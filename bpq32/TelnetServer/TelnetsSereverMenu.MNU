@@ -1,0 +1,16 @@
+MENU_1 MENU
+BEGIN
+    POPUP "Actions"
+    BEGIN
+        POPUP "Logging Options", MENUBREAK
+        BEGIN
+            MENUITEM "Logging Enabled"	101
+        END
+        POPUP "Disconnect User"
+        BEGIN
+            MENUITEM "."	102
+            MENUITEM "."	103
+            MENUITEM "."	104
+        END
+    END
+END

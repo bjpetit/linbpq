@@ -1,0 +1,5 @@
+; BPQCtrl.def : Declares the module parameters.
+
+LIBRARY      "BPQCTRL.OCX"
+
+EXPORTS

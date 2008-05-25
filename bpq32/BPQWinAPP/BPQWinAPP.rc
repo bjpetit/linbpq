@@ -1,0 +1,5 @@
+
+#define BPQICON 400
+
+BPQICON                 ICON    DISCARDABLE     "BPQ.ICO"
+

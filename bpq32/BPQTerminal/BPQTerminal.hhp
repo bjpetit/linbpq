@@ -1,0 +1,11 @@
+[OPTIONS]
+Compatibility=1.1 or later
+Compiled file=..\..\..\..\BPQ32\BPQTerminal.chm
+Contents file=Table of Contents.hhc
+Default topic=windows.htm
+Display compile progress=Yes
+Language=0x809 English (United Kingdom)
+
+
+[INFOTYPES]
+

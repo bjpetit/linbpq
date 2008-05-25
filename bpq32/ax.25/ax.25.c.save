@@ -1,0 +1,666 @@
+/* ax.25.c
+
+ * Routines for AX.25 (Amateur Radio X25 Level 2) Protocol dissection
+ * Copyright 2005,John Wiseman G8BPQ
+ *
+ * $Id: packet-sm.c 15264 2005-08-08 18:50:39Z ulfl $
+ *
+ * Ethereal - Network traffic analyzer
+ * By Gerald Combs <gerald@ethereal.com>
+ * Copyright 1998 Gerald Combs
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ */
+
+/*
+ * Decodes AX.25 frames encasulated in BPQEther, AX/IP (ip proto 93) or AX/UDP (UDP Proto 10093)
+ * 
+ * Hands off NET/ROM frames to NET/ROM decoder
+ * 
+ */
+
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <gmodule.h>
+#include <epan/packet.h>
+
+/* Define version if we are not building ethereal statically */
+
+#include "moduleinfo.h"
+
+#ifndef ENABLE_STATIC
+ G_MODULE_EXPORT const gchar version[] = VERSION;
+#endif
+
+
+static dissector_handle_t data_handle;
+
+
+/* Initialize the protocol and registered fields */
+
+static int proto_ax25 = -1;
+static int hf_bpq_ctrl = -1;
+
+/* Initialize the subtree pointers */
+
+static gint ett_ax25 = -1;
+static gint ett_ax25_flags = -1;
+
+
+static const gchar * convfromax25(const guint8 *ad,char * outcall)
+{
+	int in,out=0;
+	unsigned char chr;
+
+//
+//	CONVERT AX25 FORMAT TO NORMAL FORMAT
+//
+	memset(outcall,0x0,10);
+	for (in=0;in<6;in++)
+	{
+		chr=ad[in];
+		if (chr == 0x40)
+			break;
+		chr >>= 1;
+		outcall[out++]=chr;
+	}
+
+	chr=ad[6];				// ssid
+	chr >>= 1;
+	chr	&= 15;
+
+	if (chr > 0)
+	{
+		outcall[out++]='-';
+		if (chr > 9)
+		{
+			chr-=10;
+			outcall[out++]='1';
+		}
+		chr+=48;
+		outcall[out++]=chr;
+	}
+
+	return outcall;
+}
+
+
+
+//	HDLC COMMANDS (WITHOUT P/F)
+
+
+#define SABM	0x2F
+#define DISC	0x43
+#define DM		0x0F
+#define UA		0x63
+#define FRMR	0x87
+
+#define PFBIT	0x10
+
+#define UI 3
+#define RR 1
+#define RNR 5
+#define REJ 9
+
+guint8 FRAME_TYPE;
+guint8 FRMRFLAG;
+guint8 COMM_RESP;		//Print Command/Response Flag
+guint8 POLL_FINAL;
+
+
+
+guint8 VERSION_NO;		// Version 1 or 2       1,2
+guint8 PID;				// Protocol ID
+guint32 FRAME_LENGTH;	// Length of frame      0 - 65...
+guint8 NR;				// N(R) Flag
+guint8 NS;				// N(S) Flag
+guint8 INFO_FLAG;		// Information Packet ? 0 No, 1 Yes
+guint8 OPCODE;			// L4 FRAME TYPE
+guint8 FRMRFLAG;
+
+
+char UA_MSG[]="UA";
+
+char DM_MSG	[]="DM";
+char RR_MSG	[]="RR";
+char RNR_MSG[]="RNR";
+char UI_MSG[]="UI";
+char FRMR_MSG[]="FRMR";
+char REJ_MSG[]="REJ";
+
+
+static const gchar * DecodeControlByte(guint8 ctrl,char * CtrlString,guint8 DestFlag,guint8 SrcFlag)
+{
+	int in,out=0;
+	unsigned char chr;
+
+	_asm{
+
+		int 3
+
+	mov edi,CtrlString
+
+	MOV	FRMRFLAG,0
+
+	mov	AH,DestFlag
+	mov	AL,SrcFlag
+
+	mov	COMM_RESP,0			; Clear Command/Response Flag
+
+;-----------------------------------------------------------------------------;
+;       Is it a Poll/Final or Command/Response                                ;
+;-----------------------------------------------------------------------------;
+
+	test	AH,80H
+	mov	COMM_RESP,'C'
+	jnz	NOT_RESPONSE
+	mov	COMM_RESP,'R'
+
+NOT_RESPONSE:
+
+;-----------------------------------------------------------------------------;
+;       Is this version 1 or 2 of AX25 ?                                      ;
+;-----------------------------------------------------------------------------;
+
+	xor	AH,AL
+	test	AH,80H
+	mov	VERSION_NO,1
+	je	VERSION_1
+	mov	VERSION_NO,2
+
+VERSION_1:
+
+;-----------------------------------------------------------------------------;
+;       If this is Version 2 get the Poll/Final Bit                           ;
+;-----------------------------------------------------------------------------;
+
+	mov	POLL_FINAL,0		; Clear Poll/Final Flag
+
+	mov	AL,ctrl	; Get control byte
+
+	cmp	COMM_RESP,'C'
+	jne	NOT_COMM
+
+	test	AL,PFBIT
+	je	NOT_POLL
+
+	mov	POLL_FINAL,'P'
+
+NOT_POLL:
+NOT_COMM:
+
+	cmp	COMM_RESP,'R'
+	jne	NOT_RESP
+
+	test	AL,PFBIT
+	je	NOT_FINAL
+
+	mov	POLL_FINAL,'F'
+
+NOT_FINAL:
+NOT_RESP:
+
+;-----------------------------------------------------------------------------;
+;       Start displaying the frame information                                ;
+;-----------------------------------------------------------------------------;
+
+	and	AL,NOT PFBIT		; Remove P/F bit
+	mov	FRAME_TYPE,AL
+
+	mov	AL,'<'			; Print "<"
+	call	PUTCHAR
+
+	mov	NR,0			; Reset all the flags
+	mov	NS,0
+	mov	INFO_FLAG,0
+
+	mov	AL,FRAME_TYPE
+
+	test	AL,1
+	jne	NOT_I_FRAME
+
+;-----------------------------------------------------------------------------;
+;       Information frame                                                     ;
+;-----------------------------------------------------------------------------;
+
+	mov	AL,'I'
+	call	PUTCHAR
+	mov	INFO_FLAG,1
+	mov	NR,1
+	mov	NS,1
+	jmp	END_OF_TYPE
+
+NOT_I_FRAME:
+
+;-----------------------------------------------------------------------------;
+;       Un-numbered Information Frame                                         ;
+;-----------------------------------------------------------------------------;
+
+	cmp	AL,UI
+	jne	NOT_UI_FRAME
+
+	mov	EBX,OFFSET UI_MSG
+	call	NORMSTR
+	mov	INFO_FLAG,1
+	jmp	END_OF_TYPE
+
+NOT_UI_FRAME:
+	test	AL,10B
+	jne	NOT_R_FRAME
+
+;-----------------------------------------------------------------------------;
+;       Process supervisory frames                                            ;
+;-----------------------------------------------------------------------------;
+
+	mov	NR,1			; All supervisory frames have N(R)
+
+	and	AL,0FH			; Mask the interesting bits
+	cmp	AL,RR	
+	jne	NOT_RR_FRAME
+
+	mov	EBX,OFFSET RR_MSG
+	call	NORMSTR
+	jmp	END_OF_TYPE
+
+NOT_RR_FRAME:
+	cmp	AL,RNR
+	jne	NOT_RNR_FRAME
+
+	mov	EBX,OFFSET RNR_MSG
+	call	NORMSTR
+	jmp	END_OF_TYPE
+
+NOT_RNR_FRAME:
+	cmp	AL,REJ
+	jne	NOT_REJ_FRAME
+
+	mov	EBX,OFFSET REJ_MSG
+	call	NORMSTR
+	jmp	END_OF_TYPE
+
+NOT_REJ_FRAME:
+	mov	NR,0			; Don't display sequence number
+	mov	AL,'?'			; Print "?"
+	call	PUTCHAR
+	jmp	END_OF_TYPE
+
+;-----------------------------------------------------------------------------;
+;       Process all other frame types                                         ;
+;-----------------------------------------------------------------------------;
+
+NOT_R_FRAME:
+	cmp	AL,UA
+	jne	NOT_UA_FRAME
+
+	mov	EBX,OFFSET UA_MSG
+	call	NORMSTR
+	jmp	SHORT END_OF_TYPE
+
+NOT_UA_FRAME:
+	cmp	AL,DM
+	jne	NOT_DM_FRAME
+
+	mov	EBX,OFFSET DM_MSG
+	call	NORMSTR
+	jmp	SHORT END_OF_TYPE
+
+NOT_DM_FRAME:
+	cmp	AL,SABM
+	jne	NOT_SABM_FRAME
+
+	mov	AL,'C'
+	call	PUTCHAR
+	jmp	SHORT END_OF_TYPE
+
+NOT_SABM_FRAME:
+	cmp	AL,DISC
+	jne	NOT_DISC_FRAME
+
+	mov	AL,'D'
+	call	PUTCHAR
+	jmp	SHORT END_OF_TYPE
+
+NOT_DISC_FRAME:
+	cmp	AL,FRMR
+	jne	NOT_FRMR_FRAME
+
+	mov	EBX,OFFSET FRMR_MSG
+	call	NORMSTR
+	MOV	FRMRFLAG,1
+	jmp	SHORT END_OF_TYPE
+
+NOT_FRMR_FRAME:
+	mov	AL,'?'
+	call	PUTCHAR
+
+END_OF_TYPE:
+
+;----------------------------------------------------------------------------;
+;       If Version 2 Then display P/F C/R Information                        ;
+;----------------------------------------------------------------------------;
+
+	cmp	VERSION_NO,2
+	jne	NOT_VERSION_2
+
+	mov	AL,' '
+	call	PUTCHAR
+
+	mov	AL,COMM_RESP		; Print Command/Response Flag
+	call	PUTCHAR
+
+	cmp	POLL_FINAL,0
+	je	NO_POLL_FINAL
+
+	mov	AL,' '
+	call	PUTCHAR
+
+	mov	AL,POLL_FINAL		; Print Poll/Final Flag if Set
+	call	PUTCHAR
+
+NO_POLL_FINAL:
+NOT_VERSION_2:
+
+;----------------------------------------------------------------------------;
+;       Display sequence numbers if applicable                               ;
+;----------------------------------------------------------------------------;
+
+	cmp	NS,1
+	jne	NOT_NS_DATA
+
+	mov	AL,' '
+	call	PUTCHAR
+
+	mov	AL,'S'
+	call	PUTCHAR
+
+	mov	AL,FRAME_TYPE
+	ror	AL,1
+
+	call	DISPLAYSEQ
+
+NOT_NS_DATA:
+	cmp	NR,1
+	jne	NOT_NR_DATA
+
+	mov	AL,' '
+	call	PUTCHAR
+
+	mov	AL,'R'
+	call	PUTCHAR
+
+	mov	AL,FRAME_TYPE
+	rol	AL,1
+	rol	AL,1
+	rol	AL,1
+
+	call	DISPLAYSEQ
+
+NOT_NR_DATA:
+	mov	AL,'>'
+	call	PUTCHAR
+
+	CMP	FRMRFLAG,0
+	JE	NOTFRMR
+;
+;	DISPLAY FRMR BYTES
+;
+;	lea	ESI,MSGPID[ESI]
+	MOV	ECX,3			; TESTING
+FRMRLOOP:
+	lodsb
+	CALL	BYTE_TO_HEX
+
+	LOOP	FRMRLOOP
+
+NOTFRMR:
+
+	mov	al,0
+	stosb
+
+	}
+
+	return 0;
+
+	_asm{
+
+
+
+NORMSTR:
+	MOV	AL,[EBX]
+	INC	EBX
+	cmp	AL,0		; End of String ?
+	je	NORMSTR_RET	; Yes
+	call	PUTCHAR
+	jmp	SHORT NORMSTR
+
+NORMSTR_RET:
+	ret
+
+;-----------------------------------------------------------------------------;
+;       Display sequence numbers                                              ;
+;-----------------------------------------------------------------------------;
+
+DISPLAYSEQ:
+	and	AL,7
+	add	AL,30H
+	call	PUTCHAR
+	ret
+
+PUTCHAR:
+	STOSB
+	RET
+
+;-----------------------------------------------------------------------------;
+;       Convert byte in AL to Hex display                                     ;
+;-----------------------------------------------------------------------------;
+
+BYTE_TO_HEX:
+	push	AX
+	shr	AL,1
+	shr	AL,1
+	shr	AL,1
+	shr	AL,1
+	call	NIBBLE_TO_HEX
+	pop	AX
+	call	NIBBLE_TO_HEX
+	ret
+
+NIBBLE_TO_HEX:
+	and	AL,0FH
+	cmp	AL,10
+
+	jb	LESS_THAN_10
+	add	AL,7
+
+LESS_THAN_10:
+	add	AL,30H
+	call	PUTCHAR
+	ret
+
+
+
+	}
+}
+
+
+/*
+;----------------------------------------------------------------------------;
+;       Find the PID if an information frame                                 ;
+;----------------------------------------------------------------------------;
+
+	mov	AL,0
+
+	cmp	INFO_FLAG,1
+	jne	NO_PID
+
+	lea	ESI,MSGPID[ESI]
+	lodsb
+
+NO_PID:
+	mov	PID,AL
+
+;----------------------------------------------------------------------------;
+;       Is this a NET/ROM message of any sort ?                              ;
+;----------------------------------------------------------------------------;
+
+	MOV	ECX,FRAME_LENGTH
+
+	cmp	PID,NETROM_PID
+	je	DISPLAY_NETROM
+
+;----------------------------------------------------------------------------;
+;
+*/
+
+/* Code to actually dissect the packets */
+static void
+dissect_ax25(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+{
+	proto_item *ti;
+	proto_tree *ax25_tree;
+	tvbuff_t *next_tvb = NULL;
+
+	int fcall_offset, tcall_offset;
+	const guint8      *fcall_val, *tcall_val;
+	guint8 ctrl;
+
+	char fcall_str[10], tcall_str[10];
+	char ctrlString[20];
+
+	guint8 DestFlag, SrcFlag;
+
+	ctrl = tvb_get_guint8(tvb, 14);
+
+	tcall_offset = 0;
+	tcall_val = tvb_get_ptr(tvb, tcall_offset, 7);
+	convfromax25(tcall_val,tcall_str);
+
+	fcall_offset = 7;
+	fcall_val = tvb_get_ptr(tvb, fcall_offset, 7);
+	convfromax25(fcall_val,fcall_str);
+
+	if (check_col(pinfo->cinfo, COL_PROTOCOL)) 
+		col_set_str(pinfo->cinfo, COL_PROTOCOL, "ax.25");
+
+	
+	DestFlag = tvb_get_guint8(tvb, 6);
+	SrcFlag = tvb_get_guint8(tvb, 13);
+
+	DecodeControlByte(ctrl,&ctrlString[0],DestFlag,SrcFlag);
+
+
+	if (check_col(pinfo->cinfo, COL_INFO)) 
+		col_append_fstr(pinfo->cinfo, COL_INFO, "%s > %s %s",fcall_str,tcall_str,ctrlString);
+
+
+	if (tree) {
+		ti = proto_tree_add_item(tree, proto_ax25, tvb, 0, 0, FALSE);
+		ax25_tree = proto_item_add_subtree(ti, ett_ax25);
+
+//		ti = proto_tree_add_item(bpq_tree, hf_rudp_flags, tvb, 0, 1, FALSE);
+//		flags_tree = proto_item_add_subtree(ti, ett_rudp_flags);
+
+//		for (i = 0; i < 8; i++)
+//			proto_tree_add_item(flags_tree, flags[i], tvb, 0, 1, FALSE);
+
+		proto_tree_add_text(ax25_tree, tvb, 0, 7,"  To Callsign: %s",tcall_str);
+
+		proto_tree_add_text(ax25_tree, tvb, 7, 7, "From Callsign: %s",fcall_str);
+
+		proto_tree_add_item(ax25_tree, hf_bpq_ctrl, tvb, 14, 1, FALSE);
+
+	}
+
+	if (tvb_length(tvb) > 15)
+	{		
+		next_tvb = tvb_new_subset(tvb, 15, -1, -1);
+	
+		if (tvb_length(next_tvb) && data_handle)
+			call_dissector(data_handle, next_tvb, pinfo, tree);
+
+	}
+
+}
+
+
+
+void
+proto_register_ax25(void)
+{                 
+	static hf_register_info hf[] = {
+
+//		{ &hf_bpq_plen,
+//			{ "Packet Len","bpq.plen",FT_UINT16, BASE_DEC, NULL, 0x0,"", HFILL }
+//		},
+
+		{ &hf_bpq_ctrl,
+			{ "Control Field","bpq.ctrl",FT_UINT8, BASE_HEX, NULL, 0x0,"", HFILL }
+		},
+
+		
+	};
+
+
+/* Setup protocol subtree array */
+	static gint *ett[] = {
+		&ett_ax25,
+		&ett_ax25_flags,
+	};
+
+
+/* Register the protocol name and description */
+	proto_ax25 = proto_register_protocol("Amateur Radio ax.25",
+	    "AX.25", "ax.25");
+
+	register_dissector("ax.25", dissect_ax25, proto_ax25);
+
+/* Required function calls to register the header fields and subtrees used */
+	proto_register_field_array(proto_ax25, hf, array_length(hf));
+	proto_register_subtree_array(ett, array_length(ett));
+}
+
+void
+plugin_reg_handoff_ax25(void)
+{
+	return;
+}
+
+#ifndef ENABLE_STATIC
+
+G_MODULE_EXPORT void
+plugin_register(void)
+{
+	/* register the new protocol, protocol fields, and subtrees */
+	if (proto_ax25 == -1) { /* execute protocol initialization only once */
+		proto_register_ax25();
+	}
+
+}
+
+G_MODULE_EXPORT void
+plugin_reg_handoff(void)
+{
+	data_handle = find_dissector("data");
+
+	plugin_reg_handoff_ax25();
+}
+
+#endif

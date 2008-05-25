@@ -1,0 +1,111 @@
+// BPQCtrl.odl : type library source for OLE Control project.
+
+// This file will be processed by the Make Type Library (mktyplib) tool to
+// produce the type library (BPQCtrl.tlb) that will become a resource in
+// BPQCtrl.ocx.
+
+#include <olectl.h>
+
+[ uuid(4750C5E0-8C82-11D4-9E57-0050BF114807), version(1.0),
+  helpstring("BPQCtrl OLE Control module"), control ]
+library BPQCTRLLib
+{
+	importlib(STDOLE_TLB);
+	importlib(STDTYPE_TLB);
+
+	//  Primary dispatch interface for CBPQCtrlCtrl
+
+	[ uuid(4750C5E1-8C82-11D4-9E57-0050BF114807),
+	  helpstring("Dispatch interface for BPQCtrl Control"), hidden ]
+	dispinterface _DBPQCtrl
+	{
+		properties:
+			// NOTE - ClassWizard will maintain property information here.
+			//    Use extreme caution when editing this section.
+			//{{AFX_ODL_PROP(CBPQCtrlCtrl)
+			[id(1)] long FreeBuffers;
+			[id(2)] long NumberofPorts;
+			[id(3)] BSTR NodeCall;
+			[id(4)] BSTR NodeAlias;
+			[id(5)] BSTR BBSCall;
+			[id(6)] BSTR BBSAlias;
+			[id(35)] BSTR BPQDirectory;
+			//}}AFX_ODL_PROP
+
+		methods:
+			// NOTE - ClassWizard will maintain method information here.
+			//    Use extreme caution when editing this section.
+			//{{AFX_ODL_METHOD(CBPQCtrlCtrl)
+			[id(7)] long Init();
+			[id(8)] long SendData(long Stream, BSTR Message, long Length);
+			[id(10)] long FindFreeStream();
+			[id(11)] long Connect(long Stream);
+			[id(12)] long Disconnect(long Stream);
+			[id(24), propget] long ConnectState(long Stream);
+			[id(24), propput] void ConnectState(long Stream, long nNewValue);
+			[id(13)] void ReturntoNode(long Stream);
+			[id(25), propget] BSTR Callsign(long Stream);
+			[id(25), propput] void Callsign(long Stream, BSTR lpszNewValue);
+			[id(14)] void SetFlags(long Stream, long Mask, long Flags);
+			[id(15)] BSTR GetMonFrame(long Stream);
+			[id(16)] BSTR GetAndDecodeMonFrame(long Stream);
+			[id(17)] BSTR GetData(long Stream);
+			[id(18)] long SendRaw(long Stream, BSTR Msg, long Length);
+			[id(19)] long GetStreamPort(long Stream);
+			[id(20)] long GetStreamPaclen(long Stream);
+			[id(21)] long GetStreamType(long Stream);
+			[id(22)] long GetStreamMaxframe(long Stream);
+			[id(23)] long GetStreamL4Window(long Stream);
+			[id(26)] long DeallocateStream(long Stream);
+			[id(27)] BSTR GetAndDecodeAGWFrame(long Stream);
+			[id(28)] long GetMonCount(long Streeam);
+			[id(29)] long GetRXCount(long Stream);
+			[id(30)] long GetTXCount(long Stream);
+			[id(31)] BSTR GetVersion();
+			[id(32)] BSTR GetMonFrameAndTimeStamp(long Stream, long* Stamp, long* Count);
+			[id(33)] BSTR DecodeFrameAGW(BSTR Buffer, long Stamp, long *FrameControl);
+			[id(34)] BSTR DecodeFrame(BSTR Buffer, long Stamp);
+			[id(36), propget] BSTR ApplCall(long Appl);
+			[id(36), propput] void ApplCall(long Appl, BSTR lpszNewValue);
+			[id(37), propget] BSTR ApplAlias(long Appl);
+			[id(37), propput] void ApplAlias(long Appl, BSTR lpszNewValue);
+			[id(38), propget] long ApplQual(long Appl);
+			[id(38), propput] void ApplQual(long Appl, long nNewValue);
+			//}}AFX_ODL_METHOD
+
+			[id(DISPID_ABOUTBOX)] void AboutBox();
+	};
+
+	//  Event dispatch interface for CBPQCtrlCtrl
+
+	[ uuid(4750C5E2-8C82-11D4-9E57-0050BF114807),
+	  helpstring("Event interface for BPQCtrl Control") ]
+	dispinterface _DBPQCtrlEvents
+	{
+		properties:
+			//  Event interface has no properties
+
+		methods:
+			// NOTE - ClassWizard will maintain event information here.
+			//    Use extreme caution when editing this section.
+			//{{AFX_ODL_EVENT(CBPQCtrlCtrl)
+			[id(1)] void DataAvail(long Stream);
+			[id(2)] void MonDataAvail(long Stream);
+			[id(3)] void Connected(long Stream);
+			[id(4)] void Disconnected(long Stream);
+			//}}AFX_ODL_EVENT
+	};
+
+	//  Class information for CBPQCtrlCtrl
+
+	[ uuid(4750C5E3-8C82-11D4-9E57-0050BF114807),
+	  helpstring("BPQCtrl Control"), control ]
+	coclass BPQCtrl
+	{
+		[default] dispinterface _DBPQCtrl;
+		[default, source] dispinterface _DBPQCtrlEvents;
+	};
+
+
+	//{{AFX_APPEND_ODL}}
+};

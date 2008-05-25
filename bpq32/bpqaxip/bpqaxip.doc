@@ -1,0 +1,102 @@
+Introduction:
+
+BPQAXIP.DLL supports the encapsulation of AX.25 frames
+in IP, as defined in RFC1226.
+
+It also supports UDP encapuslation, as used by some UNIX systems.
+
+
+Environment.
+
+The program uses Winsock Version 2. This is provided 
+as standard in NT 4 and Windows 98, but must be installed
+on Win 95 before the program can be used. The Winsock2 for 95
+runtime should be included with this program - if not, you 
+will need to download it from Microsoft (ws2setup.exe).
+
+The driver is loaded when BPQ32 initialises the port.
+This occurs when the first program to use the DLL is
+loaded. Other BPQ32 programs may be loaded and unloaded, 
+but if the first program exits before all the others, 
+the AXIP dll will be deleted, and the other programs
+will crash. To get round this problem, I've written 
+a simple application (BPQAPP.EXE) which can be run first,
+and does nothing but keep the switch and AXIP dlls in
+memory. This program should be run before any other
+programs that use the BPQ32 interface.
+
+
+Configuration.
+
+The driver is defined to BPQ32 as an External port:
+
+
+PORT
+	ID=AXIP Link
+	TYPE=EXTERNAL
+	DLLNAME=BPQAXIP.DLL
+	QUALITY=200
+	MAXFRAME=4
+	FRACK=7000
+	RESPTIME=1000
+	RETRIES=10
+	PACLEN=120
+
+ENDPORT
+ 
+Note the DLLNAME parameter, which is new to BPQ32.
+
+
+The DLL reads a configuration file BPQAXIP.CFG, which 
+defines the mapping from AX.25 callsign-ssid, to an IP 
+address.This file needs to be in the current directory, or the 
+directory pointed to by the registry entry
+
+HKEY_LOCAL_MACHINE\Software\G8BPQ\BPQ32\Config File Location
+
+when BPQ32 is loaded.
+
+
+#	Config file for BPQAXIP
+
+UDP 10093					# Optional. Enables UDP support, and defines the port
+							# AX.IP listens on
+
+MAP G8BPQ-7 10.2.77.1		# Use Raw IP encapulation
+MAP BPQ7	10.2.77.1
+MAP NODES	10.2.77.1
+
+MAP G8BPQ-7 10.2.77.1 UDP 10093	# Use UDP encapulation, send to port 10093
+
+It is OK to mix Raw IP and UDP encapsulation, and to use a different
+port for different destinations,
+
+
+If an ssid is supplied, the entry only applies to that ssid value.
+If no ssid is supplied, the entry applies to all ssid values.
+So, if you want to select traffic for only G8BPQ, you must specify
+G8BPQ-0.
+
+The code has been modified to allow more that one mapping for each 
+callsign, so, for example NODES broadcasts can be sent to more than
+one station. Unfortunately this means that it is no longer possible 
+to send traffic for G8BPQ to 10.2.77.1, and all other ssids to
+10.2.77.2 by specifing:
+
+	MAP G8BPQ-0 10.2.77.1
+	MAP G8BPQ   10.2.77.2
+ 
+If you try this, messages to G8BPQ will also be sent to 10.2.77.2
+
+There is a limit of 128 entries in the mapping table.
+ 
+The software at the moment only allows IP addresses - 
+it does not yet support lookup of host names.
+
+The software will work with an IP broadcast address,
+but if the destination is on the same net as the switch, 
+it will receive its own broadcast frames.
+
+.
+.
+

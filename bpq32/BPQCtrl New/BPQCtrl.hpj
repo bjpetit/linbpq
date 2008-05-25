@@ -1,0 +1,18 @@
+[OPTIONS]
+CONTENTS=main_index
+TITLE=BPQCTRL Control Help
+COMPRESS=true
+WARNING=2
+
+[FILES]
+hlp\BPQCtrl.rtf
+
+[BITMAPS]
+; miscellaneous
+hlp\Bullet.bmp
+
+[ALIAS]
+HIDD_ABOUTBOX_BPQCTRL = HID_APP_ABOUT_BPQCTRL
+
+[MAP]
+#include <hlp\BPQCtrl.hm>

@@ -1,0 +1,8 @@
+DESCRIPTION  'Driver for WinFBB-32 BBS'
+
+EXPORTS
+	OpenFbbDriver	@1
+	CloseFbbDriver	@2
+	ReadFbbDriver	@3
+	WriteFbbDriver	@4
+	StatFbbDriver	@5

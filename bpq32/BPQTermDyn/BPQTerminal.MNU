@@ -1,0 +1,16 @@
+MENU_1 MENU
+BEGIN
+    POPUP "Action"
+    BEGIN
+        MENUITEM "Connect"	101
+        MENUITEM "Disconnect"	101
+        MENUITEM "Enable Bells"	101
+        MENUITEM "Enable Chat"	101
+    END
+    POPUP "Monitor"
+    BEGIN
+        MENUITEM "Monitor TX"	101
+        MENUITEM "Monitor Supervisory"	101
+        MENUITEM "Port"	101
+    END
+END

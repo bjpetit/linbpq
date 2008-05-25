@@ -1,0 +1,13 @@
+// MAKEHELP.BAT generated Help Map file.  Used by BPQCTRL.HPJ. 
+ 
+// Commands (ID_* and IDM_*) 
+ 
+// Prompts (IDP_*) 
+ 
+// Resources (IDR_*) 
+ 
+// Dialogs (IDD_*) 
+HIDD_PROPPAGE_BPQCTRL                   0x20064
+HIDD_ABOUTBOX_BPQCTRL                   0x20001
+ 
+// Frame Controls (IDW_*) 

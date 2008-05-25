@@ -1,0 +1,504 @@
+#ifndef DYNLOADBPQ
+
+// Definitions for Staticaly Linked DLL
+
+//	Returns number of free buffers
+//	(BPQHOST function 7 (part)).
+
+int APIENTRY GetFreeBuffs();
+
+
+
+//	Returns count of packets waiting on stream
+//	 (BPQHOST function 7 (part)).
+
+int APIENTRY RXCount(int Stream);
+
+
+
+
+//	Returns number of packets on TX queue for stream
+//	 (BPQHOST function 7 (part)).
+
+int APIENTRY TXCount(int Stream);
+
+
+
+//	Returns number of monitor frames available
+//	 (BPQHOST function 7 (part)).
+
+int APIENTRY MONCount(int Stream);
+
+
+
+//	Returns call connecten on stream (BPQHOST function 8 (part)).
+
+int APIENTRY GetCallsign(int stream, char * callsign);
+
+
+//	Returns connection info for stream (BPQHOST function 8).
+
+int APIENTRY GetConnectionInfo(int stream, char * callsign,
+										 int * port, int * sesstype, int * paclen,
+										 int * maxframe, int * l4window);
+
+
+int APIENTRY GetStreamPID(int Stream);
+
+// Returns Path of BPQDirectroy
+
+UCHAR * APIENTRY GetBPQDirectory();
+
+
+// Returns number of prcess attached to BPQ32
+
+int APIENTRY GetAttachedProcesses();
+
+
+//	Send Session Control command (BPQHOST function 6)
+//	Command = 0 Connect using APPL MASK IN param
+//	Command = 1 Connect
+//	Command = 2 Disconect
+//	Command = 3 Return to Node
+
+int APIENTRY SessionControl(int stream, int command, int param);
+
+
+
+//	Sets Application Flags and Mask for stream. (BPQHOST function 1)
+//	Top bit of flags enables monitoring
+
+int APIENTRY SetAppl(int stream, int flags, int mask);
+
+
+int APIENTRY GetApplMask(int Stream);
+
+int APIENTRY GetApplFlags(int Stream);
+
+
+BOOL APIENTRY GetAllocationState(int Stream);
+
+
+
+//	Get current Session State. Any state changed is ACK'ed
+//	automatically. See BPQHOST functions 4 and 5.
+
+int APIENTRY SessionState(int stream, int * state, int * change);
+
+//	Get current Session State. Dont Ack state change
+//	See BPQHOST function 4.
+
+int APIENTRY SessionStateNoAck(int stream, int * state);
+
+
+
+//	Send message to stream (BPQHOST Function 2)
+
+int APIENTRY SendMsg(int stream, char * msg, int len);
+
+
+
+//	Send Raw (KISS mode) frame to port (BPQHOST function 10)
+
+int APIENTRY SendRaw(int port, char * msg, int len);
+
+
+
+//	Get message from stream. Returns length, and count of frames
+//	still waiting to be collected. (BPQHOST function 3)
+
+int APIENTRY GetMsg(int stream, char * msg, int * len, int * count );
+
+
+// Perl Version - I couldn't get bpq32.pm to call GetMsg. Returns Lenth
+
+int APIENTRY GetMsgPerl(int stream, char * msg);
+
+
+//	Get Raw (Trace) data (BPQHOST function 11)
+
+int APIENTRY GetRaw(int stream, char * msg, int * len, int * count );
+
+
+
+//	This is not an API function. It is a utility to decode a received
+//	monitor frame into ascii text.
+
+int APIENTRY DecodeFrame(char * msg, char * buffer, int Stamp);
+
+
+
+//	Sets the tracing options for DecodeFrame. Mask is a bit
+//	mask of ports to monitor (ie 101 binary will monitor ports
+//	1 and 3). MTX enables monitoring on transmitted frames. MCOM
+//	enables monitoring of protocol control frames (eg SABM, UA, RR),
+//	as well as info frames.
+
+int APIENTRY SetTraceOptions(long mask, int mtxparam, int mcomparam);
+
+
+
+//	Returns number of first unused BPQHOST stream. If none available,
+//	returns 255. See API function 13.
+
+int APIENTRY FindFreeStream();
+
+
+
+//	Allocate stream. If stream is already allocated, return nonzero.
+//	Otherwise allocate stream, and return zero
+
+int APIENTRY AllocateStream(int stream);
+
+
+
+//	Release stream.
+
+int APIENTRY DeallocateStream(int stream);
+
+//	Get number of ports configured
+
+int APIENTRY GetNumberofPorts();
+
+
+//	Get port number (ports aren't necessarily numbered 1 to n)
+
+int APIENTRY GetPortNumber(int portslot);
+
+
+//	Enable async operation - new to Win32 version of API
+
+int APIENTRY BPQSetHandle(int Stream, HWND hWnd);
+
+int ConvFromAX25(unsigned char * incall, unsigned char * outcall);
+BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+
+int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall);
+
+int APIENTRY GetApplNum(int Stream);
+
+char * APIENTRY GetApplCall(int Appl);
+
+char * APIENTRY GetApplAlias(int Appl);
+
+long APIENTRY GetApplQual(int Appl);
+
+BOOL APIENTRY SetApplCall(int Appl, char * NewCall);
+
+BOOL APIENTRY SetApplAlias(int Appl, char * NewCall);
+
+BOOL APIENTRY SetApplQual(int Appl, int NewQual);
+
+
+
+
+// Routines to support "Minimize to Tray"
+
+BOOL APIENTRY GetMinimizetoTrayFlag();
+
+int APIENTRY AddTrayMenuItem(HWND hWnd, char * Label);
+
+int APIENTRY DeleteTrayMenuItem(HWND hWnd);
+
+
+// Log a message to the bpq32 console.
+ 
+int APIENTRY WritetoConsole(char * buff);
+
+int APIENTRY CheckTimer();
+
+int APIENTRY CloseBPQ32();
+
+#else
+
+//	API Definitions for Dynamic Load of BPQ32.dll
+
+UCHAR * (FAR WINAPI * GetBPQDirectory)();
+
+//	Returns number of free buffers
+//	(BPQHOST function 7 (part)).
+
+int (FAR WINAPI * GetFreeBuffs)();
+
+
+//	Returns count of packets waiting on stream
+//	 (BPQHOST function 7 (part)).
+
+int (FAR WINAPI *  RXCount) (int Stream);
+
+//	Returns number of packets on TX queue for stream
+//	 (BPQHOST function 7 (part)).
+
+int (FAR WINAPI * TXCount)(int Stream);
+
+
+//	Returns number of monitor frames available
+//	 (BPQHOST function 7 (part)).
+
+int (FAR WINAPI * MONCount) (int Stream);
+
+//	Returns call connecten on stream (BPQHOST function 8 (part)).
+
+int (FAR WINAPI * GetCallsign)(int stream, char * callsign);
+
+//	Returns connection info for stream (BPQHOST function 8).
+
+int (FAR WINAPI * GetConnectionInfo) (int stream, char * callsign,
+										 int * port, int * sesstype, int * paclen,
+										 int * maxframe, int * l4window);
+
+
+int (FAR WINAPI * GetStreamPID) (int Stream);
+
+// Returns Path of BPQDirectroy
+
+UCHAR * (FAR WINAPI * GetBPQDirectory)();
+
+// Returns number of prcess attached to BPQ32
+
+int (FAR WINAPI * GetAttachedProcesses) ();
+
+
+//	Send Session Control command (BPQHOST function 6)
+//	Command = 0 Connect using APPL MASK IN param
+//	Command = 1 Connect
+//	Command = 2 Disconect
+//	Command = 3 Return to Node
+
+int (FAR WINAPI * SessionControl) (int stream, int command, int param);
+
+
+//	Sets Application Flags and Mask for stream. (BPQHOST function 1)
+//	Top bit of flags enables monitoring
+
+int (FAR WINAPI * SetAppl) (int stream, int flags, int mask);
+
+int (FAR WINAPI * GetApplMask) (int Stream);
+
+int (FAR WINAPI * GetApplFlags)(int Stream);
+
+BOOL (FAR WINAPI * GetAllocationState) (int Stream);
+
+
+
+//	Get current Session State. Any state changed is ACK'ed
+//	automatically. See BPQHOST functions 4 and 5.
+
+int (FAR WINAPI * SessionState) (int stream, int * state, int * change);
+
+//	Get current Session State. Dont Ack state change
+//	See BPQHOST function 4.
+
+int (FAR WINAPI * SessionStateNoAck) (int stream, int * state);
+
+
+//	Send message to stream (BPQHOST Function 2)
+
+int (FAR WINAPI * SendMsg) (int stream, char * msg, int len);
+
+
+//	Send Raw (KISS mode) frame to port (BPQHOST function 10)
+
+int (FAR WINAPI * SendRaw) (int port, char * msg, int len);
+
+
+//	Get message from stream. Returns length, and count of frames
+//	still waiting to be collected. (BPQHOST function 3)
+
+int (FAR WINAPI * GetMsg) (int stream, char * msg, int * len, int * count );
+
+
+// Perl Version - I couldn't get bpq32.pm to call GetMsg. Returns Lenth
+
+int (FAR WINAPI * GetMsgPerl) (int stream, char * msg);
+
+
+//	Get Raw (Trace) data (BPQHOST function 11)
+
+int (FAR WINAPI * GetRaw) (int stream, char * msg, int * len, int * count );
+
+
+
+//	This is not an API function. It is a utility to decode a received
+//	monitor frame into ascii text.
+
+int (FAR WINAPI * DecodeFrame) (char * msg, char * buffer, int Stamp);
+
+
+//	Sets the tracing options for DecodeFrame. Mask is a bit
+//	mask of ports to monitor (ie 101 binary will monitor ports
+//	1 and 3). MTX enables monitoring on transmitted frames. MCOM
+//	enables monitoring of protocol control frames (eg SABM, UA, RR),
+//	as well as info frames.
+
+int (FAR WINAPI * SetTraceOptions) (long mask, int mtxparam, int mcomparam);
+
+
+//	Returns number of first unused BPQHOST stream. If none available,
+//	returns 255. See API function 13.
+
+int (FAR WINAPI * FindFreeStream) ();
+
+
+//	Allocate stream. If stream is already allocated, return nonzero.
+//	Otherwise allocate stream, and return zero
+
+int (FAR WINAPI * AllocateStream) (int stream);
+
+
+//	Release stream.
+
+int (FAR WINAPI * DeallocateStream) (int stream);
+
+//	Get number of ports configured
+
+int (FAR WINAPI * GetNumberofPorts) ();
+
+
+//	Get port number (ports aren't necessarily numbered 1 to n)
+
+int (FAR WINAPI * GetPortNumber) (int portslot);
+
+
+//	Enable async operation - new to Win32 version of API
+
+int (FAR WINAPI * BPQSetHandle) (int Stream, HWND hWnd);
+
+int ConvFromAX25(unsigned char * incall, unsigned char * outcall);
+BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+
+int (FAR WINAPI * ChangeSessionCallsign) (int Stream, unsigned char * AXCall);
+
+int (FAR WINAPI * GetApplNum) (int Stream);
+
+char * (FAR WINAPI * GetApplCall) (int Appl);
+
+char * (FAR WINAPI * GetApplAlias) (int Appl);
+
+long (FAR WINAPI * GetApplQual) (int Appl);
+
+BOOL (FAR WINAPI * SetApplCall) (int Appl, char * NewCall);
+
+BOOL (FAR WINAPI * SetApplAlias) (int Appl, char * NewCall);
+
+BOOL (FAR WINAPI * SetApplQual) (int Appl, int NewQual);
+
+
+// Routines to support "Minimize to Tray"
+
+BOOL (FAR WINAPI * GetMinimizetoTrayFlag)();
+
+//int APIENTRY AddTrayMenuItem();
+int (FAR WINAPI * AddTrayMenuItem)(HWND hWnd, char * Label);
+
+//int APIENTRY DeleteTrayMenuItem();
+int (FAR WINAPI * DeleteTrayMenuItem)(HWND hWnd);
+
+
+// Log a message to the bpq32 console.
+ 
+//int APIENTRY WritetoConsole();
+int (FAR WINAPI * WritetoConsole)(char * buff);
+
+int (FAR WINAPI * CheckTimer)();
+
+int (FAR WINAPI * CloseBPQ32)();
+
+HMODULE ExtDriver;
+
+BOOL GetAPI()
+{
+	int err;
+	char Msg[256];
+
+#ifdef EXTDLL
+	ExtDriver=GetModuleHandle("bpq32.dll");
+#else
+	ExtDriver=LoadLibrary("bpq32.dll");
+#endif
+
+	if (ExtDriver == NULL)
+	{
+		err=GetLastError();
+		wsprintf(Msg,"Error loading bpq32.dll - Error code %d",err);
+		
+		MessageBox(NULL,Msg,"BPQDEMO",MB_ICONSTOP);
+
+		return(FALSE);
+	}
+
+	GetFreeBuffs = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_GetFreeBuffs@0");
+	TXCount = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_RXCount@4");
+	RXCount = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_RXCount@4");
+	MONCount = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_MONCount@4");
+	GetCallsign = (int (__stdcall *)(int stream, char * callsign))GetProcAddress(ExtDriver,"_GetCallsign@8");
+	GetBPQDirectory = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetBPQDirectory@0");
+	GetConnectionInfo = (int (__stdcall *)(int, char *,int *, int *, int *,int *, int *))GetProcAddress(ExtDriver,"_GetConnectionInfo@28");
+	GetStreamPID = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_ GetStreamPID@4");
+	GetAttachedProcesses = (int (__stdcall *)())GetProcAddress(ExtDriver,"_GetAttachedProcesses@0");
+	SessionControl = (int (__stdcall *)(int stream, int command, int param))GetProcAddress(ExtDriver,"_SessionControl@12");
+	SetAppl = (int (__stdcall *)(int stream, int flags, int mask))GetProcAddress(ExtDriver,"_SetAppl@12");
+	GetApplMask = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetApplMask@4");
+	GetApplFlags = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetApplFlags@4");
+	GetAllocationState = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetAllocationState@4");
+
+	SessionState = (int (__stdcall *)(int, int *, int *))GetProcAddress(ExtDriver,"_SessionState@12");
+	SessionStateNoAck = (int (__stdcall *)(int, int *))GetProcAddress(ExtDriver,"_SessionStateNoAck@8");
+	SendMsg = (int (__stdcall *)(int stream, char * msg, int len))GetProcAddress(ExtDriver,"_SendMsg@12");
+	SendRaw = (int (__stdcall *)(int port, char * msg, int len))GetProcAddress(ExtDriver,"_SendRaw@12");
+	GetMsg = (int (__stdcall *)(int stream, char * msg, int * len, int * count ))GetProcAddress(ExtDriver,"_GetMsg@16");
+	GetMsgPerl = (int (__stdcall *)(int stream, char * msg))GetProcAddress(ExtDriver,"_GetMsgPerl@8");
+	GetRaw = (int (__stdcall *)(int stream, char * msg, int * len, int * count))GetProcAddress(ExtDriver,"_GetRaw@16");
+	DecodeFrame = (int (__stdcall *)(char * msg, char * buffer, int Stamp))GetProcAddress(ExtDriver,"_DecodeFrame@12");
+	SetTraceOptions = (int (__stdcall *)(long mask, int mtxparam, int mcomparam))GetProcAddress(ExtDriver,"_SetTraceOptions@12");
+	FindFreeStream = (int (__stdcall *)())GetProcAddress(ExtDriver,"_FindFreeStream@0");
+	AllocateStream=  (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_AllocateStream@4");
+	DeallocateStream = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_DeallocateStream@4");
+
+	GetNumberofPorts = (int (__stdcall *)())GetProcAddress(ExtDriver,"_GetNumberofPorts@0");
+	GetPortNumber = (int (__stdcall *)(int))GetProcAddress(ExtDriver,"_GetPortNumber@4");
+	BPQSetHandle = (int (__stdcall *)(int Stream, HWND hWnd))GetProcAddress(ExtDriver,"_BPQSetHandle@8");
+/*
+int (FAR WINAPI * GetNumberofPorts) ();
+int (FAR WINAPI * GetPortNumber) (int portslot);
+int (FAR WINAPI * BPQSetHandle) ();
+int ConvFromAX25(unsigned char * incall, unsigned char * outcall);
+BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+int (FAR WINAPI * ChangeSessionCallsign) (int Stream, unsigned char * AXCall);
+int (FAR WINAPI * GetApplNum) (int Stream);
+char * (FAR WINAPI * GetApplCall) (int Appl);
+char * (FAR WINAPI * GetApplAlias) (int Appl);
+long (FAR WINAPI * GetApplQual) (int Appl);
+BOOL (FAR WINAPI * SetApplCall) (int Appl, char * NewCall);
+BOOL (FAR WINAPI * SetApplAlias) (int Appl, char * NewCall);
+BOOL (FAR WINAPI * SetApplQual) (int Appl, int NewQual);
+*/	
+	
+	
+	
+	GetMinimizetoTrayFlag = (BOOL (__stdcall *)())GetProcAddress(ExtDriver,"_GetMinimizetoTrayFlag@0");
+	AddTrayMenuItem = (int (__stdcall *)(HWND hWnd, char * Label))GetProcAddress(ExtDriver,"_AddTrayMenuItem@8");
+	DeleteTrayMenuItem = (int (__stdcall *)(HWND hWnd))GetProcAddress(ExtDriver,"_DeleteTrayMenuItem@4");
+	WritetoConsole = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_WritetoConsole@4");
+	CheckTimer = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CheckTimer@0");
+	CloseBPQ32 = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CloseBPQ32@0");
+
+	return TRUE;
+}
+
+#endif
+
+//
+//	Constants and equates for async operation
+//
+
+char BPQWinMsg[] = "BPQWindowMessage";
+UINT BPQMsg;
+
+//
+//	Values returned in lParam of Windows Message
+//
+#define BPQMonitorAvail 1
+#define BPQDataAvail 2
+#define BPQStateChange 4
+
