@@ -9,6 +9,11 @@
 // Restore Checked state of Bells and AutoConnect Flags
 // Call CheckTimer on startup (fornew Initialisation Scheme for perl)
 
+// Version 2.0.3 July 2008
+
+// Display lines received without a terminaing CR
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -113,6 +118,9 @@ int change;
 int applmask = 0;
 int applflags = 2;				// Message to Application
 int Sessno = 0;
+
+int PartLinePtr=0;
+int PartLineIndex=0;		// Listbox index of (last) incomplete line
 
 BOOL Bells = FALSE;
 
@@ -707,6 +715,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
 	int index;
+	char Temp[255];
 
 	if (uMsg == WM_CHAR) 
 	{
@@ -722,8 +731,20 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			kbptr=SendMessage(hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) kbbuf);
 	
 			// Echo
+
+			if (PartLinePtr != 0)
+			{
+				// Last Line was not terminated with LF - append input text to it
+				
+				SendMessage(hwndOutput,LB_GETTEXT,PartLineIndex,(LPARAM)(LPCTSTR) Temp );
+				strcat(Temp, kbbuf);
+				PartLinePtr=0;
+				index=SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) &Temp[0] );		
+				index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) &Temp[0] );		
+			}
+			else
+				index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) &kbbuf[0] );		
 			
-			index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) &kbbuf[0] );		
 			SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
 
 			// Replace null with CR, and send to Node
@@ -951,8 +972,6 @@ DoStateChange(HWND hWnd)
 
 }
 		
-int PartLinePtr=0;
-
 DoReceivedData(HWND hWnd)
 {
 	char * ptr1, * ptr2;
@@ -962,11 +981,15 @@ DoReceivedData(HWND hWnd)
 	{
 		do {
 		
+			if (PartLinePtr != 0)
+				SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );		
+
 			GetMsg(Stream, &readbuff[PartLinePtr],&len,&count);
 		
 			len=len+PartLinePtr;
 
 			ptr1=&readbuff[0];
+			readbuff[len]=0;
 
 			if (Bells)
 			{
@@ -1000,6 +1023,8 @@ DoReceivedData(HWND hWnd)
 					PartLinePtr=len;
 
 					memmove(readbuff,ptr1,len);
+					PartLineIndex=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) PartLineIndex, MAKELPARAM(FALSE, 0));
 
 					return (0);
 

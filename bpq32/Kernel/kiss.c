@@ -12,6 +12,9 @@
 //	Version 409p March 2005 Allow Multidigit COM Ports
 
 #include "kiss.h"
+
+int WritetoConsoleLocal(char * buff);
+
    
 int ASYSEND(int port, char * buffer,int count)
 {
@@ -25,6 +28,8 @@ int	ASYINIT(int port, int speed, int PortVector,int RXVector)
 {
 	NPTTYINFO npTTYInfo ;
 	
+	WritetoConsoleLocal("ASYNC ");
+
 	CreateTTYInfo(port,speed);
 
 	if (NULL == (npTTYInfo = KISSInfo[port]))
@@ -122,7 +127,8 @@ BOOL NEAR OpenConnection( int port)
    BOOL       fRetVal ;
    NPTTYINFO  npTTYInfo ;
    COMMTIMEOUTS  CommTimeOuts ;
-   int i;
+   
+	char buf[100];
 
    if (NULL == (npTTYInfo = KISSInfo[port]))
       return ( FALSE ) ;
@@ -143,7 +149,8 @@ BOOL NEAR OpenConnection( int port)
 				  
 	if (COMDEV( npTTYInfo ) == (HANDLE) -1 )
 	{
-		i=GetLastError();
+		wsprintf(buf,"COM%d could not be opened ", PORT( npTTYInfo ));
+		WritetoConsoleLocal(buf);
 		return ( FALSE ) ;
 	}
 

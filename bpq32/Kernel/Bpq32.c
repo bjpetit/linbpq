@@ -87,6 +87,14 @@
 //					Ext Driver Close routes called
 //					Changes to release Mutex
 
+// 410e		May 2008
+
+//				Fix missing SSID on last call of UNPROTO string (CONVTOAX25 in main.asm)
+//				Fix VCOM Driver (RX Len was 1 byte too long)
+//				Fix possible crash on L4CODE if L4DACK received out of sequence
+//				Add basic IP decoding
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 
 #pragma data_seg("_BPQDATA")
@@ -170,6 +178,7 @@ DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
 
 DllExport long  MONDECODEPTR=(long)&MONDECODE;
 
+int WritetoConsoleLocal(char * buff);
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 
@@ -3242,9 +3251,12 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd)
 	}
 	return -1;
 }
- 
-
 DllExport int APIENTRY WritetoConsole(char * buff)
+{
+	return WritetoConsoleLocal(buff);
+}
+
+int WritetoConsoleLocal(char * buff)
 {
 	int ptr;
 	int len=strlen(buff);

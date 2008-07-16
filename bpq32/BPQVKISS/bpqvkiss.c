@@ -15,6 +15,10 @@
 
 //		Changes for dynamic unload of bpq32.dll
 
+// Version 1.2.1 May 2008
+
+//		Correct RX length (was 1 byte too long)
+
 #define WIN32_LEAN_AND_MEAN
 
 #include "windows.h"
@@ -125,7 +129,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		len = GetRXMessage(port,buff);
 	
-		return (len);
+		if (len>0)
+			return (len);
+		
+		return len;
 
 	case 2:				// send
 
@@ -266,9 +273,9 @@ int GetRXMessage(int port,UCHAR * buff)
 	if (pVCOMInfo->MSGREADY)
 	{
 	
-		len=pVCOMInfo->RXMPTR-&pVCOMInfo->RXMSG[0];
+		len=pVCOMInfo->RXMPTR-&pVCOMInfo->RXMSG[1];		// DOnt need KISS Control Byte
 		
-		if (pVCOMInfo->RXMSG[0] !=0)
+ 		if (pVCOMInfo->RXMSG[0] !=0)
 		{
 			pVCOMInfo->MSGREADY=FALSE;
 			pVCOMInfo->RXMPTR=(UCHAR *)&pVCOMInfo->RXMSG;
@@ -279,9 +286,9 @@ int GetRXMessage(int port,UCHAR * buff)
 		//	Remove KISS control byte
 		//
 
-		memcpy(&buff[7],&pVCOMInfo->RXMSG[1],len-1);
+		memcpy(&buff[7],&pVCOMInfo->RXMSG[1],len);
 
-		len+=6;
+		len+=7;
 		buff[5]=(len & 0xff);
 		buff[6]=(len >> 8);
 		
@@ -454,7 +461,17 @@ int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
 BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
 {
 	ULONG bytesReturned;
-	
+	int i;
+
+//	for (i=0;i<MsgLen;i++)
+//	{
+		
+//		DeviceIoControl(VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,&Message[i],1,NULL,0, &bytesReturned,NULL);
+//		Sleep(1);
+//	}
+
+
+//	return 0;
 	return DeviceIoControl(
 		VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
                   

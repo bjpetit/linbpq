@@ -7,6 +7,8 @@
 
 ;	 OCTOBER 2006 SUPPORT UP TO 8 L4 APPLICATION CALL/ALIAS PAIRS
 
+;	May 2008 Fix convtoax25 to handle null-terminated call strings (UNPROTO SSID Problem)
+
 DEBUG	EQU	0
 
 CR	EQU	0DH
