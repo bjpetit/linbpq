@@ -252,6 +252,13 @@ DllExport int APIENTRY WritetoConsole(char * buff);
 BOOLEAN CheckifBPQ32isLoaded();
 BOOLEAN StartBPQ32();
 
+BOOL Init_IP();
+BOOL Poll_IP();  
+BOOL Send_IP(VOID * Block, DWORD len);
+
+BOOL IPActive=FALSE;
+BOOL IPRequired=TRUE;
+
 Tell_Sessions();
 
 void GetSemaphore()
@@ -589,6 +596,9 @@ VOID CALLBACK TimerProc(
 
 	GetSemaphore();
 
+	if (IPActive)
+		Poll_IP(); 
+
 	TIMERINTERRUPT();
 	
 	FreeSemaphore();
@@ -612,6 +622,10 @@ FirstInit()
 	TimerInst=GetCurrentProcessId();
 
  	WritetoConsole("\n\nPort Initialisation Complete\n");
+
+	if (IPRequired) 
+		Init_IP();
+
 	OutputDebugString("BPQ32 Port Initialisation Complete");
 
 	return 0;
