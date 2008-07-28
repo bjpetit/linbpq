@@ -20,6 +20,8 @@
 #define BPQFLAGS3                       40012
 #define BPQFLAGS4                       40013
 #define BPQCOPY                         40014
+#define BPQSTREAMS                      40015
+#define BPQIPSTATUS                     40016
 
 // Next default values for new objects
 // 

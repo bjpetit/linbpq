@@ -694,7 +694,11 @@ Check_Timer()
 //		NPHandle=CreateNamedPipe("\\\\.\\pipe\\BPQ32pipe",
 //					PIPE_ACCESS_DUPLEX,0,64,4096,4096,1000,NULL);
 
- 		WritetoConsole("\n\nReinitialisation Complete\n");
+ 		if (IPRequired) 
+			Init_IP();
+
+		
+		WritetoConsole("\n\nReinitialisation Complete\n");
 
 		_beginthread(MonitorThread,0,0);
 

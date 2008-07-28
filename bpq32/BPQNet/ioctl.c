@@ -214,6 +214,17 @@ Return Value:
 
 		  NdisAcquireSpinLock(&GlobalData.Lock);
 
+		  if (IsListEmpty(&GlobalData.AdapterList))
+		  {
+
+		
+			DEBUGP(MP_TRACE, ("IOCTL Adapter Gone\n"));
+
+		  NdisReleaseSpinLock(&GlobalData.Lock);
+
+		  break;
+		  }
+
 		  Adapter = (PMP_ADAPTER) &GlobalData.AdapterList;
 		  Adapter = (PMP_ADAPTER) Adapter->List.Flink;
 
@@ -222,7 +233,7 @@ Return Value:
          switch (irpStack->Parameters.DeviceIoControl.IoControlCode) 
           {
 
-		  case IOCTL_NETVMINI_GETMACADDR:
+		  case IOCTL_BPQdrv_GETMACADDR:
  
 				if (outlen >=12)			// Room for 2 mc addresses
 				{
@@ -236,7 +247,7 @@ Return Value:
 				break;
 
             
-		  case IOCTL_NETVMINI_READ_DATA:
+		  case IOCTL_BPQdrv_READ_DATA:
 
 			
 				// In a METHOD_BUFFERED IOCTL, like a buffered read or write request, data transfer
@@ -248,7 +259,11 @@ Return Value:
 				// These values represent the maximum number of bytes the driver should read or write
 				// in response to the buffered IOCTL.
   
-					
+				if (!MP_IS_READY(Adapter))	// Probably being disabled or hibernating
+				{
+					break;
+				}
+
 				NdisAcquireSpinLock(&Adapter->BPQLock);    
 
 				if(IsListEmpty(&Adapter->TCBForBPQ))
@@ -275,7 +290,7 @@ Return Value:
 				break;
 
 
-			case IOCTL_NETVMINI_WRITE_DATA:
+			case IOCTL_BPQdrv_WRITE_DATA:
 				{
 					PTCB           pTCB = NULL;
 				    PNDIS_PACKET     RecvPacket = NULL;

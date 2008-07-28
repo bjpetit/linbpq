@@ -35,7 +35,7 @@ SOURCES = \
 	request.c \
 	sendrcv.c \
         ioctl.c \
-	netvmini.rc 
+	BPQdrv.rc 
 
 
 

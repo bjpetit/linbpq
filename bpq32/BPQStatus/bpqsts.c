@@ -7,9 +7,13 @@
 #include <malloc.h>	
 #include <memory.h>
 
+#define Dll	__declspec( dllimport )
 
 #include "bpqsts.h"
 #include "..\include\bpq32.h"			// BPQ32 API Defines
+#include "..\include\asmstrucs.h"
+
+#include "..\kernel\ipcode.h"
 
 #define BPQICON 400
 
@@ -17,6 +21,8 @@ HINSTANCE hInst;
 char AppName[] = "BPQ Node Stream Status";
 char Title[80];
 
+ARPDATA * ARPRecord = NULL;				// ARP Table - malloc'ed as needed
+IPSTATS * IPStats = NULL;
 
 // Foward declarations of functions included in this code module:
 
@@ -29,9 +35,15 @@ LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 void LoadToolHelperRoutines();
 
 int DoStatus();
+int DoIPStatus();
 CopyScreentoBuffer(char * buff);
+VOID DoARPLine(int i);
 
 char Screen[4000];
+char NewScreen[4000];
+
+int IPStatsState = -1;
+int ARPCount = 1;
 
 int ptr=0;
 
@@ -44,6 +56,7 @@ int change;
 int applmask = 0;
 int applflags=0;
 
+BOOL StreamDisplay = TRUE;
 
 CONNECTED=FALSE;
 AUTOCONNECT=TRUE;
@@ -181,12 +194,18 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	SetWindowText(hWnd,AppName);
 	
 	hMenu=CreateMenu();
+	hPopMenu2=CreatePopupMenu();
 	hPopMenu3=CreatePopupMenu();
 	SetMenu(hWnd,hMenu);
 
+	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu2,"Window");
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu3,"Edit");
 
+	AppendMenu(hPopMenu2,MF_STRING,BPQSTREAMS,"Streams");
+	AppendMenu(hPopMenu2,MF_STRING,BPQIPSTATUS,"IP Status");
 	AppendMenu(hPopMenu3,MF_STRING,BPQCOPY,"Copy");
+
+	CheckMenuItem(hMenu,BPQSTREAMS,MF_CHECKED);
 
 	DrawMenuBar(hWnd);	
 
@@ -325,7 +344,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_TIMER:
 
-		DoStatus();
+		if (StreamDisplay) DoStatus(); else DoIPStatus();
 
 		InvalidateRect(hWnd,NULL,FALSE);
 		return (0);
@@ -339,6 +358,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		//Parse the menu selections:
 		
 		switch (wmId) {
+
+			case BPQSTREAMS:
+	
+				CheckMenuItem(hMenu,BPQSTREAMS,MF_CHECKED);
+				CheckMenuItem(hMenu,BPQIPSTATUS,MF_UNCHECKED);
+
+				StreamDisplay = TRUE;
+
+				break;
+
+			case BPQIPSTATUS:
+	
+				CheckMenuItem(hMenu,BPQSTREAMS,MF_UNCHECKED);
+				CheckMenuItem(hMenu,BPQIPSTATUS,MF_CHECKED);
+
+				StreamDisplay = FALSE;
+
+				break;
+
         
 			case BPQCOPY:
 		
@@ -530,5 +568,87 @@ int DoStatus()
 	}
 
 	return(0);
+}
+
+int DoIPStatus()
+{
+	CheckTimer();
+
+	if (IPStatsState == -1)
+	{
+		//	Start a new cycle.
+
+		//	As the arp table is in shared memory, we have to ask bpq32.dll to copyeach entry to our
+		//	memory. Do one entry on each call of the timer.
+
+		memset(NewScreen, ' ', 4000); 
+		strcpy(NewScreen,"     IP Address     MAC Address        Port Type Valid Timer");
+
+		GetIPInfo(&ARPRecord, &IPStats, 0);
+
+		IPStatsState = 0;
+
+		return 0;
+	}
+
+	if (IPStatsState == 0)
+	{
+		//should have first entry, and number of entries. Should always be at least 1.
+
+		ARPCount = IPStats->ARPEntries;
+	}
+
+	DoARPLine(IPStatsState++);
+
+	if (IPStatsState == ARPCount)
+	{
+		IPStatsState = -1;
+		memcpy(Screen, NewScreen, 4000);
+	}
+	else
+		GetIPInfo(&ARPRecord, &IPStats, IPStatsState);
+	
+	return 0;
+}
+
+VOID DoARPLine(int i)
+{
+	int SSID, j;
+	char Mac[20];
+	char Call[7];
+
+	struct in_addr Addr;
+	Addr.s_addr = ARPRecord->IPADDR;
+
+	if(ARPRecord->ARPINTERFACE == 255)
+	{
+			wsprintf(Mac," %02x:%02x:%02x:%02x:%02x:%02x", 
+				ARPRecord->HWADDR[0],
+				ARPRecord->HWADDR[1],
+				ARPRecord->HWADDR[2],
+				ARPRecord->HWADDR[3],
+				ARPRecord->HWADDR[4],
+				ARPRecord->HWADDR[5]);
+	}
+	else
+	{
+			for (j=0; j< 6; j++)
+			{
+				Call[j] = ARPRecord->HWADDR[j]/2;
+				if (Call[j] == 32) Call[j] = 0;
+			}
+			Call[6] = 0;
+			SSID = (ARPRecord->HWADDR[6] & 31)/2;
+			
+			wsprintf(Mac," %s-%d", Call, SSID);
+	}
+
+	wsprintf(&NewScreen[(i+1)*108],"%18s %-19s %4d   %c  %3d   %d",
+			inet_ntoa(Addr), Mac, ARPRecord->ARPINTERFACE,
+			ARPRecord->ARPTYPE, ARPRecord->ARPVALID, ARPRecord->ARPTIMER);
+
+	
+
+	return;
 }
 
