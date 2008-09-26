@@ -15,9 +15,7 @@
 // First Version, July 2008
 
 /*
-TODO	Read Config
-		Retry Default Gateway ARP
-		? Time Out ARP
+TODo	?Time Out ARP
 		?Multiple Adapters
 */
 
@@ -27,13 +25,9 @@ TODO	Read Config
 
 #define Dll	__declspec( dllexport )
 
-
 #include "windows.h"
-
 #include <stdio.h>
-
 #include "AsmStrucs.h"
-
 #include "IPCode.h"
 
 //       ARP REQUEST (AX.25)
@@ -52,30 +46,31 @@ extern BOOL IPActive;
 
 HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
-
 ULONG OurIPAddr = 0;
 ULONG OurIPBroadcast = 0;
 
 int FramesForwarded = 0;
 int FramesDropped = 0;
 int ARPTimeouts = 0;
+int SecTimer = 10;
 
 // Following two fields used by stats to get round shared memmory problem
 
 ARPDATA Arp={0};
-
 int ARPFlag = -1;
 
 // Following Buffer is used for msgs from BPQDEV Driver. Put the Enet message part way down the buffer, 
 //	so there is room for ax.25 header instead of Enet header when we route the frame to ax.25
 //	Enet Header ia 14 bytes, AX.25 UI is 16
 
-#define EthOffset 10				// Should be plenty
+// Also used to reassemble NOS Fragmented ax.25 packets
 
-UCHAR Buffer[1600] = {0};
+UCHAR Buffer[1630] = {0};
+
+#define EthOffset 30				// Should be plenty
+
 DWORD IPLen = 0;
-UCHAR Mac[12] = {0};						// Permanant address, Current Address
-
+UCHAR Mac[12] = {0};				// Permanant address, Current Address
 
 UCHAR QST[7]={'Q'+'Q','S'+'S','T'+'T',0x40,0x40,0x40,0xe0};		//QST IN AX25
 UCHAR ourMACAddr[6] = {02,'B','P','Q',0,1};
@@ -123,7 +118,6 @@ BOOL Init_IP()
 		return FALSE;
 	} 
 
-
 	DeviceIoControl (hBPQNET, IOCTL_NETVMINI_GETMACADDR,NULL, 0, &Mac, 12, &IPLen, NULL);
 
 	// Clear old packets
@@ -137,8 +131,7 @@ BOOL Init_IP()
 
 	while (IPLen > 0);
 
-
-	IPHOSTVECTOR.HOSTAPPLFLAGS = 0x80;
+	IPHOSTVECTOR.HOSTAPPLFLAGS = 0x80;			// Request IP frams from Node
 
 	// Set up static fields in ARP messages
 
@@ -188,12 +181,22 @@ BOOL Init_IP()
 
 BOOL Poll_IP()
 {
-	// if ARPFlag set, copy requested ARP record
+	// Entered every 100 mS
+	
+	// if ARPFlag set, copy requested ARP record (For BPQStatus GUI)
 
 	if (ARPFlag != -1)
 	{
 		memcpy(&Arp, ARPRecords[ARPFlag], sizeof (ARPDATA));
 		ARPFlag = -1;
+	}
+
+	SecTimer--;
+
+	if (SecTimer == 0)
+	{
+		SecTimer = 10;
+		DoARPTimer();
 	}
 
 Pollloop:
@@ -211,7 +214,7 @@ Pollloop:
 		if (ethptr->ETYPE == 0x0008)
 		{
 			PIPMSG ipptr = (PIPMSG)&Buffer[EthOffset+14];
-			ProcessIPMsg(ipptr);
+			ProcessIPMsg(ipptr, ethptr->SOURCE, 'E', 255);
 			goto Pollloop;
 		}
 
@@ -239,19 +242,88 @@ Pollloop:
 
 		// Packet from AX.25
 
-		if (axmsg->PID == 0xcc)
+		switch (axmsg->PID)
 		{
+		case  0xcc:
+
 			// IP Message
 
+			{
 				PIPMSG ipptr = (PIPMSG)++axmsg;
+				axmsg--;
+				ProcessIPMsg(ipptr, axmsg->ORIGIN, (axmsg->CTL == 3) ? 'D' : 'V', axmsg->PORT);
+				break;
+			}
 
-				ProcessIPMsg(ipptr);
-		}
-		if (axmsg->PID == 0xcd)
-		{
+		case 0xcd:
+		
 			// ARP Message
 
-				ProcessAXARPMsg((PAXARP)axmsg);
+			ProcessAXARPMsg((PAXARP)axmsg);
+			break;
+
+		case 0x08:
+
+			// Fragmented message
+
+			// The L2 code ensures that the last fragment is present before passing the
+			// message up to us. It is just possible that bits are missing
+			{
+				UCHAR * ptr = &axmsg->PID;
+				UCHAR * nextfrag;
+
+				int frags;
+				int len;
+
+				ptr++;
+
+				if (!(*ptr & 0x80))
+					break;					// Not first fragment???
+				
+				frags=*ptr++ & 0x7f;
+
+				len = axmsg->LENGTH;
+
+				len-= sizeof(MESSAGE);
+				len--;						// Remove Frag Control Byte
+
+				memcpy(&Buffer[EthOffset], ptr, len);
+
+				nextfrag = &Buffer[EthOffset]+len;
+
+				// Release Buffer
+fragloop:
+				savemsg->CHAIN = FREE_Q;
+				FREE_Q = savemsg;
+				QCOUNT++;
+
+				if (IPHOSTVECTOR.HOSTTRACEQ == 0)	goto Pollloop;		// Shouldn't happen
+
+				axmsg = IPHOSTVECTOR.HOSTTRACEQ;
+				IPHOSTVECTOR.HOSTTRACEQ = axmsg->CHAIN;
+				savemsg=axmsg;
+
+				ptr = &axmsg->PID;
+				ptr++;
+				
+				if (--frags != (*ptr++ & 0x7f))
+					break;					// Out of sequence
+
+				len = axmsg->LENGTH;
+
+				len-= sizeof(MESSAGE);
+				len--;						// Remove Frag Control Byte
+
+				memcpy(nextfrag, ptr, len);
+
+				nextfrag+=len;
+
+				if (frags != 0) goto fragloop;
+
+				ProcessIPMsg((PIPMSG)&Buffer[EthOffset+1],axmsg->ORIGIN, (axmsg->CTL == 3) ? 'D' : 'V', axmsg->PORT);
+
+				break;
+			}
 
 		}
 		// Release the buffer
@@ -262,7 +334,7 @@ Pollloop:
 
 		QCOUNT++;
 
-		return TRUE;
+		goto Pollloop;
 
 	}
 	return TRUE;
@@ -271,7 +343,6 @@ Pollloop:
 BOOL Send_ETH(VOID * Block, DWORD len)
 {
     DWORD bytes;
-	
 	DeviceIoControl(hBPQNET,
 		IOCTL_NETVMINI_WRITE_DATA,
 		Block, len,
@@ -279,12 +350,23 @@ BOOL Send_ETH(VOID * Block, DWORD len)
         &bytes, NULL);
     
     return TRUE;
+
 }
-VOID Send_AX(VOID * Block, DWORD Len, UCHAR Port)
+
+#define AX25_P_SEGMENT  0x08
+#define SEG_REM         0x7F
+#define SEG_FIRST       0x80
+
+VOID Send_AX_Datagram(PMESSAGE Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 {
 	//	Can't use API SENDRAW, as that tries to get the semaphore, which we already have
 
 	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	memcpy(Block->DEST, HWADDR, 7);
+	memcpy(Block->ORIGIN, MYCALL, 7);
+	Block->ORIGIN[6] |= 1;						// Set End of Call
+	Block->CTL = 3;		//UI
 
 	_asm {
 
@@ -303,10 +385,83 @@ VOID Send_AX(VOID * Block, DWORD Len, UCHAR Port)
 	popad
 	popfd
 	}
+	return;
+
+}
+VOID Send_AX_CONNECTED(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
+{
+	DWORD PACLEN=255;
+	int fragno;
+	int first=1;
+	UCHAR * p;
+	int txlen;
+
+	// if Len - 16 is grater than PACLEN, then fragment (only possible on Virtual Circuits,
+	//	as fragmentation relies upon reliable delivery
+	
+	if ((Len - 16) <= PACLEN)
+	{
+		SendNetFrame(HWADDR, MYCALL, Block, Len, Port);
+		return;
+	}
+
+	Len=Len-15;
+
+	PACLEN-=2;               /* Allow for fragment control info */
+
+	fragno = Len / PACLEN;
+
+	if (Len % PACLEN == 0) fragno--;
+
+	p=Block;
+	p+=20;
+
+	while (Len > 0)
+	{
+
+	*p++ = AX25_P_SEGMENT;
+
+	*p = fragno--;
+	if (first)
+	{
+		*p |= SEG_FIRST;
+		first = 0;
+	}
+
+	txlen = (PACLEN > Len) ? Len : PACLEN;
+
+	SendNetFrame(HWADDR, MYCALL, p-23, txlen+17, Port);
+
+	p+=(txlen-1);
+	Len-=txlen;
+	}
 
 	return;
 }
+VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port)
+{
+	memcpy(&Block[7],ToCall, 7);
+	memcpy(&Block[14],FromCall, 7);
 
+	_asm {
+
+		pushfd
+		cld
+		pushad
+
+		mov	ecx,Len
+		mov	esi,Block
+		add	esi,7
+
+		mov	dl,Port
+		call	SENDNETFRAME
+
+		popad
+		popfd
+		}
+		
+	return;
+}
 
 VOID ProcessEthARPMsg(PETHARP arpptr)
 {
@@ -328,18 +483,14 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 		if (Arp != NULL)
 		{
 			Arp->IPADDR = arpptr->SENDIPADDR;
-
-
 			Arp->ARPTYPE = 'E';
 			Arp->ARPINTERFACE = 255;
+			memcpy(Arp->HWADDR, arpptr->SENDHWADDR ,6);
+			Arp->ARPVALID = TRUE;
+			Arp->ARPTIMER =  86400;
 		}
 
 AlreadyThere:
-
-		memcpy(Arp->HWADDR, arpptr->SENDHWADDR ,6);
-		Arp->ARPVALID = TRUE;
-		Arp->ARPTIMER =  86400;
-
 
 		if (arpptr->TARGETIPADDR == OurIPAddr)
 		{
@@ -361,10 +512,6 @@ AlreadyThere:
 
 		// Send to all other ports enabled for IP, reformatting as necessary
 
-		memcpy(AXARPREQMSG.MSGHDDR.DEST, QST, 7);
-		memcpy(AXARPREQMSG.MSGHDDR.ORIGIN, MYCALL, 7);
-		AXARPREQMSG.MSGHDDR.ORIGIN[6] |= 1;			// Set End of Call
-
 		AXARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
 		AXARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
 		memset(AXARPREQMSG.TARGETHWADDR, 0, 7);
@@ -373,7 +520,7 @@ AlreadyThere:
 		for (i=1; i<=NUMBEROFPORTS; i++)
 		{
 			if (Mask & 1)
-				Send_AX(&AXARPREQMSG, 46, i);
+				Send_AX_Datagram((PMESSAGE)&AXARPREQMSG, 46, i, QST);
 
 			Mask>>=1;
 		}
@@ -402,10 +549,12 @@ Update:
 		Arp->ARPVALID = TRUE;
 		Arp->ARPTIMER =  86400;
 
-
 SendBack:
+		
+		//  Send Back to Originator of ARP Request
 
-			//  Send Back to Originator of ARP Request
+		if (arpptr->TARGETIPADDR == OurIPAddr)		// Reply to our request?
+			break;
 
 		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
 				
@@ -432,9 +581,8 @@ SendBack:
 				memcpy(AXARPREQMSG.SENDHWADDR, MYCALL, 7);
 				memcpy(AXARPREQMSG.TARGETHWADDR, Arp->HWADDR, 7);
 					
-				memcpy(AXARPREQMSG.MSGHDDR.DEST, Arp->HWADDR, 7);
+				Send_AX_Datagram((PMESSAGE)&AXARPREQMSG, 46, Arp->ARPINTERFACE, Arp->HWADDR);
 
-				Send_AX(&AXARPREQMSG, 46, Arp->ARPINTERFACE);
 				return;
 			}
 		}
@@ -451,6 +599,11 @@ VOID ProcessAXARPMsg(PAXARP arpptr)
 	int i=0, Mask=IPPortMask;
 	PARPDATA Arp;
 	BOOL Found;
+
+	arpptr->MSGHDDR.ORIGIN[6] &= 0x7e;			// Clear end of Call
+
+	if (memcmp(arpptr->MSGHDDR.ORIGIN, MYCALL, 7) == 0)	// ?Echoed packet?
+		return;
 
 	switch (arpptr->ARPOPCODE)
 	{
@@ -475,17 +628,27 @@ VOID ProcessAXARPMsg(PAXARP arpptr)
 			Arp->ARPINTERFACE = arpptr->MSGHDDR.PORT;
 			Arp->ARPVALID = TRUE;
 			Arp->ARPTIMER =  86400;
-
 		}
 
 AlreadyThere:
 
+		if (arpptr->TARGETIPADDR == OurIPAddr)
+		{
+			arpptr->ARPOPCODE = 0x0200;
+			memcpy(arpptr->TARGETHWADDR, arpptr->SENDHWADDR, 7);
+			memcpy(arpptr->SENDHWADDR, MYCALL, 7);
+
+			arpptr->TARGETIPADDR = arpptr->SENDIPADDR;
+			arpptr->SENDIPADDR = OurIPAddr;
+
+			Send_AX_Datagram((PMESSAGE)arpptr, 46, arpptr->MSGHDDR.PORT, arpptr->MSGHDDR.ORIGIN);
+
+			return;
+
+		}
+
 		// Send to all other ports enabled for IP, reformatting as necessary
 	
-		memcpy(AXARPREQMSG.MSGHDDR.DEST, QST, 7);
-		memcpy(AXARPREQMSG.MSGHDDR.ORIGIN, MYCALL, 7);
-		AXARPREQMSG.MSGHDDR.ORIGIN[6] |= 1;			// Set End of Call
-
 		AXARPREQMSG.ARPOPCODE = 0x0100;
 		AXARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
 		AXARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
@@ -494,10 +657,13 @@ AlreadyThere:
 		{
 			if (i != arpptr->MSGHDDR.PORT)
 				if (Mask & 1)
-				Send_AX(&AXARPREQMSG, 46, i);
+					Send_AX_Datagram((PMESSAGE)&AXARPREQMSG, 46, i, QST);
 
 			Mask>>=1;
 		}
+
+		memset(ETHARPREQMSG.MSGHDDR.DEST, 0xff, 6);
+		memcpy(ETHARPREQMSG.MSGHDDR.SOURCE, ourMACAddr, 6);
 
 		ETHARPREQMSG.ARPOPCODE = 0x0100;
 		ETHARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
@@ -512,8 +678,7 @@ AlreadyThere:
 	case 0x0200:
 
 		// Update ARP Cache
-
-		
+	
 		Arp = LookupARP(arpptr->SENDIPADDR, TRUE, &Found);
 		
 		if (Found)
@@ -533,7 +698,10 @@ Update:
 
 SendBack:
 
-			//  Send Back to Originator of ARP Request
+		//  Send Back to Originator of ARP Request
+
+		if (arpptr->TARGETIPADDR == OurIPAddr)		// Reply to our request?
+			break;
 
 		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
 
@@ -563,9 +731,8 @@ SendBack:
 				memcpy(AXARPREQMSG.SENDHWADDR, MYCALL, 7);
 				memcpy(AXARPREQMSG.TARGETHWADDR, Arp->HWADDR, 7);
 
-				memcpy(AXARPREQMSG.MSGHDDR.DEST, Arp->HWADDR, 7);
+				Send_AX_Datagram((PMESSAGE)&AXARPREQMSG, 46, Arp->ARPINTERFACE, Arp->HWADDR);
 
-				Send_AX(&AXARPREQMSG, 46, Arp->ARPINTERFACE);
 				return;
 			}
 		}
@@ -579,15 +746,43 @@ SendBack:
 	}
 }
 
-	
-
-VOID ProcessIPMsg(PIPMSG IPptr)
+VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 {
 	ULONG Dest;
+	PARPDATA Arp;
+	BOOL Found;
+
 
 	if (IPptr->VERLEN != 0x45) return; //Only support Type = 4, Len = 20
 
 	if (!CheckIPChecksum(IPptr)) return;
+
+	// Make sure origin ia in ARP Table
+
+	Arp = LookupARP(IPptr->IPSOURCE, TRUE, &Found);
+
+	if (!Found)
+	{
+		// Add if possible
+
+		if (Arp != NULL)
+		{
+			Arp->IPADDR = IPptr->IPSOURCE;
+			if (Type == 'E')
+			{
+				memcpy(Arp->HWADDR, MACADDR, 6);
+			}
+			else
+			{
+				memcpy(Arp->HWADDR, MACADDR, 7);
+				Arp->HWADDR[6] &= 0x7f;
+			}
+			Arp->ARPTYPE = Type;
+			Arp->ARPINTERFACE = Port;
+			Arp->ARPVALID = TRUE;
+			Arp->ARPTIMER =  86400;
+		}
+	}
 
 	// See if for us - if not pass to router
 
@@ -608,7 +803,6 @@ ForUs:
 		ProcessICMPMsg(IPptr);
 		return;
 	}
-
 }
 
 BOOL CheckIPChecksum(PIPMSG IPptr)
@@ -685,13 +879,10 @@ CSUMLOOP:
 	ADC     DX,0            ; MAY BE CARRY FLOATING AROUND
 
 	NOT		DX
-
 	mov	checksum,dx
-
 	}
 
 	return checksum ;
-
 }
 
 VOID ProcessICMPMsg(PIPMSG IPptr)
@@ -700,9 +891,7 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 	PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
 
 	Len = ntohs(IPptr->IPLENGTH);
-
 	Len-=20;
-
 
 	Check_Checksum(ICMPptr, Len);
 
@@ -725,7 +914,6 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 		IPptr->IPSOURCE = OurIPAddr;
 
 		RouteIPMsg(IPptr);			// Send Back
-
 	}
 
 	if (ICMPptr->ICMPTYPE == 8)
@@ -733,7 +921,7 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 		//	ICMP_REPLY:
 	}
 
-	// Ingonre others
+	// Ingnore others
 }
 
 VOID RouteIPMsg(PIPMSG IPptr)
@@ -741,7 +929,7 @@ VOID RouteIPMsg(PIPMSG IPptr)
 	PARPDATA Arp;
 	BOOL Found;
 
-	// We rely on the ARP messages generated by eiter end to route frames.
+	// We rely on the ARP messages generated by either end to route frames.
 	//	If address is not in ARP cache (say call originated by MSYS), send to our default route
 
 	// Look up ARP
@@ -759,11 +947,10 @@ VOID RouteIPMsg(PIPMSG IPptr)
 		if (Arp->ARPTYPE == 'E')
 			SendIPtoBPQDEV(IPptr, Arp->HWADDR);
 		else
-			SendIPtoAX25(IPptr, Arp->HWADDR, Arp->ARPINTERFACE);
+			SendIPtoAX25(IPptr, Arp->HWADDR, Arp->ARPINTERFACE, Arp->ARPTYPE);
 	}
 	
 	return;	
-
 }
 
 VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR)
@@ -788,7 +975,7 @@ VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR)
 	return;
 }
 
-VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port)
+VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 {
 	PMESSAGE Msgptr = (PMESSAGE)IPptr;
 	int Len;
@@ -798,16 +985,17 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port)
 	Len = ntohs(IPptr->IPLENGTH);
 
 	Len+=16;
-
-	memcpy(Msgptr->DEST, HWADDR, 7);
-	memcpy(Msgptr->ORIGIN, MYCALL, 7);
-	Msgptr->ORIGIN[6] |= 1;						// Set End of Call
-	Msgptr->CTL = 3;		//UI
 	Msgptr->PID = 0xcc;		//IP
 
-	Send_AX(Msgptr, Len, Port);
+	if (Mode == 'D')		// Datagram
+	{
+		Send_AX_Datagram(Msgptr, Len, Port, HWADDR);
+		return;
+	}
 
-	return;
+	Send_AX_CONNECTED(Msgptr, Len, Port, HWADDR);
+
+
 }
 
 PARPDATA AllocARPEntry()
@@ -863,11 +1051,8 @@ PARPDATA AllocARPEntry()
 
 		memcpy(AXARPREQMSG.SENDHWADDR, MYCALL, 7);
 		memcpy(AXARPREQMSG.TARGETHWADDR, Arp->HWADDR, 7);
-		memcpy(AXARPREQMSG.MSGHDDR.DEST, QST, 7);
-		memcpy(AXARPREQMSG.MSGHDDR.ORIGIN, MYCALL, 7);
-		AXARPREQMSG.MSGHDDR.ORIGIN[6] |= 1;			// Set End of Call
 
-		Send_AX(&AXARPREQMSG, 46, Arp->ARPINTERFACE);
+		Send_AX_Datagram((PMESSAGE)&AXARPREQMSG, 46, Arp->ARPINTERFACE, QST);
 
 		return;
 
@@ -971,7 +1156,6 @@ BOOL ReadConfigFile(char * fn)
 	fclose(file);
 
 	return (TRUE);
-
 }
 
 
@@ -992,7 +1176,7 @@ ProcessLine(char * buf)
 
 	if (_stricmp(ptr,"IPAddr") == 0)
 	{
-		OurIPAddr = inet_addr("192.168.0.129");
+		OurIPAddr = inet_addr(p_value);
 
 		if (OurIPAddr == INADDR_NONE) return (FALSE);
 
@@ -1001,7 +1185,7 @@ ProcessLine(char * buf)
 
 	if (_stricmp(ptr,"IPBroadcast") == 0)
 	{
-		OurIPBroadcast = inet_addr("192.168.0.129");
+		OurIPBroadcast = inet_addr(p_value);
 
 		if (OurIPBroadcast == INADDR_NONE) return (FALSE);
 
@@ -1010,7 +1194,7 @@ ProcessLine(char * buf)
 
 	if (_stricmp(ptr,"IPGateway") == 0)
 	{
-		DefaultIPAddr = inet_addr("192.168.0.129");
+		DefaultIPAddr = inet_addr(p_value);
 
 		if (DefaultIPAddr == INADDR_NONE) return (FALSE);
 
@@ -1037,7 +1221,28 @@ ProcessLine(char * buf)
 	//
 	return (FALSE);
 	
+}VOID DoARPTimer()
+{
+	PARPDATA Arp = NULL;
+	int i;
+
+	for (i=0; i < NumberofARPEntries; i++)
+	{
+		Arp = ARPRecords[i];
+
+		if (!Arp->ARPVALID)
+		{
+			Arp->ARPTIMER--;
+			
+			if (Arp->ARPTIMER == 0)
+			{
+				// Retry Request
+
+				SendARPMsg(Arp);
+			}
+		}
+	}
 }
-	
+
 
 

@@ -50,19 +50,15 @@ BOOL WriteCommBlock(int port, LPSTR lpByte , DWORD dwBytesToWrite);
 
 PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 
-
 #define	FEND	0xC0	// KISS CONTROL CODES 
 #define	FESC	0xDB
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
-
 unsigned int VKISSInst = 0;
 int AttachedProcesses=0;
 
-
 HANDLE STDOUT=0;
-//DWORD n;
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
@@ -112,8 +108,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	}
  
 	return 1;
-	
-
 }
 
 DllExport int ExtProc(int fn, int port,unsigned char * buff)
@@ -168,7 +162,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 }
 
-
 DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 {
 	
@@ -189,7 +182,6 @@ DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 		
 	return ((int) ExtProc);
 }
-
 
 int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
@@ -229,14 +221,11 @@ int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 
 }
   
-
-
 int	ASYINIT(int comport, int speed, int bpqport)
 {
    char       szPort[ 30 ];
    char buf[256];
    int n;
-
 
    wsprintf( szPort, "\\\\.\\BPQ%d", comport ) ;
 
@@ -256,7 +245,6 @@ int	ASYINIT(int comport, int speed, int bpqport)
 	}
 
 	return (TRUE) ;
-
 }
 
 int GetRXMessage(int port,UCHAR * buff)
@@ -272,10 +260,9 @@ int GetRXMessage(int port,UCHAR * buff)
 
 	if (pVCOMInfo->MSGREADY)
 	{
-	
 		len=pVCOMInfo->RXMPTR-&pVCOMInfo->RXMSG[1];		// DOnt need KISS Control Byte
 		
- 		if (pVCOMInfo->RXMSG[0] !=0)
+ 		if (pVCOMInfo->RXMSG[0] != 0)
 		{
 			pVCOMInfo->MSGREADY=FALSE;
 			pVCOMInfo->RXMPTR=(UCHAR *)&pVCOMInfo->RXMSG;
@@ -304,7 +291,6 @@ int GetRXMessage(int port,UCHAR * buff)
 	else
 
 	return 0;					// nothing doing
-
 }
 
 void CheckReceivedData(PVCOMINFO pVCOMInfo)
@@ -354,10 +340,8 @@ void CheckReceivedData(PVCOMINFO pVCOMInfo)
 				if (pVCOMInfo->RXMPTR == (UCHAR *)&pVCOMInfo->RXMSG)
 					continue;
 
-
 				pVCOMInfo->MSGREADY=TRUE;
 				return;
-
 
 			case FESC:
 		
@@ -378,7 +362,6 @@ void CheckReceivedData(PVCOMINFO pVCOMInfo)
  	return;
 }
 
-
 PVCOMINFO CreateInfo( int port,int speed, int bpqport )
 {
    PVCOMINFO pVCOMInfo ;
@@ -387,12 +370,10 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )
                    (PVCOMINFO) LocalAlloc( LPTR, sizeof( VCOMINFO ) )))
       return ( (PVCOMINFO) -1 ) ;
 
-
  	pVCOMInfo->RXBCOUNT=0;
 	pVCOMInfo->MSGREADY=FALSE;
 	pVCOMInfo->RXBPTR=(UCHAR *)&pVCOMInfo->RXBUFFER; 
 	pVCOMInfo->RXMPTR=(UCHAR *)&pVCOMInfo->RXMSG;
-	
    
 	pVCOMInfo->ComDev = 0 ;
 	pVCOMInfo->Connected = FALSE ;
@@ -402,7 +383,6 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )
 	
 	return (pVCOMInfo);
 }
-
 
 BOOL NEAR DestroyTTYInfo( int port )
 {
@@ -418,8 +398,6 @@ BOOL NEAR DestroyTTYInfo( int port )
    return ( TRUE ) ;
 
 } 
-
-  
 
 BOOL NEAR OpenConnection(int bpqport)
 {            
@@ -443,7 +421,6 @@ BOOL NEAR OpenConnection(int bpqport)
 
 }
 
-
 int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
 {
 	DWORD      dwLength;
@@ -457,24 +434,13 @@ int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
 
 }
 
-
 BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
 {
 	ULONG bytesReturned;
-	int i;
 
-//	for (i=0;i<MsgLen;i++)
-//	{
-		
-//		DeviceIoControl(VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,&Message[i],1,NULL,0, &bytesReturned,NULL);
-//		Sleep(1);
-//	}
-
-
-//	return 0;
 	return DeviceIoControl(
 		VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
-                  
+
 }
 
 

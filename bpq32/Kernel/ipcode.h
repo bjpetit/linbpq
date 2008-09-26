@@ -12,6 +12,7 @@ extern char MYCALL[];	// 7 chars, ax.25 format
 extern struct BPQVECSTRUC IPHOSTVECTOR;
 
 extern int RAWTX();
+extern int SENDNETFRAME();
 
 extern int WritetoConsoleLocal(char * buff);
 
@@ -191,19 +192,21 @@ extern UCHAR BPQDirectory[];
 BOOL Init_IP();
 BOOL Poll_IP();  
 BOOL Send_ETH(VOID * Block, DWORD len);
-VOID Send_AX(VOID * Block, DWORD len, UCHAR Port);
+VOID Send_AX(VOID * Block, DWORD len, UCHAR Port, char Mode);
 VOID ProcessEthARPMsg(PETHARP arpptr);
 VOID ProcessAXARPMsg(PAXARP arpptr);
-VOID ProcessIPMsg(PIPMSG IPptr);
+VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port);
 BOOL CheckIPChecksum(PIPMSG IPptr);
 VOID ProcessICMPMsg(PIPMSG IPptr);
 VOID RouteIPMsg(PIPMSG IPptr);
 VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR);
-VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port);
+VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode);
 PARPDATA AllocARPEntry();
 VOID SendARPMsg(PARPDATA ARPptr);
 PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found);
 BOOL ReadConfigFile(char * fn);
 ProcessLine(char * buf);
+VOID DoARPTimer();
+VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
 
 Dll int APIENTRY GetIPInfo(VOID * ARPRecords, VOID * IPStats, int index);

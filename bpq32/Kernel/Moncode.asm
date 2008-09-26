@@ -102,8 +102,12 @@ VIA_MSG		DB	' via ',NULL
 QUALITY_MSG	DB	' qlty=',NULL
 
 IP_MSGL2	DB	' <IP>',CR,NULL
-ARP_MSG		DB	' <ARP>',CR,NULL
-
+FRAG_IP_MSG	DB	' <Fragmented IP>',CR,NULL
+ARP_REQ		DB	' <ARP Request>',NULL
+WHOHAS		DB	' Who Has ', 0
+TELL		DB	'? Tell ', 0
+ARP_REP		DB	' <ARP Reply> ', NULL
+ISAT		DB	' is at ', 0
 
 MYCCT_MSG	DB	' my'
 CCT_MSG		DB	' cct=',0
@@ -830,20 +834,25 @@ DISPLAY_INFO:
 	mov	EBX,OFFSET IP_MSGL2
 	call	NORMSTR
 	
-	
 	JMP DISPLAYIPDATAGRAM
+	
 @@:
 
-	cmp	PID,ARp_PID
+	cmp	PID,ARP_PID
 	JNE @F
 	
-	mov	EBX,OFFSET ARP_MSG
-	call	NORMSTR
-	JMP DISPLAYRET	
+	JMP DISPLAYARPDATAGRAM
+		
 @@:
 
-	cmp	PID,NETROM_PID
-
+	cmp	PID,08
+	JNE @F
+	
+	mov	EBX,OFFSET FRAG_IP_MSG
+	call	NORMSTR
+	
+	
+@@:
 	mov	AL,':'
 	call	PUTCHAR
 
@@ -1404,6 +1413,53 @@ L4F020:
 	CALL	PUTCHAR
 L4F030:
 	RET
+	
+DISPLAYARPDATAGRAM:
+
+	cmp word ptr 6[esi],0100H
+	JE ARPREQ
+	
+	mov	EBX,OFFSET ARP_REP
+	call	NORMSTR
+	
+	PUSH	ESI
+	LEA	ESI,15[ESI]
+	CALL	PRINT4			; PRINT IF ADDR IN 'DOTTED DECIMAL' FORMAT
+	POP		ESI
+	
+	mov	EBX,OFFSET ISAT
+	call	NORMSTR
+	
+	LEA	ESI,8[ESI]
+	call	CONVFROMAX25		; Display dest callsign
+	mov	ESI,OFFSET NORMCALL
+	call	DISPADDR
+
+	JMP 	add_cr
+
+ARPREQ:
+
+	mov	EBX,OFFSET ARP_REQ
+	call	NORMSTR
+	
+	mov	EBX,OFFSET WHOHAS
+	call	NORMSTR
+	
+	PUSH	ESI
+	LEA	ESI,26[ESI]
+	CALL	PRINT4			; PRINT IF ADDR IN 'DOTTED DECIMAL' FORMAT
+	POP		ESI
+	
+	mov	EBX,OFFSET TELL
+	call	NORMSTR
+	
+	PUSH	ESI
+	LEA	ESI,15[ESI]
+	CALL	PRINT4			; PRINT IF ADDR IN 'DOTTED DECIMAL' FORMAT
+	POP		ESI
+	
+	JMP 	add_cr
+
 
 ;----------------------------------------------------------------------------;
 ;       Display ASCIIZ strings                                               ;

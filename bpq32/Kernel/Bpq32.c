@@ -2025,8 +2025,10 @@ return (0);
 
 DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 {
+
 //	Send message to stream (BPQHOST Function 2)
 //	AH = 2	Send frame in ES:SI (length CX)
+
 	int retcode;
 
 //	WriteFile(NPHandle,msg,len,&retcode,NULL);
