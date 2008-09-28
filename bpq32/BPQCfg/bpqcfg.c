@@ -47,6 +47,11 @@
 //		Remove trailing space from UNPROTO
 //		Don't warn BBSCALL etc missing if APPL1CALL etc present
 
+// August 2008
+
+//		Add IPATEWAY Parameter
+//		Add Port DIGIMASK Parameter
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <stdio.h>
@@ -108,7 +113,7 @@ extern int __cdecl simple(int i);
 
 
 
-#define PARAMLIM 70
+#define PARAMLIM 71
 #define MAXLINE 100
 #define FILEVERSION 22
 
@@ -136,7 +141,7 @@ static char *keywords[] =
 "APPL5ALIAS", "APPL6ALIAS", "APPL7ALIAS", "APPL8ALIAS",
 "APPL1QUAL", "APPL2QUAL", "APPL3QUAL", "APPL4QUAL",
 "APPL5QUAL", "APPL6QUAL", "APPL7QUAL", "APPL8QUAL",
-"BTEXT:"
+"BTEXT:", "IPGATEWAY"
 };           /* parameter keywords */
 
 static int offset[] =
@@ -155,7 +160,7 @@ static int offset[] =
 120,130,140,150,
 160,162,164,166,
 168,170,172,174,
-121							// BTEXT was UNPROTO+1
+121, 112							// BTEXT was UNPROTO+1
 };		/* offset for corresponding data in config file */
 
 static int routine[] = 
@@ -174,7 +179,7 @@ static int routine[] =
 13, 13 ,13, 13,
 14, 14, 14, 14,
 14, 14 ,14, 14,
-15
+15, 2
 } ;			// Routine to process param
 
 static char eof_message[] = "Unexpected end of file on input\n";
@@ -187,7 +192,7 @@ static char *pkeywords[] =
 "PACLEN", "CWID", "PORTCALL", "PORTALIAS", "ENDPORT", "VALIDCALLS",
 "QUALADJUST", "DIGIFLAG", "DIGIPORT", "USERS" ,"UNPROTO", "PORTNUM",
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
-"TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME", "BCALL"
+"TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME", "BCALL", "DIGIMASK"
 };           /* parameter keywords */
 
 static int poffset[] =
@@ -196,9 +201,9 @@ static int poffset[] =
 44, 46, 48, 50, 52, 54,
 56, 58, 60, 62, 64, 
 66, 80, 90, 100, 127, 256,
-68, 70, 72 ,74, 128, 0,
+68, 70, 71 ,74, 128, 0,
 76, 78, 110, 112, 114, 116,
-118, 120, 121, 122, 123, 200, 210, 226
+118, 120, 121, 122, 123, 200, 210, 226, 72
 };		/* offset for corresponding data in config file */
 
 static int proutine[] = 
@@ -207,13 +212,13 @@ static int proutine[] =
 6, 1, 1, 1, 1, 1,
 1, 1, 1, 1, 1,
 1, 0, 0, 0, 9, 10,
-1, 1, 1, 1, 11, 1,
+1, 13, 13, 1, 11, 1,
 1, 2, 2, 12, 1, 1,
-1, 7, 7, 13, 13, 0, 14, 0
+1, 7, 7, 13, 13, 0, 14, 0, 1
 };		/* routine to process parameter */
 
 
-#define PPARAMLIM 44
+#define PPARAMLIM 45
 
 
 
@@ -306,7 +311,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 #endif
 
-	puts("Configuration file Preprocessor for Version 4.10b January 2008.\n");
+	puts("Configuration file Preprocessor for Version 4.10e August 2008.\n");
 
 #ifdef THOR
 

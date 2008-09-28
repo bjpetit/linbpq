@@ -251,6 +251,7 @@ DllExport int APIENTRY WritetoConsole(char * buff);
 
 BOOLEAN CheckifBPQ32isLoaded();
 BOOLEAN StartBPQ32();
+VOID Send_AX(VOID * Block, DWORD len, UCHAR Port);
 
 BOOL Init_IP();
 BOOL Poll_IP();  
@@ -991,14 +992,14 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			// Unload External Drivers
 
 			{
-				struct PORTCONTROL * PORTVEC=PORTTABLE;
+				PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 				
 				for (i=0;i<NUMBEROFPORTS;i++)
 				{
 					if (PORTVEC->DLLhandle)
 						FreeLibrary(PORTVEC->DLLhandle);
 
-					PORTVEC=PORTVEC->PORTPOINTER;
+					PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
 				}
 			}
 		}
@@ -1019,7 +1020,7 @@ DllExport int APIENTRY CloseBPQ32()
 {
 	// Unload External Drivers
 
-	struct PORTCONTROL * PORTVEC=PORTTABLE;
+	PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 	int i;
 
 	if (TimerInst == GetCurrentProcessId())
@@ -1034,9 +1035,9 @@ DllExport int APIENTRY CloseBPQ32()
 		for (i=0;i<NUMBEROFPORTS;i++)
 		{
 			if (PORTVEC->PORT_EXT_ADDR)
-					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTNUMBER);
+					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER);
 
-			PORTVEC=PORTVEC->PORTPOINTER;		
+			PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 		}
 	}
 	
@@ -2503,7 +2504,7 @@ DllExport BOOL APIENTRY CheckIfOwner()
 		
 }
 
-UINT InitializeExtDriver(struct PORTCONTROL * PORTVEC)
+UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
 	HINSTANCE ExtDriver=0;
 	char msg[128];
@@ -2511,7 +2512,6 @@ UINT InitializeExtDriver(struct PORTCONTROL * PORTVEC)
 	HKEY hKey=0;
 	UCHAR Value[MAX_PATH];
 	
-
 	// If no directory, use current
 
 	if (BPQDirectory[0] == 0)
@@ -3500,3 +3500,19 @@ BOOLEAN StartBPQ32()
 	return TRUE;
 }
 
+VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg)
+{
+	USHORT Mask=PORTVEC->DIGIMASK;
+
+		for (i=1; i<=NUMBEROFPORTS; i++)
+		{
+			if (Mask & 1)
+
+				// Block includes the Msg Header (7 bytes), Len Does not!
+
+				Send_AX(Msg, Msg->LENGTH - 7, i);
+
+			Mask>>=1;
+		}
+
+}

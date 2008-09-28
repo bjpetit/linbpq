@@ -1,21 +1,9 @@
 --------------------Configuration: ax25 - Win32 Debug--------------------
 
-
-Microsoft (R) Program Maintenance Utility   Version 1.62.7022
-Copyright (C) Microsoft Corp 1988-1997. All rights reserved.
-
- cl /DHAVE_WIN32_LIBETHEREAL_LIB /D_NEED_VAR_IMPORT_ /DHAVE_CONFIG_H /I../.. /I../../wiretap /IC:\ethereal-win32-libs\glib\include\glib-2.0  /IC:\ethereal-win32-libs\glib\lib\glib-2.0\include  /IC:\ethereal-win32-libs\WPdpack\include -D_U_="" /Zi /W3 /c ax.25.c
-Microsoft (R) 32-bit C/C++ Optimizing Compiler Version 13.10.3077 for 80x86
-Copyright (C) Microsoft Corporation 1984-2002. All rights reserved.
-
-ax.25.c
- link -dll /out:ax.25.dll /NOLOGO /INCREMENTAL:no /MACHINE:I386 /DEBUG ax.25.obj asmbits.obj ..\..\epan\libethereal.lib  C:\ethereal-win32-libs\glib\lib\glib-2.0.lib  C:\ethereal-win32-libs\glib\lib\gmodule-2.0.lib  C:\ethereal-win32-libs\glib\lib\gobject-2.0.lib
-   Creating library ax.25.lib and object ax.25.exp
- link -dll /out:ax.25.dll /NOLOGO /INCREMENTAL:no /MACHINE:I386 /DEBUG ax.25.obj asmbits.obj ..\..\epan\libethereal.lib  C:\ethereal-win32-libs\glib\lib\glib-2.0.lib  C:\ethereal-win32-libs\glib\lib\gmodule-2.0.lib  C:\ethereal-win32-libs\glib\lib\gobject-2.0.lib
-   Creating library ax.25.lib and object ax.25.exp
- link -dll /out:ax.25.dll /NOLOGO /INCREMENTAL:no /MACHINE:I386 /DEBUG ax.25.obj asmbits.obj ..\..\epan\libethereal.lib  C:\ethereal-win32-libs\glib\lib\glib-2.0.lib  C:\ethereal-win32-libs\glib\lib\gmodule-2.0.lib  C:\ethereal-win32-libs\glib\lib\gobject-2.0.lib
-   Creating library ax.25.lib and object ax.25.exp
+'NMAKE' is not recognized as an internal or external command,
+operable program or batch file.
+Error executing c:\windows\system32\cmd.exe.
 
 
 
-ax25.exe - 0 error(s), 0 warning(s)
+ax25.exe - 1 error(s), 0 warning(s)

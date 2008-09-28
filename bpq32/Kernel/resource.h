@@ -12,6 +12,15 @@
 #define ID_EXIT                         1000
 #define IDB_HIDE                        1001
 
+#define BPQCLEAR						401
+#define BPQCOPY							402
+#define BPQREREAD						403
+#define BPQADDARP						404
+
+#define ID_SAVE							1008
+#define ID_CANCEL						1009
+
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

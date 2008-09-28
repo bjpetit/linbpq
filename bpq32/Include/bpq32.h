@@ -492,7 +492,9 @@ BOOL (FAR WINAPI * SetApplQual) (int Appl, int NewQual);
 //	Constants and equates for async operation
 //
 
-char BPQWinMsg[] = "BPQWindowMessage";
+#ifndef BPQWinMsg
+
+static char BPQWinMsg[] = "BPQWindowMessage";
 UINT BPQMsg;
 
 //
@@ -501,4 +503,6 @@ UINT BPQMsg;
 #define BPQMonitorAvail 1
 #define BPQDataAvail 2
 #define BPQStateChange 4
+
+#endif
 

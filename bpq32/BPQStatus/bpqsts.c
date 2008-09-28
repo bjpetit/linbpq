@@ -578,7 +578,7 @@ int DoIPStatus()
 	{
 		//	Start a new cycle.
 
-		//	As the arp table is in shared memory, we have to ask bpq32.dll to copyeach entry to our
+		//	As the arp table is in shared memory, we have to ask bpq32.dll to copy each entry to our
 		//	memory. Do one entry on each call of the timer.
 
 		memset(NewScreen, ' ', 4000); 
@@ -616,11 +616,15 @@ VOID DoARPLine(int i)
 	int SSID, j;
 	char Mac[20];
 	char Call[7];
+	char IP[20];
 
 	struct in_addr Addr;
 	Addr.s_addr = ARPRecord->IPADDR;
 
-	if(ARPRecord->ARPINTERFACE == 255)
+	wsprintf(IP, "%d.%d.%d.%d", 
+		Addr.S_un.S_un_b.s_b1, Addr.S_un.S_un_b.s_b2, Addr.S_un.S_un_b.s_b3, Addr.S_un.S_un_b.s_b4); 
+
+	if(ARPRecord->ARPINTERFACE == 255)		// Ethernet
 	{
 			wsprintf(Mac," %02x:%02x:%02x:%02x:%02x:%02x", 
 				ARPRecord->HWADDR[0],
@@ -644,7 +648,7 @@ VOID DoARPLine(int i)
 	}
 
 	wsprintf(&NewScreen[(i+1)*108],"%18s %-19s %4d   %c  %3d   %d",
-			inet_ntoa(Addr), Mac, ARPRecord->ARPINTERFACE,
+			IP, Mac, ARPRecord->ARPINTERFACE,
 			ARPRecord->ARPTYPE, ARPRecord->ARPVALID, ARPRecord->ARPTIMER);
 
 	
