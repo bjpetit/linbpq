@@ -83,9 +83,9 @@
 //				Validate Alias of directly connected node, mainly for KPC3 DISABL Problem
 //				Move Port statup code out of DLLInit (mainly for perl)
 //				Changes to allow Load/Unload of bpq32.dll by appl
-//					CloseBPQ32 API added
-//					Ext Driver Close routes called
-//					Changes to release Mutex
+//				CloseBPQ32 API added
+//				Ext Driver Close routes called
+//				Changes to release Mutex
 
 // 410e		May 2008
 
@@ -94,6 +94,15 @@
 //				Fix possible crash on L4CODE if L4DACK received out of sequence
 //				Add basic IP decoding
 
+// 410f		October 2008
+
+//				Add IP Gateway
+//				Add Multiport DIGI capability
+//				Add GetPortDescription API
+//				Fix potential hangs if RNR lost
+//				Fix problem if External driver failes to load
+//				Put pushad/popad round _INITIALISEPORTS (main.asm)
+//				Add APIs GetApplCallVB and GetPortDescription (mainly for RMS)
 
 #define _CRT_SECURE_NO_DEPRECATE 
 
@@ -126,7 +135,7 @@
 #define	GETBUFFERSTATUS	  7
 #define	GETCONNECTIONINFO 8
 #define	BPQRETURN		  9  // GETCALLS
-#define	RAWTX			  10  //IE KISS TYPE DATA
+//#define	RAWTX			  10  //IE KISS TYPE DATA
 #define	GETRAWFRAME		  11
 #define	UPDATESWITCH	  12
 #define	BPQALLOC		  13
@@ -163,6 +172,7 @@ extern int CHAINNODE();
 extern int UNCHAINNODE();
 extern int REMOVENODE();
 extern int FINDFREEDESTINATION();
+extern int RAWTX();
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -258,7 +268,7 @@ BOOL Poll_IP();
 BOOL Send_IP(VOID * Block, DWORD len);
 
 BOOL IPActive=FALSE;
-BOOL IPRequired=TRUE;
+BOOL IPRequired=FALSE;
 
 Tell_Sessions();
 
@@ -660,6 +670,7 @@ Check_Timer()
 	if (FirstInitDone == 0)
 	{
 		FirstInitDone=1;
+
 		FirstInit();
 	}
 
@@ -685,6 +696,8 @@ Check_Timer()
 
 		INITIALISEPORTS();
 
+		WritetoConsole("\n\nPort Reinitialisation Complete\n");
+
 		TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 		TimerInst=GetCurrentProcessId();
 
@@ -697,9 +710,6 @@ Check_Timer()
 
  		if (IPRequired) 
 			Init_IP();
-
-		
-		WritetoConsole("\n\nReinitialisation Complete\n");
 
 		_beginthread(MonitorThread,0,0);
 
@@ -754,7 +764,6 @@ TELL_LOOP:
 
 	_asm {
 
-
 	pop		eax
 
 NOT_ALLOCED:
@@ -765,21 +774,19 @@ NOT_ALLOCED:
 	CMP	EAX,65
 	JNE SHORT TELL_LOOP
 
-
 	}
-
 	return (0);
-
 }
 
 HANDLE hInstance=0;
+
+char pgm[256];		// Uninitialised
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
 	HANDLE handle;
 	DWORD n;
 	char buf[350];
-	char pgm[256]="Not Found";
 	
 	int i;
 	unsigned int ProcessID;
@@ -1009,11 +1016,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		OutputDebugString(buf);
 
 		return 1;
-   
 	}
- 
 	return 1;
-	
 }
 
 DllExport int APIENTRY CloseBPQ32()	
@@ -1065,13 +1069,11 @@ VOID SetupBPQDirectory()
 
     if (retCode == ERROR_SUCCESS)
 	{
-		
 		// Try "BPQ Directory"
 		
 		retCode = RegQueryValueEx(hKey,"BPQ Directory",0,			
 			&Type,(UCHAR *)&BPQDirectory,&Vallen);
 
-		
 		if (retCode == ERROR_SUCCESS)
 		{
 			if (strlen(BPQDirectory) == 2 && BPQDirectory[0] == '"' && BPQDirectory[1] == '"')
@@ -1080,7 +1082,6 @@ VOID SetupBPQDirectory()
 
 		if (BPQDirectory[0] == 0)
 		{
-		
 			// BPQ Directory absent or = "" - try "Config File Location"
 
 			Vallen=MAX_PATH;
@@ -1088,22 +1089,19 @@ VOID SetupBPQDirectory()
 			retCode = RegQueryValueEx(hKey,"Config File Location",0,			
 				&Type,(UCHAR *)&BPQDirectory,&Vallen);
 
-
 			if (retCode == ERROR_SUCCESS)
 			{
 				if (strlen(BPQDirectory) == 2 && BPQDirectory[0] == '"' && BPQDirectory[1] == '"')
 					BPQDirectory[0]=0;
 			}
-
 		}
 
 		if (BPQDirectory[0] == 0) GetCurrentDirectory(MAX_PATH, BPQDirectory);
 
-		
 		RegCloseKey(hKey);
 	}
 
-	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s\n",VersionStringWithBuild, DLLName);
+	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n",VersionStringWithBuild, DLLName, pgm);
  	WritetoConsole(msg);
 	OutputDebugString(msg);
 	
@@ -1112,8 +1110,7 @@ VOID SetupBPQDirectory()
 	msg[i-1]=0;
 	OutputDebugString(msg);
 
-	return;
-	
+	return;	
 }
 
 HANDLE OpenConfigFile(char *fn)
@@ -1304,7 +1301,6 @@ DllExport int APIENTRY InitSwitch()
 	return (0);
 }
 
-
 DllExport int APIENTRY GetNumberofPorts()
 {
 	return (NUMBEROFPORTS);
@@ -1324,6 +1320,21 @@ DllExport int APIENTRY GetPortNumber(int portslot)
 
 }
 
+DllExport UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc)
+{
+	struct PORTCONTROL * PORTVEC=PORTTABLE;
+
+	if (portslot>NUMBEROFPORTS)
+		portslot=NUMBEROFPORTS;
+
+	while (--portslot > 0)
+		PORTVEC=PORTVEC->PORTPOINTER;
+
+	memcpy(Desc, PORTVEC->PORTDESCRIPTION, 30);
+	Desc[30]=0;
+
+	return 0;
+}
 
 
 /*DllExport int APIENTRY SwitchTimer()
@@ -1366,13 +1377,18 @@ DllExport UCHAR * APIENTRY GetBBSAlias()
 	return (UCHAR *)(&APPLCALLTABLE[0].APPLALIAS_TEXT);
 }
 
+DllExport VOID APIENTRY GetApplCallVB(int Appl, char * ApplCall)
+{
+	if (Appl < 1 || Appl > 8 ) return;
+
+	strncpy(ApplCall,(char *)&APPLCALLTABLE[Appl-1].APPLCALL_TEXT, 10);
+}
 DllExport char * APIENTRY GetApplCall(int Appl)
 {
 	if (Appl < 1 || Appl > 8 ) return NULL;
 
 	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLCALL_TEXT);
 }
-
 DllExport char * APIENTRY GetApplAlias(int Appl)
 {
 	if (Appl < 1 || Appl > 8 ) return NULL;
@@ -1387,9 +1403,8 @@ DllExport long APIENTRY GetApplQual(int Appl)
 	return (APPLCALLTABLE[Appl-1].APPLQUAL);
 }
 
-DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
-
 BOOL UpdateNodesForApp(int Appl);
+DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 
 DllExport BOOL APIENTRY SetApplCall(int Appl, char * NewCall)
 {
@@ -3504,15 +3519,40 @@ VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg)
 {
 	USHORT Mask=PORTVEC->DIGIMASK;
 
-		for (i=1; i<=NUMBEROFPORTS; i++)
+	for (i=1; i<=NUMBEROFPORTS; i++)
+	{
+		if (Mask & 1)
 		{
-			if (Mask & 1)
+			// Block includes the Msg Header (7 bytes), Len Does not!
 
-				// Block includes the Msg Header (7 bytes), Len Does not!
-
-				Send_AX(Msg, Msg->LENGTH - 7, i);
-
+			Send_AX(Msg, Msg->LENGTH - 7, i);
 			Mask>>=1;
 		}
+	}
+}
+VOID Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port)
+{
+	//	Can't use API SENDRAW, as that tries to get the semaphore, which we already have
+
+	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	_asm {
+
+	pushfd
+	cld
+	pushad
+
+	mov	al,Port
+	mov	ah,10
+	mov	ecx,Len
+	mov	esi,Block
+	add	esi,7
+
+	call	RAWTX
+
+	popad
+	popfd
+	}
+	return;
 
 }

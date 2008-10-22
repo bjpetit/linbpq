@@ -193,7 +193,8 @@ BOOL Init_IP();
 BOOL Poll_IP();  
 BOOL Send_ETH(VOID * Block, DWORD len);
 VOID Send_AX(VOID * Block, DWORD len, UCHAR Port, char Mode);
-VOID ProcessEthARPMsg(PETHARP arpptr);
+Dll VOID APIENTRY ProcessEthARPMsg(PETHARP arpptr);
+Dll VOID APIENTRY ProcessEthIPMsg(PVOID Buffer);
 VOID ProcessAXARPMsg(PAXARP arpptr);
 VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port);
 BOOL CheckIPChecksum(PIPMSG IPptr);
@@ -210,3 +211,6 @@ VOID DoARPTimer();
 VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
 
 Dll int APIENTRY GetIPInfo(VOID * ARPRecords, VOID * IPStats, int index);
+
+int InitPCAP(void);
+int OpenPCAP(void);

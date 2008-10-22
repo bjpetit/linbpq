@@ -1,7 +1,7 @@
 
 // Module to provide a basic Gateway between IP over AX.25 and the Internet.
 
-// Uses BPQNET Virtual Network Interface
+// Uses WinPcap
 
 // Basically operates as a mac level bridge, with headers converted between ax.25 and Ethernet.
 // ARP frames are also reformatted, and monitored to build a simple routing table.
@@ -9,7 +9,7 @@
 // so the default route must be configured. 
 
 // Intended as a gateway for legacy apps, rather than a full function ip over ax.25 router.
-// Suggested config is the BPQNet adapter bridged to the Internet Ethernet Adapter, behind a NAT/PAT Router.
+// Suggested config is to use the Internet Ethernet Adapter, behind a NAT/PAT Router.
 // The ax.25 applications will appear as single addresses on the Ethernet LAN
 
 // First Version, July 2008
@@ -29,6 +29,7 @@ TODo	?Time Out ARP
 #include <stdio.h>
 #include "AsmStrucs.h"
 #include "IPCode.h"
+#include "pcap.h"
 
 //       ARP REQUEST (AX.25)
 
@@ -44,7 +45,7 @@ int NumberofARPEntries=0;
 
 extern BOOL IPActive;
 
-HANDLE hBPQNET = INVALID_HANDLE_VALUE;
+//HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
 ULONG OurIPAddr = 0;
 ULONG OurIPBroadcast = 0;
@@ -59,7 +60,7 @@ int SecTimer = 10;
 ARPDATA Arp={0};
 int ARPFlag = -1;
 
-// Following Buffer is used for msgs from BPQDEV Driver. Put the Enet message part way down the buffer, 
+// Following Buffer is used for msgs from WinPcap. Put the Enet message part way down the buffer, 
 //	so there is room for ax.25 header instead of Enet header when we route the frame to ax.25
 //	Enet Header ia 14 bytes, AX.25 UI is 16
 
@@ -70,7 +71,6 @@ UCHAR Buffer[1630] = {0};
 #define EthOffset 30				// Should be plenty
 
 DWORD IPLen = 0;
-UCHAR Mac[12] = {0};				// Permanant address, Current Address
 
 UCHAR QST[7]={'Q'+'Q','S'+'S','T'+'T',0x40,0x40,0x40,0xe0};		//QST IN AX25
 UCHAR ourMACAddr[6] = {02,'B','P','Q',0,1};
@@ -80,6 +80,26 @@ ULONG DefaultIPAddr = 0;
 int IPPortMask = 0;
 
 IPSTATS IPStats = {0};
+
+pcap_t *adhandle;
+
+char Adapter[256];
+
+HINSTANCE PcapDriver=0;
+
+typedef int (FAR *FARPROCX)();
+
+int (FAR * pcap_sendpacketx)();
+pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
+FARPROCX pcap_compilex;
+FARPROCX pcap_setfilterx;
+FARPROCX pcap_datalinkx;
+FARPROCX pcap_next_exx;
+FARPROCX pcap_geterrx;
+
+char Dllname[6]="wpcap";
+
+FARPROCX GetAddress(char * Proc);
 
 BOOL Init_IP()
 {
@@ -92,44 +112,18 @@ BOOL Init_IP()
 	NumberofARPEntries=0;
 
     //
-    // Open handle to the control device, if it's not already opened. Please
-    // note that even a non-admin user can open handle to the device with 
-    // FILE_READ_ATTRIBUTES | SYNCHRONIZE DesiredAccess and send IOCTLs if the 
-    // IOCTL is defined with FILE_ANY_ACCESS. So for better security avoid 
-    // specifying FILE_ANY_ACCESS in your IOCTL defintions. 
-    // If you open the device with GENERIC_READ, you can send IOCTL with 
-    // FILE_READ_DATA access rights. If you open the device with GENERIC_WRITE, 
-    // you can sedn ioctl with FILE_WRITE_DATA access rights.
-    // 
+    // Open PCAP Driver
  
-	hBPQNET = CreateFile ( 
-            TEXT("\\\\.\\BPQ32NET"),
-            GENERIC_READ | GENERIC_WRITE,//FILE_READ_ATTRIBUTES | SYNCHRONIZE,
-            FILE_SHARE_READ,
-            NULL, // no SECURITY_ATTRIBUTES structure
-            OPEN_EXISTING, // No special create flags
-            FILE_ATTRIBUTE_NORMAL, // No special attributes
-            NULL);
+	OpenPCAP();
 
-    if (INVALID_HANDLE_VALUE == hBPQNET)
+    if (adhandle == NULL)
 	{
-		WritetoConsoleLocal("Failed to open BPQNET device - IP Support Disabled\n");
+		WritetoConsoleLocal("Failed to open pcap device - IP Support Disabled\n");
 		IPActive=FALSE;
 		return FALSE;
 	} 
 
-	DeviceIoControl (hBPQNET, IOCTL_NETVMINI_GETMACADDR,NULL, 0, &Mac, 12, &IPLen, NULL);
-
 	// Clear old packets
-
-	do
-		DeviceIoControl (hBPQNET,
-          IOCTL_NETVMINI_READ_DATA,
-          NULL, 0,
-          &Buffer[EthOffset], 1600,				// Leave plenty of space on front
-          &IPLen, NULL) ;
-
-	while (IPLen > 0);
 
 	IPHOSTVECTOR.HOSTAPPLFLAGS = 0x80;			// Request IP frams from Node
 
@@ -172,7 +166,7 @@ BOOL Init_IP()
 		SendARPMsg(ARPptr);
 	}
 	
-	WritetoConsoleLocal("IP Support Enabled\n");
+	WritetoConsoleLocal("\nIP Support Enabled\n");
 
 	IPActive=TRUE;
 
@@ -181,6 +175,10 @@ BOOL Init_IP()
 
 BOOL Poll_IP()
 {
+	int res;
+	struct pcap_pkthdr *header;
+	u_char *pkt_data;
+
 	// Entered every 100 mS
 	
 	// if ARPFlag set, copy requested ARP record (For BPQStatus GUI)
@@ -201,20 +199,19 @@ BOOL Poll_IP()
 
 Pollloop:
 
-	DeviceIoControl (hBPQNET,
-          IOCTL_NETVMINI_READ_DATA,
-          NULL, 0,
-          &Buffer[EthOffset], 1600,				// Leave plenty of space on front
-          &IPLen, NULL) ;
+	res = pcap_next_exx(adhandle, &header, &pkt_data);
 
-	if (IPLen > 0)
+	if (res > 0)
 	{
 		PETHMSG ethptr = (PETHMSG)&Buffer[EthOffset];
 
+		memcpy(&Buffer[EthOffset],pkt_data, header->len);
+
 		if (ethptr->ETYPE == 0x0008)
 		{
-			PIPMSG ipptr = (PIPMSG)&Buffer[EthOffset+14];
-			ProcessIPMsg(ipptr, ethptr->SOURCE, 'E', 255);
+			ProcessEthIPMsg(&Buffer[EthOffset]);
+		//	PIPMSG ipptr = (PIPMSG)&Buffer[EthOffset+14];
+		//	ProcessIPMsg(ipptr, ethptr->SOURCE, 'E', 255);
 			goto Pollloop;
 		}
 
@@ -341,14 +338,15 @@ fragloop:
 }
   
 BOOL Send_ETH(VOID * Block, DWORD len)
-{
-    DWORD bytes;
-	DeviceIoControl(hBPQNET,
-		IOCTL_NETVMINI_WRITE_DATA,
-		Block, len,
-        NULL, 0,
-        &bytes, NULL);
-    
+{ 
+	if (len < 60) len = 60;
+
+	// Send down the packet 
+
+	pcap_sendpacketx(adhandle,	// Adapter
+			Block,				// buffer with the packet
+			len);				// size
+			
     return TRUE;
 
 }
@@ -463,11 +461,28 @@ VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UC
 	return;
 }
 
-VOID ProcessEthARPMsg(PETHARP arpptr)
+Dll VOID APIENTRY ProcessEthIPMsg(PETHMSG Buffer)
+{
+	PIPMSG ipptr = (PIPMSG)&Buffer[1];
+
+	if (memcmp(Buffer, ourMACAddr,6 ) !=0 ) 
+		return;		// Not for us
+
+	if (memcmp(&Buffer[6], ourMACAddr,6 ) ==0 ) 
+		return;		// Discard our sends
+
+
+	ProcessIPMsg(ipptr, Buffer->SOURCE, 'E', 255);
+}
+
+Dll VOID APIENTRY ProcessEthARPMsg(PETHARP arpptr)
 {
 	int i=0, Mask=IPPortMask;
 	PARPDATA Arp;
 	BOOL Found;
+
+	if (memcmp(&arpptr->MSGHDDR.SOURCE, ourMACAddr,6 ) == 0 ) 
+		return;		// Discard out sends
 
 	switch (arpptr->ARPOPCODE)
 	{
@@ -479,17 +494,16 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 
 		if (Found)
 				goto AlreadyThere;				// Already there
-				
-		if (Arp != NULL)
-		{
-			Arp->IPADDR = arpptr->SENDIPADDR;
-			Arp->ARPTYPE = 'E';
-			Arp->ARPINTERFACE = 255;
-			memcpy(Arp->HWADDR, arpptr->SENDHWADDR ,6);
-			Arp->ARPVALID = TRUE;
-			Arp->ARPTIMER =  86400;
-		}
 
+		if (Arp == NULL) return;					// No point of table full
+				
+		Arp->IPADDR = arpptr->SENDIPADDR;
+		Arp->ARPTYPE = 'E';
+		Arp->ARPINTERFACE = 255;
+		memcpy(Arp->HWADDR, arpptr->SENDHWADDR ,6);
+		Arp->ARPVALID = TRUE;
+		Arp->ARPTIMER =  86400;
+	
 AlreadyThere:
 
 		if (arpptr->TARGETIPADDR == OurIPAddr)
@@ -510,6 +524,14 @@ AlreadyThere:
 
 		}
 
+		// If already resolved, and on Enet, Ignore or we send loads of unnecessary msgs to ax.25
+
+				
+		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
+
+		if (Found)
+			if (Arp->ARPVALID && (Arp->ARPTYPE == 'E')) return;
+
 		// Send to all other ports enabled for IP, reformatting as necessary
 
 		AXARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
@@ -529,6 +551,9 @@ AlreadyThere:
 
 	
 	case 0x0200:
+
+		if (memcmp(&arpptr->MSGHDDR.DEST, ourMACAddr,6 ) != 0 ) 
+		return;		// Not for us
 
 		// Update ARP Cache
 
@@ -751,7 +776,6 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 	ULONG Dest;
 	PARPDATA Arp;
 	BOOL Found;
-
 
 	if (IPptr->VERLEN != 0x45) return; //Only support Type = 4, Len = 20
 
@@ -1174,6 +1198,12 @@ ProcessLine(char * buf)
 
 	if(*ptr ==';') return (TRUE);			// comment
 
+	if(_stricmp(ptr,"ADAPTER") == 0)
+	{
+		strcpy(Adapter,p_value);
+		return (TRUE);
+	}
+
 	if (_stricmp(ptr,"IPAddr") == 0)
 	{
 		OurIPAddr = inet_addr(p_value);
@@ -1244,5 +1274,127 @@ ProcessLine(char * buf)
 	}
 }
 
+// PCAP Support Code
+
+
+
+FARPROCX GetAddress(char * Proc)
+{
+	FARPROCX ProcAddr;
+	int err=0;
+	char buf[256];
+	int n;
+
+
+	ProcAddr=(FARPROCX) GetProcAddress(PcapDriver,Proc);
+
+	if (ProcAddr == 0)
+	{
+		err=GetLastError();
+
+		n=wsprintf(buf,"Error finding %s - %d", Proc,err);
+		WritetoConsoleLocal(buf);
+	
+		return(0);
+	}
+
+	return ProcAddr;
+}
+
+void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
+
+int OpenPCAP()
+{
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	int i=0;
+	char errbuf[PCAP_ERRBUF_SIZE];
+	u_int netmask;
+	char packet_filter[60];
+	struct bpf_program fcode;
+	char buf[256];
+	int n;
+
+	PcapDriver=LoadLibrary(Dllname);
+
+	if (PcapDriver == NULL) return(FALSE);
+	
+	if ((pcap_sendpacketx=GetAddress("pcap_sendpacket")) == 0 ) return FALSE;
+
+	if ((pcap_datalinkx=GetAddress("pcap_datalink")) == 0 ) return FALSE;
+
+	if ((pcap_compilex=GetAddress("pcap_compile")) == 0 ) return FALSE;
+
+	if ((pcap_setfilterx=GetAddress("pcap_setfilter")) == 0 ) return FALSE;
+	
+	pcap_open_livex = (pcap_t * (__cdecl *)(const char *, int, int, int, char *)) GetProcAddress(PcapDriver,"pcap_open_live");
+
+	if (pcap_open_livex == NULL) return FALSE;
+
+	if ((pcap_geterrx=GetAddress("pcap_geterr")) == 0 ) return FALSE;
+
+	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
+
+	WritetoConsoleLocal("IP ");
+
+	/* Open the adapter */
+	adhandle= pcap_open_livex(Adapter,	// name of the device
+							 65536,			// portion of the packet to capture. 
+											// 65536 grants that the whole packet will be captured on all the MACs.
+							 1,				// promiscuous mode (nonzero means promiscuous)
+							 1,				// read timeout
+							 errbuf			// error buffer
+							 );
+	
+	if (adhandle == NULL)
+	{
+		n=wsprintf(buf,"Unable to open %s\n",Adapter);
+		WritetoConsoleLocal(buf);
+
+		/* Free the device list */
+		return -1;
+	}
+	
+	/* Check the link layer. We support only Ethernet for simplicity. */
+	if(pcap_datalinkx(adhandle) != DLT_EN10MB)
+	{
+		n=wsprintf(buf,"\nThis program works only on Ethernet networks.\n");
+		WritetoConsoleLocal(buf);
+		
+		/* Free the device list */
+		return -1;
+	}
+
+	netmask=0xffffff; 
+
+	sprintf(packet_filter,"ether[12:2]=0x0800 or ether[12:2]=0x0806");
+
+	//compile the filter
+	if (pcap_compilex(adhandle, &fcode, packet_filter, 1, netmask) <0 )
+	{	
+		n=wsprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
+		WritetoConsoleLocal(buf);
+
+		/* Free the device list */
+		return -1;
+	}
+	
+	//set the filter
+
+	if (pcap_setfilterx(adhandle, &fcode)<0)
+	{
+		n=wsprintf(buf,"\nError setting the filter.\n");
+		WritetoConsoleLocal(buf);
+
+		/* Free the device list */
+		return -1;
+	}
+	
+	n=wsprintf(buf,"Using %s", Adapter);
+	WritetoConsoleLocal(buf);
+
+	return TRUE;
+
+}
 
 

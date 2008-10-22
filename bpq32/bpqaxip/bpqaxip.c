@@ -68,6 +68,10 @@
 //			Add Close Driver function
 //			Dynamic Load of bpq32.dll
 
+//	Version 1.13 October 2008
+//
+//		Add Linux-style config of broadcast addressess
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -117,13 +121,16 @@ void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto, short port);
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
-BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,unsigned char * name, int keepalive);
+BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag);
+BOOL add_bc_entry(unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 BOOL ReadConfigFile(char * filename);
 int ProcessLine(char * buf);
 int CheckKeepalives();
 BOOL CopyScreentoBuffer(char * buff);
 int DumpFrameInHex(unsigned char * msg, int len);
+VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen);
+
 
 BOOL MinimizetoTray=FALSE;
 
@@ -170,7 +177,21 @@ struct arp_table_entry
 	BOOL ResolveFlag;			// True if need to resolve name
 	unsigned int keepalive;
 	unsigned int keepaliveinit;
+	BOOL BCFlag;				// Frue if we want broadcasts to got to this call
 };
+
+
+struct broadcast_table_entry
+{
+	unsigned char callsign[7];
+	unsigned char len;			// bytes to compare (6 or 7)
+};
+
+#define MAX_BROADCASTS 8
+
+struct broadcast_table_entry BroadcastAddresses[MAX_BROADCASTS];
+
+int NumberofBroadcastAddreses = 0;
 
 unsigned char  hostaddr[64];
 
@@ -181,7 +202,7 @@ LOGFONT LFTTYFONT ;
 HFONT hFont ;
 
 int arp_table_len=0;
-int index=0;					// pointer for table search
+//int index=0;					// pointer for table search
 int ResolveIndex=-1;			// pointer to entry being resolved
 
 struct arp_table_entry arp_table[MAX_ENTRIES];
@@ -328,7 +349,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 DllExport int ExtProc(int fn, int port,unsigned char * buff)
 {
 	struct iphdr * iphdrptr;
-	int len,txlen=0,err,txsock,index,digiptr,i;
+	int len,txlen=0,err,index,digiptr,i;
 	unsigned short int crc;
 	char rxbuff[500];
 	char axcall[7];
@@ -466,15 +487,15 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	case 2:				// send
 
 		
-		txlen=(buff[6]<<8) + buff[5];
+		txlen=(buff[6]<<8) + buff[5] - 5;			// Len includes buffer header (7) but we add crc
 
-		crc=compute_crc(&buff[7], txlen-7);
+		crc=compute_crc(&buff[7], txlen - 2);
 		crc ^= 0xffff;
 
-		buff[txlen]=(crc&0xff);
-		buff[txlen+1]=(crc>>8);
+		buff[txlen+5]=(crc&0xff);
+		buff[txlen+6]=(crc>>8);
 
- 		memcpy(axcall,&buff[7],7);	// Set to send to dest addr
+ 		memcpy(axcall, &buff[7], 7);	// Set to send to dest addr
 
 		// if digis are present, scan down list for first non-used call
 
@@ -489,23 +510,31 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				// This digi has been used, and it is not the last
 
 				digiptr+=7;
-
 			}
 
 			// if this has not been used, use it
 
 			if ((buff[digiptr+6] & 0x80) == 0)
-
 				memcpy(axcall,&buff[digiptr],7);  // get next call
-
 		}
 
 		axcall[6] &= 0x7e;
 
-//
-//		Send to all matching calls in arp table - may want to send NODES. ID etc
-//		to more than one station
-//
+//		If addresses to a broadcast address, send to all entries
+
+		for (i=0; i< NumberofBroadcastAddreses; i++)
+		{
+			if (memcmp(axcall, BroadcastAddresses[i].callsign, 7) == 0)
+			{
+				for (index = 0; index < arp_table_len; index++)
+				{
+					if (arp_table[index].BCFlag) SendFrame(&arp_table[index], &buff[7], txlen);
+				}
+				return 0;
+			}
+		}
+
+//		Send to all matching calls in arp table
 
 		index = 0;
 
@@ -513,28 +542,11 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			if (memcmp(arp_table[index].callsign,axcall,arp_table[index].len) == 0)
 			{
-				if (arp_table[index].ipaddr != 0)
-				{
-					destaddr.sin_addr.s_addr = arp_table[index].ipaddr;
-					destaddr.sin_port = htons(arp_table[index].port);
-
-					if (arp_table[index].port == 0) txsock = sock; else txsock = udpsock[0];
-
-					sendto(txsock,&buff[7],txlen-5,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-			
-					// reset Keepalive Timer
-					
-					arp_table[index].keepalive=arp_table[index].keepaliveinit;
-
-				}
+				SendFrame(&arp_table[index], &buff[7], txlen);
 			}
 			index++;
 		}
-
 		return (0);
-
-
-		
 
 	case 3:				// CHECK IF OK TO SEND
 
@@ -560,16 +572,29 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 //		FreeLibrary(ExtDriver);
 
 		break;
-
 	}
 	return (0);
 }
 
-//DllExport int APIENTRY ExtRX(char * msg, int * len, int * count )
-//{
-//	return (0);
-//}
+VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen)
+{				
+	int txsock;
 
+	if (arp_table->ipaddr != 0)
+	{
+		destaddr.sin_addr.s_addr = arp_table->ipaddr;
+		destaddr.sin_port = htons(arp_table->port);
+
+		if (arp_table->port == 0) txsock = sock; else txsock = udpsock[0];
+
+		sendto(txsock,buff, txlen,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+			
+		// reset Keepalive Timer
+					
+		arp_table->keepalive=arp_table->keepaliveinit;
+	}
+}
+		
 
 DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 {
@@ -958,9 +983,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			CONVFROMAX25(arp_table[index].callsign,outcall);
 								
-			i=wsprintf(line,"%.10s = %.64s = %-.30s",outcall,
-											arp_table[index].hostname,
-											hostaddr);
+			i=wsprintf(line,"%.10s = %.64s = %-.30s %c",
+				outcall,
+				arp_table[index].hostname,
+				hostaddr,
+				arp_table[index].BCFlag ? 'B' : ' ');
 
 			TextOut(hdc,0,(displayline++)*14+2,line,i);
 
@@ -1017,8 +1044,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 	int calllen;
 	int	port;
 	char axcall[7];
-	BOOL UDPFlag;
-
+	BOOL UDPFlag, BCFlag;
 
 	switch (message)
 	{
@@ -1041,6 +1067,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 				call[i] = toupper(call[i]);
 			
 			UDPFlag=IsDlgButtonChecked(ConfigWnd,1004);		
+			BCFlag=IsDlgButtonChecked(ConfigWnd,1005);		
 
 			if (UDPFlag)
 				port=GetDlgItemInt(ConfigWnd,1003,&OK3,FALSE);
@@ -1055,7 +1082,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 			{
 				if (convtoax25(call,axcall,&calllen))
 				{
-					add_arp_entry(axcall,ipad,calllen,port,host,Interval);
+					add_arp_entry(axcall,ipad,calllen,port,host,Interval, BCFlag);
 					PostMessage(hResWnd, WM_TIMER,0,0);
 					return(DestroyWindow(hWnd));
 				}
@@ -1439,6 +1466,26 @@ crcloop:
 BOOL ReadConfigFile(char * fn)
 {
 
+/* Linux Format
+
+broadcast QST-0 NODES-0
+#
+# ax.25 route definition, define as many as you need.
+# format is route (call/wildcard) (ip host at destination)
+# ssid of 0 routes all ssid's
+#
+# route <destcall> <destaddr> [flags]
+#
+# Valid flags are:
+#         b  - allow broadcasts to be transmitted via this route
+#         d  - this route is the default route
+#
+#route vk2sut-0 44.136.8.68 b
+#route vk5xxx 44.136.188.221 b
+#route vk2abc 44.1.1.1
+#
+*/
+
 //UDP 9999                               # Port we listen on
 //MAP G8BPQ-7 10.2.77.1                  # IP 93 for compatibility
 //MAP BPQ7 10.2.77.1 UDP 2222            # UDP port to send to
@@ -1450,8 +1497,6 @@ BOOL ReadConfigFile(char * fn)
 	HKEY hKey=0;
 	UCHAR Value[100];
 	UCHAR * BPQDirectory;
-
-	NumberofUDPPorts=0;
 
 	BPQDirectory=GetBPQDirectory();
 
@@ -1475,6 +1520,9 @@ BOOL ReadConfigFile(char * fn)
 	}
 
 	arp_table_len=0;
+	NumberofBroadcastAddreses = 0;
+	NumberofUDPPorts=0;
+	needip=FALSE;
 
 	while(fgets(buf, 255, file) != NULL)
 	{
@@ -1508,6 +1556,7 @@ ProcessLine(char * buf)
 
 	int calllen;
 	int	port;
+	int bcflag;
 	char axcall[7];
 	unsigned int ipad;
 	int Interval;
@@ -1534,7 +1583,6 @@ ProcessLine(char * buf)
 		if (udpport[NumberofUDPPorts++] == 0) return (FALSE);
 		
 		return (TRUE);
-
 	}
 
 	if(_stricmp(ptr,"MHEARD") == 0)
@@ -1560,17 +1608,20 @@ ProcessLine(char * buf)
 //		if (ipad == INADDR_NONE) return (FALSE);
 
 		p_UDP = strtok(NULL, " \t\n\r");
-//
-//		Look for (optional) KEEPALIVE and DYNAMIC params
-//
-		Interval=0;
 
-		if (p_UDP != NULL)
+		Interval=0;
+		port=0;				// Raw IP
+		bcflag=0;
+//
+//		Look for (optional) KEEPALIVE, DYNAMIC, UDP or BROADCAST params
+//
+		while (p_UDP != NULL)
 		{
 			if (_stricmp(p_UDP,"DYNAMIC") == 0)
 			{
 				Dynamic=TRUE;
 				p_UDP = strtok(NULL, " \t\n\r");
+				continue;
 			}
 
 			if (_stricmp(p_UDP,"KEEPALIVE") == 0)
@@ -1580,48 +1631,50 @@ ProcessLine(char * buf)
 				if (p_Interval == NULL) return (FALSE);
 
 				Interval = atoi(p_Interval);
-
 				p_UDP = strtok(NULL, " \t\n\r");
+				continue;
 			}
 
-			if (p_UDP != NULL)
+			if (_stricmp(p_UDP,"UDP") == 0)
 			{
-				if (_stricmp(p_UDP,"DYNAMIC") == 0)
-				{
-					Dynamic=TRUE;
-					p_UDP = strtok(NULL, " \t\n\r");
-				}	
-			}
-		
-		
-		}
-
-		if (p_UDP == NULL)
-		{
-			needip = TRUE;
-			port=0;				// Raw IP
-		}
-		else
-		{
-			//
-			//	Check for "UDP port"
-			//
-
-			if (_stricmp(p_UDP,"UDP") != 0) return (FALSE);
-	
-			p_udpport = strtok(NULL, " \t\n\r");
+				p_udpport = strtok(NULL, " \t\n\r");
 			
-			if (p_udpport == NULL) return (FALSE);
+				if (p_udpport == NULL) return (FALSE);
 
-			port = atoi(p_udpport);
+				port = atoi(p_udpport);
+				p_UDP = strtok(NULL, " \t\n\r");
+				continue;
+			}
+			if (_stricmp(p_UDP,"B") == 0)
+			{
+				bcflag =TRUE;
+				p_UDP = strtok(NULL, " \t\n\r");
+				continue;
+			}
 
+			return FALSE;
 		}
 
 		if (convtoax25(p_call,axcall,&calllen))
 		{
-			add_arp_entry(axcall,ipad,calllen,port,p_ipad,Interval);
+			add_arp_entry(axcall,ipad,calllen,port,p_ipad,Interval, bcflag);
 			return (TRUE);
 		}
+	}		// End of Process MAP
+
+	if(_stricmp(ptr,"BROADCAST") == 0)
+	{
+		p_call = strtok(NULL, " \t\n\r");
+		
+		if (p_call == NULL) return (FALSE);
+
+		if (convtoax25(p_call,axcall,&calllen))
+		{
+			add_bc_entry(axcall,calllen);
+			return (TRUE);
+		}
+
+
 		return (FALSE);		// Failed convtoax25
 	}
 
@@ -1714,25 +1767,15 @@ BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call,int * calllen
 	return (FALSE);
 }
 
-unsigned int find_arp(unsigned char * call)
-{
-	while (index++ < arp_table_len)
-	{
-		if (memcmp(arp_table[index].callsign,call,arp_table[index].len) == 0)
-			return (arp_table[index].ipaddr);
-	}
-	return (0);
-}
-
-
-
-BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,unsigned char * name, int keepalive)
+BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag)
 {
 	if (arp_table_len == MAX_ENTRIES)
 		//
 		//	Table full
 		//
 		return (FALSE);
+
+	if (port ==0) needip = 1;			// Enable Raw IP Mode
 
 	if (ip == INADDR_NONE)
 	{
@@ -1753,8 +1796,23 @@ BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,uns
 
 	arp_table[arp_table_len].keepalive = keepalive;
 	arp_table[arp_table_len].keepaliveinit = keepalive;
-	
+	arp_table[arp_table_len].BCFlag = BCFlag;
 	arp_table_len++;
+
+	return (TRUE);
+}
+
+BOOL add_bc_entry(unsigned char * call, int len)
+{
+	if (NumberofBroadcastAddreses == MAX_BROADCASTS)
+		//
+		//	Table full
+		//
+		return (FALSE);
+
+	memcpy (BroadcastAddresses[NumberofBroadcastAddreses].callsign,call,7);
+	BroadcastAddresses[NumberofBroadcastAddreses].len = len;
+	NumberofBroadcastAddreses++;
 
 	return (TRUE);
 }

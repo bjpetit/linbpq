@@ -1,3 +1,20 @@
+/*
+
+Declarations of BPQ32 API funtions
+
+There are two sets of definitions, one for static linking against bpq32.lib, and one for
+dynamic linking using LoadLibrary/GetProcAddress
+
+Define symbol DYNLOADBPQ before including this file to use the dynamic form.
+
+If you are writing an External Driver, rather than an application,
+you must use Dynamic Linking, and you must also define symbol EXTDLL, which will
+make the code use GetProcAddress rather than LoadLibrary. Without this the reference 
+count on BPQ32.dll gets messed up, and the code will not unload cleanly.
+
+*/
+
+
 #ifndef DYNLOADBPQ
 
 // Definitions for Staticaly Linked DLL
@@ -7,14 +24,10 @@
 
 int APIENTRY GetFreeBuffs();
 
-
-
 //	Returns count of packets waiting on stream
 //	 (BPQHOST function 7 (part)).
 
 int APIENTRY RXCount(int Stream);
-
-
 
 
 //	Returns number of packets on TX queue for stream
@@ -23,12 +36,10 @@ int APIENTRY RXCount(int Stream);
 int APIENTRY TXCount(int Stream);
 
 
-
 //	Returns number of monitor frames available
 //	 (BPQHOST function 7 (part)).
 
 int APIENTRY MONCount(int Stream);
-
 
 
 //	Returns call connecten on stream (BPQHOST function 8 (part)).
@@ -77,7 +88,6 @@ int APIENTRY GetApplFlags(int Stream);
 
 
 BOOL APIENTRY GetAllocationState(int Stream);
-
 
 
 //	Get current Session State. Any state changed is ACK'ed
@@ -190,8 +200,6 @@ BOOL APIENTRY SetApplAlias(int Appl, char * NewCall);
 BOOL APIENTRY SetApplQual(int Appl, int NewQual);
 
 
-
-
 // Routines to support "Minimize to Tray"
 
 BOOL APIENTRY GetMinimizetoTrayFlag();
@@ -205,7 +213,12 @@ int APIENTRY DeleteTrayMenuItem(HWND hWnd);
  
 int APIENTRY WritetoConsole(char * buff);
 
+// CheckTimer should be called regularly to ensure BPQ32 detects if an application crashes
+
 int APIENTRY CheckTimer();
+
+// CloseBPQ32 is used if you want to close and restart BPQ32 while your application is
+// running. This is only relevant of you have Dynamically linked BPQ32
 
 int APIENTRY CloseBPQ32();
 
@@ -364,8 +377,8 @@ int (FAR WINAPI * GetPortNumber) (int portslot);
 
 int (FAR WINAPI * BPQSetHandle) (int Stream, HWND hWnd);
 
-int ConvFromAX25(unsigned char * incall, unsigned char * outcall);
-BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+int (FAR  * ConvFromAX25) (unsigned char * incall, unsigned char * outcall);
+BOOL (FAR  * ConvToAX25) (unsigned char * callsign, unsigned char * ax25call);
 
 int (FAR WINAPI * ChangeSessionCallsign) (int Stream, unsigned char * AXCall);
 
@@ -408,6 +421,9 @@ HMODULE ExtDriver;
 
 BOOL GetAPI()
 {
+	// This procedure must be called if you are using Dynamic Linking. It loads BPQ32
+	//	if necessary, and get the addresses of the API routines
+
 	int err;
 	char Msg[256];
 
@@ -434,7 +450,7 @@ BOOL GetAPI()
 	GetCallsign = (int (__stdcall *)(int stream, char * callsign))GetProcAddress(ExtDriver,"_GetCallsign@8");
 	GetBPQDirectory = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetBPQDirectory@0");
 	GetConnectionInfo = (int (__stdcall *)(int, char *,int *, int *, int *,int *, int *))GetProcAddress(ExtDriver,"_GetConnectionInfo@28");
-	GetStreamPID = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_ GetStreamPID@4");
+	GetStreamPID = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetStreamPID@4");
 	GetAttachedProcesses = (int (__stdcall *)())GetProcAddress(ExtDriver,"_GetAttachedProcesses@0");
 	SessionControl = (int (__stdcall *)(int stream, int command, int param))GetProcAddress(ExtDriver,"_SessionControl@12");
 	SetAppl = (int (__stdcall *)(int stream, int flags, int mask))GetProcAddress(ExtDriver,"_SetAppl@12");
@@ -458,23 +474,18 @@ BOOL GetAPI()
 	GetNumberofPorts = (int (__stdcall *)())GetProcAddress(ExtDriver,"_GetNumberofPorts@0");
 	GetPortNumber = (int (__stdcall *)(int))GetProcAddress(ExtDriver,"_GetPortNumber@4");
 	BPQSetHandle = (int (__stdcall *)(int Stream, HWND hWnd))GetProcAddress(ExtDriver,"_BPQSetHandle@8");
-/*
-int (FAR WINAPI * GetNumberofPorts) ();
-int (FAR WINAPI * GetPortNumber) (int portslot);
-int (FAR WINAPI * BPQSetHandle) ();
-int ConvFromAX25(unsigned char * incall, unsigned char * outcall);
-BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
-int (FAR WINAPI * ChangeSessionCallsign) (int Stream, unsigned char * AXCall);
-int (FAR WINAPI * GetApplNum) (int Stream);
-char * (FAR WINAPI * GetApplCall) (int Appl);
-char * (FAR WINAPI * GetApplAlias) (int Appl);
-long (FAR WINAPI * GetApplQual) (int Appl);
-BOOL (FAR WINAPI * SetApplCall) (int Appl, char * NewCall);
-BOOL (FAR WINAPI * SetApplAlias) (int Appl, char * NewCall);
-BOOL (FAR WINAPI * SetApplQual) (int Appl, int NewQual);
-*/	
+
+	ConvFromAX25 = (int ( *)(unsigned char * incall, unsigned char * outcall))GetProcAddress(ExtDriver,"_ConvFromAX25");
+	ConvToAX25 = (BOOL ( *)(unsigned char * callsign, unsigned char * ax25call))GetProcAddress(ExtDriver,"_ConvToAX25");
 	
-	
+	ChangeSessionCallsign = (int (__stdcall *) (int Stream, unsigned char * AXCall))GetProcAddress(ExtDriver,"_ChangeSessionCallsign@8");
+	GetApplNum = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetApplNum@4");
+	GetApplCall = (char * (__stdcall *) (int Appl))GetProcAddress(ExtDriver,"_GetApplCall@4");
+	GetApplAlias = (char * (__stdcall *) (int Appl))GetProcAddress(ExtDriver,"_GetApplAlias@4");
+	GetApplQual  = (long (__stdcall *)(int Appl))GetProcAddress(ExtDriver,"_GetApplQual@4");
+	SetApplCall = (BOOL (__stdcall *)(int Appl, char * NewCall))GetProcAddress(ExtDriver,"_SetApplCall@8");
+	SetApplAlias = (BOOL (__stdcall *)(int Appl, char * NewCall))GetProcAddress(ExtDriver,"_SetApplAlias@8");
+	SetApplQual = (BOOL (__stdcall *)(int Appl, int NewQual))GetProcAddress(ExtDriver,"_SetApplQual@8");
 	
 	GetMinimizetoTrayFlag = (BOOL (__stdcall *)())GetProcAddress(ExtDriver,"_GetMinimizetoTrayFlag@0");
 	AddTrayMenuItem = (int (__stdcall *)(HWND hWnd, char * Label))GetProcAddress(ExtDriver,"_AddTrayMenuItem@8");
@@ -482,7 +493,6 @@ BOOL (FAR WINAPI * SetApplQual) (int Appl, int NewQual);
 	WritetoConsole = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_WritetoConsole@4");
 	CheckTimer = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CheckTimer@0");
 	CloseBPQ32 = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CloseBPQ32@0");
-
 	return TRUE;
 }
 

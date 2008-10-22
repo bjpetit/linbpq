@@ -5,6 +5,10 @@
 //
 //	Poll CheckTimer() to detect loss of program owning timer
 
+//	Version 2.1.2  October 2008
+//	Add logging param to config file
+//	Include IP address in log
+
 #include "stdafx.h"
 #include "TelnetServer.h"
 #include "bpq32.h"
@@ -201,7 +205,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    hWnd=CreateDialog(hInst,szWindowClass,0,NULL);
 
-
    //hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
     //  CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, NULL, NULL, hInstance, NULL);
 
@@ -219,7 +222,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
 
-   	return Initialise();
+   return Initialise();
 }
 
 //
@@ -541,7 +544,7 @@ int DataSocket_Read(struct ConnectionInfo * sockptr, SOCKET sock)
 	byte * BSptr;
 	byte * MsgPtr;
 	BOOL wait;
-	char logmsg[80];
+	char logmsg[120];
 
 	ioctlsocket(sock,FIONREAD,&len);
 
@@ -723,7 +726,14 @@ MsgLoop:
 
         if (LogEnabled)
 		{
-			wsprintf(logmsg,"%d User=%s\n", sockptr->Number, MsgPtr);
+			wsprintf(logmsg,"%d %d.%d.%d.%d User=%s\n",
+				sockptr->Number,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+				MsgPtr);
+
 			WriteLog (logmsg);
 		}
 		for (i = 0; i < NumberofUsers; i++)
@@ -777,7 +787,14 @@ MsgLoop:
     
         if (LogEnabled)
 		{
-			wsprintf(logmsg,"%d Password=%s\n",sockptr->Number,MsgPtr);
+			wsprintf(logmsg,"%d %d.%d.%d.%d Password=%s\n",
+				sockptr->Number,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+				MsgPtr);
+
 			WriteLog (logmsg);
 		}
 		if (strcmp(MsgPtr, sockptr->UserPointer->Password) == 0)
@@ -811,18 +828,23 @@ MsgLoop:
             
             if (strlen(cfgCTEXT) > 0)  send(sock,cfgCTEXT, strlen(cfgCTEXT),0);
 
-           
             if (LogEnabled)
 			{
-				wsprintf(logmsg,"%d Call Accepted BPQ Stream=%d Callsign %s\n",sockptr->Number,Stream, sockptr->Callsign);
+				wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted BPQ Stream=%d Callsign %s\n",
+					sockptr->Number,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+					Stream,
+					sockptr->Callsign);
+
 				WriteLog (logmsg);
 			}
 
 			ShowConnections();
 
- 
             return 0;
-
 		}
 
 		// Bad Password
@@ -927,7 +949,6 @@ BOOL Initialise()
 
 	cfgMinToTray = GetMinimizetoTrayFlag();
 
-
 	if (!ParseIniFile("BPQTelnetServer.cfg")) return FALSE;
 
     // Start WinSock 2.  If it fails, we don't need to call
@@ -1026,6 +1047,8 @@ BOOL Initialise()
 	hLogMenu=GetSubMenu(hActionMenu,0);
 
 	hDisMenu=GetSubMenu(hActionMenu,1);
+
+	CheckMenuItem(hLogMenu,0,MF_BYPOSITION | LogEnabled<<3);
 
 	return TRUE;
 }
@@ -1350,6 +1373,9 @@ int ParseIniFile(char * fn)
 		param=buf;
 		*(ptr)=0;
 		value=ptr+1;
+
+		if (_stricmp(param,"LOGGING") == 0)
+			LogEnabled = atoi(value);
 
 		if (_stricmp(param,"TCPPORT") == 0)
 			Port = atoi(value);

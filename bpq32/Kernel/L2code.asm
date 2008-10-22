@@ -1,5 +1,9 @@
 	PAGE    56,132
 
+;	Version 4.10f October 2008
+;
+;	Fix potential hangs if RNR lost
+
 .386
 ;
 ;  SEGMENT definitions and order
@@ -23,8 +27,8 @@ OFFSET32 EQU <OFFSET FLAT:>
 
 _BPQDATA	SEGMENT
 
-	INCLUDE	ENVIRON.ASM
-	INCLUDE	STRUCS.ASM
+	INCLUDE	ENVIRON.INC
+	INCLUDE	STRUCS.INC
 
 	EXTRN	QCOUNT:WORD,BUFFER:DWORD,SDCBYTE:BYTE,SDRBYTE:BYTE,PACLEN:WORD
 
@@ -192,16 +196,25 @@ HTIM101:
 
 	CMP	AH,RNR
 	JE SHORT NOTBSY			; STILL BUSY
+;
+;	Just sending RR will hause a hang of RR is missed, and other end does not poll on Busy
+;	Try sending RR CP, so we will retry if not acked
 
-	MOV	L2ACKREQ[EBX],1		; SEND RR
+	MOV	L2ACKREQ[EBX],0		; CLEAR ANY DELAYED ACK TIMER
+	
+	CMP	L2RETRIES[EBX],0
+	JNE SHORT HTIM200			; IF RR(P) OUTSTANDING WILl REPORT ANYWAY
+	
+	JMP	HTIM40					; Send RR(P)
 
 NOTBSY:
 
-	CMP	L2ACKREQ[EBX],0		; DELAYED ACK TIMER
+	CMP	L2ACKREQ[EBX],0			; DELAYED ACK TIMER
 	JE SHORT HTIM200			; NOT RUNNING
 	
 	CMP	L2RETRIES[EBX],0
 	JNE SHORT HTIM200			; DONT SEND RR RESPONSE WHILEST RR(P) OUTSTANDING
+
 
  	DEC	L2ACKREQ[EBX]
 	JNZ SHORT HTIM200			; STILL OK
@@ -1978,17 +1991,33 @@ SDSF16:
 
 SDSF16A:
 
+	PUSH	EAX
 	MOV	AL,SDCBYTE
 	ROL	AL,1			; SHIFT IT TO BOTTOM 3 BITS
 	ROL	AL,1
 	ROL	AL,1
 	AND	AL,7
 	CALL	RESETNS			; RESET N(S) AND COUNT RETRIED FRAMES 
-
+	
+	POP		EAX				; KEEP COMMAND IN AL
+	
 	MOV	L2RETRIES[EBX],0
 	MOV	L2TIMER[EBX],0		; WILL RESTART TIMER WHEN RETRY SENT
 
 SDSF16B:
+
+	CMP	AL,RNR
+	JNE @F
+;
+;	Dont Clear timer on receipt of RNR(F), spec says should poll for clearing of busy,
+;	and loss of subsequent RR will cause hang. Perhaps should set slightly longer time??
+;	Timer may have been cleared earlier, so restart it
+
+	MOV	AL,L2TIME[EBX]
+	MOV	AH,0
+	MOV	L2TIMER[EBX],AX		; SET TIMER
+
+@@:
 
 	JMP	L2DISCARD
 ;

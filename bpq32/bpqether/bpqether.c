@@ -89,10 +89,8 @@ HINSTANCE PcapDriver=0;
 typedef int (FAR *FARPROCX)();
 
 int (FAR * pcap_sendpacketx)();
+pcap_t * (FAR * pcap_open_livex)();
 
-
-//FARPROCX pcap_sendpacketx;
-FARPROCX pcap_open_livex;
 FARPROCX pcap_compilex;
 FARPROCX pcap_setfilterx;
 FARPROCX pcap_datalinkx;
@@ -100,7 +98,6 @@ FARPROCX pcap_next_exx;
 FARPROCX pcap_geterrx;
 
 char Dllname[6]="wpcap";
-
 
 int InitPCAP(void);
 FARPROCX GetAddress(char * Proc);
@@ -178,7 +175,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	switch (fn)
 	{
 	case 1:				// poll
-
 
 		res = pcap_next_exx(PCAPInfo[port].adhandle, &header, &pkt_data);
 
@@ -350,12 +346,12 @@ InitPCAP()
 
 	if ((pcap_setfilterx=GetAddress("pcap_setfilter")) == 0 ) return FALSE;
 	
-	if ((pcap_open_livex=GetAddress("pcap_open_live")) == 0 ) return FALSE;
+	if ((pcap_open_livex = (pcap_t * (__cdecl *)())
+		GetProcAddress(PcapDriver,"pcap_open_live")) == 0 ) return FALSE;
 
 	if ((pcap_geterrx=GetAddress("pcap_geterr")) == 0 ) return FALSE;
 
 	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
-	
 	
 	return (TRUE);
 		
@@ -385,21 +381,8 @@ FARPROCX GetAddress(char * Proc)
 	return ProcAddr;
 }
 
-
-#define Max_Num_Adapter 10
-
-
-char        AdapterList[Max_Num_Adapter][1024];
-char        AdapterLabel[Max_Num_Adapter][1024];
-
-	char		AdapterName[8192]; // string that contains a list of the network adapters
-	char		*temp,*temp1;
-
-
-
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
- 
 int OpenPCAP(int IOBASE, int port)
 {
 	int i=0;
@@ -409,7 +392,6 @@ int OpenPCAP(int IOBASE, int port)
 	struct bpf_program fcode;
 	char buf[256];
 	int n;
-
 
 	WritetoConsole("BPQEther ");
 
@@ -422,8 +404,6 @@ int OpenPCAP(int IOBASE, int port)
 	if (!ReadConfigFile("BPQETHER.CFG",port))
 		return (FALSE);
 
-
-
 	/* Open the adapter */
 	if ((PCAPInfo[port].adhandle= pcap_open_livex(Adapter,	// name of the device
 							 65536,			// portion of the packet to capture. 
@@ -433,7 +413,6 @@ int OpenPCAP(int IOBASE, int port)
 							 errbuf			// error buffer
 							 )) == NULL)
 	{
-
 		n=wsprintf(buf,"Unable to open %s\n",Adapter);
 		WritetoConsole(buf);
 
@@ -444,19 +423,17 @@ int OpenPCAP(int IOBASE, int port)
 	/* Check the link layer. We support only Ethernet for simplicity. */
 	if(pcap_datalinkx(PCAPInfo[port].adhandle) != DLT_EN10MB)
 	{
-	
 		n=wsprintf(buf,"\nThis program works only on Ethernet networks.\n");
 		WritetoConsole(buf);
 		
 		/* Free the device list */
 		return -1;
 	}
-	
-		netmask=0xffffff; 
 
+	netmask=0xffffff; 
 
-		sprintf(packet_filter,"ether[12:2]=0x%x",ntohs(PCAPInfo[port].EtherType));
-
+	sprintf(packet_filter,"ether[12:2]=0x%x",
+		ntohs(PCAPInfo[port].EtherType));
 
 	//compile the filter
 	if (pcap_compilex(PCAPInfo[port].adhandle, &fcode, packet_filter, 1, netmask) <0 )
@@ -464,7 +441,6 @@ int OpenPCAP(int IOBASE, int port)
 		n=wsprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
 		WritetoConsole(buf);
 
-		
 		/* Free the device list */
 		return -1;
 	}

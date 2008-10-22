@@ -55,8 +55,6 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
-unsigned int VKISSInst = 0;
-int AttachedProcesses=0;
 
 HANDLE STDOUT=0;
 
@@ -65,15 +63,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	switch( ul_reason_being_called )
 	{
 	case DLL_PROCESS_ATTACH:
-		
-		AttachedProcesses++;
-		
-		if (VKISSInst == 0)				// First entry
-		{
-			VKISSInst = GetCurrentProcessId();
-
-			GetAPI();
-		}
 
 		return 1;
    		
@@ -87,23 +76,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
     
 	case DLL_PROCESS_DETACH:
 	
-		if (VKISSInst == GetCurrentProcessId())
-		{
-		//	KillTimer(NULL,TimerHandle);
-		//	TimerHandle=0;
-		//	ResetExtDriver(2);
-			
-		//	AXIPInst=0;
-		//	Tell_Sessions();
-		//	MessageBox(NULL,"Process holding AXIP closing","BPQ32",MB_OK);
-		}
-		
-		AttachedProcesses--;
-
-		if (AttachedProcesses == 0)
-		{
-//			KillTimer(NULL,TimerHandle);
-		}
 		return 1;
 	}
  
@@ -114,8 +86,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 {
 	int len,txlen=0;
 	char txbuff[1000];
-
-//	WriteFile(STDOUT,".",1,&n,NULL);
 
 	switch (fn)
 	{
@@ -147,7 +117,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 4:				// reinit
 
-//		return(ReadConfigFile("BPQAXIP.CFG"));
 		return (0);
 
 	case 5:				// Close
@@ -164,22 +133,24 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 {
+	char msg[80];
 	
 	//
 	//	Will be called once for each port to be mapped to a BPQ Virtual COM Port
 	//	The VCOM port number is in IOBASE
 	//
 
-	WritetoConsole("VKISS ");
+	GetAPI();
+
+	wsprintf(msg,"VKISS COM%d", PortEntry->IOBASE);
+	WritetoConsole(msg);
 	
 	CreateInfo(PortEntry->IOBASE,9600, PortEntry->PORTNUMBER);
-
 
 	// Open File
 	
 	ASYINIT(PortEntry->IOBASE,9600, PortEntry->PORTNUMBER);
 
-		
 	return ((int) ExtProc);
 }
 
