@@ -49,7 +49,7 @@
 
 // August 2008
 
-//		Add IPATEWAY Parameter
+//		Add IPGATEWAY Parameter
 //		Add Port DIGIMASK Parameter
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -430,6 +430,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 		paramok[45+i]=1;	/* or APPLCALLS, APPLALIASS APPLQUAL */
 
 	paramok[69]=1;			// BText optional
+	paramok[70]=1;			// IPGateway optional
 
 	for (i=0; i < PARAMLIM; i++)
 	{
