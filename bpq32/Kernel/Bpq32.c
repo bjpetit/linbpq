@@ -103,6 +103,7 @@
 //				Fix problem if External driver failes to load
 //				Put pushad/popad round _INITIALISEPORTS (main.asm)
 //				Add APIs GetApplCallVB and GetPortDescription (mainly for RMS)
+//				Ensure Route Qual is updated if Port Qual changed
 
 #define _CRT_SECURE_NO_DEPRECATE 
 
