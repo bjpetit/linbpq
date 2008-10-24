@@ -145,7 +145,10 @@ int HDLCTX(PHDLCDATA  PORTVEC,UCHAR * buff)
 	return (0);
 }
 
-
+int HDLCCLOSE(PHDLCDATA PORTVEC)
+{
+	return 0;
+}
 int HDLCINIT(HDLCDATA * PORTVEC)
 {
 	char msg[255];
@@ -207,6 +210,7 @@ int HDLCINIT(HDLCDATA * PORTVEC)
 	return (TRUE);
 		
 }
+
 
 int PC120INIT(PHDLCDATA PORTVEC)
 {

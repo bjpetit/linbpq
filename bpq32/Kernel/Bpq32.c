@@ -174,6 +174,7 @@ extern int UNCHAINNODE();
 extern int REMOVENODE();
 extern int FINDFREEDESTINATION();
 extern int RAWTX();
+DllExport int APIENTRY CloseBPQ32();
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -243,6 +244,8 @@ unsigned int TimerInst = 0;
 int AttachedProcesses=0;
 int AttachedPerlProcesses=0;
 int AttachingProcess=0;
+
+BOOL ReconfigFlag=FALSE;
 
 int AttachedPIDList[100]={0};
 int AttachedPIDType[100]={0};
@@ -565,36 +568,6 @@ VOID MonitorTimerThread(int x)
 }
 
 
-BOOL HandlerRoutine(DWORD  dwCtrlType) 	//  control signal type
-{
-
-//#define CTRL_CLOSE_EVENT    2
-//#define CTRL_LOGOFF_EVENT   5
-//#define CTRL_SHUTDOWN_EVENT 6
-	
-	if (dwCtrlType == CTRL_C_EVENT)
-	{
-		DumpSystem();
-		WritetoConsole("Dump Taken\n");
-	
-		return (TRUE);
-	}
-
-	if (dwCtrlType == CTRL_CLOSE_EVENT)
-	{
-		WritetoConsole("Close Application first!\n");
-		
-		Beep(440,250);
-
-		return (TRUE);
-	}
-
-	return (FALSE);
-}
-
-
-
-
 VOID CALLBACK TimerProc(
 
     HWND  hwnd,	// handle of window for timer messages 
@@ -665,7 +638,6 @@ Check_Timer()
 		}
 	}
 
-
 	GetSemaphore();
 
 	if (FirstInitDone == 0)
@@ -718,6 +690,64 @@ Check_Timer()
 
 		return (1);
 
+	}
+
+	// See if reconfigure requested
+
+	if (ReconfigFlag)
+	{
+		OutputDebugString("Reconfig Requested");
+		// Only do it it timer owning process, or we could get in a real mess!
+
+		if(TimerInst == GetCurrentProcessId())
+		{
+			int i;
+			struct BPQVECSTRUC * HOSTVEC;
+			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
+	
+			ReconfigFlag = FALSE;
+
+			lineno=0;
+			memset(Screen, ' ', LINELEN*SCREENLEN);
+
+			WritetoConsole("Reconfiguring ...\n\n");
+
+			for (i=0;i<NUMBEROFPORTS;i++)
+			{
+				if (PORTVEC->PORT_EXT_ADDR)
+						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER);	// Close External Ports
+
+
+				PORTVEC->PORTCONTROL.PORTCLOSECODE(PORTVEC->PORTCONTROL.IOBASE);
+
+				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
+			}
+
+			Sleep(2000);
+			START();
+			INITIALISEPORTS();			// Restart Ports
+
+			for (i=1;i<66;i++)			// Include IP Vec
+			{
+				HOSTVEC=&BPQHOSTVECTOR[i-1];
+
+				HOSTVEC->HOSTTRACEQ=0;
+
+				if (HOSTVEC->HOSTSESSION !=0)
+				{
+					// Had a connection
+					
+					HOSTVEC->HOSTSESSION=0;
+					HOSTVEC->HOSTFLAGS |=3;	// Disconnected
+					
+					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
+				}
+			}
+
+			OutputDebugString("Reconfigured");
+			WritetoConsole("\n\nReconfiguration Complete\n");
+	
+		}
 	}
 
 	FreeSemaphore();
@@ -2992,6 +3022,8 @@ int SetUpPopUp(BOOL Reinit)
 {
     WNDCLASS  wc;
 	int i;
+	HMENU hMenu,hPopMenu;
+
 
 	// Create Console Window
         
@@ -3020,7 +3052,20 @@ int SetUpPopUp(BOOL Reinit)
 
 	if (!hWnd) {
 		return (FALSE);
-	}	
+	}
+
+	hMenu=CreateMenu();
+	hPopMenu=CreatePopupMenu();
+	SetMenu(hWnd,hMenu);
+
+	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Actions");
+
+	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"Re-read bpqcfg.bin");
+	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Dump System");
+
+	DrawMenuBar(hWnd);	
+
+
 	
 	// setup default font information
 
@@ -3171,16 +3216,35 @@ LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 			wmId    = LOWORD(wParam); // Remember, these are...
 			wmEvent = HIWORD(wParam); // ...different for Win32!
 
-
-			if (wmId >= 40000 && wmId < 40100)
-			{ 
-				handle=hWndArray[wmId-40000];
-				ShowWindow(handle, SW_RESTORE);
-				SetForegroundWindow(handle);
-				return 0;
-			}		
 	
-	case WM_SYSCOMMAND:
+		if (wmId == BPQREREAD)
+		{
+			ReconfigFlag=TRUE;	
+			WritetoConsole("Reconfig requested ... Waiting for Time Poll\n");
+
+			return 0;
+		}
+
+		if (wmId == BPQADDARP)
+		{
+			DumpSystem();
+			WritetoConsole("Dump Taken\n");
+	
+			return 0;
+		}
+
+		
+
+		if (wmId >= 40000 && wmId < 40100)
+		{ 
+			handle=hWndArray[wmId-40000];
+			ShowWindow(handle, SW_RESTORE);
+			SetForegroundWindow(handle);
+			return 0;
+		}		
+	
+	
+		case WM_SYSCOMMAND:
 
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
@@ -3236,7 +3300,11 @@ LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 	
 				return 0;
 			}
-
+			if (wParam == 04)
+			{
+				ReconfigFlag=TRUE;	
+				return 0;
+			}
 			break;
 
  		case WM_CLOSE:
@@ -3355,6 +3423,10 @@ char * stack;
 
 DllExport int APIENTRY  DumpSystem()
 {
+	char fn[200];
+
+	wsprintf(fn,"%s\\BPQDUMP",BPQDirectory);
+
 	handle = CreateFile(fn,
 					GENERIC_WRITE,
 					FILE_SHARE_READ,
@@ -3368,21 +3440,6 @@ DllExport int APIENTRY  DumpSystem()
 	mov	stack,esp
 	
 	}
-
-	/*
-	
-	ReadCoord.X=0;
-	ReadCoord.Y=0;
-
-	ReadConsoleOutputCharacter(
-		STDOUT,	// handle of a console screen buffer 
-		screen, 
-		1920,  
-		ReadCoord,	// coordinates of first cell to read from 
-		&cnt);
-
-	*/
-
 
 	WriteFile(handle,stack,128,&cnt,NULL);
 

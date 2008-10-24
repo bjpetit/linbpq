@@ -42,7 +42,10 @@ int	ASYINIT(int port, int speed, int PortVector,int RXVector)
 	return (0);
 }
 
-  
+VOID KISSCLOSE(int Port)
+{ 
+	DestroyTTYInfo(Port);
+}
 
 NPTTYINFO CreateTTYInfo( int port,int speed )
 {

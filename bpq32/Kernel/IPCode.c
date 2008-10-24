@@ -44,6 +44,7 @@ ARPDATA ** ARPRecords = NULL;				// ARP Table - malloc'ed as needed
 int NumberofARPEntries=0;
 
 extern BOOL IPActive;
+extern short NUMBEROFPORTS;
 
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
@@ -1239,6 +1240,7 @@ ProcessLine(char * buf)
 		{
 			i=atoi(p_port);
 			if (i == 0) return FALSE;
+			if (i > NUMBEROFPORTS) return FALSE;
 
 			IPPortMask |= 1 << (i-1);
 			p_port = strtok(NULL, " ,\t\n\r");

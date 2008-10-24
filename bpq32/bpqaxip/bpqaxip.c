@@ -291,12 +291,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 //			STDOUT = GetStdHandle(STD_OUTPUT_HANDLE);
 
-			if (!InitWS2())
-				return FALSE;
-
-			if (!InitAXIP())
-				return FALSE;
-
 		}
 		return 1;
    		
@@ -569,6 +563,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		PostMessage(hMHWnd, WM_DESTROY,0,0);
 		DestroyWindow(hMHWnd);
 
+		if (MinimizetoTray)
+			DeleteTrayMenuItem(hResWnd);
+
+
 //		FreeLibrary(ExtDriver);
 
 		break;
@@ -599,6 +597,11 @@ VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen)
 DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 {
 	WritetoConsole("AXIP ");
+
+	if (!InitWS2()) return 0;
+
+	if (!InitAXIP()) return 0;
+
 	return ((int) ExtProc);
 }
 
