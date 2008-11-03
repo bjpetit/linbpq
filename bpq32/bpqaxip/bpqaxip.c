@@ -84,7 +84,7 @@
 #include "resource.h"
 
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
-#define EXTDLL			// Use GetMuduleHandle instead of LoadLibrary 
+#define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
 
 #define BUFFLEN	360	

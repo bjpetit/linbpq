@@ -36,6 +36,8 @@ int InitDone=0;
 
 int AttachedProcesses=0;
 
+UCHAR StreamMap[65];
+BOOL NotFirstUse[65];
 
 
 UCHAR BPQDirectory[MAX_PATH];
@@ -48,7 +50,8 @@ int *BPQAPI=0;
 
 
 FARPROCX GETBPQAPI;
-
+int (FAR WINAPI * FindFreeStream) ();
+BOOL (FAR WINAPI * GetAllocationState) (int Stream);
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
@@ -81,7 +84,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 }
 BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 {
-
 	HANDLE Mutex;
 	UCHAR Value[100];
 
@@ -93,10 +95,17 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 	char Errbuff[100];
 	char buff[20];
 
-
 	STARTUPINFO  StartupInfo;	// pointer to STARTUPINFO 
     PROCESS_INFORMATION  ProcessInformation; 	// pointer to PROCESS_INFORMATION 
 	
+	// Initialise Stream Mapping Table
+	
+	for (i=0; i< 66; i++)
+	{
+		StreamMap[i] = i;
+		NotFirstUse[i] = FALSE;
+	}
+
 
 
 	// See if BPQ32 is running - if we create it in the NTVDM address space by
@@ -233,6 +242,9 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 	}
 
 	GETBPQAPI = (FARPROCX)GetProcAddress(ExtDriver,"_GETBPQAPI@0");
+	GetAllocationState = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetAllocationState@4");
+	FindFreeStream = (int (__stdcall *)())GetProcAddress(ExtDriver,"_FindFreeStream@0");
+
 	
 	if (GETBPQAPI == NULL)
 	{
@@ -250,6 +262,7 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 
 
 BOOL Initialized=FALSE;
+char Msg[100];
 
 void __declspec(dllexport) __cdecl CallFrom16()
 {
@@ -257,6 +270,7 @@ void __declspec(dllexport) __cdecl CallFrom16()
 	LPVOID  APIBuffer;
     ULONG   APIVDMAddress;
 	UINT stamp;
+	UINT Command, Stream, NewStream;
 
 	if (!Initialized) Initialized=InitialiseBPQ32();
 
@@ -382,6 +396,64 @@ void __declspec(dllexport) __cdecl CallFrom16()
 		_di=getDI();
 		_es=getES();
 
+		// Attempt to detect use of unallocated ports sessions.
+		// The first time a stream is used, check if allocated. If it is, find a free stream and remap.
+
+		Stream = (_ax & 0xff);
+		Command = _ax>>8;
+
+		if ((Command == 13) && (Stream == 0)) goto HOSTNOPORT;	// Find Free
+
+		_asm {
+
+		mov	ax,_ax
+
+		CMP	AH,11
+		JE SHORT NEEDHOSTPORT
+
+		CMP	AH,13
+		JE SHORT NEEDHOSTPORT
+
+		CMP	AH,10
+		JAE SHORT HOSTNOPORT
+;
+		CMP	AH,2
+		JNE	NEEDHOSTPORT			; SEND ALLOWS ZERO STREAM, MEANING UNPROTO
+	
+		OR	AL,AL
+		JZ SHORT HOSTNOPORT			;  BROADCAST STREAM
+
+NEEDHOSTPORT:
+;
+;	Is this first use of this stream
+;
+	}
+	
+
+	if (NotFirstUse[Stream] == FALSE)
+	{
+		NotFirstUse[Stream] = TRUE;
+
+		if (GetAllocationState(Stream) != 0)
+		{
+			// Stream in use - Find another
+
+			NewStream = FindFreeStream();
+
+			if (NewStream != 255)
+			{
+				StreamMap[Stream] = NewStream;
+				wsprintf(Msg,"BPQ1632 Stream %d remapped to Stream %d", Stream, NewStream);
+				OutputDebugString(Msg);
+			}
+		}
+	}
+
+	_ax = (_ax & 0xff00) | StreamMap[Stream];
+
+
+HOSTNOPORT:
+
 		switch (_ax>>8)
 		{
 			case 0:
@@ -411,7 +483,16 @@ void __declspec(dllexport) __cdecl CallFrom16()
 				mov	_di,di
 
 				}
-				
+
+			if ((Command == 13) && (Stream == 0)) // Find Free
+			{
+				// Clear First Use of Allocated Stream
+
+				if (_ax != 255) NotFirstUse[_ax] = TRUE;
+				wsprintf(Msg,"BPQ1632 Fine Free Allocated Stream %d", _ax);
+				OutputDebugString(Msg);
+			}
+
 			setAX(_ax);
 			setBX(_bx);
 			setCX(_cx);

@@ -78,7 +78,7 @@ HWND hwndOutput;
 HWND hwndMon;
 HWND hwndSplit;
 
-HINSTANCE ExtDriver=0;
+//HINSTANCE ExtDriver=0;
 
 int xsize,ysize;		// Screen size at startup
 
@@ -129,13 +129,6 @@ HFONT hFont ;
 BOOL MinimizetoTray=FALSE;
 
 HWND MainWnd;
-
-
-typedef int (FAR *FARPROCX)();
-
-FARPROCX CheckTimerX;
-FARPROCX CloseBPQ32X;
-
 
 //
 //  FUNCTION: WinMain(HANDLE, HANDLE, LPSTR, int)
@@ -261,9 +254,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance; // Store instance handle in our global variable
 
-	GetAPI();
-
-	MinimizetoTray=GetMinimizetoTrayFlag();
+	//MinimizetoTray=GetMinimizetoTrayFlag();
 
 	// Create a dialog box as the main window
 
@@ -348,26 +339,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	MoveWindows();
 
-	Stream=FindFreeStream();
-	
-	if (Stream == 255)
-	{
-		MessageBox(NULL,"No free streams available",NULL,MB_OK);
-		return (FALSE);
-	}
-
-	//
-	//	Register message for posting by BPQDLL
-	//
-
-	BPQMsg = RegisterWindowMessage(BPQWinMsg);
-
-	//
-	//	Enable Async notification
-	//
-	
-	BPQSetHandle(Stream, hWnd);
-
 	GetVersionInfo(NULL);
 
 	wsprintf(Title,"BPQTerminal Version %s - using stream %d", VersionString, Stream);
@@ -423,17 +394,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	DrawMenuBar(hWnd);	
 
 
-	if (portmask) applflags |= 0x80;
-
-	SetAppl(Stream, applflags, applmask);
-
-	SetTraceOptions(portmask,mtxparam,mcomparam);
-	
+	if (portmask) applflags |= 0x80;	
 
 	DragCursor = LoadCursor(hInstance, "IDC_DragSize");
 	Cursor = LoadCursor(NULL, IDC_ARROW);
-
-	GetCallsign(Stream, callsign);
 
 	if (MinimizetoTray)
 	{
@@ -514,13 +478,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case BPQCONNECT:
 		
+			SessionControl(Stream, 1, 0);
+			break;
+			        
+		case BPQATTACH:
+
+			GetAPI();
+
+			Stream=FindFreeStream();
+	
+			if (Stream == 255)
+			{
+				MessageBox(NULL,"No free streams available",NULL,MB_OK);
+				return (FALSE);
+			}
+
+			BPQMsg = RegisterWindowMessage(BPQWinMsg);
+			BPQSetHandle(Stream, hWnd);
+
+			SetAppl(Stream, applflags, applmask);
+			SetTraceOptions(portmask,mtxparam,mcomparam);
+
+			GetCallsign(Stream, callsign);
+
+			break;
+
+
+		case BPQDETACH:
+		
 			DeallocateStream(Stream); 
 			CloseBPQ32();
 			FreeLibrary(ExtDriver);
-
-	//		SessionControl(Stream, 1, 0);
 			break;
-			        
+
 		case BPQDISCONNECT:
 			
 			SessionControl(Stream, 2, 0);
@@ -623,29 +613,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case BPQHELP:
 
-		GetAPI();
-
-		if (ExtDriver == NULL)
-		{
-			OutputDebugString("BPQTEST Error Loading bpq32.dll");
-			return FALSE;
-		}
-
-		CheckTimer();
-
-
-	Stream=FindFreeStream();
-	
-	if (Stream == 255)
-	{
-		MessageBox(NULL,"No free streams available",NULL,MB_OK);
-		return (FALSE);
-	}
-
-	BPQMsg = RegisterWindowMessage(BPQWinMsg);
-	
-	BPQSetHandle(Stream, hWnd);
-
 
 		break;
 
@@ -695,8 +662,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             SetWindowLong(hwndInput, GWL_WNDPROC, 
                 (LONG) wpOrigInputProc); 
          
-			SessionControl(Stream, 2, 0);
-			DeallocateStream(Stream);
+//			SessionControl(Stream, 2, 0);
+//			DeallocateStream(Stream);
 			PostQuitMessage(0);
 		
 			break;

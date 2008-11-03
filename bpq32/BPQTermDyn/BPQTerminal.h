@@ -9,6 +9,8 @@
 #define BPQMENU                         101
 #define BPQCONNECT                      102
 #define BPQDISCONNECT                   103
+#define BPQATTACH						104
+#define BPQDETACH						105
 #define BPQAUTOCONNECT                  40001
 #define BPQAPPL1                        40002
 #define BPQAPPL2                        40003

@@ -13,7 +13,7 @@
 #include "..\include\bpq32.h"			// BPQ32 API Defines
 #include "..\include\asmstrucs.h"
 
-#include "..\kernel\ipcode.h"
+#include "..\BPQIPModule\ipcode.h"
 
 #define BPQICON 400
 
@@ -23,6 +23,10 @@ char Title[80];
 
 ARPDATA * ARPRecord = NULL;				// ARP Table - malloc'ed as needed
 IPSTATS * IPStats = NULL;
+
+UCHAR * BPQDirectory;
+HINSTANCE hIPModule=0;
+BOOL (FAR WINAPI * GetIPInfo) ();
 
 // Foward declarations of functions included in this code module:
 
@@ -38,6 +42,7 @@ int DoStatus();
 int DoIPStatus();
 CopyScreentoBuffer(char * buff);
 VOID DoARPLine(int i);
+BOOL LoadIPDriver();
 
 char Screen[4000];
 char NewScreen[4000];
@@ -374,6 +379,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				CheckMenuItem(hMenu,BPQIPSTATUS,MF_CHECKED);
 
 				StreamDisplay = FALSE;
+				memset(Screen, ' ', 4000); 
+
 
 				break;
 
@@ -574,6 +581,19 @@ int DoIPStatus()
 {
 	CheckTimer();
 
+	if (GetIPInfo == NULL) LoadIPDriver();
+
+	if (GetIPInfo == NULL)
+	{
+		// Falied to Load
+
+		CheckMenuItem(hMenu,BPQSTREAMS,MF_CHECKED);
+		CheckMenuItem(hMenu,BPQIPSTATUS,MF_UNCHECKED);
+		StreamDisplay = TRUE;
+
+		return 0;
+	}
+
 	if (IPStatsState == -1)
 	{
 		//	Start a new cycle.
@@ -656,3 +676,46 @@ VOID DoARPLine(int i)
 	return;
 }
 
+BOOL LoadIPDriver()
+{
+	char msg[128];
+	int err=0;
+	UCHAR Value[MAX_PATH];
+	char DLL[]="BPQIPModule.dll";
+	
+	// If no directory, use current
+
+	BPQDirectory=GetBPQDirectory();
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(Value, DLL);
+	}
+		else
+	{
+		strcpy(Value,BPQDirectory);
+		strcat(Value,"\\");
+		strcat(Value, DLL);
+	}
+		
+	hIPModule=LoadLibrary(Value);
+
+	if (hIPModule == NULL)
+	{
+		err=GetLastError();
+
+		wsprintf(msg,"Error loading Driver %s - Error code %d",	DLL,err);
+		CheckMenuItem(hMenu,BPQSTREAMS,MF_CHECKED);
+		CheckMenuItem(hMenu,BPQIPSTATUS,MF_UNCHECKED);
+		StreamDisplay = TRUE;
+		
+		MessageBox(NULL,msg,"BPQ32",MB_ICONSTOP);
+		return FALSE;
+
+	}
+	else
+	{
+		GetIPInfo = (int (__stdcall *)())GetProcAddress(hIPModule,"_GetIPInfo@12");
+	}
+	return TRUE;
+}

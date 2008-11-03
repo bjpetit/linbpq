@@ -104,6 +104,7 @@
 //				Put pushad/popad round _INITIALISEPORTS (main.asm)
 //				Add APIs GetApplCallVB and GetPortDescription (mainly for RMS)
 //				Ensure Route Qual is updated if Port Qual changed
+//				Add Reload Option, plus menu items for DUMP and SAVENODES
 
 #define _CRT_SECURE_NO_DEPRECATE 
 
@@ -140,7 +141,7 @@
 #define	GETRAWFRAME		  11
 #define	UPDATESWITCH	  12
 #define	BPQALLOC		  13
-#define	SENDNETFRAME	  14
+//#define	SENDNETFRAME	  14
 #define	GETTIME			  15
 
 
@@ -156,6 +157,7 @@ extern char SIGNONMSG;
 
 extern QCOUNT;
 extern struct BPQVECSTRUC BPQHOSTVECTOR[65];
+extern struct BPQVECSTRUC IPHOSTVECTOR;
 extern char * CONFIGFILENAME;
 
 extern int BPQHOSTAPI();
@@ -174,7 +176,13 @@ extern int UNCHAINNODE();
 extern int REMOVENODE();
 extern int FINDFREEDESTINATION();
 extern int RAWTX();
+extern int RELBUFF();
+extern int SENDNETFRAME();
+
 DllExport int APIENTRY CloseBPQ32();
+
+BOOL (FAR WINAPI * Init_IP) ();
+BOOL (FAR WINAPI * Poll_IP) ();
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -183,14 +191,7 @@ int MINORVERSION=9;
 int Semaphore = 0;
 int SemProcessID = 0;
 
-UCHAR BPQDirectory[MAX_PATH]="";
-UCHAR NODESFILENAME[MAX_PATH]="BPQNODES.dat";
-
-DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
-
-DllExport long  MONDECODEPTR=(long)&MONDECODE;
-
-int WritetoConsoleLocal(char * buff);
+UCHAR BPQDirectory[MAX_PATH];
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 
@@ -218,7 +219,7 @@ unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, 
 
 NOTIFYICONDATA niData; 
 
-int SetUpPopUp(BOOL Reinit);
+int SetupConsoleWindow();
 
 BOOL MinimizetoTray=TRUE;
 
@@ -244,6 +245,7 @@ unsigned int TimerInst = 0;
 int AttachedProcesses=0;
 int AttachedPerlProcesses=0;
 int AttachingProcess=0;
+HINSTANCE hIPModule=0;
 
 BOOL ReconfigFlag=FALSE;
 
@@ -265,10 +267,8 @@ DllExport int APIENTRY WritetoConsole(char * buff);
 
 BOOLEAN CheckifBPQ32isLoaded();
 BOOLEAN StartBPQ32();
-VOID Send_AX(VOID * Block, DWORD len, UCHAR Port);
-
-BOOL Init_IP();
-BOOL Poll_IP();  
+DllExport VOID APIENTRY  Send_AX(VOID * Block, DWORD len, UCHAR Port);
+BOOL LoadIPDriver();
 BOOL Send_IP(VOID * Block, DWORD len);
 
 BOOL IPActive=FALSE;
@@ -601,21 +601,61 @@ FirstInit()
 
 	INITIALISEPORTS();
 
-	SetUpPopUp(TRUE);
+	SetupConsoleWindow();
 
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 	TimerInst=GetCurrentProcessId();
 
  	WritetoConsole("\n\nPort Initialisation Complete\n");
 
-	if (IPRequired) 
-		Init_IP();
-
+	if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
+		
 	OutputDebugString("BPQ32 Port Initialisation Complete");
 
 	return 0;
 
 }
+
+BOOL LoadIPDriver()
+{
+	char msg[128];
+	int err=0;
+	UCHAR Value[MAX_PATH];
+	char DLL[]="BPQIPModule.dll";
+	
+	// If no directory, use current
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(Value, DLL);
+	}
+		else
+	{
+		strcpy(Value,BPQDirectory);
+		strcat(Value,"\\");
+		strcat(Value, DLL);
+	}
+		
+	hIPModule=LoadLibrary(Value);
+
+	if (hIPModule == NULL)
+	{
+		err=GetLastError();
+
+		wsprintf(msg,"Error loading Driver %s - Error code %d",	DLL,err);
+		
+		WritetoConsole(msg);
+		return FALSE;
+
+	}
+	else
+	{
+		Init_IP = (int (__stdcall *)())GetProcAddress(hIPModule,"_Init_IP@0");
+		Poll_IP = (int (__stdcall *)())GetProcAddress(hIPModule,"_Poll_IP@0");
+	}
+	return TRUE;
+}
+
 Check_Timer()
 {
 	// Don't attach timer to Perl or ntvdm Process
@@ -655,7 +695,7 @@ Check_Timer()
 
 		GetVersionInfo("bpq32.dll");
 
-		SetUpPopUp(TRUE);
+		SetupConsoleWindow();
 
 		lineno=0;
 		memset(Screen, ' ', LINELEN*SCREENLEN);
@@ -681,8 +721,7 @@ Check_Timer()
 //		NPHandle=CreateNamedPipe("\\\\.\\pipe\\BPQ32pipe",
 //					PIPE_ACCESS_DUPLEX,0,64,4096,4096,1000,NULL);
 
- 		if (IPRequired) 
-			Init_IP();
+		if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
 
 		_beginthread(MonitorThread,0,0);
 
@@ -2952,7 +2991,8 @@ int DoNodes()
 
 DllExport int APIENTRY SaveNodes ()
 {
-	
+	char FN[MAX_PATH];
+
 	DataBase=(struct DATABASE * )&DATABASE;
 
 	MaxNodes=DataBase->MAXDESTS;
@@ -2969,16 +3009,16 @@ DllExport int APIENTRY SaveNodes ()
 
 	if (BPQDirectory[0] == 0)
 	{
-		strcpy(NODESFILENAME,"BPQNODES.dat");
+		strcpy(FN,"BPQNODES.dat");
 	}
 	else
 	{
-		strcpy(NODESFILENAME,BPQDirectory);
-		strcat(NODESFILENAME,"\\");
-		strcat(NODESFILENAME,"BPQNODES.dat");
+		strcpy(FN,BPQDirectory);
+		strcat(FN,"\\");
+		strcat(FN,"BPQNODES.dat");
 	}
 
-	handle = CreateFile(NODESFILENAME,
+	handle = CreateFile(FN,
 					GENERIC_WRITE,
 					FILE_SHARE_READ,
 					NULL,
@@ -3016,9 +3056,9 @@ HFONT hFont ;
 HWND hWndArray[100]={0};
 char PopupText[30][100]={""};
 
-LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-int SetUpPopUp(BOOL Reinit)
+int SetupConsoleWindow()
 {
     WNDCLASS  wc;
 	int i;
@@ -3028,7 +3068,7 @@ int SetUpPopUp(BOOL Reinit)
 	// Create Console Window
         
 	wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-	wc.lpfnWndProc   = (WNDPROC)PopupWndProc;
+	wc.lpfnWndProc   = (WNDPROC)WndProc;
 	wc.cbClsExtra    = 0;
 	wc.cbWndExtra    = 0;
 	wc.hInstance     = hInstance;
@@ -3060,13 +3100,12 @@ int SetUpPopUp(BOOL Reinit)
 
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Actions");
 
-	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"Re-read bpqcfg.bin");
-	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Dump System");
+	AppendMenu(hPopMenu,MF_STRING,BPQSAVENODES,"Save Nodes to file BPQNODES.DAT");
+	AppendMenu(hPopMenu,MF_STRING,BPQRECONFIG,"Re-read bpqcfg.bin and reconfigure node");
+	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
 
 	DrawMenuBar(hWnd);	
 
-
-	
 	// setup default font information
 
    LFTTYFONT.lfHeight =			12;
@@ -3091,7 +3130,6 @@ int SetUpPopUp(BOOL Reinit)
 	ShowWindow(hWnd, SW_RESTORE);
 		
 	if (MinimizetoTray == 0) 
-
 		return 0;
 
 	trayMenu = CreatePopupMenu();
@@ -3116,16 +3154,11 @@ int SetUpPopUp(BOOL Reinit)
 	}
 doneit:
 
-	if (Reinit)
+	for( i = 0; i < 100; ++i )
 	{
-		for( i = 0; i < 100; ++i )
-		{
-			if (hWndArray[i] != 0)
-		
-				AppendMenu(trayMenu,MF_STRING,40000+i,PopupText[i]);
-		}
+		if (hWndArray[i] != 0)
+			AppendMenu(trayMenu,MF_STRING,40000+i,PopupText[i]);
 	}
-	
 
 	//	Set up Tray ICON
 
@@ -3180,7 +3213,7 @@ doneit:
 	return 0;
 }
 
-LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
     POINT pos;
@@ -3194,11 +3227,10 @@ LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 	switch (message) { 
 
 		case MY_TRAY_ICON_MESSAGE:
-    
-		switch(lParam)
-        {
-        
-			case WM_RBUTTONUP:
+			
+			switch(lParam)
+			{
+			case WM_RBUTTONUP:	
 			case WM_LBUTTONUP:
 
 				GetCursorPos(&pos);
@@ -3207,42 +3239,39 @@ LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 				TrackPopupMenu(trayMenu, 0, pos.x, pos.y, 0, hWnd, 0);
 				return 0;
-
-		}
+			}
 	
-
 		case WM_COMMAND:
 
 			wmId    = LOWORD(wParam); // Remember, these are...
 			wmEvent = HIWORD(wParam); // ...different for Win32!
+			
+			if (wmId == BPQSAVENODES)
+			{
+				SaveNodes();
+				WritetoConsole("Nodes Saved\n");
+				return 0;
+			}
+			if (wmId == BPQRECONFIG)
+			{
+				ReconfigFlag=TRUE;	
+				WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
+				return 0;
+			}
 
-	
-		if (wmId == BPQREREAD)
-		{
-			ReconfigFlag=TRUE;	
-			WritetoConsole("Reconfig requested ... Waiting for Time Poll\n");
+			if (wmId == BPQDUMP)
+			{
+				DumpSystem();
+				return 0;
+			}
 
-			return 0;
-		}
-
-		if (wmId == BPQADDARP)
-		{
-			DumpSystem();
-			WritetoConsole("Dump Taken\n");
-	
-			return 0;
-		}
-
-		
-
-		if (wmId >= 40000 && wmId < 40100)
-		{ 
-			handle=hWndArray[wmId-40000];
-			ShowWindow(handle, SW_RESTORE);
-			SetForegroundWindow(handle);
-			return 0;
-		}		
-	
+			if (wmId >= 40000 && wmId < 40100)
+			{ 
+				handle=hWndArray[wmId-40000];
+				ShowWindow(handle, SW_RESTORE);
+				SetForegroundWindow(handle);
+				return 0;
+			}		
 	
 		case WM_SYSCOMMAND:
 
@@ -3295,17 +3324,9 @@ LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 		
 			if (wParam == 03)
 			{
-				DumpSystem();
-				WritetoConsole("Dump Taken\n");
-	
+				DumpSystem();	
 				return 0;
 			}
-			if (wParam == 04)
-			{
-				ReconfigFlag=TRUE;	
-				return 0;
-			}
-			break;
 
  		case WM_CLOSE:
 		
@@ -3355,6 +3376,9 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd)
 	}
 	return -1;
 }
+
+int WritetoConsoleLocal(char * buff);
+
 DllExport int APIENTRY WritetoConsole(char * buff)
 {
 	return WritetoConsoleLocal(buff);
@@ -3424,6 +3448,7 @@ char * stack;
 DllExport int APIENTRY  DumpSystem()
 {
 	char fn[200];
+	char Msg[250];
 
 	wsprintf(fn,"%s\\BPQDUMP",BPQDirectory);
 
@@ -3438,7 +3463,6 @@ DllExport int APIENTRY  DumpSystem()
 	_asm {
 
 	mov	stack,esp
-	
 	}
 
 	WriteFile(handle,stack,128,&cnt,NULL);
@@ -3448,6 +3472,9 @@ DllExport int APIENTRY  DumpSystem()
 	WriteFile(handle,&Flag,(&ENDOFDATA - &Flag) * 4,&cnt,NULL);
 
  	CloseHandle(handle);
+
+	wsprintf(Msg, "Dump to %s Completed\n", fn);
+	WritetoConsole(Msg);
 
 	return (0);
 }
@@ -3588,7 +3615,7 @@ VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg)
 		}
 	}
 }
-VOID Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port)
+DllExport VOID APIENTRY Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port)
 {
 	//	Can't use API SENDRAW, as that tries to get the semaphore, which we already have
 
@@ -3613,4 +3640,23 @@ VOID Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port)
 	}
 	return;
 
+}
+
+DllExport struct BPQVECSTRUC * APIENTRY GetIPVectorAddr()
+{
+	return &IPHOSTVECTOR;
+}
+
+DllExport UINT APIENTRY GETSENDNETFRAMEADDR()
+{
+	return (UINT)&SENDNETFRAME;
+}
+
+DllExport VOID APIENTRY RelBuff(PMESSAGE Msg)
+{
+	_asm{
+
+		mov	edi,Msg
+		call RELBUFF
+	}
 }

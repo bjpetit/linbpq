@@ -114,7 +114,7 @@ extern int __cdecl simple(int i);
 
 
 #define PARAMLIM 71
-#define MAXLINE 100
+#define MAXLINE 250
 #define FILEVERSION 22
 
 char inputname[250]="bpqcfg.txt";
@@ -311,7 +311,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 #endif
 
-	puts("Configuration file Preprocessor for Version 4.10e August 2008.\n");
+	puts("Configuration file Preprocessor for Version 4.10f November 2008.\n");
 
 #ifdef THOR
 

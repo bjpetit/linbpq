@@ -182,10 +182,12 @@ int APIENTRY BPQSetHandle(int Stream, HWND hWnd);
 
 int ConvFromAX25(unsigned char * incall, unsigned char * outcall);
 BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+char * APIENTRY GetNodeCall();
 
 int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall);
 
 int APIENTRY GetApplNum(int Stream);
+
 
 char * APIENTRY GetApplCall(int Appl);
 
@@ -380,6 +382,7 @@ int (FAR WINAPI * BPQSetHandle) (int Stream, HWND hWnd);
 int (FAR  * ConvFromAX25) (unsigned char * incall, unsigned char * outcall);
 BOOL (FAR  * ConvToAX25) (unsigned char * callsign, unsigned char * ax25call);
 
+char * (FAR WINAPI * GetNodeCall) ();
 int (FAR WINAPI * ChangeSessionCallsign) (int Stream, unsigned char * AXCall);
 
 int (FAR WINAPI * GetApplNum) (int Stream);
@@ -475,9 +478,9 @@ BOOL GetAPI()
 	GetPortNumber = (int (__stdcall *)(int))GetProcAddress(ExtDriver,"_GetPortNumber@4");
 	BPQSetHandle = (int (__stdcall *)(int Stream, HWND hWnd))GetProcAddress(ExtDriver,"_BPQSetHandle@8");
 
-	ConvFromAX25 = (int ( *)(unsigned char * incall, unsigned char * outcall))GetProcAddress(ExtDriver,"_ConvFromAX25");
-	ConvToAX25 = (BOOL ( *)(unsigned char * callsign, unsigned char * ax25call))GetProcAddress(ExtDriver,"_ConvToAX25");
-	
+	ConvFromAX25 = (int ( *)(unsigned char * incall, unsigned char * outcall))GetProcAddress(ExtDriver,"ConvFromAX25");
+	ConvToAX25 = (BOOL ( *)(unsigned char * callsign, unsigned char * ax25call))GetProcAddress(ExtDriver,"ConvToAX25");
+	GetNodeCall = (char * (__stdcall *) ())GetProcAddress(ExtDriver,"_GetNodeCall@0");
 	ChangeSessionCallsign = (int (__stdcall *) (int Stream, unsigned char * AXCall))GetProcAddress(ExtDriver,"_ChangeSessionCallsign@8");
 	GetApplNum = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetApplNum@4");
 	GetApplCall = (char * (__stdcall *) (int Appl))GetProcAddress(ExtDriver,"_GetApplCall@4");

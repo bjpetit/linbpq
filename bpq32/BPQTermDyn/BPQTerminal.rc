@@ -142,7 +142,9 @@ BEGIN
         MENUITEM "Disconnect",                  BPQDISCONNECT, GRAYED
         MENUITEM "Enable Bells",                BPQBELLS
         MENUITEM "Enable Chat",                 BPQCHAT
-    END
+        MENUITEM "Attach",                      BPQATTACH
+        MENUITEM "Detach",                      BPQDETACH
+   END
     POPUP "Monitor"
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX

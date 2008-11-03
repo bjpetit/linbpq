@@ -19,17 +19,31 @@ TODo	?Time Out ARP
 		?Multiple Adapters
 */
 
-#define _CRT_SECURE_NO_DEPRECATE 
+#pragma data_seg("_BPQIPDATA")
 
-#pragma data_seg("_BPQDATA")
+#define _CRT_SECURE_NO_DEPRECATE 
 
 #define Dll	__declspec( dllexport )
 
 #include "windows.h"
 #include <stdio.h>
 #include "AsmStrucs.h"
+#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
+#define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
+#include "bpq32.h"
+
+
 #include "IPCode.h"
 #include "pcap.h"
+
+char MYCALL[7];	// 7 chars, ax.25 format
+struct BPQVECSTRUC * IPHOSTVECTOR;
+
+VOID * (FAR WINAPI * GetIPVectorAddr) ();
+VOID (FAR  WINAPI * RelBuff) ();
+UINT (FAR WINAPI * GETSENDNETFRAMEADDR) ();
+VOID (FAR WINAPI * Send_AX) (PMESSAGE Block, DWORD Len, UCHAR Port);
+
 
 //       ARP REQUEST (AX.25)
 
@@ -42,9 +56,7 @@ ETHARP ETHARPREQMSG = {0};
 ARPDATA ** ARPRecords = NULL;				// ARP Table - malloc'ed as needed
 
 int NumberofARPEntries=0;
-
-extern BOOL IPActive;
-extern short NUMBEROFPORTS;
+short NUMBEROFPORTS;
 
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
@@ -82,6 +94,13 @@ int IPPortMask = 0;
 
 IPSTATS IPStats = {0};
 
+UCHAR * BPQDirectory;
+
+char ARPFN[MAX_PATH];
+char CFGFN[MAX_PATH];
+
+HANDLE handle;
+
 pcap_t *adhandle;
 
 char Adapter[256];
@@ -102,11 +121,42 @@ char Dllname[6]="wpcap";
 
 FARPROCX GetAddress(char * Proc);
 
-BOOL Init_IP()
+Dll BOOL APIENTRY Init_IP()
 {
 	ARPDATA * ARPptr;
 
-	ReadConfigFile("IPGateway.cfg");
+	GetAPI();
+
+	GetIPVectorAddr = (char * (__stdcall *) ())GetProcAddress(ExtDriver,"_GetIPVectorAddr@0");
+	RelBuff = (VOID (__stdcall *) ())GetProcAddress(ExtDriver,"_RelBuff@4");
+	GETSENDNETFRAMEADDR = (UINT (__stdcall *) ())GetProcAddress(ExtDriver,"_GETSENDNETFRAMEADDR@0");
+	Send_AX = (UINT (__stdcall *) (PMESSAGE Block, DWORD Len, UCHAR Port))GetProcAddress(ExtDriver,"_Send_AX@12");
+
+
+	NUMBEROFPORTS=GetNumberofPorts();
+	IPHOSTVECTOR=GetIPVectorAddr();
+	SENDNETFRAME=GETSENDNETFRAMEADDR();
+	ConvToAX25(GetNodeCall(), MYCALL);
+
+	BPQDirectory=GetBPQDirectory();
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(CFGFN,"IPGateway.cfg");
+		strcpy(ARPFN,"BPQARP.dat");
+	}
+	else
+	{
+		strcpy(CFGFN,BPQDirectory);
+		strcat(CFGFN,"\\");
+		strcat(CFGFN,"IPGateway.cfg");
+
+		strcpy(ARPFN,BPQDirectory);
+		strcat(ARPFN,"\\");
+		strcat(ARPFN,"BPQARP.dat");
+	}
+	
+	ReadConfigFile();
 	
 	ARPRecords = NULL;				// ARP Table - malloc'ed as needed
 
@@ -119,14 +169,13 @@ BOOL Init_IP()
 
     if (adhandle == NULL)
 	{
-		WritetoConsoleLocal("Failed to open pcap device - IP Support Disabled\n");
-		IPActive=FALSE;
+		WritetoConsole("Failed to open pcap device - IP Support Disabled\n");
 		return FALSE;
 	} 
 
 	// Clear old packets
 
-	IPHOSTVECTOR.HOSTAPPLFLAGS = 0x80;			// Request IP frams from Node
+	IPHOSTVECTOR->HOSTAPPLFLAGS = 0x80;			// Request IP frams from Node
 
 	// Set up static fields in ARP messages
 
@@ -166,15 +215,15 @@ BOOL Init_IP()
 
 		SendARPMsg(ARPptr);
 	}
-	
-	WritetoConsoleLocal("\nIP Support Enabled\n");
 
-	IPActive=TRUE;
+	ReadARP();
+
+	WritetoConsole("\nIP Support Enabled\n");
 
 	return TRUE;
 }
 
-BOOL Poll_IP()
+Dll BOOL APIENTRY Poll_IP()
 {
 	int res;
 	struct pcap_pkthdr *header;
@@ -227,14 +276,14 @@ Pollloop:
 		// Ignore anything else
 	}
 
-	if (IPHOSTVECTOR.HOSTTRACEQ != 0)
+	if (IPHOSTVECTOR->HOSTTRACEQ != 0)
 	{
 		PMESSAGE axmsg;
 		PMESSAGE savemsg;
 
-		axmsg = IPHOSTVECTOR.HOSTTRACEQ;
+		axmsg = IPHOSTVECTOR->HOSTTRACEQ;
 
-		IPHOSTVECTOR.HOSTTRACEQ = axmsg->CHAIN;
+		IPHOSTVECTOR->HOSTTRACEQ = axmsg->CHAIN;
 
 		savemsg=axmsg;
 
@@ -258,6 +307,7 @@ Pollloop:
 			// ARP Message
 
 			ProcessAXARPMsg((PAXARP)axmsg);
+			SaveARP();
 			break;
 
 		case 0x08:
@@ -291,14 +341,12 @@ Pollloop:
 
 				// Release Buffer
 fragloop:
-				savemsg->CHAIN = FREE_Q;
-				FREE_Q = savemsg;
-				QCOUNT++;
+				RelBuff(savemsg);
 
-				if (IPHOSTVECTOR.HOSTTRACEQ == 0)	goto Pollloop;		// Shouldn't happen
+				if (IPHOSTVECTOR->HOSTTRACEQ == 0)	goto Pollloop;		// Shouldn't happen
 
-				axmsg = IPHOSTVECTOR.HOSTTRACEQ;
-				IPHOSTVECTOR.HOSTTRACEQ = axmsg->CHAIN;
+				axmsg = IPHOSTVECTOR->HOSTTRACEQ;
+				IPHOSTVECTOR->HOSTTRACEQ = axmsg->CHAIN;
 				savemsg=axmsg;
 
 				ptr = &axmsg->PID;
@@ -326,11 +374,7 @@ fragloop:
 		}
 		// Release the buffer
 
-
-		savemsg->CHAIN = FREE_Q;
-		FREE_Q = savemsg;
-
-		QCOUNT++;
+		RelBuff(savemsg);
 
 		goto Pollloop;
 
@@ -364,30 +408,16 @@ VOID Send_AX_Datagram(PMESSAGE Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 
 	memcpy(Block->DEST, HWADDR, 7);
 	memcpy(Block->ORIGIN, MYCALL, 7);
+	Block->DEST[6] &= 0x7e;						// Clear End of Call
 	Block->ORIGIN[6] |= 1;						// Set End of Call
 	Block->CTL = 3;		//UI
 
-	_asm {
+	Send_AX(Block, Len, Port);
 
-	pushfd
-	cld
-	pushad
-
-	mov	al,Port
-	mov	ah,10
-	mov	ecx,Len
-	mov	esi,Block
-	add	esi,7
-
-	call	RAWTX
-
-	popad
-	popfd
-	}
 	return;
 
 }
-VOID Send_AX_CONNECTED(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
+VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 {
 	DWORD PACLEN=255;
 	int fragno;
@@ -462,7 +492,7 @@ VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UC
 	return;
 }
 
-Dll VOID APIENTRY ProcessEthIPMsg(PETHMSG Buffer)
+VOID ProcessEthIPMsg(PETHMSG Buffer)
 {
 	PIPMSG ipptr = (PIPMSG)&Buffer[1];
 
@@ -476,7 +506,7 @@ Dll VOID APIENTRY ProcessEthIPMsg(PETHMSG Buffer)
 	ProcessIPMsg(ipptr, Buffer->SOURCE, 'E', 255);
 }
 
-Dll VOID APIENTRY ProcessEthARPMsg(PETHARP arpptr)
+VOID ProcessEthARPMsg(PETHARP arpptr)
 {
 	int i=0, Mask=IPPortMask;
 	PARPDATA Arp;
@@ -504,6 +534,7 @@ Dll VOID APIENTRY ProcessEthARPMsg(PETHARP arpptr)
 		memcpy(Arp->HWADDR, arpptr->SENDHWADDR ,6);
 		Arp->ARPVALID = TRUE;
 		Arp->ARPTIMER =  86400;
+		SaveARP();
 	
 AlreadyThere:
 
@@ -574,6 +605,7 @@ Update:
 		Arp->ARPINTERFACE = 255;
 		Arp->ARPVALID = TRUE;
 		Arp->ARPTIMER =  86400;
+		SaveARP();
 
 SendBack:
 		
@@ -800,12 +832,13 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 			else
 			{
 				memcpy(Arp->HWADDR, MACADDR, 7);
-				Arp->HWADDR[6] &= 0x7f;
+				Arp->HWADDR[6] &= 0x7e;
 			}
 			Arp->ARPTYPE = Type;
 			Arp->ARPINTERFACE = Port;
 			Arp->ARPVALID = TRUE;
 			Arp->ARPTIMER =  86400;
+			SaveARP();
 		}
 	}
 
@@ -1018,7 +1051,7 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 		return;
 	}
 
-	Send_AX_CONNECTED(Msgptr, Len, Port, HWADDR);
+	Send_AX_Connected(Msgptr, Len, Port, HWADDR);
 
 
 }
@@ -1114,7 +1147,6 @@ PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found)
 	
 Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 {
-	
 	IPStats.ARPEntries = NumberofARPEntries;
 	
 	ARPFlag = index;
@@ -1132,7 +1164,7 @@ Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 }
 
 
-BOOL ReadConfigFile(char * fn)
+BOOL ReadConfigFile()
 {
 
 // IPAddr 192.168.0.129
@@ -1142,25 +1174,11 @@ BOOL ReadConfigFile(char * fn)
 
 	FILE *file;
 	char buf[256],errbuf[256];
-
-	UCHAR Value[MAX_PATH];
-
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value,fn);
-	}
-	else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value,fn);
-	}
-		
 	
-	if ((file = fopen(Value,"r")) == NULL)
+	if ((file = fopen(CFGFN,"r")) == NULL)
 	{
-		wsprintf(buf,"Config file %s could not be opened ",Value);
-		WritetoConsoleLocal(buf);
+		wsprintf(buf,"Config file %s could not be opened ",CFGFN);
+		WritetoConsole(buf);
 
 		return (FALSE);
 	}
@@ -1172,8 +1190,8 @@ BOOL ReadConfigFile(char * fn)
 	
 		if (!ProcessLine(buf))
 		{
-			WritetoConsoleLocal("IP Gateway bad config record ");
-			WritetoConsoleLocal(errbuf);
+			WritetoConsole("IP Gateway bad config record ");
+			WritetoConsole(errbuf);
 		}
 				
 	}
@@ -1295,7 +1313,7 @@ FARPROCX GetAddress(char * Proc)
 		err=GetLastError();
 
 		n=wsprintf(buf,"Error finding %s - %d", Proc,err);
-		WritetoConsoleLocal(buf);
+		WritetoConsole(buf);
 	
 		return(0);
 	}
@@ -1337,7 +1355,7 @@ int OpenPCAP()
 
 	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
 
-	WritetoConsoleLocal("IP ");
+	WritetoConsole("IP ");
 
 	/* Open the adapter */
 	adhandle= pcap_open_livex(Adapter,	// name of the device
@@ -1351,7 +1369,7 @@ int OpenPCAP()
 	if (adhandle == NULL)
 	{
 		n=wsprintf(buf,"Unable to open %s\n",Adapter);
-		WritetoConsoleLocal(buf);
+		WritetoConsole(buf);
 
 		/* Free the device list */
 		return -1;
@@ -1361,7 +1379,7 @@ int OpenPCAP()
 	if(pcap_datalinkx(adhandle) != DLT_EN10MB)
 	{
 		n=wsprintf(buf,"\nThis program works only on Ethernet networks.\n");
-		WritetoConsoleLocal(buf);
+		WritetoConsole(buf);
 		
 		/* Free the device list */
 		return -1;
@@ -1375,7 +1393,7 @@ int OpenPCAP()
 	if (pcap_compilex(adhandle, &fcode, packet_filter, 1, netmask) <0 )
 	{	
 		n=wsprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
-		WritetoConsoleLocal(buf);
+		WritetoConsole(buf);
 
 		/* Free the device list */
 		return -1;
@@ -1386,17 +1404,203 @@ int OpenPCAP()
 	if (pcap_setfilterx(adhandle, &fcode)<0)
 	{
 		n=wsprintf(buf,"\nError setting the filter.\n");
-		WritetoConsoleLocal(buf);
+		WritetoConsole(buf);
 
 		/* Free the device list */
 		return -1;
 	}
 	
 	n=wsprintf(buf,"Using %s", Adapter);
-	WritetoConsoleLocal(buf);
+	WritetoConsole(buf);
 
 	return TRUE;
 
+}
+VOID ReadARP()
+{
+	FILE *file;
+	char buf[256],errbuf[256];
+	
+	if ((file = fopen(ARPFN,"r")) == NULL) return;
+	
+	while(fgets(buf, 255, file) != NULL)
+	{
+		strcpy(errbuf,buf);			// save in case of error
+	
+		if (!ProcessARPLine(buf))
+		{
+			WritetoConsole("IP Gateway bad ARP record ");
+			WritetoConsole(errbuf);
+		}
+				
+	}
+	
+	fclose(file);
+
+	return;
+}
+
+BOOL ProcessARPLine(char * buf)
+{
+	PCHAR p_ip, p_mac, p_port, p_type;
+	int Port;
+	char Mac[7];
+	char AXCall[7];
+	ULONG IPAddr;
+	int a,b,c,d,e,f,num;
+	
+	PARPDATA Arp;
+	BOOL Found;
+
+//	192.168.0.131 GM8BPQ-13 1 D
+
+	p_ip = strtok(buf, " \t\n\r");
+	p_mac = strtok(NULL, " \t\n\r");
+	p_port = strtok(NULL, " \t\n\r");
+	p_type = strtok(NULL, " \t\n\r");
+
+	if(p_ip == NULL) return (TRUE);
+
+	if(*p_ip =='#') return (TRUE);			// comment
+
+	if(*p_ip ==';') return (TRUE);			// comment
+
+	if (p_mac == NULL) return FALSE;
+
+	if (p_port == NULL) return FALSE;
+
+	if (p_type == NULL) return FALSE;
+
+	IPAddr = inet_addr(p_ip);
+
+	if (IPAddr == INADDR_NONE) return FALSE;
+
+	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V'))) return FALSE;
+
+	Port=atoi(p_port);
+
+	if (p_mac == NULL) return (FALSE);
+
+	if (*p_type == 'E')
+	{
+		num=sscanf(p_mac,"%x:%x:%x:%x:%x:%x",&a,&b,&c,&d,&e,&f);
+
+		if (num != 6) return FALSE;
+
+		Mac[0]=a;
+		Mac[1]=b;
+		Mac[2]=c;
+		Mac[3]=d;
+		Mac[4]=e;
+		Mac[5]=f;
+
+		if (Port != 255) return FALSE;
+	}
+	else
+	{
+		if (!ConvToAX25(p_mac, AXCall)) return FALSE;
+		if ((Port == 0) || (Port > NUMBEROFPORTS)) return FALSE;
+
+	}
+	Arp = LookupARP(IPAddr, TRUE, &Found);
+
+	if (!Found)
+	{
+		// Add if possible
+
+		if (Arp != NULL)
+		{
+			Arp->IPADDR = IPAddr;
+
+			if (*p_type == 'E')
+			{
+				memcpy(Arp->HWADDR, Mac, 6);
+			}
+			else
+			{
+				memcpy(Arp->HWADDR, AXCall, 7);
+				Arp->HWADDR[6] &= 0x7e;
+			}
+			Arp->ARPTYPE = *p_type;
+			Arp->ARPINTERFACE = Port;
+			Arp->ARPVALID = TRUE;
+			Arp->ARPTIMER =  86400;
+		}
+	}
+
+	return TRUE;
+}
+
+
+
+VOID SaveARP ()
+{
+	PARPDATA Arp;
+	int i;
+
+	handle = CreateFile(ARPFN,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	for (i=0; i < NumberofARPEntries; i++)
+	{
+		Arp = ARPRecords[i];
+		if (Arp->ARPVALID) WriteARPLine(Arp);
+	}
+
+ 	CloseHandle(handle);
+	
+	return ;
+}
+
+VOID WriteARPLine(PARPDATA ARPRecord)
+{
+	int SSID, Len, Cnt, j;
+	char Mac[20];
+	char Call[7];
+	char IP[20];
+	char Line[100];
+
+	struct in_addr Addr;
+
+	Addr.s_addr = ARPRecord->IPADDR;
+
+	wsprintf(IP, "%d.%d.%d.%d", 
+		Addr.S_un.S_un_b.s_b1, Addr.S_un.S_un_b.s_b2, Addr.S_un.S_un_b.s_b3, Addr.S_un.S_un_b.s_b4); 
+
+	if(ARPRecord->ARPINTERFACE == 255)		// Ethernet
+	{
+			wsprintf(Mac," %02x:%02x:%02x:%02x:%02x:%02x", 
+				ARPRecord->HWADDR[0],
+				ARPRecord->HWADDR[1],
+				ARPRecord->HWADDR[2],
+				ARPRecord->HWADDR[3],
+				ARPRecord->HWADDR[4],
+				ARPRecord->HWADDR[5]);
+	}
+	else
+	{
+			for (j=0; j< 6; j++)
+			{
+				Call[j] = ARPRecord->HWADDR[j]/2;
+				if (Call[j] == 32) Call[j] = 0;
+			}
+			Call[6] = 0;
+			SSID = (ARPRecord->HWADDR[6] & 31)/2;
+			
+			wsprintf(Mac,"%s-%d", Call, SSID);
+	}
+
+	Len = wsprintf(Line,"%s %s %d %c\n",
+			IP, Mac, ARPRecord->ARPINTERFACE, ARPRecord->ARPTYPE);
+		
+	WriteFile(handle,Line,Len,&Cnt,NULL);
+
+	return;
 }
 
 

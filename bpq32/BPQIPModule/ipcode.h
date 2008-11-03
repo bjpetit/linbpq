@@ -3,24 +3,9 @@
 
 //extern struct PORTCONTROL * PORTTABLE;
 
-extern short NUMBEROFPORTS;
-extern short QCOUNT;
-extern PMESSAGE FREE_Q;
 
-
-extern char MYCALL[];	// 7 chars, ax.25 format
-extern struct BPQVECSTRUC IPHOSTVECTOR;
-
-extern int RAWTX();
-extern int SENDNETFRAME();
-
-extern int WritetoConsoleLocal(char * buff);
-
-VOID SetupBPQDirectory();
 
 unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
-
-extern int VECTORLENGTH;
 
 #define IOCTL_NETVMINI_READ_DATA \
     CTL_CODE (FILE_DEVICE_UNKNOWN, 0, METHOD_BUFFERED, FILE_READ_ACCESS)
@@ -186,15 +171,11 @@ typedef struct _IPSTATS
 
 #pragma pack()
 
-extern UCHAR BPQDirectory[];
-
-
-BOOL Init_IP();
-BOOL Poll_IP();  
+Dll BOOL APIENTRY Init_IP();
+Dll BOOL APIENTRY Poll_IP();  
 BOOL Send_ETH(VOID * Block, DWORD len);
-VOID Send_AX(VOID * Block, DWORD len, UCHAR Port, char Mode);
-Dll VOID APIENTRY ProcessEthARPMsg(PETHARP arpptr);
-Dll VOID APIENTRY ProcessEthIPMsg(PVOID Buffer);
+VOID ProcessEthARPMsg(PETHARP arpptr);
+VOID ProcessEthIPMsg(PVOID Buffer);
 VOID ProcessAXARPMsg(PAXARP arpptr);
 VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port);
 BOOL CheckIPChecksum(PIPMSG IPptr);
@@ -205,12 +186,16 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode);
 PARPDATA AllocARPEntry();
 VOID SendARPMsg(PARPDATA ARPptr);
 PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found);
-BOOL ReadConfigFile(char * fn);
+BOOL ReadConfigFile();
 ProcessLine(char * buf);
 VOID DoARPTimer();
+UINT SENDNETFRAME;
 VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
+VOID ReadARP();
+BOOL ProcessARPLine(char * buf);
 
-Dll int APIENTRY GetIPInfo(VOID * ARPRecords, VOID * IPStats, int index);
+VOID SaveARP();
+VOID WriteARPLine(PARPDATA ArpRecord);
 
 int InitPCAP(void);
 int OpenPCAP(void);

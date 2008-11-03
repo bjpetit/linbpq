@@ -16,6 +16,9 @@
 #define BPQCOPY							402
 #define BPQREREAD						403
 #define BPQADDARP						404
+#define BPQRECONFIG						405
+#define BPQDUMP							406
+#define BPQSAVENODES					407
 
 #define ID_SAVE							1008
 #define ID_CANCEL						1009
