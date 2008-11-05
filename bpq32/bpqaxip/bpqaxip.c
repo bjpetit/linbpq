@@ -282,15 +282,14 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	{
 	case DLL_PROCESS_ATTACH:
 		
+		OutputDebugString("bpqaxip DLL Process Attach");
+		
 		AttachedProcesses++;
 		
 		if (AXIPInst == 0)				// First entry
 		{
 			GetAPI();
 			AXIPInst = GetCurrentProcessId();
-
-//			STDOUT = GetStdHandle(STD_OUTPUT_HANDLE);
-
 		}
 		return 1;
    		
@@ -304,6 +303,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
     
 	case DLL_PROCESS_DETACH:
 	
+		OutputDebugString("bpqaxip DLL Process Detach");
+
 		if (AXIPInst == GetCurrentProcessId())
 		{
 		//	KillTimer(NULL,TimerHandle);
@@ -379,6 +380,9 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				{
 					len-=20;			// IP HEADER
 
+					if (memcmp(&rxbuff[20], "Keepalive", 9) == 0 )
+						return 0;
+
 					crc = compute_crc(&rxbuff[20], len);
 
 					if (crc == 0xf0b8)		// Good CRC
@@ -437,6 +441,9 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			}
 			else
 			{
+				if (memcmp(rxbuff, "Keepalive", 9) == 0 )
+					continue;
+					
 				crc = compute_crc(&rxbuff[0], len);
 
 				if (crc == 0xf0b8)		// Good CRC
@@ -469,7 +476,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				//	CRC Error
 				//
 
-				wsprintf(errmsg,"BPQAXIP Invalid CRC Len=%d Source=%s Port %d",crc,inet_ntoa(rxaddr.sin_addr),udpport[i]);
+				wsprintf(errmsg,"BPQAXIP Invalid CRC=%d Source=%s Port %d",crc,inet_ntoa(rxaddr.sin_addr),udpport[i]);
 				OutputDebugString(errmsg);
 
 				return (0);
@@ -558,15 +565,19 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	case 5:				// Terminate
 
 		CloseSockets();
-
+		OutputDebugString("PostMessage(hResWnd, WM_QUIT,0,0)");
 		PostMessage(hResWnd, WM_QUIT,0,0);
+		OutputDebugString("PostMessage(hMHWnd, WM_DESTROY,0,0");
 		PostMessage(hMHWnd, WM_DESTROY,0,0);
+		OutputDebugString("DestroyWindow");
 		DestroyWindow(hMHWnd);
 
 		if (MinimizetoTray)
+		{	
+			OutputDebugString("Calling DeleteTrayMenuItem");
 			DeleteTrayMenuItem(hResWnd);
-
-
+			OutputDebugString("DeleteTrayMenuItem Returned");
+		}
 //		FreeLibrary(ExtDriver);
 
 		break;
@@ -795,11 +806,17 @@ void CloseSockets()
 	int i;
 
 	if (needip)
+	{
+		OutputDebugString("Close Raw Socket");
 		closesocket(sock);
-
+		OutputDebugString("Raw Socket Closed");
+	}
 	for (i=0;i<NumberofUDPPorts;i++)
+	{
+		OutputDebugString("Close UDP Socket");
 		closesocket(udpsock[i]);
-
+		OutputDebugString("UDP Socket Closed");
+	}
 	return ;
 }	
 
@@ -807,7 +824,7 @@ void CloseSockets()
 
 
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
 	PAINTSTRUCT ps;
@@ -1132,7 +1149,7 @@ void ResolveNames( void *dummy )
     // the main window.
 
         wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-        wc.lpfnWndProc   = (WNDPROC)WndProc;
+        wc.lpfnWndProc   = (WNDPROC)ResWndProc;
         wc.cbClsExtra    = 0;
         wc.cbWndExtra    = 0;
         wc.hInstance     = hInstance;
@@ -1182,7 +1199,7 @@ void ResolveNames( void *dummy )
 	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"ReRead AXIP.cfg");
 	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Add Entry");
 
-	DrawMenuBar(hMHWnd);	
+	DrawMenuBar(hResWnd);	
 
 
 	LFTTYFONT.lfHeight =			12;
@@ -1655,7 +1672,8 @@ ProcessLine(char * buf)
 				continue;
 			}
 
-			return FALSE;
+			if ((*p_UDP == ';') || (*p_UDP == '#'))	break;			// Comment on end
+
 		}
 
 		if (convtoax25(p_call,axcall,&calllen))

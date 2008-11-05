@@ -659,6 +659,7 @@ BOOL LoadIPDriver()
 Check_Timer()
 {
 	// Don't attach timer to Perl or ntvdm Process
+	char msg[128];
 
 
 	if (Perl == 1)
@@ -750,20 +751,41 @@ Check_Timer()
 			memset(Screen, ' ', LINELEN*SCREENLEN);
 
 			WritetoConsole("Reconfiguring ...\n\n");
+			OutputDebugString("Reconfiguring...");
 
 			for (i=0;i<NUMBEROFPORTS;i++)
 			{
-				if (PORTVEC->PORT_EXT_ADDR)
-						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER);	// Close External Ports
+				wsprintf(msg,"Reconfig Port %d",i);
+		
+				OutputDebugString(msg);
 
+				if (PORTVEC->PORT_EXT_ADDR)
+				{
+					OutputDebugString("Closing Port");
+
+					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER);	// Close External Ports
+
+					OutputDebugString("Port Closed");
+
+					if (PORTVEC->DLLhandle)
+					{
+						FreeLibrary(PORTVEC->DLLhandle);
+						OutputDebugString("Driver Unloaded");
+					}
+				}
 
 				PORTVEC->PORTCONTROL.PORTCLOSECODE(PORTVEC->PORTCONTROL.IOBASE);
 
 				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 			}
 
+			OutputDebugString("Ports Closed");
+
 			Sleep(2000);
+			OutputDebugString("Reread Config");
 			START();
+			OutputDebugString("Reinit Ports");
+
 			INITIALISEPORTS();			// Restart Ports
 
 			for (i=1;i<66;i++)			// Include IP Vec
