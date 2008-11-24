@@ -100,6 +100,7 @@ BOOL NEAR DestroyTTYInfo( int port )
       CloseConnection( port ) ;
 
    LocalFree( npTTYInfo ) ;
+   KISSInfo[port] = NULL;
 
    return ( TRUE ) ;
 

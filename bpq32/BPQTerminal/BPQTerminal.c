@@ -14,6 +14,11 @@
 // Display lines received without a terminaing CR
 
 
+// Version 2.0.4 November 2008
+
+// Add option to remove a Line Feed following a CR
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -63,10 +68,13 @@ int DoMonData(HWND hWnd);
 int TogglePort(HWND hWnd, int Item, int mask);
 int ToggleMTX(HWND hWnd);
 int ToggleMCOM(HWND hWnd);
-int ToggleBells(HWND hWnd);
+int ToggleParam(HWND hWnd, BOOL * Param, int Item);
 int ToggleChat(HWND hWnd);
 void MoveWindows();
 void CopyToClipboard(HWND hWnd);
+BOOL OpenMonitorLogfile();
+void WriteMonitorLine(char * Msg, int MsgLen);
+
 
 
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
@@ -123,6 +131,11 @@ int PartLinePtr=0;
 int PartLineIndex=0;		// Listbox index of (last) incomplete line
 
 BOOL Bells = FALSE;
+BOOL StripLF = FALSE;
+BOOL LogMonitor = FALSE;
+BOOL LogOutput = FALSE;
+
+HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
 HCURSOR DragCursor;
 HCURSOR	Cursor;
@@ -188,6 +201,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		retCode = RegSetValueEx(hKey,"AutoConnect",0,REG_DWORD,(BYTE *)&AUTOCONNECT,4);
 		retCode = RegSetValueEx(hKey,"PortMask",0,REG_DWORD,(BYTE *)&portmask,4);
 		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
+		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
 		retCode = RegSetValueEx(hKey,"ApplMask",0,REG_DWORD,(BYTE *)&applmask,4);
 		retCode = RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
 		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
@@ -326,6 +340,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey,"Bells",0,			
 			(ULONG *)&Type,(UCHAR *)&Bells,(ULONG *)&Vallen);
 	
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey,"StripLF",0,			
+			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
+	
 		Vallen=8;
 		retCode = RegQueryValueEx(hKey,"Split",0,			
 			(ULONG *)&Type,(UCHAR *)&Split,(ULONG *)&Vallen);
@@ -444,6 +462,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		CheckMenuItem(hMenu,BPQBELLS,MF_CHECKED);
 	else
 		CheckMenuItem(hMenu,BPQBELLS,MF_UNCHECKED);
+
+  	if (StripLF & 1)
+		CheckMenuItem(hMenu,BPQStripLF,MF_CHECKED);
+	else
+		CheckMenuItem(hMenu,BPQStripLF,MF_UNCHECKED);
 
 	DrawMenuBar(hWnd);	
 
@@ -616,7 +639,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case BPQBELLS:
 
-			ToggleBells(hWnd);
+			ToggleParam(hWnd, &Bells, BPQBELLS);
+			break;
+
+		case BPQStripLF:
+
+			ToggleParam(hWnd, &StripLF, BPQStripLF);
+			break;
+
+		case BPQLogOutput:
+
+			ToggleParam(hWnd, &LogOutput, BPQLogOutput);
+			break;
+
+		case BPQLogMonitor:
+
+			ToggleParam(hWnd, &LogMonitor, BPQLogMonitor);
 			break;
 
 		case BPQCHAT:
@@ -1041,11 +1079,23 @@ DoReceivedData(HWND hWnd)
 
 					ptr1=ptr2;
 
+					if ((len > 0) && StripLF)
+					{
+						if (*ptr1 == 0x0a)					// Line Feed
+						{
+							ptr1++;
+							len--;
+						}
+					}
+
+
 					if (index > 1200)
 						
 					do{
 
 						index=SendMessage(hwndOutput,LB_DELETESTRING, 0, 0);
+
+						if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
 					
 						} while (index > 1000);
 
@@ -1097,7 +1147,9 @@ DoMonData(HWND hWnd)
 				{
 					*(ptr2++)=0;
 
-					index=SendMessage(hwndMon,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );	
+					index=SendMessage(hwndMon,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+
+					if (LogMonitor) WriteMonitorLine(ptr1, ptr2 - ptr1);
 
 					if (index > 1200)
 
@@ -1290,20 +1342,13 @@ int ToggleMCOM(HWND hWnd)
     return (0);
   
 }
-int ToggleBells(HWND hWnd)
+int ToggleParam(HWND hWnd, BOOL * Param, int Item)
 {
-	Bells = Bells ^ 1;
+	*Param = !(*Param);
+
+	CheckMenuItem(hMenu,Item, (Param) ? MF_CHECKED : MF_UNCHECKED);
 	
-	if (Bells & 1)
-
-		CheckMenuItem(hMenu,BPQBELLS,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,BPQBELLS,MF_UNCHECKED);
-
     return (0);
-  
 }
 
 int ToggleChat(HWND hWnd)
@@ -1386,3 +1431,38 @@ void CopyToClipboard(HWND hWnd)
 	}
 }
 
+BOOL OpenMonitorLogfile()
+{
+	UCHAR * BPQDirectory=GetBPQDirectory();
+	UCHAR FN[MAX_PATH];
+
+	if (BPQDirectory[0] == 0)
+		wsprintf(FN,"BPQTerm_%d.log", Stream);
+	else
+		wsprintf(FN,"%s\\BPQTerm_%d.log", BPQDirectory, Stream);
+
+	MonHandle = CreateFile(FN,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	SetFilePointer(MonHandle, 0, 0, FILE_END);
+
+	return (MonHandle != INVALID_HANDLE_VALUE);
+}
+
+void WriteMonitorLine(char * Msg, int MsgLen)
+{
+	int cnt;
+	char CRLF[2] = {0x0d,0x0a};
+
+	if (MonHandle == INVALID_HANDLE_VALUE) OpenMonitorLogfile();
+
+	if (MonHandle == INVALID_HANDLE_VALUE) return;
+
+	WriteFile(MonHandle ,Msg , MsgLen, &cnt, NULL);
+	WriteFile(MonHandle ,CRLF , 2, &cnt, NULL);
+}

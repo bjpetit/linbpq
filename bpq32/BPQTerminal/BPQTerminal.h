@@ -36,7 +36,9 @@
 #define BPQBELLS		BPQBASE+46
 #define BPQCHAT			BPQBASE+47
 #define BPQHELP			BPQBASE+48
-
+#define BPQStripLF		BPQBASE+49
+#define BPQLogOutput	BPQBASE+50
+#define BPQLogMonitor	BPQBASE+51
 
 // Next default values for new objects
 // 

@@ -191,7 +191,7 @@ int MINORVERSION=9;
 int Semaphore = 0;
 int SemProcessID = 0;
 
-UCHAR BPQDirectory[MAX_PATH];
+UCHAR BPQDirectory[MAX_PATH]={0};
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 
@@ -581,6 +581,64 @@ VOID CALLBACK TimerProc(
 
 	GetSemaphore();
 
+	// See if reconfigure requested
+
+	if (ReconfigFlag)
+	{
+		// Only do it it timer owning process, or we could get in a real mess!
+
+		if(TimerInst == GetCurrentProcessId())
+		{
+			int i;
+			struct BPQVECSTRUC * HOSTVEC;
+			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
+	
+			ReconfigFlag = FALSE;
+
+			lineno=0;
+			memset(Screen, ' ', LINELEN*SCREENLEN);
+
+			WritetoConsole("Reconfiguring ...\n\n");
+
+			for (i=0;i<NUMBEROFPORTS;i++)
+			{
+				if (PORTVEC->PORTCONTROL.PORTTYPE == 0x10)			// External
+				{
+					if (PORTVEC->PORT_EXT_ADDR)
+						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);	// Close External Ports
+				}
+				PORTVEC->PORTCONTROL.PORTCLOSECODE(PORTVEC->PORTCONTROL.IOBASE);
+
+				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
+			}
+
+			Sleep(2000);
+			START();
+
+			INITIALISEPORTS();			// Restart Ports
+
+			for (i=1;i<66;i++)			// Include IP Vec
+			{
+				HOSTVEC=&BPQHOSTVECTOR[i-1];
+
+				HOSTVEC->HOSTTRACEQ=0;
+
+				if (HOSTVEC->HOSTSESSION !=0)
+				{
+					// Had a connection
+					
+					HOSTVEC->HOSTSESSION=0;
+					HOSTVEC->HOSTFLAGS |=3;	// Disconnected
+					
+					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
+				}
+			}
+
+			WritetoConsole("\n\nReconfiguration Complete\n");	
+		}
+	}
+
+
 	if (IPActive)
 		Poll_IP(); 
 
@@ -659,8 +717,6 @@ BOOL LoadIPDriver()
 Check_Timer()
 {
 	// Don't attach timer to Perl or ntvdm Process
-	char msg[128];
-
 
 	if (Perl == 1)
 	{
@@ -730,85 +786,6 @@ Check_Timer()
 
 		return (1);
 
-	}
-
-	// See if reconfigure requested
-
-	if (ReconfigFlag)
-	{
-		OutputDebugString("Reconfig Requested");
-		// Only do it it timer owning process, or we could get in a real mess!
-
-		if(TimerInst == GetCurrentProcessId())
-		{
-			int i;
-			struct BPQVECSTRUC * HOSTVEC;
-			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
-	
-			ReconfigFlag = FALSE;
-
-			lineno=0;
-			memset(Screen, ' ', LINELEN*SCREENLEN);
-
-			WritetoConsole("Reconfiguring ...\n\n");
-			OutputDebugString("Reconfiguring...");
-
-			for (i=0;i<NUMBEROFPORTS;i++)
-			{
-				wsprintf(msg,"Reconfig Port %d",i);
-		
-				OutputDebugString(msg);
-
-				if (PORTVEC->PORT_EXT_ADDR)
-				{
-					OutputDebugString("Closing Port");
-
-					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER);	// Close External Ports
-
-					OutputDebugString("Port Closed");
-
-					if (PORTVEC->DLLhandle)
-					{
-						FreeLibrary(PORTVEC->DLLhandle);
-						OutputDebugString("Driver Unloaded");
-					}
-				}
-
-				PORTVEC->PORTCONTROL.PORTCLOSECODE(PORTVEC->PORTCONTROL.IOBASE);
-
-				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
-			}
-
-			OutputDebugString("Ports Closed");
-
-			Sleep(2000);
-			OutputDebugString("Reread Config");
-			START();
-			OutputDebugString("Reinit Ports");
-
-			INITIALISEPORTS();			// Restart Ports
-
-			for (i=1;i<66;i++)			// Include IP Vec
-			{
-				HOSTVEC=&BPQHOSTVECTOR[i-1];
-
-				HOSTVEC->HOSTTRACEQ=0;
-
-				if (HOSTVEC->HOSTSESSION !=0)
-				{
-					// Had a connection
-					
-					HOSTVEC->HOSTSESSION=0;
-					HOSTVEC->HOSTFLAGS |=3;	// Disconnected
-					
-					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
-				}
-			}
-
-			OutputDebugString("Reconfigured");
-			WritetoConsole("\n\nReconfiguration Complete\n");
-	
-		}
 	}
 
 	FreeSemaphore();
@@ -1131,7 +1108,7 @@ DllExport int APIENTRY CloseBPQ32()
 		for (i=0;i<NUMBEROFPORTS;i++)
 		{
 			if (PORTVEC->PORT_EXT_ADDR)
-					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER);
+					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);
 
 			PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 		}

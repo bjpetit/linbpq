@@ -119,6 +119,7 @@ void CloseSockets();
 int CONVFROMAX25(char * incall, char * outcall);
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto, short port);
+int Update_MH_KeepAlive(struct in_addr ipad, char proto, short port);
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
 BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag);
@@ -221,6 +222,7 @@ struct MHTableEntry
 	short port;
 	struct in_addr ipaddr;
 	time_t	LastHeard;		// Time last packet received
+	int Keepalive;
 };
 
 
@@ -282,8 +284,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	{
 	case DLL_PROCESS_ATTACH:
 		
-		OutputDebugString("bpqaxip DLL Process Attach");
-		
 		AttachedProcesses++;
 		
 		if (AXIPInst == 0)				// First entry
@@ -303,8 +303,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
     
 	case DLL_PROCESS_DETACH:
 	
-		OutputDebugString("bpqaxip DLL Process Detach");
-
 		if (AXIPInst == GetCurrentProcessId())
 		{
 		//	KillTimer(NULL,TimerHandle);
@@ -381,8 +379,12 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 					len-=20;			// IP HEADER
 
 					if (memcmp(&rxbuff[20], "Keepalive", 9) == 0 )
+					{
+						if (MHEnabled)
+							Update_MH_KeepAlive(rxaddr.sin_addr,'I',93);
+	
 						return 0;
-
+					}
 					crc = compute_crc(&rxbuff[20], len);
 
 					if (crc == 0xf0b8)		// Good CRC
@@ -442,8 +444,13 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			else
 			{
 				if (memcmp(rxbuff, "Keepalive", 9) == 0 )
+				{
+					if (MHEnabled)
+						Update_MH_KeepAlive(rxaddr.sin_addr, 'U', udpport[i]);
+	
 					continue;
-					
+				}
+				
 				crc = compute_crc(&rxbuff[0], len);
 
 				if (crc == 0xf0b8)		// Good CRC
@@ -565,19 +572,13 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	case 5:				// Terminate
 
 		CloseSockets();
-		OutputDebugString("PostMessage(hResWnd, WM_QUIT,0,0)");
 		PostMessage(hResWnd, WM_QUIT,0,0);
-		OutputDebugString("PostMessage(hMHWnd, WM_DESTROY,0,0");
 		PostMessage(hMHWnd, WM_DESTROY,0,0);
-		OutputDebugString("DestroyWindow");
 		DestroyWindow(hMHWnd);
 
-		if (MinimizetoTray)
-		{	
-			OutputDebugString("Calling DeleteTrayMenuItem");
+		if (MinimizetoTray)	
 			DeleteTrayMenuItem(hResWnd);
-			OutputDebugString("DeleteTrayMenuItem Returned");
-		}
+
 //		FreeLibrary(ExtDriver);
 
 		break;
@@ -806,16 +807,11 @@ void CloseSockets()
 	int i;
 
 	if (needip)
-	{
-		OutputDebugString("Close Raw Socket");
 		closesocket(sock);
-		OutputDebugString("Raw Socket Closed");
-	}
+
 	for (i=0;i<NumberofUDPPorts;i++)
 	{
-		OutputDebugString("Close UDP Socket");
 		closesocket(udpsock[i]);
-		OutputDebugString("UDP Socket Closed");
 	}
 	return ;
 }	
@@ -1338,13 +1334,16 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 			{
 				CONVFROMAX25(MHTable[index].callsign,outcall);
 
-				i=wsprintf(line,"%-10s%-15s %c %-6d %-26s",outcall,
+				i=wsprintf(line,"%-10s%-15s %c %-6d %-25s%c",outcall,
 						inet_ntoa(MHTable[index].ipaddr),
 						MHTable[index].proto,
 						MHTable[index].port,
-						asctime(gmtime( &MHTable[index].LastHeard )));
+						asctime(gmtime( &MHTable[index].LastHeard )),
+						(MHTable[index].Keepalive == 0) ? ' ' : 'K');
 
-				TextOut(hdc,0,(index)*14+2,line,i-2);
+				line[i-2]= ' ';			// Clear CR returned by asctime
+
+				TextOut(hdc,0,(index)*14+2,line,i);
 			}
 			index++;
 		}
@@ -1872,6 +1871,14 @@ int CheckKeepalives()
 
 	}
 
+	// Decrement MH Keepalive flags
+
+	for (index = 0; index < MaxMHEntries; index++)
+	{
+		if (MHTable[index].Keepalive != 0) 
+			MHTable[index].Keepalive--;			
+	}
+
 	return (0);
 
 }
@@ -1879,6 +1886,7 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto, short port)
 {
 	int index;
 	char callsign[7];
+	int SaveKeepalive=0;
 
 	memcpy(callsign,call,7);
 	callsign[6] &= 0x3e;				// Mask non-ssid bits
@@ -1895,10 +1903,12 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto, short port)
 					memcmp(&MHTable[index].ipaddr,&ipad,4) == 0 &&
 					MHTable[index].proto == proto &&
 					MHTable[index].port == port)
-
+		{
 			// Entry found, move preceeding entries down and put on front
 
+			SaveKeepalive = MHTable[index].Keepalive;
 			goto MoveEntries;
+		}
 	}
 
 	// Table full move MaxMHEntries-1 entries down, and add on front
@@ -1919,12 +1929,38 @@ MoveEntries:
 	MHTable[0].ipaddr = ipad;
 	MHTable[0].proto = proto;
 	MHTable[0].port = port;
-	time( &MHTable[0].LastHeard);
-
+	time(&MHTable[0].LastHeard);
+	MHTable[0].Keepalive = SaveKeepalive;
 	InvalidateRect(hMHWnd,NULL,FALSE);
 	return 0;
 
 }
+
+int Update_MH_KeepAlive(struct in_addr ipad, char proto, short port)
+{
+	int index;
+
+	for (index = 0; index < MaxMHEntries; index++)
+	{
+		if (MHTable[index].callsign[0] == 0) 
+
+			//	empty entry, so call not present.
+
+			return 0;
+
+		if (memcmp(&MHTable[index].ipaddr,&ipad,4) == 0 &&
+				MHTable[index].proto == proto &&
+				MHTable[index].port == port)
+		{
+			MHTable[index].Keepalive = 30;		// 5 Minutes at 10 sec ticks
+			return 0;
+		}
+	}
+
+	return 0;
+
+}
+
 
 int DumpFrameInHex(unsigned char * msg, int len)
 {
