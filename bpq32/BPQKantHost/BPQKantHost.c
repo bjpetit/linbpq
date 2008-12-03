@@ -77,6 +77,8 @@ VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
+int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
+
 
 BOOL ReleaseTNC2Port(int Stream);
 
@@ -735,11 +737,13 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 {
 	UCHAR Command[80];
 	UCHAR Reply[400];
+	UCHAR TXBuff[400];
 	UCHAR CmdReply[]="C00";
-	UCHAR StatusReply1[]="C00FREE BYTES 936";
+	UCHAR StatusReply1[]="C00FREE BYTES 1000";
 	UCHAR StatusReply2[]="C00A/V stream - DISCONNECTED";
 
 	UCHAR Chan, Stream;
+	int TXLen;
 
 	switch (rxbuffer[0])
 	{
@@ -756,7 +760,7 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 		memcpy(Command, &rxbuffer[3], Len-3);
 		Command[Len-3] = 0;
 
-		if (stricmp(Command, "S") == 0)
+		if (_stricmp(Command, "S") == 0)
 		{
 			// Status
 
@@ -782,7 +786,7 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 			return;
 		}
 
-		if (stricmp(Command, "D") == 0)
+		if (_stricmp(Command, "D") == 0)
 		{
 			// Disconnect
 
@@ -808,11 +812,10 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 		Chan = rxbuffer[1];
 		Stream = rxbuffer[2];
 
-		SendMsg(conn->BPQPort, &rxbuffer[3], Len-3);
+		TXLen = KissDecode(&rxbuffer[3], TXBuff, Len-3);
 
+		SendMsg(conn->BPQPort, TXBuff, TXLen);
 
-		memcpy(Reply,CmdReply,3);
-		SendKISSData(conn, Reply, 3);
 		return;
 
 	default:
@@ -823,63 +826,34 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 	}
 }
 
-/*
-while (pVCOMInfo->RXBCOUNT != 0)
+int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len)
+{
+	int i,txptr=0;
+	UCHAR c;
+
+	for (i=0;i<len;i++)
 	{
-		pVCOMInfo->RXBCOUNT--;
+		c=inbuff[i];
 
-		c = *(pVCOMInfo->RXBPTR++);
-
-		if (pVCOMInfo->ESCFLAG)
+		if (c == FESC)
 		{
-			//
-			//	FESC received - next should be TFESC or TFEND
-
-			pVCOMInfo->ESCFLAG = FALSE;
-
-			if (c == TFESC)
-				c=FESC;
-	
-			if (c == TFEND)
-				c=FEND;
-
-		}
-		else
-		{
-			switch (c)
+			c=inbuff[++i];
 			{
-			case FEND:		
-	
-				//
-				//	Either start of message or message complete
-				//
-				
-				if (pVCOMInfo->RXMPTR == (UCHAR *)&pVCOMInfo->RXMSG)
-					continue;
-
-				pVCOMInfo->MSGREADY=TRUE;
-				return;
-
-			case FESC:
-		
-				pVCOMInfo->ESCFLAG = TRUE;
-				continue;
-
+				if (c == TFESC)
+					c=FESC;
+				else
+				if (c == TFEND)
+					c=FEND;
 			}
 		}
-		
-		//
-		//	Ok, a normal char
-		//
 
-		*(pVCOMInfo->RXMPTR++) = c;
-
+		outbuff[txptr++]=c;
 	}
-	
- 	return;
+
+	return txptr;
+
 }
 
-*/
 VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len)
 {
 	// Send A Packet With KISS Encoding
@@ -1196,17 +1170,10 @@ BOOL ReleaseTNC2Port(int Stream)
 int Connected(Stream)
 {
 	byte ConnectingCall[10];
-	byte * ApplCallPtr;
-	byte * keyptr;
 	byte ApplCall[10]="";
-	byte ErrorMsg[100];
 	UCHAR Msg[50];
 	int i, Len;
 	struct ConnectionInfo * conn;
-
-
-	int ApplNum,con;
-	struct SocketConnectionInfo * sockptr;
 
 	GetCallsign(Stream, ConnectingCall);
 
@@ -1222,7 +1189,7 @@ int Connected(Stream)
 		if (conn->BPQPort == Stream)
 		{
 			Len = wsprintf (Msg, "S1A*** CONNECTED to %s", ConnectingCall);
-//			SendKISSData(conn, Msg, Len);
+			SendKISSData(conn, Msg, Len);
 
 			return 0;
 		}
@@ -1233,7 +1200,6 @@ int Connected(Stream)
 
 int Disconnected (Stream)
 {
-	int con;
 	UCHAR Msg[50];
 	int i, Len;
 	struct ConnectionInfo * conn;
@@ -1259,10 +1225,7 @@ int Disconnected (Stream)
 int DoReceivedData(int Stream)
 {
 	byte Buffer[400];
-	int len,count,i,portcount;
-	char * ptr;
-	char * ptr2;
-	int Len;
+	int len,count,i;
 	struct ConnectionInfo * conn;
 
 
@@ -1299,13 +1262,8 @@ int DoReceivedData(int Stream)
 int DoMonitorData(int Stream)
 {
 	byte Buffer[500];
-	int RawLen,Length,Count;
-	byte Port;
-	struct SocketConnectionInfo * sockptr;	
-	byte AGWBuffer[500];
-	int n;
-	int Stamp, Frametype;
-	BOOL RXFlag, NeedAGW;
+	int RawLen,Count;
+	int Stamp;
 
 	do
 	{
