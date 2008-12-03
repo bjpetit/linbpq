@@ -90,7 +90,7 @@ Return Value:
 
     UNREFERENCED_PARAMETER (RegistryPath);
 
-    DebugPrint (("Entered Driver Entry xx\n"));
+    DebugPrint (("Entered Driver Entry yy\n"));
     
     //
     // Create dispatch points for the IRPs.
@@ -571,7 +571,7 @@ Return Value:
     PCM_PARTIAL_RESOURCE_LIST   partialResourceList;
     PCM_PARTIAL_RESOURCE_LIST   partialResourceListTranslated;
     PIO_STACK_LOCATION  stack;
-    ULONG i;
+    ULONG i, Port;
     PLOCAL_DEVICE_INFO deviceInfo;
 
     deviceInfo = (PLOCAL_DEVICE_INFO) DeviceObject->DeviceExtension;
@@ -639,7 +639,13 @@ Return Value:
                     resourceTrans->u.Port.Start.LowPart, 
                     resourceTrans->u.Port.Length));
 
-          
+				// Set Bitmap of Assigned Ports
+
+				for (Port = resource->u.Port.Start.LowPart;
+					Port < resource->u.Port.Start.LowPart + resourceTrans->u.Port.Length; Port++)
+				{
+					AllocatedPorts[(Port & 0x3ff) >> 5] |= (1 << (Port & 0x1f));
+				}
                 break;
 
             case CmResourceTypeMemory:
@@ -1982,6 +1988,7 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	PHDLC_CHANNEL Channel = NULL;
 	PBUF_ENTRY Buffer;
 	int i, AddChannels;
+	ULONG Port;
 
 	// Check that IO address range and Interrupt are available
 
@@ -1990,7 +1997,16 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 		DebugPrint(("InitChannel Interrupt %d not allocated\n", Params->Interrupt));
 		return 0;
 	}
-
+				
+	for (Port = Params->IOBASE; Port < Params->IOBASE + Params->IOLEN; Port++)
+	{
+		if ((AllocatedPorts[(Port & 0x3ff) >> 5] & (1 << (Port & 0x1f))) == 0)
+		{
+			DebugPrint(("InitChannel Port %x not allocated\n", Port));
+			return 0;
+		}
+	}
+ 
 	Channel = ExAllocatePool(NonPagedPool, sizeof(HDLC_CHANNEL));
 
 	if (Channel == NULL)
