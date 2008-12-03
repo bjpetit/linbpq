@@ -3,7 +3,7 @@
 
 
 #include "stdafx.h"
-#include "bpqtnc2.h"
+#include "bpqkanthost.h"
 #include "bpq32.h"
 #include "GetVersion.h"
 
@@ -28,6 +28,11 @@ HANDLE hControl;
 
 struct ConnectionInfo Connections[6];
 
+BOOL PartPacket = FALSE;
+int	PartLen;
+UCHAR *	PartPtr;
+
+
 //struct ConnectionInfo ConnectionInfo[MaxSockets+1];
 
 
@@ -45,7 +50,6 @@ int Connected(Stream);
 int Disconnected(Stream);
 int SaveConfig(hWnd);
 int Refresh();
-VOID RealPortThread(int i);
 
 HANDLE BPQOpenSerialControl(ULONG * lasterror);
 int BPQSerialAddDevice(HANDLE hDevice,ULONG * port,ULONG * result);
@@ -65,22 +69,15 @@ int BPQSerialIsCOMOpen(HANDLE hDevice,ULONG * Count);
 int BPQSerialGetDTRRTS(HANDLE hDevice,ULONG * Flags);
 
 BOOL InitTNC2Port(int Port,int * Stream);
-BOOL TNC2Timer();
-BOOL TNC2GetChar(int port,int * returnedchar, int * moretocome);
-BOOL TNC2PutChar(int port,int sentchar);
-BOOL TNC2GetVMSR(int port,int * returnedchar);
 
 BOOL OpenRealPort(conn);
 
+VOID ProcessPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
+VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-int	INITTNC2();
-BOOL APIGETCHAR();
-BOOL APIKEYSUPPORT();
-BOOL APIGETVMSR();
-BOOL TNCTIMERPROC();
 BOOL ReleaseTNC2Port(int Stream);
 
 VOID CALLBACK TimerProc();
@@ -92,8 +89,6 @@ BOOL cfgMinToTray;
 
 #define DllImport	__declspec( dllimport )
 
-unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
-
 
 DllImport INT  BPQHOSTAPIPTR();
 
@@ -102,48 +97,6 @@ int BPQHOSTAPI;
 DllImport INT  MONDECODEPTR();
 
 int MONDECODE;
-
-int Semaphore=0;
-int SEMCLASHES=0;
-
-void GetSemaphore()
-{
-	//
-	//	Wait for it to be free
-	//
-	
-	if (Semaphore !=0)
-		SEMCLASHES++;
-
-loop1:
-
-	while (Semaphore != 0)
-		Sleep(10);
-
-	//
-	//	try to get semaphore
-	//
-
-	_asm{
-
-	mov	eax,1
-	xchg Semaphore,eax	// this instruction is locked
-	
-	cmp	eax,0
-	jne loop1			// someone else got it - try again
-;
-;	ok, we've got the semaphore
-;
-	}
-
-	return;
-}
-void FreeSemaphore()
-{
-	Semaphore=0;
-
-	return; 
-}
 
 
 
@@ -253,9 +206,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //        In this function, we save the instance handle in a global variable and
 //        create and display the main program window.
 //
+
+HWND hWnd;
+
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-   HWND hWnd;
+
 	int err;
 	char Title[80];
 
@@ -277,12 +233,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"BPQ TNC2 Emulator Version %s", VersionString);
+	wsprintf(Title,"BPQ Kantronics Hostmode Emulator Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
 
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
+
+   	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
    	return Initialise();
 }
@@ -300,6 +258,44 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
+	int state,change;
+
+	if (message == BPQMsg)
+	{
+		if (lParam & BPQMonitorAvail)
+		{
+			DoMonitorData(wParam);
+			return 0;
+		}
+		if (lParam & BPQDataAvail)
+		{
+			DoReceivedData(wParam);
+			return 0;
+		}
+		if (lParam & BPQStateChange)
+		{
+
+			//	Get current Session State. Any state changed is ACK'ed
+			//	automatically. See BPQHOST functions 4 and 5.
+	
+			SessionState(wParam, &state, &change);
+		
+			if (change == 1)
+			{
+				if (state == 1)
+	
+				// Connected
+			
+					Connected(wParam);	
+				else
+					Disconnected(wParam);
+			}
+		}
+
+		return 0;
+	}
+
+	
 
 	switch (message)
 	{
@@ -366,7 +362,7 @@ BOOL Initialise()
 
 
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
-		"SOFTWARE\\G8BPQ\\BPQ32\\BPQTNC2",
+		"SOFTWARE\\G8BPQ\\BPQ32\\BPQKHOST",
                               0,
                               KEY_QUERY_VALUE,
                               &hKey);
@@ -459,31 +455,6 @@ BOOL Initialise()
 
 		}
 
-		if (conn->TypeFlag[0] == 'R')
-		{        
-        //' real Serial Port
-
-			wsprintf(conn->PortLabel,"COM%d", conn->ComPort);
-
-			if (OpenRealPort(conn))
-			{
-				wsprintf(conn->PortLabel,"COM%d", conn->ComPort);
-				conn->PortEnabled = 1;   
-				conn->BPQPort = conn->HostPort;
-				resp = InitTNC2Port(i, &conn->BPQPort);
-				conn->RTS = 1;
-//				conn->DTR = 1;
-//				EscapeCommFunction(conn->hDevice,SETDTR);
-				EscapeCommFunction(conn->hDevice,SETRTS);
-
- 				conn->HostPort = conn->BPQPort;
-
-				_beginthread(RealPortThread,0,i);
-			}
-			else
-				wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
-
-		}
 	}
 
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
@@ -492,7 +463,7 @@ BOOL Initialise()
 
 	if (cfgMinToTray)
 	
-		AddTrayMenuItem(MainWnd, "TNC2 Emulator");
+		AddTrayMenuItem(MainWnd, "KHOST Emulator");
 
 	return TRUE;
 }
@@ -527,19 +498,11 @@ int Refresh()
 VOID CALLBACK TimerProc()
 {
 	struct ConnectionInfo * conn;
-	int i, n, ConCount, ModemStat;
+	int i, ConCount, ModemStat;
 	char rxbuffer[1000];
-	int retval, more;
-	char TXMsg[1000];
 	int RXCount, TXCount, Read, resp;
 
 	CheckTimer();
-
-	GetSemaphore();
-
-	TNC2Timer();
-
-	FreeSemaphore();
 
 	for (i = 1; i <= CurrentConnections; i++)
 	{
@@ -568,76 +531,14 @@ VOID CALLBACK TimerProc()
                 
 			if (RXCount > 0)
 			{
-				resp = BPQSerialGetData(conn->hDevice, rxbuffer, 80, &Read);
+				resp = BPQSerialGetData(conn->hDevice, rxbuffer, 1000, &Read);
 
-				if (conn->KHOST)
-				{
-					ProcessKHOSTPacket(conn, (UCHAR *)&rxbuffer, Read);
-				}
-				else
-				{
-					GetSemaphore();
-			
-					for (n = 0; n < Read; n++)
-						TNC2PutChar(i, rxbuffer[n]);
-
-					FreeSemaphore();
-				}
-			}
-
-			if (TXCount > 4096) goto getstatus;
-        
-			if (!conn->KHOST)
-			{
-				n=0;
-				GetSemaphore();
-
-			getloop:
-
-				TNC2GetChar(i, &retval, &more);
-
-				if (retval != -1)
-					TXMsg[n++] = retval;
-
-				if (more > 0 && n < 1000) goto getloop;
-    
-				FreeSemaphore();
-        
-				if (n > 0 && conn->PortEnabled) 
-					BPQSerialSendData(conn->hDevice, TXMsg, n);
-			}
+					ProcessPacket(conn, (UCHAR *)&rxbuffer, Read);
 	
-		getstatus:
-        
-			TNC2GetVMSR(i, &retval);
-        
-			if ((retval & 8) == 8)	 //' DCD (Connected) Changed
-			{	
-				conn->DCD = (retval & 128) / 128;
-				
-				if (conn->DCD == 1)
-					BPQSerialSetDCD(conn->hDevice);
-				else
-					BPQSerialClrDCD(conn->hDevice);
-
-				Refresh();
 			}
-
-			if ((retval & 1) == 1)  //' CTS (Flow Control) Changed
-			{			
-				conn->CTS = (retval & 16) / 16;
-        
-				if (conn->CTS == 1)
-					BPQSerialSetCTS(conn->hDevice);
-				else
-					BPQSerialClrCTS(conn->hDevice);
-
-				Refresh();
-			}
-
+       
 			BPQSerialGetDTRRTS(conn->hDevice,&ModemStat);
 			
-
 			if ((ModemStat & 1) != conn->DTR)
 			{
 				conn->DTR=!conn->DTR;
@@ -658,127 +559,6 @@ VOID CALLBACK TimerProc()
 
 
 
-VOID RealPortThread(int i)
-{
-	struct ConnectionInfo * conn;
-	int n;
-	char rxbuffer[1000];
-	int retval, more, BytesWritten, ModemStat;
-	char TXMsg[500];
-	int RXCount, Read, resp;
-
-	COMSTAT    ComStat;
-	DWORD      dwErrorFlags;
-
-	conn = &Connections[i];
-
-	// only try to read number of bytes in queue 
-	do {
-
-		ClearCommError(conn->hDevice, &dwErrorFlags, &ComStat ) ;
-        
-		RXCount = min(1000, ComStat.cbInQue);
-        
-		if (RXCount > 0)
-		{
-			resp = ReadFile(conn->hDevice, rxbuffer, RXCount, &Read, NULL);
-
-			if (!resp)
-			{
-				Read = 0;
-				ClearCommError(conn->hDevice, &dwErrorFlags, &ComStat ) ;
-			}
-				
-			GetSemaphore();
-
-			for (n = 0; n < Read; n++)
-				TNC2PutChar(i, rxbuffer[n]);
-
-			FreeSemaphore();
-		}
-
-		if (!conn->CTS)
-			goto getstatusR;
-       
-		n=0;
-
-		GetSemaphore();
-
-getloopR:
-
-		TNC2GetChar(i, &retval, &more);
-
-		if (retval != -1)
-			TXMsg[n++] = retval;
-
-		if (more > 0 && n < 500) goto getloopR;
-    
-		FreeSemaphore();
-
-		if (n > 0 && conn->PortEnabled) 
-			resp = WriteFile(conn->hDevice, TXMsg, n, &BytesWritten, NULL);
-
-getstatusR:
-        
-		TNC2GetVMSR(i, &retval);
-        
-		if ((retval & 8) == 8)	 //' DCD (Connected) Changed
-		{
-			conn->DTR = (retval & 128) / 128;
-        
-			if (conn->DTR == 1)
-				EscapeCommFunction(conn->hDevice,SETDTR);
-			else
-				EscapeCommFunction(conn->hDevice,CLRDTR);
-
-			Refresh();
-		}
-
-		if ((retval & 1) == 1)  //' CTS (Flow Control) Changed
-		{			
-			conn->RTS = (retval & 16) / 16;
-        
-			if (conn->RTS == 1)
-				EscapeCommFunction(conn->hDevice,SETRTS);
-			else
-				EscapeCommFunction(conn->hDevice,CLRRTS);
-
-			Refresh();
-		}
-		
-		GetCommModemStatus(conn->hDevice,&ModemStat);
-
-		if ((ModemStat & MS_CTS_ON) >> 4 != conn->CTS)
-		{
-			conn->CTS=!conn->CTS;
-			Refresh();
-		}
-
-		if ((ModemStat & MS_DSR_ON) >> 5 != conn->DSR)
-		{
-			conn->DSR=!conn->DSR;
-			Refresh();
-		}
-
-		if ((ModemStat & MS_RLSD_ON) >> 7 != conn->DCD)
-		{
-			conn->DCD=!conn->DCD;
-			Refresh();
-		}
-
-	Sleep(10);
-
-	} while (TRUE);
-}
-
-
-
-
-
-
-
-
-
 
 int SaveConfig(hWnd)
 {
@@ -793,7 +573,7 @@ int SaveConfig(hWnd)
 	HKEY hKey=0;
 
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
-                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQTNC2",
+                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQKHOST",
                               0,	// Reserved
 							  0,	// Class
 							  0,	// Options
@@ -842,94 +622,15 @@ int SaveConfig(hWnd)
 		}
 	}
 
-	MessageBox(MainWnd,"You must restart BPQTNC2 for changes to be actioned","BPQTNC2",0);
+	MessageBox(MainWnd,"You must restart BPQKHOST for changes to be actioned","BPQKHOST",0);
 
 	return 0;
 }
-
-BOOL OpenRealPort(struct ConnectionInfo * conn)
-{
-   char szPort[ 15 ];
-   BOOL fRetVal ;
-   COMMTIMEOUTS CommTimeOuts ;
-   int i;
-
-   DCB	dcb;
-
-  // load the COM prefix string and append port number
-   
-  wsprintf( szPort, "//./COM%d", conn->ComPort) ;
-
-   // open COMM device
-
-   conn->hDevice =
-      CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
-                  0,                    // exclusive access
-                  NULL,                 // no security attrs
-                  OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
-                  NULL );
-				  
-	if (conn->hDevice == (HANDLE) -1 )
-	{
-		i=GetLastError();
-		return ( FALSE ) ;
-	}
-
-      // setup device buffers
-
-      SetupComm(conn->hDevice, 4096, 4096 ) ;
-
-      // purge any information in the buffer
-
-      PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT |
-                                      PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
-
-      // set up for overlapped I/O
-	  
-      CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
-      CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
-      CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
-      CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
-      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
-      SetCommTimeouts(conn->hDevice, &CommTimeOuts ) ;
 
 #define FC_DTRDSR       0x01
 #define FC_RTSCTS       0x02
 
 
-   
-	  dcb.DCBlength = sizeof( DCB );
-
-	  GetCommState(conn->hDevice, &dcb );
-
-	  BuildCommDCB(conn->Params, &dcb);	
-
-	  // setup hardware flow control
-
-      dcb.fDtrControl = DTR_CONTROL_ENABLE;
-    
-//	  dcb.fRtsControl = RTS_CONTROL_HANDSHAKE ;
-
-      dcb.fRtsControl = RTS_CONTROL_ENABLE;
-
-
-	  dcb.fInX = dcb.fOutX = 0;
-	  dcb.XonChar = 0 ;
-	  dcb.XoffChar = 0 ;
-	  dcb.XonLim = 0 ;
-	  dcb.XoffLim = 0 ;
-
-   // other various settings
-
-   dcb.fBinary = TRUE ;
-   dcb.fParity = TRUE ;
-
-   fRetVal = SetCommState(conn->hDevice, &dcb ) ;
-
-   return ( fRetVal ) ;
-
-} // end of SetupConnection()
 
 // Kantronics Host Mode Stuff
 
@@ -939,23 +640,108 @@ BOOL OpenRealPort(struct ConnectionInfo * conn)
 #define	TFESC	0xDD
 
 
+VOID ProcessPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
+{
+	UCHAR * FendPtr;
+	int NewLen;
+	
+	//	Split into KISS Packets. By far the most likely is a single KISS frame
+	//	or a single cr delimited frma, to treat as special case
+
+	FendPtr = memchr(&rxbuffer[1], FEND, Len-1);
+
+	if (rxbuffer[0] == FEND)
+	{
+		if (FendPtr == &rxbuffer[Len-1])
+		{
+			ProcessKHOSTPacket(conn, &rxbuffer[1], Len - 2);
+			return;
+		}
+
+		if (FendPtr == NULL)
+		{
+			// We have a partial Packet - Save it
+
+			PartPacket = TRUE;
+			PartLen = Len;
+			PartPtr = rxbuffer;
+			return;
+		}
+		
+		// Process the first Packet in the buffer
+
+		NewLen =  FendPtr - rxbuffer -1;
+		ProcessKHOSTPacket(conn, &rxbuffer[1], NewLen );
+	
+		// Loop Back
+
+		ProcessPacket(conn, FendPtr+1, Len - NewLen -2);
+		return;
+	}
+
+	// First Packet is not Host Mode. 
+
+	if (FendPtr != NULL)
+	{
+		// Non Host Packet, followed by host packet
+
+		NewLen =  FendPtr - rxbuffer;
+		ProcessKPacket(conn, rxbuffer, NewLen);
+
+		// Loop Back
+
+		ProcessPacket(conn, FendPtr, Len - NewLen);
+		return;
+	}
+
+	ProcessKPacket(conn, rxbuffer, Len);
+	return;
+}
+
+VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
+{
+	UCHAR Command[80];
+	UCHAR Reply[400]="cmd:\r";
+	UCHAR CmdReply[]="C00";
+
+	if (Len > 80) Len = 80;
+		
+	memcpy(Command, rxbuffer, Len);
+	Command[Len] = 0x0d;
+	Command[Len+1] = 0;
+
+	OutputDebugString(Command);
+
+//cmd:
+
+//INTFACE HOST
+//INTFACE was TERMINAL
+//cmd:RESET
+//응S00�
+//픀20XFLOW OFF�
+
+
+	SendKISSData(conn, CmdReply, 3);
+	
+	//BPQSerialSendData(conn->hDevice, Reply, 5);
+
+
+	//	Process Non-Hostmode Packet
+
+	return;
+}
+
 VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 {
 	UCHAR Command[80];
-	
 	UCHAR Reply[400];
 	UCHAR CmdReply[]="C00";
-
 	UCHAR StatusReply1[]="C00FREE BYTES 936";
 	UCHAR StatusReply2[]="C00A/V stream - DISCONNECTED";
 
+	UCHAR Chan, Stream;
 
-	rxbuffer[Len]=0x0a;
-	rxbuffer[Len+1]=0x0;
-
-	OutputDebugString(rxbuffer);
-
-	switch (rxbuffer[1])
+	switch (rxbuffer[0])
 	{
 	
 	case 'C':
@@ -963,39 +749,78 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 		// Command Packet. Extract Command
 
 		if (Len > 80) Len = 80;
-		
-		memcpy(Command, &rxbuffer[4], Len-5);
-		Command[Len-5] = 0;
+	
+		Chan = rxbuffer[1];
+		Stream = rxbuffer[2];
 
-		switch (rxbuffer[4])
+		memcpy(Command, &rxbuffer[3], Len-3);
+		Command[Len-3] = 0;
+
+		if (stricmp(Command, "S") == 0)
 		{
-			case 'S':
-
-				// Status
-
+			// Status
 
 			SendKISSData(conn, StatusReply1, strlen(StatusReply1));
 			SendKISSData(conn, StatusReply2, strlen(StatusReply2));
 			return;
-
-		default:
-
-			memcpy(Reply,CmdReply,3);
-			SendKISSData(conn, Reply, 3);
-			return;
-
 		}
-		
+
+		if (memcmp(Command, "C ", 2) == 0)
+		{
+			// Connect
+
+			Reply[0] = 'C';
+			Reply[1] = Chan;
+			Reply[2] = Stream;
+			SendKISSData(conn, Reply, 3);
+
+			SessionControl(conn->BPQPort, 1, 0);
+
+			Command[Len-3] = 0xd;
+			SendMsg(conn->BPQPort, Command, Len-2);
+
+			return;
+		}
+
+		if (stricmp(Command, "D") == 0)
+		{
+			// Disconnect
+
+			Reply[0] = 'D';
+			Reply[1] = Chan;
+			Reply[2] = Stream;
+//			SendKISSData(conn, Reply, 3);
+
+			SessionControl(conn->BPQPort, 2, 0);
+
+			return;
+		}
+
+
+		memcpy(Reply,CmdReply,3);
+		SendKISSData(conn, Reply, 3);
+		return;
+
+	case 'D':
+
+		// Data to send
+
+		Chan = rxbuffer[1];
+		Stream = rxbuffer[2];
+
+		SendMsg(conn->BPQPort, &rxbuffer[3], Len-3);
+
+
+		memcpy(Reply,CmdReply,3);
+		SendKISSData(conn, Reply, 3);
+		return;
+
 	default:
 
-		Reply[0]=0;
-
-
-		break;
-
-	return;
+		memcpy(Reply,CmdReply,3);
+		SendKISSData(conn, Reply, 3);
+		return;
 	}
-	return;
 }
 
 /*
@@ -1337,24 +1162,19 @@ BOOL InitTNC2Port(int Port,int * Stream)
 		*Stream = FindFreeStream();
 
 		if (*Stream == 255) return FALSE;
+
+		BPQSetHandle(*Stream, hWnd);
+
 	}
 	else
 	{
 		ret = AllocateStream(*Stream);
 
 		if (ret != 0) return FALSE;
+
+
 	}
 
-
-	_asm {
-
-		mov ecx,Port
-		dec	ecx
-		mov eax,Stream
-		mov	eax,[eax]
-
-		call INITTNC2
-	}
 
 	return TRUE;
 
@@ -1373,66 +1193,136 @@ BOOL ReleaseTNC2Port(int Stream)
 }
 
 
-BOOL TNC2GetChar(int port,int * returnedchar, int * moretocome)
-{            
-	_asm {
+int Connected(Stream)
+{
+	byte ConnectingCall[10];
+	byte * ApplCallPtr;
+	byte * keyptr;
+	byte ApplCall[10]="";
+	byte ErrorMsg[100];
+	UCHAR Msg[50];
+	int i, Len;
+	struct ConnectionInfo * conn;
 
-		mov	ecx,port
-		dec	ecx
-		call APIGETCHAR
 
-		mov	edi,returnedchar
-		mov	[edi],eax
+	int ApplNum,con;
+	struct SocketConnectionInfo * sockptr;
+
+	GetCallsign(Stream, ConnectingCall);
+
+	for (i=9;i>0;i--)
+		if (ConnectingCall[i]==32)
+			ConnectingCall[i]=0;
+
+
+	for (i = 1; i <= CurrentConnections; i++)
+	{
+		conn = &Connections[i];
+
+		if (conn->BPQPort == Stream)
+		{
+			Len = wsprintf (Msg, "S1A*** CONNECTED to %s", ConnectingCall);
+//			SendKISSData(conn, Msg, Len);
+
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
+int Disconnected (Stream)
+{
+	int con;
+	UCHAR Msg[50];
+	int i, Len;
+	struct ConnectionInfo * conn;
+
+
+	for (i = 1; i <= CurrentConnections; i++)
+	{
+		conn = &Connections[i];
+
+		if (conn->BPQPort == Stream)
+		{
+			Len = wsprintf (Msg, "S1A*** DISCONNECTED");
+			SendKISSData(conn, Msg, Len);
+
+			return 0;
+		}
+	}
+
+
+	return 0;
+
+}
+int DoReceivedData(int Stream)
+{
+	byte Buffer[400];
+	int len,count,i,portcount;
+	char * ptr;
+	char * ptr2;
+	int Len;
+	struct ConnectionInfo * conn;
+
+
+	for (i = 1; i <= CurrentConnections; i++)
+	{
+		conn = &Connections[i];
+
+		if (conn->BPQPort == Stream)
+		{
+			
+			do { 
+
+				GetMsg(Stream, &Buffer[3], &len, &count);
+
+				if (len > 0)
+				{
+					Buffer[0] = 'D';
+					Buffer[1] = '1';
+					Buffer[2] = 'A';
+
+					SendKISSData(conn, Buffer, len+3);
+				}
+	  
+			}while (count > 0);
+
+			return 0;
+		}
+	}
+
 	
-		mov	edi,moretocome
-		mov	[edi],ecx
-	}
-
-	return TRUE;
-
+	return 0;
 }
 
-BOOL TNC2PutChar(int port,int sentchar)
-{            
-	_asm {
+int DoMonitorData(int Stream)
+{
+	byte Buffer[500];
+	int RawLen,Length,Count;
+	byte Port;
+	struct SocketConnectionInfo * sockptr;	
+	byte AGWBuffer[500];
+	int n;
+	int Stamp, Frametype;
+	BOOL RXFlag, NeedAGW;
 
-		mov	eax,sentchar
-		mov	ecx,port
-		dec	ecx
-		call APIKEYSUPPORT
-
+	do
+	{
+		Stamp=GetRaw(Stream, Buffer, &RawLen, &Count );
+ 
 	}
 
-	return TRUE;
+	while (Count > 0);
 
-}
-
-BOOL TNC2GetVMSR(int port,int * returnedchar)
-{            
-	_asm {
-
-		mov	ecx,port
-		dec	ecx
-		call APIGETVMSR
-
-		mov	edi,returnedchar
-		mov	[edi],eax
-	
-	}
-
-	return TRUE;
+	return 0;
 
 }
 
 
-BOOL TNC2Timer()
-{            
-	_asm {
 
-		call TNCTIMERPROC
 
-	}
-	return TRUE;
 
-}
+
+
 

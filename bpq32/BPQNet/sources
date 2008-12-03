@@ -5,7 +5,7 @@
 # BUILD command sources file
 #
 
-TARGETNAME=BPQdrv
+TARGETNAME=BPQNet
 TARGETPATH=C:\Dev\Msdev2005\Projects\BPQNet
 TARGETTYPE=DRIVER
 

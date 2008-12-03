@@ -106,6 +106,10 @@
 //				Ensure Route Qual is updated if Port Qual changed
 //				Add Reload Option, plus menu items for DUMP and SAVENODES
 
+// 410g		December 2008
+
+//				Restore API Exports BPQHOSTAPIPTR and MONDECODEPTR (accidentally deleted)
+
 #define _CRT_SECURE_NO_DEPRECATE 
 
 #pragma data_seg("_BPQDATA")
@@ -146,6 +150,7 @@
 
 
 extern short NUMBEROFPORTS;
+extern long PORTENTRYLEN;
 extern struct PORTCONTROL * PORTTABLE;
 
 extern char AUTOSAVE;
@@ -191,7 +196,11 @@ int MINORVERSION=9;
 int Semaphore = 0;
 int SemProcessID = 0;
 
-UCHAR BPQDirectory[MAX_PATH]={0};
+
+DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
+DllExport long  MONDECODEPTR=(long)&MONDECODE;
+
+UCHAR BPQDirectory[MAX_PATH]="";
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 
@@ -863,6 +872,14 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	switch( ul_reason_being_called )
 	{
 	case DLL_PROCESS_ATTACH:
+
+		if (sizeof(HDLCDATA) > PORTENTRYLEN)
+		{
+			// Catastrophic - Refuse to load
+			
+			MessageBox(NULL,"BPQ32 Too much HDLC data - Recompile","BPQ32", MB_OK);
+			return 0;
+		}
 			  
 		GetSemaphore();
 

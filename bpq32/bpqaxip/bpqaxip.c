@@ -1512,12 +1512,17 @@ broadcast QST-0 NODES-0
 
 	FILE *file;
 	char buf[256],errbuf[256];
+	int Err;
 
 	HKEY hKey=0;
 	UCHAR Value[100];
 	UCHAR * BPQDirectory;
 
 	BPQDirectory=GetBPQDirectory();
+
+	wsprintf(errbuf, "BPQAXIP BPQ Directory = %s Filename = %s\n", BPQDirectory, fn);
+	OutputDebugString(errbuf);
+
 
 	if (BPQDirectory[0] == 0)
 	{
@@ -1529,9 +1534,17 @@ broadcast QST-0 NODES-0
 		strcat(Value,"\\");
 		strcat(Value,fn);
 	}
+
+	wsprintf(errbuf, "BPQAXIP Opening %s\n", Value);
+	OutputDebugString(errbuf);
+
 		
 	if ((file = fopen(Value,"r")) == NULL)
 	{
+		Err = GetLastError();
+		wsprintf(errbuf, "BPQAXIP Open Failed %d\n", Err);
+		OutputDebugString(errbuf);
+
 		n=wsprintf(buf,"Config file %s could not be opened ",Value);
 		WritetoConsole(buf);
 

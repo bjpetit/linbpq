@@ -4,7 +4,7 @@
 
 //
 //	Win95 - Uses BPQHDLC.VXD to drive card
-//  NT - Not yet supported
+//  NT -Uses BPQHDLC.DRV to drive card
 //
 
 #include "windows.h"
@@ -12,73 +12,38 @@
 #include <stdlib.h>
 #include <time.h>
 #include "bpq32.h"
-#pragma pack(1) 
-
 #include "AsmStrucs.h"
 
-typedef struct _HDLCDATA
-{
-	struct PORTCONTROL PORTCONTROL	;	// REMAP HARDWARE INFO
-//
-//	Mapping of VXD fields (mainly to simplify debugging
-//
+#define FILE_DEVICE_BPQHDLC			0x00008421
 
+#define IOCTL_BPQHDLC_SEND			CTL_CODE(FILE_DEVICE_BPQHDLC,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_BPQHDLC_POLL			CTL_CODE(FILE_DEVICE_BPQHDLC,0x801,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_BPQHDLC_TIMER			CTL_CODE(FILE_DEVICE_BPQHDLC,0x802,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_BPQHDLC_ADDCHANNEL	CTL_CODE(FILE_DEVICE_BPQHDLC,0x803,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
-	USHORT ASIOC;			// A CHAN ADDRESSES
-	USHORT SIO;				// OUR ADDRESSES (COULD BE A OR B) 
-	USHORT SIOC;
-	USHORT BSIOC;			// B CHAN CONTROL
+//	Info to pass to Kernel JDLC Driver to define an SCC Subchannel
 
-	struct PORTCONTROL * A_PTR; // PORT ENTRY FOR A CHAN
-	struct PORTCONTROL * B_PTR; // PORT ENTRY FOR B CHAN
+typedef struct _BPQHDLC_ADDCHANNEL_INPUT {
 
-	UINT * IOTXCA;				// INTERRUPT VECTORS
-	UINT * IOTXEA;
-	UINT * IORXCA;
-	UINT * IORXEA;	
+	ULONG   IOBASE;			// IO Base Address
+    ULONG	IOLEN;			// Number of Addresses
+    UCHAR   Interrupt;		// Interrupt
+	UCHAR	Channel;
 
-	UCHAR LINKSTS;
+	ULONG	ASIOC;			// A CHAN ADDRESSES
+	ULONG	SIO;			// OUR ADDRESSES (COULD BE A OR B) 
+	ULONG	SIOC;			// Our Control Channel 
+	ULONG	BSIOC;			//  B CHAN CONTROL
 
-	UINT * SDRNEXT;
-	UINT * SDRXCNT;
-	UINT * CURALP;
-	UCHAR OLOADS;				// LOCAL COUNT OF BUFFERS SHORTAGES
-	USHORT FRAMELEN;
-	UINT * SDTNEXT;				// POINTER to NEXT BYTE to TRANSMIT
-	USHORT SDTXCNT;				// CHARS LEFT TO SEND
-	UCHAR RR0;					// CURRENT RR0
-	UINT * TXFRAME;				// ADDRESS OF FRAME BEING SENT
+	UCHAR SOFTDCD;			// Use SoftDCD flag
 
-	UCHAR SDFLAGS;				// GENERAL FLAGS
+	int TXBRG;				//FOR CARDS WITHOUT /32 DIVIDER
+	int RXBRG;
 
-	UINT * PCTX_Q;				// HDLC HOLDING QUEUE
-	UINT * RXMSG_Q;				// RX INTERRUPT TO SDLC BG
+	UCHAR WR10;				//NRZ/NRZI FLAG
+    
+}  BPQHDLC_ADDCHANNEL_INPUT, *PBPQHDLC_ADDCHANNEL_INPUT;
 
-
-//;SOFTDCD		DB	0		; RX ACTIVE FLAG FOR 'SOFT DC
-	UCHAR TXDELAY;				// TX KEYUP DELAY TIMER
-	UCHAR SLOTTIME;				// TIME TO WAIT IF WE DONT SEND
-	UCHAR FIRSTCHAR;			// CHAR TO SEND FOLLOWING TXDELAY
-	USHORT L1TIMEOUT;			// UNABLE TO TX TIMEOUT
-	UCHAR PORTSLOTIMER;
-
-	USHORT TXBRG;				// FOR CARDS WITHOUT /32 DIVIDER
-	USHORT RXBRG;	
-
-	UCHAR WR10	;				// NRZ/NRZI FLAG
-
-	int	IRQHand;
-
-
-	struct PORTCONTROL * DRIVERPORTTABLE;	// ADDR OF PORT TABLE ENTRY IN VXD
-
-}HDLCDATA, * PHDLCDATA;
-
-
-#pragma pack()
-
-int x=sizeof(HDLCDATA);
-int y=sizeof(struct PORTCONTROL);
 
 DWORD n;
 
@@ -88,19 +53,25 @@ DWORD cb=0;
 int fResult=0;
 
 extern int QCOUNT;
-
+int Init98(HDLCDATA * PORTVEC);
+int Init2K(HDLCDATA * PORTVEC);
+int INITPORT(PHDLCDATA Extension);
 
 int HDLCRX(PHDLCDATA PORTVEC, UCHAR * buff)
 {
+	ULONG Param;
 	DWORD len=0;
 
 	if (hDevice == 0)
 		return (0);
 
+	memcpy(&Param, &PORTVEC->DRIVERPORTTABLE,4);
+
+
 	fResult = DeviceIoControl(
 			hDevice,   // device handle
-			'G',		   // control code
-			PORTVEC->DRIVERPORTTABLE,rand() & 0xff, //Input Params
+			IOCTL_BPQHDLC_POLL,		   // control code
+			&Param,4, //rand() & 0xff, //Input Params
 	        buff,360,&len, // output parameters
 			0);
 
@@ -116,7 +87,7 @@ int HDLCTIMER(PHDLCDATA  PORTVEC)
 
 	fResult = DeviceIoControl(
 			hDevice,   // device handle
-			'T',		   // control code
+			IOCTL_BPQHDLC_TIMER,		   // control code
 			PORTVEC->DRIVERPORTTABLE,4, //Input Params
 	        0,0,&len, // output parameters
 			0);
@@ -137,8 +108,8 @@ int HDLCTX(PHDLCDATA  PORTVEC,UCHAR * buff)
 	
 	fResult = DeviceIoControl(
 			hDevice,   // device handle
-			'S',		   // control code
-			buff,txlen,// input parameters
+			IOCTL_BPQHDLC_SEND,		   // control code
+			buff,txlen,	// input parameters
 	        NULL,0,&cb, // output parameters
 			0);
 
@@ -150,6 +121,26 @@ int HDLCCLOSE(PHDLCDATA PORTVEC)
 	return 0;
 }
 int HDLCINIT(HDLCDATA * PORTVEC)
+{
+	int WinVer, WinMinor;
+
+	WritetoConsole("HDLC ");
+
+#pragma warning(push)
+#pragma warning(disable : 4996)
+
+	_get_winmajor(&WinVer);
+	_get_winminor(&WinMinor);
+
+#pragma warning(pop)
+	
+	if (WinVer >= 5)		// Win 2000 or above
+		return Init2K(PORTVEC);
+	else
+		return Init98(PORTVEC);
+}
+
+int Init98(HDLCDATA * PORTVEC)
 {
 	char msg[255];
 	int err;
@@ -240,4 +231,645 @@ int BAYCOMINIT(PHDLCDATA PORTVEC)
 int PA0INIT(PHDLCDATA PORTVEC)		// 14 PA0HZP OPTO-SCC
 {
 	return (HDLCINIT(PORTVEC));
+}
+
+// W2K/XP Routines
+
+extern short NUMBEROFPORTS;
+extern struct PORTCONTROL * PORTTABLE;
+
+#define IOTXCA VECTOR[0]
+#define IOTXEA VECTOR[1]
+#define IORXCA VECTOR[2]
+#define IORXEA VECTOR[3]
+
+#define SIOR READ_PORT_UCHAR(Extension->SIO)
+#define SIOW(A) WRITE_PORT_UCHAR(Extension->SIO,A)
+
+#define SIOCR READ_PORT_UCHAR(Extension->SIOC)
+#define SIOCW(A) WRITE_PORT_UCHAR(Extension->SIOC,A)
+
+//#define SETRVEC	Extension->IORXCA =
+//#define SETTVEC	Extension->IOTXCA =
+
+
+int CLOCKFREQ = 76800;			// 4,915,200 HZ /(32*2)
+
+int TOSHCLOCKFREQ =	57600;
+
+UCHAR SDLCCMD[]	= {
+	0,0,
+	2,00000000,		// BASE VECTOR 
+	4,0x30,			// SDLC MODE
+	3,0xc8,			// 8BIT,  CRC ENABLE, RX DISABLED
+
+	7,0x7e,			// STANDARD FLAGS
+	1,0x13,			// INT ON ALL RX, TX INT EN, EXT INT EN
+	5,0xe1,			// DTR, 8BIT, SDLC CRC,TX CRC EN
+
+	10,0xa0,		// CRC PRESET TO 1
+
+	9,0x09,			// ENABLE INTS
+
+	11,0x66,		// NO XTAL, RXC = DPLL, TXC = RTXC, TRXC = BRG (NEEDS /32 BETWEEN TRXC AND RTXC)
+
+	14,0x83,
+	14,0x23,
+	15,0xc0			// EXT INT ONLY ON TX UND AND ABORT RX
+};
+
+#define SDLCLEN	26
+
+UCHAR TOSHR11 = 0x68;	// NO XTAL, RXC = DPLL, TXC = DPLL, NO CLK OUTPUT
+
+UCHAR CIOPARAMS[] = {
+
+	0x2B,0xFF,		// B DIRECTION - ALL IN
+	0x23,0xFF,		// A DIRECTION - ALL IN
+
+	0x1D,0x0E2,		// C/T 2 MODE - CONT, EXT IN, EXT O, SQUARE
+	0x1C,0x0E2,		// C/T 1 MODE   		"" 
+
+	0x19,0x10,		// C/T 2 LSB - 16 = /32 FOR SQUARE WAVE
+	0x18,0,			//       MSB
+
+	0x17,0x10,		// C/T 1 LSB
+	0x16,0,			//       MSB
+
+	0x0B,0x04,		// CT2   ""    - GATE
+	0x0A,0x04,		// CT1   ""    - GATE
+
+	0x06,0x0F,		// PORT C DIRECTION - INPUTS
+
+	1,0x84,			// ENABLE PORTS A AND B
+
+	0,0				// INTERRUPT CONTROL
+};
+
+#define CIOLEN	26
+
+
+VOID WRITE_PORT_UCHAR(ULONG Addr, UCHAR Value)
+{
+}
+
+UCHAR READ_PORT_UCHAR(ULONG Addr)
+{
+	return 0;
+}
+
+int Init2K(HDLCDATA * PORTVEC)
+{
+	char msg[255];
+	int err;
+
+	if (hDevice == 0)		// Not already loaded
+	{
+		//
+		//	Open HDLC Driver
+		//
+		
+		hDevice  = CreateFile(
+                    "\\\\.\\BPQHDLC",           // Open the Device "file"
+                    GENERIC_WRITE,
+                    FILE_SHARE_WRITE,
+                    NULL,
+                    OPEN_EXISTING,
+                    0,
+                    NULL);
+
+
+		if (hDevice == INVALID_HANDLE_VALUE)
+		{
+			hDevice=0;
+
+			err=GetLastError();
+	
+			wsprintf(msg,"Error Opening Driver \\device\\BPQHDLC - Error code %d", err);
+
+			WritetoConsole(msg);
+
+			return (FALSE);
+		}
+	}
+
+	INITPORT(PORTVEC);
+
+	return 0;
+}
+
+PHDLCDATA See_if_First_On_Card(PHDLCDATA Extension)
+{
+//	SEE IF ANOTHER PORT IS ALREADY USING THE OTHER CHANNEL ON THIS CARD
+	int i;
+
+	PHDLCDATA PreviousPort = (PHDLCDATA)PORTTABLE;
+
+	for (i = 0; i < NUMBEROFPORTS; i++)
+	{
+		if (Extension == PreviousPort)
+		{
+			// NONE BEFORE OURS
+
+			return NULL;
+		}
+
+		if (Extension->PORTCONTROL.IOBASE == PreviousPort->PORTCONTROL.IOBASE)
+		{
+			//	ENSURE ENTRIES ARE FOR DIFFERENT CHANNELS
+
+			if (Extension->PORTCONTROL.CHANNELNUM == PreviousPort->PORTCONTROL.CHANNELNUM)
+		
+				//	CHANNEL DEFINITION ERROR
+
+				return (PHDLCDATA) -1;
+			else
+				return PreviousPort;
+		}
+	
+		PreviousPort = (PHDLCDATA)PreviousPort->PORTCONTROL.PORTPOINTER;
+	}
+	
+	return NULL;			// FLAG NOT FOUND
+
+
+
+
+}
+
+VOID INITPART2(PHDLCDATA Extension, USHORT SCCOffset, PHDLCDATA PreviousPort)
+{
+//	SCCOffset is address of SCC relative to Card Base Address
+
+	int i;
+	USHORT SCCBase=Extension->PORTCONTROL.IOBASE + SCCOffset;
+	int BRG;
+
+//	SET UP ADDRESS LIST - THIS PATH FOR CARDS WITH 'NORMAL'
+//	ADDRESSING - C/D=A0, A/B=A1, SO ORDER IS BCTRL BDATA ACTRL ADATA
+//	OR DE, WHICH USES WORD ADDRESSES C/D=A1, A/B=A2 
+
+	Extension->BSIOC = SCCBase;			// B CHAN ADDR
+	Extension->ASIOC = SCCBase+2;		// A CHAN ADDR
+ 
+//	SEE WHICH CHANNEL TO USE
+
+	if (Extension->PORTCONTROL.CHANNELNUM == 'A')
+	{
+		Extension->A_PTR = Extension;		// POINT TO OUR ENTRY
+		Extension->SIOC = SCCBase+2;
+		Extension->SIO = SCCBase+3;			// DATA 1 ABOVE CONTROL
+
+		if (PreviousPort)			// Another Channel is first on Card
+			Extension->B_PTR = PreviousPort;	// CROSSLINK CHANNELS
+	}
+	else
+	{
+		// MUST BE B - CHECKED EARLIER
+
+		Extension->B_PTR = Extension;		// POINT TO OUR ENTRY
+		Extension->SIOC = SCCBase;
+		Extension->SIO = SCCBase+1;	// DATA 1 ABOVE CONTROL
+
+		if (PreviousPort)			// Another Channel is first on Card
+			Extension->A_PTR = PreviousPort;	// CROSSLINK CHANNELS
+
+	}
+
+//	INITIALISE COMMS CHIP
+
+	if (PreviousPort == 0)					// OTHER CHAN ALREADY SET UP?
+	{
+		// DO A HARD RESET OF THE SCC
+
+		WRITE_PORT_UCHAR(Extension->ASIOC, 0);		// Make Sure WR0
+		WRITE_PORT_UCHAR(Extension->ASIOC, 0);
+
+		WRITE_PORT_UCHAR(Extension->ASIOC, 9);		// WR9
+
+		WRITE_PORT_UCHAR(Extension->ASIOC, 0xC0);	// Hard Reset
+
+		Sleep(2);
+
+	}
+
+	for (i=0; i< SDLCLEN; i++)
+	{
+		WRITE_PORT_UCHAR(Extension->SIOC, SDLCCMD[i]);
+	}
+
+	Extension->WR10 = 0x20;			// NRZI
+
+//	SET UP BRG FOR REQUIRED SPEED
+
+	if (Extension->PORTCONTROL.BAUDRATE == 0)
+	{
+		//	SET EXTERNAL CLOCK
+
+		SIOCW(11);			// WR11
+		SIOCW(0x20);		// RX = TRXC TX = RTXC
+
+		return;
+	}
+
+	if (Extension->PORTCONTROL.PORTTYPE == 12)	//	RLC 400 USES SAME CLOCK AS TOSH
+
+		BRG = TOSHCLOCKFREQ;
+	else
+		BRG = CLOCKFREQ;
+
+	BRG=(BRG/Extension->PORTCONTROL.BAUDRATE)-2;
+
+	SIOCW(12);			// Select WR12
+	SIOCW(BRG & 0xff);	// SET LSB
+	SIOCW(13);			// Select WR13
+	SIOCW(BRG >> 8);	// SET MSB
+
+	SIOCW(11);			// WR11
+	SIOCW(0x70);		// RXC=DPLL, TXC=BRG
+
+	return;
+}
+
+VOID INITCIO(PHDLCDATA Extension)
+{
+//	INITIALISE CIO - DRSI ONLY
+	int i;
+	ULONG CIOAddr = Extension->PORTCONTROL.IOBASE + 7;  // TO CIO PORT
+
+	READ_PORT_UCHAR(CIOAddr);
+	WRITE_PORT_UCHAR(CIOAddr, 0);
+
+	READ_PORT_UCHAR(CIOAddr);
+	WRITE_PORT_UCHAR(CIOAddr, 0);
+
+	WRITE_PORT_UCHAR(CIOAddr, 1);	// FORCE RESET
+	WRITE_PORT_UCHAR(CIOAddr, 0);	//  CLEAR RESET
+
+	for (i=0; i< CIOLEN; i++)
+	{
+		WRITE_PORT_UCHAR(CIOAddr, CIOPARAMS[i] );
+	}
+
+	return;
+
+}
+VOID STARTCIO(PHDLCDATA Extension)
+{
+	USHORT CIOAddr = Extension->PORTCONTROL.IOBASE + 7;  // TO CIO PORT
+	UCHAR Reg;
+
+//	B CHANNEL
+
+//	SET COUNTER OUTPUT BIT ACTIVE
+
+	WRITE_PORT_UCHAR(CIOAddr, 0x2B);	// PORT B DIRECTION
+	Reg = READ_PORT_UCHAR(CIOAddr);
+
+	if (Extension->PORTCONTROL.CHANNELNUM == 'B')
+	{
+
+		Reg &= 0xEF;						// SET BIT 4 AS OUTPUT
+
+		WRITE_PORT_UCHAR(CIOAddr, 0x2B);	// PORT B DIRECTION
+		WRITE_PORT_UCHAR(CIOAddr, Reg);		// UPDATE PORT B DIRECTION
+
+		//	ENABLE COUNTER
+
+		WRITE_PORT_UCHAR(CIOAddr,1);		// MASTER CONFIG
+		Reg = READ_PORT_UCHAR(CIOAddr);		// GET IT
+
+		Reg |= 0x40;						// ENABLE CT1
+
+		WRITE_PORT_UCHAR(CIOAddr,1);		// MASTER CONFIG
+		WRITE_PORT_UCHAR(CIOAddr, Reg);		// Set it
+
+		//	START COUNTER
+
+		WRITE_PORT_UCHAR(CIOAddr,0x0A);		// CT1 CONTROL
+		WRITE_PORT_UCHAR(CIOAddr,6);		// START CT1
+
+		return;
+	}
+
+	Reg &= 0xFE;						// SET BIT 0 AS OUTPUT
+
+	WRITE_PORT_UCHAR(CIOAddr, 0x2B);	// PORT B DIRECTION
+	WRITE_PORT_UCHAR(CIOAddr, Reg);		// UPDATE PORT B DIRECTION
+
+	//	ENABLE COUNTER
+
+	WRITE_PORT_UCHAR(CIOAddr,1);		// MASTER CONFIG
+	Reg = READ_PORT_UCHAR(CIOAddr);		// GET IT
+
+	Reg |= 0x20;						// ENABLE CT2
+
+	WRITE_PORT_UCHAR(CIOAddr,1);		// MASTER CONFIG
+	WRITE_PORT_UCHAR(CIOAddr, Reg);		// Set it
+
+//	START COUNTER
+
+	WRITE_PORT_UCHAR(CIOAddr,0x0B);		// CT2 CONTROL
+	WRITE_PORT_UCHAR(CIOAddr,6);		// START CT2
+
+	return;
+}
+
+VOID INITMODEM(PHDLCDATA Extension)
+{
+	//	SETUP MODEM - PC120 ONLY
+
+	WRITE_PORT_UCHAR(Extension->PORTCONTROL.IOBASE, 0x0a);
+}
+
+
+VOID CHECKCHAN(PHDLCDATA Extension, USHORT CDOffset)
+{
+	// CDoffset contains offset to Second SCC
+
+	//	IF CHANNEL =  C OR D SET TO SECOND SCC ADDRESS, AND CHANGE TO A OR B
+
+	if (Extension->PORTCONTROL.CHANNELNUM > 'B')
+	{
+		//	SECOND SCC
+
+		Extension->PORTCONTROL.CHANNELNUM -=2;
+		Extension->PORTCONTROL.IOBASE+=CDOffset;
+	}
+}
+
+//	BAYCOM CARD
+
+VOID BINITPART2(PHDLCDATA Extension, USHORT SCCOffset, PHDLCDATA PreviousPort)
+{
+	// ORDER IS 0		1		2		3		4		5		6		7
+	//			ADATA	BDATA	CDATA	DDATA	ACTRL	BCTRL	CCTRL	DCTRL 
+
+	//	Before entering here IOBASE and Chan have been updated if Chan were C or D
+
+	//	SET UP ADDRESS LIST
+
+	int i;
+	USHORT SCCBase=Extension->PORTCONTROL.IOBASE + SCCOffset;
+	int BRG;
+
+//	SET UP ADDRESS LIST - THIS PATH FOR CARDS WITH 'NORMAL'
+//	ADDRESSING - C/D=A0, A/B=A1, SO ORDER IS BCTRL BDATA ACTRL ADATA
+//	OR DE, WHICH USES WORD ADDRESSES C/D=A1, A/B=A2 
+
+	Extension->ASIOC = SCCBase+4;		// A CHAN ADDR
+	Extension->BSIOC = SCCBase+5;		// B CHAN ADDR
+ 
+//	SEE WHICH CHANNEL TO USE
+
+	if (Extension->PORTCONTROL.CHANNELNUM == 'A')
+	{
+		Extension->A_PTR = Extension;		// POINT TO OUR ENTRY
+		Extension->SIOC = SCCBase+4;
+		Extension->SIO = SCCBase;
+
+		if (PreviousPort)			// Another Channel is first on Card
+			Extension->B_PTR = PreviousPort;	// CROSSLINK CHANNELS
+	}
+	else
+	{
+		// MUST BE B - CHECKED EARLIER
+
+		Extension->B_PTR = Extension;		// POINT TO OUR ENTRY
+		Extension->SIOC = SCCBase+5;
+		Extension->SIO = SCCBase+1;
+
+		if (PreviousPort)			// Another Channel is first on Card
+			Extension->A_PTR = PreviousPort;	// CROSSLINK CHANNELS
+
+	}
+
+
+//	INITIALISE COMMS CHIP
+
+	if (PreviousPort == 0)					// OTHER CHAN ALREADY SET UP?
+	{
+		// DO A HARD RESET OF THE SCC
+
+		WRITE_PORT_UCHAR(Extension->ASIOC, 0);		// Make Sure WR0
+		WRITE_PORT_UCHAR(Extension->ASIOC, 0);
+
+		WRITE_PORT_UCHAR(Extension->ASIOC, 9);		// WR9
+
+		WRITE_PORT_UCHAR(Extension->ASIOC, 0xC0);	// Hard Reset
+
+		Sleep(2);
+
+	}
+
+	for (i=0; i< SDLCLEN; i++)
+	{
+		WRITE_PORT_UCHAR(Extension->SIOC, SDLCCMD[i]);
+	}
+
+//	SET UP BRG FOR REQUIRED SPEED
+
+	if (Extension->PORTCONTROL.BAUDRATE == 0)
+	{
+		//	SET EXTERNAL CLOCK
+
+		SIOCW(11);			// WR11
+		SIOCW(0x20);		// RX = TRXC TX = RTXC
+
+		//	BAYCOM RUH PORT USES NRZ
+
+		Extension->WR10 = 0x0;			// NRZ
+
+		return;
+	}
+
+	Extension->WR10 = 0x20;			// NRZI
+
+//	THERE IS NO /32 ON THE BAYCOM BOARD, SO FOR THE MOMENT WILL USE BRG
+//	FOR TRANSMIT. THIS REQUIRES IT TO BE REPROGRAMMED BETWEEN TX AND RX,
+//	AND SO PREVENTS LOOPBACK OR FULLDUP OPERATION
+
+	BRG=(CLOCKFREQ/Extension->PORTCONTROL.BAUDRATE)-2;
+
+	SIOCW(12);			// Select WR12
+	SIOCW(BRG & 0xff);	// SET LSB
+	SIOCW(13);			// Select WR13
+	SIOCW(BRG >> 8);	// SET MSB
+
+	SIOCW(11);			// WR11
+	SIOCW(0x70);		// RXC=DPLL, TXC=BRG
+
+	Extension->RXBRG = BRG;
+
+//	CALC TX RATE
+
+	Extension->TXBRG = ((BRG+2)/32)-2;
+
+	SIOCW(12);			// Select WR12
+	SIOCW(BRG & 0xff);	// SET LSB
+	SIOCW(13);			// Select WR13
+	SIOCW(BRG >> 8);	// SET MSB
+
+//	IF 7910/3105 PORTS, SET TXC=BRG, RXC=DPLL
+
+//	IT SEEMS THE 3RD PORT IS MORE LIKELY TO BE USED WITH A SIMPLE
+//	MODEM WITHOUT CLOCK GERERATION (EG BAYCOM MODEM), SO SET ALL 
+//	PORTS THE SAME
+
+	SIOCW(11);			// WR11
+	SIOCW(0x70);		// RXC=DPLL, TXC=BRG
+}
+
+BOOLEAN INITREST(PHDLCDATA Extension)
+{
+	BPQHDLC_ADDCHANNEL_INPUT AddParams;
+	VOID * Return = NULL;
+	int cb;
+
+/*	mov     IRQHand[EBX],0	; in case already hooked by another port
+
+	MOV	PORTINTERRUPT[EBX],OFFSET32 SIOINT
+
+	CMP	EDI,0
+	JNE SHORT INTDONE		; ALREADY SET UP
+
+	CALL	HOOKINT			; INTERRUPT
+
+INTDONE:
+
+	CALL	RXAINIT
+
+	SIOCR
+	MOV	RR0[EBX],AL		; GET INITIAL RR0
+;
+*/
+
+//	Pass Params to the driver
+
+	AddParams.IOBASE = Extension->PORTCONTROL.IOBASE;
+	AddParams.IOLEN = Extension->IOLEN;
+	AddParams.Interrupt = Extension->PORTCONTROL.INTLEVEL;
+	AddParams.ASIOC = Extension->ASIOC;
+	AddParams.BSIOC = Extension->BSIOC;
+	AddParams.SIOC = Extension->SIOC;
+	AddParams.SIO = Extension->SIO;
+	AddParams.TXBRG = Extension->TXBRG;
+	AddParams.RXBRG = Extension->RXBRG;
+	AddParams.WR10 = Extension->WR10;
+	AddParams.Channel = Extension->PORTCONTROL.CHANNELNUM;
+	AddParams.SOFTDCD = Extension->PORTCONTROL.SOFTDCDFLAG;
+
+
+	fResult = DeviceIoControl(
+			hDevice,									// device handle
+			IOCTL_BPQHDLC_ADDCHANNEL,					// control code
+			&AddParams,sizeof(BPQHDLC_ADDCHANNEL_INPUT),	// input parameters
+	        &Return,4,&cb,								// output parameters
+			0);
+
+	Extension->DRIVERPORTTABLE = Return;
+
+	if (Return == NULL)
+	{
+		// Init Failed, probably because resources were not alllocated to driver
+
+		WritetoConsole("Kernel Driver Init Failed - Check Resource Allocation");
+		return (FALSE);
+	}
+
+	return TRUE;
+}
+
+
+int INITPORT(PHDLCDATA Extension)
+{
+ 	PHDLCDATA PreviousPort;
+
+	//	SEE IF C OR D. If so, Adjust IOBASE and change to A/B
+
+	switch (Extension->PORTCONTROL.PORTTYPE)
+	{
+		case 10:				// RLC100
+		case 12:				// RLC400
+		case 20:				// PA0HZP OPTO-SCC
+			
+			CHECKCHAN(Extension, 4);			// Channels are 4 apart
+			break;
+
+		case 18:				// Baycom
+			
+			CHECKCHAN(Extension, 2);			//Channels are 2 apart
+			break;
+	}
+
+	//	By now Channel Should be only A or B
+
+	if ((Extension->PORTCONTROL.CHANNELNUM != 'A') && (Extension->PORTCONTROL.CHANNELNUM != 'B'))
+	{
+			WritetoConsole("Invalid Channel\n");
+			return FALSE;
+	}
+
+	PreviousPort = See_if_First_On_Card(Extension);
+
+	if (PreviousPort == (PHDLCDATA)-1)
+	{
+		// Two ports on same card have same Channel
+
+			WritetoConsole("Duplicate Channels\n");
+			return FALSE;
+	}
+
+	switch (Extension->PORTCONTROL.PORTTYPE)
+	{
+	case 2:			// PC120
+		
+		Extension->IOLEN = 8;					// I think! - Modem is at offfset 0, SCC at 4
+		INITPART2(Extension, 4, PreviousPort);	// SCC ADDRESS 4 Above Base Address
+		if (PreviousPort == NULL) INITMODEM(Extension);
+		INITREST(Extension);
+
+		return 0;
+
+	case 4:			// DRSIINIT
+		
+		Extension->IOLEN = 8;					// SCC at 0, CIO at 7
+		if (PreviousPort == NULL) INITCIO(Extension);	// SET UP CIO FOR /32 UNLESS Already Done
+		INITPART2(Extension, 0, PreviousPort);
+		if (Extension->PORTCONTROL.BAUDRATE) STARTCIO(Extension);
+		INITREST(Extension);
+
+		return TRUE;
+	
+	case 6:
+
+		WritetoConsole("TYPE=TOSH Not Supported\n");
+		return FALSE;
+
+	case 10:				// RLC100
+	case 12:				// RLC400
+
+		Extension->IOLEN = 8;						// 2 * SCC
+		INITPART2(Extension, 0, PreviousPort);
+		INITREST(Extension);
+
+		return TRUE;
+
+	case 18:				// Baycom
+
+		Extension->IOLEN = 8;						// 2 * SCC
+		BINITPART2(Extension, 0, PreviousPort);
+		INITREST(Extension);
+
+		return 0;
+	
+	case 20:				// PA0HZP OPTO-SCC
+
+		Extension->IOLEN = 8;						// 2 * SCC
+		INITPART2(Extension, 0, PreviousPort);
+		INITREST(Extension);
+		return TRUE;
+	}
+
+	return FALSE;
 }
