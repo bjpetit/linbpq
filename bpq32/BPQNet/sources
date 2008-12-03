@@ -30,12 +30,8 @@ C_DEFINES=$(C_DEFINES) -DNDIS51_MINIPORT=1
 
 
 SOURCES = \
-	miniport.c \
-	init.c \
-	request.c \
-	sendrcv.c \
-        ioctl.c \
-	BPQdrv.rc 
+      hdlcdrv.c \
+	BPQHDLCDrv.rc 
 
 
 
