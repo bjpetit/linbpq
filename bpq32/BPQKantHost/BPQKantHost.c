@@ -1,41 +1,36 @@
-// TelnetServer.cpp : Defines the entry point for the application.
+// Kantronics Host Mode Emulator for BPQ32 Switch
 //
 
+//	Version 1.0.0 December 2008
+
+//		First Version
 
 #include "stdafx.h"
 #include "bpqkanthost.h"
 #include "bpq32.h"
 #include "GetVersion.h"
 
-
-#define MAX_LOADSTRING 100
-
 // Global Variables:
 HINSTANCE hInst;								// current instance
-TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 
-char ClassName[]="TNC2MAINWINDOW";					// the main window class name
+char ClassName[]="KHOSTMAINWINDOW";					// the main window class name
 
 HWND MainWnd;
 
 char szBuff[80];
 
-BOOL UsingBPQSerial = FALSE;
-BOOL FirstBPQPort = TRUE;
 int CurrentConnections = 5;
 
-HANDLE hControl;
+HANDLE hControl;		// BPq Serial Driver Control Device Handle
 
 struct ConnectionInfo Connections[6];
+struct StreamInfo Streams[6];
+
+//	Variables for reassembling host mode packets
 
 BOOL PartPacket = FALSE;
 int	PartLen;
 UCHAR *	PartPtr;
-
-
-//struct ConnectionInfo ConnectionInfo[MaxSockets+1];
-
-
 
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
@@ -43,12 +38,12 @@ BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 BOOL Initialise();
-int DoStateChange(Stream);
-int DoReceivedData(Stream);
-int DoMonitorData(Stream);
-int Connected(Stream);
-int Disconnected(Stream);
-int SaveConfig(hWnd);
+int DoStateChange(int Stream);
+int DoReceivedData(int Stream);
+int DoMonitorData(int Stream);
+int Connected(int Stream);
+int Disconnected(int Stream);
+int SaveConfig(HWND hWnd);
 int Refresh();
 
 HANDLE BPQOpenSerialControl(ULONG * lasterror);
@@ -68,19 +63,20 @@ int BPQSerialGetDeviceList(HANDLE hDevice,ULONG * Slot,ULONG * Port);
 int BPQSerialIsCOMOpen(HANDLE hDevice,ULONG * Count);
 int BPQSerialGetDTRRTS(HANDLE hDevice,ULONG * Flags);
 
-BOOL InitTNC2Port(int Port,int * Stream);
-
-BOOL OpenRealPort(conn);
+BOOL InitBPQPort(int Port,int * Stream);
 
 VOID ProcessPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
+VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer);
+
+//	Note that Kantronics host Mode uses KISS format Packets (without a KISS COntrol Byte)
+
 VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-
-BOOL ReleaseTNC2Port(int Stream);
+BOOL ReleaseBPQPort(int Stream);
 
 VOID CALLBACK TimerProc();
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
@@ -89,33 +85,23 @@ UINT_PTR TimerHandle = 0;
 
 BOOL cfgMinToTray;
 
-#define DllImport	__declspec( dllimport )
-
-
-DllImport INT  BPQHOSTAPIPTR();
-
-int BPQHOSTAPI;
-
-DllImport INT  MONDECODEPTR();
-
-int MONDECODE;
-
-
-
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
                      LPTSTR    lpCmdLine,
                      int       nCmdShow)
 {
 	MSG msg;
-	int i;
+	int i, j;
 	ULONG Errorval;
 	struct ConnectionInfo * conn;
+	struct StreamInfo * channel;
+	int retCode,disp;
+	char Key[20];
+	HKEY hKey=0;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 	
-
 	MyRegisterClass(hInstance);
 
 	// Perform application initialization:
@@ -131,27 +117,52 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		DispatchMessage(&msg);
 	}
 
+	//	Closing
+
 	KillTimer(NULL,TimerHandle);
 
 	if (cfgMinToTray) DeleteTrayMenuItem(MainWnd);
-	
+
+	// Open Registry to save Default Mode (HOST/TERM) Flag
+
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQKHOST",
+                              0,	// Reserved
+							  0,	// Class
+							  0,	// Options
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey, &disp);
+
+
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
-
-		if (conn->TypeFlag[0] == 'V')
+	
+		if (conn->hDevice > 0)
 		{
 			BPQSerialClrCTS(conn->hDevice);
 			BPQSerialClrDSR(conn->hDevice);
 			BPQSerialClrDCD(conn->hDevice);
-		}
 		
-		CloseHandle(conn->hDevice);
-		ReleaseTNC2Port(conn->BPQPort);
+			CloseHandle(conn->hDevice);
 
-		if (conn->Created) BPQSerialDeleteDevice(hControl, &conn->ComPort, &Errorval);
+			wsprintf(Key,"Port%dMode",i);
+			RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&conn->InHostMode,4);
 
+			conn->nextMode = conn->InHostMode;
+
+			for (j=1; j <= conn->numChannels; j++)
+			{
+				channel = conn->Channels[j];
+				ReleaseBPQPort(channel->BPQPort);
+			}
+
+			if (conn->Created) BPQSerialDeleteDevice(hControl, &conn->ComPort, &Errorval);
+		}
 	}
+	
+	RegCloseKey(hKey);
 
 	return (int) msg.wParam;
 }
@@ -194,8 +205,6 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wc.lpszClassName = ClassName; 
 
 	return RegisterClass(&wc);
-
-
 }
 
 //
@@ -203,7 +212,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 //
 //   PURPOSE: Saves instance handle and creates main window
 //
-//   connENTS:
+//   COMMENTS:
 //
 //        In this function, we save the instance handle in a global variable and
 //        create and display the main program window.
@@ -213,7 +222,6 @@ HWND hWnd;
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-
 	int err;
 	char Title[80];
 
@@ -252,7 +260,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //
 //  PURPOSE:  Processes messages for the main window.
 //
-//  WM_connAND	- process the application menu
+//  WM_COMMAND	- process the application menu
 //  WM_PAINT	- Paint the main window
 //  WM_DESTROY	- post a quit message and return
 //
@@ -293,38 +301,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					Disconnected(wParam);
 			}
 		}
-
 		return 0;
 	}
 
-	
-
 	switch (message)
 	{
-
 
 	case WM_COMMAND:
 		wmId    = LOWORD(wParam);
 		wmEvent = HIWORD(wParam);
 		// Parse the menu selections:
 
-
 		switch (wmId)
+		
+		case TN_SAVE:
 
-	case TN_SAVE:
+			SaveConfig(hWnd);
 
-		SaveConfig(hWnd);
+			break;
 
-		break;
-
-    case WM_SIZE:
+	case WM_SIZE:
 
 		if (wParam == SIZE_MINIMIZED)
 			if (cfgMinToTray)
 				return ShowWindow(hWnd, SW_HIDE);
 
 		return (0);
-
 
 	case WM_DESTROY:
 		PostQuitMessage(0);
@@ -338,30 +340,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 BOOL Initialise()
 {
-	int i,  resp, OpenCount;
+	int i, j, resp;
 	ULONG Errorval;
 	struct ConnectionInfo * conn;
+	struct StreamInfo * channel;
 	int retCode,Type,Vallen;
 	char Key[20];
 
 	HKEY hKey=0;
 	
-	_asm{
-
-	mov eax,BPQHOSTAPIPTR
-	mov eax,[eax]
-	mov	BPQHOSTAPI,eax;
-
-	mov eax,MONDECODEPTR
-	mov eax,[eax]
-	mov	MONDECODE,eax;
-
-	}
-
 	cfgMinToTray = GetMinimizetoTrayFlag();
 
-	// Get config from Registry 
+	// Make Sure BPQVCOM is available
+	
+	hControl = BPQOpenSerialControl(&Errorval);
 
+	if (hControl == (HANDLE) -1)
+	{
+		MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed","",0);
+		return FALSE;
+	}
+
+	// Get config from Registry 
 
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
 		"SOFTWARE\\G8BPQ\\BPQ32\\BPQKHOST",
@@ -375,87 +375,73 @@ BOOL Initialise()
 	{
 		conn = &Connections[i];
 
-		wsprintf(Key,"Port%d",i);
+		wsprintf(Key,"Port%dStreams",i);
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,Key,0,			
-			(ULONG *)&Type,(UCHAR *)&conn->ComPort,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&conn->numChannels,(ULONG *)&Vallen);
 
-		wsprintf(Key,"Port%dType",i);
+		if (conn->numChannels)
+		{
+			wsprintf(Key,"Port%d",i);
+			Vallen=4;
+			retCode = RegQueryValueEx(hKey,Key,0,			
+				(ULONG *)&Type,(UCHAR *)&conn->ComPort,(ULONG *)&Vallen);
 
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,Key,0,			
-			(ULONG *)&Type,(UCHAR *)&conn->TypeFlag,(ULONG *)&Vallen);
+			wsprintf(Key,"Port%dMask",i);
+			Vallen=4;
+			retCode = RegQueryValueEx(hKey,Key,0,			
+				(ULONG *)&Type,(UCHAR *)&conn->ApplMask,(ULONG *)&Vallen);
+	
+			wsprintf(Key,"Port%dMode",i);
+			Vallen=4;
+			retCode = RegQueryValueEx(hKey,Key,0,			
+				(ULONG *)&Type,(UCHAR *)&conn->InHostMode,(ULONG *)&Vallen);
+		}
 
-		strcpy(conn->Params,"9600,N,8,1");
-
-		wsprintf(Key,"Port%dParam",i);
-		Vallen=20;
-		retCode = RegQueryValueEx(hKey,Key,0,			
-			(ULONG *)&Type,(UCHAR *)&conn->Params,(ULONG *)&Vallen);
-    
-		if (conn->ComPort == 0) conn->TypeFlag[0]=0;    
-		if (conn->TypeFlag[0] == ' ') conn->ComPort = 0;
 	}
+
+	RegCloseKey(hKey);
 
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
 
-		conn->KHOST = TRUE;
+		if (conn->numChannels == 0 ) continue;
 
-		if (conn->TypeFlag[0] == 'V') // And ComPort(i) <> "" Then
+		conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
+        
+		if (conn->hDevice == (HANDLE) -1 && Errorval == 2)
 		{
-			//' BPQ Virtual Port
-        
-			if (FirstBPQPort)
-			{
-				hControl = BPQOpenSerialControl(&Errorval);
-
-				if (hControl == (HANDLE) -1)
-				{
-					MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed","",0);
-				}
-
-				FirstBPQPort = FALSE;
-			}
-
-			conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
-        
-			if (conn->hDevice == (HANDLE) -1 && Errorval == 2)
-			{
-				//' Not found, so create
-            
-				resp = BPQSerialAddDevice(hControl, &conn->ComPort, &Errorval);
-				//Debug.Print "Create "; ComPort(i), resp, Hex(Errorval)
-				conn->Created = resp;
+			//' Not found, so create
+           
+			resp = BPQSerialAddDevice(hControl, &conn->ComPort, &Errorval);
+			conn->Created = resp;
          		
-				conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
-			}			
+			conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
+		}			
 
-			if (conn->hDevice != (HANDLE) -1)
+		if (conn->hDevice != (HANDLE) -1)
+		{
+			wsprintf(conn->PortLabel,"Virtual COM%d", conn->ComPort);
+                        
+			resp = BPQSerialSetCTS(conn->hDevice);
+			resp = BPQSerialSetDSR(conn->hDevice);
+            
+			conn->CTS = 1;
+			conn->DSR = 1;
+
+			for (j = 1; j <= conn->numChannels; j++)
 			{
-				wsprintf(conn->PortLabel,"Virtual COM%d", conn->ComPort);
- 				OpenCount = -1;
-            
-				resp = BPQSerialIsCOMOpen(conn->hDevice, &OpenCount);
-				conn->PortEnabled = OpenCount;
-            
-				resp = BPQSerialSetCTS(conn->hDevice);
-				resp = BPQSerialSetDSR(conn->hDevice);
-            
-				conn->CTS = 1;
-				conn->DSR = 1;
-      
-				conn->BPQPort = conn->HostPort;
-				resp = InitTNC2Port(i, &conn->BPQPort);
-				conn->HostPort = conn->BPQPort;
-            
-				UsingBPQSerial = TRUE;
-			}
-			else
-				wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
+				conn->Channels[j] = malloc(sizeof (struct StreamInfo));
+				channel = conn->Channels[j];
+				channel->BPQPort = 0;
+				channel->Connected = FALSE;
 
+				InitBPQPort(i, &conn->Channels[j]->BPQPort);            
+			}
 		}
+		else
+			wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
 
 	}
 
@@ -476,23 +462,26 @@ int Refresh()
 	int i;
 	char Buff[10];
 
-
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
 
+		if (conn->ComPort > 0)
+		{
+
 		SendDlgItemMessage(MainWnd,TN_Check+i,BM_SETCHECK,(WPARAM)conn->PortEnabled,0);
 		SendDlgItemMessage(MainWnd,TN_Label+i,WM_SETTEXT,0,(LPARAM)&conn->PortLabel);
-		SendDlgItemMessage(MainWnd,TN_Param+i,WM_SETTEXT,0,(LPARAM)&conn->Params);
+		SendDlgItemMessage(MainWnd,TN_BPQ+i,WM_SETTEXT,0,(LPARAM) _ltoa(conn->ApplMask,Buff,10));
+		SendDlgItemMessage(MainWnd,TN_TYPE+i,WM_SETTEXT,0,(LPARAM) _ltoa(conn->numChannels,Buff,10));
 		SendDlgItemMessage(MainWnd,TN_COM+i,WM_SETTEXT,0,(LPARAM) _ltoa(conn->ComPort,Buff,10));
-		SendDlgItemMessage(MainWnd,TN_TYPE+i,WM_SETTEXT,0,(LPARAM)&conn->TypeFlag);
-		SendDlgItemMessage(MainWnd,TN_BPQ+i,WM_SETTEXT,0,(LPARAM) _ltoa(conn->BPQPort,Buff,10));
 		SendDlgItemMessage(MainWnd,TN_CTS+i,BM_SETCHECK,(WPARAM)conn->CTS,0);
 		SendDlgItemMessage(MainWnd,TN_RTS+i,BM_SETCHECK,(WPARAM)conn->RTS,0);
 		SendDlgItemMessage(MainWnd,TN_DCD+i,BM_SETCHECK,(WPARAM)conn->DCD,0);
 		SendDlgItemMessage(MainWnd,TN_DSR+i,BM_SETCHECK,(WPARAM)conn->DSR,0);
 		SendDlgItemMessage(MainWnd,TN_DTR+i,BM_SETCHECK,(WPARAM)conn->DTR,0);
+		}
 	}
+
 
 	return 0;
 }
@@ -500,77 +489,89 @@ int Refresh()
 VOID CALLBACK TimerProc()
 {
 	struct ConnectionInfo * conn;
-	int i, ConCount, ModemStat;
-	char rxbuffer[1000];
+	struct StreamInfo * channel;
+
+	int i, j, ConCount, ModemStat;
 	int RXCount, TXCount, Read, resp;
 
-	CheckTimer();
+	CheckTimer();			// Make sure BPQ32 TImer Process is running
 
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
 
-		if (conn->TypeFlag[0] == 'V')
+		ConCount = 0;
+    
+		BPQSerialIsCOMOpen(conn->hDevice, &ConCount);
+    
+		if (conn->PortEnabled == 1 && ConCount == 0)
 		{
-			ConCount = 0;
-    
-			BPQSerialIsCOMOpen(conn->hDevice, &ConCount);
-    
-			if (conn->PortEnabled == 1 && ConCount == 0)
-
-				//' Connection has just closed - disconnect stream
+			//' Connection has just closed - disconnect all streams
         
-				SessionControl(conn->BPQPort, 2, 0);
-
-    
-	        if (conn->PortEnabled != ConCount)
+			for (j = 1; j <= conn->numChannels; j++)
 			{
-				conn->PortEnabled = ConCount;
-        		Refresh();
+				channel = conn->Channels[j];
+				SessionControl(channel->BPQPort, 2, 0);
+				SetAppl(channel->BPQPort, 0, 0);
 			}
 
-			resp = BPQSerialGetQCounts(conn->hDevice, &RXCount, &TXCount);
-                
-			if (RXCount > 0)
-			{
-				resp = BPQSerialGetData(conn->hDevice, rxbuffer, 1000, &Read);
-
-					ProcessPacket(conn, (UCHAR *)&rxbuffer, Read);
-	
-			}
-       
-			BPQSerialGetDTRRTS(conn->hDevice,&ModemStat);
-			
-			if ((ModemStat & 1) != conn->DTR)
-			{
-				conn->DTR=!conn->DTR;
-				Refresh();
-			}
-
-			if ((ModemStat & 2) >> 1 != conn->RTS)
-			{
-				conn->RTS=!conn->RTS;
-				Refresh();
-			}
-
+			conn->PortEnabled = FALSE;
 		}
+
+        if (conn->PortEnabled != ConCount)
+		{
+			conn->PortEnabled = ConCount;
+
+			// Application has just connected - Set APPLMASK to allow incoming connects
+
+			for (j = 1; j <= conn->numChannels; j++)
+			{
+				channel = conn->Channels[j];
+				SetAppl(channel->BPQPort, 0, conn->ApplMask);
+			}
+
+       		Refresh();
+		}
+
+		resp = BPQSerialGetQCounts(conn->hDevice, &RXCount, &TXCount);
+                
+		if (RXCount > 0)
+		{
+			// If we have a partial packet, append this data to it
+
+			resp = BPQSerialGetData(conn->hDevice, &conn->RXBuffer[conn->RXBPtr], 1000 - conn->RXBPtr, &Read);
+
+			conn->RXBPtr += Read;
+			ProcessPacket(conn, (UCHAR *)&conn->RXBuffer, conn->RXBPtr);
+		}
+       
+		BPQSerialGetDTRRTS(conn->hDevice,&ModemStat);
+			
+		if ((ModemStat & 1) != conn->DTR)
+		{
+			conn->DTR=!conn->DTR;
+			Refresh();
+		}
+
+		if ((ModemStat & 2) >> 1 != conn->RTS)
+		{
+			conn->RTS=!conn->RTS;
+			Refresh();
+		}
+
 	}
 
+
 	return;
+
 }
-
-
-
-
-int SaveConfig(hWnd)
+int SaveConfig(HWND hWnd)
 {
 	int i;
 	int retCode,disp;
 	char Key[20];
-	BOOL OK1, OK2, OK3;
-	int Port;
-	char TypeFlag[3];
-	char Params[20];
+	BOOL OK1;
+	int Port, ApplMask, Streams;
 	BOOL DUFF=FALSE;
 	HKEY hKey=0;
 
@@ -586,43 +587,66 @@ int SaveConfig(hWnd)
 
 	if (retCode != ERROR_SUCCESS) return 0;
 
-
 	for (i = 1; i <= CurrentConnections; i++)
 	{
-		Port=GetDlgItemInt(MainWnd,TN_COM+i,&OK1,FALSE);
-		OK2=GetDlgItemText(MainWnd,TN_TYPE+i,(LPSTR)TypeFlag,3);
-		OK3=GetDlgItemText(MainWnd,TN_Param+i,(LPSTR)Params,20);
+		Port = 0;
 
-		if (!OK1 || Port < 0 || Port > 255)
+		Port=GetDlgItemInt(MainWnd,TN_COM+i,&OK1,FALSE);
+
+		if (Port < 0 || Port > 255)
 		{
 			SetDlgItemText(MainWnd,TN_COM+i,"?");
 			DUFF=TRUE;
 		}
 
-		if (OK2 != 1 || (toupper(TypeFlag[0]) != 'R' && toupper(TypeFlag[0]) != 'V' && TypeFlag[0] != ' '))
+		if (Port > 0)
 		{
-			SetDlgItemText(MainWnd,TN_TYPE+i,"?");
-			DUFF=TRUE;
-		}
-		
-		TypeFlag[0]=toupper(TypeFlag[0]);
+			Streams=GetDlgItemInt(MainWnd,TN_TYPE+i,&OK1,FALSE);
 
-		if (!DUFF)
+			if (!OK1 || Streams < 1 || Streams > 63)
+			{
+				SetDlgItemText(MainWnd,TN_TYPE+i,"?");
+				DUFF=TRUE;
+			}
+
+			ApplMask=GetDlgItemInt(MainWnd,TN_BPQ+i,&OK1,FALSE);
+
+			if (!OK1 || ApplMask < 0 || ApplMask > 255)
+			{
+				SetDlgItemText(MainWnd,TN_BPQ+i,"?");
+				DUFF=TRUE;
+			}
+		
+			if (!DUFF)
+			{
+				wsprintf(Key,"Port%d",i);
+				RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&Port,4);
+
+				wsprintf(Key,"Port%dStreams",i);
+				RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&Streams,4);
+
+				wsprintf(Key,"Port%dMask",i);
+				RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&ApplMask,4);
+			}
+		}
+		else		// if Port = 0
 		{
 			wsprintf(Key,"Port%d",i);
+			RegDeleteValue(hKey,Key);		// Clear
+			
+			wsprintf(Key,"Port%dStreams",i);
+			RegDeleteValue(hKey,Key);		// Clear
+			
+			wsprintf(Key,"Port%dMask",i);
+			RegDeleteValue(hKey,Key);		// Clear
 
-			RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&Port,4);
-
-			wsprintf(Key,"Port%dType",i);
-
-			RegSetValueEx(hKey,Key,0,REG_SZ,(BYTE *)&TypeFlag,2);
-
-			wsprintf(Key,"Port%dParam",i);
-
-			RegSetValueEx(hKey,Key,0,REG_SZ,(BYTE *)&Params,strlen(Params)+1);
- 
+			wsprintf(Key,"Port%dMode",i);
+			RegDeleteValue(hKey,Key);		// Clear
 		}
+
 	}
+
+	RegCloseKey(hKey);
 
 	MessageBox(MainWnd,"You must restart BPQKHOST for changes to be actioned","BPQKHOST",0);
 
@@ -631,8 +655,6 @@ int SaveConfig(hWnd)
 
 #define FC_DTRDSR       0x01
 #define FC_RTSCTS       0x02
-
-
 
 // Kantronics Host Mode Stuff
 
@@ -647,72 +669,161 @@ VOID ProcessPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 	UCHAR * FendPtr;
 	int NewLen;
 	
-	//	Split into KISS Packets. By far the most likely is a single KISS frame
-	//	or a single cr delimited frma, to treat as special case
-
-	FendPtr = memchr(&rxbuffer[1], FEND, Len-1);
-
-	if (rxbuffer[0] == FEND)
+	if (!conn->InHostMode)
 	{
-		if (FendPtr == &rxbuffer[Len-1])
-		{
-			ProcessKHOSTPacket(conn, &rxbuffer[1], Len - 2);
-			return;
-		}
-
-		if (FendPtr == NULL)
-		{
-			// We have a partial Packet - Save it
-
-			PartPacket = TRUE;
-			PartLen = Len;
-			PartPtr = rxbuffer;
-			return;
-		}
+		//	In Terminal Mode - Pass to Term Mode Handler
 		
-		// Process the first Packet in the buffer
-
-		NewLen =  FendPtr - rxbuffer -1;
-		ProcessKHOSTPacket(conn, &rxbuffer[1], NewLen );
-	
-		// Loop Back
-
-		ProcessPacket(conn, FendPtr+1, Len - NewLen -2);
+		ProcessKPacket(conn, rxbuffer, Len);
 		return;
 	}
 
-	// First Packet is not Host Mode. 
+	//	Split into KISS Packets. By far the most likely is a single KISS frame
+	//	so treat as special case
 
-	if (FendPtr != NULL)
+	if (!(rxbuffer[0] == FEND))
 	{
-		// Non Host Packet, followed by host packet
+		// Getting Non Host Data in Host Mode - Appl will have to sort the mess
+		// Discard any data
 
-		NewLen =  FendPtr - rxbuffer;
-		ProcessKPacket(conn, rxbuffer, NewLen);
-
-		// Loop Back
-
-		ProcessPacket(conn, FendPtr, Len - NewLen);
+		conn->RXBPtr = 0;
 		return;
 	}
 
-	ProcessKPacket(conn, rxbuffer, Len);
+	conn->RXBPtr = 0;				// Assume we will use all data in buffer - will reset if part packet received
+	
+	FendPtr = memchr(&rxbuffer[1], FEND, Len-1);
+	
+	if (FendPtr == &rxbuffer[Len-1])
+	{
+		ProcessKHOSTPacket(conn, &rxbuffer[1], Len - 2);
+		return;
+	}
+
+	if (FendPtr == NULL)
+	{
+		// We have a partial Packet - Save it
+
+		conn->RXBPtr = Len;
+		memcpy(&conn->RXBuffer[0], rxbuffer, Len);
+		return;
+	}
+		
+	// Process the first Packet in the buffer
+
+	NewLen =  FendPtr - rxbuffer -1;
+	ProcessKHOSTPacket(conn, &rxbuffer[1], NewLen );
+	
+	// Loop Back
+
+	ProcessPacket(conn, FendPtr+1, Len - NewLen -2);
 	return;
+
 }
 
 VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 {
-	UCHAR Command[80];
-	UCHAR Reply[400]="cmd:\r";
-	UCHAR CmdReply[]="C00";
+	UCHAR Char;
+	PUCHAR cmdStart;
+	UINT BytesLeft;
 
-	if (Len > 80) Len = 80;
+	// we will often get a whole connamd at once, but may not, so be prepared to receive char by char
+	//	Could also get more than one command per packet
+
+	cmdStart = rxbuffer;
+	
+	while (Len > 0)
+	{
+		Char = *(rxbuffer++);
+		Len--;
+
+//		if (conn->TermPtr > 120) conn->TermPtr = 120;	// Prevent overflow 
+
+		if (conn->Echo) BPQSerialSendData(conn->hDevice, &Char, 1);
+
+		if (Char == 0x0d)
+		{
+			// We have a command line
 		
-	memcpy(Command, rxbuffer, Len);
-	Command[Len] = 0x0d;
-	Command[Len+1] = 0;
+			*(rxbuffer-1) = 0;
+			ProcessKNormCommand(conn, cmdStart);
 
-	OutputDebugString(Command);
+			cmdStart = rxbuffer;
+		}
+	}
+
+	// if we have a residue, copy to front of buffer
+
+	if (cmdStart == (PUCHAR)&conn->RXBuffer) return;		// Haven't used any
+
+	BytesLeft = rxbuffer - cmdStart;
+
+	conn->RXBPtr = BytesLeft;
+
+	if (BytesLeft == 0) return;						// Used it all
+
+	memcpy(&conn->RXBuffer[0], cmdStart, BytesLeft);
+}
+
+VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer)
+{
+//	UCHAR CmdReply[]="C00";
+	UCHAR ResetReply[] = "\xC0\xC0S00\xC0";
+	int Len;
+
+	char seps[] = " \t\r";
+	char * Command, * Arg1, * Arg2;
+	char * Context;
+
+	if (conn->Channels[1]->Connected)
+	{
+		Len = strlen(rxbuffer);
+		rxbuffer[Len] = 0x0d;
+		SendMsg(conn->Channels[1]->BPQPort, rxbuffer, Len+1);
+		return;
+	}
+
+    Command = strtok_s(rxbuffer, seps, &Context);
+    Arg1 = strtok_s(NULL, seps, &Context);
+    Arg2 = strtok_s(NULL, seps, &Context);
+
+	if (Command == NULL)
+	{
+		BPQSerialSendData(conn->hDevice, "cmd:", 4);
+		return;
+	}
+		
+	if (_stricmp(Command, "RESET") == 0)
+	{
+		if (conn->nextMode)		
+			BPQSerialSendData(conn->hDevice, ResetReply, 6);
+		else
+			BPQSerialSendData(conn->hDevice, "cmd:", 4);
+
+		conn->InHostMode = conn->nextMode;
+
+		return;
+	}
+
+	if (_stricmp(Command, "K") == 0)
+	{
+		SessionControl(conn->Channels[1]->BPQPort, 1, 0);
+		return;
+	}
+
+	if (_memicmp(Command, "INT", 3) == 0)
+	{
+		if (Arg1)
+		{
+			if (_stricmp(Arg1, "HOST") == 0)
+				conn->nextMode = TRUE;
+			else
+				conn->nextMode = FALSE;
+		}
+
+		BPQSerialSendData(conn->hDevice, "INTFACE was TERMINAL\r", 21);
+		BPQSerialSendData(conn->hDevice, "cmd:", 4);
+		return;
+	}
 
 //cmd:
 
@@ -723,27 +834,41 @@ VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 //ÀC20XFLOW OFFÀ
 
 
-	SendKISSData(conn, CmdReply, 3);
+	//SendKISSData(conn, CmdReply, 3);
 	
-	//BPQSerialSendData(conn->hDevice, Reply, 5);
+	BPQSerialSendData(conn->hDevice, "cmd:", 4);
 
 
 	//	Process Non-Hostmode Packet
 
 	return;
 }
+int FreeBytes = 999;
 
 VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 {
+	struct StreamInfo * channel;
 	UCHAR Command[80];
 	UCHAR Reply[400];
 	UCHAR TXBuff[400];
 	UCHAR CmdReply[]="C00";
-	UCHAR StatusReply1[]="C00FREE BYTES 1000";
-	UCHAR StatusReply2[]="C00A/V stream - DISCONNECTED";
 
 	UCHAR Chan, Stream;
-	int TXLen;
+	int j, TXLen, StreamNo;
+
+	if ((Len == 1) && ((rxbuffer[0] == 'q') || (rxbuffer[0] == 'Q')))
+	{
+		// Force Back to Command Mode
+
+		Sleep(3000);
+		conn->InHostMode = FALSE;
+		BPQSerialSendData(conn->hDevice, "\r\r\rcmd:", 7);
+		return;
+	}
+
+	Chan = rxbuffer[1];
+	Stream = rxbuffer[2];
+	StreamNo = Stream - '@';
 
 	switch (rxbuffer[0])
 	{
@@ -754,8 +879,6 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 		if (Len > 80) Len = 80;
 	
-		Chan = rxbuffer[1];
-		Stream = rxbuffer[2];
 
 		memcpy(Command, &rxbuffer[3], Len-3);
 		Command[Len-3] = 0;
@@ -764,12 +887,32 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 		{
 			// Status
 
-			SendKISSData(conn, StatusReply1, strlen(StatusReply1));
-			SendKISSData(conn, StatusReply2, strlen(StatusReply2));
+			FreeBytes = 5000;
+
+			if (conn->Channels[1]->Connected)
+				if (TXCount(conn->Channels[1]->BPQPort) > 5)
+					FreeBytes = 0;
+
+			TXLen = wsprintf(Reply, "C00FREE BYTES %d ", FreeBytes);
+			SendKISSData(conn, Reply, TXLen);
+
+			for (j=1; j <= conn->numChannels; j++)
+			{
+				channel = conn->Channels[j];
+			
+				if (channel->Connected)
+				{
+					TXLen = wsprintf(Reply, "C00%c/V stream - CONNECTED to %s", j + '@', "SWITCH");
+					SendKISSData(conn, Reply, TXLen);
+				}
+//				else
+//					TXLen = wsprintf(Reply, "C00%c/V stream - DISCONNECTED", j + '@');
+
+			}
 			return;
 		}
 
-		if (memcmp(Command, "C ", 2) == 0)
+		if (_memicmp(Command, "C ", 2) == 0)
 		{
 			// Connect
 
@@ -778,10 +921,12 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 			Reply[2] = Stream;
 			SendKISSData(conn, Reply, 3);
 
-			SessionControl(conn->BPQPort, 1, 0);
+			if (StreamNo > conn->numChannels) return;		// Protect
+
+			SessionControl(conn->Channels[StreamNo]->BPQPort, 1, 0);
 
 			Command[Len-3] = 0xd;
-			SendMsg(conn->BPQPort, Command, Len-2);
+			SendMsg(conn->Channels[StreamNo]->BPQPort, Command, Len-2);
 
 			return;
 		}
@@ -790,16 +935,24 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 		{
 			// Disconnect
 
-			Reply[0] = 'D';
-			Reply[1] = Chan;
-			Reply[2] = Stream;
-//			SendKISSData(conn, Reply, 3);
+			if (StreamNo > conn->numChannels) return;		// Protect
 
-			SessionControl(conn->BPQPort, 2, 0);
+			SessionControl(conn->Channels[StreamNo]->BPQPort, 2, 0);
 
 			return;
 		}
 
+		if (_memicmp(Command, "INT", 3) == 0)
+		{
+			SendKISSData(conn, "C00INTFACE HOST", 15);
+			return;
+		}
+
+		if (_stricmp(Command, "PACLEN") == 0)
+		{
+			SendKISSData(conn, "C00PACLEN 128/128", 17);
+			return;
+		}
 
 		memcpy(Reply,CmdReply,3);
 		SendKISSData(conn, Reply, 3);
@@ -809,12 +962,12 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 		// Data to send
 
-		Chan = rxbuffer[1];
-		Stream = rxbuffer[2];
+			
+		if (StreamNo > conn->numChannels) return;		// Protect
 
 		TXLen = KissDecode(&rxbuffer[3], TXBuff, Len-3);
 
-		SendMsg(conn->BPQPort, TXBuff, TXLen);
+		SendMsg(conn->Channels[StreamNo]->BPQPort, TXBuff, TXLen);
 
 		return;
 
@@ -1125,12 +1278,10 @@ int BPQSerialGetDTRRTS(HANDLE hDevice,ULONG * Flags)
 }
 
 
-BOOL InitTNC2Port(int Port,int * Stream)
+BOOL InitBPQPort(int Port,int * Stream)
 {
 	int ret;
-	
-	if (Port > 10 || Port == 0) return FALSE;
-	
+		
 	if (*Stream == 0)
 	{
 		*Stream = FindFreeStream();
@@ -1138,7 +1289,6 @@ BOOL InitTNC2Port(int Port,int * Stream)
 		if (*Stream == 255) return FALSE;
 
 		BPQSetHandle(*Stream, hWnd);
-
 	}
 	else
 	{
@@ -1154,11 +1304,12 @@ BOOL InitTNC2Port(int Port,int * Stream)
 
 }
 
-BOOL ReleaseTNC2Port(int Stream)
+BOOL ReleaseBPQPort(int Stream)
 {	
 
 	if (Stream == 0) return FALSE;
 	
+	SetAppl(Stream, 0, 0);
 	SessionControl(Stream, 2, 0);
 	DeallocateStream(Stream);
 
@@ -1166,14 +1317,14 @@ BOOL ReleaseTNC2Port(int Stream)
 
 }
 
-
 int Connected(Stream)
 {
 	byte ConnectingCall[10];
 	byte ApplCall[10]="";
 	UCHAR Msg[50];
-	int i, Len;
+	int i, j, Len;
 	struct ConnectionInfo * conn;
+	struct StreamInfo * channel;
 
 	GetCallsign(Stream, ConnectingCall);
 
@@ -1181,19 +1332,37 @@ int Connected(Stream)
 		if (ConnectingCall[i]==32)
 			ConnectingCall[i]=0;
 
-
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
 
-		if (conn->BPQPort == Stream)
+		for (j=1; j <= conn->numChannels; j++)
 		{
-			Len = wsprintf (Msg, "S1A*** CONNECTED to %s", ConnectingCall);
-			SendKISSData(conn, Msg, Len);
+			channel = conn->Channels[j];
 
-			return 0;
+			if (channel->BPQPort == Stream)
+			{
+				if (conn->InHostMode)
+				{
+					Len = wsprintf (Msg, "S1%c*** CONNECTED to %s ", j + '@', ConnectingCall);
+					SendKISSData(conn, Msg, Len);
+				}
+				else
+				{
+					Len = wsprintf (Msg, "*** CONNECTED to %s\r", ConnectingCall);
+					BPQSerialSendData(conn->hDevice, Msg, Len);
+					BPQSerialSetDCD(conn->hDevice);
+					Refresh();
+				}
+				
+				channel->Connected = TRUE;
+
+				return 0;
+			}
 		}
 	}
+
+	// Unknown Stream
 
 	return 0;
 }
@@ -1201,23 +1370,37 @@ int Connected(Stream)
 int Disconnected (Stream)
 {
 	UCHAR Msg[50];
-	int i, Len;
+	int i, j, Len;
 	struct ConnectionInfo * conn;
-
+	struct StreamInfo * channel;
 
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
 
-		if (conn->BPQPort == Stream)
+		for (j = 1; j <= conn->numChannels; j++)
 		{
-			Len = wsprintf (Msg, "S1A*** DISCONNECTED");
-			SendKISSData(conn, Msg, Len);
+			channel = conn->Channels[j];
 
-			return 0;
+			if (channel->BPQPort == Stream)
+			{
+				if (conn->InHostMode)
+				{
+					Len = wsprintf (Msg, "S1%c*** DISCONNECTED", j + '@');
+					SendKISSData(conn, Msg, Len);
+				}
+				else
+				{
+					BPQSerialSendData(conn->hDevice, "*** DISCONNECTED\r", 17); 
+					BPQSerialClrDCD(conn->hDevice);
+					Refresh();
+				}
+				channel->Connected = FALSE;
+
+				return 0;
+			}
 		}
 	}
-
 
 	return 0;
 
@@ -1225,37 +1408,43 @@ int Disconnected (Stream)
 int DoReceivedData(int Stream)
 {
 	byte Buffer[400];
-	int len,count,i;
+	int len, count, i, j;
 	struct ConnectionInfo * conn;
-
+	struct StreamInfo * channel;
 
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
 
-		if (conn->BPQPort == Stream)
+		for (j = 1; j <= conn->numChannels; j++)
 		{
-			
-			do { 
+			channel = conn->Channels[j];
 
-				GetMsg(Stream, &Buffer[3], &len, &count);
+			if (channel->BPQPort == Stream)
+			{
+				do { 
 
-				if (len > 0)
-				{
-					Buffer[0] = 'D';
-					Buffer[1] = '1';
-					Buffer[2] = 'A';
+					GetMsg(Stream, &Buffer[3], &len, &count);
 
-					SendKISSData(conn, Buffer, len+3);
-				}
+					if (len > 0)
+					{
+						if (conn->InHostMode)
+						{
+							Buffer[0] = 'D';
+							Buffer[1] = '1';
+							Buffer[2] = j + '@';
+							SendKISSData(conn, Buffer, len+3);
+						}
+						else
+							BPQSerialSendData(conn->hDevice, &Buffer[3], len); 
+					}
 	  
-			}while (count > 0);
+				} while (count > 0);
 
-			return 0;
+				return 0;
+			}
 		}
 	}
-
-	
 	return 0;
 }
 
@@ -1268,16 +1457,12 @@ int DoMonitorData(int Stream)
 	do
 	{
 		Stamp=GetRaw(Stream, Buffer, &RawLen, &Count );
- 
 	}
 
 	while (Count > 0);
 
 	return 0;
-
 }
-
-
 
 
 
