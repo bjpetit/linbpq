@@ -109,6 +109,13 @@
 // 410g		December 2008
 
 //				Restore API Exports BPQHOSTAPIPTR and MONDECODEPTR (accidentally deleted)
+//				Fix changed init of BPQDirectory (accidentally changed)
+//				Fix Checks for lost processes (accidentally deleted)
+//				Support HDLC Cards on W2K and above
+//				Delete Tray List entries for crashed processes
+//				Add Option to NODES command to sort by Callsign
+//				Add options to save or clear BPQNODES before Reconfig.
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 
@@ -176,8 +183,6 @@ extern char PWLEN;
 extern int SEMGETS;
 extern int SEMRELEASES;
 extern int SEMCLASHES;
-extern int CHAINNODE();
-extern int UNCHAINNODE();
 extern int REMOVENODE();
 extern int FINDFREEDESTINATION();
 extern int RAWTX();
@@ -200,7 +205,7 @@ int SemProcessID = 0;
 DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
 DllExport long  MONDECODEPTR=(long)&MONDECODE;
 
-UCHAR BPQDirectory[MAX_PATH]="";
+UCHAR BPQDirectory[MAX_PATH] = "";
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 
@@ -237,8 +242,8 @@ HMENU trayMenu=0;
 HWND hWnd;
 
 DllExport int APIENTRY DumpSystem();
-
 DllExport int APIENTRY SaveNodes ();
+DllExport int APIENTRY ClearNodes ();
 
 VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT idEvent,DWORD dwTime );
 
@@ -250,7 +255,8 @@ int InitDone = 0;
 int FirstInitDone = 0;
 int PerlReinit = 0;
 int TimerHandle = 0;
-unsigned int TimerInst = 0;
+unsigned int TimerInst = 0xffffffff;
+;
 int AttachedProcesses=0;
 int AttachedPerlProcesses=0;
 int AttachingProcess=0;
@@ -260,6 +266,11 @@ BOOL ReconfigFlag=FALSE;
 
 int AttachedPIDList[100]={0};
 int AttachedPIDType[100]={0};
+
+HWND hWndArray[100]={0};
+int PIDArray[100]={0};
+char PopupText[30][100]={""};
+
 
 // Next 3 should be uninitialised so they are local to each process
 
@@ -279,6 +290,7 @@ BOOLEAN StartBPQ32();
 DllExport VOID APIENTRY  Send_AX(VOID * Block, DWORD len, UCHAR Port);
 BOOL LoadIPDriver();
 BOOL Send_IP(VOID * Block, DWORD len);
+VOID CheckforLostProcesses();
 
 BOOL IPActive=FALSE;
 BOOL IPRequired=FALSE;
@@ -351,7 +363,7 @@ void LoadToolHelperRoutines()
 	{
 		err=GetLastError();
 
-		wsprintf(msg,"BPQ32 Error loading kernel32.dll - Error code %d", err);
+		wsprintf(msg,"BPQ32 Error loading kernel32.dll - Error code %d\n", err);
 		
 		OutputDebugString(msg);
 
@@ -366,7 +378,7 @@ void LoadToolHelperRoutines()
 	{
 		err=GetLastError();
 
-		wsprintf(msg,"BPQ32 Error getting CreateToolhelp32Snapshot entry point - Error code %d", err);
+		wsprintf(msg,"BPQ32 Error getting CreateToolhelp32Snapshot entry point - Error code %d\n", err);
 		
 		OutputDebugString(msg);
 
@@ -389,7 +401,7 @@ BOOL GetProcess(int ProcessID, char * Program)
   hProcessSnap = (HANDLE)CreateToolHelp32SnapShotPtr(TH32CS_SNAPPROCESS, 0);
   if( hProcessSnap == INVALID_HANDLE_VALUE )
   {
-    OutputDebugString( "CreateToolhelp32Snapshot (of processes) Failed" );
+    OutputDebugString( "CreateToolhelp32Snapshot (of processes) Failed\n" );
     return( FALSE );
   }
 
@@ -400,7 +412,7 @@ BOOL GetProcess(int ProcessID, char * Program)
   // and exit if unsuccessful
   if( !Process32Firstptr( hProcessSnap, &pe32 ) )
   {
-    OutputDebugString( "Process32First Failed" );  // Show cause of failure
+    OutputDebugString( "Process32First Failed\n" );  // Show cause of failure
     CloseHandle( hProcessSnap );     // Must clean up the snapshot object!
     return( FALSE );
   }
@@ -448,7 +460,7 @@ BOOL IsProcess(int ProcessID)
 
   if( hProcessSnap == INVALID_HANDLE_VALUE )
   {
-    OutputDebugString( "CreateToolhelp32Snapshot (of processes) Failed" );
+    OutputDebugString( "CreateToolhelp32Snapshot (of processes) Failed\n" );
     return(TRUE);		// Don't know, so assume ok
   }
 
@@ -456,7 +468,7 @@ BOOL IsProcess(int ProcessID)
 
    if( !Process32Firstptr( hProcessSnap, &pe32 ) )
   {
-    OutputDebugString( "Process32First Failed" );  // Show cause of failure
+    OutputDebugString( "Process32First Failed\n" );  // Show cause of failure
     CloseHandle( hProcessSnap );     // Must clean up the snapshot object!
     return(TRUE);		// Don't know, so assume ok
    }
@@ -477,102 +489,127 @@ BOOL IsProcess(int ProcessID)
 
 VOID MonitorThread(int x)
 {
+	
 	// Thread to detect killed processes. Runs in process owning timer.
 
 	// Obviously can't detect loss of timer owning thread!
 
-	char Log[80];
-	int i, n, ProcessID;
-	
-
 	do {
 
-		for (n=0; n < AttachedProcesses; n++)
-		{
-			ProcessID=AttachedPIDList[n];
-			
-			if (!IsProcess(ProcessID))
-			{
-				// Process has died - Treat as a detach
-
-				wsprintf(Log,"BPQ32 Process %d Died\n", ProcessID);
-				OutputDebugString(Log);
-
-				// If process was holding the semaphore, release it
-
-				if (Semaphore == 1 && ProcessID == SemProcessID)
-				{
-					OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery");
-					Semaphore=0;
-				}
-
-				for (i=1;i<65;i++)
-				{
-					if (BPQHOSTVECTOR[i-1].STREAMOWNER == AttachedPIDList[n])
-						DeallocateStream(i);
-				}
-				
-				if (TimerInst == ProcessID)
-				{
-					KillTimer(NULL,TimerHandle);
-					TimerHandle=0;
-					TimerInst=0;
-					Tell_Sessions();
-					OutputDebugString("BPQ32 Process was running timer ");
-			
-					if (MinimizetoTray)
-						Shell_NotifyIcon(NIM_DELETE,&niData);
-				}
-				//	Remove this entry from PID List
-
-				AttachedPerlProcesses-=AttachedPIDType[n];
-
-				for (i=n; i< AttachedProcesses; i++)
-				{
-					AttachedPIDType[i]=AttachedPIDType[i+1];
-					AttachedPIDList[i]=AttachedPIDList[i+1];
-				}
-				AttachedProcesses--;				
-			}
-		}
-
 		Sleep(60000);
+
+		CheckforLostProcesses();
 
 	} while (TRUE);
 }
 
-VOID MonitorTimerThread(int x)
+VOID CheckforLostProcesses()
 {
+	UCHAR buff[100];
+	char Log[80];
+	int i, n, ProcessID;
+
+	for (n=0; n < AttachedProcesses; n++)
+	{
+		ProcessID=AttachedPIDList[n];
+			
+		if (!IsProcess(ProcessID))
+		{
+			// Process has died - Treat as a detach
+
+			wsprintf(Log,"BPQ32 Process %d Died\n", ProcessID);
+			OutputDebugString(Log);
+
+			// Remove Tray Icom Entry
+
+			for( i = 0; i < 100; ++i )
+			{
+				if (PIDArray[i] == ProcessID)
+				{
+					hWndArray[i] = 0;
+					wsprintf(Log,"BPQ32 Removing Tray Item %s\n", PopupText[i]);
+					OutputDebugString(Log);
+					DeleteMenu(trayMenu,40000+i,MF_BYCOMMAND);
+					break;
+				}
+			}
+
+			// If process was holding the semaphore, release it
+
+			if (Semaphore == 1 && ProcessID == SemProcessID)
+			{
+				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\n");
+				Semaphore=0;
+			}
+
+			for (i=1;i<65;i++)
+			{
+				if (BPQHOSTVECTOR[i-1].STREAMOWNER == AttachedPIDList[n])
+					DeallocateStream(i);
+			}
+				
+			if (TimerInst == ProcessID)
+			{
+				KillTimer(NULL,TimerHandle);
+				TimerHandle=0;
+				TimerInst=0xffffffff;
+				Tell_Sessions();
+				OutputDebugString("BPQ32 Process was running timer \n");
+			
+				if (MinimizetoTray)
+					Shell_NotifyIcon(NIM_DELETE,&niData);
+			}
+				
+			//	Remove this entry from PID List
+
+			AttachedPerlProcesses-=AttachedPIDType[n];
+
+			for (i=n; i< AttachedProcesses; i++)
+			{
+				AttachedPIDType[i]=AttachedPIDType[i+1];
+				AttachedPIDList[i]=AttachedPIDList[i+1];
+			}
+			AttachedProcesses--;
+
+			wsprintf(buff,"BPQ32 Lost Process - %d Process(es) Attached %d Perl Proceses\n", AttachedProcesses, AttachedPerlProcesses);
+			OutputDebugString(buff);
+		}
+	}
+}
+VOID MonitorTimerThread(int x)
+{	
 	// Thread to detect killed timer process. Runs in all other BPQ32 processes.
 
 	do {
+
+		Sleep(60000);
 
 		if (!IsProcess(TimerInst))
 		{
 			// Timer owning Process has died - Force a new timer to be created
 			//	New timer thread will detect lost process and tidy up
 		
-			OutputDebugString("BPQ32 Process with Timer died");
+			OutputDebugString("BPQ32 Process with Timer died\n");
 
 			// If process was holding the semaphore, release it
 
 			if (Semaphore == 1 && TimerInst == SemProcessID)
 			{
-				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery");
+				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\n");
 				Semaphore=0;
 			}
 
 			KillTimer(NULL,TimerHandle);
 			TimerHandle=0;
-			TimerInst=0;
+			TimerInst=0xffffffff;
 			Tell_Sessions();
+
+			CheckforLostProcesses();		// Normally only done in timer thread, which is now dead
 
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
 		}
 	
-		Sleep(60000);
-
 	} while (TRUE);
 }
 
@@ -666,6 +703,7 @@ FirstInit()
 
 	// Moved from DLLINIT to sort out perl problem, and meet MS Guidelines on minimising DLLMain 
 
+	
 	INITIALISEPORTS();
 
 	SetupConsoleWindow();
@@ -676,8 +714,10 @@ FirstInit()
  	WritetoConsole("\n\nPort Initialisation Complete\n");
 
 	if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
-		
-	OutputDebugString("BPQ32 Port Initialisation Complete");
+
+	_beginthread(MonitorThread,0,0);
+	
+	OutputDebugString("BPQ32 Port Initialisation Complete\n");
 
 	return 0;
 
@@ -737,7 +777,7 @@ Check_Timer()
 		{
 			if (AttachingProcess > 0 ) return 0;
 
-			OutputDebugString("BPQ32 Only perl or ntvdm running - Start bpq32.exe");
+			OutputDebugString("BPQ32 Only perl or ntvdm running - Start bpq32.exe\n");
 			StartBPQ32();
 			Sleep(2000);
 			return 0;
@@ -755,7 +795,7 @@ Check_Timer()
 
 	if (TimerHandle == 0)
 	{
-		OutputDebugString("BPQ32 Reinitialising External Ports and Attaching Timer");
+		OutputDebugString("BPQ32 Reinitialising External Ports and Attaching Timer\n");
 
 //		LoadToolHelperRoutines();
 
@@ -901,7 +941,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			if (Mutex != NULL)
 			{
-				OutputDebugString("Another BPQ32.dll is loaded");
+				OutputDebugString("Another BPQ32.dll is loaded\n");
 				i=MessageBox(NULL,"BPQ32 DLL already loaded from another directory\nIf you REALLY want this, hit OK, else hit Cancel","BPQ32",MB_OKCANCEL);
 				FreeSemaphore();
 
@@ -936,7 +976,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 				if (Mutex != NULL)
 				{
-					OutputDebugString("Another BPQ32.dll is loaded");
+					OutputDebugString("Another BPQ32.dll is loaded\n");
 					MessageBox(NULL,"BPQ32 DLL already loaded from another directory","BPQ32",MB_ICONSTOP);
 					FreeSemaphore();
 					return (0);
@@ -973,11 +1013,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 					PWLEN=i;
 					CloseHandle(handle);
 				}
-
 			}
-
-//			_beginthread(MonitorThread,0,i);
-
 		}
 		else
 		{
@@ -987,15 +1023,13 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				FreeSemaphore();
 				return (0);
 			}
-
-			// Run timer monitor threadin all other processes
-
-			_beginthread(MonitorTimerThread,0,0);
 		}
+			
+		// Run timer monitor thread in all processes - it is possible for the TImer thread not to be the first thread
+	
+		_beginthread(MonitorTimerThread,0,0);
 
 		FreeSemaphore();
-
-//		LoadToolHelperRoutines();
 
 		AttachedPIDType[AttachedProcesses]=Perl;
 		AttachedPIDList[AttachedProcesses++]=GetCurrentProcessId();
@@ -1006,7 +1040,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		GetProcess(GetCurrentProcessId(),pgm);
 		n=wsprintf(buf,"BPQ32 DLL Attach complete - Program %s  - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
 		OutputDebugString(buf);
-
 
 		// Set up local variables
 		
@@ -1025,7 +1058,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		return 1;
     
 	case DLL_PROCESS_DETACH:
-	
 		
 		ProcessID=GetCurrentProcessId();
 		
@@ -1034,7 +1066,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		for (i=1;i<65;i++)
 		{
 			if (BPQHOSTVECTOR[i-1].STREAMOWNER == ProcessID)
-
 				DeallocateStream(i);
 		}
 
@@ -1046,14 +1077,13 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		{
 			KillTimer(NULL,TimerHandle);
 			TimerHandle=0;
-			TimerInst=0;
+			TimerInst=0xffffffff;
 			Tell_Sessions();
-			OutputDebugString("BPQ32 Process with Timer closing");
+			OutputDebugString("BPQ32 Process with Timer closing\n");
 			
 			if (MinimizetoTray)
-			{
 				Shell_NotifyIcon(NIM_DELETE,&niData);
-			}
+
 		}
 
 		//	Remove our entry from PID List
@@ -1078,9 +1108,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			if (AUTOSAVE == 1) SaveNodes();	
 			
 			if (MinimizetoTray)
-			{
 				Shell_NotifyIcon(NIM_DELETE,&niData);
-			}
 
 			// Unload External Drivers
 
@@ -1117,10 +1145,10 @@ DllExport int APIENTRY CloseBPQ32()
 	{	
 		KillTimer(NULL,TimerHandle);
 		TimerHandle=0;
-		TimerInst=0;
+		TimerInst=0xffffffff;
 		Tell_Sessions();
 		
-		OutputDebugString("BPQ32 Process with Timer called CloseBPQ32");
+		OutputDebugString("BPQ32 Process with Timer called CloseBPQ32\n");
 
 		for (i=0;i<NUMBEROFPORTS;i++)
 		{
@@ -1592,15 +1620,7 @@ BOOL UpdateNodesForApp(int Appl)
 		DEST->ROUT1_QUALITY = (BYTE)APPL->APPLQUAL;
 		DEST->ROUT1_OBSCOUNT = 255;
 
-		_asm {
-
-		mov	EBX,DEST
-		CALL CHAINNODE				// Stick on Sorted Nodes chain
-		
-		}
-
 		FreeSemaphore();
-
 
 		return TRUE;
 
@@ -1639,26 +1659,12 @@ nodests:
 
 	GetSemaphore();
 
-	_asm {
-
-	mov	EBX,DEST
-	CALL UNCHAINNODE			// Remove from Sorted Nodes chain
-		
-	}
-
 	memmove (DEST->DEST_CALL,APPL->APPLCALL,13);
 
 	DEST->DEST_STATE=0x80;	// SPECIAL ENTRY
 	
 	DEST->ROUT1_QUALITY = (BYTE)APPL->APPLQUAL;
 	DEST->ROUT1_OBSCOUNT = 255;
-
-	_asm {
-
-	mov	EBX,DEST
-	CALL CHAINNODE				// Stick on Sorted Nodes chain
-		
-	}
 
 	FreeSemaphore();
 	return TRUE;
@@ -3050,6 +3056,36 @@ DllExport int APIENTRY SaveNodes ()
 	return (0);
 }
 
+DllExport int APIENTRY ClearNodes ()
+{
+	char FN[MAX_PATH];
+
+	// Set up pointer to BPQNODES file
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(FN,"BPQNODES.dat");
+	}
+	else
+	{
+		strcpy(FN,BPQDirectory);
+		strcat(FN,"\\");
+		strcat(FN,"BPQNODES.dat");
+	}
+
+	handle = CreateFile(FN,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+ 	CloseHandle(handle);
+	
+	return (0);
+}
+
 // Code to support minimizing all BPQ Apps to a single Tray ICON
 
 // As we can't minimize the console window to the tray, I'll use an ordinary
@@ -3069,9 +3105,6 @@ LOGFONT LFTTYFONT ;
 
 HFONT hFont ;
  
-HWND hWndArray[100]={0};
-char PopupText[30][100]={""};
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 int SetupConsoleWindow()
@@ -3117,7 +3150,8 @@ int SetupConsoleWindow()
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Actions");
 
 	AppendMenu(hPopMenu,MF_STRING,BPQSAVENODES,"Save Nodes to file BPQNODES.DAT");
-	AppendMenu(hPopMenu,MF_STRING,BPQRECONFIG,"Re-read bpqcfg.bin and reconfigure node");
+	AppendMenu(hPopMenu,MF_STRING,BPQRECONFIG,"Save Nodes, Re-read bpqcfg.bin and reconfigure node");
+	AppendMenu(hPopMenu,MF_STRING,BPQCLEARRECONFIG,"Clear Nodes, Re-read bpqcfg.bin and reconfigure node");
 	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
 
 	DrawMenuBar(hWnd);	
@@ -3267,9 +3301,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				SaveNodes();
 				WritetoConsole("Nodes Saved\n");
 				return 0;
+			}		
+			if (wmId == BPQCLEARRECONFIG)
+			{
+				ClearNodes();
+				WritetoConsole("Nodes file Cleared\n");
+				ReconfigFlag=TRUE;	
+				WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
+				return 0;
 			}
 			if (wmId == BPQRECONFIG)
 			{
+				SaveNodes();
+				WritetoConsole("Nodes Saved\n");
 				ReconfigFlag=TRUE;	
 				WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
 				return 0;
@@ -3369,6 +3413,7 @@ DllExport int APIENTRY AddTrayMenuItem(HWND hWnd, char * Label)
 		if (hWndArray[i] == 0)
 		{
 			hWndArray[i]=hWnd;
+			PIDArray[i] = GetCurrentProcessId();
 			strcpy(PopupText[i],Label);
 			return AppendMenu(trayMenu,MF_STRING,40000+i,Label);
 		}
@@ -3387,6 +3432,7 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd)
 		if (hWndArray[i] == hWnd)
 		{
 			hWndArray[i] = 0;
+			PIDArray[i] = 0;
 			return DeleteMenu(trayMenu,40000+i,MF_BYCOMMAND);
 		}
 	}
@@ -3504,7 +3550,7 @@ BOOLEAN CheckifBPQ32isLoaded()
 {
 	HANDLE Mutex;
 	
-	OutputDebugString("BPQ32 perl program or ntvdm attaching - Check if BPQ32 already loaded");
+	OutputDebugString("BPQ32 perl program or ntvdm attaching - Check if BPQ32 already loaded\n");
 
 	// See if BPQ32 is running - if we create it in the NTVDM address space by
 	// loading bpq32.dll it will not work.
@@ -3513,7 +3559,7 @@ BOOLEAN CheckifBPQ32isLoaded()
 
 	if (Mutex == NULL)
 	{	
-		OutputDebugString("BPQ32 No other bpq32 programs running - Loading BPQ32.exe");
+		OutputDebugString("BPQ32 No other bpq32 programs running - Loading BPQ32.exe\n");
 		return StartBPQ32();
 	}
 
