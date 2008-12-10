@@ -63,7 +63,7 @@ int BPQSerialGetDeviceList(HANDLE hDevice,ULONG * Slot,ULONG * Port);
 int BPQSerialIsCOMOpen(HANDLE hDevice,ULONG * Count);
 int BPQSerialGetDTRRTS(HANDLE hDevice,ULONG * Flags);
 
-BOOL InitBPQPort(int Port,int * Stream);
+BOOL InitBPQStream(int Port,int * Stream);
 
 VOID ProcessPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
@@ -76,7 +76,7 @@ VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-BOOL ReleaseBPQPort(int Stream);
+BOOL ReleaseBPQStream(int Stream);
 
 VOID CALLBACK TimerProc();
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
@@ -155,7 +155,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			for (j=1; j <= conn->numChannels; j++)
 			{
 				channel = conn->Channels[j];
-				ReleaseBPQPort(channel->BPQPort);
+				ReleaseBPQStream(channel->BPQStream);
 			}
 
 			if (conn->Created) BPQSerialDeleteDevice(hControl, &conn->ComPort, &Errorval);
@@ -430,14 +430,17 @@ BOOL Initialise()
 			conn->CTS = 1;
 			conn->DSR = 1;
 
-			for (j = 1; j <= conn->numChannels; j++)
+			for (j = 0; j <= conn->numChannels; j++)
 			{
+				// Use Stream zero for defaults
+				
 				conn->Channels[j] = malloc(sizeof (struct StreamInfo));
 				channel = conn->Channels[j];
-				channel->BPQPort = 0;
+				channel->BPQStream = 0;
 				channel->Connected = FALSE;
+				channel->MYCall[0] = 0;
 
-				InitBPQPort(i, &conn->Channels[j]->BPQPort);            
+				if (i > 0) InitBPQStream(i, &conn->Channels[j]->BPQStream);            
 			}
 		}
 		else
@@ -511,8 +514,8 @@ VOID CALLBACK TimerProc()
 			for (j = 1; j <= conn->numChannels; j++)
 			{
 				channel = conn->Channels[j];
-				SessionControl(channel->BPQPort, 2, 0);
-				SetAppl(channel->BPQPort, 0, 0);
+				SessionControl(channel->BPQStream, 2, 0);
+				SetAppl(channel->BPQStream, 0, 0);
 			}
 
 			conn->PortEnabled = FALSE;
@@ -527,7 +530,7 @@ VOID CALLBACK TimerProc()
 			for (j = 1; j <= conn->numChannels; j++)
 			{
 				channel = conn->Channels[j];
-				SetAppl(channel->BPQPort, 0, conn->ApplMask);
+				SetAppl(channel->BPQStream, 2, conn->ApplMask);
 			}
 
        		Refresh();
@@ -603,7 +606,7 @@ int SaveConfig(HWND hWnd)
 		{
 			Streams=GetDlgItemInt(MainWnd,TN_TYPE+i,&OK1,FALSE);
 
-			if (!OK1 || Streams < 1 || Streams > 63)
+			if (!OK1 || Streams < 1 || Streams > 26)
 			{
 				SetDlgItemText(MainWnd,TN_TYPE+i,"?");
 				DUFF=TRUE;
@@ -663,6 +666,15 @@ int SaveConfig(HWND hWnd)
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
+
+byte * EncodeCall(byte * Call)
+{
+	static char axcall[10];
+
+	ConvToAX25(Call, axcall);
+	return &axcall[0];
+
+}
 
 VOID ProcessPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 {
@@ -778,7 +790,7 @@ VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer)
 	{
 		Len = strlen(rxbuffer);
 		rxbuffer[Len] = 0x0d;
-		SendMsg(conn->Channels[1]->BPQPort, rxbuffer, Len+1);
+		SendMsg(conn->Channels[1]->BPQStream, rxbuffer, Len+1);
 		return;
 	}
 
@@ -806,7 +818,7 @@ VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer)
 
 	if (_stricmp(Command, "K") == 0)
 	{
-		SessionControl(conn->Channels[1]->BPQPort, 1, 0);
+		SessionControl(conn->Channels[1]->BPQStream, 1, 0);
 		return;
 	}
 
@@ -851,10 +863,15 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 	UCHAR Command[80];
 	UCHAR Reply[400];
 	UCHAR TXBuff[400];
-	UCHAR CmdReply[]="C00";
+	UCHAR CmdReply[]="C10";
 
 	UCHAR Chan, Stream;
 	int j, TXLen, StreamNo;
+	
+	char * Cmd, * Arg1, * Arg2, * Arg3;
+	char * Context;
+	char seps[] = " \t\r\xC0";
+	int CmdLen;
 
 	if ((Len == 1) && ((rxbuffer[0] == 'q') || (rxbuffer[0] == 'Q')))
 	{
@@ -868,32 +885,43 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 	Chan = rxbuffer[1];
 	Stream = rxbuffer[2];
-	StreamNo = Stream - '@';
+	StreamNo = Stream == '0' ? 0 : Stream - '@';
+
+	if (StreamNo > conn->numChannels)
+	{
+		SendKISSData(conn, "C10Invalid Stream", 17);
+		return;		
+	}
 
 	switch (rxbuffer[0])
 	{
-	
 	case 'C':
 
 		// Command Packet. Extract Command
 
 		if (Len > 80) Len = 80;
 	
-
 		memcpy(Command, &rxbuffer[3], Len-3);
 		Command[Len-3] = 0;
 
-		if (_stricmp(Command, "S") == 0)
+		Cmd = strtok_s(Command, seps, &Context);
+		Arg1 = strtok_s(NULL, seps, &Context);
+		Arg2 = strtok_s(NULL, seps, &Context);
+		Arg3 = strtok_s(NULL, seps, &Context);
+		CmdLen = strlen(Cmd);
+
+		if (_stricmp(Cmd, "S") == 0)
 		{
 			// Status
 
-			FreeBytes = 5000;
+			FreeBytes = 0;
 
 			if (conn->Channels[1]->Connected)
-				if (TXCount(conn->Channels[1]->BPQPort) > 5)
+				if (TXCount(conn->Channels[1]->BPQStream) > 5)
 					FreeBytes = 0;
 
 			TXLen = wsprintf(Reply, "C00FREE BYTES %d ", FreeBytes);
+//			TXLen = wsprintf(Reply, "C10");
 			SendKISSData(conn, Reply, TXLen);
 
 			for (j=1; j <= conn->numChannels; j++)
@@ -902,7 +930,7 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 			
 				if (channel->Connected)
 				{
-					TXLen = wsprintf(Reply, "C00%c/V stream - CONNECTED to %s", j + '@', "SWITCH");
+					TXLen = wsprintf(Reply, "C10%c/V stream - CONNECTED to %s", j + '@', "SWITCH");
 					SendKISSData(conn, Reply, TXLen);
 				}
 //				else
@@ -912,46 +940,90 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 			return;
 		}
 
-		if (_memicmp(Command, "C ", 2) == 0)
+		if (_memicmp(Cmd, "C", CmdLen) == 0)
 		{
-			// Connect
+			int Port;
+			struct StreamInfo * channel;
+			int BPQStream;
+			UCHAR * MYCall;
+
+			// Connect. If command has a via string and first call is numeric use it as a port number
+
+			if (Arg2 && Arg3)	
+			{
+				if (_memicmp(Arg2, "via", strlen(Arg2)) == 0)
+				{
+					// Have a via string
+
+					Port = atoi(Arg3);
+					{
+						if (Port > 0)					// First Call is numeric
+						{
+							if (strlen(Context) > 0)	// More Digis
+								TXLen = wsprintf(TXBuff, "c %s %s v %s\r", Arg3, Arg1, Context);
+							else
+								TXLen = wsprintf(TXBuff, "c %s %s\r", Arg3, Arg1);
+						}
+						else
+						{
+							// First Call Isn't Numeric. This won't work, as Digis without a port is invalid
+							
+							SendKISSData(conn, "C10Invalid via String (First must be Port)", 42);
+							return;		
+
+						}
+					}
+				}
+			}
+			else
+			{
+				TXLen = wsprintf(TXBuff, "%s %s\r", Command, Arg1);
+			}
 
 			Reply[0] = 'C';
 			Reply[1] = Chan;
 			Reply[2] = Stream;
 			SendKISSData(conn, Reply, 3);
 
-			if (StreamNo > conn->numChannels) return;		// Protect
+			channel = conn->Channels[StreamNo];
+			BPQStream = channel->BPQStream;
+			MYCall = (PUCHAR)&channel->MYCall;
 
-			SessionControl(conn->Channels[StreamNo]->BPQPort, 1, 0);
+			Connect(BPQStream);
 
-			Command[Len-3] = 0xd;
-			SendMsg(conn->Channels[StreamNo]->BPQPort, Command, Len-2);
-
-			return;
+			if (MYCall[0] > 0)
+			{
+				ChangeSessionCallsign(BPQStream, EncodeCall(MYCall));
+				SendMsg(conn->Channels[StreamNo]->BPQStream, TXBuff, TXLen);
+				return;
+			}
 		}
 
-		if (_stricmp(Command, "D") == 0)
+		if (_stricmp(Cmd, "D") == 0)
 		{
 			// Disconnect
 
-			if (StreamNo > conn->numChannels) return;		// Protect
-
-			SessionControl(conn->Channels[StreamNo]->BPQPort, 2, 0);
+			SessionControl(conn->Channels[StreamNo]->BPQStream, 2, 0);
 
 			return;
 		}
 
-		if (_memicmp(Command, "INT", 3) == 0)
+		if (_memicmp(Cmd, "INT", 3) == 0)
 		{
-			SendKISSData(conn, "C00INTFACE HOST", 15);
+			SendKISSData(conn, "C10INTFACE HOST", 15);
 			return;
 		}
 
-		if (_stricmp(Command, "PACLEN") == 0)
+		if (_stricmp(Cmd, "PACLEN") == 0)
 		{
-			SendKISSData(conn, "C00PACLEN 128/128", 17);
+			SendKISSData(conn, "C10PACLEN 128/128", 17);
 			return;
+		}
+
+		if (_memicmp(Cmd, "MYCALL", CmdLen > 1 ? CmdLen : 2) == 0)
+		{
+			if (strlen(Arg1) < 30)
+				strcpy(conn->Channels[StreamNo]->MYCall, Arg1);
 		}
 
 		memcpy(Reply,CmdReply,3);
@@ -966,8 +1038,7 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 		if (StreamNo > conn->numChannels) return;		// Protect
 
 		TXLen = KissDecode(&rxbuffer[3], TXBuff, Len-3);
-
-		SendMsg(conn->Channels[StreamNo]->BPQPort, TXBuff, TXLen);
+		SendMsg(conn->Channels[StreamNo]->BPQStream, TXBuff, TXLen);
 
 		return;
 
@@ -1278,7 +1349,7 @@ int BPQSerialGetDTRRTS(HANDLE hDevice,ULONG * Flags)
 }
 
 
-BOOL InitBPQPort(int Port,int * Stream)
+BOOL InitBPQStream(int Port,int * Stream)
 {
 	int ret;
 		
@@ -1304,7 +1375,7 @@ BOOL InitBPQPort(int Port,int * Stream)
 
 }
 
-BOOL ReleaseBPQPort(int Stream)
+BOOL ReleaseBPQStream(int Stream)
 {	
 
 	if (Stream == 0) return FALSE;
@@ -1340,7 +1411,7 @@ int Connected(Stream)
 		{
 			channel = conn->Channels[j];
 
-			if (channel->BPQPort == Stream)
+			if (channel->BPQStream == Stream)
 			{
 				if (conn->InHostMode)
 				{
@@ -1382,7 +1453,7 @@ int Disconnected (Stream)
 		{
 			channel = conn->Channels[j];
 
-			if (channel->BPQPort == Stream)
+			if (channel->BPQStream == Stream)
 			{
 				if (conn->InHostMode)
 				{
@@ -1420,7 +1491,7 @@ int DoReceivedData(int Stream)
 		{
 			channel = conn->Channels[j];
 
-			if (channel->BPQPort == Stream)
+			if (channel->BPQStream == Stream)
 			{
 				do { 
 

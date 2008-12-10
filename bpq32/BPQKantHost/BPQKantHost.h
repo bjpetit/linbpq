@@ -16,7 +16,7 @@ struct ConnectionInfo
 	HANDLE hDevice;
 	BOOL Created;
 	BOOL PortEnabled;
-	struct StreamInfo * Channels[6];
+	struct StreamInfo * Channels[27];
 	int numChannels;
 	int ApplMask;
 
@@ -28,8 +28,9 @@ struct ConnectionInfo
 
 struct StreamInfo
 { 
-    int BPQPort;
+    int BPQStream;
 	BOOL Connected;					// Set if connected to Node
+	UCHAR MYCall[30];
 };
 
 typedef struct _SERIAL_STATUS {
@@ -41,3 +42,5 @@ typedef struct _SERIAL_STATUS {
     BOOLEAN WaitForImmediate;
 } SERIAL_STATUS,*PSERIAL_STATUS;
 
+#define Disconnect(stream) SessionControl(stream,2,0)
+#define Connect(stream) SessionControl(stream,1,0)
