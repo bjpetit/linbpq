@@ -90,7 +90,7 @@ Return Value:
 
     UNREFERENCED_PARAMETER (RegistryPath);
 
-    DebugPrint (("Entered Driver Entry yy\n"));
+    DebugPrint (("Entered Driver Entry zz\n"));
     
     //
     // Create dispatch points for the IRPs.
@@ -962,9 +962,23 @@ Return Value:
             case IOCTL_BPQHDLC_TIMER:
 
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-	//			DebugPrint (("Timer IOCTL %x \n", *pIOBuffer));
+//				DebugPrint (("Timer IOCTL %x \n", *pIOBuffer));
 
 				pIrp->IoStatus.Information = 0;		// Bytes Returned
+				Status = STATUS_SUCCESS;
+				break;
+
+
+            case IOCTL_BPQHDLC_CHECKTX:
+
+				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
+
+				DebugPrint (("CheckTX IOCTL %x \n", *pIOBuffer));
+				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
+
+				*(pIOBuffer) = 0;
+				
+				pIrp->IoStatus.Information = 4;		// Bytes Returned
 				Status = STATUS_SUCCESS;
 				break;
 
@@ -1989,6 +2003,10 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	PBUF_ENTRY Buffer;
 	int i, AddChannels;
 	ULONG Port;
+
+	DebugPrint(("InitChannel Interrupt %d IOBASE %x IOLEN %d Chan %c\n",
+		Params->Interrupt, Params->IOBASE, Params->IOLEN, Params->Channel));
+
 
 	// Check that IO address range and Interrupt are available
 
