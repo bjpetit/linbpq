@@ -645,6 +645,7 @@ VOID CALLBACK TimerProc(
 			memset(Screen, ' ', LINELEN*SCREENLEN);
 
 			WritetoConsole("Reconfiguring ...\n\n");
+			OutputDebugString("BPQ32 Reconfiguring ...\n");	
 
 			for (i=0;i<NUMBEROFPORTS;i++)
 			{
@@ -659,9 +660,16 @@ VOID CALLBACK TimerProc(
 			}
 
 			Sleep(2000);
-			START();
 
-			INITIALISEPORTS();			// Restart Ports
+			_asm{
+
+			pushad
+			call START
+
+			call INITIALISEPORTS			// Restart Ports
+
+			popad
+			}
 
 			for (i=1;i<66;i++)			// Include IP Vec
 			{
@@ -681,6 +689,7 @@ VOID CALLBACK TimerProc(
 			}
 
 			WritetoConsole("\n\nReconfiguration Complete\n");	
+			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
 	}
 
