@@ -31,6 +31,7 @@
 #include <windows.h>
 #include <windowsx.h>
 #include <winsock.h>
+#include <commctrl.h>
 
 // C RunTime Header Files
 #include <stdlib.h>
@@ -39,5 +40,6 @@
 #include <tchar.h>
 #include <stdio.h>
 #include <time.h>
+
 
 // TODO: reference additional headers your program requires here
