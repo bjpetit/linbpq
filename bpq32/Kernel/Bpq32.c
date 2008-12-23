@@ -115,7 +115,10 @@
 //				Delete Tray List entries for crashed processes
 //				Add Option to NODES command to sort by Callsign
 //				Add options to save or clear BPQNODES before Reconfig.
-
+//				Fix Reconfig in Win98
+//				Monitor buffering tweaks
+//				Fix Init for large (>64k) tables
+//				Fix Nodes count in Stats
 
 #define _CRT_SECURE_NO_DEPRECATE 
 
@@ -157,6 +160,7 @@
 
 
 extern short NUMBEROFPORTS;
+extern long NUMBEROFNODES;
 extern long PORTENTRYLEN;
 extern struct PORTCONTROL * PORTTABLE;
 
@@ -643,6 +647,8 @@ VOID CALLBACK TimerProc(
 
 			lineno=0;
 			memset(Screen, ' ', LINELEN*SCREENLEN);
+
+			SetupBPQDirectory();
 
 			WritetoConsole("Reconfiguring ...\n\n");
 			OutputDebugString("BPQ32 Reconfiguring ...\n");	
@@ -1240,10 +1246,12 @@ HANDLE OpenConfigFile(char *fn)
 {
 	HANDLE handle;
 	UCHAR Value[MAX_PATH];
+	FILETIME LastWriteTime;
+	SYSTEMTIME Time;
+	char Msg[256];
 
-	
+
 	// If no directory, use current
-
 	if (BPQDirectory[0] == 0)
 	{
 		strcpy(Value,fn);
@@ -1263,7 +1271,15 @@ HANDLE OpenConfigFile(char *fn)
 					FILE_ATTRIBUTE_NORMAL,
 					NULL);
 
-	
+	GetFileTime(handle, NULL, NULL, &LastWriteTime);
+	FileTimeToSystemTime(&LastWriteTime, &Time);
+
+	wsprintf(Msg,"BPQ32 Config File %s Created %.2d:%.2d %d/%.2d/%.2d\n", Value,
+				Time.wHour, Time.wMinute, Time.wYear, Time.wMonth, Time.wDay);
+
+	OutputDebugString(Msg);
+
+
 	return(handle);
 
 }
@@ -1617,9 +1633,9 @@ BOOL UpdateNodesForApp(int Appl)
 
 		mov DEST,EBX
 
-
 		}
 
+		NUMBEROFNODES++;
 		APPL->NODEPOINTER=DEST;
 		
 		memmove (DEST->DEST_CALL,APPL->APPLCALL,13);
