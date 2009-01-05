@@ -8,7 +8,7 @@ typedef struct VCOMStruct
    HANDLE  ComDev ;
    BYTE    Port;
    BOOL    Connected;
-   UCHAR	RXBUFFER[MAXBLOCK];			// Raw chars from Comms
+   UCHAR	RXBUFFER[MAXBLOCK];		// Raw chars from Comms
    UCHAR	RXMSG[512];				// Msg being built
    int		RXBCOUNT;				// chars in RXBUFFER
    UCHAR * RXBPTR;					// get pointer for RXBUFFER (put ptr is RXBCOUNT) 
@@ -34,3 +34,6 @@ PVCOMINFO VCOMInfo[16]={0};
 
 #define IOCTL_BPQ_ADD_DEVICE     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x809,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQ_DELETE_DEVICE  CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x80a,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define W98_SERIAL_GETDATA     0x801
+#define W98_SERIAL_SETDATA     0x802

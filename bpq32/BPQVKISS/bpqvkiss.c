@@ -23,6 +23,8 @@
 
 #include "windows.h"
 #include <stdio.h>
+#include <stdlib.h>
+
 //#include <process.h>
 //#include <time.h>
 
@@ -191,22 +193,37 @@ int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 	return txptr;
 
 }
-  
+ BOOL Win98 = FALSE;
+
 int	ASYINIT(int comport, int speed, int bpqport)
 {
    char       szPort[ 30 ];
    char buf[256];
    int n;
 
-   wsprintf( szPort, "\\\\.\\BPQ%d", comport ) ;
+   	if (HIBYTE(_winver) < 5)
+		Win98 = TRUE;
 
-   VCOMInfo[bpqport]->ComDev = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+	if (Win98)
+	{
+		VCOMInfo[bpqport]->ComDev = CreateFile( "\\\\.\\BPQVCOMM.VXD", GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
                   NULL,                 // no security attrs
                   OPEN_EXISTING,
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
-				  
+	}
+	else
+	{
+		wsprintf( szPort, "\\\\.\\BPQ%d", comport ) ;
+
+		VCOMInfo[bpqport]->ComDev = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+	}		  
 	if (VCOMInfo[bpqport]->ComDev == (HANDLE) -1 )
 	{
 		n=wsprintf(buf,"Virtual COM Port %d could not be opened ",comport);
@@ -370,36 +387,19 @@ BOOL NEAR DestroyTTYInfo( int port )
 
 } 
 
-BOOL NEAR OpenConnection(int bpqport)
-{            
-   char       szPort[ 30 ];
-
-   // load the COM prefix string and append port number
-   
-   wsprintf( szPort, "\\device\\BPQ%d", bpqport ) ;
-
-   VCOMInfo[bpqport]->ComDev = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
-                  0,                    // exclusive access
-                  NULL,                 // no security attrs
-                  OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
-                  NULL );
-				  
-	if (VCOMInfo[bpqport]->ComDev == (HANDLE) -1 )
-      return (FALSE) ;
-
-   return (TRUE) ;
-
-}
 
 int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
 {
 	DWORD      dwLength;
 	
 	dwLength = 0;
-	
-	DeviceIoControl(
-		pVCOMInfo->ComDev,IOCTL_SERIAL_GETDATA,NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
+
+	if (Win98)
+		DeviceIoControl(
+			pVCOMInfo->ComDev, (pVCOMInfo->Port << 16) |W98_SERIAL_GETDATA,NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
+	else
+		DeviceIoControl(
+			pVCOMInfo->ComDev,IOCTL_SERIAL_GETDATA,NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
 
    return ( dwLength ) ;
 
@@ -409,8 +409,12 @@ BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(
-		VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
+	if (Win98)
+		return DeviceIoControl(
+			VCOMInfo[port]->ComDev,(VCOMInfo[port]->Port << 16) | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(
+			VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
 
 }
 
