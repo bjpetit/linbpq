@@ -52,6 +52,11 @@
 //		Add IPGATEWAY Parameter
 //		Add Port DIGIMASK Parameter
 
+// December 2008
+
+//		Add C_IS_CHAT Parameter
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <stdio.h>
@@ -113,7 +118,7 @@ extern int __cdecl simple(int i);
 
 
 
-#define PARAMLIM 71
+#define PARAMLIM 72
 #define MAXLINE 250
 #define FILEVERSION 22
 
@@ -141,7 +146,7 @@ static char *keywords[] =
 "APPL5ALIAS", "APPL6ALIAS", "APPL7ALIAS", "APPL8ALIAS",
 "APPL1QUAL", "APPL2QUAL", "APPL3QUAL", "APPL4QUAL",
 "APPL5QUAL", "APPL6QUAL", "APPL7QUAL", "APPL8QUAL",
-"BTEXT:", "IPGATEWAY"
+"BTEXT:", "IPGATEWAY", "C_IS_CHAT"
 };           /* parameter keywords */
 
 static int offset[] =
@@ -160,7 +165,7 @@ static int offset[] =
 120,130,140,150,
 160,162,164,166,
 168,170,172,174,
-121, 112							// BTEXT was UNPROTO+1
+121, 112, 111							// BTEXT was UNPROTO+1
 };		/* offset for corresponding data in config file */
 
 static int routine[] = 
@@ -179,7 +184,7 @@ static int routine[] =
 13, 13 ,13, 13,
 14, 14, 14, 14,
 14, 14 ,14, 14,
-15, 2
+15, 2, 2
 } ;			// Routine to process param
 
 static char eof_message[] = "Unexpected end of file on input\n";
@@ -431,6 +436,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 	paramok[69]=1;			// BText optional
 	paramok[70]=1;			// IPGateway optional
+	paramok[71]=1;			// C_IS_CHAT optional
 
 	for (i=0; i < PARAMLIM; i++)
 	{
