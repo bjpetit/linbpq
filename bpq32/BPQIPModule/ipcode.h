@@ -3,9 +3,9 @@
 
 //extern struct PORTCONTROL * PORTTABLE;
 
+#define IDI_ICON2                       123
 
-
-unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
+unsigned long _beginthread( void *, unsigned stack_size, void * arglist);
 
 #define IOCTL_NETVMINI_READ_DATA \
     CTL_CODE (FILE_DEVICE_UNKNOWN, 0, METHOD_BUFFERED, FILE_READ_ACCESS)
@@ -33,7 +33,6 @@ typedef struct _IPMSG
 //       FORMAT OF IP HEADER
 //
 //       NOTE THESE FIELDS ARE STORED HI ORDER BYTE FIRST (NOT NORMAL 8086 FORMAT)
-//
 
 	UCHAR	VERLEN;          // 4 BITS VERSION, 4 BITS LENGTH
 	UCHAR	TOS;             // TYPE OF SERVICE
@@ -50,6 +49,28 @@ typedef struct _IPMSG
 
 } IPMSG, *PIPMSG;
 
+typedef struct _TCPMSG
+{
+
+//	FORMAT OF TCP HEADER WITHIN AN IP DATAGRAM
+
+//	NOTE THESE FIELDS ARE STORED HI ORDER BYTE FIRST (NOT NORMAL 8086 FORMAT)
+
+	USHORT	SOURCEPORT;
+	USHORT	DESTPORT;
+
+	ULONG	SEQNUM;
+	ULONG	ACKNUM;
+
+	UCHAR	TCPCONTROL;			// 4 BITS DATA OFFSET 4 RESERVED
+	UCHAR	TCPFLAGS;			// (2 RESERVED) URG ACK PSH RST SYN FIN
+
+	USHORT	WINDOW;
+	USHORT	CHECKSUM;
+	USHORT	URGPTR;
+
+
+} TCPMSG, *PTCPMSG;
 
 
 //		ICMP MESSAGE STRUCTURE
@@ -169,7 +190,27 @@ typedef struct _IPSTATS
 } IPSTATS, PIPSTATS;
 
 
+#define MAX_ENTRIES 128
+
+struct map_table_entry
+{
+	unsigned int sourceipaddr;
+	unsigned short sourceport;			// bytes to compare (6 or 7)
+	unsigned int mappedipaddr;
+	unsigned short mappedport;
+	unsigned char hostname[64];
+	unsigned int error;
+	BOOL ResolveFlag;			// True if need to resolve name
+};
+
+
+
+
 #pragma pack()
+
+HANDLE hInstance;
+
+//unsigned long _beginthread( void( *start_address )( void *), unsigned stack_size, char * arglist);
 
 Dll BOOL APIENTRY Init_IP();
 Dll BOOL APIENTRY Poll_IP();  
@@ -193,6 +234,8 @@ UINT SENDNETFRAME;
 VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
 VOID ReadARP();
 BOOL ProcessARPLine(char * buf);
+void ResolveNames(void *dummy);
+int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len);
 
 VOID SaveARP();
 VOID WriteARPLine(PARPDATA ArpRecord);

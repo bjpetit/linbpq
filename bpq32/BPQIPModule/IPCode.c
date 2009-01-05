@@ -68,6 +68,36 @@ int FramesDropped = 0;
 int ARPTimeouts = 0;
 int SecTimer = 10;
 
+BOOL NeedResolver = FALSE;
+
+int map_table_len=0;
+//int index=0;					// pointer for table search
+int ResolveIndex=-1;			// pointer to entry being resolved
+
+struct map_table_entry map_table[MAX_ENTRIES];
+
+struct tagMSG Msg;
+
+char buf[MAXGETHOSTSTRUCT];
+
+LOGFONT LFTTYFONT ;
+
+HFONT hFont ;
+
+time_t ltime,lasttime;
+
+char ConfigClassName[]="CONFIG";
+
+HWND hResWnd;
+
+BOOL MinimizetoTray=FALSE;
+
+int baseline=0;
+
+unsigned char  hostaddr[64];
+
+
+
 // Following two fields used by stats to get round shared memmory problem
 
 ARPDATA Arp={0};
@@ -121,9 +151,73 @@ char Dllname[6]="wpcap";
 
 FARPROCX GetAddress(char * Proc);
 
+HANDLE hInstance;
+
+char VersionString[100];
+
+BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
+{
+	hInstance=hInst;
+
+	switch( ul_reason_being_called )
+	{
+	case DLL_PROCESS_ATTACH:
+		
+//		AttachedProcesses++;
+		
+		return 1;
+   		
+	case DLL_THREAD_ATTACH:
+		
+		return 1;
+    
+	case DLL_THREAD_DETACH:
+	
+		return 1;
+    
+	case DLL_PROCESS_DETACH:
+			
+        	if (MinimizetoTray)
+			{
+				DeleteTrayMenuItem(hResWnd);
+			}
+
+
+	return 1;
+	}
+}
+
+
+
 Dll BOOL APIENTRY Init_IP()
 {
 	ARPDATA * ARPptr;
+	HRSRC RH;
+  	struct tagVS_FIXEDFILEINFO * HG;
+
+#ifdef _DEBUG 
+	char isDebug[]="Debug Build";
+#else
+	char isDebug[]="";
+#endif
+
+	HMODULE HM;
+
+	HM=GetModuleHandle("bpqipmodule.dll");
+
+	RH=FindResource(HM,MAKEINTRESOURCE(VS_VERSION_INFO),RT_VERSION);
+
+	HG=LoadResource(HM,RH);
+
+	(int)HG+=40;
+
+	sprintf(VersionString,"%d.%d.%d.%d %s",
+					HIWORD(HG->dwFileVersionMS),
+					LOWORD(HG->dwFileVersionMS),
+					HIWORD(HG->dwFileVersionLS),
+					LOWORD(HG->dwFileVersionLS),
+					isDebug);
+
 
 	GetAPI();
 
@@ -217,6 +311,12 @@ Dll BOOL APIENTRY Init_IP()
 	}
 
 	ReadARP();
+
+	MinimizetoTray=GetMinimizetoTrayFlag();
+
+	if (NeedResolver)
+		_beginthread(ResolveNames, 0, NULL );
+
 
 	WritetoConsole("\nIP Support Enabled\n");
 
@@ -809,6 +909,8 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 	ULONG Dest;
 	PARPDATA Arp;
 	BOOL Found;
+	int index, Len;
+	PTCPMSG TCPptr;
 
 	if (IPptr->VERLEN != 0x45) return; //Only support Type = 4, Len = 20
 
@@ -861,7 +963,48 @@ ForUs:
 		ProcessICMPMsg(IPptr);
 		return;
 	}
+
+	// See if for a mapped Address
+
+	if (IPptr->IPPROTOCOL != 6) return; // Only TCP
+
+	TCPptr = (PTCPMSG)&IPptr->Data;
+
+	Len = ntohs(IPptr->IPLENGTH);
+	Len-=20;
+
+
+
+	for (index=0; index < map_table_len; index++)
+	{
+		if ((map_table[index].sourceport == TCPptr->DESTPORT) &&
+			map_table[index].sourceipaddr == IPptr->IPSOURCE)
+		{
+			//	Outgoing Message - replace Dest IP address and Port. Source Port remains unchanged
+
+			IPptr->IPSOURCE = OurIPAddr;
+			IPptr->IPDEST = map_table[index].mappedipaddr;
+			TCPptr->DESTPORT = map_table[index].mappedport;
+			CheckSumAndSend(IPptr, TCPptr, Len);
+			return;
+		}
+
+		if ((map_table[index].mappedport == TCPptr->SOURCEPORT) &&
+			map_table[index].mappedipaddr == IPptr->IPSOURCE)
+		{
+			//	Incomming Message - replace Dest IP address and Source Port
+
+			IPptr->IPSOURCE = OurIPAddr;
+			IPptr->IPDEST = map_table[index].sourceipaddr;
+			TCPptr->SOURCEPORT = map_table[index].sourceport;
+			CheckSumAndSend(IPptr, TCPptr, Len);
+			return;
+		}
+
+	}
 }
+
+
 
 BOOL CheckIPChecksum(PIPMSG IPptr)
 {
@@ -1172,6 +1315,9 @@ BOOL ReadConfigFile()
 // IPGateway 192.168.0.1
 // IPPorts 1,4 
 
+// MAP 192.168.0.100 1001 n9pmo.dyndns.org 1000
+
+
 	FILE *file;
 	char buf[256],errbuf[256];
 	
@@ -1204,8 +1350,8 @@ BOOL ReadConfigFile()
 
 ProcessLine(char * buf)
 {
-	PCHAR ptr, p_value, p_port;
-	int i;
+	PCHAR ptr, p_value, p_origport, p_host, p_port;
+	int i, port, mappedport, ipad;
 
 	ptr = strtok(buf, " \t\n\r");
 	p_value = strtok(NULL, " \t\n\r");
@@ -1263,6 +1409,38 @@ ProcessLine(char * buf)
 			IPPortMask |= 1 << (i-1);
 			p_port = strtok(NULL, " ,\t\n\r");
 		}
+		return (TRUE);
+	}
+
+	if (_stricmp(ptr,"MAP") == 0)
+	{
+		if (!p_value) return FALSE;
+
+		p_origport = strtok(NULL, " ,\t\n\r");
+		if (!p_origport) return FALSE;
+
+		p_host = strtok(NULL, " ,\t\n\r");
+		if (!p_host) return FALSE;
+
+		p_port = strtok(NULL, " ,\t\n\r");
+		if (!p_port) return FALSE;
+
+		port=atoi(p_origport);
+		if (port == 0) return FALSE;
+
+		mappedport=atoi(p_port);
+		if (mappedport == 0) return FALSE;
+
+		ipad = inet_addr(p_value);
+
+		map_table[map_table_len].sourceipaddr = ipad;
+		strcpy(map_table[map_table_len].hostname, p_host);
+		map_table[map_table_len].sourceport = ntohs(port);
+		map_table[map_table_len++].mappedport = ntohs(mappedport);
+	
+		NeedResolver = TRUE;
+
+
 		return (TRUE);
 	}
 	
@@ -1604,3 +1782,398 @@ VOID WriteARPLine(PARPDATA ARPRecord)
 }
 
 
+LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int wmId, wmEvent;
+	PAINTSTRUCT ps;
+	HDC hdc;
+	HFONT    hOldFont ;
+	struct hostent * hostptr;
+	struct in_addr ipad;
+	char line[100];
+	int index,displayline;
+
+	int i=1;
+
+	int nScrollCode,nPos;
+
+	switch (message) { 
+
+	case WM_USER+99:
+
+		i=WSAGETASYNCERROR(lParam);
+
+		map_table[ResolveIndex].error=i;
+
+		if (i ==0)
+		{
+			// resolved ok
+
+			hostptr=(struct hostent *)&buf;
+			memcpy(&map_table[ResolveIndex].mappedipaddr,hostptr->h_addr,4);
+		}
+
+  		InvalidateRect(hWnd,NULL,FALSE);
+
+		while (ResolveIndex < map_table_len)
+		{
+			ResolveIndex++;
+			
+			WSAAsyncGetHostByName (hWnd,WM_USER+99,
+						map_table[ResolveIndex].hostname,
+						buf,MAXGETHOSTSTRUCT);	
+			
+			break;
+		}
+		break;
+
+
+	case WM_COMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+
+/*
+		if (wmId == BPQREREAD)
+		{
+			CloseSockets();
+			ReadConfigFile("BPQAXIP.CFG");
+			_beginthread(OpenSockets, 0, NULL );
+			PostMessage(hResWnd, WM_TIMER,0,0);
+			InvalidateRect(hWnd,NULL,TRUE);
+
+
+			return 0;
+		}
+
+		if (wmId == BPQADDARP)
+		{
+			if (ConfigWnd == 0)
+			{		
+				ConfigWnd=CreateDialog(hInstance,ConfigClassName,0,NULL);
+    
+				if (!ConfigWnd)
+				{
+					i=GetLastError();
+					return (FALSE);
+				}
+				ShowWindow(ConfigWnd, SW_SHOW);  
+				UpdateWindow(ConfigWnd); 
+  			}
+
+			SetForegroundWindow(ConfigWnd);
+
+			return(0);
+		}
+		return 0;
+*/
+	case WM_SYSCOMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		switch (wmId) { 
+
+			case  SC_MINIMIZE: 
+
+				if (MinimizetoTray)
+
+					return ShowWindow(hWnd, SW_HIDE);
+				else
+					return (DefWindowProc(hWnd, message, wParam, lParam));
+					
+				break;
+		
+			default:
+		
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+		}
+
+
+	case WM_VSCROLL:
+		
+		nScrollCode = (int) LOWORD(wParam); // scroll bar value 
+		nPos = (short int) HIWORD(wParam);  // scroll box position 
+
+		//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
+
+		if (nScrollCode == SB_LINEUP || nScrollCode == SB_PAGEUP)
+		{
+			baseline--;
+			if (baseline <0)
+				baseline=0;
+		}
+
+		if (nScrollCode == SB_LINEDOWN || nScrollCode == SB_PAGEDOWN)
+		{
+			baseline++;
+			if (baseline > map_table_len)
+				baseline = map_table_len;
+		}
+
+		if (nScrollCode == SB_THUMBTRACK)
+		{
+			baseline=nPos;
+		}
+
+		SetScrollPos(hWnd,SB_VERT,baseline,TRUE);
+
+		InvalidateRect(hWnd,NULL,TRUE);
+		break;
+
+
+	case WM_PAINT:
+
+		hdc = BeginPaint (hWnd, &ps);
+		
+		hOldFont = SelectObject( hdc, hFont) ;
+			
+		index = baseline;
+		displayline=0;
+
+		while (index < map_table_len)
+		{
+			if (map_table[index].ResolveFlag && map_table[index].error != 0)
+			{
+					// resolver error - Display Error Code
+				wsprintf(hostaddr,"Error %d",map_table[index].error);
+			}
+			else
+			{
+				memcpy(&ipad,&map_table[index].mappedipaddr,4);
+				strncpy(hostaddr,inet_ntoa(ipad),16);
+			}
+				
+			memcpy(&ipad,&map_table[index].mappedipaddr,4);
+								
+			i=wsprintf(line,"%.64s = %-.30s",
+				map_table[index].hostname,
+				hostaddr);
+
+			TextOut(hdc,0,(displayline++)*14+2,line,i);
+
+			index++;
+		}
+
+		SelectObject( hdc, hOldFont ) ;
+		EndPaint (hWnd, &ps);
+	
+		break;        
+
+	case WM_DESTROY:
+		
+       	if (MinimizetoTray)
+			DeleteTrayMenuItem(hWnd);
+
+		PostQuitMessage(0);
+			
+		break;
+
+
+	case WM_TIMER:
+			
+		for (ResolveIndex=0; ResolveIndex < map_table_len; ResolveIndex++)
+		{	
+			WSAAsyncGetHostByName (hWnd,WM_USER+99,
+						map_table[ResolveIndex].hostname,
+						buf,MAXGETHOSTSTRUCT);
+			break;
+			
+		}
+
+
+		default:
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+
+	}
+	return (0);
+}
+
+void ResolveNames( void *dummy )
+{
+    int Windowlength, WindowParam;
+	WNDCLASS  wc;
+	int i;
+	char WindowTitle[100];
+//	HMENU hMenu,hPopMenu;
+
+	// Fill in window class structure with parameters that describe
+    // the main window.
+
+        wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
+        wc.lpfnWndProc   = (WNDPROC)ResWndProc;
+        wc.cbClsExtra    = 0;
+        wc.cbWndExtra    = 0;
+        wc.hInstance     = hInstance;
+        wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(IDI_ICON2));
+        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+		wc.lpszMenuName =  NULL ;
+        wc.lpszClassName = "AppName";
+
+        // Register the window classes
+
+		RegisterClass(&wc);
+
+		i=GetLastError();
+ 
+	if (map_table_len > 10 )
+	{
+		Windowlength=10*14+60;
+		WindowParam=WS_OVERLAPPEDWINDOW | WS_VSCROLL;
+	}
+	else
+	{
+		Windowlength=(map_table_len)*14+60;
+		WindowParam=WS_OVERLAPPEDWINDOW ;
+	}
+
+	sprintf(WindowTitle,"IP Gateway Resolver Version %s", VersionString);
+
+	hResWnd = CreateWindow("AppName",WindowTitle,
+		WindowParam,
+		CW_USEDEFAULT, 0, 500, Windowlength,
+		NULL, NULL, hInstance, NULL);
+
+		i=GetLastError();
+
+	/*
+	hMenu=CreateMenu();
+	hPopMenu=CreatePopupMenu();
+	SetMenu(hResWnd,hMenu);
+
+	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Update");
+
+	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"ReRead AXIP.cfg");
+	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Add Entry");
+
+	DrawMenuBar(hResWnd);	
+
+*/
+	LFTTYFONT.lfHeight =			12;
+    LFTTYFONT.lfWidth =          8 ;
+    LFTTYFONT.lfEscapement =     0 ;
+    LFTTYFONT.lfOrientation =    0 ;
+    LFTTYFONT.lfWeight =         0 ;
+    LFTTYFONT.lfItalic =         0 ;
+    LFTTYFONT.lfUnderline =      0 ;
+    LFTTYFONT.lfStrikeOut =      0 ;
+    LFTTYFONT.lfCharSet =        OEM_CHARSET ;
+    LFTTYFONT.lfOutPrecision =   OUT_DEFAULT_PRECIS ;
+    LFTTYFONT.lfClipPrecision =  CLIP_DEFAULT_PRECIS ;
+    LFTTYFONT.lfQuality =        DEFAULT_QUALITY ;
+    LFTTYFONT.lfPitchAndFamily = FIXED_PITCH | FF_MODERN ;
+    lstrcpy( LFTTYFONT.lfFaceName, "Fixedsys" ) ;
+
+	hFont = CreateFontIndirect(&LFTTYFONT) ;
+
+  	if (map_table_len > 10 )
+		SetScrollRange(hResWnd,SB_VERT,0,map_table_len-10,TRUE);
+
+	if (MinimizetoTray)
+	{
+		//	Set up Tray ICON
+		AddTrayMenuItem(hResWnd, "IP Gateway Resolver");
+	}
+
+	ShowWindow(hResWnd,SW_RESTORE);
+
+	SetTimer(hResWnd,1,15*60*1000,0);	
+
+	PostMessage(hResWnd, WM_TIMER,0,0);
+
+	while (GetMessage(&Msg, NULL, 0, 0)) 
+	{
+			TranslateMessage(&Msg);
+			DispatchMessage(&Msg);
+	}		
+
+}
+/*
+;	DO PSEUDO HEADER FIRST
+;
+	MOV	DX,600H			; PROTOCOL (REVERSED)
+	MOV	AX,TCPLENGTH		; TCP LENGTH
+	XCHG	AH,AL
+	ADD	DX,AX
+	MOV	AX,WORD PTR LOCALADDR[BX]
+	ADC	DX,AX
+	MOV	AX,WORD PTR LOCALADDR+2[BX]
+	ADC	DX,AX
+	MOV	AX,WORD PTR REMOTEADDR[BX]
+	ADC	DX,AX
+	MOV	AX,WORD PTR REMOTEADDR+2[BX]
+	ADC	DX,AX
+	ADC	DX,0
+
+	MOV	PHSUM,DX
+
+	PUSH	BX
+
+	MOV	BX,TXBUFFER		; HEADER
+
+	MOV	CX,TCPLENGTH		; PUT LENGTH INTO HEADER
+	MOV	BUFFLEN[BX],CX
+;
+	MOV	SI,BUFFPTR[BX]
+
+	INC	CX			; ROUND UP
+	SHR	CX,1			; WORD COUNT
+
+	CALL	DO_CHECKSUM
+
+	ADD	DX,PHSUM
+	ADC	DX,0
+	NOT	DX
+
+	MOV	SI,BUFFPTR[BX]
+	MOV	CHECKSUM[SI],DX
+
+
+*/
+
+int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len)
+{
+	USHORT PHSUM;
+		
+	IPptr->IPCHECKSUM = 0;
+
+
+	_asm{
+
+	mov	esi,TCPmsg
+	movzx eax,Len
+	add esi,eax
+	mov byte ptr[esi],0
+
+	mov	esi,IPptr
+
+	MOV	DX,600H			; PROTOCOL (REVERSED)
+	MOV	AX,Len		; TCP LENGTH
+	XCHG	AH,AL
+	ADD	DX,AX
+	MOV	AX,12[esi]
+	ADC	DX,AX
+	MOV	AX,14[esi]
+	ADC	DX,AX
+	MOV	AX,16[esi]
+	ADC	DX,AX
+	MOV	AX,18[esi]
+	ADC	DX,AX
+	ADC	DX,0
+
+	MOV	PHSUM,DX
+
+	}
+
+	TCPmsg->CHECKSUM = PHSUM;
+
+	TCPmsg->CHECKSUM = Generate_CHECKSUM(TCPmsg, Len);
+
+	// CHECKSUM IT
+
+	IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
+	RouteIPMsg(IPptr);
+	return 0;
+}
