@@ -315,7 +315,9 @@ VxD_ICODE_SEG
 
 BeginProc VXD_Device_Init
 
-	    clc                             ;no error - load VxD 
+	    Debug_Printf	"BPQHDLC Device Init\n"
+	    
+		clc                             ;no error - load VxD 
         ret
 
 EndProc VXD_Device_Init
@@ -398,19 +400,25 @@ VWIN32_DIOC_CLOSEHANDLE	EQU	<DIOC_CLOSEHANDLE>
 BeginProc VXD_IOCONTROL
 
         mov     EAX,dwIoControlCode[ESI]
+
+		pushad
+	    Debug_Printf	"BPQHDLC IOCTL %x\n", eax
+		popad
+
+        mov     EAX,dwIoControlCode[ESI]
 		cmp		EAX,VWIN32_DIOC_GETVERSION
 		je		getvers
 
-		cmp		EAX,'T'
-		jne short nottimer
+;		cmp		EAX,'T'
+;		jne short nottimer
 
-		push	ESI
+;		push	ESI
 
-		mov		EBX,lpvInBuffer[ESI]	; port table
+;		mov		EBX,lpvInBuffer[ESI]	; port table
 
-		call	HDLCTIMER
+;		call	HDLCTIMER
 
-		pop		ESI
+;		pop		ESI
 
 		xor		eax,eax
 
@@ -425,8 +433,8 @@ nottimer:
 		cmp		EAX,'G'
 		je short getdata
 
-		cmp		EAX,'I'
-		je		INITPORT
+;		cmp		EAX,'I'
+;		je		INITPORT
 		
 		jmp		skip					; Unknown
 senddata:
@@ -1617,6 +1625,8 @@ EndProc BPQVXD_Control
 
 BeginProc VXD_INIT
 
+	Debug_Printf	"BPQHDLC Dynamic Device Init\n"
+
 	clc
 	ret
 
@@ -1624,6 +1634,14 @@ BeginProc VXD_INIT
 EndProc VXD_INIT
        
 BeginProc VXD_EXIT
+
+	Debug_Printf	"BPQHDLC Dynamic Device Exit\n"
+
+
+	clc
+	ret
+
+
 
 	MOV	ebx,PORTTABLE
 	MOV	ecx,NUMBEROFPORTS
