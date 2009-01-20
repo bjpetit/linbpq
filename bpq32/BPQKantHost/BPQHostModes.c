@@ -506,15 +506,8 @@ BOOL Initialise()
 	
 	cfgMinToTray = GetMinimizetoTrayFlag();
 
-	// Make Sure BPQVCOM is available
-	
-	hControl = BPQOpenSerialControl(&Errorval);
-
-	if (hControl == (HANDLE) -1)
-	{
-		MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed","",0);
-		return FALSE;
-	}
+	if (HIBYTE(_winver) < 5)
+		Win98 = TRUE;
 
 	// Get config from Registry 
 
@@ -572,6 +565,22 @@ BOOL Initialise()
 
 	RegCloseKey(hKey);
 
+	// If running Win98 must open COM Device before opening the /vxd. Don't know why
+
+	// Make Sure BPQVCOM is available
+	
+	if (!Win98)
+	{
+
+		hControl = BPQOpenSerialControl(&Errorval);
+
+		if (hControl == (HANDLE) -1)
+		{
+			MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed","",0);
+			return FALSE;
+		}
+	}
+
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		CreateDialogLine(i);
@@ -628,6 +637,17 @@ BOOL Initialise()
 		else
 			wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
 
+	}
+
+	if (Win98)
+	{
+		hControl = BPQOpenSerialControl(&Errorval);
+
+		if (hControl == (HANDLE) -1)
+		{
+			MessageBox (MainWnd, "BPQVCOMm.vxd Driver Open Failed","",0);
+			return FALSE;
+		}
 	}
 
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
@@ -1507,9 +1527,6 @@ HANDLE BPQOpenSerialControl(ULONG * lasterror)
 
 	*lasterror=0;
 
-	if (HIBYTE(_winver) < 5)
-		Win98 = TRUE;
-
 	if (Win98)
 	{
 		hDevice = CreateFile( "\\\\.\\BPQVCOMM.VXD", GENERIC_READ | GENERIC_WRITE,
@@ -1553,15 +1570,40 @@ int BPQSerialDeleteDevice(HANDLE hDevice,ULONG * port,ULONG * result)
 
 HANDLE BPQOpenSerialPort( int port,DWORD * lasterror)
 {            
-	char szPort[ 15 ];
+	char szPort[15];
 	HANDLE hDevice;
 
+	*lasterror=0;
+
 	if (Win98)
+	{
+		wsprintf( szPort, "\\\\.\\COM%d",port) ;
+
+		hDevice = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+				  
+		if (hDevice == (HANDLE) -1 )
+		{
+			// If In Use(5) ok, else fail
+
+			if (GetLastError() == 5)
+				return (HANDLE)(port<<16);			// Port Number is a pseudohandle to the device
+
+			return (HANDLE) -1;
+		}
+
+		CloseHandle(hDevice);
+
 		return (HANDLE)(port<<16);			// Port Number is a pseudohandle to the device
+	}
+
 
   // load the COM prefix string and append port number
    
-	*lasterror=0;
 	
 	wsprintf( szPort, "\\\\.\\BPQ%d",port) ;
 
