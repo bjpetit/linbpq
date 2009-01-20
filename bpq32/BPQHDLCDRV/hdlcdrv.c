@@ -90,7 +90,7 @@ Return Value:
 
     UNREFERENCED_PARAMETER (RegistryPath);
 
-    DebugPrint (("Entered Driver Entry zz\n"));
+    DebugPrint (("BPQHDLC: Entered Driver Entry\n"));
     
     //
     // Create dispatch points for the IRPs.
@@ -150,7 +150,7 @@ Return Value:
 
     PAGED_CODE();
 
-    DebugPrint(("Entered AddDevice: %p\n", PhysicalDeviceObject));
+    DebugPrint(("BPQHDLC: Entered AddDevice: %p\n", PhysicalDeviceObject));
 
     RtlInitUnicodeString(&ntDeviceName, GPD_DEVICE_NAME);
 
@@ -178,7 +178,7 @@ Return Value:
         // deviceobject with the same name exits. This could happen
         // if you install another instance of this device.
         //
-        DebugPrint(("IoCreateDevice failed: %x\n", status));
+        DebugPrint(("BPQHDLC: IoCreateDevice failed: %x\n", status));
         return status;
     }
 
@@ -239,7 +239,7 @@ Return Value:
     // to specify the preferred buffering method for the I/O.
     // deviceObject->Flags |= DO_BUFFERED_IO;
 
-    DebugPrint(("AddDevice: %p to %p->%p \n", deviceObject, 
+    DebugPrint(("BPQHDLC: AddDevice: %p to %p->%p \n", deviceObject, 
                        deviceInfo->NextLowerDriver,
                        PhysicalDeviceObject));
 
@@ -337,7 +337,7 @@ Return Value:
         return status;
     }
 
-    DebugPrint(("%s\n",PnPMinorFunctionString(irpStack->MinorFunction)));
+    DebugPrint(("BPQHDLC: PNP Dispatch %s\n",PnPMinorFunctionString(irpStack->MinorFunction)));
 
     switch (irpStack->MinorFunction) {
     case IRP_MN_START_DEVICE:
@@ -478,7 +478,7 @@ Return Value:
         //
         // Wait for all outstanding requests to complete
         //
-        DebugPrint(("Waiting for outstanding requests\n"));
+        DebugPrint(("BPQHDLC: Waiting for outstanding requests\n"));
         IoReleaseRemoveLockAndWait(&deviceInfo->RemoveLock, Irp);
 
         Irp->IoStatus.Status = STATUS_SUCCESS;
@@ -631,11 +631,11 @@ Return Value:
                 deviceInfo->PortBase = ULongToPtr(resourceTrans->u.Port.Start.LowPart);
                 deviceInfo->PortCount       = resourceTrans->u.Port.Length;
 
-                DebugPrint(("Resource UnTranslated Port: (%x) Length: (%d)\n", 
+                DebugPrint(("BPQHDLC: Resource UnTranslated Port: (%x) Length: (%d)\n", 
                     resource->u.Port.Start.LowPart, 
                     resource->u.Port.Length));
 
-                DebugPrint(("Resource Translated Port: (%x) Length: (%d)\n", 
+                DebugPrint(("BPQHDLC: Resource Translated Port: (%x) Length: (%d)\n", 
                     resourceTrans->u.Port.Start.LowPart, 
                     resourceTrans->u.Port.Length));
 
@@ -662,7 +662,7 @@ Return Value:
                 deviceInfo->PortCount = resourceTrans->u.Memory.Length;
                 deviceInfo->PortWasMapped = TRUE;
 
-                DebugPrint(("Resource Translated Memory: (%x) Length: (%d)\n", 
+                DebugPrint(("BPQHDLC: Resource Translated Memory: (%x) Length: (%d)\n", 
                     resourceTrans->u.Memory.Start.LowPart, 
                     resourceTrans->u.Memory.Length));
 
@@ -670,9 +670,8 @@ Return Value:
 
 
             default:
-                DebugPrint(("Unhandled resource_type (0x%x)\n", resourceTrans->Type));
+                DebugPrint(("BPQHDLC: Unhandled resource_type (0x%x)\n", resourceTrans->Type));
                 status = STATUS_UNSUCCESSFUL;
-                ASSERTMSG("Unhandled resource_type in start request\n", FALSE);
             }             
             break;
 
@@ -686,7 +685,7 @@ Return Value:
             deviceInfo->PortCount = resourceTrans->u.Memory.Length;
             deviceInfo->PortWasMapped = TRUE;
 
-            DebugPrint(("Resource Translated Memory: (%x) Length: (%d)\n", 
+            DebugPrint(("BPQHDLC: Resource Translated Memory: (%x) Length: (%d)\n", 
                 resourceTrans->u.Memory.Start.LowPart, 
                 resourceTrans->u.Memory.Length));
 
@@ -696,23 +695,23 @@ Return Value:
 
 			AllocatedInterrupts |= (1 << resource->u.Interrupt.Vector);
 
-			DebugPrint(("Resource Untranslated Vector %d Level %d Aff %d\n", 
+			DebugPrint(("BPQHDLC: Resource Untranslated Vector %d Level %d Aff %d\n", 
                     resource->u.Interrupt.Vector,
                     resource->u.Interrupt.Level,
 					resource->u.Interrupt.Affinity));
 
-			DebugPrint(("Resource Translated Vector %d Level %d Aff %d\n", 
+			DebugPrint(("BPQHDLC: Resource Translated Vector %d Level %d Aff %d\n", 
                     resourceTrans->u.Interrupt.Vector,
                     resourceTrans->u.Interrupt.Level,
 					resourceTrans->u.Interrupt.Affinity));
 
-			DebugPrint(("Avail Interrupts %x\n", AllocatedInterrupts));
+			DebugPrint(("BPQHDLC: Avail Interrupts %x\n", AllocatedInterrupts));
 
 			break;
 
         default:
 
-            DebugPrint(("Unhandled resource type (0x%x)\n", resource->Type));
+            DebugPrint(("BPQHDLC: Unhandled resource type (0x%x)\n", resource->Type));
             status = STATUS_UNSUCCESSFUL;
             break;
     
@@ -849,7 +848,7 @@ Return Value:
     //
     ASSERT(DriverObject->DeviceObject == NULL);
     
-    DebugPrint (("unload\n"));
+    DebugPrint (("BPQHDLC: Unload\n"));
 
     return;
 }
@@ -908,7 +907,7 @@ Return Value:
     {
         case IRP_MJ_CREATE:
 
-			DebugPrint (("Entered Create %x \n", pIrpStack->MinorFunction));
+			DebugPrint (("BPQHDLC: Entered Create %x \n", pIrpStack->MinorFunction));
 
 			AllocatedChannels=0;
 
@@ -919,7 +918,7 @@ Return Value:
 
          case IRP_MJ_CLOSE:
 
-			DebugPrint (("Entered Close %x \n", pIrpStack->MinorFunction));
+			DebugPrint (("BPQHDLC: Entered Close %x \n", pIrpStack->MinorFunction));
 			ReleaseResources(pLDI);
             Status = STATUS_SUCCESS;
             break;
@@ -951,7 +950,7 @@ Return Value:
 		
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
-	//			DebugPrint (("Poll IOCTL %x \n", *pIOBuffer));
+	//			DebugPrint (("BPQHDLC: Poll IOCTL %x \n", *pIOBuffer));
 
 				pIrp->IoStatus.Information = 
 					ReceivePacket((PHDLC_CHANNEL)*pIOBuffer, (PUCHAR) pIOBuffer, pLDI);
@@ -962,7 +961,7 @@ Return Value:
             case IOCTL_BPQHDLC_TIMER:
 
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-//				DebugPrint (("Timer IOCTL %x \n", *pIOBuffer));
+//				DebugPrint (("BPQHDLC: Timer IOCTL %x \n", *pIOBuffer));
 
 				pIrp->IoStatus.Information = 0;		// Bytes Returned
 				Status = STATUS_SUCCESS;
@@ -973,7 +972,7 @@ Return Value:
 
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
-				DebugPrint (("CheckTX IOCTL %x \n", *pIOBuffer));
+//				DebugPrint (("BPQHDLC: CheckTX IOCTL %x \n", *pIOBuffer));
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
 				*(pIOBuffer) = 0;
@@ -987,7 +986,7 @@ Return Value:
 			
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
-				DebugPrint (("Send IOCTL %x \n", *pIOBuffer));
+//				DebugPrint (("BPQHDLC: Send IOCTL %x \n", *pIOBuffer));
 
 				SendPacket((PHDLC_CHANNEL)*pIOBuffer, (PUCHAR) pIOBuffer, pLDI);
 	            Status = STATUS_SUCCESS;
@@ -1007,15 +1006,15 @@ Return Value:
 			
             default:  
 			
-				DebugPrint (("Invalid IOCTL %x \n", pIrpStack->Parameters.DeviceIoControl.IoControlCode));
+				DebugPrint (("BPQHDLC: Invalid IOCTL %x \n", pIrpStack->Parameters.DeviceIoControl.IoControlCode));
                 Status = STATUS_INVALID_PARAMETER;
 
             }
             break;
+
         default: 
 			    
-			DebugPrint (("Invalid Function\n"));
-
+			DebugPrint (("BPQHDLC: Invalid Function %d\n", pIrpStack->MajorFunction));
             Status = STATUS_NOT_IMPLEMENTED;
             break;
     }
@@ -2004,7 +2003,7 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	int i, AddChannels;
 	ULONG Port;
 
-	DebugPrint(("InitChannel Interrupt %d IOBASE %x IOLEN %d Chan %c\n",
+	DebugPrint(("BPQHDLC: InitChannel Interrupt %d IOBASE %x IOLEN %d Chan %c\n",
 		Params->Interrupt, Params->IOBASE, Params->IOLEN, Params->Channel));
 
 
@@ -2012,7 +2011,7 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 
 	if ((AllocatedInterrupts & (1 << Params->Interrupt)) == 0)
 	{
-		DebugPrint(("InitChannel Interrupt %d not allocated\n", Params->Interrupt));
+		DebugPrint(("BPQHDLC: InitChannel Interrupt %d not allocated\n", Params->Interrupt));
 		return 0;
 	}
 				
@@ -2020,7 +2019,7 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	{
 		if ((AllocatedPorts[(Port & 0x3ff) >> 5] & (1 << (Port & 0x1f))) == 0)
 		{
-			DebugPrint(("InitChannel Port %x not allocated\n", Port));
+			DebugPrint(("BPQHDLC: InitChannel Port %x not allocated\n", Port));
 			return 0;
 		}
 	}
@@ -2029,11 +2028,11 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 
 	if (Channel == NULL)
 	{
-        DebugPrint(("Unable to allocate memory for Channel Structure\n"));
+        DebugPrint(("BPQHDLC: Unable to allocate memory for Channel Structure\n"));
 		return Channel;
 	}
 	
-	DebugPrint(("Channel Structure allocated at %x Len %d\n", Channel, sizeof(HDLC_CHANNEL)));
+	DebugPrint(("BPQHDLC: Channel Structure allocated at %x Len %d\n", Channel, sizeof(HDLC_CHANNEL)));
 
 	ChannelPointers[AllocatedChannels++] = Channel;	
 
@@ -2063,7 +2062,7 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	for (i = 0; i < AddChannels; i++)
 	{
 		Buffer = ExAllocatePool(NonPagedPool, sizeof(BUF_ENTRY));
-		DebugPrint(("Buffer allocated at %x Len %d\n", Buffer, sizeof(BUF_ENTRY)));
+		DebugPrint(("BPQHDLC: Buffer allocated at %x Len %d\n", Buffer, sizeof(BUF_ENTRY)));
 		if (Buffer) PushBUFEntry(&deviceInfo->FREE_Q, Buffer, deviceInfo);
 	}
 
@@ -2080,14 +2079,14 @@ VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo)
 	for (i=0; i< AllocatedChannels; i++)
 	{
 		ExFreePool(ChannelPointers[i]);
-		DebugPrint(("Releasing Channel Structure allocated at %x\n", ChannelPointers[i]));
+		DebugPrint(("BPQHDLC: Releasing Channel Structure allocated at %x\n", ChannelPointers[i]));
 		ChannelPointers[i] = NULL;
 	}
 
 	while (!IsListEmpty(&deviceInfo->FREE_Q))
 	{
 		Buffer = PopBUFEntry(&deviceInfo->FREE_Q, deviceInfo);
-		DebugPrint(("Releasing Buffer allocated at %x\n", Buffer));
+		DebugPrint(("BPQHDLC: Releasing Buffer allocated at %x\n", Buffer));
 		ExFreePool(Buffer);
 	}
 }
@@ -2099,13 +2098,13 @@ VOID SendPacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceInf
 
 	Len = (Msg[6]<<8) + Msg[5];
 
-	DebugPrint(("Sending Msg Len %d to %x Chan %c\n", Len, Channel->IOBASE, Channel->CHANNELNUM));
+	DebugPrint(("BPQHDLC: Sending Msg Len %d to %x Chan %c\n", Len, Channel->IOBASE, Channel->CHANNELNUM));
 
 	if (Len > BUFFLEN) return;
 
 	if (IsListEmpty(&deviceInfo->FREE_Q)) Buffer = NULL; else Buffer = PopBUFEntry(&deviceInfo->FREE_Q, deviceInfo);
 
-	DebugPrint(("Sending  - Buffer %x\n", Buffer));
+//	DebugPrint(("BPQHDLC: Sending  - Buffer %x\n", Buffer));
 
 	if (Buffer == NULL)
 	{
@@ -2138,7 +2137,7 @@ int ReceivePacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceI
 
 	Len = Buffer->MsgLen;
 
-	DebugPrint(("RX Msg Len %d\n", Len));
+//	DebugPrint(("BPQHDLC: RX Msg Len %d\n", Len));
 
 	if (Len > BUFFLEN)
 		return 0;

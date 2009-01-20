@@ -68,6 +68,7 @@ int HDLCRX(PHDLCDATA PORTVEC, UCHAR * buff)
 	if (hDevice == 0)
 		return (0);
 
+
 	if (PORTVEC->DRIVERPORTTABLE == 0) return 0;
 
 
@@ -131,9 +132,6 @@ int HDLCTX(PHDLCDATA  PORTVEC,UCHAR * buff)
 	if (hDevice == 0)
 		return (0);
 
-	if (PORTVEC->DRIVERPORTTABLE == 0) return 0;
-
-
 	txlen=(buff[6]<<8) + buff[5];
 	
 	memcpy(buff,&PORTVEC->DRIVERPORTTABLE,4);
@@ -157,6 +155,7 @@ int HDLCINIT(HDLCDATA * PORTVEC)
 	int WinVer, WinMinor;
 
 	WritetoConsole("HDLC ");
+	OutputDebugString("Init HDLC\n");
 
 #pragma warning(push)
 #pragma warning(disable : 4996)
@@ -177,6 +176,8 @@ int Init98(HDLCDATA * PORTVEC)
 	char msg[255];
 	int err;
 
+	OutputDebugString("Init HDLC 98\n");
+
 	//
 	//	Open HDLC Driver, send send config params
 	//
@@ -196,11 +197,12 @@ int Init98(HDLCDATA * PORTVEC)
 
 			err=GetLastError();
 	
-			wsprintf(msg,"Error loading Driver \\\\.\\BPQHDLC.VXD - Error code %d",err);
+			wsprintf(msg,"Error loading Driver \\\\.\\BPQHDLC.VXD - Error code %d\n",err);
+			OutputDebugString(msg);
+			
 			MessageBox(NULL,msg,"BPQ32",MB_ICONSTOP);
 
 			WritetoConsole("Initialisation Failed");
-
 
 			return (FALSE);
 		}
@@ -212,9 +214,7 @@ int Init98(HDLCDATA * PORTVEC)
 			bOutput, 4, &cb,  // output parameters
 			0);
 
-		srand( (unsigned)time( NULL ) );  //Prime random no generator
-
- 		
+		srand( (unsigned)time( NULL ) );  //Prime random no generator	
 	}
 
 	//
@@ -228,8 +228,13 @@ int Init98(HDLCDATA * PORTVEC)
 		bOutput, 4, &cb,  // output parameters
         0);
 
-	memcpy(PORTVEC->DRIVERPORTTABLE,bOutput,4);
+	//memcpy(PORTVEC->DRIVERPORTTABLE,bOutput,4);
 
+	OutputDebugString("HDLC Init Complete\n");
+
+	PORTVEC->DRIVERPORTTABLE = 0;
+
+	
 	return (TRUE);
 		
 }
@@ -355,6 +360,9 @@ int Init2K(HDLCDATA * PORTVEC)
 	char msg[255];
 	int err;
 
+		OutputDebugString("Init HDLC 2K\n");
+
+
 	if (hDevice == 0)		// Not already loaded
 	{
 		//
@@ -377,7 +385,8 @@ int Init2K(HDLCDATA * PORTVEC)
 
 			err=GetLastError();
 	
-			wsprintf(msg,"Error Opening Driver \\device\\BPQHDLC - Error code %d", err);
+			wsprintf(msg,"Error Opening Driver \\device\\BPQHDLC - Error code %d\n", err);
+			OutputDebugString(msg);
 
 			WritetoConsole(msg);
 

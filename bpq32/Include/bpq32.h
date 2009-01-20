@@ -224,9 +224,19 @@ int APIENTRY CheckTimer();
 
 int APIENTRY CloseBPQ32();
 
+int APIENTRY GETBPQAPI();
+
+UINT APIENTRY GETMONDECODE();
+
+
 #else
 
 //	API Definitions for Dynamic Load of BPQ32.dll
+
+ULONG (FAR WINAPI * GETBPQAPI)();
+
+ULONG (FAR WINAPI * GETMONDECODE)();
+
 
 UCHAR * (FAR WINAPI * GetBPQDirectory)();
 
@@ -445,6 +455,10 @@ BOOL GetAPI()
 
 		return(FALSE);
 	}
+
+
+	GETBPQAPI = (ULONG(__stdcall *)())GetProcAddress(ExtDriver,"_GETBPQAPI@0");
+	GETMONDECODE = (ULONG(__stdcall *)())GetProcAddress(ExtDriver,"_GETMONDECODE@0");
 
 	GetFreeBuffs = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_GetFreeBuffs@0");
 	TXCount = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_RXCount@4");

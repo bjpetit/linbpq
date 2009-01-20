@@ -603,15 +603,15 @@ VOID MonitorTimerThread(int x)
 				Semaphore=0;
 			}
 
-			KillTimer(NULL,TimerHandle);
-			TimerHandle=0;
-			TimerInst=0xffffffff;
-			Tell_Sessions();
+//			KillTimer(NULL,TimerHandle);
+//			TimerHandle=0;
+//			TimerInst=0xffffffff;
+//			Tell_Sessions();
 
 			CheckforLostProcesses();		// Normally only done in timer thread, which is now dead
 
-			if (MinimizetoTray)
-				Shell_NotifyIcon(NIM_DELETE,&niData);
+//			if (MinimizetoTray)
+//				Shell_NotifyIcon(NIM_DELETE,&niData);
 		}
 	
 	} while (TRUE);
@@ -1290,6 +1290,10 @@ DllExport int APIENTRY GETBPQAPI()
  	return (int)BPQHOSTAPI;
 }
     
+DllExport UINT APIENTRY GETMONDECODE()
+{
+ 	return (UINT)MONDECODE;
+}
     
 
 DllExport INT APIENTRY BPQAPI(int Fn, char * params)

@@ -164,7 +164,6 @@ typedef struct _LOCAL_DEVICE_INFO {
 
 #if DBG
 #define DebugPrint(_x_) \
-               DbgPrint ("BPQHDLC:"); \
                DbgPrint _x_;
 
 #else

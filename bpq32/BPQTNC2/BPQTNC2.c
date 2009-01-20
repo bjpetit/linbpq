@@ -4,6 +4,8 @@
 
 #include "stdafx.h"
 #include "bpqtnc2.h"
+#define DYNLOADBPQ
+
 #include "bpq32.h"
 #include "GetVersion.h"
 
@@ -26,6 +28,8 @@ int CurrentConnections = 5;
 
 HANDLE hControl;
 
+BOOL Win98 = FALSE;		// Running on Win98
+
 struct ConnectionInfo Connections[6];
 
 //struct ConnectionInfo ConnectionInfo[MaxSockets+1];
@@ -36,14 +40,14 @@ struct ConnectionInfo Connections[6];
 ATOM				MyRegisterClass(HINSTANCE hInstance);
 BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
+//INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 BOOL Initialise();
-int DoStateChange(Stream);
-int DoReceivedData(Stream);
-int DoMonitorData(Stream);
-int Connected(Stream);
-int Disconnected(Stream);
-int SaveConfig(hWnd);
+int DoStateChange(int Stream);
+int DoReceivedData(int Stream);
+int DoMonitorData(int Stream);
+int Connected(int Stream);
+int Disconnected(int Stream);
+int SaveConfig(HWND hWnd);
 int Refresh();
 VOID RealPortThread(int i);
 
@@ -70,11 +74,7 @@ BOOL TNC2GetChar(int port,int * returnedchar, int * moretocome);
 BOOL TNC2PutChar(int port,int sentchar);
 BOOL TNC2GetVMSR(int port,int * returnedchar);
 
-BOOL OpenRealPort(conn);
-
-VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
-VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len);
-int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
+BOOL OpenRealPort(struct ConnectionInfo * conn);
 
 int	INITTNC2();
 BOOL APIGETCHAR();
@@ -85,7 +85,7 @@ BOOL ReleaseTNC2Port(int Stream);
 
 VOID CALLBACK TimerProc();
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
-UINT_PTR TimerHandle = 0;
+unsigned int TimerHandle = 0;
 
 
 BOOL cfgMinToTray;
@@ -95,13 +95,10 @@ BOOL cfgMinToTray;
 unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
 
 
-DllImport INT  BPQHOSTAPIPTR();
-
 int BPQHOSTAPI;
 
-DllImport INT  MONDECODEPTR();
 
-int MONDECODE;
+UINT MONDECODE;
 
 int Semaphore=0;
 int SEMCLASHES=0;
@@ -261,6 +258,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance; // Store instance handle in our global variable
 
+	 GetAPI();
+
+
+	BPQHOSTAPI= GETBPQAPI();
+	MONDECODE = GETMONDECODE();
+
+
 	hWnd=CreateDialog(hInst,ClassName,0,NULL);
 
 
@@ -341,26 +345,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 BOOL Initialise()
 {
 	int i,  resp, OpenCount;
-	ULONG Errorval;
+	ULONG Errorval, CtlErrorval;
 	struct ConnectionInfo * conn;
 	int retCode,Type,Vallen;
 	char Key[20];
 
 	HKEY hKey=0;
+
+	OutputDebugString("BPQTNC2 Init\n");
+
 	
-	_asm{
-
-	mov eax,BPQHOSTAPIPTR
-	mov eax,[eax]
-	mov	BPQHOSTAPI,eax;
-
-	mov eax,MONDECODEPTR
-	mov eax,[eax]
-	mov	MONDECODE,eax;
-
-	}
-
 	cfgMinToTray = GetMinimizetoTrayFlag();
+
+	if (HIBYTE(_winver) < 5)
+		Win98 = TRUE;
+
 
 	// Get config from Registry 
 
@@ -399,19 +398,23 @@ BOOL Initialise()
 		if (conn->TypeFlag[0] == ' ') conn->ComPort = 0;
 	}
 
+	OutputDebugString("BPQTNC2 Got Config\n");
+
+
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
-
-		conn->KHOST = TRUE;
 
 		if (conn->TypeFlag[0] == 'V') // And ComPort(i) <> "" Then
 		{
 			//' BPQ Virtual Port
         
+			conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
+
+
 			if (FirstBPQPort)
 			{
-				hControl = BPQOpenSerialControl(&Errorval);
+				hControl = BPQOpenSerialControl(&CtlErrorval);
 
 				if (hControl == (HANDLE) -1)
 				{
@@ -421,7 +424,6 @@ BOOL Initialise()
 				FirstBPQPort = FALSE;
 			}
 
-			conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
         
 			if (conn->hDevice == (HANDLE) -1 && Errorval == 2)
 			{
@@ -486,13 +488,16 @@ BOOL Initialise()
 		}
 	}
 
+	OutputDebugString("BPQTNC2 Starting Timer\n");
+
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 
 	Refresh();
 
 	if (cfgMinToTray)
-	
 		AddTrayMenuItem(MainWnd, "TNC2 Emulator");
+
+	OutputDebugString("BPQTNC2 Init Complete\n");
 
 	return TRUE;
 }
@@ -532,6 +537,8 @@ VOID CALLBACK TimerProc()
 	int retval, more;
 	char TXMsg[1000];
 	int RXCount, TXCount, Read, resp;
+	char msg[100];
+
 
 	CheckTimer();
 
@@ -541,6 +548,7 @@ VOID CALLBACK TimerProc()
 
 	FreeSemaphore();
 
+
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = &Connections[i];
@@ -548,9 +556,9 @@ VOID CALLBACK TimerProc()
 		if (conn->TypeFlag[0] == 'V')
 		{
 			ConCount = 0;
-    
+
 			BPQSerialIsCOMOpen(conn->hDevice, &ConCount);
-    
+
 			if (conn->PortEnabled == 1 && ConCount == 0)
 
 				//' Connection has just closed - disconnect stream
@@ -564,50 +572,51 @@ VOID CALLBACK TimerProc()
         		Refresh();
 			}
 
+	        if (!conn->PortEnabled)
+				break;
+
 			resp = BPQSerialGetQCounts(conn->hDevice, &RXCount, &TXCount);
+
+
                 
 			if (RXCount > 0)
 			{
 				resp = BPQSerialGetData(conn->hDevice, rxbuffer, 80, &Read);
 
-				if (conn->KHOST)
-				{
-					ProcessKHOSTPacket(conn, (UCHAR *)&rxbuffer, Read);
-				}
-				else
-				{
-					GetSemaphore();
-			
-					for (n = 0; n < Read; n++)
-						TNC2PutChar(i, rxbuffer[n]);
-
-					FreeSemaphore();
-				}
-			}
-
-			if (TXCount > 4096) goto getstatus;
-        
-			if (!conn->KHOST)
-			{
-				n=0;
+				wsprintf(msg, "BPQTNC2 %d %d\n", RXCount, TXCount);
+				OutputDebugString(msg);
+		
 				GetSemaphore();
+			
+				for (n = 0; n < Read; n++)
+					TNC2PutChar(i, rxbuffer[n]);
 
-			getloop:
-
-				TNC2GetChar(i, &retval, &more);
-
-				if (retval != -1)
-					TXMsg[n++] = retval;
-
-				if (more > 0 && n < 1000) goto getloop;
-    
 				FreeSemaphore();
-        
-				if (n > 0 && conn->PortEnabled) 
-					BPQSerialSendData(conn->hDevice, TXMsg, n);
 			}
-	
+      
+			if (TXCount > 4096) goto getstatus;
+       
+			n=0;
+
+			GetSemaphore();
+
+		getloop:
+
+			TNC2GetChar(i, &retval, &more);
+
+			if (retval != -1)
+				TXMsg[n++] = retval;
+
+			if (more > 0 && n < 1000) goto getloop;
+    
+			FreeSemaphore();
+        
+			if (n > 0 && conn->PortEnabled) 
+				BPQSerialSendData(conn->hDevice, TXMsg, n);
+
 		getstatus:
+
+
         
 			TNC2GetVMSR(i, &retval);
         
@@ -649,8 +658,9 @@ VOID CALLBACK TimerProc()
 				conn->RTS=!conn->RTS;
 				Refresh();
 			}
-
+	
 		}
+
 	}
 
 	return;
@@ -780,7 +790,7 @@ getstatusR:
 
 
 
-int SaveConfig(hWnd)
+int SaveConfig(HWND hWnd)
 {
 	int i;
 	int retCode,disp;
@@ -931,180 +941,16 @@ BOOL OpenRealPort(struct ConnectionInfo * conn)
 
 } // end of SetupConnection()
 
-// Kantronics Host Mode Stuff
-
-#define	FEND	0xC0	// KISS CONTROL CODES 
-#define	FESC	0xDB
-#define	TFEND	0xDC
-#define	TFESC	0xDD
 
 
-VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
-{
-	UCHAR Command[80];
-	
-	UCHAR Reply[400];
-	UCHAR CmdReply[]="C00";
+// BPQ Serial Device Support
 
-	UCHAR StatusReply1[]="C00FREE BYTES 936";
-	UCHAR StatusReply2[]="C00A/V stream - DISCONNECTED";
+// On W2K and above, BPQVIrtualCOM.sys provides a pair of cross-connected devices, and a control channel
+//	to enumerate, add and delete devices.
+
+// On Win98 BPQVCOMM.VXD provides a single IOCTL interface, over which calls for each COM device are multiplexed
 
 
-	rxbuffer[Len]=0x0a;
-	rxbuffer[Len+1]=0x0;
-
-	OutputDebugString(rxbuffer);
-
-	switch (rxbuffer[1])
-	{
-	
-	case 'C':
-
-		// Command Packet. Extract Command
-
-		if (Len > 80) Len = 80;
-		
-		memcpy(Command, &rxbuffer[4], Len-5);
-		Command[Len-5] = 0;
-
-		switch (rxbuffer[4])
-		{
-			case 'S':
-
-				// Status
-
-
-			SendKISSData(conn, StatusReply1, strlen(StatusReply1));
-			SendKISSData(conn, StatusReply2, strlen(StatusReply2));
-			return;
-
-		default:
-
-			memcpy(Reply,CmdReply,3);
-			SendKISSData(conn, Reply, 3);
-			return;
-
-		}
-		
-	default:
-
-		Reply[0]=0;
-
-
-		break;
-
-	return;
-	}
-	return;
-}
-
-/*
-while (pVCOMInfo->RXBCOUNT != 0)
-	{
-		pVCOMInfo->RXBCOUNT--;
-
-		c = *(pVCOMInfo->RXBPTR++);
-
-		if (pVCOMInfo->ESCFLAG)
-		{
-			//
-			//	FESC received - next should be TFESC or TFEND
-
-			pVCOMInfo->ESCFLAG = FALSE;
-
-			if (c == TFESC)
-				c=FESC;
-	
-			if (c == TFEND)
-				c=FEND;
-
-		}
-		else
-		{
-			switch (c)
-			{
-			case FEND:		
-	
-				//
-				//	Either start of message or message complete
-				//
-				
-				if (pVCOMInfo->RXMPTR == (UCHAR *)&pVCOMInfo->RXMSG)
-					continue;
-
-				pVCOMInfo->MSGREADY=TRUE;
-				return;
-
-			case FESC:
-		
-				pVCOMInfo->ESCFLAG = TRUE;
-				continue;
-
-			}
-		}
-		
-		//
-		//	Ok, a normal char
-		//
-
-		*(pVCOMInfo->RXMPTR++) = c;
-
-	}
-	
- 	return;
-}
-
-*/
-VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len)
-{
-	// Send A Packet With KISS Encoding
-
-	UCHAR EncodedReply[800];
-	int TXLen;
-
-	TXLen = KissEncode(txbuffer, EncodedReply, Len);
-
-	BPQSerialSendData(conn->hDevice, EncodedReply, TXLen);
-
-}
-
-int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
-{
-	int i,txptr=0;
-	UCHAR c;
-
-	outbuff[0]=FEND;
-	txptr=1;
-
-	for (i=0;i<len;i++)
-	{
-		c=inbuff[i];
-		
-		switch (c)
-		{
-		case FEND:
-			outbuff[txptr++]=FESC;
-			outbuff[txptr++]=TFEND;
-			break;
-
-		case FESC:
-
-			outbuff[txptr++]=FESC;
-			outbuff[txptr++]=TFESC;
-			break;
-
-		default:
-
-			outbuff[txptr++]=c;
-		}
-	}
-
-	outbuff[txptr++]=FEND;
-
-	return txptr;
-
-}
-  
 
 
 #define IOCTL_SERIAL_SET_BAUD_RATE      CTL_CODE(FILE_DEVICE_SERIAL_PORT, 1,METHOD_BUFFERED,FILE_ANY_ACCESS)
@@ -1156,19 +1002,61 @@ int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 #define IOCTL_BPQ_DELETE_DEVICE  CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x80a,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQ_LIST_DEVICES   CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x80b,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
+#define	IOCTL_BPQ_SET_POLLDELAY	 CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x80c,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define	IOCTL_BPQ_SET_DEBUGMASK	 CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x80d,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define W98_SERIAL_IS_COM_OPEN 0x800
+#define W98_SERIAL_GETDATA     0x801
+#define W98_SERIAL_SETDATA     0x802
+
+#define W98_SERIAL_SET_CTS     0x803
+#define W98_SERIAL_SET_DSR     0x804
+#define W98_SERIAL_SET_DCD     0x805
+
+#define W98_SERIAL_CLR_CTS     0x806
+#define W98_SERIAL_CLR_DSR     0x807
+#define W98_SERIAL_CLR_DCD     0x808
+
+#define W98_BPQ_ADD_DEVICE     0x809
+#define W98_BPQ_DELETE_DEVICE  0x80a
+#define W98_BPQ_LIST_DEVICES   0x80b
+
+#define	W98_BPQ_SET_POLLDELAY	 0x80c
+#define	W98_BPQ_SET_DEBUGMASK	 0x80d
+
+#define W98_SERIAL_GET_COMMSTATUS    27
+#define W98_SERIAL_GET_DTRRTS        30
+
+#define DebugModemStatus 1
+#define DebugCOMStatus 2
+#define DebugWaitCompletion 4
+#define DebugReadCompletion 8
+
 
 HANDLE BPQOpenSerialControl(ULONG * lasterror)
 {            
 	HANDLE hDevice;
 
 	*lasterror=0;
-	
-	hDevice = CreateFile( "//./BPQControl", GENERIC_READ | GENERIC_WRITE,
+
+	if (Win98)
+	{
+		hDevice = CreateFile( "\\\\.\\BPQVCOMM.VXD", GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
                   NULL,                 // no security attrs
                   OPEN_EXISTING,
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
+	}
+	else
+	{
+		hDevice = CreateFile( "//./BPQControl", GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+	}
 				  
 	if (hDevice == (HANDLE) -1 )
 	{
@@ -1178,7 +1066,7 @@ HANDLE BPQOpenSerialControl(ULONG * lasterror)
 	return hDevice;
 
 }
-int BPQSerialAddDevice(HANDLE hDevice,ULONG * port,ULONG * result)
+int BPQSerialAddDevice(HANDLE hDevice, ULONG * port, ULONG * result)
 {
 	ULONG bytesReturned;
 
@@ -1192,15 +1080,42 @@ int BPQSerialDeleteDevice(HANDLE hDevice,ULONG * port,ULONG * result)
 	return DeviceIoControl (hDevice,IOCTL_BPQ_DELETE_DEVICE,port,4,result,4,&bytesReturned,NULL);
 }
 
-
 HANDLE BPQOpenSerialPort( int port,DWORD * lasterror)
 {            
-	char szPort[ 15 ];
+	char szPort[15];
 	HANDLE hDevice;
+
+	*lasterror=0;
+
+	if (Win98)
+	{
+		wsprintf( szPort, "\\\\.\\COM%d",port) ;
+
+		hDevice = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+				  
+		if (hDevice == (HANDLE) -1 )
+		{
+			// If In Use(5) ok, else fail
+
+			if (GetLastError() == 5)
+				return (HANDLE)(port<<16);			// Port Number is a pseudohandle to the device
+
+			return (HANDLE) -1;
+		}
+
+		CloseHandle(hDevice);
+
+		return (HANDLE)(port<<16);			// Port Number is a pseudohandle to the device
+	}
+
 
   // load the COM prefix string and append port number
    
-	*lasterror=0;
 	
 	wsprintf( szPort, "\\\\.\\BPQ%d",port) ;
 
@@ -1224,15 +1139,22 @@ int BPQSerialSetCTS(HANDLE hDevice)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_SET_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
-                  
+	if (Win98)
+		return DeviceIoControl(hControl,(UINT)(UINT)hDevice | W98_SERIAL_SET_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_SET_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
+
 }
 
 int BPQSerialSetDSR(HANDLE hDevice)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(	hDevice,IOCTL_SERIAL_SET_DSR,NULL,0,NULL,0, &bytesReturned,NULL);
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_SET_DSR,NULL,0,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_SET_DSR, NULL,0,NULL,0, &bytesReturned,NULL);
+
                   
 }
 
@@ -1240,7 +1162,11 @@ int BPQSerialSetDCD(HANDLE hDevice)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_SET_DCD,NULL,0,NULL,0, &bytesReturned,NULL);
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_SET_DCD,NULL,0,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_SET_DCD,NULL,0,NULL,0, &bytesReturned,NULL);
+
                   
 }
 
@@ -1248,14 +1174,22 @@ int BPQSerialClrCTS(HANDLE hDevice)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_CLR_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_CLR_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_CLR_CTS,NULL,0,NULL,0, &bytesReturned,NULL);
+
                   
 }
 int BPQSerialClrDSR(HANDLE hDevice)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_CLR_DSR,NULL,0,NULL,0, &bytesReturned,NULL);
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_CLR_DSR,NULL,0,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_CLR_DSR,NULL,0,NULL,0, &bytesReturned,NULL);
+
                   
 }
 
@@ -1263,8 +1197,12 @@ int BPQSerialClrDCD(HANDLE hDevice)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_CLR_DCD,NULL,0,NULL,0, &bytesReturned,NULL);
-                  
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_CLR_DCD,NULL,0,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_CLR_DCD, NULL,0,NULL,0, &bytesReturned,NULL);
+
+                     
 }
 
 int BPQSerialSendData(HANDLE hDevice,UCHAR * Message,int MsgLen)
@@ -1273,7 +1211,10 @@ int BPQSerialSendData(HANDLE hDevice,UCHAR * Message,int MsgLen)
 
 	if (MsgLen > 4096 )	return ERROR_INVALID_PARAMETER;
 	
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
                   
 }
 
@@ -1281,7 +1222,10 @@ int BPQSerialGetData(HANDLE hDevice,UCHAR * Message,int BufLen, ULONG * MsgLen)
 {
 	if (BufLen > 4096 )	return ERROR_INVALID_PARAMETER;
 	
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_GETDATA,NULL,0,Message,BufLen,MsgLen,NULL);
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_GETDATA,NULL,0,Message,BufLen,MsgLen,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_GETDATA,NULL,0,Message,BufLen,MsgLen,NULL);
                   
 }
 
@@ -1292,7 +1236,10 @@ int BPQSerialGetQCounts(HANDLE hDevice,ULONG * RXCount, ULONG * TXCount)
 	int MsgLen;
 	int ret;
 
-	ret = DeviceIoControl(hDevice,IOCTL_SERIAL_GET_COMMSTATUS,NULL,0,&Resp,sizeof(SERIAL_STATUS),&MsgLen,NULL);
+	if (Win98)
+		ret = DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_GET_COMMSTATUS,NULL,0,&Resp,sizeof(SERIAL_STATUS),&MsgLen,NULL);
+	else
+		ret = DeviceIoControl(hDevice,IOCTL_SERIAL_GET_COMMSTATUS,NULL,0,&Resp,sizeof(SERIAL_STATUS),&MsgLen,NULL);
 
     *RXCount=Resp.AmountInInQueue;
 	*TXCount=Resp.AmountInOutQueue;
@@ -1309,22 +1256,44 @@ int BPQSerialGetDeviceList(HANDLE hDevice,ULONG * Slot,ULONG * Port)
 
 }
 
-
-
-
 int BPQSerialIsCOMOpen(HANDLE hDevice,ULONG * Count)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_IS_COM_OPEN,NULL,0,Count,4,&bytesReturned,NULL);                
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_IS_COM_OPEN,NULL,0,Count,4,&bytesReturned,NULL);                
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_IS_COM_OPEN,NULL,0,Count,4,&bytesReturned,NULL);                
 }
+
 int BPQSerialGetDTRRTS(HANDLE hDevice,ULONG * Flags)
 {
 	ULONG bytesReturned;
 
-	return DeviceIoControl(hDevice,IOCTL_SERIAL_GET_DTRRTS,NULL,0,Flags,4,&bytesReturned,NULL);                
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_GET_DTRRTS,NULL,0,Flags,4,&bytesReturned,NULL);                
+	else
+		return DeviceIoControl(hDevice,IOCTL_SERIAL_GET_DTRRTS,NULL,0,Flags,4,&bytesReturned,NULL);                
 }
 
+int BPQSerialSetPollDelay(HANDLE hDevice, int PollDelay)
+{
+	ULONG bytesReturned;
+	
+	if (Win98)
+		return DeviceIoControl(hControl, (UINT)hDevice | W98_BPQ_SET_POLLDELAY,&PollDelay,4,NULL,0, &bytesReturned,NULL);
+	else
+		return DeviceIoControl(hDevice,IOCTL_BPQ_SET_POLLDELAY,&PollDelay,4,NULL,0, &bytesReturned,NULL);
+                  
+}
+
+int BPQSerialSetDebugMask(HANDLE hDevice, int DebugMask)
+{
+	ULONG bytesReturned;
+	
+	return DeviceIoControl(hDevice, IOCTL_BPQ_SET_DEBUGMASK, &DebugMask, 4, NULL, 0, &bytesReturned,NULL);
+                  
+}
 
 BOOL InitTNC2Port(int Port,int * Stream)
 {

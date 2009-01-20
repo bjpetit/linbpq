@@ -135,6 +135,7 @@ int WINAPI TfGet(void)
 	
  	if (retval == -1)
  	{
+ 	 	Yield();
  	 	CallProcEx32W(1,0,Sleep,(DWORD)2);
  	}
  	  

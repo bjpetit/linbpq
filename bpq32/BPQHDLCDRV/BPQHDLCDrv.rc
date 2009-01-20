@@ -9,7 +9,7 @@ Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Module Name:
 
-	BPQdrv.rc
+	BPQHDLCdrv.rc
 
 Abstract:
 
@@ -23,8 +23,8 @@ Abstract:
 #define VER_FILETYPE                VFT_DRV
 #define VER_FILESUBTYPE             VFT2_DRV_SYSTEM
 #define VER_FILEDESCRIPTION_STR     "BPQ32 Virtual Network Driver"
-#define VER_INTERNALNAME_STR        "BPQdrv.sys"
-#define VER_ORIGINALFILENAME_STR    "BPQdrv.sys"
+#define VER_INTERNALNAME_STR        "BPQHDLCdrv.sys"
+#define VER_ORIGINALFILENAME_STR    "BPQHDLCdrv.sys"
 
 
 
@@ -37,10 +37,10 @@ Abstract:
 #undef VER_PRODUCTVERSION_STR
 #define VER_PRODUCTVERSION_STR      VER_FILEVERSION_STR
 
-#define VER_LEGALCOPYRIGHT_STR      "Copyright (C) 2003 Microsoft Corporation" 
+#define VER_LEGALCOPYRIGHT_STR      "Copyright (C) 2009 G8BPQ" 
 #ifdef VER_COMPANYNAME_STR
 #undef VER_COMPANYNAME_STR
-#define VER_COMPANYNAME_STR         "Microsoft Corporation"
+#define VER_COMPANYNAME_STR         "G8BPQ"
 #endif
 
 #undef VER_PRODUCTNAME_STR

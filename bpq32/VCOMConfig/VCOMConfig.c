@@ -1,11 +1,12 @@
 
 //
+//	Program to Configure BPQ Virtual Serial Ports
 
 
 #include "stdafx.h"
 #include "resource.h"
 
-#include "bpq32.h"
+//#include "bpq32.h"
 #include "GetVersion.h"
 
 #define MAX_LOADSTRING 100
@@ -28,15 +29,30 @@ char Msg[100];
 #define DRIVER_FUNC_INSTALL     0x01
 #define DRIVER_FUNC_REMOVE      0x02
 
-#define DRIVER_NAME       "BPQVirtualCOM"
+char DRIVERNAME[] = "BPQVirtualCOM"	;
+char DRIVERFILENAME[]= "BPQVirtualCOM.sys";
+ 
+
+char Driver[100]="";		// Win98 Driver Key
+
 
 UCHAR Ports[10];
 
-// Forward declarations of functions included in this code module:
+int PortKey[10];			// Win 98 Subkey for this port
+
+FILETIME OldLastWriteTime;
+FILETIME NewLastWriteTime;
+SYSTEMTIME Time;
+
+char SysDriverName[MAX_PATH];
+
+
+BOOL Get98DriverTimeStamp();
+
 ATOM				MyRegisterClass(HINSTANCE hInstance);
 BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
+
 BOOL Initialise();
 void format_error (char *msg, int msglen, int errnum);
 BOOLEAN ManageDriver(
@@ -47,6 +63,8 @@ BOOLEAN ManageDriver(
 int LoadDriver();
 VOID OutputLine(char * Msg);
 VOID GetPorts();
+VOID GetPorts98();
+VOID GetPortsXP();
 
 HANDLE BPQOpenSerialControl(ULONG * lasterror);
 int BPQSerialAddDevice(HANDLE hDevice,ULONG * port,ULONG * result);
@@ -66,6 +84,20 @@ int BPQSerialIsCOMOpen(HANDLE hDevice,ULONG * Count);
 int BPQSerialGetDTRRTS(HANDLE hDevice,ULONG * Flags);
 
 BOOL cfgMinToTray;
+
+BOOL Win98 = FALSE;
+
+#define CTL_CODE( DeviceType, Function, Method, Access ) (                 \
+    ((DeviceType) << 16) | ((Access) << 14) | ((Function) << 2) | (Method) \
+)
+
+
+#define FILE_DEVICE_SERIAL_PORT         0x0000001b
+#define METHOD_BUFFERED                 0
+#define FILE_ANY_ACCESS                 0
+
+
+
 
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
@@ -154,8 +186,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int err, i;
 	char port[20];
 
-
 	hInst = hInstance; // Store instance handle in our global variable
+
+   	if (HIBYTE(_winver) < 5)
+	{
+		Win98 = TRUE;
+		strcpy(DRIVERFILENAME, "BPQVComm.vxd");
+	}
+
 
 	hWnd=CreateDialog(hInst,ClassName,0,NULL);
 
@@ -181,7 +219,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"VCOM Config Version %s", VersionString);
+	if (Win98)
+		wsprintf(Title,"VCOM Config Version %s on Win98", VersionString);
+	else
+		wsprintf(Title,"VCOM Config Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
 
@@ -205,8 +246,13 @@ VOID Refresh()
 	}
 }
 
-
 VOID GetPorts()
+{
+	if (Win98)
+		GetPorts98(); else GetPortsXP();
+}
+
+VOID GetPortsXP()
 {
 	HANDLE hControl;
 	int i, PortNo, ErrorVal;
@@ -230,6 +276,486 @@ VOID GetPorts()
 	Refresh();
 }
 
+VOID GetPorts98()
+{
+	HKEY hKey, hSubKey;
+	int retCode, i=0, PortNo;
+	FILETIME  ftLastWriteTime;
+	int Index, cbName;
+	char Name[100];
+	char Key[100];
+	char DeviceDesc[100];
+		
+	retCode = RegOpenKeyEx(HKEY_LOCAL_MACHINE,
+                              "Enum\\Root\\PORTS",
+ 							  0,	// Options
+                              KEY_ALL_ACCESS,
+                              &hKey);
+
+	if (retCode != ERROR_SUCCESS)
+	{
+
+		MessageBox (MainWnd, "Open PORTS Key Failed","",0);
+		return;
+	}
+			;
+
+	Index = 0;
+	
+	do {
+		
+		cbName = 100;
+
+		retCode = RegEnumKeyEx(hKey, Index, Name, &cbName,	NULL, NULL, 0, &ftLastWriteTime );
+
+		if (retCode != ERROR_SUCCESS) break;
+
+
+		wsprintf(Key, "Enum\\Root\\PORTS\\%s", Name);
+
+		retCode = RegOpenKeyEx(HKEY_LOCAL_MACHINE,
+                              Key,
+ 							  0,	// Options
+                              KEY_ALL_ACCESS,
+                              &hSubKey);
+
+		if (retCode != ERROR_SUCCESS)
+		{
+
+			MessageBox (MainWnd, "Open Key Failed","",0);
+			return;
+		}
+		
+		cbName = 100;
+		retCode = RegQueryValueEx(hSubKey, "DeviceDesc", 0, NULL, DeviceDesc, &cbName);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			if (_memicmp(DeviceDesc, "G8BPQ Virtual Serial Port", 25) == 0)
+			{
+				// BPQ Port
+			
+				PortNo = atoi(&DeviceDesc[30]);
+				PortKey[i] = atoi(Name);
+				Ports[i++] = PortNo;
+			}
+
+			CloseHandle(hSubKey);
+		}
+
+
+		Index++;
+
+	} while (TRUE);
+
+
+	CloseHandle(hKey);
+
+	Refresh();
+}
+
+
+VOID AddDeviceXP(int id)
+{
+	HANDLE hControl;
+	int Errorval, i;
+
+	hControl = BPQOpenSerialControl(&Errorval);
+
+	if (hControl == (HANDLE) -1)
+	{
+		MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed\nIs the Driver loaded?","",0);
+		return;
+	}
+           
+	BPQSerialAddDevice(hControl, &id, &Errorval);
+
+	CloseHandle(hControl);
+
+	if (Errorval == 0)
+	{
+		for (i=0; i<10; i++)
+		{
+			if (Ports[i] == 0)
+			{
+				Ports[i]=id;
+				Refresh();
+				break;
+			}
+		
+		}
+	}
+	else
+	{
+		MessageBox (MainWnd, "Add Port Failed","",0);
+		return;
+	}
+
+	wsprintf(Msg,"Port COM%d Added",id);
+	OutputLine(Msg);
+
+}
+
+VOID GetDriverKey98()
+{
+	HKEY hKey, hSubKey;
+	int retCode, i=0;
+	FILETIME  ftLastWriteTime;
+	int Index, cbName;
+	char Name[100];
+	char Value[100];
+		
+	retCode = RegOpenKeyEx(HKEY_LOCAL_MACHINE,
+                  "System\\CurrentControlSet\\Services\\Class\\Ports",
+ 							  0,	// Options
+                              KEY_ALL_ACCESS,
+                              &hKey);
+
+	if (retCode != ERROR_SUCCESS)
+	{
+
+		MessageBox (MainWnd, "Open Services Key Failed","",0);
+		return;
+	}
+			;
+
+	Index = 0;
+	
+	do {
+		
+		cbName = 100;
+
+		retCode = RegEnumKeyEx(hKey, Index, Name, &cbName,	NULL, NULL, 0, &ftLastWriteTime );
+
+		if (retCode != ERROR_SUCCESS) break;
+
+
+		retCode = RegOpenKeyEx(hKey,
+                              Name,
+ 							  0,	// Options
+                              KEY_ALL_ACCESS,
+                              &hSubKey);
+
+		if (retCode != ERROR_SUCCESS)
+		{
+
+			MessageBox (MainWnd, "Open Enumerated Subkey Key Failed","",0);
+			return;
+		}
+		
+
+
+
+		cbName = 100;
+		retCode = RegQueryValueEx(hSubKey, "PortDriver", 0, NULL, Value, &cbName);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			if (_stricmp(Value, "BPQVCOMM.VXD") == 0)
+			{
+				// Our Driver
+			
+				strcpy(Driver, "Ports\\");
+				strcat(Driver, Name);
+				CloseHandle(hSubKey);
+				return;
+			}
+
+			CloseHandle(hSubKey);
+		}
+
+
+		Index++;
+
+	} while (TRUE);
+
+
+	CloseHandle(hKey);
+
+	Refresh();
+}
+
+
+BYTE DCBVal[] = {0x1c,00,00,00,0x80,0x25,00,00,0x09,00,00,00,00,00,0x0a,00,0x0a,00,0x08,00,00,
+	0x11,0x13,00,00,00,00,00};
+
+BYTE SubClass[] = {1};
+
+
+VOID CreateDriverKey98()
+{
+
+	// Need to Create a Driver entry in:
+	// [HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\Class\Ports]
+
+	HKEY hKey;
+	int retCode, i=0;
+	int disp;
+	char Key[100];
+
+	i = 1000;
+
+	do {
+		
+		wsprintf(Key, "System\\CurrentControlSet\\Services\\Class\\PORTS\\%04d", i);
+
+		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+			Key,
+            0,	// Reserved
+			0,	// Class
+			0,	// Options
+            KEY_ALL_ACCESS,
+			NULL,	// Security Attrs
+            &hKey,
+			&disp);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			if (disp == REG_CREATED_NEW_KEY)
+			{				
+				// Created, so OK
+
+
+				RegSetValueEx(hKey, "ConfigDialog", 0, REG_SZ, "serialui.dll", 13);
+				RegSetValueEx(hKey, "DCB", 0, REG_BINARY, (unsigned char *)&DCBVal, 28);
+				RegSetValueEx(hKey, "DevLoader", 0, REG_SZ, "*vcomm", 7);
+ 				RegSetValueEx(hKey, "DriverDate", 0, REG_SZ, "1-01-2009", 10);
+				RegSetValueEx(hKey, "DriverDesc", 0, REG_SZ, "G8BPQ Virtual Serial Port", 28); 
+				RegSetValueEx(hKey, "EnumPropPages", 0, REG_SZ, "serialui.dll,EnumPropPages", 27); 
+				RegSetValueEx(hKey, "PortDriver", 0, REG_SZ, "bpqvcomm.vxd", 13	);
+				RegSetValueEx(hKey, "PortSubClass", 0, REG_BINARY, (unsigned char *)&SubClass, 1);
+
+				wsprintf(Driver, "Ports\\%04d", i);
+
+				return;
+
+			}
+
+			retCode = RegCloseKey (hKey);
+		}
+
+		i++;
+
+	} while (i < 1100);		// Protect
+	
+
+	MessageBox (MainWnd, "Add Software Key Failed","",0);
+	return;
+
+}
+
+
+BYTE ForcedConfig[]={00,04,00,00,00,00,00,00,0x20,00,00,00,02,00,00,00,01,00,02,00,
+  05,01,05,01,00,00,00,00,0xf0,0xff,02,00,00,01,00,00,00,00,00,00,00,00,00,00};
+
+BYTE ConfigFlags[] = {04,00,00,00};
+
+BYTE Capabilities[] = {0x14,00,00,00};
+
+
+VOID AddDevice98(int id)
+{
+
+	HKEY hKey ;
+	int retCode, i=0, len, Slot;
+	int  disp;
+	char Key[100];
+	char Val[40];
+
+
+	for (Slot=0; Slot<10; Slot++)
+	{
+		if (Ports[Slot] == id)
+		{
+
+			MessageBox (MainWnd, "Port already present","",0);
+			return;
+		}
+		if (Ports[Slot] == 0)
+			break;
+		
+	}
+
+	if (Slot == 10)
+	{
+
+		MessageBox (MainWnd, "You already have the maximum of 10 ports","",0);
+		return;
+	}
+
+
+	GetDriverKey98();
+
+	if (!Get98DriverTimeStamp())
+	{
+		MessageBox (MainWnd, "Can't open bpqvcomm.vxd\nTry loading the Driver","",0);
+		return;
+	}
+
+
+	if (strlen(Driver) == 0)
+		 CreateDriverKey98();
+
+	i = 1;
+
+	do {
+		
+		wsprintf(Key, "Enum\\Root\\PORTS\\%04d", i);
+
+		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+			Key,
+            0,	// Reserved
+			0,	// Class
+			0,	// Options
+            KEY_ALL_ACCESS,
+			NULL,	// Security Attrs
+            &hKey,
+			&disp);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			if (disp == REG_CREATED_NEW_KEY)
+			{				
+				// Created, so OK
+
+	
+
+				RegSetValueEx(hKey, "Capabilities", 0, REG_BINARY, Capabilities,4);
+
+				RegSetValueEx(hKey, "Class", 0, REG_SZ, "Ports", 6);
+
+				RegSetValueEx(hKey, "ClassGUID", 0, REG_SZ, "{4d36e978-e325-11ce-bfc1-08002be10318}", 39);
+
+				RegSetValueEx(hKey, "ConfigFlags", 0, REG_BINARY, (unsigned char *)&ConfigFlags, 4);
+				
+				len = wsprintf(Val, "G8BPQ Virtual Serial Port (COM%d)", id);
+				RegSetValueEx(hKey, "DeviceDesc", 0, REG_SZ, Val, len + 1);
+  				RegSetValueEx(hKey, "FRIENDLYNAME", 0, REG_SZ, Val, len + 1);
+
+				RegSetValueEx(hKey, "Driver", 0, REG_SZ, Driver, strlen(Driver) + 1);
+
+				ForcedConfig[20] = id;
+				ForcedConfig[22] = id;
+
+				RegSetValueEx(hKey, "ForcedConfig", 0, REG_BINARY, (unsigned char  *)&ForcedConfig, 44);
+
+				len = wsprintf(Val, "COM%d", id);
+				RegSetValueEx(hKey, "PORTNAME", 0, REG_SZ, Val, len+1);
+
+				RegSetValueEx(hKey, "Mfg", 0, REG_SZ, "G8BPQ", 6);
+				
+				Ports[Slot]=id;
+				Refresh();
+
+							
+  				wsprintf(Msg,"Port COM%d Added",id);
+				OutputLine(Msg);
+
+				return;
+
+			}
+
+			retCode = RegCloseKey (hKey);
+		}
+
+		i++;
+
+	} while (i < 100);		// Protect
+	
+
+	MessageBox (MainWnd, "Add Port Failed","",0);
+	return;
+
+}
+
+
+DeleteDeviceXP(int id)
+{
+	HANDLE hControl;
+	int Errorval, resp, i;
+	HKEY hKey=0;
+
+	char Msg[256];
+
+
+	hControl = BPQOpenSerialControl(&Errorval);
+
+	if (hControl == (HANDLE) -1)
+	{
+		MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed\nIs the Driver loaded?","",0);
+		return (0);
+	}
+           
+	resp = BPQSerialDeleteDevice(hControl, &id, &Errorval);
+
+	CloseHandle(hControl);
+
+	if (Errorval == 0)
+	{
+		for (i=0; i<10; i++)
+		{
+			if (Ports[i] == id)
+			{
+				Ports[i] = 0;
+				Refresh();
+				break;
+			}
+		}
+	}
+	else
+	{
+		MessageBox (MainWnd, "Delete Port Failed","",0);
+		return 0;
+	}
+	wsprintf(Msg,"Port COM%d Deleted",id);
+	OutputLine(Msg);
+
+	return 0;
+
+}
+
+
+
+VOID DeleteDevice98(int id)
+{
+
+	int retCode, i=0, Slot;
+	char Key[100];
+
+
+	for (Slot=0; Slot<10; Slot++)
+	{
+		if (Ports[Slot] == id)
+		{
+			break;
+		}
+	}
+
+	if (Slot == 10)
+	{
+
+		MessageBox (MainWnd, "Port not found","",0);
+		return;
+	}
+
+	wsprintf(Key, "Enum\\Root\\PORTS\\%04d", PortKey[Slot]);
+
+	retCode = RegDeleteKey(HKEY_LOCAL_MACHINE, Key);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		wsprintf(Msg,"Port COM%d Deleted",id);
+		OutputLine(Msg);
+		Ports[Slot] = 0;
+		Refresh();
+	}
+	else
+		MessageBox (MainWnd, "Delete Port Failed","",0);
+		
+	return;
+}
+
+
 //
 //  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
 //
@@ -242,8 +768,8 @@ VOID GetPorts()
 //
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	int wmId, wmEvent, id, Errorval, resp, disp, retCode, i;
-	HANDLE hControl, hFile;
+	int wmId, wmEvent, id, disp, retCode, i;
+	HANDLE hFile;
 	HKEY hKey=0;
 	char szPort[15];
 	char Errmsg[500];
@@ -269,7 +795,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDUNLOAD:
 
-			return ManageDriver(DRIVER_NAME, driverLocation,DRIVER_FUNC_REMOVE);
+			return ManageDriver(DRIVERNAME, driverLocation,DRIVER_FUNC_REMOVE);
 
 		case IDC_REFRESH:
 
@@ -306,39 +832,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			return (0);
 
 		OKtoADD:
-	
-			hControl = BPQOpenSerialControl(&Errorval);
 
-			if (hControl == (HANDLE) -1)
-			{
-				MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed\nIs the Driver loaded?","",0);
-				return (0);
-			}
-           
-			resp = BPQSerialAddDevice(hControl, &id, &Errorval);
-
-			CloseHandle(hControl);
-
-			if (Errorval == 0)
-			{
-				for (i=0; i<10; i++)
-				{
-					if (Ports[i] == 0)
-					{
-						Ports[i]=id;
-						Refresh();
-						break;
-					}
-				}
-			}
-			else
-			{
-				MessageBox (MainWnd, "Add Port Failed","",0);
-				return 0;
-			}
-
-			wsprintf(Msg,"Port COM%d Added",id);
-			OutputLine(Msg);
+			if (Win98)	AddDevice98(id); else AddDeviceXP(id);
 
 			return 0;
 
@@ -348,39 +843,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			id=SendDlgItemMessage(MainWnd, IDC_COMBO1, CB_GETCURSEL, 0, 0);
 			id++;
 
-			hControl = BPQOpenSerialControl(&Errorval);
+			if (Win98)	DeleteDevice98(id); else DeleteDeviceXP(id);
 
-			if (hControl == (HANDLE) -1)
-			{
-				MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed\nIs the Driver loaded?","",0);
-				return (0);
-			}
-           
-			resp = BPQSerialDeleteDevice(hControl, &id, &Errorval);
 
-			CloseHandle(hControl);
-
-			if (Errorval == 0)
-			{
-				for (i=0; i<10; i++)
-				{
-					if (Ports[i] == id)
-					{
-						Ports[i] = 0;
-						Refresh();
-						break;
-					}
-				}
-			}
-			else
-			{
-				MessageBox (MainWnd, "Delete Port Failed","",0);
-				return 0;
-			}
-			wsprintf(Msg,"Port COM%d Deleted",id);
-			OutputLine(Msg);
-
-			return 0;
 
 		case IDSAVE:
 			
@@ -454,6 +919,64 @@ void format_error (char *msg, int msglen, int errnum)
 }
 
 
+BOOL Get98DriverTimeStamp()
+{
+	HANDLE handle;
+	int DirLen;
+
+	DirLen = GetSystemDirectory(SysDriverName, MAX_PATH);
+  
+
+	strcat(SysDriverName, "\\");
+	strcat(SysDriverName, DRIVERFILENAME);
+
+
+	handle = CreateFile(SysDriverName,
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	if (handle != INVALID_HANDLE_VALUE)
+	{
+
+		GetFileTime(handle, NULL, NULL, &OldLastWriteTime);
+		FileTimeToSystemTime(&OldLastWriteTime, &Time);
+		CloseHandle(handle);
+		return TRUE;
+	}
+
+	return FALSE;
+
+}
+
+
+VOID CopyDriver98()
+{
+
+	Get98DriverTimeStamp();
+
+
+	if (CompareFileTime(&OldLastWriteTime, &NewLastWriteTime) > 0)
+
+		if(MessageBox (MainWnd, "New Driver is older - do you want to continue?",
+				"",MB_YESNO) == IDNO)
+				return;
+
+
+	if (CopyFile(driverLocation, SysDriverName, FALSE))
+
+		wsprintf(Msg,"Driver Installed");
+
+	else
+		wsprintf(Msg,"Unable to install driver");
+
+
+	OutputLine(Msg);
+
+}
 
 
 
@@ -540,16 +1063,23 @@ int LoadDriver()
 
     // Make sure driver exists
 	
-	if (!SetupDriverName(driverLocation)) {
+	if (!SetupDriverName(driverLocation))
+	{
 
         return 0;
     }
        
-        if (!ManageDriver(DRIVER_NAME,
+	if(Win98)
+	{
+		CopyDriver98();
+	}
+	else
+	{
+		if (!ManageDriver(DRIVERNAME,
                           driverLocation,
                           DRIVER_FUNC_INSTALL
-                          )) {
-
+                          ))
+		{
             wsprintf(Msg,"Unable to install driver");
 			OutputLine(Msg);
 
@@ -557,13 +1087,14 @@ int LoadDriver()
             // Error - remove driver.
             //
 
-            ManageDriver(DRIVER_NAME,
+            ManageDriver(DRIVERNAME,
                          driverLocation,
                          DRIVER_FUNC_REMOVE
                          );
             
             return 0;
-        }
+		}
+	}
             
 	return 0;
  
@@ -980,9 +1511,9 @@ BOOLEAN SetupDriverName(PUCHAR DriverLocation)
     // Setup path name to driver file.
     //
 
-    strcat(DriverLocation, "\\");
-    strcat(DriverLocation, DRIVER_NAME);
-    strcat(DriverLocation, ".sys");
+	strcat(DriverLocation, "\\");
+	strcat(DriverLocation, DRIVERFILENAME);
+
 
     //
     // Insure driver file is in the specified directory.
@@ -999,7 +1530,7 @@ BOOLEAN SetupDriverName(PUCHAR DriverLocation)
 
 
 	    driverLocLen = GetCurrentDirectory(MAX_PATH,DriverLocation);
-        wsprintf(Msg, "%s.SYS is not in %s", DRIVER_NAME, DriverLocation );
+        wsprintf(Msg, "%s is not in %s", DRIVERFILENAME, DriverLocation );
 		OutputLine(Msg);
         //
         // Indicate failure.
@@ -1011,6 +1542,11 @@ BOOLEAN SetupDriverName(PUCHAR DriverLocation)
     //
     // Close open file handle.
     //
+
+
+	GetFileTime(fileHandle, NULL, NULL, &NewLastWriteTime);
+	FileTimeToSystemTime(&OldLastWriteTime, &Time);
+	
 
     if (fileHandle) {
 
@@ -1085,7 +1621,7 @@ HANDLE BPQOpenSerialControl(ULONG * lasterror)
 
 	*lasterror=0;
 	
-	hDevice = CreateFile( "//./BPQControl", GENERIC_READ | GENERIC_WRITE,
+	hDevice = CreateFile( "\\\\.\\BPQControl", GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
                   NULL,                 // no security attrs
                   OPEN_EXISTING,

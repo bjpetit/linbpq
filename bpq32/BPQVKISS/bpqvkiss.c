@@ -201,10 +201,11 @@ int	ASYINIT(int comport, int speed, int bpqport)
    char buf[256];
    int n;
 
-   	if (HIBYTE(_winver) < 5)
+
+   if (HIBYTE(_winver) < 5)
 		Win98 = TRUE;
 
-	if (Win98)
+   if (Win98)
 	{
 		VCOMInfo[bpqport]->ComDev = CreateFile( "\\\\.\\BPQVCOMM.VXD", GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
