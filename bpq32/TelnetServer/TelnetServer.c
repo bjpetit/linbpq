@@ -9,6 +9,10 @@
 //	Add logging param to config file
 //	Include IP address in log
 
+//	Version 2.1.3  January 2009
+//	Add StartMinimized Command Line Option
+
+
 #include "stdafx.h"
 #include "TelnetServer.h"
 #include "bpq32.h"
@@ -40,6 +44,7 @@ int CurrentSockets=0;
 
 int Port=8010;
 BOOL cfgMinToTray;
+BOOL StartMinimized = FALSE;
 
 char PasswordMsg[100]="Password:";
 
@@ -101,9 +106,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int BPQStream, n;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
-	UNREFERENCED_PARAMETER(lpCmdLine);
 
- 	// TODO: Place code here.
+	if (_stricmp(lpCmdLine, "StartMinimized") == 0) StartMinimized = TRUE;
 
 	// Initialize global strings
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -219,7 +223,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    SetTimer(hWnd,1,10000,NULL);
 
-   ShowWindow(hWnd, nCmdShow);
+	cfgMinToTray = GetMinimizetoTrayFlag();
+
+	if (StartMinimized)
+		if (cfgMinToTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hWnd, nCmdShow);
+
+
    UpdateWindow(hWnd);
 
    return Initialise();
@@ -946,8 +960,6 @@ BOOL Initialise()
 	//	Register message for posting by BPQDLL
 
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
-
-	cfgMinToTray = GetMinimizetoTrayFlag();
 
 	if (!ParseIniFile("BPQTelnetServer.cfg")) return FALSE;
 

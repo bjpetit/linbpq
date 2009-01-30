@@ -9,6 +9,9 @@
 //
 #include "windows.h"
 
+#define IDC_STATIC                      -1
+
+
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
@@ -56,8 +59,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,1,1
- PRODUCTVERSION 1,0,1,1
+ FILEVERSION 1,1,0,1
+ PRODUCTVERSION 1,1,0,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -74,12 +77,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "G8BPQ\0"
             VALUE "FileDescription", "BPQKantHost\0"
-            VALUE "FileVersion", "1, 0, 1, 1\0"
+            VALUE "FileVersion", "1, 1, 0, 1\0"
             VALUE "InternalName", "KantHost\0"
             VALUE "LegalCopyright", "© Copyright G8BPQ\0"
             VALUE "OriginalFilename", "KantHost\0"
             VALUE "ProductName", "BPQ32 Kantronics Hostmode Emulator\0"
-            VALUE "ProductVersion", "1, 0, 1, 1\0"
+            VALUE "ProductVersion", "1, 1, 0, 1\0"
         END
     END
     BLOCK "VarFileInfo"

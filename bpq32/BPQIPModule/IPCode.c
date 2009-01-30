@@ -14,6 +14,10 @@
 
 // First Version, July 2008
 
+// Version 1.2.1 January 2009
+
+//	Add IP Address Mapping option
+
 /*
 TODo	?Time Out ARP
 		?Multiple Adapters
@@ -91,6 +95,7 @@ char ConfigClassName[]="CONFIG";
 HWND hResWnd;
 
 BOOL MinimizetoTray=FALSE;
+BOOL StartMinimized=FALSE;
 
 int baseline=0;
 
@@ -313,6 +318,7 @@ Dll BOOL APIENTRY Init_IP()
 	ReadARP();
 
 	MinimizetoTray=GetMinimizetoTrayFlag();
+	if (GetStartMinimizedFlag) StartMinimized=GetStartMinimizedFlag();
 
 	if (NeedResolver)
 		_beginthread(ResolveNames, 0, NULL );
@@ -2077,7 +2083,13 @@ void ResolveNames( void *dummy )
 		AddTrayMenuItem(hResWnd, "IP Gateway Resolver");
 	}
 
-	ShowWindow(hResWnd,SW_RESTORE);
+	if (StartMinimized)
+		if (MinimizetoTray)
+			ShowWindow(hResWnd, SW_HIDE);
+		else
+			ShowWindow(hResWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hResWnd, SW_RESTORE);
 
 	SetTimer(hResWnd,1,15*60*1000,0);	
 

@@ -11,7 +11,7 @@
 
 //	Version 409p March 2005 Allow Multidigit COM Ports
 
-//  Version 410g Jan 2009 Changes for Win98 Virtual COM
+//  Version 410h Jan 2009 Changes for Win98 Virtual COM
 //		Open \\.\com instead of //./COM
 //		Extra Dignostics
 

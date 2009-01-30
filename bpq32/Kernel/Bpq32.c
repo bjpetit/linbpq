@@ -120,6 +120,15 @@
 //				Fix Init for large (>64k) tables
 //				Fix Nodes count in Stats
 
+// 410h		January 2009
+
+//				Add Start Minimized Option
+//				Changes to KISS for WIn98 Virtual COM
+//					Open \\.\com instead of //./COM
+//					Extra Dignostics
+
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 
 #pragma data_seg("_BPQDATA")
@@ -239,6 +248,7 @@ NOTIFYICONDATA niData;
 
 int SetupConsoleWindow();
 
+BOOL StartMinimized=FALSE;
 BOOL MinimizetoTray=TRUE;
 
 HMENU trayMenu=0;
@@ -1226,6 +1236,14 @@ VOID SetupBPQDirectory()
 		}
 
 		if (BPQDirectory[0] == 0) GetCurrentDirectory(MAX_PATH, BPQDirectory);
+
+		// Get StartMinimized and MinimizetoTray flags
+
+		Vallen = 4;
+		retCode = RegQueryValueEx(hKey, "Start Minimized", 0, &Type, (UCHAR *)&StartMinimized, &Vallen);
+
+		Vallen = 4;
+		retCode = RegQueryValueEx(hKey, "Minimize to Tray", 0, &Type, (UCHAR *)&MinimizetoTray, &Vallen);
 
 		RegCloseKey(hKey);
 	}
@@ -3133,14 +3151,16 @@ int NewLine();
 LOGFONT LFTTYFONT ;
 
 HFONT hFont ;
- 
+
+HMENU hPopMenu;
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 int SetupConsoleWindow()
 {
     WNDCLASS  wc;
 	int i;
-	HMENU hMenu,hPopMenu;
+	HMENU hMenu;
 
 
 	// Create Console Window
@@ -3183,6 +3203,9 @@ int SetupConsoleWindow()
 	AppendMenu(hPopMenu,MF_STRING,BPQCLEARRECONFIG,"Clear Nodes, Re-read bpqcfg.bin and reconfigure node");
 	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
 
+	AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
+	AppendMenu(hPopMenu,MF_STRING | (MinimizetoTray)? MF_CHECKED:MF_UNCHECKED, BPQMINTOTRAY, "Minimize to Tray" );
+	
 	DrawMenuBar(hWnd);	
 
 	// setup default font information
@@ -3206,8 +3229,14 @@ int SetupConsoleWindow()
 	
 	SetWindowText(hWnd,Title);
 		
-	ShowWindow(hWnd, SW_RESTORE);
-		
+	if (StartMinimized)
+		if (MinimizetoTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hWnd, SW_RESTORE);
+
 	if (MinimizetoTray == 0) 
 		return 0;
 
@@ -3292,6 +3321,28 @@ doneit:
 	return 0;
 }
 
+VOID SaveConfig()
+{
+	HKEY hKey=0;
+	int retCode, disp;
+
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32",
+                              0,	// Reserved
+							  0,	// Class
+							  0,	// Options
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		retCode = RegSetValueEx(hKey, "Start Minimized", 0, REG_DWORD, (UCHAR *)&StartMinimized, 4);
+		retCode = RegSetValueEx(hKey, "Minimize to Tray", 0, REG_DWORD, (UCHAR *)&MinimizetoTray, 4);
+	}
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
@@ -3351,6 +3402,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (wmId == BPQDUMP)
 			{
 				DumpSystem();
+				return 0;
+			}
+
+			if (wmId == BPQMINTOTRAY)
+			{
+				MinimizetoTray = !MinimizetoTray;
+				
+				if (MinimizetoTray)
+					CheckMenuItem(hPopMenu, BPQMINTOTRAY, MF_CHECKED);
+				else
+					CheckMenuItem(hPopMenu, BPQMINTOTRAY, MF_UNCHECKED);
+
+				SaveConfig();
+				return 0;
+			}
+
+			if (wmId == BPQSTARTMIN)
+			{
+				StartMinimized = !StartMinimized;
+				
+				if (StartMinimized)
+					CheckMenuItem(hPopMenu, BPQSTARTMIN, MF_CHECKED);
+				else
+					CheckMenuItem(hPopMenu, BPQSTARTMIN, MF_UNCHECKED);
+
+				SaveConfig();
 				return 0;
 			}
 
@@ -3431,6 +3508,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 DllExport BOOL APIENTRY GetMinimizetoTrayFlag()
 {
 	return MinimizetoTray;
+}
+
+DllExport BOOL APIENTRY GetStartMinimizedFlag()
+{
+	return StartMinimized;
 }
 
 DllExport int APIENTRY AddTrayMenuItem(HWND hWnd, char * Label)

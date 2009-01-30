@@ -5,6 +5,11 @@
 
 //		First Version
 
+//	Version 1.1.0 January 2009
+
+//		Supports Win98 Virtual COM Ports
+//		Add StartMinimized Option
+
 #include "stdafx.h"
 #include "bpqhostmodes.h"
 #include "bpq32.h"
@@ -96,6 +101,7 @@ UINT_PTR TimerHandle = 0;
 
 
 BOOL cfgMinToTray;
+BOOL StartMinimized = FALSE;
 
 
 int APIENTRY WinMain(HINSTANCE hInstance,
@@ -113,7 +119,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	HKEY hKey=0;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
-	UNREFERENCED_PARAMETER(lpCmdLine);
+
+	if (_stricmp(lpCmdLine, "StartMinimized") == 0) StartMinimized = TRUE;
 	
 	MyRegisterClass(hInstance);
 
@@ -327,12 +334,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"BPQ Hostmode Emulator Version %s", VersionString);
+	wsprintf(Title,"BPQ Hostmodes Emulator Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+	cfgMinToTray = GetMinimizetoTrayFlag();
+
+	if (StartMinimized)
+		if (cfgMinToTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hWnd, nCmdShow);
 
    	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
@@ -504,10 +518,13 @@ BOOL Initialise()
 
 	HKEY hKey=0;
 	
-	cfgMinToTray = GetMinimizetoTrayFlag();
+#pragma warning(push)
+#pragma warning(disable : 4996)
 
 	if (HIBYTE(_winver) < 5)
 		Win98 = TRUE;
+
+#pragma warning(pop)
 
 	// Get config from Registry 
 
@@ -1980,7 +1997,7 @@ int *BPQAPI=0;
 
 typedef int (FAR *FARPROCX)();
 
-FARPROCX GETBPQAPI;
+FARPROCX GETAPI;
 
 int AttachedProcesses=0;
 
@@ -2233,15 +2250,15 @@ BUFF000:
 		return FALSE;
 	}
 
-	GETBPQAPI = (FARPROCX)GetProcAddress(ExtDriver,"_GETBPQAPI@0");
+	GETAPI = (FARPROCX)GetProcAddress(ExtDriver,"_GETBPQAPI@0");
 	
-	if (GETBPQAPI == NULL)
+	if (GETAPI == NULL)
 	{
 		OutputDebugString("BPQHOST Error finding BPQ32 API Entry Points");
 		return FALSE;
 	}
 
-	BPQAPI=(int *)GETBPQAPI();
+	BPQAPI=(int *)GETAPI();
 
 	}
 

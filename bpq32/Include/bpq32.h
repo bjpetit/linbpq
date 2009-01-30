@@ -210,6 +210,7 @@ int APIENTRY AddTrayMenuItem(HWND hWnd, char * Label);
 
 int APIENTRY DeleteTrayMenuItem(HWND hWnd);
 
+BOOL APIENTRY StartMinimizedFlag();
 
 // Log a message to the bpq32 console.
  
@@ -420,6 +421,7 @@ int (FAR WINAPI * AddTrayMenuItem)(HWND hWnd, char * Label);
 //int APIENTRY DeleteTrayMenuItem();
 int (FAR WINAPI * DeleteTrayMenuItem)(HWND hWnd);
 
+BOOL (FAR WINAPI * GetStartMinimizedFlag)();
 
 // Log a message to the bpq32 console.
  
@@ -507,6 +509,7 @@ BOOL GetAPI()
 	GetMinimizetoTrayFlag = (BOOL (__stdcall *)())GetProcAddress(ExtDriver,"_GetMinimizetoTrayFlag@0");
 	AddTrayMenuItem = (int (__stdcall *)(HWND hWnd, char * Label))GetProcAddress(ExtDriver,"_AddTrayMenuItem@8");
 	DeleteTrayMenuItem = (int (__stdcall *)(HWND hWnd))GetProcAddress(ExtDriver,"_DeleteTrayMenuItem@4");
+	GetStartMinimizedFlag = (BOOL (__stdcall *)())GetProcAddress(ExtDriver,"_GetStartMinimizedFlag@0");
 	WritetoConsole = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_WritetoConsole@4");
 	CheckTimer = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CheckTimer@0");
 	CloseBPQ32 = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CloseBPQ32@0");

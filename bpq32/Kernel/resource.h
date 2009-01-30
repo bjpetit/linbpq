@@ -20,6 +20,8 @@
 #define BPQDUMP							406
 #define BPQSAVENODES					407
 #define BPQCLEARRECONFIG				408
+#define BPQMINTOTRAY					409
+#define BPQSTARTMIN						410
 
 #define ID_SAVE							1008
 #define ID_CANCEL						1009

@@ -1,6 +1,10 @@
-// TelnetServer.cpp : Defines the entry point for the application.
-//
 
+// TNC2 Emulator for BPQ32 Switch
+
+// Version 1.1.0 January 2009
+
+//		Support Win98 VirtualCOM
+//		Add StartMinimized Option
 
 #include "stdafx.h"
 #include "bpqtnc2.h"
@@ -89,6 +93,7 @@ unsigned int TimerHandle = 0;
 
 
 BOOL cfgMinToTray;
+BOOL StartMinimized = FALSE;
 
 #define DllImport	__declspec( dllimport )
 
@@ -155,9 +160,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	struct ConnectionInfo * conn;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
-	UNREFERENCED_PARAMETER(lpCmdLine);
-	
 
+	if (_stricmp(lpCmdLine, "StartMinimized") == 0) StartMinimized = TRUE;
+	
 	MyRegisterClass(hInstance);
 
 	// Perform application initialization:
@@ -285,8 +290,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	SetWindowText(hWnd,Title);
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+	cfgMinToTray = GetMinimizetoTrayFlag();
+
+	if (StartMinimized)
+		if (cfgMinToTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hWnd, nCmdShow);
 
    	return Initialise();
 }
@@ -354,12 +366,13 @@ BOOL Initialise()
 
 	OutputDebugString("BPQTNC2 Init\n");
 
-	
-	cfgMinToTray = GetMinimizetoTrayFlag();
+#pragma warning(push)
+#pragma warning(disable : 4996)
 
 	if (HIBYTE(_winver) < 5)
 		Win98 = TRUE;
 
+#pragma warning(pop)
 
 	// Get config from Registry 
 

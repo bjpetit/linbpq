@@ -11,9 +11,11 @@
 //	Version 1.0.1 February 2008
 //	accepts calls in 'd' packet either way round (initially for spider)
 
-#define _CRT_SECURE_NO_DEPRECATE
+//	Version 1.2.0 January 2009
+//	Add StartMinimized Command Line Option
 
-//#define VERSION "Version 1.0.0"
+
+#define _CRT_SECURE_NO_DEPRECATE
 
 #include "stdafx.h"
 
@@ -29,6 +31,8 @@ HWND ConfigWnd;
 HBRUSH bgBrush;
 
 BOOL cfgMinToTray;
+BOOL StartMinimized = FALSE;
+
 int controlStream;
 
 char AGWPorts[500];
@@ -92,7 +96,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
 {
     MSG msg;				     // message
-	
+
+	if (_stricmp(lpCmdLine, "StartMinimized") == 0) StartMinimized = TRUE;
 	
 	if (!InitApplication(hInstance))
 		return (FALSE);	
@@ -172,7 +177,18 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	MainWnd=hWnd;
 
-    ShowWindow(hWnd, nCmdShow);  
+	cfgMinToTray = GetMinimizetoTrayFlag();
+
+	if (StartMinimized)
+		if (cfgMinToTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hWnd, nCmdShow);
+
+
+
     UpdateWindow(hWnd); 
 	
 	return Initialise();
@@ -547,9 +563,6 @@ BOOL Initialise()
 
 
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
-
-	cfgMinToTray = GetMinimizetoTrayFlag();
-
 
 	// Get config from Registry 
 

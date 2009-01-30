@@ -601,8 +601,7 @@ int DoIPStatus()
 		//	As the arp table is in shared memory, we have to ask bpq32.dll to copy each entry to our
 		//	memory. Do one entry on each call of the timer.
 
-		memset(NewScreen, ' ', 4000); 
-		strcpy(NewScreen,"     IP Address     MAC Address        Port Type Valid Timer");
+		strcpy(Screen,"     IP Address     MAC Address        Port Type Valid Timer");
 
 		GetIPInfo(&ARPRecord, &IPStats, 0);
 
@@ -622,8 +621,8 @@ int DoIPStatus()
 
 	if (IPStatsState == ARPCount)
 	{
+		memset(&Screen[(IPStatsState+1)*108], ' ', 4000-((IPStatsState+1)*108)); 
 		IPStatsState = -1;
-		memcpy(Screen, NewScreen, 4000);
 	}
 	else
 		GetIPInfo(&ARPRecord, &IPStats, IPStatsState);
@@ -667,7 +666,7 @@ VOID DoARPLine(int i)
 			wsprintf(Mac," %s-%d", Call, SSID);
 	}
 
-	wsprintf(&NewScreen[(i+1)*108],"%18s %-19s %4d   %c  %3d   %d",
+	wsprintf(&Screen[(i+1)*108],"%18s %-19s %4d   %c  %3d   %d",
 			IP, Mac, ARPRecord->ARPINTERFACE,
 			ARPRecord->ARPTYPE, ARPRecord->ARPVALID, ARPRecord->ARPTIMER);
 

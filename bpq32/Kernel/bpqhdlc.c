@@ -21,6 +21,7 @@
 #define IOCTL_BPQHDLC_TIMER			CTL_CODE(FILE_DEVICE_BPQHDLC,0x802,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQHDLC_ADDCHANNEL	CTL_CODE(FILE_DEVICE_BPQHDLC,0x803,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQHDLC_CHECKTX		CTL_CODE(FILE_DEVICE_BPQHDLC,0x804,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_BPQHDLC_INIT			CTL_CODE(FILE_DEVICE_BPQHDLC,0x804,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
 
 
@@ -55,6 +56,8 @@ BYTE bOutput[4]=" ";
 DWORD cb=0;
 int fResult=0;
 
+BOOL Win98 = FALSE;
+
 extern int QCOUNT;
 int Init98(HDLCDATA * PORTVEC);
 int Init2K(HDLCDATA * PORTVEC);
@@ -71,14 +74,12 @@ int HDLCRX(PHDLCDATA PORTVEC, UCHAR * buff)
 
 	if (PORTVEC->DRIVERPORTTABLE == 0) return 0;
 
-
 	memcpy(&Param, &PORTVEC->DRIVERPORTTABLE,4);
-
 
 	fResult = DeviceIoControl(
 			hDevice,   // device handle
-			IOCTL_BPQHDLC_POLL,		   // control code
-			&Param,4, //rand() & 0xff, //Input Params
+			(Win98) ? 'G' : IOCTL_BPQHDLC_POLL,		   // control code
+			&Param, (Win98) ? (rand() & 0xff) : 4, //Input Params
 	        buff,360,&len, // output parameters
 			0);
 
@@ -96,7 +97,7 @@ int HDLCTIMER(PHDLCDATA  PORTVEC)
 
 	fResult = DeviceIoControl(
 			hDevice,   // device handle
-			IOCTL_BPQHDLC_TIMER,		   // control code
+			(Win98) ? 'T' : IOCTL_BPQHDLC_TIMER,		   // control code
 			&PORTVEC->DRIVERPORTTABLE,4, //Input Params
 	        0,0,&len, // output parameters
 			0);
@@ -110,6 +111,9 @@ int HDLCTIMER(PHDLCDATA  PORTVEC)
 
 	if (hDevice == 0)
 		return (0);
+
+	if (Win98)
+		return 0;
 
 	if (PORTVEC->DRIVERPORTTABLE == 0) return 0;
 
@@ -138,7 +142,8 @@ int HDLCTX(PHDLCDATA  PORTVEC,UCHAR * buff)
 	
 	fResult = DeviceIoControl(
 			hDevice,   // device handle
-			IOCTL_BPQHDLC_SEND,		   // control code
+			(Win98) ? 'S' : IOCTL_BPQHDLC_SEND,	   // control code
+		   // control code
 			buff,txlen,	// input parameters
 	        NULL,0,&cb, // output parameters
 			0);
@@ -155,7 +160,6 @@ int HDLCINIT(HDLCDATA * PORTVEC)
 	int WinVer, WinMinor;
 
 	WritetoConsole("HDLC ");
-	OutputDebugString("Init HDLC\n");
 
 #pragma warning(push)
 #pragma warning(disable : 4996)
@@ -168,7 +172,12 @@ int HDLCINIT(HDLCDATA * PORTVEC)
 	if (WinVer >= 5)		// Win 2000 or above
 		return Init2K(PORTVEC);
 	else
-		return Init98(PORTVEC);
+	{
+		Init98(PORTVEC);
+		OutputDebugString("HDLC Win98 Return from Init98\n");
+		return 0;
+	}
+
 }
 
 int Init98(HDLCDATA * PORTVEC)
@@ -176,7 +185,7 @@ int Init98(HDLCDATA * PORTVEC)
 	char msg[255];
 	int err;
 
-	OutputDebugString("Init HDLC 98\n");
+	Win98 = TRUE;
 
 	//
 	//	Open HDLC Driver, send send config params
@@ -207,15 +216,19 @@ int Init98(HDLCDATA * PORTVEC)
 			return (FALSE);
 		}
 
-		fResult = DeviceIoControl(
-			hDevice,          // device handle
-			10,//DIOC_GETVERSION,  // control code
-			NULL,0,// input parameters
-			bOutput, 4, &cb,  // output parameters
-			0);
+//		OutputDebugString("Calling GetVersion\n");
+
+//		fResult = DeviceIoControl(
+//			hDevice,          // device handle
+//			10,//DIOC_GETVERSION,  // control code
+//			NULL,0,// input parameters
+//			bOutput, 4, &cb,  // output parameters
+//			0);
 
 		srand( (unsigned)time( NULL ) );  //Prime random no generator	
 	}
+
+	OutputDebugString("Calling Initialize\n");
 
 	//
 	//	Initailize Driver for this card and channel
@@ -223,18 +236,13 @@ int Init98(HDLCDATA * PORTVEC)
 
 	fResult = DeviceIoControl(
 		hDevice,   // device handle
-		'I',		   // control code
-		PORTVEC,sizeof portcontrol,// input parameters
-		bOutput, 4, &cb,  // output parameters
+		IOCTL_BPQHDLC_INIT,			// control code
+		PORTVEC,sizeof portcontrol,		// input parameters
+		bOutput, 4, &cb,				// output parameters
         0);
 
-	//memcpy(PORTVEC->DRIVERPORTTABLE,bOutput,4);
+	memcpy(&PORTVEC->DRIVERPORTTABLE, bOutput, 4);
 
-	OutputDebugString("HDLC Init Complete\n");
-
-	PORTVEC->DRIVERPORTTABLE = 0;
-
-	
 	return (TRUE);
 		
 }
@@ -359,9 +367,6 @@ int Init2K(HDLCDATA * PORTVEC)
 {
 	char msg[255];
 	int err;
-
-		OutputDebugString("Init HDLC 2K\n");
-
 
 	if (hDevice == 0)		// Not already loaded
 	{

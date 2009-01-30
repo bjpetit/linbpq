@@ -72,6 +72,10 @@
 //
 //		Add Linux-style config of broadcast addressess
 
+//	Version 1.13.2 January 2009
+//
+//		Add Start Minimized Option
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -135,6 +139,7 @@ VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen);
 
 BOOL MinimizetoTray=FALSE;
 
+BOOL StartMinimized=FALSE;
 
 #define IP_AXIP 93				   // IP Protocol for AXIP
 
@@ -699,6 +704,8 @@ InitAXIP()
 
 	MinimizetoTray=GetMinimizetoTrayFlag();
 
+	if (GetStartMinimizedFlag) StartMinimized=GetStartMinimizedFlag();
+
 	//
     //	Start Resolver Thread if needed
 	//
@@ -1224,7 +1231,13 @@ void ResolveNames( void *dummy )
 		AddTrayMenuItem(hResWnd, "AXIP Resolver");
 	}
 
-	ShowWindow(hResWnd,SW_RESTORE);
+	if (StartMinimized)
+		if (MinimizetoTray)
+			ShowWindow(hResWnd, SW_HIDE);
+		else
+			ShowWindow(hResWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hResWnd, SW_RESTORE);
 
 	SetTimer(hResWnd,1,15*60*1000,0);	
 
@@ -1447,7 +1460,14 @@ void CreateMHWindow( void *dummy )
 		AddTrayMenuItem(hMHWnd, "AXIP MHEARD");
 	}
 
-	ShowWindow(hMHWnd,SW_RESTORE);
+	if (StartMinimized)
+		if (MinimizetoTray)
+			ShowWindow(hMHWnd, SW_HIDE);
+		else
+			ShowWindow(hMHWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hMHWnd, SW_RESTORE);
+
 }
 
 

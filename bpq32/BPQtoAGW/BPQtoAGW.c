@@ -35,7 +35,6 @@
 
 #include "windows.h"
 #include <stdio.h>
-#include <process.h>
 #include <time.h>
 
 #include "AsmStrucs.h"
@@ -52,11 +51,9 @@ unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, 
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
 
-
 DllImport int ResetExtDriver(int num);
 
 void ConnecttoAGWThread(int port);
-
 
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);

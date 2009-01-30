@@ -19,10 +19,13 @@
 
 //		Correct RX length (was 1 byte too long)
 
+// Version 1.3.1 Jan 2009
+
+//		Support Win98 VirtualCOM Driver
+
 #define WIN32_LEAN_AND_MEAN
 
 #include "windows.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 //#include <process.h>
@@ -57,6 +60,7 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
+BOOL Win98 = FALSE;
 
 HANDLE STDOUT=0;
 
@@ -193,7 +197,6 @@ int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 	return txptr;
 
 }
- BOOL Win98 = FALSE;
 
 int	ASYINIT(int comport, int speed, int bpqport)
 {
@@ -201,9 +204,13 @@ int	ASYINIT(int comport, int speed, int bpqport)
    char buf[256];
    int n;
 
+#pragma warning( push )
+#pragma warning( disable : 4996 )
 
    if (HIBYTE(_winver) < 5)
 		Win98 = TRUE;
+
+#pragma warning( pop ) 
 
    if (Win98)
 	{
