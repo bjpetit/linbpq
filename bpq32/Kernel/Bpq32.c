@@ -127,9 +127,13 @@
 //					Open \\.\com instead of //./COM
 //					Extra Dignostics
 
+// 410i		Febuary 2009
 
+//				Revert KISS Changes
+//				Save Window positions
 
 #define _CRT_SECURE_NO_DEPRECATE 
+#define _USE_32BIT_TIME_T
 
 #pragma data_seg("_BPQDATA")
 
@@ -254,6 +258,8 @@ BOOL MinimizetoTray=TRUE;
 HMENU trayMenu=0;
 
 HWND hWnd;
+
+RECT Rect;			// Window Position
 
 DllExport int APIENTRY DumpSystem();
 DllExport int APIENTRY SaveNodes ();
@@ -930,6 +936,10 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	HANDLE handle;
 	DWORD n;
 	char buf[350];
+	int retCode, disp;
+	HKEY hKey=0;
+	char Size[80];
+
 	
 	int i;
 	unsigned int ProcessID;
@@ -1096,6 +1106,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (Mutex) CloseHandle(Mutex);
 
+		ShowWindow(hWnd, SW_RESTORE);
+		GetWindowRect(hWnd, &Rect);
+
 		if (hWnd) DestroyWindow(hWnd);
 
 		if (TimerInst == ProcessID)
@@ -1131,6 +1144,25 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			KillTimer(NULL,TimerHandle);
 			
 			if (AUTOSAVE == 1) SaveNodes();	
+			
+			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32",
+                              0,	// Reserved
+							  0,	// Class
+							  0,	// Options
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+			if (retCode == ERROR_SUCCESS)
+			{
+				wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+				retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+				RegCloseKey(hKey);
+			}
+
 			
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
@@ -1302,7 +1334,19 @@ HANDLE OpenConfigFile(char *fn)
 
 }
 
+ char * FormatMH(time_t szClock)
+ {
+	struct tm * TM;
+	static char MHTime[50];
+	
+	TM = localtime( &szClock );
 
+	wsprintf(MHTime, "%.2d:%.2d %.2d/%.2d/%.2d\r",
+		TM->tm_hour, TM->tm_min, TM->tm_mday, TM->tm_mon+1, TM->tm_year-100);
+
+	return MHTime;
+
+ }
 DllExport int APIENTRY GETBPQAPI()
 {
  	return (int)BPQHOSTAPI;
@@ -3161,6 +3205,9 @@ int SetupConsoleWindow()
     WNDCLASS  wc;
 	int i;
 	HMENU hMenu;
+	int retCode, Type, Vallen;
+	HKEY hKey=0;
+	char Size[80];
 
 
 	// Create Console Window
@@ -3204,7 +3251,7 @@ int SetupConsoleWindow()
 	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
 
 	AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
-	AppendMenu(hPopMenu,MF_STRING | (MinimizetoTray)? MF_CHECKED:MF_UNCHECKED, BPQMINTOTRAY, "Minimize to Tray" );
+	AppendMenu(hPopMenu,MF_STRING | (MinimizetoTray)? MF_CHECKED:MF_UNCHECKED, BPQMINTOTRAY, "Minimize to Notification Area (System Tray)" );
 	
 	DrawMenuBar(hWnd);	
 
@@ -3228,6 +3275,33 @@ int SetupConsoleWindow()
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 	
 	SetWindowText(hWnd,Title);
+
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+                "SOFTWARE\\G8BPQ\\BPQ32",    
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"WindowSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+	}
+
+	if (Rect.right < 100 || Rect.bottom < 100)
+	{
+		GetWindowRect(hWnd, &Rect);
+	}
+
+
+	MoveWindow(hWnd,Rect.left,Rect.top, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
+
+
 		
 	if (StartMinimized)
 		if (MinimizetoTray)
@@ -3447,6 +3521,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		switch (wmId) { 
 
 			case  SC_MINIMIZE: 
+
+				GetWindowRect(hWnd, &Rect);
 
 				if (MinimizetoTray)
 

@@ -27,5 +27,15 @@
 			<param name="Local" value="edit.htm">
 			</OBJECT>
 	</UL>
+	<LI> <OBJECT type="text/sitemap">
+		<param name="Name" value="Command Line Options">
+		<param name="Local" value="CMDLine.htm">
+		</OBJECT>
+	<UL>
+		<LI> <OBJECT type="text/sitemap">
+			<param name="Name" value="Configuration">
+			<param name="Local" value="ConfigParam.htm">
+			</OBJECT>
+	</UL>
 </UL>
 </BODY></HTML>

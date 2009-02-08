@@ -1,4 +1,8 @@
 
+// Version 1.0.5 January 2009
+
+//	Add Start Minimized Option
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -225,8 +229,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	SetTimer(hWnd,1,1000,NULL);
 	
-	ShowWindow(hWnd, nCmdShow);
-	UpdateWindow(hWnd);
+	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
+		if (MinimizetoTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, nCmdShow);
+	else
+		ShowWindow(hWnd, nCmdShow);
 
 	LoadToolHelperRoutines();
 

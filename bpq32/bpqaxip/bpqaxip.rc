@@ -28,8 +28,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,13,2,1
- PRODUCTVERSION 1,13,2,1
+ FILEVERSION 1,13,3,1
+ PRODUCTVERSION 1,13,3,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -51,12 +51,12 @@ BEGIN
 		#endif
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "bpqaxip\0"
-            VALUE "FileVersion", "1, 13, 2, 1\0"
+            VALUE "FileVersion", "1, 13, 3, 1\0"
             VALUE "InternalName", "bpqaxip\0"
             VALUE "LegalCopyright", "Copyright © 2002-2009 G8BPQ\0"
             VALUE "OriginalFilename", "bpqaxip.dll\0"
             VALUE "ProductName", "  bpqaxip\0"
-            VALUE "ProductVersion", "1, 13, 2, 1\0"
+            VALUE "ProductVersion", "1, 13, 3, 1\0"
         END
     END
     BLOCK "VarFileInfo"

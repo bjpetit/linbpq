@@ -11,14 +11,7 @@
 
 //	Version 409p March 2005 Allow Multidigit COM Ports
 
-//  Version 410h Jan 2009 Changes for Win98 Virtual COM
-//		Open \\.\com instead of //./COM
-//		Extra Dignostics
-
 #include "kiss.h"
-
-int WritetoConsoleLocal(char * buff);
-
    
 int ASYSEND(int port, char * buffer,int count)
 {
@@ -26,13 +19,16 @@ int ASYSEND(int port, char * buffer,int count)
    return (0);
 }
 
+VOID KISSCLOSE(int Port)
+{ 
+	DestroyTTYInfo(Port);
+}
+
 
 int	ASYINIT(int port, int speed, int PortVector,int RXVector)
 {
 	NPTTYINFO npTTYInfo ;
 	
-	WritetoConsoleLocal("ASYNC ");
-
 	CreateTTYInfo(port,speed);
 
 	if (NULL == (npTTYInfo = KISSInfo[port]))
@@ -45,10 +41,7 @@ int	ASYINIT(int port, int speed, int PortVector,int RXVector)
 	return (0);
 }
 
-VOID KISSCLOSE(int Port)
-{ 
-	DestroyTTYInfo(Port);
-}
+  
 
 NPTTYINFO CreateTTYInfo( int port,int speed )
 {
@@ -103,7 +96,6 @@ BOOL NEAR DestroyTTYInfo( int port )
       CloseConnection( port ) ;
 
    LocalFree( npTTYInfo ) ;
-   KISSInfo[port] = NULL;
 
    return ( TRUE ) ;
 
@@ -130,19 +122,18 @@ BOOL NEAR DestroyTTYInfo( int port )
 
 BOOL NEAR OpenConnection( int port)
 {            
-	char       szPort[15];
-	BOOL       fRetVal ;
-	NPTTYINFO  npTTYInfo ;
-	COMMTIMEOUTS  CommTimeOuts ;
-   
-	char buf[100];
+   char       szPort[ 15 ];
+   BOOL       fRetVal ;
+   NPTTYINFO  npTTYInfo ;
+   COMMTIMEOUTS  CommTimeOuts ;
+   int i;
 
-	if (NULL == (npTTYInfo = KISSInfo[port]))
-		return ( FALSE ) ;
+   if (NULL == (npTTYInfo = KISSInfo[port]))
+      return ( FALSE ) ;
 
   // load the COM prefix string and append port number
    
-  wsprintf( szPort, "\\\\.\\COM%d", PORT( npTTYInfo ) ) ;
+  wsprintf( szPort, "//./COM%d", PORT( npTTYInfo ) ) ;
 
    // open COMM device
 
@@ -156,9 +147,7 @@ BOOL NEAR OpenConnection( int port)
 				  
 	if (COMDEV( npTTYInfo ) == (HANDLE) -1 )
 	{
-		wsprintf(buf,"COM%d could not be opened ", PORT( npTTYInfo ));
-		OutputDebugString(buf);
-		WritetoConsoleLocal(buf);
+		i=GetLastError();
 		return ( FALSE ) ;
 	}
 
@@ -179,27 +168,23 @@ BOOL NEAR OpenConnection( int port)
       CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
       CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
       CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
-      CommTimeOuts.WriteTotalTimeoutConstant = 100 ;
+      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
       SetCommTimeouts( COMDEV( npTTYInfo ), &CommTimeOuts ) ;
    }
-	
-	fRetVal = SetupConnection( port ) ;
 
-	if (fRetVal)
-	{
-		CONNECTED( npTTYInfo ) = TRUE ;
+   fRetVal = SetupConnection( port ) ;
 
-		// assert DTR
+   if (fRetVal)
+   {
+      CONNECTED( npTTYInfo ) = TRUE ;
 
-		EscapeCommFunction( COMDEV( npTTYInfo ), SETDTR ) ;
+      // assert DTR
 
-	}
-	else
-	{
-	   wsprintf(buf,"COM%d Setup Failed %d ", PORT(npTTYInfo), GetLastError());
-	   WritetoConsoleLocal(buf);
-	   OutputDebugString(buf);
+      EscapeCommFunction( COMDEV( npTTYInfo ), SETDTR ) ;
 
+   }
+   else
+   {
       CONNECTED( npTTYInfo ) = FALSE ;
       CloseHandle( COMDEV( npTTYInfo ) ) ;
    }

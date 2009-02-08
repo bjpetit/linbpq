@@ -599,7 +599,7 @@ _BPQDATA	ENDS
 
 _TEXT	SEGMENT
 
-	EXTRN _SaveNodes@0:NEAR
+	EXTRN _SaveNodes@0:NEAR, _FormatMH:NEAR
 
 	PUBLIC	COMMANDHANDLER,CONVBIGNUMBER,COUNTNODES,B2HEX,GETVALUE
 
@@ -3308,35 +3308,31 @@ DOTIME:
 ;
 ;	DO TIME
 ;
-
-	MOV	EAX,MHTIME[ESI]			; TICKS
-	MOV	EDX,0
-	DIV	DWORD PTR D86400	; REMAINDER IS SECS IN DAY
 	
-	MOV	EAX,EDX
-	MOV	EDX,0
-	DIV	DWORD PTR D3600		; GIVES HOURS, REM = SECS
+	MOV	EAX,MHTIME[ESI]			; TICKS
 
-	CALL	PRINTNUM
-;
-	MOV	AL,':'
-	STOSB
+	push esi
+	push	edi
+	
+	PUSH EAX
+	
+	call	_FormatMH
+	mov	esi, eax
+	
+	add	esp,4
+	pop	edi
+	
+@@:
+	lodsb
+	or	al,al
+	jz	@f
+	
+	stosb
+	jmp @B
+	
+@@:
 
-	MOV	EAX,EDX
-	MOV	EDX,0
-	DIV	DWORD PTR D60		; GIVES MINS, REM = SECS
-
-	CALL	PRINTNUM
-
-	MOV	AL,':'
-	STOSB
-
-	MOV	EAX,EDX				; secs
-	CALL	PRINTNUM
-;
-	MOV	AL,0DH
-	STOSB
-
+	pop	esi
 	POP	ECX
 
 	ADD	ESI,TYPE MHSTRUC

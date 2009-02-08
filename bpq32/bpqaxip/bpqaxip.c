@@ -76,6 +76,10 @@
 //
 //		Add Start Minimized Option
 
+//	Version 1.13.3 February 2009
+//
+//		Save Window positions
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -274,6 +278,8 @@ int baseline=0;
 int InitAXIP(void);
 BOOL InitWS2(void);
 
+RECT ResRect;
+RECT MHRect;
 
 time_t ltime,lasttime;
 
@@ -283,6 +289,10 @@ HANDLE hInstance;
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
+	int retCode, disp;
+	HKEY hKey=0;
+	char Size[80];
+
 	hInstance=hInst;
 
 	switch( ul_reason_being_called )
@@ -327,6 +337,32 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			{
 				DeleteTrayMenuItem(hMHWnd);
 				DeleteTrayMenuItem(hResWnd);
+			}
+
+			ShowWindow(hMHWnd, SW_RESTORE);
+			GetWindowRect(hMHWnd, &MHRect);
+
+			ShowWindow(hResWnd, SW_RESTORE);
+			GetWindowRect(hResWnd, &ResRect);
+	
+			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQAXIP",
+                              0,	// Reserved
+							  0,	// Class
+							  0,	// Options
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+			if (retCode == ERROR_SUCCESS)
+			{
+				wsprintf(Size,"%d,%d,%d,%d",MHRect.left,MHRect.right,MHRect.top,MHRect.bottom);
+				retCode = RegSetValueEx(hKey,"MHSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+				wsprintf(Size,"%d,%d,%d,%d",ResRect.left,ResRect.right,ResRect.top,ResRect.bottom);
+				retCode = RegSetValueEx(hKey,"ResSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+				RegCloseKey(hKey);
 			}
 
 //			CloseSockets();
@@ -934,6 +970,8 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			case  SC_MINIMIZE: 
 
+				GetWindowRect(hResWnd, &ResRect);
+
 				if (MinimizetoTray)
 
 					return ShowWindow(hWnd, SW_HIDE);
@@ -1147,6 +1185,10 @@ void ResolveNames( void *dummy )
 	WNDCLASS  wc;
 	char WindowTitle[100];
 	HMENU hMenu,hPopMenu;
+	int retCode, Type, Vallen;
+	HKEY hKey=0;
+	char Size[80];
+
 
 	// Fill in window class structure with parameters that describe
     // the main window.
@@ -1190,8 +1232,34 @@ void ResolveNames( void *dummy )
 
 	hResWnd = CreateWindow("AppName",WindowTitle,
 		WindowParam,
-		CW_USEDEFAULT, 0, 500, Windowlength,
+		CW_USEDEFAULT, 0, 400, Windowlength,
 		NULL, NULL, hInstance, NULL);
+
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+                "SOFTWARE\\G8BPQ\\BPQ32\\BPQAXIP",    
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"ResSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d",&ResRect.left,&ResRect.right,&ResRect.top,&ResRect.bottom);
+	}
+
+	if (ResRect.right < 100 || ResRect.bottom < 100)
+	{
+		GetWindowRect(hResWnd, &ResRect);
+	}
+
+
+	MoveWindow(hResWnd,ResRect.left,ResRect.top, ResRect.right-ResRect.left, ResRect.bottom-ResRect.top, TRUE);
+
 
 	hMenu=CreateMenu();
 	hPopMenu=CreatePopupMenu();
@@ -1320,7 +1388,9 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 
 			case SC_MINIMIZE: 
 
-			if (MinimizetoTray)
+				GetWindowRect(hMHWnd, &MHRect);
+
+				if (MinimizetoTray)
 
 				return ShowWindow(hWnd, SW_HIDE);
 			else
@@ -1417,6 +1487,10 @@ void CreateMHWindow( void *dummy )
     WNDCLASS  wc;
 	char WindowTitle[100];
 	HMENU hMenu,hPopMenu;
+	int retCode, Type, Vallen;
+	HKEY hKey=0;
+	char Size[80];
+
 	
 	// Fill in window class structure with parameters that describe
     // the main window.
@@ -1439,8 +1513,35 @@ void CreateMHWindow( void *dummy )
 	sprintf(WindowTitle,"AXIP MHEARD Version %s",VersionString);
   
 	hMHWnd = CreateWindow("MHAppName", WindowTitle, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0, 500, (MaxMHEntries)*14+30,
+		CW_USEDEFAULT, 0, 400, 150,
 		NULL, NULL, hInstance, NULL);
+
+		
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+                "SOFTWARE\\G8BPQ\\BPQ32\\BPQAXIP",    
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"MHSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d",&MHRect.left,&MHRect.right,&MHRect.top,&MHRect.bottom);
+	}
+
+	if (MHRect.right < 100 || MHRect.bottom < 100)
+	{
+		GetWindowRect(hMHWnd, &MHRect);
+	}
+
+
+	MoveWindow(hMHWnd,MHRect.left,MHRect.top, MHRect.right-MHRect.left, MHRect.bottom-MHRect.top, TRUE);
+
 
 	hMenu=CreateMenu();
 	hPopMenu=CreatePopupMenu();

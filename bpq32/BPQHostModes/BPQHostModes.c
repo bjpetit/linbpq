@@ -101,8 +101,6 @@ UINT_PTR TimerHandle = 0;
 
 
 BOOL cfgMinToTray;
-BOOL StartMinimized = FALSE;
-
 
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
@@ -119,8 +117,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	HKEY hKey=0;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
-
-	if (_stricmp(lpCmdLine, "StartMinimized") == 0) StartMinimized = TRUE;
 	
 	MyRegisterClass(hInstance);
 
@@ -340,11 +336,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	cfgMinToTray = GetMinimizetoTrayFlag();
 
-	if (StartMinimized)
+	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
 		if (cfgMinToTray)
 			ShowWindow(hWnd, SW_HIDE);
 		else
-			ShowWindow(hWnd, SW_SHOWMINIMIZED);
+			ShowWindow(hWnd, nCmdShow);
 	else
 		ShowWindow(hWnd, nCmdShow);
 

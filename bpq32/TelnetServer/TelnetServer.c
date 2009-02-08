@@ -44,7 +44,6 @@ int CurrentSockets=0;
 
 int Port=8010;
 BOOL cfgMinToTray;
-BOOL StartMinimized = FALSE;
 
 char PasswordMsg[100]="Password:";
 
@@ -106,8 +105,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int BPQStream, n;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
-
-	if (_stricmp(lpCmdLine, "StartMinimized") == 0) StartMinimized = TRUE;
 
 	// Initialize global strings
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -225,11 +222,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	cfgMinToTray = GetMinimizetoTrayFlag();
 
-	if (StartMinimized)
+	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
 		if (cfgMinToTray)
 			ShowWindow(hWnd, SW_HIDE);
 		else
-			ShowWindow(hWnd, SW_SHOWMINIMIZED);
+			ShowWindow(hWnd, nCmdShow);
 	else
 		ShowWindow(hWnd, nCmdShow);
 

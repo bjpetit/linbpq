@@ -180,8 +180,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	TimerHandle=SetTimer(hWnd,WM_TIMER,5000,NULL);
 
-	ShowWindow(hWnd, nCmdShow);
-	UpdateWindow(hWnd);
+	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
+		if (MinimizetoTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, nCmdShow);
+	else
+		ShowWindow(hWnd, nCmdShow);
+
 
 	CheckTimer();
 

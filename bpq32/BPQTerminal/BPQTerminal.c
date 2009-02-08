@@ -17,7 +17,11 @@
 // Version 2.0.4 November 2008
 
 // Add option to remove a Line Feed following a CR
+// Add Logging Option
 
+// Version 2.0.5 January 2009
+
+// Add Start Minimized Option
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -148,6 +152,7 @@ LOGFONT LFTTYFONT ;
 HFONT hFont ;
 
 BOOL MinimizetoTray=FALSE;
+//BOOL StartMinimized = FALSE;
 
 HWND MainWnd;
 
@@ -168,6 +173,58 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	HKEY hKey=0;
 	char Size[80];
 
+	wsprintf(Size,"%d\n", nCmdShow);
+	OutputDebugString(Size);
+
+/*	PCHAR p1, p2, p3;
+
+	p1 = strtok(lpCmdLine, " ,\t\n\r");
+	p2 = strtok(NULL, " ,\t\n\r");
+	p3 = strtok(NULL, " ,\t\n\r");
+
+	if (nCmdShow == SW_SHOWMINIMIZED)
+		StartMinimized = TRUE;
+
+	if (p1)
+	{
+		if (strlen(p1) > 5)
+		{
+			if (_stricmp(p1, "StartMinimized") == 0)
+				StartMinimized = TRUE;
+
+			if (p2) Sessno = atoi(p2);
+			if (p3) sscanf(p3,"%x", &applflags);
+		}
+		else 
+		{		
+			if (p2)
+			{
+				if (strlen(p2) > 5)
+				{
+					if (_stricmp(p2, "StartMinimized") == 0)
+						StartMinimized = TRUE;
+		
+					if (p1) Sessno = atoi(p1);
+					if (p3) sscanf(p3,"%x", &applflags);
+				}
+			}
+			else
+			{
+				if (p3)
+				{
+					if (strlen(p3) > 5)
+					{
+						if (_stricmp(p3, "StartMinimized") == 0)
+							StartMinimized = TRUE;
+
+						if (p1) Sessno = atoi(p1);
+						if (p2) sscanf(p2,"%x", &applflags);
+					}
+				}
+			}
+		}
+	}
+*/
 	sscanf(lpCmdLine,"%d %x",&Sessno, &applflags);
 
 	if (!InitApplication(hInstance)) 
@@ -491,7 +548,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		AddTrayMenuItem(hWnd, Title);
 	}
 
-	ShowWindow(hWnd, nCmdShow);
+	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
+		if (MinimizetoTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, nCmdShow);
+	else
+		ShowWindow(hWnd, nCmdShow);
+
 	UpdateWindow(hWnd);
 
 	CheckTimer();
@@ -1073,6 +1137,8 @@ DoReceivedData(HWND hWnd)
 
 					index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
 					
+					if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
+
 					PartLinePtr=0;
 
 					len-=(ptr2-ptr1);
@@ -1088,14 +1154,12 @@ DoReceivedData(HWND hWnd)
 						}
 					}
 
-
 					if (index > 1200)
 						
 					do{
 
 						index=SendMessage(hwndOutput,LB_DELETESTRING, 0, 0);
 
-						if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
 					
 						} while (index > 1000);
 
@@ -1346,7 +1410,7 @@ int ToggleParam(HWND hWnd, BOOL * Param, int Item)
 {
 	*Param = !(*Param);
 
-	CheckMenuItem(hMenu,Item, (Param) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,Item, (*Param) ? MF_CHECKED : MF_UNCHECKED);
 	
     return (0);
 }
