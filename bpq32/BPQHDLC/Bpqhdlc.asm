@@ -7,6 +7,7 @@ TITLE BPQHDLC - VxD TO Drive HDLC cards for BPQ32 Switch
 ;
         .386p
 
+DEBUG EQU 1
 
 SETRVEC	MACRO    A			;MACRO TO CHANGE THE  RX INT VECTOR
 	MOV	IORXCA[EBX],OFFSET32 A
@@ -56,6 +57,10 @@ ENDM
         INCLUDE Debug.Inc
 		INCLUDE V86MMGR.INC
 		include vpicd.inc
+		
+TNC2		EQU	0		; NO SUPPORT FOR TNC2 MODE
+
+		include ..\include\strucs.inc
 
 ;******************************************************************************
 ;              V I R T U A L   D E V I C E   D E C L A R A T I O N
@@ -401,12 +406,11 @@ BeginProc VXD_IOCONTROL
 
         mov     EAX,dwIoControlCode[ESI]
 
-		pushad
-	    Debug_Printf	"BPQHDLC IOCTL %x\n", eax
-		popad
-
-        mov     EAX,dwIoControlCode[ESI]
-		cmp		EAX,VWIN32_DIOC_GETVERSION
+        PUSHAD
+        Debug_Printf	"hdlc98 IOCONTROL %x", <eax>
+        POPAD
+        
+        cmp		EAX,VWIN32_DIOC_GETVERSION
 		je		getvers
 
 ;		cmp		EAX,'T'
@@ -426,16 +430,16 @@ BeginProc VXD_IOCONTROL
 
 nottimer:
 
-
 		cmp		EAX,'S'
 		je short senddata
 
 		cmp		EAX,'G'
 		je short getdata
 
-;		cmp		EAX,'I'
-;		je		INITPORT
+		cmp		EAX, 84212010H
 		
+		je		INITPORT
+				
 		jmp		skip					; Unknown
 senddata:
 		push	ESI
@@ -609,6 +613,11 @@ SDRPEND	EQU	28H		; RESET TX INT PENDING
 
 INITPORT:
 
+	PUSHAD
+	Debug_Printf	"hdlc98 Init"
+	POPAD
+
+
 	push	ESI
 	mov		ECX,TYPE HWDATA
 	mov		ESI,lpvInBuffer[ESI]
@@ -655,8 +664,15 @@ POOLDONE:
 		  
 	mov     edi,lpvOutBuffer[ESI]
 	mov		[EDI],EBX
+	
 
-	MOV	AL,PORTTYPE[EBX]
+	MOVZX	EAX,PORTTYPE[EBX]
+	
+	PUSHAD
+	Debug_Printf	"hdlc98 PortType %x", <eax>
+	POPAD
+
+
 	
 	CMP	AL,2
 	JE	PC120INIT
@@ -673,9 +689,19 @@ POOLDONE:
 	CMP	AL,12
 	JE	RLC100INIT
 	
+	PUSHAD
+	Debug_Printf	"hdlc98 Init Exit"
+	POPAD
+
+	xor eax,eax
+	
 	RET
 
 DRSIINIT:				; INTERRUPT INITIALISATION CODE
+
+	PUSHAD
+	Debug_Printf	"hdlc98 DRSIInit"
+	POPAD
 
 
 	MOV	DX,IOBASE[EBX]		; SCC ORIGIN
@@ -835,6 +861,12 @@ INITACOUNTER:
 EXTCLOCK:
 
 	CALL	INITREST
+	
+	PUSHAD
+	Debug_Printf	"hdlc98 DRSIInit Exit"
+	POPAD
+
+        xor      eax,eax
 
  	RET
 
@@ -1625,8 +1657,10 @@ EndProc BPQVXD_Control
 
 BeginProc VXD_INIT
 
-	Debug_Printf	"BPQHDLC Dynamic Device Init\n"
-
+	PUSHAD
+	Debug_Printf	"hdlc98 SYS_DYNAMIC_DEVICE_INIT"
+	POPAD
+	
 	clc
 	ret
 
@@ -1635,14 +1669,10 @@ EndProc VXD_INIT
        
 BeginProc VXD_EXIT
 
-	Debug_Printf	"BPQHDLC Dynamic Device Exit\n"
-
-
-	clc
-	ret
-
-
-
+	PUSHAD
+	Debug_Printf	"hdlc98 SYS_DYNAMIC_DEVICE_EXIT"
+	POPAD
+	
 	MOV	ebx,PORTTABLE
 	MOV	ecx,NUMBEROFPORTS
 
