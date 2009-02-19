@@ -1339,10 +1339,11 @@ HANDLE OpenConfigFile(char *fn)
 	struct tm * TM;
 	static char MHTime[50];
 	
-	TM = localtime( &szClock );
+	szClock = (_time32(NULL) - szClock);
+	TM = localtime(&szClock);
 
-	wsprintf(MHTime, "%.2d:%.2d %.2d/%.2d/%.2d\r",
-		TM->tm_hour, TM->tm_min, TM->tm_mday, TM->tm_mon+1, TM->tm_year-100);
+	wsprintf(MHTime, "%.2d:%.2d:%.2d:%.2d\r",
+		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec);
 
 	return MHTime;
 

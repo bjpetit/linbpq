@@ -11,7 +11,14 @@
 
 //	Version 409p March 2005 Allow Multidigit COM Ports
 
+//  Version 410h Jan 2009 Changes for Win98 Virtual COM
+//		Open \\.\com instead of //./COM
+//		Extra Dignostics
+
 #include "kiss.h"
+
+int WritetoConsoleLocal(char * buff);
+
    
 int ASYSEND(int port, char * buffer,int count)
 {
@@ -19,16 +26,17 @@ int ASYSEND(int port, char * buffer,int count)
    return (0);
 }
 
-VOID KISSCLOSE(int Port)
-{ 
-	DestroyTTYInfo(Port);
-}
-
 
 int	ASYINIT(int port, int speed, int PortVector,int RXVector)
 {
+	char Msg[20];
+	
 	NPTTYINFO npTTYInfo ;
 	
+	wsprintf(Msg,"ASYNC COM%d ", port);
+
+	WritetoConsoleLocal(Msg);
+
 	CreateTTYInfo(port,speed);
 
 	if (NULL == (npTTYInfo = KISSInfo[port]))
@@ -41,7 +49,10 @@ int	ASYINIT(int port, int speed, int PortVector,int RXVector)
 	return (0);
 }
 
-  
+VOID KISSCLOSE(int Port)
+{ 
+	DestroyTTYInfo(Port);
+}
 
 NPTTYINFO CreateTTYInfo( int port,int speed )
 {
@@ -96,6 +107,7 @@ BOOL NEAR DestroyTTYInfo( int port )
       CloseConnection( port ) ;
 
    LocalFree( npTTYInfo ) ;
+   KISSInfo[port] = NULL;
 
    return ( TRUE ) ;
 
@@ -122,18 +134,19 @@ BOOL NEAR DestroyTTYInfo( int port )
 
 BOOL NEAR OpenConnection( int port)
 {            
-   char       szPort[ 15 ];
-   BOOL       fRetVal ;
-   NPTTYINFO  npTTYInfo ;
-   COMMTIMEOUTS  CommTimeOuts ;
-   int i;
+	char       szPort[15];
+	BOOL       fRetVal ;
+	NPTTYINFO  npTTYInfo ;
+	COMMTIMEOUTS  CommTimeOuts ;
+   
+	char buf[100];
 
-   if (NULL == (npTTYInfo = KISSInfo[port]))
-      return ( FALSE ) ;
+	if (NULL == (npTTYInfo = KISSInfo[port]))
+		return ( FALSE ) ;
 
   // load the COM prefix string and append port number
    
-  wsprintf( szPort, "//./COM%d", PORT( npTTYInfo ) ) ;
+  wsprintf( szPort, "\\\\.\\COM%d", PORT( npTTYInfo ) ) ;
 
    // open COMM device
 
@@ -147,7 +160,9 @@ BOOL NEAR OpenConnection( int port)
 				  
 	if (COMDEV( npTTYInfo ) == (HANDLE) -1 )
 	{
-		i=GetLastError();
+		wsprintf(buf,"COM%d could not be opened ", PORT( npTTYInfo ));
+		OutputDebugString(buf);
+		WritetoConsoleLocal(buf);
 		return ( FALSE ) ;
 	}
 
@@ -168,23 +183,28 @@ BOOL NEAR OpenConnection( int port)
       CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
       CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
       CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
-      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
+//      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
+      CommTimeOuts.WriteTotalTimeoutConstant = 500 ;
       SetCommTimeouts( COMDEV( npTTYInfo ), &CommTimeOuts ) ;
    }
+	
+	fRetVal = SetupConnection( port ) ;
 
-   fRetVal = SetupConnection( port ) ;
+	if (fRetVal)
+	{
+		CONNECTED( npTTYInfo ) = TRUE ;
 
-   if (fRetVal)
-   {
-      CONNECTED( npTTYInfo ) = TRUE ;
+		// assert DTR
 
-      // assert DTR
+		EscapeCommFunction( COMDEV( npTTYInfo ), SETDTR ) ;
 
-      EscapeCommFunction( COMDEV( npTTYInfo ), SETDTR ) ;
+	}
+	else
+	{
+	   wsprintf(buf,"COM%d Setup Failed %d ", PORT(npTTYInfo), GetLastError());
+	   WritetoConsoleLocal(buf);
+	   OutputDebugString(buf);
 
-   }
-   else
-   {
       CONNECTED( npTTYInfo ) = FALSE ;
       CloseHandle( COMDEV( npTTYInfo ) ) ;
    }
@@ -412,7 +432,7 @@ BOOL NEAR WriteCommBlock( int port, LPSTR lpByte , DWORD dwBytesToWrite)
 	                       &dwBytesWritten, NULL ) ;
 
 
-	if (!fWriteStat) 
+	if ((!fWriteStat) || (dwBytesToWrite != dwBytesWritten))
 	{
 		ClearCommError( COMDEV( npTTYInfo ), &dwErrorFlags, &ComStat ) ;
 	}
