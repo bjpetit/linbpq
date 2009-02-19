@@ -1036,6 +1036,8 @@ int i;
 /************************************************************************/
 /*     CONVERT PORT DEFINITIONS TO BINARY				*/
 /************************************************************************/
+int hw;		// Hardware type
+
 
 int ports(i)
 int i;
@@ -1069,10 +1071,12 @@ int i;
 	fseek(fp2,(long) portoffset+112,SEEK_SET);
         fputi(kissflags,fp2);
 
-   	portoffset = portoffset + 512;
-	portnum = portnum +1;
+   	if (hw != 254)				// NULL definition
+	{
+		portoffset = portoffset + 512;
+		portnum = portnum +1;
+	}
 	return(1); 
-
 
 }
 
@@ -1321,6 +1325,7 @@ char rec[];
 /*
 		RADIO PORT PROCESSING 
 */
+
 decode_port_rec(rec)
 char rec[];
 {
@@ -1475,8 +1480,6 @@ int i;
 char value[];
 char rec[];
 {
-	int hw;
-
 	hw = 255;
 	if (_stricmp(value,"ASYNC") == 0)
 	   hw = 0;
@@ -1502,12 +1505,14 @@ char rec[];
 	   hw = 18;
 	if (_stricmp(value,"PA0HZP") == 0)
 	   hw = 20;
+	if (_stricmp(value,"NULL") == 0)
+		hw = 254;
 
 	fseek(fp2,(long) fileoffset,SEEK_SET);
 
 	if (hw == 255)
 	{
-	   puts("Invalid Hardware Type (not DRSI PC120 TOSH ASYNC QUAD)");
+	   puts("Invalid Hardware Type (not DRSI PC120 INTERNAL EXTERNAL BAYCOM PA0HZP ASYNC QUAD)");
 	   printf("%s\n\n",rec);
 	   return (0);
 	}
