@@ -14,6 +14,8 @@
 //	Version 1.2.0 January 2009
 //	Add StartMinimized Command Line Option
 
+//	Version 1.2.1 February 2009
+//	Fix buffer overflow in Mon Decode
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -1059,7 +1061,7 @@ int DoMonitorData(int Stream)
 	int RawLen,Length,Count;
 	byte Port;
 	struct SocketConnectionInfo * sockptr;	
-	byte AGWBuffer[500];
+	byte AGWBuffer[1000];
 	int n;
 	int Stamp, Frametype;
 	BOOL RXFlag, NeedAGW;
