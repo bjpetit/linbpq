@@ -115,7 +115,7 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 
 	if (Mutex == NULL)
 	{	
-		OutputDebugString("BPQ1632 bpq32.dll is not already loaded - Loading BPQ32.exe");
+		OutputDebugString("BPQ1632 bpq32.dll is not already loaded - Loading BPQ32.exe\n");
 
 		// Get address of BPQ Directory
 
@@ -218,7 +218,7 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 		if (Mutex == NULL)
 		{
 				
-			OutputDebugString("BPQ1632 bpq32.exe failed to initialize within 20 seconds");
+			OutputDebugString("BPQ1632 bpq32.exe failed to initialize within 20 seconds\n");
 
 			return FALSE;
 
@@ -235,7 +235,7 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 	if (ExtDriver == NULL)
 	{
 				
-		OutputDebugString("BPQ1632 Error Loading bpq32.dll");
+		OutputDebugString("BPQ1632 Error Loading bpq32.dll\n");
 
 		return FALSE;
 
@@ -248,7 +248,7 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 	
 	if (GETBPQAPI == NULL)
 	{
-		OutputDebugString("BPQ1632 Error finding BPQ32 API Entry Point");
+		OutputDebugString("BPQ1632 Error finding BPQ32 API Entry Point\n");
 
 		return FALSE;
 	}
@@ -443,7 +443,7 @@ NEEDHOSTPORT:
 			if (NewStream != 255)
 			{
 				StreamMap[Stream] = NewStream;
-				wsprintf(Msg,"BPQ1632 Stream %d remapped to Stream %d", Stream, NewStream);
+				wsprintf(Msg,"BPQ1632 Stream %d remapped to Stream %d\n", Stream, NewStream);
 				OutputDebugString(Msg);
 			}
 		}
@@ -489,7 +489,7 @@ HOSTNOPORT:
 				// Clear First Use of Allocated Stream
 
 				if (_ax != 255) NotFirstUse[_ax] = TRUE;
-				wsprintf(Msg,"BPQ1632 Fine Free Allocated Stream %d", _ax);
+				wsprintf(Msg,"BPQ1632 Fine Free Allocated Stream %d\n", _ax);
 				OutputDebugString(Msg);
 			}
 
