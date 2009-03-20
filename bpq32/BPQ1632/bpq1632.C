@@ -625,7 +625,6 @@ HOSTNOPORT:
 //			;				
 //			;
 
-
 		        APIVDMAddress = (ULONG) (_es<<16 | _di);
 
 				APIBuffer = (LPVOID) GetVDMPointer (APIVDMAddress, 350, FALSE);
@@ -672,7 +671,10 @@ HOSTNOPORT:
 				stamp=stamp%3600;		// Secs into hour
     
 				_ax=LOWORD(stamp/60);
-				_ax+=LOWORD(stamp%60)<<8;		
+				_ax+=LOWORD(stamp%60)<<8;
+
+				_cx-=2;
+
 rawnodata:
 				
 				setAX(_ax);

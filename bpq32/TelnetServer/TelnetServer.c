@@ -12,6 +12,9 @@
 //	Version 2.1.3  January 2009
 //	Add StartMinimized Command Line Option
 
+//	Version 2.1.4  March 2009
+//	Add DisconnectOnClose Config option
+
 
 #include "stdafx.h"
 #include "TelnetServer.h"
@@ -44,6 +47,9 @@ int CurrentSockets=0;
 
 int Port=8010;
 BOOL cfgMinToTray;
+
+BOOL DisconnectOnClose=FALSE;
+
 
 char PasswordMsg[100]="Password:";
 
@@ -1102,7 +1108,12 @@ int Disconnected (Stream)
             wsprintf(Msg,"*** Disconnected from Stream %d\r\n",Stream);
 
 			send(sock, Msg, strlen(Msg),0);
-			
+
+			if (DisconnectOnClose)
+			{
+				Sleep(1000);
+				closesocket(sock);
+			}
 			return 0;
 		}
 	}
@@ -1385,6 +1396,9 @@ int ParseIniFile(char * fn)
 
 		if (_stricmp(param,"LOGGING") == 0)
 			LogEnabled = atoi(value);
+
+		if (_stricmp(param,"DisconnectOnClose") == 0)
+			DisconnectOnClose = atoi(value);
 
 		if (_stricmp(param,"TCPPORT") == 0)
 			Port = atoi(value);
