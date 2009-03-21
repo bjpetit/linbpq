@@ -28,8 +28,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 4,10,9,2
- PRODUCTVERSION 4,10,9,2
+ FILEVERSION 4,10,9,4
+ PRODUCTVERSION 4,10,9,4
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -47,12 +47,12 @@ BEGIN
             VALUE "Comments", "G8BPQ Packet Switch V4.10i\0"
             VALUE "CompanyName", "G8BPQ"
             VALUE "FileDescription", "bpq32\0"
-            VALUE "FileVersion", "4, 10, 9, 2\0"
+            VALUE "FileVersion", "4, 10, 9, 4\0"
             VALUE "InternalName", "bpq32\0"
             VALUE "LegalCopyright", "Copyright © 2001-2009  John Wiseman G8BPQ\0"
             VALUE "OriginalFilename", "bpq32.dll\0"
             VALUE "ProductName", "  bpq32\0"
-            VALUE "ProductVersion", "4, 10, 9, 2\0"
+            VALUE "ProductVersion", "4, 10, 9, 4\0"
         END
     END
     BLOCK "VarFileInfo"

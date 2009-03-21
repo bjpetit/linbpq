@@ -21,7 +21,7 @@
 #define IOCTL_BPQHDLC_TIMER			CTL_CODE(FILE_DEVICE_BPQHDLC,0x802,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQHDLC_ADDCHANNEL	CTL_CODE(FILE_DEVICE_BPQHDLC,0x803,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQHDLC_CHECKTX		CTL_CODE(FILE_DEVICE_BPQHDLC,0x804,METHOD_BUFFERED,FILE_ANY_ACCESS)
-#define IOCTL_BPQHDLC_INIT			CTL_CODE(FILE_DEVICE_BPQHDLC,0x804,METHOD_BUFFERED,FILE_ANY_ACCESS)
+//#define IOCTL_BPQHDLC_INIT			CTL_CODE(FILE_DEVICE_BPQHDLC,0x805,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
 
 
@@ -58,12 +58,15 @@ int fResult=0;
 
 BOOL Win98 = FALSE;
 
+
 extern int QCOUNT;
 int Init98(HDLCDATA * PORTVEC);
 int Init2K(HDLCDATA * PORTVEC);
 int INITPORT(PHDLCDATA PORTVEC);
 
-int HDLCRX(PHDLCDATA PORTVEC, UCHAR * buff)
+
+
+int HDLCRX2K(PHDLCDATA PORTVEC, UCHAR * buff)
 {
 	ULONG Param;
 	DWORD len=0;
@@ -86,7 +89,7 @@ int HDLCRX(PHDLCDATA PORTVEC, UCHAR * buff)
 	return (len);
 }
 
-int HDLCTIMER(PHDLCDATA  PORTVEC)
+int HDLCTIMER2K(PHDLCDATA  PORTVEC)
 {
 	DWORD len=0;
 
@@ -104,7 +107,7 @@ int HDLCTIMER(PHDLCDATA  PORTVEC)
 
 	return (0);
 }
- int HDLCTXCHECK(PHDLCDATA PORTVEC)
+ int HDLCTXCHECK2K(PHDLCDATA PORTVEC)
  {
 	DWORD Buff;
 	DWORD len=0;
@@ -129,7 +132,7 @@ int HDLCTIMER(PHDLCDATA  PORTVEC)
 
 
 
-int HDLCTX(PHDLCDATA  PORTVEC,UCHAR * buff)
+int HDLCTX2K(PHDLCDATA  PORTVEC,UCHAR * buff)
 {
 	DWORD txlen=0;
 
@@ -151,10 +154,108 @@ int HDLCTX(PHDLCDATA  PORTVEC,UCHAR * buff)
 	return (0);
 }
 
+
 int HDLCCLOSE(PHDLCDATA PORTVEC)
 {
 	return 0;
 }
+
+int HDLCRX98(PHDLCDATA PORTVEC, UCHAR * buff)
+{
+	DWORD len=0;
+
+	if (hDevice == 0)
+		return (0);
+
+	fResult = DeviceIoControl(
+			hDevice,   // device handle
+			'G',		   // control code
+			PORTVEC->DRIVERPORTTABLE,rand() & 0xff, //Input Params
+	        buff,360,&len, // output parameters
+			0);
+
+	return (len);
+}
+
+int HDLCTIMER98(PHDLCDATA PORTVEC)
+{
+	DWORD len=0;
+
+	if (hDevice == 0)
+		return (0);
+
+	fResult = DeviceIoControl(
+			hDevice,   // device handle
+			'T',		   // control code
+			PORTVEC->DRIVERPORTTABLE,4, //Input Params
+	        0,0,&len, // output parameters
+			0);
+
+	return (0);
+}
+
+ int HDLCTXCHECK98(PHDLCDATA PORTVEC)
+ {
+	 return 0;
+ }
+
+int HDLCTX98(PHDLCDATA PORTVEC,UCHAR * buff)
+{
+	DWORD txlen=0;
+
+	if (hDevice == 0)
+		return (0);
+
+	txlen=(buff[6]<<8) + buff[5];
+	
+	memcpy(buff,&PORTVEC->DRIVERPORTTABLE,4);
+	
+	fResult = DeviceIoControl(
+			hDevice,   // device handle
+			'S',		   // control code
+			buff,txlen,// input parameters
+	        NULL,0,&cb, // output parameters
+			0);
+
+	return (0);
+}
+
+int HDLCRX(PHDLCDATA PORTVEC, UCHAR * buff)
+{
+	if (Win98)
+		return HDLCRX98(PORTVEC, buff);
+	else
+		return HDLCRX2K(PORTVEC, buff);
+}
+
+
+int HDLCTIMER(PHDLCDATA PORTVEC)
+{
+	if (Win98)
+		return HDLCTIMER98(PORTVEC);
+	else
+		return HDLCTIMER2K(PORTVEC);
+}
+
+int HDLCTXCHECK(PHDLCDATA PORTVEC)
+{
+	if (Win98)
+		return HDLCTXCHECK98(PORTVEC);
+	else
+		return HDLCTXCHECK2K(PORTVEC);
+}
+
+
+int HDLCTX(PHDLCDATA  PORTVEC,UCHAR * buff)
+{
+	if (Win98)
+		return HDLCTX98(PORTVEC, buff);
+	else
+		return HDLCTX2K(PORTVEC, buff);
+}
+
+
+
 int HDLCINIT(HDLCDATA * PORTVEC)
 {
 	int WinVer, WinMinor;
@@ -186,6 +287,8 @@ int Init98(HDLCDATA * PORTVEC)
 	int err;
 
 	Win98 = TRUE;
+	
+	OutputDebugString("Init HDLC 98\n");
 
 	//
 	//	Open HDLC Driver, send send config params
@@ -235,13 +338,13 @@ int Init98(HDLCDATA * PORTVEC)
 	//
 
 	fResult = DeviceIoControl(
-		hDevice,   // device handle
-		IOCTL_BPQHDLC_INIT,			// control code
+		hDevice,						// device handle
+		'I',							// control code
 		PORTVEC,sizeof portcontrol,		// input parameters
 		bOutput, 4, &cb,				// output parameters
         0);
 
-	memcpy(&PORTVEC->DRIVERPORTTABLE, bOutput, 4);
+	memcpy(PORTVEC->DRIVERPORTTABLE,bOutput,4);
 
 	return (TRUE);
 		
