@@ -321,23 +321,23 @@ BeginProc VXD_IOCONTROL
 
         mov     EAX,dwIoControlCode[ESI]
 
-        PUSHAD
-        Debug_Printf	"hdlc98 IOCONTROL %x", <eax>
-        POPAD
+ ;       PUSHAD
+ ;       Debug_Printf	"hdlc98 IOCONTROL %x", <eax>
+ ;       POPAD
         
         cmp		EAX,VWIN32_DIOC_GETVERSION
 		je		getvers
 
-;		cmp		EAX,'T'
-;		jne short nottimer
+		cmp		EAX,'T'
+		jne short nottimer
 
-;		push	ESI
+		push	ESI
 
-;		mov		EBX,lpvInBuffer[ESI]	; port table
+		mov		EBX,lpvInBuffer[ESI]	; port table
 
-;		call	HDLCTIMER
+		call	HDLCTIMER
 
-;		pop		ESI
+		pop		ESI
 
 		xor		eax,eax
 
@@ -351,8 +351,7 @@ nottimer:
 		cmp		EAX,'G'
 		je short getdata
 
-		cmp		EAX, 84212010H
-		
+		cmp		EAX, 'I'
 		je		INITPORT
 				
 		jmp		skip					; Unknown
@@ -438,7 +437,7 @@ getdata:
 nomsg:		
 		pop		ESI
 		 
-;		call	HDLC_CHECK_TX		; checks for send
+		call	HDLC_CHECK_TX		; checks for send
 		
         xor      eax,eax
         ret
@@ -587,7 +586,6 @@ POOLDONE:
 	Debug_Printf	"hdlc98 PortType %x", <eax>
 	POPAD
 
-
 	
 	CMP	AL,2
 	JE	PC120INIT
@@ -604,8 +602,14 @@ POOLDONE:
 	CMP	AL,12
 	JE	RLC100INIT
 	
+	CMP	AL,18
+	JE	BAYCOMINIT
+
+	CMP	AL,20
+	JE	PA0INIT
+
 	PUSHAD
-	Debug_Printf	"hdlc98 Init Exit"
+	Debug_Printf	"hdlc98 Init Unknown Type"
 	POPAD
 
 	xor eax,eax
@@ -1618,10 +1622,10 @@ exit00:
 	cmp		eax,0
 	je	exit10					; Not hooked to this port
 	
-;	VxDcall VPICD_Physically_Mask
+	VxDcall VPICD_Physically_Mask
 
-;	mov     eax, IRQHand[EBX]
-;	VxDcall VPICD_Force_Default_Behavior
+	mov     eax, IRQHand[EBX]
+	VxDcall VPICD_Force_Default_Behavior
 
 exit10:
 
