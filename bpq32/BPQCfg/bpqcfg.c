@@ -56,13 +56,18 @@
 
 //		Add C_IS_CHAT Parameter
 
+// March 2009
+
+//		Allow setting port type to NULL to disable it
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
+#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <io.h>
+//#include <io.h>
 #include <ctype.h>
 #include <conio.h>
 
@@ -117,6 +122,8 @@ extern int __cdecl simple(int i);
 //char rec[];
 
 
+
+int FIRSTAPPL=1;
 
 #define PARAMLIM 72
 #define MAXLINE 250
@@ -280,7 +287,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 {
 	int i;
  	int heading = 0;
-
+	HANDLE handle;
 	char rec[MAXLINE];
 
 	if (argc >1)
@@ -463,6 +470,21 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	fclose(fp1);
 	fclose(fp2);
 
+	// Set Length (will be wrong if we have any NULL ports)
+
+	handle=CreateFile(outputname,GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (handle != INVALID_HANDLE_VALUE)
+	{
+		if(FIRSTAPPL)
+			SetFilePointer(handle, portoffset, 0, FILE_BEGIN);
+		else
+			SetFilePointer(handle, portoffset + 160, 0, FILE_BEGIN);
+
+		SetEndOfFile(handle);
+		CloseHandle(handle);
+	}
+
 	if (heading == 0)
 	{
 	   puts("Conversion (probably) successful");
@@ -586,8 +608,6 @@ char rec[];
 
 	return 0;
 }
-
-int FIRSTAPPL=1;
 
 /************************************************************************/
 /*   CALLSIGNS								*/

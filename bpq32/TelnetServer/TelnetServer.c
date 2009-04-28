@@ -15,6 +15,8 @@
 //	Version 2.1.4  March 2009
 //	Add DisconnectOnClose Config option
 
+//	Version 2.1.5  April 2009
+//  Remove limit on number of user records
 
 #include "stdafx.h"
 #include "TelnetServer.h"
@@ -1357,8 +1359,6 @@ int ParseIniFile(char * fn)
 	UCHAR Value[100];
 	UCHAR * BPQDirectory;
 	
-	UserRecPtr=malloc(1000);			// Array header - enough for 250 entries
-
 	BPQDirectory=GetBPQDirectory();
 
 	if (BPQDirectory[0] == 0)
@@ -1462,6 +1462,11 @@ int ParseIniFile(char * fn)
 			else
 				UserCall=&BlankCall[0];
 
+			if (NumberofUsers == 0)
+				UserRecPtr=malloc(4);
+			else
+				UserRecPtr=realloc(UserRecPtr,(NumberofUsers+1)*4);
+
 			UserRecPtr[NumberofUsers]=malloc(12);
 			UserRecPtr[NumberofUsers]->Callsign=malloc(strlen(UserCall)+1);
 			UserRecPtr[NumberofUsers]->Password=malloc(strlen(Pwd)+1);
@@ -1473,14 +1478,7 @@ int ParseIniFile(char * fn)
 
 			NumberofUsers += 1;
 
-			if (NumberofUsers > 249)
-			{
-				wsprintf(szBuff,"Too many users in config file",Value);
-				MessageBox(MainWnd,szBuff, "Telnet Server", MB_OK);
-				return FALSE;
-			}
 		}
-
 	}
 
 	fclose(file);

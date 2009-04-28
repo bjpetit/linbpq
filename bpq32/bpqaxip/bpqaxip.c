@@ -80,6 +80,15 @@
 //
 //		Save Window positions
 
+//	Version 1.13.4 March 2009
+//
+//		Fix loop on config file error
+
+// Version 1.14.1 April 2009
+//
+//		Add option to reject messages if sender is not in ARP Table
+//		Add option to add received calls to ARP Table
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -130,7 +139,7 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto, short port);
 int Update_MH_KeepAlive(struct in_addr ipad, char proto, short port);
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
-BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag);
+BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag);
 BOOL add_bc_entry(unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 BOOL ReadConfigFile(char * filename);
@@ -139,7 +148,11 @@ int CheckKeepalives();
 BOOL CopyScreentoBuffer(char * buff);
 int DumpFrameInHex(unsigned char * msg, int len);
 VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen);
+BOOL CheckSourceisResolvable(char * call);
 
+BOOL Checkifcanreply=TRUE;
+
+BOOL AutoAddARP=FALSE;
 
 BOOL MinimizetoTray=FALSE;
 
@@ -451,9 +464,31 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 						if (MHEnabled)
 							Update_MH_List(rxaddr.sin_addr,&buff[14],'I',93);
-					
 
-						return(1);
+						if (Checkifcanreply)
+						{
+							char call[7];
+
+							memcpy(call, &buff[14], 7);
+							call[6] &= 0x7e;		// Mask End of Address bit
+
+							if (CheckSourceisResolvable(call))
+
+								return 1;
+
+							else
+								// Can't reply. If AutoConfig is set, add to table and accept, else reject
+
+								if (AutoAddARP)
+
+									return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE);
+
+								else
+
+									return 0;
+						}
+						else
+							return(1);
 					}
 					//
 					//	CRC Error
@@ -517,9 +552,28 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 					if (MHEnabled)
 						Update_MH_List(rxaddr.sin_addr,&buff[14],'U',udpport[i]);	
- 
-					return(1);
+
+					if (Checkifcanreply)
+					{
+						char call[7];
+
+						memcpy(call, &buff[14], 7);
+						call[6] &= 0x7e;		// Mask End of Address bit
+
+						if (CheckSourceisResolvable(call))
+							return 1;
+						else
+							// Can't reply. If AutoConfig is set, add to table and accept, else reject
+
+							if (AutoAddARP)
+								return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, udpport[i], inet_ntoa(rxaddr.sin_addr), 0, TRUE);
+							else
+								return 0;
+					}
+					else
+						return(1);
 				}
+
 				//	
 				//	CRC Error
 				//
@@ -1143,7 +1197,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 			{
 				if (convtoax25(call,axcall,&calllen))
 				{
-					add_arp_entry(axcall,ipad,calllen,port,host,Interval, BCFlag);
+					add_arp_entry(axcall,&ipad,calllen,port,host,Interval, BCFlag);
 					PostMessage(hResWnd, WM_TIMER,0,0);
 					return(DestroyWindow(hWnd));
 				}
@@ -1746,6 +1800,19 @@ ProcessLine(char * buf)
 		return (TRUE);
 	}
 
+	if(_stricmp(ptr,"DONTCHECKSOURCECALL") == 0)
+	{
+		Checkifcanreply = FALSE;
+		return (TRUE);
+	}
+
+	if(_stricmp(ptr,"AUTOADDMAP") == 0)
+	{
+		AutoAddARP = TRUE;
+		return (TRUE);
+	}
+	
+
 	if(_stricmp(ptr,"MAP") == 0)
 	{
 		p_call = strtok(NULL, " \t\n\r");
@@ -1807,11 +1874,13 @@ ProcessLine(char * buf)
 
 			if ((*p_UDP == ';') || (*p_UDP == '#'))	break;			// Comment on end
 
+			return FALSE;
+
 		}
 
 		if (convtoax25(p_call,axcall,&calllen))
 		{
-			add_arp_entry(axcall,ipad,calllen,port,p_ipad,Interval, bcflag);
+			add_arp_entry(axcall,&ipad,calllen,port,p_ipad,Interval, bcflag);
 			return (TRUE);
 		}
 	}		// End of Process MAP
@@ -1921,27 +1990,27 @@ BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call,int * calllen
 	return (FALSE);
 }
 
-BOOL add_arp_entry(unsigned char * call, unsigned long ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag)
+BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag)
 {
 	if (arp_table_len == MAX_ENTRIES)
 		//
 		//	Table full
 		//
-		return (FALSE);
+		return (FALSE); 
 
-	if (port ==0) needip = 1;			// Enable Raw IP Mode
+	if (port == 0) needip = 1;			// Enable Raw IP Mode
 
-	if (ip == INADDR_NONE)
+	if (*ip == INADDR_NONE)
 	{
 		arp_table[arp_table_len].ResolveFlag=TRUE;
 		NeedResolver=TRUE;
-		ip= 0;
+		*ip = 0;
 	}
 	else
 		arp_table[arp_table_len].ResolveFlag=FALSE;
 
 	memcpy (arp_table[arp_table_len].callsign,call,7);
-	memcpy (&arp_table[arp_table_len].ipaddr,&ip,4);
+	memcpy (&arp_table[arp_table_len].ipaddr,ip,4);
 	strncpy((char *)&arp_table[arp_table_len].hostname,name,64);
 	arp_table[arp_table_len].len = len;
 	arp_table[arp_table_len].port = port;
@@ -2016,6 +2085,25 @@ int CheckKeepalives()
 	return (0);
 
 }
+
+BOOL CheckSourceisResolvable(char * call)
+{
+	// Makes sure we can reply to call before accepting message
+
+	int index = 0;
+
+	while (index < arp_table_len)
+	{
+		if (memcmp(arp_table[index].callsign, call, arp_table[index].len) == 0)
+		{
+			return 1;		// Ok to process
+		}
+		index++;
+	}
+
+	return (0);				// Not in list
+}
+
 int Update_MH_List(struct in_addr ipad, char * call, char proto, short port)
 {
 	int index;

@@ -489,7 +489,7 @@ HOSTNOPORT:
 				// Clear First Use of Allocated Stream
 
 				if (_ax != 255) NotFirstUse[_ax] = TRUE;
-				wsprintf(Msg,"BPQ1632 Fine Free Allocated Stream %d\n", _ax);
+				wsprintf(Msg,"BPQ1632 Find Free Allocated Stream %d\n", _ax);
 				OutputDebugString(Msg);
 			}
 
