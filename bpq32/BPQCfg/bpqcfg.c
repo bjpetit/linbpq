@@ -58,7 +58,7 @@
 
 // March 2009
 
-//		Allow setting port type to NULL to disable it
+//		Add C style COmments (/* */ at start of line)
 
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -124,6 +124,7 @@ extern int __cdecl simple(int i);
 
 
 int FIRSTAPPL=1;
+BOOL Comment = FALSE;
 
 #define PARAMLIM 72
 #define MAXLINE 250
@@ -287,7 +288,6 @@ main( int argc, char *argv[ ], char *envp[ ] )
 {
 	int i;
  	int heading = 0;
-	HANDLE handle;
 	char rec[MAXLINE];
 
 	if (argc >1)
@@ -323,7 +323,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 #endif
 
-	puts("Configuration file Preprocessor for Version 4.10f November 2008.\n");
+	puts("Configuration file Preprocessor for Version 4.10i April 2009.\n");
 
 #ifdef THOR
 
@@ -467,23 +467,14 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	fseek(fp2,(long) 255,SEEK_SET);
 	fputc(FILEVERSION,fp2);
 
+	if (Comment)
+	{
+		puts("\nUnterminated Comment (Missing */\n)");
+		heading = 1;
+	}
+
 	fclose(fp1);
 	fclose(fp2);
-
-	// Set Length (will be wrong if we have any NULL ports)
-
-	handle=CreateFile(outputname,GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-	if (handle != INVALID_HANDLE_VALUE)
-	{
-		if(FIRSTAPPL)
-			SetFilePointer(handle, portoffset, 0, FILE_BEGIN);
-		else
-			SetFilePointer(handle, portoffset + 160, 0, FILE_BEGIN);
-
-		SetEndOfFile(handle);
-		CloseHandle(handle);
-	}
 
 	if (heading == 0)
 	{
@@ -1091,11 +1082,9 @@ int i;
 	fseek(fp2,(long) portoffset+112,SEEK_SET);
         fputi(kissflags,fp2);
 
-   	if (hw != 254)				// NULL definition
-	{
-		portoffset = portoffset + 512;
-		portnum = portnum +1;
-	}
+	portoffset = portoffset + 512;
+	portnum = portnum +1;
+	
 	return(1); 
 
 }
@@ -1238,37 +1227,56 @@ char rec[];
 
 	do
 	{
-	   fgets(rec,MAXLINE,fp1);
+		fgets(rec,MAXLINE,fp1);
 
-	   for (i=0; rec[i] != '\0'; i++)
-	      if (rec[i] == '\t' || rec[i] == '\n')
-		 rec[i] = ' ';
+		for (i=0; rec[i] != '\0'; i++)
+			if (rec[i] == '\t' || rec[i] == '\n')
+				rec[i] = ' ';
 
-	   if (!feof(fp1))
-	   {
-	      j = verify(rec,' ');
+		if (!feof(fp1))
+		{
+			j = verify(rec,' ');
 
-	      if (j > 0)
-	      {
-		 for (i=0; rec[j] != '\0'; i++, j++)
-	  	    rec[i] = rec[j];
+			if (j > 0)
+			{
+				// Remove Leading Spaces
+				
+				for (i=0; rec[j] != '\0'; i++, j++)
+					rec[i] = rec[j];
 
-		 rec[i] = '\0';
-	      }
+				rec[i] = '\0';
+			}
+			
+			j = index(rec,";");
 
-	      j = index(rec,";");
+			if (j != -1)
+				rec[j] = '\0';				// Chop at comment
 
-	      if (j != -1)
-		 rec[j] = '\0';
+			if (strlen(rec) > 1)
+				if (memcmp(rec, "/*",2) == 0)
+					Comment = TRUE;
+				else
+					if (memcmp(rec, "*/",2) == 0)
+					{
+						rec[0] = 32;
+						rec[1] = 0;
+						Comment = FALSE;
+					}
+
+			if (Comment)
+			{
+				rec[0] = 32;
+				rec[1] = 0;
+				continue;
+			}
 
 //		  j = index(rec,"#");
 
 //	      if (j != -1)
 //		 rec[j] = '\0';
-	   
-	   }
-	}
-	while (verify(rec,' ') == -1 && !feof(fp1));
+		}
+
+	} while (verify(rec,' ') == -1 && !feof(fp1));
 
 	return 0;
 }
@@ -1525,8 +1533,6 @@ char rec[];
 	   hw = 18;
 	if (_stricmp(value,"PA0HZP") == 0)
 	   hw = 20;
-	if (_stricmp(value,"NULL") == 0)
-		hw = 254;
 
 	fseek(fp2,(long) fileoffset,SEEK_SET);
 
