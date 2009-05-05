@@ -98,7 +98,7 @@ extern int __cdecl dedports(int i);
 extern int __cdecl index(char *s,char *t);
 extern int __cdecl verify(char *s,char c);
 extern int __cdecl fputi(int i,struct _iobuf *fp);
-extern int __cdecl strip(char *rec);
+int __cdecl strip(char *rec);
 extern int __cdecl call_check(char *callsign);
 extern int __cdecl callstring(int i,char *value,char *rec);
 extern int __cdecl decode_port_rec(char *rec);
@@ -469,7 +469,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 	if (Comment)
 	{
-		puts("\nUnterminated Comment (Missing */\n)");
+		puts("\nUnterminated Comment (Missing */)\n");
 		heading = 1;
 	}
 
@@ -1224,16 +1224,22 @@ strip(rec)
 char rec[];
 {
 	int i, j;
+	char * ret;
 
 	do
 	{
-		fgets(rec,MAXLINE,fp1);
+		ret = fgets(rec,MAXLINE,fp1);
 
 		for (i=0; rec[i] != '\0'; i++)
 			if (rec[i] == '\t' || rec[i] == '\n')
 				rec[i] = ' ';
 
-		if (!feof(fp1))
+		if (feof(fp1))
+		{
+			j=1;
+		}
+
+		if (ret)
 		{
 			j = verify(rec,' ');
 

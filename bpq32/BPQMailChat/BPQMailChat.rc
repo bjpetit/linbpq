@@ -1,0 +1,186 @@
+//Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "windows.h"
+#undef APSTUDIO_HIDDEN_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
+LANGUAGE 9, 2
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+
+IDI_BPQMailChat       ICON         "icon2.ico"
+IDI_SMALL               ICON         "icon2.ico"
+
+
+BPQMailChat DIALOG DISCARDABLE  120, 50, 200, 125
+//STYLE DS_MODALFRAME | WS_OVERLAPPED | WS_CAPTION | WS_VISIBLE | WS_SYSMENU
+STYLE DS_MODALFRAME | DS_3DLOOK | WS_POPUPWINDOW | WS_DLGFRAME | WS_MINIMIZEBOX
+CAPTION "G8BPQ Mail and Chat Server 1.0.0 January 2009"
+CLASS "BPQMailChat"
+FONT 8, "FixedSys"
+BEGIN
+	CONTROL "    User       Callsign Stream Conf",
+		 101, "STATIC", SS_LEFT | WS_CHILD | WS_VISIBLE, 0, 2, 196, 8
+	LISTBOX         100, 2, 10, 190, 100,NOT WS_TABSTOP | WS_VSCROLL
+END
+
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDC_BPQMailChat MENU
+
+BEGIN
+    POPUP "Actions"
+    BEGIN
+        POPUP "Logging Options", MENUBREAK
+        BEGIN
+            MENUITEM "Logging Enabled"	IDM_LOGGING
+        END
+        POPUP "Disconnect User"
+        BEGIN
+            MENUITEM "."	IDM_DISCONNECT
+        END
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About ...",           IDM_ABOUT
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
+
+IDC_TELNETSERVER ACCELERATORS
+BEGIN
+    "?",            IDM_ABOUT,              ASCII,  ALT
+    "/",            IDM_ABOUT,              ASCII,  ALT
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_ABOUTBOX DIALOG   22, 17, 230, 75
+STYLE DS_MODALFRAME | WS_CAPTION | WS_SYSMENU
+CAPTION "About"
+FONT 8, "System"
+BEGIN
+    ICON            IDI_BPQMailChat,IDC_MYICON,14,9,16,16
+    LTEXT           "G8BPQ Mail and Chat Version 1.0.0",IDC_STATIC,49,10,119,8,SS_NOPREFIX
+    LTEXT           "Copyright (C) G8BPQ 2009",IDC_STATIC,49,20,119,8
+    DEFPUSHBUTTON   "OK",IDOK,195,6,30,11,WS_GROUP
+END
+
+#define Vers 1,0,0,0
+#define Verstring "1.0.0.0\0"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION Vers
+ PRODUCTVERSION Vers
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080904b0"
+        BEGIN
+            VALUE "CompanyName", "John Wiseman, G8BPQ\0"
+            VALUE "FileDescription", "Mail and Chat server for  G8BPQ's 32 Bit Switch\0"
+            VALUE "FileVersion", Verstring
+            VALUE "InternalName", "BPQMailChat\0"
+            VALUE "LegalCopyright", "Copyright © 2009 John Wiseman G8BPQ\0"
+            VALUE "OriginalFilename", "BPQMailChat\0"
+            VALUE "ProductName", "BPQMailChat\0"
+            VALUE "ProductVersion", Verstring
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x809, 1200
+    END
+END
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+1 TEXTINCLUDE  
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE  
+BEGIN
+    "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#include ""windows.h""\r\n"
+    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE  
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE  
+BEGIN
+   IDC_BPQMailChat   "BPQMailChat"
+   IDS_APP_TITLE       "BPQMailChat"
+END
+
+#endif
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
