@@ -139,7 +139,7 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto, short port);
 int Update_MH_KeepAlive(struct in_addr ipad, char proto, short port);
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
-BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag);
+BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded);
 BOOL add_bc_entry(unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 BOOL ReadConfigFile(char * filename);
@@ -148,7 +148,7 @@ int CheckKeepalives();
 BOOL CopyScreentoBuffer(char * buff);
 int DumpFrameInHex(unsigned char * msg, int len);
 VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen);
-BOOL CheckSourceisResolvable(char * call);
+BOOL CheckSourceisResolvable(char * call, int Port);
 
 BOOL Checkifcanreply=TRUE;
 
@@ -201,6 +201,7 @@ struct arp_table_entry
 	unsigned int keepalive;
 	unsigned int keepaliveinit;
 	BOOL BCFlag;				// Frue if we want broadcasts to got to this call
+	BOOL AutoAdded;				// Set if Entry created as a result of AUTOADDMAP
 };
 
 
@@ -472,7 +473,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 							memcpy(call, &buff[14], 7);
 							call[6] &= 0x7e;		// Mask End of Address bit
 
-							if (CheckSourceisResolvable(call))
+							if (CheckSourceisResolvable(call, 0))
 
 								return 1;
 
@@ -481,7 +482,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 								if (AutoAddARP)
 
-									return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE);
+									return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE);
 
 								else
 
@@ -560,13 +561,13 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 						memcpy(call, &buff[14], 7);
 						call[6] &= 0x7e;		// Mask End of Address bit
 
-						if (CheckSourceisResolvable(call))
+						if (CheckSourceisResolvable(call, udpport[i]))
 							return 1;
 						else
 							// Can't reply. If AutoConfig is set, add to table and accept, else reject
 
 							if (AutoAddARP)
-								return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, udpport[i], inet_ntoa(rxaddr.sin_addr), 0, TRUE);
+								return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, udpport[i], inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE);
 							else
 								return 0;
 					}
@@ -1197,7 +1198,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 			{
 				if (convtoax25(call,axcall,&calllen))
 				{
-					add_arp_entry(axcall,&ipad,calllen,port,host,Interval, BCFlag);
+					add_arp_entry(axcall,&ipad,calllen,port,host,Interval, BCFlag, FALSE);
 					PostMessage(hResWnd, WM_TIMER,0,0);
 					return(DestroyWindow(hWnd));
 				}
@@ -1880,7 +1881,7 @@ ProcessLine(char * buf)
 
 		if (convtoax25(p_call,axcall,&calllen))
 		{
-			add_arp_entry(axcall,&ipad,calllen,port,p_ipad,Interval, bcflag);
+			add_arp_entry(axcall,&ipad,calllen,port,p_ipad,Interval, bcflag, FALSE);
 			return (TRUE);
 		}
 	}		// End of Process MAP
@@ -1990,36 +1991,41 @@ BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call,int * calllen
 	return (FALSE);
 }
 
-BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag)
+BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded)
 {
+	struct arp_table_entry * arp;
+
 	if (arp_table_len == MAX_ENTRIES)
 		//
 		//	Table full
 		//
 		return (FALSE); 
 
+	arp = &arp_table[arp_table_len];
+
 	if (port == 0) needip = 1;			// Enable Raw IP Mode
 
 	if (*ip == INADDR_NONE)
 	{
-		arp_table[arp_table_len].ResolveFlag=TRUE;
+		arp->ResolveFlag=TRUE;
 		NeedResolver=TRUE;
 		*ip = 0;
 	}
 	else
-		arp_table[arp_table_len].ResolveFlag=FALSE;
+		arp->ResolveFlag=FALSE;
 
-	memcpy (arp_table[arp_table_len].callsign,call,7);
-	memcpy (&arp_table[arp_table_len].ipaddr,ip,4);
-	strncpy((char *)&arp_table[arp_table_len].hostname,name,64);
-	arp_table[arp_table_len].len = len;
-	arp_table[arp_table_len].port = port;
+	memcpy (&arp->callsign,call,7);
+	memcpy (&arp->ipaddr,ip,4);
+	strncpy((char *)&arp->hostname,name,64);
+	arp->len = len;
+	arp->port = port;
 	keepalive+=9;
 	keepalive/=10;
 
-	arp_table[arp_table_len].keepalive = keepalive;
-	arp_table[arp_table_len].keepaliveinit = keepalive;
-	arp_table[arp_table_len].BCFlag = BCFlag;
+	arp->keepalive = keepalive;
+	arp->keepaliveinit = keepalive;
+	arp->BCFlag = BCFlag;
+	arp->AutoAdded = AutoAdded;
 	arp_table_len++;
 
 	return (TRUE);
@@ -2083,19 +2089,28 @@ int CheckKeepalives()
 	}
 
 	return (0);
-
 }
 
-BOOL CheckSourceisResolvable(char * call)
+BOOL CheckSourceisResolvable(char * call, int Port)
 {
 	// Makes sure we can reply to call before accepting message
 
 	int index = 0;
+	struct arp_table_entry * arp;
 
 	while (index < arp_table_len)
 	{
-		if (memcmp(arp_table[index].callsign, call, arp_table[index].len) == 0)
+		arp = &arp_table[index];
+
+		if (memcmp(arp->callsign, call, arp->len) == 0)
 		{
+			// Call is present - if AutoAdded, refresh IP address and Port
+
+			if (arp->AutoAdded)
+			{
+				memcpy (&arp->ipaddr, (PVOID)&rxaddr.sin_addr, 4);
+				arp->port = Port;
+			}
 			return 1;		// Ok to process
 		}
 		index++;

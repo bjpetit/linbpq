@@ -23,7 +23,7 @@
 #define _WIN32_IE 0x0600	// Change this to the appropriate value to target other versions of IE.
 #endif
 
-//#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
+#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -41,6 +41,8 @@
 #include <stdio.h>
 #include <time.h>
 
-#include <strsafe.h>
+#include "BPQMailChat.h"
+#include "bpq32.h"
 
-// TODO: reference additional headers your program requires here
+
+

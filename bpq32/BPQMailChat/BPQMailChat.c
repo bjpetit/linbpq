@@ -3,8 +3,6 @@
 //
 
 #include "stdafx.h"
-#include "BPQMailChat.h"
-#include "bpq32.h"
 
 
 #define MAX_LOADSTRING 100
@@ -23,12 +21,17 @@ char szBuff[80];
 
 #define MaxSockets 64
 
-struct ConnectionInfo Connections[MaxSockets+1];
+ConnectionInfo Connections[MaxSockets+1];
 
 int NumberofUserRecords=0;
 
-struct UserInfo ** UserRecPtr;
+struct UserInfo ** UserRecPtr=NULL;
 int NumberofUsers=0;
+
+struct MsgInfo ** MsgHddrPtr=NULL;
+int NumberofMessages=0;
+
+int LatestMsg = 0;
 
 int Port=8010;
 BOOL cfgMinToTray;
@@ -72,7 +75,11 @@ char BBSName[100]="GM8BPQ";
 
 char SignoffMsg[100]="73 de GM8BPQ\r";
 
+char AbortedMsg[100]="\rOutput aborted\r";
+
 char UserDatabaseName[MAX_PATH] = "BPQBBSUsers.dat";
+
+char MsgDatabaseName[MAX_PATH] = "DIRMES.SYS";
 
 char MailDir[MAX_PATH] = "C:\\Program Files\\Amateur_Radio\\BPQBBS\\MAIL";
 
@@ -83,47 +90,18 @@ static UINT FREE_Q=0;
 static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
 
 
+extern LINK *link_hd;
+extern CIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others
+extern char OurNode[];
+extern char OurAlias[];
+
+
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
 BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
-BOOL Initialise();
-int DisplaySessions();
-int DoStateChange(Stream);
-int DoReceivedData(Stream);
-int DoMonitorData(Stream);
-int Connected(Stream);
-int Disconnected(Stream);
-int DeleteConnection(con);
-//int Socket_Accept(int SocketId);
-//int Socket_Data(int SocketId,int error, int eventcode);
-int DataSocket_Read(struct ConnectionInfo * sockptr, SOCKET sock);
-int DataSocket_Write(struct tConnectionInfo * sockptr, SOCKET sock);
-int DataSocket_Disconnect(struct ConnectionInfo * sockptr);
-BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len);
-int ShowConnections();
-int Terminate();
-int SendtoSocket(SOCKET sock,char * Msg);
-int WriteLog(char * msg);
-int ConnectState(Stream);
-byte * EncodeCall(byte * Call);
-int ParseIniFile(char * fn);
-UINT ReleaseBuffer(UINT *BUFF);
-UINT * Q_REM(UINT *Q);
-int Q_ADD(UINT *Q,UINT *BUFF);
-struct UserInfo * AllocateUserRecord(char * Call);
-struct UserInfo * LookupCall(char * Call);
-VOID SaveUserDatabase();
-VOID GetUserDatabase();
-VOID SendWelcomeMsg(int Stream, struct	ConnectionInfo * conn, struct UserInfo * user);
-VOID ProcessLine(struct	ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
-VOID ProcessChatLine(struct	ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
-VOID SendPrompt(int Stream, struct UserInfo * user);
-int QueueMsg(int stream, char * msg, int len);
-char * GetConfStations(int Conference);
-VOID SendtoOtherUsers(struct ConnectionInfo * conn, char* Msg, int msglen);
-int GetFileList(char * Dir);
+
 
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
@@ -172,6 +150,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	}
 
 	SaveUserDatabase();
+	SaveMessageDatabase();
 
 	if (cfgMinToTray) DeleteTrayMenuItem(MainWnd);
 	
@@ -249,7 +228,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    CheckTimer();
 
-   SetTimer(hWnd,1,10000,NULL);
+   SetTimer(hWnd,1,10000,NULL);		// BPQ TImer Check
+   SetTimer(hWnd,2,100,NULL);		// Send to Node
 
 	cfgMinToTray = GetMinimizetoTrayFlag();
 
@@ -278,7 +258,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	PAINTSTRUCT ps;
 	HDC hdc;
 	int state,change;
-	struct ConnectionInfo * sockptr;
+	ConnectionInfo * sockptr;
 
 
 	if (message == BPQMsg)
@@ -321,9 +301,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			
 	case WM_TIMER:
 
-		CheckTimer();
-		return (0);
+		if (wParam == 1)
+		{
+			ShowConnections();
+			CheckTimer();
+		}
+		else
+			TrytoSend();
 
+		return (0);
 
 	case WM_COMMAND:
 		wmId    = LOWORD(wParam);
@@ -384,6 +370,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 
 		KillTimer(hWnd,1);
+		KillTimer(hWnd,2);
 		PostQuitMessage(0);
 		break;
 	default:
@@ -415,27 +402,28 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 int ShowConnections()
 {
 	char msg[80];
-	struct ConnectionInfo * sockptr;
+	ConnectionInfo * conn;
 	int i,n;
 
 	SendDlgItemMessage(MainWnd,100,LB_RESETCONTENT,0,0);
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
-		sockptr=&Connections[n];
+		conn=&Connections[n];
 
-		if (!sockptr->Active)
+		if (!conn->Active)
 		{
 			strcpy(msg,"Idle");
 		}
 		else
 		{
-			if (sockptr->UserPointer == 0)
+			if (conn->UserPointer == 0)
 				strcpy(msg,"Logging in");
 			else
 			{
-				i=wsprintf(msg,"%-15s %-10s %2d %2d",
-					sockptr->UserPointer->Name, sockptr->UserPointer->Call, sockptr->BPQStream, sockptr->Conference);
+				i=wsprintf(msg, "%-15s %-10s %2d %2d %6d",
+					conn->UserPointer->Name, conn->UserPointer->Call, conn->BPQStream,
+					conn->Conference, conn->OutputQueueLength - conn->OutputGetPointer);
 			}
 		}
 		SendDlgItemMessage(MainWnd,100,LB_ADDSTRING,0,(LPARAM)msg);
@@ -458,8 +446,10 @@ SOCKET sock;
 BOOL Initialise()
 {
 	int i;
+	char call1[]="BPQ:GB7BPQ";
+	char call2[]="BPQ2:GM8BPQ";
 
-	struct	ConnectionInfo * conn;
+	ConnectionInfo * conn;
 	BOOL	ReturnValue = TRUE; // return value
 
 	HMENU hMenu;		// handle of menu 
@@ -481,7 +471,13 @@ BOOL Initialise()
 
 	GetUserDatabase();
 
-	GetFileList(MailDir);
+	GetMessageDatabase();
+
+	rtlink (call1);
+	rtlink (call2);
+
+
+	//GetFileList(MailDir);
 	 
 	// Allocate Streams
 
@@ -518,7 +514,7 @@ BOOL Initialise()
 int Connected(Stream)
 {
 	int i, n, Mask;
-	struct	ConnectionInfo * conn;
+	ConnectionInfo * conn;
 	struct UserInfo * user = NULL;
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
@@ -529,10 +525,22 @@ int Connected(Stream)
 		
 		if (Stream == conn->BPQStream)
 		{
+			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->Active = TRUE;
-			conn->Flags = 0;
+			conn->BPQStream = Stream;
 
 			GetConnectionInfo(Stream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+
+/*
+L2LINK		EQU	1
+SESSION		EQU	10B
+UPLINK		EQU	100B
+DOWNLINK	EQU	1000B
+	IF	TNC2
+HOST		EQU	10000B
+	ENDIF
+BPQHOST		EQU	100000B
+*/
 
 			for (i=9; i > 0; i--)
 			{
@@ -540,6 +548,15 @@ int Connected(Stream)
 					callsign[i] = 0;
 				else
 					break;
+			}
+
+			for (i=9; i > 0; i--)
+			{
+				if (callsign[i] == '-')
+				{
+					callsign[i] = 0;
+					break;
+				}
 			}
 
 			user = LookupCall(callsign);
@@ -554,6 +571,18 @@ int Connected(Stream)
 			time(&user->TimeLastCOnnected);
 
 			conn->UserPointer = user;
+
+			conn->lastmsg = user->lastmsg;
+
+			if (paclen == 0)
+				paclen = 236;
+			
+			conn->paclen=paclen;
+
+			//	Set SYSOP flag if user is defined as SYSOP and Host Session 
+			
+			if (((sesstype & 0x20) == 0x20) && user->sysop)
+				conn->sysop = TRUE;
 
 			Mask = 1 << (GetApplNum(Stream) - 1);
 
@@ -590,23 +619,37 @@ int Connected(Stream)
 int Disconnected (Stream)
 {
 	struct UserInfo * user = NULL;
+	ConnectionInfo * conn;
 	int n;
-		char Msg[255];
-	int len;
-
+//	char Msg[255];
+//	int len;
 
 	for (n = 0; n <= NumberofStreams-1; n++)
 	{
-		if (Stream == Connections[n].BPQStream)
-		{
-			Connections[n].Active = FALSE;
-			ShowConnections();
-	
-			user = Connections[n].UserPointer;
+		conn=&Connections[n];
 
-			len = wsprintf(Msg, "%s - %s Logged off Channel %d\r", user->Call, user->Name, Connections[n].Conference);
-			SendtoOtherUsers(&Connections[n], Msg, len);
-	
+		if (Stream == conn->BPQStream)
+		{
+			if (conn->Active == FALSE)
+				return 0;
+
+			ClearQueue(conn);
+		
+			conn->Active = FALSE;
+			ShowConnections();
+
+			if (conn->Flags & CHATMODE)
+			{
+				if (conn->Flags & CHATLINK)
+					link_drop(conn);
+				else
+				{
+					logout(conn);
+				//	user = Connections[n].UserPointer;
+				//	len = wsprintf(Msg, "%s - %s Logged off Channel %d\r", user->Call, user->Name, Connections[n].Conference);
+				//	SendtoOtherUsers(&Connections[n], Msg, len);
+				}
+			}
 
 			return 0;
 		}
@@ -617,10 +660,9 @@ int Disconnected (Stream)
 
 int DoReceivedData(int Stream)
 {
-	byte Buffer[400];
-	int len,count;
+	int count;
 	int n;
-	struct	ConnectionInfo * conn;
+	ConnectionInfo * conn;
 	struct UserInfo * user;
 
 	for (n = 0; n < NumberofStreams; n++)
@@ -631,13 +673,13 @@ int DoReceivedData(int Stream)
 		{
 			do
 			{ 
-				GetMsg(Stream, Buffer,&len, &count);
+				GetMsg(Stream, conn->InputBuffer, &conn->InputLen, &count);
 
-				if (len == 0) return 0;
+				if (conn->InputLen == 0) return 0;
 
 				user = conn->UserPointer;
 
-				ProcessLine(conn, user, Buffer, len);
+				ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
 
 			} while (count > 0);
 
@@ -652,8 +694,8 @@ int DoReceivedData(int Stream)
 }
 int DoMonitorData(int Stream)
 {
-	byte Buffer[1000];
-	byte buff[500];
+	UCHAR Buffer[1000];
+	UCHAR buff[500];
 
 	int n,len,count;
 	int stamp;
@@ -688,7 +730,7 @@ int ConnectState(Stream)
 	SessionStateNoAck(Stream, &state);
 	return state;
 }
-byte * EncodeCall(byte * Call)
+UCHAR * EncodeCall(UCHAR * Call)
 {
 	static char axcall[10];
 
@@ -784,12 +826,27 @@ int Q_ADD(UINT *Q,UINT *BUFF)
 
 }
 
+VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
+{
+	// seems to be printf to a socket
+
+	char Mess[255];
+	int len;
+	va_list(arglist);
+
+	
+	va_start(arglist, format);
+	len = vsprintf(Mess, format, arglist);
+
+	QueueMsg(conn, Mess, len);
+
+	return;
+}
+
+
 struct UserInfo * AllocateUserRecord(char * Call)
 {
-	if (NumberofUsers == 0)
-		UserRecPtr=malloc(4);
-	else
-		UserRecPtr=realloc(UserRecPtr,(NumberofUsers+1)*4);
+	UserRecPtr=realloc(UserRecPtr,(NumberofUsers+1)*4);
 
 	UserRecPtr[NumberofUsers]= malloc(sizeof (struct UserInfo));
 
@@ -798,6 +855,17 @@ struct UserInfo * AllocateUserRecord(char * Call)
 	memcpy(UserRecPtr[NumberofUsers]->Call, Call, 10);
 
 	return UserRecPtr[NumberofUsers++];
+}
+
+struct MsgInfo * AllocateMsgRecord()
+{
+	MsgHddrPtr=realloc(MsgHddrPtr,(NumberofMessages+1)*4);
+
+	MsgHddrPtr[NumberofMessages]= malloc(sizeof (struct MsgInfo));
+
+	memset(MsgHddrPtr[NumberofMessages], 0, sizeof (struct MsgInfo));
+
+	return MsgHddrPtr[NumberofMessages++];
 }
 
 struct UserInfo * LookupCall(char * Call)
@@ -904,50 +972,169 @@ VOID SaveUserDatabase()
 	return;
 }
 
-VOID SendWelcomeMsg(int Stream, struct	ConnectionInfo * conn, struct UserInfo * user)
+VOID GetMessageDatabase()
 {
-	char Msg[255];
-	int len;
+	UCHAR Value[MAX_PATH];
+	UCHAR * BPQDirectory;
+	struct MsgInfo MsgRec;
+	HANDLE Handle;
+	int ReadLen;
+	struct MsgInfo * Msg;
 
-	if (conn->Flags & CHATMODE)
-		len = wsprintf(Msg, "Hello %s\rWelcome to %s Chat Server (/H for help) >\r", user->Name, BBSName);
-	else
-		len = wsprintf(Msg, "Hello %s\r%s BBS (H for help) >\r", user->Name, BBSName);
+	BPQDirectory=GetBPQDirectory();
 
-	SendMsg(Stream, Msg, len);
-
-	if (conn->Flags & CHATMODE)
+	if (BPQDirectory[0] == 0)
 	{
-		len = wsprintf(Msg, "%s - %s Logged on to Channel %d\r", user->Call, user->Name, conn->Conference);
-		SendtoOtherUsers(conn, Msg, len);
+		strcpy(Value, MsgDatabaseName);
+	}
+	else
+	{
+		strcpy(Value,BPQDirectory);
+		strcat(Value, "\\");
+		strcat(Value, MsgDatabaseName);
 	}
 
+	Handle = CreateFile(Value,
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+
+	if (Handle == INVALID_HANDLE_VALUE)
+		return;
+
+Next:
+
+	ReadFile(Handle, &MsgRec, sizeof (MsgRec), &ReadLen, NULL); 
+
+	if (ReadLen > 0)
+	{
+		Msg = AllocateMsgRecord();
+		memcpy(Msg, &MsgRec,  sizeof (MsgRec));
+		goto Next;
+	}
+
+	LatestMsg=MsgHddrPtr[NumberofMessages-1]->number;
+
+	CloseHandle(Handle);
+
 }
 
-VOID SendPrompt(int Stream, struct UserInfo * user)
+VOID SaveMessageDatabase()
 {
-	char Msg[255];
-	int len;
+	UCHAR Value[MAX_PATH];
+	UCHAR * BPQDirectory;
+	HANDLE Handle;
+	int WriteLen;
+	int i;
 
-	len = wsprintf(Msg, "%s", Prompt);
+	BPQDirectory=GetBPQDirectory();
 
-	SendMsg(Stream, Msg, len);
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(Value, MsgDatabaseName);
+	}
+	else
+	{
+		strcpy(Value,BPQDirectory);
+		strcat(Value, "\\");
+		strcat(Value, MsgDatabaseName);
+	}
+
+	Handle = CreateFile(Value,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	for (i=0; i < NumberofMessages; i++)
+	{
+		WriteFile(Handle, MsgHddrPtr[i], sizeof (struct MsgInfo), &WriteLen, NULL);
+	}
+
+	CloseHandle(Handle);
+
+	return;
+}
+
+VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
+{
+	LINK    *link;
+//	char Msg[255];
+//	int len;
+
+	if (conn->Flags & CHATMODE)
+	{	
+		// See if from a defined nod
+		
+		for (link = link_hd; link; link = link->next)
+		{
+			if (matchi(user->Call, link->call))
+				return;						// Wait for *RTL
+		}
+
+		// Not a defined node - assume it's a user
+
+		if (!rtloginu (conn))
+		{
+			// Already connected - close
+			
+			Sleep(1000);
+			Disconnect(conn->BPQStream);
+		}
+		return;
+	}
+
+
+		//nodeprintf(conn, "Hello %s\rWelcome to %s Chat Server (/H for help) >\r", user->Name, BBSName);
+	
+	nodeprintf(conn, "Hello %s. Latest Message is %d, Last listed is %d\r%s BBS (H for help) >\r",
+				user->Name, LatestMsg, user->lastmsg, BBSName);
+
+//	if (conn->Flags & CHATMODE)
+//	{
+//		len = wsprintf(Msg, "%s - %s Logged on to Channel %d\r", user->Call, user->Name, conn->Conference);
+//		SendtoOtherUsers(conn, Msg, len);
+//	}
+
+}
+
+VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
+{
+	nodeprintf(conn, "%s", Prompt);
 }
 
 
-VOID ProcessLine(struct	ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
+VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
 {
-	char * Cmd, * Arg1, * Arg2, * Arg3;
+	char * Cmd, * Arg1;
 	char * Context;
 	char seps[] = " \t\r";
 	int CmdLen;
-	
+
+	if (conn->Flags & GETTINGMESSAGE)
+	{
+		ProcessMsgLine(conn, user, Buffer, len);
+		return;	}
+
+	if (conn->Flags & GETTINGTITLE)
+	{
+		ProcessMsgTitle(conn, user, Buffer, len);
+		return;
+	}
+
 	if (conn->Flags & GETTINGUSER)
 	{
 		memcpy(user->Name, Buffer, len-1);
 		conn->Flags &=  ~GETTINGUSER;
 		SendWelcomeMsg(conn->BPQStream, conn, user);
 	}
+
 
 	if (conn->Flags & CHATMODE)
 	{
@@ -959,7 +1146,7 @@ VOID ProcessLine(struct	ConnectionInfo * conn, struct UserInfo * user, char* Buf
 
 	if (len == 1)
 	{
-		SendPrompt(conn->BPQStream, user);
+		SendPrompt(conn, user);
 		return;
 	}
 
@@ -967,16 +1154,25 @@ VOID ProcessLine(struct	ConnectionInfo * conn, struct UserInfo * user, char* Buf
 
 	Cmd = strtok_s(Buffer, seps, &Context);
 	Arg1 = strtok_s(NULL, seps, &Context);
-	Arg2 = strtok_s(NULL, seps, &Context);
-	Arg3 = strtok_s(NULL, seps, &Context);
 	CmdLen = strlen(Cmd);
 
+	if (_memicmp(Cmd, "Abort", 1) == 0)
+	{
+		ClearQueue(conn);
+		QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+	}
 	if (_memicmp(Cmd, "Bye", CmdLen) == 0)
 	{
 		SendMsg(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+		user->lastmsg = conn->lastmsg;
 		Sleep(1000);
 		Disconnect(conn->BPQStream);
 		return;
+	}
+
+	if (_memicmp(Cmd, "L", 1) == 0)
+	{
+		DoListCommand(conn, user, Cmd, Arg1);
 	}
 
 	if (_memicmp(Cmd, "Name", CmdLen) == 0)
@@ -984,22 +1180,34 @@ VOID ProcessLine(struct	ConnectionInfo * conn, struct UserInfo * user, char* Buf
 		if (Arg1)
 			strcpy(user->Name, Arg1);
 		SendWelcomeMsg(conn->BPQStream, conn, user);
+	}
 
-		return;
+	if (_memicmp(Cmd, "R", 1) == 0)
+	{
+		DoReadCommand(conn, user, Cmd, Arg1, Context);
+	}
+
+	if (_memicmp(Cmd, "S", 1) == 0)
+	{
+		DoSendCommand(conn, user, Cmd, Arg1, Context);
 	}
 
 	if (_memicmp(Cmd, "Chat", CmdLen) == 0)
 	{
 		conn->Flags |= CHATMODE;
-		return;
 	}
 
-	SendPrompt(conn->BPQStream, user);
+	if (conn->Flags == 0)
+		SendPrompt(conn, user);
+
+	//	Send if possible
+
+	Flush(conn);
 
 }
 
 
-VOID ProcessChatLine(struct	ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
+VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
 {
 	char * Cmd, * Arg1, * Arg2, * Arg3;
 	char * Context;
@@ -1007,10 +1215,37 @@ VOID ProcessChatLine(struct	ConnectionInfo * conn, struct UserInfo * user, char*
 	int CmdLen;
 	char Msg[250];
 	int msglen, n, NewChan = 0;
-	struct	ConnectionInfo * otherconn;
+	ConnectionInfo * otherconn, *c;
 	struct UserInfo * usr;
 
 	Buffer[len] = 0;
+
+	if ((len <6) && (memcmp(Buffer, "*RTL", 4) == 0))
+	{
+		// Node - Node Connect
+
+		if (rtloginl (conn, conn->UserPointer->Call))
+		{
+			// Accepted
+		
+			conn->Flags |= CHATLINK;
+			return;
+		}
+		else
+		{
+			// Connection refused
+			
+			Disconnect(conn->BPQStream);
+			return;
+		}
+	}
+
+	if (conn->Flags & CHATLINK)
+	{
+		chkctl(conn);
+		return;
+	}
+
 
 
 //	if ((len > 1) && Buffer[0] == '/')
@@ -1027,7 +1262,6 @@ VOID ProcessChatLine(struct	ConnectionInfo * conn, struct UserInfo * user, char*
 		if (_memicmp(Cmd, "Bye", CmdLen) == 0)
 		{
 			SendMsg(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
-			conn->Active = FALSE;
 			ReturntoNode(conn->BPQStream);
 			return;
 		}
@@ -1042,23 +1276,12 @@ VOID ProcessChatLine(struct	ConnectionInfo * conn, struct UserInfo * user, char*
 
 		if ((_memicmp(Cmd, "Help", CmdLen) == 0) || Cmd[0] == '?')
 		{
-			msglen = wsprintf(Msg, "BPQChat version 1.00 available commands are :-\r\r/? or /H - To read this list)\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
-
-			msglen = wsprintf(Msg, "/B ------- To leave CHAT and return to the BPQ Node\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
-
-			msglen = wsprintf(Msg, "/C n ----- To switch to Conference stream n (0 - 32)\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
-
-			msglen = wsprintf(Msg, "/L Loc --- To register your QTH/Locator (max 30 chars)\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
-
-			msglen = wsprintf(Msg, "/Q ------- To leave CHAT and disconnect from BPQ Node\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
-
-			msglen = wsprintf(Msg, "/W ------- To list connected users\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
+			nodeprintf(conn, "BPQChat version 1.00 available commands are :-\r\r/? or /H - To read this list)\r");
+			nodeprintf(conn, "/B ------- To leave CHAT and return to the BPQ Node\r");
+			nodeprintf(conn, "/C n ----- To switch to Conference stream n (0 - 32)\r");
+			nodeprintf(conn, "/L Loc --- To register your QTH/Locator (max 30 chars)\r");
+			nodeprintf(conn, "/Q ------- To leave CHAT and disconnect from BPQ Node\r");
+			nodeprintf(conn, "/W ------- To list connected users\r");
 
 			return;
 
@@ -1099,8 +1322,7 @@ BPQChat version 1.00 available commands are :-
 				strcpy(conn->UserPointer->City, Context);
 			}
 
-			msglen = wsprintf(Msg, "Location is %s\r", conn->UserPointer->City);
-			QueueMsg(conn->BPQStream, Msg, msglen);
+			nodeprintf(conn, "Location is %s\r", conn->UserPointer->City);
 
 			return;
 
@@ -1110,11 +1332,8 @@ BPQChat version 1.00 available commands are :-
 		{
 			// Show Users
 
-			msglen = wsprintf(Msg, "User       User            User                      Port Conf  On\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
-
-			msglen = wsprintf(Msg, "Name       Call    QTH/Location/Locator               No.  No.  DD/MM\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
+			nodeprintf(conn, "User       User            User                      Port Conf  On\r");
+			nodeprintf(conn, "Name       Call    QTH/Location/Locator               No.  No.  DD/MM\r");
 
 			for (n = 0; n < NumberofStreams; n++)
 			{
@@ -1124,17 +1343,14 @@ BPQChat version 1.00 available commands are :-
 				{
 					usr = otherconn->UserPointer;
 
-					msglen = wsprintf(Msg, "%-10s %-10s %-31s %2d   %2d   %02d/%02d\r",
+					nodeprintf(conn, "%-10s %-10s %-31s %2d   %2d   %02d/%02d\r",
 								usr->Name, usr->Call, usr->City,
 								otherconn->BPQStream, otherconn->Conference, 0, 0);
 
-				
-					QueueMsg(conn->BPQStream, Msg, msglen);
 				}
 			}
 
-			msglen = wsprintf(Msg, "End of User List..\r");
-			QueueMsg(conn->BPQStream, Msg, msglen);
+			nodeprintf(conn, "End of User List..\r");
 
 			return;
 
@@ -1158,11 +1374,8 @@ BPQChat version 1.00 available commands are :-
 					ShowConnections();
 				}
 			}
-			msglen = wsprintf(Msg, "You are now on Conference channel %d\r", conn->Conference);
-			QueueMsg(conn->BPQStream, Msg, msglen);
-
-			msglen = wsprintf(Msg, "Stations using channel %d = %s\r", conn->Conference, GetConfStations(conn->Conference));
-			QueueMsg(conn->BPQStream, Msg, msglen);
+			nodeprintf(conn, "You are now on Conference channel %d\r", conn->Conference);
+			nodeprintf(conn, "Stations using channel %d = %s\r", conn->Conference, GetConfStations(conn->Conference));
 
 			msglen = wsprintf(Msg, "%s - %s has changed to conference channel %d\r", user->Call, user->Name, conn->Conference);
 			SendtoOtherUsers(conn, Msg, msglen);
@@ -1203,11 +1416,9 @@ FASTCHAT version 4.7b available commands are :-
 */
 NullCmd:
 
-		msglen = wsprintf(Msg, "Unrecognised command  - type /? for help\r");
-		QueueMsg(conn->BPQStream, Msg, msglen);
+		nodeprintf(conn, "Unrecognised command  - type /? for help\r");
 
 		return;
-
 	}
 
 	// Send message to all other connected users on same channel
@@ -1219,7 +1430,7 @@ NullCmd:
 		len = 200;
 	}
 
-	msglen = wsprintf(Msg, "[%d:%s:%s] %s", conn->BPQStream, conn->UserPointer->Call, conn->UserPointer->Name, Buffer);
+/*	msglen = wsprintf(Msg, "[%d:%s:%s] %s", conn->BPQStream, conn->UserPointer->Call, conn->UserPointer->Name, Buffer);
 
 
 	for (n = 0; n < NumberofStreams; n++)
@@ -1228,9 +1439,20 @@ NullCmd:
 		
 		if ((otherconn->Active) && (otherconn->Flags == CHATMODE) && (otherconn->Conference == conn->Conference) && conn != otherconn)
 		{
-			QueueMsg(otherconn->BPQStream, Msg, msglen);
+			QueueMsg(otherconn, Msg, msglen);
 		}
 	}
+*/
+		
+	text_tellu(conn->u.user, conn->InputBuffer, NULL, o_topic); // To local users.
+		
+	// Send to Linked nodes
+
+	for (c = circuit_hd; c; c = c->next)
+		if ((c->flags & p_linked) && c->refcnt && ct_find(c, conn->u.user->topic))
+			nprintf(c, "%c%c%s %s %s\n",
+				FORMAT, id_data, OurNode, conn->u.user->call, conn->InputBuffer);
+
 
 }
 
@@ -1253,16 +1475,113 @@ G8BPQ - Harry logged off chan No. 0 - 30/04/2009  17:50:33
 G8BPQ - Harry Logged on chan No. 0 - 30/04/2009  17:50:35 
 */
 
-int QueueMsg(int stream, char * msg, int len)
+int QueueMsg(ConnectionInfo * conn, char * msg, int len)
 {
-	return SendMsg(stream, msg, len);
+	// Add Message to queue for this connection
+
+	//	UCHAR * OutputQueue;		// Messages to user
+	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
+	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	// Create or extend buffer
+
+	conn->OutputQueue=realloc(conn->OutputQueue, conn->OutputQueueLength + len);
+
+	if (conn->OutputQueue == NULL)
+	{
+		// relloc failed - should never happen, but clean up
+
+		CriticalErrorHandler("realloc failed to expand output queue");
+		return 0;
+	}
+
+	memcpy(&conn->OutputQueue[conn->OutputQueueLength], msg, len);
+
+	conn->OutputQueueLength+=len;
+
+	return len;
+}
+
+void TrytoSend()
+{
+	// call Flush on any connected streams with queued data
+
+	ConnectionInfo * conn;
+	int n;
+
+	for (n = 0; n < NumberofStreams; n++)
+	{
+		conn = &Connections[n];
+		
+		if (conn->Active == TRUE)
+			if (conn->OutputQueue)
+				Flush(conn);
+	}
+}
+
+
+void Flush(ConnectionInfo * conn)
+{
+	int tosend, len, sent;
+	
+	// Try to send data to user. May be stopped by user paging or node flow control
+
+	//	UCHAR * OutputQueue;		// Messages to user
+	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
+	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	if (conn->OutputQueue == NULL)
+		return;						// Nothing to send
+
+	tosend = conn->OutputQueueLength - conn->OutputGetPointer;
+
+	sent=0;
+
+	while (tosend > 0)
+	{
+		if (TXCount(conn->BPQStream) > 4)
+			return;						// Busy
+	
+		if (tosend <= conn->paclen)
+			len=tosend;
+		else
+			len=conn->paclen;
+
+		SendMsg(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
+
+		conn->OutputGetPointer+=len;
+
+		tosend-=len;
+	
+		sent++;
+
+		if (sent > 4)
+			return;
+
+	}
+
+	// All Sent. Free buffers and reset pointers
+
+	ClearQueue(conn);
+}
+
+VOID ClearQueue(ConnectionInfo * conn)
+{
+	if (conn->OutputQueue == NULL)
+		return;
+
+	free(conn->OutputQueue);
+
+	conn->OutputQueue=NULL;
+	conn->OutputGetPointer=0;
+	conn->OutputQueueLength=0;
 }
 
 char * GetConfStations(int Conference)
 {
 	static char Stns[1000] = "";
 	int n;
-	struct	ConnectionInfo * otherconn;
+	ConnectionInfo * otherconn;
 
 	Stns[0] = 0;
 
@@ -1280,10 +1599,10 @@ char * GetConfStations(int Conference)
 	return Stns;
 }
 
-VOID SendtoOtherUsers(struct ConnectionInfo * conn, char* Msg, int msglen)
+VOID SendtoOtherUsers(ConnectionInfo * conn, char* Msg, int msglen)
 {
 	int n;
-	struct ConnectionInfo * otherconn;
+	ConnectionInfo * otherconn;
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -1291,22 +1610,13 @@ VOID SendtoOtherUsers(struct ConnectionInfo * conn, char* Msg, int msglen)
 		
 		if ((otherconn->Active) && (otherconn->Flags == CHATMODE) && conn != otherconn)
 		{
-			QueueMsg(otherconn->BPQStream, Msg, msglen);
+			QueueMsg(otherconn, Msg, msglen);
 		}
 	}
-
 }
 
 
-
-//#include <windows.h>
-//#include <tchar.h> 
-//#include <stdio.h>
-
-#include <strsafe.h>
-
-
-
+/*
 int GetFileList(char * Dir)
 {
    WIN32_FIND_DATA ffd;
@@ -1353,5 +1663,529 @@ int GetFileList(char * Dir)
    FindClose(hFind);
    return dwError;
 }
+*/
+
+VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
+{
+	if (Msg->via[0] != 0)
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s@%-6s %-6s %-61s\r",
+				Msg->number, FormatDateAndTime(Msg->datesd, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->via, Msg->from, Msg->title);
+	else
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s        %-6s %-61s\r",
+				Msg->number, FormatDateAndTime(Msg->datesd, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->from, Msg->title);
+
+	if (Msg->number > conn->lastmsg) 
+		conn->lastmsg = Msg->number;
+
+}
+
+void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1)
+{
+	switch (toupper(Cmd[1]))
+	{
+
+	case 0:					// Just L
+
+		if (Arg1)
+		{
+			// Range nnn-nnn or single value
+
+			char * Arg2, * Arg3;
+			char * Context;
+			char seps[] = " -\t\r";
+			int From=LatestMsg, To=0;
+
+			Arg2 = strtok_s(Arg1, seps, &Context);
+			Arg3 = strtok_s(NULL, seps, &Context);
+
+			if (Arg2)
+				To = atoi(Arg2);
+
+			if (Arg3)
+				From = atoi(Arg3);
+
+			ListMessagesInRange(conn, user, user->Call, From, To);
+
+		}
+		else
+
+			ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg);
+
+		return;
 
 
+
+	case 'L':				// List Last
+
+		if (Arg1)
+		{
+			int i = atoi(Arg1);
+			int m = NumberofMessages-1;
+				
+			for (; i>0 && m != 0; i--)
+			{
+				m = GetUserMsg(m, user->Call, conn->sysop);
+
+				if (m > 0)
+				{
+					ListMessage(MsgHddrPtr[m], conn);
+					m--;
+				}
+			}
+		}
+		return;
+
+	case 'M':			// LM - List Mine
+
+		ListMessagesTo(conn, user, user->Call);
+		return;
+
+	case '>':			// L> - List to 
+
+		if (Arg1)
+			ListMessagesTo(conn, user, Arg1);
+		
+		return;
+
+	case '<':
+
+		if (Arg1)
+			ListMessagesFrom(conn, user, Arg1);
+		
+		return;
+
+	}
+}
+	
+void ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+{
+	int i;
+
+	for (i=NumberofMessages-1; i>0; i--)
+	{
+		if (_stricmp(MsgHddrPtr[i]->to, Call) == 0)
+			ListMessage(MsgHddrPtr[i], conn);
+	}
+
+
+}
+
+void ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+{
+	int i;
+
+	for (i=NumberofMessages-1; i>0; i--)
+	{
+		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
+			ListMessage(MsgHddrPtr[i], conn);
+	}
+
+
+}
+int GetUserMsg(int m, char * Call, BOOL SYSOP)
+{
+	struct MsgInfo * Msg;
+	
+	// Get Next (usually backwards) message which should be shown to this user
+	//	ie Not Deleted, and not Private unless to or from Call
+
+	do
+	{
+		Msg=MsgHddrPtr[m];
+
+		if (SYSOP) 
+			return m;					// Sysop can list or read anything
+
+		if (Msg->status != 'K')
+		{
+			if (Msg->type == 'B') return m;
+
+			if (Msg->type == 'P')
+			{
+				if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+					return m;
+			}
+		}
+
+		m--;
+
+	} while (m> 0);
+
+	return 0;
+
+}
+
+void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End)
+{
+	int m=NumberofMessages-1;
+
+	struct MsgInfo * Msg;
+
+	do
+	{
+		m = GetUserMsg(m, user->Call, conn->sysop);
+
+		if (m == 0)
+			return;
+
+		Msg=MsgHddrPtr[m];
+
+		if (Msg->number < End)
+			return;
+
+		if (Msg->number <= Start)
+			ListMessage(MsgHddrPtr[m], conn);
+
+		m--;
+
+	} while (m> 0);
+}
+
+
+
+void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	int msgno=-1;
+	
+	switch (toupper(Cmd[1]))
+	{
+
+	case 0:					// Just L
+
+		if (Arg1)
+		{
+			msgno=atoi(Arg1);
+			ReadMessage(conn, user, msgno);
+		}
+
+		return;
+	}
+}
+
+void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
+{
+	struct MsgInfo * Msg;
+	char * MsgBytes;
+
+	Msg = FindMessage(user->Call, msgno, conn->sysop);
+
+	if (Msg == NULL)
+	{
+		nodeprintf(conn, "Message %d not found\r", msgno);
+		return;
+	}
+
+	nodeprintf(conn, "From: %s\rTo: %s\rType/Status %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r",
+		Msg->from, Msg->to, Msg->type, Msg->status, FormatDateAndTime(Msg->datesd, FALSE), Msg->bid, Msg->title);
+
+	MsgBytes = ReadMessageFile(msgno);
+
+	if (MsgBytes)
+	{
+		QueueMsg(conn, MsgBytes, Msg->length);
+		free(MsgBytes);
+
+		nodeprintf(conn, "\r\r[End of Message #%d from %s]\r", msgno, Msg->from);
+	}
+	else
+	{
+		nodeprintf(conn, "File for Message %d not found\r", msgno);
+	}
+
+}
+ struct MsgInfo * FindMessage(char * Call, int msgno, BOOL sysop)
+ {
+	int m=NumberofMessages-1;
+
+	struct MsgInfo * Msg;
+
+	do
+	{
+		m = GetUserMsg(m, Call, sysop);
+
+		if (m == 0)
+			return NULL;
+
+		Msg=MsgHddrPtr[m];
+
+		if (Msg->number == msgno)
+			return Msg;
+
+		m--;
+
+	} while (m> 0);
+
+	return NULL;
+
+}
+
+char * ReadMessageFile(int msgno)
+{
+	LARGE_INTEGER FileSize;
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	char * MsgBytes;
+	int ReadLen;
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   
+	wsprintf(MsgFile, "%s\\mail%d\\m_%06d.mes", MailDir, msgno%10, msgno);
+	
+	hFile = CreateFile(MsgFile,
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+
+	if (hFile == INVALID_HANDLE_VALUE)
+		return NULL;
+
+	GetFileSizeEx(hFile, &FileSize);
+
+	MsgBytes=malloc(FileSize.LowPart);
+
+	ReadFile(hFile, MsgBytes, FileSize.LowPart, &ReadLen, NULL); 
+
+	CloseHandle(hFile);
+
+	return MsgBytes;
+
+
+}
+
+/*
+r 1378
+From         : G8BPQ
+To           : G8BPQ
+Type/Status  : PN
+Date/Time    : 09-May 13:01
+Bid          : 1378_G8BPQ
+Message #    : 1378
+Title        : Error-report
+> *** System boot on Sun 01/03/09 00:01 ***
+> *** System boot on Tue 05/05/09 14:21 ***
+> *** System boot on Sat 09/05/09 11:23 ***
+> *** System boot on Sat 09/05/09 11:30 ***
+> *** System boot on Sat 09/05/09 11:49 ***
+> *** System boot on Sat 09/05/09 12:24 ***
+***************
+
+
+
+[End of Message #1378 from G8BPQ]
+*/
+
+char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
+{
+	struct tm *newtime;
+    char Time[80];
+	static char Date[]="xx-xxx hh:mm";
+  
+	newtime = gmtime(&Datim);
+	asctime_s(Time, sizeof(Time), newtime);
+	Date[0]=Time[8];
+	Date[1]=Time[9];
+	Date[3]=Time[4];
+	Date[4]=Time[5];
+	Date[5]=Time[6];
+
+	if (DateOnly)
+	{
+		Date[6]=0;
+		return Date;
+	}
+
+	memcpy(&Date[6], &Time[10], 6);
+	
+	return Date;
+}
+
+void DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	unsigned int i;
+	
+	switch (toupper(Cmd[1]))
+	{
+
+	case 0:					// Just S means SP
+	case 'P':
+	case 'B':
+				
+		if (Arg1 == NULL)
+		{
+			nodeprintf(conn, "*** Error: The 'TO' callsign is missing\r");
+			return;
+		}
+
+		for (i=0; i< strlen(Arg1); i++)
+			Arg1[i] = toupper(Arg1[i]);
+
+		CreateMessage(conn, user, Arg1, toupper(Cmd[1]));
+		return;
+	}
+}
+
+VOID CreateMessage(ConnectionInfo * conn, struct UserInfo * user, char * ToCall, char MsgType)
+{
+	struct MsgInfo * Msg;
+
+	// Create a temp msg header entry
+
+	Msg = malloc(sizeof (struct MsgInfo));
+
+	if (Msg == 0)
+	{
+		CriticalErrorHandler("malloc failed for new message header");
+		return;
+	}
+	
+	memset(Msg, 0, sizeof (struct MsgInfo));
+
+	conn->TempMsg = Msg;
+	wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+
+	Msg->type = MsgType;
+	Msg->status = 'N';
+	Msg->date = Msg->datechanged = Msg->datesd = time(NULL);
+
+	strcpy(Msg->to, ToCall);
+	strcpy(Msg->from, user->Call);
+
+	conn->Flags |= GETTINGTITLE;
+
+	nodeprintf(conn, "Enter Title (only):\r");
+
+
+//	Enter Title (only)            :
+//Test 4
+//Enter text for message:-
+
+}
+
+VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int msglen)
+{
+	if (msglen > 60) msglen = 60;
+
+	Buffer[msglen-1] = 0;
+
+	conn->Flags &= ~GETTINGTITLE;
+
+	strcpy(conn->TempMsg->title, Buffer);
+
+	// Create initial buffer of 10K. Expand if needed later
+
+	conn->MailBuffer=malloc(10000);
+	conn->MailBufferSize=10000;
+
+	if (conn->MailBuffer == NULL)
+	{
+		nodeprintf(conn, "Failed to create Message Buffer\r");
+		return;
+	}
+
+	conn->Flags |= GETTINGMESSAGE;
+
+	nodeprintf(conn, "Enter Message Text (end with /ex or ctrl/z)\r");
+
+}
+
+VOID ProcessMsgLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int msglen)
+{
+	struct MsgInfo * Msg;
+
+	if (((msglen < 3) && (Buffer[0] == 0x1a)) || ((msglen == 4) && (_memicmp(Buffer, "/ex", 3) == 0)))
+	{
+		conn->Flags &= ~GETTINGMESSAGE;
+
+		// Allocate a message Record slot
+
+		Msg = AllocateMsgRecord();
+		memcpy(Msg, conn->TempMsg, sizeof(struct MsgInfo));
+		
+		// Set number here so they remain in sequence
+		
+		Msg->number = ++LatestMsg;
+
+		CreateMessageFile(conn, Msg);
+
+		nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
+
+		return;
+	}
+
+	Buffer[msglen++] = 0x0a;
+
+	if ((conn->TempMsg->length + msglen) > conn->MailBufferSize)
+	{
+		conn->MailBufferSize += 10000;
+		conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+	
+		if (conn->MailBuffer == NULL)
+		{
+			nodeprintf(conn, "Failed to extend Message Buffer\r");
+
+			conn->Flags &= ~GETTINGMESSAGE;
+			return;
+		}
+	}
+
+	memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, msglen);
+
+	conn->TempMsg->length += msglen;
+
+
+}
+
+VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
+{
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int WriteLen=0;
+	char Mess[255];
+	int len;
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   
+	wsprintf(MsgFile, "%s\\mail%d\\m_%06d.mes", MailDir, Msg->number%10, Msg->number);
+	
+	hFile = CreateFile(MsgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		WriteFile(hFile, conn->MailBuffer, Msg->length, &WriteLen, NULL);
+		CloseHandle(hFile);
+	}
+
+	free(conn->MailBuffer);
+	conn->MailBufferSize=0;
+	conn->MailBuffer=0;
+
+	if (WriteLen != Msg->length)
+	{
+		len = wsprintf(Mess, "Failed to create Message File\r");
+		QueueMsg(conn, Mess, len);
+		CriticalErrorHandler(Mess);
+	}
+	return;
+}
+
+
+
+int	CriticalErrorHandler(char * error)
+{
+	return 0;
+}

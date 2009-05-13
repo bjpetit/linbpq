@@ -36,7 +36,7 @@ CAPTION "G8BPQ Mail and Chat Server 1.0.0 January 2009"
 CLASS "BPQMailChat"
 FONT 8, "FixedSys"
 BEGIN
-	CONTROL "    User       Callsign Stream Conf",
+	CONTROL "    User       Callsign Stream Conf  Queue",
 		 101, "STATIC", SS_LEFT | WS_CHILD | WS_VISIBLE, 0, 2, 196, 8
 	LISTBOX         100, 2, 10, 190, 100,NOT WS_TABSTOP | WS_VSCROLL
 END
