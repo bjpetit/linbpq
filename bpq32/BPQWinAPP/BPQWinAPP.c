@@ -25,18 +25,7 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 
-int	ProcessBuff(char * readbuff,int len);
-
-int EnableConnectMenu(HWND hWnd);
-int EnableDisconnectMenu(HWND hWnd);
-int	DisableConnectMenu(HWND hWnd);
-int DisableDisconnectMenu(HWND hWnd);
-int	ToggleAutoConnect(HWND hWnd);
-int ToggleAppl(HWND hWnd, int Item, int mask);
-int DoReceivedData(HWND hWnd);
-int	DoStateChange(HWND hWnd);
-int ToggleFlags(HWND hWnd, int Item, int mask);
-int CopyScreentoBuffer(char * buff);
+int APIENTRY SetupTrayIcon();
 
 int TimerHandle = 0;
 
@@ -190,6 +179,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 
 	CheckTimer();
+
+	SetupTrayIcon();
+
 
 	return (TRUE);
 

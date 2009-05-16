@@ -130,6 +130,8 @@ typedef struct cn_t
 #define p_user    0x01    // User connected.
 #define p_linked  0x02    // Active link with another RT.
 #define p_linkini 0x04    // Outgoing link setup with another RT.
+#define p_linkwait 0x08   // Incoming link setup - waiting for *RTL
+
 
 /*typedef struct circuit_t
 {
@@ -176,10 +178,14 @@ typedef struct ConnectionInfo_S
 	BOOL Active;
     int BPQStream;
 	int paclen;
- //   UCHAR Callsign[10];
+	UCHAR Callsign[10];			// Station call including SSID
     BOOL GotHeader;
-    UCHAR InputBuffer[500];
-    int InputLen;
+	BOOL InputMode;				// Line by Line or Binary
+
+    UCHAR InputBuffer[1000];
+    int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+
+//	int PartPacketPointer;
 	struct UserInfo * UserPointer;
     int Retries;
 	int	LoginState;				// 1 = user ok, 2 = password ok
@@ -217,7 +223,7 @@ typedef struct ConnectionInfo_S
 
 struct UserInfo{
 
-	char	Call[10]     ;	/* 8  Callsign */
+	char	Call[10];			//	Connected call without SSID	
 //	indicat relai[8]  ;	/* 64 Digis path */
 	long	lastmsg  ;	/* 4  Last L number */
 	long	nbcon;	/* 4  Number of connexions */
@@ -296,8 +302,8 @@ static USER *user_hd = NULL;
 static PROC *Rt_Control;
 static int  rtrun = FALSE;
 
-#define rtjoin  "*** Joined the RoundTable"
-#define rtleave "*** Left the RoundTable"
+#define rtjoin  "*** Joined"
+#define rtleave "*** Left"
 
 static void cn_dec(CIRCUIT *circuit, NODE *node);
 static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias);
@@ -306,6 +312,7 @@ static NODE *node_inc(char *call, char *alias);
 static int cn_find(CIRCUIT *circuit, NODE *node);
 static void text_xmit(USER *user, USER *to, char *text);
 void text_tellu(USER *user, char *text, char *to, int who);
+void text_tellu_Joined(USER *user);
 static void topic_xmit(USER *user, CIRCUIT *circuit);
 static void topic_xmit(USER *user, CIRCUIT *circuit);
 static void node_xmit(NODE *node, char kind, CIRCUIT *circuit);
@@ -317,22 +324,46 @@ static void user_leave(USER *user);
 static void topic_chg(USER *user, char *s);
 static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias);
 void link_drop(CIRCUIT *circuit);
-static void echo(CIRCUIT *fc, NODE *node);
-static void state_tell(CIRCUIT *circuit);
+static void echo(CIRCUIT *fc, NODE *node, char * Buffer);
+void state_tell(CIRCUIT *circuit);
 int ct_find(CIRCUIT *circuit, TOPIC *topic);
 int rtlink (char * Call);
 int rtloginl (CIRCUIT *conn, char * call);
-void chkctl(CIRCUIT *ckt_from);
+void chkctl(CIRCUIT *ckt_from, char * Buffer);
 int rtloginu (CIRCUIT *circuit);
 void logout(CIRCUIT *circuit);
 void show_users(CIRCUIT *circuit);
 VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...);
 BOOL matchi(char * p1, char * p2);
-
+char * strlop(char * buf, char delim);
+int rt_cmd(CIRCUIT *circuit, char * Buffer);
+CIRCUIT *circuit_new(CIRCUIT *circuit, int flags);
+VOID nputs(CIRCUIT * conn, char * buf);
+void makelinks(void);
 
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
 #define ReturntoNode(stream) SessionControl(stream,3,0)
+#define ConnectUsingAppl(stream, appl) SessionControl(stream, 0, appl)
+
+
+typedef struct SocketConnectionInfoX
+{
+	struct SocketConnectionInfoX * Next;
+	int Number;					// Number of record - for Connections display
+    SOCKET socket;
+	SOCKADDR_IN sin;  
+    UCHAR CallSign[10];
+    UCHAR TCPBuffer[3000];
+    int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+
+	UCHAR * MailBuffer;			// Mail Message being received
+	int MailBufferSize;			// Total Malloc'ed size. Actual size is in MailSize
+	int MailSize;
+	int Flags;
+  
+} SocketConn;
+
 
 #define SE 240 // End of subnegotiation parameters
 #define NOP 241 //No operation
@@ -372,10 +403,10 @@ int Disconnected(Stream);
 int DeleteConnection(con);
 //int Socket_Accept(int SocketId);
 //int Socket_Data(int SocketId,int error, int eventcode);
-int DataSocket_Read(ConnectionInfo * sockptr, SOCKET sock);
-int DataSocket_Write(ConnectionInfo * sockptr, SOCKET sock);
-int DataSocket_Disconnect(ConnectionInfo * sockptr);
-BOOL ProcessTelnetCommand(ConnectionInfo * sockptr, UCHAR * Msg, int Len);
+int DataSocket_Read(SocketConn * sockptr, SOCKET sock);
+int DataSocket_Write(SocketConn * sockptr, SOCKET sock);
+int DataSocket_Disconnect(SocketConn * sockptr);
+BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, UCHAR * Msg, int Len);
 int ShowConnections();
 int Terminate();
 int SendtoSocket(SOCKET sock,char * Msg);
@@ -402,8 +433,10 @@ char * GetConfStations(int Conference);
 VOID SendtoOtherUsers(ConnectionInfo * conn, char* Msg, int msglen);
 //int GetFileList(char * Dir);
 VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn);
+void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
 void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
+void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
 void ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 void ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
@@ -421,3 +454,14 @@ void CreateMessage(ConnectionInfo * conn, struct UserInfo * user, char * ToCall,
 VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID ProcessMsgLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg);
+void link_out (LINK *link);
+ProcessConnecting(CIRCUIT * circuit, char * Buffer);
+
+// TCP Routines
+
+BOOL InitialiseTCP();
+int Socket_Data(int sock, int error, int eventcode);
+int Socket_Accept(int SocketId);
+VOID ProcessSMTPMessage(SocketConn * sockptr, char * Buffer, int Len);
+
+

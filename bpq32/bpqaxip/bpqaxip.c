@@ -89,6 +89,10 @@
 //		Add option to reject messages if sender is not in ARP Table
 //		Add option to add received calls to ARP Table
 
+// Version 1.15.1 May 2009
+//
+//		Add IP/TCP option
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -104,6 +108,10 @@
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
 
+#define WSA_ACCEPT WM_USER + 1
+#define WSA_DATA WM_USER + 2
+#define WSA_CONNECT WM_USER + 3
+
 #define BUFFLEN	360	
 
 //	BUFFLEN-4 = L2 POINTER (FOR CLEARING TIMEOUT WHEN ACKMODE USED)
@@ -114,6 +122,13 @@
 
 #define VERSION_MAJOR         2
 #define VERSION_MINOR         0
+
+#define	FEND	0xC0	// KISS CONTROL CODES 
+#define	FESC	0xDB
+#define	TFEND	0xDC
+#define	TFESC	0xDD
+
+
 
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
@@ -139,7 +154,7 @@ int Update_MH_List(struct in_addr ipad, char * call, char proto, short port);
 int Update_MH_KeepAlive(struct in_addr ipad, char proto, short port);
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
-BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded);
+BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode);
 BOOL add_bc_entry(unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 BOOL ReadConfigFile(char * filename);
@@ -149,6 +164,13 @@ BOOL CopyScreentoBuffer(char * buff);
 int DumpFrameInHex(unsigned char * msg, int len);
 VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen);
 BOOL CheckSourceisResolvable(char * call, int Port);
+int DataSocket_Read(struct arp_table_entry * sockptr, SOCKET sock);
+int GetMessageFromBuffer(char * Buffer);
+int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
+int	KissDecode(UCHAR * inbuff, int len);
+int Socket_Accept(int SocketId);
+int Socket_Data(int sock, int error, int eventcode);
+VOID TCPConnectThread(struct arp_table_entry * arp);
 
 BOOL Checkifcanreply=TRUE;
 
@@ -202,7 +224,22 @@ struct arp_table_entry
 	unsigned int keepaliveinit;
 	BOOL BCFlag;				// Frue if we want broadcasts to got to this call
 	BOOL AutoAdded;				// Set if Entry created as a result of AUTOADDMAP
+	SOCKET TCPSock;
+	int  TCPMode;				// TCPMaster ot TCPSlave
+	UCHAR * TCPBuffer;			// Area for building TCP message from byte stream
+	int InputLen;				// Bytes in TCPBuffer
+	SOCKADDR_IN sin; 
+	SOCKADDR_IN destaddr;
+	BOOL TCPState;
+	time_t LastConnectTime;
 };
+
+#define TCPMaster 1
+#define TCPSlave 2
+
+#define TCPListening 1
+#define TCPConnecting 2
+#define TCPConnected 4
 
 
 struct broadcast_table_entry
@@ -266,6 +303,7 @@ int NumberofUDPPorts;
 
 BOOL needip = FALSE;
 BOOL NeedResolver = FALSE;
+BOOL NeedTCP = FALSE;
 
 SOCKET sock;
 SOCKET udpsock[MAXUDPPORTS+2];
@@ -403,6 +441,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	char axcall[7];
 	char errmsg[100];
 
+	struct arp_table_entry * arp;
 	switch (fn)
 	{
 	case 1:				// poll
@@ -416,7 +455,32 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			CheckKeepalives();
 			lasttime=ltime;
 		}
-				
+
+		if (NeedTCP)
+		{
+			index = 0;
+			
+			while (index < arp_table_len)
+			{
+				arp = &arp_table[index];
+
+				if (arp->TCPMode == TCPMaster)
+				{
+					if (arp->TCPState == 0)
+					{
+						//	See if time to reconnect
+		
+						if (ltime - arp->LastConnectTime > 9 )
+						{
+							_beginthread(TCPConnectThread, 0, arp);
+							arp->LastConnectTime = ltime;
+						}
+					}
+				}
+				index++;
+			}
+		}
+
 		if (needip)
 		{
 			len = recvfrom(sock,rxbuff,500,0,(LPSOCKADDR)&rxaddr,&addrlen);
@@ -482,7 +546,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 								if (AutoAddARP)
 
-									return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE);
+									return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0);
 
 								else
 
@@ -567,7 +631,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 							// Can't reply. If AutoConfig is set, add to table and accept, else reject
 
 							if (AutoAddARP)
-								return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, udpport[i], inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE);
+								return add_arp_entry(call, (PVOID)&rxaddr.sin_addr, 7, udpport[i], inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0);
 							else
 								return 0;
 					}
@@ -583,6 +647,24 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				OutputDebugString(errmsg);
 
 				return (0);
+			}
+		}
+
+		if (NeedTCP)
+		{
+			len = GetMessageFromBuffer(rxbuff);
+
+			if (len)
+			{
+				len = KissDecode(rxbuff, len-1);		// Len includes FEND
+				len -= 2;	// Ignore Cheksum
+
+				memcpy(&buff[7],&rxbuff[0],len);
+				len+=7;
+				buff[5]=(len & 0xff);
+				buff[6]=(len >> 8);
+
+				return 1;
 			}
 		}
 
@@ -685,6 +767,21 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 VOID SendFrame(struct arp_table_entry * arp_table, UCHAR * buff, int txlen)
 {				
 	int txsock;
+
+	if (arp_table->TCPMode)
+	{
+		if (arp_table->TCPState == TCPConnected)
+		{
+			char outbuff[1000];
+			int newlen;
+
+			newlen = KissEncode(buff, outbuff, txlen);
+			send(arp_table->TCPSock, outbuff, newlen, 0);
+		}
+
+		return;
+	}
+			
 
 	if (arp_table->ipaddr != 0)
 	{
@@ -823,7 +920,12 @@ void OpenSockets(void *dummy)
 	int err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
-	int i;
+	int i, status;
+	int index = 0;
+	struct arp_table_entry * arp;
+	SOCKADDR_IN local_sin;  /* Local socket - internet style */
+	PSOCKADDR_IN psin;
+
 
 	// Moved from InitAXIP, to avoid hang if started too early on XP SP2
 
@@ -898,6 +1000,73 @@ void OpenSockets(void *dummy)
 			return;
 		}
 	}
+
+	// Open any TCP sockets
+
+	while (index < arp_table_len)
+	{
+		arp = &arp_table[index++];
+
+		if (arp->TCPMode == TCPMaster)
+		{
+			arp->TCPBuffer=malloc(4000);
+			arp->TCPState = 0;
+			continue;
+		}
+
+
+		if (arp->TCPMode == TCPSlave)
+		{
+			
+			arp->TCPBuffer=malloc(4000);
+			arp->TCPState = 0;
+
+			// create the socket. Set to listening mode if Slave
+
+			arp->TCPSock = socket(AF_INET, SOCK_STREAM, 0);
+
+			if (arp->TCPSock == INVALID_SOCKET)
+			{
+				sprintf(Msg, "socket() failed error %d", WSAGetLastError());
+				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
+				continue;
+			
+			}
+ 
+			psin=&local_sin;
+
+			psin->sin_family = AF_INET;
+			psin->sin_addr.s_addr = htonl(INADDR_ANY);	// Local Host Only
+	
+			psin->sin_port = htons(arp->port);        /* Convert to network ordering */
+
+			if (bind(arp->TCPSock , (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+			{
+				sprintf(Msg, "bind(sock) failed Error %d", WSAGetLastError());
+
+				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
+				closesocket(arp->TCPSock);
+
+				continue;
+			}
+
+			if (listen(arp->TCPSock, 1) < 0)
+			{
+				sprintf(Msg, "listen(sock) failed Error %d", WSAGetLastError());
+				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
+				continue;
+
+			}
+   
+			if ((status = WSAAsyncSelect(arp->TCPSock, hResWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
+			{
+				sprintf(Msg, "WSAAsyncSelect failed Error %d", WSAGetLastError());
+				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
+				closesocket(arp->TCPSock);
+				continue;
+			}
+		}
+	}
 }	
 
 void CloseSockets()
@@ -935,6 +1104,22 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	int nScrollCode,nPos;
 
 	switch (message) { 
+
+	case WSA_DATA: // Notification on data socket
+
+		Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
+		return 0;
+
+	case WSA_ACCEPT: /* Notification if a socket connection is pending. */
+
+		Socket_Accept(wParam);
+		return 0;
+
+	case WSA_CONNECT: /* Notification if a socket connection is pending. */
+
+		Socket_Connect(wParam);
+		return 0;
+
 
 	case WM_USER+99:
 
@@ -1198,7 +1383,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 			{
 				if (convtoax25(call,axcall,&calllen))
 				{
-					add_arp_entry(axcall,&ipad,calllen,port,host,Interval, BCFlag, FALSE);
+					add_arp_entry(axcall,&ipad,calllen,port,host,Interval, BCFlag, FALSE, 0);
 					PostMessage(hResWnd, WM_TIMER,0,0);
 					return(DestroyWindow(hWnd));
 				}
@@ -1769,6 +1954,7 @@ ProcessLine(char * buf)
 	unsigned int ipad;
 	int Interval;
 	int Dynamic=FALSE;
+	int TCPMode;
 
 	ptr = strtok(buf, " \t\n\r");
 
@@ -1833,6 +2019,8 @@ ProcessLine(char * buf)
 		Interval=0;
 		port=0;				// Raw IP
 		bcflag=0;
+		TCPMode=0;
+
 //
 //		Look for (optional) KEEPALIVE, DYNAMIC, UDP or BROADCAST params
 //
@@ -1866,6 +2054,36 @@ ProcessLine(char * buf)
 				p_UDP = strtok(NULL, " \t\n\r");
 				continue;
 			}
+
+			if (_stricmp(p_UDP,"TCP-Master") == 0)
+			{
+				p_udpport = strtok(NULL, " \t\n\r");
+			
+				if (p_udpport == NULL) return (FALSE);
+
+				port = atoi(p_udpport);
+				p_UDP = strtok(NULL, " \t\n\r");
+
+				TCPMode=TCPMaster;
+
+				continue;
+			}
+
+			if (_stricmp(p_UDP,"TCP-Slave") == 0)
+			{
+				p_udpport = strtok(NULL, " \t\n\r");
+			
+				if (p_udpport == NULL) return (FALSE);
+
+				port = atoi(p_udpport);
+				p_UDP = strtok(NULL, " \t\n\r");
+
+				TCPMode = TCPSlave;
+				continue;
+
+			}
+
+
 			if (_stricmp(p_UDP,"B") == 0)
 			{
 				bcflag =TRUE;
@@ -1881,7 +2099,7 @@ ProcessLine(char * buf)
 
 		if (convtoax25(p_call,axcall,&calllen))
 		{
-			add_arp_entry(axcall,&ipad,calllen,port,p_ipad,Interval, bcflag, FALSE);
+			add_arp_entry(axcall,&ipad,calllen,port,p_ipad,Interval, bcflag, FALSE, TCPMode);
 			return (TRUE);
 		}
 	}		// End of Process MAP
@@ -1991,7 +2209,7 @@ BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call,int * calllen
 	return (FALSE);
 }
 
-BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded)
+BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPFlag)
 {
 	struct arp_table_entry * arp;
 
@@ -2026,7 +2244,11 @@ BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,u
 	arp->keepaliveinit = keepalive;
 	arp->BCFlag = BCFlag;
 	arp->AutoAdded = AutoAdded;
+	arp->TCPMode = TCPFlag;
 	arp_table_len++;
+
+	NeedResolver |= TCPFlag;					// Need Resolver window to handle tcp socket messages
+	NeedTCP |= TCPFlag;
 
 	return (TRUE);
 }
@@ -2216,3 +2438,368 @@ int DumpFrameInHex(unsigned char * msg, int len)
 	return 0;
 
 }
+
+int Socket_Accept(int SocketId)
+{
+	int addrlen;
+	struct arp_table_entry * sockptr;
+	SOCKET sock;
+	char Msg[100];
+	int index=0;
+
+	//   Find Socket entry
+
+	//	Find Connection Record
+
+	while (index < arp_table_len)
+	{
+		sockptr = &arp_table[index];
+
+		if (sockptr->TCPSock == SocketId)
+		{
+			addrlen=sizeof(struct sockaddr);
+
+			sock = accept(SocketId, (struct sockaddr *)&sockptr->sin, &addrlen);
+
+			if (sock == INVALID_SOCKET)
+			{
+				sprintf(Msg, " accept() failed Error %d", WSAGetLastError());
+				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
+				return FALSE;
+			}
+
+			WSAAsyncSelect(sock, hResWnd, WSA_DATA,
+					FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
+
+//			closesocket(sockptr->TCPSock);		// CLose listening socket
+
+			sockptr->TCPSock = sock;
+			sockptr->TCPState = TCPConnected;
+
+			return 0;
+		}
+
+		index++;
+	}
+
+	return 0;
+
+}
+
+int Socket_Connect(int SocketId)
+{
+	struct arp_table_entry * sockptr;
+
+	int index=0;
+
+	//   Find Socket entry
+
+	//	Find Connection Record
+
+	while (index < arp_table_len)
+	{
+		sockptr = &arp_table[index++];
+
+		if (sockptr->TCPSock == SocketId)
+		{
+			sockptr->TCPState = TCPConnected;
+			
+			WSAAsyncSelect(sock, hResWnd, WSA_DATA,
+					FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
+
+		}
+	}
+	return 0;
+}
+int Socket_Data(int sock, int error, int eventcode)
+{
+	struct arp_table_entry  * sockptr;
+	int index=0;
+
+	//	Find Connection Record
+
+	while (index < arp_table_len)
+	{
+		sockptr = &arp_table[index];
+
+		if (sockptr->TCPSock == sock)
+		{
+			switch (eventcode)
+			{
+				case FD_READ:
+
+					return DataSocket_Read(sockptr,sock);
+
+				case FD_WRITE:
+
+					sockptr->TCPState = TCPConnected;
+					return 0;
+
+				case FD_OOB:
+
+					return 0;
+
+				case FD_ACCEPT:
+
+					return 0;
+
+				case FD_CONNECT:
+
+					return 0;
+
+				case FD_CLOSE:
+
+					closesocket(sock);
+					return 0;
+				}
+			return 0;
+		}
+		index++;
+	}
+
+	return 0;
+}
+
+int DataSocket_Read(struct arp_table_entry * sockptr, SOCKET sock)
+{
+	int InputLen;
+
+	// May have several messages per packet, or message split over packets
+
+	if (sockptr->InputLen > 3000)	// Shouldnt have lines longer  than this in text mode
+	{
+		sockptr->InputLen=0;
+	}
+				
+	InputLen=recv(sock, &sockptr->TCPBuffer[sockptr->InputLen], 1000, 0);
+
+	if (InputLen == 0)
+		return 0;					// Does this mean closed?
+
+	sockptr->InputLen += InputLen;
+
+	return 0;
+}
+
+int GetMessageFromBuffer(char * Buffer)
+{
+	struct arp_table_entry * sockptr;
+	int index=0;
+	int MsgLen;
+	char * ptr, * ptr2;
+
+	//   Look for data in tcp buffers
+
+
+	while (index++ < arp_table_len)
+	{
+		sockptr = &arp_table[index];
+
+		if (sockptr->TCPMode)
+		{
+			if (sockptr->InputLen == 0)
+				continue;
+	
+			ptr = memchr(sockptr->TCPBuffer, FEND, sockptr->InputLen);
+
+			if (ptr)	//  FEND in buffer
+			{
+				ptr2 = &sockptr->TCPBuffer[sockptr->InputLen];
+				ptr++;
+
+				if (ptr == ptr2)
+				{
+					// Usual Case - single meg in buffer
+
+					MsgLen = sockptr->InputLen;
+					sockptr->InputLen = 0;
+
+					if (MsgLen > 1)
+					{
+						memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
+						return MsgLen;
+					}
+				}
+				else
+				{
+					// buffer contains more that 1 message
+
+					MsgLen = sockptr->InputLen - (ptr2-ptr);
+					memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
+
+					memmove(sockptr->TCPBuffer, ptr, sockptr->InputLen-MsgLen);
+
+					sockptr->InputLen -= MsgLen;
+
+					if (MsgLen > 1)
+					{
+						return MsgLen;
+					}
+				}
+			}
+		}
+	}
+	return 0;
+
+}
+
+int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
+{
+	int i,txptr=0;
+	UCHAR c;
+
+	outbuff[0]=FEND;
+	txptr=1;
+
+	for (i=0;i<len;i++)
+	{
+		c=inbuff[i];
+		
+		switch (c)
+		{
+		case FEND:
+			outbuff[txptr++]=FESC;
+			outbuff[txptr++]=TFEND;
+			break;
+
+		case FESC:
+
+			outbuff[txptr++]=FESC;
+			outbuff[txptr++]=TFESC;
+			break;
+
+		default:
+
+			outbuff[txptr++]=c;
+		}
+	}
+
+	outbuff[txptr++]=FEND;
+
+	return txptr;
+
+}
+int	KissDecode(UCHAR * inbuff, int len)
+{
+	int i,txptr=0;
+	UCHAR c;
+
+	for (i=0;i<len;i++)
+	{
+		c=inbuff[i];
+
+		if (c == FESC)
+		{
+			c=inbuff[++i];
+			{
+				if (c == TFESC)
+					c=FESC;
+				else
+				if (c == TFEND)
+					c=FEND;
+			}
+		}
+
+		inbuff[txptr++]=c;
+	}
+
+	return txptr;
+
+}
+
+VOID TCPConnectThread(struct arp_table_entry * arp)
+{
+	char Msg[255];
+	int err, i, status;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+
+
+	arp->destaddr.sin_addr.s_addr = arp->ipaddr;
+
+	closesocket(arp->TCPSock);
+
+	arp->TCPSock=socket(AF_INET,SOCK_STREAM,0);
+
+	if (arp->TCPSock == INVALID_SOCKET)
+	{
+		i=wsprintf(Msg, "Socket Failed for AX/TCP socket - error code = %d\r\n", WSAGetLastError());
+		WritetoConsole(Msg);
+  	 	return; 
+	}
+
+	ioctlsocket (arp->TCPSock, FIONBIO, &param);
+ 
+	setsockopt (arp->TCPSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = 0;
+
+	arp->destaddr.sin_family = AF_INET; 
+	arp->destaddr.sin_addr.s_addr = arp->ipaddr;
+	arp->destaddr.sin_port = htons(arp->port);
+
+	if (bind(arp->TCPSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+	{
+		//
+		//	Bind Failed
+		//
+	
+		i=wsprintf(Msg, "Bind Failed for AX/TCP socket - error code = %d\r\n", WSAGetLastError());
+		WritetoConsole(Msg);
+
+  	 	return; 
+	}
+
+	if ((status = WSAAsyncSelect(arp->TCPSock, hResWnd, WSA_CONNECT, FD_CONNECT)) > 0)
+	{
+		sprintf(Msg, "WSAAsyncSelect failed Error %d", WSAGetLastError());
+		MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
+		closesocket(arp->TCPSock);
+	}
+
+	arp->TCPState = TCPConnecting;
+
+	if (connect(arp->TCPSock,(LPSOCKADDR) &arp->destaddr, sizeof(destaddr)) == 0)
+	{
+		//
+		//	Connected successful
+		//
+
+		arp->TCPState = TCPConnected;
+
+		return;
+	}
+	else
+	{
+		err=WSAGetLastError();
+
+		if (err == WSAEWOULDBLOCK)
+		{
+			//
+			//	Connect in Progressing
+			//
+
+			return;
+		}
+		else
+		{
+			//
+			//	Connect failed
+			//
+    		i=wsprintf(Msg, "Connect Failed for AX/UDP socket - error code = %d\r\n", err);
+			WritetoConsole(Msg);
+
+			closesocket(arp->TCPSock);
+
+			arp->TCPState =0;
+
+
+			return;
+		}
+	}
+	return;		// Not Used
+
+}
+

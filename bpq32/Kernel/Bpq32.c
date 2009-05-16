@@ -264,6 +264,7 @@ RECT Rect;			// Window Position
 DllExport int APIENTRY DumpSystem();
 DllExport int APIENTRY SaveNodes ();
 DllExport int APIENTRY ClearNodes ();
+DllExport int APIENTRY SetupTrayIcon();
 
 VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT idEvent,DWORD dwTime );
 
@@ -3312,6 +3313,16 @@ int SetupConsoleWindow()
 	else
 		ShowWindow(hWnd, SW_RESTORE);
 
+
+	SetupTrayIcon();
+
+	return 0;
+
+}
+
+
+DllExport int APIENTRY SetupTrayIcon()
+{
 	if (MinimizetoTray == 0) 
 		return 0;
 

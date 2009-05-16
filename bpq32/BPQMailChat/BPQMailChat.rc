@@ -146,15 +146,15 @@ END
 
 2 TEXTINCLUDE  
 BEGIN
-    "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
-    "#include ""windows.h""\r\n"
-    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#define APSTUDIO_HIDDEN_SYMBOLS\r\r"
+    "#include ""windows.h""\r\r"
+    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\r"
     "\0"
 END
 
 3 TEXTINCLUDE  
 BEGIN
-    "\r\n"
+    "\r\r"
     "\0"
 END
 
