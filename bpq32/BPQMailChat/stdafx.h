@@ -28,10 +28,17 @@
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
+
+#include <crtdbg.h>
+
+
 // Windows Header Files:
 #include <windows.h>
 #include <windowsx.h>
 #include <winsock.h>
+#include "commctrl.h"
+
+
 
 // C RunTime Header Files
 #include <stdlib.h>
@@ -44,5 +51,7 @@
 #include "BPQMailChat.h"
 #include "bpq32.h"
 
+#include "resource.h"
 
+#include "md5.h"
 

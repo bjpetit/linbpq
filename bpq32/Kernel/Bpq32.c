@@ -205,6 +205,8 @@ extern int FINDFREEDESTINATION();
 extern int RAWTX();
 extern int RELBUFF();
 extern int SENDNETFRAME();
+VOID __cdecl Debugprintf(const char * format, ...);
+
 
 DllExport int APIENTRY CloseBPQ32();
 
@@ -3921,3 +3923,18 @@ DllExport VOID APIENTRY RelBuff(PMESSAGE Msg)
 		call RELBUFF
 	}
 }
+
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[255];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+	OutputDebugString(Mess);
+
+	return;
+}
+
+

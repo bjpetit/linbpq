@@ -3,10 +3,21 @@
 #include "resource.h"
 
 #define WSA_ACCEPT WM_USER + 1
-#define WSA_DATA WM_USER + 2
+#define WSA_CONNECT WM_USER + 2
+#define WSA_DATA WM_USER + 3
 
-#define _USE_32BIT_TIME_T
-#include "time.h"
+
+#define   malloc(s)             _malloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   calloc(c, s)          _calloc_dbg(c, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   realloc(p, s)         _realloc_dbg(p, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   _recalloc(p, c, s)    _recalloc_dbg(p, c, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   _expand(p, s)         _expand_dbg(p, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   free(p)               _free_dbg(p, _NORMAL_BLOCK)
+
+#define   zalloc(s)             _zalloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
+
+VOID * _zalloc_dbg(int len, int type, char * file, int line);
+
 
 struct UserRec
 {
@@ -23,7 +34,7 @@ struct UserRec
 
 // Protocol version.
 
-#define FORMAT       'A'
+#define FORMAT       1	 // Ctrl/A
 #define FORMAT_O     0   // Offset in frame to format byte.
 #define TYPE_O       1   // Offset in frame to kind byte.
 #define DATA_O       2   // Offset in frame to data.
@@ -178,7 +189,7 @@ typedef struct ConnectionInfo_S
 	BOOL Active;
     int BPQStream;
 	int paclen;
-	UCHAR Callsign[10];			// Station call including SSID
+	UCHAR Callsign[11];			// Station call including SSID
     BOOL GotHeader;
 	BOOL InputMode;				// Line by Line or Binary
 
@@ -207,7 +218,16 @@ typedef struct ConnectionInfo_S
 
 	long lastmsg;				// Last Listed. Stored here, updated in user record only on clean close
 	BOOL sysop;					// Set if user is authenticated as a sysop
+	UINT BBSFlags;					// Set if defined as a bbs and SID received
 	struct MsgInfo * TempMsg;		// Header while message is being received
+	struct MsgInfo * FwdMsg;		// Header while message is being forwarded
+
+	int BBSNumber;						// The BBS number (offset into bitlist of BBSes to forward a message to
+	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block
+	char FBBReplyChars[6];				//The +-= chars for the 5 proposals
+	int FBBIndex;						// current propopsal number
+	UCHAR FBBChecksum;					// Header Checksum
+
 } ConnectionInfo, CIRCUIT;
 
 // Flags Equates
@@ -218,6 +238,13 @@ typedef struct ConnectionInfo_S
 #define GETTINGTITLE 8
 #define GETTINGMESSAGE 16
 #define CHATLINK 32					// Link to another Chat Node
+
+// BBSFlags Equates
+
+#define BBS 1
+#define FBBForwarding 2
+#define FBBCompressed 4
+#define Connecting 8
 
 #pragma pack(1)
 
@@ -237,7 +264,11 @@ struct UserInfo{
 
 	long	newbanner;	/* 4  Last Banner date */
 	short 	download  ;	/* 2  download size (KB) = 100 */
-	char	xfree[20]  ;	/* 20 Reserved */
+	char	POP3Locked ;	//Nonzero if POP3 server has locked this user (stops other pop3 connections, or BBS user killing messages)
+	char	BBSNumber;		// BBS Bitmap Index Number
+	struct	BBSForwardingInfo * ForwardingInfo;
+	struct  UserInfo * BBSNext;	// links BBS record
+	char	xfree[10];		/* 10 Spare */
 	char	theme     ;	/* 1  Current topic */
 
 	char	Name[18]   ;	/* 18 1st Name */
@@ -249,6 +280,24 @@ struct UserInfo{
 	char	ZIP[9]    ;	/* 9  Zipcode */
 	BOOL	sysop;
 } ;                /* Total : 360 bytes */
+
+// flags equates
+
+#define F_EXC        0x0001
+#define F_LOC        0x0002
+#define F_EXP        0x0004
+#define F_SYS        0x0008
+#define F_BBS        0x0010
+#define F_PAG        0x0020
+#define F_GST        0x0040
+#define F_MOD        0x0080
+#define F_PRV        0x0100
+#define F_UNP        0x0200
+#define F_NEW        0x0400
+#define F_PMS        0x0800
+/* #define F_PWD        0x1000 */
+
+
 
 typedef struct user_t
 {
@@ -266,8 +315,8 @@ typedef struct user_t
 
 // Message Database Entry. Designed to be compatible with FBB
 
-#define NBBBS 80
-#define NBMASK NBBBS/8
+#define NBBBS 80			// Max BBSes we can forward to. Must be Multiple of 8, and must be 80 for FBB compatibliliy
+#define NBMASK NBBBS/8		// Number of bytes in Forward bitlists.
 
 #pragma pack(1)
 
@@ -293,9 +342,39 @@ struct MsgInfo{  /* Longueur = 194 octets */
 	char	forw[NBMASK] ;
 } ;
 
-
+typedef struct {
+	char	mode;
+	char	BID[13];
+	long	msgno;
+} BIDRec, *BIDRecP;
 
 #pragma pack()
+
+struct BBSForwardingInfo
+{
+	// Holds info for forwarding
+
+	char Callsign[11];				// BBS ax.25 Call
+	char ** ConnectScript;			// 
+	char ** Calls;					// Calls to forward to
+	char ** Haddresses;				// Heirarchical Addresses to forward to
+	int MsgCount;					// Messages for this BBS
+	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
+};
+
+struct FBBHeaderLine
+{
+	//	Holds the info from the (up to) 5 headers presented at the start of a Forward Block
+
+	char Format;					// Ascii or Binary
+	char MsgType;					// P B etc 
+	char From[7];					// Sender
+	char ATBBS[41];					// BBS of recipient (@ Field)
+	char To[7];						// Recipient
+	char BID[13];
+	int Size;
+	struct MsgInfo * FwdMsg;		// Header so we can mark as complete 
+};
 
 static USER *user_hd = NULL;
 
@@ -340,29 +419,82 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer);
 CIRCUIT *circuit_new(CIRCUIT *circuit, int flags);
 VOID nputs(CIRCUIT * conn, char * buf);
 void makelinks(void);
+//VOID * zalloc(int len);
+VOID FreeChatMemory();
+
 
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
 #define ReturntoNode(stream) SessionControl(stream,3,0)
 #define ConnectUsingAppl(stream, appl) SessionControl(stream, 0, appl)
 
+// TCP Connections. FOr the moment SMTP or POP3
 
-typedef struct SocketConnectionInfoX
+typedef struct SocketConnectionInfo
 {
-	struct SocketConnectionInfoX * Next;
+	struct SocketConnectionInfo * Next;
 	int Number;					// Number of record - for Connections display
     SOCKET socket;
-	SOCKADDR_IN sin;  
+	SOCKADDR_IN sin; 
+	int Type;					// SMTP or POP3
+	int State;					// Transaction State Machine
     UCHAR CallSign[10];
-    UCHAR TCPBuffer[3000];
+    UCHAR TCPBuffer[3000];		// For converting byte stream to messages
     int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
 
-	UCHAR * MailBuffer;			// Mail Message being received
+	char * MailFrom;			// Envelope Sender and Receiver
+	char ** RecpTo;				// May be several Recipients
+	int Recipients;
+
+	UCHAR * MailBuffer;			// Mail Message being received. malloc'ed as needed
 	int MailBufferSize;			// Total Malloc'ed size. Actual size is in MailSize
 	int MailSize;
 	int Flags;
+
+	struct UserInfo * POP3User;
+	struct MsgInfo ** POP3Msgs;	// Header List of messages for this uaer
+	int POP3MsgCount;			// No of Messages
+	int POP3MsgNum;				// Sequence number of message being received
+
+
+	struct MsgInfo * SMTPMsg;	// message for this SMTP connection
+
+
   
 } SocketConn;
+
+#define SMTPServer 1
+#define POP3SLAVE 2
+#define SMTPClient 3
+#define POP3Client 4
+
+// State Values
+
+#define GettingUser 1
+#define GettingPass 2
+#define Authenticated 4
+
+#define Connecting 8
+
+// SMTP Master
+
+#define WaitingForGreeting 16
+#define WaitingForHELOResponse 32
+#define WaitingForFROMResponse 64
+#define WaitingForTOResponse 128
+#define WaitingForDATAResponse 256
+#define WaitingForBodyResponse 512
+
+// POP3 Master
+
+#define WaitingForUSERResponse 32
+#define WaitingForPASSResponse 64
+#define WaitingForSTATResponse 128
+#define WaitingForUIDLResponse 256
+#define WaitingForLISTResponse 512
+#define WaitingForRETRResponse 512
+#define WaitingForDELEResponse 1024
+#define WaitingForQUITResponse 2048
 
 
 #define SE 240 // End of subnegotiation parameters
@@ -394,6 +526,7 @@ typedef struct SocketConnectionInfoX
 #define environmentvariables 36 //1408
 
 BOOL Initialise();
+INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 int DisplaySessions();
 int DoStateChange(Stream);
 int DoReceivedData(Stream);
@@ -424,6 +557,8 @@ VOID SaveUserDatabase();
 VOID GetUserDatabase();
 VOID GetMessageDatabase();
 VOID SaveMessageDatabase();
+VOID GetBIDDatabase();
+VOID SaveBIDDatabase();
 VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user);
 VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
@@ -450,18 +585,49 @@ char * ReadMessageFile(int msgno);
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly);
 int	CriticalErrorHandler(char * error);
 void DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
-void CreateMessage(ConnectionInfo * conn, struct UserInfo * user, char * ToCall, char MsgType);
+VOID CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID);
 VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID ProcessMsgLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg);
-void link_out (LINK *link);
+void chat_link_out (LINK *link);
 ProcessConnecting(CIRCUIT * circuit, char * Buffer);
+BOOL SaveConfig();
+BOOL GetConfigFromRegistry();
+VOID Parse_SID(ConnectionInfo * conn, char * SID, int len);
+VOID ProcessFBBLine(ConnectionInfo * conn, struct UserInfo * user, UCHAR * Buffer, int len);
+VOID SetupNextFBBMessage(CIRCUIT * conn);
+int check_fwd_bit(char *mask, int bbsnumber);
+void set_fwd_bit(char *mask, int bbsnumber);
+void clear_fwd_bit (char *mask, int bbsnumber);
+VOID SetupForwardingStruct(struct UserInfo * user);
+BOOL Forward_Message(struct UserInfo * user, struct MsgInfo * Msg);
+BOOL StartForwarding (struct UserInfo * user);
+BOOL Reverse_Forward(struct UserInfo * user);
+ProcessBBSConnecting(CIRCUIT * conn, char * Buffer, int len);
+int MatchMessagetoBBSList(struct MsgInfo * Msg);
+BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 
 // TCP Routines
 
 BOOL InitialiseTCP();
+VOID TCPTimer();
 int Socket_Data(int sock, int error, int eventcode);
 int Socket_Accept(int SocketId);
-VOID ProcessSMTPMessage(SocketConn * sockptr, char * Buffer, int Len);
+int Socket_Connect(SOCKET sock, int Error);
+VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len);
+CreateSMTPMessage(SocketConn * sockptr, int i, char * Msgtitlr, char * MsgBody, int Msglen);
+BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg);
+SOCKET CreateListeningSocket(int Port);
+TidyString(char * MailFrom);
+VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len);
+char *str_base64_encode(char *str);
+int b64decode(char *str);
+BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody);
+BOOL POP3Connect(char * Host, int Port);
+VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
+VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
+CreatePOP3Message(char * From, char * To, char * MsgTitle, char * MsgBody, int MsgLen);
 
+BOOL SendtoISP();
 
+md5 (char *arg, unsigned char * checksum);

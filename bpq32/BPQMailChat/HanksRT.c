@@ -27,13 +27,14 @@ char * strlop(char * buf, char delim)
 	return ptr;
 }
 
-VOID * zallocw(int len)
+
+VOID * _zalloc_dbg(int len, int type, char * file, int line)
 {
 	// ?? malloc and clear
 
 	void * ptr;
 
-	ptr=malloc(len);
+	ptr=_malloc_dbg(len, type, file, line);
 	memset(ptr, 0, len);
 
 	return ptr;
@@ -415,7 +416,7 @@ static NODE *node_inc(char *call, char *alias)
 
 	if (!node)
 	{
-		node = zallocw(sizeof(NODE));
+		node = zalloc(sizeof(NODE));
 		sl_ins_hd(node, node_hd);
 		node->call  = _strdup(call);
 		node->alias = _strdup(alias);
@@ -463,7 +464,7 @@ static TOPIC *topic_join(CIRCUIT *circuit, char *s)
 
 	if (!topic)
 	{
-		topic = zallocw(sizeof(TOPIC));
+		topic = zalloc(sizeof(TOPIC));
 		sl_ins_hd(topic, topic_hd);
 		topic->name = _strdup(s);
 	}
@@ -478,7 +479,7 @@ static TOPIC *topic_join(CIRCUIT *circuit, char *s)
 	  return topic;
 	}
 
-	ct = zallocw(sizeof(CT));
+	ct = zalloc(sizeof(CT));
 	sl_ins_hd(ct, circuit->topic);
 	ct->topic  = topic;
 	ct->refcnt = 1;
@@ -579,7 +580,7 @@ static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias)
 	  return node;
 	}
 
-	cn = zallocw(sizeof(CN));
+	cn = zalloc(sizeof(CN));
 	sl_ins_hd(cn, circuit->hnode);
 	cn->node   = node;
 	cn->refcnt = 1;
@@ -774,7 +775,7 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias)
 
 // User is not logged in, create a user record for them.
 
-	user = zallocw(sizeof(USER));
+	user = zalloc(sizeof(USER));
 	sl_ins_hd(user, user_hd);
 	user->circuit = circuit;
 	user->topic   = topic_join(circuit, deftopic);
@@ -852,15 +853,31 @@ int rtlink (char * Call)
 	c = strlop(Call, ':');
 	if (!c) return FALSE;
 
-	link = zallocw(sizeof(LINK));
+	link = zalloc(sizeof(LINK));
 
 	sl_ins_hd(link, link_hd);
 
 	link->alias = _strdup(Call);
 	link->call  = _strdup(c);
+
+	free(Call);
+
 	return TRUE;
 }
 
+VOID removelinks()
+{
+	LINK *link, *nextlink;
+
+	for (link = link_hd; link; link = nextlink)
+	{
+		nextlink = link->next;
+		
+		free(link->alias);
+		free(link->call);
+		free(link);
+	}
+}
 
 // We don't allocate memory for circuit, but we do chain it
 
@@ -1163,7 +1180,11 @@ void makelinks(void)
 		if (node_find(link->call)) continue;
 // Fire up the process to handle this link.
 		link->flags = p_linkini;
-		link_out(link);
+		chat_link_out(link);
 	}
 }
 
+VOID FreeChatMemory()
+{
+	removelinks();
+}

@@ -1,33 +1,32 @@
-//{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ generated include file.
-// Used by TelnetServer.rc
-//
+#define IDS_APP_TITLE 103
+#define IDR_MAINFRAME 128
+#define IDD_CONFIG 102
+#define IDD_ABOUTBOX 103
+#define IDM_ABOUT 104
+#define IDM_EXIT 105
+#define IDI_BPQMailChat 107
+#define IDI_SMALL 108
+#define IDC_BPQMailChat 109
+#define IDM_DISCONNECT 2000
+#define IDM_LOGGING 2100
+#define IDM_CONFIG 110
+#define IDC_MYICON 2
+#define IDC_BBSCall 1001
+#define IDC_BaseDir 1002
+#define IDC_BBSAppl 1003
+#define IDC_BBSStreams 1004
+#define IDC_POP3Port 1005
+#define IDC_SMTPPort 1006
+#define IDC_HRoute 1007
+#define IDC_ChatAppl 2001
+#define IDC_ChatNodes 2002
+#define IDC_ISP_Gateway_Enabled 3000
+#define IDC_MyMailDomain 3001
+#define IDC_ISPSMTPName 3002
+#define IDC_ISPSMTPPort 3003
+#define IDC_ISPPOP3Name 3004
+#define IDC_ISPPOP3Port 3005
+#define IDC_ISPAccountName 3006
+#define IDC_ISPAccountPass 3007
+#define IDC_POP3Timer 3008
 
-#define IDS_APP_TITLE			103
-
-#define IDR_MAINFRAME			128
-#define IDD_TELNETSERVER_DIALOG	102
-#define IDD_ABOUTBOX			103
-#define IDM_ABOUT				104
-#define IDM_EXIT				105
-#define IDI_BPQMailChat			107
-#define IDI_SMALL				108
-#define IDC_BPQMailChat			109
-#define IDM_DISCONNECT			2000
-#define IDM_LOGGING				2100
-#define IDC_MYICON				2
-#ifndef IDC_STATIC
-#define IDC_STATIC				-1
-#endif
-// Next default values for new objects
-// 
-#ifdef APSTUDIO_INVOKED
-#ifndef APSTUDIO_READONLY_SYMBOLS
-
-#define _APS_NO_MFC					130
-#define _APS_NEXT_RESOURCE_VALUE	129
-#define _APS_NEXT_COMMAND_VALUE		32771
-#define _APS_NEXT_CONTROL_VALUE		1000
-#define _APS_NEXT_SYMED_VALUE		110
-#endif
-#endif

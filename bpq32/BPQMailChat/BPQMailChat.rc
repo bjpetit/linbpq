@@ -62,10 +62,17 @@ BEGIN
             MENUITEM "."	IDM_DISCONNECT
         END
     END
-    POPUP "&Help"
+
+    POPUP "&Configuration"
+    BEGIN
+        MENUITEM "&Main Configuration",           IDM_CONFIG
+    END
+
+	    POPUP "&Help"
     BEGIN
         MENUITEM "&About ...",           IDM_ABOUT
     END
+
 END
 
 
@@ -86,16 +93,23 @@ END
 // Dialog
 //
 
-IDD_ABOUTBOX DIALOG   22, 17, 230, 75
+
+IDD_ABOUTBOX DIALOG   22, 17, 230, 60
 STYLE DS_MODALFRAME | WS_CAPTION | WS_SYSMENU
 CAPTION "About"
 FONT 8, "System"
 BEGIN
     ICON            IDI_BPQMailChat,IDC_MYICON,14,9,16,16
-    LTEXT           "G8BPQ Mail and Chat Version 1.0.0",IDC_STATIC,49,10,119,8,SS_NOPREFIX
-    LTEXT           "Copyright (C) G8BPQ 2009",IDC_STATIC,49,20,119,8
+    LTEXT           "G8BPQ Mail and Chat Version 1.0.0",-1,49,10,119,8,SS_NOPREFIX
+    LTEXT           "Copyright (C) G8BPQ 2009",-1,49,20,119,8
     DEFPUSHBUTTON   "OK",IDOK,195,6,30,11,WS_GROUP
+
 END
+
+
+#include "Config.rc"
+
+
 
 #define Vers 1,0,0,0
 #define Verstring "1.0.0.0\0"
