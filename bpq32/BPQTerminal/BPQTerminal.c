@@ -173,9 +173,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	HKEY hKey=0;
 	char Size[80];
 
-	wsprintf(Size,"%d\n", nCmdShow);
-	OutputDebugString(Size);
-
 /*	PCHAR p1, p2, p3;
 
 	p1 = strtok(lpCmdLine, " ,\t\n\r");

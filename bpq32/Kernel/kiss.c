@@ -161,8 +161,9 @@ BOOL NEAR OpenConnection( int port)
 	if (COMDEV( npTTYInfo ) == (HANDLE) -1 )
 	{
 		wsprintf(buf,"COM%d could not be opened ", PORT( npTTYInfo ));
-		OutputDebugString(buf);
 		WritetoConsoleLocal(buf);
+		strcat(buf, "\r\n");
+		OutputDebugString(buf);
 		return ( FALSE ) ;
 	}
 

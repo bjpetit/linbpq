@@ -136,15 +136,16 @@ BOOL InitialiseTCP()
         return FALSE;
 	}
 
-	if (ISPSMTPPort)
+	if (ISP_Gateway_Enabled)
+		if (ISPSMTPPort)
 		SendtoISP();						// See if any ISP Messages to send
 
 
 //	Create listening sockets
 
 
-//	if (SMTPInPort)
-//		smtpsock = CreateListeningSocket(SMTPInPort);
+	if (SMTPInPort)
+		smtpsock = CreateListeningSocket(SMTPInPort);
 
 	if (POP3InPort)
 		pop3sock = CreateListeningSocket(POP3InPort);
@@ -763,12 +764,31 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 	int WriteLen=0;
 	char Mess[255];
 	int len;
+	char * ptr1, * ptr2;
 
-   // Prepare string for use with FindFile functions.  First, copy the
-   // string to a buffer, then append '\*' to the directory name.
+	// Remove lf chars
 
-   
-	wsprintf(MsgFile, "%s\\mail%d\\m_%06d.mes", MailDir, Msg->number%10, Msg->number);
+	ptr1 = ptr2 = Message;
+	len = Msg->length;
+
+	while (len-- > 0)
+	{
+		*ptr2 = *ptr1;
+	
+		if (*ptr1 == '\r')
+			if (*(ptr1+1) == '\n')
+			{
+				ptr1++;
+				len--;
+			}
+		ptr1++;
+		ptr2++;
+
+	}
+
+	Msg->length = ptr2 - Message;
+
+	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
 	
 	hFile = CreateFile(MsgFile,
 					GENERIC_WRITE,
@@ -777,7 +797,6 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 					CREATE_ALWAYS,
 					FILE_ATTRIBUTE_NORMAL,
 					NULL);
-
 
 	if (hFile != INVALID_HANDLE_VALUE)
 	{
@@ -891,7 +910,6 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			if (strcmp(user->pass, &Buffer[5]) == 0)
 			{
-
 				if (user->POP3Locked)
 				{
 					SendSock(sock, "-ERR Mailbox Locked");
@@ -907,7 +925,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				// Get Message List
 
-				for (i=0; i<NumberofMessages; i++)
+				for (i=0; i<=NumberofMessages; i++)
 				{
 					Msg = MsgHddrPtr[i];
 					
@@ -1498,7 +1516,7 @@ BOOL SendtoISP()
 {
 	// Find a message intended for the Internet and send it
 
-	int m=NumberofMessages-1;
+	int m=NumberofMessages;
 	char * Body;
 
 	struct MsgInfo * Msg;

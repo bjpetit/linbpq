@@ -2500,7 +2500,7 @@ int Socket_Connect(int SocketId, int Error)
 
 		if (sockptr->TCPSock == SocketId)
 		{
-			Debugprintf("TCP Connect Complete %d error %d", sockptr->TCPSock, Error);
+			Debugprintf("TCP Connect Complete %d result %d", sockptr->TCPSock, Error);
 
 			if (Error == 0)
 			{
@@ -2553,6 +2553,8 @@ int Socket_Data(int sock, int error, int eventcode)
 					return 0;
 
 				case FD_CLOSE:
+
+					Debugprintf("TCP Close received for scoket %d", sock);
 
 					sockptr->TCPState = 0;
 					closesocket(sock);
@@ -2803,7 +2805,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 					//
 					//	Connect failed
 					//
-    				i=wsprintf(Msg, "Connect Failed for AX/UDP socket - error code = %d\r\n", err);
+    				i=wsprintf(Msg, "Connect Failed for AX/TCP socket - error code = %d\r\n", err);
 					WritetoConsole(Msg);
 					OutputDebugString(Msg);
 					closesocket(arp->TCPSock);

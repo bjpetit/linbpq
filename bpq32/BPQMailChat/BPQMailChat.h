@@ -13,6 +13,8 @@
 #define   _recalloc(p, c, s)    _recalloc_dbg(p, c, s, _NORMAL_BLOCK, __FILE__, __LINE__)
 #define   _expand(p, s)         _expand_dbg(p, s, _NORMAL_BLOCK, __FILE__, __LINE__)
 #define   free(p)               _free_dbg(p, _NORMAL_BLOCK)
+#define   _strdup(s)			_strdup_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
+
 
 #define   zalloc(s)             _zalloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
 
@@ -226,6 +228,7 @@ typedef struct ConnectionInfo_S
 	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block
 	char FBBReplyChars[6];				//The +-= chars for the 5 proposals
 	int FBBIndex;						// current propopsal number
+	BOOL FBBMsgsSent;					// Messages need to be maked as complete when next command received
 	UCHAR FBBChecksum;					// Header Checksum
 
 } ConnectionInfo, CIRCUIT;
@@ -244,7 +247,8 @@ typedef struct ConnectionInfo_S
 #define BBS 1
 #define FBBForwarding 2
 #define FBBCompressed 4
-#define Connecting 8
+#define RunningConnectScript 8
+#define Forwarding 16				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
 
 #pragma pack(1)
 
@@ -278,7 +282,7 @@ struct UserInfo{
 	char	QRA[7]    ;	/* 7  Qth Locator */
 	char	pass[13]  ;	/* 13 Password */
 	char	ZIP[9]    ;	/* 9  Zipcode */
-	BOOL	sysop;
+	BOOL	spare;
 } ;                /* Total : 360 bytes */
 
 // flags equates
@@ -354,9 +358,11 @@ struct BBSForwardingInfo
 {
 	// Holds info for forwarding
 
-	char Callsign[11];				// BBS ax.25 Call
+	BOOL Enabled;					// Forwarding Enabled
 	char ** ConnectScript;			// 
-	char ** Calls;					// Calls to forward to
+	int ScriptIndex;				// Next line in script
+	char ** TOCalls;				// Calls in to field
+	char ** ATCalls;				// Calls in ATBBS field
 	char ** Haddresses;				// Heirarchical Addresses to forward to
 	int MsgCount;					// Messages for this BBS
 	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
@@ -594,6 +600,7 @@ ProcessConnecting(CIRCUIT * circuit, char * Buffer);
 BOOL SaveConfig();
 BOOL GetConfigFromRegistry();
 VOID Parse_SID(ConnectionInfo * conn, char * SID, int len);
+VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len);
 VOID ProcessFBBLine(ConnectionInfo * conn, struct UserInfo * user, UCHAR * Buffer, int len);
 VOID SetupNextFBBMessage(CIRCUIT * conn);
 int check_fwd_bit(char *mask, int bbsnumber);
@@ -603,9 +610,20 @@ VOID SetupForwardingStruct(struct UserInfo * user);
 BOOL Forward_Message(struct UserInfo * user, struct MsgInfo * Msg);
 BOOL StartForwarding (struct UserInfo * user);
 BOOL Reverse_Forward(struct UserInfo * user);
-ProcessBBSConnecting(CIRCUIT * conn, char * Buffer, int len);
+ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 int MatchMessagetoBBSList(struct MsgInfo * Msg);
 BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
+BOOL FBBDoForward(CIRCUIT * conn);
+BOOL FindMessagestoForward (CIRCUIT * conn);
+VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
+MultiLineDialogToREG_MULTI_SZ(HWND hWnd, int DLGItem, HKEY hKey, char * ValueName);
+int Do_BBS_Sel_Changed(HWND hDlg);
+VOID FreeForwrdingStruct(struct UserInfo * user);
+VOID FreeList(char ** Hddr);
+int Do_User_Sel_Changed(HWND hDlg);
+VOID Do_Add_User();
+VOID Do_Delete_User();
+VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user);
 
 // TCP Routines
 
