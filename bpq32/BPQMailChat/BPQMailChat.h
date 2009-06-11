@@ -6,6 +6,7 @@
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3
 
+#ifdef _DEBUG
 
 #define   malloc(s)             _malloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
 #define   calloc(c, s)          _calloc_dbg(c, s, _NORMAL_BLOCK, __FILE__, __LINE__)
@@ -17,6 +18,10 @@
 
 
 #define   zalloc(s)             _zalloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#else
+#define   zalloc(s)             _zalloc(s)
+#endif
+
 
 VOID * _zalloc_dbg(int len, int type, char * file, int line);
 
@@ -329,7 +334,7 @@ struct MsgInfo{  /* Longueur = 194 octets */
 	char	status ;
 	long	number ;
 	long	length ;
-	long	date   ;
+	long	datereceived;
 	char	bbsfrom[7] ;			// ? BBS we got it from ?
 	char	via[41] ;
 	char	from[7] ;
@@ -340,7 +345,7 @@ struct MsgInfo{  /* Longueur = 194 octets */
 	char	free[9];
 	unsigned short	nblu;
 	long	theme  ;
-	long	datesd ;
+	long	datecreated ;
 	long	datechanged ;
 	char	fbbs[NBMASK] ;
 	char	forw[NBMASK] ;
@@ -425,7 +430,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer);
 CIRCUIT *circuit_new(CIRCUIT *circuit, int flags);
 VOID nputs(CIRCUIT * conn, char * buf);
 void makelinks(void);
-//VOID * zalloc(int len);
+VOID * _zalloc(int len);
 VOID FreeChatMemory();
 
 
@@ -558,6 +563,7 @@ UINT * Q_REM(UINT *Q);
 int Q_ADD(UINT *Q,UINT *BUFF);
 struct UserInfo * AllocateUserRecord(char * Call);
 struct MsgInfo * AllocateMsgRecord();
+BIDRec * AllocateBIDRecord();
 struct UserInfo * LookupCall(char * Call);
 VOID SaveUserDatabase();
 VOID GetUserDatabase();
@@ -570,6 +576,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user);
 int QueueMsg(	ConnectionInfo * conn, char * msg, int len);
+VOID SendUnbuffered(int stream, char * msg, int len);
 char * GetConfStations(int Conference);
 VOID SendtoOtherUsers(ConnectionInfo * conn, char* Msg, int msglen);
 //int GetFileList(char * Dir);
@@ -590,8 +597,8 @@ struct MsgInfo * FindMessage(char * Call, int msgno, BOOL sysop);
 char * ReadMessageFile(int msgno);
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly);
 int	CriticalErrorHandler(char * error);
-void DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
-VOID CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID);
+BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
+BOOL CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID);
 VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID ProcessMsgLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg);
@@ -608,7 +615,7 @@ void set_fwd_bit(char *mask, int bbsnumber);
 void clear_fwd_bit (char *mask, int bbsnumber);
 VOID SetupForwardingStruct(struct UserInfo * user);
 BOOL Forward_Message(struct UserInfo * user, struct MsgInfo * Msg);
-BOOL StartForwarding (struct UserInfo * user);
+VOID StartForwarding (int BBSNumber);
 BOOL Reverse_Forward(struct UserInfo * user);
 ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 int MatchMessagetoBBSList(struct MsgInfo * Msg);
@@ -621,9 +628,27 @@ int Do_BBS_Sel_Changed(HWND hDlg);
 VOID FreeForwrdingStruct(struct UserInfo * user);
 VOID FreeList(char ** Hddr);
 int Do_User_Sel_Changed(HWND hDlg);
+int Do_Msg_Sel_Changed(HWND hDlg);
 VOID Do_Add_User();
 VOID Do_Delete_User();
 VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user);
+VOID Do_Save_User();
+VOID DeleteBBS();
+VOID AddBBS();
+VOID SaveBBSConfig();
+VOID SaveChatConfig();
+VOID SaveISPConfig();
+VOID SaveFWDConfig();
+VOID ReinitializeFWDStruct(struct UserInfo * user);
+VOID CopyBIDDatabase();
+VOID CopyMessageDatabase();
+VOID CopyUserDatabase();
+
+// Console Routines
+
+BOOL CreateConsole();
+int WritetoConsoleWindow(char * Msg, int len);
+
 
 // TCP Routines
 
@@ -633,7 +658,7 @@ int Socket_Data(int sock, int error, int eventcode);
 int Socket_Accept(int SocketId);
 int Socket_Connect(SOCKET sock, int Error);
 VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len);
-CreateSMTPMessage(SocketConn * sockptr, int i, char * Msgtitlr, char * MsgBody, int Msglen);
+CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int Msglen);
 BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg);
 SOCKET CreateListeningSocket(int Port);
 TidyString(char * MailFrom);
@@ -644,8 +669,72 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody);
 BOOL POP3Connect(char * Host, int Port);
 VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
-CreatePOP3Message(char * From, char * To, char * MsgTitle, char * MsgBody, int MsgLen);
+CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen);
 
 BOOL SendtoISP();
 
 md5 (char *arg, unsigned char * checksum);
+
+
+BOOL RemoveKilledMessages();
+
+extern BOOL cfgMinToTray;
+
+extern HWND MainWnd;
+extern char BaseDir[];
+extern char MailDir[];
+extern int LatestMsg;
+extern char BBSName[];
+extern char SYSOPCall[];
+extern char BBSSID[];
+extern char NewUserPrompt[];
+
+extern struct MsgInfo ** MsgHddrPtr;
+extern int NumberofMessages;
+extern char hostname[];
+extern char RtUsr[];
+extern char RtUsrTemp[];
+extern BOOL ISP_Gateway_Enabled;
+
+extern LINK *link_hd;
+extern CIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others
+extern char OurNode[];
+extern char OurAlias[];
+extern BOOL SMTPMsgCreated;
+
+extern HINSTANCE hInst;
+extern HWND hWnd;
+extern char BBSName[];
+extern char HRoute[];
+extern int BBSApplNum;
+extern int ChatApplNum;
+extern char BaseDir[];
+extern int SMTPInPort;
+extern int POP3InPort;
+extern int MaxStreams;
+extern UCHAR * OtherNodes;
+extern struct UserInfo * BBSChain;		// Chain of users that are BBSes
+extern struct UserInfo ** UserRecPtr;
+extern int NumberofUsers;
+extern struct MsgInfo ** MsgHddrPtr;
+extern int NumberofMessages;
+extern int HighestBBSNumber;
+extern HMENU hFWDMenu;									// Forward Menu Handle
+
+extern BOOL ISP_Gateway_Enabled;
+
+extern char MyDomain[];			// Mail domain for BBS<>Internet Mapping
+
+extern char ISPSMTPName[];
+extern int ISPSMTPPort;
+
+extern char ISPPOP3Name[];
+extern int ISPPOP3Port;
+extern int ISPPOP3Interval;
+
+extern char ISPAccountName[];
+extern char ISPAccountPass[];
+extern char EncryptedISPAccountPass[];
+extern int EncryptedPassLen;
+
+extern CIRCUIT * Console;

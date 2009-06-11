@@ -45,8 +45,6 @@ HINSTANCE hInst;
 char AppName[] = "BPQTerm 32";
 char Title[80];
 
-char ClassName[]="BPQMAINWINDOW";
-
 // Foward declarations of functions included in this code module:
 
 ATOM MyRegisterClass(CONST WNDCLASS*);

@@ -4,6 +4,7 @@
 #define IDD_ABOUTBOX 103
 #define IDM_ABOUT 104
 #define IDM_EXIT 105
+#define IDM_CONSOLE 120
 #define IDI_BPQMailChat 107
 #define IDI_SMALL 108
 #define IDC_BPQMailChat 109
@@ -18,8 +19,11 @@
 #define IDC_POP3Port 1005
 #define IDC_SMTPPort 1006
 #define IDC_HRoute 1007
+#define IDC_SYSOPCALL 1008
+#define IDC_BBSSAVE 1100
 #define IDC_ChatAppl 2001
 #define IDC_ChatNodes 2002
+#define IDC_CHATSAVE 2100
 #define IDC_ISP_Gateway_Enabled 3000
 #define IDC_MyMailDomain 3001
 #define IDC_ISPSMTPName 3002
@@ -29,6 +33,7 @@
 #define IDC_ISPAccountName 3006
 #define IDC_ISPAccountPass 3007
 #define IDC_POP3Timer 3008
+#define IDC_ISPSAVE 3100
 #define IDC_FWDENABLE 4000
 #define IDC_BBS 4001
 #define IDC_CALL 4002
@@ -36,6 +41,7 @@
 #define IDC_ATCALLS 4004
 #define IDC_HROUTES 4005
 #define IDC_REVERSE 4006
+#define IDC_FWDSAVE 4100
 #define IDC_USER 5000
 #define IDC_NAME 5001
 #define IDC_PASSWORD 5002
@@ -48,5 +54,9 @@
 #define IDC_EXCLUDED 5009
 #define IDC_ADDUSER 5100
 #define IDC_DELETEUSER 5101
+#define IDC_SAVEUSER 5102
 #define IDD_USERADDED_BOX 5051
+#define IDD_UserEditInfo 5051
+#define IDM_FORWARD_ALL 7000
+#define IDM_HOUSEKEEPING 9000
 

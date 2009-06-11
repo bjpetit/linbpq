@@ -40,6 +40,18 @@ VOID * _zalloc_dbg(int len, int type, char * file, int line)
 	return ptr;
 }
 
+VOID * _zalloc(int len)
+{
+	// ?? malloc and clear
+
+	void * ptr;
+
+	ptr=malloc(len);
+	memset(ptr, 0, len);
+
+	return ptr;
+}
+
 VOID * mallocw(int len)
 {
 	// ?? malloc and warn if fails??

@@ -42,6 +42,21 @@ BEGIN
 END
 
 
+BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
+STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
+    WS_SYSMENU | WS_SIZEBOX
+CAPTION "Mail & Chat Console"
+CLASS "BPQMAINWINDOW"
+FONT 8, "FixedSys"
+BEGIN
+//    LISTBOX         116,5,6,290,134,LBS_NOINTEGRALHEIGHT  | LBS_MULTIPLESEL |
+ //                   WS_VSCROLL | WS_HSCROLL
+    LISTBOX         117,5,156,290,109,LBS_NOINTEGRALHEIGHT  | LBS_MULTIPLESEL |
+                    WS_VSCROLL | WS_HSCROLL
+    EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
+//    CTEXT        "",119,0,145,300,5,SS_NOTIFY
+
+END
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -51,28 +66,38 @@ END
 IDC_BPQMailChat MENU
 
 BEGIN
-    POPUP "Actions"
+  POPUP "Actions"
+  BEGIN
+      POPUP "Start Forwarding"
+      BEGIN
+            MENUITEM "All"	IDM_FORWARD_ALL
+      END
+   POPUP "Logging Options"
     BEGIN
-        POPUP "Logging Options", MENUBREAK
-        BEGIN
-            MENUITEM "Logging Enabled"	IDM_LOGGING
-        END
-        POPUP "Disconnect User"
-        BEGIN
-            MENUITEM "."	IDM_DISCONNECT
-        END
+          MENUITEM "Logging Enabled"	IDM_LOGGING
     END
+      POPUP "Disconnect User"
+      BEGIN
+            MENUITEM "."	IDM_DISCONNECT
+      END
+	  
+	  MENUITEM "Housekeeping"	IDM_HOUSEKEEPING
+
+  END
 
     POPUP "&Configuration"
     BEGIN
         MENUITEM "&Main Configuration",           IDM_CONFIG
     END
 
-	    POPUP "&Help"
+	POPUP "Windows"
+    BEGIN
+        MENUITEM "Console",           IDM_CONSOLE
+    END
+    POPUP "&Help"
     BEGIN
         MENUITEM "&About ...",           IDM_ABOUT
     END
-
 END
 
 

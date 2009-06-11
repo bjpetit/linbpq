@@ -26,16 +26,6 @@ SOCKET smtpsock, pop3sock;
 
 char szBuff[80];
 
-extern HWND MainWnd;
-extern char MailDir[];
-extern int LatestMsg;
-extern char BBSName[];
-extern struct MsgInfo ** MsgHddrPtr;
-extern int NumberofMessages;
-extern char hostname[];
-
-extern BOOL ISP_Gateway_Enabled;
-
 int SMTPInPort;
 int POP3InPort;
 
@@ -63,15 +53,52 @@ char mycd64[256];
 static const char cb64[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static const char cd64[]="|$$$}rstuvwxyz{$$$$$$$>?@ABCDEFGHIJKLMNOPQRSTUVW$$$$$$XYZ[\\]^_`abcdefghijklmnopq";
 
+char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 void decodeblock( unsigned char in[4], unsigned char out[3] );
 
+
+
+HANDLE LogHandle = INVALID_HANDLE_VALUE;
+
+BOOL OpenLogfile()
+{
+	UCHAR FN[MAX_PATH];
+
+	wsprintf(FN,"%s\\Log_%s.txt", BaseDir, "TCP");
+
+	LogHandle = CreateFile(FN,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	SetFilePointer(LogHandle, 0, 0, FILE_END);
+
+	return (LogHandle != INVALID_HANDLE_VALUE);
+}
+
+void WriteLogLine(char * Msg, int MsgLen, int Flags)
+{
+	int cnt;
+	char CRLF[2] = {0x0d,0x0a};
+
+	if (LogHandle == INVALID_HANDLE_VALUE) OpenLogfile();
+
+	if (LogHandle == INVALID_HANDLE_VALUE) return;
+
+	WriteFile(LogHandle ,Msg , MsgLen, &cnt, NULL);
+	WriteFile(LogHandle ,CRLF , 2, &cnt, NULL);
+}
+
 int SendSock(SOCKET sock, char * msg)
 {
+	WriteLogLine(msg,  strlen(msg), 0);
 	send(sock, msg, strlen(msg), 0);
 	return send(sock, "\r\n", 2, 0);
 }
-
 
 VOID __cdecl sockprintf(SOCKET sock, const char * format, ...)
 {
@@ -138,7 +165,7 @@ BOOL InitialiseTCP()
 
 	if (ISP_Gateway_Enabled)
 		if (ISPSMTPPort)
-		SendtoISP();						// See if any ISP Messages to send
+			SendtoISP();						// See if any ISP Messages to send
 
 
 //	Create listening sockets
@@ -469,8 +496,11 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 {
 	SOCKET sock;
 	int i;
+	time_t Date = 0;
 
 	sock=sockptr->socket;
+
+	WriteLogLine(Buffer, Len-2, 0);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
@@ -482,7 +512,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			int linelen, MsgLen;
 			char Msgtitle[62];
 
-			// Scan headers for a Subject: Line (Headers end at black line)
+			// Scan headers for a Subject: or Date: Line (Headers end at black line)
 
 			ptr1 = sockptr->MailBuffer;
 		Loop:
@@ -490,7 +520,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			if (ptr2 == NULL)
 			{
-				send(sock, "500 Eh\r\n", 8,0);
+				SendSock(sock, "500 Eh");
 				return;
 			}
 
@@ -502,7 +532,66 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				memcpy(Msgtitle, &ptr1[9], linelen-9);
 				Msgtitle[linelen-9]=0;
 			}
-			
+
+			if (_memicmp(ptr1, "Date:", 5) == 0)
+			{
+				struct tm rtime;
+				char * Context;
+				char seps[] = " ,\t\r";
+				char Offset[10] = "";
+				int i, HH, MM;
+
+				memset(&rtime, 0, sizeof(struct tm));
+
+				// Date: Tue, 9 Jun 2009 20:54:55 +0100
+
+				ptr1 = strtok_s(&ptr1[5], seps, &Context);	// Skip Day
+				ptr1 = strtok_s(NULL, seps, &Context);		// Day
+
+				rtime.tm_mday = atoi(ptr1);
+
+				ptr1 = strtok_s(NULL, seps, &Context);		// Month
+
+				for (i=0; i < 12; i++)
+				{
+					if (strcmp(month[i], ptr1) == 0)
+					{
+						rtime.tm_mon = i;
+						break;
+					}
+				}
+		
+				sscanf(Context, "%04d %02d%:%02d:%02d%s",
+					&rtime.tm_year, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec, Offset);
+
+				rtime.tm_year -= 1900;
+
+				Date = mktime(&rtime);
+	
+				if (Date == (time_t)-1)
+					Date = 0;
+				else
+				{
+					if ((Offset[0] == '+') || (Offset[0] == '-'))
+					{
+						MM = atoi(&Offset[3]);
+						Offset[3] = 0;
+						HH = atoi(&Offset[1]);
+						MM = MM + (60 * HH);
+
+						if (Offset[0] == '+')
+							Date -= (60*MM);
+						else
+							Date += (60*MM);
+
+
+					}
+				}
+
+
+
+			}
+
 			if (linelen)			// Not Null line
 			{
 				ptr1 = ptr2 + 2;		// Skip crlf
@@ -523,22 +612,25 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			for (i=0; i < sockptr->Recipients; i++)
 			{
-				CreateSMTPMessage(sockptr, i, Msgtitle, ptr2, MsgLen);
+				CreateSMTPMessage(sockptr, i, Msgtitle, Date, ptr2, MsgLen);
 
 			}
 
 			free(sockptr->RecpTo);
-
+			free(sockptr->MailFrom);
 			free(sockptr->MailBuffer);
+
 			sockptr->MailBufferSize=0;
 			sockptr->MailBuffer=0;
 	
-			send(sock, "250 Ok\r\n", 8,0);
+			SendSock(sock, "250 Ok");
 			
 			//else			
 			//	send(sock, "450 Ok\r\n", 8,0);
 
-			sockptr->Flags =	0;
+			sockptr->Flags = 0;
+			sockptr->Recipients = 0;
+
 			return;
 		}
 
@@ -640,7 +732,7 @@ ZvVx9G1hcg==
 
 	if(memcmp(Buffer, "HELO",4) == 0)
 	{
-		send(sock, "250 Ok\r\n", 8,0);
+		SendSock(sock, "250 Ok");
 		return;
 	}
 	
@@ -649,7 +741,8 @@ ZvVx9G1hcg==
 		sockptr->MailFrom = zalloc(Len);
 		memcpy(sockptr->MailFrom, &Buffer[10], Len-12);
 			
-		send(sock, "250 Ok\r\n", 8,0);
+		SendSock(sock, "250 Ok");
+
 		return;
 	}
 
@@ -660,7 +753,7 @@ ZvVx9G1hcg==
 
 		memcpy(sockptr->RecpTo[sockptr->Recipients++], &Buffer[8], Len-10);
 			
-		send(sock, "250 Ok\r\n", 8,0);
+		SendSock(sock, "250 Ok");
 		return;
 	}
 
@@ -672,7 +765,7 @@ ZvVx9G1hcg==
 		if (sockptr->MailBuffer == NULL)
 		{
 			CriticalErrorHandler("Failed to create SMTP Message Buffer");
-			send(sock, "250 Failed\r\n", 12,0);
+			SendSock(sock, "250 Failed");
 			shutdown(sock, 0);
 
 			return;
@@ -680,79 +773,100 @@ ZvVx9G1hcg==
 	
 		sockptr->Flags |= GETTINGMESSAGE;
 
-		send(sock, "354 End data with <CR><LF>.<CR><LF>\r\n", 37,0);
+		SendSock(sock, "354 End data with <CR><LF>.<CR><LF>");
 		return;
 	}
 
 	if(memcmp(Buffer, "QUIT\r\n", 6) == 0)
 	{
-		send(sock, "221 OK\r\n", 8,0);
+		SendSock(sock, "221 OK");
 		Sleep(500);
 		shutdown(sock, 0);
 		return;
 	}
-	sock=sock;
+
+	if(memcmp(Buffer, "RSET\r\n", 6) == 0)
+	{
+		SendSock(sock, "250 Ok");
+		sockptr->State = 0;
+		sockptr->Recipients;
+//		Sleep(500);
+//		shutdown(sock, 0);
+		return;
+	}
 
 
 	return;
 }
 
 
-CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, char * MsgBody, int MsgLen)
+CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
 {
 	struct MsgInfo * Msg;
+	BIDRec * BIDRec;
+
 	char * via;
 
 	// Allocate a message Record slot
 
 	Msg = AllocateMsgRecord();
-
-
-			// Allocate a message Record slot
 		
-			// Set number here so they remain in sequence
+	// Set number here so they remain in sequence
 		
-			Msg->number = ++LatestMsg;
-			Msg->length = MsgLen;
+	Msg->number = ++LatestMsg;
+	Msg->length = MsgLen;
 
-			wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+	wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
 
-			Msg->type = 'P';
-			Msg->status = 'N';
-			Msg->date = Msg->datechanged = Msg->datesd = time(NULL);
+	Msg->type = 'P';
+	Msg->status = 'N';
 
-			TidyString(sockptr->RecpTo[i]);
+	BIDRec = AllocateBIDRecord();
 
-			via = strlop(sockptr->RecpTo[i], '@');
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->msgno = Msg->number;
 
-			if (via)
-			{
-				if (strlen(via) > 40) via[40] = 0;
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
 
-				strcpy(Msg->via, via);		// Save before messing with it
+	if (Date)
+		Msg->datecreated = Date;
 
-				strlop(via, '.');			// Get first part of address
+	TidyString(sockptr->RecpTo[i]);
 
-				if (_stricmp(via, BBSName) == 0)
-				{
-					// sent via us - clear the name
+	via = strlop(sockptr->RecpTo[i], '@');
 
-					Msg->via[0] = 0;
+	if (via)
+	{
+		if (strlen(via) > 40) via[40] = 0;
 
-				}
-			}
+		strcpy(Msg->via, via);		// Save before messing with it
 
-			if (strlen(sockptr->RecpTo[i]) > 6) sockptr->RecpTo[i][6]=0;
+		strlop(via, '.');			// Get first part of address
 
-			strcpy(Msg->to, sockptr->RecpTo[i]);
+		if (_stricmp(via, BBSName) == 0)
+		{
+			// sent via us - clear the name
 
-			strcpy(Msg->from, sockptr->MailFrom);
+			Msg->via[0] = 0;
+		}
+	}
 
-			strcpy(Msg->title, MsgTitle);
+	if (strlen(sockptr->RecpTo[i]) > 6) sockptr->RecpTo[i][6]=0;
 
-			free(sockptr->RecpTo[i]);
+	strcpy(Msg->to, sockptr->RecpTo[i]);
 
-			return CreateSMTPMessageFile(MsgBody, Msg);
+	strcpy(Msg->from, sockptr->MailFrom);
+
+	strcpy(Msg->title, MsgTitle);
+
+	free(sockptr->RecpTo[i]);
+
+	// Set up forwarding bitmap
+
+	MatchMessagetoBBSList(Msg);
+
+	return CreateSMTPMessageFile(MsgBody, Msg);
 		
 }
 
@@ -811,6 +925,9 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 
 		return FALSE;
 	}
+
+	SaveMessageDatabase();
+	SaveBIDDatabase();
 
 	return TRUE;
 }
@@ -885,6 +1002,8 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	struct MsgInfo * Msg;
 
 	sock=sockptr->socket;
+
+	WriteLogLine(Buffer, Len-2, 0);
 
 	if (sockptr->State == GettingUser)
 	{
@@ -1404,6 +1523,10 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
+	WriteLogLine(Buffer, Len-2, 0);
+
+	Buffer[Len] = 0;
+
 	if (sockptr->State == WaitingForGreeting)
 	{
 		if (memcmp(Buffer, "220 ",4) == 0)
@@ -1424,7 +1547,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
-			sockprintf(sock, "MAIL FROM: %s@%s", sockptr->SMTPMsg->from, MyDomain);
+			sockprintf(sock, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
 			sockptr->State = WaitingForFROMResponse;
 		}
 		else
@@ -1440,7 +1563,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
-			sockprintf(sock, "RCPT TO: %s", sockptr->SMTPMsg->via);
+			sockprintf(sock, "RCPT TO: <%s>", sockptr->SMTPMsg->via);
 			sockptr->State = WaitingForTOResponse;
 		}
 		else
@@ -1665,8 +1788,11 @@ BOOL POP3Connect(char * Host, int Port)
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 {
 	SOCKET sock;
+	time_t Date;
 
 	sock=sockptr->socket;
+
+	WriteLogLine(Buffer, Len-2, 0);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
@@ -1686,7 +1812,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			if (ptr2 == NULL)
 			{
-				send(sock, "500 Eh\r\n", 8,0);
+				SendSock(sock, "500 Eh");
 				return;
 			}
 
@@ -1717,7 +1843,62 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 				memcpy(Msgtitle, &ptr1[9], linelen-9);
 				Msgtitle[linelen-9]=0;
 			}
+			else
+			if (_memicmp(ptr1, "Date:", 5) == 0)
+			{
+				struct tm rtime;
+				char * Context;
+				char seps[] = " ,\t\r";
+				char Offset[10] = "";
+				int i, HH, MM;
 
+				memset(&rtime, 0, sizeof(struct tm));
+
+				// Date: Tue, 9 Jun 2009 20:54:55 +0100
+
+				ptr1 = strtok_s(&ptr1[5], seps, &Context);	// Skip Day
+				ptr1 = strtok_s(NULL, seps, &Context);		// Day
+
+				rtime.tm_mday = atoi(ptr1);
+
+				ptr1 = strtok_s(NULL, seps, &Context);		// Month
+
+				for (i=0; i < 12; i++)
+				{
+					if (strcmp(month[i], ptr1) == 0)
+					{
+						rtime.tm_mon = i;
+						break;
+					}
+				}
+		
+				sscanf(Context, "%04d %02d%:%02d:%02d%s",
+					&rtime.tm_year, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec, Offset);
+
+				rtime.tm_year -= 1900;
+
+				Date = mktime(&rtime);
+				
+				if (Date == (time_t)-1)
+					Date = 0;
+				else
+				{
+					if ((Offset[0] == '+') || (Offset[0] == '-'))
+					{
+						MM = atoi(&Offset[3]);
+						Offset[3] = 0;
+						HH = atoi(&Offset[1]);
+						MM = MM + (60 * HH);
+
+						if (Offset[0] == '+')
+							Date -= (60*MM);
+						else
+							Date += (60*MM);
+
+
+					}
+				}
+			}
 
 			
 			if (linelen)			// Not Null line
@@ -1738,7 +1919,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (strlen(MsgFrom) > 6) MsgFrom[6]=0;
 
 
-			CreatePOP3Message(MsgFrom, MsgTo, Msgtitle, ptr2, MsgLen);
+			CreatePOP3Message(MsgFrom, MsgTo, Msgtitle, Date, ptr2, MsgLen);
 
 			free(sockptr->MailBuffer);
 			sockptr->MailBufferSize=0;
@@ -1899,7 +2080,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			}
 			else
 			{
-				send(sock, "QUIT\r\n", 8,0);
+				SendSock(sock, "QUIT");
 				sockptr->Flags = WaitingForQUITResponse;
 			}
 		}
@@ -2024,9 +2205,10 @@ quit
 Connection to host lost.
 
 */
-CreatePOP3Message(char * From, char * To, char * MsgTitle, char * MsgBody, int MsgLen)
+CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
 {
 	struct MsgInfo * Msg;
+	BIDRec * BIDRec;
 
 
 	// Allocate a message Record slot
@@ -2034,34 +2216,42 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, char * MsgBody, int M
 	Msg = AllocateMsgRecord();
 
 
-			// Allocate a message Record slot
+	// Allocate a message Record slot
 		
-			// Set number here so they remain in sequence
+	// Set number here so they remain in sequence
 		
-			Msg->number = ++LatestMsg;
-			Msg->length = MsgLen;
+	Msg->number = ++LatestMsg;
+	Msg->length = MsgLen;
 
-			wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+	wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
 
-			Msg->type = 'P';
-			Msg->status = 'N';
-			Msg->date = Msg->datechanged = Msg->datesd = time(NULL);
+	Msg->type = 'P';
+	Msg->status = 'N';
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
 
-//From: "John Wiseman" <john.wiseman@ntlworld.com>
-//To: <G8BPQ@g8bpq.org.uk>
+	if (Date)
+		Msg->datecreated = Date;
 
-			TidyString(To);
-			strlop(To, '@');
+	BIDRec = AllocateBIDRecord();
 
-			if (strlen(To) > 6) To[6]=0;
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->msgno = Msg->number;
 
-			strcpy(Msg->to, To);
+	TidyString(To);
+	strlop(To, '@');
 
-			strcpy(Msg->from, From);
+	if (strlen(To) > 6) To[6]=0;
 
-			strcpy(Msg->title, MsgTitle);
+	strcpy(Msg->to, To);
+	strcpy(Msg->from, From);
+	strcpy(Msg->title, MsgTitle);
 
-			return CreateSMTPMessageFile(MsgBody, Msg);
+	// Set up forwarding bitmap
+
+	MatchMessagetoBBSList(Msg);
+
+	return CreateSMTPMessageFile(MsgBody, Msg);
 		
 }
 
