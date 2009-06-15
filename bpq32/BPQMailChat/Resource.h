@@ -59,4 +59,32 @@
 #define IDD_UserEditInfo 5051
 #define IDM_FORWARD_ALL 7000
 #define IDM_HOUSEKEEPING 9000
+#define IDM_PR	9001
+#define IDM_PUR	9002
+#define IDM_PF	9003
+#define IDM_PNF	9004
+#define IDM_BF	9005
+#define IDM_BNF	9006
+#define IDM_AP	9007
+#define IDM_AB	9008
+#define IDM_LTFROM 9009
+#define IDM_LTTO 9010
+#define IDM_LTAT 9011
+#define IDM_MAINTSAVE 9012
+
+
+#define BPQBASE 1024
+#define BPQMTX 1040
+#define BPQMCOM 1041
+#define BPQCOPYMON 1042
+#define BPQCOPYOUT 1043
+#define BPQCLEARMON 1044
+#define BPQCLEAROUT 1045
+#define BPQBELLS 1046
+#define BPQCHAT 1047
+#define BPQHELP 1048
+#define BPQStripLF 1049
+#define BPQLogOutput 1050
+#define BPQLogMonitor 1051
+#define BPQSendDisconnected 1052
 

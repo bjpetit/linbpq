@@ -22,8 +22,11 @@
 #define   zalloc(s)             _zalloc(s)
 #endif
 
-
 VOID * _zalloc_dbg(int len, int type, char * file, int line);
+
+#define LOG_BBS 1
+#define LOG_CHAT 2
+#define LOG_SMTP 4
 
 
 struct UserRec
@@ -172,6 +175,7 @@ typedef struct cn_t
 // Users. Could be connected at any node.
 
 #define u_echo 0x0002     // User wants his text echoed to him.
+#define u_bells 0x0004    // User wants bell when other users join.
 
 
 typedef struct ConnectionInfo_S
@@ -253,7 +257,7 @@ typedef struct ConnectionInfo_S
 #define FBBForwarding 2
 #define FBBCompressed 4
 #define RunningConnectScript 8
-#define Forwarding 16				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
+#define FORWARDING 16				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
 
 #pragma pack(1)
 
@@ -306,6 +310,12 @@ struct UserInfo{
 #define F_PMS        0x0800
 /* #define F_PWD        0x1000 */
 
+struct Override
+{
+	char * Call;
+	int Days;
+};
+	
 
 
 typedef struct user_t
@@ -371,6 +381,7 @@ struct BBSForwardingInfo
 	char ** Haddresses;				// Heirarchical Addresses to forward to
 	int MsgCount;					// Messages for this BBS
 	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
+	BOOL Forwarding;				// Forward in progress
 };
 
 struct FBBHeaderLine
@@ -639,15 +650,19 @@ VOID SaveBBSConfig();
 VOID SaveChatConfig();
 VOID SaveISPConfig();
 VOID SaveFWDConfig();
+VOID SaveMAINTConfig();
 VOID ReinitializeFWDStruct(struct UserInfo * user);
 VOID CopyBIDDatabase();
 VOID CopyMessageDatabase();
 VOID CopyUserDatabase();
+VOID FWDTimerProc();
 
 // Console Routines
 
 BOOL CreateConsole();
 int WritetoConsoleWindow(char * Msg, int len);
+int ToggleParam(HWND hWnd, BOOL * Param, int Item);
+void CopyToClipboard(HWND hWnd);
 
 
 // TCP Routines
@@ -670,15 +685,20 @@ BOOL POP3Connect(char * Host, int Port);
 VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen);
+void WriteLogLine(char * Msg, int MsgLen, int Flags);
 
 BOOL SendtoISP();
 
 md5 (char *arg, unsigned char * checksum);
 
-
+VOID * GetOverrides(HKEY hKey, char * ValueName);
+VOID ExpireMessages();
+VOID KillMsg(struct MsgInfo * Msg);
 BOOL RemoveKilledMessages();
 
 extern BOOL cfgMinToTray;
+
+extern char SignoffMsg[];
 
 extern HWND MainWnd;
 extern char BaseDir[];
@@ -720,6 +740,8 @@ extern struct MsgInfo ** MsgHddrPtr;
 extern int NumberofMessages;
 extern int HighestBBSNumber;
 extern HMENU hFWDMenu;									// Forward Menu Handle
+extern char zeros[];						// For forward bitmask tests
+
 
 extern BOOL ISP_Gateway_Enabled;
 
@@ -738,3 +760,17 @@ extern char EncryptedISPAccountPass[];
 extern int EncryptedPassLen;
 
 extern CIRCUIT * Console;
+
+extern int PR;
+extern int PUR;
+extern int PF;
+extern int PNF;
+extern int BF;
+extern int BNF;
+extern int AP;
+extern int AB;
+
+extern struct Override ** LTFROM;
+extern struct Override ** LTTO;
+extern struct Override ** LTAT;
+

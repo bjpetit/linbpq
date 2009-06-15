@@ -106,6 +106,8 @@ char BaseDir[MAX_PATH];
 
 char MailDir[MAX_PATH];
 
+int FWDInterval = 300;		// 5 Mins
+int FWDTimer = 300;
 
 UCHAR * OtherNodes=NULL;
 
@@ -399,6 +401,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ShowConnections();
 			CheckTimer();
 			TCPTimer();
+			FWDTimerProc();
 		}
 		else
 			TrytoSend();
@@ -465,6 +468,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDM_HOUSEKEEPING:
 
 			RemoveKilledMessages();
+			ExpireMessages();
 			break;
 
 		case IDM_CONSOLE:
@@ -556,13 +560,29 @@ int ShowConnections()
 		}
 		else
 		{
-			if (conn->UserPointer == 0)
-				strcpy(msg,"Logging in");
+			if (conn->Flags & CHATLINK)
+			{
+				i=wsprintf(msg, "%-10s %-10s %2d %-10s%5d",
+					"Chat Link", conn->u.link->alias, conn->BPQStream,
+					"", conn->OutputQueueLength - conn->OutputGetPointer);
+			}
+			else
+			if ((conn->Flags & CHATMODE)  && conn->topic)
+			{
+				i=wsprintf(msg, "%-10s %-10s %2d %-10s%5d",
+					conn->UserPointer->Name, conn->u.link->alias, conn->BPQStream,
+					conn->topic->topic->name, conn->OutputQueueLength - conn->OutputGetPointer);
+			}
 			else
 			{
-				i=wsprintf(msg, "%-15s %-10s %2d %2d %6d",
-					conn->UserPointer->Name, conn->UserPointer->Call, conn->BPQStream,
-					conn->Conference, conn->OutputQueueLength - conn->OutputGetPointer);
+				if (conn->UserPointer == 0)
+					strcpy(msg,"Logging in");
+				else
+				{
+					i=wsprintf(msg, "%-10s %-10s %2d %-10s%5d",
+						conn->UserPointer->Name, conn->UserPointer->Call, conn->BPQStream,
+						"BBS", conn->OutputQueueLength - conn->OutputGetPointer);
+				}
 			}
 		}
 		SendDlgItemMessage(MainWnd,100,LB_ADDSTRING,0,(LPARAM)msg);
@@ -728,8 +748,6 @@ BOOL Initialise()
 		AddTrayMenuItem(MainWnd, "Mail/Chat Server");
 	}
 
-	StartForwarding(0);
-
 	return TRUE;
 }
 
@@ -883,6 +901,11 @@ int Disconnected (Stream)
 				free(conn->FBBHeaders);
 				conn->FBBHeaders = NULL;
 			}
+
+			if (conn->UserPointer)
+				if (conn->UserPointer->ForwardingInfo)
+					conn->UserPointer->ForwardingInfo->Forwarding = FALSE;
+
 			return 0;
 		}
 	}
@@ -1288,6 +1311,8 @@ VOID GetMessageDatabase()
 	MsgHddrPtr[0]= malloc(sizeof (MsgRec));
 	memcpy(MsgHddrPtr[0], &MsgRec,  sizeof (MsgRec));
 
+	LatestMsg=MsgHddrPtr[0]->length;
+
 	NumberofMessages = 0;
 
 Next:
@@ -1316,11 +1341,6 @@ Next:
 
 		goto Next;
 	}
-
-	if (NumberofMessages == 0)
-		LatestMsg=0;
-	else
-		LatestMsg=MsgHddrPtr[NumberofMessages]->number;
 
 	CloseHandle(Handle);
 
@@ -1351,6 +1371,7 @@ VOID SaveMessageDatabase()
 					NULL);
 
 	MsgHddrPtr[0]->number = NumberofMessages;
+	MsgHddrPtr[0]->length = LatestMsg;
 
 	for (i=0; i <= NumberofMessages; i++)
 	{
@@ -1501,6 +1522,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 		{
 			// Already connected - close
 			
+			Flush(conn);
 			Sleep(1000);
 			Disconnect(conn->BPQStream);
 		}
@@ -1540,7 +1562,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		return;
 	}
 
-	if (conn->BBSFlags & Forwarding)
+	if (conn->BBSFlags & FORWARDING)
 	{
 		ProcessMBLLine(conn, user, Buffer, len);
 		return;
@@ -1598,7 +1620,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		
 			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to, Msg->via, Msg->from, Msg->bid);
 
-			conn->BBSFlags |= Forwarding;
+			conn->BBSFlags |= FORWARDING;
 			return;
 
 		}
@@ -1684,6 +1706,23 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		return;
 	}
 
+	if ((_memicmp(Cmd, "H", 1) == 0) || (_memicmp(Cmd, "H", 1) == 0))
+	{
+		nputs(conn, "A - Abort Output\r");
+		nputs(conn, "B - Logoff\r");
+		nputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
+		nputs(conn, "L - List Message(s) - L = List New, LM = List Mine L> Call, L< Call = List to or from\r");
+		nputs(conn, "                      LL num = List Last, L num-num = List Range\r");
+		nputs(conn, "N Name - Set Name\r");
+		nputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me\r");
+		nputs(conn, "S - Send Message\r");
+
+		SendPrompt(conn, user);
+
+		return;
+
+	}
+
 	if (_memicmp(Cmd, "Chat", CmdLen) == 0)
 	{
 		conn->Flags |= CHATMODE;
@@ -1713,18 +1752,13 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
 {
-	char * Cmd, * Arg1, * Arg2, * Arg3;
-	char * Context;
-	char seps[] = " \t\r";
-	int CmdLen;
-	char Msg[250];
-	int msglen, n, NewChan = 0;
-	ConnectionInfo * otherconn, *c;
-	struct UserInfo * usr;
+	ConnectionInfo *c;
 
 	Buffer[len] = 0;
 
 	strlop(Buffer, '\r');
+
+	WriteLogLine(Buffer, len-1, LOG_CHAT);
 
 	if (conn->flags == p_linkwait)
 	{
@@ -1822,154 +1856,7 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 		rt_cmd(conn, Buffer);
 
 		return;
-/*
-		if ((_memicmp(Cmd, "Help", CmdLen) == 0) || Cmd[0] == '?')
-		{
-			nodeprintf(conn, "BPQChat version 1.00 available commands are :-\r\r/? or /H - To read this list)\r");
-			nodeprintf(conn, "/B ------- To leave CHAT and return to the BPQ Node\r");
-			nodeprintf(conn, "/C n ----- To switch to Conference stream n (0 - 32)\r");
-			nodeprintf(conn, "/L Loc --- To register your QTH/Locator (max 30 chars)\r");
-			nodeprintf(conn, "/Q ------- To leave CHAT and disconnect from BPQ Node\r");
-			nodeprintf(conn, "/W ------- To list connected users\r");
 
-			return;
-
-		}
-
-/*
-BPQChat version 1.00 available commands are :-
-
-/? or /H - To read this list
-/n text -- Send a line of text only to a specific user on Channel n (0 > (10-1))
-/A ------- Toggle linefeed after [callsign:name] option On/Off
-/B ------- To leave FASTCHAT and return to the BPQ Node
-/C ------- Show the current Time and Date (PC Clock)
-/C n ----- To switch to Conference stream n (0 > 32)
-/D ------- Show connection status (conference channel etc.. your on)
-/E ------- Toggle expert user status On/Off (Expert=no ctext)
-/F ------- Turn On/Off your bell filter
-/I ------- Shows information about FASTCHAT 4.7b and the station plus more help.
-/L Loc --- To register your QTH/Locator (max 35 chars)
-/N Name -- To register onto John's FASTCHAT.
-/Q ------- To disconnect from FASTCHAT 4.7b and BPQ Node completely
-/S ------- Shows sysop information or wether John is available
-/S Text -- Send a line of text to John the Sysop only
-/T ------- Wake John the Sysop up (not at night please)
-/U ------- List registered John's FASTCHAT users
-/U Call -- Show details on a registered user
-/W ------- To list logged in registered users
-*/
-
-		if (_memicmp(Cmd, "location", CmdLen) == 0)
-		{
-			// Change Address info
-
-			if (strlen(Context) > 0)
-			{
-				Context[strlen(Context) - 1] = 0;
-				if (strlen(Context) > 30) Context[30] = 0;
-				strcpy(conn->UserPointer->City, Context);
-			}
-
-			nodeprintf(conn, "Location is %s\r", conn->UserPointer->City);
-
-			return;
-
-		}
-
-		if (_memicmp(Cmd, "w", CmdLen) == 0)
-		{
-			// Show Users
-
-			nodeprintf(conn, "User       User            User                      Port Conf  On\r");
-			nodeprintf(conn, "Name       Call    QTH/Location/Locator               No.  No.  DD/MM\r");
-
-			for (n = 0; n < NumberofStreams; n++)
-			{
-				otherconn = &Connections[n];
-		
-				if ((otherconn->Active) && (otherconn->Flags == CHATMODE))
-				{
-					usr = otherconn->UserPointer;
-
-					nodeprintf(conn, "%-10s %-10s %-31s %2d   %2d   %02d/%02d\r",
-								usr->Name, usr->Call, usr->City,
-								otherconn->BPQStream, otherconn->Conference, 0, 0);
-
-				}
-			}
-
-			nodeprintf(conn, "End of User List..\r");
-
-			return;
-
-		}
-
-		Arg1 = strtok_s(NULL, seps, &Context);
-		Arg2 = strtok_s(NULL, seps, &Context);
-		Arg3 = strtok_s(NULL, seps, &Context);
-
-		if (_memicmp(Cmd, "c", CmdLen) == 0)
-		{
-			// Change Conference Channel
-
-			if (Arg1)
-			{
-				NewChan = atoi(Arg1);
-
-				if (NewChan > 0 &&  NewChan < 33)
-				{
-					conn->Conference = NewChan;
-					ShowConnections();
-				}
-			}
-			nodeprintf(conn, "You are now on Conference channel %d\r", conn->Conference);
-			nodeprintf(conn, "Stations using channel %d = %s\r", conn->Conference, GetConfStations(conn->Conference));
-
-			msglen = wsprintf(Msg, "%s - %s has changed to conference channel %d\r", user->Call, user->Name, conn->Conference);
-			SendtoOtherUsers(conn, Msg, msglen);
-
-			return;
-
-		}
-
-//Stations using channel 3 = G8BPQ GM8BPQ 
-/*
-		/h
-********* Bill G7LSQ's wonderful Conferencing Node - FSCHAT:G7LSQ-9 *********
-****************** Located in Bryanston,Blandford,Dorset ********************
-***************** A FASTPAK Research And Development node *******************
-
-FASTCHAT version 4.7b available commands are :-
-
-/? or /H - To read this list
-/n text -- Send a line of text only to a specific user on Channel n (0 > (10-1))
-/A ------- Toggle linefeed after [callsign:name] option On/Off
-/B ------- To leave FASTCHAT and return to the BPQ Node
-/C ------- Show the current Time and Date (PC Clock)
-/C n ----- To switch to Conference stream n (0 > 32)
-/D ------- Show connection status (conference channel etc.. your on)
-/E ------- Toggle expert user status On/Off (Expert=no ctext)
-/F ------- Turn On/Off your bell filter
-/I ------- Shows information about FASTCHAT 4.7b and the station plus more help.
-/L Loc --- To register your QTH/Locator (max 35 chars)
-/N Name -- To register onto John's FASTCHAT.
-/Q ------- To disconnect from FASTCHAT 4.7b and BPQ Node completely
-/S ------- Shows sysop information or wether John is available
-/S Text -- Send a line of text to John the Sysop only
-/T ------- Wake John the Sysop up (not at night please)
-/U ------- List registered John's FASTCHAT users
-/U Call -- Show details on a registered user
-/W ------- To list logged in registered users
-
-
-NullCmd:
-*/
-		nodeprintf(conn, "Unrecognised command  - type /? for help\r");
-
-		
-
-		return;
 	}
 
 	// Send message to all other connected users on same channel
@@ -1980,20 +1867,6 @@ NullCmd:
 		Buffer[201] = 0;
 		len = 200;
 	}
-
-/*	msglen = wsprintf(Msg, "[%d:%s:%s] %s", conn->BPQStream, conn->UserPointer->Call, conn->UserPointer->Name, Buffer);
-
-
-	for (n = 0; n < NumberofStreams; n++)
-	{
-		otherconn = &Connections[n];
-		
-		if ((otherconn->Active) && (otherconn->Flags == CHATMODE) && (otherconn->Conference == conn->Conference) && conn != otherconn)
-		{
-			QueueMsg(otherconn, Msg, msglen);
-		}
-	}
-*/
 		
 	text_tellu(conn->u.user, Buffer, NULL, o_topic); // To local users.
 		
@@ -2006,25 +1879,6 @@ NullCmd:
 
 
 }
-
-/*
-BPQ:GM8BPQ-2} Connected to CHAT
-[FASTCHAT - 4.7b]
- Hi John,
-John's Chat server, (FASTCHAT 4.7b), You are logged on channel 1 ,
-Conference 0, total users allowed = 10 , Currently logged in users = 2
-Current system time = 17:48:17.
-
-hello
-[0:G8BPQ:Harry] hello
-G8BPQ - Harry has changed to conference channel 3
-/c 3
-You are now on Conference channel 3
-Stations using channel 3 = G8BPQ GM8BPQ 
-sadssdsdsda
-G8BPQ - Harry logged off chan No. 0 - 30/04/2009  17:50:33
-G8BPQ - Harry Logged on chan No. 0 - 30/04/2009  17:50:35 
-*/
 
 VOID SendUnbuffered(int stream, char * msg, int len)
 {
@@ -3109,7 +2963,7 @@ VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
 	int Count = 0;
 	char ** Value;
 
-	Value = zalloc(4);				// always NULL entry on enad even if no values
+	Value = zalloc(4);				// always NULL entry on end even if no values
 
 	Value[0] = NULL;
 
@@ -3196,9 +3050,10 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 			conn->UserPointer = user;
 
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
-//			Connect(conn->BPQStream);
 
 			//	Connected Event will trigger connect to remote system
+
+			ShowConnections();
 
 			return TRUE;
 		}
@@ -3267,7 +3122,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 			return TRUE;
 		}
 
-		conn->BBSFlags |= Forwarding;
+		conn->BBSFlags |= FORWARDING;
 		return TRUE;
 	}
 
@@ -3313,6 +3168,18 @@ int	CriticalErrorHandler(char * error)
 	return 0;
 }
 
+VOID FWDTimerProc()
+{
+	FWDTimer+=10;
+
+	if (FWDTimer > FWDInterval)			// 5 mins
+	{
+		FWDTimer=0;
+		StartForwarding(0);
+	}
+
+}
+
 void StartForwarding(int BBSNumber)
 {
 	struct UserInfo * user;
@@ -3326,10 +3193,13 @@ void StartForwarding(int BBSNumber)
 
 		if ((BBSNumber == 0) || (user->BBSNumber == BBSNumber))
 			if (ForwardingInfo)
-				if (ForwardingInfo->Enabled && ForwardingInfo->ConnectScript)
+				if (ForwardingInfo->Enabled && ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0))
 					if (ForwardingInfo->ConnectScript[0])
 						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag)
+						{
+							ForwardingInfo->Forwarding = TRUE;
 							ConnecttoBBS(user);
+						}
 	}
 
 	return;
@@ -3502,7 +3372,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		
 			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to, Msg->via, Msg->from, Msg->bid);
 
-			conn->BBSFlags |= Forwarding;
+			conn->BBSFlags |= FORWARDING;
 
 		}
 		else
@@ -3548,7 +3418,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		
 			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to, Msg->via, Msg->from, Msg->bid);
 
-			conn->BBSFlags |= Forwarding;
+			conn->BBSFlags |= FORWARDING;
 			return;
 
 		}
@@ -3997,6 +3867,20 @@ BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardin
 		}
 	}
 
+	// Check AT distributions
+
+	if (ForwardingInfo->ATCalls)
+	{
+		Calls = ForwardingInfo->ATCalls;
+
+		while(Calls[0])
+		{
+			if (strcmp(Calls[0], ATBBS) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
 	if ((HRoute) &&	(ForwardingInfo->Haddresses))
 	{
 		// Match on Routes

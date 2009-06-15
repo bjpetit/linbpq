@@ -36,7 +36,7 @@ CAPTION "G8BPQ Mail and Chat Server 1.0.0 January 2009"
 CLASS "BPQMailChat"
 FONT 8, "FixedSys"
 BEGIN
-	CONTROL "    User       Callsign Stream Conf  Queue",
+	CONTROL " User      Callsign Stream Conf      Queue",
 		 101, "STATIC", SS_LEFT | WS_CHILD | WS_VISIBLE, 0, 2, 196, 8
 	LISTBOX         100, 2, 10, 190, 100,NOT WS_TABSTOP | WS_VSCROLL
 END
@@ -46,6 +46,7 @@ BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
     WS_SYSMENU | WS_SIZEBOX
 CAPTION "Mail & Chat Console"
+MENU MENU_1
 CLASS "BPQMAINWINDOW"
 FONT 8, "FixedSys"
 BEGIN
@@ -100,6 +101,29 @@ BEGIN
     END
 END
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+MENU_1 MENU DISCARDABLE 
+BEGIN
+    POPUP "Action"
+    BEGIN
+        MENUITEM "Enable Bells",                BPQBELLS
+        MENUITEM "Strip Linefeeds",             BPQStripLF
+        MENUITEM "Log Output",			        BPQLogOutput
+    END
+    POPUP "Edit"
+    BEGIN
+        MENUITEM "Copy Output Window",          BPQCOPYOUT
+        MENUITEM "Clear Output Window",         BPQCLEAROUT
+    END
+    MENUITEM "Help",                        BPQHELP
+END
+
+
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -136,8 +160,8 @@ END
 
 
 
-#define Vers 1,0,0,0
-#define Verstring "1.0.0.0\0"
+#define Vers 1,0,0,4
+#define Verstring "1.0.0.4\0"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION Vers

@@ -131,6 +131,14 @@ static void upduser(USER *user)
 	char *c, *buf;
 
 	in = fopen(RtUsr, "r");
+
+	if (!(in))
+	{
+		in = fopen(RtUsr, "w");
+		fclose(in);
+		in = fopen(RtUsr, "r");
+	}
+
 	out = fopen(RtUsrTemp, "w");
 
 	if (!(in) || !(out)) return;
@@ -149,7 +157,7 @@ static void upduser(USER *user)
 	}
 
 	free(buf);
-	fprintf(out, "%s %s %s\n", user->call, user->name, user->qth);
+	fprintf(out, "%s %d %s %s\n", user->call, user->flags, user->name, user->qth);
 	fclose(in);
 	fclose(out);
 
@@ -162,7 +170,7 @@ static void upduser(USER *user)
 static void rduser(USER *user)
 {
 	FILE *in;
-	char *buf, *name, *qth;
+	char *buf, *name, *flags, *qth;
 
 	user->name = _strdup("?_name");
 	user->qth  = _strdup("?_qth");
@@ -177,11 +185,17 @@ static void rduser(USER *user)
 	  {
 		strlop(buf, '\n');
 
-	    name = strlop(buf, ' ');
+	    flags = strlop(buf, ' ');
 			if (!matchi(buf, user->call)) continue;
-			if (!name) break;
+			if (!flags) break;
+
+			name = strlop(flags, ' ');
+			user->flags = atoi(flags);
+
 			qth = strlop(name, ' ');
 			strnew(&user->name, name);
+
+
 			if (!qth) break;
 			strnew(&user->qth,  qth);
 			break;
@@ -668,6 +682,9 @@ void text_tellu_Joined(USER * user)
 		if ((circuit->u.user == user) && !(user->flags & u_echo)) continue;
 
 		nputs(circuit, buf);
+
+		if (circuit->u.user->flags & u_bells)
+			nputc(circuit, 7);
 	}
 }
 // Tell one link circuit about a local user change of topic.
@@ -960,14 +977,18 @@ int rtloginu (CIRCUIT *circuit)
 
 	user = user_join(circuit, circuit->UserPointer->Call, OurNode, OurAlias);
 	circuit->u.user = user;
+
+	if (strcmp(user->name, "?_name") == 0)
+	{
+		user->name = _strdup(circuit->UserPointer->Name);
+	}
+	upduser(user);
 	nputs(circuit, "G8BPQ Chat Server.\rType /h for command summary.\rBringing up links to other nodes.\r");
 	nputs(circuit, "This may take a minute or two.\rThe /p command shows what nodes are linked.\r");
 	text_tellu_Joined(user);
 	user_tell(user, id_join);
 	show_users(circuit);
 	makelinks();
-
-// Run in circles, scream and shout.
 
 	return TRUE;
 }
@@ -1096,14 +1117,16 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 
 	switch(tolower(Buffer[1]))
 	{
-		case 'b' :                               return FALSE;
-		case 'e' : user->flags ^= u_echo;   return TRUE;
+		case 'a' : user->flags ^= u_bells; upduser(user); return TRUE;
+		case 'b' : return FALSE;
+		case 'e' : user->flags ^= u_echo; upduser(user); return TRUE;
 		
-		case 'f' : makelinks();                 return TRUE;
+		case 'f' : makelinks(); return TRUE;
 
 		case 'h' :
 			nputs(circuit, "/U - Show Users.\r/N - Enter your Name.\r/Q - Enter your QTH.\r/T - Show Topics.\r");
 			nputs(circuit, "/T Name - Join Topic or Create new Topic.\r/P - Show Ports and Links.\r");
+			nputs(circuit, "/A - Toggle Alert on user join.\r");
 			nputs(circuit, "/E - Toggle Echo.\r/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
 			nputs(circuit, "/B - Leave Chat and return to node.\r");
