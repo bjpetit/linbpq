@@ -1117,9 +1117,18 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 
 	switch(tolower(Buffer[1]))
 	{
-		case 'a' : user->flags ^= u_bells; upduser(user); return TRUE;
+		case 'a' :
+			user->flags ^= u_bells;
+			upduser(user);
+			nprintf(circuit, "Alert %s\r",  (user->flags & u_bells) ? "Enabled" : "Disabled");
+			return TRUE;
+
 		case 'b' : return FALSE;
-		case 'e' : user->flags ^= u_echo; upduser(user); return TRUE;
+		case 'e' : 
+			user->flags ^= u_echo;
+			upduser(user);
+			nprintf(circuit, "Echo %s\r",  (user->flags & u_echo) ? "Enabled" : "Disabled");
+			return TRUE;
 		
 		case 'f' : makelinks(); return TRUE;
 

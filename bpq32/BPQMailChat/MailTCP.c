@@ -1979,8 +1979,6 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-
-
 	if (sockptr->State == WaitingForGreeting)
 	{
 		if (memcmp(Buffer, "+OK", 3) == 0)
@@ -2121,119 +2119,14 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 }
 
-/*
-+OK POP3 server ready
-user gm8bpq
--ERR Invalid command; valid commands: USER, QUIT
-user gm8bpq
-+OK please send PASS command
-pass gb7bpq
-+OK gm8bpq is welcome here
-stat
-+OK 1 2725
-uidl
-+OK 1 messages
-1 <5755D609C3CF43039C2E43F8A95DB4B9@WL2KCMBO>
-.
-list
-+OK 1 messages
-1 2725
-.
-retr 1
--ERR Invalid command; valid commands: CAPA, DELE, LIST, LAST, NOOP, RETR, RSET,
-STAT, TOP, UIDL or QUIT
-retr 1
-+OK 2725 octets
-Return-Path: <SRS0=IsFrtg=ntlworld.com=john.wiseman@g8bpq.org.uk>
-Received: from aamtain13-winn.ispmail.ntl.com ([81.103.221.35])
-          by mtain02-winn.ispmail.ntl.com
-          (InterMail vM.7.08.04.00 201-2186-134-20080326) with ESMTP
-          id <20090519093436.UIPM11736.mtain02-winn.ispmail.ntl.com@aamtain13-wi
-nn.ispmail.ntl.com>
-          for <gm8bpq@ntlworld.com>; Tue, 19 May 2009 10:34:36 +0100
-Received: from forward-mta.mail.ai270.net ([94.126.40.221])
-          by aamtain13-winn.ispmail.ntl.com
-          (InterMail vG.2.02.00.01 201-2161-120-102-20060912) with ESMTP
-          id <20090519093436.NJVC12335.aamtain13-winn.ispmail.ntl.com@forward-mt
-a.mail.ai270.net>
-          for <gm8bpq@ntlworld.com>; Tue, 19 May 2009 10:34:36 +0100
-Received: from forward.mail.ai270.net (forward4.mail.ai270.net [94.126.40.213])
-        by forward-mta.mail.ai270.net (Postfix) with ESMTP id A3AD05589B6
-        for <gm8bpq@ntlworld.com>; Tue, 19 May 2009 10:34:26 +0100 (BST)
-Received-SPF: forward4.mail.ai270.net: 217.16.223.6 is neither permitted nor den
-ied by domain of ntlworld.com
-Received: from sys30.scotnet.net ([217.16.223.6])
-        by forward.mail.ai270.net with esmtp (Exim 4.63 (FreeBSD))
-        (envelope-from <john.wiseman@ntlworld.com>)
-        id 1M6Led-000Ipw-JD
-        for G8BPQ@g8bpq.org.uk; Tue, 19 May 2009 10:30:35 +0100
-Received: from WL2KCMBO (gun-ghluasad-80-80-180-97.hebrides.net [80.80.180.97] (
-may be forged))
-        by sys30.scotnet.net (8.13.5/8.13.5) with ESMTP id n4J9YShf000743
-        for <G8BPQ@g8bpq.org.uk>; Tue, 19 May 2009 10:34:32 +0100
-From: "John Wiseman" <john.wiseman@ntlworld.com>
-To: <G8BPQ@g8bpq.org.uk>
-Subject: RE: SMTP Forward 2
-Date: Tue, 19 May 2009 10:34:28 +0100
-Message-ID: <5755D609C3CF43039C2E43F8A95DB4B9@WL2KCMBO>
-MIME-Version: 1.0
-Content-Type: text/plain;
-        charset="US-ASCII"
-Content-Transfer-Encoding: 7bit
-X-Priority: 3 (Normal)
-X-MSMail-Priority: Normal
-X-Mailer: Microsoft Outlook, Build 10.0.2627
-In-reply-to: <20090519083100.YUMX21185.aamtain05-winn.ispmail.ntl.com@[192.168.1
-.102]>
-X-MimeOLE: Produced By Microsoft MimeOLE V6.00.2900.5579
-Importance: Normal
-X-AI-MailScanner-Information:
-X-AI-MailScanner: Found to be clean
-X-AI-MailScanner-SpamScore: s
-X-AI-MailScanner-From: john.wiseman@ntlworld.com
-X-Spam-Status: No
-X-Cloudmark-Analysis: v=1.0 c=1 a=1X21CfFGAAAA:8 a=NLZqzBF-AAAA:8 a=1qap3JQV3pFP
-mpRtC9IA:9 a=Ut184ClIUGw1PyMs6u75FYemau0A:4 a=_dQi-Dcv4p4A:10 a=mODCoEQeq0NuFUDj
-:21 a=Z_fCmsZ7Kde6nAjp:21
-X-Antivirus: avast! (VPS 090518-0, 18/05/2009), Inbound message
-X-Antivirus-Status: Clean
-
-Reply to SMTP forward test 2
-
-
------Original Message-----
-From: G8BPQ@g8bpq.org.uk [mailto:G8BPQ@g8bpq.org.uk]
-Sent: 19 May 2009 09:31
-To: john.wiseman@ntlworld.com
-Subject: SMTP Forward 2
-
-
-Message
-Message 2
-Message 3
-Message 4
-
-
-.
-quit
-+OK gm8bpq InterMail POP3 server signing off.
-
-
-Connection to host lost.
-
-*/
 CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
 {
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
 
-
 	// Allocate a message Record slot
 
 	Msg = AllocateMsgRecord();
-
-
-	// Allocate a message Record slot
 		
 	// Set number here so they remain in sequence
 		
