@@ -151,7 +151,7 @@ BOOL CreateConsole()
 	Console->paclen=236;
 	Console->sysop = TRUE;
 
-	SendUnbuffered(-1, BBSSID, strlen(BBSSID));
+	nodeprintf(Console, BBSSID, ALLOWCOMPRESSED ? "BFH" : "FH");
 
 	if (user->Name[0] == 0)
 	{
@@ -431,12 +431,15 @@ int WritetoConsoleWindow(char * Msg, int len)
 
 lineloop:
 
+	if (PartLinePtr > 300)
+		PartLinePtr = 0;
+
 	if (len > 0)
 	{
 		//	copy text to control a line at a time	
 					
 		ptr2=memchr(ptr1,13,len);
-				
+
 		if (ptr2 == 0)
 		{
 			// no newline. Move data to start of buffer and Save pointer
@@ -449,42 +452,41 @@ lineloop:
 			return (0);
 
 		}
-		else
-		{
-			*(ptr2++)=0;
 
-			index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+		*(ptr2++)=0;
+
+		index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
 					
 	//		if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
 
-			PartLinePtr=0;
+		PartLinePtr=0;
 
-			len-=(ptr2-ptr1);
+		len-=(ptr2-ptr1);
 
-			ptr1=ptr2;
+		ptr1=ptr2;
 
-			if ((len > 0) && StripLF)
+		if ((len > 0) && StripLF)
+		{
+			if (*ptr1 == 0x0a)					// Line Feed
 			{
-				if (*ptr1 == 0x0a)					// Line Feed
-				{
-					ptr1++;
-					len--;
-				}
+				ptr1++;
+				len--;
 			}
-
-			if (index > 1200)
-						
-			do{
-
-				index=SendMessage(hwndOutput,LB_DELETESTRING, 0, 0);
-			
-				} while (index > 1000);
-
-			SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
-
-			goto lineloop;
 		}
+
+		if (index > 1200)
+						
+		do{
+
+			index=SendMessage(hwndOutput,LB_DELETESTRING, 0, 0);
+			
+			} while (index > 1000);
+
+		SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+
+		goto lineloop;
 	}
+
 
 	return (0);
 }

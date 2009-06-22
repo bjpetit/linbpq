@@ -59,15 +59,17 @@ void decodeblock( unsigned char in[4], unsigned char out[3] );
 
 
 
-HANDLE LogHandle = INVALID_HANDLE_VALUE;
+HANDLE LogHandle[3] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
 
-BOOL OpenLogfile()
+char * Logs[3] = {"BBS", "CHAT", "SMTP"};
+
+BOOL OpenLogfile(int Flags)
 {
 	UCHAR FN[MAX_PATH];
 
-	wsprintf(FN,"%s\\Log_%s.txt", BaseDir, "TCP");
+	wsprintf(FN,"%s\\Log_%s.txt", BaseDir, Logs[Flags]);
 
-	LogHandle = CreateFile(FN,
+	LogHandle[Flags] = CreateFile(FN,
 					GENERIC_WRITE,
 					FILE_SHARE_READ,
 					NULL,
@@ -75,9 +77,9 @@ BOOL OpenLogfile()
 					FILE_ATTRIBUTE_NORMAL,
 					NULL);
 
-	SetFilePointer(LogHandle, 0, 0, FILE_END);
+	SetFilePointer(LogHandle[Flags], 0, 0, FILE_END);
 
-	return (LogHandle != INVALID_HANDLE_VALUE);
+	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
 }
 
 void WriteLogLine(char * Msg, int MsgLen, int Flags)
@@ -85,17 +87,18 @@ void WriteLogLine(char * Msg, int MsgLen, int Flags)
 	int cnt;
 	char CRLF[2] = {0x0d,0x0a};
 
-	if (LogHandle == INVALID_HANDLE_VALUE) OpenLogfile();
+	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) OpenLogfile(Flags);
 
-	if (LogHandle == INVALID_HANDLE_VALUE) return;
+	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) return;
 
-	WriteFile(LogHandle ,Msg , MsgLen, &cnt, NULL);
-	WriteFile(LogHandle ,CRLF , 2, &cnt, NULL);
+	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
+	WriteFile(LogHandle[Flags] ,CRLF , 2, &cnt, NULL);
 }
 
 int SendSock(SOCKET sock, char * msg)
 {
-	WriteLogLine(msg,  strlen(msg), 0);
+	WriteLogLine(msg,  strlen(msg), LOG_TCP);
+	WriteLogLine("\r\n", 2, LOG_TCP);
 	send(sock, msg, strlen(msg), 0);
 	return send(sock, "\r\n", 2, 0);
 }
@@ -127,7 +130,7 @@ VOID TCPTimer()
 	if (POP3Timer > ISPPOP3Interval)			// 5 mins
 	{
 		POP3Timer=0;
-		if (ISPPOP3Port)
+		if (ISPPOP3Port  && ISP_Gateway_Enabled)
 			POP3Connect(ISPPOP3Name, ISPPOP3Port);
 	}
 
@@ -146,10 +149,8 @@ BOOL InitialiseTCP()
 		mycd64[j]=i;
 	}
 
-
    // Start WinSock 2.  If it fails, we don't need to call
     // WSACleanup().
-
 
     VersionRequested = MAKEWORD(VERSION_MAJOR, VERSION_MINOR);
 
@@ -500,7 +501,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, 0);
+	WriteLogLine(Buffer, Len-2, LOG_TCP);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
@@ -1019,7 +1020,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, 0);
+	WriteLogLine(Buffer, Len-2, LOG_TCP);
 
 	if (sockptr->State == GettingUser)
 	{
@@ -1539,7 +1540,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, 0);
+	WriteLogLine(Buffer, Len-2, LOG_TCP);
 
 	Buffer[Len] = 0;
 
@@ -1808,7 +1809,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, 0);
+	WriteLogLine(Buffer, Len-2, LOG_TCP);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{

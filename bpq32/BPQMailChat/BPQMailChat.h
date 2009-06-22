@@ -24,9 +24,9 @@
 
 VOID * _zalloc_dbg(int len, int type, char * file, int line);
 
-#define LOG_BBS 1
-#define LOG_CHAT 2
-#define LOG_SMTP 4
+#define LOG_BBS 0
+#define LOG_CHAT 1
+#define LOG_TCP 2
 
 
 struct UserRec
@@ -59,6 +59,8 @@ struct UserRec
 #define id_send   'S'    // Data for one user.
 #define id_topic  'T'    // User changes topic.
 #define id_user   'I'    // User login information.
+#define id_keepalive   'K'    // User login information.
+
 
 #define o_all    1  // To all users.
 #define o_one    2  // To a specific user.
@@ -202,7 +204,7 @@ typedef struct ConnectionInfo_S
 	int paclen;
 	UCHAR Callsign[11];			// Station call including SSID
     BOOL GotHeader;
-	BOOL InputMode;				// Line by Line or Binary
+	UCHAR InputMode;				// Line by Line or Binary
 
     UCHAR InputBuffer[1000];
     int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
@@ -439,11 +441,11 @@ BOOL matchi(char * p1, char * p2);
 char * strlop(char * buf, char delim);
 int rt_cmd(CIRCUIT *circuit, char * Buffer);
 CIRCUIT *circuit_new(CIRCUIT *circuit, int flags);
-VOID nputs(CIRCUIT * conn, char * buf);
+VOID BBSputs(CIRCUIT * conn, char * buf);
 void makelinks(void);
 VOID * _zalloc(int len);
 VOID FreeChatMemory();
-
+VOID ChatTimer();
 
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
@@ -576,6 +578,7 @@ struct UserInfo * AllocateUserRecord(char * Call);
 struct MsgInfo * AllocateMsgRecord();
 BIDRec * AllocateBIDRecord();
 struct UserInfo * LookupCall(char * Call);
+BIDRec  * LookupBID(char * BID);
 VOID SaveUserDatabase();
 VOID GetUserDatabase();
 VOID GetMessageDatabase();
@@ -636,7 +639,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn);
 VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
 MultiLineDialogToREG_MULTI_SZ(HWND hWnd, int DLGItem, HKEY hKey, char * ValueName);
 int Do_BBS_Sel_Changed(HWND hDlg);
-VOID FreeForwrdingStruct(struct UserInfo * user);
+VOID FreeForwardingStruct(struct UserInfo * user);
 VOID FreeList(char ** Hddr);
 int Do_User_Sel_Changed(HWND hDlg);
 int Do_Msg_Sel_Changed(HWND hDlg);
@@ -656,6 +659,19 @@ VOID CopyBIDDatabase();
 VOID CopyMessageDatabase();
 VOID CopyUserDatabase();
 VOID FWDTimerProc();
+VOID CreateMessageFromBuffer(CIRCUIT * conn);
+VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...);
+
+VOID FreeOverrides();
+
+// FBB Routines
+
+VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
+VOID UnpackFBBBinary(CIRCUIT * conn);
+void Decode(CIRCUIT * conn) ;
+int Encode(char * in, char * out, int len);
+
+
 
 // Console Routines
 
@@ -741,7 +757,7 @@ extern int NumberofMessages;
 extern int HighestBBSNumber;
 extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
-
+extern BOOL ALLOWCOMPRESSED;
 
 extern BOOL ISP_Gateway_Enabled;
 
@@ -760,6 +776,8 @@ extern char EncryptedISPAccountPass[];
 extern int EncryptedPassLen;
 
 extern CIRCUIT * Console;
+extern HWND hConsole;
+
 
 extern int PR;
 extern int PUR;

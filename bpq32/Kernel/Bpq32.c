@@ -553,7 +553,6 @@ VOID CheckforLostProcesses()
 					wsprintf(Log,"BPQ32 Removing Tray Item %s\n", PopupText[i]);
 					OutputDebugString(Log);
 					DeleteMenu(trayMenu,40000+i,MF_BYCOMMAND);
-					break;
 				}
 			}
 

@@ -1065,6 +1065,9 @@ VOID SaveBBSConfig()
 		POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
 		SMTPInPort = GetDlgItemInt(hwndDisplay, IDC_SMTPPort, &OK4, FALSE);
 
+		strlop(BBSName, '-');
+		strlop(SYSOPCall, '-');
+
 	if (retCode == ERROR_SUCCESS)
 	{		
 		retCode = RegSetValueEx(hKey, "Streams", 0, REG_DWORD,(BYTE *)&MaxStreams, 4);
@@ -1251,7 +1254,7 @@ VOID ReinitializeFWDStruct(struct UserInfo * user)
 {
 	if (user->ForwardingInfo)
 	{
-		FreeForwrdingStruct(user);
+		FreeForwardingStruct(user);
 		free(user->ForwardingInfo); 
 	}
 

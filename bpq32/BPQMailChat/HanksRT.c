@@ -63,6 +63,7 @@ VOID nputs(CIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
+	WriteLogLine(buf,  strlen(buf), LOG_CHAT);
 	QueueMsg(conn, buf, strlen(buf));
 }
 
@@ -70,6 +71,7 @@ VOID nputc(CIRCUIT * conn, char buf)
 {
 	// Seems to send buf to socket
 
+	WriteLogLine(&buf,  1, LOG_CHAT);
 	QueueMsg(conn, &buf, 1);
 }
 
@@ -1227,6 +1229,43 @@ void makelinks(void)
 		chat_link_out(link);
 	}
 }
+
+
+
+// Send Keepalives to all connected nodes
+
+static void node_keepalive()
+{
+	CIRCUIT *circuit;
+
+	if (user_hd)			// Any Users?
+	{
+		for (circuit = circuit_hd; circuit; circuit = circuit->next)
+		{
+			if (circuit->flags & p_linked)
+				nprintf(circuit, "%c%c%s %s\r", FORMAT, id_keepalive, OurNode, OurNode);
+		}
+	}
+}
+
+int ChatTmr = 0;
+
+VOID ChatTimer()
+{
+	// Entered every 10 seconds
+
+	ChatTmr++;
+
+	if (ChatTmr > 60) // 10 Mins
+	{
+		ChatTmr = 0;
+		node_keepalive();
+	}
+}
+
+
+
+
 
 VOID FreeChatMemory()
 {

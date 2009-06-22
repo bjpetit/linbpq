@@ -1,3 +1,652 @@
+// Mail and Chat Server for BPQ32 Packet Switch
+//
+// FBB Forwarding Routines
+
+#include "stdafx.h"
+
+#define MAXSIZE 100000
+
+VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
+{
+	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
+	int i;
+	char * ptr;
+	char * Context;
+	char seps[] = " \r";
+//	char FSLine[] = "FS +++++\r";
+
+	if (conn->Flags & GETTINGMESSAGE)
+	{
+		ProcessMsgLine(conn, user, Buffer, len);
+		return;
+	}
+
+	if (conn->Flags & GETTINGTITLE)
+	{
+		ProcessMsgTitle(conn, user, Buffer, len);
+		return;
+	}
+
+	// Should be FA FB F> FS FF FQ
+
+	if (Buffer[0] != 'F')
+	{
+		BBSputs(conn, "*** Protocol Error - Line should start with 'F'\r");
+		Flush(conn);
+		Sleep(500);
+		Disconnect(conn->BPQStream);
+
+		return;
+	}
+
+	switch (Buffer[1])
+	{
+	case 'F':
+
+		// Request Reverse
+
+		if (conn->FBBMsgsSent)
+			FlagSentMessages(conn, user);
+		
+		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
+
+			BBSputs(conn, "FQ\r");
+
+		return;
+
+	case 'S':
+
+		//	Proposal response
+
+		for (i=0; i < conn->FBBIndex; i++)
+		{
+			FBBHeader = &conn->FBBHeaders[i];
+				
+			if (Buffer[i+3] == '-')				// Not wanted
+			{
+				// Zap the entry
+
+				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+
+				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
+
+				conn->UserPointer->ForwardingInfo->MsgCount--;
+			}
+
+			if (Buffer[i+3] == '=')				// Defer
+			{
+				// Zap the entry
+
+				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+
+				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
+
+				conn->UserPointer->ForwardingInfo->MsgCount--;
+			}
+
+			if (Buffer[i+3] == '+')				// Need it
+			{
+				struct tm * tm;
+				time_t now;
+				char * MsgBytes;
+
+				conn->FBBMsgsSent = TRUE;		// Messages to flag as complete when next command received
+
+				if (conn->BBSFlags & FBBCompressed)
+					SendCompressed(conn, FBBHeader);
+				else
+				{
+					nodeprintf(conn, "%s\r", FBBHeader->FwdMsg->title);
+
+					MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
+
+					now = time(NULL);
+
+					tm = gmtime(&now);	
+	
+					nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r",
+						tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+						FBBHeader->FwdMsg->number, BBSName, HRoute);
+
+					if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
+						BBSputs(conn, "\r");
+
+					if (MsgBytes)
+					{
+						QueueMsg(conn, MsgBytes, FBBHeader->FwdMsg->length);
+						free(MsgBytes);
+					}
+			
+					nodeprintf(conn, "%c\r", 26);
+				}
+			}
+
+		}
+
+		conn->FBBIndex = 0;		// ready for next block;
+		conn->FBBChecksum = 0;
+
+
+		return;
+
+	case 'Q':
+
+		Disconnect(conn->BPQStream);
+		return;
+
+	case 'A':			// Proposal
+	case 'B':			// Proposal
+
+		if (conn->FBBMsgsSent)
+			FlagSentMessages(conn, user);			// Mark previously sent messages
+
+
+		// Accumulate checksum
+
+		for (i=0; i< len; i++)
+		{
+			conn->FBBChecksum+=Buffer[i];
+		}
+
+		// Parse Header
+
+		// Find free line
+
+		for (i = 0; i < 5; i++)
+		{
+			FBBHeader = &conn->FBBHeaders[i];
+
+			if (FBBHeader->Format == 0)
+				break;
+		}
+
+		if (i == 5)
+		{
+			BBSputs(conn, "*** Protocol Error - Too Many Proposals\r");
+			Flush(conn);
+			Sleep(500);
+			Disconnect(conn->BPQStream);
+		}
+
+		//FA P GM8BPQ G8BPQ G8BPQ 2209_GM8BPQ 8
+
+		FBBHeader->Format = Buffer[1];
+
+		ptr = strtok_s(&Buffer[3], seps, &Context);
+
+		if (ptr == NULL) goto badparam;
+
+		if (strlen(ptr) != 1) goto badparam;
+
+		FBBHeader->MsgType = *ptr;
+
+		ptr = strtok_s(NULL, seps, &Context);
+
+		if (ptr == NULL) goto badparam;
+
+		if (strlen(ptr) > 6 ) goto badparam;
+
+		strcpy(FBBHeader->From, ptr);
+
+		ptr = strtok_s(NULL, seps, &Context);
+
+		if (ptr == NULL) goto badparam;
+
+		if (strlen(ptr) > 40 ) goto badparam;
+
+		strcpy(FBBHeader->ATBBS, ptr);
+
+		ptr = strtok_s(NULL, seps, &Context);
+
+		if (ptr == NULL) goto badparam;
+
+		if (strlen(ptr) > 7 ) goto badparam;
+
+		strcpy(FBBHeader->To, ptr);
+
+		ptr = strtok_s(NULL, seps, &Context);
+
+		if (ptr == NULL) goto badparam;
+
+		if (strlen(ptr) > 12 ) goto badparam;
+
+		strcpy(FBBHeader->BID, ptr);
+
+		ptr = strtok_s(NULL, seps, &Context);
+
+		if (ptr == NULL) goto badparam;
+
+		FBBHeader->Size = atoi(ptr);
+
+		goto ok;
+
+badparam:
+
+		BBSputs(conn, "*** Protocol Error - Proposal format error\r");
+		Flush(conn);
+		Sleep(500);
+		Disconnect(conn->BPQStream);
+		return;
+
+ok:
+		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MAXSIZE))
+		{
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// CLear header
+			conn->FBBReplyChars[conn->FBBIndex++] = '-';
+		}
+		else
+			conn->FBBReplyChars[conn->FBBIndex++] = '+';
+		return;
+
+	case '>':
+
+		// Optional Checksum
+
+		if (len > 3)
+		{
+			int sum;
+			
+			sscanf(&Buffer[3], "%x", &sum);
+
+			conn->FBBChecksum+=sum;
+
+			if (conn->FBBChecksum)
+			{
+				BBSputs(conn, "*** Proposal Checksum Error\r");
+				Flush(conn);
+				Sleep(500);
+				Disconnect(conn->BPQStream);
+				return;
+			}
+		}
+
+		// Return "FS ", followed by +-= for each proposal
+
+		conn->FBBReplyChars[conn->FBBIndex++] = 0;
+
+		nodeprintf(conn, "FS %s\r", conn->FBBReplyChars);
+
+		// if all rejected, send prompt, else set up for first message
+
+		FBBHeader = &conn->FBBHeaders[0];
+
+		if (FBBHeader->MsgType == 0)
+		{
+			conn->FBBIndex = 0;		// ready for first block;
+			conn->FBBChecksum = 0;
+
+			BBSputs(conn, "FF\r");
+		}
+		else
+		{
+			if (conn->BBSFlags & FBBCompressed)
+				conn->InputMode = 'B';
+			CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID);
+		}
+
+		return;
+
+	}
+
+/*
+Connects FC1GHV	
+Connected
+[FBB-5.11-FHM$]Bienvenue a Poitiers, Jean-Paul.>
+[FBB-5.11-FHM$]         (F6FBB has the F flag in the SID)
+FB P F6FBB FC1GHV.FFPC.FRA.EU FC1MVP 24657_F6FBB 1345
+FB P FC1CDC F6ABJ F6AXV 24643_F6FBB 5346
+FB B F6FBB FRA FBB 22_456_F6FBB 8548
+F> HH
+  	FS +-+ (accepts the 1st and the 3rd)
+Title 1st messageText 1st message
+......
+^Z
+Title 3rd message
+Text 3rd message
+......
+^Z	
+FB P FC1GHV F6FBB F6FBB 2734_FC1GHV 234
+FB B FC1GHV F6FBB FC1CDC 2745_FC1GHV 3524
+F> HH
+ FS -- (Don't need them, and send immediately the proposal).
+ FB P FC1CDC F6ABJ F6AXV 24754_F6FBB 345F> HH
+FS + (Accepts the message)
+Title message
+Text message......
+^Z	
+FF (no more message)
+FB B F6FBB TEST FRA 24654_F6FBB 145
+F> HH	
+FS + (Accepts the message)
+Title message
+Text message
+......
+^Z	
+FF (still no message)
+FQ (No more message)	
+Disconnection of the link	
+*/
+	return;
+}
+VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
+{
+	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
+	int i;
+
+	// Called if FBB command received after sending a block of messages . Flag as as sent.
+
+	conn->FBBMsgsSent = FALSE;
+
+	for (i=0; i < 5; i++)
+	{
+		FBBHeader = &conn->FBBHeaders[i];
+				
+		if (FBBHeader && FBBHeader->MsgType)				// Not a zapped entry
+		{
+			clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+			set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
+
+			//  Only mark as forwarded if sent to all BBSs that should have it
+			
+			if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+			{
+				FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
+				FBBHeader->FwdMsg->datechanged=time(NULL);
+			}
+
+			conn->UserPointer->ForwardingInfo->MsgCount--;
+		}
+	}
+}
+
+
+VOID SetupNextFBBMessage(CIRCUIT * conn)
+{	
+	struct FBBHeaderLine * FBBHeader;	// The Headers from an FFB forward block
+
+	memmove(&conn->FBBHeaders[0], &conn->FBBHeaders[1], 4 * sizeof(struct FBBHeaderLine));
+	
+	memset(&conn->FBBHeaders[4], 0, sizeof(struct FBBHeaderLine));
+
+	FBBHeader = &conn->FBBHeaders[0];
+
+	if (FBBHeader->MsgType == 0)
+	{
+		conn->FBBIndex = 0;		// ready for next block;
+		conn->FBBChecksum = 0;
+
+		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
+		{
+			conn->InputMode = 0;
+			BBSputs(conn, "FF\r");
+		}
+	}
+	else
+	{
+		if (conn->BBSFlags & FBBCompressed)
+			conn->InputMode = 'B';
+		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID);
+	}
+}
+
+BOOL FBBDoForward(CIRCUIT * conn)
+{
+	int i;
+	char proposal[100];
+	int proplen;
+
+	if (FindMessagestoForward(conn))
+	{
+		// Send Proposal Block
+
+		struct FBBHeaderLine * FBBHeader;
+
+		// Initialise checksum
+
+		for (i=0; i < conn->FBBIndex; i++)
+		{
+			FBBHeader = &conn->FBBHeaders[i];
+				
+			proplen = wsprintf(proposal, "FB %c %s %s %s %s %d\r", 
+					FBBHeader->MsgType,
+					FBBHeader->From,
+					(FBBHeader->ATBBS[0]) ? FBBHeader->ATBBS : conn->UserPointer->Call, 
+					FBBHeader->To, 
+					FBBHeader->BID,
+					FBBHeader->Size);
+
+			// Accumulate checksum
+
+			while(proplen > 0)
+			{
+				conn->FBBChecksum+=proposal[--proplen];
+			}
+
+			BBSputs(conn, proposal);
+
+		}
+
+		conn->FBBChecksum = - conn->FBBChecksum;
+
+		nodeprintf(conn, "F> %02X\r", conn->FBBChecksum);
+		return TRUE;
+	}
+
+	return FALSE;
+}
+
+
+VOID UnpackFBBBinary(CIRCUIT * conn)
+{
+	int MsgLen, i;
+	UCHAR * ptr;
+
+loop:
+
+	ptr = conn->InputBuffer;
+
+	if (conn->InputLen < 2)
+		return;							//  All formats need at least two bytes
+
+	switch (*ptr)
+	{
+	case 1:			// Header
+
+		MsgLen = ptr[1] + 2;
+
+		if (conn->InputLen < MsgLen)
+			return;						// Wait for more
+
+	//		if (msglen > 60) msglen = 60;
+
+
+		strcpy(conn->TempMsg->title, &ptr[2]);
+	
+
+		// Create initial buffer of 10K. Expand if needed later
+
+		conn->MailBuffer=malloc(10000);
+		conn->MailBufferSize=10000;
+
+		if (conn->MailBuffer == NULL)
+		{
+			BBSputs(conn, "*** Failed to create Message Buffer\r");
+			return;
+		}
+
+		ptr += MsgLen;
+
+		memmove(conn->InputBuffer, ptr, conn->InputLen-MsgLen);
+
+		conn->InputLen -= MsgLen;
+
+		conn->FBBChecksum = 0;
+
+
+		goto loop;
+
+
+
+	case 2:			// Data Block
+
+		if (ptr[1] == 0)
+			MsgLen = 256;
+		else
+			MsgLen = ptr[1];
+
+		if (conn->InputLen < (MsgLen + 2))
+			return;						// Wait for more
+
+		// Process it
+
+		ptr+=2;
+
+		for (i=0; i< MsgLen; i++)
+		{
+			conn->FBBChecksum+=ptr[i];
+		}
+
+		ptr-=2;
+
+		if ((conn->TempMsg->length + MsgLen) > conn->MailBufferSize)
+		{
+			conn->MailBufferSize += 10000;
+			conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+	
+			if (conn->MailBuffer == NULL)
+			{
+				BBSputs(conn, "*** Failed to extend Message Buffer\r");
+				return;
+			}
+		}
+
+		memcpy(&conn->MailBuffer[conn->TempMsg->length], &ptr[2], MsgLen);
+
+		conn->TempMsg->length += MsgLen;
+
+		MsgLen +=2;
+
+		ptr += MsgLen;
+
+		memmove(conn->InputBuffer, ptr, conn->InputLen-MsgLen);
+
+		conn->InputLen -= MsgLen;
+
+		goto loop;
+
+
+	case 4:				// EOM
+
+		// Process EOM
+
+		conn->FBBChecksum+=ptr[1];
+
+		if (conn->FBBChecksum == 0)
+			Decode(conn);
+		else
+			BBSputs(conn, "*** Message Checksum Error\r");
+
+		ptr += 2;
+
+		memmove(conn->InputBuffer, ptr, conn->InputLen-2);
+
+		conn->InputLen -= 2;
+
+		goto loop;
+	
+	default:
+
+		BBSputs(conn, "*** Protocol Error - Invalid Binary Message Format (Invalid Message Type)\r");
+
+		return;
+	}
+}
+
+VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
+{
+	struct tm * tm;
+	time_t now;
+	char * MsgBytes;
+	UCHAR * Compressed, * Compressedptr;
+	UCHAR * UnCompressed;
+	char * Title;
+	UCHAR * Output, * Outputptr;
+	int i, OrigLen, MsgLen, CompLen;
+	char Rline[80];
+
+	MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
+
+	OrigLen = FBBHeader->FwdMsg->length;
+
+	Title = FBBHeader->FwdMsg->title;
+
+	Compressed = Compressedptr = zalloc(2 * OrigLen + 200);
+	Output = Outputptr = zalloc(2 * OrigLen + 200);
+
+	*Outputptr++ = 1;
+	*Outputptr++ = strlen(Title) + 8;
+	strcpy(Outputptr, Title);
+	Outputptr += strlen(Title) +1;
+	strcpy(Outputptr, "000000");
+	Outputptr += 7;
+
+	now = time(NULL);
+
+	tm = gmtime(&now);	
+	
+	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r",
+		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+		FBBHeader->FwdMsg->number, BBSName, HRoute);
+
+	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
+		strcat(Rline, "\r");
+
+	MsgLen = OrigLen + strlen(Rline);
+
+	UnCompressed = zalloc(MsgLen+10);
+
+	strcpy(UnCompressed, Rline);
+	strcat(UnCompressed, MsgBytes);
+
+	CompLen = Encode(UnCompressed, Compressed, MsgLen);
+
+	conn->FBBChecksum = 0;
+
+	for (i=0; i< CompLen; i++)
+	{
+		conn->FBBChecksum+=Compressed[i];
+	}
+
+	while (CompLen > 256)
+	{
+		*Outputptr++ = 2;
+		*Outputptr++ = 0;
+
+		memcpy(Outputptr, Compressedptr, 256);
+		Outputptr += 256;
+		Compressedptr += 256;
+		CompLen -= 256;
+	}
+
+	*Outputptr++ = 2;
+	*Outputptr++ = CompLen;
+
+	memcpy(Outputptr, Compressedptr, CompLen);
+
+	Outputptr += CompLen;
+
+	*Outputptr++ = 4;
+	conn->FBBChecksum = - conn->FBBChecksum;
+	*Outputptr++ = conn->FBBChecksum;
+
+	QueueMsg(conn, Output, Outputptr - Output);
+
+	free(MsgBytes);
+	free(Compressed);
+	free(UnCompressed);
+	free(Output);
+			
+}
 /**************************************************************
         lzhuf.c
         written by Haruyasu Yoshizaki 11/20/1988
@@ -5,12 +654,6 @@
         comments translated by Haruhiko Okumura 4/7/1989
 **************************************************************/
 
-#include "stdafx.h"
-
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <string.h>
-//#include <ctype.h>
 
 /* crctab calculated by Mark G. Mendel, Network Systems Corporation */
 static unsigned short crctab[256] = {
@@ -52,7 +695,7 @@ static unsigned short crctab[256] = {
 #define updcrc(cp, crc) ((crc << 8) ^ crctab[(cp & 0xff) ^ (crc >> 8)])
 
 
-UCHAR  *infile, *outfile;
+UCHAR  *infile, *outfile, * endinfile;
 unsigned	long 	int  textsize = 0, codesize = 0;
 unsigned	short	crc;
 int					version_1;
@@ -73,10 +716,10 @@ void Error(char *message)
 
 unsigned char
                 text_buf[N + F - 1];
-int             match_position, match_length,
+short           match_position, match_length,
                 lson[N + 1], rson[N + 257], dad[N + 1];
 
-static int crc_fputc(int c, UCHAR *outfile)
+static int crc_fputc(int c)
 {
 	crc = updcrc(c, crc);
 	*(outfile++) = c;
@@ -348,11 +991,11 @@ void Putcode(int l, unsigned c)         /* output c bits of code */
 {
         putbuf |= c >> putlen;
         if ((putlen += l) >= 8) {
-				if (crc_fputc(putbuf >> 8, outfile) == EOF) {
+				if (crc_fputc(putbuf >> 8) == EOF) {
                         Error(wterr);
                 }
                 if ((putlen -= 8) >= 8) {
-						if (crc_fputc(putbuf, outfile) == EOF) {
+						if (crc_fputc(putbuf) == EOF) {
                                 Error(wterr);
                         }
                         codesize += 2;
@@ -506,7 +1149,7 @@ void EncodePosition(unsigned short c)
 void EncodeEnd(void)
 {
         if (putlen) {
-				if (crc_fputc(putbuf >> 8, outfile) == EOF) {
+				if (crc_fputc(putbuf >> 8) == EOF) {
                         Error(wterr);
                 }
                 codesize++;
@@ -550,12 +1193,26 @@ int DecodePosition(void)
 
 /* compression */
 
-void Encode(CIRCUIT * conn)  /* compression */
+short Get()
+{
+	if (infile == endinfile)
+		return 	-1;
+	else
+		return *(infile++);
+}
+
+int Encode(char * in, char * out, int inlen)  /* compression */
 {
 		short  i, c, len, r, s, last_match_length;
 		char *ptr;
 
+		putbuf = 0;
+		putlen = 0;
+		textsize = 0;
+		codesize = 0;
+
 		crc = 0;
+		outfile = out;
 
 
 /*		if (version_1)
@@ -565,17 +1222,24 @@ void Encode(CIRCUIT * conn)  /* compression */
 				Error(wterr);   // output crc of binary 
 		}
 */
-		fseek(infile, 0L, 2);
-		textsize = ftell(infile);
-		ptr = (char *)&textsize;
-		for (i = 0 ; i < sizeof(textsize) ; i++)
-			crc_fputc(ptr[i], infile);
+//		infile = &conn->MailBuffer[2];
 
-		if (fwrite(&textsize, sizeof textsize, 1, outfile) < 1)
-				Error(wterr);   /* output size of text */
+		textsize = inlen;
+
+		ptr = (char *)&textsize;
+//		for (i = 0 ; i < sizeof(textsize) ; i++)
+//			crc_fputc(ptr[i], infile);
+
+		*(outfile++) = *(ptr++);
+		*(outfile++) = *(ptr++);
+		*(outfile++) = *(ptr++);
+		*(outfile++) = *(ptr++);
+		
 		if (textsize == 0)
-				return;
-		rewind(infile);
+				return 0;
+
+		infile = in;
+		endinfile = infile + inlen;
 		textsize = 0;                   /* rewind and re-read */
 		StartHuff();
 		InitTree();
@@ -583,7 +1247,7 @@ void Encode(CIRCUIT * conn)  /* compression */
 		r = N - F;
 		for (i = s; i < r; i++)
 				text_buf[i] = ' ';
-		for (len = 0; len < F && (c = getc(infile)) != EOF; len++)
+		for (len = 0; len < F && (c = Get()) != EOF; len++)
 				text_buf[r + len] = c;
 		textsize = len;
 		for (i = 1; i <= F; i++)
@@ -601,7 +1265,7 @@ void Encode(CIRCUIT * conn)  /* compression */
 				}
 				last_match_length = match_length;
 				for (i = 0; i < last_match_length &&
-								(c = getc(infile)) != EOF; i++) {
+								(c = Get()) != EOF; i++) {
 						DeleteNode(s);
 						text_buf[s] = c;
 						if (s < F - 1)
@@ -620,19 +1284,20 @@ void Encode(CIRCUIT * conn)  /* compression */
 		} while (len > 0);
 		EncodeEnd();
 
-		printf("\n");
-		if (version_1)
-		{
-			/* Writes the CRC in the beginning of the file */
-			rewind(outfile);
-			if (fwrite(&crc, sizeof crc, 1, outfile) < 1)
-				Error(wterr);   /* output crc of binary */
-			printf("CRC: %04x\n", crc);
-		}
+//		if (version_1)
+//		{
+//			/* Writes the CRC in the beginning of the file */
+//			rewind(outfile);
+//			if (fwrite(&crc, sizeof crc, 1, outfile) < 1)
+//				Error(wterr);   /* output crc of binary */
+//			printf("CRC: %04x\n", crc);
+//		}
 
 		printf("In : %ld bytes\n", textsize);
 		printf("Out: %ld bytes\n", codesize);
 		printf("Out/In: %.3f\n", (double)codesize / textsize);
+
+		return codesize + 4;
 }
 
 void Decode(CIRCUIT * conn)  
@@ -641,7 +1306,7 @@ void Decode(CIRCUIT * conn)
 		short  i, j, k, r;
 		short c;
 		unsigned long int  count;
-		unsigned int  crc_read;
+//		unsigned int  crc_read;
 
 		getbuf = 0;
 		getlen = 0;
@@ -650,8 +1315,6 @@ void Decode(CIRCUIT * conn)
 
 
 		infile = &conn->MailBuffer[0];
-		outfile = zalloc(10*conn->TempMsg->length);
-
 
 /*		if (version_1)
 		{
@@ -667,7 +1330,8 @@ void Decode(CIRCUIT * conn)
 
 		for (i = 0 ; i < sizeof(textsize) ; i++)
 			ptr[i] = crc_fgetc(infile);
-		printf("File Size = %d\n", textsize);
+
+		outfile = zalloc(textsize + 100);
 
 		if (textsize == 0)
 				return;
@@ -676,7 +1340,8 @@ void Decode(CIRCUIT * conn)
 		for (i = 0; i < N - F; i++)
 				text_buf[i] = ' ';
 		r = N - F;
-		for (count = 0; count < textsize; ) {
+		for (count = 0; count < textsize; )
+		{
 				c = DecodeChar();
 				if (c < 256) {
 					*(outfile++) = c;

@@ -4,8 +4,6 @@
 
 #include "stdafx.h"
 
-#define MAXSIZE 1000000
-
 #define MAX_LOADSTRING 100
 
 // Global Variables:
@@ -78,7 +76,7 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[BPQ-1.00-FH$]\r";
+char BBSSID[]="[BPQ-1.00-%s$]\r";
 //char BBSSID[]="[BPQ-1.00-AB1FHMRX$]\r";
 
 char ChatSID[]="[BPQChatServer-1.00]\r";
@@ -108,6 +106,8 @@ char MailDir[MAX_PATH];
 
 int FWDInterval = 300;		// 5 Mins
 int FWDTimer = 300;
+
+BOOL ALLOWCOMPRESSED = TRUE;
 
 UCHAR * OtherNodes=NULL;
 
@@ -174,7 +174,12 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	SaveBIDDatabase();
 
 
-	if (cfgMinToTray) DeleteTrayMenuItem(MainWnd);
+	if (cfgMinToTray)
+	{
+		DeleteTrayMenuItem(MainWnd);
+		DeleteTrayMenuItem(hConsole);
+	}
+
 
 	// Free all allocated memory
 
@@ -184,7 +189,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 		if (user->ForwardingInfo)
 		{
-			FreeForwrdingStruct(user);
+			FreeForwardingStruct(user);
 			free(user->ForwardingInfo); 
 		}
 
@@ -207,6 +212,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	FreeChatMemory();
 
+	FreeOverrides();
 
 	_CrtDumpMemoryLeaks();
 
@@ -402,6 +408,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			CheckTimer();
 			TCPTimer();
 			FWDTimerProc();
+			ChatTimer();
 		}
 		else
 			TrytoSend();
@@ -428,14 +435,38 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			return TRUE;
 		}
+
+		if (wParam == (WPARAM)hDisMenu)
+		{
+			// Set up Forward Menu
+
+			CIRCUIT * conn;
+			char MenuLine[30];
+			int n;
+
+			for (n = 0; n <= NumberofStreams-1; n++)
+			{
+				conn=&Connections[n];
+
+				RemoveMenu(hDisMenu, IDM_DISCONNECT + n, MF_BYCOMMAND);
+
+				if (conn->Active)
+				{
+					wsprintf(MenuLine, "%d %s", conn->BPQStream, conn->Callsign);
+					AppendMenu(hDisMenu, MF_STRING, IDM_DISCONNECT + n, MenuLine);
+				}
+			}
+			return TRUE;
+		}
 		break;
+
 
 	case WM_COMMAND:
 		wmId    = LOWORD(wParam);
 		wmEvent = HIWORD(wParam);
 		// Parse the menu selections:
 
-		if (wmId > IDM_DISCONNECT && wmId < IDM_DISCONNECT+MaxSockets+1)
+		if (wmId >= IDM_DISCONNECT && wmId < IDM_DISCONNECT+MaxSockets+1)
 		{
 			// disconnect user
 
@@ -443,7 +474,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		
 			if (conn->Active)
 			{	
-				return 0;
+				Disconnect(conn->BPQStream);
 			}
 		}
 
@@ -837,17 +868,18 @@ int Connected(Stream)
 			{
 				conn->Flags |= CHATMODE;
 
-				SendUnbuffered(Stream, ChatSID, strlen(ChatSID));
+				BBSputs(conn, ChatSID);
 			}
 			else
 			{
-				SendUnbuffered(Stream, BBSSID, strlen(BBSSID));
+				nodeprintf(conn, BBSSID, ALLOWCOMPRESSED ? "BFH" : "FH");
+
 			}
 
 			if (user->Name[0] == 0)
 			{
 				conn->Flags |= GETTINGUSER;
-				SendUnbuffered(Stream, NewUserPrompt, strlen(NewUserPrompt));
+				BBSputs(conn, NewUserPrompt);
 			}
 			else
 				SendWelcomeMsg(Stream, conn, user);
@@ -918,7 +950,7 @@ int DoReceivedData(int Stream)
 	int count, InputLen;
 	UINT MsgLen;
 	int n;
-	ConnectionInfo * conn;
+	CIRCUIT * conn;
 	struct UserInfo * user;
 	char * ptr, * ptr2;
 	char Buffer[512];
@@ -943,6 +975,14 @@ int DoReceivedData(int Stream)
 				if (InputLen == 0) return 0;
 
 				conn->InputLen += InputLen;
+
+				if (conn->InputMode == 'B')
+				{
+					UnpackFBBBinary(conn);
+				}
+				else
+				{
+
 			loop:
 				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
 
@@ -989,7 +1029,7 @@ int DoReceivedData(int Stream)
 
 					}
 				}
-
+				}
 			} while (count > 0);
 
 			return 0;
@@ -1556,6 +1596,15 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 	char seps[] = " \t\r";
 	int CmdLen;
 
+	if (conn->Flags & CHATMODE)
+	{
+		ProcessChatLine(conn, user, Buffer, len);
+		return;
+	}
+
+	WriteLogLine(Buffer, len-1, LOG_BBS);
+
+
 	if (conn->BBSFlags & FBBForwarding)
 	{
 		ProcessFBBLine(conn, user, Buffer, len);
@@ -1588,12 +1637,6 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 	}
 
 
-	if (conn->Flags & CHATMODE)
-	{
-		ProcessChatLine(conn, user, Buffer, len);
-		return;
-	}
-
 	// Process Command
 
 	if (len == 1)
@@ -1618,7 +1661,9 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 			Msg = conn->FwdMsg;
 		
-			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to, Msg->via, Msg->from, Msg->bid);
+			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+					Msg->from, Msg->bid);
 
 			conn->BBSFlags |= FORWARDING;
 			return;
@@ -1635,6 +1680,22 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 		if (user->flags & F_BBS)
 		{
+			if (user->ForwardingInfo)
+			{
+				if (user->ForwardingInfo->Forwarding)
+				{
+					BBSputs(conn, "Already Connected\r");
+					Disconnect(conn->BPQStream);
+					Flush(conn);
+					Sleep(500);
+					return;
+				}
+
+			}
+
+			if (user->ForwardingInfo)
+				user->ForwardingInfo->Forwarding = TRUE;
+
 			Parse_SID(conn, &Buffer[1], len-4);
 			
 			if (conn->BBSFlags & FBBForwarding)
@@ -1643,7 +1704,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 				conn->FBBChecksum = 0;
 			}
 			else
-				nputs(conn, ">\r");
+				BBSputs(conn, ">\r");
 
 		}
 		
@@ -1708,14 +1769,14 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 	if ((_memicmp(Cmd, "H", 1) == 0) || (_memicmp(Cmd, "H", 1) == 0))
 	{
-		nputs(conn, "A - Abort Output\r");
-		nputs(conn, "B - Logoff\r");
-		nputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
-		nputs(conn, "L - List Message(s) - L = List New, LM = List Mine L> Call, L< Call = List to or from\r");
-		nputs(conn, "                      LL num = List Last, L num-num = List Range\r");
-		nputs(conn, "N Name - Set Name\r");
-		nputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me\r");
-		nputs(conn, "S - Send Message\r");
+		BBSputs(conn, "A - Abort Output\r");
+		BBSputs(conn, "B - Logoff\r");
+		BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
+		BBSputs(conn, "L - List Message(s) - L = List New, LM = List Mine L> Call, L< Call = List to or from\r");
+		BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
+		BBSputs(conn, "N Name - Set Name\r");
+		BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me\r");
+		BBSputs(conn, "S - Send Message\r");
 
 		SendPrompt(conn, user);
 
@@ -1739,7 +1800,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 	if (conn->Flags == 0)
 	{
-		nputs(conn, "Invalid Command\r");
+		BBSputs(conn, "Invalid Command\r");
 		SendPrompt(conn, user);
 	}
 
@@ -2663,7 +2724,8 @@ BOOL CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATB
 
 	strcpy(Msg->from, From);
 
-	conn->Flags |= GETTINGTITLE;
+	if (!(conn->BBSFlags & FBBCompressed))
+		conn->Flags |= GETTINGTITLE;
 
 	if (!(conn->BBSFlags & BBS))
 		nodeprintf(conn, "Enter Title (only):\r");
@@ -2704,13 +2766,45 @@ VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 
 VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int msglen)
 {
-	struct MsgInfo * Msg;
-	BIDRec * BIDRec;
-	char * ptr1, * ptr2 = NULL;
+	char * ptr2 = NULL;
 
 	if (((msglen < 3) && (Buffer[0] == 0x1a)) || ((msglen == 4) && (_memicmp(Buffer, "/ex", 3) == 0)))
 	{
 		conn->Flags &= ~GETTINGMESSAGE;
+
+		CreateMessageFromBuffer(conn);
+		return;
+
+	}
+
+//	Buffer[msglen++] = 0x0a;
+
+	if ((conn->TempMsg->length + msglen) > conn->MailBufferSize)
+	{
+		conn->MailBufferSize += 10000;
+		conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+	
+		if (conn->MailBuffer == NULL)
+		{
+			nodeprintf(conn, "Failed to extend Message Buffer\r");
+
+			conn->Flags &= ~GETTINGMESSAGE;
+			return;
+		}
+	}
+
+	memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, msglen);
+
+	conn->TempMsg->length += msglen;
+
+
+}
+
+VOID CreateMessageFromBuffer(CIRCUIT * conn)
+{
+	struct MsgInfo * Msg;
+	BIDRec * BIDRec;
+	char * ptr1, * ptr2 = NULL;
 
 		// Allocate a message Record slot
 
@@ -2784,7 +2878,7 @@ nextline:
 			nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
 		else
 			if (!(conn->BBSFlags & FBBForwarding))
-				nputs(conn, ">\r");
+				BBSputs(conn, ">\r");
 			else
 				SetupNextFBBMessage(conn);
 		
@@ -2795,29 +2889,6 @@ nextline:
 		SaveBIDDatabase();
 
 		return;
-	}
-
-//	Buffer[msglen++] = 0x0a;
-
-	if ((conn->TempMsg->length + msglen) > conn->MailBufferSize)
-	{
-		conn->MailBufferSize += 10000;
-		conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
-	
-		if (conn->MailBuffer == NULL)
-		{
-			nodeprintf(conn, "Failed to extend Message Buffer\r");
-
-			conn->Flags &= ~GETTINGMESSAGE;
-			return;
-		}
-	}
-
-	memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, msglen);
-
-	conn->TempMsg->length += msglen;
-
-
 }
 
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
@@ -2909,7 +2980,7 @@ ProcessConnecting(CIRCUIT * circuit, char * Buffer)
 	{
 		// Connected - Send *RTL 
 
-		nputs(circuit, "*RTL\r");  // Log in to the remote RT system.
+		BBSputs(circuit, "*RTL\r");  // Log in to the remote RT system.
 		return TRUE;
 
 	}
@@ -2930,6 +3001,8 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 	HKEY hKey=0;
 	int retCode,Type,Vallen;
 	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
+	int m;
+	struct MsgInfo * Msg;
 
 	ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 
@@ -2952,6 +3025,21 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
 
 		RegCloseKey(hKey);
+	}
+
+	for (m = FirstMessagetoForward; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		// If any forward bits are set, increment count on  BBS record.
+
+		if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+		{
+			if (check_fwd_bit(Msg->fbbs, user->BBSNumber))
+			{
+				user->ForwardingInfo->MsgCount++;
+			}
+		}
 	}
 }
 
@@ -2997,7 +3085,7 @@ VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
 	return Value;
 }
 
-VOID FreeForwrdingStruct(struct UserInfo * user)
+VOID FreeForwardingStruct(struct UserInfo * user)
 {
 	struct	BBSForwardingInfo * ForwardingInfo;
 
@@ -3067,11 +3155,14 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 {
 	struct	BBSForwardingInfo * ForwardingInfo = conn->UserPointer->ForwardingInfo;
 	char ** Scripts;
+	char callsign[10];
+	int port, sesstype, paclen, maxframe, l4window;
+
 
 	Buffer[len]=0;
 	_strupr(Buffer);
 
-	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK")|| strstr(Buffer, "SORRY"))
+	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK")|| strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID"))
 	{
 		// Connect Failed
 
@@ -3097,6 +3188,14 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	// No more steps, Look for SID or Prompt
 
+	// Update PACLEN
+
+	GetConnectionInfo(conn->BPQStream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+
+	if (paclen > 0)
+		conn->paclen = paclen;
+
+
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
 		Parse_SID(conn, &Buffer[1], len-4);
@@ -3112,17 +3211,38 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	{
 		conn->BBSFlags &= ~RunningConnectScript;
 
-		SendUnbuffered(conn->BPQStream, BBSSID, strlen(BBSSID));
+		nodeprintf(conn, BBSSID, ALLOWCOMPRESSED ? "BFH" : "FH");
 
 		if (conn->BBSFlags & FBBForwarding)
 		{
 			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
-				nputs(conn, "FF\r");
+				BBSputs(conn, "FF\r");
 
 			return TRUE;
 		}
 
 		conn->BBSFlags |= FORWARDING;
+
+		if (FindMessagestoForward(conn))
+		{
+			struct MsgInfo * Msg;
+				
+			// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
+
+			Msg = conn->FwdMsg;
+		
+			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+					Msg->from, Msg->bid);
+
+			return TRUE;
+
+		}
+		else
+		{
+			BBSputs(conn, "F>\r");
+		}
+
 		return TRUE;
 	}
 
@@ -3155,7 +3275,9 @@ VOID Parse_SID(ConnectionInfo * conn, char * SID, int len)
 			break;
 
 		case 'B':
-			conn->BBSFlags |= FBBCompressed;
+
+			if (ALLOWCOMPRESSED)
+				conn->BBSFlags |= FBBCompressed;
 			break;
 
 		}
@@ -3295,10 +3417,13 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 {
 	if (Buffer[0] == 'N')				// Not wanted
 	{
-		// Zap the entry
+		if (conn->FwdMsg)
+		{
+			// Zap the entry
 
-		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
-		conn->UserPointer->ForwardingInfo->MsgCount--;
+			clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
+			conn->UserPointer->ForwardingInfo->MsgCount--;
+		}
 
 		return;
 	}
@@ -3307,8 +3432,10 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	{
 		struct tm * tm;
 		time_t now;
-
 		char * MsgBytes;
+
+		if (!conn->FwdMsg)
+			return;
 
 		nodeprintf(conn, "%s\r", conn->FwdMsg->title);
 
@@ -3323,7 +3450,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			conn->FwdMsg->number, BBSName, HRoute);
 
 		if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
-			nputs(conn, "\r");
+			BBSputs(conn, "\r");
 
 		if (MsgBytes)
 		{
@@ -3370,13 +3497,15 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			Msg = conn->FwdMsg;
 		
-			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to, Msg->via, Msg->from, Msg->bid);
+			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+					Msg->from, Msg->bid);
 
 			conn->BBSFlags |= FORWARDING;
 
 		}
 		else
-			nputs(conn, "F>\r");
+			BBSputs(conn, "F>\r");
 	}
 
 	Buffer[len] = 0;
@@ -3416,7 +3545,9 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			Msg = conn->FwdMsg;
 		
-			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to, Msg->via, Msg->from, Msg->bid);
+			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+					Msg->from, Msg->bid);
 
 			conn->BBSFlags |= FORWARDING;
 			return;
@@ -3426,379 +3557,8 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		Disconnect(conn->BPQStream);
 		return;
 	}
-
-
-
-}
-VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
-{
-	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
-	int i;
-	char * ptr;
-	char * Context;
-	char seps[] = " \r";
-//	char FSLine[] = "FS +++++\r";
-
-
-	if (conn->Flags & GETTINGMESSAGE)
-	{
-		ProcessMsgLine(conn, user, Buffer, len);
-		return;
-	}
-
-	if (conn->Flags & GETTINGTITLE)
-	{
-		ProcessMsgTitle(conn, user, Buffer, len);
-		return;
-	}
-
-	// Should be FA FB F> FS FF FQ
-
-	if (Buffer[0] != 'F')
-	{
-		nputs(conn, "*** Protocol Error - Line should start with 'F'\r");
-		Flush(conn);
-		Sleep(500);
-		Disconnect(conn->BPQStream);
-
-		return;
-	}
-
-	switch (Buffer[1])
-	{
-	case 'F':
-
-		// Request Reverse
-
-		if (conn->FBBMsgsSent)
-			FlagSentMessages(conn, user);
-		
-		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
-
-			nputs(conn, "FQ\r");
-
-		return;
-
-	case 'S':
-
-		//	Proposal response
-
-		for (i=0; i < conn->FBBIndex; i++)
-		{
-			FBBHeader = &conn->FBBHeaders[i];
-				
-			if (Buffer[i+3] == '-')				// Not wanted
-			{
-				// Zap the entry
-
-				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
-
-				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
-
-				conn->UserPointer->ForwardingInfo->MsgCount--;
-			}
-
-			if (Buffer[i+3] == '=')				// Defer
-			{
-				// Zap the entry
-
-				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
-
-				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
-
-				conn->UserPointer->ForwardingInfo->MsgCount--;
-			}
-
-			if (Buffer[i+3] == '+')				// Need it
-			{
-				struct tm * tm;
-				time_t now;
-				char * MsgBytes;
-
-				conn->FBBMsgsSent = TRUE;		// Messages to flag as complete when next command received
-
-				nodeprintf(conn, "%s\r", FBBHeader->FwdMsg->title);
-
-				MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
-
-				now = time(NULL);
-
-				tm = gmtime(&now);	
-	
-				nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r",
-					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
-					FBBHeader->FwdMsg->number, BBSName, HRoute);
-
-				if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
-					nputs(conn, "\r");
-
-				if (MsgBytes)
-				{
-					QueueMsg(conn, MsgBytes, FBBHeader->FwdMsg->length);
-					free(MsgBytes);
-				}
-			
-				nodeprintf(conn, "%c\r", 26);
-
-			}
-
-		}
-
-		conn->FBBIndex = 0;		// ready for next block;
-		conn->FBBChecksum = 0;
-
-
-		return;
-
-	case 'Q':
-
-		Disconnect(conn->BPQStream);
-		return;
-
-	case 'A':			// Proposal
-	case 'B':			// Proposal
-
-		if (conn->FBBMsgsSent)
-			FlagSentMessages(conn, user);			// Mark previously sent messages
-
-
-		// Accumulate checksum
-
-		for (i=0; i< len; i++)
-		{
-			conn->FBBChecksum+=Buffer[i];
-		}
-
-		// Parse Header
-
-		// Find free line
-
-		for (i = 0; i < 5; i++)
-		{
-			FBBHeader = &conn->FBBHeaders[i];
-
-			if (FBBHeader->Format == 0)
-				break;
-		}
-
-		if (i == 5)
-		{
-			nputs(conn, "*** Protocol Error - Too Many Proposals\r");
-			Flush(conn);
-			Sleep(500);
-			Disconnect(conn->BPQStream);
-		}
-
-		//FA P GM8BPQ G8BPQ G8BPQ 2209_GM8BPQ 8
-
-		FBBHeader->Format = Buffer[1];
-
-		ptr = strtok_s(&Buffer[3], seps, &Context);
-
-		if (ptr == NULL) goto badparam;
-
-		if (strlen(ptr) != 1) goto badparam;
-
-		FBBHeader->MsgType = *ptr;
-
-		ptr = strtok_s(NULL, seps, &Context);
-
-		if (ptr == NULL) goto badparam;
-
-		if (strlen(ptr) > 6 ) goto badparam;
-
-		strcpy(FBBHeader->From, ptr);
-
-		ptr = strtok_s(NULL, seps, &Context);
-
-		if (ptr == NULL) goto badparam;
-
-		if (strlen(ptr) > 40 ) goto badparam;
-
-		strcpy(FBBHeader->ATBBS, ptr);
-
-		ptr = strtok_s(NULL, seps, &Context);
-
-		if (ptr == NULL) goto badparam;
-
-		if (strlen(ptr) > 7 ) goto badparam;
-
-		strcpy(FBBHeader->To, ptr);
-
-		ptr = strtok_s(NULL, seps, &Context);
-
-		if (ptr == NULL) goto badparam;
-
-		if (strlen(ptr) > 12 ) goto badparam;
-
-		strcpy(FBBHeader->BID, ptr);
-
-		ptr = strtok_s(NULL, seps, &Context);
-
-		if (ptr == NULL) goto badparam;
-
-		FBBHeader->Size = atoi(ptr);
-
-		goto ok;
-
-badparam:
-
-		nputs(conn, "*** Protocol Error - Proposal format error\r");
-		Flush(conn);
-		Sleep(500);
-		Disconnect(conn->BPQStream);
-		return;
-
-ok:
-		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MAXSIZE))
-		{
-			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// CLear header
-			conn->FBBReplyChars[conn->FBBIndex++] = '-';
-		}
-		else
-			conn->FBBReplyChars[conn->FBBIndex++] = '+';
-		return;
-
-	case '>':
-
-		// Optional Checksum
-
-		if (len > 3)
-		{
-			int sum;
-			
-			sscanf(&Buffer[3], "%x", &sum);
-
-			conn->FBBChecksum+=sum;
-
-			if (conn->FBBChecksum)
-			{
-				nputs(conn, "*** Proposal Checksum Error\r");
-				Flush(conn);
-				Sleep(500);
-				Disconnect(conn->BPQStream);
-				return;
-			}
-		}
-
-		// Return "FS ", followed by +-= for each proposal
-
-		conn->FBBReplyChars[conn->FBBIndex++] = 0;
-
-		nodeprintf(conn, "FS %s\r", conn->FBBReplyChars);
-
-		// if all rejected, send prompt, else set up for first message
-
-		FBBHeader = &conn->FBBHeaders[0];
-
-		if (FBBHeader->MsgType == 0)
-		{
-			conn->FBBIndex = 0;		// ready for first block;
-			conn->FBBChecksum = 0;
-
-			nputs(conn, "FF\r");
-		}
-		else
-			CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID);
-
-
-		return;
-
-	}
-
-/*
-Connects FC1GHV	
-Connected
-[FBB-5.11-FHM$]Bienvenue a Poitiers, Jean-Paul.>
-[FBB-5.11-FHM$]         (F6FBB has the F flag in the SID)
-FB P F6FBB FC1GHV.FFPC.FRA.EU FC1MVP 24657_F6FBB 1345
-FB P FC1CDC F6ABJ F6AXV 24643_F6FBB 5346
-FB B F6FBB FRA FBB 22_456_F6FBB 8548
-F> HH
-  	FS +-+ (accepts the 1st and the 3rd)
-Title 1st messageText 1st message
-......
-^Z
-Title 3rd message
-Text 3rd message
-......
-^Z	
-FB P FC1GHV F6FBB F6FBB 2734_FC1GHV 234
-FB B FC1GHV F6FBB FC1CDC 2745_FC1GHV 3524
-F> HH
- FS -- (Don't need them, and send immediately the proposal).
- FB P FC1CDC F6ABJ F6AXV 24754_F6FBB 345F> HH
-FS + (Accepts the message)
-Title message
-Text message......
-^Z	
-FF (no more message)
-FB B F6FBB TEST FRA 24654_F6FBB 145
-F> HH	
-FS + (Accepts the message)
-Title message
-Text message
-......
-^Z	
-FF (still no message)
-FQ (No more message)	
-Disconnection of the link	
-*/
-	return;
-}
-VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
-{
-	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
-	int i;
-
-	// Called if FBB command received after sending a block of messages . Flag as as sent.
-
-	conn->FBBMsgsSent = FALSE;
-
-	for (i=0; i < 5; i++)
-	{
-		FBBHeader = &conn->FBBHeaders[i];
-				
-		if (FBBHeader->MsgType)				// Not a zapped entry
-		{
-			clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
-			set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
-
-			//  Only mark as forwarded if sent to all BBSs that should have it
-			
-			if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
-			{
-				FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
-				FBBHeader->FwdMsg->datechanged=time(NULL);
-			}
-
-			conn->UserPointer->ForwardingInfo->MsgCount--;
-		}
-	}
 }
 
-
-VOID SetupNextFBBMessage(CIRCUIT * conn)
-{	
-	struct FBBHeaderLine * FBBHeader;	// The Headers from an FFB forward block
-
-	memmove(&conn->FBBHeaders[0], &conn->FBBHeaders[1], 4 * sizeof(struct FBBHeaderLine));
-	
-	memset(&conn->FBBHeaders[4], 0, sizeof(struct FBBHeaderLine));
-
-	FBBHeader = &conn->FBBHeaders[0];
-
-	if (FBBHeader->MsgType == 0)
-	{
-		conn->FBBIndex = 0;		// ready for next block;
-		conn->FBBChecksum = 0;
-
-		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
-			nputs(conn, "FF\r");
-	}
-	else
-		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID);
-}
 
 int check_fwd_bit(char *mask, int bbsnumber)
 {
@@ -3909,48 +3669,12 @@ BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardin
 
 }
 
-BOOL FBBDoForward(CIRCUIT * conn)
+
+VOID BBSputs(CIRCUIT * conn, char * buf)
 {
-	int i;
-	char proposal[100];
-	int proplen;
+	// Seems to send buf to socket
 
-	if (FindMessagestoForward(conn))
-	{
-		// Send Proposal Block
+	WriteLogLine(buf,  strlen(buf) -1, LOG_BBS);
 
-		struct FBBHeaderLine * FBBHeader;
-
-		// Initialise checksum
-
-		for (i=0; i < conn->FBBIndex; i++)
-		{
-			FBBHeader = &conn->FBBHeaders[i];
-				
-			proplen = wsprintf(proposal, "FB %c %s %s %s %s %d\r", 
-					FBBHeader->MsgType,
-					FBBHeader->From,
-					FBBHeader->ATBBS, 
-					FBBHeader->To, 
-					FBBHeader->BID,
-					FBBHeader->Size);
-
-			// Accumulate checksum
-
-			while(proplen > 0)
-			{
-				conn->FBBChecksum+=proposal[--proplen];
-			}
-
-			nputs(conn, proposal);
-
-		}
-
-		conn->FBBChecksum = - conn->FBBChecksum;
-
-		nodeprintf(conn, "F> %02X\r", conn->FBBChecksum);
-		return TRUE;
-	}
-
-	return FALSE;
+	QueueMsg(conn, buf, strlen(buf));
 }

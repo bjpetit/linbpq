@@ -19,6 +19,32 @@ struct Override ** LTFROM;
 struct Override ** LTTO;
 struct Override ** LTAT;
 
+VOID FreeOverride(struct Override ** Hddr)
+{
+	struct Override ** Save;
+	
+	if (Hddr)
+	{
+		Save = Hddr;
+		while(Hddr[0])
+		{
+			free(Hddr[0]->Call);
+			free(Hddr[0]);
+			Hddr++;
+		}
+		
+		free(Save);
+	}
+
+}
+
+VOID FreeOverrides()
+{
+	FreeOverride(LTFROM);
+	FreeOverride(LTTO);
+	FreeOverride(LTAT);
+}
+
 VOID * GetOverrides(HKEY hKey, char * ValueName)
 {
 	int retCode,Type,Vallen;
@@ -104,11 +130,14 @@ VOID ExpireMessages()
 
 				// Is it unforwarded or unread?
 
-				if (memcmp(Msg->fbbs, zeros, NBMASK) == 0) 
+				if (memcmp(Msg->fbbs, zeros, NBMASK) == 0)
+				{
 					if (Msg->datecreated < PURLimit) KillMsg(Msg);
+				}
 				else
+				{
 					if (Msg->datecreated < PNFLimit) KillMsg(Msg);
-
+				}
 				continue;	
 	
 			case 'F':
