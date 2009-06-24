@@ -28,6 +28,7 @@ char szBuff[80];
 
 int SMTPInPort;
 int POP3InPort;
+BOOL RemoteEmail;			// Set to listen on INADDR_ANY rather than LOCALHOST
 
 BOOL ISP_Gateway_Enabled;
 
@@ -61,7 +62,7 @@ void decodeblock( unsigned char in[4], unsigned char out[3] );
 
 HANDLE LogHandle[3] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
 
-char * Logs[3] = {"BBS", "CHAT", "SMTP"};
+char * Logs[3] = {"BBS", "CHAT", "TCP"};
 
 BOOL OpenLogfile(int Flags)
 {
@@ -201,7 +202,7 @@ SOCKET CreateListeningSocket(int Port)
 	psin=&local_sin;
 
 	psin->sin_family = AF_INET;
-	psin->sin_addr.s_addr = htonl(INADDR_LOOPBACK);	// Local Host Olny
+	psin->sin_addr.s_addr = htonl(RemoteEmail ? INADDR_ANY  : INADDR_LOOPBACK);	// Local Host Olny
 	
 	psin->sin_port = htons(Port);        /* Convert to network ordering */
 
@@ -732,7 +733,7 @@ ZvVx9G1hcg==
 	if(memcmp(Buffer, "EHLO",4) == 0)
 	{
 		SendSock(sock, "250-BPQ Mail Server");
-		SendSock(sock, "250 AUTH LOGIN PLAIN");
+		SendSock(sock, "250 AUTH LOGIN");
 
 		//250-8BITMIME
 
@@ -1022,6 +1023,20 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	WriteLogLine(Buffer, Len-2, LOG_TCP);
 
+	if(memcmp(Buffer, "CAPA",4) == 0)
+	{
+		SendSock(sock, "+OK Capability list follows");
+		SendSock(sock, "UIDL");
+		SendSock(sock, "EXPIRE 30");
+		SendSock(sock, ".");
+		return;
+	}  
+
+	if(memcmp(Buffer, "AUTH",4) == 0)
+	{
+		SendSock(sock, "-ERR");
+		return;
+	}  
 	if (sockptr->State == GettingUser)
 	{
 		

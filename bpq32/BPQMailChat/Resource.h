@@ -1,3 +1,4 @@
+#define IDC_STATIC -1
 #define IDS_APP_TITLE 103
 #define IDR_MAINFRAME 128
 #define IDD_CONFIG 102
@@ -20,6 +21,7 @@
 #define IDC_SMTPPort 1006
 #define IDC_HRoute 1007
 #define IDC_SYSOPCALL 1008
+#define IDC_REMOTEEMAIL 1009
 #define IDC_BBSSAVE 1100
 #define IDC_ChatAppl 2001
 #define IDC_ChatNodes 2002

@@ -747,6 +747,8 @@ extern int ChatApplNum;
 extern char BaseDir[];
 extern int SMTPInPort;
 extern int POP3InPort;
+extern BOOL RemoteEmail;
+
 extern int MaxStreams;
 extern UCHAR * OtherNodes;
 extern struct UserInfo * BBSChain;		// Chain of users that are BBSes

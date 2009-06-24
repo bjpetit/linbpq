@@ -1130,6 +1130,8 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 
 	QueueMsg(conn, Mess, len);
 
+	WriteLogLine(Mess, len-1, LOG_BBS);
+
 	return;
 }
 
@@ -2980,7 +2982,7 @@ ProcessConnecting(CIRCUIT * circuit, char * Buffer)
 	{
 		// Connected - Send *RTL 
 
-		BBSputs(circuit, "*RTL\r");  // Log in to the remote RT system.
+		nputs(circuit, "*RTL\r");  // Log in to the remote RT system.
 		return TRUE;
 
 	}

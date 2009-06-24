@@ -484,6 +484,8 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSStreams, MaxStreams, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_POP3Port, POP3InPort, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_SMTPPort, SMTPInPort, FALSE);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_REMOTEEMAIL, RemoteEmail);
+
 
 		break;
 
@@ -1065,6 +1067,8 @@ VOID SaveBBSConfig()
 		POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
 		SMTPInPort = GetDlgItemInt(hwndDisplay, IDC_SMTPPort, &OK4, FALSE);
 
+		RemoteEmail = IsDlgButtonChecked(hwndDisplay, IDC_REMOTEEMAIL);
+
 		strlop(BBSName, '-');
 		strlop(SYSOPCall, '-');
 
@@ -1079,6 +1083,7 @@ VOID SaveBBSConfig()
 				
 		retCode = RegSetValueEx(hKey,"SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey,"POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
+		retCode = RegSetValueEx(hKey,"RemoteEmail",0,REG_DWORD,(BYTE *)&RemoteEmail,4);
 
 		RegCloseKey(hKey);
 
@@ -1375,6 +1380,13 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&ISP_Gateway_Enabled,(ULONG *)&Vallen);
 
 		Vallen=4;
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"RemoteEmail",0,			
+			(ULONG *)&Type,(UCHAR *)&RemoteEmail,(ULONG *)&Vallen);
+
+		Vallen=4;
+
 		retCode += RegQueryValueEx(hKey,"POP3 Polling Interval",0,			
 			(ULONG *)&Type,(UCHAR *)&ISPPOP3Interval,(ULONG *)&Vallen);
 
