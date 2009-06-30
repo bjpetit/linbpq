@@ -278,6 +278,8 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			strnew(&user->name, f1);
 			strnew(&user->qth,  f2);
 			upduser(user);
+			makelinks();					// Bring up our links if not already up
+
 			break;
 
 // User ucall logged out of node ncall.
@@ -1254,7 +1256,42 @@ VOID ChatTimer()
 {
 	// Entered every 10 seconds
 
+	int i;
+	NODE *node;
+	USER *user;
+	CIRCUIT *c;
+
+
+	i = 0;
+
+	for (user = user_hd; user; user = user->next)
+	{
+		i++;
+	}
+	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
+
+	i = 0;
+
+	for (node = node_hd; node; node = node->next)
+	{
+		i++;
+	}
+	SetDlgItemInt(hWnd, IDC_NODES, i, FALSE);
+
+	i = 0;
+
+	for (c = circuit_hd; c; c = c->next)
+	{
+		if (c->flags & p_linked) 
+			i++;
+	}
+	SetDlgItemInt(hWnd, IDC_LINKS,  i, FALSE);
+
+
+
 	ChatTmr++;
+
+
 
 	if (ChatTmr > 60) // 10 Mins
 	{

@@ -722,6 +722,8 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
 
+			SetDlgItemInt(hDlg, IDC_FWDINT, FWDInterval, FALSE);
+
 			return 0;
 		}
 
@@ -1170,7 +1172,7 @@ VOID SaveChatConfig()
 VOID SaveFWDConfig()
 {
 	HKEY hKey=0;
-	int retCode,disp;
+	int retCode,disp, OK;
 	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
 	int Rev;
 
@@ -1190,6 +1192,17 @@ VOID SaveFWDConfig()
 
 		Rev = IsDlgButtonChecked(hwndDisplay, IDC_REVERSE);
 		retCode = RegSetValueEx(hKey,"RequestReverse", 0, REG_DWORD, (BYTE *)&Rev,4);
+		
+		RegCloseKey(hKey);
+		
+		FWDInterval = GetDlgItemInt(hwndDisplay, IDC_FWDINT, &OK, FALSE);
+
+		// Interval is not user specific
+
+		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, 
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+		retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&FWDInterval,4);
 
 		RegCloseKey(hKey);
 
@@ -1306,7 +1319,38 @@ MultiLineDialogToREG_MULTI_SZ(HWND hDialog, int DLGItem, HKEY hKey, char * Value
 	return TRUE;
 
 }
-		
+
+VOID SaveWindowPosns()
+{
+	HKEY hKey=0;
+	int retCode, disp;
+	char Size[80];
+
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
+                              0,	// Reserved
+							  0,	// Class
+							  0,	// Options
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		wsprintf(Size,"%d,%d,%d,%d",ConsoleRect.left,ConsoleRect.right,ConsoleRect.top,ConsoleRect.bottom);
+		retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+		wsprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
+		retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+		RegCloseKey(hKey);
+	}
+
+	return;
+}
+
+
 
 
 
@@ -1314,6 +1358,7 @@ BOOL GetConfigFromRegistry()
 {
 	HKEY hKey=0;
 	int retCode,Type,Vallen;
+	char Size[80];
 
 	// Get Config From Registry
 
@@ -1338,6 +1383,10 @@ TryAgain:
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"BBSApplNum",0,			
 			(ULONG *)&Type,(UCHAR *)&BBSApplNum,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"FWDInterval",0,			
+			(ULONG *)&Type,(UCHAR *)&FWDInterval,(ULONG *)&Vallen);
 		
 		Vallen=100;
 		retCode += RegQueryValueEx(hKey,"BBSName",0,			
@@ -1419,11 +1468,21 @@ TryAgain:
 		retCode += RegQueryValueEx(hKey,"ISPAccountPass",0,			
 			(ULONG *)&Type,(UCHAR *)&EncryptedISPAccountPass,(ULONG *)&EncryptedPassLen);
 
-		RegCloseKey(hKey);
-
 		DecryptPass(EncryptedISPAccountPass, ISPAccountPass, EncryptedPassLen);
 
+		Vallen=80;
+		RegQueryValueEx(hKey,"ConsoleSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
+		sscanf(Size,"%d,%d,%d,%d",&ConsoleRect.left,&ConsoleRect.right,&ConsoleRect.top,&ConsoleRect.bottom);
+
+		Vallen=80;
+		RegQueryValueEx(hKey,"WindowSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+		RegCloseKey(hKey);
+	
 		retCode += RegOpenKeyEx (HKEY_LOCAL_MACHINE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping",
                               0,

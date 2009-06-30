@@ -2,6 +2,11 @@
 //
 #include "resrc1.h"
 
+// Generated Help ID header file
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "resrc1.hm"
+#undef APSTUDIO_HIDDEN_SYMBOLS
+
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -39,16 +44,24 @@ IDI_SMALL               ICON    DISCARDABLE     "icon2.ico"
 // Dialog
 //
 
-BPQMAILCHAT DIALOG DISCARDABLE  120, 50, 200, 125
+BPQMAILCHAT DIALOG DISCARDABLE  120, 50, 294, 125
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
     WS_SYSMENU
-CAPTION "G8BPQ Mail and Chat Server 1.0.0 January 2009"
+CAPTION "G8BPQ Mail and Chat Server 1.0.0.10 June 2009"
 CLASS "BPQMailChat"
 FONT 8, "FixedSys"
 BEGIN
     LTEXT           " User      Callsign Stream Conf      Queue",101,0,2,196,
                     8,NOT WS_GROUP
-    LISTBOX         100,2,10,190,100,WS_VSCROLL
+    LISTBOX         100,2,10,190,110,WS_VSCROLL
+    LTEXT           "Chat Nodes",IDC_STATIC,195,11,40,8
+    EDITTEXT        IDC_NODES,241,10,20,10,ES_AUTOHSCROLL
+    LTEXT           "Chat Users",IDC_STATIC,195,21,40,10
+    EDITTEXT        IDC_USERS,241,20,20,10,ES_AUTOHSCROLL
+    LTEXT           "Chat Links",IDC_STATIC,195,31,40,10
+    EDITTEXT        IDC_LINKS,241,30,20,10,ES_AUTOHSCROLL
+    LTEXT           "Sysop Msgs",IDC_STATIC,195,45,40,10
+    EDITTEXT        IDC_SYSOPMSGS,241,44,20,10,ES_AUTOHSCROLL
 END
 
 BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
@@ -64,17 +77,6 @@ BEGIN
     EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
 END
 
-IDD_ABOUTBOX DIALOG DISCARDABLE  22, 17, 230, 60
-STYLE DS_MODALFRAME | WS_CAPTION | WS_SYSMENU
-CAPTION "About"
-FONT 8, "System"
-BEGIN
-    ICON            IDI_BPQMailChat,IDC_MYICON,14,9,18,20
-    LTEXT           "G8BPQ Mail and Chat Version 1.0.0.7",-1,49,10,141,8,
-                    SS_NOPREFIX
-    LTEXT           "Copyright (C) G8BPQ 2009",-1,49,22,119,8
-    DEFPUSHBUTTON   "OK",IDOK,195,6,30,11,WS_GROUP
-END
 
 102 DIALOG DISCARDABLE  0, 0, 385, 300
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
@@ -122,7 +124,7 @@ BEGIN
     EDITTEXT        2001,185,106,29,14
     LTEXT           "Nodes to link to",-1,115,129,53,8
     EDITTEXT        2002,185,125,87,88,ES_MULTILINE | ES_UPPERCASE | 
-                    ES_AUTOVSCROLL
+                    ES_AUTOVSCROLL | ES_WANTRETURN
     DEFPUSHBUTTON   "Save",2100,172,226,50,14,BS_CENTER | BS_VCENTER
     LTEXT           "The Application Number defines which BPQ32 Application gives access to the Chat Server. Note this a the APPLNumber (1-8) not an Appication Mask, as uses in many BPQ32 programs.",
                     -1,10,10,353,18
@@ -191,33 +193,36 @@ BEGIN
     DEFPUSHBUTTON   "Save",3100,165,240,57,17,BS_CENTER | BS_VCENTER
 END
 
-FORWARDING DIALOG DISCARDABLE  0, 0, 381, 266
+FORWARDING DIALOG 0, 0, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "MS Sans Serif"
 BEGIN
-    LTEXT           "BBS",-1,80,40,57,13
+    LTEXT           "BBS",IDC_STATIC,80,40,57,13
     COMBOBOX        4001,75,55,66,60,CBS_SIMPLE | CBS_OEMCONVERT | CBS_SORT | 
                     CBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Connect Script",-1,80,130,57,13
+    LTEXT           "Connect Script",IDC_STATIC,80,130,57,13
     EDITTEXT        4002,75,145,66,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
-    LTEXT           "To Calls:",-1,165,40,57,13
+    LTEXT           "To Calls:",IDC_STATIC,165,40,57,13
     EDITTEXT        4003,165,55,66,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
     EDITTEXT        4005,165,145,101,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
-    LTEXT           "Hierarchical Routes",-1,165,130,70,12
-    LTEXT           "AT Calls:",-1,245,40,57,13
+    LTEXT           "Hierarchical Routes",IDC_STATIC,165,130,70,12
+    LTEXT           "AT Calls:",IDC_STATIC,245,40,57,13
     EDITTEXT        4004,245,55,66,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
     CONTROL         "Enable Forwarding",4000,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFT | WS_TABSTOP,75,215,111,8
+                    BS_LEFT | WS_TABSTOP,75,215,79,8
     CONTROL         "Request Reverse Forwarding",4006,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,75,230,109,8
+                    BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,74,229,107,8
     DEFPUSHBUTTON   "Save",4100,165,245,57,17,BS_CENTER | BS_VCENTER
     LTEXT           "Forwarding Rules are define here. BBS Records are created by setting the BBS flag on a User Record.",
-                    -1,5,5,368,10
+                    IDC_STATIC,5,5,368,10
     LTEXT           "The Enable Forwarding flag allows you to temporarily disable forwarding without losing the messages to be forwarded. ",
-                    -1,5,20,373,8
+                    IDC_STATIC,5,20,373,8
+    LTEXT           "Interval (Mins)",IDC_STATIC,168,215,44,11
+    EDITTEXT        IDC_FWDINT,220,214,26,11,ES_AUTOHSCROLL
 END
 
 5051 DIALOG DISCARDABLE  176, 132, 129, 68
@@ -385,54 +390,6 @@ BEGIN
                     WS_TABSTOP,299,147,35,10
     CONTROL         "",80,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
                     WS_TABSTOP,299,157,35,10
-    CONTROL         "",81,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,167,35,10
-    CONTROL         "",82,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,177,35,10
-    CONTROL         "",83,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,187,35,10
-    CONTROL         "",84,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,197,35,10
-    CONTROL         "",85,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,7,35,10
-    CONTROL         "",86,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,17,35,10
-    CONTROL         "",87,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,27,35,10
-    CONTROL         "",88,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,37,35,10
-    CONTROL         "",89,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,47,35,10
-    CONTROL         "",90,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,57,35,10
-    CONTROL         "",91,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,67,35,10
-    CONTROL         "",92,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,77,35,10
-    CONTROL         "",93,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,87,35,10
-    CONTROL         "",94,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,97,35,10
-    CONTROL         "",95,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,107,35,10
-    CONTROL         "",96,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,117,35,10
-    CONTROL         "",97,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,127,35,10
-    CONTROL         "",98,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,137,35,10
-    CONTROL         "",99,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,147,35,10
-    CONTROL         "",100,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,157,35,10
-    CONTROL         "",101,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,167,35,10
-    CONTROL         "",102,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,177,35,10
-    CONTROL         "",103,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,187,35,10
-    CONTROL         "",104,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,197,35,10
 END
 
 MAINT DIALOG DISCARDABLE  26, 5, 381, 266
@@ -588,46 +545,21 @@ END
 #endif    // APSTUDIO_INVOKED
 
 
-#ifndef _MAC
 /////////////////////////////////////////////////////////////////////////////
 //
-// Version
+// DESIGNINFO
 //
 
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,7
- PRODUCTVERSION 1,0,0,7
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
-#else
- FILEFLAGS 0x0L
-#endif
- FILEOS 0x40004L
- FILETYPE 0x2L
- FILESUBTYPE 0x0L
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
 BEGIN
-    BLOCK "StringFileInfo"
+    IDD_ABOUTBOX, DIALOG
     BEGIN
-        BLOCK "080904b0"
-        BEGIN
-            VALUE "CompanyName", "John Wiseman, G8BPQ\0"
-            VALUE "FileDescription", "Mail and Chat server for  G8BPQ's 32 Bit Switch\0"
-            VALUE "FileVersion", "1.0.0.7\0"
-            VALUE "InternalName", "BPQMailChat\0"
-            VALUE "LegalCopyright", "Copyright © 2009 John Wiseman G8BPQ\0"
-            VALUE "OriginalFilename", "BPQMailChat\0"
-            VALUE "ProductName", "BPQMailChat\0"
-            VALUE "ProductVersion", "1.0.0.7\0"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x809, 1200
+        RIGHTMARGIN, 279
+        BOTTOMMARGIN, 63
     END
 END
-
-#endif    // !_MAC
+#endif    // APSTUDIO_INVOKED
 
 
 /////////////////////////////////////////////////////////////////////////////

@@ -90,3 +90,9 @@
 #define BPQLogMonitor 1051
 #define BPQSendDisconnected 1052
 
+#define IDC_NODES 501
+#define IDC_USERS 502
+#define IDC_LINKS 503
+#define IDC_SYSOPMSGS 504
+#define IDC_FWDINT 505
+

@@ -51,6 +51,7 @@
 #include "BPQMailChat.h"
 #include "bpq32.h"
 
+#include "resrc1.h"
 #include "resource.h"
 
 #include "md5.h"

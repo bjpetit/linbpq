@@ -28,10 +28,8 @@ HMENU hMenu;		// handle of menu
 
 
 #define InputBoxHeight 25
-RECT Rect;
-//RECT MonRect;
+RECT ConsoleRect;
 RECT OutputRect;
-//RECT SplitRect;
 
 int Height, Width, LastY;
 
@@ -104,27 +102,27 @@ BOOL CreateConsole()
 
 	DrawMenuBar(hWnd);	
 
-
-
 	// Retrieve the handlse to the edit controls. 
 
 	hwndInput = GetDlgItem(hConsole, 118); 
 	hwndOutput = GetDlgItem(hConsole, 117); 
-//	hwndSplit = GetDlgItem(hConsole, 119); 
-//	hwndMon = GetDlgItem(hConsole, 116); 
  
 	// Set our own WndProcs for the controls. 
 
 	wpOrigInputProc = (WNDPROC) SetWindowLong(hwndInput, GWL_WNDPROC, (LONG) InputProc); 
 	wpOrigOutputProc = (WNDPROC)SetWindowLong(hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
-//	wpOrigMonProc = (WNDPROC)SetWindowLong(hwndMon, GWL_WNDPROC, (LONG)MonProc);
-//	wpOrigSplitProc = (WNDPROC)SetWindowLong(hwndSplit, GWL_WNDPROC, (LONG)SplitProc);
 
-		if (cfgMinToTray)
-			AddTrayMenuItem(hConsole, "Mail/Chat Console");
-
+	if (cfgMinToTray)
+		AddTrayMenuItem(hConsole, "Mail/Chat Console");
 
 	ShowWindow(hConsole, SW_SHOWNORMAL);
+
+	if (ConsoleRect.right < 100 || ConsoleRect.bottom < 100)
+	{
+		GetWindowRect(hConsole,	&ConsoleRect);
+	}
+
+	MoveWindow(hConsole,ConsoleRect.left,ConsoleRect.top, ConsoleRect.right-ConsoleRect.left, ConsoleRect.bottom-ConsoleRect.top, TRUE);
 
 	MoveWindows();
 
@@ -281,7 +279,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		
 			// Remove the subclass from the edit control. 
 
-			GetWindowRect(hWnd,	&Rect);	// For save soutine
+			GetWindowRect(hWnd,	&ConsoleRect);	// For save soutine
 
             SetWindowLong(hwndInput, GWL_WNDPROC, 
                 (LONG) wpOrigInputProc); 
@@ -374,7 +372,8 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			kbbuf[0]=0x1a;
 			kbbuf[1]=13;
 
-//			SendMsg(Stream, &kbbuf[0], 2);
+			ProcessLine(Console, user, &kbbuf[0], 2);
+
 
 			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
 

@@ -446,6 +446,8 @@ void makelinks(void);
 VOID * _zalloc(int len);
 VOID FreeChatMemory();
 VOID ChatTimer();
+VOID nputs(CIRCUIT * conn, char * buf);
+
 
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
@@ -599,8 +601,8 @@ void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
 void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
-void ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
-void ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
+int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
+int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
 int GetUserMsg(int m, char * Call, BOOL SYSOP);
 void Flush(ConnectionInfo * conn);
@@ -654,6 +656,7 @@ VOID SaveChatConfig();
 VOID SaveISPConfig();
 VOID SaveFWDConfig();
 VOID SaveMAINTConfig();
+VOID SaveWindowPosns();
 VOID ReinitializeFWDStruct(struct UserInfo * user);
 VOID CopyBIDDatabase();
 VOID CopyMessageDatabase();
@@ -740,6 +743,8 @@ extern BOOL SMTPMsgCreated;
 
 extern HINSTANCE hInst;
 extern HWND hWnd;
+extern RECT MainRect;
+
 extern char BBSName[];
 extern char HRoute[];
 extern int BBSApplNum;
@@ -776,9 +781,11 @@ extern char ISPAccountName[];
 extern char ISPAccountPass[];
 extern char EncryptedISPAccountPass[];
 extern int EncryptedPassLen;
+extern char *month[]; 
 
 extern CIRCUIT * Console;
 extern HWND hConsole;
+extern RECT ConsoleRect;
 
 
 extern int PR;
@@ -793,4 +800,6 @@ extern int AB;
 extern struct Override ** LTFROM;
 extern struct Override ** LTTO;
 extern struct Override ** LTAT;
+
+extern int FWDInterval;
 

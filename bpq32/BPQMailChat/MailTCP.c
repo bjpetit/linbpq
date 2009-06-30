@@ -87,11 +87,21 @@ void WriteLogLine(char * Msg, int MsgLen, int Flags)
 {
 	int cnt;
 	char CRLF[2] = {0x0d,0x0a};
+	struct tm * tm;
+	char Stamp[20];
+	time_t T;
 
 	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) OpenLogfile(Flags);
 
 	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) return;
 
+	T = time(NULL);
+	tm = gmtime(&T);	
+	
+	wsprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d ",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+	WriteFile(LogHandle[Flags] ,Stamp , strlen(Stamp), &cnt, NULL);
 	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
 	WriteFile(LogHandle[Flags] ,CRLF , 2, &cnt, NULL);
 }
@@ -99,7 +109,6 @@ void WriteLogLine(char * Msg, int MsgLen, int Flags)
 int SendSock(SOCKET sock, char * msg)
 {
 	WriteLogLine(msg,  strlen(msg), LOG_TCP);
-	WriteLogLine("\r\n", 2, LOG_TCP);
 	send(sock, msg, strlen(msg), 0);
 	return send(sock, "\r\n", 2, 0);
 }
@@ -119,23 +128,26 @@ VOID __cdecl sockprintf(SOCKET sock, const char * format, ...)
 
 VOID TCPTimer()
 {
-	if (SMTPMsgCreated)
-		if (ISPSMTPPort)
-		{
-			SendtoISP();
-			SMTPMsgCreated=FALSE;
-		}
 
 	POP3Timer+=10;
 
 	if (POP3Timer > ISPPOP3Interval)			// 5 mins
 	{
 		POP3Timer=0;
+
+		if (ISPSMTPPort && ISP_Gateway_Enabled)
+			SendtoISP();
+		
 		if (ISPPOP3Port  && ISP_Gateway_Enabled)
 			POP3Connect(ISPPOP3Name, ISPPOP3Port);
 	}
-
+	else
+	{
+		if (SMTPMsgCreated && ISPSMTPPort && ISP_Gateway_Enabled)
+			SendtoISP();
+	}
 }
+
 BOOL InitialiseTCP()
 {
 	int			  Error;              // catches return value of WSAStartup
@@ -164,11 +176,6 @@ BOOL InitialiseTCP()
             "BPQMailChat", MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
         return FALSE;
 	}
-
-	if (ISP_Gateway_Enabled)
-		if (ISPSMTPPort)
-			SendtoISP();						// See if any ISP Messages to send
-
 
 //	Create listening sockets
 
@@ -1664,7 +1671,6 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	}
 
 
-
 }	
 
 BOOL SendtoISP()
@@ -1680,18 +1686,17 @@ BOOL SendtoISP()
 	{
 		Msg=MsgHddrPtr[m];
 
-		if ((Msg->status == 'N') && (Msg->to[0] == 0))
+		if ((Msg->status == 'N') && (Msg->to[0] == 0) && (Msg->from[0] != 0))
 		{
 			// Make sure message exists
 
-		Body = ReadMessageFile(Msg->number);
+			Body = ReadMessageFile(Msg->number);
 
-		if (Body == NULL)
-		{
-			Msg->status = 'K';
-			return FALSE;
-		}
-
+			if (Body == NULL)
+			{
+				Msg->status = 'K';
+				return FALSE;
+			}
 			SMTPConnect(ISPSMTPName, ISPSMTPPort, Msg, Body);
 
 			return TRUE;

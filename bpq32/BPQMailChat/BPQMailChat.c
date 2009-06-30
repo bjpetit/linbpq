@@ -4,6 +4,8 @@
 
 #include "stdafx.h"
 
+#include "GetVersion.h"
+
 #define MAX_LOADSTRING 100
 
 // Global Variables:
@@ -12,6 +14,7 @@ TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 
 HWND MainWnd;
+RECT MainRect;
 HMENU hActionMenu;
 HMENU hLogMenu;
 HMENU hDisMenu;									// Disconnect Menu Handle
@@ -34,7 +37,7 @@ struct UserInfo * BBSChain = NULL;						// Chain of users that are BBSes
 struct MsgInfo ** MsgHddrPtr=NULL;
 int NumberofMessages=0;
 
-int FirstMessagetoForward=1;					// Lowest Message wirh a forward bit set - limits search
+int FirstMessagetoForward=0;					// Lowest Message wirh a forward bit set - limits search
 
 BIDRec ** BIDRecPtr=NULL;
 int NumberofBIDs=0;
@@ -104,8 +107,8 @@ char BaseDir[MAX_PATH];
 
 char MailDir[MAX_PATH];
 
-int FWDInterval = 300;		// 5 Mins
-int FWDTimer = 300;
+int FWDInterval = 5;		// 5 Mins
+int FWDTimer = 9999999;
 
 BOOL ALLOWCOMPRESSED = TRUE;
 
@@ -180,7 +183,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		DeleteTrayMenuItem(hConsole);
 	}
 
-
 	// Free all allocated memory
 
 	for (n = 0; n <= NumberofUsers; n++)
@@ -216,6 +218,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	_CrtDumpMemoryLeaks();
 
+	if (hConsole)
+		GetWindowRect(hConsole,	&ConsoleRect);	// For save soutine
+
+	SaveWindowPosns();
 	
 	return (int) msg.wParam;
 }
@@ -279,19 +285,54 @@ HWND hWnd;
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
+	char Title[80];
 	WSADATA WsaData;
 	HMENU hMenu;		// handle of menu 
+	HKEY hKey=0;
+	int retCode,Type,Vallen;
+	char Size[80];
 
-   hInst = hInstance;
+	// Get Window Size  From Registry
 
-   hWnd=CreateDialog(hInst,szWindowClass,0,NULL);
 
-   if (!hWnd)
-   {
-      return FALSE;
-   }
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
 
-   MainWnd=hWnd;
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+		RegQueryValueEx(hKey,"WindowSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+		RegCloseKey(hKey);
+	}
+
+	hInst = hInstance;
+
+	hWnd=CreateDialog(hInst,szWindowClass,0,NULL);
+
+	if (!hWnd)
+	{
+		return FALSE;
+	}
+	MainWnd=hWnd;
+
+	if (MainRect.right < 100 || MainRect.bottom < 100)
+	{
+		GetWindowRect(hWnd,	&MainRect);
+	}
+
+	MoveWindow(hWnd,MainRect.left,MainRect.top, MainRect.right-MainRect.left, MainRect.bottom-MainRect.top, TRUE);
+
+   GetVersionInfo(NULL);
+
+   wsprintf(Title,"G8BPQ Mail and Chat Server Version %s", VersionString);
+
+	SetWindowText(hWnd,Title);
 
    	// Get handles fou updating menu items
 
@@ -307,10 +348,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    CheckTimer();
 
-   SetTimer(hWnd,1,10000,NULL);		// BPQ TImer Check
-   SetTimer(hWnd,2,100,NULL);		// Send to Node
-
-	cfgMinToTray = GetMinimizetoTrayFlag();
+ 	cfgMinToTray = GetMinimizetoTrayFlag();
 
 	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
 		if (cfgMinToTray)
@@ -539,12 +577,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// TODO: Add any drawing code here...
 		EndPaint(hWnd, &ps);
 		break;
+
 	case WM_DESTROY:
 
+		GetWindowRect(MainWnd,	&MainRect);	// For save soutine
 		KillTimer(hWnd,1);
 		KillTimer(hWnd,2);
 		PostQuitMessage(0);
 		break;
+
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
@@ -618,6 +659,18 @@ int ShowConnections()
 		}
 		SendDlgItemMessage(MainWnd,100,LB_ADDSTRING,0,(LPARAM)msg);
 	}
+
+	n = 0;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		if (MsgHddrPtr[i]->status == 'N')
+			if (_stricmp(MsgHddrPtr[i]->to, SYSOPCall) == 0)
+				n++;
+	}
+
+	SetDlgItemInt(hWnd, IDC_SYSOPMSGS, n, FALSE);
+
 
 	return 0;
 }
@@ -749,8 +802,8 @@ BOOL Initialise()
 	CopyMessageDatabase();
 	CopyUserDatabase();
 
-	GetUserDatabase();
 	GetMessageDatabase();
+	GetUserDatabase();
 	GetBIDDatabase();
 	 
 	// Allocate Streams
@@ -778,6 +831,9 @@ BOOL Initialise()
 	{
 		AddTrayMenuItem(MainWnd, "Mail/Chat Server");
 	}
+	
+	SetTimer(hWnd,1,10000,NULL);		// BPQ TImer Check
+	SetTimer(hWnd,2,100,NULL);		// Send to Node
 
 	return TRUE;
 }
@@ -868,7 +924,7 @@ int Connected(Stream)
 			{
 				conn->Flags |= CHATMODE;
 
-				BBSputs(conn, ChatSID);
+				nputs(conn, ChatSID);
 			}
 			else
 			{
@@ -1313,7 +1369,7 @@ VOID GetMessageDatabase()
 	HANDLE Handle;
 	int ReadLen;
 	struct MsgInfo * Msg;
-	struct UserInfo * user;
+	char * MsgBytes;
 
 	Handle = CreateFile(MsgDatabasePath,
 					GENERIC_READ,
@@ -1363,6 +1419,18 @@ Next:
 
 	if (ReadLen > 0)
 	{
+		// Validate Header
+
+		if (MsgRec.type == 0)
+			goto Next;
+
+		MsgBytes = ReadMessageFile(MsgRec.number);
+
+		if (MsgBytes)
+			free(MsgBytes);
+		else
+			goto Next;
+
 		Msg = AllocateMsgRecord();
 		memcpy(Msg, &MsgRec,  sizeof (MsgRec));
 
@@ -1370,19 +1438,16 @@ Next:
 
 		if (memcmp(MsgRec.fbbs, zeros, NBMASK) != 0)
 		{
-			for (user = BBSChain; user; user = user->BBSNext)
-			{
-				if (check_fwd_bit(MsgRec.fbbs, user->BBSNumber))
-				{
-					user->ForwardingInfo->MsgCount++;
-					if (FirstMessagetoForward == 0)
-						FirstMessagetoForward = NumberofMessages;			// limit search
-				}
-			}
+			if (FirstMessagetoForward == 0)
+				FirstMessagetoForward = NumberofMessages;			// limit search
 		}
 
 		goto Next;
 	}
+
+	if (FirstMessagetoForward == 0)
+		FirstMessagetoForward = NumberofMessages;			// limit search
+
 
 	CloseHandle(Handle);
 
@@ -1523,12 +1588,12 @@ VOID SaveBIDDatabase()
 	return;
 }
 
-BIDRec  * LookupBID(char * BID)
+BIDRec * LookupBID(char * BID)
 {
 	BIDRec * ptr = NULL;
 	int i;
 
-	for (i=1; i < NumberofBIDs; i++)
+	for (i=1; i <= NumberofBIDs; i++)
 	{
 		ptr = BIDRecPtr[i];
 
@@ -1687,9 +1752,9 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 				if (user->ForwardingInfo->Forwarding)
 				{
 					BBSputs(conn, "Already Connected\r");
-					Disconnect(conn->BPQStream);
 					Flush(conn);
 					Sleep(500);
+					Disconnect(conn->BPQStream);
 					return;
 				}
 
@@ -1778,7 +1843,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
 		BBSputs(conn, "N Name - Set Name\r");
 		BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me\r");
-		BBSputs(conn, "S - Send Message\r");
+		BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, SR Num - Send Reply\r");
 
 		SendPrompt(conn, user);
 
@@ -2281,51 +2346,62 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 	case 'M':			// LM - List Mine
 
-		ListMessagesTo(conn, user, user->Call);
+		if (ListMessagesTo(conn, user, user->Call) == 0)
+			BBSputs(conn, "No Messages found\r");
 		return;
 
 	case '>':			// L> - List to 
 
 		if (Arg1)
-			ListMessagesTo(conn, user, Arg1);
+			if (ListMessagesTo(conn, user, Arg1) == 0)
+				BBSputs(conn, "No Messages found\r");
+		
 		
 		return;
 
 	case '<':
 
 		if (Arg1)
-			ListMessagesFrom(conn, user, Arg1);
+			if (ListMessagesFrom(conn, user, Arg1) == 0);
+				BBSputs(conn, "No Messages found\r");
 		
 		return;
 
 	}
 }
 	
-void ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 {
-	int i;
+	int i, Msgs = 0;
 
 	for (i=NumberofMessages; i>0; i--)
 	{
 		if (_stricmp(MsgHddrPtr[i]->to, Call) == 0)
+		{
+			Msgs++;
 			ListMessage(MsgHddrPtr[i], conn);
+		}
 	}
-
-
+	
+	return(Msgs);
 }
 
-void ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 {
-	int i;
+	int i, Msgs = 0;
 
 	for (i=NumberofMessages; i>0; i--)
 	{
 		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
+		{
+			Msgs++;
 			ListMessage(MsgHddrPtr[i], conn);
+		}
 	}
-
-
+	
+	return(Msgs);
 }
+
 int GetUserMsg(int m, char * Call, BOOL SYSOP)
 {
 	struct MsgInfo * Msg;
@@ -2557,25 +2633,19 @@ Title        : Error-report
 
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
 {
-	struct tm *newtime;
-    char Time[80];
-	static char Date[]="xx-xxx hh:mm";
-  
-	newtime = gmtime(&Datim);
-	asctime_s(Time, sizeof(Time), newtime);
-	Date[0]=Time[8];
-	Date[1]=Time[9];
-	Date[3]=Time[4];
-	Date[4]=Time[5];
-	Date[5]=Time[6];
+	struct tm *tm;
+	static char Date[]="xx-xxx hh:mmZ";
+
+	tm = gmtime(&Datim);
+	
+	wsprintf(Date,"%02d-%3s %02d:%02dZ",
+					tm->tm_mday, month[tm->tm_mon], tm->tm_hour, tm->tm_min);
 
 	if (DateOnly)
 	{
 		Date[6]=0;
 		return Date;
 	}
-
-	memcpy(&Date[6], &Time[10], 6);
 	
 	return Date;
 }
@@ -2589,12 +2659,19 @@ BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	char * ATBBS = NULL;
 	char * ptr;
 	char seps[] = " \t\r";
+	struct MsgInfo * OldMsg;
+	struct MsgInfo * Msg;
+	char OldTitle[62];
 
+	int msgno;
 
 	switch (toupper(Cmd[1]))
 	{
 
 	case 0:					// Just S means SP
+		
+		Cmd[1] = 'P';
+
 	case 'P':
 	case 'B':
 				
@@ -2645,6 +2722,70 @@ BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 
 		return CreateMessage(conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID);	
+
+	case 'R':
+				
+		if (Arg1 == NULL)
+		{
+			nodeprintf(conn, "*** Error: Message Number is missing\r");
+			return FALSE;
+		}
+
+		msgno = atoi(Arg1);
+		
+		OldMsg = FindMessage(user->Call, msgno, conn->sysop);
+
+		if (OldMsg == NULL)
+		{
+			nodeprintf(conn, "Message %d not found\r", msgno);
+			return FALSE;
+		}
+
+		// Create a temp msg header entry
+
+		Msg = malloc(sizeof (struct MsgInfo));
+
+		if (Msg == 0)
+		{
+			CriticalErrorHandler("malloc failed for new message header");
+			return FALSE;
+		}
+	
+		memset(Msg, 0, sizeof (struct MsgInfo));
+
+		conn->TempMsg = Msg;
+
+		Msg->type = 'P';
+		Msg->status = 'N';
+		Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+		strcpy(Msg->to, OldMsg->from);
+		strcpy(Msg->from, user->Call);
+
+		strcpy(OldTitle, OldMsg->title);
+
+		if (strlen(OldTitle) > 57) OldTitle[57] = 0;
+
+		strcpy(Msg->title, "Re:");
+		strcat(Msg->title, OldTitle);
+
+		// Create initial buffer of 10K. Expand if needed later
+
+		conn->MailBuffer=malloc(10000);
+		conn->MailBufferSize=10000;
+
+		if (conn->MailBuffer == NULL)
+		{
+			nodeprintf(conn, "Failed to create Message Buffer\r");
+			return FALSE;
+		}
+
+		conn->Flags |= GETTINGMESSAGE;
+
+		nodeprintf(conn, "Enter Message Text (end with /ex or ctrl/z)\r");
+
+		return TRUE;
+
 	}
 
 	nodeprintf(conn, "*** Error: Invalid Send option %c\r", Cmd[1]);
@@ -3296,7 +3437,7 @@ VOID FWDTimerProc()
 {
 	FWDTimer+=10;
 
-	if (FWDTimer > FWDInterval)			// 5 mins
+	if (FWDTimer > FWDInterval * 60)			// 5 mins
 	{
 		FWDTimer=0;
 		StartForwarding(0);
@@ -3361,7 +3502,6 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	BOOL Found = FALSE;
 	char RLine[100];
 
-
 	conn->FBBIndex = 0;
 
 	if (user->ForwardingInfo->MsgCount == 0)
@@ -3371,7 +3511,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	{
 		Msg=MsgHddrPtr[m];
 
-		if (check_fwd_bit(Msg->fbbs, user->BBSNumber))
+		if (Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
 		{
 			// Message to be sent - do a consistancy check (State, etc)
 
@@ -3443,6 +3583,12 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		
+		if (MsgBytes == 0)
+		{
+			MsgBytes = _strdup("Message file not found\r\r");
+			conn->FwdMsg->length = strlen(MsgBytes);
+		}
+
 		now = time(NULL);
 
 		tm = gmtime(&now);	
