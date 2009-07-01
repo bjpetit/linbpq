@@ -15,6 +15,8 @@
 //		Open \\.\com instead of //./COM
 //		Extra Dignostics
 
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "kiss.h"
 
 int WritetoConsoleLocal(char * buff);

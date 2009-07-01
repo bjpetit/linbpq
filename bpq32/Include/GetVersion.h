@@ -1,6 +1,7 @@
 
 char VersionString[50];
 char VersionStringWithBuild[50];
+int Ver[4];
 
 VOID GetVersionInfo(char * File)
 {
@@ -35,6 +36,10 @@ VOID GetVersionInfo(char * File)
 					LOWORD(HG->dwFileVersionLS),
 					isDebug);
 
+	Ver[0] = HIWORD(HG->dwFileVersionMS);
+	Ver[1] = LOWORD(HG->dwFileVersionMS);
+	Ver[2] = HIWORD(HG->dwFileVersionLS);
+	Ver[3] = LOWORD(HG->dwFileVersionLS);
 
 	return;
 

@@ -2,11 +2,6 @@
 //
 #include "resrc1.h"
 
-// Generated Help ID header file
-#define APSTUDIO_HIDDEN_SYMBOLS
-#include "resrc1.hm"
-#undef APSTUDIO_HIDDEN_SYMBOLS
-
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -44,24 +39,27 @@ IDI_SMALL               ICON    DISCARDABLE     "icon2.ico"
 // Dialog
 //
 
-BPQMAILCHAT DIALOG DISCARDABLE  120, 50, 294, 125
+BPQMAILCHAT DIALOG DISCARDABLE  120, 50, 294, 165
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
     WS_SYSMENU
 CAPTION "G8BPQ Mail and Chat Server 1.0.0.10 June 2009"
 CLASS "BPQMailChat"
 FONT 8, "FixedSys"
 BEGIN
-    LTEXT           " User      Callsign Stream Conf      Queue",101,0,2,196,
-                    8,NOT WS_GROUP
+    LTEXT           " User      Callsign Stream Conf      Queue",101,0,2,196,10
+    LTEXT           "UTC",IDC_STATIC,197,2,15,10
+    LTEXT           "Local",IDC_STATIC,241,2,21,10
+    LTEXT	        "", IDC_UTC,215,2,25,10
+    LTEXT           "", IDC_LOCAL,265,2,25,10
     LISTBOX         100,2,10,190,110,WS_VSCROLL
-    LTEXT           "Chat Nodes",IDC_STATIC,195,11,40,8
-    EDITTEXT        IDC_NODES,241,10,20,10,ES_AUTOHSCROLL
-    LTEXT           "Chat Users",IDC_STATIC,195,21,40,10
-    EDITTEXT        IDC_USERS,241,20,20,10,ES_AUTOHSCROLL
-    LTEXT           "Chat Links",IDC_STATIC,195,31,40,10
-    EDITTEXT        IDC_LINKS,241,30,20,10,ES_AUTOHSCROLL
-    LTEXT           "Sysop Msgs",IDC_STATIC,195,45,40,10
-    EDITTEXT        IDC_SYSOPMSGS,241,44,20,10,ES_AUTOHSCROLL
+    LTEXT           "Chat Nodes",IDC_STATIC,197,25,40,10
+    LTEXT	        "", IDC_NODES,243,25,20,10
+    LTEXT           "Chat Users",IDC_STATIC,197,35,40,10
+    LTEXT	        "", IDC_USERS,243,35,20,10
+    LTEXT           "Chat Links",IDC_STATIC,197,45,40,10
+    LTEXT	        "", IDC_LINKS,243,45,20,10
+    LTEXT           "Sysop Msgs",IDC_STATIC,197,60,40,10
+    LTEXT	        "", IDC_SYSOPMSGS,243,60,20,10
 END
 
 BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
@@ -77,6 +75,17 @@ BEGIN
     EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
 END
 
+BPQMONWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
+STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
+    WS_SYSMENU | WS_THICKFRAME
+CAPTION "Mail & Chat Monitor"
+MENU MENU_2
+CLASS "BPQMONWINDOW"
+FONT 8, "FixedSys"
+BEGIN
+    LISTBOX         121,5,156,290,109,LBS_MULTIPLESEL | LBS_NOINTEGRALHEIGHT | 
+                    WS_VSCROLL | WS_HSCROLL
+END
 
 102 DIALOG DISCARDABLE  0, 0, 385, 300
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
@@ -193,9 +202,8 @@ BEGIN
     DEFPUSHBUTTON   "Save",3100,165,240,57,17,BS_CENTER | BS_VCENTER
 END
 
-FORWARDING DIALOG 0, 0, 381, 266
+FORWARDING DIALOG DISCARDABLE  0, 0, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
-FONT 8, "MS Sans Serif"
 BEGIN
     LTEXT           "BBS",IDC_STATIC,80,40,57,13
     COMBOBOX        4001,75,55,66,60,CBS_SIMPLE | CBS_OEMCONVERT | CBS_SORT | 
@@ -221,7 +229,7 @@ BEGIN
                     IDC_STATIC,5,5,368,10
     LTEXT           "The Enable Forwarding flag allows you to temporarily disable forwarding without losing the messages to be forwarded. ",
                     IDC_STATIC,5,20,373,8
-    LTEXT           "Interval (Mins)",IDC_STATIC,168,215,44,11
+    LTEXT           "Interval(Mins)",IDC_STATIC,168,215,45,11
     EDITTEXT        IDC_FWDINT,220,214,26,11,ES_AUTOHSCROLL
 END
 
@@ -465,6 +473,7 @@ BEGIN
     POPUP "Windows"
     BEGIN
         MENUITEM "Console",                     IDM_CONSOLE
+        MENUITEM "Monitor",                     IDM_MONITOR
     END
     POPUP "&Help"
     BEGIN
@@ -486,6 +495,21 @@ BEGIN
         MENUITEM "Clear Output Window",         BPQCLEAROUT
     END
     MENUITEM "Help",                        BPQHELP
+END
+
+MENU_2 MENU DISCARDABLE 
+BEGIN
+    POPUP "Monitor"
+    BEGIN
+        MENUITEM "Monitor BBS",                 MONBBS
+        MENUITEM "Monitor CHAT",                MONCHAT
+        MENUITEM "Monitor TCP",                 MONTCP
+    END
+    POPUP "Edit"
+    BEGIN
+        MENUITEM "Copy Monitor Window",         BPQCOPYOUT
+        MENUITEM "Clear Monitor Window",        BPQCLEAROUT
+    END
 END
 
 
@@ -553,10 +577,9 @@ END
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO DISCARDABLE 
 BEGIN
-    IDD_ABOUTBOX, DIALOG
+    "BPQMAILCHAT", DIALOG
     BEGIN
-        RIGHTMARGIN, 279
-        BOTTOMMARGIN, 63
+        BOTTOMMARGIN, 125
     END
 END
 #endif    // APSTUDIO_INVOKED

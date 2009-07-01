@@ -683,6 +683,12 @@ int WritetoConsoleWindow(char * Msg, int len);
 int ToggleParam(HWND hWnd, BOOL * Param, int Item);
 void CopyToClipboard(HWND hWnd);
 
+// Monitor Routines
+
+BOOL CreateMonitor();
+int WritetoMonitorWindow(char * Msg, int len);
+
+
 
 // TCP Routines
 
@@ -704,7 +710,7 @@ BOOL POP3Connect(char * Host, int Port);
 VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen);
-void WriteLogLine(char * Msg, int MsgLen, int Flags);
+void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags);
 
 BOOL SendtoISP();
 
@@ -727,6 +733,7 @@ extern char BBSName[];
 extern char SYSOPCall[];
 extern char BBSSID[];
 extern char NewUserPrompt[];
+extern int Ver[4];
 
 extern struct MsgInfo ** MsgHddrPtr;
 extern int NumberofMessages;
@@ -786,6 +793,9 @@ extern char *month[];
 extern CIRCUIT * Console;
 extern HWND hConsole;
 extern RECT ConsoleRect;
+
+extern RECT MonitorRect;
+extern HWND hMonitor;
 
 
 extern int PR;

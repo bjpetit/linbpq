@@ -1341,6 +1341,9 @@ VOID SaveWindowPosns()
 		wsprintf(Size,"%d,%d,%d,%d",ConsoleRect.left,ConsoleRect.right,ConsoleRect.top,ConsoleRect.bottom);
 		retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
+		wsprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
+		retCode = RegSetValueEx(hKey,"MonitorSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
 		wsprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
 		retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
@@ -1475,6 +1478,12 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		sscanf(Size,"%d,%d,%d,%d",&ConsoleRect.left,&ConsoleRect.right,&ConsoleRect.top,&ConsoleRect.bottom);
+
+		Vallen=80;
+		RegQueryValueEx(hKey,"MonitorSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		sscanf(Size,"%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom);
 
 		Vallen=80;
 		RegQueryValueEx(hKey,"WindowSize",0,			

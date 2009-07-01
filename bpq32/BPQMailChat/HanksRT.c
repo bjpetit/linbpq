@@ -63,7 +63,7 @@ VOID nputs(CIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
-	WriteLogLine(buf,  strlen(buf), LOG_CHAT);
+	WriteLogLine('>',buf,  strlen(buf), LOG_CHAT);
 	QueueMsg(conn, buf, strlen(buf));
 }
 
@@ -71,7 +71,7 @@ VOID nputc(CIRCUIT * conn, char buf)
 {
 	// Seems to send buf to socket
 
-	WriteLogLine(&buf,  1, LOG_CHAT);
+	WriteLogLine('>',&buf,  1, LOG_CHAT);
 	QueueMsg(conn, &buf, 1);
 }
 
@@ -1245,7 +1245,7 @@ static void node_keepalive()
 		for (circuit = circuit_hd; circuit; circuit = circuit->next)
 		{
 			if (circuit->flags & p_linked)
-				nprintf(circuit, "%c%c%s %s\r", FORMAT, id_keepalive, OurNode, OurNode);
+				nprintf(circuit, "%c%c%s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call);
 		}
 	}
 }
@@ -1261,9 +1261,7 @@ VOID ChatTimer()
 	USER *user;
 	CIRCUIT *c;
 
-
 	i = 0;
-
 	for (user = user_hd; user; user = user->next)
 	{
 		i++;
@@ -1271,7 +1269,6 @@ VOID ChatTimer()
 	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
 
 	i = 0;
-
 	for (node = node_hd; node; node = node->next)
 	{
 		i++;
@@ -1279,7 +1276,6 @@ VOID ChatTimer()
 	SetDlgItemInt(hWnd, IDC_NODES, i, FALSE);
 
 	i = 0;
-
 	for (c = circuit_hd; c; c = c->next)
 	{
 		if (c->flags & p_linked) 
@@ -1287,11 +1283,7 @@ VOID ChatTimer()
 	}
 	SetDlgItemInt(hWnd, IDC_LINKS,  i, FALSE);
 
-
-
 	ChatTmr++;
-
-
 
 	if (ChatTmr > 60) // 10 Mins
 	{

@@ -23,6 +23,10 @@
 
 // Add Start Minimized Option
 
+// Version 2.0.6 June 2009
+
+// Add Option to send *** Disconnnected on disocnnect
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -43,6 +47,7 @@ HBRUSH bgBrush;
 
 HINSTANCE hInst; 
 char AppName[] = "BPQTerm 32";
+char ClassName[] = "BPQMAINWINDOW";
 char Title[80];
 
 char ClassName[] = "BPQMAINWINDOW";
@@ -138,6 +143,8 @@ BOOL Bells = FALSE;
 BOOL StripLF = FALSE;
 BOOL LogMonitor = FALSE;
 BOOL LogOutput = FALSE;
+BOOL SendDisconnected = TRUE;
+
 
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
@@ -256,6 +263,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		retCode = RegSetValueEx(hKey,"PortMask",0,REG_DWORD,(BYTE *)&portmask,4);
 		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
 		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
+		retCode = RegSetValueEx(hKey,"SendDisconnected",0,REG_DWORD,(BYTE *)&SendDisconnected,4);
 		retCode = RegSetValueEx(hKey,"ApplMask",0,REG_DWORD,(BYTE *)&applmask,4);
 		retCode = RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
 		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
@@ -397,6 +405,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"StripLF",0,			
 			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "SendDisconnected",0,			
+			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
+	
+
 	
 		Vallen=8;
 		retCode = RegQueryValueEx(hKey,"Split",0,			
@@ -513,14 +527,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		CheckMenuItem(hMenu,BPQAUTOCONNECT,MF_UNCHECKED);
 
   	if (Bells & 1)
-		CheckMenuItem(hMenu,BPQBELLS,MF_CHECKED);
+		CheckMenuItem(hMenu,BPQBELLS, MF_CHECKED);
 	else
-		CheckMenuItem(hMenu,BPQBELLS,MF_UNCHECKED);
+		CheckMenuItem(hMenu,BPQBELLS, MF_UNCHECKED);
+
+  	if (SendDisconnected & 1)
+		CheckMenuItem(hMenu,BPQSendDisconnected, MF_CHECKED);
+	else
+		CheckMenuItem(hMenu,BPQSendDisconnected, MF_UNCHECKED);
 
   	if (StripLF & 1)
-		CheckMenuItem(hMenu,BPQStripLF,MF_CHECKED);
+		CheckMenuItem(hMenu,BPQStripLF, MF_CHECKED);
 	else
-		CheckMenuItem(hMenu,BPQStripLF,MF_UNCHECKED);
+		CheckMenuItem(hMenu,BPQStripLF, MF_UNCHECKED);
 
 	DrawMenuBar(hWnd);	
 
@@ -711,6 +730,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQLogOutput:
 
 			ToggleParam(hWnd, &LogOutput, BPQLogOutput);
+			break;
+
+		case BPQSendDisconnected:
+
+			ToggleParam(hWnd, &SendDisconnected, BPQSendDisconnected);
 			break;
 
 		case BPQLogMonitor:
@@ -1058,12 +1082,18 @@ DoStateChange(HWND hWnd)
 
 		}
 		else
-		{
+		{	
 			CONNECTED=FALSE;
 			wsprintf(Title,"BPQTerminal Version %s - using stream %d - Disconnected",VersionString,Stream);
 			SetWindowText(hWnd,Title);
 			DisableDisconnectMenu(hWnd);
 			EnableConnectMenu(hWnd);
+
+			if (SendDisconnected)
+			{
+				int index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) "*** Disconnected");		
+				SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+			}
 		}
 	}
 

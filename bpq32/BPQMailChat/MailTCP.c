@@ -60,55 +60,10 @@ void decodeblock( unsigned char in[4], unsigned char out[3] );
 
 
 
-HANDLE LogHandle[3] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
-
-char * Logs[3] = {"BBS", "CHAT", "TCP"};
-
-BOOL OpenLogfile(int Flags)
-{
-	UCHAR FN[MAX_PATH];
-
-	wsprintf(FN,"%s\\Log_%s.txt", BaseDir, Logs[Flags]);
-
-	LogHandle[Flags] = CreateFile(FN,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					OPEN_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-
-	SetFilePointer(LogHandle[Flags], 0, 0, FILE_END);
-
-	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
-}
-
-void WriteLogLine(char * Msg, int MsgLen, int Flags)
-{
-	int cnt;
-	char CRLF[2] = {0x0d,0x0a};
-	struct tm * tm;
-	char Stamp[20];
-	time_t T;
-
-	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) OpenLogfile(Flags);
-
-	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) return;
-
-	T = time(NULL);
-	tm = gmtime(&T);	
-	
-	wsprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d ",
-				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
-
-	WriteFile(LogHandle[Flags] ,Stamp , strlen(Stamp), &cnt, NULL);
-	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
-	WriteFile(LogHandle[Flags] ,CRLF , 2, &cnt, NULL);
-}
 
 int SendSock(SOCKET sock, char * msg)
 {
-	WriteLogLine(msg,  strlen(msg), LOG_TCP);
+	WriteLogLine('>',msg,  strlen(msg), LOG_TCP);
 	send(sock, msg, strlen(msg), 0);
 	return send(sock, "\r\n", 2, 0);
 }
@@ -509,7 +464,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, LOG_TCP);
+	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
@@ -1028,7 +983,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, LOG_TCP);
+	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
 
 	if(memcmp(Buffer, "CAPA",4) == 0)
 	{
@@ -1562,7 +1517,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, LOG_TCP);
+	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
 
 	Buffer[Len] = 0;
 
@@ -1829,7 +1784,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine(Buffer, Len-2, LOG_TCP);
+	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{

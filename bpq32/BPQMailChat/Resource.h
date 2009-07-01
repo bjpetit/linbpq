@@ -6,6 +6,7 @@
 #define IDM_ABOUT 104
 #define IDM_EXIT 105
 #define IDM_CONSOLE 120
+#define IDM_MONITOR 121
 #define IDI_BPQMailChat 107
 #define IDI_SMALL 108
 #define IDC_BPQMailChat 109
@@ -89,6 +90,10 @@
 #define BPQLogOutput 1050
 #define BPQLogMonitor 1051
 #define BPQSendDisconnected 1052
+
+#define MONBBS 1060
+#define MONCHAT 1061
+#define MONTCP 1062
 
 #define IDC_NODES 501
 #define IDC_USERS 502

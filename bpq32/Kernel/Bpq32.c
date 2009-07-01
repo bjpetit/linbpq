@@ -132,6 +132,11 @@
 //				Revert KISS Changes
 //				Save Window positions
 
+// 410j		June 2009
+
+//				Fix tidying of window List when program crashed
+//				Add Max Nodes to Stats
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
@@ -178,6 +183,7 @@ extern long PORTENTRYLEN;
 extern struct PORTCONTROL * PORTTABLE;
 
 extern char AUTOSAVE;
+extern int MAXDESTS;
 
 extern char MYNODECALL;	// 10 chars,not null terminated
 extern char MYALIAS;		// 6 chars, not null terminated
@@ -3111,15 +3117,13 @@ DllExport int APIENTRY SaveNodes ()
 
 	DataBase=(struct DATABASE * )&DATABASE;
 
-	MaxNodes=DataBase->MAXDESTS;
-
 	Routes = DataBase->NEIGHBOURS;
 	RouteLen = DataBase->NEIGHBOUR_LIST_LEN;
 	MaxRoutes = DataBase->MAXNEIGHBOURS;
 
 	Dests = DataBase->DESTS;
 	NodeLen = DataBase->DEST_LIST_LEN;
-	MaxNodes = DataBase->MAXDESTS;
+	MaxNodes = MAXDESTS;
 
 	// Set up pointer to BPQNODES file
 

@@ -24,7 +24,7 @@ HWND hwndOutput;
 //HWND hwndMon;
 //HWND hwndSplit;
 
-HMENU hMenu;		// handle of menu 
+static HMENU hMenu;		// handle of menu 
 
 
 #define InputBoxHeight 25
@@ -149,7 +149,7 @@ BOOL CreateConsole()
 	Console->paclen=236;
 	Console->sysop = TRUE;
 
-	nodeprintf(Console, BBSSID, ALLOWCOMPRESSED ? "BFH" : "FH");
+	nodeprintf(Console, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3], ALLOWCOMPRESSED ? "BFH" : "FH");
 
 	if (user->Name[0] == 0)
 	{

@@ -79,10 +79,10 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[BPQ-1.00-%s$]\r";
+char BBSSID[]="[BPQ-%d.%d.%d.%d-%s$]\r";
 //char BBSSID[]="[BPQ-1.00-AB1FHMRX$]\r";
 
-char ChatSID[]="[BPQChatServer-1.00]\r";
+char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
 char NewUserPrompt[100]="Please enter your Name: ";
 
@@ -181,6 +181,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	{
 		DeleteTrayMenuItem(MainWnd);
 		DeleteTrayMenuItem(hConsole);
+		DeleteTrayMenuItem(hMonitor);
 	}
 
 	// Free all allocated memory
@@ -440,7 +441,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			
 	case WM_TIMER:
 
-		if (wParam == 1)
+		if (wParam == 1)		// Slow = 10 secs
 		{
 			ShowConnections();
 			CheckTimer();
@@ -545,6 +546,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			CreateConsole();
 			break;
 
+		case IDM_MONITOR:
+
+			CreateMonitor();
+			break;
+
 		case IDM_ABOUT:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 			break;
@@ -619,6 +625,9 @@ int ShowConnections()
 	char msg[80];
 	ConnectionInfo * conn;
 	int i,n;
+	time_t now;
+	struct tm * tm;
+	char tim[20];
 
 	SendDlgItemMessage(MainWnd,100,LB_RESETCONTENT,0,0);
 
@@ -670,6 +679,16 @@ int ShowConnections()
 	}
 
 	SetDlgItemInt(hWnd, IDC_SYSOPMSGS, n, FALSE);
+
+	now = time(NULL);
+
+	tm = gmtime(&now);	
+	wsprintf(tim,"%02d:%02d", tm->tm_hour, tm->tm_min);
+	SetDlgItemText(hWnd, IDC_UTC, tim);
+
+	tm = localtime(&now);
+	wsprintf(tim,"%02d:%02d", tm->tm_hour, tm->tm_min);
+	SetDlgItemText(hWnd, IDC_LOCAL, tim);
 
 
 	return 0;
@@ -846,6 +865,7 @@ int Connected(Stream)
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
 	char ConnectedMsg[] = "CONNECTED  ";
+	char Msg[100];
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -918,18 +938,22 @@ int Connected(Stream)
 
 			Mask = 1 << (GetApplNum(Stream) - 1);
 
+			n=wsprintf(Msg, "Incoming Connect from %s", user->Call);
+			
 			// Send SID and Prompt
+
 
 			if (Mask == ChatApplMask)
 			{
+				WriteLogLine('>',Msg, n, LOG_CHAT);
 				conn->Flags |= CHATMODE;
 
-				nputs(conn, ChatSID);
+				nodeprintf(conn, ChatSID, Ver[0], Ver[1], Ver[2], Ver[3]);
 			}
 			else
 			{
-				nodeprintf(conn, BBSSID, ALLOWCOMPRESSED ? "BFH" : "FH");
-
+				WriteLogLine('>',Msg, n, LOG_BBS);
+				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3], ALLOWCOMPRESSED ? "BFH" : "FH");
 			}
 
 			if (user->Name[0] == 0)
@@ -954,8 +978,8 @@ int Disconnected (Stream)
 	struct UserInfo * user = NULL;
 	ConnectionInfo * conn;
 	int n;
-//	char Msg[255];
-//	int len;
+	char Msg[255];
+	int len;
 
 	for (n = 0; n <= NumberofStreams-1; n++)
 	{
@@ -967,12 +991,17 @@ int Disconnected (Stream)
 				return 0;
 
 			ClearQueue(conn);
+			
+			len=wsprintf(Msg, "%s Disconnected", conn->Callsign);
+
 		
 			conn->Active = FALSE;
 			ShowConnections();
 
 			if (conn->Flags & CHATMODE)
 			{
+				WriteLogLine('>',Msg, len, LOG_CHAT);
+
 				if (conn->Flags & CHATLINK)
 					link_drop(conn);
 				else
@@ -982,7 +1011,11 @@ int Disconnected (Stream)
 				//	len = wsprintf(Msg, "%s - %s Logged off Channel %d\r", user->Call, user->Name, Connections[n].Conference);
 				//	SendtoOtherUsers(&Connections[n], Msg, len);
 				}
+
+				return 0;
 			}
+
+			WriteLogLine('>',Msg, len, LOG_BBS);
 
 			if (conn->FBBHeaders)
 			{
@@ -1186,7 +1219,7 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 
 	QueueMsg(conn, Mess, len);
 
-	WriteLogLine(Mess, len-1, LOG_BBS);
+	WriteLogLine('>',Mess, len-1, LOG_BBS);
 
 	return;
 }
@@ -1669,7 +1702,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		return;
 	}
 
-	WriteLogLine(Buffer, len-1, LOG_BBS);
+	WriteLogLine('<',Buffer, len-1, LOG_BBS);
 
 
 	if (conn->BBSFlags & FBBForwarding)
@@ -1884,9 +1917,9 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 
 	Buffer[len] = 0;
 
-	strlop(Buffer, '\r');
+	WriteLogLine('<',Buffer, len, LOG_CHAT);
 
-	WriteLogLine(Buffer, len-1, LOG_CHAT);
+	strlop(Buffer, '\r');
 
 	if (conn->flags == p_linkwait)
 	{
@@ -3264,6 +3297,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 {
 	int n, p;
 	CIRCUIT * conn;
+	char Msg[100];
 
 	for (n = NumberofStreams-1; n > 0 ; n--)
 	{
@@ -3281,6 +3315,10 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 			conn->UserPointer = user;
 
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
+
+			n=wsprintf(Msg, "Connecting to BBS %s", user->Call);
+
+			WriteLogLine('>',Msg, n, LOG_BBS);
 
 			//	Connected Event will trigger connect to remote system
 
@@ -3301,6 +3339,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
 
+	WriteLogLine('<',Buffer, len-1, LOG_BBS);
 
 	Buffer[len]=0;
 	_strupr(Buffer);
@@ -3354,7 +3393,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	{
 		conn->BBSFlags &= ~RunningConnectScript;
 
-		nodeprintf(conn, BBSSID, ALLOWCOMPRESSED ? "BFH" : "FH");
+		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3], ALLOWCOMPRESSED ? "BFH" : "FH");
 
 		if (conn->BBSFlags & FBBForwarding)
 		{
@@ -3822,7 +3861,7 @@ VOID BBSputs(CIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
-	WriteLogLine(buf,  strlen(buf) -1, LOG_BBS);
+	WriteLogLine('>',buf,  strlen(buf) -1, LOG_BBS);
 
 	QueueMsg(conn, buf, strlen(buf));
 }

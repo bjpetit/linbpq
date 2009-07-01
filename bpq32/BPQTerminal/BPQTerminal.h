@@ -39,6 +39,7 @@
 #define BPQStripLF		BPQBASE+49
 #define BPQLogOutput	BPQBASE+50
 #define BPQLogMonitor	BPQBASE+51
+#define BPQSendDisconnected	BPQBASE+52
 
 // Next default values for new objects
 // 
