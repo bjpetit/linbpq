@@ -557,7 +557,18 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			SendDlgItemMessage(pHdr->hwndDisplay, 0, LB_ADDSTRING, 0, (LPARAM)msgno);
 		} 
 
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
+
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "N");
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Y");
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "K");
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "F");
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "$");
+
+
 		break;
+
 
 	case MAINTPARAMS:
 

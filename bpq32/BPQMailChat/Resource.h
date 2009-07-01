@@ -101,3 +101,5 @@
 #define IDC_SYSOPMSGS 504
 #define IDC_FWDINT 505
 
+#define IDC_MSGTYPE                     1001
+#define IDC_MSGSTATUS                   1002

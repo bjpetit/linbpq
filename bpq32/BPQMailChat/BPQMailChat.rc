@@ -33,6 +33,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // remains consistent on all systems.
 IDI_BPQMailChat         ICON    DISCARDABLE     "icon2.ico"
 IDI_SMALL               ICON    DISCARDABLE     "icon2.ico"
+IDI_ICON1               ICON    DISCARDABLE     "icon1.ico"
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -46,20 +47,21 @@ CAPTION "G8BPQ Mail and Chat Server 1.0.0.10 June 2009"
 CLASS "BPQMailChat"
 FONT 8, "FixedSys"
 BEGIN
-    LTEXT           " User      Callsign Stream Conf      Queue",101,0,2,196,10
+    LTEXT           " User      Callsign Stream Conf      Queue",101,0,2,196,
+                    10
     LTEXT           "UTC",IDC_STATIC,197,2,15,10
     LTEXT           "Local",IDC_STATIC,241,2,21,10
-    LTEXT	        "", IDC_UTC,215,2,25,10
-    LTEXT           "", IDC_LOCAL,265,2,25,10
+    LTEXT           "",IDC_UTC,215,2,25,10
+    LTEXT           "",IDC_LOCAL,265,2,25,10
     LISTBOX         100,2,10,190,110,WS_VSCROLL
     LTEXT           "Chat Nodes",IDC_STATIC,197,25,40,10
-    LTEXT	        "", IDC_NODES,243,25,20,10
+    LTEXT           "",IDC_NODES,243,25,20,10
     LTEXT           "Chat Users",IDC_STATIC,197,35,40,10
-    LTEXT	        "", IDC_USERS,243,35,20,10
+    LTEXT           "",IDC_USERS,243,35,20,10
     LTEXT           "Chat Links",IDC_STATIC,197,45,40,10
-    LTEXT	        "", IDC_LINKS,243,45,20,10
+    LTEXT           "",IDC_LINKS,243,45,20,10
     LTEXT           "Sysop Msgs",IDC_STATIC,197,60,40,10
-    LTEXT	        "", IDC_SYSOPMSGS,243,60,20,10
+    LTEXT           "",IDC_SYSOPMSGS,243,60,20,10
 END
 
 BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
@@ -243,6 +245,7 @@ END
 
 EDITMSG DIALOG DISCARDABLE  26, 5, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "MS Sans Serif"
 BEGIN
     RTEXT           "Msg",-1,7,7,19,8
     LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
@@ -252,28 +255,7 @@ BEGIN
     EDITTEXT        6003,33,128,65,14,ES_UPPERCASE | ES_AUTOHSCROLL
     EDITTEXT        6004,33,145,177,14,ES_UPPERCASE | ES_AUTOHSCROLL
     EDITTEXT        6005,33,162,177,14,ES_AUTOHSCROLL
-    CONTROL         "Data",6,"Button",BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,
-                    110,15,31,10
-    CONTROL         "A",7,"Button",BS_AUTORADIOBUTTON | BS_LEFT,131,30,17,10
-    CONTROL         "B",8,"Button",BS_AUTORADIOBUTTON | BS_LEFT,131,41,17,10
-    CONTROL         "P",9,"Button",BS_AUTORADIOBUTTON | BS_LEFT,131,52,17,10
-    CONTROL         "T",10,"Button",BS_AUTORADIOBUTTON | BS_LEFT,131,63,17,
-                    10
-    LTEXT           "Status",-1,165,15,20,8
-    CONTROL         "$",11,"Button",BS_AUTORADIOBUTTON | BS_LEFT,191,14,19,
-                    10
-    CONTROL         "N",12,"Button",BS_AUTORADIOBUTTON | BS_LEFT,191,24,19,
-                    10
-    CONTROL         "Y",13,"Button",BS_AUTORADIOBUTTON | BS_LEFT,191,34,19,
-                    10
-    CONTROL         "F",14,"Button",BS_AUTORADIOBUTTON | BS_LEFT,191,44,19,
-                    10
-    CONTROL         "X",15,"Button",BS_AUTORADIOBUTTON | BS_LEFT,191,54,19,
-                    10
-    CONTROL         "K",16,"Button",BS_AUTORADIOBUTTON | BS_LEFT,191,64,19,
-                    10
-    CONTROL         "A",17,"Button",BS_AUTORADIOBUTTON | BS_LEFT,191,74,19,
-                    10
+    LTEXT           "Status",-1,160,10,20,8
     EDITTEXT        6018,145,95,65,14,ES_AUTOHSCROLL
     EDITTEXT        6019,145,111,65,14,ES_AUTOHSCROLL
     EDITTEXT        6020,145,128,65,14,ES_UPPERCASE | ES_AUTOHSCROLL
@@ -285,7 +267,7 @@ BEGIN
     RTEXT           "Sent",-1,109,95,32,8
     RTEXT           "Received",-1,109,113,32,8
     RTEXT           "Size",-1,109,130,32,8
-    LTEXT           "Type",-1,109,30,17,8
+    LTEXT           "Type",-1,105,10,17,8
     CONTROL         "",25,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
                     WS_TABSTOP,221,7,35,10
     CONTROL         "",26,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
@@ -398,6 +380,10 @@ BEGIN
                     WS_TABSTOP,299,147,35,10
     CONTROL         "",80,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
                     WS_TABSTOP,299,157,35,10
+    COMBOBOX        IDC_MSGTYPE,125,9,25,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
+                    WS_TABSTOP
+    COMBOBOX        IDC_MSGSTATUS,185,9,25,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
+                    WS_TABSTOP
 END
 
 MAINT DIALOG DISCARDABLE  26, 5, 381, 266
