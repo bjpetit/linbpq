@@ -43,6 +43,8 @@ BOOL LogMonitor = FALSE;
 BOOL LogOutput = FALSE;
 BOOL SendDisconnected = TRUE;
 
+BOOL WarnWrap = TRUE;
+
 
 
 int PartLinePtr=0;
@@ -64,7 +66,11 @@ BOOL CreateConsole()
 	HBRUSH bgBrush;
 
 	if (hConsole)
+	{
+		ShowWindow(hConsole, SW_SHOWNORMAL);
+		SetForegroundWindow(hConsole);
 		return FALSE;							// Alreaqy open
+	}
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -377,18 +383,20 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
 
-        return 0; 
+			return 0; 
 		}
 
-	}
+		if(WarnWrap)
+			if (SendMessage(hwndInput,WM_GETTEXTLENGTH, 0, 0) == 80) Beep(220, 150);
  
+	}
+
     return CallWindowProc(wpOrigInputProc, hwnd, uMsg, wParam, lParam); 
 } 
 
 LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-
-	// Trap mouse messages, so we cant select stuff in output and mon windows,
+	// Trap mouse messages, so we can't select stuff in output and mon windows,
 	//	otherwise scrolling doesnt work.
 
 	if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) 

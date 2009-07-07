@@ -55,7 +55,11 @@ BOOL CreateMonitor()
 	HBRUSH bgBrush;
 
 	if (hMonitor)
+	{
+		ShowWindow(hMonitor, SW_SHOWNORMAL);
+		SetForegroundWindow(hMonitor);
 		return FALSE;							// Alreaqy open
+	}
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 

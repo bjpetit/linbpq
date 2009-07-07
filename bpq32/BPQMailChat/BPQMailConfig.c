@@ -42,7 +42,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
 VOID WINAPI OnTabbedDialogInit(HWND hwndDlg);
 
-// POP3 Password is encrypted by xor'ing it with an MD5 hash of the hostname and pop2 server name
+// POP3 Password is encrypted by xor'ing it with an MD5 hash of the hostname and pop3 server name
 
 
 int EncryptPass(char * Pass, char * Encrypt)
@@ -255,6 +255,11 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 		case IDC_SAVEUSER:
 
 			Do_Save_User();
+			return TRUE;
+
+		case IDC_SAVEMSG:
+
+			Do_Save_Msg();
 			return TRUE;
 
 		case IDC_BBSSAVE:
@@ -562,15 +567,36 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "N");
 		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Y");
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "K");
 		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "F");
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "K");
+		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "H");
 		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "$");
+
+		for (n = 1; n <= NBBBS; n++ )
+		{
+			CheckDlgButton(pHdr->hwndDisplay, n + 24, BST_INDETERMINATE);
+		}
+
+		for (user = BBSChain; user; user = user->BBSNext)
+		{
+			SetDlgItemText(pHdr->hwndDisplay, user->BBSNumber + 24, user->Call);
+			CheckDlgButton(pHdr->hwndDisplay, user->BBSNumber + 24, BST_INDETERMINATE);
+		}
+
+		CheckDlgButton(pHdr->hwndDisplay,105, BST_INDETERMINATE);
+		CheckDlgButton(pHdr->hwndDisplay,106, BST_UNCHECKED);
+		CheckDlgButton(pHdr->hwndDisplay,107, BST_CHECKED);
 
 
 		break;
 
 
 	case MAINTPARAMS:
+
+		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAXMSG, MaxMsgno, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDC_BIDLIFETIME, BidLifetime, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAINTINTERVAL, MaintInterval, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAINTTIME, MaintTime, FALSE);
 
 		SetDlgItemInt(pHdr->hwndDisplay, IDM_PR, PR, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDM_PUR, PUR, FALSE);
@@ -938,6 +964,8 @@ VOID Do_Save_User()
 	if (IsDlgButtonChecked(hwndDisplay, IDC_SYSOP))
 		user->flags |= F_SYS; else user->flags &= ~F_SYS;
 
+	SaveUserDatabase();
+
 	wsprintf(InfoBoxText, "User information saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
@@ -999,11 +1027,25 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 
 			SetDlgItemText(hDlg, 6018, FormatDateAndTime(Msg->datecreated, FALSE));
 			SetDlgItemText(hDlg, 6019, FormatDateAndTime(Msg->datereceived, FALSE));
+			SetDlgItemText(hDlg, 6021, FormatDateAndTime(Msg->datechanged, FALSE));
 			SetDlgItemText(hDlg, 6020, Size);
+
+			SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_SETCURSEL, Msg->type  == 'B' ? 0 : 1, 0);
+
+			switch(Msg->status)
+			{
+			case 'N': Sel = MSGSTATUS_N; break;
+			case 'Y': Sel = MSGSTATUS_Y; break;
+			case 'F': Sel = MSGSTATUS_F; break;
+			case 'K': Sel = MSGSTATUS_K; break;
+			case 'H': Sel = MSGSTATUS_H; break;
+			case '$': Sel = MSGSTATUS_$; break;
+			}
+
+			SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_SETCURSEL, Sel, 0);
 
 			for (BBSNo = 1; BBSNo <= NBBBS; BBSNo++ )
 			{
-				SetDlgItemText(hDlg, BBSNo + 24, "");
 				CheckDlgButton(hDlg, BBSNo + 24, BST_INDETERMINATE);
 			}
 
@@ -1016,9 +1058,9 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 					if (check_fwd_bit(Msg->fbbs, user->BBSNumber))
 					{
 						SetDlgItemText(hDlg, user->BBSNumber+ 24, user->Call);
-						CheckDlgButton(hDlg, user->BBSNumber+ 24, BST_CHECKED);
+						CheckDlgButton(hDlg, user->BBSNumber+ 24, BST_UNCHECKED);
 					}
-				}
+				} 
 			}
 
 			if (memcmp(Msg->forw, zeros, NBMASK) != 0)
@@ -1028,36 +1070,115 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 					if (check_fwd_bit(Msg->forw, user->BBSNumber))
 					{
 						SetDlgItemText(hDlg, user->BBSNumber+ 24, user->Call);
-						CheckDlgButton(hDlg, user->BBSNumber+ 24, BST_INDETERMINATE);
+						CheckDlgButton(hDlg, user->BBSNumber+ 24, BST_CHECKED);
 					}
 				}
 			}
-
-
-//			CheckDlgButton(hDlg, IDC_EXCLUDED, (user->flags & F_EXC));
 
 			return 0;
 		}
 	}
 
-	// Typing in new user
-
-	CurrentConfigIndex = -1;
-
-	SetDlgItemText(hDlg, IDC_NAME, "");
-	SetDlgItemText(hDlg, IDC_PASSWORD, "");
-	SetDlgItemText(hDlg, IDC_ZIP, "");
-	SetDlgItemText(hDlg, IDC_HOMEBBS, "");
-
-	CheckDlgButton(hDlg, IDC_SYSOP, FALSE);
-	CheckDlgButton(hDlg, IDC_BBSFLAG, FALSE);
-	CheckDlgButton(hDlg, IDC_PMSFLAG, FALSE);
-	CheckDlgButton(hDlg, IDC_EXPERT, FALSE);
-	CheckDlgButton(hDlg, IDC_EXCLUDED, FALSE);
+	CurrentMsgIndex = -1;
 
 	return 0;
 }
 
+VOID Do_Save_Msg()
+{
+	struct MsgInfo * Msg;
+	struct UserInfo * user;
+
+	char status[2];
+	int n, BBSNumber;
+	BOOL toforward, forwarded;
+
+	if (CurrentMsgIndex == -1)
+	{
+		wsprintf(InfoBoxText, "Please select a message to save");
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+		return;
+	}
+
+	Msg = MsgHddrPtr[CurrentMsgIndex];
+
+	GetDlgItemText(hwndDisplay, 6001, Msg->from, 7);
+	GetDlgItemText(hwndDisplay, 6002, Msg->bid, 13);
+	GetDlgItemText(hwndDisplay, 6003, Msg->to, 7);
+	GetDlgItemText(hwndDisplay, 6004, Msg->via, 41);
+	GetDlgItemText(hwndDisplay, 6005, Msg->title, 61);
+
+	GetDlgItemText(hwndDisplay, IDC_MSGTYPE, status, 2);
+	Msg->type = status[0];
+
+	GetDlgItemText(hwndDisplay, IDC_MSGSTATUS, status, 2);
+	Msg->status = status[0];
+
+	for (user = BBSChain; user; user = user->BBSNext)
+	{
+		n = IsDlgButtonChecked(hwndDisplay, user->BBSNumber + 24);
+
+		BBSNumber = user->BBSNumber;
+
+		toforward = check_fwd_bit(Msg->fbbs, BBSNumber);
+		forwarded = check_fwd_bit(Msg->forw, BBSNumber);
+
+		if (n == BST_INDETERMINATE)
+		{
+			if ((!toforward) && (!forwarded))
+			{
+				// No Change
+				continue;
+			}
+			else
+			{
+				clear_fwd_bit(Msg->fbbs, BBSNumber);
+				if (toforward)
+					user->ForwardingInfo->MsgCount--;
+
+				clear_fwd_bit(Msg->forw, BBSNumber);
+			}
+		}
+		else if (n == BST_UNCHECKED)
+		{
+			if (toforward)
+			{
+				// No Change
+				continue;
+			}
+			else
+			{
+				set_fwd_bit(Msg->fbbs, BBSNumber);
+				user->ForwardingInfo->MsgCount++;
+				clear_fwd_bit(Msg->forw, BBSNumber);
+			}
+		}
+		else if (n == BST_CHECKED)
+		{
+			if (forwarded)
+			{
+				// No Change
+				continue;
+			}
+			else
+			{
+				set_fwd_bit(Msg->forw, BBSNumber);
+
+				clear_fwd_bit(Msg->fbbs, BBSNumber);
+				if (toforward)
+					user->ForwardingInfo->MsgCount--;
+
+			}
+		}
+	}
+
+	wsprintf(InfoBoxText, "Message Updated");
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+
+	Msg->datechanged=time(NULL);
+
+	SaveMessageDatabase();				
+}
 
 VOID SaveBBSConfig()
 {
@@ -1235,6 +1356,17 @@ VOID SaveMAINTConfig()
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
+	MaxMsgno = GetDlgItemInt(hwndDisplay, IDC_MAXMSG, &OK1, FALSE);
+	retCode = RegSetValueEx(hKey, "MaxMsgno",0 , REG_DWORD,(BYTE *)&MaxMsgno, 4);
+
+	BidLifetime = GetDlgItemInt(hwndDisplay, IDC_BIDLIFETIME, &OK1, FALSE);
+	retCode = RegSetValueEx(hKey, "BidLifetime",0 , REG_DWORD,(BYTE *)&BidLifetime, 4);
+
+	MaintInterval = GetDlgItemInt(hwndDisplay, IDC_MAINTINTERVAL, &OK1, FALSE);
+	retCode = RegSetValueEx(hKey, "MaintInterval",0 , REG_DWORD,(BYTE *)&MaintInterval, 4);
+
+	MaintTime = GetDlgItemInt(hwndDisplay, IDC_MAINTTIME, &OK1, FALSE);
+	retCode = RegSetValueEx(hKey, "MaintTime",0 , REG_DWORD,(BYTE *)&MaintTime, 4);
 
 	PR = GetDlgItemInt(hwndDisplay, IDM_PR, &OK1, FALSE);
 	retCode = RegSetValueEx(hKey, "PR",0 , REG_DWORD,(BYTE *)&PR, 4);
@@ -1511,6 +1643,23 @@ TryAgain:
 		
 		if (retCode == ERROR_SUCCESS)
 		{
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey,"MaxMsgno",0,			
+			(ULONG *)&Type,(UCHAR *)&MaxMsgno,(ULONG *)&Vallen);
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey,"BidLifetime",0,			
+			(ULONG *)&Type,(UCHAR *)&BidLifetime,(ULONG *)&Vallen);
+
+	
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey,"MaintInterval",0,			
+			(ULONG *)&Type,(UCHAR *)&MaintInterval,(ULONG *)&Vallen);
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey,"MaintTime",0,			
+			(ULONG *)&Type,(UCHAR *)&MaintTime,(ULONG *)&Vallen);
+
 			Vallen=4;
 			retCode += RegQueryValueEx(hKey,"PR",0,			
 			(ULONG *)&Type,(UCHAR *)&PR,(ULONG *)&Vallen);

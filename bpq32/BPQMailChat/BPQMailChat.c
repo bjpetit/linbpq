@@ -42,9 +42,16 @@ int FirstMessagetoForward=0;					// Lowest Message wirh a forward bit set - limi
 BIDRec ** BIDRecPtr=NULL;
 int NumberofBIDs=0;
 
+WPRec ** WPRecPtr=NULL;
+int NumberofWPrecs=0;
 
 int LatestMsg = 0;
 int HighestBBSNumber = 0;
+
+int MaxMsgno = 60000;
+int BidLifetime = 60;
+int MaintInterval = 24;
+int MaintTime = 0;
 
 BOOL cfgMinToTray;
 
@@ -102,6 +109,9 @@ char MsgDatabaseName[MAX_PATH] = "DIRMES.SYS";
 
 char BIDDatabasePath[MAX_PATH];
 char BIDDatabaseName[MAX_PATH] = "WFBID.SYS";
+
+char WPDatabasePath[MAX_PATH];
+char WPDatabaseName[MAX_PATH] = "WP.SYS";
 
 char BaseDir[MAX_PATH];
 
@@ -206,6 +216,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	free(MsgHddrPtr);
 
+//	for (n = 0; n <= NumberofWPrecs; n++)
+//		free(WPRecPtr[n]);
+
+//	free(WPRecPtr);
+
 	for (n = 0; n <= NumberofBIDs; n++)
 		free(BIDRecPtr[n]);
 
@@ -218,9 +233,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	FreeOverrides();
 
 	_CrtDumpMemoryLeaks();
-
-	if (hConsole)
-		GetWindowRect(hConsole,	&ConsoleRect);	// For save soutine
 
 	SaveWindowPosns();
 	
@@ -537,8 +549,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDM_HOUSEKEEPING:
 
-			RemoveKilledMessages();
-			ExpireMessages();
+			DoHouseKeeping();
 			break;
 
 		case IDM_CONSOLE:
@@ -587,6 +598,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 
 		GetWindowRect(MainWnd,	&MainRect);	// For save soutine
+	
+		if (hConsole)
+			GetWindowRect(hConsole,	&ConsoleRect);	// For save soutine
+		if (hMonitor)
+			GetWindowRect(hMonitor,	&MonitorRect);	// For save soutine
+
 		KillTimer(hWnd,1);
 		KillTimer(hWnd,2);
 		PostQuitMessage(0);
@@ -669,6 +686,8 @@ int ShowConnections()
 		SendDlgItemMessage(MainWnd,100,LB_ADDSTRING,0,(LPARAM)msg);
 	}
 
+	SetDlgItemInt(hWnd, IDC_MSGS, NumberofMessages, FALSE);
+
 	n = 0;
 
 	for (i=NumberofMessages; i>0; i--)
@@ -680,6 +699,14 @@ int ShowConnections()
 
 	SetDlgItemInt(hWnd, IDC_SYSOPMSGS, n, FALSE);
 
+	n = 0;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		if (MsgHddrPtr[i]->status == 'H') n++;
+	}
+
+	SetDlgItemInt(hWnd, IDC_HELD, n, FALSE);
 	now = time(NULL);
 
 	tm = gmtime(&now);	
@@ -777,6 +804,10 @@ BOOL Initialise()
 	strcat(BIDDatabasePath, "\\");
 	strcat(BIDDatabasePath, BIDDatabaseName);
 
+	strcpy(WPDatabasePath, BaseDir);
+	strcat(WPDatabasePath, "\\");
+	strcat(WPDatabasePath, WPDatabaseName);
+
 	strcpy(MailDir, BaseDir);
 	strcat(MailDir, "\\");
 	strcat(MailDir, "MAIL");
@@ -824,7 +855,8 @@ BOOL Initialise()
 	GetMessageDatabase();
 	GetUserDatabase();
 	GetBIDDatabase();
-	 
+	//GetWPDatabase();
+
 	// Allocate Streams
 
 	for (i=0; i < MaxStreams; i++)
@@ -845,14 +877,15 @@ BOOL Initialise()
 
 	InitialiseTCP();
 
-
 	if (cfgMinToTray)
 	{
 		AddTrayMenuItem(MainWnd, "Mail/Chat Server");
 	}
 	
-	SetTimer(hWnd,1,10000,NULL);		// BPQ TImer Check
-	SetTimer(hWnd,2,100,NULL);		// Send to Node
+	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
+	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
+
+	ShowConnections();
 
 	return TRUE;
 }
@@ -976,7 +1009,7 @@ int Connected(Stream)
 int Disconnected (Stream)
 {
 	struct UserInfo * user = NULL;
-	ConnectionInfo * conn;
+	CIRCUIT * conn;
 	int n;
 	char Msg[255];
 	int len;
@@ -992,29 +1025,29 @@ int Disconnected (Stream)
 
 			ClearQueue(conn);
 			
-			len=wsprintf(Msg, "%s Disconnected", conn->Callsign);
-
-		
 			conn->Active = FALSE;
 			ShowConnections();
 
 			if (conn->Flags & CHATMODE)
 			{
-				WriteLogLine('>',Msg, len, LOG_CHAT);
-
 				if (conn->Flags & CHATLINK)
+				{
+					len=wsprintf(Msg, "Chat Node %s Disconnected", conn->u.link->call);
+					WriteLogLine('>',Msg, len, LOG_CHAT);
 					link_drop(conn);
+				}
 				else
 				{
+					len=wsprintf(Msg, "Chat User %s Disconnected", conn->Callsign);
+					WriteLogLine('>',Msg, len, LOG_CHAT);
+
 					logout(conn);
-				//	user = Connections[n].UserPointer;
-				//	len = wsprintf(Msg, "%s - %s Logged off Channel %d\r", user->Call, user->Name, Connections[n].Conference);
-				//	SendtoOtherUsers(&Connections[n], Msg, len);
 				}
 
 				return 0;
 			}
 
+			len=wsprintf(Msg, "%s Disconnected", conn->Callsign);
 			WriteLogLine('>',Msg, len, LOG_BBS);
 
 			if (conn->FBBHeaders)
@@ -1042,7 +1075,7 @@ int DoReceivedData(int Stream)
 	CIRCUIT * conn;
 	struct UserInfo * user;
 	char * ptr, * ptr2;
-	char Buffer[512];
+	char Buffer[600];
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -1054,7 +1087,7 @@ int DoReceivedData(int Stream)
 			{ 
 				// May have several messages per packet, or message split over packets
 
-				if (conn->InputLen > 256)	// Shouldnt have lines longer  than this in text mode
+				if (conn->InputLen > 300)	// Shouldnt have lines longer  than this in text mode
 				{
 					conn->InputLen=0;
 				}
@@ -1087,7 +1120,7 @@ int DoReceivedData(int Stream)
 	
 	
 						if (conn->flags == p_linkini)		// Chat Connect
-							ProcessConnecting(conn, conn->InputBuffer);
+							ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
 						else if (conn->BBSFlags & RunningConnectScript)
 							ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
 						else
@@ -1104,7 +1137,7 @@ int DoReceivedData(int Stream)
 						memcpy(Buffer, conn->InputBuffer, MsgLen);
 
 						if (conn->flags == p_linkini)
-							ProcessConnecting(conn, Buffer);
+							ProcessConnecting(conn, Buffer, MsgLen);
 						else if (conn->BBSFlags & RunningConnectScript)
 							ProcessBBSConnectScript(conn, Buffer, MsgLen);
 						else
@@ -1257,6 +1290,17 @@ BIDRec * AllocateBIDRecord()
 	memset(BIDRecPtr[NumberofBIDs], 0, sizeof (BIDRec));
 
 	return BIDRecPtr[NumberofBIDs];
+}
+
+WPRec * AllocateWPRecord()
+{
+	WPRecPtr=realloc(WPRecPtr,(++NumberofWPrecs+1)*4);
+
+	WPRecPtr[NumberofWPrecs]= malloc(sizeof (WPRec));
+
+	memset(WPRecPtr[NumberofWPrecs], 0, sizeof (WPRec));
+
+	return WPRecPtr[NumberofWPrecs];
 }
 
 
@@ -1636,6 +1680,119 @@ BIDRec * LookupBID(char * BID)
 	return NULL;
 }
 
+VOID GetWPDatabase()
+{
+	WPRec WPRec;
+	HANDLE Handle;
+	int ReadLen;
+	WPRecP WP;
+
+	Handle = CreateFile(WPDatabasePath,
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+
+	if (Handle == INVALID_HANDLE_VALUE)
+	{
+		// Initialise a new File
+
+		WPRecPtr=malloc(4);
+		WPRecPtr[0]= malloc(sizeof (WPRec));
+		memset(WPRecPtr[0], 0, sizeof (WPRec));
+		NumberofWPrecs = 0;
+
+		return;
+	}
+
+
+	// Get First Record
+		
+	ReadFile(Handle, &WPRec, sizeof (WPRec), &ReadLen, NULL); 
+
+	if (ReadLen == 0)
+	{
+		// Duff file
+
+		memset(&WPRec, 0, sizeof (WPRec));
+	}
+
+	// Set up control record
+
+	WPRecPtr=malloc(4);
+	WPRecPtr[0]= malloc(sizeof (WPRec));
+	memcpy(WPRecPtr[0], &WPRec,  sizeof (WPRec));
+
+	NumberofWPrecs = 0;
+
+Next:
+
+	ReadFile(Handle, &WPRec, sizeof (WPRec), &ReadLen, NULL); 
+
+	if (ReadLen > 0)
+	{
+		WP = AllocateWPRecord();
+		memcpy(WP, &WPRec,  sizeof (WPRec));
+		goto Next;
+	}
+
+	CloseHandle(Handle);
+}
+
+VOID CopyWPDatabase()
+{
+	char Backup[MAX_PATH];
+
+	strcpy(Backup, WPDatabasePath);
+	strcat(Backup, ".bak");
+
+	CopyFile(WPDatabasePath, Backup, FALSE);
+}
+
+VOID SaveWPDatabase()
+{
+	HANDLE Handle;
+	int WriteLen;
+	int i;
+
+	Handle = CreateFile(WPDatabasePath,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+//	WPRecPtr[0]-> = NumberofWPrecs;			// First Record has file size
+
+	for (i=0; i <= NumberofWPrecs; i++)
+	{
+		WriteFile(Handle, WPRecPtr[i], sizeof (WPRec), &WriteLen, NULL);
+	}
+
+	CloseHandle(Handle);
+
+	return;
+}
+
+WPRec * LookupWP(char * Call)
+{
+	WPRec * ptr = NULL;
+	int i;
+
+	for (i=1; i <= NumberofWPrecs; i++)
+	{
+		ptr = WPRecPtr[i];
+
+		if (_stricmp(ptr->callsign, Call) == 0) return ptr;
+	}
+
+	return NULL;
+}
+
 
 VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 {
@@ -1873,9 +2030,9 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		BBSputs(conn, "B - Logoff\r");
 		BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
 		BBSputs(conn, "L - List Message(s) - L = List New, LM = List Mine L> Call, L< Call = List to or from\r");
-		BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
+		BBSputs(conn, "                      LL num = List Last, L num-num = List Range LH - List Held\r");
 		BBSputs(conn, "N Name - Set Name\r");
-		BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me\r");
+		BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
 		BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, SR Num - Send Reply\r");
 
 		SendPrompt(conn, user);
@@ -1886,15 +2043,11 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 	if (_memicmp(Cmd, "Chat", CmdLen) == 0)
 	{
-		conn->Flags |= CHATMODE;
-		
-		if (!rtloginu (conn))
-		{
-			// Already connected - close
-			
-			Sleep(1000);
-			Disconnect(conn->BPQStream);
-		}
+		if (rtloginu (conn))
+			conn->Flags |= CHATMODE;
+		else
+			SendPrompt(conn, user);
+
 		return;
 	}
 
@@ -1953,10 +2106,7 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 		Sleep(500);
 		Disconnect(conn->BPQStream);
 		return;
-
-
 	}
-
 
 	if (conn->Flags & CHATLINK)
 	{
@@ -2400,6 +2550,25 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		
 		return;
 
+	case 'H':				// List Held
+		{
+			int m = NumberofMessages;
+				
+			while (m > 0)
+			{
+				m = GetUserMsg(m, user->Call, conn->sysop);
+
+				if (m > 0)
+				{
+					if (MsgHddrPtr[m]->status == 'H')
+						ListMessage(MsgHddrPtr[m], conn);
+					m--;
+				}
+			}
+		}
+		return;
+
+
 	}
 }
 	
@@ -2683,7 +2852,7 @@ char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
 	return Date;
 }
 
-BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
 {
 	// SB WANT @ ALLCAN < N6ZFJ $4567_N0ARY
 	
@@ -2752,6 +2921,19 @@ BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 		if (!From)
 			From = user->Call;
+
+		if (!(conn->BBSFlags & BBS))
+		{
+			// if a normal user, check that TO and/or AT are known and warn if not.
+
+			if (!ATBBS)
+			{
+				// No routing, if not a user and not known to forwarding or WP warn
+
+				struct UserInfo * ToUser = LookupCall(Arg1);
+
+				conn->LocalMsg = (ToUser) ? TRUE : FALSE;			}
+		}
 
 
 		return CreateMessage(conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID);	
@@ -2981,6 +3163,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
 	char * ptr1, * ptr2 = NULL;
+	int FWDCount;
 
 		// Allocate a message Record slot
 
@@ -3044,14 +3227,29 @@ nextline:
 
 		strcpy(BIDRec->BID, Msg->bid);
 		BIDRec->mode = Msg->type;
-		BIDRec->msgno = Msg->number;
+		BIDRec->msgno = LOWORD(Msg->number);
+		BIDRec->timestamp = LOWORD(time(NULL)/86400);
 
 		// Set up forwarding bitmap
 
-		MatchMessagetoBBSList(Msg);
+		FWDCount = MatchMessagetoBBSList(Msg);
 
 		if (!(conn->BBSFlags & BBS))
+		{
 			nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
+
+			if (Msg->via[0])
+			{	
+				if (FWDCount ==  0)
+					nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
+			}
+			else
+			{
+				if (FWDCount ==  0 && conn->LocalMsg == 0)
+					// Not Local and no forward route
+					nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
+			}
+		}
 		else
 			if (!(conn->BBSFlags & FBBForwarding))
 				BBSputs(conn, ">\r");
@@ -3111,7 +3309,7 @@ void chat_link_out (LINK *link)
 	int n, p;
 	CIRCUIT * conn;
 
-	for (n = NumberofStreams-1; n > 0 ; n--)
+	for (n = NumberofStreams-1; n >= 0 ; n--)
 	{
 		conn = &Connections[n];
 		
@@ -3122,9 +3320,9 @@ void chat_link_out (LINK *link)
 			conn->BPQStream = p;
 
 			conn->Active = TRUE;
-			conn->Flags = CHATMODE | CHATLINK;
 			circuit_new(conn,p_linkini);
 			conn->u.link = link;
+			conn->Flags = CHATMODE | CHATLINK;
 
 			ConnectUsingAppl(conn->BPQStream, ChatApplMask);
 
@@ -3139,8 +3337,10 @@ void chat_link_out (LINK *link)
 
 }
 
-ProcessConnecting(CIRCUIT * circuit, char * Buffer)
+ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
 {
+	WriteLogLine('<',Buffer, Len-1, LOG_CHAT);
+
 	Buffer = _strupr(Buffer);
 
 	if (memcmp(Buffer, "OK\r", 3) == 0)
@@ -3299,7 +3499,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 	CIRCUIT * conn;
 	char Msg[100];
 
-	for (n = NumberofStreams-1; n > 0 ; n--)
+	for (n = NumberofStreams-1; n >= 0 ; n--)
 	{
 		conn = &Connections[n];
 		
@@ -3501,8 +3701,9 @@ void StartForwarding(int BBSNumber)
 					if (ForwardingInfo->ConnectScript[0])
 						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag)
 						{
-							ForwardingInfo->Forwarding = TRUE;
-							ConnecttoBBS(user);
+							if (ConnecttoBBS(user))
+								ForwardingInfo->Forwarding = TRUE;
+								
 						}
 	}
 

@@ -11,6 +11,9 @@ NODE *node_hd = NULL;
 LINK *link_hd = NULL;
 TOPIC *topic_hd = NULL;
 
+int ChatTmr = 0;
+
+
 char * strlop(char * buf, char delim)
 {
 	// Seems to Terminate buf at delim, and return rest of string
@@ -773,6 +776,9 @@ static void user_leave(USER *user)
 			break;
 		}
 	}
+
+	if (user_hd == NULL)
+		ChatTmr = 59;					// If no users, disconnect links after 10-20 secs
 }
 
 // User changed to a different topic.
@@ -812,7 +818,6 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias)
 	sl_ins_hd(user, user_hd);
 	user->circuit = circuit;
 	user->topic   = topic_join(circuit, deftopic);
-//	user->flags   = u_echo;
 	user->call    = _strdup(ucall);
 	_strupr(user->call);
 	user->node    = node;
@@ -916,9 +921,24 @@ VOID removelinks()
 
 CIRCUIT *circuit_new(CIRCUIT *circuit, int flags)
 {
-	sl_ins_hd(circuit, circuit_hd);
+	// Make sure circuit isn't already on list
+	
+	CIRCUIT *c;
 
 	circuit->flags = flags;
+	circuit->next = NULL;
+
+	for (c = circuit_hd; c; c = c->next)
+	{
+		if (c == circuit)
+		{
+			MessageBox(MainWnd, "Corruption in Chat Circult List Detected - Trying to recover", "BPQMailChat", MB_OK);
+			return circuit;
+		}
+	}
+	
+	sl_ins_hd(circuit, circuit_hd);
+
 	return circuit;
 }
 
@@ -1248,9 +1268,16 @@ static void node_keepalive()
 				nprintf(circuit, "%c%c%s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call);
 		}
 	}
+	else
+	{
+		// No users. Close links
+		for (circuit = circuit_hd; circuit; circuit = circuit->next)
+		{
+			if (circuit->flags & (p_linked | p_linkini | p_linkwait))
+				Disconnect(circuit->BPQStream);
+		}
+	}
 }
-
-int ChatTmr = 0;
 
 VOID ChatTimer()
 {

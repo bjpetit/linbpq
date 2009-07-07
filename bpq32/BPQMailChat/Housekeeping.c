@@ -92,6 +92,15 @@ VOID * GetOverrides(HKEY hKey, char * ValueName)
 	return Value;
 }
 
+VOID DoHouseKeeping()
+{
+	RemoveKilledMessages();
+	ExpireMessages();
+
+	if (LatestMsg > MaxMsgno)
+		Renumber_Messages();
+}
+
 VOID ExpireMessages()
 {
 	struct MsgInfo * Msg;
@@ -245,6 +254,8 @@ BOOL RemoveKilledMessages()
 
 	int i, n;
 
+//	Renumber_Messages();
+
 	NewMsgHddrPtr = zalloc((NumberofMessages+1) * 4);
 	NewMsgHddrPtr[0] = MsgHddrPtr[0];		// Copy Control Record
 
@@ -276,4 +287,87 @@ BOOL RemoveKilledMessages()
 
 }
 
+VOID Renumber_Messages()
+{
+	int NewNumber[65536] = {0};
+	struct MsgInfo * Msg;
+	struct UserInfo * user = NULL;
+	char OldMsgFile[MAX_PATH];
+	char NewMsgFile[MAX_PATH];
+	int j, lastmsg, result;
 
+	int i, n;
+
+	i = 0;		// New Message Number
+
+	for (n = 1; n <= NumberofMessages; n++)
+	{
+		Msg = MsgHddrPtr[n];
+
+		NewNumber[Msg->number] = ++i;		// Save so we can update users' last listed count
+
+		// New will always be >= old unless somethnig hasgon horribly wrong,
+		// so can rename in place without risk of losing a message
+
+		if (Msg->number < i)
+		{
+			MessageBox(MainWnd, "Invalid message number detected, quitting", "BPQMailChat", MB_OK);
+			SaveMessageDatabase();
+			return;
+		}
+
+		if (Msg->number != i)
+		{
+			wsprintf(OldMsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
+			wsprintf(NewMsgFile, "%s\\m_%06d.mes", MailDir, i);
+			result = rename(OldMsgFile, NewMsgFile);
+			if (result)
+			{
+				char Errmsg[100];
+				wsprintf(Errmsg, "Could not rename message no %d to %d, quitting", Msg->number, i);
+				MessageBox(MainWnd,Errmsg , "BPQMailChat", MB_OK);
+				SaveMessageDatabase();
+				return;
+			}
+			Msg->number = i;
+		}
+		
+	}
+
+	for (n = 0; n <= NumberofUsers; n++)
+	{
+		user = UserRecPtr[n];
+		lastmsg = user->lastmsg;
+
+		if (lastmsg <= 0)
+			user->lastmsg = 0;
+		else
+		{
+			j = NewNumber[lastmsg];
+
+			if (j == 0)
+			{
+				// Last listed has gone. Find next above
+
+				while(++lastmsg < 65536)
+				{
+					if (NewNumber[lastmsg] != 0)
+					{
+						user->lastmsg = NewNumber[lastmsg];
+						break;
+					}
+				}	
+
+			}
+			user->lastmsg = NewNumber[lastmsg];
+		}
+	}
+
+	MsgHddrPtr[0]->length = LatestMsg = i;
+
+	SaveMessageDatabase();
+	SaveUserDatabase();
+
+	return;
+
+}

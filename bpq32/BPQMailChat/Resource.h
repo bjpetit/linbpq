@@ -60,6 +60,11 @@
 #define IDC_SAVEUSER 5102
 #define IDD_USERADDED_BOX 5051
 #define IDD_UserEditInfo 5051
+
+#define IDC_MSGTYPE 6101
+#define IDC_MSGSTATUS 6102
+#define IDC_SAVEMSG 6103
+
 #define IDM_FORWARD_ALL 7000
 #define IDM_HOUSEKEEPING 9000
 #define IDM_PR	9001
@@ -74,6 +79,12 @@
 #define IDM_LTTO 9010
 #define IDM_LTAT 9011
 #define IDM_MAINTSAVE 9012
+
+#define IDC_MAXMSG                      9021
+#define IDC_BIDLIFETIME                 9022
+#define IDC_MAINTINTERVAL               9023
+#define IDC_MAINTTIME                   9024
+
 
 
 #define BPQBASE 1024
@@ -100,6 +111,9 @@
 #define IDC_LINKS 503
 #define IDC_SYSOPMSGS 504
 #define IDC_FWDINT 505
+#define IDC_UTC 506
+#define IDC_LOCAL 507
+#define IDC_MSGS 508 
+#define IDC_HELD 509
 
-#define IDC_MSGTYPE                     1001
-#define IDC_MSGSTATUS                   1002
+

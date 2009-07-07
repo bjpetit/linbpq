@@ -33,7 +33,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // remains consistent on all systems.
 IDI_BPQMailChat         ICON    DISCARDABLE     "icon2.ico"
 IDI_SMALL               ICON    DISCARDABLE     "icon2.ico"
-IDI_ICON1               ICON    DISCARDABLE     "icon1.ico"
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -60,8 +59,12 @@ BEGIN
     LTEXT           "",IDC_USERS,243,35,20,10
     LTEXT           "Chat Links",IDC_STATIC,197,45,40,10
     LTEXT           "",IDC_LINKS,243,45,20,10
-    LTEXT           "Sysop Msgs",IDC_STATIC,197,60,40,10
-    LTEXT           "",IDC_SYSOPMSGS,243,60,20,10
+    LTEXT           "Msgs",IDC_STATIC,197,60,40,10
+    LTEXT           "",IDC_MSGS,243,60,20,10
+    LTEXT           "Sysop Msgs",IDC_STATIC,197,70,40,10
+    LTEXT           "Held Msgs",IDC_STATIC,197,80,40,10
+    LTEXT           "",IDC_SYSOPMSGS,243,70,20,10
+    LTEXT           "",IDC_HELD,243,80,20,10
 END
 
 BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
@@ -245,29 +248,28 @@ END
 
 EDITMSG DIALOG DISCARDABLE  26, 5, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
-FONT 8, "MS Sans Serif"
 BEGIN
-    RTEXT           "Msg",-1,7,7,19,8
+    RTEXT           "Msg",IDC_STATIC,7,7,19,8
     LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
                     WS_TABSTOP
     EDITTEXT        6001,33,95,65,14,ES_UPPERCASE | ES_AUTOHSCROLL
     EDITTEXT        6002,33,111,65,14,ES_UPPERCASE | ES_AUTOHSCROLL
     EDITTEXT        6003,33,128,65,14,ES_UPPERCASE | ES_AUTOHSCROLL
-    EDITTEXT        6004,33,145,177,14,ES_UPPERCASE | ES_AUTOHSCROLL
-    EDITTEXT        6005,33,162,177,14,ES_AUTOHSCROLL
-    LTEXT           "Status",-1,160,10,20,8
-    EDITTEXT        6018,145,95,65,14,ES_AUTOHSCROLL
-    EDITTEXT        6019,145,111,65,14,ES_AUTOHSCROLL
-    EDITTEXT        6020,145,128,65,14,ES_UPPERCASE | ES_AUTOHSCROLL
-    RTEXT           "From",-1,7,98,19,8
-    RTEXT           "BID",-1,7,114,19,8
-    RTEXT           "To",-1,7,132,19,8
-    RTEXT           "Via",-1,7,150,19,8
-    RTEXT           "Title",-1,7,167,19,8
-    RTEXT           "Sent",-1,109,95,32,8
-    RTEXT           "Received",-1,109,113,32,8
-    RTEXT           "Size",-1,109,130,32,8
-    LTEXT           "Type",-1,105,10,17,8
+    EDITTEXT        6004,33,171,177,14,ES_UPPERCASE | ES_AUTOHSCROLL
+    EDITTEXT        6005,33,188,177,14,ES_AUTOHSCROLL
+    LTEXT           "Status",IDC_STATIC,160,10,20,8
+    EDITTEXT        6018,153,95,57,14,ES_AUTOHSCROLL
+    EDITTEXT        6019,153,111,57,14,ES_AUTOHSCROLL
+    EDITTEXT        6020,153,145,55,14,ES_AUTOHSCROLL
+    RTEXT           "From",IDC_STATIC,7,98,19,8
+    RTEXT           "BID",IDC_STATIC,7,114,19,8
+    RTEXT           "To",IDC_STATIC,7,132,19,8
+    RTEXT           "Via",IDC_STATIC,7,176,19,8
+    RTEXT           "Title",IDC_STATIC,7,193,19,8
+    RTEXT           "Sent",IDC_STATIC,116,96,32,8
+    RTEXT           "Received",IDC_STATIC,116,113,32,8
+    RTEXT           "Size",IDC_STATIC,116,147,32,8
+    LTEXT           "Type",IDC_STATIC,105,10,17,8
     CONTROL         "",25,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
                     WS_TABSTOP,221,7,35,10
     CONTROL         "",26,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
@@ -380,52 +382,124 @@ BEGIN
                     WS_TABSTOP,299,147,35,10
     CONTROL         "",80,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
                     WS_TABSTOP,299,157,35,10
+    CONTROL         "",81,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,299,167,35,10
+    CONTROL         "",82,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,299,177,35,10
+    CONTROL         "",83,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,299,187,35,10
+    CONTROL         "",84,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,299,197,35,10
+    CONTROL         "",85,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,7,35,10
+    CONTROL         "",86,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,17,35,10
+    CONTROL         "",87,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,27,35,10
+    CONTROL         "",88,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,37,35,10
+    CONTROL         "",89,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,47,35,10
+    CONTROL         "",90,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,57,35,10
+    CONTROL         "",91,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,67,35,10
+    CONTROL         "",92,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,77,35,10
+    CONTROL         "",93,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,87,35,10
+    CONTROL         "",94,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,97,35,10
+    CONTROL         "",95,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,107,35,10
+    CONTROL         "",96,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,117,35,10
+    CONTROL         "",97,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,127,35,10
+    CONTROL         "",98,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,137,35,10
+    CONTROL         "",99,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,147,35,10
+    CONTROL         "",100,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,157,35,10
+    CONTROL         "",101,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,167,35,10
+    CONTROL         "",102,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,177,35,10
+    CONTROL         "",103,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,187,35,10
+    CONTROL         "",104,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,339,197,35,10
     COMBOBOX        IDC_MSGTYPE,125,9,25,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
                     WS_TABSTOP
     COMBOBOX        IDC_MSGSTATUS,185,9,25,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
                     WS_TABSTOP
+    DEFPUSHBUTTON   "Save",IDC_SAVEMSG,162,221,57,17,BS_CENTER | BS_VCENTER
+    CONTROL         "Dont Send",105,"Button",BS_3STATE | BS_CENTER | 
+                    BS_PUSHLIKE,233,225,43,10
+    CONTROL         "Send",106,"Button",BS_3STATE | BS_CENTER | BS_PUSHLIKE,
+                    282,224,35,10
+    CONTROL         "Sent",107,"Button",BS_3STATE | BS_CENTER | BS_PUSHLIKE,
+                    324,224,35,10
+    LTEXT           "Key",IDC_STATIC,288,211,35,9
+    RTEXT           "Last Changed",IDC_STATIC,103,130,45,8
+    EDITTEXT        6021,153,128,57,14,ES_AUTOHSCROLL
 END
 
 MAINT DIALOG DISCARDABLE  26, 5, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "System"
 BEGIN
-    LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before bing deleted. You can also specify whether to keep copies (archive) messages that have been deleted.",
-                    IDC_STATIC,10,5,361,22
-    LTEXT           "Read",IDC_STATIC,90,45,46,10
-    EDITTEXT        IDM_PR,155,45,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before bEing deleted",
+                    IDC_STATIC,149,13,216,28
+    LTEXT           "Read",IDC_STATIC,159,68,46,10
+    EDITTEXT        IDM_PR,224,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Unread",IDC_STATIC,90,60,46,10
-    EDITTEXT        IDM_PUR,155,60,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Unread",IDC_STATIC,159,83,46,10
+    EDITTEXT        IDM_PUR,224,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Forwarded",IDC_STATIC,90,75,46,10
-    EDITTEXT        IDM_PF,155,75,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Forwarded",IDC_STATIC,159,98,46,10
+    EDITTEXT        IDM_PF,224,98,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Not Forwarded",IDC_STATIC,90,90,49,10
-    EDITTEXT        IDM_PNF,155,90,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Not Forwarded",IDC_STATIC,159,113,49,10
+    EDITTEXT        IDM_PNF,224,113,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Forwarded",IDC_STATIC,195,45,49,10
-    EDITTEXT        IDM_BF,255,45,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Forwarded",IDC_STATIC,264,68,49,10
+    EDITTEXT        IDM_BF,324,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Not Forwarded",IDC_STATIC,195,60,49,10
-    EDITTEXT        IDM_BNF,255,60,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Not Forwarded",IDC_STATIC,264,83,49,10
+    EDITTEXT        IDM_BNF,324,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    GROUPBOX        "Personals",IDC_STATIC,80,35,108,99
-    GROUPBOX        "Bulletins",IDC_STATIC,190,35,103,100
+    GROUPBOX        "Personals",IDC_STATIC,149,58,108,71
+    GROUPBOX        "Bulletins",IDC_STATIC,259,58,103,71
     LTEXT           "The followiing boxes allow you to specify different values for different Bulletin origins and destinationss.",
-                    IDC_STATIC,25,140,361,8
-    LTEXT           "Specify Call, Lifetime, eg ALL,10",IDC_STATIC,25,150,
-                    361,8
-    LTEXT           "From",IDC_STATIC,50,165,40,12
-    EDITTEXT        IDM_LTFROM,30,180,87,55,ES_MULTILINE | ES_UPPERCASE | 
+                    IDC_STATIC,151,136,214,19
+    LTEXT           "Specify Call, Lifetime, eg ALL,10",IDC_STATIC,156,158,
+                    154,8
+    LTEXT           "From",IDC_STATIC,181,170,40,12
+    EDITTEXT        IDM_LTFROM,151,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "To",IDC_STATIC,175,165,27,12
-    EDITTEXT        IDM_LTTO,140,180,87,55,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "To",IDC_STATIC,263,170,27,12
+    EDITTEXT        IDM_LTTO,221,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "At",IDC_STATIC,295,165,15,12
-    EDITTEXT        IDM_LTAT,255,180,87,54,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "At",IDC_STATIC,344,170,15,12
+    EDITTEXT        IDM_LTAT,289,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    DEFPUSHBUTTON   "Save",IDM_MAINTSAVE,175,250,50,14,BS_CENTER | 
+    DEFPUSHBUTTON   "Save",IDM_MAINTSAVE,166,250,50,14,BS_CENTER | 
                     BS_VCENTER
+    GROUPBOX        "Lifetimes",IDC_STATIC,144,0,231,244
+    GROUPBOX        "Parameters",IDC_STATIC,3,3,133,241
+    LTEXT           "Max Message Number",IDC_STATIC,7,22,77,10
+    LTEXT           "BID Litetime (Days)",IDC_STATIC,7,46,77,10
+    LTEXT           "Maintenance Interval",IDC_STATIC,7,70,77,10
+    LTEXT           "Maintenance TIme",IDC_STATIC,7,94,77,10
+    EDITTEXT        IDC_MAXMSG,96,22,25,12,ES_CENTER | ES_NUMBER
+    EDITTEXT        IDC_BIDLIFETIME,96,45,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    EDITTEXT        IDC_MAINTINTERVAL,96,68,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    EDITTEXT        IDC_MAINTTIME,96,91,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
 END
 
 

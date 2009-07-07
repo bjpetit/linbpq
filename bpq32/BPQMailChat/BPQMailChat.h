@@ -241,6 +241,7 @@ typedef struct ConnectionInfo_S
 	int FBBIndex;						// current propopsal number
 	BOOL FBBMsgsSent;					// Messages need to be maked as complete when next command received
 	UCHAR FBBChecksum;					// Header Checksum
+	BOOL LocalMsg;				// Set if current Send command is for a local user
 
 } ConnectionInfo, CIRCUIT;
 
@@ -363,11 +364,55 @@ struct MsgInfo{  /* Longueur = 194 octets */
 	char	forw[NBMASK] ;
 } ;
 
+#define MSGTYPE_B 0
+#define MSGTYPE_P 1
+
+#define MSGSTATUS_N 0
+#define MSGSTATUS_Y 1
+#define MSGSTATUS_F 2
+#define MSGSTATUS_K 3
+#define MSGSTATUS_H 4
+#define MSGSTATUS_$ 5
+
+
+
 typedef struct {
 	char	mode;
 	char	BID[13];
-	long	msgno;
+	unsigned short msgno;
+	unsigned short timestamp;
 } BIDRec, *BIDRecP;
+
+
+/* Structures fichiers WP */
+
+typedef struct WPREC {	/* 108 bytes */
+	long last;
+	short  local;
+	char source;
+	char callsign[7];
+	char homebbs[41];
+	char zip[9];
+	char name[13];
+	char qth[31];
+} WPMsgRec, * WPMsgRecP;
+
+typedef struct WPDBASE{	/* 194 bytes */
+	char callsign[7];
+	char name[13];
+	unsigned char free;
+	unsigned char changed;
+	unsigned short seen;
+	long last_modif;
+	long last_seen;
+	char first_homebbs[41];
+	char secnd_homebbs[41];
+	char first_zip[9];
+	char secnd_zip[9];
+	char first_qth[31];
+	char secnd_qth[31];
+} WPRec, * WPRecP;
+
 
 #pragma pack()
 
@@ -586,6 +631,7 @@ VOID GetUserDatabase();
 VOID GetMessageDatabase();
 VOID SaveMessageDatabase();
 VOID GetBIDDatabase();
+VOID GetWPDatabase();
 VOID SaveBIDDatabase();
 VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user);
 VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
@@ -616,10 +662,10 @@ int	CriticalErrorHandler(char * error);
 BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 BOOL CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID);
 VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
-VOID ProcessMsgLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
+VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len);
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg);
 void chat_link_out (LINK *link);
-ProcessConnecting(CIRCUIT * circuit, char * Buffer);
+ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len);
 BOOL SaveConfig();
 BOOL GetConfigFromRegistry();
 VOID Parse_SID(ConnectionInfo * conn, char * SID, int len);
@@ -645,6 +691,7 @@ VOID FreeForwardingStruct(struct UserInfo * user);
 VOID FreeList(char ** Hddr);
 int Do_User_Sel_Changed(HWND hDlg);
 int Do_Msg_Sel_Changed(HWND hDlg);
+VOID Do_Save_Msg();
 VOID Do_Add_User();
 VOID Do_Delete_User();
 VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user);
@@ -717,9 +764,11 @@ BOOL SendtoISP();
 md5 (char *arg, unsigned char * checksum);
 
 VOID * GetOverrides(HKEY hKey, char * ValueName);
+VOID DoHouseKeeping();
 VOID ExpireMessages();
 VOID KillMsg(struct MsgInfo * Msg);
 BOOL RemoveKilledMessages();
+VOID Renumber_Messages();
 
 extern BOOL cfgMinToTray;
 
@@ -741,6 +790,12 @@ extern char hostname[];
 extern char RtUsr[];
 extern char RtUsrTemp[];
 extern BOOL ISP_Gateway_Enabled;
+
+extern int MaxMsgno;
+extern int BidLifetime;
+extern int MaintInterval;
+extern int MaintTime;
+
 
 extern LINK *link_hd;
 extern CIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others

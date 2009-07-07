@@ -136,6 +136,7 @@
 
 //				Fix tidying of window List when program crashed
 //				Add Max Nodes to Stats
+//				Don't update APPLnALIAS with received NODES info
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T

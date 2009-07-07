@@ -805,7 +805,9 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 	strcpy(BIDRec->BID, Msg->bid);
 	BIDRec->mode = Msg->type;
-	BIDRec->msgno = Msg->number;
+	BIDRec->msgno = LOWORD(Msg->number);
+	BIDRec->timestamp = LOWORD(time(NULL)/86400);
+
 
 	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
 
@@ -2122,7 +2124,9 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 
 	strcpy(BIDRec->BID, Msg->bid);
 	BIDRec->mode = Msg->type;
-	BIDRec->msgno = Msg->number;
+	BIDRec->msgno = LOWORD(Msg->number);
+	BIDRec->timestamp = LOWORD(time(NULL)/86400);
+
 
 	TidyString(To);
 	strlop(To, '@');

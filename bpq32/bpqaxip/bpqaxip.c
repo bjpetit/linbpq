@@ -234,7 +234,7 @@ struct arp_table_entry
 	SOCKADDR_IN sin; 
 	SOCKADDR_IN destaddr;
 	BOOL TCPState;
-	time_t LastConnectTime;
+	UINT TCPThreadID;			// Thread ID if TCP Master
 };
 
 #define TCPMaster 1
@@ -883,22 +883,6 @@ InitAXIP()
 	_beginthread(OpenSockets, 0, NULL );
 
 	// Start TCP outward connect threads
-
-	if (NeedTCP)
-	{
-		int index = 0;
-		struct arp_table_entry * arp;
-	
-		while (index < arp_table_len)
-		{
-			arp = &arp_table[index++];
-
-			if (arp->TCPMode == TCPMaster)
-				_beginthread(TCPConnectThread, 0, arp);
-		}
-	}
-
-
 	//
 	//	Open MH window if needed
 	
@@ -1005,6 +989,12 @@ void OpenSockets(void *dummy)
 		{
 			arp->TCPBuffer=malloc(4000);
 			arp->TCPState = 0;
+
+			if (arp->TCPThreadID == 0)
+			{
+				arp->TCPThreadID = _beginthread(TCPConnectThread, 0, arp);
+				Debugprintf("TCP Connect thread created for %s Handle %x", arp->hostname, arp->TCPThreadID);
+			}
 			continue;
 		}
 
@@ -1066,6 +1056,8 @@ void OpenSockets(void *dummy)
 void CloseSockets()
 {
 	int i;
+	int index = 0;
+	struct arp_table_entry * arp;
 
 	if (needip)
 		closesocket(sock);
@@ -1074,6 +1066,37 @@ void CloseSockets()
 	{
 		closesocket(udpsock[i]);
 	}
+	
+	// Close any open or listening TCP sockets
+
+	while (index < arp_table_len)
+	{
+		arp = &arp_table[index++];
+
+		if (arp->TCPMode == TCPMaster)
+		{
+			if (arp->TCPState)
+			{
+				closesocket(arp->TCPSock);
+				arp->TCPSock = 0;
+			}
+			continue;
+		}
+
+		if (arp->TCPMode == TCPSlave)
+		{
+			if (arp->TCPState)
+			{
+				closesocket(arp->TCPSock);
+				arp->TCPSock = 0;
+			}
+
+			closesocket(arp->TCPListenSock);
+			continue;
+		}
+
+	}
+
 	return ;
 }	
 
@@ -2430,7 +2453,6 @@ int DumpFrameInHex(unsigned char * msg, int len)
 	}
 
 	return 0;
-
 }
 
 int Socket_Accept(int SocketId)
@@ -2441,7 +2463,7 @@ int Socket_Accept(int SocketId)
 	char Msg[100];
 	int index=0;
 
-	//   Find Socket entry
+	//  Find Socket entry
 
 	//	Find Connection Record
 
@@ -2726,13 +2748,13 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 
 	Sleep(10000);									// Delay startup a bit
 
-	while(TRUE)
-	{
+	while(arp->TCPMode == TCPMaster)
+	{		
 		if (arp->TCPState == 0)
 		{
 			arp->destaddr.sin_addr.s_addr = arp->ipaddr;
 
-			Debugprintf("TCP Connect Closing socket %d", arp->TCPSock);
+			Debugprintf("TCP Connect Closing socket %d IP %s", arp->TCPSock, arp->hostname);
 	
 			closesocket(arp->TCPSock);
 
@@ -2798,7 +2820,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 					//	Connect in Progressing
 					//
 
-						Debugprintf("TCP Connect in Progress %d", arp->TCPSock);
+						Debugprintf("TCP Connect in Progress %d IP %s", arp->TCPSock, arp->hostname);
 				}
 				else
 				{
@@ -2818,6 +2840,10 @@ wait:
 		Sleep (120000);				// 2 Mins 
 	}
 
+	Debugprintf("TCP Cnnect Thread %x Closing", arp->TCPThreadID);
+
+	arp->TCPThreadID = 0;
+	
 	return;		// Not Used
 
 }
