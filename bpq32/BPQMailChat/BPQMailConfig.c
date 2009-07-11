@@ -4,17 +4,14 @@
 //	Configuration Module
 
 #include "stdafx.h"
-#define C_PAGES 7
+#define C_PAGES 4
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
 #define BBSPARAMS 0
 #define ISPPARAMS 1
 #define CHATPARAMS 2
-#define USERPARAMS 3
-#define FWDPARAMS 4
-#define MSGPARAMS 5
-#define MAINTPARAMS 6
+#define MAINTPARAMS 3
 
 
 typedef struct tag_dlghdr {
@@ -218,50 +215,6 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 
-		case IDC_BBS:
-
-			// BBS Selection Changed
-
-			Do_BBS_Sel_Changed(hDlg);
-
-			return TRUE;
-
-		case IDC_USER:
-
-			// User Selection Changed
-
-			Do_User_Sel_Changed(hDlg);
-
-			return TRUE;
-
-		case 0:
-
-			// Msg Selection Changed
-
-			Do_Msg_Sel_Changed(hDlg);
-
-			return TRUE;
-
-		case IDC_ADDUSER:
-
-			Do_Add_User();
-			return TRUE;
-
-		case IDC_DELETEUSER:
-
-			Do_Delete_User();
-			return TRUE;
-
-		case IDC_SAVEUSER:
-
-			Do_Save_User();
-			return TRUE;
-
-		case IDC_SAVEMSG:
-
-			Do_Save_Msg();
-			return TRUE;
-
 		case IDC_BBSSAVE:
 			
 			SaveBBSConfig();
@@ -277,10 +230,6 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			SaveISPConfig();
 			return TRUE;
 
-		case IDC_FWDSAVE:
-			
-			SaveFWDConfig();
-			return TRUE;
 
 		case IDM_MAINTSAVE:
 
@@ -349,27 +298,15 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	tie.pszText = "Chat Params";
 	TabCtrl_InsertItem(pHdr->hwndTab, 2, &tie);
 
-	tie.pszText = "Users";
-	TabCtrl_InsertItem(pHdr->hwndTab, 3, &tie);
-
-	tie.pszText = "Forwarding";
-	TabCtrl_InsertItem(pHdr->hwndTab, 4, &tie);
-
-	tie.pszText = "Message";
-	TabCtrl_InsertItem(pHdr->hwndTab, 5, &tie);
-
 	tie.pszText = "Maintenance";
-	TabCtrl_InsertItem(pHdr->hwndTab, 6, &tie);
+	TabCtrl_InsertItem(pHdr->hwndTab, 3, &tie);
 
 	// Lock the resources for the three child dialog boxes.
 
 	pHdr->apRes[0] = DoLockDlgRes("BBS_CONFIG");
 	pHdr->apRes[1] = DoLockDlgRes("ISP_CONFIG");
 	pHdr->apRes[2] = DoLockDlgRes("CHAT_CONFIG");
-	pHdr->apRes[3] = DoLockDlgRes("USEREDIT");
-	pHdr->apRes[4] = DoLockDlgRes("FORWARDING");
-	pHdr->apRes[5] = DoLockDlgRes("EDITMSG");
-	pHdr->apRes[6] = DoLockDlgRes("MAINT");
+	pHdr->apRes[3] = DoLockDlgRes("MAINT");
 
 	// Determine the bounding rectangle for all child dialog boxes.
 
@@ -450,11 +387,9 @@ DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName)
 
 VOID WINAPI OnSelChanged(HWND hwndDlg)
 {
-	int n, ptr;
+	int ptr;
 	int len;
 	char Nodes[1000]="";
-	struct UserInfo * user;
-	char msgno[10];
 	char Text[10000]="";
 	char Line[80];
 	struct Override ** Call;
@@ -536,61 +471,6 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		break;
 
 
-	case USERPARAMS:
-		
-		for (n = 1; n <= NumberofUsers; n++)
-		{
-			SendDlgItemMessage(pHdr->hwndDisplay, IDC_USER, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)UserRecPtr[n]->Call);
-		} 
-
-		break;
-
-	case FWDPARAMS:
-
-		for (user = BBSChain; user; user = user->BBSNext)
-		{
-			SendDlgItemMessage(pHdr->hwndDisplay, IDC_BBS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)user->Call);
-		}  
-
-		break;
-
-	case MSGPARAMS:
-		
-		for (n = 1; n <= NumberofMessages; n++)
-		{
-			wsprintf(msgno, "%d", MsgHddrPtr[n]->number);
-			SendDlgItemMessage(pHdr->hwndDisplay, 0, LB_ADDSTRING, 0, (LPARAM)msgno);
-		} 
-
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
-
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "N");
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Y");
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "F");
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "K");
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "H");
-		SendDlgItemMessage(pHdr->hwndDisplay, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "$");
-
-		for (n = 1; n <= NBBBS; n++ )
-		{
-			CheckDlgButton(pHdr->hwndDisplay, n + 24, BST_INDETERMINATE);
-		}
-
-		for (user = BBSChain; user; user = user->BBSNext)
-		{
-			SetDlgItemText(pHdr->hwndDisplay, user->BBSNumber + 24, user->Call);
-			CheckDlgButton(pHdr->hwndDisplay, user->BBSNumber + 24, BST_INDETERMINATE);
-		}
-
-		CheckDlgButton(pHdr->hwndDisplay,105, BST_INDETERMINATE);
-		CheckDlgButton(pHdr->hwndDisplay,106, BST_UNCHECKED);
-		CheckDlgButton(pHdr->hwndDisplay,107, BST_CHECKED);
-
-
-		break;
-
-
 	case MAINTPARAMS:
 
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAXMSG, MaxMsgno, FALSE);
@@ -650,10 +530,6 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDM_LTAT, Text);
 
 		Text[0] = 0;
-
-
-
-
 
 	}
 
@@ -826,9 +702,10 @@ int Do_User_Sel_Changed(HWND hDlg)
 	return 0;
 }
 
-VOID Do_Add_User()
+VOID Do_Add_User(HWND hDlg)
 {
 	struct UserInfo * user;
+	int n;
 	
 	if (LookupCall(CurrentConfigCall))
 		wsprintf(InfoBoxText, "User %s already exists", CurrentConfigCall);
@@ -844,7 +721,12 @@ VOID Do_Add_User()
 	}	
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
-	OnSelChanged(hwndDlg);					// Force a reload of dialog
+	SendDlgItemMessage(hDlg, IDC_USER, CB_RESETCONTENT, 0, 0);
+
+	for (n = 1; n <= NumberofUsers; n++)
+	{
+		SendDlgItemMessage(hDlg, IDC_USER, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)UserRecPtr[n]->Call);
+	} 
 
 	return;
 
@@ -862,7 +744,7 @@ VOID SetupNewBBS(struct UserInfo * user)
 
 
 
-VOID Do_Delete_User()
+VOID Do_Delete_User(HWND hDlg)
 {
 	struct UserInfo * user;
 	int n;
@@ -891,7 +773,12 @@ VOID Do_Delete_User()
 	
 	NumberofUsers--;
 
-	OnSelChanged(hwndDlg);					// Force a reload of dialog
+	SendDlgItemMessage(hDlg, IDC_USER, CB_RESETCONTENT, 0, 0);
+
+	for (n = 1; n <= NumberofUsers; n++)
+	{
+		SendDlgItemMessage(hDlg, IDC_USER, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)UserRecPtr[n]->Call);
+	} 
 
 	wsprintf(InfoBoxText, "User %s deleted", user->Call);
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -904,7 +791,7 @@ VOID Do_Delete_User()
 	return;
 
 }
-VOID Do_Save_User()
+VOID Do_Save_User(HWND hDlg)
 {
 	struct UserInfo * user;
 
@@ -924,12 +811,12 @@ VOID Do_Save_User()
 		return;
 	}
 
-	GetDlgItemText(hwndDisplay, IDC_NAME, user->Name, 17);
-	GetDlgItemText(hwndDisplay, IDC_PASSWORD, user->pass, 12);
-	GetDlgItemText(hwndDisplay, IDC_ZIP, user->Address, 60);
-	GetDlgItemText(hwndDisplay, IDC_HOMEBBS, user->HomeBBS, 40);
+	GetDlgItemText(hDlg, IDC_NAME, user->Name, 17);
+	GetDlgItemText(hDlg, IDC_PASSWORD, user->pass, 12);
+	GetDlgItemText(hDlg, IDC_ZIP, user->Address, 60);
+	GetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS, 40);
 
-	if (IsDlgButtonChecked(hwndDisplay, IDC_BBSFLAG))
+	if (IsDlgButtonChecked(hDlg, IDC_BBSFLAG))
 	{
 		// If BBS Flag has changed, must set up or delete forwarding info
 
@@ -952,16 +839,16 @@ VOID Do_Save_User()
 		}
 	}
 			
-	if (IsDlgButtonChecked(hwndDisplay, IDC_PMSFLAG))
+	if (IsDlgButtonChecked(hDlg, IDC_PMSFLAG))
 		user->flags |= F_PMS; else user->flags &= ~F_PMS;
 
-	if (IsDlgButtonChecked(hwndDisplay, IDC_EXPERT))
+	if (IsDlgButtonChecked(hDlg, IDC_EXPERT))
 		user->flags |= F_EXP; else user->flags &= ~F_EXP;
 
-	if (IsDlgButtonChecked(hwndDisplay, IDC_EXCLUDED))
+	if (IsDlgButtonChecked(hDlg, IDC_EXCLUDED))
 		user->flags |= F_EXC; else user->flags &= ~F_EXC;
 
-	if (IsDlgButtonChecked(hwndDisplay, IDC_SYSOP))
+	if (IsDlgButtonChecked(hDlg, IDC_SYSOP))
 		user->flags |= F_SYS; else user->flags &= ~F_SYS;
 
 	SaveUserDatabase();
@@ -1084,7 +971,7 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 	return 0;
 }
 
-VOID Do_Save_Msg()
+VOID Do_Save_Msg(HWND hDlg)
 {
 	struct MsgInfo * Msg;
 	struct UserInfo * user;
@@ -1102,21 +989,18 @@ VOID Do_Save_Msg()
 
 	Msg = MsgHddrPtr[CurrentMsgIndex];
 
-	GetDlgItemText(hwndDisplay, 6001, Msg->from, 7);
-	GetDlgItemText(hwndDisplay, 6002, Msg->bid, 13);
-	GetDlgItemText(hwndDisplay, 6003, Msg->to, 7);
-	GetDlgItemText(hwndDisplay, 6004, Msg->via, 41);
-	GetDlgItemText(hwndDisplay, 6005, Msg->title, 61);
+	GetDlgItemText(hDlg, 6001, Msg->from, 7);
+	GetDlgItemText(hDlg, 6002, Msg->bid, 13);
+	GetDlgItemText(hDlg, 6003, Msg->to, 7);
+	GetDlgItemText(hDlg, 6004, Msg->via, 41);
+	GetDlgItemText(hDlg, 6005, Msg->title, 61);
 
-	GetDlgItemText(hwndDisplay, IDC_MSGTYPE, status, 2);
+	GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
 	Msg->type = status[0];
-
-	GetDlgItemText(hwndDisplay, IDC_MSGSTATUS, status, 2);
-	Msg->status = status[0];
 
 	for (user = BBSChain; user; user = user->BBSNext)
 	{
-		n = IsDlgButtonChecked(hwndDisplay, user->BBSNumber + 24);
+		n = IsDlgButtonChecked(hDlg, user->BBSNumber + 24);
 
 		BBSNumber = user->BBSNumber;
 
@@ -1172,12 +1056,26 @@ VOID Do_Save_Msg()
 		}
 	}
 
+	GetDlgItemText(hDlg, IDC_MSGSTATUS, status, 2);
+	
+	if (Msg->status != status[0])
+	{
+		// Need to take action if killing message
+
+		Msg->status = status[0];
+		if (status[0] == 'K')
+			FlagAsKilled(Msg);					// Clear forwarding bits
+	}
+
+
 	wsprintf(InfoBoxText, "Message Updated");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 	Msg->datechanged=time(NULL);
 
-	SaveMessageDatabase();				
+	SaveMessageDatabase();		
+
+	Do_Msg_Sel_Changed(hDlg);				// Refresh
 }
 
 VOID SaveBBSConfig()
@@ -1223,7 +1121,7 @@ VOID SaveBBSConfig()
 
 	}
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	wsprintf(InfoBoxText, "Warning - Program must be restarted for changes to be effective");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
@@ -1283,25 +1181,68 @@ VOID SaveChatConfig()
 	BOOL OK1;
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
 	HKEY hKey=0;
-	int retCode,disp;
+	int retCode, disp, Type, Vallen, len;
+	int ptr;
+	int OldChatAppl;
 
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
+	OldChatAppl = ChatApplNum;
+	
 	ChatApplNum = GetDlgItemInt(hwndDisplay, IDC_ChatAppl, &OK1, FALSE);
 	retCode = RegSetValueEx(hKey, "ChatApplNum",0 , REG_DWORD,(BYTE *)&ChatApplNum, 4);
 
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDC_ChatNodes, hKey, "OtherChatNodes");
 
-	RegCloseKey(hKey);
+	// reinitialise other nodes list. rtlink messes with the string so pass copy
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	node_close();
+
+	// Show dialog box now - gives time for links to close
+	
+	if (ChatApplNum == OldChatAppl)
+		wsprintf(InfoBoxText, "Configuration Changes Saved and Applied");
+	else
+	{
+		ChatApplNum = OldChatAppl;
+		wsprintf(InfoBoxText, "Warning Program must be restarted to change Chat Appl Num");
+	}
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
+	free(OtherNodes);
+
+	// Get length of Chatnodes String
+				
+	Vallen=0;
+	RegQueryValueEx(hKey,"OtherChatNodes",0,			
+		(ULONG *)&Type,NULL,(ULONG *)&Vallen);
+
+	if (Vallen)
+		OtherNodes=malloc(Vallen);
+
+	RegQueryValueEx(hKey,"OtherChatNodes",0,			
+		(ULONG *)&Type,OtherNodes,(ULONG *)&Vallen);
+
+	RegCloseKey(hKey);
+
+	removelinks();
+	 
+	ptr=0;
+
+	while (OtherNodes[ptr])
+	{
+		len=strlen(&OtherNodes[ptr]);		
+		rtlink(_strdup(&OtherNodes[ptr]));			
+		ptr+= (len + 1);
+	}
+
+	if (user_hd)			// Any Users?
+		makelinks();		// Bring up links
 }
 	
 
-VOID SaveFWDConfig()
+VOID SaveFWDConfig(HWND hDlg)
 {
 	HKEY hKey=0;
 	int retCode,disp, OK;
@@ -1314,20 +1255,20 @@ VOID SaveFWDConfig()
 
 		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
-		MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDC_ATCALLS, hKey, "ATCalls");
-		MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDC_TOCALLS, hKey, "ToCalls");
-		MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDC_HROUTES, hKey, "HRoutes");
-		MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDC_CALL, hKey, "Connect Script");
+		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_ATCALLS, hKey, "ATCalls");
+		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_TOCALLS, hKey, "ToCalls");
+		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HROUTES, hKey, "HRoutes");
+		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_CALL, hKey, "Connect Script");
 
-		Rev = IsDlgButtonChecked(hwndDisplay, IDC_FWDENABLE);
+		Rev = IsDlgButtonChecked(hDlg, IDC_FWDENABLE);
 		retCode = RegSetValueEx(hKey,"Enabled", 0, REG_DWORD, (BYTE *)&Rev,4);
 
-		Rev = IsDlgButtonChecked(hwndDisplay, IDC_REVERSE);
+		Rev = IsDlgButtonChecked(hDlg, IDC_REVERSE);
 		retCode = RegSetValueEx(hKey,"RequestReverse", 0, REG_DWORD, (BYTE *)&Rev,4);
 		
 		RegCloseKey(hKey);
 		
-		FWDInterval = GetDlgItemInt(hwndDisplay, IDC_FWDINT, &OK, FALSE);
+		FWDInterval = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
 
 		// Interval is not user specific
 
@@ -1463,7 +1404,7 @@ MultiLineDialogToREG_MULTI_SZ(HWND hDialog, int DLGItem, HKEY hKey, char * Value
 
 }
 
-VOID SaveWindowPosns()
+VOID SaveWindowConfig()
 {
 	HKEY hKey=0;
 	int retCode, disp;
@@ -1489,6 +1430,12 @@ VOID SaveWindowPosns()
 
 		wsprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
 		retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
+		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
+		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&WarnWrap,4);
+		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&WrapInput,4);
+		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&FlashOnConnect,4);
 
 		RegCloseKey(hKey);
 	}
@@ -1620,6 +1567,28 @@ TryAgain:
 		RegQueryValueEx(hKey,"ConsoleSize",0,			
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
+		Vallen=4;
+		RegQueryValueEx(hKey,"Bells",0,			
+			(ULONG *)&Type,(UCHAR *)&Bells,(ULONG *)&Vallen);
+	
+		Vallen=4;
+		RegQueryValueEx(hKey,"StripLF",0,			
+			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"WarnWrap",0,			
+			(ULONG *)&Type,(UCHAR *)&WarnWrap,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"WrapInput",0,			
+			(ULONG *)&Type,(UCHAR *)&WrapInput,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"FlashOnConnect",0,			
+			(ULONG *)&Type,(UCHAR *)&FlashOnConnect,(ULONG *)&Vallen);
+
+
+
 		sscanf(Size,"%d,%d,%d,%d",&ConsoleRect.left,&ConsoleRect.right,&ConsoleRect.top,&ConsoleRect.bottom);
 
 		Vallen=80;
@@ -1721,4 +1690,209 @@ TryAgain:
 
 	return TRUE;
 
+}
+
+
+INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int Command, n;
+		
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+
+	case WM_INITDIALOG:
+
+		for (n = 1; n <= NumberofUsers; n++)
+		{
+			SendDlgItemMessage(hDlg, IDC_USER, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)UserRecPtr[n]->Call);
+		} 
+
+		return (INT_PTR)TRUE;
+
+
+	case WM_COMMAND:
+
+		Command = LOWORD(wParam);
+
+		switch (Command)
+		{
+
+		case IDOK:
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+
+
+		case IDC_USER:
+
+			// User Selection Changed
+
+			Do_User_Sel_Changed(hDlg);
+
+			return TRUE;
+
+
+		case IDC_ADDUSER:
+
+			Do_Add_User(hDlg);
+			return TRUE;
+
+		case IDC_DELETEUSER:
+
+			Do_Delete_User(hDlg);
+			return TRUE;
+
+		case IDC_SAVEUSER:
+
+			Do_Save_User(hDlg);
+			return TRUE;
+
+		}
+		break;
+	}
+	
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int Command, n;
+	char msgno[10];
+	struct UserInfo * user;
+
+
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+
+	case WM_INITDIALOG:
+
+		for (n = 1; n <= NumberofMessages; n++)
+		{
+			wsprintf(msgno, "%d", MsgHddrPtr[n]->number);
+			SendDlgItemMessage(hDlg, 0, LB_ADDSTRING, 0, (LPARAM)msgno);
+		} 
+
+		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
+		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
+
+		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "N");
+		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Y");
+		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "F");
+		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "K");
+		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "H");
+		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "$");
+
+		for (n = 1; n <= NBBBS; n++ )
+		{
+			CheckDlgButton(hDlg, n + 24, BST_INDETERMINATE);
+		}
+
+		for (user = BBSChain; user; user = user->BBSNext)
+		{
+			SetDlgItemText(hDlg, user->BBSNumber + 24, user->Call);
+			CheckDlgButton(hDlg, user->BBSNumber + 24, BST_INDETERMINATE);
+		}
+
+		CheckDlgButton(hDlg,105, BST_INDETERMINATE);
+		CheckDlgButton(hDlg,106, BST_UNCHECKED);
+		CheckDlgButton(hDlg,107, BST_CHECKED);
+
+
+
+		return (INT_PTR)TRUE;
+
+
+	case WM_COMMAND:
+
+		Command = LOWORD(wParam);
+
+		switch (Command)
+		{
+
+		case IDOK:
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+
+		case 0:
+
+			// Msg Selection Changed
+
+			Do_Msg_Sel_Changed(hDlg);
+
+			return TRUE;
+
+		case IDC_SAVEMSG:
+
+			Do_Save_Msg(hDlg);
+			return TRUE;
+
+
+
+		}
+		break;
+	}
+	
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int Command;
+	struct UserInfo * user;
+
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+
+	case WM_INITDIALOG:
+
+		for (user = BBSChain; user; user = user->BBSNext)
+		{
+			SendDlgItemMessage(hDlg, IDC_BBS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)user->Call);
+		}  
+
+		break;
+
+
+		return (INT_PTR)TRUE;
+
+
+	case WM_COMMAND:
+
+		Command = LOWORD(wParam);
+
+		switch (Command)
+		{
+
+		case IDOK:
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+
+		case IDC_BBS:
+
+			// BBS Selection Changed
+
+			Do_BBS_Sel_Changed(hDlg);
+
+			return TRUE;
+
+
+
+		case IDC_FWDSAVE:
+			
+			SaveFWDConfig(hDlg);
+			return TRUE;
+
+		}
+		break;
+	}
+	
+	return (INT_PTR)FALSE;
 }

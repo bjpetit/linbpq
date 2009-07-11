@@ -116,4 +116,6 @@
 #define IDC_MSGS 508 
 #define IDC_HELD 509
 
-
+#define IDD_USEREDIT 200
+#define IDD_FORWARDING 201
+#define IDD_MSGEDIT 202

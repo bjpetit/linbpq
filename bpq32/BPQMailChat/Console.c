@@ -4,7 +4,7 @@
 
 #include "stdafx.h"
 
-char ClassName[]="BPQMAINWINDOW";
+char ClassName[]="CONSOLEWINDOW";
 
 char SYSOPCall[50];
 
@@ -33,19 +33,23 @@ RECT OutputRect;
 
 int Height, Width, LastY;
 
+int ClientHeight, ClientWidth;
+
+
 char kbbuf[160];
 int kbptr=0;
-char readbuff[1024];
+char readbuff[101000];
 
 BOOL Bells = TRUE;
 BOOL StripLF = TRUE;
-BOOL LogMonitor = FALSE;
-BOOL LogOutput = FALSE;
-BOOL SendDisconnected = TRUE;
 
 BOOL WarnWrap = TRUE;
+BOOL FlashOnConnect = TRUE;
+BOOL WrapInput = TRUE;
 
-
+int WrapLen = 80;
+int WarnLen = 90;
+int maxlinelen = 80;
 
 int PartLinePtr=0;
 int PartLineIndex=0;		// Listbox index of (last) incomplete line
@@ -96,15 +100,11 @@ BOOL CreateConsole()
 
 	hMenu=GetMenu(hConsole);
 
-	if (Bells & 1)
-		CheckMenuItem(hMenu,BPQBELLS, MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQBELLS, MF_UNCHECKED);
-
-  	if (StripLF & 1)
-		CheckMenuItem(hMenu,BPQStripLF, MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQStripLF, MF_UNCHECKED);
+	CheckMenuItem(hMenu,BPQBELLS, (Bells) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,BPQStripLF, (StripLF) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_WARNINPUT, (WarnWrap) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_WRAPTEXT, (WrapInput) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_Flash, (FlashOnConnect) ? MF_CHECKED : MF_UNCHECKED);
 
 	DrawMenuBar(hWnd);	
 
@@ -169,22 +169,27 @@ BOOL CreateConsole()
 
 }
 
-
 void MoveWindows()
 {
-	RECT rcMain, rcClient;
-	int ClientHeight, ClientWidth;
+	RECT rcClient;
 
-	GetWindowRect(hConsole, &rcMain);
 	GetClientRect(hConsole, &rcClient); 
 
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 
-//	MoveWindow(hwndMon,2, 0, ClientWidth-4, SplitPos, TRUE);
 	MoveWindow(hwndOutput,2, 2, ClientWidth-4, ClientHeight-InputBoxHeight-4, TRUE);
 	MoveWindow(hwndInput,2, ClientHeight-InputBoxHeight-2, ClientWidth-4, InputBoxHeight, TRUE);
-//	MoveWindow(hwndSplit,0, SplitPos, ClientWidth, SplitBarHeight, TRUE);
+
+	GetClientRect(hwndInput, &rcClient); 
+
+	ClientHeight = rcClient.bottom;
+	ClientWidth = rcClient.right;
+	
+	WarnLen = ClientWidth/8 - 10;
+	WrapLen = WarnLen;
+	maxlinelen = WarnLen;
+
 }
 
 
@@ -218,16 +223,22 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			ToggleParam(hWnd, &StripLF, BPQStripLF);
 			break;
 
-		case BPQLogOutput:
+		case IDM_WARNINPUT:
 
-			ToggleParam(hWnd, &LogOutput, BPQLogOutput);
+			ToggleParam(hWnd, &WarnWrap, IDM_WARNINPUT);
 			break;
 
 
-		case BPQLogMonitor:
+		case IDM_WRAPTEXT:
 
-			ToggleParam(hWnd, &LogMonitor, BPQLogMonitor);
+			ToggleParam(hWnd, &WrapInput, IDM_WRAPTEXT);
 			break;
+
+		case IDM_Flash:
+
+			ToggleParam(hWnd, &FlashOnConnect, IDM_WRAPTEXT);
+			break;
+
 
 		case BPQCLEAROUT:
 
@@ -332,39 +343,32 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
-	int index;
-	char Temp[255];
+	int TextLen;
 
 	if (uMsg == WM_CHAR) 
 	{
+		if(WarnWrap || WrapInput)
+		{
+			TextLen = SendMessage(hwndInput,WM_GETTEXTLENGTH, 0, 0);
+
+			if (WarnWrap)
+				if (TextLen == WarnLen) Beep(220, 150);
+			
+			if (WrapInput)
+				if ((wParam == 0x20) && (TextLen > WrapLen))
+					wParam = 13;		// Replace space with Enter
+
+		}
+
 		if (wParam == 13)
 		{
-			//
-			//	if not connected, and autoconnect is
-			//	enabled, connect now
-						
 			kbptr=SendMessage(hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) kbbuf);
-	
-			// Echo
-
-			if (PartLinePtr != 0)
-			{
-				// Last Line was not terminated with LF - append input text to it
-				
-				SendMessage(hwndOutput,LB_GETTEXT,PartLineIndex,(LPARAM)(LPCTSTR) Temp );
-				strcat(Temp, kbbuf);
-				PartLinePtr=0;
-				index=SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) &Temp[0] );		
-				index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) &Temp[0] );		
-			}
-			else
-				index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) &kbbuf[0] );		
-			
-			SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
-
-			// Replace null with CR, and send to Node
 
 			kbbuf[kbptr]=13;
+
+			// Echo
+
+			WritetoConsoleWindow(kbbuf, kbptr+1);
 
 			ProcessLine(Console, user, &kbbuf[0], kbptr+1);
 
@@ -385,9 +389,6 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			return 0; 
 		}
-
-		if(WarnWrap)
-			if (SendMessage(hwndInput,WM_GETTEXTLENGTH, 0, 0) == 80) Beep(220, 150);
  
 	}
 
@@ -438,7 +439,7 @@ int WritetoConsoleWindow(char * Msg, int len)
 
 lineloop:
 
-	if (PartLinePtr > 300)
+	if (PartLinePtr > 100000)
 		PartLinePtr = 0;
 
 	if (len > 0)
@@ -460,11 +461,63 @@ lineloop:
 
 		}
 
-		*(ptr2++)=0;
+					*(ptr2++)=0;
 
-		index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+					// If len is greater that screen with, fold
+
+					if ((ptr2 - ptr1) > maxlinelen)
+					{
+						char * ptr3;
+						char * saveptr1 = ptr1;
+						int linelen = ptr2 - ptr1;
+						int foldlen;
+						char save;
 					
-	//		if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
+					foldloop:
+
+						ptr3 = ptr1 + maxlinelen;
+					
+						while(*ptr3!= 0x20 && ptr3 > ptr1)
+						{
+							ptr3--;
+						}
+						
+						foldlen = ptr3 - ptr1 ;
+
+						if (foldlen == 0)
+						{
+							// No space before, so split at width
+
+							foldlen = maxlinelen;
+							ptr3 = ptr1 + maxlinelen;
+
+						}
+						else
+						{
+							ptr3++ ; // Omit space
+							linelen--;
+						}
+						save = ptr1[foldlen];
+						ptr1[foldlen] = 0;
+						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+						ptr1[foldlen] = save;
+						linelen -= foldlen;
+						ptr1 = ptr3;
+
+						if (linelen > maxlinelen)
+							goto foldloop;
+						
+						if (linelen > 0)
+							index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+
+						ptr1 = saveptr1;
+					}
+
+					else
+					{
+						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+					}
+
 
 		PartLinePtr=0;
 

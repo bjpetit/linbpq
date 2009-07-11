@@ -10,6 +10,7 @@ CIRCUIT *circuit_hd = NULL;			// This is a chain of RT circuits. There may be ot
 NODE *node_hd = NULL;
 LINK *link_hd = NULL;
 TOPIC *topic_hd = NULL;
+USER *user_hd = NULL;
 
 int ChatTmr = 0;
 
@@ -691,7 +692,13 @@ void text_tellu_Joined(USER * user)
 		nputs(circuit, buf);
 
 		if (circuit->u.user->flags & u_bells)
-			nputc(circuit, 7);
+			if (circuit->BPQStream < 0) // Console
+			{
+				FlashWindow(hConsole, TRUE);
+				nputc(circuit, 7);
+			}
+			else
+				nputc(circuit, 7);
 	}
 }
 // Tell one link circuit about a local user change of topic.
@@ -915,6 +922,7 @@ VOID removelinks()
 		free(link->call);
 		free(link);
 	}
+	link_hd = NULL;
 }
 
 // We don't allocate memory for circuit, but we do chain it
@@ -1252,7 +1260,18 @@ void makelinks(void)
 	}
 }
 
+VOID node_close()
+{
+	// Close all Node-Node Links
 
+	CIRCUIT *circuit;
+
+	for (circuit = circuit_hd; circuit; circuit = circuit->next)
+	{
+		if (circuit->flags & (p_linked | p_linkini | p_linkwait))
+			Disconnect(circuit->BPQStream);
+	}
+}
 
 // Send Keepalives to all connected nodes
 
@@ -1271,11 +1290,8 @@ static void node_keepalive()
 	else
 	{
 		// No users. Close links
-		for (circuit = circuit_hd; circuit; circuit = circuit->next)
-		{
-			if (circuit->flags & (p_linked | p_linkini | p_linkwait))
-				Disconnect(circuit->BPQStream);
-		}
+
+		node_close();
 	}
 }
 

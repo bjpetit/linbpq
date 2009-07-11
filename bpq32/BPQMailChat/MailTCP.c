@@ -102,7 +102,6 @@ VOID TCPTimer()
 			SendtoISP();
 	}
 }
-
 BOOL InitialiseTCP()
 {
 	int			  Error;              // catches return value of WSAStartup
@@ -1218,8 +1217,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		Msg = sockptr->POP3Msgs[i-1];
 
-		Msg->status='K';
-		Msg->datechanged=time(NULL);
+		FlagAsKilled(Msg);
 
 		SendSock(sock, "+OK ");
 		return;
@@ -1651,7 +1649,7 @@ BOOL SendtoISP()
 
 			if (Body == NULL)
 			{
-				Msg->status = 'K';
+				FlagAsKilled(Msg);
 				return FALSE;
 			}
 			SMTPConnect(ISPSMTPName, ISPSMTPPort, Msg, Body);

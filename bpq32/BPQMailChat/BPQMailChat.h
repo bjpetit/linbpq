@@ -445,7 +445,7 @@ struct FBBHeaderLine
 	struct MsgInfo * FwdMsg;		// Header so we can mark as complete 
 };
 
-static USER *user_hd = NULL;
+extern USER *user_hd;
 
 static PROC *Rt_Control;
 static int  rtrun = FALSE;
@@ -492,6 +492,8 @@ VOID * _zalloc(int len);
 VOID FreeChatMemory();
 VOID ChatTimer();
 VOID nputs(CIRCUIT * conn, char * buf);
+VOID node_close();
+VOID removelinks();
 
 
 #define Connect(stream) SessionControl(stream,1,0)
@@ -647,6 +649,7 @@ void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
 void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
+VOID FlagAsKilled(struct MsgInfo * Msg);
 int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
@@ -692,8 +695,8 @@ VOID FreeList(char ** Hddr);
 int Do_User_Sel_Changed(HWND hDlg);
 int Do_Msg_Sel_Changed(HWND hDlg);
 VOID Do_Save_Msg();
-VOID Do_Add_User();
-VOID Do_Delete_User();
+VOID Do_Add_User(HWND hDlg);
+VOID Do_Delete_User(HWND hDlg);
 VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user);
 VOID Do_Save_User();
 VOID DeleteBBS();
@@ -703,7 +706,7 @@ VOID SaveChatConfig();
 VOID SaveISPConfig();
 VOID SaveFWDConfig();
 VOID SaveMAINTConfig();
-VOID SaveWindowPosns();
+VOID SaveWindowConfig();
 VOID ReinitializeFWDStruct(struct UserInfo * user);
 VOID CopyBIDDatabase();
 VOID CopyMessageDatabase();
@@ -769,6 +772,7 @@ VOID ExpireMessages();
 VOID KillMsg(struct MsgInfo * Msg);
 BOOL RemoveKilledMessages();
 VOID Renumber_Messages();
+BOOL ExpireBIDs();
 
 extern BOOL cfgMinToTray;
 
@@ -785,7 +789,11 @@ extern char NewUserPrompt[];
 extern int Ver[4];
 
 extern struct MsgInfo ** MsgHddrPtr;
+extern BIDRec ** BIDRecPtr;
+
 extern int NumberofMessages;
+extern int NumberofBIDs;
+
 extern char hostname[];
 extern char RtUsr[];
 extern char RtUsrTemp[];
@@ -848,6 +856,14 @@ extern char *month[];
 extern CIRCUIT * Console;
 extern HWND hConsole;
 extern RECT ConsoleRect;
+
+extern BOOL Bells;
+extern BOOL StripLF;
+
+extern BOOL WarnWrap;
+extern BOOL FlashOnConnect;
+extern BOOL WrapInput;
+
 
 extern RECT MonitorRect;
 extern HWND hMonitor;

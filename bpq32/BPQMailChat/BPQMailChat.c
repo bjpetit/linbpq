@@ -2,11 +2,33 @@
 //
 //
 
+// Version 1.0.0.17
+
+//	Split Messasge, User and BBS Editing from Main Config.
+//	Add word wrap to Console input and output
+//  Flash Console on chat user connect
+//	Fix procesing Name response in chat mode
+//	Fix processing of *RTL from station not defined as a Caht Node
+//	Fix overlength lines ln List responses
+//  Housekeeping expires BIDs 
+//  Killing a message removes it from the forwarding counts
+
+// Version 1.0.0.18
+
+// Save User Database when name is entered or updated so it is not lost on a crash
+
+
+
 #include "stdafx.h"
 
 #include "GetVersion.h"
 
 #define MAX_LOADSTRING 100
+
+INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
@@ -234,7 +256,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	_CrtDumpMemoryLeaks();
 
-	SaveWindowPosns();
+	SaveWindowConfig();
 	
 	return (int) msg.wParam;
 }
@@ -570,6 +592,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
 			break;
 
+		case IDM_USERS:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_USEREDIT), hWnd, UserEditDialogProc);
+			break;
+
+		case IDM_FWD:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_FORWARDING), hWnd, FwdEditDialogProc);
+			break;
+
+		case IDM_MESSAGES:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_MSGEDIT), hWnd, MsgEditDialogProc);
+			break;
 
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
@@ -640,7 +673,7 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 int ShowConnections()
 {
 	char msg[80];
-	ConnectionInfo * conn;
+	CIRCUIT * conn;
 	int i,n;
 	time_t now;
 	struct tm * tm;
@@ -668,7 +701,7 @@ int ShowConnections()
 			if ((conn->Flags & CHATMODE)  && conn->topic)
 			{
 				i=wsprintf(msg, "%-10s %-10s %2d %-10s%5d",
-					conn->UserPointer->Name, conn->u.link->alias, conn->BPQStream,
+					conn->UserPointer->Name, conn->u.user->call, conn->BPQStream,
 					conn->topic->topic->name, conn->OutputQueueLength - conn->OutputGetPointer);
 			}
 			else
@@ -1623,6 +1656,10 @@ Next:
 	{
 		BID = AllocateBIDRecord();
 		memcpy(BID, &BIDRec,  sizeof (BIDRec));
+
+		if (BID->timestamp == 0) 	
+			BID->timestamp = LOWORD(time(NULL)/86400);
+
 		goto Next;
 	}
 
@@ -1825,19 +1862,9 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 		}
 		return;
 	}
-
-
-		//nodeprintf(conn, "Hello %s\rWelcome to %s Chat Server (/H for help) >\r", user->Name, BBSName);
 	
 	nodeprintf(conn, "Hello %s. Latest Message is %d, Last listed is %d\r%s BBS (H for help) >\r",
 				user->Name, LatestMsg, user->lastmsg, BBSName);
-
-//	if (conn->Flags & CHATMODE)
-//	{
-//		len = wsprintf(Msg, "%s - %s Logged on to Channel %d\r", user->Call, user->Name, conn->Conference);
-//		SendtoOtherUsers(conn, Msg, len);
-//	}
-
 }
 
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
@@ -1890,6 +1917,8 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		memcpy(user->Name, Buffer, len-1);
 		conn->Flags &=  ~GETTINGUSER;
 		SendWelcomeMsg(conn->BPQStream, conn, user);
+		SaveUserDatabase();
+
 		return;
 	}
 
@@ -2007,6 +2036,8 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		if (Arg1)
 			strcpy(user->Name, Arg1);
 		SendWelcomeMsg(conn->BPQStream, conn, user);
+		SaveUserDatabase();
+
 		return;
 	}
 
@@ -2068,9 +2099,18 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 {
 	ConnectionInfo *c;
 
-	Buffer[len] = 0;
-
 	WriteLogLine('<',Buffer, len, LOG_CHAT);
+
+	if (conn->Flags & GETTINGUSER)
+	{
+		memcpy(user->Name, Buffer, len-1);
+		conn->Flags &=  ~GETTINGUSER;
+		SendWelcomeMsg(conn->BPQStream, conn, user);
+		SaveUserDatabase();
+		return;
+	}
+
+	Buffer[len] = 0;
 
 	strlop(Buffer, '\r');
 
@@ -2117,17 +2157,19 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 	if(conn->u.user == NULL)
 		return;									// A node link, but not activated yet
 
-//	if ((len > 1) && Buffer[0] == '/')
+
+	if ((len <6) && (memcmp(Buffer, "*RTL", 4) == 0))
+	{
+		// Other end thinks this is a node-node link
+
+		Disconnect(conn->BPQStream);
+		return;
+	}
+
 	if (Buffer[0] == '/')
 	{
 
 		// Process Command
-
-//		Cmd = strtok_s(&Buffer[1], seps, &Context);
-
-//		if (Cmd == NULL) goto NullCmd;
-
-//		CmdLen = strlen(Cmd);
 
 		if (_memicmp(&Buffer[1], "Bye", 1) == 0)
 		{
@@ -2393,6 +2435,29 @@ int GetFileList(char * Dir)
 }
 */
 
+VOID FlagAsKilled(struct MsgInfo * Msg)
+{
+	struct UserInfo * user;
+
+	Msg->status='K';
+	Msg->datechanged=time(NULL);
+
+	// Remove any forwarding references
+
+	if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+	{	
+		for (user = BBSChain; user; user = user->BBSNext)
+		{
+			if (check_fwd_bit(Msg->fbbs, user->BBSNumber))
+			{
+				user->ForwardingInfo->MsgCount--;
+				clear_fwd_bit(Msg->fbbs, user->BBSNumber);
+			}
+		}
+	}
+}
+
+
 
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
 {
@@ -2421,8 +2486,7 @@ void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 			if ((_stricmp(Msg->to, user->Call) == 0)&& (Msg->status == 'Y'))
 			{
-				Msg->status='K';
-				Msg->datechanged=time(NULL);
+				FlagAsKilled(Msg);
 
 				nodeprintf(conn, "Message #%d Killed\r", Msg->number);
 			}
@@ -2444,8 +2508,7 @@ void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 		return;
 	}
 
-	Msg->status='K';
-	Msg->datechanged=time(NULL);
+	FlagAsKilled(Msg);
 
 	nodeprintf(conn, "Message #%d Killed\r", msgno);
 
@@ -2455,15 +2518,15 @@ void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
 {
 	if (Msg->to[0] == 0 && Msg->via[0] != 0)
-		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s %-6s %-61s\r",
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s %-6s %-s\r",
 				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->via, Msg->from, Msg->title);
 
 	else
 		if (Msg->via[0] != 0)
-			nodeprintf(conn, "%-6d %s %c%c   %5d %-6s@%-6s %-6s %-61s\r",
+			nodeprintf(conn, "%-6d %s %c%c   %5d %-6s@%-6s %-6s %-s\r",
 				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->via, Msg->from, Msg->title);
 	else
-		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s        %-6s %-61s\r",
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s        %-6s %-s\r",
 				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->from, Msg->title);
 
 	if (Msg->number > conn->lastmsg) 
@@ -2729,6 +2792,32 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 	if (MsgBytes)
 	{
+		int len;
+		char * ptr1, * ptr2;
+
+		// Remove lf chars
+
+		ptr1 = ptr2 = MsgBytes;
+		len = Msg->length;
+
+		while (len-- > 0)
+		{
+			*ptr2 = *ptr1;
+	
+			if (*ptr1 == '\r')
+				if (*(ptr1+1) == '\n')
+				{
+					ptr1++;
+					len--;
+				}
+			ptr1++;
+			ptr2++;
+
+		}
+
+		Msg->length = ptr2 - MsgBytes;
+
+
 		QueueMsg(conn, MsgBytes, Msg->length);
 		free(MsgBytes);
 
@@ -3272,7 +3361,30 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 	int WriteLen=0;
 	char Mess[255];
 	int len;
-   
+	char * ptr1, * ptr2;
+
+	// Remove lf chars
+
+	ptr1 = ptr2 = conn->MailBuffer;
+	len = Msg->length;
+
+	while (len-- > 0)
+	{
+		*ptr2 = *ptr1;
+	
+		if (*ptr1 == '\r')
+			if (*(ptr1+1) == '\n')
+			{
+				ptr1++;
+				len--;
+			}
+		ptr1++;
+		ptr2++;
+
+	}
+
+	Msg->length = ptr2 - conn->MailBuffer;
+
 	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
 	
 	hFile = CreateFile(MsgFile,

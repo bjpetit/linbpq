@@ -96,6 +96,7 @@ VOID DoHouseKeeping()
 {
 	RemoveKilledMessages();
 	ExpireMessages();
+	ExpireBIDs();
 
 	if (LatestMsg > MaxMsgno)
 		Renumber_Messages();
@@ -242,8 +243,7 @@ VOID ExpireMessages()
 
 VOID KillMsg(struct MsgInfo * Msg)
 {
-	Msg->status = 'K';
-	Msg->datechanged = time(NULL);
+	FlagAsKilled(Msg);
 }
 
 BOOL RemoveKilledMessages()
@@ -253,8 +253,6 @@ BOOL RemoveKilledMessages()
 	char MsgFile[MAX_PATH];
 
 	int i, n;
-
-//	Renumber_Messages();
 
 	NewMsgHddrPtr = zalloc((NumberofMessages+1) * 4);
 	NewMsgHddrPtr[0] = MsgHddrPtr[0];		// Copy Control Record
@@ -369,5 +367,39 @@ VOID Renumber_Messages()
 	SaveUserDatabase();
 
 	return;
+
+}
+
+BOOL ExpireBIDs()
+{
+	BIDRec * BID;
+	BIDRec ** NewBIDRecPtr;
+	unsigned short now=LOWORD(time(NULL)/86400);
+
+	int i, n;
+
+	NewBIDRecPtr = zalloc((NumberofBIDs+1) * 4);
+	NewBIDRecPtr[0] = BIDRecPtr[0];		// Copy Control Record
+
+	i = 0;
+
+	for (n = 1; n <= NumberofBIDs; n++)
+	{
+		BID = BIDRecPtr[n];
+
+		if ((now - BID->timestamp) < BidLifetime)
+			NewBIDRecPtr[++i] = BID;
+	}
+
+	NumberofBIDs = i;
+	NewBIDRecPtr[0]->msgno = i;
+
+	free(BIDRecPtr);
+
+	BIDRecPtr = NewBIDRecPtr;
+
+	SaveBIDDatabase();
+
+	return TRUE;
 
 }
