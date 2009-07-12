@@ -91,15 +91,60 @@ VOID * GetOverrides(HKEY hKey, char * ValueName)
 
 	return Value;
 }
+int Removed;
+int Killed;
+int BIDSRemoved;
+
+
+INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int Command;
+		
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+		SetDlgItemInt(hDlg, IDC_REMOVED, Removed, FALSE);
+		SetDlgItemInt(hDlg, IDC_KILLED, Killed, FALSE);
+		SetDlgItemInt(hDlg, IDC_LIVE, NumberofMessages - Killed, FALSE);
+		SetDlgItemInt(hDlg, IDC_TOTAL, NumberofMessages, FALSE);
+		SetDlgItemInt(hDlg, IDC_BIDSREMOVED, BIDSRemoved, FALSE);
+		SetDlgItemInt(hDlg, IDC_BIDSLEFT, NumberofBIDs, FALSE);
+
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+
+		Command = LOWORD(wParam);
+
+		switch (Command)
+		{
+		case IDOK:
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+
+		}
+		break;
+	}
+	
+	return 0;
+}
 
 VOID DoHouseKeeping()
 {
+
 	RemoveKilledMessages();
 	ExpireMessages();
 	ExpireBIDs();
 
 	if (LatestMsg > MaxMsgno)
 		Renumber_Messages();
+
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
+	return;
+
 }
 
 VOID ExpireMessages()
@@ -117,6 +162,8 @@ VOID ExpireMessages()
 	struct Override ** Calls;
 
 	int now=time(NULL);
+
+	Killed = 0;
 
 	PRLimit = now - PR*86400;
 	PURLimit = now - PUR*86400;
@@ -244,6 +291,7 @@ VOID ExpireMessages()
 VOID KillMsg(struct MsgInfo * Msg)
 {
 	FlagAsKilled(Msg);
+	Killed++;
 }
 
 BOOL RemoveKilledMessages()
@@ -251,8 +299,9 @@ BOOL RemoveKilledMessages()
 	struct MsgInfo * Msg;
 	struct MsgInfo ** NewMsgHddrPtr;
 	char MsgFile[MAX_PATH];
-
 	int i, n;
+
+	Removed = 0;
 
 	NewMsgHddrPtr = zalloc((NumberofMessages+1) * 4);
 	NewMsgHddrPtr[0] = MsgHddrPtr[0];		// Copy Control Record
@@ -267,6 +316,7 @@ BOOL RemoveKilledMessages()
 		{
 			wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
 			DeleteFile(MsgFile);
+			Removed++;
 		}
 		else
 			NewMsgHddrPtr[++i] = Msg;
@@ -390,6 +440,8 @@ BOOL ExpireBIDs()
 		if ((now - BID->timestamp) < BidLifetime)
 			NewBIDRecPtr[++i] = BID;
 	}
+
+	BIDSRemoved = NumberofBIDs - i;
 
 	NumberofBIDs = i;
 	NewBIDRecPtr[0]->msgno = i;

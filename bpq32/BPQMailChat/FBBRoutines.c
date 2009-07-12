@@ -237,7 +237,7 @@ badparam:
 ok:
 		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MAXSIZE))
 		{
-			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// CLear header
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBIndex++] = '-';
 		}
 		else
@@ -380,6 +380,8 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 	{
 		conn->FBBIndex = 0;		// ready for next block;
 		conn->FBBChecksum = 0;
+		conn->InputMode = 0;
+
 
 		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
 		{

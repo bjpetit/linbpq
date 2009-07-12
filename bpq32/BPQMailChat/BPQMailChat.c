@@ -16,8 +16,8 @@
 // Version 1.0.0.18
 
 // Save User Database when name is entered or updated so it is not lost on a crash
-
-
+// Fix Protocol Error in Compressed Forwarding when switching direction
+// Add Housekeeping results dialog.
 
 #include "stdafx.h"
 

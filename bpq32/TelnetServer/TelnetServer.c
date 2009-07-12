@@ -18,6 +18,9 @@
 //	Version 2.1.5  April 2009
 //  Remove limit on number of user records
 
+//	Version 2.1.6  April 2009
+//  Remove entry from Disconnect User Dialog when session closes
+
 #include "stdafx.h"
 #include "TelnetServer.h"
 #include "bpq32.h"
@@ -338,7 +341,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     
 				shutdown(sock,2);
 
-				closesocket(sock);   //' Tidy up
+				DataSocket_Disconnect(sockptr);
 	
 				return 0;
 			}
@@ -896,14 +899,22 @@ MsgLoop:
 
 int DataSocket_Disconnect( struct ConnectionInfo * sockptr)
 {
-	closesocket(sockptr->socket);
+	int n;
 
-	Disconnect(sockptr->BPQStream);
+	if (sockptr->SocketActive)
+	{
+		closesocket(sockptr->socket);
 
-	sockptr->SocketActive = FALSE;
+		Disconnect(sockptr->BPQStream);
+
+		n=sockptr->Number;
+
+		ModifyMenu(hDisMenu,n-1,MF_BYPOSITION | MF_STRING,IDM_DISCONNECT + n, ".");
+
+		sockptr->SocketActive = FALSE;
 	
-	ShowConnections();
-
+		ShowConnections();
+	}
 	return 0;
 }
 
@@ -1114,7 +1125,7 @@ int Disconnected (Stream)
 			if (DisconnectOnClose)
 			{
 				Sleep(1000);
-				closesocket(sock);
+				DataSocket_Disconnect(&ConnectionInfo[n]);
 			}
 			return 0;
 		}

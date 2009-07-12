@@ -113,6 +113,9 @@ RECT SplitRect;
 
 int Height, Width, LastY;
 
+int maxlinelen = 80;
+
+
 char Key[80];
 int portmask=0;
 int mtxparam=1;
@@ -120,7 +123,7 @@ int mcomparam=1;
 
 char kbbuf[160];
 int kbptr=0;
-char readbuff[1024];
+char readbuff[100000];				// for stupid bbs programs
 
 int ptr=0;
 
@@ -851,26 +854,14 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			
 			kbptr=SendMessage(hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) kbbuf);
 	
+			kbbuf[kbptr]=13;
+
 			// Echo
 
-			if (PartLinePtr != 0)
-			{
-				// Last Line was not terminated with LF - append input text to it
-				
-				SendMessage(hwndOutput,LB_GETTEXT,PartLineIndex,(LPARAM)(LPCTSTR) Temp );
-				strcat(Temp, kbbuf);
-				PartLinePtr=0;
-				index=SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) &Temp[0] );		
-				index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) &Temp[0] );		
-			}
-			else
-				index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) &kbbuf[0] );		
-			
-			SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
-
+			WritetoOutputWindow(kbbuf, kbptr+1);
+		
 			// Replace null with CR, and send to Node
 
-			kbbuf[kbptr]=13;
 			SendMsg(Stream, &kbbuf[0], kbptr+1);
 
 			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
@@ -1103,15 +1094,30 @@ DoReceivedData(HWND hWnd)
 {
 	char * ptr1, * ptr2;
 	int index;
+	char Msg[300];
 
 	if (RXCount(Stream) > 0)
 	{
 		do {
+
+			GetMsg(Stream, &Msg[0],&len,&count);
+		
+			WritetoOutputWindow(Msg, len);
+
+		} while (count > 0);
+	}
+	return (0);
+}
+int WritetoOutputWindow(char * Msg, int len)
+{
+	char * ptr1, * ptr2;
+	int index;
+
 		
 			if (PartLinePtr != 0)
 				SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );		
 
-			GetMsg(Stream, &readbuff[PartLinePtr],&len,&count);
+			memcpy(&readbuff[PartLinePtr], Msg, len);
 		
 			len=len+PartLinePtr;
 
@@ -1150,7 +1156,9 @@ DoReceivedData(HWND hWnd)
 					PartLinePtr=len;
 
 					memmove(readbuff,ptr1,len);
+
 					PartLineIndex=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+
 					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) PartLineIndex, MAKELPARAM(FALSE, 0));
 
 					return (0);
@@ -1160,9 +1168,61 @@ DoReceivedData(HWND hWnd)
 				{
 					*(ptr2++)=0;
 
-					index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
-					
 					if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
+					
+					// If len is greater that screen with, fold
+
+					if ((ptr2 - ptr1) > maxlinelen)
+					{
+						char * ptr3;
+						char * saveptr1 = ptr1;
+						int linelen = ptr2 - ptr1;
+						int foldlen;
+						char save;
+					
+					foldloop:
+
+						ptr3 = ptr1 + maxlinelen;
+					
+						while(*ptr3!= 0x20 && ptr3 > ptr1)
+						{
+							ptr3--;
+						}
+						
+						foldlen = ptr3 - ptr1 ;
+
+						if (foldlen == 0)
+						{
+							// No space before, so split at width
+
+							foldlen = maxlinelen;
+							ptr3 = ptr1 + maxlinelen;
+
+						}
+						else
+						{
+							ptr3++ ; // Omit space
+							linelen--;
+						}
+						save = ptr1[foldlen];
+						ptr1[foldlen] = 0;
+						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+						ptr1[foldlen] = save;
+						linelen -= foldlen;
+						ptr1 = ptr3;
+
+						if (linelen > maxlinelen)
+							goto foldloop;
+						
+						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+						ptr1 = saveptr1;
+					}
+
+					else
+					{
+						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+					}
+
 
 					PartLinePtr=0;
 
@@ -1192,12 +1252,8 @@ DoReceivedData(HWND hWnd)
 
 					goto lineloop;
 				}
-			}
-
-		} while (count > 0);
-	}
-	return (0);
 }
+}			
 
 DoMonData(HWND hWnd)
 {
@@ -1472,6 +1528,13 @@ void MoveWindows()
 	MoveWindow(hwndOutput,2, SplitPos+SplitBarHeight, ClientWidth-4, ClientHeight-SplitPos-InputBoxHeight-SplitBarHeight-SplitBarHeight, TRUE);
 	MoveWindow(hwndInput,2, ClientHeight-InputBoxHeight-2, ClientWidth-4, InputBoxHeight, TRUE);
 	MoveWindow(hwndSplit,0, SplitPos, ClientWidth, SplitBarHeight, TRUE);
+
+	GetClientRect(hwndInput, &rcClient); 
+
+	ClientHeight = rcClient.bottom;
+	ClientWidth = rcClient.right;
+	
+	maxlinelen = ClientWidth/8 - 10;
 }
 
 void CopyToClipboard(HWND hWnd)

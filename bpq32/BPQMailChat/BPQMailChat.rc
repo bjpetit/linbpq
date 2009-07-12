@@ -241,7 +241,7 @@ BEGIN
     EDITTEXT        IDC_FWDINT,220,214,26,11,ES_AUTOHSCROLL
 END
 
-5051 DIALOG DISCARDABLE  176, 132, 129, 68
+IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68
 STYLE DS_FIXEDSYS | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_THICKFRAME
 FONT 8, "System"
 BEGIN
@@ -507,6 +507,26 @@ BEGIN
                     ES_NUMBER
 END
 
+IDD_MAINTRESULTS DIALOG DISCARDABLE  0, 0, 181, 114
+STYLE DS_FIXEDSYS | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_THICKFRAME
+CAPTION "Maintenance Results"
+FONT 8, "System"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,66,91,50,14
+    LTEXT           "Killed Messsages Removed",IDC_STATIC,11,10,103,10
+    LTEXT           "Messages Killed",IDC_STATIC,11,21,103,10
+    LTEXT           "Live Messages",IDC_STATIC,11,32,104,10
+    LTEXT           "Total Messages",IDC_STATIC,11,43,103,10
+    LTEXT           "BIDs Removed",IDC_STATIC,11,58,103,10
+    LTEXT           "BIDs Left",IDC_STATIC,11,70,103,10
+    LTEXT           "Static",IDC_REMOVED,146,10,30,10
+    LTEXT           "Static",IDC_KILLED,146,21,30,10
+    LTEXT           "Static",IDC_LIVE,146,32,30,10
+    LTEXT           "Static",IDC_TOTAL,146,43,30,10
+    LTEXT           "Static",IDC_BIDSREMOVED,146,58,30,10
+    LTEXT           "Static",IDC_BIDSLEFT,146,69,30,10
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -651,9 +671,17 @@ BEGIN
         BOTTOMMARGIN, 125
     END
 
-    5051, DIALOG
+    IDD_USERADDED_BOX, DIALOG
     BEGIN
         BOTTOMMARGIN, 65
+    END
+
+    IDD_MAINTRESULTS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 176
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 106
     END
 END
 #endif    // APSTUDIO_INVOKED
