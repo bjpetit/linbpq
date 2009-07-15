@@ -635,8 +635,6 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
 
-			SetDlgItemInt(hDlg, IDC_FWDINT, FWDInterval, FALSE);
-
 			return 0;
 		}
 
@@ -1268,19 +1266,23 @@ VOID SaveFWDConfig(HWND hDlg)
 		
 		RegCloseKey(hKey);
 		
-		FWDInterval = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
+	}
+		
+	// Interval and Max Sizes are not user specific
 
-		// Interval is not user specific
-
-		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, 
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, 
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
-		retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&FWDInterval,4);
+	FWDInterval = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
+	retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&FWDInterval,4);
 
-		RegCloseKey(hKey);
+	MaxTXSize = GetDlgItemInt(hDlg, IDC_MAXSEND, &OK, FALSE);
+	retCode = RegSetValueEx(hKey,"MaxTXSize", 0, REG_DWORD, (BYTE *)&MaxTXSize,4);
 
-		ReinitializeFWDStruct(CurrentBBS);
-	}
+	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
+	retCode = RegSetValueEx(hKey,"MaxRXSize", 0, REG_DWORD, (BYTE *)&MaxRXSize,4);
+
+	RegCloseKey(hKey);
 
 	wsprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -1481,6 +1483,14 @@ TryAgain:
 		RegQueryValueEx(hKey,"FWDInterval",0,			
 			(ULONG *)&Type,(UCHAR *)&FWDInterval,(ULONG *)&Vallen);
 		
+		Vallen=4;
+		RegQueryValueEx(hKey,"MaxTXSize",0,			
+			(ULONG *)&Type,(UCHAR *)&MaxTXSize,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"MaxRXSize",0,			
+			(ULONG *)&Type,(UCHAR *)&MaxRXSize,(ULONG *)&Vallen);
+
 		Vallen=100;
 		retCode += RegQueryValueEx(hKey,"BBSName",0,			
 			(ULONG *)&Type,(UCHAR *)&BBSName,(ULONG *)&Vallen);
@@ -1856,11 +1866,11 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			SendDlgItemMessage(hDlg, IDC_BBS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)user->Call);
 		}  
 
-		break;
-
+		SetDlgItemInt(hDlg, IDC_FWDINT, FWDInterval, FALSE);
+		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
+		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
 
 		return (INT_PTR)TRUE;
-
 
 	case WM_COMMAND:
 

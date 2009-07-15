@@ -19,6 +19,16 @@
 // Fix Protocol Error in Compressed Forwarding when switching direction
 // Add Housekeeping results dialog.
 
+// Version 1.0.0.19
+
+// Allow PACLEN in forward scripts.
+// Store and forward messages with CRLF as line ends
+// Send Disconnect after FQ ( for LinFBB)
+// "Last Listed" is saved if MailChat is closed without closing Console
+// Maximum acceptable message length can be specified (in Forwarding Config)
+
+
+
 #include "stdafx.h"
 
 #include "GetVersion.h"
@@ -204,6 +214,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		}
 	}
 
+	if (hConsole)
+		DestroyWindow(hConsole);
+
 	SaveUserDatabase();
 	SaveMessageDatabase();
 	SaveBIDDatabase();
@@ -212,8 +225,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	if (cfgMinToTray)
 	{
 		DeleteTrayMenuItem(MainWnd);
-		DeleteTrayMenuItem(hConsole);
-		DeleteTrayMenuItem(hMonitor);
+		if (hConsole)
+			DeleteTrayMenuItem(hConsole);
+		if (hMonitor)
+			DeleteTrayMenuItem(hMonitor);
 	}
 
 	// Free all allocated memory
@@ -2767,10 +2782,32 @@ void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		return;
 	}
 	return;
-
-
 }
 
+int RemoveLF(char * Message, int len)
+{
+	// Remove lf chars
+
+	char * ptr1, * ptr2;
+
+	ptr1 = ptr2 = Message;
+
+	while (len-- > 0)
+	{
+		*ptr2 = *ptr1;
+	
+		if (*ptr1 == '\r')
+			if (*(ptr1+1) == '\n')
+			{
+				ptr1++;
+				len--;
+			}
+		ptr1++;
+		ptr2++;
+	}
+
+	return (ptr2 - Message);
+}
 
 void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 {
@@ -2792,31 +2829,9 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 	if (MsgBytes)
 	{
-		int len;
-		char * ptr1, * ptr2;
-
 		// Remove lf chars
 
-		ptr1 = ptr2 = MsgBytes;
-		len = Msg->length;
-
-		while (len-- > 0)
-		{
-			*ptr2 = *ptr1;
-	
-			if (*ptr1 == '\r')
-				if (*(ptr1+1) == '\n')
-				{
-					ptr1++;
-					len--;
-				}
-			ptr1++;
-			ptr2++;
-
-		}
-
-		Msg->length = ptr2 - MsgBytes;
-
+		Msg->length = RemoveLF(MsgBytes, Msg->length);
 
 		QueueMsg(conn, MsgBytes, Msg->length);
 		free(MsgBytes);
@@ -3224,7 +3239,7 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 
 	}
 
-//	Buffer[msglen++] = 0x0a;
+	Buffer[msglen++] = 0x0a;
 
 	if ((conn->TempMsg->length + msglen) > conn->MailBufferSize)
 	{
@@ -3243,8 +3258,6 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 	memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, msglen);
 
 	conn->TempMsg->length += msglen;
-
-
 }
 
 VOID CreateMessageFromBuffer(CIRCUIT * conn)
@@ -3319,6 +3332,14 @@ nextline:
 		BIDRec->msgno = LOWORD(Msg->number);
 		BIDRec->timestamp = LOWORD(time(NULL)/86400);
 
+		if (Msg->length > MaxTXSize)
+		{
+			Msg->status = 'H';
+
+			if (!(conn->BBSFlags & BBS))
+				nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
+		}
+
 		// Set up forwarding bitmap
 
 		FWDCount = MatchMessagetoBBSList(Msg);
@@ -3361,29 +3382,6 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 	int WriteLen=0;
 	char Mess[255];
 	int len;
-	char * ptr1, * ptr2;
-
-	// Remove lf chars
-
-	ptr1 = ptr2 = conn->MailBuffer;
-	len = Msg->length;
-
-	while (len-- > 0)
-	{
-		*ptr2 = *ptr1;
-	
-		if (*ptr1 == '\r')
-			if (*(ptr1+1) == '\n')
-			{
-				ptr1++;
-				len--;
-			}
-		ptr1++;
-		ptr2++;
-
-	}
-
-	Msg->length = ptr2 - conn->MailBuffer;
 
 	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
 	
@@ -3656,7 +3654,8 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	Buffer[len]=0;
 	_strupr(Buffer);
 
-	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK")|| strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID"))
+	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
+		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED"))
 	{
 		// Connect Failed
 
@@ -3669,7 +3668,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	
 	if (Scripts[ForwardingInfo->ScriptIndex])
 	{
-		if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "LINKED"))
+		if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "INVALID") || strstr(Buffer, "PACLEN"))
 		{
 			nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex++]);
 			return TRUE;
@@ -3682,16 +3681,17 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	// No more steps, Look for SID or Prompt
 
-	// Update PACLEN
-
-	GetConnectionInfo(conn->BPQStream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
-
-	if (paclen > 0)
-		conn->paclen = paclen;
-
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
+		// Update PACLEN
+
+		GetConnectionInfo(conn->BPQStream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+
+		if (paclen > 0)
+			conn->paclen = paclen;
+
+		
 		Parse_SID(conn, &Buffer[1], len-4);
 			
 		if (conn->BBSFlags & FBBForwarding)
@@ -3883,11 +3883,11 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 				strcpy(FBBHeader->ATBBS, Msg->via);
 				strcpy(FBBHeader->BID, Msg->bid);
 
-				// Set up R:Line, so se can add its length to the zise
+				// Set up R:Line, so se can add its length to the sise
 
 				tm = gmtime(&Msg->datecreated);	
 	
-				FBBHeader->Size += wsprintf(RLine,"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r",
+				FBBHeader->Size += wsprintf(RLine,"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 					Msg->number, BBSName, HRoute);
 
@@ -3931,7 +3931,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (!conn->FwdMsg)
 			return;
 
-		nodeprintf(conn, "%s\r", conn->FwdMsg->title);
+		nodeprintf(conn, "%s\r\n", conn->FwdMsg->title);
 
 		MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		
@@ -3945,12 +3945,12 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		tm = gmtime(&now);	
 	
-		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r",
+		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 			conn->FwdMsg->number, BBSName, HRoute);
 
 		if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
-			BBSputs(conn, "\r");
+			BBSputs(conn, "\r\n");
 
 		if (MsgBytes)
 		{

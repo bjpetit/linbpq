@@ -4,7 +4,8 @@
 
 #include "stdafx.h"
 
-#define MAXSIZE 100000
+int MaxRXSize = 99999;
+int MaxTXSize = 99999;
 
 VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {
@@ -49,9 +50,15 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			FlagSentMessages(conn, user);
 		
 		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
-
+		{
 			BBSputs(conn, "FQ\r");
 
+			// LinFBB needs a Disconnect Here
+
+			Flush(conn);
+			Sleep(400);
+			Disconnect(conn->BPQStream);
+		}
 		return;
 
 	case 'S':
@@ -96,7 +103,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 					SendCompressed(conn, FBBHeader);
 				else
 				{
-					nodeprintf(conn, "%s\r", FBBHeader->FwdMsg->title);
+					nodeprintf(conn, "%s\r\n", FBBHeader->FwdMsg->title);
 
 					MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
 
@@ -110,12 +117,12 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 					tm = gmtime(&now);	
 	
-					nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r",
+					nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 						tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 						FBBHeader->FwdMsg->number, BBSName, HRoute);
 
-					if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
-						BBSputs(conn, "\r");
+					if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
+						BBSputs(conn, "\r\n");
 
 					if (MsgBytes)
 					{
@@ -123,7 +130,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 						free(MsgBytes);
 					}
 			
-					nodeprintf(conn, "%c\r", 26);
+					nodeprintf(conn, "%c\r\n", 26);
 				}
 			}
 
@@ -235,7 +242,7 @@ badparam:
 		return;
 
 ok:
-		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MAXSIZE))
+		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MaxRXSize))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBIndex++] = '-';
@@ -611,12 +618,12 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 	tm = gmtime(&now);	
 	
-	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r",
+	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 		FBBHeader->FwdMsg->number, BBSName, HRoute);
 
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
-		strcat(Rline, "\r");
+		strcat(Rline, "\r\n");
 
 	MsgLen = OrigLen + strlen(Rline);
 

@@ -804,6 +804,8 @@ extern int BidLifetime;
 extern int MaintInterval;
 extern int MaintTime;
 
+extern int MaxRXSize;
+extern int MaxTXSize;
 
 extern LINK *link_hd;
 extern CIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others

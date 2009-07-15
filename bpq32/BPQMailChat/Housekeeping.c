@@ -316,6 +316,7 @@ BOOL RemoveKilledMessages()
 		{
 			wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
 			DeleteFile(MsgFile);
+			free(Msg);
 			Removed++;
 		}
 		else

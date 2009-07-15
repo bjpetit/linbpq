@@ -3,13 +3,15 @@
 // Used by BPQMailChat.rc
 //
 #define IDI_ICON1                       101
-#define IDD_MAINTRESULTS                30001
+#define IDC_MAXSEND                     506
+#define IDC_MAXRECV                     507
 #define IDC_REMOVED                     1006
 #define IDC_KILLED                      1007
 #define IDC_LIVE                        1008
 #define IDC_TOTAL                       1009
 #define IDC_BIDSREMOVED                 1010
 #define IDC_BIDSLEFT                    1011
+#define IDD_MAINTRESULTS                30001
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
