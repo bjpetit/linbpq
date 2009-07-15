@@ -40,7 +40,7 @@
 #define BPQLogOutput	BPQBASE+50
 #define BPQLogMonitor	BPQBASE+51
 #define BPQSendDisconnected	BPQBASE+52
-
+#define BPQMNODES		BPQBASE+53
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

@@ -25,7 +25,9 @@
 
 // Version 2.0.6 June 2009
 
-// Add Option to send *** Disconnnected on disocnnect
+// Add Option to send *** Disconnnected on disconnect
+// Add line wrap code
+// Add option not to monitor NODES broadcasts
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -81,7 +83,7 @@ void MoveWindows();
 void CopyToClipboard(HWND hWnd);
 BOOL OpenMonitorLogfile();
 void WriteMonitorLine(char * Msg, int MsgLen);
-
+VOID WritetoOutputWindow(char * Msg, int len);
 
 
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
@@ -145,7 +147,7 @@ BOOL StripLF = FALSE;
 BOOL LogMonitor = FALSE;
 BOOL LogOutput = FALSE;
 BOOL SendDisconnected = TRUE;
-
+BOOL MonitorNODES = TRUE;
 
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
@@ -542,6 +544,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	else
 		CheckMenuItem(hMenu,BPQStripLF, MF_UNCHECKED);
 
+	CheckMenuItem(hMenu,BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
+
+
 	DrawMenuBar(hWnd);	
 
 	if (portmask) applflags |= 0x80;
@@ -738,6 +743,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ToggleParam(hWnd, &SendDisconnected, BPQSendDisconnected);
 			break;
 
+		case BPQMNODES:
+
+			ToggleParam(hWnd, &MonitorNODES, BPQMNODES);
+			break;
+
 		case BPQLogMonitor:
 
 			ToggleParam(hWnd, &LogMonitor, BPQLogMonitor);
@@ -838,9 +848,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
  
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
-	int index;
-	char Temp[255];
-
 	if (uMsg == WM_CHAR) 
 	{
 		if (wParam == 13)
@@ -1092,8 +1099,6 @@ DoStateChange(HWND hWnd)
 		
 DoReceivedData(HWND hWnd)
 {
-	char * ptr1, * ptr2;
-	int index;
 	char Msg[300];
 
 	if (RXCount(Stream) > 0)
@@ -1108,7 +1113,7 @@ DoReceivedData(HWND hWnd)
 	}
 	return (0);
 }
-int WritetoOutputWindow(char * Msg, int len)
+VOID WritetoOutputWindow(char * Msg, int len)
 {
 	char * ptr1, * ptr2;
 	int index;
@@ -1161,7 +1166,7 @@ int WritetoOutputWindow(char * Msg, int len)
 
 					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) PartLineIndex, MAKELPARAM(FALSE, 0));
 
-					return (0);
+					return;
 
 				}
 				else
@@ -1260,14 +1265,21 @@ DoMonData(HWND hWnd)
 	char * ptr1, * ptr2;
 	int index, stamp;
 	int len;
-	char buffer[1024], monbuff[512];
+	unsigned char buffer[1024], monbuff[512];
 
 	if (MONCount(Stream) > 0)
 	{
 		do {
 		
 			stamp=GetRaw(Stream, monbuff,&len,&count);
-			len=DecodeFrame(monbuff,buffer,stamp);
+
+			// See if a NODES
+
+
+			if (!MonitorNODES && monbuff[22] == 0xcf && monbuff[23] == 0xff)
+				len = 0;
+			else
+				len=DecodeFrame(monbuff,buffer,stamp);
 	
 			ptr1=&buffer[0];
 
