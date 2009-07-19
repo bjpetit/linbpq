@@ -6,6 +6,7 @@
 
 int MaxRXSize = 99999;
 int MaxTXSize = 99999;
+int MaxFBBBlockSize = 10000;
 
 VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {
@@ -82,13 +83,9 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			if (Buffer[i+3] == '=')				// Defer
 			{
-				// Zap the entry
-
-				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+				// Remove entry from forwarding block
 
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
-
-				conn->UserPointer->ForwardingInfo->MsgCount--;
 			}
 
 			if (Buffer[i+3] == '+')				// Need it
@@ -247,8 +244,22 @@ ok:
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBIndex++] = '-';
 		}
+		else if (LookupTempBID(FBBHeader->BID))
+		{
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
+			conn->FBBReplyChars[conn->FBBIndex++] = '=';
+		}
 		else
+		{
+			//	Save BID in temp list in case we are offered it again before completion
+			
+			BIDRec * TempBID = AllocateTempBIDRecord();
+			strcpy(TempBID->BID, FBBHeader->BID);
+			TempBID->u.conn = conn;
+
 			conn->FBBReplyChars[conn->FBBIndex++] = '+';
+		}
+
 		return;
 
 	case '>':
@@ -294,7 +305,7 @@ ok:
 		{
 			if (conn->BBSFlags & FBBCompressed)
 				conn->InputMode = 'B';
-			CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID);
+			CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID, NULL);
 		}
 
 		return;
@@ -400,7 +411,8 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 	{
 		if (conn->BBSFlags & FBBCompressed)
 			conn->InputMode = 'B';
-		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID);
+
+		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID, NULL);
 	}
 }
 
@@ -422,7 +434,8 @@ BOOL FBBDoForward(CIRCUIT * conn)
 		{
 			FBBHeader = &conn->FBBHeaders[i];
 				
-			proplen = wsprintf(proposal, "FB %c %s %s %s %s %d\r", 
+			proplen = wsprintf(proposal, "%s %c %s %s %s %s %d\r", 
+					(conn->BBSFlags & FBBCompressed) ? "FA" : "FB",
 					FBBHeader->MsgType,
 					FBBHeader->From,
 					(FBBHeader->ATBBS[0]) ? FBBHeader->ATBBS : conn->UserPointer->Call, 

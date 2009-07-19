@@ -181,12 +181,12 @@ void MoveWindows()
 	MoveWindow(hwndOutput,2, 2, ClientWidth-4, ClientHeight-InputBoxHeight-4, TRUE);
 	MoveWindow(hwndInput,2, ClientHeight-InputBoxHeight-2, ClientWidth-4, InputBoxHeight, TRUE);
 
-	GetClientRect(hwndInput, &rcClient); 
+	GetClientRect(hwndOutput, &rcClient); 
 
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 	
-	WarnLen = ClientWidth/8 - 10;
+	WarnLen = ClientWidth/8 - 1;
 	WrapLen = WarnLen;
 	maxlinelen = WarnLen;
 

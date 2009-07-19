@@ -456,20 +456,20 @@ void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
 	{
 		if (Flags == LOG_TCP && MonTCP)
 		{	
-			WritetoMonitorWindow(&Flag, 1);
+			WritetoMonitorWindow((char *)&Flag, 1);
 			WritetoMonitorWindow(Msg, MsgLen);
 			WritetoMonitorWindow(CRLF , 1);
 		}
 		else if (Flags == LOG_CHAT && MonCHAT)
 		{	
-			WritetoMonitorWindow(&Flag, 1);
+			WritetoMonitorWindow((char *)&Flag, 1);
 			WritetoMonitorWindow(Msg, MsgLen);
 			if (Msg[MsgLen-1] != '\r')
 				WritetoMonitorWindow(CRLF , 1);
 		}
 		else if (Flags == LOG_BBS  && MonBBS)
 		{	
-			WritetoMonitorWindow(&Flag, 1);
+			WritetoMonitorWindow((char *)&Flag, 1);
 			WritetoMonitorWindow(Msg, MsgLen);
 			WritetoMonitorWindow(CRLF , 1);
 		}
@@ -483,8 +483,8 @@ void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
 	T = time(NULL);
 	tm = gmtime(&T);	
 	
-	wsprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d ",
-				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+	wsprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d %c",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, Flag);
 
 	WriteFile(LogHandle[Flags] ,Stamp , strlen(Stamp), &cnt, NULL);
 	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);

@@ -1541,12 +1541,12 @@ void MoveWindows()
 	MoveWindow(hwndInput,2, ClientHeight-InputBoxHeight-2, ClientWidth-4, InputBoxHeight, TRUE);
 	MoveWindow(hwndSplit,0, SplitPos, ClientWidth, SplitBarHeight, TRUE);
 
-	GetClientRect(hwndInput, &rcClient); 
+	GetClientRect(hwndOutput, &rcClient); 
 
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 	
-	maxlinelen = ClientWidth/8 - 10;
+	maxlinelen = ClientWidth/8 - 1;
 }
 
 void CopyToClipboard(HWND hWnd)

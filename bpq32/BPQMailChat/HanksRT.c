@@ -963,17 +963,33 @@ int rtloginl (CIRCUIT *conn, char * call)
 	}
 
 	if (!link) return FALSE;           // We don't link with this system.
-	if (link->flags & (p_linked | p_linkini)) return FALSE;  // Already linked.
+
+	if (link->flags & (p_linked | p_linkini))
+	{
+		// Already Linked. Used to Disconnect, but that can cause sync errors
+		// Try closing old link and keeping new
+
+		CIRCUIT *c;
+		int len;
+		char Msg[80];
+
+		for (c = circuit_hd; c; c = c->next)
+		{
+			if (c->u.link == link)
+			{
+				len=wsprintf(Msg, "Chat Node %s Connect when Connected - Old Connection Closed", call);
+				WriteLogLine('|',Msg, len, LOG_CHAT);
+
+				c->Active = FALSE;			// So we don't try to clear circuit again
+				Disconnect(c->BPQStream);
+				link_drop(c);
+				ShowConnections();
+				break;
+			}
+		}
+	}
 
 // Accept the link request.
-
-/*	puser(link->alias);
-	buf = mallocw(128);
-	strcpy(buf, call);
-	strlop(buf, '-');
-	puser(buf);
-	free(buf);
-*/
 
 	circuit_new(conn, p_linked);
 

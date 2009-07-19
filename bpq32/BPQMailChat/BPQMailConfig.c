@@ -710,12 +710,11 @@ VOID Do_Add_User(HWND hDlg)
 	else if	((strlen(CurrentConfigCall) < 3) || (strlen(CurrentConfigCall) > 6))
 		wsprintf(InfoBoxText, "User %s is invalid", CurrentConfigCall);
 	else
-
 	{
 		user = AllocateUserRecord(CurrentConfigCall);
 		CurrentConfigIndex=NumberofUsers;
-		Do_Save_User();
-		wsprintf(InfoBoxText, "User %s added", CurrentConfigCall);
+		Do_Save_User(hDlg, FALSE);
+		wsprintf(InfoBoxText, "User %s added and info saved", CurrentConfigCall);
 	}	
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
@@ -789,7 +788,7 @@ VOID Do_Delete_User(HWND hDlg)
 	return;
 
 }
-VOID Do_Save_User(HWND hDlg)
+VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 {
 	struct UserInfo * user;
 
@@ -851,10 +850,11 @@ VOID Do_Save_User(HWND hDlg)
 
 	SaveUserDatabase();
 
-	wsprintf(InfoBoxText, "User information saved");
-	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-
-					
+	if (ShowBox)
+	{
+		wsprintf(InfoBoxText, "User information saved");
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+	}				
 }
 
 VOID DeleteBBS(struct UserInfo * user)
@@ -1033,6 +1033,8 @@ VOID Do_Save_Msg(HWND hDlg)
 				set_fwd_bit(Msg->fbbs, BBSNumber);
 				user->ForwardingInfo->MsgCount++;
 				clear_fwd_bit(Msg->forw, BBSNumber);
+				if (FirstMessagetoForward > CurrentMsgIndex)
+					FirstMessagetoForward = CurrentMsgIndex;
 			}
 		}
 		else if (n == BST_CHECKED)
@@ -1265,7 +1267,8 @@ VOID SaveFWDConfig(HWND hDlg)
 		retCode = RegSetValueEx(hKey,"RequestReverse", 0, REG_DWORD, (BYTE *)&Rev,4);
 		
 		RegCloseKey(hKey);
-		
+
+		ReinitializeFWDStruct(CurrentBBS);
 	}
 		
 	// Interval and Max Sizes are not user specific
@@ -1282,8 +1285,10 @@ VOID SaveFWDConfig(HWND hDlg)
 	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
 	retCode = RegSetValueEx(hKey,"MaxRXSize", 0, REG_DWORD, (BYTE *)&MaxRXSize,4);
 
+	MaxFBBBlockSize = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
+	retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&MaxFBBBlockSize,4);
 	RegCloseKey(hKey);
-
+		
 	wsprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
@@ -1491,7 +1496,10 @@ TryAgain:
 		RegQueryValueEx(hKey,"MaxRXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxRXSize,(ULONG *)&Vallen);
 
+		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
+			(ULONG *)&Type,(UCHAR *)&MaxFBBBlockSize,(ULONG *)&Vallen);
 		Vallen=100;
+
 		retCode += RegQueryValueEx(hKey,"BBSName",0,			
 			(ULONG *)&Type,(UCHAR *)&BBSName,(ULONG *)&Vallen);
 
@@ -1756,7 +1764,7 @@ INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 		case IDC_SAVEUSER:
 
-			Do_Save_User(hDlg);
+			Do_Save_User(hDlg, TRUE);
 			return TRUE;
 
 		}
@@ -1869,6 +1877,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		SetDlgItemInt(hDlg, IDC_FWDINT, FWDInterval, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
+		SetDlgItemInt(hDlg, IDC_MAXBLOCK, MaxFBBBlockSize, FALSE);
 
 		return (INT_PTR)TRUE;
 

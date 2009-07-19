@@ -134,13 +134,23 @@ INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 
 VOID DoHouseKeeping()
 {
-
 	RemoveKilledMessages();
 	ExpireMessages();
+	
+	GetSemaphore(&AllocSemaphore);
 	ExpireBIDs();
+	FreeSemaphore(&AllocSemaphore);
 
 	if (LatestMsg > MaxMsgno)
+	{
+		GetSemaphore(&MsgNoSemaphore);
+		GetSemaphore(&AllocSemaphore);
+
 		Renumber_Messages();
+	
+		FreeSemaphore(&MsgNoSemaphore);
+		FreeSemaphore(&AllocSemaphore);
+	}
 
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
 	return;
@@ -303,6 +313,10 @@ BOOL RemoveKilledMessages()
 
 	Removed = 0;
 
+	GetSemaphore(&MsgNoSemaphore);
+	GetSemaphore(&AllocSemaphore);
+
+
 	NewMsgHddrPtr = zalloc((NumberofMessages+1) * 4);
 	NewMsgHddrPtr[0] = MsgHddrPtr[0];		// Copy Control Record
 
@@ -329,6 +343,9 @@ BOOL RemoveKilledMessages()
 	free(MsgHddrPtr);
 
 	MsgHddrPtr = NewMsgHddrPtr;
+
+	FreeSemaphore(&MsgNoSemaphore);
+	FreeSemaphore(&AllocSemaphore);
 
 	SaveMessageDatabase();
 
@@ -438,14 +455,14 @@ BOOL ExpireBIDs()
 	{
 		BID = BIDRecPtr[n];
 
-		if ((now - BID->timestamp) < BidLifetime)
+		if ((now - BID->u.timestamp) < BidLifetime)
 			NewBIDRecPtr[++i] = BID;
 	}
 
 	BIDSRemoved = NumberofBIDs - i;
 
 	NumberofBIDs = i;
-	NewBIDRecPtr[0]->msgno = i;
+	NewBIDRecPtr[0]->u.msgno = i;
 
 	free(BIDRecPtr);
 

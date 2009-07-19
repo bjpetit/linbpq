@@ -227,6 +227,7 @@ typedef struct ConnectionInfo_S
 	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
 
 	UCHAR * MailBuffer;			// Mail Message being received
+	UCHAR * CopyBuffer;			// Mail Message being forwarded
 	int MailBufferSize;			// Total Malloc'ed size. Actual size in in Msg Struct
 
 	long lastmsg;				// Last Listed. Stored here, updated in user record only on clean close
@@ -236,6 +237,7 @@ typedef struct ConnectionInfo_S
 	struct MsgInfo * FwdMsg;		// Header while message is being forwarded
 
 	int BBSNumber;						// The BBS number (offset into bitlist of BBSes to forward a message to
+	int NextMessagetoForward;			// Next index to check in forward cycle
 	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block
 	char FBBReplyChars[6];				//The +-= chars for the 5 proposals
 	int FBBIndex;						// current propopsal number
@@ -260,7 +262,7 @@ typedef struct ConnectionInfo_S
 #define FBBForwarding 2
 #define FBBCompressed 4
 #define RunningConnectScript 8
-#define FORWARDING 16				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
+#define MBLFORWARDING 16				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
 
 #pragma pack(1)
 
@@ -379,8 +381,15 @@ struct MsgInfo{  /* Longueur = 194 octets */
 typedef struct {
 	char	mode;
 	char	BID[13];
-	unsigned short msgno;
-	unsigned short timestamp;
+	union 
+	{                   /*  array named screen */
+		struct    
+		{ 
+			unsigned short msgno;
+			unsigned short timestamp;
+		};
+		CIRCUIT * conn;
+	} u;
 } BIDRec, *BIDRecP;
 
 
@@ -626,8 +635,11 @@ int Q_ADD(UINT *Q,UINT *BUFF);
 struct UserInfo * AllocateUserRecord(char * Call);
 struct MsgInfo * AllocateMsgRecord();
 BIDRec * AllocateBIDRecord();
+BIDRec * AllocateTempBIDRecord();
 struct UserInfo * LookupCall(char * Call);
 BIDRec  * LookupBID(char * BID);
+BIDRec  * LookupTempBID(char * BID);
+VOID RemoveTempBIDS(CIRCUIT * conn);
 VOID SaveUserDatabase();
 VOID GetUserDatabase();
 VOID GetMessageDatabase();
@@ -663,7 +675,7 @@ char * ReadMessageFile(int msgno);
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly);
 int	CriticalErrorHandler(char * error);
 BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
-BOOL CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID);
+BOOL CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID, char * Title);
 VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len);
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg);
@@ -698,7 +710,7 @@ VOID Do_Save_Msg();
 VOID Do_Add_User(HWND hDlg);
 VOID Do_Delete_User(HWND hDlg);
 VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user);
-VOID Do_Save_User();
+VOID Do_Save_User(HWND hDlg, BOOL ShowBox);
 VOID DeleteBBS();
 VOID AddBBS();
 VOID SaveBBSConfig();
@@ -739,6 +751,10 @@ BOOL CreateMonitor();
 int WritetoMonitorWindow(char * Msg, int len);
 
 
+// Utilities
+
+void GetSemaphore(int * Semaphore);
+void FreeSemaphore(int * Semaphore);
 
 // TCP Routines
 
@@ -792,7 +808,12 @@ extern struct MsgInfo ** MsgHddrPtr;
 extern BIDRec ** BIDRecPtr;
 
 extern int NumberofMessages;
+extern int FirstMessagetoForward;
+
 extern int NumberofBIDs;
+
+extern int AllocSemaphore;
+extern int MsgNoSemaphore;
 
 extern char hostname[];
 extern char RtUsr[];
@@ -806,6 +827,7 @@ extern int MaintTime;
 
 extern int MaxRXSize;
 extern int MaxTXSize;
+extern int MaxFBBBlockSize;
 
 extern LINK *link_hd;
 extern CIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others

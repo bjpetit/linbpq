@@ -5,6 +5,7 @@
 #define IDI_ICON1                       101
 #define IDC_MAXSEND                     506
 #define IDC_MAXRECV                     507
+#define IDC_MAXBLOCK                    508
 #define IDC_REMOVED                     1006
 #define IDC_KILLED                      1007
 #define IDC_LIVE                        1008
