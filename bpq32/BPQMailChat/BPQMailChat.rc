@@ -535,6 +535,41 @@ BEGIN
     LTEXT           "Static",IDC_BIDSLEFT,146,69,30,10
 END
 
+IDD_EDITWP DIALOG DISCARDABLE  0, 0, 398, 265
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "EDIT WP Record"
+FONT 8, "MS Sans Serif"
+BEGIN
+    COMBOBOX        IDD_WP,9,9,76,190,CBS_SIMPLE | CBS_UPPERCASE | CBS_SORT | 
+                    WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_WPNAME,165,10,128,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_ZIP1,165,85,128,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_QTH1,165,55,215,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_HOMEBBS1,165,25,216,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    PUSHBUTTON      "Delete",5101,106,215,56,17,BS_CENTER | BS_VCENTER
+    LTEXT           "Name",-1,100,11,47,10
+    LTEXT           "ZIP 1",-1,100,86,47,12
+    LTEXT           "QTH 1",-1,100,56,47,10
+    LTEXT           "Home BBS 1",-1,100,26,53,10
+    PUSHBUTTON      "Save",5102,171,216,56,17,BS_CENTER | BS_VCENTER
+    LTEXT           "Home BBS 2",-1,100,41,53,10
+    EDITTEXT        IDC_HOMEBBS2,165,40,216,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    LTEXT           "QTH 2",-1,100,71,47,10
+    EDITTEXT        IDC_QTH2,165,70,215,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_ZIP2,165,100,128,12,ES_AUTOHSCROLL
+    LTEXT           "ZIP 1",-1,100,101,47,12
+    LTEXT           "Last Seen",-1,100,121,47,12
+    EDITTEXT        IDC_LASTSEEN,165,120,128,12,ES_AUTOHSCROLL
+    LTEXT           "Last Modified",-1,100,136,47,12
+    EDITTEXT        IDC_LASTMODIFIED,165,135,128,12,ES_AUTOHSCROLL
+    LTEXT           "Type",-1,100,156,47,12
+    EDITTEXT        IDC_TYPE,165,155,59,12,ES_AUTOHSCROLL
+    LTEXT           "Changed",-1,100,171,47,12
+    LTEXT           "Seen",-1,100,186,47,12
+    EDITTEXT        IDC_CHANGED,165,170,59,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_SEEN,165,185,59,12,ES_AUTOHSCROLL
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -565,6 +600,7 @@ BEGIN
         MENUITEM "Manage &Users",               IDM_USERS
         MENUITEM "Manage &Forwarding",          IDM_FWD
         MENUITEM "Manage &Messages",            IDM_MESSAGES
+        MENUITEM "Manage &White Pages",         IDM_WP
     END
     POPUP "Windows"
     BEGIN
@@ -579,13 +615,14 @@ END
 
 CONSOLEMENU MENU DISCARDABLE 
 BEGIN
-    POPUP "Action"
+    POPUP "Options"
     BEGIN
         MENUITEM "Enable Bells",                BPQBELLS
         MENUITEM "Strip Linefeeds",             BPQStripLF
         MENUITEM "Wrap Input  ",                IDM_WRAPTEXT
         MENUITEM "Beep if Input too long",      IDM_WARNINPUT
         MENUITEM "Flash on Chat User Connect",  IDM_Flash
+        MENUITEM "Close Window on exit from BBS", IDM_CLOSEWINDOW
     END
     POPUP "Edit"
     BEGIN
@@ -696,6 +733,14 @@ BEGIN
         RIGHTMARGIN, 176
         TOPMARGIN, 7
         BOTTOMMARGIN, 106
+    END
+
+    IDD_EDITWP, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 391
+        TOPMARGIN, 9
+        BOTTOMMARGIN, 258
     END
 END
 #endif    // APSTUDIO_INVOKED

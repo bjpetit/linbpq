@@ -1160,9 +1160,9 @@ VOID WritetoOutputWindow(char * Msg, int len)
 
 					PartLinePtr=len;
 
-					memmove(readbuff,ptr1,len);
-
 					PartLineIndex=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+			
+					memmove(readbuff,ptr1,len);
 
 					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) PartLineIndex, MAKELPARAM(FALSE, 0));
 

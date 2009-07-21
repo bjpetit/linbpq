@@ -1,0 +1,583 @@
+// Mail and Chat Server for BPQ32 Packet Switch
+//
+// White Pages Database Support Routines
+
+#include "stdafx.h"
+
+int CurrentWPIndex;
+
+VOID DoWPUpdate(WPRec *WP, char Type, char * Name, char * HA, char * QTH, char * ZIP, time_t WPDate);
+
+
+WPRec * AllocateWPRecord()
+{
+	WPRec * WP = zalloc(sizeof (WPRec));
+
+	GetSemaphore(&AllocSemaphore);
+
+	WPRecPtr=realloc(WPRecPtr,(++NumberofWPrecs+1)*4);
+	WPRecPtr[NumberofWPrecs]= WP;
+
+	FreeSemaphore(&AllocSemaphore);
+
+
+	return WP;
+}
+VOID GetWPDatabase()
+{
+	WPRec WPRec;
+	HANDLE Handle;
+	int ReadLen;
+	WPRecP WP;
+
+	Handle = CreateFile(WPDatabasePath,
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+
+	if (Handle == INVALID_HANDLE_VALUE)
+	{
+		// Initialise a new File
+
+		WPRecPtr=malloc(4);
+		WPRecPtr[0]= malloc(sizeof (WPRec));
+		memset(WPRecPtr[0], 0, sizeof (WPRec));
+		NumberofWPrecs = 0;
+
+		return;
+	}
+
+
+	// Get First Record
+		
+	ReadFile(Handle, &WPRec, sizeof (WPRec), &ReadLen, NULL); 
+
+	if (ReadLen == 0)
+	{
+		// Duff file
+
+		memset(&WPRec, 0, sizeof (WPRec));
+	}
+
+	// Set up control record
+
+	WPRecPtr=malloc(4);
+	WPRecPtr[0]= malloc(sizeof (WPRec));
+	memcpy(WPRecPtr[0], &WPRec,  sizeof (WPRec));
+
+	NumberofWPrecs = 0;
+
+Next:
+
+	ReadFile(Handle, &WPRec, sizeof (WPRec), &ReadLen, NULL); 
+
+	if (ReadLen == sizeof (WPRec))
+	{
+		if (strlen(WPRec.callsign) > 2)
+		{
+			WP = LookupWP(WPRec.callsign);
+
+			if (WP == NULL)
+				WP = AllocateWPRecord();
+
+			memcpy(WP, &WPRec,  sizeof (WPRec));
+		}
+		goto Next;
+	}
+
+	CloseHandle(Handle);
+}
+
+VOID CopyWPDatabase()
+{
+	char Backup[MAX_PATH];
+
+	strcpy(Backup, WPDatabasePath);
+	strcat(Backup, ".bak");
+
+	CopyFile(WPDatabasePath, Backup, FALSE);
+}
+
+VOID SaveWPDatabase()
+{
+	HANDLE Handle;
+	int WriteLen;
+	int i;
+
+	Handle = CreateFile(WPDatabasePath,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+//	WPRecPtr[0]-> = NumberofWPrecs;			// First Record has file size
+
+	for (i=0; i <= NumberofWPrecs; i++)
+	{
+		WriteFile(Handle, WPRecPtr[i], sizeof (WPRec), &WriteLen, NULL);
+	}
+
+	CloseHandle(Handle);
+
+	return;
+}
+
+WPRec * LookupWP(char * Call)
+{
+	WPRec * ptr = NULL;
+	int i;
+
+	for (i=1; i <= NumberofWPrecs; i++)
+	{
+		ptr = WPRecPtr[i];
+
+		if (_stricmp(ptr->callsign, Call) == 0) return ptr;
+	}
+
+	return NULL;
+}
+
+int Do_WP_Sel_Changed(HWND hDlg)
+{
+	// Update WP display with newly selected rec
+
+	WPRec *  WP;
+	char WPCall[10];
+	int Sel = SendDlgItemMessage(hDlg, IDD_WP, CB_GETCURSEL, 0, 0);
+	char Type[] = " ";
+
+	if (Sel == -1)
+		SendDlgItemMessage(hDlg, IDD_WP, WM_GETTEXT, Sel, (LPARAM)(LPCTSTR)&WPCall);
+	else
+		SendDlgItemMessage(hDlg, IDD_WP, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&WPCall);
+	
+	for (CurrentWPIndex = 1; CurrentWPIndex <= NumberofWPrecs; CurrentWPIndex++)
+	{
+		WP = WPRecPtr[CurrentWPIndex];
+
+		if (_stricmp(WP->callsign, WPCall) == 0)
+		{
+
+			SetDlgItemText(hDlg, IDC_WPNAME, WP->name);
+			SetDlgItemText(hDlg, IDC_HOMEBBS1, WP->first_homebbs);
+			SetDlgItemText(hDlg, IDC_HOMEBBS2, WP->first_homebbs);
+			SetDlgItemText(hDlg, IDC_QTH1, WP->first_qth);
+			SetDlgItemText(hDlg, IDC_QTH2, WP->secnd_qth);
+			SetDlgItemText(hDlg, IDC_ZIP1, WP->first_zip);
+			SetDlgItemText(hDlg, IDC_ZIP2, WP->secnd_zip);
+			Type[0] = WP->Type;
+			SetDlgItemText(hDlg, IDC_TYPE, Type);
+			SetDlgItemInt(hDlg, IDC_CHANGED, WP->changed, FALSE);
+			SetDlgItemInt(hDlg, IDC_SEEN, WP->seen, FALSE);
+
+			SetDlgItemText(hDlg, IDC_LASTSEEN, FormatDateAndTime(WP->last_seen, TRUE));
+			SetDlgItemText(hDlg, IDC_LASTMODIFIED, FormatDateAndTime(WP->last_modif, TRUE));
+	
+			return 0;
+		}
+	}
+
+	CurrentWPIndex = -1;
+
+	return 0;
+}
+
+
+INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int Command, n;
+
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+
+	case WM_INITDIALOG:
+
+		for (n = 1; n <= NumberofWPrecs; n++)
+		{
+			SendDlgItemMessage(hDlg, IDD_WP, CB_ADDSTRING, 0, (LPARAM)WPRecPtr[n]->callsign);
+		} 
+
+		return (INT_PTR)TRUE;
+
+
+	case WM_COMMAND:
+
+		Command = LOWORD(wParam);
+
+		switch (Command)
+		{
+
+		case IDOK:
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+
+		case IDD_WP:
+
+			// Msg Selection Changed
+
+			Do_WP_Sel_Changed(hDlg);
+
+			return TRUE;
+
+		case IDC_SAVEMSG:
+
+//			Do_Save_Msg(hDlg);
+			return TRUE;
+		}
+		break;
+	}
+	
+	return (INT_PTR)FALSE;
+}
+
+VOID GetWPInfoFromRLine(char * From, char * FirstRLine, time_t RLineTime)
+{
+	/* The /G suffix denotes that the information in this line has been gathered by examining
+	the header of a message to GUESS at which BBS the sender is registered. The HomeBBS of the User
+	is assumed to be the BBS shown in the first R: header line. The date associated with this 
+	information is the date shown on this R: header line.
+	*/
+
+	// R:930101/0000 1530@KA6FUB.#NOCAL.CA.USA.NOAM
+
+	// R:930101/0000 @:KA6FUB.#NOCAL.CA.USA.NOAM #:1530
+
+	// The FirstRLine pointer points to the message, so shouldnt be changed
+
+	WPRec * WP;
+	char ATBBS[200];
+	int RLen;
+
+	char * ptr1 = strchr(FirstRLine, '@'); 
+	char * ptr2 = strchr(FirstRLine, '\r');
+
+	if (!ptr1)
+		return;			// Duff
+
+	if (*++ptr1 == ':')
+		ptr1++;			// Format 2
+
+	RLen = ptr2 - ptr1;
+
+	if (RLen > 200)
+		return;
+
+	memcpy(ATBBS, ptr1, RLen);
+	ATBBS[RLen] = 0;
+
+	ptr2 = strchr(ATBBS,  ' ');
+
+	if (ptr2)
+		*ptr2 = 0;
+
+	WP = LookupWP(From);
+
+	if (!WP)
+	{
+		// Not Found
+
+		WP = AllocateWPRecord();
+
+		strcpy(WP->callsign, From);
+		strcpy(WP->first_homebbs, ATBBS);
+		strcpy(WP->secnd_homebbs, ATBBS);
+
+		WP->last_modif = RLineTime;
+		WP->last_seen = RLineTime;
+
+		WP->Type = 'G';
+
+		return;
+	}
+
+	if (WP->last_modif >= RLineTime)
+		return;
+
+	// Update 2nd if changed
+
+	if (strcmp(WP->secnd_homebbs , ATBBS) != 0)
+	{
+		strcpy(WP->secnd_homebbs, ATBBS);
+		WP->last_modif = RLineTime;
+	}
+
+	return;
+}
+
+VOID ProcessWPMsg(char * MailBuffer, int Size, char * FirstRLine)
+{
+	char * ptr1 = MailBuffer;
+	char * ptr2;
+	WPRec * WP;
+	char WPLine[200];
+	int WPLen;
+
+	ptr1[Size] = 0;
+
+	ptr1 = FirstRLine;
+
+	while (*ptr1)
+	{
+		ptr2 = strchr(ptr1, '\r');
+
+		if (ptr2 == 0)	//  No CR in buffer
+			return;
+
+		WPLen =	ptr2 - ptr1;
+
+		if ((memcmp(ptr1, "On ", 3)  == 0) && (WPLen < 200))
+		{
+			char * Date;
+			char * Call;
+			char * AT;
+			char * HA;
+			char * zip;
+			char * ZIP;
+			char * Name;
+			char * QTH = NULL;
+			char * Context;
+			char seps[] = " \r";
+
+			// Make copy of string, as strtok messes with it
+			
+			memcpy(WPLine, ptr1, WPLen);
+			WPLine[WPLen] = 0;
+
+			Date = strtok_s(WPLine+3, seps, &Context);
+			Call = strtok_s(NULL, seps, &Context);
+			AT = strtok_s(NULL, seps, &Context);
+			HA = strtok_s(NULL, seps, &Context);
+			zip = strtok_s(NULL, seps, &Context);
+			ZIP = strtok_s(NULL, seps, &Context);
+			Name = strtok_s(NULL, seps, &Context);
+			QTH = strtok_s(NULL, seps, &Context);
+
+
+			if (AT[0] == '@' && (QTH))
+			{
+				struct tm rtime;
+				time_t WPDate;
+				char Type;
+				char * TypeString;
+
+				if (memcmp(Name, "?", 2) == 0) Name = NULL;
+				if (memcmp(ZIP, "?", 2) == 0) ZIP = NULL;
+				if (memcmp(QTH, "?", 2) == 0) QTH = NULL;
+
+				memset(&rtime, 0, sizeof(struct tm));
+			
+				sscanf(Date, "%02d%02d%02d",
+				&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday);
+
+				rtime.tm_year += 100;
+				rtime.tm_mon--;
+
+/*
+This process freshens the database, following receipt of the new or changed information detailed above.
+
+The update subroutine will first look for an entry in the database for the callsign which matches the received information.
+If it does not exist then a completely new record will be created in the database and the information be used to fill what
+fields it can, in both the active and the temporary components. The date will be then changed to the one associated with the
+update information.
+
+If the record does already exist, then the unknown fields of both the temporary and active fields will be filled in, and 
+those fields already known in the temporary part will be replaced by the new information if the date new information is
+younger than that already on file. The date will then be
+adjusted such that it is consistent with the updated information.
+
+If the new information is of the /U category, then the current fields will be replaced by the new information in both
+the primary and secondary (Active and Temporary) parts of the record, as this information has been input directly from
+the user. If the information was of another category then only the secondary (Temporary) part of the record will be
+updated, so the Active or primary record will remain unchanged at this time.
+
+If a field is changed, a flag giving the update request type is then validated. If the /U flag is already validated,
+it will not be replaced. This flag will be used in case the WP update messages are validated.
+*/
+				if ((WPDate = mktime(&rtime)) != (time_t)-1 )
+				{
+					TypeString = strlop(Call, '/');
+					Type = TypeString[0];
+
+					WP = LookupWP(Call);
+
+					if (WP)
+					{
+						// Found, so update 
+
+						DoWPUpdate(WP, Type, Name, HA, QTH, ZIP, WPDate);
+					}
+					else
+					{
+						WP = AllocateWPRecord();
+
+						strcpy(WP->callsign, Call);
+						if (Name) strcpy(WP->name, Name);
+						strcpy(WP->first_homebbs, HA);
+						strcpy(WP->secnd_homebbs, HA);
+
+						if (QTH)
+						{
+							strcpy(WP->first_qth, QTH);
+							strcpy(WP->secnd_qth, QTH);;
+						}
+						if (ZIP)
+						{
+							strcpy(WP->first_zip, ZIP);
+							strcpy(WP->secnd_zip, ZIP);
+						}
+
+						WP->Type = Type;
+						WP->last_modif = WPDate;
+						WP->last_seen = WPDate;
+						WP->seen++;
+					}
+				}	
+			}
+		}
+		
+		ptr1 = ++ptr2;
+		if (*ptr1 == '\n')
+			ptr1++;
+	}
+
+	SaveWPDatabase();
+
+	return;
+}
+
+VOID DoWPUpdate(WPRec * WP, char Type, char * Name, char * HA, char * QTH, char * ZIP, time_t WPDate)
+{
+	// First Update any unknown field
+
+	if(Name)
+		if (WP->name == NULL) {strcpy(WP->name, Name); WP->last_modif = WPDate;}
+
+	if (QTH)
+	{
+		if (WP->first_qth == NULL) {strcpy(WP->first_qth, QTH); WP->last_modif = WPDate;}
+		if (WP->secnd_qth == NULL) {strcpy(WP->secnd_qth, QTH); WP->last_modif = WPDate;}
+	}
+	if (ZIP)
+	{
+		if (WP->first_zip == NULL) {strcpy(WP->first_zip, ZIP); WP->last_modif = WPDate;}
+		if (WP->secnd_zip == NULL) {strcpy(WP->secnd_zip, ZIP); WP->last_modif = WPDate;}
+	}
+	
+	WP->last_seen = WPDate;
+	WP->seen++;
+
+	// Now Update Temp Fields if update is newer than original
+
+	if (WP->last_modif >= WPDate)
+		return;
+
+	if (Type == 'U')					// Definitive Update
+	{
+		if (strcmp(WP->first_homebbs , HA) != 0)
+		{
+			strcpy(WP->first_homebbs, HA); strcpy(WP->secnd_homebbs, HA); WP->last_modif = WPDate; WP->changed = TRUE;
+		}
+
+		 if (Name)
+		 {
+			 if (strcmp(WP->name , Name) != 0)
+			 {
+				strcpy(WP->name, Name); 
+				WP->last_modif = WPDate; 
+				WP->changed = TRUE;
+			}
+		 }
+
+		if (QTH)
+		{
+			if (strcmp(WP->first_qth , QTH) != 0)
+			{
+				strcpy(WP->first_qth, QTH);
+				strcpy(WP->secnd_qth, QTH);
+				WP->last_modif = WPDate;
+				WP->changed = TRUE;
+			}
+		}
+
+		if (ZIP)
+		{
+			if (strcmp(WP->first_zip , ZIP) != 0)
+			{
+				strcpy(WP->first_zip, ZIP);
+				strcpy(WP->secnd_zip, ZIP);
+				WP->last_modif = WPDate;
+				WP->changed = TRUE;
+			}
+		}
+
+		WP->Type = Type;
+
+		return;
+	}
+
+	// Non-Definitive - only update second copy
+
+	if (strcmp(WP->secnd_homebbs , HA) != 0) {strcpy(WP->secnd_homebbs, HA); WP->last_modif = WPDate; WP->Type = Type;}
+
+	if (Name)
+		if (strcmp(WP->name , Name) != 0) {strcpy(WP->name, Name); WP->last_modif = WPDate; WP->Type = Type;}
+
+	if (QTH)
+		if (strcmp(WP->secnd_qth , QTH) != 0) {strcpy(WP->secnd_qth, QTH); WP->last_modif = WPDate; WP->Type = Type;}
+
+	if (ZIP)
+		if (strcmp(WP->secnd_zip , ZIP) != 0) {strcpy(WP->secnd_zip, ZIP); WP->last_modif = WPDate; WP->Type = Type;}
+						
+	return;
+}
+
+VOID UpdateWPWithUserInfo(struct UserInfo * user)
+{
+	WPRec * WP = LookupWP(user->Call);
+
+	if (!WP)
+	{
+		WP = AllocateWPRecord();
+		strcpy(WP->callsign, user->Call);
+	}
+
+	// Update Record
+
+	if (user->HomeBBS[0])
+	{
+		strcpy(WP->first_homebbs, user->HomeBBS);
+		strcpy(WP->secnd_homebbs, user->HomeBBS);
+	}
+
+	if (user->Address[0])
+	{
+		strcpy(WP->first_qth, user->Address);
+		strcpy(WP->secnd_qth, user->Address);
+	}
+
+	if (user->ZIP[0])
+	{
+		strcpy(WP->first_zip, user->ZIP);
+		strcpy(WP->secnd_zip, user->ZIP );
+	}
+
+	if (user->Name[0])
+		strcpy(WP->name, user->Name);
+
+	WP->last_modif = WP->last_seen = time(NULL);
+
+	WP->changed = TRUE;
+	WP->Type = 'U';
+
+	SaveWPDatabase();
+
+}

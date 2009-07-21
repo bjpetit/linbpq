@@ -301,10 +301,10 @@ struct UserInfo{
 
 // flags equates
 
-#define F_EXC        0x0001
+#define F_Excluded   0x0001
 #define F_LOC        0x0002
-#define F_EXP        0x0004
-#define F_SYS        0x0008
+#define F_Expert     0x0004
+#define F_SYSOP      0x0008
 #define F_BBS        0x0010
 #define F_PAG        0x0020
 #define F_GST        0x0040
@@ -409,7 +409,7 @@ typedef struct WPREC {	/* 108 bytes */
 typedef struct WPDBASE{	/* 194 bytes */
 	char callsign[7];
 	char name[13];
-	unsigned char free;
+	unsigned char Type;
 	unsigned char changed;
 	unsigned short seen;
 	long last_modif;
@@ -645,16 +645,17 @@ VOID GetUserDatabase();
 VOID GetMessageDatabase();
 VOID SaveMessageDatabase();
 VOID GetBIDDatabase();
-VOID GetWPDatabase();
 VOID SaveBIDDatabase();
+VOID GetWPDatabase();
+VOID CopyWPDatabase();
+VOID SaveWPDatabase();
+WPRec * LookupWP(char * Call);
 VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user);
 VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user);
 int QueueMsg(	ConnectionInfo * conn, char * msg, int len);
 VOID SendUnbuffered(int stream, char * msg, int len);
-char * GetConfStations(int Conference);
-VOID SendtoOtherUsers(ConnectionInfo * conn, char* Msg, int msglen);
 //int GetFileList(char * Dir);
 VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn);
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
@@ -744,6 +745,7 @@ BOOL CreateConsole();
 int WritetoConsoleWindow(char * Msg, int len);
 int ToggleParam(HWND hWnd, BOOL * Param, int Item);
 void CopyToClipboard(HWND hWnd);
+VOID CloseConsole(int Stream);
 
 // Monitor Routines
 
@@ -790,6 +792,12 @@ BOOL RemoveKilledMessages();
 VOID Renumber_Messages();
 BOOL ExpireBIDs();
 
+// WP Routines
+
+VOID ProcessWPMsg(char * MailBuffer, int Size, char * FisrtRLine);
+VOID GetWPInfoFromRLine(char * From, char * FirstRLine, time_t RLineTime);
+VOID UpdateWPWithUserInfo(struct UserInfo * user);
+
 extern BOOL cfgMinToTray;
 
 extern char SignoffMsg[];
@@ -797,6 +805,8 @@ extern char SignoffMsg[];
 extern HWND MainWnd;
 extern char BaseDir[];
 extern char MailDir[];
+extern char WPDatabasePath[];
+
 extern int LatestMsg;
 extern char BBSName[];
 extern char SYSOPCall[];
@@ -805,12 +815,15 @@ extern char NewUserPrompt[];
 extern int Ver[4];
 
 extern struct MsgInfo ** MsgHddrPtr;
+
 extern BIDRec ** BIDRecPtr;
+extern int NumberofBIDs;
 
 extern int NumberofMessages;
 extern int FirstMessagetoForward;
 
-extern int NumberofBIDs;
+extern WPRec ** WPRecPtr;
+extern int NumberofWPrecs;
 
 extern int AllocSemaphore;
 extern int MsgNoSemaphore;
@@ -887,7 +900,7 @@ extern BOOL StripLF;
 extern BOOL WarnWrap;
 extern BOOL FlashOnConnect;
 extern BOOL WrapInput;
-
+extern BOOL CloseWindowOnBye;
 
 extern RECT MonitorRect;
 extern HWND hMonitor;

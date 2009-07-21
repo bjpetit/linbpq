@@ -129,6 +129,143 @@ BOOL matchi(char * p1, char * p2)
 		return TRUE;
 }
 
+VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
+{
+	ConnectionInfo *c;
+
+	WriteLogLine('<',Buffer, len, LOG_CHAT);
+
+	if (conn->Flags & GETTINGUSER)
+	{
+		memcpy(user->Name, Buffer, len-1);
+		conn->Flags &=  ~GETTINGUSER;
+		SendWelcomeMsg(conn->BPQStream, conn, user);
+		SaveUserDatabase();
+		return;
+	}
+
+	Buffer[len] = 0;
+
+	strlop(Buffer, '\r');
+
+	if (conn->flags == p_linkwait)
+	{
+		//waiting for *RTL
+
+		if ((len <6) && (memcmp(Buffer, "*RTL", 4) == 0))
+		{
+			// Node - Node Connect
+
+			if (rtloginl (conn, conn->Callsign))
+			{
+				// Accepted
+		
+				conn->Flags |= CHATLINK;
+				return;
+			}
+			else
+			{
+				// Connection refused
+			
+				Disconnect(conn->BPQStream);
+				return;
+			}
+		}
+
+		if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
+			return;
+
+		nprintf(conn, "Unexpected Message on Chat Node-Node Link - Disconnecting\r");
+		Flush(conn);
+		Sleep(500);
+		Disconnect(conn->BPQStream);
+		return;
+	}
+
+	if (conn->Flags & CHATLINK)
+	{
+		chkctl(conn, Buffer);
+		return;
+	}
+
+	if(conn->u.user == NULL)
+		return;									// A node link, but not activated yet
+
+
+	if ((len <6) && (memcmp(Buffer, "*RTL", 4) == 0))
+	{
+		// Other end thinks this is a node-node link
+
+		Disconnect(conn->BPQStream);
+		return;
+	}
+
+	if (Buffer[0] == '/')
+	{
+
+		// Process Command
+
+		if (_memicmp(&Buffer[1], "Bye", 1) == 0)
+		{
+			SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+			
+			if (conn->BPQStream == -1)
+			{
+				logout(conn);
+				conn->Flags = 0;
+			}
+
+			else
+				ReturntoNode(conn->BPQStream);
+								
+			return;
+		}
+
+		if (_memicmp(&Buffer[1], "Quit", 4) == 0)
+		{
+			SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+
+			if (conn->BPQStream == -1)
+			{
+				logout(conn);
+				conn->Flags = 0;
+			}
+
+			else
+			{
+				Sleep(1000);
+				Disconnect(conn->BPQStream);
+			}
+			
+			return;
+		}
+
+		rt_cmd(conn, Buffer);
+
+		return;
+
+	}
+
+	// Send message to all other connected users on same channel
+
+	if (len > 200)
+	{
+		Buffer[200] = '\r';
+		Buffer[201] = 0;
+		len = 200;
+	}
+		
+	text_tellu(conn->u.user, Buffer, NULL, o_topic); // To local users.
+		
+	// Send to Linked nodes
+
+	for (c = circuit_hd; c; c = c->next)
+		if ((c->flags & p_linked) && c->refcnt && ct_find(c, conn->u.user->topic))
+			nprintf(c, "%c%c%s %s %s\r",
+				FORMAT, id_data, OurNode, conn->u.user->call, Buffer);
+
+
+}
 
 static void upduser(USER *user)
 {
@@ -680,6 +817,10 @@ void text_tellu_Joined(USER * user)
 
 	sprintf(buf, "%-6.6s *** Joined Chat, Topic %s\r", user->call, user->topic->name);
 
+	if (FlashOnConnect)
+		FlashWindow(hWnd, TRUE);
+
+
 // Send it to all connected users in the same topic.
 // Echo to originator if requested.
 
@@ -693,7 +834,7 @@ void text_tellu_Joined(USER * user)
 		if (circuit->u.user->flags & u_bells)
 			if (circuit->BPQStream < 0) // Console
 			{
-				FlashWindow(hConsole, TRUE);
+				if (FlashOnConnect) FlashWindow(hConsole, TRUE);
 				nputc(circuit, 7);
 			}
 			else

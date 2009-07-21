@@ -46,6 +46,7 @@ BOOL StripLF = TRUE;
 BOOL WarnWrap = TRUE;
 BOOL FlashOnConnect = TRUE;
 BOOL WrapInput = TRUE;
+BOOL CloseWindowOnBye = TRUE;
 
 int WrapLen = 80;
 int WarnLen = 90;
@@ -105,6 +106,7 @@ BOOL CreateConsole()
 	CheckMenuItem(hMenu,IDM_WARNINPUT, (WarnWrap) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_WRAPTEXT, (WrapInput) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_Flash, (FlashOnConnect) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_CLOSEWINDOW, (CloseWindowOnBye) ? MF_CHECKED : MF_UNCHECKED);
 
 	DrawMenuBar(hWnd);	
 
@@ -167,6 +169,15 @@ BOOL CreateConsole()
 
 	return TRUE;
 
+}
+
+VOID CloseConsole(int Stream)
+{
+	if (CloseWindowOnBye)
+	{
+		PostMessage(hConsole, WM_DESTROY, 0, 0);
+		CloseWindow(hConsole);
+	}
 }
 
 void MoveWindows()
@@ -239,6 +250,10 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			ToggleParam(hWnd, &FlashOnConnect, IDM_WRAPTEXT);
 			break;
 
+		case IDM_CLOSEWINDOW:
+
+			ToggleParam(hWnd, &CloseWindowOnBye, IDM_CLOSEWINDOW);
+			break;
 
 		case BPQCLEAROUT:
 
@@ -265,6 +280,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 	case WM_SYSCOMMAND:
 
+
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
@@ -280,21 +296,22 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				return (DefWindowProc(hWnd, message, wParam, lParam));
 		}
 
-		case WM_SIZING:
 
-			lprc = (LPRECT) lParam;
+	case WM_SIZING:
 
-			Height = lprc->bottom-lprc->top;
-			Width = lprc->right-lprc->left;
+		lprc = (LPRECT) lParam;
 
-			MoveWindows();
+		Height = lprc->bottom-lprc->top;
+		Width = lprc->right-lprc->left;
+
+		MoveWindows();
 			
-			return TRUE;
+		return TRUE;
 
 
-		case WM_DESTROY:
+	case WM_DESTROY:
 		
-			// Remove the subclass from the edit control. 
+		// Remove the subclass from the edit control. 
 
 			GetWindowRect(hWnd,	&ConsoleRect);	// For save soutine
 
@@ -306,7 +323,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				DeleteTrayMenuItem(hWnd);
 
 
-			if (Console->Active)
+			if (Console && Console->Active)
 			{
 				ClearQueue(Console);
 		
@@ -452,10 +469,11 @@ lineloop:
 		{
 			// no newline. Move data to start of buffer and Save pointer
 
-			PartLinePtr=len;
-			memmove(readbuff,ptr1,len);
 			PartLineIndex=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
 			SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) PartLineIndex, MAKELPARAM(FALSE, 0));
+
+			PartLinePtr=len;
+			memmove(readbuff,ptr1,len);
 
 			return (0);
 

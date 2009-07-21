@@ -672,11 +672,11 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, IDC_ZIP, user->Address);
 			SetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS);
 
-			CheckDlgButton(hDlg, IDC_SYSOP, (user->flags & F_SYS));
+			CheckDlgButton(hDlg, IDC_SYSOP, (user->flags & F_SYSOP));
 			CheckDlgButton(hDlg, IDC_BBSFLAG, (user->flags & F_BBS));
 			CheckDlgButton(hDlg, IDC_PMSFLAG, (user->flags & F_PMS));
-			CheckDlgButton(hDlg, IDC_EXPERT, (user->flags & F_EXP));
-			CheckDlgButton(hDlg, IDC_EXCLUDED, (user->flags & F_EXC));
+			CheckDlgButton(hDlg, IDC_EXPERT, (user->flags & F_Expert));
+			CheckDlgButton(hDlg, IDC_EXCLUDED, (user->flags & F_Excluded));
 
 			return 0;
 		}
@@ -840,15 +840,18 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 		user->flags |= F_PMS; else user->flags &= ~F_PMS;
 
 	if (IsDlgButtonChecked(hDlg, IDC_EXPERT))
-		user->flags |= F_EXP; else user->flags &= ~F_EXP;
+		user->flags |= F_Expert; else user->flags &= ~F_Expert;
 
 	if (IsDlgButtonChecked(hDlg, IDC_EXCLUDED))
-		user->flags |= F_EXC; else user->flags &= ~F_EXC;
+		user->flags |= F_Excluded; else user->flags &= ~F_Excluded;
 
 	if (IsDlgButtonChecked(hDlg, IDC_SYSOP))
-		user->flags |= F_SYS; else user->flags &= ~F_SYS;
+		user->flags |= F_SYSOP; else user->flags &= ~F_SYSOP;
 
 	SaveUserDatabase();
+
+	UpdateWPWithUserInfo(user);
+
 
 	if (ShowBox)
 	{
@@ -1443,6 +1446,7 @@ VOID SaveWindowConfig()
 		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&WarnWrap,4);
 		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&WrapInput,4);
 		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&FlashOnConnect,4);
+		retCode = RegSetValueEx(hKey,"CloseWindowOnBye",0,REG_DWORD,(BYTE *)&CloseWindowOnBye,4);
 
 		RegCloseKey(hKey);
 	}
@@ -1592,6 +1596,10 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey,"StripLF",0,			
 			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"CloseWindowOnBye",0,			
+			(ULONG *)&Type,(UCHAR *)&CloseWindowOnBye,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"WarnWrap",0,			

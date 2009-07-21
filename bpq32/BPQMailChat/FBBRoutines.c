@@ -136,7 +136,6 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		conn->FBBIndex = 0;		// ready for next block;
 		conn->FBBChecksum = 0;
 
-
 		return;
 
 	case 'Q':
@@ -312,44 +311,6 @@ ok:
 
 	}
 
-/*
-Connects FC1GHV	
-Connected
-[FBB-5.11-FHM$]Bienvenue a Poitiers, Jean-Paul.>
-[FBB-5.11-FHM$]         (F6FBB has the F flag in the SID)
-FB P F6FBB FC1GHV.FFPC.FRA.EU FC1MVP 24657_F6FBB 1345
-FB P FC1CDC F6ABJ F6AXV 24643_F6FBB 5346
-FB B F6FBB FRA FBB 22_456_F6FBB 8548
-F> HH
-  	FS +-+ (accepts the 1st and the 3rd)
-Title 1st messageText 1st message
-......
-^Z
-Title 3rd message
-Text 3rd message
-......
-^Z	
-FB P FC1GHV F6FBB F6FBB 2734_FC1GHV 234
-FB B FC1GHV F6FBB FC1CDC 2745_FC1GHV 3524
-F> HH
- FS -- (Don't need them, and send immediately the proposal).
- FB P FC1CDC F6ABJ F6AXV 24754_F6FBB 345F> HH
-FS + (Accepts the message)
-Title message
-Text message......
-^Z	
-FF (no more message)
-FB B F6FBB TEST FRA 24654_F6FBB 145
-F> HH	
-FS + (Accepts the message)
-Title message
-Text message
-......
-^Z	
-FF (still no message)
-FQ (No more message)	
-Disconnection of the link	
-*/
 	return;
 }
 VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
@@ -637,6 +598,15 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 		strcat(Rline, "\r\n");
+
+	i=strlen(MsgBytes);
+
+	if (i != OrigLen)
+	{
+		MessageBox(NULL, "OrigLen != BufferLen", "BPQMailChat", MB_YESNO);
+		OrigLen = i;
+	}
+
 
 	MsgLen = OrigLen + strlen(Rline);
 
@@ -1415,3 +1385,35 @@ void Decode(CIRCUIT * conn)
 }
 
 #pragma warning(pop)
+
+/*
+20:09:00R GM8BPQ-10>FBB Port=1 <UI C>:
+103    !!
+20:10:06R GM8BPQ-10>FBB Port=1 <UI C>:
+19-Jul 21:08 <<< Mailbox GM8BPQ Skigersta >>> 2 active messages.
+Messages for
+ ALL
+
+20:11:11R GM8BPQ-10>FBB Port=1 <UI C>:
+104    P      5 G8BPQ         GM8BPQ 090719 ***
+20:12:17R GM8BPQ-10>FBB Port=1 <UI C>:
+105    B      5 ALL           GM8BPQ 090719 test
+
+20:13:23R GM8BPQ-10>FBB Port=1 <UI C>:
+? 0000006464
+
+20:15:34R GM8BPQ-10>FBB Port=1 <UI C>:
+105    !!
+20:15:45T GM8BPQ-10>MAIL Port=2 <UI C>:
+
+20:16:40R GM8BPQ-10>FBB Port=1 <UI C>:
+19-Jul 21:15 <<< Mailbox GM8BPQ Skigersta >>> 4 active messages.
+Messages for
+ ALL G8BPQ
+20:17:46R GM8BPQ-10>FBB Port=1 <UI C>:
+106    P      5 GM8BPQ        GM8BPQ 090719 ***
+20:20:54R GM8BPQ-10>FBB Port=1 <UI C>:
+? 0000006464
+20:21:05T GM8BPQ-10>FBB Port=2 <UI C>:
+? 0000006464
+*/

@@ -12,20 +12,36 @@
 #define IDC_TOTAL                       1009
 #define IDC_BIDSREMOVED                 1010
 #define IDC_BIDSLEFT                    1011
+#define IDD_WP                          5000
+#define IDC_WPNAME                      5001
+#define IDC_ZIP1                        5002
+#define IDC_QTH1                        5003
+#define IDC_HOMEBBS1                    5004
+#define IDC_HOMEBBS2                    5005
+#define IDC_QTH2                        5006
+#define IDC_ZIP2                        5007
+#define IDC_LASTSEEN                    5008
+#define IDC_LASTMODIFIED                5009
+#define IDC_TYPE                        5010
+#define IDC_CHANGED                     5011
+#define IDC_SEEN                        5012
 #define IDD_MAINTRESULTS                30001
+#define IDD_EDITWP                      30002
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
 #define IDM_WRAPTEXT                    40004
 #define IDM_WARNINPUT                   40005
 #define IDM_Flash                       40006
+#define IDM_CLOSEWINDOW                 40007
+#define IDM_WP                          40008
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30002
-#define _APS_NEXT_COMMAND_VALUE         40007
+#define _APS_NEXT_RESOURCE_VALUE        30003
+#define _APS_NEXT_COMMAND_VALUE         40009
 #define _APS_NEXT_CONTROL_VALUE         1012
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

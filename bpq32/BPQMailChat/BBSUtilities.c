@@ -26,7 +26,7 @@ void GetSemaphore(int * Semaphore)
 	//	Wait for it to be free
 	//
 	
-	if (*Semaphore !=0)
+	if (*Semaphore != 0)
 		Debugprintf("MailChat Semaphore Clash");
 
 loop1:
@@ -44,7 +44,7 @@ loop1:
 
 	mov	eax,1
 	mov ebx, Semaphore
-	xchg [ebx],eax	// this instruction is locked
+	xchg [ebx],eax		// this instruction is locked
 	
 	cmp	eax,0
 	jne loop1			// someone else got it - try again
