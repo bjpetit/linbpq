@@ -154,6 +154,8 @@
 
 #include "AsmStrucs.h"
 
+#define SPECIALVERSION "Joel's Debug Version"
+
 #include "GetVersion.h"
 
 #define DllImport	__declspec( dllimport )
@@ -226,6 +228,14 @@ int MINORVERSION=9;
 
 int Semaphore = 0;
 int SemProcessID = 0;
+int SemHeldByAPI = 0;
+UINT Sem_eax = 0;
+UINT Sem_ebx = 0;
+UINT Sem_ecx = 0;
+UINT Sem_edx = 0;
+UINT Sem_esi = 0;
+UINT Sem_edi = 0;
+
 
 
 DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
@@ -367,6 +377,8 @@ loop1:
 void FreeSemaphore()
 {
 	SEMRELEASES++;
+
+	SemHeldByAPI = 0;
 
 	Semaphore=0;
 
@@ -563,11 +575,14 @@ VOID CheckforLostProcesses()
 				}
 			}
 
-			// If process was holding the semaphore, release it
+			// If process ) the semaphore, release it
 
 			if (Semaphore == 1 && ProcessID == SemProcessID)
 			{
-				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\n");
+				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\r\n");
+				Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
+					Sem_eax, Sem_ebx = 0, Sem_ecx = 0, Sem_edx = 0, Sem_esi = 0, Sem_edi); 
+
 				Semaphore=0;
 			}
 
@@ -655,6 +670,8 @@ VOID CALLBACK TimerProc(
 	//
 
 	GetSemaphore();
+
+	SemHeldByAPI = 2;
 
 	// See if reconfigure requested
 
@@ -826,6 +843,8 @@ Check_Timer()
 
 	GetSemaphore();
 
+	SemHeldByAPI = 3;
+
 	if (FirstInitDone == 0)
 	{
 		FirstInitDone=1;
@@ -966,6 +985,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		}
 			  
 		GetSemaphore();
+
+		SemHeldByAPI = 4;
 
 		LoadToolHelperRoutines();
 
@@ -1700,6 +1721,8 @@ BOOL UpdateNodesForApp(int Appl)
 
 
 		GetSemaphore();
+
+		SemHeldByAPI = 5;
 	
 		_asm{
 
@@ -1741,6 +1764,8 @@ nodests:
 	{
 		GetSemaphore();
 
+		SemHeldByAPI = 6;
+
 		_asm {
 
 		mov	EBX,DEST
@@ -1757,8 +1782,9 @@ nodests:
 
 	if (APPLCALLTABLE[App].APPLCALL[0] < 41)	return FALSE;
 
-
 	GetSemaphore();
+
+	SemHeldByAPI = 7;
 
 	memmove (DEST->DEST_CALL,APPL->APPLCALL,13);
 
@@ -2393,6 +2419,8 @@ DllExport int APIENTRY DecodeFrame(char * msg, char * buffer, int Stamp)
 
 	GetSemaphore();
 
+	SemHeldByAPI = 8;
+
 	_asm {
 
 	pushfd
@@ -2455,6 +2483,8 @@ DllExport int APIENTRY FindFreeStream()
 
 
 	GetSemaphore();
+
+	SemHeldByAPI = 9;
 
 	_asm{
 	

@@ -261,8 +261,9 @@ typedef struct ConnectionInfo_S
 #define BBS 1
 #define FBBForwarding 2
 #define FBBCompressed 4
-#define RunningConnectScript 8
-#define MBLFORWARDING 16				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
+#define FBBB1Mode 8
+#define RunningConnectScript 32
+#define MBLFORWARDING 64				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
 
 #pragma pack(1)
 
@@ -451,6 +452,8 @@ struct FBBHeaderLine
 	char To[7];						// Recipient
 	char BID[13];
 	int Size;
+	int CSize;						// Compresses Size (B2 proto)
+	BOOL B2Message;					// Set if an FC type
 	struct MsgInfo * FwdMsg;		// Header so we can mark as complete 
 };
 
@@ -662,6 +665,9 @@ void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
 void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
+int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
+int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
+
 VOID FlagAsKilled(struct MsgInfo * Msg);
 int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
@@ -735,7 +741,7 @@ VOID FreeOverrides();
 VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 VOID UnpackFBBBinary(CIRCUIT * conn);
 void Decode(CIRCUIT * conn) ;
-int Encode(char * in, char * out, int len);
+int Encode(char * in, char * out, int len, BOOL B2Protocol);
 
 
 
@@ -798,9 +804,21 @@ VOID ProcessWPMsg(char * MailBuffer, int Size, char * FisrtRLine);
 VOID GetWPInfoFromRLine(char * From, char * FirstRLine, time_t RLineTime);
 VOID UpdateWPWithUserInfo(struct UserInfo * user);
 
+// UI Routines
+
+VOID SetupUIInterface();
+VOID SendLatestUI();
+VOID SendMsgUI(struct MsgInfo * Msg);
+VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);
+VOID SeeifBBSUIFrame(struct _MESSAGE * buff, int len);
+
+
 extern BOOL cfgMinToTray;
 
 extern char SignoffMsg[];
+
+extern char InfoBoxText[];			// Text to display in Config Info Popup
+
 
 extern HWND MainWnd;
 extern char BaseDir[];
@@ -872,6 +890,7 @@ extern int HighestBBSNumber;
 extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
 extern BOOL ALLOWCOMPRESSED;
+extern BOOL ALLOWB2;
 
 extern BOOL ISP_Gateway_Enabled;
 

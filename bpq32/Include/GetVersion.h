@@ -8,11 +8,14 @@ VOID GetVersionInfo(char * File)
 	HRSRC RH;
   	struct tagVS_FIXEDFILEINFO * HG;
 #ifdef _DEBUG 
-	char isDebug[]="Debug Build";
+	char isDebug[40]="Debug Build ";
 #else
-	char isDebug[]="";
+	char isDebug[40]="";
 #endif
 	HMODULE HM;
+#ifdef SPECIALVERSION
+	strcat(isDebug, SPECIALVERSION);
+#endif
 
 	HM=GetModuleHandle(File);
 

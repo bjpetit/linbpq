@@ -61,3 +61,28 @@ void FreeSemaphore(int * Semaphore)
 
 	return; 
 }
+VOID BBSputs(CIRCUIT * conn, char * buf)
+{
+	// Sends to user and logs
+
+	WriteLogLine('>',buf,  strlen(buf) -1, LOG_BBS);
+
+	QueueMsg(conn, buf, strlen(buf));
+}
+
+VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
+{
+	char Mess[255];
+	int len;
+	va_list(arglist);
+
+	
+	va_start(arglist, format);
+	len = vsprintf(Mess, format, arglist);
+
+	QueueMsg(conn, Mess, len);
+
+	WriteLogLine('>',Mess, len-1, LOG_BBS);
+
+	return;
+}

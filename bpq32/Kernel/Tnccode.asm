@@ -71,6 +71,13 @@ _ENDOFDATA	DD	0		; For DUMP ROUTINE
 	EXTRN	BPQHOSTVECTOR:BYTE,BPQVECLENGTH:BYTE
 
 	EXTRN	REALTIMETICKS:WORD,BUFFERWAITS:DWORD
+	extern _SemHeldByAPI:DWORD
+	extern _Sem_eax:DWORD
+	extern _Sem_ebx:DWORD
+	extern _Sem_ecx:DWORD
+	extern _Sem_edx:DWORD
+	extern _Sem_esi:DWORD
+	extern _Sem_edi:DWORD
 
 	PUBLIC	DISCFLAG
 
@@ -679,6 +686,15 @@ _BPQHOSTAPI:
 	call	_Check_Timer
 	call	_GetSemaphore
 	popad
+		
+	mov _SemHeldByAPI,1
+	mov _Sem_eax,eax
+	mov _Sem_ebx,ebx
+	mov _Sem_ecx,ecx
+	mov _Sem_edx,edx
+	mov _Sem_esi,esi
+	mov _Sem_edi,edi
+
 
 	call	API
 

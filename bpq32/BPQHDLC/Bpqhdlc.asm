@@ -619,16 +619,29 @@ POOLDONE:
 DRSIINIT:				; INTERRUPT INITIALISATION CODE
 
 	PUSHAD
-	Debug_Printf	"hdlc98 DRSIInit"
+	movzx eax, IOBASE[EBX]
+	Debug_Printf	"hdlc98 DRSIInit IOADDR  %x", <eax>
 	POPAD
 
+	PUSHAD
+	Debug_Printf	"hdlc98 Calling INITPART1"
+	POPAD
 
 	MOV	DX,IOBASE[EBX]		; SCC ORIGIN
 	CALL	INITPART1
+	
+	PUSHAD
+	Debug_Printf	"hdlc98 Calling INITCIO"
+	POPAD
+
 
 	PUSH	EDX
 	CALL	INITCIO			; SET UP CIO FOR /32
 	POP		EDX
+	
+	PUSHAD
+	Debug_Printf	"hdlc98 Calling INITPART2"
+	POPAD
 
 	CALL	INITPART2
 ;
@@ -638,6 +651,11 @@ DRSIINIT:				; INTERRUPT INITIALISATION CODE
 	JNE SHORT STARTCOUNTER
 
 	JMP	EXTCLOCK
+	
+	PUSHAD
+	Debug_Printf	"hdlc98 Starting BRG"
+	POPAD
+
 
 STARTCOUNTER:
 ;
@@ -778,6 +796,11 @@ INITACOUNTER:
 	DELAY
 
 EXTCLOCK:
+
+	PUSHAD
+	Debug_Printf	"hdlc98 Calling INITREST"
+	POPAD
+
 
 	CALL	INITREST
 	
@@ -1072,8 +1095,11 @@ PINITREST:
 ;	INITIALISE COMMS CHIP
 ;
 
-	cli
+	PUSHAD
+	Debug_Printf	"hdlc98 Initialising SCC"
+	POPAD
 
+	cli
 
 	CMP	EDI,0			; OTHER CHAN ALREADY SET UP?
 	JNE SHORT SIOSECOND	; YES
@@ -1498,7 +1524,7 @@ PA0INIT:
 INITREST:
 
 	mov     IRQHand[EBX],0	; in case already hooked by another port
-
+	
 	MOV	PORTINTERRUPT[EBX],OFFSET32 SIOINT
 
 	CMP	EDI,0
@@ -2791,6 +2817,11 @@ NOBUFFERCHECK:
 
 HOOKINT:
 
+	PUSHAD
+	movzx eax, INTLEVEL[EBX]
+	Debug_Printf	"hdlc98 Hooking Interupt %x", <eax>
+	POPAD
+
 	mov     edi, OFFSET32 vid
 	
 	movzx	ax,INTLEVEL[EBX]
@@ -2810,18 +2841,26 @@ HOOKINT:
 	mov     IRQHand[EBX], eax
 
 	VxDCall	VPICD_Physically_Unmask
-	jc      errorhandler
+	jc      errorhandler2
 
 	ret
 
 
 errorhandler:
 
-	mov	eax,0
-	div	eax
+	PUSHAD
+	Debug_Printf	"hdlc98 Hook Interupt Failed"
+	POPAD
+
 	ret
+	
+errorhandler2:
 
+	PUSHAD
+	Debug_Printf	"hdlc98 Unmask Interupt Failed"
+	POPAD
 
+	ret
 
 
 EndProc VXD_EXIT

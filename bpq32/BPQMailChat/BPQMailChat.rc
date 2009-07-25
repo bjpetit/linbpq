@@ -101,34 +101,39 @@ END
 
 BBS_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
 STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
 BEGIN
-    EDITTEXT        1001,115,100,68,14,ES_UPPERCASE
-    LTEXT           "Base Directory",IDC_STATIC,45,143,53,12
-    LTEXT           "BBS Call",IDC_STATIC,45,105,37,12
-    LTEXT           "BBS Appl Number",IDC_STATIC,45,165,61,12
-    LTEXT           "BBS Streams",IDC_STATIC,45,185,49,12
-    EDITTEXT        1002,115,140,212,14
-    EDITTEXT        1003,115,160,29,14
-    EDITTEXT        1004,115,180,29,14
-    LTEXT           "POP3 Port",IDC_STATIC,45,224,49,12
-    LTEXT           "SMTP Port",IDC_STATIC,167,224,49,12
-    EDITTEXT        1005,115,222,29,14
-    EDITTEXT        1006,222,222,29,14
-    LTEXT           "H Route",IDC_STATIC,45,125,37,12
-    EDITTEXT        1007,115,120,119,13,ES_UPPERCASE
-    DEFPUSHBUTTON   "Save",1100,165,245,50,14,BS_CENTER | BS_VCENTER
+    EDITTEXT        1001,83,98,68,14,ES_UPPERCASE
+    LTEXT           "Base Directory",IDC_STATIC,13,141,53,12
+    LTEXT           "BBS Call",IDC_STATIC,13,103,37,12
+    LTEXT           "BBS Appl Number",IDC_STATIC,13,160,61,10
+    LTEXT           "BBS Streams",IDC_STATIC,163,160,49,10
+    EDITTEXT        1002,83,138,212,14
+    EDITTEXT        1003,83,158,29,14
+    EDITTEXT        1004,228,159,29,14
+    LTEXT           "POP3 Port",IDC_STATIC,13,222,49,12
+    LTEXT           "SMTP Port",IDC_STATIC,135,222,49,12
+    EDITTEXT        1005,83,220,29,14
+    EDITTEXT        1006,190,220,29,14
+    LTEXT           "H Route",IDC_STATIC,13,123,37,12
+    EDITTEXT        1007,83,118,119,13,ES_UPPERCASE
+    DEFPUSHBUTTON   "Save",1100,133,243,50,14,BS_CENTER | BS_VCENTER
     LTEXT           "BBS Call is the base callsign,without SSID. This is not necessarily the same as the Applicaion Callsign defined in the BPQ32 configuration. SYSOPCall is the callsign used by the local console.",
                     IDC_STATIC,10,5,354,23
     LTEXT           "The eMail Server Params configure the SMTP and POP3 Servers, which allow a normal Internet email client to get messages from, and post mesages to the BBS. If you don't want to use this, set them to zero.",
                     IDC_STATIC,10,55,357,18
     LTEXT           "The Application Number defines which BPQ32 Application gives access to the BBS. Note this a the APPLNumber (1-8) not an Appication Mask, as uses in many BPQ32 programs.",
                     IDC_STATIC,10,30,353,18
-    LTEXT           "BBS Call",IDC_STATIC,45,103,37,12
-    LTEXT           "SYSOP Call",IDC_STATIC,195,103,42,12
-    EDITTEXT        1008,260,100,68,14,ES_UPPERCASE
+    LTEXT           "BBS Call",IDC_STATIC,13,101,37,12
+    LTEXT           "SYSOP Call",IDC_STATIC,163,101,42,12
+    EDITTEXT        1008,228,98,68,14,ES_UPPERCASE
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,273,222,91,14
-    LTEXT           "eMail Server Params:",IDC_STATIC,46,205,135,10
+                    WS_TABSTOP,241,220,91,14
+    LTEXT           "eMail Server Params:",IDC_STATIC,14,203,135,10
+    CONTROL         "Enable  UI System",IDC_ENABLEUI,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,13,182,77,10
+    LTEXT           "Enable UI System activates FBB compatible UI broadcating of Message Headers",
+                    IDC_STATIC,10,77,358,15
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -540,18 +545,19 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "EDIT WP Record"
 FONT 8, "MS Sans Serif"
 BEGIN
-    COMBOBOX        IDD_WP,9,9,76,190,CBS_SIMPLE | CBS_UPPERCASE | CBS_SORT | 
+    COMBOBOX        IDC_WP,9,9,76,190,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
                     WS_VSCROLL | WS_TABSTOP
     EDITTEXT        IDC_WPNAME,165,10,128,12,ES_AUTOHSCROLL
     EDITTEXT        IDC_ZIP1,165,85,128,12,ES_AUTOHSCROLL
     EDITTEXT        IDC_QTH1,165,55,215,12,ES_AUTOHSCROLL
     EDITTEXT        IDC_HOMEBBS1,165,25,216,12,ES_UPPERCASE | ES_AUTOHSCROLL
-    PUSHBUTTON      "Delete",5101,106,215,56,17,BS_CENTER | BS_VCENTER
+    PUSHBUTTON      "Delete",IDC_DELETEWP,106,215,56,17,BS_CENTER | 
+                    BS_VCENTER
     LTEXT           "Name",-1,100,11,47,10
     LTEXT           "ZIP 1",-1,100,86,47,12
     LTEXT           "QTH 1",-1,100,56,47,10
     LTEXT           "Home BBS 1",-1,100,26,53,10
-    PUSHBUTTON      "Save",5102,171,216,56,17,BS_CENTER | BS_VCENTER
+    PUSHBUTTON      "Save",IDC_SAVEWP,171,216,56,17,BS_CENTER | BS_VCENTER
     LTEXT           "Home BBS 2",-1,100,41,53,10
     EDITTEXT        IDC_HOMEBBS2,165,40,216,12,ES_UPPERCASE | ES_AUTOHSCROLL
     LTEXT           "QTH 2",-1,100,71,47,10

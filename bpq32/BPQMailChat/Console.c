@@ -157,7 +157,8 @@ BOOL CreateConsole()
 	Console->paclen=236;
 	Console->sysop = TRUE;
 
-	nodeprintf(Console, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3], ALLOWCOMPRESSED ? "BFH" : "FH");
+	nodeprintf(Console, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
+		ALLOWCOMPRESSED ? "B" : "", ALLOWB2 ? "2" : "");
 
 	if (user->Name[0] == 0)
 	{
@@ -175,8 +176,8 @@ VOID CloseConsole(int Stream)
 {
 	if (CloseWindowOnBye)
 	{
-		PostMessage(hConsole, WM_DESTROY, 0, 0);
-		CloseWindow(hConsole);
+//		PostMessage(hConsole, WM_DESTROY, 0, 0);
+		DestroyWindow(hConsole);
 	}
 }
 

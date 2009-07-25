@@ -55,6 +55,22 @@
 // Excluded flag is actioned.
 // Asks user to set HomeBBS if not already set.
 // Fix "Shrinking Message" problem, where message got shorter each time it was read Initroduced in .19).
+// Flash Server window when anyone connects to chat (If Console Option "Flash on Chat User Connect" set).
+
+// Version 1.0.0.23
+
+// Fix R: line scan bug
+
+// Version 1.0.0.24
+
+// Fix closing console window on 'B'.
+// Fix Message Creation time.
+// Enable Delete function in WP edit dialog
+
+// Version 1.0.0.25
+
+// Implement K< and K> commands
+// Experimental support for B1 and B2 forwarding
 
 
 #include "stdafx.h"
@@ -150,7 +166,7 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[BPQ-%d.%d.%d.%d-%s$]\r";
+char BBSSID[]="[BPQ-%d.%d.%d.%d-%s%sFH$]\r";
 //char BBSSID[]="[BPQ-1.00-AB1FHMRX$]\r";
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
@@ -185,6 +201,9 @@ int FWDInterval = 5;		// 5 Mins
 int FWDTimer = 9999999;
 
 BOOL ALLOWCOMPRESSED = TRUE;
+BOOL ALLOWB2 = FALSE;
+
+BOOL UseUI = FALSE;
 
 UCHAR * OtherNodes=NULL;
 
@@ -958,12 +977,15 @@ BOOL Initialise()
 
 		BPQSetHandle(conn->BPQStream, hWnd);
 
-		SetAppl(conn->BPQStream, 2, BBSApplMask | ChatApplMask);
+		SetAppl(conn->BPQStream, (i == 0 && UseUI) ? 0x82 : 2, BBSApplMask | ChatApplMask);
 		Disconnect(conn->BPQStream);
 
 	}
 
 	InitialiseTCP();
+
+	if (UseUI)
+		SetupUIInterface();
 
 	if (cfgMinToTray)
 	{
@@ -1085,7 +1107,8 @@ int Connected(Stream)
 			else
 			{
 				WriteLogLine('|',Msg, n, LOG_BBS);
-				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3], ALLOWCOMPRESSED ? "BFH" : "FH");
+				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
+					ALLOWCOMPRESSED ? "B" : "", ALLOWB2 ? "2" : "");
 			}
 
 			if (user->Name[0] == 0)
@@ -1269,29 +1292,23 @@ int DoMonitorData(int Stream)
 //	UCHAR Buffer[1000];
 	UCHAR buff[500];
 
-	int n,len,count=0;
+	int len,count=0;
 	int stamp;
 
-	for (n = 0; n < NumberofStreams; n++)
-	{
-		if (Stream == Connections[n].BPQStream)
-		{
 			do { 
 
 			stamp=GetRaw(Stream, buff,&len,&count);
 
 			if (len == 0) return 0;
+
+			SeeifBBSUIFrame((struct _MESSAGE *)buff, len);
 			
-//			len=DecodeFrame(buff,Buffer,stamp);
-				
-			}
-			while (len>0);
 		}
 
 
 		while (count > 0);	
  
-	}
+	
 
 	return 0;
 
@@ -1341,22 +1358,7 @@ int WriteLog(char * msg)
 }
 
 
-VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
-{
-	char Mess[255];
-	int len;
-	va_list(arglist);
 
-	
-	va_start(arglist, format);
-	len = vsprintf(Mess, format, arglist);
-
-	QueueMsg(conn, Mess, len);
-
-	WriteLogLine('>',Mess, len-1, LOG_BBS);
-
-	return;
-}
 
 struct UserInfo * AllocateUserRecord(char * Call)
 {
@@ -2313,7 +2315,7 @@ VOID FlagAsKilled(struct MsgInfo * Msg)
 
 
 
-void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
 {
 	int msgno=-1;
 	int i;
@@ -2346,6 +2348,29 @@ void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			}
 		}
 		return;
+
+	case '>':			// L> - List to 
+
+		if (conn->sysop)
+		{
+			if (Arg1)
+				if (KillMessagesTo(conn, user, Arg1) == 0)
+				BBSputs(conn, "No Messages found\r");
+		
+		
+			return;
+		}
+
+	case '<':
+
+		if (conn->sysop)
+		{
+			if (Arg1)
+				if (KillMessagesFrom(conn, user, Arg1) == 0);
+					BBSputs(conn, "No Messages found\r");
+
+					return;
+		}
 	}
 
 	nodeprintf(conn, "*** Error: Invalid Kill option %c\r", Cmd[1]);
@@ -2353,6 +2378,45 @@ void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	return;
 
 }
+
+int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+{
+	int i, Msgs = 0;
+	struct MsgInfo * Msg;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		Msg = MsgHddrPtr[i];
+		if (Msg->status != 'K' && _stricmp(Msg->from, Call) == 0)
+		{
+			Msgs++;
+			KillMessage(conn, user, MsgHddrPtr[i]->number);
+		}
+	}
+	
+	return(Msgs);
+}
+
+int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+{
+	int i, Msgs = 0;
+	struct MsgInfo * Msg;
+
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		Msg = MsgHddrPtr[i];
+		if (Msg->status != 'K' && _stricmp(Msg->from, Call) == 0)
+		{
+			Msgs++;
+			KillMessage(conn, user, MsgHddrPtr[i]->number);
+		}
+	}
+	
+	return(Msgs);
+}
+
+
 
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 {
@@ -3284,6 +3348,7 @@ nextline:
 			ptr2 = ptr1;			// save
 			ptr1 = strchr(ptr1, '\r');
 			ptr1++;
+			if (*ptr1 == '\n') ptr1++;
 
 			goto nextline;
 		}
@@ -3303,7 +3368,9 @@ nextline:
 			rtime.tm_year += 100;
 			rtime.tm_mon--;
 
-			if ((result = mktime(&rtime)) != (time_t)-1 )
+//			result = _mkgmtime(&rtime);
+
+			if ((result = _mkgmtime(&rtime)) != (time_t)-1 )
 			{
 				Msg->datecreated =  result;	
 				GetWPInfoFromRLine(Msg->from, ptr2, result);
@@ -3350,6 +3417,7 @@ nextline:
 					// Not Local and no forward route
 					nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
 			}
+			SendPrompt(conn, conn->UserPointer);
 		}
 		else
 			if (!(conn->BBSFlags & FBBForwarding))
@@ -3362,6 +3430,8 @@ nextline:
 
 		SaveMessageDatabase();
 		SaveBIDDatabase();
+
+		SendMsgUI(Msg);
 
 		return;
 }
@@ -3709,7 +3779,8 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	{
 		conn->BBSFlags &= ~RunningConnectScript;
 
-		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3], ALLOWCOMPRESSED ? "BFH" : "FH");
+		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
+			ALLOWCOMPRESSED ? "B" : "", ALLOWB2 ? "2" : "");
 
 		conn->NextMessagetoForward = FirstMessagetoForward;
 
@@ -3756,6 +3827,12 @@ VOID Parse_SID(ConnectionInfo * conn, char * SID, int len)
 			conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
 			break;
 
+		case '2':
+
+			if (ALLOWB2 && ALLOWCOMPRESSED)
+				conn->BBSFlags |= FBBB1Mode;		// B2 uses B1 mode (crc on front of file)
+			break;
+
 		case 'B':
 
 			if (ALLOWCOMPRESSED)
@@ -3797,14 +3874,11 @@ void StartForwarding(int BBSNumber)
 
 		if ((BBSNumber == 0) || (user->BBSNumber == BBSNumber))
 			if (ForwardingInfo)
-				if (ForwardingInfo->Enabled && ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0))
-					if (ForwardingInfo->ConnectScript[0])
+				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
+					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag)
-						{
 							if (ConnecttoBBS(user))
 								ForwardingInfo->Forwarding = TRUE;
-								
-						}
 	}
 
 	return;
@@ -4008,12 +4082,3 @@ BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardin
 
 }
 
-
-VOID BBSputs(CIRCUIT * conn, char * buf)
-{
-	// Seems to send buf to socket
-
-	WriteLogLine('>',buf,  strlen(buf) -1, LOG_BBS);
-
-	QueueMsg(conn, buf, strlen(buf));
-}

@@ -12,7 +12,8 @@
 #define IDC_TOTAL                       1009
 #define IDC_BIDSREMOVED                 1010
 #define IDC_BIDSLEFT                    1011
-#define IDD_WP                          5000
+#define IDC_ENABLEUI                    1012
+#define IDC_WP                          5000
 #define IDC_WPNAME                      5001
 #define IDC_ZIP1                        5002
 #define IDC_QTH1                        5003
@@ -35,14 +36,16 @@
 #define IDM_Flash                       40006
 #define IDM_CLOSEWINDOW                 40007
 #define IDM_WP                          40008
+#define IDC_SAVEWP                      40009
+#define IDC_DELETEWP                    40010
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30003
-#define _APS_NEXT_COMMAND_VALUE         40009
-#define _APS_NEXT_CONTROL_VALUE         1012
+#define _APS_NEXT_COMMAND_VALUE         40011
+#define _APS_NEXT_CONTROL_VALUE         1013
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

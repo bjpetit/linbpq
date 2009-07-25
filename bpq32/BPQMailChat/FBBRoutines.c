@@ -106,7 +106,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 					if (MsgBytes == 0)
 					{
-						MsgBytes = _strdup("Message file not found\r\r");
+						MsgBytes = _strdup("Message file not found\r\n");
 						FBBHeader->FwdMsg->length = strlen(MsgBytes);
 					}
 
@@ -121,11 +121,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 					if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
 						BBSputs(conn, "\r\n");
 
-					if (MsgBytes)
-					{
-						QueueMsg(conn, MsgBytes, FBBHeader->FwdMsg->length);
-						free(MsgBytes);
-					}
+					QueueMsg(conn, MsgBytes, FBBHeader->FwdMsg->length);
+					free(MsgBytes);
 			
 					nodeprintf(conn, "%c\r\n", 26);
 				}
@@ -238,6 +235,112 @@ badparam:
 		return;
 
 ok:
+		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MaxRXSize))
+		{
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
+			conn->FBBReplyChars[conn->FBBIndex++] = '-';
+		}
+		else if (LookupTempBID(FBBHeader->BID))
+		{
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
+			conn->FBBReplyChars[conn->FBBIndex++] = '=';
+		}
+		else
+		{
+			//	Save BID in temp list in case we are offered it again before completion
+			
+			BIDRec * TempBID = AllocateTempBIDRecord();
+			strcpy(TempBID->BID, FBBHeader->BID);
+			TempBID->u.conn = conn;
+
+			conn->FBBReplyChars[conn->FBBIndex++] = '+';
+		}
+
+		FBBHeader->B2Message = FALSE;
+
+		return;
+
+	case 'C':			// B2 Proposal
+
+		if (conn->FBBMsgsSent)
+			FlagSentMessages(conn, user);			// Mark previously sent messages
+
+		// Accumulate checksum
+
+		for (i=0; i< len; i++)
+		{
+			conn->FBBChecksum+=Buffer[i];
+		}
+
+		// Parse Header
+
+		// Find free line
+
+		for (i = 0; i < 5; i++)
+		{
+			FBBHeader = &conn->FBBHeaders[i];
+
+			if (FBBHeader->Format == 0)
+				break;
+		}
+
+		if (i == 5)
+		{
+			BBSputs(conn, "*** Protocol Error - Too Many Proposals\r");
+			Flush(conn);
+			Sleep(500);
+			Disconnect(conn->BPQStream);
+		}
+
+
+		// FC EM A3EDD4P00P55 377 281 0
+
+		
+		/*
+		
+			FC Proposal code. Requires B2 SID feature.
+			Type Message type ( 1 or 2 alphanumeric characters
+
+			CM WinLink 2000 Control message
+			EM Encapsulated Message
+			ID Unique Message Identifier (max length 12 characters)
+			U-Size Uncompressed size of message
+			C-size Compressed size of message
+
+		*/
+		FBBHeader->Format = Buffer[1];
+
+		ptr = strtok_s(&Buffer[3], seps, &Context);
+		if (ptr == NULL) goto badparam2;
+		if (strlen(ptr) != 2) goto badparam2;
+		FBBHeader->MsgType = ptr[0];
+
+		ptr = strtok_s(NULL, seps, &Context);
+
+		if (ptr == NULL) goto badparam2;
+		if (strlen(ptr) > 12 ) goto badparam;
+		strcpy(FBBHeader->BID, ptr);
+
+		ptr = strtok_s(NULL, seps, &Context);
+		if (ptr == NULL) goto badparam2;
+		FBBHeader->Size = atoi(ptr);
+
+		ptr = strtok_s(NULL, seps, &Context);
+		if (ptr == NULL) goto badparam2;
+		FBBHeader->CSize = atoi(ptr);
+		FBBHeader->B2Message = TRUE;
+
+		goto ok2;
+
+badparam2:
+
+		BBSputs(conn, "*** Protocol Error - Proposal format error\r");
+		Flush(conn);
+		Sleep(500);
+		Disconnect(conn->BPQStream);
+		return;
+
+ok2:
 		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MaxRXSize))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
@@ -531,7 +634,17 @@ loop:
 		conn->FBBChecksum+=ptr[1];
 
 		if (conn->FBBChecksum == 0)
-			Decode(conn);
+		{
+			__try 
+			{
+				Decode(conn);
+			}
+			__except(EXCEPTION_EXECUTE_HANDLER)
+			{
+				BBSputs(conn, "*** Program Error Decoding Message\r");
+			}
+		}
+
 		else
 			BBSputs(conn, "*** Message Checksum Error\r");
 
@@ -570,7 +683,7 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 	if (MsgBytes == 0)
 	{
-		MsgBytes = _strdup("Message file not found\r\r");
+		MsgBytes = _strdup("Message file not found\r\n");
 		FBBHeader->FwdMsg->length = strlen(MsgBytes);
 	}
 
@@ -601,13 +714,6 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 	i=strlen(MsgBytes);
 
-	if (i != OrigLen)
-	{
-		MessageBox(NULL, "OrigLen != BufferLen", "BPQMailChat", MB_YESNO);
-		OrigLen = i;
-	}
-
-
 	MsgLen = OrigLen + strlen(Rline);
 
 	UnCompressed = zalloc(MsgLen+10);
@@ -615,7 +721,7 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	strcpy(UnCompressed, Rline);
 	strcat(UnCompressed, MsgBytes);
 
-	CompLen = Encode(UnCompressed, Compressed, MsgLen);
+	CompLen = Encode(UnCompressed, Compressed, MsgLen, conn->BBSFlags & FBBB1Mode);
 
 	conn->FBBChecksum = 0;
 
@@ -726,7 +832,7 @@ unsigned char
 unsigned short           match_position, match_length,
                 lson[N + 1], rson[N + 257], dad[N + 1];
 
-static int crc_fputc(int c)
+static int crc_fputc(unsigned short c)
 {
 	crc = updcrc(c, crc);
 	*(outfile++) = c;
@@ -1213,7 +1319,7 @@ short Get()
 #pragma warning(disable:4244)
 
 
-int Encode(char * in, char * out, int inlen)  /* compression */
+int Encode(char * in, char * out, int inlen, BOOL B1Protocol)  /* compression */
 {
 		short  i, c, len, r, s, last_match_length;
 		char *ptr;
@@ -1226,29 +1332,24 @@ int Encode(char * in, char * out, int inlen)  /* compression */
 		crc = 0;
 		outfile = out;
 
-
-/*		if (version_1)
+		if (B1Protocol)
 		{
-			// Reserves two bytes for the CRC 
-			if (fwrite(&crc, sizeof crc, 1, outfile) < 1)
-				Error(wterr);   // output crc of binary 
+			outfile+=2;				// Space for CRC
 		}
-*/
+
 //		infile = &conn->MailBuffer[2];
 
 		textsize = inlen;
 
 		ptr = (char *)&textsize;
-//		for (i = 0 ; i < sizeof(textsize) ; i++)
-//			crc_fputc(ptr[i], infile);
 
-		*(outfile++) = *(ptr++);
-		*(outfile++) = *(ptr++);
-		*(outfile++) = *(ptr++);
-		*(outfile++) = *(ptr++);
+		crc_fputc(*(ptr++));
+		crc_fputc(*(ptr++));
+		crc_fputc(*(ptr++));
+		crc_fputc(*(ptr++));
 		
 		if (textsize == 0)
-				return 0;
+			return 0;
 
 		infile = in;
 		endinfile = infile + inlen;
@@ -1296,18 +1397,12 @@ int Encode(char * in, char * out, int inlen)  /* compression */
 		} while (len > 0);
 		EncodeEnd();
 
-//		if (version_1)
-//		{
-//			/* Writes the CRC in the beginning of the file */
-//			rewind(outfile);
-//			if (fwrite(&crc, sizeof crc, 1, outfile) < 1)
-//				Error(wterr);   /* output crc of binary */
-//			printf("CRC: %04x\n", crc);
-//		}
-
-		printf("In : %ld bytes\n", textsize);
-		printf("Out: %ld bytes\n", codesize);
-		printf("Out/In: %.3f\n", (double)codesize / textsize);
+		if (B1Protocol)
+		{
+			out[0]=LOBYTE(crc);
+			out[1]=HIBYTE(crc);
+			codesize+=2;
+		}
 
 		return codesize + 4;
 }
@@ -1318,23 +1413,22 @@ void Decode(CIRCUIT * conn)
 		short  i, j, k, r;
 		short c;
 		unsigned long int  count;
-//		unsigned int  crc_read;
+		unsigned short  crc_read;
+		struct FBBHeaderLine * FBBHeader= &conn->FBBHeaders[0];	// The Headers from an FFB forward block
 
 		getbuf = 0;
 		getlen = 0;
 		textsize = 0;
 		codesize = 0;
 
-
 		infile = &conn->MailBuffer[0];
 
-/*		if (version_1)
+		if (conn->BBSFlags & FBBB1Mode)
 		{
-			if (fread(&crc_read, sizeof crc_read, 1, infile) < 1)
-				Error("Can't read");  // read size of text
-			printf("File CRC  = %04x\n", crc_read);
+			crc_read =  crc_fgetc();
+			crc_read |= (crc_fgetc() << 8);
 		}
-*/
+
 		crc = 0;
 
 		textsize = 0;
@@ -1380,40 +1474,79 @@ void Decode(CIRCUIT * conn)
 		
 		conn->TempMsg->length = count;
 
-		CreateMessageFromBuffer(conn);
+		if (FBBHeader->B2Message)
+		{
+			// Parse the Message for B2 From and To info
+/*
+MID: A3EDD4P00P55
+Date: 2009/07/25 10:08
+Type: Private
+From: SMTP:john.wiseman@ntlworld.com
+To: G8BPQ
+Subject: RE: RMS Test Messaage
+Mbo: SMTP
+Body: 214
+*/
+			char * ptr1, * ptr2;
+			int linelen, MsgLen = 0;
+			struct MsgInfo * Msg = conn->TempMsg;
+			time_t Date;
 
+			ptr1 = outfile;
+		Loop:
+			ptr2 = strchr(ptr1, '\r');
+
+			linelen = ptr2 - ptr1;
+
+			if (_memicmp(ptr1, "From:", 5) == 0)
+			{
+				if (linelen > 12) linelen = 12;
+				memcpy(Msg->from, &ptr1[6], linelen-6);
+			}
+			else if (_memicmp(ptr1, "To:", 3) == 0)
+			{
+				if (linelen > 10) linelen = 10;
+				memcpy(Msg->to, &ptr1[4], linelen-4);
+			}
+			else if (_memicmp(ptr1, "Type:", 4) == 0)
+			{
+				Msg->type = ptr1[6];
+			}
+			else if (_memicmp(ptr1, "Body:", 4) == 0)
+			{
+				MsgLen = atoi(&ptr1[5]);
+			}
+			else if (_memicmp(ptr1, "Date:", 5) == 0)
+			{
+				struct tm rtime;
+				char seps[] = " ,\t\r";
+
+				memset(&rtime, 0, sizeof(struct tm));
+
+				// Date: 2009/07/25 10:08
+	
+				sscanf(&ptr1[5], "%04d/%02d%/%02d %02d:%02d",
+					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+
+				rtime.tm_year -= 1900;
+
+				Date = mktime(&rtime);
+	
+				if (Date == (time_t)-1)
+					Date = time(NULL);
+
+			}
+
+			if (linelen)			// Not Null line
+			{
+				ptr1 = ptr2 + 2;		// Skip crlf
+				goto Loop;
+			}
+
+		}
+
+		CreateMessageFromBuffer(conn);
 }
 
 #pragma warning(pop)
 
-/*
-20:09:00R GM8BPQ-10>FBB Port=1 <UI C>:
-103    !!
-20:10:06R GM8BPQ-10>FBB Port=1 <UI C>:
-19-Jul 21:08 <<< Mailbox GM8BPQ Skigersta >>> 2 active messages.
-Messages for
- ALL
-
-20:11:11R GM8BPQ-10>FBB Port=1 <UI C>:
-104    P      5 G8BPQ         GM8BPQ 090719 ***
-20:12:17R GM8BPQ-10>FBB Port=1 <UI C>:
-105    B      5 ALL           GM8BPQ 090719 test
-
-20:13:23R GM8BPQ-10>FBB Port=1 <UI C>:
-? 0000006464
-
-20:15:34R GM8BPQ-10>FBB Port=1 <UI C>:
-105    !!
-20:15:45T GM8BPQ-10>MAIL Port=2 <UI C>:
-
-20:16:40R GM8BPQ-10>FBB Port=1 <UI C>:
-19-Jul 21:15 <<< Mailbox GM8BPQ Skigersta >>> 4 active messages.
-Messages for
- ALL G8BPQ
-20:17:46R GM8BPQ-10>FBB Port=1 <UI C>:
-106    P      5 GM8BPQ        GM8BPQ 090719 ***
-20:20:54R GM8BPQ-10>FBB Port=1 <UI C>:
-? 0000006464
-20:21:05T GM8BPQ-10>FBB Port=2 <UI C>:
-? 0000006464
-*/

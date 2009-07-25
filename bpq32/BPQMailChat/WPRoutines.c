@@ -5,6 +5,8 @@
 #include "stdafx.h"
 
 int CurrentWPIndex;
+char CurrentWPCall[10];
+
 
 VOID DoWPUpdate(WPRec *WP, char Type, char * Name, char * HA, char * QTH, char * ZIP, time_t WPDate);
 
@@ -148,20 +150,19 @@ int Do_WP_Sel_Changed(HWND hDlg)
 	// Update WP display with newly selected rec
 
 	WPRec *  WP;
-	char WPCall[10];
-	int Sel = SendDlgItemMessage(hDlg, IDD_WP, CB_GETCURSEL, 0, 0);
+	int Sel = SendDlgItemMessage(hDlg, IDC_WP, CB_GETCURSEL, 0, 0);
 	char Type[] = " ";
 
 	if (Sel == -1)
-		SendDlgItemMessage(hDlg, IDD_WP, WM_GETTEXT, Sel, (LPARAM)(LPCTSTR)&WPCall);
+		SendDlgItemMessage(hDlg, IDC_WP, WM_GETTEXT, Sel, (LPARAM)(LPCTSTR)&CurrentWPCall);
 	else
-		SendDlgItemMessage(hDlg, IDD_WP, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&WPCall);
+		SendDlgItemMessage(hDlg, IDC_WP, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&CurrentWPCall);
 	
 	for (CurrentWPIndex = 1; CurrentWPIndex <= NumberofWPrecs; CurrentWPIndex++)
 	{
 		WP = WPRecPtr[CurrentWPIndex];
 
-		if (_stricmp(WP->callsign, WPCall) == 0)
+		if (_stricmp(WP->callsign, CurrentWPCall) == 0)
 		{
 
 			SetDlgItemText(hDlg, IDC_WPNAME, WP->name);
@@ -188,6 +189,53 @@ int Do_WP_Sel_Changed(HWND hDlg)
 	return 0;
 }
 
+INT_PTR CALLBACK InfoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
+VOID Do_Delete_WPRec(HWND hDlg)
+{
+	WPRec * WP;
+	int n;
+
+
+	if (CurrentWPIndex == -1)
+	{
+		wsprintf(InfoBoxText, "Please select a WP Record to delete");
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+		return;
+	}
+
+	WP = WPRecPtr[CurrentWPIndex];
+
+	if (strcmp(CurrentWPCall, WP->callsign) != 0)
+	{
+		wsprintf(InfoBoxText, "Inconsistancy detected - record not deleted");
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+		return;
+	}
+
+	for (n = CurrentWPIndex; n < NumberofWPrecs; n++)
+	{
+		WPRecPtr[n] = WPRecPtr[n+1];		// move down all following entries
+	}
+	
+	NumberofWPrecs--;
+
+	SendDlgItemMessage(hDlg, IDC_WP, CB_RESETCONTENT, 0, 0);
+
+	for (n = 1; n <= NumberofWPrecs; n++)
+	{
+		SendDlgItemMessage(hDlg, IDC_WP, CB_ADDSTRING, 0, (LPARAM)WPRecPtr[n]->callsign);
+	} 
+
+
+	wsprintf(InfoBoxText, "WP record for %s deleted", WP->callsign);
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+
+	free(WP);
+
+	return;
+
+}
 
 INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -201,7 +249,7 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 		for (n = 1; n <= NumberofWPrecs; n++)
 		{
-			SendDlgItemMessage(hDlg, IDD_WP, CB_ADDSTRING, 0, (LPARAM)WPRecPtr[n]->callsign);
+			SendDlgItemMessage(hDlg, IDC_WP, CB_ADDSTRING, 0, (LPARAM)WPRecPtr[n]->callsign);
 		} 
 
 		return (INT_PTR)TRUE;
@@ -220,7 +268,7 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 
-		case IDD_WP:
+		case IDC_WP:
 
 			// Msg Selection Changed
 
@@ -228,9 +276,14 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 			return TRUE;
 
-		case IDC_SAVEMSG:
+		case IDC_SAVEWP:
 
-//			Do_Save_Msg(hDlg);
+//			Do_Save_WPREC(hDlg);
+			return TRUE;
+
+		case IDC_DELETEWP:
+
+			Do_Delete_WPRec(hDlg);
 			return TRUE;
 		}
 		break;
