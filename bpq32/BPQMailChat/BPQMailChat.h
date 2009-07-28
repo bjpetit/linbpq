@@ -891,6 +891,7 @@ extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
 extern BOOL ALLOWCOMPRESSED;
 extern BOOL ALLOWB2;
+extern BOOL EnableUI;
 
 extern BOOL ISP_Gateway_Enabled;
 

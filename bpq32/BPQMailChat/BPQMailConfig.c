@@ -422,6 +422,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDir);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSStreams, MaxStreams, FALSE);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_ENABLEUI, EnableUI);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_POP3Port, POP3InPort, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_SMTPPort, SMTPInPort, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_REMOTEEMAIL, RemoteEmail);
@@ -1096,7 +1097,7 @@ VOID SaveBBSConfig()
 		GetDlgItemText(hwndDisplay, IDC_SYSOPCALL, SYSOPCall, 50);
 		GetDlgItemText(hwndDisplay, IDC_HRoute, HRoute, 50);
 		GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDir, 50);
-
+		EnableUI = IsDlgButtonChecked(hwndDisplay, IDC_ENABLEUI);
 		BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 		MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
 		POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
@@ -1115,10 +1116,11 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "SYSOPCall", 0, REG_SZ,(BYTE *)&SYSOPCall, strlen(SYSOPCall));
 		retCode = RegSetValueEx(hKey, "H-Route", 0, REG_SZ,(BYTE *)&HRoute, strlen(HRoute));
 		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDir, strlen(BaseDir));
+		retCode = RegSetValueEx(hKey, "EnableUI",0,REG_DWORD,(BYTE *)&EnableUI,4);
 				
-		retCode = RegSetValueEx(hKey,"SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
-		retCode = RegSetValueEx(hKey,"POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
-		retCode = RegSetValueEx(hKey,"RemoteEmail",0,REG_DWORD,(BYTE *)&RemoteEmail,4);
+		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
+		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
+		retCode = RegSetValueEx(hKey, "RemoteEmail",0,REG_DWORD,(BYTE *)&RemoteEmail,4);
 
 		RegCloseKey(hKey);
 
@@ -1290,6 +1292,10 @@ VOID SaveFWDConfig(HWND hDlg)
 
 	MaxFBBBlockSize = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
 	retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&MaxFBBBlockSize,4);
+
+	ALLOWB2 = IsDlgButtonChecked(hDlg, IDC_USEB2);
+	retCode = RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&ALLOWB2,4);
+
 	RegCloseKey(hKey);
 		
 	wsprintf(InfoBoxText, "Configuration Saved");
@@ -1489,6 +1495,10 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&BBSApplNum,(ULONG *)&Vallen);
 
 		Vallen=4;
+		RegQueryValueEx(hKey,"EnableUI",0,			
+			(ULONG *)&Type,(UCHAR *)&EnableUI,(ULONG *)&Vallen);
+
+		Vallen=4;
 		RegQueryValueEx(hKey,"FWDInterval",0,			
 			(ULONG *)&Type,(UCHAR *)&FWDInterval,(ULONG *)&Vallen);
 		
@@ -1500,8 +1510,14 @@ TryAgain:
 		RegQueryValueEx(hKey,"MaxRXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxRXSize,(ULONG *)&Vallen);
 
+		Vallen=4;
 		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxFBBBlockSize,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"Use B2 Protocol",0,			
+			(ULONG *)&Type,(UCHAR *)&ALLOWB2,(ULONG *)&Vallen);
+
 		Vallen=100;
 
 		retCode += RegQueryValueEx(hKey,"BBSName",0,			
@@ -1886,6 +1902,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXBLOCK, MaxFBBBlockSize, FALSE);
+		CheckDlgButton(hDlg, IDC_USEB2, ALLOWB2);
 
 		return (INT_PTR)TRUE;
 

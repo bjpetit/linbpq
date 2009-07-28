@@ -137,6 +137,12 @@
 //				Fix tidying of window List when program crashed
 //				Add Max Nodes to Stats
 //				Don't update APPLnALIAS with received NODES info
+//				Fix MH display in other timezones
+//				Fix Possible crash when processing NETROM type Zero frames (eg NRR)
+//				Basic IMP3 Stuff
+//				Add extra diagnostics to Lost Process detection
+//				Process Netrom Record Route frames.
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -154,7 +160,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Joel's Debug Version"
+//#define SPECIALVERSION "Joel's Debug Version"
 
 #include "GetVersion.h"
 
@@ -189,7 +195,6 @@ extern char AUTOSAVE;
 extern int MAXDESTS;
 
 extern char MYNODECALL;	// 10 chars,not null terminated
-extern char MYALIAS;		// 6 chars, not null terminated
 extern struct APPLCALLS  APPLCALLTABLE[8];
 extern char SIGNONMSG;
 
@@ -214,6 +219,7 @@ extern int FINDFREEDESTINATION();
 extern int RAWTX();
 extern int RELBUFF();
 extern int SENDNETFRAME();
+
 VOID __cdecl Debugprintf(const char * format, ...);
 
 
@@ -236,7 +242,7 @@ UINT Sem_edx = 0;
 UINT Sem_esi = 0;
 UINT Sem_edi = 0;
 
-
+struct _DATABASE * DataBase  = (struct _DATABASE *)&DATABASE;
 
 DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
 DllExport long  MONDECODEPTR=(long)&MONDECODE;
@@ -959,6 +965,9 @@ HANDLE hInstance=0;
 
 char pgm[256];		// Uninitialised
 
+int xx = sizeof(struct ROUTE);
+
+
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
 	HANDLE handle;
@@ -984,6 +993,13 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			return 0;
 		}
 			  
+		if (sizeof(struct ROUTE) != DataBase->ROUTE_LEN)
+		{
+			// Catastrophic - Refuse to load
+			
+			MessageBox(NULL,"ROUTE Table .c and .asm mismatch - fix and rebuild", "BPQ32", MB_OK);
+			return 0;
+		}
 		GetSemaphore();
 
 		SemHeldByAPI = 4;
@@ -1370,7 +1386,7 @@ HANDLE OpenConfigFile(char *fn)
 	static char MHTime[50];
 	
 	szClock = (_time32(NULL) - szClock);
-	TM = localtime(&szClock);
+	TM = gmtime(&szClock);
 
 	wsprintf(MHTime, "%.2d:%.2d:%.2d:%.2d\r",
 		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec);
@@ -2783,16 +2799,13 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 }
 
-extern int DATABASE;
-extern int ENDOFDATA;
-
 /*
 _DATABASE	LABEL	BYTE
 
 FILLER		DB	14 DUP (0)	; PROTECTION AGENST BUFFER PROBLEMS!
 			DB	MAJORVERSION,MINORVERSION
 NEIGHBOURS	DD	0
-			DW	TYPE NEIGHBOUR_LIST
+			DW	TYPE ROUTE
 MAXNEIGHBOURS	DW	20		; MAX ADJACENT NODES
 
 DESTS		DD	0		; NODE LIST
@@ -2819,96 +2832,8 @@ DllExport int * APIENTRY SaveNodesSupport()
 //
 //	Internal BPQNODES support
 //
-#pragma pack (1)
 
 #define UCHAR unsigned char
-
-struct DATABASE
-{
-	char FILLER[14];
-	char MAJORVERSION;
-	char MINORVERSION;
-	char FILLER1[16];
-
-	struct ROUTE * NEIGHBOURS;
-	short  NEIGHBOUR_LIST_LEN;
-	short  MAXNEIGHBOURS;
-
-	struct DEST * DESTS;				// NODE LIST
-	short  DEST_LIST_LEN;
-	short  MAXDESTS;			// MAX NODES IN SYSTEM
-/*
-LINKS		DD	0		; L2 LINK TABLE
-MAXLINKS	DW	30		; MAX LEVEL 2 LINKS (UP,DOWN AND INTERNODE)
-
-L4TABLE		DD	0
-MAXCIRCUITS	DW	50		; NUMBER OF L4 CIRCUITS
-
-NUMBEROFPORTS	DW	0
-
-TNCTABLE	DD	0
-NUMBEROFSTREAMS	DW	0
-
-ENDDESTLIST	DD	0		; NODE LIST+1
-*/
-};
-
-
-
-
-
-
-struct DEST
-{
-	int DEST_CHAIN;			// SORTED LIST CHAIN
-
-	char DEST_CALL[7];		// DESTINATION CALLSIGN (AX25 FORMAT)
-	char DEST_ALIAS[6];
-	char DEST_STATE;		// CONTROL BITS - SETTING UP, ACTIVE ETC	
-	char DEST_ROUTE;		// CURRENTY ACTIVE DESTINATION
-
-	UCHAR ROUT1_QUALITY;	// QUALITY
-	UCHAR ROUT1_OBSCOUNT;	//
-	struct ROUTE * ROUT1_NEIGHBOUR;	// POINTER TO NEXT NODE IN PATH
-
-	UCHAR ROUT2_QUALITY;	// QUALITY
-	UCHAR ROUT2_OBSCOUNT;	//
-	struct ROUTE * ROUT2_NEIGHBOUR;	// POINTER TO NEXT NODE IN PATH
-
-	UCHAR ROUT3_QUALITY;	// QUALITY
-	UCHAR ROUT3_OBSCOUNT;	//
-	struct ROUTE * ROUT3_NEIGHBOUR;	// POINTER TO NEXT NODE IN PATH
-
-
-	int	DEST_Q;				// QUEUE OF FRAMES FOR THIS DESTINATION
-
-	short DEST_RTT;			// SMOOTHED ROUND TRIP TIMER
-	short DEST_COUNT;		// FRAMES SENT
-
-};
-
-struct ROUTE
-{
-	UCHAR NEIGHBOUR_CALL[7];		//	; AX25 CALLSIGN	
-	UCHAR NEIGHBOUR_DIGI1[7];		//	; DIGIS EN ROUTE (MAX 2 - ?? REMOVE)
-	UCHAR NEIGHBOUR_DIGI2[7];
-
-	UCHAR NEIGHBOUR_PORT;			
-
-	UCHAR NEIGHBOUR_QUAL;
-	UCHAR NEIGHBOUR_FLAG;			//; SET IF 'LOCKED' ROUTE
-
-	char * NEIGHBOUR_LINK;		// POINTER TO LINK FOR THIS NEIGHBOUR
-
-	short NEIGHBOUR_TIME;		// TIME LAST HEARD (HH MM)
-
-	int NBOUR_IFRAMES;			// FRAMES SENT/RECEIVED
-	int NBOUR_RETRIES;			// RETRASMISSIONS
-
-	UCHAR NBOUR_MAXFRAME;		// FOR OPTIMISATION CODE
-	UCHAR NBOUR_FRACK;
-	UCHAR NBOUR_PACLEN;
-};
 
 /*
 ROUTE ADD G1HTL-1 2 200  0 0 0
@@ -2918,11 +2843,6 @@ NODE ADD NOT:GB7NOT G1HTL-1 2 199 G4IRX-3 2 98
 
 */
 
-#pragma pack ()
-
-//struct DATABASE * APIENTRY SaveNodesSupport();
-
-struct DATABASE * DataBase;
 struct DEST * Dests;
 struct ROUTE * Routes;
 
@@ -3022,14 +2942,14 @@ int DoRoutes()
 
 
 			cursor=wsprintf(line,
-					"ROUTE ADD %s %d %d%s%s %d %d %d\r\n",
+					"ROUTE ADD %s %d %d%s%s %d %d %d %d \r\n",
 					Normcall,
 					Routes->NEIGHBOUR_PORT,
-					Routes->NEIGHBOUR_QUAL,
-					locked,digis,
+					Routes->NEIGHBOUR_QUAL,	locked, digis,
 					Routes->NBOUR_MAXFRAME,
 					Routes->NBOUR_FRACK,
-					Routes->NBOUR_PACLEN);
+					Routes->NBOUR_PACLEN,
+					Routes->IMP3Node);
 		
 
 			WriteFile(handle,line,cursor,&cnt,NULL);
@@ -3146,10 +3066,8 @@ DllExport int APIENTRY SaveNodes ()
 {
 	char FN[MAX_PATH];
 
-	DataBase=(struct DATABASE * )&DATABASE;
-
 	Routes = DataBase->NEIGHBOURS;
-	RouteLen = DataBase->NEIGHBOUR_LIST_LEN;
+	RouteLen = DataBase->ROUTE_LEN;
 	MaxRoutes = DataBase->MAXNEIGHBOURS;
 
 	Dests = DataBase->DESTS;
@@ -3776,11 +3694,6 @@ DllExport int APIENTRY  DumpSystem()
 	return (0);
 }
 
-DumpStringtoDebugLog(char * msg, int len)
-{
-	return 0;
-}
-
 BOOLEAN CheckifBPQ32isLoaded()
 {
 	HANDLE Mutex;
@@ -3970,5 +3883,4 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	return;
 }
-
 

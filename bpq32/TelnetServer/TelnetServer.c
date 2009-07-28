@@ -18,8 +18,9 @@
 //	Version 2.1.5  April 2009
 //  Remove limit on number of user records
 
-//	Version 2.1.6  April 2009
+//	Version 2.1.6  July 2009
 //  Remove entry from Disconnect User Dialog when session closes
+//	Fix reception of multiple backspaces in same packet
 
 #include "stdafx.h"
 #include "TelnetServer.h"
@@ -611,6 +612,28 @@ int DataSocket_Read(struct ConnectionInfo * sockptr, SOCKET sock)
 		memmove(BSptr-1, BSptr+1, charsAfter);
 	
 		sockptr->InputLen+=(len-2);		// drop bs and char before
+
+		// see if more bs chars
+BSCheck:
+		BSptr = memchr(&sockptr->InputBuffer[0], 8, sockptr->InputLen);
+
+		if (BSptr == NULL)
+			goto IACLoop;
+
+		charsAfter = sockptr->InputLen-(BSptr-&sockptr->InputBuffer[0])-1;
+
+		if (charsAfter == 0)
+		{
+			sockptr->InputLen--;		// Remove BS
+			if (sockptr->InputLen > 0) sockptr->InputLen--; //Remove last char if not at start
+			return 0;
+		}
+
+		memmove(BSptr-1, BSptr+1, charsAfter);
+		sockptr->InputLen--;		// Remove BS
+		if (sockptr->InputLen > 0) sockptr->InputLen--; //Remove last char if not at start
+
+		goto BSCheck;					// may be more bs chars
 
 	}
 	else

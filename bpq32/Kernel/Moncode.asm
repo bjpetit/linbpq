@@ -120,6 +120,7 @@ DISC_ACK_MSG	DB	' <DISC ACK>',NULL
 INFO_MSG	DB	' <INFO S',NULL
 INFO_ACK_MSG	DB	' <INFO ACK R',NULL
 DUFF_NET_MSG	DB	' <????>',NULL
+NRR_NET_MSG	DB	' <Record Route>', CR, NULL
 IP_MSG		DB	' <IP> ',NULL
  
 UA_MSG		DB	'UA',NULL
@@ -217,6 +218,9 @@ INFO_FLAG	DB	0		; Information Packet ? 0 No, 1 Yes
 OPCODE		DB	0		; L4 FRAME TYPE
 FRMRFLAG	DB	0
 
+L3INDEX		DB	0
+L3ID		DB	0
+
 TRACEFLAG	DB	1
 MALL		DB	1
 HEADERLN	DB	1
@@ -264,7 +268,7 @@ _TEXT   SEGMENT PUBLIC 'CODE'
 
 	PUBLIC	_MONDECODE,_BPQMONOPTIONS
 
-	EXTRN	_MMASK:WORD,_MTX:BYTE,_MCOM:BYTE
+	EXTRN	_MMASK:WORD,_MTX:BYTE,_MCOM:BYTE, _DisplayIMP3RIF:near
 
 _BPQMONOPTIONS:
 
@@ -968,6 +972,27 @@ DISPLAY_NETROM:
 ;       Display NODES broadcast                                              ;
 ;----------------------------------------------------------------------------;
 
+;	If an IMP3 RIF (type <> UI) decode as such
+	
+	cmp FRAME_TYPE, 3
+	je @f
+
+	sub ecx,24				; header
+	
+	push ecx
+	push edi
+	push esi
+	
+	call _DisplayIMP3RIF
+	
+	add	esp,12
+	
+	mov	edi, eax			; returned pointer
+	mov	al,cr
+	
+	jmp short NO_INFO
+	
+@@:
 	push	ECX
 
 	mov	EBX,OFFSET NODES_MSG
@@ -1128,9 +1153,11 @@ DISPLAY_NETROM_DATA:
 	CALL	NORMSTR
 
 	LODSB
+	MOV		L3INDEX,AL
 	CALL	BYTE_TO_HEX
 
 	LODSB
+	MOV		L3ID,AL
 	CALL	BYTE_TO_HEX
 
 	INC	ESI
@@ -1304,9 +1331,53 @@ NOT_L4INFO:
 	JMP END_NETROM
 
 NOT_L4IACK:
-
+	
 	OR	AL,AL
-	JNZ	NOTIP
+	JNZ	UNKNOWNNR
+	
+	CMP WORD PTR L3INDEX, 0c0cH
+	JE L3IP
+	
+	CMP WORD PTR L3INDEX, 0100H
+	JNE UNKNOWNNR
+	
+	mov	EBX,OFFSET NRR_NET_MSG
+	call	NORMSTR
+	
+	INC ESI
+	
+	MOV	ECX,FRAME_LENGTH
+	sub	ECX,44
+	
+	; DISPLAY NRR Calls
+NRRLOOP:
+	PUSH	ECX	
+	PUSH	ESI
+	call	CONVFROMAX25
+	mov	ESI,OFFSET NORMCALL
+	call	DISPADDR
+	POP	ESI
+	POP ECX
+	
+	MOV	AL,' '
+	
+	TEST 7[ESI], 80H			; END OF LIST BIT?
+	JZ @F
+	
+	MOV AL,'*'
+@@:	
+	CALL PUTCHAR
+
+	ADD ESI,8
+	SUB ECX,8
+	JNC	NRRLOOP
+	
+	
+
+
+	JMP END_NETROM
+	
+L3IP:
 ;
 ;	TCP/IP DATAGRAM
 ;
@@ -1377,7 +1448,7 @@ DISPLAYIPDATAGRAM:
 
 	JMP	ADD_CR
 
-NOTIP:
+UNKNOWNNR:
 
 	mov	EBX,OFFSET DUFF_NET_MSG
 	call	NORMSTR

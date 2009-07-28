@@ -203,7 +203,7 @@ int FWDTimer = 9999999;
 BOOL ALLOWCOMPRESSED = TRUE;
 BOOL ALLOWB2 = FALSE;
 
-BOOL UseUI = FALSE;
+BOOL EnableUI = FALSE;
 
 UCHAR * OtherNodes=NULL;
 
@@ -977,14 +977,14 @@ BOOL Initialise()
 
 		BPQSetHandle(conn->BPQStream, hWnd);
 
-		SetAppl(conn->BPQStream, (i == 0 && UseUI) ? 0x82 : 2, BBSApplMask | ChatApplMask);
+		SetAppl(conn->BPQStream, (i == 0 && EnableUI) ? 0x82 : 2, BBSApplMask | ChatApplMask);
 		Disconnect(conn->BPQStream);
 
 	}
 
 	InitialiseTCP();
 
-	if (UseUI)
+	if (EnableUI)
 		SetupUIInterface();
 
 	if (cfgMinToTray)
@@ -3735,7 +3735,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	Scripts = ForwardingInfo->ConnectScript;
 
-	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "INVALID") || strstr(Buffer, "PACLEN"))
+	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "PACLEN") || strstr(Buffer, "OK"))
 	{
 		ForwardingInfo->ScriptIndex++;
 		

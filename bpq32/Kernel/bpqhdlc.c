@@ -23,6 +23,7 @@
 #define IOCTL_BPQHDLC_CHECKTX		CTL_CODE(FILE_DEVICE_BPQHDLC,0x804,METHOD_BUFFERED,FILE_ANY_ACCESS)
 //#define IOCTL_BPQHDLC_INIT			CTL_CODE(FILE_DEVICE_BPQHDLC,0x805,METHOD_BUFFERED,FILE_ANY_ACCESS)
 
+VOID __cdecl Debugprintf(const char * format, ...);
 
 
 //	Info to pass to Kernel HDLC Driver to define an SCC Subchannel
@@ -334,7 +335,7 @@ int Init98(HDLCDATA * PORTVEC)
 	OutputDebugString("Calling Initialize\n");
 
 	//
-	//	Initailize Driver for this card and channel
+	//	Initialize Driver for this card and channel
 	//
 
 	fResult = DeviceIoControl(
@@ -344,7 +345,12 @@ int Init98(HDLCDATA * PORTVEC)
 		bOutput, 4, &cb,				// output parameters
         0);
 
-	memcpy(PORTVEC->DRIVERPORTTABLE,bOutput,4);
+
+	memcpy(&PORTVEC->DRIVERPORTTABLE,bOutput,4);
+
+	Debugprintf("BPQ32 HDLC Driver Table ADDR %X", PORTVEC->DRIVERPORTTABLE);
+
+	OutputDebugString("Initialize Returned\n");
 
 	return (TRUE);
 		

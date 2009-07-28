@@ -41,6 +41,7 @@ TODo	?Time Out ARP
 #include "pcap.h"
 
 char MYCALL[7];	// 7 chars, ax.25 format
+
 struct BPQVECSTRUC * IPHOSTVECTOR;
 
 VOID * (FAR WINAPI * GetIPVectorAddr) ();

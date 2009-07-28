@@ -13,6 +13,7 @@
 #define IDC_BIDSREMOVED                 1010
 #define IDC_BIDSLEFT                    1011
 #define IDC_ENABLEUI                    1012
+#define IDC_USEB2                       1013
 #define IDC_WP                          5000
 #define IDC_WPNAME                      5001
 #define IDC_ZIP1                        5002
@@ -45,7 +46,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30003
 #define _APS_NEXT_COMMAND_VALUE         40011
-#define _APS_NEXT_CONTROL_VALUE         1013
+#define _APS_NEXT_CONTROL_VALUE         1014
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

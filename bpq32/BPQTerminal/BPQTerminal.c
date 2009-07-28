@@ -1276,7 +1276,7 @@ DoMonData(HWND hWnd)
 			// See if a NODES
 
 
-			if (!MonitorNODES && monbuff[22] == 0xcf && monbuff[23] == 0xff)
+			if (!MonitorNODES && monbuff[21] == 3 && monbuff[22] == 0xcf && monbuff[23] == 0xff)
 				len = 0;
 			else
 				len=DecodeFrame(monbuff,buffer,stamp);

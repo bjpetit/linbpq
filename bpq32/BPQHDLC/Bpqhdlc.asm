@@ -349,12 +349,26 @@ nottimer:
 		je short senddata
 
 		cmp		EAX,'G'
-		je short getdata
+		je getdata
 
 		cmp		EAX, 'I'
-		je		INITPORT
-				
-		jmp		skip					; Unknown
+		jne		skip
+		
+       PUSHAD
+	   Debug_Printf	"hdlc98 Entering INITPORT ESI = %x",<ESI>
+       POPAD
+	
+		push esi
+		call		INITPORT
+		pop	esi
+		
+       PUSHAD
+	   Debug_Printf	"hdlc98 Returned from INITPORT ESI = %x",<ESI>
+       POPAD
+
+		xor		eax,eax
+		ret
+		
 senddata:
 		push	ESI
 
@@ -362,6 +376,12 @@ senddata:
 		mov		ESI,lpvInBuffer[ESI]	; buffer
 
 		mov		EBX,[ESI]			; PORT ADDRESS
+		
+		PUSHAD
+		movzx eax, IOBASE[EBX]
+		Debug_Printf	"hdlc98 TX Frame IOADDR %x", <eax>
+		POPAD
+
 
 		push	ESI					; save buffer
 
@@ -414,6 +434,12 @@ getdata:
 		STI
 
 		jz short nomsg
+		
+		PUSHAD
+		movzx eax, IOBASE[EBX]
+		Debug_Printf	"hdlc98 Passing Frame to Appl"
+		POPAD
+
 	
 		mov		EDX,EDI		; save buffer
 		movzx	ECX,word ptr 5[EDI] ; length
@@ -528,7 +554,7 @@ SDRPEND	EQU	28H		; RESET TX INT PENDING
 INITPORT:
 
 	PUSHAD
-	Debug_Printf	"hdlc98 Init"
+	Debug_Printf	"hdlc98 Init ESI = %d",<ESI>
 	POPAD
 
 
@@ -579,6 +605,9 @@ POOLDONE:
 	mov     edi,lpvOutBuffer[ESI]
 	mov		[EDI],EBX
 	
+	PUSHAD
+	Debug_Printf	"hdlc98 PortControl %x", <ebx>
+	POPAD
 
 	MOVZX	EAX,PORTTYPE[EBX]
 	
@@ -586,7 +615,6 @@ POOLDONE:
 	Debug_Printf	"hdlc98 PortType %x", <eax>
 	POPAD
 
-	
 	CMP	AL,2
 	JE	PC120INIT
 	
@@ -652,12 +680,12 @@ DRSIINIT:				; INTERRUPT INITIALISATION CODE
 
 	JMP	EXTCLOCK
 	
+STARTCOUNTER:
+	
 	PUSHAD
 	Debug_Printf	"hdlc98 Starting BRG"
 	POPAD
 
-
-STARTCOUNTER:
 ;
 	MOV	DX,IOBASE[EBX]
 	ADD	DX,7			; TO CIO PORT
@@ -801,14 +829,13 @@ EXTCLOCK:
 	Debug_Printf	"hdlc98 Calling INITREST"
 	POPAD
 
-
 	CALL	INITREST
 	
 	PUSHAD
 	Debug_Printf	"hdlc98 DRSIInit Exit"
 	POPAD
 
-        xor      eax,eax
+    xor      eax,eax
 
  	RET
 
@@ -1538,6 +1565,12 @@ INTDONE:
 
 	SIOCR
 	MOV	RR0[EBX],AL		; GET INITIAL RR0
+	
+	PUSHAD
+	movzx eax, RR0[EBX]
+	Debug_Printf	"hdlc98 Initial RR0 %x", <eax>
+	POPAD
+
 ;
 	RET
 
@@ -1690,6 +1723,11 @@ TXDTIMER:
 ;	TXDELAY HAS EXPIRED - START SENDING
 ;
 	mov	ebx,edx			; Reference data = Port vector
+	
+	PUSHAD
+	movzx eax, IOBASE[EBX]
+	Debug_Printf	"hdlc98 TXDELAY Expired IOADDR  %x", <eax>
+	POPAD
 
 	mov	TimeOut_Handle[EBX],0
 
@@ -1750,13 +1788,18 @@ DCDHIGH_X:
 NOTDCD:
 
 	CMP	L1TIMEOUT[EBX],0
-	JE SHORT TIMERRET
+	JE TIMERRET
 
 	DEC	L1TIMEOUT[EBX]
 	JNZ SHORT TIMERRET
 ;
 ;	WE HAVE BEEN UNABLE TO TRANSMIT FOR 60 SECS - CLEAR TX Q
 ;
+	PUSHAD
+	movzx eax, IOBASE[EBX]
+	Debug_Printf	"hdlc98 60 Sec Tineout IOADDR %x", <eax>
+	POPAD
+
 	PUSH	ESI
 	PUSH	EDI
 
@@ -2063,6 +2106,11 @@ NO_INTERLOCK:
 
 DCDHIGH:
 
+	PUSHAD
+	movzx eax, IOBASE[EBX]
+;	Debug_Printf	"hdlc98 DCD High - Cant TX"
+	POPAD
+
 	STI
 	RET
 
@@ -2070,6 +2118,12 @@ STARTID:
 ;
 ;	KICK OFF CW ID SEQUENCE
 ;
+
+	PUSHAD
+	movzx eax, IOBASE[EBX]
+	Debug_Printf	"hdlc98 Starting CWID IOADDR %x", <eax>
+	POPAD
+
 	MOV	LINKSTS[EBX],1		; SET ACTIVE
 
 	MOV	CWIDTIMER[EBX],3		; KEYUP TIME (300 ms)
@@ -2203,6 +2257,12 @@ DONTCHANGE:
 ;	Start TXDelay Timer
 ;
 	movzx   eax,PORTTXDELAY[EBX]
+	
+	PUSHAD
+	movzx eax, IOBASE[EBX]
+	Debug_Printf	"hdlc98 Starting TXDELAY %x", <eax>
+	POPAD
+
 	mov     edx, EBX
 	mov     esi, offset TXDTIMER
 	VMMcall Set_Async_Time_Out
@@ -2211,6 +2271,12 @@ DONTCHANGE:
 	RET
 
 SDADRX:
+
+	PUSHAD
+	movzx eax, IOBASE[EBX]
+	Debug_Printf	"hdlc98 RX Start of Frame"
+	POPAD
+
 
 ;	MOV	SOFTDCD[EBX],4		; SET RX ACTIVE
 
@@ -2539,6 +2605,12 @@ SENDAGAIN:
 	MOV	AL,SDTXCRC
 	SIOCW				; RESET TX CRC GENERATOR
 ;
+
+	PUSHAD	
+	movzx eax, IOBASE[EBX]
+	Debug_Printf	"hdlc98 Starting TX"
+	POPAD
+
 	DELAY
 	MOV	AL,[EDI-1]		; FIRST BYTE
 	SIOW				; TRANSMIT IT
@@ -2670,6 +2742,11 @@ SIOINT: 					; ENTERED FROM HARDWARE INTERRUPT
 	pusha
 
 	mov	ebx,edx			; Ref Data
+	
+;	PUSHAD
+;	movzx eax, IOBASE[EBX]
+;	Debug_Printf	"hdlc98 Interrupt for IOADDR  %x", <eax>
+;	POPAD
 
 
 SIOI10:
@@ -2681,6 +2758,12 @@ SIOI10:
 	DELAY
 
 	IN	AL,DX			; GET PENDING INTS
+	
+;	PUSHAD
+;	movzx eax, al
+;	Debug_Printf	"hdlc98 Pending Ints  %x", <eax>
+;	POPAD
+
 	OR	AL,AL
 	JZ SHORT NOINTS			; NONE
 
@@ -2728,6 +2811,10 @@ NOINTS:
 
 	mov     eax, IRQHand[EBX]
 	VxDCall	VPICD_Phys_EOI			; eoi it
+	
+;	PUSHAD
+;	Debug_Printf	"Leaving Int Handler"
+;	POPAD
 
 	clc
 	popa
@@ -2840,7 +2927,10 @@ HOOKINT:
 	
 	mov     IRQHand[EBX], eax
 
+	push	ebx
 	VxDCall	VPICD_Physically_Unmask
+	pop		ebx
+	
 	jc      errorhandler2
 
 	ret
