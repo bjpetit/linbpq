@@ -416,14 +416,14 @@ NBOUR_MAXFRAME	DB	?		; FOR OPTIMISATION CODE
 NBOUR_FRACK		DB	?
 NBOUR_PACLEN	DB	?
 
-IMP3Node		DD	?
-Status			DD	?		;		// 
-LastRTT			DD	?		;	// Last Value Reported
-RTT				DD	?		;		// Current	
-SRTT			DD	?		;		// Smoothed RTT
-NeighbourSRTT	DD	?		;    // Other End SRTT
-BCTimer			DD	?		;	// Time to next L3RTT Broadcast
-Timeout			DD	?		;	// Lost Response Timer
+INP3Node		DD	?
+Status			DD	?		;
+LastRTT			DD	?		; Last Value Reported
+RTT				DD	?		; Current	
+SRTT			DD	?		; Smoothed RTT
+NeighbourSRTT	DD	?		; Other End SRTT
+BCTimer			DD	?		; Time to next L3RTT Broadcast
+Timeout			DD	?		; Lost Response Timer
 Retries			DD	?
 
 

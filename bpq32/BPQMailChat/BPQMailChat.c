@@ -71,6 +71,7 @@
 
 // Implement K< and K> commands
 // Experimental support for B1 and B2 forwarding
+// Experimental UI System
 
 
 #include "stdafx.h"
@@ -2055,6 +2056,11 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 	{
 		if (Arg1)
 		{
+			// QTH may contain spaces, so put back together, and just split at cr
+			
+			Arg1[strlen(Arg1)] = ' ';
+			strtok_s(Arg1, "\r", &Context);
+
 			if (strlen(Arg1) > 60)
 				Arg1[60] = 0;
 

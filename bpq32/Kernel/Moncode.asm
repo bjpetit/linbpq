@@ -268,7 +268,7 @@ _TEXT   SEGMENT PUBLIC 'CODE'
 
 	PUBLIC	_MONDECODE,_BPQMONOPTIONS
 
-	EXTRN	_MMASK:WORD,_MTX:BYTE,_MCOM:BYTE, _DisplayIMP3RIF:near
+	EXTRN	_MMASK:WORD,_MTX:BYTE,_MCOM:BYTE, _DisplayINP3RIF:near
 
 _BPQMONOPTIONS:
 
@@ -972,7 +972,7 @@ DISPLAY_NETROM:
 ;       Display NODES broadcast                                              ;
 ;----------------------------------------------------------------------------;
 
-;	If an IMP3 RIF (type <> UI) decode as such
+;	If an INP3 RIF (type <> UI) decode as such
 	
 	cmp FRAME_TYPE, 3
 	je @f
@@ -983,7 +983,7 @@ DISPLAY_NETROM:
 	push edi
 	push esi
 	
-	call _DisplayIMP3RIF
+	call _DisplayINP3RIF
 	
 	add	esp,12
 	

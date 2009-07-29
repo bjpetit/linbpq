@@ -16,10 +16,17 @@
 
 
 extern char MYCALL[7];	// 7 chars, ax.25 format
-extern char MYALIAS;	// 6 chars, not null terminated
+extern char MYALIAS[6];	// 6 chars, not null terminated
 extern char L3RTT[7];	// 7 chars, ax.25 format
 //extern int SENDNETFRAME();
 extern struct _DATABASE * DataBase;
+extern struct APPLCALLS  APPLCALLTABLE[8];
+
+
+extern VOID * GETBUFF();
+extern VOID Q_ADD();
+extern VOID SETUPNODEHEADER();
+extern VOID POSTDATAAVAIL();
 
 extern int DATABASE;
 extern int ENDOFDATA;
@@ -97,6 +104,67 @@ struct BPQVECSTRUC
 	ULONG	STREAMOWNER;	//	PID of Process owning stream
 }  bpqvecstruc;
 
+//
+//	Session Record
+//
+typedef struct TRANSPORTENTRY
+{
+	UCHAR	L4USER[7];				// CALL OF ORIGINATING USER
+	VOID *	L4TARGET;			// POINTER TO TARGET LINK/DEST
+	UCHAR	L4MYCALL[7];			// CALL WE ARE USING
+
+	UCHAR	CIRCUITINDEX;			// OUR CIRCUIT INFO
+	UCHAR	CIRCUITID;			//
+
+	UCHAR	FARINDEX;			//
+	UCHAR	FARID;			//	OTHER END'S INFO
+
+	UCHAR	L4WINDOW;			// WINDOW SIZE
+	UCHAR	L4WS;				// WINDOW START - NEXT FRAME TO ACK
+	UCHAR	TXSEQNO;			//
+	UCHAR	RXSEQNO;			// TRANSPORT LEVEL SEQUENCE INFO
+	UCHAR	L4LASTACKED;		// LAST SEQUENCE ACKED
+
+	UCHAR	FLAGS;				// TRANSPORT LEVEL FLAGS
+	UCHAR	NAKBITS;			// NAK & CHOKE BITS TO BE SENT
+	struct TRANSPORTENTRY * L4CROSSLINK; // POINTER TO LINKED L4 SESSION ENTRY
+	UCHAR	L4CIRCUITTYPE;		// BIT SIGNIFICANT - SEE BELOW
+	VOID *	L4TX_Q;
+	VOID *	L4RX_Q;	
+	VOID *	L4HOLD_Q;			// FRAMES WAITING TO BE ACKED
+	VOID *	L4RESEQ_Q;			// FRAMES RECEIVED OUT OF SEQUENCE
+
+	UCHAR	L4STATE;
+	USHORT	L4TIMER;
+	UCHAR	L4ACKREQ;			// DATA ACK NEEDED
+	UCHAR	L4RETRIES;			// RETRY COUNTER
+	USHORT	L4KILLTIMER;		// IDLE CIRCUIT TIMER 
+	USHORT	SESSIONT1;			// TIMEOUT FOR SESSIONS FROM HERE
+	UCHAR	SESSPACLEN;			// PACLEN FOR THIS SESSION
+	UCHAR	BADCOMMANDS;		// SUCCESSIVE BAD COMMANDS
+	UCHAR	STAYFLAG;			// STAY CONNECTED FLAG
+	UCHAR	SPYFLAG;			// SPY - CONNECT TO NODE VIA BBS CALLSIGN
+		
+	UCHAR	RTT_SEQ;			// SEQUENCE NUMBER BEING TIMED
+	USHORT	RTT_TIMER;			// TIME ABOVE SEQUENCE WAS SENT
+
+	USHORT	PASSWORD;			// AUTHORISATION CODE FOR REMOTE SYSOP
+
+	UCHAR	SESS_APPLFLAGS;		// APPL FLAGS FOR THIS SESSION
+
+	VOID *	DUMPPTR;			// POINTER FOR REMOTE DUMP MODE
+};
+
+//
+//	CIRCUITTYPE EQUATES
+//
+
+#define L2LINK		1
+#define SESSION		2
+#define UPLINK		4
+#define DOWNLINK	8
+#define BPQHOST		32
+
 
 struct APPLCALLS
 {
@@ -146,6 +214,8 @@ struct DEST_LIST
 	short DEST_RTT;				// SMOOTHED ROUND TRIP TIMER
 	short DEST_COUNT;			//  FRAMES SENT
 
+
+
 } dest_list;
 
 typedef struct ROUTE
@@ -171,7 +241,7 @@ typedef struct ROUTE
 	UCHAR NBOUR_FRACK;
 	UCHAR NBOUR_PACLEN;
 
-	BOOL IMP3Node;
+	BOOL INP3Node;
 
 	int Status;				// 
 	int LastRTT;			// Last Value Reported
@@ -182,6 +252,15 @@ typedef struct ROUTE
 	int Timeout;			// Lost Response Timer
 	int Retries;			// Lost Response Count
 };
+
+// Status Equates
+
+#define GotRTTRequest 1		// Other end has sent us a RTT Packet
+#define GotRTTResponse 2	// Other end has sent us a RTT Response
+#define GotRIF 4			// Other end has sent RIF, so is probably an INP3 Node
+							//	(could just be monitoring RTT for some reason
+#define SentOurRIF 16		// Set when we have sent a rif for our Call and any ApplCalls
+							//  (only sent when we have seen both a request and response)
 
 
 struct PORTCONTROL

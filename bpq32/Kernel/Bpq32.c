@@ -139,7 +139,7 @@
 //				Don't update APPLnALIAS with received NODES info
 //				Fix MH display in other timezones
 //				Fix Possible crash when processing NETROM type Zero frames (eg NRR)
-//				Basic IMP3 Stuff
+//				Basic INP3 Stuff
 //				Add extra diagnostics to Lost Process detection
 //				Process Netrom Record Route frames.
 
@@ -195,7 +195,6 @@ extern char AUTOSAVE;
 extern int MAXDESTS;
 
 extern char MYNODECALL;	// 10 chars,not null terminated
-extern struct APPLCALLS  APPLCALLTABLE[8];
 extern char SIGNONMSG;
 
 extern QCOUNT;
@@ -747,12 +746,19 @@ VOID CALLBACK TimerProc(
 		}
 	}
 
+	__try 
+	{
+		if (IPActive)
+		Poll_IP();
+		
+		TIMERINTERRUPT();
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER)
+	{
+		Debugprintf("BPQ32 *** Program Error in Timer Processing");
+	}
 
-	if (IPActive)
-		Poll_IP(); 
 
-	TIMERINTERRUPT();
-	
 	FreeSemaphore();
 		
 	return;
@@ -1615,7 +1621,7 @@ DllExport UCHAR * APIENTRY GetNodeCall()
 
 DllExport UCHAR * APIENTRY GetNodeAlias()
 {
-	return (&MYALIAS);
+	return (&MYALIAS[0]);
 }
 
 DllExport UCHAR * APIENTRY GetBBSCall()
@@ -2949,7 +2955,7 @@ int DoRoutes()
 					Routes->NBOUR_MAXFRAME,
 					Routes->NBOUR_FRACK,
 					Routes->NBOUR_PACLEN,
-					Routes->IMP3Node);
+					Routes->INP3Node);
 		
 
 			WriteFile(handle,line,cursor,&cnt,NULL);

@@ -412,7 +412,7 @@ VOID ProcessWPMsg(char * MailBuffer, int Size, char * FirstRLine)
 			zip = strtok_s(NULL, seps, &Context);
 			ZIP = strtok_s(NULL, seps, &Context);
 			Name = strtok_s(NULL, seps, &Context);
-			QTH = strtok_s(NULL, seps, &Context);
+			QTH = strtok_s(NULL, "\r", &Context);			// QTH may have spaces
 
 
 			if (AT[0] == '@' && (QTH))
