@@ -185,6 +185,11 @@ struct APPLCALLS
 
 } applcalls;
 
+//
+//	We store the Time Received from our neighbour. Before using it we add our current route SRTT
+//  This way our times adjust to changes of neighbour SRTT. We can't cater for changes to other hop RTTs,
+//	But if these are significant (say 25% or 100 ms) they will be retransmitted
+
 typedef struct DEST_ROUTE_ENTRY
 {
 	UCHAR ROUT_QUALITY;		// QUALITY
@@ -253,6 +258,7 @@ typedef struct ROUTE
 	int RTT;				// Current	
 	int SRTT;				// Smoothed RTT
 	int NeighbourSRTT;		// Other End SRTT
+//	int RTTIncrement;		// Average of Ours and Neighbours SRTT in 10 ms
 	int BCTimer;			// Time to next L3RTT Broadcast
 	int Timeout;			// Lost Response Timer
 	int Retries;			// Lost Response Count

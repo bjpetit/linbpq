@@ -643,7 +643,9 @@ VOID MonitorTimerThread(int x)
 
 			if (Semaphore == 1 && TimerInst == SemProcessID)
 			{
-				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\n");
+				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\r\n");
+				Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
+					Sem_eax, Sem_ebx = 0, Sem_ecx = 0, Sem_edx = 0, Sem_esi = 0, Sem_edi); 
 				Semaphore=0;
 			}
 

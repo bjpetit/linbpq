@@ -2,10 +2,9 @@
 //	INP3 Suport Code for BPQ32 Switch
 //
 
-//	All code runs from the BPQ32 Receivedor Timer Routines under Semaphore.
+//	All code runs from the BPQ32 Received or Timer Routines under Semaphore.
 //	As most data areas are dynamically allocated, they will not survive a Timer Process Swap.
 //	Shared data can be used for Config Info.
-
 
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -38,19 +37,6 @@ typedef struct _RTTMSG
 	UCHAR PADDING[147];
 
 } RTTMSG;
-
-
-typedef struct _INP3Node
-{
-	UCHAR Call[7];
-	UCHAR Alias[6];
-	int LastRTT;			// Last Value Reported
-	int RTT;				// Current	
-	int SRTT;				// Smoothed RTT
-	int Hops;
-	int	NRQuality;			// Equivalent NETROM Quality
-	struct _INP3Neighbour * Neighbour;	// Adjacent Node
-};
 
 
 #define DllImport	__declspec( dllimport )
@@ -169,7 +155,8 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	int opcode;
 	char alias[6];
 	USHORT Stamp;
-	int RTTIncrement;
+
+	return;
 
 	// Update TImestamp on Route
 
@@ -200,10 +187,6 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 }
 	Route->NEIGHBOUR_TIME = Stamp;
 
-	// Calculate time to add to received RTT (Avge of our Route RTT Times
-
-	RTTIncrement = (Route->SRTT + Route->NeighbourSRTT) / 20;	// We store millisecs
-
 	while (msglen > 0)
 	{
 		memset(alias, ' ', 6);	
@@ -232,7 +215,7 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 		ptr1++;
 		msglen--;		// EOP
 
-		UpdateNode(Route, axcall, alias, hops, rtt + RTTIncrement);
+		UpdateNode(Route, axcall, alias, hops, rtt);
 	}
 	
 	return;
@@ -256,8 +239,9 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 	CMP	EBX,0
 	JNE SHORT New
 
-	jmp exit				; No Room
 	}
+
+	return;					// No Room
 
 New:
 
@@ -389,6 +373,23 @@ NOTBADROUTE:
 
 VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt)
 {
+	if (ROUTEPTR->Hops == 0)
+	{
+		// This is not a INP3 Route - Convert it
+
+		ROUTEPTR->Hops = hops;
+		ROUTEPTR->SRTT = rtt;
+
+		return;
+	}
+
+	if (ROUTEPTR->SRTT > rtt)
+	{
+		// Improved
+		
+		ROUTEPTR->SRTT = rtt;
+		ROUTEPTR->Hops = hops;
+	}
 }
 
 

@@ -379,17 +379,27 @@ DEST_ROUTE	DB	?		; CURRENTY ACTIVE DESTINATION
 ROUT1_QUALITY	DB	?		; QUALITY
 ROUT1_OBSCOUNT	DB	?
 ROUT1_NEIGHBOUR	DD	?		; POINTER TO NEXT NODE IN PATH
-xx1				DB 7 DUP (?)
+LastRTT1		DW  ?;		// Last Value Reported
+RTT1			DW  ?;		// Current	
+SRTT1			DW  ?;		// Smoothed RTT
+Hops1			DB  ?;
 
 ROUT2_QUALITY	DB	?
 ROUT2_OBSCOUNT	DB	?
 ROUT2_NEIGHBOUR	DD	?
-xx2				DB 7 DUP (?)
+LastRTT2		DW  ?;		// Last Value Reported
+RTT2			DW  ?;		// Current	
+SRTT2			DW  ?;		// Smoothed RTT
+Hops2			DB  ?;
 
 ROUT3_QUALITY	DB	?
 ROUT3_OBSCOUNT	DB	?
 ROUT3_NEIGHBOUR	DD	?
-xx3				DB 7 DUP (?)
+LastRTT3		DW  ?;		// Last Value Reported
+RTT3			DW  ?;		// Current	
+SRTT3			DW  ?;		// Smoothed RTT
+Hops3			DB  ?;
+
 DEST_Q		DD	?		; QUEUE OF FRAMES FOR THIS DESTINATION
 
 DEST_RTT	DW	?		; SMOOTHED ROUND TRIP TIMER
