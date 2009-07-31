@@ -72,9 +72,23 @@
 // Implement K< and K> commands
 // Experimental support for B1 and B2 forwarding
 // Experimental UI System
+// Fix extracting QTH from WP updates
 
+// Version 1.0.0.26
 
+// Add YN etc responses for FBB B1/B2
+
+// Version 1.0.0.27
+
+// Fix crash if NULL received as start of a packet.
+// Add Save WP command
+// Make B2 flag BBS-specific.
+// Implement B2 Send
+
+.
 #include "stdafx.h"
+
+// #define SPECIALVERSION "Beta"
 
 #include "GetVersion.h"
 
@@ -202,9 +216,10 @@ int FWDInterval = 5;		// 5 Mins
 int FWDTimer = 9999999;
 
 BOOL ALLOWCOMPRESSED = TRUE;
-BOOL ALLOWB2 = FALSE;
 
 BOOL EnableUI = FALSE;
+
+char UIPortString[100];
 
 UCHAR * OtherNodes=NULL;
 
@@ -435,7 +450,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    GetVersionInfo(NULL);
 
-   wsprintf(Title,"G8BPQ Mail and Chat Server Version %s", VersionString);
+   wsprintf(Title,"G8BPQ Mail and Chat Server Beta Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
 
@@ -1092,11 +1107,9 @@ int Connected(Stream)
 				return 0;
 			}
 
-
 			n=wsprintf(Msg, "Incoming Connect from %s", user->Call);
 			
 			// Send SID and Prompt
-
 
 			if (Mask == ChatApplMask)
 			{
@@ -1107,9 +1120,14 @@ int Connected(Stream)
 			}
 			else
 			{
+				BOOL B2 = FALSE;
+
+				if(conn->UserPointer->ForwardingInfo)
+					B2 = conn->UserPointer->ForwardingInfo->AllowB2;
+				
 				WriteLogLine('|',Msg, n, LOG_BBS);
 				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-					ALLOWCOMPRESSED ? "B" : "", ALLOWB2 ? "2" : "");
+					ALLOWCOMPRESSED ? "B" : "", B2 ? "2" : "");
 			}
 
 			if (user->Name[0] == 0)
@@ -1242,8 +1260,7 @@ int DoReceivedData(int Stream)
 					if (++ptr == ptr2)
 					{
 						// Usual Case - single meg in buffer
-	
-	
+
 						if (conn->flags == p_linkini)		// Chat Connect
 							ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
 						else if (conn->BBSFlags & RunningConnectScript)
@@ -1267,6 +1284,14 @@ int DoReceivedData(int Stream)
 							ProcessBBSConnectScript(conn, Buffer, MsgLen);
 						else
 							ProcessLine(conn, user, Buffer, MsgLen);
+
+						if (*ptr == 0 || *ptr == '\n')
+						{
+							/// CR LF or CR Null
+
+							ptr++;
+							conn->InputLen--;
+						}
 
 						memmove(conn->InputBuffer, ptr, conn->InputLen-MsgLen);
 
@@ -1996,6 +2021,14 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 	}
 
 	Cmd = strtok_s(Buffer, seps, &Context);
+
+	if (Cmd == NULL)
+	{
+		BBSputs(conn, "Invalid Command\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
 	Arg1 = strtok_s(NULL, seps, &Context);
 	CmdLen = strlen(Cmd);
 
@@ -3582,6 +3615,10 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		retCode += RegQueryValueEx(hKey, "RequestReverse", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
 
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
+
 		RegCloseKey(hKey);
 	}
 
@@ -3786,7 +3823,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		conn->BBSFlags &= ~RunningConnectScript;
 
 		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-			ALLOWCOMPRESSED ? "B" : "", ALLOWB2 ? "2" : "");
+			ALLOWCOMPRESSED ? "B" : "", conn->UserPointer->ForwardingInfo->AllowB2 ? "2" : "");
 
 		conn->NextMessagetoForward = FirstMessagetoForward;
 
@@ -3804,7 +3841,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	return TRUE;
 }
 
-VOID Parse_SID(ConnectionInfo * conn, char * SID, int len)
+VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 {
 	// scan backwards for first '-'
 
@@ -3835,8 +3872,8 @@ VOID Parse_SID(ConnectionInfo * conn, char * SID, int len)
 
 		case '2':
 
-			if (ALLOWB2 && ALLOWCOMPRESSED)
-				conn->BBSFlags |= FBBB1Mode;		// B2 uses B1 mode (crc on front of file)
+			if (conn->UserPointer->ForwardingInfo->AllowB2 && ALLOWCOMPRESSED)
+				conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
 			break;
 
 		case 'B':
@@ -3962,6 +3999,11 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 				FBBHeader->Size += wsprintf(RLine,"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 					Msg->number, BBSName, HRoute);
+
+				// If using B2 forwarding we need the message size and Compressed size for FC proposal
+
+				if (conn->BBSFlags & FBBB2Mode)
+					CreateB2Message(FBBHeader, RLine);
 
 				if (conn->FBBIndex == 5  || TotalSize > MaxFBBBlockSize)
 					return TRUE;							// Got max number or too big

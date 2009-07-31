@@ -11,6 +11,7 @@
 #define IDC_LIVE                        1008
 #define IDC_TOTAL                       1009
 #define IDC_BIDSREMOVED                 1010
+#define IDC_UIPORTS                     1010
 #define IDC_BIDSLEFT                    1011
 #define IDC_ENABLEUI                    1012
 #define IDC_USEB2                       1013

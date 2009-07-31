@@ -42,7 +42,7 @@ IDI_SMALL               ICON    DISCARDABLE     "icon2.ico"
 BPQMAILCHAT DIALOG DISCARDABLE  120, 50, 294, 165
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
     WS_SYSMENU
-CAPTION "G8BPQ Mail and Chat Server 1.0.0.10 June 2009"
+CAPTION "G8BPQ Mail and Chat Server 1.0.0.10 Beta July 2009"
 CLASS "BPQMailChat"
 FONT 8, "FixedSys"
 BEGIN
@@ -107,10 +107,10 @@ BEGIN
     LTEXT           "Base Directory",IDC_STATIC,7,138,66,12
     LTEXT           "BBS Call",IDC_STATIC,7,100,37,12
     LTEXT           "BBS Appl Number",IDC_STATIC,7,161,61,10
-    LTEXT           "BBS Streams",IDC_STATIC,163,160,49,10
+    LTEXT           "BBS Streams",IDC_STATIC,157,160,45,10
     EDITTEXT        1002,83,138,212,14
     EDITTEXT        1003,83,158,29,14
-    EDITTEXT        1004,228,159,29,14
+    EDITTEXT        1004,208,159,29,14
     LTEXT           "POP3 Port",IDC_STATIC,7,222,49,12
     LTEXT           "SMTP Port",IDC_STATIC,135,222,49,12
     EDITTEXT        1005,83,220,29,14
@@ -126,7 +126,7 @@ BEGIN
                     IDC_STATIC,10,33,353,18
     LTEXT           "BBS Call",IDC_STATIC,13,101,37,12
     LTEXT           "SYSOP Call",IDC_STATIC,163,101,42,12
-    EDITTEXT        1008,228,98,68,14,ES_UPPERCASE
+    EDITTEXT        1008,208,98,68,14,ES_UPPERCASE
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,241,220,91,14
     LTEXT           "eMail Server Params:",IDC_STATIC,7,203,135,10
@@ -134,6 +134,8 @@ BEGIN
                     BS_LEFTTEXT | WS_TABSTOP,6,182,83,10
     LTEXT           "Enable UI System activates FBB compatible UI broadcating of Message Headers",
                     IDC_STATIC,10,75,358,15
+    EDITTEXT        IDC_UIPORTS,208,180,41,14
+    LTEXT           "UI Ports",IDC_STATIC,157,182,37,10
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -253,8 +255,8 @@ BEGIN
     LTEXT           "FBB Max Block",IDC_STATIC,5,116,58,12
     EDITTEXT        IDC_MAXBLOCK,66,114,26,12,ES_AUTOHSCROLL | ES_NUMBER
     CONTROL         "B2 Protocol (Experimental)",IDC_USEB2,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,5,134,68,23
+                    BS_AUTOCHECKBOX | BS_MULTILINE | WS_TABSTOP,230,219,108,
+                    8
 END
 
 IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68

@@ -158,7 +158,7 @@ BOOL CreateConsole()
 	Console->sysop = TRUE;
 
 	nodeprintf(Console, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-		ALLOWCOMPRESSED ? "B" : "", ALLOWB2 ? "2" : "");
+		ALLOWCOMPRESSED ? "B" : "", "");
 
 	if (user->Name[0] == 0)
 	{

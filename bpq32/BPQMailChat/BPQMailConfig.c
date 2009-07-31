@@ -298,7 +298,7 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	tie.pszText = "Chat Params";
 	TabCtrl_InsertItem(pHdr->hwndTab, 2, &tie);
 
-	tie.pszText = "Maintenance";
+	tie.pszText = "Housekeeping";
 	TabCtrl_InsertItem(pHdr->hwndTab, 3, &tie);
 
 	// Lock the resources for the three child dialog boxes.
@@ -423,10 +423,10 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSStreams, MaxStreams, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_ENABLEUI, EnableUI);
+		SetDlgItemText(pHdr->hwndDisplay, IDC_UIPORTS, UIPortString);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_POP3Port, POP3InPort, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_SMTPPort, SMTPInPort, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_REMOTEEMAIL, RemoteEmail);
-
 
 		break;
 
@@ -635,6 +635,8 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
+			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
+
 
 			return 0;
 		}
@@ -1071,7 +1073,6 @@ VOID Do_Save_Msg(HWND hDlg)
 			FlagAsKilled(Msg);					// Clear forwarding bits
 	}
 
-
 	wsprintf(InfoBoxText, "Message Updated");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
@@ -1093,20 +1094,22 @@ VOID SaveBBSConfig()
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 		
-		GetDlgItemText(hwndDisplay, IDC_BBSCall, BBSName, 50);
-		GetDlgItemText(hwndDisplay, IDC_SYSOPCALL, SYSOPCall, 50);
-		GetDlgItemText(hwndDisplay, IDC_HRoute, HRoute, 50);
-		GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDir, 50);
-		EnableUI = IsDlgButtonChecked(hwndDisplay, IDC_ENABLEUI);
-		BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
-		MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
-		POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
-		SMTPInPort = GetDlgItemInt(hwndDisplay, IDC_SMTPPort, &OK4, FALSE);
+	GetDlgItemText(hwndDisplay, IDC_BBSCall, BBSName, 50);
+	GetDlgItemText(hwndDisplay, IDC_SYSOPCALL, SYSOPCall, 50);
+	GetDlgItemText(hwndDisplay, IDC_HRoute, HRoute, 50);
+	GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDir, 50);
+	EnableUI = IsDlgButtonChecked(hwndDisplay, IDC_ENABLEUI);
+	GetDlgItemText(hwndDisplay, IDC_UIPORTS, UIPortString, 100);
 
-		RemoteEmail = IsDlgButtonChecked(hwndDisplay, IDC_REMOTEEMAIL);
+	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
+	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
+	POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
+	SMTPInPort = GetDlgItemInt(hwndDisplay, IDC_SMTPPort, &OK4, FALSE);
 
-		strlop(BBSName, '-');
-		strlop(SYSOPCall, '-');
+	RemoteEmail = IsDlgButtonChecked(hwndDisplay, IDC_REMOTEEMAIL);
+
+	strlop(BBSName, '-');
+	strlop(SYSOPCall, '-');
 
 	if (retCode == ERROR_SUCCESS)
 	{		
@@ -1116,7 +1119,8 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "SYSOPCall", 0, REG_SZ,(BYTE *)&SYSOPCall, strlen(SYSOPCall));
 		retCode = RegSetValueEx(hKey, "H-Route", 0, REG_SZ,(BYTE *)&HRoute, strlen(HRoute));
 		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDir, strlen(BaseDir));
-		retCode = RegSetValueEx(hKey, "EnableUI",0,REG_DWORD,(BYTE *)&EnableUI,4);
+		retCode = RegSetValueEx(hKey, "EnableUI",0, REG_DWORD,(BYTE *)&EnableUI,4);
+		retCode = RegSetValueEx(hKey, "UIPortString",0, REG_SZ,(BYTE *)&UIPortString, strlen(UIPortString));
 				
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
@@ -1270,7 +1274,10 @@ VOID SaveFWDConfig(HWND hDlg)
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_REVERSE);
 		retCode = RegSetValueEx(hKey,"RequestReverse", 0, REG_DWORD, (BYTE *)&Rev,4);
-		
+	
+		Rev = IsDlgButtonChecked(hDlg, IDC_USEB2);
+		retCode = RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
+	
 		RegCloseKey(hKey);
 
 		ReinitializeFWDStruct(CurrentBBS);
@@ -1293,8 +1300,6 @@ VOID SaveFWDConfig(HWND hDlg)
 	MaxFBBBlockSize = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
 	retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&MaxFBBBlockSize,4);
 
-	ALLOWB2 = IsDlgButtonChecked(hDlg, IDC_USEB2);
-	retCode = RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&ALLOWB2,4);
 
 	RegCloseKey(hKey);
 		
@@ -1498,7 +1503,13 @@ TryAgain:
 		RegQueryValueEx(hKey,"EnableUI",0,			
 			(ULONG *)&Type,(UCHAR *)&EnableUI,(ULONG *)&Vallen);
 
+		Vallen=100;
+
+		RegQueryValueEx(hKey, "UIPortString",0,			
+			(ULONG *)&Type,(UCHAR *)&UIPortString,(ULONG *)&Vallen);
+
 		Vallen=4;
+
 		RegQueryValueEx(hKey,"FWDInterval",0,			
 			(ULONG *)&Type,(UCHAR *)&FWDInterval,(ULONG *)&Vallen);
 		
@@ -1513,10 +1524,6 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxFBBBlockSize,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"Use B2 Protocol",0,			
-			(ULONG *)&Type,(UCHAR *)&ALLOWB2,(ULONG *)&Vallen);
 
 		Vallen=100;
 
@@ -1902,7 +1909,6 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXBLOCK, MaxFBBBlockSize, FALSE);
-		CheckDlgButton(hDlg, IDC_USEB2, ALLOWB2);
 
 		return (INT_PTR)TRUE;
 

@@ -262,6 +262,7 @@ typedef struct ConnectionInfo_S
 #define FBBForwarding 2
 #define FBBCompressed 4
 #define FBBB1Mode 8
+#define FBBB2Mode 16
 #define RunningConnectScript 32
 #define MBLFORWARDING 64				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
 
@@ -439,6 +440,7 @@ struct BBSForwardingInfo
 	int MsgCount;					// Messages for this BBS
 	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
 	BOOL Forwarding;				// Forward in progress
+	BOOL AllowB2;					// Enable B2 
 };
 
 struct FBBHeaderLine
@@ -454,6 +456,7 @@ struct FBBHeaderLine
 	int Size;
 	int CSize;						// Compresses Size (B2 proto)
 	BOOL B2Message;					// Set if an FC type
+	UCHAR * CompressedMsg;			// Compressed Body fo B2
 	struct MsgInfo * FwdMsg;		// Header so we can mark as complete 
 };
 
@@ -739,6 +742,7 @@ VOID FreeOverrides();
 // FBB Routines
 
 VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
+VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 VOID UnpackFBBBinary(CIRCUIT * conn);
 void Decode(CIRCUIT * conn) ;
 int Encode(char * in, char * out, int len, BOOL B2Protocol);
@@ -890,8 +894,8 @@ extern int HighestBBSNumber;
 extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
 extern BOOL ALLOWCOMPRESSED;
-extern BOOL ALLOWB2;
 extern BOOL EnableUI;
+extern char UIPortString[100];
 
 extern BOOL ISP_Gateway_Enabled;
 

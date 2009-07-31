@@ -187,7 +187,6 @@
 
 
 extern short NUMBEROFPORTS;
-extern long NUMBEROFNODES;
 extern long PORTENTRYLEN;
 extern struct PORTCONTROL * PORTTABLE;
 
@@ -1006,6 +1005,16 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			MessageBox(NULL,"ROUTE Table .c and .asm mismatch - fix and rebuild", "BPQ32", MB_OK);
 			return 0;
 		}
+	
+		if (sizeof(struct DEST_LIST) != DataBase->DEST_LIST_LEN)
+		{
+			// Catastrophic - Refuse to load
+			
+			MessageBox(NULL,"NODES Table .c and .asm mismatch - fix and rebuild", "BPQ32", MB_OK);
+			return 0;
+		}
+	
+		
 		GetSemaphore();
 
 		SemHeldByAPI = 4;
@@ -1763,8 +1772,8 @@ BOOL UpdateNodesForApp(int Appl)
 
 		DEST->DEST_STATE=0x80;	// SPECIAL ENTRY
 	
-		DEST->ROUT1_QUALITY = (BYTE)APPL->APPLQUAL;
-		DEST->ROUT1_OBSCOUNT = 255;
+		DEST->ROUTE1.ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
+		DEST->ROUTE1.ROUT_OBSCOUNT = 255;
 
 		FreeSemaphore();
 
@@ -1812,8 +1821,8 @@ nodests:
 
 	DEST->DEST_STATE=0x80;	// SPECIAL ENTRY
 	
-	DEST->ROUT1_QUALITY = (BYTE)APPL->APPLQUAL;
-	DEST->ROUT1_OBSCOUNT = 255;
+	DEST->ROUTE1.ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
+	DEST->ROUTE1.ROUT_OBSCOUNT = 255;
 
 	FreeSemaphore();
 	return TRUE;
@@ -2849,7 +2858,7 @@ NODE ADD NOT:GB7NOT G1HTL-1 2 199 G4IRX-3 2 98
 
 */
 
-struct DEST * Dests;
+struct DEST_LIST * Dests;
 struct ROUTE * Routes;
 
 int MaxNodes;
@@ -2967,8 +2976,6 @@ int DoRoutes()
 	return (0);
 }
 
-
-
 int DoNodes()
 {
 	Dests-=1;
@@ -2977,12 +2984,11 @@ int DoNodes()
 	{
 		Dests+=1;
 		
-		if (Dests->ROUT1_NEIGHBOUR == 0)
+		if (Dests->ROUTE1.ROUT_NEIGHBOUR == 0)
 			continue;
 
 		len=ConvFromAX25(Dests->DEST_CALL,Normcall);
 		Normcall[len]=0;
-
 
 		memcpy(Alias,Dests->DEST_ALIAS,6);
 		
@@ -2994,66 +3000,63 @@ int DoNodes()
 				Alias[i] = 0;
 		}
 
-
 		len=ConvFromAX25(
-			Dests->ROUT1_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+			Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
 		
 		Portcall[len]=0;
 
 		cursor=wsprintf(line,"NODE ADD %s:%s %s %d %d ",
 			Alias,Normcall,Portcall,
-			Dests->ROUT1_NEIGHBOUR->NEIGHBOUR_PORT,
-			Dests->ROUT1_QUALITY);
+			Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+			Dests->ROUTE1.ROUT_QUALITY);
 
-		if (Dests->ROUT1_OBSCOUNT > 127)
+		if (Dests->ROUTE1.ROUT_OBSCOUNT > 127)
 		{
 			len=wsprintf(&line[cursor],"! ");
 			cursor+=len;
 		}
 
 
-		if (Dests->ROUT2_NEIGHBOUR != 0)
+		if (Dests->ROUTE2.ROUT_NEIGHBOUR != 0)
 		{
 			len=ConvFromAX25(
-				Dests->ROUT2_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+				Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
 			Portcall[len]=0;
 
 			len=wsprintf(&line[cursor],"%s %d %d ",
 				Portcall,
-				Dests->ROUT2_NEIGHBOUR->NEIGHBOUR_PORT,
-				Dests->ROUT2_QUALITY);
-
+				Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+				Dests->ROUTE2.ROUT_QUALITY);
+	
 			cursor+=len;
 
-			if (Dests->ROUT2_OBSCOUNT > 127)
+			if (Dests->ROUTE2.ROUT_OBSCOUNT > 127)
 			{
 				len=wsprintf(&line[cursor],"! ");
 				cursor+=len;
 			}
-
-
 		}
 
-		if (Dests->ROUT3_NEIGHBOUR != 0)
+		if (Dests->ROUTE3.ROUT_NEIGHBOUR != 0)
 		{
 			len=ConvFromAX25(
-				Dests->ROUT3_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+				Dests->ROUTE3.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
 			Portcall[len]=0;
 
 			len=wsprintf(&line[cursor],"%s %d %d ",
 				Portcall,
-				Dests->ROUT3_NEIGHBOUR->NEIGHBOUR_PORT,
-				Dests->ROUT3_QUALITY);
-		
+				Dests->ROUTE3.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+				Dests->ROUTE3.ROUT_QUALITY);
+	
 			cursor+=len;
 
-			if (Dests->ROUT3_OBSCOUNT > 127)
+			if (Dests->ROUTE3.ROUT_OBSCOUNT > 127)
 			{
 				len=wsprintf(&line[cursor],"! ");
 				cursor+=len;
 			}
-
 		}
+
 
 		line[cursor++]='\r';
 		line[cursor++]='\n';
@@ -3061,12 +3064,7 @@ int DoNodes()
 	}
 
 	return (0);
-
 }
-
-
-
-
 
 DllExport int APIENTRY SaveNodes ()
 {

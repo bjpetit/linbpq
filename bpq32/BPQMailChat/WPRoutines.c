@@ -9,7 +9,7 @@ char CurrentWPCall[10];
 
 
 VOID DoWPUpdate(WPRec *WP, char Type, char * Name, char * HA, char * QTH, char * ZIP, time_t WPDate);
-
+VOID Do_Save_WPRec(HWND hDlg);
 
 WPRec * AllocateWPRecord()
 {
@@ -191,6 +191,48 @@ int Do_WP_Sel_Changed(HWND hDlg)
 
 INT_PTR CALLBACK InfoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+
+VOID Do_Save_WPRec(HWND hDlg)
+{
+	WPRec * WP;
+	char Type[] = " ";
+	BOOL OK1;
+
+	if (CurrentWPIndex == -1)
+	{
+		wsprintf(InfoBoxText, "Please select a WP Record to save");
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+		return;
+	}
+
+	WP = WPRecPtr[CurrentWPIndex];
+
+	if (strcmp(CurrentWPCall, WP->callsign) != 0)
+	{
+		wsprintf(InfoBoxText, "Inconsistancy detected - record not saved");
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+		return;
+	}
+
+	GetDlgItemText(hDlg, IDC_WPNAME, WP->name, 13);
+	GetDlgItemText(hDlg, IDC_HOMEBBS1, WP->first_homebbs, 41);
+	GetDlgItemText(hDlg, IDC_HOMEBBS2, WP->first_homebbs, 41);
+	GetDlgItemText(hDlg, IDC_QTH1, WP->first_qth, 31);
+	GetDlgItemText(hDlg, IDC_QTH2, WP->secnd_qth, 31);
+	GetDlgItemText(hDlg, IDC_ZIP1, WP->first_zip, 31);
+	GetDlgItemText(hDlg, IDC_ZIP2, WP->secnd_zip, 31);
+	WP->last_modif = time(NULL);
+	WP->seen = GetDlgItemInt(hDlg, IDC_SEEN, &OK1, FALSE);
+
+	WP->Type = 'U';
+	WP->changed = 1;
+
+	SaveWPDatabase();
+
+	wsprintf(InfoBoxText, "WP information saved");
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);				
+}
+
 VOID Do_Delete_WPRec(HWND hDlg)
 {
 	WPRec * WP;
@@ -278,7 +320,7 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 		case IDC_SAVEWP:
 
-//			Do_Save_WPREC(hDlg);
+			Do_Save_WPRec(hDlg);
 			return TRUE;
 
 		case IDC_DELETEWP:

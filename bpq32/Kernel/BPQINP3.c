@@ -66,7 +66,8 @@ VOID __cdecl Debugprintf(const char * format, ...);
 VOID SendNRRecordRoute(char * Call, struct TRANSPORTENTRY * Session);
 VOID SendINP3RIF(struct ROUTE * Route, UCHAR * Call, UCHAR * Alias, int Hops, int RTT);
 VOID SendOurRIF(struct ROUTE * Route);
-
+VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt);
+VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt);
 
 struct _RTTMSG RTTMsg = {""};
 
@@ -166,10 +167,46 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	short rtt;
 	int len;
 	int opcode;
-	char alias[6] = "";
+	char alias[6];
+	USHORT Stamp;
+	int RTTIncrement;
+
+	// Update TImestamp on Route
+
+	_asm{
+
+	push	0
+	call	time
+
+	add	esp,4
+
+	MOV	EDX,0
+	mov ecx, 86400
+	DIV	ecx					; REMAINDER IS SECS IN DAY
+	MOV	EAX,EDX
+	MOV	EDX,0
+	mov ecx, 3600
+	DIV	ecx					; GIVES HOURS, REM = SECS
+	mov	ebx,eax				; SAVE
+
+	MOV	EAX,EDX
+	MOV	EDX,0
+	mov ecx, 60
+	DIV	ecx					; GIVES MINS, REM = SECS
+	shl ebx,8
+	or	ebx, eax
+	mov Stamp, bx
+
+}
+	Route->NEIGHBOUR_TIME = Stamp;
+
+	// Calculate time to add to received RTT (Avge of our Route RTT Times
+
+	RTTIncrement = (Route->SRTT + Route->NeighbourSRTT) / 20;	// We store millisecs
 
 	while (msglen > 0)
 	{
+		memset(alias, ' ', 6);	
 		memcpy(axcall, ptr1, 7);
 
 		ptr1+=7;
@@ -194,10 +231,166 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 
 		ptr1++;
 		msglen--;		// EOP
+
+		UpdateNode(Route, axcall, alias, hops, rtt + RTTIncrement);
 	}
 	
 	return;
 }
+
+VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt)
+{
+	struct DEST_LIST * Dest;
+	struct DEST_ROUTE_ENTRY * ROUTEPTR;
+	int i;
+
+	_asm{
+
+
+	MOV	ESI,axcall
+	CALL	FINDDESTINATION
+	mov	Dest, ebx
+
+	JZ SHORT Found			; ALREADY THERE
+
+	CMP	EBX,0
+	JNE SHORT New
+
+	jmp exit				; No Room
+	}
+
+New:
+
+	memset(Dest, 0, sizeof(struct DEST_LIST));
+
+	memcpy(Dest->DEST_CALL, axcall, 7);
+	memcpy(Dest->DEST_ALIAS, alias, 6);
+
+//	Set up First Route
+
+	Dest->ROUTE1.Hops = hops;
+	Dest->ROUTE1.SRTT = rtt;
+	Dest->ROUTE1.ROUT_NEIGHBOUR = Route;
+	Dest->ROUTE1.ROUT_OBSCOUNT = 5;
+	Dest->ROUTE1.ROUT_QUALITY = 10;				// Till we work out what to do
+
+	NUMBEROFNODES++;
+
+Found:
+
+	// Update ALIAS
+
+	memcpy(Dest->DEST_ALIAS, alias, 6);
+
+	// See if we are known to it, it not add
+
+	ROUTEPTR = &Dest->ROUTE1;
+
+	if (ROUTEPTR->ROUT_NEIGHBOUR == Route)
+	{
+		UpdateRoute(Dest, ROUTEPTR, hops, rtt);
+		return;
+	}
+
+	ROUTEPTR = &Dest->ROUTE2;
+
+	if (ROUTEPTR->ROUT_NEIGHBOUR == Route)
+	{
+		UpdateRoute(Dest, ROUTEPTR, hops, rtt);
+		return;
+	}
+
+	ROUTEPTR = &Dest->ROUTE3;
+
+	if (ROUTEPTR->ROUT_NEIGHBOUR == Route)
+	{
+		UpdateRoute(Dest, ROUTEPTR, hops, rtt);
+		return;
+	}
+
+	// Not in list. If any spare, add.
+	// If full, see if this is better
+
+	ROUTEPTR = &Dest->ROUTE1;
+
+	for (i = 1; i < 4; i++)
+	{
+		if (ROUTEPTR->ROUT_NEIGHBOUR == NULL)
+		{
+			// Add here
+
+			Dest->ROUTE1.Hops = hops;
+			Dest->ROUTE1.SRTT = rtt;
+			Dest->ROUTE1.ROUT_NEIGHBOUR = Route;
+			Dest->ROUTE1.ROUT_OBSCOUNT = 5;
+			Dest->ROUTE1.ROUT_QUALITY = 10;				// Till we work out what to do
+
+			return;
+		}
+		ROUTEPTR++;
+	}
+
+	return;
+
+
+/*	LEA	EDI,DEST_CALL[EBX]
+	MOV	ECX,7
+	REP MOVSB
+
+	MOV	ECX,6			; ADD ALIAS
+	MOV	ESI,OFFSET32 TEMPFIELD
+	REP MOVSB
+
+	POP	ESI
+;
+;	GET NEIGHBOURS FOR THIS DESTINATION
+;
+	CALL	CONVTOAX25
+	JNZ SHORT BADROUTE
+;
+	CALL	GETVALUE
+	MOV	SAVEPORT,AL		; SET PORT FOR _FINDNEIGHBOUR
+
+	CALL	GETVALUE
+	MOV	ROUTEQUAL,AL
+;
+	MOV	ESI,OFFSET32 AX25CALL
+
+	PUSH	EBX			; SAVE DEST
+	CALL	_FINDNEIGHBOUR
+	MOV	EAX,EBX			; ROUTE TO AX
+	POP	EBX
+
+	JZ SHORT NOTBADROUTE
+
+	JMP SHORT BADROUTE
+
+NOTBADROUTE:
+;
+;	UPDATE ROUTE LIST FOR THIS DEST
+;
+	MOV	ROUT1_NEIGHBOUR[EBX],EAX
+	MOV	AL,ROUTEQUAL
+	MOV	ROUT1_QUALITY[EBX],AL
+	MOV	ROUT1_OBSCOUNT[EBX],255	; LOCKED
+;
+	POP	EDI
+	POP	EBX
+	
+	INC	_NUMBEROFNODES
+
+	JMP	SENDOK
+*/
+
+
+	return;
+
+}
+
+VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt)
+{
+}
+
 
 
 VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGE * Buff, int Len, int Port)

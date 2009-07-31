@@ -8,6 +8,7 @@ int MaxRXSize = 99999;
 int MaxTXSize = 99999;
 int MaxFBBBlockSize = 10000;
 
+
 VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {
 	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
@@ -70,7 +71,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		{
 			FBBHeader = &conn->FBBHeaders[i];
 				
-			if (Buffer[i+3] == '-')				// Not wanted
+			if ((Buffer[i+3] == '-') || (Buffer[i+3] == 'N') || (Buffer[i+3] == 'R'))				// Not wanted
 			{
 				// Zap the entry
 
@@ -81,14 +82,14 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				conn->UserPointer->ForwardingInfo->MsgCount--;
 			}
 
-			if (Buffer[i+3] == '=')				// Defer
+			if ((Buffer[i+3] == '=') || (Buffer[i+3] == 'L'))				// Defer
 			{
 				// Remove entry from forwarding block
 
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 			}
 
-			if (Buffer[i+3] == '+')				// Need it
+			if ((Buffer[i+3] == '+') || (Buffer[i+3] == 'Y') || (Buffer[i+3] == 'H'))				// Need it
 			{
 				struct tm * tm;
 				time_t now;
@@ -97,7 +98,12 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				conn->FBBMsgsSent = TRUE;		// Messages to flag as complete when next command received
 
 				if (conn->BBSFlags & FBBCompressed)
-					SendCompressed(conn, FBBHeader);
+				{
+					if (conn->BBSFlags & FBBB2Mode)
+						SendCompressedB2(conn, FBBHeader);
+					else
+						SendCompressed(conn, FBBHeader);
+				}
 				else
 				{
 					nodeprintf(conn, "%s\r\n", FBBHeader->FwdMsg->title);
@@ -492,13 +498,20 @@ BOOL FBBDoForward(CIRCUIT * conn)
 
 		struct FBBHeaderLine * FBBHeader;
 
-		// Initialise checksum
-
 		for (i=0; i < conn->FBBIndex; i++)
 		{
 			FBBHeader = &conn->FBBHeaders[i];
-				
-			proplen = wsprintf(proposal, "%s %c %s %s %s %s %d\r", 
+
+			if (conn->BBSFlags & FBBB2Mode)
+
+				// FC EM A3EDD4P00P55 377 281 0
+
+				proplen = wsprintf(proposal, "FC EM %s %d %d %d\r", 
+					FBBHeader->BID,
+					FBBHeader->Size,
+					FBBHeader->CSize, 0);
+			else
+				proplen = wsprintf(proposal, "%s %c %s %s %s %s %d\r", 
 					(conn->BBSFlags & FBBCompressed) ? "FA" : "FB",
 					FBBHeader->MsgType,
 					FBBHeader->From,
@@ -712,12 +725,10 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 		strcat(Rline, "\r\n");
 
-	i=strlen(MsgBytes);
-
 	MsgLen = OrigLen + strlen(Rline);
-
+	
 	UnCompressed = zalloc(MsgLen+10);
-
+	
 	strcpy(UnCompressed, Rline);
 	strcat(UnCompressed, MsgBytes);
 
@@ -760,6 +771,139 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	free(Output);
 			
 }
+
+CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
+{
+	char * MsgBytes;
+	UCHAR * Compressed;
+	UCHAR * UnCompressed;
+	int OrigLen, MsgLen, B2HddrLen, CompLen;
+	char Date[20];
+	struct tm * tm;
+	time_t now;
+
+
+	MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
+
+	if (MsgBytes == 0)
+	{
+		MsgBytes = _strdup("Message file not found\r\n");
+		FBBHeader->FwdMsg->length = strlen(MsgBytes);
+	}
+
+	OrigLen = FBBHeader->FwdMsg->length;
+
+	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
+		strcat(Rline, "\r\n");
+
+	MsgLen = OrigLen + strlen(Rline);
+
+	UnCompressed = zalloc(MsgLen+1000);
+
+	now = time(NULL);
+
+	tm = gmtime(&now);	
+	
+	wsprintf(Date, "%04d%/%02d/%02d %02d:%02d",
+		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+	// We create the B2 Header
+/*
+	MID: XR88I1J160EB
+	Date: 2009/07/25 18:17
+	Type: Private
+	From: SMTP:john.wiseman@ntlworld.com
+	To: G8BPQ
+	Subject: RE: RMS Test Message
+	Mbo: SMTP
+	Body: 213
+
+*/
+	B2HddrLen = wsprintf(UnCompressed,
+		"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
+		FBBHeader->FwdMsg->bid,
+		Date,
+		(FBBHeader->FwdMsg->type == 'P') ? "Private" : "Bulletin",
+		FBBHeader->FwdMsg->from,
+		FBBHeader->FwdMsg->to,
+		FBBHeader->FwdMsg->title,
+		BBSName,
+		MsgLen);
+
+	strcat(UnCompressed, Rline);
+	strcat(UnCompressed, MsgBytes);
+
+	MsgLen += B2HddrLen;
+
+	FBBHeader->Size = MsgLen;
+
+	Compressed = zalloc(2 * MsgLen + 200);
+
+	CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
+
+	FBBHeader->CompressedMsg = Compressed;
+	FBBHeader->CSize = CompLen;
+
+	free(UnCompressed);
+
+}
+
+VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
+{
+	UCHAR * Compressed, * Compressedptr;
+	UCHAR * Output, * Outputptr;
+	int i, CompLen;
+
+	Compressed =Compressedptr = FBBHeader->CompressedMsg;
+
+	Output = Outputptr = zalloc(FBBHeader->CSize + 200);
+
+	*Outputptr++ = 1;
+	*Outputptr++ = strlen(FBBHeader->FwdMsg->title) + 8;
+	strcpy(Outputptr, FBBHeader->FwdMsg->title);
+	Outputptr += strlen(FBBHeader->FwdMsg->title) +1;
+	strcpy(Outputptr, "000000");
+	Outputptr += 7;
+
+	CompLen = FBBHeader->CSize;
+
+	conn->FBBChecksum = 0;
+
+	for (i=0; i< CompLen; i++)
+	{
+		conn->FBBChecksum+=Compressed[i];
+	}
+
+	while (CompLen > 256)
+	{
+		*Outputptr++ = 2;
+		*Outputptr++ = 0;
+
+		memcpy(Outputptr, Compressedptr, 256);
+		Outputptr += 256;
+		Compressedptr += 256;
+		CompLen -= 256;
+	}
+
+	*Outputptr++ = 2;
+	*Outputptr++ = CompLen;
+
+	memcpy(Outputptr, Compressedptr, CompLen);
+
+	Outputptr += CompLen;
+
+	*Outputptr++ = 4;
+	conn->FBBChecksum = - conn->FBBChecksum;
+	*Outputptr++ = conn->FBBChecksum;
+
+	QueueMsg(conn, Output, Outputptr - Output);
+
+	free(Compressed);
+	free(Output);
+			
+}
+
+
 /**************************************************************
         lzhuf.c
         written by Haruyasu Yoshizaki 11/20/1988
