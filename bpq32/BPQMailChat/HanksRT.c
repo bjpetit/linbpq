@@ -1124,7 +1124,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 				c->Active = FALSE;			// So we don't try to clear circuit again
 				Disconnect(c->BPQStream);
 				link_drop(c);
-				ShowConnections();
+				RefreshMainWindow();
 				break;
 			}
 		}
@@ -1460,25 +1460,45 @@ VOID ChatTimer()
 	USER *user;
 	CIRCUIT *c;
 
+	ClearDebugWindow();
+
+	WritetoDebugWindow("Chat Users\r\n", 12);
+
+
 	i = 0;
 	for (user = user_hd; user; user = user->next)
 	{
+		WritetoDebugWindow(user->call, strlen(user->call));
+		WritetoDebugWindow("\r\n", 2);
 		i++;
 	}
 	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
 
+	WritetoDebugWindow("Chat Nodes\r\n", 12);
+
+
 	i = 0;
 	for (node = node_hd; node; node = node->next)
 	{
+		WritetoDebugWindow(node->call, strlen(node->call));
+		WritetoDebugWindow("\r\n", 2);
+
 		i++;
 	}
 	SetDlgItemInt(hWnd, IDC_NODES, i, FALSE);
+
+	WritetoDebugWindow("Chat Links\r\n", 12);
 
 	i = 0;
 	for (c = circuit_hd; c; c = c->next)
 	{
 		if (c->flags & p_linked) 
+		{
+			WritetoDebugWindow(c->u.user->call, strlen(c->u.user->call));
+			WritetoDebugWindow("\r\n", 2);
+
 			i++;
+		}
 	}
 	SetDlgItemInt(hWnd, IDC_LINKS,  i, FALSE);
 

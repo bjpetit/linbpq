@@ -85,7 +85,29 @@
 // Make B2 flag BBS-specific.
 // Implement B2 Send
 
-.
+// Version 1.0.0.28
+
+// Fix parsing of smtp to addresses - eg smtp:john.wiseman@cantab.net
+// Flag messages as Held if smtp server rejects from or to addresses
+// Fix Kill to (K> Call)
+// Edit Message dialog shows latest first
+// Add chat debug window to try to track down occasional chat connection problems
+
+// Version 1.0.0.29
+
+// Add loads of try/excspt
+
+// Version 1.0.0.30
+
+// Writes Debug output to LOG_DEBUG and Monitor Window
+
+// Version 1.0.0.31
+
+// Allow use of GoogleMail for ISP functions
+// Accept SYSOP as alias for SYSOPCall - ie user can do SP SYSOP, and it will appear in sysop's LM, RM, etc
+// Email Housekeeping Results to SYSOP
+
+
 #include "stdafx.h"
 
 // #define SPECIALVERSION "Beta"
@@ -495,6 +517,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //  PURPOSE:  Processes messages for the main window.
 //
 //
+
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
@@ -502,17 +526,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	HDC hdc;
 	int state,change;
 	ConnectionInfo * conn;
+	struct _EXCEPTION_POINTERS exinfo;
+
 
 	if (message == BPQMsg)
 	{
 		if (lParam & BPQMonitorAvail)
 		{
-			DoMonitorData(wParam);
+			__try
+			{
+				DoMonitorData(wParam);
+			}
+			My__except_Routine("DoMonitorData");
+
 			return 0;
+			
 		}
 		if (lParam & BPQDataAvail)
 		{
-			DoReceivedData(wParam);
+			__try
+			{
+				DoReceivedData(wParam);
+			}
+			My__except_Routine("DoReceivedData")
 			return 0;
 		}
 		if (lParam & BPQStateChange)
@@ -520,18 +556,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			//	Get current Session State. Any state changed is ACK'ed
 			//	automatically. See BPQHOST functions 4 and 5.
 	
-			SessionState(wParam, &state, &change);
-		
-			if (change == 1)
+			__try
 			{
-				if (state == 1)
+				SessionState(wParam, &state, &change);
+		
+				if (change == 1)
+				{
+					if (state == 1)
 	
-				// Connected
+					// Connected
 			
-					Connected(wParam);	
-				else
-					Disconnected(wParam);
+						Connected(wParam);	
+					else
+						Disconnected(wParam);
+				}
 			}
+			My__except_Routine("DoStateChange");
+
 		}
 
 		return 0;
@@ -562,15 +603,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		if (wParam == 1)		// Slow = 10 secs
 		{
-			ShowConnections();
-			CheckTimer();
-			TCPTimer();
-			FWDTimerProc();
-			ChatTimer();
+			__try
+			{
+				RefreshMainWindow();
+				CheckTimer();
+				TCPTimer();
+				FWDTimerProc();
+				ChatTimer();
+			}
+			My__except_Routine("Slow Timer");
 		}
 		else
-			TrytoSend();
-
+			__try
+			{
+				TrytoSend();
+			}
+			My__except_Routine("TrytoSend");
+		
 		return (0);
 
 	case WM_INITMENUPOPUP:
@@ -669,6 +718,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			CreateMonitor();
 			break;
 
+		case IDM_DEBUG:
+
+			CreateDebugWindow();
+			break;
+
 		case IDM_ABOUT:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 			break;
@@ -759,11 +813,11 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 	return (INT_PTR)FALSE;
 }
 
-int ShowConnections()
+int RefreshMainWindow()
 {
 	char msg[80];
 	CIRCUIT * conn;
-	int i,n;
+	int i,n, SYSOPMsgs = 0, HeldMsgs = 0, SMTPMsgs = 0;
 	time_t now;
 	struct tm * tm;
 	char tim[20];
@@ -812,23 +866,27 @@ int ShowConnections()
 
 	n = 0;
 
-	for (i=NumberofMessages; i>0; i--)
+	for (i=1; i <= NumberofMessages; i++)
 	{
 		if (MsgHddrPtr[i]->status == 'N')
-			if (_stricmp(MsgHddrPtr[i]->to, SYSOPCall) == 0)
-				n++;
+		{
+			if (_stricmp(MsgHddrPtr[i]->to, SYSOPCall) == 0  || _stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0)
+				SYSOPMsgs++;
+			else
+			if (MsgHddrPtr[i]->to[0] == 0)
+				SMTPMsgs++;
+		}
+		else
+		{
+			if (MsgHddrPtr[i]->status == 'H')
+				HeldMsgs++;
+		}
 	}
 
-	SetDlgItemInt(hWnd, IDC_SYSOPMSGS, n, FALSE);
+	SetDlgItemInt(hWnd, IDC_SYSOPMSGS, SYSOPMsgs, FALSE);
+	SetDlgItemInt(hWnd, IDC_HELD, HeldMsgs, FALSE);
+	SetDlgItemInt(hWnd, IDC_SMTP, SMTPMsgs, FALSE);
 
-	n = 0;
-
-	for (i=NumberofMessages; i>0; i--)
-	{
-		if (MsgHddrPtr[i]->status == 'H') n++;
-	}
-
-	SetDlgItemInt(hWnd, IDC_HELD, n, FALSE);
 	now = time(NULL);
 
 	tm = gmtime(&now);	
@@ -1011,7 +1069,7 @@ BOOL Initialise()
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
 
-	ShowConnections();
+	RefreshMainWindow();
 
 	return TRUE;
 }
@@ -1138,7 +1196,7 @@ int Connected(Stream)
 			else
 				SendWelcomeMsg(Stream, conn, user);
 
-			ShowConnections();
+			RefreshMainWindow();
 			
 			return 0;
 		}
@@ -1167,7 +1225,7 @@ int Disconnected (Stream)
 			ClearQueue(conn);
 			
 			conn->Active = FALSE;
-			ShowConnections();
+			RefreshMainWindow();
 
 			if (conn->Flags & CHATMODE)
 			{
@@ -1243,7 +1301,18 @@ int DoReceivedData(int Stream)
 
 				if (conn->InputMode == 'B')
 				{
-					UnpackFBBBinary(conn);
+					__try
+					{
+						UnpackFBBBinary(conn);
+					}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{
+						conn->InputBuffer[conn->InputLen] = 0;
+						Debugprintf("MAILCHAT *** Program Error in UnpackFBBBinary");
+						Disconnect(conn->BPQStream);
+						conn->InputLen=0;
+						return 0;
+					}
 				}
 				else
 				{
@@ -1261,13 +1330,23 @@ int DoReceivedData(int Stream)
 					{
 						// Usual Case - single meg in buffer
 
-						if (conn->flags == p_linkini)		// Chat Connect
-							ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
-						else if (conn->BBSFlags & RunningConnectScript)
-							ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
-						else
-							ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
-
+						__try
+						{
+							if (conn->flags == p_linkini)		// Chat Connect
+								ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
+							else if (conn->BBSFlags & RunningConnectScript)
+								ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
+							else
+								ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
+						}
+						__except(EXCEPTION_EXECUTE_HANDLER)
+						{
+							conn->InputBuffer[conn->InputLen] = 0;
+							Debugprintf("MAILCHAT *** Program Error Processing input %s ", conn->InputBuffer);
+							Disconnect(conn->BPQStream);
+							conn->InputLen=0;
+							return 0;
+						}
 						conn->InputLen=0;
 					}
 					else
@@ -1277,13 +1356,24 @@ int DoReceivedData(int Stream)
 						MsgLen = conn->InputLen - (ptr2-ptr);
 
 						memcpy(Buffer, conn->InputBuffer, MsgLen);
+						__try
+						{
+							if (conn->flags == p_linkini)
+								ProcessConnecting(conn, Buffer, MsgLen);
+							else if (conn->BBSFlags & RunningConnectScript)
+								ProcessBBSConnectScript(conn, Buffer, MsgLen);
+							else
+								ProcessLine(conn, user, Buffer, MsgLen);
+						}
+						__except(EXCEPTION_EXECUTE_HANDLER)
+						{
+							Buffer[MsgLen] = 0;
+							Debugprintf("MAILCHAT *** Program Error Processing input %s ", Buffer);
+							Disconnect(conn->BPQStream);
+							conn->InputLen=0;
+							return 0;
+						}
 
-						if (conn->flags == p_linkini)
-							ProcessConnecting(conn, Buffer, MsgLen);
-						else if (conn->BBSFlags & RunningConnectScript)
-							ProcessBBSConnectScript(conn, Buffer, MsgLen);
-						else
-							ProcessLine(conn, user, Buffer, MsgLen);
 
 						if (*ptr == 0 || *ptr == '\n')
 						{
@@ -1932,7 +2022,15 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 	if (conn->Flags & CHATMODE)
 	{
-		ProcessChatLine(conn, user, Buffer, len);
+		__try 
+		{
+			ProcessChatLine(conn, user, Buffer, len);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			Debugprintf("MAILCHAT *** Program Error in ProcessChatLine");
+			Disconnect(conn->BPQStream);
+		}
 		return;
 	}
 
@@ -1941,24 +2039,56 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 	if (conn->BBSFlags & FBBForwarding)
 	{
-		ProcessFBBLine(conn, user, Buffer, len);
+		__try 
+		{
+			ProcessFBBLine(conn, user, Buffer, len);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			Debugprintf("MAILCHAT *** Program Error in ProcessFBBLine");
+			Disconnect(conn->BPQStream);
+		}
 		return;
 	}
 
 	if (conn->Flags & GETTINGMESSAGE)
 	{
-		ProcessMsgLine(conn, user, Buffer, len);
+		__try 
+		{
+			ProcessMsgLine(conn, user, Buffer, len);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			Debugprintf("MAILCHAT *** Program Error in ProcessMSGLine");
+			Disconnect(conn->BPQStream);
+		}
 		return;	}
 
 	if (conn->Flags & GETTINGTITLE)
 	{
-		ProcessMsgTitle(conn, user, Buffer, len);
+		__try 
+		{
+			ProcessMsgTitle(conn, user, Buffer, len);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			Debugprintf("MAILCHAT *** Program Error in ProcessMsgTitle");
+			Disconnect(conn->BPQStream);
+		}
 		return;
 	}
 
 	if (conn->BBSFlags & MBLFORWARDING)
 	{
-		ProcessMBLLine(conn, user, Buffer, len);
+		__try 
+		{
+			ProcessMBLLine(conn, user, Buffer, len);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			Debugprintf("MAILCHAT *** Program Error in ProcessMBLLine");
+			Disconnect(conn->BPQStream);
+		}
 		return;
 	}
 	if (conn->Flags & GETTINGUSER)
@@ -2379,16 +2509,18 @@ void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		{
 			Msg = MsgHddrPtr[i];
 
-			if ((_stricmp(Msg->to, user->Call) == 0)&& (Msg->status == 'Y'))
+			if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
 			{
-				FlagAsKilled(Msg);
-
-				nodeprintf(conn, "Message #%d Killed\r", Msg->number);
+				if (Msg->status == 'Y')
+				{
+					FlagAsKilled(Msg);
+					nodeprintf(conn, "Message #%d Killed\r", Msg->number);
+				}
 			}
 		}
 		return;
 
-	case '>':			// L> - List to 
+	case '>':			// K> - Kill to 
 
 		if (conn->sysop)
 		{
@@ -2426,7 +2558,7 @@ int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 	for (i=NumberofMessages; i>0; i--)
 	{
 		Msg = MsgHddrPtr[i];
-		if (Msg->status != 'K' && _stricmp(Msg->from, Call) == 0)
+		if (Msg->status != 'K' && _stricmp(Msg->to, Call) == 0)
 		{
 			Msgs++;
 			KillMessage(conn, user, MsgHddrPtr[i]->number);
@@ -2626,7 +2758,8 @@ int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 
 	for (i=NumberofMessages; i>0; i--)
 	{
-		if (_stricmp(MsgHddrPtr[i]->to, Call) == 0)
+		if ((_stricmp(MsgHddrPtr[i]->to, Call) == 0) ||
+			((conn->sysop) && (_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0)  && (_stricmp(Call, SYSOPCall) == 0)))
 		{
 			Msgs++;
 			ListMessage(MsgHddrPtr[i], conn);
@@ -2717,7 +2850,7 @@ void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * C
 
 
 
-void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
 {
 	int msgno=-1;
 	int i;
@@ -2742,10 +2875,9 @@ void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		{
 			Msg = MsgHddrPtr[i];
 
-			if ((_stricmp(Msg->to, user->Call) == 0)&& (Msg->status == 'N'))
-			{
-				ReadMessage(conn, user, Msg->number);
-			}
+			if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
+				if (Msg->status == 'N')
+					ReadMessage(conn, user, Msg->number);
 		}
 
 		return;
@@ -2794,7 +2926,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 		return;
 	}
 
-	nodeprintf(conn, "From: %s\rTo: %s\rType/Status %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r",
+	nodeprintf(conn, "From: %s\rTo: %s\rType/Status %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
 		Msg->from, Msg->to, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 	MsgBytes = ReadMessageFile(msgno);
@@ -2810,7 +2942,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		nodeprintf(conn, "\r\r[End of Message #%d from %s]\r", msgno, Msg->from);
 
-		if (strcmp(user->Call, Msg->to) == 0)
+		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
 		{
 			Msg->status = 'Y';
 			Msg->datechanged=time(NULL);
@@ -3055,13 +3187,16 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 	WPRecP WP;
 
 
-	// Accept call@call (without spaces)
+	// Accept call@call (without spaces) - but check for smtp addresses
 
-	ptr = strchr(*To, '@');
-
-	if (ptr)
+	if (_memicmp(*To, "smtp:", 5) != 0)
 	{
-		*ATBBS = strlop(*To, '@');
+		ptr = strchr(*To, '@');
+
+		if (ptr)
+		{
+			*ATBBS = strlop(*To, '@');
+		}
 	}
 
 	// Look for Optional fields;
@@ -3105,6 +3240,12 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 	if (!(conn->BBSFlags & BBS))
 	{
 		// if a normal user, check that TO and/or AT are known and warn if not.
+
+		if (_stricmp(*To, "SYSOP") == 0)
+		{
+			conn->LocalMsg = TRUE;
+			return TRUE;
+		}
 
 		if (!*ATBBS)
 		{
@@ -3322,6 +3463,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	char * ptr1, * ptr2 = NULL;
 	int FWDCount;
 	char OldMess[] = "\r\n\r\nOriginal Message:\r\n\r\n";
+	struct _EXCEPTION_POINTERS exinfo;
 
 	// If doing SC, Append Old Message
 
@@ -3353,9 +3495,6 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 		conn->CopyBuffer = NULL;
 	}
 
-
-
-	
 		// Allocate a message Record slot
 
 		Msg = AllocateMsgRecord();
@@ -3447,7 +3586,7 @@ nextline:
 
 			if (Msg->via[0])
 			{	
-				if (FWDCount ==  0)
+				if (FWDCount ==  0 &&  Msg->to[0] != 0)		// unless smtp msg
 					nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
 			}
 			else
@@ -3470,7 +3609,11 @@ nextline:
 		SaveMessageDatabase();
 		SaveBIDDatabase();
 
-		SendMsgUI(Msg);
+		__try
+		{
+			SendMsgUI(Msg);
+		}
+		My__except_Routine("SendMsgUI");
 
 		return;
 }
@@ -3741,7 +3884,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 
 			//	Connected Event will trigger connect to remote system
 
-			ShowConnections();
+			RefreshMainWindow();
 
 			return TRUE;
 		}
@@ -3876,12 +4019,17 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 				conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
 			break;
 
+		case '1':
+
+			if (ALLOWCOMPRESSED)
+				conn->BBSFlags |= FBBB1Mode ;	// B2 uses B1 mode (crc on front of file)
+			break;
+
 		case 'B':
 
 			if (ALLOWCOMPRESSED)
 				conn->BBSFlags |= FBBCompressed;
 			break;
-
 		}
 	}
 

@@ -6,6 +6,7 @@
 #define IDC_MAXSEND                     506
 #define IDC_MAXRECV                     507
 #define IDC_MAXBLOCK                    508
+#define IDC_SMTP                        510
 #define IDC_REMOVED                     1006
 #define IDC_KILLED                      1007
 #define IDC_LIVE                        1008
@@ -40,13 +41,14 @@
 #define IDM_WP                          40008
 #define IDC_SAVEWP                      40009
 #define IDC_DELETEWP                    40010
+#define IDM_DEBUG                       40011
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30003
-#define _APS_NEXT_COMMAND_VALUE         40011
+#define _APS_NEXT_COMMAND_VALUE         40012
 #define _APS_NEXT_CONTROL_VALUE         1014
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

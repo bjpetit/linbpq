@@ -65,6 +65,8 @@ BEGIN
     LTEXT           "Held Msgs",IDC_STATIC,197,80,40,10
     LTEXT           "",IDC_SYSOPMSGS,243,70,20,10
     LTEXT           "",IDC_HELD,243,80,20,10
+    LTEXT           "SMTP Msgs",IDC_STATIC,197,90,40,10
+    LTEXT           "",IDC_SMTP,243,90,20,10
 END
 
 CONSOLEWINDOW DIALOG DISCARDABLE  17, 25, 400, 301
@@ -89,6 +91,18 @@ CLASS "BPQMONWINDOW"
 FONT 8, "FixedSys"
 BEGIN
     LISTBOX         121,5,156,290,109,LBS_MULTIPLESEL | LBS_NOINTEGRALHEIGHT | 
+                    WS_VSCROLL | WS_HSCROLL
+END
+
+BPQDEBUGWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
+STYLE DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | 
+    WS_THICKFRAME
+CAPTION "Mail & Chat Debug Window"
+MENU MENU_3
+CLASS "BPQDEBUGWINDOW"
+FONT 8, "FixedSys"
+BEGIN
+    LISTBOX         122,5,156,290,109,LBS_MULTIPLESEL | LBS_NOINTEGRALHEIGHT | 
                     WS_VSCROLL | WS_HSCROLL
 END
 
@@ -473,7 +487,7 @@ MAINT DIALOG DISCARDABLE  26, 5, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
-    LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before bEing deleted",
+    LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before being deleted",
                     IDC_STATIC,149,13,216,28
     LTEXT           "Read",IDC_STATIC,159,68,46,10
     EDITTEXT        IDM_PR,224,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
@@ -495,9 +509,9 @@ BEGIN
                     ES_NUMBER
     GROUPBOX        "Personals",IDC_STATIC,149,58,108,71
     GROUPBOX        "Bulletins",IDC_STATIC,259,58,103,71
-    LTEXT           "The followiing boxes allow you to specify different values for different Bulletin origins and destinationss.",
+    LTEXT           "The following boxes allow you to specify different values for different Bulletin origins and destinations.",
                     IDC_STATIC,151,136,214,19
-    LTEXT           "Specify Call, Lifetime, eg ALL,10",IDC_STATIC,156,158,
+    LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,156,158,
                     154,8
     LTEXT           "From",IDC_STATIC,181,170,40,12
     EDITTEXT        IDM_LTFROM,151,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
@@ -515,7 +529,7 @@ BEGIN
     LTEXT           "Max Message Number",IDC_STATIC,7,22,77,10
     LTEXT           "BID Litetime (Days)",IDC_STATIC,7,46,77,10
     LTEXT           "Maintenance Interval",IDC_STATIC,7,70,77,10
-    LTEXT           "Maintenance TIme",IDC_STATIC,7,94,77,10
+    LTEXT           "Maintenance Time",IDC_STATIC,7,94,77,10
     EDITTEXT        IDC_MAXMSG,96,22,25,12,ES_CENTER | ES_NUMBER
     EDITTEXT        IDC_BIDLIFETIME,96,45,25,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
@@ -617,6 +631,7 @@ BEGIN
     BEGIN
         MENUITEM "Console",                     IDM_CONSOLE
         MENUITEM "Monitor",                     IDM_MONITOR
+        MENUITEM "Debug Chat",                  IDM_DEBUG
     END
     POPUP "&Help"
     BEGIN
@@ -650,6 +665,15 @@ BEGIN
         MENUITEM "Monitor CHAT",                MONCHAT
         MENUITEM "Monitor TCP",                 MONTCP
     END
+    POPUP "Edit"
+    BEGIN
+        MENUITEM "Copy Monitor Window",         BPQCOPYOUT
+        MENUITEM "Clear Monitor Window",        BPQCLEAROUT
+    END
+END
+
+MENU_3 MENU DISCARDABLE 
+BEGIN
     POPUP "Edit"
     BEGIN
         MENUITEM "Copy Monitor Window",         BPQCOPYOUT

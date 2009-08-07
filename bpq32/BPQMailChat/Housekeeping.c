@@ -148,10 +148,11 @@ VOID DoHouseKeeping()
 
 		Renumber_Messages();
 	
-		FreeSemaphore(&MsgNoSemaphore);
 		FreeSemaphore(&AllocSemaphore);
+		FreeSemaphore(&MsgNoSemaphore);
 	}
 
+	MailHousekeepingResults();
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
 	return;
 
@@ -471,5 +472,64 @@ BOOL ExpireBIDs()
 	SaveBIDDatabase();
 
 	return TRUE;
+
+}
+
+VOID MailHousekeepingResults()
+{
+	struct MsgInfo * Msg = AllocateMsgRecord();
+	BIDRec * BIDRec;
+
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int WriteLen=0;
+	char * MailBuffer = malloc(10000);
+
+
+	Msg->length += wsprintf(&MailBuffer[Msg->length], "Killed Messsages Removed %d\r\n", Removed);
+	Msg->length += wsprintf(&MailBuffer[Msg->length], "Messages Killed          %d\r\n", Killed);
+	Msg->length += wsprintf(&MailBuffer[Msg->length], "Live Messages            %d\r\n", NumberofMessages - Killed);
+	Msg->length += wsprintf(&MailBuffer[Msg->length], "Total Messages           %d\r\n", NumberofMessages);
+	Msg->length += wsprintf(&MailBuffer[Msg->length], "BIDs Removed             %d\r\n", BIDSRemoved);
+	Msg->length += wsprintf(&MailBuffer[Msg->length], "BIDs Left                %d\r\n", NumberofBIDs);
+
+	GetSemaphore(&MsgNoSemaphore);
+	Msg->number = ++LatestMsg;
+	FreeSemaphore(&MsgNoSemaphore);
+ 
+	strcpy(Msg->from, "SYSTEM");
+	strcpy(Msg->to, "SYSOP");
+	strcpy(Msg->title, "Housekeeping Results");
+
+	Msg->type = 'P';
+	Msg->status = 'N';
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+
+	BIDRec = AllocateBIDRecord();
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
+	
+	hFile = CreateFile(MsgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
+		CloseHandle(hFile);
+	}
+
+	free(MailBuffer);
+
 
 }

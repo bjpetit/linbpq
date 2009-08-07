@@ -1,10 +1,10 @@
 // Mail and Chat Server for BPQ32 Packet Switch
 //
-//	Monitor Window(s) Module
+//	Debug Window(s) Module
 
 #include "stdafx.h"
 
-static char ClassName[]="BPQMONWINDOW";
+static char ClassName[]="BPQDEBUGWINDOW";
 
 char SYSOPCall[50];
 
@@ -13,7 +13,7 @@ extern
 WNDPROC wpOrigInputProc; 
 WNDPROC wpOrigOutputProc; 
 
-HWND hMonitor;
+HWND hDebug;
 static HWND hwndInput;
 static HWND hwndOutput;
 
@@ -49,15 +49,15 @@ static void MoveWindows();
 
 #define BGCOLOUR RGB(236,233,216)
 
-BOOL CreateMonitor()
+BOOL CreateDebugWindow()
 {
     WNDCLASS  wc;
 	HBRUSH bgBrush;
 
-	if (hMonitor)
+	if (hDebug)
 	{
-		ShowWindow(hMonitor, SW_SHOWNORMAL);
-		SetForegroundWindow(hMonitor);
+		ShowWindow(hDebug, SW_SHOWNORMAL);
+		SetForegroundWindow(hDebug);
 		return FALSE;							// Alreaqy open
 	}
 
@@ -78,12 +78,12 @@ BOOL CreateMonitor()
 
 	RegisterClass(&wc);
 
-	hMonitor=CreateDialog(hInst,ClassName,0,NULL);
+	hDebug=CreateDialog(hInst,ClassName,0,NULL);
 	
-    if (!hMonitor)
+    if (!hDebug)
         return (FALSE);
 
-	hMenu=GetMenu(hMonitor);
+	hMenu=GetMenu(hDebug);
 
 	if (Bells & 1)
 		CheckMenuItem(hMenu,BPQBELLS, MF_CHECKED);
@@ -103,23 +103,23 @@ BOOL CreateMonitor()
 
 	// Retrieve the handlse to the edit controls. 
 
-	hwndOutput = GetDlgItem(hMonitor, 121); 
+	hwndOutput = GetDlgItem(hDebug, 122); 
  
 	// Set our own WndProcs for the controls. 
 
 	wpOrigOutputProc = (WNDPROC)SetWindowLong(hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(hMonitor, "Mail/Chat Monitor");
+		AddTrayMenuItem(hDebug, "Mail/Chat Debug");
 
-	ShowWindow(hMonitor, SW_SHOWNORMAL);
+	ShowWindow(hDebug, SW_SHOWNORMAL);
 
 	if (MonitorRect.right < 100 || MonitorRect.bottom < 100)
 	{
-		GetWindowRect(hMonitor,	&MonitorRect);
+		GetWindowRect(hDebug,	&MonitorRect);
 	}
 
-	MoveWindow(hMonitor,MonitorRect.left,MonitorRect.top, MonitorRect.right-MonitorRect.left, MonitorRect.bottom-MonitorRect.top, TRUE);
+	MoveWindow(hDebug,MonitorRect.left,MonitorRect.top, MonitorRect.right-MonitorRect.left, MonitorRect.bottom-MonitorRect.top, TRUE);
 
 	MoveWindows();
 
@@ -133,8 +133,8 @@ static void MoveWindows()
 	RECT rcMain, rcClient;
 	int ClientHeight, ClientWidth;
 
-	GetWindowRect(hMonitor, &rcMain);
-	GetClientRect(hMonitor, &rcClient); 
+	GetWindowRect(hDebug, &rcMain);
+	GetClientRect(hDebug, &rcClient); 
 
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
@@ -247,7 +247,7 @@ static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 				DeleteTrayMenuItem(hWnd);
 
 
-			hMonitor = NULL;
+			hDebug = NULL;
 			
 			break;
 
@@ -272,7 +272,12 @@ LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	return CallWindowProc(wpOrigOutputProc, hwnd, uMsg, wParam, lParam); 
 } 
 
-int WritetoMonitorWindow(char * Msg, int len)
+VOID ClearDebugWindow()
+{
+	SendMessage(hwndOutput,LB_RESETCONTENT, 0, 0);		
+}
+
+VOID WritetoDebugWindow(char * Msg, int len)
 {
 	char * ptr1, * ptr2;
 	int index;
@@ -323,7 +328,7 @@ lineloop:
 			PartLineIndex=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
 			SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) PartLineIndex, MAKELPARAM(FALSE, 0));
 
-			return (0);
+			return;
 
 		}
 
@@ -360,9 +365,7 @@ lineloop:
 
 		goto lineloop;
 	}
-
-
-	return (0);
+	return;
 }
 
 static int ToggleParam(HWND hWnd, BOOL * Param, int Item)
@@ -421,84 +424,3 @@ static  void CopyToClipboard(HWND hWnd)
 }
 
 
-HANDLE LogHandle[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
-
-char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
-
-BOOL OpenLogfile(int Flags)
-{
-	UCHAR FN[MAX_PATH];
-
-	wsprintf(FN,"%s\\Log_%s.txt", BaseDir, Logs[Flags]);
-
-	LogHandle[Flags] = CreateFile(FN,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					OPEN_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-
-	SetFilePointer(LogHandle[Flags], 0, 0, FILE_END);
-
-	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
-}
-
-void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
-{
-	int cnt;
-	char CRLF[2] = {0x0d,0x0a};
-	struct tm * tm;
-	char Stamp[20];
-	time_t T;
-
-	if (hMonitor )
-	{
-		if (Flags == LOG_TCP && MonTCP)
-		{	
-			WritetoMonitorWindow((char *)&Flag, 1);
-			WritetoMonitorWindow(Msg, MsgLen);
-			WritetoMonitorWindow(CRLF , 1);
-		}
-		else if (Flags == LOG_CHAT && MonCHAT)
-		{	
-			WritetoMonitorWindow((char *)&Flag, 1);
-			WritetoMonitorWindow(Msg, MsgLen);
-			if (Msg[MsgLen-1] != '\r')
-				WritetoMonitorWindow(CRLF , 1);
-		}
-		else if (Flags == LOG_BBS  && MonBBS)
-		{	
-			WritetoMonitorWindow((char *)&Flag, 1);
-			WritetoMonitorWindow(Msg, MsgLen);
-			WritetoMonitorWindow(CRLF , 1);
-		}
-		else if (Flags == LOG_DEBUG)
-		{	
-			WritetoMonitorWindow((char *)&Flag, 1);
-			WritetoMonitorWindow(Msg, MsgLen);
-			WritetoMonitorWindow(CRLF , 1);
-		}
-
-	}
-
-
-	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) OpenLogfile(Flags);
-
-	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) return;
-
-	T = time(NULL);
-	tm = gmtime(&T);	
-	
-	wsprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d %c",
-				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, Flag);
-
-	WriteFile(LogHandle[Flags] ,Stamp , strlen(Stamp), &cnt, NULL);
-	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
-	WriteFile(LogHandle[Flags] ,CRLF , 2, &cnt, NULL);
-
-	CloseHandle(LogHandle[Flags]);
-
-	LogHandle[Flags] = INVALID_HANDLE_VALUE;
-
-}

@@ -126,7 +126,7 @@ _TEXT	SEGMENT
 	EXTRN	COUNT_AT_L2:NEAR
 	EXTRN	POSTSTATECHANGE:NEAR
 
-	extrn	_time:near, _ProcessRTTMsg:near, _ProcessINP3RIF:NEAR, _NRRecordRoute:NEAR
+	extrn	_time:near, _NRRecordRoute:NEAR ;, _ProcessRTTMsg:near, _ProcessINP3RIF:NEAR
 
 L4BG:
 ;
@@ -792,7 +792,7 @@ NETMSG00:
 	
 	push NEIGHBOUR[EBX]
 
-	CALL	_ProcessINP3RIF
+;	CALL	_ProcessINP3RIF
 
 	ADD	ESP,16
 
@@ -851,8 +851,7 @@ NOTFORUS:
 	CALL	COMPARECALLS
 	pop esi
 	jnz short @f
-	
-	
+		
 	MOV ESI, BUFFER
 	MOVZX	EAX, BYTE PTR 4[ESI] ; Port
 	PUSH EAX
@@ -866,7 +865,7 @@ NOTFORUS:
 	
 	push NEIGHBOUR[EBX]
 	
-	CALL	_ProcessRTTMsg
+;	CALL	_ProcessRTTMsg
 
 	ADD	ESP, 16
 

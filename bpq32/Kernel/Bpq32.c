@@ -143,6 +143,11 @@
 //				Add extra diagnostics to Lost Process detection
 //				Process Netrom Record Route frames.
 
+// 410k		June 2009
+
+//				Fix calculation of %retries in extended ROUTES display
+//				FIx corruption of ROUTES table
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -160,7 +165,7 @@
 
 #include "AsmStrucs.h"
 
-//#define SPECIALVERSION "Joel's Debug Version"
+#define SPECIALVERSION "Debug Version"
 
 #include "GetVersion.h"
 
@@ -191,7 +196,6 @@ extern long PORTENTRYLEN;
 extern struct PORTCONTROL * PORTTABLE;
 
 extern char AUTOSAVE;
-extern int MAXDESTS;
 
 extern char MYNODECALL;	// 10 chars,not null terminated
 extern char SIGNONMSG;
@@ -671,6 +675,8 @@ VOID CALLBACK TimerProc(
     UINT  idEvent,	// timer identifier
     DWORD  dwTime) 	// current system time	
 {
+	struct _EXCEPTION_POINTERS exinfo;
+
 	//
 	//	Get semaphore before proceeeding
 	//
@@ -754,11 +760,16 @@ VOID CALLBACK TimerProc(
 		
 		TIMERINTERRUPT();
 	}
-	__except(EXCEPTION_EXECUTE_HANDLER)
+	__except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)
 	{
-		Debugprintf("BPQ32 *** Program Error in Timer Processing");
-	}
+		Debugprintf("BPQ32 *** Program Error %x at %x in Timer Processing",
+			exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress);
 
+		Debugprintf("EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x",
+			exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,
+			exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);
+
+	}
 
 	FreeSemaphore();
 		
@@ -1176,6 +1187,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (TimerInst == ProcessID)
 		{
+			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
+			int i;
+
 			KillTimer(NULL,TimerHandle);
 			TimerHandle=0;
 			TimerInst=0xffffffff;
@@ -1185,6 +1199,15 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
 
+			// Close External Drivees
+			
+			for (i=0;i<NUMBEROFPORTS;i++)
+			{
+				if (PORTVEC->PORT_EXT_ADDR)
+						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);
+	
+				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
+			}
 		}
 
 		//	Remove our entry from PID List
@@ -1232,7 +1255,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			// Unload External Drivers
 
-			{
+/*
+{
 				PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 				
 				for (i=0;i<NUMBEROFPORTS;i++)
@@ -1242,9 +1266,10 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 					PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
 				}
-			}
-		}
 
+			}
+*/	
+		}
 		GetProcess(GetCurrentProcessId(),pgm);
 		n=wsprintf(buf,"BPQ32 DLL Detach complete - Program %s  - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
 		OutputDebugString(buf);
@@ -2989,6 +3014,9 @@ int DoNodes()
 		if (Dests->ROUTE1.ROUT_NEIGHBOUR == 0)
 			continue;
 
+__try 
+	{
+
 		len=ConvFromAX25(Dests->DEST_CALL,Normcall);
 		Normcall[len]=0;
 
@@ -3063,6 +3091,12 @@ int DoNodes()
 		line[cursor++]='\r';
 		line[cursor++]='\n';
 		WriteFile(handle,line,cursor,&cnt,NULL);
+
+			}
+	__except(EXCEPTION_EXECUTE_HANDLER)
+	{
+		Debugprintf("BPQ32 *** Program Error in DONODES");
+	}
 	}
 
 	return (0);

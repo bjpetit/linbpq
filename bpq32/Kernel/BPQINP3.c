@@ -43,6 +43,8 @@ typedef struct _RTTMSG
 #define DllExport	__declspec( dllexport )
 
 extern int SENDNETFRAME();
+extern VOID Q_ADD();
+
 
 DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
@@ -54,10 +56,17 @@ VOID SendINP3RIF(struct ROUTE * Route, UCHAR * Call, UCHAR * Alias, int Hops, in
 VOID SendOurRIF(struct ROUTE * Route);
 VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt);
 VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt);
+VOID KillRoute(struct DEST_ROUTE_ENTRY * ROUTEPTR);
+VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt);
+VOID SendNetFrame(struct _MESSAGE * Frame);
+
 
 struct _RTTMSG RTTMsg = {""};
 
-struct TRANSPORTENTRY * NRRSession;
+struct ROUTE DummyRoute = {"","",""};
+
+int RIPTimerCount = 0;				// 1 sec to 10 sec counter
+int PosTimerCount = 0;				// 1 sec to 5 Mins counter
 
 // Timer Runs every 10 Secs
 
@@ -75,41 +84,75 @@ VOID InitialiseRTT()
 	RTTMsg.ALIAS[6] = ' ';
 	memcpy(RTTMsg.ID, "L3RTT: ", 7);
 	memset(RTTMsg.PADDING, ' ', sizeof(RTTMsg.PADDING));
-}
 
-VOID SendNetFrame(struct _MESSAGE * Frame)
-{
-	UCHAR Port = Frame->PORT;
-	int Len = Frame->LENGTH;
-		
-	_asm {
-
-		pushfd
-		cld
-		pushad
-
-		mov	ecx,Len
-		mov	esi,Frame
-		add	esi,7
-		sub ecx,7
-
-		mov	dl,Port
-		call	SENDNETFRAME
-
-		popad
-		popfd
-	}
-		
-	return;
+	ConvToAX25("DUMMY", DummyRoute.NEIGHBOUR_CALL);
 }
 
 TellINP3LinkGone(struct ROUTE * Route)
 {
+	int i;
+	struct DEST_LIST * Dest =  DataBase->DESTS;
+
 	Route->SRTT = 0;
 	Route->RTT = 0;
 	Route->BCTimer = 0;
 	Route->Status = 0;
 	Route->Timeout = 0;
+
+	Dest--;
+
+	// Delete any Dest entries via this Route
+
+	for (i=0; i < MAXDESTS; i++)
+	{
+		Dest++;
+
+		if (Dest->ROUTE1.ROUT_NEIGHBOUR == Route)
+		{
+			//	We are deleting the best route, so need to tell other nodes
+			//	If this is the only one, we need to keep the entry with at 60000 rtt so
+			//	we can send it. Remove when all gone
+
+			//	How do we indicate is is dead - we cant clear ROUT_NEIGHBOUR as that indicates a spare entry
+			//	Set to a dummy, so other routines won't crash
+
+			if (Dest->ROUTE2.ROUT_NEIGHBOUR == 0)
+			{
+				// Only entry
+				Dest->ROUTE1.SRTT = 60000;
+				Dest->ROUTE1.Hops = 255;
+				Dest->ROUTE1.ROUT_NEIGHBOUR = &DummyRoute;
+
+				continue;
+			}
+
+			Dest->ROUTE2.LastRTT  = Dest->ROUTE1.SRTT;		// So next scan will check if rtt has increaced
+															// enough to need a RIF
+				
+			memcpy(&Dest->ROUTE1, &Dest->ROUTE2, sizeof(struct DEST_ROUTE_ENTRY));
+			memcpy(&Dest->ROUTE2, &Dest->ROUTE3, sizeof(struct DEST_ROUTE_ENTRY));
+			memset(&Dest->ROUTE3, 0, sizeof(struct DEST_ROUTE_ENTRY));
+
+			continue;
+		}
+
+		// If we aren't removing the best, we don't need to tell anyone.
+		
+		if (Dest->ROUTE2.ROUT_NEIGHBOUR == Route)
+		{
+			memcpy(&Dest->ROUTE2, &Dest->ROUTE3, sizeof(struct DEST_ROUTE_ENTRY));
+			memset(&Dest->ROUTE3, 0, sizeof(struct DEST_ROUTE_ENTRY));
+
+			continue;
+		}
+
+		if (Dest->ROUTE3.ROUT_NEIGHBOUR == Route)
+		{
+			memset(&Dest->ROUTE3, 0, sizeof(struct DEST_ROUTE_ENTRY));
+			continue;
+		}
+	}
+
 }
 
 VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGE * Buff)
@@ -155,8 +198,6 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	int opcode;
 	char alias[6];
 	USHORT Stamp;
-
-	return;
 
 	// Update TImestamp on Route
 
@@ -220,6 +261,12 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	
 	return;
 }
+
+VOID KillRoute(struct DEST_ROUTE_ENTRY * ROUTEPTR)
+{
+}
+
+
 
 VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt)
 {
@@ -314,7 +361,55 @@ Found:
 		ROUTEPTR++;
 	}
 
+	// Full, see if this is better
+
+	// Note that wont replace any netrom routes with INP3 ones unless we add pseudo rtt values to netrom entries
+
+	if (Dest->ROUTE1.SRTT > rtt)
+	{
+		// We are better. Move others down and add on front
+
+		memcpy(&Dest->ROUTE3, &Dest->ROUTE2, sizeof(struct DEST_ROUTE_ENTRY));
+		memcpy(&Dest->ROUTE2, &Dest->ROUTE1, sizeof(struct DEST_ROUTE_ENTRY));
+
+		AddHere(&Dest->ROUTE1, Route, hops, rtt);
+		return;
+	}
+
+	if (Dest->ROUTE2.SRTT > rtt)
+	{
+		// We are better. Move  2nd down and add
+
+		memcpy(&Dest->ROUTE3, &Dest->ROUTE2, sizeof(struct DEST_ROUTE_ENTRY));
+
+		AddHere(&Dest->ROUTE2, Route, hops, rtt);
+		return;
+	}
+
+	if (Dest->ROUTE3.SRTT > rtt)
+	{
+		// We are better. Add here
+
+		AddHere(&Dest->ROUTE3, Route, hops, rtt);
+		return;
+	}
+
+	// Worse than any - ignoee
+
+}
+
+VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt)
+{
+	ROUTEPTR->Hops = hops;
+	ROUTEPTR->SRTT = rtt;
+	ROUTEPTR->LastRTT = 0;
+	ROUTEPTR->RTT = 0;
+	ROUTEPTR->ROUT_NEIGHBOUR = Route;
+	ROUTEPTR->ROUT_OBSCOUNT = 5;
+	ROUTEPTR->ROUT_QUALITY = 10;				// Till we work out what to do
+
 	return;
+}
 
 
 /*	LEA	EDI,DEST_CALL[EBX]
@@ -367,9 +462,7 @@ NOTBADROUTE:
 */
 
 
-	return;
 
-}
 
 VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt)
 {
@@ -491,59 +584,34 @@ int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT)
 
 	// Need to null-terminate Alias
 
-	memcpy(AliasCopy, Alias, 6);
-	ptr = strchr(AliasCopy, ' ');
-
-	if (ptr)
-		*ptr = 0;
-
-	AliasLen = strlen(AliasCopy);
-
 	memcpy(&RIF[0], Call, 7);
 	RIF[7] = Hops;
 	RIF[8] = HIBYTE(RTT);
 	RIF[9] = LOBYTE(RTT);
-	RIF[10] = AliasLen+2;
-	RIF[11] = 0;
-	memcpy(&RIF[12], Alias, AliasLen);
-	RIF[12+AliasLen] = 0;
 
-	RIFLen = 13 + AliasLen;
+	if (Alias)
+	{
+		memcpy(AliasCopy, Alias, 6);
+		ptr = strchr(AliasCopy, ' ');
 
-	return RIFLen;
+		if (ptr)
+			*ptr = 0;
+
+		AliasLen = strlen(AliasCopy);
+
+		RIF[10] = AliasLen+2;
+		RIF[11] = 0;
+		memcpy(&RIF[12], Alias, AliasLen);
+		RIF[12+AliasLen] = 0;
+
+		RIFLen = 13 + AliasLen;
+		return RIFLen;
+	}
+	RIF[10] = 0;
+	
+	return (11);
 }
 
-VOID SendINP3RIF(struct ROUTE * Route, UCHAR * Call, UCHAR * Alias, int Hops, int RTT)
-{
-	struct _MESSAGE Msg;
-	int RIFLen;
-	int totLen = 1;
-	UCHAR AliasCopy[10] = "";
-	UCHAR * ptr;
-
-	// Need to null-terminate Alias
-
-	memcpy(AliasCopy, Alias, 6);
-	ptr = strchr(AliasCopy, ' ');
-
-	if (ptr)
-		*ptr = 0;
-
-	Msg.L3MSG.L3SRCE[0] = 0xff;
-
-	RIFLen = BuildRIF(&Msg.L3MSG.L3SRCE[totLen], Call, AliasCopy, Hops, RTT);
-	totLen += RIFLen;
-	RIFLen = BuildRIF(&Msg.L3MSG.L3SRCE[totLen], "GM8BPQ-11", "BPQXXX", 2, 98);
-	totLen += RIFLen;
-
-	memcpy(Msg.DEST, Route->NEIGHBOUR_CALL, 7);
-	memcpy(Msg.ORIGIN, MYCALL, 7);
-	Msg.PORT = Route->NEIGHBOUR_PORT;
-	Msg.PID = NRPID;
-	Msg.LENGTH = totLen + 14 + 2 + 7;
-
-	SendNetFrame(&Msg);
-}
 
 VOID SendOurRIF(struct ROUTE * Route)
 {
@@ -687,7 +755,6 @@ SendRIPTimer()
 					Route->Retries = RTTRetries;
 					SendRTTMsg(Route);
 				}
-//				SendNRRecordRoute("GM8BPQ-8", 2);
 			}
 		}
 
@@ -697,170 +764,164 @@ SendRIPTimer()
 	return (0);
 }
 
+// Create an Empty RIF
+
+struct _MESSAGE * CreateRIFHeader(struct ROUTE * Route)
+{
+	struct _MESSAGE * Msg = malloc(sizeof(struct _MESSAGE));
+	UCHAR AliasCopy[10] = "";
+
+	Msg->LENGTH = 1;
+	Msg->L3MSG.L3SRCE[0] = 0xff;
+
+	memcpy(Msg->DEST, Route->NEIGHBOUR_CALL, 7);
+	memcpy(Msg->ORIGIN, MYCALL, 7);
+	Msg->PORT = Route->NEIGHBOUR_PORT;
+	Msg->PID = NRPID;
+
+	return Msg;
+
+}
+
+SendRIF(struct _MESSAGE * Msg)
+{
+	Msg->LENGTH += 14 + 2 + 7;
+
+	SendNetFrame(Msg);
+
+	free(Msg);
+}
+
+SendRIPToOtherNeighbours(UCHAR * axcall, struct DEST_ROUTE_ENTRY * Entry)
+{
+	struct ROUTE * Routes = DataBase->NEIGHBOURS;
+	struct _MESSAGE * Msg;
+	int count, MaxRoutes = DataBase->MAXNEIGHBOURS;
+
+	for (count=0; count<MaxRoutes; count++)
+	{
+		if ((Routes->INP3Node) && (Routes->Status) && (Routes != Entry->ROUT_NEIGHBOUR))	// Dont send to originator of route
+		{
+			Msg = Routes->Msg;
+			
+			if (Msg == NULL) 
+				Msg = Routes->Msg = CreateRIFHeader(Routes);
+
+			Msg->LENGTH += BuildRIF(&Msg->L3MSG.L3SRCE[Msg->LENGTH],
+				axcall, 0, Entry->Hops, Entry->SRTT);				// Don't send Alias
+
+			if (Msg->LENGTH > Routes->NBOUR_PACLEN - 11)
+			{
+				SendRIF(Msg);
+				Routes->Msg = NULL;
+			}
+		}
+		Routes+=1;
+	}
+}
+
+FlushRIFs()
+{
+	struct ROUTE * Routes = DataBase->NEIGHBOURS;
+	int count, MaxRoutes = DataBase->MAXNEIGHBOURS;
+
+	for (count=0; count<MaxRoutes; count++)
+	{
+		if (Routes->Msg)
+		{
+			SendRIF(Routes->Msg);
+			Routes->Msg = NULL;
+		}
+		Routes+=1;
+	}
+}
+
+VOID SendNegativeInfo()
+{
+	int i, Preload;
+	struct DEST_LIST * Dest =  DataBase->DESTS;
+	struct DEST_ROUTE_ENTRY * Entry;
+
+	Dest--;
+
+	// Send RIF for any Dests that have got worse
+	
+	// ?? Should we send to one Neighbour at a time, or do all in parallel ??
+
+	// The spec says send Negative info as soon as possible so I'll try building them in parallel
+	// That will mean building several packets in parallel
+
+
+	for (i=0; i < MAXDESTS; i++)
+	{
+		Dest++;
+
+		Entry = &Dest->ROUTE1;
+
+		if (Entry->SRTT > Entry->LastRTT)
+		{
+			if (Entry->LastRTT)		// if zero haven't yet reported +ve info
+			{
+				SendRIPToOtherNeighbours(Dest->DEST_CALL, Entry);
+				Preload = Entry->SRTT /10;
+				if (Entry->SRTT < 60000)
+					Entry->LastRTT = Entry->SRTT + Preload;	//10% Negative Preload
+			}
+		}
+	}
+}
+
+VOID SendPositiveInfo()
+{
+	int i;
+	struct DEST_LIST * Dest =  DataBase->DESTS;
+	struct DEST_ROUTE_ENTRY * Entry;
+
+	Dest--;
+
+	// Send RIF for any Dests that have got significantly better or are newly discovered
+
+	for (i=0; i < MAXDESTS; i++)
+	{
+		Dest++;
+
+		Entry = &Dest->ROUTE1;
+
+		if (( (Entry->SRTT) && (Entry->LastRTT == 0) )|| 		// if zero haven't yet reported +ve info
+			((((Entry->SRTT * 125) /100) < Entry->LastRTT) && // Better by 25%
+			((Entry->LastRTT - Entry->SRTT) > 10)))			  // and 100ms
+		{
+			SendRIPToOtherNeighbours(Dest->DEST_CALL, Entry);
+			Dest->ROUTE1.LastRTT = (Dest->ROUTE1.SRTT * 11) / 10;	//10% Negative Preload
+		}
+	}
+}
+
+
 INP3TIMER()
 {
 	if (RTTMsg.ID[0] == 0)
 		InitialiseRTT();
 
-	SendRIPTimer();
-}
+	// Called once per second
 
-/*
-datagrams (and other things) to be transported in Netrom L3 frames. 
-When the frametype is 0x00, the "circuit index" and "circuit id" (first 2 
-bytes of the transport header) take on a different meaning, something like 
-"protocol family" and "protocol id". IP over netrom uses 0x0C for both 
-bytes, TheNet uses 0x00 for both bytes when making L3RTT measurements, and 
-Xnet uses family 0x00, protocol id 0x01 for Netrom Record Route. I believe 
-there are authors using other values too. Unfortunately there is no 
-co-ordinating authority for these numbers, so authors just pick an unused 
-one. 
-*/
+	SendNegativeInfo();
 
-VOID NRRecordRoute(char * Buff, int Len)
-{
-	// NRR frame for us. If We originated it, report outcome, else put our call on end, and send back
-	
-	struct _MESSAGE Msg = {0};
-	int NRRLen = Len - 28;
-	UCHAR Flags;
-	char call[10];
-	int calllen;
-
-
-	if (memcmp(&Buff[28], MYCALL, 7) == 0)
+	if (RIPTimerCount == 0)
 	{
-		UCHAR * BUFFER;
-		UCHAR * ptr1;
-		VOID * ptr;
-
-		struct _MESSAGE * Msg;
-
-		_asm{
-			
-		call GETBUFF
-		mov BUFFER, edi
-
-		}
-		if (BUFFER == NULL)
-			return;
-
-		ptr1 = &BUFFER[7];
-		
-		*ptr1++ = 0xf0;			// PID
-
-		_asm{
-
-		mov	edi,ptr1
-
-//		CALL	SETUPNODEHEADER		; PUT IN NODE ID
-
-		mov ptr1,edi
-
-		}
-
-		ptr1 += wsprintf(ptr1, "NRR Response:");
-
-		Buff+=28;
-		Len -= 28;
-
-		while (Len > 0)
-		{
-			calllen = ConvFromAX25(Buff, call);
-			call[calllen] = 0;
-			ptr1 += wsprintf(ptr1, " %s", call);
-			if ((Buff[7] & 0x80) == 0x80)			// Check turnround bit
-				*ptr1++ = '*';
-	
-			Buff+=8;
-			Len -= 8;
-		}
-
-		// Add ours on end for neatness
-
-		calllen = ConvFromAX25(MYCALL, call);
-		call[calllen] = 0;
-		ptr1 += wsprintf(ptr1, " %s", call);
-
-		*ptr1++ = 0x0d;			// CR
-
-		Len = ptr1 - BUFFER;
-
-		Msg = (struct _MESSAGE *)BUFFER;
-		
-		Msg->LENGTH = Len;
-
-		Msg->CHAIN = NULL;
-
-		ptr1 = &NRRSession->L4TX_Q;
-
-		_asm {	
-			
-		pushad
-
-		mov esi, ptr1
-		mov	edi, BUFFER;
-
-		call Q_ADD
-
-		mov	ebx, NRRSession 
-		CALL	POSTDATAAVAIL
-
-		popad
-
-		}
-
-		return;
+		RIPTimerCount = 10;
+		SendRIPTimer();
 	}
+	else
+		RIPTimerCount--;
 
-	// Add our call on end, and increase count
-
-	Flags = Buff[Len -1];
-
-	Flags--;
-
-	if (Flags && NRRLen < 228)					// Dont update if full
+	if (PosTimerCount == 0)
 	{
-		Flags |= 0x80;			// Set End of route bit
-		Msg.PID = NRPID;
-
-		memcpy(Msg.L3MSG.L3DEST, &Buff[8], 7);
-		memcpy(Msg.L3MSG.L3SRCE, &Buff[15], 7);
-		Msg.L3MSG.L3TTL = L3LIVES;
-		Msg.L3MSG.L4ID = 1;
-
-		memcpy(Msg.L3MSG.L4DATA, &Buff[28], NRRLen);
-		memcpy(&Msg.L3MSG.L4DATA[NRRLen], &Buff[15], 7);
-		Msg.L3MSG.L4DATA[NRRLen+7] = Flags;
-		NRRLen += 8;
+		PosTimerCount = 300;			// 5 mins
+		SendPositiveInfo();
 	}
-		
-	Msg.LENGTH = NRRLen + 20 + 14 + 2 + 7;
-	
-	SendNetFrame(&Msg);
+	else
+		PosTimerCount--;
 
 }
 
-VOID SendNRRecordRoute(char * Call, struct TRANSPORTENTRY * Session)
-{	
-	struct _MESSAGE Msg = {0};
-	int Stream = 1;
-
-	NRRSession = Session;			// Save Session Pointer for reply
-
-	Msg.PID = NRPID;
-
-	memcpy(Msg.L3MSG.L3DEST, Call, 7);
-	memcpy(Msg.L3MSG.L3SRCE, MYCALL, 7);
-		
-	Msg.L3MSG.L3TTL = L3LIVES;
-	Msg.L3MSG.L4ID = 1;
-
-	memcpy(Msg.L3MSG.L4DATA, MYCALL, 7);
-	Msg.L3MSG.L4DATA[7] = Stream + 28;
-		
-	Msg.LENGTH = 8 + 20 + 14 + 2 + 7;
-	
-	SendNetFrame(&Msg);
-
-}

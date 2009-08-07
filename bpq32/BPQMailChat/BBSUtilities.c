@@ -9,12 +9,12 @@ int SEMCLASHES = 0;
 VOID __cdecl Debugprintf(const char * format, ...)
 {
 	char Mess[255];
-	va_list(arglist);
+	va_list(arglist);int Len;
 
 	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
+	Len = vsprintf(Mess, format, arglist);
+	WriteLogLine('!',Mess, Len, LOG_DEBUG);
 	strcat(Mess, "\r\n");
-
 	OutputDebugString(Mess);
 
 	return;

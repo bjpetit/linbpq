@@ -44,11 +44,15 @@ char ISPAccountName[50];
 char ISPAccountPass[50];
 char EncryptedISPAccountPass[50];
 int EncryptedPassLen;
+
+BOOL GMailMode = FALSE;
+char GMailName[50];
+
 int POP3Timer=300;							// Run on startup
 int ISPPOP3Interval;
 
 BOOL SMTPMsgCreated=FALSE;					// Set to cause SMTP client to send messages to ISP
-
+BOOL SMTPActive=FALSE;						// SO we don't try every 10 secs!
 
 char mycd64[256];
 static const char cb64[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -116,9 +120,6 @@ BOOL InitialiseTCP()
 		mycd64[j]=i;
 	}
 
-   // Start WinSock 2.  If it fails, we don't need to call
-    // WSACleanup().
-
     VersionRequested = MAKEWORD(VERSION_MAJOR, VERSION_MINOR);
 
 	Error = WSAStartup(VersionRequested, &WsaData);
@@ -139,6 +140,23 @@ BOOL InitialiseTCP()
 
 	if (POP3InPort)
 		pop3sock = CreateListeningSocket(POP3InPort);
+
+	if (ISP_Gateway_Enabled)
+	{
+		// See if using GMail
+
+		char * ptr = strchr(ISPAccountName, '@');
+
+		if (ptr)
+		{
+			if (_stricmp(&ptr[1], "gmail.com") == 0 || _stricmp(&ptr[1], "googlemail.com") == 0)
+			{
+				strcpy(GMailName, ISPAccountName);
+				strlop(GMailName, '@');
+				GMailMode = TRUE;
+			}
+		}
+	}
 
 	return TRUE;
 
@@ -1399,9 +1417,10 @@ int b64decode(char *str)
 
 BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 {
-	int err, status;
+	int err, status, n;
 	u_long param=1;
 	BOOL bcopt=TRUE;
+	char LogMsg[100];
 
 	SocketConn * sockptr;
 
@@ -1423,8 +1442,13 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 
 		 HostEnt = gethostbyname (Host);
 		 
-		 if (!HostEnt) return FALSE;			// Resolve failed
-
+		 if (!HostEnt)
+		 {
+ 			n=wsprintf(LogMsg, "Resolve Failed for SMTP Server %s", Host);
+			WriteLogLine('|',LogMsg, n, LOG_BBS);
+			SMTPActive = FALSE;
+			return FALSE;			// Resolve failed
+		 }
 		 memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 	}
 
@@ -1562,6 +1586,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		}
 		else
 		{
+			sockptr->SMTPMsg->status = 'H';			// Hold for review
 			SendSock(sock, "QUIT");
 			sockptr->State = 0;
 		}
@@ -1578,6 +1603,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		}
 		else
 		{
+			sockptr->SMTPMsg->status = 'H';			// Hold for review
 			SendSock(sock, "QUIT");
 			sockptr->State = 0;
 		}
@@ -1591,7 +1617,11 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			sockprintf(sock, "From: %s@%s", sockptr->SMTPMsg->from, MyDomain);
 			sockprintf(sock, "To: %s", sockptr->SMTPMsg->via);
-			sockprintf(sock, "Reply-To: %s@%s", sockptr->SMTPMsg->from, MyDomain);
+			if (GMailMode)
+				sockprintf(sock, "Reply-To: %s+%s@%s", GMailName, sockptr->SMTPMsg->from, MyDomain);
+			else
+				sockprintf(sock, "Reply-To: %s@%s", sockptr->SMTPMsg->from, MyDomain);
+				
 			sockprintf(sock, "Subject: %s", sockptr->SMTPMsg->title);
 			SendSock(sock, "");
 
@@ -1632,10 +1662,15 @@ BOOL SendtoISP()
 {
 	// Find a message intended for the Internet and send it
 
-	int m=NumberofMessages;
+	int m = NumberofMessages, n;
 	char * Body;
+	char LogMsg[100];
 
 	struct MsgInfo * Msg;
+
+	if (SMTPActive)
+		return;
+
 
 	do
 	{
@@ -1652,7 +1687,14 @@ BOOL SendtoISP()
 				FlagAsKilled(Msg);
 				return FALSE;
 			}
+
+			n=wsprintf(LogMsg, "Connecting to Server %s to send Msg %d", ISPSMTPName, Msg->number);
+
+			WriteLogLine('|',LogMsg, n, LOG_BBS);
+
 			SMTPConnect(ISPSMTPName, ISPSMTPPort, Msg, Body);
+
+			SMTPActive = TRUE;
 
 			return TRUE;
 		}
@@ -1667,7 +1709,7 @@ BOOL SendtoISP()
 
 BOOL POP3Connect(char * Host, int Port)
 {
-	int err, status;
+	int err, status, n;
 	u_long param=1;
 	BOOL bcopt=TRUE;
 
@@ -1677,6 +1719,10 @@ BOOL POP3Connect(char * Host, int Port)
 	SOCKADDR_IN destaddr;
 	int addrlen=sizeof(sinx);
 	struct hostent * HostEnt;
+	char LogMsg[100];
+
+	n=wsprintf(LogMsg, "Connecting to POP3 Server %s", Host);
+	WriteLogLine('|',LogMsg, n, LOG_BBS);
 
 
 	// Resolve Name if needed
@@ -1692,10 +1738,13 @@ BOOL POP3Connect(char * Host, int Port)
 
 		 HostEnt = gethostbyname (Host);
 		 
-		 if (!HostEnt) return FALSE;			// Resolve failed
-
+		 if (!HostEnt)
+		 {
+			n=wsprintf(LogMsg, "Resolve Failed for POP3 Server %s", Host);
+			WriteLogLine('|',LogMsg, n, LOG_BBS);
+			return FALSE;			// Resolve failed
+		 }
 		 memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-
 	}
 
 //   Allocate a Socket entry
@@ -1812,14 +1861,16 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			// From: "John Wiseman" <john.wiseman@ntlworld.com>
 			// To: <G8BPQ@g8bpq.org.uk>
+			//<To: <gm8bpq+g8bpq@googlemail.com>
+
 
 
 
 			if (_memicmp(ptr1, "From:", 5) == 0)
 			{
 				if (linelen > 65) linelen = 65;
-				memcpy(MsgFrom, &ptr1[6], linelen-6);
-				MsgFrom[linelen-6]=0;
+				memcpy(MsgFrom, ptr1, linelen);
+				MsgFrom[linelen]=0;
 			}
 			else
 			if (_memicmp(ptr1, "To:", 3) == 0)
@@ -1901,17 +1952,22 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			ptr1 = sockptr->MailBuffer;
 
+			// Put the From Address into the message, and set from to smtp:
+			
+			// From: "John Wiseman" <john.wiseman@cantab.net>
+
+			*(--ptr2) = '\n';
+			*(--ptr2) = '\r';
+
+			ptr2 -= strlen(MsgFrom);
+			memcpy(ptr2, MsgFrom, strlen(MsgFrom));
+
+			*(--ptr2) = '\n';
+			*(--ptr2) = '\r';
+
 			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
-
-			// We Just want the from call, not the full address.
-			
-			TidyString(MsgFrom);
-			
-			strlop(MsgFrom, '@');
-			if (strlen(MsgFrom) > 6) MsgFrom[6]=0;
-
-
-			CreatePOP3Message(MsgFrom, MsgTo, Msgtitle, Date, ptr2, MsgLen);
+				
+			CreatePOP3Message("smtp:", MsgTo, Msgtitle, Date, ptr2, MsgLen);
 
 			free(sockptr->MailBuffer);
 			sockptr->MailBufferSize=0;
@@ -2128,6 +2184,16 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 
 	TidyString(To);
 	strlop(To, '@');
+
+	if (GMailMode)
+	{
+		// + separates our address and the target user
+
+		char * GMailto;;
+		GMailto = strlop(To,'+');
+		if (GMailto)
+			strcpy(To, GMailto);
+	}
 
 	if (strlen(To) > 6) To[6]=0;
 

@@ -329,7 +329,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				ClearQueue(Console);
 		
 				Console->Active = FALSE;
-				ShowConnections();
+				RefreshMainWindow();
 
 				if (Console->Flags & CHATMODE)
 				{

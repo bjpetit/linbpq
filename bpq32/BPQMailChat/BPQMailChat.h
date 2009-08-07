@@ -2,6 +2,17 @@
 
 #include "resource.h"
 
+// Standard __except handler for try/except
+
+#define My__except_Routine(Message) \
+__except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
+{\
+	Debugprintf("MAILCHAT *** Program Error %x at %x in %s EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x",\
+		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
+		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
+		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
+}
+
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3
@@ -27,6 +38,7 @@ VOID * _zalloc_dbg(int len, int type, char * file, int line);
 #define LOG_BBS 0
 #define LOG_CHAT 1
 #define LOG_TCP 2
+#define LOG_DEBUG 3
 
 
 struct UserRec
@@ -628,16 +640,13 @@ int DataSocket_Read(SocketConn * sockptr, SOCKET sock);
 int DataSocket_Write(SocketConn * sockptr, SOCKET sock);
 int DataSocket_Disconnect(SocketConn * sockptr);
 BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, UCHAR * Msg, int Len);
-int ShowConnections();
+int RefreshMainWindow();
 int Terminate();
 int SendtoSocket(SOCKET sock,char * Msg);
 int WriteLog(char * msg);
 int ConnectState(Stream);
 UCHAR * EncodeCall(UCHAR * Call);
 int ParseIniFile(char * fn);
-UINT ReleaseBuffer(UINT *BUFF);
-UINT * Q_REM(UINT *Q);
-int Q_ADD(UINT *Q,UINT *BUFF);
 struct UserInfo * AllocateUserRecord(char * Call);
 struct MsgInfo * AllocateMsgRecord();
 BIDRec * AllocateBIDRecord();
@@ -736,7 +745,6 @@ VOID CopyUserDatabase();
 VOID FWDTimerProc();
 VOID CreateMessageFromBuffer(CIRCUIT * conn);
 VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...);
-
 VOID FreeOverrides();
 
 // FBB Routines
@@ -746,8 +754,7 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 VOID UnpackFBBBinary(CIRCUIT * conn);
 void Decode(CIRCUIT * conn) ;
 int Encode(char * in, char * out, int len, BOOL B2Protocol);
-
-
+CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline);
 
 // Console Routines
 
@@ -762,11 +769,16 @@ VOID CloseConsole(int Stream);
 BOOL CreateMonitor();
 int WritetoMonitorWindow(char * Msg, int len);
 
+BOOL CreateDebugWindow();
+VOID WritetoDebugWindow(char * Msg, int len);
+VOID ClearDebugWindow();
 
 // Utilities
 
 void GetSemaphore(int * Semaphore);
 void FreeSemaphore(int * Semaphore);
+
+VOID __cdecl Debugprintf(const char * format, ...);
 
 // TCP Routines
 
@@ -801,6 +813,7 @@ VOID KillMsg(struct MsgInfo * Msg);
 BOOL RemoveKilledMessages();
 VOID Renumber_Messages();
 BOOL ExpireBIDs();
+VOID MailHousekeepingResults();
 
 // WP Routines
 

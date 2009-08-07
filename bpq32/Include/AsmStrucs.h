@@ -22,9 +22,11 @@ extern char L3RTT[7];	// 7 chars, ax.25 format
 extern struct _DATABASE * DataBase;
 extern struct APPLCALLS  APPLCALLTABLE[8];
 
+extern int MAXDESTS;
+
+
 
 extern VOID * GETBUFF();
-extern VOID Q_ADD();
 extern VOID SETUPNODEHEADER();
 extern VOID POSTDATAAVAIL();
 extern VOID FINDDESTINATION();
@@ -253,7 +255,7 @@ typedef struct ROUTE
 
 	BOOL INP3Node;
 
-	int Status;				// 
+	int Status;			// 
 	int LastRTT;			// Last Value Reported
 	int RTT;				// Current	
 	int SRTT;				// Smoothed RTT
@@ -262,6 +264,7 @@ typedef struct ROUTE
 	int BCTimer;			// Time to next L3RTT Broadcast
 	int Timeout;			// Lost Response Timer
 	int Retries;			// Lost Response Count
+	struct _MESSAGE * Msg;	// RIF being built
 };
 
 // Status Equates

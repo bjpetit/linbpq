@@ -1808,7 +1808,7 @@ INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int Command, n;
-	char msgno[10];
+	char msgno[20];
 	struct UserInfo * user;
 
 
@@ -1818,7 +1818,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 	case WM_INITDIALOG:
 
-		for (n = 1; n <= NumberofMessages; n++)
+		for (n = NumberofMessages; n >= 1; n--)
 		{
 			wsprintf(msgno, "%d", MsgHddrPtr[n]->number);
 			SendDlgItemMessage(hDlg, 0, LB_ADDSTRING, 0, (LPARAM)msgno);
