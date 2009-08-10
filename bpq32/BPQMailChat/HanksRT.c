@@ -815,7 +815,7 @@ void text_tellu_Joined(USER * user)
 	CIRCUIT *circuit;
 	char buf[256];
 
-	sprintf(buf, "%-6.6s *** Joined Chat, Topic %s\r", user->call, user->topic->name);
+	sprintf(buf, "%-6.6s *** Joined Chat, Topic %s", user->call, user->topic->name);
 
 	if (FlashOnConnect)
 		FlashWindow(hWnd, TRUE);
@@ -839,6 +839,8 @@ void text_tellu_Joined(USER * user)
 			}
 			else
 				nputc(circuit, 7);
+
+		nputc(circuit, 13);
 	}
 }
 // Tell one link circuit about a local user change of topic.

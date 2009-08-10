@@ -197,6 +197,8 @@ BEGIN
     LTEXT           "QTH",-1,7,131,35,14
     LTEXT           "Home BBS",-1,5,150,40,14
     PUSHBUTTON      "Save",5102,141,175,42,14,BS_CENTER | BS_VCENTER
+    CONTROL         "Permit Email",IDC_EMAIL,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFT | WS_TABSTOP,72,69,57,10
 END
 
 ISP_CONFIG DIALOG DISCARDABLE  26, 5, 381, 266

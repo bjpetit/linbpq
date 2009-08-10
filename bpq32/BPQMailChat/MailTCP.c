@@ -1565,8 +1565,16 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
-			sockprintf(sock, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
-			sockptr->State = WaitingForFROMResponse;
+			if (GMailMode)
+			{
+				sockprintf(sock, "AUTH LOGIN");
+				sockptr->State = WaitingForAUTHResponse;
+			}
+			else
+			{
+				sockprintf(sock, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
+				sockptr->State = WaitingForFROMResponse;
+			}
 		}
 		else
 		{
@@ -1576,6 +1584,38 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		return;
 	}
+
+	if (sockptr->State == WaitingForAUTHResponse)
+	{
+		if (memcmp(Buffer, "334 VXNlcm5hbWU6", 7) == 0)
+		{
+			char * Msg = str_base64_encode(ISPAccountName);
+			sockprintf(sock, Msg, strlen(Msg));
+			return;
+		}
+		else if (memcmp(Buffer, "334 UGF", 7) == 0)
+		{
+			char * Msg = str_base64_encode(ISPAccountPass);
+			sockprintf(sock, Msg, strlen(Msg));
+			return;
+		}
+		else if (memcmp(Buffer, "235 ", 4) == 0)
+		{
+			sockprintf(sock, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
+//			sockprintf(sock, "MAIL FROM: <%s@%s.%s>", sockptr->SMTPMsg->from, BBSName, HRoute);
+			sockptr->State = WaitingForFROMResponse;
+		}
+
+		else
+		{
+			SendSock(sock, "QUIT");
+			sockptr->State = 0;
+		}
+
+		return;
+
+	}
+
 
 	if (sockptr->State == WaitingForFROMResponse)
 	{
@@ -1615,12 +1655,14 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "354 ",4) == 0)
 		{
-			sockprintf(sock, "From: %s@%s", sockptr->SMTPMsg->from, MyDomain);
 			sockprintf(sock, "To: %s", sockptr->SMTPMsg->via);
+			sockprintf(sock, "From: %s <%s@%s>", sockptr->SMTPMsg->from, sockptr->SMTPMsg->from, MyDomain);
+			sockprintf(sock, "Sender: %s@%s", sockptr->SMTPMsg->from, MyDomain);
 			if (GMailMode)
 				sockprintf(sock, "Reply-To: %s+%s@%s", GMailName, sockptr->SMTPMsg->from, MyDomain);
 			else
 				sockprintf(sock, "Reply-To: %s@%s", sockptr->SMTPMsg->from, MyDomain);
+
 				
 			sockprintf(sock, "Subject: %s", sockptr->SMTPMsg->title);
 			SendSock(sock, "");
@@ -1646,9 +1688,11 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			sockptr->SMTPMsg->status = 'F';
 		}
 
-	
+
 		SendSock(sock, "QUIT");
 		sockptr->State = 0;
+
+		SMTPActive = FALSE;
 
 		SMTPMsgCreated=TRUE;					// See if any more
 

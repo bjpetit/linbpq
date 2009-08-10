@@ -327,6 +327,8 @@ struct UserInfo{
 #define F_UNP        0x0200
 #define F_NEW        0x0400
 #define F_PMS        0x0800
+#define F_EMAIL      0x1000
+
 /* #define F_PWD        0x1000 */
 
 struct Override
@@ -584,6 +586,7 @@ typedef struct SocketConnectionInfo
 #define WaitingForTOResponse 128
 #define WaitingForDATAResponse 256
 #define WaitingForBodyResponse 512
+#define WaitingForAUTHResponse 1024
 
 // POP3 Master
 

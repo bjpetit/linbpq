@@ -1,3 +1,3 @@
 ﻿
-#define Vers 1,0,0,31
-#define Verstring "1.0.0.31\0"
+#define Vers 1,0,0,32
+#define Verstring "1.0.0.32\0"

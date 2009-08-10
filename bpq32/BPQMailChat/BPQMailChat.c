@@ -3283,7 +3283,7 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 	return TRUE;
 }
 
-BOOL CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID, char * Title)
+BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID, char * Title)
 {
 	struct MsgInfo * Msg;
 	char * via = NULL;
@@ -3337,6 +3337,11 @@ BOOL CreateMessage(ConnectionInfo * conn, char * From, char * ToCall, char * ATB
 	{
 		if (ISP_Gateway_Enabled)
 		{
+			if ((conn->UserPointer->flags & F_EMAIL) == 0)
+			{
+				nodeprintf(conn, "*** Error - You need to ask the SYSOP to allow you to use Internet Mail\r");
+				return FALSE;
+			}
 			via=strlop(ToCall, ':');
 			ToCall[0] = 0;
 		}

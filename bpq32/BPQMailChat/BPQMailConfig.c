@@ -680,6 +680,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_PMSFLAG, (user->flags & F_PMS));
 			CheckDlgButton(hDlg, IDC_EXPERT, (user->flags & F_Expert));
 			CheckDlgButton(hDlg, IDC_EXCLUDED, (user->flags & F_Excluded));
+			CheckDlgButton(hDlg, IDC_EMAIL, (user->flags & F_EMAIL));
 
 			return 0;
 		}
@@ -850,6 +851,9 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (IsDlgButtonChecked(hDlg, IDC_SYSOP))
 		user->flags |= F_SYSOP; else user->flags &= ~F_SYSOP;
+
+	if (IsDlgButtonChecked(hDlg, IDC_EMAIL))
+		user->flags |= F_EMAIL; else user->flags &= ~F_EMAIL;
 
 	SaveUserDatabase();
 

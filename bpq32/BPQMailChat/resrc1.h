@@ -27,6 +27,7 @@
 #define IDC_LASTSEEN                    5008
 #define IDC_LASTMODIFIED                5009
 #define IDC_TYPE                        5010
+#define IDC_EMAIL                       5010
 #define IDC_CHANGED                     5011
 #define IDC_SEEN                        5012
 #define IDD_MAINTRESULTS                30001
