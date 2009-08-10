@@ -89,7 +89,6 @@ VOID NRRecordRoute(char * Buff, int Len)
 	{
 		UCHAR * BUFFER;
 		UCHAR * ptr1;
-		VOID * ptr;
 
 		struct _MESSAGE * Msg;
 

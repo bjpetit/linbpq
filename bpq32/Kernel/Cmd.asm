@@ -880,13 +880,27 @@ CMDI00:
 
 	JMP	SENDCOMMANDREPLY
 
+	extern _VersionStringWithBuild:byte
+	
+VERS	DB	'Version '
+
 CMDV00:
 
-	MOV	ESI,OFFSET VERSTRING
-	MOVZX	ECX,LVERSTRING
+	MOV ESI,OFFSET VERS
+	MOV	ECX, 8
+	REP MOVSB
 
-	CALL	MOVEANDCHECK		; CHECK FOR PACLEN
-
+	MOV	ESI,OFFSET _VersionStringWithBuild
+@@:
+	lodsb
+	or al,al
+	jz @f
+	stosb
+	jmp @b
+@@:
+	mov	al,0dh
+	stosb
+	
 	JMP	SENDCOMMANDREPLY
 
 
@@ -1212,7 +1226,7 @@ NRRCMD:
 	POP	EDI
 	JZ  SHORT @F		; FOUND
 
-
+	POP	EBX
 
 	MOV	ESI,OFFSET32 NOTFOUNDMSG
 	MOV	ECX,10

@@ -165,7 +165,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Debug Version"
+//#define SPECIALVERSION "Debug Version"
 
 #include "GetVersion.h"
 
@@ -762,12 +762,41 @@ VOID CALLBACK TimerProc(
 	}
 	__except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)
 	{
+		unsigned int SPPtr;
+		unsigned int SPVal;
+
+		DWORD Stack[16];
+		
+		SPPtr = exinfo.ContextRecord->Esp;	
+
+		__asm{
+
+		mov eax, SPPtr
+		mov SPVal,eax
+		lea edi,Stack
+		mov esi,eax
+		mov ecx,64
+		rep movsb
+
+	}
+
+
 		Debugprintf("BPQ32 *** Program Error %x at %x in Timer Processing",
 			exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress);
 
-		Debugprintf("EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x",
+		
+		Debugprintf("EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x ESP %x",
 			exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,
-			exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);
+			exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi, SPVal);
+		
+		Debugprintf("Stack:");
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			SPVal, Stack[0], Stack[1], Stack[2], Stack[3], Stack[4], Stack[5], Stack[6], Stack[7]);
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			SPVal+32, Stack[8], Stack[9], Stack[10], Stack[11], Stack[12], Stack[13], Stack[14], Stack[15]);
+
 
 	}
 
@@ -1187,9 +1216,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (TimerInst == ProcessID)
 		{
-			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
-			int i;
-
 			KillTimer(NULL,TimerHandle);
 			TimerHandle=0;
 			TimerInst=0xffffffff;
@@ -1199,15 +1225,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
 
-			// Close External Drivees
-			
-			for (i=0;i<NUMBEROFPORTS;i++)
-			{
-				if (PORTVEC->PORT_EXT_ADDR)
-						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);
-	
-				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
-			}
 		}
 
 		//	Remove our entry from PID List
@@ -1255,8 +1272,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			// Unload External Drivers
 
-/*
-{
+			{
 				PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 				
 				for (i=0;i<NUMBEROFPORTS;i++)
@@ -1266,10 +1282,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 					PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
 				}
-
 			}
-*/	
 		}
+
 		GetProcess(GetCurrentProcessId(),pgm);
 		n=wsprintf(buf,"BPQ32 DLL Detach complete - Program %s  - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
 		OutputDebugString(buf);
@@ -3014,60 +3029,64 @@ int DoNodes()
 		if (Dests->ROUTE1.ROUT_NEIGHBOUR == 0)
 			continue;
 
-__try 
-	{
+		__try 
+		{
+			len=ConvFromAX25(Dests->DEST_CALL,Normcall);
+			Normcall[len]=0;
 
-		len=ConvFromAX25(Dests->DEST_CALL,Normcall);
-		Normcall[len]=0;
-
-		memcpy(Alias,Dests->DEST_ALIAS,6);
+			memcpy(Alias,Dests->DEST_ALIAS,6);
 		
-		Alias[6]=0;
+			Alias[6]=0;
 
-		for (i=0;i<6;i++)
-		{
-			if (Alias[i] == ' ')
-				Alias[i] = 0;
-		}
-
-		len=ConvFromAX25(
-			Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
-		
-		Portcall[len]=0;
-
-		cursor=wsprintf(line,"NODE ADD %s:%s %s %d %d ",
-			Alias,Normcall,Portcall,
-			Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
-			Dests->ROUTE1.ROUT_QUALITY);
-
-		if (Dests->ROUTE1.ROUT_OBSCOUNT > 127)
-		{
-			len=wsprintf(&line[cursor],"! ");
-			cursor+=len;
-		}
-
-
-		if (Dests->ROUTE2.ROUT_NEIGHBOUR != 0)
-		{
-			len=ConvFromAX25(
-				Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
-			Portcall[len]=0;
-
-			len=wsprintf(&line[cursor],"%s %d %d ",
-				Portcall,
-				Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
-				Dests->ROUTE2.ROUT_QUALITY);
-	
-			cursor+=len;
-
-			if (Dests->ROUTE2.ROUT_OBSCOUNT > 127)
+			for (i=0;i<6;i++)
 			{
-				len=wsprintf(&line[cursor],"! ");
-				cursor+=len;
+				if (Alias[i] == ' ')
+					Alias[i] = 0;
 			}
-		}
 
-		if (Dests->ROUTE3.ROUT_NEIGHBOUR != 0)
+			cursor=wsprintf(line,"NODE ADD %s:%s ", Alias,Normcall);
+				
+			if (Dests->ROUTE1.ROUT_NEIGHBOUR != 0 && Dests->ROUTE1.ROUT_NEIGHBOUR->INP3Node == 0)
+			{
+				len=ConvFromAX25(
+					Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+				Portcall[len]=0;
+
+				len=wsprintf(&line[cursor],"%s %d %d ",
+					Portcall,
+					Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+					Dests->ROUTE1.ROUT_QUALITY);
+	
+				cursor+=len;
+
+				if (Dests->ROUTE1.ROUT_OBSCOUNT > 127)
+				{
+					len=wsprintf(&line[cursor],"! ");
+					cursor+=len;
+				}
+			}
+
+			if (Dests->ROUTE2.ROUT_NEIGHBOUR != 0 && Dests->ROUTE2.ROUT_NEIGHBOUR->INP3Node == 0)
+			{
+				len=ConvFromAX25(
+					Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+				Portcall[len]=0;
+
+				len=wsprintf(&line[cursor],"%s %d %d ",
+					Portcall,
+					Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+					Dests->ROUTE2.ROUT_QUALITY);
+	
+				cursor+=len;
+
+				if (Dests->ROUTE2.ROUT_OBSCOUNT > 127)
+				{
+					len=wsprintf(&line[cursor],"! ");
+					cursor+=len;
+				}
+			}
+
+		if (Dests->ROUTE3.ROUT_NEIGHBOUR != 0 && Dests->ROUTE3.ROUT_NEIGHBOUR->INP3Node == 0)
 		{
 			len=ConvFromAX25(
 				Dests->ROUTE3.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
@@ -3087,12 +3106,13 @@ __try
 			}
 		}
 
-
-		line[cursor++]='\r';
-		line[cursor++]='\n';
-		WriteFile(handle,line,cursor,&cnt,NULL);
-
-			}
+		if (cursor > 30)
+		{
+			line[cursor++]='\r';
+			line[cursor++]='\n';
+			WriteFile(handle,line,cursor,&cnt,NULL);
+		}
+}
 	__except(EXCEPTION_EXECUTE_HANDLER)
 	{
 		Debugprintf("BPQ32 *** Program Error in DONODES");

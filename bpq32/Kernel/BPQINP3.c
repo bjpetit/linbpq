@@ -51,7 +51,6 @@ DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
 VOID __cdecl Debugprintf(const char * format, ...);
 
 
-VOID SendNRRecordRoute(char * Call, struct TRANSPORTENTRY * Session);
 VOID SendINP3RIF(struct ROUTE * Route, UCHAR * Call, UCHAR * Alias, int Hops, int RTT);
 VOID SendOurRIF(struct ROUTE * Route);
 VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt);
@@ -59,16 +58,44 @@ VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, in
 VOID KillRoute(struct DEST_ROUTE_ENTRY * ROUTEPTR);
 VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt);
 VOID SendNetFrame(struct _MESSAGE * Frame);
+VOID SendRIPToNeighbour(struct ROUTE * Route);
+
+#define NOINP3
+
+#ifdef NOINP3
+
+TellINP3LinkGone(struct ROUTE * Route)
+{
+	return 0;
+}
+VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
+{
+	return;
+}
+VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGE * Buff, int Len, int Port)
+{
+	return;
+}
+INP3TIMER()
+{
+	return 0;
+}
+
+
+
+#else
 
 
 struct _RTTMSG RTTMsg = {""};
 
-struct ROUTE DummyRoute = {"","",""};
+//struct ROUTE DummyRoute = {"","",""};
 
 int RIPTimerCount = 0;				// 1 sec to 10 sec counter
 int PosTimerCount = 0;				// 1 sec to 5 Mins counter
 
 // Timer Runs every 10 Secs
+
+int MAXRTT = 9000;			// 90 secs
 
 int RTTInterval = 24;			// 4 Minutes
 int RTTRetries = 2;
@@ -79,19 +106,20 @@ VOID InitialiseRTT()
 	memcpy(RTTMsg.ID, "L3RTT: ", 7);
 	memcpy(RTTMsg.VERSION, "LEVEL3_V2.1 ", 12);
 	memcpy(RTTMsg.SWVERSION, "BPQ32001 ", 9);
-	memcpy(RTTMsg.FLAGS, "$M60000 $N ", 10);
+	wsprintf(RTTMsg.FLAGS, "$M%d $N   ", MAXRTT);
 	memcpy(RTTMsg.ALIAS, &MYALIAS, 6);
 	RTTMsg.ALIAS[6] = ' ';
 	memcpy(RTTMsg.ID, "L3RTT: ", 7);
 	memset(RTTMsg.PADDING, ' ', sizeof(RTTMsg.PADDING));
-
-	ConvToAX25("DUMMY", DummyRoute.NEIGHBOUR_CALL);
 }
 
-TellINP3LinkGone(struct ROUTE * Route)
+VOID TellINP3LinkGone(struct ROUTE * Route)
 {
 	int i;
 	struct DEST_LIST * Dest =  DataBase->DESTS;
+
+	if (Route->INP3Node == 0)
+		return;
 
 	Route->SRTT = 0;
 	Route->RTT = 0;
@@ -113,15 +141,13 @@ TellINP3LinkGone(struct ROUTE * Route)
 			//	If this is the only one, we need to keep the entry with at 60000 rtt so
 			//	we can send it. Remove when all gone
 
-			//	How do we indicate is is dead - we cant clear ROUT_NEIGHBOUR as that indicates a spare entry
-			//	Set to a dummy, so other routines won't crash
+			//	How do we indicate is is dead - Maybe the 60000 is enough!
 
 			if (Dest->ROUTE2.ROUT_NEIGHBOUR == 0)
 			{
 				// Only entry
 				Dest->ROUTE1.SRTT = 60000;
 				Dest->ROUTE1.Hops = 255;
-				Dest->ROUTE1.ROUT_NEIGHBOUR = &DummyRoute;
 
 				continue;
 			}
@@ -152,7 +178,6 @@ TellINP3LinkGone(struct ROUTE * Route)
 			continue;
 		}
 	}
-
 }
 
 VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGE * Buff)
@@ -170,6 +195,7 @@ VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGE * Buff)
 		{
 			Route->Status |= SentOurRIF;	
 			SendOurRIF(Route);
+			SendRIPToNeighbour(Route);
 		}
 	}
 
@@ -193,7 +219,7 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 {
 	char axcall[7];
 	int hops;
-	short rtt;
+	unsigned short rtt;
 	int len;
 	int opcode;
 	char alias[6];
@@ -273,6 +299,7 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 	struct DEST_LIST * Dest;
 	struct DEST_ROUTE_ENTRY * ROUTEPTR;
 	int i;
+	char call[11]="";
 
 	_asm{
 
@@ -292,6 +319,9 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 
 New:
 
+	if (rtt >= 60000)
+		return;				// No Point addind a new dead route
+
 	memset(Dest, 0, sizeof(struct DEST_LIST));
 
 	memcpy(Dest->DEST_CALL, axcall, 7);
@@ -301,11 +331,20 @@ New:
 
 	Dest->ROUTE1.Hops = hops;
 	Dest->ROUTE1.SRTT = rtt;
+	Dest->ROUTE1.LastRTT = 0;
+
+	Dest->INP3FLAGS = NewNode;
+
 	Dest->ROUTE1.ROUT_NEIGHBOUR = Route;
 	Dest->ROUTE1.ROUT_OBSCOUNT = 5;
 	Dest->ROUTE1.ROUT_QUALITY = 10;				// Till we work out what to do
 
 	NUMBEROFNODES++;
+
+	ConvFromAX25(Dest->DEST_CALL, call);
+	Debugprintf("Adding  Node %s Hops %d RTT %d", call, hops, rtt);
+
+	return;
 
 Found:
 
@@ -316,6 +355,11 @@ Found:
 	// See if we are known to it, it not add
 
 	ROUTEPTR = &Dest->ROUTE1;
+
+	if (rtt >= 60000)
+	{
+		i=rtt+1;
+	}
 
 	if (ROUTEPTR->ROUT_NEIGHBOUR == Route)
 	{
@@ -341,6 +385,9 @@ Found:
 
 	// Not in list. If any spare, add.
 	// If full, see if this is better
+
+	if (rtt >= 60000)
+		return;				// No Point addind a new dead route
 
 	ROUTEPTR = &Dest->ROUTE1;
 
@@ -462,6 +509,35 @@ NOTBADROUTE:
 */
 
 
+VOID SortRoutes(struct DEST_LIST * Dest)
+{
+	 struct DEST_ROUTE_ENTRY Temp;
+
+
+	// May now be out of order
+
+	if (Dest->ROUTE2.ROUT_QUALITY == 0)
+		return;						// Only One, so cant be out of order
+	
+	if (Dest->ROUTE3.ROUT_QUALITY == 0)
+	{
+		// Only 2
+
+		if (Dest->ROUTE1.SRTT <= Dest->ROUTE2.SRTT)
+			return;
+
+		// Swap one and two
+
+		memcpy(&Temp, &Dest->ROUTE1, sizeof(struct DEST_ROUTE_ENTRY));
+		memcpy(&Dest->ROUTE1, &Dest->ROUTE2, sizeof(struct DEST_ROUTE_ENTRY));
+		memcpy(&Dest->ROUTE2, &Temp, sizeof(struct DEST_ROUTE_ENTRY));
+
+		return;
+	}
+
+	// Have 3 Entries
+}
+
 
 
 VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, int  hops, int rtt)
@@ -473,18 +549,26 @@ VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, in
 		ROUTEPTR->Hops = hops;
 		ROUTEPTR->SRTT = rtt;
 
+		SortRoutes(Dest);
 		return;
 	}
 
-	if (ROUTEPTR->SRTT > rtt)
+	if (rtt == 60000)
 	{
-		// Improved
-		
 		ROUTEPTR->SRTT = rtt;
 		ROUTEPTR->Hops = hops;
-	}
-}
 
+		SortRoutes(Dest);
+		return;
+
+	}
+
+	ROUTEPTR->SRTT = rtt;
+	ROUTEPTR->Hops = hops;
+	
+	SortRoutes(Dest);
+	return;
+}
 
 
 VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGE * Buff, int Len, int Port)
@@ -532,6 +616,8 @@ VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGE * Buff, int Len, int 
 			{
 				Route->Status |= SentOurRIF;	
 				SendOurRIF(Route);
+				SendRIPToNeighbour(Route);
+
 			}
 			else
 			{
@@ -582,7 +668,8 @@ int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT)
 	UCHAR AliasCopy[10] = "";
 	UCHAR * ptr;
 
-	// Need to null-terminate Alias
+
+	if (RTT > 60000) RTT = 60000;	// Dont send more than 60000
 
 	memcpy(&RIF[0], Call, 7);
 	RIF[7] = Hops;
@@ -591,6 +678,8 @@ int BuildRIF(UCHAR * RIF, UCHAR * Call, UCHAR * Alias, int Hops, int RTT)
 
 	if (Alias)
 	{
+		// Need to null-terminate Alias
+		
 		memcpy(AliasCopy, Alias, 6);
 		ptr = strchr(AliasCopy, ' ');
 
@@ -646,54 +735,6 @@ VOID SendOurRIF(struct ROUTE * Route)
 	Msg.LENGTH = totLen + 14 + 2 + 7;
 
 	SendNetFrame(&Msg);
-}
-
-UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
-{
-	char call[10];
-	int calllen;
-	int hops;
-	unsigned short rtt;
-	unsigned int len;
-	int opcode;
-	char alias[10] = "";
-
-	ptr2+=wsprintf(ptr2, " INP3 RIF:\r  Call Alias Hops RTT\r");
-
-	while (msglen > 0)
-	{
-		calllen = ConvFromAX25(ptr1, call);
-		call[calllen] = 0;
-
-		ptr1+=7;
-
-		hops = *ptr1++;
-		rtt = (*ptr1++ << 8);
-		rtt += *ptr1++;
-
-		msglen -= 10;
-
-		while (*ptr1)
-		{
-			len = *ptr1;
-			opcode = *(ptr1+1);
-
-			if (opcode == 0 && len < 9)
-			{
-				memcpy(alias, ptr1+2, len-2);
-				alias[len-2] = 0;
-			}
-			ptr1+=len;
-			msglen -=len;
-		}
-
-		ptr2+=wsprintf(ptr2, "  %s:%s% %d %4.2d\r", alias, call, hops, rtt);
-
-		ptr1++;
-		msglen--;		// EOP
-	}
-	
-	return ptr2;
 }
 
 SendRIPTimer()
@@ -792,7 +833,7 @@ SendRIF(struct _MESSAGE * Msg)
 	free(Msg);
 }
 
-SendRIPToOtherNeighbours(UCHAR * axcall, struct DEST_ROUTE_ENTRY * Entry)
+SendRIPToOtherNeighbours(UCHAR * axcall, UCHAR * alias, struct DEST_ROUTE_ENTRY * Entry)
 {
 	struct ROUTE * Routes = DataBase->NEIGHBOURS;
 	struct _MESSAGE * Msg;
@@ -800,23 +841,70 @@ SendRIPToOtherNeighbours(UCHAR * axcall, struct DEST_ROUTE_ENTRY * Entry)
 
 	for (count=0; count<MaxRoutes; count++)
 	{
-		if ((Routes->INP3Node) && (Routes->Status) && (Routes != Entry->ROUT_NEIGHBOUR))	// Dont send to originator of route
+		if ((Routes->INP3Node) && 
+			(Routes->Status) && 
+			(Routes != Entry->ROUT_NEIGHBOUR))	// Dont send to originator of route
 		{
 			Msg = Routes->Msg;
 			
 			if (Msg == NULL) 
 				Msg = Routes->Msg = CreateRIFHeader(Routes);
-
+			
 			Msg->LENGTH += BuildRIF(&Msg->L3MSG.L3SRCE[Msg->LENGTH],
-				axcall, 0, Entry->Hops, Entry->SRTT);				// Don't send Alias
+				axcall, alias, Entry->Hops + 1, Entry->SRTT + Entry->ROUT_NEIGHBOUR->SRTT/10);
 
-			if (Msg->LENGTH > Routes->NBOUR_PACLEN - 11)
+			if (Msg->LENGTH > 250 - 11)
+//			if (Msg->LENGTH > Routes->NBOUR_PACLEN - 11)
 			{
 				SendRIF(Msg);
 				Routes->Msg = NULL;
 			}
 		}
 		Routes+=1;
+	}
+}
+
+VOID SendRIPToNeighbour(struct ROUTE * Route)
+{
+	int i;
+	struct DEST_LIST * Dest =  DataBase->DESTS;
+	struct DEST_ROUTE_ENTRY * Entry;
+	struct _MESSAGE * Msg;
+
+	Dest--;
+
+	// Send all entries not via this Neighbour - used when link starts
+
+	for (i=0; i < MAXDESTS; i++)
+	{
+		Dest++;
+
+		Entry = &Dest->ROUTE1;
+
+		if (Entry->ROUT_NEIGHBOUR && Entry->Hops && Route != Entry->ROUT_NEIGHBOUR)	
+		{
+			// Best Route not via this neighbour - send
+		
+			Msg = Route->Msg;
+			
+			if (Msg == NULL) 
+				Msg = Route->Msg = CreateRIFHeader(Route);
+			
+			Msg->LENGTH += BuildRIF(&Msg->L3MSG.L3SRCE[Msg->LENGTH],
+				Dest->DEST_CALL, Dest->DEST_ALIAS,
+				Entry->Hops + 1, Entry->SRTT + Entry->ROUT_NEIGHBOUR->SRTT/10);
+
+			if (Msg->LENGTH > 250 - 11)
+			{
+				SendRIF(Msg);
+				Route->Msg = NULL;
+			}
+		}
+	}
+	if (Route->Msg)
+	{
+		SendRIF(Route->Msg);
+		Route->Msg = NULL;
 	}
 }
 
@@ -862,11 +950,25 @@ VOID SendNegativeInfo()
 		{
 			if (Entry->LastRTT)		// if zero haven't yet reported +ve info
 			{
-				SendRIPToOtherNeighbours(Dest->DEST_CALL, Entry);
+				if (Entry->LastRTT == 1)	// if 1, probably new, so send alias
+					SendRIPToOtherNeighbours(Dest->DEST_CALL, Dest->DEST_ALIAS, Entry);
+				else
+					SendRIPToOtherNeighbours(Dest->DEST_CALL, 0, Entry);
+
 				Preload = Entry->SRTT /10;
 				if (Entry->SRTT < 60000)
 					Entry->LastRTT = Entry->SRTT + Preload;	//10% Negative Preload
 			}
+		}
+			
+		if (Entry->SRTT >= 60000)
+		{
+			// It is dead, and we have reported it if necessary, so remove
+			char call[11]="";
+			ConvFromAX25(Dest->DEST_CALL, call);
+			Debugprintf("Deleting Node %s", call);
+			memset(Dest, 0, sizeof(struct DEST_LIST));
+			NUMBEROFNODES--;
 		}
 	}
 }
@@ -891,8 +993,37 @@ VOID SendPositiveInfo()
 			((((Entry->SRTT * 125) /100) < Entry->LastRTT) && // Better by 25%
 			((Entry->LastRTT - Entry->SRTT) > 10)))			  // and 100ms
 		{
-			SendRIPToOtherNeighbours(Dest->DEST_CALL, Entry);
+			SendRIPToOtherNeighbours(Dest->DEST_CALL, 0, Entry);
 			Dest->ROUTE1.LastRTT = (Dest->ROUTE1.SRTT * 11) / 10;	//10% Negative Preload
+		}
+	}
+}
+
+VOID SendNewInfo()
+{
+	int i;
+	unsigned int NewRTT;
+	struct DEST_LIST * Dest =  DataBase->DESTS;
+	struct DEST_ROUTE_ENTRY * Entry;
+
+	Dest--;
+
+	// Send RIF for any Dests that have just been added
+
+	for (i=0; i < MAXDESTS; i++)
+	{
+		Dest++;
+
+		if (Dest->INP3FLAGS & NewNode)
+		{
+			Dest->INP3FLAGS &= ~NewNode;
+			
+			Entry = &Dest->ROUTE1;
+
+			SendRIPToOtherNeighbours(Dest->DEST_CALL, Dest->DEST_ALIAS, Entry);
+
+			NewRTT = (Entry->SRTT * 11) / 10;
+			Entry->LastRTT = NewRTT;	//10% Negative Preload
 		}
 	}
 }
@@ -905,11 +1036,12 @@ INP3TIMER()
 
 	// Called once per second
 
-	SendNegativeInfo();
+	SendNegativeInfo();					// Urgent
 
 	if (RIPTimerCount == 0)
 	{
 		RIPTimerCount = 10;
+		SendNewInfo();					// Not quite so urgent
 		SendRIPTimer();
 	}
 	else
@@ -923,5 +1055,58 @@ INP3TIMER()
 	else
 		PosTimerCount--;
 
+	FlushRIFs();
+
+}
+
+
+#endif
+
+UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
+{
+	char call[10];
+	int calllen;
+	int hops;
+	unsigned short rtt;
+	unsigned int len;
+	int opcode;
+	char alias[10] = "";
+
+	ptr2+=wsprintf(ptr2, " INP3 RIF:\r  Call Alias Hops RTT\r");
+
+	while (msglen > 0)
+	{
+		calllen = ConvFromAX25(ptr1, call);
+		call[calllen] = 0;
+
+		ptr1+=7;
+
+		hops = *ptr1++;
+		rtt = (*ptr1++ << 8);
+		rtt += *ptr1++;
+
+		msglen -= 10;
+
+		while (*ptr1)
+		{
+			len = *ptr1;
+			opcode = *(ptr1+1);
+
+			if (opcode == 0 && len < 9)
+			{
+				memcpy(alias, ptr1+2, len-2);
+				alias[len-2] = 0;
+			}
+			ptr1+=len;
+			msglen -=len;
+		}
+
+		ptr2+=wsprintf(ptr2, "  %s:%s% %d %4.2d\r", alias, call, hops, rtt);
+
+		ptr1++;
+		msglen--;		// EOP
+	}
+	
+	return ptr2;
 }
 

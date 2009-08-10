@@ -137,7 +137,7 @@ _SIGNONMSG	LABEL	BYTE
 		DB	NAMESTRING,' AX25 Packet Switch System ',CR,LF
 		DB	'Version '
 VERS	DB	VERSIONSTRING,' - ',DATESTRING,CR,LF
-		DB	'Copyright (c) 1988-2008 John Wiseman.'
+		DB	'Copyright (c) 1988-2009 John Wiseman.'
 		DB	CR,LF,LF
 
 		DB	0
