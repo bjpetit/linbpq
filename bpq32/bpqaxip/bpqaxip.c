@@ -1312,11 +1312,12 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			CONVFROMAX25(arp_table[index].callsign,outcall);
 								
-			i=wsprintf(line,"%.10s = %.64s = %-.30s %c",
+			i=wsprintf(line,"%.10s = %.64s = %-.30s %c %c",
 				outcall,
 				arp_table[index].hostname,
 				hostaddr,
-				arp_table[index].BCFlag ? 'B' : ' ');
+				arp_table[index].BCFlag ? 'B' : ' ',
+				arp_table[index].TCPState ? 'C' : ' ');
 
 			TextOut(hdc,0,(displayline++)*14+2,line,i);
 
