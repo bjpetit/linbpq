@@ -217,7 +217,11 @@ struct arp_table_entry
 {
 	unsigned char callsign[7];
 	unsigned char len;			// bytes to compare (6 or 7)
-	unsigned int ipaddr;
+	union
+	{
+		struct in_addr in_addr;
+		unsigned int ipaddr;
+	};
 	unsigned short port;
 	unsigned char hostname[64];
 	unsigned int error;
@@ -2622,9 +2626,9 @@ int GetMessageFromBuffer(char * Buffer)
 	//   Look for data in tcp buffers
 
 
-	while (index++ < arp_table_len)
+	while (index < arp_table_len)
 	{
-		sockptr = &arp_table[index];
+		sockptr = &arp_table[index++];
 
 		if (sockptr->TCPMode)
 		{
@@ -2648,6 +2652,9 @@ int GetMessageFromBuffer(char * Buffer)
 					if (MsgLen > 1)
 					{
 						memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
+						if (MHEnabled)
+							Update_MH_List(sockptr->in_addr, &Buffer[7],'T', sockptr->port);
+
 						return MsgLen;
 					}
 				}
@@ -2664,6 +2671,9 @@ int GetMessageFromBuffer(char * Buffer)
 
 					if (MsgLen > 1)
 					{
+						if (MHEnabled)
+							Update_MH_List(sockptr->in_addr, &Buffer[7],'T', sockptr->port);
+
 						return MsgLen;
 					}
 				}
