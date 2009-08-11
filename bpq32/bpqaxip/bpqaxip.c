@@ -93,6 +93,12 @@
 //
 //		Add IP/TCP option
 
+// Version 1.15.2 August 2009
+//
+//		Extra Debug Output in TCP Mode
+//		Fix problem if TCP entry was forst in table
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -1018,9 +1024,10 @@ void OpenSockets(void *dummy)
 				sprintf(Msg, "socket() failed error %d", WSAGetLastError());
 				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
 				continue;
-			
 			}
- 
+
+			Debugprintf("TCP Listening Socket Created - socket %d", arp->TCPListenSock);
+
 			psin=&local_sin;
 
 			psin->sin_family = AF_INET;
@@ -2471,6 +2478,8 @@ int Socket_Accept(int SocketId)
 
 	//	Find Connection Record
 
+	Debugprintf("Incomming Connect - Socket %d", SocketId);
+
 	while (index < arp_table_len)
 	{
 		sockptr = &arp_table[index];
@@ -2487,6 +2496,8 @@ int Socket_Accept(int SocketId)
 				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
 				return FALSE;
 			}
+
+			Debugprintf("Connect accepted - Socket %d", sock);
 
 			WSAAsyncSelect(sock, hResWnd, WSA_DATA,
 					FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
@@ -2580,7 +2591,7 @@ int Socket_Data(int sock, int error, int eventcode)
 
 				case FD_CLOSE:
 
-					Debugprintf("TCP Close received for scoket %d", sock);
+					Debugprintf("TCP Close received for socket %d", sock);
 
 					sockptr->TCPState = 0;
 					closesocket(sock);
