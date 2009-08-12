@@ -96,11 +96,14 @@
 // Version 1.15.2 August 2009
 //
 //		Extra Debug Output in TCP Mode
-//		Fix problem if TCP entry was forst in table
-
+//		Fix problem if TCP entry was first in table
+//		Include TCP sessions in MHEARD
+//		Add T flag to Resolver window fot TCP Sessions
+//		Set SO_KEEPALIVE and SO_CONDITIONAL_ACCEPT socket options
 
 #define _CRT_SECURE_NO_DEPRECATE
 
+#include <winsock2.h>
 #include "windows.h"
 #include <stdio.h>
 #include <process.h>
@@ -245,6 +248,8 @@ struct arp_table_entry
 	SOCKADDR_IN destaddr;
 	BOOL TCPState;
 	UINT TCPThreadID;			// Thread ID if TCP Master
+	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
+
 };
 
 #define TCPMaster 1
@@ -1011,7 +1016,8 @@ void OpenSockets(void *dummy)
 
 		if (arp->TCPMode == TCPSlave)
 		{
-			
+			BOOL bOptVal = TRUE;
+
 			arp->TCPBuffer=malloc(4000);
 			arp->TCPState = 0;
 
@@ -1027,6 +1033,13 @@ void OpenSockets(void *dummy)
 			}
 
 			Debugprintf("TCP Listening Socket Created - socket %d", arp->TCPListenSock);
+
+
+			if (setsockopt(arp->TCPListenSock, SOL_SOCKET, SO_CONDITIONAL_ACCEPT, (char*)&bOptVal, 4) != SOCKET_ERROR)
+			{
+				Debugprintf("Set SO_CONDITIONAL_ACCEPT: ON\n");
+			}
+
 
 			psin=&local_sin;
 
@@ -2474,12 +2487,12 @@ int Socket_Accept(int SocketId)
 	SOCKET sock;
 	char Msg[100];
 	int index=0;
+	BOOL bOptVal = TRUE;
+
 
 	//  Find Socket entry
 
-	//	Find Connection Record
-
-	Debugprintf("Incomming Connect - Socket %d", SocketId);
+	Debugprintf("Incoming Connect - Socket %d", SocketId);
 
 	while (index < arp_table_len)
 	{
@@ -2499,6 +2512,13 @@ int Socket_Accept(int SocketId)
 			}
 
 			Debugprintf("Connect accepted - Socket %d", sock);
+
+  
+			if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&bOptVal, 4) != SOCKET_ERROR)
+			{
+
+				Debugprintf("Set SO_KEEPALIVE: ON");
+			}
 
 			WSAAsyncSelect(sock, hResWnd, WSA_DATA,
 					FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
@@ -2637,7 +2657,6 @@ int GetMessageFromBuffer(char * Buffer)
 
 	//   Look for data in tcp buffers
 
-
 	while (index < arp_table_len)
 	{
 		sockptr = &arp_table[index++];
@@ -2645,7 +2664,25 @@ int GetMessageFromBuffer(char * Buffer)
 		if (sockptr->TCPMode)
 		{
 			if (sockptr->InputLen == 0)
+			{
+				sockptr->TCPOK++;
+
+				if (sockptr->TCPOK > 36000)		// 60 MINS
+				{
+					if (sockptr->TCPSock)
+					{
+						Debugprintf("No Data for 60 Mins on Data Sock %d State %d",
+							sockptr->TCPListenSock, sockptr->TCPSock, sockptr->TCPState);
+
+						sockptr->TCPState = 0;
+						closesocket(sockptr->TCPSock);
+						sockptr->TCPSock = 0;
+					}
+
+					sockptr->TCPOK = 0;
+				}
 				continue;
+			}
 	
 			ptr = memchr(sockptr->TCPBuffer, FEND, sockptr->InputLen);
 
@@ -2664,8 +2701,11 @@ int GetMessageFromBuffer(char * Buffer)
 					if (MsgLen > 1)
 					{
 						memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
+
 						if (MHEnabled)
 							Update_MH_List(sockptr->in_addr, &Buffer[7],'T', sockptr->port);
+
+						sockptr->TCPOK = 0;
 
 						return MsgLen;
 					}
@@ -2685,6 +2725,8 @@ int GetMessageFromBuffer(char * Buffer)
 					{
 						if (MHEnabled)
 							Update_MH_List(sockptr->in_addr, &Buffer[7],'T', sockptr->port);
+
+						sockptr->TCPOK = 0;
 
 						return MsgLen;
 					}
@@ -2791,7 +2833,12 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 
 			ioctlsocket (arp->TCPSock, FIONBIO, &param);
  
-			setsockopt (arp->TCPSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
+			setsockopt (arp->TCPSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+ 
+			if (setsockopt(arp->TCPSock, SOL_SOCKET, SO_KEEPALIVE, (char*)&bcopt, 4) != SOCKET_ERROR)
+			{
+				Debugprintf("Set SO_KEEPALIVE: ON");
+			}
 
 			sinx.sin_family = AF_INET;
 			sinx.sin_addr.s_addr = INADDR_ANY;
@@ -2862,7 +2909,7 @@ wait:
 		Sleep (120000);				// 2 Mins 
 	}
 
-	Debugprintf("TCP Cnnect Thread %x Closing", arp->TCPThreadID);
+	Debugprintf("TCP Connect Thread %x Closing", arp->TCPThreadID);
 
 	arp->TCPThreadID = 0;
 	
