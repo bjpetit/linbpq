@@ -1591,12 +1591,14 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			char * Msg = str_base64_encode(ISPAccountName);
 			sockprintf(sock, Msg, strlen(Msg));
+			free(Msg);
 			return;
 		}
 		else if (memcmp(Buffer, "334 UGF", 7) == 0)
 		{
 			char * Msg = str_base64_encode(ISPAccountPass);
 			sockprintf(sock, Msg, strlen(Msg));
+			free(Msg);
 			return;
 		}
 		else if (memcmp(Buffer, "235 ", 4) == 0)
@@ -1713,8 +1715,7 @@ BOOL SendtoISP()
 	struct MsgInfo * Msg;
 
 	if (SMTPActive)
-		return;
-
+		return FALSE;
 
 	do
 	{
@@ -1906,8 +1907,6 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			// From: "John Wiseman" <john.wiseman@ntlworld.com>
 			// To: <G8BPQ@g8bpq.org.uk>
 			//<To: <gm8bpq+g8bpq@googlemail.com>
-
-
 
 
 			if (_memicmp(ptr1, "From:", 5) == 0)

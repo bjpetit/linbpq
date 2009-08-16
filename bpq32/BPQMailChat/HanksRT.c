@@ -184,13 +184,20 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 
 	if (conn->Flags & CHATLINK)
 	{
-		chkctl(conn, Buffer);
+		__try 
+		{
+			chkctl(conn, Buffer);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			Debugprintf("MAILCHAT *** Program Error procesing Chat Node Message %s", Buffer);
+			Disconnect(conn->BPQStream);
+		}
 		return;
 	}
 
 	if(conn->u.user == NULL)
 		return;									// A node link, but not activated yet
-
 
 	if ((len <6) && (memcmp(Buffer, "*RTL", 4) == 0))
 	{
@@ -202,7 +209,6 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 
 	if (Buffer[0] == '/')
 	{
-
 		// Process Command
 
 		if (_memicmp(&Buffer[1], "Bye", 1) == 0)
@@ -243,7 +249,6 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 		rt_cmd(conn, Buffer);
 
 		return;
-
 	}
 
 	// Send message to all other connected users on same channel
@@ -263,7 +268,6 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 		if ((c->flags & p_linked) && c->refcnt && ct_find(c, conn->u.user->topic))
 			nprintf(c, "%c%c%s %s %s\r",
 				FORMAT, id_data, OurNode, conn->u.user->call, Buffer);
-
 
 }
 
@@ -305,8 +309,6 @@ static void upduser(USER *user)
 
 	remove(RtUsr);
 	rename(RtUsrTemp, RtUsr);
-
-
 }
 
 static void rduser(USER *user)
@@ -346,7 +348,6 @@ static void rduser(USER *user)
 		free(buf);
 		fclose(in);
 	}
-
 }
 
 void chkctl(CIRCUIT *ckt_from, char * Buffer)
@@ -820,7 +821,6 @@ void text_tellu_Joined(USER * user)
 	if (FlashOnConnect)
 		FlashWindow(hWnd, TRUE);
 
-
 // Send it to all connected users in the same topic.
 // Echo to originator if requested.
 
@@ -944,7 +944,6 @@ static void topic_chg(USER *user, char *s)
 	user->topic = topic_join(user->circuit, s);
 	sprintf(buf, "*** Joined Topic: %s", user->topic->name);
 	text_tellu(user, buf, NULL, o_topic); // Tell everyone in the new topic.
-
 }
 
 // Create a user record for this user.
@@ -1082,7 +1081,7 @@ CIRCUIT *circuit_new(CIRCUIT *circuit, int flags)
 	{
 		if (c == circuit)
 		{
-			MessageBox(MainWnd, "Corruption in Chat Circult List Detected - Trying to recover", "BPQMailChat", MB_OK);
+			Debugprintf("MAILCHAT: Attempting to add Ciruit when already on list");
 			return circuit;
 		}
 	}
@@ -1190,7 +1189,7 @@ void logout(CIRCUIT *circuit)
 	circuit->flags = p_nil;
 	user = circuit->u.user;
 //	if (log_rt) tlogp("RT Logout");
-	if (user)			// May not have logged in if alrready conencted
+	if (user)			// May not have logged in if already conencted
 	{
 		user_tell(user, id_leave);
 		text_tellu(user, rtleave, NULL, o_all);
@@ -1199,9 +1198,7 @@ void logout(CIRCUIT *circuit)
 	}
 
 	circuit_free(circuit);
-
 }
-
 
 void show_users(CIRCUIT *circuit)
 {
@@ -1294,7 +1291,6 @@ static void show_topics(CIRCUIT *conn)
 }
 
 
-
 // Do a user command.
 
 int rt_cmd(CIRCUIT *circuit, char * Buffer)
@@ -1364,7 +1360,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 				return TRUE;
 			}
 
-// Send to the desired user only.
+			// Send to the desired user only.
 
 			if (su->circuit->flags & p_user)
 				text_tellu(user, f2, f1, o_one);
@@ -1379,7 +1375,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			{
 				topic_chg(user, f1);
 
-// Tell all link circuits about the change of topic.
+				// Tell all link circuits about the change of topic.
 
 				for (c = circuit_hd; c; c = c->next)
 					if (c->flags & p_linked) topic_xmit(user, c);
@@ -1397,22 +1393,24 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 	return TRUE;
 }
 
-
-
 void makelinks(void)
 {
 	LINK *link;
 
-// Make the links.
+	// Make the links.
 
 	for (link = link_hd; link; link = link->next)
 	{
-// Is this link already established?
+	// Is this link already established?
 		if (link->flags & (p_linked | p_linkini)) continue;
-// Already linked through some other node?
-// If so, making this link would create a loop.
+
+		// Already linked through some other node?
+		// If so, making this link would create a loop.
+
 		if (node_find(link->call)) continue;
-// Fire up the process to handle this link.
+
+		// Fire up the process to handle this link.
+		
 		link->flags = p_linkini;
 		chat_link_out(link);
 	}
@@ -1466,7 +1464,6 @@ VOID ChatTimer()
 
 	WritetoDebugWindow("Chat Users\r\n", 12);
 
-
 	i = 0;
 	for (user = user_hd; user; user = user->next)
 	{
@@ -1478,7 +1475,6 @@ VOID ChatTimer()
 
 	WritetoDebugWindow("Chat Nodes\r\n", 12);
 
-
 	i = 0;
 	for (node = node_hd; node; node = node->next)
 	{
@@ -1487,6 +1483,7 @@ VOID ChatTimer()
 
 		i++;
 	}
+
 	SetDlgItemInt(hWnd, IDC_NODES, i, FALSE);
 
 	WritetoDebugWindow("Chat Links\r\n", 12);
@@ -1502,6 +1499,7 @@ VOID ChatTimer()
 			i++;
 		}
 	}
+
 	SetDlgItemInt(hWnd, IDC_LINKS,  i, FALSE);
 
 	ChatTmr++;
@@ -1512,10 +1510,6 @@ VOID ChatTimer()
 		node_keepalive();
 	}
 }
-
-
-
-
 
 VOID FreeChatMemory()
 {

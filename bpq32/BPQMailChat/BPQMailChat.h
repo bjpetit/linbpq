@@ -40,6 +40,12 @@ VOID * _zalloc_dbg(int len, int type, char * file, int line);
 #define LOG_TCP 2
 #define LOG_DEBUG 3
 
+typedef struct SEM
+{
+	int Flag;
+	int Clashes;
+};
+
 
 struct UserRec
 {
@@ -455,6 +461,8 @@ struct BBSForwardingInfo
 	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
 	BOOL Forwarding;				// Forward in progress
 	BOOL AllowB2;					// Enable B2 
+	int FwdInterval;
+	int FwdTimer;
 };
 
 struct FBBHeaderLine
@@ -752,7 +760,7 @@ VOID FreeOverrides();
 
 // FBB Routines
 
-VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
+VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg);
 VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 VOID UnpackFBBBinary(CIRCUIT * conn);
 void Decode(CIRCUIT * conn) ;
@@ -778,8 +786,8 @@ VOID ClearDebugWindow();
 
 // Utilities
 
-void GetSemaphore(int * Semaphore);
-void FreeSemaphore(int * Semaphore);
+void GetSemaphore(struct SEM * Semaphore);
+void FreeSemaphore(struct SEM * Semaphore);
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
@@ -810,7 +818,7 @@ BOOL SendtoISP();
 md5 (char *arg, unsigned char * checksum);
 
 VOID * GetOverrides(HKEY hKey, char * ValueName);
-VOID DoHouseKeeping();
+VOID DoHouseKeeping(BOOL Mainual);
 VOID ExpireMessages();
 VOID KillMsg(struct MsgInfo * Msg);
 BOOL RemoveKilledMessages();
@@ -827,11 +835,11 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user);
 // UI Routines
 
 VOID SetupUIInterface();
-VOID SendLatestUI();
+VOID SendLatestUI(int Port);
 VOID SendMsgUI(struct MsgInfo * Msg);
 VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);
 VOID SeeifBBSUIFrame(struct _MESSAGE * buff, int len);
-
+struct MsgInfo * FindMessageByNumber(int msgno);
 
 extern BOOL cfgMinToTray;
 
@@ -863,8 +871,8 @@ extern int FirstMessagetoForward;
 extern WPRec ** WPRecPtr;
 extern int NumberofWPrecs;
 
-extern int AllocSemaphore;
-extern int MsgNoSemaphore;
+extern struct SEM AllocSemaphore;
+extern struct SEM MsgNoSemaphore;
 
 extern char hostname[];
 extern char RtUsr[];
@@ -958,6 +966,4 @@ extern int AB;
 extern struct Override ** LTFROM;
 extern struct Override ** LTTO;
 extern struct Override ** LTAT;
-
-extern int FWDInterval;
 

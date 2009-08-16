@@ -8,6 +8,55 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 {
 	Buffer[len] = 0;
 
+	if (Buffer[0] == 6 && Buffer[1] == 5)
+	{
+		// ?? Sally send there after a failed tranfer
+
+		memmove(Buffer, &Buffer[2], len);
+		len-=2;
+	}
+
+
+	if (_memicmp(Buffer, "F< ", 3) == 0)
+	{
+		// FBB COonpressed request from system using UI Messages
+
+		int Number = atoi(&Buffer[3]);
+		struct MsgInfo * Msg = FindMessageByNumber(Number);
+		char ErrMsg[80];
+		int ErrLen;
+
+		if (Msg == 0)
+		{
+			ErrLen = wsprintf(&ErrMsg[2], "Msg $%d does not exist!\r>", Number);
+			ErrMsg[0] = 0x18;
+			ErrMsg[1] = ErrLen;
+
+			BBSputs(conn, ErrMsg);
+			BBSputs(conn, ">\r");
+			return;
+		}
+		
+		Msg = FindMessage(user->Call, Number, conn->sysop);
+
+		if (Msg)
+		{
+			SendCompressed(conn, Msg);
+			BBSputs(conn, ">\r");
+		}
+		else
+		{
+			ErrLen = wsprintf(&ErrMsg[2], "Msg $%d not available to you!\r>", Number);
+			ErrMsg[0] = 0x18;
+			ErrMsg[1] = ErrLen;
+
+			BBSputs(conn, ErrMsg);
+			BBSputs(conn, ">\r");
+		}
+		return;
+	}
+
+
 	if (Buffer[0] == 'S')				//Send
 	{
 		// SB WANT @ ALLCAN < N6ZFJ $4567_N0ARY
@@ -208,5 +257,8 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		Disconnect(conn->BPQStream);
 		return;
 	}
+	
+	nputs(conn, ">\r");
+
 }
 

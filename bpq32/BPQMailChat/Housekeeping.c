@@ -132,7 +132,7 @@ INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 	return 0;
 }
 
-VOID DoHouseKeeping()
+VOID DoHouseKeeping(BOOL Manual)
 {
 	RemoveKilledMessages();
 	ExpireMessages();
@@ -153,7 +153,10 @@ VOID DoHouseKeeping()
 	}
 
 	MailHousekeepingResults();
-	DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
+
+	if (Manual)
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
+	
 	return;
 
 }

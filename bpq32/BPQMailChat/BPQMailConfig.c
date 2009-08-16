@@ -393,6 +393,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 	char Text[10000]="";
 	char Line[80];
 	struct Override ** Call;
+	char Time[10];
 
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
 
@@ -477,7 +478,8 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAXMSG, MaxMsgno, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BIDLIFETIME, BidLifetime, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAINTINTERVAL, MaintInterval, FALSE);
-		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAINTTIME, MaintTime, FALSE);
+		wsprintf(Time, "%04d", MaintTime);
+		SetDlgItemText(pHdr->hwndDisplay, IDC_MAINTTIME, Time);
 
 		SetDlgItemInt(pHdr->hwndDisplay, IDM_PR, PR, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDM_PUR, PUR, FALSE);
@@ -636,6 +638,8 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
+			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
+
 
 
 			return 0;
@@ -1258,7 +1262,7 @@ VOID SaveChatConfig()
 VOID SaveFWDConfig(HWND hDlg)
 {
 	HKEY hKey=0;
-	int retCode,disp, OK;
+	int retCode,disp, OK, Val;
 	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
 	int Rev;
 
@@ -1281,7 +1285,10 @@ VOID SaveFWDConfig(HWND hDlg)
 	
 		Rev = IsDlgButtonChecked(hDlg, IDC_USEB2);
 		retCode = RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
-	
+
+		Val = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
+		retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&Val,4);
+
 		RegCloseKey(hKey);
 
 		ReinitializeFWDStruct(CurrentBBS);
@@ -1291,9 +1298,6 @@ VOID SaveFWDConfig(HWND hDlg)
 
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, 
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	FWDInterval = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
-	retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&FWDInterval,4);
 
 	MaxTXSize = GetDlgItemInt(hDlg, IDC_MAXSEND, &OK, FALSE);
 	retCode = RegSetValueEx(hKey,"MaxTXSize", 0, REG_DWORD, (BYTE *)&MaxTXSize,4);
@@ -1512,10 +1516,6 @@ TryAgain:
 		RegQueryValueEx(hKey, "UIPortString",0,			
 			(ULONG *)&Type,(UCHAR *)&UIPortString,(ULONG *)&Vallen);
 
-		Vallen=4;
-
-		RegQueryValueEx(hKey,"FWDInterval",0,			
-			(ULONG *)&Type,(UCHAR *)&FWDInterval,(ULONG *)&Vallen);
 		
 		Vallen=4;
 		RegQueryValueEx(hKey,"MaxTXSize",0,			
@@ -1909,7 +1909,6 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			SendDlgItemMessage(hDlg, IDC_BBS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)user->Call);
 		}  
 
-		SetDlgItemInt(hDlg, IDC_FWDINT, FWDInterval, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXBLOCK, MaxFBBBlockSize, FALSE);

@@ -495,7 +495,12 @@ void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
 
 	WriteFile(LogHandle[Flags] ,Stamp , strlen(Stamp), &cnt, NULL);
 	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
-	WriteFile(LogHandle[Flags] ,CRLF , 2, &cnt, NULL);
+
+
+	if (Flags == LOG_CHAT && Msg[MsgLen-1] == '\r')
+		WriteFile(LogHandle[Flags] ,&CRLF[1] , 1, &cnt, NULL);
+	else
+		WriteFile(LogHandle[Flags] ,CRLF , 2, &cnt, NULL);
 
 	CloseHandle(LogHandle[Flags]);
 

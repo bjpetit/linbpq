@@ -16,7 +16,6 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	char * ptr;
 	char * Context;
 	char seps[] = " \r";
-//	char FSLine[] = "FS +++++\r";
 
 	if (conn->Flags & GETTINGMESSAGE)
 	{
@@ -102,7 +101,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 					if (conn->BBSFlags & FBBB2Mode)
 						SendCompressedB2(conn, FBBHeader);
 					else
-						SendCompressed(conn, FBBHeader);
+						SendCompressed(conn, FBBHeader->FwdMsg);
 				}
 				else
 				{
@@ -498,6 +497,9 @@ BOOL FBBDoForward(CIRCUIT * conn)
 
 		struct FBBHeaderLine * FBBHeader;
 
+		if (conn->UserPointer->ForwardingInfo->MsgCount == 0)
+			Debugprintf("MAILCHAT Msg to forward, but count = 0");
+
 		for (i=0; i < conn->FBBIndex; i++)
 		{
 			FBBHeader = &conn->FBBHeaders[i];
@@ -536,10 +538,16 @@ BOOL FBBDoForward(CIRCUIT * conn)
 		nodeprintf(conn, "F> %02X\r", conn->FBBChecksum);
 		return TRUE;
 	}
+	else
+	{
+		if (conn->UserPointer->ForwardingInfo->MsgCount > 0)
+			Debugprintf("MAILCHAT No Msgs to forward, but count = %d - reseting to 0",
+				conn->UserPointer->ForwardingInfo->MsgCount);
 
+		conn->UserPointer->ForwardingInfo->MsgCount = 0;
+	}
 	return FALSE;
 }
-
 
 VOID UnpackFBBBinary(CIRCUIT * conn)
 {
@@ -680,7 +688,7 @@ loop:
 	}
 }
 
-VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
+VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 {
 	struct tm * tm;
 	time_t now;
@@ -692,17 +700,17 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	int i, OrigLen, MsgLen, CompLen;
 	char Rline[80];
 
-	MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
+	MsgBytes = ReadMessageFile(FwdMsg->number);
 
 	if (MsgBytes == 0)
 	{
 		MsgBytes = _strdup("Message file not found\r\n");
-		FBBHeader->FwdMsg->length = strlen(MsgBytes);
+		FwdMsg->length = strlen(MsgBytes);
 	}
 
-	OrigLen = FBBHeader->FwdMsg->length;
+	OrigLen = FwdMsg->length;
 
-	Title = FBBHeader->FwdMsg->title;
+	Title = FwdMsg->title;
 
 	Compressed = Compressedptr = zalloc(2 * OrigLen + 200);
 	Output = Outputptr = zalloc(2 * OrigLen + 200);
@@ -720,7 +728,7 @@ VOID SendCompressed(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	
 	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
-		FBBHeader->FwdMsg->number, BBSName, HRoute);
+		FwdMsg->number, BBSName, HRoute);
 
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 		strcat(Rline, "\r\n");

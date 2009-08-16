@@ -20,18 +20,20 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
-void GetSemaphore(int * Semaphore)
+void GetSemaphore(struct SEM * Semaphore)
 {
 	//
 	//	Wait for it to be free
 	//
 	
-	if (*Semaphore != 0)
+	if (Semaphore->Flag != 0)
+	{
+		Semaphore->Clashes++;
 		Debugprintf("MailChat Semaphore Clash");
-
+	}
 loop1:
 
-	while (*Semaphore != 0)
+	while (Semaphore->Flag != 0)
 	{
 		Sleep(10);
 	}
@@ -55,9 +57,9 @@ loop1:
 
 	return;
 }
-void FreeSemaphore(int * Semaphore)
+void FreeSemaphore(struct SEM * Semaphore)
 {
-	*Semaphore=0;
+	Semaphore->Flag=0;
 
 	return; 
 }

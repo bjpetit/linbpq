@@ -101,12 +101,26 @@
 
 // Writes Debug output to LOG_DEBUG and Monitor Window
 
-// Version 1.0.0.31
+// Version 1.0.0.32
 
 // Allow use of GoogleMail for ISP functions
 // Accept SYSOP as alias for SYSOPCall - ie user can do SP SYSOP, and it will appear in sysop's LM, RM, etc
 // Email Housekeeping Results to SYSOP
 
+// Version 1.0.0.33
+
+// Housekeeping now runs at Maintenance Time. Maintenance Interval removed. 
+// Allow multiple numbers on R and K commands
+// Fix L command with single number
+// Log if Forward count is out of step with messages to forward.
+// UI Processing improved and F< command implemented
+
+// Version 1.0.0.34
+
+// Semaphore Chat Messages
+// Display Semaphore Clashes
+// More Program Error Traps
+// Kill Messages more than BIDLifetime old
 
 #include "stdafx.h"
 
@@ -140,7 +154,10 @@ char szBuff[80];
 
 ConnectionInfo Connections[MaxSockets+1];
 
-int AllocSemaphore = 0;
+
+struct SEM ChatSemaphore = {0, 0};
+
+struct SEM AllocSemaphore = {0, 0};
 
 struct UserInfo ** UserRecPtr=NULL;
 int NumberofUsers=0;
@@ -162,7 +179,7 @@ WPRec ** WPRecPtr=NULL;
 int NumberofWPrecs=0;
 
 int LatestMsg = 0;
-int MsgNoSemaphore = 0;			// For locking updates to LatestMsg
+struct SEM MsgNoSemaphore = {0, 0};			// For locking updates to LatestMsg
 int HighestBBSNumber = 0;
 
 int MaxMsgno = 60000;
@@ -234,8 +251,6 @@ char BaseDir[MAX_PATH];
 
 char MailDir[MAX_PATH];
 
-int FWDInterval = 5;		// 5 Mins
-int FWDTimer = 9999999;
 
 BOOL ALLOWCOMPRESSED = TRUE;
 
@@ -246,6 +261,8 @@ char UIPortString[100];
 UCHAR * OtherNodes=NULL;
 
 char zeros[NBMASK];						// For forward bitmask tests
+
+time_t MaintClock;						// Time to run housekeeping
 
 
 // Forward declarations of functions included in this code module:
@@ -265,7 +282,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	HACCEL hAccelTable;
 	int BPQStream, n;
 	struct UserInfo * user;
-	
+	struct _EXCEPTION_POINTERS exinfo;
+
 	UNREFERENCED_PARAMETER(hPrevInstance);
 
 	// Initialize global strings
@@ -282,15 +300,22 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_BPQMailChat));
 
 	// Main message loop:
-	while (GetMessage(&msg, NULL, 0, 0))
-	{
-		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+
+	__try
+	{	
+		while (GetMessage(&msg, NULL, 0, 0))
 		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+			if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+			{
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
+			}
 		}
 	}
+	My__except_Routine("GetMessageLoop");
 
+	__try
+	{
 	for (n = 0; n < NumberofStreams; n++)
 	{
 		BPQStream=Connections[n].BPQStream;
@@ -364,7 +389,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	_CrtDumpMemoryLeaks();
 
 	SaveWindowConfig();
-	
+
+	}
+	My__except_Routine("Close Processing");
+
 	return (int) msg.wParam;
 }
 
@@ -563,12 +591,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (change == 1)
 				{
 					if (state == 1)
-	
-					// Connected
-			
-						Connected(wParam);	
+					{
+
+						// Connected
+					
+						__try
+						{
+							Connected(wParam);	
+						}
+						My__except_Routine("Connected");
+					}
 					else
-						Disconnected(wParam);
+					{
+						__try
+						{
+							Disconnected(wParam);
+						}
+						My__except_Routine("Disconnected");
+					}
 				}
 			}
 			My__except_Routine("DoStateChange");
@@ -610,6 +650,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				TCPTimer();
 				FWDTimerProc();
 				ChatTimer();
+				if (MaintClock < time(NULL))
+				{
+					DoHouseKeeping(FALSE);
+					MaintClock += 86400;
+				}
 			}
 			My__except_Routine("Slow Timer");
 		}
@@ -705,7 +750,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDM_HOUSEKEEPING:
 
-			DoHouseKeeping();
+			DoHouseKeeping(TRUE);
 			break;
 
 		case IDM_CONSOLE:
@@ -886,6 +931,10 @@ int RefreshMainWindow()
 	SetDlgItemInt(hWnd, IDC_SYSOPMSGS, SYSOPMsgs, FALSE);
 	SetDlgItemInt(hWnd, IDC_HELD, HeldMsgs, FALSE);
 	SetDlgItemInt(hWnd, IDC_SMTP, SMTPMsgs, FALSE);
+
+	SetDlgItemInt(hWnd, IDC_CHATSEM, ChatSemaphore.Clashes, FALSE);
+	SetDlgItemInt(hWnd, IDC_MSGSEM, MsgNoSemaphore.Clashes, FALSE);
+	SetDlgItemInt(hWnd, IDC_ALLOCSEM, AllocSemaphore.Clashes, FALSE);
 
 	now = time(NULL);
 
@@ -1069,6 +1118,28 @@ BOOL Initialise()
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
 
+	// Calulate time to run Housekeeping
+
+	{
+		struct tm *tm;
+		time_t now;
+
+		now = time(NULL);
+
+		tm = gmtime(&now);
+
+		tm->tm_hour = MaintTime / 100;
+		tm->tm_min = MaintTime % 100;
+		tm->tm_sec = 0;
+
+		MaintClock = mktime(tm);
+
+		if (MaintClock < now)
+			MaintClock += 86400;
+
+	}
+
+
 	RefreshMainWindow();
 
 	return TRUE;
@@ -1212,6 +1283,7 @@ int Disconnected (Stream)
 	int n;
 	char Msg[255];
 	int len;
+	struct _EXCEPTION_POINTERS exinfo;
 
 	for (n = 0; n <= NumberofStreams-1; n++)
 	{
@@ -1233,14 +1305,14 @@ int Disconnected (Stream)
 				{
 					len=wsprintf(Msg, "Chat Node %s Disconnected", conn->u.link->call);
 					WriteLogLine('|',Msg, len, LOG_CHAT);
-					link_drop(conn);
+					__try {link_drop(conn);} My__except_Routine("link_drop");
 				}
 				else
 				{
 					len=wsprintf(Msg, "Chat User %s Disconnected", conn->Callsign);
 					WriteLogLine('|',Msg, len, LOG_CHAT);
+					__try {logout(conn);} My__except_Routine("logout");
 
-					logout(conn);
 				}
 
 				return 0;
@@ -1258,9 +1330,13 @@ int Disconnected (Stream)
 			}
 
 			if (conn->UserPointer)
+			{
 				if (conn->UserPointer->ForwardingInfo)
+				{
 					conn->UserPointer->ForwardingInfo->Forwarding = FALSE;
-
+					conn->UserPointer->ForwardingInfo->FwdTimer = 0;
+				}
+			}
 			return 0;
 		}
 	}
@@ -2019,18 +2095,20 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 	char * Context;
 	char seps[] = " \t\r";
 	int CmdLen;
+	struct _EXCEPTION_POINTERS exinfo;
+
 
 	if (conn->Flags & CHATMODE)
 	{
+		GetSemaphore(&ChatSemaphore);
+
 		__try 
 		{
 			ProcessChatLine(conn, user, Buffer, len);
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			Debugprintf("MAILCHAT *** Program Error in ProcessChatLine");
-			Disconnect(conn->BPQStream);
-		}
+		My__except_Routine("ProcessChatLine");
+		
+		FreeSemaphore(&ChatSemaphore);
 		return;
 	}
 
@@ -2133,7 +2211,10 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 			}
 
 			if (user->ForwardingInfo)
+			{
 				user->ForwardingInfo->Forwarding = TRUE;
+				user->ForwardingInfo->FwdTimer = 0;			// So we dont send to immediately
+			}
 
 			Parse_SID(conn, &Buffer[1], len-4);
 			
@@ -2495,10 +2576,12 @@ void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 	case 0:					// Just K
 
-		if (Arg1)
+		while (Arg1)
 		{
-			msgno=atoi(Arg1);
+			msgno = atoi(Arg1);
 			KillMessage(conn, user, msgno);
+
+			Arg1 = strtok_s(NULL, " \r", &Context);
 		}
 
 		return;
@@ -2647,7 +2730,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			Arg3 = strtok_s(NULL, seps, &Context);
 
 			if (Arg2)
-				To = atoi(Arg2);
+				To = From = atoi(Arg2);
 
 			if (Arg3)
 				From = atoi(Arg3);
@@ -2861,10 +2944,11 @@ void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 	{
 	case 0:					// Just R
 
-		if (Arg1)
+		while (Arg1)
 		{
-			msgno=atoi(Arg1);
+			msgno = atoi(Arg1);
 			ReadMessage(conn, user, msgno);
+			Arg1 = strtok_s(NULL, " \r", &Context);
 		}
 
 		return;
@@ -3469,6 +3553,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	int FWDCount;
 	char OldMess[] = "\r\n\r\nOriginal Message:\r\n\r\n";
 	struct _EXCEPTION_POINTERS exinfo;
+	int Age;
 
 	// If doing SC, Append Old Message
 
@@ -3556,10 +3641,14 @@ nextline:
 			if ((result = _mkgmtime(&rtime)) != (time_t)-1 )
 			{
 				Msg->datecreated =  result;	
-				GetWPInfoFromRLine(Msg->from, ptr2, result);
-		}
+				Age = (time(NULL) - result)/86400;
+				if (Age > BidLifetime)
+					Msg->status = 'K';
+				else
+					GetWPInfoFromRLine(Msg->from, ptr2, result);
+			}
 
-			if (strcmp(Msg->to, "WP") == 0)
+			if (Msg->status != 'K' && strcmp(Msg->to, "WP") == 0)
 				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
 
 		}
@@ -3766,6 +3855,14 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
+
+		Vallen=4;
+
+		RegQueryValueEx(hKey,"FWDInterval",0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->FwdInterval,(ULONG *)&Vallen);
+
+		if (ForwardingInfo->FwdInterval == 0)
+				ForwardingInfo->FwdInterval = 3600;
 
 		RegCloseKey(hKey);
 	}
@@ -4047,14 +4144,27 @@ int	CriticalErrorHandler(char * error)
 
 VOID FWDTimerProc()
 {
-	FWDTimer+=10;
+	struct UserInfo * user;
+	struct	BBSForwardingInfo * ForwardingInfo ;
 
-	if (FWDTimer > FWDInterval * 60)			// 5 mins
+	for (user = BBSChain; user; user = user->BBSNext)
 	{
-		FWDTimer=0;
-		StartForwarding(0);
-	}
+		// See if any messages are queued for this BBS
 
+		ForwardingInfo = user->ForwardingInfo;
+		ForwardingInfo->FwdTimer+=10;
+
+		if (ForwardingInfo->FwdTimer > ForwardingInfo->FwdInterval)
+		{
+			ForwardingInfo->FwdTimer=0;
+				if (ForwardingInfo->Enabled)
+					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
+						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag)
+							if (ConnecttoBBS(user))
+								ForwardingInfo->Forwarding = TRUE;
+
+		}
+	}
 }
 
 void StartForwarding(int BBSNumber)
@@ -4115,8 +4225,8 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 
 	conn->FBBIndex = 0;
 
-	if (user->ForwardingInfo->MsgCount == 0)
-		return FALSE;
+//	if (user->ForwardingInfo->MsgCount == 0)
+//		return FALSE;
 
 	for (m = conn->NextMessagetoForward; m <= NumberofMessages; m++)
 	{
@@ -4207,10 +4317,14 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 	for (user = BBSChain; user; user = user->BBSNext)
 	{		
 		ForwardingInfo = user->ForwardingInfo;
+
 		if (CheckABBS(Msg, user, ForwardingInfo, ATBBS, HRoute))		
 		{
-			set_fwd_bit(Msg->fbbs, user->BBSNumber);
-			ForwardingInfo->MsgCount++;
+			if (_stricmp(user->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+			{
+				set_fwd_bit(Msg->fbbs, user->BBSNumber);
+				ForwardingInfo->MsgCount++;
+			}
 			Count++;
 		}
 	}

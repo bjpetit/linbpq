@@ -65,7 +65,7 @@ VOID SetupUIInterface()
 
 	__try
 	{
-		SendLatestUI();
+		SendLatestUI(0);
 	}
 	My__except_Routine("SendLatestUI");
 
@@ -96,7 +96,7 @@ struct MsgInfo * FindMessageByNumber(int msgno)
 
 VOID SendMsgUI(struct MsgInfo * Msg)
 {
-	char msg[100];
+	char msg[200];
 	int len, i;
 	int Mask = UIPortMask;
 	int NumPorts = GetNumberofPorts();
@@ -118,6 +118,51 @@ VOID SendMsgUI(struct MsgInfo * Msg)
 	}
 }
 
+VOID SendHeaders(int Number, int Port)
+{
+	// Send headers in response to a resync request
+
+	char msg[256];
+	unsigned  len=0;
+	struct tm *tm;
+	struct MsgInfo * Msg;
+
+	//12345 B 2053 TEST@ALL F6FBB 920325 This is the subject
+
+	while (Number <= LatestMsg)
+	{
+		Msg = FindMessageByNumber(Number);
+	
+		if (Msg)
+		{
+			if (len > (200 - strlen(Msg->title)))
+			{
+				Send_AX_Datagram(msg, len, Port, AXDEST);
+				len=0;
+			}
+
+			tm = gmtime(&Msg->datecreated);	
+	
+			len += wsprintf(&msg[len], "%-6d %c %6d %-13s %-6s %02d%02d%02d %s\r",
+				Msg->number, Msg->type, Msg->length, Msg->to,
+				Msg->from, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Msg->title);
+		}
+		else
+		{
+			if (len > 230)
+			{
+				Send_AX_Datagram(msg, len, Port, AXDEST);
+				len=0;
+			}
+			len += wsprintf(&msg[len], "%-6d #\r", Number);
+		}
+
+		Number++;
+	}
+
+	Send_AX_Datagram(msg, len, Port, AXDEST);
+
+}
 VOID SendDummyUI(int num)
 {
 	char msg[100];
@@ -136,7 +181,7 @@ VOID SendDummyUI(int num)
 	}
 }
 
-VOID SendLatestUI()
+VOID SendLatestUI(int Port)
 {
 	char msg[20];
 	int len, i;
@@ -144,6 +189,12 @@ VOID SendLatestUI()
 	int NumPorts = GetNumberofPorts();
 	
 	len = wsprintf(msg,"%-6d !!\r", LatestMsg);
+
+	if (Port)
+	{
+		Send_AX_Datagram(msg, len, Port, AXDEST);
+		return;
+	}
 
 	for (i=1; i <= NumPorts; i++)
 	{
@@ -181,16 +232,14 @@ VOID ProcessUItoMe(char * msg, int len)
 	return;
 }
 
-VOID ProcessUItoFBB(char * msg, int len)
+VOID ProcessUItoFBB(char * msg, int len, int Port)
 {
 	// ? 0000006464
 	// The first 8 digits are the hexadecimal number of the requested start of the list
 	// (here 00002EE0 -> 12000) and the last two digits are the sum of the four bytes anded with FF (0E).
 
-	int Number, Sum;
+	int Number, Sum, Sent = 0;
 	char cksum[3];
-	struct _EXCEPTION_POINTERS exinfo;
-
 	
 	if (msg[0] == '?')
 	{
@@ -200,28 +249,13 @@ VOID ProcessUItoFBB(char * msg, int len)
 		sscanf(&msg[1], "%X", &Number);
 		sscanf(cksum, "%X", &Sum);
 
-		if (Number <= LatestMsg)
+		if (Number >= LatestMsg)
 		{
-			struct MsgInfo * Msg = FindMessageByNumber(Number);
-	
-			if (Msg)
-			{			__try
-				{
-					SendMsgUI(Msg);
-				}
-				My__except_Routine("SendMsgUI");
-			}
-			else
-			{
-				__try
-				{				
-					SendDummyUI(Number);
-				}
-				My__except_Routine("SendDummyUI");	
-			}
-
+			SendLatestUI(Port);
+			return;
 		}
-
+		
+		SendHeaders(Number+1, Port);
 	}
 	
 	return;
@@ -230,25 +264,28 @@ VOID ProcessUItoFBB(char * msg, int len)
 
 VOID SeeifBBSUIFrame(PMESSAGE buff, int len)
 {
+	if (buff->PORT > 128)
+		return;										// Only look at received frames
+	
 	if (buff->CTL != 3)
 		return;
 
 	if (buff->PID != 0xf0)
 		return;
 
-	if (memcmp(buff->ORIGIN, MYCALL,6) == 0)		// From me?
-		if (buff->ORIGIN[6] == (MYCALL[6] | 1))		// Set End of Call
-			return;
+//	if (memcmp(buff->ORIGIN, MYCALL,6) == 0)		// From me?
+//		if (buff->ORIGIN[6] == (MYCALL[6] | 1))		// Set End of Call
+//			return;
 
 	if (memcmp(buff->DEST, MYCALL, 6) == 0)
 		if ((buff->DEST[6] & 0x7e) == MYCALL[6])	// Just SSID Bits
 		{
-			ProcessUItoFBB(buff->DATA, len-23);
+			ProcessUItoFBB(buff->DATA, len-23, buff->PORT);
 			return;
 		}
 	if (memcmp(buff->DEST, AXDEST, 6) == 0)
 	{
-		ProcessUItoFBB(buff->DATA, len-23);
+		ProcessUItoFBB(buff->DATA, len-23, buff->PORT);
 		return;
 	}
 
