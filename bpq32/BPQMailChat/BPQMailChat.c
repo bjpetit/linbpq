@@ -122,6 +122,10 @@
 // More Program Error Traps
 // Kill Messages more than BIDLifetime old
 
+// Version 1.0.0.35
+
+// Test for Mike - Remove B1 check from Parse_SID
+
 #include "stdafx.h"
 
 // #define SPECIALVERSION "Beta"
@@ -652,8 +656,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				ChatTimer();
 				if (MaintClock < time(NULL))
 				{
+					struct tm *tm;	
+					
 					DoHouseKeeping(FALSE);
 					MaintClock += 86400;
+					
+					tm = gmtime(&MaintClock);
+
+					Debugprintf("MaintTime = %d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
+						MaintTime, tm->tm_year - 100, tm->tm_mon +1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+
 				}
 			}
 			My__except_Routine("Slow Timer");
@@ -1136,6 +1148,11 @@ BOOL Initialise()
 
 		if (MaintClock < now)
 			MaintClock += 86400;
+
+		tm = gmtime(&MaintClock);
+
+		Debugprintf("MaintTime = %d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
+				MaintTime, tm->tm_year - 100, tm->tm_mon +1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 
 	}
 
@@ -3629,11 +3646,24 @@ nextline:
 			time_t result;
 
 			memset(&rtime, 0, sizeof(struct tm));
-			
-			sscanf(&ptr2[2], "%02d%02d%02d/%02d%02d",
-				&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
 
-			rtime.tm_year += 100;
+			if (ptr2[10] == '/')
+			{
+				// Dodgy 4 char year
+			
+				sscanf(&ptr2[2], "%04d%02d%02d/%02d%02d",
+					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+				rtime.tm_year -= 1900
+					;
+			}
+			else
+			{
+				sscanf(&ptr2[2], "%02d%02d%02d/%02d%02d",
+					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+
+				rtime.tm_year += 100;
+			}
+
 			rtime.tm_mon--;
 
 //			result = _mkgmtime(&rtime);
@@ -4123,8 +4153,8 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 		case '1':
 
-			if (ALLOWCOMPRESSED)
-				conn->BBSFlags |= FBBB1Mode ;	// B2 uses B1 mode (crc on front of file)
+//			if (ALLOWCOMPRESSED)
+//				conn->BBSFlags |= FBBB1Mode ;	// B2 uses B1 mode (crc on front of file)
 			break;
 
 		case 'B':
@@ -4182,7 +4212,7 @@ void StartForwarding(int BBSNumber)
 			if (ForwardingInfo)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag)
+						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
 							if (ConnecttoBBS(user))
 								ForwardingInfo->Forwarding = TRUE;
 	}

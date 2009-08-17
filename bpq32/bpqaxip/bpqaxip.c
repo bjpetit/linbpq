@@ -182,6 +182,7 @@ int Socket_Connect(int SocketId, int Error);
 int Socket_Data(int sock, int error, int eventcode);
 VOID TCPConnectThread(struct arp_table_entry * arp);
 VOID __cdecl Debugprintf(const char * format, ...);
+BOOL OpenListeningSocket(struct arp_table_entry * arp);
 
 BOOL Checkifcanreply=TRUE;
 
@@ -913,11 +914,9 @@ void OpenSockets(void *dummy)
 	int err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
-	int i, status;
+	int i;
 	int index = 0;
 	struct arp_table_entry * arp;
-	SOCKADDR_IN local_sin;  /* Local socket - internet style */
-	PSOCKADDR_IN psin;
 
 
 	// Moved from InitAXIP, to avoid hang if started too early on XP SP2
@@ -1016,66 +1015,74 @@ void OpenSockets(void *dummy)
 
 		if (arp->TCPMode == TCPSlave)
 		{
-			BOOL bOptVal = TRUE;
-
-			arp->TCPBuffer=malloc(4000);
-			arp->TCPState = 0;
-
-			// create the socket. Set to listening mode if Slave
-
-			arp->TCPListenSock = socket(AF_INET, SOCK_STREAM, 0);
-
-			if (arp->TCPListenSock == INVALID_SOCKET)
-			{
-				sprintf(Msg, "socket() failed error %d", WSAGetLastError());
-				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
-				continue;
-			}
-
-			Debugprintf("TCP Listening Socket Created - socket %d", arp->TCPListenSock);
-
-
-			if (setsockopt(arp->TCPListenSock, SOL_SOCKET, SO_CONDITIONAL_ACCEPT, (char*)&bOptVal, 4) != SOCKET_ERROR)
-			{
-				Debugprintf("Set SO_CONDITIONAL_ACCEPT: ON\n");
-			}
-
-
-			psin=&local_sin;
-
-			psin->sin_family = AF_INET;
-			psin->sin_addr.s_addr = htonl(INADDR_ANY);	// Local Host Only
-	
-			psin->sin_port = htons(arp->port);        /* Convert to network ordering */
-
-			if (bind(arp->TCPListenSock , (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
-			{
-				sprintf(Msg, "bind(sock) failed Error %d", WSAGetLastError());
-
-				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
-				closesocket(arp->TCPListenSock);
-
-				continue;
-			}
-
-			if (listen(arp->TCPListenSock, 1) < 0)
-			{
-				sprintf(Msg, "listen(sock) failed Error %d", WSAGetLastError());
-				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
-				continue;
-
-			}
-   
-			if ((status = WSAAsyncSelect(arp->TCPListenSock, hResWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
-			{
-				sprintf(Msg, "WSAAsyncSelect failed Error %d", WSAGetLastError());
-				MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
-				closesocket(arp->TCPListenSock);
-				continue;
-			}
+			OpenListeningSocket(arp);
 		}
 	}
 }	
+OpenListeningSocket(struct arp_table_entry * arp)
+{
+	char Msg[255];
+	PSOCKADDR_IN psin;
+	BOOL bOptVal = TRUE;
+	SOCKADDR_IN local_sin;  /* Local socket - internet style */
+	int status;
+
+
+	arp->TCPBuffer=malloc(4000);
+	arp->TCPState = 0;
+
+	// create the socket. Set to listening mode if Slave
+
+	arp->TCPListenSock = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (arp->TCPListenSock == INVALID_SOCKET)
+	{
+		sprintf(Msg, "socket() failed error %d", WSAGetLastError());
+		MessageBox(hResWnd, Msg, "BPQAXIP", MB_OK);
+		return FALSE;
+	}
+
+	Debugprintf("TCP Listening Socket Created - socket %d", arp->TCPListenSock);
+
+	if (setsockopt(arp->TCPListenSock, SOL_SOCKET, SO_CONDITIONAL_ACCEPT, (char*)&bOptVal, 4) != SOCKET_ERROR)
+	{
+		Debugprintf("Set SO_CONDITIONAL_ACCEPT: ON\n");
+	}
+
+	psin=&local_sin;
+
+	psin->sin_family = AF_INET;
+	psin->sin_addr.s_addr = htonl(INADDR_ANY);	// Local Host Only
+	
+	psin->sin_port = htons(arp->port);        /* Convert to network ordering */
+
+	if (bind(arp->TCPListenSock , (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+	{
+		sprintf(Msg, "bind(sock) failed Error %d", WSAGetLastError());
+		Debugprintf(Msg);
+		closesocket(arp->TCPListenSock);
+
+		return FALSE;
+	}
+
+	if (listen(arp->TCPListenSock, 1) < 0)
+	{
+		sprintf(Msg, "listen(sock) failed Error %d", WSAGetLastError());
+		Debugprintf(Msg);
+		closesocket(arp->TCPListenSock);
+		return FALSE;
+	}
+
+	if ((status = WSAAsyncSelect(arp->TCPListenSock, hResWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
+	{
+		sprintf(Msg, "WSAAsyncSelect failed Error %d", WSAGetLastError());
+		Debugprintf(Msg);
+		closesocket(arp->TCPListenSock);
+		return FALSE;
+	}
+
+	return TRUE;
+}
 
 void CloseSockets()
 {
@@ -2489,7 +2496,6 @@ int Socket_Accept(int SocketId)
 	int index=0;
 	BOOL bOptVal = TRUE;
 
-
 	//  Find Socket entry
 
 	Debugprintf("Incoming Connect - Socket %d", SocketId);
@@ -2678,6 +2684,9 @@ int GetMessageFromBuffer(char * Buffer)
 						closesocket(sockptr->TCPSock);
 						sockptr->TCPSock = 0;
 					}
+
+					closesocket(sockptr->TCPListenSock);
+					OpenListeningSocket(sockptr);
 
 					sockptr->TCPOK = 0;
 				}

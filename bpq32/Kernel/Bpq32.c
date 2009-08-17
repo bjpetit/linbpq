@@ -193,6 +193,7 @@
 
 extern short NUMBEROFPORTS;
 extern long PORTENTRYLEN;
+extern long LINKTABLELEN;
 extern struct PORTCONTROL * PORTTABLE;
 
 extern char AUTOSAVE;
@@ -216,7 +217,6 @@ extern char PWLEN;
 extern int SEMGETS;
 extern int SEMRELEASES;
 extern int SEMCLASHES;
-extern int REMOVENODE();
 extern int FINDFREEDESTINATION();
 extern int RAWTX();
 extern int RELBUFF();
@@ -1040,6 +1040,13 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			return 0;
 		}
 			  
+		if (sizeof(LINKTABLE) != LINKTABLELEN)
+		{
+			// Catastrophic - Refuse to load
+			
+			MessageBox(NULL,"L2 LINK Table .c and .asm mismatch - fix and rebuild","BPQ32", MB_OK);
+			return 0;
+		}
 		if (sizeof(struct ROUTE) != DataBase->ROUTE_LEN)
 		{
 			// Catastrophic - Refuse to load
@@ -1814,8 +1821,8 @@ BOOL UpdateNodesForApp(int Appl)
 
 		DEST->DEST_STATE=0x80;	// SPECIAL ENTRY
 	
-		DEST->ROUTE1.ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
-		DEST->ROUTE1.ROUT_OBSCOUNT = 255;
+		DEST->NRROUTE1.ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
+		DEST->NRROUTE1.ROUT_OBSCOUNT = 255;
 
 		FreeSemaphore();
 
@@ -1863,8 +1870,8 @@ nodests:
 
 	DEST->DEST_STATE=0x80;	// SPECIAL ENTRY
 	
-	DEST->ROUTE1.ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
-	DEST->ROUTE1.ROUT_OBSCOUNT = 255;
+	DEST->NRROUTE1.ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
+	DEST->NRROUTE1.ROUT_OBSCOUNT = 255;
 
 	FreeSemaphore();
 	return TRUE;
@@ -3026,7 +3033,7 @@ int DoNodes()
 	{
 		Dests+=1;
 		
-		if (Dests->ROUTE1.ROUT_NEIGHBOUR == 0)
+		if (Dests->NRROUTE1.ROUT_NEIGHBOUR == 0)
 			continue;
 
 		__try 
@@ -3046,60 +3053,60 @@ int DoNodes()
 
 			cursor=wsprintf(line,"NODE ADD %s:%s ", Alias,Normcall);
 				
-			if (Dests->ROUTE1.ROUT_NEIGHBOUR != 0 && Dests->ROUTE1.ROUT_NEIGHBOUR->INP3Node == 0)
+			if (Dests->NRROUTE1.ROUT_NEIGHBOUR != 0 && Dests->NRROUTE1.ROUT_NEIGHBOUR->INP3Node == 0)
 			{
 				len=ConvFromAX25(
-					Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+					Dests->NRROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
 				Portcall[len]=0;
 
 				len=wsprintf(&line[cursor],"%s %d %d ",
 					Portcall,
-					Dests->ROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
-					Dests->ROUTE1.ROUT_QUALITY);
+					Dests->NRROUTE1.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+					Dests->NRROUTE1.ROUT_QUALITY);
 	
 				cursor+=len;
 
-				if (Dests->ROUTE1.ROUT_OBSCOUNT > 127)
+				if (Dests->NRROUTE1.ROUT_OBSCOUNT > 127)
 				{
 					len=wsprintf(&line[cursor],"! ");
 					cursor+=len;
 				}
 			}
 
-			if (Dests->ROUTE2.ROUT_NEIGHBOUR != 0 && Dests->ROUTE2.ROUT_NEIGHBOUR->INP3Node == 0)
+			if (Dests->NRROUTE2.ROUT_NEIGHBOUR != 0 && Dests->NRROUTE2.ROUT_NEIGHBOUR->INP3Node == 0)
 			{
 				len=ConvFromAX25(
-					Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+					Dests->NRROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
 				Portcall[len]=0;
 
 				len=wsprintf(&line[cursor],"%s %d %d ",
 					Portcall,
-					Dests->ROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
-					Dests->ROUTE2.ROUT_QUALITY);
+					Dests->NRROUTE2.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+					Dests->NRROUTE2.ROUT_QUALITY);
 	
 				cursor+=len;
 
-				if (Dests->ROUTE2.ROUT_OBSCOUNT > 127)
+				if (Dests->NRROUTE2.ROUT_OBSCOUNT > 127)
 				{
 					len=wsprintf(&line[cursor],"! ");
 					cursor+=len;
 				}
 			}
 
-		if (Dests->ROUTE3.ROUT_NEIGHBOUR != 0 && Dests->ROUTE3.ROUT_NEIGHBOUR->INP3Node == 0)
+		if (Dests->NRROUTE3.ROUT_NEIGHBOUR != 0 && Dests->NRROUTE3.ROUT_NEIGHBOUR->INP3Node == 0)
 		{
 			len=ConvFromAX25(
-				Dests->ROUTE3.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
+				Dests->NRROUTE3.ROUT_NEIGHBOUR->NEIGHBOUR_CALL,Portcall);
 			Portcall[len]=0;
 
 			len=wsprintf(&line[cursor],"%s %d %d ",
 				Portcall,
-				Dests->ROUTE3.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
-				Dests->ROUTE3.ROUT_QUALITY);
+				Dests->NRROUTE3.ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+				Dests->NRROUTE3.ROUT_QUALITY);
 	
 			cursor+=len;
 
-			if (Dests->ROUTE3.ROUT_OBSCOUNT > 127)
+			if (Dests->NRROUTE3.ROUT_OBSCOUNT > 127)
 			{
 				len=wsprintf(&line[cursor],"! ");
 				cursor+=len;

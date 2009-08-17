@@ -59,8 +59,9 @@ VOID KillRoute(struct DEST_ROUTE_ENTRY * ROUTEPTR);
 VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt);
 VOID SendNetFrame(struct _MESSAGE * Frame);
 VOID SendRIPToNeighbour(struct ROUTE * Route);
+VOID DeleteNETROMRoutes(struct ROUTE * Route);
 
-#define NOINP3
+//#define NOINP3
 
 #ifdef NOINP3
 
@@ -117,9 +118,16 @@ VOID TellINP3LinkGone(struct ROUTE * Route)
 {
 	int i;
 	struct DEST_LIST * Dest =  DataBase->DESTS;
+	char call[11]="";
+
+	ConvFromAX25(Route->NEIGHBOUR_CALL, call);
+	Debugprintf("BPQ32 L2 Link to Neighbour %s lost", call);
 
 	if (Route->INP3Node == 0)
+	{
+		DeleteNETROMRoutes(Route);
 		return;
+	}
 
 	Route->SRTT = 0;
 	Route->RTT = 0;
@@ -178,6 +186,73 @@ VOID TellINP3LinkGone(struct ROUTE * Route)
 			continue;
 		}
 	}
+}
+
+VOID DeleteNETROMRoutes(struct ROUTE * Route)
+{
+	int i;
+	struct DEST_LIST * Dest =  DataBase->DESTS;
+
+	// Delete any NETROM Dest entries via this Route
+
+	for (i=0; i < MAXDESTS; i++)
+	{
+		Dest++;
+
+		if (Dest->NRROUTE1.ROUT_NEIGHBOUR == Route)
+		{	
+			if (Dest->NRROUTE2.ROUT_NEIGHBOUR == 0)
+			{
+				// No More Routes - ZAP Dest
+
+				{
+					char call[11]="";
+					ConvFromAX25(Dest->DEST_CALL, call);
+					Debugprintf("Deleting NR Node %s", call);
+				}
+
+				_asm
+				{
+					pushad
+					mov	EBX,Dest
+					CALL REMOVENODE			// Clear buffers, Remove from Sorted Nodes chain, and zap entry
+					popad
+				}
+
+				continue;
+			}
+			memcpy(&Dest->NRROUTE1, &Dest->NRROUTE2, sizeof(struct NR_DEST_ROUTE_ENTRY));
+			memcpy(&Dest->NRROUTE2, &Dest->NRROUTE3, sizeof(struct NR_DEST_ROUTE_ENTRY));
+			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+
+			continue;
+		}
+		
+		if (Dest->NRROUTE2.ROUT_NEIGHBOUR == Route)
+		{
+			memcpy(&Dest->NRROUTE2, &Dest->NRROUTE3, sizeof(struct NR_DEST_ROUTE_ENTRY));
+			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+
+			continue;
+		}
+
+		if (Dest->ROUTE3.ROUT_NEIGHBOUR == Route)
+		{
+			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+			continue;
+		}
+	}
+}
+
+
+VOID TellINP3LinkSetupFailed(struct ROUTE * Route)
+{
+	// Attempt to activate Neighbour failed
+
+	if (Route->INP3Node == 0)
+		TellINP3LinkGone(Route);
+
+
 }
 
 VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGE * Buff)
@@ -336,8 +411,6 @@ New:
 	Dest->INP3FLAGS = NewNode;
 
 	Dest->ROUTE1.ROUT_NEIGHBOUR = Route;
-	Dest->ROUTE1.ROUT_OBSCOUNT = 5;
-	Dest->ROUTE1.ROUT_QUALITY = 10;				// Till we work out what to do
 
 	NUMBEROFNODES++;
 
@@ -400,8 +473,6 @@ Found:
 			Dest->ROUTE1.Hops = hops;
 			Dest->ROUTE1.SRTT = rtt;
 			Dest->ROUTE1.ROUT_NEIGHBOUR = Route;
-			Dest->ROUTE1.ROUT_OBSCOUNT = 5;
-			Dest->ROUTE1.ROUT_QUALITY = 10;				// Till we work out what to do
 
 			return;
 		}
@@ -452,8 +523,6 @@ VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops
 	ROUTEPTR->LastRTT = 0;
 	ROUTEPTR->RTT = 0;
 	ROUTEPTR->ROUT_NEIGHBOUR = Route;
-	ROUTEPTR->ROUT_OBSCOUNT = 5;
-	ROUTEPTR->ROUT_QUALITY = 10;				// Till we work out what to do
 
 	return;
 }
@@ -513,13 +582,12 @@ VOID SortRoutes(struct DEST_LIST * Dest)
 {
 	 struct DEST_ROUTE_ENTRY Temp;
 
-
 	// May now be out of order
 
-	if (Dest->ROUTE2.ROUT_QUALITY == 0)
+	if (Dest->ROUTE2.ROUT_NEIGHBOUR == 0)
 		return;						// Only One, so cant be out of order
 	
-	if (Dest->ROUTE3.ROUT_QUALITY == 0)
+	if (Dest->ROUTE3.ROUT_NEIGHBOUR == 0)
 	{
 		// Only 2
 
@@ -586,14 +654,15 @@ VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGE * Buff, int Len, int 
 		int Dummy;
 		struct _MESSAGE Msg;
 
+		if (Route->INP3Node == 0)
+			return;						// We don't want to use INP3
+
 		// Extract other end's SRTT
 
 		sscanf(&Buff->L4DATA[6], "%d %d", &Dummy, &OtherRTT);
 		Route->NeighbourSRTT = OtherRTT * 10;  // We store in mS
 
 		// Echo Back to sender
-		
-		Route->INP3Node = TRUE; // Must be!
 
 		memcpy(Msg.DEST, Buff->L3SRCE, 7);
 		memcpy(Msg.ORIGIN, MYCALL, 7);
@@ -657,6 +726,31 @@ VOID SendRTTMsg(struct ROUTE * Route)
 	Msg.LENGTH = 256 + 14 + 2 + 7;
 
 	Route->Timeout = RTTTimeout;
+
+	SendNetFrame(&Msg);
+}
+
+VOID SendKeepAlive(struct ROUTE * Route)
+{
+	struct _MESSAGE Msg;
+
+	memcpy(Msg.DEST, Route->NEIGHBOUR_CALL, 7);
+	memcpy(Msg.ORIGIN, MYCALL, 7);
+	Msg.PORT = Route->NEIGHBOUR_PORT;
+	Msg.PID = NRPID;
+
+	memcpy(Msg.L3MSG.L3DEST, L3KEEP, 7);
+	memcpy(Msg.L3MSG.L3SRCE, MYCALL, 7);
+	Msg.L3MSG.L3TTL = 1;
+	Msg.L3MSG.L4ID = 0;
+	Msg.L3MSG.L4INDEX = 0;
+	Msg.L3MSG.L4RXNO = 0;
+	Msg.L3MSG.L4TXNO = 0;
+	Msg.L3MSG.L4FLAGS = L4INFO;
+
+	Msg.L3MSG.L4DATA[0] = 'K';
+
+	Msg.LENGTH = 20 + 14 + 2 + 7;
 
 	SendNetFrame(&Msg);
 }
@@ -747,6 +841,39 @@ SendRIPTimer()
 	{
 		if (Route->NEIGHBOUR_CALL[0] != 0)
 		{
+			if (Route->NEIGHBOUR_LINK == 0)
+			{
+				// Try to activate link
+
+				_asm
+				{
+					//	EBX POINTS TO A NEIGHBOUR - FIND AN L2 SESSION FROM US TO IT, OR Create one
+
+					mov	ebx, Route
+					pushad
+					call	L2SETUPCROSSLINK
+					popad
+				}
+				
+				if (Route->NEIGHBOUR_LINK == 0)
+				{
+					Route++;
+					continue;						// No room for link
+				}
+			}
+
+			if (Route->NEIGHBOUR_LINK->L2STATE != 5)	// Not up yet
+			{
+				Route++;
+				continue;
+			}
+
+			if (Route->NEIGHBOUR_LINK->KILLTIMER > 600)
+			{
+				SendKeepAlive(Route);
+				Route->NEIGHBOUR_LINK->KILLTIMER = 0;		// Keep Open
+			}
+
 			if (Route->INP3Node)
 			{
 				if (Route->Timeout)
@@ -756,8 +883,10 @@ SendRIPTimer()
 					Route->Timeout--;
 
 					if (Route->Timeout)
+					{
+						Route++;
 						continue;				// Wait
-
+					}
 					// No response Try again
 
 					Route->Retries--;
@@ -853,7 +982,7 @@ SendRIPToOtherNeighbours(UCHAR * axcall, UCHAR * alias, struct DEST_ROUTE_ENTRY 
 			Msg->LENGTH += BuildRIF(&Msg->L3MSG.L3SRCE[Msg->LENGTH],
 				axcall, alias, Entry->Hops + 1, Entry->SRTT + Entry->ROUT_NEIGHBOUR->SRTT/10);
 
-			if (Msg->LENGTH > 250 - 11)
+			if (Msg->LENGTH > 250 - 15)
 //			if (Msg->LENGTH > Routes->NBOUR_PACLEN - 11)
 			{
 				SendRIF(Msg);
@@ -894,7 +1023,7 @@ VOID SendRIPToNeighbour(struct ROUTE * Route)
 				Dest->DEST_CALL, Dest->DEST_ALIAS,
 				Entry->Hops + 1, Entry->SRTT + Entry->ROUT_NEIGHBOUR->SRTT/10);
 
-			if (Msg->LENGTH > 250 - 11)
+			if (Msg->LENGTH > 250 - 15)
 			{
 				SendRIF(Msg);
 				Route->Msg = NULL;
