@@ -30,6 +30,7 @@ struct ConnectionInfo
 	int	LoginState;				// 1 = user ok, 2 = password ok
 	BOOL DoingCommand;			// Processing Telnet Command
 	BOOL DoEcho;				// Telnet Echo option accepted
+	BOOL FBBMode;				// Pure TCP for FBB forwarding
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

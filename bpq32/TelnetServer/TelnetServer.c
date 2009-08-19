@@ -22,10 +22,13 @@
 //  Remove entry from Disconnect User Dialog when session closes
 //	Fix reception of multiple backspaces in same packet
 
+//	Version 2.1.7  August 2009
+//  Support FBB forwarding
+
+
 #include "stdafx.h"
 #include "TelnetServer.h"
 #include "bpq32.h"
-
 
 #define MAX_LOADSTRING 100
 
@@ -52,6 +55,8 @@ int CurrentConnections=0;
 int CurrentSockets=0;
 
 int Port=8010;
+int FBBPort=0;
+
 BOOL cfgMinToTray;
 
 BOOL DisconnectOnClose=FALSE;
@@ -77,6 +82,10 @@ char BlankCall[]="         ";
 
 BOOL LogEnabled=FALSE;
 
+SOCKET sock;
+SOCKET FBBsock;
+
+
 
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
@@ -94,6 +103,7 @@ int DeleteConnection(con);
 int Socket_Accept(int SocketId);
 int Socket_Data(int SocketId,int error, int eventcode);
 int DataSocket_Read(struct ConnectionInfo * sockptr, SOCKET sock);
+int DataSocket_ReadFBB(struct ConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_Write(struct tConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_Disconnect(struct ConnectionInfo * sockptr);
 BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len);
@@ -457,6 +467,11 @@ int Socket_Accept(int SocketId)
 			sockptr->UserPointer = 0;
 			sockptr->DoEcho = FALSE;
 
+			if (SocketId == FBBsock)
+				sockptr->FBBMode = TRUE;
+			else
+				sockptr->FBBMode = FALSE;
+
 			if (CurrentSockets < n)
 			{
 				// Just Created a new one - add an item to disconnect menu
@@ -488,18 +503,20 @@ int Socket_Accept(int SocketId)
 				return 0;
 			}
 		
-			send(sock, Negotiate, 6, 0);
-			send(sock,LoginMsg,strlen(LoginMsg),0);
-
+			if (sockptr->FBBMode == FALSE)
+			{
+				send(sock, Negotiate, 6, 0);
+				send(sock,LoginMsg,strlen(LoginMsg),0);
+			}
 			return 0;
 		}
 		
-
 	//	Can only happen if MaxSessions > maxSockets, which is a config error
 
 		
 	}
-return 0;
+
+	return 0;
 	return 0;
 }
 
@@ -526,7 +543,10 @@ int Socket_Data(int sock, int error, int eventcode)
 			{
 				case FD_READ:
 
-					return DataSocket_Read(sockptr,sock);
+					if (sockptr->FBBMode)
+						return DataSocket_ReadFBB(sockptr,sock);
+					else
+						return DataSocket_Read(sockptr,sock);
 
 				case FD_WRITE:
 
@@ -918,6 +938,259 @@ MsgLoop:
 	return 0;
 }
 
+int DataSocket_ReadFBB(struct ConnectionInfo * sockptr, SOCKET sock)
+{
+	int len=0, maxlen, InputLen, MsgLen, Stream, i, n;
+	char NLMsg[3]={13,10,0};
+	byte * LFPtr;
+	byte * MsgPtr;
+	char logmsg[120];
+
+	ioctlsocket(sock,FIONREAD,&len);
+
+	maxlen = InputBufferLen - sockptr->InputLen;
+	
+	if (len > maxlen) len=maxlen;
+
+	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
+
+	if (len == SOCKET_ERROR || len ==0)
+	{
+		// Failed or closed - clear connection
+
+		return 0;
+	}
+
+	sockptr->InputLen+=len;
+
+	// Extract lines from input stream
+
+	MsgPtr = &sockptr->InputBuffer[0];
+	InputLen = sockptr->InputLen;
+
+MsgLoop:
+
+	if (sockptr->LoginState == 2)
+	{
+		// Data. FBB is binary
+
+		// Send to Node
+
+		Stream = sockptr->BPQStream;
+
+		if (InputLen > 256)
+		{		
+			SendMsg(Stream, MsgPtr, 256);
+			sockptr->InputLen -= 256;
+
+			InputLen -= 256;
+
+			memmove(MsgPtr,MsgPtr+256,InputLen);
+
+			goto MsgLoop;
+		}
+			
+		SendMsg(Stream, MsgPtr, InputLen);
+		sockptr->InputLen = 0;
+
+		return 0;
+	}
+	
+	if (InputLen > 256)
+	{
+		// Long message received when waiting for user or password - just ignore
+
+		sockptr->InputLen=0;
+
+		return 0;
+	}
+
+	LFPtr=memchr(MsgPtr, 13, InputLen);
+	
+	if (LFPtr == 0)
+		return 0;							// Waitr for more
+	
+	// Got a CR
+
+	// Process data up to the cr
+
+	MsgLen=LFPtr-MsgPtr;
+
+	switch (sockptr->LoginState)
+	{
+
+	case 0:
+		
+        //   Check Username
+        //
+
+		*(LFPtr)=0;				 // remove cr
+        
+        if (LogEnabled)
+		{
+			wsprintf(logmsg,"%d %d.%d.%d.%d User=%s\n",
+				sockptr->Number,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+				MsgPtr);
+
+			WriteLog (logmsg);
+		}
+		for (i = 0; i < NumberofUsers; i++)
+		{
+			if (strcmp(MsgPtr,UserRecPtr[i]->UserName) == 0)
+			{
+                sockptr->UserPointer = UserRecPtr[i];      //' Save pointer for checking password
+                strcpy(sockptr->Callsign, UserRecPtr[i]->Callsign); //' for *** linked
+                                
+                sockptr->Retries = 0;
+                
+                sockptr->LoginState = 1;
+                sockptr->InputLen = 0;
+
+				n=sockptr->Number;
+
+				ModifyMenu(hDisMenu,n-1,MF_BYPOSITION | MF_STRING,IDM_DISCONNECT + n,MsgPtr);
+
+				ShowConnections();
+
+               	InputLen=InputLen-(MsgLen+1);
+
+				sockptr->InputLen=InputLen;
+				
+				if (InputLen > 0)
+				{
+					memmove(MsgPtr,LFPtr+1,InputLen);
+
+					goto MsgLoop;
+				}
+			}
+		}
+        
+        //   Not found
+        
+        
+        if (sockptr->Retries++ == 4)
+		{
+            send(sock,AttemptsMsg,sizeof(AttemptsMsg),0);
+            Sleep (1000);
+            closesocket(sock);
+            DataSocket_Disconnect(sockptr);       //' Tidy up
+		}
+		else
+		{        
+            send(sock, LoginMsg, strlen(LoginMsg), 0);
+            sockptr->InputLen=0;
+
+		}
+
+		return 0;
+       
+	case 1:
+		   
+		*(LFPtr)=0;				 // remove cr
+            
+        if (LogEnabled)
+		{
+			wsprintf(logmsg,"%d %d.%d.%d.%d Password=%s\n",
+				sockptr->Number,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+				MsgPtr);
+
+			WriteLog (logmsg);
+		}
+		if (strcmp(MsgPtr, sockptr->UserPointer->Password) == 0)
+		{
+			Stream = sockptr->BPQStream;
+			
+			if (Stream == 0)
+			{
+				Stream = FindFreeStream();
+
+				if (Stream == 255)
+				{
+					// no free streams - send error and close
+
+					return 0;
+				}
+
+				sockptr->BPQStream = Stream;
+
+				BPQSetHandle(Stream, MainWnd);
+			}
+
+			Connect(Stream);
+  
+			if (sockptr->Callsign[0] != ' ') 
+				ChangeSessionCallsign(Stream, EncodeCall(sockptr->Callsign));
+
+            sockptr->LoginState = 2;
+            
+            sockptr->InputLen = 0;
+            
+            if (LogEnabled)
+			{
+				wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted BPQ Stream=%d Callsign %s\n",
+					sockptr->Number,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+					Stream,
+					sockptr->Callsign);
+
+				WriteLog (logmsg);
+			}
+
+			ShowConnections();
+			InputLen=InputLen-(MsgLen+1);
+
+			sockptr->InputLen=InputLen;
+
+			// What is left is the Command to connect to the BBS
+
+			if (InputLen > 0)
+			{
+				memmove(MsgPtr,LFPtr+1,InputLen);
+				MsgPtr[InputLen] = 13;
+				SendMsg(Stream, MsgPtr, InputLen+1);
+				sockptr->InputLen=0;
+			}
+			
+			return 0;
+	
+		}
+		// Bad Password
+        
+        if (sockptr->Retries++ == 4)
+		{
+			send(sock,AttemptsMsg, strlen(AttemptsMsg),0);
+            Sleep (1000);
+            closesocket(sock);
+            DataSocket_Disconnect (sockptr);      //' Tidy up
+		}
+		else
+		{
+			send(sock, PasswordMsg, strlen(PasswordMsg), 0);
+			sockptr->InputLen=0;
+		}
+
+		return 0;
+
+	default:
+
+		return 0;
+
+	}
+
+	return 0;
+}
+
 
 
 int DataSocket_Disconnect( struct ConnectionInfo * sockptr)
@@ -982,7 +1255,6 @@ SOCKADDR_IN local_sin;  /* Local socket - internet style */
 
 PSOCKADDR_IN psin;
 
-SOCKET sock;
 
 BOOL Initialise()
 {
@@ -1032,8 +1304,7 @@ BOOL Initialise()
         }
     }
 
-
-//	Create listening socket
+//	Create listening socket(s)
 
 	sock = socket( AF_INET, SOCK_STREAM, 0);
 
@@ -1064,7 +1335,6 @@ BOOL Initialise()
 
     if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
 	{
-
 		wsprintf(szBuff, "listen(sock) failed Error %d", WSAGetLastError());
 
 		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
@@ -1074,7 +1344,6 @@ BOOL Initialise()
    
 	if ((status = WSAAsyncSelect( sock, MainWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
 	{
-
 		wsprintf(szBuff, "WSAAsyncSelect failed Error %d", WSAGetLastError());
 
 		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
@@ -1085,6 +1354,60 @@ BOOL Initialise()
 
 	}
 
+	if (FBBPort && FBBPort == Port)
+	{
+		FBBsock = sock;
+	}
+	else
+	{
+		FBBsock = socket( AF_INET, SOCK_STREAM, 0);
+
+		if (FBBsock == INVALID_SOCKET)
+		{
+			wsprintf(szBuff, "socket() failed error %d", WSAGetLastError());
+			MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+			return FALSE;
+        
+		}
+ 
+		psin=&local_sin;
+
+		psin->sin_family = AF_INET;
+		psin->sin_addr.s_addr = INADDR_ANY;
+		psin->sin_port = htons(FBBPort);        // Convert to network ordering 
+
+ 
+		if (bind( FBBsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+		{
+			 wsprintf(szBuff, "bind(FBBsock) failed Error %d", WSAGetLastError());
+
+			 MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+			closesocket( FBBsock );
+
+			return FALSE;
+		}
+
+		if (listen( FBBsock, MAX_PENDING_CONNECTS ) < 0)
+		{
+			wsprintf(szBuff, "listen(FBBsock) failed Error %d", WSAGetLastError());
+
+			MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+
+			return FALSE;
+		}
+   
+		if ((status = WSAAsyncSelect( FBBsock, MainWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
+		{
+			wsprintf(szBuff, "WSAAsyncSelect failed Error %d", WSAGetLastError());
+
+			MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+
+			closesocket( FBBsock );
+		
+			return FALSE;
+
+		}
+	}
 
 	if (cfgMinToTray)
 	
@@ -1117,10 +1440,11 @@ int Connected(Stream)
 		{
 			sock=ConnectionInfo[n].socket;
     
-            wsprintf(Msg,"*** Connected using Stream %d\r\n",Stream);
-
-			send(sock, Msg, strlen(Msg),0);
-			
+            if(ConnectionInfo[n].FBBMode == 0)
+			{
+				wsprintf(Msg,"*** Connected using Stream %d\r\n",Stream);
+				send(sock, Msg, strlen(Msg),0);
+			}
 			return 0;
 		}
 	}
@@ -1178,7 +1502,13 @@ int DoReceivedData(int Stream)
 
 				if (len == 0) return 0;
 				
-				// Replace cr with crlf
+				if (ConnectionInfo[n].FBBMode)
+				{
+					send(sock,Buffer,len,0);
+				}
+				else
+				{
+					// Replace cr with crlf
 
 				ptr=&Buffer[0];
 
@@ -1204,7 +1534,8 @@ int DoReceivedData(int Stream)
 					ptr=ptr2+1;
 				}
 				while (len>0);
-			}
+				}
+				}
 
 			while (count > 0);
 
@@ -1388,7 +1719,8 @@ int ParseIniFile(char * fn)
 	char buf[256],errbuf[256];
 	char * param;
 	char * value;
-	char * pos, *ptr,*User,*Pwd,*UserCall;
+	char * Context, *ptr, *User, *Pwd, *UserCall, *pos;
+	BOOL FBB;
 	HKEY hKey=0;
 	UCHAR Value[100];
 	UCHAR * BPQDirectory;
@@ -1437,7 +1769,10 @@ int ParseIniFile(char * fn)
 		if (_stricmp(param,"TCPPORT") == 0)
 			Port = atoi(value);
 
-//		if (strcmp(param,"LOGINRESPONSE") == 0) cfgLOGINRESPONSE = value;
+		if (_stricmp(param,"FBBPORT") == 0)
+			FBBPort = atoi(value);
+
+		//		if (strcmp(param,"LOGINRESPONSE") == 0) cfgLOGINRESPONSE = value;
 //	    if (strcmp(param,"PASSWORDRESPONSE") == 0) cfgPASSWORDRESPONSE = value;
 
 	    if (_stricmp(param,"LOGINPROMPT") == 0)
@@ -1462,31 +1797,20 @@ int ParseIniFile(char * fn)
 
 		if (_stricmp(param,"USER") == 0)
 		{
-			pos = strchr(value,',');
+			FBB = FALSE;
+			
+			User = strtok_s(value, ", ", &Context);
+			Pwd = strtok_s(NULL, ", ", &Context);
+			UserCall = strtok_s(NULL, ", ", &Context);
 
-			if (!pos)
-			{
+			if (User == 0 || Pwd == 0)
 				// invalid record
-
 				continue;
-
-			}
-				
-			User=value;
-			*(pos++)=0;
-			Pwd=pos;
-
-			pos = strchr(pos,',');
-
-//			UserCall=pos;
 
 			// Callsign may be missing
 			
-			if (pos) 
-			{			
-				*(pos++)=0;
-				UserCall=pos;
-				
+			if (UserCall) 
+			{							
 				if (UserCall[0] == 0)
 					UserCall=&BlankCall[0];
 				else
@@ -1511,7 +1835,6 @@ int ParseIniFile(char * fn)
 			strcpy(UserRecPtr[NumberofUsers]->Callsign,UserCall);
 
 			NumberofUsers += 1;
-
 		}
 	}
 
