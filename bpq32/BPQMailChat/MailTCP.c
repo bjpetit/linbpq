@@ -547,7 +547,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime);
+				Date = _mkgmtime(&rtime);
 	
 				if (Date == (time_t)-1)
 					Date = 0;
@@ -1963,7 +1963,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime);
+				Date = _mkgmtime(&rtime);
 				
 				if (Date == (time_t)-1)
 					Date = 0;

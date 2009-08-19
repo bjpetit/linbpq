@@ -771,7 +771,7 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline);
 
 BOOL CreateConsole();
 int WritetoConsoleWindow(char * Msg, int len);
-int ToggleParam(HWND hWnd, BOOL * Param, int Item);
+int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item);
 void CopyToClipboard(HWND hWnd);
 VOID CloseConsole(int Stream);
 
@@ -841,6 +841,9 @@ VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);
 VOID SeeifBBSUIFrame(struct _MESSAGE * buff, int len);
 struct MsgInfo * FindMessageByNumber(int msgno);
 
+
+
+extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;
 
 extern char SignoffMsg[];
@@ -852,6 +855,11 @@ extern HWND MainWnd;
 extern char BaseDir[];
 extern char MailDir[];
 extern char WPDatabasePath[];
+
+extern BOOL LogBBS;
+extern BOOL LogCHAT;
+extern BOOL LogTCP;
+
 
 extern int LatestMsg;
 extern char BBSName[];
@@ -940,6 +948,7 @@ extern char *month[];
 
 extern CIRCUIT * Console;
 extern HWND hConsole;
+extern HWND hDebug;
 extern RECT ConsoleRect;
 
 extern BOOL Bells;

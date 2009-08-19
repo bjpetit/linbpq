@@ -126,9 +126,18 @@
 
 // Test for Mike - Remove B1 check from Parse_SID
 
+// Version 1.0.0.36
+
+// Fix calculation of Housekeeping Time.
+// Set dialog box background explicitly.
+// Remove tray entry for chat debug window
+// Add date to log file name.
+// Add Actions Menu option to disable logging.
+// Fix size of main window when it changes between versions.
+
 #include "stdafx.h"
 
-// #define SPECIALVERSION "Beta"
+#define SPECIALVERSION "Beta"
 
 #include "GetVersion.h"
 
@@ -148,7 +157,7 @@ TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 HWND MainWnd;
 RECT MainRect;
 HMENU hActionMenu;
-HMENU hLogMenu;
+static HMENU hMenu;
 HMENU hDisMenu;									// Disconnect Menu Handle
 HMENU hFWDMenu;									// Forward Menu Handle
 
@@ -211,8 +220,6 @@ char LoginMsg[]="user:";
 
 char BlankCall[]="         ";
 
-
-BOOL LogEnabled=FALSE;
 
 UCHAR BBSApplMask;
 UCHAR ChatApplMask;
@@ -347,6 +354,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			DeleteTrayMenuItem(hConsole);
 		if (hMonitor)
 			DeleteTrayMenuItem(hMonitor);
+		if (hDebug)
+			DeleteTrayMenuItem(hDebug);
 	}
 
 	// Free all allocated memory
@@ -415,14 +424,15 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 //    so that the application will get 'well formed' small icons associated
 //    with it.
 //
-
+//
 #define BGCOLOUR RGB(236,233,216)
+//#define BGCOLOUR RGB(245,245,245)
+
+HBRUSH bgBrush;
 
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
 	WNDCLASSEX wcex;
-	HBRUSH bgBrush;
-
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -461,10 +471,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	char Title[80];
 	WSADATA WsaData;
-	HMENU hMenu;		// handle of menu 
+	HMENU hTopMenu;		// handle of menu 
 	HKEY hKey=0;
 	int retCode,Type,Vallen;
 	char Size[80];
+	RECT InitRect;
 
 	// Get Window Size  From Registry
 
@@ -493,6 +504,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	{
 		return FALSE;
 	}
+
 	MainWnd=hWnd;
 
 	if (MainRect.right < 100 || MainRect.bottom < 100)
@@ -500,25 +512,26 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		GetWindowRect(hWnd,	&MainRect);
 	}
 
-	MoveWindow(hWnd,MainRect.left,MainRect.top, MainRect.right-MainRect.left, MainRect.bottom-MainRect.top, TRUE);
+	// Keep the size in case changed from previous version
 
-   GetVersionInfo(NULL);
+	GetWindowRect(hWnd,	&InitRect);
 
-   wsprintf(Title,"G8BPQ Mail and Chat Server Beta Version %s", VersionString);
+	MoveWindow(hWnd,MainRect.left,MainRect.top, InitRect.right-InitRect.left, InitRect.bottom-InitRect.top, TRUE);
+
+	GetVersionInfo(NULL);
+
+	wsprintf(Title,"G8BPQ Mail and Chat Server Beta Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
 
    	// Get handles fou updating menu items
 
-	hMenu=GetMenu(MainWnd);
-	hActionMenu=GetSubMenu(hMenu,0);
+	hTopMenu=GetMenu(MainWnd);
+	hActionMenu=GetSubMenu(hTopMenu,0);
 
 	hFWDMenu=GetSubMenu(hActionMenu,0);
-	hLogMenu=GetSubMenu(hActionMenu,1);
+	hMenu=GetSubMenu(hActionMenu,1);
 	hDisMenu=GetSubMenu(hActionMenu,2);
-
-	CheckMenuItem(hLogMenu,0,MF_BYPOSITION | LogEnabled<<3);
-
 
    CheckTimer();
 
@@ -663,7 +676,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					
 					tm = gmtime(&MaintClock);
 
-					Debugprintf("MaintTime = %d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
+					Debugprintf("MaintTime = %04d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
 						MaintTime, tm->tm_year - 100, tm->tm_mon +1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 
 				}
@@ -678,6 +691,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			My__except_Routine("TrytoSend");
 		
 		return (0);
+
+	
+	case WM_CTLCOLORDLG:
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
 
 	case WM_INITMENUPOPUP:
 
@@ -751,14 +776,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		switch (wmId)
 		{
 
-		case IDM_LOGGING:
+		case IDM_LOGBBS:
 
-			// Toggle Logging Flag
-
-			LogEnabled = !LogEnabled;
-			CheckMenuItem(hLogMenu,0,MF_BYPOSITION | LogEnabled<<3);
-
+			ToggleParam(hMenu, hWnd, &LogBBS, IDM_LOGBBS);
 			break;
+
+		case IDM_LOGCHAT:
+
+			ToggleParam(hMenu, hWnd, &LogCHAT, IDM_LOGCHAT);
+			break;
+
+		case IDM_LOGTCP:
+
+			ToggleParam(hMenu, hWnd, &LogTCP, IDM_LOGTCP);
+			break;
+
 
 		case IDM_HOUSEKEEPING:
 
@@ -1144,18 +1176,21 @@ BOOL Initialise()
 		tm->tm_min = MaintTime % 100;
 		tm->tm_sec = 0;
 
-		MaintClock = mktime(tm);
+		MaintClock = _mkgmtime(tm);
 
 		if (MaintClock < now)
 			MaintClock += 86400;
 
 		tm = gmtime(&MaintClock);
 
-		Debugprintf("MaintTime = %d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
+		Debugprintf("MaintTime = %04d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
 				MaintTime, tm->tm_year - 100, tm->tm_mon +1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 
 	}
 
+	CheckMenuItem(hMenu,IDM_LOGBBS, (LogBBS) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_LOGTCP, (LogTCP) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,IDM_LOGCHAT, (LogCHAT) ? MF_CHECKED : MF_UNCHECKED);
 
 	RefreshMainWindow();
 

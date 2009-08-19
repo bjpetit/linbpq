@@ -166,17 +166,17 @@ static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 
 		case MONBBS:
 
-			ToggleParam(hWnd, &MonBBS, MONBBS);
+			ToggleParam(hMenu, hWnd, &MonBBS, MONBBS);
 			break;
 
 		case MONCHAT:
 
-			ToggleParam(hWnd, &MonCHAT, MONCHAT);
+			ToggleParam(hMenu, hWnd, &MonCHAT, MONCHAT);
 			break;
 
 		case MONTCP:
 
-			ToggleParam(hWnd, &MonTCP, MONTCP);
+			ToggleParam(hMenu, hWnd, &MonTCP, MONTCP);
 			break;
 
 
@@ -367,7 +367,7 @@ lineloop:
 	return;
 }
 
-static int ToggleParam(HWND hWnd, BOOL * Param, int Item)
+/*static int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item)
 {
 	*Param = !(*Param);
 
@@ -375,7 +375,7 @@ static int ToggleParam(HWND hWnd, BOOL * Param, int Item)
 	
     return (0);
 }
-
+*/
 static  void CopyToClipboard(HWND hWnd)
 {
 	int i,n, len=0;

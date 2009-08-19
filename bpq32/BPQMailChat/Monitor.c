@@ -36,6 +36,10 @@ static BOOL MonBBS = TRUE;
 static BOOL MonCHAT = TRUE;
 static BOOL MonTCP = TRUE;
 
+BOOL LogBBS = TRUE;
+BOOL LogCHAT = TRUE;
+BOOL LogTCP = TRUE;
+
 static int PartLinePtr=0;
 static int PartLineIndex=0;		// Listbox index of (last) incomplete line
 
@@ -167,17 +171,17 @@ static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 
 		case MONBBS:
 
-			ToggleParam(hWnd, &MonBBS, MONBBS);
+			ToggleParam(hMenu, hWnd, &MonBBS, MONBBS);
 			break;
 
 		case MONCHAT:
 
-			ToggleParam(hWnd, &MonCHAT, MONCHAT);
+			ToggleParam(hMenu, hWnd, &MonCHAT, MONCHAT);
 			break;
 
 		case MONTCP:
 
-			ToggleParam(hWnd, &MonTCP, MONTCP);
+			ToggleParam(hMenu, hWnd, &MonTCP, MONTCP);
 			break;
 
 
@@ -365,7 +369,7 @@ lineloop:
 	return (0);
 }
 
-static int ToggleParam(HWND hWnd, BOOL * Param, int Item)
+static int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item)
 {
 	*Param = !(*Param);
 
@@ -428,8 +432,13 @@ char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
 BOOL OpenLogfile(int Flags)
 {
 	UCHAR FN[MAX_PATH];
+	time_t T;
+	struct tm * tm;
 
-	wsprintf(FN,"%s\\Log_%s.txt", BaseDir, Logs[Flags]);
+	T = time(NULL);
+	tm = gmtime(&T);	
+
+	wsprintf(FN,"%s\\Log_%02d%02d%02d_%s.txt", BaseDir, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
 
 	LogHandle[Flags] = CreateFile(FN,
 					GENERIC_WRITE,
@@ -459,6 +468,7 @@ void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
 			WritetoMonitorWindow((char *)&Flag, 1);
 			WritetoMonitorWindow(Msg, MsgLen);
 			WritetoMonitorWindow(CRLF , 1);
+
 		}
 		else if (Flags == LOG_CHAT && MonCHAT)
 		{	
@@ -481,6 +491,13 @@ void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
 		}
 
 	}
+
+	if (Flags == LOG_TCP && !LogTCP)
+		return;
+	if (Flags == LOG_BBS && !LogBBS)
+		return;
+	if (Flags == LOG_CHAT && !LogCHAT)
+		return;
 
 
 	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) OpenLogfile(Flags);

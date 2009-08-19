@@ -227,33 +227,33 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 		case BPQBELLS:
 
-			ToggleParam(hWnd, &Bells, BPQBELLS);
+			ToggleParam(hMenu, hWnd, &Bells, BPQBELLS);
 			break;
 
 		case BPQStripLF:
 
-			ToggleParam(hWnd, &StripLF, BPQStripLF);
+			ToggleParam(hMenu, hWnd, &StripLF, BPQStripLF);
 			break;
 
 		case IDM_WARNINPUT:
 
-			ToggleParam(hWnd, &WarnWrap, IDM_WARNINPUT);
+			ToggleParam(hMenu, hWnd, &WarnWrap, IDM_WARNINPUT);
 			break;
 
 
 		case IDM_WRAPTEXT:
 
-			ToggleParam(hWnd, &WrapInput, IDM_WRAPTEXT);
+			ToggleParam(hMenu, hWnd, &WrapInput, IDM_WRAPTEXT);
 			break;
 
 		case IDM_Flash:
 
-			ToggleParam(hWnd, &FlashOnConnect, IDM_WRAPTEXT);
+			ToggleParam(hMenu, hWnd, &FlashOnConnect, IDM_WRAPTEXT);
 			break;
 
 		case IDM_CLOSEWINDOW:
 
-			ToggleParam(hWnd, &CloseWindowOnBye, IDM_CLOSEWINDOW);
+			ToggleParam(hMenu, hWnd, &CloseWindowOnBye, IDM_CLOSEWINDOW);
 			break;
 
 		case BPQCLEAROUT:
@@ -570,7 +570,7 @@ lineloop:
 	return (0);
 }
 
-int ToggleParam(HWND hWnd, BOOL * Param, int Item)
+int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item)
 {
 	*Param = !(*Param);
 

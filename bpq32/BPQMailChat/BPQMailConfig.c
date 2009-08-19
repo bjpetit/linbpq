@@ -134,6 +134,19 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 
        break;
 
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
+
 	case WM_COMMAND:
 
 		switch (LOWORD(wParam))
@@ -191,13 +204,24 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 //	This processes messages from controls on the tab subpages
 	int Command;
 
-		
-	UNREFERENCED_PARAMETER(lParam);
 	switch (message)
 	{
 	case WM_INITDIALOG:
 		OnChildDialogInit( hDlg);
 		return (INT_PTR)TRUE;
+
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
 
 	case WM_COMMAND:
 
@@ -1467,6 +1491,11 @@ VOID SaveWindowConfig()
 		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&FlashOnConnect,4);
 		retCode = RegSetValueEx(hKey,"CloseWindowOnBye",0,REG_DWORD,(BYTE *)&CloseWindowOnBye,4);
 
+		retCode = RegSetValueEx(hKey,"Log_BBS",0,REG_DWORD,(BYTE *)&LogBBS,4);
+		retCode = RegSetValueEx(hKey,"Log_TCP",0,REG_DWORD,(BYTE *)&LogTCP,4);
+		retCode = RegSetValueEx(hKey,"Log_CHAT",0,REG_DWORD,(BYTE *)&LogCHAT,4);
+
+
 		RegCloseKey(hKey);
 	}
 
@@ -1640,7 +1669,17 @@ TryAgain:
 		RegQueryValueEx(hKey,"FlashOnConnect",0,			
 			(ULONG *)&Type,(UCHAR *)&FlashOnConnect,(ULONG *)&Vallen);
 
+		Vallen=4;
+		RegQueryValueEx(hKey,"Log_BBS",0,			
+			(ULONG *)&Type,(UCHAR *)&LogBBS,(ULONG *)&Vallen);
 
+		Vallen=4;
+		RegQueryValueEx(hKey,"Log_TCP",0,			
+			(ULONG *)&Type,(UCHAR *)&LogTCP,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"Log_CHAT",0,			
+			(ULONG *)&Type,(UCHAR *)&LogCHAT,(ULONG *)&Vallen);
 
 		sscanf(Size,"%d,%d,%d,%d",&ConsoleRect.left,&ConsoleRect.right,&ConsoleRect.top,&ConsoleRect.bottom);
 
@@ -1763,6 +1802,18 @@ INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 
 		return (INT_PTR)TRUE;
 
+		
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
 
 	case WM_COMMAND:
 
@@ -1853,9 +1904,19 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		CheckDlgButton(hDlg,106, BST_UNCHECKED);
 		CheckDlgButton(hDlg,107, BST_CHECKED);
 
-
-
 		return (INT_PTR)TRUE;
+
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
 
 
 	case WM_COMMAND:
@@ -1914,6 +1975,20 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		SetDlgItemInt(hDlg, IDC_MAXBLOCK, MaxFBBBlockSize, FALSE);
 
 		return (INT_PTR)TRUE;
+
+
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
 
 	case WM_COMMAND:
 

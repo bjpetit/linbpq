@@ -296,6 +296,18 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 		return (INT_PTR)TRUE;
 
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
 
 	case WM_COMMAND:
 
@@ -497,7 +509,7 @@ updated, so the Active or primary record will remain unchanged at this time.
 If a field is changed, a flag giving the update request type is then validated. If the /U flag is already validated,
 it will not be replaced. This flag will be used in case the WP update messages are validated.
 */
-				if ((WPDate = mktime(&rtime)) != (time_t)-1 )
+				if ((WPDate = _mkgmtime(&rtime)) != (time_t)-1 )
 				{
 					TypeString = strlop(Call, '/');
 					Type = TypeString[0];

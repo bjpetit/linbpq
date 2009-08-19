@@ -1682,7 +1682,7 @@ Body: 214
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime);
+				Date = _mkgmtime(&rtime);
 	
 				if (Date == (time_t)-1)
 					Date = time(NULL);

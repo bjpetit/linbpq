@@ -48,13 +48,16 @@
 #define IDC_SAVEWP                      40009
 #define IDC_DELETEWP                    40010
 #define IDM_DEBUG                       40011
+#define IDM_LOGBBS                      40012
+#define IDM_LOGTCP                      40013
+#define IDM_LOGCHAT                     40014
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30003
-#define _APS_NEXT_COMMAND_VALUE         40012
+#define _APS_NEXT_COMMAND_VALUE         40015
 #define _APS_NEXT_CONTROL_VALUE         1015
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
