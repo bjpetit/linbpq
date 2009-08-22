@@ -175,6 +175,7 @@ int APIENTRY GetNumberofPorts();
 
 int APIENTRY GetPortNumber(int portslot);
 
+UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc);
 
 //	Enable async operation - new to Win32 version of API
 

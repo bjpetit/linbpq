@@ -11,6 +11,11 @@ char MYCALL[7];
 #pragma pack(1)
 
 UINT UIPortMask = 0;
+BOOL UIEnabled[17];
+char * UIDigi[17];
+char * UIDigiAX[17];		// ax.25 version of digistring
+int UIDigiLen[17];			// Length of AX string
+
 
 typedef struct _MESSAGE
 {
@@ -37,30 +42,49 @@ typedef struct _MESSAGE
 
 VOID SetupUIInterface()
 {
-	char * ptr;
 	int i, NumPorts = GetNumberofPorts();
-	char Tempstring[101];
 	struct _EXCEPTION_POINTERS exinfo;
 
 	ConvToAX25(GetApplCall(BBSApplNum), MYCALL);
-	MYCALL[6];				// Set End of Call (only used as origin)
-
 	ConvToAX25(UIDEST, AXDEST);
 
 	UIPortMask = 0;
 
-	memcpy(Tempstring, UIPortString, 100);
-
-	ptr = strtok(Tempstring, " ,\t\n\r");
-		
-	while (ptr != NULL)
+	for (i = 1; i <= NumPorts; i++)
 	{
-		i=atoi(ptr);
-
-		if (i > 0 && i <= NumPorts)
+		if (UIEnabled[i])
+		{
+			char DigiString[100], * DigiLeft;
 			UIPortMask |= 1 << (i-1);
+			if (UIDigi[i])
+			{
+				UIDigiAX[i] = zalloc(100);
+				strcpy(DigiString, UIDigi[i]);
+				DigiLeft = strlop(DigiString,',');
 
-		ptr = strtok(NULL, " ,\t\n\r");
+				while(DigiString[0])
+				{
+					ConvToAX25(DigiString, &UIDigiAX[i][UIDigiLen[i]]);
+					UIDigiLen[i] += 7;
+
+					if (DigiLeft)
+					{
+						_asm
+						{
+							mov eax,dword ptr [DigiLeft] 
+							push eax
+							lea	eax,[DigiString] 
+							push eax
+							call strcpy
+							add	esp,8
+						}
+						DigiLeft = strlop(DigiString,',');
+					}
+					else
+						DigiString[0] = 0;
+				}
+			}
+		}
 	}
 
 	__try
@@ -209,16 +233,36 @@ VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 {
 	MESSAGE AXMSG;
 
+	PMESSAGE AXPTR = &AXMSG;
+
 	// Block includes the Msg Header (7 bytes), Len Does not!
 
-	memcpy(AXMSG.DEST, HWADDR, 7);
-	memcpy(AXMSG.ORIGIN, MYCALL, 7);
-	AXMSG.DEST[6] &= 0x7e;			// Clear End of Call
-	AXMSG.DEST[6] |= 0x80;			// set Command Bit
-	AXMSG.ORIGIN[6] |= 1;			// Set End of Call
-	AXMSG.CTL = 3;		//UI
-	AXMSG.PID = 0xf0;
-	memcpy(AXMSG.DATA, Msg, Len);
+	memcpy(AXPTR->DEST, HWADDR, 7);
+	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+	AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+	if (UIDigi[Port])
+	{
+		// This port has a digi string
+
+		int DigiLen = UIDigiLen[Port];
+
+		memcpy(&AXPTR->CTL, UIDigiAX[Port], DigiLen);
+		
+		_asm{					// Adjusting pointers to structs is difficult in C!
+			mov	eax,AXPTR
+			add eax, DigiLen
+			mov AXPTR,EAX
+		}
+
+		Len += DigiLen;
+
+	}
+	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+	AXPTR->CTL = 3;		//UI
+	AXPTR->PID = 0xf0;
+	memcpy(AXPTR->DATA, Msg, Len);
 
 	SendRaw(Port, (char *)&AXMSG.DEST, Len + 16);
 
@@ -261,11 +305,58 @@ VOID ProcessUItoFBB(char * msg, int len, int Port)
 	return;
 }
 
+UCHAR * AdjustForDigis(PMESSAGE * buff, int * len)
+{
+	PMESSAGE buff1 = *(buff);
 
+	if ((buff1->ORIGIN[6] & 1) == 1)
+	{
+		// End of Call Set
+	
+		return 0;				// No Digis
+	}
+
+	_asm {
+		mov	eax,buff
+		mov	ebx,[eax]
+		add ebx,7
+		mov	[eax],ebx
+	}
+
+	return (&buff1->CTL);		// Start of Digi String
+}
 VOID SeeifBBSUIFrame(PMESSAGE buff, int len)
 {
-	if (buff->PORT > 128)
-		return;										// Only look at received frames
+	UCHAR * Digis;
+	UCHAR From[7], To[7];
+	int Port = buff->PORT;
+	
+	if (Port > 128)
+		return;									// Only look at received frames
+
+	memcpy(From, buff->ORIGIN, 7);				// Save Origin and Dest before adjucting for Digis
+	memcpy(To, buff->DEST, 7);
+
+	Digis = AdjustForDigis(&buff, &len);
+
+	if (Digis)
+	{
+		// Make sure all are actioned
+	
+	DigiLoop:
+	
+		if ((Digis[6] & 0x80) == 0)
+			return;								// Not repeated
+		
+		if ((Digis[6] & 1) == 0)				// Not end of list
+		{
+			Digis+-7;
+			goto DigiLoop;
+		}
+	}
+
+
+
 	
 	if (buff->CTL != 3)
 		return;
@@ -277,15 +368,18 @@ VOID SeeifBBSUIFrame(PMESSAGE buff, int len)
 //		if (buff->ORIGIN[6] == (MYCALL[6] | 1))		// Set End of Call
 //			return;
 
-	if (memcmp(buff->DEST, MYCALL, 6) == 0)
-		if ((buff->DEST[6] & 0x7e) == MYCALL[6])	// Just SSID Bits
-		{
-			ProcessUItoFBB(buff->DATA, len-23, buff->PORT);
-			return;
-		}
-	if (memcmp(buff->DEST, AXDEST, 6) == 0)
+	From[6] &= 0x7e;
+	To[6] &= 0x7e;
+
+	if (memcmp(To, MYCALL, 7) == 0)
 	{
-		ProcessUItoFBB(buff->DATA, len-23, buff->PORT);
+		ProcessUItoFBB(buff->DATA, len-23, Port);
+		return;
+	}
+
+	if (memcmp(To, AXDEST, 7) == 0)
+	{
+		ProcessUItoFBB(buff->DATA, len-23, Port);
 		return;
 	}
 

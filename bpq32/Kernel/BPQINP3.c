@@ -3,8 +3,6 @@
 //
 
 //	All code runs from the BPQ32 Received or Timer Routines under Semaphore.
-//	As most data areas are dynamically allocated, they will not survive a Timer Process Swap.
-//	Shared data can be used for Config Info.
 
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -60,6 +58,7 @@ VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops
 VOID SendNetFrame(struct _MESSAGE * Frame);
 VOID SendRIPToNeighbour(struct ROUTE * Route);
 VOID DeleteNETROMRoutes(struct ROUTE * Route);
+VOID DeleteINP3Routes(struct ROUTE * Route);
 
 //#define NOINP3
 
@@ -116,18 +115,28 @@ VOID InitialiseRTT()
 
 VOID TellINP3LinkGone(struct ROUTE * Route)
 {
-	int i;
 	struct DEST_LIST * Dest =  DataBase->DESTS;
 	char call[11]="";
 
 	ConvFromAX25(Route->NEIGHBOUR_CALL, call);
 	Debugprintf("BPQ32 L2 Link to Neighbour %s lost", call);
 
+	if (Route->NEIGHBOUR_LINK)
+		Debugprintf("BPQ32 Neighbour_Link not cleared");
+
+
 	if (Route->INP3Node == 0)
-	{
 		DeleteNETROMRoutes(Route);
-		return;
-	}
+	else
+		DeleteINP3Routes(Route);
+}
+
+VOID DeleteINP3Routes(struct ROUTE * Route)
+{
+	int i;
+	struct DEST_LIST * Dest =  DataBase->DESTS;
+
+	// Delete any NETROM Dest entries via this Route
 
 	Route->SRTT = 0;
 	Route->RTT = 0;
@@ -143,6 +152,10 @@ VOID TellINP3LinkGone(struct ROUTE * Route)
 	{
 		Dest++;
 
+		if (Dest->DEST_CALL[0] == 0)
+			continue;										// Spare Entry
+
+
 		if (Dest->ROUTE1.ROUT_NEIGHBOUR == Route)
 		{
 			//	We are deleting the best route, so need to tell other nodes
@@ -150,7 +163,6 @@ VOID TellINP3LinkGone(struct ROUTE * Route)
 			//	we can send it. Remove when all gone
 
 			//	How do we indicate is is dead - Maybe the 60000 is enough!
-
 			if (Dest->ROUTE2.ROUT_NEIGHBOUR == 0)
 			{
 				// Only entry
@@ -193,34 +205,50 @@ VOID DeleteNETROMRoutes(struct ROUTE * Route)
 	int i;
 	struct DEST_LIST * Dest =  DataBase->DESTS;
 
+	Dest--;
+
 	// Delete any NETROM Dest entries via this Route
 
 	for (i=0; i < MAXDESTS; i++)
 	{
 		Dest++;
 
+		if (Dest->DEST_CALL[0] == 0)
+			continue;										// Spare Entry
+
 		if (Dest->NRROUTE1.ROUT_NEIGHBOUR == Route)
 		{	
-			if (Dest->NRROUTE2.ROUT_NEIGHBOUR == 0)
+			if (Dest->NRROUTE2.ROUT_NEIGHBOUR == 0)			// No more Netrom Routes
 			{
-				// No More Routes - ZAP Dest
-
+				if (Dest->ROUTE1.ROUT_NEIGHBOUR == 0)		// Any INP3 ROutes?
 				{
-					char call[11]="";
-					ConvFromAX25(Dest->DEST_CALL, call);
-					Debugprintf("Deleting NR Node %s", call);
-				}
+					// No More Routes - ZAP Dest
 
-				_asm
+					{
+						char call[11]="";
+						ConvFromAX25(Dest->DEST_CALL, call);
+						Debugprintf("Deleting NR Node %s", call);
+					}
+
+					_asm
+					{
+						pushad
+						mov	EBX,Dest
+						CALL REMOVENODE			// Clear buffers, Remove from Sorted Nodes chain, and zap entry
+						popad
+					}
+
+					continue;
+				}
+				else
 				{
-					pushad
-					mov	EBX,Dest
-					CALL REMOVENODE			// Clear buffers, Remove from Sorted Nodes chain, and zap entry
-					popad
-				}
+					// Still have an INP3 Route - just zap this entry
 
-				continue;
+					memset(&Dest->NRROUTE1, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+					continue;
+				}
 			}
+
 			memcpy(&Dest->NRROUTE1, &Dest->NRROUTE2, sizeof(struct NR_DEST_ROUTE_ENTRY));
 			memcpy(&Dest->NRROUTE2, &Dest->NRROUTE3, sizeof(struct NR_DEST_ROUTE_ENTRY));
 			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
@@ -236,7 +264,7 @@ VOID DeleteNETROMRoutes(struct ROUTE * Route)
 			continue;
 		}
 
-		if (Dest->ROUTE3.ROUT_NEIGHBOUR == Route)
+		if (Dest->NRROUTE3.ROUT_NEIGHBOUR == Route)
 		{
 			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
 			continue;
@@ -248,11 +276,17 @@ VOID DeleteNETROMRoutes(struct ROUTE * Route)
 VOID TellINP3LinkSetupFailed(struct ROUTE * Route)
 {
 	// Attempt to activate Neighbour failed
+	
+	char call[11]="";
+
+	ConvFromAX25(Route->NEIGHBOUR_CALL, call);
+	Debugprintf("BPQ32 L2 Link to Neighbour %s setup failed", call);
+
 
 	if (Route->INP3Node == 0)
-		TellINP3LinkGone(Route);
-
-
+		DeleteNETROMRoutes(Route);
+	else
+		DeleteINP3Routes(Route);
 }
 
 VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGE * Buff)
@@ -1092,12 +1126,22 @@ VOID SendNegativeInfo()
 			
 		if (Entry->SRTT >= 60000)
 		{
-			// It is dead, and we have reported it if necessary, so remove
-			char call[11]="";
-			ConvFromAX25(Dest->DEST_CALL, call);
-			Debugprintf("Deleting Node %s", call);
-			memset(Dest, 0, sizeof(struct DEST_LIST));
-			NUMBEROFNODES--;
+			// It is dead, and we have reported it if necessary, so remove if no NETROM Routes
+
+			if (Dest->NRROUTE1.ROUT_NEIGHBOUR == 0)			// No more Netrom Routes
+			{
+				char call[11]="";
+				ConvFromAX25(Dest->DEST_CALL, call);
+				Debugprintf("Deleting Node %s", call);
+				memset(Dest, 0, sizeof(struct DEST_LIST));
+				NUMBEROFNODES--;
+			}
+			else
+			{
+				// Have a NETROM route, so zap the INP3 one
+
+				memset(Entry, 0, sizeof(struct DEST_ROUTE_ENTRY));
+			}
 		}
 	}
 }

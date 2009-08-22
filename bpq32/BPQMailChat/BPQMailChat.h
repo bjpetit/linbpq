@@ -56,7 +56,7 @@ struct UserRec
 
 #define InputBufferLen 500
 
-#define ln_ibuf 128
+//#define ln_ibuf 128
 #define deftopic "General"
 
 
@@ -222,7 +222,7 @@ typedef struct ConnectionInfo_S
 	int paclen;
 	UCHAR Callsign[11];			// Station call including SSID
     BOOL GotHeader;
-	UCHAR InputMode;				// Line by Line or Binary
+	UCHAR InputMode;			// Line by Line or Binary
 
     UCHAR InputBuffer[1000];
     int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
@@ -234,7 +234,6 @@ typedef struct ConnectionInfo_S
 	int Flags;
 //	BOOL DoingCommand;			// Processing Telnet Command
 //	BOOL DoEcho;				// Telnet Echo option accepted
-	int Conference;				// Conf number in chat mode
 
 	// Data to the user is kept in a malloc'd buffer. This can be appended to,
 	// and data sucked out under both terminal and system flow control. PACLEN is
@@ -243,6 +242,10 @@ typedef struct ConnectionInfo_S
 	UCHAR * OutputQueue;		// Messages to user
 	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
 	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	BOOL Paging;				// Set if user wants paging
+	int LinesSent;				// Count when paging
+	int PageLen;				// Lines per page
 
 	UCHAR * MailBuffer;			// Mail Message being received
 	UCHAR * CopyBuffer;			// Mail Message being forwarded
@@ -289,33 +292,33 @@ typedef struct ConnectionInfo_S
 struct UserInfo{
 
 	char	Call[10];			//	Connected call without SSID	
-//	indicat relai[8]  ;	/* 64 Digis path */
-	long	lastmsg  ;	/* 4  Last L number */
-	long	nbcon;	/* 4  Number of connexions */
+//	indicat relai[8];			/* 64 Digis path */
+	long	lastmsg;			/* 4  Last L number */
+	long	nbcon;				/* 4  Number of connexions */
 	time_t	TimeLastCOnnected;  //Last connexion date */
 //	long	lastyap __a2__  ;	/* 4  Last YN date */
 	short	flags    ;	/* 2  Flags */
 	short	on_base  ;	/* 2  ON Base number */
 
-	UCHAR	nbl       ;	/* 1  Lines paging */
+	UCHAR	PageLen;			// Lines Per Page
 	UCHAR	lang      ;	/* 1  Language */
 
 	long	newbanner;	/* 4  Last Banner date */
 	short 	download  ;	/* 2  download size (KB) = 100 */
-	char	POP3Locked ;	//Nonzero if POP3 server has locked this user (stops other pop3 connections, or BBS user killing messages)
-	char	BBSNumber;		// BBS Bitmap Index Number
+	char	POP3Locked ;		// Nonzero if POP3 server has locked this user (stops other pop3 connections, or BBS user killing messages)
+	char	BBSNumber;			// BBS Bitmap Index Number
 	struct	BBSForwardingInfo * ForwardingInfo;
 	struct  UserInfo * BBSNext;	// links BBS record
-	char	xfree[10];		/* 10 Spare */
-	char	theme     ;	/* 1  Current topic */
+	char	xfree[10];			/* 10 Spare */
+	char	theme;				/* 1  Current topic */
 
-	char	Name[18]   ;	/* 18 1st Name */
-	char	Address[61] ;	/* 61 Address */
-	char	City[31] ;	/* 31 City */
-	char	HomeBBS[41]  ;	/* 41 home BBS */
-	char	QRA[7]    ;	/* 7  Qth Locator */
-	char	pass[13]  ;	/* 13 Password */
-	char	ZIP[9]    ;	/* 9  Zipcode */
+	char	Name[18];			/* 18 1st Name */
+	char	Address[61];		/* 61 Address */
+	char	City[31];			/* 31 City */
+	char	HomeBBS[41];		/* 41 home BBS */
+	char	QRA[7];				/* 7  Qth Locator */
+	char	pass[13];			/* 13 Password */
+	char	ZIP[9];				/* 9  Zipcode */
 	BOOL	spare;
 } ;                /* Total : 360 bytes */
 
@@ -695,6 +698,7 @@ VOID FlagAsKilled(struct MsgInfo * Msg);
 int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
+void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
 int GetUserMsg(int m, char * Call, BOOL SYSOP);
 void Flush(ConnectionInfo * conn);
 VOID ClearQueue(ConnectionInfo * conn);
@@ -886,6 +890,8 @@ extern char hostname[];
 extern char RtUsr[];
 extern char RtUsrTemp[];
 extern BOOL ISP_Gateway_Enabled;
+extern BOOL SMTPAuthNeeded;
+
 
 extern int MaxMsgno;
 extern int BidLifetime;
@@ -927,7 +933,10 @@ extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
 extern BOOL ALLOWCOMPRESSED;
 extern BOOL EnableUI;
-extern char UIPortString[100];
+extern BOOL UIEnabled[];
+extern char * UIDigi[];
+
+
 
 extern BOOL ISP_Gateway_Enabled;
 

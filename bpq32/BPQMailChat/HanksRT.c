@@ -1230,6 +1230,7 @@ static void show_circuits(CIRCUIT *conn)
 	CIRCUIT *circuit;
 	NODE    *node;
 	int     len;
+	CN	*cn;
 
 	nprintf(conn, "Here %-6.6s <- ", OurAlias);
 	len = 0;
@@ -1260,6 +1261,17 @@ static void show_circuits(CIRCUIT *conn)
 		}
 
 		nputc(conn, '\r');
+
+		nprintf(conn, "      Nodes <- ");
+
+		for (cn = circuit->hnode; cn; cn = cn->next)
+		{
+			nputs(conn, cn->node->call);
+			nputs(conn, " ");
+		}
+
+		nputc(conn, '\r');
+
 	}
 	else if (circuit->flags & p_user)
 		nprintf(conn, "User %-6.6s\r", circuit->u.user->call);

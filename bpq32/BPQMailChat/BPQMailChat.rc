@@ -154,8 +154,7 @@ BEGIN
                     BS_LEFTTEXT | WS_TABSTOP,6,182,83,10
     LTEXT           "Enable UI System activates FBB compatible UI broadcating of Message Headers",
                     IDC_STATIC,10,75,358,15
-    EDITTEXT        IDC_UIPORTS,208,180,41,14
-    LTEXT           "UI Ports",IDC_STATIC,157,182,37,10
+    PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,158,181,91,13
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -209,6 +208,7 @@ END
 
 ISP_CONFIG DIALOG DISCARDABLE  26, 5, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "System"
 BEGIN
     EDITTEXT        3001,95,110,100,19
     LTEXT           "SMTP Server",-1,10,132,53,13
@@ -223,7 +223,7 @@ BEGIN
     LTEXT           "Port",-1,250,132,19,13
     EDITTEXT        3005,275,150,29,19
     EDITTEXT        3003,275,130,29,19
-    LTEXT           "This page configures the BBS <> Internet Mail Gateway. The Gateway allows local users to send messages to Internet emal addresses, and get replies from those massages",
+    LTEXT           "This page configures the BBS <> Internet Mail Gateway. The Gateway allows local users to send messages to Internet emal addresses, and get replies from those messages",
                     -1,10,10,353,20
     LTEXT           "My Domain",-1,10,112,51,7
     LTEXT           "ISP Account Password",-1,10,192,80,13
@@ -235,6 +235,9 @@ BEGIN
     CONTROL         "Enable Internet Gateway",3000,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | BS_LEFT | WS_TABSTOP,10,89,96,15
     DEFPUSHBUTTON   "Save",3100,165,240,57,17,BS_CENTER | BS_VCENTER
+    CONTROL         "SMTP Server Requires Authentication",ISP_SMTP_AUTH,
+                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_LEFT | 
+                    BS_MULTILINE | WS_TABSTOP,249,171,69,37
 END
 
 IDD_FORWARDING DIALOG DISCARDABLE  20, 20, 381, 273
@@ -602,6 +605,15 @@ BEGIN
     EDITTEXT        IDC_SEEN,165,185,59,12,ES_AUTOHSCROLL
 END
 
+IDD_UICONFIG DIALOG DISCARDABLE  0, 0, 321, 120
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "UI Configuration"
+FONT 8, "MS Sans Serif"
+BEGIN
+    DEFPUSHBUTTON   "Save",IDOK,89,99,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,175,99,50,14
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -790,6 +802,14 @@ BEGIN
         RIGHTMARGIN, 391
         TOPMARGIN, 9
         BOTTOMMARGIN, 258
+    END
+
+    IDD_UICONFIG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 314
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 113
     END
 END
 #endif    // APSTUDIO_INVOKED

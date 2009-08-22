@@ -101,6 +101,11 @@
 //		Add T flag to Resolver window fot TCP Sessions
 //		Set SO_KEEPALIVE and SO_CONDITIONAL_ACCEPT socket options
 
+// Version 1.15.4 August 2009
+
+//		Recycle Listening Socket if no connect for 60 mins
+//		Clear data connections if no data for 60 mins
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <winsock2.h>

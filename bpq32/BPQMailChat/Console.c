@@ -157,6 +157,9 @@ BOOL CreateConsole()
 	Console->paclen=236;
 	Console->sysop = TRUE;
 
+	Console->PageLen = user->PageLen;
+	Console->Paging = (user->PageLen > 0);
+
 	nodeprintf(Console, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
 		ALLOWCOMPRESSED ? "B" : "", "");
 

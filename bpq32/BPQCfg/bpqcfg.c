@@ -323,7 +323,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 #endif
 
-	puts("Configuration file Preprocessor for Version 4.10i April 2009.\n");
+	puts("Configuration file Preprocessor for Version 4.10k August 2009.\n");
 
 #ifdef THOR
 
@@ -978,6 +978,7 @@ int i;
 	int pwind;
 	int pfrack;
 	int ppacl;	
+	int inp3;	
 
 	fseek(fp2,(long) fileoffset,SEEK_SET);
 
@@ -989,7 +990,7 @@ int i;
 	   pfrack=0;
 	   ppacl=0;
 
-	   sscanf(rec,"%[^,],%d,%d,%d,%d,%d",callsign,&quality,&port,&pwind,&pfrack,&ppacl);
+	   sscanf(rec,"%[^,],%d,%d,%d,%d,%d,%d",callsign,&quality,&port,&pwind,&pfrack,&ppacl, &inp3);
 
 	   err_flag = call_check(callsign);
 
@@ -1009,7 +1010,14 @@ int i;
 			err_flag = 1;
 	   }
 	   fputc(port,fp2);
-	   fputc(pwind,fp2);
+
+	   // Use top bit of window as INP3 Flag
+
+	   if (inp3)
+		   pwind |= 0x80;
+
+	   fputc(pwind, fp2);
+
 	   fputi(pfrack,fp2);
 	   fputc(ppacl,fp2);
 

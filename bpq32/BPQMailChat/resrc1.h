@@ -21,6 +21,8 @@
 #define IDC_ENABLEUI                    1012
 #define IDC_USEB2                       1013
 #define IDC_CHATSEM                     1014
+#define IDC_UICONFIG                    1016
+#define ISP_SMTP_AUTH                   3009
 #define IDC_WP                          5000
 #define IDC_WPNAME                      5001
 #define IDC_ZIP1                        5002
@@ -37,6 +39,7 @@
 #define IDC_SEEN                        5012
 #define IDD_MAINTRESULTS                30001
 #define IDD_EDITWP                      30002
+#define IDD_UICONFIG                    30003
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
@@ -56,9 +59,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30003
+#define _APS_NEXT_RESOURCE_VALUE        30004
 #define _APS_NEXT_COMMAND_VALUE         40015
-#define _APS_NEXT_CONTROL_VALUE         1015
+#define _APS_NEXT_CONTROL_VALUE         1017
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

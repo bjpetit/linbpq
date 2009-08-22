@@ -45,10 +45,12 @@ char ISPAccountPass[50];
 char EncryptedISPAccountPass[50];
 int EncryptedPassLen;
 
+BOOL SMTPAuthNeeded;
+
 BOOL GMailMode = FALSE;
 char GMailName[50];
 
-int POP3Timer=300;							// Run on startup
+int POP3Timer=9999;							// Run on startup
 int ISPPOP3Interval;
 
 BOOL SMTPMsgCreated=FALSE;					// Set to cause SMTP client to send messages to ISP
@@ -145,7 +147,7 @@ BOOL InitialiseTCP()
 	{
 		// See if using GMail
 
-		char * ptr = strchr(ISPAccountName, '@');
+			char * ptr = strchr(ISPAccountName, '@');
 
 		if (ptr)
 		{
@@ -154,6 +156,7 @@ BOOL InitialiseTCP()
 				strcpy(GMailName, ISPAccountName);
 				strlop(GMailName, '@');
 				GMailMode = TRUE;
+				SMTPAuthNeeded = TRUE;
 			}
 		}
 	}
@@ -317,6 +320,15 @@ ReleaseSock(SOCKET sock)
 			if (sockptr->POP3User)
 				sockptr->POP3User->POP3Locked = FALSE;
 
+			if (sockptr->State == WaitingForGreeting)
+			{
+				char LogMsg[80];
+				int n=wsprintf(LogMsg, "Premature Close on Socket %d", sock);
+				WriteLogLine('|',LogMsg, n, LOG_TCP);
+	
+				if (sockptr->Type == SMTPClient)
+					SMTPActive = FALSE;	
+			}
 
 			free(sockptr);
 			return  0;
@@ -670,8 +682,6 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		decodeblock(&Buffer[12], &Out[9]);
 		decodeblock(&Buffer[16], &Out[12]);
 		decodeblock(&Buffer[20], &Out[15]);
-
-		len = b64decode(Buffer);
 
 		user = LookupCall(sockptr->CallSign);
 
@@ -1326,93 +1336,26 @@ void decodeblock( unsigned char in[4], unsigned char out[3] )
 **/
 char *str_base64_encode(char *str)
 {
-    unsigned char in[3], out[4];
-    unsigned int i, len, blocksout = 0, linesize = strlen(str);
+    unsigned int i = 0, j = 0, len = strlen(str);
 	char *tmp = str;
-	char *result = (char *)malloc((linesize + 3 - linesize % 3) * 4 / 3 + 1);
+	char *result = (char *)zalloc((len+1)*4);
 	
 	if (!result)
 		return NULL;
-		
-	while (*tmp) {
-        len = 0;
-		
-        for( i = 0; i < 3; i++ ) {
-            in[i] = (unsigned char)(*tmp);
-			
-            if (*tmp)
-                len++;
-            else
-                in[i] = 0;
-			
-			tmp++;
-        }
-		
-        if( len ) {
-            encodeblock( in, out, len);
-			
-            for( i = 0; i < 4; i++ ) 
-                result[blocksout++] = out[i];
-        }		
-    }
-	
-	result[blocksout] = '\0';
-	
-	return result;
-}
 
-/**
-* Decode a base64 encoded string.
-* 
-* @param *str Encoded String to decode
-* @return The decoded string
-* @see str_base64_encode
-**/
-int b64decode(char *str)
-{	
-    unsigned char in[4], out[3], v;
-    unsigned int i, len, pos = 0;
-	char *tmp = str;
-	char *result = str; //(char *)malloc(strlen(str) + 1);
-
-	if (!result)
-		return 0;
-		
-    while(*tmp) {
-        for( len = 0, i = 0; i < 4 && *tmp; i++ ) {
-            v = 0;
-			
-            while(*tmp && v == 0 ) {			
-                v = (unsigned char)(*tmp);				
-                v = (unsigned char) ((v < 43 || v > 122) ? 0 : cd64[ v - 43 ]);				
-				
-                if( v )
-                    v = (unsigned char) ((v == '$') ? 0 : v - 61);
-					
-				tmp++;
-            }
-			
-            if(*tmp) {
-                len++;
-				
-                if( v ) 
-                    in[i] = (unsigned char) (v - 1);
-            }
-            else 
-                in[i] = 0;
-        }
-		
-        if(len) {
-            decodeblock( in, out );
-			
-            for( i = 0; i < len - 1; i++ )
-               result[pos++] = out[i];
-        }
+	while (len  > 2 )
+	{
+		encodeblock(&str[i], &result[j],3);
+		i+=3;
+		j+=4;
+		len -=3;
+	}
+	if (len)
+	{
+		encodeblock(&str[i], &result[j], len);
 	}
 
-	result[pos] = '\0';
-	
-	return pos;
+	return result;
 }
 
 BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
@@ -1445,7 +1388,7 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 		 if (!HostEnt)
 		 {
  			n=wsprintf(LogMsg, "Resolve Failed for SMTP Server %s", Host);
-			WriteLogLine('|',LogMsg, n, LOG_BBS);
+			WriteLogLine('|',LogMsg, n, LOG_TCP);
 			SMTPActive = FALSE;
 			return FALSE;			// Resolve failed
 		 }
@@ -1565,7 +1508,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
-			if (GMailMode)
+			if (SMTPAuthNeeded)
 			{
 				sockprintf(sock, "AUTH LOGIN");
 				sockptr->State = WaitingForAUTHResponse;
@@ -1580,6 +1523,8 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			SendSock(sock, "QUIT");
 			sockptr->State = 0;
+			SMTPActive = FALSE;
+
 		}
 
 		return;
@@ -1587,17 +1532,17 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForAUTHResponse)
 	{
-		if (memcmp(Buffer, "334 VXNlcm5hbWU6", 7) == 0)
+		if (memcmp(Buffer, "334 VXN", 7) == 0)
 		{
 			char * Msg = str_base64_encode(ISPAccountName);
-			sockprintf(sock, Msg, strlen(Msg));
+			SendSock(sock, Msg);
 			free(Msg);
 			return;
 		}
 		else if (memcmp(Buffer, "334 UGF", 7) == 0)
 		{
 			char * Msg = str_base64_encode(ISPAccountPass);
-			sockprintf(sock, Msg, strlen(Msg));
+			SendSock(sock, Msg);
 			free(Msg);
 			return;
 		}
@@ -1612,6 +1557,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			SendSock(sock, "QUIT");
 			sockptr->State = 0;
+			SMTPActive = FALSE;
 		}
 
 		return;
@@ -1631,6 +1577,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			sockptr->SMTPMsg->status = 'H';			// Hold for review
 			SendSock(sock, "QUIT");
 			sockptr->State = 0;
+			SMTPActive = FALSE;
 		}
 
 		return;
@@ -1648,6 +1595,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			sockptr->SMTPMsg->status = 'H';			// Hold for review
 			SendSock(sock, "QUIT");
 			sockptr->State = 0;
+			SMTPActive = FALSE;
 		}
 
 		return;
@@ -1678,6 +1626,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			SendSock(sock, "QUIT");
 			sockptr->State = 0;
+			SMTPActive = FALSE;
 		}
 
 		return;
@@ -1735,7 +1684,7 @@ BOOL SendtoISP()
 
 			n=wsprintf(LogMsg, "Connecting to Server %s to send Msg %d", ISPSMTPName, Msg->number);
 
-			WriteLogLine('|',LogMsg, n, LOG_BBS);
+			WriteLogLine('|',LogMsg, n, LOG_TCP);
 
 			SMTPConnect(ISPSMTPName, ISPSMTPPort, Msg, Body);
 
@@ -1767,7 +1716,7 @@ BOOL POP3Connect(char * Host, int Port)
 	char LogMsg[100];
 
 	n=wsprintf(LogMsg, "Connecting to POP3 Server %s", Host);
-	WriteLogLine('|',LogMsg, n, LOG_BBS);
+	WriteLogLine('|',LogMsg, n, LOG_TCP);
 
 
 	// Resolve Name if needed
@@ -1786,7 +1735,7 @@ BOOL POP3Connect(char * Host, int Port)
 		 if (!HostEnt)
 		 {
 			n=wsprintf(LogMsg, "Resolve Failed for POP3 Server %s", Host);
-			WriteLogLine('|',LogMsg, n, LOG_BBS);
+			WriteLogLine('|',LogMsg, n, LOG_TCP);
 			return FALSE;			// Resolve failed
 		 }
 		 memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);

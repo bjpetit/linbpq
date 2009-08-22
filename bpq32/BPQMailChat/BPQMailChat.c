@@ -130,10 +130,18 @@
 
 // Fix calculation of Housekeeping Time.
 // Set dialog box background explicitly.
-// Remove tray entry for chat debug window
+// Remove tray entry for chat debug window.
 // Add date to log file name.
 // Add Actions Menu option to disable logging.
 // Fix size of main window when it changes between versions.
+
+// Version 1.0.0.37
+
+// Implement Paging.
+// Fix L< command (was giving no messages).
+// Implement LR LR mmm-nnn LR nnn- (and L nnn-)
+// KM should no longer kill SYSOP bulls.
+// ISP interfaces allows SMTP Auth to be configured
 
 #include "stdafx.h"
 
@@ -266,8 +274,6 @@ char MailDir[MAX_PATH];
 BOOL ALLOWCOMPRESSED = TRUE;
 
 BOOL EnableUI = FALSE;
-
-char UIPortString[100];
 
 UCHAR * OtherNodes=NULL;
 
@@ -1266,6 +1272,9 @@ int Connected(Stream)
 
 			conn->lastmsg = user->lastmsg;
 
+			conn->PageLen = user->PageLen;
+			conn->Paging = (user->PageLen > 0);
+
 			conn->NextMessagetoForward = FirstMessagetoForward;
 
 			if (paclen == 0)
@@ -2141,7 +2150,7 @@ VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
 }
 
 
-VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
+VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
 	char * Cmd, * Arg1;
 	char * Context;
@@ -2235,6 +2244,27 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 	// Process Command
 
+	if (conn->Paging && (conn->LinesSent >= conn->PageLen))
+	{
+		// Waiting for paging prompt
+
+		if (len > 1)
+		{
+			if (_memicmp(Buffer, "Abort", 1) == 0)
+			{
+				ClearQueue(conn);
+				conn->LinesSent = 0;
+
+				QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+				SendPrompt(conn, user);
+				return;
+			}
+		}
+
+		conn->LinesSent = 0;
+		return;
+	}
+
 	if (len == 1)
 	{
 		SendPrompt(conn, user);
@@ -2298,6 +2328,8 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 	if (_memicmp(Cmd, "Abort", 1) == 0)
 	{
 		ClearQueue(conn);
+		conn->LinesSent = 0;
+
 		QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
 		SendPrompt(conn, user);
 		return;
@@ -2344,6 +2376,28 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 
 		SendWelcomeMsg(conn->BPQStream, conn, user);
 		SaveUserDatabase();
+
+		return;
+	}
+
+	if (_memicmp(Cmd, "OP", 2) == 0)
+	{
+		int Lines;
+		
+		// Paging Control. Param is number of lines per page
+
+		if (Arg1)
+		{
+			Lines = atoi(Arg1);
+
+			user->PageLen = Lines;
+			conn->PageLen = Lines;
+			conn->Paging = (Lines > 0);
+			SaveUserDatabase();
+		}
+		
+		nodeprintf(conn,"Page Length is %d\r", user->PageLen);
+		SendPrompt(conn, user);
 
 		return;
 	}
@@ -2416,6 +2470,7 @@ VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, in
 		BBSputs(conn, "                      LN LY LH LK LF L$ - List Mesaage with corresponding Status\r");
 		BBSputs(conn, "                      LB LP - List Mesaage with corresponding Type\r");
 		BBSputs(conn, "N Name - Set Name\r");
+		BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
 		BBSputs(conn, "Q QTH - Set QTH\r");
 		BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
 		BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, SR Num - Send Reply, SC Num - Send Copy\r");
@@ -2534,7 +2589,7 @@ void TrytoSend()
 }
 
 
-void Flush(ConnectionInfo * conn)
+void Flush(CIRCUIT * conn)
 {
 	int tosend, len, sent;
 	
@@ -2543,6 +2598,11 @@ void Flush(ConnectionInfo * conn)
 	//	UCHAR * OutputQueue;		// Messages to user
 	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
 	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	//	BOOL Paging;				// Set if user wants paging
+	//	int LinesSent;				// Count when paging
+	//	int PageLen;				// Lines per page
+
 
 	if (conn->OutputQueue == NULL)
 		return;						// Nothing to send
@@ -2555,17 +2615,54 @@ void Flush(ConnectionInfo * conn)
 	{
 		if (TXCount(conn->BPQStream) > 4)
 			return;						// Busy
-	
+
+		if (conn->Paging && (conn->LinesSent >= conn->PageLen))
+			return;
+
 		if (tosend <= conn->paclen)
 			len=tosend;
 		else
 			len=conn->paclen;
+
+		if (conn->Paging)
+		{
+			// look for CR chars in message to send. Increment LinesSent, and stop if at limit
+
+			char * ptr1 = &conn->OutputQueue[conn->OutputGetPointer];
+			char * ptr2;
+			int lenleft = len;
+
+			ptr2 = memchr(ptr1, 0x0d, len);
+
+			while (ptr2)
+			{
+				conn->LinesSent++;
+				ptr2++;
+				lenleft = len - (ptr2 - ptr1);
+
+				if (conn->LinesSent >= conn->PageLen)
+				{
+					len = ptr2 - &conn->OutputQueue[conn->OutputGetPointer];
+					
+					SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
+					conn->OutputGetPointer+=len;
+					tosend-=len;
+					SendUnbuffered(conn->BPQStream, "<A>bort, <CR> Continue..>", 25);
+
+					return;
+
+				}
+				ptr2 = memchr(ptr2, 0x0d, lenleft);
+			}
+		}
 
 		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
 
 		conn->OutputGetPointer+=len;
 
 		tosend-=len;
+
+		
 	
 		sent++;
 
@@ -2575,6 +2672,8 @@ void Flush(ConnectionInfo * conn)
 	}
 
 	// All Sent. Free buffers and reset pointers
+
+	conn->LinesSent = 0;
 
 	ClearQueue(conn);
 }
@@ -2646,7 +2745,7 @@ void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 			if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
 			{
-				if (Msg->status == 'Y')
+				if (Msg->type == 'P' && Msg->status == 'Y')
 				{
 					FlagAsKilled(Msg);
 					nodeprintf(conn, "Message #%d Killed\r", Msg->number);
@@ -2768,6 +2867,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	{
 
 	case 0:					// Just L
+	case 'R':			// LR = List Reverse
 
 		if (Arg1)
 		{
@@ -2777,7 +2877,8 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			char * Context;
 			char seps[] = " -\t\r";
 			int From=LatestMsg, To=0;
-
+			char * Range = strchr(Arg1, '-');
+			
 			Arg2 = strtok_s(Arg1, seps, &Context);
 			Arg3 = strtok_s(NULL, seps, &Context);
 
@@ -2786,13 +2887,23 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 			if (Arg3)
 				From = atoi(Arg3);
+			else
+				if (Range)
+					From = LatestMsg;
 
-			ListMessagesInRange(conn, user, user->Call, From, To);
+
+			if (Cmd[1])
+				ListMessagesInRangeForwards(conn, user, user->Call, From, To);
+			else
+				ListMessagesInRange(conn, user, user->Call, From, To);
 
 		}
 		else
 
-			ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg);
+			if (Cmd[1])
+				ListMessagesInRangeForwards(conn, user, user->Call, LatestMsg, conn->lastmsg);
+			else
+				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg);
 
 		return;
 
@@ -2836,7 +2947,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	case '<':
 
 		if (Arg1)
-			if (ListMessagesFrom(conn, user, Arg1) == 0);
+			if (ListMessagesFrom(conn, user, Arg1) == 0)
 				BBSputs(conn, "No Messages found\r");
 		
 		return;
@@ -2953,6 +3064,40 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 
 }
 
+int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
+{
+	struct MsgInfo * Msg;
+	
+	// Get Next (usually backwards) message which should be shown to this user
+	//	ie Not Deleted, and not Private unless to or from Call
+
+	do
+	{
+		Msg=MsgHddrPtr[m];
+
+		if (SYSOP) 
+			return m;					// Sysop can list or read anything
+
+		if (Msg->status != 'K')
+		{
+			if (Msg->type == 'B') return m;
+
+			if (Msg->type == 'P')
+			{
+				if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+					return m;
+			}
+		}
+
+		m++;
+
+	} while (m <= NumberofMessages);
+
+	return 0;
+
+}
+
+
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End)
 {
 	int m=NumberofMessages;
@@ -2981,6 +3126,36 @@ void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * C
 		m--;
 
 	} while (m> 0);
+}
+
+void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int End, int Start)
+{
+	int m=1;
+
+	struct MsgInfo * Msg;
+
+	if (NumberofMessages == 0)
+		return;
+
+
+	do
+	{
+		m = GetUserMsgForwards(m, user->Call, conn->sysop);
+
+		if (m > NumberofMessages)
+			return;
+
+		Msg=MsgHddrPtr[m];
+
+		if (Msg->number > End)
+			return;
+
+		if (Msg->number >= Start)
+			ListMessage(MsgHddrPtr[m], conn);
+
+		m++;
+
+	} while (m <= NumberofMessages);
 }
 
 
