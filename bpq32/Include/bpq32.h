@@ -60,6 +60,10 @@ int APIENTRY GetStreamPID(int Stream);
 
 UCHAR * APIENTRY GetBPQDirectory();
 
+UCHAR * APIENTRY GetSignOnMsg();
+
+UCHAR * APIENTRY GetVersionString();
+
 
 // Returns number of prcess attached to BPQ32
 
@@ -239,8 +243,9 @@ ULONG (FAR WINAPI * GETBPQAPI)();
 
 ULONG (FAR WINAPI * GETMONDECODE)();
 
-
 UCHAR * (FAR WINAPI * GetBPQDirectory)();
+UCHAR * (FAR WINAPI * GetSignOnMsg)();
+UCHAR * (FAR WINAPI * GetVersionString)();
 
 //	Returns number of free buffers
 //	(BPQHOST function 7 (part)).
@@ -469,6 +474,8 @@ BOOL GetAPI()
 	MONCount = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_MONCount@4");
 	GetCallsign = (int (__stdcall *)(int stream, char * callsign))GetProcAddress(ExtDriver,"_GetCallsign@8");
 	GetBPQDirectory = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetBPQDirectory@0");
+	GetSignOnMsg = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetSignOnMsg@0");
+	GetVersionString = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
 	GetConnectionInfo = (int (__stdcall *)(int, char *,int *, int *, int *,int *, int *))GetProcAddress(ExtDriver,"_GetConnectionInfo@28");
 	GetStreamPID = (int (__stdcall *)(int Stream))GetProcAddress(ExtDriver,"_GetStreamPID@4");
 	GetAttachedProcesses = (int (__stdcall *)())GetProcAddress(ExtDriver,"_GetAttachedProcesses@0");

@@ -411,10 +411,10 @@ senddata:
 
 		mov		EBX,[ESI]			; PORT ADDRESS
 		
-		PUSHAD
-		movzx eax, IOBASE[EBX]
-		Debug_Printf	"hdlc98 TX Frame IOADDR %x", <eax>
-		POPAD
+;		PUSHAD
+;		movzx eax, IOBASE[EBX]
+;		Debug_Printf	"hdlc98 TX Frame IOADDR %x", <eax>
+;		POPAD
 
 
 		push	ESI					; save buffer
@@ -469,10 +469,10 @@ getdata:
 
 		jz short nomsg
 		
-		PUSHAD
-		movzx eax, IOBASE[EBX]
-		Debug_Printf	"hdlc98 Passing Frame to Appl"
-		POPAD
+;		PUSHAD
+;		movzx eax, IOBASE[EBX]
+;		Debug_Printf	"hdlc98 Passing Frame to Appl"
+;		POPAD
 
 	
 		mov		EDX,EDI		; save buffer
@@ -1777,10 +1777,10 @@ TXDTIMER:
 ;
 	mov	ebx,edx			; Reference data = Port vector
 	
-	PUSHAD
-	movzx eax, IOBASE[EBX]
-	Debug_Printf	"hdlc98 TXDELAY Expired IOADDR  %x", <eax>
-	POPAD
+;	PUSHAD
+;	movzx eax, IOBASE[EBX]
+;	Debug_Printf	"hdlc98 TXDELAY Expired IOADDR  %x", <eax>
+;	POPAD
 
 	mov	TimeOut_Handle[EBX],0
 
@@ -2159,10 +2159,10 @@ NO_INTERLOCK:
 
 DCDHIGH:
 
-	PUSHAD
-	movzx eax, IOBASE[EBX]
+;	PUSHAD
+;	movzx eax, IOBASE[EBX]
 ;	Debug_Printf	"hdlc98 DCD High - Cant TX"
-	POPAD
+;	POPAD
 
 	STI
 	RET
@@ -2172,10 +2172,10 @@ STARTID:
 ;	KICK OFF CW ID SEQUENCE
 ;
 
-	PUSHAD
-	movzx eax, IOBASE[EBX]
-	Debug_Printf	"hdlc98 Starting CWID IOADDR %x", <eax>
-	POPAD
+;	PUSHAD
+;	movzx eax, IOBASE[EBX]
+;	Debug_Printf	"hdlc98 Starting CWID IOADDR %x", <eax>
+;	POPAD
 
 	MOV	LINKSTS[EBX],1		; SET ACTIVE
 
@@ -2311,10 +2311,10 @@ DONTCHANGE:
 ;
 	movzx   eax,PORTTXDELAY[EBX]
 	
-	PUSHAD
-	movzx eax, IOBASE[EBX]
-	Debug_Printf	"hdlc98 Starting TXDELAY %x", <eax>
-	POPAD
+;	PUSHAD
+;	movzx eax, IOBASE[EBX]
+;	Debug_Printf	"hdlc98 Starting TXDELAY %x", <eax>
+;	POPAD
 
 	mov     edx, EBX
 	mov     esi, offset TXDTIMER
@@ -2325,10 +2325,10 @@ DONTCHANGE:
 
 SDADRX:
 
-	PUSHAD
-	movzx eax, IOBASE[EBX]
-	Debug_Printf	"hdlc98 RX Start of Frame"
-	POPAD
+;	PUSHAD
+;	movzx eax, IOBASE[EBX]
+;	Debug_Printf	"hdlc98 RX Start of Frame"
+;	POPAD
 
 
 ;	MOV	SOFTDCD[EBX],4		; SET RX ACTIVE
@@ -2659,10 +2659,10 @@ SENDAGAIN:
 	SIOCW				; RESET TX CRC GENERATOR
 ;
 
-	PUSHAD	
-	movzx eax, IOBASE[EBX]
-	Debug_Printf	"hdlc98 Starting TX"
-	POPAD
+;	PUSHAD	
+;	movzx eax, IOBASE[EBX]
+;	Debug_Printf	"hdlc98 Starting TX"
+;	POPAD
 
 	DELAY
 	MOV	AL,[EDI-1]		; FIRST BYTE

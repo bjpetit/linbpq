@@ -1,6 +1,6 @@
 
-char VersionString[50];
-char VersionStringWithBuild[50];
+char VersionString[50]="";
+char VersionStringWithBuild[50]="";
 int Ver[4];
 
 VOID GetVersionInfo(char * File)

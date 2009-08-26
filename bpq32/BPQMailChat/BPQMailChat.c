@@ -142,6 +142,16 @@
 // Implement LR LR mmm-nnn LR nnn- (and L nnn-)
 // KM should no longer kill SYSOP bulls.
 // ISP interfaces allows SMTP Auth to be configured
+// SMTP Client would fail to send any more messages if a connection failed
+
+// Version 1.0.0.38
+
+// Don't include killed messages in L commands (except LK!)
+// Implement l@
+// Add forwarding timebands
+// Allow resizing of main window.
+// Add Ver command.
+
 
 #include "stdafx.h"
 
@@ -156,6 +166,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+UCHAR * (FAR WINAPI * GetVersionStringptr)();
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
@@ -163,11 +174,14 @@ TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 
 HWND MainWnd;
+HWND hWndSess;
 RECT MainRect;
 HMENU hActionMenu;
 static HMENU hMenu;
 HMENU hDisMenu;									// Disconnect Menu Handle
 HMENU hFWDMenu;									// Forward Menu Handle
+
+int SessX, SessY, SessWidth;					// Params for Session Window
 
 char szBuff[80];
 
@@ -345,6 +359,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		}
 	}
 
+	Sleep(2000);		// A bit of time for links to close
+
 	if (hConsole)
 		DestroyWindow(hConsole);
 
@@ -404,6 +420,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	FreeChatMemory();
 
 	FreeOverrides();
+
+	Free_UI();
 
 	_CrtDumpMemoryLeaks();
 
@@ -482,6 +500,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int retCode,Type,Vallen;
 	char Size[80];
 	RECT InitRect;
+	RECT SessRect;
+
+	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
+
+	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
+
 
 	// Get Window Size  From Registry
 
@@ -529,6 +553,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	wsprintf(Title,"G8BPQ Mail and Chat Server Beta Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
+
+	hWndSess = GetDlgItem(hWnd, 100); 
+
+	GetWindowRect(hWnd,	&InitRect);
+	GetWindowRect(hWndSess, &SessRect);
+
+	SessX = SessRect.left - InitRect.left ;
+	SessY = SessRect.top -InitRect.top;
+	SessWidth = SessRect.right - SessRect.left;
 
    	// Get handles fou updating menu items
 
@@ -674,17 +707,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				FWDTimerProc();
 				ChatTimer();
 				if (MaintClock < time(NULL))
-				{
-					struct tm *tm;	
-					
+				{				
 					DoHouseKeeping(FALSE);
-					MaintClock += 86400;
-					
-					tm = gmtime(&MaintClock);
-
-					Debugprintf("MaintTime = %04d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
-						MaintTime, tm->tm_year - 100, tm->tm_mon +1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
-
+					MaintClock += 86400;					
 				}
 			}
 			My__except_Routine("Slow Timer");
@@ -858,6 +883,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				return ShowWindow(hWnd, SW_HIDE);
 
 		return (0);
+
+	
+	case WM_SIZING:
+	{
+		LPRECT lprc = (LPRECT) lParam;
+		int Height = lprc->bottom-lprc->top;
+		int Width = lprc->right-lprc->left;
+
+		MoveWindow(hWndSess, 0, 30, SessWidth, Height - 100, TRUE);
+			
+		return TRUE;
+	}
 
 
 	case WM_PAINT:
@@ -1186,11 +1223,6 @@ BOOL Initialise()
 
 		if (MaintClock < now)
 			MaintClock += 86400;
-
-		tm = gmtime(&MaintClock);
-
-		Debugprintf("MaintTime = %04d, Maintclock set to %02d/%02d/%02d %02d:%02d:%02d",
-				MaintTime, tm->tm_year - 100, tm->tm_mon +1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
 
 	}
 
@@ -2481,6 +2513,18 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	}
 
+	if (_memicmp(Cmd, "Ver", CmdLen) == 0)
+	{
+		if (GetVersionStringptr)
+			nodeprintf(conn, "BBS Version %s\rNode Version %s\r", VersionStringWithBuild, GetVersionStringptr());
+		else
+			nodeprintf(conn, "BBS Version %s\r", VersionStringWithBuild);
+
+		SendPrompt(conn, user);
+
+		return;
+	}
+
 	if (_memicmp(Cmd, "HOMEBBS", CmdLen) == 0)
 	{
 		if (Arg1)
@@ -2503,7 +2547,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	}
 
 
-	if (_memicmp(Cmd, "Chat", CmdLen) == 0)
+	if (_memicmp(Cmd, "Chat", 4) == 0)
 	{
 		if(ChatApplNum == 0)
 		{
@@ -2952,11 +2996,18 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		
 		return;
 
+	case '@':
+
+		if (Arg1)
+			if (ListMessagesAT(conn, user, Arg1) == 0)
+				BBSputs(conn, "No Messages found\r");
+		
+		return;
+
 	case 'H':				// List Status
 	case 'N':
 	case 'Y':
 	case 'F':
-	case 'K':
 	case '%':
 		{
 			int m = NumberofMessages;
@@ -2975,6 +3026,24 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		}
 		return;
 
+	case 'K':
+		{
+			int i, Msgs = 0;
+
+			for (i=NumberofMessages; i>0; i--)
+			{
+				if (MsgHddrPtr[i]->status == 'K')
+				{
+					Msgs++;
+					ListMessage(MsgHddrPtr[i], conn);
+				}
+			}
+
+			if (Msgs == 0)
+				BBSputs(conn, "No Messages found\r");
+
+		}
+
 	case 'P':
 	case 'B':
 		{
@@ -2991,9 +3060,11 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 					m--;
 				}
 			}
+
+			return;
 		}
-		return;
-	}
+		}
+	
 	nodeprintf(conn, "*** Error: Invalid List option %c\r", Cmd[1]);
 
 }
@@ -3004,6 +3075,9 @@ int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 
 	for (i=NumberofMessages; i>0; i--)
 	{
+		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
 		if ((_stricmp(MsgHddrPtr[i]->to, Call) == 0) ||
 			((conn->sysop) && (_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0)  && (_stricmp(Call, SYSOPCall) == 0)))
 		{
@@ -3021,6 +3095,9 @@ int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 
 	for (i=NumberofMessages; i>0; i--)
 	{
+		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
 		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
 		{
 			Msgs++;
@@ -3031,6 +3108,24 @@ int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 	return(Msgs);
 }
 
+int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+{
+	int i, Msgs = 0;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
+		if (_stricmp(MsgHddrPtr[i]->via, Call) == 0)
+		{
+			Msgs++;
+			ListMessage(MsgHddrPtr[i], conn);
+		}
+	}
+	
+	return(Msgs);
+}
 int GetUserMsg(int m, char * Call, BOOL SYSOP)
 {
 	struct MsgInfo * Msg;
@@ -3042,11 +3137,10 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 	{
 		Msg=MsgHddrPtr[m];
 
-		if (SYSOP) 
-			return m;					// Sysop can list or read anything
-
 		if (Msg->status != 'K')
 		{
+			if (SYSOP) return m;			// Sysop can list or read anything
+	
 			if (Msg->type == 'B') return m;
 
 			if (Msg->type == 'P')
@@ -3074,12 +3168,11 @@ int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
 	do
 	{
 		Msg=MsgHddrPtr[m];
-
-		if (SYSOP) 
-			return m;					// Sysop can list or read anything
-
+		
 		if (Msg->status != 'K')
 		{
+			if (SYSOP) return m;			// Sysop can list or read anything
+
 			if (Msg->type == 'B') return m;
 
 			if (Msg->type == 'P')
@@ -4063,6 +4156,36 @@ ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
 
 }
 
+VOID SetupFwdTimes(struct BBSForwardingInfo * ForwardingInfo)
+{
+	char ** Times = ForwardingInfo->FWDTimes;
+	int Start, End;
+	int Count = 0;
+
+	ForwardingInfo->FWDBands = zalloc(sizeof(struct FWDBAND));
+
+	if (Times)
+	{
+		while(Times[0])
+		{
+			ForwardingInfo->FWDBands = realloc(ForwardingInfo->FWDBands, (Count+2)* sizeof(struct FWDBAND));
+			ForwardingInfo->FWDBands[Count] = zalloc(sizeof(struct FWDBAND));
+
+			Start = atoi(Times[0]);
+			End = atoi(&Times[0][5]);
+
+			ForwardingInfo->FWDBands[Count]->FWDStartBand =  (time_t)(Start / 100) * 3600 + (Start % 100) * 60; 
+			ForwardingInfo->FWDBands[Count]->FWDEndBand =  (time_t)(End / 100) * 3600 + (End % 100) * 60 + 59; 
+
+			Count++;
+			Times++;
+		}
+		ForwardingInfo->FWDBands[Count] = NULL;
+	}
+}
+
+
+
 VOID SetupForwardingStruct(struct UserInfo * user)
 {
 	struct	BBSForwardingInfo * ForwardingInfo;
@@ -4083,6 +4206,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		ForwardingInfo->TOCalls = GetMultiStringValue(hKey,  "TOCalls");
 		ForwardingInfo->ATCalls = GetMultiStringValue(hKey,  "ATCalls");
 		ForwardingInfo->Haddresses = GetMultiStringValue(hKey,  "HRoutes");
+		ForwardingInfo->FWDTimes = GetMultiStringValue(hKey,  "FWD Times");
 
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey, "Enabled", 0,			
@@ -4105,6 +4229,12 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 				ForwardingInfo->FwdInterval = 3600;
 
 		RegCloseKey(hKey);
+
+		// Convert FWD Times
+
+		if (ForwardingInfo->FWDTimes)
+			SetupFwdTimes(ForwardingInfo);
+
 	}
 
 	for (m = FirstMessagetoForward; m <= NumberofMessages; m++)
@@ -4175,6 +4305,8 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 	FreeList(ForwardingInfo->ATCalls);
 	FreeList(ForwardingInfo->Haddresses);
 	FreeList(ForwardingInfo->ConnectScript);
+	FreeList(ForwardingInfo->FWDTimes);
+	FreeList(ForwardingInfo->FWDBands);
 }
 
 VOID FreeList(char ** Hddr)
@@ -4188,13 +4320,10 @@ VOID FreeList(char ** Hddr)
 		{
 			free(Hddr[0]);
 			Hddr++;
-		}
-		
+		}	
 		free(Save);
 	}
-
 }
-
 
 
 BOOL ConnecttoBBS (struct UserInfo * user)
@@ -4394,9 +4523,31 @@ VOID FWDTimerProc()
 		ForwardingInfo = user->ForwardingInfo;
 		ForwardingInfo->FwdTimer+=10;
 
-		if (ForwardingInfo->FwdTimer > ForwardingInfo->FwdInterval)
+		if (ForwardingInfo->FwdTimer >= ForwardingInfo->FwdInterval)
 		{
 			ForwardingInfo->FwdTimer=0;
+
+			if (ForwardingInfo->FWDBands)
+			{
+				// Check Timebands
+
+				struct FWDBAND ** Bands = ForwardingInfo->FWDBands;
+				int Count = 0;
+				time_t now = time(NULL);
+
+				now %= 86400;		// Secs in to day
+
+				while(Bands[Count])
+				{
+					if ((Bands[Count]->FWDStartBand < now) && (Bands[Count]->FWDEndBand >= now))
+						goto FWD;	// In band
+
+				Count++;
+				}
+				continue;				// Out of bands
+			}
+		FWD:	
+
 				if (ForwardingInfo->Enabled)
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag)
@@ -4545,7 +4696,7 @@ void clear_fwd_bit (char *mask, int bbsnumber)
 
 int MatchMessagetoBBSList(struct MsgInfo * Msg)
 {
-	struct UserInfo * user;
+	struct UserInfo * bbs;
 	struct	BBSForwardingInfo * ForwardingInfo;
 	char ATBBS[41];
 	char * HRoute;
@@ -4554,15 +4705,69 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 	strcpy(ATBBS, Msg->via);
 	HRoute = strlop(ATBBS, '.');
 
-	for (user = BBSChain; user; user = user->BBSNext)
-	{		
-		ForwardingInfo = user->ForwardingInfo;
+	if (Msg->type == 'P')
+	{
+		// P messages are only sent to one BBS, but check the TO and AT of all BBSs before routing on HA
 
-		if (CheckABBS(Msg, user, ForwardingInfo, ATBBS, HRoute))		
-		{
-			if (_stricmp(user->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+		{		
+			ForwardingInfo = bbs->ForwardingInfo;
+			
+			if (CheckBBSToList(Msg, bbs, ForwardingInfo, ATBBS, HRoute))
 			{
-				set_fwd_bit(Msg->fbbs, user->BBSNumber);
+				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+				{
+					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+					ForwardingInfo->MsgCount++;
+				}
+				return 1;
+			}
+		}
+
+		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+		{		
+			ForwardingInfo = bbs->ForwardingInfo;
+			
+			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS, HRoute))
+			{
+				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+				{
+					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+					ForwardingInfo->MsgCount++;
+				}
+				return 1;
+			}
+		}
+
+		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+		{		
+			ForwardingInfo = bbs->ForwardingInfo;
+			
+			if (CheckBBSHList(Msg, bbs, ForwardingInfo, ATBBS, HRoute))
+			{
+				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+				{
+					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+					ForwardingInfo->MsgCount++;
+				}
+				return 1;
+			}
+		}
+
+		return FALSE;
+	}
+
+	// Bulls go to all matching BBSs, so the order of checking doesn't matter
+
+	for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+	{		
+		ForwardingInfo = bbs->ForwardingInfo;
+
+		if (CheckABBS(Msg, bbs, ForwardingInfo, ATBBS, HRoute))		
+		{
+			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+			{
+				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 				ForwardingInfo->MsgCount++;
 			}
 			Count++;
@@ -4571,13 +4776,13 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 
 	return Count;
 }
-BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
+BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
 {
 	char ** Calls;
 	char ** HRoutes;
 	int i, j;
 
-	if (strcmp(ATBBS, user->Call) == 0)					// @BBS = BBS
+	if (strcmp(ATBBS, bbs->Call) == 0)					// @BBS = BBS
 		return TRUE;
 
 	// Check TO distributions
@@ -4622,7 +4827,7 @@ BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardin
 
 			while ((i >= 0) && (j >= 0))				// Until one string rus out
 			{
-				if (HRoutes[0][i--] != HRoute[j--])	// Copare backwards
+				if (HRoutes[0][i--] != HRoute[j--])	// Compare backwards
 					goto next;
 			}
 
@@ -4637,3 +4842,77 @@ BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardin
 
 }
 
+BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
+{
+	char ** Calls;
+
+	// Check TO distributions
+
+	if (ForwardingInfo->TOCalls)
+	{
+		Calls = ForwardingInfo->TOCalls;
+
+		while(Calls[0])
+		{
+			if (strcmp(Calls[0], Msg->to) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+	return FALSE;
+}
+
+BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
+{
+	char ** Calls;
+
+	// Check AT distributions
+
+	if (strcmp(ATBBS, bbs->Call) == 0)			// @BBS = BBS
+		return TRUE;
+
+	if (ForwardingInfo->ATCalls)
+	{
+		Calls = ForwardingInfo->ATCalls;
+
+		while(Calls[0])
+		{
+			if (strcmp(Calls[0], ATBBS) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+	return FALSE;
+}
+
+BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
+{
+	char ** HRoutes;
+	int i, j;
+
+	if ((HRoute) &&	(ForwardingInfo->Haddresses))
+	{
+		// Match on Routes
+
+		HRoutes = ForwardingInfo->Haddresses;
+
+		while(HRoutes[0])
+		{
+			i = strlen(HRoutes[0]) - 1;
+			j = strlen(HRoute) - 1;
+
+			while ((i >= 0) && (j >= 0))				// Until one string rus out
+			{
+				if (HRoutes[0][i--] != HRoute[j--])	// Compare backwards
+					goto next;
+			}
+
+			return TRUE;
+		next:	
+			HRoutes++;
+		}
+	}
+	return FALSE;
+}

@@ -450,6 +450,12 @@ typedef struct WPDBASE{	/* 194 bytes */
 
 #pragma pack()
 
+struct FWDBAND
+{
+	time_t FWDStartBand;
+	time_t FWDEndBand;
+};
+
 struct BBSForwardingInfo
 {
 	// Holds info for forwarding
@@ -460,6 +466,8 @@ struct BBSForwardingInfo
 	char ** TOCalls;				// Calls in to field
 	char ** ATCalls;				// Calls in ATBBS field
 	char ** Haddresses;				// Heirarchical Addresses to forward to
+	char ** FWDTimes;				// Time bands to forward
+	struct FWDBAND ** FWDBands;
 	int MsgCount;					// Messages for this BBS
 	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
 	BOOL Forwarding;				// Forward in progress
@@ -697,6 +705,7 @@ int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 VOID FlagAsKilled(struct MsgInfo * Msg);
 int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
+int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
 void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
 int GetUserMsg(int m, char * Call, BOOL SYSOP);
@@ -730,7 +739,10 @@ VOID StartForwarding (int BBSNumber);
 BOOL Reverse_Forward(struct UserInfo * user);
 ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 int MatchMessagetoBBSList(struct MsgInfo * Msg);
-BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * user, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
+BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
+BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
+BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
+BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 BOOL FBBDoForward(CIRCUIT * conn);
 BOOL FindMessagestoForward (CIRCUIT * conn);
 VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
@@ -839,6 +851,7 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user);
 // UI Routines
 
 VOID SetupUIInterface();
+VOID Free_UI();
 VOID SendLatestUI(int Port);
 VOID SendMsgUI(struct MsgInfo * Msg);
 VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);

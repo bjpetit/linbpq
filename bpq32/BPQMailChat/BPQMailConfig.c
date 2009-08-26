@@ -121,8 +121,6 @@ VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len)
 }
 
 
-
-
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
@@ -659,6 +657,21 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 			SetDlgItemText(hDlg, IDC_HROUTES, Text);
 
+
+			Text[0] = 0;
+			Calls = ForwardingInfo->FWDTimes;
+
+			if (Calls)
+			{
+				while(Calls[0])
+				{
+					strcat(Text, Calls[0]);
+					strcat(Text, "\r\n");
+					Calls++;
+				}
+			}
+
+			SetDlgItemText(hDlg, IDC_FWDTIMES, Text);
 
 			Text[0] = 0;
 			Calls = ForwardingInfo->ConnectScript;
@@ -1319,6 +1332,7 @@ VOID SaveFWDConfig(HWND hDlg)
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_TOCALLS, hKey, "ToCalls");
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HROUTES, hKey, "HRoutes");
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_CALL, hKey, "Connect Script");
+		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_FWDTIMES, hKey, "FWD Times");
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_FWDENABLE);
 		retCode = RegSetValueEx(hKey,"Enabled", 0, REG_DWORD, (BYTE *)&Rev,4);
@@ -2128,15 +2142,12 @@ SaveUIConfig()
 	char Key[80];
 	HKEY hKey;
 
+	Free_UI();
+
 	for (i=1; i<=Num; i++)
 	{
 		UIEnabled[i] =  Button_GetCheck(hCheck[i]);
-
-		if (UIDigi[i])
-		{
-			free(UIDigi[i]);
-			UIDigi[i] = NULL;
-		}
+	
 		Len = GetWindowTextLength(hUIBox[i]);
 	
 		UIDigi[i] = malloc(Len+1);
@@ -2155,6 +2166,14 @@ SaveUIConfig()
 			RegCloseKey(hKey);
 		}
 	}
+
+	wsprintf(InfoBoxText, "Configuration Saved");
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+
+
+	if (EnableUI)
+		SetupUIInterface();
+
 
 	return TRUE;
 }

@@ -60,6 +60,9 @@
 
 //		Add C style COmments (/* */ at start of line)
 
+// August 2009
+
+//		Add INP3 flag to locked routes
 
 #define _CRT_SECURE_NO_DEPRECATE
 

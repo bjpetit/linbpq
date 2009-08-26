@@ -147,7 +147,7 @@
 
 //				Fix calculation of %retries in extended ROUTES display
 //				FIx corruption of ROUTES table
-
+//				Add GetVersionString API call.
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -1957,6 +1957,11 @@ DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 DllExport UCHAR * APIENTRY GetSignOnMsg()
 {
 	return (&SIGNONMSG);
+}
+
+DllExport char * APIENTRY GetVersionString()
+{
+	return ((char *)&VersionStringWithBuild);
 }
 
 

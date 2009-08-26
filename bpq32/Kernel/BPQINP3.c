@@ -277,10 +277,10 @@ VOID TellINP3LinkSetupFailed(struct ROUTE * Route)
 {
 	// Attempt to activate Neighbour failed
 	
-	char call[11]="";
+//	char call[11]="";
 
-	ConvFromAX25(Route->NEIGHBOUR_CALL, call);
-	Debugprintf("BPQ32 L2 Link to Neighbour %s setup failed", call);
+//	ConvFromAX25(Route->NEIGHBOUR_CALL, call);
+//	Debugprintf("BPQ32 L2 Link to Neighbour %s setup failed", call);
 
 
 	if (Route->INP3Node == 0)
@@ -875,7 +875,8 @@ SendRIPTimer()
 	{
 		if (Route->NEIGHBOUR_CALL[0] != 0)
 		{
-			if (Route->NEIGHBOUR_LINK == 0)
+			if (Route->NEIGHBOUR_LINK == 0 || 
+				Route->NEIGHBOUR_LINK->LINKPORT == 0)
 			{
 				// Try to activate link
 

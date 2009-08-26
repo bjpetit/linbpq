@@ -105,6 +105,7 @@
 
 //		Recycle Listening Socket if no connect for 60 mins
 //		Clear data connections if no data for 60 mins
+//		Repaint MH Window after clear.
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -1644,7 +1645,7 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 
 			case BPQCLEAR:
 				memset(MHTable, 0, sizeof(MHTable));
-				InvalidateRect(hMHWnd,NULL,FALSE);
+				InvalidateRect(hWnd,NULL,TRUE);
 				return 0;
 
 			case BPQCOPY:

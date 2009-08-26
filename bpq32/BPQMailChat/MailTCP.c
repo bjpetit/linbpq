@@ -670,7 +670,6 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == GettingPass)
 	{
-		int len;
 		struct UserInfo * user = NULL;
 		char Out[30];
 
@@ -2135,6 +2134,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		shutdown(sock,0);
 		sockptr->State = 0;
+		return;
 	}
 
 	SendSock(sock, "QUIT");

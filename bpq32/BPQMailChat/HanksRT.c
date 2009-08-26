@@ -1246,15 +1246,13 @@ static void show_circuits(CIRCUIT *conn)
 	nputc(conn, '\r');
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
-	if (circuit->flags & p_linked)
 	{
-		nprintf(conn, "Link %-6.6s <- ", circuit->u.link->alias);
-		len = 0;
-
-		for (node = node_hd; node; node = node->next)
-		if (node->refcnt && !cn_find(circuit, node))
+		if (circuit->flags & p_linked)
 		{
-			len += strlen(node->alias) + 1;
+			nprintf(conn, "Nodes via %-6.6s - ", circuit->u.link->alias);
+			len = 0;
+
+/*			len += strlen(node->alias) + 1;
 			if (len > 60) { len = strlen(node->alias) + 1; nputs(circuit, xxx); }
 			nputs(conn, node->alias);
 			nputc(conn, ' ');
@@ -1263,20 +1261,24 @@ static void show_circuits(CIRCUIT *conn)
 		nputc(conn, '\r');
 
 		nprintf(conn, "      Nodes <- ");
-
-		for (cn = circuit->hnode; cn; cn = cn->next)
-		{
-			nputs(conn, cn->node->call);
-			nputs(conn, " ");
-		}
+*/
+		
+			for (cn = circuit->hnode; cn; cn = cn->next)
+			{
+				len += strlen(cn->node->alias) + 1;
+				if (len > 60) {len = strlen(cn->node->alias) + 1; nputs(circuit, xxx); }
+				nputs(conn, cn->node->alias);
+				nputs(conn, " ");
+			}
 
 		nputc(conn, '\r');
-
+		}
+		else if (circuit->flags & p_user)
+			nprintf(conn, "User %-6.6s\r", circuit->u.user->call);
+		else if (circuit->flags & p_linkini)
+			nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
 	}
-	else if (circuit->flags & p_user)
-		nprintf(conn, "User %-6.6s\r", circuit->u.user->call);
-	else if (circuit->flags & p_linkini)
-		nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
+	
 }
 
 // /T Command: List topics and users in them.

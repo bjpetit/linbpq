@@ -270,6 +270,7 @@ _TEXT   SEGMENT PUBLIC 'CODE'
 
 	EXTRN	_MMASK:WORD,_MTX:BYTE,_MCOM:BYTE, _DisplayINP3RIF:near
 
+	PUBLIC	_BPQMONOPTIONS
 _BPQMONOPTIONS:
 
 	MOV	_MMASK,AX
@@ -278,6 +279,7 @@ _BPQMONOPTIONS:
 
 	RET
 
+	PUBLIC	_MONDECODE
 _MONDECODE:
 ;
 ;	esi=message, edi=buffer
@@ -292,10 +294,12 @@ _MONDECODE:
 	jne	TRACEOK
 
 
+	PUBLIC	TRACERET
 TRACERET:
 
 	ret
 
+	PUBLIC	TRACEOK
 TRACEOK:
 ;
 ;	GET THE CONTROL BYTE, TO SEE IF THIS FRAME IS TO BE DISPLAYED
@@ -343,6 +347,7 @@ CTRLFOUND:
 ;       Check for MALL                                                        ;
 ;-----------------------------------------------------------------------------;
 
+	PUBLIC	IFRAME
 IFRAME:
 
 	cmp	MALL,0
@@ -351,6 +356,7 @@ IFRAME:
 	MOV	ECX,0
 	ret
 
+	PUBLIC	OKTOTRACE
 OKTOTRACE:
 ;
 ;-----------------------------------------------------------------------------;
@@ -371,6 +377,7 @@ OKTOTRACE:
 	MOV	ECX,0
 	RET
 
+	PUBLIC	NOT_TX
 NOT_TX:
 
 	AND	CL,7FH			; MASK T/R BIT
@@ -385,6 +392,7 @@ NOT_TX:
 	MOV 	ECX,0
 	RET
 
+	PUBLIC	TRACEOK1
 TRACEOK1:
 
 	MOV	FRMRFLAG,0
@@ -403,6 +411,7 @@ TRACEOK1:
 	jnz	NOT_RESPONSE
 	mov	COMM_RESP,'R'
 
+	PUBLIC	NOT_RESPONSE
 NOT_RESPONSE:
 
 ;-----------------------------------------------------------------------------;
@@ -415,6 +424,7 @@ NOT_RESPONSE:
 	je	VERSION_1
 	mov	VERSION_NO,2
 
+	PUBLIC	VERSION_1
 VERSION_1:
 ;
 ;	DISPLAY TIMESTAMP AND T/R FLAG
@@ -453,6 +463,7 @@ VERSION_1:
 
 	MOV	AL,'T'
 
+	PUBLIC	TR
 TR:
 
 	CALL	PUTCHAR
@@ -499,6 +510,7 @@ TR:
 ;       Display any Digi-Peaters                                              ;
 ;-----------------------------------------------------------------------------;
 
+	PUBLIC	NEXT_DIGI
 NEXT_DIGI:
 
 	test	MSGORIGIN+6[ESI],1
@@ -529,12 +541,14 @@ NEXT_DIGI:
 	mov	AL,'*'
 	call	PUTCHAR
 
+	PUBLIC	NOT_REPEATED
 NOT_REPEATED:
 
 	pop	ECX
 	pop	ESI
 	loop	NEXT_DIGI
 
+	PUBLIC	NO_MORE_DIGIS
 NO_MORE_DIGIS:	
 
 ;----------------------------------------------------------------------------;
@@ -567,7 +581,9 @@ NO_MORE_DIGIS:
 
 	mov	POLL_FINAL,'P'
 
+	PUBLIC	NOT_POLL
 NOT_POLL:
+	PUBLIC	NOT_COMM
 NOT_COMM:
 
 	cmp	COMM_RESP,'R'
@@ -578,7 +594,9 @@ NOT_COMM:
 
 	mov	POLL_FINAL,'F'
 
+	PUBLIC	NOT_FINAL
 NOT_FINAL:
+	PUBLIC	NOT_RESP
 NOT_RESP:
 
 ;-----------------------------------------------------------------------------;
@@ -611,6 +629,7 @@ NOT_RESP:
 	mov	NS,1
 	jmp	END_OF_TYPE
 
+	PUBLIC	NOT_I_FRAME
 NOT_I_FRAME:
 
 ;-----------------------------------------------------------------------------;
@@ -625,6 +644,7 @@ NOT_I_FRAME:
 	mov	INFO_FLAG,1
 	jmp	END_OF_TYPE
 
+	PUBLIC	NOT_UI_FRAME
 NOT_UI_FRAME:
 	test	AL,10B
 	jne	NOT_R_FRAME
@@ -643,6 +663,7 @@ NOT_UI_FRAME:
 	call	NORMSTR
 	jmp	END_OF_TYPE
 
+	PUBLIC	NOT_RR_FRAME
 NOT_RR_FRAME:
 	cmp	AL,RNR
 	jne	NOT_RNR_FRAME
@@ -651,6 +672,7 @@ NOT_RR_FRAME:
 	call	NORMSTR
 	jmp	END_OF_TYPE
 
+	PUBLIC	NOT_RNR_FRAME
 NOT_RNR_FRAME:
 	cmp	AL,REJ
 	jne	NOT_REJ_FRAME
@@ -659,6 +681,7 @@ NOT_RNR_FRAME:
 	call	NORMSTR
 	jmp	END_OF_TYPE
 
+	PUBLIC	NOT_REJ_FRAME
 NOT_REJ_FRAME:
 	mov	NR,0			; Don't display sequence number
 	mov	AL,'?'			; Print "?"
@@ -669,6 +692,7 @@ NOT_REJ_FRAME:
 ;       Process all other frame types                                         ;
 ;-----------------------------------------------------------------------------;
 
+	PUBLIC	NOT_R_FRAME
 NOT_R_FRAME:
 	cmp	AL,UA
 	jne	NOT_UA_FRAME
@@ -677,6 +701,7 @@ NOT_R_FRAME:
 	call	NORMSTR
 	jmp	SHORT END_OF_TYPE
 
+	PUBLIC	NOT_UA_FRAME
 NOT_UA_FRAME:
 	cmp	AL,DM
 	jne	NOT_DM_FRAME
@@ -685,6 +710,7 @@ NOT_UA_FRAME:
 	call	NORMSTR
 	jmp	SHORT END_OF_TYPE
 
+	PUBLIC	NOT_DM_FRAME
 NOT_DM_FRAME:
 	cmp	AL,SABM
 	jne	NOT_SABM_FRAME
@@ -693,6 +719,7 @@ NOT_DM_FRAME:
 	call	PUTCHAR
 	jmp	SHORT END_OF_TYPE
 
+	PUBLIC	NOT_SABM_FRAME
 NOT_SABM_FRAME:
 	cmp	AL,DISC
 	jne	NOT_DISC_FRAME
@@ -701,6 +728,7 @@ NOT_SABM_FRAME:
 	call	PUTCHAR
 	jmp	SHORT END_OF_TYPE
 
+	PUBLIC	NOT_DISC_FRAME
 NOT_DISC_FRAME:
 	cmp	AL,FRMR
 	jne	NOT_FRMR_FRAME
@@ -710,10 +738,12 @@ NOT_DISC_FRAME:
 	MOV	FRMRFLAG,1
 	jmp	SHORT END_OF_TYPE
 
+	PUBLIC	NOT_FRMR_FRAME
 NOT_FRMR_FRAME:
 	mov	AL,'?'
 	call	PUTCHAR
 
+	PUBLIC	END_OF_TYPE
 END_OF_TYPE:
 
 ;----------------------------------------------------------------------------;
@@ -738,7 +768,9 @@ END_OF_TYPE:
 	mov	AL,POLL_FINAL		; Print Poll/Final Flag if Set
 	call	PUTCHAR
 
+	PUBLIC	NO_POLL_FINAL
 NO_POLL_FINAL:
+	PUBLIC	NOT_VERSION_2
 NOT_VERSION_2:
 
 ;----------------------------------------------------------------------------;
@@ -759,6 +791,7 @@ NOT_VERSION_2:
 
 	call	DISPLAYSEQ
 
+	PUBLIC	NOT_NS_DATA
 NOT_NS_DATA:
 	cmp	NR,1
 	jne	NOT_NR_DATA
@@ -776,6 +809,7 @@ NOT_NS_DATA:
 
 	call	DISPLAYSEQ
 
+	PUBLIC	NOT_NR_DATA
 NOT_NR_DATA:
 	mov	AL,'>'
 	call	PUTCHAR
@@ -787,6 +821,7 @@ NOT_NR_DATA:
 ;
 	lea	ESI,MSGPID[ESI]
 	MOV	ECX,3			; TESTING
+	PUBLIC	FRMRLOOP
 FRMRLOOP:
 	lodsb
 	CALL	BYTE_TO_HEX
@@ -808,6 +843,7 @@ NOTFRMR:
 	lea	ESI,MSGPID[ESI]
 	lodsb
 
+	PUBLIC	NO_PID
 NO_PID:
 	mov	PID,AL
 
@@ -824,6 +860,7 @@ NO_PID:
 ;       Display the rest of the frame (If Any)                               ;
 ;----------------------------------------------------------------------------;
 
+	PUBLIC	DISPLAY_INFO
 DISPLAY_INFO:
 
 	cmp	INFO_FLAG,1		; Is it an information packet ?
@@ -879,6 +916,7 @@ DISPLAY_INFO:
 	mov	esi,SAVESI
 	movzx	ECX,MSGLENGTH[ESI]
 	mov	edi,offset32 HEXDUMPAREA
+	PUBLIC	XX
 XX:
 	lodsb
 	call BYTE_TO_HEX
@@ -909,6 +947,7 @@ XX:
 	POP	ESI
 	POP	ECX
 
+	PUBLIC	SAMELN
 SAMELN:
 
 	cmp	ECX,257
@@ -916,6 +955,7 @@ SAMELN:
 
 	mov	ECX,256
 
+	PUBLIC	LENGTH_OK
 LENGTH_OK:
 
 	push	ECX
@@ -929,9 +969,11 @@ LENGTH_OK:
 	CMP	AL,20H
 	JB	SKIP_MON		; IGNORE OTHER CONTROLS
 
+	PUBLIC	MONOK
 MONOK:
 	call	PUTCHAR
 
+	PUBLIC	SKIP_MON
 SKIP_MON:
 
 	pop	ECX
@@ -943,12 +985,15 @@ NO_INFO:
 ;
 	CMP	AL,CR
 	JE	NOTANOTHER
+	PUBLIC	ADD_CR
 ADD_CR:
 	mov	AL,CR
 	call	PUTCHAR
 
+	PUBLIC	NOTANOTHER
 NOTANOTHER:
 ;
+	PUBLIC	DISPLAYRET
 DISPLAYRET:
 
 	MOV	ECX,EDI
@@ -961,6 +1006,7 @@ DISPLAYRET:
 ;       Display NET/ROM data                                                 ;
 ;----------------------------------------------------------------------------;
 
+	PUBLIC	DISPLAY_NETROM
 DISPLAY_NETROM:
 
 	lodsb
@@ -1008,6 +1054,7 @@ DISPLAY_NETROM:
 
 	sub	ECX,30			; Header, mnemonic and signature length
 
+	PUBLIC	NODES_LOOP
 NODES_LOOP:
 
 	cmp	ECX,0
@@ -1031,6 +1078,7 @@ NODES_LOOP:
 
 	mov	ECX,6			; Max length
 
+	PUBLIC	MNEMONIC_LOOP
 MNEMONIC_LOOP:
 
 	lodsb				; Get character
@@ -1042,11 +1090,11 @@ MNEMONIC_LOOP:
 
 	loop	MNEMONIC_LOOP
 
+	PUBLIC	END_MNEMONIC
 END_MNEMONIC:
 
 	mov	AL,':'
 	call	PUTCHAR
-
 NO_MNEMONIC:
 
 	pop	ESI
@@ -1090,6 +1138,7 @@ NO_MNEMONIC:
 	
 BADNODESMSG	DB	'BPQ32 Corrupt NODES Message Detected',0
 	
+	PUBLIC	BAD_NODES
 BAD_NODES:
 
 	PUSH	EAX
@@ -1110,6 +1159,7 @@ BAD_NODES:
 ;       Display normal NET/ROM transmissions                                 ;
 ;----------------------------------------------------------------------------;
 
+	PUBLIC	DISPLAY_NETROM_DATA
 DISPLAY_NETROM_DATA:
 
 	DEC	ESI			; BACK TO DATA
@@ -1219,10 +1269,12 @@ DISPLAY_NETROM_DATA:
 
 	CALL	DISPLAY_BYTE_1
 ;
+	PUBLIC	NOT_BPQ
 NOT_BPQ:
 
 	JMP	ADD_CR
 
+	PUBLIC	NOT_L4CREQ
 NOT_L4CREQ:
 
 	cmp	AL,L4CACK
@@ -1238,6 +1290,7 @@ NOT_L4CREQ:
 
 	JMP	END_NETROM
 
+	PUBLIC	L4CRQ00
 L4CRQ00:
 
 	MOV	EBX,OFFSET CONN_ACK_MSG
@@ -1261,6 +1314,7 @@ L4CRQ00:
 
 	JMP	ADD_CR
 
+	PUBLIC	NOT_L4CACK
 NOT_L4CACK:
 
 	cmp	AL,L4DREQ
@@ -1271,6 +1325,7 @@ NOT_L4CACK:
 
 	JMP	ADD_CR
 
+	PUBLIC	NOT_L4DREQ
 NOT_L4DREQ:
 
 	cmp	AL,L4DACK
@@ -1281,6 +1336,7 @@ NOT_L4DREQ:
 
 	jmp	add_cr
 
+	PUBLIC	NOT_L4DACK
 NOT_L4DACK:
 
 	cmp	AL,L4INFO
@@ -1312,6 +1368,7 @@ NOT_L4DACK:
 	jmp	DISPLAY_INFO
 
 
+	PUBLIC	NOT_L4INFO
 NOT_L4INFO:
 
 	cmp	AL,L4IACK
@@ -1330,6 +1387,7 @@ NOT_L4INFO:
 
 	JMP END_NETROM
 
+	PUBLIC	NOT_L4IACK
 NOT_L4IACK:
 	
 	OR	AL,AL
@@ -1350,6 +1408,7 @@ NOT_L4IACK:
 	sub	ECX,44
 	
 	; DISPLAY NRR Calls
+	PUBLIC	NRRLOOP
 NRRLOOP:
 	PUSH	ECX	
 	PUSH	ESI
@@ -1377,6 +1436,7 @@ NRRLOOP:
 
 	JMP END_NETROM
 	
+	PUBLIC	L3IP
 L3IP:
 ;
 ;	TCP/IP DATAGRAM
@@ -1386,6 +1446,7 @@ L3IP:
 ;
 	INC	ESI			; NOW POINTING TO IP HEADER
 
+	PUBLIC	DISPLAYIPDATAGRAM
 DISPLAYIPDATAGRAM:
 
 	PUSH	ESI
@@ -1448,16 +1509,19 @@ DISPLAYIPDATAGRAM:
 
 	JMP	ADD_CR
 
+	PUBLIC	UNKNOWNNR
 UNKNOWNNR:
 
 	mov	EBX,OFFSET DUFF_NET_MSG
 	call	NORMSTR
 
 
+	PUBLIC	END_NETROM
 END_NETROM:
 
 	jmp	add_cr
 
+	PUBLIC	DOL4FLAGS
 DOL4FLAGS:
 ;
 ;	DISPLAY BUSY/NAK/MORE FLAGS
@@ -1467,21 +1531,25 @@ DOL4FLAGS:
 
 	MOV	AL,'B'
 	CALL	PUTCHAR
+	PUBLIC	L4F010
 L4F010:
 	TEST	OPCODE,L4NAK
 	JZ	L4F020
 
 	MOV	AL,'N'
 	CALL	PUTCHAR
+	PUBLIC	L4F020
 L4F020:
 	TEST	OPCODE,L4MORE
 	JZ	L4F030
 
 	MOV	AL,'M'
 	CALL	PUTCHAR
+	PUBLIC	L4F030
 L4F030:
 	RET
 	
+	PUBLIC	DISPLAYARPDATAGRAM
 DISPLAYARPDATAGRAM:
 
 	cmp word ptr 6[esi],0100H
@@ -1505,6 +1573,7 @@ DISPLAYARPDATAGRAM:
 
 	JMP 	add_cr
 
+	PUBLIC	ARPREQ
 ARPREQ:
 
 	mov	EBX,OFFSET ARP_REQ
@@ -1533,6 +1602,7 @@ ARPREQ:
 ;       Display ASCIIZ strings                                               ;
 ;----------------------------------------------------------------------------;
 
+	PUBLIC	NORMSTR
 NORMSTR:
 	MOV	AL,[EBX]
 	INC	EBX
@@ -1541,6 +1611,7 @@ NORMSTR:
 	call	PUTCHAR
 	jmp	SHORT NORMSTR
 
+	PUBLIC	NORMSTR_RET
 NORMSTR_RET:
 	ret
 
@@ -1548,6 +1619,7 @@ NORMSTR_RET:
 ;       Display sequence numbers                                              ;
 ;-----------------------------------------------------------------------------;
 
+	PUBLIC	DISPLAYSEQ
 DISPLAYSEQ:
 	and	AL,7
 	add	AL,30H
@@ -1558,6 +1630,7 @@ DISPLAYSEQ:
 ;       Display Callsign pointed to by SI                                     ;
 ;-----------------------------------------------------------------------------;
 
+	PUBLIC	DISPADDR
 DISPADDR:
 	
 	jcxz	DISPADDR_RET
@@ -1567,10 +1640,12 @@ DISPADDR:
 
 	loop	DISPADDR
 
+	PUBLIC	DISPADDR_RET
 DISPADDR_RET:
 	ret
 
 
+	PUBLIC	PRINT4
 PRINT4:
 ;
 ;	DISPLAY IP ADDR IN DOTTED DECIMAL FORMAT
@@ -1602,6 +1677,7 @@ PRINT4:
 ;       Convert byte in AL to nnn, nn or n format                             ;
 ;-----------------------------------------------------------------------------;
 
+	PUBLIC	DISPLAY_BYTE_1
 DISPLAY_BYTE_1:
 
 	cmp	AL,100
@@ -1609,6 +1685,7 @@ DISPLAY_BYTE_1:
 
 	mov	AH,0
 
+	PUBLIC	HUNDREDS_LOOP_1
 HUNDREDS_LOOP_1:
 	cmp	AL,100
 	jb	HUNDREDS_LOOP_END_1
@@ -1617,6 +1694,7 @@ HUNDREDS_LOOP_1:
 	inc	AH
 	jmp	SHORT HUNDREDS_LOOP_1
 
+	PUBLIC	HUNDREDS_LOOP_END_1
 HUNDREDS_LOOP_END_1:
 	push	AX
 	mov	AL,AH
@@ -1625,13 +1703,16 @@ HUNDREDS_LOOP_END_1:
 	pop	AX
 	jmp	SHORT TENS_PRINT_1
 
+	PUBLIC	TENS_1
 TENS_1:
 	cmp	AL,10
 	jb	UNITS_1
 
+	PUBLIC	TENS_PRINT_1
 TENS_PRINT_1:
 	mov	AH,0
 
+	PUBLIC	TENS_LOOP_1
 TENS_LOOP_1:
 	cmp	AL,10
 	jb	TENS_LOOP_END_1
@@ -1640,6 +1721,7 @@ TENS_LOOP_1:
 	inc	AH
 	jmp	SHORT TENS_LOOP_1
 
+	PUBLIC	TENS_LOOP_END_1
 TENS_LOOP_END_1:
 	push	AX
 	mov	AL,AH
@@ -1647,6 +1729,7 @@ TENS_LOOP_END_1:
 	call	PUTCHAR
 	pop	AX
 
+	PUBLIC	UNITS_1
 UNITS_1:
 	add	AL,30H
 	call	PUTCHAR
@@ -1657,6 +1740,7 @@ UNITS_1:
 ;       Convert byte in AL to nn format                                       ;
 ;-----------------------------------------------------------------------------;
 
+	PUBLIC	DISPLAY_BYTE_2
 DISPLAY_BYTE_2:
 	cmp	AL,100
 	jb	TENS_2
@@ -1664,9 +1748,11 @@ DISPLAY_BYTE_2:
 	sub	AL,100
 	jmp	SHORT DISPLAY_BYTE_2
 
+	PUBLIC	TENS_2
 TENS_2:
 	mov	AH,0
 
+	PUBLIC	TENS_LOOP_2
 TENS_LOOP_2:
 	cmp	AL,10
 	jb	TENS_LOOP_END_2
@@ -1675,6 +1761,7 @@ TENS_LOOP_2:
 	inc	AH
 	jmp	SHORT TENS_LOOP_2
 
+	PUBLIC	TENS_LOOP_END_2
 TENS_LOOP_END_2:
 	push	AX
 	mov	AL,AH
@@ -1682,6 +1769,7 @@ TENS_LOOP_END_2:
 	call	PUTCHAR
 	pop	AX
 
+	PUBLIC	UNITS_2
 UNITS_2:
 	add	AL,30H
 	call	PUTCHAR
@@ -1694,6 +1782,7 @@ UNITS_2:
 
 	PUBLIC BYTE_TO_HEX
 	
+	PUBLIC	BYTE_TO_HEX
 BYTE_TO_HEX:
 	push	AX
 	shr	AL,1
@@ -1705,6 +1794,7 @@ BYTE_TO_HEX:
 	call	NIBBLE_TO_HEX
 	ret
 
+	PUBLIC	NIBBLE_TO_HEX
 NIBBLE_TO_HEX:
 	and	AL,0FH
 	cmp	AL,10
@@ -1712,11 +1802,11 @@ NIBBLE_TO_HEX:
 	jb	LESS_THAN_10
 	add	AL,7
 
+	PUBLIC	LESS_THAN_10
 LESS_THAN_10:
 	add	AL,30H
 	call	PUTCHAR
 	ret
-
 
 
 CONVFROMAX25:
@@ -1795,10 +1885,12 @@ hexout5:
 ;
 	ret
 
+	PUBLIC	PUTCHAR
 PUTCHAR:
 	STOSB
 	RET
 
 _TEXT	ENDS
-;               
+
 	END
+             

@@ -14,6 +14,10 @@
 #include "bpq32.h"
 #include "AsmStrucs.h"
 
+_CRT_OBSOLETE(GetVersionEx) errno_t __cdecl _get_winmajor(__out unsigned int * _Value);
+_CRT_OBSOLETE(GetVersionEx) errno_t __cdecl _get_winminor(__out unsigned int * _Value);
+
+
 #define FILE_DEVICE_BPQHDLC			0x00008421
 
 #define IOCTL_BPQHDLC_SEND			CTL_CODE(FILE_DEVICE_BPQHDLC,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)

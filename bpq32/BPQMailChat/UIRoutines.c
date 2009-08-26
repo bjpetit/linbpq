@@ -55,7 +55,10 @@ VOID SetupUIInterface()
 		if (UIEnabled[i])
 		{
 			char DigiString[100], * DigiLeft;
+
 			UIPortMask |= 1 << (i-1);
+			UIDigiLen[i] = 0;
+
 			if (UIDigi[i])
 			{
 				UIDigiAX[i] = zalloc(100);
@@ -95,6 +98,26 @@ VOID SetupUIInterface()
 
 }
 
+VOID Free_UI()
+{
+	int i;
+
+	for (i = 1; i <= 16; i++)
+	{
+		if (UIDigi[i])
+		{
+			free(UIDigi[i]);
+			UIDigi[i] = NULL;
+		}
+
+		if (UIDigiAX[i])
+		{
+			free(UIDigiAX[i]);
+			UIDigiAX[i] = NULL;
+		}
+	}
+}
+	
 struct MsgInfo * FindMessageByNumber(int msgno)
  {
 	int m=NumberofMessages;
@@ -350,7 +373,7 @@ VOID SeeifBBSUIFrame(PMESSAGE buff, int len)
 		
 		if ((Digis[6] & 1) == 0)				// Not end of list
 		{
-			Digis+-7;
+			Digis +=7;
 			goto DigiLoop;
 		}
 	}

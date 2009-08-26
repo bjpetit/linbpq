@@ -23,6 +23,7 @@
 #define IDC_CHATSEM                     1014
 #define IDC_UICONFIG                    1016
 #define ISP_SMTP_AUTH                   3009
+#define IDC_FWDTIMES                    4008
 #define IDC_WP                          5000
 #define IDC_WPNAME                      5001
 #define IDC_ZIP1                        5002
