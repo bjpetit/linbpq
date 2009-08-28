@@ -3149,7 +3149,7 @@ BPQTRACERET:
 	PUBLIC _RELBUFF
 	
 _RELBUFF	LABEL NEAR
-	PUBLIC	RELBUFF
+
 RELBUFF:
 ;
 ;	see if buffer is already on free q

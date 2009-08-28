@@ -38,7 +38,7 @@
 #include <winsock.h>
 #include "commctrl.h"
 
-
+#include <shellapi.h>
 
 // C RunTime Header Files
 #include <stdlib.h>

@@ -430,6 +430,7 @@ DESTISOK:
 ;	IF 	current route is 1, then we must have INP3 routes (or entry is corrupt)
 
 	POP	EBX
+	PUSH EBX
 
 	CMP	DEST_ROUTE[EBX],1
 	JNE	NOROUTETODESTx

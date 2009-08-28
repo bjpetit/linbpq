@@ -8,12 +8,11 @@ static char ClassName[]="BPQMONWINDOW";
 
 char SYSOPCall[50];
 
-extern
-
-WNDPROC wpOrigInputProc; 
-WNDPROC wpOrigOutputProc; 
+static WNDPROC wpOrigInputProc; 
+static WNDPROC wpOrigOutputProc; 
 
 HWND hMonitor;
+
 static HWND hwndInput;
 static HWND hwndOutput;
 
@@ -26,11 +25,10 @@ RECT OutputRect;
 
 int Height, Width, LastY;
 
-char kbbuf[160];
+static char kbbuf[160];
 static int kbptr=0;
-char readbuff[1024];
+static char readbuff[1024];
 
-static BOOL Bells = TRUE;
 static BOOL StripLF = TRUE;
 static BOOL MonBBS = TRUE;
 static BOOL MonCHAT = TRUE;
@@ -88,16 +86,6 @@ BOOL CreateMonitor()
         return (FALSE);
 
 	hMenu=GetMenu(hMonitor);
-
-	if (Bells & 1)
-		CheckMenuItem(hMenu,BPQBELLS, MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQBELLS, MF_UNCHECKED);
-
-  	if (StripLF & 1)
-		CheckMenuItem(hMenu,BPQStripLF, MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQStripLF, MF_UNCHECKED);
 
 	CheckMenuItem(hMenu,MONBBS, MonBBS ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,MONCHAT, MonCHAT ? MF_CHECKED : MF_UNCHECKED);
@@ -291,21 +279,13 @@ int WritetoMonitorWindow(char * Msg, int len)
 	ptr1=&readbuff[0];
 	readbuff[len]=0;
 
-	if (Bells)
-	{
-		do {
-
-			ptr2=memchr(ptr1,7,len);
+	do {
+		ptr2=memchr(ptr1,7,len);
 			
-			if (ptr2)
-			{
-				*(ptr2)=32;
-				Beep(440,250);
-			}
-	
-		} while (ptr2);
+		if (ptr2)
+			*(ptr2)=32;
 
-	}
+	} while (ptr2);
 
 lineloop:
 

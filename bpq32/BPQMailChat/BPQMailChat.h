@@ -984,6 +984,8 @@ extern BOOL CloseWindowOnBye;
 extern RECT MonitorRect;
 extern HWND hMonitor;
 
+extern int LogAge;
+extern BOOL DeletetoRecycleBin;
 
 extern int PR;
 extern int PUR;

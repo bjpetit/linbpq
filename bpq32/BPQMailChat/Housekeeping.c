@@ -4,6 +4,9 @@
 
 #include "stdafx.h"
 
+int LogAge = 7;
+
+BOOL DeletetoRecycleBin = FALSE;
 
 int PR = 30;
 int PUR = 30;
@@ -14,10 +17,24 @@ int BNF = 30;
 int AP;
 int AB;
 
-
 struct Override ** LTFROM;
 struct Override ** LTTO;
 struct Override ** LTAT;
+
+int DeleteLogFiles();
+
+DeletetoRecycle(char * FN)
+{
+	SHFILEOPSTRUCT FileOp;
+
+	FileOp.hwnd = NULL;
+	FileOp.wFunc = FO_DELETE;
+	FileOp.fFlags = FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_NOCONFIRMMKDIR | FOF_ALLOWUNDO;
+	FileOp.pFrom = FN;
+	FileOp.pTo = NULL;
+
+	return SHFileOperation(&FileOp);
+}
 
 VOID FreeOverride(struct Override ** Hddr)
 {
@@ -134,6 +151,8 @@ INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 
 VOID DoHouseKeeping(BOOL Manual)
 {
+	DeleteLogFiles();
+
 	RemoveKilledMessages();
 	ExpireMessages();
 	
@@ -332,8 +351,12 @@ BOOL RemoveKilledMessages()
 
 		if (Msg->status == 'K')
 		{
-			wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
-			DeleteFile(MsgFile);
+			wsprintf(MsgFile, "%s\\m_%06d.mes%c", MailDir, Msg->number, 0);
+			if (DeletetoRecycleBin)
+				DeletetoRecycle(MsgFile);
+			else
+				DeleteFile(MsgFile);
+			
 			free(Msg);
 			Removed++;
 		}
@@ -534,5 +557,68 @@ VOID MailHousekeepingResults()
 
 	free(MailBuffer);
 
+}
 
+
+int DeleteLogFiles()
+{
+   WIN32_FIND_DATA ffd;
+
+   char szDir[MAX_PATH];
+   char File[MAX_PATH];
+   HANDLE hFind = INVALID_HANDLE_VALUE;
+   DWORD dwError=0;
+   LARGE_INTEGER ft;
+   time_t now = time(NULL);
+   int Age;
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   strcpy(szDir, BaseDir);
+   strcat(szDir, "\\Log_*.txt");
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+   {
+      return dwError;
+   } 
+   
+   // List all the files in the directory with some info about them.
+
+   do
+   {
+      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      {
+         OutputDebugString(ffd.cFileName);
+      }
+      else
+      {
+         ft.HighPart = ffd.ftCreationTime.dwHighDateTime;
+         ft.LowPart = ffd.ftCreationTime.dwLowDateTime;
+
+		 ft.QuadPart -=  116444736000000000;
+		 ft.QuadPart /= 10000000;
+
+		 Age = (now - ft.LowPart) / 86400; 
+
+		 if (Age > LogAge)
+		 {
+			 wsprintf(File, "%s\\%s%c", BaseDir, ffd.cFileName, 0);
+			 if (DeletetoRecycleBin)
+				DeletetoRecycle(File);
+			 else
+				 DeleteFile(File);
+		 }
+      }
+   }
+   while (FindNextFile(hFind, &ffd) != 0);
+ 
+   dwError = GetLastError();
+
+   FindClose(hFind);
+   return dwError;
 }

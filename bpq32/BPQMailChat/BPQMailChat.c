@@ -152,6 +152,13 @@
 // Allow resizing of main window.
 // Add Ver command.
 
+// Version 1.0.1.1
+
+// First Public Beta
+
+// Fix part line handling in Console
+// Maintenance deletes old log files.
+// Add option to delete files to the recycle bin.
 
 #include "stdafx.h"
 

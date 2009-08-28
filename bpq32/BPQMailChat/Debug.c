@@ -9,8 +9,8 @@ static char ClassName[]="BPQDEBUGWINDOW";
 char SYSOPCall[50];
 
 
-WNDPROC wpOrigInputProc; 
-WNDPROC wpOrigOutputProc; 
+static WNDPROC wpOrigInputProc; 
+static WNDPROC wpOrigOutputProc; 
 
 HWND hDebug;
 static HWND hwndInput;
@@ -18,16 +18,13 @@ static HWND hwndOutput;
 
 static HMENU hMenu;		// handle of menu 
 
-
 #define InputBoxHeight 25
 RECT MonitorRect;
 RECT OutputRect;
 
 int Height, Width, LastY;
 
-char kbbuf[160];
-static int kbptr=0;
-char readbuff[1024];
+static char readbuff[1024];
 
 static BOOL Bells = TRUE;
 static BOOL StripLF = TRUE;

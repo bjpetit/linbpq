@@ -22,6 +22,7 @@
 #define IDC_USEB2                       1013
 #define IDC_CHATSEM                     1014
 #define IDC_UICONFIG                    1016
+#define IDC_DELETETORECYCLE             1017
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_WP                          5000
@@ -38,6 +39,7 @@
 #define IDC_EMAIL                       5010
 #define IDC_CHANGED                     5011
 #define IDC_SEEN                        5012
+#define IDC_LOGLIFETIME                 9025
 #define IDD_MAINTRESULTS                30001
 #define IDD_EDITWP                      30002
 #define IDD_UICONFIG                    30003
@@ -62,7 +64,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30004
 #define _APS_NEXT_COMMAND_VALUE         40015
-#define _APS_NEXT_CONTROL_VALUE         1017
+#define _APS_NEXT_CONTROL_VALUE         1018
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

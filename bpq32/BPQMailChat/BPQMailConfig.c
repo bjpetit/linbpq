@@ -516,6 +516,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAXMSG, MaxMsgno, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BIDLIFETIME, BidLifetime, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDC_LOGLIFETIME, LogAge, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAINTINTERVAL, MaintInterval, FALSE);
 		wsprintf(Time, "%04d", MaintTime);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_MAINTTIME, Time);
@@ -530,6 +531,9 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		CheckDlgButton(pHdr->hwndDisplay, IDM_AP, AP);
 		CheckDlgButton(pHdr->hwndDisplay, IDM_AB, AB);
+
+		CheckDlgButton(pHdr->hwndDisplay, IDC_DELETETORECYCLE, DeletetoRecycleBin);
+
 
 		if (LTFROM)
 		{
@@ -1389,6 +1393,9 @@ VOID SaveMAINTConfig()
 	BidLifetime = GetDlgItemInt(hwndDisplay, IDC_BIDLIFETIME, &OK1, FALSE);
 	retCode = RegSetValueEx(hKey, "BidLifetime",0 , REG_DWORD,(BYTE *)&BidLifetime, 4);
 
+	LogAge = GetDlgItemInt(hwndDisplay, IDC_LOGLIFETIME, &OK1, FALSE);
+	retCode = RegSetValueEx(hKey, "LogLifetime",0 , REG_DWORD,(BYTE *)&LogAge, 4);
+
 	MaintInterval = GetDlgItemInt(hwndDisplay, IDC_MAINTINTERVAL, &OK1, FALSE);
 	retCode = RegSetValueEx(hKey, "MaintInterval",0 , REG_DWORD,(BYTE *)&MaintInterval, 4);
 
@@ -1419,6 +1426,8 @@ VOID SaveMAINTConfig()
 	val = IsDlgButtonChecked(hwndDisplay, IDM_AB);
 	retCode = RegSetValueEx(hKey,"AB", 0, REG_DWORD, (BYTE *)&val,4);
 
+	DeletetoRecycleBin = IsDlgButtonChecked(hwndDisplay, IDC_DELETETORECYCLE);
+	retCode = RegSetValueEx(hKey,"DeletetoRecycleBin", 0, REG_DWORD, (BYTE *)&DeletetoRecycleBin,4);
 
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTFROM, hKey, "LTFROM");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTTO, hKey, "LTTO");
@@ -1776,6 +1785,10 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&MaxMsgno,(ULONG *)&Vallen);
 
 			Vallen=4;
+			RegQueryValueEx(hKey,"LogLifetime",0,			
+			(ULONG *)&Type,(UCHAR *)&LogAge,(ULONG *)&Vallen);
+
+			Vallen=4;
 			retCode += RegQueryValueEx(hKey,"BidLifetime",0,			
 			(ULONG *)&Type,(UCHAR *)&BidLifetime,(ULONG *)&Vallen);
 
@@ -1820,6 +1833,10 @@ TryAgain:
 			Vallen=4;
 			retCode += RegQueryValueEx(hKey, "AB", 0,			
 				(ULONG *)&Type,(UCHAR *)&AB,(ULONG *)&Vallen);
+
+			Vallen=4;
+			RegQueryValueEx(hKey, "DeletetoRecycleBin", 0,			
+				(ULONG *)&Type,(UCHAR *)&DeletetoRecycleBin,(ULONG *)&Vallen);
 
 
 			LTFROM = GetOverrides(hKey, "LTFROM");

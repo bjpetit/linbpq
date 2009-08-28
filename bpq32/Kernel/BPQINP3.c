@@ -875,9 +875,11 @@ SendRIPTimer()
 	{
 		if (Route->NEIGHBOUR_CALL[0] != 0)
 		{
-			if (Route->NEIGHBOUR_LINK == 0 || 
-				Route->NEIGHBOUR_LINK->LINKPORT == 0)
+			if (Route->NEIGHBOUR_LINK == 0 || Route->NEIGHBOUR_LINK->LINKPORT == 0)
 			{
+				if (Route->NEIGHBOUR_QUAL == 0)
+					continue;						// Qual zero is a locked out route
+
 				// Try to activate link
 
 				_asm

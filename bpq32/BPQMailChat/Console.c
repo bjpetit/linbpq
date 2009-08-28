@@ -12,17 +12,13 @@ CIRCUIT * Console;
 
 struct UserInfo * user;
 
-
-WNDPROC wpOrigInputProc; 
-WNDPROC wpOrigOutputProc; 
-//WNDPROC wpOrigMonProc; 
-//WNDPROC wpOrigSplitProc; 
+static WNDPROC wpOrigInputProc; 
+static WNDPROC wpOrigOutputProc; 
 
 HWND hConsole;
-HWND hwndInput;
-HWND hwndOutput;
-//HWND hwndMon;
-//HWND hwndSplit;
+
+static HWND hwndInput;
+static HWND hwndOutput;
 
 static HMENU hMenu;		// handle of menu 
 
@@ -36,9 +32,9 @@ int Height, Width, LastY;
 int ClientHeight, ClientWidth;
 
 
-char kbbuf[160];
-int kbptr=0;
-char readbuff[101000];
+static char kbbuf[160];
+static int kbptr=0;
+static char readbuff[101000];
 
 BOOL Bells = TRUE;
 BOOL StripLF = TRUE;
@@ -48,20 +44,21 @@ BOOL FlashOnConnect = TRUE;
 BOOL WrapInput = TRUE;
 BOOL CloseWindowOnBye = TRUE;
 
-int WrapLen = 80;
-int WarnLen = 90;
-int maxlinelen = 80;
+static int WrapLen = 80;
+static int WarnLen = 90;
+static int maxlinelen = 80;
 
-int PartLinePtr=0;
-int PartLineIndex=0;		// Listbox index of (last) incomplete line
+static int PartLinePtr=0;
+static int PartLineIndex=0;		// Listbox index of (last) incomplete line
 
 
-LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-void MoveWindows();
+static LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+static LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
+static LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
+static LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
+static LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
+static void MoveWindows();
+
 
 #define BGCOLOUR RGB(236,233,216)
 
@@ -483,63 +480,61 @@ lineloop:
 
 		}
 
-					*(ptr2++)=0;
+		*(ptr2++)=0;
 
-					// If len is greater that screen with, fold
+		// If len is greater that screen with, fold
 
-					if ((ptr2 - ptr1) > maxlinelen)
-					{
-						char * ptr3;
-						char * saveptr1 = ptr1;
-						int linelen = ptr2 - ptr1;
-						int foldlen;
-						char save;
+		if ((ptr2 - ptr1) > maxlinelen)
+		{
+			char * ptr3;
+			char * saveptr1 = ptr1;
+			int linelen = ptr2 - ptr1;
+			int foldlen;
+			char save;
 					
-					foldloop:
+		foldloop:
 
-						ptr3 = ptr1 + maxlinelen;
+			ptr3 = ptr1 + maxlinelen;
 					
-						while(*ptr3!= 0x20 && ptr3 > ptr1)
-						{
-							ptr3--;
-						}
+			while(*ptr3!= 0x20 && ptr3 > ptr1)
+			{
+				ptr3--;
+			}
 						
-						foldlen = ptr3 - ptr1 ;
+			foldlen = ptr3 - ptr1 ;
 
-						if (foldlen == 0)
-						{
-							// No space before, so split at width
+			if (foldlen == 0)
+			{
+				// No space before, so split at width
 
-							foldlen = maxlinelen;
-							ptr3 = ptr1 + maxlinelen;
+				foldlen = maxlinelen;
+				ptr3 = ptr1 + maxlinelen;
 
-						}
-						else
-						{
-							ptr3++ ; // Omit space
-							linelen--;
-						}
-						save = ptr1[foldlen];
-						ptr1[foldlen] = 0;
-						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
-						ptr1[foldlen] = save;
-						linelen -= foldlen;
-						ptr1 = ptr3;
+			}
+			else
+			{
+				ptr3++ ; // Omit space
+				linelen--;
+			}
+			save = ptr1[foldlen];
+			ptr1[foldlen] = 0;
+			index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+			ptr1[foldlen] = save;
+			linelen -= foldlen;
+			ptr1 = ptr3;
 
-						if (linelen > maxlinelen)
-							goto foldloop;
+			if (linelen > maxlinelen)
+				goto foldloop;
 						
-						if (linelen > 0)
-							index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+			if (linelen > 0)
+				index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
 
-						ptr1 = saveptr1;
-					}
-
-					else
-					{
-						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
-					}
-
+			ptr1 = saveptr1;
+		}
+		else
+		{
+			index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+		}
 
 		PartLinePtr=0;
 
