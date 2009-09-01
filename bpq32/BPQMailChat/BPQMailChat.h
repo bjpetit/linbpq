@@ -260,8 +260,10 @@ typedef struct ConnectionInfo_S
 	int BBSNumber;						// The BBS number (offset into bitlist of BBSes to forward a message to
 	int NextMessagetoForward;			// Next index to check in forward cycle
 	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block
-	char FBBReplyChars[6];				//The +-= chars for the 5 proposals
+	char FBBReplyChars[36];				//The +-=!nnnn chars for the 5 proposals
+	int FBBReplyIndex;					// current Reply Pointer
 	int FBBIndex;						// current propopsal number
+	int RestartFrom;					// Restart position
 	BOOL FBBMsgsSent;					// Messages need to be maked as complete when next command received
 	UCHAR FBBChecksum;					// Header Checksum
 	BOOL LocalMsg;				// Set if current Send command is for a local user
@@ -286,6 +288,14 @@ typedef struct ConnectionInfo_S
 #define FBBB2Mode 16
 #define RunningConnectScript 32
 #define MBLFORWARDING 64				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
+
+typedef struct FBBRestartData
+{
+	struct MsgInfo * TempMsg;		// Header while message is being received
+	struct UserInfo * UserPointer;
+	UCHAR * MailBuffer;				// Mail Message being received
+	int MailBufferSize;				// Total Malloc'ed size. Actual size in in Msg Struct
+};
 
 #pragma pack(1)
 
@@ -337,6 +347,7 @@ struct UserInfo{
 #define F_NEW        0x0400
 #define F_PMS        0x0800
 #define F_EMAIL      0x1000
+#define F_HOLDMAIL   0x2000
 
 /* #define F_PWD        0x1000 */
 
@@ -465,16 +476,20 @@ struct BBSForwardingInfo
 	int ScriptIndex;				// Next line in script
 	char ** TOCalls;				// Calls in to field
 	char ** ATCalls;				// Calls in ATBBS field
-	char ** Haddresses;				// Heirarchical Addresses to forward to
+	char ** Haddresses;				// Heirarchical Addresses to forward to (as stored)
+	char *** HADDRS;				// Heirarchical Addresses to forward to
 	char ** FWDTimes;				// Time bands to forward
 	struct FWDBAND ** FWDBands;
 	int MsgCount;					// Messages for this BBS
 	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
 	BOOL Forwarding;				// Forward in progress
+	int MaxFBBBlockSize;
+	BOOL AllowB1;					// Enable B1
 	BOOL AllowB2;					// Enable B2 
 	int FwdInterval;
 	int FwdTimer;
 };
+
 
 struct FBBHeaderLine
 {
@@ -738,11 +753,6 @@ BOOL Forward_Message(struct UserInfo * user, struct MsgInfo * Msg);
 VOID StartForwarding (int BBSNumber);
 BOOL Reverse_Forward(struct UserInfo * user);
 ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
-int MatchMessagetoBBSList(struct MsgInfo * Msg);
-BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
-BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
-BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
-BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 BOOL FBBDoForward(CIRCUIT * conn);
 BOOL FindMessagestoForward (CIRCUIT * conn);
 VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
@@ -782,6 +792,9 @@ VOID UnpackFBBBinary(CIRCUIT * conn);
 void Decode(CIRCUIT * conn) ;
 int Encode(char * in, char * out, int len, BOOL B2Protocol);
 CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline);
+VOID SaveFBBBinary(CIRCUIT * conn);
+BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
+
 
 // Console Routines
 
@@ -806,6 +819,9 @@ void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
 
 VOID __cdecl Debugprintf(const char * format, ...);
+VOID __cdecl Logprintf(int LogMode, int InOut, const char * format, ...);
+
+VOID SortBBSChain();
 
 // TCP Routines
 
@@ -857,6 +873,19 @@ VOID SendMsgUI(struct MsgInfo * Msg);
 VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);
 VOID SeeifBBSUIFrame(struct _MESSAGE * buff, int len);
 struct MsgInfo * FindMessageByNumber(int msgno);
+
+// Message Routing Routtines
+
+VOID SetupHAddreses(struct	BBSForwardingInfo * ForwardingInfo);
+VOID SetupMyHA();
+
+int MatchMessagetoBBSList(struct MsgInfo * Msg);
+BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
+BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo);
+BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS);
+BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
+BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
+
 
 
 
@@ -913,7 +942,6 @@ extern int MaintTime;
 
 extern int MaxRXSize;
 extern int MaxTXSize;
-extern int MaxFBBBlockSize;
 
 extern LINK *link_hd;
 extern CIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others

@@ -12,10 +12,22 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	va_list(arglist);int Len;
 
 	va_start(arglist, format);
-	Len = vsprintf(Mess, format, arglist);
+	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
 	WriteLogLine('!',Mess, Len, LOG_DEBUG);
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
+
+	return;
+}
+
+VOID __cdecl Logprintf(int LogMode, int InOut, const char * format, ...)
+{
+	char Mess[255];
+	va_list(arglist);int Len;
+
+	va_start(arglist, format);
+	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
+	WriteLogLine(InOut, Mess, Len, LogMode);
 
 	return;
 }
@@ -80,11 +92,47 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 
 	
 	va_start(arglist, format);
-	len = vsprintf(Mess, format, arglist);
+	len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
 
 	QueueMsg(conn, Mess, len);
 
 	WriteLogLine('>',Mess, len-1, LOG_BBS);
 
 	return;
+}
+
+int compare( const void *arg1, const void *arg2 );
+
+VOID SortBBSChain()
+{
+	struct UserInfo * user;
+	struct UserInfo * users[100]; 
+	int i = 0, n;
+
+	// Get array of addresses
+
+	for (user = BBSChain; user; user = user->BBSNext)
+	{
+		users[i++] = user;
+		if (i > 99) break;
+	}
+
+	qsort((void *)users, i, 4, compare );
+
+	BBSChain = NULL;
+
+	// Rechain (backwards, as entries ate puton front of chain)
+
+	for (n = i-1; n >= 0; n--)
+	{
+		users[n]->BBSNext = BBSChain;
+		BBSChain = users[n];
+	}
+}
+
+int compare(const void *arg1, const void *arg2)
+{
+   // Compare Calls. Fortunately at start of stuct
+
+   return _stricmp(*(char**)arg1 , *(char**)arg2);
 }

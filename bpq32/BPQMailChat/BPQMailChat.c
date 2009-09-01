@@ -160,6 +160,19 @@
 // Maintenance deletes old log files.
 // Add option to delete files to the recycle bin.
 
+// Version 1.0.2.1
+
+// Allow all Node SYSOP commands in connect scripts.
+// Implement FBB B1 Protocol with Resume
+// Make FBB Max Block size settable for each BBS.
+// Add extra logging when Chat Sessions refused.
+// Rewrite forwarding by HA.
+// Fix Crash on invalid housekeeping override.
+// Add Hold Messages option.
+// Trap CRT Errors
+// Sort Actions/Start Forwarding List
+
+
 #include "stdafx.h"
 
 #define SPECIALVERSION "Beta"
@@ -260,7 +273,7 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[BPQ-%d.%d.%d.%d-%s%sFH$]\r";
+char BBSSID[]="[BPQ-%d.%d.%d.%d-%s%s%sFH$]\r";
 //char BBSSID[]="[BPQ-1.00-AB1FHMRX$]\r";
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
@@ -311,6 +324,22 @@ LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 
 
+void myInvalidParameterHandler(const wchar_t* expression,
+   const wchar_t* function, 
+   const wchar_t* file, 
+   unsigned int line, 
+   uintptr_t pReserved)
+{
+	Logprintf(LOG_DEBUG, '!', "*** Error **** C Run Time Invalid Parameter Handler Called");
+
+	if (expression && function && file)
+	{
+		Logprintf(LOG_DEBUG, '!', "Expression = %S", expression);
+		Logprintf(LOG_DEBUG, '!', "Function %S", function);
+		Logprintf(LOG_DEBUG, '!', "File %S Line %d", file, line);
+	}
+}
+
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
                      LPTSTR    lpCmdLine,
@@ -322,7 +351,12 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	struct UserInfo * user;
 	struct _EXCEPTION_POINTERS exinfo;
 
-	UNREFERENCED_PARAMETER(hPrevInstance);
+	// Trap CRT Errors
+	
+	_invalid_parameter_handler oldHandler, newHandler;
+   
+	newHandler = myInvalidParameterHandler;
+	oldHandler = _set_invalid_parameter_handler(newHandler);
 
 	// Initialize global strings
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -374,7 +408,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	SaveUserDatabase();
 	SaveMessageDatabase();
 	SaveBIDDatabase();
-
 
 	if (cfgMinToTray)
 	{
@@ -779,7 +812,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				if (conn->Active)
 				{
-					wsprintf(MenuLine, "%d %s", conn->BPQStream, conn->Callsign);
+					sprintf_s(MenuLine, 30, "%d %s", conn->BPQStream, conn->Callsign);
 					AppendMenu(hDisMenu, MF_STRING, IDM_DISCONNECT + n, MenuLine);
 				}
 			}
@@ -975,14 +1008,14 @@ int RefreshMainWindow()
 		{
 			if (conn->Flags & CHATLINK)
 			{
-				i=wsprintf(msg, "%-10s %-10s %2d %-10s%5d",
+				i=sprintf_s(msg, sizeof(msg), "%-10s %-10s %2d %-10s%5d",
 					"Chat Link", conn->u.link->alias, conn->BPQStream,
 					"", conn->OutputQueueLength - conn->OutputGetPointer);
 			}
 			else
 			if ((conn->Flags & CHATMODE)  && conn->topic)
 			{
-				i=wsprintf(msg, "%-10s %-10s %2d %-10s%5d",
+				i=sprintf_s(msg, sizeof(msg), "%-10s %-10s %2d %-10s%5d",
 					conn->UserPointer->Name, conn->u.user->call, conn->BPQStream,
 					conn->topic->topic->name, conn->OutputQueueLength - conn->OutputGetPointer);
 			}
@@ -992,7 +1025,7 @@ int RefreshMainWindow()
 					strcpy(msg,"Logging in");
 				else
 				{
-					i=wsprintf(msg, "%-10s %-10s %2d %-10s%5d",
+					i=sprintf_s(msg, sizeof(msg), "%-10s %-10s %2d %-10s%5d",
 						conn->UserPointer->Name, conn->UserPointer->Call, conn->BPQStream,
 						"BBS", conn->OutputQueueLength - conn->OutputGetPointer);
 				}
@@ -1033,11 +1066,11 @@ int RefreshMainWindow()
 	now = time(NULL);
 
 	tm = gmtime(&now);	
-	wsprintf(tim,"%02d:%02d", tm->tm_hour, tm->tm_min);
+	sprintf_s(tim, sizeof(tim), "%02d:%02d", tm->tm_hour, tm->tm_min);
 	SetDlgItemText(hWnd, IDC_UTC, tim);
 
 	tm = localtime(&now);
-	wsprintf(tim,"%02d:%02d", tm->tm_hour, tm->tm_min);
+	sprintf_s(tim, sizeof(tim), "%02d:%02d", tm->tm_hour, tm->tm_min);
 	SetDlgItemText(hWnd, IDC_LOCAL, tim);
 
 
@@ -1080,7 +1113,7 @@ BOOL Initialise()
 
 	if (Attrs == -1)
 	{
-		wsprintf(msg, "Base Directory %s not found - should it be created?", BaseDir);
+		sprintf_s(msg, sizeof(msg), "Base Directory %s not found - should it be created?", BaseDir);
 		ret = MessageBox(NULL, msg, "BPQMailChat", MB_YESNO);
 
 		if (ret == IDYES)
@@ -1102,7 +1135,7 @@ BOOL Initialise()
 	{
 		if (!(Attrs & FILE_ATTRIBUTE_DIRECTORY))
 		{
-			wsprintf(msg, "Base Directory %s is a file not a directory - exiting", BaseDir);
+			sprintf_s(msg, sizeof(msg), "Base Directory %s is a file not a directory - exiting", BaseDir);
 			ret = MessageBox(NULL, msg, "BPQMailChat", MB_ICONSTOP);
 
 			return FALSE;
@@ -1133,7 +1166,7 @@ BOOL Initialise()
 
 	strcpy(MailDir, BaseDir);
 	strcat(MailDir, "\\");
-	strcat(MailDir, "MAIL");
+	strcat(MailDir, "Mail");
 
 	CreateDirectory(MailDir, NULL);		// Just in case
 
@@ -1166,7 +1199,6 @@ BOOL Initialise()
 			rtlink(_strdup(&OtherNodes[ptr]));			
 			ptr+= (len + 1);
 		}
-
 	}
 
 	// Make backup copies of Databases
@@ -1196,7 +1228,6 @@ BOOL Initialise()
 
 		SetAppl(conn->BPQStream, (i == 0 && EnableUI) ? 0x82 : 2, BBSApplMask | ChatApplMask);
 		Disconnect(conn->BPQStream);
-
 	}
 
 	InitialiseTCP();
@@ -1208,6 +1239,8 @@ BOOL Initialise()
 	{
 		AddTrayMenuItem(MainWnd, "Mail/Chat Server");
 	}
+
+	SetupMyHA();
 	
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
@@ -1274,8 +1307,7 @@ int Connected(Stream)
 					ProcessBBSConnectScript(conn, ConnectedMsg, 10);
 					return 0;
 				}
-	
-				
+		
 				if (conn->flags == p_linkini)
 				{
 					conn->paclen = 128;
@@ -1301,8 +1333,10 @@ int Connected(Stream)
 			if (user == NULL)
 			{
 				user = AllocateUserRecord(callsign);
-
+	
 				if (user == NULL) return 0; //		Cant happen??
+
+				user->flags |= F_HOLDMAIL;
 			}
 
 			time(&user->TimeLastCOnnected);
@@ -1330,13 +1364,13 @@ int Connected(Stream)
 
 			if (user->flags & F_Excluded)
 			{
-				n=wsprintf(Msg, "Incoming Connect from %s Rejected by Exclude Flag", user->Call);
+				n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s Rejected by Exclude Flag", user->Call);
 				WriteLogLine('|',Msg, n, LOG_CHAT);
 				Disconnect(Stream);
 				return 0;
 			}
 
-			n=wsprintf(Msg, "Incoming Connect from %s", user->Call);
+			n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s", user->Call);
 			
 			// Send SID and Prompt
 
@@ -1349,14 +1383,16 @@ int Connected(Stream)
 			}
 			else
 			{
-				BOOL B2 = FALSE;
+				BOOL B1 = FALSE, B2 = FALSE;
 
 				if(conn->UserPointer->ForwardingInfo)
+				{
+					B1 = conn->UserPointer->ForwardingInfo->AllowB1;
 					B2 = conn->UserPointer->ForwardingInfo->AllowB2;
-				
+				}
 				WriteLogLine('|',Msg, n, LOG_BBS);
 				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-					ALLOWCOMPRESSED ? "B" : "", B2 ? "2" : "");
+					ALLOWCOMPRESSED ? "B" : "", B1 ? "1" : "", B2 ? "2" : "");
 			}
 
 			if (user->Name[0] == 0)
@@ -1395,7 +1431,15 @@ int Disconnected (Stream)
 				return 0;
 
 			ClearQueue(conn);
-			
+
+			if (conn->InputMode == 'B')
+			{
+				// Save partly received message for a restart
+						
+				if (conn->BBSFlags & FBBB1Mode)
+					SaveFBBBinary(conn);		
+			}
+
 			conn->Active = FALSE;
 			RefreshMainWindow();
 
@@ -1403,13 +1447,13 @@ int Disconnected (Stream)
 			{
 				if (conn->Flags & CHATLINK)
 				{
-					len=wsprintf(Msg, "Chat Node %s Disconnected", conn->u.link->call);
+					len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Disconnected", conn->u.link->call);
 					WriteLogLine('|',Msg, len, LOG_CHAT);
 					__try {link_drop(conn);} My__except_Routine("link_drop");
 				}
 				else
 				{
-					len=wsprintf(Msg, "Chat User %s Disconnected", conn->Callsign);
+					len=sprintf_s(Msg, sizeof(Msg), "Chat User %s Disconnected", conn->Callsign);
 					WriteLogLine('|',Msg, len, LOG_CHAT);
 					__try {logout(conn);} My__except_Routine("logout");
 
@@ -1420,7 +1464,7 @@ int Disconnected (Stream)
 
 			RemoveTempBIDS(conn);
 
-			len=wsprintf(Msg, "%s Disconnected", conn->Callsign);
+			len=sprintf_s(Msg, sizeof(Msg), "%s Disconnected", conn->Callsign);
 			WriteLogLine('|',Msg, len, LOG_BBS);
 
 			if (conn->FBBHeaders)
@@ -1806,6 +1850,9 @@ Next:
 		}
 		goto Next;
 	}
+
+	SortBBSChain();
+
 
 	CloseHandle(Handle);	
 }
@@ -3401,7 +3448,7 @@ char * ReadMessageFile(int msgno)
 	char * MsgBytes;
 	int ReadLen;
  
-	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, msgno);
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, msgno);
 	
 	hFile = CreateFile(MsgFile,
 					GENERIC_READ,
@@ -3460,7 +3507,7 @@ char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
 	tm = gmtime(&Datim);
 	
 	if (tm)
-		wsprintf(Date,"%02d-%3s %02d:%02dZ",
+		sprintf_s(Date, sizeof(Date), "%02d-%3s %02d:%02dZ",
 					tm->tm_mday, month[tm->tm_mon], tm->tm_hour, tm->tm_min);
 
 	if (DateOnly)
@@ -3714,7 +3761,12 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 	conn->TempMsg = Msg;
 
 	Msg->type = MsgType;
-	Msg->status = 'N';
+	
+	if (conn->UserPointer->flags & F_HOLDMAIL)
+		Msg->status = 'H';
+	else
+		Msg->status = 'N';
+	
 	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
 
 	if (BID)
@@ -3928,7 +3980,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 		// Create BID if non supplied
 
 		if (Msg->bid[0] == 0)
-			wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+			sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
 
 		// if message body had R: lines, get date created from last (not very accurate, but best we can do)
 
@@ -4060,7 +4112,7 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 	char Mess[255];
 	int len;
 
-	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
 	
 	hFile = CreateFile(MsgFile,
 					GENERIC_WRITE,
@@ -4083,7 +4135,7 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 
 	if (WriteLen != Msg->length)
 	{
-		len = wsprintf(Mess, "Failed to create Message File\r");
+		len = sprintf_s(Mess, sizeof(Mess), "Failed to create Message File\r");
 		QueueMsg(conn, Mess, len);
 		CriticalErrorHandler(Mess);
 	}
@@ -4114,7 +4166,7 @@ void chat_link_out (LINK *link)
 
 			ConnectUsingAppl(conn->BPQStream, ChatApplMask);
 
-			n=wsprintf(Msg, "Connecting to Chat Node %s", conn->u.link->alias);
+			n=sprintf_s(Msg, sizeof(Msg), "Connecting to Chat Node %s", conn->u.link->alias);
 
 			WriteLogLine('|',Msg, n, LOG_CHAT);
 	
@@ -4191,8 +4243,6 @@ VOID SetupFwdTimes(struct BBSForwardingInfo * ForwardingInfo)
 	}
 }
 
-
-
 VOID SetupForwardingStruct(struct UserInfo * user)
 {
 	struct	BBSForwardingInfo * ForwardingInfo;
@@ -4224,6 +4274,10 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
 
 		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "Use B1 Protocol", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB1,(ULONG *)&Vallen);
+
+		Vallen=4;
 		retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
 
@@ -4232,16 +4286,24 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		RegQueryValueEx(hKey,"FWDInterval",0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->FwdInterval,(ULONG *)&Vallen);
 
+		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->MaxFBBBlockSize,(ULONG *)&Vallen);
+
+		if (ForwardingInfo->MaxFBBBlockSize == 0)
+			ForwardingInfo->MaxFBBBlockSize = 10000;
+
 		if (ForwardingInfo->FwdInterval == 0)
 				ForwardingInfo->FwdInterval = 3600;
 
 		RegCloseKey(hKey);
 
-		// Convert FWD Times
+		// Convert FWD Times and H Addresses
 
 		if (ForwardingInfo->FWDTimes)
 			SetupFwdTimes(ForwardingInfo);
 
+		if (ForwardingInfo->Haddresses)
+			SetupHAddreses(ForwardingInfo);
 	}
 
 	for (m = FirstMessagetoForward; m <= NumberofMessages; m++)
@@ -4311,9 +4373,10 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 	FreeList(ForwardingInfo->TOCalls);
 	FreeList(ForwardingInfo->ATCalls);
 	FreeList(ForwardingInfo->Haddresses);
+	FreeList(ForwardingInfo->HADDRS);
 	FreeList(ForwardingInfo->ConnectScript);
 	FreeList(ForwardingInfo->FWDTimes);
-	FreeList(ForwardingInfo->FWDBands);
+	FreeList((char **)ForwardingInfo->FWDBands);
 }
 
 VOID FreeList(char ** Hddr)
@@ -4337,7 +4400,6 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 {
 	int n, p;
 	CIRCUIT * conn;
-	char Msg[100];
 
 	for (n = NumberofStreams-1; n >= 0 ; n--)
 	{
@@ -4356,9 +4418,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
 
-			n=wsprintf(Msg, "Connecting to BBS %s", user->Call);
-
-			WriteLogLine('|',Msg, n, LOG_BBS);
+			Logprintf(LOG_BBS, '|', "Connecting to BBS %s", user->Call);
 
 			//	Connected Event will trigger connect to remote system
 
@@ -4378,6 +4438,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	char ** Scripts;
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
+	char * ptr, * ptr2;
 
 	WriteLogLine('<',Buffer, len-1, LOG_BBS);
 
@@ -4399,6 +4460,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	Scripts = ForwardingInfo->ConnectScript;
 
+
 	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "PACLEN") || strstr(Buffer, "OK"))
 	{
 		ForwardingInfo->ScriptIndex++;
@@ -4407,6 +4469,30 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 			nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
 
 		return TRUE;
+	}
+
+	ptr = strchr(Buffer, '}');
+
+	if (ptr)
+	{
+		// Could be respsonse to Node Command
+
+		ptr+=2;
+		
+		ptr2 = strchr(&ptr[0], ' ');
+
+		if (ptr2)
+		{
+		if (memcmp(ptr, Scripts[ForwardingInfo->ScriptIndex], ptr2-ptr) == 0)	// Reply to last sscript command
+		{
+			ForwardingInfo->ScriptIndex++;
+		
+			if (Scripts[ForwardingInfo->ScriptIndex]) // If more to send, send it
+				nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
+
+			return TRUE;
+		}
+		}
 	}
 
 	// Not Success or Fail. If last line is still outstanding, wait fot Respon
@@ -4440,11 +4526,15 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	}
 
 	if (Buffer[len-2] == '>')
-	{
+	{		
 		conn->BBSFlags &= ~RunningConnectScript;
 
+		// Only delare B1 and B2 if other end did, and we are configued for it
+
 		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-			ALLOWCOMPRESSED ? "B" : "", conn->UserPointer->ForwardingInfo->AllowB2 ? "2" : "");
+			ALLOWCOMPRESSED ? "B" : "", 
+			(conn->BBSFlags & FBBB1Mode) ? "1" : "",
+			(conn->BBSFlags & FBBB2Mode) ? "2" : ""); 
 
 		conn->NextMessagetoForward = FirstMessagetoForward;
 
@@ -4491,26 +4581,39 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 			conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
 			break;
 
-		case '2':
-
-			if (conn->UserPointer->ForwardingInfo->AllowB2 && ALLOWCOMPRESSED)
-				conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
-			break;
-
-		case '1':
-
-//			if (ALLOWCOMPRESSED)
-//				conn->BBSFlags |= FBBB1Mode ;	// B2 uses B1 mode (crc on front of file)
-			break;
-
 		case 'B':
 
 			if (ALLOWCOMPRESSED)
+			{
 				conn->BBSFlags |= FBBCompressed;
+
+//				if (conn->UserPointer->ForwardingInfo->AllowB1) // !!!!! Testing !!!!
+//					conn->BBSFlags |= FBBB1Mode;
+
+				
+				// Look for 1 or 2 or 12 as next 2 chars
+
+				if (SID[len+2] == '1')
+				{
+					conn->BBSFlags |= FBBB1Mode;
+
+					if (SID[len+3] == '2')
+						if (conn->UserPointer->ForwardingInfo->AllowB2)
+							conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
+
+					break;
+				}
+
+				if (SID[len+2] == '2')
+						if (conn->UserPointer->ForwardingInfo->AllowB2)
+							conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
+	
+				break;
+			}
+
 			break;
 		}
 	}
-
 	return;
 }
 int	CriticalErrorHandler(char * error)
@@ -4657,7 +4760,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 
 				tm = gmtime(&Msg->datecreated);	
 	
-				FBBHeader->Size += wsprintf(RLine,"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
+				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 					Msg->number, BBSName, HRoute);
 
@@ -4666,7 +4769,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 				if (conn->BBSFlags & FBBB2Mode)
 					CreateB2Message(FBBHeader, RLine);
 
-				if (conn->FBBIndex == 5  || TotalSize > MaxFBBBlockSize)
+				if (conn->FBBIndex == 5  || TotalSize > user->ForwardingInfo->MaxFBBBlockSize)
 					return TRUE;							// Got max number or too big
 
 				Found = TRUE;								// Remember we have some
@@ -4701,6 +4804,13 @@ void clear_fwd_bit (char *mask, int bbsnumber)
 		mask[(bbsnumber - 1) / 8] &= (~(1 << ((bbsnumber - 1) % 8)));
 }
 
+VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
+{
+}
+VOID SetupMyHA()
+{
+}
+
 int MatchMessagetoBBSList(struct MsgInfo * Msg)
 {
 	struct UserInfo * bbs;
@@ -4720,7 +4830,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 			
-			if (CheckBBSToList(Msg, bbs, ForwardingInfo, ATBBS, HRoute))
+			if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 			{
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
@@ -4735,7 +4845,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 			
-			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS, HRoute))
+			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
 			{
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
@@ -4849,7 +4959,7 @@ BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwarding
 
 }
 
-BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
+BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo)
 {
 	char ** Calls;
 
@@ -4870,7 +4980,7 @@ BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwa
 	return FALSE;
 }
 
-BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
+BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS)
 {
 	char ** Calls;
 

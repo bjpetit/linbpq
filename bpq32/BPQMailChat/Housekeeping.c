@@ -97,6 +97,9 @@ VOID * GetOverrides(HKEY hKey, char * ValueName)
 		Value = realloc(Value, (Count+2)*4);
 		Value[Count] = zalloc(sizeof(struct Override));
 		Val = strlop(&MultiString[ptr], ',');
+		if (Val == NULL)
+			break;
+
 		Value[Count]->Call = _strupr(_strdup(&MultiString[ptr]));
 		Value[Count++]->Days = atoi(Val);
 		ptr+= (len + 1);
@@ -351,7 +354,7 @@ BOOL RemoveKilledMessages()
 
 		if (Msg->status == 'K')
 		{
-			wsprintf(MsgFile, "%s\\m_%06d.mes%c", MailDir, Msg->number, 0);
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes%c", MailDir, Msg->number, 0);
 			if (DeletetoRecycleBin)
 				DeletetoRecycle(MsgFile);
 			else
@@ -531,7 +534,7 @@ VOID MailHousekeepingResults()
 	Msg->status = 'N';
 	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
 
-	wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
 
 	BIDRec = AllocateBIDRecord();
 	strcpy(BIDRec->BID, Msg->bid);
@@ -539,7 +542,7 @@ VOID MailHousekeepingResults()
 	BIDRec->u.msgno = LOWORD(Msg->number);
 	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
 
-	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
 	
 	hFile = CreateFile(MsgFile,
 					GENERIC_WRITE,

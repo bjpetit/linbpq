@@ -695,9 +695,10 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
+			CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
 			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
-
+			SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
 
 
 			return 0;
@@ -743,6 +744,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_EXPERT, (user->flags & F_Expert));
 			CheckDlgButton(hDlg, IDC_EXCLUDED, (user->flags & F_Excluded));
 			CheckDlgButton(hDlg, IDC_EMAIL, (user->flags & F_EMAIL));
+			CheckDlgButton(hDlg, IDC_HOLDMAIL, (user->flags & F_HOLDMAIL));
 
 			return 0;
 		}
@@ -795,14 +797,20 @@ VOID Do_Add_User(HWND hDlg)
 
 }
 
-VOID SetupNewBBS(struct UserInfo * user)
+BOOL SetupNewBBS(struct UserInfo * user)
 {
+	if (HighestBBSNumber == NBBBS)
+		return FALSE;
+
 	user->BBSNext = BBSChain;
 	BBSChain = user;
 	user->BBSNumber = ++HighestBBSNumber;
 
+	SortBBSChain();
+
 	ReinitializeFWDStruct(user);
 
+	return TRUE;
 }
 
 
@@ -887,8 +895,8 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 		{
 			// New BBS
 
-			user->flags |= F_BBS;
-			SetupNewBBS(user);
+			if(SetupNewBBS(user))
+				user->flags |= F_BBS;
 		}
 	}
 	else
@@ -916,6 +924,9 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (IsDlgButtonChecked(hDlg, IDC_EMAIL))
 		user->flags |= F_EMAIL; else user->flags &= ~F_EMAIL;
+
+	if (IsDlgButtonChecked(hDlg, IDC_HOLDMAIL))
+		user->flags |= F_HOLDMAIL; else user->flags &= ~F_HOLDMAIL;
 
 	SaveUserDatabase();
 
@@ -1347,8 +1358,15 @@ VOID SaveFWDConfig(HWND hDlg)
 		Rev = IsDlgButtonChecked(hDlg, IDC_USEB2);
 		retCode = RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
 
+		Rev = IsDlgButtonChecked(hDlg, IDC_USEB1);
+		retCode = RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
+
 		Val = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
 		retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&Val,4);
+
+		Val = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
+		retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&Val,4);
+
 
 		RegCloseKey(hKey);
 
@@ -1365,10 +1383,6 @@ VOID SaveFWDConfig(HWND hDlg)
 
 	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
 	retCode = RegSetValueEx(hKey,"MaxRXSize", 0, REG_DWORD, (BYTE *)&MaxRXSize,4);
-
-	MaxFBBBlockSize = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
-	retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&MaxFBBBlockSize,4);
-
 
 	RegCloseKey(hKey);
 		
@@ -1589,10 +1603,6 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey,"MaxRXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxRXSize,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
-			(ULONG *)&Type,(UCHAR *)&MaxFBBBlockSize,(ULONG *)&Vallen);
 
 		Vallen=100;
 
@@ -1959,7 +1969,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		for (n = NumberofMessages; n >= 1; n--)
 		{
-			wsprintf(msgno, "%d", MsgHddrPtr[n]->number);
+			sprintf_s(msgno, sizeof(msgno), "%d", MsgHddrPtr[n]->number);
 			SendDlgItemMessage(hDlg, 0, LB_ADDSTRING, 0, (LPARAM)msgno);
 		} 
 
@@ -2056,7 +2066,6 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
-		SetDlgItemInt(hDlg, IDC_MAXBLOCK, MaxFBBBlockSize, FALSE);
 
 		return (INT_PTR)TRUE;
 

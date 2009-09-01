@@ -6,8 +6,9 @@
 
 int MaxRXSize = 99999;
 int MaxTXSize = 99999;
-int MaxFBBBlockSize = 10000;
 
+struct FBBRestartData ** RestartData = NULL;
+int RestartCount = 0;
 
 VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {
@@ -16,6 +17,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	char * ptr;
 	char * Context;
 	char seps[] = " \r";
+	int RestartPtr;
+	char * Respptr;
 
 	if (conn->Flags & GETTINGMESSAGE)
 	{
@@ -66,11 +69,15 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		//	Proposal response
 
+		Respptr=&Buffer[2];
+
 		for (i=0; i < conn->FBBIndex; i++)
 		{
 			FBBHeader = &conn->FBBHeaders[i];
+
+			Respptr++;
 				
-			if ((Buffer[i+3] == '-') || (Buffer[i+3] == 'N') || (Buffer[i+3] == 'R'))				// Not wanted
+			if ((*Respptr == '-') || (*Respptr == 'N') || (*Respptr == 'R'))				// Not wanted
 			{
 				// Zap the entry
 
@@ -79,16 +86,40 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 
 				conn->UserPointer->ForwardingInfo->MsgCount--;
+				continue;
 			}
 
-			if ((Buffer[i+3] == '=') || (Buffer[i+3] == 'L'))				// Defer
+			if ((*Respptr == '=') || (*Respptr == 'L'))				// Defer
 			{
 				// Remove entry from forwarding block
 
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
+				continue;
 			}
 
-			if ((Buffer[i+3] == '+') || (Buffer[i+3] == 'Y') || (Buffer[i+3] == 'H'))				// Need it
+			conn->RestartFrom = 0;		// Assume Restart from
+	
+			if ((*Respptr == '!') || (*Respptr == 'A'))
+			{
+				// Restart 
+
+				char Num[10];
+				char *numptr=&Num[0];
+
+				Respptr++;
+
+				while (isdigit(*Respptr))
+				{
+					*(numptr++) = *(Respptr++);
+				}
+				*numptr = 0;
+
+				conn->RestartFrom = atoi(Num);
+
+				*(--Respptr) = '+';  // So can drop through
+			}
+
+			if ((*Respptr == '+') || (*Respptr == 'Y') || (*Respptr == 'H'))				// Need it
 			{
 				struct tm * tm;
 				time_t now;
@@ -131,8 +162,9 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			
 					nodeprintf(conn, "%c\r\n", 26);
 				}
+				continue;
 			}
-
+			BBSputs(conn, "*** Protocol Error - Invalid Proposal Response'\r");
 		}
 
 		conn->FBBIndex = 0;		// ready for next block;
@@ -243,22 +275,27 @@ ok:
 		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MaxRXSize))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
-			conn->FBBReplyChars[conn->FBBIndex++] = '-';
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+		}
+		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
+		{
+			conn->FBBReplyIndex += wsprintf(&conn->FBBReplyChars[conn->FBBReplyIndex], "!%d", RestartPtr);
 		}
 		else if (LookupTempBID(FBBHeader->BID))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
-			conn->FBBReplyChars[conn->FBBIndex++] = '=';
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '=';
 		}
 		else
 		{
+
 			//	Save BID in temp list in case we are offered it again before completion
 			
 			BIDRec * TempBID = AllocateTempBIDRecord();
 			strcpy(TempBID->BID, FBBHeader->BID);
 			TempBID->u.conn = conn;
 
-			conn->FBBReplyChars[conn->FBBIndex++] = '+';
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '+';
 		}
 
 		FBBHeader->B2Message = FALSE;
@@ -349,12 +386,12 @@ ok2:
 		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MaxRXSize))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
-			conn->FBBReplyChars[conn->FBBIndex++] = '-';
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
 		}
 		else if (LookupTempBID(FBBHeader->BID))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
-			conn->FBBReplyChars[conn->FBBIndex++] = '=';
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '=';
 		}
 		else
 		{
@@ -364,7 +401,7 @@ ok2:
 			strcpy(TempBID->BID, FBBHeader->BID);
 			TempBID->u.conn = conn;
 
-			conn->FBBReplyChars[conn->FBBIndex++] = '+';
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '+';
 		}
 
 		return;
@@ -393,7 +430,8 @@ ok2:
 
 		// Return "FS ", followed by +-= for each proposal
 
-		conn->FBBReplyChars[conn->FBBIndex++] = 0;
+		conn->FBBReplyChars[conn->FBBReplyIndex] = 0;
+		conn->FBBReplyIndex = 0;
 
 		nodeprintf(conn, "FS %s\r", conn->FBBReplyChars);
 
@@ -551,7 +589,7 @@ BOOL FBBDoForward(CIRCUIT * conn)
 
 VOID UnpackFBBBinary(CIRCUIT * conn)
 {
-	int MsgLen, i;
+	int MsgLen, i, offset, n;
 	UCHAR * ptr;
 
 loop:
@@ -570,22 +608,9 @@ loop:
 		if (conn->InputLen < MsgLen)
 			return;						// Wait for more
 
-	//		if (msglen > 60) msglen = 60;
-
-
 		strcpy(conn->TempMsg->title, &ptr[2]);
-	
 
-		// Create initial buffer of 10K. Expand if needed later
-
-		conn->MailBuffer=malloc(10000);
-		conn->MailBufferSize=10000;
-
-		if (conn->MailBuffer == NULL)
-		{
-			BBSputs(conn, "*** Failed to create Message Buffer\r");
-			return;
-		}
+		offset = atoi(ptr+3+strlen(conn->TempMsg->title));
 
 		ptr += MsgLen;
 
@@ -595,6 +620,87 @@ loop:
 
 		conn->FBBChecksum = 0;
 
+		if (offset)
+		{
+			struct FBBRestartData * RestartRec;
+
+			// Trying to restart - make sure we have restart data
+
+			for (i = 1; i <= RestartCount; i++)
+			{
+				RestartRec = RestartData[i];
+		
+				if ((RestartRec->UserPointer == conn->UserPointer)
+					&& (strcmp(RestartRec->TempMsg->bid, conn->TempMsg->bid) == 0))
+				{
+					if (RestartRec->TempMsg->length <= offset)
+					{
+						conn->TempMsg->length = RestartRec->TempMsg->length;
+						conn->MailBuffer = RestartRec->MailBuffer;
+						conn->MailBufferSize = RestartRec->MailBufferSize;
+
+						// FBB Seems to insert  6 Byte message
+						// It looks like the original csum and length - perhaps a a consistancy check
+
+						if (conn->InputLen > 8)
+						{
+							ptr = conn->InputBuffer+2;
+							conn->InputLen -=8;
+								
+							for (i=0; i<6; i++)
+							{
+								conn->FBBChecksum+=ptr[0];
+								ptr++;
+							}
+
+							memmove(conn->InputBuffer, ptr, conn->InputLen);
+
+						}
+						else
+							BBSputs(conn, "*** Extra 8 bytes missing.\r");
+
+						goto GotRestart;
+					}
+					else
+					{
+						BBSputs(conn, "*** Trying to restart from invalid position.\r");
+						return;
+					}
+
+					// Remove Restart info
+
+					for (n = i; n < RestartCount; n++)
+					{
+						RestartData[n] = RestartData[n+1];		// move down all following entries
+					}
+					RestartCount--;
+				}
+			}
+
+			// No Restart Data
+
+			BBSputs(conn, "*** Trying to restart, but no restart data.\r");
+
+			return;
+		}
+	
+		// Create initial buffer of 10K. Expand if needed later
+
+		if (conn->MailBufferSize == 0)
+		{
+			// Dont allocate if restarting
+
+			conn->MailBuffer=malloc(10000);
+			conn->MailBufferSize=10000;
+		}
+
+	GotRestart:
+
+		if (conn->MailBuffer == NULL)
+		{
+			BBSputs(conn, "*** Failed to create Message Buffer\r");
+			return;
+		}
 
 		goto loop;
 
@@ -691,13 +797,12 @@ loop:
 VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 {
 	struct tm * tm;
-	time_t now;
 	char * MsgBytes;
 	UCHAR * Compressed, * Compressedptr;
 	UCHAR * UnCompressed;
 	char * Title;
 	UCHAR * Output, * Outputptr;
-	int i, OrigLen, MsgLen, CompLen;
+	int i, OrigLen, MsgLen, CompLen, DataOffset;
 	char Rline[80];
 
 	MsgBytes = ReadMessageFile(FwdMsg->number);
@@ -719,12 +824,19 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 	*Outputptr++ = strlen(Title) + 8;
 	strcpy(Outputptr, Title);
 	Outputptr += strlen(Title) +1;
-	strcpy(Outputptr, "000000");
+	wsprintf(Outputptr, "%06d", conn->RestartFrom);
 	Outputptr += 7;
 
-	now = time(NULL);
+	DataOffset = Outputptr - Output;	// Used if restarting
 
-	tm = gmtime(&now);	
+	if (conn->RestartFrom == 0)
+	{
+		// save time first sent, or checksum will be wrong when we restart
+		
+		FwdMsg->datechanged=time(NULL);
+	}
+
+	tm = gmtime(&FwdMsg->datechanged);	
 	
 	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -744,9 +856,36 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	conn->FBBChecksum = 0;
 
-	for (i=0; i< CompLen; i++)
+	// If restarting, send the checksum and length as a single record, then data from the restart point
+	// The count includes the header, so adjust count and pointers
+
+	if (conn->RestartFrom)
 	{
-		conn->FBBChecksum+=Compressed[i];
+		*Outputptr++ = 2;
+		*Outputptr++ = 6;
+
+		for (i=0; i< 6; i++)
+		{
+			conn->FBBChecksum+=Compressed[i];
+			*Outputptr++ = Compressed[i];
+		}
+
+//		conn->RestartFrom -= DataOffset;
+		
+		for (i=conn->RestartFrom; i< CompLen; i++)
+		{
+			conn->FBBChecksum+=Compressed[i];
+		}
+		
+		Compressedptr += conn->RestartFrom;
+		CompLen -= conn->RestartFrom;
+	}
+	else
+	{
+		for (i=0; i< CompLen; i++)
+		{
+			conn->FBBChecksum+=Compressed[i];
+		}
 	}
 
 	while (CompLen > 256)
@@ -907,9 +1046,78 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	QueueMsg(conn, Output, Outputptr - Output);
 
 	free(Compressed);
-	free(Output);
-			
+	free(Output);		
 }
+
+// Restart Routines.
+
+VOID SaveFBBBinary(CIRCUIT * conn)
+{
+	// Disconnected during binary transfer
+
+	char Msg[120];
+	int len;
+	struct FBBRestartData * RestartRec = zalloc(sizeof (struct FBBRestartData));
+	
+	if (conn->TempMsg->length < 256)
+		return;							// Not worth it.
+
+	// Need to save Header in conn->TempMsg and data in conn->MailBuffer
+
+	if (conn->InputLen < 2)
+		return;							//  All formats need at least two bytes
+	
+	GetSemaphore(&AllocSemaphore);
+
+	RestartData=realloc(RestartData,(++RestartCount+1)*4);
+	RestartData[RestartCount] = RestartRec;
+
+	FreeSemaphore(&AllocSemaphore);
+
+	RestartRec->UserPointer = conn->UserPointer;
+	RestartRec->TempMsg = conn->TempMsg;
+	RestartRec->MailBuffer = conn->MailBuffer;
+	RestartRec->MailBufferSize = conn->MailBufferSize;
+
+	len = sprintf_s(Msg, sizeof(Msg), "Disconnect received from %s during Binary Transfer - %d Bytes Saved for restart",
+		conn->Callsign, conn->TempMsg->length);
+
+	WriteLogLine('|',Msg, len, LOG_BBS);
+}
+
+BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
+{
+	int i;
+
+	struct FBBRestartData * RestartRec;
+
+	for (i = 1; i <= RestartCount; i++)
+	{
+		RestartRec = RestartData[i];
+		
+		if ((RestartRec->UserPointer == conn->UserPointer)
+			&& (strcmp(RestartRec->TempMsg->bid, FBBHeader->BID) == 0))
+		{
+			char Msg[120];
+			int len;
+
+			len = sprintf_s(Msg, sizeof(Msg), "Restart Data found for %s - Requesting restart from %d",
+				FBBHeader->BID, RestartRec->TempMsg->length);
+
+			WriteLogLine('|',Msg, len, LOG_BBS);
+
+			return (RestartRec->TempMsg->length);
+		}
+	}
+
+	return FALSE;				// Not Found
+}
+
+
+
+
+
+
 
 
 /**************************************************************
@@ -993,11 +1201,8 @@ static int crc_fputc(unsigned short c)
 
 static short crc_fgetc()
 {
-	int retour = *(infile++);
+	short retour = *(infile++);
 
-	if (retour != -1) {
-		crc = updcrc(retour, crc);
-	}
 	return(retour);
 }
 
@@ -1224,7 +1429,7 @@ short GetBit(void)        /* get one bit */
         short i;
 
         while (getlen <= 8) {
-				if ((i = crc_fgetc(infile)) < 0) i = 0;
+				if ((i = crc_fgetc()) < 0) i = 0;
                 getbuf |= i << (8 - getlen);
                 getlen += 8;
         }
@@ -1239,7 +1444,7 @@ short GetByte(void)       /* get one byte */
         unsigned short i;
 
         while (getlen <= 8) {
-				if ((i = crc_fgetc(infile)) == 0xffff) i = 0;
+				if ((i = crc_fgetc()) == 0xffff) i = 0;
                 getbuf |= i << (8 - getlen);
                 getlen += 8;
         }
@@ -1556,7 +1761,12 @@ int Encode(char * in, char * out, int inlen, BOOL B1Protocol)  /* compression */
 			codesize+=2;
 		}
 
-		return codesize + 4;
+		 codesize += 4;
+
+		Logprintf(LOG_BBS, '|', "Compressed Message Comp Len %d Msg Len %d CRC %x", 
+				codesize, inlen, crc);
+
+		return codesize;
 }
 
 void Decode(CIRCUIT * conn)  
@@ -1575,19 +1785,38 @@ void Decode(CIRCUIT * conn)
 
 		infile = &conn->MailBuffer[0];
 
+		crc = 0;
+
 		if (conn->BBSFlags & FBBB1Mode)
 		{
-			crc_read =  crc_fgetc();
-			crc_read |= (crc_fgetc() << 8);
-		}
+			short val;
+			
+			crc_read = infile[0];
+			crc_read |= infile[1] << 8;
 
-		crc = 0;
+			for (i = 2; i < conn->TempMsg->length; i++)
+			{
+				val = infile[i];
+				crc = updcrc(val, crc);
+			}
+			if (crc != crc_read)
+			{
+				nodeprintf(conn, "*** Message CRC Error File %x Calc %x\r", crc_read, crc);
+				return;
+			}
+
+			infile+=2;
+		}
 
 		textsize = 0;
 		ptr = (char *)&textsize;
 
 		for (i = 0 ; i < sizeof(textsize) ; i++)
-			ptr[i] = crc_fgetc(infile);
+			ptr[i] = crc_fgetc();
+
+		Logprintf(LOG_BBS, '|', "Uncompressing Message Comp Len %d Msg Len %d CRC %x", 
+				conn->TempMsg->length, textsize, crc);
+	
 
 		outfile = zalloc(textsize + 100);
 

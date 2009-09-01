@@ -87,7 +87,7 @@ VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...)
 	va_list(arglist);
 	
 	va_start(arglist, format);
-	vsprintf(buff, format, arglist);
+	vsprintf_s(buff, 300, format, arglist);
 
 	nputs(conn, buff);
 }
@@ -202,6 +202,9 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 	if ((len <6) && (memcmp(Buffer, "*RTL", 4) == 0))
 	{
 		// Other end thinks this is a node-node link
+
+		Logprintf(LOG_CHAT, '!', "Station %s trying to start Node Protocol, but not defined as a Node",
+			conn->Callsign);
 
 		Disconnect(conn->BPQStream);
 		return;
@@ -1091,13 +1094,17 @@ CIRCUIT *circuit_new(CIRCUIT *circuit, int flags)
 	return circuit;
 }
 
-// Handle an incoming link.
+// Handle an incoming link. We should only get here if we think the station is a node.
 
 int rtloginl (CIRCUIT *conn, char * call)
 {
 	LINK    *link;
 
-	if (node_find(call)) return FALSE; // Already linked.
+	if (node_find(call))
+	{
+		Logprintf(LOG_TCP, '|', "Refusing link with %s to prevent a loop", conn->Callsign);
+		return FALSE; // Already linked.
+	}
 
 	for (link = link_hd; link; link = link->next)
 	{	if (matchi(call, link->call))
@@ -1119,7 +1126,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 		{
 			if (c->u.link == link)
 			{
-				len=wsprintf(Msg, "Chat Node %s Connect when Connected - Old Connection Closed", call);
+				len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Connect when Connected - Old Connection Closed", call);
 				WriteLogLine('|',Msg, len, LOG_CHAT);
 
 				c->Active = FALSE;			// So we don't try to clear circuit again

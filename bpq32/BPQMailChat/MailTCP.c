@@ -82,7 +82,7 @@ VOID __cdecl sockprintf(SOCKET sock, const char * format, ...)
 	va_list(arglist);
 	
 	va_start(arglist, format);
-	vsprintf(buff, format, arglist);
+	vsprintf_s(buff, 300, format, arglist);
 
 	SendSock(sock, buff);
 }
@@ -322,9 +322,7 @@ ReleaseSock(SOCKET sock)
 
 			if (sockptr->State == WaitingForGreeting)
 			{
-				char LogMsg[80];
-				int n=wsprintf(LogMsg, "Premature Close on Socket %d", sock);
-				WriteLogLine('|',LogMsg, n, LOG_TCP);
+				Logprintf(LOG_TCP, '|', "Premature Close on Socket %d", sock);
 	
 				if (sockptr->Type == SMTPClient)
 					SMTPActive = FALSE;	
@@ -822,7 +820,7 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 	Msg->number = ++LatestMsg;
 	Msg->length = MsgLen;
 
-	wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
 
 	Msg->type = 'P';
 	Msg->status = 'N';
@@ -910,7 +908,7 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 
 	Msg->length = ptr2 - Message;
 
-	wsprintf(MsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
 	
 	hFile = CreateFile(MsgFile,
 					GENERIC_WRITE,
@@ -928,7 +926,7 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 
 	if (WriteLen != Msg->length)
 	{
-		len = wsprintf(Mess, "Failed to create Message File\r");
+		len = sprintf_s(Mess, sizeof(Mess), "Failed to create Message File\r");
 		CriticalErrorHandler(Mess);
 
 		return FALSE;
@@ -1120,7 +1118,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			size+=sockptr->POP3Msgs[i]->length;
 		}
 
-		wsprintf(reply, "+OK %d %d", sockptr->POP3MsgCount, size);
+		sprintf_s(reply, sizeof(reply), "+OK %d %d", sockptr->POP3MsgCount, size);
 
 		SendSock(sock, reply);
 		return;
@@ -1136,7 +1134,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		for (i=0; i< sockptr->POP3MsgCount; i++)
 		{
-			wsprintf(reply, "%d %s", i+1, sockptr->POP3Msgs[i]->bid);
+			sprintf_s(reply, sizeof(reply), "%d %s", i+1, sockptr->POP3Msgs[i]->bid);
 			SendSock(sock, reply);	
 		}
 
@@ -1154,7 +1152,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		for (i=0; i< sockptr->POP3MsgCount; i++)
 		{
-			wsprintf(reply, "%d %d", i+1, sockptr->POP3Msgs[i]->length);
+			sprintf_s(reply, sizeof(reply), "%d %d", i+1, sockptr->POP3Msgs[i]->length);
 			SendSock(sock, reply);	
 		}
 
@@ -1198,17 +1196,17 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 //Received: from [69.147.65.148] by n15.bullet.sp1.yahoo.com with NNFMP; 16 May 2009 02:30:47 -0000
 //Received: from [69.147.108.192] by t11.bullet.mail.sp1.yahoo.com with NNFMP; 16 May 2009 02:30:47 -0000
 
-		wsprintf(Header, "To: %s", Msg->to);
+		sprintf_s(Header, sizeof(Header), "To: %s", Msg->to);
 		SendSock(sock, Header);
 		
-		wsprintf(Header, "Message-ID: %s", Msg->bid);
+		sprintf_s(Header, sizeof(Header), "Message-ID: %s", Msg->bid);
 		SendSock(sock, Header);
-		wsprintf(Header, "From: %s", Msg->from);
+		sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
 		SendSock(sock, Header);
 //Sender: shipplotter@yahoogroups.com
-//		wsprintf(Header, "Date: %s", Msg->date);
+//		sprintf_s(Header, sizeof(Header), "Date: %s", Msg->date);
 //		SendSock(sock, Header);
-		wsprintf(Header, "Subject: %s", Msg->title);
+		sprintf_s(Header, sizeof(Header), "Subject: %s", Msg->title);
 		SendSock(sock, Header);
 //Content-Type: text/plain; charset=ISO-8859-1
 //Content-Transfer-Encoding: 7bit
@@ -1359,10 +1357,9 @@ char *str_base64_encode(char *str)
 
 BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 {
-	int err, status, n;
+	int err, status;
 	u_long param=1;
 	BOOL bcopt=TRUE;
-	char LogMsg[100];
 
 	SocketConn * sockptr;
 
@@ -1386,8 +1383,7 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 		 
 		 if (!HostEnt)
 		 {
- 			n=wsprintf(LogMsg, "Resolve Failed for SMTP Server %s", Host);
-			WriteLogLine('|',LogMsg, n, LOG_TCP);
+ 			Logprintf(LOG_TCP,'|', "Resolve Failed for SMTP Server %s", Host);
 			SMTPActive = FALSE;
 			return FALSE;			// Resolve failed
 		 }
@@ -1656,9 +1652,8 @@ BOOL SendtoISP()
 {
 	// Find a message intended for the Internet and send it
 
-	int m = NumberofMessages, n;
+	int m = NumberofMessages;
 	char * Body;
-	char LogMsg[100];
 
 	struct MsgInfo * Msg;
 
@@ -1681,9 +1676,7 @@ BOOL SendtoISP()
 				return FALSE;
 			}
 
-			n=wsprintf(LogMsg, "Connecting to Server %s to send Msg %d", ISPSMTPName, Msg->number);
-
-			WriteLogLine('|',LogMsg, n, LOG_TCP);
+			Logprintf(LOG_TCP, '|', "Connecting to Server %s to send Msg %d", ISPSMTPName, Msg->number);
 
 			SMTPConnect(ISPSMTPName, ISPSMTPPort, Msg, Body);
 
@@ -1702,7 +1695,7 @@ BOOL SendtoISP()
 
 BOOL POP3Connect(char * Host, int Port)
 {
-	int err, status, n;
+	int err, status;
 	u_long param=1;
 	BOOL bcopt=TRUE;
 
@@ -1712,11 +1705,8 @@ BOOL POP3Connect(char * Host, int Port)
 	SOCKADDR_IN destaddr;
 	int addrlen=sizeof(sinx);
 	struct hostent * HostEnt;
-	char LogMsg[100];
 
-	n=wsprintf(LogMsg, "Connecting to POP3 Server %s", Host);
-	WriteLogLine('|',LogMsg, n, LOG_TCP);
-
+	Logprintf(LOG_TCP, '|', "Connecting to POP3 Server %s", Host);
 
 	// Resolve Name if needed
 
@@ -1733,8 +1723,7 @@ BOOL POP3Connect(char * Host, int Port)
 		 
 		 if (!HostEnt)
 		 {
-			n=wsprintf(LogMsg, "Resolve Failed for POP3 Server %s", Host);
-			WriteLogLine('|',LogMsg, n, LOG_TCP);
+			Logprintf(LOG_TCP, '|', "Resolve Failed for POP3 Server %s", Host);
 			return FALSE;			// Resolve failed
 		 }
 		 memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
@@ -2157,7 +2146,7 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 	Msg->number = ++LatestMsg;
 	Msg->length = MsgLen;
 
-	wsprintf(Msg->bid, "%d_%s", LatestMsg, BBSName);
+	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
 
 	Msg->type = 'P';
 	Msg->status = 'N';

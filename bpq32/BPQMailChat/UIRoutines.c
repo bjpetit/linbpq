@@ -152,7 +152,7 @@ VOID SendMsgUI(struct MsgInfo * Msg)
 
 	struct tm *tm = gmtime(&Msg->datecreated);	
 	
-	len = wsprintf(msg,"%-6d %c %6d %-13s %-6s %02d%02d%02d %s\r",
+	len = sprintf_s(msg, sizeof(msg),"%-6d %c %6d %-13s %-6s %02d%02d%02d %s\r",
 		Msg->number, Msg->type, Msg->length, Msg->to,
 		Msg->from, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Msg->title);
 
@@ -217,7 +217,7 @@ VOID SendDummyUI(int num)
 	int Mask = UIPortMask;
 	int NumPorts = GetNumberofPorts()
 ;
-	len = wsprintf(msg,"%-6d #\r", num);
+	len = sprintf_s(msg, sizeof(msg),"%-6d #\r", num);
 
 	for (i=1; i <= NumPorts; i++)
 	{
@@ -235,7 +235,7 @@ VOID SendLatestUI(int Port)
 	int Mask = UIPortMask;
 	int NumPorts = GetNumberofPorts();
 	
-	len = wsprintf(msg,"%-6d !!\r", LatestMsg);
+	len = sprintf_s(msg, sizeof(msg),"%-6d !!\r", LatestMsg);
 
 	if (Port)
 	{
