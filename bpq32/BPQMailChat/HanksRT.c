@@ -1236,6 +1236,8 @@ static void show_circuits(CIRCUIT *conn)
 {
 	CIRCUIT *circuit;
 	NODE    *node;
+	LINK *link;
+
 	int     len;
 	CN	*cn;
 
@@ -1285,7 +1287,19 @@ static void show_circuits(CIRCUIT *conn)
 		else if (circuit->flags & p_linkini)
 			nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
 	}
-	
+
+	nprintf(conn, "Links Defined:\r");
+
+
+	for (link = link_hd; link; link = link->next)
+	{
+		if (link->flags & p_linked )
+			nprintf(conn, "  %-10.10s Open\r", link->call);
+		else if (link->flags & (p_linked | p_linkini))
+			nprintf(conn, "  %-10.10s Connecting\r", link->call);
+		else
+			nprintf(conn, "  %-10.10s Idle\r", link->call);
+	}
 }
 
 // /T Command: List topics and users in them.

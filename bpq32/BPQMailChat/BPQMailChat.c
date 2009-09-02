@@ -177,6 +177,9 @@
 // Fix PE if ctext contains }
 // Run Houskeeping at startup if previous Housekeeping was missed
 
+// Version 1.2.2.
+
+// Add configued nodes to /p listing
 
 // Rewrite forwarding by HA.
 
