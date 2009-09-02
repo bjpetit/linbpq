@@ -23,6 +23,8 @@ struct Override ** LTAT;
 
 int DeleteLogFiles();
 
+int LastFWDTime;
+
 DeletetoRecycle(char * FN)
 {
 	SHFILEOPSTRUCT FileOp;
@@ -154,6 +156,10 @@ INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 
 VOID DoHouseKeeping(BOOL Manual)
 {
+	HKEY hKey=0;
+	int retCode, disp;
+	time_t NOW;
+
 	DeleteLogFiles();
 
 	RemoveKilledMessages();
@@ -175,6 +181,17 @@ VOID DoHouseKeeping(BOOL Manual)
 	}
 
 	MailHousekeepingResults();
+	
+	NOW = time(NULL);
+
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		retCode = RegSetValueEx(hKey,"LastHouseKeepingTime",0,REG_DWORD,(BYTE *)&NOW,4);
+		RegCloseKey(hKey);
+	}
 
 	if (Manual)
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);

@@ -166,11 +166,19 @@
 // Implement FBB B1 Protocol with Resume
 // Make FBB Max Block size settable for each BBS.
 // Add extra logging when Chat Sessions refused.
-// Rewrite forwarding by HA.
 // Fix Crash on invalid housekeeping override.
 // Add Hold Messages option.
 // Trap CRT Errors
 // Sort Actions/Start Forwarding List
+
+// Version 1.2.2.2
+
+// Fill in gaps in BBS Number sequence
+// Fix PE if ctext contains }
+// Run Houskeeping at startup if previous Housekeeping was missed
+
+
+// Rewrite forwarding by HA.
 
 
 #include "stdafx.h"
@@ -862,7 +870,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ToggleParam(hMenu, hWnd, &LogTCP, IDM_LOGTCP);
 			break;
 
-
 		case IDM_HOUSEKEEPING:
 
 			DoHouseKeeping(TRUE);
@@ -1264,6 +1271,11 @@ BOOL Initialise()
 		if (MaintClock < now)
 			MaintClock += 86400;
 
+		if (LastFWDTime)
+		{
+			if ((MaintClock - LastFWDTime) > 86400)
+				DoHouseKeeping(FALSE);
+		}
 	}
 
 	CheckMenuItem(hMenu,IDM_LOGBBS, (LogBBS) ? MF_CHECKED : MF_UNCHECKED);
@@ -4473,9 +4485,9 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	ptr = strchr(Buffer, '}');
 
-	if (ptr)
+	if (ptr && Scripts[ForwardingInfo->ScriptIndex]) // Beware it could be part of ctext
 	{
-		// Could be respsonse to Node Command
+		// Could be respsonse to Node Command 
 
 		ptr+=2;
 		
@@ -4804,6 +4816,8 @@ void clear_fwd_bit (char *mask, int bbsnumber)
 		mask[(bbsnumber - 1) / 8] &= (~(1 << ((bbsnumber - 1) % 8)));
 }
 
+#ifndef NEWROUTING
+
 VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
 {
 }
@@ -5033,3 +5047,6 @@ BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwar
 	}
 	return FALSE;
 }
+
+#endif
+

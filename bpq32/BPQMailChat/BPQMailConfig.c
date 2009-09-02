@@ -797,14 +797,55 @@ VOID Do_Add_User(HWND hDlg)
 
 }
 
+int FindFreeBBSNumber()
+{
+	// returns the lowest number not used by any bbs or message.
+
+	struct MsgInfo * Msg;
+	struct UserInfo * user;
+	int i, m;
+
+	for (i = 1; i<= NBBBS; i++)
+	{
+		for (user = BBSChain; user; user = user->BBSNext)
+		{
+			if (user->BBSNumber == i)
+				goto nexti;				// In use
+		}
+
+		// Not used by BBS - checkj messages
+
+		for (m = 1; m <= NumberofMessages; m++)
+		{
+			Msg=MsgHddrPtr[m];
+
+			if (check_fwd_bit(Msg->fbbs, i))
+				goto nexti;				// In use
+
+			if (check_fwd_bit(Msg->forw, i))
+				goto nexti;				// In use
+		}
+
+		// Not in Use
+
+		return i;
+	
+nexti:;
+
+	}
+
+	return 0;		// All used
+}
+		
+
 BOOL SetupNewBBS(struct UserInfo * user)
 {
-	if (HighestBBSNumber == NBBBS)
-		return FALSE;
-
 	user->BBSNext = BBSChain;
 	BBSChain = user;
-	user->BBSNumber = ++HighestBBSNumber;
+	user->BBSNumber = FindFreeBBSNumber();
+
+	if (user->BBSNumber == 0)
+		return FALSE;
 
 	SortBBSChain();
 
@@ -1790,6 +1831,11 @@ TryAgain:
 		
 		if (retCode == ERROR_SUCCESS)
 		{
+			Vallen=4;
+			RegQueryValueEx(hKey,"LastHouseKeepingTime",0,			
+			(ULONG *)&Type,(UCHAR *)&LastFWDTime,(ULONG *)&Vallen);
+
+
 			Vallen=4;
 			retCode += RegQueryValueEx(hKey,"MaxMsgno",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxMsgno,(ULONG *)&Vallen);

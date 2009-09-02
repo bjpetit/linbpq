@@ -1028,3 +1028,5 @@ extern struct Override ** LTFROM;
 extern struct Override ** LTTO;
 extern struct Override ** LTAT;
 
+extern int LastFWDTime;
+

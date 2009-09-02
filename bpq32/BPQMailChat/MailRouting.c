@@ -12,11 +12,11 @@
 
 #include "stdafx.h"
 
-
 char * MyElements[20];		// My HA in element format
 
 char MyRouteElements[100];
 
+#ifdef NEWROUTING
 
 VOID SetupMyHA()
 {
@@ -473,6 +473,29 @@ so B to gbr.eu will go to best for gbr.eu unless in gbr, else will go to all *.g
 
 
 
+   EURO -- Europe
+   MEDR -- Mediterranean
+   INDI -- Indian Ocean including the Indian subcontinent
+   MDLE -- Middle East
+   SEAS -- South-East Asia
+   ASIA -- The Orient
+
+   NOAM -- North America (Canada, USA, Mexico)
+   CEAM -- Central America
+   CARB -- Caribbean
+   SOAM -- South America
+
+   AUNZ -- Australia/New Zealand
+   EPAC -- Eastern Pacific
+   NPAC -- Northern Pacific
+   SPAC -- Southern Pacific
+   WPAC -- Western Pacific
+
+   NAFR -- Northern Africa
+   CAFR -- Central Africa
+   SAFR -- Southern Africa
+
+   ANTR -- Antarctica 
 
 
 
@@ -484,3 +507,5 @@ so B to gbr.eu will go to best for gbr.eu unless in gbr, else will go to all *.g
 
 
 */
+
+#endif
