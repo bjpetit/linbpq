@@ -870,7 +870,7 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 	// Set up forwarding bitmap
 
-	MatchMessagetoBBSList(Msg);
+	MatchMessagetoBBSList(Msg, 0);
 
 	return CreateSMTPMessageFile(MsgBody, Msg);
 		
@@ -2184,7 +2184,7 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 
 	// Set up forwarding bitmap
 
-	MatchMessagetoBBSList(Msg);
+	MatchMessagetoBBSList(Msg, 0);
 
 	return CreateSMTPMessageFile(MsgBody, Msg);
 		

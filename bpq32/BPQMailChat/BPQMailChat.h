@@ -879,7 +879,7 @@ struct MsgInfo * FindMessageByNumber(int msgno);
 VOID SetupHAddreses(struct	BBSForwardingInfo * ForwardingInfo);
 VOID SetupMyHA();
 
-int MatchMessagetoBBSList(struct MsgInfo * Msg);
+int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn);
 BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo);
 BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS);

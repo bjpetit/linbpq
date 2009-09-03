@@ -622,5 +622,228 @@ void CopyToClipboard(HWND hWnd)
 				GlobalFree(hMem);		
 	}
 }
-
-
+/*
+#define XBITMAP 80 
+#define YBITMAP 20 
+ 
+#define BUFFER MAX_PATH 
+ 
+HBITMAP hbmpPencil, hbmpCrayon, hbmpMarker, hbmpPen, hbmpFork; 
+HBITMAP hbmpPicture, hbmpOld; 
+ 
+void AddItem(HWND hwnd, LPSTR lpstr, HBITMAP hbmp) 
+{ 
+    int nItem; 
+ 
+    nItem = SendMessage(hwnd, LB_ADDSTRING, 0, (LPARAM)lpstr); 
+    SendMessage(hwnd, LB_SETITEMDATA, (WPARAM)nItem, (LPARAM)hbmp); 
+} 
+ 
+DWORD APIENTRY DlgDrawProc( 
+        HWND hDlg,            // window handle to dialog box 
+        UINT message,         // type of message 
+        UINT wParam,          // message-specific information 
+        LONG lParam) 
+{ 
+    int nItem; 
+    TCHAR tchBuffer[BUFFER]; 
+    HBITMAP hbmp; 
+    HWND hListBox; 
+    TEXTMETRIC tm; 
+    int y; 
+    HDC hdcMem; 
+    LPMEASUREITEMSTRUCT lpmis; 
+    LPDRAWITEMSTRUCT lpdis; 
+    RECT rcBitmap;
+	HRESULT hr; 
+	size_t * pcch;
+ 
+    switch (message) 
+    { 
+ 
+        case WM_INITDIALOG: 
+ 
+            // Load bitmaps. 
+ 
+            hbmpPencil = LoadBitmap(hinst, MAKEINTRESOURCE(700)); 
+            hbmpCrayon = LoadBitmap(hinst, MAKEINTRESOURCE(701)); 
+            hbmpMarker = LoadBitmap(hinst, MAKEINTRESOURCE(702)); 
+            hbmpPen = LoadBitmap(hinst, MAKEINTRESOURCE(703)); 
+            hbmpFork = LoadBitmap(hinst, MAKEINTRESOURCE(704)); 
+ 
+            // Retrieve list box handle. 
+ 
+            hListBox = GetDlgItem(hDlg, IDL_STUFF); 
+ 
+            // Initialize the list box text and associate a bitmap 
+            // with each list box item. 
+ 
+            AddItem(hListBox, "pencil", hbmpPencil); 
+            AddItem(hListBox, "crayon", hbmpCrayon); 
+            AddItem(hListBox, "marker", hbmpMarker); 
+            AddItem(hListBox, "pen",    hbmpPen); 
+            AddItem(hListBox, "fork",   hbmpFork); 
+ 
+            SetFocus(hListBox); 
+            SendMessage(hListBox, LB_SETCURSEL, 0, 0); 
+            return TRUE; 
+ 
+        case WM_MEASUREITEM: 
+ 
+            lpmis = (LPMEASUREITEMSTRUCT) lParam; 
+ 
+            // Set the height of the list box items. 
+ 
+            lpmis->itemHeight = 20; 
+            return TRUE; 
+ 
+        case WM_DRAWITEM: 
+ 
+            lpdis = (LPDRAWITEMSTRUCT) lParam; 
+ 
+            // If there are no list box items, skip this message. 
+ 
+            if (lpdis->itemID == -1) 
+            { 
+                break; 
+            } 
+ 
+            // Draw the bitmap and text for the list box item. Draw a 
+            // rectangle around the bitmap if it is selected. 
+ 
+            switch (lpdis->itemAction) 
+            { 
+                case ODA_SELECT: 
+                case ODA_DRAWENTIRE: 
+ 
+                    // Display the bitmap associated with the item. 
+ 
+                    hbmpPicture =(HBITMAP)SendMessage(lpdis->hwndItem, 
+                        LB_GETITEMDATA, lpdis->itemID, (LPARAM) 0); 
+ 
+                    hdcMem = CreateCompatibleDC(lpdis->hDC); 
+                    hbmpOld = SelectObject(hdcMem, hbmpPicture); 
+ 
+                    BitBlt(lpdis->hDC, 
+                        lpdis->rcItem.left, lpdis->rcItem.top, 
+                        lpdis->rcItem.right - lpdis->rcItem.left, 
+                        lpdis->rcItem.bottom - lpdis->rcItem.top, 
+                        hdcMem, 0, 0, SRCCOPY); 
+ 
+                    // Display the text associated with the item. 
+ 
+                    SendMessage(lpdis->hwndItem, LB_GETTEXT, 
+                        lpdis->itemID, (LPARAM) tchBuffer); 
+ 
+                    GetTextMetrics(lpdis->hDC, &tm); 
+ 
+                    y = (lpdis->rcItem.bottom + lpdis->rcItem.top - 
+                        tm.tmHeight) / 2;
+						
+                    hr = StringCchLength(tchBuffer, BUFFER, pcch);
+                    if (FAILED(hr))
+                    {
+                        // TODO: Handle error.
+                    }
+ 
+                    TextOut(lpdis->hDC, 
+                        XBITMAP + 6, 
+                        y, 
+                        tchBuffer, 
+                        pcch); 						
+ 
+                    SelectObject(hdcMem, hbmpOld); 
+                    DeleteDC(hdcMem); 
+ 
+                    // Is the item selected? 
+ 
+                    if (lpdis->itemState & ODS_SELECTED) 
+                    { 
+                        // Set RECT coordinates to surround only the 
+                        // bitmap. 
+ 
+                        rcBitmap.left = lpdis->rcItem.left; 
+                        rcBitmap.top = lpdis->rcItem.top; 
+                        rcBitmap.right = lpdis->rcItem.left + XBITMAP; 
+                        rcBitmap.bottom = lpdis->rcItem.top + YBITMAP; 
+ 
+                        // Draw a rectangle around bitmap to indicate 
+                        // the selection. 
+ 
+                        DrawFocusRect(lpdis->hDC, &rcBitmap); 
+                    } 
+                    break; 
+ 
+                case ODA_FOCUS: 
+ 
+                    // Do not process focus changes. The focus caret 
+                    // (outline rectangle) indicates the selection. 
+                    // The IDOK button indicates the final 
+                    // selection. 
+ 
+                    break; 
+            } 
+            return TRUE; 
+ 
+        case WM_COMMAND: 
+ 
+            switch (LOWORD(wParam)) 
+            { 
+                case IDOK: 
+                    // Get the selected item's text. 
+ 
+                    nItem = SendMessage(GetDlgItem(hDlg, IDL_STUFF), 
+                       LB_GETCURSEL, 0, (LPARAM) 0); 
+                       hbmp = SendMessage(GetDlgItem(hDlg, IDL_STUFF), 
+                            LB_GETITEMDATA, nItem, 0); 
+ 
+                    // If the item is not the correct answer, tell the 
+                    // user to try again. 
+                    //
+                    // If the item is the correct answer, congratulate 
+                    // the user and destroy the dialog box. 
+ 
+                    if (hbmp != hbmpFork) 
+                    { 
+                        MessageBox(hDlg, "Try again!", "Oops", MB_OK); 
+                        return FALSE; 
+                    } 
+                    else 
+                    { 
+                        MessageBox(hDlg, "You're right!", 
+                            "Congratulations.", MB_OK); 
+ 
+                      // Fall through. 
+                    } 
+ 
+                case IDCANCEL: 
+ 
+                    // Destroy the dialog box. 
+ 
+                    EndDialog(hDlg, TRUE); 
+                    return TRUE; 
+ 
+                default: 
+ 
+                    return FALSE; 
+            } 
+ 
+        case WM_DESTROY: 
+ 
+            // Free any resources used by the bitmaps. 
+ 
+            DeleteObject(hbmpPencil); 
+            DeleteObject(hbmpCrayon); 
+            DeleteObject(hbmpMarker); 
+            DeleteObject(hbmpPen); 
+            DeleteObject(hbmpFork); 
+ 
+            return TRUE; 
+ 
+        default: 
+            return FALSE; 
+ 
+    } 
+    return FALSE; 
+} 
+*/

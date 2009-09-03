@@ -171,15 +171,30 @@
 // Trap CRT Errors
 // Sort Actions/Start Forwarding List
 
-// Version 1.2.2.2
+// Version 1.0.2.2
 
 // Fill in gaps in BBS Number sequence
 // Fix PE if ctext contains }
 // Run Houskeeping at startup if previous Housekeeping was missed
 
-// Version 1.2.2.
+// Version 1.0.2.3
 
-// Add configued nodes to /p listing
+// Add configured nodes to /p listing
+
+// Version 1.0.2.4
+
+// Fix RMS (it wanted B2 not B12)
+// Send messages if available after rejecting all proposals
+// Dont try to send msg back to originator.
+
+// Version 1.0.2.5
+
+// Fix timeband processing when none specified.
+// Improved Chat Help display.
+// Add helpful responses to /n /q and /t
+
+
+
 
 // Rewrite forwarding by HA.
 
@@ -837,6 +852,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		wmEvent = HIWORD(wParam);
 		// Parse the menu selections:
 
+		if (wmEvent == LBN_DBLCLK)
+
+				break;
+
 		if (wmId >= IDM_DISCONNECT && wmId < IDM_DISCONNECT+MaxSockets+1)
 		{
 			// disconnect user
@@ -921,6 +940,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DestroyWindow(hWnd);
 			break;
 
+  
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}
@@ -1687,7 +1707,7 @@ int WriteLog(char * msg)
 	char timebuf[128];
 
 	time_t ltime;
-    struct tm today;
+	struct tm today;
  
 	if ((file = fopen("BPQTelnetServer.log","a")) == NULL)
 		return FALSE;
@@ -4079,7 +4099,7 @@ nextline:
 
 		// Set up forwarding bitmap
 
-		FWDCount = MatchMessagetoBBSList(Msg);
+		FWDCount = MatchMessagetoBBSList(Msg, conn);
 
 		if (!(conn->BBSFlags & BBS))
 		{
@@ -4443,6 +4463,8 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 		}
 	}
 
+	Logprintf(LOG_BBS, '|', "No Free Streams for connect to BBS %s", user->Call);
+
 	return FALSE;
 	
 }
@@ -4548,7 +4570,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
 			ALLOWCOMPRESSED ? "B" : "", 
-			(conn->BBSFlags & FBBB1Mode) ? "1" : "",
+			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
 			(conn->BBSFlags & FBBB2Mode) ? "2" : ""); 
 
 		conn->NextMessagetoForward = FirstMessagetoForward;
@@ -4652,7 +4674,7 @@ VOID FWDTimerProc()
 		{
 			ForwardingInfo->FwdTimer=0;
 
-			if (ForwardingInfo->FWDBands)
+			if (ForwardingInfo->FWDBands && ForwardingInfo->FWDBands[0])
 			{
 				// Check Timebands
 
@@ -4828,7 +4850,7 @@ VOID SetupMyHA()
 {
 }
 
-int MatchMessagetoBBSList(struct MsgInfo * Msg)
+int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 {
 	struct UserInfo * bbs;
 	struct	BBSForwardingInfo * ForwardingInfo;
@@ -4851,8 +4873,11 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 			{
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
+					if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+					{
+						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+						ForwardingInfo->MsgCount++;
+					}
 				}
 				return 1;
 			}
@@ -4866,8 +4891,11 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 			{
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
+					if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+					{
+						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+						ForwardingInfo->MsgCount++;
+					}
 				}
 				return 1;
 			}
@@ -4881,8 +4909,11 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 			{
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
+					if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+					{
+						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+						ForwardingInfo->MsgCount++;
+					}
 				}
 				return 1;
 			}
@@ -4901,8 +4932,11 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 		{
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
-				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-				ForwardingInfo->MsgCount++;
+				if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+				{
+					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+					ForwardingInfo->MsgCount++;
+				}
 			}
 			Count++;
 		}

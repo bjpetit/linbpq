@@ -1354,19 +1354,21 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 		case 'f' : makelinks(); return TRUE;
 
 		case 'h' :
+		case '?' :
+			nputs(circuit, "Commands can be in upper or lower case.\r");
 			nputs(circuit, "/U - Show Users.\r/N - Enter your Name.\r/Q - Enter your QTH.\r/T - Show Topics.\r");
-			nputs(circuit, "/T Name - Join Topic or Create new Topic.\r/P - Show Ports and Links.\r");
+			nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are case sensitive\r/P - Show Ports and Links.\r");
 			nputs(circuit, "/A - Toggle Alert on user join.\r");
 			nputs(circuit, "/E - Toggle Echo.\r/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
-			nputs(circuit, "/B - Leave Chat and return to node.\r");
+			nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");
 			return TRUE;
 		
 		case 'k' : show_nodes(circuit);                 return TRUE;
 
 		case 'n' :
 			strnew(&user->name, Buffer + 3);
-			saydone(circuit);
+			nprintf(circuit, "Name set to %s\r", user->name);
 			upduser(user);
 			user_tell(user, id_user);
 			return TRUE;
@@ -1375,7 +1377,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 
 		case 'q' :
 			strnew(&user->qth, Buffer + 3);
-			saydone(circuit);
+			nprintf(circuit, "QTH set to %s\r", user->qth);
 			upduser(user);
 			user_tell(user, id_user);
 			return TRUE;
@@ -1414,6 +1416,9 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 
 				for (c = circuit_hd; c; c = c->next)
 					if (c->flags & p_linked) topic_xmit(user, c);
+
+				nprintf(circuit, "Switched to Topic %s\r", user->topic->name);
+
 			}
 			else
 			  show_topics(circuit);

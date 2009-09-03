@@ -16,6 +16,37 @@ char * MyElements[20];		// My HA in element format
 
 char MyRouteElements[100];
 
+struct Continent
+{
+	char FourCharCode[5];
+	char TwoCharCode[3];
+};
+
+struct Continent Continents[] = {
+   		"EURO",	"EU", // Europe
+   		"MEDR",	"EU", // Mediterranean
+   		"INDI",	"AS", // Indian Ocean including the Indian subcontinent
+   		"MDLE",	"EU", // Middle East
+   		"SEAS",	"EU", // South-East Asia
+   		"ASIA",	"AS", // The Orient
+   		"NOAM",	"NA", // North America (Canada, USA, Mexico)
+   		"CEAM",	"", // Central America
+   		"CARB",	"", // Caribbean
+   		"SOAM",	"SA", // South America
+   		"AUNZ",	"OC", // Australia/New Zealand
+   		"EPAC",	"OC", // Eastern Pacific
+   		"NPAC",	"OC", // Northern Pacific
+   		"SPAC",	"OC", // Southern Pacific
+   		"WPAC",	"OC", // Western Pacific
+   		"NAFR",	"AF", // Northern Africa
+   		"CAFR",	"AF", // Central Africa
+   		"SAFR",	"AF", // Southern Africa
+   		"ANTR",	"OC", // Antarctica 
+};
+
+int NumberofContinents = sizeof(Continents)/sizeof(Continents[1]);
+
+
 #ifdef NEWROUTING
 
 VOID SetupMyHA()
@@ -471,41 +502,8 @@ if B (flood) send to all matching HA (having lopped of matching n-1
 
 so B to gbr.eu will go to best for gbr.eu unless in gbr, else will go to all *.gbr
 
-
-
-   EURO -- Europe
-   MEDR -- Mediterranean
-   INDI -- Indian Ocean including the Indian subcontinent
-   MDLE -- Middle East
-   SEAS -- South-East Asia
-   ASIA -- The Orient
-
-   NOAM -- North America (Canada, USA, Mexico)
-   CEAM -- Central America
-   CARB -- Caribbean
-   SOAM -- South America
-
-   AUNZ -- Australia/New Zealand
-   EPAC -- Eastern Pacific
-   NPAC -- Northern Pacific
-   SPAC -- Southern Pacific
-   WPAC -- Western Pacific
-
-   NAFR -- Northern Africa
-   CAFR -- Central Africa
-   SAFR -- Southern Africa
-
-   ANTR -- Antarctica 
-
-
-
-
-
-
-
-
-
-
 */
 
 #endif
+
+

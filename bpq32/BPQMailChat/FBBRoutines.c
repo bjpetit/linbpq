@@ -435,16 +435,20 @@ ok2:
 
 		nodeprintf(conn, "FS %s\r", conn->FBBReplyChars);
 
-		// if all rejected, send prompt, else set up for first message
+		// if all rejected, send proposals or prompt, else set up for first message
 
 		FBBHeader = &conn->FBBHeaders[0];
 
 		if (FBBHeader->MsgType == 0)
 		{
-			conn->FBBIndex = 0;		// ready for first block;
+			conn->FBBIndex = 0;						// ready for first block;
 			conn->FBBChecksum = 0;
 
-			BBSputs(conn, "FF\r");
+			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
+			{
+				conn->InputMode = 0;
+				BBSputs(conn, "FF\r");
+			}
 		}
 		else
 		{
