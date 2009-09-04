@@ -645,12 +645,19 @@ static TOPIC *topic_join(CIRCUIT *circuit, char *s)
 
 	topic->refcnt++;  // One more user in this topic.
 
+	Logprintf(LOG_CHAT, '?', "topic_join complete user %s topic %s addr %x ref %d",
+		circuit->u.user->call, topic->name, topic, topic->refcnt);
+
+
 // Add the circuit / topic association.
 
-	for (ct = circuit->topic; ct; ct = ct->next) if (ct->topic == topic)
+	for (ct = circuit->topic; ct; ct = ct->next)
 	{
-	  ct->refcnt++;
-	  return topic;
+		if (ct->topic == topic)
+		{
+			ct->refcnt++;
+			return topic;
+		}
 	}
 
 	ct = zalloc(sizeof(CT));
@@ -666,6 +673,9 @@ static void topic_leave(CIRCUIT *circuit, TOPIC *topic)
 {
 	CT    *ct, *ctp;
 	TOPIC *t,  *tp;
+
+	Logprintf(LOG_CHAT, '?', "topic_leave user %s topic %s addr %x ref %d",
+		circuit->u.user->call, topic->name, topic, topic->refcnt);
 
 	topic->refcnt--;
 
@@ -1102,7 +1112,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 
 	if (node_find(call))
 	{
-		Logprintf(LOG_TCP, '|', "Refusing link with %s to prevent a loop", conn->Callsign);
+		Logprintf(LOG_CHAT, '|', "Refusing link with %s to prevent a loop", conn->Callsign);
 		return FALSE; // Already linked.
 	}
 
@@ -1537,7 +1547,17 @@ VOID ChatTimer()
 	{
 		if (c->flags & p_linked) 
 		{
-			WritetoDebugWindow(c->u.user->call, strlen(c->u.user->call));
+			char buff[1000];
+			int ptr;
+			CT * ct;
+			ptr = sprintf_s(buff, sizeof(buff), "%s Topics: ", c->u.user->call);
+	
+			for (ct = c->topic; ct; ct = ct->next)
+			{
+				ptr+= sprintf_s(&buff[ptr], sizeof(buff) - ptr, "%s ", ct->topic->name);
+			}
+
+			WritetoDebugWindow(buff, ptr);
 			WritetoDebugWindow("\r\n", 2);
 
 			i++;

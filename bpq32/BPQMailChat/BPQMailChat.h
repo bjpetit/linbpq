@@ -525,7 +525,6 @@ static void text_xmit(USER *user, USER *to, char *text);
 void text_tellu(USER *user, char *text, char *to, int who);
 void text_tellu_Joined(USER *user);
 static void topic_xmit(USER *user, CIRCUIT *circuit);
-static void topic_xmit(USER *user, CIRCUIT *circuit);
 static void node_xmit(NODE *node, char kind, CIRCUIT *circuit);
 static void node_tell(NODE *node, char kind);
 static void user_xmit(USER *user, char kind, CIRCUIT *circuit);
