@@ -278,6 +278,10 @@ VOID WritetoDebugWindow(char * Msg, int len)
 	char * ptr1, * ptr2;
 	int index;
 
+	if (len ==0)
+		return;
+
+
 	if (PartLinePtr != 0)
 		SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );		
 

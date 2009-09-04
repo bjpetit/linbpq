@@ -1319,7 +1319,8 @@ static void show_topics(CIRCUIT *conn)
 		{
 			nputs(conn, "  ");
 			for (user = user_hd; user; user = user->next)
-				if (user->topic == topic) nprintf(conn, " %s", user->call);
+				if (user->topic == topic)
+					nprintf(conn, " %s", user->call);
 			nputc(conn, '\r');
 		}
 	}
@@ -1498,7 +1499,10 @@ VOID ChatTimer()
 	int i;
 	NODE *node;
 	USER *user;
+	TOPIC *topic;
 	CIRCUIT *c;
+	char Msg[1000];
+	int len;
 
 	ClearDebugWindow();
 
@@ -1507,8 +1511,8 @@ VOID ChatTimer()
 	i = 0;
 	for (user = user_hd; user; user = user->next)
 	{
-		WritetoDebugWindow(user->call, strlen(user->call));
-		WritetoDebugWindow("\r\n", 2);
+		len = sprintf_s(Msg, sizeof(Msg), "%s Topic %s\r\n", user->call, user->topic->name); 
+		WritetoDebugWindow(Msg, len);
 		i++;
 	}
 	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
@@ -1541,6 +1545,17 @@ VOID ChatTimer()
 	}
 
 	SetDlgItemInt(hWnd, IDC_LINKS,  i, FALSE);
+
+	WritetoDebugWindow("Chat Topics\r\n", 12);
+
+	i = 0;
+	for (topic = topic_hd; topic; topic = topic->next)
+	{
+		len = sprintf_s(Msg, sizeof(Msg), "%s %d\r\n", topic->name, topic->refcnt); 
+		WritetoDebugWindow(Msg, len);
+		i++;
+	}
+
 
 	ChatTmr++;
 

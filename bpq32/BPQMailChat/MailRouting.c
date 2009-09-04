@@ -136,7 +136,7 @@ VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
 	ForwardingInfo->HADDRS[Count] = NULL;
 }
 
-int MatchMessagetoBBSList(struct MsgInfo * Msg)
+int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 {
 	struct UserInfo * bbs;
 	struct	BBSForwardingInfo * ForwardingInfo;
@@ -199,7 +199,6 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 			Flood = TRUE;
 	}
 
-
 	// Check againt our HR. If n elememts match, remove (n-1) (by setting start pointer)
 
 	FirstElement = 0;
@@ -214,10 +213,19 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 
 	if (FirstElement) FirstElement--;
 
+	Logprintf(LOG_BBS, '?', "Routing Trace Type %c %s VIA %s Route On %s %s %s %s %s",
+		Msg->type, (Flood) ? "(Flood)":"", Msg->via, HElements[FirstElement],
+		HElements[FirstElement+1], HElements[FirstElement+2], HElements[FirstElement+3], HElements[FirstElement+4]);
+
 
 	if (Msg->type == 'P' || Flood == 0)
 	{
-		// P messages are only sent to one BBS, but check the TO and AT of all BBSs before routing on HA
+		// P messages are only sent to one BBS, but check the TO and AT of all BBSs before routing on HA,
+		// and choose the best match on HA
+
+		struct UserInfo * bestbbs = NULL;
+		int bestmatch = 0;
+		int depth;
 
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
@@ -225,10 +233,15 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 			
 			if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 			{
+				Logprintf(LOG_BBS, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
+
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
+					if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+					{
+						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+						ForwardingInfo->MsgCount++;
+					}
 				}
 				return 1;
 			}
@@ -237,34 +250,63 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
-			
-			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+
+			// Check AT 
+
+			if (strcmp(ATBBS, bbs->Call) == 0)			// @BBS = BBS		
+//			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
 			{
+				Logprintf(LOG_BBS, '?', "Routing Trace AT %s Matches BBS %s", ATBBS, bbs->Call);
+
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
+					if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+					{
+						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+						ForwardingInfo->MsgCount++;
+					}
 				}
 				return 1;
 			}
 		}
+
+		// We should choose the BBS with most matching elements (ie match on #23.GBR better that GBR)
+
 
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
-			
-			if (CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[FirstElement]))
+
+			depth = CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[FirstElement], FirstElement);
+
+			if (depth)
 			{
-				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+				Logprintf(LOG_BBS, '?', "Routing Trace HR %s Matches BBS %s Depth %d",
+					HElements[FirstElement], bbs->Call, depth);
+		
+				if (depth > bestmatch)
 				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
+					bestmatch = depth;
+					bestbbs = bbs;
 				}
-				return 1;
 			}
 		}
+		if (bestbbs)
+		{
+			Logprintf(LOG_BBS, '?', "Routing Trace HR Best Match is %s", bestbbs->Call);
 
-		return FALSE;
+			if (_stricmp(bestbbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+			{
+				if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bestbbs->Call) != 0)) // Dont send back
+				{
+					set_fwd_bit(Msg->fbbs, bestbbs->BBSNumber);
+					bestbbs->ForwardingInfo->MsgCount++;
+				}
+			}
+			return 1;
+		}
+
+		return FALSE;	// No match
 	}
 
 	// Flood Bulls go to all matching BBSs, so the order of checking doesn't matter
@@ -276,6 +318,8 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 
 		if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 		{
+			Logprintf(LOG_BBS, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
+
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
 				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
@@ -289,8 +333,11 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 		{
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
-				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-				ForwardingInfo->MsgCount++;
+				if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+				{
+					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+					ForwardingInfo->MsgCount++;
+				}
 			}
 			Count++;
 			continue;
@@ -298,8 +345,12 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg)
 
 
 
-		if (CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[FirstElement]))
+		if (CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[FirstElement], FirstElement))
 		{
+			Logprintf(LOG_BBS, '?', "Routing Trace HR %s %s %s %s Matches BBS %s",
+				HElements[FirstElement], HElements[FirstElement+1], HElements[FirstElement+2], 
+				HElements[FirstElement+3], bbs->Call);
+	
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
 				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
@@ -404,8 +455,8 @@ BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwa
 
 	// Check AT distributions
 
-	if (strcmp(ATBBS, bbs->Call) == 0)			// @BBS = BBS
-		return TRUE;
+//	if (strcmp(ATBBS, bbs->Call) == 0)			// @BBS = BBS
+//		return TRUE;
 
 	if (ForwardingInfo->ATCalls)
 	{
@@ -453,12 +504,13 @@ BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwar
 	return FALSE;
 }
 */
-BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements)
+int CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements, int StartLevel)
 {
 	char *** HRoutes;
-	int i, j;
+	int i = 0, j;
+	int bestmatch = 0;
 
-	if ((HRoute) &&	(ForwardingInfo->HADDRS))
+	if (ForwardingInfo->HADDRS)
 	{
 		// Match on Routes
 
@@ -466,20 +518,23 @@ BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSFo
 
 		while(HRoutes[0])
 		{
-			i =j = 0;
+			i = j = 0;
 			
 			while (HRoutes[0][i] && HElements[j]) // Until one set runs out
 			{
-				if (strcmp(HRoutes[0][i++], HElements[j++]) != 0)
-					goto next;
-
+				if (strcmp(HRoutes[0][i], HElements[j]) != 0)
+					break;
+				i++;
+				j++;
 			}
-			return TRUE;
-		next:	
+			if (HElements[j] == 0) // All elements of HR match
+				if (i > bestmatch)
+					bestmatch = i;
+
 			HRoutes++;
 		}
 	}
-	return FALSE;
+	return bestmatch;
 }
 /*
 EU should match fra.eu, but not gbr.eu in gbr.eu
