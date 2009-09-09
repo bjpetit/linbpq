@@ -193,6 +193,15 @@
 // Improved Chat Help display.
 // Add helpful responses to /n /q and /t
 
+// Version 1.0.2.6
+
+// Kill Personal WP messages after porcessing
+// Make sure a node doesnt try to "join" or "leave" a node as a user.
+// More tracing to try to track down lost topic links.
+// Add command recall to Console
+// Show users in new topic when changing topic
+// Add Send From Clipboard" Action
+
 
 
 
@@ -348,6 +357,7 @@ ATOM				RegisterMainWindowClass(HINSTANCE hInstance);
 BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 
 void myInvalidParameterHandler(const wchar_t* expression,
@@ -399,9 +409,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Main message loop:
 
-	__try
-	{	
-		while (GetMessage(&msg, NULL, 0, 0))
+	
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		__try
 		{
 			if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 			{
@@ -409,8 +420,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				DispatchMessage(&msg);
 			}
 		}
+		My__except_Routine("GetMessageLoop");
 	}
-	My__except_Routine("GetMessageLoop");
 
 	__try
 	{
@@ -572,9 +583,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
 
-
 	// Get Window Size  From Registry
-
 
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
@@ -608,11 +617,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		GetWindowRect(hWnd,	&MainRect);
 	}
 
-	// Keep the size in case changed from previous version
-
-	GetWindowRect(hWnd,	&InitRect);
-
-	MoveWindow(hWnd,MainRect.left,MainRect.top, InitRect.right-InitRect.left, InitRect.bottom-InitRect.top, TRUE);
+	MoveWindow(hWnd,MainRect.left,MainRect.top, MainRect.right-MainRect.left, MainRect.bottom-MainRect.top, TRUE);
 
 	GetVersionInfo(NULL);
 
@@ -803,6 +808,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WM_INITMENUPOPUP:
 
+		if (wParam == (WPARAM)hActionMenu)
+		{
+			if (IsClipboardFormatAvailable(CF_TEXT))
+				EnableMenuItem(hActionMenu,ID_ACTIONS_SENDMSGFROMCLIPBOARD, MF_BYCOMMAND | MF_ENABLED);
+			else
+				EnableMenuItem(hActionMenu,ID_ACTIONS_SENDMSGFROMCLIPBOARD, MF_BYCOMMAND | MF_DISABLED);
+			
+			return TRUE;
+		}
+
 		if (wParam == (WPARAM)hFWDMenu)
 		{
 			// Set up Forward Menu
@@ -936,6 +951,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_EDITWP), hWnd, WPEditDialogProc);
 			break;
 
+		case ID_ACTIONS_SENDMSGFROMCLIPBOARD:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_MSGFROMCLIPBOARD), hWnd, ClpMsgDialogProc);
+			break;
+
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
 			break;
@@ -992,6 +1011,166 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	return 0;
 }
+
+
+INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	HGLOBAL   hglb; 
+    LPTSTR    lptstr; 
+
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+       if (!IsClipboardFormatAvailable(CF_TEXT)) 
+            return TRUE; 
+
+        if (!OpenClipboard(hDlg)) 
+            return TRUE; 
+ 
+        hglb = GetClipboardData(CF_TEXT); 
+
+        if (hglb != NULL) 
+        { 
+            lptstr = GlobalLock(hglb);
+
+            if (lptstr != NULL) 
+            { 
+				SetDlgItemText(hDlg, IDC_EDIT1, lptstr);
+				GlobalUnlock(hglb); 
+            } 
+        } 
+        CloseClipboard(); 
+
+		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
+		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
+
+		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_SETCURSEL, 0, 0);
+
+        return TRUE; 
+
+	case WM_COMMAND:
+
+		if (LOWORD(wParam) == IDSEND)
+		{
+			char status [3];
+			struct MsgInfo * Msg;
+			char * via = NULL;
+			char BID[13];
+			BIDRec * BIDRec;
+			int MsgLen;
+			char * MailBuffer;
+			char MsgFile[MAX_PATH];
+			HANDLE hFile = INVALID_HANDLE_VALUE;
+			int WriteLen=0;
+			char HDest[61];
+			char * Vptr;
+
+
+			MsgLen = SendDlgItemMessage(hDlg, IDC_EDIT1, WM_GETTEXTLENGTH, 0 ,0);
+
+			if (MsgLen)
+			{
+				MailBuffer = malloc(MsgLen+1);
+				GetDlgItemText(hDlg, IDC_EDIT1, MailBuffer, MsgLen+1);
+			}
+
+			GetDlgItemText(hDlg, IDC_MSGTO, HDest, 60);
+
+			GetDlgItemText(hDlg, IDC_MSGBID, BID, 13);
+
+			if (strlen(HDest) == 0)
+			{		
+				MessageBox(NULL, "To: Call Missing!", "BPQMailChat", MB_ICONERROR);
+				return TRUE;
+			}
+
+			if (strlen(BID))
+			{		
+				if (LookupBID(BID))
+				{
+					// Duplicate bid
+
+					MessageBox(NULL, "Duplicate BID", "BPQMailChat", MB_ICONERROR);
+					return TRUE;
+				}
+			}
+
+			Msg = AllocateMsgRecord();
+		
+			// Set number here so they remain in sequence
+		
+			Msg->number = ++LatestMsg;
+			Msg->length = MsgLen;
+
+			strcpy(Msg->from, SYSOPCall);
+			Vptr = strlop(HDest, '@');
+	
+			if (Vptr)
+				if (strlen(Vptr) > 40)
+					Vptr[40] = 0;
+
+			strcpy(Msg->to, HDest);
+			strcpy(Msg->via, Vptr);
+
+
+			GetDlgItemText(hDlg, IDC_MSGTITLE, Msg->title, 61);
+			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
+			Msg->type = status[0];
+			Msg->status = 'N';
+
+			if (strlen(BID) == 0)
+				sprintf_s(BID, sizeof(BID), "%d_%s", LatestMsg, BBSName);
+
+			strcpy(Msg->bid, BID);
+
+			Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+			BIDRec = AllocateBIDRecord();
+
+			strcpy(BIDRec->BID, Msg->bid);
+			BIDRec->mode = Msg->type;
+			BIDRec->u.msgno = LOWORD(Msg->number);
+			BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+	
+			hFile = CreateFile(MsgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+			if (hFile != INVALID_HANDLE_VALUE)
+			{
+				WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
+				CloseHandle(hFile);
+			}
+
+			free(MailBuffer);
+
+			MatchMessagetoBBSList(Msg, 0);
+
+			EndDialog(hDlg, LOWORD(wParam));
+
+			return TRUE;
+		}
+
+		if (LOWORD(wParam) == IDCANCELMSG)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+
+		return (INT_PTR)TRUE;
+
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
 
 // Message handler for about box.
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -1238,6 +1417,8 @@ BOOL Initialise()
 	CopyUserDatabase();
 	CopyWPDatabase();
 
+	SetupMyHA();
+
 	GetMessageDatabase();
 	GetUserDatabase();
 	GetBIDDatabase();
@@ -1269,8 +1450,6 @@ BOOL Initialise()
 	{
 		AddTrayMenuItem(MainWnd, "Mail/Chat Server");
 	}
-
-	SetupMyHA();
 	
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
@@ -4076,8 +4255,13 @@ nextline:
 			}
 
 			if (Msg->status != 'K' && strcmp(Msg->to, "WP") == 0)
+			{
 				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
+	
+				if (Msg->type == 'P')			// Kill any processed private WP messages.
+					Msg->status = 'K';
 
+			}
 		}
 
 		CreateMessageFile(conn, Msg);
@@ -4409,6 +4593,7 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 	FreeList(ForwardingInfo->ATCalls);
 	FreeList(ForwardingInfo->Haddresses);
 	FreeList(ForwardingInfo->HADDRS);
+	FreeList(ForwardingInfo->HADDROffet);
 	FreeList(ForwardingInfo->ConnectScript);
 	FreeList(ForwardingInfo->FWDTimes);
 	FreeList((char **)ForwardingInfo->FWDBands);
@@ -4797,7 +4982,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 
 				tm = gmtime(&Msg->datecreated);	
 	
-				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
+				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.2\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 					Msg->number, BBSName, HRoute);
 

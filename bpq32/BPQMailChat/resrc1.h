@@ -23,6 +23,12 @@
 #define IDC_CHATSEM                     1014
 #define IDC_UICONFIG                    1016
 #define IDC_DELETETORECYCLE             1017
+#define IDC_EDIT1                       1019
+#define IDC_MSGTO                       1020
+#define IDC_MSGTITLE                    1021
+#define IDC_MSGBID                      1022
+#define IDSEND                          1023
+#define IDCANCELMSG                     1024
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_WP                          5000
@@ -45,6 +51,7 @@
 #define IDD_MAINTRESULTS                30001
 #define IDD_EDITWP                      30002
 #define IDD_UICONFIG                    30003
+#define IDD_MSGFROMCLIPBOARD            30004
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
@@ -59,14 +66,15 @@
 #define IDM_LOGBBS                      40012
 #define IDM_LOGTCP                      40013
 #define IDM_LOGCHAT                     40014
+#define ID_ACTIONS_SENDMSGFROMCLIPBOARD 40015
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30004
-#define _APS_NEXT_COMMAND_VALUE         40015
-#define _APS_NEXT_CONTROL_VALUE         1019
+#define _APS_NEXT_RESOURCE_VALUE        30005
+#define _APS_NEXT_COMMAND_VALUE         40016
+#define _APS_NEXT_CONTROL_VALUE         1025
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

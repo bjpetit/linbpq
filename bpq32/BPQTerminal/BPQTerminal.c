@@ -29,6 +29,11 @@
 // Add line wrap code
 // Add option not to monitor NODES broadcasts
 
+// Version 2.0.7
+
+// Add input buffer scrollback.
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -845,13 +850,71 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	return (0);
 }
 
+static char * KbdStack[20];
+
+int StackIndex=0;
  
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
+	if (uMsg == WM_KEYUP)
+	{
+		unsigned int i;
+
+//		Debugprintf("5%x", LOBYTE(HIWORD(lParam)));
+
+		if (LOBYTE(HIWORD(lParam)) == 0x48)
+		{
+			// Scroll up
+
+			if (KbdStack[StackIndex] == NULL)
+				return TRUE;
+
+			SendMessage(hwndInput, WM_SETTEXT,0,(LPARAM)(LPCSTR) KbdStack[StackIndex]);
+			
+			for (i = 0; i < strlen(KbdStack[StackIndex]); i++)
+			{
+				SendMessage(hwndInput, WM_KEYDOWN, VK_RIGHT, 0);
+				SendMessage(hwndInput, WM_KEYUP, VK_RIGHT, 0);
+			}
+
+			StackIndex++;
+			if (StackIndex == 20)
+				StackIndex = 19;
+
+			return TRUE;
+		}
+
+		if (LOBYTE(HIWORD(lParam)) == 0x50)
+		{
+			// Scroll up
+
+			StackIndex--;
+			if (StackIndex < 0)
+				StackIndex = 0;
+
+			if (KbdStack[StackIndex] == NULL)
+				return TRUE;
+			
+			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) KbdStack[StackIndex]);
+
+			for (i = 0; i < strlen(KbdStack[StackIndex]); i++)
+			{
+				SendMessage(hwndInput, WM_KEYDOWN, VK_RIGHT, 0);
+				SendMessage(hwndInput, WM_KEYUP, VK_RIGHT, 0);
+			}
+			
+			return TRUE;
+		}
+	}
+
+
+
 	if (uMsg == WM_CHAR) 
 	{
 		if (wParam == 13)
 		{
+			int i;
+
 			//
 			//	if not connected, and autoconnect is
 			//	enabled, connect now
@@ -860,7 +923,21 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				SessionControl(Stream, 1, 0);
 			
 			kbptr=SendMessage(hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) kbbuf);
-	
+
+			// Stack it
+
+			StackIndex = 0;
+
+			if (KbdStack[19])
+				free(KbdStack[19]);
+
+			for (i = 18; i >= 0; i--)
+			{
+				KbdStack[i+1] = KbdStack[i];
+			}
+
+			KbdStack[0] = _strdup(kbbuf);
+
 			kbbuf[kbptr]=13;
 
 			// Echo

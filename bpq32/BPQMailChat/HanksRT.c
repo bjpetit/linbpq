@@ -268,10 +268,10 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 	// Send to Linked nodes
 
 	for (c = circuit_hd; c; c = c->next)
+	{
 		if ((c->flags & p_linked) && c->refcnt && ct_find(c, conn->u.user->topic))
-			nprintf(c, "%c%c%s %s %s\r",
-				FORMAT, id_data, OurNode, conn->u.user->call, Buffer);
-
+			nprintf(c, "%c%c%s %s %s\r", FORMAT, id_data, OurNode, conn->u.user->call, Buffer);
+	}
 }
 
 static void upduser(USER *user)
@@ -353,6 +353,18 @@ static void rduser(USER *user)
 	}
 }
 
+
+void ReportBadJoin(ncall, ucall)
+{
+	Logprintf(LOG_CHAT, '!', "User %s Join from Node %s but already connected", ucall, ncall);
+}
+
+void ReportBadLeave(ncall, ucall)
+{
+	Logprintf(LOG_CHAT, '!', "Node %s reporting Node %s as a leaving user", ncall, ucall);
+}
+
+
 void chkctl(CIRCUIT *ckt_from, char * Buffer)
 {
 	NODE    *node, *ln;
@@ -390,10 +402,11 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			text_tellu(user, f1, NULL, o_topic);
 
 			for (ckt_to = circuit_hd; ckt_to; ckt_to = ckt_to->next)
-				if ((ckt_to->flags & p_linked) &&
-					   ckt_to->refcnt &&
-					   !cn_find(ckt_to, node) &&
-					   ct_find(ckt_to, user->topic)) nprintf(ckt_to, "%s\r", Buffer);
+			{
+				if ((ckt_to->flags & p_linked) && ckt_to->refcnt &&
+					!cn_find(ckt_to, node) && ct_find(ckt_to, user->topic))
+				   nprintf(ckt_to, "%s\r", Buffer);
+			}
 			break;
 
 // User ucall at node ncall changed their Name/QTH info.
@@ -412,6 +425,30 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // User ucall logged into node ncall.
 
 		case id_join :
+
+			user = user_find(ucall);
+			if (user)
+			{
+				// Already Here
+		
+				ReportBadJoin(ncall, ucall);
+				break;				// We have this user as an active Node
+			}
+
+			/*
+			// Make sure the user isn't really a Node
+
+			if (node_find(ucall))
+			for (link = link_hd; link; link = link->next)
+			{
+				if (matchi(link->call, ucall))
+				{
+					ReportBadJoin(ncall, ucall);
+					break;				// We have this user as a node to link to 
+				}
+			}
+			*/
+
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			f2 = strlop(f1, ' ');
 			if (!f2) break;
@@ -429,6 +466,26 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // User ucall logged out of node ncall.
 
 		case id_leave :
+
+			/*
+			// Make sure the user isn't really a Node
+
+			if (node_find(ucall))
+			{
+				ReportBadLeave(ncall, ucall);
+				break;				// We have this user as an active Node
+			}
+
+			for (link = link_hd; link; link = link->next)
+			{
+				if (matchi(link->call, ucall))
+				{
+					ReportBadLeave(ncall, ucall);
+					break;				// We have this user as a node to link to 
+				}
+			}
+			*/
+
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			user = user_find(ucall);
 			if (!user) break;
@@ -456,9 +513,12 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // If we are linked, is a loop, do what?
 
 		case id_link :
-			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			ln = node_find(ucall);
-			if (!ln && !matchi(ncall, OurNode)) cn_inc(ckt_from, ucall, f1);
+			if (!ln && !matchi(ncall, OurNode))
+			{
+				cn_inc(ckt_from, ucall, f1);
+				echo(ckt_from, node, Buffer);  // Relay to other nodes.
+			}
 			break;
 
 // User ucall at node ncall sent f2 to user f1.
@@ -508,7 +568,10 @@ void state_tell(CIRCUIT *circuit)
 // Tell the node that just linked here about nodes known on other links.
 
 	for (node = node_hd; node; node = node->next)
-	  if (!matchi(node->call, OurNode)) node_xmit(node, id_link, circuit);
+	{
+	  if (!matchi(node->call, OurNode))
+		  node_xmit(node, id_link, circuit);
+	}
 
 // Tell the node that just linked here about known users, and their topics.
 
@@ -575,7 +638,10 @@ NODE *node_find(char *call)
 	NODE *node;
 
 	for (node = node_hd; node; node = node->next)
-		if (node->refcnt && matchi(node->call, call)) break;
+	{
+		if (node->refcnt && matchi(node->call, call))
+			break;
+	}
 
 	return node;
 }
@@ -632,7 +698,10 @@ static TOPIC *topic_join(CIRCUIT *circuit, char *s)
 // Look for an existing topic.
 
 	for (topic = topic_hd; topic; topic = topic->next)
-		if (matchi(topic->name, s)) break;
+	{
+		if (matchi(topic->name, s))
+			break;
+	}
 
 // Create a new topic, if needed.
 
@@ -715,8 +784,10 @@ int ct_find(CIRCUIT *circuit, TOPIC *topic)
 	CT *ct;
 
 	for (ct = circuit->topic; ct; ct = ct->next)
-		if (ct->topic == topic) return ct->refcnt;
-
+	{
+		if (ct->topic == topic)
+			return ct->refcnt;
+	}
 	return 0;
 }
 
@@ -758,10 +829,13 @@ static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias)
 
 	node = node_inc(call, alias);
 
-	for (cn = circuit->hnode; cn; cn = cn->next) if (cn->node == node)
+	for (cn = circuit->hnode; cn; cn = cn->next)
 	{
-	  cn->refcnt++;
-	  return node;
+		if (cn->node == node)
+		{
+			cn->refcnt++;
+			return node;
+		}
 	}
 
 	cn = zalloc(sizeof(CN));
@@ -777,9 +851,11 @@ static int cn_find(CIRCUIT *circuit, NODE *node)
 {
 	CN *cn;
 
-	for (cn = circuit->hnode; cn; cn = cn->next) if (cn->node == node)
-		return cn->refcnt;
-
+	for (cn = circuit->hnode; cn; cn = cn->next)
+	{
+		if (cn->node == node)
+			return cn->refcnt;
+	}
 	return 0;
 }
 
@@ -880,7 +956,10 @@ static void node_tell(NODE *node, char kind)
 	CIRCUIT *circuit;
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
-		if (circuit->flags & p_linked) node_xmit(node, kind, circuit);
+	{
+		if (circuit->flags & p_linked)
+			node_xmit(node, kind, circuit);
+	}
 }
 
 // Tell another node about a user login/logout at this node.
@@ -901,8 +980,10 @@ static void user_tell(USER *user, char kind)
 	CIRCUIT *circuit;
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
+	{
 		if (circuit->flags & p_linked)
-	  user_xmit(user, kind, circuit);
+			user_xmit(user, kind, circuit);
+	}
 }
 
 // Find the user record for call.
@@ -912,7 +993,10 @@ static USER *user_find(char *call)
 	USER *user;
 
 	for (user = user_hd; user; user = user->next)
-		if (matchi(user->call, call)) break;
+	{
+		if (matchi(user->call, call))
+			break;
+	}
 
 	return user;
 }
@@ -971,19 +1055,25 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias)
 // Is this user already logged in at this node?
 
 	for (user = user_hd; user; user = user->next)
-		if (matchi(user->call, ucall) && (user->node == node)) return user;
+	{
+		if (matchi(user->call, ucall) && (user->node == node))
+			return user;
+	}
 
 // User is not logged in, create a user record for them.
 
 	user = zalloc(sizeof(USER));
 	sl_ins_hd(user, user_hd);
 	user->circuit = circuit;
-	user->topic   = topic_join(circuit, deftopic);
-	user->call    = _strdup(ucall);
+	user->call = _strdup(ucall);
 	_strupr(user->call);
 	user->node    = node;
 	rduser(user);
-	if (circuit->flags & p_user) circuit->u.user = user;
+
+	if (circuit->flags & p_user)
+		circuit->u.user = user;
+
+	user->topic   = topic_join(circuit, deftopic);
 	return user;
 }
 
@@ -1036,8 +1126,10 @@ static void echo(CIRCUIT *fc, NODE *node, char * Buffer)
 	CIRCUIT *tc;
 
 	for (tc = circuit_hd; tc; tc = tc->next)
-	if ((tc != fc) && (tc->flags & p_linked) && !cn_find(tc, node))
-		nprintf(tc, "%s\r", Buffer);
+	{
+		if ((tc != fc) && (tc->flags & p_linked) && !cn_find(tc, node))
+			nprintf(tc, "%s\r", Buffer);
+	}
 }
 
 
@@ -1220,13 +1312,28 @@ void logout(CIRCUIT *circuit)
 void show_users(CIRCUIT *circuit)
 {
 	USER *user;
+	char * Alias;
+	char * Topic;
 
 	nputs(circuit, "Stations connected:\r");
 
 	for (user = user_hd; user; user = user->next)
+	{
+		if ((user->node == 0) || (user->node->alias == 0))
+			Alias = "(Corrupt Alias)";
+		else
+			Alias = user->node->alias;
+
+		if ((user->topic == 0) || (user->topic->name == 0))
+			Topic = "(Corrupt Topic)";
+		else
+			Topic = user->topic->name;
+
 		nprintf(circuit, "%-6.6s at %-9.9s %s, %s [ %s ]\r",
-		user->call, user->node->alias, user->name, user->qth, user->topic->name);
+		user->call, Alias, user->name, user->qth, Topic);
+	}
 }
+
 
 static void show_nodes(CIRCUIT *circuit)
 {
@@ -1234,8 +1341,11 @@ static void show_nodes(CIRCUIT *circuit)
 
 	nputs(circuit, "Known Nodes:\r");
 
-	for (node = node_hd; node; node = node->next) if (node->refcnt)
-		nprintf(circuit, "%s:%s %u\r", node->alias, node->call, node->refcnt);
+	for (node = node_hd; node; node = node->next)
+	{
+		if (node->refcnt)
+			nprintf(circuit, "%s:%s %u\r", node->alias, node->call, node->refcnt);
+	}
 }
 
 // /P Command: List circuits and remote RT on them.
@@ -1268,7 +1378,7 @@ static void show_circuits(CIRCUIT *conn)
 	{
 		if (circuit->flags & p_linked)
 		{
-			nprintf(conn, "Nodes via %-6.6s - ", circuit->u.link->alias);
+			nprintf(conn, "Nodes via %-6.6s(%d) - ", circuit->u.link->alias, circuit->refcnt);
 			len = 0;
 
 /*			len += strlen(node->alias) + 1;
@@ -1329,13 +1439,35 @@ static void show_topics(CIRCUIT *conn)
 		{
 			nputs(conn, "  ");
 			for (user = user_hd; user; user = user->next)
+			{
 				if (user->topic == topic)
 					nprintf(conn, " %s", user->call);
+			}
 			nputc(conn, '\r');
 		}
 	}
 }
 
+static void show_users_in_topic(CIRCUIT *conn)
+{
+	TOPIC *topic;
+	USER  *user;
+
+	nputs(conn, "Users in Topic:\r");
+
+	topic = conn->u.user->topic;
+	{
+		if (topic->refcnt)
+		{
+			for (user = user_hd; user; user = user->next)
+			{
+				if (user->topic == topic)
+					nprintf(conn, "%s ", user->call);
+			}
+			nputc(conn, '\r');
+		}
+	}
+}
 
 // Do a user command.
 
@@ -1422,13 +1554,17 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			if (f1)
 			{
 				topic_chg(user, f1);
+				nprintf(circuit, "Switched to Topic %s\r", user->topic->name);
+				show_users_in_topic(circuit);
 
 				// Tell all link circuits about the change of topic.
 
 				for (c = circuit_hd; c; c = c->next)
-					if (c->flags & p_linked) topic_xmit(user, c);
+				{
+					if (c->flags & p_linked)
+						topic_xmit(user, c);
+				}
 
-				nprintf(circuit, "Switched to Topic %s\r", user->topic->name);
 
 			}
 			else
@@ -1521,7 +1657,8 @@ VOID ChatTimer()
 	i = 0;
 	for (user = user_hd; user; user = user->next)
 	{
-		len = sprintf_s(Msg, sizeof(Msg), "%s Topic %s\r\n", user->call, user->topic->name); 
+		len = sprintf_s(Msg, sizeof(Msg), "%s Topic %s\r\n", user->call,
+			(user->topic) ? user->topic->name : "** Missing Topic **"); 
 		WritetoDebugWindow(Msg, len);
 		i++;
 	}

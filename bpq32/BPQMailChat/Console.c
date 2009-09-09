@@ -36,6 +36,10 @@ static char kbbuf[160];
 static int kbptr=0;
 static char readbuff[101000];
 
+#define MAXSTACK 20
+static char * KbdStack[MAXSTACK];
+
+
 BOOL Bells = TRUE;
 BOOL StripLF = TRUE;
 
@@ -44,12 +48,21 @@ BOOL FlashOnConnect = TRUE;
 BOOL WrapInput = TRUE;
 BOOL CloseWindowOnBye = TRUE;
 
-static int WrapLen = 80;
+static unsigned int WrapLen = 80;
 static int WarnLen = 90;
 static int maxlinelen = 80;
 
 static int PartLinePtr=0;
 static int PartLineIndex=0;		// Listbox index of (last) incomplete line
+
+static DWORD dwCharX;      // average width of characters 
+static DWORD dwCharY;      // height of characters 
+static DWORD dwClientX;    // width of client area 
+static DWORD dwClientY;    // height of client area 
+static DWORD dwLineLen;    // line length 
+static int nCaretPosX = 0; // horizontal position of caret 
+static int nCaretPosY = 0; // vertical position of caret 
+ 
 
 
 static LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -209,13 +222,14 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 {
 	int wmId, wmEvent;
 	LPRECT lprc;
+	int i;
 	
 	switch (message) { 
 
-		case WM_ACTIVATE:
+	case WM_ACTIVATE:
 
-			SetFocus(hwndInput);
-			break;
+		SetFocus(hwndInput);
+		break;
 
 
 	case WM_COMMAND:
@@ -342,6 +356,17 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				}
 			}
 
+			// Free Scrollback
+
+			for (i = 0; i < MAXSTACK ; i++)
+			{
+				if (KbdStack[i])
+				{
+					free(KbdStack[i]);
+					KbdStack[i] = NULL;
+				}
+			}
+
 			Sleep(500);
 
 			free(Console);
@@ -357,11 +382,62 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	return (0);
 }
 
-
+int StackIndex=0;
 
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
-	int TextLen;
+	int i;
+	unsigned int TextLen;
+ 
+	if (uMsg == WM_KEYUP)
+	{
+		unsigned int i;
+//		Debugprintf("5%x", LOBYTE(HIWORD(lParam)));
+
+		if (LOBYTE(HIWORD(lParam)) == 0x48)
+		{
+			// Scroll up
+
+			if (KbdStack[StackIndex] == NULL)
+				return TRUE;
+
+			SendMessage(hwndInput, WM_SETTEXT,0,(LPARAM)(LPCSTR) KbdStack[StackIndex]);
+			
+			for (i = 0; i < strlen(KbdStack[StackIndex]); i++)
+			{
+				SendMessage(hwndInput, WM_KEYDOWN, VK_RIGHT, 0);
+				SendMessage(hwndInput, WM_KEYUP, VK_RIGHT, 0);
+			}
+
+			StackIndex++;
+			if (StackIndex == 20)
+				StackIndex = 19;
+
+			return TRUE;
+		}
+
+		if (LOBYTE(HIWORD(lParam)) == 0x50)
+		{
+			// Scroll up
+
+			StackIndex--;
+			if (StackIndex < 0)
+				StackIndex = 0;
+
+			if (KbdStack[StackIndex] == NULL)
+				return TRUE;
+			
+			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) KbdStack[StackIndex]);
+
+			for (i = 0; i < strlen(KbdStack[StackIndex]); i++)
+			{
+				SendMessage(hwndInput, WM_KEYDOWN, VK_RIGHT, 0);
+				SendMessage(hwndInput, WM_KEYUP, VK_RIGHT, 0);
+			}
+			
+			return TRUE;
+		}
+	}
 
 	if (uMsg == WM_CHAR) 
 	{
@@ -381,6 +457,20 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		if (wParam == 13)
 		{
 			kbptr=SendMessage(hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) kbbuf);
+
+			StackIndex = 0;
+
+			// Stack it
+
+			if (KbdStack[19])
+				free(KbdStack[19]);
+
+			for (i = 18; i >= 0; i--)
+			{
+				KbdStack[i+1] = KbdStack[i];
+			}
+
+			KbdStack[0] = _strdup(kbbuf);
 
 			kbbuf[kbptr]=13;
 

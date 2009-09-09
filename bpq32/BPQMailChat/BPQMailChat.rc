@@ -52,7 +52,7 @@ BEGIN
     LTEXT           "Local",IDC_STATIC,241,3,21,10
     LTEXT           "",IDC_UTC,215,3,25,10
     LTEXT           "",IDC_LOCAL,269,3,25,10
-    LISTBOX         100,0,15,190,138,WS_VSCROLL | LBS_NOTIFY 
+    LISTBOX         100,0,15,190,138,WS_VSCROLL
     LTEXT           "Chat Nodes",IDC_STATIC,197,25,40,10
     LTEXT           "",IDC_NODES,243,25,20,10
     LTEXT           "Chat Users",IDC_STATIC,197,35,40,10
@@ -631,6 +631,27 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,175,99,50,14
 END
 
+IDD_MSGFROMCLIPBOARD DIALOGEX 0, 0, 442, 321
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "Message from Clipboard"
+FONT 8, "System"
+BEGIN
+    PUSHBUTTON      "Send",IDSEND,330,5,50,14
+    PUSHBUTTON      "Cancel",IDCANCELMSG,330,25,50,14
+    EDITTEXT        IDC_EDIT1,5,50,430,255,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN | WS_VSCROLL | WS_HSCROLL,
+                    WS_EX_ACCEPTFILES
+    LTEXT           "To:",IDC_STATIC,66,8,12,8
+    EDITTEXT        IDC_MSGTO,83,7,147,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    LTEXT           "Title:",IDC_STATIC,8,26,22,8
+    EDITTEXT        IDC_MSGTITLE,34,24,277,12,ES_AUTOHSCROLL
+    LTEXT           "BID:",IDC_STATIC,238,8,20,8
+    EDITTEXT        IDC_MSGBID,258,7,65,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    LTEXT           "Type",IDC_STATIC,8,8,20,8
+    COMBOBOX        IDC_MSGTYPE,34,7,25,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
+                    WS_TABSTOP
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -656,6 +677,8 @@ BEGIN
             MENUITEM ".",                           IDM_DISCONNECT
         END
         MENUITEM "Housekeeping",                IDM_HOUSEKEEPING
+        MENUITEM "Send Msg from Clipboard",     ID_ACTIONS_SENDMSGFROMCLIPBOARD
+
     END
     POPUP "&Configuration"
     BEGIN
@@ -827,6 +850,14 @@ BEGIN
         RIGHTMARGIN, 314
         TOPMARGIN, 7
         BOTTOMMARGIN, 113
+    END
+
+    IDD_MSGFROMCLIPBOARD, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 435
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 314
     END
 END
 #endif    // APSTUDIO_INVOKED

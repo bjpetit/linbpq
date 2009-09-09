@@ -13,6 +13,16 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
 }
 
+#define My__except_RoutineWithDisconnect(Message) \
+__except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
+{\
+	Debugprintf("MAILCHAT *** Program Error %x at %x in %s EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x",\
+		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
+		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
+		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
+	Disconnect(conn->BPQStream);\
+}
+
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3
@@ -478,6 +488,7 @@ struct BBSForwardingInfo
 	char ** ATCalls;				// Calls in ATBBS field
 	char ** Haddresses;				// Heirarchical Addresses to forward to (as stored)
 	char *** HADDRS;				// Heirarchical Addresses to forward to
+	int * HADDROffet;				// Elements added to complete the HR. At least n+1 must match to forward
 	char ** FWDTimes;				// Time bands to forward
 	struct FWDBAND ** FWDBands;
 	int MsgCount;					// Messages for this BBS

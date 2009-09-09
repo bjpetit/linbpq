@@ -57,5 +57,5 @@
 
 #include "md5.h"
 
-#define NEWROUTING
+//#define NEWROUTING
 

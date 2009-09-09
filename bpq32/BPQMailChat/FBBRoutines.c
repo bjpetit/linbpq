@@ -150,7 +150,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 					tm = gmtime(&now);	
 	
-					nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
+					nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.2\r\n",
 						tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 						FBBHeader->FwdMsg->number, BBSName, HRoute);
 
@@ -842,7 +842,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	tm = gmtime(&FwdMsg->datechanged);	
 	
-	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.0\r\n",
+	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.2\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 		FwdMsg->number, BBSName, HRoute);
 
