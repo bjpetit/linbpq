@@ -195,13 +195,12 @@
 
 // Version 1.0.2.6
 
-// Kill Personal WP messages after porcessing
+// Kill Personal WP messages after processing
 // Make sure a node doesnt try to "join" or "leave" a node as a user.
 // More tracing to try to track down lost topic links.
 // Add command recall to Console
 // Show users in new topic when changing topic
 // Add Send From Clipboard" Action
-
 
 
 
@@ -1044,10 +1043,24 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
 		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
+		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "T");
 
 		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_SETCURSEL, 0, 0);
 
-        return TRUE; 
+		return TRUE; 
+
+	case WM_SIZING:
+	{
+		HWND hWndEdit = GetDlgItem(hDlg, IDC_EDIT1); 
+
+		LPRECT lprc = (LPRECT) lParam;
+		int Height = lprc->bottom-lprc->top;
+		int Width = lprc->right-lprc->left;
+
+		MoveWindow(hWndEdit, 5, 100, Width-20, Height - 140, TRUE);
+			
+		return TRUE;
+	}
 
 	case WM_COMMAND:
 
@@ -1158,7 +1171,7 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 			return TRUE;
 		}
 
-		if (LOWORD(wParam) == IDCANCELMSG)
+		if (LOWORD(wParam) == IDCANCEL)
 		{
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
@@ -3314,6 +3327,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 	case 'P':
 	case 'B':
+	case 'T':
 		{
 			int m = NumberofMessages;
 				
@@ -3409,7 +3423,7 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 		{
 			if (SYSOP) return m;			// Sysop can list or read anything
 	
-			if (Msg->type == 'B') return m;
+			if (Msg->type == 'B' || Msg->type == 'T') return m;
 
 			if (Msg->type == 'P')
 			{
@@ -3441,7 +3455,7 @@ int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
 		{
 			if (SYSOP) return m;			// Sysop can list or read anything
 
-			if (Msg->type == 'B') return m;
+			if (Msg->type == 'B' || Msg->type == 'T') return m;
 
 			if (Msg->type == 'P')
 			{
@@ -3759,6 +3773,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 	case 'P':
 	case 'B':
+	case 'T':
 				
 		if (Arg1 == NULL)
 		{
@@ -4593,7 +4608,7 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 	FreeList(ForwardingInfo->ATCalls);
 	FreeList(ForwardingInfo->Haddresses);
 	FreeList(ForwardingInfo->HADDRS);
-	FreeList(ForwardingInfo->HADDROffet);
+	free(ForwardingInfo->HADDROffet);
 	FreeList(ForwardingInfo->ConnectScript);
 	FreeList(ForwardingInfo->FWDTimes);
 	FreeList((char **)ForwardingInfo->FWDBands);

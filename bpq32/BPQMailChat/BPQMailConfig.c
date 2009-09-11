@@ -1039,7 +1039,12 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, 6021, FormatDateAndTime(Msg->datechanged, FALSE));
 			SetDlgItemText(hDlg, 6020, Size);
 
-			SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_SETCURSEL, Msg->type  == 'B' ? 0 : 1, 0);
+			if (Msg->type  == 'B')
+				SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_SETCURSEL, 0, 0);
+			else if (Msg->type  == 'P')
+				SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_SETCURSEL, 1, 0);
+			else
+				SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_SETCURSEL, 2, 0);
 
 			switch(Msg->status)
 			{
@@ -2021,6 +2026,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
 		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
+		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "T");
 
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "N");
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Y");
