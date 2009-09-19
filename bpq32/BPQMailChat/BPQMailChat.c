@@ -202,6 +202,13 @@
 // Show users in new topic when changing topic
 // Add Send From Clipboard" Action
 
+// Version 1.0.2.7
+
+// Hold messages from the future, or with invalid dates.
+// Add KH (kill held) command.
+
+
+
 
 
 // Rewrite forwarding by HA.
@@ -307,7 +314,7 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[BPQ-%d.%d.%d.%d-%s%s%sFH$]\r";
+char BBSSID[]="[BPQ-%d.%d.%d.%d-%s%s%s%sH$]\r";
 //char BBSSID[]="[BPQ-1.00-AB1FHMRX$]\r";
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
@@ -337,6 +344,8 @@ char WPDatabaseName[MAX_PATH] = "WP.SYS";
 char BaseDir[MAX_PATH];
 
 char MailDir[MAX_PATH];
+
+char RlineVer[50];
 
 
 BOOL ALLOWCOMPRESSED = TRUE;
@@ -495,9 +504,29 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	FreeChatMemory();
 
+	n = 0;
+
+	if (Aliases)
+	{
+		while(Aliases[n])
+		{
+			free(Aliases[n]->Dest);
+			free(Aliases[n]);
+			n++;
+		}
+
+		free(Aliases);
+		FreeList(AliasText);
+	}
+
 	FreeOverrides();
 
 	Free_UI();
+
+	for (n=1; n<20; n++)
+	{
+		if (MyElements[n]) free(MyElements[n]);
+	}
 
 	_CrtDumpMemoryLeaks();
 
@@ -621,6 +650,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	GetVersionInfo(NULL);
 
 	wsprintf(Title,"G8BPQ Mail and Chat Server Beta Version %s", VersionString);
+
+	wsprintf(RlineVer, "BPQ%d.%d.%d", Ver[0], Ver[1], Ver[2]);
 
 	SetWindowText(hWnd,Title);
 
@@ -1057,7 +1088,7 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 		int Height = lprc->bottom-lprc->top;
 		int Width = lprc->right-lprc->left;
 
-		MoveWindow(hWndEdit, 5, 100, Width-20, Height - 140, TRUE);
+		MoveWindow(hWndEdit, 5, 90, Width-20, Height - 140, TRUE);
 			
 		return TRUE;
 	}
@@ -1431,6 +1462,7 @@ BOOL Initialise()
 	CopyWPDatabase();
 
 	SetupMyHA();
+	SetupFwdAliases();
 
 	GetMessageDatabase();
 	GetUserDatabase();
@@ -1559,8 +1591,15 @@ int Connected(Stream)
 
 			if (user == NULL)
 			{
+				int Length=0;
+				char * MailBuffer = malloc(100);
+
 				user = AllocateUserRecord(callsign);
-	
+
+				Length += wsprintf(MailBuffer, "New User %s Connected to Mailbox\r\n", callsign);
+
+				SendMessageToSYSOP("New User", MailBuffer, Length);
+
 				if (user == NULL) return 0; //		Cant happen??
 
 				user->flags |= F_HOLDMAIL;
@@ -1619,7 +1658,7 @@ int Connected(Stream)
 				}
 				WriteLogLine('|',Msg, n, LOG_BBS);
 				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-					ALLOWCOMPRESSED ? "B" : "", B1 ? "1" : "", B2 ? "2" : "");
+					ALLOWCOMPRESSED ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", "F");
 			}
 
 			if (user->Name[0] == 0)
@@ -3079,6 +3118,23 @@ void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		}
 		return;
 
+	case 'H':					// Kill Held
+
+		if (conn->sysop)
+		{
+			for (i=NumberofMessages; i>0; i--)
+			{
+				Msg = MsgHddrPtr[i];
+
+				if (Msg->status == 'H')
+				{
+					FlagAsKilled(Msg);
+					nodeprintf(conn, "Message #%d Killed\r", Msg->number);
+				}
+			}
+		}
+		return;
+
 	case '>':			// K> - Kill to 
 
 		if (conn->sysop)
@@ -4244,18 +4300,21 @@ nextline:
 			
 				sscanf(&ptr2[2], "%04d%02d%02d/%02d%02d",
 					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
-				rtime.tm_year -= 1900
-					;
+				rtime.tm_year -= 1900;
+				rtime.tm_mon--;
 			}
-			else
+			else if (ptr2[8] == '/')
 			{
 				sscanf(&ptr2[2], "%02d%02d%02d/%02d%02d",
 					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
 
-				rtime.tm_year += 100;
+				if (rtime.tm_year < 90)
+					rtime.tm_year += 100;		// Range 1990-2089
+				rtime.tm_mon--;
 			}
 
-			rtime.tm_mon--;
+			// Otherwise leave date as zero, which should be rejected
+
 
 //			result = _mkgmtime(&rtime);
 
@@ -4263,13 +4322,23 @@ nextline:
 			{
 				Msg->datecreated =  result;	
 				Age = (time(NULL) - result)/86400;
-				if (Age > BidLifetime)
+
+				if ( Age < -7)
+					Msg->status = 'H';
+				else if (Age > BidLifetime)
 					Msg->status = 'K';
 				else
 					GetWPInfoFromRLine(Msg->from, ptr2, result);
 			}
+			else
+			{
+				// Can't decode R: Datestamp
 
-			if (Msg->status != 'K' && strcmp(Msg->to, "WP") == 0)
+				Msg->status = 'H';
+			}
+
+
+			if (Msg->status == 'N' && strcmp(Msg->to, "WP") == 0)
 			{
 				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
 	
@@ -4601,17 +4670,35 @@ VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
 VOID FreeForwardingStruct(struct UserInfo * user)
 {
 	struct	BBSForwardingInfo * ForwardingInfo;
+	int i;
+
 
 	ForwardingInfo = user->ForwardingInfo;
 
 	FreeList(ForwardingInfo->TOCalls);
 	FreeList(ForwardingInfo->ATCalls);
 	FreeList(ForwardingInfo->Haddresses);
-	FreeList(ForwardingInfo->HADDRS);
-	free(ForwardingInfo->HADDROffet);
+	i=0;
+	if(ForwardingInfo->HADDRS)
+	{
+		while(ForwardingInfo->HADDRS[i])
+		{
+			FreeList(ForwardingInfo->HADDRS[i++]);
+		}
+		free(ForwardingInfo->HADDRS);
+		free(ForwardingInfo->HADDROffet);
+	}
 	FreeList(ForwardingInfo->ConnectScript);
 	FreeList(ForwardingInfo->FWDTimes);
-	FreeList((char **)ForwardingInfo->FWDBands);
+	if (ForwardingInfo->FWDBands)
+	{
+		i=0;
+		while(ForwardingInfo->FWDBands[i])
+		{
+			FreeList(ForwardingInfo->FWDBands[i++]);
+		}
+		free(ForwardingInfo->FWDBands);
+	}
 }
 
 VOID FreeList(char ** Hddr)
@@ -4629,7 +4716,6 @@ VOID FreeList(char ** Hddr)
 		free(Save);
 	}
 }
-
 
 BOOL ConnecttoBBS (struct UserInfo * user)
 {
@@ -4769,9 +4855,10 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		// Only delare B1 and B2 if other end did, and we are configued for it
 
 		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-			ALLOWCOMPRESSED ? "B" : "", 
+			(conn->BBSFlags & FBBCompressed) ? "B" : "", 
 			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
-			(conn->BBSFlags & FBBB2Mode) ? "2" : ""); 
+			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
+			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
 
 		conn->NextMessagetoForward = FirstMessagetoForward;
 
@@ -4997,9 +5084,9 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 
 				tm = gmtime(&Msg->datecreated);	
 	
-				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.2\r\n",
+				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
-					Msg->number, BBSName, HRoute);
+					Msg->number, BBSName, HRoute, RlineVer);
 
 				// If using B2 forwarding we need the message size and Compressed size for FC proposal
 
@@ -5041,12 +5128,69 @@ void clear_fwd_bit (char *mask, int bbsnumber)
 		mask[(bbsnumber - 1) / 8] &= (~(1 << ((bbsnumber - 1) % 8)));
 }
 
+
+VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
+{
+	struct MsgInfo * Msg = AllocateMsgRecord();
+	BIDRec * BIDRec;
+
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int WriteLen=0;
+
+	Msg->length = Length;
+
+	GetSemaphore(&MsgNoSemaphore);
+	Msg->number = ++LatestMsg;
+	FreeSemaphore(&MsgNoSemaphore);
+ 
+	strcpy(Msg->from, "SYSTEM");
+	strcpy(Msg->to, "SYSOP");
+	strcpy(Msg->title, Title);
+
+	Msg->type = 'P';
+	Msg->status = 'N';
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+
+	BIDRec = AllocateBIDRecord();
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+	
+	hFile = CreateFile(MsgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
+		CloseHandle(hFile);
+	}
+
+	free(MailBuffer);
+
+}
+
+
+
 #ifndef NEWROUTING
 
 VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
 {
 }
 VOID SetupMyHA()
+{
+}
+VOID SetupFwdAliases()
 {
 }
 

@@ -146,9 +146,9 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		tm = gmtime(&now);	
 	
-		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.2\r\n",
+		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
-			conn->FwdMsg->number, BBSName, HRoute);
+			conn->FwdMsg->number, BBSName, HRoute, RlineVer);
 
 		if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 			BBSputs(conn, "\r\n");

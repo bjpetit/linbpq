@@ -215,6 +215,7 @@ VOID ExpireMessages()
 	struct Override ** Calls;
 
 	int now=time(NULL);
+	int Future = now + (7 * 86400);
 
 	Killed = 0;
 
@@ -229,6 +230,14 @@ VOID ExpireMessages()
 	for (n = 1; n <= NumberofMessages; n++)
 	{
 		Msg = MsgHddrPtr[n];
+
+		// If from the future, Kill it
+
+		if (Msg->datecreated > Future)
+		{
+			KillMsg(Msg);
+			continue;
+		}
 
 		switch (Msg->type)
 		{
@@ -523,60 +532,17 @@ BOOL ExpireBIDs()
 
 VOID MailHousekeepingResults()
 {
-	struct MsgInfo * Msg = AllocateMsgRecord();
-	BIDRec * BIDRec;
-
-	char MsgFile[MAX_PATH];
-	HANDLE hFile = INVALID_HANDLE_VALUE;
-	int WriteLen=0;
+	int Length=0;
 	char * MailBuffer = malloc(10000);
 
+	Length += wsprintf(&MailBuffer[Length], "Killed Messsages Removed %d\r\n", Removed);
+	Length += wsprintf(&MailBuffer[Length], "Messages Killed          %d\r\n", Killed);
+	Length += wsprintf(&MailBuffer[Length], "Live Messages            %d\r\n", NumberofMessages - Killed);
+	Length += wsprintf(&MailBuffer[Length], "Total Messages           %d\r\n", NumberofMessages);
+	Length += wsprintf(&MailBuffer[Length], "BIDs Removed             %d\r\n", BIDSRemoved);
+	Length += wsprintf(&MailBuffer[Length], "BIDs Left                %d\r\n", NumberofBIDs);
 
-	Msg->length += wsprintf(&MailBuffer[Msg->length], "Killed Messsages Removed %d\r\n", Removed);
-	Msg->length += wsprintf(&MailBuffer[Msg->length], "Messages Killed          %d\r\n", Killed);
-	Msg->length += wsprintf(&MailBuffer[Msg->length], "Live Messages            %d\r\n", NumberofMessages - Killed);
-	Msg->length += wsprintf(&MailBuffer[Msg->length], "Total Messages           %d\r\n", NumberofMessages);
-	Msg->length += wsprintf(&MailBuffer[Msg->length], "BIDs Removed             %d\r\n", BIDSRemoved);
-	Msg->length += wsprintf(&MailBuffer[Msg->length], "BIDs Left                %d\r\n", NumberofBIDs);
-
-	GetSemaphore(&MsgNoSemaphore);
-	Msg->number = ++LatestMsg;
-	FreeSemaphore(&MsgNoSemaphore);
- 
-	strcpy(Msg->from, "SYSTEM");
-	strcpy(Msg->to, "SYSOP");
-	strcpy(Msg->title, "Housekeeping Results");
-
-	Msg->type = 'P';
-	Msg->status = 'N';
-	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
-
-	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
-
-	BIDRec = AllocateBIDRecord();
-	strcpy(BIDRec->BID, Msg->bid);
-	BIDRec->mode = Msg->type;
-	BIDRec->u.msgno = LOWORD(Msg->number);
-	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
-
-	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
-	
-	hFile = CreateFile(MsgFile,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-
-	if (hFile != INVALID_HANDLE_VALUE)
-	{
-		WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
-		CloseHandle(hFile);
-	}
-
-	free(MailBuffer);
-
+	SendMessageToSYSOP("Housekeeping Results", MailBuffer, Length);
 }
 
 

@@ -1419,7 +1419,7 @@ VOID SaveFWDConfig(HWND hDlg)
 		ReinitializeFWDStruct(CurrentBBS);
 	}
 		
-	// Interval and Max Sizes are not user specific
+	// Interval and Max Sizes and Aliasesare not user specific
 
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, 
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
@@ -1429,6 +1429,16 @@ VOID SaveFWDConfig(HWND hDlg)
 
 	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
 	retCode = RegSetValueEx(hKey,"MaxRXSize", 0, REG_DWORD, (BYTE *)&MaxRXSize,4);
+
+	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_ALIAS, hKey, "FWD Aliases");
+
+	Rev = IsDlgButtonChecked(hDlg, IDC_READDRESSLOCAL);
+	retCode = RegSetValueEx(hKey,"Readdress Local", 0, REG_DWORD, (BYTE *)&Rev,4);
+
+	Rev = IsDlgButtonChecked(hDlg, IDC_READDRESSRXED);
+	retCode = RegSetValueEx(hKey,"Readdress Received", 0, REG_DWORD, (BYTE *)&Rev,4);
+
+
 
 	RegCloseKey(hKey);
 		
@@ -1649,6 +1659,16 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey,"MaxRXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxRXSize,(ULONG *)&Vallen);
+
+		AliasText = GetMultiStringValue(hKey,  "FWD Aliases");
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"Readdress Local",0,			
+			(ULONG *)&Type,(UCHAR *)&ReaddressLocal,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"Readdress Received",0,			
+			(ULONG *)&Type,(UCHAR *)&ReaddressReceived,(ULONG *)&Vallen);
 
 		Vallen=100;
 
@@ -2100,6 +2120,49 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 	return (INT_PTR)FALSE;
 }
 
+char HRHelpMsg[] = 
+"Please read the following carefully, as forwarding is handled rather differently from other BBS software\r\n" 
+"Private Messages, and Bulls that have not reached their target area (eg a Bull sent to ALL@GBR from the\r\n"
+"USA) are forwarded to only one define define BBS1 with HR EU and BBS2 with HR GBR.EU, a message for GBR.EU\r\n"
+"will be sent to BBS2. Any other EU message (eg FRA.EU) would be sent to BBS2."
+"\r\n\r\n"
+"Bulls which have reached their target will be sent to ALL BBS's where the BBS HA matches all elements\r\n"
+"of the HA of the message\r\n So if a BBS had\r\n"
+"GBR.EU It would match messages sent to EU or GBR.EU, but not FRA.EU.\r\n"
+"If you want to send only Bulls addressed to a lower level then add the number of levels to ignore after the string\r\n"
+"So #23.GBR.EU,2 would match only Bulls for #23, and not GBR or EU\r\r"
+"The software assumes an implied WW on the end of all aadresses, but only if there is something in the field\r\n"
+"So you need an explicit WW to send to everyone. So a BBS with WW in the HA will get all Bulls, and any Personal\r\n"
+"Messages that don't have a more explicit route via another BBS"
+;
+
+INT_PTR CALLBACK HRHelpProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+		SetDlgItemText(hDlg, IDC_HRTEXT, HRHelpMsg);
+
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+			return (INT_PTR)TRUE;
+
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+#include <htmlhelp.h>
+
+
 INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int Command;
@@ -2118,6 +2181,26 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
+
+		if (Aliases)
+		{
+			char Text[100000] = "";
+			int i=0;
+
+			while(Aliases[i])
+			{
+				strcat(Text, Aliases[i]->Dest);
+				strcat(Text, ":");
+				strcat(Text, Aliases[i]->Alias);
+				strcat(Text, "\r\n");
+				i++;
+			}
+			SetDlgItemText(hDlg, IDC_ALIAS, Text);
+		}
+
+
+		CheckDlgButton(hDlg, IDC_READDRESSLOCAL, ReaddressLocal);
+		CheckDlgButton(hDlg, IDC_READDRESSRXED, ReaddressReceived);
 
 		return (INT_PTR)TRUE;
 
@@ -2154,6 +2237,15 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			Do_BBS_Sel_Changed(hDlg);
 
+			return TRUE;
+
+		case IDC_HRHELP:
+			
+			//DialogBox(hInst, MAKEINTRESOURCE(IDD_HRHELP), hWnd, HRHelpProc);
+		//	Winexec(hDlg,"C:\\Dev\\Docs\\BPQ32 HTML Docs\\index.html",HH_HELP_FINDER,0);  
+			ShellExecute(hDlg,"open","C:\\Dev\\Docs\\BPQ32 HTML Docs\\index.html","",NULL,SW_SHOWNORMAL); 
+
+	
 			return TRUE;
 
 

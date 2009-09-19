@@ -150,9 +150,9 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 					tm = gmtime(&now);	
 	
-					nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.2\r\n",
+					nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 						tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
-						FBBHeader->FwdMsg->number, BBSName, HRoute);
+						FBBHeader->FwdMsg->number, BBSName, HRoute, RlineVer);
 
 					if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
 						BBSputs(conn, "\r\n");
@@ -272,7 +272,10 @@ badparam:
 		return;
 
 ok:
-		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MaxRXSize))
+		// If P Message, dont immediately reject on a Duplicate BID. Check if we still have the message
+		//	If we do, reject  it. If not, accept it again. (do we need some loop protection ???)
+
+		if (DoWeWantIt(FBBHeader) == FALSE)
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
@@ -842,9 +845,9 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	tm = gmtime(&FwdMsg->datechanged);	
 	
-	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s BPQ1.0.2\r\n",
+	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
-		FwdMsg->number, BBSName, HRoute);
+		FwdMsg->number, BBSName, HRoute, RlineVer);
 
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 		strcat(Rline, "\r\n");
@@ -1934,4 +1937,61 @@ Body: 214
 }
 
 #pragma warning(pop)
+
+BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader)
+{
+	struct MsgInfo * Msg;
+	BIDRec * BID;
+	int m;
+
+	if (FBBHeader->Size > MaxRXSize)
+		return FALSE;
+	
+	BID = LookupBID(FBBHeader->BID);
+	
+	if (BID)
+	{
+		if (FBBHeader->MsgType == 'B')
+			return FALSE;
+
+		m = NumberofMessages;
+		
+		while (m > 0)
+		{
+			Msg = MsgHddrPtr[m];
+ 
+			if (Msg->number == BID->u.msgno)
+			{
+				// if the same TO we will assume the same message
+
+				if (strcmp(Msg->to, FBBHeader->To) == 0)
+				{
+					// We have this message. If we have already forwarded it, we should accept it again
+
+					if ((Msg->status == 'N') || (Msg->status == 'Y'))
+						return FALSE;			// Dont want it
+					else
+						return TRUE;			// Get it again
+				}
+
+				// Same number. but different message (why?) Accept for now
+
+				return TRUE; 
+			}
+
+			m--;
+		}
+
+		return TRUE; // A personal Message we have had before, but don't still have.
+	}
+	else
+	{
+		// We don't know the BID
+
+		return TRUE;	// We want it
+	}
+}
+
+
+
 

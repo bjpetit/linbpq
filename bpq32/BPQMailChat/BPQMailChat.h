@@ -367,6 +367,11 @@ struct Override
 	int Days;
 };
 	
+struct ALIAS
+{
+	char * Alias;
+	char * Dest;
+};
 
 
 typedef struct user_t
@@ -476,6 +481,8 @@ struct FWDBAND
 	time_t FWDStartBand;
 	time_t FWDEndBand;
 };
+
+
 
 struct BBSForwardingInfo
 {
@@ -793,6 +800,8 @@ VOID FWDTimerProc();
 VOID CreateMessageFromBuffer(CIRCUIT * conn);
 VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...);
 VOID FreeOverrides();
+VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length);
+
 
 // FBB Routines
 
@@ -804,6 +813,7 @@ int Encode(char * in, char * out, int len, BOOL B2Protocol);
 CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline);
 VOID SaveFBBBinary(CIRCUIT * conn);
 BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
+BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader);
 
 
 // Console Routines
@@ -888,6 +898,7 @@ struct MsgInfo * FindMessageByNumber(int msgno);
 
 VOID SetupHAddreses(struct	BBSForwardingInfo * ForwardingInfo);
 VOID SetupMyHA();
+VOID SetupFwdAliases();
 
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn);
 BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
@@ -911,6 +922,7 @@ extern HWND MainWnd;
 extern char BaseDir[];
 extern char MailDir[];
 extern char WPDatabasePath[];
+extern char RlineVer[50];
 
 extern BOOL LogBBS;
 extern BOOL LogCHAT;
@@ -1039,4 +1051,11 @@ extern struct Override ** LTTO;
 extern struct Override ** LTAT;
 
 extern int LastFWDTime;
+
+extern char * MyElements[];
+extern char ** AliasText;
+extern struct ALIAS ** Aliases;
+
+extern BOOL ReaddressLocal;
+extern BOOL ReaddressReceived;
 
