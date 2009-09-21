@@ -33,7 +33,8 @@ struct Continent
 struct Country
 {
 	char Country[5];
-	char Continent[5];
+	char Continent4[5];
+	char Continent2[3];
 };
 
 
@@ -62,243 +63,243 @@ struct Continent Continents[] =
 
 struct Country Countries[] = 
 {			
-		"AFG", "****",		// Afghanistan
-		"ALA", "****",		// Åland Islands
-		"ALB", "****",		// Albania
-		"DZA", "****",		// Algeria
-		"ASM", "****",		// American Samoa
-		"AND", "EURO",		// Andorra
-		"AGO", "****",		// Angola
-		"AIA", "****",		// Anguilla
-		"ATG", "****",		// Antigua and Barbuda
-		"ARG", "SOAM",		// Argentina
-		"ARM", "****",		// Armenia
-		"ABW", "****",		// Aruba
-		"AUS", "AUNZ",		// Australia
-		"AUT", "****",		// Austria
-		"AZE", "****",		// Azerbaijan
-		"BHS", "****",		// Bahamas
-		"BHR", "****",		// Bahrain
-		"BGD", "****",		// Bangladesh
-		"BRB", "****",		// Barbados
-		"BLR", "****",		// Belarus
-		"BEL", "EURO",		// Belgium
-		"BLZ", "****",		// Belize
-		"BEN", "****",		// Benin
-		"BMU", "****",		// Bermuda
-		"BTN", "****",		// Bhutan
-		"BOL", "****",		// Bolivia (Plurinational State of)
-		"BIH", "****",		// Bosnia and Herzegovina
-		"BWA", "****",		// Botswana
-		"BRA", "****",		// Brazil
-		"VGB", "****",		// British Virgin Islands
-		"BRN", "****",		// Brunei Darussalam
-		"BGR", "****",		// Bulgaria
-		"BFA", "****",		// Burkina Faso
-		"BDI", "****",		// Burundi
-		"KHM", "****",		// Cambodia
-		"CMR", "****",		// Cameroon
-		"CAN", "NOAM",		// Canada
-		"CPV", "****",		// Cape Verde
-		"CYM", "****",		// Cayman Islands
-		"CAF", "****",		// Central African Republic
-		"TCD", "****",		// Chad
-		"CHL", "****",		// Chile
-		"CHN", "****",		// China
-		"HKG", "****",		// Hong Kong Special Administrative Region of China
-		"MAC", "****",		// Macao Special Administrative Region of China
-		"COL", "****",		// Colombia
-		"COM", "****",		// Comoros
-		"COG", "****",		// Congo
-		"COK", "****",		// Cook Islands
-		"CRI", "****",		// Costa Rica
-		"CIV", "****",		// Côte d'Ivoire
-		"HRV", "EURO",		// Croatia
-		"CUB", "****",		// Cuba
-		"CYP", "****",		// Cyprus
-		"CZE", "EURO",		// Czech Republic
-		"PRK", "****",		// Democratic People's Republic of Korea
-		"COD", "****",		// Democratic Republic of the Congo
-		"DNK", "EURO",		// Denmark
-		"DJI", "****",		// Djibouti
-		"DMA", "****",		// Dominica
-		"DOM", "****",		// Dominican Republic
-		"ECU", "****",		// Ecuador
-		"EGY", "****",		// Egypt
-		"SLV", "****",		// El Salvador
-		"GNQ", "****",		// Equatorial Guinea
-		"ERI", "****",		// Eritrea
-		"EST", "EURO",		// Estonia
-		"ETH", "****",		// Ethiopia
-		"FRO", "EURO",		// Faeroe Islands
-		"FLK", "****",		// Falkland Islands (Malvinas)
-		"FJI", "****",		// Fiji
-		"FIN", "EURO",		// Finland
-		"FRA", "EURO",		// France
-		"GUF", "****",		// French Guiana
-		"PYF", "****",		// French Polynesia
-		"GAB", "****",		// Gabon
-		"GMB", "****",		// Gambia
-		"GEO", "****",		// Georgia
-		"DEU", "EURO",		// Germany
-		"GHA", "****",		// Ghana
-		"GIB", "EURO",		// Gibraltar
-		"GRC", "EURO",		// Greece
-		"GRL", "****",		// Greenland
-		"GRD", "****",		// Grenada
-		"GLP", "****",		// Guadeloupe
-		"GUM", "****",		// Guam
-		"GTM", "****",		// Guatemala
-		"GGY", "EURO",		// Guernsey
-		"GIN", "****",		// Guinea
-		"GNB", "****",		// Guinea-Bissau
-		"GUY", "****",		// Guyana
-		"HTI", "****",		// Haiti
-		"VAT", "EURO",		// Holy See
-		"HND", "****",		// Honduras
-		"HUN", "EURO",		// Hungary
-		"ISL", "EURO",		// Iceland
-		"IND", "****",		// India
-		"IDN", "****",		// Indonesia
-		"IRN", "****",		// Iran (Islamic Republic of)
-		"IRQ", "****",		// Iraq
-		"IRL", "EURO",		// Ireland
-		"IMN", "EURO",		// Isle of Man
-		"ISR", "****",		// Israel
-		"ITA", "EURO",		// Italy
-		"JAM", "****",		// Jamaica
-		"JPN", "****",		// Japan
-		"JEY", "EURO",		// Jersey
-		"JOR", "****",		// Jordan
-		"KAZ", "****",		// Kazakhstan
-		"KEN", "****",		// Kenya
-		"KIR", "****",		// Kiribati
-		"KWT", "****",		// Kuwait
-		"KGZ", "****",		// Kyrgyzstan
-		"LAO", "****",		// Lao People's Democratic Republic
-		"LVA", "EURO",		// Latvia
-		"LBN", "****",		// Lebanon
-		"LSO", "****",		// Lesotho
-		"LBR", "****",		// Liberia
-		"LBY", "****",		// Libyan Arab Jamahiriya
-		"LIE", "EURO",		// Liechtenstein
-		"LTU", "EURO",		// Lithuania
-		"LUX", "EURO",		// Luxembourg
-		"MDG", "****",		// Madagascar
-		"MWI", "****",		// Malawi
-		"MYS", "****",		// Malaysia
-		"MDV", "****",		// Maldives
-		"MLI", "****",		// Mali
-		"MLT", "EURO",		// Malta
-		"MHL", "****",		// Marshall Islands
-		"MTQ", "****",		// Martinique
-		"MRT", "****",		// Mauritania
-		"MUS", "****",		// Mauritius
-		"MYT", "****",		// Mayotte
-		"MEX", "****",		// Mexico
-		"FSM", "****",		// Micronesia (Federated States of)
-		"MCO", "EURO",		// Monaco
-		"MNG", "****",		// Mongolia
-		"MNE", "****",		// Montenegro
-		"MSR", "****",		// Montserrat
-		"MAR", "****",		// Morocco
-		"MOZ", "****",		// Mozambique
-		"MMR", "****",		// Myanmar
-		"NAM", "****",		// Namibia
-		"NRU", "****",		// Nauru
-		"NPL", "****",		// Nepal
-		"NLD", "EURO",		// Netherlands
-		"ANT", "****",		// Netherlands Antilles
-		"NCL", "****",		// New Caledonia
-		"NZL", "AUNZ",		// New Zealand
-		"NIC", "****",		// Nicaragua
-		"NER", "****",		// Niger
-		"NGA", "****",		// Nigeria
-		"NIU", "****",		// Niue
-		"NFK", "****",		// Norfolk Island
-		"MNP", "****",		// Northern Mariana Islands
-		"NOR", "EURO",		// Norway
-		"PSE", "****",		// Occupied Palestinian Territory
-		"OMN", "****",		// Oman
-		"PAK", "****",		// Pakistan
-		"PLW", "****",		// Palau
-		"PAN", "****",		// Panama
-		"PNG", "****",		// Papua New Guinea
-		"PRY", "****",		// Paraguay
-		"PER", "****",		// Peru
-		"PHL", "****",		// Philippines
-		"PCN", "****",		// Pitcairn
-		"POL", "EURO",		// Poland
-		"PRT", "EURO",		// Portugal
-		"PRI", "****",		// Puerto Rico
-		"QAT", "****",		// Qatar
-		"KOR", "****",		// Republic of Korea
-		"MDA", "****",		// Republic of Moldova
-		"REU", "****",		// Réunion
-		"ROU", "****",		// Romania
-		"RUS", "****",		// Russian Federation
-		"RWA", "****",		// Rwanda
-		"BLM", "****",		// Saint-Barthélemy
-		"SHN", "****",		// Saint Helena
-		"KNA", "****",		// Saint Kitts and Nevis
-		"LCA", "****",		// Saint Lucia
-		"MAF", "****",		// Saint-Martin (French part)
-		"SPM", "****",		// Saint Pierre and Miquelon
-		"VCT", "****",		// Saint Vincent and the Grenadines
-		"WSM", "****",		// Samoa
-		"SMR", "****",		// San Marino
-		"STP", "****",		// Sao Tome and Principe
-		"SAU", "****",		// Saudi Arabia
-		"SEN", "****",		// Senegal
-		"SRB", "EURO",		// Serbia
-		"SYC", "****",		// Seychelles
-		"SLE", "****",		// Sierra Leone
-		"SGP", "****",		// Singapore
-		"SVK", "EURO",		// Slovakia
-		"SVN", "EURO",		// Slovenia
-		"SLB", "****",		// Solomon Islands
-		"SOM", "****",		// Somalia
-		"ZAF", "****",		// South Africa
-		"ESP", "EURO",		// Spain
-		"LKA", "****",		// Sri Lanka
-		"SDN", "****",		// Sudan
-		"SUR", "****",		// Suriname
-		"SJM", "****",		// Svalbard and Jan Mayen Islands
-		"SWZ", "****",		// Swaziland
-		"SWE", "EURO",		// Sweden
-		"CHE", "EURO",		// Switzerland
-		"SYR", "****",		// Syrian Arab Republic
-		"TJK", "****",		// Tajikistan
-		"THA", "****",		// Thailand
-		"MKD", "EURO",		// The former Yugoslav Republic of Macedonia
-		"TLS", "****",		// Timor-Leste
-		"TGO", "****",		// Togo
-		"TKL", "****",		// Tokelau
-		"TON", "****",		// Tonga
-		"TTO", "****",		// Trinidad and Tobago
-		"TUN", "****",		// Tunisia
-		"TUR", "****",		// Turkey
-		"TKM", "****",		// Turkmenistan
-		"TCA", "****",		// Turks and Caicos Islands
-		"TUV", "****",		// Tuvalu
-		"UGA", "****",		// Uganda
-		"UKR", "****",		// Ukraine
-		"ARE", "****",		// United Arab Emirates
-		"GBR", "EURO",		// United Kingdom of Great Britain and Northern Ireland
-		"TZA", "****",		// United Republic of Tanzania
-		"USA", "NOAM",		// United States of America
-		"VIR", "****",		// United States Virgin Islands
-		"URY", "****",		// Uruguay
-		"UZB", "****",		// Uzbekistan
-		"VUT", "****",		// Vanuatu
-		"VEN", "****",		// Venezuela (Bolivarian Republic of)
-		"VNM", "****",		// Viet Nam
-		"WLF", "****",		// Wallis and Futuna Islands
-		"ESH", "****",		// Western Sahara
-		"YEM", "****",		// Yemen
-		"ZMB", "SAFR",		// Zambia
-		"ZWE", "SAFR"};		// Zimbabwe
-
+		"AFG", "****", "AS", 		// Afghanistan
+		"ALA", "****", "**", 		// Åland Islands
+		"ALB", "EURO", "EU", 		// Albania
+		"DZA", "NAFR", "AF", 		// Algeria
+		"ASM", "****", "**", 		// American Samoa
+		"AND", "EURO", "EU", 		// Andorra
+		"AGO", "****", "**", 		// Angola
+		"AIA", "****", "**", 		// Anguilla
+		"ATG", "****", "**", 		// Antigua and Barbuda
+		"ARG", "SOAM", "SA", 		// Argentina
+		"ARM", "****", "**", 		// Armenia
+		"ABW", "****", "**", 		// Aruba
+		"AUS", "AUNZ", "OC", 		// Australia
+		"AUT", "EURO", "EU", 		// Austria
+		"AZE", "****", "AS", 		// Azerbaijan
+		"BHS", "****", "**", 		// Bahamas
+		"BHR", "****", "**", 		// Bahrain
+		"BGD", "INDE", "AS", 		// Bangladesh
+		"BRB", "****", "**", 		// Barbados
+		"BLR", "****", "**", 		// Belarus
+		"BEL", "EURO", "EU", 		// Belgium
+		"BLZ", "****", "**", 		// Belize
+		"BEN", "****", "**", 		// Benin
+		"BMU", "****", "**", 		// Bermuda
+		"BTN", "****", "**", 		// Bhutan
+		"BOL", "****", "**", 		// Bolivia (Plurinational State of)
+		"BIH", "EURO", "EU", 		// Bosnia and Herzegovina
+		"BWA", "****", "AF", 		// Botswana
+		"BRA", "****", "SA", 		// Brazil
+		"VGB", "****", "**", 		// British Virgin Islands
+		"BRN", "****", "**", 		// Brunei Darussalam
+		"BGR", "EURO", "EU", 		// Bulgaria
+		"BFA", "****", "**", 		// Burkina Faso
+		"BDI", "****", "**", 		// Burundi
+		"KHM", "****", "AS", 		// Cambodia
+		"CMR", "****", "**", 		// Cameroon
+		"CAN", "NOAM", "NA", 		// Canada
+		"CPV", "****", "**", 		// Cape Verde
+		"CYM", "****", "**", 		// Cayman Islands
+		"CAF", "****", "**", 		// Central African Republic
+		"TCD", "****", "**", 		// Chad
+		"CHL", "SOAM", "SA", 		// Chile
+		"CHN", "****", "AS", 		// China
+		"HKG", "****", "AS", 		// Hong Kong Special Administrative Region of China
+		"MAC", "****", "AS", 		// Macao Special Administrative Region of China
+		"COL", "****", "SA", 		// Colombia
+		"COM", "****", "**", 		// Comoros
+		"COG", "****", "AF", 		// Congo
+		"COK", "****", "**", 		// Cook Islands
+		"CRI", "CEAM", "NA", 		// Costa Rica
+		"CIV", "****", "**", 		// Côte d'Ivoire
+		"HRV", "EURO", "EU", 		// Croatia
+		"CUB", "CARB", "NA", 		// Cuba
+		"CYP", "EURO", "EU", 		// Cyprus
+		"CZE", "EURO", "EU", 		// Czech Republic
+		"PRK", "****", "AS", 		// Democratic People's Republic of Korea
+		"COD", "****", "AF", 		// Democratic Republic of the Congo
+		"DNK", "EURO", "EU", 		// Denmark
+		"DJI", "****", "**", 		// Djibouti
+		"DMA", "****", "**", 		// Dominica
+		"DOM", "CARB", "NA", 		// Dominican Republic
+		"ECU", "****", "**", 		// Ecuador
+		"EGY", "MDLE", "AF", 		// Egypt
+		"SLV", "****", "**", 		// El Salvador
+		"GNQ", "****", "**", 		// Equatorial Guinea
+		"ERI", "****", "AF", 		// Eritrea
+		"EST", "EURO", "EU", 		// Estonia
+		"ETH", "****", "AF", 		// Ethiopia
+		"FRO", "EURO", "EU", 		// Faeroe Islands
+		"FLK", "****", "SA", 		// Falkland Islands (Malvinas)
+		"FJI", "****", "**", 		// Fiji
+		"FIN", "EURO", "EU", 		// Finland
+		"FRA", "EURO", "EU", 		// France
+		"GUF", "****", "**", 		// French Guiana
+		"PYF", "****", "**", 		// French Polynesia
+		"GAB", "****", "**", 		// Gabon
+		"GMB", "****", "**", 		// Gambia
+		"GEO", "****", "**", 		// Georgia
+		"DEU", "EURO", "EU", 		// Germany
+		"GHA", "****", "**", 		// Ghana
+		"GIB", "EURO", "EU", 		// Gibraltar
+		"GRC", "EURO", "EU", 		// Greece
+		"GRL", "EURO", "EU", 		// Greenland
+		"GRD", "CARB", "NA", 		// Grenada
+		"GLP", "****", "**", 		// Guadeloupe
+		"GUM", "****", "**", 		// Guam
+		"GTM", "****", "**", 		// Guatemala
+		"GGY", "EURO", "EU", 		// Guernsey
+		"GIN", "****", "**", 		// Guinea
+		"GNB", "****", "**", 		// Guinea-Bissau
+		"GUY", "****", "**", 		// Guyana
+		"HTI", "****", "**", 		// Haiti
+		"VAT", "EURO", "EU", 		// Holy See
+		"HND", "CEAM", "NA", 		// Honduras
+		"HUN", "EURO", "EU", 		// Hungary
+		"ISL", "EURO", "EU", 		// Iceland
+		"IND", "INDI", "AS", 		// India
+		"IDN", "****", "AS", 		// Indonesia
+		"IRN", "MDLE", "AS", 		// Iran (Islamic Republic of)
+		"IRQ", "MDLE", "AS", 		// Iraq
+		"IRL", "EURO", "EU", 		// Ireland
+		"IMN", "EURO", "EU", 		// Isle of Man
+		"ISR", "MDLE", "AS", 		// Israel
+		"ITA", "EURO", "EU", 		// Italy
+		"JAM", "****", "NA", 		// Jamaica
+		"JPN", "****", "AS", 		// Japan
+		"JEY", "EURO", "EU", 		// Jersey
+		"JOR", "MDLE", "AS", 		// Jordan
+		"KAZ", "****", "AS", 		// Kazakhstan
+		"KEN", "****", "AF", 		// Kenya
+		"KIR", "****", "**", 		// Kiribati
+		"KWT", "MDLE", "AS", 		// Kuwait
+		"KGZ", "****", "**", 		// Kyrgyzstan
+		"LAO", "****", "**", 		// Lao People's Democratic Republic
+		"LVA", "EURO", "EU", 		// Latvia
+		"LBN", "MDLE", "AS", 		// Lebanon
+		"LSO", "****", "AF", 		// Lesotho
+		"LBR", "****", "AF", 		// Liberia
+		"LBY", "MDLE", "AS", 		// Libyan Arab Jamahiriya
+		"LIE", "EURO", "EU", 		// Liechtenstein
+		"LTU", "EURO", "EU", 		// Lithuania
+		"LUX", "EURO", "EU", 		// Luxembourg
+		"MDG", "****", "**", 		// Madagascar
+		"MWI", "****", "**", 		// Malawi
+		"MYS", "****", "AS", 		// Malaysia
+		"MDV", "****", "**", 		// Maldives
+		"MLI", "****", "**", 		// Mali
+		"MLT", "EURO", "EU", 		// Malta
+		"MHL", "****", "**", 		// Marshall Islands
+		"MTQ", "****", "**", 		// Martinique
+		"MRT", "****", "**", 		// Mauritania
+		"MUS", "****", "**", 		// Mauritius
+		"MYT", "****", "**", 		// Mayotte
+		"MEX", "****", "NA", 		// Mexico
+		"FSM", "****", "**", 		// Micronesia (Federated States of)
+		"MCO", "EURO", "EU", 		// Monaco
+		"MNG", "****", "AS", 		// Mongolia
+		"MNE", "****", "**", 		// Montenegro
+		"MSR", "****", "**", 		// Montserrat
+		"MAR", "****", "AF", 		// Morocco
+		"MOZ", "****", "**", 		// Mozambique
+		"MMR", "****", "**", 		// Myanmar
+		"NAM", "****", "AF", 		// Namibia
+		"NRU", "****", "**", 		// Nauru
+		"NPL", "****", "AS", 		// Nepal
+		"NLD", "EURO", "EU", 		// Netherlands
+		"ANT", "****", "**", 		// Netherlands Antilles
+		"NCL", "****", "**", 		// New Caledonia
+		"NZL", "AUNZ", "OC", 		// New Zealand
+		"NIC", "****", "SA", 		// Nicaragua
+		"NER", "****", "**", 		// Niger
+		"NGA", "****", "AF", 		// Nigeria
+		"NIU", "****", "**", 		// Niue
+		"NFK", "****", "**", 		// Norfolk Island
+		"MNP", "****", "**", 		// Northern Mariana Islands
+		"NOR", "EURO", "EU", 		// Norway
+		"PSE", "MDLE", "AS", 		// Occupied Palestinian Territory
+		"OMN", "****", "**", 		// Oman
+		"PAK", "INDI", "AS", 		// Pakistan
+		"PLW", "****", "**", 		// Palau
+		"PAN", "****", "SA", 		// Panama
+		"PNG", "****", "**", 		// Papua New Guinea
+		"PRY", "****", "**", 		// Paraguay
+		"PER", "****", "SA", 		// Peru
+		"PHL", "****", "**", 		// Philippines
+		"PCN", "****", "**", 		// Pitcairn
+		"POL", "EURO", "EU", 		// Poland
+		"PRT", "EURO", "EU", 		// Portugal
+		"PRI", "****", "**", 		// Puerto Rico
+		"QAT", "****", "**", 		// Qatar
+		"KOR", "****", "AS", 		// Republic of Korea
+		"MDA", "****", "**", 		// Republic of Moldova
+		"REU", "****", "**", 		// Réunion
+		"ROU", "****", "**", 		// Romania
+		"RUS", "****", "**", 		// Russian Federation
+		"RWA", "****", "AF", 		// Rwanda
+		"BLM", "****", "**", 		// Saint-Barthélemy
+		"SHN", "****", "**", 		// Saint Helena
+		"KNA", "****", "**", 		// Saint Kitts and Nevis
+		"LCA", "****", "**", 		// Saint Lucia
+		"MAF", "****", "**", 		// Saint-Martin (French part)
+		"SPM", "****", "**", 		// Saint Pierre and Miquelon
+		"VCT", "****", "**", 		// Saint Vincent and the Grenadines
+		"WSM", "****", "**", 		// Samoa
+		"SMR", "****", "**", 		// San Marino
+		"STP", "****", "**", 		// Sao Tome and Principe
+		"SAU", "MDLE", "AS", 		// Saudi Arabia
+		"SEN", "****", "**", 		// Senegal
+		"SRB", "EURO", "EU", 		// Serbia
+		"SYC", "****", "**", 		// Seychelles
+		"SLE", "****", "AF", 		// Sierra Leone
+		"SGP", "****", "AS", 		// Singapore
+		"SVK", "EURO", "EU", 		// Slovakia
+		"SVN", "EURO", "EU", 		// Slovenia
+		"SLB", "****", "**", 		// Solomon Islands
+		"SOM", "****", "AF", 		// Somalia
+		"ZAF", "SAFR", "AF", 		// South Africa
+		"ESP", "EURO", "EU", 		// Spain
+		"LKA", "INDE", "AS", 		// Sri Lanka
+		"SDN", "****", "AF", 		// Sudan
+		"SUR", "****", "**", 		// Suriname
+		"SJM", "****", "**", 		// Svalbard and Jan Mayen Islands
+		"SWZ", "****", "AF", 		// Swaziland
+		"SWE", "EURO", "EU", 		// Sweden
+		"CHE", "EURO", "EU", 		// Switzerland
+		"SYR", "****", "**", 		// Syrian Arab Republic
+		"TJK", "****", "**", 		// Tajikistan
+		"THA", "****", "AS", 		// Thailand
+		"MKD", "EURO", "EU", 		// The former Yugoslav Republic of Macedonia
+		"TLS", "****", "**", 		// Timor-Leste
+		"TGO", "****", "**", 		// Togo
+		"TKL", "****", "**", 		// Tokelau
+		"TON", "****", "**", 		// Tonga
+		"TTO", "****", "**", 		// Trinidad and Tobago
+		"TUN", "****", "AF", 		// Tunisia
+		"TUR", "EURO", "EU", 		// Turkey
+		"TKM", "****", "AS", 		// Turkmenistan
+		"TCA", "****", "**", 		// Turks and Caicos Islands
+		"TUV", "****", "**", 		// Tuvalu
+		"UGA", "****", "AF", 		// Uganda
+		"UKR", "EURO", "EU", 		// Ukraine
+		"ARE", "MDLE", "AS", 		// United Arab Emirates
+		"GBR", "EURO", "EU", 		// United Kingdom of Great Britain and Northern Ireland
+		"TZA", "****", "AF", 		// United Republic of Tanzania
+		"USA", "NOAM", "NA", 		// United States of America
+		"VIR", "****", "**", 		// United States Virgin Islands
+		"URY", "SOAM", "SA", 		// Uruguay
+		"UZB", "****", "**", 		// Uzbekistan
+		"VUT", "****", "**", 		// Vanuatu
+		"VEN", "SOAM", "SA", 		// Venezuela (Bolivarian Republic of)
+		"VNM", "****", "AS", 		// Viet Nam
+		"WLF", "****", "**", 		// Wallis and Futuna Islands
+		"ESH", "****", "AF", 		// Western Sahara
+		"YEM", "****", "AF", 		// Yemen
+		"ZMB", "SAFR", "AF", 		// Zambia
+		"ZWE", "SAFR", "AF"		// Zimbabwe
+};
 char ** AliasText;
 struct ALIAS ** Aliases;
 
@@ -371,7 +372,6 @@ VOID SetupMyHA()
 	int Elements = 1;					// Implied WW on front
 	char * ptr2;
 	struct Continent * Continent;
-	struct Country * Country;
 
 	strcpy(MyRouteElements, HRoute);
 	
@@ -405,14 +405,14 @@ VOID SetupMyHA()
 
 	if (MyElements[1])
 	{
-		if (strlen(MyElements[1]) == 2)
+		if (strlen(MyElements[1]) == 4)
 		{
-			// Convert to 4 char Continent;
+			// Convert to 2 char Continent;
 			Continent = FindContinent(MyElements[1]);
 			if (Continent)
 			{
 				free(MyElements[1]);
-				MyElements[1] = _strdup(Continent->FourCharCode);
+				MyElements[1] = _strdup(Continent->TwoCharCode);
 			}
 		}
 	}
@@ -455,11 +455,9 @@ VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
 	int Count=0;
 	char ** HText = ForwardingInfo->Haddresses;
 	char * SaveHText, * ptr2;
-	char * TopElement;
+//	char * TopElement;
 	char * Num;
 	struct Continent * Continent;
-	struct Country * Country;
-
 
 	ForwardingInfo->HADDRS = zalloc(4);				// always NULL entry on end even if no values
 	ForwardingInfo->HADDROffet = zalloc(4);			// always NULL entry on end even if no values
@@ -470,7 +468,7 @@ VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
 		ForwardingInfo->HADDRS = realloc(ForwardingInfo->HADDRS, (Count+2)*4);
 		ForwardingInfo->HADDROffet = realloc(ForwardingInfo->HADDROffet, (Count+2)*4);
 	
-		ForwardingInfo->HADDRS[Count] = zalloc(4);
+		ForwardingInfo->HADDRS[Count] = zalloc(8);	// Always at lesat WWW and NULL
 
 		SaveHText = _strdup(HText[0]);
 		Num = strlop(SaveHText, ',');
@@ -538,14 +536,14 @@ FullHR:
 
 		if (ForwardingInfo->HADDRS[Count][1])
 		{
-			if (strlen(ForwardingInfo->HADDRS[Count][1]) == 2)
+			if (strlen(ForwardingInfo->HADDRS[Count][1]) == 4)
 			{
-				// Convert to 4 char Continent;
+				// Convert to 2 char Continent;
 				Continent = FindContinent(ForwardingInfo->HADDRS[Count][1]);
 				if (Continent)
 				{
 					free(ForwardingInfo->HADDRS[Count][1]);
-					ForwardingInfo->HADDRS[Count][1] = _strdup(Continent->FourCharCode);
+					ForwardingInfo->HADDRS[Count][1] = _strdup(Continent->TwoCharCode);
 				}
 			}
 		}
@@ -622,7 +620,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	{
 		// Just need to add Continent and WW
 
-		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", RouteElements, Country->Continent);
+		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", RouteElements, Country->Continent2);
 		goto FULLHA;
 	}
 
@@ -662,14 +660,14 @@ FULLHA:
 	if (HElements[1])
 		{
 
-		if (strlen(HElements[1]) == 2)
+		if (strlen(HElements[1]) == 4)
 		{
-			// Convert to 4 char Continent;
+			// Convert to 2 char Continent;
 			Continent = FindContinent(HElements[1]);
 			if (Continent)
 			{
 //				free(MyElements[1]);
-				HElements[1] = _strdup(Continent->FourCharCode);
+				HElements[1] = _strdup(Continent->TwoCharCode);
 			}
 		}
 	}

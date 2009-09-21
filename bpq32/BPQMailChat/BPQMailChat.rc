@@ -287,8 +287,8 @@ BEGIN
     LTEXT           "FBB Max Block",IDC_STATIC,257,220,58,12
     EDITTEXT        IDC_MAXBLOCK,341,218,26,12,ES_AUTOHSCROLL | ES_NUMBER
     EDITTEXT        IDC_ALIAS,4,113,99,109,ES_MULTILINE | ES_UPPERCASE | 
-                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
-                    WS_VSCROLL
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | NOT 
+                    WS_VISIBLE | WS_VSCROLL
     LTEXT           "Times",IDC_STATIC,326,46,30,13
     CONTROL         "Use B1 Protocol",IDC_USEB1,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,133,235,114,8
@@ -297,15 +297,15 @@ BEGIN
     EDITTEXT        IDC_CALL,132,140,66,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL
-    LTEXT           "Aliases",IDC_STATIC,5,100,57,13
+    LTEXT           "Aliases",IDC_STATIC,5,100,57,13,NOT WS_VISIBLE
     CONTROL         "Readdress Locally Input",IDC_READDRESSLOCAL,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,4,226,97,8
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | NOT 
+                    WS_VISIBLE | WS_TABSTOP,4,226,97,8
     CONTROL         "Readdress Received",IDC_READDRESSRXED,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,4,239,97,8
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | NOT 
+                    WS_VISIBLE | WS_TABSTOP,4,239,97,8
     DEFPUSHBUTTON   "? Help",IDC_HRHELP,309,126,28,11,BS_CENTER | BS_VCENTER | 
-                    NOT WS_TABSTOP
+                    NOT WS_VISIBLE | NOT WS_TABSTOP
 END
 
 IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68

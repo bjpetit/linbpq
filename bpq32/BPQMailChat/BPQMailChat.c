@@ -206,8 +206,13 @@
 
 // Hold messages from the future, or with invalid dates.
 // Add KH (kill held) command.
+// Send Message to SYSOP when a new user connects.
 
+// Version 1.0.2.8
 
+// Don't reject personal message on Dup BID unless we already have an unforwarded copy.
+// Hold Looping messages.
+// Warn SYSOP of held messages.
 
 
 
@@ -4058,11 +4063,11 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 	{
 		BIDRec * TempBID;
 		
-		if (LookupBID(BID))
+		if ((Msg->type == 'B') && LookupBID(BID))			// Only reject Bulls on BID 
 		{
 			// Duplicate bid
 	
-			if (conn->BBSFlags & BBS)
+			if ((conn->BBSFlags & BBS))
 				nodeprintf(conn, "NO - BID\r");
 			else
 				nodeprintf(conn, "*** Error- Duplicate BID\r");
@@ -4214,10 +4219,11 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
 	char * ptr1, * ptr2 = NULL;
+	char * ptr3, * ptr4;
 	int FWDCount;
 	char OldMess[] = "\r\n\r\nOriginal Message:\r\n\r\n";
 	struct _EXCEPTION_POINTERS exinfo;
-	int Age;
+	int Age, OurCount;
 
 	// If doing SC, Append Old Message
 
@@ -4269,12 +4275,29 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 
 		// if message body had R: lines, get date created from last (not very accurate, but best we can do)
 
+		// Also check if we have had message beofre to detect loops
+
+
 		ptr1 = conn->MailBuffer;
+		OurCount = 0;
 
 nextline:
 
 		if (memcmp(ptr1, "R:", 2) == 0)
 		{
+			// Is if ours?
+
+			// BPQ RLINE Format R:090920/1041Z 6542@N4JOA.#WPBFL.FL.USA.NOAM BPQ1.0.2
+
+			ptr3 = strchr(ptr1, '@');
+			ptr4 = strchr(ptr1, '.');
+
+			if (ptr3 && ptr4 && (ptr4 > ptr3))
+			{
+				if (memcmp(ptr3+1, BBSName, ptr4-ptr3-1) == 0)
+					OurCount++;
+			}
+			
 			// see if another
 
 			ptr2 = ptr1;			// save
@@ -4315,7 +4338,6 @@ nextline:
 
 			// Otherwise leave date as zero, which should be rejected
 
-
 //			result = _mkgmtime(&rtime);
 
 			if ((result = _mkgmtime(&rtime)) != (time_t)-1 )
@@ -4337,6 +4359,12 @@ nextline:
 				Msg->status = 'H';
 			}
 
+			if (OurCount > 1)
+			{
+				// Message is looping 
+
+				Msg->status = 'H';
+			}
 
 			if (Msg->status == 'N' && strcmp(Msg->to, "WP") == 0)
 			{
@@ -4394,6 +4422,18 @@ nextline:
 		
 		if(Msg->to[0] == 0)
 			SMTPMsgCreated=TRUE;
+
+
+		if (Msg->status == 'H')
+		{
+			int Length=0;
+			char * MailBuffer = malloc(100);
+			char Title[100];
+
+			Length += wsprintf(MailBuffer, "Message %d Held. It may be looping, too big, or have a suspect Date\r\n", Msg->number);
+			wsprintf(Title, "Message %d Held", Msg->number);
+			SendMessageToSYSOP(Title, MailBuffer, Length);
+		}
 
 		SaveMessageDatabase();
 		SaveBIDDatabase();
@@ -4642,7 +4682,10 @@ VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
 	retCode = RegQueryValueEx(hKey, ValueName, 0, (ULONG *)&Type, NULL, (ULONG *)&Vallen);
 
 	if ((retCode != 0)  || (Vallen == 0)) 
+	{
+		free(Value);
 		return FALSE;
+	}
 
 	MultiString = malloc(Vallen);
 
@@ -4683,7 +4726,8 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 	{
 		while(ForwardingInfo->HADDRS[i])
 		{
-			FreeList(ForwardingInfo->HADDRS[i++]);
+			FreeList(ForwardingInfo->HADDRS[i]);
+			i++;
 		}
 		free(ForwardingInfo->HADDRS);
 		free(ForwardingInfo->HADDROffet);
@@ -4695,7 +4739,8 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 		i=0;
 		while(ForwardingInfo->FWDBands[i])
 		{
-			FreeList(ForwardingInfo->FWDBands[i++]);
+			free(ForwardingInfo->FWDBands[i]);
+			i++;
 		}
 		free(ForwardingInfo->FWDBands);
 	}

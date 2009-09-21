@@ -1098,6 +1098,9 @@ BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 	struct FBBRestartData * RestartRec;
 
+	if ((conn->BBSFlags & FBBB1Mode) == 0)
+		return FALSE;						// Only B1 & B2 support restart
+
 	for (i = 1; i <= RestartCount; i++)
 	{
 		RestartRec = RestartData[i];
@@ -1968,7 +1971,7 @@ BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader)
 				{
 					// We have this message. If we have already forwarded it, we should accept it again
 
-					if ((Msg->status == 'N') || (Msg->status == 'Y'))
+					if ((Msg->status == 'N') || (Msg->status == 'Y')|| (Msg->status == 'H'))
 						return FALSE;			// Dont want it
 					else
 						return TRUE;			// Get it again
