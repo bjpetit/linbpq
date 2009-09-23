@@ -214,6 +214,12 @@
 // Hold Looping messages.
 // Warn SYSOP of held messages.
 
+// Version 1.0.2.9
+
+// Close connecton on receipt of *** DONE (MBL style forwarding).
+// Improved validation in link_drop (Chat Node)
+// Change to welcome prompt and Msg Header for Outpost.
+// Fix Connect Script processing for KA Nodes
 
 
 // Rewrite forwarding by HA.
@@ -1156,12 +1162,14 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 			Vptr = strlop(HDest, '@');
 	
 			if (Vptr)
+			{
 				if (strlen(Vptr) > 40)
 					Vptr[40] = 0;
 
-			strcpy(Msg->to, HDest);
-			strcpy(Msg->via, Vptr);
+				strcpy(Msg->via, Vptr);
+			}
 
+			strcpy(Msg->to, HDest);
 
 			GetDlgItemText(hDlg, IDC_MSGTITLE, Msg->title, 61);
 			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
@@ -1546,8 +1554,9 @@ int Connected(Stream)
 	struct UserInfo * user = NULL;
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
-	char ConnectedMsg[] = "CONNECTED  ";
+	char ConnectedMsg[] = "*** CONNECTED  ";
 	char Msg[100];
+	char Title[100];
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -1568,7 +1577,7 @@ int Connected(Stream)
 					// Run first line of connect script
 
 					conn->UserPointer->ForwardingInfo->ScriptIndex = -1;  // Incremented before being used
-					ProcessBBSConnectScript(conn, ConnectedMsg, 10);
+					ProcessBBSConnectScript(conn, ConnectedMsg, 14);
 					return 0;
 				}
 		
@@ -1603,7 +1612,9 @@ int Connected(Stream)
 
 				Length += wsprintf(MailBuffer, "New User %s Connected to Mailbox\r\n", callsign);
 
-				SendMessageToSYSOP("New User", MailBuffer, Length);
+				wsprintf(Title, "New User %s", callsign);
+
+				SendMessageToSYSOP(Title, MailBuffer, Length);
 
 				if (user == NULL) return 0; //		Cant happen??
 
@@ -2498,14 +2509,13 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 	if (user->HomeBBS[0] == 0)
 		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");
 
-	nodeprintf(conn, "%s BBS (H for help) >\r", BBSName);
+	nodeprintf(conn, "Type H for help.\rde %s>\r", BBSName);
 }
 
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
 {
-	nodeprintf(conn, "%s>\r", BBSName);
+	nodeprintf(conn, "de %s>\r", BBSName);
 }
-
 
 VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
@@ -3673,7 +3683,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 		return;
 	}
 
-	nodeprintf(conn, "From: %s\rTo: %s\rType/Status %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
+	nodeprintf(conn, "From: %s\rTo: %s\rType/Status: %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
 		Msg->from, Msg->to, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 	MsgBytes = ReadMessageFile(msgno);
@@ -4606,6 +4616,10 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		ForwardingInfo->TOCalls = GetMultiStringValue(hKey,  "TOCalls");
 		ForwardingInfo->ATCalls = GetMultiStringValue(hKey,  "ATCalls");
 		ForwardingInfo->Haddresses = GetMultiStringValue(hKey,  "HRoutes");
+//		ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutesP");
+//		if (ForwardingInfo->HaddressesP == NULL)
+//			ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutes");
+
 		ForwardingInfo->FWDTimes = GetMultiStringValue(hKey,  "FWD Times");
 
 		Vallen=4;
@@ -4638,6 +4652,15 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		if (ForwardingInfo->FwdInterval == 0)
 				ForwardingInfo->FwdInterval = 3600;
 
+/*		Vallen=0;
+		RegQueryValueEx(hKey,"BBSHA",0 , (ULONG *)&Type,NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			ForwardingInfo->BBSHA = malloc(Vallen);
+			RegQueryValueEx(hKey, "BBSHA", 0, (ULONG *)&Type, ForwardingInfo->BBSHA,(ULONG *)&Vallen);
+		}
+*/
 		RegCloseKey(hKey);
 
 		// Convert FWD Times and H Addresses
@@ -4647,6 +4670,12 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 
 		if (ForwardingInfo->Haddresses)
 			SetupHAddreses(ForwardingInfo);
+
+//		if (ForwardingInfo->HaddressesP)
+//			SetupHAddresesP(ForwardingInfo);
+
+//		if (ForwardingInfo->BBSHA)
+//			SetupHAElements(ForwardingInfo);
 	}
 
 	for (m = FirstMessagetoForward; m <= NumberofMessages; m++)
@@ -4721,6 +4750,8 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 	FreeList(ForwardingInfo->TOCalls);
 	FreeList(ForwardingInfo->ATCalls);
 	FreeList(ForwardingInfo->Haddresses);
+//	FreeList(ForwardingInfo->HaddressesP);
+
 	i=0;
 	if(ForwardingInfo->HADDRS)
 	{
@@ -4732,6 +4763,18 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 		free(ForwardingInfo->HADDRS);
 		free(ForwardingInfo->HADDROffet);
 	}
+
+/*	i=0;
+	if(ForwardingInfo->HADDRSP)
+	{
+		while(ForwardingInfo->HADDRSP[i])
+		{
+			FreeList(ForwardingInfo->HADDRSP[i]);
+			i++;
+		}
+		free(ForwardingInfo->HADDRSP);
+	}
+*/
 	FreeList(ForwardingInfo->ConnectScript);
 	FreeList(ForwardingInfo->FWDTimes);
 	if (ForwardingInfo->FWDBands)
@@ -4828,8 +4871,24 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	Scripts = ForwardingInfo->ConnectScript;
 
+	// NETROM to  KA node returns
 
-	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "PACLEN") || strstr(Buffer, "OK"))
+	//c 1 milsw
+	//WIRAC:N9PMO-2} Connected to MILSW
+	//###CONNECTED TO NODE MILSW(N9ZXS) CHANNEL A
+	//You have reached N9ZXS's KA-Node MILSW
+	//ENTER COMMAND: B,C,J,N, or Help ?
+
+	//C KB9PRF-7
+	//###LINK MADE
+	//###CONNECTED TO NODE KB9PRF-7(KB9PRF-4) CHANNEL A
+
+	// Look for (Space)Connected so we aren't fooled by ###CONNECTED TO NODE, which is not
+	// an indication of a connect.
+
+
+	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") ||
+			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE"))
 	{
 		ForwardingInfo->ScriptIndex++;
 		

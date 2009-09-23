@@ -1088,7 +1088,9 @@ void link_drop(CIRCUIT *circuit)
 
 // So we don't try and send anything on this circuit.
 
-	circuit->u.link->flags = p_nil;
+	if (circuit->u.link)
+		circuit->u.link->flags = p_nil;
+	
 	circuit->flags = p_nil;
 
 // Users connected on the dropped link are no longer connected.

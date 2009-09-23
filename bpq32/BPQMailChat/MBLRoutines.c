@@ -257,7 +257,13 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		Disconnect(conn->BPQStream);
 		return;
 	}
-	
+
+	if (_stricmp(Buffer, "*** DONE\r") == 0)
+	{
+		Disconnect(conn->BPQStream);
+		return;
+	}
+
 	nputs(conn, ">\r");
 
 }
