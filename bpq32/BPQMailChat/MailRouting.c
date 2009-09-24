@@ -42,10 +42,10 @@ struct Continent Continents[] =
 {
    		"EURO",	"EU", // Europe
    		"MEDR",	"EU", // Mediterranean
+   		"ASIA",	"AS", // The Orient
    		"INDI",	"AS", // Indian Ocean including the Indian subcontinent
    		"MDLE",	"EU", // Middle East
    		"SEAS",	"EU", // South-East Asia
-   		"ASIA",	"AS", // The Orient
    		"NOAM",	"NA", // North America (Canada, USA, Mexico)
    		"CEAM",	"NA", // Central America
    		"CARB",	"NA", // Caribbean
@@ -64,56 +64,56 @@ struct Continent Continents[] =
 struct Country Countries[] = 
 {			
 		"AFG", "****", "AS", 		// Afghanistan
-		"ALA", "****", "**", 		// Åland Islands
+		"ALA", "EURO", "EU", 		// Åland Islands
 		"ALB", "EURO", "EU", 		// Albania
 		"DZA", "NAFR", "AF", 		// Algeria
-		"ASM", "****", "**", 		// American Samoa
+		"ASM", "****", "AS", 		// American Samoa
 		"AND", "EURO", "EU", 		// Andorra
-		"AGO", "****", "**", 		// Angola
-		"AIA", "****", "**", 		// Anguilla
-		"ATG", "****", "**", 		// Antigua and Barbuda
+		"AGO", "CAFR", "AF", 		// Angola
+		"AIA", "CARB", "NA", 		// Anguilla
+		"ATG", "CARB", "NA", 		// Antigua and Barbuda
 		"ARG", "SOAM", "SA", 		// Argentina
-		"ARM", "****", "**", 		// Armenia
-		"ABW", "****", "**", 		// Aruba
+		"ARM", "****", "AS", 		// Armenia
+		"ABW", "CARB", "NA", 		// Aruba
 		"AUS", "AUNZ", "OC", 		// Australia
 		"AUT", "EURO", "EU", 		// Austria
 		"AZE", "****", "AS", 		// Azerbaijan
-		"BHS", "****", "**", 		// Bahamas
-		"BHR", "****", "**", 		// Bahrain
+		"BHS", "CARB", "NA", 		// Bahamas
+		"BHR", "MDLE", "AS", 		// Bahrain
 		"BGD", "INDE", "AS", 		// Bangladesh
-		"BRB", "****", "**", 		// Barbados
-		"BLR", "****", "**", 		// Belarus
+		"BRB", "CARB", "NA", 		// Barbados
+		"BLR", "EURO", "EU", 		// Belarus
 		"BEL", "EURO", "EU", 		// Belgium
-		"BLZ", "****", "**", 		// Belize
-		"BEN", "****", "**", 		// Benin
-		"BMU", "****", "**", 		// Bermuda
-		"BTN", "****", "**", 		// Bhutan
-		"BOL", "****", "**", 		// Bolivia (Plurinational State of)
+		"BLZ", "CEAM", "NA", 		// Belize
+		"BEN", "CAFR", "AF", 		// Benin
+		"BMU", "CARB", "NA", 		// Bermuda
+		"BTN", "ASIA", "AS", 		// Bhutan
+		"BOL", "SOAM", "SA", 		// Bolivia (Plurinational State of)
 		"BIH", "EURO", "EU", 		// Bosnia and Herzegovina
 		"BWA", "****", "AF", 		// Botswana
 		"BRA", "****", "SA", 		// Brazil
-		"VGB", "****", "**", 		// British Virgin Islands
-		"BRN", "****", "**", 		// Brunei Darussalam
+		"VGB", "CARB", "NA", 		// British Virgin Islands
+		"BRN", "ASIA", "AS", 		// Brunei Darussalam
 		"BGR", "EURO", "EU", 		// Bulgaria
-		"BFA", "****", "**", 		// Burkina Faso
-		"BDI", "****", "**", 		// Burundi
+		"BFA", "CAFR", "AF", 		// Burkina Faso
+		"BDI", "CAFR", "AF", 		// Burundi
 		"KHM", "****", "AS", 		// Cambodia
-		"CMR", "****", "**", 		// Cameroon
+		"CMR", "CAFR", "AF", 		// Cameroon
 		"CAN", "NOAM", "NA", 		// Canada
-		"CPV", "****", "**", 		// Cape Verde
-		"CYM", "****", "**", 		// Cayman Islands
-		"CAF", "****", "**", 		// Central African Republic
-		"TCD", "****", "**", 		// Chad
+		"CPV", "NAFR", "AF", 		// Cape Verde
+		"CYM", "CARB", "NA", 		// Cayman Islands
+		"CAF", "CAFR", "AF", 		// Central African Republic
+		"TCD", "CAFR", "AF", 		// Chad
 		"CHL", "SOAM", "SA", 		// Chile
 		"CHN", "****", "AS", 		// China
 		"HKG", "****", "AS", 		// Hong Kong Special Administrative Region of China
 		"MAC", "****", "AS", 		// Macao Special Administrative Region of China
 		"COL", "****", "SA", 		// Colombia
-		"COM", "****", "**", 		// Comoros
+		"COM", "SAFR", "AF", 		// Comoros
 		"COG", "****", "AF", 		// Congo
-		"COK", "****", "**", 		// Cook Islands
+		"COK", "SPAC", "OC", 		// Cook Islands
 		"CRI", "CEAM", "NA", 		// Costa Rica
-		"CIV", "****", "**", 		// Côte d'Ivoire
+		"CIV", "CAFR", "AF", 		// Côte d'Ivoire
 		"HRV", "EURO", "EU", 		// Croatia
 		"CUB", "CARB", "NA", 		// Cuba
 		"CYP", "EURO", "EU", 		// Cyprus
@@ -121,40 +121,40 @@ struct Country Countries[] =
 		"PRK", "****", "AS", 		// Democratic People's Republic of Korea
 		"COD", "****", "AF", 		// Democratic Republic of the Congo
 		"DNK", "EURO", "EU", 		// Denmark
-		"DJI", "****", "**", 		// Djibouti
-		"DMA", "****", "**", 		// Dominica
+		"DJI", "NAFR", "AF", 		// Djibouti
+		"DMA", "CARB", "NA", 		// Dominica
 		"DOM", "CARB", "NA", 		// Dominican Republic
-		"ECU", "****", "**", 		// Ecuador
+		"ECU", "SOAM", "SA", 		// Ecuador
 		"EGY", "MDLE", "AF", 		// Egypt
-		"SLV", "****", "**", 		// El Salvador
-		"GNQ", "****", "**", 		// Equatorial Guinea
+		"SLV", "CEAM", "NA", 		// El Salvador
+		"GNQ", "CAFR", "AF", 		// Equatorial Guinea
 		"ERI", "****", "AF", 		// Eritrea
 		"EST", "EURO", "EU", 		// Estonia
 		"ETH", "****", "AF", 		// Ethiopia
 		"FRO", "EURO", "EU", 		// Faeroe Islands
 		"FLK", "****", "SA", 		// Falkland Islands (Malvinas)
-		"FJI", "****", "**", 		// Fiji
+		"FJI", "SPAC", "OC", 		// Fiji
 		"FIN", "EURO", "EU", 		// Finland
 		"FRA", "EURO", "EU", 		// France
-		"GUF", "****", "**", 		// French Guiana
-		"PYF", "****", "**", 		// French Polynesia
-		"GAB", "****", "**", 		// Gabon
-		"GMB", "****", "**", 		// Gambia
-		"GEO", "****", "**", 		// Georgia
+		"GUF", "SOAM", "SA", 		// French Guiana
+		"PYF", "SPAC", "OC", 		// French Polynesia
+		"GAB", "CAFR", "AF", 		// Gabon
+		"GMB", "CAFR", "AF", 		// Gambia
+		"GEO", "ASIA", "AS", 		// Georgia
 		"DEU", "EURO", "EU", 		// Germany
-		"GHA", "****", "**", 		// Ghana
+		"GHA", "CAFR", "AF", 		// Ghana
 		"GIB", "EURO", "EU", 		// Gibraltar
 		"GRC", "EURO", "EU", 		// Greece
 		"GRL", "EURO", "EU", 		// Greenland
 		"GRD", "CARB", "NA", 		// Grenada
-		"GLP", "****", "**", 		// Guadeloupe
-		"GUM", "****", "**", 		// Guam
-		"GTM", "****", "**", 		// Guatemala
+		"GLP", "CARB", "NA", 		// Guadeloupe
+		"GUM", "SPAC", "OC", 		// Guam
+		"GTM", "CEAM", "NA", 		// Guatemala
 		"GGY", "EURO", "EU", 		// Guernsey
-		"GIN", "****", "**", 		// Guinea
-		"GNB", "****", "**", 		// Guinea-Bissau
-		"GUY", "****", "**", 		// Guyana
-		"HTI", "****", "**", 		// Haiti
+		"GIN", "CAFR", "AF", 		// Guinea
+		"GNB", "CAFR", "AF", 		// Guinea-Bissau
+		"GUY", "SOAM", "SA", 		// Guyana
+		"HTI", "CARB", "NA", 		// Haiti
 		"VAT", "EURO", "EU", 		// Holy See
 		"HND", "CEAM", "NA", 		// Honduras
 		"HUN", "EURO", "EU", 		// Hungary
@@ -173,128 +173,128 @@ struct Country Countries[] =
 		"JOR", "MDLE", "AS", 		// Jordan
 		"KAZ", "****", "AS", 		// Kazakhstan
 		"KEN", "****", "AF", 		// Kenya
-		"KIR", "****", "**", 		// Kiribati
+		"KIR", "EPAC", "OC", 		// Kiribati
 		"KWT", "MDLE", "AS", 		// Kuwait
-		"KGZ", "****", "**", 		// Kyrgyzstan
-		"LAO", "****", "**", 		// Lao People's Democratic Republic
+		"KGZ", "ASIA", "AS", 		// Kyrgyzstan
+		"LAO", "ASIA", "AS", 		// Lao People's Democratic Republic
 		"LVA", "EURO", "EU", 		// Latvia
 		"LBN", "MDLE", "AS", 		// Lebanon
-		"LSO", "****", "AF", 		// Lesotho
-		"LBR", "****", "AF", 		// Liberia
+		"LSO", "SAFR", "AF", 		// Lesotho
+		"LBR", "CAFR", "AF", 		// Liberia
 		"LBY", "MDLE", "AS", 		// Libyan Arab Jamahiriya
 		"LIE", "EURO", "EU", 		// Liechtenstein
 		"LTU", "EURO", "EU", 		// Lithuania
 		"LUX", "EURO", "EU", 		// Luxembourg
-		"MDG", "****", "**", 		// Madagascar
-		"MWI", "****", "**", 		// Malawi
-		"MYS", "****", "AS", 		// Malaysia
-		"MDV", "****", "**", 		// Maldives
-		"MLI", "****", "**", 		// Mali
+		"MDG", "SAFR", "AF", 		// Madagascar
+		"MWI", "SAFR", "AF", 		// Malawi
+		"MYS", "ASIA", "AS", 		// Malaysia
+		"MDV", "INDI", "AS", 		// Maldives
+		"MLI", "CAFR", "AF", 		// Mali
 		"MLT", "EURO", "EU", 		// Malta
-		"MHL", "****", "**", 		// Marshall Islands
-		"MTQ", "****", "**", 		// Martinique
-		"MRT", "****", "**", 		// Mauritania
-		"MUS", "****", "**", 		// Mauritius
-		"MYT", "****", "**", 		// Mayotte
+		"MHL", "WPAC", "OC", 		// Marshall Islands
+		"MTQ", "CARB", "NA", 		// Martinique
+		"MRT", "NAFR", "AF", 		// Mauritania
+		"MUS", "SAFR", "AF", 		// Mauritius
+		"MYT", "SAFR", "AF", 		// Mayotte
 		"MEX", "****", "NA", 		// Mexico
-		"FSM", "****", "**", 		// Micronesia (Federated States of)
+		"FSM", "WPAC", "OC", 		// Micronesia (Federated States of)
 		"MCO", "EURO", "EU", 		// Monaco
 		"MNG", "****", "AS", 		// Mongolia
-		"MNE", "****", "**", 		// Montenegro
-		"MSR", "****", "**", 		// Montserrat
-		"MAR", "****", "AF", 		// Morocco
-		"MOZ", "****", "**", 		// Mozambique
-		"MMR", "****", "**", 		// Myanmar
+		"MNE", "EURO", "EU", 		// Montenegro
+		"MSR", "CARB", "NA", 		// Montserrat
+		"MAR", "NAFR", "AF", 		// Morocco
+		"MOZ", "SAFR", "AF", 		// Mozambique
+		"MMR", "ASIA", "AS", 		// Myanmar
 		"NAM", "****", "AF", 		// Namibia
-		"NRU", "****", "**", 		// Nauru
+		"NRU", "WPAC", "OC", 		// Nauru
 		"NPL", "****", "AS", 		// Nepal
 		"NLD", "EURO", "EU", 		// Netherlands
-		"ANT", "****", "**", 		// Netherlands Antilles
-		"NCL", "****", "**", 		// New Caledonia
+		"ANT", "CARB", "NA", 		// Netherlands Antilles
+		"NCL", "SPAC", "OC", 		// New Caledonia
 		"NZL", "AUNZ", "OC", 		// New Zealand
 		"NIC", "****", "SA", 		// Nicaragua
-		"NER", "****", "**", 		// Niger
+		"NER", "NAFR", "AF", 		// Niger
 		"NGA", "****", "AF", 		// Nigeria
-		"NIU", "****", "**", 		// Niue
-		"NFK", "****", "**", 		// Norfolk Island
-		"MNP", "****", "**", 		// Northern Mariana Islands
+		"NIU", "SPAC", "OC", 		// Niue
+		"NFK", "SPAC", "OC", 		// Norfolk Island
+		"MNP", "WPAC", "OC", 		// Northern Mariana Islands
 		"NOR", "EURO", "EU", 		// Norway
 		"PSE", "MDLE", "AS", 		// Occupied Palestinian Territory
-		"OMN", "****", "**", 		// Oman
+		"OMN", "MDLE", "AS", 		// Oman
 		"PAK", "INDI", "AS", 		// Pakistan
-		"PLW", "****", "**", 		// Palau
-		"PAN", "****", "SA", 		// Panama
-		"PNG", "****", "**", 		// Papua New Guinea
-		"PRY", "****", "**", 		// Paraguay
-		"PER", "****", "SA", 		// Peru
-		"PHL", "****", "**", 		// Philippines
-		"PCN", "****", "**", 		// Pitcairn
+		"PLW", "SPAC", "OC", 		// Palau
+		"PAN", "CEAM", "SA", 		// Panama
+		"PNG", "SPAC", "OC", 		// Papua New Guinea
+		"PRY", "SOAM", "SA", 		// Paraguay
+		"PER", "SOAM", "SA", 		// Peru
+		"PHL", "ASIA", "AS", 		// Philippines
+		"PCN", "SPAC", "OC", 		// Pitcairn
 		"POL", "EURO", "EU", 		// Poland
 		"PRT", "EURO", "EU", 		// Portugal
-		"PRI", "****", "**", 		// Puerto Rico
-		"QAT", "****", "**", 		// Qatar
-		"KOR", "****", "AS", 		// Republic of Korea
-		"MDA", "****", "**", 		// Republic of Moldova
-		"REU", "****", "**", 		// Réunion
-		"ROU", "****", "**", 		// Romania
-		"RUS", "****", "**", 		// Russian Federation
+		"PRI", "CARB", "NA", 		// Puerto Rico
+		"QAT", "MDLE", "AS", 		// Qatar
+		"KOR", "ASIA", "AS", 		// Republic of Korea
+		"MDA", "EURO", "EU", 		// Republic of Moldova
+		"REU", "SAFR", "AF", 		// Réunion
+		"ROU", "EURO", "EU", 		// Romania
+		"RUS", "ASIA", "AS", 		// Russian Federation
 		"RWA", "****", "AF", 		// Rwanda
-		"BLM", "****", "**", 		// Saint-Barthélemy
-		"SHN", "****", "**", 		// Saint Helena
-		"KNA", "****", "**", 		// Saint Kitts and Nevis
-		"LCA", "****", "**", 		// Saint Lucia
-		"MAF", "****", "**", 		// Saint-Martin (French part)
-		"SPM", "****", "**", 		// Saint Pierre and Miquelon
-		"VCT", "****", "**", 		// Saint Vincent and the Grenadines
-		"WSM", "****", "**", 		// Samoa
-		"SMR", "****", "**", 		// San Marino
-		"STP", "****", "**", 		// Sao Tome and Principe
+		"BLM", "CARB", "NA", 		// Saint-Barthélemy
+		"SHN", "SOAM", "SA", 		// Saint Helena
+		"KNA", "CARB", "NA", 		// Saint Kitts and Nevis
+		"LCA", "CARB", "NA", 		// Saint Lucia
+		"MAF", "CARB", "NA", 		// Saint-Martin (French part)
+		"SPM", "NOAM", "NA", 		// Saint Pierre and Miquelon
+		"VCT", "CARB", "NA", 		// Saint Vincent and the Grenadines
+		"WSM", "SPAC", "OC", 		// Samoa
+		"SMR", "EURO", "EU", 		// San Marino
+		"STP", "CAFR", "AF", 		// Sao Tome and Principe
 		"SAU", "MDLE", "AS", 		// Saudi Arabia
-		"SEN", "****", "**", 		// Senegal
+		"SEN", "CAFR", "AF", 		// Senegal
 		"SRB", "EURO", "EU", 		// Serbia
-		"SYC", "****", "**", 		// Seychelles
+		"SYC", "SAFR", "AF", 		// Seychelles
 		"SLE", "****", "AF", 		// Sierra Leone
 		"SGP", "****", "AS", 		// Singapore
 		"SVK", "EURO", "EU", 		// Slovakia
 		"SVN", "EURO", "EU", 		// Slovenia
-		"SLB", "****", "**", 		// Solomon Islands
+		"SLB", "SPAC", "OC", 		// Solomon Islands
 		"SOM", "****", "AF", 		// Somalia
 		"ZAF", "SAFR", "AF", 		// South Africa
 		"ESP", "EURO", "EU", 		// Spain
 		"LKA", "INDE", "AS", 		// Sri Lanka
 		"SDN", "****", "AF", 		// Sudan
-		"SUR", "****", "**", 		// Suriname
-		"SJM", "****", "**", 		// Svalbard and Jan Mayen Islands
+		"SUR", "SOAM", "SA", 		// Suriname
+		"SJM", "EURO", "EU", 		// Svalbard and Jan Mayen Islands
 		"SWZ", "****", "AF", 		// Swaziland
 		"SWE", "EURO", "EU", 		// Sweden
 		"CHE", "EURO", "EU", 		// Switzerland
-		"SYR", "****", "**", 		// Syrian Arab Republic
-		"TJK", "****", "**", 		// Tajikistan
+		"SYR", "MDLE", "AS", 		// Syrian Arab Republic
+		"TJK", "ASIA", "AS", 		// Tajikistan
 		"THA", "****", "AS", 		// Thailand
 		"MKD", "EURO", "EU", 		// The former Yugoslav Republic of Macedonia
-		"TLS", "****", "**", 		// Timor-Leste
-		"TGO", "****", "**", 		// Togo
-		"TKL", "****", "**", 		// Tokelau
-		"TON", "****", "**", 		// Tonga
-		"TTO", "****", "**", 		// Trinidad and Tobago
+		"TLS", "ASIA", "AS", 		// Timor-Leste
+		"TGO", "CAFR", "AF", 		// Togo
+		"TKL", "AUNZ", "OC", 		// Tokelau
+		"TON", "SPAC", "OC", 		// Tonga
+		"TTO", "CARB", "NA", 		// Trinidad and Tobago
 		"TUN", "****", "AF", 		// Tunisia
 		"TUR", "EURO", "EU", 		// Turkey
 		"TKM", "****", "AS", 		// Turkmenistan
-		"TCA", "****", "**", 		// Turks and Caicos Islands
-		"TUV", "****", "**", 		// Tuvalu
+		"TCA", "CARB", "NA", 		// Turks and Caicos Islands
+		"TUV", "SPAC", "OC", 		// Tuvalu
 		"UGA", "****", "AF", 		// Uganda
 		"UKR", "EURO", "EU", 		// Ukraine
 		"ARE", "MDLE", "AS", 		// United Arab Emirates
 		"GBR", "EURO", "EU", 		// United Kingdom of Great Britain and Northern Ireland
 		"TZA", "****", "AF", 		// United Republic of Tanzania
 		"USA", "NOAM", "NA", 		// United States of America
-		"VIR", "****", "**", 		// United States Virgin Islands
+		"VIR", "CARB", "NA", 		// United States Virgin Islands
 		"URY", "SOAM", "SA", 		// Uruguay
-		"UZB", "****", "**", 		// Uzbekistan
-		"VUT", "****", "**", 		// Vanuatu
+		"UZB", "ASIA", "AS", 		// Uzbekistan
+		"VUT", "SPAC", "OC", 		// Vanuatu
 		"VEN", "SOAM", "SA", 		// Venezuela (Bolivarian Republic of)
 		"VNM", "****", "AS", 		// Viet Nam
-		"WLF", "****", "**", 		// Wallis and Futuna Islands
+		"WLF", "SPAC", "OC", 		// Wallis and Futuna Islands
 		"ESH", "****", "AF", 		// Western Sahara
 		"YEM", "****", "AF", 		// Yemen
 		"ZMB", "SAFR", "AF", 		// Zambia
@@ -448,7 +448,62 @@ VOID SetupFwdAliases()
 	}
 }
 
+VOID SetupHAElements(struct BBSForwardingInfo * ForwardingInfo)
+{
+	char * HText = ForwardingInfo->BBSHA;
+	char * SaveHText, * ptr2;
+	struct Continent * Continent;
+	int Elements = 1;
 
+	ForwardingInfo->BBSHAElements = zalloc(8);				// always NULL entry on end even if no values
+
+	SaveHText = _strdup(HText);
+
+	ptr2 = SaveHText + strlen(SaveHText) -1;
+
+	ForwardingInfo->BBSHAElements[0] = _strdup(WW);
+
+	do 
+	{
+		ForwardingInfo->BBSHAElements = realloc(ForwardingInfo->BBSHAElements, (Elements+2)*4);
+		
+		while ((*ptr2 != '.') && (ptr2 > SaveHText))
+		{
+			ptr2 --;
+		}
+
+		if (ptr2 == SaveHText)
+		{
+			// End
+	
+			ForwardingInfo->BBSHAElements[Elements++] = _strdup(ptr2);
+			break;
+		}
+
+			ForwardingInfo->BBSHAElements[Elements++] = _strdup(ptr2+1);
+			*ptr2 = 0;
+
+	} while(TRUE);
+
+	ForwardingInfo->BBSHAElements[Elements++] = NULL;
+
+	if (ForwardingInfo->BBSHAElements[1])
+	{
+		if (strlen(ForwardingInfo->BBSHAElements[1]) == 4)
+		{
+			// Convert to 2 char Continent;
+			Continent = FindContinent(ForwardingInfo->BBSHAElements[1]);
+			if (Continent)
+			{
+				free(ForwardingInfo->BBSHAElements[1]);
+				ForwardingInfo->BBSHAElements[1] = _strdup(Continent->TwoCharCode);
+			}
+		}
+	}
+
+	free(SaveHText);
+
+}
 
 VOID SetupHAddreses(struct BBSForwardingInfo * ForwardingInfo)
 {
@@ -554,7 +609,80 @@ FullHR:
 
 	ForwardingInfo->HADDRS[Count] = NULL;
 
+}
 
+VOID SetupHAddresesP(struct BBSForwardingInfo * ForwardingInfo)
+{
+	int Count=0;
+	char ** HText = ForwardingInfo->HaddressesP;
+	char * SaveHText, * ptr2;
+//	char * TopElement;
+	char * Num;
+	struct Continent * Continent;
+
+	ForwardingInfo->HADDRSP = zalloc(4);				// always NULL entry on end even if no values
+
+	while(HText[0])
+	{
+		int Elements = 1;
+		ForwardingInfo->HADDRSP = realloc(ForwardingInfo->HADDRSP, (Count+2)*4);
+	
+		ForwardingInfo->HADDRSP[Count] = zalloc(8);	// Always at lesat WWW and NULL
+
+		SaveHText = _strdup(HText[0]);
+		Num = strlop(SaveHText, ',');
+
+		ptr2 = SaveHText + strlen(SaveHText) -1;
+
+		ForwardingInfo->HADDRSP[Count][0] = _strdup(WW);
+
+		if (strcmp(HText[0], "WW") != 0)
+		{
+
+		do 
+		{
+			ForwardingInfo->HADDRSP[Count] = realloc(ForwardingInfo->HADDRSP[Count], (Elements+2)*4);
+			
+			while ((*ptr2 != '.') && (ptr2 > SaveHText))
+			{
+				ptr2 --;
+			}
+
+			if (ptr2 == SaveHText)
+			{
+				// End
+	
+				ForwardingInfo->HADDRSP[Count][Elements++] = _strdup(ptr2);
+				break;
+			}
+
+			ForwardingInfo->HADDRSP[Count][Elements++] = _strdup(ptr2+1);
+			*ptr2 = 0;
+
+		} while(TRUE);
+		}
+
+		ForwardingInfo->HADDRSP[Count][Elements++] = NULL;
+
+		if (ForwardingInfo->HADDRSP[Count][1])
+		{
+			if (strlen(ForwardingInfo->HADDRSP[Count][1]) == 4)
+			{
+				// Convert to 2 char Continent;
+				Continent = FindContinent(ForwardingInfo->HADDRSP[Count][1]);
+				if (Continent)
+				{
+					free(ForwardingInfo->HADDRSP[Count][1]);
+					ForwardingInfo->HADDRSP[Count][1] = _strdup(Continent->TwoCharCode);
+				}
+			}
+		}
+		free(SaveHText);
+		HText++;
+		Count++;
+	}
+
+	ForwardingInfo->HADDRSP[Count] = NULL;
 }
 
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
@@ -610,7 +738,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	{
 		// Just need to add WW
 
-		sprintf_s(FullRoute, sizeof(FullRoute),"%s.WW", RouteElements);
+		sprintf_s(FullRoute, sizeof(FullRoute),"%s.WW", Msg->via);
 		goto FULLHA;
 	}
 
@@ -620,14 +748,13 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	{
 		// Just need to add Continent and WW
 
-		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", RouteElements, Country->Continent2);
+		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", Msg->via, Country->Continent2);
 		goto FULLHA;
 	}
 
 	// Don't know
 
-	strcpy(FullRoute, RouteElements);
-
+	strcpy(FullRoute, Msg->via);
 
 FULLHA:
 
@@ -658,8 +785,7 @@ FULLHA:
 	}
 
 	if (HElements[1])
-		{
-
+	{
 		if (strlen(HElements[1]) == 4)
 		{
 			// Convert to 2 char Continent;
@@ -775,7 +901,7 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
-			depth = CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[FirstElement], Flood);
+			depth = CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[FirstElement]);
 
 			if (depth)
 			{
@@ -806,12 +932,15 @@ NOHA:
 		return FALSE;	// No match
 	}
 
-	// Flood Bulls go to all matching BBSs, so the order of checking doesn't matter
+	// Flood Bulls go to all matching BBSs in the flood area, so the order of checking doesn't matter
+
+	// For now I will only route on HA
+
 
 	for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 	{		
 		ForwardingInfo = bbs->ForwardingInfo;
-
+/*
 		if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 		{
 			Logprintf(LOG_BBS, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
@@ -838,8 +967,9 @@ NOHA:
 			Count++;
 			continue;
 		}
-
-		if (CheckBBSHElements(Msg, bbs, ForwardingInfo, Msg->via, &HElements[FirstElement], Flood))
+*/		
+		
+		if (CheckBBSHElementsFlood(Msg, bbs, ForwardingInfo, Msg->via, &HElements[FirstElement]))
 		{
 			Logprintf(LOG_BBS, '?', "Routing Trace HR %s %s %s %s Matches BBS %s",
 				HElements[FirstElement], HElements[FirstElement+1], HElements[FirstElement+2], 
@@ -855,71 +985,6 @@ NOHA:
 	}
 
 	return Count;
-}
-BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
-{
-	char ** Calls;
-	char ** HRoutes;
-	int i, j;
-
-	if (strcmp(ATBBS, bbs->Call) == 0)					// @BBS = BBS
-		return TRUE;
-
-	// Check TO distributions
-
-	if (ForwardingInfo->TOCalls)
-	{
-		Calls = ForwardingInfo->TOCalls;
-
-		while(Calls[0])
-		{
-			if (strcmp(Calls[0], Msg->to) == 0)	
-				return TRUE;
-
-			Calls++;
-		}
-	}
-
-	// Check AT distributions
-
-	if (ForwardingInfo->ATCalls)
-	{
-		Calls = ForwardingInfo->ATCalls;
-
-		while(Calls[0])
-		{
-			if (strcmp(Calls[0], ATBBS) == 0)	
-				return TRUE;
-
-			Calls++;
-		}
-	}
-	if ((HRoute) &&	(ForwardingInfo->Haddresses))
-	{
-		// Match on Routes
-
-		HRoutes = ForwardingInfo->Haddresses;
-
-		while(HRoutes[0])
-		{
-			i = strlen(HRoutes[0]) - 1;
-			j = strlen(HRoute) - 1;
-
-			while ((i >= 0) && (j >= 0))				// Until one string rus out
-			{
-				if (HRoutes[0][i--] != HRoute[j--])	// Compare backwards
-					goto next;
-			}
-
-			return TRUE;
-		next:	
-			HRoutes++;
-		}
-	}
-
-
-	return FALSE;
-
 }
 
 BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo)
@@ -966,47 +1031,75 @@ BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwa
 	}
 	return FALSE;
 }
-/*
 
-BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute)
+int CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements)
 {
-	char ** HRoutes;
-	int i, j;
+	// Used for Personal Messages, and Bulls not yot at their traget area
 
-	if ((HRoute) &&	(ForwardingInfo->Haddresses))
+	char *** HRoutes;
+	int i = 0, j, k = 0;
+	int bestmatch = 0;
+
+	if (ForwardingInfo->HADDRSP)
 	{
 		// Match on Routes
 
-		HRoutes = ForwardingInfo->Haddresses;
+		HRoutes = ForwardingInfo->HADDRSP;
+		k=0;
 
-		while(HRoutes[0])
+		while(HRoutes[k])
 		{
-			i = strlen(HRoutes[0]) - 1;
-			j = strlen(HRoute) - 1;
-
-			while ((i >= 0) && (j >= 0))				// Until one string rus out
+			i = j = 0;
+			
+			while (HRoutes[k][i] && HElements[j]) // Until one set runs out
 			{
-				if (HRoutes[0][i--] != HRoute[j--])	// Compare backwards
-					goto next;
+				if (strcmp(HRoutes[k][i], HElements[j]) != 0)
+					break;
+				i++;
+				j++;
 			}
+				
+			if (i > bestmatch)
+					bestmatch = i;
 
-			return TRUE;
-		next:	
-			HRoutes++;
+			k++;
 		}
 	}
-	return FALSE;
+	return bestmatch;
 }
-*/
-int CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements, int Flood)
+
+
+int CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements)
 {
 	char *** HRoutes;
+	char ** BBSHA;
+
 	int i = 0, j, k = 0;
 	int bestmatch = 0;
 
 	if (ForwardingInfo->HADDRS)
 	{
 		// Match on Routes
+
+		// Message must be in right area (all elements of message match BBS Location HA)
+
+		BBSHA = ForwardingInfo->BBSHAElements;
+
+		if (BBSHA == NULL)
+			return 0;				// Not safe to flood
+			
+		i = j = 0;
+			
+		while (BBSHA[i] && HElements[j]) // Until one set runs out
+		{
+			if (strcmp(BBSHA[i], HElements[j]) != 0)
+				break;
+			i++;
+			j++;
+		}
+		
+		if (HElements[j] != 0)
+			return 0;				// Message is not for BBS's area 
 
 		HRoutes = ForwardingInfo->HADDRS;
 		k=0;
@@ -1024,21 +1117,25 @@ int CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSFor
 			}
 				
 			if (i > bestmatch)
+			{
+				// As Flooding, only match if all elements match, and elements matching > offset
+				
+				// As Flooding, only match if all elements from BBS are matched
+				// ie if BBS has #23.gbr.eu, and msg gbr.eu, don't match
+				// if BBS has gbr.eu, and msg #23.gbr.eu, ok (so long as bbs in in #23, checked above.
 
-				// if Flooding, only match if all elements match, and elements matching > offset
 
-				if (Flood == 0)
+				if (HRoutes[k][i] == 0)
 					bestmatch = i;
-				else
-					if (HElements[j] == 0)
-						if (i > ForwardingInfo->HADDROffet[k])
-							bestmatch = i;
-
+			}
 			k++;
 		}
 	}
 	return bestmatch;
 }
+
+
+
 /*
 EU should match fra.eu, but not gbr.eu in gbr.eu
 

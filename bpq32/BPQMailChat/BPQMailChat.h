@@ -493,6 +493,8 @@ struct BBSForwardingInfo
 	int ScriptIndex;				// Next line in script
 	char ** TOCalls;				// Calls in to field
 	char ** ATCalls;				// Calls in ATBBS field
+	char ** HaddressesP;			// Heirarchical Addresses for Personals to forward to (as stored)
+	char *** HADDRSP;				// Heirarchical Addresses for Personals to forward to
 	char ** Haddresses;				// Heirarchical Addresses to forward to (as stored)
 	char *** HADDRS;				// Heirarchical Addresses to forward to
 	int * HADDROffet;				// Elements added to complete the HR. At least n+1 must match to forward
@@ -506,6 +508,8 @@ struct BBSForwardingInfo
 	BOOL AllowB2;					// Enable B2 
 	int FwdInterval;
 	int FwdTimer;
+	char *BBSHA;					// HA of BBS
+	char ** BBSHAElements;			// elements of HA of BBS
 };
 
 
@@ -896,7 +900,9 @@ struct MsgInfo * FindMessageByNumber(int msgno);
 
 // Message Routing Routtines
 
+VOID SetupHAElements(struct BBSForwardingInfo * ForwardingInfo);
 VOID SetupHAddreses(struct	BBSForwardingInfo * ForwardingInfo);
+VOID SetupHAddresesP(struct	BBSForwardingInfo * ForwardingInfo);
 VOID SetupMyHA();
 VOID SetupFwdAliases();
 
@@ -905,10 +911,8 @@ BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwarding
 BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo);
 BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS);
 BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
-BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements, int StartLevel);
-
-
-
+BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
+BOOL CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
 
 extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;

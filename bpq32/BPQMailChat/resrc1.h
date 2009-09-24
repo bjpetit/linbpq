@@ -7,6 +7,7 @@
 #define IDC_MAXSEND                     506
 #define IDC_MAXRECV                     507
 #define IDC_MAXBLOCK                    508
+#define IDC_BBSHA                       509
 #define IDC_SMTP                        510
 #define IDC_USERS2                      513
 #define IDC_MSGSEM                      514
@@ -31,6 +32,7 @@
 #define IDCANCELMSG                     1024
 #define IDC_ALIAS                       1025
 #define IDC_HRTEXT                      1027
+#define IDC_HROUTESP                    1029
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -80,7 +82,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30006
 #define _APS_NEXT_COMMAND_VALUE         40016
-#define _APS_NEXT_CONTROL_VALUE         1029
+#define _APS_NEXT_CONTROL_VALUE         1030
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

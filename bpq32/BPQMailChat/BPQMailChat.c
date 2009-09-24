@@ -4616,9 +4616,9 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		ForwardingInfo->TOCalls = GetMultiStringValue(hKey,  "TOCalls");
 		ForwardingInfo->ATCalls = GetMultiStringValue(hKey,  "ATCalls");
 		ForwardingInfo->Haddresses = GetMultiStringValue(hKey,  "HRoutes");
-//		ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutesP");
-//		if (ForwardingInfo->HaddressesP == NULL)
-//			ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutes");
+		ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutesP");
+		if (ForwardingInfo->HaddressesP == NULL)
+			ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutes");
 
 		ForwardingInfo->FWDTimes = GetMultiStringValue(hKey,  "FWD Times");
 
@@ -4652,7 +4652,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		if (ForwardingInfo->FwdInterval == 0)
 				ForwardingInfo->FwdInterval = 3600;
 
-/*		Vallen=0;
+		Vallen=0;
 		RegQueryValueEx(hKey,"BBSHA",0 , (ULONG *)&Type,NULL, (ULONG *)&Vallen);
 
 		if (Vallen)
@@ -4660,7 +4660,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			ForwardingInfo->BBSHA = malloc(Vallen);
 			RegQueryValueEx(hKey, "BBSHA", 0, (ULONG *)&Type, ForwardingInfo->BBSHA,(ULONG *)&Vallen);
 		}
-*/
+
 		RegCloseKey(hKey);
 
 		// Convert FWD Times and H Addresses
@@ -4671,11 +4671,11 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		if (ForwardingInfo->Haddresses)
 			SetupHAddreses(ForwardingInfo);
 
-//		if (ForwardingInfo->HaddressesP)
-//			SetupHAddresesP(ForwardingInfo);
+		if (ForwardingInfo->HaddressesP)
+			SetupHAddresesP(ForwardingInfo);
 
-//		if (ForwardingInfo->BBSHA)
-//			SetupHAElements(ForwardingInfo);
+		if (ForwardingInfo->BBSHA)
+			SetupHAElements(ForwardingInfo);
 	}
 
 	for (m = FirstMessagetoForward; m <= NumberofMessages; m++)
@@ -4764,7 +4764,7 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 		free(ForwardingInfo->HADDROffet);
 	}
 
-/*	i=0;
+	i=0;
 	if(ForwardingInfo->HADDRSP)
 	{
 		while(ForwardingInfo->HADDRSP[i])
@@ -4774,7 +4774,7 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 		}
 		free(ForwardingInfo->HADDRSP);
 	}
-*/
+
 	FreeList(ForwardingInfo->ConnectScript);
 	FreeList(ForwardingInfo->FWDTimes);
 	if (ForwardingInfo->FWDBands)

@@ -663,6 +663,23 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 
 			Text[0] = 0;
+			Calls = ForwardingInfo->HaddressesP;
+
+			if (Calls)
+			{
+				while(Calls[0])
+				{
+					strcat(Text, Calls[0]);
+					strcat(Text, "\r\n");
+					Calls++;
+				}
+			
+			}
+
+			SetDlgItemText(hDlg, IDC_HROUTESP, Text);
+
+			Text[0] = 0;
+
 			Calls = ForwardingInfo->FWDTimes;
 
 			if (Calls)
@@ -699,7 +716,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
 			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
 			SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
-
+			SetDlgItemText(hDlg, IDC_BBSHA, ForwardingInfo->BBSHA);
 
 			return 0;
 		}
@@ -1382,6 +1399,7 @@ VOID SaveFWDConfig(HWND hDlg)
 	int retCode,disp, OK, Val;
 	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
 	int Rev;
+	char BBSHA[50];
 
 	if (CurrentBBS)
 	{
@@ -1392,6 +1410,7 @@ VOID SaveFWDConfig(HWND hDlg)
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_ATCALLS, hKey, "ATCalls");
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_TOCALLS, hKey, "ToCalls");
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HROUTES, hKey, "HRoutes");
+		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HROUTESP, hKey, "HRoutesP");
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_CALL, hKey, "Connect Script");
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_FWDTIMES, hKey, "FWD Times");
 
@@ -1413,13 +1432,15 @@ VOID SaveFWDConfig(HWND hDlg)
 		Val = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
 		retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&Val,4);
 
+		GetDlgItemText(hDlg, IDC_BBSHA, BBSHA, 50);
+		RegSetValueEx(hKey,"BBSHA", 0, REG_SZ, BBSHA, strlen(BBSHA));
 
 		RegCloseKey(hKey);
 
 		ReinitializeFWDStruct(CurrentBBS);
 	}
 		
-	// Interval and Max Sizes and Aliasesare not user specific
+	// Interval and Max Sizes and Aliases are not user specific
 
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, 
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);

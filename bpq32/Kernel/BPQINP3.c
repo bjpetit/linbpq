@@ -68,6 +68,10 @@ TellINP3LinkGone(struct ROUTE * Route)
 {
 	return 0;
 }
+VOID TellINP3LinkSetupFailed(struct ROUTE * Route)
+{
+}
+
 VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 {
 	return;
