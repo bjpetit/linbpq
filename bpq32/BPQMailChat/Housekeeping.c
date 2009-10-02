@@ -511,6 +511,8 @@ BOOL ExpireBIDs()
 	{
 		BID = BIDRecPtr[n];
 
+//		Debugprintf("%d %d", BID->u.timestamp, now - BID->u.timestamp);
+
 		if ((now - BID->u.timestamp) < BidLifetime)
 			NewBIDRecPtr[++i] = BID;
 	}

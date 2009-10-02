@@ -20,7 +20,10 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
-	Disconnect(conn->BPQStream);\
+	if (conn->BPQStream <  0)\
+		CloseConsole(conn->BPQStream);\
+	else\
+		Disconnect(conn->BPQStream);\
 }
 
 #define WSA_ACCEPT WM_USER + 1
@@ -384,6 +387,8 @@ typedef struct user_t
 	CIRCUIT *circuit;       // Circuit user is on, local or link.
 	TOPIC   *topic;         // Topic user is in.
 	int     flags;
+	time_t	lastmsgtime;	// Time of last input from user
+
 } USER;
 
 #pragma pack()
@@ -506,6 +511,7 @@ struct BBSForwardingInfo
 	int MaxFBBBlockSize;
 	BOOL AllowB1;					// Enable B1
 	BOOL AllowB2;					// Enable B2 
+	BOOL PersonalOnly;				// Only Forward Personals
 	int FwdInterval;
 	int FwdTimer;
 	char *BBSHA;					// HA of BBS
@@ -551,9 +557,9 @@ static void node_xmit(NODE *node, char kind, CIRCUIT *circuit);
 static void node_tell(NODE *node, char kind);
 static void user_xmit(USER *user, char kind, CIRCUIT *circuit);
 static void user_tell(USER *user, char kind);
-static USER *user_find(char *call);
+static USER *user_find(char *call, char * node);
 static void user_leave(USER *user);
-static void topic_chg(USER *user, char *s);
+static BOOL topic_chg(USER *user, char *s);
 static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias);
 void link_drop(CIRCUIT *circuit);
 static void echo(CIRCUIT *fc, NODE *node, char * Buffer);
@@ -722,6 +728,7 @@ VOID SaveBIDDatabase();
 VOID GetWPDatabase();
 VOID CopyWPDatabase();
 VOID SaveWPDatabase();
+VOID GetBadWordFile();
 WPRec * LookupWP(char * Call);
 VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user);
 VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
@@ -843,7 +850,7 @@ void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
 
 VOID __cdecl Debugprintf(const char * format, ...);
-VOID __cdecl Logprintf(int LogMode, int InOut, const char * format, ...);
+VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...);
 
 VOID SortBBSChain();
 
@@ -867,7 +874,7 @@ BOOL POP3Connect(char * Host, int Port);
 VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen);
-void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags);
+void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 
 BOOL SendtoISP();
 
@@ -921,6 +928,7 @@ extern char SignoffMsg[];
 
 extern char InfoBoxText[];			// Text to display in Config Info Popup
 
+extern int LastVer[4];				// In case we need to do somthing the first time a version is run
 
 extern HWND MainWnd;
 extern char BaseDir[];

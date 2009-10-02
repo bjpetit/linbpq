@@ -221,8 +221,18 @@
 // Change to welcome prompt and Msg Header for Outpost.
 // Fix Connect Script processing for KA Nodes
 
+// Version 1.0.3.1
 
+// Fix incorrect sending of NO - BID.
+// Fix problems caused by a user being connected to more than one chat node.
+// Show idle time on Chat /u display.
 // Rewrite forwarding by HA.
+// Add "Bad Words" Test.
+// Add reason for holding to SYSOP "Message Held" Message.
+// Make topics case-insensitive.
+// Allow SR for smtp mail.
+// Try to fix sime user's "Add User" problem.
+// Use Windows Sound Events for (Chat "user join" alert)
 
 
 #include "stdafx.h"
@@ -244,6 +254,8 @@ UCHAR * (FAR WINAPI * GetVersionStringptr)();
 HINSTANCE hInst;								// current instance
 TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
+
+int LastVer[4] = {0, 0, 0, 0};					// In case we need to do somthing the first time a version is run
 
 HWND MainWnd;
 HWND hWndSess;
@@ -284,6 +296,10 @@ int NumberofTempBIDs=0;
 
 WPRec ** WPRecPtr=NULL;
 int NumberofWPrecs=0;
+
+char ** BadWords=NULL;
+int NumberofBadWords=0;
+char * BadFile = NULL;
 
 int LatestMsg = 0;
 struct SEM MsgNoSemaphore = {0, 0};			// For locking updates to LatestMsg
@@ -352,6 +368,9 @@ char BIDDatabaseName[MAX_PATH] = "WFBID.SYS";
 char WPDatabasePath[MAX_PATH];
 char WPDatabaseName[MAX_PATH] = "WP.SYS";
 
+char BadWordsPath[MAX_PATH];
+char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
+
 char BaseDir[MAX_PATH];
 
 char MailDir[MAX_PATH];
@@ -385,13 +404,13 @@ void myInvalidParameterHandler(const wchar_t* expression,
    unsigned int line, 
    uintptr_t pReserved)
 {
-	Logprintf(LOG_DEBUG, '!', "*** Error **** C Run Time Invalid Parameter Handler Called");
+	Logprintf(LOG_DEBUG, NULL, '!', "*** Error **** C Run Time Invalid Parameter Handler Called");
 
 	if (expression && function && file)
 	{
-		Logprintf(LOG_DEBUG, '!', "Expression = %S", expression);
-		Logprintf(LOG_DEBUG, '!', "Function %S", function);
-		Logprintf(LOG_DEBUG, '!', "File %S Line %d", file, line);
+		Logprintf(LOG_DEBUG, NULL, '!', "Expression = %S", expression);
+		Logprintf(LOG_DEBUG, NULL, '!', "Function %S", function);
+		Logprintf(LOG_DEBUG, NULL, '!', "File %S Line %d", file, line);
 	}
 }
 
@@ -514,6 +533,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	free(OtherNodes);
 
 	FreeChatMemory();
+
+	if (BadWords) free(BadWords);
+	if (BadFile) free(BadFile);
 
 	n = 0;
 
@@ -1408,10 +1430,6 @@ BOOL Initialise()
 		}
 	}
 
-	ret = CreateDirectory("c:\\MAIL", NULL);
-	ret = CreateDirectory("c:\\MAIL\\MAIL0", NULL);
-
-	
 	// Set up file and directory names
 		
 	strcpy(UserDatabasePath, BaseDir);
@@ -1429,6 +1447,10 @@ BOOL Initialise()
 	strcpy(WPDatabasePath, BaseDir);
 	strcat(WPDatabasePath, "\\");
 	strcat(WPDatabasePath, WPDatabaseName);
+
+	strcpy(BadWordsPath, BaseDir);
+	strcat(BadWordsPath, "\\");
+	strcat(BadWordsPath, BadWordsName);
 
 	strcpy(MailDir, BaseDir);
 	strcat(MailDir, "\\");
@@ -1477,10 +1499,11 @@ BOOL Initialise()
 	SetupMyHA();
 	SetupFwdAliases();
 
+	GetWPDatabase();
 	GetMessageDatabase();
 	GetUserDatabase();
 	GetBIDDatabase();
-	GetWPDatabase();
+	GetBadWordFile();
 
 	// Allocate Streams
 
@@ -1647,7 +1670,7 @@ int Connected(Stream)
 			if (user->flags & F_Excluded)
 			{
 				n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s Rejected by Exclude Flag", user->Call);
-				WriteLogLine('|',Msg, n, LOG_CHAT);
+				WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
 				Disconnect(Stream);
 				return 0;
 			}
@@ -1658,7 +1681,7 @@ int Connected(Stream)
 
 			if (Mask == ChatApplMask)
 			{
-				WriteLogLine('|',Msg, n, LOG_CHAT);
+				WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
 				conn->Flags |= CHATMODE;
 
 				nodeprintf(conn, ChatSID, Ver[0], Ver[1], Ver[2], Ver[3]);
@@ -1672,7 +1695,7 @@ int Connected(Stream)
 					B1 = conn->UserPointer->ForwardingInfo->AllowB1;
 					B2 = conn->UserPointer->ForwardingInfo->AllowB2;
 				}
-				WriteLogLine('|',Msg, n, LOG_BBS);
+				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
 				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
 					ALLOWCOMPRESSED ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", "F");
 			}
@@ -1730,13 +1753,13 @@ int Disconnected (Stream)
 				if (conn->Flags & CHATLINK)
 				{
 					len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Disconnected", conn->u.link->call);
-					WriteLogLine('|',Msg, len, LOG_CHAT);
+					WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 					__try {link_drop(conn);} My__except_Routine("link_drop");
 				}
 				else
 				{
 					len=sprintf_s(Msg, sizeof(Msg), "Chat User %s Disconnected", conn->Callsign);
-					WriteLogLine('|',Msg, len, LOG_CHAT);
+					WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 					__try {logout(conn);} My__except_Routine("logout");
 
 				}
@@ -1747,7 +1770,7 @@ int Disconnected (Stream)
 			RemoveTempBIDS(conn);
 
 			len=sprintf_s(Msg, sizeof(Msg), "%s Disconnected", conn->Callsign);
-			WriteLogLine('|',Msg, len, LOG_BBS);
+			WriteLogLine(conn, '|',Msg, len, LOG_BBS);
 
 			if (conn->FBBHeaders)
 			{
@@ -2470,6 +2493,99 @@ VOID RemoveTempBIDS(CIRCUIT * conn)
 	}
 }
 
+VOID GetBadWordFile()
+{
+	HANDLE Handle;
+	int ReadLen;
+	DWORD FileSize;
+	char * ptr1, * ptr2;
+
+	Handle = CreateFile(BadWordsPath,
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+
+	if (Handle == INVALID_HANDLE_VALUE)
+	{
+		return;
+	}
+
+	FileSize = GetFileSize(Handle, NULL);
+
+	BadFile = malloc(FileSize+1);
+
+	ReadFile(Handle, BadFile, FileSize, &ReadLen, NULL); 
+
+	CloseHandle(Handle);
+
+	BadFile[FileSize]=0;
+
+	_strlwr(BadFile);								// Compares are case-insensitive
+
+	ptr2 = strtok_s(BadFile, "\r\n", &ptr1);
+
+	while (ptr1)
+	{
+		if (*ptr1 == '\n') ptr1++;
+		ptr2 = strtok_s(NULL, "\r\n", &ptr1);
+		if (ptr2)
+		{
+			BadWords = realloc(BadWords,(++NumberofBadWords+1)*4);
+			BadWords[NumberofBadWords] = ptr2;
+		}
+		else
+			break;
+	}
+}
+
+BOOL CheckBadWord(char * Word, char * Msg)
+{
+	char * ptr1 = Msg, * ptr2;
+	int len = strlen(Word);
+
+	while (*ptr1)					// Stop at end
+	{
+		ptr2 = strstr(ptr1, Word);
+
+		if (ptr2 == NULL)
+			return FALSE;				// OK
+
+		// Only bad if it ia not part of a longer word
+
+		if ((ptr1 == Msg) || !(isalpha(*(ptr1 - 1))))	// No alpha before
+			if (!(isalpha(*(ptr1 + len))))			// No alpha after
+				return TRUE;					// Bad word
+	
+		// Keep searching
+
+		ptr1 = ptr2 + len;
+	}
+
+	return FALSE;					// OK
+}
+
+BOOL CheckBadWords(char * Msg)
+{
+	char * dupMsg = _strlwr(_strdup(Msg));
+	int i;
+
+	for (i = 1; i <= NumberofBadWords; i++)
+	{
+		if (CheckBadWord(BadWords[i], dupMsg))
+		{
+			free(dupMsg);
+			return TRUE;			// Bad
+		}
+	}
+
+	free(dupMsg);
+	return FALSE;					// OK
+
+}
 
 VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 {
@@ -2534,13 +2650,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			ProcessChatLine(conn, user, Buffer, len);
 		}
-		My__except_Routine("ProcessChatLine");
+		My__except_RoutineWithDisconnect("ProcessChatLine");
 		
 		FreeSemaphore(&ChatSemaphore);
 		return;
 	}
 
-	WriteLogLine('<',Buffer, len-1, LOG_BBS);
+	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
 
 
 	if (conn->BBSFlags & FBBForwarding)
@@ -2671,6 +2787,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			{
 				conn->FBBIndex = 0;		// ready for first block;
 				conn->FBBChecksum = 0;
+				memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
 			}
 			else
 				BBSputs(conn, ">\r");
@@ -3832,7 +3949,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 	struct MsgInfo * OldMsg;
 	char OldTitle[62];
 	char NewTitle[62];
-
+	char SMTPTO[100];
 	int msgno;
 
 	switch (toupper(Cmd[1]))
@@ -3876,6 +3993,40 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		}
 
 		Arg1=&OldMsg->from[0];
+
+		if (_stricmp(Arg1, "SMTP:") == 0)
+		{
+			// SMTP message. Need to get the real sender from the message
+
+			char * MsgBytes = ReadMessageFile(msgno);
+
+			if (MsgBytes)
+			{
+				char * ptr1 = strchr(&MsgBytes[1], '<');
+				char * ptr2 = strchr(&MsgBytes[1], '>');
+
+				if (ptr1 && ptr2)
+				{
+					*ptr2=0;;
+					ptr1++;
+					wsprintf(SMTPTO, "SMTP:%s", ptr1);
+				}
+				else
+				{
+					nodeprintf(conn, "Couldn't get originator's email address\r");
+					return FALSE;
+				}
+
+				free(MsgBytes);
+
+				Arg1 = SMTPTO;
+			}
+			else
+			{
+				nodeprintf(conn, "Couldn't get originator's email address\r");
+				return FALSE;
+			}
+		}
 
 		if (!DecodeSendParams(conn, "", &From, &Arg1, &ATBBS, &BID))
 			return FALSE;
@@ -4234,6 +4385,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	char OldMess[] = "\r\n\r\nOriginal Message:\r\n\r\n";
 	struct _EXCEPTION_POINTERS exinfo;
 	int Age, OurCount;
+	char * HoldReason = "User has Hold Messages flag set";
 
 	// If doing SC, Append Old Message
 
@@ -4356,7 +4508,10 @@ nextline:
 				Age = (time(NULL) - result)/86400;
 
 				if ( Age < -7)
+				{
 					Msg->status = 'H';
+					HoldReason = "Suspect Date Sent";
+				}
 				else if (Age > BidLifetime)
 					Msg->status = 'K';
 				else
@@ -4367,6 +4522,7 @@ nextline:
 				// Can't decode R: Datestamp
 
 				Msg->status = 'H';
+				HoldReason = "Corrupt R: Line - can't determine age";
 			}
 
 			if (OurCount > 1)
@@ -4374,6 +4530,8 @@ nextline:
 				// Message is looping 
 
 				Msg->status = 'H';
+				HoldReason = "Message may be looping";
+
 			}
 
 			if (Msg->status == 'N' && strcmp(Msg->to, "WP") == 0)
@@ -4384,6 +4542,14 @@ nextline:
 					Msg->status = 'K';
 
 			}
+		}
+
+		conn->MailBuffer[Msg->length] = 0;
+
+		if (CheckBadWords(Msg->title) || CheckBadWords(conn->MailBuffer))
+		{
+			Msg->status = 'H';
+			HoldReason = "Bad word in title or body";
 		}
 
 		CreateMessageFile(conn, Msg);
@@ -4398,6 +4564,7 @@ nextline:
 		if (Msg->length > MaxTXSize)
 		{
 			Msg->status = 'H';
+			HoldReason = "Message too long";
 
 			if (!(conn->BBSFlags & BBS))
 				nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
@@ -4440,8 +4607,8 @@ nextline:
 			char * MailBuffer = malloc(100);
 			char Title[100];
 
-			Length += wsprintf(MailBuffer, "Message %d Held. It may be looping, too big, or have a suspect Date\r\n", Msg->number);
-			wsprintf(Title, "Message %d Held", Msg->number);
+			Length += wsprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+			wsprintf(Title, "Message %d Held - %s", Msg->number, HoldReason);
 			SendMessageToSYSOP(Title, MailBuffer, Length);
 		}
 
@@ -4521,7 +4688,9 @@ void chat_link_out (LINK *link)
 
 			n=sprintf_s(Msg, sizeof(Msg), "Connecting to Chat Node %s", conn->u.link->alias);
 
-			WriteLogLine('|',Msg, n, LOG_CHAT);
+			strcpy(conn->Callsign, conn->u.link->alias);
+
+			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
 	
 			//	Connected Event will trigger connect to remote system
 
@@ -4536,7 +4705,7 @@ void chat_link_out (LINK *link)
 
 ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
 {
-	WriteLogLine('<',Buffer, Len-1, LOG_CHAT);
+	WriteLogLine(circuit, '<',Buffer, Len-1, LOG_CHAT);
 
 	Buffer = _strupr(Buffer);
 
@@ -4617,9 +4786,6 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		ForwardingInfo->ATCalls = GetMultiStringValue(hKey,  "ATCalls");
 		ForwardingInfo->Haddresses = GetMultiStringValue(hKey,  "HRoutes");
 		ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutesP");
-		if (ForwardingInfo->HaddressesP == NULL)
-			ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutes");
-
 		ForwardingInfo->FWDTimes = GetMultiStringValue(hKey,  "FWD Times");
 
 		Vallen=4;
@@ -4639,7 +4805,13 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
 
 		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "FWD Personals Only", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->PersonalOnly,(ULONG *)&Vallen);
 
+
+
+
+		Vallen=4;
 		RegQueryValueEx(hKey,"FWDInterval",0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->FwdInterval,(ULONG *)&Vallen);
 
@@ -4653,7 +4825,22 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 				ForwardingInfo->FwdInterval = 3600;
 
 		Vallen=0;
-		RegQueryValueEx(hKey,"BBSHA",0 , (ULONG *)&Type,NULL, (ULONG *)&Vallen);
+		retCode = RegQueryValueEx(hKey,"BBSHA",0 , (ULONG *)&Type,NULL, (ULONG *)&Vallen);
+
+		if (retCode != 0)
+		{
+			// No Key - Get from WP??
+				
+			WPRec * ptr = LookupWP(user->Call);
+
+			if (ptr)
+			{
+				if (ptr->first_homebbs)
+				{
+					ForwardingInfo->BBSHA = _strdup(ptr->first_homebbs);
+				}
+			}
+		}
 
 		if (Vallen)
 		{
@@ -4675,7 +4862,13 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			SetupHAddresesP(ForwardingInfo);
 
 		if (ForwardingInfo->BBSHA)
-			SetupHAElements(ForwardingInfo);
+			if (ForwardingInfo->BBSHA[0])
+				SetupHAElements(ForwardingInfo);
+			else
+			{
+				free(ForwardingInfo->BBSHA);
+				ForwardingInfo->BBSHA = NULL;
+			}
 	}
 
 	for (m = FirstMessagetoForward; m <= NumberofMessages; m++)
@@ -4710,7 +4903,7 @@ VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
 
 	retCode = RegQueryValueEx(hKey, ValueName, 0, (ULONG *)&Type, NULL, (ULONG *)&Vallen);
 
-	if ((retCode != 0)  || (Vallen == 0)) 
+	if ((retCode != 0)  || (Vallen < 3))		// Two nulls means empty multistring
 	{
 		free(Value);
 		return FALSE;
@@ -4750,7 +4943,7 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 	FreeList(ForwardingInfo->TOCalls);
 	FreeList(ForwardingInfo->ATCalls);
 	FreeList(ForwardingInfo->Haddresses);
-//	FreeList(ForwardingInfo->HaddressesP);
+	FreeList(ForwardingInfo->HaddressesP);
 
 	i=0;
 	if(ForwardingInfo->HADDRS)
@@ -4787,6 +4980,18 @@ VOID FreeForwardingStruct(struct UserInfo * user)
 		}
 		free(ForwardingInfo->FWDBands);
 	}
+	if (ForwardingInfo->BBSHAElements)
+	{
+		i=0;
+		while(ForwardingInfo->BBSHAElements[i])
+		{
+			free(ForwardingInfo->BBSHAElements[i]);
+			i++;
+		}
+		free(ForwardingInfo->BBSHAElements);
+	}
+	free(ForwardingInfo->BBSHA);
+
 }
 
 VOID FreeList(char ** Hddr)
@@ -4827,7 +5032,9 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
 
-			Logprintf(LOG_BBS, '|', "Connecting to BBS %s", user->Call);
+			Logprintf(LOG_BBS, conn, '|', "Connecting to BBS %s", user->Call);
+
+			strcpy(conn->Callsign, user->Call);
 
 			//	Connected Event will trigger connect to remote system
 
@@ -4837,7 +5044,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 		}
 	}
 
-	Logprintf(LOG_BBS, '|', "No Free Streams for connect to BBS %s", user->Call);
+	Logprintf(LOG_BBS, conn, '|', "No Free Streams for connect to BBS %s", user->Call);
 
 	return FALSE;
 	
@@ -4851,7 +5058,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	int port, sesstype, paclen, maxframe, l4window;
 	char * ptr, * ptr2;
 
-	WriteLogLine('<',Buffer, len-1, LOG_BBS);
+	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
 
 	Buffer[len]=0;
 	_strupr(Buffer);
@@ -4946,6 +5153,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		if (conn->BBSFlags & FBBForwarding)
 		{
 			conn->FBBIndex = 0;		// ready for first block;
+			memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
 			conn->FBBChecksum = 0;
 		}
 

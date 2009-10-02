@@ -22,6 +22,7 @@
 #define IDC_ENABLEUI                    1012
 #define IDC_USEB2                       1013
 #define IDC_CHATSEM                     1014
+#define IDC_PERSONALONLY                1014
 #define IDC_UICONFIG                    1016
 #define IDC_DELETETORECYCLE             1017
 #define IDC_EDIT1                       1019

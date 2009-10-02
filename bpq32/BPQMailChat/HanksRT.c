@@ -66,7 +66,7 @@ VOID nputs(CIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
-	WriteLogLine('>',buf,  strlen(buf), LOG_CHAT);
+	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
 	QueueMsg(conn, buf, strlen(buf));
 }
 
@@ -74,7 +74,7 @@ VOID nputc(CIRCUIT * conn, char buf)
 {
 	// Seems to send buf to socket
 
-	WriteLogLine('>',&buf,  1, LOG_CHAT);
+	WriteLogLine(conn, '>',&buf,  1, LOG_CHAT);
 	QueueMsg(conn, &buf, 1);
 }
 
@@ -133,7 +133,7 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 {
 	ConnectionInfo *c;
 
-	WriteLogLine('<',Buffer, len, LOG_CHAT);
+	WriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
 
 	if (conn->Flags & GETTINGUSER)
 	{
@@ -203,7 +203,7 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 	{
 		// Other end thinks this is a node-node link
 
-		Logprintf(LOG_CHAT, '!', "Station %s trying to start Node Protocol, but not defined as a Node",
+		Logprintf(LOG_CHAT, conn, '!', "Station %s trying to start Node Protocol, but not defined as a Node",
 			conn->Callsign);
 
 		Disconnect(conn->BPQStream);
@@ -264,6 +264,8 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 	}
 		
 	text_tellu(conn->u.user, Buffer, NULL, o_topic); // To local users.
+
+	conn->u.user->lastmsgtime = time(NULL);
 		
 	// Send to Linked nodes
 
@@ -356,12 +358,12 @@ static void rduser(USER *user)
 
 void ReportBadJoin(ncall, ucall)
 {
-	Logprintf(LOG_CHAT, '!', "User %s Join from Node %s but already connected", ucall, ncall);
+	Logprintf(LOG_CHAT, NULL, '!', "User %s Join from Node %s but already connected", ucall, ncall);
 }
 
 void ReportBadLeave(ncall, ucall)
 {
-	Logprintf(LOG_CHAT, '!', "Node %s reporting Node %s as a leaving user", ncall, ucall);
+	Logprintf(LOG_CHAT, NULL, '!', "Node %s reporting Node %s as a leaving user", ncall, ucall);
 }
 
 
@@ -397,7 +399,8 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // Data from user ucall at node ncall.
 
 		case id_data :
-			user = user_find(ucall);
+			user = user_find(ucall, ncall);
+			user->lastmsgtime = time(NULL);
 			if (!user) break;
 			text_tellu(user, f1, NULL, o_topic);
 
@@ -413,7 +416,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 
 		case id_user :
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
-			user = user_find(ucall);
+			user = user_find(ucall, ncall);
 			if (!user) break;
 			f2 = strlop(f1, ' ');
 			if (!f2) break;
@@ -426,28 +429,22 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 
 		case id_join :
 
-			user = user_find(ucall);
+			user = user_find(ucall, ncall);
+
 			if (user)
 			{
 				// Already Here
-		
+
 				ReportBadJoin(ncall, ucall);
+
+				//if (strcmp(user->node->call, OurNode) == 0)
+				//{
+					// Locally connected, and at another node
+				//}
+		
 				break;				// We have this user as an active Node
 			}
 
-			/*
-			// Make sure the user isn't really a Node
-
-			if (node_find(ucall))
-			for (link = link_hd; link; link = link->next)
-			{
-				if (matchi(link->call, ucall))
-				{
-					ReportBadJoin(ncall, ucall);
-					break;				// We have this user as a node to link to 
-				}
-			}
-			*/
 
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			f2 = strlop(f1, ' ');
@@ -467,27 +464,8 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 
 		case id_leave :
 
-			/*
-			// Make sure the user isn't really a Node
-
-			if (node_find(ucall))
-			{
-				ReportBadLeave(ncall, ucall);
-				break;				// We have this user as an active Node
-			}
-
-			for (link = link_hd; link; link = link->next)
-			{
-				if (matchi(link->call, ucall))
-				{
-					ReportBadLeave(ncall, ucall);
-					break;				// We have this user as a node to link to 
-				}
-			}
-			*/
-
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
-			user = user_find(ucall);
+			user = user_find(ucall, ncall);
 			if (!user) break;
 			f2 = strlop(f1, ' ');
 			if (!f2) break;
@@ -503,14 +481,21 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // Node ncall lost its link to node ucall, alias f1.
 
 		case id_unlink :
-			echo(ckt_from, node, Buffer);  // Relay to other nodes.
+
+			// Only relay to other nodes if we had node. Could get loop otherwise.
+			// ?? This could possibly cause stuck nodes
+
 			ln = node_find(ucall);
-			if (ln)	cn_dec(ckt_from, ln);
+			if (ln)
+			{
+				cn_dec(ckt_from, ln);
+				echo(ckt_from, node, Buffer);  // Relay to other nodes if we had node. COuld get loop if
+			}
 			break;
 
 // Node ncall acquired a link to node ucall, alias f1.
 // If we are not linked, is no problem, don't link.
-// If we are linked, is a loop, do what?
+// If we are linked, is a loop, do what? (Try ignore!)
 
 		case id_link :
 			ln = node_find(ucall);
@@ -524,11 +509,11 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // User ucall at node ncall sent f2 to user f1.
 
 		case id_send :
-			user = user_find(ucall);
+			user = user_find(ucall, ncall);
 			if (!user) break;
 			f2 = strlop(f1, ' ');
 			if (!f2) break;
-			su = user_find(f1);
+			su = user_find(f1, NULL);
 			if (!su) break;
 
 			if (su->circuit->flags & p_user)
@@ -541,7 +526,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 
 		case id_topic :
 			echo(ckt_from, node, Buffer);  //  Relay to other nodes.
-			user = user_find(ucall);
+			user = user_find(ucall, ncall);
 			if (user) topic_chg(user, f1);
 			break;
 
@@ -678,13 +663,18 @@ static void node_dec(NODE *node)
 
 	tp = NULL;
 
-	for (t = node_hd; t; tp = t, t = t->next) if (t == node)
+	for (t = node_hd; t; tp = t, t = t->next)
 	{
-		if (tp) tp->next = t->next; else node_hd = t->next;
-		free(t->alias);
-		free(t->call);
-		free(t);
-		break;
+		if (t == node)
+		{
+			if (tp) tp->next = t->next; else node_hd = t->next;
+			free(t->alias);
+			t->alias = NULL;
+			free(t->call);
+			t->call = NULL;
+			free(t);
+			break;
+		}
 	}
 }
 
@@ -714,7 +704,7 @@ static TOPIC *topic_join(CIRCUIT *circuit, char *s)
 
 	topic->refcnt++;  // One more user in this topic.
 
-	Logprintf(LOG_CHAT, '?', "topic_join complete user %s topic %s addr %x ref %d",
+	Logprintf(LOG_CHAT, circuit, '?', "topic_join complete user %s topic %s addr %x ref %d",
 		circuit->u.user->call, topic->name, topic, topic->refcnt);
 
 
@@ -743,7 +733,7 @@ static void topic_leave(CIRCUIT *circuit, TOPIC *topic)
 	CT    *ct, *ctp;
 	TOPIC *t,  *tp;
 
-	Logprintf(LOG_CHAT, '?', "topic_leave user %s topic %s addr %x ref %d",
+	Logprintf(LOG_CHAT, circuit, '?', "topic_leave user %s topic %s addr %x ref %d",
 		circuit->u.user->call, topic->name, topic, topic->refcnt);
 
 	topic->refcnt--;
@@ -924,7 +914,7 @@ void text_tellu_Joined(USER * user)
 			if (circuit->BPQStream < 0) // Console
 			{
 				if (FlashOnConnect) FlashWindow(hConsole, TRUE);
-				nputc(circuit, 7);
+				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
 			}
 			else
 				nputc(circuit, 7);
@@ -986,16 +976,24 @@ static void user_tell(USER *user, char kind)
 	}
 }
 
-// Find the user record for call.
+// Find the user record for call@node. Node can be NULL, meaning any node
 
-static USER *user_find(char *call)
+static USER *user_find(char *call, char * node)
 {
 	USER *user;
 
 	for (user = user_hd; user; user = user->next)
 	{
-		if (matchi(user->call, call))
+		if (node)
+		{
+			if (matchi(user->call, call) && matchi(user->node->call, node))
+				break;
+		}
+		else
+		{
+			if (matchi(user->call, call))
 			break;
+		}
 	}
 
 	return user;
@@ -1029,11 +1027,11 @@ static void user_leave(USER *user)
 
 // User changed to a different topic.
 
-static void topic_chg(USER *user, char *s)
+static BOOL topic_chg(USER *user, char *s)
 {
 	char buf[128];
 
-	if (_stricmp(user->topic->name, s) == 0) return;			// Not Changed
+	if (_stricmp(user->topic->name, s) == 0) return FALSE;			// Not Changed
 
 	sprintf(buf, "*** Left Topic: %s", user->topic->name);
 	text_tellu(user, buf, NULL, o_topic); // Tell everyone in the old topic.
@@ -1041,6 +1039,8 @@ static void topic_chg(USER *user, char *s)
 	user->topic = topic_join(user->circuit, s);
 	sprintf(buf, "*** Joined Topic: %s", user->topic->name);
 	text_tellu(user, buf, NULL, o_topic); // Tell everyone in the new topic.
+
+	return TRUE;
 }
 
 // Create a user record for this user.
@@ -1067,11 +1067,13 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias)
 	user->circuit = circuit;
 	user->call = _strdup(ucall);
 	_strupr(user->call);
-	user->node    = node;
+	user->node = node;
 	rduser(user);
 
 	if (circuit->flags & p_user)
 		circuit->u.user = user;
+
+	user->lastmsgtime = time(NULL);
 
 	user->topic   = topic_join(circuit, deftopic);
 	return user;
@@ -1206,7 +1208,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 
 	if (node_find(call))
 	{
-		Logprintf(LOG_CHAT, '|', "Refusing link with %s to prevent a loop", conn->Callsign);
+		Logprintf(LOG_CHAT, conn, '|', "Refusing link with %s to prevent a loop", conn->Callsign);
 		return FALSE; // Already linked.
 	}
 
@@ -1231,7 +1233,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 			if (c->u.link == link)
 			{
 				len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Connect when Connected - Old Connection Closed", call);
-				WriteLogLine('|',Msg, len, LOG_CHAT);
+				WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
 
 				c->Active = FALSE;			// So we don't try to clear circuit again
 				Disconnect(c->BPQStream);
@@ -1263,7 +1265,9 @@ int rtloginu (CIRCUIT *circuit)
 
 // Is this user already logged in to RT somewhere else?
 
-	if (user_find(circuit->UserPointer->Call))
+	user = user_find(circuit->UserPointer->Call, NULL);
+	
+	if (user)
 	{
 		nputs(circuit, "*** Already connected at another node.\r");
 		return FALSE;
@@ -1331,8 +1335,15 @@ void show_users(CIRCUIT *circuit)
 		else
 			Topic = user->topic->name;
 
-		nprintf(circuit, "%-6.6s at %-9.9s %s, %s [ %s ]\r",
-		user->call, Alias, user->name, user->qth, Topic);
+		__try 
+		{		
+			nprintf(circuit, "%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
+				user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+			Debugprintf("MAILCHAT *** Program Error in show_users");
+		}
 	}
 }
 
@@ -1359,11 +1370,12 @@ static void show_circuits(CIRCUIT *conn)
 	CIRCUIT *circuit;
 	NODE    *node;
 	LINK *link;
+	char line[100];
 
 	int     len;
 	CN	*cn;
 
-	nprintf(conn, "Here %-6.6s <- ", OurAlias);
+/*	nprintf(conn, "Here %-6.6s <- ", OurAlias);
 	len = 0;
 
 	for (node = node_hd; node; node = node->next) if (node->refcnt)
@@ -1373,36 +1385,44 @@ static void show_circuits(CIRCUIT *conn)
 		nputs(conn, node->alias);
 		nputc(conn, ' ');
 	}
+*/
+	wsprintf(line, "Here %-6.6s <-", OurAlias);
 
-	nputc(conn, '\r');
+	for (node = node_hd; node; node = node->next) if (node->refcnt)
+	{
+		len = wsprintf(line, "%s %s", line, node->alias);
+		if (len > 80)
+		{
+			nprintf(conn, "%s\r", line);
+			len = wsprintf(line, "              ");
+		}
+	}
+
+	nprintf(conn, "%s\r", line);
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
 		if (circuit->flags & p_linked)
 		{
-			nprintf(conn, "Nodes via %-6.6s(%d) - ", circuit->u.link->alias, circuit->refcnt);
-			len = 0;
-
-/*			len += strlen(node->alias) + 1;
-			if (len > 60) { len = strlen(node->alias) + 1; nputs(circuit, xxx); }
-			nputs(conn, node->alias);
-			nputc(conn, ' ');
-		}
-
-		nputc(conn, '\r');
-
-		nprintf(conn, "      Nodes <- ");
-*/
-		
+			len = wsprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
 			for (cn = circuit->hnode; cn; cn = cn->next)
 			{
-				len += strlen(cn->node->alias) + 1;
-				if (len > 60) {len = strlen(cn->node->alias) + 1; nputs(circuit, xxx); }
-				nputs(conn, cn->node->alias);
-				nputs(conn, " ");
+				if (cn->node && cn->node->alias)
+				{
+					len = wsprintf(line, "%s %s", line, cn->node->alias);
+					if (len > 80)
+					{
+						nprintf(conn, "%s\r", line);
+						len = wsprintf(line, "            ");
+					}
+				}
+				else
+				{
+					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
+				}
 			}
 
-		nputc(conn, '\r');
+			nprintf(conn, "%s\r", line);
 		}
 		else if (circuit->flags & p_user)
 			nprintf(conn, "User %-6.6s\r", circuit->u.user->call);
@@ -1411,7 +1431,6 @@ static void show_circuits(CIRCUIT *conn)
 	}
 
 	nprintf(conn, "Links Defined:\r");
-
 
 	for (link = link_hd; link; link = link->next)
 	{
@@ -1502,7 +1521,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 		case '?' :
 			nputs(circuit, "Commands can be in upper or lower case.\r");
 			nputs(circuit, "/U - Show Users.\r/N - Enter your Name.\r/Q - Enter your QTH.\r/T - Show Topics.\r");
-			nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are case sensitive\r/P - Show Ports and Links.\r");
+			nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are not case sensitive\r/P - Show Ports and Links.\r");
 			nputs(circuit, "/A - Toggle Alert on user join.\r");
 			nputs(circuit, "/E - Toggle Echo.\r/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
@@ -1534,7 +1553,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			f2 = strlop(f1, ' ');            // Text to send.
 			if (!f2) break;
 			_strupr(f1);
-			su = user_find(f1);
+			su = user_find(f1, NULL);
 
 			if (!su)
 			{
@@ -1555,19 +1574,25 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			f1 = strlop(Buffer, ' ');
 			if (f1)
 			{
-				topic_chg(user, f1);
-				nprintf(circuit, "Switched to Topic %s\r", user->topic->name);
-				show_users_in_topic(circuit);
-
-				// Tell all link circuits about the change of topic.
-
-				for (c = circuit_hd; c; c = c->next)
+				if (topic_chg(user, f1))
 				{
-					if (c->flags & p_linked)
-						topic_xmit(user, c);
+					nprintf(circuit, "Switched to Topic %s\r", user->topic->name);
+					show_users_in_topic(circuit);
+
+					// Tell all link circuits about the change of topic.
+
+					for (c = circuit_hd; c; c = c->next)
+					{
+						if (c->flags & p_linked)
+							topic_xmit(user, c);
+					}
 				}
+				else
+				{
+					// Already in topic
 
-
+					nprintf(circuit, "You were already in Topic %s\r", user->topic->name);
+				}
 			}
 			else
 			  show_topics(circuit);

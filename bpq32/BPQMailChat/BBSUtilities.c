@@ -13,21 +13,21 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
-	WriteLogLine('!',Mess, Len, LOG_DEBUG);
+	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG);
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
 
 	return;
 }
 
-VOID __cdecl Logprintf(int LogMode, int InOut, const char * format, ...)
+VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...)
 {
 	char Mess[255];
 	va_list(arglist);int Len;
 
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
-	WriteLogLine(InOut, Mess, Len, LogMode);
+	WriteLogLine(conn, InOut, Mess, Len, LogMode);
 
 	return;
 }
@@ -79,7 +79,7 @@ VOID BBSputs(CIRCUIT * conn, char * buf)
 {
 	// Sends to user and logs
 
-	WriteLogLine('>',buf,  strlen(buf) -1, LOG_BBS);
+	WriteLogLine(conn, '>',buf,  strlen(buf) -1, LOG_BBS);
 
 	QueueMsg(conn, buf, strlen(buf));
 }
@@ -96,7 +96,7 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 
 	QueueMsg(conn, Mess, len);
 
-	WriteLogLine('>',Mess, len-1, LOG_BBS);
+	WriteLogLine(conn, '>',Mess, len-1, LOG_BBS);
 
 	return;
 }

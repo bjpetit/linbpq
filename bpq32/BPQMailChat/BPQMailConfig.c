@@ -714,6 +714,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
 			CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
+			CheckDlgButton(hDlg, IDC_PERSONALONLY, ForwardingInfo->PersonalOnly);
 			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
 			SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
 			SetDlgItemText(hDlg, IDC_BBSHA, ForwardingInfo->BBSHA);
@@ -730,7 +731,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 int Do_User_Sel_Changed(HWND hDlg)
 {
-	
+
 	// Update BBS display with newly selected BBS
 
 	struct UserInfo * user;
@@ -741,8 +742,6 @@ int Do_User_Sel_Changed(HWND hDlg)
 		SendDlgItemMessage(hDlg, IDC_USER, WM_GETTEXT, Sel, (LPARAM)(LPCTSTR)&CurrentConfigCall);
 	else
 		SendDlgItemMessage(hDlg, IDC_USER, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&CurrentConfigCall);
-
-	
 
 	for (CurrentConfigIndex = 1; CurrentConfigIndex <= NumberofUsers; CurrentConfigIndex++)
 	{
@@ -789,6 +788,8 @@ VOID Do_Add_User(HWND hDlg)
 {
 	struct UserInfo * user;
 	int n;
+
+	SendDlgItemMessage(hDlg, IDC_USER, WM_GETTEXT, 19, (LPARAM)(LPCTSTR)&CurrentConfigCall);
 	
 	if (LookupCall(CurrentConfigCall))
 		wsprintf(InfoBoxText, "User %s already exists", CurrentConfigCall);
@@ -1396,7 +1397,7 @@ VOID SaveChatConfig()
 VOID SaveFWDConfig(HWND hDlg)
 {
 	HKEY hKey=0;
-	int retCode,disp, OK, Val;
+	int retCode,disp, OK, Val, n;
 	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
 	int Rev;
 	char BBSHA[50];
@@ -1422,6 +1423,9 @@ VOID SaveFWDConfig(HWND hDlg)
 	
 		Rev = IsDlgButtonChecked(hDlg, IDC_USEB2);
 		retCode = RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
+
+		Rev = IsDlgButtonChecked(hDlg, IDC_PERSONALONLY);
+		retCode = RegSetValueEx(hKey, "FWD Personals Only", 0, REG_DWORD, (BYTE *)&Rev,4);
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_USEB1);
 		retCode = RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
@@ -1460,6 +1464,26 @@ VOID SaveFWDConfig(HWND hDlg)
 	retCode = RegSetValueEx(hKey,"Readdress Received", 0, REG_DWORD, (BYTE *)&Rev,4);
 
 
+	// Reinitialise Aliases
+
+	n = 0;
+
+	if (Aliases)
+	{
+		while(Aliases[n])
+		{
+			free(Aliases[n]->Dest);
+			free(Aliases[n]);
+			n++;
+		}
+
+		free(Aliases);
+		Aliases = NULL;
+		FreeList(AliasText);
+	}
+
+	AliasText = GetMultiStringValue(hKey,  "FWD Aliases");
+	SetupFwdAliases();
 
 	RegCloseKey(hKey);
 		
@@ -1628,6 +1652,8 @@ VOID SaveWindowConfig()
 		retCode = RegSetValueEx(hKey,"Log_TCP",0,REG_DWORD,(BYTE *)&LogTCP,4);
 		retCode = RegSetValueEx(hKey,"Log_CHAT",0,REG_DWORD,(BYTE *)&LogCHAT,4);
 
+		wsprintf(Size,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
+		retCode = RegSetValueEx(hKey, "Version",0, REG_SZ,(BYTE *)&Size, strlen(Size));
 
 		RegCloseKey(hKey);
 	}
@@ -1650,10 +1676,7 @@ BOOL GetConfigFromRegistry()
 TryAgain:
 
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
-                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
-                              0,
-                              KEY_QUERY_VALUE,
-                              &hKey);
+                 "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
 
 	if (retCode == ERROR_SUCCESS)
 	{
@@ -1831,6 +1854,38 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+
+		Vallen=80;
+
+		if (RegQueryValueEx(hKey,"Version",0, (ULONG *)&Type, (UCHAR *)&Size, (ULONG *)&Vallen) == 0)
+			sscanf(Size,"%d,%d,%d,%d", &LastVer[0], &LastVer[1], &LastVer[2], &LastVer[3]);
+
+
+		if ((LastVer[3] != Ver[3]) || (LastVer[2] != Ver[2]) ||
+			(LastVer[1] != Ver[1]) || (LastVer[0] != Ver[0]))
+		{
+			// New Version Detected
+
+			if (LastVer[0] == 0)
+			{
+				// Pre Version Checking
+
+				MessageBox(NULL, "WARNING - This seems to be the first time you have run this version.\r\n"
+					"Forwarding has changed significantly. Please read the docs and make the necessary\r\n"
+					"changes to Forwarding Config. The Software will try to fill in the BBS HA fields from the WP\r\n"
+					"Database, but check them, and complete the  new 'Hierarchical Routes (Flood Bulls)' field.\r\n"
+					"Network access has been  disabled by setting BBS Streams to zero to prevent messages\r\n"
+					"being lost or incorrecly forwarded. Once you are happy with the forwarding config\r\n"
+					"you can reset BBS Streams.",
+						"BPQMailChat", MB_ICONINFORMATION);
+
+				MaxStreams = 0;
+				
+				RegSetValueEx(hKey, "Streams", 0, REG_DWORD,(BYTE *)&MaxStreams, 4);
+
+			}
+		}
+
 		RegCloseKey(hKey);
 
 		for (i=1; i<=16; i++)
@@ -2262,14 +2317,11 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		case IDC_HRHELP:
 			
-			//DialogBox(hInst, MAKEINTRESOURCE(IDD_HRHELP), hWnd, HRHelpProc);
-		//	Winexec(hDlg,"C:\\Dev\\Docs\\BPQ32 HTML Docs\\index.html",HH_HELP_FINDER,0);  
-			ShellExecute(hDlg,"open","C:\\Dev\\Docs\\BPQ32 HTML Docs\\index.html","",NULL,SW_SHOWNORMAL); 
+			ShellExecute(hDlg,"open",
+				"http://www.cantab.net/users/john.wiseman/MailChat/Forwarding.html",
+				"", NULL, SW_SHOWNORMAL); 
 
-	
 			return TRUE;
-
-
 
 		case IDC_FWDSAVE:
 			

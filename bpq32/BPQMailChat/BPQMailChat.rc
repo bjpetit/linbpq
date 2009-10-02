@@ -258,10 +258,11 @@ BEGIN
     EDITTEXT        IDC_TOCALLS,177,59,50,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL
-    EDITTEXT        IDC_HROUTESP,274,140,140,60,ES_MULTILINE | ES_UPPERCASE | 
+    EDITTEXT        IDC_HROUTESP,273,140,140,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL | WS_HSCROLL
-    LTEXT           "Hierarchical Routes (Bulls)",IDC_STATIC,138,126,105,12
+    LTEXT           "Hierarchical Routes (Flood Bulls)",IDC_STATIC,141,126,
+                    114,12
     LTEXT           "AT Calls:",IDC_STATIC,242,46,43,10
     EDITTEXT        IDC_ATCALLS,233,59,50,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
@@ -291,28 +292,31 @@ BEGIN
                     WS_VSCROLL
     LTEXT           "Times",IDC_STATIC,299,46,30,13
     CONTROL         "Use B1 Protocol",IDC_USEB1,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,123,245,67,8
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,231,245,67,8
     CONTROL         "Use B2 Protocol",IDC_USEB2,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,202,245,73,8
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,308,245,73,8
     EDITTEXT        IDC_CALL,343,59,66,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL
     LTEXT           "Aliases",IDC_STATIC,5,100,57,13
     CONTROL         "Readdress Locally Input",IDC_READDRESSLOCAL,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,4,226,97,8
+                    WS_DISABLED | WS_TABSTOP,4,226,97,8
     CONTROL         "Readdress Received",IDC_READDRESSRXED,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,4,239,97,8
-    DEFPUSHBUTTON   "? Help",IDC_HRHELP,250,125,28,11,BS_CENTER | BS_VCENTER | 
+                    WS_DISABLED | WS_TABSTOP,4,239,97,8
+    DEFPUSHBUTTON   "? Help",IDC_HRHELP,381,6,33,11,BS_CENTER | BS_VCENTER | 
                     NOT WS_TABSTOP
-    EDITTEXT        IDC_HROUTES,125,140,140,60,ES_MULTILINE | ES_UPPERCASE | 
+    EDITTEXT        IDC_HROUTES,122,140,140,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL | WS_HSCROLL
-    LTEXT           "Hierarchical Routes (Personals)",IDC_STATIC,290,126,122,
-                    12
+    LTEXT           "HR  (Personals and Directed Bulls)",IDC_STATIC,281,126,
+                    125,12
     LTEXT           "Interval (Seconds)",IDC_STATIC,125,205,65,12
     EDITTEXT        IDC_BBSHA,162,223,143,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Send Personal Mail Only",IDC_PERSONALONLY,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
+                    WS_TABSTOP,123,245,96,8
 END
 
 IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68

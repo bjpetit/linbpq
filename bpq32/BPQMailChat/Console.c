@@ -187,6 +187,21 @@ BOOL CreateConsole()
 
 VOID CloseConsole(int Stream)
 {
+
+if (Console->Flags & CHATMODE)
+	{
+		__try
+		{
+			logout(Console);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+		}
+	
+		Console->Flags = 0;
+	}
+
+
 	if (CloseWindowOnBye)
 	{
 //		PostMessage(hConsole, WM_DESTROY, 0, 0);

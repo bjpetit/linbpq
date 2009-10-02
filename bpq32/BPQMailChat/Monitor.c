@@ -433,7 +433,7 @@ BOOL OpenLogfile(int Flags)
 	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
 }
 
-void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
+void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 {
 	int cnt;
 	char CRLF[2] = {0x0d,0x0a};
@@ -453,6 +453,16 @@ void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
 		else if (Flags == LOG_CHAT && MonCHAT)
 		{	
 			WritetoMonitorWindow((char *)&Flag, 1);
+
+			if (conn && conn->Callsign[0])
+			{
+				char call[20];
+				wsprintf(call, "%s          ", conn->Callsign);
+				WritetoMonitorWindow(call, 10);
+			}
+			else
+				WritetoMonitorWindow("          ", 10);
+
 			WritetoMonitorWindow(Msg, MsgLen);
 			if (Msg[MsgLen-1] != '\r')
 				WritetoMonitorWindow(CRLF , 1);
@@ -460,6 +470,15 @@ void WriteLogLine(int Flag, char * Msg, int MsgLen, int Flags)
 		else if (Flags == LOG_BBS  && MonBBS)
 		{	
 			WritetoMonitorWindow((char *)&Flag, 1);
+			if (conn && conn->Callsign[0])
+			{
+				char call[20];
+				wsprintf(call, "%s          ", conn->Callsign);
+				WritetoMonitorWindow(call, 10);
+			}
+			else
+				WritetoMonitorWindow("          ", 10);
+
 			WritetoMonitorWindow(Msg, MsgLen);
 			WritetoMonitorWindow(CRLF , 1);
 		}

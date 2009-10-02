@@ -48,6 +48,7 @@
 #include <tchar.h>
 #include <stdio.h>
 #include <time.h>
+#include <mmsystem.h> 
 
 #include "BPQMailChat.h"
 #include "bpq32.h"

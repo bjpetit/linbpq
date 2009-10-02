@@ -85,6 +85,12 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 
+				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+				{
+					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
+					FBBHeader->FwdMsg->datechanged=time(NULL);
+				}
+
 				conn->UserPointer->ForwardingInfo->MsgCount--;
 				continue;
 			}
@@ -168,6 +174,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		}
 
 		conn->FBBIndex = 0;		// ready for next block;
+		memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
 		conn->FBBChecksum = 0;
 
 		return;
@@ -445,6 +452,7 @@ ok2:
 		if (FBBHeader->MsgType == 0)
 		{
 			conn->FBBIndex = 0;						// ready for first block;
+			memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
 			conn->FBBChecksum = 0;
 
 			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
@@ -511,6 +519,8 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 	if (FBBHeader->MsgType == 0)
 	{
 		conn->FBBIndex = 0;		// ready for next block;
+		memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
+
 		conn->FBBChecksum = 0;
 		conn->InputMode = 0;
 
@@ -1089,7 +1099,7 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 	len = sprintf_s(Msg, sizeof(Msg), "Disconnect received from %s during Binary Transfer - %d Bytes Saved for restart",
 		conn->Callsign, conn->TempMsg->length);
 
-	WriteLogLine('|',Msg, len, LOG_BBS);
+	WriteLogLine(conn, '|',Msg, len, LOG_BBS);
 }
 
 BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
@@ -1114,7 +1124,7 @@ BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 			len = sprintf_s(Msg, sizeof(Msg), "Restart Data found for %s - Requesting restart from %d",
 				FBBHeader->BID, RestartRec->TempMsg->length);
 
-			WriteLogLine('|',Msg, len, LOG_BBS);
+			WriteLogLine(conn, '|',Msg, len, LOG_BBS);
 
 			return (RestartRec->TempMsg->length);
 		}
@@ -1773,7 +1783,7 @@ int Encode(char * in, char * out, int inlen, BOOL B1Protocol)  /* compression */
 
 		 codesize += 4;
 
-		Logprintf(LOG_BBS, '|', "Compressed Message Comp Len %d Msg Len %d CRC %x", 
+		Logprintf(LOG_BBS, NULL, '|', "Compressed Message Comp Len %d Msg Len %d CRC %x", 
 				codesize, inlen, crc);
 
 		return codesize;
@@ -1824,7 +1834,7 @@ void Decode(CIRCUIT * conn)
 		for (i = 0 ; i < sizeof(textsize) ; i++)
 			ptr[i] = crc_fgetc();
 
-		Logprintf(LOG_BBS, '|', "Uncompressing Message Comp Len %d Msg Len %d CRC %x", 
+		Logprintf(LOG_BBS, conn, '|', "Uncompressing Message Comp Len %d Msg Len %d CRC %x", 
 				conn->TempMsg->length, textsize, crc);
 	
 

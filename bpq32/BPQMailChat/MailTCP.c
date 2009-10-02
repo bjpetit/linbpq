@@ -69,7 +69,7 @@ void decodeblock( unsigned char in[4], unsigned char out[3] );
 
 int SendSock(SOCKET sock, char * msg)
 {
-	WriteLogLine('>',msg,  strlen(msg), LOG_TCP);
+	WriteLogLine(NULL, '>',msg,  strlen(msg), LOG_TCP);
 	send(sock, msg, strlen(msg), 0);
 	return send(sock, "\r\n", 2, 0);
 }
@@ -322,7 +322,7 @@ ReleaseSock(SOCKET sock)
 
 			if (sockptr->State == WaitingForGreeting)
 			{
-				Logprintf(LOG_TCP, '|', "Premature Close on Socket %d", sock);
+				Logprintf(LOG_TCP, NULL, '|', "Premature Close on Socket %d", sock);
 	
 				if (sockptr->Type == SMTPClient)
 					SMTPActive = FALSE;	
@@ -491,7 +491,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
+	WriteLogLine(NULL, '<',Buffer, Len-2, LOG_TCP);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
@@ -1009,7 +1009,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
+	WriteLogLine(NULL, '<',Buffer, Len-2, LOG_TCP);
 
 	if(memcmp(Buffer, "CAPA",4) == 0)
 	{
@@ -1383,7 +1383,7 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 		 
 		 if (!HostEnt)
 		 {
- 			Logprintf(LOG_TCP,'|', "Resolve Failed for SMTP Server %s", Host);
+ 			Logprintf(LOG_TCP, NULL, '|', "Resolve Failed for SMTP Server %s", Host);
 			SMTPActive = FALSE;
 			return FALSE;			// Resolve failed
 		 }
@@ -1479,7 +1479,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
+	WriteLogLine(NULL, '<',Buffer, Len-2, LOG_TCP);
 
 	Buffer[Len] = 0;
 
@@ -1676,7 +1676,7 @@ BOOL SendtoISP()
 				return FALSE;
 			}
 
-			Logprintf(LOG_TCP, '|', "Connecting to Server %s to send Msg %d", ISPSMTPName, Msg->number);
+			Logprintf(LOG_TCP, NULL, '|', "Connecting to Server %s to send Msg %d", ISPSMTPName, Msg->number);
 
 			SMTPConnect(ISPSMTPName, ISPSMTPPort, Msg, Body);
 
@@ -1706,7 +1706,7 @@ BOOL POP3Connect(char * Host, int Port)
 	int addrlen=sizeof(sinx);
 	struct hostent * HostEnt;
 
-	Logprintf(LOG_TCP, '|', "Connecting to POP3 Server %s", Host);
+	Logprintf(LOG_TCP, NULL, '|', "Connecting to POP3 Server %s", Host);
 
 	// Resolve Name if needed
 
@@ -1723,7 +1723,7 @@ BOOL POP3Connect(char * Host, int Port)
 		 
 		 if (!HostEnt)
 		 {
-			Logprintf(LOG_TCP, '|', "Resolve Failed for POP3 Server %s", Host);
+			Logprintf(LOG_TCP, NULL, '|', "Resolve Failed for POP3 Server %s", Host);
 			return FALSE;			// Resolve failed
 		 }
 		 memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
@@ -1815,7 +1815,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	sock=sockptr->socket;
 
-	WriteLogLine('<',Buffer, Len-2, LOG_TCP);
+	WriteLogLine(NULL, '<',Buffer, Len-2, LOG_TCP);
 
 	if (sockptr->Flags == GETTINGMESSAGE)
 	{
@@ -1947,7 +1947,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
 				
-			CreatePOP3Message("smtp:", MsgTo, Msgtitle, Date, ptr2, MsgLen);
+			CreatePOP3Message("SMTP:", MsgTo, Msgtitle, Date, ptr2, MsgLen);
 
 			free(sockptr->MailBuffer);
 			sockptr->MailBufferSize=0;

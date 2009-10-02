@@ -696,13 +696,11 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	int Elements = 0;
 	char * ptr2;
 	int MyElement = 0;
-	int FirstElement = 0;
 	BOOL Flood = FALSE;
 	char FullRoute[100];
 	struct Continent * Continent;
 	struct Country * Country;
 	struct ALIAS * Alias;
-
 
 	strcpy(RouteElements, Msg->via);
 
@@ -711,7 +709,15 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	Alias = FindAlias(RouteElements);
 	
 	if (Alias)
+	{
+		Logprintf(LOG_BBS, conn, '?', "Routing Trace Alias Substitution %s > %s",
+			RouteElements, Alias->Alias); 
+
 		strcpy(RouteElements, Alias->Alias);
+
+		if ((ReaddressReceived && (conn->BBSFlags & BBS)) || (ReaddressLocal && ((conn->BBSFlags & BBS) == 0)))
+			strcpy(Msg->via, Alias->Alias);
+	}
 
 // Make sure HA is complete (starting at WW)
 
@@ -725,9 +731,6 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		ptr2 --;
 	}
 
-	if (ptr2 != RouteElements)
-		*ptr2++ = 0;
-
 	if ((strcmp(ptr2, "WW") == 0) || (strcmp(ptr2, "WWW") == 0))
 	{
 		strcpy(FullRoute, RouteElements);
@@ -738,7 +741,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	{
 		// Just need to add WW
 
-		sprintf_s(FullRoute, sizeof(FullRoute),"%s.WW", Msg->via);
+		sprintf_s(FullRoute, sizeof(FullRoute),"%s.WW", RouteElements);
 		goto FULLHA;
 	}
 
@@ -748,13 +751,18 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	{
 		// Just need to add Continent and WW
 
-		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", Msg->via, Country->Continent2);
+		sprintf_s(FullRoute, sizeof(FullRoute),"%s.%s.WW", RouteElements, Country->Continent2);
 		goto FULLHA;
 	}
 
 	// Don't know
 
-	strcpy(FullRoute, Msg->via);
+	// Assume a local dis list, and set Flood.
+
+	strcpy(FullRoute, RouteElements);
+
+	Flood = TRUE;
+
 
 FULLHA:
 
@@ -820,26 +828,11 @@ FULLHA:
 			Flood = TRUE;
 	}
 
-	// Check againt our HR. If n elememts match, remove (n-1) (by setting start pointer)
-
-	FirstElement = 0;
-
-	while (HElements[FirstElement])
-	{
-		if (strcmp(HElements[FirstElement], MyElements[FirstElement]) != 0)
-			break;
-
-		FirstElement++;
-	}
-	FirstElement = 0;
-
-	if (FirstElement) FirstElement--;
-
 NOHA:
 
-	Logprintf(LOG_BBS, '?', "Routing Trace Type %c %s VIA %s Route On %s %s %s %s %s",
-		Msg->type, (Flood) ? "(Flood)":"", Msg->via, HElements[FirstElement],
-		HElements[FirstElement+1], HElements[FirstElement+2], HElements[FirstElement+3], HElements[FirstElement+4]);
+	Logprintf(LOG_BBS, conn, '?', "Routing Trace Type %c %s VIA %s Route On %s %s %s %s %s",
+		Msg->type, (Flood) ? "(Flood)":"", Msg->via, HElements[0],
+		HElements[1], HElements[2], HElements[3], HElements[4]);
 
 
 	if (Msg->type == 'P' || Flood == 0)
@@ -854,10 +847,13 @@ NOHA:
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
+
+			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
+				continue;
 			
 			if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 			{
-				Logprintf(LOG_BBS, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
 
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
@@ -875,12 +871,15 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
+			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
+				continue;
+
 			// Check AT 
 
-			if (strcmp(ATBBS, bbs->Call) == 0)			// @BBS = BBS		
-//			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+			if ((strcmp(ATBBS, bbs->Call) == 0))			// @BBS = BBS		
+//					CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
 			{
-				Logprintf(LOG_BBS, '?', "Routing Trace AT %s Matches BBS %s", ATBBS, bbs->Call);
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches implied AT %s", ATBBS, bbs->Call);
 
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
@@ -901,11 +900,14 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
-			depth = CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[FirstElement]);
+			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
+				continue;
+
+			depth = CheckBBSHElements(Msg, bbs, ForwardingInfo, ATBBS, &HElements[0]);
 
 			if (depth)
 			{
-				Logprintf(LOG_BBS, '?', "Routing Trace HR Matches BBS %s Depth %d", bbs->Call, depth);
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace HR Matches BBS %s Depth %d", bbs->Call, depth);
 		
 				if (depth > bestmatch)
 				{
@@ -916,7 +918,7 @@ NOHA:
 		}
 		if (bestbbs)
 		{
-			Logprintf(LOG_BBS, '?', "Routing Trace HR Best Match is %s", bestbbs->Call);
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace HR Best Match is %s", bestbbs->Call);
 
 			if (_stricmp(bestbbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
@@ -934,16 +936,20 @@ NOHA:
 
 	// Flood Bulls go to all matching BBSs in the flood area, so the order of checking doesn't matter
 
-	// For now I will only route on HA
+	// For now I will only route on AT (for none-hierarchical addresses) and HA
 
 
 	for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 	{		
 		ForwardingInfo = bbs->ForwardingInfo;
+
+		if (ForwardingInfo->PersonalOnly)
+			continue;
+
 /*
 		if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 		{
-			Logprintf(LOG_BBS, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
 
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
@@ -953,9 +959,12 @@ NOHA:
 			Count++;
 			continue;
 		}
-
-		if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+*/
+		if ((strcmp(ATBBS, bbs->Call) == 0) ||			// @BBS = BBS		
+			CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
 		{
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace AT %s Matches BBS %s", Msg->to, bbs->Call);
+
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
 				if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
@@ -967,13 +976,13 @@ NOHA:
 			Count++;
 			continue;
 		}
-*/		
 		
-		if (CheckBBSHElementsFlood(Msg, bbs, ForwardingInfo, Msg->via, &HElements[FirstElement]))
+		
+		if (CheckBBSHElementsFlood(Msg, bbs, ForwardingInfo, Msg->via, &HElements[0]))
 		{
-			Logprintf(LOG_BBS, '?', "Routing Trace HR %s %s %s %s Matches BBS %s",
-				HElements[FirstElement], HElements[FirstElement+1], HElements[FirstElement+2], 
-				HElements[FirstElement+3], bbs->Call);
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace HR %s %s %s %s %s Matches BBS %s",
+				HElements[0], HElements[1], HElements[2], 
+				HElements[3], HElements[4], bbs->Call);
 	
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
@@ -1136,1437 +1145,7 @@ int CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct B
 
 
 
-/*
-EU should match fra.eu, but not gbr.eu in gbr.eu
-
-gbr.eu should match #25.gbr.ee, but not #23.gbr.eu in #23.gbr.eu
-
-So, I shouldn't remove EU unless gbr.eu matches/
-
-I ahouldn'r remove gbr.eu unless #23.gbr.eu matches/
-
-Not quite.
-
-How about:
-
-If B and all elements of message HA match our HA, then can flood, else route.
-
-If P message, or B(route) send to bast (ie longest matching HA)
-
-if B (flood) send to all matching HA (having lopped of matching n-1
-
-so B to gbr.eu will go to best for gbr.eu unless in gbr, else will go to all *.gbr
-
-*/
+/
 
 #endif
 
-/*
-004
-
-Afghanistan
-
-AFG
-
-248
-
-Åland Islands
-
-ALA
-
-008
-
-Albania
-
-ALB
-
-012
-
-Algeria
-
-DZA
-
-016
-
-American Samoa
-
-ASM
-
-020
-
-Andorra
-
-AND
-
-024
-
-Angola
-
-AGO
-
-660
-
-Anguilla
-
-AIA
-
-028
-
-Antigua and Barbuda
-
-ATG
-
-032
-
-Argentina
-
-ARG
-
-051
-
-Armenia
-
-ARM
-
-533
-
-Aruba
-
-ABW
-
-036
-
-Australia
-
-AUS
-
-040
-
-Austria
-
-AUT
-
-031
-
-Azerbaijan
-
-AZE
-
-044
-
-Bahamas
-
-BHS
-
-048
-
-Bahrain
-
-BHR
-
-050
-
-Bangladesh
-
-BGD
-
-052
-
-Barbados
-
-BRB
-
-112
-
-Belarus
-
-BLR
-
-056
-
-Belgium
-
-BEL
-
-084
-
-Belize
-
-BLZ
-
-204
-
-Benin
-
-BEN
-
-060
-
-Bermuda
-
-BMU
-
-064
-
-Bhutan
-
-BTN
-
-068
-
-Bolivia (Plurinational State of)
-
-BOL
-
-070
-
-Bosnia and Herzegovina
-
-BIH
-
-072
-
-Botswana
-
-BWA
-
-076
-
-Brazil
-
-BRA
-
-092
-
-British Virgin Islands
-
-VGB
-
-096
-
-Brunei Darussalam
-
-BRN
-
-100
-
-Bulgaria
-
-BGR
-
-854
-
-Burkina Faso
-
-BFA
-
-108
-
-Burundi
-
-BDI
-
-116
-
-Cambodia
-
-KHM
-
-120
-
-Cameroon
-
-CMR
-
-124
-
-Canada
-
-CAN
-
-132
-
-Cape Verde
-
-CPV
-
-136
-
-Cayman Islands
-
-CYM
-
-140
-
-Central African Republic
-
-CAF
-
-148
-
-Chad
-
-TCD
-
-830
-
-Channel Islands
-
-152
-
-Chile
-
-CHL
-
-156
-
-China
-
-CHN
-
-344
-
-Hong Kong Special Administrative Region of China
-
-HKG
-
-446
-
-Macao Special Administrative Region of China
-
-MAC
-
-170
-
-Colombia
-
-COL
-
-174
-
-Comoros
-
-COM
-
-178
-
-Congo
-
-COG
-
-184
-
-Cook Islands
-
-COK
-
-188
-
-Costa Rica
-
-CRI
-
-384
-
-Côte d'Ivoire
-
-CIV
-
-191
-
-Croatia
-
-HRV
-
-192
-
-Cuba
-
-CUB
-
-196
-
-Cyprus
-
-CYP
-
-203
-
-Czech Republic
-
-CZE
-
-408
-
-Democratic People's Republic of Korea
-
-PRK
-
-180
-
-Democratic Republic of the Congo
-
-COD
-
-208
-
-Denmark
-
-DNK
-
-262
-
-Djibouti
-
-DJI
-
-212
-
-Dominica
-
-DMA
-
-214
-
-Dominican Republic
-
-DOM
-
-218
-
-Ecuador
-
-ECU
-
-818
-
-Egypt
-
-EGY
-
-222
-
-El Salvador
-
-SLV
-
-226
-
-Equatorial Guinea
-
-GNQ
-
-232
-
-Eritrea
-
-ERI
-
-233
-
-Estonia
-
-EST
-
-231
-
-Ethiopia
-
-ETH
-
-234
-
-Faeroe Islands
-
-FRO
-
-238
-
-Falkland Islands (Malvinas)
-
-FLK
-
-242
-
-Fiji
-
-FJI
-
-246
-
-Finland
-
-FIN
-
-250
-
-France
-
-FRA
-
-254
-
-French Guiana
-
-GUF
-
-258
-
-French Polynesia
-
-PYF
-
-266
-
-Gabon
-
-GAB
-
-270
-
-Gambia
-
-GMB
-
-268
-
-Georgia
-
-GEO
-
-276
-
-Germany
-
-DEU
-
-288
-
-Ghana
-
-GHA
-
-292
-
-Gibraltar
-
-GIB
-
-300
-
-Greece
-
-GRC
-
-304
-
-Greenland
-
-GRL
-
-308
-
-Grenada
-
-GRD
-
-312
-
-Guadeloupe
-
-GLP
-
-316
-
-Guam
-
-GUM
-
-320
-
-Guatemala
-
-GTM
-
-831
-
-Guernsey
-
-GGY
-
-324
-
-Guinea
-
-GIN
-
-624
-
-Guinea-Bissau
-
-GNB
-
-328
-
-Guyana
-
-GUY
-
-332
-
-Haiti
-
-HTI
-
-336
-
-Holy See
-
-VAT
-
-340
-
-Honduras
-
-HND
-
-348
-
-Hungary
-
-HUN
-
-352
-
-Iceland
-
-ISL
-
-356
-
-India
-
-IND
-
-360
-
-Indonesia
-
-IDN
-
-364
-
-Iran (Islamic Republic of)
-
-IRN
-
-368
-
-Iraq
-
-IRQ
-
-372
-
-Ireland
-
-IRL
-
-833
-
-Isle of Man
-
-IMN
-
-376
-
-Israel
-
-ISR
-
-380
-
-Italy
-
-ITA
-
-388
-
-Jamaica
-
-JAM
-
-392
-
-Japan
-
-JPN
-
-832
-Jersey	JEY
-400
-
-Jordan
-
-JOR
-
-398
-
-Kazakhstan
-
-KAZ
-
-404
-
-Kenya
-
-KEN
-
-296
-
-Kiribati
-
-KIR
-
-414
-
-Kuwait
-
-KWT
-
-417
-
-Kyrgyzstan
-
-KGZ
-
-418
-
-Lao People's Democratic Republic
-
-LAO
-
-428
-
-Latvia
-
-LVA
-
-422
-
-Lebanon
-
-LBN
-
-426
-
-Lesotho
-
-LSO
-
-430
-
-Liberia
-
-LBR
-
-434
-
-Libyan Arab Jamahiriya
-
-LBY
-
-438
-
-Liechtenstein
-
-LIE
-
-440
-
-Lithuania
-
-LTU
-
-442
-
-Luxembourg
-
-LUX
-
-450
-
-Madagascar
-
-MDG
-
-454
-
-Malawi
-
-MWI
-
-458
-
-Malaysia
-
-MYS
-
-462
-
-Maldives
-
-MDV
-
-466
-
-Mali
-
-MLI
-
-470
-
-Malta
-
-MLT
-
-584
-
-Marshall Islands
-
-MHL
-
-474
-
-Martinique
-
-MTQ
-
-478
-
-Mauritania
-
-MRT
-
-480
-
-Mauritius
-
-MUS
-
-175
-
-Mayotte	MYT
-484
-
-Mexico
-
-MEX
-
-583
-
-Micronesia (Federated States of)
-
-FSM
-
-492
-
-Monaco
-
-MCO
-
-496
-
-Mongolia
-
-MNG
-
-499
-
-Montenegro
-
-MNE
-
-500
-
-Montserrat
-
-MSR
-
-504
-
-Morocco
-
-MAR
-
-508
-
-Mozambique
-
-MOZ
-
-104
-
-Myanmar
-
-MMR
-
-516
-
-Namibia
-
-NAM
-
-520
-
-Nauru
-
-NRU
-
-524
-
-Nepal
-
-NPL
-
-528
-
-Netherlands
-
-NLD
-
-530
-
-Netherlands Antilles
-
-ANT
-
-540
-
-New Caledonia
-
-NCL
-
-554
-
-New Zealand
-
-NZL
-
-558
-
-Nicaragua
-
-NIC
-
-562
-
-Niger
-
-NER
-
-566
-
-Nigeria
-
-NGA
-
-570
-
-Niue
-
-NIU
-
-574
-
-Norfolk Island
-
-NFK
-
-580
-
-Northern Mariana Islands
-
-MNP
-
-578
-
-Norway
-
-NOR
-
-275
-
-Occupied Palestinian Territory
-
-PSE
-
-512
-
-Oman
-
-OMN
-
-586
-
-Pakistan
-
-PAK
-
-585
-
-Palau
-
-PLW
-
-591
-
-Panama
-
-PAN
-
-598
-
-Papua New Guinea
-
-PNG
-
-600
-
-Paraguay
-
-PRY
-
-604
-
-Peru
-
-PER
-
-608
-
-Philippines
-
-PHL
-
-612
-
-Pitcairn
-
-PCN
-
-616
-
-Poland
-
-POL
-
-620
-
-Portugal
-
-PRT
-
-630
-
-Puerto Rico
-
-PRI
-
-634
-
-Qatar
-
-QAT
-
-410
-
-Republic of Korea
-
-KOR
-
-498
-Republic of Moldova
-MDA
-638
-
-Réunion
-
-REU
-
-642
-
-Romania
-
-ROU
-
-643
-
-Russian Federation
-
-RUS
-
-646
-
-Rwanda
-
-RWA
-
-652
-
-Saint-Barthélemy
-
-BLM
-
-654
-
-Saint Helena
-
-SHN
-
-659
-
-Saint Kitts and Nevis
-
-KNA
-
-662
-
-Saint Lucia
-
-LCA
-
-663
-
-Saint-Martin (French part)	MAF
-666
-
-Saint Pierre and Miquelon
-
-SPM
-
-670
-
-Saint Vincent and the Grenadines
-
-VCT
-
-882
-
-Samoa
-
-WSM
-
-674
-
-San Marino
-
-SMR
-
-678
-
-Sao Tome and Principe
-
-STP
-
-682
-
-Saudi Arabia
-
-SAU
-
-686
-
-Senegal
-
-SEN
-
-688
-
-Serbia
-
-SRB
-
-690
-
-Seychelles
-
-SYC
-
-694
-
-Sierra Leone
-
-SLE
-
-702
-
-Singapore
-
-SGP
-
-703
-
-Slovakia
-
-SVK
-
-705
-
-Slovenia
-
-SVN
-
-090
-
-Solomon Islands
-
-SLB
-
-706
-
-Somalia
-
-SOM
-
-710
-
-South Africa
-
-ZAF
-
-724
-
-Spain
-
-ESP
-
-144
-
-Sri Lanka
-
-LKA
-
-736
-
-Sudan
-
-SDN
-
-740
-
-Suriname
-
-SUR
-
-744
-
-Svalbard and Jan Mayen Islands
-
-SJM
-
-748
-
-Swaziland
-
-SWZ
-
-752
-
-Sweden
-
-SWE
-
-756
-
-Switzerland
-
-CHE
-
-760
-
-Syrian Arab Republic
-
-SYR
-
-762
-
-Tajikistan
-
-TJK
-
-764
-
-Thailand
-
-THA
-
-807
-
-The former Yugoslav Republic of Macedonia
-
-MKD
-
-626
-
-Timor-Leste
-
-TLS
-
-768
-
-Togo
-
-TGO
-
-772
-
-Tokelau
-
-TKL
-
-776
-
-Tonga
-
-TON
-
-780
-
-Trinidad and Tobago
-
-TTO
-
-788
-
-Tunisia
-
-TUN
-
-792
-
-Turkey
-
-TUR
-
-795
-
-Turkmenistan
-
-TKM
-
-796
-
-Turks and Caicos Islands
-
-TCA
-
-798
-
-Tuvalu
-
-TUV
-
-800
-
-Uganda
-
-UGA
-
-804
-
-Ukraine
-
-UKR
-
-784
-
-United Arab Emirates
-
-ARE
-
-826
-
-United Kingdom of Great Britain and Northern Ireland
-
-GBR
-
-834
-
-United Republic of Tanzania
-
-TZA
-
-840
-
-United States of America
-
-USA
-
-850
-
-United States Virgin Islands
-
-VIR
-
-858
-
-Uruguay
-
-URY
-
-860
-
-Uzbekistan
-
-UZB
-
-548
-
-Vanuatu
-
-VUT
-
-862
-
-Venezuela (Bolivarian Republic of)
-
-VEN
-
-704
-
-Viet Nam
-
-VNM
-
-876
-
-Wallis and Futuna Islands
-
-WLF
-
-732
-
-Western Sahara
-
-ESH
-
-887
-
-Yemen
-
-YEM
-
-894
-
-Zambia
-
-ZMB
-
-716
-
-Zimbabwe
-
-ZWE
-
-*/
