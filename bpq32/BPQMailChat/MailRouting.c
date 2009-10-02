@@ -1142,10 +1142,5 @@ int CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct B
 	}
 	return bestmatch;
 }
-
-
-
-/
-
 #endif
 

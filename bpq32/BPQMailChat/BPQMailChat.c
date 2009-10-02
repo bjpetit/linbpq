@@ -231,7 +231,15 @@
 // Add reason for holding to SYSOP "Message Held" Message.
 // Make topics case-insensitive.
 // Allow SR for smtp mail.
-// Try to fix sime user's "Add User" problem.
+// Try to fix some user's "Add User" problem.
+
+
+
+
+
+
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 
@@ -2526,7 +2534,7 @@ VOID GetBadWordFile()
 
 	_strlwr(BadFile);								// Compares are case-insensitive
 
-	ptr2 = strtok_s(BadFile, "\r\n", &ptr1);
+	ptr1 = BadFile;
 
 	while (ptr1)
 	{
@@ -2534,8 +2542,11 @@ VOID GetBadWordFile()
 		ptr2 = strtok_s(NULL, "\r\n", &ptr1);
 		if (ptr2)
 		{
-			BadWords = realloc(BadWords,(++NumberofBadWords+1)*4);
-			BadWords[NumberofBadWords] = ptr2;
+			if (*ptr2 != '#')
+			{
+				BadWords = realloc(BadWords,(++NumberofBadWords+1)*4);
+				BadWords[NumberofBadWords] = ptr2;
+			}
 		}
 		else
 			break;
