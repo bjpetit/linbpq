@@ -525,9 +525,15 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // User ucall at node ncall changed topic.
 
 		case id_topic :
-			echo(ckt_from, node, Buffer);  //  Relay to other nodes.
 			user = user_find(ucall, ncall);
-			if (user) topic_chg(user, f1);
+			if (user)
+			{
+				if (_stricmp(user->topic->name, f1) !=0)
+				{
+					echo(ckt_from, node, Buffer);  //  Relay to other nodes.
+					topic_chg(user, f1);
+				}
+			}
 			break;
 
 		default :  break;
@@ -914,7 +920,7 @@ void text_tellu_Joined(USER * user)
 			if (circuit->BPQStream < 0) // Console
 			{
 				if (FlashOnConnect) FlashWindow(hConsole, TRUE);
-				nputc(circuit, 7);
+				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
 //				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
 			}
 			else

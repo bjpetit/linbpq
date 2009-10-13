@@ -573,7 +573,7 @@ BEGIN
     GROUPBOX        "Lifetimes",IDC_STATIC,144,0,231,244
     GROUPBOX        "Parameters",IDC_STATIC,3,3,133,241
     LTEXT           "Max Message Number",IDC_STATIC,7,23,77,10
-    LTEXT           "BID Litetime (Days)",IDC_STATIC,7,46,77,10
+    LTEXT           "BID Lifetime (Days)",IDC_STATIC,7,46,77,10
     LTEXT           "Maintenance Time (UTC)   Enter as HHMM",IDC_STATIC,7,69,
                     83,25
     EDITTEXT        IDC_MAXMSG,96,22,25,12,ES_CENTER | ES_NUMBER

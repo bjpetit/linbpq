@@ -83,13 +83,14 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
 
-				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 
 				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
 				{
 					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
 					FBBHeader->FwdMsg->datechanged=time(NULL);
 				}
+
+				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 
 				conn->UserPointer->ForwardingInfo->MsgCount--;
 				continue;
@@ -174,7 +175,6 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		}
 
 		conn->FBBIndex = 0;		// ready for next block;
-		memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
 		conn->FBBChecksum = 0;
 
 		return;
@@ -503,6 +503,8 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 			conn->UserPointer->ForwardingInfo->MsgCount--;
 		}
 	}
+	memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
+
 }
 
 
@@ -1810,6 +1812,7 @@ void Decode(CIRCUIT * conn)
 		if (conn->BBSFlags & FBBB1Mode)
 		{
 			short val;
+//			int i;
 			
 			crc_read = infile[0];
 			crc_read |= infile[1] << 8;

@@ -234,9 +234,17 @@
 // Try to fix some user's "Add User" problem.
 
 
+// Version 1.0.3.2
+
+// Fix program error when prcessing - response in FBB forwarding.
+// Fix code to flag messages as sent.
 
 
+// Version 1.0.3.3
 
+// Attempt to fix message loop on topic_change
+// Fix loop if compressed size is greater than 32K when receiving with B1 protocol.
+// Fix selection of B1
 
 
 
@@ -5242,7 +5250,8 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 				if (SID[len+2] == '1')
 				{
-					conn->BBSFlags |= FBBB1Mode;
+					if (conn->UserPointer->ForwardingInfo->AllowB1)
+						conn->BBSFlags |= FBBB1Mode;
 
 					if (SID[len+3] == '2')
 						if (conn->UserPointer->ForwardingInfo->AllowB2)

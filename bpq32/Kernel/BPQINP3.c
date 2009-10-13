@@ -60,7 +60,7 @@ VOID SendRIPToNeighbour(struct ROUTE * Route);
 VOID DeleteNETROMRoutes(struct ROUTE * Route);
 VOID DeleteINP3Routes(struct ROUTE * Route);
 
-//#define NOINP3
+#define NOINP3
 
 #ifdef NOINP3
 

@@ -761,8 +761,8 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 	strcpy(FullRoute, RouteElements);
 
-	Flood = TRUE;
-
+	if (Msg->type == 'B')
+		Flood = TRUE;
 
 FULLHA:
 
