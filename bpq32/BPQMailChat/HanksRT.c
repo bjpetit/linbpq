@@ -920,7 +920,7 @@ void text_tellu_Joined(USER * user)
 			if (circuit->BPQStream < 0) // Console
 			{
 				if (FlashOnConnect) FlashWindow(hConsole, TRUE);
-				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
+				nputc(circuit, 7);
 //				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
 			}
 			else

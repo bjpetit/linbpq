@@ -28,8 +28,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 
-#define Vers 4,10,11,4
-#define Verstring "4, 10, 11, 4\0"
+#define Vers 4,10,12,1
+#define Verstring "4, 10, 12, 1\0"
 
 
 VS_VERSION_INFO VERSIONINFO

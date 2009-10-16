@@ -57,7 +57,7 @@ VOID KillRoute(struct DEST_ROUTE_ENTRY * ROUTEPTR);
 VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops, int rtt);
 VOID SendNetFrame(struct _MESSAGE * Frame);
 VOID SendRIPToNeighbour(struct ROUTE * Route);
-VOID DeleteNETROMRoutes(struct ROUTE * Route);
+VOID DecayNETROMRoutes(struct ROUTE * Route);
 VOID DeleteINP3Routes(struct ROUTE * Route);
 
 #define NOINP3
@@ -130,7 +130,7 @@ VOID TellINP3LinkGone(struct ROUTE * Route)
 
 
 	if (Route->INP3Node == 0)
-		DeleteNETROMRoutes(Route);
+		DecayNETROMRoutes(Route);
 	else
 		DeleteINP3Routes(Route);
 }
@@ -204,7 +204,7 @@ VOID DeleteINP3Routes(struct ROUTE * Route)
 	}
 }
 
-VOID DeleteNETROMRoutes(struct ROUTE * Route)
+VOID DecayNETROMRoutes(struct ROUTE * Route)
 {
 	int i;
 	struct DEST_LIST * Dest =  DataBase->DESTS;
@@ -221,57 +221,75 @@ VOID DeleteNETROMRoutes(struct ROUTE * Route)
 			continue;										// Spare Entry
 
 		if (Dest->NRROUTE1.ROUT_NEIGHBOUR == Route)
-		{	
-			if (Dest->NRROUTE2.ROUT_NEIGHBOUR == 0)			// No more Netrom Routes
+		{
+			Dest->NRROUTE1.ROUT_OBSCOUNT--;
+
+			if (Dest->NRROUTE1.ROUT_OBSCOUNT == 0)
 			{
-				if (Dest->ROUTE1.ROUT_NEIGHBOUR == 0)		// Any INP3 ROutes?
+				// ROute expired
+
+				if (Dest->NRROUTE2.ROUT_NEIGHBOUR == 0)			// No more Netrom Routes
 				{
-					// No More Routes - ZAP Dest
-
+					if (Dest->ROUTE1.ROUT_NEIGHBOUR == 0)		// Any INP3 ROutes?
 					{
-						char call[11]="";
-						ConvFromAX25(Dest->DEST_CALL, call);
-						Debugprintf("Deleting NR Node %s", call);
-					}
+						// No More Routes - ZAP Dest
 
-					_asm
+						{
+							char call[11]="";
+							ConvFromAX25(Dest->DEST_CALL, call);
+							Debugprintf("Deleting NR Node %s", call);
+						}
+
+						_asm
+						{
+							pushad
+							mov	EBX,Dest
+							CALL REMOVENODE			// Clear buffers, Remove from Sorted Nodes chain, and zap entry
+							popad
+						}
+
+						continue;
+					}
+					else
 					{
-						pushad
-						mov	EBX,Dest
-						CALL REMOVENODE			// Clear buffers, Remove from Sorted Nodes chain, and zap entry
-						popad
+						// Still have an INP3 Route - just zap this entry
+
+						memset(&Dest->NRROUTE1, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+						continue;
+
 					}
-
-					continue;
 				}
-				else
-				{
-					// Still have an INP3 Route - just zap this entry
 
-					memset(&Dest->NRROUTE1, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
-					continue;
-				}
+				memcpy(&Dest->NRROUTE1, &Dest->NRROUTE2, sizeof(struct NR_DEST_ROUTE_ENTRY));
+				memcpy(&Dest->NRROUTE2, &Dest->NRROUTE3, sizeof(struct NR_DEST_ROUTE_ENTRY));
+				memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+
+				continue;
 			}
-
-			memcpy(&Dest->NRROUTE1, &Dest->NRROUTE2, sizeof(struct NR_DEST_ROUTE_ENTRY));
-			memcpy(&Dest->NRROUTE2, &Dest->NRROUTE3, sizeof(struct NR_DEST_ROUTE_ENTRY));
-			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
-
-			continue;
 		}
 		
 		if (Dest->NRROUTE2.ROUT_NEIGHBOUR == Route)
 		{
-			memcpy(&Dest->NRROUTE2, &Dest->NRROUTE3, sizeof(struct NR_DEST_ROUTE_ENTRY));
-			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+			Dest->NRROUTE2.ROUT_OBSCOUNT--;
 
-			continue;
+			if (Dest->NRROUTE2.ROUT_OBSCOUNT == 0)
+			{
+				memcpy(&Dest->NRROUTE2, &Dest->NRROUTE3, sizeof(struct NR_DEST_ROUTE_ENTRY));
+				memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+
+				continue;
+			}
 		}
 
 		if (Dest->NRROUTE3.ROUT_NEIGHBOUR == Route)
 		{
-			memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
-			continue;
+			Dest->NRROUTE3.ROUT_OBSCOUNT--;
+
+			if (Dest->NRROUTE3.ROUT_OBSCOUNT == 0)
+			{
+				memset(&Dest->NRROUTE3, 0, sizeof(struct NR_DEST_ROUTE_ENTRY));
+				continue;
+			}
 		}
 	}
 }
@@ -288,7 +306,7 @@ VOID TellINP3LinkSetupFailed(struct ROUTE * Route)
 
 
 	if (Route->INP3Node == 0)
-		DeleteNETROMRoutes(Route);
+		DecayNETROMRoutes(Route);
 	else
 		DeleteINP3Routes(Route);
 }

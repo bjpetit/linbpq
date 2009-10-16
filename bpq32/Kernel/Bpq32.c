@@ -146,8 +146,10 @@
 // 410k		June 2009
 
 //				Fix calculation of %retries in extended ROUTES display
-//				FIx corruption of ROUTES table
+//				Fix corruption of ROUTES table
 //				Add GetVersionString API call.
+//				Keep links to neighbouring nodes open
+//				Add GetPortTableEntry API call
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -1650,6 +1652,19 @@ DllExport UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc)
 	Desc[30]=0;
 
 	return 0;
+}
+
+DllExport struct PORTCONTROL * APIENTRY GetPortTableEntry(int portslot)
+{
+	struct PORTCONTROL * PORTVEC=PORTTABLE;
+
+	if (portslot>NUMBEROFPORTS)
+		portslot=NUMBEROFPORTS;
+
+	while (--portslot > 0)
+		PORTVEC=PORTVEC->PORTPOINTER;
+
+	return PORTVEC;
 }
 
 

@@ -7,7 +7,7 @@
 // Version 2.0.2 January 2008
 
 // Restore Checked state of Bells and AutoConnect Flags
-// Call CheckTimer on startup (fornew Initialisation Scheme for perl)
+// Call CheckTimer on startup (for new Initialisation Scheme for perl)
 
 // Version 2.0.3 July 2008
 
@@ -32,6 +32,7 @@
 // Version 2.0.7
 
 // Add input buffer scrollback.
+// Fix monitoring when PORTNUM specified
 
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -339,7 +340,7 @@ HMENU hMenu, hPopMenu1, hPopMenu2, hPopMenu3;		// handle of menu
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-	int i, tempmask=0xffff;
+	int i, n, tempmask=0xffff;
 	char msg[20];
 	int retCode,Type,Vallen;
 	HKEY hKey=0;
@@ -507,9 +508,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hPopMenu1=GetSubMenu(hMenu,1);
 
-	for (i=1;i <= GetNumberofPorts();i++)
+	for (n=1;n <= GetNumberofPorts();n++)
 	{
+		i = GetPortNumber(n);
+
 		wsprintf(msg,"Port %d",i);
+
 		if (tempmask & (1<<(i-1)))
 		{
 			AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i,msg);
