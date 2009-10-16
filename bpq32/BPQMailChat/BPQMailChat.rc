@@ -123,37 +123,39 @@ BBS_CONFIG DIALOG DISCARDABLE  0, 0, 368, 280
 STYLE WS_CHILD
 FONT 8, "System"
 BEGIN
-    EDITTEXT        1001,83,98,68,14,ES_UPPERCASE
-    LTEXT           "Base Directory",IDC_STATIC,7,138,66,12
-    LTEXT           "BBS Call",IDC_STATIC,7,100,37,12
-    LTEXT           "BBS Appl Number",IDC_STATIC,7,161,61,10
-    LTEXT           "BBS Streams",IDC_STATIC,157,160,45,10
-    EDITTEXT        1002,83,138,212,14
-    EDITTEXT        1003,83,158,29,14
-    EDITTEXT        1004,208,159,29,14
-    LTEXT           "POP3 Port",IDC_STATIC,7,222,49,12
-    LTEXT           "SMTP Port",IDC_STATIC,135,222,49,12
-    EDITTEXT        1005,83,220,29,14
-    EDITTEXT        1006,190,220,29,14
-    LTEXT           "H Route",IDC_STATIC,7,120,37,12
-    EDITTEXT        1007,83,118,119,13,ES_UPPERCASE
-    DEFPUSHBUTTON   "Save",1100,144,243,50,14,BS_CENTER | BS_VCENTER
+    EDITTEXT        1001,83,103,68,14,ES_UPPERCASE
+    LTEXT           "Base Directory",IDC_STATIC,7,143,66,12
+    LTEXT           "BBS Call",IDC_STATIC,7,105,37,12
+    LTEXT           "BBS Appl Number",IDC_STATIC,7,166,61,10
+    LTEXT           "BBS Streams",IDC_STATIC,157,165,45,10
+    EDITTEXT        1002,83,143,212,14
+    EDITTEXT        1003,83,163,29,14
+    EDITTEXT        1004,208,164,29,14
+    LTEXT           "POP3 Port",IDC_STATIC,90,227,37,12
+    LTEXT           "SMTP Port",IDC_STATIC,170,227,37,12
+    EDITTEXT        IDC_POP3Port,130,225,29,14
+    EDITTEXT        IDC_SMTPPort,210,225,29,14
+    LTEXT           "H Route",IDC_STATIC,7,125,37,12
+    EDITTEXT        1007,83,123,119,13,ES_UPPERCASE
+    DEFPUSHBUTTON   "Save",1100,144,248,50,14,BS_CENTER | BS_VCENTER
     LTEXT           "BBS Call is the base callsign,without SSID. This is not necessarily the same as the Applicaion Callsign defined in the BPQ32 configuration. SYSOPCall is the callsign used by the local console.",
-                    IDC_STATIC,10,5,354,23
-    LTEXT           "The eMail Server Params configure the SMTP and POP3 Servers, which allow a normal Internet email client to get messages from, and post mesages to the BBS. If you don't want to use this, set them to zero.",
-                    IDC_STATIC,9,52,357,20
+                    IDC_STATIC,10,4,354,23
+    LTEXT           "The eMail Server Params configure the NNTP, SMTP and POP3 Servers, which allow  normal Internet email and News clients to get messages from, and post mesages to the BBS. If you don't want to use this, set them to zero.",
+                    IDC_STATIC,8,52,357,27
     LTEXT           "The Application Number defines which BPQ32 Application gives access to the BBS. Note this a the APPLNumber (1-8) not an Appication Mask, as uses in many BPQ32 programs.",
-                    IDC_STATIC,10,33,353,18
-    LTEXT           "SYSOP Call",IDC_STATIC,163,101,42,12
-    EDITTEXT        1008,208,98,68,14,ES_UPPERCASE
+                    IDC_STATIC,10,27,353,18
+    LTEXT           "SYSOP Call",IDC_STATIC,163,106,42,12
+    EDITTEXT        1008,208,103,68,14,ES_UPPERCASE
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,241,220,91,14
-    LTEXT           "eMail Server Params:",IDC_STATIC,7,203,135,10
+                    WS_TABSTOP,249,225,91,14
+    LTEXT           "eMail Server Params:",IDC_STATIC,7,208,135,10
     CONTROL         "Enable UI System",IDC_ENABLEUI,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,6,182,83,10
+                    BS_LEFTTEXT | WS_TABSTOP,6,187,83,10
     LTEXT           "Enable UI System activates FBB compatible UI broadcating of Message Headers",
-                    IDC_STATIC,10,75,358,15
-    PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,158,181,91,13
+                    IDC_STATIC,10,81,358,15
+    PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,158,186,91,13
+    LTEXT           "NNTP Port",IDC_STATIC,7,227,39,12
+    EDITTEXT        IDC_NNTPPort,47,225,29,14
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266

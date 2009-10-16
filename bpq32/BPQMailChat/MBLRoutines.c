@@ -231,8 +231,6 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			conn->UserPointer->ForwardingInfo->MsgCount--;
 		}
 
-
-
 		// Send Message or Disconnect
 
 		if (FindMessagestoForward(conn))

@@ -52,6 +52,7 @@
 
 #include "BPQMailChat.h"
 #include "bpq32.h"
+#include "ASMStrucs.h"
 
 #include "resrc1.h"
 #include "resource.h"

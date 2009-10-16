@@ -246,6 +246,11 @@
 // Fix loop if compressed size is greater than 32K when receiving with B1 protocol.
 // Fix selection of B1
 
+// Version 1.0.3.4
+
+// Add "KISS ONLY" Flag to R: Lines (Needs Node Version 4.10.12 (4.10l) or above)
+// Add Basic NNTP Interface
+// Fix possible loop in lzhuf encode
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -265,6 +270,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 UCHAR * (FAR WINAPI * GetVersionStringptr)();
+struct PORTCONTROL * (FAR WINAPI * GetPortTableEntryptr)();
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
@@ -393,6 +399,7 @@ char MailDir[MAX_PATH];
 
 char RlineVer[50];
 
+BOOL KISSOnly = FALSE;
 
 BOOL ALLOWCOMPRESSED = TRUE;
 
@@ -403,6 +410,8 @@ UCHAR * OtherNodes=NULL;
 char zeros[NBMASK];						// For forward bitmask tests
 
 time_t MaintClock;						// Time to run housekeeping
+
+struct MsgInfo * MsgnotoMsg[100000];	// Message Number to Message Slot List.
 
 
 // Forward declarations of functions included in this code module:
@@ -659,6 +668,24 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
 
 	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
+	GetPortTableEntryptr = (struct PORTCONTROL *(__stdcall *)())GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
+
+	if (GetPortTableEntryptr)
+	{
+		int n;
+		struct PORTCONTROL * PORTVEC;
+
+		KISSOnly = TRUE;
+		
+		for (n=1; n <= GetNumberofPorts(); n++)
+		{
+			PORTVEC = GetPortTableEntryptr(n);
+
+			if (PORTVEC->PORTTYPE == 16)		// EXTERNAL
+				KISSOnly = FALSE;
+
+		}
+	}
 
 	// Get Window Size  From Registry
 
@@ -700,7 +727,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	wsprintf(Title,"G8BPQ Mail and Chat Server Beta Version %s", VersionString);
 
-	wsprintf(RlineVer, "BPQ%d.%d.%d", Ver[0], Ver[1], Ver[2]);
+	wsprintf(RlineVer, "BPQ%s%d.%d.%d", (KISSOnly) ? "K" : "", Ver[0], Ver[1], Ver[2]);
 
 	SetWindowText(hWnd,Title);
 
@@ -833,9 +860,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
 		return 0;
 
+	case NNTP_DATA: // Notification on data socket
+
+		NNTP_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
+		return 0;
+
 	case WSA_ACCEPT: /* Notification if a socket connection is pending. */
 
 		Socket_Accept(wParam);
+		return 0;
+
+	case NNTP_ACCEPT: /* Notification if a socket connection is pending. */
+
+		NNTP_Accept(wParam);
 		return 0;
 
 	case WSA_CONNECT: /* Notification if a socket connection completed. */
@@ -1195,6 +1232,7 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 		
 			Msg->number = ++LatestMsg;
 			Msg->length = MsgLen;
+			MsgnotoMsg[Msg->number] = Msg;
 
 			strcpy(Msg->from, SYSOPCall);
 			Vptr = strlop(HDest, '@');
@@ -1247,6 +1285,8 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 			free(MailBuffer);
 
 			MatchMessagetoBBSList(Msg, 0);
+
+			BuildNNTPList(Msg);				// Build NNTP Groups list
 
 			EndDialog(hDlg, LOWORD(wParam));
 
@@ -1539,6 +1579,8 @@ BOOL Initialise()
 	}
 
 	InitialiseTCP();
+
+	InitialiseNNTP();
 
 	if (EnableUI)
 		SetupUIInterface();
@@ -1958,7 +2000,7 @@ int DoMonitorData(int Stream)
 
 			if (len == 0) return 0;
 
-			SeeifBBSUIFrame((struct _MESSAGE *)buff, len);
+			SeeifBBSUIFrame((struct _MESSAGEX *)buff, len);
 			
 		}
 
@@ -2288,6 +2330,10 @@ Next:
 
 		Msg = AllocateMsgRecord();
 		memcpy(Msg, &MsgRec,  sizeof (MsgRec));
+
+		MsgnotoMsg[Msg->number] = Msg;
+
+		BuildNNTPList(Msg);				// Build NNTP Groups list
 
 		// If any forward bits are set, increment count on corresponding BBS record.
 
@@ -3647,6 +3693,26 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 
 }
 
+BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
+{
+	// Return TRUE if user ias allowed to read message
+	
+	if (Msg->status != 'K')
+	{
+		if (SYSOP) return TRUE;			// Sysop can list or read anything
+	
+		if (Msg->type == 'B' || Msg->type == 'T') return TRUE;
+
+		if (Msg->type == 'P')
+		{
+			if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+				return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
 int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
 {
 	struct MsgInfo * Msg;
@@ -3682,64 +3748,32 @@ int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
 
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End)
 {
-	int m=NumberofMessages;
-
+	int m;
 	struct MsgInfo * Msg;
 
-	if (NumberofMessages == 0)
-		return;
-
-
-	do
+	for (m = Start; m >= End; m--)
 	{
-		m = GetUserMsg(m, user->Call, conn->sysop);
-
-		if (m < 1)
-			return;
-
-		Msg=MsgHddrPtr[m];
-
-		if (Msg->number < End)
-			return;
-
-		if (Msg->number <= Start)
-			ListMessage(MsgHddrPtr[m], conn);
-
-		m--;
-
-	} while (m> 0);
+		Msg = MsgnotoMsg[m];
+		
+		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
+			ListMessage(Msg, conn);
+	}
 }
+
 
 void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int End, int Start)
 {
-	int m=1;
-
+	int m;
 	struct MsgInfo * Msg;
 
-	if (NumberofMessages == 0)
-		return;
-
-
-	do
+	for (m = Start; m <= End; m++)
 	{
-		m = GetUserMsgForwards(m, user->Call, conn->sysop);
-
-		if (m > NumberofMessages)
-			return;
-
-		Msg=MsgHddrPtr[m];
-
-		if (Msg->number > End)
-			return;
-
-		if (Msg->number >= Start)
-			ListMessage(MsgHddrPtr[m], conn);
-
-		m++;
-
-	} while (m <= NumberofMessages);
+		Msg = MsgnotoMsg[m];
+		
+		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
+			ListMessage(Msg, conn);
+	}
 }
-
 
 
 void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
@@ -3811,11 +3845,17 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 	struct MsgInfo * Msg;
 	char * MsgBytes;
 
-	Msg = FindMessage(user->Call, msgno, conn->sysop);
+	Msg = MsgnotoMsg[msgno];
 
 	if (Msg == NULL)
 	{
 		nodeprintf(conn, "Message %d not found\r", msgno);
+		return;
+	}
+
+	if (!CheckUserMsg(Msg, user->Call, conn->sysop))
+	{
+		nodeprintf(conn, "Message %d not for you\r", msgno);
 		return;
 	}
 
@@ -4448,6 +4488,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 		GetSemaphore(&MsgNoSemaphore);
 		Msg->number = ++LatestMsg;
 		FreeSemaphore(&MsgNoSemaphore);
+		MsgnotoMsg[Msg->number] = Msg;
 
 		// Create BID if non supplied
 
@@ -4630,6 +4671,8 @@ nextline:
 			wsprintf(Title, "Message %d Held - %s", Msg->number, HoldReason);
 			SendMessageToSYSOP(Title, MailBuffer, Length);
 		}
+
+		BuildNNTPList(Msg);				// Build NNTP Groups list
 
 		SaveMessageDatabase();
 		SaveBIDDatabase();
@@ -5474,6 +5517,8 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
 
 	GetSemaphore(&MsgNoSemaphore);
 	Msg->number = ++LatestMsg;
+	MsgnotoMsg[Msg->number] = Msg;
+
 	FreeSemaphore(&MsgNoSemaphore);
  
 	strcpy(Msg->from, "SYSTEM");

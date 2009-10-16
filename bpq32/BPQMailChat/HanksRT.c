@@ -528,7 +528,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			user = user_find(ucall, ncall);
 			if (user)
 			{
-				if (_stricmp(user->topic->name, f1) !=0)
+				if (_stricmp(user->topic->name, f1) != 0)
 				{
 					echo(ckt_from, node, Buffer);  //  Relay to other nodes.
 					topic_chg(user, f1);

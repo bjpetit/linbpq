@@ -17,7 +17,7 @@ char * UIDigiAX[17];		// ax.25 version of digistring
 int UIDigiLen[17];			// Length of AX string
 
 
-typedef struct _MESSAGE
+typedef struct _MESSAGEX
 {
 //	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
 
@@ -35,7 +35,7 @@ typedef struct _MESSAGE
 	UCHAR	PID;
 	UCHAR	DATA[256];
 
-}MESSAGE, *PMESSAGE;
+}MESSAGEX, *PMESSAGEX;
 
 #pragma pack()
 
@@ -254,9 +254,9 @@ VOID SendLatestUI(int Port)
 
 VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 {
-	MESSAGE AXMSG;
+	MESSAGEX AXMSG;
 
-	PMESSAGE AXPTR = &AXMSG;
+	PMESSAGEX AXPTR = &AXMSG;
 
 	// Block includes the Msg Header (7 bytes), Len Does not!
 
@@ -328,9 +328,9 @@ VOID ProcessUItoFBB(char * msg, int len, int Port)
 	return;
 }
 
-UCHAR * AdjustForDigis(PMESSAGE * buff, int * len)
+UCHAR * AdjustForDigis(PMESSAGEX * buff, int * len)
 {
-	PMESSAGE buff1 = *(buff);
+	PMESSAGEX buff1 = *(buff);
 
 	if ((buff1->ORIGIN[6] & 1) == 1)
 	{
@@ -348,7 +348,7 @@ UCHAR * AdjustForDigis(PMESSAGE * buff, int * len)
 
 	return (&buff1->CTL);		// Start of Digi String
 }
-VOID SeeifBBSUIFrame(PMESSAGE buff, int len)
+VOID SeeifBBSUIFrame(PMESSAGEX buff, int len)
 {
 	UCHAR * Digis;
 	UCHAR From[7], To[7];

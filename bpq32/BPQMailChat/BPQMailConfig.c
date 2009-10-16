@@ -463,6 +463,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSStreams, MaxStreams, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_ENABLEUI, EnableUI);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_POP3Port, POP3InPort, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDC_NNTPPort, NNTPInPort, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_SMTPPort, SMTPInPort, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_REMOTEEMAIL, RemoteEmail);
 
@@ -1245,6 +1246,7 @@ VOID SaveBBSConfig()
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
 	POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
 	SMTPInPort = GetDlgItemInt(hwndDisplay, IDC_SMTPPort, &OK4, FALSE);
+	NNTPInPort = GetDlgItemInt(hwndDisplay, IDC_NNTPPort, &OK3, FALSE);
 
 	RemoteEmail = IsDlgButtonChecked(hwndDisplay, IDC_REMOTEEMAIL);
 
@@ -1263,6 +1265,7 @@ VOID SaveBBSConfig()
 				
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
+		retCode = RegSetValueEx(hKey, "NNTPPort",0,REG_DWORD,(BYTE *)&NNTPInPort,4);
 		retCode = RegSetValueEx(hKey, "RemoteEmail",0,REG_DWORD,(BYTE *)&RemoteEmail,4);
 
 		RegCloseKey(hKey);
@@ -1750,6 +1753,10 @@ TryAgain:
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"POP3Port",0,			
 			(ULONG *)&Type,(UCHAR *)&POP3InPort,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"NNTPPort",0,			
+			(ULONG *)&Type,(UCHAR *)&NNTPInPort,(ULONG *)&Vallen);
 
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"SMTPGatewayEnabled",0,			

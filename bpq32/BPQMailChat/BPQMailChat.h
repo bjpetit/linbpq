@@ -29,6 +29,8 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3
+#define NNTP_ACCEPT WM_USER + 4
+#define NNTP_DATA WM_USER + 5
 
 #ifdef _DEBUG
 
@@ -413,7 +415,8 @@ struct MsgInfo{  /* Longueur = 194 octets */
 	char	bid[13] ;
 	char	title[61] ;
 	char	bin;
-	char	free[9];
+	int		nntpnum;			// Number within topic (ie Bull TO Addr) - used for nntp
+	char	free[5];
 	unsigned short	nblu;
 	long	theme  ;
 	long	datecreated ;
@@ -432,6 +435,16 @@ struct MsgInfo{  /* Longueur = 194 octets */
 #define MSGSTATUS_H 4
 #define MSGSTATUS_$ 5
 
+struct NNTPRec
+{
+	// Used for NNTP access to Bulls
+
+	char NewsGroup[64];		// = Bull TO.at field
+	int	FirstMsg;			// Lowest Number
+	int LastMsg;			// Highest Number
+	int Count;				// Active Msgs
+	time_t DateCreated;		// COntains Creation Date of First Bull in Group
+};
 
 
 typedef struct {
@@ -619,17 +632,18 @@ typedef struct SocketConnectionInfo
 	int POP3MsgCount;			// No of Messages
 	int POP3MsgNum;				// Sequence number of message being received
 
-
 	struct MsgInfo * SMTPMsg;	// message for this SMTP connection
 
+	struct NNTPRec * NNTPGroup;	// Currently Selected Group
+	int NNTPNum;				// Currenrly Selected Msg Number
 
-  
 } SocketConn;
 
 #define SMTPServer 1
 #define POP3SLAVE 2
 #define SMTPClient 3
 #define POP3Client 4
+#define NNTPServer 5
 
 // State Values
 
@@ -679,7 +693,7 @@ typedef struct SocketConnectionInfo
 #define IAC  255
 
 #define suppressgoahead 3 //858
-#define Status 5 //859
+//#define Status 5 //859
 //#define echo 1 //857
 #define timingmark 6 //860
 #define terminaltype 24 //1091
@@ -864,7 +878,7 @@ int Socket_Connect(SOCKET sock, int Error);
 VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len);
 CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int Msglen);
 BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg);
-SOCKET CreateListeningSocket(int Port);
+SOCKET CreateListeningSocket(int Port, int Message);
 TidyString(char * MailFrom);
 VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len);
 char *str_base64_encode(char *str);
@@ -875,8 +889,17 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen);
 void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
+int SendSock(SOCKET sock, char * msg);
+VOID __cdecl sockprintf(SOCKET sock, const char * format, ...);
 
 BOOL SendtoISP();
+
+// NNTP ROutines
+
+VOID InitialiseNNTP();
+VOID BuildNNTPList(struct MsgInfo * Msg);
+int NNTP_Data(int sock, int error, int eventcode);
+int NNTP_Accept(int SocketId);
 
 md5 (char *arg, unsigned char * checksum);
 
@@ -902,7 +925,7 @@ VOID Free_UI();
 VOID SendLatestUI(int Port);
 VOID SendMsgUI(struct MsgInfo * Msg);
 VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);
-VOID SeeifBBSUIFrame(struct _MESSAGE * buff, int len);
+VOID SeeifBBSUIFrame(struct _MESSAGEX * buff, int len);
 struct MsgInfo * FindMessageByNumber(int msgno);
 
 // Message Routing Routtines
@@ -962,6 +985,9 @@ extern int NumberofWPrecs;
 extern struct SEM AllocSemaphore;
 extern struct SEM MsgNoSemaphore;
 
+extern struct MsgInfo * MsgnotoMsg[];	// Message Number to Message Slot List.
+
+
 extern char hostname[];
 extern char RtUsr[];
 extern char RtUsrTemp[];
@@ -994,6 +1020,7 @@ extern int ChatApplNum;
 extern char BaseDir[];
 extern int SMTPInPort;
 extern int POP3InPort;
+extern int NNTPInPort;
 extern BOOL RemoteEmail;
 
 extern int MaxStreams;

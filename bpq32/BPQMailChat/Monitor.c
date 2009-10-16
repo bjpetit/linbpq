@@ -27,7 +27,7 @@ int Height, Width, LastY;
 
 static char kbbuf[160];
 static int kbptr=0;
-static char readbuff[1024];
+static char readbuff[100000];
 
 static BOOL StripLF = TRUE;
 static BOOL MonBBS = TRUE;

@@ -12,7 +12,6 @@ int CurrentConnections;
 
 int CurrentSockets=0;
 
-
 #define MAX_PENDING_CONNECTS 4
 
 #define VERSION_MAJOR         2
@@ -61,10 +60,9 @@ static const char cb64[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01
 static const char cd64[]="|$$$}rstuvwxyz{$$$$$$$>?@ABCDEFGHIJKLMNOPQRSTUVW$$$$$$XYZ[\\]^_`abcdefghijklmnopq";
 
 char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 void decodeblock( unsigned char in[4], unsigned char out[3] );
-
-
 
 
 int SendSock(SOCKET sock, char * msg)
@@ -138,10 +136,10 @@ BOOL InitialiseTCP()
 
 
 	if (SMTPInPort)
-		smtpsock = CreateListeningSocket(SMTPInPort);
+		smtpsock = CreateListeningSocket(SMTPInPort, WSA_ACCEPT);
 
 	if (POP3InPort)
-		pop3sock = CreateListeningSocket(POP3InPort);
+		pop3sock = CreateListeningSocket(POP3InPort, WSA_ACCEPT);
 
 	if (ISP_Gateway_Enabled)
 	{
@@ -166,7 +164,7 @@ BOOL InitialiseTCP()
 }
 
 
-SOCKET CreateListeningSocket(int Port)
+SOCKET CreateListeningSocket(int Port, int Message)
 {
 	SOCKET sock;
 	int status;
@@ -208,7 +206,7 @@ SOCKET CreateListeningSocket(int Port)
 		return FALSE;
 	}
    
-	if ((status = WSAAsyncSelect( sock, MainWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
+	if ((status = WSAAsyncSelect( sock, MainWnd, Message, FD_ACCEPT)) > 0)
 	{
 
 		sprintf(szBuff, "WSAAsyncSelect failed Error %d", WSAGetLastError());
@@ -818,6 +816,7 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 	// Set number here so they remain in sequence
 		
 	Msg->number = ++LatestMsg;
+	MsgnotoMsg[Msg->number] = Msg;
 	Msg->length = MsgLen;
 
 	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
@@ -884,9 +883,10 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 	int WriteLen=0;
 	char Mess[255];
 	int len;
-	char * ptr1, * ptr2;
 
 	// Remove lf chars
+
+	/*
 
 	ptr1 = ptr2 = Message;
 	len = Msg->length;
@@ -907,6 +907,7 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 	}
 
 	Msg->length = ptr2 - Message;
+	*/
 
 	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
 	
@@ -2144,7 +2145,9 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 	// Set number here so they remain in sequence
 		
 	Msg->number = ++LatestMsg;
+	MsgnotoMsg[Msg->number] = Msg;
 	Msg->length = MsgLen;
+
 
 	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
 
