@@ -34,7 +34,9 @@ int ClientHeight, ClientWidth;
 
 static char kbbuf[160];
 static int kbptr=0;
-static char readbuff[101000];
+
+#define MAXLINE 10000
+static char readbuff[MAXLINE+100];
 
 #define MAXSTACK 20
 static char * KbdStack[MAXSTACK];
@@ -533,6 +535,12 @@ int WritetoConsoleWindow(char * Msg, int len)
 {
 	char * ptr1, * ptr2;
 	int index;
+
+	if (len+PartLinePtr > MAXLINE)
+		PartLinePtr = 0;
+
+	if (len > MAXLINE)
+		len = MAXLINE;
 
 	if (PartLinePtr != 0)
 		SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );		

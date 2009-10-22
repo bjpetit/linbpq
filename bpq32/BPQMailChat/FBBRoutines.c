@@ -554,9 +554,6 @@ BOOL FBBDoForward(CIRCUIT * conn)
 
 		struct FBBHeaderLine * FBBHeader;
 
-		if (conn->UserPointer->ForwardingInfo->MsgCount == 0)
-			Debugprintf("MAILCHAT Msg to forward, but count = 0");
-
 		for (i=0; i < conn->FBBIndex; i++)
 		{
 			FBBHeader = &conn->FBBHeaders[i];
@@ -587,7 +584,6 @@ BOOL FBBDoForward(CIRCUIT * conn)
 			}
 
 			BBSputs(conn, proposal);
-
 		}
 
 		conn->FBBChecksum = - conn->FBBChecksum;
@@ -595,14 +591,7 @@ BOOL FBBDoForward(CIRCUIT * conn)
 		nodeprintf(conn, "F> %02X\r", conn->FBBChecksum);
 		return TRUE;
 	}
-	else
-	{
-		if (conn->UserPointer->ForwardingInfo->MsgCount > 0)
-			Debugprintf("MAILCHAT No Msgs to forward, but count = %d - reseting to 0",
-				conn->UserPointer->ForwardingInfo->MsgCount);
 
-		conn->UserPointer->ForwardingInfo->MsgCount = 0;
-	}
 	return FALSE;
 }
 

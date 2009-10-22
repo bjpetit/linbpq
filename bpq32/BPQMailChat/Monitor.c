@@ -27,7 +27,9 @@ int Height, Width, LastY;
 
 static char kbbuf[160];
 static int kbptr=0;
-static char readbuff[100000];
+
+#define MAXLINE 10000
+static char readbuff[MAXLINE+100];
 
 static BOOL StripLF = TRUE;
 static BOOL MonBBS = TRUE;
@@ -268,6 +270,13 @@ int WritetoMonitorWindow(char * Msg, int len)
 {
 	char * ptr1, * ptr2;
 	int index;
+
+	if (len+PartLinePtr > MAXLINE)
+		PartLinePtr = 0;
+
+	if (len > MAXLINE)
+		len = MAXLINE;
+
 
 	if (PartLinePtr != 0)
 		SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );		

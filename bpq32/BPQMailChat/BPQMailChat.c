@@ -252,6 +252,32 @@
 // Add Basic NNTP Interface
 // Fix possible loop in lzhuf encode
 
+// Version 1.0.3.5
+
+// Fix forwarding of Held Messages
+// More attempts to fix Chat crashes.
+// Limit join/leave problem with mismatched nodes.
+// Add Chat Node Monitoring System.
+// Change order of elements in nntp addresses (now to.at, was at.to)
+
+// Version 1.0.3.6
+
+// Restart and Exit if too many errors
+// Fix forwarding of killed messages.
+// Fix Forwarding to PaKet.
+// Fix problem if BBS signon contains words from the "Fail" list
+
+// Version 1.0.3.7
+
+// re-fix loop if compressed size is greater than 32K - reintroduced in 1.0.3.4
+// Add last message to edit users
+// Change Console and Monitor Buffer sizes
+// Don't flag msg as 'Y' on read if it was Held or Killed
+
+
+
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -270,7 +296,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 UCHAR * (FAR WINAPI * GetVersionStringptr)();
-struct PORTCONTROL * (FAR WINAPI * GetPortTableEntryptr)();
+struct _EXTPORTDATA * (FAR WINAPI * GetPortTableEntryptr)();
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
@@ -413,6 +439,7 @@ time_t MaintClock;						// Time to run housekeeping
 
 struct MsgInfo * MsgnotoMsg[100000];	// Message Number to Message Slot List.
 
+int ProgramErrors = 0;
 
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
@@ -439,6 +466,44 @@ void myInvalidParameterHandler(const wchar_t* expression,
 	}
 }
 
+// If program gets too many program errors, it will restart itself  and shut down
+
+VOID CheckProgramErrors()
+{
+	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
+	ProgramErrors++;
+
+	if (ProgramErrors > 25)
+	{
+		Logprintf(LOG_DEBUG, NULL, '!', "Too Many Program Errors - Closing");
+
+		if (cfgMinToTray)
+		{
+			DeleteTrayMenuItem(MainWnd);
+			if (hConsole)
+				DeleteTrayMenuItem(hConsole);
+			if (hMonitor)
+				DeleteTrayMenuItem(hMonitor);
+			if (hDebug)
+				DeleteTrayMenuItem(hDebug);
+		}
+
+		
+		SInfo.cb=sizeof(SInfo);
+		SInfo.lpReserved=NULL; 
+		SInfo.lpDesktop=NULL; 
+		SInfo.lpTitle=NULL; 
+		SInfo.dwFlags=0; 
+		SInfo.cbReserved2=0; 
+  		SInfo.lpReserved2=NULL; 
+
+		CreateProcess("BPQMailChat.exe" ,"BPQMailChat.exe WAIT" , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+					
+		exit(0);
+	}
+}
+
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
                      LPTSTR    lpCmdLine,
@@ -449,10 +514,31 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int BPQStream, n;
 	struct UserInfo * user;
 	struct _EXCEPTION_POINTERS exinfo;
+	_invalid_parameter_handler oldHandler, newHandler;
+	char Msg[100];
+	int i = 60;
+
+	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delau 60 Secs
+	{	
+		hWnd = CreateWindow("STATIC", "MailChat Restarting after Failure - Please Wait", 0,
+		CW_USEDEFAULT, 100, 550, 70,
+		NULL, NULL, hInstance, NULL);
+
+		ShowWindow(hWnd, nCmdShow);
+
+		while (i-- > 0)
+		{
+			wsprintf(Msg, "MailChat Restarting after Failure - Please Wait %d secs.", i);
+			SetWindowText(hWnd, Msg);
+			
+			Sleep(1000);
+		}
+
+		DestroyWindow(hWnd);
+	}
 
 	// Trap CRT Errors
 	
-	_invalid_parameter_handler oldHandler, newHandler;
    
 	newHandler = myInvalidParameterHandler;
 	oldHandler = _set_invalid_parameter_handler(newHandler);
@@ -472,7 +558,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Main message loop:
 
-	
+	Logprintf(LOG_DEBUG, NULL, '!', "Program Starting");
+
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
 		__try
@@ -554,6 +641,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	if (TempBIDRecPtr)
 		free(TempBIDRecPtr);
+
+	for (n = 1; n <= NumberofNNTPRecs; n++)
+		free(NNTPRecPtr[n]);
+
+	free(NNTPRecPtr);
 
 	free(OtherNodes);
 
@@ -668,12 +760,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
 
 	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
-	GetPortTableEntryptr = (struct PORTCONTROL *(__stdcall *)())GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
+	GetPortTableEntryptr = (struct _EXTPORTDATA *(__stdcall *)())GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
 
 	if (GetPortTableEntryptr)
 	{
 		int n;
-		struct PORTCONTROL * PORTVEC;
+		struct _EXTPORTDATA * PORTVEC;
 
 		KISSOnly = TRUE;
 		
@@ -681,9 +773,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		{
 			PORTVEC = GetPortTableEntryptr(n);
 
-			if (PORTVEC->PORTTYPE == 16)		// EXTERNAL
+			if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
+			{
 				KISSOnly = FALSE;
 
+				if (_memicmp(PORTVEC->PORT_DLL_NAME, "BPQAXIP.DLL", 11) == 0)
+					AXIPPort = PORTVEC->PORTCONTROL.PORTNUMBER;
+			}
 		}
 	}
 
@@ -1520,6 +1616,9 @@ BOOL Initialise()
 	strcpy(RtUsrTemp, BaseDir);
 	strcat(RtUsrTemp, "\\ChatUsers.tmp");
 
+	strcpy(RtKnown, BaseDir);
+	strcat(RtKnown, "\\RTKnown.txt");
+
 	BBSApplMask = 1<<(BBSApplNum-1);
 	ChatApplMask = 1<<(ChatApplNum-1);
 
@@ -1543,6 +1642,8 @@ BOOL Initialise()
 			rtlink(_strdup(&OtherNodes[ptr]));			
 			ptr+= (len + 1);
 		}
+
+		SetupChat();
 	}
 
 	// Make backup copies of Databases
@@ -1894,6 +1995,7 @@ int DoReceivedData(int Stream)
 						Debugprintf("MAILCHAT *** Program Error in UnpackFBBBinary");
 						Disconnect(conn->BPQStream);
 						conn->InputLen=0;
+						CheckProgramErrors();
 						return 0;
 					}
 				}
@@ -1928,6 +2030,7 @@ int DoReceivedData(int Stream)
 							Debugprintf("MAILCHAT *** Program Error Processing input %s ", conn->InputBuffer);
 							Disconnect(conn->BPQStream);
 							conn->InputLen=0;
+							CheckProgramErrors();
 							return 0;
 						}
 						conn->InputLen=0;
@@ -1954,6 +2057,7 @@ int DoReceivedData(int Stream)
 							Debugprintf("MAILCHAT *** Program Error Processing input %s ", Buffer);
 							Disconnect(conn->BPQStream);
 							conn->InputLen=0;
+							CheckProgramErrors();
 							return 0;
 						}
 
@@ -2655,8 +2759,7 @@ BOOL CheckBadWords(char * Msg)
 VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 {
 	LINK    *link;
-//	char Msg[255];
-//	int len;
+	KNOWNNODE *node;
 
 	if (conn->Flags & CHATMODE)
 	{	
@@ -2671,7 +2774,30 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 			}
 		}
 
-		// Not a defined node - assume it's a user
+		// See if from a previously known node
+
+		node = knownnode_find(conn->Callsign);
+
+		if (node)
+		{
+			// A node is trying to link, but we don't have it defined - close
+
+			Logprintf(LOG_CHAT, conn, '!', "Node %s connected, but is not defined as a Node - closing",
+				conn->Callsign);
+
+			nodeprintf(conn, "Node %s does not have $s defined as a node to link to - closing.\r",
+				OurNode, conn->Callsign);
+
+			Flush(conn);
+
+			Sleep(500);
+
+			Disconnect(conn->BPQStream);
+
+			return;
+		}
+
+		// Not a defined or known node - pretty safe to assume it's a user
 
 		if (!rtloginu (conn))
 		{
@@ -2706,7 +2832,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	int CmdLen;
 	struct _EXCEPTION_POINTERS exinfo;
 
-
 	if (conn->Flags & CHATMODE)
 	{
 		GetSemaphore(&ChatSemaphore);
@@ -2734,6 +2859,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			Debugprintf("MAILCHAT *** Program Error in ProcessFBBLine");
 			Disconnect(conn->BPQStream);
+			CheckProgramErrors();
 		}
 		return;
 	}
@@ -2748,6 +2874,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			Debugprintf("MAILCHAT *** Program Error in ProcessMSGLine");
 			Disconnect(conn->BPQStream);
+			CheckProgramErrors();
 		}
 		return;	}
 
@@ -2761,6 +2888,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			Debugprintf("MAILCHAT *** Program Error in ProcessMsgTitle");
 			Disconnect(conn->BPQStream);
+			CheckProgramErrors();
 		}
 		return;
 	}
@@ -2775,6 +2903,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			Debugprintf("MAILCHAT *** Program Error in ProcessMBLLine");
 			Disconnect(conn->BPQStream);
+			CheckProgramErrors();
 		}
 		return;
 	}
@@ -3697,9 +3826,10 @@ BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
 {
 	// Return TRUE if user ias allowed to read message
 	
+	if (SYSOP) return TRUE;			// Sysop can list or read anything
+
 	if (Msg->status != 'K')
 	{
-		if (SYSOP) return TRUE;			// Sysop can list or read anything
 	
 		if (Msg->type == 'B' || Msg->type == 'T') return TRUE;
 
@@ -3877,8 +4007,11 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
 		{
-			Msg->status = 'Y';
-			Msg->datechanged=time(NULL);
+			if ((Msg->status != 'K') && (Msg->status != 'H'))
+			{
+				Msg->status = 'Y';
+				Msg->datechanged=time(NULL);
+			}
 		}
 
 
@@ -4573,7 +4706,11 @@ nextline:
 					HoldReason = "Suspect Date Sent";
 				}
 				else if (Age > BidLifetime)
-					Msg->status = 'K';
+				{
+					Msg->status = 'H';
+					HoldReason = "Message too old";
+
+				}
 				else
 					GetWPInfoFromRLine(Msg->from, ptr2, result);
 			}
@@ -4629,8 +4766,6 @@ nextline:
 			if (!(conn->BBSFlags & BBS))
 				nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
 		}
-
-		// Set up forwarding bitmap
 
 		FWDCount = MatchMessagetoBBSList(Msg, conn);
 
@@ -4776,6 +4911,8 @@ ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
 		circuit->u.link->flags = p_linked;
  	  	circuit->flags = p_linked;
 		state_tell(circuit);
+		NeedStatus = TRUE;
+
 		return TRUE;
 	}
 
@@ -5125,20 +5262,24 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	Buffer[len]=0;
 	_strupr(Buffer);
 
+	Scripts = ForwardingInfo->ConnectScript;	
+	
+	if (Scripts[ForwardingInfo->ScriptIndex] == NULL)			// Only Check until script is finished
+		goto CheckForSID;
+
 	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED"))
 	{
 		// Connect Failed
 
 		Disconnect(conn->BPQStream);
-
 		return FALSE;
 	}
 
 	// The pointer is only updated when we get the connect, so we can tell when the last line is acked
 	// The first entry is always from Connected event, so don't have to worry about testing entry -1 below
 
-	Scripts = ForwardingInfo->ConnectScript;
+
 
 	// NETROM to  KA node returns
 
@@ -5199,6 +5340,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	// No more steps, Look for SID or Prompt
 
+CheckForSID:
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
@@ -5220,6 +5362,12 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		}
 
 		return TRUE;
+	}
+
+	if (memcmp(Buffer, "[PAKET ", 7) == 0)
+	{
+		conn->BBSFlags |= BBS;
+		conn->BBSFlags |= MBLFORWARDING;
 	}
 
 	if (Buffer[len-2] == '>')
@@ -5432,7 +5580,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	{
 		Msg=MsgHddrPtr[m];
 
-		if (Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
+		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
 		{
 			// Message to be sent - do a consistancy check (State, etc)
 
@@ -5554,7 +5702,6 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
 	}
 
 	free(MailBuffer);
-
 }
 
 

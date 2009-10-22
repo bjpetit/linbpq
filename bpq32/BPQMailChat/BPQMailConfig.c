@@ -755,6 +755,8 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, IDC_ZIP, user->Address);
 			SetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS);
 
+			SetDlgItemInt(hDlg, IDC_LASTLISTED, user->lastmsg, FALSE);
+
 			CheckDlgButton(hDlg, IDC_SYSOP, (user->flags & F_SYSOP));
 			CheckDlgButton(hDlg, IDC_BBSFLAG, (user->flags & F_BBS));
 			CheckDlgButton(hDlg, IDC_PMSFLAG, (user->flags & F_PMS));
@@ -775,6 +777,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 	SetDlgItemText(hDlg, IDC_PASSWORD, "");
 	SetDlgItemText(hDlg, IDC_ZIP, "");
 	SetDlgItemText(hDlg, IDC_HOMEBBS, "");
+	SetDlgItemInt(hDlg, IDC_LASTLISTED, LatestMsg, FALSE);
 
 	CheckDlgButton(hDlg, IDC_SYSOP, FALSE);
 	CheckDlgButton(hDlg, IDC_BBSFLAG, FALSE);
@@ -925,6 +928,7 @@ VOID Do_Delete_User(HWND hDlg)
 VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 {
 	struct UserInfo * user;
+	BOOL OK;
 
 	if (CurrentConfigIndex == -1)
 	{
@@ -946,6 +950,7 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 	GetDlgItemText(hDlg, IDC_PASSWORD, user->pass, 12);
 	GetDlgItemText(hDlg, IDC_ZIP, user->Address, 60);
 	GetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS, 40);
+	user->lastmsg = GetDlgItemInt(hDlg, IDC_LASTLISTED, &OK, FALSE);
 
 	if (IsDlgButtonChecked(hDlg, IDC_BBSFLAG))
 	{

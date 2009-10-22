@@ -4,6 +4,10 @@
 
 // Standard __except handler for try/except
 
+VOID CheckProgramErrors();
+
+extern int ProgramErrors;
+
 #define My__except_Routine(Message) \
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
 {\
@@ -11,6 +15,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
+	CheckProgramErrors();\
 }
 
 #define My__except_RoutineWithDisconnect(Message) \
@@ -20,6 +25,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
+	CheckProgramErrors();\
 	if (conn->BPQStream <  0)\
 		CloseConsole(conn->BPQStream);\
 	else\
@@ -136,6 +142,15 @@ typedef struct link_t
 	char *call;
 	int  flags; // See circuit flags.
 } LINK;
+
+
+typedef struct knownnode_t
+{
+	struct knownnode_t *next;
+	char *call;
+	time_t LastHeard;
+
+} KNOWNNODE;
 
 
 // Topics.
@@ -557,6 +572,7 @@ static int  rtrun = FALSE;
 #define rtjoin  "*** Joined"
 #define rtleave "*** Left"
 
+KNOWNNODE *knownnode_find(char *call);
 static void cn_dec(CIRCUIT *circuit, NODE *node);
 static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias);
 static NODE *node_find(char *call);
@@ -597,8 +613,8 @@ VOID ChatTimer();
 VOID nputs(CIRCUIT * conn, char * buf);
 VOID node_close();
 VOID removelinks();
-
-
+VOID SetupChat()
+;
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
 #define ReturntoNode(stream) SessionControl(stream,3,0)
@@ -976,6 +992,10 @@ extern struct MsgInfo ** MsgHddrPtr;
 extern BIDRec ** BIDRecPtr;
 extern int NumberofBIDs;
 
+extern struct NNTPRec ** NNTPRecPtr;
+extern int NumberofNNTPRecs;
+
+
 extern int NumberofMessages;
 extern int FirstMessagetoForward;
 
@@ -991,6 +1011,10 @@ extern struct MsgInfo * MsgnotoMsg[];	// Message Number to Message Slot List.
 extern char hostname[];
 extern char RtUsr[];
 extern char RtUsrTemp[];
+extern char RtKnown[];
+extern int AXIPPort;
+extern BOOL NeedStatus;
+
 extern BOOL ISP_Gateway_Enabled;
 extern BOOL SMTPAuthNeeded;
 

@@ -3,16 +3,26 @@
 char OurNode[10];
 char OurAlias[10];
 
+char RtKnown[MAX_PATH];
 char RtUsr[MAX_PATH] = "STUsers.txt";
 char RtUsrTemp[MAX_PATH] = "STUsers.tmp";
+
+int AXIPPort =0;
 
 CIRCUIT *circuit_hd = NULL;			// This is a chain of RT circuits. There may be others
 NODE *node_hd = NULL;
 LINK *link_hd = NULL;
 TOPIC *topic_hd = NULL;
 USER *user_hd = NULL;
+KNOWNNODE * known_hd = NULL;
 
 int ChatTmr = 0;
+
+BOOL NeedStatus = FALSE;
+
+static void node_dec(NODE *node);
+static KNOWNNODE *knownnode_add(char *call);
+VOID SendChatLinkStatus();
 
 
 char * strlop(char * buf, char delim)
@@ -192,6 +202,7 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 		{
 			Debugprintf("MAILCHAT *** Program Error procesing Chat Node Message %s", Buffer);
 			Disconnect(conn->BPQStream);
+			CheckProgramErrors();
 		}
 		return;
 	}
@@ -464,14 +475,22 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 
 		case id_leave :
 
-			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			user = user_find(ucall, ncall);
-			if (!user) break;
+			if (!user)
+			{
+				Debugprintf("MAILCHAT: Leave for %s from %s when not on list", ucall, ncall);
+				break;
+			}
+
+			echo(ckt_from, node, Buffer);  // Relay to other nodes.
+
 			f2 = strlop(f1, ' ');
 			if (!f2) break;
+
 			text_tellu(user, rtleave, NULL, o_all);
 			ckt_from->refcnt--;
 			cn_dec(ckt_from, node);
+			node_dec(node);
 			strnew(&user->name, f1);
 			strnew(&user->qth,  f2);
 			upduser(user);
@@ -489,8 +508,16 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			if (ln)
 			{
 				cn_dec(ckt_from, ln);
+				node_dec(ln);
+
 				echo(ckt_from, node, Buffer);  // Relay to other nodes if we had node. COuld get loop if
 			}
+			else
+			{
+				Debugprintf("MAILCHAT: node %s unlink for %s when not on list", ncall, ucall);
+				break;
+			}
+
 			break;
 
 // Node ncall acquired a link to node ucall, alias f1.
@@ -504,6 +531,12 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 				cn_inc(ckt_from, ucall, f1);
 				echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			}
+			else
+			{
+				Debugprintf("MAILCHAT: node %s link for %s when already on list", ncall, ucall);
+				break;
+			}
+
 			break;
 
 // User ucall at node ncall sent f2 to user f1.
@@ -647,6 +680,8 @@ static NODE *node_inc(char *call, char *alias)
 
 	if (!node)
 	{
+		knownnode_add(call);
+
 		node = zalloc(sizeof(NODE));
 		sl_ins_hd(node, node_hd);
 		node->call  = _strdup(call);
@@ -669,6 +704,8 @@ static void node_dec(NODE *node)
 
 	tp = NULL;
 
+	Debugprintf("MAILCHAT: Removing %s From Node List", node->call);
+
 	for (t = node_hd; t; tp = t, t = t->next)
 	{
 		if (t == node)
@@ -682,6 +719,8 @@ static void node_dec(NODE *node)
 			break;
 		}
 	}
+	Debugprintf("MAILCHAT: Remove Complete");
+
 }
 
 // User joins a topic.
@@ -795,7 +834,7 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 {
 	CN *c, *cp;
 
-	node_dec(node);
+	Debugprintf("MAILCHAT: Remove c/n %s ", node->call);
 
 	cp = NULL;
 
@@ -803,13 +842,68 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 	{
 		if (c->node == node)
 		{
-			if (--c->refcnt) return;			// Still in use
+			CN * cn;
+			int len;
+			char line[100]="";
+			
+			if (--c->refcnt) 
+			{
+				Debugprintf("MAILCHAT: Remove c/n Node %s still in use refcount %d", node->call, c->refcnt);
+				return;			// Still in use
+			}
+			Debugprintf("MAILCHAT: Refcount 0 - Removing %s. List Before is:", node->call);
+
+			for (cn = circuit->hnode; cn; cn = cn->next)
+			{
+				if (cn->node && cn->node->alias)
+				{
+					len = wsprintf(line, "%s %s", line, cn->node->alias);
+					if (len > 80)
+					{
+						Debugprintf("%s\r", line);
+						len = wsprintf(line, "            ");
+					}
+				}
+				else
+				{
+					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
+				}
+			}
+
+			Debugprintf("%s\r", line);
+
 
 			// CN record no longer needed
 
-			if (cp) cp->next = c->next; else circuit->hnode = c->next;
+			if (cp)
+				cp->next = c->next;
+			else
+				circuit->hnode = c->next;
 
 			free(c);
+
+			Debugprintf("MAILCHAT: Remove c/n Trace After");
+
+			line[0] = 0;
+
+			for (cn = circuit->hnode; cn; cn = cn->next)
+			{
+				if (cn->node && cn->node->alias)
+				{
+					len = wsprintf(line, "%s %s", line, cn->node->alias);
+					if (len > 80)
+					{
+						Debugprintf("%s\r", line);
+						len = wsprintf(line, "            ");
+					}
+				}
+				else
+				{
+					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
+				}
+			}
+
+			Debugprintf("%s\r", line);
 
 			break;
 		}
@@ -1094,6 +1188,7 @@ void link_drop(CIRCUIT *circuit)
 {
 	USER *user, *usernext;
 	CN   *cn;
+	struct _EXCEPTION_POINTERS exinfo;
 
 // So we don't try and send anything on this circuit.
 
@@ -1103,6 +1198,8 @@ void link_drop(CIRCUIT *circuit)
 	circuit->flags = p_nil;
 
 // Users connected on the dropped link are no longer connected.
+
+	__try {
 
 	for (user = user_hd; user; user = usernext)
 	{
@@ -1117,7 +1214,12 @@ void link_drop(CIRCUIT *circuit)
 			user_leave(user);
 		}
 	}
+
+	} My__except_Routine("link_drop clear users");
+
 // Any node known from the dropped link is no longer known.
+
+	__try{
 
 	for (cn = circuit->hnode; cn; cn = cn->next)
 	{
@@ -1125,9 +1227,19 @@ void link_drop(CIRCUIT *circuit)
 		node_dec(cn->node);
 	}
 
+	} My__except_Routine("link_drop clear nodes");
+
+
 // The circuit is no longer used.
 
+	__try{
+
+
 	circuit_free(circuit);
+
+    } My__except_Routine("link_drop clear circuit");
+
+	NeedStatus = TRUE;
 }
 
 // Handle an incoming control frame from a linked RT system.
@@ -1181,6 +1293,50 @@ VOID removelinks()
 	}
 	link_hd = NULL;
 }
+VOID removeknown()
+{
+	// Save Known Nodes list and free struct
+	
+	KNOWNNODE *node, *nextnode;
+	FILE *out;
+
+	out = fopen(RtKnown, "w");
+
+	for (node = known_hd; node; node = nextnode)
+	{
+		fprintf(out, "%s %d\n", node->call, node->LastHeard);
+
+		nextnode = node->next;
+		free(node->call);
+		free(node);
+	}
+	known_hd = NULL;
+
+	fclose(out);
+}
+
+VOID LoadKnown()
+{
+	// Reload Known Nodes list 
+	
+	FILE *in;
+	char buf[128];
+	char * ptr;
+
+	in = fopen(RtKnown, "r");
+
+	while(fgets(buf, 128, in))
+	{
+		ptr = strchr(buf, ' ');
+		if (ptr)
+		{
+			*(ptr) = 0;
+			knownnode_add(buf);
+		}
+	}
+
+	fclose(in);
+}
 
 // We don't allocate memory for circuit, but we do chain it
 
@@ -1197,7 +1353,7 @@ CIRCUIT *circuit_new(CIRCUIT *circuit, int flags)
 	{
 		if (c == circuit)
 		{
-			Debugprintf("MAILCHAT: Attempting to add Ciruit when already on list");
+			Debugprintf("MAILCHAT: Attempting to add Circuit when already on list");
 			return circuit;
 		}
 	}
@@ -1260,6 +1416,8 @@ int rtloginl (CIRCUIT *conn, char * call)
 	link->flags = p_linked;
 	state_tell(conn);
 
+	NeedStatus = TRUE;
+
 	return TRUE;
 
 }
@@ -1316,6 +1474,8 @@ void logout(CIRCUIT *circuit)
 		user_tell(user, id_leave);
 		text_tellu(user, rtleave, NULL, o_all);
 		cn_dec(circuit, user->node);
+		node_dec(user->node);
+
 		user_leave(user);
 	}
 
@@ -1350,6 +1510,7 @@ void show_users(CIRCUIT *circuit)
 		__except(EXCEPTION_EXECUTE_HANDLER)
 		{
 			Debugprintf("MAILCHAT *** Program Error in show_users");
+			CheckProgramErrors();
 		}
 	}
 }
@@ -1412,6 +1573,7 @@ static void show_circuits(CIRCUIT *conn)
 		if (circuit->flags & p_linked)
 		{
 			len = wsprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
+
 			for (cn = circuit->hnode; cn; cn = cn->next)
 			{
 				if (cn->node && cn->node->alias)
@@ -1655,8 +1817,10 @@ VOID node_close()
 static void node_keepalive()
 {
 	CIRCUIT *circuit;
+	
+	NeedStatus = TRUE;					// Send Report to Monitor
 
-	if (user_hd)			// Any Users?
+	if (user_hd)						// Any Users?
 	{
 		for (circuit = circuit_hd; circuit; circuit = circuit->next)
 		{
@@ -1685,6 +1849,12 @@ VOID ChatTimer()
 	int len;
 
 	ClearDebugWindow();
+
+	if (NeedStatus)
+	{
+		NeedStatus = FALSE;
+		SendChatLinkStatus();
+	}
 
 	WritetoDebugWindow("Chat Users\r\n", 12);
 
@@ -1747,17 +1917,147 @@ VOID ChatTimer()
 		i++;
 	}
 
-
 	ChatTmr++;
 
 	if (ChatTmr > 60) // 10 Mins
 	{
-		ChatTmr = 0;
+		ChatTmr = 1;
 		node_keepalive();
+		ProgramErrors = 0;
 	}
 }
 
 VOID FreeChatMemory()
 {
-	removelinks();
+	struct _EXCEPTION_POINTERS exinfo;
+
+	__try {
+
+		removelinks();
+		removeknown();
+	}
+	My__except_Routine("FreeChatMemory");
+
 }
+
+// Find a call in the known node list.
+
+KNOWNNODE *knownnode_find(char *call)
+{
+	KNOWNNODE *node;
+
+	for (node = known_hd; node; node = node->next)
+	{
+		if (matchi(node->call, call))
+			break;
+	}
+
+	return node;
+}
+
+// Add a known node.
+
+static KNOWNNODE *knownnode_add(char *call)
+{
+	KNOWNNODE *node;
+
+	node = knownnode_find(call);
+
+	if (!node)
+	{
+		node = zalloc(sizeof(KNOWNNODE));
+		sl_ins_hd(node, known_hd);
+		node->call  = _strdup(call);
+	}
+
+	node->LastHeard = time(NULL);
+	return node;
+}
+
+static char UIDEST[10] = "DUMMY";
+static char AXDEST[7];
+static char MYCALL[7];
+
+#pragma pack(1)
+
+
+typedef struct _MESSAGEX
+{
+//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+
+	struct _MESSAGE * CHAIN;
+
+	UCHAR	PORT;
+	USHORT	LENGTH;
+
+	UCHAR	DEST[7];
+	UCHAR	ORIGIN[7];
+
+//	 MAY BE UP TO 56 BYTES OF DIGIS
+
+	UCHAR	CTL;
+	UCHAR	PID;
+	UCHAR	DATA[256];
+
+}MESSAGEX, *PMESSAGEX;
+
+#pragma pack()
+
+VOID SetupChat()
+{
+	ConvToAX25(OurNode, MYCALL);
+	ConvToAX25(UIDEST, AXDEST);
+
+	LoadKnown();
+}
+
+
+VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len)
+{
+	MESSAGEX AXMSG;
+
+	PMESSAGEX AXPTR = &AXMSG;
+
+	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	memcpy(AXPTR->DEST, AXDEST, 7);
+	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+	AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+	AXPTR->CTL = 3;		//UI
+	AXPTR->PID = 0xf0;
+	memcpy(AXPTR->DATA, Msg, Len);
+
+	SendRaw(AXIPPort, (char *)&AXMSG.DEST, Len + 16);
+
+	return;
+
+}
+
+VOID SendChatLinkStatus()
+{
+	char Msg[256] = {0};
+	LINK * link;
+	int len;
+
+	if (AXIPPort == 0)
+		return;
+
+	for (link = link_hd; link; link = link->next)
+	{
+		len = wsprintf(Msg, "%s%s %c ", Msg, link->call, '0' + link->flags);
+
+		if (len > 240)
+			break;
+
+	}
+
+	Msg[len++] = '\r';
+
+	Send_MON_Datagram(Msg, len);
+
+}
+
+
