@@ -355,7 +355,6 @@ static void rduser(USER *user)
 			qth = strlop(name, ' ');
 			strnew(&user->name, name);
 
-
 			if (!qth) break;
 			strnew(&user->qth,  qth);
 			break;
@@ -426,11 +425,16 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // User ucall at node ncall changed their Name/QTH info.
 
 		case id_user :
-			echo(ckt_from, node, Buffer);  // Relay to other nodes.
+
 			user = user_find(ucall, ncall);
 			if (!user) break;
 			f2 = strlop(f1, ' ');
 			if (!f2) break;
+
+			if ((strcmp(user->name, f1) == 0) && (strcmp(user->qth, f2) == 0))	// No Change?
+				break;
+
+			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			strnew(&user->name, f1);
 			strnew(&user->qth,  f2);
 			upduser(user);
@@ -1700,7 +1704,19 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 		case 'k' : show_nodes(circuit);                 return TRUE;
 
 		case 'n' :
-			strnew(&user->name, Buffer + 3);
+
+			f1 = &Buffer[2];
+
+			while ((*f1 != 0) && (*f1 == ' '))
+				f1++;
+
+			if (*f1 == 0)
+			{
+				nprintf(circuit, "Name is %s\r", user->name);
+				return TRUE;
+			}
+
+			strnew(&user->name, f1);
 			nprintf(circuit, "Name set to %s\r", user->name);
 			upduser(user);
 			user_tell(user, id_user);
@@ -1709,7 +1725,20 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 		case 'p' : show_circuits(circuit); return TRUE;
 
 		case 'q' :
-			strnew(&user->qth, Buffer + 3);
+
+			f1 = &Buffer[2];
+
+			while ((*f1 != 0) && (*f1 == ' '))
+				f1++;
+
+			if (*f1 == 0)
+			{
+				nprintf(circuit, "QTH is %s\r", user->qth);
+				return TRUE;
+			}
+
+			strnew(&user->qth, f1);
+			
 			nprintf(circuit, "QTH set to %s\r", user->qth);
 			upduser(user);
 			user_tell(user, id_user);

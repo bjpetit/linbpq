@@ -274,7 +274,12 @@
 // Change Console and Monitor Buffer sizes
 // Don't flag msg as 'Y' on read if it was Held or Killed
 
+// Version 1.0.3.8
 
+// Don't connect if all hessages for a BBS are held.
+// Hold message if From or To are missing.
+// Fix parsing of /n and /q commands
+// fix possible loop on changing name or qth
 
 
 
@@ -334,7 +339,7 @@ struct UserInfo * BBSChain = NULL;						// Chain of users that are BBSes
 struct MsgInfo ** MsgHddrPtr=NULL;
 int NumberofMessages=0;
 
-int FirstMessagetoForward=0;					// Lowest Message wirh a forward bit set - limits search
+int FirstMessageIndextoForward=0;					// Lowest Message wirh a forward bit set - limits search
 
 BIDRec ** BIDRecPtr=NULL;
 int NumberofBIDs=0;
@@ -1039,7 +1044,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			for (user = BBSChain; user; user = user->BBSNext)
 			{
-				wsprintf(MenuLine, "%s %d Msgs", user->Call, user->ForwardingInfo->MsgCount);
+				wsprintf(MenuLine, "%s %d Msgs", user->Call, CountMessagestoForward(user->BBSNumber));
 
 				if (ModifyMenu(hFWDMenu, IDM_FORWARD_ALL + user->BBSNumber, 
 					MF_BYCOMMAND | MF_STRING, IDM_FORWARD_ALL + user->BBSNumber, MenuLine) == 0)
@@ -1812,7 +1817,7 @@ int Connected(Stream)
 			conn->PageLen = user->PageLen;
 			conn->Paging = (user->PageLen > 0);
 
-			conn->NextMessagetoForward = FirstMessagetoForward;
+			conn->NextMessagetoForward = FirstMessageIndextoForward;
 
 			if (paclen == 0)
 				paclen = 236;
@@ -2443,15 +2448,15 @@ Next:
 
 		if (memcmp(MsgRec.fbbs, zeros, NBMASK) != 0)
 		{
-			if (FirstMessagetoForward == 0)
-				FirstMessagetoForward = NumberofMessages;			// limit search
+			if (FirstMessageIndextoForward == 0)
+				FirstMessageIndextoForward = NumberofMessages;			// limit search
 		}
 
 		goto Next;
 	}
 
-	if (FirstMessagetoForward == 0)
-		FirstMessagetoForward = NumberofMessages;			// limit search
+	if (FirstMessageIndextoForward == 0)
+		FirstMessageIndextoForward = NumberofMessages;			// limit search
 
 
 	CloseHandle(Handle);
@@ -5070,7 +5075,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			}
 	}
 
-	for (m = FirstMessagetoForward; m <= NumberofMessages; m++)
+	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
 	{
 		Msg=MsgHddrPtr[m];
 
@@ -5382,7 +5387,7 @@ CheckForSID:
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
 			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
 
-		conn->NextMessagetoForward = FirstMessagetoForward;
+		conn->NextMessagetoForward = FirstMessageIndextoForward;
 
 		if (conn->BBSFlags & FBBForwarding)
 		{
@@ -5507,7 +5512,7 @@ VOID FWDTimerProc()
 
 				if (ForwardingInfo->Enabled)
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag)
+						if (SeeifMessagestoForward(user->BBSNumber) || ForwardingInfo->ReverseFlag)
 							if (ConnecttoBBS(user))
 								ForwardingInfo->Forwarding = TRUE;
 
@@ -5530,7 +5535,7 @@ void StartForwarding(int BBSNumber)
 			if (ForwardingInfo)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (ForwardingInfo->MsgCount || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
+						if (SeeifMessagestoForward(BBSNumber) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
 							if (ConnecttoBBS(user))
 								ForwardingInfo->Forwarding = TRUE;
 	}
@@ -5584,6 +5589,20 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 		{
 			// Message to be sent - do a consistancy check (State, etc)
 
+			if ((Msg->from[0] == 0) || (Msg->to[0] == 0))
+			{
+				int Length=0;
+				char * MailBuffer = malloc(100);
+				char Title[100];
+
+				Length += wsprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+				wsprintf(Title, "Message %d Held - %s", Msg->number, "Missing From: or To: field");
+				SendMessageToSYSOP(Title, MailBuffer, Length);
+			
+				Msg->status = 'H';
+				continue;
+			}
+
 			conn->NextMessagetoForward = m + 1;			// So we don't offer again if defered
 
 			// if FBB forwarding add to list, eise save pointer
@@ -5632,6 +5651,41 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	return Found;
 }
 
+BOOL SeeifMessagestoForward (int BBSNumber)
+{
+	// See if any messages are queued for this BBS
+
+	int m;
+	struct MsgInfo * Msg;
+
+	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+int CountMessagestoForward (int BBSNumber)
+{
+	// See if any messages are queued for this BBS
+
+	int m, n=0;
+	struct MsgInfo * Msg;
+
+	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+			n++;
+	}
+
+	return n;
+}
 int check_fwd_bit(char *mask, int bbsnumber)
 {
 	return (mask[(bbsnumber - 1) / 8] & (1 << ((bbsnumber - 1) % 8)));

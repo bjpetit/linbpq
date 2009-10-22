@@ -813,6 +813,8 @@ BOOL Reverse_Forward(struct UserInfo * user);
 ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 BOOL FBBDoForward(CIRCUIT * conn);
 BOOL FindMessagestoForward (CIRCUIT * conn);
+BOOL SeeifMessagestoForward (int BBSNumber);
+int CountMessagestoForward (int BBSNumber);
 VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
 MultiLineDialogToREG_MULTI_SZ(HWND hWnd, int DLGItem, HKEY hKey, char * ValueName);
 int Do_BBS_Sel_Changed(HWND hDlg);
@@ -997,7 +999,7 @@ extern int NumberofNNTPRecs;
 
 
 extern int NumberofMessages;
-extern int FirstMessagetoForward;
+extern int FirstMessageIndextoForward;
 
 extern WPRec ** WPRecPtr;
 extern int NumberofWPrecs;

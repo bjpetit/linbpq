@@ -1186,8 +1186,8 @@ VOID Do_Save_Msg(HWND hDlg)
 				set_fwd_bit(Msg->fbbs, BBSNumber);
 				user->ForwardingInfo->MsgCount++;
 				clear_fwd_bit(Msg->forw, BBSNumber);
-				if (FirstMessagetoForward > CurrentMsgIndex)
-					FirstMessagetoForward = CurrentMsgIndex;
+				if (FirstMessageIndextoForward > CurrentMsgIndex)
+					FirstMessageIndextoForward = CurrentMsgIndex;
 			}
 		}
 		else if (n == BST_CHECKED)
@@ -2330,7 +2330,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		case IDC_HRHELP:
 			
 			ShellExecute(hDlg,"open",
-				"http://www.cantab.net/users/john.wiseman/MailChat/Forwarding.html",
+				"http://www.cantab.net/users/john.wiseman/Documents/BPQ Mail and Chat Server Mail Forwarding.htm",
 				"", NULL, SW_SHOWNORMAL); 
 
 			return TRUE;
