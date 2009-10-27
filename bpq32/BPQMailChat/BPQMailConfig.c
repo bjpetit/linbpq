@@ -1640,21 +1640,18 @@ VOID SaveWindowConfig()
 
 	if (retCode == ERROR_SUCCESS)
 	{
-		wsprintf(Size,"%d,%d,%d,%d",ConsoleRect.left,ConsoleRect.right,ConsoleRect.top,ConsoleRect.bottom);
-		retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+		if (ConsHeader[0]->ConsoleRect.right)
+		{
+			wsprintf(Size,"%d,%d,%d,%d",ConsHeader[0]->ConsoleRect.left, ConsHeader[0]->ConsoleRect.right,
+				ConsHeader[0]->ConsoleRect.top, ConsHeader[0]->ConsoleRect.bottom);
 
+			retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+		}
 		wsprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
 		retCode = RegSetValueEx(hKey,"MonitorSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
 		wsprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
 		retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
-		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
-		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&WarnWrap,4);
-		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&WrapInput,4);
-		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&FlashOnConnect,4);
-		retCode = RegSetValueEx(hKey,"CloseWindowOnBye",0,REG_DWORD,(BYTE *)&CloseWindowOnBye,4);
 
 		retCode = RegSetValueEx(hKey,"Log_BBS",0,REG_DWORD,(BYTE *)&LogBBS,4);
 		retCode = RegSetValueEx(hKey,"Log_TCP",0,REG_DWORD,(BYTE *)&LogTCP,4);
@@ -1663,6 +1660,29 @@ VOID SaveWindowConfig()
 		wsprintf(Size,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
 		retCode = RegSetValueEx(hKey, "Version",0, REG_SZ,(BYTE *)&Size, strlen(Size));
 
+		RegCloseKey(hKey);
+	}
+
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole",
+                              0,	// Reserved
+							  0,	// Class
+							  0,	// Options
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		if (ConsHeader[1]->ConsoleRect.right)
+		{
+			wsprintf(Size,"%d,%d,%d,%d",ConsHeader[1]->ConsoleRect.left, ConsHeader[1]->ConsoleRect.right,
+				ConsHeader[1]->ConsoleRect.top, ConsHeader[1]->ConsoleRect.bottom);
+
+			retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+		}
+		
 		RegCloseKey(hKey);
 	}
 
@@ -1813,34 +1833,6 @@ TryAgain:
 		RegQueryValueEx(hKey,"AuthenticateSMTP",0,			
 			(ULONG *)&Type,(UCHAR *)&SMTPAuthNeeded,(ULONG *)&Vallen);
 
-		Vallen=80;
-		RegQueryValueEx(hKey,"ConsoleSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"Bells",0,			
-			(ULONG *)&Type,(UCHAR *)&Bells,(ULONG *)&Vallen);
-	
-		Vallen=4;
-		RegQueryValueEx(hKey,"StripLF",0,			
-			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"CloseWindowOnBye",0,			
-			(ULONG *)&Type,(UCHAR *)&CloseWindowOnBye,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"WarnWrap",0,			
-			(ULONG *)&Type,(UCHAR *)&WarnWrap,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"WrapInput",0,			
-			(ULONG *)&Type,(UCHAR *)&WrapInput,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"FlashOnConnect",0,			
-			(ULONG *)&Type,(UCHAR *)&FlashOnConnect,(ULONG *)&Vallen);
-
 		Vallen=4;
 		RegQueryValueEx(hKey,"Log_BBS",0,			
 			(ULONG *)&Type,(UCHAR *)&LogBBS,(ULONG *)&Vallen);
@@ -1852,8 +1844,6 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey,"Log_CHAT",0,			
 			(ULONG *)&Type,(UCHAR *)&LogCHAT,(ULONG *)&Vallen);
-
-		sscanf(Size,"%d,%d,%d,%d",&ConsoleRect.left,&ConsoleRect.right,&ConsoleRect.top,&ConsoleRect.bottom);
 
 		Vallen=80;
 		RegQueryValueEx(hKey,"MonitorSize",0,			

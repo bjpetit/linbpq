@@ -276,12 +276,19 @@
 
 // Version 1.0.3.8
 
-// Don't connect if all hessages for a BBS are held.
+// Don't connect if all messages for a BBS are held.
 // Hold message if From or To are missing.
 // Fix parsing of /n and /q commands
 // fix possible loop on changing name or qth
 
+// Version 1.0.3.9
 
+// More Chat fixes and monitoring
+// Added additional console for chat
+
+// Version 1.0.3.10
+
+// Fix for corruption of CIrcuit-Node chain.
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -486,8 +493,10 @@ VOID CheckProgramErrors()
 		if (cfgMinToTray)
 		{
 			DeleteTrayMenuItem(MainWnd);
-			if (hConsole)
-				DeleteTrayMenuItem(hConsole);
+			if (ConsHeader[0]->hConsole)
+				DeleteTrayMenuItem(ConsHeader[0]->hConsole);
+			if (ConsHeader[1]->hConsole)
+				DeleteTrayMenuItem(ConsHeader[1]->hConsole);
 			if (hMonitor)
 				DeleteTrayMenuItem(hMonitor);
 			if (hDebug)
@@ -592,10 +601,17 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		}
 	}
 
-	Sleep(2000);		// A bit of time for links to close
+	ClearChatLinkStatus();
+	SendChatLinkStatus();
 
-	if (hConsole)
-		DestroyWindow(hConsole);
+	Sleep(1000);				// A bit of time for links to close
+
+	SendChatLinkStatus();		// Send again to reduce chance of being missed
+
+	if (ConsHeader[0]->hConsole)
+		DestroyWindow(ConsHeader[0]->hConsole);
+	if (ConsHeader[1]->hConsole)
+		DestroyWindow(ConsHeader[1]->hConsole);
 
 	SaveUserDatabase();
 	SaveMessageDatabase();
@@ -604,8 +620,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	if (cfgMinToTray)
 	{
 		DeleteTrayMenuItem(MainWnd);
-		if (hConsole)
-			DeleteTrayMenuItem(hConsole);
+		if (ConsHeader[0]->hConsole)
+			DeleteTrayMenuItem(ConsHeader[0]->hConsole);
+		if (ConsHeader[1]->hConsole)
+			DeleteTrayMenuItem(ConsHeader[1]->hConsole);
 		if (hMonitor)
 			DeleteTrayMenuItem(hMonitor);
 		if (hDebug)
@@ -1108,7 +1126,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		switch (wmId)
 		{
-
 		case IDM_LOGBBS:
 
 			ToggleParam(hMenu, hWnd, &LogBBS, IDM_LOGBBS);
@@ -1131,7 +1148,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDM_CONSOLE:
 
-			CreateConsole();
+			CreateConsole(-1);
+			break;
+
+		case IDM_CHATCONSOLE:
+
+			CreateConsole(-2);
 			break;
 
 		case IDM_MONITOR:
@@ -1212,9 +1234,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_DESTROY:
 
 		GetWindowRect(MainWnd,	&MainRect);	// For save soutine
-	
-		if (hConsole)
-			GetWindowRect(hConsole,	&ConsoleRect);	// For save soutine
+		if (ConsHeader[0]->hConsole)
+			GetWindowRect(ConsHeader[0]->hConsole, &ConsHeader[0]->ConsoleRect);	// For save soutine
+		if (ConsHeader[1]->hConsole)
+			GetWindowRect(ConsHeader[1]->hConsole, &ConsHeader[1]->ConsoleRect);	// For save soutine
 		if (hMonitor)
 			GetWindowRect(hMonitor,	&MonitorRect);	// For save soutine
 
@@ -3229,8 +3252,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 VOID SendUnbuffered(int stream, char * msg, int len)
 {
-	if (stream == -1)
-		WritetoConsoleWindow(msg, len);
+	if (stream < 0)
+		WritetoConsoleWindow(stream, msg, len);
 	else
 		SendMsg(stream, msg, len);
 }
@@ -3268,6 +3291,8 @@ void TrytoSend()
 	// call Flush on any connected streams with queued data
 
 	ConnectionInfo * conn;
+	struct ConsoleInfo * Cons;
+
 	int n;
 
 	for (n = 0; n < NumberofStreams; n++)
@@ -3279,8 +3304,11 @@ void TrytoSend()
 				Flush(conn);
 	}
 
-	if (Console)
-		Flush(Console);
+	for (Cons = ConsHeader[0]; Cons; Cons = Cons->next)
+	{
+		if (Cons->Console)
+			Flush(Cons->Console);
+	}
 }
 
 

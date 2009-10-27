@@ -48,7 +48,6 @@ static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 static LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 static LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 static LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-static LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 static void MoveWindows();
 
 #define BGCOLOUR RGB(236,233,216)
@@ -519,6 +518,16 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, Flag);
 
 	WriteFile(LogHandle[Flags] ,Stamp , strlen(Stamp), &cnt, NULL);
+
+	if (conn && conn->Callsign[0])
+	{
+		char call[20];
+		wsprintf(call, "%s          ", conn->Callsign);
+		WriteFile(LogHandle[Flags],call, 10, &cnt, NULL);
+	}
+	else
+		WriteFile(LogHandle[Flags], "          ", 10, &cnt, NULL);
+
 	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
 
 

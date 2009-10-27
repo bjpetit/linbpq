@@ -14,9 +14,10 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
 	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG);
+	#ifdef _DEBUG 
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
-
+	#endif
 	return;
 }
 

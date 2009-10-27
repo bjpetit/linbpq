@@ -83,9 +83,9 @@ MENU CONSOLEMENU
 CLASS "CONSOLEWINDOW"
 FONT 8, "FixedSys"
 BEGIN
-    LISTBOX         117,5,156,290,109,LBS_MULTIPLESEL | LBS_NOINTEGRALHEIGHT | 
+    LISTBOX         117,55,98,290,109,LBS_MULTIPLESEL | LBS_NOINTEGRALHEIGHT | 
                     WS_VSCROLL | WS_HSCROLL
-    EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
+    EDITTEXT        118,24,228,348,15,ES_AUTOHSCROLL | ES_NOHIDESEL
 END
 
 BPQMONWINDOW DIALOG DISCARDABLE  17, 25, 400, 300
@@ -96,7 +96,7 @@ MENU MENU_2
 CLASS "BPQMONWINDOW"
 FONT 8, "FixedSys"
 BEGIN
-    LISTBOX         121,5,156,290,109,LBS_MULTIPLESEL | LBS_NOINTEGRALHEIGHT | 
+    LISTBOX         121,6,25,290,109,LBS_MULTIPLESEL | LBS_NOINTEGRALHEIGHT | 
                     WS_VSCROLL | WS_HSCROLL
 END
 
@@ -727,7 +727,8 @@ BEGIN
     END
     POPUP "Windows"
     BEGIN
-        MENUITEM "Console",                     IDM_CONSOLE
+        MENUITEM "BBS Console",                 IDM_CONSOLE
+        MENUITEM "Chat Console",                IDM_CHATCONSOLE
         MENUITEM "Monitor",                     IDM_MONITOR
         MENUITEM "Debug Chat",                  IDM_DEBUG
     END
@@ -746,7 +747,7 @@ BEGIN
         MENUITEM "Wrap Input  ",                IDM_WRAPTEXT
         MENUITEM "Beep if Input too long",      IDM_WARNINPUT
         MENUITEM "Flash on Chat User Connect",  IDM_Flash
-        MENUITEM "Close Window on exit from BBS", IDM_CLOSEWINDOW
+        MENUITEM "Close Window on exit",        IDM_CLOSEWINDOW
     END
     POPUP "Edit"
     BEGIN

@@ -10,10 +10,16 @@ char SYSOPCall[50];
 
 struct UserInfo * user;
 
+struct ConsoleInfo BBSConsole;
+struct ConsoleInfo ChatConsole;
+struct ConsoleInfo * ConsHeader[2] = {&BBSConsole, &ChatConsole};
 
-struct ConsoleInfo CINFO;
+struct ConsoleInfo * InitHeader;
 
-struct ConsoleInfo * ConsHeader = &CINFO;
+
+//CIRCUIT * Console;
+HWND hConsole;
+//RECT ConsoleRect;
 
 
 #define InputBoxHeight 25
@@ -21,20 +27,31 @@ static LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 static LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 static LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 static LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-static LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-static void MoveWindows();
+void MoveWindows(struct ConsoleInfo * Cinfo);
+VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo);
 
 
 #define BGCOLOUR RGB(236,233,216)
 
 BOOL CreateConsole(int Stream)
 {
-    WNDCLASS  wc;
+	WNDCLASS  wc = {0};
 	HBRUSH bgBrush;
 	HMENU hMenu;
+	HKEY hKey=0;
+	int retCode,Type,Vallen;
+	char Size[80] = "";
 
-	struct ConsoleInfo * Cinfo = &CINFO;
+	struct ConsoleInfo * Cinfo;
 
+	if (BBSConsole.next == NULL) BBSConsole.next = &ChatConsole;
+	
+	if (Stream == -1) 
+		Cinfo = &BBSConsole;
+	else
+		Cinfo = &ChatConsole;
+
+	InitHeader = Cinfo;
 
 	if (Cinfo->hConsole)
 	{
@@ -45,36 +62,58 @@ BOOL CreateConsole(int Stream)
 
 	Cinfo->BPQStream = Stream;
 
-/*
+	// Get Config From Registry
+
+	if (Stream == -1)
+		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
+	else
+	{
+		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole", 0, KEY_ALL_ACCESS, &hKey);
+
+		if (retCode != ERROR_SUCCESS)
+			retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+				"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
+
+	}
+	if (retCode == ERROR_SUCCESS)
+	{
 		Vallen=80;
 		RegQueryValueEx(hKey,"ConsoleSize",0,			
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"Bells",0,			
-			(ULONG *)&Type,(UCHAR *)&Bells,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&Cinfo->Bells,(ULONG *)&Vallen);
 	
 		Vallen=4;
 		RegQueryValueEx(hKey,"StripLF",0,			
-			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&Cinfo->StripLF,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"CloseWindowOnBye",0,			
-			(ULONG *)&Type,(UCHAR *)&CloseWindowOnBye,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&Cinfo->CloseWindowOnBye,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"WarnWrap",0,			
-			(ULONG *)&Type,(UCHAR *)&WarnWrap,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&Cinfo->WarnWrap,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"WrapInput",0,			
-			(ULONG *)&Type,(UCHAR *)&WrapInput,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&Cinfo->WrapInput,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"FlashOnConnect",0,			
-			(ULONG *)&Type,(UCHAR *)&FlashOnConnect,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&Cinfo->FlashOnConnect,(ULONG *)&Vallen);
+		
+		RegCloseKey(hKey);
 
-*/
+		sscanf(Size,"%d,%d,%d,%d", &Cinfo->ConsoleRect.left, &Cinfo->ConsoleRect.right,
+			&Cinfo->ConsoleRect.top, &Cinfo->ConsoleRect.bottom);
+
+
+	}
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -93,14 +132,13 @@ BOOL CreateConsole(int Stream)
 
 	RegisterClass(&wc);
 
-	Cinfo->hConsole=CreateDialog(hInst,ClassName,0,NULL);
+	hConsole = CreateDialog(hInst,ClassName,0,NULL);
 	
-    if (!Cinfo->hConsole)
+	if (!hConsole)
         return (FALSE);
 
-	hMenu=GetMenu(Cinfo->hConsole);
+	hMenu=GetMenu(hConsole);
 	Cinfo->hMenu = hMenu;
-
 
 	CheckMenuItem(hMenu,BPQBELLS, (Cinfo->Bells) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,BPQStripLF, (Cinfo->StripLF) ? MF_CHECKED : MF_UNCHECKED);
@@ -113,8 +151,8 @@ BOOL CreateConsole(int Stream)
 
 	// Retrieve the handlse to the edit controls. 
 
-	Cinfo->hwndInput = GetDlgItem(Cinfo->hConsole, 118); 
-	Cinfo->hwndOutput = GetDlgItem(Cinfo->hConsole, 117); 
+	Cinfo->hwndInput = GetDlgItem(hConsole, 118); 
+	Cinfo->hwndOutput = GetDlgItem(hConsole, 117); 
  
 	// Set our own WndProcs for the controls. 
 
@@ -122,16 +160,28 @@ BOOL CreateConsole(int Stream)
 	Cinfo->wpOrigOutputProc = (WNDPROC)SetWindowLong(Cinfo->hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(Cinfo->hConsole, "Mail/Chat Console");
+		if (Stream == -1)
+			AddTrayMenuItem(hConsole, "BBS Console");
+		else
+			AddTrayMenuItem(hConsole, "Chat Console");
 
-	ShowWindow(Cinfo->hConsole, SW_SHOWNORMAL);
+	if (Stream == -1)
+		SetWindowText(hConsole, "BBS Console");
+	else
+		SetWindowText(hConsole, "Chat Console");
+
+	ShowWindow(hConsole, SW_SHOWNORMAL);
 
 	if (Cinfo->ConsoleRect.right < 100 || Cinfo->ConsoleRect.bottom < 100)
 	{
-		GetWindowRect(Cinfo->hConsole,	&Cinfo->ConsoleRect);
+		GetWindowRect(hConsole,	&Cinfo->ConsoleRect);
 	}
 
-	MoveWindow(Cinfo->hConsole,Cinfo->ConsoleRect.left,Cinfo->ConsoleRect.top, Cinfo->ConsoleRect.right-Cinfo->ConsoleRect.left, Cinfo->ConsoleRect.bottom-Cinfo->ConsoleRect.top, TRUE);
+	MoveWindow(hConsole, Cinfo->ConsoleRect.left, Cinfo->ConsoleRect.top, 
+		Cinfo->ConsoleRect.right-Cinfo->ConsoleRect.left,
+		Cinfo->ConsoleRect.bottom-Cinfo->ConsoleRect.top, TRUE);
+
+	Cinfo->hConsole = hConsole;
 
 	MoveWindows(Cinfo);
 
@@ -170,18 +220,27 @@ BOOL CreateConsole(int Stream)
 		SendUnbuffered(-1, NewUserPrompt, strlen(NewUserPrompt));
 	}
 	else
-		SendWelcomeMsg(-1, Cinfo->Console, user);
-
+	{
+		if (Stream == -2)
+		{
+			if (rtloginu (Cinfo->Console))
+				Cinfo->Console->Flags |= CHATMODE;
+			else
+				SendPrompt(Cinfo->Console, user);
+		}
+		else
+			SendWelcomeMsg(-1, Cinfo->Console, user);
+	}
 	return TRUE;
 
 }
-VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo);
+
 
 VOID CloseConsole(int Stream)
 {
 	struct ConsoleInfo * Cinfo;
 
-	for (Cinfo = ConsHeader; Cinfo; Cinfo = Cinfo->next)
+	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
 	{
 		if (Cinfo->Console)
 		{
@@ -198,8 +257,10 @@ VOID CloseConsole(int Stream)
 
 VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 {
+	HKEY hKey=0;
+	int retCode, disp;
 
-if (Cinfo->Console->Flags & CHATMODE)
+	if (Cinfo->Console->Flags & CHATMODE)
 	{
 		__try
 		{
@@ -218,17 +279,26 @@ if (Cinfo->Console->Flags & CHATMODE)
 //		PostMessage(hConsole, WM_DESTROY, 0, 0);
 		DestroyWindow(Cinfo->hConsole);
 	}
-/*	
-sscanf(Size,"%d,%d,%d,%d",&ConsoleRect.left,&ConsoleRect.right,&ConsoleRect.top,&ConsoleRect.bottom);
+
+	if (Cinfo->BPQStream == -1)
+		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
+	else
+		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
 
 
-		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
-		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
-		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&WarnWrap,4);
-		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&WrapInput,4);
-		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&FlashOnConnect,4);
-		retCode = RegSetValueEx(hKey,"CloseWindowOnBye",0,REG_DWORD,(BYTE *)&CloseWindowOnBye,4);
-*/
+	if (retCode == ERROR_SUCCESS)
+	{
+		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Cinfo->Bells,4);
+		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&Cinfo->StripLF,4);
+		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&Cinfo->WarnWrap,4);
+		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&Cinfo->WrapInput,4);
+		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&Cinfo->FlashOnConnect,4);
+		retCode = RegSetValueEx(hKey,"CloseWindowOnBye",0,REG_DWORD,(BYTE *)&Cinfo->CloseWindowOnBye,4);
+
+		RegCloseKey(hKey);
+	}
 }
 
 void MoveWindows(struct ConsoleInfo * Cinfo)
@@ -264,14 +334,14 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	int i;
 	struct ConsoleInfo * Cinfo;
 
-	for (Cinfo = ConsHeader; Cinfo; Cinfo = Cinfo->next)
+	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
 	{
 		if (Cinfo->hConsole == hWnd)
 			break;
 	}
 
 	if (Cinfo == NULL)
-		 Cinfo = &CINFO;
+		 Cinfo = InitHeader;
 	
 	switch (message) { 
 
@@ -311,7 +381,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 		case IDM_Flash:
 
-			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->FlashOnConnect, IDM_WRAPTEXT);
+			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->FlashOnConnect, IDM_Flash);
 			break;
 
 		case IDM_CLOSEWINDOW:
@@ -328,8 +398,6 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		
 			CopyToClipboard(Cinfo->hwndOutput);
 			break;
-
-
 
 		//case BPQHELP:
 
@@ -372,6 +440,12 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			
 		return TRUE;
 
+		
+	case WM_CLOSE:
+
+			CloseConsoleSupport(Cinfo);
+			
+			return (DefWindowProc(hWnd, message, wParam, lParam));
 
 	case WM_DESTROY:
 		
@@ -438,14 +512,14 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	unsigned int TextLen;
 	struct ConsoleInfo * Cinfo;
 
-	for (Cinfo = ConsHeader; Cinfo; Cinfo = Cinfo->next)
+	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
 	{
-		if (Cinfo->hwndInput == hWnd)
-			 Cinfo = &CINFO;
+		if (Cinfo->hwndInput == hwnd)
+			break;
 	}
 
 	if (Cinfo == NULL)
-		return TRUE;
+		 Cinfo = InitHeader;
 
  
 	if (uMsg == WM_KEYUP)
@@ -497,16 +571,21 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return TRUE;
 		}
 	}
+				
 
 	if (uMsg == WM_CHAR) 
 	{
+		TextLen = SendMessage(Cinfo->hwndInput,WM_GETTEXTLENGTH, 0, 0);
+
+		if (TextLen > INPUTLEN-10) Beep(220, 150);
+		
 		if(Cinfo->WarnWrap || Cinfo->WrapInput)
 		{
 			TextLen = SendMessage(Cinfo->hwndInput,WM_GETTEXTLENGTH, 0, 0);
 
 			if (Cinfo->WarnWrap)
 				if (TextLen == Cinfo->WarnLen) Beep(220, 150);
-			
+
 			if (Cinfo->WrapInput)
 				if ((wParam == 0x20) && (TextLen > Cinfo->WrapLen))
 					wParam = 13;		// Replace space with Enter
@@ -515,7 +594,8 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		if (wParam == 13)
 		{
-			Cinfo->kbptr=SendMessage(Cinfo->hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) Cinfo->kbbuf);
+			Cinfo->kbptr=SendMessage(Cinfo->hwndInput, WM_GETTEXT, INPUTLEN-1, 
+				(LPARAM) (LPCSTR)Cinfo->kbbuf);
 
 			Cinfo->StackIndex = 0;
 
@@ -566,14 +646,14 @@ LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	struct ConsoleInfo * Cinfo;
 
-	for (Cinfo = ConsHeader; Cinfo; Cinfo = Cinfo->next)
+	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
 	{
 		if (Cinfo->hwndOutput == hWnd)
 			break;
 	}
 
 	if (Cinfo == NULL)
-		 Cinfo = &CINFO;
+		 Cinfo = InitHeader;
 
 	
 	// Trap mouse messages, so we can't select stuff in output and mon windows,
@@ -591,7 +671,7 @@ int WritetoConsoleWindow(int Stream, char * Msg, int len)
 {
 	struct ConsoleInfo * Cinfo;
 
-	for (Cinfo = ConsHeader; Cinfo; Cinfo = Cinfo->next)
+	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
 	{
 		if (Cinfo->Console)
 		{

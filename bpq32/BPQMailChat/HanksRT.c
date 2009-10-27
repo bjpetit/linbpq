@@ -41,6 +41,7 @@ char * strlop(char * buf, char delim)
 	return ptr;
 }
 
+
 VOID * _zalloc_dbg(int len, int type, char * file, int line)
 {
 	// ?? malloc and clear
@@ -49,6 +50,33 @@ VOID * _zalloc_dbg(int len, int type, char * file, int line)
 
 	ptr=_malloc_dbg(len, type, file, line);
 	memset(ptr, 0, len);
+
+	return ptr;
+}
+
+VOID * _zalloc_dbg_trace(int len, int type, char * file, int line)
+{
+	// ?? malloc and clear
+
+	void * ptr;
+
+	ptr=_malloc_dbg(len, type, file, line);
+	memset(ptr, 0, len);
+
+	Debugprintf("Malloc Trace %s %d %x %d", file, line, ptr, len);
+
+	return ptr;
+}
+
+VOID * _malloc_dbg_trace(int len, int type, char * file, int line)
+{
+	// ?? malloc and clear
+
+	void * ptr;
+
+	ptr=_malloc_dbg(len, type, file, line);
+
+	Debugprintf("Malloc Trace %s %d %x %d", file, line, ptr, len);
 
 	return ptr;
 }
@@ -63,13 +91,6 @@ VOID * _zalloc(int len)
 	memset(ptr, 0, len);
 
 	return ptr;
-}
-
-VOID * mallocw(int len)
-{
-	// ?? malloc and warn if fails??
-
-	return malloc(len);
 }
 
 VOID nputs(CIRCUIT * conn, char * buf)
@@ -229,12 +250,13 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 		{
 			SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
 			
-			if (conn->BPQStream == -1)
+			if (conn->BPQStream < 0)
 			{
 				logout(conn);
 				conn->Flags = 0;
+				if (conn->BPQStream == -2)
+					CloseConsole(conn->BPQStream);
 			}
-
 			else
 				ReturntoNode(conn->BPQStream);
 								
@@ -245,10 +267,12 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 		{
 			SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
 
-			if (conn->BPQStream == -1)
+			if (conn->BPQStream < 0)
 			{
 				logout(conn);
 				conn->Flags = 0;
+				if (conn->BPQStream == -2)
+					CloseConsole(conn->BPQStream);
 			}
 
 			else
@@ -266,13 +290,6 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 	}
 
 	// Send message to all other connected users on same channel
-
-	if (len > 200)
-	{
-		Buffer[200] = '\r';
-		Buffer[201] = 0;
-		len = 200;
-	}
 		
 	text_tellu(conn->u.user, Buffer, NULL, o_topic); // To local users.
 
@@ -290,7 +307,9 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 static void upduser(USER *user)
 {
 	FILE *in, *out;
-	char *c, *buf;
+	char *c;
+	char Buffer[2048];
+	char *buf = Buffer;
 
 	in = fopen(RtUsr, "r");
 
@@ -305,8 +324,6 @@ static void upduser(USER *user)
 
 	if (!(in) || !(out)) return;
 
-	buf = mallocw(128);
-
 	while(fgets(buf, 128, in))
 	{
  	  c = strchr(buf, ' ');
@@ -318,7 +335,6 @@ static void upduser(USER *user)
 		}
 	}
 
-	free(buf);
 	fprintf(out, "%s %d %s %s\n", user->call, user->flags, user->name, user->qth);
 	fclose(in);
 	fclose(out);
@@ -330,7 +346,9 @@ static void upduser(USER *user)
 static void rduser(USER *user)
 {
 	FILE *in;
-	char *buf, *name, *flags, *qth;
+	char *name, *flags, *qth;
+	char Buffer[2048];
+	char *buf = Buffer;
 
 	user->name = _strdup("?_name");
 	user->qth  = _strdup("?_qth");
@@ -339,8 +357,6 @@ static void rduser(USER *user)
 
 	if (in)
 	{
-		buf = mallocw(128);
-
 	  while(fgets(buf, 128, in))
 	  {
 		strlop(buf, '\n');
@@ -359,8 +375,6 @@ static void rduser(USER *user)
 			strnew(&user->qth,  qth);
 			break;
 		}
-
-		free(buf);
 		fclose(in);
 	}
 }
@@ -511,15 +525,22 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			ln = node_find(ucall);
 			if (ln)
 			{
-				cn_dec(ckt_from, ln);
-				node_dec(ln);
+				// is it on this circuit?
 
-				echo(ckt_from, node, Buffer);  // Relay to other nodes if we had node. COuld get loop if
+				if (cn_find(ckt_from, ln))
+				{
+					cn_dec(ckt_from, ln);
+					node_dec(ln);
+					echo(ckt_from, node, Buffer);  // Relay to other nodes if we had node. COuld get loop if
+				}
+				else
+				{
+					Debugprintf("MAILCHAT: node %s unlink for %s when not on this link", ncall, ucall);
+				}
 			}
 			else
 			{
 				Debugprintf("MAILCHAT: node %s unlink for %s when not on list", ncall, ucall);
-				break;
 			}
 
 			break;
@@ -667,7 +688,8 @@ NODE *node_find(char *call)
 
 	for (node = node_hd; node; node = node->next)
 	{
-		if (node->refcnt && matchi(node->call, call))
+		//if (node->refcnt && matchi(node->call, call))   I don't think this is right!!!
+		if (matchi(node->call, call))
 			break;
 	}
 
@@ -690,6 +712,7 @@ static NODE *node_inc(char *call, char *alias)
 		sl_ins_hd(node, node_hd);
 		node->call  = _strdup(call);
 		node->alias = _strdup(alias);
+//		Debugprintf("New Node Rec Created at %x for %s %s", node, node->call, node->alias);
 	}
 
 	node->refcnt++;
@@ -848,7 +871,7 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 		{
 			CN * cn;
 			int len;
-			char line[100]="";
+			char line[1000]="";
 			
 			if (--c->refcnt) 
 			{
@@ -857,15 +880,23 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 			}
 			Debugprintf("MAILCHAT: Refcount 0 - Removing %s. List Before is:", node->call);
 
+			__try{
 			for (cn = circuit->hnode; cn; cn = cn->next)
 			{
 				if (cn->node && cn->node->alias)
 				{
-					len = wsprintf(line, "%s %s", line, cn->node->alias);
-					if (len > 80)
+					__try
 					{
-						Debugprintf("%s\r", line);
-						len = wsprintf(line, "            ");
+						len = wsprintf(line, "%s %s", line, cn->node->alias);
+						if (len > 80)
+						{
+							Debugprintf("%s", line);
+							len = wsprintf(line, "            ");
+						}
+					}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{
+						len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);
 					}
 				}
 				else
@@ -873,9 +904,12 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
 				}
 			}
+			}
+			__except(EXCEPTION_EXECUTE_HANDLER)
+			{len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
 
-			Debugprintf("%s\r", line);
 
+			Debugprintf("%s", line);
 
 			// CN record no longer needed
 
@@ -894,24 +928,66 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 			{
 				if (cn->node && cn->node->alias)
 				{
-					len = wsprintf(line, "%s %s", line, cn->node->alias);
-					if (len > 80)
+					__try
 					{
-						Debugprintf("%s\r", line);
-						len = wsprintf(line, "            ");
+						len = wsprintf(line, "%s %s", line, cn->node->alias);
+						if (len > 80)
+						{
+							Debugprintf("%s", line);
+							len = wsprintf(line, "            ");
+						}
 					}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
 				}
 				else
 				{
 					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
 				}
 			}
-
-			Debugprintf("%s\r", line);
-
+			Debugprintf("%s", line);
 			break;
 		}
 	}
+
+	if (c == NULL)
+	{
+		CN * cn;
+		int len;
+		char line[1000]="";
+	
+		// not found??
+	
+		Debugprintf("MAILCHAT: !! Remove c/n Node %s addr %x not found cn chain follows", node->call, node);
+
+		line[0] = 0;
+
+		for (cn = circuit->hnode; cn; cn = cn->next)
+		{
+				if (cn->node && cn->node->call)
+				{
+					__try
+					{
+						len = wsprintf(line, "%s %x %s", line, cn->node, cn->node->alias);
+						if (len > 80)
+						{
+							Debugprintf("%s", line);
+							len = wsprintf(line, "            ");
+						}
+					}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
+				}
+				else
+				{
+					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
+				}
+		}
+		Debugprintf("%s", line);
+
+	}
+
+
 }
 
 // Add a circuit/node association.
@@ -928,6 +1004,9 @@ static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias)
 		if (cn->node == node)
 		{
 			cn->refcnt++;
+			Debugprintf("cn_inc cn Refcount for %s->%s  incremented to %d - adding Call %s",
+				circuit->Callsign, node->call, cn->refcnt, call);
+
 			return node;
 		}
 	}
@@ -936,6 +1015,10 @@ static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias)
 	sl_ins_hd(cn, circuit->hnode);
 	cn->node   = node;
 	cn->refcnt = 1;
+
+	Debugprintf("cn_inc New cn for %s->%s - adding Call %s",
+				circuit->Callsign, node->call, call);
+
 	return node;
 }
 
@@ -964,9 +1047,9 @@ static void text_xmit(USER *user, USER *to, char *text)
 void text_tellu(USER *user, char *text, char *to, int who)
 {
 	CIRCUIT *circuit;
-	char    *buf;
+	char Buffer[2048];
+	char *buf = Buffer;
 
-	buf = mallocw(strlen(text) + 11);
 	sprintf(buf, "%-6.6s %c %s\r", user->call, (who == o_one) ? '>' : ':', text);
 
 // Send it to all connected users in the same topic.
@@ -990,8 +1073,6 @@ void text_tellu(USER *user, char *text, char *to, int who)
 				break;
 		}
 	}
-
-	free(buf);
 }
 
 void text_tellu_Joined(USER * user)
@@ -1001,7 +1082,7 @@ void text_tellu_Joined(USER * user)
 
 	sprintf(buf, "%-6.6s *** Joined Chat, Topic %s", user->call, user->topic->name);
 
-	if (FlashOnConnect)
+	if (ConsHeader[1]->FlashOnConnect)
 		FlashWindow(hWnd, TRUE);
 
 // Send it to all connected users in the same topic.
@@ -1017,7 +1098,7 @@ void text_tellu_Joined(USER * user)
 		if (circuit->u.user->flags & u_bells)
 			if (circuit->BPQStream < 0) // Console
 			{
-				if (FlashOnConnect) FlashWindow(hConsole, TRUE);
+				if (ConsHeader[1]->FlashOnConnect) FlashWindow(ConsHeader[1]->hConsole, TRUE);
 				nputc(circuit, 7);
 //				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
 			}
@@ -1040,8 +1121,13 @@ static void topic_xmit(USER *user, CIRCUIT *circuit)
 
 static void node_xmit(NODE *node, char kind, CIRCUIT *circuit)
 {
-	if (!cn_find(circuit, node)) nprintf(circuit, "%c%c%s %s %s\r",
-		FORMAT, kind, OurNode, node->call, node->alias);
+	__try{
+		if (!cn_find(circuit, node))
+		nprintf(circuit, "%c%c%s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias);
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER)
+		{Debugprintf("*PE*node_xmit Corrupt Rec %x %x %x", node, node->call, node->alias);}
+
 }
 
 // Tell all other nodes about one node known by this node.
@@ -1064,8 +1150,9 @@ static void user_xmit(USER *user, char kind, CIRCUIT *circuit)
 	NODE *node;
 
 	node = user->node;
-	if (!cn_find(circuit, node)) nprintf(circuit, "%c%c%s %s %s %s\r",
-		FORMAT, kind, node->call, user->call, user->name, user->qth);
+
+	if (!cn_find(circuit, node))
+		nprintf(circuit, "%c%c%s %s %s %s\r", FORMAT, kind, node->call, user->call, user->name, user->qth);
 }
 
 // Tell all other nodes about a user login/logout at this node.
@@ -1227,10 +1314,14 @@ void link_drop(CIRCUIT *circuit)
 
 	for (cn = circuit->hnode; cn; cn = cn->next)
 	{
-		node_tell(cn->node, id_unlink);
-		node_dec(cn->node);
-	}
+		__try{
+			node_tell(cn->node, id_unlink);
+		} My__except_Routine("link_drop clear nodes node tell");
 
+		__try{
+			node_dec(cn->node);
+		} My__except_Routine("link_drop clear nodes node dec");
+	}
 	} My__except_Routine("link_drop clear nodes");
 
 
@@ -1328,6 +1419,9 @@ VOID LoadKnown()
 	char * ptr;
 
 	in = fopen(RtKnown, "r");
+
+	if (in == NULL)
+		return;
 
 	while(fgets(buf, 128, in))
 	{
@@ -1542,7 +1636,7 @@ static void show_circuits(CIRCUIT *conn)
 	CIRCUIT *circuit;
 	NODE    *node;
 	LINK *link;
-	char line[100];
+	char line[1000];
 
 	int     len;
 	CN	*cn;
@@ -1577,25 +1671,32 @@ static void show_circuits(CIRCUIT *conn)
 		if (circuit->flags & p_linked)
 		{
 			len = wsprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
-
-			for (cn = circuit->hnode; cn; cn = cn->next)
-			{
-				if (cn->node && cn->node->alias)
+			__try{
+				for (cn = circuit->hnode; cn; cn = cn->next)
 				{
-					len = wsprintf(line, "%s %s", line, cn->node->alias);
-					if (len > 80)
+					if (cn->node && cn->node->alias)
 					{
-						nprintf(conn, "%s\r", line);
-						len = wsprintf(line, "            ");
+						__try
+						{
+							len = wsprintf(line, "%s %s", line, cn->node->alias);
+							if (len > 80)
+							{
+								nprintf(conn, "%s\r", line);
+								len = wsprintf(line, "            ");
+							}
+						}
+						__except(EXCEPTION_EXECUTE_HANDLER)
+							{len = wsprintf(line, "%s *PE* Corrupt Rec %x %x", line, cn, cn->node);}
 					}
-				}
-				else
-				{
-					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
+					else
+						len = wsprintf(line, "%s Corrupt Rec %x %x ", line, cn, cn->node);
 				}
 			}
+			__except(EXCEPTION_EXECUTE_HANDLER)
+			{len = wsprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
 
 			nprintf(conn, "%s\r", line);
+
 		}
 		else if (circuit->flags & p_user)
 			nprintf(conn, "User %-6.6s\r", circuit->u.user->call);
@@ -2087,6 +2188,16 @@ VOID SendChatLinkStatus()
 
 	Send_MON_Datagram(Msg, len);
 
+}
+
+VOID ClearChatLinkStatus()
+{
+	LINK * link;
+
+	for (link = link_hd; link; link = link->next)
+	{
+		link->flags = 0;
+	}
 }
 
 

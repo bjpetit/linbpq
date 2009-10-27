@@ -78,13 +78,14 @@
 #define IDM_LOGTCP                      40013
 #define IDM_LOGCHAT                     40014
 #define ID_ACTIONS_SENDMSGFROMCLIPBOARD 40015
+#define IDM_CHATCONSOLE                 40016
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30006
-#define _APS_NEXT_COMMAND_VALUE         40016
+#define _APS_NEXT_COMMAND_VALUE         40017
 #define _APS_NEXT_CONTROL_VALUE         1031
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

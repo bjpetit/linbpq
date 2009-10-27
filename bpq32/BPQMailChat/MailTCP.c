@@ -67,9 +67,19 @@ void decodeblock( unsigned char in[4], unsigned char out[3] );
 
 int SendSock(SOCKET sock, char * msg)
 {
-	WriteLogLine(NULL, '>',msg,  strlen(msg), LOG_TCP);
-	send(sock, msg, strlen(msg), 0);
-	return send(sock, "\r\n", 2, 0);
+	int len = strlen(msg), sent;
+	
+ 	WriteLogLine(NULL, '>',msg,  len, LOG_TCP);
+
+	if (len > 0)
+	{
+		sent =send(sock, msg, strlen(msg), 0);
+		if (sent < len)
+			return sent;
+	}
+
+	sent = send(sock, "\r\n", 2, 0);
+	return sent;
 }
 
 VOID __cdecl sockprintf(SOCKET sock, const char * format, ...)

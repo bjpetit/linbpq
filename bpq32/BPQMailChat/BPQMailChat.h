@@ -40,6 +40,8 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 
 #ifdef _DEBUG
 
+VOID * _malloc_dbg_trace(int len, int type, char * file, int line);
+
 #define   malloc(s)             _malloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
 #define   calloc(c, s)          _calloc_dbg(c, s, _NORMAL_BLOCK, __FILE__, __LINE__)
 #define   realloc(p, s)         _realloc_dbg(p, s, _NORMAL_BLOCK, __FILE__, __LINE__)
@@ -564,6 +566,63 @@ struct FBBHeaderLine
 	struct MsgInfo * FwdMsg;		// Header so we can mark as complete 
 };
 
+#define MAXSTACK 20
+#define MAXLINE 10000
+#define INPUTLEN 512
+
+struct ConsoleInfo 
+{
+	struct ConsoleInfo * next;
+	CIRCUIT * Console;
+	int BPQStream;
+	WNDPROC wpOrigInputProc; 
+	WNDPROC wpOrigOutputProc; 
+	HWND hConsole;
+	HWND hwndInput;
+	HWND hwndOutput;
+	HMENU hMenu;		// handle of menu 
+	RECT ConsoleRect;
+	RECT OutputRect;
+
+	int Height, Width, LastY;
+
+	int ClientHeight, ClientWidth;
+
+	char kbbuf[INPUTLEN];
+	int kbptr;
+
+	char readbuff[MAXLINE+100];
+
+	char * KbdStack[MAXSTACK];
+
+	int StackIndex;
+
+	BOOL Bells;
+	BOOL StripLF;
+
+	BOOL WarnWrap;
+	BOOL FlashOnConnect;
+	BOOL WrapInput;
+	BOOL CloseWindowOnBye;
+
+	unsigned int WrapLen;
+	int WarnLen;
+	int maxlinelen;
+
+	int PartLinePtr;
+	int PartLineIndex;		// Listbox index of (last) incomplete line
+
+	DWORD dwCharX;      // average width of characters 
+	DWORD dwCharY;      // height of characters 
+	DWORD dwClientX;    // width of client area 
+	DWORD dwClientY;    // height of client area 
+	DWORD dwLineLen;    // line length 
+	int nCaretPosX; // horizontal position of caret 
+	int nCaretPosY; // vertical position of caret 
+ 
+};
+
+
 extern USER *user_hd;
 
 static PROC *Rt_Control;
@@ -613,8 +672,10 @@ VOID ChatTimer();
 VOID nputs(CIRCUIT * conn, char * buf);
 VOID node_close();
 VOID removelinks();
-VOID SetupChat()
-;
+VOID SetupChat();
+VOID SendChatLinkStatus();
+VOID ClearChatLinkStatus();
+
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
 #define ReturntoNode(stream) SessionControl(stream,3,0)
@@ -861,8 +922,8 @@ BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader);
 
 // Console Routines
 
-BOOL CreateConsole();
-int WritetoConsoleWindow(char * Msg, int len);
+BOOL CreateConsole(int Stream);
+int WritetoConsoleWindow(int Stream, char * Msg, int len);
 int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item);
 void CopyToClipboard(HWND hWnd);
 VOID CloseConsole(int Stream);
@@ -964,6 +1025,8 @@ BOOL CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct	
 
 extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;
+
+extern CIRCUIT * Console;
 
 extern char SignoffMsg[];
 
@@ -1083,22 +1146,11 @@ extern char EncryptedISPAccountPass[];
 extern int EncryptedPassLen;
 extern char *month[]; 
 
-extern CIRCUIT * Console;
-extern HWND hConsole;
 extern HWND hDebug;
-extern RECT ConsoleRect;
-
-extern BOOL Bells;
-extern BOOL StripLF;
-
-extern BOOL WarnWrap;
-extern BOOL FlashOnConnect;
-extern BOOL WrapInput;
-extern BOOL CloseWindowOnBye;
-
 extern RECT MonitorRect;
 extern HWND hMonitor;
-
+//extern HWND hConsole;
+//extern RECT ConsoleRect;
 extern int LogAge;
 extern BOOL DeletetoRecycleBin;
 
@@ -1124,3 +1176,4 @@ extern struct ALIAS ** Aliases;
 extern BOOL ReaddressLocal;
 extern BOOL ReaddressReceived;
 
+struct ConsoleInfo * ConsHeader[];
