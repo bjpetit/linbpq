@@ -24,14 +24,15 @@ Partial Class Form1
       Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
       Me.MenuStrip1 = New System.Windows.Forms.MenuStrip
       Me.ConfigToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
+      Me.ConfigMonitorToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
+      Me.EditNodesListToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
       Me.Label1 = New System.Windows.Forms.Label
       Me.Label2 = New System.Windows.Forms.Label
       Me.Defined = New System.Windows.Forms.TextBox
       Me.Active = New System.Windows.Forms.TextBox
       Me.Label3 = New System.Windows.Forms.Label
       Me.Lastupdated = New System.Windows.Forms.TextBox
-      Me.ConfigMonitorToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
-      Me.EditNodesListToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
+      Me.Timer2 = New System.Windows.Forms.Timer(Me.components)
       Me.MenuStrip1.SuspendLayout()
       Me.SuspendLayout()
       '
@@ -64,6 +65,18 @@ Partial Class Form1
       Me.ConfigToolStripMenuItem.Name = "ConfigToolStripMenuItem"
       Me.ConfigToolStripMenuItem.Size = New System.Drawing.Size(67, 23)
       Me.ConfigToolStripMenuItem.Text = "Config"
+      '
+      'ConfigMonitorToolStripMenuItem
+      '
+      Me.ConfigMonitorToolStripMenuItem.Name = "ConfigMonitorToolStripMenuItem"
+      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(199, 24)
+      Me.ConfigMonitorToolStripMenuItem.Text = "Config Monitor"
+      '
+      'EditNodesListToolStripMenuItem
+      '
+      Me.EditNodesListToolStripMenuItem.Name = "EditNodesListToolStripMenuItem"
+      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(199, 24)
+      Me.EditNodesListToolStripMenuItem.Text = "Edit Nodes List"
       '
       'Label1
       '
@@ -113,17 +126,9 @@ Partial Class Form1
       Me.Lastupdated.Size = New System.Drawing.Size(134, 20)
       Me.Lastupdated.TabIndex = 7
       '
-      'ConfigMonitorToolStripMenuItem
+      'Timer2
       '
-      Me.ConfigMonitorToolStripMenuItem.Name = "ConfigMonitorToolStripMenuItem"
-      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(199, 24)
-      Me.ConfigMonitorToolStripMenuItem.Text = "Config Monitor"
-      '
-      'EditNodesListToolStripMenuItem
-      '
-      Me.EditNodesListToolStripMenuItem.Name = "EditNodesListToolStripMenuItem"
-      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(199, 24)
-      Me.EditNodesListToolStripMenuItem.Text = "Edit Nodes List"
+      Me.Timer2.Interval = 3600000
       '
       'Form1
       '
@@ -159,5 +164,6 @@ Partial Class Form1
    Friend WithEvents Lastupdated As System.Windows.Forms.TextBox
    Friend WithEvents ConfigMonitorToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
    Friend WithEvents EditNodesListToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
+   Friend WithEvents Timer2 As System.Windows.Forms.Timer
 
 End Class

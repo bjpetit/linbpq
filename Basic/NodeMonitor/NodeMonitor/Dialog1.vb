@@ -28,6 +28,7 @@ Public Class ConfigBox
 
    Private Sub Dialog1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 
+      AutoUpdateBox.Checked = My.Settings.AutoUpdate
       FileNameBox.Text = My.Settings.FileName
       OutputFileBox.Text = My.Settings.OutputFileName
       UserBox.Text = My.Settings.UserName

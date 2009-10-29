@@ -47,6 +47,9 @@ Public Class Form1
    Dim BPQStream As Integer
    Dim NoMoreBoxes As Boolean = False
 
+   Dim ProgramUpdated As Boolean = False
+   Dim DataUpdated As Boolean = False
+
    Public WithEvents AxBPQCtrl1 As AxBPQCTRLLib.AxBPQCtrl
 
    Dim Node As New Dictionary(Of String, Integer)
@@ -55,7 +58,15 @@ Public Class Form1
 
    Private Sub Form1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 
-      If My.Settings.Password = "" Then
+      If My.Settings.AutoUpdate Then
+
+         Checkforupdates()
+         Timer2.Interval = 86400 * 1000
+         Timer2.Enabled = True
+
+      End If
+
+      If My.Settings.UseUDP = False And My.Settings.UseNode = False Then
 
          ConfigBox.Visible = True
 
@@ -85,7 +96,6 @@ Public Class Form1
          AxBPQCtrl1.SetFlags(BPQStream, 0, 128)
 
       End If
-
 
       ReadNodesFile()
 
@@ -194,8 +204,8 @@ Public Class Form1
                   Nalias = RTrim(Nalias)
                   Callsign = GetCall(Buff, 7)
                   UpdateNode(Callsign)
-                  Debug.Print(Now & " NODES from " & Callsign & " " & Nalias & " Len " & Len.ToString & _
-                     " " & RemoteEP.ToString)
+                  ' Debug.Print(Now & " NODES from " & Callsign & " " & Nalias & " Len " & Len.ToString & _
+                  '   " " & RemoteEP.ToString)
 
                   Node(Nalias) = 60
 
@@ -342,7 +352,6 @@ Public Class Form1
       Dim i As Integer, j As Integer = 0, k As Integer
       Dim State As Integer
 
-
       For i = 0 To NodeIndex - 1
 
          If Nodes(i).Count > 0 Then
@@ -389,7 +398,10 @@ Public Class Form1
 
          Using sw As StreamWriter = New StreamWriter(My.Settings.OutputFileName)
 
+            sw.Write(Now & vbCrLf & "|")
+
             For i = 0 To NodeIndex - 1
+
 
                If Nodes(i).Count = 0 Then
                   sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).downIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
@@ -423,44 +435,11 @@ Public Class Form1
                      End If
 
                      sw.Write("Line," & Nodes(j).Lon & "," & Nodes(j).Lat & "," & _
-                              Nodes(k).Lon & "," & Nodes(k).Lat & "," & State.ToString & "," & vbCrLf & "|")
-
-                     End If
+                              Nodes(k).Lon & "," & Nodes(k).Lat & "," & State.ToString & "," & ChatLinks(i).Call1 & " <> " & ChatLinks(i).Call2 & "," & vbCrLf & "|")
 
                   End If
 
-            Next
-
-            sw.Close()
-
-         End Using
-
-         Dim client As New WebClient()
-
-         client.Credentials = New NetworkCredential(My.Settings.UserName, My.Settings.Password)
-
-         Try
-            client.UploadFile(My.Settings.URL, My.Settings.OutputFileName)
-            Changed = False
-            My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", Now & " FTP Transfer Complete" & vbCrLf, True)
-
-         Catch ex As Exception
-
-            If NoMoreBoxes = False Then
-
-               NoMoreBoxes = True
-               MsgBox("FTP Failed - " & ex.ToString())
-               NoMoreBoxes = False
-
-            End If
-
-         End Try
-
-         Using sw As StreamWriter = New StreamWriter(My.Settings.OutputFileName & "x")
-
-            For i = 0 To ChatLinkCount - 1
-
-               sw.WriteLine(ChatLinks(i).Call1 & "," & ChatLinks(i).Call2 & "," & ChatLinks(i).Call1State & "," & ChatLinks(i).Call2State)
+               End If
 
             Next
 
@@ -468,11 +447,32 @@ Public Class Form1
 
          End Using
 
+         If (My.Settings.UserName <> "") Then
 
+            Dim client As New WebClient()
 
+            client.Credentials = New NetworkCredential(My.Settings.UserName, My.Settings.Password)
+
+            Try
+               client.UploadFile(My.Settings.URL, My.Settings.OutputFileName)
+               Changed = False
+               My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", Now & " FTP Transfer Complete" & vbCrLf, True)
+
+            Catch ex As Exception
+
+               If NoMoreBoxes = False Then
+
+                  NoMoreBoxes = True
+                  MsgBox("FTP Failed - " & ex.ToString())
+                  NoMoreBoxes = False
+
+               End If
+
+            End Try
+
+         End If
 
       End If
-
 
    End Sub
 
@@ -664,4 +664,150 @@ Public Class Form1
 
    End Function
 
+   Private Sub Timer2_Tick(ByVal sender As Object, ByVal e As System.EventArgs) Handles Timer2.Tick
+
+      Checkforupdates()
+
+      If DataUpdated Then
+         ReadNodesFile()
+         DataUpdated = False
+      End If
+
+   End Sub
+
+   Sub Checkforupdates()
+
+      Dim client As New WebClient()
+      Dim Msg As String = Nothing
+      Dim DataTime As Date
+      Dim ProgTime As Date
+      Dim NewDataTime As Date
+      Dim NewProgTime As Date
+
+      '
+      '  See if new config or program files to load.
+      '
+      '  Status Message is timestamp from files.
+
+      Try
+
+         DataTime = File.GetLastWriteTime(My.Settings.FileName)
+
+         If DataTime = #1/1/1601# Then Return
+
+         ProgTime = File.GetLastWriteTime(Application.ExecutablePath)
+
+      Catch ex As Exception
+
+      End Try
+ 
+      Try
+
+         Msg = client.DownloadString("http://www.cantab.net/users/john.wiseman/Icons/FileTimeStamps.txt")
+
+      Catch ex As Exception
+
+         Return
+
+      End Try
+
+      If IsNothing(Msg) Then Return
+
+      If Msg.Length < 40 Or Msg.Length > 50 Then Return
+
+      Dim Lines() As String = Msg.Split(Chr(10))
+
+      If Lines.Length < 2 Then Return
+
+      Try
+
+         NewDataTime = CDate(Lines(0))
+         NewProgTime = CDate(Lines(1))
+
+      Catch ex As Exception
+         Return
+      End Try
+
+       If NewDataTime > DataTime Then
+
+         Dim FN As String
+         Dim NewData As String
+
+         Lines = My.Settings.FileName.Split("\"c)
+         FN = Lines(Lines.Length - 1)
+
+         Try
+
+            NewData = client.DownloadString("http://www.cantab.net/users/john.wiseman/Icons/" & FN)
+
+            Try
+               Dim NewName As String = FN & "." & DataTime.ToString
+               Mid(NewName, InStr(NewName, "/"), 1) = "-"
+               Mid(NewName, InStr(NewName, "/"), 1) = "-"
+               Mid(NewName, InStr(NewName, ":"), 1) = "-"
+               Mid(NewName, InStr(NewName, ":"), 1) = "-"
+
+
+               My.Computer.FileSystem.RenameFile(My.Settings.FileName, NewName)
+               My.Computer.FileSystem.WriteAllText(My.Settings.FileName, NewData, False)
+
+               MsgBox("Data Updated")
+
+               DataUpdated = True
+
+            Catch ex As Exception
+
+            End Try
+
+         Catch ex As Exception
+            MsgBox(ex.ToString)
+         End Try
+
+      End If
+      If NewProgTime > ProgTime Then
+
+         Dim FN As String
+         Dim NewProg() As Byte
+
+         Lines = Application.ExecutablePath.Split("\"c)
+         FN = Lines(Lines.Length - 1)
+
+         Try
+
+            NewProg = client.DownloadData("http://www.cantab.net/users/john.wiseman/Icons/" & FN)
+
+            If NewProg.Length > 50000 Then
+
+               Try
+                  Dim NewName As String = FN & "." & DataTime.ToString
+                  Mid(NewName, InStr(NewName, "/"), 1) = "-"
+                  Mid(NewName, InStr(NewName, "/"), 1) = "-"
+                  Mid(NewName, InStr(NewName, ":"), 1) = "-"
+                  Mid(NewName, InStr(NewName, ":"), 1) = "-"
+
+                  My.Computer.FileSystem.RenameFile(Application.ExecutablePath, NewName)
+                  My.Computer.FileSystem.WriteAllBytes(Application.ExecutablePath, NewProg, False)
+
+                  MsgBox("Program Updated")
+
+                  Process.Start(Application.ExecutablePath)
+
+                  End
+
+               Catch ex As Exception
+
+               End Try
+
+            End If
+
+
+         Catch ex As Exception
+            MsgBox(ex.ToString)
+         End Try
+
+      End If
+
+
+
+   End Sub
 End Class

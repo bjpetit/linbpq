@@ -36,6 +36,7 @@ Partial Class ConfigBox
       Me.MonitorUDP = New System.Windows.Forms.CheckBox
       Me.Label6 = New System.Windows.Forms.Label
       Me.PortNum = New System.Windows.Forms.TextBox
+      Me.AutoUpdateBox = New System.Windows.Forms.CheckBox
       Me.TableLayoutPanel1.SuspendLayout()
       Me.SuspendLayout()
       '
@@ -76,7 +77,7 @@ Partial Class ConfigBox
       'Label1
       '
       Me.Label1.AutoSize = True
-      Me.Label1.Location = New System.Drawing.Point(16, 125)
+      Me.Label1.Location = New System.Drawing.Point(16, 144)
       Me.Label1.Name = "Label1"
       Me.Label1.Size = New System.Drawing.Size(52, 13)
       Me.Label1.TabIndex = 1
@@ -85,7 +86,7 @@ Partial Class ConfigBox
       'Label2
       '
       Me.Label2.AutoSize = True
-      Me.Label2.Location = New System.Drawing.Point(16, 155)
+      Me.Label2.Location = New System.Drawing.Point(16, 174)
       Me.Label2.Name = "Label2"
       Me.Label2.Size = New System.Drawing.Size(60, 13)
       Me.Label2.TabIndex = 2
@@ -94,7 +95,7 @@ Partial Class ConfigBox
       'Label3
       '
       Me.Label3.AutoSize = True
-      Me.Label3.Location = New System.Drawing.Point(16, 185)
+      Me.Label3.Location = New System.Drawing.Point(16, 204)
       Me.Label3.Name = "Label3"
       Me.Label3.Size = New System.Drawing.Size(53, 13)
       Me.Label3.TabIndex = 3
@@ -102,21 +103,21 @@ Partial Class ConfigBox
       '
       'URLBox
       '
-      Me.URLBox.Location = New System.Drawing.Point(128, 122)
+      Me.URLBox.Location = New System.Drawing.Point(128, 141)
       Me.URLBox.Name = "URLBox"
       Me.URLBox.Size = New System.Drawing.Size(233, 20)
       Me.URLBox.TabIndex = 4
       '
       'UserBox
       '
-      Me.UserBox.Location = New System.Drawing.Point(128, 152)
+      Me.UserBox.Location = New System.Drawing.Point(128, 171)
       Me.UserBox.Name = "UserBox"
       Me.UserBox.Size = New System.Drawing.Size(168, 20)
       Me.UserBox.TabIndex = 5
       '
       'PasswordBox
       '
-      Me.PasswordBox.Location = New System.Drawing.Point(128, 182)
+      Me.PasswordBox.Location = New System.Drawing.Point(128, 201)
       Me.PasswordBox.Name = "PasswordBox"
       Me.PasswordBox.PasswordChar = Global.Microsoft.VisualBasic.ChrW(42)
       Me.PasswordBox.Size = New System.Drawing.Size(100, 20)
@@ -125,7 +126,7 @@ Partial Class ConfigBox
       'Label4
       '
       Me.Label4.AutoSize = True
-      Me.Label4.Location = New System.Drawing.Point(16, 65)
+      Me.Label4.Location = New System.Drawing.Point(16, 84)
       Me.Label4.Name = "Label4"
       Me.Label4.Size = New System.Drawing.Size(99, 13)
       Me.Label4.TabIndex = 7
@@ -133,7 +134,7 @@ Partial Class ConfigBox
       '
       'FileNameBox
       '
-      Me.FileNameBox.Location = New System.Drawing.Point(128, 62)
+      Me.FileNameBox.Location = New System.Drawing.Point(128, 81)
       Me.FileNameBox.Name = "FileNameBox"
       Me.FileNameBox.Size = New System.Drawing.Size(268, 20)
       Me.FileNameBox.TabIndex = 8
@@ -141,7 +142,7 @@ Partial Class ConfigBox
       'Label5
       '
       Me.Label5.AutoSize = True
-      Me.Label5.Location = New System.Drawing.Point(16, 95)
+      Me.Label5.Location = New System.Drawing.Point(16, 114)
       Me.Label5.Name = "Label5"
       Me.Label5.Size = New System.Drawing.Size(59, 13)
       Me.Label5.TabIndex = 9
@@ -149,7 +150,7 @@ Partial Class ConfigBox
       '
       'OutputFileBox
       '
-      Me.OutputFileBox.Location = New System.Drawing.Point(128, 92)
+      Me.OutputFileBox.Location = New System.Drawing.Point(128, 111)
       Me.OutputFileBox.Name = "OutputFileBox"
       Me.OutputFileBox.Size = New System.Drawing.Size(268, 20)
       Me.OutputFileBox.TabIndex = 10
@@ -158,7 +159,7 @@ Partial Class ConfigBox
       '
       Me.MonitorNode.AutoSize = True
       Me.MonitorNode.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
-      Me.MonitorNode.Location = New System.Drawing.Point(16, 30)
+      Me.MonitorNode.Location = New System.Drawing.Point(16, 49)
       Me.MonitorNode.Name = "MonitorNode"
       Me.MonitorNode.Size = New System.Drawing.Size(119, 17)
       Me.MonitorNode.TabIndex = 11
@@ -169,7 +170,7 @@ Partial Class ConfigBox
       '
       Me.MonitorUDP.AutoSize = True
       Me.MonitorUDP.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
-      Me.MonitorUDP.Location = New System.Drawing.Point(167, 30)
+      Me.MonitorUDP.Location = New System.Drawing.Point(174, 49)
       Me.MonitorUDP.Name = "MonitorUDP"
       Me.MonitorUDP.Size = New System.Drawing.Size(87, 17)
       Me.MonitorUDP.TabIndex = 12
@@ -179,7 +180,7 @@ Partial Class ConfigBox
       'Label6
       '
       Me.Label6.AutoSize = True
-      Me.Label6.Location = New System.Drawing.Point(274, 32)
+      Me.Label6.Location = New System.Drawing.Point(268, 51)
       Me.Label6.Name = "Label6"
       Me.Label6.Size = New System.Drawing.Size(52, 13)
       Me.Label6.TabIndex = 13
@@ -187,10 +188,21 @@ Partial Class ConfigBox
       '
       'PortNum
       '
-      Me.PortNum.Location = New System.Drawing.Point(332, 30)
+      Me.PortNum.Location = New System.Drawing.Point(326, 49)
       Me.PortNum.Name = "PortNum"
       Me.PortNum.Size = New System.Drawing.Size(67, 20)
       Me.PortNum.TabIndex = 14
+      '
+      'AutoUpdateBox
+      '
+      Me.AutoUpdateBox.AutoSize = True
+      Me.AutoUpdateBox.Location = New System.Drawing.Point(17, 19)
+      Me.AutoUpdateBox.Name = "AutoUpdateBox"
+      Me.AutoUpdateBox.RightToLeft = System.Windows.Forms.RightToLeft.Yes
+      Me.AutoUpdateBox.Size = New System.Drawing.Size(117, 17)
+      Me.AutoUpdateBox.TabIndex = 15
+      Me.AutoUpdateBox.Text = "Enable Autoupdate"
+      Me.AutoUpdateBox.UseVisualStyleBackColor = True
       '
       'ConfigBox
       '
@@ -199,6 +211,7 @@ Partial Class ConfigBox
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.CancelButton = Me.Cancel_Button
       Me.ClientSize = New System.Drawing.Size(435, 315)
+      Me.Controls.Add(Me.AutoUpdateBox)
       Me.Controls.Add(Me.PortNum)
       Me.Controls.Add(Me.Label6)
       Me.Controls.Add(Me.MonitorUDP)
@@ -243,5 +256,6 @@ Partial Class ConfigBox
    Friend WithEvents MonitorUDP As System.Windows.Forms.CheckBox
    Friend WithEvents Label6 As System.Windows.Forms.Label
    Friend WithEvents PortNum As System.Windows.Forms.TextBox
+   Friend WithEvents AutoUpdateBox As System.Windows.Forms.CheckBox
 
 End Class

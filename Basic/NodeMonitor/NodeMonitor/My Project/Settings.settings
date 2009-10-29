@@ -5,25 +5,28 @@
     <Setting Name="Port" Type="System.Int32" Scope="User">
       <Value Profile="(Default)">10090</Value>
     </Setting>
-    <Setting Name="FileName" Type="System.String" Scope="User">
-      <Value Profile="(Default)">C:\Program Files\bpq32\Monitor\nodelist.txt</Value>
-    </Setting>
     <Setting Name="UserName" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
     <Setting Name="Password" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
-    <Setting Name="URL" Type="System.String" Scope="User">
-      <Value Profile="(Default)">ftp://ftp.cantab.net/www/Icons/Status.txt</Value>
-    </Setting>
-    <Setting Name="OutputFileName" Type="System.String" Scope="User">
-      <Value Profile="(Default)">C:\Program Files\bpq32\Monitor\Status.txt</Value>
-    </Setting>
     <Setting Name="UseUDP" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
     <Setting Name="UseNode" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="FileName" Type="System.String" Scope="User">
+      <Value Profile="(Default)">nodelist.chat.txt</Value>
+    </Setting>
+    <Setting Name="URL" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="OutputFileName" Type="System.String" Scope="User">
+      <Value Profile="(Default)">Status.txt</Value>
+    </Setting>
+    <Setting Name="AutoUpdate" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
   </Settings>

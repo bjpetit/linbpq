@@ -44,6 +44,7 @@ Partial Class AddNode
       Me.PictureBox2 = New System.Windows.Forms.PictureBox
       Me.IconTune = New System.Windows.Forms.TrackBar
       Me.Label8 = New System.Windows.Forms.Label
+      Me.DDMMSS = New System.Windows.Forms.Label
       Me.TableLayoutPanel1.SuspendLayout()
       CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
       CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -154,11 +155,11 @@ Partial Class AddNode
       'LOC
       '
       Me.LOC.AutoSize = True
-      Me.LOC.Location = New System.Drawing.Point(208, 56)
+      Me.LOC.Location = New System.Drawing.Point(346, 59)
       Me.LOC.Name = "LOC"
-      Me.LOC.Size = New System.Drawing.Size(39, 13)
+      Me.LOC.Size = New System.Drawing.Size(37, 13)
       Me.LOC.TabIndex = 24
-      Me.LOC.Text = "Label7"
+      Me.LOC.Text = "          "
       '
       'Cancel_Button
       '
@@ -278,6 +279,15 @@ Partial Class AddNode
       Me.Label8.TabIndex = 32
       Me.Label8.Text = "Tune Icon Width"
       '
+      'DDMMSS
+      '
+      Me.DDMMSS.AutoSize = True
+      Me.DDMMSS.Location = New System.Drawing.Point(210, 59)
+      Me.DDMMSS.Name = "DDMMSS"
+      Me.DDMMSS.Size = New System.Drawing.Size(97, 13)
+      Me.DDMMSS.TabIndex = 33
+      Me.DDMMSS.Text = "                              "
+      '
       'AddNode
       '
       Me.AcceptButton = Me.OK_Button
@@ -285,6 +295,7 @@ Partial Class AddNode
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.CancelButton = Me.Cancel_Button
       Me.ClientSize = New System.Drawing.Size(474, 387)
+      Me.Controls.Add(Me.DDMMSS)
       Me.Controls.Add(Me.Label8)
       Me.Controls.Add(Me.IconTune)
       Me.Controls.Add(Me.PictureBox2)
@@ -347,5 +358,6 @@ Partial Class AddNode
    Friend WithEvents PictureBox2 As System.Windows.Forms.PictureBox
    Friend WithEvents IconTune As System.Windows.Forms.TrackBar
    Friend WithEvents Label8 As System.Windows.Forms.Label
+   Friend WithEvents DDMMSS As System.Windows.Forms.Label
 
 End Class

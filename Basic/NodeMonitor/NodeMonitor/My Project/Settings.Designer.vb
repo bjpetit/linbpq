@@ -68,18 +68,6 @@ Namespace My
         
         <Global.System.Configuration.UserScopedSettingAttribute(),  _
          Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
-         Global.System.Configuration.DefaultSettingValueAttribute("C:\Program Files\bpq32\Monitor\nodelist.txt")>  _
-        Public Property FileName() As String
-            Get
-                Return CType(Me("FileName"),String)
-            End Get
-            Set
-                Me("FileName") = value
-            End Set
-        End Property
-        
-        <Global.System.Configuration.UserScopedSettingAttribute(),  _
-         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
          Global.System.Configuration.DefaultSettingValueAttribute("")>  _
         Public Property UserName() As String
             Get
@@ -104,30 +92,6 @@ Namespace My
         
         <Global.System.Configuration.UserScopedSettingAttribute(),  _
          Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
-         Global.System.Configuration.DefaultSettingValueAttribute("ftp://ftp.cantab.net/www/Icons/Status.txt")>  _
-        Public Property URL() As String
-            Get
-                Return CType(Me("URL"),String)
-            End Get
-            Set
-                Me("URL") = value
-            End Set
-        End Property
-        
-        <Global.System.Configuration.UserScopedSettingAttribute(),  _
-         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
-         Global.System.Configuration.DefaultSettingValueAttribute("C:\Program Files\bpq32\Monitor\Status.txt")>  _
-        Public Property OutputFileName() As String
-            Get
-                Return CType(Me("OutputFileName"),String)
-            End Get
-            Set
-                Me("OutputFileName") = value
-            End Set
-        End Property
-        
-        <Global.System.Configuration.UserScopedSettingAttribute(),  _
-         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
          Global.System.Configuration.DefaultSettingValueAttribute("False")>  _
         Public Property UseUDP() As Boolean
             Get
@@ -147,6 +111,54 @@ Namespace My
             End Get
             Set
                 Me("UseNode") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("nodelist.chat.txt")>  _
+        Public Property FileName() As String
+            Get
+                Return CType(Me("FileName"),String)
+            End Get
+            Set
+                Me("FileName") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("")>  _
+        Public Property URL() As String
+            Get
+                Return CType(Me("URL"),String)
+            End Get
+            Set
+                Me("URL") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("Status.txt")>  _
+        Public Property OutputFileName() As String
+            Get
+                Return CType(Me("OutputFileName"),String)
+            End Get
+            Set
+                Me("OutputFileName") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("False")>  _
+        Public Property AutoUpdate() As Boolean
+            Get
+                Return CType(Me("AutoUpdate"),Boolean)
+            End Get
+            Set
+                Me("AutoUpdate") = value
             End Set
         End Property
     End Class

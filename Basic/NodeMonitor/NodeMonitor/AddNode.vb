@@ -229,6 +229,7 @@ Public Class AddNode
             DownIconBox.Text = Nodes(i).downIcon
 
             LOC.Text = ToLOC(CDbl(Nodes(i).Lat), CDbl(Nodes(i).Lon))
+            DDMMSS.Text = ToDDMMSS(CDbl(Nodes(i).Lat), CDbl(Nodes(i).Lon))
 
             PictureBox1.Image = New Bitmap(UpIconBox.Text)
             PictureBox2.Image = New Bitmap(DownIconBox.Text)
@@ -297,43 +298,37 @@ Public Class AddNode
 
    Function ToDDMMSS(ByVal Lat As Double, ByVal Lon As Double) As String
 
-      Dim Locator As String = "XX00XX"
-      Dim i As Integer
-      Dim S1 As Double, S2 As Double
+      Dim Position As String
+      Dim DD As Integer, MM As Integer, SS As Integer
+      Dim NS As String = "N"
+      Dim EW As String = "E"
+      Dim Mins As Double
 
-      Lon = Lon + 180
-      Lat = Lat + 90
+      If Lat < 0 Then
+         Lat = -Lat
+         NS = "S"
+      End If
 
-      S1 = Lon Mod 20
+      If Lon < 0 Then
+         Lon = -Lon
+         EW = "W"
+      End If
 
-      i = CInt(Int(Lon / 20))
-      Mid(Locator, 1, 1) = Chr(65 + i)
+      DD = CInt(Int(Lat))
+      Mins = (Lat - DD) * 60
+      MM = CInt(Int(Mins))
+      SS = CInt((Mins - MM) * 60)
 
-      S2 = S1 Mod 2
+      Position = Format(DD, "D") & "°" & Format(MM, "D") & "'" & Format(SS, "D") & """ " & NS
 
-      i = CInt(Int(S1 / 2))
-      Mid(Locator, 3, 1) = Chr(48 + i)
+      DD = CInt(Int(Lon))
+      Mins = (Lon - DD) * 60
+      MM = CInt(Int(Mins))
+      SS = CInt((Mins - MM) * 60)
 
-      i = CInt(Int(S2 * 12))
-      Mid(Locator, 5, 1) = Chr(65 + i)
+      Position = Position & " " & Format(DD, "D") & "°" & Format(MM, "D") & "'" & Format(SS, "D") & """ " & EW
 
-
-      S1 = Lat Mod 10
-
-      i = CInt(Int(Lat / 10))
-      Mid(Locator, 2, 1) = Chr(65 + i)
-
-      S2 = S1 Mod 1
-
-      i = CInt(Int(S1))
-      Mid(Locator, 4, 1) = Chr(48 + i)
-
-      i = CInt(Int(S2 * 24))
-      Mid(Locator, 6, 1) = Chr(65 + i)
-
-
-
-      Return Locator
+      Return Position
 
    End Function
 
