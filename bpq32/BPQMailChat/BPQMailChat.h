@@ -711,6 +711,11 @@ typedef struct SocketConnectionInfo
 
 	struct MsgInfo * SMTPMsg;	// message for this SMTP connection
 
+	UCHAR * SendBuffer;			// Message being sent if socket is busy. malloc'ed as needed
+	int SendBufferSize;			// Total Malloc'ed size. Actual size is in MailSize
+	int SendSize;				// Bytes in buffer
+	int SendPtr;				// next byte to send when ready
+
 	struct NNTPRec * NNTPGroup;	// Currently Selected Group
 	int NNTPNum;				// Currenrly Selected Msg Number
 
@@ -968,8 +973,9 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen);
 void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
-int SendSock(SOCKET sock, char * msg);
-VOID __cdecl sockprintf(SOCKET sock, const char * format, ...);
+int SendSock(SocketConn * sockptr, char * msg);
+VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...);
+VOID SendFromQueue(SocketConn * sockptr);
 
 BOOL SendtoISP();
 

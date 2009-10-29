@@ -350,6 +350,7 @@ VOID ExpireMessages()
 	}
 }
 
+
 VOID KillMsg(struct MsgInfo * Msg)
 {
 	FlagAsKilled(Msg);
@@ -386,7 +387,9 @@ BOOL RemoveKilledMessages()
 			else
 				DeleteFile(MsgFile);
 			
+			MsgnotoMsg[Msg->number] = NULL;	
 			free(Msg);
+
 			Removed++;
 		}
 		else
@@ -420,6 +423,12 @@ VOID Renumber_Messages()
 
 	int i, n;
 
+	for (i = 0; i < 100000; i++)
+	{
+		MsgnotoMsg[i] = NULL;
+	}
+
+
 	i = 0;		// New Message Number
 
 	for (n = 1; n <= NumberofMessages; n++)
@@ -452,6 +461,7 @@ VOID Renumber_Messages()
 				return;
 			}
 			Msg->number = i;
+			MsgnotoMsg[i] = Msg;
 		}
 		
 	}

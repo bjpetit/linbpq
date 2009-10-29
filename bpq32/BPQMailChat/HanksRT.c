@@ -1004,8 +1004,8 @@ static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias)
 		if (cn->node == node)
 		{
 			cn->refcnt++;
-			Debugprintf("cn_inc cn Refcount for %s->%s  incremented to %d - adding Call %s",
-				circuit->Callsign, node->call, cn->refcnt, call);
+//			Debugprintf("cn_inc cn Refcount for %s->%s  incremented to %d - adding Call %s",
+//				circuit->Callsign, node->call, cn->refcnt, call);
 
 			return node;
 		}
@@ -1016,8 +1016,8 @@ static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias)
 	cn->node   = node;
 	cn->refcnt = 1;
 
-	Debugprintf("cn_inc New cn for %s->%s - adding Call %s",
-				circuit->Callsign, node->call, call);
+//	Debugprintf("cn_inc New cn for %s->%s - adding Call %s",
+//				circuit->Callsign, node->call, call);
 
 	return node;
 }

@@ -65,24 +65,70 @@ char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 void decodeblock( unsigned char in[4], unsigned char out[3] );
 
 
-int SendSock(SOCKET sock, char * msg)
+int SendSock(SocketConn * sockptr, char * msg)
 {
 	int len = strlen(msg), sent;
-	
+	char * newmsg = malloc(len+10);
+
  	WriteLogLine(NULL, '>',msg,  len, LOG_TCP);
 
-	if (len > 0)
+	strcpy(newmsg, msg);
+
+	strcat(newmsg, "\r\n");
+
+	len+=2;
+
+	if (sockptr->SendBuffer)
 	{
-		sent =send(sock, msg, strlen(msg), 0);
-		if (sent < len)
-			return sent;
+		// Already queued, so add to end
+
+		if ((sockptr->SendSize + len) > sockptr->SendBufferSize)
+		{
+			sockptr->SendBufferSize += (10000 + len);
+			sockptr->SendBuffer = realloc(sockptr->SendBuffer, sockptr->SendBufferSize);
+		}
+
+		memcpy(&sockptr->SendBuffer[sockptr->SendSize], newmsg, len);
+		sockptr->SendSize += len;
+		free (newmsg);
+		return len;
+	}
+	
+	sent = send(sockptr->socket, newmsg, len, 0);
+		
+	if (sent < len)
+	{
+		int error, remains;
+
+		// Not all could be sent - queue rest
+
+		if (sent == SOCKET_ERROR)
+		{
+			error = WSAGetLastError();
+			if (error == WSAEWOULDBLOCK)
+				sent=0;
+
+			//	What else??
+		}
+
+		remains = len - sent;
+
+		sockptr->SendBufferSize += (10000 + remains);
+		sockptr->SendBuffer = malloc(sockptr->SendBufferSize);
+
+		memcpy(sockptr->SendBuffer, &newmsg[sent], remains);
+
+		sockptr->SendSize = remains;
+		sockptr->SendPtr = 0;
+
 	}
 
-	sent = send(sock, "\r\n", 2, 0);
+	free (newmsg);
+
 	return sent;
 }
 
-VOID __cdecl sockprintf(SOCKET sock, const char * format, ...)
+VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...)
 {
 	// printf to a socket
 
@@ -92,7 +138,7 @@ VOID __cdecl sockprintf(SOCKET sock, const char * format, ...)
 	va_start(arglist, format);
 	vsprintf_s(buff, 300, format, arglist);
 
-	SendSock(sock, buff);
+	SendSock(sockptr, buff);
 }
 
 VOID TCPTimer()
@@ -370,17 +416,24 @@ int Socket_Data(int sock, int error, int eventcode)
 
 				case FD_WRITE:
 
-					if (sockptr->Type == SMTPServer)
-						SendSock(sock, "220 BPQMail SMTP Server ready");
+					// Either Just connected, or flow contorl cleared
+
+					if (sockptr->SendBuffer)
+						// Data Queued
+						SendFromQueue(sockptr);
 					else
 					{
-						if (sockptr->Type == POP3SLAVE)
+						if (sockptr->Type == SMTPServer)
+							SendSock(sockptr, "220 BPQMail SMTP Server ready");
+						else
 						{
-							SendSock(sock, "+OK POP3 server ready");
-							sockptr->State = GettingUser;
+							if (sockptr->Type == POP3SLAVE)
+							{
+								SendSock(sockptr, "+OK POP3 server ready");
+								sockptr->State = GettingUser;
+							}
 						}
 					}
-	
 					return 0;
 
 				case FD_OOB:
@@ -519,7 +572,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			if (ptr2 == NULL)
 			{
-				SendSock(sock, "500 Eh");
+				SendSock(sockptr, "500 Eh");
 				return;
 			}
 
@@ -624,7 +677,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			sockptr->MailSize = 0;
 
 	
-			SendSock(sock, "250 Ok");
+			SendSock(sockptr, "250 Ok");
 			
 			//else			
 			//	send(sock, "450 Ok\r\n", 8,0);
@@ -670,7 +723,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		strcpy(sockptr->CallSign, Out);
 		
 		sockptr->State = GettingPass;
-		SendSock(sock, "334 UGFzc3dvcmQ6");
+		SendSock(sockptr, "334 UGFzc3dvcmQ6");
 		return;
 	}
 
@@ -695,12 +748,12 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (strcmp(user->pass, Out) == 0)
 			{
 				sockptr->State = Authenticated;
-				SendSock(sock, "235 2.0.0 OK Authenticated"); //535 authorization failed
+				SendSock(sockptr, "235 2.0.0 OK Authenticated"); //535 authorization failed
 				return;
 			}
 		}
 
-		SendSock(sock, "535 authorization failed");
+		SendSock(sockptr, "535 authorization failed");
 		sockptr->State = 0;
 		return;
 	}
@@ -720,14 +773,14 @@ ZvVx9G1hcg==
 	if(memcmp(Buffer, "AUTH LOGIN", 10) == 0)
 	{
 		sockptr->State = GettingUser;
-		SendSock(sock, "334 VXNlcm5hbWU6");
+		SendSock(sockptr, "334 VXNlcm5hbWU6");
 		return;
 	}
 
 	if(memcmp(Buffer, "EHLO",4) == 0)
 	{
-		SendSock(sock, "250-BPQ Mail Server");
-		SendSock(sock, "250 AUTH LOGIN");
+		SendSock(sockptr, "250-BPQ Mail Server");
+		SendSock(sockptr, "250 AUTH LOGIN");
 
 		//250-8BITMIME
 
@@ -737,14 +790,14 @@ ZvVx9G1hcg==
 	if(memcmp(Buffer, "AUTH LOGIN", 10) == 0)
 	{
 		sockptr->State = GettingUser;
-		SendSock(sock, "334 VXNlcm5hbWU6");
+		SendSock(sockptr, "334 VXNlcm5hbWU6");
 		return;
 	}
 
 
 	if(memcmp(Buffer, "HELO",4) == 0)
 	{
-		SendSock(sock, "250 Ok");
+		SendSock(sockptr, "250 Ok");
 		return;
 	}
 	
@@ -753,7 +806,7 @@ ZvVx9G1hcg==
 		sockptr->MailFrom = zalloc(Len);
 		memcpy(sockptr->MailFrom, &Buffer[10], Len-12);
 			
-		SendSock(sock, "250 Ok");
+		SendSock(sockptr, "250 Ok");
 
 		return;
 	}
@@ -765,7 +818,7 @@ ZvVx9G1hcg==
 
 		memcpy(sockptr->RecpTo[sockptr->Recipients++], &Buffer[8], Len-10);
 			
-		SendSock(sock, "250 Ok");
+		SendSock(sockptr, "250 Ok");
 		return;
 	}
 
@@ -777,7 +830,7 @@ ZvVx9G1hcg==
 		if (sockptr->MailBuffer == NULL)
 		{
 			CriticalErrorHandler("Failed to create SMTP Message Buffer");
-			SendSock(sock, "250 Failed");
+			SendSock(sockptr, "250 Failed");
 			shutdown(sock, 0);
 
 			return;
@@ -785,13 +838,13 @@ ZvVx9G1hcg==
 	
 		sockptr->Flags |= GETTINGMESSAGE;
 
-		SendSock(sock, "354 End data with <CR><LF>.<CR><LF>");
+		SendSock(sockptr, "354 End data with <CR><LF>.<CR><LF>");
 		return;
 	}
 
 	if(memcmp(Buffer, "QUIT\r\n", 6) == 0)
 	{
-		SendSock(sock, "221 OK");
+		SendSock(sockptr, "221 OK");
 		Sleep(500);
 		shutdown(sock, 0);
 		return;
@@ -799,7 +852,7 @@ ZvVx9G1hcg==
 
 	if(memcmp(Buffer, "RSET\r\n", 6) == 0)
 	{
-		SendSock(sock, "250 Ok");
+		SendSock(sockptr, "250 Ok");
 		sockptr->State = 0;
 		sockptr->Recipients;
 //		Sleep(500);
@@ -1024,16 +1077,16 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if(memcmp(Buffer, "CAPA",4) == 0)
 	{
-		SendSock(sock, "+OK Capability list follows");
-		SendSock(sock, "UIDL");
-		SendSock(sock, "EXPIRE 30");
-		SendSock(sock, ".");
+		SendSock(sockptr, "+OK Capability list follows");
+		SendSock(sockptr, "UIDL");
+		SendSock(sockptr, "EXPIRE 30");
+		SendSock(sockptr, ".");
 		return;
 	}  
 
 	if(memcmp(Buffer, "AUTH",4) == 0)
 	{
-		SendSock(sock, "-ERR");
+		SendSock(sockptr, "-ERR");
 		return;
 	}  
 	if (sockptr->State == GettingUser)
@@ -1045,7 +1098,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		strcpy(sockptr->CallSign, &Buffer[5]);
 		
 		sockptr->State = GettingPass;
-		SendSock(sock, "+OK please send PASS command");
+		SendSock(sockptr, "+OK please send PASS command");
 		return;
 	}
 
@@ -1062,13 +1115,13 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			{
 				if (user->POP3Locked)
 				{
-					SendSock(sock, "-ERR Mailbox Locked");
+					SendSock(sockptr, "-ERR Mailbox Locked");
 					sockptr->State = 0;
 					return;
 				}
 
 				sockptr->State = Authenticated;
-				SendSock(sock, "+OK Authenticated");
+				SendSock(sockptr, "+OK Authenticated");
 
 				sockptr->POP3User = user;
 				user->POP3Locked = TRUE;
@@ -1090,14 +1143,14 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			}
 		}
 
-		SendSock(sock, "-ERR Authentication failed");
+		SendSock(sockptr, "-ERR Authentication failed");
 		sockptr->State = 0;
 		return;
 	}
 
 	if (memcmp(Buffer, "QUIT",4) == 0)
 	{
-		SendSock(sock, "+OK Finished");
+		SendSock(sockptr, "+OK Finished");
 
 		if (sockptr->POP3User)
 			sockptr->POP3User->POP3Locked = FALSE;
@@ -1108,13 +1161,13 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (memcmp(Buffer, "NOOP",4) == 0)
 	{
-		SendSock(sock, "+OK ");
+		SendSock(sockptr, "+OK ");
 		return;
 	}
 
 	if (sockptr->State != Authenticated)
 	{
-		SendSock(sock, "-ERR Need Authentication");
+		SendSock(sockptr, "-ERR Need Authentication");
 		sockptr->State = 0;
 		return;
 	}
@@ -1131,7 +1184,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		sprintf_s(reply, sizeof(reply), "+OK %d %d", sockptr->POP3MsgCount, size);
 
-		SendSock(sock, reply);
+		SendSock(sockptr, reply);
 		return;
 	}
 
@@ -1141,15 +1194,15 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		int i, count=0, size=0;
 		int MsgNo=1;
 
-		SendSock(sock, "+OK ");
+		SendSock(sockptr, "+OK ");
 
 		for (i=0; i< sockptr->POP3MsgCount; i++)
 		{
 			sprintf_s(reply, sizeof(reply), "%d %s", i+1, sockptr->POP3Msgs[i]->bid);
-			SendSock(sock, reply);	
+			SendSock(sockptr, reply);	
 		}
 
-		SendSock(sock, ".");
+		SendSock(sockptr, ".");
 		return;
 	}
 
@@ -1159,15 +1212,15 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		int i, count=0, size=0;
 		int MsgNo=1;
 
-		SendSock(sock, "+OK ");
+		SendSock(sockptr, "+OK ");
 
 		for (i=0; i< sockptr->POP3MsgCount; i++)
 		{
 			sprintf_s(reply, sizeof(reply), "%d %d", i+1, sockptr->POP3Msgs[i]->length);
-			SendSock(sock, reply);	
+			SendSock(sockptr, reply);	
 		}
 
-		SendSock(sock, ".");
+		SendSock(sockptr, ".");
 		return;
 	}
 
@@ -1186,7 +1239,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		if ((i > sockptr->POP3MsgCount)  || (i == 0))
 		{
-			SendSock(sock, "-ERR no such message");
+			SendSock(sockptr, "-ERR no such message");
 			return;
 		}
 
@@ -1196,11 +1249,11 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		if (msgbytes == NULL)
 		{
-			SendSock(sock, "-ERR no such message");
+			SendSock(sockptr, "-ERR no such message");
 			return;
 		}
 
-		SendSock(sock, "+OK ");
+		SendSock(sockptr, "+OK ");
 
 		// Build an RFC822 ish header
 
@@ -1208,25 +1261,25 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 //Received: from [69.147.108.192] by t11.bullet.mail.sp1.yahoo.com with NNFMP; 16 May 2009 02:30:47 -0000
 
 		sprintf_s(Header, sizeof(Header), "To: %s", Msg->to);
-		SendSock(sock, Header);
+		SendSock(sockptr, Header);
 		
 		sprintf_s(Header, sizeof(Header), "Message-ID: %s", Msg->bid);
-		SendSock(sock, Header);
+		SendSock(sockptr, Header);
 		sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
-		SendSock(sock, Header);
+		SendSock(sockptr, Header);
 //Sender: shipplotter@yahoogroups.com
 //		sprintf_s(Header, sizeof(Header), "Date: %s", Msg->date);
-//		SendSock(sock, Header);
+//		SendSock(sockptr, Header);
 		sprintf_s(Header, sizeof(Header), "Subject: %s", Msg->title);
-		SendSock(sock, Header);
+		SendSock(sockptr, Header);
 //Content-Type: text/plain; charset=ISO-8859-1
 //Content-Transfer-Encoding: 7bit
 
-		SendSock(sock, "");							// Blank line before body
+		SendSock(sockptr, "");							// Blank line before body
 
-		SendSock(sock, msgbytes);
-		SendSock(sock, "");
-		SendSock(sock, ".");
+		SendSock(sockptr, msgbytes);
+		SendSock(sockptr, "");
+		SendSock(sockptr, ".");
 
 		free(msgbytes);
 
@@ -1247,7 +1300,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		if ((i > sockptr->POP3MsgCount)  || (i == 0))
 		{
-			SendSock(sock, "-ERR no such message");
+			SendSock(sockptr, "-ERR no such message");
 			return;
 		}
 
@@ -1255,14 +1308,14 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		FlagAsKilled(Msg);
 
-		SendSock(sock, "+OK ");
+		SendSock(sockptr, "+OK ");
 		return;
 	}
 
 
 	if (memcmp(Buffer, "QUIT",4) == 0)
 	{
-		SendSock(sock, "+OK Finished");
+		SendSock(sockptr, "+OK Finished");
 
 		if (sockptr->POP3User)
 			sockptr->POP3User->POP3Locked = FALSE;
@@ -1270,7 +1323,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	SendSock(sock, "-ERR Unrecognised Command");
+	SendSock(sockptr, "-ERR Unrecognised Command");
 
 }
 
@@ -1498,12 +1551,12 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "220 ",4) == 0)
 		{
-			sockprintf(sock, "HELO %s", BBSName);
+			sockprintf(sockptr, "HELO %s", BBSName);
 			sockptr->State = WaitingForHELOResponse;
 		}
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = 0;
 		}
 
@@ -1516,18 +1569,18 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			if (SMTPAuthNeeded)
 			{
-				sockprintf(sock, "AUTH LOGIN");
+				sockprintf(sockptr, "AUTH LOGIN");
 				sockptr->State = WaitingForAUTHResponse;
 			}
 			else
 			{
-				sockprintf(sock, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
+				sockprintf(sockptr, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
 				sockptr->State = WaitingForFROMResponse;
 			}
 		}
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = 0;
 			SMTPActive = FALSE;
 
@@ -1541,27 +1594,27 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		if (memcmp(Buffer, "334 VXN", 7) == 0)
 		{
 			char * Msg = str_base64_encode(ISPAccountName);
-			SendSock(sock, Msg);
+			SendSock(sockptr, Msg);
 			free(Msg);
 			return;
 		}
 		else if (memcmp(Buffer, "334 UGF", 7) == 0)
 		{
 			char * Msg = str_base64_encode(ISPAccountPass);
-			SendSock(sock, Msg);
+			SendSock(sockptr, Msg);
 			free(Msg);
 			return;
 		}
 		else if (memcmp(Buffer, "235 ", 4) == 0)
 		{
-			sockprintf(sock, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
-//			sockprintf(sock, "MAIL FROM: <%s@%s.%s>", sockptr->SMTPMsg->from, BBSName, HRoute);
+			sockprintf(sockptr, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
+//			sockprintf(sockptr, "MAIL FROM: <%s@%s.%s>", sockptr->SMTPMsg->from, BBSName, HRoute);
 			sockptr->State = WaitingForFROMResponse;
 		}
 
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = 0;
 			SMTPActive = FALSE;
 		}
@@ -1575,13 +1628,13 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
-			sockprintf(sock, "RCPT TO: <%s>", sockptr->SMTPMsg->via);
+			sockprintf(sockptr, "RCPT TO: <%s>", sockptr->SMTPMsg->via);
 			sockptr->State = WaitingForTOResponse;
 		}
 		else
 		{
 			sockptr->SMTPMsg->status = 'H';			// Hold for review
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = 0;
 			SMTPActive = FALSE;
 		}
@@ -1593,13 +1646,13 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
-			SendSock(sock, "DATA");
+			SendSock(sockptr, "DATA");
 			sockptr->State = WaitingForDATAResponse;
 		}
 		else
 		{
 			sockptr->SMTPMsg->status = 'H';			// Hold for review
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = 0;
 			SMTPActive = FALSE;
 		}
@@ -1611,26 +1664,26 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "354 ",4) == 0)
 		{
-			sockprintf(sock, "To: %s", sockptr->SMTPMsg->via);
-			sockprintf(sock, "From: %s <%s@%s>", sockptr->SMTPMsg->from, sockptr->SMTPMsg->from, MyDomain);
-			sockprintf(sock, "Sender: %s@%s", sockptr->SMTPMsg->from, MyDomain);
+			sockprintf(sockptr, "To: %s", sockptr->SMTPMsg->via);
+			sockprintf(sockptr, "From: %s <%s@%s>", sockptr->SMTPMsg->from, sockptr->SMTPMsg->from, MyDomain);
+			sockprintf(sockptr, "Sender: %s@%s", sockptr->SMTPMsg->from, MyDomain);
 			if (GMailMode)
-				sockprintf(sock, "Reply-To: %s+%s@%s", GMailName, sockptr->SMTPMsg->from, MyDomain);
+				sockprintf(sockptr, "Reply-To: %s+%s@%s", GMailName, sockptr->SMTPMsg->from, MyDomain);
 			else
-				sockprintf(sock, "Reply-To: %s@%s", sockptr->SMTPMsg->from, MyDomain);
+				sockprintf(sockptr, "Reply-To: %s@%s", sockptr->SMTPMsg->from, MyDomain);
 
 				
-			sockprintf(sock, "Subject: %s", sockptr->SMTPMsg->title);
-			SendSock(sock, "");
+			sockprintf(sockptr, "Subject: %s", sockptr->SMTPMsg->title);
+			SendSock(sockptr, "");
 
-			SendSock(sock, sockptr->MailBuffer);
-			SendSock(sock, ".");
+			SendSock(sockptr, sockptr->MailBuffer);
+			SendSock(sockptr, ".");
 
 			sockptr->State = WaitingForBodyResponse;
 		}
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = 0;
 			SMTPActive = FALSE;
 		}
@@ -1646,7 +1699,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		}
 
 
-		SendSock(sock, "QUIT");
+		SendSock(sockptr, "QUIT");
 		sockptr->State = 0;
 
 		SMTPActive = FALSE;
@@ -1846,7 +1899,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			if (ptr2 == NULL)
 			{
-				SendSock(sock, "500 Eh");
+				SendSock(sockptr, "500 Eh");
 				return;
 			}
 
@@ -1969,14 +2022,14 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			if (sockptr->POP3MsgCount > sockptr->POP3MsgNum++)
 			{
-				sockprintf(sock, "RETR %d", sockptr->POP3MsgNum);
+				sockprintf(sockptr, "RETR %d", sockptr->POP3MsgNum);
 
 				sockptr->State = WaitingForRETRResponse;
 			}
 			else
 			{
 				sockptr->POP3MsgNum = 1;
-				sockprintf(sock, "DELE %d", sockptr->POP3MsgNum);;
+				sockprintf(sockptr, "DELE %d", sockptr->POP3MsgNum);;
 				sockptr->State = WaitingForDELEResponse;
 			}
 
@@ -2006,12 +2059,12 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "+OK", 3) == 0)
 		{
-			sockprintf(sock, "USER %s", ISPAccountName);
+			sockprintf(sockptr, "USER %s", ISPAccountName);
 			sockptr->State = WaitingForUSERResponse;
 		}
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = 0;
 		}
 
@@ -2022,12 +2075,12 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "+OK", 3) == 0)
 		{
-			sockprintf(sock, "PASS %s", ISPAccountPass);
+			sockprintf(sockptr, "PASS %s", ISPAccountPass);
 			sockptr->State = WaitingForPASSResponse;
 		}
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = WaitingForQUITResponse;
 		}
 
@@ -2038,7 +2091,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "+OK", 3) == 0)
 		{
-			SendSock(sock, "STAT");
+			SendSock(sockptr, "STAT");
 			sockptr->State = WaitingForSTATResponse;
 		}
 		else
@@ -2060,20 +2113,20 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			{
 				sockptr->POP3MsgCount = Msgs;
 				sockptr->POP3MsgNum = 1;
-				SendSock(sock, "RETR 1");
+				SendSock(sockptr, "RETR 1");
 
 				sockptr->State = WaitingForRETRResponse;
 
 			}
 			else
 			{
-				SendSock(sock, "QUIT");
+				SendSock(sockptr, "QUIT");
 				sockptr->State = WaitingForQUITResponse;
 			}
 		}
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = WaitingForQUITResponse;
 		}
 
@@ -2090,7 +2143,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (sockptr->MailBuffer == NULL)
 			{
 				CriticalErrorHandler("Failed to create POP3 Message Buffer");
-				SendSock(sock, "QUIT");
+				SendSock(sockptr, "QUIT");
 				sockptr->State = WaitingForQUITResponse;
 				shutdown(sock, 0);
 
@@ -2102,7 +2155,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		}
 		else
 		{
-			SendSock(sock, "QUIT");
+			SendSock(sockptr, "QUIT");
 			sockptr->State = WaitingForQUITResponse;
 		}
 
@@ -2114,11 +2167,11 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		{
 			if (sockptr->POP3MsgCount > sockptr->POP3MsgNum++)
 			{
-				sockprintf(sock, "DELE %d", sockptr->POP3MsgNum);;
+				sockprintf(sockptr, "DELE %d", sockptr->POP3MsgNum);;
 			}
 			else
 			{
-				SendSock(sock, "QUIT");
+				SendSock(sockptr, "QUIT");
 				sockptr->Flags = WaitingForQUITResponse;
 			}
 		}
@@ -2137,7 +2190,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	SendSock(sock, "QUIT");
+	SendSock(sockptr, "QUIT");
 	shutdown(sock,0);
 	sockptr->State = 0;
 

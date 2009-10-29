@@ -290,6 +290,12 @@
 
 // Fix for corruption of CIrcuit-Node chain.
 
+// Version 1.0.3.11
+
+// Fix flow control for SMTP and NNTP 
+
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
