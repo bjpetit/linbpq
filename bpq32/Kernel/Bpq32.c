@@ -147,9 +147,16 @@
 
 //				Fix calculation of %retries in extended ROUTES display
 //				Fix corruption of ROUTES table
+
+// 410l		October 2009
+
 //				Add GetVersionString API call.
-//				Keep links to neighbouring nodes open
 //				Add GetPortTableEntry API call
+//				Keep links to neighbouring nodes open
+
+// Build 2
+
+//				Fix PE in NOROUTETODEST (missing POP EBX)
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T

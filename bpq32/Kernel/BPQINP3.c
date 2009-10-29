@@ -42,7 +42,7 @@ typedef struct _RTTMSG
 
 extern int SENDNETFRAME();
 extern VOID Q_ADD();
-
+extern int COUNTNODES();
 
 DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
@@ -61,34 +61,6 @@ VOID DecayNETROMRoutes(struct ROUTE * Route);
 VOID DeleteINP3Routes(struct ROUTE * Route);
 
 #define NOINP3
-
-#ifdef NOINP3
-
-TellINP3LinkGone(struct ROUTE * Route)
-{
-	return 0;
-}
-VOID TellINP3LinkSetupFailed(struct ROUTE * Route)
-{
-}
-
-VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
-{
-	return;
-}
-VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGE * Buff, int Len, int Port)
-{
-	return;
-}
-INP3TIMER()
-{
-	return 0;
-}
-
-
-
-#else
-
 
 struct _RTTMSG RTTMsg = {""};
 
@@ -234,11 +206,13 @@ VOID DecayNETROMRoutes(struct ROUTE * Route)
 					{
 						// No More Routes - ZAP Dest
 
+						#ifdef _DEBUG
 						{
 							char call[11]="";
 							ConvFromAX25(Dest->DEST_CALL, call);
 							Debugprintf("Deleting NR Node %s", call);
 						}
+						#endif
 
 						_asm
 						{
@@ -355,6 +329,12 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	int opcode;
 	char alias[6];
 	USHORT Stamp;
+
+#ifdef NOINP3
+
+	return;
+
+#endif
 
 	// Update TImestamp on Route
 
@@ -889,7 +869,7 @@ VOID SendOurRIF(struct ROUTE * Route)
 
 SendRIPTimer()
 {
-	int count;
+	int count, nodes;
 	struct ROUTE * Route = DataBase->NEIGHBOURS;
 	int MaxRoutes = DataBase->MAXNEIGHBOURS;
 
@@ -900,7 +880,28 @@ SendRIPTimer()
 			if (Route->NEIGHBOUR_LINK == 0 || Route->NEIGHBOUR_LINK->LINKPORT == 0)
 			{
 				if (Route->NEIGHBOUR_QUAL == 0)
+				{
+					Route++;
 					continue;						// Qual zero is a locked out route
+				}
+
+				// Dont Activate  link has no nodes unless INP3
+
+				if (Route->INP3Node == 0)
+				{
+					_asm
+					{
+						mov esi, Route
+						call COUNTNODES
+						mov nodes, eax
+					}
+
+					if (nodes == 0)
+					{
+						Route++;
+						continue;
+					}
+				}
 
 				// Try to activate link
 
@@ -933,6 +934,12 @@ SendRIPTimer()
 				Route->NEIGHBOUR_LINK->KILLTIMER = 0;		// Keep Open
 			}
 
+#ifdef NOINP3
+
+			Route++;
+			continue;
+
+#endif
 			if (Route->INP3Node)
 			{
 				if (Route->Timeout)
@@ -1227,12 +1234,26 @@ VOID SendNewInfo()
 }
 
 
-INP3TIMER()
+VOID INP3TIMER()
 {
 	if (RTTMsg.ID[0] == 0)
 		InitialiseRTT();
 
 	// Called once per second
+
+#ifdef NOINP3
+
+	if (RIPTimerCount == 0)
+	{
+		RIPTimerCount = 10;
+		SendRIPTimer();
+	}
+	else
+		RIPTimerCount--;
+
+	return;
+
+#endif
 
 	SendNegativeInfo();					// Urgent
 
@@ -1257,8 +1278,6 @@ INP3TIMER()
 
 }
 
-
-#endif
 
 UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
 {

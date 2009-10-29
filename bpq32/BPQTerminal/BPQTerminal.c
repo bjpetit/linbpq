@@ -29,7 +29,7 @@
 // Add line wrap code
 // Add option not to monitor NODES broadcasts
 
-// Version 2.0.7
+// Version 2.0.7 October 2009
 
 // Add input buffer scrollback.
 // Fix monitoring when PORTNUM specified
