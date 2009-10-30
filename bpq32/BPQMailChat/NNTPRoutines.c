@@ -373,6 +373,50 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	Buffer[Len-2] = 0;
 
+	if(_memicmp(Buffer, "AUTHINFO USER", 13) == 0)
+	{
+		if (Len > 22) Buffer[22]=0;
+		strcpy(sockptr->CallSign, &Buffer[14]);
+		sockptr->State = GettingPass;
+		sockprintf(sockptr, "381 More authentication information required");
+		return;
+	}
+
+	if (sockptr->State == GettingUser)
+	{
+		sockprintf(sockptr, "480 Authentication required");
+		return;
+	}
+
+	if (sockptr->State == GettingPass)
+	{
+		struct UserInfo * user = NULL;
+
+		if(_memicmp(Buffer, "AUTHINFO PASS", 13) == 0)
+		{
+			user = LookupCall(sockptr->CallSign);
+
+			if (user)
+			{
+				if (strcmp(user->pass, &Buffer[14]) == 0)
+				{
+					sockprintf(sockptr, "281 Authentication accepted");
+	
+					sockptr->State = Authenticated;
+					sockptr->POP3User = user;
+					return;
+				}
+			}
+			SendSock(sockptr, "482 Authentication rejected");
+			sockptr->State = GettingUser;
+			return;
+		}
+
+		sockprintf(sockptr, "480 Authentication required");
+		return;
+	}
+
+
 	if(memcmp(Buffer, "GROUP", 5) == 0)
 	{
 		int i;
@@ -881,7 +925,10 @@ int NNTP_Data(int sock, int error, int eventcode)
 
 						SendFromQueue(sockptr);
 					else
-						SendSock(sockptr, "200 BPQMail NNTP Server ready");		
+					{
+						SendSock(sockptr, "200 BPQMail NNTP Server ready");	
+						sockptr->State = GettingUser;
+					}
 					
 					return 0;
 

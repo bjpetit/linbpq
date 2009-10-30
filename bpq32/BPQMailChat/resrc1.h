@@ -36,6 +36,8 @@
 #define IDC_HRTEXT                      1027
 #define IDC_HROUTESP                    1029
 #define IDC_LASTLISTED                  1030
+#define IDC_MESSAGE                     1031
+#define IDSAVE                          1032
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -54,6 +56,7 @@
 #define IDC_CHANGED                     5011
 #define IDC_HOLDMAIL                    5011
 #define IDC_SEEN                        5012
+#define IDC_EDITTEXT                    6104
 #define IDC_LOGLIFETIME                 9025
 #define IDC_USEB1                       9876
 #define IDC_READDRESSLOCAL              9877
@@ -63,6 +66,7 @@
 #define IDD_UICONFIG                    30003
 #define IDD_MSGFROMCLIPBOARD            30004
 #define IDD_HRHELP                      30005
+#define IDD_EDITMSGTEXT                 30006
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
@@ -84,9 +88,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30006
+#define _APS_NEXT_RESOURCE_VALUE        30007
 #define _APS_NEXT_COMMAND_VALUE         40017
-#define _APS_NEXT_CONTROL_VALUE         1031
+#define _APS_NEXT_CONTROL_VALUE         1033
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

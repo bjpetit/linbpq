@@ -49,6 +49,7 @@ VOID WINAPI OnChildDialogInit(HWND hwndDlg);
 VOID WINAPI OnTabbedDialogInit(HWND hwndDlg);
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 // POP3 Password is encrypted by xor'ing it with an MD5 hash of the hostname and pop3 server name
 
@@ -2184,12 +2185,15 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			return TRUE;
 
+		case IDC_EDITTEXT:
+
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_EDITMSGTEXT), hDlg, EditMsgTextDialogProc);
+			return TRUE;
+
 		case IDC_SAVEMSG:
 
 			Do_Save_Msg(hDlg);
 			return TRUE;
-
-
 
 		}
 		break;
@@ -2486,3 +2490,111 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 	
 	return (INT_PTR)FALSE;
 }
+
+INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	struct MsgInfo * Msg;
+	char * MsgBytes;
+	int Cmd = LOWORD(wParam);
+
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		HWND hWndEdit = GetDlgItem(hDlg, IDC_MESSAGE); 
+
+		Msg = MsgHddrPtr[CurrentMsgIndex];
+
+		MsgBytes = ReadMessageFile(Msg->number);
+
+		if (MsgBytes)
+		{
+			SetDlgItemText(hDlg, IDC_MESSAGE, MsgBytes); 
+			SendDlgItemMessage(hDlg, IDC_MESSAGE, EM_SETSEL, -1, 0);
+
+			free (MsgBytes);
+		}
+		return TRUE; 
+	}
+
+	case WM_SIZING:
+	{
+		HWND hWndEdit = GetDlgItem(hDlg, IDC_MESSAGE); 
+
+		LPRECT lprc = (LPRECT) lParam;
+		int Height = lprc->bottom-lprc->top;
+		int Width = lprc->right-lprc->left;
+
+		MoveWindow(hWndEdit, 5, 50, Width-20, Height - 95, TRUE);
+
+		return TRUE;
+	}
+
+	case WM_ACTIVATE:
+
+		SendDlgItemMessage(hDlg, IDC_MESSAGE, EM_SETSEL, -1, 0);
+
+		break;
+
+
+	case WM_COMMAND:
+
+		if (Cmd == IDSAVE)
+		{
+			struct MsgInfo * Msg;
+			char * via = NULL;
+			int MsgLen;
+			char * MailBuffer;
+			char MsgFile[MAX_PATH];
+			HANDLE hFile = INVALID_HANDLE_VALUE;
+			int WriteLen=0;
+
+			Msg = MsgHddrPtr[CurrentMsgIndex];
+
+			MsgLen = SendDlgItemMessage(hDlg, IDC_MESSAGE, WM_GETTEXTLENGTH, 0 ,0);
+
+			if (MsgLen)
+			{
+				MailBuffer = malloc(MsgLen+1);
+				GetDlgItemText(hDlg, IDC_MESSAGE, MailBuffer, MsgLen+1);
+			}
+
+			Msg->datechanged = time(NULL);
+			Msg->length = MsgLen;
+
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+	
+			hFile = CreateFile(MsgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+			if (hFile != INVALID_HANDLE_VALUE)
+			{
+				WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
+				CloseHandle(hFile);
+			}
+
+			free(MailBuffer);
+
+			EndDialog(hDlg, LOWORD(wParam));
+
+			return TRUE;
+		}
+
+		if (Cmd == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+
+		return (INT_PTR)TRUE;
+
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
