@@ -14,6 +14,7 @@ Public Structure NodeData
    Public PopupMode As Integer
    Public Comment As String
    Public Count As Integer
+   Public Deleted As Boolean
 End Structure
 
 Public Structure ChatLink
@@ -243,6 +244,9 @@ Public Class Form1
 
                      End Try
 
+                     If Report.Length < 2 Then Exit Sub ' No Calls
+
+
                      Elements = Split(Report, " ")
 
                      For n = 0 To Elements.Length - 1 Step 2
@@ -262,7 +266,7 @@ Public Class Form1
                         End If
 
                      Next
-                    
+
                   End If
 
                End If

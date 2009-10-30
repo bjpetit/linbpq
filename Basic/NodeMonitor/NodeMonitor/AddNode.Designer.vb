@@ -32,10 +32,6 @@ Partial Class AddNode
       Me.Label6 = New System.Windows.Forms.Label
       Me.CallBox = New System.Windows.Forms.ComboBox
       Me.LOC = New System.Windows.Forms.Label
-      Me.Cancel_Button = New System.Windows.Forms.Button
-      Me.OK_Button = New System.Windows.Forms.Button
-      Me.TableLayoutPanel1 = New System.Windows.Forms.TableLayoutPanel
-      Me.Check = New System.Windows.Forms.Button
       Me.HoverButton = New System.Windows.Forms.RadioButton
       Me.ClickButton = New System.Windows.Forms.RadioButton
       Me.Label7 = New System.Windows.Forms.Label
@@ -45,7 +41,10 @@ Partial Class AddNode
       Me.IconTune = New System.Windows.Forms.TrackBar
       Me.Label8 = New System.Windows.Forms.Label
       Me.DDMMSS = New System.Windows.Forms.Label
-      Me.TableLayoutPanel1.SuspendLayout()
+      Me.Cancel_Button = New System.Windows.Forms.Button
+      Me.OK_Button = New System.Windows.Forms.Button
+      Me.Check = New System.Windows.Forms.Button
+      Me.Delete_Button = New System.Windows.Forms.Button
       CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).BeginInit()
       CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).BeginInit()
       CType(Me.IconTune, System.ComponentModel.ISupportInitialize).BeginInit()
@@ -161,51 +160,6 @@ Partial Class AddNode
       Me.LOC.TabIndex = 24
       Me.LOC.Text = "          "
       '
-      'Cancel_Button
-      '
-      Me.Cancel_Button.Anchor = System.Windows.Forms.AnchorStyles.None
-      Me.Cancel_Button.DialogResult = System.Windows.Forms.DialogResult.Cancel
-      Me.Cancel_Button.Location = New System.Drawing.Point(151, 4)
-      Me.Cancel_Button.Name = "Cancel_Button"
-      Me.Cancel_Button.Size = New System.Drawing.Size(67, 23)
-      Me.Cancel_Button.TabIndex = 1
-      Me.Cancel_Button.Text = "Cancel"
-      '
-      'OK_Button
-      '
-      Me.OK_Button.Anchor = System.Windows.Forms.AnchorStyles.None
-      Me.OK_Button.Location = New System.Drawing.Point(76, 4)
-      Me.OK_Button.Name = "OK_Button"
-      Me.OK_Button.Size = New System.Drawing.Size(67, 23)
-      Me.OK_Button.TabIndex = 0
-      Me.OK_Button.Text = "Save"
-      '
-      'TableLayoutPanel1
-      '
-      Me.TableLayoutPanel1.Anchor = CType((System.Windows.Forms.AnchorStyles.Bottom Or System.Windows.Forms.AnchorStyles.Right), System.Windows.Forms.AnchorStyles)
-      Me.TableLayoutPanel1.ColumnCount = 3
-      Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle)
-      Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle)
-      Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle)
-      Me.TableLayoutPanel1.Controls.Add(Me.Check, 0, 0)
-      Me.TableLayoutPanel1.Controls.Add(Me.Cancel_Button, 2, 0)
-      Me.TableLayoutPanel1.Controls.Add(Me.OK_Button, 1, 0)
-      Me.TableLayoutPanel1.Location = New System.Drawing.Point(125, 343)
-      Me.TableLayoutPanel1.Name = "TableLayoutPanel1"
-      Me.TableLayoutPanel1.RowCount = 1
-      Me.TableLayoutPanel1.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100.0!))
-      Me.TableLayoutPanel1.Size = New System.Drawing.Size(224, 31)
-      Me.TableLayoutPanel1.TabIndex = 0
-      '
-      'Check
-      '
-      Me.Check.Location = New System.Drawing.Point(3, 3)
-      Me.Check.Name = "Check"
-      Me.Check.Size = New System.Drawing.Size(67, 23)
-      Me.Check.TabIndex = 25
-      Me.Check.Text = "Check"
-      Me.Check.UseVisualStyleBackColor = True
-      '
       'HoverButton
       '
       Me.HoverButton.AutoSize = True
@@ -266,7 +220,7 @@ Partial Class AddNode
       '
       Me.IconTune.Location = New System.Drawing.Point(344, 208)
       Me.IconTune.Name = "IconTune"
-      Me.IconTune.Size = New System.Drawing.Size(88, 56)
+      Me.IconTune.Size = New System.Drawing.Size(88, 45)
       Me.IconTune.TabIndex = 31
       Me.IconTune.Value = 5
       '
@@ -288,6 +242,43 @@ Partial Class AddNode
       Me.DDMMSS.TabIndex = 33
       Me.DDMMSS.Text = "                              "
       '
+      'Cancel_Button
+      '
+      Me.Cancel_Button.Anchor = System.Windows.Forms.AnchorStyles.None
+      Me.Cancel_Button.DialogResult = System.Windows.Forms.DialogResult.Cancel
+      Me.Cancel_Button.Location = New System.Drawing.Point(313, 346)
+      Me.Cancel_Button.Name = "Cancel_Button"
+      Me.Cancel_Button.Size = New System.Drawing.Size(67, 23)
+      Me.Cancel_Button.TabIndex = 1
+      Me.Cancel_Button.Text = "Cancel"
+      '
+      'OK_Button
+      '
+      Me.OK_Button.Anchor = System.Windows.Forms.AnchorStyles.None
+      Me.OK_Button.Location = New System.Drawing.Point(167, 346)
+      Me.OK_Button.Name = "OK_Button"
+      Me.OK_Button.Size = New System.Drawing.Size(67, 23)
+      Me.OK_Button.TabIndex = 0
+      Me.OK_Button.Text = "Save"
+      '
+      'Check
+      '
+      Me.Check.Location = New System.Drawing.Point(94, 346)
+      Me.Check.Name = "Check"
+      Me.Check.Size = New System.Drawing.Size(67, 23)
+      Me.Check.TabIndex = 25
+      Me.Check.Text = "Check"
+      Me.Check.UseVisualStyleBackColor = True
+      '
+      'Delete_Button
+      '
+      Me.Delete_Button.Anchor = System.Windows.Forms.AnchorStyles.None
+      Me.Delete_Button.Location = New System.Drawing.Point(240, 346)
+      Me.Delete_Button.Name = "Delete_Button"
+      Me.Delete_Button.Size = New System.Drawing.Size(67, 23)
+      Me.Delete_Button.TabIndex = 34
+      Me.Delete_Button.Text = "Delete"
+      '
       'AddNode
       '
       Me.AcceptButton = Me.OK_Button
@@ -295,6 +286,10 @@ Partial Class AddNode
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.CancelButton = Me.Cancel_Button
       Me.ClientSize = New System.Drawing.Size(474, 387)
+      Me.Controls.Add(Me.Cancel_Button)
+      Me.Controls.Add(Me.Delete_Button)
+      Me.Controls.Add(Me.Check)
+      Me.Controls.Add(Me.OK_Button)
       Me.Controls.Add(Me.DDMMSS)
       Me.Controls.Add(Me.Label8)
       Me.Controls.Add(Me.IconTune)
@@ -317,7 +312,6 @@ Partial Class AddNode
       Me.Controls.Add(Me.Label3)
       Me.Controls.Add(Me.Label2)
       Me.Controls.Add(Me.Label1)
-      Me.Controls.Add(Me.TableLayoutPanel1)
       Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog
       Me.MaximizeBox = False
       Me.MinimizeBox = False
@@ -325,7 +319,6 @@ Partial Class AddNode
       Me.ShowInTaskbar = False
       Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent
       Me.Text = "Maintain Node List"
-      Me.TableLayoutPanel1.ResumeLayout(False)
       CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
       CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).EndInit()
       CType(Me.IconTune, System.ComponentModel.ISupportInitialize).EndInit()
@@ -346,10 +339,6 @@ Partial Class AddNode
    Friend WithEvents Label6 As System.Windows.Forms.Label
    Friend WithEvents CallBox As System.Windows.Forms.ComboBox
    Friend WithEvents LOC As System.Windows.Forms.Label
-   Friend WithEvents Cancel_Button As System.Windows.Forms.Button
-   Friend WithEvents OK_Button As System.Windows.Forms.Button
-   Friend WithEvents TableLayoutPanel1 As System.Windows.Forms.TableLayoutPanel
-   Friend WithEvents Check As System.Windows.Forms.Button
    Friend WithEvents HoverButton As System.Windows.Forms.RadioButton
    Friend WithEvents ClickButton As System.Windows.Forms.RadioButton
    Friend WithEvents Label7 As System.Windows.Forms.Label
@@ -359,5 +348,9 @@ Partial Class AddNode
    Friend WithEvents IconTune As System.Windows.Forms.TrackBar
    Friend WithEvents Label8 As System.Windows.Forms.Label
    Friend WithEvents DDMMSS As System.Windows.Forms.Label
+   Friend WithEvents Cancel_Button As System.Windows.Forms.Button
+   Friend WithEvents OK_Button As System.Windows.Forms.Button
+   Friend WithEvents Check As System.Windows.Forms.Button
+   Friend WithEvents Delete_Button As System.Windows.Forms.Button
 
 End Class

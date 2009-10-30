@@ -3,6 +3,8 @@ Imports System.IO
 
 Public Class AddNode
 
+   Dim SelectedItem As Integer = -1
+
    Private Sub OK_Button_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles OK_Button.Click
 
       Dim Callsign As String
@@ -84,38 +86,38 @@ Public Class AddNode
 
       End If
 
-         ' Refresh the call combo box
+      ' Refresh the call combo box
 
-         CallBox.Items.Clear()
-         CallBox.Text = ""
+      CallBox.Items.Clear()
+      CallBox.Text = ""
 
+
+      For i = 0 To NodeIndex - 1
+
+         If Nodes(i).Deleted = False Then CallBox.Items.Add(Nodes(i).Callsign)
+
+      Next
+
+
+      My.Computer.FileSystem.DeleteFile(My.Settings.FileName, FileIO.UIOption.OnlyErrorDialogs, _
+            FileIO.RecycleOption.SendToRecycleBin, FileIO.UICancelOption.DoNothing)
+
+
+      Using sw As StreamWriter = New StreamWriter(My.Settings.FileName)
 
          For i = 0 To NodeIndex - 1
-
-            CallBox.Items.Add(Nodes(i).Callsign)
-
-         Next
-
-
-         My.Computer.FileSystem.DeleteFile(My.Settings.FileName, FileIO.UIOption.OnlyErrorDialogs, _
-               FileIO.RecycleOption.SendToRecycleBin, FileIO.UICancelOption.DoNothing)
-
-
-         Using sw As StreamWriter = New StreamWriter(My.Settings.FileName)
-
-            For i = 0 To NodeIndex - 1
 
             sw.WriteLine(Nodes(i).Callsign & "," & Nodes(i).NAlias & "," & _
                   Nodes(i).Lat & "," & Nodes(i).Lon & "," & Nodes(i).downIcon & "," & _
                   Nodes(i).upIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment)
 
-            Next
+         Next
 
-            sw.Close()
+         sw.Close()
 
-         End Using
+      End Using
 
-         Me.DialogResult = System.Windows.Forms.DialogResult.OK
+      Me.DialogResult = System.Windows.Forms.DialogResult.OK
 
    End Sub
 
@@ -131,7 +133,7 @@ Public Class AddNode
 
       For i = 0 To NodeIndex - 1
 
-         CallBox.Items.Add(Nodes(i).Callsign)
+         If Nodes(i).Deleted = False Then CallBox.Items.Add(Nodes(i).Callsign)
 
       Next
 
@@ -170,7 +172,7 @@ Public Class AddNode
       If InStr(LString, "E") <> 0 Then East = True
       If InStr(LString, "W") <> 0 Then West = True
 
-      Return DecodeLatLon(LString, west)
+      Return DecodeLatLon(LString, West)
 
    End Function
 
@@ -237,6 +239,9 @@ Public Class AddNode
             PictureBox1.Size = PictureBox1.Image.Size
             PictureBox2.Size = PictureBox1.Image.Size
 
+            SelectedItem = i
+
+            Exit For
 
          End If
 
@@ -378,7 +383,7 @@ Public Class AddNode
       Dim Lat As Double
       Dim Lon As Double
       Dim NAlias As String = ""
- 
+
       Try
 
          Lat = DecodeLat(LatBox.Text)
@@ -393,6 +398,8 @@ Public Class AddNode
       LonBox.Text = Lon.ToString
 
       LOC.Text = ToLOC(CDbl(Lat), CDbl(Lon))
+      DDMMSS.Text = ToDDMMSS(CDbl(Lat), CDbl(Lon))
+
 
    End Sub
 
@@ -469,7 +476,24 @@ Public Class AddNode
 
    End Sub
 
-   Private Sub PictureBox1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles PictureBox1.Click
+   Private Sub Delete_Button_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Delete_Button.Click
+
+      ' Refresh the call combo box
+
+      Dim i As Integer
+
+      Nodes(SelectedItem).Deleted = True
+
+      CallBox.Items.Clear()
+      CallBox.Text = ""
+
+      For i = 0 To NodeIndex - 1
+
+         If Nodes(i).Deleted = False Then CallBox.Items.Add(Nodes(i).Callsign)
+
+      Next
+
 
    End Sub
+
 End Class

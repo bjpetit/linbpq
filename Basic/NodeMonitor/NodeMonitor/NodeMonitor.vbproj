@@ -47,7 +47,7 @@
     <DefineDebug>false</DefineDebug>
     <DefineTrace>true</DefineTrace>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\..\..\..\Program Files\BPQ32\Monitor\</OutputPath>
+    <OutputPath>..\..\..\..\..\Program Files\bpq32\Monitor\</OutputPath>
     <DocumentationFile>NodeMonitor.xml</DocumentationFile>
     <NoWarn>
     </NoWarn>
