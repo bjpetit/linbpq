@@ -244,28 +244,29 @@ Public Class Form1
 
                      End Try
 
-                     If Report.Length < 2 Then Exit Sub ' No Calls
+                     If Report.Length > 2 Then
 
+                        Elements = Split(Report, " ")
 
-                     Elements = Split(Report, " ")
+                        For n = 0 To Elements.Length - 1 Step 2
 
-                     For n = 0 To Elements.Length - 1 Step 2
+                           ptr = FindChatPair(CallFrom, Elements(n))
 
-                        ptr = FindChatPair(CallFrom, Elements(n))
+                           NewState = CInt(Elements(n + 1))
 
-                        NewState = CInt(Elements(n + 1))
+                           If ChatLinks(ptr).Call1 = CallFrom Then
+                              If NewState <> ChatLinks(ptr).Call1State Then Changed = True
+                              ChatLinks(ptr).Call1State = NewState
+                              ChatLinks(ptr).Timeout1 = 21
+                           Else
+                              If NewState <> ChatLinks(ptr).Call2State Then Changed = True
+                              ChatLinks(ptr).Call2State = NewState
+                              ChatLinks(ptr).Timeout2 = 21
+                           End If
 
-                        If ChatLinks(ptr).Call1 = CallFrom Then
-                           If NewState <> ChatLinks(ptr).Call1State Then Changed = True
-                           ChatLinks(ptr).Call1State = NewState
-                           ChatLinks(ptr).Timeout1 = 21
-                        Else
-                           If NewState <> ChatLinks(ptr).Call2State Then Changed = True
-                           ChatLinks(ptr).Call2State = NewState
-                           ChatLinks(ptr).Timeout2 = 21
-                        End If
+                        Next
 
-                     Next
+                     End If
 
                   End If
 
