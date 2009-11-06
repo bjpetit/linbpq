@@ -2170,9 +2170,15 @@ VOID SendChatLinkStatus()
 {
 	char Msg[256] = {0};
 	LINK * link;
-	int len;
+	int len = 0;
+
+	if (ChatApplNum == 0)
+		return;
 
 	if (AXIPPort == 0)
+		return;
+
+	if (MYCALL[0] == 0)
 		return;
 
 	for (link = link_hd; link; link = link->next)
@@ -2181,13 +2187,10 @@ VOID SendChatLinkStatus()
 
 		if (len > 240)
 			break;
-
 	}
-
 	Msg[len++] = '\r';
 
 	Send_MON_Datagram(Msg, len);
-
 }
 
 VOID ClearChatLinkStatus()

@@ -294,6 +294,13 @@
 
 // Fix flow control for SMTP and NNTP 
 
+// Version 1.0.3.12
+
+// Fix crash in SendChatStatus if no Chat Links Defined.
+// Disable Chat Mode if there is no ApplCall for ChatApplNum,
+// Add Edit Message to Manage Messages Dialog
+
+
 
 
 
@@ -709,11 +716,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	_CrtDumpMemoryLeaks();
 
-	SaveWindowConfig();
-
 	}
 	My__except_Routine("Close Processing");
 
+	SaveWindowConfig();
+	
 	return (int) msg.wParam;
 }
 
@@ -1654,30 +1661,35 @@ BOOL Initialise()
 	strcat(RtKnown, "\\RTKnown.txt");
 
 	BBSApplMask = 1<<(BBSApplNum-1);
-	ChatApplMask = 1<<(ChatApplNum-1);
 
 	if (ChatApplNum)
 	{
 		ptr1=GetApplCall(ChatApplNum);
-		memcpy(OurNode, ptr1, 10);
-		strlop(OurNode, ' ');
 
-		ptr1=GetApplAlias(ChatApplNum);
-		memcpy(OurAlias, ptr1,10);
-		strlop(OurAlias, ' ');
-
-		// Set up other nodes list. rtlink messes with the string so pass copy
-	
-		ptr=0;
-
-		while (OtherNodes[ptr])
+		if (*ptr1 > 0x20)
 		{
-			len=strlen(&OtherNodes[ptr]);		
-			rtlink(_strdup(&OtherNodes[ptr]));			
-			ptr+= (len + 1);
-		}
+			memcpy(OurNode, ptr1, 10);
+			strlop(OurNode, ' ');
 
-		SetupChat();
+			ptr1=GetApplAlias(ChatApplNum);
+			memcpy(OurAlias, ptr1,10);
+			strlop(OurAlias, ' ');
+
+			ChatApplMask = 1<<(ChatApplNum-1);
+		
+			// Set up other nodes list. rtlink messes with the string so pass copy
+	
+			ptr=0;
+
+			while (OtherNodes[ptr])
+			{
+				len=strlen(&OtherNodes[ptr]);		
+				rtlink(_strdup(&OtherNodes[ptr]));			
+				ptr+= (len + 1);
+			}
+
+			SetupChat();
+		}
 	}
 
 	// Make backup copies of Databases
@@ -3229,7 +3241,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (_memicmp(Cmd, "Chat", 4) == 0)
 	{
-		if(ChatApplNum == 0)
+		if(ChatApplMask == 0)
 		{
 			BBSputs(conn, "Chat Node is disabled\r");
 			SendPrompt(conn, user);

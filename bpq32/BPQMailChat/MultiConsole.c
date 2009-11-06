@@ -223,6 +223,13 @@ BOOL CreateConsole(int Stream)
 	{
 		if (Stream == -2)
 		{
+			if(ChatApplMask == 0)
+			{
+				BBSputs(Cinfo->Console, "Chat Node is disabled\r");
+				SendPrompt(Cinfo->Console, user);
+				return TRUE;
+			}
+
 			if (rtloginu (Cinfo->Console))
 				Cinfo->Console->Flags |= CHATMODE;
 			else

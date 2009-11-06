@@ -1345,6 +1345,8 @@ VOID SaveChatConfig()
 	int retCode, disp, Type, Vallen, len;
 	int ptr;
 	int OldChatAppl;
+	char * ptr1;
+
 
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
@@ -1352,6 +1354,15 @@ VOID SaveChatConfig()
 	OldChatAppl = ChatApplNum;
 	
 	ChatApplNum = GetDlgItemInt(hwndDisplay, IDC_ChatAppl, &OK1, FALSE);
+
+	ptr1=GetApplCall(ChatApplNum);
+
+	if (*ptr1 < 0x21)
+	{
+			MessageBox(NULL, "WARNING - There is no APPLCALL in BPQCFG matching the confgured ChatApplNum. Chat will not work",
+						"BPQMailChat", MB_ICONINFORMATION);
+	}
+
 	retCode = RegSetValueEx(hKey, "ChatApplNum",0 , REG_DWORD,(BYTE *)&ChatApplNum, 4);
 
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDC_ChatNodes, hKey, "OtherChatNodes");

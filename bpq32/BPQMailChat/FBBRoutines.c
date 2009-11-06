@@ -365,7 +365,7 @@ ok:
 		ptr = strtok_s(&Buffer[3], seps, &Context);
 		if (ptr == NULL) goto badparam2;
 		if (strlen(ptr) != 2) goto badparam2;
-		FBBHeader->MsgType = ptr[0];
+		FBBHeader->MsgType = 'P'; //ptr[0];
 
 		ptr = strtok_s(NULL, seps, &Context);
 

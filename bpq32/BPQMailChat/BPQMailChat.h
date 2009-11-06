@@ -1034,6 +1034,9 @@ extern BOOL cfgMinToTray;
 
 extern CIRCUIT * Console;
 
+extern UCHAR ChatApplMask;
+
+
 extern char SignoffMsg[];
 
 extern char InfoBoxText[];			// Text to display in Config Info Popup
