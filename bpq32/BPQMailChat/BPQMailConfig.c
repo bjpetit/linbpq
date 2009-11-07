@@ -1355,12 +1355,15 @@ VOID SaveChatConfig()
 	
 	ChatApplNum = GetDlgItemInt(hwndDisplay, IDC_ChatAppl, &OK1, FALSE);
 
-	ptr1=GetApplCall(ChatApplNum);
-
-	if (*ptr1 < 0x21)
+	if (ChatApplNum)	
 	{
-			MessageBox(NULL, "WARNING - There is no APPLCALL in BPQCFG matching the confgured ChatApplNum. Chat will not work",
-						"BPQMailChat", MB_ICONINFORMATION);
+		ptr1=GetApplCall(ChatApplNum);
+
+		if (ptr1 && (*ptr1 < 0x21))
+		{
+				MessageBox(NULL, "WARNING - There is no APPLCALL in BPQCFG matching the confgured ChatApplNum. Chat will not work",
+							"BPQMailChat", MB_ICONINFORMATION);
+		}
 	}
 
 	retCode = RegSetValueEx(hKey, "ChatApplNum",0 , REG_DWORD,(BYTE *)&ChatApplNum, 4);

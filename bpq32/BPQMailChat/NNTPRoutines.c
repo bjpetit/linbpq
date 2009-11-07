@@ -512,6 +512,44 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
+	//NEWGROUPS YYMMDD HHMMSS [GMT] [<distributions>]
+	
+	if(memcmp(Buffer, "NEWGROUPS", 9) == 0)
+	{
+		int i;
+		struct NNTPRec * REC = NULL;
+		struct tm rtime;
+		char Offset[20] = "";
+		time_t Time;
+
+		memset(&rtime, 0, sizeof(struct tm));
+
+		sscanf(&Buffer[10], "%02d%02d%02d %02d%02d%02d %s",
+			&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday,
+			&rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec, Offset);
+
+		rtime.tm_year+=100;
+		rtime.tm_mon--;
+
+		if (_stricmp(Offset, "GMT") == 0)
+			Time = _mkgmtime(&rtime);
+		else
+			Time = mktime(&rtime);
+		
+		SendSock(sockptr, "231 list of new newsgroups follows");
+
+		for (i=1; i <= NumberofNNTPRecs; i++)
+		{
+			REC = NNTPRecPtr[i];
+
+			if (REC->DateCreated > Time)
+				sockprintf(sockptr, "%s %d %d y", REC->NewsGroup, REC->LastMsg, REC->FirstMsg);
+		}
+
+		SendSock(sockptr,".");
+		return;
+	}
+
 	if(memcmp(Buffer, "HEAD",4) == 0)
 	{
 		struct NNTPRec * REC = sockptr->NNTPGroup;

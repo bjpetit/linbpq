@@ -60,7 +60,7 @@ VOID SendRIPToNeighbour(struct ROUTE * Route);
 VOID DecayNETROMRoutes(struct ROUTE * Route);
 VOID DeleteINP3Routes(struct ROUTE * Route);
 
-#define NOINP3
+//#define NOINP3
 
 struct _RTTMSG RTTMsg = {""};
 
@@ -72,6 +72,7 @@ int PosTimerCount = 0;				// 1 sec to 5 Mins counter
 // Timer Runs every 10 Secs
 
 int MAXRTT = 9000;			// 90 secs
+int MaxHops = 4;
 
 int RTTInterval = 24;			// 4 Minutes
 int RTTRetries = 2;
@@ -411,6 +412,22 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 	struct DEST_ROUTE_ENTRY * ROUTEPTR;
 	int i;
 	char call[11]="";
+
+	if (hops > MaxHops && hops < 255)
+	{
+		ConvFromAX25(axcall, call);
+		Debugprintf("Node %s Hops %d RTT %d Ignored - Hop Count too high", call, hops, rtt);
+		return;
+	}
+
+	if (rtt > MAXRTT  && rtt < 60000)
+	{
+		ConvFromAX25(axcall, call);
+		Debugprintf("Node %s Hops %d RTT %d Ignored - rtt too high", call, hops, rtt);
+		return;
+	}
+
+	
 
 	_asm{
 

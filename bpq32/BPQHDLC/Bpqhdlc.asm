@@ -1420,9 +1420,9 @@ BINITCOM:
 	
 	PUSHAD
 	movzx eax, ASIOC[EBX]
-	movzx ebx, SIO[EBX]
 	movzx ecx, SIOC[EBX]
 	movzx edx, BSIOC[EBX]
+	movzx ebx, SIO[EBX]
 	
 	Debug_Printf	"hdlc98 USCCInit ASIOC SIO SIOC BSIOC %x %x %x %x", <eax, ebx, ecx, edx>
 	POPAD
@@ -2793,6 +2793,10 @@ INTMUX:
 ;
 	pusha
 
+	PUSHAD
+	Debug_Printf	"Entering Int Handler"
+	POPAD
+
 	MOV	EBX, [EDX]			; First card on this level
 	 
 	PUSH	EBX
@@ -2848,9 +2852,9 @@ ENDINT:
 	mov     eax, IRQHand[EBX]
 	VxDCall	VPICD_Phys_EOI			; eoi it
 	
-;	PUSHAD
-;	Debug_Printf	"Leaving Int Handler"
-;	POPAD
+	PUSHAD
+	Debug_Printf	"Leaving Int Handler"
+	POPAD
 
 	clc
 	popa
@@ -3010,11 +3014,6 @@ NOBUFFERCHECK:
 ;
 
 HOOKINT:
-
-	PUSHAD
-	movzx eax, INTLEVEL[EBX]
-	Debug_Printf	"hdlc98 Hooking Interupt %x", <eax>
-	POPAD
 	
 ;	See if already in use
 

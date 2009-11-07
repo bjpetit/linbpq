@@ -299,10 +299,13 @@
 // Fix crash in SendChatStatus if no Chat Links Defined.
 // Disable Chat Mode if there is no ApplCall for ChatApplNum,
 // Add Edit Message to Manage Messages Dialog
+// NNTP needs authentication
 
 
+// Version 1.0.3.13
 
-
+// Fix Chat ApplCall warning when ChatAppl = 0
+// Add NEWGROUPS Command
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
