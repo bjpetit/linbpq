@@ -38,12 +38,14 @@ BOOL Win98 = FALSE;
 
 HANDLE STDOUT=0;
 
-struct KISSINFO * CreateTTYInfo(int port, int speed);
+struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL NEAR OpenConnection(int);
 BOOL NEAR SetupConnection(int);
-BOOL CloseConnection(struct KISSINFO * conn);
+BOOL CloseConnection(struct TNCINFO * conn);
 BOOL NEAR WriteCommBlock(int, LPSTR, DWORD);
 BOOL NEAR DestroyTTYInfo(int port);
+int NEAR ReadCommBlock(int port, LPSTR lpszBlock, int nMaxLength);
+OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
@@ -112,7 +114,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		CloseHandle(KISSInfo[port].hDevice);
+		CloseHandle(TNCInfo[port].hDevice);
 		return (0);
 	}
 
@@ -138,7 +140,7 @@ DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 //	PORTVECTOR(npTTYInfo) = PortVector; //	BX on entry to char handlers
 //	RXVECTOR(npTTYInfo) = RXVector; //	Routine to call for each char
 
-	OpenCOMMPort(&KISSInfo[PortEntry->PORTNUMBER], PortEntry->IOBASE, PortEntry->BAUDRATE);
+	OpenCOMMPort(&TNCInfo[PortEntry->PORTNUMBER], PortEntry->IOBASE, PortEntry->BAUDRATE);
 
 	return ((int) ExtProc);
 }
@@ -159,14 +161,14 @@ BOOL NEAR DestroyTTYInfo( int port )
 
    // force connection closed (if not already closed)
 
-   CloseConnection(&KISSInfo[port]);
+   CloseConnection(&TNCInfo[port]);
 
    return TRUE;
 
 } // end of DestroyTTYInfo()
 
 
-BOOL CloseConnection(struct KISSINFO * conn)
+BOOL CloseConnection(struct TNCINFO * conn)
 {
    // disable event notification and wait for thread
    // to halt
@@ -187,7 +189,7 @@ BOOL CloseConnection(struct KISSINFO * conn)
 
 } // end of CloseConnection()
 
-OpenCOMMPort(struct KISSINFO * conn, int Port, int Speed)
+OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 {
 	char szPort[15];
 	char buf[80];
@@ -245,8 +247,6 @@ OpenCOMMPort(struct KISSINFO * conn, int Port, int Speed)
 
 	  GetCommState(conn->hDevice, &dcb );
 
-	  BuildCommDCB(conn->Params, &dcb);	
-
 	  // setup hardware flow control
 
       dcb.fDtrControl = DTR_CONTROL_ENABLE;
@@ -294,18 +294,18 @@ int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength )
 
 	// only try to read number of bytes in queue 
 	
-	ClearCommError(KISSInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
+	ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
 
 	dwLength = min( (DWORD) nMaxLength, ComStat.cbInQue ) ;
 
 	if (dwLength > 0)
 	{
-		fReadStat = ReadFile(KISSInfo[port].hDevice, lpszBlock,
+		fReadStat = ReadFile(TNCInfo[port].hDevice, lpszBlock,
 		                    dwLength, &dwLength, NULL) ;
 		if (!fReadStat)
 		{
 		    dwLength = 0 ;
-			ClearCommError(KISSInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
+			ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
 		}
 	}
 
@@ -323,13 +323,13 @@ BOOL NEAR WriteCommBlock( int port, LPSTR lpByte , DWORD dwBytesToWrite)
 	COMSTAT     ComStat;
 
 
-	fWriteStat = WriteFile(KISSInfo[port].hDevice, lpByte, dwBytesToWrite,
+	fWriteStat = WriteFile(TNCInfo[port].hDevice, lpByte, dwBytesToWrite,
 	                       &dwBytesWritten, NULL ) ;
 
 
 	if ((!fWriteStat) || (dwBytesToWrite != dwBytesWritten))
 	{
-		ClearCommError(KISSInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
+		ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
 	}
 	return ( TRUE ) ;
 

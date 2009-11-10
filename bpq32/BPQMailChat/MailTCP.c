@@ -1132,10 +1132,14 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				{
 					Msg = MsgHddrPtr[i];
 					
-					if ((_stricmp(Msg->to, sockptr->CallSign) == 0) &&  (Msg->status != 'K'))
+					if ((_stricmp(Msg->to, sockptr->CallSign) == 0) ||
+						((_stricmp(Msg->to, "SYSOP") == 0) && (user->flags & F_SYSOP) && (Msg->type == 'P')))
 					{
-						sockptr->POP3Msgs = realloc(sockptr->POP3Msgs, (sockptr->POP3MsgCount+1)*4);
-						sockptr->POP3Msgs[sockptr->POP3MsgCount++] = MsgHddrPtr[i];
+						if (Msg->status != 'K')
+						{
+							sockptr->POP3Msgs = realloc(sockptr->POP3Msgs, (sockptr->POP3MsgCount+1)*4);
+							sockptr->POP3Msgs[sockptr->POP3MsgCount++] = MsgHddrPtr[i];
+						}
 					}
 				}
 

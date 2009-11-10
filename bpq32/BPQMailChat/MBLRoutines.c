@@ -198,11 +198,13 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
 					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
 					Msg->from, Msg->bid);
+			return;
 
 		}
 		else
 		{
 			BBSputs(conn, "F>\r");
+			return;
 		}
 	}
 

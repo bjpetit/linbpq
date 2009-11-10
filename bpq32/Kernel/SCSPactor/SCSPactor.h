@@ -3,7 +3,7 @@
 
 #define MAXBLOCK 4096
 
-struct KISSINFO
+struct TNCINFO
 { 
 //	char PortType;
 	int RTS;
@@ -11,17 +11,15 @@ struct KISSINFO
 	int DCD;
 	int DTR;
 	int DSR;
-	char Params[20];				// Init Params (eg 9600,n,8)
-	char PortLabel[20];
-	char TypeFlag[2];
 	HANDLE hDevice;
-	BOOL Created;
 	BOOL PortEnabled;
 	int FLOWCTRL;
 	BOOL KHOST;						// Set if in Kantronics Host Mode
+	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
+
 };
 
-struct KISSINFO  KISSInfo[16]={0};
+struct TNCINFO  TNCInfo[16]={0};
 
 
 #define IOCTL_SERIAL_IS_COM_OPEN CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)

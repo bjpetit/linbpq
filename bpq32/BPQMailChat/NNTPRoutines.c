@@ -799,6 +799,12 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 */
 	if(memcmp(Buffer, "POST", 4) == 0)
 	{
+		if (sockptr->State != Authenticated)
+		{
+			sockprintf(sockptr, "480 Authentication required");
+			return;
+		}		
+
 		sockptr->MailBuffer=malloc(10000);
 		sockptr->MailBufferSize=10000;
 
@@ -965,7 +971,7 @@ int NNTP_Data(int sock, int error, int eventcode)
 					else
 					{
 						SendSock(sockptr, "200 BPQMail NNTP Server ready");	
-						sockptr->State = GettingUser;
+//						sockptr->State = GettingUser;
 					}
 					
 					return 0;

@@ -827,7 +827,7 @@ static void topic_leave(CIRCUIT *circuit, TOPIC *topic)
 
 	tp = NULL;
 
-	for (t = topic_hd; t; t = t->next)
+	for (t = topic_hd; t; tp = t, t = t->next)
 	{
 		if (!t->refcnt && (t == topic))
 		{

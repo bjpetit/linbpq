@@ -305,7 +305,14 @@
 // Version 1.0.3.13
 
 // Fix Chat ApplCall warning when ChatAppl = 0
-// Add NEWGROUPS Command
+// Add NNTP NEWGROUPS Command
+// Fix MBL Forwarding (remove extra > prompt after SP)
+
+// Version 1.0.3.14
+
+// Fix topic switch code.
+// Send SYSOP messages on POP3 interface if User SYSOP flag is set.
+// NNTP only needs Authentication for posting, not reading.
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
