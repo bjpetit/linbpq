@@ -64,6 +64,10 @@
 
 //		Add INP3 flag to locked routes
 
+// November 2009
+
+//		Add PROTOCOL=PACTOR option
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -1580,6 +1584,9 @@ char rec[];
 	   hw = 6;
 	if (_stricmp(value,"COMBIOS") == 0)
 	   hw = 8;
+
+	if (_stricmp(value,"PACTOR") == 0)
+	   hw = 10;
 
 	fseek(fp2,(long) fileoffset,SEEK_SET);
 
