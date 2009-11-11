@@ -66,7 +66,7 @@
 
 // November 2009
 
-//		Add PROTOCOL=PACTOR option
+//		Add PROTOCOL=PACTOR or WINMOR option
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -1584,8 +1584,9 @@ char rec[];
 	   hw = 6;
 	if (_stricmp(value,"COMBIOS") == 0)
 	   hw = 8;
-
 	if (_stricmp(value,"PACTOR") == 0)
+	   hw = 10;
+	if (_stricmp(value,"WINMOR") == 0)
 	   hw = 10;
 
 	fseek(fp2,(long) fileoffset,SEEK_SET);
