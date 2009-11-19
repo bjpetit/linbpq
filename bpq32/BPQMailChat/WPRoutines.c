@@ -512,7 +512,11 @@ it will not be replaced. This flag will be used in case the WP update messages a
 				if ((WPDate = _mkgmtime(&rtime)) != (time_t)-1 )
 				{
 					TypeString = strlop(Call, '/');
-					Type = TypeString[0];
+					
+					if (TypeString)
+						Type = TypeString[0];
+					else
+						Type = 'G';
 
 					WP = LookupWP(Call);
 

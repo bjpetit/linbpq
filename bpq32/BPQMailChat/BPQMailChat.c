@@ -319,7 +319,8 @@
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Beta"
+//#define SPECIALVERSION "Beta"
+#define SPECIALVERSION "Peter"
 
 #include "GetVersion.h"
 
@@ -965,25 +966,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		
 				if (change == 1)
 				{
-					if (state == 1)
-					{
-
-						// Connected
-					
-						__try
-						{
-							Connected(wParam);	
-						}
-						My__except_Routine("Connected");
-					}
+					if (state == 1) // Connected	
+					{__try {Connected(wParam);} My__except_Routine("Connected");}
 					else
-					{
-						__try
-						{
-							Disconnected(wParam);
-						}
-						My__except_Routine("Disconnected");
-					}
+						__try{Disconnected(wParam);} My__except_Routine("Disconnected");
 				}
 			}
 			My__except_Routine("DoStateChange");
@@ -1553,6 +1539,7 @@ int RefreshMainWindow()
 	SetDlgItemInt(hWnd, IDC_CHATSEM, ChatSemaphore.Clashes, FALSE);
 	SetDlgItemInt(hWnd, IDC_MSGSEM, MsgNoSemaphore.Clashes, FALSE);
 	SetDlgItemInt(hWnd, IDC_ALLOCSEM, AllocSemaphore.Clashes, FALSE);
+	SetDlgItemInt(hWnd, IDC_1STTOFORWARD, FirstMessageIndextoForward, FALSE); 
 
 	now = time(NULL);
 
@@ -1819,7 +1806,7 @@ int Connected(Stream)
 					return 0;
 				}
 		
-				if (conn->flags == p_linkini)
+				if (conn->rtcflags == p_linkini)
 				{
 					conn->paclen = 128;
 					nprintf(conn, "c %s\r", conn->u.link->call);
@@ -2073,7 +2060,7 @@ int DoReceivedData(int Stream)
 
 						__try
 						{
-							if (conn->flags == p_linkini)		// Chat Connect
+							if (conn->rtcflags == p_linkini)		// Chat Connect
 								ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
 							else if (conn->BBSFlags & RunningConnectScript)
 								ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
@@ -2100,7 +2087,7 @@ int DoReceivedData(int Stream)
 						memcpy(Buffer, conn->InputBuffer, MsgLen);
 						__try
 						{
-							if (conn->flags == p_linkini)
+							if (conn->rtcflags == p_linkini)
 								ProcessConnecting(conn, Buffer, MsgLen);
 							else if (conn->BBSFlags & RunningConnectScript)
 								ProcessBBSConnectScript(conn, Buffer, MsgLen);
@@ -2825,7 +2812,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 		{
 			if (matchi(conn->Callsign, link->call))
 			{
-				conn->flags = p_linkwait;
+				conn->rtcflags = p_linkwait;
 				return;						// Wait for *RTL
 			}
 		}
@@ -4970,7 +4957,7 @@ ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
 	if (memcmp(Buffer, "OK\r", 3) == 0)
 	{
 		circuit->u.link->flags = p_linked;
- 	  	circuit->flags = p_linked;
+ 	  	circuit->rtcflags = p_linked;
 		state_tell(circuit);
 		NeedStatus = TRUE;
 
@@ -5329,7 +5316,8 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		goto CheckForSID;
 
 	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
-		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED"))
+		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
+		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - PORT IN USE"))
 	{
 		// Connect Failed
 

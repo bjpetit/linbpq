@@ -234,7 +234,7 @@ typedef struct ConnectionInfo_S
 {
 	struct ConnectionInfo_S *next;
 	PROC *proc;
-	UCHAR flags;             // p_linked or p_user.
+	UCHAR rtcflags;             // p_linked or p_user.
 	int s;                 // Socket.
 //	char buf[ln_ibuf];      // Line of incoming text.
 	union
@@ -405,7 +405,7 @@ typedef struct user_t
 	NODE    *node;          // Node user logged into.
 	CIRCUIT *circuit;       // Circuit user is on, local or link.
 	TOPIC   *topic;         // Topic user is in.
-	int     flags;
+	int     rtflags;
 	time_t	lastmsgtime;	// Time of last input from user
 
 } USER;

@@ -14,9 +14,8 @@
 //#include <process.h>
 //#include <time.h>
 
-#define VERSION_MAJOR         1
-#define VERSION_MINOR         0
-
+#define VERSION_MAJOR 1
+#define VERSION_MINOR 0
 
 #include "SCSPactor.h"
 #include "ASMStrucs.h"
@@ -25,8 +24,8 @@
 #define EXTDLL			// Use GetMuduleHandle instead of LoadLibrary 
 #include "bpq32.h"
  
-#define DllImport	__declspec( dllimport )
-#define DllExport	__declspec( dllexport )
+#define DllImport	__declspec(dllimport)
+#define DllExport	__declspec(dllexport)
 
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
@@ -46,11 +45,11 @@ BOOL NEAR WriteCommBlock(int, LPSTR, DWORD);
 BOOL NEAR DestroyTTYInfo(int port);
 int NEAR ReadCommBlock(int port, LPSTR lpszBlock, int nMaxLength);
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
-
+VOID DEDPoll(int Port);
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
-	switch( ul_reason_being_called )
+	switch(ul_reason_being_called)
 	{
 	case DLL_PROCESS_ATTACH:
 
@@ -80,6 +79,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	switch (fn)
 	{
 	case 1:				// poll
+
+		DEDPoll(port);
 
 		len = ReadCommBlock(port,&buff[8], 350);
 
@@ -136,19 +137,18 @@ DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 	wsprintf(msg,"Pactor COM%d", PortEntry->IOBASE);
 	WritetoConsole(msg);
 	
-
 //	PORTVECTOR(npTTYInfo) = PortVector; //	BX on entry to char handlers
 //	RXVECTOR(npTTYInfo) = RXVector; //	Routine to call for each char
 
 	OpenCOMMPort(&TNCInfo[PortEntry->PORTNUMBER], PortEntry->IOBASE, PortEntry->BAUDRATE);
 
-	return ((int) ExtProc);
+	return ((int)ExtProc);
 }
  
-int ASYSEND(int port, char * buffer,int count)
+int ASYSEND(int port, char * buffer, int count)
 {
-   WriteCommBlock(port,buffer, count);
-   return (0);
+   WriteCommBlock(port, buffer, count);
+   return 0;
 }
 
 VOID KISSCLOSE(int Port)
@@ -156,9 +156,8 @@ VOID KISSCLOSE(int Port)
 	DestroyTTYInfo(Port);
 }
 
-BOOL NEAR DestroyTTYInfo( int port )
+BOOL NEAR DestroyTTYInfo(int port)
 {
-
    // force connection closed (if not already closed)
 
    CloseConnection(&TNCInfo[port]);
@@ -181,8 +180,7 @@ BOOL CloseConnection(struct TNCINFO * conn)
 
    // purge any outstanding reads/writes and close device handle
 
-   PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT |
-                                   PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+   PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
    CloseHandle(conn->hDevice);
  
    return TRUE;
@@ -212,80 +210,71 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
 				  
-	if (conn->hDevice == (HANDLE) -1 )
+	if (conn->hDevice == (HANDLE) -1)
 	{
 		wsprintf(buf,"COM%d Setup Failed %d ", Port, GetLastError());
 		WritetoConsole(buf);
 		OutputDebugString(buf);
 
-		return (FALSE) ;
+		return (FALSE);
 	}
 
-      // setup device buffers
+	SetupComm(conn->hDevice, 4096, 4096); // setup device buffers
 
-      SetupComm(conn->hDevice, 4096, 4096 ) ;
+	// purge any information in the buffer
 
-      // purge any information in the buffer
+	PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
 
-      PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT |
-                                      PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
-
-      // set up for overlapped I/O
+	// set up for overlapped I/O
 	  
-      CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
-      CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
-      CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
-      CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
-      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
-      SetCommTimeouts(conn->hDevice, &CommTimeOuts ) ;
+	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF;
+	CommTimeOuts.ReadTotalTimeoutMultiplier = 0;
+	CommTimeOuts.ReadTotalTimeoutConstant = 0;
+	CommTimeOuts.WriteTotalTimeoutMultiplier = 0;
+	CommTimeOuts.WriteTotalTimeoutConstant = 0;
+	SetCommTimeouts(conn->hDevice, &CommTimeOuts);
 
 #define FC_DTRDSR       0x01
 #define FC_RTSCTS       0x02
+	
+	dcb.DCBlength = sizeof(DCB);
+	GetCommState(conn->hDevice, &dcb);
 
-   
-	  dcb.DCBlength = sizeof( DCB );
+	 // setup hardware flow control
 
-	  GetCommState(conn->hDevice, &dcb );
+	dcb.fDtrControl = DTR_CONTROL_ENABLE;
+//	dcb.fRtsControl = RTS_CONTROL_HANDSHAKE;
+	dcb.fRtsControl = RTS_CONTROL_ENABLE;
 
-	  // setup hardware flow control
+	dcb.BaudRate = Speed;
+	dcb.ByteSize = 8;
+	dcb.Parity = NOPARITY;
+	dcb.StopBits = ONESTOPBIT;
 
-      dcb.fDtrControl = DTR_CONTROL_ENABLE;
-    
-//	  dcb.fRtsControl = RTS_CONTROL_HANDSHAKE ;
+	dcb.fInX = dcb.fOutX = 0;
+	dcb.XonChar = 0;
+	dcb.XoffChar = 0;
+	dcb.XonLim = 0;
+	dcb.XoffLim = 0;
 
-      dcb.fRtsControl = RTS_CONTROL_ENABLE;
+	// other various settings
 
-	  dcb.BaudRate = Speed;
-	  dcb.ByteSize = 8;
-	  dcb.Parity = NOPARITY;
-	  dcb.StopBits = ONESTOPBIT;
+	dcb.fBinary = TRUE;
+	dcb.fParity = TRUE;
 
-	  dcb.fInX = dcb.fOutX = 0;
-	  dcb.XonChar = 0 ;
-	  dcb.XoffChar = 0 ;
-	  dcb.XonLim = 0 ;
-	  dcb.XoffLim = 0 ;
+	fRetVal = SetCommState(conn->hDevice, &dcb);
 
-   // other various settings
-
-   dcb.fBinary = TRUE ;
-   dcb.fParity = TRUE ;
-
-   fRetVal = SetCommState(conn->hDevice, &dcb ) ;
-
-   conn->RTS = 1;
+	conn->RTS = 1;
 //				conn->DTR = 1;
 //				EscapeCommFunction(conn->hDevice,SETDTR);
 
-   EscapeCommFunction(conn->hDevice,SETRTS);
-
-   return TRUE;
-
-
+	EscapeCommFunction(conn->hDevice,SETRTS);
+	
+	return TRUE;
 }
 
 
-int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength )
+int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength)
 {
 	BOOL       fReadStat ;
 	COMSTAT    ComStat ;
@@ -294,22 +283,22 @@ int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength )
 
 	// only try to read number of bytes in queue 
 	
-	ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
+	ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat);
 
-	dwLength = min( (DWORD) nMaxLength, ComStat.cbInQue ) ;
+	dwLength = min( (DWORD) nMaxLength, ComStat.cbInQue);
 
 	if (dwLength > 0)
 	{
 		fReadStat = ReadFile(TNCInfo[port].hDevice, lpszBlock,
-		                    dwLength, &dwLength, NULL) ;
+		                    dwLength, &dwLength, NULL);
 		if (!fReadStat)
 		{
-		    dwLength = 0 ;
-			ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
+		    dwLength = 0;
+			ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat);
 		}
 	}
 
-   return ( dwLength ) ;
+   return (dwLength);
 
 } // end of ReadCommBlock()
 
@@ -317,21 +306,25 @@ int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength )
 BOOL NEAR WriteCommBlock( int port, LPSTR lpByte , DWORD dwBytesToWrite)
 {
 
-	BOOL        fWriteStat ;
-	DWORD       dwBytesWritten ;
+	BOOL        fWriteStat;
+	DWORD       dwBytesWritten;
 	DWORD       dwErrorFlags;
 	COMSTAT     ComStat;
 
 
 	fWriteStat = WriteFile(TNCInfo[port].hDevice, lpByte, dwBytesToWrite,
-	                       &dwBytesWritten, NULL ) ;
+	                       &dwBytesWritten, NULL);
 
 
 	if ((!fWriteStat) || (dwBytesToWrite != dwBytesWritten))
 	{
-		ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat ) ;
+		ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat);
 	}
-	return ( TRUE ) ;
+	return TRUE;
 
 } // end of WriteCommBlock()
 
+
+VOID DEDPoll(int Port)
+{
+}

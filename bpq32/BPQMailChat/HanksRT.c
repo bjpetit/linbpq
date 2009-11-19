@@ -179,7 +179,7 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 
 	strlop(Buffer, '\r');
 
-	if (conn->flags == p_linkwait)
+	if (conn->rtcflags == p_linkwait)
 	{
 		//waiting for *RTL
 
@@ -299,7 +299,7 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 
 	for (c = circuit_hd; c; c = c->next)
 	{
-		if ((c->flags & p_linked) && c->refcnt && ct_find(c, conn->u.user->topic))
+		if ((c->rtcflags & p_linked) && c->refcnt && ct_find(c, conn->u.user->topic))
 			nprintf(c, "%c%c%s %s %s\r", FORMAT, id_data, OurNode, conn->u.user->call, Buffer);
 	}
 }
@@ -335,7 +335,7 @@ static void upduser(USER *user)
 		}
 	}
 
-	fprintf(out, "%s %d %s %s\n", user->call, user->flags, user->name, user->qth);
+	fprintf(out, "%s %d %s %s\n", user->call, user->rtflags, user->name, user->qth);
 	fclose(in);
 	fclose(out);
 
@@ -366,7 +366,7 @@ static void rduser(USER *user)
 			if (!flags) break;
 
 			name = strlop(flags, ' ');
-			user->flags = atoi(flags);
+			user->rtflags = atoi(flags);
 
 			qth = strlop(name, ' ');
 			strnew(&user->name, name);
@@ -430,7 +430,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 
 			for (ckt_to = circuit_hd; ckt_to; ckt_to = ckt_to->next)
 			{
-				if ((ckt_to->flags & p_linked) && ckt_to->refcnt &&
+				if ((ckt_to->rtcflags & p_linked) && ckt_to->refcnt &&
 					!cn_find(ckt_to, node) && ct_find(ckt_to, user->topic))
 				   nprintf(ckt_to, "%s\r", Buffer);
 			}
@@ -574,7 +574,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			su = user_find(f1, NULL);
 			if (!su) break;
 
-			if (su->circuit->flags & p_user)
+			if (su->circuit->rtcflags & p_user)
 				text_tellu(user, f2, f1, o_one);
 			else
 				echo(ckt_from, node, Buffer);  // Relay to other nodes.
@@ -1057,8 +1057,8 @@ void text_tellu(USER *user, char *text, char *to, int who)
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
-		if (!(circuit->flags & p_user)) continue;  // Circuit is a link.
-		if ((circuit->u.user == user) && !(user->flags & u_echo)) continue;
+		if (!(circuit->rtcflags & p_user)) continue;  // Circuit is a link.
+		if ((circuit->u.user == user) && !(user->rtflags & u_echo)) continue;
 
 		switch(who)
 		{
@@ -1090,12 +1090,12 @@ void text_tellu_Joined(USER * user)
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
-		if (!(circuit->flags & p_user)) continue;  // Circuit is a link.
-		if ((circuit->u.user == user) && !(user->flags & u_echo)) continue;
+		if (!(circuit->rtcflags & p_user)) continue;  // Circuit is a link.
+		if ((circuit->u.user == user) && !(user->rtflags & u_echo)) continue;
 
 		nputs(circuit, buf);
 
-		if (circuit->u.user->flags & u_bells)
+		if (circuit->u.user->rtflags & u_bells)
 			if (circuit->BPQStream < 0) // Console
 			{
 				if (ConsHeader[1]->FlashOnConnect) FlashWindow(ConsHeader[1]->hConsole, TRUE);
@@ -1138,7 +1138,7 @@ static void node_tell(NODE *node, char kind)
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
-		if (circuit->flags & p_linked)
+		if (circuit->rtcflags & p_linked)
 			node_xmit(node, kind, circuit);
 	}
 }
@@ -1163,7 +1163,7 @@ static void user_tell(USER *user, char kind)
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
-		if (circuit->flags & p_linked)
+		if (circuit->rtcflags & p_linked)
 			user_xmit(user, kind, circuit);
 	}
 }
@@ -1262,7 +1262,7 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias)
 	user->node = node;
 	rduser(user);
 
-	if (circuit->flags & p_user)
+	if (circuit->rtcflags & p_user)
 		circuit->u.user = user;
 
 	user->lastmsgtime = time(NULL);
@@ -1286,7 +1286,7 @@ void link_drop(CIRCUIT *circuit)
 	if (circuit->u.link)
 		circuit->u.link->flags = p_nil;
 	
-	circuit->flags = p_nil;
+	circuit->rtcflags = p_nil;
 
 // Users connected on the dropped link are no longer connected.
 
@@ -1345,7 +1345,7 @@ static void echo(CIRCUIT *fc, NODE *node, char * Buffer)
 
 	for (tc = circuit_hd; tc; tc = tc->next)
 	{
-		if ((tc != fc) && (tc->flags & p_linked) && !cn_find(tc, node))
+		if ((tc != fc) && (tc->rtcflags & p_linked) && !cn_find(tc, node))
 			nprintf(tc, "%s\r", Buffer);
 	}
 }
@@ -1444,7 +1444,7 @@ CIRCUIT *circuit_new(CIRCUIT *circuit, int flags)
 	
 	CIRCUIT *c;
 
-	circuit->flags = flags;
+	circuit->rtcflags = flags;
 	circuit->next = NULL;
 
 	for (c = circuit_hd; c; c = c->next)
@@ -1564,7 +1564,7 @@ void logout(CIRCUIT *circuit)
 {
 	USER *user;
 
-	circuit->flags = p_nil;
+	circuit->rtcflags = p_nil;
 	user = circuit->u.user;
 //	if (log_rt) tlogp("RT Logout");
 	if (user)			// May not have logged in if already conencted
@@ -1668,7 +1668,7 @@ static void show_circuits(CIRCUIT *conn)
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
-		if (circuit->flags & p_linked)
+		if (circuit->rtcflags & p_linked)
 		{
 			len = wsprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
 			__try{
@@ -1698,9 +1698,9 @@ static void show_circuits(CIRCUIT *conn)
 			nprintf(conn, "%s\r", line);
 
 		}
-		else if (circuit->flags & p_user)
+		else if (circuit->rtcflags & p_user)
 			nprintf(conn, "User %-6.6s\r", circuit->u.user->call);
-		else if (circuit->flags & p_linkini)
+		else if (circuit->rtcflags & p_linkini)
 			nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
 	}
 
@@ -1777,16 +1777,16 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 	switch(tolower(Buffer[1]))
 	{
 		case 'a' :
-			user->flags ^= u_bells;
+			user->rtflags ^= u_bells;
 			upduser(user);
-			nprintf(circuit, "Alert %s\r",  (user->flags & u_bells) ? "Enabled" : "Disabled");
+			nprintf(circuit, "Alert %s\r",  (user->rtflags & u_bells) ? "Enabled" : "Disabled");
 			return TRUE;
 
 		case 'b' : return FALSE;
 		case 'e' : 
-			user->flags ^= u_echo;
+			user->rtflags ^= u_echo;
 			upduser(user);
-			nprintf(circuit, "Echo %s\r",  (user->flags & u_echo) ? "Enabled" : "Disabled");
+			nprintf(circuit, "Echo %s\r",  (user->rtflags & u_echo) ? "Enabled" : "Disabled");
 			return TRUE;
 		
 		case 'f' : makelinks(); return TRUE;
@@ -1862,7 +1862,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 
 			// Send to the desired user only.
 
-			if (su->circuit->flags & p_user)
+			if (su->circuit->rtcflags & p_user)
 				text_tellu(user, f2, f1, o_one);
 			else
 				text_xmit(user, su, f2);
@@ -1882,7 +1882,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 
 					for (c = circuit_hd; c; c = c->next)
 					{
-						if (c->flags & p_linked)
+						if (c->rtcflags & p_linked)
 							topic_xmit(user, c);
 					}
 				}
@@ -1937,7 +1937,7 @@ VOID node_close()
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
-		if (circuit->flags & (p_linked | p_linkini | p_linkwait))
+		if (circuit->rtcflags & (p_linked | p_linkini | p_linkwait))
 			Disconnect(circuit->BPQStream);
 	}
 }
@@ -1954,7 +1954,7 @@ static void node_keepalive()
 	{
 		for (circuit = circuit_hd; circuit; circuit = circuit->next)
 		{
-			if (circuit->flags & p_linked)
+			if (circuit->rtcflags & p_linked)
 				nprintf(circuit, "%c%c%s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call);
 		}
 	}
@@ -2016,7 +2016,7 @@ VOID ChatTimer()
 	i = 0;
 	for (c = circuit_hd; c; c = c->next)
 	{
-		if (c->flags & p_linked) 
+		if (c->rtcflags & p_linked) 
 		{
 			char buff[1000];
 			int ptr;

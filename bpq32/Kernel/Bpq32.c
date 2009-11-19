@@ -205,6 +205,13 @@ extern long PORTENTRYLEN;
 extern long LINKTABLELEN;
 extern struct PORTCONTROL * PORTTABLE;
 
+DllExport struct TRANSPORTENTRY * L4TABLE = 0;
+DllExport UCHAR NEXTID = 55;
+DllExport WORD MAXCIRCUITS = 50;
+DllExport UCHAR L4DEFAULTWINDOW = 4;
+DllExport WORD L4T1 = 60;
+
+
 extern char AUTOSAVE;
 
 extern char MYNODECALL;	// 10 chars,not null terminated

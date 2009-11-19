@@ -369,6 +369,7 @@ BOOL RemoveKilledMessages()
 	GetSemaphore(&MsgNoSemaphore);
 	GetSemaphore(&AllocSemaphore);
 
+	FirstMessageIndextoForward = 0;
 
 	NewMsgHddrPtr = zalloc((NumberofMessages+1) * 4);
 	NewMsgHddrPtr[0] = MsgHddrPtr[0];		// Copy Control Record
@@ -393,11 +394,21 @@ BOOL RemoveKilledMessages()
 			Removed++;
 		}
 		else
+		{
 			NewMsgHddrPtr[++i] = Msg;
+			if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+			{
+				if (FirstMessageIndextoForward == 0)
+					FirstMessageIndextoForward = i;
+			}
+		}
 	}
 
 	NumberofMessages = i;
 	NewMsgHddrPtr[0]->number = i;
+
+	if (FirstMessageIndextoForward == 0)
+		FirstMessageIndextoForward = NumberofMessages;
 
 	free(MsgHddrPtr);
 
