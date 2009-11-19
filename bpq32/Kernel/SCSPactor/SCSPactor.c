@@ -265,8 +265,8 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 	fRetVal = SetCommState(conn->hDevice, &dcb);
 
 	conn->RTS = 1;
-//				conn->DTR = 1;
-//				EscapeCommFunction(conn->hDevice,SETDTR);
+//	conn->DTR = 1;
+//	EscapeCommFunction(conn->hDevice,SETDTR);
 
 	EscapeCommFunction(conn->hDevice,SETRTS);
 	
