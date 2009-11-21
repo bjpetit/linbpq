@@ -731,6 +731,9 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		ptr2 --;
 	}
 
+	if (ptr2 != RouteElements)
+		*ptr2++ = 0;
+
 	if ((strcmp(ptr2, "WW") == 0) || (strcmp(ptr2, "WWW") == 0))
 	{
 		strcpy(FullRoute, RouteElements);

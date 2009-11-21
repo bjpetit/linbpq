@@ -314,13 +314,25 @@
 // Send SYSOP messages on POP3 interface if User SYSOP flag is set.
 // NNTP only needs Authentication for posting, not reading.
 
+// Version 1.0.3.15
+
+// Fix reset of First to Forward after househeeping
+
+// Version 1.0.3.16
+
+// Fix check of HA for terminating WW
+// MBL Mode remove extra > prompts
+// Fix program error if WP record has unexpected format
+// Connect Script changes for WINMOR
+// Fix typo in unconfigured node has connected message
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 
 #include "stdafx.h"
 
 //#define SPECIALVERSION "Beta"
-#define SPECIALVERSION "Peter"
 
 #include "GetVersion.h"
 
@@ -1539,7 +1551,6 @@ int RefreshMainWindow()
 	SetDlgItemInt(hWnd, IDC_CHATSEM, ChatSemaphore.Clashes, FALSE);
 	SetDlgItemInt(hWnd, IDC_MSGSEM, MsgNoSemaphore.Clashes, FALSE);
 	SetDlgItemInt(hWnd, IDC_ALLOCSEM, AllocSemaphore.Clashes, FALSE);
-	SetDlgItemInt(hWnd, IDC_1STTOFORWARD, FirstMessageIndextoForward, FALSE); 
 
 	now = time(NULL);
 
@@ -2828,7 +2839,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 			Logprintf(LOG_CHAT, conn, '!', "Node %s connected, but is not defined as a Node - closing",
 				conn->Callsign);
 
-			nodeprintf(conn, "Node %s does not have $s defined as a node to link to - closing.\r",
+			nodeprintf(conn, "Node %s does not have %s defined as a node to link to - closing.\r",
 				OurNode, conn->Callsign);
 
 			Flush(conn);
@@ -4815,7 +4826,8 @@ nextline:
 				nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
 		}
 
-		FWDCount = MatchMessagetoBBSList(Msg, conn);
+		if (Msg->to[0])
+			FWDCount = MatchMessagetoBBSList(Msg, conn);
 
 		if (!(conn->BBSFlags & BBS))
 		{
