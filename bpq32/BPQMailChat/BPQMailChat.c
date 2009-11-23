@@ -326,7 +326,9 @@
 // Connect Script changes for WINMOR
 // Fix typo in unconfigured node has connected message
 
+// Version 1.0.3.17
 
+// Fix forwarding of Personals 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 

@@ -337,6 +337,9 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 
 #endif
 
+	if (Route->INP3Node == 0)
+		return;						// We don't want to use INP3
+
 	// Update TImestamp on Route
 
 	_asm{
@@ -403,7 +406,6 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 VOID KillRoute(struct DEST_ROUTE_ENTRY * ROUTEPTR)
 {
 }
-
 
 
 VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, int rtt)

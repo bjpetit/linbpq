@@ -732,7 +732,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	}
 
 	if (ptr2 != RouteElements)
-		*ptr2++ = 0;
+		*ptr2++;
 
 	if ((strcmp(ptr2, "WW") == 0) || (strcmp(ptr2, "WWW") == 0))
 	{
@@ -1046,7 +1046,7 @@ BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwa
 
 int CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements)
 {
-	// Used for Personal Messages, and Bulls not yot at their traget area
+	// Used for Personal Messages, and Bulls not yot at their target area
 
 	char *** HRoutes;
 	int i = 0, j, k = 0;
@@ -1070,10 +1070,14 @@ int CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSFor
 				i++;
 				j++;
 			}
-				
-			if (i > bestmatch)
-					bestmatch = i;
 
+			// Only send if all BBS elements match
+
+			if (HRoutes[k][i] == 0)
+			{
+				if (i > bestmatch)
+						bestmatch = i;
+			}
 			k++;
 		}
 	}

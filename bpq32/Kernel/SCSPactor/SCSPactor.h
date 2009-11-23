@@ -5,22 +5,29 @@
 
 struct TNCINFO
 { 
-//	char PortType;
-	int RTS;
-	int CTS;
-	int DCD;
-	int DTR;
-	int DSR;
-	HANDLE hDevice;
-	BOOL PortEnabled;
-	int FLOWCTRL;
-	BOOL KHOST;						// Set if in Kantronics Host Mode
-	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
+	int PACTORtoBPQ_Q;			// Frames for BPQ
+	int BPQtoPACTOR_Q;			// Frames for PACTOR
 
+	BOOL TNCOK;					// TNC is reponding
+
+//	int RTS;
+//	int CTS;
+//	int DCD;
+//	int DTR;
+//	int DSR;
+	HANDLE hDevice;
+//	BOOL PortEnabled;
+	int FLOWCTRL;
+	BOOL HostMode;					// Set if in DED Host Mode
+	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
+	int Timeout;					// Timeout response counter
+	int Retries;
+	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
+	int TXLen;						// Len of last sent
+	UCHAR Toggle;					// Sequence bit
 };
 
 struct TNCINFO  TNCInfo[16]={0};
-
 
 #define IOCTL_SERIAL_IS_COM_OPEN CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERIAL_GETDATA     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x801,METHOD_BUFFERED,FILE_ANY_ACCESS)

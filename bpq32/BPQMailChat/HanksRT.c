@@ -485,7 +485,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			strnew(&user->name, f1);
 			strnew(&user->qth,  f2);
 			upduser(user);
-			makelinks();					// Bring up our links if not already up
+//			makelinks();					// Bring up our links if not already up
 
 			break;
 
@@ -1555,7 +1555,7 @@ int rtloginu (CIRCUIT *circuit)
 	text_tellu_Joined(user);
 	user_tell(user, id_join);
 	show_users(circuit);
-	makelinks();
+//	makelinks();
 
 	return TRUE;
 }
@@ -1926,6 +1926,7 @@ void makelinks(void)
 		
 		link->flags = p_linkini;
 		chat_link_out(link);
+		return;						// One at a time
 	}
 }
 
@@ -2048,6 +2049,9 @@ VOID ChatTimer()
 	}
 
 	ChatTmr++;
+
+	if (user_hd)				// Any Users?
+		makelinks();
 
 	if (ChatTmr > 60) // 10 Mins
 	{

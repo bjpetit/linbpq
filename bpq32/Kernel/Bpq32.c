@@ -158,6 +158,12 @@
 
 //				Fix PE in NOROUTETODEST (missing POP EBX)
 
+// 410m		November 2009
+
+//				Changes for PACTOR and WINMOR support
+//				Enable INP3 if configured on a route.
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
