@@ -329,6 +329,14 @@
 // Version 1.0.3.17
 
 // Fix forwarding of Personals 
+
+// Version 1.0.3.18
+
+// Fix detection of misconfigured nodes to work with new nodes.
+// Limit connection attempt rate when a chat node is unavailable.
+// Fix Program Error on long input lines (> ~250 chars).
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 
@@ -570,7 +578,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	char Msg[100];
 	int i = 60;
 
-	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delau 60 Secs
+	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delay 60 Secs
 	{	
 		hWnd = CreateWindow("STATIC", "MailChat Restarting after Failure - Please Wait", 0,
 		CW_USEDEFAULT, 100, 550, 70,
@@ -2016,7 +2024,7 @@ int DoReceivedData(int Stream)
 	CIRCUIT * conn;
 	struct UserInfo * user;
 	char * ptr, * ptr2;
-	char Buffer[600];
+	char Buffer[1000];
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -2028,7 +2036,7 @@ int DoReceivedData(int Stream)
 			{ 
 				// May have several messages per packet, or message split over packets
 
-				if (conn->InputLen > 300)	// Shouldnt have lines longer  than this in text mode
+				if (conn->InputLen > 600)	// Shouldnt have lines longer  than this in text mode
 				{
 					conn->InputLen=0;
 				}
@@ -3328,8 +3336,7 @@ void TrytoSend()
 		conn = &Connections[n];
 		
 		if (conn->Active == TRUE)
-			if (conn->OutputQueue)
-				Flush(conn);
+			Flush(conn);
 	}
 
 	for (Cons = ConsHeader[0]; Cons; Cons = Cons->next)
@@ -3356,8 +3363,21 @@ void Flush(CIRCUIT * conn)
 
 
 	if (conn->OutputQueue == NULL)
-		return;						// Nothing to send
+	{
+		// Nothing to send. If Close after Flush is set, disconnect
 
+		if (conn->CloseAfterFlush)
+		{
+			conn->CloseAfterFlush--;
+			
+			if (conn->CloseAfterFlush)
+				return;
+
+			Disconnect(conn->BPQStream);
+		}
+
+		return;						// Nothing to send
+	}
 	tosend = conn->OutputQueueLength - conn->OutputGetPointer;
 
 	sent=0;
@@ -5331,7 +5351,8 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
-		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - PORT IN USE"))
+		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - PORT IN USE") ||
+		strstr(Buffer, "DISCONNECTED"))
 	{
 		// Connect Failed
 
@@ -5395,7 +5416,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		}
 	}
 
-	// Not Success or Fail. If last line is still outstanding, wait fot Respon
+	// Not Success or Fail. If last line is still outstanding, wait fot Response
 	//		else look for SID or Prompt
 
 	if (Scripts[ForwardingInfo->ScriptIndex])
@@ -5515,9 +5536,14 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 				}
 
 				if (SID[len+2] == '2')
-						if (conn->UserPointer->ForwardingInfo->AllowB2)
+				{
+					if (conn->UserPointer->ForwardingInfo->AllowB2)
 							conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
 	
+					if (conn->UserPointer->ForwardingInfo->AllowB1)
+							conn->BBSFlags |= FBBB1Mode;				// B2 should allow fallback to B1 (but RMS doesnt!)
+
+				}
 				break;
 			}
 

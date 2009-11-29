@@ -7,24 +7,31 @@ struct TNCINFO
 { 
 	int PACTORtoBPQ_Q;			// Frames for BPQ
 	int BPQtoPACTOR_Q;			// Frames for PACTOR
-
+	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
+	char * InitScript;			// Initialisation Commands
+	char * InitPtr;				// Next Command
+	int	ReinitState;			// Reinit State Machine
 	BOOL TNCOK;					// TNC is reponding
+	int	FramesOutstanding;		// Frames Queued - used for flow control
+	BOOL InternalCmd;			// Last Command was generated internally
+	int	IntCmdDelay;			// To limit internal commands
 
-//	int RTS;
-//	int CTS;
-//	int DCD;
-//	int DTR;
-//	int DSR;
+	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
+
+	BOOL Connected;				// When set, all data is passed as data instead of commands
+	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
+
 	HANDLE hDevice;
-//	BOOL PortEnabled;
-	int FLOWCTRL;
 	BOOL HostMode;					// Set if in DED Host Mode
-	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
+//	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
 	int Timeout;					// Timeout response counter
 	int Retries;
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent
+	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
+	int RXLen;						// Data in RXBUffer
 	UCHAR Toggle;					// Sequence bit
+	int NextToPoll;					// Last Channel Polled - 0 or 31
 };
 
 struct TNCINFO  TNCInfo[16]={0};

@@ -59,9 +59,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			// LinFBB needs a Disconnect Here
 
-			Flush(conn);
-			Sleep(400);
-			Disconnect(conn->BPQStream);
+			conn->CloseAfterFlush = 20;			// 2 Secs
 		}
 		return;
 
@@ -398,6 +396,11 @@ ok2:
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
 		}
+		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
+		{
+			conn->FBBReplyIndex += wsprintf(&conn->FBBReplyChars[conn->FBBReplyIndex], "!%d", RestartPtr);
+		}
+
 		else if (LookupTempBID(FBBHeader->BID))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
@@ -650,22 +653,9 @@ loop:
 						// FBB Seems to insert  6 Byte message
 						// It looks like the original csum and length - perhaps a a consistancy check
 
-						if (conn->InputLen > 8)
-						{
-							ptr = conn->InputBuffer+2;
-							conn->InputLen -=8;
-								
-							for (i=0; i<6; i++)
-							{
-								conn->FBBChecksum+=ptr[0];
-								ptr++;
-							}
+						// But Airmail Sends the Restart Data in the next packet, move the check code.
 
-							memmove(conn->InputBuffer, ptr, conn->InputLen);
-
-						}
-						else
-							BBSputs(conn, "*** Extra 8 bytes missing.\r");
+						conn->NeedRestartHeader = TRUE;
 
 						goto GotRestart;
 					}
@@ -724,6 +714,32 @@ loop:
 		if (conn->InputLen < (MsgLen + 2))
 			return;						// Wait for more
 
+		// Waiting for Restart Header, see if it has arrived
+
+		if (conn->NeedRestartHeader)
+		{
+			conn->NeedRestartHeader = FALSE;
+
+			if (conn->InputLen > 8)
+			{
+				ptr = conn->InputBuffer+2;
+				conn->InputLen -=8;
+								
+				for (i=0; i<6; i++)
+				{
+					conn->FBBChecksum+=ptr[0];
+					ptr++;
+				}
+
+				memmove(conn->InputBuffer, ptr, conn->InputLen);
+
+			}
+			else
+				BBSputs(conn, "*** Extra 8 bytes missing.\r");
+
+			goto loop;
+
+		}
 		// Process it
 
 		ptr+=2;
@@ -878,8 +894,6 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 			*Outputptr++ = Compressed[i];
 		}
 
-//		conn->RestartFrom -= DataOffset;
-		
 		for (i=conn->RestartFrom; i< CompLen; i++)
 		{
 			conn->FBBChecksum+=Compressed[i];
@@ -935,8 +949,6 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 	int OrigLen, MsgLen, B2HddrLen, CompLen;
 	char Date[20];
 	struct tm * tm;
-	time_t now;
-
 
 	MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
 
@@ -955,9 +967,14 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 
 	UnCompressed = zalloc(MsgLen+1000);
 
-	now = time(NULL);
+//	if (conn->RestartFrom == 0)
+//	{
+//		// save time first sent, or checksum will be wrong when we restart
+//		
+//		FwdMsg->datechanged=time(NULL);
+//	}
 
-	tm = gmtime(&now);	
+	tm = gmtime(&FBBHeader->FwdMsg->datechanged);	
 	
 	wsprintf(Date, "%04d%/%02d/%02d %02d:%02d",
 		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
@@ -1009,7 +1026,7 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	UCHAR * Output, * Outputptr;
 	int i, CompLen;
 
-	Compressed =Compressedptr = FBBHeader->CompressedMsg;
+	Compressed = Compressedptr = FBBHeader->CompressedMsg;
 
 	Output = Outputptr = zalloc(FBBHeader->CSize + 200);
 
@@ -1017,16 +1034,41 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	*Outputptr++ = strlen(FBBHeader->FwdMsg->title) + 8;
 	strcpy(Outputptr, FBBHeader->FwdMsg->title);
 	Outputptr += strlen(FBBHeader->FwdMsg->title) +1;
-	strcpy(Outputptr, "000000");
+	wsprintf(Outputptr, "%06d", conn->RestartFrom);
 	Outputptr += 7;
 
 	CompLen = FBBHeader->CSize;
 
 	conn->FBBChecksum = 0;
 
-	for (i=0; i< CompLen; i++)
+	// If restarting, send the checksum and length as a single record, then data from the restart point
+	// The count includes the header, so adjust count and pointers
+
+	if (conn->RestartFrom)
 	{
-		conn->FBBChecksum+=Compressed[i];
+		*Outputptr++ = 2;
+		*Outputptr++ = 6;
+
+		for (i=0; i< 6; i++)
+		{
+			conn->FBBChecksum+=Compressed[i];
+			*Outputptr++ = Compressed[i];
+		}
+		
+		for (i=conn->RestartFrom; i< CompLen; i++)
+		{
+			conn->FBBChecksum+=Compressed[i];
+		}
+		
+		Compressedptr += conn->RestartFrom;
+		CompLen -= conn->RestartFrom;
+	}
+	else
+	{
+		for (i=0; i< CompLen; i++)
+		{
+			conn->FBBChecksum+=Compressed[i];
+		}
 	}
 
 	while (CompLen > 256)
@@ -1072,8 +1114,8 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 
 	// Need to save Header in conn->TempMsg and data in conn->MailBuffer
 
-	if (conn->InputLen < 2)
-		return;							//  All formats need at least two bytes
+//	if (conn->InputLen < 2)
+//		return;							//  All formats need at least two bytes
 	
 	GetSemaphore(&AllocSemaphore);
 

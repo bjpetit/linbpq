@@ -8,7 +8,7 @@ int SEMCLASHES = 0;
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
-	char Mess[255];
+	char Mess[1000];
 	va_list(arglist);int Len;
 
 	va_start(arglist, format);
@@ -23,7 +23,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...)
 {
-	char Mess[255];
+	char Mess[1000];
 	va_list(arglist);int Len;
 
 	va_start(arglist, format);
@@ -87,7 +87,7 @@ VOID BBSputs(CIRCUIT * conn, char * buf)
 
 VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 {
-	char Mess[255];
+	char Mess[1000];
 	int len;
 	va_list(arglist);
 

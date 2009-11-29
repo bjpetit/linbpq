@@ -143,6 +143,8 @@ typedef struct link_t
 	char *alias;
 	char *call;
 	int  flags; // See circuit flags.
+	int delay;	// Limit connects when failing
+
 } LINK;
 
 
@@ -275,6 +277,8 @@ typedef struct ConnectionInfo_S
 	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
 	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
 
+	int CloseAfterFlush;		// Close session when all sent. Set to 100ms intervals to wait.
+	
 	BOOL Paging;				// Set if user wants paging
 	int LinesSent;				// Count when paging
 	int PageLen;				// Lines per page
@@ -296,6 +300,7 @@ typedef struct ConnectionInfo_S
 	int FBBReplyIndex;					// current Reply Pointer
 	int FBBIndex;						// current propopsal number
 	int RestartFrom;					// Restart position
+	BOOL NeedRestartHeader;				// Set if waiting for 6 byte restart header
 	BOOL FBBMsgsSent;					// Messages need to be maked as complete when next command received
 	UCHAR FBBChecksum;					// Header Checksum
 	BOOL LocalMsg;				// Set if current Send command is for a local user

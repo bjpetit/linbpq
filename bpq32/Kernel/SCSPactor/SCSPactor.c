@@ -9,6 +9,7 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
+#include <stdio.h>
 #include <stdlib.h>
 
 //#include <process.h>
@@ -44,13 +45,26 @@ BOOL NEAR SetupConnection(int);
 BOOL CloseConnection(struct TNCINFO * conn);
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
 BOOL NEAR DestroyTTYInfo(int port);
-int NEAR ReadCommBlock(int port, LPSTR lpszBlock, int nMaxLength);
+void CheckRX(struct TNCINFO * TNC);
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 VOID DEDPoll(int Port);
 VOID CRCStuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 unsigned short int compute_crc(unsigned char *buf,int len);
 int Unstuff(UCHAR * Msg, int len);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
+VOID ProcessTermModeResponse(struct TNCINFO * TNC);
+BOOL ReadConfigFile(char * filename);
+int ProcessLine(char * buf);
+VOID ExitHost(struct TNCINFO * TNC);
+VOID DoTNCReinit(struct TNCINFO * TNC);
+VOID DoTermModeTimeout(struct TNCINFO * TNC);
+
+DllImport UCHAR NEXTID;
+DllImport struct TRANSPORTENTRY * L4TABLE;
+DllImport WORD MAXCIRCUITS;
+DllImport UCHAR L4DEFAULTWINDOW;
+DllImport WORD L4T1;
+
 
 // Buffer Pool
 
@@ -74,7 +88,6 @@ UINT * Q_REM(UINT *Q)
 
 	return (first);
 }
-
 
 // Return Buffer to Free Queue
 
@@ -112,6 +125,19 @@ int Q_ADD(UINT *Q,UINT *BUFF)
 	return(0);
 }
 
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[255];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	OutputDebugString(Mess);
+
+	return;
+}
 
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
@@ -121,6 +147,11 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	switch(ul_reason_being_called)
 	{
 	case DLL_PROCESS_ATTACH:
+
+		// Read Config
+
+		GetAPI();					// Load BPQ32
+		ReadConfigFile("BPQtoPACTOR.CFG");
 
 		// Build buffer pool
 
@@ -151,62 +182,23 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 DllExport int ExtProc(int fn, int port,unsigned char * buff)
 {
-	int len = 0, txlen = 0;
-	UCHAR rxbuff[1000];
-	unsigned short  crc;
+	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = &TNCInfo[port];
-
 
 	switch (fn)
 	{
 	case 1:				// poll
 
+		if (TNC->ReportDISC)
+		{
+			TNC->ReportDISC = FALSE;
+			return -1;
+		}
+	
 		DEDPoll(port);
 
-		len = ReadCommBlock(port, rxbuff, 350);
-
-		if (len > 0)
-		{
-			if (TNC->HostMode == 0)
-			{
-				// We think TNC is in Terminal Mode
-
-				if (rxbuff[0] != 170)
-				{
-					// Probably in Term Mode
-
-					return 0;
-				}
-				else
-				{
-					// It is in Host Mode
-
-					TNC->HostMode = TRUE;
-
-					// Drop Through
-				}
-			}
-			if (rxbuff[0] == 170)
-			{
-				len = Unstuff(&rxbuff[2], len - 2);
-				crc = compute_crc(&rxbuff[2], len);
-
-				if (crc == 0xf0b8)		// Good CRC
-					ProcessDEDFrame(TNC, rxbuff, len);
-				else
-				{
-					// Bad CRC - should we check of complete frame (how)
-				}
-			}
-			else
-			{
-					// We think it is in Host Mode, but got a frame not starting with 170
-					// See if it had dropped back to Terminal Mode
-
-			}
-
-		}
+		CheckRX(TNC);
 
 		if (TNC->PACTORtoBPQ_Q !=0)
 		{
@@ -252,13 +244,18 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		memcpy(buffptr+2, &buff[8], txlen);
 		
 		Q_ADD(&TNC->BPQtoPACTOR_Q, buffptr);
+
+		TNC->FramesOutstanding++;
 		
 		return (0);
 
 
 	case 3:				// CHECK IF OK TO SEND
 
-		return (0);		// OK
+		if (TNC->FramesOutstanding > 4)
+			return 1;
+		else
+			return 0;		// OK
 
 	case 4:				// reinit
 
@@ -274,24 +271,30 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 }
 
-DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
+DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[80];
-	
+	struct TNCINFO * TNC;
+	int port;
+
 	//
 	//	Will be called once for each Pactor Port
 	//	The COM port number is in IOBASE
 	//
 
-	GetAPI();
-
-	wsprintf(msg,"Pactor COM%d", PortEntry->IOBASE);
+	wsprintf(msg,"Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
 	WritetoConsole(msg);
+
+	port=PortEntry->PORTCONTROL.PORTNUMBER;
+	TNC = &TNCInfo[port];
+
+	TNC->PortRecord = PortEntry;
+
 	
 //	PORTVECTOR(npTTYInfo) = PortVector; //	BX on entry to char handlers
 //	RXVECTOR(npTTYInfo) = RXVector; //	Routine to call for each char
 
-	OpenCOMMPort(&TNCInfo[PortEntry->PORTNUMBER], PortEntry->IOBASE, PortEntry->BAUDRATE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
 	return ((int)ExtProc);
 }
@@ -376,7 +379,7 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 	CommTimeOuts.ReadTotalTimeoutMultiplier = 0;
 	CommTimeOuts.ReadTotalTimeoutConstant = 0;
 	CommTimeOuts.WriteTotalTimeoutMultiplier = 0;
-	CommTimeOuts.WriteTotalTimeoutConstant = 0;
+	CommTimeOuts.WriteTotalTimeoutConstant = 1000;
 	SetCommTimeouts(conn->hDevice, &CommTimeOuts);
 
 #define FC_DTRDSR       0x01
@@ -417,36 +420,119 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 	
 	return TRUE;
 }
-
-
-int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength)
+void CheckRX(struct TNCINFO * TNC)
 {
-	BOOL       fReadStat ;
-	COMSTAT    ComStat ;
+	BOOL       fReadStat;
+	COMSTAT    ComStat;
 	DWORD      dwErrorFlags;
-	DWORD      dwLength;
+	int Length;
+	unsigned short crc;
 
 	// only try to read number of bytes in queue 
+
+	if (TNC->RXLen == 500)
+		TNC->RXLen = 0;
+
+	ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+
+	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
+
+	if (Length == 0)
+		return;					// Nothing doing
+
+	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
 	
-	ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat);
-
-	dwLength = min( (DWORD) nMaxLength, ComStat.cbInQue);
-
-	if (dwLength > 0)
+	if (!fReadStat)
 	{
-		fReadStat = ReadFile(TNCInfo[port].hDevice, lpszBlock,
-		                    dwLength, &dwLength, NULL);
-		if (!fReadStat)
+		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
+		return;
+	}
+	
+	TNC->RXLen += Length;
+
+	Length = TNC->RXLen;
+
+	// DED mode doesn't have an end of frame delimiter. We need to know if we have a full frame
+
+	// Fortunately this is a polled protocol, so we only get one frame at a time
+
+	// If first char != 170, then probably a Terminal Mode Frame. Wait for CR on end
+
+	// If first char is 170, we could check rhe length field, but that could be corrupt, as
+	// we haen't checked CRC. All I can think of is to check the CRC and if it is ok, assume frame is
+	// complete. If CRC is duff, we will eventually time out and get a retry. The retry code
+	// can clear the RC buffer
+			
+	if (TNC->RXBuffer[0] != 170)
+	{
+		// Char Mode Frame I think we need to see cmd: on end
+
+		// If we think we are in host mode, then to could be noise - just discard.
+
+		if (TNC->HostMode)
 		{
-		    dwLength = 0;
-			ClearCommError(TNCInfo[port].hDevice, &dwErrorFlags, &ComStat);
+			TNC->RXLen = 0;		// Ready for next frame
+			return;
 		}
+
+		TNC->RXBuffer[TNC->RXLen] = 0;
+
+//		if (TNC->RXBuffer[TNC->RXLen-2] != ':')
+		if (strstr(TNC->RXBuffer, "cmd: ") == 0)
+			return;				// Wait for rest of frame
+
+		// Complete Char Mode Frame
+
+		TNC->RXLen = 0;		// Ready for next frame
+					
+		if (TNC->HostMode == 0)
+		{
+			// We think TNC is in Terminal Mode
+			ProcessTermModeResponse(TNC);
+			return;
+		}
+		// We thought it was in Host Mode, but are wrong.
+
+		TNC->HostMode = FALSE;
+		return;
 	}
 
-   return (dwLength);
+	// Receiving a Host Mode frame
 
-} // end of ReadCommBlock()
+	if (Length < 6)				// Minimum Frame Sise
+		return;
 
+	if (TNC->RXBuffer[2] == 170)
+	{
+		// Retransmit Request
+	
+		TNC->RXLen = 0;
+		return;				// Ignore for now
+	}
+
+	Length = Unstuff(&TNC->RXBuffer[2], Length - 2);
+
+	if (Length == -1)
+	{
+		// Unstuff returned an errors (170 not followed by 0)
+
+		TNC->RXLen = 0;
+		return;				// Ignore for now
+	}
+	crc = compute_crc(&TNC->RXBuffer[2], Length);
+
+	if (crc == 0xf0b8)		// Good CRC
+	{
+		TNC->RXLen = 0;		// Ready for next frame
+		ProcessDEDFrame(TNC, TNC->RXBuffer, Length);
+		
+		return;
+	}
+
+	// Bad CRC - assume incomplete frame, and wait for rest. If it was a full bad frame, timeout and retry will recover link.
+
+	return;
+}
 
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
 {
@@ -462,19 +548,15 @@ BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
 		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
 	}
 
-	TNC->Timeout = 20;
+	TNC->Timeout = 100;
 
 	return TRUE;
-
 }
-
 
 VOID DEDPoll(int Port)
 {
 	struct TNCINFO * TNC = &TNCInfo[Port];
 	UCHAR * Poll = TNC->TXBuffer;
-
-	// Send a Generic Poll (Assume CRC Extended DED, so we only poll channel 255)
 
 	if (TNC->Timeout)
 	{
@@ -491,7 +573,54 @@ VOID DEDPoll(int Port)
 			return;
 		}
 
+		// Retried out.
+
+		if (TNC->HostMode == 0)
+		{
+			DoTermModeTimeout(TNC);
+			return;
+		}
+
+		// Retried out in host mode - Clear any connection and reinit the TNC
+
+		Debugprintf("PACTOR - Link to TNC Lost");
 		TNC->TNCOK = FALSE;
+		TNC->HostMode = 0;
+		TNC->ReinitState = 0;
+		
+		if (TNC->PortRecord->ATTACHEDSESSION)		// COnnected
+		{
+			TNC->Connected = FALSE;		// Back to Command Mode
+			TNC->ReportDISC = TRUE;		// Tell Nod
+		}
+
+	}
+
+	if (TNC->PortRecord->ATTACHEDSESSION == 0 && TNC->Connected)
+	{
+		// Node has disconnected - clear any connection
+			
+		UCHAR * Poll = TNC->TXBuffer;
+
+		TNC->Connected = FALSE;
+
+		TNC->TXBuffer[2] = 0x1f;
+		TNC->TXBuffer[3] = 0x1;
+		TNC->TXBuffer[4] = 0x0;
+		TNC->TXBuffer[5] = 'D';
+
+		CRCStuffAndSend(TNC, TNC->TXBuffer, 6);
+		return;
+	}
+
+
+
+	// if we have just restarted or TNC appears to be in terminal mode, run Initialisation Sequence
+
+	if (!TNC->HostMode)
+	{
+		DoTNCReinit(TNC);
+		return;
 	}
 
 	// Send Data if avail, else send poll
@@ -505,29 +634,198 @@ VOID DEDPoll(int Port)
 
 		datalen=buffptr[1];
 
-		Poll[0] = 170;
-		Poll[1] = 170;
 		Poll[2] = 31;		// PACTOR Channel
-		Poll[3] = 0;		// Data
-		Poll[4] = datalen - 1;			// Len-1
-		memcpy(&Poll[5], buffptr+2, datalen);		// Data goes to +7, but we have an extra byte
+
+		if (TNC->Connected)
+		{
+			Poll[3] = 0;			// Data?
+		}
+		else
+		{
+			Poll[3] = 1;			// Command
+			datalen --;				// Exclude CR
+		}
+
+		Poll[4] = datalen - 1;
+		memcpy(&Poll[5], buffptr+2, datalen);
 		
 		ReleaseBuffer(buffptr);
 		
 		CRCStuffAndSend(TNC, Poll, datalen + 5);
 
+		TNC->InternalCmd = TNC->Connected;
+
 		return;
 	}
 
+	// Need to poll data and control channel (for responses to commands)
 
-	Poll[0] = 170;
-	Poll[1] = 170;
-	Poll[2] = 255;			// Channel
-	Poll[3] = 1;			// Command
+	// Also check status if we have data buffered (for flow control)
+
+	if (TNC->TNCOK)
+	{
+		if (TNC->IntCmdDelay == 1)
+		{
+			Poll[2] = 31; // Channel
+			Poll[3] = 0x1;			// Command
+			Poll[4] = 0;			// Len-1
+			Poll[5] = 'L';			// Status
+
+			CRCStuffAndSend(TNC, Poll, 6);
+
+			TNC->InternalCmd = TRUE;
+			TNC->IntCmdDelay = 0;
+			return;
+		}
+		if (TNC->IntCmdDelay <=0)
+		{
+			Poll[2] = 31; // Channel
+			Poll[3] = 0x1;			// Command
+			Poll[4] = 1;			// Len-1
+			Poll[5] = '@';			// Buffer Status
+			Poll[6] = 'B';
+
+			CRCStuffAndSend(TNC, Poll, 7);
+
+			TNC->InternalCmd = TRUE;
+			TNC->IntCmdDelay = 20;	// Every 2 secs
+
+			return;
+		}
+		else
+			TNC->IntCmdDelay--;
+	}
+
+	Poll[2] = TNC->NextToPoll ; // Channel
+	TNC->NextToPoll = 255;
+
+	Poll[3] = 0x1;			// Command
+
+	if (TNC->ReinitState == 3)
+	{
+		TNC->ReinitState = 0;
+		Poll[3] = 0x41;
+	}
+
 	Poll[4] = 0;			// Len-1
 	Poll[5] = 'G';			// Poll
 
 	CRCStuffAndSend(TNC, Poll, 6);
+	TNC->InternalCmd = FALSE;
+
+	return;
+
+}
+
+VOID DoTNCReinit(struct TNCINFO * TNC)
+{
+	UCHAR * Poll = TNC->TXBuffer;
+
+	if (TNC->ReinitState == 0)
+	{
+		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
+
+		Poll[0] = 13;
+		TNC->TXLen = 1;
+
+		WriteCommBlock(TNC);
+
+		TNC->Retries = 2;
+	}
+
+	if (TNC->ReinitState == 1)		// Forcing back to Term
+		TNC->ReinitState = 0;
+
+	if (TNC->ReinitState == 2)		// In Term State, Sending Initialisation Commands
+	{
+		char * start, * end;
+		int len;
+
+		start = TNC->InitPtr;
+		
+		if (*(start) == 0)			// End of Script
+		{
+			// Put into Host Mode
+
+			TNC->TXBuffer[2] = 0;
+			TNC->Toggle = 0;
+
+			memcpy(Poll, "JHOST4\r", 7);
+
+			TNC->TXLen = 7;
+			WriteCommBlock(TNC);
+
+			// Timeout will enter host mode
+
+			TNC->Toggle = 0;
+			TNC->ReinitState = 3;	// Set toggle force bit
+
+			return;
+		}
+		
+		end = strchr(start, 13);
+		len = ++end - start;
+		TNC->InitPtr = end;
+		memcpy(Poll, start, len);
+
+		TNC->TXLen = len;
+		WriteCommBlock(TNC);
+
+		TNC->Retries = 2;
+	}
+}
+
+VOID DoTermModeTimeout(struct TNCINFO * TNC)
+{
+	UCHAR * Poll = TNC->TXBuffer;
+
+	if (TNC->ReinitState == 0)
+	{
+		//Checking if in Terminal Mode - Try to set back to Term Mode
+
+		TNC->ReinitState = 1;
+		ExitHost(TNC);
+		TNC->Retries = 1;
+
+		return;
+	}
+	if (TNC->ReinitState == 1)
+	{
+		// Forcing back to Term Mode
+
+		TNC->ReinitState = 0;
+		DoTNCReinit(TNC);				// See if worked
+		return;
+	}
+
+	if (TNC->ReinitState == 3)
+	{
+		// Entering Host Mode
+	
+		// Assume ok
+
+		TNC->HostMode = TRUE;
+		TNC->NextToPoll = 255;
+		return;
+	}
+}
+
+	
+
+
+
+VOID ExitHost(struct TNCINFO * TNC)
+{
+	UCHAR * Poll = TNC->TXBuffer;
+
+	// Try to exit Host Mode
+
+	TNC->TXBuffer[2] = 31;
+	TNC->TXBuffer[3] = 0x41;
+	TNC->TXBuffer[4] = 0x5;
+	memcpy(&TNC->TXBuffer[5], "JHOST0", 6);
+
+	CRCStuffAndSend(TNC, Poll, 11);
 
 	return;
 }
@@ -565,6 +863,8 @@ crcloop:
 VOID CRCStuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
 	unsigned short int crc;
+	UCHAR StuffedMsg[500];
+	int i, j;
 
     Msg[3] |= TNC->Toggle;
 	TNC->Toggle ^= 0x80;
@@ -575,12 +875,29 @@ VOID CRCStuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	Msg[Len++] = (crc&0xff);
 	Msg[Len++] = (crc>>8);
 
+	for (i = j = 2; i < Len; i++)
+	{
+		StuffedMsg[j++] = Msg[i];
+		if (Msg[i] == 170)
+		{
+			StuffedMsg[j++] = 0;
+		}
+	}
+
+	if (j != i)
+	{
+		Len = j;
+		memcpy(Msg, StuffedMsg, j);
+	}
+
 	TNC->TXLen = Len;
+
+	Msg[0] = 170;
+	Msg[1] = 170;
 
 	WriteCommBlock(TNC);
 
 	TNC->Retries = 5;
-
 }
 
 int Unstuff(UCHAR * Msg, int len)
@@ -591,14 +908,42 @@ int Unstuff(UCHAR * Msg, int len)
 	{
 		Msg[j] = Msg[i];
 		if (Msg[i] == 170)			// Remove next byte
+		{
 			i++;
+			if (Msg[i] != 0)
+				return -1;
+		}
 	}
 
 	return j;
 }
 
-VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int len)
+VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 {
+	UCHAR * Poll = TNC->TXBuffer;
+
+	if (TNC->ReinitState == 0)
+	{
+		// Testing if in Term Mode. It is, so can now send Init Commands
+
+		TNC->InitPtr = TNC->InitScript;
+		TNC->ReinitState = 2;
+		return;
+	}
+	if (TNC->ReinitState == 2)
+	{
+		// Sending Init Commands
+
+		DoTNCReinit(TNC);		// Send Next Command
+		return;
+	}
+}
+
+VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
+{
+	UINT * buffptr;
+	char * Buffer;				// Data portion of frame
+
 	// Any valid frame is an ACK
 
 	TNC->Timeout = 0;
@@ -606,31 +951,337 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int len)
 
 	//	See if Poll Reply or Data
 	
-	if (Msg[3] == 1)
+	if (Msg[3] == 0)
 	{
-		// Poll Response
+		// Success - Nothing Follows
+
+		if ((TNC->TXBuffer[3] & 1) == 0)	// Data
+			return;
+
+		// If the response to a Command, then we should convert to a text "Ok" for forward scripts, etc
+
+		if (TNC->TXBuffer[5] == 'G')	// Poll
+			return;
+
+		if (TNC->TXBuffer[5] == 'C')	// Connect - reply we need is async
+			return;
+
+		if (TNC->TXBuffer[5] == 'L')	// Shouldnt happen!
+			return;
+
+		buffptr = Q_REM(&FREE_Q);
+
+		if (buffptr == NULL) return;			// No buffers, so ignore
+
+		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"Pactor} Ok\r");
+
+		Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
 
 		return;
 	}
 
-	if (Msg[3] == 0)
+	if (Msg[3] > 0 && Msg[3] < 6)
 	{
-		// Data
+		// Success with message - null terminated
 
-		UINT * buffptr;
+		UCHAR * ptr;
+		int len;
+
+		if (Msg[2] == 0xff)				// General Poll Response
+		{
+			TNC->NextToPoll = Msg[4] - 1;
+			return;
+		}
+
+		Buffer = &Msg[4];
+		
+		ptr = strchr(Buffer, 0);
+
+		if (ptr == 0)
+			return;
+
+		*(ptr++) = 13;
+		*(ptr) = 0;
+
+		len = ptr - Buffer;
+
+		if (len > 256)
+			return;
+
+		// See if we need to process locally (Response to our command, Incoming Call, Disconencted, etc
+
+		if (Msg[3] < 3)						// 1 or 2 - Success or Fail
+		{
+
+			if (Msg[2] == 0xff)				// General Poll Response
+			{
+				TNC->NextToPoll = Msg[4] - 1;
+				return;
+			}
+
+			// See if a response to internal command
+
+			if (TNC->InternalCmd)
+			{
+				// Process it
+
+				char LastCmd = TNC->TXBuffer[5];
+
+				if (LastCmd == 'L')		// Status
+				{
+					int s1, s2, s3, s4, s5, s6, num;
+
+					num = sscanf(Buffer, "%d %d %d %d %d %d", &s1, &s2, &s3, &s4, &s5, &s6);
+			
+					TNC->FramesOutstanding = s3;
+					return;
+				}
+				return;
+			}
+		}
+
+		if (Msg[3] == 3)					// Status
+		{			
+			if (strstr(Buffer, "DISCONNECTED"))
+			{
+				// Release Session
+
+				TNC->Connected = FALSE;		// Back to Command Mode
+				TNC->ReportDISC = TRUE;		// Tell Node
+
+				return;
+			}
+
+			if (strstr(Buffer, "CONNECTED"))
+//			if (strstr(&Msg[4], "CONNECT REQUEST"))
+			{
+				if (TNC->PortRecord->ATTACHEDSESSION == 0)
+				{
+					// Incomming Connect
+
+					struct TRANSPORTENTRY * Session;
+					int Index = 0;
+
+					Session=L4TABLE;
+
+					// Find a free Circuit Entry
+
+					while (Index < MAXCIRCUITS)
+					{
+						if (Session->L4USER[0] == 0)
+							break;
+
+						Session++;
+						Index++;
+					}
+
+					if (Index == MAXCIRCUITS)
+						return;					// Tables Full
+
+
+					ConvToAX25(&Buffer[18], Session->L4USER);
+					ConvToAX25(GetNodeCall(), Session->L4MYCALL);
+	
+					Session->CIRCUITINDEX = Index;
+					Session->CIRCUITID = NEXTID;
+					NEXTID++;
+					if (NEXTID == 0) NEXTID++;		// Keep non-zero
+
+					TNC->PortRecord->ATTACHEDSESSION = Session;
+
+					Session->L4TARGET = TNC->PortRecord;
+					Session->L4CIRCUITTYPE = UPLINK+PACTOR;
+					Session->L4WINDOW = L4DEFAULTWINDOW;
+					Session->L4STATE = 5;
+					Session->SESSIONT1 = L4T1;
+
+					TNC->Connected = TRUE;			// Subsequent data to data channel
+
+					// If an autoconnect APPL is defined, send it
+
+					if (TNC->ApplCmd)
+					{
+						buffptr = Q_REM(&FREE_Q);
+						if (buffptr == 0) return;			// No buffers, so ignore
+
+						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
+						Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
+					}
+					return;
+				}
+				else
+				{
+
+					// Connect Complete
+			
+					buffptr = Q_REM(&FREE_Q);
+					if (buffptr == 0) return;			// No buffers, so ignore
+
+					buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Connected to %s", &Buffer[18]);;
+
+					Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
+	
+					TNC->Connected = TRUE;			// Subsequent data to data channel
+
+					return;
+				}
+			}
+			return;
+
+		}
+
+		// 1, 2, 4, 5 - pass to Appl
+
+		buffptr = Q_REM(&FREE_Q);
+
+		if (buffptr == NULL) return;			// No buffers, so ignore
+
+		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"Pactor} %s", &Msg[4]);
+
+		Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
+
+		return;
+	}
+
+	if (Msg[3] == 7)
+	{
+		if (Msg[2] == 0xfe)						// Status Poll Response
+			return;
+		
+		// COnnected Data
 		
 		buffptr = Q_REM(&FREE_Q);
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 			
 		buffptr[1] = Msg[4] + 1;
-		memcpy(buffptr[1], &Msg[5], buffptr[1]);
+		memcpy(&buffptr[2], &Msg[5], buffptr[1]);
 		Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
 
 		return;
 	}
-
 }
 
+FILE *file;
+
+
+BOOL ReadConfigFile(char * fn)
+{
+	char buf[256],errbuf[256];
+
+	UCHAR Value[100];
+	UCHAR * BPQDirectory;
+
+	BPQDirectory=GetBPQDirectory();
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(Value,fn);
+	}
+	else
+	{
+		strcpy(Value,BPQDirectory);
+		strcat(Value,"\\");
+		strcat(Value,fn);
+	}
+		
+	if ((file = fopen(Value,"r")) == NULL)
+	{
+		wsprintf(buf,"BPQtoPACTOR - Config file %s not found ",Value);
+		WritetoConsole(buf);
+		return (TRUE);			// Dont need it at the moment
+	}
+
+	while(fgets(buf, 255, file) != NULL)
+	{
+		strcpy(errbuf,buf);			// save in case of error
+	
+		if (!ProcessLine(buf))
+		{
+			WritetoConsole("BPQtoPACTOR - Bad config record ");
+			WritetoConsole(errbuf);
+		}			
+	}
+
+	fclose(file);
+	return (TRUE);
+}
+GetLine(char * buf)
+{
+loop:
+	if (fgets(buf, 255, file) == NULL)
+		return 0;
+
+	if (buf[0] < 0x20) goto loop;
+	if (buf[0] == '#') goto loop;
+	if (buf[0] == ';') goto loop;
+
+	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
+	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
+	buf[strlen(buf)] = 13;
+
+	return 1;
+}
+
+ProcessLine(char * buf)
+{
+	char * ptr,* p_cmd;
+	int BPQport;
+	int len=510;
+	struct TNCINFO * TNC;
+
+	ptr = strtok(buf, " \t\n\r");
+
+	if(ptr == NULL) return (TRUE);
+
+	if(*ptr =='#') return (TRUE);			// comment
+
+	if(*ptr ==';') return (TRUE);			// comment
+
+	ptr = strtok(NULL, " \t\n\r");
+
+	BPQport=0;
+
+	BPQport = atoi(ptr);
+
+
+	if(BPQport > 0 && BPQport <17)
+	{
+		TNC = &TNCInfo[BPQport];
+
+		p_cmd = strtok(NULL, " \t\n\r");
+			
+		if (p_cmd != NULL)
+		{
+			TNC->ApplCmd=_strdup(p_cmd);
+		}
+
+		// Read Initialisation lines
+
+		TNC->InitScript = malloc(1000);
+
+		TNC->InitScript[0] = 0;
+
+		while(TRUE)
+		{
+			if (GetLine(buf) == 0)
+				return TRUE;
+
+			if (memcmp(buf, "****", 4) == 0)
+				return TRUE;
+
+			ptr = strchr(buf, ';');
+			if (ptr)
+			{
+				*ptr++ = 13;
+				*ptr = 0;
+			}
+			strcat (TNC->InitScript, buf);
+		}
+	}
+
+	return (FALSE);
+	
+}
 
 

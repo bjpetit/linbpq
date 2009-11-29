@@ -114,11 +114,11 @@ VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...)
 {
 	// seems to be printf to a socket
 
-	char buff[300];
+	char buff[600];
 	va_list(arglist);
 	
 	va_start(arglist, format);
-	vsprintf_s(buff, 300, format, arglist);
+	vsprintf_s(buff, 600, format, arglist);
 
 	nputs(conn, buff);
 }
@@ -160,7 +160,7 @@ BOOL matchi(char * p1, char * p2)
 		return TRUE;
 }
 
-VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len)
+VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
 	ConnectionInfo *c;
 
@@ -237,6 +237,8 @@ VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer
 
 		Logprintf(LOG_CHAT, conn, '!', "Station %s trying to start Node Protocol, but not defined as a Node",
 			conn->Callsign);
+
+		knownnode_add(conn->Callsign);			// So it won't happen again
 
 		Disconnect(conn->BPQStream);
 		return;
@@ -1512,6 +1514,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 	nputs(conn, "OK\r");
 	conn->u.link = link;
 	link->flags = p_linked;
+	link->delay = 0;			// Dont delay first restart
 	state_tell(conn);
 
 	NeedStatus = TRUE;
@@ -1923,10 +1926,17 @@ void makelinks(void)
 		if (node_find(link->call)) continue;
 
 		// Fire up the process to handle this link.
+
+		if (link->delay == 0)
+		{
+			link->flags = p_linkini;
+			link->delay = 12;			// 2 mins
+			chat_link_out(link);
+			return;						// One at a time
+		}
+		else
+			link->delay--;
 		
-		link->flags = p_linkini;
-		chat_link_out(link);
-		return;						// One at a time
 	}
 }
 
@@ -2207,4 +2217,6 @@ VOID ClearChatLinkStatus()
 	}
 }
 
-
+/*
+Hi Alll.  Things are quite up here.  We had a nice day.  Overcast cool about +5 deg C.  cooling off a bit tonight to -2.  I had a nice chat with John G8BPQ this morning about the software etc.  Things lookign good, and he opes and thinks he's fixed the bugs in the CHAT so I guess we'll see.  bk to net kk
+*/

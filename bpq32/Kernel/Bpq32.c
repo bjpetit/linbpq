@@ -1937,7 +1937,7 @@ DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 			return (FALSE);
 		}
 
-		if (callsign[i] == 0 || callsign[i] == ' ')
+		if (callsign[i] == 0 || callsign[i] == 13 || callsign[i] == ' ')
 		{
 			//
 			//	End of call - no ssid

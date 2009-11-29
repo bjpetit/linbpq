@@ -132,11 +132,11 @@ VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...)
 {
 	// printf to a socket
 
-	char buff[300];
+	char buff[1000];
 	va_list(arglist);
 	
 	va_start(arglist, format);
-	vsprintf_s(buff, 300, format, arglist);
+	vsprintf_s(buff, 1000, format, arglist);
 
 	SendSock(sockptr, buff);
 }
