@@ -211,6 +211,15 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	{
 	case 1:				// poll
 
+		if (TNC->PortRecord->ATTACHEDSESSION == 0 && TNC->Connected)
+		{
+			// Node has disconnected - clear any connection
+
+			TNC->Connected = FALSE;
+			send(TNC->WINMORSock,"DISCONNECT\r", 11, 0);
+		}
+
+
 		if (TNC->ReportDISC)
 		{
 			TNC->ReportDISC = FALSE;
@@ -979,8 +988,7 @@ VOID ProcessResponse(TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (buffptr == 0) return;			// No buffers, so ignore
 
-	buffptr[1] = MsgLen;
-	memcpy(buffptr+2, Buffer, MsgLen);
+	buffptr[1] = wsprintf(buffptr+2,"Winmor} %s", Buffer);
 
 	Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 			
