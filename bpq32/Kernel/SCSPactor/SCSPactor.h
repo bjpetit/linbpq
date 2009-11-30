@@ -1,5 +1,8 @@
 
 #include <winioctl.h>
+#include "resource.h"
+#include "resrc1.h"
+
 
 #define MAXBLOCK 4096
 
@@ -18,8 +21,9 @@ struct TNCINFO
 
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 
-	BOOL Connected;				// When set, all data is passed as data instead of commands
-	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
+	BOOL Connected;					// When set, all data is passed as data instead of commands
+	BOOL Connecting;				// Set when Outward Connect in progress
+	BOOL ReportDISC;				// Need to report an incoming DISC to kernel
 
 	HANDLE hDevice;
 	BOOL HostMode;					// Set if in DED Host Mode
@@ -31,7 +35,15 @@ struct TNCINFO
 	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
 	int RXLen;						// Data in RXBUffer
 	UCHAR Toggle;					// Sequence bit
-	int NextToPoll;					// Last Channel Polled - 0 or 31
+	UCHAR PTCStatus0;				// Status Bytes
+	UCHAR PTCStatus1;				// Status Bytes
+	UCHAR PTCStatus2;				// Status Bytes
+	UCHAR PTCStatus3;				// Status Bytes
+	char RemoteCall[10];			// Callsign
+	int BytesTXed;
+	int BytesRXed;
+	HWND hDlg;						// Status Window Handle
+
 };
 
 struct TNCINFO  TNCInfo[16]={0};

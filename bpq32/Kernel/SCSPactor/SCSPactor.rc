@@ -1,13 +1,16 @@
 //Microsoft Developer Studio generated resource script.
 //
-#include "resource.h"
+#include "resrc1.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
+#include "resource.h"
+#define APSTUDIO_HIDDEN_SYMBOLS
 #include "windows.h"
+#undef APSTUDIO_HIDDEN_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -64,6 +67,43 @@ END
 #endif    // !_MAC
 
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+PACTORSTATUS DIALOG DISCARDABLE  0, 0, 214, 125
+STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Pactor Status"
+CLASS "PACTORSTATUS"
+FONT 8, "FixedSys"
+BEGIN
+    LTEXT           "",IDC_1,60,70,54,11
+    LTEXT           "",IDC_2,60,55,54,11
+    LTEXT           "",IDC_3,60,40,75,11
+    LTEXT           "0",IDC_4,60,85,54,11
+    LTEXT           "TX/RX State",IDC_STATIC,6,70,44,10
+    LTEXT           "Status",IDC_STATIC,5,55,30,10
+    LTEXT           "Mode",IDC_STATIC,5,40,30,10
+    LTEXT           "Buffers",IDC_STATIC,5,85,30,10
+    LTEXT           "",IDC_TNCSTATE,60,25,125,11
+    LTEXT           "TNC State",IDC_STATIC,5,25,40,10
+    LTEXT           "Comms State",IDC_STATIC,5,10,45,10
+    LTEXT           "",IDC_COMMSSTATE,60,10,145,11
+    LTEXT           "Traffic",IDC_STATIC,5,100,30,10
+    LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,60,100,140,11
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON2               ICON    DISCARDABLE     "icon2.ico"
+
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -72,12 +112,15 @@ END
 
 1 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "resource.h\0"
+    "resrc1.h\0"
 END
 
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "#include ""afxres.h""\r\n"
+    "#include ""resource.h""\r\n"
+    "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#include ""windows.h""\r\n"
+    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "\0"
 END
 

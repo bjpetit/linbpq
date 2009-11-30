@@ -58,6 +58,7 @@ int ProcessLine(char * buf);
 VOID ExitHost(struct TNCINFO * TNC);
 VOID DoTNCReinit(struct TNCINFO * TNC);
 VOID DoTermModeTimeout(struct TNCINFO * TNC);
+BOOL CreatePactorWindow();
 
 DllImport UCHAR NEXTID;
 DllImport struct TRANSPORTENTRY * L4TABLE;
@@ -73,6 +74,15 @@ DllImport WORD L4T1;
 static UINT FREE_Q=0;
 
 static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
+
+char status[8][8] = {"ERROR",  "REQUEST", "TRAFFIC", "IDLE", "OVER", "PHASE", "SYNCH", ""};
+
+char ModeText[8][14] = {"STANDBY", "AMTOR-ARQ",  "PACTOR-ARQ", "AMTOR-FEC", "PACTOR-FEC", "RTTY / CW", "LISTEN", "Channel-Busy"};
+
+BOOL MinimizetoTray = FALSE;
+
+HBRUSH bgBrush;
+
 
 // Get buffer from Queue
 
@@ -139,19 +149,22 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
+HANDLE hInstance;
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
 	int i;
-	
+
 	switch(ul_reason_being_called)
 	{
 	case DLL_PROCESS_ATTACH:
 
+		hInstance = hInst;
+	
 		// Read Config
 
 		GetAPI();					// Load BPQ32
-		ReadConfigFile("BPQtoPACTOR.CFG");
+		ReadConfigFile("SCSPACTOR.CFG");
 
 		// Build buffer pool
 
@@ -185,6 +198,9 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = &TNCInfo[port];
+
+	if (TNC->hDevice == (HANDLE) -1)
+		return 0;							// Port not open
 
 	switch (fn)
 	{
@@ -252,7 +268,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:				// CHECK IF OK TO SEND
 
-		if (TNC->FramesOutstanding > 4)
+		if (TNC->FramesOutstanding > 10)
 			return 1;
 		else
 			return 0;		// OK
@@ -290,14 +306,141 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->PortRecord = PortEntry;
 
+	MinimizetoTray = GetMinimizetoTrayFlag();
+
+	CreatePactorWindow(TNC);
 	
 //	PORTVECTOR(npTTYInfo) = PortVector; //	BX on entry to char handlers
 //	RXVECTOR(npTTYInfo) = RXVector; //	Routine to call for each char
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
+
 	return ((int)ExtProc);
 }
+
+static char ClassName[]="PACTORSTATUS";
+
+#define BGCOLOUR RGB(236,233,216)
+
+static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int wmId, wmEvent;
+	
+	switch (message) { 
+
+//		case WM_ACTIVATE:
+
+//			SetFocus(hwndInput);
+//			break;
+
+
+	case WM_COMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		switch (wmId) {
+
+
+		default:
+
+			return 0;
+
+		}
+
+	case WM_SYSCOMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		switch (wmId) { 
+
+		case  SC_MINIMIZE: 
+
+			if (MinimizetoTray)
+				return ShowWindow(hWnd, SW_HIDE);		
+		
+			default:
+		
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+		}
+
+		case WM_CTLCOLORDLG:
+			return (LONG)bgBrush;
+
+		 case WM_CTLCOLORSTATIC:
+		{
+			HDC hdcStatic = (HDC)wParam;
+			SetTextColor(hdcStatic, RGB(0, 0, 0));
+			SetBkMode(hdcStatic, TRANSPARENT);
+			return (LONG)bgBrush;
+		}
+
+		case WM_SIZING:
+			
+			return TRUE;
+
+
+		case WM_DESTROY:
+		
+			// Remove the subclass from the edit control. 
+
+
+			if (MinimizetoTray) 
+				DeleteTrayMenuItem(hWnd);
+
+			break;
+
+		default:
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+
+	}
+	return (0);
+}
+
+BOOL CreatePactorWindow(struct TNCINFO * TNC)
+{
+    WNDCLASS  wc;
+
+	if (TNC->hDlg)
+	{
+		ShowWindow(TNC->hDlg, SW_SHOWNORMAL);
+		SetForegroundWindow(TNC->hDlg);
+		return FALSE;							// Already open
+	}
+
+	bgBrush = CreateSolidBrush(BGCOLOUR);
+
+	wc.style = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
+    wc.lpfnWndProc = WndProc;       
+                                        
+    wc.cbClsExtra = 0;                
+    wc.cbWndExtra = DLGWINDOWEXTRA;
+	wc.hInstance = hInstance;
+    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(IDI_ICON2) );
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = bgBrush; 
+
+	wc.lpszMenuName = NULL;	
+	wc.lpszClassName = ClassName; 
+
+	RegisterClass(&wc);
+
+	TNC->hDlg = CreateDialog(hInstance,ClassName,0,NULL);
+	
+    if (!TNC->hDlg)
+        return (GetLastError());
+
+	if (MinimizetoTray)
+		AddTrayMenuItem(TNC->hDlg, "Pactor Status");
+
+	ShowWindow(TNC->hDlg, SW_SHOWNORMAL);
+
+	return TRUE;
+}
+
+
  
 VOID KISSCLOSE(int Port)
 { 
@@ -360,9 +503,10 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 				  
 	if (conn->hDevice == (HANDLE) -1)
 	{
-		wsprintf(buf,"COM%d Setup Failed %d ", Port, GetLastError());
+		wsprintf(buf,"COM%d Setup Failed - Error %d ", Port, GetLastError());
 		WritetoConsole(buf);
 		OutputDebugString(buf);
+		SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
 
 		return (FALSE);
 	}
@@ -417,7 +561,10 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 
 	EscapeCommFunction(conn->hDevice,SETDTR);
 	EscapeCommFunction(conn->hDevice,SETRTS);
-	
+
+	wsprintf(buf,"COM%d Open", Port);
+	SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
+
 	return TRUE;
 }
 void CheckRX(struct TNCINFO * TNC)
@@ -557,6 +704,23 @@ VOID DEDPoll(int Port)
 {
 	struct TNCINFO * TNC = &TNCInfo[Port];
 	UCHAR * Poll = TNC->TXBuffer;
+	char Status[80];
+
+	if (TNC->PortRecord->ATTACHEDSESSION)		// Connected to Node
+		if (TNC->Connected)
+			if (TNC->PortRecord->ATTACHEDSESSION->L4CIRCUITTYPE & UPLINK)
+				wsprintf(Status, "Connected to %s Inbound", TNC->RemoteCall);
+			else
+				wsprintf(Status, "Connected to %s Outbound", TNC->RemoteCall);
+		else
+			if (TNC->Connecting)
+				wsprintf(Status, "Connecting to %s", TNC->RemoteCall);
+			else
+				wsprintf(Status, "In Use");
+	else
+		wsprintf(Status, "Free");
+
+	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 	if (TNC->Timeout)
 	{
@@ -585,6 +749,10 @@ VOID DEDPoll(int Port)
 
 		Debugprintf("PACTOR - Link to TNC Lost");
 		TNC->TNCOK = FALSE;
+
+		wsprintf(Status,"COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
+
 		TNC->HostMode = 0;
 		TNC->ReinitState = 0;
 		
@@ -600,6 +768,7 @@ VOID DEDPoll(int Port)
 	{
 		// Node has disconnected - clear any connection
 			
+		UINT * buffptr;
 		UCHAR * Poll = TNC->TXBuffer;
 
 		TNC->Connected = FALSE;
@@ -610,10 +779,20 @@ VOID DEDPoll(int Port)
 		TNC->TXBuffer[5] = 'D';
 
 		CRCStuffAndSend(TNC, TNC->TXBuffer, 6);
+
+		while(TNC->BPQtoPACTOR_Q)
+		{
+			buffptr=Q_REM(&TNC->BPQtoPACTOR_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+		while(TNC->PACTORtoBPQ_Q)
+		{
+			buffptr=Q_REM(&TNC->PACTORtoBPQ_Q);
+			ReleaseBuffer(buffptr);
+		}
 		return;
 	}
-
-
 
 	// if we have just restarted or TNC appears to be in terminal mode, run Initialisation Sequence
 
@@ -639,11 +818,26 @@ VOID DEDPoll(int Port)
 		if (TNC->Connected)
 		{
 			Poll[3] = 0;			// Data?
+			TNC->BytesTXed += datalen;
 		}
 		else
 		{
+			// Command. DO some sanity checking and look for things to process locally
+
+			char * Buffer = (char *)&buffptr[2];	// Data portion of frame
+
 			Poll[3] = 1;			// Command
-			datalen --;				// Exclude CR
+			datalen--;				// Exclude CR
+			Buffer[datalen] = 0;	// Null Terminate
+			_strupr(Buffer);
+
+
+			if (Buffer[0] == 'C' && datalen > 2)	// Connect
+			{
+				if (*(++Buffer) == ' ') Buffer++;		// Space isn't needed
+				memcpy(TNC->RemoteCall, Buffer, 9);
+				TNC->Connecting = TRUE;
+			}
 		}
 
 		Poll[4] = datalen - 1;
@@ -658,13 +852,27 @@ VOID DEDPoll(int Port)
 		return;
 	}
 
-	// Need to poll data and control channel (for responses to commands)
-
-	// Also check status if we have data buffered (for flow control)
+	// Check status if we have data buffered (for flow control)
 
 	if (TNC->TNCOK)
 	{
-		if (TNC->IntCmdDelay == 1)
+		if (TNC->IntCmdDelay == 4)
+		{
+			Poll[2] = 31; // Channel
+			Poll[3] = 0x1;			// Command
+			Poll[4] = 1;			// Len-1
+			Poll[5] = '%';			// Bytes acked Status
+			Poll[6] = 'T';
+
+			CRCStuffAndSend(TNC, Poll, 7);
+
+			TNC->InternalCmd = TRUE;
+			TNC->IntCmdDelay--;
+
+			return;
+		}
+
+		if (TNC->IntCmdDelay == 2)
 		{
 			Poll[2] = 31; // Channel
 			Poll[3] = 0x1;			// Command
@@ -674,9 +882,10 @@ VOID DEDPoll(int Port)
 			CRCStuffAndSend(TNC, Poll, 6);
 
 			TNC->InternalCmd = TRUE;
-			TNC->IntCmdDelay = 0;
+			TNC->IntCmdDelay--;
 			return;
 		}
+
 		if (TNC->IntCmdDelay <=0)
 		{
 			Poll[2] = 31; // Channel
@@ -696,9 +905,9 @@ VOID DEDPoll(int Port)
 			TNC->IntCmdDelay--;
 	}
 
-	Poll[2] = TNC->NextToPoll ; // Channel
-	TNC->NextToPoll = 255;
+	// Use General Poll (255)
 
+	Poll[2] = 255 ; // Channel
 	Poll[3] = 0x1;			// Command
 
 	if (TNC->ReinitState == 3)
@@ -725,12 +934,17 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 	{
 		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
 
+		char Status[80];
+		
+		TNC->TNCOK = FALSE;
+		wsprintf(Status,"COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
+		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
+
 		Poll[0] = 13;
 		TNC->TXLen = 1;
 
 		WriteCommBlock(TNC);
-
-		TNC->Retries = 2;
+		TNC->Retries = 1;
 	}
 
 	if (TNC->ReinitState == 1)		// Forcing back to Term
@@ -757,6 +971,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 
 			// Timeout will enter host mode
 
+			TNC->Retries = 1;
 			TNC->Toggle = 0;
 			TNC->ReinitState = 3;	// Set toggle force bit
 
@@ -805,7 +1020,8 @@ VOID DoTermModeTimeout(struct TNCINFO * TNC)
 		// Assume ok
 
 		TNC->HostMode = TRUE;
-		TNC->NextToPoll = 255;
+		TNC->IntCmdDelay = 10;
+
 		return;
 	}
 }
@@ -928,6 +1144,14 @@ VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 
 		TNC->InitPtr = TNC->InitScript;
 		TNC->ReinitState = 2;
+
+		// Send Restart to make sure PTC is in a known state
+
+		strcpy(Poll, "RESTART\r");
+
+		TNC->TXLen = 8;
+		WriteCommBlock(TNC);
+
 		return;
 	}
 	if (TNC->ReinitState == 2)
@@ -947,7 +1171,16 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	// Any valid frame is an ACK
 
 	TNC->Timeout = 0;
-	TNC->TNCOK = TRUE;
+
+	if (TNC->TNCOK == FALSE)
+	{
+		// Just come up
+		char Status[80];
+		
+		TNC->TNCOK = TRUE;
+		wsprintf(Status,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
+	}
 
 	//	See if Poll Reply or Data
 	
@@ -987,9 +1220,34 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		UCHAR * ptr;
 		int len;
 
-		if (Msg[2] == 0xff)				// General Poll Response
+		if (Msg[2] == 0xff)			// General Poll Response
 		{
-			TNC->NextToPoll = Msg[4] - 1;
+			UCHAR * Poll = TNC->TXBuffer;
+			UCHAR Chan = Msg[4] - 1;
+
+			if (Chan == 255)
+				return;				// Nothing doing
+
+			// Poll the channel that had data
+
+			Poll[2] = Chan;			// Channel
+			Poll[3] = 0x1;			// Command
+
+			if (Chan == 254)		// Status - Send Extended Status (G3)
+			{
+				Poll[4] = 1;			// Len-1
+				Poll[5] = 'G';			// Extended Status Poll
+				Poll[6] = '3';
+			}
+			else
+			{
+				Poll[4] = 0;			// Len-1
+				Poll[5] = 'G';			// Poll
+			}
+
+			CRCStuffAndSend(TNC, Poll, Poll[4] + 6);
+			TNC->InternalCmd = FALSE;
+
 			return;
 		}
 
@@ -1012,13 +1270,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (Msg[3] < 3)						// 1 or 2 - Success or Fail
 		{
-
-			if (Msg[2] == 0xff)				// General Poll Response
-			{
-				TNC->NextToPoll = Msg[4] - 1;
-				return;
-			}
-
 			// See if a response to internal command
 
 			if (TNC->InternalCmd)
@@ -1036,6 +1287,29 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					TNC->FramesOutstanding = s3;
 					return;
 				}
+
+				if (LastCmd == '@')		// @ Commands
+				{
+					if (TNC->TXBuffer[6]== 'B')	// Buffer Status
+					{
+						SetDlgItemText(TNC->hDlg, IDC_4, Buffer);
+						return;
+					}
+				}
+
+				if (LastCmd == '%')		// % Commands
+				{
+					char Status[80];
+					
+					if (TNC->TXBuffer[6]== 'T')	// TX count Status
+					{
+						wsprintf(Status, "RX %d TX %d ACKED %s", TNC->BytesRXed, TNC->BytesTXed, Buffer);
+						SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
+						return;
+					}
+				}
+
+
 				return;
 			}
 		}
@@ -1053,8 +1327,12 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			}
 
 			if (strstr(Buffer, "CONNECTED"))
-//			if (strstr(&Msg[4], "CONNECT REQUEST"))
 			{
+				TNC->Connected = TRUE;			// Subsequent data to data channel
+				TNC->Connecting = FALSE;
+
+				TNC->BytesRXed = TNC->BytesTXed = 0;
+
 				if (TNC->PortRecord->ATTACHEDSESSION == 0)
 				{
 					// Incomming Connect
@@ -1078,6 +1356,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					if (Index == MAXCIRCUITS)
 						return;					// Tables Full
 
+					Buffer[len-1] = 0;
+
+					memcpy(TNC->RemoteCall, &Buffer[18], 9);	// Save Text Callsign 
 
 					ConvToAX25(&Buffer[18], Session->L4USER);
 					ConvToAX25(GetNodeCall(), Session->L4MYCALL);
@@ -1094,8 +1375,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					Session->L4WINDOW = L4DEFAULTWINDOW;
 					Session->L4STATE = 5;
 					Session->SESSIONT1 = L4T1;
-
-					TNC->Connected = TRUE;			// Subsequent data to data channel
+					Session->SESSPACLEN = 100;
 
 					// If an autoconnect APPL is defined, send it
 
@@ -1111,7 +1391,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				}
 				else
 				{
-
 					// Connect Complete
 			
 					buffptr = Q_REM(&FREE_Q);
@@ -1121,8 +1400,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 					Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
 	
-					TNC->Connected = TRUE;			// Subsequent data to data channel
-
 					return;
 				}
 			}
@@ -1145,16 +1422,45 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 	if (Msg[3] == 7)
 	{
-		if (Msg[2] == 0xfe)						// Status Poll Response
-			return;
+		char StatusMsg[60];
+		int Status, Mode, ISS;
 		
-		// COnnected Data
+		if (Msg[2] == 0xfe)						// Status Poll Response
+		{
+			Status = Msg[5];
+			
+			TNC->PTCStatus0 = Status;
+			TNC->PTCStatus1 = Msg[6];
+			TNC->PTCStatus2 = Msg[7];
+			TNC->PTCStatus3 = Msg[8];
+
+			Mode = (Status >> 4) & 7;
+			ISS = Status & 8;
+			Status &= 7;
+
+			wsprintf(StatusMsg, "%x %x %x %x", TNC->PTCStatus0,
+				TNC->PTCStatus1, TNC->PTCStatus2, TNC->PTCStatus3);
+			
+			if (ISS)
+				SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
+			else
+				SetDlgItemText(TNC->hDlg, IDC_1, "Receive");
+
+			SetDlgItemText(TNC->hDlg, IDC_2, status[Status]);
+			SetDlgItemText(TNC->hDlg, IDC_3, ModeText[Mode]);
+
+
+			return;
+		}
+		
+		// Connected Data
 		
 		buffptr = Q_REM(&FREE_Q);
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 			
-		buffptr[1] = Msg[4] + 1;
+		buffptr[1] = Msg[4] + 1;				// Length
+		TNC->BytesRXed += buffptr[1];
 		memcpy(&buffptr[2], &Msg[5], buffptr[1]);
 		Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
 
