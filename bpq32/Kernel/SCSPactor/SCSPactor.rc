@@ -31,8 +31,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,1,1
- PRODUCTVERSION 1,1,1,1
+ FILEVERSION 1,1,1,3
+ PRODUCTVERSION 1,1,1,3
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -50,12 +50,12 @@ BEGIN
             VALUE "Comments", "SCS Pactor interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "SCSPactor\0"
-            VALUE "FileVersion", "1, 1, 1, 1\0"
+            VALUE "FileVersion", "1, 1, 1, 3\0"
             VALUE "InternalName", "SCSPactor\0"
             VALUE "LegalCopyright", "Copyright © 2009 G8BPQ\0"
             VALUE "OriginalFilename", "SCSPactor.dll\0"
             VALUE "ProductName", "  SCSPactor\0"
-            VALUE "ProductVersion", "1, 1, 1, 1\0"
+            VALUE "ProductVersion", "1, 1, 1, 3\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -72,7 +72,7 @@ END
 // Dialog
 //
 
-PACTORSTATUS DIALOG DISCARDABLE  0, 0, 214, 125
+PACTORSTATUS DIALOG DISCARDABLE  0, 0, 229, 134
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Pactor Status"
 CLASS "PACTORSTATUS"
@@ -92,6 +92,7 @@ BEGIN
     LTEXT           "",IDC_COMMSSTATE,60,10,145,11
     LTEXT           "Traffic",IDC_STATIC,5,100,30,10
     LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,60,100,140,11
+    LTEXT           "",IDC_PACTORLEVEL,5,115,220,11
 END
 
 

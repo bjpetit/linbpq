@@ -30,12 +30,7 @@
 
 DllImport UINT CRCTAB;
 
-#define	FEND	0xC0	// KISS CONTROL CODES 
-#define	FESC	0xDB
-#define	TFEND	0xDC
-#define	TFESC	0xDD
-
-BOOL Win98 = FALSE;
+RECT Rect;
 
 HANDLE STDOUT=0;
 
@@ -78,6 +73,8 @@ static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
 char status[8][8] = {"ERROR",  "REQUEST", "TRAFFIC", "IDLE", "OVER", "PHASE", "SYNCH", ""};
 
 char ModeText[8][14] = {"STANDBY", "AMTOR-ARQ",  "PACTOR-ARQ", "AMTOR-FEC", "PACTOR-FEC", "RTTY / CW", "LISTEN", "Channel-Busy"};
+
+char PactorLevelText[4][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR-III"};
 
 BOOL MinimizetoTray = FALSE;
 
@@ -154,6 +151,11 @@ HANDLE hInstance;
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
 	int i;
+	int retCode, disp;
+	HKEY hKey=0;
+	char Size[80];
+	char Key[80];
+	struct TNCINFO * TNC;
 
 	switch(ul_reason_being_called)
 	{
@@ -187,7 +189,32 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
     
 	case DLL_PROCESS_DETACH:
 	
-		return 1;
+		for (i=1; i<17; i++)
+		{
+			TNC = &TNCInfo[i];
+			if (TNC->hDlg == NULL)
+				continue;
+
+			ShowWindow(TNC->hDlg, SW_RESTORE);
+			GetWindowRect(TNC->hDlg, &Rect);
+
+			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", i);
+	
+			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+			if (retCode == ERROR_SUCCESS)
+			{
+				wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+				RegCloseKey(hKey);
+			}
+		}
+ 		return 1;
 	}
  
 	return 1;
@@ -310,9 +337,6 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	CreatePactorWindow(TNC);
 	
-//	PORTVECTOR(npTTYInfo) = PortVector; //	BX on entry to char handlers
-//	RXVECTOR(npTTYInfo) = RXVector; //	Routine to call for each char
-
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
 
@@ -402,6 +426,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 BOOL CreatePactorWindow(struct TNCINFO * TNC)
 {
     WNDCLASS  wc;
+	char Title[80];
+	int retCode, Type, Vallen;
+	HKEY hKey=0;
+	char Key[80];
+	char Size[80];
 
 	if (TNC->hDlg)
 	{
@@ -429,11 +458,35 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 
 	TNC->hDlg = CreateDialog(hInstance,ClassName,0,NULL);
 	
-    if (!TNC->hDlg)
-        return (GetLastError());
+	wsprintf(Title,"Pactor Status - COM%d", TNC->PortRecord->PORTCONTROL.IOBASE);
+
+	SetWindowText(TNC->hDlg, Title);
 
 	if (MinimizetoTray)
-		AddTrayMenuItem(TNC->hDlg, "Pactor Status");
+		AddTrayMenuItem(TNC->hDlg, Title);
+
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+	
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"Size",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+	}
+
+	if (Rect.right < 100 || Rect.bottom < 100)
+	{
+		GetWindowRect(TNC->hDlg, &Rect);
+	}
+
+	MoveWindow(TNC->hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
 
 	ShowWindow(TNC->hDlg, SW_SHOWNORMAL);
 
@@ -441,7 +494,6 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 }
 
 
- 
 VOID KISSCLOSE(int Port)
 { 
 	DestroyTTYInfo(Port);
@@ -822,7 +874,7 @@ VOID DEDPoll(int Port)
 		}
 		else
 		{
-			// Command. DO some sanity checking and look for things to process locally
+			// Command. Do some sanity checking and look for things to process locally
 
 			char * Buffer = (char *)&buffptr[2];	// Data portion of frame
 
@@ -852,10 +904,26 @@ VOID DEDPoll(int Port)
 		return;
 	}
 
-	// Check status if we have data buffered (for flow control)
-
+	// Check status Periodically
+		
 	if (TNC->TNCOK)
 	{
+		if (TNC->IntCmdDelay == 6)
+		{
+			Poll[2] = 254;			 // Channel
+			Poll[3] = 0x1;			// Command
+			Poll[4] = 1;			// Len-1
+			Poll[5] = 'G';			// Extended Status Poll
+			Poll[6] = '3';
+
+			CRCStuffAndSend(TNC, Poll, 7);
+						
+			TNC->InternalCmd = TRUE;
+			TNC->IntCmdDelay--;
+
+			return;
+		}
+
 		if (TNC->IntCmdDelay == 4)
 		{
 			Poll[2] = 31; // Channel
@@ -1423,16 +1491,21 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	if (Msg[3] == 7)
 	{
 		char StatusMsg[60];
-		int Status, Mode, ISS;
+		int Status, Mode, ISS, Offset;
 		
 		if (Msg[2] == 0xfe)						// Status Poll Response
 		{
 			Status = Msg[5];
 			
 			TNC->PTCStatus0 = Status;
-			TNC->PTCStatus1 = Msg[6];
-			TNC->PTCStatus2 = Msg[7];
-			TNC->PTCStatus3 = Msg[8];
+			TNC->PTCStatus1 = Msg[6] & 3;		// Pactor Level 1-3
+			TNC->PTCStatus2 = Msg[7];			// Speed Level
+			Offset = Msg[8];
+
+			if (Offset > 128)
+				Offset -= 128;
+
+			TNC->PTCStatus3 = Offset; 
 
 			Mode = (Status >> 4) & 7;
 			ISS = Status & 8;
@@ -1444,11 +1517,19 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			if (ISS)
 				SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
 			else
-				SetDlgItemText(TNC->hDlg, IDC_1, "Receive");
+				SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
 
 			SetDlgItemText(TNC->hDlg, IDC_2, status[Status]);
 			SetDlgItemText(TNC->hDlg, IDC_3, ModeText[Mode]);
 
+			if (Offset == 128)		// Undefined
+				wsprintf(StatusMsg, "Mode %s Speed Level %d Freq Offset Unknown",
+					PactorLevelText[TNC->PTCStatus1], Msg[7]);
+			else
+				wsprintf(StatusMsg, "Mode %s Speed Level %d Freq Offset %d",
+					PactorLevelText[TNC->PTCStatus1], Msg[7], Offset);
+
+			SetDlgItemText(TNC->hDlg, IDC_PACTORLEVEL, StatusMsg);
 
 			return;
 		}
