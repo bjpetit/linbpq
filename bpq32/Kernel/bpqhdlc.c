@@ -25,7 +25,9 @@ _CRT_OBSOLETE(GetVersionEx) errno_t __cdecl _get_winminor(__out unsigned int * _
 #define IOCTL_BPQHDLC_TIMER			CTL_CODE(FILE_DEVICE_BPQHDLC,0x802,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQHDLC_ADDCHANNEL	CTL_CODE(FILE_DEVICE_BPQHDLC,0x803,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_BPQHDLC_CHECKTX		CTL_CODE(FILE_DEVICE_BPQHDLC,0x804,METHOD_BUFFERED,FILE_ANY_ACCESS)
-//#define IOCTL_BPQHDLC_INIT			CTL_CODE(FILE_DEVICE_BPQHDLC,0x805,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_BPQHDLC_IOREAD		CTL_CODE(FILE_DEVICE_BPQHDLC,0x805,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_BPQHDLC_IOWRITE		CTL_CODE(FILE_DEVICE_BPQHDLC,0x806,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
@@ -50,7 +52,10 @@ typedef struct _BPQHDLC_ADDCHANNEL_INPUT {
 	int RXBRG;
 
 	UCHAR WR10;				// NRZ/NRZI FLAG
-    
+ 
+	USHORT TXDELAY;			//TX KEYUP DELAY TIMER
+	UCHAR PERSISTANCE;
+
 }  BPQHDLC_ADDCHANNEL_INPUT, *PBPQHDLC_ADDCHANNEL_INPUT;
 
 
@@ -405,7 +410,7 @@ extern struct PORTCONTROL * PORTTABLE;
 #define SIOW(A) WRITE_PORT_UCHAR(PORTVEC->SIO,A)
 
 #define SIOCR READ_PORT_UCHAR(PORTVEC->SIOC)
-#define SIOCW(A) WRITE_PORT_UCHAR(PORTVEC->SIOC,A)
+#define SIOCW(A) WRITE_PORT_UCHAR(PORTVEC->SIOC, A)
 
 //#define SETRVEC	PORTVEC->IORXCA =
 //#define SETTVEC	PORTVEC->IOTXCA =
@@ -417,8 +422,8 @@ int TOSHCLOCKFREQ =	57600;
 
 UCHAR SDLCCMD[]	= {
 	0,0,
-	2,00000000,		// BASE VECTOR 
-	4,0x30,			// SDLC MODE
+	2,0,			// BASE VECTOR 
+	4,0x20,			// SDLC MODE
 	3,0xc8,			// 8BIT,  CRC ENABLE, RX DISABLED
 
 	7,0x7e,			// STANDARD FLAGS
@@ -467,13 +472,38 @@ UCHAR CIOPARAMS[] = {
 #define CIOLEN	26
 
 
-VOID WRITE_PORT_UCHAR(ULONG Addr, UCHAR Value)
+VOID WRITE_PORT_UCHAR(UINT Port, UINT Value)
 {
+  	ULONG buff[3];
+	
+	buff[0] = Port;
+	buff[1] = Value;
+	
+	fResult = DeviceIoControl(
+			hDevice,   // device handle
+			IOCTL_BPQHDLC_IOWRITE,	   // control code
+			buff, 8,	// input parameters
+	        NULL,0,&cb, // output parameters
+			0);
 }
 
-UCHAR READ_PORT_UCHAR(ULONG Addr)
+UCHAR READ_PORT_UCHAR(ULONG Port)
 {
-	return 0;
+	ULONG buff[3];
+	
+	buff[0] = Port;
+	
+	fResult = DeviceIoControl(
+			hDevice,   // device handle
+			IOCTL_BPQHDLC_IOREAD,	   // control code
+			buff, 4,	// input parameters
+	        buff, 4,&cb, // output parameters
+			0);
+
+	Debugprintf("BPQ32 HDLC READ_PORT_UCHAR Returned  %X", LOBYTE(buff[0]));
+
+	return LOBYTE(buff[0]);
+
 }
 
 int Init2K(HDLCDATA * PORTVEC)
@@ -897,11 +927,9 @@ BOOLEAN INITREST(PHDLCDATA PORTVEC)
 INTDONE:
 
 	CALL	RXAINIT
-
-	SIOCR
-	MOV	RR0[EBX],AL		; GET INITIAL RR0
 ;
 */
+
 
 //	Pass Params to the driver
 
@@ -917,6 +945,8 @@ INTDONE:
 	AddParams.WR10 = PORTVEC->WR10;
 	AddParams.Channel = PORTVEC->PORTCONTROL.CHANNELNUM;
 	AddParams.SOFTDCD = PORTVEC->PORTCONTROL.SOFTDCDFLAG;
+	AddParams.TXDELAY = PORTVEC->PORTCONTROL.PORTTXDELAY;
+	AddParams.PERSISTANCE = PORTVEC->PORTCONTROL.PORTPERSISTANCE;
 
 
 	fResult = DeviceIoControl(
@@ -935,6 +965,9 @@ INTDONE:
 		WritetoConsole("Kernel Driver Init Failed - Check Resource Allocation");
 		return (FALSE);
 	}
+
+	PORTVEC->RR0 = SIOCR;	//GET INITIAL RR0
+
 
 	return TRUE;
 }

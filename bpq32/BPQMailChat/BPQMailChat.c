@@ -336,6 +336,10 @@
 // Limit connection attempt rate when a chat node is unavailable.
 // Fix Program Error on long input lines (> ~250 chars).
 
+// Version 1.0.3.19
+
+// Fix Restart of B2 mode transfers.
+// Fix error if other end offers B1 and you are configured for B2 only.
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -5525,7 +5529,8 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 				if (SID[len+2] == '1')
 				{
-					if (conn->UserPointer->ForwardingInfo->AllowB1)
+					if (conn->UserPointer->ForwardingInfo->AllowB1 ||
+						conn->UserPointer->ForwardingInfo->AllowB2)		// B2 implies B1
 						conn->BBSFlags |= FBBB1Mode;
 
 					if (SID[len+3] == '2')

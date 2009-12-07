@@ -21,9 +21,13 @@ struct TNCINFO
 
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 
+	BOOL Attached;					// Set what attached to a BPQ32 stream
 	BOOL Connected;					// When set, all data is passed as data instead of commands
 	BOOL Connecting;				// Set when Outward Connect in progress
 	BOOL ReportDISC;				// Need to report an incoming DISC to kernel
+
+	char * CmdSet;					// A series of commands to send to the TNC
+	char * CmdSave;					// Base address for free
 
 	HANDLE hDevice;
 	BOOL HostMode;					// Set if in DED Host Mode
@@ -39,6 +43,8 @@ struct TNCINFO
 	UCHAR PTCStatus1;				// Status Bytes
 	UCHAR PTCStatus2;				// Status Bytes
 	UCHAR PTCStatus3;				// Status Bytes
+	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
+	char MyCall[10]	;				// Call we are using
 	char RemoteCall[10];			// Callsign
 	int BytesTXed;
 	int BytesRXed;
@@ -46,7 +52,6 @@ struct TNCINFO
 
 };
 
-struct TNCINFO  TNCInfo[16]={0};
 
 #define IOCTL_SERIAL_IS_COM_OPEN CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERIAL_GETDATA     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x801,METHOD_BUFFERED,FILE_ANY_ACCESS)

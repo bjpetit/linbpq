@@ -4,47 +4,9 @@
 
 #define MAXBLOCK 4096
 
-struct TNCINFO
-{ 
-	int PACTORtoBPQ_Q;			// Frames for BPQ
-	int BPQtoPACTOR_Q;			// Frames for PACTOR
-	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
-	char * InitScript;			// Initialisation Commands
-	char * InitPtr;				// Next Command
-	int	ReinitState;			// Reinit State Machine
-	BOOL TNCOK;					// TNC is reponding
-	int	FramesOutstanding;		// Frames Queued - used for flow control
-	BOOL InternalCmd;			// Last Command was generated internally
-	int	IntCmdDelay;			// To limit internal commands
-
-	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
-
-	BOOL Connected;				// When set, all data is passed as data instead of commands
-	BOOL Connecting;				// Set when Outward Connect in progress
-	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
-
-	HANDLE hDevice;
-	BOOL HostMode;					// Set if in DED Host Mode
-	BOOL NeedPACTOR;				// Set if need to send PACTOR to put into Standby Mode
-	int Timeout;					// Timeout response counter
-	int Retries;
-	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
-	int TXLen;						// Len of last sent
-	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
-	int RXLen;						// Data in RXBUffer
-	char RemoteCall[10];			// Callsign
-	int BytesTXed;
-	int BytesAcked;
-	int BytesRXed;
-
-	HWND hDlg;						// Status Window Handle
-};
-
-struct TNCINFO  TNCInfo[16]={0};
-
 struct STREAMINFO
 {
-	struct TRANSPORTENTRY * ATTACHEDSESSION;
+//	struct TRANSPORTENTRY * AttachedSession;
 
 	int PACTORtoBPQ_Q;			// Frames for BPQ
 	int BPQtoPACTOR_Q;			// Frames for PACTOR
@@ -52,18 +14,57 @@ struct STREAMINFO
 	BOOL InternalCmd;			// Last Command was generated internally
 	int	IntCmdDelay;			// To limit internal commands
 
+	BOOL Attached;					// Set what attached to a BPQ32 stream
 	BOOL Connected;				// When set, all data is passed as data instead of commands
 	BOOL Connecting;			// Set when Outward Connect in progress
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 
 	int Timeout;				// Timeout response counter
 
-	char RemoteCall[10];		// Callsign
+	char MyCall[10]	;				// Call we are using
+	char RemoteCall[10];			// Callsign
+
 	int BytesTXed;
 	int BytesAcked;
 	int BytesRXed;
-
+	int BytesOutstanding;		// For Packet Channels
 };
+
+
+
+struct TNCINFO
+{
+	struct STREAMINFO Streams[27];	// 0 is Pactor on HF port, Rest are ax.25 on VHF port.
+	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
+	char * InitScript;			// Initialisation Commands
+	char * InitPtr;				// Next Command
+	int	ReinitState;			// Reinit State Machine
+	BOOL TNCOK;					// TNC is reponding
+	BOOL InternalCmd;			// Last Command was generated internally
+	int CmdStream;				// Stream last command was issued on
+	int	IntCmdDelay;			// To limit internal commands
+
+	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
+
+	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
+
+	HANDLE hDevice;
+	BOOL HostMode;					// Set if in DED Host Mode
+	BOOL NeedPACTOR;				// Set if need to send PACTOR to put into Standby Mode
+	int Timeout;					// Timeout response counter
+//	int Retries;
+	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
+	int TXLen;						// Len of last sent
+	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
+	int RXLen;						// Data in RXBUffer
+
+	int Mem1;						// Free Bytes (VHF /HF)
+	int Mem2;
+
+	HWND hDlg;						// Status Window Handle
+};
+
+
 
 
 

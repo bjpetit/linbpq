@@ -180,7 +180,7 @@
 
 #include "AsmStrucs.h"
 
-//#define SPECIALVERSION "Debug Version"
+#define SPECIALVERSION "PACTOR Test"
 
 #include "GetVersion.h"
 

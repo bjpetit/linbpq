@@ -90,7 +90,7 @@ Return Value:
 
     UNREFERENCED_PARAMETER (RegistryPath);
 
-    DebugPrint (("BPQHDLC: Entered Driver Entry\n"));
+    DebugPrint (("BPQHDLC: Entered Driver Entry V 0.0.2\n"));
     
     //
     // Create dispatch points for the IRPs.
@@ -238,6 +238,7 @@ Return Value:
     // If you provide read/write dispatch handlers, make sure
     // to specify the preferred buffering method for the I/O.
     // deviceObject->Flags |= DO_BUFFERED_IO;
+
 
     DebugPrint(("BPQHDLC: AddDevice: %p to %p->%p \n", deviceObject, 
                        deviceInfo->NextLowerDriver,
@@ -853,37 +854,23 @@ Return Value:
     return;
 }
 
-NTSTATUS
-GpdDispatch(
-    IN    PDEVICE_OBJECT pDO,
-    IN    PIRP pIrp             
-    )
+NTSTATUS GpdDispatch(IN    PDEVICE_OBJECT pDO, IN    PIRP pIrp)
+{   
+//    pDO - Pointer to device object.
 
-/*++
+//    pIrp - Pointer to the current IRP.
 
-Routine Description:
-    This routine is the dispatch handler for the driver.  It is responsible
-    for processing the IRPs.
-
-Arguments:
-    
-    pDO - Pointer to device object.
-
-    pIrp - Pointer to the current IRP.
-
-Return Value:
-
-    STATUS_SUCCESS if the IRP was processed successfully, otherwise an error
-    indicating the reason for failure.
-
---*/
-
-{
     PLOCAL_DEVICE_INFO pLDI;
     PIO_STACK_LOCATION pIrpStack;
     NTSTATUS Status;
 	int i;
 	PULONG pIOBuffer;
+	PUCHAR IOBuffer;
+	PBUF_ENTRY Buffer;
+	LARGE_INTEGER Interval;
+	PHDLC_CHANNEL Channel;
+	PUCHAR Mapped_IOADDR;
+
 
     PAGED_CODE();
 
@@ -927,24 +914,37 @@ Return Value:
             //  Dispatch on IOCTL
             switch (pIrpStack->Parameters.DeviceIoControl.IoControlCode)
             {
-            case IOCTL_GPD_READ_PORT_UCHAR:
-                Status = GpdIoctlReadPort(
-                            pLDI,
-                            pIrp,
-                            pIrpStack,
-                            pIrpStack->Parameters.DeviceIoControl.IoControlCode
-                            );
-                break;
 
-            case IOCTL_GPD_WRITE_PORT_UCHAR:
-                Status = GpdIoctlWritePort(
-                            pLDI, 
-                            pIrp,
-                            pIrpStack,
-                            pIrpStack->Parameters.DeviceIoControl.IoControlCode
-                            );
-                break;
+			case IOCTL_BPQHDLC_IOREAD:
 
+				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
+
+				Mapped_IOADDR = ULongToPtr(*pIOBuffer);
+
+				*(pIOBuffer) = READ_PORT_UCHAR(Mapped_IOADDR);
+				
+				pIrp->IoStatus.Information = 4;		// Bytes Returned
+
+				DebugPrint (("BPQHDLC: IOREAD %x %x\n", Mapped_IOADDR, *(pIOBuffer) ));
+
+				Status = STATUS_SUCCESS;
+				break;
+
+			case IOCTL_BPQHDLC_IOWRITE:
+
+				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
+				IOBuffer = (PUCHAR)pIrp->AssociatedIrp.SystemBuffer;
+
+				Mapped_IOADDR = ULongToPtr(*pIOBuffer);
+
+				DebugPrint (("BPQHDLC: IOWRITE %x %x\n", Mapped_IOADDR, IOBuffer[4]));
+
+				WRITE_PORT_UCHAR(Mapped_IOADDR, IOBuffer[4]);
+				
+				pIrp->IoStatus.Information = 0;		// Bytes Returned
+				Status = STATUS_SUCCESS;
+
+				break;
 
 			case IOCTL_BPQHDLC_POLL:
 		
@@ -961,7 +961,39 @@ Return Value:
             case IOCTL_BPQHDLC_TIMER:
 
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-//				DebugPrint (("BPQHDLC: Timer IOCTL %x \n", *pIOBuffer));
+				Channel = (PHDLC_CHANNEL)*pIOBuffer;
+			
+				// See if anything to send. If so, and channel is clear, Key up and start TXDelay timer.
+				
+				if (Channel->LINKSTS == 0)		// Idle
+				{
+					if (!IsListEmpty(&Channel->TXMSG_Q))
+					{
+						Buffer = PopBUFEntry(&Channel->TXMSG_Q, pLDI);
+						if (Buffer == NULL) return 0;
+
+						 // Kick off TXDelay 
+
+						DebugPrint(("BPQHDLC: Starting TXDelay %d\n", Channel->TXDELAY));
+
+						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 5);
+						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 0xeb); //RAISE RTS TO START SENDING FLAGS
+
+							//MOV	WR10[BX],00100000B	; NRZI
+
+						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 10);
+						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 0xA4); //Abort on underrun
+
+						Interval.QuadPart = Int32x32To64(Channel->TXDELAY, -10000);
+
+						KeSetTimer(&Channel->PollingTimer, Interval , &Channel->PollingDpc);
+
+						PushBUFEntry(&pLDI->FREE_Q, Buffer, pLDI);
+
+					}
+				}
+			
+
 
 				pIrp->IoStatus.Information = 0;		// Bytes Returned
 				Status = STATUS_SUCCESS;
@@ -1028,227 +1060,6 @@ Return Value:
     return Status;
 }
 
-
-NTSTATUS
-GpdIoctlReadPort(
-    IN PLOCAL_DEVICE_INFO pLDI,
-    IN PIRP pIrp,
-    IN PIO_STACK_LOCATION IrpStack,
-    IN ULONG IoctlCode  )
-
-
-/*++
-
-Routine Description:
-    This routine processes the IOCTLs which read from the ports.
-
-Arguments:
-    
-    pLDI        - our local device data
-    pIrp        - IO request packet
-    IrpStack    - The current stack location
-    IoctlCode   - The ioctl code from the IRP
-
-Return Value:
-    STATUS_SUCCESS           -- OK
-
-    STATUS_INVALID_PARAMETER -- The buffer sent to the driver
-                                was too small to contain the
-                                port, or the buffer which
-                                would be sent back to the driver
-                                was not a multiple of the data size.
-
-    STATUS_ACCESS_VIOLATION  -- An illegal port number was given.
-
---*/
-
-{
-                                // NOTE:  Use METHOD_BUFFERED ioctls.
-    PULONG pIOBuffer;           // Pointer to transfer buffer
-                                //      (treated as an array of longs).
-    ULONG InBufferSize;         // Amount of data avail. from caller.
-    ULONG OutBufferSize;        // Max data that caller can accept.
-    ULONG nPort;                // Port number to read
-    ULONG DataBufferSize;
-
-    PAGED_CODE();
-
-    // Size of buffer containing data from application
-    InBufferSize  = IrpStack->Parameters.DeviceIoControl.InputBufferLength;
-
-    // Size of buffer for data to be sent to application
-    OutBufferSize = IrpStack->Parameters.DeviceIoControl.OutputBufferLength;
-
-    // NT copies inbuf here before entry and copies this to outbuf after
-    // return, for METHOD_BUFFERED IOCTL's.
-    pIOBuffer     = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-
-    // Check to ensure input buffer is big enough to hold a port number and
-    // the output buffer is at least as big as the port data width.
-    //
-    switch (IoctlCode)
-    {
-    case IOCTL_GPD_READ_PORT_UCHAR:
-        DataBufferSize = sizeof(UCHAR);
-        break;
- 
-	default:      
-        return STATUS_INVALID_PARAMETER;
-
-    }
-
-    if ( InBufferSize != sizeof(ULONG) || OutBufferSize < DataBufferSize )
-    {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    // Buffers are big enough.
-
-    nPort = *pIOBuffer;             // Get the I/O port number from the buffer.
-
-    if (nPort >= pLDI->PortCount ||
-        (nPort + DataBufferSize) > pLDI->PortCount ||
-        (((ULONG_PTR)pLDI->PortBase + nPort) & (DataBufferSize - 1)) != 0)
-    {
-        return STATUS_ACCESS_VIOLATION;   // It was not legal.
-    }
-    
-     // Address is in I/O space
-        
-        switch (IoctlCode)
-        {
-        case IOCTL_GPD_READ_PORT_UCHAR:
-            *(PUCHAR)pIOBuffer = READ_PORT_UCHAR(
-                            (PUCHAR)((ULONG_PTR)pLDI->PortBase + nPort) );
-            break;
-
-		default:      
-            return STATUS_INVALID_PARAMETER;
-
-
-        }
- 
-    //
-    // Indicate # of bytes read
-    //
-    
-    pIrp->IoStatus.Information = DataBufferSize;
-
-    return STATUS_SUCCESS;
-}
-
-
-NTSTATUS
-GpdIoctlWritePort(
-    IN PLOCAL_DEVICE_INFO pLDI, 
-    IN PIRP pIrp, 
-    IN PIO_STACK_LOCATION IrpStack,
-    IN ULONG IoctlCode
-    )
-
-/*++
-
-Routine Description:
-    This routine processes the IOCTLs which write to the ports.
-
-Arguments:
-    
-    pLDI        - our local device data
-    pIrp        - IO request packet
-    IrpStack    - The current stack location
-    IoctlCode   - The ioctl code from the IRP
-
-Return Value:
-    STATUS_SUCCESS           -- OK
-
-    STATUS_INVALID_PARAMETER -- The buffer sent to the driver
-                                was too small to contain the
-                                port, or the buffer which
-                                would be sent back to the driver
-                                was not a multiple of the data size.
-
-    STATUS_ACCESS_VIOLATION  -- An illegal port number was given.
-
---*/
-
-{
-                                // NOTE:  Use METHOD_BUFFERED ioctls.
-    PULONG pIOBuffer;           // Pointer to transfer buffer
-                                //      (treated as array of longs).
-    ULONG InBufferSize ;        // Amount of data avail. from caller.
-    ULONG nPort;                // Port number to read or write.
-    ULONG DataBufferSize;
-
-    PAGED_CODE();
-
-    // Size of buffer containing data from application
-    InBufferSize  = IrpStack->Parameters.DeviceIoControl.InputBufferLength;
-
-    // NT copies inbuf here before entry and copies this to outbuf after return,
-    // for METHOD_BUFFERED IOCTL's.
-    pIOBuffer     = (PULONG) pIrp->AssociatedIrp.SystemBuffer;
-
-    pIrp->IoStatus.Information = 0;
-    
-    // Check to ensure input buffer is big enough to hold a port number as well
-    // as the data to write.
-    //
-    // The relative port # is a ULONG, and the data is the type appropriate to
-    // the IOCTL.
-    //
-
-    switch (IoctlCode)
-    {
-    case IOCTL_GPD_WRITE_PORT_UCHAR:
-		
-		DataBufferSize = sizeof(UCHAR);
-        break;
-
-    default:      
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    if ( InBufferSize < (sizeof(ULONG) + DataBufferSize) )
-    {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    nPort = *pIOBuffer++;
-
-    if (nPort >= pLDI->PortCount ||
-        (nPort + DataBufferSize) > pLDI->PortCount ||
-        (((ULONG_PTR)pLDI->PortBase + nPort) & (DataBufferSize - 1)) != 0)
-    {
-        return STATUS_ACCESS_VIOLATION;   // Illegal port number
-    }
-
-        // Address is in I/O space
-    
-	switch (IoctlCode)
-	{
-        case IOCTL_GPD_WRITE_PORT_UCHAR:
-
-			WRITE_PORT_UCHAR(
-				(PUCHAR)((ULONG_PTR)pLDI->PortBase + nPort),
-				*(PUCHAR)pIOBuffer );
-            break;
-
-		default:      
-
-			return STATUS_INVALID_PARAMETER;
-	}
-    
- 
-    //
-    // Indicate # of bytes written
-    //
-    
-    pIrp->IoStatus.Information = DataBufferSize;
-
-    return STATUS_SUCCESS;
-}
-
-
 #if DBG
 PCHAR
 PnPMinorFunctionString (
@@ -1311,11 +1122,7 @@ PnPMinorFunctionString (
 
 #endif
 
-BOOLEAN
-HDLCISR(
-    IN PKINTERRUPT InterruptObject,
-    IN PVOID Context
-    )
+BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, IN PVOID Context)
 
 /*++
 
@@ -1343,10 +1150,6 @@ Return Value:
 --*/
 
 {
-
-    //
-    // Holds the information specific to handling this device.
-    //
     PHDLC_CHANNEL Extension = Context;
 
     //
@@ -1418,173 +1221,6 @@ NOINTS:
     return ServicedAnInterrupt;
 
  }
-/*
- //   LOGENTRY(LOG_CNT, 'DpI3', 0, Extension->DpcCount, 0);
-
-    if ((InterruptIdReg & SERIAL_IIR_NO_INTERRUPT_PENDING)) {
-
-        ServicedAnInterrupt = FALSE;
-
-    } else if (!Extension->DeviceIsOpened
-               || (Extension->PowerState != PowerDeviceD0)) {
-
-
-        //
-        // We got an interrupt with the device being closed or when the
-        // device is supposed to be powered down.  This
-        // is not unlikely with a serial device.  We just quietly
-        // keep servicing the causes until it calms down.
-        //
-
-        ServicedAnInterrupt = TRUE;
-        do {
-
-            InterruptIdReg &= (~SERIAL_IIR_FIFOS_ENABLED);
-            switch (InterruptIdReg) {
-
-
-                default: {
-
-                    ASSERT(FALSE);
-                    break;
-
-                }
-
-            }
-
-#ifdef _WIN64
-        } while (!((InterruptIdReg =
-                    READ_INTERRUPT_ID_REG(Extension->Controller, Extension->AddressSpace))
-                    & SERIAL_IIR_NO_INTERRUPT_PENDING));
-#else
-        } while (!((InterruptIdReg =
-                    READ_INTERRUPT_ID_REG(Extension->Controller))
-                    & SERIAL_IIR_NO_INTERRUPT_PENDING));
-#endif
-
-    } else {
-
-        ServicedAnInterrupt = TRUE;
-        do {
-
-            //
-            // We only care about bits that can denote an interrupt.
-            //
-
-            InterruptIdReg &= SERIAL_IIR_RLS | SERIAL_IIR_RDA |
-                              SERIAL_IIR_CTI | SERIAL_IIR_THR |
-                              SERIAL_IIR_MS;
-
-            //
-            // We have an interrupt.  We look for interrupt causes
-            // in priority order.  The presence of a higher interrupt
-            // will mask out causes of a lower priority.  When we service
-            // and quiet a higher priority interrupt we then need to check
-            // the interrupt causes to see if a new interrupt cause is
-            // present.
-            //
-
-            switch (InterruptIdReg) {
-
-                        }
-
-  
-
- 
-                case SERIAL_IIR_MS: {
-
-                //    SerialHandleModemUpdate(
-                   //     Extension,
-                      //  FALSE
-                      //  );
-
-                    break;
-
-                }
-
-            }
-
-#ifdef _WIN64
-        } while (!((InterruptIdReg =
-                    READ_INTERRUPT_ID_REG(Extension->Controller, Extension->AddressSpace))
-                    & SERIAL_IIR_NO_INTERRUPT_PENDING));
-#else
-        } while (!((InterruptIdReg =
-                    READ_INTERRUPT_ID_REG(Extension->Controller))
-                    & SERIAL_IIR_NO_INTERRUPT_PENDING));
-#endif
-
-        //
-        // Besides catching the WINBOND and SMC chip problems this
-        // will also cause transmission to restart incase of an xon
-        // char being received.  Don't remove.
-        //
-
-        if (SerialProcessLSR(Extension) & SERIAL_LSR_THRE) {
-
-            if (!Extension->TXHolding &&
-                (Extension->WriteLength ||
-                 Extension->TransmitImmediate)) {
-
-                goto doTrasmitStuff;
-
-            }
-
-        }
-
-    }
-
-    //
-    // This will "unlock" the close and cause the event
-    // to fire if we didn't queue any DPC's
-    //
-
-    {
-       LONG pendingCnt;
-
-       //
-       // Increment once more.  This is just a quick test to see if we
-       // have a chance of causing the event to fire... we don't want
-       // to run a DPC on every ISR if we don't have to....
-       //
-
-retryDPCFiring:;
-
-       InterlockedIncrement(&Extension->DpcCount);
- //      LOGENTRY(LOG_CNT, 'DpI4', 0, Extension->DpcCount, 0);
-
-       //
-       // Decrement and see if the lock above looks like the only one left.
-       //
-
-       pendingCnt = InterlockedDecrement(&Extension->DpcCount);
-//       LOGENTRY(LOG_CNT, 'DpD5', 0, Extension->DpcCount, 0);
-
-       if (pendingCnt == 1) {
-          KeInsertQueueDpc(&Extension->IsrUnlockPagesDpc, NULL, NULL);
-       } else {
-          if (InterlockedDecrement(&Extension->DpcCount) == 0) {
-
-//             LOGENTRY(LOG_CNT, 'DpD6', &Extension->IsrUnlockPagesDpc,
-//                      Extension->DpcCount, 0);
-
-             //
-             // We missed it.  Retry...
-             //
-
-             InterlockedIncrement(&Extension->DpcCount);
-     //        LOGENTRY(LOG_CNT, 'DpI5', &Extension->IsrUnlockPagesDpc,
-       //               Extension->DpcCount, 0);
-             goto retryDPCFiring;
-          }
-       }
-    }
-
-    return ServicedAnInterrupt;
-
-}
-
-*/
 
 
 VOID SDADRX(PHDLC_CHANNEL Extension)
@@ -2036,7 +1672,7 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 
 	ChannelPointers[AllocatedChannels++] = Channel;	
 
-	InitializeListHead(&Channel->PCTX_Q);
+	InitializeListHead(&Channel->TXMSG_Q);
 	InitializeListHead(&Channel->RXMSG_Q);
 
 	Channel->IOBASE = Params->IOBASE;
@@ -2055,6 +1691,8 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	Channel->IORXCA = SDADRX;			// RX CHANNEL A
 	Channel->IORXEA = SPCLINT;
 
+	Channel->TXDELAY = Params->TXDELAY;
+
 	// Add a few buffers to the pool (More if first channel)
 
 	AddChannels = (AllocatedChannels == 1) ? 5:2;
@@ -2066,7 +1704,20 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 		if (Buffer) PushBUFEntry(&deviceInfo->FREE_Q, Buffer, deviceInfo);
 	}
 
-	//RXAINIT(Channel);
+	//
+    // Create Timer Stuff - a Dpc and a Timer Object
+    //
+
+	KeInitializeDpc(&Channel->PollingDpc,
+                        TXDelayDpc,
+                        (PVOID)Channel );
+    //
+    // Initialize the timer object
+    //
+
+    KeInitializeTimer(&Channel->PollingTimer );
+
+ 	//RXAINIT(Channel);
 
 	return Channel;
 }
@@ -2075,11 +1726,17 @@ VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo)
 {
 	int i;
 	PBUF_ENTRY Buffer;
+	PHDLC_CHANNEL Channel;
+
 
 	for (i=0; i< AllocatedChannels; i++)
 	{
-		ExFreePool(ChannelPointers[i]);
-		DebugPrint(("BPQHDLC: Releasing Channel Structure allocated at %x\n", ChannelPointers[i]));
+		Channel = ChannelPointers[i];
+
+		KeCancelTimer(&Channel->PollingTimer);
+		
+		ExFreePool(Channel);
+		DebugPrint(("BPQHDLC: Releasing Channel Structure allocated at %x\n", Channel));
 		ChannelPointers[i] = NULL;
 	}
 
@@ -2115,7 +1772,7 @@ VOID SendPacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceInf
 		Buffer->MsgLen = Len;
 		memcpy(Buffer->Message, Msg, Len);
 
-		PushBUFEntry(&Channel->RXMSG_Q, Buffer, deviceInfo);
+		PushBUFEntry(&Channel->TXMSG_Q, Buffer, deviceInfo);
 	}
 
 	return;
@@ -2149,3 +1806,35 @@ int ReceivePacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceI
 	return Len;
 }
 
+VOID TXDelayDpc(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2)
+{
+ //   PDEVICE_OBJECT          deviceObject;
+ //   PDEVICE_EXTENSION       deviceExtension;
+
+ //   deviceObject = (PDEVICE_OBJECT)Context;
+ //   deviceExtension = deviceObject->DeviceExtension;
+
+	PHDLC_CHANNEL Extension = (PHDLC_CHANNEL)Context;
+
+	DebugPrint(("BPQHDLC: Timer Fired, DPC %x Context %x\n", Dpc, Context));
+
+	Extension->SDFLAGS |= SDTINP;
+	SETTVEC	SDDTTX;				// SET VECTOR TO 'TX DATA'
+
+	SIOCW(SDTXCRC);					// RESET TX CRC GENERATOR
+
+	SIOW (*Extension->SDTNEXT++);	// TRANSMIT First BYTE
+
+	SIOCW(SDTXUND);					// RESET TX UNDERRUN LATCH
+
+	Extension->RR0 &= !SDUNDER;		// KEEP STORE COPY
+
+	SIOCW(10);						// Select WR10 
+	SIOCW(Extension->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
+}
+
+DropRTS(PHDLC_CHANNEL Channel)
+{
+	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 5);
+	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 0xe1);	 //Drop RTS   
+}

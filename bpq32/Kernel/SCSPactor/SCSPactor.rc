@@ -30,9 +30,13 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Version
 //
 
+#define Vers 1,1,1,5
+#define Verstring "1,1,1,5\0"
+
+
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,1,3
- PRODUCTVERSION 1,1,1,3
+ FILEVERSION Vers
+ PRODUCTVERSION Vers
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -50,12 +54,12 @@ BEGIN
             VALUE "Comments", "SCS Pactor interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "SCSPactor\0"
-            VALUE "FileVersion", "1, 1, 1, 3\0"
+            VALUE "FileVersion", Verstring
             VALUE "InternalName", "SCSPactor\0"
             VALUE "LegalCopyright", "Copyright © 2009 G8BPQ\0"
             VALUE "OriginalFilename", "SCSPactor.dll\0"
             VALUE "ProductName", "  SCSPactor\0"
-            VALUE "ProductVersion", "1, 1, 1, 3\0"
+            VALUE "ProductVersion", Verstring
         END
     END
     BLOCK "VarFileInfo"
@@ -86,13 +90,13 @@ BEGIN
     LTEXT           "Status",IDC_STATIC,5,55,30,10
     LTEXT           "Mode",IDC_STATIC,5,40,30,10
     LTEXT           "Buffers",IDC_STATIC,5,85,30,10
-    LTEXT           "",IDC_TNCSTATE,60,25,125,11
+    LTEXT           "",IDC_TNCSTATE,60,25,160,11
     LTEXT           "TNC State",IDC_STATIC,5,25,40,10
     LTEXT           "Comms State",IDC_STATIC,5,10,45,10
     LTEXT           "",IDC_COMMSSTATE,60,10,145,11
     LTEXT           "Traffic",IDC_STATIC,5,100,30,10
     LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,60,100,140,11
-    LTEXT           "",IDC_PACTORLEVEL,5,115,220,11
+    LTEXT           "",IDC_PACTORLEVEL,5,115,215,11
 END
 
 
