@@ -16,11 +16,18 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "AsmStrucs.h"
+
 
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #define EXTDLL			// Use GetMuduleHandle instead of LoadLibrary 
 #include "bpq32.h"
+#include "winmor.h"
+
+#include "AsmStrucs.h"
+
+#define WINMOR
+
+#include "..\PactorCommon.c"
 
 #define VERSION_MAJOR         2
 #define VERSION_MINOR         0
@@ -47,46 +54,8 @@ DllImport WORD MAXCIRCUITS;
 DllImport UCHAR L4DEFAULTWINDOW;
 DllImport WORD L4T1;
 
-#pragma pack(1)
-#pragma pack()
-
-typedef struct TNCINFO_S
-{ 
-	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
-	int BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
-
-	SOCKET WINMORSock;			// Control Socket, indexed by BPQ Port
-	SOCKET WINMORDataSock;		// Data Socket, indexed by BPQ Port
-
-	char * WINMORSignon;		// Pointer to message for secure signin
-	char * WINMORHostName;		// WINMOR Host - may be dotted decimal or DNS Name
-	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
-	char * InitScript;			// Initialisation Commands
-
-    UCHAR TCPBuffer[100];		// For converting byte stream to messages
-    int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
-
-	BOOL Connected;				// When set, all data is passed to Data Socket
-
-	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
-
-	time_t lasttime;
-
-	BOOL CONNECTING;
-	BOOL CONNECTED;
-	BOOL DATACONNECTING;
-	BOOL DATACONNECTED;
-
-	SOCKADDR_IN destaddr;
-	SOCKADDR_IN Datadestaddr;
-
-	struct _EXTPORTDATA * PortRecord;
-
-} TNCINFO;
-
 #define MAXBPQPORTS 16
 
-TNCINFO TNCInfo[MAXBPQPORTS+1]={0};
 
 static time_t ltime;
 
@@ -205,16 +174,17 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	unsigned int bytes,txlen=0;
 	char ErrMsg[255];
 
-	TNCINFO * TNC = &TNCInfo[port];
+	struct TNCINFO * TNC = TNCInfo[port];
 
 	switch (fn)
 	{
 	case 1:				// poll
 
-		if (TNC->PortRecord->ATTACHEDSESSION == 0 && TNC->Connected)
+		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0 && TNC->Attached)
 		{
 			// Node has disconnected - clear any connection
 
+			TNC->Attached= FALSE;
 			TNC->Connected = FALSE;
 			send(TNC->WINMORSock,"DISCONNECT\r", 11, 0);
 		}
@@ -223,6 +193,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		if (TNC->ReportDISC)
 		{
 			TNC->ReportDISC = FALSE;
+			buff[4] = 0;
 			return -1;
 		}
 
@@ -275,6 +246,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				
 					TNC->CONNECTING = FALSE;
 					TNC->CONNECTED = FALSE;
+					if (TNC->Attached)
+						TNC->ReportDISC = TRUE;
 				}
 			}
 
@@ -314,6 +287,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 					WritetoConsole(ErrMsg);
 					TNC->CONNECTING = FALSE;
 					TNC->CONNECTED = FALSE;
+					TNC->ReportDISC = TRUE;
 				}
 			}
 		
@@ -325,8 +299,9 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 			datalen=buffptr[1];
 
+			buff[4] = 0;						// Compatibility with Kam Driver
 			buff[7] = 0xf0;
-			memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
+			memcpy(&buff[8],buffptr+2,datalen);	// Data goes to +7, but we have an extra byte
 			datalen+=8;
 			buff[5]=(datalen & 0xff);
 			buff[6]=(datalen >> 8);
@@ -431,7 +406,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:				// CHECK IF OK TO SEND
 
-		return (0);		// OK
+		return (TNC->CONNECTED << 8);		// OK
 			
 		break;
 
@@ -449,8 +424,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
 	int i, port;
 	char Msg[255];
+	char * ptr;
 
-	TNCINFO * TNC;
+	struct TNCINFO * TNC;
 
 	//
 	//	Will be called once for each WINMOR port 
@@ -459,9 +435,30 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	//
 	
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
-	TNC = &TNCInfo[port];
+	TNC = TNCInfo[port];
+
+		TNC = TNCInfo[port];
+
+	if (TNC == NULL)
+	{
+		// Not defined in Config file
+
+		wsprintf(Msg," ** Error - no info in WINMOR.cfg for this port");
+		WritetoConsole(Msg);
+
+		return 0;
+	}
 
 	TNC->PortRecord = PortEntry;
+
+	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
+		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+	else
+		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
+
+	ptr=strchr(TNC->NodeCall, ' ');
+	if (ptr) *(ptr) = 0;					// Null Terminate
+
 
 	if (TNC->destaddr.sin_family == 0)
 	{
@@ -566,167 +563,6 @@ InitWINMOR()
 
 */
 
-FILE *file;
-
-BOOL ReadConfigFile(char * fn)
-{
-	char buf[256],errbuf[256];
-
-	UCHAR Value[100];
-	UCHAR * BPQDirectory;
-
-	BPQDirectory=GetBPQDirectory();
-
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value,fn);
-	}
-	else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value,fn);
-	}
-		
-	if ((file = fopen(Value,"r")) == NULL)
-	{
-		wsprintf(buf,"BPQtoWINMOR - Config file %s not found ",Value);
-		WritetoConsole(buf);
-		return (TRUE);			// Dont need it at the moment
-	}
-
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-	
-		if (!ProcessLine(buf))
-		{
-			WritetoConsole("BPQtoWINMOR - Bad config record ");
-			WritetoConsole(errbuf);
-		}			
-	}
-
-	fclose(file);
-	return (TRUE);
-}
-GetLine(char * buf)
-{
-loop:
-	if (fgets(buf, 255, file) == NULL)
-		return 0;
-
-	if (buf[0] < 0x20) goto loop;
-	if (buf[0] == '#') goto loop;
-	if (buf[0] == ';') goto loop;
-
-	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
-	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
-	buf[strlen(buf)] = 13;
-
-	return 1;
-}
-
-ProcessLine(char * buf)
-{
-	char * ptr,* p_cmd;
-	char * p_ipad;
-	char * p_port;
-//	unsigned long ipad;
-	unsigned short WINMORport;
-	int BPQport;
-	int len=510;
-	TNCINFO * TNC;
-
-	ptr = strtok(buf, " \t\n\r");
-
-	if(ptr == NULL) return (TRUE);
-
-	if(*ptr =='#') return (TRUE);			// comment
-
-	if(*ptr ==';') return (TRUE);			// comment
-
-	BPQport=0;
-
-	BPQport = atoi(ptr);
-
-	if(BPQport > 0 && BPQport <17)
-	{
-		TNC = &TNCInfo[BPQport];
-
-		p_ipad = strtok(NULL, " \t\n\r");
-		
-		if (p_ipad == NULL) return (FALSE);
-	
-		p_port = strtok(NULL, " \t\n\r");
-			
-		if (p_port == NULL) return (FALSE);
-
-		WINMORport = atoi(p_port);
-
-		TNC->destaddr.sin_family = AF_INET;
-		TNC->destaddr.sin_port = htons(WINMORport);
-		TNC->Datadestaddr.sin_family = AF_INET;
-		TNC->Datadestaddr.sin_port = htons(WINMORport+1);
-
-		TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
-
-		if (TNC->WINMORHostName == NULL) return TRUE;
-
-		strcpy(TNC->WINMORHostName,p_ipad);
-
-		p_cmd = strtok(NULL, " \t\n\r");
-			
-		if (p_cmd != NULL)
-		{
-			TNC->ApplCmd=_strdup(p_cmd);
-		}
-/*
-			
-			
-			return (TRUE);
-
-		p_password = strtok(NULL, " \t\n\r");
-			
-		if (p_password == NULL) return (TRUE);
-
-		// Allocate buffer for signon message
-
-		TNC->WINMORSignon=malloc(546);
-
-		if (TNC->WINMORSignon == NULL) return TRUE;
-
-		memset(TNC->WINMORSignon,0,546);
-
-		TNC->WINMORSignon[4]='P';
-
-		memcpy(&WINMORSignon[BPQport][28],&len,4);
-
-		strcpy(&WINMORSignon[BPQport][36],p_user);
-
-		strcpy(&WINMORSignon[BPQport][291],p_password);
-*/
-
-		// Read Initialisation lines
-
-		TNC->InitScript = malloc(1000);
-
-		TNC->InitScript[0] = 0;
-
-		while(TRUE)
-		{
-			if (GetLine(buf) == 0)
-				return TRUE;
-				
-			if (memcmp(buf, "****", 4) == 0)
-				return TRUE;
-
-			strcat (TNC->InitScript, buf);
-		}
-	}
-
-	return (FALSE);
-	
-}
 	
 int ConnecttoWINMOR(int port)
 {
@@ -742,7 +578,7 @@ VOID ConnecttoWINMORThread(port)
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	struct hostent * HostEnt;
-	TNCINFO * TNC = &TNCInfo[port];
+	struct TNCINFO * TNC = TNCInfo[port];
 
 	Sleep(1000);		// Allow init to complete 
 
@@ -851,7 +687,7 @@ VOID ConnecttoWINMORThread(port)
 	return;
 }
 
-VOID ProcessResponse(TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
+VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 {
 	// Response on WINMOR control channel. Could be a reply to a command, or
 	// an Async  Response
@@ -862,7 +698,7 @@ VOID ProcessResponse(TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	
 	if (_memicmp(Buffer, "CONNECTED", 9) == 0)
 	{
-		if (TNC->PortRecord->ATTACHEDSESSION == 0)
+		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0)
 		{
 			// Incomming Connect
 
@@ -895,7 +731,8 @@ VOID ProcessResponse(TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			NEXTID++;
 			if (NEXTID == 0) NEXTID++;		// Keep non-zero
 
-			TNC->PortRecord->ATTACHEDSESSION = Session;
+			TNC->PortRecord->ATTACHEDSESSIONS[0] = Session;
+			TNC->Attached = TRUE;
 
 			Session->L4TARGET = TNC->PortRecord;
 	
@@ -940,6 +777,7 @@ VOID ProcessResponse(TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
+			TNC->Connecting = FALSE;
 			TNC->Connected = TRUE;			// Subsequent data to data channel
 
 			return;
@@ -997,7 +835,7 @@ VOID ProcessResponse(TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 int ProcessReceivedData(int port)
 {
 	char ErrMsg[255];
-	struct TNCINFO_S * TNC = &TNCInfo[port];
+	struct TNCINFO * TNC = TNCInfo[port];
 
 	int InputLen, MsgLen;
 	char * ptr, * ptr2;
@@ -1021,6 +859,7 @@ int ProcessReceivedData(int port)
 		}
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;
+		TNC->ReportDISC = TRUE;
 
 		return 0;					
 	}
@@ -1068,7 +907,7 @@ VOID ProcessDataSocketData(int port)
 {
 	// Info on Data Socket - just packetize and send on
 	
-	struct TNCINFO_S * TNC = &TNCInfo[port];
+	struct TNCINFO * TNC = TNCInfo[port];
 
 	int InputLen, PacLen = 236;
 	char ErrMsg[80];
@@ -1096,6 +935,7 @@ loop:
 
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;
+		TNC->ReportDISC = TRUE;
 
 		return;					
 	}

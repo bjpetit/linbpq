@@ -2,6 +2,7 @@
 // Microsoft Developer Studio generated include file.
 // Used by BPQtoWINMOR.rc
 //
+#define IDI_ICON2                       3
 
 // Next default values for new objects
 // 
