@@ -341,8 +341,19 @@
 // Fix Restart of B2 mode transfers.
 // Fix error if other end offers B1 and you are configured for B2 only.
 
-// Use Windows Sound Events for (Chat "user join" alert)
 
+// Version 1.0.3.20
+
+// Fix Paging in Chat Mode.
+// Report Node Versions.
+
+// Version 1.0.3.21
+
+// Check node is not already known when processing OK
+// Add option to suppress emailing of housekeeping results
+
+
+// Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
@@ -2867,7 +2878,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 
 		// Not a defined or known node - pretty safe to assume it's a user
 
-		if (!rtloginu (conn))
+		if (!rtloginu (conn, FALSE))
 		{
 			// Already connected - close
 			
@@ -3135,6 +3146,16 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		if (Arg1)
 		{
 			Lines = atoi(Arg1);
+			
+			if (Lines)				// Sanity Check
+			{
+				if (Lines < 10)
+				{
+					nodeprintf(conn,"Page Length %d is too short\r", Lines);
+					SendPrompt(conn, user);
+					return;
+				}
+			}
 
 			user->PageLen = Lines;
 			conn->PageLen = Lines;
@@ -3270,7 +3291,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			return;
 		}
 
-		if (rtloginu (conn))
+		if (rtloginu (conn, TRUE), TRUE)
 			conn->Flags |= CHATMODE;
 		else
 			SendPrompt(conn, user);
@@ -4988,15 +5009,38 @@ void chat_link_out (LINK *link)
 
 ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
 {
-	WriteLogLine(circuit, '<',Buffer, Len-1, LOG_CHAT);
+	WriteLogLine(circuit, '<' ,Buffer, Len-1, LOG_CHAT);
 
 	Buffer = _strupr(Buffer);
 
-	if (memcmp(Buffer, "OK\r", 3) == 0)
+	if (memcmp(Buffer, "[BPQCHATSERVER-", 15) == 0)
 	{
+		char * ptr = strchr(Buffer, ']');
+		if (ptr)
+		{
+			*ptr = 0;
+			strcpy(circuit->FBBReplyChars, &Buffer[15]);
+		}
+		else
+			circuit->FBBReplyChars[0] = 0;
+
+		return 0;
+	}
+
+	if (memcmp(Buffer, "OK", 2) == 0)
+	{
+		// Make sure node isn't known. There is a window here that could cause a loop
+
+		if (node_find(circuit->u.link->call))
+		{
+			Logprintf(LOG_CHAT, circuit, '|', "Dropping link with %s to prevent a loop", circuit->Callsign);
+			Disconnect(circuit->BPQStream);
+			return FALSE;
+		}
+
 		circuit->u.link->flags = p_linked;
  	  	circuit->rtcflags = p_linked;
-		state_tell(circuit);
+		state_tell(circuit, circuit->FBBReplyChars);
 		NeedStatus = TRUE;
 
 		return TRUE;
@@ -5006,8 +5050,10 @@ ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
 	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "LINKED"))
 	{
 		// Connected - Send *RTL 
-
+		
 		nputs(circuit, "*RTL\r");  // Log in to the remote RT system.
+		nprintf(circuit, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call, Verstring);
+
 		return TRUE;
 
 	}

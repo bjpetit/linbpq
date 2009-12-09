@@ -230,7 +230,7 @@ BOOL CreateConsole(int Stream)
 				return TRUE;
 			}
 
-			if (rtloginu (Cinfo->Console))
+			if (rtloginu (Cinfo->Console, TRUE))
 				Cinfo->Console->Flags |= CHATMODE;
 			else
 				SendPrompt(Cinfo->Console, user);
@@ -534,7 +534,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		unsigned int i;
 //		Debugprintf("5%x", LOBYTE(HIWORD(lParam)));
 
-		if (LOBYTE(HIWORD(lParam)) == 0x48)
+		if (LOBYTE(HIWORD(lParam)) == 0x48 && wParam == 0x26)
 		{
 			// Scroll up
 
@@ -556,7 +556,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return TRUE;
 		}
 
-		if (LOBYTE(HIWORD(lParam)) == 0x50)
+		if (LOBYTE(HIWORD(lParam)) == 0x50 && wParam == 0x28)
 		{
 			// Scroll up
 

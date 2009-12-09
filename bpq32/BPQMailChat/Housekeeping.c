@@ -7,7 +7,7 @@
 int LogAge = 7;
 
 BOOL DeletetoRecycleBin = FALSE;
-
+BOOL SuppressMaintEmail = FALSE;
 int PR = 30;
 int PUR = 30;
 int PF = 30;
@@ -180,7 +180,8 @@ VOID DoHouseKeeping(BOOL Manual)
 		FreeSemaphore(&MsgNoSemaphore);
 	}
 
-	MailHousekeepingResults();
+	if (!SuppressMaintEmail)
+		MailHousekeepingResults();
 	
 	NOW = time(NULL);
 

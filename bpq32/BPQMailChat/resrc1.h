@@ -26,6 +26,7 @@
 #define IDC_PERSONALONLY                1014
 #define IDC_UICONFIG                    1016
 #define IDC_DELETETORECYCLE             1017
+#define IDC_MAINTNOMAIL                 1018
 #define IDC_EDIT1                       1019
 #define IDC_MSGTO                       1020
 #define IDC_MSGTITLE                    1021

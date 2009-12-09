@@ -102,7 +102,6 @@ struct UserRec
 #define id_user   'I'    // User login information.
 #define id_keepalive   'K'    // User login information.
 
-
 #define o_all    1  // To all users.
 #define o_one    2  // To a specific user.
 #define o_topic  3  // To all users in a specific topic.
@@ -173,6 +172,7 @@ typedef struct node_t
 	struct node_t *next;
 	char *alias;
 	char *call;
+	char * Version;
 	int refcnt;
 } NODE;
 
@@ -638,9 +638,9 @@ static int  rtrun = FALSE;
 
 KNOWNNODE *knownnode_find(char *call);
 static void cn_dec(CIRCUIT *circuit, NODE *node);
-static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias);
-static NODE *node_find(char *call);
-static NODE *node_inc(char *call, char *alias);
+static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias, char * Version);
+NODE *node_find(char *call);
+static NODE *node_inc(char *call, char *alias, char * Version);
 static int cn_find(CIRCUIT *circuit, NODE *node);
 static void text_xmit(USER *user, USER *to, char *text);
 void text_tellu(USER *user, char *text, char *to, int who);
@@ -653,15 +653,15 @@ static void user_tell(USER *user, char kind);
 static USER *user_find(char *call, char * node);
 static void user_leave(USER *user);
 static BOOL topic_chg(USER *user, char *s);
-static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias);
+static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias, BOOL Local);
 void link_drop(CIRCUIT *circuit);
 static void echo(CIRCUIT *fc, NODE *node, char * Buffer);
-void state_tell(CIRCUIT *circuit);
+void state_tell(CIRCUIT *circuit, char * Version);
 int ct_find(CIRCUIT *circuit, TOPIC *topic);
 int rtlink (char * Call);
 int rtloginl (CIRCUIT *conn, char * call);
-void chkctl(CIRCUIT *ckt_from, char * Buffer);
-int rtloginu (CIRCUIT *circuit);
+void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len);
+int rtloginu (CIRCUIT *circuit, BOOL Local);
 void logout(CIRCUIT *circuit);
 void show_users(CIRCUIT *circuit);
 VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...);
@@ -1040,10 +1040,10 @@ extern BOOL cfgMinToTray;
 extern CIRCUIT * Console;
 
 extern UCHAR ChatApplMask;
-
+extern char Verstring[];
 
 extern char SignoffMsg[];
-
+extern char AbortedMsg[];
 extern char InfoBoxText[];			// Text to display in Config Info Popup
 
 extern int LastVer[4];				// In case we need to do somthing the first time a version is run
@@ -1167,7 +1167,7 @@ extern HWND hMonitor;
 //extern RECT ConsoleRect;
 extern int LogAge;
 extern BOOL DeletetoRecycleBin;
-
+extern BOOL SuppressMaintEmail;
 extern int PR;
 extern int PUR;
 extern int PF;

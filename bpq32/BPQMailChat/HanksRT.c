@@ -20,6 +20,9 @@ int ChatTmr = 0;
 
 BOOL NeedStatus = FALSE;
 
+char Verstring[80];
+
+
 static void node_dec(NODE *node);
 static KNOWNNODE *knownnode_add(char *call);
 VOID SendChatLinkStatus();
@@ -160,9 +163,32 @@ BOOL matchi(char * p1, char * p2)
 		return TRUE;
 }
 
+
 VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
 	ConnectionInfo *c;
+
+	if (conn->Paging && (conn->LinesSent >= conn->PageLen))
+	{
+		// Waiting for paging prompt
+
+		if (len > 1)
+		{
+			if (_memicmp(Buffer, "Abort", 1) == 0)
+			{
+				ClearQueue(conn);
+				conn->LinesSent = 0;
+
+				QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+				SendPrompt(conn, user);
+				return;
+			}
+		}
+
+		conn->LinesSent = 0;
+		return;
+	}
+
 
 	WriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
 
@@ -183,7 +209,7 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 	{
 		//waiting for *RTL
 
-		if ((len <6) && (memcmp(Buffer, "*RTL", 4) == 0))
+		if (memcmp(Buffer, "*RTL", 4) == 0)
 		{
 			// Node - Node Connect
 
@@ -217,7 +243,7 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 	{
 		__try 
 		{
-			chkctl(conn, Buffer);
+			chkctl(conn, Buffer, len);
 		}
 		__except(EXCEPTION_EXECUTE_HANDLER)
 		{
@@ -393,7 +419,7 @@ void ReportBadLeave(ncall, ucall)
 }
 
 
-void chkctl(CIRCUIT *ckt_from, char * Buffer)
+void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 {
 	NODE    *node, *ln;
 	CIRCUIT *ckt_to;
@@ -401,6 +427,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 	char    *ncall, *ucall, *f1, *f2, *buf;
 
 	if (Buffer[FORMAT_O] != FORMAT) return; // Not a control message.
+
 	buf = _strdup(Buffer + DATA_O);
 
 // FORMAT and TYPE bytes are followed by node and user callsigns.
@@ -480,7 +507,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			f2 = strlop(f1, ' ');
 			if (!f2) break;
-			user = user_join(ckt_from, ucall, ncall, NULL);
+			user = user_join(ckt_from, ucall, ncall, NULL, FALSE);
 			if (!user) break;
 			ckt_from->refcnt++;
 			text_tellu_Joined(user);
@@ -552,10 +579,12 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // If we are linked, is a loop, do what? (Try ignore!)
 
 		case id_link :
+
 			ln = node_find(ucall);
 			if (!ln && !matchi(ncall, OurNode))
 			{
-				cn_inc(ckt_from, ucall, f1);
+				f2 = strlop(f1, ' ');
+				cn_inc(ckt_from, ucall, f1, f2);
 				echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			}
 			else
@@ -596,6 +625,18 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 			}
 			break;
 
+					
+		case id_keepalive :
+
+			ln = node_find(ncall);
+			if (ln)
+			{
+				if (ln->Version == NULL)
+					if (f1)
+						ln->Version = _strdup(f1);
+			}
+			break;
+
 		default :  break;
 	}
 
@@ -608,12 +649,12 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer)
 // Tell another node about users known by this node.
 // Done at incoming or outgoing link establishment.
 
-void state_tell(CIRCUIT *circuit)
+void state_tell(CIRCUIT *circuit, char * Version)
 {
 	NODE *node;
 	USER *user;
 
-	node = cn_inc(circuit, circuit->u.link->call, circuit->u.link->alias);
+	node = cn_inc(circuit, circuit->u.link->call, circuit->u.link->alias, Version);
 	node_tell(node, id_link); // Tell other nodes about this new link
 
 // Tell the node that just linked here about nodes known on other links.
@@ -700,7 +741,7 @@ NODE *node_find(char *call)
 
 // Add a reference to a node.
 
-static NODE *node_inc(char *call, char *alias)
+static NODE *node_inc(char *call, char *alias, char * Version)
 {
 	NODE *node;
 
@@ -714,6 +755,9 @@ static NODE *node_inc(char *call, char *alias)
 		sl_ins_hd(node, node_hd);
 		node->call  = _strdup(call);
 		node->alias = _strdup(alias);
+		if (Version)
+			node->Version = _strdup(Version);
+
 //		Debugprintf("New Node Rec Created at %x for %s %s", node, node->call, node->alias);
 	}
 
@@ -898,17 +942,17 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 					}
 					__except(EXCEPTION_EXECUTE_HANDLER)
 					{
-						len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);
+						len = wsprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);
 					}
 				}
 				else
 				{
-					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
+					len = wsprintf(line, "%s Corrupt Rec %x %x ", line, cn, cn->node);
 				}
 			}
 			}
 			__except(EXCEPTION_EXECUTE_HANDLER)
-			{len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
+			{len = wsprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
 
 
 			Debugprintf("%s", line);
@@ -994,12 +1038,12 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 
 // Add a circuit/node association.
 
-static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias)
+static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias, char * Version)
 {
 	NODE *node;
 	CN *cn;
 
-	node = node_inc(call, alias);
+	node = node_inc(call, alias, Version);
 
 	for (cn = circuit->hnode; cn; cn = cn->next)
 	{
@@ -1125,7 +1169,11 @@ static void node_xmit(NODE *node, char kind, CIRCUIT *circuit)
 {
 	__try{
 		if (!cn_find(circuit, node))
-		nprintf(circuit, "%c%c%s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias);
+			if (node->Version && (kind == id_link))
+				nprintf(circuit, "%c%c%s %s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias, node->Version);
+			else
+				nprintf(circuit, "%c%c%s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias);
+
 	}
 	__except(EXCEPTION_EXECUTE_HANDLER)
 		{Debugprintf("*PE*node_xmit Corrupt Rec %x %x %x", node, node->call, node->alias);}
@@ -1239,12 +1287,17 @@ static BOOL topic_chg(USER *user, char *s)
 
 // Create a user record for this user.
 
-static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias)
+static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias, BOOL Local)
 {
 	NODE *node;
 	USER *user;
 
-	node = cn_inc(circuit, ncall, nalias);
+	if (Local)
+	{
+		node = cn_inc(circuit, ncall, nalias, Verstring);
+	}
+	else
+		node = cn_inc(circuit, ncall, nalias, NULL);
 
 // Is this user already logged in at this node?
 
@@ -1476,7 +1529,8 @@ int rtloginl (CIRCUIT *conn, char * call)
 	}
 
 	for (link = link_hd; link; link = link->next)
-	{	if (matchi(call, link->call))
+	{
+		if (matchi(call, link->call))
 			break;
 	}
 
@@ -1515,17 +1569,17 @@ int rtloginl (CIRCUIT *conn, char * call)
 	conn->u.link = link;
 	link->flags = p_linked;
 	link->delay = 0;			// Dont delay first restart
-	state_tell(conn);
+	state_tell(conn, NULL);
+	nprintf(conn, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, conn->u.link->call, Verstring);
 
 	NeedStatus = TRUE;
 
 	return TRUE;
-
 }
 
 // User connected to chat, or did chat command from BBS
 
-int rtloginu (CIRCUIT *circuit)
+int rtloginu (CIRCUIT *circuit, BOOL Local)
 {
 	USER    *user;
 
@@ -1545,7 +1599,7 @@ int rtloginu (CIRCUIT *circuit)
 
 	circuit_new(circuit, p_user);
 
-	user = user_join(circuit, circuit->UserPointer->Call, OurNode, OurAlias);
+	user = user_join(circuit, circuit->UserPointer->Call, OurNode, OurAlias, Local);
 	circuit->u.user = user;
 
 	if (strcmp(user->name, "?_name") == 0)
@@ -1626,7 +1680,10 @@ static void show_nodes(CIRCUIT *circuit)
 	for (node = node_hd; node; node = node->next)
 	{
 		if (node->refcnt)
-			nprintf(circuit, "%s:%s %u\r", node->alias, node->call, node->refcnt);
+			if (node->Version)
+				nprintf(circuit, "%s:%s %s %u\r", node->alias, node->call, node->Version, node->refcnt);
+			else
+				nprintf(circuit, "%s:%s %s %u\r", node->alias, node->call, "Not Known", node->refcnt);
 	}
 }
 
@@ -1966,7 +2023,7 @@ static void node_keepalive()
 		for (circuit = circuit_hd; circuit; circuit = circuit->next)
 		{
 			if (circuit->rtcflags & p_linked)
-				nprintf(circuit, "%c%c%s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call);
+				nprintf(circuit, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call, Verstring);
 		}
 	}
 	else
@@ -2151,6 +2208,8 @@ VOID SetupChat()
 {
 	ConvToAX25(OurNode, MYCALL);
 	ConvToAX25(UIDEST, AXDEST);
+
+	wsprintf(Verstring, "%d.%d.%d.%d",  Ver[0], Ver[1], Ver[2], Ver[3]);
 
 	LoadKnown();
 }

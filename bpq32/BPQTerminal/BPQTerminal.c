@@ -34,6 +34,9 @@
 // Add input buffer scrollback.
 // Fix monitoring when PORTNUM specified
 
+// FIx use of numeric keypad 2 and 8 (were treated as up and down)
+
+// Version 2.0.8 December 2009
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -866,7 +869,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 //		Debugprintf("5%x", LOBYTE(HIWORD(lParam)));
 
-		if (LOBYTE(HIWORD(lParam)) == 0x48)
+		if (LOBYTE(HIWORD(lParam)) == 0x48 && wParam == 0x26)
 		{
 			// Scroll up
 
@@ -888,7 +891,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return TRUE;
 		}
 
-		if (LOBYTE(HIWORD(lParam)) == 0x50)
+		if (LOBYTE(HIWORD(lParam)) == 0x50 && wParam == 0x28)
 		{
 			// Scroll up
 

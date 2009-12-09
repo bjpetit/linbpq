@@ -535,7 +535,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		CheckDlgButton(pHdr->hwndDisplay, IDM_AB, AB);
 
 		CheckDlgButton(pHdr->hwndDisplay, IDC_DELETETORECYCLE, DeletetoRecycleBin);
-
+		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTNOMAIL, SuppressMaintEmail);
 
 		if (LTFROM)
 		{
@@ -1567,6 +1567,9 @@ VOID SaveMAINTConfig()
 	DeletetoRecycleBin = IsDlgButtonChecked(hwndDisplay, IDC_DELETETORECYCLE);
 	retCode = RegSetValueEx(hKey,"DeletetoRecycleBin", 0, REG_DWORD, (BYTE *)&DeletetoRecycleBin,4);
 
+	SuppressMaintEmail = IsDlgButtonChecked(hwndDisplay, IDC_MAINTNOMAIL);
+	retCode = RegSetValueEx(hKey,"SuppressMaintEmail", 0, REG_DWORD, (BYTE *)&SuppressMaintEmail,4);
+
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTFROM, hKey, "LTFROM");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTTO, hKey, "LTTO");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTAT, hKey, "LTAT");
@@ -1877,7 +1880,7 @@ TryAgain:
 		if (RegQueryValueEx(hKey,"Version",0, (ULONG *)&Type, (UCHAR *)&Size, (ULONG *)&Vallen) == 0)
 			sscanf(Size,"%d,%d,%d,%d", &LastVer[0], &LastVer[1], &LastVer[2], &LastVer[3]);
 
-
+/*
 		if ((LastVer[3] != Ver[3]) || (LastVer[2] != Ver[2]) ||
 			(LastVer[1] != Ver[1]) || (LastVer[0] != Ver[0]))
 		{
@@ -1902,7 +1905,7 @@ TryAgain:
 
 			}
 		}
-
+*/
 		RegCloseKey(hKey);
 
 		for (i=1; i<=16; i++)
@@ -2012,6 +2015,9 @@ TryAgain:
 			RegQueryValueEx(hKey, "DeletetoRecycleBin", 0,			
 				(ULONG *)&Type,(UCHAR *)&DeletetoRecycleBin,(ULONG *)&Vallen);
 
+			Vallen=4;
+			RegQueryValueEx(hKey, "SuppressMaintEmail", 0,			
+				(ULONG *)&Type,(UCHAR *)&SuppressMaintEmail,(ULONG *)&Vallen);
 
 			LTFROM = GetOverrides(hKey, "LTFROM");
 			LTTO = GetOverrides(hKey, "LTTO");

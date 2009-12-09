@@ -1048,7 +1048,7 @@ OpenListeningSocket(struct arp_table_entry * arp)
 		return FALSE;
 	}
 
-	Debugprintf("TCP Listening Socket Created - socket %d", arp->TCPListenSock);
+	Debugprintf("TCP Listening Socket Created - socket %d  port %d ", arp->TCPListenSock, arp->port);
 
 	if (setsockopt(arp->TCPListenSock, SOL_SOCKET, SO_CONDITIONAL_ACCEPT, (char*)&bOptVal, 4) != SOCKET_ERROR)
 	{

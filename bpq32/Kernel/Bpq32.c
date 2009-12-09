@@ -1955,40 +1955,6 @@ DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 	return (FALSE);
 }
 
-/*
-
-	LEA	ESI,APPLCALL[EDX]
-	LEA	EDI,DEST_CALL[EBX]
-	MOV	ECX,13
-	REP MOVSB
-
-	MOV	DEST_STATE[EBX],80H	; SPECIAL ENTRY
-	
-	MOV	AL,BYTE PTR APPLQUAL[EDX]
-	MOV	ROUT1_QUALITY[EBX],AL
-	MOV	ROUT1_OBSCOUNT[EBX],255
-
-	CALL _CHAINNODE
-
-
-*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 DllExport UCHAR * APIENTRY GetSignOnMsg()
 {
 	return (&SIGNONMSG);

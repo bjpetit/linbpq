@@ -888,7 +888,7 @@ VOID KAMPoll(int Port)
 				_strupr(MsgPtr);
 
 
-				if (MsgPtr[0] == 'C' && datalen > 2)	// Connect
+				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2)	// Connect
 				{
 					memcpy(TNC->Streams[Stream].RemoteCall, &MsgPtr[2], 9);
 					TNC->Streams[Stream].Connecting = TRUE;
