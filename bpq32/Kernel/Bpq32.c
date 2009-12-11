@@ -160,8 +160,11 @@
 
 // 410m		November 2009
 
-//				Changes for PACTOR and WINMOR support
+//				Changes for PACTOR and WINMOR to support the ATTACH command
 //				Enable INP3 if configured on a route.
+//				Fox count of nodes in Stats Display
+//				Overwrite the worst quality unused route if a call is received from a node not in your
+//				table when the table is full
 
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -180,7 +183,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "PACTOR Test"
+//#define SPECIALVERSION "PACTOR Test"
 
 #include "GetVersion.h"
 

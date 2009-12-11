@@ -134,21 +134,84 @@ typedef enum _DEVICE_PNP_STATE {
 #define RESTORE_PREVIOUS_PNP_STATE(_Data_)   \
         (_Data_)->DevicePnPState =   (_Data_)->PreviousPnPState;\
 
+
+// One Entry Per Interrupt Supported. Maintains a list of Ports using that Interrupt
+
+typedef struct _HDLC_INTERRUPTS {
+
+    PKINTERRUPT Interrupt;
+    KIRQL Irql;    // Translated Irql
+    ULONG OriginalVector;  // Untranslated vector
+    ULONG OriginalIrql;    // Untranslated irql
+    ULONG AddressSpace;    // Address space
+    ULONG BusNumber;		// Bus number
+    INTERFACE_TYPE InterfaceType;    // Interface type
+	PUCHAR Mapped_SIOC;		// 
+	PUCHAR Mapped_BSIOC;	//  B CHAN CONTROL
+	UCHAR Level;
+    ULONG Vector;			// Translated vector
+	ULONG InterruptMode;
+    ULONG Affinity;
+} HDLC_INTERRUPTS,*PHDLC_INTERRUPTS;
+
 // driver local data structure specific to each device object
+
+typedef struct _HDLC_CHANNEL;
+
 typedef struct _LOCAL_DEVICE_INFO {
-    PVOID               PortBase;       // base port address
-    ULONG               PortCount;      // Count of I/O addresses used.
-//    ULONG               PortMemoryType; // HalTranslateBusAddress MemoryType
-    PDEVICE_OBJECT      DeviceObject;   // The Gpd device object.
-    PDEVICE_OBJECT      NextLowerDriver;     // The top of the stack
-    DEVICE_PNP_STATE    DevicePnPState;   // Track the state of the device
-    DEVICE_PNP_STATE    PreviousPnPState; // Remembers the previous pnp state
-    BOOLEAN             PortWasMapped;  // If TRUE, we have to unmap on unload  
-    IO_REMOVE_LOCK      RemoveLock;
-    KSPIN_LOCK			QueueSpinLock;	// Spinlock to Sync access to Buffer Queues
-	LIST_ENTRY			FREE_Q;			// Free bufferes pool header
+    PDEVICE_OBJECT      DeviceObject;			// The Gpd device object.
+    PDEVICE_OBJECT      NextLowerDriver;		// The top of the stack
+    DEVICE_PNP_STATE    DevicePnPState;			// Track the state of the device
+    DEVICE_PNP_STATE    PreviousPnPState;		// Remembers the previous pnp state
+    BOOLEAN             PortWasMapped;			// If TRUE, we have to unmap on unload  
+	IO_REMOVE_LOCK      RemoveLock;
+    KSPIN_LOCK			QueueSpinLock;			// Spinlock to Sync access to Buffer Queues
+	LIST_ENTRY			FREE_Q;					// Free bufferes pool header
+	HDLC_INTERRUPTS		Interrupt_Control[16];	// Interrupt Control Structs
+	struct _HDLC_CHANNEL * ChannelPointers[16];	// Channel Records
 
 } LOCAL_DEVICE_INFO, *PLOCAL_DEVICE_INFO;
+
+// Create Local DRIVER_INFO for Intellisense
+
+typedef struct _MYDEVICE_OBJECT {
+    CSHORT Type;
+    USHORT Size;
+    LONG ReferenceCount;
+    struct _DRIVER_OBJECT *DriverObject;
+    struct _DEVICE_OBJECT *NextDevice;
+    struct _DEVICE_OBJECT *AttachedDevice;
+    struct _IRP *CurrentIrp;
+    PIO_TIMER Timer;
+    ULONG Flags;                                // See above:  DO_...
+    ULONG Characteristics;                      // See ntioapi:  FILE_...
+    PVPB Vpb;
+    PLOCAL_DEVICE_INFO DeviceExtension;
+    DEVICE_TYPE DeviceType;
+    CCHAR StackSize;
+    union {
+        LIST_ENTRY ListEntry;
+        WAIT_CONTEXT_BLOCK Wcb;
+    } Queue;
+    ULONG AlignmentRequirement;
+    KDEVICE_QUEUE DeviceQueue;
+    KDPC Dpc;
+
+    //
+    //  The following field is for exclusive use by the filesystem to keep
+    //  track of the number of Fsp threads currently using the device
+    //
+
+    ULONG ActiveThreadCount;
+    PSECURITY_DESCRIPTOR SecurityDescriptor;
+    KEVENT DeviceLock;
+
+    USHORT SectorSize;
+    USHORT Spare1;
+
+    struct _DEVOBJ_Channel  *DeviceObjectChannel;
+    PVOID  Reserved;
+} MYDEVICE_OBJECT;
 
 
 #if DBG
@@ -170,11 +233,8 @@ DriverEntry(
     );
 
 
-NTSTATUS    
-GpdDispatch(       
-    IN  PDEVICE_OBJECT pDO,
-    IN  PIRP pIrp                    
-    );
+
+NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp);
 
 NTSTATUS    
 GpdIoctlReadPort(  
@@ -232,20 +292,14 @@ PnPMinorFunctionString (
     UCHAR MinorFunction
 );
 
-VOID TXDelayDpc(
-    IN PKDPC Dpc,
-    IN PVOID Context,
-    IN PVOID SystemArgument1,
-    IN PVOID SystemArgument2
-);
-
-
 typedef struct _HDLC_CHANNEL {
+
+	int	ChannelPointer;	// Our Slot in ChannelPointers
 
 	// HDLC Variables
 
-	ULONG IOBASE;		//CONFIG PARAMS FOR HARDWARE DRIVERS 
-	UCHAR INTLEVEL;		//FIRST 4 SAME FOR ALL H/W TYPES
+	ULONG IOBASE;		// CONFIG PARAMS FOR HARDWARE DRIVERS 
+	UCHAR INTLEVEL;		// FIRST 4 SAME FOR ALL H/W TYPES
 	USHORT BAUDRATE;	// SPEED
 	UCHAR CHANNELNUM;	// ON MULTICHANNEL H/W
 
@@ -269,7 +323,7 @@ typedef struct _HDLC_CHANNEL {
 	UCHAR OLOADS;			//LOCAL COUNT OF BUFFERS SHORTAGES
 	USHORT FRAMELEN	;
 	UCHAR * SDTNEXT;			//POINTER to NEXT BYTE to TRANSMIT
-	SHORT SDTXCNT;			//CHARS LEFT TO SEND
+	int SDTXCNT;			//CHARS LEFT TO SEND
 	UCHAR RR0;				//CURRENT RR0
 	VOID * TXFRAME;			//ADDRESS OF FRAME BEING SENT
 
@@ -281,7 +335,6 @@ typedef struct _HDLC_CHANNEL {
 	UCHAR SOFTDCD;			//RX ACTIVE FLAG FOR 'SOFT DC
 	USHORT TXDELAY;		//TX KEYUP DELAY TIMER
 	UCHAR SLOTTIME;			//TIME TO WAIT IF WE DONT SEND
-	UCHAR FIRSTCHAR;		//CHAR TO SEND FOLLOWING TXDELAY
 	USHORT L1TIMEOUT;		// UNABLE TO TX TIMEOUT
 	UCHAR PORTSLOTIMER;	
 
@@ -294,76 +347,20 @@ typedef struct _HDLC_CHANNEL {
 	int L2URUNC;			// UNDERRUNS
 	int	RXERRORS;
 
-   // Custom timer DPC object
-    KDPC PollingDpc;
-
     // Polling timer object
-    KTIMER  PollingTimer;
+    KTIMER  TXDelayTimer;
 
+	KDPC TXDelayDpc;
+    KDPC TXCompleteDpc;
+    KDPC RXCompleteDpc;
+
+	int TXComplete;
+
+	MYDEVICE_OBJECT * Device;		// Pointer to Device Object (Needed for Freeing Buffers in Interrupt Routines)
+
+	struct HDLC_CHANNEL * INTCHAIN;	// Next SIO on this level
 
 } HDLC_CHANNEL, *PHDLC_CHANNEL;
-
-// One Entry Per Interrupt Supported. Maintains a list of Ports using that Interrupt
-
-typedef struct _HDLC_INTERRUPTS {
-
-    //
-    // We keep the following values around so that we can connect
-    // to the interrupt and report resources after the configuration
-    // record is gone.
-    //
-
-    //
-    // Translated vector
-    //
-
-    ULONG Vector;
-
-    //
-    // Translated Irql
-    //
-
-    KIRQL Irql;
-
-
-    //
-    // Untranslated vector
-    //
-
-    ULONG OriginalVector;
-
-
-    //
-    // Untranslated irql
-    //
-
-    ULONG OriginalIrql;
-
-
-    //
-    // Address space
-    //
-
-    ULONG AddressSpace;
-
-
-    //
-    // Bus number
-    //
-
-    ULONG BusNumber;
-
-
-    //
-    // Interface type
-    //
-
-    INTERFACE_TYPE InterfaceType;
-
-	PUCHAR Mapped_SIOC;		// 
-	PUCHAR Mapped_BSIOC;	//  B CHAN CONTROL
-
-} HDLC_INTERRUPTS,*PHDLC_INTERRUPTS;
 
 // Buffer Format using List Entry 
 
@@ -400,34 +397,39 @@ typedef struct {
 
 
 
-#define SIOR READ_PORT_UCHAR(Extension->Mapped_SIO)
-#define SIOW(A) WRITE_PORT_UCHAR(Extension->Mapped_SIO,A)
+#define SIOR READ_PORT_UCHAR(Channel->Mapped_SIO)
+#define SIOW(A) WRITE_PORT_UCHAR(Channel->Mapped_SIO,A)
 
-#define SIOCR READ_PORT_UCHAR(Extension->Mapped_SIOC)
-#define SIOCW(A) WRITE_PORT_UCHAR(Extension->Mapped_SIOC,A)
+#define SIOCR READ_PORT_UCHAR(Channel->Mapped_SIOC)
+#define SIOCW(A) WRITE_PORT_UCHAR(Channel->Mapped_SIOC,A)
 
-#define SETRVEC	Extension->IORXCA =
-#define SETTVEC	Extension->IOTXCA =
+#define SETRVEC	Channel->IORXCA =
+#define SETTVEC	Channel->IOTXCA =
 
-VOID SDIDRX(PHDLC_CHANNEL Extension);
-VOID SDOVRX(PHDLC_CHANNEL Extension);
-VOID IGNORE(PHDLC_CHANNEL Extension);
-VOID SDCMTX(PHDLC_CHANNEL Extension);
-VOID SDADRX(PHDLC_CHANNEL Extension);
-VOID EXTINT(PHDLC_CHANNEL Extension);
-VOID SPCLINT(PHDLC_CHANNEL Extension);
+VOID SDIDRX(PHDLC_CHANNEL Channel);
+VOID SDOVRX(PHDLC_CHANNEL Channel);
+VOID IGNORE(PHDLC_CHANNEL Channel);
+VOID SDCMTX(PHDLC_CHANNEL Channel);
+VOID SDADRX(PHDLC_CHANNEL Channel);
+VOID EXTINT(PHDLC_CHANNEL Channel);
+VOID SPCLINT(PHDLC_CHANNEL Channel);
 
 
-VOID SENDDUMMY1(PHDLC_CHANNEL Extension);
-VOID SENDDUMMY2(PHDLC_CHANNEL Extension);
-VOID SENDDUMMY3(PHDLC_CHANNEL Extension);
-VOID SENDDUMMY4(PHDLC_CHANNEL Extension);
-VOID DROPRTS(PHDLC_CHANNEL Extension);
+VOID SENDDUMMY1(PHDLC_CHANNEL Channel);
+VOID SENDDUMMY2(PHDLC_CHANNEL Channel);
+VOID SENDDUMMY3(PHDLC_CHANNEL Channel);
+VOID SENDDUMMY4(PHDLC_CHANNEL Channel);
+VOID DROPRTS(PHDLC_CHANNEL Channel);
 
 PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO deviceInfo);
 VOID SendPacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceInfo);
 VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo);
 int ReceivePacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceInfo);
+
+VOID StartTX(PLOCAL_DEVICE_INFO, PHDLC_CHANNEL Channel, PBUF_ENTRY Buffer);
+VOID TXDelay(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2);
+VOID TXComplete(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2);
+VOID RXComplete(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2);
 
 
 #endif

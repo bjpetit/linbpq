@@ -330,7 +330,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 #endif
 
-	puts("Configuration file Preprocessor for Version 4.10k August 2009.\n");
+	puts("Configuration file Preprocessor for Version 4.10m December 2009.\n");
 
 #ifdef THOR
 

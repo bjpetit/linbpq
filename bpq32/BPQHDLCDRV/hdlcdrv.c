@@ -40,8 +40,6 @@ Copyright (c) Microsoft Corporation.  All rights reserved.
 
 // Save area for Channel Structures so they may be released on close
 
-PHDLC_CHANNEL ChannelPointers[16];
-
 int AllocatedChannels = 0;			// Counts number allocated
 
 ULONG AllocatedInterrupts=0;
@@ -438,12 +436,7 @@ Return Value:
 
         SET_NEW_PNP_STATE(deviceInfo, SurpriseRemovePending);
        
-        if (deviceInfo->PortWasMapped)
-        {
-            MmUnmapIoSpace(deviceInfo->PortBase, deviceInfo->PortCount);
-            deviceInfo->PortWasMapped = FALSE;
-        }
-        RtlInitUnicodeString(&win32DeviceName, DOS_DEVICE_NAME);
+		RtlInitUnicodeString(&win32DeviceName, DOS_DEVICE_NAME);
         IoDeleteSymbolicLink(&win32DeviceName);           
         
         IoSkipCurrentIrpStackLocation(Irp);
@@ -465,12 +458,8 @@ Return Value:
             //
             // We received query-remove earlier so free up resources.
             //
-            if (deviceInfo->PortWasMapped)
-            {
-                MmUnmapIoSpace(deviceInfo->PortBase, deviceInfo->PortCount);
-                deviceInfo->PortWasMapped = FALSE;
-            }
-            RtlInitUnicodeString(&win32DeviceName, DOS_DEVICE_NAME);
+
+			RtlInitUnicodeString(&win32DeviceName, DOS_DEVICE_NAME);
             IoDeleteSymbolicLink(&win32DeviceName);           
         }        
 
@@ -572,7 +561,7 @@ Return Value:
     PCM_PARTIAL_RESOURCE_LIST   partialResourceList;
     PCM_PARTIAL_RESOURCE_LIST   partialResourceListTranslated;
     PIO_STACK_LOCATION  stack;
-    ULONG i, Port;
+    ULONG i, Port, Int;
     PLOCAL_DEVICE_INFO deviceInfo;
 
     deviceInfo = (PLOCAL_DEVICE_INFO) DeviceObject->DeviceExtension;
@@ -628,10 +617,6 @@ Return Value:
 
             case CmResourceTypePort:
 
-                deviceInfo->PortWasMapped = FALSE;
-                deviceInfo->PortBase = ULongToPtr(resourceTrans->u.Port.Start.LowPart);
-                deviceInfo->PortCount       = resourceTrans->u.Port.Length;
-
                 DebugPrint(("BPQHDLC: Resource UnTranslated Port: (%x) Length: (%d)\n", 
                     resource->u.Port.Start.LowPart, 
                     resource->u.Port.Length));
@@ -649,7 +634,7 @@ Return Value:
 				}
                 break;
 
-            case CmResourceTypeMemory:
+ /*           case CmResourceTypeMemory:
 
                 //
                 // We need to map the memory
@@ -668,7 +653,7 @@ Return Value:
                     resourceTrans->u.Memory.Length));
 
                 break;
-
+*/
 
             default:
                 DebugPrint(("BPQHDLC: Unhandled resource_type (0x%x)\n", resourceTrans->Type));
@@ -676,7 +661,7 @@ Return Value:
             }             
             break;
 
-        case CmResourceTypeMemory:
+ /*       case CmResourceTypeMemory:
 
             deviceInfo->PortBase = (PVOID)
                 MmMapIoSpace (resourceTrans->u.Memory.Start,
@@ -691,20 +676,32 @@ Return Value:
                 resourceTrans->u.Memory.Length));
 
             break;
-
+*/
         case CmResourceTypeInterrupt:
 
 			AllocatedInterrupts |= (1 << resource->u.Interrupt.Vector);
+
+			Int = resource->u.Interrupt.Vector;
+
+			deviceInfo->Interrupt_Control[Int].Vector = resourceTrans->u.Interrupt.Vector;
+			deviceInfo->Interrupt_Control[Int].Level= (UCHAR)resourceTrans->u.Interrupt.Level;
+			deviceInfo->Interrupt_Control[Int].Affinity = resourceTrans->u.Interrupt.Affinity;
+            
+            if (resourceTrans->Flags & CM_RESOURCE_INTERRUPT_LATCHED)
+				deviceInfo->Interrupt_Control[Int].InterruptMode = Latched;
+			else
+				deviceInfo->Interrupt_Control[Int].InterruptMode = LevelSensitive;
 
 			DebugPrint(("BPQHDLC: Resource Untranslated Vector %d Level %d Aff %d\n", 
                     resource->u.Interrupt.Vector,
                     resource->u.Interrupt.Level,
 					resource->u.Interrupt.Affinity));
 
-			DebugPrint(("BPQHDLC: Resource Translated Vector %d Level %d Aff %d\n", 
+			DebugPrint(("BPQHDLC: Resource Translated Vector %d Level %d Aff %d Latched %d\n", 
                     resourceTrans->u.Interrupt.Vector,
                     resourceTrans->u.Interrupt.Level,
-					resourceTrans->u.Interrupt.Affinity));
+					resourceTrans->u.Interrupt.Affinity,
+					deviceInfo->Interrupt_Control[Int].InterruptMode));
 
 			DebugPrint(("BPQHDLC: Avail Interrupts %x\n", AllocatedInterrupts));
 
@@ -854,20 +851,19 @@ Return Value:
     return;
 }
 
-NTSTATUS GpdDispatch(IN    PDEVICE_OBJECT pDO, IN    PIRP pIrp)
+NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp)
 {   
 //    pDO - Pointer to device object.
 
 //    pIrp - Pointer to the current IRP.
 
-    PLOCAL_DEVICE_INFO pLDI;
+   PLOCAL_DEVICE_INFO pLDI;
     PIO_STACK_LOCATION pIrpStack;
     NTSTATUS Status;
 	int i;
 	PULONG pIOBuffer;
 	PUCHAR IOBuffer;
 	PBUF_ENTRY Buffer;
-	LARGE_INTEGER Interval;
 	PHDLC_CHANNEL Channel;
 	PUCHAR Mapped_IOADDR;
 
@@ -875,7 +871,7 @@ NTSTATUS GpdDispatch(IN    PDEVICE_OBJECT pDO, IN    PIRP pIrp)
     PAGED_CODE();
 
     pIrp->IoStatus.Information = 0;
-    pLDI = (PLOCAL_DEVICE_INFO)pDO->DeviceExtension;    // Get local info struct
+    pLDI = pDO->DeviceExtension;    // Get local info struct
 
     Status = IoAcquireRemoveLock (&pLDI->RemoveLock, pIrp);
 
@@ -972,28 +968,10 @@ NTSTATUS GpdDispatch(IN    PDEVICE_OBJECT pDO, IN    PIRP pIrp)
 						Buffer = PopBUFEntry(&Channel->TXMSG_Q, pLDI);
 						if (Buffer == NULL) return 0;
 
-						 // Kick off TXDelay 
-
-						DebugPrint(("BPQHDLC: Starting TXDelay %d\n", Channel->TXDELAY));
-
-						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 5);
-						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 0xeb); //RAISE RTS TO START SENDING FLAGS
-
-							//MOV	WR10[BX],00100000B	; NRZI
-
-						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 10);
-						WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 0xA4); //Abort on underrun
-
-						Interval.QuadPart = Int32x32To64(Channel->TXDELAY, -10000);
-
-						KeSetTimer(&Channel->PollingTimer, Interval , &Channel->PollingDpc);
-
-						PushBUFEntry(&pLDI->FREE_Q, Buffer, pLDI);
-
+						StartTX(pLDI, Channel, Buffer);
 					}
 				}
-			
-
+	
 
 				pIrp->IoStatus.Information = 0;		// Bytes Returned
 				Status = STATUS_SUCCESS;
@@ -1028,6 +1006,8 @@ NTSTATUS GpdDispatch(IN    PDEVICE_OBJECT pDO, IN    PIRP pIrp)
 			
 			case IOCTL_BPQHDLC_ADDCHANNEL:
 			
+				// We return the Address of the Channel Structure to BPQ32 to use as a Handle for IO requests
+				
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
 				*(PULONG)pIOBuffer = (ULONG)InitChannel((PBPQHDLC_ADDCHANNEL_INPUT)pIOBuffer, pLDI);
@@ -1122,35 +1102,16 @@ PnPMinorFunctionString (
 
 #endif
 
-BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, IN PVOID Context)
-
-/*++
-
-Routine Description:
-
-    This is the interrupt service routine for the serial port driver.
-    It will determine whether the serial port is the source of this
-    interrupt.  If it is, then this routine will do the minimum of
-    processing to quiet the interrupt.  It will store any information
-    necessary for later processing.
-
-Arguments:
-
-    InterruptObject - Points to the interrupt object declared for this
-    device.  We *do not* use this parameter.
-
-    Context - This is really a pointer to the device extension for this
-    device.
-
-Return Value:
-
-    This function will return TRUE if the serial port is the source
-    of this interrupt, FALSE otherwise.
-
---*/
-
+ 
+BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, HDLC_CHANNEL * Channel)
 {
-    PHDLC_CHANNEL Extension = Context;
+    // This function will return TRUE if the serial port is the source
+    // of this interrupt, FALSE otherwise.
+
+	// Context (2nd Param) is the first Channel Record on this level.
+	// Each Channel Record has a ponter back to the Device Object record.
+
+	MYDEVICE_OBJECT * Device = Channel->Device;
 
     //
     // Holds the contents of the interrupt identification record.
@@ -1184,35 +1145,45 @@ Return Value:
     // queueing
     //
 
-//    InterlockedIncrement(&Extension->DpcCount);
+//    InterlockedIncrement(&Channel->DpcCount);
 
 	// ENTERED FROM HARDWARE INTERRUPT
 
+	DebugPrint(("BPQHDLC: ISR Entered\n"));
+
 SIOI10:
 
-	WRITE_PORT_UCHAR(Extension->Mapped_ASIOC, 3);		//SELECT RR3
+	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 3);		//SELECT RR3
 
-	InterruptIdReg = READ_PORT_UCHAR(Extension->Mapped_ASIOC);
+	InterruptIdReg = READ_PORT_UCHAR(Channel->Mapped_ASIOC);
 
 	if (InterruptIdReg == 0) goto NOINTS; 
 
 	ServicedAnInterrupt = TRUE;
 
-	WRITE_PORT_UCHAR(Extension->Mapped_BSIOC, 2);		//SELECT RR3
+	WRITE_PORT_UCHAR(Channel->Mapped_BSIOC, 2);		//SELECT RR3
 
-	Vector = READ_PORT_UCHAR(Extension->Mapped_BSIOC);
+	Vector = READ_PORT_UCHAR(Channel->Mapped_BSIOC);
 		
 	if (Vector < 8)
-		Extension = Extension->B_PTR;		// GET DATA FOR B CHANNEL
+		Channel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
 	else
 	{
-		Extension = Extension->A_PTR;		// GET DATA FOR B CHANNEL
+		Channel = Channel->A_PTR;		// GET DATA FOR B CHANNEL
 		Vector -=8;
 	}
 
-	Extension->VECTOR[Vector<<1](Extension);
+	// Call our char handler
 
-	WRITE_PORT_UCHAR(Extension->Mapped_ASIOC, 0x38);		// RESET IUS
+	Channel->VECTOR[Vector<<1](Channel);
+
+	if (Channel->TXComplete)
+	{
+		KeInsertQueueDpc(&Channel->TXCompleteDpc, Channel->Device, Channel);
+		Channel->TXComplete = FALSE;
+	}
+
+	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 0x38);		// RESET IUS
 
 	goto	SIOI10;			// SEE IF ANY MORE 
 
@@ -1222,12 +1193,25 @@ NOINTS:
 
  }
 
+VOID TXComplete(IN PKDPC Dpc, IN PVOID Context, MYDEVICE_OBJECT * Device, HDLC_CHANNEL * Channel)
+{
+	// Called when TX Complete Occurs. Free the buffer and see if any more to send
 
-VOID SDADRX(PHDLC_CHANNEL Extension)
+	PushBUFEntry(&Device->DeviceExtension->FREE_Q, Channel->TXFRAME, Device->DeviceExtension);
+}
+
+VOID RXComplete(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2)
+{
+	// Called when RX Complete Occurs. Queue buffer.
+
+	//PushBUFEntry(&DeviceObject->DeviceExtension->FREE_Q, Context->TXFRAME, DeviceObject->DeviceExtension);
+
+}
+VOID SDADRX(PHDLC_CHANNEL Channel)
 {
 	UCHAR Char;
 
-//	Extension->SOFTDCD = 4;			// SET RX ACTIVE
+//	Channel->SOFTDCD = 4;			// SET RX ACTIVE
 /*
 	MOV	ESI,OFFSET32 deviceInfo->FREE_Q
 	cli
@@ -1252,9 +1236,9 @@ GETB00:
 	INC	EDI
 	MOV	SDRNEXT[EBX],EDI		; AND NEXT BYTE POINTER
 ;*/
-	Extension->FRAMELEN = 7;
+	Channel->FRAMELEN = 7;
 
-	Extension->SDFLAGS |= SDRINP;	// SET RX IN PROGRESS
+	Channel->SDFLAGS |= SDRINP;	// SET RX IN PROGRESS
 
 	SETRVEC	SDIDRX;					// SET VECTOR TO 'GET DATA'
 
@@ -1264,7 +1248,7 @@ GETB00:
 
 //	NO BUFFER FOR RECEIVE - SET TO DISCARD
 
-	Extension->OLOADS++;
+	Channel->OLOADS++;
 
 	SETRVEC	SDOVRX;
 
@@ -1273,24 +1257,24 @@ GETB00:
 	return;
 }
 
-VOID SDIDRX(PHDLC_CHANNEL Extension)
+VOID SDIDRX(PHDLC_CHANNEL Channel)
 {
 //;
 //;	NOW READ CHARACTER FROM SIO AND STORE
 //;
 
-	Extension->SOFTDCD = 4;			// SET RX ACTIVE
-	Extension->FRAMELEN++;
+	Channel->SOFTDCD = 4;			// SET RX ACTIVE
+	Channel->FRAMELEN++;
 
-	if (Extension->FRAMELEN > BUFFLEN-10)
+	if (Channel->FRAMELEN > BUFFLEN-10)
 		SETRVEC	SDOVRX;				//	CANT TAKE ANY MORE
 
-	*(Extension->SDRNEXT++) = SIOR;	// GET data
+	*(Channel->SDRNEXT++) = SIOR;	// GET data
 
 	return;
 }
 
-VOID SDOVRX(PHDLC_CHANNEL Extension)
+VOID SDOVRX(PHDLC_CHANNEL Channel)
 {
 	//	DISCARD REST OF MESSAGE
 
@@ -1301,7 +1285,7 @@ VOID SDOVRX(PHDLC_CHANNEL Extension)
 
 //***	RX SPECIAL CHARACTER INTERRUPT
 
-VOID SPCLINT(PHDLC_CHANNEL Extension)
+VOID SPCLINT(PHDLC_CHANNEL Channel)
 {
 	UCHAR RR1;
 	
@@ -1318,13 +1302,13 @@ VOID SPCLINT(PHDLC_CHANNEL Extension)
 
 //	NOT END OF FRAME - SHOULD BE OVERRUN - DISCARD FRAME
 
-	Extension->L2ORUNC++;	// FOR STATS
+	Channel->L2ORUNC++;	// FOR STATS
 
-	if (Extension->SDFLAGS & SDRINP)
+	if (Channel->SDFLAGS & SDRINP)
 	{
 		// BUFFER IS ALLOCATED
 
-		Extension->SDFLAGS &= !SDRINP;
+		Channel->SDFLAGS &= !SDRINP;
 
 		//MOV	ESI,OFFSET32 deviceInfo->FREE_Q
 		//MOV	EDI,CURALP[EBX]
@@ -1353,13 +1337,13 @@ SDEOF:
 
 //	CMP	FRAMELEN[EBX],14H
 //	JB SHORT DONTCOUNT		// TOO SHORT
-	Extension->RXERRORS++;
+	Channel->RXERRORS++;
 
 
-	if ((Extension->SDFLAGS & SDRINP) == 0)
+	if ((Channel->SDFLAGS & SDRINP) == 0)
 		goto SDSP09;		// IF NOT SET, NO BUFFER IS ALLOCATED
 
-	Extension->SDFLAGS &= !SDRINP;
+	Channel->SDFLAGS &= !SDRINP;
 
 DISCARDFRAME:
 
@@ -1376,14 +1360,14 @@ SDSP09:
 //	GOOD FRAME RECEIVED
 
 SDSP10:
-	if ((Extension->SDFLAGS & SDRINP) == 0)
+	if ((Channel->SDFLAGS & SDRINP) == 0)
 		goto SDSP11;			// IF NOT SET, NO BUFFER IS ALLOCATED
 
-	Extension->SDFLAGS &= !SDRINP;
+	Channel->SDFLAGS &= !SDRINP;
 
-	*(--Extension->SDRNEXT) = 0xfe;	// OVERWRITE FIRSTS FCS BYTE WITH MARKER
+	*(--Channel->SDRNEXT) = 0xfe;	// OVERWRITE FIRSTS FCS BYTE WITH MARKER
 
-	if (Extension->FRAMELEN < 20)
+	if (Channel->FRAMELEN < 20)
 		goto DISCARDFRAME;		// TOO SHORT
 
 //	MOV	EDI,CURALP[EBX]		; BUFFER ADDR
@@ -1409,18 +1393,18 @@ SPCLINTEXIT:
 //					      ELSE SEND ABORT
 //		 - ABORT START/END - IF RECEIVING, CANCEL MESSAGE
 
-VOID EXTINT(PHDLC_CHANNEL Extension)
+VOID EXTINT(PHDLC_CHANNEL Channel)
 {
-	UCHAR RR0, OldRR0 = Extension->RR0;
+	UCHAR RR0, OldRR0 = Channel->RR0;
 
 	RR0 = SIOCR;
 	
-	Extension->RR0 = RR0;
+	Channel->RR0 = RR0;
 
 	if (((RR0 ^ OldRR0) & 0xc0) == 0)
 		goto SDST40;							// NO INTERESTING CHANGES
 	
-	if ((Extension->SDFLAGS & SDTINP) == 0)
+	if ((Channel->SDFLAGS & SDTINP) == 0)
 		goto SDST10;							// J IF 'TX IN PROGRESS' NOT SET
 
 //	WE ARE TRANSMITTING - CHECK FOR UNDERRUN
@@ -1428,7 +1412,7 @@ VOID EXTINT(PHDLC_CHANNEL Extension)
 	if ((RR0 & SDUNDER) == 0)		// TX UNDERRUN?
 		goto SDST10;				// ONLY INTERESTING ONE
 
-	if ((Extension->SDTXCNT) & 0x8000)	// IS IDP CHAR COUNT -VE?
+	if ((Channel->SDTXCNT) & 0x8000)	// IS IDP CHAR COUNT -VE?
 		goto SDST10;						// J IF YES (NORMAL END-OF-FRAME)
 
 //	UNDERRUN IN MID-FRAME
@@ -1437,16 +1421,16 @@ VOID EXTINT(PHDLC_CHANNEL Extension)
 	SIOCW(SDABTX);						// SEND ABORT SEQUENCE
 	SETTVEC	SDCMTX;						// SET VECTOR TO 'TX COMPLETE'
 
-	Extension->SDFLAGS |= ABSENT;		// SET ABORT SENT
+	Channel->SDFLAGS |= ABSENT;		// SET ABORT SENT
 
-	Extension->L2URUNC++;				// UNDERRUNS
+	Channel->L2URUNC++;				// UNDERRUNS
 
 	goto SDST10;						// SEE IF ANY RX ERROR BITS ALSO SET
 
 //	IS RX IN PROGRESS?
 
 SDST10:
-	if ((Extension->SDTXCNT & SDRINP) == 0)
+	if ((Channel->SDTXCNT & SDRINP) == 0)
 		goto SDST40;					// NO, SO PROBABLY ABORT FOLLOWING MSG 
 
 	if ((RR0 & SDABORT)	== 0)			// IS ABORT STATUS BIT SET?
@@ -1457,7 +1441,7 @@ SDST10:
 //	MOV	ESI,OFFSET32 deviceInfo->FREE_Q
 //	CALL	Q_ADDF			; RELEASE BUFFER
 
-	Extension->SDFLAGS &= !SDRINP;	// CLEAR RX IN PROGRESS
+	Channel->SDFLAGS &= !SDRINP;	// CLEAR RX IN PROGRESS
 
 	SETRVEC SDADRX;					// READY FOR NEXT FRAME
 
@@ -1471,20 +1455,20 @@ SDST40:
 
 //***	TX DATA
 
-VOID SDDTTX(PHDLC_CHANNEL Extension)
+VOID SDDTTX(PHDLC_CHANNEL Channel)
 {	
-	Extension->SDTXCNT--;			// DECREMENT CURRENT IDP COUNT
+	Channel->SDTXCNT--;			// DECREMENT CURRENT IDP COUNT
 ;
-	if (Extension->SDTXCNT >= 0)
+	if (Channel->SDTXCNT >= 0)
 	{
-		SIOW (*Extension->SDTNEXT++);	// TRANSMIT NEXT BYTE
+		SIOW (*Channel->SDTNEXT++);	// TRANSMIT NEXT BYTE
 		return;
 	}
 
 //	NO MORE DATA TO TRANSMIT
 
 	SIOCW (10);							// Select Wr10  
-	SIOCW(Extension->WR10 |  0x80);		// SET TO SEND CRC ON UNDERRUN
+	SIOCW(Channel->WR10 |  0x80);		// SET TO SEND CRC ON UNDERRUN
 
 	SIOCW(SDRPEND);			// RESET TX UNDERRUN/EOM LATCH
 	SETTVEC	SDCMTX;			// SET TX VECTOR TO 'TX COMPLETION'
@@ -1494,27 +1478,21 @@ VOID SDDTTX(PHDLC_CHANNEL Extension)
 
 //	*** F11 - TX COMPLETION
 
-VOID SDCMTX(PHDLC_CHANNEL Extension)
+VOID SDCMTX(PHDLC_CHANNEL Channel)
 {
 	SIOCW(SDRPEND);			// RESET TX INT PENDING
 
-	if ((Extension->SDFLAGS) & ABSENT)
+	if ((Channel->SDFLAGS) & ABSENT)
 	{
 		//	FRAME WAS ABORTED - SEND AGAIN
 
-		Extension->SDFLAGS &= !ABSENT;
+		Channel->SDFLAGS &= !ABSENT;
 		//	MOV	EDI,TXFRAME[EBX]
 		//	JMP SHORT SENDAGAIN
 	}
 
-//	MOV	EDI,TXFRAME[EBX]
-//	MOV	TXFRAME[EBX],0
-
-//	MOV	ESI,OFFSET32 TRACE_Q	; TRACE IT
-//	MOV	ESI,OFFSET32 deviceInfo->FREE_Q	; TRACE IT
-//	CALL	Q_ADDF
-
-	Extension->SDFLAGS &= !SDTINP;
+	Channel->TXComplete = TRUE;
+	Channel->SDFLAGS &= !SDTINP;
 
 //	SEE IF MORE TO SEND
 
@@ -1534,19 +1512,19 @@ VOID SDCMTX(PHDLC_CHANNEL Extension)
 //	LEA	EDI,8[EDI]
 //	MOV	SDTNEXT[EBX],EDI		; SET NEXT BYTE POINTER
 
-	Extension->SDFLAGS |= SDTINP;
+	Channel->SDFLAGS |= SDTINP;
 	SETTVEC	SDDTTX;				// SET VECTOR TO 'TX DATA'
 
 	SIOCW(SDTXCRC);					// RESET TX CRC GENERATOR
 
-	SIOW (*Extension->SDTNEXT++);	// TRANSMIT First BYTE
+	SIOW (*Channel->SDTNEXT++);	// TRANSMIT First BYTE
 
 	SIOCW(SDTXUND);					// RESET TX UNDERRUN LATCH
 
-	Extension->RR0 &= !SDUNDER;		// KEEP STORE COPY
+	Channel->RR0 &= !SDUNDER;		// KEEP STORE COPY
 
 	SIOCW(10);						// Select WR10 
-	SIOCW(Extension->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
+	SIOCW(Channel->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
  
 	return;
 
@@ -1561,7 +1539,7 @@ NOMORETOSEND:
 	return;
 }
 
-VOID SENDDUMMY1(PHDLC_CHANNEL Extension)
+VOID SENDDUMMY1(PHDLC_CHANNEL Channel)
 {
 	SIOW(0);		// FIRST DUMMY
 
@@ -1570,7 +1548,7 @@ VOID SENDDUMMY1(PHDLC_CHANNEL Extension)
 	return;
 }
 
-VOID SENDDUMMY2(PHDLC_CHANNEL Extension)
+VOID SENDDUMMY2(PHDLC_CHANNEL Channel)
 {
 	SIOW(0);		// SECOND DUMMY
 
@@ -1579,7 +1557,7 @@ VOID SENDDUMMY2(PHDLC_CHANNEL Extension)
 	return;
 }
 
-VOID SENDDUMMY3(PHDLC_CHANNEL Extension)
+VOID SENDDUMMY3(PHDLC_CHANNEL Channel)
 {
 	SIOW(0);		// THIRD DUMMY
 
@@ -1587,7 +1565,7 @@ VOID SENDDUMMY3(PHDLC_CHANNEL Extension)
 
 	return;
 }
-VOID SENDDUMMY4(PHDLC_CHANNEL Extension)
+VOID SENDDUMMY4(PHDLC_CHANNEL Channel)
 {
 	SIOW(0);		// 4TH DUMMY
 
@@ -1596,9 +1574,9 @@ VOID SENDDUMMY4(PHDLC_CHANNEL Extension)
 	return;
 }
 
-VOID DROPRTS(PHDLC_CHANNEL Extension)
+VOID DROPRTS(PHDLC_CHANNEL Channel)
 {
-	Extension->LINKSTS &= 0xfe;	// SET NOT TRANSMITTING
+	Channel->LINKSTS &= 0xfe;	// SET NOT TRANSMITTING
 
 	SIOCW(5);
 	
@@ -1606,14 +1584,14 @@ VOID DROPRTS(PHDLC_CHANNEL Extension)
 
 	SETTVEC	IGNORE;
 
-	if (Extension->RXBRG)
+	if (Channel->RXBRG)
 	{
 		// NEED TO RESET BRG FOR RECEIVE
 
 		SIOCW(12);			// Select WR12
-		SIOCW(Extension->RXBRG &0xff);	// SET LSB
+		SIOCW(Channel->RXBRG &0xff);	// SET LSB
 		SIOCW(13);			// Select WR12
-		SIOCW(Extension->RXBRG >> 8);	// SET MSB
+		SIOCW(Channel->RXBRG >> 8);	// SET MSB
 	}
 
 	return;
@@ -1622,7 +1600,7 @@ VOID DROPRTS(PHDLC_CHANNEL Extension)
 
 //***	TX INTERRUPT IGNORE
 
-VOID IGNORE(PHDLC_CHANNEL Extension)
+VOID IGNORE(PHDLC_CHANNEL Channel)
 {
 	SIOCW(SDRPEND);					// RESET TX INTERRUPT PENDING
 
@@ -1638,10 +1616,11 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	PBUF_ENTRY Buffer;
 	int i, AddChannels;
 	ULONG Port;
+	NTSTATUS status;
+	PHDLC_INTERRUPTS Interrupt;
 
 	DebugPrint(("BPQHDLC: InitChannel Interrupt %d IOBASE %x IOLEN %d Chan %c\n",
 		Params->Interrupt, Params->IOBASE, Params->IOLEN, Params->Channel));
-
 
 	// Check that IO address range and Interrupt are available
 
@@ -1670,7 +1649,9 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	
 	DebugPrint(("BPQHDLC: Channel Structure allocated at %x Len %d\n", Channel, sizeof(HDLC_CHANNEL)));
 
-	ChannelPointers[AllocatedChannels++] = Channel;	
+	Channel->ChannelPointer = AllocatedChannels; // Save our position in AllocatedChannels List
+
+	deviceInfo->ChannelPointers[AllocatedChannels++] = Channel;	
 
 	InitializeListHead(&Channel->TXMSG_Q);
 	InitializeListHead(&Channel->RXMSG_Q);
@@ -1685,13 +1666,13 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	Channel->WR10 = Params->WR10;
 	Channel->CHANNELNUM = Params->Channel;
 	Channel->SOFTDCD = Params->SOFTDCD;
+	Channel->TXDELAY = Params->TXDELAY;
 
 	Channel->IOTXCA = IGNORE;			// TX CHANNEL A
 	Channel->IOTXEA = EXTINT;
 	Channel->IORXCA = SDADRX;			// RX CHANNEL A
 	Channel->IORXEA = SPCLINT;
 
-	Channel->TXDELAY = Params->TXDELAY;
 
 	// Add a few buffers to the pool (More if first channel)
 
@@ -1704,18 +1685,42 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 		if (Buffer) PushBUFEntry(&deviceInfo->FREE_Q, Buffer, deviceInfo);
 	}
 
-	//
-    // Create Timer Stuff - a Dpc and a Timer Object
-    //
+    // Create Timer and Interrupt Stuff - 3  * Dpc and a Timer Object
 
-	KeInitializeDpc(&Channel->PollingDpc,
-                        TXDelayDpc,
-                        (PVOID)Channel );
-    //
+	KeInitializeDpc(&Channel->TXDelayDpc, TXDelay, (PVOID)Channel );
+	KeInitializeDpc(&Channel->TXCompleteDpc, TXComplete, (PVOID)Channel );
+	KeInitializeDpc(&Channel->RXCompleteDpc, RXComplete, (PVOID)Channel );
+
     // Initialize the timer object
-    //
 
-    KeInitializeTimer(&Channel->PollingTimer );
+    KeInitializeTimer(&Channel->TXDelayTimer);
+
+	// Hook the interrupt if this is the first device on the level
+
+	Interrupt = &deviceInfo->Interrupt_Control[Params->Interrupt];
+
+	if (Interrupt->Interrupt == NULL)
+	{
+		DebugPrint(("BPQHDLC: Connecting Interrupt %d Vector %d Level %d Mode %d Aff %d\n",
+			Params->Interrupt, Interrupt->Vector,
+			Interrupt->Level,
+			Interrupt->InterruptMode,
+			Interrupt->Affinity, FALSE));
+		
+		status = IoConnectInterrupt(&Interrupt->Interrupt,
+						HDLCISR,
+						Channel, NULL,
+						Interrupt->Vector,
+						Interrupt->Level,
+						Interrupt->Level,
+						Interrupt->InterruptMode,
+						FALSE,		// Sharable
+						Interrupt->Affinity, FALSE);
+
+		if (!NT_SUCCESS(status)) 
+			DebugPrint(("Couldn't connect to interrupt"));
+
+	}
 
  	//RXAINIT(Channel);
 
@@ -1727,17 +1732,17 @@ VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo)
 	int i;
 	PBUF_ENTRY Buffer;
 	PHDLC_CHANNEL Channel;
-
+	PHDLC_INTERRUPTS Interrupt;
 
 	for (i=0; i< AllocatedChannels; i++)
 	{
-		Channel = ChannelPointers[i];
+		Channel = deviceInfo->ChannelPointers[i];
 
-		KeCancelTimer(&Channel->PollingTimer);
+		KeCancelTimer(&Channel->TXDelayTimer);
 		
 		ExFreePool(Channel);
 		DebugPrint(("BPQHDLC: Releasing Channel Structure allocated at %x\n", Channel));
-		ChannelPointers[i] = NULL;
+		deviceInfo->ChannelPointers[i] = NULL;
 	}
 
 	while (!IsListEmpty(&deviceInfo->FREE_Q))
@@ -1745,6 +1750,21 @@ VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo)
 		Buffer = PopBUFEntry(&deviceInfo->FREE_Q, deviceInfo);
 		DebugPrint(("BPQHDLC: Releasing Buffer allocated at %x\n", Buffer));
 		ExFreePool(Buffer);
+	}
+
+	// Release Interupts
+
+	for (i=0; i < 17; i++)
+	{
+		Interrupt = &deviceInfo->Interrupt_Control[i];
+		{
+			if (Interrupt->Interrupt)
+			{
+				DebugPrint(("BPQHDLC: Disconnecting Interrupt %d\n", i));
+				IoDisconnectInterrupt(Interrupt->Interrupt);
+				Interrupt->Interrupt = NULL;
+			}
+		}
 	}
 }
 
@@ -1806,35 +1826,91 @@ int ReceivePacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceI
 	return Len;
 }
 
-VOID TXDelayDpc(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2)
+VOID StartTX(PLOCAL_DEVICE_INFO pLDI, PHDLC_CHANNEL Channel, PBUF_ENTRY Buffer)
 {
- //   PDEVICE_OBJECT          deviceObject;
- //   PDEVICE_EXTENSION       deviceExtension;
+	LARGE_INTEGER Interval;
+	
+	Channel->LINKSTS |= 1;		// Set Active
 
- //   deviceObject = (PDEVICE_OBJECT)Context;
- //   deviceExtension = deviceObject->DeviceExtension;
+	// Kick off TXDelay 
 
-	PHDLC_CHANNEL Extension = (PHDLC_CHANNEL)Context;
+	DebugPrint(("BPQHDLC: Starting TXDelay %d\n", Channel->TXDELAY));
 
-	DebugPrint(("BPQHDLC: Timer Fired, DPC %x Context %x\n", Dpc, Context));
+	//PushBUFEntry(&pLDI->FREE_Q, Buffer, pLDI);
 
-	Extension->SDFLAGS |= SDTINP;
+	Channel->TXFRAME = Buffer;
+	Channel->SDTXCNT = Buffer->MsgLen;
+	Channel->SDTNEXT = &Buffer->Message[8];
+
+	Channel->SDFLAGS |= SDTINP;
+
+	Channel->SDFLAGS |= SDTINP;
 	SETTVEC	SDDTTX;				// SET VECTOR TO 'TX DATA'
 
 	SIOCW(SDTXCRC);					// RESET TX CRC GENERATOR
 
-	SIOW (*Extension->SDTNEXT++);	// TRANSMIT First BYTE
+	SIOW (*Channel->SDTNEXT++);	// TRANSMIT First BYTE
 
 	SIOCW(SDTXUND);					// RESET TX UNDERRUN LATCH
 
-	Extension->RR0 &= !SDUNDER;		// KEEP STORE COPY
+	Channel->RR0 &= !SDUNDER;		// KEEP STORE COPY
 
 	SIOCW(10);						// Select WR10 
-	SIOCW(Extension->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
+	SIOCW(Channel->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
+
+	if (Channel->TXBRG)
+	{
+	//;	NEED TO RESET BRG FOR TRANSMIT
+
+		SIOCW(12);						// Select WR12
+		SIOCW(Channel->TXBRG & 0xff);	// SET LSB
+		SIOCW(13);						// Select WR13
+		SIOCW(Channel->TXBRG >> 8);	// SET MSB
+	}
+
+//
+//	Start TXDelay Timer
+//
+
+	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 5);
+	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 0xeb); //RAISE RTS TO START SENDING FLAGS
+
+	//MOV	WR10[BX],00100000B	; NRZI
+
+	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 10);
+	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, Channel->WR10 | 0xA4); //Abort on underrun
+
+	Interval.QuadPart = Int32x32To64(Channel->TXDELAY, -10000);
+
+	KeSetTimer(&Channel->TXDelayTimer, Interval , &Channel->TXDelayDpc);
+
+	return;
 }
 
-DropRTS(PHDLC_CHANNEL Channel)
+VOID TXDelay(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2)
 {
-	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 5);
-	WRITE_PORT_UCHAR(Channel->Mapped_SIOC, 0xe1);	 //Drop RTS   
+ //   PDEVICE_OBJECT          deviceObject;
+ //   PDEVICE_Channel       deviceChannel;
+
+ //   deviceObject = (PDEVICE_OBJECT)Context;
+ //   deviceChannel = deviceObject->DeviceExtension;
+
+	PHDLC_CHANNEL Channel = (PHDLC_CHANNEL)Context;
+
+	DebugPrint(("BPQHDLC: TXDelay Expired - starting TX, DPC %x Context %x\n", Dpc, Context));
+
+	Channel->SDFLAGS |= SDTINP;
+	SETTVEC	SDDTTX;				// SET VECTOR TO 'TX DATA'
+
+	SIOCW(SDTXCRC);					// RESET TX CRC GENERATOR
+
+	SIOW (*Channel->SDTNEXT++);	// TRANSMIT First BYTE
+
+	SIOCW(SDTXUND);					// RESET TX UNDERRUN LATCH
+
+	Channel->RR0 &= !SDUNDER;		// KEEP STORE COPY
+
+	SIOCW(10);						// Select WR10 
+	SIOCW(Channel->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
+
 }
