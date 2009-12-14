@@ -2071,8 +2071,9 @@ VOID ChatTimer()
 	i = 0;
 	for (node = node_hd; node; node = node->next)
 	{
-		WritetoDebugWindow(node->call, strlen(node->call));
-		WritetoDebugWindow("\r\n", 2);
+		len = sprintf_s(Msg, sizeof(Msg), "%s Version %s Count %d\r\n",
+			node->call, node->Version, node->refcnt);
+		WritetoDebugWindow(Msg, len);
 
 		i++;
 	}

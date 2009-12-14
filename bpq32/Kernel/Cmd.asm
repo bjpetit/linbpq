@@ -274,6 +274,9 @@ CQCALL	DB	'CQ          ',2
 	DB	'ATTACH      ',1
 	DD	ATTACHCMD,0
 
+	DB	'RADIO       ',3
+	DD	RADIOCMD,0
+		
 	DB	'NRR         ',1
 	DD	NRRCMD,0
 
@@ -355,6 +358,10 @@ ATTERRLEN3	EQU	$-ATTERRMSG3
 
 AXATTERRMSG1	DB	'Error - No free streams on this port',0dh
 AXATTERRLEN1	EQU	$-AXATTERRMSG1
+
+RADERRMSG	DB	'Error - Rig Control Interface not available',0dh
+RADERRLEN	EQU	$-RADERRMSG
+
 
 MHDISMSG	DB	'MHEARD not enabled on that port',0dh
 
@@ -3978,6 +3985,64 @@ DOTIME:
 MHEND:
 
 	JMP	SENDCOMMANDREPLY
+
+	PUBLIC RADIOCMD
+
+EXTERN	_Rig_Command:DWORD
+
+RADIOCMD:
+
+; Send a command over the Rig Control Interface
+
+	MOV	CONNECTREPLYPTR,EDI	; SAVE POINTER
+	MOV	CONNECTSESSION,EBX
+
+	CMP		_Rig_Command,0
+	JNE	@F
+	
+; Rig Control not available
+
+	MOV	ESI,OFFSET32 RADERRMSG
+	MOV	ECX,RADERRLEN
+
+	REP MOVSB
+	JMP	SENDCOMMANDREPLY
+
+@@:
+
+	push	EBX
+	push	esi
+
+	MOVZX	EAX, CIRCUITINDEX[EBX]
+	PUSH	ESI				; Command
+	PUSH	EAX				; Srream	
+	
+	CALL	_Rig_Command
+	
+	pop	esi
+	POP	EBX
+	
+	or eax,eax
+	jnz	@F					; OK
+
+; Error Message is in buffer
+
+	MOV	CONNECTREPLYPTR,EDI	; SAVE POINTER
+CPloop:
+	lodsb
+	stosb
+	
+	cmp	al, 13
+	jne	CPloop
+	
+	JMP SENDCOMMANDREPLY
+
+@@:
+		
+	MOV	EDI,REPLYBUFFER
+	CALL	RELBUFF
+
+	ret
 
 
 	PUBLIC	ATTACHCMD

@@ -26,6 +26,8 @@
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
+
+static char ClassName[]="PACTORSTATUS";
 #include "..\PactorCommon.c"
  
 #define DllImport	__declspec(dllimport)
@@ -317,7 +319,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
-
+		
 		_asm 
 		{
 			MOV	EAX,buff
@@ -327,7 +329,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		if (Stream == 0)
 		{
 			if (TNC->Streams[0].FramesOutstanding  > 4)
-				return (1 | TNC->HostMode << 8);
+				(1 | TNC->HostMode << 8);
 		}
 		else
 		{
@@ -416,6 +418,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
 	CreatePactorWindow(TNC);
+	
+	LoadRigDriver();
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
@@ -717,6 +721,7 @@ VOID KAMPoll(int Port)
 		int calllen;
 		UCHAR TXMsg[1000] = "D20";
 		int datalen;
+		char Msg[80];
 
 		TNC->Streams[0].Attached = TRUE;
 
@@ -730,6 +735,14 @@ VOID KAMPoll(int Port)
 
 		wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+		// Stop Scanning
+
+		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+		if (Rig_Command)
+			Rig_Command(-1, Msg);
+
 	}
 	
 	if (TNC->Timeout)
@@ -838,8 +851,16 @@ VOID KAMPoll(int Port)
 			TNC->Timeout = 50;
 			TNC->IntCmdDelay--;
 
+			// Restart Scanning
+
+			wsprintf(Status, "%d SCANSTART", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+			if (Rig_Command)
+				Rig_Command(-1, Status);
+
 			return;
 		}
+
 	}
 
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -886,6 +907,20 @@ VOID KAMPoll(int Port)
 				datalen--;				// Exclude CR
 				MsgPtr[datalen] = 0;	// Null Terminate
 				_strupr(MsgPtr);
+
+				if ((Stream == 0) && memcmp(MsgPtr, "RADIO ", 6) == 0)
+				{
+					if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &MsgPtr[6]))
+					{
+						ReleaseBuffer(buffptr);
+					}
+					else
+					{
+						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &MsgPtr[6]);
+						Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+					}
+					return;
+				}
 
 
 				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2)	// Connect
@@ -1372,6 +1407,15 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 			if (Stream == 0)
 			{
+				// Stop Scanner
+
+				char Msg[80];
+				
+				wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+				if (Rig_Command)
+					Rig_Command(-1, Msg);
+
 				wsprintf(Status, "RX %d TX %d ACKED %d ", 
 					TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
 				SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);

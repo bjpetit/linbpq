@@ -2878,7 +2878,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 
 		// Not a defined or known node - pretty safe to assume it's a user
 
-		if (!rtloginu (conn, FALSE))
+		if (!rtloginu (conn, TRUE))
 		{
 			// Already connected - close
 			
@@ -3291,7 +3291,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			return;
 		}
 
-		if (rtloginu (conn, TRUE), TRUE)
+		if (rtloginu (conn, TRUE))
 			conn->Flags |= CHATMODE;
 		else
 			SendPrompt(conn, user);

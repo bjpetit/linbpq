@@ -255,6 +255,10 @@ DllExport int APIENTRY CloseBPQ32();
 BOOL (FAR WINAPI * Init_IP) ();
 BOOL (FAR WINAPI * Poll_IP) ();
 
+BOOL (FAR WINAPI * Rig_Command) ();
+BOOL (FAR WINAPI * Rig_Init) ();
+BOOL (FAR WINAPI * Rig_Poll) ();
+
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
 int MINORVERSION=9;
@@ -330,10 +334,11 @@ int PerlReinit = 0;
 int TimerHandle = 0;
 unsigned int TimerInst = 0xffffffff;
 ;
-int AttachedProcesses=0;
-int AttachedPerlProcesses=0;
-int AttachingProcess=0;
-HINSTANCE hIPModule=0;
+int AttachedProcesses = 0;
+int AttachedPerlProcesses = 0;
+int AttachingProcess = 0;
+HINSTANCE hIPModule = 0;
+HINSTANCE hRigModule = 0;
 
 BOOL ReconfigFlag=FALSE;
 
@@ -364,9 +369,12 @@ DllExport VOID APIENTRY  Send_AX(VOID * Block, DWORD len, UCHAR Port);
 BOOL LoadIPDriver();
 BOOL Send_IP(VOID * Block, DWORD len);
 VOID CheckforLostProcesses();
+BOOL LoadRigDriver();
 
-BOOL IPActive=FALSE;
-BOOL IPRequired=FALSE;
+BOOL IPActive = FALSE;
+BOOL IPRequired = FALSE;
+BOOL RigRequired = TRUE;
+BOOL RigActive = FALSE;
 
 Tell_Sessions();
 
@@ -780,8 +788,8 @@ VOID CALLBACK TimerProc(
 
 	__try 
 	{
-		if (IPActive)
-		Poll_IP();
+		if (IPActive) Poll_IP();
+		if (RigActive) Rig_Poll();
 		
 		TIMERINTERRUPT();
 	}
@@ -850,12 +858,13 @@ FirstInit()
 
 	if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
 
+	if (RigRequired) if (LoadRigDriver()) RigActive = Rig_Init();
+
 	_beginthread(MonitorThread,0,0);
 	
 	OutputDebugString("BPQ32 Port Initialisation Complete\n");
 
 	return 0;
-
 }
 
 BOOL LoadIPDriver()
@@ -897,6 +906,48 @@ BOOL LoadIPDriver()
 	}
 	return TRUE;
 }
+
+BOOL LoadRigDriver()
+{
+	char msg[128];
+	int err=0;
+	UCHAR Value[MAX_PATH];
+	char DLL[]="RigControl.dll";
+	
+	// If no directory, use current
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(Value, DLL);
+	}
+		else
+	{
+		strcpy(Value,BPQDirectory);
+		strcat(Value,"\\");
+		strcat(Value, DLL);
+	}
+		
+	hRigModule = LoadLibrary(Value);
+
+	if (hRigModule == NULL)
+	{
+		err=GetLastError();
+
+		wsprintf(msg,"Error loading Driver %s - Error code %d",	DLL,err);
+		
+		WritetoConsole(msg);
+		return FALSE;
+
+	}
+	else
+	{
+		Rig_Init = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Init@0");
+		Rig_Poll = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Poll@0");
+		Rig_Command = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Command@8");
+	}
+	return TRUE;
+}
+
 
 Check_Timer()
 {
@@ -965,6 +1016,8 @@ Check_Timer()
 //					PIPE_ACCESS_DUPLEX,0,64,4096,4096,1000,NULL);
 
 		if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
+
+		if (RigRequired) if (LoadRigDriver()) RigActive = TRUE;
 
 		_beginthread(MonitorThread,0,0);
 
@@ -3946,6 +3999,15 @@ DllExport VOID APIENTRY RelBuff(PMESSAGE Msg)
 		call RELBUFF
 	}
 }
+
+DllExport PMESSAGE APIENTRY GetBuff()
+{
+	_asm{
+ 		call GETBUFF
+		mov eax, edi
+	}
+}
+
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {

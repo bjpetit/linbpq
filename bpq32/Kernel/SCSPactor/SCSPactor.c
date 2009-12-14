@@ -26,6 +26,8 @@
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
+
+static char ClassName[]="PACTORSTATUS";
 #include "..\PactorCommon.c"
  
 #define DllImport	__declspec(dllimport)
@@ -366,7 +368,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
 	CreatePactorWindow(TNC);
-	
+
+	LoadRigDriver();
+
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
 	return ((int)ExtProc);
@@ -656,6 +660,14 @@ VOID DEDPoll(int Port)
 
 		wsprintf(Status, "In Use by %s", TNC->MyCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+		// Stop Scanner
+		
+		wsprintf(Status, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+		if (Rig_Command)
+			Rig_Command(-1, Status);
+
 	}
 
 	if (TNC->Timeout)
@@ -738,6 +750,13 @@ VOID DEDPoll(int Port)
 
 		TNC->CmdSet = TNC->CmdSave = malloc(100);
 		wsprintf(TNC->CmdSet, "I%s\rY1\r", TNC->NodeCall);
+
+		//	Start Scanner
+				
+		wsprintf(Status, "%d SCANSTART", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+		if (Rig_Command) Rig_Command(-1, Status);
+
 	}
 
 	// if we have just restarted or TNC appears to be in terminal mode, run Initialisation Sequence
@@ -808,6 +827,19 @@ VOID DEDPoll(int Port)
 			Buffer[datalen] = 0;	// Null Terminate
 			_strupr(Buffer);
 
+			if (memcmp(Buffer, "RADIO ", 6) == 0)
+			{
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &Buffer[6]))
+				{
+					ReleaseBuffer(buffptr);
+				}
+				else
+				{
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &Buffer[6]);
+					Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
+				}
+				return;
+			}
 
 			if (Buffer[0] == 'C' && datalen > 2)	// Connect
 			{
@@ -1355,6 +1387,12 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				TNC->Connecting = FALSE;
 
 				TNC->BytesRXed = TNC->BytesTXed = 0;
+
+				//	Stop Scanner
+				
+				wsprintf(Status, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+				if (Rig_Command) Rig_Command(-1, Status);
 
 				if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0)
 				{
