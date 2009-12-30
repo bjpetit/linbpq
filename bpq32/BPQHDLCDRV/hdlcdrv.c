@@ -1618,6 +1618,9 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	ULONG Port;
 	NTSTATUS status;
 	PHDLC_INTERRUPTS Interrupt;
+    UCHAR InterruptIdReg;
+	UCHAR Vector;
+
 
 	DebugPrint(("BPQHDLC: InitChannel Interrupt %d IOBASE %x IOLEN %d Chan %c\n",
 		Params->Interrupt, Params->IOBASE, Params->IOLEN, Params->Channel));
@@ -1694,6 +1697,41 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
     // Initialize the timer object
 
     KeInitializeTimer(&Channel->TXDelayTimer);
+
+	// Clear any Pending ints
+
+SIOI10:
+
+	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 3);		//SELECT RR3
+
+	InterruptIdReg = READ_PORT_UCHAR(Channel->Mapped_ASIOC);
+
+	if (InterruptIdReg == 0 || InterruptIdReg == 255) goto NOINTS; 
+
+	WRITE_PORT_UCHAR(Channel->Mapped_BSIOC, 2);		//SELECT RR2
+
+	Vector = READ_PORT_UCHAR(Channel->Mapped_BSIOC);
+
+	DebugPrint(("BPQHDLC: Clear Ints Vector = %d\n", Vector));
+	
+	if (Vector < 8)
+		Channel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
+	else
+	{
+		Channel = Channel->A_PTR;		// GET DATA FOR B CHANNEL
+		Vector -=8;
+	}
+
+	// Call our char handler
+
+	Channel->VECTOR[Vector<<1](Channel);
+
+	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 0x38);		// RESET IUS
+
+	goto	SIOI10;			// SEE IF ANY MORE 
+
+NOINTS:
+
 
 	// Hook the interrupt if this is the first device on the level
 
