@@ -4,6 +4,10 @@
 //	Uses BPQ EXTERNAL interface
 //
 
+// Dec 29 2009
+
+//	Add Scan Control using %W Hostmode Command
+
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -229,8 +233,9 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
+	int Param;
 
-	if (TNC->hDevice == (HANDLE) -1)
+	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
 	switch (fn)
@@ -315,6 +320,33 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		CloseHandle(TNCInfo[port]->hDevice);
 		return (0);
+
+	case 6:				// Scan Stop Interface
+
+		_asm 
+		{
+			MOV	EAX,buff
+			mov Param,eax
+		}
+
+		if (Param == 1)		// Request Permission
+		{
+			TNC->WantToChangeFreq = TRUE;
+			TNC->OKToChangeFreq = FALSE;
+			return TRUE;
+		}
+
+		if (Param == 2)		// Check  Permission
+			return TNC->OKToChangeFreq;
+
+		if (Param == 3)		// Release  Permission
+		{
+			TNC->DontWantToChangeFreq = TRUE;
+			return 0;
+		}
+
+		return 0;
+
 	}
 
 	return 0;
@@ -753,7 +785,7 @@ VOID DEDPoll(int Port)
 
 		//	Start Scanner
 				
-		wsprintf(Status, "%d SCANSTART", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		wsprintf(Status, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 		
 		if (Rig_Command) Rig_Command(-1, Status);
 
@@ -798,6 +830,48 @@ VOID DEDPoll(int Port)
 		}
 	}
 
+	// if Freq Change needed, check if ok to do it.
+	
+	if (TNC->TNCOK)
+	{
+		if (TNC->WantToChangeFreq)
+		{
+			Poll[2] = 31;			// Command
+			Poll[3] = 1;			// Command
+			Poll[4] = 2;			// Len -1
+			Poll[5] = '%';
+			Poll[6] = 'W';
+			Poll[7] = '0';
+		
+			CRCStuffAndSend(TNC, Poll, 8);
+
+			TNC->InternalCmd = TRUE;
+			TNC->WantToChangeFreq = FALSE;
+
+			return;
+		}
+
+		if (TNC->DontWantToChangeFreq)
+		{
+			Poll[2] = 31;			// Command
+			Poll[3] = 1;			// Command
+			Poll[4] = 2;			// Len -1
+			Poll[5] = '%';
+			Poll[6] = 'W';
+			Poll[7] = '1';
+		
+			CRCStuffAndSend(TNC, Poll, 8);
+
+			TNC->InternalCmd = TRUE;
+			TNC->DontWantToChangeFreq = FALSE;
+			TNC->OKToChangeFreq = FALSE;
+
+			return;
+		}
+
+	}
+
+
 	// Send Data if avail, else send poll
 
 	if (TNC->TNCOK && TNC->BPQtoPACTOR_Q)
@@ -829,13 +903,15 @@ VOID DEDPoll(int Port)
 
 			if (memcmp(Buffer, "RADIO ", 6) == 0)
 			{
-				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &Buffer[6]))
+				wsprintf(&Buffer[40], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &Buffer[6]);
+
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &Buffer[40]))
 				{
 					ReleaseBuffer(buffptr);
 				}
 				else
 				{
-					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &Buffer[6]);
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &Buffer[40]);
 					Q_ADD(&TNC->PACTORtoBPQ_Q, buffptr);
 				}
 				return;
@@ -1233,6 +1309,11 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		if (TNC->TXBuffer[5] == 'L')	// Shouldnt happen!
 			return;
 
+		if (TNC->TXBuffer[5] == '%' && TNC->TXBuffer[6] == 'W')	// Scan Control - Response to W1
+			if (TNC->InternalCmd)
+				return;					// Just Ignor
+
+
 		buffptr = Q_REM(&FREE_Q);
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
@@ -1337,6 +1418,14 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						wsprintf(Status, "RX %d TX %d ACKED %s", TNC->BytesRXed, TNC->BytesTXed, Buffer);
 						SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
 						return;
+					}
+
+					if (TNC->TXBuffer[6] == 'W')	// Scan Control
+					{
+						if (Msg[4] == '1')			// Ok to Change
+							TNC->OKToChangeFreq = 1;
+						else
+							TNC->OKToChangeFreq = -1;
 					}
 				}
 				return;

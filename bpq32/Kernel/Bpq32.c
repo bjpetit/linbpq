@@ -166,6 +166,18 @@
 //				Overwrite the worst quality unused route if a call is received from a node not in your
 //				table when the table is full
 
+//	Build 5
+
+//	Rig Control Interface
+//	Limit KAM VHF attach and RADIO commands to authorised programs (MailChat and BPQTerminal)
+
+// Build 6
+
+// Fix reading INP3 Flag from BPQNODES
+
+// Build 7
+
+//	Add MAXHOPS and MAXRTT config options
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -355,6 +367,8 @@ char PopupText[30][100]={""};
 byte	MCOM;
 char	MTX;
 USHORT	MMASK;
+
+UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
 
 BOOL	Perl;
 HANDLE Mutex;
@@ -1149,6 +1163,11 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		LoadToolHelperRoutines();
 
 		GetProcess(GetCurrentProcessId(),pgm);
+
+		if (_stricmp(pgm,"BPQTelnetServer.exe") == 0)
+			AuthorisedProgram = FALSE;
+		else
+			AuthorisedProgram = TRUE;
 
 		if (_stricmp(pgm,"perl.exe") == 0 || _stricmp(pgm,"ntvdm.exe") == 0)
 

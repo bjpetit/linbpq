@@ -6,24 +6,27 @@
 
 #define MAXBLOCK 4096
 
-struct STREAMINFO
+struct RIGINFO
 {
 //	struct TRANSPORTENTRY * AttachedSession;
 
-	int PACTORtoBPQ_Q;			// Frames for BPQ
-	int BPQtoPACTOR_Q;			// Frames for PACTOR
+	int BPQtoRADIO_Q;			// Frames for PACTOR
 
-	BOOL Attached;				// Set what attached to a BPQ32 stream
 	int BPQPort;				// Port this radio is attached to.
+	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
+
 	UCHAR RigAddr;
 	BOOL Scanning;				// Scanning enabled
 	int ScanCounter;
 	int PollCounter;			// Don't poll too often;
-	int ScanFreq;				//
+	int ScanFreq;				// Scan Rate
 
-	BOOL TNCOK;					// TNC is reponding
+	BOOL OKtoChange;			// Can Change
+	BOOL WaitingForPermission;	//
 
-	int Session;				// BPQ L4 Record
+	BOOL RIGOK;					// RIG is reponding
+
+	int Session;				// BPQ L4 Record Number
 	UCHAR Mode;					// Save to send after getting freq ack
 	UCHAR Filter;
 
@@ -34,40 +37,43 @@ struct STREAMINFO
 	char * FreqList;
 	char * FreqPtr;
 
+	HWND hLabel;
+	HWND hCAT;
+	HWND hFREQ;
+	HWND hMODE;
+	HWND hSCAN;
+
 };
 
+#define ICOM 1
+#define YAESU 2
+#define KENWOOD 3
 
-
-struct TNCINFO
+struct PORTINFO
 {
+	int PortType;				// ICOM, Yaesu, Etc
 	int IOBASE;
 	int SPEED;
-	struct STREAMINFO Streams[27];	// 0 is Pactor on HF port, Rest are ax.25 on VHF port.
-	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
-	char * InitScript;			// Initialisation Commands
+	struct RIGINFO Rigs[10];	// Rigs off a port
 	char * InitPtr;				// Next Command
-	int	ReinitState;			// Reinit State Machine
-	BOOL InternalCmd;			// Last Command was generated internally
+	int CmdSent;				// Last Command sent
 	int CmdStream;				// Stream last command was issued on
-	int	IntCmdDelay;			// To limit internal commands
-	int	MaxStreams;				// Radios on this interface
-	int CurrentStream;			// Radio last accessed.
+//	int	IntCmdDelay;			// To limit internal commands
+	int	ConfiguredRigs;			// Radios on this interface
+	int CurrentRig;				// Radio last accessed.
 
 	int Timeout;				// Timeout response counter
 	int Retries;
-	BOOL TNCOK;					// TNC is reponding
+	BOOL PORTOK;				// PORT is reponding
 
-	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
-
-	HANDLE hDevice;
-	BOOL HostMode;					// Set if in DED Host Mode
-	BOOL NeedPACTOR;				// Set if need to send PACTOR to put into Standby Mode
+	HANDLE hDevice;					// COM device Handle
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent
 	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
 	int RXLen;						// Data in RXBUffer
+	HWND hStatus;
+	BOOL AutoPoll;					// set if last command was a Timer poll 
 
-	HWND hDlg;						// Status Window Handle
 };
 
 

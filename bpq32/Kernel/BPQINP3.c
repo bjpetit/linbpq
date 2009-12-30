@@ -476,9 +476,13 @@ New:
 
 Found:
 
+	if (Dest->DEST_STATE & 0x80)	// Application Entry
+		return;
+
 	// Update ALIAS
 
-	memcpy(Dest->DEST_ALIAS, alias, 6);
+	if (alias[0] > ' ')
+		memcpy(Dest->DEST_ALIAS, alias, 6);
 
 	// See if we are known to it, it not add
 

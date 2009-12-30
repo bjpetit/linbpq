@@ -48,6 +48,10 @@ struct TNCINFO
 	char RemoteCall[10];			// Callsign
 	int BytesTXed;
 	int BytesRXed;
+	BOOL WantToChangeFreq;			// Request from Scanner to Change
+	int OKToChangeFreq;				// 1 = SCS Says OK to change, -1 = Dont Change zero = still waiting
+	BOOL DontWantToChangeFreq;		// Change done - ok to relaase SCS
+
 	HWND hDlg;						// Status Window Handle
 
 };

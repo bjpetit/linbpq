@@ -78,7 +78,8 @@ _ENDOFDATA	DD	0		; For DUMP ROUTINE
 	extern _Sem_edx:DWORD
 	extern _Sem_esi:DWORD
 	extern _Sem_edi:DWORD
-
+	extern _AuthorisedProgram:BYTE
+	
 	PUBLIC	DISCFLAG
 
 _BPQDATA	ENDS
@@ -1363,6 +1364,8 @@ GOTMASK:
 
 	MOV	HOSTSESSION[EBX],ESI
  	MOV	L4CIRCUITTYPE[ESI],BPQHOST+UPLINK
+ 	MOV	AL,_AuthorisedProgram	;	// Secure Host Session
+ 	MOV	Authorised_Session[ESI],AL
 
 	PUBLIC	BPQCONRET
 BPQCONRET:

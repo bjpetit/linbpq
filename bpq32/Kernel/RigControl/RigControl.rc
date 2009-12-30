@@ -78,29 +78,6 @@ CAPTION "Rig Control"
 CLASS "RIGCONTROL"
 FONT 8, "FixedSys"
 BEGIN
-    LTEXT           "",IDC_COMMSSTATE,25,5,100,11
-    LTEXT           " Radio  CI-V Addr  Freq        Mode",IDC_STATIC,0,23,
-                    160,9
-    LTEXT           "",IDC_FREQ,70,39,45,8
-    LTEXT           "",IDC_MODE,125,39,30,8
-    LTEXT           "",IDC_RIG,5,39,35,8
-    LTEXT           "",IDC_RIG2,5,49,35,8
-    LTEXT           "",IDC_RIG3,5,59,35,8
-    LTEXT           "",IDC_RIG4,5,69,35,8
-    LTEXT           "",IDC_RIG5,5,79,35,8
-    LTEXT           "",IDC_FREQ2,70,49,45,8
-    LTEXT           "",IDC_MODE2,125,49,30,8
-    LTEXT           "",IDC_FREQ3,70,59,45,8
-    LTEXT           "",IDC_MODE3,125,59,30,8
-    LTEXT           "",IDC_FREQ4,70,69,45,8
-    LTEXT           "",IDC_MODE4,125,69,30,8
-    LTEXT           "",IDC_FREQ5,70,79,45,8
-    LTEXT           "",IDC_MODE5,125,79,30,8
-    LTEXT           "",IDC_CAT,46,39,14,8
-    LTEXT           "",IDC_CAT2,46,49,14,8
-    LTEXT           "",IDC_CAT3,46,59,14,8
-    LTEXT           "",IDC_CAT4,46,69,14,8
-    LTEXT           "",IDC_CAT5,46,79,14,8
 END
 
 

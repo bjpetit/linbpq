@@ -353,7 +353,7 @@ ATTERRLEN1	EQU	$-ATTERRMSG1
 ATTERRMSG2	DB	'Error - TNC Not Ready',0dh
 ATTERRLEN2	EQU	$-ATTERRMSG2
 
-ATTERRMSG3	DB	'Sorry, you are not allowd to use this port',0dh
+ATTERRMSG3	DB	'Sorry, you are not allowed to use this port',0dh
 ATTERRLEN3	EQU	$-ATTERRMSG3
 
 AXATTERRMSG1	DB	'Error - No free streams on this port',0dh
@@ -361,7 +361,6 @@ AXATTERRLEN1	EQU	$-AXATTERRMSG1
 
 RADERRMSG	DB	'Error - Rig Control Interface not available',0dh
 RADERRLEN	EQU	$-RADERRMSG
-
 
 MHDISMSG	DB	'MHEARD not enabled on that port',0dh
 
@@ -2677,14 +2676,14 @@ CMDC05:
 	JMP	CMDC99
 @@:	
 	mov	esi,ebx
-;
-;	Only Allow Attach VHF from Applications
+;;
+;	Only Allow Attach VHF from Secure Applications
 ;
 	PUSH EBX
 	MOV	EBX,CONNECTSESSION
-	TEST	L4CIRCUITTYPE[EBX],BPQHOST
+	TEST	Authorised_Session[EBX], 1
 	POP	EBX
-	JNZ short @f			; LET HOST DO ANYTHING
+	JNZ short @f			; OK
 
 	MOV	ESI,OFFSET32 ATTERRMSG3	; Not Allowed
 	MOV	ECX,ATTERRLEN3
@@ -4101,10 +4100,10 @@ ATTACHCMD:
 	cmp	eax, ' '
 	je short attpactor
 ;
-;	Only Allow Attach VHF from Applications
+;	Only Allow Attach VHF from Secure Applications
 ;
-	TEST	L4CIRCUITTYPE[EBX],BPQHOST
-	JNZ short @f			; LET HOST DO ANYTHING
+	TEST	Authorised_Session[EBX], 1
+	JNZ short @f
 
 	MOV	ESI,OFFSET32 ATTERRMSG3	; Not Allowed
 	MOV	ECX,ATTERRLEN3

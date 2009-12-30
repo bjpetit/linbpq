@@ -909,6 +909,11 @@ PROCNODE21:
 	PUSH	ESI
 	ADD	ESI,10			; SKIP CONTROL, PID AND SIG BYTES
 	LEA	EDI,DEST_ALIAS[EBX]
+	
+;	If no alias in message, ignore
+
+	cmp	byte ptr[esi], 20h
+	jbe	NoAlias
 
 ;	Validate Alias, mainly for DISABL KPC3 Problem
 
@@ -932,6 +937,7 @@ AliasOK:
 	loop @B
 	
 	POP	ESI
+NoAlias:
 ;
 ;	UPDATE QUALITY AND OBS COUNT
 ;

@@ -1,5 +1,5 @@
 //
-//	DLL to inteface SCS TNC in Pactor Mode to BPQ32 switch 
+//	DLL to inteface KAM TNC in Pactor Mode to BPQ32 switch 
 //
 //	Uses BPQ EXTERNAL interface
 //
@@ -347,8 +347,12 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		CloseHandle(TNCInfo[port]->hDevice);
 		return (0);
-	}
 
+	case 6:				// Scan Control
+
+		return 0;		// None Yet
+
+	}
 	return 0;
 
 }
@@ -853,7 +857,7 @@ VOID KAMPoll(int Port)
 
 			// Restart Scanning
 
-			wsprintf(Status, "%d SCANSTART", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			wsprintf(Status, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 		
 			if (Rig_Command)
 				Rig_Command(-1, Status);
@@ -910,13 +914,14 @@ VOID KAMPoll(int Port)
 
 				if ((Stream == 0) && memcmp(MsgPtr, "RADIO ", 6) == 0)
 				{
-					if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &MsgPtr[6]))
+					wsprintf(&MsgPtr[40], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &MsgPtr[6]);
+					if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &MsgPtr[40]))
 					{
 						ReleaseBuffer(buffptr);
 					}
 					else
 					{
-						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &MsgPtr[6]);
+						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &MsgPtr[40]);
 						Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 					}
 					return;
