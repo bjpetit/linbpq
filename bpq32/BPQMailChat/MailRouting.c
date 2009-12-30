@@ -701,8 +701,27 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	struct Continent * Continent;
 	struct Country * Country;
 	struct ALIAS * Alias;
+	struct UserInfo * RMS;
 
 	strcpy(RouteElements, Msg->via);
+
+//	See if sending @ winlink.org
+
+	if (strcmp(RouteElements, "WINLINK.ORG") == 0)
+	{
+		RMS = FindRMS();
+
+		if (RMS)
+		{
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace @ winlink.org Matches BBS RMS");
+			{
+				set_fwd_bit(Msg->fbbs, RMS->BBSNumber);
+				RMS->ForwardingInfo->MsgCount++;
+				return 1;
+			}
+		}
+		return 0;
+	}
 
 	// See if a well-known alias
 

@@ -679,94 +679,100 @@ __int32 Encode(char * in, char * out, __int32 inlen, BOOL B1Protocol)  /* compre
 
 void Decode(CIRCUIT * conn)  
 {
-		char *ptr;
-		short  i, j, k, r;
-		short c;
-		unsigned long count;
-		unsigned short  crc_read;
-		struct FBBHeaderLine * FBBHeader= &conn->FBBHeaders[0];	// The Headers from an FFB forward block
+	char *ptr;
+	short  i, j, k, r;
+	short c;
+	unsigned long count;
+	unsigned short  crc_read;
+	struct FBBHeaderLine * FBBHeader= &conn->FBBHeaders[0];	// The Headers from an FFB forward block
 
-		getbuf = 0;
-		getlen = 0;
-		textsize = 0;
-		codesize = 0;
+	getbuf = 0;
+	getlen = 0;
+	textsize = 0;
+	codesize = 0;
 
-		infile = &conn->MailBuffer[0];
+	infile = &conn->MailBuffer[0];
 
-		crc = 0;
+	crc = 0;
 
-		if (conn->BBSFlags & FBBB1Mode)
-		{
-			short val;
-			long n;
+	if (conn->BBSFlags & FBBB1Mode)
+	{
+		short val;
+		long n;
 			
-			crc_read = infile[0];
-			crc_read |= infile[1] << 8;
+		crc_read = infile[0];
+		crc_read |= infile[1] << 8;
 
-			for (n = 2; n < conn->TempMsg->length; n++)
-			{
-				val = infile[n];
-				crc = updcrc(val, crc);
-			}
-			if (crc != crc_read)
-			{
-				nodeprintf(conn, "*** Message CRC Error File %x Calc %x\r", crc_read, crc);
-				return;
-			}
-
-			infile+=2;
+		for (n = 2; n < conn->TempMsg->length; n++)
+		{
+			val = infile[n];
+			crc = updcrc(val, crc);
+		}
+		if (crc != crc_read)
+		{
+			nodeprintf(conn, "*** Message CRC Error File %x Calc %x\r", crc_read, crc);
+			return;
 		}
 
-		textsize = 0;
-		ptr = (char *)&textsize;
+		infile+=2;
+	}
 
-		for (i = 0 ; i < sizeof(textsize) ; i++)
-			ptr[i] = (unsigned char)crc_fgetc();
+	textsize = 0;
+	ptr = (char *)&textsize;
 
-		Logprintf(LOG_BBS, conn, '|', "Uncompressing Message Comp Len %d Msg Len %d CRC %x", 
-				conn->TempMsg->length, textsize, crc);
+	for (i = 0 ; i < sizeof(textsize) ; i++)
+		ptr[i] = (unsigned char)crc_fgetc();
+
+	Logprintf(LOG_BBS, conn, '|', "Uncompressing Message Comp Len %d Msg Len %d CRC %x", 
+			conn->TempMsg->length, textsize, crc);
 	
+	outfile = zalloc(textsize + 100);
 
-		outfile = zalloc(textsize + 100);
+	if (textsize == 0)
+		return;
 
-		if (textsize == 0)
-				return;
+	StartHuff();
+	
+	for (i = 0; i < N - F; i++)
+		text_buf[i] = 0x20;
 
-		StartHuff();
-		for (i = 0; i < N - F; i++)
-        text_buf[i] = 0x20;
-		r = N - F;
-		for (count = 0; count < textsize; )
+	r = N - F;
+
+	for (count = 0; count < textsize; )
+	{
+		c = DecodeChar();
+		if (c < 256)
 		{
-				c = DecodeChar();
-				if (c < 256) {
-					*(outfile++) = (unsigned char)c;
-						text_buf[r++] = (unsigned char)c;
-						r &= (N - 1);
-						count++;
-				} else {
-						i = (r - DecodePosition() - 1) & (N - 1);
-						j = c - 255 + THRESHOLD;
-						for (k = 0; k < j; k++) {
-								c = text_buf[(i + k) & (N - 1)];
-								*(outfile++) = (unsigned char)c;
-                                text_buf[r++] = (unsigned char)c;
-                                r &= (N - 1);
-								count++;
-                        }
-                }
-        }
+			*(outfile++) = (unsigned char)c;
+			text_buf[r++] = (unsigned char)c;
+			r &= (N - 1);
+			count++;
+		} 
+		else
+		{
+			i = (r - DecodePosition() - 1) & (N - 1);
+			j = c - 255 + THRESHOLD;
+			for (k = 0; k < j; k++)
+			{
+				c = text_buf[(i + k) & (N - 1)];
+				*(outfile++) = (unsigned char)c;
+                text_buf[r++] = (unsigned char)c;
+				r &= (N - 1);
+				count++;
+			}
+		}
+	}
 
-		outfile -=count;
+	outfile -=count;
 
-		free(conn->MailBuffer);
-		conn->MailBuffer = outfile;
+	free(conn->MailBuffer);
+	conn->MailBuffer = outfile;
 		
-		conn->TempMsg->length = count;
+	conn->TempMsg->length = count;
 
-		if (FBBHeader->B2Message)
-		{
-			// Parse the Message for B2 From and To info
+	if (FBBHeader->B2Message)
+	{
+		// Parse the Message for B2 From and To info
 /*
 MID: A3EDD4P00P55
 Date: 2009/07/25 10:08
@@ -776,65 +782,86 @@ To: G8BPQ
 Subject: RE: RMS Test Messaage
 Mbo: SMTP
 Body: 214
+File: 3556 NOLA.XLS
+File: 5566 NEWBOAT.HOMEPORT.JPG
+
 */
-			char * ptr1, * ptr2;
-			int linelen, MsgLen = 0;
-			struct MsgInfo * Msg = conn->TempMsg;
-			time_t Date;
+		// Note that at the moment we silently discard any attachments
+		// It would be nice to at least save and forward them and maybe deliver 
+		// via the SMTP interface
 
-			ptr1 = outfile;
-		Loop:
-			ptr2 = strchr(ptr1, '\r');
+		char * ptr1, * ptr2;
+		int linelen, MsgLen = 0;
+		struct MsgInfo * Msg = conn->TempMsg;
+		time_t Date;
 
-			linelen = ptr2 - ptr1;
+		ptr1 = outfile;
+	Loop:
+		ptr2 = strchr(ptr1, '\r');
 
-			if (_memicmp(ptr1, "From:", 5) == 0)
+		linelen = ptr2 - ptr1;
+
+		if (_memicmp(ptr1, "From:", 5) == 0)
+		{
+			if (_memicmp(&ptr1[6], "smtp:", 5) == 0)
+			{
+				if (_stricmp(conn->Callsign, "RMS") == 0)
+				{
+					// Swap smtp: to rms: so we can reply via RMS
+
+					strcpy(Msg->from, "RMS:");
+				}
+				else
+				{
+					strcpy(Msg->from, "SMTP:");
+				}
+			}
+			else
 			{
 				if (linelen > 12) linelen = 12;
 				memcpy(Msg->from, &ptr1[6], linelen-6);
 			}
-			else if (_memicmp(ptr1, "To:", 3) == 0)
-			{
-				if (linelen > 10) linelen = 10;
-				memcpy(Msg->to, &ptr1[4], linelen-4);
-			}
-			else if (_memicmp(ptr1, "Type:", 4) == 0)
-			{
-				Msg->type = ptr1[6];
-			}
-			else if (_memicmp(ptr1, "Body:", 4) == 0)
-			{
-				MsgLen = atoi(&ptr1[5]);
-			}
-			else if (_memicmp(ptr1, "Date:", 5) == 0)
-			{
-				struct tm rtime;
-				char seps[] = " ,\t\r";
+		}
+		else if (_memicmp(ptr1, "To:", 3) == 0)
+		{
+			if (linelen > 10) linelen = 10;
+			memcpy(Msg->to, &ptr1[4], linelen-4);
+		}
+		else if (_memicmp(ptr1, "Type:", 4) == 0)
+		{
+			Msg->type = ptr1[6];
+		}
+		else if (_memicmp(ptr1, "Body:", 4) == 0)
+		{
+			MsgLen = atoi(&ptr1[5]);
+		}
+		else if (_memicmp(ptr1, "Date:", 5) == 0)
+		{
+			struct tm rtime;
+			char seps[] = " ,\t\r";
 
-				memset(&rtime, 0, sizeof(struct tm));
+			memset(&rtime, 0, sizeof(struct tm));
 
-				// Date: 2009/07/25 10:08
+			// Date: 2009/07/25 10:08
 	
-				sscanf(&ptr1[5], "%04d/%02d%/%02d %02d:%02d",
+			sscanf(&ptr1[5], "%04d/%02d%/%02d %02d:%02d",
 					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
 
-				rtime.tm_year -= 1900;
+			rtime.tm_year -= 1900;
 
-				Date = _mkgmtime(&rtime);
+			Date = _mkgmtime(&rtime);
 	
-				if (Date == (time_t)-1)
-					Date = time(NULL);
-
-			}
-
-			if (linelen)			// Not Null line
-			{
-				ptr1 = ptr2 + 2;		// Skip crlf
-				goto Loop;
-			}
+			if (Date == (time_t)-1)
+				Date = time(NULL);
 
 		}
 
-		CreateMessageFromBuffer(conn);
-}
+		if (linelen)			// Not Null line
+		{
+			ptr1 = ptr2 + 2;		// Skip crlf
+			goto Loop;
+		}
+	}
 
+	CreateMessageFromBuffer(conn);
+}

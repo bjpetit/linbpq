@@ -352,12 +352,31 @@
 // Check node is not already known when processing OK
 // Add option to suppress emailing of housekeeping results
 
+// Version 1.0.3.22
+
+// Correct Version processing when user connects via the network
+// Add time controlled forwarding scripts
+
+// Version 1.0.3.23
+
+// Changes to RMS forwarding
+
+// Version 1.0.3.24
+
+// Fix RMS: from SMTP interface
+// Accept RMS/ instead of RMS: for Thunderbird
+
+// Version 1.0.3.25
+
+// Accept smtp: addresses from smtp client, and route to ISP gateway.
+// Set FROM address of messages from RMS that are delivered to smtp client so a reply will go back via RMS.
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-//#define SPECIALVERSION "Beta"
+#define SPECIALVERSION "RMSTest"
 
 #include "GetVersion.h"
 
@@ -614,7 +633,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Trap CRT Errors
 	
-   
 	newHandler = myInvalidParameterHandler;
 	oldHandler = _set_invalid_parameter_handler(newHandler);
 
@@ -2018,10 +2036,18 @@ int Disconnected (Stream)
 
 			if (conn->UserPointer)
 			{
-				if (conn->UserPointer->ForwardingInfo)
+				struct	BBSForwardingInfo * FWDInfo = conn->UserPointer->ForwardingInfo;
+
+				if (FWDInfo)
 				{
-					conn->UserPointer->ForwardingInfo->Forwarding = FALSE;
-					conn->UserPointer->ForwardingInfo->FwdTimer = 0;
+					FWDInfo->Forwarding = FALSE;
+
+					if (FWDInfo->UserCall[0])			// Will be set if RMS
+					{
+						FindNextRMSUser(FWDInfo);
+					}
+					else
+						FWDInfo->FwdTimer = 0;
 				}
 			}
 			return 0;
@@ -3299,6 +3325,45 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (_memicmp(Cmd, "POLLRMS", 6) == 0)
+	{
+		struct UserInfo * RMS;
+
+		RMS = FindRMS();
+
+		if (!RMS)
+		{
+			BBSputs(conn, "Forwarding via RMS is not configured\r");
+			SendPrompt(conn, user);
+			return;
+		}
+		else
+		{
+			if (RMS->ForwardingInfo->Forwarding)
+			{
+				BBSputs(conn, "RMS is busy - try again in a minute or so\r");
+				SendPrompt(conn, user);
+				return;
+			}
+
+			strcpy(RMS->ForwardingInfo->UserCall, user->Call);
+			RMS->ForwardingInfo->UserIndex = -1;		// Not part of user scan
+
+			if (ConnecttoBBS(RMS))
+			{
+				RMS->ForwardingInfo->Forwarding = TRUE;
+				BBSputs(conn, "RMS poll initiated\r");
+			}
+			else
+				BBSputs(conn, "RMS poll failed\r");
+
+			SendPrompt(conn, user);
+			return;
+		}
+
+		return;
+	}
+
 	if (conn->Flags == 0)
 	{
 		BBSputs(conn, "Invalid Command\r");
@@ -4247,7 +4312,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 	struct MsgInfo * OldMsg;
 	char OldTitle[62];
 	char NewTitle[62];
-	char SMTPTO[100];
+	char SMTPTO[100]= "";
 	int msgno;
 
 	switch (toupper(Cmd[1]))
@@ -4292,38 +4357,62 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 		Arg1=&OldMsg->from[0];
 
-		if (_stricmp(Arg1, "SMTP:") == 0)
+		if (_stricmp(Arg1, "SMTP:") == 0 || _stricmp(Arg1, "RMS:") == 0)
 		{
 			// SMTP message. Need to get the real sender from the message
 
 			char * MsgBytes = ReadMessageFile(msgno);
+			char * ptr;
 
 			if (MsgBytes)
 			{
-				char * ptr1 = strchr(&MsgBytes[1], '<');
-				char * ptr2 = strchr(&MsgBytes[1], '>');
+				// Look for From:
 
-				if (ptr1 && ptr2)
+				_strlwr(MsgBytes);
+			
+				ptr = strstr(MsgBytes, "from:");
+
+				if (ptr)
 				{
-					*ptr2=0;;
-					ptr1++;
-					wsprintf(SMTPTO, "SMTP:%s", ptr1);
-				}
-				else
-				{
-					nodeprintf(conn, "Couldn't get originator's email address\r");
-					return FALSE;
+					// Look for SMTP sytle address wirh <>
+
+					char * ptr1 = strchr(ptr, 13);
+					char * ptr2;
+				
+					*ptr1=0;;
+
+					ptr1 = strchr(ptr, '<');
+					ptr2 = strchr(ptr, '>');
+				
+					if (ptr1 && ptr2)
+					{
+						*ptr2=0;;
+						ptr1++;
+						wsprintf(SMTPTO, "%s%s", Arg1, ptr1);
+					}
+					else
+					{
+						// Try RMS Style SMTP:
+					
+						ptr1 = strstr(ptr, "smtp:");
+
+						if (ptr1)
+						{
+							wsprintf(SMTPTO, "%s%s", Arg1, &ptr1[5]);
+						}
+					}
 				}
 
 				free(MsgBytes);
-
-				Arg1 = SMTPTO;
 			}
-			else
+			
+			if (SMTPTO[0] == 0)
 			{
 				nodeprintf(conn, "Couldn't get originator's email address\r");
 				return FALSE;
 			}
+
+			Arg1 = SMTPTO;
 		}
 
 		if (!DecodeSendParams(conn, "", &From, &Arg1, &ATBBS, &BID))
@@ -4393,10 +4482,9 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 	char seps[] = " \t\r";
 	WPRecP WP;
 
-
 	// Accept call@call (without spaces) - but check for smtp addresses
 
-	if (_memicmp(*To, "smtp:", 5) != 0)
+	if (_memicmp(*To, "smtp:", 5) != 0 && _memicmp(*To, "rms:", 4) != 0  && _memicmp(*To, "rms/", 4) != 0)
 	{
 		ptr = strchr(*To, '@');
 
@@ -4545,7 +4633,29 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 
 	}
 
-	if (_memicmp(ToCall, "smtp:", 5) == 0)
+	if (_memicmp(ToCall, "rms:", 4) == 0)
+	{
+		if (!FindRMS())
+		{
+			nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+			return FALSE;
+		}
+
+		via=strlop(ToCall, ':');
+		_strupr(ToCall);
+	}
+	else if (_memicmp(ToCall, "rms/", 4) == 0)
+	{
+		if (!FindRMS())
+		{
+			nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+			return FALSE;
+		}
+
+		via=strlop(ToCall, '/');
+		_strupr(ToCall);
+	}
+	else if (_memicmp(ToCall, "smtp:", 5) == 0)
 	{
 		if (ISP_Gateway_Enabled)
 		{
@@ -5388,6 +5498,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
 	char * ptr, * ptr2;
+	BOOL MoreLines = TRUE;
 
 	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
 
@@ -5395,9 +5506,64 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	_strupr(Buffer);
 
 	Scripts = ForwardingInfo->ConnectScript;	
+
+	if (ForwardingInfo->ScriptIndex == -1)
+	{
+		// First Entry - if first line is TIMES, check and skip forward if necessary
 	
-	if (Scripts[ForwardingInfo->ScriptIndex] == NULL)			// Only Check until script is finished
-		goto CheckForSID;
+		int n = 0;
+		int Start, End;
+		time_t now = time(NULL), StartSecs, EndSecs;
+		char * Line;
+
+		now %= 86400;
+		Line = Scripts[n];
+
+		if (memcmp(Line, "TIMES", 5) == 0)
+		{
+		NextBand:
+			Start = atoi(&Line[6]);
+			End = atoi(&Line[11]);
+
+			StartSecs =  (time_t)(Start / 100) * 3600 + (Start % 100) * 60; 
+			EndSecs =  (time_t)(End / 100) * 3600 + (End % 100) * 60 + 59;
+
+			if ((StartSecs <= now) && (EndSecs >= now))
+				goto InBand;	// In band
+
+			// Look for next TIME
+		NextLine:
+			Line = Scripts[++n];
+
+			if (Line == NULL)
+			{
+				// No more lines - Disconnect
+			
+				Disconnect(conn->BPQStream);
+				return FALSE;
+			}
+
+			if (memcmp(Line, "TIMES", 5) != 0)
+				goto NextLine;
+			else
+				goto NextBand;
+InBand:
+			ForwardingInfo->ScriptIndex = n;	
+		}
+
+	}
+	else
+	{
+		// Dont check first time through
+		
+		if (Scripts[ForwardingInfo->ScriptIndex] == NULL ||
+			memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0)			// Only Check until script is finished
+		{
+			MoreLines = FALSE;
+		}
+		if (!MoreLines)
+			goto CheckForSID;
+	}
 
 	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
@@ -5436,15 +5602,24 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	{
 		ForwardingInfo->ScriptIndex++;
 		
-		if (Scripts[ForwardingInfo->ScriptIndex]) // If more to send, send it
-			nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
+		if (Scripts[ForwardingInfo->ScriptIndex] && 
+			memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) != 0)			// Only Check until script is finished
+		{
+			if (strcmp(Scripts[ForwardingInfo->ScriptIndex], "*** LINKED TO *") == 0)
+			{
+				// Used for RMS to switch to a user call for polling RMS
 
+				nodeprintf(conn, "*** LINKED TO %s\r", ForwardingInfo->UserCall);
+			}
+			else
+				nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
+		}
 		return TRUE;
 	}
 
 	ptr = strchr(Buffer, '}');
 
-	if (ptr && Scripts[ForwardingInfo->ScriptIndex]) // Beware it could be part of ctext
+	if (ptr && MoreLines) // Beware it could be part of ctext
 	{
 		// Could be respsonse to Node Command 
 
@@ -5454,22 +5629,23 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 
 		if (ptr2)
 		{
-		if (memcmp(ptr, Scripts[ForwardingInfo->ScriptIndex], ptr2-ptr) == 0)	// Reply to last sscript command
-		{
-			ForwardingInfo->ScriptIndex++;
+			if (memcmp(ptr, Scripts[ForwardingInfo->ScriptIndex], ptr2-ptr) == 0)	// Reply to last sscript command
+			{
+				ForwardingInfo->ScriptIndex++;
 		
-			if (Scripts[ForwardingInfo->ScriptIndex]) // If more to send, send it
-				nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
+				if (Scripts[ForwardingInfo->ScriptIndex])
+					if (memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) != 0)	
+					nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
 
-			return TRUE;
-		}
+				return TRUE;
+			}
 		}
 	}
 
 	// Not Success or Fail. If last line is still outstanding, wait fot Response
 	//		else look for SID or Prompt
 
-	if (Scripts[ForwardingInfo->ScriptIndex])
+	if (MoreLines)
 		return TRUE;
 
 	// No more steps, Look for SID or Prompt
@@ -5648,9 +5824,21 @@ VOID FWDTimerProc()
 				if (ForwardingInfo->Enabled)
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (SeeifMessagestoForward(user->BBSNumber) || ForwardingInfo->ReverseFlag)
-							if (ConnecttoBBS(user))
-								ForwardingInfo->Forwarding = TRUE;
-
+							if (strcmp(user->Call, "RMS") == 0)
+							{
+								if (ForwardingInfo->UserIndex == 0)
+									FindNextRMSUser(ForwardingInfo);
+								
+								if (ForwardingInfo->UserCall[0] == 0)	// No Users to poll
+									continue;
+								if (ConnecttoBBS(user))
+									ForwardingInfo->Forwarding = TRUE;
+							}
+							else
+							{
+								if (ConnecttoBBS(user))
+									ForwardingInfo->Forwarding = TRUE;
+							}
 		}
 	}
 }
@@ -5671,8 +5859,22 @@ void StartForwarding(int BBSNumber)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (SeeifMessagestoForward(BBSNumber) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
-							if (ConnecttoBBS(user))
-								ForwardingInfo->Forwarding = TRUE;
+							if (strcmp(user->Call, "RMS") == 0)
+							{
+								if (ForwardingInfo->UserIndex == 0)
+									FindNextRMSUser(ForwardingInfo);
+								
+								if (ForwardingInfo->UserCall[0] == 0)	// No Users to poll
+									continue;
+								if (ConnecttoBBS(user))
+									ForwardingInfo->Forwarding = TRUE;
+							}
+							else
+							{
+								if (ConnecttoBBS(user))
+									ForwardingInfo->Forwarding = TRUE;
+							}
+
 	}
 
 	return;
@@ -5746,8 +5948,17 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 			{
 				struct tm *tm;
 
+				// If sending to RMS, only select messages from same user
+
+//				if ((conn->FBBIndex) && strcmp(conn->Callsign, "RMS") == 0)			// Dont Check first
+//				{
+//					FBBHeader = &conn->FBBHeaders[conn->FBBIndex - 1];
+//					if (strcmp(Msg->from, FBBHeader->FwdMsg->from) !=0)		// Different User
+//						continue;
+//				}
+
 				FBBHeader = &conn->FBBHeaders[conn->FBBIndex++];
-  
+
 				FBBHeader->FwdMsg = Msg;
 				FBBHeader->MsgType = Msg->type;
 				FBBHeader->Size = Msg->length;
@@ -5893,6 +6104,48 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
 	free(MailBuffer);
 }
 
+struct UserInfo * FindRMS()
+{
+	struct UserInfo * bbs;
+	
+	for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+	{		
+		if (strcmp(bbs->Call, "RMS") == 0)
+			return bbs;
+	}
+	
+	return NULL;
+}
+
+VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo)
+{
+	struct UserInfo * user;
+
+	int i = FWDInfo->UserIndex;
+
+	if (i == -1)
+	{
+		FWDInfo->UserIndex = FWDInfo->UserCall[0] = 0;	// Not scanning users
+	}
+
+	for (i++; i <= NumberofUsers; i++)
+	{
+		user = UserRecPtr[i];
+
+		if (user->flags & F_POLLRMS)
+		{
+			FWDInfo->UserIndex = i;
+			strcpy(FWDInfo->UserCall, user->Call);
+			FWDInfo->FwdTimer = FWDInfo->FwdInterval - 20;
+			return ;
+		}
+	}
+
+	// Finished Scan
+
+	FWDInfo->UserIndex = FWDInfo->FwdTimer = FWDInfo->UserCall[0] = 0;
+	
+}
 
 
 #ifndef NEWROUTING

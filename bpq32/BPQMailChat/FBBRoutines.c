@@ -949,6 +949,7 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 	int OrigLen, MsgLen, B2HddrLen, CompLen;
 	char Date[20];
 	struct tm * tm;
+	char B2To[80];
 
 	MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
 
@@ -991,16 +992,24 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 	Body: 213
 
 */
+	if (strcmp(FBBHeader->FwdMsg->to, "RMS") == 0)		// Address is in via
+		strcpy(B2To, FBBHeader->FwdMsg->via);
+	else
+		if (FBBHeader->FwdMsg->via[0])
+			wsprintf(B2To, "%s@%s", FBBHeader->FwdMsg->to, FBBHeader->FwdMsg->via);
+		else
+			strcpy(B2To, FBBHeader->FwdMsg->to);
+	
 	B2HddrLen = wsprintf(UnCompressed,
-		"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
-		FBBHeader->FwdMsg->bid,
-		Date,
-		(FBBHeader->FwdMsg->type == 'P') ? "Private" : "Bulletin",
-		FBBHeader->FwdMsg->from,
-		FBBHeader->FwdMsg->to,
-		FBBHeader->FwdMsg->title,
-		BBSName,
-		MsgLen);
+			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
+			FBBHeader->FwdMsg->bid,
+			Date,
+			(FBBHeader->FwdMsg->type == 'P') ? "Private" : "Bulletin",
+			FBBHeader->FwdMsg->from,
+			B2To,
+			FBBHeader->FwdMsg->title,
+			BBSName,
+			MsgLen);
 
 	strcat(UnCompressed, Rline);
 	strcat(UnCompressed, MsgBytes);

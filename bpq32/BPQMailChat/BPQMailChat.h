@@ -385,6 +385,7 @@ struct UserInfo{
 #define F_PMS        0x0800
 #define F_EMAIL      0x1000
 #define F_HOLDMAIL   0x2000
+#define F_POLLRMS	  0x4000
 
 /* #define F_PWD        0x1000 */
 
@@ -551,6 +552,8 @@ struct BBSForwardingInfo
 	int FwdTimer;
 	char *BBSHA;					// HA of BBS
 	char ** BBSHAElements;			// elements of HA of BBS
+	char UserCall[10];				// User we are forwarding on behalf of (Currently only for RMS)
+	int UserIndex;					// index of User we are forwarding on behalf of (Currently only for RMS)
 };
 
 
@@ -883,9 +886,9 @@ VOID StartForwarding (int BBSNumber);
 BOOL Reverse_Forward(struct UserInfo * user);
 ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 BOOL FBBDoForward(CIRCUIT * conn);
-BOOL FindMessagestoForward (CIRCUIT * conn);
-BOOL SeeifMessagestoForward (int BBSNumber);
-int CountMessagestoForward (int BBSNumber);
+BOOL FindMessagestoForward(CIRCUIT * conn);
+BOOL SeeifMessagestoForward(int BBSNumber);
+int CountMessagestoForward(int BBSNumber);
 VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
 MultiLineDialogToREG_MULTI_SZ(HWND hWnd, int DLGItem, HKEY hKey, char * ValueName);
 int Do_BBS_Sel_Changed(HWND hDlg);
@@ -915,8 +918,9 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn);
 VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...);
 VOID FreeOverrides();
 VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length);
-
-
+struct UserInfo * FindRMS();
+VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo);
+BOOL ConnecttoBBS (struct UserInfo * user);
 // FBB Routines
 
 VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg);

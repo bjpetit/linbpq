@@ -894,7 +894,6 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 	BIDRec->u.msgno = LOWORD(Msg->number);
 	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
 
-
 	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
 
 	if (Date)
@@ -902,7 +901,23 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 	TidyString(sockptr->RecpTo[i]);
 
-	via = strlop(sockptr->RecpTo[i], '@');
+	if (_memicmp(sockptr->RecpTo[i], "rms:", 4) == 0)
+	{
+		via=strlop(sockptr->RecpTo[i], ':');
+	}
+	else if (_memicmp(sockptr->RecpTo[i], "rms/", 4) == 0)
+	{
+		via=strlop(sockptr->RecpTo[i], '/');
+	}
+	else if (_memicmp(sockptr->RecpTo[i], "smtp:", 4) == 0)
+	{
+		via=strlop(sockptr->RecpTo[i], ':');
+		sockptr->RecpTo[i][0] =0;
+	}
+	else
+	{
+		via = strlop(sockptr->RecpTo[i], '@');
+	}
 
 	if (via)
 	{
@@ -1269,7 +1284,37 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		
 		sprintf_s(Header, sizeof(Header), "Message-ID: %s", Msg->bid);
 		SendSock(sockptr, Header);
-		sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
+
+		// If the message has arrived from RMS, set the From: to the original sender
+		//	(the from: in the messsage body.
+
+		if (_stricmp(Msg->from, "RMS:") == 0)
+		{
+			char TempFrom[100];
+			char * ptr1;
+
+			ptr = strstr(msgbytes, "From:");
+			
+			if (ptr)
+			{
+				memcpy(TempFrom, ptr, 99);
+				
+				ptr1 = strchr(TempFrom, 13);
+
+				*ptr1=0;;
+
+				ptr1 = strstr(TempFrom, "SMTP:");
+
+				if (ptr1)
+					sprintf_s(Header, sizeof(Header), "From: rms/%s", &ptr1[5]);
+				else
+					sprintf_s(Header, sizeof(Header), "From: rms/%s", &TempFrom[6]);
+
+			}
+		}
+		else
+			sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
+		
 		SendSock(sockptr, Header);
 //Sender: shipplotter@yahoogroups.com
 //		sprintf_s(Header, sizeof(Header), "Date: %s", Msg->date);
