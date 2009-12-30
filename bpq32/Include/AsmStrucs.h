@@ -214,7 +214,9 @@ typedef struct TRANSPORTENTRY
 
 	UCHAR	SESS_APPLFLAGS;		// APPL FLAGS FOR THIS SESSION
 
-	VOID *	DUMPPTR;			// POINTER FOR REMOTE DUMP MODE
+	UCHAR	Secure_Session;		// Set if Host session from BPQTerminal or BPQMailChat
+
+	VOID *	DUMPPTR;			// POINTER FOR REMOTnE DUMP MODE
 };
 
 //

@@ -17,7 +17,10 @@ count on BPQ32.dll gets messed up, and the code will not unload cleanly.
 
 #ifndef DYNLOADBPQ
 
-// Definitions for Staticaly Linked DLL
+// Definitions for Statically Linked DLL
+
+struct PORTCONTROL * APIENTRY GetPortTableEntry(int portslot);
+
 
 //	Returns number of free buffers
 //	(BPQHOST function 7 (part)).
@@ -239,6 +242,8 @@ VOID *APIENTRY GetBuff();
 
 
 #else
+
+struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntry) (int portslot);
 
 //	API Definitions for Dynamic Load of BPQ32.dll
 
@@ -466,6 +471,9 @@ BOOL GetAPI()
 
 		return(FALSE);
 	}
+
+	GetPortTableEntry = (struct PORTCONTROL * (__stdcall *)(int PortSlot))GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
+
 
 
 	GETBPQAPI = (ULONG(__stdcall *)())GetProcAddress(ExtDriver,"_GETBPQAPI@0");
