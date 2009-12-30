@@ -341,8 +341,29 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		if (TNC->Connected)
 			bytes=send(TNC->WINMORDataSock,(const char FAR *)&buff[8],txlen,0);
 		else
+		{
+			// See if Local command (eg RADIO)
+
+			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
+			{
+				wsprintf(&buff[8], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &buff[14]);
+
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff[8]))
+				{
+				}
+				else
+				{
+					UINT * buffptr = Q_REM(&FREE_Q);
+
+					if (buffptr == 0) return 1;			// No buffers, so ignore
+
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &buff[8]);
+					Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+				}
+				return 1;
+			}
 			bytes=send(TNC->WINMORSock,(const char FAR *)&buff[8],txlen,0);
-		
+		}
 		if (bytes != txlen)
 		{
 
@@ -475,6 +496,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 			strcpy(TNC->WINMORHostName,"127.0.0.1");
 
 	}
+
+	LoadRigDriver();
 
 	i=wsprintf(Msg,"WINMOR Host %s %d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
 	WritetoConsole(Msg);
@@ -826,7 +849,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (buffptr == 0) return;			// No buffers, so ignore
 
-	buffptr[1] = wsprintf(buffptr+2,"Winmor} %s", Buffer);
+	buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} %s", Buffer);
 
 	Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 			
