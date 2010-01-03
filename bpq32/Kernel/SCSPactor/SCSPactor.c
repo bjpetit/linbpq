@@ -32,6 +32,9 @@
 #include "bpq32.h"
 
 static char ClassName[]="PACTORSTATUS";
+
+#define SCS
+
 #include "..\PactorCommon.c"
  
 #define DllImport	__declspec(dllimport)
@@ -65,6 +68,8 @@ int ProcessLine(char * buf);
 VOID ExitHost(struct TNCINFO * TNC);
 VOID DoTNCReinit(struct TNCINFO * TNC);
 VOID DoTermModeTimeout(struct TNCINFO * TNC);
+BOOL OpenVirtualSerialPort(struct TNCINFO * TNC);
+int ReadVCommBlock(struct TNCINFO * TNC, char * Block, int MaxLength);
 
 DllImport UCHAR NEXTID;
 DllImport struct TRANSPORTENTRY * L4TABLE;
@@ -234,6 +239,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Param;
+	char Block[100];
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
@@ -249,6 +255,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 			return -1;
 		}
+
+		if (TNC->VCOMHandle)
+			ReadVCommBlock(TNC, Block, 100);
+
 	
 		DEDPoll(port);
 
@@ -404,6 +414,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	LoadRigDriver();
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
+
+	if (TNC->VCOMPort)
+		OpenVirtualSerialPort(TNC);
 
 	return ((int)ExtProc);
 }
@@ -869,6 +882,31 @@ VOID DEDPoll(int Port)
 			return;
 		}
 
+	}
+
+
+	// Send Radio Command if avail
+
+	if (TNC->TNCOK && TNC->BPQtoRadio_Q)
+	{
+		int datalen;
+		UINT * buffptr;
+			
+		buffptr=Q_REM(&TNC->BPQtoRadio_Q);
+
+		datalen=buffptr[1];
+
+		Poll[2] = 253;		// Radio Channel
+		Poll[3] = 0;		// Data?
+		Poll[4] = datalen - 1;
+	
+		memcpy(&Poll[5], buffptr+2, datalen);
+		
+		ReleaseBuffer(buffptr);
+		
+		CRCStuffAndSend(TNC, Poll, datalen + 5);
+
+		return;
 	}
 
 
@@ -1654,6 +1692,20 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			return;
 		}
 		
+		if (Msg[2] == 253)						// Rig Port Response
+		{
+			int ret;
+
+			// (Win98)
+			//	return DeviceIoControl(
+			//			VCOMInfo[port]->ComDev,(VCOMInfo[port]->Port << 16) | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
+			//else
+
+			DeviceIoControl(
+					TNC->VCOMHandle, IOCTL_SERIAL_SETDATA, &Msg[5], Msg[4] + 1, NULL, 0, &ret, NULL);
+
+			return;
+		}
 		// Connected Data
 		
 		buffptr = Q_REM(&FREE_Q);
@@ -1669,3 +1721,87 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	}
 }
 
+BOOL OpenVirtualSerialPort(struct TNCINFO * TNC)
+{
+	char szPort[16];
+	char buf[80];
+
+/*#pragma warning( push )
+#pragma warning( disable : 4996 )
+
+   if (HIBYTE(_winver) < 5)
+		Win98 = TRUE;
+
+#pragma warning( pop ) 
+
+   if (Win98)
+	{
+		VCOMInfo[bpqport]->ComDev = CreateFile( "\\\\.\\BPQVCOMM.VXD", GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+	}
+	else
+*/
+	{
+		wsprintf( szPort, "\\\\.\\BPQ%d", TNC->VCOMPort) ;
+
+		TNC->VCOMHandle = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+	}		  
+	if (TNC->VCOMHandle == (HANDLE) -1 )
+	{
+		wsprintf(buf,"Virtual COM Port %d could not be opened ", TNC->VCOMPort);
+		WritetoConsole(buf);
+
+		return (FALSE) ;
+	}
+
+	return (TRUE) ;
+}
+
+int ReadVCommBlock(struct TNCINFO * TNC, char * Block, int MaxLength)
+{
+	DWORD Length;
+	UINT * buffptr;
+
+	
+	Length = 0;
+
+//	if (Win98)
+//		DeviceIoControl(
+//			pVCOMInfo->ComDev, (pVCOMInfo->Port << 16) |W98_SERIAL_GETDATA,NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
+//	else
+	DeviceIoControl(
+			TNC->VCOMHandle, IOCTL_SERIAL_GETDATA, NULL, 0, Block, MaxLength, &Length,NULL);
+
+	if (Length == 0)
+		return 0;
+
+	if (Length == MaxLength)
+		return 0;							// Probably garbage in buffer
+
+	if (!TNC->TNCOK)
+		return 0;
+
+	// Queue for TNC
+
+	buffptr = Q_REM(&FREE_Q);
+
+	if (buffptr == 0) return (0);			// No buffers, so ignore
+
+	buffptr[1] = Length;
+		
+	memcpy(buffptr+2, Block, Length);
+		
+	Q_ADD(&TNC->BPQtoRadio_Q, buffptr);
+
+   return 0;
+
+}

@@ -879,7 +879,7 @@ NOHA:
 
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
-					if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+					if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
 					{
 						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 						ForwardingInfo->MsgCount++;
@@ -905,7 +905,7 @@ NOHA:
 
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
-					if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+					if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
 					{
 						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 						ForwardingInfo->MsgCount++;
@@ -944,7 +944,7 @@ NOHA:
 
 			if (_stricmp(bestbbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
-				if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bestbbs->Call) != 0)) // Dont send back
+				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
 				{
 					set_fwd_bit(Msg->fbbs, bestbbs->BBSNumber);
 					bestbbs->ForwardingInfo->MsgCount++;
@@ -989,7 +989,7 @@ NOHA:
 
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
-				if ((conn == NULL) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
 				{
 					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 					ForwardingInfo->MsgCount++;
@@ -1008,8 +1008,11 @@ NOHA:
 	
 			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
-				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-				ForwardingInfo->MsgCount++;
+				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+				{
+					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+					ForwardingInfo->MsgCount++;
+				}
 			}
 			Count++;
 		}

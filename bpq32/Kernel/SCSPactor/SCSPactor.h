@@ -10,6 +10,8 @@ struct TNCINFO
 { 
 	int PACTORtoBPQ_Q;			// Frames for BPQ
 	int BPQtoPACTOR_Q;			// Frames for PACTOR
+	int BPQtoRadio_Q;			// Frames for Rig Interface
+
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
 	char * InitScript;			// Initialisation Commands
 	char * InitPtr;				// Next Command
@@ -54,6 +56,8 @@ struct TNCINFO
 
 	HWND hDlg;						// Status Window Handle
 
+	int VCOMPort;					// COMM Port for Rig COntrol Channel
+	HANDLE VCOMHandle;
 };
 
 

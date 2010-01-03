@@ -446,6 +446,7 @@ struct MsgInfo{  /* Longueur = 194 octets */
 	long	datechanged ;
 	char	fbbs[NBMASK] ;
 	char	forw[NBMASK] ;
+	char	emailfrom[41];
 } ;
 
 #define MSGTYPE_B 0

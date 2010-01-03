@@ -371,12 +371,22 @@
 // Accept smtp: addresses from smtp client, and route to ISP gateway.
 // Set FROM address of messages from RMS that are delivered to smtp client so a reply will go back via RMS.
 
+// Version 1.0.3.26
+
+// Improve display of rms and smtp messages in message lists and message display.
+
+// Version 1.0.3.27
+
+// Correct code that prevents mail being retured to originating BBS.
+// Tidy stuck Node and Topics when all links close
+// Fix B2 handling of @ to TO Address.
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "RMSTest"
+// #define SPECIALVERSION "RMSTest"
 
 #include "GetVersion.h"
 
@@ -2472,6 +2482,7 @@ VOID GetMessageDatabase()
 	int ReadLen;
 	struct MsgInfo * Msg;
 	char * MsgBytes;
+	int Resize = 0;				// Used to resize file if format changes
 
 	Handle = CreateFile(MsgDatabasePath,
 					GENERIC_READ,
@@ -2515,9 +2526,17 @@ VOID GetMessageDatabase()
 
 	NumberofMessages = 0;
 
-Next:
+	if (MsgRec.status == 0)		// Used a file format version 0 = original, 1 = Extra email from addr.
+	{
+		Resize = 41;
+		MsgHddrPtr[0]->status = 1;
+		SetFilePointer (Handle, -41, NULL, FILE_CURRENT);
+		memset(MsgRec.emailfrom, 0, 41);
+	}
 
-	ReadFile(Handle, &MsgRec, sizeof (MsgRec), &ReadLen, NULL); 
+Next: 
+
+	ReadFile(Handle, &MsgRec, sizeof (MsgRec) - Resize, &ReadLen, NULL); 
 
 	if (ReadLen > 0)
 	{
@@ -3722,17 +3741,35 @@ void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
 {
+	char FullFrom[80];
+	char FullTo[80];
+
+
+	strcpy(FullFrom, Msg->from);
+	strcat(FullFrom, Msg->emailfrom);
+
+	if (_stricmp(Msg->to, "RMS") == 0)
+	{
+		wsprintf(FullTo, "RMS:%s", Msg->via);
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
+	}
+	else
+
 	if (Msg->to[0] == 0 && Msg->via[0] != 0)
-		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->via, Msg->from, Msg->title);
+	{
+		wsprintf(FullTo, "smtp:%s", Msg->via);
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
+	}
 
 	else
 		if (Msg->via[0] != 0)
-			nodeprintf(conn, "%-6d %s %c%c   %5d %-6s@%-6s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->via, Msg->from, Msg->title);
+			nodeprintf(conn, "%-6d %s %c%c   %5d %-7s@%-6s %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->via, FullFrom, Msg->title);
 	else
-		nodeprintf(conn, "%-6d %s %c%c   %5d %-6s        %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->from, Msg->title);
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
 
 	if (Msg->number > conn->lastmsg) 
 		conn->lastmsg = Msg->number;
@@ -4145,6 +4182,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 {
 	struct MsgInfo * Msg;
 	char * MsgBytes;
+	char FullTo[100];
 
 	Msg = MsgnotoMsg[msgno];
 
@@ -4160,8 +4198,17 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 		return;
 	}
 
-	nodeprintf(conn, "From: %s\rTo: %s\rType/Status: %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
-		Msg->from, Msg->to, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+	if (_stricmp(Msg->to, "RMS") == 0)
+		 wsprintf(FullTo, "RMS:%s", Msg->via);
+	else
+	if (Msg->to[0] == 0)
+		wsprintf(FullTo, "smtp:%s", Msg->via);
+	else
+		strcpy(FullTo, Msg->to);
+
+
+	nodeprintf(conn, "From: %s%s\rTo: %s\rType/Status: %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
+		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 	MsgBytes = ReadMessageFile(msgno);
 
@@ -4361,56 +4408,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		{
 			// SMTP message. Need to get the real sender from the message
 
-			char * MsgBytes = ReadMessageFile(msgno);
-			char * ptr;
-
-			if (MsgBytes)
-			{
-				// Look for From:
-
-				_strlwr(MsgBytes);
-			
-				ptr = strstr(MsgBytes, "from:");
-
-				if (ptr)
-				{
-					// Look for SMTP sytle address wirh <>
-
-					char * ptr1 = strchr(ptr, 13);
-					char * ptr2;
-				
-					*ptr1=0;;
-
-					ptr1 = strchr(ptr, '<');
-					ptr2 = strchr(ptr, '>');
-				
-					if (ptr1 && ptr2)
-					{
-						*ptr2=0;;
-						ptr1++;
-						wsprintf(SMTPTO, "%s%s", Arg1, ptr1);
-					}
-					else
-					{
-						// Try RMS Style SMTP:
-					
-						ptr1 = strstr(ptr, "smtp:");
-
-						if (ptr1)
-						{
-							wsprintf(SMTPTO, "%s%s", Arg1, &ptr1[5]);
-						}
-					}
-				}
-
-				free(MsgBytes);
-			}
-			
-			if (SMTPTO[0] == 0)
-			{
-				nodeprintf(conn, "Couldn't get originator's email address\r");
-				return FALSE;
-			}
+			sprintf(SMTPTO, "%s%s", Arg1, OldMsg->emailfrom);
 
 			Arg1 = SMTPTO;
 		}

@@ -102,6 +102,10 @@ char Modes[8][6] = {"LSB",  "USB", "AM", "CW", "RTTY", "FM", "WFM", "????"};
 
 char YaesuModes[16][6] = {"LSB",  "USB", "CW", "CWR", "AM", "", "", "", "FM", "", "DIG", "", "PKT", "FMN", "????"};
 
+
+char KenwoodModes[8][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "????"};
+
+
 //
 //	Code Common to Pactor Modules
 
@@ -925,13 +929,13 @@ portok:
 			return FALSE;
 		}
 
-		for (ModeNo = 0; ModeNo < 15; ModeNo++)
+		for (ModeNo = 0; ModeNo < 8; ModeNo++)
 		{
-			if (_stricmp(YaesuModes[ModeNo], Mode) == 0)
+			if (_stricmp(KenwoodModes[ModeNo], Mode) == 0)
 				break;
 		}
 
-		if (ModeNo == 15)
+		if (ModeNo == 8)
 		{
 			wsprintf(Command, "Sorry -Invalid Mode\r");
 			return FALSE;
@@ -949,7 +953,7 @@ portok:
 
 		Poll = (UCHAR *)&buffptr[2];
 
-		buffptr[1] = wsprintf(Poll, "FA%s;", FreqString);
+		buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;", FreqString, ModeNo);
 		
 		Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1348,6 +1352,12 @@ void CheckRX(struct PORTINFO * PORT)
 	
 		if (Length < 3)				// Minimum Frame Sise
 			return;
+
+		if (Length > 50)			// Garbage
+		{
+			PORT->RXLen = 0;		// Ready for next frame	
+			return;
+		}
 
 		if (PORT->RXBuffer[Length-1] != ';')
 			return;	
@@ -2125,6 +2135,8 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 		SetWindowText(PORT->hStatus, Status);
 	}
 
+	RIG->RIGOK = TRUE;
+
 	wsprintf(Status,"%s", &Msg[2]);
 	SetWindowText(RIG->hFREQ, Status);
 
@@ -2252,7 +2264,7 @@ ScanExit:
 
 		memcpy(Poll, buffptr+2, datalen);
 
-		PORT->TXLen = 5;					// First send the set Freq
+		PORT->TXLen = datalen;					// First send the set Freq
 		WriteCommBlock(PORT);
 		PORT->CmdSent = Poll[4];
 		PORT->Retries = 2;

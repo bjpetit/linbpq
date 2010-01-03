@@ -350,7 +350,17 @@ ProcessLine(char * buf)
 				*ptr++ = 13;
 				*ptr = 0;
 			}
-			strcat (TNC->InitScript, buf);
+
+#ifdef SCS
+
+			if (_memicmp(buf, "RIGCONTROL COM", 14) == 0)
+	
+				// SCS Virtual COM Channel
+
+				TNC->VCOMPort = atoi(&buf[14]);
+			else
+#endif
+				strcat (TNC->InitScript, buf);
 		}
 	}
 

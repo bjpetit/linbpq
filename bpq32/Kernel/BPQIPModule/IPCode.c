@@ -625,6 +625,9 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 	switch (arpptr->ARPOPCODE)
 	{
 	case 0x0100:
+
+		if (arpptr->TARGETIPADDR == 0)		// Request for 0.0.0.0
+			return;
 	
 		// Add to our table, as we will almost certainly want to send back to it
 

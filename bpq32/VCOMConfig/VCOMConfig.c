@@ -36,9 +36,9 @@ char DRIVERFILENAME[]= "BPQVirtualCOM.sys";
 char Driver[100]="";		// Win98 Driver Key
 
 
-UCHAR Ports[10];
+UCHAR Ports[20];
 
-int PortKey[10];			// Win 98 Subkey for this port
+int PortKey[20];			// Win 98 Subkey for this port
 
 FILETIME OldLastWriteTime;
 FILETIME NewLastWriteTime;
@@ -239,7 +239,7 @@ VOID Refresh()
 	int i;
 	char com[4];
 
-	for (i=0; i<10; i++)
+	for (i=0; i<20; i++)
 	{
 		wsprintf(com,"%d",Ports[i]);
 		SendDlgItemMessage(MainWnd, IDC_EDIT1+i, WM_SETTEXT, 0, (LPARAM) (LPCTSTR) com);
@@ -265,7 +265,7 @@ VOID GetPortsXP()
 		return;
 	}
 
-	for (i=0; i<10; i++)
+	for (i=0; i<20; i++)
 	{
 		BPQSerialGetDeviceList(hControl, &i, &PortNo);
 		Ports[i] = PortNo;
@@ -374,7 +374,7 @@ VOID AddDeviceXP(int id)
 
 	if (Errorval == 0)
 	{
-		for (i=0; i<10; i++)
+		for (i=0; i<20; i++)
 		{
 			if (Ports[i] == 0)
 			{
@@ -563,7 +563,7 @@ VOID AddDevice98(int id)
 	char Val[40];
 
 
-	for (Slot=0; Slot<10; Slot++)
+	for (Slot=0; Slot<20; Slot++)
 	{
 		if (Ports[Slot] == id)
 		{
@@ -576,10 +576,10 @@ VOID AddDevice98(int id)
 		
 	}
 
-	if (Slot == 10)
+	if (Slot == 20)
 	{
 
-		MessageBox (MainWnd, "You already have the maximum of 10 ports","",0);
+		MessageBox (MainWnd, "You already have the maximum of 20 ports","",0);
 		return;
 	}
 
@@ -692,7 +692,7 @@ DeleteDeviceXP(int id)
 
 	if (Errorval == 0)
 	{
-		for (i=0; i<10; i++)
+		for (i=0; i<20; i++)
 		{
 			if (Ports[i] == id)
 			{
@@ -723,7 +723,7 @@ VOID DeleteDevice98(int id)
 	char Key[100];
 
 
-	for (Slot=0; Slot<10; Slot++)
+	for (Slot=0; Slot<20; Slot++)
 	{
 		if (Ports[Slot] == id)
 		{
@@ -731,7 +731,7 @@ VOID DeleteDevice98(int id)
 		}
 	}
 
-	if (Slot == 10)
+	if (Slot == 20)
 	{
 
 		MessageBox (MainWnd, "Port not found","",0);
@@ -868,7 +868,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				return 0;
 			}
 
-			retCode = RegSetValueEx(hKey,"Ports",0,REG_BINARY,(BYTE *)&Ports,10);
+			retCode = RegSetValueEx(hKey,"Ports",0,REG_BINARY,(BYTE *)&Ports,20);
  
 			retCode = RegCloseKey (hKey);
 

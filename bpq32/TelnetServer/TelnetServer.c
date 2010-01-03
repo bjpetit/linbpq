@@ -25,6 +25,8 @@
 //	Version 2.1.7  August 2009
 //  Support FBB forwarding
 
+//	Version 2.1.8  january 2010
+//  Change connected message to be fixed text. (for Outpost)
 
 #include "stdafx.h"
 #include "TelnetServer.h"
@@ -1430,7 +1432,6 @@ BOOL Initialise()
 int Connected(Stream)
 {
 	byte Msg[80];
-
 	SOCKET sock;
 	int n;
 
@@ -1442,7 +1443,8 @@ int Connected(Stream)
     
             if(ConnectionInfo[n].FBBMode == 0)
 			{
-				wsprintf(Msg,"*** Connected using Stream %d\r\n",Stream);
+				wsprintf(Msg,"*** Connected to SWITCH\r\n");
+//				wsprintf(Msg,"*** Connected using Stream %d\r\n",Stream);
 				send(sock, Msg, strlen(Msg),0);
 			}
 			return 0;

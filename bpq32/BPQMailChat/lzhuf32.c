@@ -680,6 +680,7 @@ __int32 Encode(char * in, char * out, __int32 inlen, BOOL B1Protocol)  /* compre
 void Decode(CIRCUIT * conn)  
 {
 	char *ptr;
+	char * StartofMsg;
 	short  i, j, k, r;
 	short c;
 	unsigned long count;
@@ -790,10 +791,11 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		// It would be nice to at least save and forward them and maybe deliver 
 		// via the SMTP interface
 
-		char * ptr1, * ptr2;
+		char * ptr1, * ptr2, * ptr3;
 		int linelen, MsgLen = 0;
 		struct MsgInfo * Msg = conn->TempMsg;
 		time_t Date;
+		char FullTo[100];
 
 		ptr1 = outfile;
 	Loop:
@@ -807,9 +809,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				if (_stricmp(conn->Callsign, "RMS") == 0)
 				{
-					// Swap smtp: to rms: so we can reply via RMS
+					// Swap smtp: to rms: and save originator so we can reply via RMS
 
 					strcpy(Msg->from, "RMS:");
+					memcpy(Msg->emailfrom, &ptr1[11], linelen - 11);
 				}
 				else
 				{
@@ -824,8 +827,21 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 		else if (_memicmp(ptr1, "To:", 3) == 0)
 		{
-			if (linelen > 10) linelen = 10;
-			memcpy(Msg->to, &ptr1[4], linelen-4);
+			memset(FullTo, 0, 99);
+			memcpy(FullTo, &ptr1[4], linelen-4);
+
+			ptr3 = strchr(FullTo, '@');
+
+			if (ptr3)
+			{
+				*ptr3++ = 0;
+				strcpy(Msg->via, ptr3);
+			}
+			
+			if (strlen(FullTo) >6 )
+				FullTo[6] = 0;
+
+			strcpy(Msg->to, FullTo);
 		}
 		else if (_memicmp(ptr1, "Type:", 4) == 0)
 		{
@@ -834,6 +850,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		else if (_memicmp(ptr1, "Body:", 4) == 0)
 		{
 			MsgLen = atoi(&ptr1[5]);
+			StartofMsg = ptr1;
 		}
 		else if (_memicmp(ptr1, "Date:", 5) == 0)
 		{
@@ -861,6 +878,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			ptr1 = ptr2 + 2;		// Skip crlf
 			goto Loop;
 		}
+
+	// Remove the headers (except Body and any File: Lines
+
+	memmove(conn->MailBuffer, StartofMsg, conn->TempMsg->length);
+	conn->TempMsg->length -= (StartofMsg - conn->MailBuffer);
+
 	}
 
 	CreateMessageFromBuffer(conn);

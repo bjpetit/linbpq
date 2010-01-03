@@ -677,8 +677,8 @@ static void circuit_free(CIRCUIT *circuit)
 {
 	CIRCUIT *c, *cp;
 	CN      *ncn;
-//	NODE    *nn;
-//	TOPIC   *tn;
+	NODE    *nn;
+	TOPIC   *tn;
 
 	cp = NULL;
 
@@ -702,7 +702,7 @@ static void circuit_free(CIRCUIT *circuit)
 	if (circuit_hd) return;
 
 // RT has gone inactive. Clean up.
-/*
+
 	while (node_hd)
 	{
 		nn = node_hd->next;
@@ -719,7 +719,6 @@ static void circuit_free(CIRCUIT *circuit)
 		free(topic_hd);
 		topic_hd = tn;
 	}
-*/
 }
 
 

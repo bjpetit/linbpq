@@ -903,16 +903,21 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 	if (_memicmp(sockptr->RecpTo[i], "rms:", 4) == 0)
 	{
-		via=strlop(sockptr->RecpTo[i], ':');
+		via = _strlwr(strlop(sockptr->RecpTo[i], ':'));
 	}
 	else if (_memicmp(sockptr->RecpTo[i], "rms/", 4) == 0)
 	{
-		via=strlop(sockptr->RecpTo[i], '/');
+		via = _strlwr(strlop(sockptr->RecpTo[i], '/'));
 	}
-	else if (_memicmp(sockptr->RecpTo[i], "smtp:", 4) == 0)
+	else if (_memicmp(sockptr->RecpTo[i], "smtp:", 5) == 0)
 	{
-		via=strlop(sockptr->RecpTo[i], ':');
-		sockptr->RecpTo[i][0] =0;
+		via = _strlwr(strlop(sockptr->RecpTo[i], ':'));
+		sockptr->RecpTo[i][0] = 0;
+	}
+	else if (_memicmp(sockptr->RecpTo[i], "smtp/", 5) == 0)
+	{
+		via = _strlwr(strlop(sockptr->RecpTo[i], '/'));
+		sockptr->RecpTo[i][0] = 0;
 	}
 	else
 	{
@@ -1285,35 +1290,13 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		sprintf_s(Header, sizeof(Header), "Message-ID: %s", Msg->bid);
 		SendSock(sockptr, Header);
 
-		// If the message has arrived from RMS, set the From: to the original sender
-		//	(the from: in the messsage body.
-
-		if (_stricmp(Msg->from, "RMS:") == 0)
-		{
-			char TempFrom[100];
-			char * ptr1;
-
-			ptr = strstr(msgbytes, "From:");
-			
-			if (ptr)
-			{
-				memcpy(TempFrom, ptr, 99);
-				
-				ptr1 = strchr(TempFrom, 13);
-
-				*ptr1=0;;
-
-				ptr1 = strstr(TempFrom, "SMTP:");
-
-				if (ptr1)
-					sprintf_s(Header, sizeof(Header), "From: rms/%s", &ptr1[5]);
-				else
-					sprintf_s(Header, sizeof(Header), "From: rms/%s", &TempFrom[6]);
-
-			}
-		}
+		if (_stricmp(Msg->from, "smtp:") == 0)
+			sprintf_s(Header, sizeof(Header), "From: smtp/%s", Msg->emailfrom);
 		else
-			sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
+			if (_stricmp(Msg->from, "rms:") == 0)
+				sprintf_s(Header, sizeof(Header), "From: RMS/%s", Msg->emailfrom);
+			else
+				sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
 		
 		SendSock(sockptr, Header);
 //Sender: shipplotter@yahoogroups.com
@@ -1962,8 +1945,8 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (_memicmp(ptr1, "From:", 5) == 0)
 			{
 				if (linelen > 65) linelen = 65;
-				memcpy(MsgFrom, ptr1, linelen);
-				MsgFrom[linelen]=0;
+				memcpy(MsgFrom, &ptr1[5], linelen-5);
+				MsgFrom[linelen-5]=0;
 			}
 			else
 			if (_memicmp(ptr1, "To:", 3) == 0)
@@ -2045,22 +2028,12 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			ptr1 = sockptr->MailBuffer;
 
-			// Put the From Address into the message, and set from to smtp:
-			
-			// From: "John Wiseman" <john.wiseman@cantab.net>
-
-			*(--ptr2) = '\n';
-			*(--ptr2) = '\r';
-
-			ptr2 -= strlen(MsgFrom);
-			memcpy(ptr2, MsgFrom, strlen(MsgFrom));
-
-			*(--ptr2) = '\n';
-			*(--ptr2) = '\r';
+			TidyString(MsgFrom);
+			_strlwr(MsgFrom);
 
 			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
 				
-			CreatePOP3Message("SMTP:", MsgTo, Msgtitle, Date, ptr2, MsgLen);
+			CreatePOP3Message(MsgFrom, MsgTo, Msgtitle, Date, ptr2, MsgLen);
 
 			free(sockptr->MailBuffer);
 			sockptr->MailBufferSize=0;
@@ -2294,7 +2267,8 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 	if (strlen(To) > 6) To[6]=0;
 
 	strcpy(Msg->to, To);
-	strcpy(Msg->from, From);
+	strcpy(Msg->from, "smtp:");
+	strcpy(Msg->emailfrom, From);
 	strcpy(Msg->title, MsgTitle);
 
 	// Set up forwarding bitmap
