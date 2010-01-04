@@ -456,11 +456,36 @@ NextPort:
 
 					if (Modeptr)
 					{
-						for (ModeNo = 0; ModeNo < 8; ModeNo++)
+						switch(PORT->PortType)
 						{
-							if (Modes[ModeNo][0] == Modeptr[0])
-								break;
+						case ICOM:						
+						
+							for (ModeNo = 0; ModeNo < 8; ModeNo++)
+							{
+								if (Modes[ModeNo][0] == Modeptr[0])
+									break;
+							}
+							break;
+
+						case YAESU:						
+						
+							for (ModeNo = 0; ModeNo < 16; ModeNo++)
+							{
+								if (YaesuModes[ModeNo][0] == Modeptr[0])
+									break;
+							}
+							break;
+
+						case KENWOOD:						
+						
+							for (ModeNo = 0; ModeNo < 8; ModeNo++)
+							{
+								if (KenwoodModes[ModeNo][0] == Modeptr[0])
+									break;
+							}
+							break;
 						}
+
 					}
 
 					Freq = Freq * 1000000.0;
@@ -543,10 +568,7 @@ NextPort:
 					}
 					else if	(PORT->PortType == KENWOOD)
 					{	
-						//Send Mode first - changing mode can change freq
-
-						FreqPtr += wsprintf(FreqPtr, "FA00%s;", FreqString);
-						*(FreqPtr++) = 0;
+						FreqPtr += wsprintf(FreqPtr, "FA00%s;MD%d;", FreqString, ModeNo);
 					}
 
 					*(FreqPtr) = 0;
@@ -2237,13 +2259,13 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 			if (*(ptr) == 0)			// End of list - reset to start
 				RIG->FreqPtr = ptr = RIG->FreqList;
 
-			memcpy(PORT->TXBuffer, ptr, 10);
+			memcpy(PORT->TXBuffer, ptr, 18);
 
-			RIG->FreqPtr += 10;
+			RIG->FreqPtr += 18;
 	
-			PORT->TXLen = 5;
+			PORT->TXLen = 18;
 			WriteCommBlock(PORT);
-			PORT->CmdSent = Poll[4];
+			PORT->CmdSent = 1;
 			PORT->Retries = 2;
 			PORT->AutoPoll = TRUE;
 

@@ -31,8 +31,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,1,0
- PRODUCTVERSION 1,1,1,0
+ FILEVERSION 1,1,1,1
+ PRODUCTVERSION 1,1,1,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -50,12 +50,12 @@ BEGIN
             VALUE "Comments", "Rig Frequency Control interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "RigControl\0"
-            VALUE "FileVersion", "1.1.1.0\0"
+            VALUE "FileVersion", "1.1.1.1\0"
             VALUE "InternalName", "RigControl\0"
             VALUE "LegalCopyright", "Copyright © 2009 G8BPQ\0"
             VALUE "OriginalFilename", "RigControl.dll\0"
             VALUE "ProductName", "  SRigControl\0"
-            VALUE "ProductVersion", "1.1.1.0\0"
+            VALUE "ProductVersion", "1.1.1.1\0"
         END
     END
     BLOCK "VarFileInfo"

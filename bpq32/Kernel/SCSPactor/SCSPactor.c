@@ -7,6 +7,8 @@
 // Dec 29 2009
 
 //	Add Scan Control using %W Hostmode Command
+//	Map Rig control port to a Virtual Serial Port.
+
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS

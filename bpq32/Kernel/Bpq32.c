@@ -179,6 +179,10 @@
 
 //	Add MAXHOPS and MAXRTT config options
 
+// Build 8
+
+// Fix INP3 deletion of Application Nodes.
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
