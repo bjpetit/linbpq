@@ -688,7 +688,8 @@ VOID SetupHAddresesP(struct BBSForwardingInfo * ForwardingInfo)
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 {
 	struct UserInfo * bbs;
-	struct	BBSForwardingInfo * ForwardingInfo;
+	struct UserInfo * user;
+	struct BBSForwardingInfo * ForwardingInfo;
 	char ATBBS[41];
 	char RouteElements[41];
 	int Count = 0;
@@ -709,6 +710,20 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 	if (strcmp(RouteElements, "WINLINK.ORG") == 0)
 	{
+		// If a user of this bbs with Poll RMS set, leave it here - no point in sending to winlink
+		
+		user = LookupCall(Msg->to);
+
+		if (user)
+		{
+			if (user->flags & F_POLLRMS)
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace @ winlink.org, but local RMS user - leave here");
+
+				return 1;					// Route found
+			}
+		}
+	
 		RMS = FindRMS();
 
 		if (RMS)
@@ -944,7 +959,7 @@ NOHA:
 
 			if (_stricmp(bestbbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 			{
-				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
+				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bestbbs->Call) != 0)) // Dont send back
 				{
 					set_fwd_bit(Msg->fbbs, bestbbs->BBSNumber);
 					bestbbs->ForwardingInfo->MsgCount++;

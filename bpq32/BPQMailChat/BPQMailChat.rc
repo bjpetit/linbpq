@@ -183,7 +183,7 @@ END
 IDD_USEREDIT DIALOGEX 20, 20, 234, 216
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit User"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     COMBOBOX        5000,7,7,57,80,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
                     WS_VSCROLL | WS_TABSTOP
@@ -542,67 +542,24 @@ BEGIN
                     BS_VCENTER
 END
 
-MAINT DIALOG DISCARDABLE  26, 5, 381, 266
+WELCOMEMSG DIALOG DISCARDABLE  26, 5, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
-    LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before being deleted",
-                    IDC_STATIC,149,13,216,28
-    LTEXT           "Read",IDC_STATIC,159,68,46,10
-    EDITTEXT        IDM_PR,224,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    LTEXT           "Unread",IDC_STATIC,159,83,46,10
-    EDITTEXT        IDM_PUR,224,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    LTEXT           "Forwarded",IDC_STATIC,159,98,46,10
-    EDITTEXT        IDM_PF,224,98,20,10,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    LTEXT           "Not Forwarded",IDC_STATIC,159,113,49,10
-    EDITTEXT        IDM_PNF,224,113,20,10,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    LTEXT           "Forwarded",IDC_STATIC,264,68,49,10
-    EDITTEXT        IDM_BF,324,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    LTEXT           "Not Forwarded",IDC_STATIC,264,83,49,10
-    EDITTEXT        IDM_BNF,324,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    GROUPBOX        "Personals",IDC_STATIC,149,58,108,71
-    GROUPBOX        "Bulletins",IDC_STATIC,259,58,103,71
-    LTEXT           "The following boxes allow you to specify different values for different Bulletin origins and destinations.",
-                    IDC_STATIC,151,136,214,19
-    LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,156,158,
-                    154,8
-    LTEXT           "From",IDC_STATIC,176,173,28,12
-    EDITTEXT        IDM_LTFROM,151,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
-                    ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "To",IDC_STATIC,247,173,27,12
-    EDITTEXT        IDM_LTTO,221,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
-                    ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "At",IDC_STATIC,316,173,15,12
-    EDITTEXT        IDM_LTAT,289,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
-                    ES_AUTOVSCROLL | ES_WANTRETURN
-    DEFPUSHBUTTON   "Save",IDM_MAINTSAVE,166,250,50,14,BS_CENTER | 
-                    BS_VCENTER
-    GROUPBOX        "Lifetimes",IDC_STATIC,144,0,231,244
-    GROUPBOX        "Parameters",IDC_STATIC,3,3,133,241
-    LTEXT           "Max Message Number",IDC_STATIC,7,23,77,10
-    LTEXT           "BID Lifetime (Days)",IDC_STATIC,7,46,77,10
-    LTEXT           "Maintenance Time (UTC)   Enter as HHMM",IDC_STATIC,7,69,
-                    83,25
-    EDITTEXT        IDC_MAXMSG,96,22,25,12,ES_CENTER | ES_NUMBER
-    EDITTEXT        IDC_BIDLIFETIME,96,45,25,12,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    EDITTEXT        IDC_MAINTTIME,96,68,25,12,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    LTEXT           "Log File Lifetime (Days)",IDC_STATIC,7,93,80,10
-    EDITTEXT        IDC_LOGLIFETIME,96,91,25,12,ES_CENTER | ES_AUTOHSCROLL | 
-                    ES_NUMBER
-    CONTROL         "Delete Log and Message Files to Recycle Bin",
-                    IDC_DELETETORECYCLE,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,105,98,27
-    CONTROL         "Supress Mailing of Housekeeping Results",
-                    IDC_MAINTNOMAIL,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
-                    BS_MULTILINE | WS_TABSTOP,5,135,98,27
+    EDITTEXT        IDM_USERMSG,5,20,340,50,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN
+    EDITTEXT        IDM_CHATUSERMSG,5,93,340,50,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
+    EDITTEXT        IDM_NEWUSERMSG,5,167,340,50,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
+    DEFPUSHBUTTON   "Save",IDM_MSGSAVE,166,250,50,14,BS_CENTER | BS_VCENTER
+    LTEXT           "Normal User Welcome Message",IDC_STATIC,5,7,130,8
+    LTEXT           "Chat Welcome Message",IDC_STATIC,5,80,130,8
+    LTEXT           "New User Welcome Message",IDC_STATIC,5,155,130,8
+    LTEXT           "$U : Callsign of the connected user    $I : First name of the connected user  ",
+                    IDC_STATIC,5,227,365,10
+    LTEXT           "$L : Number of the latest message    $N : Number of active messages.    $Z : Last message read by user",
+                    IDC_STATIC,5,238,365,10
 END
 
 IDD_MAINTRESULTS DIALOG DISCARDABLE  0, 0, 181, 114
@@ -711,6 +668,69 @@ BEGIN
                     WS_EX_ACCEPTFILES
     PUSHBUTTON      "Save",IDSAVE,5,5,67,17
     PUSHBUTTON      "Cancel",IDCANCEL,75,5,67,17
+END
+
+MAINT DIALOG DISCARDABLE  26, 5, 381, 266
+STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "System"
+BEGIN
+    LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before being deleted",
+                    IDC_STATIC,149,13,216,28
+    LTEXT           "Read",IDC_STATIC,159,68,46,10
+    EDITTEXT        IDM_PR,224,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Unread",IDC_STATIC,159,83,46,10
+    EDITTEXT        IDM_PUR,224,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Forwarded",IDC_STATIC,159,98,46,10
+    EDITTEXT        IDM_PF,224,98,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Not Forwarded",IDC_STATIC,159,113,49,10
+    EDITTEXT        IDM_PNF,224,113,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Forwarded",IDC_STATIC,264,68,49,10
+    EDITTEXT        IDM_BF,324,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Not Forwarded",IDC_STATIC,264,83,49,10
+    EDITTEXT        IDM_BNF,324,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    GROUPBOX        "Personals",IDC_STATIC,149,58,108,71
+    GROUPBOX        "Bulletins",IDC_STATIC,259,58,103,71
+    LTEXT           "The following boxes allow you to specify different values for different Bulletin origins and destinations.",
+                    IDC_STATIC,151,136,214,19
+    LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,156,158,
+                    154,8
+    LTEXT           "From",IDC_STATIC,176,173,28,12
+    EDITTEXT        IDM_LTFROM,151,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
+                    ES_AUTOVSCROLL | ES_WANTRETURN
+    LTEXT           "To",IDC_STATIC,247,173,27,12
+    EDITTEXT        IDM_LTTO,221,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
+                    ES_AUTOVSCROLL | ES_WANTRETURN
+    LTEXT           "At",IDC_STATIC,316,173,15,12
+    EDITTEXT        IDM_LTAT,289,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
+                    ES_AUTOVSCROLL | ES_WANTRETURN
+    DEFPUSHBUTTON   "Save",IDM_MAINTSAVE,166,250,50,14,BS_CENTER | 
+                    BS_VCENTER
+    GROUPBOX        "Lifetimes",IDC_STATIC,144,0,231,244
+    GROUPBOX        "Parameters",IDC_STATIC,3,3,133,241
+    LTEXT           "Max Message Number",IDC_STATIC,7,23,77,10
+    LTEXT           "BID Lifetime (Days)",IDC_STATIC,7,46,77,10
+    LTEXT           "Maintenance Time (UTC)   Enter as HHMM",IDC_STATIC,7,69,
+                    83,25
+    EDITTEXT        IDC_MAXMSG,96,22,25,12,ES_CENTER | ES_NUMBER
+    EDITTEXT        IDC_BIDLIFETIME,96,45,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    EDITTEXT        IDC_MAINTTIME,96,68,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Log File Lifetime (Days)",IDC_STATIC,7,93,80,10
+    EDITTEXT        IDC_LOGLIFETIME,96,91,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    CONTROL         "Delete Log and Message Files to Recycle Bin",
+                    IDC_DELETETORECYCLE,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,105,98,27
+    CONTROL         "Supress Mailing of Housekeeping Results",
+                    IDC_MAINTNOMAIL,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
+                    BS_MULTILINE | WS_TABSTOP,5,135,98,27
 END
 
 

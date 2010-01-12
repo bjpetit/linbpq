@@ -1,6 +1,8 @@
 // C equivalents of ASM STRUCS
 
 
+#define BUFFLEN	360
+
 #define NRPID 0xcf			// NETROM PID
 
 #define L4BUSY	0x80		// BNA - DONT SEND ANY MORE

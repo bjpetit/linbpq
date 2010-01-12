@@ -182,6 +182,10 @@
 // Build 8
 
 // Fix INP3 deletion of Application Nodes.
+// Fix GETCALLSIGN for Pactor Sessions
+// Add N Call* to display all SSID's of a call
+// Fix flow control on Pactor sessions.
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T

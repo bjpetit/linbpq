@@ -6,10 +6,50 @@
 
 #define MAXBLOCK 4096
 
-struct TNCINFO
-{ 
+#define MaxStreams 10			// First is used for Pactor, even though Pactor uses channel 31
+#define PactorStream 31
+
+
+struct STREAMINFO
+{
+//	struct TRANSPORTENTRY * AttachedSession;
+
 	int PACTORtoBPQ_Q;			// Frames for BPQ
 	int BPQtoPACTOR_Q;			// Frames for PACTOR
+	int	FramesOutstanding;		// Frames Queued - used for flow control
+	BOOL InternalCmd;			// Last Command was generated internally
+	int	IntCmdDelay;			// To limit internal commands
+
+	BOOL Attached;				// Set what attached to a BPQ32 stream
+	BOOL Connected;				// When set, all data is passed as data instead of commands
+	BOOL Connecting;			// Set when Outward Connect in progress
+	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
+
+	int DEDStream;				// Stream number for DED interface (same as index except for pactor)
+
+	char MyCall[10]	;			// Call we are using
+	char RemoteCall[10];		// Callsign
+
+	int BytesTXed;
+	int BytesAcked;
+	int BytesRXed;
+	int BytesOutstanding;		// For Packet Channels
+
+	UCHAR PTCStatus0;			// Status Bytes
+	UCHAR PTCStatus1;			// Status Bytes
+	UCHAR PTCStatus2;			// Status Bytes
+	UCHAR PTCStatus3;			// Status Bytes
+
+	char * CmdSet;			// A series of commands to send to the TNC
+	char * CmdSave;				// Base address for free
+
+};
+
+struct TNCINFO
+{ 
+	struct STREAMINFO Streams[MaxStreams+1];	// 0 is Pactor 1 - 10 are ax.25.
+	int LastStream;				// Last one polled for status or send
+
 	int BPQtoRadio_Q;			// Frames for Rig Interface
 
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
@@ -23,14 +63,6 @@ struct TNCINFO
 
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 
-	BOOL Attached;					// Set what attached to a BPQ32 stream
-	BOOL Connected;					// When set, all data is passed as data instead of commands
-	BOOL Connecting;				// Set when Outward Connect in progress
-	BOOL ReportDISC;				// Need to report an incoming DISC to kernel
-
-	char * CmdSet;					// A series of commands to send to the TNC
-	char * CmdSave;					// Base address for free
-
 	HANDLE hDevice;
 	BOOL HostMode;					// Set if in DED Host Mode
 //	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
@@ -39,17 +71,12 @@ struct TNCINFO
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent
 	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
-	int RXLen;						// Data in RXBUffer
+	UINT RXLen;						// Data in RXBUffer
 	UCHAR Toggle;					// Sequence bit
-	UCHAR PTCStatus0;				// Status Bytes
-	UCHAR PTCStatus1;				// Status Bytes
-	UCHAR PTCStatus2;				// Status Bytes
-	UCHAR PTCStatus3;				// Status Bytes
 	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
 	char MyCall[10]	;				// Call we are using
 	char RemoteCall[10];			// Callsign
-	int BytesTXed;
-	int BytesRXed;
+	int Buffers;					// Free buffers in TNC
 	BOOL WantToChangeFreq;			// Request from Scanner to Change
 	int OKToChangeFreq;				// 1 = SCS Says OK to change, -1 = Dont Change zero = still waiting
 	BOOL DontWantToChangeFreq;		// Change done - ok to relaase SCS
@@ -58,6 +85,10 @@ struct TNCINFO
 
 	int VCOMPort;					// COMM Port for Rig COntrol Channel
 	HANDLE VCOMHandle;
+
+	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
+	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
+
 };
 
 

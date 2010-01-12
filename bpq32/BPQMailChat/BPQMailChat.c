@@ -381,6 +381,13 @@
 // Tidy stuck Node and Topics when all links close
 // Fix B2 handling of @ to TO Address.
 
+// Version 1.0.3.28
+
+// Ensure user Record for the BBS Call has BBS bit set.
+// Don't send messages addressed @winlink.org if addressee is a local user with Poll RMS set.
+// Add user configurable welcome messages.
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -497,6 +504,11 @@ char BBSSID[]="[BPQ-%d.%d.%d.%d-%s%s%s%sH$]\r";
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
 char NewUserPrompt[100]="Please enter your Name: ";
+
+char * WelcomeMsg = NULL;
+char * NewWelcomeMsg = NULL;
+char * ChatWelcomeMsg = NULL;
+char * NewChatWelcomeMsg = NULL;
 
 char BBSName[100];
 
@@ -1640,6 +1652,7 @@ BOOL Initialise()
 	int Attrs, ret;
 	char msg[MAX_PATH + 50];
 
+
 	//	Register message for posting by BPQDLL
 
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
@@ -1768,6 +1781,21 @@ BOOL Initialise()
 	GetUserDatabase();
 	GetBIDDatabase();
 	GetBadWordFile();
+
+	// Make sure there is a user record for the BBS, with BBS bit set.
+
+	user = LookupCall(BBSName);
+		
+	if (user == NULL)
+		user = AllocateUserRecord(BBSName);
+
+	if ((user->flags & F_BBS) == 0)
+	{
+		// Not Defined as a BBS
+
+		if(SetupNewBBS(user))
+			user->flags |= F_BBS;
+	}
 
 	// Allocate Streams
 
@@ -1908,6 +1936,9 @@ int Connected(Stream)
 				if (user == NULL) return 0; //		Cant happen??
 
 				user->flags |= F_HOLDMAIL;
+
+				conn->NewUser = TRUE;
+
 			}
 
 			time(&user->TimeLastCOnnected);
@@ -2884,6 +2915,8 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 {
 	LINK    *link;
 	KNOWNNODE *node;
+	char Welcome[] = "Hello $I. Latest Message is $L, Last listed is $Z$W";
+
 
 	if (conn->Flags & CHATMODE)
 	{	
@@ -2933,9 +2966,11 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 		}
 		return;
 	}
-	
-	nodeprintf(conn, "Hello %s. Latest Message is %d, Last listed is %d\r",
-		user->Name, LatestMsg, user->lastmsg);
+
+	if (conn->NewUser)
+		ExpandAndSendMessage(conn, NewWelcomeMsg, LOG_BBS);
+	else
+		ExpandAndSendMessage(conn, WelcomeMsg, LOG_BBS);
 
 	if (user->HomeBBS[0] == 0)
 		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");

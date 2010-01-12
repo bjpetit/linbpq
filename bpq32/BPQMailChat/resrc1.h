@@ -39,6 +39,10 @@
 #define IDC_LASTLISTED                  1030
 #define IDC_MESSAGE                     1031
 #define IDSAVE                          1032
+#define IDM_USERMSG                     1034
+#define IDM_CHATUSERMSG                 1035
+#define IDM_NEWUSERMSG                  1036
+#define IDM_MSGSAVE                     1037
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -90,9 +94,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30007
+#define _APS_NEXT_RESOURCE_VALUE        30008
 #define _APS_NEXT_COMMAND_VALUE         40017
-#define _APS_NEXT_CONTROL_VALUE         1034
+#define _APS_NEXT_CONTROL_VALUE         1038
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

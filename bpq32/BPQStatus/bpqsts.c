@@ -17,7 +17,7 @@
 #include "..\include\bpq32.h"			// BPQ32 API Defines
 #include "..\include\asmstrucs.h"
 
-#include "..\BPQIPModule\ipcode.h"
+#include "..\kernel\BPQIPModule\ipcode.h"
 
 #define BPQICON 400
 

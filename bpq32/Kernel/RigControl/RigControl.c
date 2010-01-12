@@ -1417,7 +1417,6 @@ VOID ProcessHostFrame(struct PORTINFO * PORT, UCHAR * rxbuffer, int Len)
 
 	ProcessHostFrame(PORT, FendPtr+1, Len - NewLen);
 	return;
-
 }
 
 
@@ -1436,7 +1435,7 @@ BOOL NEAR WriteCommBlock(struct PORTINFO * PORT)
 		ClearCommError(PORT->hDevice, &dwErrorFlags, &ComStat);
 	}
 
-	PORT->Timeout = 20;		// 2 secs
+	PORT->Timeout = 100;		// 2 secs
 
 	return TRUE;  
 }

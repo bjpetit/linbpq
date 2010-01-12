@@ -234,7 +234,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Stream;
 
-
 	if (TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
@@ -329,7 +328,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		if (Stream == 0)
 		{
 			if (TNC->Streams[0].FramesOutstanding  > 4)
-				(1 | TNC->HostMode << 8);
+				return (1 | TNC->HostMode << 8);
 		}
 		else
 		{

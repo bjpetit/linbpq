@@ -303,7 +303,8 @@ typedef struct ConnectionInfo_S
 	BOOL NeedRestartHeader;				// Set if waiting for 6 byte restart header
 	BOOL FBBMsgsSent;					// Messages need to be maked as complete when next command received
 	UCHAR FBBChecksum;					// Header Checksum
-	BOOL LocalMsg;				// Set if current Send command is for a local user
+	BOOL LocalMsg;						// Set if current Send command is for a local user
+	BOOL NewUser;						// Set if first time user has accessed BBS
 
 } ConnectionInfo, CIRCUIT;
 
@@ -909,6 +910,7 @@ VOID SaveChatConfig();
 VOID SaveISPConfig();
 VOID SaveFWDConfig();
 VOID SaveMAINTConfig();
+VOID SaveWelcomeMsgs();
 VOID SaveWindowConfig();
 VOID ReinitializeFWDStruct(struct UserInfo * user);
 VOID CopyBIDDatabase();
@@ -922,6 +924,8 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length);
 struct UserInfo * FindRMS();
 VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo);
 BOOL ConnecttoBBS (struct UserInfo * user);
+BOOL SetupNewBBS(struct UserInfo * user);
+
 // FBB Routines
 
 VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg);
@@ -951,6 +955,7 @@ int WritetoMonitorWindow(char * Msg, int len);
 BOOL CreateDebugWindow();
 VOID WritetoDebugWindow(char * Msg, int len);
 VOID ClearDebugWindow();
+int RemoveLF(char * Message, int len);
 
 // Utilities
 
@@ -961,6 +966,7 @@ VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...);
 
 VOID SortBBSChain();
+VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG);
 
 // TCP Routines
 
@@ -1069,6 +1075,13 @@ extern char BBSName[];
 extern char SYSOPCall[];
 extern char BBSSID[];
 extern char NewUserPrompt[];
+
+extern char * WelcomeMsg;
+extern char * NewWelcomeMsg;
+extern char * ChatWelcomeMsg;
+extern char * NewChatWelcomeMsg;
+
+
 extern int Ver[4];
 
 extern struct MsgInfo ** MsgHddrPtr;

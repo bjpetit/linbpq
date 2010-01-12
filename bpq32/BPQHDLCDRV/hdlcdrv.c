@@ -1125,7 +1125,7 @@ BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, HDLC_CHANNEL * Channel)
     // Will hold whether we've serviced any interrupt causes in this
     // routine.
     //
-    BOOLEAN ServicedAnInterrupt;
+    BOOLEAN ServicedAnInterrupt = FALSE;
 
     UCHAR tempLSR;
 
@@ -1151,20 +1151,30 @@ BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, HDLC_CHANNEL * Channel)
 
 	DebugPrint(("BPQHDLC: ISR Entered\n"));
 
-SIOI10:
+	DebugPrint(("BPQHDLC: ASIOC Reg = %x\n", Channel->Mapped_ASIOC));
+	DebugPrint(("BPQHDLC: BSIOC Reg = %x\n", Channel->Mapped_BSIOC));
+	DebugPrint(("BPQHDLC: SIOC Reg = %x\n", Channel->Mapped_SIOC));
+
+
+//SIOI10:
 
 	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 3);		//SELECT RR3
 
 	InterruptIdReg = READ_PORT_UCHAR(Channel->Mapped_ASIOC);
 
-	if (InterruptIdReg == 0) goto NOINTS; 
+	DebugPrint(("BPQHDLC: IID Reg = %d\n", InterruptIdReg));
+
+//	if (InterruptIdReg == 0) goto NOINTS; 
 
 	ServicedAnInterrupt = TRUE;
 
-	WRITE_PORT_UCHAR(Channel->Mapped_BSIOC, 2);		//SELECT RR3
+	WRITE_PORT_UCHAR(Channel->Mapped_BSIOC, 2);		//SELECT RR2
 
 	Vector = READ_PORT_UCHAR(Channel->Mapped_BSIOC);
-		
+
+	DebugPrint(("BPQHDLC: Vector = %d\n", Vector));
+
+/*		
 	if (Vector < 8)
 		Channel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
 	else
@@ -1175,7 +1185,7 @@ SIOI10:
 
 	// Call our char handler
 
-	Channel->VECTOR[Vector<<1](Channel);
+//	Channel->VECTOR[Vector<<1](Channel);
 
 	if (Channel->TXComplete)
 	{
@@ -1185,10 +1195,10 @@ SIOI10:
 
 	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 0x38);		// RESET IUS
 
-	goto	SIOI10;			// SEE IF ANY MORE 
+//	goto	SIOI10;			// SEE IF ANY MORE 
 
 NOINTS:
-
+*/
     return ServicedAnInterrupt;
 
  }
@@ -1698,13 +1708,22 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 
     KeInitializeTimer(&Channel->TXDelayTimer);
 
-	// Clear any Pending ints
 
-SIOI10:
 
+// Clear any Pending ints
+
+	i = 10;
+
+//
+	DebugPrint(("BPQHDLC: ASIOC Reg = %x\n", Channel->Mapped_ASIOC));
+	DebugPrint(("BPQHDLC: BSIOC Reg = %x\n", Channel->Mapped_BSIOC));
+	DebugPrint(("BPQHDLC: SIOC Reg = %x\n", Channel->Mapped_SIOC));
+/*
 	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 3);		//SELECT RR3
 
 	InterruptIdReg = READ_PORT_UCHAR(Channel->Mapped_ASIOC);
+
+	DebugPrint(("BPQHDLC: IID Reg = %d\n", InterruptIdReg));
 
 	if (InterruptIdReg == 0 || InterruptIdReg == 255) goto NOINTS; 
 
@@ -1714,6 +1733,7 @@ SIOI10:
 
 	DebugPrint(("BPQHDLC: Clear Ints Vector = %d\n", Vector));
 	
+
 	if (Vector < 8)
 		Channel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
 	else
@@ -1722,15 +1742,19 @@ SIOI10:
 		Vector -=8;
 	}
 
+
 	// Call our char handler
 
-	Channel->VECTOR[Vector<<1](Channel);
+//	Channel->VECTOR[Vector<<1](Channel);
 
 	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 0x38);		// RESET IUS
 
-	goto	SIOI10;			// SEE IF ANY MORE 
+	i--;
+
+	if (i) goto	SIOI10;			// SEE IF ANY MORE 
 
 NOINTS:
+*/
 
 
 	// Hook the interrupt if this is the first device on the level
@@ -1745,6 +1769,7 @@ NOINTS:
 			Interrupt->InterruptMode,
 			Interrupt->Affinity, FALSE));
 		
+
 		status = IoConnectInterrupt(&Interrupt->Interrupt,
 						HDLCISR,
 						Channel, NULL,

@@ -4,7 +4,7 @@
 //	Configuration Module
 
 #include "stdafx.h"
-#define C_PAGES 4
+#define C_PAGES 5
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
@@ -12,6 +12,7 @@ int CurrentPage=0;				// Page currently on show in tabbed Dialog
 #define ISPPARAMS 1
 #define CHATPARAMS 2
 #define MAINTPARAMS 3
+#define WELCOMEMSGS 4
 
 
 typedef struct tag_dlghdr {
@@ -275,6 +276,12 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			SaveMAINTConfig();
 			return TRUE;
 
+
+		case IDM_MSGSAVE:
+
+			SaveWelcomeMsgs();
+			return TRUE;
+
 		}
 		break;
 	}
@@ -337,8 +344,12 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	tie.pszText = "Chat Params";
 	TabCtrl_InsertItem(pHdr->hwndTab, 2, &tie);
 
-	tie.pszText = "Housekeeping";
+ 	tie.pszText = "Housekeeping";
 	TabCtrl_InsertItem(pHdr->hwndTab, 3, &tie);
+
+	tie.pszText = "Welcome Messages";
+	TabCtrl_InsertItem(pHdr->hwndTab, 4, &tie);
+
 
 	// Lock the resources for the three child dialog boxes.
 
@@ -346,6 +357,7 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	pHdr->apRes[1] = DoLockDlgRes("ISP_CONFIG");
 	pHdr->apRes[2] = DoLockDlgRes("CHAT_CONFIG");
 	pHdr->apRes[3] = DoLockDlgRes("MAINT");
+	pHdr->apRes[4] = DoLockDlgRes("WELCOMEMSG");
 
 	// Determine the bounding rectangle for all child dialog boxes.
 
@@ -578,6 +590,19 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDM_LTAT, Text);
 
 		Text[0] = 0;
+
+		break;
+
+
+	case WELCOMEMSGS:
+
+		SetDlgItemText(pHdr->hwndDisplay, IDM_USERMSG, WelcomeMsg);
+		SetDlgItemText(pHdr->hwndDisplay, IDM_NEWUSERMSG, NewWelcomeMsg);
+		SetDlgItemText(pHdr->hwndDisplay, IDM_CHATUSERMSG, ChatWelcomeMsg);
+
+
+		break;
+
 
 	}
 
@@ -1591,6 +1616,46 @@ VOID SaveMAINTConfig()
 
 }
 
+VOID SaveWelcomeMsgs()
+{
+	char Value[10000];
+
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
+	HKEY hKey=0;
+	int retCode, disp;
+
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	GetDlgItemText(hwndDisplay, IDM_USERMSG, Value, 10000);
+
+	free(WelcomeMsg);
+	WelcomeMsg = _strdup(Value);
+	
+	RegSetValueEx(hKey, "WelcomeMsg", 0, REG_SZ, Value, strlen(Value));
+
+	GetDlgItemText(hwndDisplay, IDM_NEWUSERMSG, Value, 10000);
+
+	free(NewWelcomeMsg);
+	NewWelcomeMsg = _strdup(Value);
+	
+	RegSetValueEx(hKey, "NewUserWelcomeMsg", 0, REG_SZ, Value, strlen(Value));
+
+	GetDlgItemText(hwndDisplay, IDM_CHATUSERMSG, Value, 10000);
+
+	free(ChatWelcomeMsg);
+	ChatWelcomeMsg = _strdup(Value);
+	
+	RegSetValueEx(hKey, "ChatWelcomeMsg", 0, REG_SZ, Value, strlen(Value));
+
+
+	RegCloseKey(hKey);
+
+	wsprintf(InfoBoxText, "Configuration Saved");
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+}
+
+
 
 VOID ReinitializeFWDStruct(struct UserInfo * user)
 {
@@ -1878,6 +1943,47 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+
+		// Get Welcome Messages
+
+		Vallen=0;
+		
+		RegQueryValueEx(hKey,"WelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			WelcomeMsg = malloc(Vallen);
+			RegQueryValueEx(hKey,"WelcomeMsg",0, (ULONG *)&Type, WelcomeMsg, (ULONG *)&Vallen);
+		}
+		else
+			
+			WelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
+
+		RegQueryValueEx(hKey,"NewUserWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			NewWelcomeMsg = malloc(Vallen);
+			RegQueryValueEx(hKey,"NewUserWelcomeMsg",0, (ULONG *)&Type, NewWelcomeMsg, (ULONG *)&Vallen);
+		}
+		else
+			
+			NewWelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
+
+		RegQueryValueEx(hKey,"ChatWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			ChatWelcomeMsg = malloc(Vallen);
+			RegQueryValueEx(hKey,"ChatWelcomeMsg",0, (ULONG *)&Type, ChatWelcomeMsg, (ULONG *)&Vallen);
+		}
+		else
+			
+			ChatWelcomeMsg = _strdup(
+			
+			"G8BPQ Chat Server.\r\nType /h for command summary.\r\nBringing up links to other nodes.\r\n"
+			"This may take a minute or two.\r\nThe /p command shows what nodes are linked.\r\n");
+
 
 		Vallen=80;
 

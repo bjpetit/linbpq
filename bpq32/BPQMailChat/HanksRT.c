@@ -1606,8 +1606,8 @@ int rtloginu (CIRCUIT *circuit, BOOL Local)
 		user->name = _strdup(circuit->UserPointer->Name);
 	}
 	upduser(user);
-	nputs(circuit, "G8BPQ Chat Server.\rType /h for command summary.\rBringing up links to other nodes.\r");
-	nputs(circuit, "This may take a minute or two.\rThe /p command shows what nodes are linked.\r");
+
+	ExpandAndSendMessage(circuit, ChatWelcomeMsg, LOG_CHAT);
 	text_tellu_Joined(user);
 	user_tell(user, id_join);
 	show_users(circuit);

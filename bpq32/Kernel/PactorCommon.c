@@ -175,6 +175,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 #endif
 
 
+
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 {
 	struct MHSTRUC * MH = TNC->PortRecord->PORTCONTROL.PORTMHEARD;
