@@ -24,6 +24,7 @@ Public Structure ChatLink
    Public Call2State As Integer
    Public Timeout1 As Integer
    Public Timeout2 As Integer
+   Public KillTimer As Integer
 
 End Structure
 
@@ -250,18 +251,24 @@ Public Class Form1
 
                         For n = 0 To Elements.Length - 1 Step 2
 
-                           ptr = FindChatPair(CallFrom, Elements(n))
+                           If Elements(n) <> "XX" Then
 
-                           NewState = CInt(Elements(n + 1))
+                              ptr = FindChatPair(CallFrom, Elements(n))
 
-                           If ChatLinks(ptr).Call1 = CallFrom Then
-                              If NewState <> ChatLinks(ptr).Call1State Then Changed = True
-                              ChatLinks(ptr).Call1State = NewState
-                              ChatLinks(ptr).Timeout1 = 21
-                           Else
-                              If NewState <> ChatLinks(ptr).Call2State Then Changed = True
-                              ChatLinks(ptr).Call2State = NewState
-                              ChatLinks(ptr).Timeout2 = 21
+                              NewState = CInt(Elements(n + 1))
+
+                              ChatLinks(ptr).KillTimer = 0
+
+                              If ChatLinks(ptr).Call1 = CallFrom Then
+                                 If NewState <> ChatLinks(ptr).Call1State Then Changed = True
+                                 ChatLinks(ptr).Call1State = NewState
+                                 ChatLinks(ptr).Timeout1 = 21
+                              Else
+                                 If NewState <> ChatLinks(ptr).Call2State Then Changed = True
+                                 ChatLinks(ptr).Call2State = NewState
+                                 ChatLinks(ptr).Timeout2 = 21
+                              End If
+
                            End If
 
                         Next
@@ -429,18 +436,21 @@ Public Class Form1
                      ' We hae both Positions - write a Line: line
                      ' |Line,-122.1225,47.6891666666667, -93.294332,36.620264,#000000,2
 
-                     If ChatLinks(i).Call1State = 0 And ChatLinks(i).Call2State = -1 Then
-                        State = 3      ' Mismatch
-                     ElseIf ChatLinks(i).Call1State = 2 And ChatLinks(i).Call2State = 2 Then
-                        State = 2
-                     ElseIf ChatLinks(i).Call1State = 2 Or ChatLinks(i).Call2State = 2 Then
-                        State = 1
-                     Else
-                        State = 0
-                     End If
+                     If (ChatLinks(i).KillTimer < 24) Then ' Not heard of for a while - remove
 
-                     sw.Write("Line," & Nodes(j).Lon & "," & Nodes(j).Lat & "," & _
-                              Nodes(k).Lon & "," & Nodes(k).Lat & "," & State.ToString & "," & ChatLinks(i).Call1 & " <> " & ChatLinks(i).Call2 & "," & vbCrLf & "|")
+                        If ChatLinks(i).Call1State = 0 And ChatLinks(i).Call2State = -1 Then
+                           State = 3      ' Mismatch
+                        ElseIf ChatLinks(i).Call1State = 2 And ChatLinks(i).Call2State = 2 Then
+                           State = 2
+                        ElseIf ChatLinks(i).Call1State = 2 Or ChatLinks(i).Call2State = 2 Then
+                           State = 1
+                        Else
+                           State = 0
+                        End If
+
+                        sw.Write("Line," & Nodes(j).Lon & "," & Nodes(j).Lat & "," & _
+                                 Nodes(k).Lon & "," & Nodes(k).Lat & "," & State.ToString & "," & ChatLinks(i).Call1 & " <> " & ChatLinks(i).Call2 & "," & vbCrLf & "|")
+                     End If
 
                   End If
 
@@ -516,23 +526,27 @@ Public Class Form1
 
             If strLine.Length < 10 Then Exit For
 
-            ReDim Preserve Nodes(NodeIndex + 1)
-
             Elements = Split(strLine, ",")
-            Nodes(NodeIndex).Callsign = Trim(Elements(0))
-            Nodes(NodeIndex).NAlias = Trim(Elements(1))
-            Nodes(NodeIndex).Lat = Trim(Elements(2))
-            Nodes(NodeIndex).Lon = Trim(Elements(3))
-            Nodes(NodeIndex).downIcon = Trim(Elements(4))
-            Nodes(NodeIndex).upIcon = Trim(Elements(5))
-            Nodes(NodeIndex).PopupMode = CInt(Elements(6))
-            Nodes(NodeIndex).Comment = LTrim(Microsoft.VisualBasic.Left(Elements(7), Elements(7).Length - 1))
 
-            If Nodes(NodeIndex).upIcon = "" Then Nodes(NodeIndex).upIcon = "greenmarker.png"
-            If Nodes(NodeIndex).downIcon = "" Then Nodes(NodeIndex).downIcon = "redmarker.png"
+            If Trim(Elements(0)) <> "XX" Then
 
+               ReDim Preserve Nodes(NodeIndex + 1)
 
-            NodeIndex = NodeIndex + 1
+               Nodes(NodeIndex).Callsign = Trim(Elements(0))
+               Nodes(NodeIndex).NAlias = Trim(Elements(1))
+               Nodes(NodeIndex).Lat = Trim(Elements(2))
+               Nodes(NodeIndex).Lon = Trim(Elements(3))
+               Nodes(NodeIndex).downIcon = Trim(Elements(4))
+               Nodes(NodeIndex).upIcon = Trim(Elements(5))
+               Nodes(NodeIndex).PopupMode = CInt(Elements(6))
+               Nodes(NodeIndex).Comment = LTrim(Microsoft.VisualBasic.Left(Elements(7), Elements(7).Length - 1))
+
+               If Nodes(NodeIndex).upIcon = "" Then Nodes(NodeIndex).upIcon = "greenmarker.png"
+               If Nodes(NodeIndex).downIcon = "" Then Nodes(NodeIndex).downIcon = "redmarker.png"
+
+               NodeIndex = NodeIndex + 1
+
+            End If
 
          Next
 
@@ -677,6 +691,14 @@ Public Class Form1
          ReadNodesFile()
          DataUpdated = False
       End If
+
+      Dim i As Integer
+
+      For i = 0 To ChatLinkCount - 1
+
+         ChatLinks(i).KillTimer = ChatLinks(i).KillTimer + 1
+
+      Next
 
    End Sub
 
