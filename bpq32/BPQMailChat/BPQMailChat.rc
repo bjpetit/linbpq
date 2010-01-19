@@ -621,10 +621,34 @@ END
 IDD_UICONFIG DIALOG DISCARDABLE  0, 0, 321, 120
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "UI Configuration"
-FONT 8, "MS Sans Serif"
+FONT 8, "System"
 BEGIN
     DEFPUSHBUTTON   "Save",IDOK,89,99,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,175,99,50,14
+END
+
+IDD_UPDATECHATMAP DIALOG DISCARDABLE  0, 0, 274, 146
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Update Chat Map"
+FONT 8, "System"
+BEGIN
+    DEFPUSHBUTTON   "Save",IDOK,100,125,35,14
+    PUSHBUTTON      "Cancel",IDCANCEL,140,125,40,14
+    DEFPUSHBUTTON   "Send to Map System",IDSENDTOMAP,5,125,90,14
+    EDITTEXT        IDC_POPUPTEXT,5,80,200,35,ES_MULTILINE | ES_AUTOHSCROLL | 
+                    WS_HSCROLL
+    EDITTEXT        IDC_MAPPOSITION,5,45,145,15,ES_AUTOHSCROLL
+    LTEXT           "Popup Box Text. ",IDC_STATIC,5,65,70,9
+    CONTROL         "Hover",IDC_HOVER,"Button",BS_AUTORADIOBUTTON,219,92,45,
+                    10
+    CONTROL         "Click",IDC_CLICK,"Button",BS_AUTORADIOBUTTON,219,104,45,
+                    10
+    LTEXT           "Popup Mode",IDC_STATIC,215,80,49,10
+    LTEXT           "Click Help for full information about the Chat Network Map",
+                    IDC_STATIC,5,10,195,15
+    DEFPUSHBUTTON   "? Help",IDC_MAPHELP,220,10,33,11,BS_CENTER | BS_VCENTER | 
+                    NOT WS_TABSTOP
+    LTEXT           "Positon",IDC_STATIC,5,30,35,10
 END
 
 IDD_MSGFROMCLIPBOARD DIALOGEX 0, 0, 442, 321
@@ -760,6 +784,7 @@ BEGIN
         MENUITEM "Housekeeping",                IDM_HOUSEKEEPING
         MENUITEM "Send Msg from Clipboard",     ID_ACTIONS_SENDMSGFROMCLIPBOARD
 
+        MENUITEM "Update Chat Map Info",        ID_ACTIONS_UPDATECHATMAPINFO
     END
     POPUP "&Configuration"
     BEGIN

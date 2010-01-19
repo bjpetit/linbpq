@@ -240,6 +240,12 @@ UINT APIENTRY GETMONDECODE();
 VOID APIENTRY RelBuff(VOID * Msg);
 VOID *APIENTRY GetBuff();
 
+VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
+
+BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
+
+VOID APIENTRY md5 (char *arg, unsigned char * checksum);
+
 
 #else
 

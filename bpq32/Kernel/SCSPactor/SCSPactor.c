@@ -8,6 +8,7 @@
 
 //	Add Scan Control using %W Hostmode Command
 //	Map Rig control port to a Virtual Serial Port.
+//	Add Support for packet port(s).
 
 
 #define WIN32_LEAN_AND_MEAN
@@ -431,6 +432,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	}
 
 	PortEntry->MAXHOSTMODESESSIONS = MaxStreams;		// Default
+	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.15 call on each stream
 
 	TNC->PortRecord = PortEntry;
 
@@ -778,7 +780,7 @@ BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
 		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
 	}
 
-	TNC->Timeout = 100;
+	TNC->Timeout = 20;				// 2 secs
 
 	return TRUE;
 }

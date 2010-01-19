@@ -328,7 +328,8 @@ ProcessLine(char * buf)
 			
 		if (p_cmd != NULL)
 		{
-			TNC->ApplCmd=_strdup(p_cmd);
+			if (p_cmd[0] != ';' && p_cmd[0] != '#')
+				TNC->ApplCmd=_strdup(p_cmd);
 		}
 
 		// Read Initialisation lines

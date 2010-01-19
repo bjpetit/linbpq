@@ -2825,7 +2825,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 	BOOL bcopt=TRUE;
 	SOCKADDR_IN sinx; 
 
-	Sleep(10000);									// Delay startup a bit
+	Sleep(5000);									// Delay startup a bit
 
 	while(arp->TCPMode == TCPMaster)
 	{		
@@ -2921,7 +2921,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 			}
 		}
 wait:
-		Sleep (120000);				// 2 Mins 
+		Sleep (115000);				// 2 Mins 
 	}
 
 	Debugprintf("TCP Connect Thread %x Closing", arp->TCPThreadID);

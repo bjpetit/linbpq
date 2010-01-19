@@ -620,7 +620,7 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 	BOOL Found;
 
 	if (memcmp(&arpptr->MSGHDDR.SOURCE, ourMACAddr,6 ) == 0 ) 
-		return;		// Discard out sends
+		return;		// Discard our sends
 
 	switch (arpptr->ARPOPCODE)
 	{

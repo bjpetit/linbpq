@@ -471,10 +471,10 @@ typedef struct _EXTPORTDATA
 	char PORT_DLL_NAME[16];	
 	UCHAR EXTRESTART;					// FLAG FOR DRIVER REINIT
 	HINSTANCE DLLhandle;
-	
 	int MAXHOSTMODESESSIONS;			// Max Host Sessions supported (Used for KAM Pactor + ax.25 support)
-
 	struct TRANSPORTENTRY * ATTACHEDSESSIONS[27];	// For PACTOR. etc
+	BOOL PERMITGATEWAY;				//  Set if ax.25 ports can change callsign (ie SCS, not KAM
+
 
 }	EXTPORTDATA, *PEXTPORTDATA;
 

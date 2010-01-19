@@ -2716,9 +2716,13 @@ CMDC05:
 	JMP	CMDC99
 @@:	
 	mov	esi,ebx
-;;
-;	Only Allow Attach VHF from Secure Applications
 ;
+;	Only Allow Attach VHF from Secure Applications or if PERMITGATEWAY is set
+;
+
+	CMP	PERMITGATEWAY[EBX],1
+	JE @F							; OK
+	
 	PUSH EBX
 	MOV	EBX,CONNECTSESSION
 	TEST	Authorised_Session[EBX], 1
@@ -4141,8 +4145,12 @@ ATTACHCMD:
 	cmp	eax, ' '
 	je short attpactor
 ;
-;	Only Allow Attach VHF from Secure Applications
+;	Only Allow Attach VHF from Secure Applications or if PERMITGATEWAY is set
 ;
+
+	CMP	PERMITGATEWAY[ESI],1
+	JE @F							; OK
+	
 	TEST	Authorised_Session[EBX], 1
 	JNZ short @f
 

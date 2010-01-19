@@ -378,7 +378,7 @@
 // Version 1.0.3.27
 
 // Correct code that prevents mail being retured to originating BBS.
-// Tidy stuck Node and Topics when all links close
+// Tidy stuck Nodes and Topics when all links close
 // Fix B2 handling of @ to TO Address.
 
 // Version 1.0.3.28
@@ -387,6 +387,9 @@
 // Don't send messages addressed @winlink.org if addressee is a local user with Poll RMS set.
 // Add user configurable welcome messages.
 
+// Version 1.0.3.29
+
+// Add AUTH feature to Rig Control
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -562,6 +565,7 @@ BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK    ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 
 void myInvalidParameterHandler(const wchar_t* expression,
@@ -1280,6 +1284,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_MSGFROMCLIPBOARD), hWnd, ClpMsgDialogProc);
 			break;
 
+
+		case ID_ACTIONS_UPDATECHATMAPINFO:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_UPDATECHATMAP), hWnd, ChatMapDialogProc);
+			break;
+
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
 			break;
@@ -1514,6 +1523,110 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 		break;
 	}
 	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	char Position[81] = "";
+	char PopupText[251] = "";
+	char Msg[500];
+	int len;
+	int Click = 0, Hover = 0;
+	char ClickHover[3] = "";
+	HKEY hKey=0;
+	int retCode,Type,Vallen;
+
+
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			Vallen=80;
+			RegQueryValueEx(hKey,"MapPosition", 0 , &Type,(UCHAR *)&Position, &Vallen);
+
+			Vallen=250;
+			RegQueryValueEx(hKey,"MapPopup", 0 , &Type,(UCHAR *)&PopupText, &Vallen);
+
+			Vallen=4;
+			RegQueryValueEx(hKey,"PopupMode", 0, &Type, (UCHAR *)&Click, &Vallen);
+		
+			RegCloseKey(hKey);
+		}
+
+		SetDlgItemText(hDlg, IDC_MAPPOSITION, Position);
+		SetDlgItemText(hDlg, IDC_POPUPTEXT, PopupText);
+
+		SendDlgItemMessage(hDlg, IDC_CLICK, BM_SETCHECK, Click , Click);
+		SendDlgItemMessage(hDlg, IDC_HOVER, BM_SETCHECK, !Click , !Click);
+
+		return TRUE; 
+
+	case WM_COMMAND:
+
+		switch LOWORD(wParam)
+		{
+		case IDSENDTOMAP:
+
+			GetDlgItemText(hDlg, IDC_MAPPOSITION, Position, 80);
+			GetDlgItemText(hDlg, IDC_POPUPTEXT, PopupText, 250);
+		
+			Click = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
+			Hover = SendDlgItemMessage(hDlg, IDC_HOVER, BM_GETCHECK, 0 ,0);
+		
+			if (AXIPPort)
+			{
+				if (Click) ClickHover[0] = '1';
+				else 
+					if (Hover) ClickHover[0] = '0';
+
+				len = wsprintf(Msg, "INFO %s|%s|%s|\r", Position, PopupText, ClickHover);
+
+				if (len < 256)
+					Send_MON_Datagram(Msg, len);
+			}
+			
+		break;
+
+		case IDOK:
+
+			GetDlgItemText(hDlg, IDC_MAPPOSITION, Position, 80);
+			GetDlgItemText(hDlg, IDC_POPUPTEXT, PopupText, 250);
+		
+			Click = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
+			Hover = SendDlgItemMessage(hDlg, IDC_HOVER, BM_GETCHECK, 0 ,0);
+
+			retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+				"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
+
+			if (retCode == ERROR_SUCCESS)
+			{
+				RegSetValueEx(hKey, "MapPosition", 0 , REG_SZ, (UCHAR *)&Position, strlen(Position));
+				RegSetValueEx(hKey, "MapPopup", 0, REG_SZ, (UCHAR *)&PopupText, strlen(PopupText));
+				RegSetValueEx(hKey, "PopupMode", 0, REG_DWORD, (UCHAR *)&Click, 4);
+		
+				RegCloseKey(hKey);
+			}
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		
+		case IDC_MAPHELP:
+			
+			ShellExecute(hDlg,"open",
+				"http://www.cantab.net/users/john.wiseman/Documents/BPQChatMap.htm",
+				"", NULL, SW_SHOWNORMAL); 
+
+			return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 
@@ -5633,19 +5746,30 @@ InBand:
 	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") ||
 			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE"))
 	{
-		ForwardingInfo->ScriptIndex++;
+		char * Cmd = Scripts[++ForwardingInfo->ScriptIndex];
 		
-		if (Scripts[ForwardingInfo->ScriptIndex] && 
-			memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) != 0)			// Only Check until script is finished
+		if (Cmd && memcmp(Cmd, "TIMES", 5) != 0)			// Only Check until script is finished
 		{
-			if (strcmp(Scripts[ForwardingInfo->ScriptIndex], "*** LINKED TO *") == 0)
+			if (strcmp(Cmd, "*** LINKED TO *") == 0)
 			{
 				// Used for RMS to switch to a user call for polling RMS
 
 				nodeprintf(conn, "*** LINKED TO %s\r", ForwardingInfo->UserCall);
 			}
+			else if (memcmp(Cmd, "RADIO AUTH", 10) == 0)
+			{
+				// Generate a Password to enable RADIO commands on a remote node
+				char AuthCommand[80];
+
+				strcpy(AuthCommand, Cmd);
+
+				CreateOneTimePassword(&AuthCommand[11], &Cmd[11], 0); 
+
+				nodeprintf(conn, "%s\r", AuthCommand);
+			}
 			else
-				nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
+
+				nodeprintf(conn, "%s\r", Cmd);
 		}
 		return TRUE;
 	}

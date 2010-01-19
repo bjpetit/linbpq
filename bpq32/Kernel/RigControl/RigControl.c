@@ -88,6 +88,10 @@ DllImport WORD MAXCIRCUITS;
 DllImport UCHAR L4DEFAULTWINDOW;
 DllImport WORD L4T1;
 
+VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
+BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
+
+
 // Buffer Pool
 
 #define NUMBEROFBUFFERS 20
@@ -104,6 +108,11 @@ char YaesuModes[16][6] = {"LSB",  "USB", "CW", "CWR", "AM", "", "", "", "FM", ""
 
 
 char KenwoodModes[8][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "????"};
+
+
+char AuthPassword[100] = "";
+
+char LastPassword[17];
 
 
 //
@@ -348,8 +357,18 @@ NextPort:
 
 	if(*ptr ==';') return (TRUE);			// comment
 
-//#COM58 19200 ICOM
 
+	if (memcmp(ptr, "AUTH", 4) == 0)
+	{
+		ptr = strtok(NULL, " \t\n\r");
+		if (ptr == NULL) return FALSE;
+		if (strlen(ptr) > 100) return FALSE;
+
+		strcpy(AuthPassword, ptr);
+		return TRUE;
+	}
+
+//#COM58 19200 ICOM
 
 	if (memcmp(ptr, "COM", 3) == 0)
 	{
@@ -726,6 +745,29 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 	struct TRANSPORTENTRY * L4 = L4TABLE;
 
 	//	Only Allow RADIO from Secure Applications
+
+	if (memcmp(Command, " AUTH ", 6) == 0)
+	{
+		char Password[40];
+
+		if (AuthPassword[0] && (memcmp(LastPassword, &Command[6], 16) != 0))
+		{
+			if (CheckOneTimePassword(&Command[6], AuthPassword))
+			{
+				L4 += Session;
+				L4->Secure_Session = 1;
+
+				wsprintf(Command, "Ok\r");
+
+				memcpy(LastPassword, &Command[6], 16);	// Save
+
+				return FALSE;
+			}
+		}
+		
+		wsprintf(Command, "Sorry AUTH failed\r");
+		return FALSE;
+	}
 
 	if (Session != -1)				// Used for internal Stop/Start
 	{		
@@ -1526,7 +1568,8 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 			}
 			else
 			{
-				RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->BPQPort, 1);	// Request Perrmission
+				if (RIG->PortRecord->PORT_EXT_ADDR)
+					RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->BPQPort, 1);	// Request Perrmission
 				
 				// If it returns zero there is no need to wait.
 				
@@ -2049,7 +2092,8 @@ VOID YaesuPoll(struct PORTINFO * PORT)
 			}
 			else
 			{
-				RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->BPQPort, 1);	// Request Perrmission
+				if (RIG->PortRecord->PORT_EXT_ADDR)
+					RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->BPQPort, 1);	// Request Perrmission
 				
 				// If it returns zero there is no need to wait.
 				
@@ -2234,7 +2278,8 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 			}
 			else
 			{
-				RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->BPQPort, 1);	// Request Perrmission
+				if (RIG->PortRecord->PORT_EXT_ADDR)
+					RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->BPQPort, 1);	// Request Perrmission
 				
 				// If it returns zero there is no need to wait.
 				

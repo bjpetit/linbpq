@@ -213,6 +213,7 @@ EXTRESTART		DB	?		; FLAG FOR DRIVER REINIT
 DLLHANDLE		DD	?
 MAXHOSTMODESESSIONS DD ?	; Max Host Sessions supported (Used for KAM Pactor + ax.25 support)
 ATTACHEDSESSIONS	DD	27 DUP (0); Owning Sessions for PACTOR, etc
+PERMITGATEWAY		DD	0		; Set if ax.25 ports can change callsign (ie SCS, not KAM
 
 EXTDATA	ENDS
 

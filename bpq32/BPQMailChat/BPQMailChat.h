@@ -685,6 +685,7 @@ VOID removelinks();
 VOID SetupChat();
 VOID SendChatLinkStatus();
 VOID ClearChatLinkStatus();
+VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len);
 
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
@@ -1001,8 +1002,6 @@ VOID InitialiseNNTP();
 VOID BuildNNTPList(struct MsgInfo * Msg);
 int NNTP_Data(int sock, int error, int eventcode);
 int NNTP_Accept(int SocketId);
-
-md5 (char *arg, unsigned char * checksum);
 
 VOID * GetOverrides(HKEY hKey, char * ValueName);
 VOID DoHouseKeeping(BOOL Mainual);

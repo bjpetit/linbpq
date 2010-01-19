@@ -92,11 +92,28 @@ typedef struct _ICMPMSG
 } ICMPMSG, *PICMPMSG;
 
 
+typedef struct _IPMESSAGE
+{
+//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
 
+	struct _MESSAGE * CHAIN;
+
+	UCHAR	PORT;
+	USHORT	LENGTH;
+
+	UCHAR	DEST[7];
+	UCHAR	ORIGIN[7];
+
+//	 MAY BE UP TO 56 BYTES OF DIGIS
+
+	UCHAR	CTL;
+	UCHAR	PID; 
+
+};
 
 typedef struct _AXARP
 {
-	struct _MESSAGE MSGHDDR;
+	struct _IPMESSAGE MSGHDDR;
 	
 	USHORT	HWTYPE;      //    DB      0,3             ; AX.25
 	USHORT	PID;			//	DB      0,0CCH          ; PID

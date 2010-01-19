@@ -58,8 +58,6 @@ PBUF_ENTRY PopBUFEntry(PLIST_ENTRY ListHead, PLOCAL_DEVICE_INFO deviceInfo)
     return CONTAINING_RECORD(ListEntry, BUF_ENTRY, ListEntry);
 }
 
-
-
 NTSTATUS
 DriverEntry(
     IN PDRIVER_OBJECT  DriverObject,
@@ -85,10 +83,9 @@ Return Value:
 
 --*/
 {
-
     UNREFERENCED_PARAMETER (RegistryPath);
 
-    DebugPrint (("BPQHDLC: Entered Driver Entry V 0.0.2\n"));
+    DebugPrint (("BPQHDLC: Entered Driver Entry V 0.0.3\n"));
     
     //
     // Create dispatch points for the IRPs.
@@ -908,12 +905,15 @@ NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp)
 
         case IRP_MJ_DEVICE_CONTROL:
             //  Dispatch on IOCTL
+
+			pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
+			Channel = (PHDLC_CHANNEL)*pIOBuffer;
+
             switch (pIrpStack->Parameters.DeviceIoControl.IoControlCode)
             {
 
 			case IOCTL_BPQHDLC_IOREAD:
 
-				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
 				Mapped_IOADDR = ULongToPtr(*pIOBuffer);
 
@@ -944,20 +944,17 @@ NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp)
 
 			case IOCTL_BPQHDLC_POLL:
 		
-				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-
-	//			DebugPrint (("BPQHDLC: Poll IOCTL %x \n", *pIOBuffer));
+//				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
 				pIrp->IoStatus.Information = 
-					ReceivePacket((PHDLC_CHANNEL)*pIOBuffer, (PUCHAR) pIOBuffer, pLDI);
+					ReceivePacket(Channel, (PUCHAR) pIOBuffer, pLDI);
 
 				Status = STATUS_SUCCESS;
 				break;
 
             case IOCTL_BPQHDLC_TIMER:
 
-				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-				Channel = (PHDLC_CHANNEL)*pIOBuffer;
+//				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 			
 				// See if anything to send. If so, and channel is clear, Key up and start TXDelay timer.
 				
@@ -965,13 +962,57 @@ NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp)
 				{
 					if (!IsListEmpty(&Channel->TXMSG_Q))
 					{
+						if (Channel->SOFTDCDFLAG)
+						{
+							if ((Channel->RR0 & 0x10) == 0)	// SYNC bit = Active
+								goto OktoSend;
+						}
+						else
+						{
+							if ((Channel->RR0 & 0x08) == 0)	// Hardware DCD
+								goto OktoSend;
+						}
+
+						DebugPrint (("BPQHDLC: TX  - Channel Busy\n", *pIOBuffer));
+						goto TXBusy; 
+
+					OktoSend:
+						
 						Buffer = PopBUFEntry(&Channel->TXMSG_Q, pLDI);
 						if (Buffer == NULL) return 0;
 
 						StartTX(pLDI, Channel, Buffer);
+
+						Channel->L1TIMEOUT = 0;
+						goto TimerReturn;
+					}
+				}
+				
+			TXBusy:
+
+				if (Channel->L1TIMEOUT)
+				{
+					Channel->L1TIMEOUT--;
+
+					if (Channel->L1TIMEOUT == 0)
+					{
+						// Cannot transmit for a minute - delete
+
+						Buffer = PopBUFEntry(&Channel->TXMSG_Q, pLDI);
+
+						while (Buffer)
+						{
+							PushBUFEntry(&Channel->Device->FREE_Q, Buffer, Channel->Device);
+							Channel->L1DISCARD++;
+
+							DebugPrint (("BPQHDLC: TX Busy - discarding %x\n", Buffer));
+
+							Buffer = PopBUFEntry(&Channel->TXMSG_Q, pLDI);
+						}
 					}
 				}
 	
+			TimerReturn:
 
 				pIrp->IoStatus.Information = 0;		// Bytes Returned
 				Status = STATUS_SUCCESS;
@@ -981,10 +1022,6 @@ NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp)
             case IOCTL_BPQHDLC_CHECKTX:
 
 				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-
-//				DebugPrint (("BPQHDLC: CheckTX IOCTL %x \n", *pIOBuffer));
-				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
-
 				*(pIOBuffer) = 0;
 				
 				pIrp->IoStatus.Information = 4;		// Bytes Returned
@@ -994,12 +1031,15 @@ NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp)
 
 			case IOCTL_BPQHDLC_SEND:
 			
-				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
+//				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
 //				DebugPrint (("BPQHDLC: Send IOCTL %x \n", *pIOBuffer));
 
-				SendPacket((PHDLC_CHANNEL)*pIOBuffer, (PUCHAR) pIOBuffer, pLDI);
+				SendPacket(Channel, (PUCHAR) pIOBuffer, pLDI);
 	            Status = STATUS_SUCCESS;
+
+				if (Channel->L1TIMEOUT == 0)
+					Channel->L1TIMEOUT = 600;
 		
 				break;
 
@@ -1008,7 +1048,7 @@ NTSTATUS GpdDispatch(IN DEVICE_OBJECT * pDO, IN    PIRP pIrp)
 			
 				// We return the Address of the Channel Structure to BPQ32 to use as a Handle for IO requests
 				
-				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
+//				pIOBuffer = (PULONG)pIrp->AssociatedIrp.SystemBuffer;
 
 				*(PULONG)pIOBuffer = (ULONG)InitChannel((PBPQHDLC_ADDCHANNEL_INPUT)pIOBuffer, pLDI);
 
@@ -1111,23 +1151,16 @@ BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, HDLC_CHANNEL * Channel)
 	// Context (2nd Param) is the first Channel Record on this level.
 	// Each Channel Record has a ponter back to the Device Object record.
 
-	MYDEVICE_OBJECT * Device = Channel->Device;
-
     //
     // Holds the contents of the interrupt identification record.
     // A low bit of zero in this register indicates that there is
     // an interrupt pending on this device.
     //
     UCHAR InterruptIdReg;
-	UCHAR Vector;
-
-    //
-    // Will hold whether we've serviced any interrupt causes in this
-    // routine.
-    //
+	UCHAR Vector;    //
     BOOLEAN ServicedAnInterrupt = FALSE;
-
     UCHAR tempLSR;
+	HDLC_CHANNEL * IntChannel;
 
     UNREFERENCED_PARAMETER(InterruptObject);
 
@@ -1149,22 +1182,15 @@ BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, HDLC_CHANNEL * Channel)
 
 	// ENTERED FROM HARDWARE INTERRUPT
 
-	DebugPrint(("BPQHDLC: ISR Entered\n"));
+//	DebugPrint(("BPQHDLC: ISR Entered Channel = %x\n", Channel));
 
-	DebugPrint(("BPQHDLC: ASIOC Reg = %x\n", Channel->Mapped_ASIOC));
-	DebugPrint(("BPQHDLC: BSIOC Reg = %x\n", Channel->Mapped_BSIOC));
-	DebugPrint(("BPQHDLC: SIOC Reg = %x\n", Channel->Mapped_SIOC));
-
-
-//SIOI10:
+SIOI10:
 
 	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 3);		//SELECT RR3
 
 	InterruptIdReg = READ_PORT_UCHAR(Channel->Mapped_ASIOC);
 
-	DebugPrint(("BPQHDLC: IID Reg = %d\n", InterruptIdReg));
-
-//	if (InterruptIdReg == 0) goto NOINTS; 
+	if (InterruptIdReg == 0) goto NOINTS; 
 
 	ServicedAnInterrupt = TRUE;
 
@@ -1172,33 +1198,29 @@ BOOLEAN HDLCISR(IN PKINTERRUPT InterruptObject, HDLC_CHANNEL * Channel)
 
 	Vector = READ_PORT_UCHAR(Channel->Mapped_BSIOC);
 
-	DebugPrint(("BPQHDLC: Vector = %d\n", Vector));
-
-/*		
 	if (Vector < 8)
-		Channel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
+		IntChannel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
 	else
 	{
-		Channel = Channel->A_PTR;		// GET DATA FOR B CHANNEL
+		IntChannel = Channel->A_PTR;		// GET DATA FOR B CHANNEL
 		Vector -=8;
 	}
 
+	Vector = Vector >>1;
+
 	// Call our char handler
 
-//	Channel->VECTOR[Vector<<1](Channel);
-
-	if (Channel->TXComplete)
+	if (IntChannel)
 	{
-		KeInsertQueueDpc(&Channel->TXCompleteDpc, Channel->Device, Channel);
-		Channel->TXComplete = FALSE;
+		IntChannel->VECTOR[Vector](IntChannel);
+		
+		WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 0x38);		// RESET IUS
 	}
 
-	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 0x38);		// RESET IUS
-
-//	goto	SIOI10;			// SEE IF ANY MORE 
+	goto	SIOI10;			// SEE IF ANY MORE 
 
 NOINTS:
-*/
+
     return ServicedAnInterrupt;
 
  }
@@ -1207,62 +1229,77 @@ VOID TXComplete(IN PKDPC Dpc, IN PVOID Context, MYDEVICE_OBJECT * Device, HDLC_C
 {
 	// Called when TX Complete Occurs. Free the buffer and see if any more to send
 
-	PushBUFEntry(&Device->DeviceExtension->FREE_Q, Channel->TXFRAME, Device->DeviceExtension);
+	DebugPrint(("BPQHDLC: TXComplete %x %x %x\n", Channel, Channel->Device, Channel->TXFRAME));
+
+	PushBUFEntry(&Channel->Device->FREE_Q, Channel->TXFRAME, Channel->Device);
+
+	Channel->TXFRAME = NULL;
 }
 
-VOID RXComplete(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID SystemArgument2)
+VOID RXComplete(IN PKDPC Dpc, IN PVOID Context, PBUF_ENTRY Buffer, HDLC_CHANNEL * Channel)
 {
 	// Called when RX Complete Occurs. Queue buffer.
 
-	//PushBUFEntry(&DeviceObject->DeviceExtension->FREE_Q, Context->TXFRAME, DeviceObject->DeviceExtension);
+	int len;
+
+	if (Buffer)
+	{
+		len = Buffer->MsgLen = Channel->FRAMELEN - 1;
+		Buffer->Message[5] = (len & 0xff);
+		Buffer->Message[6] = (len >> 8);
+
+		PushBUFEntry(&Channel->RXMSG_Q, Buffer, Channel->Device);
+		DebugPrint(("BPQHDLC: RXComplete len = %d BUffer = %x\n", len, Buffer));
+	}
+
+	//Get a new buffer
+
+	if (IsListEmpty(&Channel->Device->FREE_Q))
+		Buffer = NULL;
+	else 
+		Buffer = PopBUFEntry(&Channel->Device->FREE_Q, Channel->Device);
+
+	Channel->RXFRAME = Buffer;
+	
+	if (Buffer == NULL)
+	{
+		DebugPrint(("RX Complete - No Buffer\n"));
+		Channel->OLOADS++;
+		SETRVEC	SDOVRX;							// Discard Frame
+	}
+	else
+	{
+		Channel->SDRNEXT = &Buffer->Message[7];
+		Channel->FRAMELEN = 7;
+		SETRVEC	SDADRX;	
+	}
+
+	DebugPrint(("BPQHDLC: RXComplete len = %d New Buffer = %x\n", len, Buffer));
 
 }
+
 VOID SDADRX(PHDLC_CHANNEL Channel)
 {
 	UCHAR Char;
 
-//	Channel->SOFTDCD = 4;			// SET RX ACTIVE
-/*
-	MOV	ESI,OFFSET32 deviceInfo->FREE_Q
-	cli
-	CALL	Q_REM
-	sti
-	JNZ SHORT GETB00
+	DebugPrint(("BPQHDLC: SDADRX\n"));
 
-;	CALL	NOBUFFERCHECK		; CHECK IF POOL IS CORRUPT
-	JMP SHORT NOBUFFERS
+	Channel->SOFTDCD = 4;			// SET RX ACTIVE
 
-GETB00:
+	Char = SIOR;					// GET FIRST BYTE OF ADDRESS
 
-	DEC	QCOUNT
+	Channel->FRAMELEN++;
 
-	MOV	DWORD PTR [EDI],OFFSET32 GETB00	; FLAG FOR DUMP ANALYSER
-*/
-	Char = SIOR;			// GET FIRST BYTE OF ADDRESS
-/*
-	MOV	CURALP[EBX],EDI		; SAVE ADDR
-	ADD	EDI,7
-	MOV	[EDI],AL			; ADDR TO BUFFER
-	INC	EDI
-	MOV	SDRNEXT[EBX],EDI		; AND NEXT BYTE POINTER
-;*/
-	Channel->FRAMELEN = 7;
+	if (Channel->FRAMELEN > BUFFLEN-10)
+		SETRVEC	SDOVRX;				//	CANT TAKE ANY MORE
 
-	Channel->SDFLAGS |= SDRINP;	// SET RX IN PROGRESS
+	*(Channel->SDRNEXT++) = SIOR;	// GET data
+
+	DebugPrint(("BPQHDLC: RX Char %c %x Len %d\n", Char, Char, Channel->FRAMELEN));
+
+	Channel->SDFLAGS |= SDRINP;		// SET RX IN PROGRESS
 
 	SETRVEC	SDIDRX;					// SET VECTOR TO 'GET DATA'
-
-	return;
-
-//NOBUFFERS:
-
-//	NO BUFFER FOR RECEIVE - SET TO DISCARD
-
-	Channel->OLOADS++;
-
-	SETRVEC	SDOVRX;
-
-	SIOR;				// CLEAR INT PENDING
 
 	return;
 }
@@ -1271,7 +1308,8 @@ VOID SDIDRX(PHDLC_CHANNEL Channel)
 {
 //;
 //;	NOW READ CHARACTER FROM SIO AND STORE
-//;
+//
+	UCHAR Char = SIOR;
 
 	Channel->SOFTDCD = 4;			// SET RX ACTIVE
 	Channel->FRAMELEN++;
@@ -1281,12 +1319,16 @@ VOID SDIDRX(PHDLC_CHANNEL Channel)
 
 	*(Channel->SDRNEXT++) = SIOR;	// GET data
 
+//	DebugPrint(("BPQHDLC: RX Char %c %x Len %d\n", Char, Char, Channel->FRAMELEN));
+
 	return;
 }
 
 VOID SDOVRX(PHDLC_CHANNEL Channel)
 {
 	//	DISCARD REST OF MESSAGE
+
+	DebugPrint(("BPQHDLC: SDoVRX\n"));
 
 	SIOR;				// READ CHAR AND DISCARD
 
@@ -1298,7 +1340,10 @@ VOID SDOVRX(PHDLC_CHANNEL Channel)
 VOID SPCLINT(PHDLC_CHANNEL Channel)
 {
 	UCHAR RR1;
-	
+	PBUF_ENTRY Buffer;
+
+	DebugPrint(("BPQHDLC: SPCLINT\n"));
+
 	SIOR;				// READ CHAR AND DISCARD
 
 	SIOCW(1);			// SELECT RR1
@@ -1314,29 +1359,11 @@ VOID SPCLINT(PHDLC_CHANNEL Channel)
 
 	Channel->L2ORUNC++;	// FOR STATS
 
-	if (Channel->SDFLAGS & SDRINP)
-	{
-		// BUFFER IS ALLOCATED
-
-		Channel->SDFLAGS &= !SDRINP;
-
-		//MOV	ESI,OFFSET32 deviceInfo->FREE_Q
-		//MOV	EDI,CURALP[EBX]
-		//CALL	Q_ADDF
-	}
-
 	SETRVEC SDOVRX;			// DISCARD REST OF MESSAGE
 
-	goto SPCLINTEXIT;
+	return;
 
 SDEOF:
-
-//	IF RESIDUE IS NONZERO, IGNORE FRAME
-
-//	MOV	AL,AH
-//	AND	AL,1110B		; GET RESIDUE BITS
-//	CMP	AL,0110B
-//;	JNE SHORT DONTCOUNT		; NOT MULTIPLE OF 8 BITS
 
 //	END OF FRAME - SEE IF FCS OK
 
@@ -1345,54 +1372,64 @@ SDEOF:
 
 //	FCS ERROR
 
-//	CMP	FRAMELEN[EBX],14H
-//	JB SHORT DONTCOUNT		// TOO SHORT
+	DebugPrint(("BPQHDLC: FCS Error\n"));
+
 	Channel->RXERRORS++;
 
+	if (Channel->RXFRAME == 0)
+	{
+		SETRVEC SDOVRX;				// No buffer
+	}
+	else
+	{
+		Channel->SDFLAGS &= !SDRINP;
 
-	if ((Channel->SDFLAGS & SDRINP) == 0)
-		goto SDSP09;		// IF NOT SET, NO BUFFER IS ALLOCATED
+		Buffer = Channel->RXFRAME;
+		
+		Channel->SDRNEXT = &Buffer->Message[7];
+		Channel->FRAMELEN = 7;
 
-	Channel->SDFLAGS &= !SDRINP;
+		SETRVEC SDADRX;
+	}
 
-DISCARDFRAME:
+	return;
 
-//	MOV	ESI,OFFSET32 deviceInfo->FREE_Q
-//	MOV	EDI,CURALP[EBX]
-//	CALL	Q_ADDF
-
-SDSP09:
-
-	SETRVEC SDADRX;
-
-	goto SPCLINTEXIT;
-
-//	GOOD FRAME RECEIVED
+	//	GOOD FRAME RECEIVED
 
 SDSP10:
-	if ((Channel->SDFLAGS & SDRINP) == 0)
-		goto SDSP11;			// IF NOT SET, NO BUFFER IS ALLOCATED
+
+	SETRVEC SDOVRX;				// Will be reset to IDRX by RXComplete if another beffer is available
+
+	if (Channel->RXFRAME == 0)
+		return;					// IF NOT SET, NO BUFFER IS ALLOCATED
 
 	Channel->SDFLAGS &= !SDRINP;
 
 	*(--Channel->SDRNEXT) = 0xfe;	// OVERWRITE FIRSTS FCS BYTE WITH MARKER
 
 	if (Channel->FRAMELEN < 20)
-		goto DISCARDFRAME;		// TOO SHORT
+	{
+		// Too short - reset buffer
 
-//	MOV	EDI,CURALP[EBX]		; BUFFER ADDR
-//	MOV	5[EDI],AX		; PUT IN LENGTH
+		DebugPrint(("BPQHDLC: Frame too short(%d) - resetting buffer\n", Channel->FRAMELEN));
 
-//	LEA	ESI,RXMSG_Q[EBX]
-//	CALL	Q_ADD			; QUEUE MSG FOR B/G
-SDSP11:
+		
+		Buffer = Channel->RXFRAME;
+		
+		Channel->SDRNEXT = &Buffer->Message[7];
+		Channel->FRAMELEN = 7;
 
-	SETRVEC SDADRX;			// READY FOR NEXT FRAME
+		SETRVEC SDADRX;
+		return;
+	}
 
-SPCLINTEXIT:
+	DebugPrint(("BPQHDLC: Signalling RX Complete\n"));
 
-	return;
+	KeInsertQueueDpc(&Channel->RXCompleteDpc, Channel->RXFRAME, Channel);
 	
+	Channel->RXFRAME = 0;
+
+	return;	
 }
 	
 
@@ -1405,9 +1442,9 @@ SPCLINTEXIT:
 
 VOID EXTINT(PHDLC_CHANNEL Channel)
 {
-	UCHAR RR0, OldRR0 = Channel->RR0;
+	UCHAR RR0= SIOCR, OldRR0 = Channel->RR0;
 
-	RR0 = SIOCR;
+	DebugPrint(("BPQHDLC: EXTINT OldRR0 = %x RR0 = %x\n", OldRR0, RR0));
 	
 	Channel->RR0 = RR0;
 
@@ -1440,20 +1477,32 @@ VOID EXTINT(PHDLC_CHANNEL Channel)
 //	IS RX IN PROGRESS?
 
 SDST10:
-	if ((Channel->SDTXCNT & SDRINP) == 0)
+	if ((Channel->SDFLAGS & SDRINP) == 0)
 		goto SDST40;					// NO, SO PROBABLY ABORT FOLLOWING MSG 
 
 	if ((RR0 & SDABORT)	== 0)			// IS ABORT STATUS BIT SET?
-		goto SDST40;					// J IF NOT - ? ABORT TERMINATON
+	{
+		DebugPrint(("BPQHDLC: EXTINT Abort Clear?\n"));
+	}
+	else
+	{
+		PBUF_ENTRY Buffer = Channel->RXFRAME;
 
-//	MOV	EDI,CURALP[EBX]		; BUFFER ADDR
+		DebugPrint(("BPQHDLC: EXTINT Abort\n"));
 
-//	MOV	ESI,OFFSET32 deviceInfo->FREE_Q
-//	CALL	Q_ADDF			; RELEASE BUFFER
+		// Reset buffer
 
-	Channel->SDFLAGS &= !SDRINP;	// CLEAR RX IN PROGRESS
+		if (Buffer)
+		{
+			Channel->SDRNEXT = &Buffer->Message[7];
+			Channel->FRAMELEN = 7;
+		
+		}
+		
+		Channel->SDFLAGS &= !SDRINP;	// CLEAR RX IN PROGRESS
 
-	SETRVEC SDADRX;					// READY FOR NEXT FRAME
+		SETRVEC SDADRX;					// READY FOR NEXT FRAME
+	}
 
 SDST40:
 
@@ -1467,6 +1516,8 @@ SDST40:
 
 VOID SDDTTX(PHDLC_CHANNEL Channel)
 {	
+//	DebugPrint(("BPQHDLC: SDDTTX\n"));
+
 	Channel->SDTXCNT--;			// DECREMENT CURRENT IDP COUNT
 ;
 	if (Channel->SDTXCNT >= 0)
@@ -1490,6 +1541,8 @@ VOID SDDTTX(PHDLC_CHANNEL Channel)
 
 VOID SDCMTX(PHDLC_CHANNEL Channel)
 {
+	DebugPrint(("BPQHDLC: SDCMTX\n"));
+
 	SIOCW(SDRPEND);			// RESET TX INT PENDING
 
 	if ((Channel->SDFLAGS) & ABSENT)
@@ -1501,7 +1554,10 @@ VOID SDCMTX(PHDLC_CHANNEL Channel)
 		//	JMP SHORT SENDAGAIN
 	}
 
-	Channel->TXComplete = TRUE;
+	DebugPrint(("BPQHDLC: Signalling TX Complete\n"));
+
+	KeInsertQueueDpc(&Channel->TXCompleteDpc, Channel->Device, Channel);
+
 	Channel->SDFLAGS &= !SDTINP;
 
 //	SEE IF MORE TO SEND
@@ -1568,7 +1624,7 @@ VOID SENDDUMMY2(PHDLC_CHANNEL Channel)
 }
 
 VOID SENDDUMMY3(PHDLC_CHANNEL Channel)
-{
+{	
 	SIOW(0);		// THIRD DUMMY
 
 	SETTVEC	SENDDUMMY4;
@@ -1586,6 +1642,8 @@ VOID SENDDUMMY4(PHDLC_CHANNEL Channel)
 
 VOID DROPRTS(PHDLC_CHANNEL Channel)
 {
+	DebugPrint(("BPQHDLC: DROPRTS\n"));
+
 	Channel->LINKSTS &= 0xfe;	// SET NOT TRANSMITTING
 
 	SIOCW(5);
@@ -1612,6 +1670,8 @@ VOID DROPRTS(PHDLC_CHANNEL Channel)
 
 VOID IGNORE(PHDLC_CHANNEL Channel)
 {
+	DebugPrint(("BPQHDLC: IGNORE\n"));
+
 	SIOCW(SDRPEND);					// RESET TX INTERRUPT PENDING
 
 	return;
@@ -1623,6 +1683,9 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	// Create and Initialise Kernel Channel Entry for a new Channel
 
 	PHDLC_CHANNEL Channel = NULL;
+	PHDLC_CHANNEL OtherChannel = NULL;
+	PHDLC_CHANNEL ClrChannel = NULL;
+
 	PBUF_ENTRY Buffer;
 	int i, AddChannels;
 	ULONG Port;
@@ -1654,6 +1717,8 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
  
 	Channel = ExAllocatePool(NonPagedPool, sizeof(HDLC_CHANNEL));
 
+	memset(Channel, 0, sizeof(HDLC_CHANNEL));
+
 	if (Channel == NULL)
 	{
         DebugPrint(("BPQHDLC: Unable to allocate memory for Channel Structure\n"));
@@ -1665,6 +1730,35 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	Channel->ChannelPointer = AllocatedChannels; // Save our position in AllocatedChannels List
 
 	deviceInfo->ChannelPointers[AllocatedChannels++] = Channel;	
+
+	Channel->Device = deviceInfo; 
+
+	if (Params->Channel == 'A')
+	{
+		Channel->A_PTR = Channel;
+		Channel->B_PTR = Params->OtherChannel;
+	}
+	else
+	{
+		Channel->B_PTR = Channel;
+		Channel->A_PTR = Params->OtherChannel;
+	}
+
+	if (Params->OtherChannel)
+	{
+		// This is Second Channel. Set up the other Channel pointer
+
+		OtherChannel = Params->OtherChannel;
+
+		if (Params->Channel == 'A')
+			OtherChannel->A_PTR = Channel;
+		else
+			OtherChannel->B_PTR = Channel;
+
+			DebugPrint(("BPQHDLC: OtherChannel %x A_PTR = %x B_PTR = %x\n",
+				OtherChannel, OtherChannel->A_PTR, OtherChannel->B_PTR));
+	}
+
 
 	InitializeListHead(&Channel->TXMSG_Q);
 	InitializeListHead(&Channel->RXMSG_Q);
@@ -1678,7 +1772,7 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	Channel->RXBRG = Params->RXBRG;
 	Channel->WR10 = Params->WR10;
 	Channel->CHANNELNUM = Params->Channel;
-	Channel->SOFTDCD = Params->SOFTDCD;
+	Channel->SOFTDCDFLAG = Params->SOFTDCDFLAG;
 	Channel->TXDELAY = Params->TXDELAY;
 
 	Channel->IOTXCA = IGNORE;			// TX CHANNEL A
@@ -1686,10 +1780,11 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 	Channel->IORXCA = SDADRX;			// RX CHANNEL A
 	Channel->IORXEA = SPCLINT;
 
+	DebugPrint(("BPQHDLC: TXBRG %x RXBRG = %x, WR10 = %x\n", Channel->TXBRG, Channel->RXBRG, Channel->WR10)); 
 
 	// Add a few buffers to the pool (More if first channel)
 
-	AddChannels = (AllocatedChannels == 1) ? 5:2;
+	AddChannels = (AllocatedChannels == 1) ? 10:5;
 
 	for (i = 0; i < AddChannels; i++)
 	{
@@ -1708,17 +1803,19 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 
     KeInitializeTimer(&Channel->TXDelayTimer);
 
-
-
 // Clear any Pending ints
 
 	i = 10;
 
-//
 	DebugPrint(("BPQHDLC: ASIOC Reg = %x\n", Channel->Mapped_ASIOC));
 	DebugPrint(("BPQHDLC: BSIOC Reg = %x\n", Channel->Mapped_BSIOC));
 	DebugPrint(("BPQHDLC: SIOC Reg = %x\n", Channel->Mapped_SIOC));
-/*
+
+	DebugPrint(("BPQHDLC: A_PTR = %x\n", Channel->A_PTR));	
+	DebugPrint(("BPQHDLC: B_PTR = %x\n", Channel->B_PTR));	
+
+SIOI10:
+
 	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 3);		//SELECT RR3
 
 	InterruptIdReg = READ_PORT_UCHAR(Channel->Mapped_ASIOC);
@@ -1731,31 +1828,39 @@ PHDLC_CHANNEL InitChannel(PBPQHDLC_ADDCHANNEL_INPUT Params, PLOCAL_DEVICE_INFO d
 
 	Vector = READ_PORT_UCHAR(Channel->Mapped_BSIOC);
 
+	DebugPrint(("BPQHDLC: Clear Ints IOTXCA = %x\n", Channel->IOTXCA));
+	DebugPrint(("BPQHDLC: Clear Ints IOTXEA = %x\n", Channel->IOTXEA));
+	DebugPrint(("BPQHDLC: Clear Ints IORXCA = %x\n", Channel->IORXCA));
+	DebugPrint(("BPQHDLC: Clear Ints IORXEA = %x\n", Channel->IORXEA));
+
 	DebugPrint(("BPQHDLC: Clear Ints Vector = %d\n", Vector));
 	
-
 	if (Vector < 8)
-		Channel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
+		ClrChannel = Channel->B_PTR;		// GET DATA FOR B CHANNEL
 	else
 	{
-		Channel = Channel->A_PTR;		// GET DATA FOR B CHANNEL
+		ClrChannel = Channel->A_PTR;		// GET DATA FOR B CHANNEL
 		Vector -=8;
 	}
 
+	if (ClrChannel)
+	{
+		DebugPrint(("BPQHDLC: Clear Ints Channel = %x Vector now = %d\n", ClrChannel, Vector));
 
-	// Call our char handler
+		// Call our char handler
 
-//	Channel->VECTOR[Vector<<1](Channel);
+		DebugPrint(("BPQHDLC: Vector points to = %x SDADRX %x\n", ClrChannel->VECTOR[Vector>>1], SDADRX));
 
-	WRITE_PORT_UCHAR(Channel->Mapped_ASIOC, 0x38);		// RESET IUS
+		ClrChannel->VECTOR[Vector>>1](ClrChannel);
+
+		WRITE_PORT_UCHAR(ClrChannel->Mapped_ASIOC, 0x38);		// RESET IUS
+	}
 
 	i--;
 
 	if (i) goto	SIOI10;			// SEE IF ANY MORE 
 
 NOINTS:
-*/
-
 
 	// Hook the interrupt if this is the first device on the level
 
@@ -1785,12 +1890,13 @@ NOINTS:
 
 	}
 
- 	//RXAINIT(Channel);
+ 	RXAINIT(Channel);
 
 	return Channel;
 }
 
 VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo)
+
 {
 	int i;
 	PBUF_ENTRY Buffer;
@@ -1801,9 +1907,30 @@ VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo)
 	{
 		Channel = deviceInfo->ChannelPointers[i];
 
+		// Reset SCCs
+
+		SIOCW(0);
+		SIOCW(0);
+		SIOCW(9);
+		SIOCW(0xC0);
+		
+		if (Channel->RXFRAME)
+		{
+			Buffer = Channel->RXFRAME;
+			DebugPrint(("BPQHDLC: Releasing RX Buffer allocated at %x\n", Buffer));
+//			ExFreePool(Buffer);
+		}
+
+		if (Channel->TXFRAME)
+		{
+			Buffer = Channel->TXFRAME;
+			DebugPrint(("BPQHDLC: Releasing TX Buffer allocated at %x\n", Buffer));
+//			ExFreePool(Buffer);
+		}
+
 		KeCancelTimer(&Channel->TXDelayTimer);
 		
-		ExFreePool(Channel);
+//		ExFreePool(Channel);
 		DebugPrint(("BPQHDLC: Releasing Channel Structure allocated at %x\n", Channel));
 		deviceInfo->ChannelPointers[i] = NULL;
 	}
@@ -1812,7 +1939,7 @@ VOID ReleaseResources(PLOCAL_DEVICE_INFO deviceInfo)
 	{
 		Buffer = PopBUFEntry(&deviceInfo->FREE_Q, deviceInfo);
 		DebugPrint(("BPQHDLC: Releasing Buffer allocated at %x\n", Buffer));
-		ExFreePool(Buffer);
+//		ExFreePool(Buffer);
 	}
 
 	// Release Interupts
@@ -1877,7 +2004,7 @@ int ReceivePacket(PHDLC_CHANNEL Channel, UCHAR * Msg, PLOCAL_DEVICE_INFO deviceI
 
 	Len = Buffer->MsgLen;
 
-//	DebugPrint(("BPQHDLC: RX Msg Len %d\n", Len));
+	DebugPrint(("BPQHDLC: RX Msg Len %d Addr %x\n", Len, Buffer));
 
 	if (Len > BUFFLEN)
 		return 0;
@@ -1902,28 +2029,18 @@ VOID StartTX(PLOCAL_DEVICE_INFO pLDI, PHDLC_CHANNEL Channel, PBUF_ENTRY Buffer)
 	//PushBUFEntry(&pLDI->FREE_Q, Buffer, pLDI);
 
 	Channel->TXFRAME = Buffer;
-	Channel->SDTXCNT = Buffer->MsgLen;
-	Channel->SDTNEXT = &Buffer->Message[8];
+	Channel->SDTXCNT = Buffer->MsgLen - 8;
+	Channel->SDTNEXT = &Buffer->Message[7];
 
 	Channel->SDFLAGS |= SDTINP;
 
-	Channel->SDFLAGS |= SDTINP;
 	SETTVEC	SDDTTX;				// SET VECTOR TO 'TX DATA'
-
-	SIOCW(SDTXCRC);					// RESET TX CRC GENERATOR
-
-	SIOW (*Channel->SDTNEXT++);	// TRANSMIT First BYTE
-
-	SIOCW(SDTXUND);					// RESET TX UNDERRUN LATCH
-
-	Channel->RR0 &= !SDUNDER;		// KEEP STORE COPY
-
-	SIOCW(10);						// Select WR10 
-	SIOCW(Channel->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
 
 	if (Channel->TXBRG)
 	{
 	//;	NEED TO RESET BRG FOR TRANSMIT
+
+		DebugPrint(("BPQHDLC: Changing BRG\n", Channel->TXDELAY));
 
 		SIOCW(12);						// Select WR12
 		SIOCW(Channel->TXBRG & 0xff);	// SET LSB
@@ -1976,4 +2093,38 @@ VOID TXDelay(IN PKDPC Dpc, IN PVOID Context, IN PVOID SystemArgument1, IN PVOID 
 	SIOCW(10);						// Select WR10 
 	SIOCW(Channel->WR10 | 0x84);	// SET TO SEND CRC ON UNDERRUN
 
+}
+VOID RXAINIT(PHDLC_CHANNEL Channel)
+{
+	PBUF_ENTRY Buffer;
+
+	// Get a buffer
+
+	if (IsListEmpty(&Channel->Device->FREE_Q))
+		Buffer = NULL;
+	else 
+		Buffer = PopBUFEntry(&Channel->Device->FREE_Q, Channel->Device);
+
+	Channel->RXFRAME = Buffer;
+	
+	if (Buffer == NULL)
+	{
+		DebugPrint(("RXAINIT - No Buffer\n"));
+		Channel->OLOADS++;
+		SETRVEC	SDOVRX;							// Discard Frame
+	}
+	else
+	{
+		Channel->SDRNEXT = &Buffer->Message[7];
+		Channel->FRAMELEN = 7;
+		SETRVEC	SDADRX;
+	}
+
+	DebugPrint(("RXAINIT - Buffer %x\n", Buffer));
+
+	SIOCW(0x33);				// ERROR RESET WR3
+		
+	SIOCW(0xd9);				// 8BIT, CRC EN, RX EN
+
+	return;
 }

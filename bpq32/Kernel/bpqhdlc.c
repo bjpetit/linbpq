@@ -46,7 +46,9 @@ typedef struct _BPQHDLC_ADDCHANNEL_INPUT {
 	ULONG	SIOC;			// Our Control Channel 
 	ULONG	BSIOC;			//  B CHAN CONTROL
 
-	UCHAR SOFTDCD;			// Use SoftDCD flag
+	VOID * OtherChannel;		// Kernel Channel record for first channel if this is 2nd channel
+
+	UCHAR SOFTDCDFLAG;			// Use SoftDCD flag
 
 	int TXBRG;				// FOR CARDS WITHOUT /32 DIVIDER
 	int RXBRG;
@@ -167,6 +169,12 @@ int HDLCTX2K(PHDLCDATA  PORTVEC,UCHAR * buff)
 
 int HDLCCLOSE(PHDLCDATA PORTVEC)
 {
+	if (hDevice)
+	{
+		CloseHandle(hDevice);
+		hDevice = 0;
+	}
+
 	return 0;
 }
 
@@ -674,9 +682,6 @@ VOID INITPART2(PHDLCDATA PORTVEC, USHORT SCCOffset, PHDLCDATA PreviousPort)
 	SIOCW(13);			// Select WR13
 	SIOCW(BRG >> 8);	// SET MSB
 
-	SIOCW(11);			// WR11
-	SIOCW(0x70);		// RXC=DPLL, TXC=BRG
-
 	return;
 }
 
@@ -909,7 +914,7 @@ VOID BINITPART2(PHDLCDATA PORTVEC, USHORT SCCOffset, PHDLCDATA PreviousPort)
 	SIOCW(0x70);		// RXC=DPLL, TXC=BRG
 }
 
-BOOLEAN INITREST(PHDLCDATA PORTVEC)
+BOOLEAN INITREST(PHDLCDATA PORTVEC, PHDLCDATA PrevPort)
 {
 	BPQHDLC_ADDCHANNEL_INPUT AddParams;
 	VOID * Return = NULL;
@@ -944,10 +949,13 @@ INTDONE:
 	AddParams.RXBRG = PORTVEC->RXBRG;
 	AddParams.WR10 = PORTVEC->WR10;
 	AddParams.Channel = PORTVEC->PORTCONTROL.CHANNELNUM;
-	AddParams.SOFTDCD = PORTVEC->PORTCONTROL.SOFTDCDFLAG;
+	AddParams.SOFTDCDFLAG = PORTVEC->PORTCONTROL.SOFTDCDFLAG;
 	AddParams.TXDELAY = PORTVEC->PORTCONTROL.PORTTXDELAY;
 	AddParams.PERSISTANCE = PORTVEC->PORTCONTROL.PORTPERSISTANCE;
-
+	if (PrevPort)
+		AddParams.OtherChannel = PrevPort->DRIVERPORTTABLE;
+	else
+		AddParams.OtherChannel = 0;
 
 	fResult = DeviceIoControl(
 			hDevice,									// device handle
@@ -1019,7 +1027,7 @@ int INITPORT(PHDLCDATA PORTVEC)
 		PORTVEC->IOLEN = 8;					// I think! - Modem is at offfset 0, SCC at 4
 		INITPART2(PORTVEC, 4, PreviousPort);	// SCC ADDRESS 4 Above Base Address
 		if (PreviousPort == NULL) INITMODEM(PORTVEC);
-		INITREST(PORTVEC);
+		INITREST(PORTVEC, PreviousPort);
 
 		return 0;
 
@@ -1029,7 +1037,7 @@ int INITPORT(PHDLCDATA PORTVEC)
 		if (PreviousPort == NULL) INITCIO(PORTVEC);	// SET UP CIO FOR /32 UNLESS Already Done
 		INITPART2(PORTVEC, 0, PreviousPort);
 		if (PORTVEC->PORTCONTROL.BAUDRATE) STARTCIO(PORTVEC);
-		INITREST(PORTVEC);
+		INITREST(PORTVEC, PreviousPort);
 
 		return TRUE;
 	
@@ -1043,7 +1051,7 @@ int INITPORT(PHDLCDATA PORTVEC)
 
 		PORTVEC->IOLEN = 4;						// 2 * SCC, but each SCC can be on it's own
 		INITPART2(PORTVEC, 0, PreviousPort);
-		INITREST(PORTVEC);
+		INITREST(PORTVEC, PreviousPort);
 
 		return TRUE;
 
@@ -1051,7 +1059,7 @@ int INITPORT(PHDLCDATA PORTVEC)
 
 		PORTVEC->IOLEN = 8;						// 2 * SCC, but Need at least 6 Addresses
 		BINITPART2(PORTVEC, 0, PreviousPort);
-		INITREST(PORTVEC);
+		INITREST(PORTVEC, PreviousPort);
 
 		return 0;
 	
@@ -1059,7 +1067,7 @@ int INITPORT(PHDLCDATA PORTVEC)
 
 		PORTVEC->IOLEN = 4;						// 2 * SCC, but each SCC can be on it's own
 		INITPART2(PORTVEC, 0, PreviousPort);
-		INITREST(PORTVEC);
+		INITREST(PORTVEC, PreviousPort);
 		return TRUE;
 	}
 

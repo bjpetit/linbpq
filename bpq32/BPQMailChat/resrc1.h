@@ -2,6 +2,7 @@
 // Microsoft Developer Studio generated include file.
 // Used by BPQMailChat.rc
 //
+#define IDSENDTOMAP                     3
 #define IDI_ICON1                       101
 #define IDC_NODES2                      505
 #define IDC_MAXSEND                     506
@@ -43,6 +44,11 @@
 #define IDM_CHATUSERMSG                 1035
 #define IDM_NEWUSERMSG                  1036
 #define IDM_MSGSAVE                     1037
+#define IDC_MAPPOSITION                 1039
+#define IDC_HOVER                       1040
+#define IDC_CLICK                       1041
+#define IDC_MAPHELP                     1042
+#define IDC_POPUPTEXT                   1043
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -73,6 +79,7 @@
 #define IDD_MSGFROMCLIPBOARD            30004
 #define IDD_HRHELP                      30005
 #define IDD_EDITMSGTEXT                 30006
+#define IDD_UPDATECHATMAP               30007
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
@@ -89,14 +96,15 @@
 #define IDM_LOGCHAT                     40014
 #define ID_ACTIONS_SENDMSGFROMCLIPBOARD 40015
 #define IDM_CHATCONSOLE                 40016
+#define ID_ACTIONS_UPDATECHATMAPINFO    40017
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30008
-#define _APS_NEXT_COMMAND_VALUE         40017
-#define _APS_NEXT_CONTROL_VALUE         1038
+#define _APS_NEXT_RESOURCE_VALUE        30009
+#define _APS_NEXT_COMMAND_VALUE         40018
+#define _APS_NEXT_CONTROL_VALUE         1044
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

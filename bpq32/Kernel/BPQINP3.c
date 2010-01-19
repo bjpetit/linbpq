@@ -184,7 +184,9 @@ VOID DecayNETROMRoutes(struct ROUTE * Route)
 
 	Dest--;
 
-	// Delete any NETROM Dest entries via this Route
+	// Decay any NETROM Dest entries via this Route. If OBS reaches zero, remove
+
+	// OBSINIT is probably too many retries. Try decrementing by 2.
 
 	for (i=0; i < MAXDESTS; i++)
 	{
@@ -196,10 +198,12 @@ VOID DecayNETROMRoutes(struct ROUTE * Route)
 		if (Dest->NRROUTE1.ROUT_NEIGHBOUR == Route)
 		{
 			Dest->NRROUTE1.ROUT_OBSCOUNT--;
+			if (Dest->NRROUTE1.ROUT_OBSCOUNT)
+				Dest->NRROUTE1.ROUT_OBSCOUNT--;
 
 			if (Dest->NRROUTE1.ROUT_OBSCOUNT == 0)
 			{
-				// ROute expired
+				// Route expired
 
 				if (Dest->NRROUTE2.ROUT_NEIGHBOUR == 0)			// No more Netrom Routes
 				{
@@ -908,7 +912,7 @@ SendRIPTimer()
 					continue;						// Qual zero is a locked out route
 				}
 
-				// Dont Activate  link has no nodes unless INP3
+				// Dont Activate if link has no nodes unless INP3
 
 				if (Route->INP3Node == 0)
 				{

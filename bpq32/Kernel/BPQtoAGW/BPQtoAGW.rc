@@ -28,8 +28,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,5,0,3
- PRODUCTVERSION 1,5,0,3
+ FILEVERSION 1,5,0,4
+ PRODUCTVERSION 1,5,0,4
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -47,12 +47,12 @@ BEGIN
             VALUE "Comments", "BPQ32 to AGWPE Interface\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "BPQtoAGW\0"
-            VALUE "FileVersion", "1, 5, 0, 3\0"
+            VALUE "FileVersion", "1, 5, 0, 4\0"
             VALUE "InternalName", "BPQtoAGW\0"
             VALUE "LegalCopyright", "Copyright © John Wiseman G8BPQ 2008\0"
             VALUE "OriginalFilename", "BPQtoAGW.dll\0"
             VALUE "ProductName", "  BPQtoAGW\0"
-            VALUE "ProductVersion", "1, 5, 0, 3\0"
+            VALUE "ProductVersion", "1, 5, 0, 4\0"
         END
     END
     BLOCK "VarFileInfo"

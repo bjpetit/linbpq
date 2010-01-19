@@ -186,6 +186,10 @@
 // Add N Call* to display all SSID's of a call
 // Fix flow control on Pactor sessions.
 
+// Build 9
+
+// HDLC Support for XP
+// Add AUTH routines
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -4047,5 +4051,75 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	OutputDebugString(Mess);
 
 	return;
+}
+
+VOID APIENTRY md5 (char *arg, unsigned char * checksum);
+
+
+DllExport VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset)
+{
+	// Create a time dependent One Time Password from the KeyPhrase
+	// TimeOffset is used when checking to allow for slight variation in clocks
+
+	time_t NOW = time(NULL);
+	UCHAR Hash[16];
+	char Key[1000];
+	int i, chr;
+
+
+	NOW = NOW/30 + TimeOffset;				// Only Change every 30 secs
+
+	wsprintf(Key, "%s%x", KeyPhrase, NOW);
+
+	md5(Key, Hash);
+
+	for (i=0; i<16; i++)
+	{
+		chr = (Hash[i] & 31);
+		if (chr > 9) chr += 7;
+		
+		Password[i] = chr + 48; 
+	}
+
+	Password[16] = 0;
+
+	Debugprintf("%s %d", Password, TimeOffset);
+
+	return;
+}
+DllExport BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase)
+{
+	char CheckPassword[17];
+	
+	CreateOneTimePassword(CheckPassword, KeyPhrase, 0);
+
+	if (memcmp(Password, CheckPassword, 16) == 0)
+		return TRUE;
+
+	CreateOneTimePassword(CheckPassword, KeyPhrase, -1);
+
+	if (memcmp(Password, CheckPassword, 16) == 0)
+		return TRUE;
+
+	CreateOneTimePassword(CheckPassword, KeyPhrase, 1);
+
+	if (memcmp(Password, CheckPassword, 16) == 0)
+		return TRUE;
+	CreateOneTimePassword(CheckPassword, KeyPhrase, -2);
+
+	if (memcmp(Password, CheckPassword, 16) == 0)
+		return TRUE;
+
+	CreateOneTimePassword(CheckPassword, KeyPhrase, 2);
+
+	if (memcmp(Password, CheckPassword, 16) == 0)
+		return TRUE;
+
+	CreateOneTimePassword(CheckPassword, KeyPhrase, -3);
+
+	if (memcmp(Password, CheckPassword, 16) == 0)
+		return TRUE;
+
+	return FALSE;
 }
 
