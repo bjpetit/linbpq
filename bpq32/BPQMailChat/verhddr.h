@@ -1,4 +1,4 @@
 ﻿
-#define Vers 1,0,3,28
-#define Verstring "1.0.3.28\0"
+#define Vers 1,0,3,30
+#define Verstring "1.0.3.30\0"
 

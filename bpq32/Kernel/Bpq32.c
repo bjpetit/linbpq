@@ -4066,7 +4066,6 @@ DllExport VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase,
 	char Key[1000];
 	int i, chr;
 
-
 	NOW = NOW/30 + TimeOffset;				// Only Change every 30 secs
 
 	wsprintf(Key, "%s%x", KeyPhrase, NOW);

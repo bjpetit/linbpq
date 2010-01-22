@@ -396,7 +396,7 @@
 
 #include "stdafx.h"
 
-// #define SPECIALVERSION "RMSTest"
+#define SPECIALVERSION "Packlink"
 
 #include "GetVersion.h"
 
@@ -3221,6 +3221,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	}
 
 	Buffer[len] = 0;
+
+	if (memcmp(Buffer, ";FW:", 4) == 0)
+	{
+		// Paclink User Select (poll for list)
+		
+		return;						// Ingore for now
+	}
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
