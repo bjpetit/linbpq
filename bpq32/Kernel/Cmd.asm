@@ -695,12 +695,128 @@ STATST10:
 
 	RET
 
-
 	PUBLIC	COMMANDHANDLER
 COMMANDHANDLER:
+
+	CALL INNERCOMMANDHANDLER
+
+;	See if any more commands in buffer
+
+	cmp	PARTCMDBUFFER[ebx],0
+	jne	@f					; Command
+	
+	ret
+@@:	
+	mov	edi,PARTCMDBUFFER[ebx]
+	mov PARTCMDBUFFER[ebx],0
+	
+;	Check that message has a CR, if not save buffer and exit
+
+	push edi
+	
+	movzx	ecx,MSGLENGTH[EDI]
+	sub	ecx,8
+	lea	edi,8[edi]			; New Data
+
+	mov	al,13
+	repne scasb
+	
+	pop edi
+	
+	jz	COMMANDHANDLER		; Found CR so process it
+
+	mov PARTCMDBUFFER[ebx],edi
+	
+	ret						; Wait for rest
+	
+INNERCOMMANDHANDLER:	
 ;
 	MOV	CMDSTACKP,ESP		; SAVE STACK FOR NO BUFFER RECOVERY
+
+;	If a partial command is stored, append this data to it.
+
+	cmp	PARTCMDBUFFER[ebx],0
+	je	@f					; No Partial Command
+	
+	push	edi				; Save message
+	
+	movzx	ecx,MSGLENGTH[EDI]
+	sub	ecx,8
+	
+	lea	esi,8[edi]			; New Data
+	
+	mov	edi,PARTCMDBUFFER[ebx]	; Old Data
+	
+	movzx	eax,MSGLENGTH[EDI]	; Old Length
+	
+	add MSGLENGTH[EDI], cx
+	add edi,eax					; to end of old data
+	
+	rep	movsb
+	
+	pop	edi
+	call	RELBUFF
+	
+	mov	edi,PARTCMDBUFFER[ebx]
+	mov PARTCMDBUFFER[ebx],0
+@@:
+		
+;	Check that message has a CR, if not save buffer and exit
+
+	push edi
+	
+	movzx	ecx,MSGLENGTH[EDI]
+	sub	ecx,8
+	lea	edi,8[edi]			; New Data
+
+	mov	al,13
+	repne scasb
+	
+	jz	@f					; Found
+	
+	pop edi
+	mov	PARTCMDBUFFER[ebx],edi
+	ret
+	
+@@:
 ;
+;	If ecx is non-zero there ate chars beyond the cr in the buffer
+;
+	or	ecx,ecx
+	jz	NoMoreChars
+	
+;	Get a new buffer, and copy extra data to it.
+
+;	command is on stack, edi points to char past cr
+
+	push	edi
+	call	GETBUFF
+	JNZ SHORT @F
+	
+	pop	edi
+	
+	jmp short NoMoreChars		; Just ignore rest
+@@:
+	pop	esi						; Next Command
+	
+	add ecx,8
+	mov	MSGLENGTH[edi],cx
+	
+	push edi
+	
+	add edi,7
+	mov	al,0f0h					; PID
+	stosb
+	rep movsb
+	
+	pop	edi						; New Buffer
+	
+	mov	PARTCMDBUFFER[ebx],edi
+	
+NoMoreChars:
+
+	pop	edi						; Original Message
+
 ;	GET PACLEN FOR THIS CONNECTION
 ;
 	MOV	AH,0
@@ -3784,7 +3900,7 @@ NEWBUFFER:
 ;	GET BUFFER
 ;
 	CALL	GETBUFF
-	JNZ SHORT CHECKBUFFER10		; OK
+	JNZ SHORT CHECKBUFFER10	; OK
 ;
 ;	NO BUFFERS - ABORT
 ;
