@@ -345,6 +345,7 @@ SESS_APPLFLAGS	DB	0		; APPL FLAGS FOR THIS SESSION
 Authorised_Session DB 0;	// Set if Host session from BPQTerminal or BPQMailChat
 
 DUMPPTR		DD	0		; POINTER FOR REMOTE DUMP MODE
+PARTCMDBUFFER DD 0		; Save area for incomplete commmand
 
 TRANSPORTENTRY	ENDS
 ;

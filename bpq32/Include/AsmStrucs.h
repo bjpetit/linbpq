@@ -219,6 +219,7 @@ typedef struct TRANSPORTENTRY
 	UCHAR	Secure_Session;		// Set if Host session from BPQTerminal or BPQMailChat
 
 	VOID *	DUMPPTR;			// POINTER FOR REMOTnE DUMP MODE
+	VOID *	PARTCMDBUFFER;		//  Save area for incomplete commmand
 };
 
 //
