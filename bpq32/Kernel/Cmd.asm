@@ -698,8 +698,10 @@ STATST10:
 	PUBLIC	COMMANDHANDLER
 COMMANDHANDLER:
 
+	push ebx
 	CALL INNERCOMMANDHANDLER
-
+	pop	ebx
+	
 ;	See if any more commands in buffer
 
 	cmp	PARTCMDBUFFER[ebx],0

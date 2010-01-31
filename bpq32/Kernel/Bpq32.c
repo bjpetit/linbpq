@@ -207,7 +207,7 @@
 
 #include "AsmStrucs.h"
 
-//#define SPECIALVERSION "PACTOR Test"
+#define SPECIALVERSION "PACTOR Test"
 
 #include "GetVersion.h"
 
