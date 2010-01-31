@@ -544,6 +544,346 @@ loop:
 	return 0;
 }
 
+char * FindPart(char ** Msg, char * Boundary, int * PartLen)
+{
+	char * ptr = *Msg, * ptr2;
+	char * Msgptr = *Msg;
+	int BLen = strlen(Boundary);
+	char * Part;
+
+	while(*ptr)				// Just in case we run off end
+	{
+		ptr2 = strchr(ptr, 10);	// Find LF
+
+		if (ptr2 == NULL) return NULL;
+
+		if (*ptr == '-' && *(ptr+1) == '-')
+		{
+			if (memcmp(&ptr[2], Boundary, BLen) == 0)
+			{
+				// Found Boundary
+
+				int Partlen = ptr - Msgptr;
+				Part = malloc(Partlen + 1);
+				memcpy(Part, Msgptr, Partlen);
+				Part[Partlen] = 0;
+
+				*Msg = ++ptr2;
+		
+				*PartLen = Partlen;
+
+				return Part; 
+			}
+		}
+
+		ptr = ++ptr2;
+	}
+	return NULL;
+}
+
+
+
+
+
+BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	// Will reformat message if necessary. 
+{
+	int i;
+	char * ptr, * ptr2, * ptr3, * ptr4;
+	char Boundary[1000];
+	BOOL Multipart = FALSE;
+	BOOL ALT = FALSE;
+	int Partlen;
+	char * Save;
+	
+	char FileName[100][MAX_PATH] = {""};
+	int FileLen[100];
+	char * FileBody[100];
+	char * MallocSave[100];
+	char * NewMsg;
+
+	int Files = 0;
+
+	ptr = Msg;
+
+	while(*ptr != 13)
+	{
+		ptr2 = strchr(ptr, 10);	// Find CR
+
+		while(ptr2[1] == ' ' || ptr2[1] == 9)		// Whitespace - continuation line
+		{
+			ptr2 = strchr(&ptr2[1], 10);	// Find CR
+		}
+
+//		Content-Type: multipart/mixed;
+//	boundary="----=_NextPart_000_025B_01CAA004.84449180"
+//		7.2.2 The Multipart/mixed (primary) subtype
+//		7.2.3 The Multipart/alternative subtype
+
+
+		if (_memicmp(ptr, "Content-Type: ", 14) == 0)
+		{
+			char Line[1000] = "";
+			char lcLine[1000] = "";
+
+			char * ptr3;
+
+			memcpy(Line, &ptr[14], ptr2-ptr-14);
+			memcpy(lcLine, &ptr[14], ptr2-ptr-14);
+			_strlwr(lcLine);
+
+			if (_memicmp(Line, "Multipart/", 10) == 0)
+			{
+				Multipart = TRUE;
+
+				if (_memicmp(&Line[10], "alternative", 11) == 0)
+				{
+					ALT = TRUE;
+				}
+
+				ptr3 = strstr(Line, "boundary");
+
+				if (ptr3)
+				{
+					strcpy(Boundary, &ptr3[10]);
+					ptr3 = strchr(Boundary, '"');
+					if (ptr3) *ptr3 = 0;
+				}
+				else
+					return FALSE;						// Can't do anything without a boundary ??
+			}
+
+		}
+
+		ptr = ptr2;
+		ptr++;
+
+	}
+
+	if (Multipart == FALSE)
+		return FALSE;
+
+	// FindPart Returns Next Part of Message, Updates Input Pointer
+	// Skip to first Boundary (over the non MIME Alt Part)
+
+	ptr = FindPart(Body, Boundary, &Partlen);
+
+	free(ptr);
+	
+	if (ALT)
+	{
+		// Assume HTML and Plain Text Versions of the same single body.
+
+		ptr = FindPart(Body, Boundary, &Partlen);	
+
+		Save = ptr;		// For free();
+
+		// Should be the First (Least desireable part, but the bit we want, as we are only interested in plain text)
+
+		// Skip any headers
+	
+		while(*ptr != 13)
+		{
+			ptr2 = strchr(ptr, 10);	// Find CR
+					
+			while(ptr2[1] == ' ' || ptr2[1] == 9)		// Whitespace - continuation line
+			{
+				ptr2 = strchr(&ptr2[1], 10);	// Find CR
+			}
+
+			ptr = ++ptr2;
+		}
+
+		ptr += 2;		// Skip rerminating line
+
+		// Should now have a plain text body to return;
+
+		strcpy(*Body, ptr);
+		*MsgLen = strlen(ptr);
+
+		free(Save);
+	
+		return FALSE;
+	}
+
+	// Assume Multipart/Mixed - Message with attachments
+
+	ptr = FindPart(Body, Boundary, &Partlen);
+
+	while (ptr)
+	{
+		BOOL Base64 = FALSE;
+
+		MallocSave[Files] = ptr;		// For free();
+
+		// Should be the First (Least desireable part, but the bit we want, as we are only interested in plain text)
+
+		// Process headers - looking for Content-Disposition: attachment;
+
+		// The first could also be a Content-Type: multipart/alternative; - if so, feed back to mime handler
+	
+		while(*ptr != 13)
+		{
+			char lcLine[1000] = "";
+
+			ptr2 = strchr(ptr, 10);	// Find CR
+					
+			while(ptr2[1] == ' ' || ptr2[1] == 9)		// Whitespace - continuation line
+			{
+				ptr2 = strchr(&ptr2[1], 10);	// Find CR
+			}
+
+			memcpy(lcLine, ptr, ptr2-ptr-1);
+			_strlwr(lcLine);
+
+			ptr = lcLine;
+
+			if (_memicmp(ptr, "Content-Type: Multipart/alternative", 30) == 0)
+			{
+				// Feed Back
+				int MsgLen;
+				char * Text = malloc(Partlen+1);
+
+				memcpy(Text, MallocSave[Files], Partlen);
+
+				free(MallocSave[Files]);
+				MallocSave[Files] = Text;
+
+
+				CheckforMIME(sockptr, Text, &Text, &MsgLen);
+
+				FileName[Files][0] = 0;				
+				FileBody[Files] = Text;
+
+
+				FileLen[Files++] = MsgLen;
+
+				goto NextPart;
+
+			}
+			else if (_memicmp(ptr, "Content-Disposition: ", 21) == 0)
+			{
+				ptr3 = strstr(&ptr[21], "filename");
+				
+				if (ptr3)
+				{
+					ptr3 += 9;
+					if (*ptr3 == '"') ptr3++;
+					ptr4 = strchr(ptr3, '"');
+					if (ptr4) *ptr4 = 0;
+
+					strcpy(FileName[Files], ptr3);
+				}
+			}
+
+			else if (_memicmp(ptr, "Content-Transfer-Encoding:", 26) == 0)
+			{
+				if (strstr(&ptr[26], "base64"))
+					Base64 = TRUE;
+			}
+
+			ptr = ++ptr2;
+		}
+
+		ptr += 2;
+
+		// Should now have file or plain text. If file is Base64 encoded, decode it.
+
+		FileBody[Files] = ptr;
+		FileLen[Files] = Partlen -2 - (ptr - MallocSave[Files]);
+
+		if (Base64)
+		{
+			int i = 0, Len = FileLen[Files], NewLen;
+			char * ptr2 = ptr;
+			char * End;
+
+			End = ptr + FileLen[Files];
+
+			while (ptr < End)
+			{
+				while (*ptr < 33)
+					{ptr++;}
+
+				*ptr2++ = *ptr++;
+			}
+			*ptr2 = 0;
+
+			ptr = FileBody[Files];
+			Len = ptr2 - ptr -1;
+
+			ptr2 = ptr;
+
+			while (Len > 0)
+			{
+				decodeblock(ptr, ptr2);
+				ptr += 4;
+				ptr2 += 3;
+				Len -= 4;
+			}
+
+			NewLen = ptr2 - FileBody[Files];
+
+			if (*(ptr-1) == '=')
+				NewLen--;
+
+			if (*(ptr-2) == '=')
+				NewLen--;
+	
+			FileLen[Files] = NewLen;
+		}
+		
+		Files++;
+
+	NextPart:
+		ptr = FindPart(Body, Boundary, &Partlen);
+	}
+
+	// Now have all the parts - build a B2 Message. Leave the first part of header for later,
+	// as we may have multiple recipients. Start with the Body: Line.
+
+	// We nned to add the first part of header later, so start message part way down buffer.
+	// Make sure buffer is big enough.
+
+	if ((sockptr->MailSize + 2000) > sockptr->MailBufferSize)
+	{
+		sockptr->MailBufferSize += 2000;
+		sockptr->MailBuffer = realloc(sockptr->MailBuffer, sockptr->MailBufferSize);
+	
+		if (sockptr->MailBuffer == NULL)
+		{
+			CriticalErrorHandler("Failed to extend Message Buffer");
+			shutdown(sockptr->socket, 0);
+			return FALSE;
+		}
+	}
+
+
+	NewMsg = sockptr->MailBuffer + 1000;
+
+	NewMsg += wsprintf(NewMsg, "Body: %d\r\n", FileLen[0]);
+
+	for (i = 1; i < Files; i++)
+	{
+		NewMsg += wsprintf(NewMsg, "File: %d %s\r\n", FileLen[i], FileName[i]);
+	}
+
+	NewMsg += wsprintf(NewMsg, "\r\n");
+
+	for (i = 0; i < Files; i++)
+	{
+		memcpy(NewMsg, FileBody[i], FileLen[i]);
+		NewMsg += FileLen[i];
+		free(MallocSave[i]);
+		NewMsg += wsprintf(NewMsg, "\r\n");
+	}
+
+	*MsgLen = NewMsg - (sockptr->MailBuffer + 1000);
+	*Body = sockptr->MailBuffer + 1000;
+
+	return TRUE;		// B2 Message
+}
+
+
 VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 {
 	SOCKET sock;
@@ -558,13 +898,12 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if(memcmp(Buffer, ".\r\n", 3) == 0)
 		{
-			// File Message
-
 			char * ptr1, * ptr2;
 			int linelen, MsgLen;
 			char Msgtitle[62];
+			BOOL B2Flag;
 
-			// Scan headers for a Subject: or Date: Line (Headers end at black line)
+			// Scan headers for a Subject: or Date: Line (Headers end at blank line)
 
 			ptr1 = sockptr->MailBuffer;
 		Loop:
@@ -592,6 +931,13 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				char seps[] = " ,\t\r";
 				char Offset[10] = "";
 				int i, HH, MM;
+				char Copy[500]="";
+
+				// Copy message, so original isn't messed up by strtok
+				
+				memcpy(Copy, ptr1, linelen);
+
+				ptr1 = Copy;
 
 				memset(&rtime, 0, sizeof(struct tm));
 
@@ -636,12 +982,8 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 						else
 							Date += (60*MM);
 
-
 					}
 				}
-
-
-
 			}
 
 			if (linelen)			// Not Null line
@@ -661,11 +1003,13 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			strlop(sockptr->MailFrom, '@');
 			if (strlen(sockptr->MailFrom) > 6) sockptr->MailFrom[6]=0;
 
+			// Examine Message to look for html formatting and attachments.
+
+			B2Flag = CheckforMIME(sockptr, sockptr->MailBuffer, &ptr2, &MsgLen);	// Will reformat message if necessary. 
 
 			for (i=0; i < sockptr->Recipients; i++)
 			{
-				CreateSMTPMessage(sockptr, i, Msgtitle, Date, ptr2, MsgLen);
-
+				CreateSMTPMessage(sockptr, i, Msgtitle, Date, ptr2, MsgLen, B2Flag);
 			}
 
 			free(sockptr->RecpTo);
@@ -860,12 +1204,11 @@ ZvVx9G1hcg==
 		return;
 	}
 
-
 	return;
 }
 
 
-CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
+CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag)
 {
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
@@ -948,6 +1291,57 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 	strcpy(Msg->title, MsgTitle);
 
+	if(Msg->to[0] == 0)
+		SMTPMsgCreated=TRUE;
+
+	if (B2Flag)
+	{
+		char B2Hddr[1000];
+		int B2HddrLen;
+		char B2To[80];
+		char * NewBody;
+		char DateString[80];
+		struct tm * tm;
+
+		tm = gmtime(&Date);	
+	
+		wsprintf(DateString, "%04d%/%02d/%02d %02d:%02d",
+			tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+
+		if (strcmp(Msg->to, "RMS") == 0)		// Address is in via
+		strcpy(B2To, Msg->via);
+	else
+		if (Msg->via[0])
+			wsprintf(B2To, "%s@%s", Msg->to, Msg->via);
+		else
+			strcpy(B2To, Msg->to);
+
+		
+		Msg->B2Flags = B2Msg | Attachments;
+
+		B2HddrLen = wsprintf(B2Hddr,
+			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n",
+			Msg->bid, DateString, "Private",
+			Msg->from, B2To, Msg->title, BBSName);
+
+		NewBody = MsgBody - B2HddrLen;
+
+		memcpy(NewBody, B2Hddr, B2HddrLen);
+
+		Msg->length += B2HddrLen;
+
+		free(sockptr->RecpTo[i]);
+	
+		// Set up forwarding bitmap
+
+		MatchMessagetoBBSList(Msg, 0);
+
+		return CreateSMTPMessageFile(NewBody, Msg);
+
+
+	}
+
 	free(sockptr->RecpTo[i]);
 
 	// Set up forwarding bitmap
@@ -967,30 +1361,6 @@ BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg)
 	char Mess[255];
 	int len;
 
-	// Remove lf chars
-
-	/*
-
-	ptr1 = ptr2 = Message;
-	len = Msg->length;
-
-	while (len-- > 0)
-	{
-		*ptr2 = *ptr1;
-	
-		if (*ptr1 == '\r')
-			if (*(ptr1+1) == '\n')
-			{
-				ptr1++;
-				len--;
-			}
-		ptr1++;
-		ptr2++;
-
-	}
-
-	Msg->length = ptr2 - Message;
-	*/
 
 	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
 	
@@ -1299,13 +1669,16 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
 		
 		SendSock(sockptr, Header);
-//Sender: shipplotter@yahoogroups.com
-//		sprintf_s(Header, sizeof(Header), "Date: %s", Msg->date);
-//		SendSock(sockptr, Header);
 		sprintf_s(Header, sizeof(Header), "Subject: %s", Msg->title);
 		SendSock(sockptr, Header);
-//Content-Type: text/plain; charset=ISO-8859-1
-//Content-Transfer-Encoding: 7bit
+
+		if (Msg->B2Flags & Attachments)
+		{
+			// B2 Message with Attachments. Create a Mime-Encoded Multipart message
+
+			SendMultiPartMessage(sockptr, Msg, msgbytes);
+			return;
+		}
 
 		SendSock(sockptr, "");							// Blank line before body
 
@@ -1405,14 +1778,16 @@ void encodeblock( unsigned char in[3], unsigned char out[4], int len )
 
 void decodeblock( unsigned char in[4], unsigned char out[3] )
 {   
-    in[0]=mycd64[in[0]];
-    in[1]=mycd64[in[1]];
-    in[2]=mycd64[in[2]];
-    in[3]=mycd64[in[3]];
+    char Block[5];
+	
+	Block[0]=mycd64[in[0]];
+    Block[1]=mycd64[in[1]];
+    Block[2]=mycd64[in[2]];
+    Block[3]=mycd64[in[3]];
 
-	out[0] = (unsigned char ) (in[0] << 2 | in[1] >> 4);
-    out[1] = (unsigned char ) (in[1] << 4 | in[2] >> 2);
-    out[2] = (unsigned char ) (((in[2] << 6) & 0xc0) | in[3]);
+	out[0] = (unsigned char ) (Block[0] << 2 | Block[1] >> 4);
+    out[1] = (unsigned char ) (Block[1] << 4 | Block[2] >> 2);
+    out[2] = (unsigned char ) (((Block[2] << 6) & 0xc0) | Block[3]);
 }
 
 /** 
@@ -1704,14 +2079,22 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			else
 				sockprintf(sockptr, "Reply-To: %s@%s", sockptr->SMTPMsg->from, MyDomain);
 
-				
 			sockprintf(sockptr, "Subject: %s", sockptr->SMTPMsg->title);
-			SendSock(sockptr, "");
+			
+			sockptr->State = WaitingForBodyResponse;
 
+			if (sockptr->SMTPMsg->B2Flags & Attachments)
+			{
+				// B2 Message with Attachments. Create a Mime-Encoded Multipart message
+
+				SendMultiPartMessage(sockptr, sockptr->SMTPMsg, sockptr->MailBuffer);
+				return;
+			}
+
+			SendSock(sockptr, "");
 			SendSock(sockptr, sockptr->MailBuffer);
 			SendSock(sockptr, ".");
 
-			sockptr->State = WaitingForBodyResponse;
 		}
 		else
 		{
@@ -1740,8 +2123,6 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		return;
 	}
-
-
 }	
 
 BOOL SendtoISP()
@@ -1908,6 +2289,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 {
 	SOCKET sock;
 	time_t Date;
+	BOOL B2Flag;
 
 	sock=sockptr->socket;
 
@@ -1970,6 +2352,13 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 				char seps[] = " ,\t\r";
 				char Offset[10] = "";
 				int i, HH, MM;
+				char Copy[500]="";
+
+				// Copy message, so original isn't messed up by strtok
+				
+				memcpy(Copy, ptr1, linelen);
+
+				ptr1 = Copy;
 
 				memset(&rtime, 0, sizeof(struct tm));
 
@@ -2032,8 +2421,10 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			_strlwr(MsgFrom);
 
 			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
-				
-			CreatePOP3Message(MsgFrom, MsgTo, Msgtitle, Date, ptr2, MsgLen);
+
+			B2Flag = CheckforMIME(sockptr, sockptr->MailBuffer, &ptr2, &MsgLen);	// Will reformat message if necessary. 
+
+			CreatePOP3Message(MsgFrom, MsgTo, Msgtitle, Date, ptr2, MsgLen, B2Flag);
 
 			free(sockptr->MailBuffer);
 			sockptr->MailBufferSize=0;
@@ -2218,7 +2609,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 }
 
-CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
+CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag)
 {
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
@@ -2271,11 +2662,207 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 	strcpy(Msg->emailfrom, From);
 	strcpy(Msg->title, MsgTitle);
 
+	if(Msg->to[0] == 0)
+		SMTPMsgCreated=TRUE;
+
+	if (B2Flag)
+	{
+		char B2Hddr[1000];
+		int B2HddrLen;
+		char B2To[80];
+		char * NewBody;
+		char DateString[80];
+		struct tm * tm;
+
+		tm = gmtime(&Date);	
+	
+		wsprintf(DateString, "%04d%/%02d/%02d %02d:%02d",
+			tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+
+		if (strcmp(Msg->to, "RMS") == 0)		// Address is in via
+		strcpy(B2To, Msg->via);
+	else
+		if (Msg->via[0])
+			wsprintf(B2To, "%s@%s", Msg->to, Msg->via);
+		else
+			strcpy(B2To, Msg->to);
+
+		
+		Msg->B2Flags = B2Msg | Attachments;
+
+		B2HddrLen = wsprintf(B2Hddr,
+			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n",
+			Msg->bid, DateString, "Private",
+			Msg->from, B2To, Msg->title, BBSName);
+
+		NewBody = MsgBody - B2HddrLen;
+
+		memcpy(NewBody, B2Hddr, B2HddrLen);
+
+		Msg->length += B2HddrLen;
+
+		// Set up forwarding bitmap
+
+		MatchMessagetoBBSList(Msg, 0);
+
+		return CreateSMTPMessageFile(NewBody, Msg);
+	}
+
 	// Set up forwarding bitmap
 
 	MatchMessagetoBBSList(Msg, 0);
 
 	return CreateSMTPMessageFile(MsgBody, Msg);
-		
+
 }
 
+VOID base64_encode(char *str, char * result, int len)
+{
+    unsigned int i = 0, j = 0;
+	char *tmp = str;
+	
+
+	while (len  > 2 )
+	{
+		encodeblock(&str[i], &result[j],3);
+		i+=3;
+		j+=4;
+		len -=3;
+	}
+	if (len)
+	{
+		encodeblock(&str[i], &result[j], len);
+	}
+
+	return;
+}
+
+Base64EncodeAndSend(SocketConn * sockptr, UCHAR * Msg, int Len)
+{
+	char Base64Line[80];
+	int i = Len;
+	int j = 0;
+
+	Base64Line[76] = 13;
+	Base64Line[77] = 10;
+	Base64Line[78] = 0;
+
+	// Need to encode in 57 byte chunks to give 76 char lines.
+
+	while(i > 57)
+	{
+		base64_encode(&Msg[j], Base64Line, 57);
+		SendSock(sockptr, Base64Line);
+	
+		j += 57;
+		i -= 57;
+	}
+
+	memset(Base64Line, 0, 79);
+
+	base64_encode(&Msg[j], Base64Line, i);
+	SendSock(sockptr, Base64Line);
+	SendSock(sockptr, "");
+}
+
+VOID SendMultiPartMessage(SocketConn * sockptr, struct MsgInfo * Msg, UCHAR * msgbytes)
+{
+	char * ptr;		
+	char Header[120];
+	char Separator[33]="";
+	char FileName[100][MAX_PATH] = {""};
+	int FileLen[100];
+	int Files = 0;
+	int BodyLen;
+	int i;
+
+	CreateOneTimePassword(&Separator[0], "Key", 0); 
+	CreateOneTimePassword(&Separator[16], "Key", 1); 
+
+	SendSock(sockptr, "MIME-Version: 1.0");
+
+	sprintf_s(Header, sizeof(Header), "Content-Type: multipart/mixed; boundary=\"%s\"", Separator);
+	SendSock(sockptr, Header);
+
+	SendSock(sockptr, "");							// Blank line before body
+
+// Get Part Sizes and Filenames
+
+	ptr = msgbytes;
+
+	while(*ptr != 13)
+	{
+		char * ptr2 = strchr(ptr, 10);	// Find CR
+
+		if (memcmp(ptr, "Body: ", 6) == 0)
+		{
+			BodyLen = atoi(&ptr[6]);
+		}
+
+		if (memcmp(ptr, "File: ", 6) == 0)
+		{
+			char * ptr1 = strchr(&ptr[6], ' ');	// Find Space
+
+			FileLen[Files] = atoi(&ptr[6]);
+
+			memcpy(FileName[Files++], &ptr1[1], (ptr2-ptr1 - 2));
+		}
+				
+		ptr = ptr2;
+		ptr++;
+	}
+
+	ptr += 2;			// Over Blank Line 
+
+	// Write the none-Mime Part
+
+	SendSock(sockptr, "This is a multi-part message in MIME format.");
+	SendSock(sockptr, "");
+
+	// Write the Body as the first part.
+
+	sprintf_s(Header, sizeof(Header), "--%s", Separator);
+	SendSock(sockptr, Header);
+	SendSock(sockptr, "Content-Type: text/plain");
+	SendSock(sockptr, "");
+
+	ptr[BodyLen] = 0;
+
+	SendSock(sockptr, ptr);
+
+	ptr += BodyLen;		// to first file
+	ptr += 2;			// Over Blank Line
+
+	// Write Each Attachment
+
+	for (i = 0; i < Files; i++)
+	{
+		sprintf_s(Header, sizeof(Header), "--%s", Separator);
+		SendSock(sockptr, Header);
+//		Content-Type: image/png; name="UserParams.png"
+		SendSock(sockptr, "Content-Transfer-Encoding: base64");
+
+		sprintf_s(Header, sizeof(Header), "Content-Disposition: attachment; filename=\"%s\"", FileName[i]);
+		SendSock(sockptr, Header);
+
+		SendSock(sockptr, "");
+
+		// base64 encode and send file	
+
+		Base64EncodeAndSend(sockptr, ptr, FileLen[i]);
+
+		ptr += FileLen[i];
+		ptr +=2;				// Over separator
+	}
+	
+	sprintf_s(Header, sizeof(Header), "--%s--", Separator);
+	SendSock(sockptr, Header);
+
+	SendSock(sockptr, "");
+	SendSock(sockptr, ".");
+
+	free(msgbytes);
+
+	return;
+}

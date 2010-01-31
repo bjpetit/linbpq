@@ -2062,7 +2062,30 @@ VOID ChatTimer()
 			(user->topic) ? user->topic->name : "** Missing Topic **"); 
 		WritetoDebugWindow(Msg, len);
 		i++;
+	
+		if (user->circuit->rtcflags & p_user)	// Local User
+		{
+			if ((time(NULL) - user->lastmsgtime) > 7200)
+			{
+				nprintf(user->circuit, "*** Disconnected - Idle time exceeded");
+				Sleep(1000);
+
+				if (user->circuit->BPQStream < 0)
+				{
+					CloseConsole(user->circuit->BPQStream);	
+					break;
+				}
+				else
+				{
+					Disconnect(user->circuit->BPQStream);
+					break;
+				}
+			}
+		}
+
 	}
+
+
 	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
 
 	WritetoDebugWindow("Chat Nodes\r\n", 12);

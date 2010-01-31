@@ -708,7 +708,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 //	See if sending @ winlink.org
 
-	if (strcmp(RouteElements, "WINLINK.ORG") == 0)
+	if (_stricmp(RouteElements, "WINLINK.ORG") == 0)
 	{
 		// If a user of this bbs with Poll RMS set, leave it here - no point in sending to winlink
 		

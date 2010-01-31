@@ -677,6 +677,41 @@ __int32 Encode(char * in, char * out, __int32 inlen, BOOL B1Protocol)  /* compre
 		return codesize;
 }
 
+BOOL CheckifPacket(char * Via)
+{
+	char * ptr1, * ptr2;
+	
+	// Message addressed to a non-winlink address
+	// Need to see if real smtp, or a packet address
+
+	// No . in address assume Packet - g8bpq@g8bpq
+
+	ptr1 = strchr(Via, '.');
+
+	if (ptr1 == NULL)
+		return TRUE;			// Packet
+
+	// Find Last Element
+
+	ptr2 = strchr(++ptr1, '.');
+
+	while (ptr2)
+	{
+		ptr1 = ptr2;
+		ptr2 = strchr(++ptr1, '.');
+	}
+
+	// ptr1 is last element. If a valid continent or country, it is a packt message
+	
+	if (FindContinent(ptr1))
+		return TRUE;			// Packet
+
+//	if (FindCountry(ptr1))
+//		return TRUE;			// Packet
+
+	return FALSE;
+}
+
 void Decode(CIRCUIT * conn)  
 {
 	char *ptr;
@@ -787,15 +822,21 @@ File: 3556 NOLA.XLS
 File: 5566 NEWBOAT.HOMEPORT.JPG
 
 */
-		// Note that at the moment we silently discard any attachments
-		// It would be nice to at least save and forward them and maybe deliver 
-		// via the SMTP interface
-
 		char * ptr1, * ptr2, * ptr3;
 		int linelen, MsgLen = 0;
 		struct MsgInfo * Msg = conn->TempMsg;
 		time_t Date;
 		char FullTo[100];
+		char ** RecpTo = NULL;				// May be several Recipients
+		char ** HddrTo = NULL;				// May be several Recipients
+		char ** Via = NULL;					// May be several Recipients
+		int B2To;							// Offset to To: fields in B2 header
+		int Recipients = 0;
+
+		Msg->B2Flags |= B2Msg;
+				
+		if (_stricmp(conn->Callsign, "RMS") == 0)
+			Msg->B2Flags |= FromRMS;
 
 		ptr1 = outfile;
 	Loop:
@@ -805,6 +846,13 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 		if (_memicmp(ptr1, "From:", 5) == 0)
 		{
+			if (conn->Paclink)
+			{
+				// Messages just have the call - need to add @winlink.org
+
+				strcpy(Msg->emailfrom, "winlink.org");
+
+			}
 			if (_memicmp(&ptr1[6], "smtp:", 5) == 0)
 			{
 				if (_stricmp(conn->Callsign, "RMS") == 0)
@@ -827,8 +875,16 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 		else if (_memicmp(ptr1, "To:", 3) == 0)
 		{
+			HddrTo=realloc(HddrTo, (Recipients+1)*4);
+			HddrTo[Recipients] = zalloc(100);
+
 			memset(FullTo, 0, 99);
 			memcpy(FullTo, &ptr1[4], linelen-4);
+			memcpy(HddrTo[Recipients], ptr1, linelen+2);
+
+			conn->TempMsg->length -= strlen(HddrTo[Recipients]);
+
+			B2To = ptr1 - outfile;
 
 			ptr3 = strchr(FullTo, '@');
 
@@ -838,10 +894,64 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				strcpy(Msg->via, ptr3);
 			}
 			
-			if (strlen(FullTo) >6 )
+			if (conn->Paclink)
+			{
+				Msg->B2Flags |= FromPaclink;
+
+				// Message from paclink
+
+				// Messages to WL2K just have call.
+				// Messages to email or BBS addresses have smtp:
+			
+
+				if (_memicmp(&ptr1[4], "SMTP:", 5) == 0)
+				{
+					// See if Packet or SMTP
+					
+					if (CheckifPacket(Msg->via))
+					{
+						// Packet Message
+
+						memmove(FullTo, &FullTo[5], strlen(FullTo - 5));
+						_strupr(FullTo);
+						_strupr(Msg->via);
+					}
+					else
+					{
+						// Internet address - do we send via RMS??
+
+						memcpy(Msg->via, &ptr1[9], linelen);
+						Msg->via[linelen-9] = 0;
+						strcpy(FullTo,"RMS");
+					}
+
+				}
+				else
+				{
+					strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
+				}
+
+			}
+
+			if (strlen(FullTo) > 6)
 				FullTo[6] = 0;
 
 			strcpy(Msg->to, FullTo);
+
+			RecpTo=realloc(RecpTo, (Recipients+1)*4);
+			RecpTo[Recipients] = zalloc(10);
+
+			Via=realloc(Via, (Recipients+1)*4);
+			Via[Recipients] = zalloc(50);
+
+			strcpy(Via[Recipients], Msg->via);
+			strcpy(RecpTo[Recipients++], FullTo);
+
+			// Remove the To: Line from the buffer
+
+			memmove(ptr1, ptr2+2, count);
+			goto Loop;
+			
 		}
 		else if (_memicmp(ptr1, "Type:", 4) == 0)
 		{
@@ -851,6 +961,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		{
 			MsgLen = atoi(&ptr1[5]);
 			StartofMsg = ptr1;
+		}
+		else if (_memicmp(ptr1, "File:", 5) == 0)
+		{
+			Msg->B2Flags |= Attachments;
 		}
 		else if (_memicmp(ptr1, "Date:", 5) == 0)
 		{
@@ -879,12 +993,61 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			goto Loop;
 		}
 
-	// Remove the headers (except Body and any File: Lines
+		// Processed all headers
 
-	memmove(conn->MailBuffer, StartofMsg, conn->TempMsg->length);
-	conn->TempMsg->length -= (StartofMsg - conn->MailBuffer);
+		// If multiple recipents, create one copy for each BBS address, and one for all others (via RMS)
+	
+		{
+			int i;
+			struct MsgInfo * SaveMsg;
+			char * SaveBody;
+			int SaveMsgLen = conn->MailBufferSize;
+			BOOL SentToRMS = FALSE;
+			int ToLen;
 
-	}
+			for (i = 0; i < Recipients; i++)
+			{
+				if (strcmp(RecpTo[i], "RMS") == 0 || _stricmp(Via[i], "winlink.org") == 0)
+				{
+	//				if (SentToRMS)
+	//					continue;
+
+					SentToRMS = TRUE;
+				}
+
+				SaveMsg = malloc(sizeof(struct MsgInfo));
+				memcpy(SaveMsg, Msg, sizeof(struct MsgInfo));
+	
+				SaveBody = malloc(SaveMsgLen + 1);
+				memcpy(SaveBody, conn->MailBuffer, SaveMsgLen);
+
+				// Add our To: 
+
+				ToLen = strlen(HddrTo[i]);
+
+				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+				memcpy(&conn->MailBuffer[B2To], HddrTo[i], ToLen); 
+
+				conn->TempMsg->length += ToLen;
+
+				strcpy(Msg->to, RecpTo[i]);
+				strcpy(Msg->via, Via[i]);
+				CreateMessageFromBuffer(conn);
+				conn->TempMsg = Msg = SaveMsg;
+				conn->MailBuffer = SaveBody;
+			}
+
+			free(SaveMsg);
+			free(SaveBody);
+
+			return;
+		}
+//		else
+//		{
+			// Single Destination -  Need to put to: line back in message
+
+
+	} // end if B2Msg
 
 	CreateMessageFromBuffer(conn);
 }

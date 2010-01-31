@@ -79,13 +79,20 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			{
 				// Zap the entry
 
-				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
-
-
-				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+				if (conn->Paclink)					// Not using Bit Masks
 				{
 					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
 					FBBHeader->FwdMsg->datechanged=time(NULL);
+				}
+				else
+				{
+					clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+
+					if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+					{
+						FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
+						FBBHeader->FwdMsg->datechanged=time(NULL);
+					}
 				}
 
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
@@ -821,15 +828,16 @@ loop:
 VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 {
 	struct tm * tm;
-	char * MsgBytes;
+	char * MsgBytes, * Save;
 	UCHAR * Compressed, * Compressedptr;
 	UCHAR * UnCompressed;
 	char * Title;
 	UCHAR * Output, * Outputptr;
 	int i, OrigLen, MsgLen, CompLen, DataOffset;
 	char Rline[80];
+	int RLineLen;
 
-	MsgBytes = ReadMessageFile(FwdMsg->number);
+	MsgBytes = Save = ReadMessageFile(FwdMsg->number);
 
 	if (MsgBytes == 0)
 	{
@@ -869,12 +877,32 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 		strcat(Rline, "\r\n");
 
-	MsgLen = OrigLen + strlen(Rline);
+	RLineLen = strlen(Rline);
+
+	MsgLen = OrigLen + RLineLen;
 	
 	UnCompressed = zalloc(MsgLen+10);
 	
 	strcpy(UnCompressed, Rline);
-	strcat(UnCompressed, MsgBytes);
+
+	// If a B2 Message, Remove B2 Header
+
+	if (FwdMsg->B2Flags)
+	{
+		// Remove B2 Headers (up to the File: Line)
+			
+		char * ptr;
+		ptr= strstr(MsgBytes, "File:");
+
+		if (ptr)
+		{
+			OrigLen -= (ptr - MsgBytes);
+			MsgBytes = ptr;
+		}
+	}
+
+
+	memcpy(&UnCompressed[RLineLen], MsgBytes, OrigLen);
 
 	CompLen = Encode(UnCompressed, Compressed, MsgLen, conn->BBSFlags & FBBB1Mode);
 
@@ -934,14 +962,14 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	QueueMsg(conn, Output, Outputptr - Output);
 
-	free(MsgBytes);
+	free(Save);
 	free(Compressed);
 	free(UnCompressed);
 	free(Output);
 			
 }
 
-CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
+VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rline)
 {
 	char * MsgBytes;
 	UCHAR * Compressed;
@@ -950,23 +978,60 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 	char Date[20];
 	struct tm * tm;
 	char B2To[80];
+	struct MsgInfo * Msg = FBBHeader->FwdMsg;
 
-	MsgBytes = ReadMessageFile(FBBHeader->FwdMsg->number);
+	MsgBytes = ReadMessageFile(Msg->number);
 
 	if (MsgBytes == 0)
 	{
 		MsgBytes = _strdup("Message file not found\r\n");
-		FBBHeader->FwdMsg->length = strlen(MsgBytes);
+		Msg->length = strlen(MsgBytes);
 	}
 
-	OrigLen = FBBHeader->FwdMsg->length;
+	UnCompressed = zalloc(Msg->length+2000);
+	OrigLen = Msg->length;
+
+	// If a B2 Message  add R:line at start of Body, but otherwise leave intact.
+
+	if (Msg->B2Flags & B2Msg)
+	{
+		char * ptr;
+		
+		MsgLen = OrigLen + strlen(Rline);
+
+		FBBHeader->Size = MsgLen;
+
+		// Add R: Line at end of header block.
+
+		ptr = strstr(MsgBytes, "\r\n\r\n");
+
+		ptr+=2;
+
+		memcpy(UnCompressed, MsgBytes, ptr - MsgBytes);
+		memcpy(&UnCompressed[ptr - MsgBytes], Rline, strlen(Rline));
+		memcpy(&UnCompressed[strlen(Rline)+ptr - MsgBytes], ptr, MsgLen);
+		
+
+		Compressed = zalloc(2 * MsgLen + 200);
+
+		memcpy(UnCompressed, MsgBytes, OrigLen);
+
+		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
+
+		FBBHeader->CompressedMsg = Compressed;
+		FBBHeader->CSize = CompLen;
+
+		free(UnCompressed);
+
+		return;
+	}
+
 
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 		strcat(Rline, "\r\n");
 
 	MsgLen = OrigLen + strlen(Rline);
 
-	UnCompressed = zalloc(MsgLen+1000);
 
 //	if (conn->RestartFrom == 0)
 //	{
@@ -975,7 +1040,7 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 //		FwdMsg->datechanged=time(NULL);
 //	}
 
-	tm = gmtime(&FBBHeader->FwdMsg->datechanged);	
+	tm = gmtime(&Msg->datechanged);	
 	
 	wsprintf(Date, "%04d%/%02d/%02d %02d:%02d",
 		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
@@ -992,24 +1057,18 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 	Body: 213
 
 */
-	if (strcmp(FBBHeader->FwdMsg->to, "RMS") == 0)		// Address is in via
-		strcpy(B2To, FBBHeader->FwdMsg->via);
+	if (strcmp(Msg->to, "RMS") == 0)		// Address is in via
+		strcpy(B2To, Msg->via);
 	else
-		if (FBBHeader->FwdMsg->via[0])
-			wsprintf(B2To, "%s@%s", FBBHeader->FwdMsg->to, FBBHeader->FwdMsg->via);
+		if (Msg->via[0])
+			wsprintf(B2To, "%s@%s", Msg->to, Msg->via);
 		else
-			strcpy(B2To, FBBHeader->FwdMsg->to);
+			strcpy(B2To, Msg->to);
 	
 	B2HddrLen = wsprintf(UnCompressed,
 			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
-			FBBHeader->FwdMsg->bid,
-			Date,
-			(FBBHeader->FwdMsg->type == 'P') ? "Private" : "Bulletin",
-			FBBHeader->FwdMsg->from,
-			B2To,
-			FBBHeader->FwdMsg->title,
-			BBSName,
-			MsgLen);
+			Msg->bid, Date, (Msg->type == 'P') ? "Private" : "Bulletin",
+			Msg->from, B2To, Msg->title, BBSName, MsgLen);
 
 	strcat(UnCompressed, Rline);
 	strcat(UnCompressed, MsgBytes);
@@ -1026,7 +1085,6 @@ CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline)
 	FBBHeader->CSize = CompLen;
 
 	free(UnCompressed);
-
 }
 
 VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
@@ -1037,7 +1095,7 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 	Compressed = Compressedptr = FBBHeader->CompressedMsg;
 
-	Output = Outputptr = zalloc(FBBHeader->CSize + 200);
+	Output = Outputptr = zalloc(FBBHeader->CSize + 1000);
 
 	*Outputptr++ = 1;
 	*Outputptr++ = strlen(FBBHeader->FwdMsg->title) + 8;

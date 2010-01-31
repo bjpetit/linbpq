@@ -391,12 +391,20 @@
 
 // Add AUTH feature to Rig Control
 
+// Version 1.0.3.30
+
+// Process Paclink Header (;FW:)
+
+// Version 1.0.3.31
+
+// Process Messages with attachments.
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Packlink"
+#define SPECIALVERSION "Paclink"
 
 #include "GetVersion.h"
 
@@ -2147,6 +2155,9 @@ int Disconnected (Stream)
 
 			ClearQueue(conn);
 
+			if (conn->PacLinkCalls)
+				free(conn->PacLinkCalls);
+
 			if (conn->InputMode == 'B')
 			{
 				// Save partly received message for a restart
@@ -3226,7 +3237,34 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	{
 		// Paclink User Select (poll for list)
 		
-		return;						// Ingore for now
+		char * ptr1,* ptr2, * ptr3;
+		int index=0;
+
+		// Convert string to Multistring
+
+		Buffer[len-1] = 0;
+
+		conn->PacLinkCalls = zalloc(len*3);
+
+		ptr1 = &Buffer[5];
+		ptr2 = (char *)conn->PacLinkCalls;
+		ptr2 += (len * 2);
+		strcpy(ptr2, ptr1);
+
+		while (ptr2)
+		{
+			ptr3 = strlop(ptr2, ' ');
+
+			if (strlen(ptr2))
+				conn->PacLinkCalls[index++] = ptr2;
+		
+			ptr2 = ptr3;
+		}
+
+		conn->Paclink = TRUE;
+
+		
+		return;	
 	}
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
@@ -4336,7 +4374,7 @@ int RemoveLF(char * Message, int len)
 void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 {
 	struct MsgInfo * Msg;
-	char * MsgBytes;
+	char * MsgBytes, * Save;
 	char FullTo[100];
 
 	Msg = MsgnotoMsg[msgno];
@@ -4365,16 +4403,29 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 	nodeprintf(conn, "From: %s%s\rTo: %s\rType/Status: %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
 		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
-	MsgBytes = ReadMessageFile(msgno);
+	MsgBytes = Save = ReadMessageFile(msgno);
 
 	if (MsgBytes)
 	{
+		int Length;
+
+		if (Msg->B2Flags)
+		{
+			// Remove B2 Headers (up to the File: Line)
+			
+			char * ptr;
+			ptr = strstr(MsgBytes, "Body:");
+
+			if (ptr)
+				MsgBytes = ptr;
+		}
+
 		// Remove lf chars
 
-		int Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+		Length = RemoveLF(MsgBytes, strlen(MsgBytes));
 
 		QueueMsg(conn, MsgBytes, Length);
-		free(MsgBytes);
+		free(Save);
 
 		nodeprintf(conn, "\r\r[End of Message #%d from %s]\r", msgno, Msg->from);
 
@@ -4386,8 +4437,6 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 				Msg->datechanged=time(NULL);
 			}
 		}
-
-
 	}
 	else
 	{
@@ -6086,10 +6135,30 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	{
 		Msg=MsgHddrPtr[m];
 
+		// If forwarding to Paclink, look for any message matching the requested call list with statis 'N'
+
+		if (conn->Paclink && conn->PacLinkCalls)
+		{
+			int index = 1;
+
+			char * Call = conn->PacLinkCalls[0];
+
+			while (Call)
+			{
+				if ((Msg->status == 'N') && (_stricmp(Msg->to, Call) == 0))
+					goto Forwardit;
+				
+				Call = conn->PacLinkCalls[index++];
+			}
+			continue;
+		}
+
 		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
 		{
 			// Message to be sent - do a consistancy check (State, etc)
 
+		Forwardit:
+		
 			if ((Msg->from[0] == 0) || (Msg->to[0] == 0))
 			{
 				int Length=0;
@@ -6111,15 +6180,6 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 			if (conn->BBSFlags & FBBForwarding)
 			{
 				struct tm *tm;
-
-				// If sending to RMS, only select messages from same user
-
-//				if ((conn->FBBIndex) && strcmp(conn->Callsign, "RMS") == 0)			// Dont Check first
-//				{
-//					FBBHeader = &conn->FBBHeaders[conn->FBBIndex - 1];
-//					if (strcmp(Msg->from, FBBHeader->FwdMsg->from) !=0)		// Different User
-//						continue;
-//				}
 
 				FBBHeader = &conn->FBBHeaders[conn->FBBIndex++];
 
@@ -6143,7 +6203,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 				// If using B2 forwarding we need the message size and Compressed size for FC proposal
 
 				if (conn->BBSFlags & FBBB2Mode)
-					CreateB2Message(FBBHeader, RLine);
+					CreateB2Message(conn, FBBHeader, RLine);
 
 				if (conn->FBBIndex == 5  || TotalSize > user->ForwardingInfo->MaxFBBBlockSize)
 					return TRUE;							// Got max number or too big

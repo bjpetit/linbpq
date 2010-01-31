@@ -38,6 +38,7 @@
 #include <windowsx.h>
 #include <winsock.h>
 #include "commctrl.h"
+#include "Commdlg.h"
 
 #include <shellapi.h>
 

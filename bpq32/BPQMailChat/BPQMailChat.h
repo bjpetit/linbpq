@@ -305,6 +305,8 @@ typedef struct ConnectionInfo_S
 	UCHAR FBBChecksum;					// Header Checksum
 	BOOL LocalMsg;						// Set if current Send command is for a local user
 	BOOL NewUser;						// Set if first time user has accessed BBS
+	BOOL Paclink;						// Set if receiving messages from Paclink
+	char ** PacLinkCalls;					// Calls we are getting messages for
 
 } ConnectionInfo, CIRCUIT;
 
@@ -426,7 +428,8 @@ typedef struct user_t
 
 #pragma pack(1)
 
-struct MsgInfo{  /* Longueur = 194 octets */
+struct MsgInfo
+{
 	char	type ;
 	char	status ;
 	long	number ;
@@ -440,7 +443,15 @@ struct MsgInfo{  /* Longueur = 194 octets */
 	char	title[61] ;
 	char	bin;
 	int		nntpnum;			// Number within topic (ie Bull TO Addr) - used for nntp
-	char	free[5];
+
+	UCHAR	B2Flags;
+
+	#define B2Msg 1				// Set if Message File is a formatted B2 message
+	#define Attachments 2		// Set if B2 message has attachments
+	#define FromPaclink 4
+	#define FromRMS 8
+
+	char	free[4];
 	unsigned short	nblu;
 	long	theme  ;
 	long	datecreated ;
@@ -934,7 +945,7 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 VOID UnpackFBBBinary(CIRCUIT * conn);
 void Decode(CIRCUIT * conn) ;
 int Encode(char * in, char * out, int len, BOOL B2Protocol);
-CreateB2Message(struct FBBHeaderLine * FBBHeader, char * Rline);
+VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rline);
 VOID SaveFBBBinary(CIRCUIT * conn);
 BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader);
@@ -977,7 +988,7 @@ int Socket_Data(int sock, int error, int eventcode);
 int Socket_Accept(int SocketId);
 int Socket_Connect(SOCKET sock, int Error);
 VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len);
-CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int Msglen);
+CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, char * MsgBody, int Msglen, BOOL B2Flag);
 BOOL CreateSMTPMessageFile(char * Message, struct MsgInfo * Msg);
 SOCKET CreateListeningSocket(int Port, int Message);
 TidyString(char * MailFrom);
@@ -988,11 +999,13 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody);
 BOOL POP3Connect(char * Host, int Port);
 VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
-CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen);
+CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen, BOOL B2Flag);
 void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 int SendSock(SocketConn * sockptr, char * msg);
 VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...);
 VOID SendFromQueue(SocketConn * sockptr);
+VOID SendMultiPartMessage(SocketConn * sockptr, struct MsgInfo * Msg, UCHAR * msgbytes);
+
 
 BOOL SendtoISP();
 
@@ -1035,7 +1048,7 @@ VOID SetupHAddreses(struct	BBSForwardingInfo * ForwardingInfo);
 VOID SetupHAddresesP(struct	BBSForwardingInfo * ForwardingInfo);
 VOID SetupMyHA();
 VOID SetupFwdAliases();
-
+struct Continent * FindContinent(char * Name);
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn);
 BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo);

@@ -22,8 +22,6 @@ HWND hwndDisplay; // current child dialog box
 RECT rcDisplay; // display rectangle for the tab control
 
 
-
-
 DLGTEMPLATE *apRes[C_PAGES];
 
 } DLGHDR;
@@ -2637,6 +2635,11 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 
 		MsgBytes = ReadMessageFile(Msg->number);
 
+		// See if Multipart
+
+		if (Msg->B2Flags & Attachments)
+			EnableWindow(GetDlgItem(hDlg, IDC_SAVEATTACHMENTS), TRUE);
+
 		if (MsgBytes)
 		{
 			SetDlgItemText(hDlg, IDC_MESSAGE, MsgBytes); 
@@ -2669,6 +2672,86 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 
 	case WM_COMMAND:
 
+		if (Cmd == IDC_SAVEATTACHMENTS)
+		{
+			struct MsgInfo * Msg;
+			char * MailBuffer;
+			char FileName[100][MAX_PATH] = {""};
+			int FileLen[100];
+			int Files = 0;
+			int BodyLen;
+			int i;
+			char * ptr;
+
+			HANDLE hFile = INVALID_HANDLE_VALUE;
+			int WriteLen=0;
+
+			Msg = MsgHddrPtr[CurrentMsgIndex];
+
+			MailBuffer = ReadMessageFile(Msg->number);
+
+			ptr = MailBuffer;
+
+			while(*ptr != 13)
+			{
+				char * ptr2 = strchr(ptr, 10);	// Find CR
+
+				if (memcmp(ptr, "Body: ", 6) == 0)
+				{
+					BodyLen = atoi(&ptr[6]);
+				}
+
+				if (memcmp(ptr, "File: ", 6) == 0)
+				{
+					char * ptr1 = strchr(&ptr[6], ' ');	// Find Space
+
+					FileLen[Files] = atoi(&ptr[6]);
+
+					memcpy(FileName[Files++], &ptr1[1], (ptr2-ptr1 - 2));
+				}
+				
+				ptr = ptr2;
+				ptr++;
+			}
+
+			ptr += 4;			// Over Blank Line and Separator
+			ptr += BodyLen;		// to first file
+
+			for (i = 0; i < Files; i++)
+			{
+				OPENFILENAME Ofn; 
+				memset(&Ofn, 0, sizeof(Ofn));
+ 
+				Ofn.lStructSize = sizeof(OPENFILENAME); 
+				Ofn.hInstance = hInst;
+				Ofn.hwndOwner = hDlg; 
+				Ofn.lpstrFilter = NULL; 
+				Ofn.lpstrFile= FileName[i]; 
+				Ofn.nMaxFile = sizeof(FileName[i])/ sizeof(*FileName[i]); 
+				Ofn.lpstrFileTitle = NULL; 
+				Ofn.nMaxFileTitle = 0; 
+				Ofn.lpstrInitialDir = (LPSTR)NULL; 
+				Ofn.Flags = OFN_SHOWHELP | OFN_OVERWRITEPROMPT; 
+				Ofn.lpstrTitle = NULL;//; 
+
+				if (GetSaveFileName(&Ofn))
+				{
+					hFile = CreateFile(FileName[i],
+						GENERIC_WRITE, FILE_SHARE_READ, NULL,
+						CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+					if (hFile != INVALID_HANDLE_VALUE)
+					{
+						WriteFile(hFile, ptr, FileLen[i], &WriteLen, NULL);
+						CloseHandle(hFile);
+					}
+				}
+
+				ptr += FileLen[i];
+				ptr +=2;				// Over separator
+			}
+		}
+				
 		if (Cmd == IDSAVE)
 		{
 			struct MsgInfo * Msg;
