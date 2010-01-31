@@ -33,6 +33,7 @@ Partial Class Form1
       Me.Label3 = New System.Windows.Forms.Label
       Me.Lastupdated = New System.Windows.Forms.TextBox
       Me.Timer2 = New System.Windows.Forms.Timer(Me.components)
+      Me.Timer3 = New System.Windows.Forms.Timer(Me.components)
       Me.MenuStrip1.SuspendLayout()
       Me.SuspendLayout()
       '
@@ -128,7 +129,11 @@ Partial Class Form1
       '
       'Timer2
       '
+      Me.Timer2.Enabled = True
       Me.Timer2.Interval = 3600000
+      '
+      'Timer3
+      '
       '
       'Form1
       '
@@ -165,5 +170,6 @@ Partial Class Form1
    Friend WithEvents ConfigMonitorToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
    Friend WithEvents EditNodesListToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
    Friend WithEvents Timer2 As System.Windows.Forms.Timer
+   Friend WithEvents Timer3 As System.Windows.Forms.Timer
 
 End Class

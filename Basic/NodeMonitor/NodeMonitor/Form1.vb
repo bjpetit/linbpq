@@ -15,6 +15,8 @@ Public Structure NodeData
    Public Comment As String
    Public Count As Integer
    Public Deleted As Boolean
+   Public KillTimer As Integer
+
 End Structure
 
 Public Structure ChatLink
@@ -63,8 +65,8 @@ Public Class Form1
       If My.Settings.AutoUpdate Then
 
          Checkforupdates()
-         Timer2.Interval = 86400 * 1000
-         Timer2.Enabled = True
+         Timer3.Interval = 86400 * 1000
+         Timer3.Enabled = True
 
       End If
 
@@ -154,12 +156,12 @@ Public Class Form1
             Nalias = GetString(Buff, 17, 22)
             Callsign = GetCall(Buff, 7)
             '           SerHandle" NODES from " & Callsign & " " & Nalias & " Len " & len.ToString)
-            UpdateNode(Callsign)
+            UpdateNode(Callsign, True)
             Node(Nalias) = 60
 
             For i = 23 To len - 20 Step 21
                Callsign = GetCall(Buff, i)
-               UpdateNode(Callsign)
+               UpdateNode(Callsign, True)
                Nalias = GetString(Buff, i + 7, i + 12)
                Nalias = RTrim(Nalias)
                Node(Nalias) = 60
@@ -205,22 +207,22 @@ Public Class Form1
                   Nalias = GetString(Buff, 17, 22)
                   Nalias = RTrim(Nalias)
                   Callsign = GetCall(Buff, 7)
-                  UpdateNode(Callsign)
-                  ' Debug.Print(Now & " NODES from " & Callsign & " " & Nalias & " Len " & Len.ToString & _
-                  '   " " & RemoteEP.ToString)
+                  UpdateNode(Callsign, True)
+                  Debug.Print(Now & " NODES from " & Callsign & " " & Nalias & " Len " & Len.ToString & _
+                    " " & RemoteEP.ToString)
 
                   Node(Nalias) = 60
 
                   For i = 23 To Len - 20 Step 21
                      Callsign = GetCall(Buff, i)
-                     UpdateNode(Callsign)
+                     UpdateNode(Callsign, True)
                      Nalias = GetString(Buff, i + 7, i + 12)
                      Nalias = RTrim(Nalias)
                      Node(Nalias) = 60
                      '            debug.print(Callsign & " " & Nalias)
                   Next
 
-               Else
+               Else ' Not Nodes
 
                   CallTo = GetCall(Buff, 0)
 
@@ -234,51 +236,120 @@ Public Class Form1
 
                      CallFrom = GetCall(Buff, 7)
 
+                     UpdateNode(CallFrom, True)
+
                      Report = GetString(Buff, 16, Len - 5)
 
-                     Try
+                     ' Try
 
-                        My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", _
-                          Now & " " & CallFrom & " " & Report & " " & RemoteEP.ToString & vbCrLf, True)
+                     ' My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", _
+                     '     Now & " " & CallFrom & " " & Report & " " & RemoteEP.ToString & vbCrLf, True)
 
-                     Catch ex As Exception
+                     'Catch ex As Exception
 
-                     End Try
+                     ' End Try
 
                      If Report.Length > 2 Then
 
                         Elements = Split(Report, " ")
 
-                        For n = 0 To Elements.Length - 1 Step 2
+                        If Elements(0) = "INFO" Then
 
-                           If Elements(n) <> "XX" Then
+                           Try
 
-                              ptr = FindChatPair(CallFrom, Elements(n))
+                              Dim latstring As String
+                              Dim lonstring As String
+                              Dim LatLon() As String
+                              Dim index As Integer = FindCall(CallFrom)
 
-                              NewState = CInt(Elements(n + 1))
+                              Report = Mid(Report, 6)
+                              Elements = Split(Report, "|")
 
-                              ChatLinks(ptr).KillTimer = 0
+                              If Elements.Length = 3 Then
 
-                              If ChatLinks(ptr).Call1 = CallFrom Then
-                                 If NewState <> ChatLinks(ptr).Call1State Then Changed = True
-                                 ChatLinks(ptr).Call1State = NewState
-                                 ChatLinks(ptr).Timeout1 = 21
-                              Else
-                                 If NewState <> ChatLinks(ptr).Call2State Then Changed = True
-                                 ChatLinks(ptr).Call2State = NewState
-                                 ChatLinks(ptr).Timeout2 = 21
+                                 If Elements(0).Length > 0 Then
+
+                                    ' Update Lat/Lon
+
+                                    If InStr(Elements(0), ",") > 0 Then
+
+                                       ' Comma Separated - easy!
+
+                                       LatLon = Split(LTrim(Elements(0)), ",")
+                                       latstring = LatLon(0)
+                                       lonstring = LatLon(1)
+
+                                    Else
+
+                                       LatLon = Split(LTrim(Elements(0)), " ")
+
+                                       ' May have spaces round N/S/E/W - if so get 4 elements
+
+                                       If LatLon.Length = 4 Then
+                                          latstring = LatLon(0) & " " & LatLon(1)
+                                          lonstring = LatLon(2) & " " & LatLon(3)
+                                       Else
+                                          latstring = LatLon(0)
+                                          lonstring = LatLon(1)
+                                       End If
+
+                                    End If
+
+                                    Nodes(index).Lat = DecodeLat(latstring).ToString
+                                    Nodes(index).Lon = DecodeLon(lonstring).ToString
+
+                                 End If
+
+                                 ' Update Popup text and flag if present
+
+                                 If Elements(1).Length > 0 Then Nodes(index).Comment = Elements(1)
+                                 If Elements(2).Length > 0 Then Nodes(index).PopupMode = CInt(Elements(2))
+
+                                 Changed = True
+
+                                 SaveNodesFile()
+
                               End If
 
-                           End If
+                           Catch ex As Exception
 
-                        Next
+                              Debug.Print("Decode INFO Failed - " & ex.Message())
 
-                     End If
+                           End Try
 
-                  End If
+                        Else
 
-               End If
+                           For n = 0 To Elements.Length - 1 Step 2
 
+                              If Elements(n) <> "XX" Then
+
+                                 UpdateNode(Elements(n), False)
+
+                                 ptr = FindChatPair(CallFrom, Elements(n))
+
+                                 NewState = CInt(Elements(n + 1))
+
+                                 ChatLinks(ptr).KillTimer = 0
+
+                                 If ChatLinks(ptr).Call1 = CallFrom Then
+                                    If NewState <> ChatLinks(ptr).Call1State Then Changed = True
+                                    ChatLinks(ptr).Call1State = NewState
+                                    ChatLinks(ptr).Timeout1 = 21
+                                 Else
+                                    If NewState <> ChatLinks(ptr).Call2State Then Changed = True
+                                    ChatLinks(ptr).Call2State = NewState
+                                    ChatLinks(ptr).Timeout2 = 21
+                                 End If
+
+                              End If
+
+                           Next
+
+
+                        End If ' INFO/CHAT LINKS
+                     End If ' Len > 2
+                  End If ' Call = DUMMY
+               End If ' NODES 
             End If  ' Not UI
 
          End While
@@ -414,11 +485,14 @@ Public Class Form1
 
             For i = 0 To NodeIndex - 1
 
+               If Nodes(i).KillTimer < 24 Then ' Not heard of for a while - don't display
 
-               If Nodes(i).Count = 0 Then
-                  sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).downIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
-               Else
-                  sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).upIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
+                  If Nodes(i).Count = 0 Then
+                     sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).downIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
+                  Else
+                     sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).upIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
+                  End If
+
                End If
 
             Next
@@ -462,8 +536,11 @@ Public Class Form1
 
          End Using
 
-         If (My.Settings.UserName <> "") Then
+         If (My.Settings.UserName = "") Then
 
+            Changed = False
+
+         Else
             Dim client As New WebClient()
 
             client.Credentials = New NetworkCredential(My.Settings.UserName, My.Settings.Password)
@@ -471,7 +548,7 @@ Public Class Form1
             Try
                client.UploadFile(My.Settings.URL, My.Settings.OutputFileName)
                Changed = False
-               My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", Now & " FTP Transfer Complete" & vbCrLf, True)
+               '          My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", Now & " FTP Transfer Complete" & vbCrLf, True)
 
             Catch ex As Exception
 
@@ -491,20 +568,29 @@ Public Class Form1
 
    End Sub
 
-   Private Sub UpdateNode(ByVal Callsign As String)
+   Private Sub UpdateNode(ByVal Callsign As String, ByVal UpdateCount As Boolean)
 
       Dim i As Integer
 
       For i = 0 To NodeIndex - 1
 
+         ' If UpdateCount is false, then this is coming from a chat link report
+         ' Dont set node active, but update killtimer so it will be displayed
+
          If Nodes(i).Callsign = Callsign Then
-            If Nodes(i).Count = 0 Then
-               Changed = True
+
+            Nodes(i).KillTimer = 0
+
+            If UpdateCount Then
+
+               If Nodes(i).Count = 0 Then
+                  Changed = True
+               End If
+               Nodes(i).Count = 60
+
             End If
-            Nodes(i).Count = 60
 
          End If
-
       Next
 
    End Sub
@@ -543,6 +629,8 @@ Public Class Form1
 
                If Nodes(NodeIndex).upIcon = "" Then Nodes(NodeIndex).upIcon = "greenmarker.png"
                If Nodes(NodeIndex).downIcon = "" Then Nodes(NodeIndex).downIcon = "redmarker.png"
+
+               Nodes(NodeIndex).KillTimer = 24
 
                NodeIndex = NodeIndex + 1
 
@@ -586,6 +674,8 @@ Public Class Form1
             For i = 0 To NodeIndex - 1
 
                If Nodes(i).Callsign = Elements(0) Then
+
+                  Nodes(i).KillTimer = 23
 
                   If Elements(3) = Nodes(i).upIcon Then
 
@@ -685,18 +775,19 @@ Public Class Form1
 
    Private Sub Timer2_Tick(ByVal sender As Object, ByVal e As System.EventArgs) Handles Timer2.Tick
 
-      Checkforupdates()
-
-      If DataUpdated Then
-         ReadNodesFile()
-         DataUpdated = False
-      End If
-
       Dim i As Integer
 
       For i = 0 To ChatLinkCount - 1
 
          ChatLinks(i).KillTimer = ChatLinks(i).KillTimer + 1
+         If ChatLinks(i).KillTimer = 24 Then Changed = True
+
+      Next
+
+      For i = 0 To NodeIndex - 1
+
+         Nodes(i).KillTimer = Nodes(i).KillTimer + 1
+         If Nodes(i).KillTimer = 24 Then Changed = True
 
       Next
 
@@ -835,6 +926,17 @@ Public Class Form1
       End If
 
 
+
+   End Sub
+
+   Private Sub Timer3_Tick(ByVal sender As Object, ByVal e As System.EventArgs) Handles Timer3.Tick
+
+      Checkforupdates()
+
+      If DataUpdated Then
+         ReadNodesFile()
+         DataUpdated = False
+      End If
 
    End Sub
 End Class

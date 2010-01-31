@@ -98,24 +98,7 @@ Public Class AddNode
 
       Next
 
-
-      My.Computer.FileSystem.DeleteFile(My.Settings.FileName, FileIO.UIOption.OnlyErrorDialogs, _
-            FileIO.RecycleOption.SendToRecycleBin, FileIO.UICancelOption.DoNothing)
-
-
-      Using sw As StreamWriter = New StreamWriter(My.Settings.FileName)
-
-         For i = 0 To NodeIndex - 1
-
-            sw.WriteLine(Nodes(i).Callsign & "," & Nodes(i).NAlias & "," & _
-                  Nodes(i).Lat & "," & Nodes(i).Lon & "," & Nodes(i).downIcon & "," & _
-                  Nodes(i).upIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment)
-
-         Next
-
-         sw.Close()
-
-      End Using
+      SaveNodesFile()
 
       Me.DialogResult = System.Windows.Forms.DialogResult.OK
 
@@ -144,74 +127,6 @@ Public Class AddNode
 
    End Sub
 
-   Public Function DecodeLat(ByVal LString As String) As Double
-
-      Dim North As Boolean = False
-      Dim South As Boolean = False
-
-      If IsNumeric(LString) Then Return CDbl(LString)
-
-      LString = UCase(LString)
-
-      If InStr(LString, "N") <> 0 Then North = True
-      If InStr(LString, "S") <> 0 Then South = True
-
-      Return DecodeLatLon(LString, South)
-
-   End Function
-
-   Public Function DecodeLon(ByVal LString As String) As Double
-
-      Dim East As Boolean = False
-      Dim West As Boolean = False
-
-      If IsNumeric(LString) Then Return CDbl(LString)
-
-      LString = UCase(LString)
-
-      If InStr(LString, "E") <> 0 Then East = True
-      If InStr(LString, "W") <> 0 Then West = True
-
-      Return DecodeLatLon(LString, West)
-
-   End Function
-
-
-   Public Function DecodeLatLon(ByVal LatString As String, ByVal SW As Boolean) As Double
-
-      Dim Val As Double
-
-      Dim Degpos As Integer = 0
-      Dim Minpos As Integer = 0
-      Dim Secpos As Integer = 0
-      Dim GotSecs As Boolean
-      Dim Degs As Integer, Mins As Integer, Secs As Integer
-
-      Degpos = InStr(LatString, "°")
-      Minpos = InStr(LatString, "'")
-      Secpos = InStr(LatString, """")
-
-      GotSecs = Degpos > 0 And Minpos > 0 And Secpos > 0
-
-      If GotSecs Then
-
-         Degs = CInt(Microsoft.VisualBasic.Left(LatString, Degpos - 1))
-         Mins = CInt(Microsoft.VisualBasic.Mid(LatString, Degpos + 1, Minpos - 1 - Degpos))
-         Secs = CInt(Microsoft.VisualBasic.Mid(LatString, Minpos + 1, Secpos - 1 - Minpos))
-
-      Else
-
-         Return CDbl(LatString)
-
-      End If
-
-      Val = Degs + Mins / 60 + Secs / 3600
-
-      If SW Then Val = -Val
-
-      Return Val
-
-   End Function
    Private Sub CallBox_SelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles CallBox.SelectedIndexChanged
 
       Dim i As Integer
@@ -233,11 +148,17 @@ Public Class AddNode
             LOC.Text = ToLOC(CDbl(Nodes(i).Lat), CDbl(Nodes(i).Lon))
             DDMMSS.Text = ToDDMMSS(CDbl(Nodes(i).Lat), CDbl(Nodes(i).Lon))
 
-            PictureBox1.Image = New Bitmap(UpIconBox.Text)
-            PictureBox2.Image = New Bitmap(DownIconBox.Text)
+            Try
 
-            PictureBox1.Size = PictureBox1.Image.Size
-            PictureBox2.Size = PictureBox1.Image.Size
+               PictureBox1.Image = New Bitmap(UpIconBox.Text)
+               PictureBox2.Image = New Bitmap(DownIconBox.Text)
+
+               PictureBox1.Size = PictureBox1.Image.Size
+               PictureBox2.Size = PictureBox1.Image.Size
+
+            Catch ex As Exception
+
+            End Try
 
             SelectedItem = i
 
@@ -452,8 +373,14 @@ Public Class AddNode
 
       g2.DrawString(Callsign, f, Brushes.White, 0, 0)
 
-      PictureBox1.Image.Dispose()
-      PictureBox2.Image.Dispose()
+      Try
+
+         PictureBox1.Image.Dispose()
+         PictureBox2.Image.Dispose()
+
+      Catch ex As Exception
+
+      End Try
 
       image1.Save(Callsign & ".ok.png", System.Drawing.Imaging.ImageFormat.Png)
       image2.Save(Callsign & ".down.png", System.Drawing.Imaging.ImageFormat.Png)
