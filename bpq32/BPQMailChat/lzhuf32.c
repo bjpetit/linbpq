@@ -912,9 +912,14 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					{
 						// Packet Message
 
-						memmove(FullTo, &FullTo[5], strlen(FullTo - 5));
+						memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
 						_strupr(FullTo);
 						_strupr(Msg->via);
+						
+						// Update the saved to: line (remove the smtp:)
+
+						strcpy(&HddrTo[Recipients][4], &HddrTo[Recipients][9]);
+
 					}
 					else
 					{
@@ -1039,6 +1044,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			free(SaveMsg);
 			free(SaveBody);
+			conn->TempMsg = NULL;
+			conn->MailBuffer = NULL;
 
 			return;
 		}

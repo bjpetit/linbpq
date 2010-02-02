@@ -776,7 +776,7 @@ static void node_dec(NODE *node)
 
 	tp = NULL;
 
-	Debugprintf("MAILCHAT: Removing %s From Node List", node->call);
+//	Debugprintf("MAILCHAT: Removing %s From Node List", node->call);
 
 	for (t = node_hd; t; tp = t, t = t->next)
 	{
@@ -791,7 +791,7 @@ static void node_dec(NODE *node)
 			break;
 		}
 	}
-	Debugprintf("MAILCHAT: Remove Complete");
+//	Debugprintf("MAILCHAT: Remove Complete");
 
 }
 
@@ -906,7 +906,7 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 {
 	CN *c, *cp;
 
-	Debugprintf("MAILCHAT: Remove c/n %s ", node->call);
+//	Debugprintf("MAILCHAT: Remove c/n %s ", node->call);
 
 	cp = NULL;
 
@@ -914,16 +914,18 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 	{
 		if (c->node == node)
 		{
-			CN * cn;
-			int len;
-			char line[1000]="";
+//			CN * cn;
+//			int len;
+//			char line[1000]="";
 			
 			if (--c->refcnt) 
 			{
-				Debugprintf("MAILCHAT: Remove c/n Node %s still in use refcount %d", node->call, c->refcnt);
+//				Debugprintf("MAILCHAT: Remove c/n Node %s still in use refcount %d", node->call, c->refcnt);
 				return;			// Still in use
 			}
-			Debugprintf("MAILCHAT: Refcount 0 - Removing %s. List Before is:", node->call);
+
+			/*
+//			Debugprintf("MAILCHAT: Refcount 0 - Removing %s. List Before is:", node->call);
 
 			__try{
 			for (cn = circuit->hnode; cn; cn = cn->next)
@@ -935,7 +937,7 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 						len = wsprintf(line, "%s %s", line, cn->node->alias);
 						if (len > 80)
 						{
-							Debugprintf("%s", line);
+//							Debugprintf("%s", line);
 							len = wsprintf(line, "            ");
 						}
 					}
@@ -954,7 +956,8 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 			{len = wsprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
 
 
-			Debugprintf("%s", line);
+//			Debugprintf("%s", line);
+*/
 
 			// CN record no longer needed
 
@@ -965,6 +968,7 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 
 			free(c);
 
+			/*
 			Debugprintf("MAILCHAT: Remove c/n Trace After");
 
 			line[0] = 0;
@@ -991,6 +995,7 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 				}
 			}
 			Debugprintf("%s", line);
+			*/
 			break;
 		}
 	}

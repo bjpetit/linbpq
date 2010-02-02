@@ -889,20 +889,38 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	if (FwdMsg->B2Flags)
 	{
-		// Remove B2 Headers (up to the File: Line)
-			
 		char * ptr;
-		ptr= strstr(MsgBytes, "File:");
-
+		int BodyLen = OrigLen;				
+		
+		// Remove all B2 Headers, and all but the first part.
+					
+		ptr = strstr(MsgBytes, "Body:");
+			
 		if (ptr)
 		{
-			OrigLen -= (ptr - MsgBytes);
-			MsgBytes = ptr;
+			BodyLen = atoi(&ptr[5]);
+			ptr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+			if (ptr)
+				ptr +=4;
+			else
+				ptr = MsgBytes;
+			
 		}
+		else
+			ptr = MsgBytes;
+
+		if (memcmp(ptr, "R:", 2) == 0)    // Already have RLines, so remove blank line after new R:line
+			RLineLen -= 2;
+
+		memcpy(&UnCompressed[RLineLen], ptr, BodyLen);
+
+		MsgLen = BodyLen + RLineLen;
 	}
-
-
-	memcpy(&UnCompressed[RLineLen], MsgBytes, OrigLen);
+	else  // Not B2 Message
+	{
+		memcpy(&UnCompressed[RLineLen], MsgBytes, OrigLen);
+	}
 
 	CompLen = Encode(UnCompressed, Compressed, MsgLen, conn->BBSFlags & FBBB1Mode);
 
@@ -995,26 +1013,48 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	if (Msg->B2Flags & B2Msg)
 	{
-		char * ptr;
+		char * ptr, *ptr2;
+		int BodyLen;
+		int BodyLineLen, RlineLen = strlen(Rline);
+		int Index;
 		
-		MsgLen = OrigLen + strlen(Rline);
+		MsgLen = OrigLen + RlineLen;
 
+		// Add R: Line at start of body. Will Need to Update Body Length
+
+		ptr = strstr(MsgBytes, "Body:");
+		ptr2 = strstr(ptr, "\r\n");
+
+		Index = ptr - MsgBytes;		// Bytes Before Body: line
+
+		BodyLen = atoi(&ptr[5]);
+		BodyLineLen = (ptr2 - ptr) + 2;
+		BodyLen += RlineLen;
+		MsgLen -= BodyLineLen;		// Length of Body Line may change
+
+		memcpy(UnCompressed, MsgBytes, Index);	// Up to Old Body;
+		BodyLineLen = wsprintf(&UnCompressed[Index], "Body: %d\r\n", BodyLen);
+
+		MsgLen += BodyLineLen;		// Length of Body Line may have changed
+		Index += BodyLineLen;
+
+		ptr = strstr(ptr2, "\r\n\r\n");	// Blank line before Body
+
+		ptr+=4;
+	
+		ptr2 +=2;					// Line Following Original Body: Line
+
+		memcpy(&UnCompressed[Index], ptr2, ptr - ptr2); // Stuff Between Body: Line and Body
+
+		Index += (ptr - ptr2);
+
+		memcpy(&UnCompressed[Index], Rline, RlineLen);
+		Index += RlineLen;
+		memcpy(&UnCompressed[Index], ptr, MsgLen);		// Rest of Message
+		
 		FBBHeader->Size = MsgLen;
 
-		// Add R: Line at end of header block.
-
-		ptr = strstr(MsgBytes, "\r\n\r\n");
-
-		ptr+=2;
-
-		memcpy(UnCompressed, MsgBytes, ptr - MsgBytes);
-		memcpy(&UnCompressed[ptr - MsgBytes], Rline, strlen(Rline));
-		memcpy(&UnCompressed[strlen(Rline)+ptr - MsgBytes], ptr, MsgLen);
-		
-
 		Compressed = zalloc(2 * MsgLen + 200);
-
-		memcpy(UnCompressed, MsgBytes, OrigLen);
 
 		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
 

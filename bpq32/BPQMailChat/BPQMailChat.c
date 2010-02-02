@@ -398,7 +398,11 @@
 // Version 1.0.3.31
 
 // Process Messages with attachments.
+// Add inactivity timeout to Chat Console sessions.
 
+// Version 1.0.3.32
+
+// Fix for Pactink > BBS Addresses 
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
