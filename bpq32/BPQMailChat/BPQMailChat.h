@@ -561,6 +561,7 @@ struct BBSForwardingInfo
 	BOOL AllowB1;					// Enable B1
 	BOOL AllowB2;					// Enable B2 
 	BOOL PersonalOnly;				// Only Forward Personals
+	BOOL SendNew;					// Forward new messages immediately
 	int FwdInterval;
 	int FwdTimer;
 	char *BBSHA;					// HA of BBS

@@ -732,6 +732,9 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 			{
 				set_fwd_bit(Msg->fbbs, RMS->BBSNumber);
 				RMS->ForwardingInfo->MsgCount++;
+				if (RMS->ForwardingInfo->SendNew)
+					RMS->ForwardingInfo->FwdTimer = RMS->ForwardingInfo->FwdInterval;
+
 				return 1;
 			}
 		}
@@ -898,6 +901,9 @@ NOHA:
 					{
 						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 						ForwardingInfo->MsgCount++;
+						if (ForwardingInfo->SendNew)
+							ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
+
 					}
 				}
 				return 1;
@@ -924,6 +930,8 @@ NOHA:
 					{
 						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 						ForwardingInfo->MsgCount++;
+						if (ForwardingInfo->SendNew)
+							ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
 					}
 				}
 				return 1;
@@ -963,6 +971,8 @@ NOHA:
 				{
 					set_fwd_bit(Msg->fbbs, bestbbs->BBSNumber);
 					bestbbs->ForwardingInfo->MsgCount++;
+					if (ForwardingInfo->SendNew)
+						ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
 				}
 			}
 			return 1;
@@ -1008,6 +1018,8 @@ NOHA:
 				{
 					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 					ForwardingInfo->MsgCount++;
+					if (ForwardingInfo->SendNew)
+						ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
 				}
 			}
 			Count++;
@@ -1027,6 +1039,8 @@ NOHA:
 				{
 					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
 					ForwardingInfo->MsgCount++;
+					if (ForwardingInfo->SendNew)
+						ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
 				}
 			}
 			Count++;

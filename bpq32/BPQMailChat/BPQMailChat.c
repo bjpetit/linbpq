@@ -402,13 +402,36 @@
 
 // Version 1.0.3.32
 
-// Fix for Pactink > BBS Addresses 
+// Fix for Paclink > BBS Addresses 
+
+// Version 1.0.3.33
+
+// Fix multiple transfers per session for B2.
+// Kill messages eent to paclink.
+// Add option to forward messages on arrival.
+
+// Version 1.0.3.34
+
+// Fix bbs addresses to winlink.
+// Fix adding @winlink.org to imcoming paclink msgs
+
+// Version 1.0.3.35
+
+// Fix bbs addresses to winlink. (Again)
+
+
+
+
+
+
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Paclink"
+//#define SPECIALVERSION "Paclink"
 
 #include "GetVersion.h"
 
@@ -2167,7 +2190,9 @@ int Disconnected (Stream)
 				// Save partly received message for a restart
 						
 				if (conn->BBSFlags & FBBB1Mode)
-					SaveFBBBinary(conn);		
+					if (conn->Paclink == 0)			// Paclink doesn't do restarts
+						if (strcmp(conn->Callsign, "RMS") != 0)	// Neither does RMS Packet.
+							SaveFBBBinary(conn);		
 			}
 
 			conn->Active = FALSE;
@@ -5212,9 +5237,7 @@ nextline:
 		else
 			if (!(conn->BBSFlags & FBBForwarding))
 				BBSputs(conn, ">\r");
-			else
-				SetupNextFBBMessage(conn);
-		
+
 		if(Msg->to[0] == 0)
 			SMTPMsgCreated=TRUE;
 
@@ -5455,8 +5478,9 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		retCode += RegQueryValueEx(hKey, "FWD Personals Only", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->PersonalOnly,(ULONG *)&Vallen);
 
-
-
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "FWD New Immediately", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->SendNew,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"FWDInterval",0,			

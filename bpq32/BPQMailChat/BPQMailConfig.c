@@ -740,6 +740,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
 			CheckDlgButton(hDlg, IDC_PERSONALONLY, ForwardingInfo->PersonalOnly);
+			CheckDlgButton(hDlg, IDC_SENDNEW, ForwardingInfo->SendNew);
 			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
 			SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
 			SetDlgItemText(hDlg, IDC_BBSHA, ForwardingInfo->BBSHA);
@@ -1476,6 +1477,9 @@ VOID SaveFWDConfig(HWND hDlg)
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_PERSONALONLY);
 		retCode = RegSetValueEx(hKey, "FWD Personals Only", 0, REG_DWORD, (BYTE *)&Rev,4);
+
+		Rev = IsDlgButtonChecked(hDlg, IDC_SENDNEW);
+		retCode = RegSetValueEx(hKey, "FWD New Immediately", 0, REG_DWORD, (BYTE *)&Rev,4);
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_USEB1);
 		retCode = RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);

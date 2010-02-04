@@ -499,18 +499,27 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 				
 		if (FBBHeader && FBBHeader->MsgType)				// Not a zapped entry
 		{
-			clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
-			set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
-
-			//  Only mark as forwarded if sent to all BBSs that should have it
-			
-			if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+			if (conn->Paclink)
 			{
-				FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
-				FBBHeader->FwdMsg->datechanged=time(NULL);
-			}
+				// Kill Messages sent to paclink
 
-			conn->UserPointer->ForwardingInfo->MsgCount--;
+				FlagAsKilled(FBBHeader->FwdMsg);
+			}
+			else
+			{
+				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+				set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
+
+				//  Only mark as forwarded if sent to all BBSs that should have it
+			
+				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+				{
+					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
+					FBBHeader->FwdMsg->datechanged=time(NULL);
+				}
+
+				conn->UserPointer->ForwardingInfo->MsgCount--;
+			}
 		}
 	}
 	memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
@@ -1010,6 +1019,7 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	OrigLen = Msg->length;
 
 	// If a B2 Message  add R:line at start of Body, but otherwise leave intact.
+	// Unless a message to Paclink, when we must remove any HA from the TO address
 
 	if (Msg->B2Flags & B2Msg)
 	{
@@ -1019,6 +1029,29 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		int Index;
 		
 		MsgLen = OrigLen + RlineLen;
+
+		if (conn->Paclink)
+		{
+			// Remove any HA on the TO address
+
+			ptr = strstr(MsgBytes, "To:");
+			if (ptr)
+			{
+				ptr2 = strstr(ptr, "\r\n");
+				if (ptr2)
+				{
+					while (ptr < ptr2)
+					{
+						if (*ptr == '.')
+						{
+							memset(ptr, ' ', ptr2 - ptr);
+							break;
+						}
+						ptr++;
+					}
+				}
+			}
+		}
 
 		// Add R: Line at start of body. Will Need to Update Body Length
 
@@ -1100,7 +1133,7 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	if (strcmp(Msg->to, "RMS") == 0)		// Address is in via
 		strcpy(B2To, Msg->via);
 	else
-		if (Msg->via[0])
+		if (Msg->via[0] && (!conn->Paclink))
 			wsprintf(B2To, "%s@%s", Msg->to, Msg->via);
 		else
 			strcpy(B2To, Msg->to);

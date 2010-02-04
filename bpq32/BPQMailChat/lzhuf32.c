@@ -850,7 +850,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				// Messages just have the call - need to add @winlink.org
 
-				strcpy(Msg->emailfrom, "winlink.org");
+				strcpy(Msg->emailfrom, "@winlink.org");
 
 			}
 			if (_memicmp(&ptr1[6], "smtp:", 5) == 0)
@@ -1002,6 +1002,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 		// If multiple recipents, create one copy for each BBS address, and one for all others (via RMS)
 	
+		if (Recipients > 1)
 		{
 			int i;
 			struct MsgInfo * SaveMsg;
@@ -1009,6 +1010,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			int SaveMsgLen = conn->MailBufferSize;
 			BOOL SentToRMS = FALSE;
 			int ToLen;
+
+			SaveMsg = Msg;
+			SaveBody = conn->MailBuffer;
 
 			for (i = 0; i < Recipients; i++)
 			{
@@ -1020,11 +1024,11 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					SentToRMS = TRUE;
 				}
 
-				SaveMsg = malloc(sizeof(struct MsgInfo));
-				memcpy(SaveMsg, Msg, sizeof(struct MsgInfo));
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
 	
-				SaveBody = malloc(SaveMsgLen + 1);
-				memcpy(SaveBody, conn->MailBuffer, SaveMsgLen);
+				conn->MailBuffer = malloc(SaveMsgLen + 1);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
 
 				// Add our To: 
 
@@ -1037,24 +1041,36 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				strcpy(Msg->to, RecpTo[i]);
 				strcpy(Msg->via, Via[i]);
+
 				CreateMessageFromBuffer(conn);
-				conn->TempMsg = Msg = SaveMsg;
-				conn->MailBuffer = SaveBody;
 			}
 
 			free(SaveMsg);
 			free(SaveBody);
-			conn->TempMsg = NULL;
 			conn->MailBuffer = NULL;
 
+			SetupNextFBBMessage(conn);
 			return;
 		}
-//		else
-//		{
+		else
+		{
 			// Single Destination -  Need to put to: line back in message
+
+			int ToLen = strlen(HddrTo[0]);
+
+			memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+			memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 
+
+			conn->TempMsg->length += ToLen;
+
+			CreateMessageFromBuffer(conn);
+			SetupNextFBBMessage(conn);
+			return;
+		}
 
 
 	} // end if B2Msg
 
 	CreateMessageFromBuffer(conn);
+	SetupNextFBBMessage(conn);
 }
