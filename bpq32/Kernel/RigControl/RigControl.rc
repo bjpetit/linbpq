@@ -83,36 +83,17 @@ END
 RIGCONFIG DIALOG DISCARDABLE  0, 0, 432, 206
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Rig Control Configuration"
-FONT 8, "MS Sans Serif"
+FONT 8, "FixedSys"
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,175,160,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,230,160,50,14
-    COMBOBOX        IDC_TIMES,265,130,60,40,CBS_DROPDOWN | CBS_SORT | 
-                    WS_VSCROLL | WS_TABSTOP
-    COMBOBOX        IDC_RIGTYPE,145,130,44,50,CBS_DROPDOWNLIST | CBS_SORT | 
-                    WS_VSCROLL | WS_TABSTOP
-    COMBOBOX        IDC_COMPORT,25,130,50,52,CBS_DROPDOWNLIST | CBS_SORT | 
-                    WS_VSCROLL | WS_TABSTOP
-    COMBOBOX        IDC_FREQ,340,130,70,35,CBS_DROPDOWN | CBS_SORT | 
-                    WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Port",IDC_STATIC,25,6,45,8
-    LTEXT           "Speed",IDC_STATIC,80,6,40,8
-    LTEXT           "Times",IDC_STATIC,270,6,25,8
-    LTEXT           "Rig Type",IDC_STATIC,149,6,30,8
-    COMBOBOX        IDC_SPEED,80,130,50,52,CBS_DROPDOWNLIST | CBS_SORT | 
-                    WS_VSCROLL | WS_TABSTOP
-    EDITTEXT        IDC_ADDR,195,130,25,15,ES_AUTOHSCROLL
-    LTEXT           "Addr",IDC_STATIC,193,6,17,8
-    LTEXT           "Frequency / Mode",IDC_STATIC,340,6,65,8
-    EDITTEXT        IDC_ADDR2,225,130,25,15,ES_AUTOHSCROLL
-    LTEXT           "Label",IDC_STATIC,225,6,17,8
-    CONTROL         "",IDC_RADIO1,"Button",BS_AUTORADIOBUTTON,8,20,8,10
-    EDITTEXT        RIG_LINE,25,20,230,12,ES_AUTOHSCROLL | ES_READONLY | NOT 
-                    WS_BORDER
-    COMBOBOX        IDC_DISPTIMES,265,20,60,40,CBS_DROPDOWN | CBS_SORT | 
-                    WS_VSCROLL | WS_TABSTOP
-    COMBOBOX        IDC_DISPFREQ,335,20,70,35,CBS_DROPDOWN | CBS_SORT | 
-                    WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Port",IDC_STATIC,25,6,25,8
+    LTEXT           "Speed",IDC_STATIC,57,6,35,8
+    LTEXT           "Times",IDC_STATIC,210,6,25,8
+    LTEXT           "Rig Type",IDC_STATIC,109,6,30,8
+    LTEXT           "Addr",IDC_STATIC,147,6,17,8
+    LTEXT           "Frequency / Mode",IDC_STATIC,276,6,65,8
+    LTEXT           "Label",IDC_STATIC,174,6,27,8
 END
 
 
@@ -163,25 +144,6 @@ RIG_MENU1 MENU DISCARDABLE
 BEGIN
     MENUITEM "Config",                      65535
 END
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// DESIGNINFO
-//
-
-#ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO DISCARDABLE 
-BEGIN
-    "RIGCONFIG", DIALOG
-    BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 425
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 199
-    END
-END
-#endif    // APSTUDIO_INVOKED
 
 #endif    // English (U.K.) resources
 /////////////////////////////////////////////////////////////////////////////

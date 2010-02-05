@@ -91,6 +91,7 @@ DllImport WORD L4T1;
 VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
 BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 
+INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 // Buffer Pool
 
@@ -159,6 +160,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		case RIG_CONFIG:
 
+			DialogBox(hInstance, MAKEINTRESOURCE(RIGCONFIG), hDlg, ConfigDialogProc);
 			break;
 
 		default:
@@ -2384,6 +2386,159 @@ ScanExit:
 	return;
 }
 
+int CRow;
+HANDLE hComPort, hSpeed, hRigType, hButton, hAddr, hLabel, hTimes, hFreqs;
+
+VOID CreateRigConfigLine(HWND hDlg, struct PORTINFO * PORT, struct RIGINFO * RIG)
+{
+
+	hButton =  CreateWindow(WC_BUTTON , "", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_TABSTOP,
+					10, CRow+5, 10,10, hDlg, NULL, hInstance, NULL);
+
+	if (PORT->PortType == ICOM)
+	{
+		char Addr[10];
+
+		wsprintf(Addr, "%X", RIG->RigAddr);
+
+		hAddr =  CreateWindow(WC_EDIT , Addr, WS_CHILD | WS_VISIBLE  | WS_TABSTOP | WS_BORDER,
+                 305, CRow, 30,20, hDlg, NULL, hInstance, NULL);
+
+	}
+	hLabel =  CreateWindow(WC_EDIT , RIG->RigName, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER,
+                 350, CRow, 60,20, hDlg, NULL, hInstance, NULL);
 
 
+	hTimes =  CreateWindow(WC_COMBOBOX , "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | 
+                    WS_VSCROLL | WS_TABSTOP,
+                 415, CRow, 100,80, hDlg, NULL, hInstance, NULL);
+
+	hFreqs =  CreateWindow(WC_EDIT , "", WS_CHILD | WS_VISIBLE| WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL,
+                 520, CRow, 300, 20, hDlg, NULL, hInstance, NULL);
+
+	SendMessage(hTimes, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "0000:1159");
+	SendMessage(hTimes, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "1200:2359");
+	SendMessage(hTimes, CB_SETCURSEL, 0, 0);
+
+	CRow += 30;	
+
+}
+
+VOID CreatePortConfigLine(HWND hDlg, struct PORTINFO * PORT)
+{	
+	char Port[20]; 
+	int i;
+
+	hComPort =  CreateWindow(WC_COMBOBOX , "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | 
+                    WS_VSCROLL | WS_TABSTOP,
+                 45, CRow, 80, 160, hDlg, NULL, hInstance, NULL);
+
+	for (i = 1; i < 256; i++)
+	{
+		wsprintf(Port, "COM%d", i);
+		SendMessage(hComPort, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Port);
+	}
+
+	wsprintf(Port, "COM%d", PORT->IOBASE);
+
+	i = SendMessage(hComPort, CB_FINDSTRINGEXACT, 0, Port);
+
+	SendMessage(hComPort, CB_SETCURSEL, i, 0);
+	
+	
+	hSpeed =  CreateWindow(WC_COMBOBOX , "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | 
+                    WS_VSCROLL | WS_TABSTOP,
+                 130, CRow, 65,80, hDlg, NULL, hInstance, NULL);
+
+	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "1200");
+	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "2400");
+	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "4800");
+	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "9600");
+	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "19200");
+	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "38400");
+
+	wsprintf(Port, "%d", PORT->SPEED);
+
+	i = SendMessage(hSpeed, CB_FINDSTRINGEXACT, 0, Port);
+
+	SendMessage(hSpeed, CB_SETCURSEL, i, 0);
+
+	hRigType =  CreateWindow(WC_COMBOBOX , "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,
+                 200, CRow, 100,80, hDlg, NULL, hInstance, NULL);
+
+	SendMessage(hRigType, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "ICOM");
+	SendMessage(hRigType, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "YAESU");
+	SendMessage(hRigType, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "KENWOOD");
+
+	SendMessage(hRigType, CB_SETCURSEL, PORT->PortType -1, 0);
+
+}
+
+INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	struct MsgInfo * Msg;
+	char * MsgBytes;
+	int Cmd = LOWORD(wParam);
+
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		struct PORTINFO * PORT;
+		struct RIGINFO * RIG;
+		int i, p;
+
+		CRow = 40;
+
+		for (p = 0; p < NumberofPorts; p++)
+		{
+			PORT = PORTInfo[p];
+
+			CreatePortConfigLine(hDlg, PORT);
+		
+			for (i=0; i < PORT->ConfiguredRigs; i++)
+			{
+				RIG = &PORT->Rigs[i];
+				CreateRigConfigLine(hDlg, PORT, RIG);
+			}
+		}
+
+
+
+/*	 CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 90, Row, 40,20, hDlg, NULL, hInstance, NULL);
+	
+	 CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 135, Row, 100,20, hDlg, NULL, hInstance, NULL);
+*/
+return TRUE; 
+	}
+
+	case WM_SIZING:
+	{
+		return TRUE;
+	}
+
+	case WM_ACTIVATE:
+
+//		SendDlgItemMessage(hDlg, IDC_MESSAGE, EM_SETSEL, -1, 0);
+
+		break;
+
+
+	case WM_COMMAND:
+
+
+		if (Cmd == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+
+		return (INT_PTR)TRUE;
+
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
 

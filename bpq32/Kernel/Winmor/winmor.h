@@ -24,6 +24,7 @@ typedef struct TNCINFO
 	BOOL Connected;				// When set, all data is passed to Data Socket
 	BOOL Connecting;
 	BOOL Attached;				// Set what attached to a BPQ32 stream
+	BOOL StartSent;				// COdec Start send (so will get a disconnect)
 
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 

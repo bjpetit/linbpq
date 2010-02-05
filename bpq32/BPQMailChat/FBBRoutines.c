@@ -33,6 +33,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	}
 
 	// Should be FA FB F> FS FF FQ
+	if (Buffer[0] == ';')
+		return;							// winlink comment
 
 	if (Buffer[0] != 'F')
 	{
@@ -1006,6 +1008,8 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	struct tm * tm;
 	char B2To[80];
 	struct MsgInfo * Msg = FBBHeader->FwdMsg;
+	char DebugMsg[1000]="";
+	char * xptr;
 
 	MsgBytes = ReadMessageFile(Msg->number);
 
@@ -1033,7 +1037,7 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		if (conn->Paclink)
 		{
 			// Remove any HA on the TO address
-
+			
 			ptr = strstr(MsgBytes, "To:");
 			if (ptr)
 			{
@@ -1042,7 +1046,7 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 				{
 					while (ptr < ptr2)
 					{
-						if (*ptr == '.')
+						if (*ptr == '.' || *ptr == '@')
 						{
 							memset(ptr, ' ', ptr2 - ptr);
 							break;
@@ -1051,6 +1055,7 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 					}
 				}
 			}
+
 		}
 
 		// Add R: Line at start of body. Will Need to Update Body Length
@@ -1090,6 +1095,10 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		Compressed = zalloc(2 * MsgLen + 200);
 
 		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
+
+		ptr = strstr(UnCompressed, "\r\n\r\n");	// Blank line before Body
+		memcpy(DebugMsg, UnCompressed, ptr - UnCompressed);
+		Debugprintf("Paclin Trace: %s", DebugMsg);
 
 		FBBHeader->CompressedMsg = Compressed;
 		FBBHeader->CSize = CompLen;
@@ -1149,6 +1158,10 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	MsgLen += B2HddrLen;
 
 	FBBHeader->Size = MsgLen;
+
+	xptr = strstr(UnCompressed, "\r\n\r\n");	// Blank line before Body
+	memcpy(DebugMsg, UnCompressed, xptr - UnCompressed);
+	Debugprintf("Paclin Trace: %s", DebugMsg);
 
 	Compressed = zalloc(2 * MsgLen + 200);
 

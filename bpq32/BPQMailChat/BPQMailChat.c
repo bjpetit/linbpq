@@ -5969,7 +5969,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 		case 'F':			// FBB Blocked Forwarding
 
-			conn->BBSFlags |= FBBForwarding;
+			conn->BBSFlags |= FBBForwarding | BBS;
 			conn->BBSFlags &= ~MBLFORWARDING;
 
 		

@@ -37,6 +37,8 @@ unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, 
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
 
+VOID __cdecl Debugprintf(const char * format, ...);
+
 DllImport int ResetExtDriver(int num);
 void ConnecttoWINMORThread(int port);
 VOID ProcessDataSocketData(int port);
@@ -100,6 +102,20 @@ BOOL InitWS2(void);
 static UINT FREE_Q=0;
 
 static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
+
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[255];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+
+	OutputDebugString(Mess);
+
+	return;
+}
 
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
@@ -180,13 +196,44 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	{
 	case 1:				// poll
 
+		if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Attached == 0)
+		{
+			// New Attach
+
+			int calllen;
+			UCHAR TXMsg[1000] = "D20";
+			int datalen;
+			char Msg[80];
+
+			TNC->Attached = TRUE;
+
+			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->MyCall);
+			TNC->MyCall[calllen] = 0;
+
+			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+
+			datalen = wsprintf(TXMsg, "MYC %s\r\n", TNC->MyCall);
+			send(TNC->WINMORSock,TXMsg, datalen, 0);
+
+	//	wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
+	//	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+			// Stop Scanning
+
+			wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+			if (Rig_Command)
+				Rig_Command(-1, Msg);
+
+		}
+
 		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0 && TNC->Attached)
 		{
 			// Node has disconnected - clear any connection
 
 			TNC->Attached= FALSE;
 			TNC->Connected = FALSE;
-			send(TNC->WINMORSock,"DISCONNECT\r", 11, 0);
+			send(TNC->WINMORSock,"DISCONNECT\r\n", 11, 0);
 		}
 
 
@@ -362,7 +409,30 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				}
 				return 1;
 			}
-			bytes=send(TNC->WINMORSock,(const char FAR *)&buff[8],txlen,0);
+
+
+			// See if a Connect Command. If so, start codec and set Connecting
+
+			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
+			{
+				char Connect[80] = "CONNECT ";
+
+				send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+				TNC->StartSent = TRUE;
+
+				memcpy(&Connect[8], &buff[10], txlen);
+				txlen += 6;
+				Connect[txlen++] = 0x0a;
+				bytes=send(TNC->WINMORSock, Connect, txlen, 0);
+				TNC->Connecting = TRUE;
+
+			}
+			else
+			{
+
+				buff[8 + txlen++] = 0x0a;
+				bytes=send(TNC->WINMORSock,(const char FAR *)&buff[8],txlen,0);
+			}
 		}
 		if (bytes != txlen)
 		{
@@ -717,7 +787,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	UINT * buffptr;
 
-	Buffer[MsgLen] = 0;
+	Buffer[MsgLen - 2] = 0;			// Remove CRLF
+
+	Debugprintf("WINMOR RX: %s", Buffer);
 	
 	if (_memicmp(Buffer, "CONNECTED", 9) == 0)
 	{
@@ -793,7 +865,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			if (buffptr == 0) return;			// No buffers, so ignore
 
-			ReplyLen = wsprintf(Reply, "*** Connected to %s", &Buffer[10]);
+			ReplyLen = wsprintf(Reply, "*** Connected to %s\r", &Buffer[10]);
 
 			buffptr[1] = ReplyLen;
 			memcpy(buffptr+2, Reply, ReplyLen);
@@ -809,6 +881,12 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "DISCONNECTED", 12) == 0)
 	{
+		if (TNC->StartSent)
+		{
+			TNC->StartSent = FALSE;		// Disconnect reported following start codec
+			return;
+		}
+
 		// Release Session
 
 		TNC->Connected = FALSE;		// Back to Command Mode
@@ -817,7 +895,34 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
+	if (_memicmp(Buffer, "MONCALL", 7) == 0)
+	{
+		// Add to MHEARD
+
+		UpdateMH(TNC, &Buffer[8], '+');
+	}
+		
+	if (_memicmp(Buffer, "CMD", 3) == 0)
+	{
+		return;
+	}
+
+	if (_memicmp(Buffer, "MODE", 4) == 0)
+	{
+		return;
+	}
+
 	if (_memicmp(Buffer, "PENDING", 6) == 0)
+	{
+		return;
+	}
+
+	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
+	{
+		return;
+	}
+
+	if (_memicmp(Buffer, "BUFFERS", 7) == 0)
 	{
 		return;
 	}
@@ -828,12 +933,22 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	if (_memicmp(Buffer, "FAULT", 5) == 0)
+//	if (_memicmp(Buffer, "FAULT", 5) == 0)
+//	{
+//		return;
+//	}
+
+	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
 	{
 		return;
 	}
 
-	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
+	if (_memicmp(Buffer, "PTT TRUE", 8) == 0)
+	{
+		return;
+	}
+
+	if (_memicmp(Buffer, "PTT FALSE", 9) == 0)
 	{
 		return;
 	}
@@ -849,7 +964,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (buffptr == 0) return;			// No buffers, so ignore
 
-	buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} %s", Buffer);
+	buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} %s\r", Buffer);
 
 	Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 			
@@ -891,7 +1006,7 @@ int ProcessReceivedData(int port)
 
 loop:
 	
-	ptr = memchr(TNC->TCPBuffer, '\r', TNC->InputLen);
+	ptr = memchr(TNC->TCPBuffer, '\n', TNC->InputLen);
 
 	if (ptr)	//  CR in buffer
 	{
