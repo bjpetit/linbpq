@@ -747,6 +747,11 @@ void Decode(CIRCUIT * conn)
 		if (crc != crc_read)
 		{
 			nodeprintf(conn, "*** Message CRC Error File %x Calc %x\r", crc_read, crc);
+			free(conn->MailBuffer);
+			conn->MailBufferSize=0;
+			conn->MailBuffer=0;
+			SetupNextFBBMessage(conn);
+
 			return;
 		}
 
