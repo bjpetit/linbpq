@@ -27,6 +27,7 @@
 
 #define WINMOR
 
+static char ClassName[]="WINMORSTATUS";
 #include "..\PactorCommon.c"
 
 #define VERSION_MAJOR         2
@@ -127,8 +128,10 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	case DLL_PROCESS_ATTACH:
 		
 		AttachedProcesses++;
-		
-		if (WINMORInst == 0)				// First entry
+
+		hInstance = hInst;
+	
+		if (WINMORInst == 0)			// First entry
 		{
 			GetAPI();					// Load BPQ32
 
@@ -186,7 +189,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	int datalen;
 	UINT * buffptr;
 	char txbuff[500];
-
+	char Status[80];
 	unsigned int bytes,txlen=0;
 	char ErrMsg[255];
 
@@ -201,7 +204,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			// New Attach
 
 			int calllen;
-			UCHAR TXMsg[1000] = "D20";
+			UCHAR TXMsg[1000];
 			int datalen;
 			char Msg[80];
 
@@ -215,8 +218,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			datalen = wsprintf(TXMsg, "MYC %s\r\n", TNC->MyCall);
 			send(TNC->WINMORSock,TXMsg, datalen, 0);
 
-	//	wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
-	//	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+			wsprintf(Status, "In Use by %s", TNC->MyCall);
+			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 			// Stop Scanning
 
@@ -229,13 +232,34 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0 && TNC->Attached)
 		{
+			UCHAR TXMsg[1000];
+			int datalen;
+
 			// Node has disconnected - clear any connection
 
 			TNC->Attached= FALSE;
 			TNC->Connected = FALSE;
-			send(TNC->WINMORSock,"DISCONNECT\r\n", 11, 0);
-		}
+			send(TNC->WINMORSock,"DISCONNECT\r\n", 12, 0);
 
+			// Then set mycall back to Node or Port Call
+
+			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+
+			datalen = wsprintf(TXMsg, "MYC %s\r\n", TNC->NodeCall);
+			send(TNC->WINMORSock,TXMsg, datalen, 0);
+
+			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+			send(TNC->WINMORSock, "CODEC\r\n", 7, 0);
+			send(TNC->WINMORSock, "MYC\r\n", 5, 0);
+
+			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
+
+			//	Start Scanner
+				
+			wsprintf(TXMsg, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			if (Rig_Command) Rig_Command(-1, TXMsg);
+
+		}
 
 		if (TNC->ReportDISC)
 		{
@@ -381,7 +405,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;		// Don't try if not connected
 		}
 
-		if (TNC->BPQtoWINMOR_Q) return 0;		// Socket is blocked - just drop packets
+		if (TNC->BPQtoWINMOR_Q)
+			return 0;		// Socket is blocked - just drop packets
 														// till it clears
 		txlen=(buff[6]<<8) + buff[5]-8;	
 		
@@ -423,13 +448,21 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&Connect[8], &buff[10], txlen);
 				txlen += 6;
 				Connect[txlen++] = 0x0a;
+				Connect[txlen] = 0;
+
+				_strupr(Connect);
+
 				bytes=send(TNC->WINMORSock, Connect, txlen, 0);
 				TNC->Connecting = TRUE;
 
+				memset(TNC->RemoteCall, 0, 10);
+				memcpy(TNC->RemoteCall, &Connect[8], txlen-10);
+
+				wsprintf(Status, "%s Connecting to %s", TNC->MyCall, TNC->RemoteCall);
+				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 			}
 			else
 			{
-
 				buff[8 + txlen++] = 0x0a;
 				bytes=send(TNC->WINMORSock,(const char FAR *)&buff[8],txlen,0);
 			}
@@ -516,6 +549,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	int i, port;
 	char Msg[255];
 	char * ptr;
+	char Title[80];
+
 
 	struct TNCINFO * TNC;
 
@@ -566,6 +601,17 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 			strcpy(TNC->WINMORHostName,"127.0.0.1");
 
 	}
+
+	CreatePactorWindow(TNC);
+
+	wsprintf(Title,"WINMOR Status - Port %d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+
+	SetWindowText(TNC->hDlg, Title);
+
+	MinimizetoTray = GetMinimizetoTrayFlag();
+	
+	if (MinimizetoTray)
+		AddTrayMenuItem(TNC->hDlg, Title);
 
 	LoadRigDriver();
 
@@ -751,6 +797,8 @@ VOID ConnecttoWINMORThread(port)
 			err=WSAGetLastError();
    			i=wsprintf(Msg, "Connect Failed for WINMOR socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
+			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to TNC failed");
+
 			Alerted = TRUE;
 		}
 		
@@ -769,6 +817,9 @@ VOID ConnecttoWINMORThread(port)
 
 		send(TNC->WINMORSock, TNC->InitScript , strlen(TNC->InitScript), 0);
 		Alerted = TRUE;
+
+		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connected to WINMOR TNC");
+
 		return;
 	}
 
@@ -786,10 +837,18 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	// an Async  Response
 
 	UINT * buffptr;
+	char Status[80];
+
+
+	if (_memicmp(Buffer, "PTT ", 4) == 0)
+	{
+		return;
+	}
 
 	Buffer[MsgLen - 2] = 0;			// Remove CRLF
 
 	Debugprintf("WINMOR RX: %s", Buffer);
+
 	
 	if (_memicmp(Buffer, "CONNECTED", 9) == 0)
 	{
@@ -799,6 +858,15 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			struct TRANSPORTENTRY * Session;
 			int Index = 0;
+
+			// Stop Scanner
+
+			char Msg[80];
+				
+			wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+			if (Rig_Command)
+				Rig_Command(-1, Msg);
 
 			Session=L4TABLE;
 
@@ -838,6 +906,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			TNC->Connected = TRUE;			// Subsequent data to data channel
 
+			wsprintf(Status, "%s Connected to %s Inbound", TNC->RemoteCall, TNC->NodeCall);
+			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+
 			// If an autoconnect APPL is defined, send it
 
 			if (TNC->ApplCmd)
@@ -875,6 +947,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			TNC->Connecting = FALSE;
 			TNC->Connected = TRUE;			// Subsequent data to data channel
 
+			wsprintf(Status, "%s Connected to %s Outbound", TNC->MyCall, TNC->RemoteCall);
+			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+
 			return;
 		}
 	}
@@ -900,6 +976,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		// Add to MHEARD
 
 		UpdateMH(TNC, &Buffer[8], '+');
+		return;
 	}
 		
 	if (_memicmp(Buffer, "CMD", 3) == 0)
@@ -909,6 +986,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "MODE", 4) == 0)
 	{
+		Debugprintf("WINMOR RX: %s", Buffer);
+		SetDlgItemText(TNC->hDlg, IDC_MODE, &Buffer[5]);
 		return;
 	}
 
@@ -919,11 +998,14 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
 	{
+		SetDlgItemText(TNC->hDlg, IDC_PROTOSTATE, &Buffer[9]);
 		return;
 	}
 
 	if (_memicmp(Buffer, "BUFFERS", 7) == 0)
 	{
+		Debugprintf("WINMOR RX: %s", Buffer);
+		SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, &Buffer[8]);
 		return;
 	}
 
@@ -939,22 +1021,14 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 //	}
 
 	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
-	{
-		return;
-	}
-
-	if (_memicmp(Buffer, "PTT TRUE", 8) == 0)
-	{
-		return;
-	}
-
-	if (_memicmp(Buffer, "PTT FALSE", 9) == 0)
-	{
+	{	
+		SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Busy");
 		return;
 	}
 
 	if (_memicmp(Buffer, "BUSY FALSE", 10) == 0)
 	{
+		SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Clear");
 		return;
 	}
 
@@ -981,10 +1055,11 @@ int ProcessReceivedData(int port)
 
 	// May have several messages per packet, or message split over packets
 
-	if (TNC->InputLen > 100)	// Shouldnt have lines longer  than this on command connection
+	if (TNC->InputLen > 1000)	// Shouldnt have lines longer  than this on command connection
 		TNC->InputLen=0;
 				
-	InputLen=recv(TNC->WINMORSock, &TNC->TCPBuffer[TNC->InputLen], 100 - TNC->InputLen, 0);
+	InputLen=recv(TNC->WINMORSock, &TNC->TCPBuffer[TNC->InputLen], 1000 - TNC->InputLen, 0);
+
 
 	if (InputLen == 0)
 	{
@@ -1001,6 +1076,7 @@ int ProcessReceivedData(int port)
 
 		return 0;					
 	}
+	Debugprintf("Winmor: RXC %d bytes", InputLen);
 
 	TNC->InputLen += InputLen;
 
@@ -1048,7 +1124,6 @@ VOID ProcessDataSocketData(int port)
 	struct TNCINFO * TNC = TNCInfo[port];
 
 	int InputLen, PacLen = 236;
-	char ErrMsg[80];
 
 	UINT * buffptr;
 loop:
@@ -1064,13 +1139,14 @@ loop:
 		return;
 	}
 
+	Debugprintf("Winmor: RXD %d bytes", InputLen);
+
 	if (InputLen == 0)
 	{
 		// Does this mean closed?
 		
-		wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", port);
-		WritetoConsole(ErrMsg);
-
+		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to TNC lost");
+	
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;
 		TNC->ReportDISC = TRUE;

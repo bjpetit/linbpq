@@ -23,7 +23,6 @@ struct TNCINFO * TNCInfo[18] = {NULL};		// Records are Malloc'd
 BOOL ReadConfigFile(char * filename);
 int ProcessLine(char * buf);
 
-#ifndef WINMOR
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -171,9 +170,6 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 
 	return TRUE;
 }
-
-#endif
-
 
 
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)

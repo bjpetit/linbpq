@@ -335,6 +335,7 @@ typedef struct FBBRestartData
 	struct UserInfo * UserPointer;
 	UCHAR * MailBuffer;				// Mail Message being received
 	int MailBufferSize;				// Total Malloc'ed size. Actual size in in Msg Struct
+	int Count;						// Give up if too many restarts
 };
 
 #pragma pack(1)

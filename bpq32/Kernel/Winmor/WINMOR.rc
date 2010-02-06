@@ -64,6 +64,36 @@ END
 #endif    // !_MAC
 
 
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+WINMORSTATUS DIALOG DISCARDABLE  0, 0, 254, 110
+STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "WINMOR Status"
+CLASS "WINMORSTATUS"
+FONT 8, "FixedSys"
+BEGIN
+    LTEXT           "",IDC_PROTOSTATE,65,70,54,11
+    LTEXT           "",IDC_CHANSTATE,65,55,105,11
+    LTEXT           "",IDC_MODE,65,40,75,11
+    LTEXT           "TX/RX State",IDC_STATIC,6,70,44,10
+    LTEXT           "Channel State",IDC_STATIC,5,55,55,10
+    LTEXT           "Mode",IDC_STATIC,5,40,30,10
+    LTEXT           "",IDC_TNCSTATE,65,25,160,11
+    LTEXT           "TNC State",IDC_STATIC,5,25,40,10
+    LTEXT           "Comms State",IDC_STATIC,5,10,45,10
+    LTEXT           "",IDC_COMMSSTATE,65,10,145,11
+    LTEXT           "Traffic",IDC_STATIC,5,85,30,10
+    LTEXT           "",IDC_TRAFFIC,65,85,140,11
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
@@ -82,7 +112,7 @@ END
 
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "#include ""afxres.h""\r\n"
+    "windows.h\r\n"
     "\0"
 END
 
@@ -92,6 +122,22 @@ BEGIN
     "\0"
 END
 
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    "WINMORSTATUS", DIALOG
+    BEGIN
+        RIGHTMARGIN, 229
+    END
+END
 #endif    // APSTUDIO_INVOKED
 
 #endif    // English (U.K.) resources

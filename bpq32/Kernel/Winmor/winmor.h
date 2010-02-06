@@ -18,7 +18,7 @@ typedef struct TNCINFO
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
 	char * InitScript;			// Initialisation Commands
 
-    UCHAR TCPBuffer[100];		// For converting byte stream to messages
+    UCHAR TCPBuffer[1000];		// For converting byte stream to messages
     int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
 
 	BOOL Connected;				// When set, all data is passed to Data Socket

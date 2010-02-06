@@ -423,7 +423,7 @@ ok2:
 			strcpy(TempBID->BID, FBBHeader->BID);
 			TempBID->u.conn = conn;
 
-			conn->FBBReplyChars[conn->FBBReplyIndex++] = '+';
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = 'Y';
 		}
 
 		return;
@@ -1306,6 +1306,17 @@ BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 		{
 			char Msg[120];
 			int len;
+
+			RestartRec->Count++;
+
+			if (RestartRec->Count > 1)
+			{
+				len = sprintf_s(Msg, sizeof(Msg), "Too many restarts for %s - Requesting restart from beginning",
+					FBBHeader->BID);
+				
+				WriteLogLine(conn, '|',Msg, len, LOG_BBS);
+				return FALSE;
+			}
 
 			len = sprintf_s(Msg, sizeof(Msg), "Restart Data found for %s - Requesting restart from %d",
 				FBBHeader->BID, RestartRec->TempMsg->length);

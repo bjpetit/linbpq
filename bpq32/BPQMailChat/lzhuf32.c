@@ -837,6 +837,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		char ** Via = NULL;					// May be several Recipients
 		int B2To;							// Offset to To: fields in B2 header
 		int Recipients = 0;
+		struct _EXCEPTION_POINTERS exinfo;
+
+
+		__try {
 
 		Msg->B2Flags |= B2Msg;
 				
@@ -1016,6 +1020,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			BOOL SentToRMS = FALSE;
 			int ToLen;
 
+			__try{
+
 			SaveMsg = Msg;
 			SaveBody = conn->MailBuffer;
 
@@ -1056,6 +1062,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			SetupNextFBBMessage(conn);
 			return;
+	
+			} My__except_Routine("Decode B2 Message");
+
+
 		}
 		else
 		{
@@ -1072,6 +1082,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			SetupNextFBBMessage(conn);
 			return;
 		}
+
+		} My__except_Routine("Decode B2 Message");
 
 
 	} // end if B2Msg
