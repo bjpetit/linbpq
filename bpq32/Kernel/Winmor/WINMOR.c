@@ -435,6 +435,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
+			if (_memicmp(&buff[8], "CODEC TRUE", 9) == 0)
+				TNC->StartSent = TRUE;
 
 			// See if a Connect Command. If so, start codec and set Connecting
 
