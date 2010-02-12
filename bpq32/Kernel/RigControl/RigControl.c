@@ -372,10 +372,11 @@ ProcessLine(char * buf)
 	struct PORTINFO * PORT;
 	struct RIGINFO * RIG;
 	char * FreqPtr;
+	char * Context;
 
 NextPort:
 
-	ptr = strtok(buf, " \t\n\r");
+	ptr = strtok_s(buf, " \t\n\r", &Context);
 
 	if(ptr == NULL) return (TRUE);
 
@@ -386,7 +387,7 @@ NextPort:
 
 	if (memcmp(ptr, "AUTH", 4) == 0)
 	{
-		ptr = strtok(NULL, " \t\n\r");
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		if (ptr == NULL) return FALSE;
 		if (strlen(ptr) > 100) return FALSE;
 
@@ -404,11 +405,11 @@ NextPort:
 		memset(PORT, 0, sizeof(struct PORTINFO));
 
 		PORT->IOBASE = atoi(&ptr[3]);
-		ptr = strtok(NULL, " \t\n\r");
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		if(ptr == NULL) return (FALSE);
 		PORT->SPEED = atoi(ptr);
 
-		ptr = strtok(NULL, " \t\n\r");
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		if(ptr == NULL) return (FALSE);
 
 		if (strcmp(ptr, "ICOM") == 0 || strcmp(ptr, "YAESU") == 0 || strcmp(ptr, "KENWOOD") == 0)
@@ -437,16 +438,16 @@ NextPort:
 
 				RIG = &PORT->Rigs[Radio];
 
-				ptr = strtok(buf, " \t\n\r");
+				ptr = strtok_s(buf, " \t\n\r", &Context);
 				if (ptr == NULL) return (FALSE);
 
-				ptr = strtok(NULL, " \t\n\r");
+				ptr = strtok_s(NULL, " \t\n\r", &Context);
 				if (ptr == NULL) return (FALSE);
 
 				if (strlen(ptr) > 9) return FALSE;
 				strcpy(RIG->RigName, ptr);
 
-				ptr = strtok(NULL, " \t\n\r");
+				ptr = strtok_s(NULL, " \t\n\r", &Context);
 				if (ptr == NULL) return (FALSE);
 
 				if 	(PORT->PortType == ICOM)
@@ -454,18 +455,21 @@ NextPort:
 					sscanf(ptr, "%x", &RIG->RigAddr);
 					if (RIG->RigAddr == 0) return FALSE;
 
-					ptr = strtok(NULL, " \t\n\r");
+					ptr = strtok_s(NULL, " \t\n\r", &Context);
 					if (ptr == NULL) return (FALSE);
 				}
 					
 				RIG->BPQPort = atoi(ptr);
 
-				ptr = strtok(NULL, " \t\n\r");
+				ptr = strtok_s(NULL, " \t\n\r", &Context);
 				if (ptr == NULL) return (FALSE);
 
 				RIG->ScanFreq = atoi(ptr);
 
-				ptr = strtok(NULL, " \t\n\r");
+				RIG->FreqText = _strdup(Context);
+
+				ptr = strtok_s(NULL, " \t\n\r", &Context);
+
 
 				// Frequency List
 
@@ -621,7 +625,7 @@ NextPort:
 					RIG->Scanning = TRUE;
 					RIG->ScanCounter = 20;
 
-					ptr = strtok(NULL, " \t\n\r");
+					ptr = strtok_s(NULL, " \t\n\r", &Context);
 				}
 
 				Radio++;
@@ -774,8 +778,6 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 
 	if (memcmp(Command, " AUTH ", 6) == 0)
 	{
-		char Password[40];
-
 		if (AuthPassword[0] && (memcmp(LastPassword, &Command[6], 16) != 0))
 		{
 			if (CheckOneTimePassword(&Command[6], AuthPassword))
@@ -2208,11 +2210,11 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 	UCHAR * Poll = PORT->TXBuffer;
 	UCHAR * Msg = PORT->RXBuffer;
 	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
-	int n, j, Freq = 0, decdigit;
-	double FreqF;
-	char Valchar[_CVTBUFSIZE];
+//	int n, j, Freq = 0, decdigit;
+//	double FreqF;
+//	char Valchar[_CVTBUFSIZE];
 	char Status[80];
-	unsigned int Mode;
+//	unsigned int Mode;
 
 	PORT->Timeout = 0;
 
@@ -2387,10 +2389,11 @@ ScanExit:
 }
 
 int CRow;
-HANDLE hComPort, hSpeed, hRigType, hButton, hAddr, hLabel, hTimes, hFreqs;
+HANDLE hComPort, hSpeed, hRigType, hButton, hAddr, hLabel, hTimes, hFreqs, hBPQPort;
 
 VOID CreateRigConfigLine(HWND hDlg, struct PORTINFO * PORT, struct RIGINFO * RIG)
 {
+	char Port[10];
 
 	hButton =  CreateWindow(WC_BUTTON , "", WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_TABSTOP,
 					10, CRow+5, 10,10, hDlg, NULL, hInstance, NULL);
@@ -2406,15 +2409,18 @@ VOID CreateRigConfigLine(HWND hDlg, struct PORTINFO * PORT, struct RIGINFO * RIG
 
 	}
 	hLabel =  CreateWindow(WC_EDIT , RIG->RigName, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER,
-                 350, CRow, 60,20, hDlg, NULL, hInstance, NULL);
+                 340, CRow, 60,20, hDlg, NULL, hInstance, NULL);
 
+	wsprintf(Port, "%d", RIG->BPQPort);
+	hBPQPort =  CreateWindow(WC_EDIT , Port, WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL,
+                 405, CRow, 20, 20, hDlg, NULL, hInstance, NULL);
 
 	hTimes =  CreateWindow(WC_COMBOBOX , "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | 
                     WS_VSCROLL | WS_TABSTOP,
-                 415, CRow, 100,80, hDlg, NULL, hInstance, NULL);
+                 430, CRow, 100,80, hDlg, NULL, hInstance, NULL);
 
-	hFreqs =  CreateWindow(WC_EDIT , "", WS_CHILD | WS_VISIBLE| WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL,
-                 520, CRow, 300, 20, hDlg, NULL, hInstance, NULL);
+	hFreqs =  CreateWindow(WC_EDIT , RIG->FreqText, WS_CHILD | WS_VISIBLE| WS_TABSTOP | WS_BORDER | ES_AUTOHSCROLL,
+                 535, CRow, 300, 20, hDlg, NULL, hInstance, NULL);
 
 	SendMessage(hTimes, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "0000:1159");
 	SendMessage(hTimes, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "1200:2359");
@@ -2431,7 +2437,7 @@ VOID CreatePortConfigLine(HWND hDlg, struct PORTINFO * PORT)
 
 	hComPort =  CreateWindow(WC_COMBOBOX , "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | 
                     WS_VSCROLL | WS_TABSTOP,
-                 45, CRow, 80, 160, hDlg, NULL, hInstance, NULL);
+                 30, CRow, 90, 160, hDlg, NULL, hInstance, NULL);
 
 	for (i = 1; i < 256; i++)
 	{
@@ -2441,14 +2447,14 @@ VOID CreatePortConfigLine(HWND hDlg, struct PORTINFO * PORT)
 
 	wsprintf(Port, "COM%d", PORT->IOBASE);
 
-	i = SendMessage(hComPort, CB_FINDSTRINGEXACT, 0, Port);
+	i = SendMessage(hComPort, CB_FINDSTRINGEXACT, 0,(LPARAM) Port);
 
 	SendMessage(hComPort, CB_SETCURSEL, i, 0);
 	
 	
 	hSpeed =  CreateWindow(WC_COMBOBOX , "", WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | 
                     WS_VSCROLL | WS_TABSTOP,
-                 130, CRow, 65,80, hDlg, NULL, hInstance, NULL);
+                 120, CRow, 75, 80, hDlg, NULL, hInstance, NULL);
 
 	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "1200");
 	SendMessage(hSpeed, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "2400");
@@ -2459,7 +2465,7 @@ VOID CreatePortConfigLine(HWND hDlg, struct PORTINFO * PORT)
 
 	wsprintf(Port, "%d", PORT->SPEED);
 
-	i = SendMessage(hSpeed, CB_FINDSTRINGEXACT, 0, Port);
+	i = SendMessage(hSpeed, CB_FINDSTRINGEXACT, 0, (LPARAM)Port);
 
 	SendMessage(hSpeed, CB_SETCURSEL, i, 0);
 
@@ -2476,8 +2482,6 @@ VOID CreatePortConfigLine(HWND hDlg, struct PORTINFO * PORT)
 
 INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	struct MsgInfo * Msg;
-	char * MsgBytes;
 	int Cmd = LOWORD(wParam);
 
 	switch (message)

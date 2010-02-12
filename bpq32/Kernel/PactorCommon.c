@@ -407,5 +407,9 @@ BOOL LoadRigDriver()
 	return TRUE;
 }
 
+int FindBaseControlPort(int Port)
+{
+	return Port;
+}
 
 

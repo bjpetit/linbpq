@@ -356,6 +356,9 @@ ATTERRLEN2	EQU	$-ATTERRMSG2
 ATTERRMSG3	DB	'Sorry, you are not allowed to use this port',0dh
 ATTERRLEN3	EQU	$-ATTERRMSG3
 
+ATTERRMSG4	DB	'Sorry, an interlocked port is in use',0dh
+ATTERRLEN4	EQU	$-ATTERRMSG4
+
 AXATTERRMSG1	DB	'Error - No free streams on this port',0dh
 AXATTERRLEN1	EQU	$-AXATTERRMSG1
 
@@ -402,6 +405,8 @@ HOSTBUSYMSGLEN	EQU	$-hostbusymsg
 NOPORTMSG	DB	'Downlink connect needs port number - C P CALLSIGN ',cr
 
 LNOPORTMSG	EQU	$-NOPORTMSG
+
+SAVETNCSTATE DB	0		; WINMOR/PACTOR TNC STATE
 
 CQFLAG		DB	0
 STAYSWITCH	DB	0		; CONNECT STRING INCLUDED S(TAY)
@@ -4243,7 +4248,9 @@ ATTACHCMD:
 	PUSHAD
 	MOV	EBX,ESI
 	MOV EAX,0					; Channel if KAM
-	CALL	PORTTXCHECK[EBX]	; 
+	CALL	PORTTXCHECK[EBX]	;
+	mov	SAVETNCSTATE, AH		; Save for Free but DIsconnecting Test
+	 
 	OR	AH,AH
 	JNZ @F						; TNC is OK
 	
@@ -4279,16 +4286,35 @@ ATTACHCMD:
 	JMP	SENDCOMMANDREPLY
 
 @@:
-
 	sub	al, '@'
 	shl eax,2
 	jmp @f
 attpactor:
-	mov eax,0			; pactor
+	mov eax,0					; pactor/winmor
+	TEST SAVETNCSTATE,80H		; Disconnecting
+	JNZ ATTBUSY
+	
+	CMP PORTINTERLOCK[ESI], 0
+	JE @F
+;
+;	Check Interlocked Ports
+
+	mov	al, PORTINTERLOCK[ESI]
+	CALL CHECKINTERLOCK
+	JZ	@F
+
+; Interlocked port is busy
+
+	MOV	ESI,OFFSET32 ATTERRMSG4	; In Use
+	MOV	ECX,ATTERRLEN4
+
+	REP MOVSB
+	JMP	SENDCOMMANDREPLY	
+;
 @@:	
 	CMP	ATTACHEDSESSIONS[ESI][EAX],0
 	JE	@F
-	
+ATTBUSY:
 	MOV	ESI,OFFSET32 ATTERRMSG1	; In Use
 	MOV	ECX,ATTERRLEN1
 
@@ -4363,6 +4389,44 @@ ATTERR:
 
 	REP MOVSB
 	JMP	SENDCOMMANDREPLY
+	
+CHECKINTERLOCK:
+;
+;	See if any Interlocked ports are Busy
+;
+	push	ebx
+	
+	MOV	EBX,PORTTABLE
+	MOVZX	ECX,NUMBEROFPORTS
+	
+CHKINTL:
+
+	CMP	ESI,EBX
+	JE	@F				; Our Port
+	
+	TEST AL,PORTINTERLOCK[EBX]
+	JZ	@F
+;
+;	Same Group - is it busy
+;
+	CMP	ATTACHEDSESSIONS[EBX],0
+	jE	@F					; OK
+	
+	OR	AL,1
+	POP EBX
+	
+	RET
+	
+@@:
+	MOV	EBX,PORTPOINTER[EBX]
+
+	LOOP	CHKINTL
+	
+	XOR	AL,AL				; Set zero 
+	
+	pop	EBX
+	RET
+	
 
 	PUBLIC	GETVALUE
 GETVALUE:

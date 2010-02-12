@@ -23,8 +23,11 @@ typedef struct TNCINFO
 
 	BOOL Connected;				// When set, all data is passed to Data Socket
 	BOOL Connecting;
+	BOOL Disconnecting;			// Disconnect Sent - waiting for DISCONNECTED or Timout
+	int	DiscTimeout;			// Disconnect Timeout counter.
 	BOOL Attached;				// Set what attached to a BPQ32 stream
-	BOOL StartSent;				// COdec Start send (so will get a disconnect)
+	BOOL StartSent;				// Codec Start send (so will get a disconnect)
+	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.
 
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 
@@ -38,6 +41,7 @@ typedef struct TNCINFO
 	char MyCall[10]	;				// Call we are using
 	char RemoteCall[10];			// Callsign
 	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
+	char CurrentMYC[10];			// Save current call so we don't change it unnecessarily
 
 	SOCKADDR_IN destaddr;
 	SOCKADDR_IN Datadestaddr;

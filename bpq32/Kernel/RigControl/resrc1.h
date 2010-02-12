@@ -2,6 +2,8 @@
 // Microsoft Developer Studio generated include file.
 // Used by RigControl.rc
 //
+#define ID_ADDRIG                       3
+#define ID_ADDTIME                      4
 #define RIG_MENU1                       103
 #define IDC_TIMES                       1014
 #define IDC_RIGTYPE                     1015
@@ -14,10 +16,8 @@
 #define IDC_DISPFREQ                    1022
 #define IDC_RADIO1                      1023
 #define RIG_LINE                        1024
+#define RIGCONFIG                       30006
 #define IDC_STATIC                      -1
-
-#define RIGCONFIG                 30006
-
 
 // Next default values for new objects
 // 

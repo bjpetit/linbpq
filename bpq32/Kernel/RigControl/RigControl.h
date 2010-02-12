@@ -32,6 +32,8 @@ struct RIGINFO
 
 	char RigName[10];
 
+	char * FreqText;			// Frequency list in text format
+
 	// Frequency list is a block of Set Freq/Mode commands in link format, null terminated
 
 	char * FreqList;

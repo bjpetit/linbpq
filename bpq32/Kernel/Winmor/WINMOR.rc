@@ -28,8 +28,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,5,0,1
- PRODUCTVERSION 1,5,0,1
+ FILEVERSION 1,5,0,3
+ PRODUCTVERSION 1,5,0,3
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -47,12 +47,12 @@ BEGIN
             VALUE "Comments", "BPQ32 to WINMOR Interface\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "WINMOR\0"
-            VALUE "FileVersion", "1, 5, 0, 1\0"
+            VALUE "FileVersion", "1, 5, 0, 3\0"
             VALUE "InternalName", "WINMOR\0"
             VALUE "LegalCopyright", "Copyright © John Wiseman G8BPQ 2009\0"
             VALUE "OriginalFilename", "WINMOR.dll\0"
             VALUE "ProductName", "WINMOR\0"
-            VALUE "ProductVersion", "1, 5, 0, 1\0"
+            VALUE "ProductVersion", "1, 5, 0, 3\0"
         END
     END
     BLOCK "VarFileInfo"

@@ -85,8 +85,8 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Rig Control Configuration"
 FONT 8, "FixedSys"
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,175,160,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,230,160,50,14
+    DEFPUSHBUTTON   "OK",IDOK,223,160,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,278,160,50,14
     LTEXT           "Port",IDC_STATIC,25,6,25,8
     LTEXT           "Speed",IDC_STATIC,57,6,35,8
     LTEXT           "Times",IDC_STATIC,210,6,25,8
@@ -94,6 +94,8 @@ BEGIN
     LTEXT           "Addr",IDC_STATIC,147,6,17,8
     LTEXT           "Frequency / Mode",IDC_STATIC,276,6,65,8
     LTEXT           "Label",IDC_STATIC,174,6,27,8
+    DEFPUSHBUTTON   "Add Rig",ID_ADDRIG,103,160,50,14
+    DEFPUSHBUTTON   "Add Time Band",ID_ADDTIME,158,160,60,14
 END
 
 
