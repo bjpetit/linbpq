@@ -4404,13 +4404,13 @@ CHKINTL:
 	CMP	ESI,EBX
 	JE	@F				; Our Port
 	
-	TEST AL,PORTINTERLOCK[EBX]
-	JZ	@F
+	CMP AL,PORTINTERLOCK[EBX]
+	JNE	@F
 ;
 ;	Same Group - is it busy
 ;
 	CMP	ATTACHEDSESSIONS[EBX],0
-	jE	@F					; OK
+	JE	@F					; OK
 	
 	OR	AL,1
 	POP EBX

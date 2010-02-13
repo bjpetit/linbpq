@@ -551,7 +551,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	
 
 
-	case 3:				// CHECK IF OK TO SEND
+	case 3:				// CHECK IF OK TO SEND (And check TNC Status)
 
 		return (TNC->CONNECTED << 8 | TNC->Disconnecting << 15);		// OK
 			
@@ -1097,6 +1097,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		// Release Session
 
+		TNC->Connecting = FALSE;
 		TNC->Connected = FALSE;		// Back to Command Mode
 		TNC->ReportDISC = TRUE;		// Tell Node
 

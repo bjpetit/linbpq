@@ -259,6 +259,7 @@ BOOL CreateRigWindow()
 
 	hDlg = CreateDialog(hInstance,ClassName,0,NULL);
 
+/*
 	hMenu=CreateMenu();
 	hPopMenu=CreatePopupMenu();
 	SetMenu(hDlg,hMenu);
@@ -266,15 +267,9 @@ BOOL CreateRigWindow()
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Actions");
 
 	AppendMenu(hPopMenu,MF_STRING,RIG_CONFIG,"Configure");
-	//AppendMenu(hPopMenu,MF_STRING,BPQRECONFIG,"Save Nodes, Re-read bpqcfg.bin and reconfigure node");
-	//AppendMenu(hPopMenu,MF_STRING,BPQCLEARRECONFIG,"Clear Nodes, Re-read bpqcfg.bin and reconfigure node");
-	//AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
-
-	//AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
-	//AppendMenu(hPopMenu,MF_STRING | (MinimizetoTray)? MF_CHECKED:MF_UNCHECKED, BPQMINTOTRAY, "Minimize to Notification Area (System Tray)" );
 	
 	DrawMenuBar(hDlg);	
-
+*/
 	
 	wsprintf(Title,"Rig Control");
 

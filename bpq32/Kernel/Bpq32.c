@@ -191,6 +191,16 @@
 // HDLC Support for XP
 // Add AUTH routines
 
+// Build 10
+
+// Fix handling commands split over more that one packet.
+
+// Build 11
+
+// Attach cmd changes for winmor disconnecting state
+// Option Interlock Winmor/Pactor ports
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 

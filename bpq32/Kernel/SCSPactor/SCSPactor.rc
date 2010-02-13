@@ -30,8 +30,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Version
 //
 
-#define Vers 1,1,1,10
-#define Verstring "1.1.1.10\0"
+#define Vers 1,1,1,11
+#define Verstring "1.1.1.11\0"
 
 
 VS_VERSION_INFO VERSIONINFO
