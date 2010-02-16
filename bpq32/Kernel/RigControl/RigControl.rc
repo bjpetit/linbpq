@@ -30,9 +30,12 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Version
 //
 
+#define Vers 1,1,1,6
+#define Verstring "1.1.1.6\0"
+
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,1,4
- PRODUCTVERSION 1,1,1,4
+ FILEVERSION Vers
+ PRODUCTVERSION Vers
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -50,12 +53,12 @@ BEGIN
             VALUE "Comments", "Rig Frequency Control interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "RigControl\0"
-            VALUE "FileVersion", "1.1.1.4\0"
+            VALUE "FileVersion", Verstring
             VALUE "InternalName", "RigControl\0"
             VALUE "LegalCopyright", "Copyright © 2009 G8BPQ\0"
             VALUE "OriginalFilename", "RigControl.dll\0"
             VALUE "ProductName", "  SRigControl\0"
-            VALUE "ProductVersion", "1.1.1.4\0"
+            VALUE "ProductVersion", Verstring
         END
     END
     BLOCK "VarFileInfo"
@@ -72,7 +75,7 @@ END
 // Dialog
 //
 
-RIGCONTROL DIALOG DISCARDABLE  0, 0, 160, 155
+RIGCONTROL DIALOG DISCARDABLE  0, 0, 169, 156
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Rig Control"
 CLASS "RIGCONTROL"

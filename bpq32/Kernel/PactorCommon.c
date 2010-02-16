@@ -13,6 +13,9 @@ BOOL (FAR WINAPI * Rig_Command) ();
 BOOL (FAR WINAPI * Rig_Init) ();
 BOOL (FAR WINAPI * Rig_Poll) ();
 
+VOID (FAR WINAPI * Rig_PTT) ();
+struct RIGINFO * (FAR WINAPI * Rig_GETPTTREC) ();
+
 UCHAR * BPQDirectory;
 
 
@@ -36,6 +39,47 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 //			break;
 
 
+#ifdef WINMOR
+
+	case WSA_DATA: // Notification on data socket
+
+		Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
+		return 0;
+
+	case WM_COMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		switch (wmId) {
+
+		case WINMOR_CONFIG:
+		{
+			int i;
+			struct TNCINFO * TNC;
+
+			for (i=1; i<17; i++)
+			{
+				TNC = TNCInfo[i];
+				if (TNC == NULL)
+				continue;
+		
+				if (TNC->hDlg == hWnd)
+					break;
+			}
+
+			DialogBoxParam(hInstance, MAKEINTRESOURCE(WINMORCONFIG), hWnd, ConfigDialogProc, (LPARAM)TNC);
+ 
+			break;
+		}
+		default:
+
+			return 0;
+
+		}
+
+#else
+
 	case WM_COMMAND:
 
 		wmId    = LOWORD(wParam); // Remember, these are...
@@ -49,6 +93,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			return 0;
 
 		}
+#endif
 
 	case WM_SYSCOMMAND:
 
@@ -318,6 +363,25 @@ ProcessLine(char * buf)
 
 		strcpy(TNC->WINMORHostName,p_ipad);
 
+		ptr = strtok(NULL, " \t\n\r");
+
+		if (_stricmp(ptr, "PTT") == 0)
+		{
+			ptr = strtok(NULL, " \t\n\r");
+
+			if (ptr)
+			{
+				if (_stricmp(ptr, "CI-V") == 0)
+					TNC->PTTMode = PTTCI_V;
+				else if (_stricmp(ptr, "RTS") == 0)
+					TNC->PTTMode = PTTRTS;
+				else if (_stricmp(ptr, "DTR") == 0)
+					TNC->PTTMode = PTTDTR;
+				else if (_stricmp(ptr, "DTRRTS") == 0)
+					TNC->PTTMode = PTTDTR | PTTRTS;
+			}
+		}
+
 #endif
 
 		p_cmd = strtok(NULL, " \t\n\r");
@@ -403,13 +467,10 @@ BOOL LoadRigDriver()
 		Rig_Init = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Init@0");
 		Rig_Poll = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Poll@0");
 		Rig_Command = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Command@8");
+		Rig_PTT = (VOID (__stdcall *)())GetProcAddress(hRigModule,"_Rig_PTT@8");
+		Rig_GETPTTREC = (struct RIGINFO *  (__stdcall *)())GetProcAddress(hRigModule,"_Rig_GETPTTREC@4");
 	}
 	return TRUE;
-}
-
-int FindBaseControlPort(int Port)
-{
-	return Port;
 }
 
 

@@ -10,8 +10,8 @@ typedef struct TNCINFO
 	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
 	int BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
 
-	SOCKET WINMORSock;			// Control Socket, indexed by BPQ Port
-	SOCKET WINMORDataSock;		// Data Socket, indexed by BPQ Port
+	SOCKET WINMORSock;			// Control Socket
+	SOCKET WINMORDataSock;		// Data Socket
 
 	char * WINMORSignon;		// Pointer to message for secure signin
 	char * WINMORHostName;		// WINMOR Host - may be dotted decimal or DNS Name
@@ -35,6 +35,7 @@ typedef struct TNCINFO
 
 	BOOL CONNECTING;			// TCP Session Flags
 	BOOL CONNECTED;
+	BOOL Alerted;				// COnnect Failed Prompt sent
 	BOOL DATACONNECTING;
 	BOOL DATACONNECTED;
 
@@ -47,6 +48,12 @@ typedef struct TNCINFO
 	SOCKADDR_IN Datadestaddr;
 
 	struct _EXTPORTDATA * PortRecord;
+	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record (For PTT)
+	int PTTMode;						// PTT Mode Flags
+
+	int WIMMORPID;
+	char * CaptureDevices;
+	char * PlaybackDevices;
 
 	HWND hDlg;						// Status Window Handle
 

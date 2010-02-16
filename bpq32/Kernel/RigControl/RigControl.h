@@ -6,17 +6,23 @@
 
 #define MAXBLOCK 4096
 
+struct TimeScan
+{
+	time_t Start;
+	char * Scanlist;
+};
+
 struct RIGINFO
 {
 //	struct TRANSPORTENTRY * AttachedSession;
 
 	int BPQtoRADIO_Q;			// Frames for PACTOR
 
-	int BPQPort;				// Port this radio is attached to.
+	UINT BPQPort;				// Port this radio is attached to. Bit Map, as may be more than one port controlling radio
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 
 	UCHAR RigAddr;
-	BOOL Scanning;				// Scanning enabled
+	int ScanStopped;			// Scanning enabled of zero. Bits used for interlocked scanning (eg winmor/pactor on same port
 	int ScanCounter;
 	int PollCounter;			// Don't poll too often;
 	int ScanFreq;				// Scan Rate
@@ -32,24 +38,36 @@ struct RIGINFO
 
 	char RigName[10];
 
+	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
+	int NumberofBands;
+
 	char * FreqText;			// Frequency list in text format
 
 	// Frequency list is a block of Set Freq/Mode commands in link format, null terminated
 
-	char * FreqList;
 	char * FreqPtr;
+
+	int PTTMode;				// PTT COntrol Flags.
+
+	#define PTTRTS		1
+	#define PTTDTR		2
+	#define PTTCI_V		4
+
+	struct PORTINFO * PORT;		// For PTT Routines
 
 	HWND hLabel;
 	HWND hCAT;
 	HWND hFREQ;
 	HWND hMODE;
 	HWND hSCAN;
+	HWND hPTT;
 
 };
 
 #define ICOM 1
 #define YAESU 2
 #define KENWOOD 3
+#define PTT 4
 
 struct PORTINFO
 {
