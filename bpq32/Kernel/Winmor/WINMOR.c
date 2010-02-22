@@ -17,7 +17,9 @@
 #include <time.h>
 #include <Psapi.h>
 
-
+#define SD_RECEIVE      0x00
+#define SD_SEND         0x01
+#define SD_BOTH         0x02
 
 
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
@@ -38,7 +40,12 @@
 int Socket_Data(int sock, int error, int eventcode);
 INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+KillTNC(struct TNCINFO * TNC);
+RestartTNC(struct TNCINFO * TNC);
+KillPopups(struct TNCINFO * TNC);
+
 static char ClassName[]="WINMORSTATUS";
+
 #include "..\PactorCommon.c"
 
 #define VERSION_MAJOR         2
@@ -177,9 +184,15 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			TNC = TNCInfo[i];
 			if (TNC == NULL)
 				continue;
-		
-			closesocket(TNC->WINMORSock);
+	 	
+			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+			Sleep(500);
+			shutdown(TNC->WINMORDataSock, SD_BOTH);
+			Sleep(500);
+			shutdown(TNC->WINMORSock, SD_BOTH);
+			Sleep(500);
 			closesocket(TNC->WINMORDataSock);
+			closesocket(TNC->WINMORSock);
 		}
 
 		return 1;
@@ -229,6 +242,40 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	int Param;
 
 	struct TNCINFO * TNC = TNCInfo[port];
+
+	TNC->TimeSinceLast++;
+
+	if (TNC->TimeSinceLast > 3000)			// 5 MINS
+	{
+		if (TNC->ProgramPath)
+		{
+			if (strstr(TNC->ProgramPath, "WINMOR TNC"))
+			{
+				struct tm * tm;
+				char Time[80];
+				
+				TNC->Restarts++;
+				TNC->LastRestart = time(NULL);
+
+				tm = gmtime(&TNC->LastRestart);	
+				
+				sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
+					tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+				SetDlgItemText(TNC->hDlg, IDC_RESTARTTIME, Time);
+				sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
+				SetDlgItemText(TNC->hDlg, IDC_RESTARTS, Time);
+
+				KillTNC(TNC);
+				RestartTNC(TNC);
+
+				TNC->TimeSinceLast = 0;
+			}
+		}
+	}
+
+
+
 
 	if (!TNC->RIG && TNC->PTTMode)
 	{
@@ -544,8 +591,14 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		closesocket(TNC->WINMORSock);
+		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+		Sleep(500);
+		shutdown(TNC->WINMORDataSock, SD_BOTH);
+		Sleep(500);
+		shutdown(TNC->WINMORSock, SD_BOTH);
+		Sleep(500);
 		closesocket(TNC->WINMORDataSock);
+		closesocket(TNC->WINMORSock);
 
 		return (0);
 
@@ -609,7 +662,6 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 
 }
 
-HMENU hPopMenu;
 
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
@@ -618,6 +670,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	char * ptr;
 	char Title[80];
 	HMENU hMenu;
+
 
 	struct TNCINFO * TNC;
 
@@ -689,12 +742,15 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		AddTrayMenuItem(TNC->hDlg, Title);
 
 	hMenu=CreateMenu();
-	hPopMenu=CreatePopupMenu();
+	TNC->hPopMenu=CreatePopupMenu();
 	SetMenu(TNC->hDlg,hMenu);
 
-	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu,"Actions");
+	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)TNC->hPopMenu,"Actions");
 
-	AppendMenu(hPopMenu, MF_STRING, WINMOR_CONFIG, "Show Soundcards");
+	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_CONFIG, "Show Soundcards");
+	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILL, "Kill Winmor TNC");
+	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart Winmor TNC");
+	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILLPOPUPS, "Kill Popups");
 	
 	DrawMenuBar(TNC->hDlg);	
 
@@ -934,6 +990,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	UINT * buffptr;
 	char Status[80];
 
+	TNC->TimeSinceLast = 0;
+
 	Buffer[MsgLen - 2] = 0;			// Remove CRLF
 
 	if (_memicmp(Buffer, "PTT T", 5) == 0)
@@ -949,6 +1007,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
+	Debugprintf("WINMOR RX: %s", Buffer);
 
 	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
 	{	
@@ -962,7 +1021,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	Debugprintf("WINMOR RX: %s", Buffer);
 
 	if (_memicmp(Buffer, "CONNECTED", 9) == 0)
 	{
@@ -1152,7 +1210,21 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "PROCESSID", 9) == 0)
 	{
+		HANDLE hProc;
+		char ExeName[256] = "";
+
 		TNC->WIMMORPID = atoi(&Buffer[10]);
+
+		// Get the File Name in case we want to restart it.
+
+		hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
+
+		if (hProc)
+		{
+			GetModuleFileNameEx(hProc, 0,  ExeName, 255);
+			CloseHandle(hProc);
+			TNC->ProgramPath = _strdup(ExeName);
+		}
 	}
 
 	if (_memicmp(Buffer, "CAPTUREDEVICES", 14) == 0)
@@ -1255,6 +1327,9 @@ VOID ProcessDataSocketData(int port)
 	int InputLen, PacLen = 236;
 
 	UINT * buffptr;
+		
+	TNC->TimeSinceLast = 0;
+
 loop:
 	buffptr = Q_REM(&FREE_Q);
 
@@ -1503,21 +1578,56 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 KillTNC(struct TNCINFO * TNC)
 {
 	HANDLE hProc;
-	char ExeName[256];
-	int Len = 255;
 	
 	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
 
 	if (hProc)
 	{
-//		TerminateProcess(hProc, 0);
-	//QueryFullProcessImageName(hProc, 0, ExeName, &Len);
-	  GetModuleFileNameEx(hProc, 0,  ExeName, Len);
-
-	CloseHandle(hProc);
-	return 0;
+		TerminateProcess(hProc, 0);
+		CloseHandle(hProc);
 	}
 
+	return 0;
+}
+
+RestartTNC(struct TNCINFO * TNC)
+{
+	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
+
+	SInfo.cb=sizeof(SInfo);
+	SInfo.lpReserved=NULL; 
+	SInfo.lpDesktop=NULL; 
+	SInfo.lpTitle=NULL; 
+	SInfo.dwFlags=0; 
+	SInfo.cbReserved2=0; 
+  	SInfo.lpReserved2=NULL; 
+
+	CreateProcess(TNC->ProgramPath, TNC->ProgramPath, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+
+	return 0;
+}
+
+BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM  lParam)
+{
+	char wtext[100];
+	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
+	
+	GetWindowText(hwnd,wtext,100);
+
+	if (memcmp(wtext,"Registration", 12) == 0)
+	{
+		ShowWindow(hwnd, SW_HIDE);
+	}
+	
+	return (TRUE);
+}
+
+KillPopups(struct TNCINFO * TNC)
+{
+	EnumWindows(EnumWindowsProc, (LPARAM)TNC);
+
+	return 0;
 }
 
 

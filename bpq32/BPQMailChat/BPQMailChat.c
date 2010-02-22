@@ -427,7 +427,9 @@
 
 // Fix for RMS Express forwarding
 
+// Version 1.0.3.38
 
+// Fixes for smtp and lower case packet addresses from Airmail
 
 
 

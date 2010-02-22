@@ -946,9 +946,25 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 
 			}
+			else			// Not Paclink
+			{
+				if (_memicmp(&ptr1[4], "SMTP:", 5) == 0)
+				{
+					memcpy(Msg->via, &ptr1[9], linelen);
+					Msg->via[linelen - 9] = 0;
+					strcpy(FullTo,"RMS");
+//					FullTo[0] = 0;
+				}
+				else
+				{
+					_strupr(FullTo);
+					_strupr(Msg->via);
+				}
+			}
 
 			if (strlen(FullTo) > 6)
 				FullTo[6] = 0;
+
 
 			strcpy(Msg->to, FullTo);
 

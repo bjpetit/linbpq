@@ -708,7 +708,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 //	See if sending @ winlink.org
 
-	if (_stricmp(RouteElements, "WINLINK.ORG") == 0)
+	if (_stricmp(Msg->to, "RMS") == 0 || _stricmp(RouteElements, "WINLINK.ORG") == 0)
 	{
 		// If a user of this bbs with Poll RMS set, leave it here - no point in sending to winlink
 		
@@ -728,15 +728,17 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 		if (RMS)
 		{
-			Logprintf(LOG_BBS, conn, '?', "Routing Trace @ winlink.org Matches BBS RMS");
-			{
-				set_fwd_bit(Msg->fbbs, RMS->BBSNumber);
-				RMS->ForwardingInfo->MsgCount++;
-				if (RMS->ForwardingInfo->SendNew)
-					RMS->ForwardingInfo->FwdTimer = RMS->ForwardingInfo->FwdInterval;
+			if (_stricmp(Msg->to, "RMS") == 0 )
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace to RMS Matches BBS RMS");
+			else
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace @ winlink.org Matches BBS RMS");
+			
+			set_fwd_bit(Msg->fbbs, RMS->BBSNumber);
+			RMS->ForwardingInfo->MsgCount++;
+			if (RMS->ForwardingInfo->SendNew)
+				RMS->ForwardingInfo->FwdTimer = RMS->ForwardingInfo->FwdInterval;
 
-				return 1;
-			}
+			return 1;
 		}
 		return 0;
 	}

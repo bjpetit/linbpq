@@ -27,13 +27,9 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Version
 //
 
-#define Vers 1,5,0,6
-#define Verstring "1.5.0.6\0"
-
-
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION Vers
- PRODUCTVERSION Vers
+ FILEVERSION 1,1,1,8
+ PRODUCTVERSION 1,1,1,8
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -51,12 +47,12 @@ BEGIN
             VALUE "Comments", "BPQ32 to WINMOR Interface\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "WINMOR\0"
-            VALUE "FileVersion", Verstring
+            VALUE "FileVersion", "1.1.1.7\0"
             VALUE "InternalName", "WINMOR\0"
             VALUE "LegalCopyright", "Copyright © John Wiseman G8BPQ 2009\0"
             VALUE "OriginalFilename", "WINMOR.dll\0"
             VALUE "ProductName", "WINMOR\0"
-            VALUE "ProductVersion", Verstring
+            VALUE "ProductVersion", "1.1.1.7\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -73,7 +69,7 @@ END
 // Dialog
 //
 
-WINMORSTATUS DIALOG DISCARDABLE  0, 0, 254, 110
+WINMORSTATUS DIALOG DISCARDABLE  0, 0, 254, 125
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "WINMOR Status"
 CLASS "WINMORSTATUS"
@@ -82,7 +78,7 @@ BEGIN
     LTEXT           "",IDC_PROTOSTATE,65,70,54,11
     LTEXT           "",IDC_CHANSTATE,65,55,105,11
     LTEXT           "",IDC_MODE,65,40,75,11
-    LTEXT           "TX/RX State",IDC_STATIC,6,70,44,10
+    LTEXT           "TX/RX State",IDC_STATIC,5,70,44,10
     LTEXT           "Channel State",IDC_STATIC,5,55,55,10
     LTEXT           "Mode",IDC_STATIC,5,40,30,10
     LTEXT           "",IDC_TNCSTATE,65,25,160,11
@@ -91,6 +87,10 @@ BEGIN
     LTEXT           "",IDC_COMMSSTATE,65,10,145,11
     LTEXT           "Traffic",IDC_STATIC,5,85,30,10
     LTEXT           "",IDC_TRAFFIC,65,85,140,11
+    LTEXT           "TNC Restarts",IDC_STATIC,5,100,50,10
+    LTEXT           "0",IDC_RESTARTS,65,100,20,11
+    LTEXT           "Last Restart",IDC_STATIC,90,100,51,10
+    LTEXT           "Never",IDC_RESTARTTIME,147,100,100,11
 END
 
 WINMORCONFIG DIALOG DISCARDABLE  0, 0, 354, 225
@@ -155,6 +155,7 @@ BEGIN
     "WINMORSTATUS", DIALOG
     BEGIN
         RIGHTMARGIN, 229
+        BOTTOMMARGIN, 110
     END
 END
 #endif    // APSTUDIO_INVOKED

@@ -54,9 +54,16 @@ typedef struct TNCINFO
 	int WIMMORPID;
 	char * CaptureDevices;
 	char * PlaybackDevices;
+	char * ProgramPath;
+
+	int Restarts;					// TNC Kill/Restarts done
+	time_t LastRestart;
+	
+	int TimeSinceLast;				// Time since last message from TNC (10ths of a sec)
+
 
 	HWND hDlg;						// Status Window Handle
-
+	HMENU hPopMenu;					// Actions Menu Handle
 
 };
 

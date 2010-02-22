@@ -261,12 +261,12 @@ BOOL CreateRigWindow()
 
 /*
 	hMenu=CreateMenu();
-	hPopMenu=CreatePopupMenu();
+	TNC->hPopMenu=CreatePopupMenu();
 	SetMenu(hDlg,hMenu);
 
-	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Actions");
+	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)TNC->hPopMenu,"Actions");
 
-	AppendMenu(hPopMenu,MF_STRING,RIG_CONFIG,"Configure");
+	AppendMenu(TNC->hPopMenu,MF_STRING,RIG_CONFIG,"Configure");
 	
 	DrawMenuBar(hDlg);	
 */

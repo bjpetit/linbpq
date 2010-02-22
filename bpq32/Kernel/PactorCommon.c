@@ -30,7 +30,12 @@ int ProcessLine(char * buf);
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
-	
+
+#ifdef WINMOR
+	int i;
+	struct TNCINFO * TNC;
+#endif
+
 	switch (message) { 
 
 //		case WM_ACTIVATE:
@@ -46,32 +51,78 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
 		return 0;
 
+	case WM_INITMENUPOPUP:
+
+		for (i=1; i<17; i++)
+		{
+			TNC = TNCInfo[i];
+			if (TNC == NULL)
+				continue;
+			
+			if (TNC->hDlg == hWnd)
+				break;
+		}
+
+
+		if (wParam == (WPARAM)TNC->hPopMenu)
+		{
+			if (TNC->ProgramPath)
+			{
+				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
+				{
+					EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
+					EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
+		
+					return TRUE;
+				}
+			}
+
+			EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_GRAYED);
+			EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_GRAYED);
+		}
+			
+		break;
+
 	case WM_COMMAND:
 
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
+		for (i=1; i<17; i++)
+		{
+			TNC = TNCInfo[i];
+			if (TNC == NULL)
+				continue;
+		
+			if (TNC->hDlg == hWnd)
+				break;
+		}
+
+
 		switch (wmId) {
 
 		case WINMOR_CONFIG:
-		{
-			int i;
-			struct TNCINFO * TNC;
-
-			for (i=1; i<17; i++)
-			{
-				TNC = TNCInfo[i];
-				if (TNC == NULL)
-				continue;
-		
-				if (TNC->hDlg == hWnd)
-					break;
-			}
 
 			DialogBoxParam(hInstance, MAKEINTRESOURCE(WINMORCONFIG), hWnd, ConfigDialogProc, (LPARAM)TNC);
+			break;
+
+		case WINMOR_KILL:
+
+			KillTNC(TNC);
+			break;
+
+		case WINMOR_RESTART:
+
+			KillTNC(TNC);
+			RestartTNC(TNC);
  
 			break;
-		}
+
+		case WINMOR_KILLPOPUPS:
+
+			KillPopups(TNC);
+			break;
+
 		default:
 
 			return 0;
@@ -365,20 +416,23 @@ ProcessLine(char * buf)
 
 		ptr = strtok(NULL, " \t\n\r");
 
-		if (_stricmp(ptr, "PTT") == 0)
+		if (ptr)
 		{
-			ptr = strtok(NULL, " \t\n\r");
-
-			if (ptr)
+			if (_stricmp(ptr, "PTT") == 0)
 			{
-				if (_stricmp(ptr, "CI-V") == 0)
-					TNC->PTTMode = PTTCI_V;
-				else if (_stricmp(ptr, "RTS") == 0)
-					TNC->PTTMode = PTTRTS;
-				else if (_stricmp(ptr, "DTR") == 0)
-					TNC->PTTMode = PTTDTR;
-				else if (_stricmp(ptr, "DTRRTS") == 0)
-					TNC->PTTMode = PTTDTR | PTTRTS;
+				ptr = strtok(NULL, " \t\n\r");
+
+				if (ptr)
+				{
+					if (_stricmp(ptr, "CI-V") == 0)
+						TNC->PTTMode = PTTCI_V;
+					else if (_stricmp(ptr, "RTS") == 0)
+						TNC->PTTMode = PTTRTS;
+					else if (_stricmp(ptr, "DTR") == 0)
+						TNC->PTTMode = PTTDTR;
+					else if (_stricmp(ptr, "DTRRTS") == 0)
+						TNC->PTTMode = PTTDTR | PTTRTS;
+				}
 			}
 		}
 
