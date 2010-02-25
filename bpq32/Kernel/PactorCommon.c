@@ -232,8 +232,11 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 
 	TNC->hDlg = CreateDialog(hInstance,ClassName,0,NULL);
 	
+#ifdef WINMOR
+	wsprintf(Title,"WINMOR Status - Port %d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+#else
 	wsprintf(Title,"Pactor Status - COM%d", TNC->PortRecord->PORTCONTROL.IOBASE);
-
+#endif
 	SetWindowText(TNC->hDlg, Title);
 
 	if (MinimizetoTray)
@@ -432,14 +435,20 @@ ProcessLine(char * buf)
 						TNC->PTTMode = PTTDTR;
 					else if (_stricmp(ptr, "DTRRTS") == 0)
 						TNC->PTTMode = PTTDTR | PTTRTS;
+
+					p_cmd = strtok(NULL, " \t\n\r");
 				}
 			}
+			else
+				p_cmd = ptr;
 		}
+		else
+			p_cmd = ptr;
 
-#endif
 
+#else
 		p_cmd = strtok(NULL, " \t\n\r");
-			
+#endif			
 		if (p_cmd != NULL)
 		{
 			if (p_cmd[0] != ';' && p_cmd[0] != '#')

@@ -67,6 +67,8 @@ int ConnecttoWINMOR();
 int ProcessReceivedData(struct TNCINFO * TNC);
 int ProcessLine(char * buf);
 VOID ReleaseTNC(struct TNCINFO * TNC);
+VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
+VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
@@ -243,6 +245,9 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	struct TNCINFO * TNC = TNCInfo[port];
 
+	if (TNC == NULL)
+		return 0;							// Port not defined
+
 	TNC->TimeSinceLast++;
 
 	if (TNC->TimeSinceLast > 3000)			// 5 MINS
@@ -301,11 +306,14 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->MyCall);
 			TNC->MyCall[calllen] = 0;
 
-			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
-
 			// Stop Listening, and set MYCALL to user's call
 
+			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
 			ChangeMYC(TNC, TNC->MyCall);
+
+			// Stop other ports in same group
+
+			SuspendOtherPorts(TNC);
 
 			wsprintf(Status, "In Use by %s", TNC->MyCall);
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
@@ -327,17 +335,24 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			send(TNC->WINMORSock,"DISCONNECT\r\n", 12, 0);
 
 			TNC->Attached = FALSE;
-
+			
 			if (TNC->Connecting || TNC->Connected)
 			{
 				TNC->Connected = FALSE;
 				TNC->Connecting = FALSE;
 				TNC->Disconnecting = TRUE;
+
 				TNC->DiscTimeout = 300;			// 30 Secs
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Disconnecting");
 			}
 			else
 				ReleaseTNC(TNC);
+
+			if (TNC->FECMode)
+			{
+				TNC->FECMode = FALSE;
+				send(TNC->WINMORSock,"SENDID 0\r\n", 10, 0);
+			}
 
 		}
 
@@ -457,6 +472,32 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			bytes=send(TNC->WINMORDataSock,(const char FAR *)&buff[8],txlen,0);
 		else
 		{
+			if (_memicmp(&buff[8], "D\r", 2) == 0)
+			{
+				TNC->ReportDISC = TRUE;		// Tell Node
+				return 0;
+			}
+	
+			if (TNC->FECMode)
+			{
+				char Buffer[300];
+				int len;
+
+				// Send FEC Data
+
+				buff[8 + txlen] = 0;
+				len = wsprintf(Buffer, "%-9s: %s", TNC->MyCall, &buff[8]);
+
+				send(TNC->WINMORDataSock, Buffer, len, 0);
+
+				if (TNC->FEC1600)
+					send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
+				else
+					send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
+				return 0;
+			}
+
+
 			// See if Local command (eg RADIO)
 
 			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
@@ -481,10 +522,22 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			if (_memicmp(&buff[8], "CODEC TRUE", 9) == 0)
 				TNC->StartSent = TRUE;
 
-
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
 			{
 				TNC->ReportDISC = TRUE;		// Tell Node
+				return 0;
+			}
+
+			if (_memicmp(&buff[8], "FEC", 3) == 0)
+			{
+				TNC->FECMode = TRUE;
+				send(TNC->WINMORSock,"FECRCV TRUE\r\nFECRCV\r\n", 21, 0);
+		
+				if (_memicmp(&buff[8], "FEC 1600", 8) == 0)
+					TNC->FEC1600 = TRUE;
+				else
+					TNC->FEC1600 = FALSE;
+
 				return 0;
 			}
 
@@ -660,6 +713,56 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 
 	if (Rig_Command) Rig_Command(-1, TXMsg);
 
+	ReleaseOtherPorts(TNC);
+
+}
+
+VOID SuspendOtherPorts(struct TNCINFO * ThisTNC)
+{
+	// Disable other TNCs in same Interlock Group
+	
+	struct TNCINFO * TNC;
+	int i, Interlock = ThisTNC->Interlock;
+
+	if (Interlock == 0)
+		return;
+
+	for (i=1; i<17; i++)
+	{
+		TNC = TNCInfo[i];
+		if (TNC == NULL)
+			continue;
+
+		if (TNC == ThisTNC)
+			continue;
+
+//		if (Interlock == TNC->Interlock)	// Same Group	
+//			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+	}
+}
+
+VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
+{
+	// Enable other TNCs in same Interlock Group
+	
+	struct TNCINFO * TNC;
+	int i, Interlock = ThisTNC->Interlock;
+
+	if (Interlock == 0)
+		return;
+
+	for (i=1; i<17; i++)
+	{
+		TNC = TNCInfo[i];
+		if (TNC == NULL)
+			continue;
+
+		if (TNC == ThisTNC)
+			continue;
+
+//		if (Interlock == TNC->Interlock)	// Same Group	
+//			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+	}
 }
 
 
@@ -668,9 +771,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	int i, port;
 	char Msg[255];
 	char * ptr;
-	char Title[80];
 	HMENU hMenu;
-
 
 	struct TNCINFO * TNC;
 
@@ -691,7 +792,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		wsprintf(Msg," ** Error - no info in WINMOR.cfg for this port");
 		WritetoConsole(Msg);
 
-		return 0;
+		return (int) ExtProc;
 	}
 
 	LoadRigDriver();
@@ -702,6 +803,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		memcpy(TNC->NodeCall, GetNodeCall(), 10);
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
+
+	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -730,16 +833,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	}
 
-	CreatePactorWindow(TNC);
-
-	wsprintf(Title,"WINMOR Status - Port %d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-
-	SetWindowText(TNC->hDlg, Title);
-
 	MinimizetoTray = GetMinimizetoTrayFlag();
-	
-	if (MinimizetoTray)
-		AddTrayMenuItem(TNC->hDlg, Title);
+
+	CreatePactorWindow(TNC);
 
 	hMenu=CreateMenu();
 	TNC->hPopMenu=CreatePopupMenu();
@@ -750,7 +846,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_CONFIG, "Show Soundcards");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILL, "Kill Winmor TNC");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart Winmor TNC");
-	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILLPOPUPS, "Kill Popups");
+	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILLPOPUPS, "Hide Popups");
 	
 	DrawMenuBar(TNC->hDlg);	
 
@@ -982,6 +1078,31 @@ VOID ConnecttoWINMORThread(port)
 	return;
 }
 
+BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
+{
+	char wtext[100];
+	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
+	UINT ProcessId;
+
+	GetWindowText(hwnd,wtext,99);
+
+	if (memcmp(wtext,"WINMOR Sound Card TNC", 21) == 0)
+	{
+		GetWindowThreadProcessId(hwnd, &ProcessId);
+
+		if (TNC->WIMMORPID == ProcessId)
+		{
+			 // Our Process
+
+			wsprintf (wtext, "WINMOR Sound Card TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
+			SetWindowText(hwnd, wtext);
+			return FALSE;
+		}
+	}
+	
+	return (TRUE);
+}
+
 VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 {
 	// Response on WINMOR control channel. Could be a reply to a command, or
@@ -1006,8 +1127,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			Rig_PTT(TNC->RIG, FALSE);
 		return;
 	}
-
-	Debugprintf("WINMOR RX: %s", Buffer);
 
 	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
 	{	
@@ -1048,6 +1167,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		
 			if (Rig_Command)
 				Rig_Command(-1, Msg);
+
+			// Stop other ports in same group
+
+			SuspendOtherPorts(TNC);
 
 			Session=L4TABLE;
 
@@ -1141,6 +1264,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "DISCONNECTED", 12) == 0)
 	{
+		if (TNC->FECMode)
+			return;
+
 		if (TNC->StartSent)
 		{
 			TNC->StartSent = FALSE;		// Disconnect reported following start codec
@@ -1164,7 +1290,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		// Add to MHEARD
 
 		UpdateMH(TNC, &Buffer[8], '+');
-		return;
+		
+		if (!TNC->FECMode)
+			return;							// If in FEC mode pass ID messages to user.
 	}
 		
 	if (_memicmp(Buffer, "CMD", 3) == 0)
@@ -1225,6 +1353,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			CloseHandle(hProc);
 			TNC->ProgramPath = _strdup(ExeName);
 		}
+
+		// Set Window Title to reflect BPQ Port Description
+
+		EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 	}
 
 	if (_memicmp(Buffer, "CAPTUREDEVICES", 14) == 0)
@@ -1343,6 +1475,7 @@ loop:
 		return;
 	}
 
+
 	Debugprintf("Winmor: RXD %d bytes", InputLen);
 
 	if (InputLen == 0)
@@ -1358,6 +1491,12 @@ loop:
 		return;					
 	}
 
+	if (TNC->FECMode)
+	{
+		char * msg = (char *)&buffptr[2];
+		msg[InputLen] = 0;
+		InputLen = strlen((char *)&buffptr[2]);
+	}
 	buffptr[1] = InputLen;
 	Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
@@ -1608,12 +1747,17 @@ RestartTNC(struct TNCINFO * TNC)
 	return 0;
 }
 
+int LoopProtect;
+
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM  lParam)
 {
 	char wtext[100];
 	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
 	
-	GetWindowText(hwnd,wtext,100);
+	if (LoopProtect++ > 100000)
+		return FALSE;
+	
+	GetWindowText(hwnd, wtext, 99);
 
 	if (memcmp(wtext,"Registration", 12) == 0)
 	{
@@ -1625,6 +1769,8 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM  lParam)
 
 KillPopups(struct TNCINFO * TNC)
 {
+	LoopProtect = 0;
+	
 	EnumWindows(EnumWindowsProc, (LPARAM)TNC);
 
 	return 0;

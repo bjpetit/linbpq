@@ -29,6 +29,9 @@ typedef struct TNCINFO
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
 	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.
 
+	BOOL FECMode;				// In FEC Mode
+	BOOL FEC1600;				// Use 1600 Hz FEC Mode
+
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 
 	time_t lasttime;
@@ -49,7 +52,7 @@ typedef struct TNCINFO
 
 	struct _EXTPORTDATA * PortRecord;
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record (For PTT)
-	int PTTMode;						// PTT Mode Flags
+	int PTTMode;					// PTT Mode Flags
 
 	int WIMMORPID;
 	char * CaptureDevices;
@@ -61,6 +64,7 @@ typedef struct TNCINFO
 	
 	int TimeSinceLast;				// Time since last message from TNC (10ths of a sec)
 
+	int Interlock;					// Port Interlock Group
 
 	HWND hDlg;						// Status Window Handle
 	HMENU hPopMenu;					// Actions Menu Handle

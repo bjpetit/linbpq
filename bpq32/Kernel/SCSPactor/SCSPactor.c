@@ -419,7 +419,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		wsprintf(msg," ** Error - no info in SCSPACTOR.cfg for this port");
 		WritetoConsole(msg);
 
-		return 0;
+		return (int) ExtProc;
 	}
 
 	// Set up DED addresses for streams (first stream (Pactor) = DED 31

@@ -234,7 +234,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Stream;
 
-	if (TNC->hDevice == (HANDLE) -1)
+	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
 	switch (fn)
@@ -382,7 +382,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		wsprintf(msg," ** Error - no info in KAMPACTOR.cfg for this port");
 		WritetoConsole(msg);
 
-		return 0;
+		return (int)ExtProc;
 	}
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
