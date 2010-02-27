@@ -430,7 +430,7 @@
 // Version 1.0.3.38
 
 // Fixes for smtp and lower case packet addresses from Airmail
-
+// Fix missing > afer NO - Bid in MBL mode
 
 
 
@@ -4854,7 +4854,10 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 			// Duplicate bid
 	
 			if ((conn->BBSFlags & BBS))
+			{
 				nodeprintf(conn, "NO - BID\r");
+				nodeprintf(conn, ">\r");
+			}
 			else
 				nodeprintf(conn, "*** Error- Duplicate BID\r");
 

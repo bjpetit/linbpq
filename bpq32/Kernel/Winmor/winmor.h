@@ -31,6 +31,13 @@ typedef struct TNCINFO
 
 	BOOL FECMode;				// In FEC Mode
 	BOOL FEC1600;				// Use 1600 Hz FEC Mode
+	int FECIDTimer;				// Time in FEC Mode. Used to trigger ID broadcasts
+
+	int Busy;					// Channel Busy Flags
+#define CDBusy 1
+#define PTTBusy 2
+
+	BOOL FECPending;			// Need an FEC Send when channel is next idle
 
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 

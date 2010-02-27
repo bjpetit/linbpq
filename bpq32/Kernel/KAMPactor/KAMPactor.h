@@ -51,6 +51,7 @@ struct TNCINFO
 	HANDLE hDevice;
 	BOOL HostMode;					// Set if in DED Host Mode
 	BOOL NeedPACTOR;				// Set if need to send PACTOR to put into Standby Mode
+	BOOL OldMode;					// Use PACTOR instead of TOR (for old software)
 	int Timeout;					// Timeout response counter
 //	int Retries;
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry

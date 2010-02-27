@@ -27,6 +27,8 @@
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
 
+#define KAM 1
+
 static char ClassName[]="PACTORSTATUS";
 #include "..\PactorCommon.c"
  
@@ -848,8 +850,11 @@ VOID KAMPoll(int Port)
 			datalen = wsprintf(TXMsg, "C20MYPTCALL %s", TNC->NodeCall);
 			EncodeAndSend(TNC, TXMsg, datalen);
 
-//			EncodeAndSend(TNC, "C20PACTOR", 9);			// Back to Listen
-			EncodeAndSend(TNC, "C20TOR", 6);			// Back to Listen
+			if (TNC->OldMode)
+				EncodeAndSend(TNC, "C20PACTOR", 9);			// Back to Listen
+			else
+				EncodeAndSend(TNC, "C20TOR", 6);			// Back to Listen
+
 			TNC->InternalCmd = 'T';
 			TNC->Timeout = 50;
 			TNC->IntCmdDelay--;
@@ -1189,7 +1194,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	Len = KissDecode(Msg, Msg, Len);	// Remove KISS transparency
 
-	if (Msg[1] == '2') Stream = 0; else Stream = Msg[2] - '@';	
+	if (Msg[2] == '0') Stream = 0; else Stream = Msg[2] - '@';	
 
 	//	See if Poll Reply or Data
 
@@ -1204,7 +1209,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	if (Msg[0] == 'E')					// Data Echo
 	{
-		if (Msg[1] == '2')				// HF Port
+		if (Msg[2] == '0')				// Pactor Stream
 		{
 			TNC->Streams[0].BytesAcked += Len -3;
 			wsprintf(Status, "RX %d TX %d ACKED %d ",

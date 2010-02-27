@@ -142,6 +142,10 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 {
 	struct TNCINFO * TNC;
 	int i;
+	HKEY hKey=0;
+	char Size[80];
+	char Key[80];
+	int retCode, disp;
 
 	switch( ul_reason_being_called )
 	{
@@ -186,13 +190,33 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			TNC = TNCInfo[i];
 			if (TNC == NULL)
 				continue;
+
+			ShowWindow(TNC->hDlg, SW_RESTORE);
+			GetWindowRect(TNC->hDlg, &Rect);
+
+			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", i);
+	
+			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+			if (retCode == ERROR_SUCCESS)
+			{
+				wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+				RegCloseKey(hKey);
+			}
+
 	 	
 			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
-			Sleep(500);
+			Sleep(100);
 			shutdown(TNC->WINMORDataSock, SD_BOTH);
-			Sleep(500);
+			Sleep(100);
 			shutdown(TNC->WINMORSock, SD_BOTH);
-			Sleep(500);
+			Sleep(100);
 			closesocket(TNC->WINMORDataSock);
 			closesocket(TNC->WINMORSock);
 		}
@@ -248,40 +272,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL)
 		return 0;							// Port not defined
 
-	TNC->TimeSinceLast++;
-
-	if (TNC->TimeSinceLast > 3000)			// 5 MINS
-	{
-		if (TNC->ProgramPath)
-		{
-			if (strstr(TNC->ProgramPath, "WINMOR TNC"))
-			{
-				struct tm * tm;
-				char Time[80];
-				
-				TNC->Restarts++;
-				TNC->LastRestart = time(NULL);
-
-				tm = gmtime(&TNC->LastRestart);	
-				
-				sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
-					tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
-
-				SetDlgItemText(TNC->hDlg, IDC_RESTARTTIME, Time);
-				sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-				SetDlgItemText(TNC->hDlg, IDC_RESTARTS, Time);
-
-				KillTNC(TNC);
-				RestartTNC(TNC);
-
-				TNC->TimeSinceLast = 0;
-			}
-		}
-	}
-
-
-
-
 	if (!TNC->RIG && TNC->PTTMode)
 	{
 		TNC->RIG = Rig_GETPTTREC(port);
@@ -293,6 +283,61 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	switch (fn)
 	{
 	case 1:				// poll
+
+		if (TNC->FECMode)
+		{
+			if (TNC->FECIDTimer++ > 6000)		// ID every 10 Mins
+			{
+				if (!TNC->Busy)
+				{
+					TNC->FECIDTimer = 0;
+					send(TNC->WINMORSock, "SENDID 0\r\n", 10, 0);
+				}
+			}
+			if (TNC->FECPending)	// Check if FEC Send needed
+			{
+				if (!TNC->Busy)
+				{
+					TNC->FECPending = 0;
+
+					if (TNC->FEC1600)
+						send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
+					else
+						send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
+				}
+			}
+		}
+
+		if (TNC->TimeSinceLast++ > 18000)			// 30 MINS
+		{
+			// Restart TNC
+		
+			if (TNC->ProgramPath)
+			{
+				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
+				{
+					struct tm * tm;
+					char Time[80];
+				
+					TNC->Restarts++;
+					TNC->LastRestart = time(NULL);
+
+					tm = gmtime(&TNC->LastRestart);	
+				
+					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
+						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+					SetDlgItemText(TNC->hDlg, IDC_RESTARTTIME, Time);
+					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
+					SetDlgItemText(TNC->hDlg, IDC_RESTARTS, Time);
+
+					KillTNC(TNC);
+					RestartTNC(TNC);
+
+					TNC->TimeSinceLast = 0;
+				}
+			}
+		}
 
 		if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Attached == 0)
 		{
@@ -490,10 +535,17 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 				send(TNC->WINMORDataSock, Buffer, len, 0);
 
-				if (TNC->FEC1600)
-					send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
+				if (TNC->Busy)
+				{
+					TNC->FECPending = 1;
+				}
 				else
-					send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
+				{
+					if (TNC->FEC1600)
+						send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
+					else
+						send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
+				}
 				return 0;
 			}
 
@@ -531,6 +583,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			if (_memicmp(&buff[8], "FEC", 3) == 0)
 			{
 				TNC->FECMode = TRUE;
+				TNC->FECIDTimer = 0;
 				send(TNC->WINMORSock,"FECRCV TRUE\r\nFECRCV\r\n", 21, 0);
 		
 				if (_memicmp(&buff[8], "FEC 1600", 8) == 0)
@@ -813,7 +866,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	wsprintf(Msg, "CODEC FALSE\r\nMYC %s\r\nCODEC TRUE\r\nLISTEN TRUE\r\nMYC\r\n", TNC->NodeCall);
 	strcat(TNC->InitScript, Msg);
-	strcat(TNC->InitScript,"CAPTUREDEVICES\r\nPLAYBACKDEVICES\r\nPROCESSID\r\n");
+	strcat(TNC->InitScript,"PROCESSID\r\n");
 
 	strcpy(TNC->CurrentMYC, TNC->NodeCall);
 
@@ -843,7 +896,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)TNC->hPopMenu,"Actions");
 
-	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_CONFIG, "Show Soundcards");
+//	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_CONFIG, "Show Soundcards");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILL, "Kill Winmor TNC");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart Winmor TNC");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILLPOPUPS, "Hide Popups");
@@ -1111,18 +1164,29 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	UINT * buffptr;
 	char Status[80];
 
-	TNC->TimeSinceLast = 0;
+	if (_memicmp(Buffer, "FAULT failure to Restart Sound card", 20) == 0)
+	{
+		// Force a restart
+
+			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+	}
+	else
+		TNC->TimeSinceLast = 0;
+
 
 	Buffer[MsgLen - 2] = 0;			// Remove CRLF
 
 	if (_memicmp(Buffer, "PTT T", 5) == 0)
 	{
+		TNC->Busy |= PTTBusy;
 		if (TNC->PTTMode)
 			Rig_PTT(TNC->RIG, TRUE);
 		return;
 	}
 	if (_memicmp(Buffer, "PTT F", 5) == 0)
 	{
+		TNC->Busy &= ~PTTBusy;
 		if (TNC->PTTMode)
 			Rig_PTT(TNC->RIG, FALSE);
 		return;
@@ -1130,12 +1194,14 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
 	{	
+		TNC->Busy |= CDBusy;
 		SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Busy");
 		return;
 	}
 
 	if (_memicmp(Buffer, "BUSY FALSE", 10) == 0)
 	{
+		TNC->Busy &= ~CDBusy;
 		SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Clear");
 		return;
 	}
@@ -1330,12 +1396,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	if (_memicmp(Buffer, "RRADIO", 16) == 0)
-	{
-		// Response to Radio Control Command
-		return;
-	}
-
 	if (_memicmp(Buffer, "PROCESSID", 9) == 0)
 	{
 		HANDLE hProc;
@@ -1359,9 +1419,18 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 	}
 
-	if (_memicmp(Buffer, "CAPTUREDEVICES", 14) == 0)
+	if ((_memicmp(Buffer, "FAULT Not from state FEC", 24) == 0) || (_memicmp(Buffer, "FAULT Blocked by Busy Lock", 24) == 0))
 	{
-		TNC->CaptureDevices = _strdup(&Buffer[15]);
+		if (TNC->FECMode)
+		{
+			Sleep(1000);
+			
+			if (TNC->FEC1600)
+				send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
+			else
+				send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
+			return;
+		}
 	}
 
 	if (_memicmp(Buffer, "PLAYBACKDEVICES", 15) == 0)
@@ -1488,14 +1557,21 @@ loop:
 		TNC->CONNECTED = FALSE;
 		TNC->ReportDISC = TRUE;
 
+		ReleaseBuffer(buffptr);
 		return;					
 	}
 
 	if (TNC->FECMode)
 	{
 		char * msg = (char *)&buffptr[2];
+		
 		msg[InputLen] = 0;
+		
 		InputLen = strlen((char *)&buffptr[2]);
+
+		if (msg[InputLen - 1] == 3)		// End of errored block
+			msg[InputLen++] = 13;		// Add CR
+
 	}
 	buffptr[1] = InputLen;
 	Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
@@ -1620,7 +1696,7 @@ int Socket_Data(int sock, int error, int eventcode)
 
 	return 0;
 }
-
+/*
 INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int Cmd = LOWORD(wParam);
@@ -1713,7 +1789,7 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 	}
 	return (INT_PTR)FALSE;
 }
-
+*/
 KillTNC(struct TNCINFO * TNC)
 {
 	HANDLE hProc;

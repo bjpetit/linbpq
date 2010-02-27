@@ -101,10 +101,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		switch (wmId) {
 
-		case WINMOR_CONFIG:
-
-			DialogBoxParam(hInstance, MAKEINTRESOURCE(WINMORCONFIG), hWnd, ConfigDialogProc, (LPARAM)TNC);
-			break;
+//		case WINMOR_CONFIG:
+//
+//			DialogBoxParam(hInstance, MAKEINTRESOURCE(WINMORCONFIG), hWnd, ConfigDialogProc, (LPARAM)TNC);
+//			break;
 
 		case WINMOR_KILL:
 
@@ -483,6 +483,21 @@ ProcessLine(char * buf)
 				// SCS Virtual COM Channel
 
 				TNC->VCOMPort = atoi(&buf[14]);
+			else
+#endif
+#ifdef KAM
+
+			if (_memicmp(buf, "OLDMODE", 7) == 0)
+	
+				// SCS Virtual COM Channel
+
+				TNC->OldMode = TRUE;
+			else
+#endif
+#ifdef WINMOR
+
+			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
+			{}
 			else
 #endif
 				strcat (TNC->InitScript, buf);
