@@ -51,6 +51,15 @@
 #define IDC_MAPHELP                     1042
 #define IDC_POPUPTEXT                   1043
 #define IDC_SAVEATTACHMENTS             1044
+#define CONN_OUT                        1045
+#define MSGS_OUT                        1046
+#define MSGS_IN                         1047
+#define REJECTS_IN                      1048
+#define REJECTS_OUT                     1049
+#define BYTES_OUT                       1050
+#define BYTES_IN                        1051
+#define LASTCONNECT                     1052
+#define CONN_IN                         1053
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -106,7 +115,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
 #define _APS_NEXT_COMMAND_VALUE         40018
-#define _APS_NEXT_CONTROL_VALUE         1045
+#define _APS_NEXT_CONTROL_VALUE         1060
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

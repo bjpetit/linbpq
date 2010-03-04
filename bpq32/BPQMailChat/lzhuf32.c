@@ -811,6 +811,9 @@ void Decode(CIRCUIT * conn)
 		
 	conn->TempMsg->length = count;
 
+	conn->UserPointer->MsgsReceived++;
+	conn->UserPointer->BytesForwardedIn += count;
+
 	if (FBBHeader->B2Message)
 	{
 		// Parse the Message for B2 From and To info

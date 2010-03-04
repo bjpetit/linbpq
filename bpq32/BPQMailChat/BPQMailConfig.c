@@ -775,6 +775,10 @@ int Do_User_Sel_Changed(HWND hDlg)
 
 		if (strcmp(user->Call, CurrentConfigCall) == 0)
 		{
+			struct tm *tm;
+			char Date[80];
+			char * Dateptr;
+
 			SetDlgItemText(hDlg, IDC_NAME, user->Name);
 			SetDlgItemText(hDlg, IDC_PASSWORD, user->pass);
 			SetDlgItemText(hDlg, IDC_ZIP, user->Address);
@@ -790,6 +794,21 @@ int Do_User_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_EMAIL, (user->flags & F_EMAIL));
 			CheckDlgButton(hDlg, IDC_HOLDMAIL, (user->flags & F_HOLDMAIL));
 			CheckDlgButton(hDlg, IDC_POLLRMS, (user->flags & F_POLLRMS));
+
+			SetDlgItemInt(hDlg, CONN_IN, user->nbcon, FALSE);
+			SetDlgItemInt(hDlg, CONN_OUT, user->ConnectsOut, FALSE);
+			SetDlgItemInt(hDlg, MSGS_IN, user->MsgsReceived, FALSE);
+			SetDlgItemInt(hDlg, MSGS_OUT, user->MsgsSent, FALSE);
+			SetDlgItemInt(hDlg, REJECTS_IN, user->MsgsRejectedIn, FALSE);
+			SetDlgItemInt(hDlg, REJECTS_OUT, user->MsgsRejectedOut, FALSE);
+			SetDlgItemInt(hDlg, BYTES_IN, user->BytesForwardedIn, FALSE);
+			SetDlgItemInt(hDlg, BYTES_OUT, user->BytesForwardedOut, FALSE);
+
+			tm = gmtime(&user->TimeLastConnected);	
+			Dateptr = asctime(tm);
+			strcpy(Date, Dateptr);
+
+			SetDlgItemText(hDlg, LASTCONNECT, Date);
 
 			return 0;
 		}

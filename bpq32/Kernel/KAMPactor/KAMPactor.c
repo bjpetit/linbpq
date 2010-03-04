@@ -329,8 +329,16 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Stream == 0)
 		{
-			if (TNC->Streams[0].FramesOutstanding  > 4)
-				return (1 | TNC->HostMode << 8);
+			if (TNC->HFPacket)
+			{
+				if (TNC->Mem1 < 2000)	
+					return (1 | TNC->HostMode << 8);
+			}
+			else
+			{
+				if (TNC->Streams[0].FramesOutstanding  > 4)
+					return (1 | TNC->HostMode << 8);
+			}
 		}
 		else
 		{
@@ -729,6 +737,7 @@ VOID KAMPoll(int Port)
 		char Msg[80];
 
 		TNC->Streams[0].Attached = TRUE;
+		TNC->HFPacket = FALSE;
 
 		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
 		TNC->Streams[0].MyCall[calllen] = 0;
@@ -737,6 +746,8 @@ VOID KAMPoll(int Port)
 		datalen = wsprintf(TXMsg, "C20MYPTCALL %s", TNC->Streams[0].MyCall);
 		EncodeAndSend(TNC, TXMsg, datalen);
 		TNC->InternalCmd = 'M';
+
+		TNC->NeedPACTOR = 0;		// Cancel enter Pactor
 
 		wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
@@ -802,7 +813,13 @@ VOID KAMPoll(int Port)
 
 			if (Stream == 0)					// Pactor Stream
 			{
-				EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
+				if (TNC->HFPacket)
+					EncodeAndSend(TNC, "C2AD", 4);		// Disconnect
+				else
+					EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
+
+				TNC->HFPacket = FALSE;
+
 				TNC->NeedPACTOR = 50;				// Need to Send PACTOR command after 5 secs
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
 			}
@@ -890,13 +907,15 @@ VOID KAMPoll(int Port)
 			{
 				if (Stream > 0)
 					wsprintf(TXMsg, "D1%c", Stream + '@');
+				else if (TNC->HFPacket)
+					memcpy(TXMsg, "D2A", 3);
 					
 				memcpy(&TXMsg[3], buffptr + 2, datalen);
 				EncodeAndSend(TNC, TXMsg, datalen + 3);
 				ReleaseBuffer(buffptr);
 				TNC->Streams[Stream].BytesTXed += datalen; 
 
-				if (Stream == 0)
+				if (Stream == 0 && TNC->HFPacket == 0)
 				{
 					wsprintf(Status, "RX %d TX %d ACKED %d ",
 						TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
@@ -931,6 +950,13 @@ VOID KAMPoll(int Port)
 					return;
 				}
 
+				if ((Stream == 0) && memcmp(MsgPtr, "HFPACKET", 8) == 0)
+				{
+					TNC->HFPacket = TRUE;
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "KAM} OK\r");
+					Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+					return;
+				}
 
 				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2)	// Connect
 				{
@@ -941,7 +967,13 @@ VOID KAMPoll(int Port)
 
 					if (Stream == 0)
 					{
-						datalen = wsprintf(TXMsg, "C20PACTOR %s", TNC->Streams[0].RemoteCall);
+	//					TNC->HFPacket = TRUE;
+
+						if (TNC->HFPacket)
+							datalen = wsprintf(TXMsg, "C2AC %s", TNC->Streams[0].RemoteCall);
+						else
+							datalen = wsprintf(TXMsg, "C20PACTOR %s", TNC->Streams[0].RemoteCall);
+
 						wsprintf(Status, "%s Connecting to %s",
 							TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
@@ -962,7 +994,11 @@ VOID KAMPoll(int Port)
 				{
 					if (Stream == 0)
 					{
-						EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
+						if (TNC->HFPacket)
+							EncodeAndSend(TNC, "C2AD", 4);		// ??Return to packet mode??
+						else
+							EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
+			
 						TNC->NeedPACTOR = 50;
 					}
 					else
@@ -1194,7 +1230,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	Len = KissDecode(Msg, Msg, Len);	// Remove KISS transparency
 
-	if (Msg[2] == '0') Stream = 0; else Stream = Msg[2] - '@';	
+	if (Msg[1] == '2') Stream = 0; else Stream = Msg[2] - '@';	
 
 	//	See if Poll Reply or Data
 
@@ -1209,7 +1245,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	if (Msg[0] == 'E')					// Data Echo
 	{
-		if (Msg[2] == '0')				// Pactor Stream
+		if (Msg[1] == '2')				// HF Port
 		{
 			TNC->Streams[0].BytesAcked += Len -3;
 			wsprintf(Status, "RX %d TX %d ACKED %d ",
@@ -1270,6 +1306,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				// S/2 CONNECTED to NLV
 
 				// each line is teminated by CR, and by the time it gets here it is null terminated
+
+				//FREE BYTES 2628
+				//A/H #80(1) CONNECTED to DK0MNL..
 
 				Line = strchr(&Msg[3], 13);
 				if (Line == 0) return;
@@ -1397,7 +1436,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			return;
 		}
 
-		if (Stream == 0)
+		if (Msg[2] == '0')
 			Call = strstr(Buffer, "<LINKED TO");
 		else
 			Call = strstr(Buffer, "NNECTED to");
@@ -1406,7 +1445,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		{	
 			Call+=11;					// To Callsign
 			
-			if (Stream == 0)
+			if (Stream == 0 && TNC->HFPacket == 0)
 			{
 				Buffer[Len-4] = 0;
 				UpdateMH(TNC, Call, '+');
@@ -1455,6 +1494,8 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				TNC->Streams[Stream].Attached = TRUE;
 
+				if (Msg[1] == '2' && Msg[2] == 'A')
+					TNC->HFPacket = TRUE;
 
 				strcpy(TNC->Streams[Stream].RemoteCall, Call);	// Save Text Callsign 
 

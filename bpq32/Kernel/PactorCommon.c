@@ -129,6 +129,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		}
 
+	case WM_SIZING:
+
+		for (i=1; i<17; i++)
+		{
+			TNC = TNCInfo[i];
+			if (TNC == NULL)
+				continue;
+		
+			if (TNC->hDlg == hWnd)
+				break;
+		}
+
+		MoveWindows(TNC);
+			
+		return TRUE;
+
 #else
 
 	case WM_COMMAND:
@@ -173,11 +189,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			SetBkMode(hdcStatic, TRANSPARENT);
 			return (LONG)bgBrush;
 		}
-
-		case WM_SIZING:
-			
-			return TRUE;
-
 
 		case WM_DESTROY:
 		

@@ -253,7 +253,8 @@ DllExport UCHAR NEXTID = 55;
 DllExport WORD MAXCIRCUITS = 50;
 DllExport UCHAR L4DEFAULTWINDOW = 4;
 DllExport WORD L4T1 = 60;
-
+DllExport struct APPLCALLS APPLCALLTABLE[8];
+DllExport char * APPLS;
 
 extern char AUTOSAVE;
 

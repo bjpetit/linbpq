@@ -201,7 +201,8 @@ BOOL CreateConsole(int Stream)
 		if (user == NULL) return 0; //		Cant happen??
 	}
 
-	time(&user->TimeLastCOnnected);
+	time(&user->TimeLastConnected);
+	user->nbcon++;
 
 	Cinfo->Console->UserPointer = user;
 	Cinfo->Console->lastmsg = user->lastmsg;

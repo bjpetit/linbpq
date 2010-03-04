@@ -79,6 +79,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				
 			if ((*Respptr == '-') || (*Respptr == 'N') || (*Respptr == 'R'))				// Not wanted
 			{
+				user->MsgsRejectedOut++;
+				
 				// Zap the entry
 
 				if (conn->Paclink)					// Not using Bit Masks
@@ -173,6 +175,9 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 					QueueMsg(conn, MsgBytes, FBBHeader->FwdMsg->length);
 					free(MsgBytes);
+
+					user->MsgsSent++;
+					user->BytesForwardedOut += FBBHeader->FwdMsg->length;
 			
 					nodeprintf(conn, "%c\r\n", 26);
 				}
@@ -293,6 +298,7 @@ ok:
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+			user->MsgsRejectedIn++;
 		}
 		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
 		{
@@ -877,6 +883,8 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 		// save time first sent, or checksum will be wrong when we restart
 		
 		FwdMsg->datechanged=time(NULL);
+		conn->UserPointer->MsgsSent++;
+		conn->UserPointer->BytesForwardedOut += OrigLen;
 	}
 
 	tm = gmtime(&FwdMsg->datechanged);	
@@ -1008,7 +1016,7 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	struct tm * tm;
 	char B2To[80];
 	struct MsgInfo * Msg = FBBHeader->FwdMsg;
-	char DebugMsg[1000]="";
+//	char DebugMsg[1000]="";
 	char * xptr;
 
 	MsgBytes = ReadMessageFile(Msg->number);
@@ -1097,8 +1105,9 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
 
 		ptr = strstr(UnCompressed, "\r\n\r\n");	// Blank line before Body
-		memcpy(DebugMsg, UnCompressed, ptr - UnCompressed);
-		Debugprintf("Paclin Trace: %s", DebugMsg);
+
+//		memcpy(DebugMsg, UnCompressed, ptr - UnCompressed);
+//		Debugprintf("Paclin Trace: %s", DebugMsg);
 
 		FBBHeader->CompressedMsg = Compressed;
 		FBBHeader->CSize = CompLen;
@@ -1160,8 +1169,9 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	FBBHeader->Size = MsgLen;
 
 	xptr = strstr(UnCompressed, "\r\n\r\n");	// Blank line before Body
-	memcpy(DebugMsg, UnCompressed, xptr - UnCompressed);
-	Debugprintf("Paclin Trace: %s", DebugMsg);
+
+//	memcpy(DebugMsg, UnCompressed, xptr - UnCompressed);
+//	Debugprintf("Paclin Trace: %s", DebugMsg);
 
 	Compressed = zalloc(2 * MsgLen + 200);
 
@@ -1222,6 +1232,9 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 		{
 			conn->FBBChecksum+=Compressed[i];
 		}
+		conn->UserPointer->MsgsSent++;
+		conn->UserPointer->BytesForwardedOut += FBBHeader->FwdMsg->length;
+
 	}
 
 	while (CompLen > 256)

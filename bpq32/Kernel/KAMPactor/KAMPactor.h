@@ -28,6 +28,7 @@ struct STREAMINFO
 	int BytesAcked;
 	int BytesRXed;
 	int BytesOutstanding;		// For Packet Channels
+
 };
 
 
@@ -61,6 +62,8 @@ struct TNCINFO
 
 	int Mem1;						// Free Bytes (VHF /HF)
 	int Mem2;
+
+	BOOL HFPacket;					// Set if HF port is in Packet mode instead of Pactor Mode
 
 	HWND hDlg;						// Status Window Handle
 };

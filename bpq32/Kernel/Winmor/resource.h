@@ -17,6 +17,8 @@
 #define IDC_CAPTURE                     1009
 #define WINMOR_KILL                     1010
 #define WINMOR_KILLPOPUPS               1011
+#define IDC_LIST1                       1013
+#define IDC_WINMORTRACE                 1013
 #define WINMORCONFIG                    30006
 #define IDC_STATIC                      -1
 
@@ -26,7 +28,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        101
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1012
+#define _APS_NEXT_CONTROL_VALUE         1014
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

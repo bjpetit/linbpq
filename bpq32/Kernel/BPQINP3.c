@@ -21,6 +21,8 @@
 
 #include "AsmStrucs.h"
 
+extern struct APPLCALLS  APPLCALLTABLE[8];
+
 typedef struct _RTTMSG
 {
 	UCHAR ID[7];

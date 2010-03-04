@@ -345,8 +345,8 @@ struct UserInfo{
 	char	Call[10];			//	Connected call without SSID	
 //	indicat relai[8];			/* 64 Digis path */
 	long	lastmsg;			/* 4  Last L number */
-	long	nbcon;				/* 4  Number of connexions */
-	time_t	TimeLastCOnnected;  //Last connexion date */
+	long	nbcon;				/* 4  Number of connexions in*/
+	time_t	TimeLastConnected;  //Last connexion date */
 //	long	lastyap __a2__  ;	/* 4  Last YN date */
 	short	flags    ;	/* 2  Flags */
 	short	on_base  ;	/* 2  ON Base number */
@@ -365,7 +365,18 @@ struct UserInfo{
 
 	char	Name[18];			/* 18 1st Name */
 	char	Address[61];		/* 61 Address */
-	char	City[31];			/* 31 City */
+
+	// Stats. Was City[31];			/* 31 City */
+	int MsgsReceived;
+	int MsgsSent;
+	int MsgsRejectedIn;			// Messages we reject
+	int MsgsRejectedOut;		// Messages Rejectd by other end
+	int BytesForwardedIn;
+	int BytesForwardedOut;
+	int ConnectsOut;			// Forwarding Connects Out
+
+	char Spare3[3];
+
 	char	HomeBBS[41];		/* 41 home BBS */
 	char	QRA[7];				/* 7  Qth Locator */
 	char	pass[13];			/* 13 Password */
@@ -392,6 +403,7 @@ struct UserInfo{
 #define F_POLLRMS	  0x4000
 
 /* #define F_PWD        0x1000 */
+
 
 struct Override
 {
@@ -567,8 +579,8 @@ struct BBSForwardingInfo
 	int FwdTimer;
 	char *BBSHA;					// HA of BBS
 	char ** BBSHAElements;			// elements of HA of BBS
-	char UserCall[10];				// User we are forwarding on behalf of (Currently only for RMS)
-	int UserIndex;					// index of User we are forwarding on behalf of (Currently only for RMS)
+//	char UserCall[10];				// User we are forwarding on behalf of (Currently only for RMS)
+//	int UserIndex;					// index of User we are forwarding on behalf of (Currently only for RMS)
 };
 
 

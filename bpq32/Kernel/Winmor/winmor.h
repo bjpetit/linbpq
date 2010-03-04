@@ -54,6 +54,8 @@ typedef struct TNCINFO
 	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
 	char CurrentMYC[10];			// Save current call so we don't change it unnecessarily
 
+	char TargetCall[10];			// Call incoming connect is addressed to (for appl call support)
+
 	SOCKADDR_IN destaddr;
 	SOCKADDR_IN Datadestaddr;
 
@@ -74,6 +76,7 @@ typedef struct TNCINFO
 	int Interlock;					// Port Interlock Group
 
 	HWND hDlg;						// Status Window Handle
+	HWND hMonitor;					// Handle to Monitor control
 	HMENU hPopMenu;					// Actions Menu Handle
 
 };

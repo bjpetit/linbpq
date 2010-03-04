@@ -55,7 +55,7 @@ SYSOP	EQU	1
 
 	EXTRN	BPQHOSTVECTOR:BYTE,BPQVECLENGTH:BYTE
 
-	PUBLIC	APPLS,BUFFERWAITS
+	PUBLIC	_APPLS,BUFFERWAITS
 
 	EXTRN	INFOMSG:DWORD,INFOLEN:WORD,DESTHEADER:DWORD
 
@@ -200,7 +200,7 @@ PASSCMD	DB		'PASSWORD    '
 
 APPL1	LABEL	BYTE
 
-APPLS	DB	'************',12
+_APPLS	DB	'************',12
 		DD	APPLCMD,0
 HOSTCMD	DB	'************',12
 		DD	APPLCMD,0
@@ -787,10 +787,22 @@ INNERCOMMANDHANDLER:
 	
 @@:
 ;
-;	If ecx is non-zero there ate chars beyond the cr in the buffer
+;	If ecx is non-zero there are chars beyond the cr in the buffer
 ;
 	or	ecx,ecx
 	jz	NoMoreChars
+	
+; see if LF after CR
+	
+	cmp byte ptr[EDI], 10		; LF
+	jne nolf
+	
+	inc edi
+	dec ecx
+		
+	jmp @B
+	
+nolf:
 	
 ;	Get a new buffer, and copy extra data to it.
 
@@ -1146,7 +1158,7 @@ CMD?00:
 ;	DISPLAY AVAILABLE COMMANDS
 ;
 	MOV	ECX,8
-	MOV	ESI,OFFSET32 APPLS
+	MOV	ESI,OFFSET32 _APPLS
 	PUBLIC	ADDAPPLS
 ADDAPPLS:
 	CMP	BYTE PTR [ESI],'*'
@@ -3573,7 +3585,7 @@ SENDCMDMSG:
 ;
 ;	ADD BBS CALL, OR APPL
 ;
-	MOV	ESI,OFFSET32 APPLS
+	MOV	ESI,OFFSET32 _APPLS
 	MOV	AL,1
 	MOV	ECX,8
 	PUBLIC	GETAPPL

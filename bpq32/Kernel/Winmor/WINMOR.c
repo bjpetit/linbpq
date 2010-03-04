@@ -43,6 +43,7 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 KillTNC(struct TNCINFO * TNC);
 RestartTNC(struct TNCINFO * TNC);
 KillPopups(struct TNCINFO * TNC);
+VOID MoveWindows(struct TNCINFO * TNC);
 
 static char ClassName[]="WINMORSTATUS";
 
@@ -69,6 +70,7 @@ int ProcessLine(char * buf);
 VOID ReleaseTNC(struct TNCINFO * TNC);
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
 VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
+VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
@@ -79,6 +81,8 @@ DllImport struct TRANSPORTENTRY * L4TABLE;
 DllImport WORD MAXCIRCUITS;
 DllImport UCHAR L4DEFAULTWINDOW;
 DllImport WORD L4T1;
+DllImport struct APPLCALLS APPLCALLTABLE[];
+DllImport char APPLS;
 
 #define MAXBPQPORTS 16
 
@@ -244,13 +248,13 @@ VOID ChangeMYC(struct TNCINFO * TNC, char * Call)
 
 	strcpy(TNC->CurrentMYC, Call);
 
-	send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+//	send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
 
 	datalen = wsprintf(TXMsg, "MYC %s\r\n", Call);
 	send(TNC->WINMORSock,TXMsg, datalen, 0);
 
-	send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
-	TNC->StartSent = TRUE;
+//	send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+//	TNC->StartSent = TRUE;
 
 	send(TNC->WINMORSock, "MYC\r\n", 5, 0);
 
@@ -756,7 +760,7 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 
 	ChangeMYC(TNC, TNC->NodeCall);
 
-	send(TNC->WINMORSock, "CODEC TRUE\r\nLISTEN TRUE\r\n", 25, 0);
+	send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
 
 	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
 
@@ -825,8 +829,10 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	char Msg[255];
 	char * ptr;
 	HMENU hMenu;
-
+	struct APPLCALLS * APPL;
 	struct TNCINFO * TNC;
+	char Aux[100] = "MYAUX ";
+	char Appl[10];
 
 	//
 	//	Will be called once for each WINMOR port 
@@ -864,9 +870,33 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	// Set MYCALL
 
-	wsprintf(Msg, "CODEC FALSE\r\nMYC %s\r\nCODEC TRUE\r\nLISTEN TRUE\r\nMYC\r\n", TNC->NodeCall);
+	wsprintf(Msg, "MYC %s\r\nCODEC TRUE\r\nLISTEN TRUE\r\nMYC\r\n", TNC->NodeCall);
 	strcat(TNC->InitScript, Msg);
 	strcat(TNC->InitScript,"PROCESSID\r\n");
+
+
+	for (i = 0; i < 8; i++)
+	{
+		APPL=&APPLCALLTABLE[i];
+
+		if (APPL->APPLCALL_TEXT[0] > ' ')
+		{
+			char * ptr;
+			memcpy(Appl, APPL->APPLCALL_TEXT, 10);
+			ptr=strchr(Appl, ' ');
+
+			if (ptr)
+			{
+				*ptr++ = ',';
+				*ptr = 0;
+			}
+
+			strcat(Aux, Appl);
+		}
+	}
+	strcat(TNC->InitScript, Aux);
+	strcat(TNC->InitScript,"\r\nMYAUX\r\n");
+
 
 	strcpy(TNC->CurrentMYC, TNC->NodeCall);
 
@@ -903,6 +933,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	
 	DrawMenuBar(TNC->hDlg);	
 
+	TNC->hMonitor = GetDlgItem(TNC->hDlg, IDC_WINMORTRACE); 
+	
+	MoveWindows(TNC);
 
 	i=wsprintf(Msg,"WINMOR Host %s %d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
 	WritetoConsole(Msg);
@@ -1206,11 +1239,30 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
+	if (_memicmp(Buffer, "TARGET", 6) == 0)
+	{
+		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		memcpy(TNC->TargetCall, &Buffer[7], 10);
+		return;
+	}
+
+	if (_memicmp(Buffer, "OFFSET", 6) == 0)
+	{
+//		WritetoTrace(TNC, Buffer, MsgLen - 2);
+//		memcpy(TNC->TargetCall, &Buffer[7], 10);
+		return;
+	}
 
 	if (_memicmp(Buffer, "CONNECTED", 9) == 0)
 	{
 		char Call[11];
 		char * ptr;
+		struct APPLCALLS * APPL;
+		char * ApplPtr = &APPLS;
+		int App;
+		char Appl[10];
+
+		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
 		memcpy(Call, &Buffer[10], 10);
 
@@ -1280,15 +1332,30 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			TNC->Connected = TRUE;			// Subsequent data to data channel
 
-			wsprintf(Status, "%s Connected to %s Inbound", TNC->RemoteCall, TNC->NodeCall);
+			wsprintf(Status, "%s Connected to %s Inbound", TNC->RemoteCall, TNC->TargetCall);
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
+			// See which application the connect is for
 
-			// If an autoconnect APPL is defined, send it
-
-			if (TNC->ApplCmd)
+			for (App = 0; App < 8; App++)
 			{
-				MsgLen = wsprintf(Buffer, "%s\r", TNC->ApplCmd);
+				APPL=&APPLCALLTABLE[App];
+				memcpy(Appl, APPL->APPLCALL_TEXT, 10);
+				ptr=strchr(Appl, ' ');
+
+				if (ptr)
+					*ptr = 0;
+	
+				if (_stricmp(TNC->TargetCall, Appl) == 0)
+					break;
+			}
+
+			if (App < 8)
+			{
+				char AppName[13];
+
+				memcpy(AppName, &ApplPtr[App * 21], 12);
+				MsgLen = wsprintf(Buffer, "%s\r", AppName);
 				buffptr = Q_REM(&FREE_Q);
 
 				if (buffptr == 0) return;			// No buffers, so ignore
@@ -1339,6 +1406,24 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			return;
 		}
 
+		if (TNC->Connecting)
+		{
+			// Report Connect Failed, and drop back to command mode
+
+			TNC->Connecting = FALSE;
+			buffptr = Q_REM(&FREE_Q);
+
+			if (buffptr == 0) return;			// No buffers, so ignore
+
+			buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} Failure with %s\r", TNC->RemoteCall);
+
+			Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+
+			return;
+		}
+
+		WritetoTrace(TNC, Buffer, MsgLen - 2);
+
 		// Release Session
 
 		TNC->Connecting = FALSE;
@@ -1356,6 +1441,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		// Add to MHEARD
 
 		UpdateMH(TNC, &Buffer[8], '+');
+		WritetoTrace(TNC, Buffer, MsgLen - 2);
 		
 		if (!TNC->FECMode)
 			return;							// If in FEC mode pass ID messages to user.
@@ -1524,10 +1610,9 @@ VOID ProcessDataSocketData(int port)
 	// Info on Data Socket - just packetize and send on
 	
 	struct TNCINFO * TNC = TNCInfo[port];
-
 	int InputLen, PacLen = 236;
-
 	UINT * buffptr;
+	char * msg;
 		
 	TNC->TimeSinceLast = 0;
 
@@ -1561,12 +1646,13 @@ loop:
 		return;					
 	}
 
+	msg = (char *)&buffptr[2];
+	msg[InputLen] = 0;	
+	
+	WritetoTrace(TNC, msg, InputLen);
+		
 	if (TNC->FECMode)
-	{
-		char * msg = (char *)&buffptr[2];
-		
-		msg[InputLen] = 0;
-		
+	{	
 		InputLen = strlen((char *)&buffptr[2]);
 
 		if (msg[InputLen - 1] == 3)		// End of errored block
@@ -1852,5 +1938,91 @@ KillPopups(struct TNCINFO * TNC)
 	return 0;
 }
 
+VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
+{
+	int index = 0;
+	UCHAR * ptr1 = Msg, * ptr2;
+	UCHAR Line[1000];
+	int LineLen, i;
+
+lineloop:
+
+	if (Len > 0)
+	{
+		//	copy text to control a line at a time	
+					
+		ptr2=memchr(ptr1,13,Len);
+
+		if (ptr2)
+		{
+			ptr2++;
+			LineLen = ptr2 - ptr1;
+			Len -= LineLen;
+			memcpy(Line, ptr1, LineLen);
+			memcpy(&Line[LineLen - 1], "<cr>", 4);
+			LineLen += 3;
+
+			if ((*ptr2) == 10)
+			{
+				memcpy(&Line[LineLen], "<lf>", 4);
+				LineLen += 4;
+				ptr2++;
+				Len --;
+			}
+			
+			Line[LineLen] = 0;
+
+			// If line contains any data above 7f, assume binary and dont display
+
+			for (i = 0; i < LineLen; i++)
+			{
+				if (Line[i] > 127)
+					goto Skip;
+			}
+
+			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Line);
+		Skip:
+			ptr1 = ptr2;
+
+			goto lineloop;
+
+		}
+
+		for (i = 0; i < Len; i++)
+		{
+			if (ptr1[i] > 127)
+				break;
+		}
+
+		if (i == Len)
+			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) ptr1 );
+
+	}
+
+	if (index > 1200)
+						
+	do{
+
+		index=index=SendMessage(TNC->hMonitor, LB_DELETESTRING, 0, 0);
+			
+	} while (index > 1000);
+
+	index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+
+}
 
 
+
+VOID MoveWindows(struct TNCINFO * TNC)
+{
+	RECT rcClient;
+	int ClientHeight, ClientWidth;
+
+	GetClientRect(TNC->hDlg, &rcClient); 
+
+	ClientHeight = rcClient.bottom;
+	ClientWidth = rcClient.right;
+
+	MoveWindow(TNC->hMonitor,4 , 220, ClientWidth-8, ClientHeight-225, TRUE);
+
+}

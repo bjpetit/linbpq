@@ -23,7 +23,7 @@ extern char L3RTT[7];	// 7 chars, ax.25 format
 extern char L3KEEP[7];	// 7 chars, ax.25 format
 //extern int SENDNETFRAME();
 extern struct _DATABASE * DataBase;
-extern struct APPLCALLS  APPLCALLTABLE[8];
+//extern struct APPLCALLS  APPLCALLTABLE[8];
 
 extern int MAXDESTS;
 

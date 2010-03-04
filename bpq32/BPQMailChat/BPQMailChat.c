@@ -432,7 +432,13 @@
 // Fixes for smtp and lower case packet addresses from Airmail
 // Fix missing > afer NO - Bid in MBL mode
 
+// Version 1.0.3.39
 
+// Use ;FW: for RMS polling.
+
+// Version 1.0.3.40
+
+// Add ELSE Option to connect scripts.
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -2027,7 +2033,7 @@ int Connected(Stream)
 	struct UserInfo * user = NULL;
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
-	char ConnectedMsg[] = "*** CONNECTED  ";
+	char ConnectedMsg[] = "*** CONNECTED    ";
 	char Msg[100];
 	char Title[100];
 
@@ -2049,8 +2055,7 @@ int Connected(Stream)
 
 					// Run first line of connect script
 
-					conn->UserPointer->ForwardingInfo->ScriptIndex = -1;  // Incremented before being used
-					ProcessBBSConnectScript(conn, ConnectedMsg, 14);
+					ProcessBBSConnectScript(conn, ConnectedMsg, 15);
 					return 0;
 				}
 		
@@ -2097,7 +2102,8 @@ int Connected(Stream)
 
 			}
 
-			time(&user->TimeLastCOnnected);
+			time(&user->TimeLastConnected);
+			user->nbcon++;
 
 			conn->UserPointer = user;
 
@@ -2244,11 +2250,11 @@ int Disconnected (Stream)
 				{
 					FWDInfo->Forwarding = FALSE;
 
-					if (FWDInfo->UserCall[0])			// Will be set if RMS
-					{
-						FindNextRMSUser(FWDInfo);
-					}
-					else
+//					if (FWDInfo->UserCall[0])			// Will be set if RMS
+//					{
+//						FindNextRMSUser(FWDInfo);
+//					}
+//					else
 						FWDInfo->FwdTimer = 0;
 				}
 			}
@@ -2267,7 +2273,7 @@ int DoReceivedData(int Stream)
 	CIRCUIT * conn;
 	struct UserInfo * user;
 	char * ptr, * ptr2;
-	char Buffer[1000];
+	char Buffer[10000];
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -2279,7 +2285,7 @@ int DoReceivedData(int Stream)
 			{ 
 				// May have several messages per packet, or message split over packets
 
-				if (conn->InputLen > 600)	// Shouldnt have lines longer  than this in text mode
+				if (conn->InputLen > 9600)	// Shouldnt have lines longer  than this in text mode
 				{
 					conn->InputLen=0;
 				}
@@ -3574,7 +3580,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
-	if (_memicmp(Cmd, "POLLRMS", 6) == 0)
+/*	if (_memicmp(Cmd, "POLLRMS", 6) == 0)
 	{
 		struct UserInfo * RMS;
 
@@ -3612,7 +3618,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 		return;
 	}
-
+*/
 	if (conn->Flags == 0)
 	{
 		BBSputs(conn, "Invalid Command\r");
@@ -4461,6 +4467,9 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		Length = RemoveLF(MsgBytes, strlen(MsgBytes));
 
+		user->MsgsSent ++;
+		user->BytesForwardedOut += Length;
+
 		QueueMsg(conn, MsgBytes, Length);
 		free(Save);
 
@@ -4998,6 +5007,9 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 	if (((msglen < 3) && (Buffer[0] == 0x1a)) || ((msglen == 4) && (_memicmp(Buffer, "/ex", 3) == 0)))
 	{
 		conn->Flags &= ~GETTINGMESSAGE;
+
+		user->MsgsReceived++;
+		user->BytesForwardedIn += conn->TempMsg->length;
 
 		CreateMessageFromBuffer(conn);
 		return;
@@ -5732,6 +5744,30 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 	
 }
 
+struct DelayParam
+{
+	struct UserInfo * User;
+	int Delay;
+
+};
+
+struct DelayParam DParam;		// Not 100% safe, but near enough
+
+VOID ConnectDelayThread(struct DelayParam * DParam)
+{
+	struct UserInfo * User = DParam->User;
+	int Delay = DParam->Delay;
+
+	Sleep(Delay);
+
+	ConnecttoBBS(User);
+	
+	return;
+}
+
+unsigned long _beginthread( void( *start_address )(struct DelayParam * DParam),
+				unsigned stack_size, struct DelayParam * DParam);
+
 BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 {
 	struct	BBSForwardingInfo * ForwardingInfo = conn->UserPointer->ForwardingInfo;
@@ -5796,14 +5832,18 @@ InBand:
 	else
 	{
 		// Dont check first time through
-		
-		if (Scripts[ForwardingInfo->ScriptIndex] == NULL ||
-			memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0)			// Only Check until script is finished
+
+		if (strcmp(Buffer, "*** CONNECTED  ") != 0)
 		{
-			MoreLines = FALSE;
-		}
-		if (!MoreLines)
-			goto CheckForSID;
+			if (Scripts[ForwardingInfo->ScriptIndex] == NULL ||
+				memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0	||		// Only Check until script is finished
+				memcmp(Scripts[ForwardingInfo->ScriptIndex], "ELSE", 4) == 0)			// Only Check until script is finished
+			{
+				MoreLines = FALSE;
+			}
+			if (!MoreLines)
+				goto CheckForSID;
+			}
 	}
 
 	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
@@ -5813,13 +5853,42 @@ InBand:
 	{
 		// Connect Failed
 
+		char * Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+		int Delay = 1000;
+	
+		// Look for an alternative connect block (Starting with ELSE)
+
+	ElseLoop:
+
+		if (Cmd == 0 || memcmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
+		{
+			Disconnect(conn->BPQStream);
+			return FALSE;
+		}
+
+		if (memcmp(Cmd, "ELSE", 4) != 0)
+		{
+			Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+			goto ElseLoop;
+		}
+
+		if (memcmp(&Cmd[5], "DELAY", 5) == 0)
+			Delay = atoi(&Cmd[10]) * 1000;
+		else
+			Delay = 1000;
+
 		Disconnect(conn->BPQStream);
+
+		DParam.Delay = Delay;
+		DParam.User = conn->UserPointer;
+
+		_beginthread(ConnectDelayThread, 0, &DParam);
+		
 		return FALSE;
 	}
 
 	// The pointer is only updated when we get the connect, so we can tell when the last line is acked
 	// The first entry is always from Connected event, so don't have to worry about testing entry -1 below
-
 
 
 	// NETROM to  KA node returns
@@ -5843,15 +5912,17 @@ InBand:
 	{
 		char * Cmd = Scripts[++ForwardingInfo->ScriptIndex];
 		
-		if (Cmd && memcmp(Cmd, "TIMES", 5) != 0)			// Only Check until script is finished
+		if (Cmd && memcmp(Cmd, "TIMES", 5) != 0 && memcmp(Cmd, "ELSE", 4) != 0)			// Only Check until script is finished
 		{
-			if (strcmp(Cmd, "*** LINKED TO *") == 0)
+/*			if (strcmp(Cmd, "*** LINKED TO *") == 0)
 			{
 				// Used for RMS to switch to a user call for polling RMS
 
 				nodeprintf(conn, "*** LINKED TO %s\r", ForwardingInfo->UserCall);
 			}
-			else if (memcmp(Cmd, "RADIO AUTH", 10) == 0)
+			else
+*/
+			if (memcmp(Cmd, "RADIO AUTH", 10) == 0)
 			{
 				// Generate a Password to enable RADIO commands on a remote node
 				char AuthCommand[80];
@@ -5936,6 +6007,32 @@ CheckForSID:
 	{		
 		conn->BBSFlags &= ~RunningConnectScript;
 
+		if (strcmp(conn->Callsign, "RMS") == 0)
+		{
+			// Build a ;FW: line with all calls with PollRMS Set
+
+			int i;
+			char FWLine[10000] = ";FW:";
+			struct UserInfo * user;
+			
+			for (i = 0; i <= NumberofUsers; i++)
+			{
+				user = UserRecPtr[i];
+
+				if (user->flags & F_POLLRMS)
+				{
+					strcat(FWLine, " ");
+					strcat(FWLine, user->Call);
+				}
+			}
+			
+			strcat(FWLine, "\r");	
+
+			nodeprintf(conn, FWLine);
+
+			//nodeprintf(conn,";FW: GM8BPQ-1 G8BPQ G8BPQ-5 GM8BPQ G8BPQ-1 GM8BPQ-2 BPQTST\r");
+		}
+
 		// Only delare B1 and B2 if other end did, and we are configued for it
 
 		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
@@ -5945,6 +6042,8 @@ CheckForSID:
 			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
 
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
+
+		conn->UserPointer->ConnectsOut++;
 
 		if (conn->BBSFlags & FBBForwarding)
 		{
@@ -6076,6 +6175,7 @@ VOID FWDTimerProc()
 				if (ForwardingInfo->Enabled)
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (SeeifMessagestoForward(user->BBSNumber) || ForwardingInfo->ReverseFlag)
+/*
 							if (strcmp(user->Call, "RMS") == 0)
 							{
 								if (ForwardingInfo->UserIndex == 0)
@@ -6087,7 +6187,9 @@ VOID FWDTimerProc()
 									ForwardingInfo->Forwarding = TRUE;
 							}
 							else
-							{
+*/							{
+								user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+
 								if (ConnecttoBBS(user))
 									ForwardingInfo->Forwarding = TRUE;
 							}
@@ -6111,7 +6213,7 @@ void StartForwarding(int BBSNumber)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (SeeifMessagestoForward(BBSNumber) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
-							if (strcmp(user->Call, "RMS") == 0)
+/*							if (strcmp(user->Call, "RMS") == 0)
 							{
 								if (ForwardingInfo->UserIndex == 0)
 									FindNextRMSUser(ForwardingInfo);
@@ -6122,7 +6224,9 @@ void StartForwarding(int BBSNumber)
 									ForwardingInfo->Forwarding = TRUE;
 							}
 							else
-							{
+*/							{
+								user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+
 								if (ConnecttoBBS(user))
 									ForwardingInfo->Forwarding = TRUE;
 							}
@@ -6379,7 +6483,7 @@ struct UserInfo * FindRMS()
 	
 	return NULL;
 }
-
+/*
 VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo)
 {
 	struct UserInfo * user;
@@ -6406,10 +6510,9 @@ VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo)
 
 	// Finished Scan
 
-	FWDInfo->UserIndex = FWDInfo->FwdTimer = FWDInfo->UserCall[0] = 0;
-	
+	FWDInfo->UserIndex = FWDInfo->FwdTimer = FWDInfo->UserCall[0] = 0;	
 }
-
+*/
 
 #ifndef NEWROUTING
 
