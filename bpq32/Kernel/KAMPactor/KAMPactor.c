@@ -331,7 +331,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			if (TNC->HFPacket)
 			{
-				if (TNC->Mem1 < 2000)	
+				if (TNC->Mem1 < 2000 || TNC->Streams[0].FramesOutstanding  > 4)	
 					return (1 | TNC->HostMode << 8);
 			}
 			else
@@ -885,11 +885,26 @@ VOID KAMPoll(int Port)
 
 			return;
 		}
-
 	}
 
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
+
+		// If in HF Packet mode, normal flow control doesn't seem to work
+		//	If more that 4 packets sent, send a status poll. and use response to 
+		//	reset frames outstanding
+
+		if ((Stream == 0) && (TNC->HFPacket) && (TNC->Streams[0].FramesOutstanding  > 4))
+		{
+			EncodeAndSend(TNC, "C10S", 4);
+			TNC->InternalCmd = 'S';
+			TNC->Timeout = 50;
+			return;
+
+		}
+
+
+
 		if (TNC->TNCOK && TNC->Streams[Stream].BPQtoPACTOR_Q)
 		{
 			int datalen;
@@ -915,13 +930,13 @@ VOID KAMPoll(int Port)
 				ReleaseBuffer(buffptr);
 				TNC->Streams[Stream].BytesTXed += datalen; 
 
-				if (Stream == 0 && TNC->HFPacket == 0)
+				if (Stream == 0)
 				{
 					wsprintf(Status, "RX %d TX %d ACKED %d ",
 						TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
 					SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
 
-					if (TNC->Streams[0].BPQtoPACTOR_Q == 0)		// Nothing following
+					if ((TNC->HFPacket == 0) && (TNC->Streams[0].BPQtoPACTOR_Q == 0))		// Nothing following
 						EncodeAndSend(TNC, "E", 1);			// Changeover when all sent
 				}
 
@@ -1310,6 +1325,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				//FREE BYTES 2628
 				//A/H #80(1) CONNECTED to DK0MNL..
 
+				if (TNC->HFPacket)
+					TNC->Streams[0].FramesOutstanding = 0;
+
 				Line = strchr(&Msg[3], 13);
 				if (Line == 0) return;
 				ptr =  strchr(&Msg[13], '/');
@@ -1466,6 +1484,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				wsprintf(Status, "RX %d TX %d ACKED %d ", 
 					TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
+				
 				SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
 			}
 

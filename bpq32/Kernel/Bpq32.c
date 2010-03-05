@@ -200,6 +200,11 @@
 // Attach cmd changes for winmor disconnecting state
 // Option Interlock Winmor/Pactor ports
 
+// Build 12
+
+// Add APPLS export for winmor
+// Handle commands ending CR LF
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -217,7 +222,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "PACTOR Test"
+///#define SPECIALVERSION "PACTOR Test"
 
 #include "GetVersion.h"
 

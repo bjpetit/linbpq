@@ -517,9 +517,7 @@ NextPort:
 
 				if (PORT->PortType == PTT)
 				{
-					Radio++;
-					PORT->ConfiguredRigs++;
-					return TRUE;
+					goto Next;
 				}
 
 				ptr = strtok_s(NULL, " \t\n\r", &Context);
@@ -710,7 +708,7 @@ NextPort:
 
 					ptr = strtok_s(NULL, " \t\n\r", &Context);
 				}
-
+			Next:
 				Radio++;
 				PORT->ConfiguredRigs++;
 				

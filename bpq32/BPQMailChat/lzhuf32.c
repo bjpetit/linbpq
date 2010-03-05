@@ -841,7 +841,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		int B2To;							// Offset to To: fields in B2 header
 		int Recipients = 0;
 		struct _EXCEPTION_POINTERS exinfo;
-
+		int RMSMsgs = 0, BBSMsgs = 0;
 
 		__try {
 
@@ -885,7 +885,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				memcpy(Msg->from, &ptr1[6], linelen-6);
 			}
 		}
-		else if (_memicmp(ptr1, "To:", 3) == 0)
+		else if (_memicmp(ptr1, "To:", 3) == 0 || _memicmp(ptr1, "cc:", 3) == 0)
 		{
 			HddrTo=realloc(HddrTo, (Recipients+1)*4);
 			HddrTo[Recipients] = zalloc(100);
@@ -931,6 +931,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 						// Update the saved to: line (remove the smtp:)
 
 						strcpy(&HddrTo[Recipients][4], &HddrTo[Recipients][9]);
+						BBSMsgs++;
 
 					}
 					else
@@ -940,12 +941,14 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 						memcpy(Msg->via, &ptr1[9], linelen);
 						Msg->via[linelen-9] = 0;
 						strcpy(FullTo,"RMS");
+						RMSMsgs ++;
 					}
 
 				}
 				else
 				{
 					strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
+					RMSMsgs ++;
 				}
 
 			}
@@ -1038,21 +1041,53 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			int SaveMsgLen = conn->MailBufferSize;
 			BOOL SentToRMS = FALSE;
 			int ToLen;
+			char * ToString = malloc(Recipients * 100);
 
 			__try{
 
 			SaveMsg = Msg;
 			SaveBody = conn->MailBuffer;
 
+			// Create one copy with all RMS recipients, and another for each packet recipient
+			
+			if (RMSMsgs)
+			{
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 1);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+				// Add all RMS To: lines 
+
+				ToLen = 0;
+				ToString[0] = 0;
+
+				for (i = 0; i < Recipients; i++)
+				{
+					if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0)
+					{
+						ToLen += strlen(HddrTo[i]);
+						strcat(ToString, HddrTo[i]);
+					}
+				}
+				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+				memcpy(&conn->MailBuffer[B2To], ToString, ToLen); 
+
+				conn->TempMsg->length += ToLen;
+
+				strcpy(Msg->to, "RMS");
+				strcpy(Msg->via, "winlink.org");
+
+				CreateMessageFromBuffer(conn);
+			}
+
 			for (i = 0; i < Recipients; i++)
 			{
-				if (strcmp(RecpTo[i], "RMS") == 0 || _stricmp(Via[i], "winlink.org") == 0)
-				{
-	//				if (SentToRMS)
-	//					continue;
+				// Only Non - RMS Dests
 
-					SentToRMS = TRUE;
-				}
+				if (_stricmp (Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0)		
+					continue;
 
 				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
 				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
