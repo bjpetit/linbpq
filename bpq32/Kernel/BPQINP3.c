@@ -957,7 +957,7 @@ SendRIPTimer()
 				continue;
 			}
 
-			if (Route->NEIGHBOUR_LINK->KILLTIMER > 600)
+			if (Route->NEIGHBOUR_LINK->KILLTIMER > 60 * 12 * 3)	// 12 Minutes
 			{
 				SendKeepAlive(Route);
 				Route->NEIGHBOUR_LINK->KILLTIMER = 0;		// Keep Open

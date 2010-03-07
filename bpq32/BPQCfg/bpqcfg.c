@@ -68,9 +68,11 @@
 
 //		Add PROTOCOL=PACTOR or WINMOR option
 
-//	December 20009
+//	December 2009
 
 //		Add INP3 MAXRTT and MAXHOPS Commands
+
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 

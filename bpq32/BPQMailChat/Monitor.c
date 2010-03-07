@@ -259,8 +259,8 @@ LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	// Trap mouse messages, so we cant select stuff in output and mon windows,
 	//	otherwise scrolling doesnt work.
 
-	if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) 
-        return TRUE; 
+	if (uMsg >= WM_MOUSEFIRST && uMsg <=  WM_LBUTTONDBLCLK) 
+       return TRUE; 
 
 	return CallWindowProc(wpOrigOutputProc, hwnd, uMsg, wParam, lParam); 
 } 

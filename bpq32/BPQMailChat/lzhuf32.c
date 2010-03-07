@@ -905,6 +905,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				*ptr3++ = 0;
 				strcpy(Msg->via, ptr3);
 			}
+			else
+				Msg->via[0] = 0;
+
 			
 			if (conn->Paclink)
 			{
@@ -1048,9 +1051,73 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			SaveMsg = Msg;
 			SaveBody = conn->MailBuffer;
 
-			// Create one copy with all RMS recipients, and another for each packet recipient
-			
-			if (RMSMsgs)
+			// If from WL2K, create one message for each to: or cc: that is a local user
+
+			if (Msg->B2Flags & FromRMS)
+			{
+				struct UserInfo * user;
+				char Call[10];
+				char * ptr;
+
+				for (i = 0; i < Recipients; i++)
+				{
+					memcpy(Call, &HddrTo[i][4], 9);
+					ptr = strchr(Call, 13);
+					if (ptr)
+						*ptr = 0;
+					
+					user = LookupCall(Call);
+
+					if (user == 0)
+						continue;
+					if ((user->flags & F_POLLRMS) == 0)
+						continue;
+
+					conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+					memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+					conn->MailBuffer = malloc(SaveMsgLen + 1);
+					memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+					// Add our To: 
+		
+					ToLen = strlen(HddrTo[i]);
+
+					if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
+						memcpy(HddrTo[i], "To", 2);
+
+					memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+					memcpy(&conn->MailBuffer[B2To], HddrTo[i], ToLen); 
+
+					conn->TempMsg->length += ToLen;
+
+					strcpy(Msg->to, RecpTo[i]);
+					strcpy(Msg->via, Via[i]);
+				
+					Msg->bid[0] = 0;
+
+					CreateMessageFromBuffer(conn);
+				}
+			}
+			else
+			{
+				// From a client - Create one copy with all RMS recipients, and another for each packet recipient	
+
+			// Merge all RMS To: lines 
+
+			ToLen = 0;
+			ToString[0] = 0;
+
+			for (i = 0; i < Recipients; i++)
+			{
+				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0)
+				{
+					ToLen += strlen(HddrTo[i]);
+					strcat(ToString, HddrTo[i]);
+				}
+			}
+
+			if (ToLen)
 			{
 				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
 				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
@@ -1058,19 +1125,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				conn->MailBuffer = malloc(SaveMsgLen + 1);
 				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
 
-				// Add all RMS To: lines 
 
-				ToLen = 0;
-				ToString[0] = 0;
-
-				for (i = 0; i < Recipients; i++)
-				{
-					if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0)
-					{
-						ToLen += strlen(HddrTo[i]);
-						strcat(ToString, HddrTo[i]);
-					}
-				}
 				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
 				memcpy(&conn->MailBuffer[B2To], ToString, ToLen); 
 
@@ -1079,12 +1134,18 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				strcpy(Msg->to, "RMS");
 				strcpy(Msg->via, "winlink.org");
 
+				// Must Change the BID
+
+				Msg->bid[0] = 0;
+
 				CreateMessageFromBuffer(conn);
 			}
 
+			free(ToString);
+
 			for (i = 0; i < Recipients; i++)
 			{
-				// Only Non - RMS Dests
+				// Only Process Non - RMS Dests
 
 				if (_stricmp (Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0)		
 					continue;
@@ -1099,6 +1160,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				ToLen = strlen(HddrTo[i]);
 
+				if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
+					memcpy(HddrTo[i], "To", 2);
+
 				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
 				memcpy(&conn->MailBuffer[B2To], HddrTo[i], ToLen); 
 
@@ -1106,9 +1170,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				strcpy(Msg->to, RecpTo[i]);
 				strcpy(Msg->via, Via[i]);
+				
+				Msg->bid[0] = 0;
 
 				CreateMessageFromBuffer(conn);
 			}
+			}	// End not from RMS
 
 			free(SaveMsg);
 			free(SaveBody);

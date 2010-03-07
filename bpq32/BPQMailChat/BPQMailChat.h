@@ -429,7 +429,7 @@ typedef struct user_t
 	TOPIC   *topic;         // Topic user is in.
 	int     rtflags;
 	time_t	lastmsgtime;	// Time of last input from user
-
+	COLORREF Colour;		// For Console Display
 } USER;
 
 #pragma pack()
@@ -680,7 +680,7 @@ static void node_xmit(NODE *node, char kind, CIRCUIT *circuit);
 static void node_tell(NODE *node, char kind);
 static void user_xmit(USER *user, char kind, CIRCUIT *circuit);
 static void user_tell(USER *user, char kind);
-static USER *user_find(char *call, char * node);
+USER *user_find(char *call, char * node);
 static void user_leave(USER *user);
 static BOOL topic_chg(USER *user, char *s);
 static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias, BOOL Local);

@@ -1139,7 +1139,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		return 0;
 
 
-			
+ 			
 	case WM_TIMER:
 
 		if (wParam == 1)		// Slow = 10 secs

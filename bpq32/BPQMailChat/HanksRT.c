@@ -363,7 +363,7 @@ static void upduser(USER *user)
 		}
 	}
 
-	fprintf(out, "%s %d %s %s\n", user->call, user->rtflags, user->name, user->qth);
+	fprintf(out, "%s %d %s %s¬%x\n", user->call, user->rtflags, user->name, user->qth, user->Colour);
 	fclose(in);
 	fclose(out);
 
@@ -377,6 +377,7 @@ static void rduser(USER *user)
 	char *name, *flags, *qth;
 	char Buffer[2048];
 	char *buf = Buffer;
+	char * ptr;
 
 	user->name = _strdup("?_name");
 	user->qth  = _strdup("?_qth");
@@ -400,6 +401,13 @@ static void rduser(USER *user)
 			strnew(&user->name, name);
 
 			if (!qth) break;
+			
+			ptr = strchr(qth, '¬');
+			if (ptr)
+			{
+				*ptr++ = 0;
+				sscanf(ptr, "%x", &user->Colour);
+			}
 			strnew(&user->qth,  qth);
 			break;
 		}
@@ -1130,7 +1138,7 @@ void text_tellu_Joined(USER * user)
 	CIRCUIT *circuit;
 	char buf[256];
 
-	sprintf(buf, "%-6.6s *** Joined Chat, Topic %s", user->call, user->topic->name);
+	sprintf(buf, "%-6.6s : *** Joined Chat, Topic %s", user->call, user->topic->name);
 
 	if (ConsHeader[1]->FlashOnConnect)
 		FlashWindow(hWnd, TRUE);
@@ -1224,7 +1232,7 @@ static void user_tell(USER *user, char kind)
 
 // Find the user record for call@node. Node can be NULL, meaning any node
 
-static USER *user_find(char *call, char * node)
+USER *user_find(char *call, char * node)
 {
 	USER *user;
 

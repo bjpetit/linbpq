@@ -334,6 +334,7 @@ void MoveWindows(struct ConsoleInfo * Cinfo)
 
 }
 
+COLORREF Colour;
 
 LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -341,6 +342,11 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	LPRECT lprc;
 	int i;
 	struct ConsoleInfo * Cinfo;
+    TCHAR tchBuffer[1000];  
+    TEXTMETRIC tm; 
+    int y;  
+    LPMEASUREITEMSTRUCT lpmis; 
+    LPDRAWITEMSTRUCT lpdis; 
 
 	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
 	{
@@ -351,13 +357,78 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	if (Cinfo == NULL)
 		 Cinfo = InitHeader;
 	
-	switch (message) { 
+	switch (message) {
+ 
+        case WM_MEASUREITEM: 
+ 
+            lpmis = (LPMEASUREITEMSTRUCT) lParam; 
+ 
+            // Set the height of the list box items. 
+ 
+            lpmis->itemHeight = 15; 
+            return TRUE; 
+ 
+        case WM_DRAWITEM: 
+ 
+            lpdis = (LPDRAWITEMSTRUCT) lParam; 
+ 
+            // If there are no list box items, skip this message. 
+ 
+            if (lpdis->itemID == -1) 
+            { 
+                break; 
+            } 
+ 
+            switch (lpdis->itemAction) 
+            { 
+                COLORREF OldColour;
+
+				case ODA_SELECT: 
+                case ODA_DRAWENTIRE: 
+ 
+				  // if Chat Console, and message from a user, change colour 
+					
+					SendMessage(lpdis->hwndItem, LB_GETTEXT, lpdis->itemID, (LPARAM) tchBuffer); 
+ 
+                    GetTextMetrics(lpdis->hDC, &tm); 
+ 
+                    y = (lpdis->rcItem.bottom + lpdis->rcItem.top - tm.tmHeight) / 2;
+
+					if ((Cinfo->BPQStream == -2) && 
+						((memcmp(&tchBuffer[6], " : ", 3) == 0) || (memcmp(&tchBuffer[6], " > ", 3) == 0)))
+					{
+						USER * user;
+						char call[11];
+
+						memcpy(call, tchBuffer, 10);
+						strlop(call, ' ');
+
+		
+						user = user_find(call, NULL);
+						if (user)
+							OldColour = SetTextColor(lpdis->hDC, user->Colour);
+						else
+							OldColour = SetTextColor(lpdis->hDC, 0);
+					}
+					else
+						OldColour = SetTextColor(lpdis->hDC, 0);
+						
+                    TextOut(lpdis->hDC, 
+                        6, 
+                        y, 
+                        tchBuffer, 
+                        strlen(tchBuffer)); 						
+ 
+ //					SetTextColor(lpdis->hDC, OldColour);
+
+                    break; 
+			}
+
 
 	case WM_ACTIVATE:
 
 		SetFocus(Cinfo->hwndInput);
 		break;
-
 
 	case WM_COMMAND:
 
@@ -365,6 +436,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
 		switch (wmId) {
+
 
 		case BPQBELLS:
 
@@ -662,13 +734,12 @@ LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	if (Cinfo == NULL)
 		 Cinfo = InitHeader;
-
 	
 	// Trap mouse messages, so we can't select stuff in output and mon windows,
 	//	otherwise scrolling doesnt work.
 
 	if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) 
-        return TRUE; 
+       return TRUE; 
 
 	return CallWindowProc(Cinfo->wpOrigOutputProc, hwnd, uMsg, wParam, lParam); 
 } 
