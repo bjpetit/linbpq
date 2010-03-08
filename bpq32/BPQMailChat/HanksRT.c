@@ -100,6 +100,9 @@ VOID nputs(CIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
+	if (*buf = 0x1b)
+		buf += 2;				// Colour Escape
+	
 	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
 	QueueMsg(conn, buf, strlen(buf));
 }
@@ -1105,8 +1108,8 @@ static void text_xmit(USER *user, USER *to, char *text)
 void text_tellu(USER *user, char *text, char *to, int who)
 {
 	CIRCUIT *circuit;
-	char Buffer[2048];
-	char *buf = Buffer;
+	UCHAR Buffer[2048];
+	UCHAR *buf = &Buffer[4];
 
 	sprintf(buf, "%-6.6s %c %s\r", user->call, (who == o_one) ? '>' : ':', text);
 
@@ -1121,13 +1124,43 @@ void text_tellu(USER *user, char *text, char *to, int who)
 		switch(who)
 		{
 			case o_topic :
-				if (circuit->u.user->topic == user->topic) nputs(circuit, buf);
+				if (circuit->u.user->topic == user->topic)
+				{
+					if (circuit->BPQStream == -2)	// To console
+					{
+						// Put a colour header on message
+												
+						*(--buf) = user->Colour; 
+						*(--buf) = 0x1b;
+					}					
+					nputs(circuit, buf);
+				}	
 				break;
-			case o_all :
+
+			case o_all:
+
+				if (circuit->BPQStream == -2)	// To console
+				{
+					// Put a colour header on message
+					
+					*(--buf) = user->Colour; 
+					*(--buf) = 0x1b;
+				}					
 				nputs(circuit, buf);
 				break;
+	
 			case o_one :
-				if (matchi(circuit->u.user->call, to)) nputs(circuit, buf);
+				if (matchi(circuit->u.user->call, to))
+				{
+					if (circuit->BPQStream == -2)	// To console
+					{
+						// Put a colour header on message
+						
+						*(--buf) = user->Colour; 
+						*(--buf) = 0x1b;
+					}					
+					nputs(circuit, buf);
+				}
 				break;
 		}
 	}
@@ -1328,6 +1361,8 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias,
 	_strupr(user->call);
 	user->node = node;
 	rduser(user);
+	if (user->Colour == 0)
+		user->Colour = 11;
 
 	if (circuit->rtcflags & p_user)
 		circuit->u.user = user;

@@ -429,7 +429,7 @@ typedef struct user_t
 	TOPIC   *topic;         // Topic user is in.
 	int     rtflags;
 	time_t	lastmsgtime;	// Time of last input from user
-	COLORREF Colour;		// For Console Display
+	int Colour;			// For Console Display
 } USER;
 
 #pragma pack()
@@ -654,6 +654,10 @@ struct ConsoleInfo
 	DWORD dwLineLen;    // line length 
 	int nCaretPosX; // horizontal position of caret 
 	int nCaretPosY; // vertical position of caret 
+
+	COLORREF FGColour;		// Text Colour
+	COLORREF BGColour;		// Background Colour
+	COLORREF DefaultColour;	// Default Text Colour
  
 };
 

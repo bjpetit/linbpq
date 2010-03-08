@@ -21,6 +21,38 @@ struct ConsoleInfo * InitHeader;
 HWND hConsole;
 //RECT ConsoleRect;
 
+COLORREF Colours[256] = {0,
+		RGB(0,0,0), RGB(0,0,128), RGB(0,0,192), RGB(0,0,255),				// 1 - 4
+		RGB(0,64,0), RGB(0,64,128), RGB(0,64,192), RGB(0,64,255),			// 5 - 8
+		RGB(0,128,0), RGB(0,128,128), RGB(0,128,192), RGB(0,128,255),		// 9 - 12
+		RGB(0,192,0), RGB(0,192,128), RGB(0,192,192), RGB(0,192,255),		// 13 - 16
+		RGB(0,255,0), RGB(0,255,128), RGB(0,255,192), RGB(0,255,255),		// 17 - 20
+
+		RGB(64,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 17 
+		RGB(64,64,0), RGB(64,64,128), RGB(64,64,192), RGB(64,64,255),
+		RGB(64,128,0), RGB(64,128,128), RGB(64,128,192), RGB(64,128,255),
+		RGB(64,192,0), RGB(64,192,128), RGB(64,192,192), RGB(64,192,255),
+		RGB(64,255,0), RGB(64,255,128), RGB(64,255,192), RGB(64,255,255),
+
+		RGB(128,0,0), RGB(128,0,128), RGB(128,0,192), RGB(128,0,255),				// 33
+		RGB(128,64,0), RGB(128,64,128), RGB(128,64,192), RGB(128,64,255),
+		RGB(128,128,0), RGB(128,128,128), RGB(128,128,192), RGB(128,128,255),
+		RGB(128,192,0), RGB(128,192,128), RGB(128,192,192), RGB(128,192,255),
+		RGB(128,255,0), RGB(128,255,128), RGB(128,255,192), RGB(128,255,255),
+
+		RGB(192,0,0), RGB(192,0,128), RGB(192,0,192), RGB(192,0,255),				// 49
+		RGB(192,64,0), RGB(192,64,128), RGB(192,64,192), RGB(192,64,255),
+		RGB(192,128,0), RGB(192,128,128), RGB(192,128,192), RGB(192,128,255),
+		RGB(192,192,0), RGB(192,192,128), RGB(192,192,192), RGB(192,192,255),
+		RGB(192,255,0), RGB(192,255,128), RGB(192,255,192), RGB(192,2552,255),
+
+		RGB(255,0,0), RGB(255,0,128), RGB(255,0,192), RGB(255,0,255),				// 49
+		RGB(255,64,0), RGB(255,64,128), RGB(255,64,192), RGB(255,64,255),
+		RGB(255,128,0), RGB(255,128,128), RGB(255,128,192), RGB(255,128,255),
+		RGB(255,192,0), RGB(255,192,128), RGB(255,192,192), RGB(255,192,255),
+		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,2552,255)
+};
+
 
 #define InputBoxHeight 25
 static LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -342,7 +374,8 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	LPRECT lprc;
 	int i;
 	struct ConsoleInfo * Cinfo;
-    TCHAR tchBuffer[1000];  
+    UCHAR tchBuffer[1000];
+	UCHAR * buf = tchBuffer;
     TEXTMETRIC tm; 
     int y;  
     LPMEASUREITEMSTRUCT lpmis; 
@@ -381,12 +414,10 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
  
             switch (lpdis->itemAction) 
             { 
-                COLORREF OldColour;
-
 				case ODA_SELECT: 
                 case ODA_DRAWENTIRE: 
  
-				  // if Chat Console, and message from a user, change colour 
+				  // if Chat Console, and message has a colour eacape, action it 
 					
 					SendMessage(lpdis->hwndItem, LB_GETTEXT, lpdis->itemID, (LPARAM) tchBuffer); 
  
@@ -394,30 +425,18 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
  
                     y = (lpdis->rcItem.bottom + lpdis->rcItem.top - tm.tmHeight) / 2;
 
-					if ((Cinfo->BPQStream == -2) && 
-						((memcmp(&tchBuffer[6], " : ", 3) == 0) || (memcmp(&tchBuffer[6], " > ", 3) == 0)))
+					if ((Cinfo->BPQStream == -2) && (tchBuffer[0] == 0x1b))
 					{
-						USER * user;
-						char call[11];
-
-						memcpy(call, tchBuffer, 10);
-						strlop(call, ' ');
-
-		
-						user = user_find(call, NULL);
-						if (user)
-							OldColour = SetTextColor(lpdis->hDC, user->Colour);
-						else
-							OldColour = SetTextColor(lpdis->hDC, 0);
+						SetTextColor(lpdis->hDC,  Colours[tchBuffer[1] - 10]);
+						buf += 2;
 					}
-					else
-						OldColour = SetTextColor(lpdis->hDC, 0);
-						
+//					SetBkColor(lpdis->hDC, 0);
+
                     TextOut(lpdis->hDC, 
                         6, 
                         y, 
-                        tchBuffer, 
-                        strlen(tchBuffer)); 						
+                        buf, 
+                        strlen(buf)); 						
  
  //					SetTextColor(lpdis->hDC, OldColour);
 
@@ -695,7 +714,19 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			// Echo
 
-			WritetoConsoleWindow(Cinfo->BPQStream, Cinfo->kbbuf, Cinfo->kbptr+1);
+			Cinfo->FGColour = Cinfo->DefaultColour;
+
+			if (Cinfo->BPQStream == -2)
+			{
+				char Msg[INPUTLEN+4];
+				Msg[0] = 0x1b;
+				Msg[1] = 1;
+				memcpy(&Msg[2], Cinfo->kbbuf, Cinfo->kbptr+1);
+
+				WritetoConsoleWindow(Cinfo->BPQStream, Msg, Cinfo->kbptr+3);
+			}
+			else
+				WritetoConsoleWindow(Cinfo->BPQStream, Cinfo->kbbuf, Cinfo->kbptr+1);
 
 			ProcessLine(Cinfo->Console, user, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
 
@@ -827,7 +858,7 @@ lineloop:
 		}
 
 		*(ptr2++)=0;
-
+						
 		// If len is greater that screen with, fold
 
 		if ((ptr2 - ptr1) > Cinfo->maxlinelen)
