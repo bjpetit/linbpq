@@ -28,8 +28,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,1,10
- PRODUCTVERSION 1,1,1,10
+ FILEVERSION 1,1,1,11
+ PRODUCTVERSION 1,1,1,11
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -69,7 +69,7 @@ END
 // Dialog
 //
 
-WINMORSTATUS DIALOG DISCARDABLE  0, 0, 254, 229
+WINMORSTATUS DIALOG DISCARDABLE  0, 0, 283, 229
 STYLE WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "WINMOR Status"
 CLASS "WINMORSTATUS"
@@ -81,7 +81,7 @@ BEGIN
     LTEXT           "TX/RX State",IDC_STATIC,5,70,44,10
     LTEXT           "Channel State",IDC_STATIC,5,55,55,10
     LTEXT           "Mode",IDC_STATIC,5,40,30,10
-    LTEXT           "",IDC_TNCSTATE,65,25,160,11
+    LTEXT           "",IDC_TNCSTATE,65,25,212,11
     LTEXT           "TNC State",IDC_STATIC,5,25,40,10
     LTEXT           "Comms State",IDC_STATIC,5,10,45,10
     LTEXT           "",IDC_COMMSSTATE,65,10,145,11
@@ -91,7 +91,7 @@ BEGIN
     LTEXT           "0",IDC_RESTARTS,65,100,20,11
     LTEXT           "Last Restart",IDC_STATIC,90,100,51,10
     LTEXT           "Never",IDC_RESTARTTIME,147,100,100,11
-    LISTBOX         IDC_WINMORTRACE,5,114,245,110,LBS_NOINTEGRALHEIGHT | 
+    LISTBOX         IDC_WINMORTRACE,5,114,275,110,LBS_NOINTEGRALHEIGHT | 
                     WS_VSCROLL | WS_HSCROLL | WS_TABSTOP
 END
 
@@ -118,7 +118,7 @@ END
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
-IDI_ICON2               ICON    DISCARDABLE     "icon2.ico"
+IDI_ICON3               ICON    DISCARDABLE     "icon2.ico"
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -156,7 +156,7 @@ GUIDELINES DESIGNINFO DISCARDABLE
 BEGIN
     "WINMORSTATUS", DIALOG
     BEGIN
-        RIGHTMARGIN, 229
+        RIGHTMARGIN, 258
         BOTTOMMARGIN, 214
     END
 END

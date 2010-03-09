@@ -295,9 +295,12 @@ DllExport int APIENTRY CloseBPQ32();
 BOOL (FAR WINAPI * Init_IP) ();
 BOOL (FAR WINAPI * Poll_IP) ();
 
-BOOL (FAR WINAPI * Rig_Command) ();
-BOOL (FAR WINAPI * Rig_Init) ();
-BOOL (FAR WINAPI * Rig_Poll) ();
+BOOL APIENTRY Rig_Init();
+BOOL APIENTRY Rig_Poll();
+BOOL APIENTRY Rig_Command();
+//BOOL (FAR WINAPI * Rig_Command) ();
+//BOOL (FAR WINAPI * Rig_Init) ();
+//BOOL (FAR WINAPI * Rig_Poll) ();
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -900,7 +903,7 @@ FirstInit()
 
 	if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
 
-	if (RigRequired) if (LoadRigDriver()) RigActive = Rig_Init();
+	if (RigRequired) RigActive = Rig_Init();
 
 	_beginthread(MonitorThread,0,0);
 	
@@ -948,7 +951,7 @@ BOOL LoadIPDriver()
 	}
 	return TRUE;
 }
-
+/*
 BOOL LoadRigDriver()
 {
 	char msg[128];
@@ -990,7 +993,7 @@ BOOL LoadRigDriver()
 	return TRUE;
 }
 
-
+*/
 Check_Timer()
 {
 	// Don't attach timer to Perl or ntvdm Process
@@ -1059,7 +1062,7 @@ Check_Timer()
 
 		if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
 
-		if (RigRequired) if (LoadRigDriver()) RigActive = TRUE;
+		if (RigRequired) RigActive = TRUE;
 
 		_beginthread(MonitorThread,0,0);
 
@@ -2751,6 +2754,12 @@ DllExport int APIENTRY AllocateStream(int stream)
 
 	}
 	return(retcode);
+}
+int APIENTRY Rig_Command(int Session, char * Command);
+
+BOOL Rig_CommandInt(int Session, char * Command)
+{
+	return Rig_Command(Session, Command);
 }
 
 DllExport int APIENTRY DeallocateStream(int stream)

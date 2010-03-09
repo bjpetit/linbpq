@@ -523,29 +523,14 @@ BOOL LoadRigDriver()
 {
 	char msg[128];
 	int err=0;
-	UCHAR Value[MAX_PATH];
-	char DLL[]="RigControl.dll";
-	
-	// If no directory, use current
 
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value, DLL);
-	}
-		else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value, DLL);
-	}
+	hRigModule = GetModuleHandle("bpq32.dll");
 		
-	hRigModule = LoadLibrary(Value);
-
 	if (hRigModule == NULL)
 	{
 		err=GetLastError();
 
-		wsprintf(msg,"Error loading Driver %s - Error code %d",	DLL,err);
+		wsprintf(msg,"Error loading bpq32.dll - Error code %d", err);
 		
 		WritetoConsole(msg);
 		return FALSE;

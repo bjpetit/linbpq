@@ -4167,7 +4167,7 @@ MHEND:
 
 	PUBLIC RADIOCMD
 
-EXTERN	_Rig_Command:DWORD
+EXTERN	_Rig_Command@8:NEAR
 
 RADIOCMD:
 
@@ -4176,19 +4176,6 @@ RADIOCMD:
 	MOV	CONNECTREPLYPTR,EDI	; SAVE POINTER
 	MOV	CONNECTSESSION,EBX
 
-	CMP		_Rig_Command,0
-	JNE	@F
-	
-; Rig Control not available
-
-	MOV	ESI,OFFSET32 RADERRMSG
-	MOV	ECX,RADERRLEN
-
-	REP MOVSB
-	JMP	SENDCOMMANDREPLY
-
-@@:
-
 	push	EBX
 	push	esi
 
@@ -4196,7 +4183,7 @@ RADIOCMD:
 	PUSH	ESI				; Command
 	PUSH	EAX				; Srream	
 	
-	CALL	_Rig_Command
+	CALL	_Rig_Command@8
 	
 	pop	esi
 	POP	EBX

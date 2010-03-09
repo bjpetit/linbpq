@@ -27,7 +27,7 @@
 #include "bpq32.h"
 #include "winmor.h"
 
-#include "..\RigControl\RigControl.h"
+#include "..\RigControl.h"
 
 #include "AsmStrucs.h"
 
@@ -722,7 +722,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 1)		// Request Permission
 		{
-			if (TNC->ConnectPending)
+			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
 //			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
@@ -733,7 +733,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		if (Param == 2)		// Check  Permission
 		{
 			if (TNC->ConnectPending)
-				return 0;	// Keep Waiting
+				return -1;	// Skip Interval
 
 			return 1;		// OK to change
 		}
@@ -1332,7 +1332,11 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			TNC->Connected = TRUE;			// Subsequent data to data channel
 
-			wsprintf(Status, "%s Connected to %s Inbound", TNC->RemoteCall, TNC->TargetCall);
+			if (TNC->RIG)
+				wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
+			else
+				wsprintf(Status, "%s Connected to %s Inbound", TNC->RemoteCall, TNC->TargetCall);
+
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 			// See which application the connect is for

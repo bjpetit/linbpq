@@ -6,7 +6,7 @@
 #define IDD_DXNET                       101
 #define IDI_DXNET                       103
 #define IDI_ICON1                       105
-#define IDI_ICON3                       107
+//#define IDI_ICON3                       107
 #define IDB_DXNET                       120
 #define IDI_ICON2                       123
 #define ID_EXIT                         1000
