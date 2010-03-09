@@ -75,7 +75,7 @@ VOID ProcessYaesuCmdAck(struct PORTINFO * PORT);
 VOID ProcessKenwoodFrame(PORT);
 VOID KenwoodPoll(struct PORTINFO * PORT);
 
-int Q_ADD(UINT *Q,UINT *BUFF);
+int Q_ADD_RIG(UINT *Q,UINT *BUFF);
 
 extern  struct TRANSPORTENTRY * L4TABLE;
 
@@ -90,7 +90,7 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 #define NUMBEROFBUFFERS 20
 
-static UINT FREE_Q=0;
+static UINT FREE_Q_RIG=0;
 
 static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
 
@@ -717,7 +717,7 @@ NextPort:
 
 // Get buffer from Queue
 
-UINT * Q_REM(UINT *Q)
+UINT * Q_REM_RIG(UINT *Q)
 {
 	UINT  * first,next;
 	
@@ -736,15 +736,15 @@ UINT ReleaseBuffer(UINT *BUFF)
 {
 	UINT * pointer;
 	
-	(UINT)pointer=FREE_Q;
+	(UINT)pointer=FREE_Q_RIG;
 	*BUFF=(UINT)pointer;
-	FREE_Q=(UINT)BUFF;
+	FREE_Q_RIG=(UINT)BUFF;
 
 	return (0);
 }
 
 
-/*int Q_ADD(UINT *Q,UINT *BUFF)
+int Q_ADD_RIG(UINT *Q,UINT *BUFF)
 {
 	UINT * next;
 	
@@ -766,8 +766,8 @@ UINT ReleaseBuffer(UINT *BUFF)
 	return(0);
 }
 
-*/
-char VersionString[100];
+
+
 /*
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
@@ -1060,7 +1060,7 @@ portok:
 			return FALSE;
 		}
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = Q_REM_RIG(&FREE_Q_RIG);
 
 		if (buffptr == 0)
 		{
@@ -1096,7 +1096,7 @@ portok:
 
 		buffptr[1] = 19;
 		
-		Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
 
 		return TRUE;
 
@@ -1120,7 +1120,7 @@ portok:
 			return FALSE;
 		}
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = Q_REM_RIG(&FREE_Q_RIG);
 
 		if (buffptr == 0)
 		{
@@ -1146,7 +1146,7 @@ portok:
 					
 		buffptr[1] = 10;
 		
-		Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
 
 		return TRUE;
 
@@ -1170,7 +1170,7 @@ portok:
 			return FALSE;
 		}
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = Q_REM_RIG(&FREE_Q_RIG);
 
 		if (buffptr == 0)
 		{
@@ -1184,7 +1184,7 @@ portok:
 
 		buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;", FreqString, ModeNo);
 		
-		Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
 
 		return TRUE;
 
@@ -1230,7 +1230,7 @@ DllExport BOOL APIENTRY Rig_Init()
 
 	// Build buffer pool
 
-	FREE_Q = 0;			// In case reloading;
+	FREE_Q_RIG = 0;			// In case reloading;
 
 	for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
 	{	
@@ -1739,7 +1739,7 @@ ScanExit:
 		int datalen;
 		UINT * buffptr;
 			
-		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
+		buffptr=Q_REM_RIG(&RIG->BPQtoRADIO_Q);
 
 		datalen=buffptr[1];
 
@@ -1993,7 +1993,7 @@ SendResponse(int Session, char * Msg)
 
 	VEC = L4->L4TARGET;
 
-	Q_ADD((UINT *)&L4->L4TX_Q, (UINT *)Buffer);
+	Q_ADD_RIG((UINT *)&L4->L4TX_Q, (UINT *)Buffer);
 
 	PostMessage(VEC->HOSTHANDLE, BPQMsg, VEC->HOSTSTREAM, 2);  
 
@@ -2266,7 +2266,7 @@ ScanExit:
 		int datalen;
 		UINT * buffptr;
 			
-		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
+		buffptr=Q_REM_RIG(&RIG->BPQtoRADIO_Q);
 
 		datalen=buffptr[1];
 
@@ -2452,7 +2452,7 @@ ScanExit:
 		int datalen;
 		UINT * buffptr;
 			
-		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
+		buffptr=Q_REM_RIG(&RIG->BPQtoRADIO_Q);
 
 		datalen=buffptr[1];
 

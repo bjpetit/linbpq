@@ -366,7 +366,134 @@ void MoveWindows(struct ConsoleInfo * Cinfo)
 
 }
 
-COLORREF Colour;
+
+INT_PTR CALLBACK ChatColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    TEXTMETRIC tm; 
+    int y;  
+    LPMEASUREITEMSTRUCT lpmis; 
+    LPDRAWITEMSTRUCT lpdis; 
+
+
+	switch (message)
+	{
+		int Colour;
+		USER *user;
+		char Call[100];
+		int Sel;
+		char ColourString[100];
+
+	case WM_INITDIALOG:
+
+		for (user = user_hd; user; user = user->next)
+		{
+			SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_ADDSTRING, 0, (LPARAM) user->call);
+		}
+	
+		for (Colour = 0; Colour < 100; Colour++)
+		{
+			SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_ADDSTRING, 0, (LPARAM) Colours [Colour]);
+		}
+		return TRUE;
+
+		       
+	case WM_MEASUREITEM: 
+ 
+            lpmis = (LPMEASUREITEMSTRUCT) lParam; 
+ 
+            // Set the height of the list box items. 
+ 
+            lpmis->itemHeight = 15; 
+            return TRUE; 
+ 
+	case WM_DRAWITEM: 
+ 
+            lpdis = (LPDRAWITEMSTRUCT) lParam; 
+ 
+            // If there are no list box items, skip this message. 
+ 
+            if (lpdis->itemID == -1) 
+            { 
+                break; 
+            } 
+ 
+            switch (lpdis->itemAction) 
+            { 
+				case ODA_SELECT: 
+                case ODA_DRAWENTIRE: 
+ 			
+					// if Chat Console, and message has a colour eacape, action it 
+ 
+                    GetTextMetrics(lpdis->hDC, &tm); 
+ 
+                    y = (lpdis->rcItem.bottom + lpdis->rcItem.top - tm.tmHeight) / 2;
+
+						SetTextColor(lpdis->hDC,  Colours[lpdis->itemID]);
+
+//					SetBkColor(lpdis->hDC, 0);
+
+					wsprintf(ColourString, "XXXXXX %06X", Colours[lpdis->itemID]); 
+
+                    TextOut(lpdis->hDC, 
+                        6, 
+                        y, 
+                        ColourString, 
+                        13); 						
+ 
+ //					SetTextColor(lpdis->hDC, OldColour);
+
+                    break; 
+			}
+
+
+	case WM_COMMAND:
+
+		switch LOWORD(wParam)
+		{
+		case IDC_CHATCALLS:
+
+			if (HIWORD(wParam) == CBN_SELCHANGE)
+			{
+				Sel = SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETCURSEL, 0, 0);
+			
+				SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&Call);
+
+				user = user_find(Call, NULL);
+
+				if (user)
+					SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_SETCURSEL, user->Colour - 10, 0);
+			}
+
+			break;
+
+		case IDOK:
+		{
+			Sel = SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETCURSEL, 0, 0);
+			
+			SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&Call);
+
+			Sel = SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_GETCURSEL, 0, 0);
+				
+			user = user_find(Call, NULL);
+
+			if (user)
+			{
+				user->Colour = Sel + 10;
+				upduser(user);
+			}
+		}
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		
+		}
+	}
+	return FALSE;
+}
+
+
 
 LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -497,6 +624,12 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		
 			CopyToClipboard(Cinfo->hwndOutput);
 			break;
+
+
+		case IDM_EDITCHATCOLOURS:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_CHATCOLCONFIG), hWnd, ChatColourDialogProc);
+			break;
+
 
 		//case BPQHELP:
 

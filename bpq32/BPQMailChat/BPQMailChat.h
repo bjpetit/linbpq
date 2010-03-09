@@ -714,6 +714,8 @@ VOID removelinks();
 VOID SetupChat();
 VOID SendChatLinkStatus();
 VOID ClearChatLinkStatus();
+void rduser(USER *user);
+void upduser(USER *user);
 VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len);
 
 #define Connect(stream) SessionControl(stream,1,0)

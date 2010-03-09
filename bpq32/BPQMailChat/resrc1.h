@@ -60,6 +60,8 @@
 #define BYTES_IN                        1051
 #define LASTCONNECT                     1052
 #define CONN_IN                         1053
+#define IDC_CHATCALLS                   1064
+#define IDC_CHATCOLOURS                 1065
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -91,6 +93,7 @@
 #define IDD_HRHELP                      30005
 #define IDD_EDITMSGTEXT                 30006
 #define IDD_UPDATECHATMAP               30007
+#define IDD_CHATCOLCONFIG               30008
 #define IDM_USERS                       40001
 #define IDM_FWD                         40002
 #define IDM_MESSAGES                    40003
@@ -108,14 +111,15 @@
 #define ID_ACTIONS_SENDMSGFROMCLIPBOARD 40015
 #define IDM_CHATCONSOLE                 40016
 #define ID_ACTIONS_UPDATECHATMAPINFO    40017
+#define IDM_EDITCHATCOLOURS             40018
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
-#define _APS_NEXT_COMMAND_VALUE         40018
-#define _APS_NEXT_CONTROL_VALUE         1061
+#define _APS_NEXT_COMMAND_VALUE         40019
+#define _APS_NEXT_CONTROL_VALUE         1064
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

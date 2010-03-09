@@ -100,11 +100,12 @@ VOID nputs(CIRCUIT * conn, char * buf)
 {
 	// Seems to send buf to socket
 
-	if (*buf = 0x1b)
+	QueueMsg(conn, buf, strlen(buf));
+
+	if (*buf == 0x1b)
 		buf += 2;				// Colour Escape
 	
 	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
-	QueueMsg(conn, buf, strlen(buf));
 }
 
 VOID nputc(CIRCUIT * conn, char buf)
@@ -335,7 +336,7 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 	}
 }
 
-static void upduser(USER *user)
+void upduser(USER *user)
 {
 	FILE *in, *out;
 	char *c;
@@ -366,7 +367,7 @@ static void upduser(USER *user)
 		}
 	}
 
-	fprintf(out, "%s %d %s %s¬%x\n", user->call, user->rtflags, user->name, user->qth, user->Colour);
+	fprintf(out, "%s %d %s %s¬%d\n", user->call, user->rtflags, user->name, user->qth, user->Colour);
 	fclose(in);
 	fclose(out);
 
@@ -374,7 +375,7 @@ static void upduser(USER *user)
 	rename(RtUsrTemp, RtUsr);
 }
 
-static void rduser(USER *user)
+void rduser(USER *user)
 {
 	FILE *in;
 	char *name, *flags, *qth;
@@ -409,7 +410,7 @@ static void rduser(USER *user)
 			if (ptr)
 			{
 				*ptr++ = 0;
-				sscanf(ptr, "%x", &user->Colour);
+ 				user->Colour = atoi(ptr);
 			}
 			strnew(&user->qth,  qth);
 			break;
@@ -1132,8 +1133,11 @@ void text_tellu(USER *user, char *text, char *to, int who)
 												
 						*(--buf) = user->Colour; 
 						*(--buf) = 0x1b;
-					}					
-					nputs(circuit, buf);
+						nputs(circuit, buf);
+						buf +=2;
+					}
+					else
+						nputs(circuit, buf);
 				}	
 				break;
 
@@ -1145,8 +1149,12 @@ void text_tellu(USER *user, char *text, char *to, int who)
 					
 					*(--buf) = user->Colour; 
 					*(--buf) = 0x1b;
-				}					
-				nputs(circuit, buf);
+					nputs(circuit, buf);
+					buf +=2;
+				}
+				else
+					nputs(circuit, buf);
+	
 				break;
 	
 			case o_one :
@@ -1158,8 +1166,11 @@ void text_tellu(USER *user, char *text, char *to, int who)
 						
 						*(--buf) = user->Colour; 
 						*(--buf) = 0x1b;
-					}					
-					nputs(circuit, buf);
+						nputs(circuit, buf);
+						buf +=2;
+					}
+					else
+						nputs(circuit, buf);
 				}
 				break;
 		}
@@ -1169,7 +1180,8 @@ void text_tellu(USER *user, char *text, char *to, int who)
 void text_tellu_Joined(USER * user)
 {
 	CIRCUIT *circuit;
-	char buf[256];
+	UCHAR Buffer[200];
+	UCHAR *buf = &Buffer[4];
 
 	sprintf(buf, "%-6.6s : *** Joined Chat, Topic %s", user->call, user->topic->name);
 
@@ -1184,7 +1196,17 @@ void text_tellu_Joined(USER * user)
 		if (!(circuit->rtcflags & p_user)) continue;  // Circuit is a link.
 		if ((circuit->u.user == user) && !(user->rtflags & u_echo)) continue;
 
-		nputs(circuit, buf);
+		if (circuit->BPQStream == -2)	// To console
+		{
+			// Put a colour header on message
+					
+			*(--buf) = user->Colour; 
+			*(--buf) = 0x1b;
+			nputs(circuit, buf);
+			buf +=2;
+		}
+		else
+			nputs(circuit, buf);
 
 		if (circuit->u.user->rtflags & u_bells)
 			if (circuit->BPQStream < 0) // Console
