@@ -440,6 +440,10 @@
 
 // Add ELSE Option to connect scripts.
 
+// Version 1.0.3.41
+
+// Improved handling of Multiple Addresses
+// Add user colours to chat.
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
