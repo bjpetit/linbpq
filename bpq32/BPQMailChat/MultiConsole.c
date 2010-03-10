@@ -853,7 +853,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			{
 				char Msg[INPUTLEN+4];
 				Msg[0] = 0x1b;
-				Msg[1] = 1;
+				Msg[1] = 11;
 				memcpy(&Msg[2], Cinfo->kbbuf, Cinfo->kbptr+1);
 
 				WritetoConsoleWindow(Cinfo->BPQStream, Msg, Cinfo->kbptr+3);
