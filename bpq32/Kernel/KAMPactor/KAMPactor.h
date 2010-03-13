@@ -66,6 +66,9 @@ struct TNCINFO
 	BOOL HFPacket;					// Set if HF port is in Packet mode instead of Pactor Mode
 
 	HWND hDlg;						// Status Window Handle
+	
+	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+
 };
 
 

@@ -296,11 +296,9 @@ BOOL (FAR WINAPI * Init_IP) ();
 BOOL (FAR WINAPI * Poll_IP) ();
 
 BOOL APIENTRY Rig_Init();
+BOOL APIENTRY Rig_Close();
 BOOL APIENTRY Rig_Poll();
 BOOL APIENTRY Rig_Command();
-//BOOL (FAR WINAPI * Rig_Command) ();
-//BOOL (FAR WINAPI * Rig_Init) ();
-//BOOL (FAR WINAPI * Rig_Poll) ();
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -797,6 +795,8 @@ VOID CALLBACK TimerProc(
 				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 			}
 
+			Rig_Close();
+
 			Sleep(2000);
 
 			_asm{
@@ -825,8 +825,11 @@ VOID CALLBACK TimerProc(
 					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
 				}
 			}
-
+			
 			WritetoConsole("\n\nReconfiguration Complete\n");	
+			
+			if (RigRequired) RigActive = Rig_Init();
+			
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
 	}
@@ -1062,7 +1065,7 @@ Check_Timer()
 
 		if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
 
-		if (RigRequired) RigActive = TRUE;
+		if (RigRequired) RigActive = Rig_Init();
 
 		_beginthread(MonitorThread,0,0);
 
@@ -1311,7 +1314,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		if (_stricmp(pgm,"bpq32.exe") == 0 &&  AttachingProcess == 1) AttachingProcess=0;
 
 		GetProcess(GetCurrentProcessId(),pgm);
-		n=wsprintf(buf,"BPQ32 DLL Attach complete - Program %s  - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
+		n=wsprintf(buf,"BPQ32 DLL Attach complete - Program %s - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
 		OutputDebugString(buf);
 
 		// Set up local variables
@@ -1418,10 +1421,11 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 					PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
 				}
 			}
+			Rig_Close();
 		}
 
 		GetProcess(GetCurrentProcessId(),pgm);
-		n=wsprintf(buf,"BPQ32 DLL Detach complete - Program %s  - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
+		n=wsprintf(buf,"BPQ32 DLL Detach complete - Program %s - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
 		OutputDebugString(buf);
 
 		return 1;
@@ -3325,7 +3329,7 @@ DllExport int APIENTRY ClearNodes ()
 
 
 #include "SHELLAPI.H"
-#include "resource.h"
+#include "kernelresource.h"
 
 char AppName[] = "BPQ32";
 char Title[80] = "BPQ32.dll Console";

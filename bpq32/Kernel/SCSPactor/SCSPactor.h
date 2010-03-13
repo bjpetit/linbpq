@@ -89,6 +89,8 @@ struct TNCINFO
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
 
+	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+
 };
 
 

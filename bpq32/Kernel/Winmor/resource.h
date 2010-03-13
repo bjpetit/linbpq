@@ -2,7 +2,7 @@
 // Microsoft Developer Studio generated include file.
 // Used by WINMOR.rc
 //
-#define IDI_ICON3                       3
+#define IDI_ICON2                       2
 #define IDC_PROTOSTATE                  1000
 #define IDC_CHANSTATE                   1001
 #define IDC_MODE                        1002

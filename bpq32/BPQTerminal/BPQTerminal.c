@@ -95,6 +95,40 @@ void WriteMonitorLine(char * Msg, int MsgLen);
 VOID WritetoOutputWindow(char * Msg, int len);
 
 
+COLORREF Colours[256] = {0,
+		RGB(0,0,0), RGB(0,0,128), RGB(0,0,192), RGB(0,0,255),				// 1 - 4
+		RGB(0,64,0), RGB(0,64,128), RGB(0,64,192), RGB(0,64,255),			// 5 - 8
+		RGB(0,128,0), RGB(0,128,128), RGB(0,128,192), RGB(0,128,255),		// 9 - 12
+		RGB(0,192,0), RGB(0,192,128), RGB(0,192,192), RGB(0,192,255),		// 13 - 16
+		RGB(0,255,0), RGB(0,255,128), RGB(0,255,192), RGB(0,255,255),		// 17 - 20
+
+		RGB(64,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 21 
+		RGB(64,64,0), RGB(64,64,128), RGB(64,64,192), RGB(64,64,255),
+		RGB(64,128,0), RGB(64,128,128), RGB(64,128,192), RGB(64,128,255),
+		RGB(64,192,0), RGB(64,192,128), RGB(64,192,192), RGB(64,192,255),
+		RGB(64,255,0), RGB(64,255,128), RGB(64,255,192), RGB(64,255,255),
+
+		RGB(128,0,0), RGB(128,0,128), RGB(128,0,192), RGB(128,0,255),				// 41
+		RGB(128,64,0), RGB(128,64,128), RGB(128,64,192), RGB(128,64,255),
+		RGB(128,128,0), RGB(128,128,128), RGB(128,128,192), RGB(128,128,255),
+		RGB(128,192,0), RGB(128,192,128), RGB(128,192,192), RGB(128,192,255),
+		RGB(128,255,0), RGB(128,255,128), RGB(128,255,192), RGB(128,255,255),
+
+		RGB(192,0,0), RGB(192,0,128), RGB(192,0,192), RGB(192,0,255),				// 61
+		RGB(192,64,0), RGB(192,64,128), RGB(192,64,192), RGB(192,64,255),
+		RGB(192,128,0), RGB(192,128,128), RGB(192,128,192), RGB(192,128,255),
+		RGB(192,192,0), RGB(192,192,128), RGB(192,192,192), RGB(192,192,255),
+		RGB(192,255,0), RGB(192,255,128), RGB(192,255,192), RGB(192,2552,255),
+
+		RGB(255,0,0), RGB(255,0,128), RGB(255,0,192), RGB(255,0,255),				// 81
+		RGB(255,64,0), RGB(255,64,128), RGB(255,64,192), RGB(255,64,255),
+		RGB(255,128,0), RGB(255,128,128), RGB(255,128,192), RGB(255,128,255),
+		RGB(255,192,0), RGB(255,192,128), RGB(255,192,192), RGB(255,192,255),
+		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,2552,255)
+};
+
+
+
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
@@ -607,6 +641,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
 	LPRECT lprc;
+	UCHAR Buffer[1000];
+	UCHAR * buf = Buffer;
+    TEXTMETRIC tm; 
+    int y;  
+    LPMEASUREITEMSTRUCT lpmis; 
+    LPDRAWITEMSTRUCT lpdis; 
+
 
 	if (message == BPQMsg)
 	{
@@ -623,6 +664,57 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	
 	switch (message) { 
+
+        case WM_MEASUREITEM: 
+ 
+            lpmis = (LPMEASUREITEMSTRUCT) lParam; 
+ 
+            // Set the height of the list box items. 
+ 
+  //          lpmis->itemHeight = 15; 
+            return TRUE; 
+ 
+        case WM_DRAWITEM: 
+ 
+            lpdis = (LPDRAWITEMSTRUCT) lParam; 
+ 
+            // If there are no list box items, skip this message. 
+ 
+            if (lpdis->itemID == -1) 
+            { 
+                break; 
+            } 
+ 
+            switch (lpdis->itemAction) 
+            { 
+				case ODA_SELECT: 
+                case ODA_DRAWENTIRE: 
+ 
+				  // if Chat Console, and message has a colour eacape, action it 
+					
+					SendMessage(lpdis->hwndItem, LB_GETTEXT, lpdis->itemID, (LPARAM) Buffer); 
+ 
+                    GetTextMetrics(lpdis->hDC, &tm); 
+ 
+                    y = (lpdis->rcItem.bottom + lpdis->rcItem.top - tm.tmHeight) / 2;
+
+					if (Buffer[0] == 0x1b)
+					{
+						SetTextColor(lpdis->hDC,  Colours[Buffer[1] - 10]);
+						buf += 2;
+					}
+//					SetBkColor(lpdis->hDC, 0);
+
+                    TextOut(lpdis->hDC, 
+                        6, 
+                        y, 
+                        buf, 
+                        strlen(buf)); 						
+ 
+ //					SetTextColor(lpdis->hDC, OldColour);
+
+                    break; 
+			}
 
 		case WM_ACTIVATE:
 
@@ -863,6 +955,8 @@ int StackIndex=0;
  
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
+	char DisplayLine[200] = "\x1b\xb";
+	
 	if (uMsg == WM_KEYUP)
 	{
 		unsigned int i;
@@ -947,9 +1041,11 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			kbbuf[kbptr]=13;
 
-			// Echo
+			// Echo, with set Black escape
 
-			WritetoOutputWindow(kbbuf, kbptr+1);
+			memcpy(&DisplayLine[2], kbbuf, kbptr+1);
+
+			WritetoOutputWindow(DisplayLine, kbptr+3);
 		
 			// Replace null with CR, and send to Node
 
@@ -1349,7 +1445,7 @@ DoMonData(HWND hWnd)
 	char * ptr1, * ptr2;
 	int index, stamp;
 	int len;
-	unsigned char buffer[1024], monbuff[512];
+	unsigned char buffer[1024] = "\x1b\x20", monbuff[512];
 
 	if (MONCount(Stream) > 0)
 	{
@@ -1357,14 +1453,21 @@ DoMonData(HWND hWnd)
 		
 			stamp=GetRaw(Stream, monbuff,&len,&count);
 
+			if (monbuff[4] & 0x80)		// TX
+				buffer[1] = 91;
+			else
+				buffer[1] = 11;
+
 			// See if a NODES
 
 
 			if (!MonitorNODES && monbuff[21] == 3 && monbuff[22] == 0xcf && monbuff[23] == 0xff)
 				len = 0;
 			else
-				len=DecodeFrame(monbuff,buffer,stamp);
-	
+			{
+				len=DecodeFrame(monbuff,&buffer[2],stamp);
+				len +=2;
+			}
 			ptr1=&buffer[0];
 
 		lineloop:

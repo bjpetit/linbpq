@@ -213,7 +213,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 				RegCloseKey(hKey);
 			}
-
 	 	
 			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
 			Sleep(100);
@@ -223,6 +222,11 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			Sleep(100);
 			closesocket(TNC->WINMORDataSock);
 			closesocket(TNC->WINMORSock);
+
+			if (MinimizetoTray)	
+				DeleteTrayMenuItem(TNC->hDlg);
+
+
 		}
 
 		return 1;
@@ -709,6 +713,14 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		Sleep(500);
 		closesocket(TNC->WINMORDataSock);
 		closesocket(TNC->WINMORSock);
+
+		PostMessage(TNC->hDlg, WM_DESTROY,0,0);
+		DestroyWindow(TNC->hDlg);
+
+		if (MinimizetoTray)	
+			DeleteTrayMenuItem(TNC->hDlg);
+
+		TNC->hDlg = 0;
 
 		return (0);
 

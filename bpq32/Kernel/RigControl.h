@@ -1,7 +1,7 @@
 
 #include <winioctl.h>
-#include "resource.h"
-#include "resrc1.h"
+#include "Rigresource.h"
+
 
 
 #define MAXBLOCK 4096

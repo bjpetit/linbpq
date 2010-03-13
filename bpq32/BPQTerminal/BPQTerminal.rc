@@ -112,19 +112,20 @@ BPQICON                 ICON    DISCARDABLE     "BPQ.ICO"
 
 BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 300, 300
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
-    WS_SYSMENU | WS_SIZEBOX
+    WS_SYSMENU
 CAPTION "BPQTerminal Version 1.0.0"
 MENU MENU_1
 CLASS "BPQMAINWINDOW"
 FONT 8, "FixedSys"
 BEGIN
-    LISTBOX         116,5,6,290,134,LBS_NOINTEGRALHEIGHT  | LBS_MULTIPLESEL |
-                    WS_VSCROLL | WS_HSCROLL
-    LISTBOX         117,5,156,290,109,LBS_NOINTEGRALHEIGHT  | LBS_MULTIPLESEL |
-                    WS_VSCROLL | WS_HSCROLL
+    LISTBOX         116,5,6,290,134,LBS_MULTIPLESEL | LBS_OWNERDRAWFIXED | 
+                    LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
+                    WS_HSCROLL
+    LISTBOX         117,5,156,290,109,LBS_MULTIPLESEL | LBS_OWNERDRAWFIXED | 
+                    LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
+                    WS_HSCROLL
     EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
-    CTEXT        "",119,0,145,300,5,SS_NOTIFY
-
+    CTEXT           "",119,0,145,300,5,SS_NOTIFY
 END
 
 
@@ -143,16 +144,15 @@ BEGIN
         MENUITEM "Enable Bells",                BPQBELLS
         MENUITEM "Enable Chat",                 BPQCHAT
         MENUITEM "Strip Linefeeds",             BPQStripLF
-        MENUITEM "Log Monitor",			        BPQLogMonitor
-        MENUITEM "Log Output",			        BPQLogOutput
-        MENUITEM "Send Disconnected",			BPQSendDisconnected
-
+        MENUITEM "Log Monitor",                 BPQLogMonitor
+        MENUITEM "Log Output",                  BPQLogOutput
+        MENUITEM "Send Disconnected",           BPQSendDisconnected
     END
     POPUP "Monitor"
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX
         MENUITEM "Monitor Supervisory",         BPQMCOM
-        MENUITEM "Monitor NODES",				BPQMNODES
+        MENUITEM "Monitor NODES",               BPQMNODES
     END
     POPUP "Edit"
     BEGIN

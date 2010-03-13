@@ -197,9 +197,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		case WM_DESTROY:
 		
-			// Remove the subclass from the edit control. 
-
-
 			if (MinimizetoTray) 
 				DeleteTrayMenuItem(hWnd);
 
@@ -212,7 +209,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	return (0);
 }
 
-HMENU hPopMenu;
+//HMENU hPopMenu;
 
 
 BOOL CreateRigWindow()
@@ -224,14 +221,7 @@ BOOL CreateRigWindow()
 	char Key[80];
 	char Size[80];
 	int Top, Left;
-	HMENU hMenu;
-
-	if (hDlg)
-	{
-		ShowWindow(hDlg, SW_SHOWNORMAL);
-		SetForegroundWindow(hDlg);
-		return FALSE;							// Already open
-	}
+//	HMENU hMenu;
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -280,8 +270,7 @@ BOOL CreateRigWindow()
 	{
 		Vallen=80;
 
-		retCode = RegQueryValueEx(hKey,"Size",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+		retCode = RegQueryValueEx(hKey,"Size",0, (ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
 			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
@@ -291,16 +280,13 @@ BOOL CreateRigWindow()
 	Left = Rect.left;
 
 	GetWindowRect(hDlg, &Rect);	// Get the real size
-
 	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
 
 	GetWindowRect(hDlg, &Rect);	// Get Actual Position
-
 	ShowWindow(hDlg, SW_SHOWNORMAL);
 
 	return TRUE;
 }
-
 
 struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
 {
@@ -333,7 +319,6 @@ char * CheckTimeBands(struct RIGINFO * RIG)
 	return RIG->FreqPtr;
 }
 
-
 FILE *file;
 
 char errbuf[256];
@@ -342,10 +327,10 @@ BOOL ReadConfigFile()
 {
 	char buf[256];
 
+	NumberofPorts = 0;
+
 	if ((file = fopen(CFGFN,"r")) == NULL)
-	{
 		return (TRUE);
-	}
 
 	while(fgets(buf, 255, file) != NULL)
 	{
@@ -403,7 +388,6 @@ NextPort:
 	if(*ptr =='#') return (TRUE);			// comment
 
 	if(*ptr ==';') return (TRUE);			// comment
-
 
 	if (memcmp(ptr, "AUTH", 4) == 0)
 	{
@@ -767,57 +751,6 @@ int Q_ADD_RIG(UINT *Q,UINT *BUFF)
 }
 
 
-
-/*
-BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
-{
-	int retCode, disp;
-	HKEY hKey=0;
-	char Size[80];
-	char Key[80];
-
-	switch(ul_reason_being_called)
-	{
-	case DLL_PROCESS_ATTACH:
-
-		hInstance = hInst;
-		return 1;
-   		
-	case DLL_THREAD_ATTACH:
-		
-		return 1;
-    
-	case DLL_THREAD_DETACH:
-	
-		return 1;
-    
-	case DLL_PROCESS_DETACH:
-	
-		if (hDlg == NULL)
-			return 1;
-
-		ShowWindow(hDlg, SW_RESTORE);
-		GetWindowRect(hDlg, &Rect);
-
-		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\RIGCONTROL");
-	
-		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-		if (retCode == ERROR_SUCCESS)
-		{
-			wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
-			retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-			RegCloseKey(hKey);
-		}
-		return 1;
-	}
-}
-*/
 DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 {
 	struct PORTINFO * PORT;
@@ -892,8 +825,6 @@ DllExport struct RIGINFO * APIENTRY Rig_GETPTTREC(int Port)
 
 
 
-
-
 DllExport int APIENTRY Rig_Command(int Session, char * Command)
 {
 	int n, Port, ModeNo, Filter;
@@ -963,8 +894,6 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 				goto portok;
 		}
 	}
-
-
 
 	wsprintf(Command, "Sorry - Port not found\r");
 	return FALSE;
@@ -1239,6 +1168,8 @@ DllExport BOOL APIENTRY Rig_Init()
 
 	CreateRigWindow();
 
+	Row = 0;
+
 	for (p = 0; p < NumberofPorts; p++)
 	{
 		PORT = PORTInfo[p];
@@ -1269,6 +1200,48 @@ DllExport BOOL APIENTRY Rig_Init()
 	return TRUE;
 }
 
+DllExport BOOL APIENTRY Rig_Close()
+{
+	struct PORTINFO * PORT;
+	int p;
+	int retCode, disp;
+	HKEY hKey=0;
+	char Size[80];
+	char Key[80];
+
+	for (p = 0; p < NumberofPorts; p++)
+	{
+		PORT = PORTInfo[p];
+		
+		CloseHandle(PORT->hDevice);
+	}
+
+	if (hDlg == NULL)
+		return 1;
+
+	ShowWindow(hDlg, SW_RESTORE);
+	GetWindowRect(hDlg, &Rect);
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\RIGCONTROL");
+	
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+		RegCloseKey(hKey);
+	}
+
+	DestroyWindow(hDlg);
+	
+	return TRUE;
+}
 
 VOID CreateDisplay(struct PORTINFO * PORT)
 {
@@ -2487,8 +2460,9 @@ ScanExit:
 
 	return;
 }
-
+/*
 int CRow;
+
 HANDLE hComPort, hSpeed, hRigType, hButton, hAddr, hLabel, hTimes, hFreqs, hBPQPort;
 
 VOID CreateRigConfigLine(HWND hDlg, struct PORTINFO * PORT, struct RIGINFO * RIG)
@@ -2609,12 +2583,12 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 
 
-/*	 CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 90, Row, 40,20, hDlg, NULL, hInstance, NULL);
+//	 CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+//                 90, Row, 40,20, hDlg, NULL, hInstance, NULL);
 	
-	 CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 135, Row, 100,20, hDlg, NULL, hInstance, NULL);
-*/
+//	 CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+//                 135, Row, 100,20, hDlg, NULL, hInstance, NULL);
+
 return TRUE; 
 	}
 
@@ -2632,7 +2606,6 @@ return TRUE;
 
 	case WM_COMMAND:
 
-
 		if (Cmd == IDCANCEL)
 		{
 			EndDialog(hDlg, LOWORD(wParam));
@@ -2646,3 +2619,4 @@ return TRUE;
 	return (INT_PTR)FALSE;
 }
 
+*/

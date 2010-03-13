@@ -620,6 +620,53 @@ INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK    ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+struct _EXCEPTION_POINTERS exinfox;
+	
+CONTEXT ContextRecord;
+EXCEPTION_RECORD ExceptionRecord;
+
+	DWORD Stack[16];
+
+Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg)
+{
+	unsigned int SPPtr;
+	unsigned int SPVal;
+
+	memcpy(&ContextRecord, exinfo->ContextRecord, sizeof(ContextRecord));
+	memcpy(&ExceptionRecord, exinfo->ExceptionRecord, sizeof(ExceptionRecord));
+		
+	SPPtr = ContextRecord.Esp;
+
+	Debugprintf("BPQMailChat *** Program Error %x at %x in %s",
+	ExceptionRecord.ExceptionCode, ExceptionRecord.ExceptionAddress, Msg);	
+
+
+	__asm{
+
+		mov eax, SPPtr
+		mov SPVal,eax
+		lea edi,Stack
+		mov esi,eax
+		mov ecx,64
+		rep movsb
+
+	}
+
+	Debugprintf("EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x ESP %x",
+		ContextRecord.Eax, ContextRecord.Ebx, ContextRecord.Ecx,
+		ContextRecord.Edx, ContextRecord.Esi, ContextRecord.Edi, SPVal);
+		
+	Debugprintf("Stack:");
+
+	Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+		SPVal, Stack[0], Stack[1], Stack[2], Stack[3], Stack[4], Stack[5], Stack[6], Stack[7]);
+
+	Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+		SPVal+32, Stack[8], Stack[9], Stack[10], Stack[11], Stack[12], Stack[13], Stack[14], Stack[15]);
+
+}
+
+
 
 void myInvalidParameterHandler(const wchar_t* expression,
    const wchar_t* function, 

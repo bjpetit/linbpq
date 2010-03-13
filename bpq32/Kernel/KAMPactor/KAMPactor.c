@@ -23,6 +23,8 @@
 #include "KAMPactor.h"
 #include "ASMStrucs.h"
 
+#include "..\RigControl.h"
+
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
@@ -355,6 +357,15 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	case 5:				// Close
 
 		CloseHandle(TNCInfo[port]->hDevice);
+		
+		PostMessage(TNC->hDlg, WM_DESTROY,0,0);
+		DestroyWindow(TNC->hDlg);
+
+		if (MinimizetoTray)	
+			DeleteTrayMenuItem(TNC->hDlg);
+
+		TNC->hDlg = 0;
+
 		return (0);
 
 	case 6:				// Scan Control
@@ -1540,7 +1551,11 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				if (Stream == 0)
 				{
-					wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
+					if (TNC->RIG)
+						wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
+					else
+						wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
+
 					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 				}
 
@@ -1597,7 +1612,11 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				
 				if (Stream == 0)
 				{
-					wsprintf(Status, "%s Connected to %s Outbound", TNC->NodeCall, TNC->Streams[0].RemoteCall);
+					if (TNC->RIG)
+						wsprintf(Status, "%s Connected to %s Outbound Freq %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall, TNC->RIG->Valchar);
+					else
+						wsprintf(Status, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
+
 					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 				}
 

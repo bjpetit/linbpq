@@ -1,14 +1,13 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
-#include "resrc1.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
-#include "windows.h"
+#include "afxres.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -28,13 +27,9 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Version
 //
 
-#define Vers 1,1,1,13
-#define Verstring "1.1.1.13\0"
-
-
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION Vers
- PRODUCTVERSION Vers
+ FILEVERSION 1,1,1,13
+ PRODUCTVERSION 1,1,1,13
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -52,12 +47,12 @@ BEGIN
             VALUE "Comments", "KAM Pactor interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "KAMPactor\0"
-            VALUE "FileVersion", Verstring
+            VALUE "FileVersion", "1.1.1.13\0"
             VALUE "InternalName", "KAMPactor\0"
             VALUE "LegalCopyright", "Copyright © 2009 G8BPQ\0"
             VALUE "OriginalFilename", "KAMPactor.dll\0"
             VALUE "ProductName", "  KAMPactor\0"
-            VALUE "ProductVersion", Verstring
+            VALUE "ProductVersion", "1.1.1.13\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -74,7 +69,7 @@ END
 // Dialog
 //
 
-PACTORSTATUS DIALOG DISCARDABLE  0, 0, 214, 125
+PACTORSTATUS DIALOG DISCARDABLE  0, 0, 249, 125
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Pactor Status"
 CLASS "PACTORSTATUS"
@@ -91,7 +86,7 @@ BEGIN
     LTEXT           "",IDC_TNCSTATE,60,25,125,11
     LTEXT           "TNC State",IDC_STATIC,5,25,40,10
     LTEXT           "Comms State",IDC_STATIC,5,10,45,10
-    LTEXT           "",IDC_COMMSSTATE,60,10,145,11
+    LTEXT           "",IDC_COMMSSTATE,60,10,185,11
     LTEXT           "Traffic",IDC_STATIC,5,100,30,10
     LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,60,100,140,11
 END
@@ -129,22 +124,6 @@ BEGIN
     "\0"
 END
 
-#endif    // APSTUDIO_INVOKED
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// DESIGNINFO
-//
-
-#ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO DISCARDABLE 
-BEGIN
-    "PACTORSTATUS", DIALOG
-    BEGIN
-        BOTTOMMARGIN, 125
-    END
-END
 #endif    // APSTUDIO_INVOKED
 
 #endif    // English (U.K.) resources

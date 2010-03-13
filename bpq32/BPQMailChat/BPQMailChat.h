@@ -8,13 +8,25 @@ VOID CheckProgramErrors();
 
 extern int ProgramErrors;
 
-#define My__except_Routine(Message) \
+extern struct _EXCEPTION_POINTERS exinfox;
+
+
+Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg);
+
+/*#define My__except_Routine(Message) \
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
 {\
 	Debugprintf("MAILCHAT *** Program Error %x at %x in %s EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x",\
 		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
+	CheckProgramErrors();\
+}
+*/
+#define My__except_Routine(Message) \
+__except(memcpy(&exinfox, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
+{\
+	Dump_Process_State(&exinfox, Message);\
 	CheckProgramErrors();\
 }
 
@@ -230,7 +242,7 @@ typedef struct cn_t
 
 #define u_echo 0x0002     // User wants his text echoed to him.
 #define u_bells 0x0004    // User wants bell when other users join.
-
+#define u_colour 0x0008    // User wants BPQTerminal colour codes.
 
 typedef struct ConnectionInfo_S
 {

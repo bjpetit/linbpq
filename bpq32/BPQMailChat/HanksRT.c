@@ -1106,6 +1106,21 @@ static void text_xmit(USER *user, USER *to, char *text)
 		FORMAT, id_send, OurNode, user->call, to->call, text);
 }
 
+void put_text(CIRCUIT * circuit, USER * user, UCHAR * buf)
+{
+	if (circuit->u.user->rtflags & u_colour)	// Use Colour
+	{
+		// Put a colour header on message
+												
+		*(--buf) = user->Colour; 
+		*(--buf) = 0x1b;
+		nputs(circuit, buf);
+		buf +=2;
+	}	
+	else	
+		nputs(circuit, buf);
+}
+
 void text_tellu(USER *user, char *text, char *to, int who)
 {
 	CIRCUIT *circuit;
@@ -1126,52 +1141,20 @@ void text_tellu(USER *user, char *text, char *to, int who)
 		{
 			case o_topic :
 				if (circuit->u.user->topic == user->topic)
-				{
-					if (circuit->BPQStream == -2)	// To console
-					{
-						// Put a colour header on message
-												
-						*(--buf) = user->Colour; 
-						*(--buf) = 0x1b;
-						nputs(circuit, buf);
-						buf +=2;
-					}
-					else
-						nputs(circuit, buf);
-				}	
+					put_text(circuit, user, buf);	// Send adding Colour if wanted
+	
 				break;
 
 			case o_all:
 
-				if (circuit->BPQStream == -2)	// To console
-				{
-					// Put a colour header on message
-					
-					*(--buf) = user->Colour; 
-					*(--buf) = 0x1b;
-					nputs(circuit, buf);
-					buf +=2;
-				}
-				else
-					nputs(circuit, buf);
+				if (circuit->u.user->rtflags & u_colour)	// Use Colour
+					put_text(circuit, user, buf);	// Send adding Colour if wanted
 	
 				break;
 	
 			case o_one :
 				if (matchi(circuit->u.user->call, to))
-				{
-					if (circuit->BPQStream == -2)	// To console
-					{
-						// Put a colour header on message
-						
-						*(--buf) = user->Colour; 
-						*(--buf) = 0x1b;
-						nputs(circuit, buf);
-						buf +=2;
-					}
-					else
-						nputs(circuit, buf);
-				}
+					put_text(circuit, user, buf);	// Send adding Colour if wanted
 				break;
 		}
 	}
@@ -1196,17 +1179,7 @@ void text_tellu_Joined(USER * user)
 		if (!(circuit->rtcflags & p_user)) continue;  // Circuit is a link.
 		if ((circuit->u.user == user) && !(user->rtflags & u_echo)) continue;
 
-		if (circuit->BPQStream == -2)	// To console
-		{
-			// Put a colour header on message
-					
-			*(--buf) = user->Colour; 
-			*(--buf) = 0x1b;
-			nputs(circuit, buf);
-			buf +=2;
-		}
-		else
-			nputs(circuit, buf);
+		put_text(circuit, user, buf);	// Send adding Colour if wanted
 
 		if (circuit->u.user->rtflags & u_bells)
 			if (circuit->BPQStream < 0) // Console
@@ -1912,6 +1885,13 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			return TRUE;
 
 		case 'b' : return FALSE;
+
+		case 'c' :
+			user->rtflags ^= u_colour;
+			upduser(user);
+			nprintf(circuit, "BPQTerminal Colour Mode %s\r",  (user->rtflags & u_colour) ? "Enabled" : "Disabled");
+			return TRUE;
+
 		case 'e' : 
 			user->rtflags ^= u_echo;
 			upduser(user);

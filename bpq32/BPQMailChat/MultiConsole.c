@@ -847,8 +847,6 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			// Echo
 
-			Cinfo->FGColour = Cinfo->DefaultColour;
-
 			if (Cinfo->BPQStream == -2)
 			{
 				char Msg[INPUTLEN+4];

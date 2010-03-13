@@ -1184,7 +1184,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			SetupNextFBBMessage(conn);
 			return;
 	
-			} My__except_Routine("Decode B2 Message");
+			} My__except_Routine("Process Multiple Destinations");
+			return;
 
 
 		}
@@ -1205,7 +1206,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 
 		} My__except_Routine("Decode B2 Message");
-
+		
+		return;
 
 	} // end if B2Msg
 
