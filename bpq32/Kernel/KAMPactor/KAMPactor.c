@@ -976,6 +976,12 @@ VOID KAMPoll(int Port)
 					return;
 				}
 
+				if (_memicmp(MsgPtr, "D\r", 2) == 0)
+				{
+					TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
+					return;
+				}
+
 				if ((Stream == 0) && memcmp(MsgPtr, "HFPACKET", 8) == 0)
 				{
 					TNC->HFPacket = TRUE;

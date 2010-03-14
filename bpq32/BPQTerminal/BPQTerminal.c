@@ -34,9 +34,14 @@
 // Add input buffer scrollback.
 // Fix monitoring when PORTNUM specified
 
-// FIx use of numeric keypad 2 and 8 (were treated as up and down)
-
 // Version 2.0.8 December 2009
+
+// Fix use of numeric keypad 2 and 8 (were treated as up and down)
+
+// Version 2.0.9 March 2010
+
+// Add colour for monitor and BPQ Chat
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -191,6 +196,7 @@ BOOL LogMonitor = FALSE;
 BOOL LogOutput = FALSE;
 BOOL SendDisconnected = TRUE;
 BOOL MonitorNODES = TRUE;
+BOOL MonitorColour = TRUE;
 
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
@@ -314,6 +320,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		retCode = RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
 		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
 		retCode = RegSetValueEx(hKey,"Split",0,REG_BINARY,(BYTE *)&Split,sizeof(Split));
+		retCode = RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
+
 		wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
 		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
@@ -443,7 +451,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"AutoConnect",0,			
 			(ULONG *)&Type,(UCHAR *)&AUTOCONNECT,(ULONG *)&Vallen);
-	
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey,"MONColour",0,			
+			(ULONG *)&Type,(UCHAR *)&MonitorColour,(ULONG *)&Vallen);
+
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"Bells",0,			
 			(ULONG *)&Type,(UCHAR *)&Bells,(ULONG *)&Vallen);
@@ -592,6 +604,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	CheckMenuItem(hMenu,BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
 
+	CheckMenuItem(hMenu,MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
 
 	DrawMenuBar(hWnd);	
 
@@ -850,6 +863,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQMNODES:
 
 			ToggleParam(hWnd, &MonitorNODES, BPQMNODES);
+			break;
+
+		case MONCOLOUR:
+
+			ToggleParam(hWnd, &MonitorColour, MONCOLOUR);
 			break;
 
 		case BPQLogMonitor:
@@ -1445,7 +1463,7 @@ DoMonData(HWND hWnd)
 	char * ptr1, * ptr2;
 	int index, stamp;
 	int len;
-	unsigned char buffer[1024] = "\x1b\x20", monbuff[512];
+	unsigned char buffer[1024] = "\x1b\xb", monbuff[512];
 
 	if (MONCount(Stream) > 0)
 	{
@@ -1453,13 +1471,15 @@ DoMonData(HWND hWnd)
 		
 			stamp=GetRaw(Stream, monbuff,&len,&count);
 
-			if (monbuff[4] & 0x80)		// TX
-				buffer[1] = 91;
-			else
-				buffer[1] = 11;
+			if (MonitorColour)
+			{
+				if (monbuff[4] & 0x80)		// TX
+					buffer[1] = 91;
+				else
+					buffer[1] = 17;
+			}
 
 			// See if a NODES
-
 
 			if (!MonitorNODES && monbuff[21] == 3 && monbuff[22] == 0xcf && monbuff[23] == 0xff)
 				len = 0;
@@ -1468,6 +1488,7 @@ DoMonData(HWND hWnd)
 				len=DecodeFrame(monbuff,&buffer[2],stamp);
 				len +=2;
 			}
+
 			ptr1=&buffer[0];
 
 		lineloop:

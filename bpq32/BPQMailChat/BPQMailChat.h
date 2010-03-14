@@ -13,7 +13,7 @@ extern struct _EXCEPTION_POINTERS exinfox;
 
 Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg);
 
-/*#define My__except_Routine(Message) \
+#define My__except_Routine(Message) \
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
 {\
 	Debugprintf("MAILCHAT *** Program Error %x at %x in %s EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x",\
@@ -22,14 +22,14 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
 	CheckProgramErrors();\
 }
-*/
+/*
 #define My__except_Routine(Message) \
 __except(memcpy(&exinfox, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
 {\
 	Dump_Process_State(&exinfox, Message);\
 	CheckProgramErrors();\
 }
-
+*/
 #define My__except_RoutineWithDisconnect(Message) \
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
 {\
@@ -387,7 +387,9 @@ struct UserInfo{
 	int BytesForwardedOut;
 	int ConnectsOut;			// Forwarding Connects Out
 
-	char Spare3[3];
+	USHORT RMSSSIDBits;			// SSID's to poll in RMS
+
+	char Spare1;
 
 	char	HomeBBS[41];		/* 41 home BBS */
 	char	QRA[7];				/* 7  Qth Locator */

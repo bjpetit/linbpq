@@ -579,6 +579,21 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
+			if (_memicmp(&buff[8], "MAXCONREQ", 9) == 0)
+			{
+				if (buff[17] != 13)
+				{
+					// Limit connects
+
+					int tries = atoi(&buff[18]);
+					if (tries > 10) tries = 10;
+					wsprintf(&buff[8], "MAXCONREQ %d\r\nMAXCONREQ\r\n", tries);
+
+					send(TNC->WINMORSock,&buff[8],strlen(&buff[8]), 0);
+					return 0;
+				}
+			}
+
 			if (_memicmp(&buff[8], "CODEC TRUE", 9) == 0)
 				TNC->StartSent = TRUE;
 
@@ -772,7 +787,7 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 
 	ChangeMYC(TNC, TNC->NodeCall);
 
-	send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+	send(TNC->WINMORSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
 
 	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
 

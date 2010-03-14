@@ -205,6 +205,13 @@
 // Add APPLS export for winmor
 // Handle commands ending CR LF
 
+// Build 13
+
+// Incorporate Rig Control in Kernel
+
+// Build 14
+
+// Fix config reload for Rig COntrol 
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T

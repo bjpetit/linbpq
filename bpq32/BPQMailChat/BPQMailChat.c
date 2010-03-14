@@ -445,6 +445,13 @@
 // Improved handling of Multiple Addresses
 // Add user colours to chat.
 
+// Version 1.0.3.42
+
+// Poll multiple SSID's for RMS
+// Colour support for BPQTEerminal
+// New /C chat command to toggle colour on or off.
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
@@ -2833,12 +2840,35 @@ Next:
 
 VOID CopyMessageDatabase()
 {
-	char Backup[MAX_PATH];
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
 
-	strcpy(Backup, MsgDatabasePath);
-	strcat(Backup, ".bak");
+	// Keep 4 Generations
 
-	CopyFile(MsgDatabasePath, Backup, FALSE);
+	strcpy(Backup2, MsgDatabasePath);
+	strcat(Backup2, ".bak.3");
+
+	strcpy(Backup1, MsgDatabasePath);
+	strcat(Backup1, ".bak.2");
+
+	DeleteFile(Backup2);			// Remove old .bak.3
+	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+	strcpy(Backup2, MsgDatabasePath);
+	strcat(Backup2, ".bak.1");
+
+	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+	strcpy(Backup1, MsgDatabasePath);
+	strcat(Backup1, ".bak");
+
+	MoveFile(Backup1, Backup2);		//Move .bak to .bak.1
+
+	strcpy(Backup2, MsgDatabasePath);
+	strcat(Backup2, ".bak");
+
+	CopyFile(MsgDatabasePath, Backup2, FALSE);	// Copy to .bak
+
 }
 
 VOID SaveMessageDatabase()
@@ -6062,9 +6092,10 @@ CheckForSID:
 		{
 			// Build a ;FW: line with all calls with PollRMS Set
 
-			int i;
+			int i, s;
 			char FWLine[10000] = ";FW:";
 			struct UserInfo * user;
+			char RMSCall[20];
 			
 			for (i = 0; i <= NumberofUsers; i++)
 			{
@@ -6072,8 +6103,23 @@ CheckForSID:
 
 				if (user->flags & F_POLLRMS)
 				{
-					strcat(FWLine, " ");
-					strcat(FWLine, user->Call);
+					if (user->RMSSSIDBits == 0) user->RMSSSIDBits = 1;
+
+					for (s = 0; s < 16; s++)
+					{
+						if (user->RMSSSIDBits & (1 << s))
+						{
+							strcat(FWLine, " ");
+							if (s)
+							{
+								wsprintf(RMSCall, "%s-%d", user->Call, s);
+								strcat(FWLine, RMSCall);
+							}
+							else
+								strcat(FWLine, user->Call);
+							
+						}
+					}
 				}
 			}
 			

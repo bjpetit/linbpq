@@ -2,7 +2,7 @@
 // Microsoft Developer Studio generated include file.
 // Used by RigControl.rc
 //
-#define IDI_ICON2                       2
+
 #define ID_ADDRIG                       3
 #define ID_ADDTIME                      4
 #define RIG_MENU1                       103

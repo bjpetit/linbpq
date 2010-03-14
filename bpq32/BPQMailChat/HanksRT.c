@@ -1889,7 +1889,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 		case 'c' :
 			user->rtflags ^= u_colour;
 			upduser(user);
-			nprintf(circuit, "BPQTerminal Colour Mode %s\r",  (user->rtflags & u_colour) ? "Enabled" : "Disabled");
+			nprintf(circuit, "Colour Mode %s\r",  (user->rtflags & u_colour) ? "Enabled" : "Disabled");
 			return TRUE;
 
 		case 'e' : 
@@ -1906,6 +1906,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			nputs(circuit, "/U - Show Users.\r/N - Enter your Name.\r/Q - Enter your QTH.\r/T - Show Topics.\r");
 			nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are not case sensitive\r/P - Show Ports and Links.\r");
 			nputs(circuit, "/A - Toggle Alert on user join.\r");
+			nputs(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal.\r");
 			nputs(circuit, "/E - Toggle Echo.\r/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
 			nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");

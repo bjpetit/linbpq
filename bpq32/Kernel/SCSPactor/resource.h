@@ -3,7 +3,6 @@
 // Used by SCSPactor.rc
 //
 
-#define IDI_ICON2                       3
 #define IDC_PACTORLEVEL                101
 #define IDC_1                        1001
 #define IDC_2                        1002

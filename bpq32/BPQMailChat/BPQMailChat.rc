@@ -181,10 +181,10 @@ BEGIN
                     -1,10,60,360,25
 END
 
-IDD_USEREDIT DIALOGEX 20, 20, 234, 261
+IDD_USEREDIT DIALOGEX 20, 20, 244, 261
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit User"
-FONT 8, "System", 0, 0, 0x1
+FONT 8, "System"
 BEGIN
     COMBOBOX        5000,7,7,57,80,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
                     WS_VSCROLL | WS_TABSTOP
@@ -204,37 +204,41 @@ BEGIN
                     WS_TABSTOP,72,57,57,10
     PUSHBUTTON      "Add user",5100,51,241,42,14,BS_CENTER | BS_VCENTER
     PUSHBUTTON      "Delete user",5101,96,241,42,14,BS_CENTER | BS_VCENTER
-    LTEXT           "Name",-1,7,160,35,14
-    LTEXT           "Password",-1,7,178,35,14
-    LTEXT           "QTH",-1,7,196,35,14
-    LTEXT           "Home BBS",-1,7,214,40,14
+    LTEXT           "Name",IDC_STATIC,7,160,35,14
+    LTEXT           "Password",IDC_STATIC,7,178,35,14
+    LTEXT           "QTH",IDC_STATIC,7,196,35,14
+    LTEXT           "Home BBS",IDC_STATIC,7,214,40,14
     PUSHBUTTON      "Save",5102,141,241,42,14,BS_CENTER | BS_VCENTER
     CONTROL         "Permit Email",IDC_EMAIL,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFT | WS_TABSTOP,155,9,57,10
     CONTROL         "Hold Messages",IDC_HOLDMAIL,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFT | WS_TABSTOP,72,69,65,10
-    LTEXT           "Last Listed",-1,150,69,41,12
+    LTEXT           "Last Listed",IDC_STATIC,150,69,41,12
     EDITTEXT        IDC_LASTLISTED,190,68,29,12,ES_AUTOHSCROLL | ES_NUMBER
     CONTROL         "Poll RMS",IDC_POLLRMS,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFT | WS_TABSTOP,155,21,57,10,0,HIDC_POLLRMS
-    LTEXT           "Connects in",-1,10,100,45,10
-    LTEXT           "Connects out",-1,10,111,45,10
+                    BS_LEFT | WS_TABSTOP,155,22,45,8,0,HIDC_POLLRMS
+    LTEXT           "Connects in",IDC_STATIC,10,100,45,10
+    LTEXT           "Connects out",IDC_STATIC,10,111,45,10
     LTEXT           "0",CONN_IN,57,100,26,10,0,WS_EX_RIGHT
     LTEXT           "0",CONN_OUT,57,111,26,10,0,WS_EX_RIGHT
-    LTEXT           "Msgs in",-1,87,100,35,10
-    LTEXT           "Msgs out",-1,87,111,35,10
+    LTEXT           "Msgs in",IDC_STATIC,87,100,35,10
+    LTEXT           "Msgs out",IDC_STATIC,87,111,35,10
     LTEXT           "0",MSGS_IN,125,100,26,10,0,WS_EX_RIGHT
     LTEXT           "0",MSGS_OUT,125,111,26,10,0,WS_EX_RIGHT
-    LTEXT           "Rejects in",-1,159,100,35,10
-    LTEXT           "Rejects out",-1,159,111,40,10
+    LTEXT           "Rejects in",IDC_STATIC,159,100,35,10
+    LTEXT           "Rejects out",IDC_STATIC,159,111,40,10
     LTEXT           "0",REJECTS_IN,201,100,26,10,0,WS_EX_RIGHT
     LTEXT           "0",REJECTS_OUT,201,111,26,10,0,WS_EX_RIGHT
-    LTEXT           "Bytes out",-1,10,133,35,10
+    LTEXT           "Bytes out",IDC_STATIC,10,133,35,10
     LTEXT           "",BYTES_OUT,45,133,38,10,0,WS_EX_RIGHT
-    LTEXT           "Bytes in",-1,10,122,35,10
+    LTEXT           "Bytes in",IDC_STATIC,10,122,35,10
     LTEXT           "0",BYTES_IN,45,122,38,10,0,WS_EX_RIGHT
-    LTEXT           "Last Connect",-1,87,122,45,10
+    LTEXT           "Last Connect",IDC_STATIC,87,122,45,10
     LTEXT           "Never",LASTCONNECT,134,122,93,10
+    COMBOBOX        RMS_SSID1,203,20,12,30,CBS_SIMPLE
+    COMBOBOX        RMS_SSID2,216,20,12,35,CBS_SIMPLE
+    COMBOBOX        RMS_SSID3,228,20,12,35,CBS_SIMPLE
+    LTEXT           "for  SSID's",IDC_STATIC,164,33,37,8
 END
 
 ISP_CONFIG DIALOG DISCARDABLE  26, 5, 381, 266
@@ -656,8 +660,8 @@ FONT 8, "System"
 BEGIN
     DEFPUSHBUTTON   "Save",IDOK,50,95,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,120,95,50,14
-    COMBOBOX        IDC_CHATCALLS,10,5,100,60,CBS_DROPDOWNLIST | 
-                    CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_CHATCALLS,10,5,100,60,CBS_DROPDOWNLIST | CBS_SORT | 
+                    WS_VSCROLL | WS_TABSTOP
     COMBOBOX        IDC_CHATCOLOURS,115,5,100,60,CBS_DROPDOWNLIST | 
                     CBS_OWNERDRAWFIXED | WS_VSCROLL | WS_TABSTOP
 END
@@ -960,6 +964,11 @@ BEGIN
     "BBS_CONFIG", DIALOG
     BEGIN
         BOTTOMMARGIN, 266
+    END
+
+    IDD_USEREDIT, DIALOG
+    BEGIN
+        RIGHTMARGIN, 229
     END
 
     IDD_FORWARDING, DIALOG

@@ -1185,6 +1185,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			return;
 	
 			} My__except_Routine("Process Multiple Destinations");
+
+			BBSputs(conn, "*** Program Error Processing Multiple Destinations\r");
 			return;
 
 
@@ -1206,6 +1208,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 
 		} My__except_Routine("Decode B2 Message");
+
+			BBSputs(conn, "*** Program Error Decoding B2 Message\r");
 		
 		return;
 

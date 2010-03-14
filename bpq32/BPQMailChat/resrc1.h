@@ -61,7 +61,10 @@
 #define LASTCONNECT                     1052
 #define CONN_IN                         1053
 #define IDC_CHATCALLS                   1064
+#define RMS_SSID1                       1070
 #define IDC_CHATCOLOURS                 1065
+#define RMS_SSID2                       1071
+#define RMS_SSID3                       1072
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -119,7 +122,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
 #define _APS_NEXT_COMMAND_VALUE         40019
-#define _APS_NEXT_CONTROL_VALUE         1064
+#define _APS_NEXT_CONTROL_VALUE         1073
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

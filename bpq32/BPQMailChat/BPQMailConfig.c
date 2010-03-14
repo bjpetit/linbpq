@@ -778,6 +778,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 			struct tm *tm;
 			char Date[80];
 			char * Dateptr;
+			int i, s;
 
 			SetDlgItemText(hDlg, IDC_NAME, user->Name);
 			SetDlgItemText(hDlg, IDC_PASSWORD, user->pass);
@@ -803,6 +804,39 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SetDlgItemInt(hDlg, REJECTS_OUT, user->MsgsRejectedOut, FALSE);
 			SetDlgItemInt(hDlg, BYTES_IN, user->BytesForwardedIn, FALSE);
 			SetDlgItemInt(hDlg, BYTES_OUT, user->BytesForwardedOut, FALSE);
+
+
+			for (i = 0; i < 3; i++)
+			{
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_RESETCONTENT,0 , 0);
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)" ");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"1");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"2");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"3");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"4");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"5");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"6");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"7");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"8");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"9");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"10");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"11");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"12");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"13");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"14");
+			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"15");
+			}
+
+			i = 0;
+			for (s = 0; s < 16; s++)
+			{
+				if (user->RMSSSIDBits & (1 << s))
+				{
+					SendDlgItemMessage(hDlg, RMS_SSID1 + i++, CB_SETCURSEL, s, 0);
+					if (i == 3)
+						break;
+				}
+			}
 
 			tm = gmtime(&user->TimeLastConnected);	
 			Dateptr = asctime(tm);
@@ -974,6 +1008,8 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 {
 	struct UserInfo * user;
 	BOOL OK;
+	char RMSSSID[10];
+	int SSID;
 
 	if (CurrentConfigIndex == -1)
 	{
@@ -1040,6 +1076,20 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (IsDlgButtonChecked(hDlg, IDC_POLLRMS))
 		user->flags |= F_POLLRMS; else user->flags &= ~F_POLLRMS;
+
+	user->RMSSSIDBits = 0;
+
+	SendDlgItemMessage(hDlg, RMS_SSID1, WM_GETTEXT, 3, (LPARAM)(LPCTSTR)&RMSSSID);
+	SSID = atoi(RMSSSID);
+	user->RMSSSIDBits |= (1 << (SSID));
+
+	SendDlgItemMessage(hDlg, RMS_SSID2, WM_GETTEXT, 3, (LPARAM)(LPCTSTR)&RMSSSID);
+	SSID = atoi(RMSSSID);
+	user->RMSSSIDBits |= (1 << (SSID));
+
+	SendDlgItemMessage(hDlg, RMS_SSID3, WM_GETTEXT, 3, (LPARAM)(LPCTSTR)&RMSSSID);
+	SSID = atoi(RMSSSID);
+	user->RMSSSIDBits |= (1 << (SSID));
 
 	SaveUserDatabase();
 

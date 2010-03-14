@@ -1147,6 +1147,12 @@ VOID DEDPoll(int Port)
 				Buffer[datalen] = 0;	// Null Terminate
 				_strupr(Buffer);
 
+				if (_memicmp(Buffer, "D\r", 2) == 0)
+				{
+					TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
+					return;
+				}
+
 				if (memcmp(Buffer, "RADIO ", 6) == 0)
 				{
 					wsprintf(&Buffer[40], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &Buffer[6]);
