@@ -90,7 +90,8 @@ Namespace My
         End Property
         
         <Global.System.Configuration.UserScopedSettingAttribute(),  _
-         Global.System.Diagnostics.DebuggerNonUserCodeAttribute()>  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("True")>  _
         Public Property OptTCPMaster() As Boolean
             Get
                 Return CType(Me("OptTCPMaster"),Boolean)
@@ -101,13 +102,62 @@ Namespace My
         End Property
         
         <Global.System.Configuration.UserScopedSettingAttribute(),  _
-         Global.System.Diagnostics.DebuggerNonUserCodeAttribute()>  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("False")>  _
         Public Property OptTCPSlave() As Boolean
             Get
                 Return CType(Me("OptTCPSlave"),Boolean)
             End Get
             Set
                 Me("OptTCPSlave") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("")>  _
+        Public Property LocalCOM() As String
+            Get
+                Return CType(Me("LocalCOM"),String)
+            End Get
+            Set
+                Me("LocalCOM") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("")>  _
+        Public Property RemoteCOM() As String
+            Get
+                Return CType(Me("RemoteCOM"),String)
+            End Get
+            Set
+                Me("RemoteCOM") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("")>  _
+        Public Property LocalBaud() As String
+            Get
+                Return CType(Me("LocalBaud"),String)
+            End Get
+            Set
+                Me("LocalBaud") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("")>  _
+        Public Property RemoteBaud() As String
+            Get
+                Return CType(Me("RemoteBaud"),String)
+            End Get
+            Set
+                Me("RemoteBaud") = value
             End Set
         End Property
     End Class

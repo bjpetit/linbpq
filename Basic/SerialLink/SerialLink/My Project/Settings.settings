@@ -12,9 +12,21 @@
       <Value Profile="(Default)" />
     </Setting>
     <Setting Name="OptTCPMaster" Type="System.Boolean" Scope="User">
-      <Value Profile="(Default)" />
+      <Value Profile="(Default)">True</Value>
     </Setting>
     <Setting Name="OptTCPSlave" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="LocalCOM" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="RemoteCOM" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="LocalBaud" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
+    <Setting Name="RemoteBaud" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
   </Settings>

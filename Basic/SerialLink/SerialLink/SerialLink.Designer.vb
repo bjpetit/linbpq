@@ -37,11 +37,11 @@ Partial Class SerialLink
       Me.TCPPort = New System.Windows.Forms.TextBox
       Me.Label2 = New System.Windows.Forms.Label
       Me.Label3 = New System.Windows.Forms.Label
-      Me.ComboBox1 = New System.Windows.Forms.ComboBox
-      Me.ComboBox2 = New System.Windows.Forms.ComboBox
+      Me.LocalCOM = New System.Windows.Forms.ComboBox
+      Me.LocallBaud = New System.Windows.Forms.ComboBox
       Me.Label4 = New System.Windows.Forms.Label
-      Me.ComboBox3 = New System.Windows.Forms.ComboBox
-      Me.ComboBox4 = New System.Windows.Forms.ComboBox
+      Me.RemoteCOM = New System.Windows.Forms.ComboBox
+      Me.RemoteBAUD = New System.Windows.Forms.ComboBox
       CType(Me.AxWinsock1, System.ComponentModel.ISupportInitialize).BeginInit()
       Me.SuspendLayout()
       '
@@ -188,21 +188,21 @@ Partial Class SerialLink
       Me.Label3.TabIndex = 19
       Me.Label3.Text = "TCP Port"
       '
-      'ComboBox1
+      'LocalCOM
       '
-      Me.ComboBox1.FormattingEnabled = True
-      Me.ComboBox1.Location = New System.Drawing.Point(204, 59)
-      Me.ComboBox1.Name = "ComboBox1"
-      Me.ComboBox1.Size = New System.Drawing.Size(109, 21)
-      Me.ComboBox1.TabIndex = 20
+      Me.LocalCOM.FormattingEnabled = True
+      Me.LocalCOM.Location = New System.Drawing.Point(204, 59)
+      Me.LocalCOM.Name = "LocalCOM"
+      Me.LocalCOM.Size = New System.Drawing.Size(109, 21)
+      Me.LocalCOM.TabIndex = 20
       '
-      'ComboBox2
+      'LocallBaud
       '
-      Me.ComboBox2.FormattingEnabled = True
-      Me.ComboBox2.Location = New System.Drawing.Point(204, 93)
-      Me.ComboBox2.Name = "ComboBox2"
-      Me.ComboBox2.Size = New System.Drawing.Size(109, 21)
-      Me.ComboBox2.TabIndex = 21
+      Me.LocallBaud.FormattingEnabled = True
+      Me.LocallBaud.Location = New System.Drawing.Point(204, 93)
+      Me.LocallBaud.Name = "LocallBaud"
+      Me.LocallBaud.Size = New System.Drawing.Size(109, 21)
+      Me.LocallBaud.TabIndex = 21
       '
       'Label4
       '
@@ -213,32 +213,32 @@ Partial Class SerialLink
       Me.Label4.TabIndex = 22
       Me.Label4.Text = "State:"
       '
-      'ComboBox3
+      'RemoteCOM
       '
-      Me.ComboBox3.FormattingEnabled = True
-      Me.ComboBox3.Location = New System.Drawing.Point(12, 59)
-      Me.ComboBox3.Name = "ComboBox3"
-      Me.ComboBox3.Size = New System.Drawing.Size(109, 21)
-      Me.ComboBox3.TabIndex = 23
+      Me.RemoteCOM.FormattingEnabled = True
+      Me.RemoteCOM.Location = New System.Drawing.Point(12, 59)
+      Me.RemoteCOM.Name = "RemoteCOM"
+      Me.RemoteCOM.Size = New System.Drawing.Size(109, 21)
+      Me.RemoteCOM.TabIndex = 23
       '
-      'ComboBox4
+      'RemoteBAUD
       '
-      Me.ComboBox4.FormattingEnabled = True
-      Me.ComboBox4.Location = New System.Drawing.Point(12, 93)
-      Me.ComboBox4.Name = "ComboBox4"
-      Me.ComboBox4.Size = New System.Drawing.Size(109, 21)
-      Me.ComboBox4.TabIndex = 24
+      Me.RemoteBAUD.FormattingEnabled = True
+      Me.RemoteBAUD.Location = New System.Drawing.Point(12, 93)
+      Me.RemoteBAUD.Name = "RemoteBAUD"
+      Me.RemoteBAUD.Size = New System.Drawing.Size(109, 21)
+      Me.RemoteBAUD.TabIndex = 24
       '
       'SerialLink
       '
       Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.ClientSize = New System.Drawing.Size(323, 333)
-      Me.Controls.Add(Me.ComboBox4)
-      Me.Controls.Add(Me.ComboBox3)
+      Me.Controls.Add(Me.RemoteBAUD)
+      Me.Controls.Add(Me.RemoteCOM)
       Me.Controls.Add(Me.Label4)
-      Me.Controls.Add(Me.ComboBox2)
-      Me.Controls.Add(Me.ComboBox1)
+      Me.Controls.Add(Me.LocallBaud)
+      Me.Controls.Add(Me.LocalCOM)
       Me.Controls.Add(Me.Label3)
       Me.Controls.Add(Me.Label2)
       Me.Controls.Add(Me.TCPPort)
@@ -276,10 +276,10 @@ Partial Class SerialLink
    Friend WithEvents TCPPort As System.Windows.Forms.TextBox
    Friend WithEvents Label2 As System.Windows.Forms.Label
    Friend WithEvents Label3 As System.Windows.Forms.Label
-   Friend WithEvents ComboBox1 As System.Windows.Forms.ComboBox
-   Friend WithEvents ComboBox2 As System.Windows.Forms.ComboBox
+   Friend WithEvents LocalCOM As System.Windows.Forms.ComboBox
+   Friend WithEvents LocallBaud As System.Windows.Forms.ComboBox
    Friend WithEvents Label4 As System.Windows.Forms.Label
-   Friend WithEvents ComboBox3 As System.Windows.Forms.ComboBox
-   Friend WithEvents ComboBox4 As System.Windows.Forms.ComboBox
+   Friend WithEvents RemoteCOM As System.Windows.Forms.ComboBox
+   Friend WithEvents RemoteBAUD As System.Windows.Forms.ComboBox
 
 End Class
