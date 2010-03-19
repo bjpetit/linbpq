@@ -750,7 +750,7 @@ void Decode(CIRCUIT * conn)
 			free(conn->MailBuffer);
 			conn->MailBufferSize=0;
 			conn->MailBuffer=0;
-			SetupNextFBBMessage(conn);
+			conn->CloseAfterFlush = 20;			// 2 Secs
 
 			return;
 		}
@@ -767,7 +767,7 @@ void Decode(CIRCUIT * conn)
 	Logprintf(LOG_BBS, conn, '|', "Uncompressing Message Comp Len %d Msg Len %d CRC %x", 
 			conn->TempMsg->length, textsize, crc);
 	
-	outfile = zalloc(textsize + 100);
+	outfile = zalloc(textsize + 10000);		// Lots of space for B2 header manipulations
 
 	if (textsize == 0)
 		return;
@@ -1041,7 +1041,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			int i;
 			struct MsgInfo * SaveMsg;
 			char * SaveBody;
-			int SaveMsgLen = conn->MailBufferSize;
+			int SaveMsgLen = count;
 			BOOL SentToRMS = FALSE;
 			int ToLen;
 			char * ToString = malloc(Recipients * 100);
@@ -1076,7 +1076,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
 					memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
 	
-					conn->MailBuffer = malloc(SaveMsgLen + 1);
+					conn->MailBuffer = malloc(SaveMsgLen + 1000);
 					memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
 
 					// Add our To: 
@@ -1122,7 +1122,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
 				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
 	
-				conn->MailBuffer = malloc(SaveMsgLen + 1);
+				conn->MailBuffer = malloc(SaveMsgLen + 1000);
 				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
 
 
@@ -1153,7 +1153,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
 				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
 	
-				conn->MailBuffer = malloc(SaveMsgLen + 1);
+				conn->MailBuffer = malloc(SaveMsgLen + 1000);
 				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
 
 				// Add our To: 
@@ -1187,6 +1187,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			} My__except_Routine("Process Multiple Destinations");
 
 			BBSputs(conn, "*** Program Error Processing Multiple Destinations\r");
+			Flush(conn);
+			conn->CloseAfterFlush = 20;			// 2 Secs
+
 			return;
 
 
@@ -1209,7 +1212,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 		} My__except_Routine("Decode B2 Message");
 
-			BBSputs(conn, "*** Program Error Decoding B2 Message\r");
+		BBSputs(conn, "*** Program Error Decoding B2 Message\r");
+		Flush(conn);
+		conn->CloseAfterFlush = 20;			// 2 Secs
 		
 		return;
 

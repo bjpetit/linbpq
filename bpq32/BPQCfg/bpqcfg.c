@@ -72,7 +72,9 @@
 
 //		Add INP3 MAXRTT and MAXHOPS Commands
 
+// March 2010
 
+// Ass SIMPLE mode
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -85,6 +87,71 @@
 #include <conio.h>
 
 
+
+#pragma pack(1) 
+
+struct CONFIGTABLE
+{
+
+//	CONFIGURATION DATA STRUCTURE
+
+//	DEFINES LAYOUT OF CONFIG RECORD PRODUCED BY CONFIGURATION PROG
+
+//	LAYOUT MUST MATCH THAT IN CONFIG.C SOURCE
+
+	char C_NODECALL[10];		// OFFSET = 0 
+	char C_NODEALIAS[10];		// OFFSET = 10
+	char C_BBSCALL[10];			// OFFSET = 20
+	char C_BBSALIAS[10];		// OFFSET = 30
+
+	short C_OBSINIT;			// OFFSET = 40
+	short C_OBSMIN;				// OFFSET = 42
+	short C_NODESINTERVAL;		// OFFSET = 44
+	short C_L3TIMETOLIVE;		// OFFSET = 46
+	short C_L4RETRIES;			// OFFSET = 48
+	short C_L4TIMEOUT;			// OFFSET = 50
+	short C_BUFFERS;			// OFFSET = 52
+	short C_PACLEN;				// OFFSET = 54
+	short C_TRANSDELAY;			// OFFSET = 56
+	short C_T3;					// OFFSET = 58
+	short Spare1;				// OFFSET = 60
+	short Spare2;				// OFFSET = 62
+	short C_IDLETIME;			// OFFSET = 64
+	UCHAR C_EMSFLAG;			// OFFSET = 66
+	UCHAR C_LINKEDFLAG;			// OFFSET = 67
+	UCHAR C_BBS;				// OFFSET = 68
+	UCHAR C_NODE;				// OFFSET = 69
+	UCHAR C_HOSTINTERRUPT;		// OFFSET = 70
+	UCHAR C_DESQVIEW;			// OFFSET = 71
+	short C_MAXLINKS;			// OFFSET = 72
+	short C_MAXDESTS;
+	short C_MAXNEIGHBOURS;
+	short C_MAXCIRCUITS;		// 78
+	UCHAR C_TNCPORTLIST[16];	// OFFSET = 80
+	short C_IDINTERVAL;			// 96
+	short C_FULLCTEXT;			// 98    ; SPARE (WAS DIGIFLAG)
+	short C_MINQUAL;			// 100
+	UCHAR C_HIDENODES;			// 102
+	short C_L4DELAY;			// 103
+	short C_L4WINDOW;			// 105
+	short C_BTINTERVAL;			// 107
+	UCHAR C_AUTOSAVE;			// 109
+	UCHAR C_L4APPL;				// 110
+	UCHAR C_C;					//  111 "C" = HOST Command Enabled
+	UCHAR C_IP;					//  112 IP Enabled
+	UCHAR C_MAXRTT;				// 113
+	UCHAR C_MAXHOPS;			// 114
+	UCHAR Spare[3];				// 115 NOW SPARE
+	short C_BBSQUAL;			// 118
+	UCHAR C_WASUNPROTO;
+	UCHAR C_BTEXT[120];			// 121
+	char C_VERSTRING[10];		// 241 Version String from Config File
+	char Spare4[4];				// 251
+	UCHAR C_VERSION;			// CONFIG PROG VERSION
+};
+
+
+#pragma pack()
 
 int tnctypes(int i, char value[],char rec[]);
 int do_kiss (char value[],char rec[]);
@@ -104,17 +171,17 @@ extern int __cdecl numbers(int i,char *value,char *rec);
 extern int __cdecl applstrings(int i,char *value,char *rec);
 extern int __cdecl dotext(int i,char *key_word);
 extern int __cdecl doBText(int i,char *key_word);
-extern int __cdecl routes(int i);
-extern int __cdecl ports(int i);
+int routes(int i);
+int ports(int i);
 extern int __cdecl tncports(int i);
 extern int __cdecl dedports(int i);
 extern int __cdecl index(char *s,char *t);
 extern int __cdecl verify(char *s,char c);
 extern int __cdecl fputi(int i,struct _iobuf *fp);
-int __cdecl strip(char *rec);
+int  strip(char *rec);
 extern int __cdecl call_check(char *callsign);
 extern int __cdecl callstring(int i,char *value,char *rec);
-extern int __cdecl decode_port_rec(char *rec);
+int decode_port_rec(char *rec);
 extern int __cdecl doid(int i,char *value,char *rec);
 extern int __cdecl dodll(int i,char *value,char *rec);
 extern int __cdecl hwtypes(int i,char *value,char *rec);
@@ -302,6 +369,8 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	int i;
  	int heading = 0;
 	char rec[MAXLINE];
+	int Cfglen = sizeof(struct CONFIGTABLE);
+
 
 	if (argc >1)
 	{
@@ -336,7 +405,7 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 #endif
 
-	puts("Configuration file Preprocessor for Version 4.10m December 2009.\n");
+	puts("Configuration file Preprocessor for Version 4.10n March 2010.\n");
 
 #ifdef THOR
 
@@ -1075,8 +1144,7 @@ int i;
 int hw;		// Hardware type
 
 
-int ports(i)
-int i;
+int ports(int i)
 {
 	char rec[MAXLINE];
 	endport=0;
@@ -1974,15 +2042,58 @@ static int defaults [] =
 
 
 
-int simple(i)
-int i;
+int simple(int i)
 {
+	int numwritten;
+
+	// Set up the basic config header
+
+	struct CONFIGTABLE Cfg;
+
+	memset(&Cfg, 0, 256);
+
+	Cfg.C_AUTOSAVE = 1;
+	Cfg.C_BBS = 1;
+	Cfg.C_BTINTERVAL = 60;
+	Cfg.C_BUFFERS = 999;
+	Cfg.C_C = 1;
+	Cfg.C_DESQVIEW = 0;
+	Cfg.C_EMSFLAG = 0;
+	Cfg.C_FULLCTEXT = 0;
+	Cfg.C_HIDENODES = 0;
+	Cfg.C_HOSTINTERRUPT = 127;
+	Cfg.C_IDINTERVAL = 10;
+	Cfg.C_IDLETIME = 900;
+	Cfg.C_IP = 0;
+	Cfg.C_L3TIMETOLIVE = 25;
+	Cfg.C_L4DELAY = 10;
+	Cfg.C_L4RETRIES = 3;
+	Cfg.C_L4TIMEOUT = 60;
+	Cfg.C_L4WINDOW = 4;
+	Cfg.C_LINKEDFLAG = 'A';
+	Cfg.C_MAXCIRCUITS = 128;
+	Cfg.C_MAXDESTS = 250;
+	Cfg.C_MAXHOPS = 4;
+	Cfg.C_MAXLINKS = 64;
+	Cfg.C_MAXNEIGHBOURS = 64;
+	Cfg.C_MAXRTT = 90;
+	Cfg.C_MINQUAL = 150;
+	Cfg.C_NODE = 1;
+	Cfg.C_NODESINTERVAL = 30;
+	Cfg.C_OBSINIT = 6;
+	Cfg.C_OBSMIN = 5;
+	Cfg.C_PACLEN = 236;
+	Cfg.C_T3 = 180;
+	Cfg.C_TRANSDELAY = 1;
+
 	/* Set PARAMOK flags on all values that are defaulted */
 
 	for (i=0; i < PARAMLIM; i++)
 	   paramok[i]=1;
 
-	fseek(fp2,(long) 69,SEEK_SET);
+	fseek(fp2,(long) 0,SEEK_SET);
+
+	numwritten = fwrite(&Cfg, sizeof(Cfg), 1, fp2);
 
 	paramok[15]=0;		/* Must have callsign */
 

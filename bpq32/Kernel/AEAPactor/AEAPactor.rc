@@ -1,7 +1,7 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
-#include "resrc1.h"
+#include "Versions.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -28,13 +28,9 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Version
 //
 
-#define Vers 1,1,1,1
-#define Verstring "1.1.1.1\0"
-
-
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION Vers
- PRODUCTVERSION Vers
+ FILEVERSION AEAVers
+ PRODUCTVERSION AEAVers
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -52,12 +48,12 @@ BEGIN
             VALUE "Comments", "AEA/Timewave Pactor interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "AEAPactor\0"
-            VALUE "FileVersion", Verstring
+            VALUE "FileVersion", AEAVerstring
             VALUE "InternalName", "AEAPactor\0"
             VALUE "LegalCopyright", "Copyright © 2010 G8BPQ\0"
             VALUE "OriginalFilename", "AEAPactor.dll\0"
             VALUE "ProductName", "  AEAPactor\0"
-            VALUE "ProductVersion", Verstring
+            VALUE "ProductVersion", AEAVerstring
         END
     END
     BLOCK "VarFileInfo"
@@ -74,21 +70,21 @@ END
 // Dialog
 //
 
-PACTORSTATUS DIALOG DISCARDABLE  0, 0, 214, 125
+PACTORSTATUS DIALOG DISCARDABLE  0, 0, 259, 125
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Pactor Status"
 CLASS "PACTORSTATUS"
 FONT 8, "FixedSys"
 BEGIN
     LTEXT           "",IDC_1,60,70,54,11
-    LTEXT           "",IDC_2,60,55,54,11
+    LTEXT           "",IDC_2,60,55,90,11
     LTEXT           "",IDC_3,60,40,75,11
     LTEXT           "0",IDC_4,60,85,54,11
     LTEXT           "TX/RX State",IDC_STATIC,6,70,44,10
     LTEXT           "Status",IDC_STATIC,5,55,30,10
     LTEXT           "Mode",IDC_STATIC,5,40,30,10
     LTEXT           "Buffers",IDC_STATIC,5,85,30,10
-    LTEXT           "",IDC_TNCSTATE,60,25,125,11
+    LTEXT           "",IDC_TNCSTATE,60,25,195,11
     LTEXT           "TNC State",IDC_STATIC,5,25,40,10
     LTEXT           "Comms State",IDC_STATIC,5,10,45,10
     LTEXT           "",IDC_COMMSSTATE,60,10,145,11
@@ -119,7 +115,7 @@ END
 
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "#include ""afxres.h""\r\n"
+    "#include ""winres.h""\r\n"
     "\0"
 END
 
@@ -142,7 +138,7 @@ GUIDELINES DESIGNINFO DISCARDABLE
 BEGIN
     "PACTORSTATUS", DIALOG
     BEGIN
-        BOTTOMMARGIN, 125
+        RIGHTMARGIN, 214
     END
 END
 #endif    // APSTUDIO_INVOKED

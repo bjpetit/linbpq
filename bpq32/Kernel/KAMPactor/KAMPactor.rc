@@ -1,6 +1,7 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
+#include "Versions.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -28,8 +29,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,1,14
- PRODUCTVERSION 1,1,1,14
+ FILEVERSION KAMVers
+ PRODUCTVERSION KAMVers
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -47,12 +48,12 @@ BEGIN
             VALUE "Comments", "KAM Pactor interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "KAMPactor\0"
-            VALUE "FileVersion", "1.1.1.13\0"
+            VALUE "FileVersion", KAMVerstring
             VALUE "InternalName", "KAMPactor\0"
             VALUE "LegalCopyright", "Copyright © 2009 G8BPQ\0"
             VALUE "OriginalFilename", "KAMPactor.dll\0"
             VALUE "ProductName", "  KAMPactor\0"
-            VALUE "ProductVersion", "1.1.1.13\0"
+            VALUE "ProductVersion", KAMVerstring
         END
     END
     BLOCK "VarFileInfo"

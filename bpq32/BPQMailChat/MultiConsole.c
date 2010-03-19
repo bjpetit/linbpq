@@ -536,7 +536,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
  
             if (lpdis->itemID == -1) 
             { 
-                break; 
+                return TRUE; 
             } 
  
             switch (lpdis->itemAction) 
@@ -569,6 +569,8 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
                     break; 
 			}
+
+			return TRUE;
 
 
 	case WM_ACTIVATE:

@@ -1,6 +1,7 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "kernelresource.h"
+#include "Versions.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -56,8 +57,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 4,10,13,14
- PRODUCTVERSION 4,10,13,14
+ FILEVERSION KVers
+ PRODUCTVERSION KVers
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -72,15 +73,15 @@ BEGIN
     BEGIN
         BLOCK "080904b0"
         BEGIN
-            VALUE "Comments", "G8BPQ Packet Switch V4.10m\0"
+            VALUE "Comments", "G8BPQ Packet Switch V4.10n\0"
             VALUE "CompanyName", "G8BPQ\0"
             VALUE "FileDescription", "bpq32\0"
-            VALUE "FileVersion", "4.10.13.13\0"
+            VALUE "FileVersion", KVerstring
             VALUE "InternalName", "bpq32\0"
-            VALUE "LegalCopyright", "Copyright © 2001-2009 John Wiseman G8BPQ\0"
+            VALUE "LegalCopyright", "Copyright © 2001-2010 John Wiseman G8BPQ\0"
             VALUE "OriginalFilename", "bpq32.dll\0"
             VALUE "ProductName", "bpq32\0"
-            VALUE "ProductVersion", "4.10.13.13\0"
+            VALUE "ProductVersion", KVerstring
         END
     END
     BLOCK "VarFileInfo"

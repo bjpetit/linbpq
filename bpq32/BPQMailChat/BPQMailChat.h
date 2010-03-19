@@ -319,6 +319,7 @@ typedef struct ConnectionInfo_S
 	BOOL NewUser;						// Set if first time user has accessed BBS
 	BOOL Paclink;						// Set if receiving messages from Paclink
 	char ** PacLinkCalls;					// Calls we are getting messages for
+	BOOL SkipPrompt;					// Set if a remote node sends a > at the end of his CTEXT
 
 } ConnectionInfo, CIRCUIT;
 

@@ -2,7 +2,7 @@
 #include <winioctl.h>
 #include "Rigresource.h"
 
-
+#define IDI_ICON2                       2
 
 #define MAXBLOCK 4096
 

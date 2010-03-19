@@ -58,10 +58,17 @@ struct TNCINFO
 	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
 	int RXLen;						// Data in RXBUffer
 
-	int Mem1;						// Free Bytes (VHF /HF)
+	char TXRXState;					// Current State
 	int Mem2;
 
 	HWND hDlg;						// Status Window Handle
+
+	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
+	BOOL CommandBusy;				// Waiting for Command ACK
+
+	char * CmdSet;					// A series of commands to send to the TNC
+	char * CmdSave;					// Base address for free
+
 };
 
 

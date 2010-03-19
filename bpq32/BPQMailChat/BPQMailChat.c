@@ -451,6 +451,15 @@
 // Colour support for BPQTEerminal
 // New /C chat command to toggle colour on or off.
 
+// Version 1.0.3.43
+
+// Add SKIPPROMPT command to forward scripts
+// Fix B2 decode crash with long headers
+
+// Version 1.0.4.1
+
+// Non - Beta Release
+// Fix possible crash/corruption with long B2 messages
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -1056,7 +1065,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"G8BPQ Mail and Chat Server Beta Version %s", VersionString);
+	wsprintf(Title,"G8BPQ Mail and Chat Server Version %s", VersionString);
 
 	wsprintf(RlineVer, "BPQ%s%d.%d.%d", (KISSOnly) ? "K" : "", Ver[0], Ver[1], Ver[2]);
 
@@ -6013,10 +6022,19 @@ InBand:
 				CreateOneTimePassword(&AuthCommand[11], &Cmd[11], 0); 
 
 				nodeprintf(conn, "%s\r", AuthCommand);
+				return TRUE;
 			}
-			else
 
-				nodeprintf(conn, "%s\r", Cmd);
+			if (memcmp(Cmd, "SKIPPROMPT", 10) == 0)
+			{
+				// Remote Node sends > at end of CTEXT - we need to swallow it
+
+				conn->SkipPrompt = TRUE;
+				return TRUE;
+			}
+
+			nodeprintf(conn, "%s\r", Cmd);
+		
 		}
 		return TRUE;
 	}
@@ -6085,7 +6103,13 @@ CheckForSID:
 	}
 
 	if (Buffer[len-2] == '>')
-	{		
+	{
+		if (conn->SkipPrompt)
+		{
+			conn->SkipPrompt = FALSE;
+			return TRUE;
+		}
+	
 		conn->BBSFlags &= ~RunningConnectScript;
 
 		if (strcmp(conn->Callsign, "RMS") == 0)

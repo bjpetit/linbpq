@@ -226,8 +226,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		{
 			BBSputs(conn, "*** Protocol Error - Too Many Proposals\r");
 			Flush(conn);
-			Sleep(500);
-			Disconnect(conn->BPQStream);
+			conn->CloseAfterFlush = 20;			// 2 Secs
 		}
 
 		//FA P GM8BPQ G8BPQ G8BPQ 2209_GM8BPQ 8
@@ -286,8 +285,7 @@ badparam:
 
 		BBSputs(conn, "*** Protocol Error - Proposal format error\r");
 		Flush(conn);
-		Sleep(500);
-		Disconnect(conn->BPQStream);
+		conn->CloseAfterFlush = 20;			// 2 Secs
 		return;
 
 ok:
@@ -353,8 +351,7 @@ ok:
 		{
 			BBSputs(conn, "*** Protocol Error - Too Many Proposals\r");
 			Flush(conn);
-			Sleep(500);
-			Disconnect(conn->BPQStream);
+			conn->CloseAfterFlush = 20;			// 2 Secs
 		}
 
 
@@ -401,8 +398,7 @@ badparam2:
 
 		BBSputs(conn, "*** Protocol Error - Proposal format error\r");
 		Flush(conn);
-		Sleep(500);
-		Disconnect(conn->BPQStream);
+		conn->CloseAfterFlush = 20;			// 2 Secs
 		return;
 
 ok2:
@@ -450,8 +446,7 @@ ok2:
 			{
 				BBSputs(conn, "*** Proposal Checksum Error\r");
 				Flush(conn);
-				Sleep(500);
-				Disconnect(conn->BPQStream);
+				conn->CloseAfterFlush = 20;			// 2 Secs
 				return;
 			}
 		}
@@ -686,6 +681,9 @@ loop:
 					else
 					{
 						BBSputs(conn, "*** Trying to restart from invalid position.\r");
+						Flush(conn);
+						conn->CloseAfterFlush = 20;			// 2 Secs
+
 						return;
 					}
 
@@ -702,6 +700,8 @@ loop:
 			// No Restart Data
 
 			BBSputs(conn, "*** Trying to restart, but no restart data.\r");
+			Flush(conn);
+			conn->CloseAfterFlush = 20;			// 2 Secs
 
 			return;
 		}
@@ -721,6 +721,8 @@ loop:
 		if (conn->MailBuffer == NULL)
 		{
 			BBSputs(conn, "*** Failed to create Message Buffer\r");
+			conn->CloseAfterFlush = 20;			// 2 Secs
+
 			return;
 		}
 
@@ -783,6 +785,8 @@ loop:
 			if (conn->MailBuffer == NULL)
 			{
 				BBSputs(conn, "*** Failed to extend Message Buffer\r");
+				conn->CloseAfterFlush = 20;			// 2 Secs
+
 				return;
 			}
 		}
@@ -817,12 +821,19 @@ loop:
 			__except(EXCEPTION_EXECUTE_HANDLER)
 			{
 				BBSputs(conn, "*** Program Error Decoding Message\r");
+				Flush(conn);
+				conn->CloseAfterFlush = 20;			// 2 Secs
+				return;
 			}
 		}
 
 		else
+		{
 			BBSputs(conn, "*** Message Checksum Error\r");
-
+			Flush(conn);
+			conn->CloseAfterFlush = 20;			// 2 Secs
+			return;
+		}
 		ptr += 2;
 
 		memmove(conn->InputBuffer, ptr, conn->InputLen-2);
@@ -835,8 +846,7 @@ loop:
 
 		BBSputs(conn, "*** Protocol Error - Invalid Binary Message Format (Invalid Message Type)\r");
 		Flush(conn);
-		Sleep(500);
-		Disconnect(conn->BPQStream);
+		conn->CloseAfterFlush = 20;			// 2 Secs
 
 		return;
 	}

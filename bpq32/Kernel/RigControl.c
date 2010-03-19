@@ -769,22 +769,47 @@ DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 	{
 		UCHAR * Poll = PORT->TXBuffer;
 
-		*(Poll++) = 0xFE;
-		*(Poll++) = 0xFE;
-		*(Poll++) = RIG->RigAddr;
-		*(Poll++) = 0xE0;
-		*(Poll++) = 0x1C;		// RIG STATE
-		*(Poll++) = 0x00;		// PTT
-		*(Poll++) = PTTState;	// OFF/ON
+		switch  (PORT->PortType)
+		{
+		case ICOM:
 
-		*(Poll++) = 0xFD;
+			*(Poll++) = 0xFE;
+			*(Poll++) = 0xFE;
+			*(Poll++) = RIG->RigAddr;
+			*(Poll++) = 0xE0;
+			*(Poll++) = 0x1C;		// RIG STATE
+			*(Poll++) = 0x00;		// PTT
+			*(Poll++) = PTTState;	// OFF/ON
+
+			*(Poll++) = 0xFD;
 	
-		PORT->TXLen = 8;		// First send the set Freq
-		RigWriteCommBlock(PORT);
+			PORT->TXLen = 8;		// First send the set Freq
+			RigWriteCommBlock(PORT);
 
-		PORT->Retries = 1;
+			PORT->Retries = 1;
 
-		return;
+			return;
+
+		case KENWOOD:
+
+			if (PTTState)
+			{
+				strcpy(Poll,"TX0;");
+				PORT->TXLen = 4;
+			}
+			else
+			{
+				strcpy(Poll,"RX;");
+				PORT->TXLen = 3;
+			}
+
+			RigWriteCommBlock(PORT);
+
+			PORT->Retries = 1;
+			PORT->Timeout = 0;
+			return;
+
+		}
 	}
 
 	if (RIG->PTTMode & PTTRTS)
@@ -2289,8 +2314,6 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 	char Status[80];
 //	unsigned int Mode;
 
-	PORT->Timeout = 0;
-
 	if (PORT->PORTOK == FALSE)
 	{
 		// Just come up
@@ -2303,8 +2326,30 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 
 	RIG->RIGOK = TRUE;
 
-	wsprintf(Status,"%s", &Msg[2]);
-	SetWindowText(RIG->hFREQ, Status);
+	if (Msg[0] == 'F' && Msg[1] == 'A')
+	{
+		int F1, F2 = atoi(&Msg[7]);
+		Msg[7] = 0;
+		F1 = atoi(&Msg[2]);
+
+		wsprintf(Status,"%d.%d", F1, F2);
+		SetWindowText(RIG->hFREQ, Status);
+
+		PORT->Timeout = 0;
+
+		return;
+	}
+
+	if (Msg[0] == 'M' && Msg[1] == 'D')
+	{
+		int Mode = Msg[2] - 48;
+
+		if (Mode > 7) Mode = 7;
+
+		SetWindowText(RIG->hMODE, KenwoodModes[Mode]);
+
+		return;
+	}
 
 
 }
@@ -2313,7 +2358,7 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 VOID KenwoodPoll(struct PORTINFO * PORT)
 {
 	UCHAR * Poll = PORT->TXBuffer;
-	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Kenwood
 
 	if (RIG->ScanStopped == 0)
 		if (RIG->ScanCounter)
@@ -2339,7 +2384,7 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 //		SetWindowText(RIG->hFREQ, "145.810000");
 //		SetWindowText(RIG->hMODE, "RTTY/1");
 
-		PORT->Rigs[PORT->CurrentRig].RIGOK = FALSE;
+		RIG->RIGOK = FALSE;
 
 		return;
 
@@ -2347,7 +2392,7 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 
 	// Send Data if avail, else send poll
 
-	if (RIG->ScanStopped == 0)
+	if (RIG->RIGOK && RIG->ScanStopped == 0)
 	{
 		if (RIG->ScanCounter <= 0)
 		{
@@ -2411,7 +2456,8 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 			PORT->TXLen = 18;
 			RigWriteCommBlock(PORT);
 			PORT->CmdSent = 1;
-			PORT->Retries = 2;
+			PORT->Retries = 0;	
+			PORT->Timeout = 0;
 			PORT->AutoPoll = TRUE;
 
 			return;
@@ -2434,26 +2480,37 @@ ScanExit:
 		PORT->TXLen = datalen;					// First send the set Freq
 		RigWriteCommBlock(PORT);
 		PORT->CmdSent = Poll[4];
-		PORT->Retries = 2;
+		PORT->Timeout = 0;
+		RIG->PollCounter = 1;
 
 		ReleaseBuffer(buffptr);
 		PORT->AutoPoll = FALSE;
 	
 		return;
 	}
+		
+	if (RIG->PollCounter)
+	{
+		RIG->PollCounter--;
+		if (RIG->PollCounter > 1)
+			return;
+	}
 
-	if (RIG->ScanStopped == 0)
-		return;						// no point in reading freq if we are about to change it
+	RIG->PollCounter = 10;			// Once Per Sec
 		
 	// Read Frequency 
 
 	Poll[0] = 'F';
 	Poll[1] = 'A';
 	Poll[2] = ';';
+	Poll[3] = 'M';
+	Poll[4] = 'D';
+	Poll[5] = ';';
 
-	PORT->TXLen = 3;
+	PORT->TXLen = 6;
 	RigWriteCommBlock(PORT);
-	PORT->Retries = 2;
+	PORT->Retries = 1;
+	PORT->Timeout = 10;
 	PORT->CmdSent = 0;
 
 	PORT->AutoPoll = TRUE;

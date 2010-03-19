@@ -169,7 +169,7 @@ COMMANDLIST	LABEL	BYTE
 	DB	'L4TIMEOUT   ',5
 	 DD  SWITCHVALW,_L4T1
 	DB	'T3          ',2
-	 DD  SWITCHVAL,T3
+	 DD  SWITCHVALW,T3
 	DB	'IDLETIME    ',8
 	 DD  SWITCHVALW,L4LIMIT
 	DB	'LINKEDFLAG  ',10
@@ -317,6 +317,10 @@ L3INVPORTLEN	EQU	$-L3INVALIDPORT
 
 PACINVALIDPORT	DB	'Sorry, port is not an ax.25 port',0dh
 PACINVPORTLEN	EQU	$-PACINVALIDPORT
+
+WINMOR		DB	'W'+'W','I'+'I','N'+'N','M'+'M','O'+'O','R'+'R' ; WINMOR IN AX25
+PACTORCALL	DB	'P'+'P','A'+'A','C'+'C','T'+'T','O'+'O','R'+'R' ; PACTOR IN AX25
+
 
 T4MSG		DB	'L4 timeout - '
 T4MSGLEN	EQU	$-T4MSG
@@ -901,7 +905,6 @@ COMMANDDECODE10:
 	STOSB				; PID
 
 	CALL	_SETUPNODEHEADER
-
 
 	PUSH	EDI			; SAVE REPLY BUFFER
 
@@ -2693,7 +2696,7 @@ CMDC01X:
 ;	NUMERIC ALIAS INSTEAD OF A PORT
 ;
 	CALL	SCAN
-	CMP	BYTE PTR[ESI+1],20H	; COULD JUSY BE S OR Z
+	CMP	BYTE PTR[ESI+1],20H	; COULD JUST BE S OR Z
 	JBE SHORT NOPORT
 
 	ADD	ESP,4			; DISCARD SAVED ESI
@@ -2839,6 +2842,50 @@ CMDC05:
 	JNE	NOTPACTORPORT
 ;
 ;	PACTOR style port
+;
+;	if Via PACTOR or WINMOR, convert to attach, then call = Digi's are in AX25STRING (+7)
+
+	push	esi
+	push	edi
+	push	ecx
+	
+	mov	esi, offset AX25STRING+7
+	mov edi, offset WINMOR
+	mov	ecx, 6
+	rep cmpsb
+	
+	je	@F
+
+	mov	esi, offset AX25STRING+7
+	mov edi, offset PACTORCALL
+	mov	ecx, 6
+	rep cmpsb
+	
+	je @f
+	
+	pop	ecx
+	pop	edi
+	pop esi
+	
+	jmp short NotWINPAC
+
+@@:
+
+	pop	ecx
+	pop	edi
+	pop esi
+	
+	mov	COMMANDBUFFER, 'A'
+	
+	MOV	EDI,CONNECTREPLYPTR
+	MOV	EBX,CONNECTSESSION
+
+	push edi
+
+	JMP REDOCOMMAND
+	
+
+NOTWINPAC:
 ;
 ;	If on a KAM with ax.25 on port 2, do an Attach command, then pass on connect
 ;
@@ -4263,7 +4310,15 @@ ATTACHCMD:
 
 @@:
 	POPAD
+	
 	mov	eax, CMDTAIL
+	cmp	byte ptr 2[eax], ' '
+	je @f					; Not "Attach and Call"
+	
+	jmp short attpactor	
+	
+@@:
+
 	movzx eax, byte ptr[eax]
 	
 	cmp	eax, ' '
@@ -4371,6 +4426,55 @@ ATTBUSY:
 	MOV	L4TARGET[EBX], ESI
 	
 	MOV	L4CIRCUITTYPE[EBX],DOWNLINK+PACTOR
+	
+	mov	esi, CMDTAIL
+	cmp	byte ptr 2[esi], ' '
+	JE SHORT NoCall		; CANT DO MUCH ELSE
+
+	;	if attach and call, 
+
+	CALL	GETBUFF
+	JZ SHORT NoCall		; CANT DO MUCH ELSE
+
+	PUSH	EDI
+
+;	Stream Number for KAM is in KAMSESSION
+
+	MOV	4[EDI],0
+	
+	MOV	EBX,L4TARGET[EBX]		; PORT ENTRY
+	ADD	EDI,7
+	mov	al,0f0h
+	stosb
+	mov	al, 'C'
+	stosb
+	mov	al, ' '
+	stosb
+
+	mov	esi, CMDTAIL
+	mov ECX,10
+@@:
+	lodsb
+	cmp al, ' '
+	je @f
+	
+	stosb
+	loop @b
+@@:		
+	mov al,13
+	stosb
+	
+	mov	ecx,edi
+	pop edi
+	sub	ecx,edi
+	
+	MOV	MSGLENGTH[EDI],CX
+
+	LEA	ESI,PORTTX_Q[EBX]
+	
+	CALL	_Q_ADD
+	
+NoCall:	
 	
 	MOV	EDI,CONNECTREPLYPTR
 	MOV	EBX,CONNECTSESSION
@@ -5224,7 +5328,6 @@ DISPVALW:
 
 	PUBLIC	DISPVAL
 DISPVAL:
-
 
 	MOV	ECX,1
 	CALL	KEYDISP

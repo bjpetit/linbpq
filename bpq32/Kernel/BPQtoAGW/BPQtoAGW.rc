@@ -1,6 +1,7 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
+#include "Versions.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -28,8 +29,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,5,0,5
- PRODUCTVERSION 1,5,0,5
+ FILEVERSION BPQtoAGWVers
+ PRODUCTVERSION BPQtoAGWVers
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -47,12 +48,12 @@ BEGIN
             VALUE "Comments", "BPQ32 to AGWPE Interface\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "BPQtoAGW\0"
-            VALUE "FileVersion", "1, 5, 0, 5\0"
+            VALUE "FileVersion", BPQtoAGWVerstring
             VALUE "InternalName", "BPQtoAGW\0"
             VALUE "LegalCopyright", "Copyright © John Wiseman G8BPQ 2008\0"
             VALUE "OriginalFilename", "BPQtoAGW.dll\0"
             VALUE "ProductName", "  BPQtoAGW\0"
-            VALUE "ProductVersion", "1, 5, 0, 5\0"
+            VALUE "ProductVersion", BPQtoAGWVerstring
         END
     END
     BLOCK "VarFileInfo"

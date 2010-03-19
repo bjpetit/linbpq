@@ -706,7 +706,12 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	
 
 
-	case 3:				// CHECK IF OK TO SEND (And check TNC Status)
+	case 3:	
+		
+		// CHECK IF OK TO SEND (And check TNC Status)
+
+		if (TNC->Attached == 0)
+			return TNC->CONNECTED << 8 | 1;
 
 		return (TNC->CONNECTED << 8 | TNC->Disconnecting << 15);		// OK
 			
@@ -2054,6 +2059,6 @@ VOID MoveWindows(struct TNCINFO * TNC)
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 
-	MoveWindow(TNC->hMonitor,4 , 220, ClientWidth-8, ClientHeight-225, TRUE);
+	MoveWindow(TNC->hMonitor,4 , 200, ClientWidth-8, ClientHeight-205, TRUE);
 
 }

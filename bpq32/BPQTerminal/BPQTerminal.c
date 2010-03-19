@@ -695,7 +695,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
  
             if (lpdis->itemID == -1) 
             { 
-                break; 
+               return TRUE; 
             } 
  
             switch (lpdis->itemAction) 
@@ -728,6 +728,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
                     break; 
 			}
+
+			return TRUE;
 
 		case WM_ACTIVATE:
 
@@ -1318,8 +1320,14 @@ VOID WritetoOutputWindow(char * Msg, int len)
 
 		
 			if (PartLinePtr != 0)
-				SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );		
-
+			{
+				SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );	
+				if (Msg[0] == 0x1b && len > 1) 
+				{
+					Msg += 2;		// Remove Colour Escape
+					len -= 2;
+				}
+			}
 			memcpy(&readbuff[PartLinePtr], Msg, len);
 		
 			len=len+PartLinePtr;
@@ -1348,8 +1356,7 @@ VOID WritetoOutputWindow(char * Msg, int len)
 			if (len > 0)
 			{
 				//	copy text to control a line at a time	
-
-					
+	
 				ptr2=memchr(ptr1,13,len);
 				
 				if (ptr2 == 0)

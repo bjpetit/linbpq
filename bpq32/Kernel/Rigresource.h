@@ -3,6 +3,7 @@
 // Used by RigControl.rc
 //
 
+
 #define ID_ADDRIG                       3
 #define ID_ADDTIME                      4
 #define RIG_MENU1                       103

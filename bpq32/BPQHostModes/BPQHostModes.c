@@ -10,6 +10,10 @@
 //		Supports Win98 Virtual COM Ports
 //		Add StartMinimized Option
 
+// Version 1.1.2 March 2010
+
+// Fix crash on close if port can't be opened
+
 #include "stdafx.h"
 #include "bpqhostmodes.h"
 #include "bpq32.h"
@@ -172,7 +176,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			for (j=1; j <= conn->numChannels; j++)
 			{
 				channel = conn->Channels[j];
-				ReleaseBPQStream(channel->BPQStream);
+				if (channel) ReleaseBPQStream(channel->BPQStream);
 			}
 
 			if (conn->Created) BPQSerialDeleteDevice(hControl, &conn->ComPort, &Errorval);
@@ -4537,8 +4541,3 @@ int PUTCHARx(struct ConnectionInfo * conn, UCHAR c)
 	return 0;
 }
 
-
-
-
-
-FDED
