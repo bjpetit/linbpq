@@ -34,7 +34,6 @@ Partial Class Form1
         Me.Label76 = New System.Windows.Forms.Label
         Me.ComboBox3 = New System.Windows.Forms.ComboBox
         Me.HelpProvider1 = New System.Windows.Forms.HelpProvider
-        Me.PACLENBox = New BPQCFG.DTNumTextBox
         Me.PortsTab = New System.Windows.Forms.TabPage
         Me.TabControl2 = New System.Windows.Forms.TabControl
         Me.NewPortPage = New System.Windows.Forms.TabPage
@@ -62,18 +61,9 @@ Partial Class Form1
         Me.Label41 = New System.Windows.Forms.Label
         Me.Label40 = New System.Windows.Forms.Label
         Me.Label39 = New System.Windows.Forms.Label
-        Me.MaxRoutesBox = New BPQCFG.DTNumTextBox
-        Me.MaxNodesBox = New BPQCFG.DTNumTextBox
-        Me.ObsMinBox = New BPQCFG.DTNumTextBox
-        Me.ObsInitBox = New BPQCFG.DTNumTextBox
-        Me.MinQualBox = New BPQCFG.DTNumTextBox
-        Me.L4WindowBox = New BPQCFG.DTNumTextBox
-        Me.L4DelayBox = New BPQCFG.DTNumTextBox
-        Me.L4TimeOutBox = New BPQCFG.DTNumTextBox
-        Me.L4RetriesBox = New BPQCFG.DTNumTextBox
-        Me.L3TTLBox = New BPQCFG.DTNumTextBox
-        Me.NodesIntervalBox = New BPQCFG.DTNumTextBox
         Me.TabPage6 = New System.Windows.Forms.TabPage
+        Me.CIsChatBox = New System.Windows.Forms.CheckBox
+        Me.IPGatewayBox = New System.Windows.Forms.CheckBox
         Me.Label85 = New System.Windows.Forms.Label
         Me.BPQCODE = New System.Windows.Forms.RadioButton
         Me.BPQ32 = New System.Windows.Forms.RadioButton
@@ -91,37 +81,24 @@ Partial Class Form1
         Me.Label54 = New System.Windows.Forms.Label
         Me.Label55 = New System.Windows.Forms.Label
         Me.Label56 = New System.Windows.Forms.Label
-        Me.BuffersBox = New BPQCFG.DTNumTextBox
-        Me.MaxCircuitsBox = New BPQCFG.DTNumTextBox
-        Me.IdleTimeBox = New BPQCFG.DTNumTextBox
-        Me.T3Box = New BPQCFG.DTNumTextBox
-        Me.MaxLinksBox = New BPQCFG.DTNumTextBox
         Me.TabPage1 = New System.Windows.Forms.TabPage
         Me.Label38 = New System.Windows.Forms.Label
         Me.Label49 = New System.Windows.Forms.Label
-        Me.BTIntervalBox = New BPQCFG.DTNumTextBox
         Me.Label57 = New System.Windows.Forms.Label
-        Me.IDIntervalBox = New BPQCFG.DTNumTextBox
         Me.FullCTEXT = New System.Windows.Forms.CheckBox
         Me.Label37 = New System.Windows.Forms.Label
-        Me.BTEXTBox = New BPQCFG.MultiLineTextBox
         Me.Label36 = New System.Windows.Forms.Label
-        Me.CTEXTBox = New BPQCFG.MultiLineTextBox
         Me.Label35 = New System.Windows.Forms.Label
-        Me.InfoMsgBox = New BPQCFG.MultiLineTextBox
         Me.Label34 = New System.Windows.Forms.Label
-        Me.IDMsgBox = New BPQCFG.MultiLineTextBox
-        Me.NodeAliasBox = New BPQCFG.AliasTextBox
         Me.Label17 = New System.Windows.Forms.Label
-        Me.NodeCallBox = New BPQCFG.CallsignTextBox
         Me.Label1 = New System.Windows.Forms.Label
         Me.TabControl1 = New System.Windows.Forms.TabControl
         Me.RoutesTab = New System.Windows.Forms.TabPage
         Me.Label66 = New System.Windows.Forms.Label
         Me.Label65 = New System.Windows.Forms.Label
         Me.BPQ16Tab = New System.Windows.Forms.TabPage
-        Me.HostInterruptBox = New BPQCFG.DTNumTextBox
-        Me.TransDelayBox = New BPQCFG.DTNumTextBox
+        Me.Label2 = New System.Windows.Forms.Label
+        Me.UnprotoBox = New System.Windows.Forms.TextBox
         Me.Label51 = New System.Windows.Forms.Label
         Me.Label50 = New System.Windows.Forms.Label
         Me.EMSBox = New System.Windows.Forms.CheckBox
@@ -144,8 +121,36 @@ Partial Class Form1
         Me.Label82 = New System.Windows.Forms.Label
         Me.Label83 = New System.Windows.Forms.Label
         Me.ErrorProvider1 = New System.Windows.Forms.ErrorProvider(Me.components)
-        Me.UnprotoBox = New System.Windows.Forms.TextBox
-        Me.Label2 = New System.Windows.Forms.Label
+        Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
+        Me.BTIntervalBox = New BPQCFG.DTNumTextBox
+        Me.IDIntervalBox = New BPQCFG.DTNumTextBox
+        Me.BTEXTBox = New BPQCFG.MultiLineTextBox
+        Me.CTEXTBox = New BPQCFG.MultiLineTextBox
+        Me.InfoMsgBox = New BPQCFG.MultiLineTextBox
+        Me.IDMsgBox = New BPQCFG.MultiLineTextBox
+        Me.NodeAliasBox = New BPQCFG.AliasTextBox
+        Me.NodeCallBox = New BPQCFG.CallsignTextBox
+        Me.BuffersBox = New BPQCFG.DTNumTextBox
+        Me.MaxCircuitsBox = New BPQCFG.DTNumTextBox
+        Me.IdleTimeBox = New BPQCFG.DTNumTextBox
+        Me.T3Box = New BPQCFG.DTNumTextBox
+        Me.PACLENBox = New BPQCFG.DTNumTextBox
+        Me.MaxLinksBox = New BPQCFG.DTNumTextBox
+        Me.MaxHopsBox = New BPQCFG.DTNumTextBox
+        Me.MaxRTTBox = New BPQCFG.DTNumTextBox
+        Me.MaxRoutesBox = New BPQCFG.DTNumTextBox
+        Me.MaxNodesBox = New BPQCFG.DTNumTextBox
+        Me.ObsMinBox = New BPQCFG.DTNumTextBox
+        Me.ObsInitBox = New BPQCFG.DTNumTextBox
+        Me.MinQualBox = New BPQCFG.DTNumTextBox
+        Me.L4WindowBox = New BPQCFG.DTNumTextBox
+        Me.L4DelayBox = New BPQCFG.DTNumTextBox
+        Me.L4TimeOutBox = New BPQCFG.DTNumTextBox
+        Me.L4RetriesBox = New BPQCFG.DTNumTextBox
+        Me.L3TTLBox = New BPQCFG.DTNumTextBox
+        Me.NodesIntervalBox = New BPQCFG.DTNumTextBox
+        Me.HostInterruptBox = New BPQCFG.DTNumTextBox
+        Me.TransDelayBox = New BPQCFG.DTNumTextBox
         Me.PortsTab.SuspendLayout()
         Me.TabControl2.SuspendLayout()
         Me.ApplsTab.SuspendLayout()
@@ -267,19 +272,6 @@ Partial Class Form1
         Me.ComboBox3.Name = "ComboBox3"
         Me.ComboBox3.Size = New System.Drawing.Size(168, 21)
         Me.ComboBox3.TabIndex = 1
-        '
-        'PACLENBox
-        '
-        Me.HelpProvider1.SetHelpString(Me.PACLENBox, "Number of bytes in each packet. There are two PACLEN params, one here and")
-        Me.PACLENBox.Location = New System.Drawing.Point(120, 85)
-        Me.PACLENBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.PACLENBox.Max = 256
-        Me.PACLENBox.Name = "PACLENBox"
-        Me.HelpProvider1.SetShowHelp(Me.PACLENBox, True)
-        Me.PACLENBox.Size = New System.Drawing.Size(43, 20)
-        Me.PACLENBox.TabIndex = 21
-        Me.PACLENBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.PACLENBox, resources.GetString("PACLENBox.ToolTip"))
         '
         'PortsTab
         '
@@ -422,6 +414,8 @@ Partial Class Form1
         'TabPage2
         '
         Me.TabPage2.AutoScroll = True
+        Me.TabPage2.Controls.Add(Me.MaxHopsBox)
+        Me.TabPage2.Controls.Add(Me.MaxRTTBox)
         Me.TabPage2.Controls.Add(Me.xTextBox41)
         Me.TabPage2.Controls.Add(Me.xTextBox40)
         Me.TabPage2.Controls.Add(Me.xTextBox39)
@@ -599,123 +593,11 @@ Partial Class Form1
         Me.Label39.TabIndex = 0
         Me.Label39.Text = "Nodes Interval"
         '
-        'MaxRoutesBox
-        '
-        Me.MaxRoutesBox.Location = New System.Drawing.Point(256, 81)
-        Me.MaxRoutesBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.MaxRoutesBox.Max = 500
-        Me.MaxRoutesBox.Name = "MaxRoutesBox"
-        Me.MaxRoutesBox.Size = New System.Drawing.Size(43, 20)
-        Me.MaxRoutesBox.TabIndex = 42
-        Me.MaxRoutesBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.MaxRoutesBox, "Max adjacent Nodes")
-        '
-        'MaxNodesBox
-        '
-        Me.MaxNodesBox.Location = New System.Drawing.Point(101, 78)
-        Me.MaxNodesBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.MaxNodesBox.Max = 500
-        Me.MaxNodesBox.Name = "MaxNodesBox"
-        Me.MaxNodesBox.Size = New System.Drawing.Size(43, 20)
-        Me.MaxNodesBox.TabIndex = 40
-        Me.MaxNodesBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.MaxNodesBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
-        '
-        'ObsMinBox
-        '
-        Me.ObsMinBox.Location = New System.Drawing.Point(391, 176)
-        Me.ObsMinBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.ObsMinBox.Max = 9
-        Me.ObsMinBox.Name = "ObsMinBox"
-        Me.ObsMinBox.Size = New System.Drawing.Size(36, 20)
-        Me.ObsMinBox.TabIndex = 21
-        Me.ObsMinBox.Text = "0"
-        '
-        'ObsInitBox
-        '
-        Me.ObsInitBox.Location = New System.Drawing.Point(240, 176)
-        Me.ObsInitBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.ObsInitBox.Max = 10
-        Me.ObsInitBox.Name = "ObsInitBox"
-        Me.ObsInitBox.Size = New System.Drawing.Size(38, 20)
-        Me.ObsInitBox.TabIndex = 20
-        Me.ObsInitBox.Text = "0"
-        '
-        'MinQualBox
-        '
-        Me.MinQualBox.Location = New System.Drawing.Point(105, 204)
-        Me.MinQualBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.MinQualBox.Max = 255
-        Me.MinQualBox.Name = "MinQualBox"
-        Me.MinQualBox.Size = New System.Drawing.Size(39, 20)
-        Me.MinQualBox.TabIndex = 13
-        Me.MinQualBox.Text = "0"
-        '
-        'L4WindowBox
-        '
-        Me.L4WindowBox.Location = New System.Drawing.Point(105, 331)
-        Me.L4WindowBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.L4WindowBox.Max = 127
-        Me.L4WindowBox.Name = "L4WindowBox"
-        Me.L4WindowBox.Size = New System.Drawing.Size(43, 20)
-        Me.L4WindowBox.TabIndex = 11
-        Me.L4WindowBox.Text = "0"
-        '
-        'L4DelayBox
-        '
-        Me.L4DelayBox.Location = New System.Drawing.Point(256, 331)
-        Me.L4DelayBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.L4DelayBox.Max = 10
-        Me.L4DelayBox.Name = "L4DelayBox"
-        Me.L4DelayBox.Size = New System.Drawing.Size(43, 20)
-        Me.L4DelayBox.TabIndex = 9
-        Me.L4DelayBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.L4DelayBox, "L4 Delay (Seconds)")
-        '
-        'L4TimeOutBox
-        '
-        Me.L4TimeOutBox.Location = New System.Drawing.Point(408, 331)
-        Me.L4TimeOutBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.L4TimeOutBox.Max = 240
-        Me.L4TimeOutBox.Name = "L4TimeOutBox"
-        Me.L4TimeOutBox.Size = New System.Drawing.Size(43, 20)
-        Me.L4TimeOutBox.TabIndex = 7
-        Me.L4TimeOutBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.L4TimeOutBox, "L4 Timout (Seconds)")
-        '
-        'L4RetriesBox
-        '
-        Me.L4RetriesBox.Location = New System.Drawing.Point(544, 331)
-        Me.L4RetriesBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.L4RetriesBox.Max = 10
-        Me.L4RetriesBox.Name = "L4RetriesBox"
-        Me.L4RetriesBox.Size = New System.Drawing.Size(43, 20)
-        Me.L4RetriesBox.TabIndex = 5
-        Me.L4RetriesBox.Text = "0"
-        '
-        'L3TTLBox
-        '
-        Me.L3TTLBox.Location = New System.Drawing.Point(544, 176)
-        Me.L3TTLBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.L3TTLBox.Max = 255
-        Me.L3TTLBox.Name = "L3TTLBox"
-        Me.L3TTLBox.Size = New System.Drawing.Size(43, 20)
-        Me.L3TTLBox.TabIndex = 3
-        Me.L3TTLBox.Text = "0"
-        '
-        'NodesIntervalBox
-        '
-        Me.NodesIntervalBox.Location = New System.Drawing.Point(105, 176)
-        Me.NodesIntervalBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.NodesIntervalBox.Max = 120
-        Me.NodesIntervalBox.Name = "NodesIntervalBox"
-        Me.NodesIntervalBox.Size = New System.Drawing.Size(39, 20)
-        Me.NodesIntervalBox.TabIndex = 1
-        Me.NodesIntervalBox.Text = "0"
-        '
         'TabPage6
         '
         Me.TabPage6.AutoScroll = True
+        Me.TabPage6.Controls.Add(Me.CIsChatBox)
+        Me.TabPage6.Controls.Add(Me.IPGatewayBox)
         Me.TabPage6.Controls.Add(Me.Label85)
         Me.TabPage6.Controls.Add(Me.BPQCODE)
         Me.TabPage6.Controls.Add(Me.BPQ32)
@@ -747,6 +629,30 @@ Partial Class Form1
         Me.TabPage6.TabIndex = 5
         Me.TabPage6.Text = "System/L2 Params"
         Me.TabPage6.UseVisualStyleBackColor = True
+        '
+        'CIsChatBox
+        '
+        Me.CIsChatBox.AutoSize = True
+        Me.CIsChatBox.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
+        Me.CIsChatBox.Location = New System.Drawing.Point(511, 214)
+        Me.CIsChatBox.Name = "CIsChatBox"
+        Me.CIsChatBox.Size = New System.Drawing.Size(68, 17)
+        Me.CIsChatBox.TabIndex = 57
+        Me.CIsChatBox.Text = "C is Chat"
+        Me.ToolTip1.SetToolTip(Me.CIsChatBox, "If set the NODES and ROUTES tables will" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "be saved when the node shuts down" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+        Me.CIsChatBox.UseVisualStyleBackColor = True
+        '
+        'IPGatewayBox
+        '
+        Me.IPGatewayBox.AutoSize = True
+        Me.IPGatewayBox.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
+        Me.IPGatewayBox.Location = New System.Drawing.Point(410, 214)
+        Me.IPGatewayBox.Name = "IPGatewayBox"
+        Me.IPGatewayBox.Size = New System.Drawing.Size(81, 17)
+        Me.IPGatewayBox.TabIndex = 56
+        Me.IPGatewayBox.Text = "IP Gateway"
+        Me.ToolTip1.SetToolTip(Me.IPGatewayBox, "If set the NODES and ROUTES tables will" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "be saved when the node shuts down" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+        Me.IPGatewayBox.UseVisualStyleBackColor = True
         '
         'Label85
         '
@@ -813,7 +719,7 @@ Partial Class Form1
         '
         Me.BBSBox.AutoSize = True
         Me.BBSBox.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
-        Me.BBSBox.Location = New System.Drawing.Point(366, 214)
+        Me.BBSBox.Location = New System.Drawing.Point(116, 214)
         Me.BBSBox.Margin = New System.Windows.Forms.Padding(2)
         Me.BBSBox.Name = "BBSBox"
         Me.BBSBox.Size = New System.Drawing.Size(47, 17)
@@ -826,7 +732,7 @@ Partial Class Form1
         '
         Me.NodeBox.AutoSize = True
         Me.NodeBox.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
-        Me.NodeBox.Location = New System.Drawing.Point(264, 214)
+        Me.NodeBox.Location = New System.Drawing.Point(36, 214)
         Me.NodeBox.Margin = New System.Windows.Forms.Padding(2)
         Me.NodeBox.Name = "NodeBox"
         Me.NodeBox.Size = New System.Drawing.Size(52, 17)
@@ -850,7 +756,7 @@ Partial Class Form1
         'Label48
         '
         Me.Label48.AutoSize = True
-        Me.Label48.Location = New System.Drawing.Point(34, 297)
+        Me.Label48.Location = New System.Drawing.Point(36, 307)
         Me.Label48.Name = "Label48"
         Me.Label48.Size = New System.Drawing.Size(350, 13)
         Me.Label48.TabIndex = 46
@@ -860,7 +766,7 @@ Partial Class Form1
         '
         Me.HideNodesBox.AutoSize = True
         Me.HideNodesBox.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
-        Me.HideNodesBox.Location = New System.Drawing.Point(140, 214)
+        Me.HideNodesBox.Location = New System.Drawing.Point(297, 214)
         Me.HideNodesBox.Name = "HideNodesBox"
         Me.HideNodesBox.Size = New System.Drawing.Size(82, 17)
         Me.HideNodesBox.TabIndex = 45
@@ -873,7 +779,7 @@ Partial Class Form1
         '
         Me.AutoSaveBox.AutoSize = True
         Me.AutoSaveBox.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
-        Me.AutoSaveBox.Location = New System.Drawing.Point(36, 214)
+        Me.AutoSaveBox.Location = New System.Drawing.Point(198, 214)
         Me.AutoSaveBox.Name = "AutoSaveBox"
         Me.AutoSaveBox.Size = New System.Drawing.Size(73, 17)
         Me.AutoSaveBox.TabIndex = 43
@@ -895,7 +801,7 @@ Partial Class Form1
         'Label60
         '
         Me.Label60.AutoSize = True
-        Me.Label60.Location = New System.Drawing.Point(36, 254)
+        Me.Label60.Location = New System.Drawing.Point(36, 253)
         Me.Label60.Name = "Label60"
         Me.Label60.Size = New System.Drawing.Size(40, 13)
         Me.Label60.TabIndex = 36
@@ -904,7 +810,7 @@ Partial Class Form1
         'Label53
         '
         Me.Label53.AutoSize = True
-        Me.Label53.Location = New System.Drawing.Point(30, 364)
+        Me.Label53.Location = New System.Drawing.Point(267, 344)
         Me.Label53.Margin = New System.Windows.Forms.Padding(2, 0, 2, 0)
         Me.Label53.Name = "Label53"
         Me.Label53.Size = New System.Drawing.Size(47, 13)
@@ -914,7 +820,7 @@ Partial Class Form1
         'Label54
         '
         Me.Label54.AutoSize = True
-        Me.Label54.Location = New System.Drawing.Point(27, 335)
+        Me.Label54.Location = New System.Drawing.Point(36, 343)
         Me.Label54.Margin = New System.Windows.Forms.Padding(2, 0, 2, 0)
         Me.Label54.Name = "Label54"
         Me.Label54.Size = New System.Drawing.Size(89, 13)
@@ -940,65 +846,6 @@ Partial Class Form1
         Me.Label56.Size = New System.Drawing.Size(55, 13)
         Me.Label56.TabIndex = 18
         Me.Label56.Text = "Max Links"
-        '
-        'BuffersBox
-        '
-        Me.BuffersBox.Location = New System.Drawing.Point(121, 251)
-        Me.BuffersBox.Max = 999
-        Me.BuffersBox.Name = "BuffersBox"
-        Me.BuffersBox.Size = New System.Drawing.Size(42, 20)
-        Me.BuffersBox.TabIndex = 48
-        Me.BuffersBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.BuffersBox, "Maximum buffers to allocate. Actual number may be less," & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "depending on number of p" & _
-                "orts and size of tables." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Normally set to 999 for BPQ32 or 255 for BPQCODE")
-        '
-        'MaxCircuitsBox
-        '
-        Me.MaxCircuitsBox.Location = New System.Drawing.Point(276, 48)
-        Me.MaxCircuitsBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.MaxCircuitsBox.Max = 255
-        Me.MaxCircuitsBox.Name = "MaxCircuitsBox"
-        Me.MaxCircuitsBox.Size = New System.Drawing.Size(43, 20)
-        Me.MaxCircuitsBox.TabIndex = 42
-        Me.MaxCircuitsBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.MaxCircuitsBox, "Max Circuits. Should normally be" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "twice the maximum concurrent" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "users on the node" & _
-                ".")
-        '
-        'IdleTimeBox
-        '
-        Me.IdleTimeBox.Location = New System.Drawing.Point(120, 360)
-        Me.IdleTimeBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.IdleTimeBox.Max = 86400
-        Me.IdleTimeBox.Name = "IdleTimeBox"
-        Me.IdleTimeBox.Size = New System.Drawing.Size(42, 20)
-        Me.IdleTimeBox.TabIndex = 25
-        Me.IdleTimeBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.IdleTimeBox, "The time after whcih an idle link will be closed." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recommended value " & _
-                "900 (15 mins)")
-        '
-        'T3Box
-        '
-        Me.T3Box.Location = New System.Drawing.Point(120, 331)
-        Me.T3Box.Margin = New System.Windows.Forms.Padding(2)
-        Me.T3Box.Max = 300
-        Me.T3Box.Name = "T3Box"
-        Me.T3Box.Size = New System.Drawing.Size(42, 20)
-        Me.T3Box.TabIndex = 23
-        Me.T3Box.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.T3Box, "The time after whcih an idle linkwill be checked" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "to make sure the other end is s" & _
-                "till present. " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "The system send a RR(P) after this interval" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recomme" & _
-                "nded value 180 (3 mins)" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
-        '
-        'MaxLinksBox
-        '
-        Me.MaxLinksBox.Location = New System.Drawing.Point(120, 48)
-        Me.MaxLinksBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.MaxLinksBox.Max = 255
-        Me.MaxLinksBox.Name = "MaxLinksBox"
-        Me.MaxLinksBox.Size = New System.Drawing.Size(43, 20)
-        Me.MaxLinksBox.TabIndex = 19
-        Me.MaxLinksBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.MaxLinksBox, """Max Level 2 Links " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "(up, down and internode)""")
         '
         'TabPage1
         '
@@ -1050,18 +897,6 @@ Partial Class Form1
         Me.Label49.TabIndex = 35
         Me.Label49.Text = "Beacon  Interval"
         '
-        'BTIntervalBox
-        '
-        Me.BTIntervalBox.Location = New System.Drawing.Point(534, 327)
-        Me.BTIntervalBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.BTIntervalBox.Max = 60
-        Me.BTIntervalBox.Name = "BTIntervalBox"
-        Me.BTIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.BTIntervalBox.Size = New System.Drawing.Size(25, 20)
-        Me.BTIntervalBox.TabIndex = 34
-        Me.BTIntervalBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.BTIntervalBox, "Time between beacons in minutes")
-        '
         'Label57
         '
         Me.Label57.AutoSize = True
@@ -1071,19 +906,6 @@ Partial Class Form1
         Me.Label57.Size = New System.Drawing.Size(56, 13)
         Me.Label57.TabIndex = 33
         Me.Label57.Text = "ID Interval"
-        '
-        'IDIntervalBox
-        '
-        Me.IDIntervalBox.Location = New System.Drawing.Point(534, 69)
-        Me.IDIntervalBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.IDIntervalBox.Max = 60
-        Me.IDIntervalBox.Name = "IDIntervalBox"
-        Me.IDIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.IDIntervalBox.Size = New System.Drawing.Size(25, 20)
-        Me.IDIntervalBox.TabIndex = 32
-        Me.IDIntervalBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.IDIntervalBox, "Time between ID Packets in minutes.." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Check your licencing contions " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "for guidanc" & _
-                "e" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
         '
         'FullCTEXT
         '
@@ -1108,19 +930,6 @@ Partial Class Form1
         Me.Label37.Text = "BTEXT  (Default Beacon) - Sent to Beacon Call, which is specified in Ports sectio" & _
             "n"
         '
-        'BTEXTBox
-        '
-        Me.BTEXTBox.CausesValidation = False
-        Me.BTEXTBox.Location = New System.Drawing.Point(12, 351)
-        Me.BTEXTBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.BTEXTBox.MaxLen = 80
-        Me.BTEXTBox.Multiline = True
-        Me.BTEXTBox.Name = "BTEXTBox"
-        Me.BTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.BTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-        Me.BTEXTBox.Size = New System.Drawing.Size(551, 50)
-        Me.BTEXTBox.TabIndex = 27
-        '
         'Label36
         '
         Me.Label36.AutoSize = True
@@ -1130,18 +939,6 @@ Partial Class Form1
         Me.Label36.Size = New System.Drawing.Size(218, 13)
         Me.Label36.TabIndex = 26
         Me.Label36.Text = "CTEXT Message (Sent when user connects)"
-        '
-        'CTEXTBox
-        '
-        Me.CTEXTBox.Location = New System.Drawing.Point(12, 271)
-        Me.CTEXTBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.CTEXTBox.MaxLen = 512
-        Me.CTEXTBox.Multiline = True
-        Me.CTEXTBox.Name = "CTEXTBox"
-        Me.CTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.CTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-        Me.CTEXTBox.Size = New System.Drawing.Size(549, 50)
-        Me.CTEXTBox.TabIndex = 25
         '
         'Label35
         '
@@ -1153,18 +950,6 @@ Partial Class Form1
         Me.Label35.TabIndex = 24
         Me.Label35.Text = "INFO Message (Sent in response to INFO Command )"
         '
-        'InfoMsgBox
-        '
-        Me.InfoMsgBox.Location = New System.Drawing.Point(12, 169)
-        Me.InfoMsgBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.InfoMsgBox.MaxLen = 512
-        Me.InfoMsgBox.Multiline = True
-        Me.InfoMsgBox.Name = "InfoMsgBox"
-        Me.InfoMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.InfoMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-        Me.InfoMsgBox.Size = New System.Drawing.Size(549, 50)
-        Me.InfoMsgBox.TabIndex = 23
-        '
         'Label34
         '
         Me.Label34.AutoSize = True
@@ -1175,27 +960,6 @@ Partial Class Form1
         Me.Label34.TabIndex = 22
         Me.Label34.Text = "ID Message (Sent in AX.25 ID Packets)"
         '
-        'IDMsgBox
-        '
-        Me.IDMsgBox.Location = New System.Drawing.Point(12, 91)
-        Me.IDMsgBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.IDMsgBox.MaxLen = 512
-        Me.IDMsgBox.Multiline = True
-        Me.IDMsgBox.Name = "IDMsgBox"
-        Me.IDMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.IDMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-        Me.IDMsgBox.Size = New System.Drawing.Size(549, 50)
-        Me.IDMsgBox.TabIndex = 21
-        '
-        'NodeAliasBox
-        '
-        Me.NodeAliasBox.Location = New System.Drawing.Point(209, 20)
-        Me.NodeAliasBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.NodeAliasBox.Name = "NodeAliasBox"
-        Me.NodeAliasBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.NodeAliasBox.Size = New System.Drawing.Size(67, 20)
-        Me.NodeAliasBox.TabIndex = 19
-        '
         'Label17
         '
         Me.Label17.AutoSize = True
@@ -1205,15 +969,6 @@ Partial Class Form1
         Me.Label17.Size = New System.Drawing.Size(58, 13)
         Me.Label17.TabIndex = 18
         Me.Label17.Text = "Node Alias"
-        '
-        'NodeCallBox
-        '
-        Me.NodeCallBox.Location = New System.Drawing.Point(67, 20)
-        Me.NodeCallBox.Margin = New System.Windows.Forms.Padding(0)
-        Me.NodeCallBox.Name = "NodeCallBox"
-        Me.NodeCallBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-        Me.NodeCallBox.Size = New System.Drawing.Size(63, 20)
-        Me.NodeCallBox.TabIndex = 1
         '
         'Label1
         '
@@ -1261,29 +1016,29 @@ Partial Class Form1
         Me.Label66.AutoSize = True
         Me.Label66.Location = New System.Drawing.Point(324, 21)
         Me.Label66.Name = "Label66"
-        Me.Label66.Size = New System.Drawing.Size(232, 13)
+        Me.Label66.Size = New System.Drawing.Size(262, 13)
         Me.Label66.TabIndex = 2
-        Me.Label66.Text = "Call               Qual   Port  MaxF   Frack   Paclen "
+        Me.Label66.Text = "Call               Qual   Port  MaxF   Frack   Paclen   INP3"
         '
         'Label65
         '
         Me.Label65.AutoSize = True
         Me.Label65.Location = New System.Drawing.Point(28, 21)
         Me.Label65.Name = "Label65"
-        Me.Label65.Size = New System.Drawing.Size(229, 13)
+        Me.Label65.Size = New System.Drawing.Size(259, 13)
         Me.Label65.TabIndex = 1
-        Me.Label65.Text = "Call              Qual   Port  MaxF   Frack   Paclen "
+        Me.Label65.Text = "Call              Qual   Port  MaxF   Frack   Paclen   INP3" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10)
         '
         'BPQ16Tab
         '
         Me.BPQ16Tab.Controls.Add(Me.Label2)
         Me.BPQ16Tab.Controls.Add(Me.UnprotoBox)
-        Me.BPQ16Tab.Controls.Add(Me.HostInterruptBox)
-        Me.BPQ16Tab.Controls.Add(Me.TransDelayBox)
         Me.BPQ16Tab.Controls.Add(Me.Label51)
         Me.BPQ16Tab.Controls.Add(Me.Label50)
         Me.BPQ16Tab.Controls.Add(Me.EMSBox)
         Me.BPQ16Tab.Controls.Add(Me.DesqViewBox)
+        Me.BPQ16Tab.Controls.Add(Me.HostInterruptBox)
+        Me.BPQ16Tab.Controls.Add(Me.TransDelayBox)
         Me.BPQ16Tab.Location = New System.Drawing.Point(4, 22)
         Me.BPQ16Tab.Name = "BPQ16Tab"
         Me.BPQ16Tab.Padding = New System.Windows.Forms.Padding(3)
@@ -1292,25 +1047,22 @@ Partial Class Form1
         Me.BPQ16Tab.Text = "DOS BPQCODE Params"
         Me.BPQ16Tab.UseVisualStyleBackColor = True
         '
-        'HostInterruptBox
+        'Label2
         '
-        Me.HostInterruptBox.Location = New System.Drawing.Point(282, 26)
-        Me.HostInterruptBox.Margin = New System.Windows.Forms.Padding(2)
-        Me.HostInterruptBox.Max = 255
-        Me.HostInterruptBox.Name = "HostInterruptBox"
-        Me.HostInterruptBox.Size = New System.Drawing.Size(31, 20)
-        Me.HostInterruptBox.TabIndex = 57
-        Me.HostInterruptBox.Text = "0"
+        Me.Label2.AutoSize = True
+        Me.Label2.Location = New System.Drawing.Point(17, 381)
+        Me.Label2.Name = "Label2"
+        Me.Label2.Size = New System.Drawing.Size(45, 13)
+        Me.Label2.TabIndex = 59
+        Me.Label2.Text = "Unproto"
         '
-        'TransDelayBox
+        'UnprotoBox
         '
-        Me.TransDelayBox.Location = New System.Drawing.Point(415, 26)
-        Me.TransDelayBox.Max = 10
-        Me.TransDelayBox.Name = "TransDelayBox"
-        Me.TransDelayBox.Size = New System.Drawing.Size(32, 20)
-        Me.TransDelayBox.TabIndex = 8
-        Me.TransDelayBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.TransDelayBox, "TNC2 TRANS mode send timeout (Seconds)")
+        Me.UnprotoBox.Location = New System.Drawing.Point(71, 378)
+        Me.UnprotoBox.Name = "UnprotoBox"
+        Me.UnprotoBox.Size = New System.Drawing.Size(499, 20)
+        Me.UnprotoBox.TabIndex = 58
+        Me.ToolTip1.SetToolTip(Me.UnprotoBox, "Golbal Unproto Address (only used on DOS and old BPQ32 versions")
         '
         'Label51
         '
@@ -1517,29 +1269,335 @@ Partial Class Form1
         '
         Me.ErrorProvider1.ContainerControl = Me
         '
-        'UnprotoBox
+        'Timer1
         '
-        Me.UnprotoBox.Location = New System.Drawing.Point(71, 378)
-        Me.UnprotoBox.Name = "UnprotoBox"
-        Me.UnprotoBox.Size = New System.Drawing.Size(499, 20)
-        Me.UnprotoBox.TabIndex = 58
-        Me.ToolTip1.SetToolTip(Me.UnprotoBox, "Golbal Unproto Address (only used on DOS and old BPQ32 versions")
         '
-        'Label2
+        'BTIntervalBox
         '
-        Me.Label2.AutoSize = True
-        Me.Label2.Location = New System.Drawing.Point(17, 381)
-        Me.Label2.Name = "Label2"
-        Me.Label2.Size = New System.Drawing.Size(45, 13)
-        Me.Label2.TabIndex = 59
-        Me.Label2.Text = "Unproto"
+        Me.BTIntervalBox.Location = New System.Drawing.Point(534, 327)
+        Me.BTIntervalBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.BTIntervalBox.Max = 60
+        Me.BTIntervalBox.Name = "BTIntervalBox"
+        Me.BTIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.BTIntervalBox.Size = New System.Drawing.Size(25, 20)
+        Me.BTIntervalBox.TabIndex = 34
+        Me.BTIntervalBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.BTIntervalBox, "Time between beacons in minutes")
+        '
+        'IDIntervalBox
+        '
+        Me.IDIntervalBox.Location = New System.Drawing.Point(534, 69)
+        Me.IDIntervalBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.IDIntervalBox.Max = 60
+        Me.IDIntervalBox.Name = "IDIntervalBox"
+        Me.IDIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.IDIntervalBox.Size = New System.Drawing.Size(25, 20)
+        Me.IDIntervalBox.TabIndex = 32
+        Me.IDIntervalBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.IDIntervalBox, "Time between ID Packets in minutes.." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Check your licencing contions " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "for guidanc" & _
+                "e" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+        '
+        'BTEXTBox
+        '
+        Me.BTEXTBox.CausesValidation = False
+        Me.BTEXTBox.Location = New System.Drawing.Point(12, 351)
+        Me.BTEXTBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.BTEXTBox.MaxLen = 80
+        Me.BTEXTBox.Multiline = True
+        Me.BTEXTBox.Name = "BTEXTBox"
+        Me.BTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.BTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+        Me.BTEXTBox.Size = New System.Drawing.Size(551, 50)
+        Me.BTEXTBox.TabIndex = 27
+        '
+        'CTEXTBox
+        '
+        Me.CTEXTBox.Location = New System.Drawing.Point(12, 271)
+        Me.CTEXTBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.CTEXTBox.MaxLen = 512
+        Me.CTEXTBox.Multiline = True
+        Me.CTEXTBox.Name = "CTEXTBox"
+        Me.CTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.CTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+        Me.CTEXTBox.Size = New System.Drawing.Size(549, 50)
+        Me.CTEXTBox.TabIndex = 25
+        '
+        'InfoMsgBox
+        '
+        Me.InfoMsgBox.Location = New System.Drawing.Point(12, 169)
+        Me.InfoMsgBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.InfoMsgBox.MaxLen = 512
+        Me.InfoMsgBox.Multiline = True
+        Me.InfoMsgBox.Name = "InfoMsgBox"
+        Me.InfoMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.InfoMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+        Me.InfoMsgBox.Size = New System.Drawing.Size(549, 50)
+        Me.InfoMsgBox.TabIndex = 23
+        '
+        'IDMsgBox
+        '
+        Me.IDMsgBox.Location = New System.Drawing.Point(12, 91)
+        Me.IDMsgBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.IDMsgBox.MaxLen = 512
+        Me.IDMsgBox.Multiline = True
+        Me.IDMsgBox.Name = "IDMsgBox"
+        Me.IDMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.IDMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+        Me.IDMsgBox.Size = New System.Drawing.Size(549, 50)
+        Me.IDMsgBox.TabIndex = 21
+        '
+        'NodeAliasBox
+        '
+        Me.NodeAliasBox.Location = New System.Drawing.Point(209, 20)
+        Me.NodeAliasBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.NodeAliasBox.Name = "NodeAliasBox"
+        Me.NodeAliasBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.NodeAliasBox.Size = New System.Drawing.Size(67, 20)
+        Me.NodeAliasBox.TabIndex = 19
+        '
+        'NodeCallBox
+        '
+        Me.NodeCallBox.Location = New System.Drawing.Point(67, 20)
+        Me.NodeCallBox.Margin = New System.Windows.Forms.Padding(0)
+        Me.NodeCallBox.Name = "NodeCallBox"
+        Me.NodeCallBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+        Me.NodeCallBox.Size = New System.Drawing.Size(63, 20)
+        Me.NodeCallBox.TabIndex = 1
+        '
+        'BuffersBox
+        '
+        Me.BuffersBox.Location = New System.Drawing.Point(121, 251)
+        Me.BuffersBox.Max = 999
+        Me.BuffersBox.Name = "BuffersBox"
+        Me.BuffersBox.Size = New System.Drawing.Size(42, 20)
+        Me.BuffersBox.TabIndex = 48
+        Me.BuffersBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.BuffersBox, "Maximum buffers to allocate. Actual number may be less," & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "depending on number of p" & _
+                "orts and size of tables." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Normally set to 999 for BPQ32 or 255 for BPQCODE")
+        '
+        'MaxCircuitsBox
+        '
+        Me.MaxCircuitsBox.Location = New System.Drawing.Point(276, 48)
+        Me.MaxCircuitsBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.MaxCircuitsBox.Max = 255
+        Me.MaxCircuitsBox.Name = "MaxCircuitsBox"
+        Me.MaxCircuitsBox.Size = New System.Drawing.Size(43, 20)
+        Me.MaxCircuitsBox.TabIndex = 42
+        Me.MaxCircuitsBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.MaxCircuitsBox, "Max Circuits. Should normally be" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "twice the maximum concurrent" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "users on the node" & _
+                ".")
+        '
+        'IdleTimeBox
+        '
+        Me.IdleTimeBox.Location = New System.Drawing.Point(351, 340)
+        Me.IdleTimeBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.IdleTimeBox.Max = 86400
+        Me.IdleTimeBox.Name = "IdleTimeBox"
+        Me.IdleTimeBox.Size = New System.Drawing.Size(42, 20)
+        Me.IdleTimeBox.TabIndex = 25
+        Me.IdleTimeBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.IdleTimeBox, "The time after whcih an idle link will be closed." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recommended value " & _
+                "900 (15 mins)")
+        '
+        'T3Box
+        '
+        Me.T3Box.Location = New System.Drawing.Point(151, 340)
+        Me.T3Box.Margin = New System.Windows.Forms.Padding(2)
+        Me.T3Box.Max = 300
+        Me.T3Box.Name = "T3Box"
+        Me.T3Box.Size = New System.Drawing.Size(42, 20)
+        Me.T3Box.TabIndex = 23
+        Me.T3Box.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.T3Box, "The time after whcih an idle linkwill be checked" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "to make sure the other end is s" & _
+                "till present. " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "The system send a RR(P) after this interval" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recomme" & _
+                "nded value 180 (3 mins)" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+        '
+        'PACLENBox
+        '
+        Me.HelpProvider1.SetHelpString(Me.PACLENBox, "Number of bytes in each packet. There are two PACLEN params, one here and")
+        Me.PACLENBox.Location = New System.Drawing.Point(120, 85)
+        Me.PACLENBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.PACLENBox.Max = 256
+        Me.PACLENBox.Name = "PACLENBox"
+        Me.HelpProvider1.SetShowHelp(Me.PACLENBox, True)
+        Me.PACLENBox.Size = New System.Drawing.Size(43, 20)
+        Me.PACLENBox.TabIndex = 21
+        Me.PACLENBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.PACLENBox, resources.GetString("PACLENBox.ToolTip"))
+        '
+        'MaxLinksBox
+        '
+        Me.MaxLinksBox.Location = New System.Drawing.Point(120, 48)
+        Me.MaxLinksBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.MaxLinksBox.Max = 255
+        Me.MaxLinksBox.Name = "MaxLinksBox"
+        Me.MaxLinksBox.Size = New System.Drawing.Size(43, 20)
+        Me.MaxLinksBox.TabIndex = 19
+        Me.MaxLinksBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.MaxLinksBox, """Max Level 2 Links " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "(up, down and internode)""")
+        '
+        'MaxHopsBox
+        '
+        Me.MaxHopsBox.Location = New System.Drawing.Point(389, 208)
+        Me.MaxHopsBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.MaxHopsBox.Max = 500
+        Me.MaxHopsBox.Name = "MaxHopsBox"
+        Me.MaxHopsBox.Size = New System.Drawing.Size(38, 20)
+        Me.MaxHopsBox.TabIndex = 47
+        Me.MaxHopsBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.MaxHopsBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+        '
+        'MaxRTTBox
+        '
+        Me.MaxRTTBox.Location = New System.Drawing.Point(240, 205)
+        Me.MaxRTTBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.MaxRTTBox.Max = 500
+        Me.MaxRTTBox.Name = "MaxRTTBox"
+        Me.MaxRTTBox.Size = New System.Drawing.Size(38, 20)
+        Me.MaxRTTBox.TabIndex = 46
+        Me.MaxRTTBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.MaxRTTBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+        '
+        'MaxRoutesBox
+        '
+        Me.MaxRoutesBox.Location = New System.Drawing.Point(256, 81)
+        Me.MaxRoutesBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.MaxRoutesBox.Max = 500
+        Me.MaxRoutesBox.Name = "MaxRoutesBox"
+        Me.MaxRoutesBox.Size = New System.Drawing.Size(43, 20)
+        Me.MaxRoutesBox.TabIndex = 42
+        Me.MaxRoutesBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.MaxRoutesBox, "Max adjacent Nodes")
+        '
+        'MaxNodesBox
+        '
+        Me.MaxNodesBox.Location = New System.Drawing.Point(101, 78)
+        Me.MaxNodesBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.MaxNodesBox.Max = 500
+        Me.MaxNodesBox.Name = "MaxNodesBox"
+        Me.MaxNodesBox.Size = New System.Drawing.Size(43, 20)
+        Me.MaxNodesBox.TabIndex = 40
+        Me.MaxNodesBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.MaxNodesBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+        '
+        'ObsMinBox
+        '
+        Me.ObsMinBox.Location = New System.Drawing.Point(391, 176)
+        Me.ObsMinBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.ObsMinBox.Max = 9
+        Me.ObsMinBox.Name = "ObsMinBox"
+        Me.ObsMinBox.Size = New System.Drawing.Size(36, 20)
+        Me.ObsMinBox.TabIndex = 21
+        Me.ObsMinBox.Text = "0"
+        '
+        'ObsInitBox
+        '
+        Me.ObsInitBox.Location = New System.Drawing.Point(240, 176)
+        Me.ObsInitBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.ObsInitBox.Max = 10
+        Me.ObsInitBox.Name = "ObsInitBox"
+        Me.ObsInitBox.Size = New System.Drawing.Size(38, 20)
+        Me.ObsInitBox.TabIndex = 20
+        Me.ObsInitBox.Text = "0"
+        '
+        'MinQualBox
+        '
+        Me.MinQualBox.Location = New System.Drawing.Point(105, 204)
+        Me.MinQualBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.MinQualBox.Max = 255
+        Me.MinQualBox.Name = "MinQualBox"
+        Me.MinQualBox.Size = New System.Drawing.Size(39, 20)
+        Me.MinQualBox.TabIndex = 13
+        Me.MinQualBox.Text = "0"
+        '
+        'L4WindowBox
+        '
+        Me.L4WindowBox.Location = New System.Drawing.Point(105, 331)
+        Me.L4WindowBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.L4WindowBox.Max = 127
+        Me.L4WindowBox.Name = "L4WindowBox"
+        Me.L4WindowBox.Size = New System.Drawing.Size(43, 20)
+        Me.L4WindowBox.TabIndex = 11
+        Me.L4WindowBox.Text = "0"
+        '
+        'L4DelayBox
+        '
+        Me.L4DelayBox.Location = New System.Drawing.Point(256, 331)
+        Me.L4DelayBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.L4DelayBox.Max = 10
+        Me.L4DelayBox.Name = "L4DelayBox"
+        Me.L4DelayBox.Size = New System.Drawing.Size(43, 20)
+        Me.L4DelayBox.TabIndex = 9
+        Me.L4DelayBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.L4DelayBox, "L4 Delay (Seconds)")
+        '
+        'L4TimeOutBox
+        '
+        Me.L4TimeOutBox.Location = New System.Drawing.Point(408, 331)
+        Me.L4TimeOutBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.L4TimeOutBox.Max = 240
+        Me.L4TimeOutBox.Name = "L4TimeOutBox"
+        Me.L4TimeOutBox.Size = New System.Drawing.Size(43, 20)
+        Me.L4TimeOutBox.TabIndex = 7
+        Me.L4TimeOutBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.L4TimeOutBox, "L4 Timout (Seconds)")
+        '
+        'L4RetriesBox
+        '
+        Me.L4RetriesBox.Location = New System.Drawing.Point(544, 331)
+        Me.L4RetriesBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.L4RetriesBox.Max = 10
+        Me.L4RetriesBox.Name = "L4RetriesBox"
+        Me.L4RetriesBox.Size = New System.Drawing.Size(43, 20)
+        Me.L4RetriesBox.TabIndex = 5
+        Me.L4RetriesBox.Text = "0"
+        '
+        'L3TTLBox
+        '
+        Me.L3TTLBox.Location = New System.Drawing.Point(544, 176)
+        Me.L3TTLBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.L3TTLBox.Max = 255
+        Me.L3TTLBox.Name = "L3TTLBox"
+        Me.L3TTLBox.Size = New System.Drawing.Size(43, 20)
+        Me.L3TTLBox.TabIndex = 3
+        Me.L3TTLBox.Text = "0"
+        '
+        'NodesIntervalBox
+        '
+        Me.NodesIntervalBox.Location = New System.Drawing.Point(105, 176)
+        Me.NodesIntervalBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.NodesIntervalBox.Max = 120
+        Me.NodesIntervalBox.Name = "NodesIntervalBox"
+        Me.NodesIntervalBox.Size = New System.Drawing.Size(39, 20)
+        Me.NodesIntervalBox.TabIndex = 1
+        Me.NodesIntervalBox.Text = "0"
+        '
+        'HostInterruptBox
+        '
+        Me.HostInterruptBox.Location = New System.Drawing.Point(282, 26)
+        Me.HostInterruptBox.Margin = New System.Windows.Forms.Padding(2)
+        Me.HostInterruptBox.Max = 255
+        Me.HostInterruptBox.Name = "HostInterruptBox"
+        Me.HostInterruptBox.Size = New System.Drawing.Size(31, 20)
+        Me.HostInterruptBox.TabIndex = 57
+        Me.HostInterruptBox.Text = "0"
+        '
+        'TransDelayBox
+        '
+        Me.TransDelayBox.Location = New System.Drawing.Point(415, 26)
+        Me.TransDelayBox.Max = 10
+        Me.TransDelayBox.Name = "TransDelayBox"
+        Me.TransDelayBox.Size = New System.Drawing.Size(32, 20)
+        Me.TransDelayBox.TabIndex = 8
+        Me.TransDelayBox.Text = "0"
+        Me.ToolTip1.SetToolTip(Me.TransDelayBox, "TNC2 TRANS mode send timeout (Seconds)")
         '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.AutoScroll = True
-        Me.ClientSize = New System.Drawing.Size(723, 479)
+        Me.ClientSize = New System.Drawing.Size(671, 493)
         Me.Controls.Add(Me.TabControl1)
         Me.HelpButton = True
         Me.Margin = New System.Windows.Forms.Padding(2)
@@ -1566,130 +1624,135 @@ Partial Class Form1
         Me.ResumeLayout(False)
 
     End Sub
-    Friend WithEvents Label67 As System.Windows.Forms.Label
-    Friend WithEvents Label68 As System.Windows.Forms.Label
-    Friend WithEvents Label69 As System.Windows.Forms.Label
-    Friend WithEvents Label70 As System.Windows.Forms.Label
-    Friend WithEvents Label71 As System.Windows.Forms.Label
-    Friend WithEvents Label72 As System.Windows.Forms.Label
-    Friend WithEvents Label73 As System.Windows.Forms.Label
-    Friend WithEvents Label74 As System.Windows.Forms.Label
-    Friend WithEvents Label75 As System.Windows.Forms.Label
-    Friend WithEvents ComboBox2 As System.Windows.Forms.ComboBox
-    Friend WithEvents Label76 As System.Windows.Forms.Label
-    Friend WithEvents ComboBox3 As System.Windows.Forms.ComboBox
-    Friend WithEvents HelpProvider1 As System.Windows.Forms.HelpProvider
-    Friend WithEvents PortsTab As System.Windows.Forms.TabPage
-    Friend WithEvents TabControl2 As System.Windows.Forms.TabControl
-    Friend WithEvents NewPortPage As System.Windows.Forms.TabPage
-    Friend WithEvents ApplsTab As System.Windows.Forms.TabPage
-    Friend WithEvents xTextBox65 As System.Windows.Forms.TextBox
-    Friend WithEvents ApplNameLabel As System.Windows.Forms.Label
-    Friend WithEvents ApplQualLabel As System.Windows.Forms.Label
-    Friend WithEvents ApplAliasLabel As System.Windows.Forms.Label
-    Friend WithEvents ApplCallLabel As System.Windows.Forms.Label
-    Friend WithEvents TabPage2 As System.Windows.Forms.TabPage
-    Friend WithEvents Label45 As System.Windows.Forms.Label
-    Friend WithEvents Label44 As System.Windows.Forms.Label
-    Friend WithEvents Label43 As System.Windows.Forms.Label
-    Friend WithEvents Label42 As System.Windows.Forms.Label
-    Friend WithEvents Label41 As System.Windows.Forms.Label
-    Friend WithEvents Label40 As System.Windows.Forms.Label
-    Friend WithEvents Label39 As System.Windows.Forms.Label
-    Friend WithEvents TabPage6 As System.Windows.Forms.TabPage
-    Friend WithEvents Label53 As System.Windows.Forms.Label
-    Friend WithEvents Label54 As System.Windows.Forms.Label
-    Friend WithEvents Label55 As System.Windows.Forms.Label
-    Friend WithEvents Label56 As System.Windows.Forms.Label
-    Friend WithEvents TabPage1 As System.Windows.Forms.TabPage
-    Friend WithEvents Label57 As System.Windows.Forms.Label
-    Friend WithEvents FullCTEXT As System.Windows.Forms.CheckBox
-    Friend WithEvents Label37 As System.Windows.Forms.Label
-    Friend WithEvents BTEXTBox As BPQCFG.MultiLineTextBox
-    Friend WithEvents Label36 As System.Windows.Forms.Label
-    Friend WithEvents CTEXTBox As BPQCFG.MultiLineTextBox
-    Friend WithEvents Label35 As System.Windows.Forms.Label
-    Friend WithEvents InfoMsgBox As BPQCFG.MultiLineTextBox
-    Friend WithEvents Label34 As System.Windows.Forms.Label
-    Friend WithEvents IDMsgBox As BPQCFG.MultiLineTextBox
-    Friend WithEvents Label17 As System.Windows.Forms.Label
-    Friend WithEvents NodeCallBox As BPQCFG.CallsignTextBox
-    Friend WithEvents Label1 As System.Windows.Forms.Label
-    Friend WithEvents TabControl1 As System.Windows.Forms.TabControl
-    Friend WithEvents RoutesTab As System.Windows.Forms.TabPage
-    Friend WithEvents BPQ16Tab As System.Windows.Forms.TabPage
-    Friend WithEvents Label59 As System.Windows.Forms.Label
-    Friend WithEvents Label58 As System.Windows.Forms.Label
-    Friend WithEvents Label60 As System.Windows.Forms.Label
-    Friend WithEvents Label61 As System.Windows.Forms.Label
-    Friend WithEvents AutoSaveBox As System.Windows.Forms.CheckBox
-    Friend WithEvents Label48 As System.Windows.Forms.Label
-    Friend WithEvents HideNodesBox As System.Windows.Forms.CheckBox
-    Friend WithEvents ToolTip1 As System.Windows.Forms.ToolTip
-    Friend WithEvents xTextBox37 As System.Windows.Forms.TextBox
-    Friend WithEvents Label49 As System.Windows.Forms.Label
-    Friend WithEvents Label47 As System.Windows.Forms.Label
-    Friend WithEvents Label46 As System.Windows.Forms.Label
-    Friend WithEvents xTextBox40 As System.Windows.Forms.TextBox
-    Friend WithEvents xTextBox39 As System.Windows.Forms.TextBox
-    Friend WithEvents xTextBox41 As System.Windows.Forms.TextBox
-    Friend WithEvents EMSBox As System.Windows.Forms.CheckBox
-    Friend WithEvents DesqViewBox As System.Windows.Forms.CheckBox
-    Friend WithEvents Label50 As System.Windows.Forms.Label
-    Friend WithEvents Label51 As System.Windows.Forms.Label
-    Friend WithEvents Label52 As System.Windows.Forms.Label
-    Friend WithEvents Label62 As System.Windows.Forms.Label
-    Friend WithEvents Label63 As System.Windows.Forms.Label
-    Friend WithEvents CheckBox2 As System.Windows.Forms.CheckBox
-    Friend WithEvents CheckBox3 As System.Windows.Forms.CheckBox
-    Friend WithEvents Label66 As System.Windows.Forms.Label
-    Friend WithEvents Label65 As System.Windows.Forms.Label
-    Friend WithEvents BBSBox As System.Windows.Forms.CheckBox
-    Friend WithEvents NodeBox As System.Windows.Forms.CheckBox
-    Friend WithEvents CheckBox5 As System.Windows.Forms.CheckBox
-    Friend WithEvents Label77 As System.Windows.Forms.Label
-    Friend WithEvents CheckBox6 As System.Windows.Forms.CheckBox
-    Friend WithEvents CheckBox7 As System.Windows.Forms.CheckBox
-    Friend WithEvents CheckBox8 As System.Windows.Forms.CheckBox
-    Friend WithEvents Label78 As System.Windows.Forms.Label
-    Friend WithEvents Label79 As System.Windows.Forms.Label
-    Friend WithEvents Label80 As System.Windows.Forms.Label
-    Friend WithEvents Label81 As System.Windows.Forms.Label
-    Friend WithEvents Label82 As System.Windows.Forms.Label
-    Friend WithEvents Label83 As System.Windows.Forms.Label
-    Friend WithEvents Label84 As System.Windows.Forms.Label
-    Friend WithEvents EnableLinked As System.Windows.Forms.ComboBox
-    Friend WithEvents BPQCODE As System.Windows.Forms.RadioButton
-    Friend WithEvents BPQ32 As System.Windows.Forms.RadioButton
-    Friend WithEvents Label85 As System.Windows.Forms.Label
-    Friend WithEvents ErrorProvider1 As System.Windows.Forms.ErrorProvider
-    Friend WithEvents HostInterruptBox As BPQCFG.DTNumTextBox
-    Friend WithEvents MinQualBox As BPQCFG.DTNumTextBox
-    Friend WithEvents L4WindowBox As BPQCFG.DTNumTextBox
-    Friend WithEvents L4DelayBox As BPQCFG.DTNumTextBox
-    Friend WithEvents L4TimeOutBox As BPQCFG.DTNumTextBox
-    Friend WithEvents L4RetriesBox As BPQCFG.DTNumTextBox
-    Friend WithEvents L3TTLBox As BPQCFG.DTNumTextBox
-    Friend WithEvents NodesIntervalBox As BPQCFG.DTNumTextBox
-    Friend WithEvents ObsMinBox As BPQCFG.DTNumTextBox
-    Friend WithEvents ObsInitBox As BPQCFG.DTNumTextBox
-    Friend WithEvents MaxRoutesBox As BPQCFG.DTNumTextBox
-    Friend WithEvents MaxNodesBox As BPQCFG.DTNumTextBox
-    Friend WithEvents IdleTimeBox As BPQCFG.DTNumTextBox
-    Friend WithEvents T3Box As BPQCFG.DTNumTextBox
-    Friend WithEvents PACLENBox As BPQCFG.DTNumTextBox
-    Friend WithEvents MaxLinksBox As BPQCFG.DTNumTextBox
-    Friend WithEvents IDIntervalBox As BPQCFG.DTNumTextBox
-    Friend WithEvents MaxCircuitsBox As BPQCFG.DTNumTextBox
-    Friend WithEvents BTIntervalBox As BPQCFG.DTNumTextBox
-    Friend WithEvents BuffersBox As BPQCFG.DTNumTextBox
-    Friend WithEvents TransDelayBox As BPQCFG.DTNumTextBox
-    Friend WithEvents Label38 As System.Windows.Forms.Label
-    Friend WithEvents AGWApplVal As System.Windows.Forms.Label
-    Friend WithEvents Label64 As System.Windows.Forms.Label
-    Friend WithEvents ApplTypeLabel As System.Windows.Forms.Label
-    Friend WithEvents NodeAliasBox As BPQCFG.AliasTextBox
-    Friend WithEvents Label2 As System.Windows.Forms.Label
-    Friend WithEvents UnprotoBox As System.Windows.Forms.TextBox
+   Friend WithEvents Label67 As System.Windows.Forms.Label
+   Friend WithEvents Label68 As System.Windows.Forms.Label
+   Friend WithEvents Label69 As System.Windows.Forms.Label
+   Friend WithEvents Label70 As System.Windows.Forms.Label
+   Friend WithEvents Label71 As System.Windows.Forms.Label
+   Friend WithEvents Label72 As System.Windows.Forms.Label
+   Friend WithEvents Label73 As System.Windows.Forms.Label
+   Friend WithEvents Label74 As System.Windows.Forms.Label
+   Friend WithEvents Label75 As System.Windows.Forms.Label
+   Friend WithEvents ComboBox2 As System.Windows.Forms.ComboBox
+   Friend WithEvents Label76 As System.Windows.Forms.Label
+   Friend WithEvents ComboBox3 As System.Windows.Forms.ComboBox
+   Friend WithEvents HelpProvider1 As System.Windows.Forms.HelpProvider
+   Friend WithEvents PortsTab As System.Windows.Forms.TabPage
+   Friend WithEvents TabControl2 As System.Windows.Forms.TabControl
+   Friend WithEvents NewPortPage As System.Windows.Forms.TabPage
+   Friend WithEvents ApplsTab As System.Windows.Forms.TabPage
+   Friend WithEvents xTextBox65 As System.Windows.Forms.TextBox
+   Friend WithEvents ApplNameLabel As System.Windows.Forms.Label
+   Friend WithEvents ApplQualLabel As System.Windows.Forms.Label
+   Friend WithEvents ApplAliasLabel As System.Windows.Forms.Label
+   Friend WithEvents ApplCallLabel As System.Windows.Forms.Label
+   Friend WithEvents TabPage2 As System.Windows.Forms.TabPage
+   Friend WithEvents Label45 As System.Windows.Forms.Label
+   Friend WithEvents Label44 As System.Windows.Forms.Label
+   Friend WithEvents Label43 As System.Windows.Forms.Label
+   Friend WithEvents Label42 As System.Windows.Forms.Label
+   Friend WithEvents Label41 As System.Windows.Forms.Label
+   Friend WithEvents Label40 As System.Windows.Forms.Label
+   Friend WithEvents Label39 As System.Windows.Forms.Label
+   Friend WithEvents TabPage6 As System.Windows.Forms.TabPage
+   Friend WithEvents Label53 As System.Windows.Forms.Label
+   Friend WithEvents Label54 As System.Windows.Forms.Label
+   Friend WithEvents Label55 As System.Windows.Forms.Label
+   Friend WithEvents Label56 As System.Windows.Forms.Label
+   Friend WithEvents TabPage1 As System.Windows.Forms.TabPage
+   Friend WithEvents Label57 As System.Windows.Forms.Label
+   Friend WithEvents FullCTEXT As System.Windows.Forms.CheckBox
+   Friend WithEvents Label37 As System.Windows.Forms.Label
+   Friend WithEvents BTEXTBox As BPQCFG.MultiLineTextBox
+   Friend WithEvents Label36 As System.Windows.Forms.Label
+   Friend WithEvents CTEXTBox As BPQCFG.MultiLineTextBox
+   Friend WithEvents Label35 As System.Windows.Forms.Label
+   Friend WithEvents InfoMsgBox As BPQCFG.MultiLineTextBox
+   Friend WithEvents Label34 As System.Windows.Forms.Label
+   Friend WithEvents IDMsgBox As BPQCFG.MultiLineTextBox
+   Friend WithEvents Label17 As System.Windows.Forms.Label
+   Friend WithEvents NodeCallBox As BPQCFG.CallsignTextBox
+   Friend WithEvents Label1 As System.Windows.Forms.Label
+   Friend WithEvents TabControl1 As System.Windows.Forms.TabControl
+   Friend WithEvents RoutesTab As System.Windows.Forms.TabPage
+   Friend WithEvents BPQ16Tab As System.Windows.Forms.TabPage
+   Friend WithEvents Label59 As System.Windows.Forms.Label
+   Friend WithEvents Label58 As System.Windows.Forms.Label
+   Friend WithEvents Label60 As System.Windows.Forms.Label
+   Friend WithEvents Label61 As System.Windows.Forms.Label
+   Friend WithEvents AutoSaveBox As System.Windows.Forms.CheckBox
+   Friend WithEvents Label48 As System.Windows.Forms.Label
+   Friend WithEvents HideNodesBox As System.Windows.Forms.CheckBox
+   Friend WithEvents ToolTip1 As System.Windows.Forms.ToolTip
+   Friend WithEvents xTextBox37 As System.Windows.Forms.TextBox
+   Friend WithEvents Label49 As System.Windows.Forms.Label
+   Friend WithEvents Label47 As System.Windows.Forms.Label
+   Friend WithEvents Label46 As System.Windows.Forms.Label
+   Friend WithEvents xTextBox40 As System.Windows.Forms.TextBox
+   Friend WithEvents xTextBox39 As System.Windows.Forms.TextBox
+   Friend WithEvents xTextBox41 As System.Windows.Forms.TextBox
+   Friend WithEvents EMSBox As System.Windows.Forms.CheckBox
+   Friend WithEvents DesqViewBox As System.Windows.Forms.CheckBox
+   Friend WithEvents Label50 As System.Windows.Forms.Label
+   Friend WithEvents Label51 As System.Windows.Forms.Label
+   Friend WithEvents Label52 As System.Windows.Forms.Label
+   Friend WithEvents Label62 As System.Windows.Forms.Label
+   Friend WithEvents Label63 As System.Windows.Forms.Label
+   Friend WithEvents CheckBox2 As System.Windows.Forms.CheckBox
+   Friend WithEvents CheckBox3 As System.Windows.Forms.CheckBox
+   Friend WithEvents Label66 As System.Windows.Forms.Label
+   Friend WithEvents Label65 As System.Windows.Forms.Label
+   Friend WithEvents BBSBox As System.Windows.Forms.CheckBox
+   Friend WithEvents NodeBox As System.Windows.Forms.CheckBox
+   Friend WithEvents CheckBox5 As System.Windows.Forms.CheckBox
+   Friend WithEvents Label77 As System.Windows.Forms.Label
+   Friend WithEvents CheckBox6 As System.Windows.Forms.CheckBox
+   Friend WithEvents CheckBox7 As System.Windows.Forms.CheckBox
+   Friend WithEvents CheckBox8 As System.Windows.Forms.CheckBox
+   Friend WithEvents Label78 As System.Windows.Forms.Label
+   Friend WithEvents Label79 As System.Windows.Forms.Label
+   Friend WithEvents Label80 As System.Windows.Forms.Label
+   Friend WithEvents Label81 As System.Windows.Forms.Label
+   Friend WithEvents Label82 As System.Windows.Forms.Label
+   Friend WithEvents Label83 As System.Windows.Forms.Label
+   Friend WithEvents Label84 As System.Windows.Forms.Label
+   Friend WithEvents EnableLinked As System.Windows.Forms.ComboBox
+   Friend WithEvents BPQCODE As System.Windows.Forms.RadioButton
+   Friend WithEvents BPQ32 As System.Windows.Forms.RadioButton
+   Friend WithEvents Label85 As System.Windows.Forms.Label
+   Friend WithEvents ErrorProvider1 As System.Windows.Forms.ErrorProvider
+   Friend WithEvents HostInterruptBox As BPQCFG.DTNumTextBox
+   Friend WithEvents MinQualBox As BPQCFG.DTNumTextBox
+   Friend WithEvents L4WindowBox As BPQCFG.DTNumTextBox
+   Friend WithEvents L4DelayBox As BPQCFG.DTNumTextBox
+   Friend WithEvents L4TimeOutBox As BPQCFG.DTNumTextBox
+   Friend WithEvents L4RetriesBox As BPQCFG.DTNumTextBox
+   Friend WithEvents L3TTLBox As BPQCFG.DTNumTextBox
+   Friend WithEvents NodesIntervalBox As BPQCFG.DTNumTextBox
+   Friend WithEvents ObsMinBox As BPQCFG.DTNumTextBox
+   Friend WithEvents ObsInitBox As BPQCFG.DTNumTextBox
+   Friend WithEvents MaxRoutesBox As BPQCFG.DTNumTextBox
+   Friend WithEvents MaxNodesBox As BPQCFG.DTNumTextBox
+   Friend WithEvents IdleTimeBox As BPQCFG.DTNumTextBox
+   Friend WithEvents T3Box As BPQCFG.DTNumTextBox
+   Friend WithEvents PACLENBox As BPQCFG.DTNumTextBox
+   Friend WithEvents MaxLinksBox As BPQCFG.DTNumTextBox
+   Friend WithEvents IDIntervalBox As BPQCFG.DTNumTextBox
+   Friend WithEvents MaxCircuitsBox As BPQCFG.DTNumTextBox
+   Friend WithEvents BTIntervalBox As BPQCFG.DTNumTextBox
+   Friend WithEvents BuffersBox As BPQCFG.DTNumTextBox
+   Friend WithEvents TransDelayBox As BPQCFG.DTNumTextBox
+   Friend WithEvents Label38 As System.Windows.Forms.Label
+   Friend WithEvents AGWApplVal As System.Windows.Forms.Label
+   Friend WithEvents Label64 As System.Windows.Forms.Label
+   Friend WithEvents ApplTypeLabel As System.Windows.Forms.Label
+   Friend WithEvents NodeAliasBox As BPQCFG.AliasTextBox
+   Friend WithEvents Label2 As System.Windows.Forms.Label
+   Friend WithEvents UnprotoBox As System.Windows.Forms.TextBox
+   Friend WithEvents MaxRTTBox As BPQCFG.DTNumTextBox
+   Friend WithEvents MaxHopsBox As BPQCFG.DTNumTextBox
+   Friend WithEvents IPGatewayBox As System.Windows.Forms.CheckBox
+    Friend WithEvents CIsChatBox As System.Windows.Forms.CheckBox
+    Friend WithEvents Timer1 As System.Windows.Forms.Timer
 
 End Class

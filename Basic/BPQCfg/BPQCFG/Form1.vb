@@ -21,6 +21,7 @@ Public Class Form1
     Dim menuItem4 As New MenuItem()
     Dim menuItem5 As New MenuItem()
     Dim menuItem6 As New MenuItem()
+    Dim menuItem7 As New MenuItem()
 
 
 
@@ -76,7 +77,8 @@ Public Class Form1
         menuItem3.Text = "&Update Source and Create Binary"
         menuItem4.Text = "&Create Binary"
         menuItem5.Text = "Create &Source"
-        menuItem6.Text = "&Exit"
+        menuItem6.Text = "Switch to Simple Cinfiguration Mode"
+        menuItem7.Text = "&Exit"
 
         menuItem3.Enabled = False
 
@@ -96,7 +98,8 @@ Public Class Form1
         AddHandler menuItem3.Click, AddressOf Me.Save_SourceandBinary
         AddHandler menuItem4.Click, AddressOf Me.Save_Binary
         AddHandler menuItem5.Click, AddressOf Me.Save_Source
-        AddHandler menuItem6.Click, AddressOf Me.Exit_Click
+        AddHandler menuItem6.Click, AddressOf Me.Switch_To_Simple
+        AddHandler menuItem7.Click, AddressOf Exit_Click
         ' Assign mainMenu1 to the form.
         Me.Menu = mainMenu1
 
@@ -109,6 +112,12 @@ Public Class Form1
         InitHandlers()
         CreateRoutePage()
         CreateTNCPage()
+
+        If My.Settings.StartMode = "S" Then
+            SimpleForm.Visible = True
+            Timer1.Enabled = True
+            Return
+        End If
 
         GetConfigFile()
 
@@ -183,13 +192,13 @@ Public Class Form1
 
     End Sub
 
-    Private Sub Open_Click(ByVal sender As Object, ByVal e As System.EventArgs)
+    Sub Open_Click(ByVal sender As Object, ByVal e As System.EventArgs)
         ' Create a new OpenFileDialog and display it.
 
         GetConfigFile()
 
     End Sub
-    Private Sub Validate_Click(ByVal sender As Object, ByVal e As System.EventArgs)
+    Sub Validate_Click(ByVal sender As Object, ByVal e As System.EventArgs)
         ' Create a new OpenFileDialog and display it.
 
         Debug.Print(Me.ValidateChildren())
@@ -197,13 +206,13 @@ Public Class Form1
 
     End Sub
 
-    Private Sub Save_Binary(ByVal sender As Object, ByVal e As System.EventArgs)
+    Sub Save_Binary(ByVal sender As Object, ByVal e As System.EventArgs)
 
         SaveConfigasBinary()
 
     End Sub
 
-    Private Sub Save_SourceandBinary(ByVal sender As Object, ByVal e As System.EventArgs)
+    Sub Save_SourceandBinary(ByVal sender As Object, ByVal e As System.EventArgs)
 
         SaveConfigAsText()
 
@@ -223,26 +232,17 @@ Public Class Form1
 
     Private Sub Save_Source(ByVal sender As Object, ByVal e As System.EventArgs)
 
-        SaveConfigAsText()
+      SaveConfigAsText()
 
     End Sub
-    Private Sub Exit_Click(ByVal sender As Object, ByVal e As System.EventArgs)
+    Private Sub Switch_To_Simple(ByVal sender As Object, ByVal e As System.EventArgs)
 
-        SavePortInfo()
-
-        CopyConfigtoArray()
-
-        If CompareConfig() = False Or AGWAppl <> OriginalAGWAppl Then
-
-            If MsgBox("Changes have not been saved - do you want to save before exiting?", _
-                 MsgBoxStyle.YesNo + MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config") = MsgBoxResult.Yes Then
-                If Not SaveConfigAsBinary() Then Exit Sub
-            End If
-        End If
-
-        End
+        Me.Visible = False
+        SimpleForm.Visible = True
 
     End Sub
+
+
 
     Function PreSaveValidate()
 
@@ -260,7 +260,7 @@ Public Class Form1
 
     End Function
 
-    Private Function SaveConfigAsBinary() As Boolean
+    Function SaveConfigAsBinary() As Boolean
 
         If Not PreSaveValidate() Then Return False
 
@@ -463,7 +463,7 @@ Public Class Form1
         HostInterruptBox.Text = Config(70)
         DesqViewBox.Checked = Config(71)
         MaxLinksBox.Text = Config(72)
-        MaxNodesBox.Text = Config(74)
+      MaxNodesBox.Text = Get16Bits(74)
         MaxRoutesBox.Text = Get16Bits(76)
         MaxCircuitsBox.Text = Get16Bits(78)
         IDIntervalBox.Text = Get16Bits(96)
@@ -473,7 +473,12 @@ Public Class Form1
         L4DelayBox.Text = Get16Bits(103)
         L4WindowBox.Text = Get16Bits(105)
         BTIntervalBox.Text = Get16Bits(107)
-        AutoSaveBox.Checked = Config(109)
+      AutoSaveBox.Checked = Config(109)
+      CIsChatBox.Checked = Config(111)
+      IPGatewayBox.Checked = Config(112)
+      MaxRTTBox.Text = Config(113)
+      MaxHopsBox.Text = Config(114)
+
         ApplQual(1).Text = Get16Bits(118)
 
         For i = 0 To 7
@@ -504,15 +509,22 @@ Public Class Form1
 
             RouteCall(i).Text = GetString(RouteBase, 10)
             RouteQual(i).Text = Config(RouteBase + 10)
-            RoutePort(i).Text = Config(RouteBase + 11)
+         RoutePort(i).Text = Config(RouteBase + 11)
 
+         If Config(RouteBase + 12) > 127 Then
+            RouteMaxFrame(i).Text = Config(RouteBase + 12) - 128
+            Routeinp3(i).Text = 1
+         Else
             RouteMaxFrame(i).Text = Config(RouteBase + 12)
-            RouteFrack(i).Text = Get16Bits(RouteBase + 13)
-            RoutePaclen(i).Text = Config(RouteBase + 15)
+            Routeinp3(i).Text = 0
+         End If
 
-            RouteBase = RouteBase + 16
+         RouteFrack(i).Text = Get16Bits(RouteBase + 13)
+         RoutePaclen(i).Text = Config(RouteBase + 15)
 
-        Next
+         RouteBase = RouteBase + 16
+
+      Next
 
         If ConfigLength > PortConfigPointer Then
 
@@ -681,31 +693,41 @@ GetNext:
         If line.Length = 0 Then GoTo GetNext
 
         If Mid(line, 1, 1) = "#" Then GoTo GetNext
-        If Mid(line, 1, 1) = ";" Then GoTo GetNext
+      If Mid(line, 1, 1) = ";" Then GoTo GetNext
 
-        Do
+      If Mid(line, 1, 2) = "/*" Then
+loop1:   LineNo = LineNo + 1
+         If LineNo >= Lines Then Return Nothing
+         line = AllLines(LineNo)
+         If Mid(line, 1, 2) <> "*/" Then GoTo loop1
+         GoTo GetNext
 
-            i = InStr(line, Chr(9))
+      End If
 
-            If i > 0 Then Mid(line, i, 1) = " "
 
-        Loop Until i = 0
+      Do
 
-        i = InStr(line, ";")
+         i = InStr(line, Chr(9))
 
-        If i > 0 Then
-            Comment = Mid(line, i + 1)
-            line = Microsoft.VisualBasic.Left(line, i - 1)
-        Else
-            Comment = ""
-        End If
-        line = LTrim(RTrim(line))
+         If i > 0 Then Mid(line, i, 1) = " "
 
-        If line = "" Then GoTo GetNext
+      Loop Until i = 0
 
-        Return line
+      i = InStr(line, ";")
 
-    End Function
+      If i > 0 Then
+         Comment = Mid(line, i + 1)
+         line = Microsoft.VisualBasic.Left(line, i - 1)
+      Else
+         Comment = ""
+      End If
+      line = LTrim(RTrim(line))
+
+      If line = "" Then GoTo GetNext
+
+      Return line
+
+   End Function
 
     Public Sub ProcessCfgLine(ByVal Line As String)
 
@@ -755,38 +777,38 @@ GetNext:
     Public Sub ProcessKeyValuePair()
         Dim i As Integer
 
-        For i = 1 To 67
+      For i = 1 To 72
 
-            If Key = TxtCfg(i).Key Then
+         If Key = TxtCfg(i).Key Then
 
-                TxtCfg(i).LineNo = LineNo
-                ParamAtLine(LineNo) = i
+            TxtCfg(i).LineNo = LineNo
+            ParamAtLine(LineNo) = i
 
-                If i = 39 Then       ' Enable Linked
-                    If Value = "Y" Then EnableLinked.SelectedIndex = 1
-                    If Value = "N" Then EnableLinked.SelectedIndex = 0
-                    If Value = "A" Then EnableLinked.SelectedIndex = 2
-                    Exit Sub
-                End If
-
-                If i = 44 Then        ' Applications
-                    ProcessTextApps(Value)
-                    Exit Sub
-                End If
-
-                If Not TxtCfg(i).CfgField Is Nothing Then
-                    If TxtCfg(i).Checkbox Then
-                        TxtCfg(i).CfgField.checked = Value
-                    Else
-                        TxtCfg(i).CfgField.text = Value
-                    End If
-                End If
-
-                Exit Sub
-
+            If i = 39 Then       ' Enable Linked
+               If Value = "Y" Then EnableLinked.SelectedIndex = 1
+               If Value = "N" Then EnableLinked.SelectedIndex = 0
+               If Value = "A" Then EnableLinked.SelectedIndex = 2
+               Exit Sub
             End If
 
-        Next
+            If i = 44 Then        ' Applications
+               ProcessTextApps(Value)
+               Exit Sub
+            End If
+
+            If Not TxtCfg(i).CfgField Is Nothing Then
+               If TxtCfg(i).Checkbox Then
+                  TxtCfg(i).CfgField.checked = Value
+               Else
+                  TxtCfg(i).CfgField.text = Value
+               End If
+            End If
+
+            Exit Sub
+
+         End If
+
+      Next
         Debug.Print(Key)
 
     End Sub
@@ -848,7 +870,7 @@ GetNext:
 
             If (Line = Nothing) Or (Microsoft.VisualBasic.Left(Line, 3) = "***") Then Exit Sub
 
-            Line = Line & ",,,,,"
+         Line = Line & ",,,,,,"
 
             i = InStr(Line, ",")
             RouteCall(p).Text = Microsoft.VisualBasic.Left(Line, i - 1)
@@ -870,10 +892,15 @@ GetNext:
             RouteFrack(p).Text = Microsoft.VisualBasic.Left(Line, i - 1)
             Line = Mid(Line, i + 1)
 
-            i = InStr(Line, ",")
-            RoutePaclen(p).Text = Microsoft.VisualBasic.Left(Line, i - 1)
-            RouteComment(p) = Comment
-            RouteLineno(p) = LineNo
+         i = InStr(Line, ",")
+         RoutePaclen(p).Text = Microsoft.VisualBasic.Left(Line, i - 1)
+         Line = Mid(Line, i + 1)
+
+         i = InStr(Line, ",")
+         Routeinp3(p).Text = Microsoft.VisualBasic.Left(Line, i - 1)
+
+         RouteComment(p) = Comment
+         RouteLineno(p) = LineNo
 
             p = p + 1
             ParamAtLine(LineNo) = p
@@ -1047,18 +1074,23 @@ GetNext:
         Putbyte(70, HostInterruptBox.Text)
         PutBool(71, DesqViewBox.Checked)
         Putbyte(72, MaxLinksBox.Text)
-        Putbyte(74, MaxNodesBox.Text)
-        Put16bits(76, MaxRoutesBox.Text)
+      Put16bits(74, MaxNodesBox.Text)
+      Put16bits(76, MaxRoutesBox.Text)
         Put16bits(78, MaxCircuitsBox.Text)
         Put16bits(96, IDIntervalBox.Text)
-        PutBool(98, FullCTEXT.Checked)
-        Put16bits(100, MinQualBox.Text)
-        PutBool(102, HideNodesBox.Checked)
-        Put16bits(103, L4DelayBox.Text)
-        Put16bits(105, L4WindowBox.Text)
-        Put16bits(107, BTIntervalBox.Text)
-        PutBool(109, AutoSaveBox.Checked)
-        Put16bits(118, ApplQual(1).Text)
+      PutBool(98, FullCTEXT.Checked)
+      Put16bits(100, MinQualBox.Text)
+      PutBool(102, HideNodesBox.Checked)
+      Put16bits(103, L4DelayBox.Text)
+      Put16bits(105, L4WindowBox.Text)
+      Put16bits(107, BTIntervalBox.Text)
+      PutBool(109, AutoSaveBox.Checked)
+      PutBool(111, CIsChatBox.Checked)
+      PutBool(112, IPGatewayBox.Checked)
+      Put16bits(113, MaxRTTBox.Text)
+      Put16bits(114, MaxHopsBox.Text)
+
+      Put16bits(118, ApplQual(1).Text)
 
         For i = 0 To 7
             PutString(256 + 16 * i, 16, ApplName(i + 1).Text)
@@ -1079,7 +1111,6 @@ GetNext:
         Try
 
             For i = 1 To NumberOfPorts
-
 
                 PutPortString(2, 30, TxtPortCfg(PORTID).Value(i))
 
@@ -1106,8 +1137,9 @@ GetNext:
                 PutPortString(100, 10, TxtPortCfg(PORTALIAS).Value(i), 0)
                 PutPortString(256, 256, TxtPortCfg(VALIDCALLS).Value(i), 0)
                 PutPort16bits(68, TxtPortCfg(QUALADJUST).Value(i))
-                PutPort16bits(70, TxtPortCfg(DIGIFLAG).Value(i))
-                PutPort16bits(72, TxtPortCfg(DIGIPORT).Value(i))
+                Putport8bits(70, TxtPortCfg(DIGIFLAG).Value(i))
+                Putport8bits(71, TxtPortCfg(DIGIPORT).Value(i))
+                PutPort16bits(72, TxtPortCfg(DIGIMASK).Value(i))
                 PutPort16bits(74, TxtPortCfg(USERS).Value(i))
                 PutPortString(128, 72, TxtPortCfg(UNPROTO).Value(i), 0)
                 PutPort16bits(0, TxtPortCfg(PORTNUM).Value(i))
@@ -1118,7 +1150,7 @@ GetNext:
                 PutPort16bits(114, TxtPortCfg(INTERLOCK).Value(i))
                 PutPort16bits(116, TxtPortCfg(NODESPACLEN).Value(i))
                 Putport8bits(118, TxtPortCfg(TXPORT).Value(i))
-                PutPortBoolean(MHEARD, i)
+                PutPortMH(MHEARD, i)
                 PutPortBoolean(CWIDTYPE, i)
                 Putport8bits(122, TxtPortCfg(MINQUAL).Value(i))
                 PutPort16bits(123, TxtPortCfg(MAXDIGIS).Value(i))
@@ -1144,12 +1176,17 @@ GetNext:
             If RouteCall(i).Text <> "" Then
                 PutString(RouteBase, 10, RouteCall(i).Text, True)
                 Putbyte(RouteBase + 10, RouteQual(i).Text)
-                Putbyte(RouteBase + 11, RoutePort(i).Text)
-                Putbyte(RouteBase + 12, RouteMaxFrame(i).Text)
-                Put16bits(RouteBase + 13, RouteFrack(i).Text)
-                Putbyte(RouteBase + 15, RoutePaclen(i).Text)
-                RouteBase = RouteBase + 16
+            Putbyte(RouteBase + 11, RoutePort(i).Text)
+            If Routeinp3(i).Text = "1" Then
+               Putbyte(RouteBase + 12, RouteMaxFrame(i).Text + 128)
+            Else
+               Putbyte(RouteBase + 12, RouteMaxFrame(i).Text)
             End If
+
+            Put16bits(RouteBase + 13, RouteFrack(i).Text)
+            Putbyte(RouteBase + 15, RoutePaclen(i).Text)
+            RouteBase = RouteBase + 16
+         End If
         Next
 
         If BPQ32.Checked Then
@@ -1193,6 +1230,9 @@ GetNext:
         textfile.WriteLine("T3=" & T3Box.Text)
         textfile.WriteLine("IDLETIME=" & IdleTimeBox.Text)
 
+        textfile.WriteLine("MaxHops=" & MaxHopsBox.Text)
+        textfile.WriteLine("MAXRTT" & MaxRTTBox.Text)
+
         If EMSBox.Checked Then value = "1" Else value = "0"
         textfile.WriteLine("EMS=" & value)
 
@@ -1227,6 +1267,13 @@ GetNext:
         If AutoSaveBox.Checked Then value = "1" Else value = "0"
         textfile.WriteLine("AUTOSAVE=" & value)
 
+        If IPGatewayBox.Checked Then value = "1" Else value = "0"
+        textfile.WriteLine("IPGATEWAY=" & value)
+
+        If CIsChatBox.Checked Then value = "1" Else value = "0"
+        textfile.WriteLine("C_IS_CHAT=" & value)
+
+
         textfile.WriteLine("IDMSG:")
         textfile.WriteLine(IDMsgBox.Text)
         textfile.WriteLine("***")
@@ -1247,12 +1294,13 @@ GetNext:
         For i = 0 To 31
 
             If Mid(RouteCall(i).Text, 1, 1) > " " Then
-                value = RTrim(RouteCall(i).Text) & "," & _
-                    RouteQual(i).Text & "," & _
-                    RoutePort(i).Text & "," & _
-                    RouteMaxFrame(i).Text & "," & _
-                    RouteFrack(i).Text & "," & _
-                    RoutePaclen(i).Text
+            value = RTrim(RouteCall(i).Text) & "," & _
+                RouteQual(i).Text & "," & _
+                RoutePort(i).Text & "," & _
+                RouteMaxFrame(i).Text & "," & _
+                RouteFrack(i).Text & "," & _
+                RoutePaclen(i).Text & "," & _
+                Routeinp3(i).Text
 
                 textfile.WriteLine(value)
             End If
@@ -1389,6 +1437,27 @@ GetNext:
 
             Next
 
+            For i = 69 To 70                 'Only output APPLCALLS if defined
+
+                If TxtCfg(i).LineNo = 0 Then
+
+                    If TxtCfg(i).CfgField IsNot Nothing Then
+
+                        If TxtCfg(i).CfgField.text <> "" And TxtCfg(i).CfgField.text <> "0" Then
+                            textfile.WriteLine(TxtCfg(i).Key & "=" & TxtCfg(i).CfgField.text)
+
+                        End If
+                    End If
+                End If
+            Next
+
+            If IPGatewayBox.Checked Then Value = "1" Else Value = "0"
+            textfile.WriteLine("IPGATEWAY=" & Value)
+
+            If CIsChatBox.Checked Then Value = "1" Else Value = "0"
+            textfile.WriteLine("C_IS_CHAT=" & Value)
+
+
             For i = 0 To 15
 
                 WriteTNCPortLine(i, textfile)
@@ -1416,6 +1485,7 @@ GetNext:
                     If RouteMaxFrame(p).Text > 0 Then Line = Line & "," & RouteMaxFrame(p).Text Else Line = Line & ","
                     If RouteFrack(p).Text > 0 Then Line = Line & "," & RouteFrack(p).Text Else Line = Line & ","
                     If RoutePaclen(p).Text > 0 Then Line = Line & "," & RoutePaclen(p).Text Else Line = Line & ","
+               If Routeinp3(p).Text > 0 Then Line = Line & "," & Routeinp3(p).Text Else Line = Line & ","
 
                     Line = StripCommas(Line)
 
@@ -1669,84 +1739,86 @@ GetNext:
 
     End Sub
 
-    Function SaveRoutesWithComments(ByVal n As Integer, ByVal textfile As System.IO.StreamWriter) As Integer
+   Function SaveRoutesWithComments(ByVal n As Integer, ByVal textfile As System.IO.StreamWriter) As Integer
 
 
-        '   Not so simple as main config, as number of lines may have altered
+      '   Not so simple as main config, as number of lines may have altered
 
-        '   Scan input till ***
-        '       if comment, copy it
-        '       if not, find line in routes with same lineno and output it
-        '       output any new lines (without a line number)
-        '       output ***
+      '   Scan input till ***
+      '       if comment, copy it
+      '       if not, find line in routes with same lineno and output it
+      '       output any new lines (without a line number)
+      '       output ***
 
-        Dim i As Integer, p As Integer, line As String
+      Dim i As Integer, p As Integer, line As String
 
-        textfile.WriteLine(AllLines(n))
-
-
-        For i = n + 1 To Lines
-
-            line = AllLines(i)
-
-            p = ParamAtLine(i)
-
-            If p > 0 Then ' A route line
-
-                p = p - 1           ' Fiddle, as zero is first record
-
-                If RouteLineno(p) = i Then            ' Hasnt changed
-
-                    If Mid(RouteCall(p).Text, 1, 1) > " " Then
-
-                        line = RouteCall(p).Text & "," & RouteQual(p).Text & "," & RoutePort(p).Text
-                        If RouteMaxFrame(p).Text > 0 Then line = line & "," & RouteMaxFrame(p).Text Else line = line & ","
-                        If RouteFrack(p).Text > 0 Then line = line & "," & RouteFrack(p).Text Else line = line & ","
-                        If RoutePaclen(p).Text > 0 Then line = line & "," & RoutePaclen(p).Text Else line = line & ","
-
-                        line = StripCommas(line)
-
-                        If RouteComment(p) <> "" Then line = line & Chr(9) & "; " & RouteComment(p)
-
-                        textfile.WriteLine(line)
-
-                    End If
-
-                    Continue For
-
-                End If
-
-            End If
+      textfile.WriteLine(AllLines(n))
 
 
-            If Microsoft.VisualBasic.Left(line, 3) = "***" Then
+      For i = n + 1 To Lines
 
-                For p = 0 To 31
+         line = AllLines(i)
 
-                    If Mid(RouteCall(p).Text, 1, 1) > " " And RouteLineno(p) = 0 Then
+         p = ParamAtLine(i)
 
-                        line = RTrim(RouteCall(p).Text) & "," & RouteQual(p).Text & "," & RoutePort(p).Text
+         If p > 0 Then ' A route line
 
-                        If RouteMaxFrame(p).Text > 0 Then line = line & "," & RouteMaxFrame(p).Text Else line = line & ","
-                        If RouteFrack(p).Text > 0 Then line = line & "," & RouteFrack(p).Text Else line = line & ","
-                        If RoutePaclen(p).Text > 0 Then line = line & "," & RoutePaclen(p).Text Else line = line & ","
+            p = p - 1           ' Fiddle, as zero is first record
 
-                        line = StripCommas(line)
+            If RouteLineno(p) = i Then            ' Hasnt changed
 
-                        textfile.WriteLine(line)
-                    End If
+               If Mid(RouteCall(p).Text, 1, 1) > " " Then
 
-                Next
+                  line = RouteCall(p).Text & "," & RouteQual(p).Text & "," & RoutePort(p).Text
+                  If RouteMaxFrame(p).Text > 0 Then line = line & "," & RouteMaxFrame(p).Text Else line = line & ","
+                  If RouteFrack(p).Text > 0 Then line = line & "," & RouteFrack(p).Text Else line = line & ","
+                  If RoutePaclen(p).Text > 0 Then line = line & "," & RoutePaclen(p).Text Else line = line & ","
+                  If Routeinp3(p).Text > 0 Then line = line & "," & Routeinp3(p).Text Else line = line & ","
 
-                Return i
+                  line = StripCommas(line)
+
+                  If RouteComment(p) <> "" Then line = line & Chr(9) & "; " & RouteComment(p)
+
+                  textfile.WriteLine(line)
+
+               End If
+
+               Continue For
 
             End If
 
-            textfile.WriteLine(line)
+         End If
 
-        Next
 
-    End Function
+         If Microsoft.VisualBasic.Left(line, 3) = "***" Then
+
+            For p = 0 To 31
+
+               If Mid(RouteCall(p).Text, 1, 1) > " " And RouteLineno(p) = 0 Then
+
+                  line = RTrim(RouteCall(p).Text) & "," & RouteQual(p).Text & "," & RoutePort(p).Text
+
+                  If RouteMaxFrame(p).Text > 0 Then line = line & "," & RouteMaxFrame(p).Text Else line = line & ","
+                  If RouteFrack(p).Text > 0 Then line = line & "," & RouteFrack(p).Text Else line = line & ","
+                  If RoutePaclen(p).Text > 0 Then line = line & "," & RoutePaclen(p).Text Else line = line & ","
+                  If Routeinp3(p).Text > 0 Then line = line & "," & Routeinp3(p).Text Else line = line & ","
+
+                  line = StripCommas(line)
+
+                  textfile.WriteLine(line)
+               End If
+
+            Next
+
+            Return i
+
+         End If
+
+         textfile.WriteLine(line)
+
+      Next
+
+   End Function
 
     Function SavePortWithComments(ByVal n As Integer, ByVal textfile As System.IO.StreamWriter) As Integer
 
@@ -1755,7 +1827,7 @@ GetNext:
 
         '   Scan input till ENDPORT
         '       if comment, copy it
-        '       if not, find line in routes with same lineno and output it
+        '       if not, find line with same lineno and output it
         '       output any new lines (without a line number)
         '       output ENDPORT
 
@@ -1921,7 +1993,6 @@ GetNext:
 
             If TxtPortCfg(p).LineNo(SavePortNo) = 0 Then ' Not specified
 
-
                 ' Only ouput PORTNUM if not default (<> current port)
 
                 If p = PORTNUM Then
@@ -1947,13 +2018,26 @@ GetNext:
 
                 If p = PROTOCOL Then
 
-                    ' Only ASYNC and HDLC have PROTOCOL
+                    ' ASYNC and HDLC WINMOR and PACTOR have PROTOCOL
 
-                    If TxtPortCfg(PORTTYPE).Value(SavePortNo) = 0 Or TxtPortCfg(PORTTYPE).Value(SavePortNo) > 2 Then
+                    Dim NeedProto As Boolean = False
 
-                        textfile.WriteLine(" PROTOCOL=" & Protos(TxtPortCfg(PORTTYPE).Value(SavePortNo)))
-
+                    If TxtPortCfg(PORTTYPE).Value(SavePortNo) = 0 Then
+                        NeedProto = True
+                    ElseIf TxtPortCfg(PORTTYPE).Value(SavePortNo) > 2 Then
+                        NeedProto = True
+                    ElseIf TxtPortCfg(PORTTYPE).Value(SavePortNo) = "2" Then
+                        ' Exetrnal
+                        If TxtPortCfg(DLLNAME).Value(SavePortNo).Contains("Pactor") Or _
+                                         TxtPortCfg(DLLNAME).Value(SavePortNo).Contains("WINMOR") Then
+                            NeedProto = True
+                        End If
                     End If
+
+                    If NeedProto Then
+                        textfile.WriteLine(" PROTOCOL=" & Protos(TxtPortCfg(PROTOCOL).Value(SavePortNo)))
+                    End If
+
 
                     Continue For
 
@@ -2000,10 +2084,11 @@ GetNext:
                     End If
 
                 Else
-
-                    If TxtPortCfg(p).Value(SavePortNo).Length <> 0 Then
-                        If TxtPortCfg(p).Value(SavePortNo) <> "0" Then
-                            textfile.WriteLine(" " & TxtPortCfg(p).Key & "=" & TxtPortCfg(p).Value(SavePortNo))
+                    If TxtPortCfg(p).Value(SavePortNo) IsNot Nothing Then
+                        If TxtPortCfg(p).Value(SavePortNo).Length <> 0 Then
+                            If TxtPortCfg(p).Value(SavePortNo) <> "0" Then
+                                textfile.WriteLine(" " & TxtPortCfg(p).Key & "=" & TxtPortCfg(p).Value(SavePortNo))
+                            End If
                         End If
                     End If
                 End If
@@ -2087,5 +2172,115 @@ GetNext:
 
     End Sub
 
+   Private Sub IDMsgBox_MouseHover(ByVal sender As Object, ByVal e As System.EventArgs) Handles IDMsgBox.MouseHover
+
+   End Sub
+
+    Private Sub Timer1_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Timer1.Tick
+
+        Timer1.Enabled = False
+        Me.Visible = False
+
+    End Sub
+
+    Public Sub CreateSimpleConfig()
+
+        Dim i As Integer, NewLength As Integer
+
+        NewLength = 2560 + 176
+
+        ReDim NewConfigBytes(NewLength - 1)   ' Length seems to have a extra byte!
+
+        NewConfigBytes(255) = 22  ' Version
+
+        Putbyte(40, 6) ' ObsInitBox.Text)
+        Putbyte(42, 5) 'ObsMinBox.Text)
+        Put16bits(44, 30) '  NodesIntervalBox.Text)
+        Put16bits(46, 25) 'L3TTLBox.Text)
+        Put16bits(48, 3) 'L4RetriesBox.Text)
+        Put16bits(50, 60) 'L4TimeOutBox.Text)
+        Put16bits(52, 999) 'BuffersBox.Text)
+        Put16bits(54, 236) 'PACLENBox.Text)
+        Put16bits(56, 1) 'TransDelayBox.Text)
+        Put16bits(58, 180) 'T3Box.Text)
+        Put16bits(64, 900) 'IdleTimeBox.Text)
+        PutBool(66, 0) 'EMSBox.Checked)
+        Putbyte(67, Asc("A")) 'EnableLinked
+        PutBool(68, 1) 'BBSBox.Checked)
+        PutBool(69, 1) 'NodeBox.Checked)
+        Putbyte(70, 127) 'HostInterruptBox.Text)
+        PutBool(71, 1) 'DesqViewBox.Checked)
+        Putbyte(72, 64) 'MaxLinksBox.Text)
+        Put16bits(74, 250) 'MaxNodesBox.Text)
+        Put16bits(76, 64) 'MaxRoutesBox.Text)
+        Put16bits(78, 128) 'MaxCircuitsBox.Text)
+        Put16bits(96, 10) 'IDIntervalBox.Text)
+        PutBool(98, 0) 'FullCTEXT.Checked)
+        Put16bits(100, 150) 'MinQualBox.Text)
+        PutBool(102, 0) 'HideNodesBox.Checked)
+        Put16bits(103, 10) 'L4DelayBox.Text)
+        Put16bits(105, 4) 'L4WindowBox.Text)
+        Put16bits(107, 60) 'BTIntervalBox.Text)
+        PutBool(109, 1) 'AutoSaveBox.Checked)
+        PutBool(111, 1) 'CisChatBox.Checked)
+        PutBool(112, 0) 'IPwayBox.Checked)
+        Put16bits(113, 90) 'MaxRTTBox.Text)
+        Put16bits(114, 4) 'MaxHopsBox.Text)
+
+
+        BPQ32.Checked = True
+
+        Config = NewConfigBytes
+
+        ConfigLength = Config.Length
+
+        NumberOfPortsinConfig = Int((ConfigLength - 2560) / 512)
+
+        NumberOfPorts = 0
+
+        ObsInitBox.Text = Config(40)
+        ObsMinBox.Text = Config(42)
+        NodesIntervalBox.Text = Get16Bits(44)
+
+        L3TTLBox.Text = Get16Bits(46)
+        L4RetriesBox.Text = Get16Bits(48)
+        L4TimeOutBox.Text = Get16Bits(50)
+        BuffersBox.Text = Get16Bits(52)
+        PACLENBox.Text = Get16Bits(54)
+        TransDelayBox.Text = Get16Bits(56)
+        T3Box.Text = Get16Bits(58)
+        IdleTimeBox.Text = Get16Bits(64)
+
+        EMSBox.Checked = Config(66)
+
+        i = Config(67)
+        If i = Asc("Y") Then EnableLinked.SelectedIndex = 1
+        If i = Asc("N") Then EnableLinked.SelectedIndex = 0
+        If i = Asc("A") Then EnableLinked.SelectedIndex = 2
+
+        BBSBox.Checked = Config(68)
+        NodeBox.Checked = Config(69)
+        HostInterruptBox.Text = Config(70)
+        DesqViewBox.Checked = Config(71)
+        MaxLinksBox.Text = Config(72)
+        MaxNodesBox.Text = Get16Bits(74)
+        MaxRoutesBox.Text = Get16Bits(76)
+        MaxCircuitsBox.Text = Get16Bits(78)
+        IDIntervalBox.Text = Get16Bits(96)
+        FullCTEXT.Checked = Get16Bits(98)
+        MinQualBox.Text = Get16Bits(100)
+        HideNodesBox.Checked = Config(102)
+        L4DelayBox.Text = Get16Bits(103)
+        L4WindowBox.Text = Get16Bits(105)
+        BTIntervalBox.Text = Get16Bits(107)
+        AutoSaveBox.Checked = Config(109)
+        CIsChatBox.Checked = Config(111)
+        IPGatewayBox.Checked = Config(112)
+        MaxRTTBox.Text = Config(113)
+        MaxHopsBox.Text = Config(114)
+ 
+        TabControl1.SelectedIndex = 1
+
+    End Sub
 
 End Class

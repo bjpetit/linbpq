@@ -117,80 +117,10 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <metadata name="HelpProvider1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>9, 10</value>
+  <metadata name="ToolTip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>17, 17</value>
   </metadata>
   <metadata name="ToolTip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>138, 17</value>
-  </metadata>
-  <data name="xTextBox65.Text" xml:space="preserve">
-    <value>The node supports up to 8 applications that a user may access  by connecting to the switch, and entering  the Application Name. With BPQ32, each application can have a Callsign, Alias and  Quality. The user can connect directly to these calls, instead of having to connect ot the switch, then enter the name.  The DOS version only allows direct connects to the first application, and Appl1Call, etc  are refered to as BBSCALL . 
-If quality is non-zero, the Call and Alias will be included in the NODES broadcast, allowing L4 connects from 
-other stations in the network.</value>
-  </data>
-  <metadata name="MaxHopsBox.Locked" type="System.Boolean, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
-    <value>True</value>
-  </metadata>
-  <data name="xTextBox41.Text" xml:space="preserve">
-    <value>Level 4 (L4) provides a reliable connection, by retransmitting lost packets. and resequencing packets received
-out of order. L4Window is the number of packets that can be sent before waiting for an acknowledgment. Timeout
-is the time after which an unacknowledged packet is retrnsmitted.L4 Retries is the number of a times a packet is sent
-before failing the connection. L4Delay is the time between receiving a packet and sending an acknolwgement.</value>
-  </data>
-  <data name="xTextBox39.Text" xml:space="preserve">
-    <value>The BPQ Node implements the NET/ROM protocol,designed by WA8DED (Software 2000, Inc).
-
-The termiinology can be confusing. Iin this context, a NODE is a station running the  NET/ROM protocol
-and a ROUTE is a direct  link between two NODES. </value>
-  </data>
-  <metadata name="EnableLinked.Locked" type="System.Boolean, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
-    <value>True</value>
-  </metadata>
-  <data name="xTextBox37.Text" xml:space="preserve">
-    <value>Number of bytes in each packet. There are two PACLEN params, one here and one
-in the PORTSmsection. 
-This one is used to set the initial value for sessions via other nodes, and for sessions
-initiated from here. The other is used for incoming direct (Level 2) sessions. In all cases 
-the application program can override thse values.
-
-Max is 256. Should not normally be set ot more than 236, as anything larger will 
-have to be fragmented to pass over a NETROM link.</value>
-  </data>
-  <data name="xTextBox37.ToolTip" xml:space="preserve">
-    <value>Number of bytes in each packet. There are two PACLEN params, one here and
-one in the PORTS section. This one is used to set the initial value
-for sessions via other nodes, and for sessions initiated from here.
-The other is used for incoming direct (Level 2) sessions. In all cases
-the application program can override thse values.
-
-Max is 256. Should not normally be set ot more than 236, as anything larger will 
-have to be fragmented to pass over a NETROM link.
-</value>
-  </data>
-  <data name="PACLENBox.ToolTip" xml:space="preserve">
-    <value>Number of bytes in each packet. There are two PACLEN params, one here and
-one in the PORTS section. This one is used to set the initial value
-for sessions via other nodes, and for sessions initiated from here.
-The other is used for incoming direct (Level 2) sessions. In all cases
-the application program can override thse values.
-
-Max is 256. Should not normally be set ot more than 236, as anything larger will 
-have to be fragmented to pass over a NETROM link.
-</value>
-  </data>
-  <metadata name="CTEXTBox.Locked" type="System.Boolean, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
-    <value>True</value>
-  </metadata>
-  <metadata name="NodeCallBox.Locked" type="System.Boolean, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
-    <value>True</value>
-  </metadata>
-  <metadata name="ErrorProvider1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>403, 17</value>
-  </metadata>
-  <metadata name="$this.TrayHeight" type="System.Int32, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
-    <value>25</value>
-  </metadata>
-  <metadata name="Timer1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-    <value>526, 17</value>
+    <value>17, 17</value>
   </metadata>
 </root>

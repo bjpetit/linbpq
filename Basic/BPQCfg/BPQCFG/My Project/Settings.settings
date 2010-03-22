@@ -17,5 +17,8 @@
     <Setting Name="CfgFileSaveName" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>
+    <Setting Name="StartMode" Type="System.String" Scope="User">
+      <Value Profile="(Default)">S</Value>
+    </Setting>
   </Settings>
 </SettingsFile>
