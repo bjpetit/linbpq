@@ -23,6 +23,9 @@ Module Module1
     Public NumberOfPortsinConfig As Integer
     Public NumberofTNCPorts As Integer
 
+    Public DontAskBeforeClose As Boolean
+    Public ConfigLoaded As Boolean = False
+
 
 
  

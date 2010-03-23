@@ -1271,6 +1271,7 @@ Partial Class Form1
         '
         'Timer1
         '
+        Me.Timer1.Interval = 50
         '
         'BTIntervalBox
         '
@@ -1396,7 +1397,7 @@ Partial Class Form1
         Me.IdleTimeBox.Size = New System.Drawing.Size(42, 20)
         Me.IdleTimeBox.TabIndex = 25
         Me.IdleTimeBox.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.IdleTimeBox, "The time after whcih an idle link will be closed." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recommended value " & _
+        Me.ToolTip1.SetToolTip(Me.IdleTimeBox, "The time after whcih an idle link will be closed." & vbCrLf & "In seconds, recommended value " & _
                 "900 (15 mins)")
         '
         'T3Box
@@ -1408,9 +1409,9 @@ Partial Class Form1
         Me.T3Box.Size = New System.Drawing.Size(42, 20)
         Me.T3Box.TabIndex = 23
         Me.T3Box.Text = "0"
-        Me.ToolTip1.SetToolTip(Me.T3Box, "The time after whcih an idle linkwill be checked" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "to make sure the other end is s" & _
-                "till present. " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "The system send a RR(P) after this interval" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recomme" & _
-                "nded value 180 (3 mins)" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+        Me.ToolTip1.SetToolTip(Me.T3Box, "The time after whcih an idle linkwill be checked" & vbCrLf & "to make sure the other end is s" & _
+                "till present. " & vbCrLf & "The system send a RR(P) after this interval" & vbCrLf & "In seconds, recomme" & _
+                "nded value 180 (3 mins)" & vbCrLf)
         '
         'PACLENBox
         '
@@ -1597,9 +1598,10 @@ Partial Class Form1
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.AutoScroll = True
-        Me.ClientSize = New System.Drawing.Size(671, 493)
+        Me.ClientSize = New System.Drawing.Size(685, 493)
         Me.Controls.Add(Me.TabControl1)
         Me.HelpButton = True
+        Me.Icon = CType(resources.GetObject("$this.Icon"), System.Drawing.Icon)
         Me.Margin = New System.Windows.Forms.Padding(2)
         Me.MaximizeBox = False
         Me.MinimizeBox = False

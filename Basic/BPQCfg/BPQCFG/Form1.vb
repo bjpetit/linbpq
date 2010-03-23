@@ -31,6 +31,8 @@ Public Class Form1
 
         CopyConfigtoArray()
 
+        If DontAskBeforeClose Then Return
+
         If CompareConfig() = False Or AGWAppl <> OriginalAGWAppl Then
 
             If MsgBox("Changes have not been saved - do you want to save before exiting?", _
@@ -77,7 +79,7 @@ Public Class Form1
         menuItem3.Text = "&Update Source and Create Binary"
         menuItem4.Text = "&Create Binary"
         menuItem5.Text = "Create &Source"
-        menuItem6.Text = "Switch to Simple Cinfiguration Mode"
+        menuItem6.Text = "Switch to Simple Configuration Mode"
         menuItem7.Text = "&Exit"
 
         menuItem3.Enabled = False
@@ -237,11 +239,16 @@ Public Class Form1
     End Sub
     Private Sub Switch_To_Simple(ByVal sender As Object, ByVal e As System.EventArgs)
 
+        SavePortInfo()
+
+        SimpleForm.CopyConfigtoSimple()
         Me.Visible = False
         SimpleForm.Visible = True
 
-    End Sub
+        My.Settings.StartMode = "S"
 
+
+    End Sub
 
 
     Function PreSaveValidate()
@@ -411,6 +418,8 @@ Public Class Form1
             Exit Sub
         End If
 
+        ConfigLoaded = True
+
         NewConfig = False
 
         For i = 1 To NumberOfPorts
@@ -463,7 +472,7 @@ Public Class Form1
         HostInterruptBox.Text = Config(70)
         DesqViewBox.Checked = Config(71)
         MaxLinksBox.Text = Config(72)
-      MaxNodesBox.Text = Get16Bits(74)
+        MaxNodesBox.Text = Get16Bits(74)
         MaxRoutesBox.Text = Get16Bits(76)
         MaxCircuitsBox.Text = Get16Bits(78)
         IDIntervalBox.Text = Get16Bits(96)
@@ -631,6 +640,8 @@ Public Class Form1
             Exit Sub
 
         End If
+
+        ConfigLoaded = True
 
         i = Asc(Mid(AllLines(Lines - 1), 1, 1))
         If i = 0 Then Lines = Lines - 1 ' Nulls May be present at end of DOS config
@@ -2215,7 +2226,7 @@ loop1:   LineNo = LineNo + 1
         Put16bits(76, 64) 'MaxRoutesBox.Text)
         Put16bits(78, 128) 'MaxCircuitsBox.Text)
         Put16bits(96, 10) 'IDIntervalBox.Text)
-        PutBool(98, 0) 'FullCTEXT.Checked)
+        PutBool(98, 1) 'FullCTEXT.Checked)
         Put16bits(100, 150) 'MinQualBox.Text)
         PutBool(102, 0) 'HideNodesBox.Checked)
         Put16bits(103, 10) 'L4DelayBox.Text)

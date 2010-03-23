@@ -190,6 +190,24 @@ have to be fragmented to pass over a NETROM link.
   <metadata name="$this.TrayHeight" type="System.Int32, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
     <value>25</value>
   </metadata>
+  <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+  <data name="$this.Icon" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+    <value>
+        AAABAAEAICAQAAAAAADoAgAAFgAAACgAAAAgAAAAQAAAAAEABAAAAAAAgAIAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAACAAACAAAAAgIAAgAAAAIAAgACAgAAAgICAAMDAwAAAAP8AAP8AAAD//wD/AAAA/wD/AP//
+        AAD///8Au7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7
+        u7u7u7uwAAALu7u7u7u7u7u7u7u7ALsAu7u7u7u7u7u7u7u7sAuwAAu7u7u7u7u7u7u7u7ALu7ALu7u7
+        u7u7u7u7u7uwC7uwC7u7u7u7u7u7u7u7sAu7sAu7u7u7u7u7u7u7u7ALu7ALu7u7u7u7u7u7u7uwC7uw
+        C7u7u7u7u7sAu7u7uwC7ALu7u7u7u7u7ALu7u7uwAAu7u7u7u7u7uwC7u7u7u7u7u7u7u7u7u7sAu7u7
+        u7u7u7u7u7u7u7u7AAAAC7u7u7u7u7u7u7u7uwC7uwC7u7u7u7u7u7u7u7sAu7sAu7u7u7u7u7u7u7u7
+        ALu7ALu7u7u7u7sAAAALuwC7uwC7u7u7u7u7ALu7ALsAAAALu7u7u7u7uwC7uwC7u7u7u7u7u7u7u7sA
+        u7sAu7u7u7u7u7u7u7u7ALu7ALu7u7u7u7u7u7u7uwAAAAu7u7u7u7u7u7u7u7sAu7sAu7u7u7u7u7u7
+        u7u7ALu7ALu7u7u7u7u7u7u7uwC7uwC7u7u7u7u7u7u7u7sAAAALu7u7u7u7u7u7u7u7u7u7u7u7u7u7
+        u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7sAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+</value>
+  </data>
   <metadata name="Timer1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>526, 17</value>
   </metadata>
