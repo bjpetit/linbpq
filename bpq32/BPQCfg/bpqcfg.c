@@ -74,7 +74,12 @@
 
 // March 2010
 
-// Ass SIMPLE mode
+// Add SIMPLE mode
+
+// March 2010
+
+// Change default of Full_CTEXT to 1
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -150,6 +155,59 @@ struct CONFIGTABLE
 	UCHAR C_VERSION;			// CONFIG PROG VERSION
 };
 
+struct PORTCONFIG
+{
+	short PORTNUM;
+	char ID[30];			//2
+	short TYPE;			// 32,
+	short PROTOCOL;			// 34,
+	short IOADDR;			// 36,
+	short INTLEVEL;			// 38,
+	short SPEED;			// 40,
+	short CHANNEL;			// 42,
+	short BBSFLAG;			// 44, 
+	short QUALITY;			// 46, 
+	short MAXFRAME;			// 48,
+	short TXDELAY;			// 50,
+	short SLOTTIME;			// 52, 
+	short PERSIST;			// 54,
+
+	short FULLDUP;			// 56,
+	short SOFTDCD;			// 58, 
+	short FRACK;			// 60, 
+	short RESPTIME;			// 62,
+	short RETRIES;			// 64, 
+
+	short PACLEN;			// 66,
+	short QUALADJUST;			// 68,
+	UCHAR DIGIFLAG;			// 70,
+	UCHAR DIGIPORT;			// 71 
+	short DIGIMASK;			// 72
+	short USERS;			// 74,
+	short TXTAIL;			// 76
+	short ALIAS_IS_BBS;			// 78
+	char CWID[10];			// 80,
+	char PORTCALL[10];			//  90,
+	char PORTALIAS[10];			// 100,
+	short L3ONLY;			//  110,
+	short KISSOPTIONS;		//"112,
+	short INTERLOCK;			// 114,
+	short NODESPACLEN;			//  116,
+	short TXPORT;			// 118,
+	UCHAR MHEARD;			// 120,
+	UCHAR CWIDTYPE;			// 121,
+	short MINQUAL;			// 122, 
+	short MAXDIGIS;			//  123,
+	char Pad[4];				// 127,
+	char UNPROTO[72];		//  128, 
+	char PORTALIAS2[10];	//    200,
+	char DLLNAME[16];		//  210,
+	char BCALL[10];			// 226,
+	char Pad2[20];
+	char VALIDCALLS[256];	//   256,
+};
+
+struct PORTCONFIG PortRec;
 
 #pragma pack()
 
@@ -370,7 +428,6 @@ main( int argc, char *argv[ ], char *envp[ ] )
  	int heading = 0;
 	char rec[MAXLINE];
 	int Cfglen = sizeof(struct CONFIGTABLE);
-
 
 	if (argc >1)
 	{
@@ -1658,14 +1715,17 @@ char rec[];
 	   hw = 0;
 	if (_stricmp(value,"NETROM") == 0)
 	   hw = 2;
+	if (_stricmp(value,"BPQKISS") == 0)
+	   hw = 4;
 	if (_stricmp(value,"HDLC") == 0)
 	   hw = 6;
-	if (_stricmp(value,"COMBIOS") == 0)
+	if (_stricmp(value,"L2") == 0)
 	   hw = 8;
 	if (_stricmp(value,"PACTOR") == 0)
 	   hw = 10;
 	if (_stricmp(value,"WINMOR") == 0)
 	   hw = 10;
+
 
 	fseek(fp2,(long) fileoffset,SEEK_SET);
 
@@ -2059,7 +2119,7 @@ int simple(int i)
 	Cfg.C_C = 1;
 	Cfg.C_DESQVIEW = 0;
 	Cfg.C_EMSFLAG = 0;
-	Cfg.C_FULLCTEXT = 0;
+	Cfg.C_FULLCTEXT = 1;
 	Cfg.C_HIDENODES = 0;
 	Cfg.C_HOSTINTERRUPT = 127;
 	Cfg.C_IDINTERVAL = 10;

@@ -454,12 +454,19 @@
 // Version 1.0.3.43
 
 // Add SKIPPROMPT command to forward scripts
-// Fix B2 decode crash with long headers
 
 // Version 1.0.4.1
 
 // Non - Beta Release
 // Fix possible crash/corruption with long B2 messages
+
+// Version 1.0.4.2
+
+// Add @winlink.org to the B2 From addresss if it is just a callsign
+// Route Flood Bulls on TO as well as @
+
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 

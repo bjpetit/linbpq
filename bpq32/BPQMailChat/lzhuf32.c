@@ -831,17 +831,18 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 */
 		char * ptr1, * ptr2, * ptr3;
-		int linelen, MsgLen = 0;
+		__int32 linelen, MsgLen = 0;
 		struct MsgInfo * Msg = conn->TempMsg;
 		time_t Date;
 		char FullTo[100];
+		char FullFrom[100];
 		char ** RecpTo = NULL;				// May be several Recipients
 		char ** HddrTo = NULL;				// May be several Recipients
 		char ** Via = NULL;					// May be several Recipients
-		int B2To;							// Offset to To: fields in B2 header
-		int Recipients = 0;
+		__int32 B2To;							// Offset to To: fields in B2 header
+		__int32 Recipients = 0;
 		struct _EXCEPTION_POINTERS exinfo;
-		int RMSMsgs = 0, BBSMsgs = 0;
+		__int32 RMSMsgs = 0, BBSMsgs = 0;
 
 		__try {
 
@@ -855,6 +856,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		ptr2 = strchr(ptr1, '\r');
 
 		linelen = ptr2 - ptr1;
+
+		memcpy(FullFrom, ptr1, linelen);
+		FullFrom[linelen] = 0;
 
 		if (_memicmp(ptr1, "From:", 5) == 0)
 		{
@@ -883,7 +887,27 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				if (linelen > 12) linelen = 12;
 				memcpy(Msg->from, &ptr1[6], linelen-6);
+
+				// Remove any SSID
+
+				ptr3 = strchr(Msg->from, '-');
+				if (ptr3) *ptr3 = 0;
 			}
+
+			// If from RMS, and no @ in message, append @winlink.org to the B2 Header.
+			// so messages passed via B2 know it is from Winlink
+
+			if ((Msg->B2Flags & FromRMS) && strchr(FullFrom, '@') == NULL)
+			{
+				// Move Message down buffer - ptr2 is the insertion point
+
+				memmove(ptr2+12, ptr2, count);
+				memcpy(ptr2, "@winlink.org", 12);
+				count += 12;
+				conn->TempMsg->length += 12;
+			}
+
+
 		}
 		else if (_memicmp(ptr1, "To:", 3) == 0 || _memicmp(ptr1, "cc:", 3) == 0)
 		{
@@ -1038,12 +1062,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 	
 		if (Recipients > 1)
 		{
-			int i;
+			__int32 i;
 			struct MsgInfo * SaveMsg;
 			char * SaveBody;
-			int SaveMsgLen = count;
+			__int32 SaveMsgLen = count;
 			BOOL SentToRMS = FALSE;
-			int ToLen;
+			__int32 ToLen;
 			char * ToString = malloc(Recipients * 100);
 
 			__try{
@@ -1198,7 +1222,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		{
 			// Single Destination -  Need to put to: line back in message
 
-			int ToLen = strlen(HddrTo[0]);
+			__int32 ToLen = strlen(HddrTo[0]);
 
 			memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
 			memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 

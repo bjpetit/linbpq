@@ -8,6 +8,11 @@
 //  Version 1.0 January 2009 - Initial Version
 //
 
+// March 22 2010
+
+// Send FAULTS to Monitor Window
+// Force PROTOCOL = WINMOR/PACTOR (to simmplifiy Config)
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -897,6 +902,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
+	PortEntry->PORTCONTROL.PROTOCOL = 10;
+
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
@@ -1496,9 +1503,11 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	}
 
 	if (_memicmp(Buffer, "PENDING", 6) == 0)
-	{
 		return;
-	}
+
+	if (_memicmp(Buffer, "FAULT", 5) == 0)
+		WritetoTrace(TNC, Buffer, MsgLen - 2);
+
 
 	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
 	{

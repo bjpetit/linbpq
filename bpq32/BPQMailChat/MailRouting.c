@@ -872,8 +872,8 @@ FULLHA:
 
 NOHA:
 
-	Logprintf(LOG_BBS, conn, '?', "Routing Trace Type %c %s VIA %s Route On %s %s %s %s %s",
-		Msg->type, (Flood) ? "(Flood)":"", Msg->via, HElements[0],
+	Logprintf(LOG_BBS, conn, '?', "Routing Trace Type %c %sTO %s VIA %s Route On %s %s %s %s %s",
+		Msg->type, (Flood) ? "(Flood) ":"", Msg->to, Msg->via, HElements[0],
 		HElements[1], HElements[2], HElements[3], HElements[4]);
 
 
@@ -987,6 +987,7 @@ NOHA:
 
 	// For now I will only route on AT (for none-hierarchical addresses) and HA
 
+	// Ver 1.0.4.2 - Try including TO
 
 	for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 	{		
@@ -995,7 +996,6 @@ NOHA:
 		if (ForwardingInfo->PersonalOnly)
 			continue;
 
-/*
 		if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 		{
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
@@ -1008,7 +1008,7 @@ NOHA:
 			Count++;
 			continue;
 		}
-*/
+
 		if ((strcmp(ATBBS, bbs->Call) == 0) ||			// @BBS = BBS		
 			CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
 		{
