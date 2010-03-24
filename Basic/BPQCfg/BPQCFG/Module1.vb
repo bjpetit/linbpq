@@ -1,10 +1,10 @@
 Module Module1
 
-    Public Declare Function GetAdapterList Lib "c:\bpq32\bpqadaptersdll.dll" _
-         Alias "_GetAdapterList@4" (ByVal ErrMsg As String) As Integer
+    '  Public Declare Function GetAdapterList Lib "c:\bpq32\bpqadaptersdll.dll" _
+    '       Alias "_GetAdapterList@4" (ByVal ErrMsg As String) As Integer
 
-    Public Declare Function GetNextAdapter Lib "c:\bpq32\bpqadaptersdll.dll" _
-         Alias "_GetNextAdapter@8" (ByVal Name As String, ByVal Desc As String) As Integer
+    ' Public Declare Function GetNextAdapter Lib "c:\bpq32\bpqadaptersdll.dll" _
+    '      Alias "_GetNextAdapter@8" (ByVal Name As String, ByVal Desc As String) As Integer
 
     Public BPQDirectory As String
     Public CfgFile As String

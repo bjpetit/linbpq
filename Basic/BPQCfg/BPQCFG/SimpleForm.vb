@@ -907,50 +907,57 @@ Public Class SimpleForm
 
         OutFile.Close()
 
-        If NeedRigControl Then 'And CanCreateRigControl Then
+        If NeedRigControl Then
 
-            Dim LastCOM As String = ""
+            If CanCreateRigControl Then
 
-            FileName = BPQDirectory & "\RigControl.cfg"
 
-            Try
-                File.Copy(FileName & ".save", FileName & ".old", True)
-            Catch ex As Exception
-            End Try
-            Try
-                File.Copy(FileName, FileName & ".save", True)
-            Catch ex As Exception
-            End Try
+                Dim LastCOM As String = ""
 
-            OutFile = My.Computer.FileSystem.OpenTextFileWriter(FileName, False, System.Text.Encoding.ASCII)
+                FileName = BPQDirectory & "\RigControl.cfg"
 
-            OutFile.WriteLine("#	Rig COntrol file for WINMOR PTT Created by WinBPQCfg")
-            OutFile.WriteLine("")
+                Try
+                    File.Copy(FileName & ".save", FileName & ".old", True)
+                Catch ex As Exception
+                End Try
+                Try
+                    File.Copy(FileName, FileName & ".save", True)
+                Catch ex As Exception
+                End Try
 
-            For i = 1 To NumberOfPorts
+                OutFile = My.Computer.FileSystem.OpenTextFileWriter(FileName, False, System.Text.Encoding.ASCII)
 
-                If UCase(TxtPortCfg(DLLNAME).Value(i)) = "WINMOR.DLL" Then
+                OutFile.WriteLine("#	Rig Control file for WINMOR PTT Created by WinBPQCfg")
+                OutFile.WriteLine("")
 
-                    If WINMORPTT(i).Text <> "VOX" Then
+                For i = 1 To NumberOfPorts
 
-                        If PTTCOMM(i).Text <> LastCOM Then
-                            OutFile.WriteLine("")
-                            Line = PTTCOMM(i).Text & " 9600 PTTONLY"
+                    If UCase(TxtPortCfg(DLLNAME).Value(i)) = "WINMOR.DLL" Then
+
+                        If WINMORPTT(i).Text <> "VOX" Then
+
+                            If PTTCOMM(i).Text <> LastCOM Then
+                                OutFile.WriteLine("")
+                                Line = PTTCOMM(i).Text & " 9600 PTTONLY"
+                                OutFile.WriteLine(Line)
+                                LastCOM = PTTCOMM(i).Text
+                            End If
+
+                            Line = "RADIO WINMOR " & i
                             OutFile.WriteLine(Line)
-                            LastCOM = PTTCOMM(i).Text
+
                         End If
-
-                        Line = "RADIO WINMOR " & i
-                        OutFile.WriteLine(Line)
-
                     End If
-                End If
-            Next
+                Next
 
-            OutFile.WriteLine("")
-            OutFile.Close()
+                OutFile.WriteLine("")
+                OutFile.Close()
 
+            Else
+
+            End If
         End If
+
 
         MsgBox("File creation complete", MsgBoxStyle.OkOnly + MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config")
 
