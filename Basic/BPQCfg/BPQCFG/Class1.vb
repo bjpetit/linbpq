@@ -95,6 +95,20 @@ Public Class CallsignTextBox
 
 End Class
 
+Public Class NonNullCombobox
+   Inherits Combobox
+
+
+   Sub New()
+
+      AddHandler Me.Validating, AddressOf ValidatingCombo
+      AddHandler Me.Validated, AddressOf ValidatedSub
+
+   End Sub
+
+
+End Class
+
 Public Class AliasTextBox
     Inherits TextBox
 

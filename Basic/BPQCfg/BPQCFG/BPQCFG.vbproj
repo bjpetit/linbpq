@@ -11,11 +11,13 @@
     <RootNamespace>BPQCFG</RootNamespace>
     <AssemblyName>WinBPQCFG</AssemblyName>
     <MyType>WindowsForms</MyType>
-    <ManifestCertificateThumbprint>3CF1E7252C4C7050BA1EBC43C848B785DA24CEDF</ManifestCertificateThumbprint>
-    <ManifestKeyFile>BPQCFG_1_TemporaryKey.pfx</ManifestKeyFile>
+    <ManifestCertificateThumbprint>3A3E43C76A3C0901BE572BD3B32117B13766BF99</ManifestCertificateThumbprint>
+    <ManifestKeyFile>BPQCFG_2_TemporaryKey.pfx</ManifestKeyFile>
     <GenerateManifests>true</GenerateManifests>
     <SignManifests>true</SignManifests>
     <IsWebBootstrapper>false</IsWebBootstrapper>
+    <OptionStrict>Off</OptionStrict>
+    <ApplicationIcon>Resources\icon2.ico</ApplicationIcon>
     <PublishUrl>C:\bpqcfg\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -26,12 +28,10 @@
     <UpdatePeriodically>false</UpdatePeriodically>
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
+    <CreateWebPageOnPublish>true</CreateWebPageOnPublish>
     <WebPage>publish.htm</WebPage>
-    <OpenBrowserOnPublish>false</OpenBrowserOnPublish>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <BootstrapperEnabled>true</BootstrapperEnabled>
-    <OptionStrict>Off</OptionStrict>
-    <ApplicationIcon>Resources\icon2.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -58,6 +58,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
@@ -128,6 +129,7 @@
     <Compile Include="SimpleHelp.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="VCOMModule.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="AddPort1.resx">
@@ -187,6 +189,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="BPQCFG_1_TemporaryKey.pfx" />
+    <None Include="BPQCFG_2_TemporaryKey.pfx" />
     <None Include="Resources\icon2.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.VisualBasic.targets" />

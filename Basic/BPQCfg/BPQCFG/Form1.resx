@@ -123,6 +123,17 @@
   <metadata name="ToolTip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
     <value>138, 17</value>
   </metadata>
+  <data name="PACLENBox.ToolTip" xml:space="preserve">
+    <value>Number of bytes in each packet. There are two PACLEN params, one here and
+one in the PORTS section. This one is used to set the initial value
+for sessions via other nodes, and for sessions initiated from here.
+The other is used for incoming direct (Level 2) sessions. In all cases
+the application program can override thse values.
+
+Max is 256. Should not normally be set ot more than 236, as anything larger will 
+have to be fragmented to pass over a NETROM link.
+</value>
+  </data>
   <data name="xTextBox65.Text" xml:space="preserve">
     <value>The node supports up to 8 applications that a user may access  by connecting to the switch, and entering  the Application Name. With BPQ32, each application can have a Callsign, Alias and  Quality. The user can connect directly to these calls, instead of having to connect ot the switch, then enter the name.  The DOS version only allows direct connects to the first application, and Appl1Call, etc  are refered to as BBSCALL . 
 If quality is non-zero, the Call and Alias will be included in the NODES broadcast, allowing L4 connects from 
@@ -157,17 +168,6 @@ Max is 256. Should not normally be set ot more than 236, as anything larger will
 have to be fragmented to pass over a NETROM link.</value>
   </data>
   <data name="xTextBox37.ToolTip" xml:space="preserve">
-    <value>Number of bytes in each packet. There are two PACLEN params, one here and
-one in the PORTS section. This one is used to set the initial value
-for sessions via other nodes, and for sessions initiated from here.
-The other is used for incoming direct (Level 2) sessions. In all cases
-the application program can override thse values.
-
-Max is 256. Should not normally be set ot more than 236, as anything larger will 
-have to be fragmented to pass over a NETROM link.
-</value>
-  </data>
-  <data name="PACLENBox.ToolTip" xml:space="preserve">
     <value>Number of bytes in each packet. There are two PACLEN params, one here and
 one in the PORTS section. This one is used to set the initial value
 for sessions via other nodes, and for sessions initiated from here.
