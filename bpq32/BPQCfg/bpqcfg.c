@@ -74,11 +74,11 @@
 
 // March 2010
 
-// Add SIMPLE mode
+//		Add SIMPLE mode
 
 // March 2010
 
-// Change default of Full_CTEXT to 1
+//		Change SIMPLE mode default of Full_CTEXT to 1
 
 
 #define _CRT_SECURE_NO_DEPRECATE

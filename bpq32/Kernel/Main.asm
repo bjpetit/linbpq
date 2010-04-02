@@ -2851,6 +2851,9 @@ MAINL00:
 	JMP SHORT MAINL10		; SEE IF ANY MORE 
 	
 gotsess:
+
+	MOV	L4KILLTIMER[EAX],0	; Reset Idle Timeout
+
 	mov	ebx,L4CROSSLINK[EAX]
 	
 	or	ebx,ebx

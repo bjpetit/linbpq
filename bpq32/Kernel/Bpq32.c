@@ -213,6 +213,15 @@
 
 // Fix config reload for Rig COntrol 
 
+// 410n		March 2010
+
+// Implement C P via PACROR/WINMOR (for Airmail)
+
+// Build 2
+
+// Don't flip SSID bits on Downlink Connect if uplink is Pactor/WINMOR
+// Fix resetting IDLE Timer on Pactor/WINMOR sessions
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 

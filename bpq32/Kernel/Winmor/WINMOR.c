@@ -608,7 +608,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 
-			if (_memicmp(&buff[8], "FEC", 3) == 0)
+			if (_memicmp(&buff[8], "FEC\r", 4) == 0 || _memicmp(&buff[8], "FEC ", 4) == 0)
 			{
 				TNC->FECMode = TRUE;
 				TNC->FECIDTimer = 0;
