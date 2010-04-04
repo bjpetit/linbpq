@@ -509,7 +509,7 @@ Module Module1
       If TxtPortCfg(IOADDR).Value(CurrentPort) = "" Then TxtPortCfg(IOADDR).Value(CurrentPort) = "0"
       IOADDRBox.Text = Hex(TxtPortCfg(IOADDR).Value(CurrentPort))
 
-      For i = 0 To 3
+      For i = 0 To 4
          KISSOptionsBox.SetItemChecked(i, ((TxtPortCfg(KISSOPTIONS).Value(CurrentPort) >> i) And 1) = 1)
       Next
 
