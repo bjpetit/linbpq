@@ -1960,38 +1960,38 @@ int do_kiss (char * value,char * rec)
 	int err=255;
 
 	if (_stricmp(value,"POLLED") == 0)
-	    {
+	{
 		err=0;
 		kissflags=kissflags | 2;
-	    }
+	}
 
 	if (_stricmp(value,"CHECKSUM") == 0)
-	    {
+	{
 		err=0;
 		kissflags=kissflags | 1;
-	    }
+	}
 
-	if (_stricmp(value,"CRC") == 0)
-	    {
+	if (_stricmp(value,"D700") == 0)
+	{
 		err=0;
 		kissflags=kissflags | 16;
-	    }
+	}
 
 	if (_stricmp(value,"ACKMODE") == 0)
-	    {
+	{
 		err=0;
 		kissflags=kissflags | 4;
-	    }
+	}
 
 	if (_stricmp(value,"SLAVE") == 0)
-	    {
+	{
 		err=0;
 		kissflags=kissflags | 8;
-	    }
+	}
 
 	if (err == 255)
 	{
-	   puts("Invalid KISS Options (not POLLED ACKMODE CHECKSUM CRC SLAVE)");
+	   puts("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE)");
 	   printf("%s\n\n",rec);
 	}
 	return (err);
