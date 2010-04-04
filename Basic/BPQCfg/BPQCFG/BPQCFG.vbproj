@@ -14,7 +14,7 @@
     <ManifestCertificateThumbprint>3A3E43C76A3C0901BE572BD3B32117B13766BF99</ManifestCertificateThumbprint>
     <ManifestKeyFile>BPQCFG_2_TemporaryKey.pfx</ManifestKeyFile>
     <GenerateManifests>true</GenerateManifests>
-    <SignManifests>true</SignManifests>
+    <SignManifests>false</SignManifests>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <OptionStrict>Off</OptionStrict>
     <ApplicationIcon>Resources\icon2.ico</ApplicationIcon>

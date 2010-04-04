@@ -877,7 +877,7 @@ Module Module1
 
       KISSOptionsBox.CheckOnClick = True
       KISSOptionsBox.FormattingEnabled = True
-      KISSOptionsBox.Items.AddRange(New Object() {"Checksum", "Polled", "ACKMode", "Slave"})
+      KISSOptionsBox.Items.AddRange(New Object() {"Checksum", "Polled", "ACKMode", "Slave", "D700"})
       KISSOptionsBox.Name = "KISSOptionsBox"
       KISSOptionsBox.Size = New System.Drawing.Size(112, 55)
       KISSOptionsBox.TabIndex = 37
@@ -2331,7 +2331,8 @@ Module Module1
          If KissParam = "CHECKSUM" Then KissOption = KissOption + 1 _
           Else If KissParam = "POLLED" Then KissOption = KissOption + 2 _
           Else If KissParam = "ACKMODE" Then KissOption = KissOption + 4 _
-          Else If KissParam = "SLAVE" Then KissOption = KissOption + 8 Else Return False
+          Else If KissParam = "SLAVE" Then KissOption = KissOption + 8 _
+          Else If KissParam = "D700" Then KissOption = KissOption + 16 Else Return False
 
       Loop While Value <> ""
 

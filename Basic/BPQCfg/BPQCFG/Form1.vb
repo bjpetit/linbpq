@@ -1927,6 +1927,8 @@ loop1:   LineNo = LineNo + 1
                If (Kiss And 2) = 2 Then Value = Value & "POLLED,"
                If (Kiss And 4) = 4 Then Value = Value & "ACKMODE,"
                If (Kiss And 8) = 8 Then Value = Value & "SLAVE,"
+               If (Kiss And 8) = 8 Then Value = Value & "SLAVE,"
+               If (Kiss And 16) = 16 Then Value = Value & "D710,"
 
                If Value.Length > 0 Then
 
@@ -2105,6 +2107,7 @@ loop1:   LineNo = LineNo + 1
                If (Kiss And 2) = 2 Then Value = Value & "POLLED,"
                If (Kiss And 4) = 4 Then Value = Value & "ACKMODE,"
                If (Kiss And 8) = 8 Then Value = Value & "SLAVE,"
+               If (Kiss And 16) = 16 Then Value = Value & "D710,"
 
                If Value.Length > 0 Then
 
