@@ -465,6 +465,10 @@
 // Add @winlink.org to the B2 From addresss if it is just a callsign
 // Route Flood Bulls on TO as well as @
 
+// Version 1.0.4.3
+
+// Handle Packet Addresses from RMS Express
+// Fix for Housekeeping B$ messages
 
 
 
@@ -6190,6 +6194,9 @@ CheckForSID:
 VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 {
 	// scan backwards for first '-'
+
+	if (strstr(SID, "RMS Ex"))
+		conn->RMSExpress = TRUE;
 
 	while (len > 0)
 	{

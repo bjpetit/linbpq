@@ -701,7 +701,7 @@ BOOL CheckifPacket(char * Via)
 		ptr2 = strchr(++ptr1, '.');
 	}
 
-	// ptr1 is last element. If a valid continent or country, it is a packt message
+	// ptr1 is last element. If a valid continent, it is a packet message
 	
 	if (FindContinent(ptr1))
 		return TRUE;			// Packet
@@ -979,7 +979,53 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 
 			}
-			else			// Not Paclink
+			else if (conn->RMSExpress)
+			{
+				Msg->B2Flags |= FromRMSExpress;
+
+				// Message from RMS Express
+				// Messages to WL2K just have call.
+				// Messages to email or BBS addresses don't have smtp:
+			
+
+				if (Msg->via[0])
+				{
+					// Has an @ - See if Packet or SMTP
+					
+					if (CheckifPacket(Msg->via))
+					{
+						// Packet Message
+
+			//			memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
+						_strupr(FullTo);
+						_strupr(Msg->via);
+						
+						// Update the saved to: line (remove the smtp:)
+
+			//			strcpy(&HddrTo[Recipients][4], &HddrTo[Recipients][9]);
+						BBSMsgs++;
+
+					}
+					else
+					{
+						// Internet address - do we send via RMS??
+
+						memcpy(Msg->via, &ptr1[4], linelen);
+						Msg->via[linelen-4] = 0;
+						strcpy(FullTo,"RMS");
+						RMSMsgs ++;
+					}
+
+				}
+				else
+				{
+					strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
+					RMSMsgs ++;
+				}
+
+			}
+
+			else			// Not Paclink or RMS Express
 			{
 				if (_memicmp(&ptr1[4], "SMTP:", 5) == 0)
 				{
@@ -1134,7 +1180,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			for (i = 0; i < Recipients; i++)
 			{
-				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0)
+				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+					_stricmp(RecpTo[i], "RMS") == 0)
 				{
 					ToLen += strlen(HddrTo[i]);
 					strcat(ToString, HddrTo[i]);
@@ -1171,7 +1218,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				// Only Process Non - RMS Dests
 
-				if (_stricmp (Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0)		
+				if (_stricmp (Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+						_stricmp(RecpTo[i], "RMS") == 0)		
 					continue;
 
 				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));

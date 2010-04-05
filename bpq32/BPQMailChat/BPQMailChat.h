@@ -318,7 +318,8 @@ typedef struct ConnectionInfo_S
 	BOOL LocalMsg;						// Set if current Send command is for a local user
 	BOOL NewUser;						// Set if first time user has accessed BBS
 	BOOL Paclink;						// Set if receiving messages from Paclink
-	char ** PacLinkCalls;					// Calls we are getting messages for
+	BOOL RMSExpress;					// Set if receiving messages from RMS Express
+	char ** PacLinkCalls;				// Calls we are getting messages for
 	BOOL SkipPrompt;					// Set if a remote node sends a > at the end of his CTEXT
 
 } ConnectionInfo, CIRCUIT;
@@ -478,6 +479,7 @@ struct MsgInfo
 	#define Attachments 2		// Set if B2 message has attachments
 	#define FromPaclink 4
 	#define FromRMS 8
+	#define FromRMSExpress 16 
 
 	char	free[4];
 	unsigned short	nblu;

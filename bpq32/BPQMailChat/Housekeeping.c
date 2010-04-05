@@ -243,6 +243,7 @@ VOID ExpireMessages()
 		switch (Msg->type)
 		{
 		case 'P':
+		case 'T':
 
 			switch (Msg->status)
 			{
@@ -341,11 +342,16 @@ VOID ExpireMessages()
 			{
 			case '$':
 			case 'N':
+			case ' ':
+
+				if (Msg->datecreated < BNFLimit) KillMsg(Msg);
+				break;	
+
 			case 'F':
+			case 'Y':
 
 				if (Msg->datecreated < BFLimit) KillMsg(Msg);
 				break;	
-
 			}			
 		}
 	}
