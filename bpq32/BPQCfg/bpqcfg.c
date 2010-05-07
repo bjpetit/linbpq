@@ -80,6 +80,10 @@
 
 //		Change SIMPLE mode default of Full_CTEXT to 1
 
+// April 2010
+
+//		Add NoKeepAlive ROUTE option
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -1154,10 +1158,13 @@ int i;
 	   }
 	   fputc(port,fp2);
 
-	   // Use top bit of window as INP3 Flag
+	   // Use top bit of window as INP3 Flag, next as NoKeepAlive
 
-	   if (inp3)
+	   if (inp3 & 1)
 		   pwind |= 0x80;
+
+	   if (inp3 & 2)
+		   pwind |= 0x40;
 
 	   fputc(pwind, fp2);
 

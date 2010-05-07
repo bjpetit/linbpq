@@ -331,6 +331,7 @@ typedef struct ROUTE
 	UCHAR NBOUR_PACLEN;
 
 	BOOL INP3Node;
+	BOOL NoKeepAlive;		// Suppress Keepalive Processing
 
 	int Status;			// 
 	int LastRTT;			// Last Value Reported

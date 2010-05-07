@@ -128,6 +128,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		struct tm * tm;
 		time_t now;
 		char * MsgBytes;
+		char * MsgPtr;			// In case updated for B2
 
 		if (!conn->FwdMsg)
 			return;
@@ -142,6 +143,31 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			conn->FwdMsg->length = strlen(MsgBytes);
 		}
 
+		MsgPtr = MsgBytes;
+
+		// If a B2 Message, remove B2 Header
+
+		if (conn->FwdMsg->B2Flags)
+		{		
+			// Remove all B2 Headers, and all but the first part.
+					
+			MsgPtr = strstr(MsgBytes, "Body:");
+			
+			if (MsgPtr)
+			{
+				conn->FwdMsg->length = atoi(&MsgPtr[5]);
+				MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+				if (MsgPtr)
+					MsgPtr +=4;
+				else
+					MsgPtr = MsgBytes;
+			
+			}
+			else
+				MsgPtr = MsgBytes;
+		}
+
 		now = time(NULL);
 
 		tm = gmtime(&now);	
@@ -153,7 +179,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
 			BBSputs(conn, "\r\n");
 
-		QueueMsg(conn, MsgBytes, conn->FwdMsg->length);
+		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);
 		free(MsgBytes);
 			
 		nodeprintf(conn, "%c\r", 26);

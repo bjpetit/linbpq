@@ -447,6 +447,8 @@ NBOUR_FRACK		DB	?
 NBOUR_PACLEN	DB	?
 
 INP3Node		DD	?
+NoKeepAlive		DD	?		; Suppress Keepalive Processing
+
 Status			DD	?		;
 LastRTT			DD	?		; Last Value Reported
 RTT				DD	?		; Current	

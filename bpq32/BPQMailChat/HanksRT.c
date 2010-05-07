@@ -1166,7 +1166,7 @@ void text_tellu_Joined(USER * user)
 	UCHAR Buffer[200];
 	UCHAR *buf = &Buffer[4];
 
-	sprintf(buf, "%-6.6s : *** Joined Chat, Topic %s", user->call, user->topic->name);
+	sprintf(buf, "%-6.6s : %s *** Joined Chat, Topic %s", user->call, user->name, user->topic->name);
 
 	if (ConsHeader[1]->FlashOnConnect)
 		FlashWindow(hWnd, TRUE);

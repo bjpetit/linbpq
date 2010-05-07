@@ -470,7 +470,20 @@
 // Handle Packet Addresses from RMS Express
 // Fix for Housekeeping B$ messages
 
+// Version 1.0.4.4
 
+// Remove B2 header and all but the Body part from messages forwared using MBL
+// Fix handling of ;FW: from RMS Express
+
+// Version 1.0.4.5
+
+// Disable Paging on forwarding sessions.
+// Kill Msgs sent to RMS Exxpress
+// Add Name to Chat *** Joined msg
+
+// Version 1.0.4.6
+
+// Pass smtp:winlink.org messages from Airmail to local user check
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -3405,7 +3418,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			ptr2 = ptr3;
 		}
 
-		conn->Paclink = TRUE;
+		if (!conn->RMSExpress)
+			conn->Paclink = TRUE;
 
 		
 		return;	
@@ -6196,19 +6210,24 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 	// scan backwards for first '-'
 
 	if (strstr(SID, "RMS Ex"))
+	{
 		conn->RMSExpress = TRUE;
+		conn->Paclink = FALSE;
+	}
 
 	while (len > 0)
 	{
 		switch (SID[len--])
 		{
 		case '-':
+
 			len=0;
 			break;
 
 		case '$':
-			conn->BBSFlags |= BBS;
-			conn->BBSFlags |= MBLFORWARDING;
+
+			conn->BBSFlags |= BBS | MBLFORWARDING;
+			conn->Paging = FALSE;
 
 			break;
 
@@ -6216,8 +6235,9 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 			conn->BBSFlags |= FBBForwarding | BBS;
 			conn->BBSFlags &= ~MBLFORWARDING;
-
 		
+			conn->Paging = FALSE;
+
 			// Allocate a Header Block
 
 			conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
@@ -6413,9 +6433,9 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	{
 		Msg=MsgHddrPtr[m];
 
-		// If forwarding to Paclink, look for any message matching the requested call list with statis 'N'
+		// If forwarding to Paclink or RMS Express, look for any message matching the requested call list with statis 'N'
 
-		if (conn->Paclink && conn->PacLinkCalls)
+		if (conn->PacLinkCalls)
 		{
 			int index = 1;
 
@@ -6423,7 +6443,8 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 
 			while (Call)
 			{
-				if ((Msg->status == 'N') && (_stricmp(Msg->to, Call) == 0))
+				if (_stricmp(Msg->to, Call) == 0)
+					if (Msg->status == 'N') 
 					goto Forwardit;
 				
 				Call = conn->PacLinkCalls[index++];

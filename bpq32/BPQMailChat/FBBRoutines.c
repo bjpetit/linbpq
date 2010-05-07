@@ -502,7 +502,7 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 				
 		if (FBBHeader && FBBHeader->MsgType)				// Not a zapped entry
 		{
-			if (conn->Paclink)
+			if (conn->Paclink || conn->RMSExpress)
 			{
 				// Kill Messages sent to paclink
 

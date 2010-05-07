@@ -45,6 +45,7 @@ typedef struct _RTTMSG
 extern int SENDNETFRAME();
 extern VOID Q_ADD();
 extern int COUNTNODES();
+extern short L4LIMIT;
 
 DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
@@ -199,9 +200,10 @@ VOID DecayNETROMRoutes(struct ROUTE * Route)
 
 		if (Dest->NRROUTE1.ROUT_NEIGHBOUR == Route)
 		{
-			Dest->NRROUTE1.ROUT_OBSCOUNT--;
 			if (Dest->NRROUTE1.ROUT_OBSCOUNT)
 				Dest->NRROUTE1.ROUT_OBSCOUNT--;
+				if (Dest->NRROUTE1.ROUT_OBSCOUNT)
+					Dest->NRROUTE1.ROUT_OBSCOUNT--;
 
 			if (Dest->NRROUTE1.ROUT_OBSCOUNT == 0)
 			{
@@ -906,6 +908,12 @@ SendRIPTimer()
 	{
 		if (Route->NEIGHBOUR_CALL[0] != 0)
 		{
+			if (Route->NoKeepAlive)					// Keepalive Disabled
+			{
+				Route++;
+				continue;
+			}
+			
 			if (Route->NEIGHBOUR_LINK == 0 || Route->NEIGHBOUR_LINK->LINKPORT == 0)
 			{
 				if (Route->NEIGHBOUR_QUAL == 0)
@@ -957,7 +965,7 @@ SendRIPTimer()
 				continue;
 			}
 
-			if (Route->NEIGHBOUR_LINK->KILLTIMER > 60 * 12 * 3)	// 12 Minutes
+			if (Route->NEIGHBOUR_LINK->KILLTIMER > ((L4LIMIT - 60) * 3))	// IDLETIME - 1 Minute
 			{
 				SendKeepAlive(Route);
 				Route->NEIGHBOUR_LINK->KILLTIMER = 0;		// Keep Open

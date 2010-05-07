@@ -1029,9 +1029,19 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				if (_memicmp(&ptr1[4], "SMTP:", 5) == 0)
 				{
-					memcpy(Msg->via, &ptr1[9], linelen);
-					Msg->via[linelen - 9] = 0;
-					strcpy(FullTo,"RMS");
+					// If a winlink.org address we need to convert to call
+
+					if (_stricmp(Msg->via, "winlink.org") == 0)
+					{
+						memmove(FullTo, &FullTo[5], strlen(FullTo - 5));
+						_strupr(FullTo);
+					}
+					else
+					{
+						memcpy(Msg->via, &ptr1[9], linelen);
+						Msg->via[linelen - 9] = 0;
+						strcpy(FullTo,"RMS");
+					}
 //					FullTo[0] = 0;
 				}
 				else

@@ -215,12 +215,13 @@
 
 // 410n		March 2010
 
-// Implement C P via PACROR/WINMOR (for Airmail)
+// Implement C P via PACTOR/WINMOR (for Airmail)
 
 // Build 2
 
 // Don't flip SSID bits on Downlink Connect if uplink is Pactor/WINMOR
 // Fix resetting IDLE Timer on Pactor/WINMOR sessions
+// Send L4 KEEPLI messages based on IDLETIME
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -3142,7 +3143,6 @@ int DoRoutes()
 				}
 			}
 
-
 			cursor=wsprintf(line,
 					"ROUTE ADD %s %d %d%s%s %d %d %d %d \r\n",
 					Normcall,
@@ -3151,8 +3151,7 @@ int DoRoutes()
 					Routes->NBOUR_MAXFRAME,
 					Routes->NBOUR_FRACK,
 					Routes->NBOUR_PACLEN,
-					Routes->INP3Node);
-		
+					Routes->INP3Node | (Routes->NoKeepAlive << 1));	
 
 			WriteFile(handle,line,cursor,&cnt,NULL);
 		}
