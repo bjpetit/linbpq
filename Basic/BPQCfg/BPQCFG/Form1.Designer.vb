@@ -34,7 +34,6 @@ Partial Class Form1
       Me.Label76 = New System.Windows.Forms.Label
       Me.ComboBox3 = New System.Windows.Forms.ComboBox
       Me.HelpProvider1 = New System.Windows.Forms.HelpProvider
-      Me.PACLENBox = New BPQCFG.DTNumTextBox
       Me.PortsTab = New System.Windows.Forms.TabPage
       Me.TabControl2 = New System.Windows.Forms.TabControl
       Me.NewPortPage = New System.Windows.Forms.TabPage
@@ -48,8 +47,6 @@ Partial Class Form1
       Me.ApplAliasLabel = New System.Windows.Forms.Label
       Me.ApplCallLabel = New System.Windows.Forms.Label
       Me.TabPage2 = New System.Windows.Forms.TabPage
-      Me.MaxHopsBox = New BPQCFG.DTNumTextBox
-      Me.MaxRTTBox = New BPQCFG.DTNumTextBox
       Me.xTextBox41 = New System.Windows.Forms.TextBox
       Me.xTextBox40 = New System.Windows.Forms.TextBox
       Me.xTextBox39 = New System.Windows.Forms.TextBox
@@ -64,17 +61,6 @@ Partial Class Form1
       Me.Label41 = New System.Windows.Forms.Label
       Me.Label40 = New System.Windows.Forms.Label
       Me.Label39 = New System.Windows.Forms.Label
-      Me.MaxRoutesBox = New BPQCFG.DTNumTextBox
-      Me.MaxNodesBox = New BPQCFG.DTNumTextBox
-      Me.ObsMinBox = New BPQCFG.DTNumTextBox
-      Me.ObsInitBox = New BPQCFG.DTNumTextBox
-      Me.MinQualBox = New BPQCFG.DTNumTextBox
-      Me.L4WindowBox = New BPQCFG.DTNumTextBox
-      Me.L4DelayBox = New BPQCFG.DTNumTextBox
-      Me.L4TimeOutBox = New BPQCFG.DTNumTextBox
-      Me.L4RetriesBox = New BPQCFG.DTNumTextBox
-      Me.L3TTLBox = New BPQCFG.DTNumTextBox
-      Me.NodesIntervalBox = New BPQCFG.DTNumTextBox
       Me.TabPage6 = New System.Windows.Forms.TabPage
       Me.CIsChatBox = New System.Windows.Forms.CheckBox
       Me.IPGatewayBox = New System.Windows.Forms.CheckBox
@@ -95,29 +81,16 @@ Partial Class Form1
       Me.Label54 = New System.Windows.Forms.Label
       Me.Label55 = New System.Windows.Forms.Label
       Me.Label56 = New System.Windows.Forms.Label
-      Me.BuffersBox = New BPQCFG.DTNumTextBox
-      Me.MaxCircuitsBox = New BPQCFG.DTNumTextBox
-      Me.IdleTimeBox = New BPQCFG.DTNumTextBox
-      Me.T3Box = New BPQCFG.DTNumTextBox
-      Me.MaxLinksBox = New BPQCFG.DTNumTextBox
       Me.TabPage1 = New System.Windows.Forms.TabPage
       Me.Label38 = New System.Windows.Forms.Label
       Me.Label49 = New System.Windows.Forms.Label
-      Me.BTIntervalBox = New BPQCFG.DTNumTextBox
       Me.Label57 = New System.Windows.Forms.Label
-      Me.IDIntervalBox = New BPQCFG.DTNumTextBox
       Me.FullCTEXT = New System.Windows.Forms.CheckBox
       Me.Label37 = New System.Windows.Forms.Label
-      Me.BTEXTBox = New BPQCFG.MultiLineTextBox
       Me.Label36 = New System.Windows.Forms.Label
-      Me.CTEXTBox = New BPQCFG.MultiLineTextBox
       Me.Label35 = New System.Windows.Forms.Label
-      Me.InfoMsgBox = New BPQCFG.MultiLineTextBox
       Me.Label34 = New System.Windows.Forms.Label
-      Me.IDMsgBox = New BPQCFG.MultiLineTextBox
-      Me.NodeAliasBox = New BPQCFG.AliasTextBox
       Me.Label17 = New System.Windows.Forms.Label
-      Me.NodeCallBox = New BPQCFG.CallsignTextBox
       Me.Label1 = New System.Windows.Forms.Label
       Me.TabControl1 = New System.Windows.Forms.TabControl
       Me.RoutesTab = New System.Windows.Forms.TabPage
@@ -130,8 +103,6 @@ Partial Class Form1
       Me.Label50 = New System.Windows.Forms.Label
       Me.EMSBox = New System.Windows.Forms.CheckBox
       Me.DesqViewBox = New System.Windows.Forms.CheckBox
-      Me.HostInterruptBox = New BPQCFG.DTNumTextBox
-      Me.TransDelayBox = New BPQCFG.DTNumTextBox
       Me.ToolTip1 = New System.Windows.Forms.ToolTip(Me.components)
       Me.CheckBox6 = New System.Windows.Forms.CheckBox
       Me.CheckBox8 = New System.Windows.Forms.CheckBox
@@ -151,6 +122,35 @@ Partial Class Form1
       Me.Label83 = New System.Windows.Forms.Label
       Me.ErrorProvider1 = New System.Windows.Forms.ErrorProvider(Me.components)
       Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
+      Me.BTIntervalBox = New BPQCFG.DTNumTextBox
+      Me.IDIntervalBox = New BPQCFG.DTNumTextBox
+      Me.BTEXTBox = New BPQCFG.MultiLineTextBox
+      Me.CTEXTBox = New BPQCFG.MultiLineTextBox
+      Me.InfoMsgBox = New BPQCFG.MultiLineTextBox
+      Me.IDMsgBox = New BPQCFG.MultiLineTextBox
+      Me.NodeAliasBox = New BPQCFG.AliasTextBox
+      Me.NodeCallBox = New BPQCFG.CallsignTextBox
+      Me.BuffersBox = New BPQCFG.DTNumTextBox
+      Me.MaxCircuitsBox = New BPQCFG.DTNumTextBox
+      Me.IdleTimeBox = New BPQCFG.DTNumTextBox
+      Me.T3Box = New BPQCFG.DTNumTextBox
+      Me.PACLENBox = New BPQCFG.DTNumTextBox
+      Me.MaxLinksBox = New BPQCFG.DTNumTextBox
+      Me.MaxHopsBox = New BPQCFG.DTNumTextBox
+      Me.MaxRTTBox = New BPQCFG.DTNumTextBox
+      Me.MaxRoutesBox = New BPQCFG.DTNumTextBox
+      Me.MaxNodesBox = New BPQCFG.DTNumTextBox
+      Me.ObsMinBox = New BPQCFG.DTNumTextBox
+      Me.ObsInitBox = New BPQCFG.DTNumTextBox
+      Me.MinQualBox = New BPQCFG.DTNumTextBox
+      Me.L4WindowBox = New BPQCFG.DTNumTextBox
+      Me.L4DelayBox = New BPQCFG.DTNumTextBox
+      Me.L4TimeOutBox = New BPQCFG.DTNumTextBox
+      Me.L4RetriesBox = New BPQCFG.DTNumTextBox
+      Me.L3TTLBox = New BPQCFG.DTNumTextBox
+      Me.NodesIntervalBox = New BPQCFG.DTNumTextBox
+      Me.HostInterruptBox = New BPQCFG.DTNumTextBox
+      Me.TransDelayBox = New BPQCFG.DTNumTextBox
       Me.PortsTab.SuspendLayout()
       Me.TabControl2.SuspendLayout()
       Me.ApplsTab.SuspendLayout()
@@ -272,19 +272,6 @@ Partial Class Form1
       Me.ComboBox3.Name = "ComboBox3"
       Me.ComboBox3.Size = New System.Drawing.Size(168, 21)
       Me.ComboBox3.TabIndex = 1
-      '
-      'PACLENBox
-      '
-      Me.HelpProvider1.SetHelpString(Me.PACLENBox, "Number of bytes in each packet. There are two PACLEN params, one here and")
-      Me.PACLENBox.Location = New System.Drawing.Point(120, 85)
-      Me.PACLENBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.PACLENBox.Max = 256
-      Me.PACLENBox.Name = "PACLENBox"
-      Me.HelpProvider1.SetShowHelp(Me.PACLENBox, True)
-      Me.PACLENBox.Size = New System.Drawing.Size(43, 20)
-      Me.PACLENBox.TabIndex = 21
-      Me.PACLENBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.PACLENBox, resources.GetString("PACLENBox.ToolTip"))
       '
       'PortsTab
       '
@@ -463,28 +450,6 @@ Partial Class Form1
       Me.TabPage2.Text = "Network (L3/L4) Params"
       Me.TabPage2.UseVisualStyleBackColor = True
       '
-      'MaxHopsBox
-      '
-      Me.MaxHopsBox.Location = New System.Drawing.Point(389, 208)
-      Me.MaxHopsBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.MaxHopsBox.Max = 500
-      Me.MaxHopsBox.Name = "MaxHopsBox"
-      Me.MaxHopsBox.Size = New System.Drawing.Size(38, 20)
-      Me.MaxHopsBox.TabIndex = 47
-      Me.MaxHopsBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxHopsBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
-      '
-      'MaxRTTBox
-      '
-      Me.MaxRTTBox.Location = New System.Drawing.Point(240, 205)
-      Me.MaxRTTBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.MaxRTTBox.Max = 500
-      Me.MaxRTTBox.Name = "MaxRTTBox"
-      Me.MaxRTTBox.Size = New System.Drawing.Size(38, 20)
-      Me.MaxRTTBox.TabIndex = 46
-      Me.MaxRTTBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxRTTBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
-      '
       'xTextBox41
       '
       Me.xTextBox41.BorderStyle = System.Windows.Forms.BorderStyle.None
@@ -627,120 +592,6 @@ Partial Class Form1
       Me.Label39.Size = New System.Drawing.Size(76, 13)
       Me.Label39.TabIndex = 0
       Me.Label39.Text = "Nodes Interval"
-      '
-      'MaxRoutesBox
-      '
-      Me.MaxRoutesBox.Location = New System.Drawing.Point(256, 81)
-      Me.MaxRoutesBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.MaxRoutesBox.Max = 500
-      Me.MaxRoutesBox.Name = "MaxRoutesBox"
-      Me.MaxRoutesBox.Size = New System.Drawing.Size(43, 20)
-      Me.MaxRoutesBox.TabIndex = 42
-      Me.MaxRoutesBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxRoutesBox, "Max adjacent Nodes")
-      '
-      'MaxNodesBox
-      '
-      Me.MaxNodesBox.Location = New System.Drawing.Point(101, 78)
-      Me.MaxNodesBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.MaxNodesBox.Max = 500
-      Me.MaxNodesBox.Name = "MaxNodesBox"
-      Me.MaxNodesBox.Size = New System.Drawing.Size(43, 20)
-      Me.MaxNodesBox.TabIndex = 40
-      Me.MaxNodesBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxNodesBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
-      '
-      'ObsMinBox
-      '
-      Me.ObsMinBox.Location = New System.Drawing.Point(391, 176)
-      Me.ObsMinBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.ObsMinBox.Max = 9
-      Me.ObsMinBox.Name = "ObsMinBox"
-      Me.ObsMinBox.Size = New System.Drawing.Size(36, 20)
-      Me.ObsMinBox.TabIndex = 21
-      Me.ObsMinBox.Text = "0"
-      '
-      'ObsInitBox
-      '
-      Me.ObsInitBox.Location = New System.Drawing.Point(240, 176)
-      Me.ObsInitBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.ObsInitBox.Max = 10
-      Me.ObsInitBox.Name = "ObsInitBox"
-      Me.ObsInitBox.Size = New System.Drawing.Size(38, 20)
-      Me.ObsInitBox.TabIndex = 20
-      Me.ObsInitBox.Text = "0"
-      '
-      'MinQualBox
-      '
-      Me.MinQualBox.Location = New System.Drawing.Point(105, 204)
-      Me.MinQualBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.MinQualBox.Max = 255
-      Me.MinQualBox.Name = "MinQualBox"
-      Me.MinQualBox.Size = New System.Drawing.Size(39, 20)
-      Me.MinQualBox.TabIndex = 13
-      Me.MinQualBox.Text = "0"
-      '
-      'L4WindowBox
-      '
-      Me.L4WindowBox.Location = New System.Drawing.Point(105, 331)
-      Me.L4WindowBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.L4WindowBox.Max = 127
-      Me.L4WindowBox.Name = "L4WindowBox"
-      Me.L4WindowBox.Size = New System.Drawing.Size(43, 20)
-      Me.L4WindowBox.TabIndex = 11
-      Me.L4WindowBox.Text = "0"
-      '
-      'L4DelayBox
-      '
-      Me.L4DelayBox.Location = New System.Drawing.Point(256, 331)
-      Me.L4DelayBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.L4DelayBox.Max = 10
-      Me.L4DelayBox.Name = "L4DelayBox"
-      Me.L4DelayBox.Size = New System.Drawing.Size(43, 20)
-      Me.L4DelayBox.TabIndex = 9
-      Me.L4DelayBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.L4DelayBox, "L4 Delay (Seconds)")
-      '
-      'L4TimeOutBox
-      '
-      Me.L4TimeOutBox.Location = New System.Drawing.Point(408, 331)
-      Me.L4TimeOutBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.L4TimeOutBox.Max = 240
-      Me.L4TimeOutBox.Name = "L4TimeOutBox"
-      Me.L4TimeOutBox.Size = New System.Drawing.Size(43, 20)
-      Me.L4TimeOutBox.TabIndex = 7
-      Me.L4TimeOutBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.L4TimeOutBox, "L4 Timout (Seconds)")
-      '
-      'L4RetriesBox
-      '
-      Me.L4RetriesBox.Location = New System.Drawing.Point(544, 331)
-      Me.L4RetriesBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.L4RetriesBox.Max = 10
-      Me.L4RetriesBox.Name = "L4RetriesBox"
-      Me.L4RetriesBox.Size = New System.Drawing.Size(43, 20)
-      Me.L4RetriesBox.TabIndex = 5
-      Me.L4RetriesBox.Text = "0"
-      '
-      'L3TTLBox
-      '
-      Me.L3TTLBox.Location = New System.Drawing.Point(544, 176)
-      Me.L3TTLBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.L3TTLBox.Max = 255
-      Me.L3TTLBox.Name = "L3TTLBox"
-      Me.L3TTLBox.Size = New System.Drawing.Size(43, 20)
-      Me.L3TTLBox.TabIndex = 3
-      Me.L3TTLBox.Text = "0"
-      '
-      'NodesIntervalBox
-      '
-      Me.NodesIntervalBox.Location = New System.Drawing.Point(105, 176)
-      Me.NodesIntervalBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.NodesIntervalBox.Max = 120
-      Me.NodesIntervalBox.Name = "NodesIntervalBox"
-      Me.NodesIntervalBox.Size = New System.Drawing.Size(39, 20)
-      Me.NodesIntervalBox.TabIndex = 1
-      Me.NodesIntervalBox.Text = "0"
       '
       'TabPage6
       '
@@ -996,65 +847,6 @@ Partial Class Form1
       Me.Label56.TabIndex = 18
       Me.Label56.Text = "Max Links"
       '
-      'BuffersBox
-      '
-      Me.BuffersBox.Location = New System.Drawing.Point(121, 251)
-      Me.BuffersBox.Max = 999
-      Me.BuffersBox.Name = "BuffersBox"
-      Me.BuffersBox.Size = New System.Drawing.Size(42, 20)
-      Me.BuffersBox.TabIndex = 48
-      Me.BuffersBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.BuffersBox, "Maximum buffers to allocate. Actual number may be less," & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "depending on number of p" & _
-              "orts and size of tables." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Normally set to 999 for BPQ32 or 255 for BPQCODE")
-      '
-      'MaxCircuitsBox
-      '
-      Me.MaxCircuitsBox.Location = New System.Drawing.Point(276, 48)
-      Me.MaxCircuitsBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.MaxCircuitsBox.Max = 255
-      Me.MaxCircuitsBox.Name = "MaxCircuitsBox"
-      Me.MaxCircuitsBox.Size = New System.Drawing.Size(43, 20)
-      Me.MaxCircuitsBox.TabIndex = 42
-      Me.MaxCircuitsBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxCircuitsBox, "Max Circuits. Should normally be" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "twice the maximum concurrent" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "users on the node" & _
-              ".")
-      '
-      'IdleTimeBox
-      '
-      Me.IdleTimeBox.Location = New System.Drawing.Point(351, 340)
-      Me.IdleTimeBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.IdleTimeBox.Max = 86400
-      Me.IdleTimeBox.Name = "IdleTimeBox"
-      Me.IdleTimeBox.Size = New System.Drawing.Size(42, 20)
-      Me.IdleTimeBox.TabIndex = 25
-      Me.IdleTimeBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.IdleTimeBox, "The time after whcih an idle link will be closed." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recommended value " & _
-              "900 (15 mins)")
-      '
-      'T3Box
-      '
-      Me.T3Box.Location = New System.Drawing.Point(151, 340)
-      Me.T3Box.Margin = New System.Windows.Forms.Padding(2)
-      Me.T3Box.Max = 600
-      Me.T3Box.Name = "T3Box"
-      Me.T3Box.Size = New System.Drawing.Size(42, 20)
-      Me.T3Box.TabIndex = 23
-      Me.T3Box.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.T3Box, "The time after whcih an idle linkwill be checked" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "to make sure the other end is s" & _
-              "till present. " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "The system send a RR(P) after this interval" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recomme" & _
-              "nded value 180 (3 mins)" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
-      '
-      'MaxLinksBox
-      '
-      Me.MaxLinksBox.Location = New System.Drawing.Point(120, 48)
-      Me.MaxLinksBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.MaxLinksBox.Max = 255
-      Me.MaxLinksBox.Name = "MaxLinksBox"
-      Me.MaxLinksBox.Size = New System.Drawing.Size(43, 20)
-      Me.MaxLinksBox.TabIndex = 19
-      Me.MaxLinksBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxLinksBox, """Max Level 2 Links " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "(up, down and internode)""")
-      '
       'TabPage1
       '
       Me.TabPage1.AutoScroll = True
@@ -1105,18 +897,6 @@ Partial Class Form1
       Me.Label49.TabIndex = 35
       Me.Label49.Text = "Beacon  Interval"
       '
-      'BTIntervalBox
-      '
-      Me.BTIntervalBox.Location = New System.Drawing.Point(534, 327)
-      Me.BTIntervalBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.BTIntervalBox.Max = 60
-      Me.BTIntervalBox.Name = "BTIntervalBox"
-      Me.BTIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.BTIntervalBox.Size = New System.Drawing.Size(25, 20)
-      Me.BTIntervalBox.TabIndex = 34
-      Me.BTIntervalBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.BTIntervalBox, "Time between beacons in minutes")
-      '
       'Label57
       '
       Me.Label57.AutoSize = True
@@ -1126,19 +906,6 @@ Partial Class Form1
       Me.Label57.Size = New System.Drawing.Size(56, 13)
       Me.Label57.TabIndex = 33
       Me.Label57.Text = "ID Interval"
-      '
-      'IDIntervalBox
-      '
-      Me.IDIntervalBox.Location = New System.Drawing.Point(534, 69)
-      Me.IDIntervalBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.IDIntervalBox.Max = 60
-      Me.IDIntervalBox.Name = "IDIntervalBox"
-      Me.IDIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.IDIntervalBox.Size = New System.Drawing.Size(25, 20)
-      Me.IDIntervalBox.TabIndex = 32
-      Me.IDIntervalBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.IDIntervalBox, "Time between ID Packets in minutes.." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Check your licencing contions " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "for guidanc" & _
-              "e" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
       '
       'FullCTEXT
       '
@@ -1163,19 +930,6 @@ Partial Class Form1
       Me.Label37.Text = "BTEXT  (Default Beacon) - Sent to Beacon Call, which is specified in Ports sectio" & _
           "n"
       '
-      'BTEXTBox
-      '
-      Me.BTEXTBox.CausesValidation = False
-      Me.BTEXTBox.Location = New System.Drawing.Point(12, 351)
-      Me.BTEXTBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.BTEXTBox.MaxLen = 80
-      Me.BTEXTBox.Multiline = True
-      Me.BTEXTBox.Name = "BTEXTBox"
-      Me.BTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.BTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-      Me.BTEXTBox.Size = New System.Drawing.Size(551, 50)
-      Me.BTEXTBox.TabIndex = 27
-      '
       'Label36
       '
       Me.Label36.AutoSize = True
@@ -1185,18 +939,6 @@ Partial Class Form1
       Me.Label36.Size = New System.Drawing.Size(218, 13)
       Me.Label36.TabIndex = 26
       Me.Label36.Text = "CTEXT Message (Sent when user connects)"
-      '
-      'CTEXTBox
-      '
-      Me.CTEXTBox.Location = New System.Drawing.Point(12, 271)
-      Me.CTEXTBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.CTEXTBox.MaxLen = 512
-      Me.CTEXTBox.Multiline = True
-      Me.CTEXTBox.Name = "CTEXTBox"
-      Me.CTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.CTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-      Me.CTEXTBox.Size = New System.Drawing.Size(549, 50)
-      Me.CTEXTBox.TabIndex = 25
       '
       'Label35
       '
@@ -1208,18 +950,6 @@ Partial Class Form1
       Me.Label35.TabIndex = 24
       Me.Label35.Text = "INFO Message (Sent in response to INFO Command )"
       '
-      'InfoMsgBox
-      '
-      Me.InfoMsgBox.Location = New System.Drawing.Point(12, 169)
-      Me.InfoMsgBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.InfoMsgBox.MaxLen = 512
-      Me.InfoMsgBox.Multiline = True
-      Me.InfoMsgBox.Name = "InfoMsgBox"
-      Me.InfoMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.InfoMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-      Me.InfoMsgBox.Size = New System.Drawing.Size(549, 50)
-      Me.InfoMsgBox.TabIndex = 23
-      '
       'Label34
       '
       Me.Label34.AutoSize = True
@@ -1230,27 +960,6 @@ Partial Class Form1
       Me.Label34.TabIndex = 22
       Me.Label34.Text = "ID Message (Sent in AX.25 ID Packets)"
       '
-      'IDMsgBox
-      '
-      Me.IDMsgBox.Location = New System.Drawing.Point(12, 91)
-      Me.IDMsgBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.IDMsgBox.MaxLen = 512
-      Me.IDMsgBox.Multiline = True
-      Me.IDMsgBox.Name = "IDMsgBox"
-      Me.IDMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.IDMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
-      Me.IDMsgBox.Size = New System.Drawing.Size(549, 50)
-      Me.IDMsgBox.TabIndex = 21
-      '
-      'NodeAliasBox
-      '
-      Me.NodeAliasBox.Location = New System.Drawing.Point(209, 20)
-      Me.NodeAliasBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.NodeAliasBox.Name = "NodeAliasBox"
-      Me.NodeAliasBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.NodeAliasBox.Size = New System.Drawing.Size(67, 20)
-      Me.NodeAliasBox.TabIndex = 19
-      '
       'Label17
       '
       Me.Label17.AutoSize = True
@@ -1260,15 +969,6 @@ Partial Class Form1
       Me.Label17.Size = New System.Drawing.Size(58, 13)
       Me.Label17.TabIndex = 18
       Me.Label17.Text = "Node Alias"
-      '
-      'NodeCallBox
-      '
-      Me.NodeCallBox.Location = New System.Drawing.Point(67, 20)
-      Me.NodeCallBox.Margin = New System.Windows.Forms.Padding(0)
-      Me.NodeCallBox.Name = "NodeCallBox"
-      Me.NodeCallBox.RightToLeft = System.Windows.Forms.RightToLeft.No
-      Me.NodeCallBox.Size = New System.Drawing.Size(63, 20)
-      Me.NodeCallBox.TabIndex = 1
       '
       'Label1
       '
@@ -1316,18 +1016,18 @@ Partial Class Form1
       Me.Label66.AutoSize = True
       Me.Label66.Location = New System.Drawing.Point(324, 21)
       Me.Label66.Name = "Label66"
-      Me.Label66.Size = New System.Drawing.Size(262, 13)
+      Me.Label66.Size = New System.Drawing.Size(268, 13)
       Me.Label66.TabIndex = 2
-      Me.Label66.Text = "Call               Qual   Port  MaxF   Frack   Paclen   INP3"
+      Me.Label66.Text = "Call                 Qual   Port  MaxF   Frack   Paclen   INP3"
       '
       'Label65
       '
       Me.Label65.AutoSize = True
       Me.Label65.Location = New System.Drawing.Point(28, 21)
       Me.Label65.Name = "Label65"
-      Me.Label65.Size = New System.Drawing.Size(259, 13)
+      Me.Label65.Size = New System.Drawing.Size(265, 13)
       Me.Label65.TabIndex = 1
-      Me.Label65.Text = "Call              Qual   Port  MaxF   Frack   Paclen   INP3" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10)
+      Me.Label65.Text = "Call                Qual   Port  MaxF   Frack   Paclen   INP3" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10)
       '
       'BPQ16Tab
       '
@@ -1401,26 +1101,6 @@ Partial Class Form1
       Me.DesqViewBox.TabIndex = 3
       Me.DesqViewBox.Text = "DesqView"
       Me.DesqViewBox.UseVisualStyleBackColor = True
-      '
-      'HostInterruptBox
-      '
-      Me.HostInterruptBox.Location = New System.Drawing.Point(282, 26)
-      Me.HostInterruptBox.Margin = New System.Windows.Forms.Padding(2)
-      Me.HostInterruptBox.Max = 255
-      Me.HostInterruptBox.Name = "HostInterruptBox"
-      Me.HostInterruptBox.Size = New System.Drawing.Size(31, 20)
-      Me.HostInterruptBox.TabIndex = 57
-      Me.HostInterruptBox.Text = "0"
-      '
-      'TransDelayBox
-      '
-      Me.TransDelayBox.Location = New System.Drawing.Point(415, 26)
-      Me.TransDelayBox.Max = 10
-      Me.TransDelayBox.Name = "TransDelayBox"
-      Me.TransDelayBox.Size = New System.Drawing.Size(32, 20)
-      Me.TransDelayBox.TabIndex = 8
-      Me.TransDelayBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.TransDelayBox, "TNC2 TRANS mode send timeout (Seconds)")
       '
       'CheckBox6
       '
@@ -1592,6 +1272,326 @@ Partial Class Form1
       'Timer1
       '
       Me.Timer1.Interval = 50
+      '
+      'BTIntervalBox
+      '
+      Me.BTIntervalBox.Location = New System.Drawing.Point(534, 327)
+      Me.BTIntervalBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.BTIntervalBox.Max = 60
+      Me.BTIntervalBox.Name = "BTIntervalBox"
+      Me.BTIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.BTIntervalBox.Size = New System.Drawing.Size(25, 20)
+      Me.BTIntervalBox.TabIndex = 34
+      Me.BTIntervalBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.BTIntervalBox, "Time between beacons in minutes")
+      '
+      'IDIntervalBox
+      '
+      Me.IDIntervalBox.Location = New System.Drawing.Point(534, 69)
+      Me.IDIntervalBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.IDIntervalBox.Max = 60
+      Me.IDIntervalBox.Name = "IDIntervalBox"
+      Me.IDIntervalBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.IDIntervalBox.Size = New System.Drawing.Size(25, 20)
+      Me.IDIntervalBox.TabIndex = 32
+      Me.IDIntervalBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.IDIntervalBox, "Time between ID Packets in minutes.." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Check your licencing contions " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "for guidanc" & _
+              "e" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+      '
+      'BTEXTBox
+      '
+      Me.BTEXTBox.CausesValidation = False
+      Me.BTEXTBox.Location = New System.Drawing.Point(12, 351)
+      Me.BTEXTBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.BTEXTBox.MaxLen = 80
+      Me.BTEXTBox.Multiline = True
+      Me.BTEXTBox.Name = "BTEXTBox"
+      Me.BTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.BTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+      Me.BTEXTBox.Size = New System.Drawing.Size(551, 50)
+      Me.BTEXTBox.TabIndex = 27
+      '
+      'CTEXTBox
+      '
+      Me.CTEXTBox.Location = New System.Drawing.Point(12, 271)
+      Me.CTEXTBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.CTEXTBox.MaxLen = 512
+      Me.CTEXTBox.Multiline = True
+      Me.CTEXTBox.Name = "CTEXTBox"
+      Me.CTEXTBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.CTEXTBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+      Me.CTEXTBox.Size = New System.Drawing.Size(549, 50)
+      Me.CTEXTBox.TabIndex = 25
+      '
+      'InfoMsgBox
+      '
+      Me.InfoMsgBox.Location = New System.Drawing.Point(12, 169)
+      Me.InfoMsgBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.InfoMsgBox.MaxLen = 512
+      Me.InfoMsgBox.Multiline = True
+      Me.InfoMsgBox.Name = "InfoMsgBox"
+      Me.InfoMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.InfoMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+      Me.InfoMsgBox.Size = New System.Drawing.Size(549, 50)
+      Me.InfoMsgBox.TabIndex = 23
+      '
+      'IDMsgBox
+      '
+      Me.IDMsgBox.Location = New System.Drawing.Point(12, 91)
+      Me.IDMsgBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.IDMsgBox.MaxLen = 512
+      Me.IDMsgBox.Multiline = True
+      Me.IDMsgBox.Name = "IDMsgBox"
+      Me.IDMsgBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.IDMsgBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
+      Me.IDMsgBox.Size = New System.Drawing.Size(549, 50)
+      Me.IDMsgBox.TabIndex = 21
+      '
+      'NodeAliasBox
+      '
+      Me.NodeAliasBox.Location = New System.Drawing.Point(209, 20)
+      Me.NodeAliasBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.NodeAliasBox.Name = "NodeAliasBox"
+      Me.NodeAliasBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.NodeAliasBox.Size = New System.Drawing.Size(67, 20)
+      Me.NodeAliasBox.TabIndex = 19
+      '
+      'NodeCallBox
+      '
+      Me.NodeCallBox.Location = New System.Drawing.Point(67, 20)
+      Me.NodeCallBox.Margin = New System.Windows.Forms.Padding(0)
+      Me.NodeCallBox.Name = "NodeCallBox"
+      Me.NodeCallBox.RightToLeft = System.Windows.Forms.RightToLeft.No
+      Me.NodeCallBox.Size = New System.Drawing.Size(63, 20)
+      Me.NodeCallBox.TabIndex = 1
+      '
+      'BuffersBox
+      '
+      Me.BuffersBox.Location = New System.Drawing.Point(121, 251)
+      Me.BuffersBox.Max = 999
+      Me.BuffersBox.Name = "BuffersBox"
+      Me.BuffersBox.Size = New System.Drawing.Size(42, 20)
+      Me.BuffersBox.TabIndex = 48
+      Me.BuffersBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.BuffersBox, "Maximum buffers to allocate. Actual number may be less," & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "depending on number of p" & _
+              "orts and size of tables." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "Normally set to 999 for BPQ32 or 255 for BPQCODE")
+      '
+      'MaxCircuitsBox
+      '
+      Me.MaxCircuitsBox.Location = New System.Drawing.Point(276, 48)
+      Me.MaxCircuitsBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.MaxCircuitsBox.Max = 255
+      Me.MaxCircuitsBox.Name = "MaxCircuitsBox"
+      Me.MaxCircuitsBox.Size = New System.Drawing.Size(43, 20)
+      Me.MaxCircuitsBox.TabIndex = 42
+      Me.MaxCircuitsBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.MaxCircuitsBox, "Max Circuits. Should normally be" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "twice the maximum concurrent" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "users on the node" & _
+              ".")
+      '
+      'IdleTimeBox
+      '
+      Me.IdleTimeBox.Location = New System.Drawing.Point(351, 340)
+      Me.IdleTimeBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.IdleTimeBox.Max = 86400
+      Me.IdleTimeBox.Name = "IdleTimeBox"
+      Me.IdleTimeBox.Size = New System.Drawing.Size(42, 20)
+      Me.IdleTimeBox.TabIndex = 25
+      Me.IdleTimeBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.IdleTimeBox, "The time after whcih an idle link will be closed." & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recommended value " & _
+              "900 (15 mins)")
+      '
+      'T3Box
+      '
+      Me.T3Box.Location = New System.Drawing.Point(151, 340)
+      Me.T3Box.Margin = New System.Windows.Forms.Padding(2)
+      Me.T3Box.Max = 600
+      Me.T3Box.Name = "T3Box"
+      Me.T3Box.Size = New System.Drawing.Size(42, 20)
+      Me.T3Box.TabIndex = 23
+      Me.T3Box.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.T3Box, "The time after whcih an idle linkwill be checked" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "to make sure the other end is s" & _
+              "till present. " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "The system send a RR(P) after this interval" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "In seconds, recomme" & _
+              "nded value 180 (3 mins)" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+      '
+      'PACLENBox
+      '
+      Me.HelpProvider1.SetHelpString(Me.PACLENBox, "Number of bytes in each packet. There are two PACLEN params, one here and")
+      Me.PACLENBox.Location = New System.Drawing.Point(120, 85)
+      Me.PACLENBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.PACLENBox.Max = 256
+      Me.PACLENBox.Name = "PACLENBox"
+      Me.HelpProvider1.SetShowHelp(Me.PACLENBox, True)
+      Me.PACLENBox.Size = New System.Drawing.Size(43, 20)
+      Me.PACLENBox.TabIndex = 21
+      Me.PACLENBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.PACLENBox, resources.GetString("PACLENBox.ToolTip"))
+      '
+      'MaxLinksBox
+      '
+      Me.MaxLinksBox.Location = New System.Drawing.Point(120, 48)
+      Me.MaxLinksBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.MaxLinksBox.Max = 255
+      Me.MaxLinksBox.Name = "MaxLinksBox"
+      Me.MaxLinksBox.Size = New System.Drawing.Size(43, 20)
+      Me.MaxLinksBox.TabIndex = 19
+      Me.MaxLinksBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.MaxLinksBox, """Max Level 2 Links " & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "(up, down and internode)""")
+      '
+      'MaxHopsBox
+      '
+      Me.MaxHopsBox.Location = New System.Drawing.Point(389, 208)
+      Me.MaxHopsBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.MaxHopsBox.Max = 500
+      Me.MaxHopsBox.Name = "MaxHopsBox"
+      Me.MaxHopsBox.Size = New System.Drawing.Size(38, 20)
+      Me.MaxHopsBox.TabIndex = 47
+      Me.MaxHopsBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.MaxHopsBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+      '
+      'MaxRTTBox
+      '
+      Me.MaxRTTBox.Location = New System.Drawing.Point(240, 205)
+      Me.MaxRTTBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.MaxRTTBox.Max = 500
+      Me.MaxRTTBox.Name = "MaxRTTBox"
+      Me.MaxRTTBox.Size = New System.Drawing.Size(38, 20)
+      Me.MaxRTTBox.TabIndex = 46
+      Me.MaxRTTBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.MaxRTTBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+      '
+      'MaxRoutesBox
+      '
+      Me.MaxRoutesBox.Location = New System.Drawing.Point(256, 81)
+      Me.MaxRoutesBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.MaxRoutesBox.Max = 500
+      Me.MaxRoutesBox.Name = "MaxRoutesBox"
+      Me.MaxRoutesBox.Size = New System.Drawing.Size(43, 20)
+      Me.MaxRoutesBox.TabIndex = 42
+      Me.MaxRoutesBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.MaxRoutesBox, "Max adjacent Nodes")
+      '
+      'MaxNodesBox
+      '
+      Me.MaxNodesBox.Location = New System.Drawing.Point(101, 78)
+      Me.MaxNodesBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.MaxNodesBox.Max = 500
+      Me.MaxNodesBox.Name = "MaxNodesBox"
+      Me.MaxNodesBox.Size = New System.Drawing.Size(43, 20)
+      Me.MaxNodesBox.TabIndex = 40
+      Me.MaxNodesBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.MaxNodesBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+      '
+      'ObsMinBox
+      '
+      Me.ObsMinBox.Location = New System.Drawing.Point(391, 176)
+      Me.ObsMinBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.ObsMinBox.Max = 9
+      Me.ObsMinBox.Name = "ObsMinBox"
+      Me.ObsMinBox.Size = New System.Drawing.Size(36, 20)
+      Me.ObsMinBox.TabIndex = 21
+      Me.ObsMinBox.Text = "0"
+      '
+      'ObsInitBox
+      '
+      Me.ObsInitBox.Location = New System.Drawing.Point(240, 176)
+      Me.ObsInitBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.ObsInitBox.Max = 10
+      Me.ObsInitBox.Name = "ObsInitBox"
+      Me.ObsInitBox.Size = New System.Drawing.Size(38, 20)
+      Me.ObsInitBox.TabIndex = 20
+      Me.ObsInitBox.Text = "0"
+      '
+      'MinQualBox
+      '
+      Me.MinQualBox.Location = New System.Drawing.Point(105, 204)
+      Me.MinQualBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.MinQualBox.Max = 255
+      Me.MinQualBox.Name = "MinQualBox"
+      Me.MinQualBox.Size = New System.Drawing.Size(39, 20)
+      Me.MinQualBox.TabIndex = 13
+      Me.MinQualBox.Text = "0"
+      '
+      'L4WindowBox
+      '
+      Me.L4WindowBox.Location = New System.Drawing.Point(105, 331)
+      Me.L4WindowBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.L4WindowBox.Max = 127
+      Me.L4WindowBox.Name = "L4WindowBox"
+      Me.L4WindowBox.Size = New System.Drawing.Size(43, 20)
+      Me.L4WindowBox.TabIndex = 11
+      Me.L4WindowBox.Text = "0"
+      '
+      'L4DelayBox
+      '
+      Me.L4DelayBox.Location = New System.Drawing.Point(256, 331)
+      Me.L4DelayBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.L4DelayBox.Max = 10
+      Me.L4DelayBox.Name = "L4DelayBox"
+      Me.L4DelayBox.Size = New System.Drawing.Size(43, 20)
+      Me.L4DelayBox.TabIndex = 9
+      Me.L4DelayBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.L4DelayBox, "L4 Delay (Seconds)")
+      '
+      'L4TimeOutBox
+      '
+      Me.L4TimeOutBox.Location = New System.Drawing.Point(408, 331)
+      Me.L4TimeOutBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.L4TimeOutBox.Max = 240
+      Me.L4TimeOutBox.Name = "L4TimeOutBox"
+      Me.L4TimeOutBox.Size = New System.Drawing.Size(43, 20)
+      Me.L4TimeOutBox.TabIndex = 7
+      Me.L4TimeOutBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.L4TimeOutBox, "L4 Timout (Seconds)")
+      '
+      'L4RetriesBox
+      '
+      Me.L4RetriesBox.Location = New System.Drawing.Point(544, 331)
+      Me.L4RetriesBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.L4RetriesBox.Max = 10
+      Me.L4RetriesBox.Name = "L4RetriesBox"
+      Me.L4RetriesBox.Size = New System.Drawing.Size(43, 20)
+      Me.L4RetriesBox.TabIndex = 5
+      Me.L4RetriesBox.Text = "0"
+      '
+      'L3TTLBox
+      '
+      Me.L3TTLBox.Location = New System.Drawing.Point(544, 176)
+      Me.L3TTLBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.L3TTLBox.Max = 255
+      Me.L3TTLBox.Name = "L3TTLBox"
+      Me.L3TTLBox.Size = New System.Drawing.Size(43, 20)
+      Me.L3TTLBox.TabIndex = 3
+      Me.L3TTLBox.Text = "0"
+      '
+      'NodesIntervalBox
+      '
+      Me.NodesIntervalBox.Location = New System.Drawing.Point(105, 176)
+      Me.NodesIntervalBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.NodesIntervalBox.Max = 120
+      Me.NodesIntervalBox.Name = "NodesIntervalBox"
+      Me.NodesIntervalBox.Size = New System.Drawing.Size(39, 20)
+      Me.NodesIntervalBox.TabIndex = 1
+      Me.NodesIntervalBox.Text = "0"
+      '
+      'HostInterruptBox
+      '
+      Me.HostInterruptBox.Location = New System.Drawing.Point(282, 26)
+      Me.HostInterruptBox.Margin = New System.Windows.Forms.Padding(2)
+      Me.HostInterruptBox.Max = 255
+      Me.HostInterruptBox.Name = "HostInterruptBox"
+      Me.HostInterruptBox.Size = New System.Drawing.Size(31, 20)
+      Me.HostInterruptBox.TabIndex = 57
+      Me.HostInterruptBox.Text = "0"
+      '
+      'TransDelayBox
+      '
+      Me.TransDelayBox.Location = New System.Drawing.Point(415, 26)
+      Me.TransDelayBox.Max = 10
+      Me.TransDelayBox.Name = "TransDelayBox"
+      Me.TransDelayBox.Size = New System.Drawing.Size(32, 20)
+      Me.TransDelayBox.TabIndex = 8
+      Me.TransDelayBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.TransDelayBox, "TNC2 TRANS mode send timeout (Seconds)")
       '
       'Form1
       '

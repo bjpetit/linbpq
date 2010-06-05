@@ -66,8 +66,8 @@ Public Class Form1
 
       CloseHandle(VCOMHandle)
 
-      Dim scServices() As ServiceController
-      scServices = ServiceController.GetServices()
+      '     Dim scServices() As ServiceController
+      '    scServices = ServiceController.GetServices()
 
 
 
@@ -553,6 +553,9 @@ Public Class Form1
          If Config(RouteBase + 12) > 127 Then
             RouteMaxFrame(i).Text = Config(RouteBase + 12) - 128
             Routeinp3(i).Text = 1
+         ElseIf Config(RouteBase + 12) > 63 Then
+            RouteMaxFrame(i).Text = Config(RouteBase + 12) - 64
+            Routeinp3(i).Text = 2
          Else
             RouteMaxFrame(i).Text = Config(RouteBase + 12)
             Routeinp3(i).Text = 0
@@ -1219,6 +1222,8 @@ loop1:   LineNo = LineNo + 1
             Putbyte(RouteBase + 11, RoutePort(i).Text)
             If Routeinp3(i).Text = "1" Then
                Putbyte(RouteBase + 12, RouteMaxFrame(i).Text + 128)
+            ElseIf Routeinp3(i).Text = "2" Then
+               Putbyte(RouteBase + 12, RouteMaxFrame(i).Text + 64)
             Else
                Putbyte(RouteBase + 12, RouteMaxFrame(i).Text)
             End If
@@ -1226,7 +1231,7 @@ loop1:   LineNo = LineNo + 1
             Put16bits(RouteBase + 13, RouteFrack(i).Text)
             Putbyte(RouteBase + 15, RoutePaclen(i).Text)
             RouteBase = RouteBase + 16
-         End If
+            End If
       Next
 
       If BPQ32.Checked Then

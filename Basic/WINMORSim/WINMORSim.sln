@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 9.00
 # Visual Basic Express 2005
-Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "WINMORSim", "WindowsApplication1\WINMORSim.vbproj", "{A75C6DE2-ABC4-4624-8EB1-7692E5253EC6}"
+Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "WindowsApplication1", "WindowsApplication1\WindowsApplication1.vbproj", "{A75C6DE2-ABC4-4624-8EB1-7692E5253EC6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

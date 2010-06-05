@@ -298,7 +298,7 @@ Module Module1
          RouteMaxFrame(i) = New NumTextBox(7)
          RouteFrack(i) = New NumTextBox(10000)
          RoutePaclen(i) = New NumTextBox(256)
-         Routeinp3(i) = New NumTextBox(1)
+         Routeinp3(i) = New NumTextBox(2)
 
          RouteCall(i).Location = New System.Drawing.Point(CurrCol + 8, CurrRow)
          RouteQual(i).Location = New System.Drawing.Point(CurrCol + 98, CurrRow)
