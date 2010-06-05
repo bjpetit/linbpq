@@ -706,12 +706,66 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 	strcpy(RouteElements, Msg->via);
 
+	Logprintf(LOG_BBS, conn, '?', "Routing Trace To %s Via %s", Msg->to, RouteElements);
+
 //	See if sending @ winlink.org
 
-	if (_stricmp(Msg->to, "RMS") == 0 || _stricmp(RouteElements, "WINLINK.ORG") == 0)
+	if (_stricmp(Msg->to, "RMS") == 0)
 	{
 		// If a user of this bbs with Poll RMS set, leave it here - no point in sending to winlink
+	
+		// To = RMS could come from RMS:EMAIL Address. If so, we only check user if @winlink.org, or
+		// we will hold g8bpq@g8bpq.org.uk
+
+		char * Call;
+		char * AT;
+
+		Call = _strupr(_strdup(Msg->via));
+		AT = strlop(Call, '@');
+
+		if (_stricmp(AT, "WINLINK.ORG") == 0)
+		{
+			user = LookupCall(Call);
+
+			if (user)
+			{
+				if (user->flags & F_POLLRMS)
+				{
+					Logprintf(LOG_BBS, conn, '?', "Message @ winlink.org, but local RMS user - leave here");
+					strcpy(Msg->to, Call);
+					strcpy(Msg->via, AT);
+
+					free(Call);
+
+					return 1;
+				}
+			}
+		}
 		
+		free(Call);
+
+		// To = RMS, but not winlink.org, or not local user.
+
+		RMS = FindRMS();
+
+		if (RMS)
+		{
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace to RMS Matches BBS RMS");
+			
+			set_fwd_bit(Msg->fbbs, RMS->BBSNumber);
+			RMS->ForwardingInfo->MsgCount++;
+			if (RMS->ForwardingInfo->SendNew)
+				RMS->ForwardingInfo->FwdTimer = RMS->ForwardingInfo->FwdInterval;
+
+			return 1;
+		}
+
+		// To RMS, but don't have a BBS called RMS - dropthrough in case we are forwarding RMS to another BBS
+
+	}
+
+	if (_stricmp(RouteElements, "WINLINK.ORG") == 0)
+	{
 		user = LookupCall(Msg->to);
 
 		if (user)
@@ -728,10 +782,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 		if (RMS)
 		{
-			if (_stricmp(Msg->to, "RMS") == 0 )
-				Logprintf(LOG_BBS, conn, '?', "Routing Trace to RMS Matches BBS RMS");
-			else
-				Logprintf(LOG_BBS, conn, '?', "Routing Trace @ winlink.org Matches BBS RMS");
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace @ winlink.org Matches BBS RMS");
 			
 			set_fwd_bit(Msg->fbbs, RMS->BBSNumber);
 			RMS->ForwardingInfo->MsgCount++;

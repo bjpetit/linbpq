@@ -6,6 +6,10 @@
 //		Support Win98 VirtualCOM
 //		Add StartMinimized Option
 
+// Version 1.1.1 May 2010
+
+//		Add MYCALL support
+
 #include "stdafx.h"
 #include "bpqtnc2.h"
 #define DYNLOADBPQ
@@ -29,6 +33,8 @@ char szBuff[80];
 BOOL UsingBPQSerial = FALSE;
 BOOL FirstBPQPort = TRUE;
 int CurrentConnections = 5;
+
+extern char NodeCall[11];
 
 HANDLE hControl;
 
@@ -260,12 +266,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance; // Store instance handle in our global variable
 
-	 GetAPI();
-
+	GetAPI();
 
 	BPQHOSTAPI= GETBPQAPI();
 	MONDECODE = GETMONDECODE();
-
 
 	hWnd=CreateDialog(hInst,ClassName,0,NULL);
 
@@ -370,6 +374,8 @@ BOOL Initialise()
 		Win98 = TRUE;
 
 #pragma warning(pop)
+
+	memcpy(NodeCall, GetNodeCall(), 10);
 
 	// Get config from Registry 
 
@@ -587,8 +593,6 @@ VOID CALLBACK TimerProc()
 
 			resp = BPQSerialGetQCounts(conn->hDevice, &RXCount, &TXCount);
 
-
-                
 			if (RXCount > 0)
 			{
 				resp = BPQSerialGetData(conn->hDevice, rxbuffer, 80, &Read);
@@ -626,8 +630,6 @@ VOID CALLBACK TimerProc()
 
 		getstatus:
 
-
-        
 			TNC2GetVMSR(i, &retval);
         
 			if ((retval & 8) == 8)	 //' DCD (Connected) Changed
@@ -667,16 +669,11 @@ VOID CALLBACK TimerProc()
 			{
 				conn->RTS=!conn->RTS;
 				Refresh();
-			}
-	
+			}	
 		}
-
 	}
-
 	return;
 }
-
-
 
 VOID RealPortThread(int i)
 {
@@ -791,15 +788,6 @@ getstatusR:
 	} while (TRUE);
 }
 
-
-
-
-
-
-
-
-
-
 int SaveConfig(HWND hWnd)
 {
 	int i;
@@ -824,7 +812,6 @@ int SaveConfig(HWND hWnd)
 
 	if (retCode != ERROR_SUCCESS) return 0;
 
-
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		Port=GetDlgItemInt(MainWnd,TN_COM+i,&OK1,FALSE);
@@ -848,17 +835,13 @@ int SaveConfig(HWND hWnd)
 		if (!DUFF)
 		{
 			wsprintf(Key,"Port%d",i);
-
 			RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&Port,4);
 
 			wsprintf(Key,"Port%dType",i);
-
 			RegSetValueEx(hKey,Key,0,REG_SZ,(BYTE *)&TypeFlag,2);
 
 			wsprintf(Key,"Port%dParam",i);
-
 			RegSetValueEx(hKey,Key,0,REG_SZ,(BYTE *)&Params,strlen(Params)+1);
- 
 		}
 	}
 
@@ -917,8 +900,6 @@ BOOL OpenRealPort(struct ConnectionInfo * conn)
 #define FC_DTRDSR       0x01
 #define FC_RTSCTS       0x02
 
-
-   
 	  dcb.DCBlength = sizeof( DCB );
 
 	  GetCommState(conn->hDevice, &dcb );
@@ -932,7 +913,6 @@ BOOL OpenRealPort(struct ConnectionInfo * conn)
 //	  dcb.fRtsControl = RTS_CONTROL_HANDSHAKE ;
 
       dcb.fRtsControl = RTS_CONTROL_ENABLE;
-
 
 	  dcb.fInX = dcb.fOutX = 0;
 	  dcb.XonChar = 0 ;
@@ -1323,7 +1303,6 @@ BOOL InitTNC2Port(int Port,int * Stream)
 
 		if (ret != 0) return FALSE;
 	}
-
 
 	_asm {
 

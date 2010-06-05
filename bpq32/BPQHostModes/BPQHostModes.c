@@ -12,7 +12,12 @@
 
 // Version 1.1.2 March 2010
 
-// Fix crash on close if port can't be opened
+//		Fix crash on close if port can't be opened
+
+// Version 1.1.3 May 2010
+
+//		Support Real Serial Port Pairs (Param of REAL selects this mode)
+
 
 #include "stdafx.h"
 #include "bpqhostmodes.h"
@@ -35,6 +40,8 @@ int CurrentConnections = 0;
 HANDLE hControl;		// BPq Serial Driver Control Device Handle
 
 BOOL Win98 = FALSE;		// Running on Win98
+
+char COMType = 'V';		// Serial Port Type - Real or BPQ Virtual
 
 
 struct ConnectionInfo * Connections[MaxConnections+1];
@@ -70,8 +77,8 @@ int BPQSerialSetDCD(HANDLE hDevice);
 int BPQSerialClrCTS(HANDLE hDevice);
 int BPQSerialClrDSR(HANDLE hDevice);
 int BPQSerialClrDCD(HANDLE hDevice);
-int BPQSerialSendData(HANDLE hDevice,UCHAR * Message,int MsgLen);
-int BPQSerialGetData(HANDLE hDevice,UCHAR * Message,int BufLen, ULONG * MsgLen);
+int BPQSerialSendData(char Type, HANDLE hDevice, UCHAR * Message, int MsgLen);
+int BPQSerialGetData(char Type, HANDLE hDevice, UCHAR * Message, UINT BufLen, ULONG * MsgLen);
 int BPQSerialGetQCounts(HANDLE hDevice,ULONG * RXCount, ULONG * TXCount);
 int BPQSerialGetDeviceList(HANDLE hDevice,ULONG * Slot,ULONG * Port);
 int BPQSerialIsCOMOpen(HANDLE hDevice,ULONG * Count);
@@ -90,6 +97,8 @@ BOOL InitDED(struct ConnectionInfo * conn);
 int PUTCHARx(struct ConnectionInfo * conn, UCHAR c);
 int DOCOMMAND(struct ConnectionInfo * conn);
 
+BOOL OpenRealPort(struct ConnectionInfo * conn);
+VOID RealPortThread(int i);
 
 //	Note that Kantronics host Mode uses KISS format Packets (without a KISS COntrol Byte)
 
@@ -121,6 +130,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	HKEY hKey=0;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
+
+	COMType = toupper(lpCmdLine[0]);
 	
 	MyRegisterClass(hInstance);
 
@@ -371,7 +382,7 @@ int CreateDialogLine(int i)
 
 
 	hCOM[i] = CreateWindowEx(WS_EX_CLIENTEDGE, WC_EDIT , "", WS_CHILD | WS_BORDER | WS_VISIBLE,
-                 115,row,25,22, hWnd, NULL, hInst, NULL);
+                 115,row,35,22, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hCOM[i], WM_SETFONT,(WPARAM) hFont, 0);
 
@@ -586,9 +597,8 @@ BOOL Initialise()
 
 	// Make Sure BPQVCOM is available
 	
-	if (!Win98)
+	if (!Win98 && COMType != 'R')
 	{
-
 		hControl = BPQOpenSerialControl(&Errorval);
 
 		if (hControl == (HANDLE) -1)
@@ -606,34 +616,58 @@ BOOL Initialise()
 
 		if (conn->numChannels == 0 ) continue;
 
-		conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
-        
-		if (conn->hDevice == (HANDLE) -1 && Errorval == 2)
-		{
-			//' Not found, so create
-           
-			resp = BPQSerialAddDevice(hControl, &conn->ComPort, &Errorval);
-			conn->Created = resp;
-         		
-			conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
-		}			
+		if (COMType == 'R')
+		{        
+			//' real Serial Port
 
-		if (conn->hDevice != (HANDLE) -1)
-		{
-			wsprintf(conn->PortLabel,"Virtual COM%d", conn->ComPort);
-                        
-			resp = BPQSerialSetCTS(conn->hDevice);
-			resp = BPQSerialSetDSR(conn->hDevice);
+			wsprintf(conn->PortLabel,"COM%d", conn->ComPort);
 
-			if (conn->DEDMode)
-				BPQSerialSetPollDelay(conn->hDevice, 100);
-			
-			conn->CTS = 1;
-			conn->DSR = 1;
-
-			for (j = 0; j <= conn->numChannels; j++)
+			if (OpenRealPort(conn))
 			{
-				// Use Stream zero for defaults
+				wsprintf(conn->PortLabel,"COM%d", conn->ComPort);
+				conn->PortEnabled = 1;   
+				EscapeCommFunction(conn->hDevice,SETDTR);
+				EscapeCommFunction(conn->hDevice,SETRTS);
+			}
+			else
+				wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
+		}
+		else
+		{
+			// Virtual Port
+
+			conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
+        
+			if (conn->hDevice == (HANDLE) -1 && Errorval == 2)
+			{
+				//' Not found, so create
+           
+				resp = BPQSerialAddDevice(hControl, &conn->ComPort, &Errorval);
+				conn->Created = resp;
+         		
+				conn->hDevice = BPQOpenSerialPort(conn->ComPort, &Errorval);
+			}			
+
+			if (conn->hDevice != (HANDLE) -1)
+			{
+				wsprintf(conn->PortLabel,"Virtual COM%d", conn->ComPort);
+                        
+				resp = BPQSerialSetCTS(conn->hDevice);
+				resp = BPQSerialSetDSR(conn->hDevice);
+
+				if (conn->DEDMode)
+					BPQSerialSetPollDelay(conn->hDevice, 100);
+			}
+			else
+				wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
+		}
+
+		conn->CTS = 1;
+		conn->DSR = 1;
+
+		for (j = 0; j <= conn->numChannels; j++)
+		{
+			// Use Stream zero for defaults
 				
 				conn->Channels[j] = malloc(sizeof (struct StreamInfo));
 				channel = conn->Channels[j];
@@ -645,14 +679,10 @@ BOOL Initialise()
 				if (i > 0)
 					if (!conn->DEDMode)
 						InitBPQStream(i, &conn->Channels[j]->BPQStream);            
-			}
-
-			if (conn->DEDMode)
-				InitDED(conn);
-
 		}
-		else
-			wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
+
+		if (conn->DEDMode)
+			InitDED(conn);
 
 	}
 
@@ -780,7 +810,7 @@ VOID CALLBACK TimerProc()
 		{
 			// If we have a partial packet, append this data to it
 
-			resp = BPQSerialGetData(conn->hDevice, &conn->RXBuffer[conn->RXBPtr], 1000 - conn->RXBPtr, &Read);
+			resp = BPQSerialGetData(COMType, conn->hDevice, &conn->RXBuffer[conn->RXBPtr], 1000 - conn->RXBPtr, &Read);
 
 			conn->RXBPtr += Read;
 			if (conn->DEDMode)
@@ -789,7 +819,25 @@ VOID CALLBACK TimerProc()
 				ProcessPacket(conn, (UCHAR *)&conn->RXBuffer, conn->RXBPtr);
 		}
        
-		BPQSerialGetDTRRTS(conn->hDevice,&ModemStat);
+		if (COMType == 'R')
+		{
+			GetCommModemStatus(conn->hDevice,&ModemStat);
+					
+			if ((ModemStat & MS_CTS_ON) >> 4!= conn->CTS)
+			{
+				conn->CTS=!conn->CTS;
+				Refresh();
+			}
+
+			if ((ModemStat & MS_DSR_ON) >> 5 != conn->DSR)
+			{
+				conn->DSR=!conn->DSR;
+				Refresh();
+			}
+		}
+		else
+		{
+			BPQSerialGetDTRRTS(conn->hDevice,&ModemStat);
 			
 		if ((ModemStat & 1) != conn->DTR)
 		{
@@ -803,6 +851,7 @@ VOID CALLBACK TimerProc()
 			Refresh();
 		}
 
+		}
 		if (conn->DEDMode)
 		{
 			int Len=0;
@@ -819,14 +868,14 @@ VOID CALLBACK TimerProc()
 
 				if (Len > 900) 
 				{
-					BPQSerialSendData(conn->hDevice, Message, Len);
+					BPQSerialSendData(COMType, conn->hDevice, Message, Len);
 					Len = 0;
 				}
 			}
 				
 			if (Len > 0) 
 			{
-				BPQSerialSendData(conn->hDevice, Message, Len);
+				BPQSerialSendData(COMType, conn->hDevice, Message, Len);
 			}
 		}
 	}
@@ -1055,7 +1104,7 @@ VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 //		if (conn->TermPtr > 120) conn->TermPtr = 120;	// Prevent overflow 
 
-		if (conn->Echo) BPQSerialSendData(conn->hDevice, &Char, 1);
+		if (conn->Echo) BPQSerialSendData(COMType, conn->hDevice, &Char, 1);
 
 		if (Char == 0x0d)
 		{
@@ -1105,16 +1154,16 @@ VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer)
 
 	if (Command == NULL)
 	{
-		BPQSerialSendData(conn->hDevice, "cmd:", 4);
+		BPQSerialSendData(COMType, conn->hDevice, "cmd:", 4);
 		return;
 	}
 		
 	if (_stricmp(Command, "RESET") == 0)
 	{
 		if (conn->nextMode)		
-			BPQSerialSendData(conn->hDevice, ResetReply, 6);
+			BPQSerialSendData(COMType, conn->hDevice, ResetReply, 6);
 		else
-			BPQSerialSendData(conn->hDevice, "cmd:", 4);
+			BPQSerialSendData(COMType, conn->hDevice, "cmd:", 4);
 
 		conn->InHostMode = conn->nextMode;
 
@@ -1137,8 +1186,8 @@ VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer)
 				conn->nextMode = FALSE;
 		}
 
-		BPQSerialSendData(conn->hDevice, "INTFACE was TERMINAL\r", 21);
-		BPQSerialSendData(conn->hDevice, "cmd:", 4);
+		BPQSerialSendData(COMType, conn->hDevice, "INTFACE was TERMINAL\r", 21);
+		BPQSerialSendData(COMType, conn->hDevice, "cmd:", 4);
 		return;
 	}
 
@@ -1153,7 +1202,7 @@ VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer)
 
 	//SendKISSData(conn, CmdReply, 3);
 	
-	BPQSerialSendData(conn->hDevice, "cmd:", 4);
+	BPQSerialSendData(COMType, conn->hDevice, "cmd:", 4);
 
 
 	//	Process Non-Hostmode Packet
@@ -1184,7 +1233,7 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 		Sleep(3000);
 		conn->InHostMode = FALSE;
-		BPQSerialSendData(conn->hDevice, "\r\r\rcmd:", 7);
+		BPQSerialSendData(COMType, conn->hDevice, "\r\r\rcmd:", 7);
 		return;
 	}
 
@@ -1407,7 +1456,7 @@ VOID SendKISSData(struct ConnectionInfo * conn, UCHAR * txbuffer, int Len)
 
 	TXLen = KissEncode(txbuffer, EncodedReply, Len);
 
-	BPQSerialSendData(conn->hDevice, EncodedReply, TXLen);
+	BPQSerialSendData(COMType, conn->hDevice, EncodedReply, TXLen);
 
 }
 
@@ -1710,12 +1759,20 @@ int BPQSerialClrDCD(HANDLE hDevice)
                      
 }
 
-int BPQSerialSendData(HANDLE hDevice,UCHAR * Message,int MsgLen)
+int BPQSerialSendData(char Type, HANDLE hDevice,UCHAR * Message,int MsgLen)
 {
 	ULONG bytesReturned;
 
 	if (MsgLen > 4096 )	return ERROR_INVALID_PARAMETER;
-	
+
+	if (Type == 'R')
+	{
+		int BytesWritten;
+
+		WriteFile(hDevice, Message, MsgLen, &BytesWritten, NULL);
+		return 0;
+	}
+
 	if (Win98)
 		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
 	else
@@ -1723,10 +1780,37 @@ int BPQSerialSendData(HANDLE hDevice,UCHAR * Message,int MsgLen)
                   
 }
 
-int BPQSerialGetData(HANDLE hDevice,UCHAR * Message,int BufLen, ULONG * MsgLen)
+int BPQSerialGetData(char Type, HANDLE hDevice, UCHAR * Message, UINT BufLen, ULONG * MsgLen)
 {
 	if (BufLen > 4096 )	return ERROR_INVALID_PARAMETER;
-	
+
+	if (Type == 'R')
+	{
+		ULONG RXLen, resp;
+
+		COMSTAT    ComStat;
+		DWORD      dwErrorFlags;
+
+		// only try to read number of bytes in queue 
+
+		ClearCommError(hDevice, &dwErrorFlags, &ComStat ) ;
+        
+		RXLen = min(BufLen, ComStat.cbInQue);
+        
+		if (RXLen > 0)
+		{
+			resp = ReadFile(hDevice, Message, RXLen, MsgLen, NULL);
+
+			if (!resp)
+			{
+				MsgLen = 0;
+				ClearCommError(hDevice, &dwErrorFlags, &ComStat ) ;
+			}				
+		}
+       
+		return 0;
+	}
+
 	if (Win98)
 		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_GETDATA,NULL,0,Message,BufLen,MsgLen,NULL);
 	else
@@ -1740,6 +1824,21 @@ int BPQSerialGetQCounts(HANDLE hDevice,ULONG * RXCount, ULONG * TXCount)
 	SERIAL_STATUS Resp;
 	int MsgLen;
 	int ret;
+
+	if (COMType == 'R')
+	{
+		COMSTAT    ComStat;
+		DWORD      dwErrorFlags;
+
+		// only try to read number of bytes in queue 
+
+		ClearCommError(hDevice, &dwErrorFlags, &ComStat );
+
+        *RXCount = ComStat.cbInQue;
+		*TXCount = ComStat.cbOutQue;
+
+		return 0;
+	} 
 
 	if (Win98)
 		ret = DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_GET_COMMSTATUS,NULL,0,&Resp,sizeof(SERIAL_STATUS),&MsgLen,NULL);
@@ -1764,6 +1863,17 @@ int BPQSerialGetDeviceList(HANDLE hDevice,ULONG * Slot,ULONG * Port)
 int BPQSerialIsCOMOpen(HANDLE hDevice,ULONG * Count)
 {
 	ULONG bytesReturned;
+
+	if (COMType == 'R')
+	{
+		int ModemStat;
+
+		GetCommModemStatus(hDevice,&ModemStat);
+
+		*Count = (ModemStat & MS_DSR_ON) >> 5;
+
+		return 0;
+	}
 
 	if (Win98)
 		return DeviceIoControl(hControl, (UINT)hDevice | W98_SERIAL_IS_COM_OPEN,NULL,0,Count,4,&bytesReturned,NULL);                
@@ -1872,7 +1982,7 @@ int Connected(Stream)
 				else
 				{
 					Len = wsprintf (Msg, "*** CONNECTED to %s\r", ConnectingCall);
-					BPQSerialSendData(conn->hDevice, Msg, Len);
+					BPQSerialSendData(COMType, conn->hDevice, Msg, Len);
 					BPQSerialSetDCD(conn->hDevice);
 					Refresh();
 				}
@@ -1913,7 +2023,7 @@ int Disconnected (Stream)
 				}
 				else
 				{
-					BPQSerialSendData(conn->hDevice, "*** DISCONNECTED\r", 17); 
+					BPQSerialSendData(COMType, conn->hDevice, "*** DISCONNECTED\r", 17); 
 					BPQSerialClrDCD(conn->hDevice);
 					Refresh();
 				}
@@ -1958,7 +2068,7 @@ int DoReceivedData(int Stream)
 							SendKISSData(conn, Buffer, len+3);
 						}
 						else
-							BPQSerialSendData(conn->hDevice, &Buffer[3], len); 
+							BPQSerialSendData(COMType, conn->hDevice, &Buffer[3], len); 
 					}
 	  
 				} while (count > 0);
@@ -4540,4 +4650,87 @@ int PUTCHARx(struct ConnectionInfo * conn, UCHAR c)
 	
 	return 0;
 }
+
+BOOL OpenRealPort(struct ConnectionInfo * conn)
+{
+   char szPort[ 15 ];
+   BOOL fRetVal ;
+   COMMTIMEOUTS CommTimeOuts ;
+   int i;
+
+   DCB	dcb;
+
+  // load the COM prefix string and append port number
+   
+  wsprintf( szPort, "//./COM%d", conn->ComPort) ;
+
+   // open COMM device
+
+   conn->hDevice =
+      CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+				  
+	if (conn->hDevice == (HANDLE) -1 )
+	{
+		i=GetLastError();
+		return ( FALSE ) ;
+	}
+
+      // setup device buffers
+
+      SetupComm(conn->hDevice, 4096, 4096 ) ;
+
+      // purge any information in the buffer
+
+      PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT |
+                                      PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+
+      // set up for overlapped I/O
+	  
+      CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
+      CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
+      CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
+      CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
+      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
+      SetCommTimeouts(conn->hDevice, &CommTimeOuts ) ;
+
+#define FC_DTRDSR       0x01
+#define FC_RTSCTS       0x02
+
+	  dcb.DCBlength = sizeof( DCB );
+
+	  GetCommState(conn->hDevice, &dcb );
+
+	  BuildCommDCB("38400,N,8,1", &dcb);	
+
+	  // setup hardware flow control
+
+      dcb.fDtrControl = DTR_CONTROL_ENABLE;
+    
+//	  dcb.fRtsControl = RTS_CONTROL_HANDSHAKE ;
+
+      dcb.fRtsControl = RTS_CONTROL_ENABLE;
+
+	  dcb.fInX = dcb.fOutX = 0;
+	  dcb.XonChar = 0 ;
+	  dcb.XoffChar = 0 ;
+	  dcb.XonLim = 0 ;
+	  dcb.XoffLim = 0 ;
+
+   // other various settings
+
+   dcb.fBinary = TRUE ;
+   dcb.fParity = TRUE ;
+
+   fRetVal = SetCommState(conn->hDevice, &dcb ) ;
+
+   return ( fRetVal ) ;
+
+} 
+
+
 

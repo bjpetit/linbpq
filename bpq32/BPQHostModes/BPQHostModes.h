@@ -15,7 +15,9 @@ struct ConnectionInfo
 	int DCD;
 	int DTR;
 	int DSR;
+	char Params[20];				// Init Params (eg 9600,n,8)
 	char PortLabel[20];
+
 	HANDLE hDevice;
 	BOOL Created;
 	BOOL PortEnabled;

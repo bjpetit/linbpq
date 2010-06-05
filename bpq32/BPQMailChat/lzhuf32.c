@@ -907,7 +907,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				conn->TempMsg->length += 12;
 			}
 
-
 		}
 		else if (_memicmp(ptr1, "To:", 3) == 0 || _memicmp(ptr1, "cc:", 3) == 0)
 		{
@@ -917,6 +916,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			memset(FullTo, 0, 99);
 			memcpy(FullTo, &ptr1[4], linelen-4);
 			memcpy(HddrTo[Recipients], ptr1, linelen+2);
+
+			Logprintf(LOG_BBS, conn, '?', "B2 Msg To: %s", FullTo);
 
 			conn->TempMsg->length -= strlen(HddrTo[Recipients]);
 

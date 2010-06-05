@@ -484,12 +484,17 @@
 // Version 1.0.4.6
 
 // Pass smtp:winlink.org messages from Airmail to local user check
+// Only apply local user check to RMS: messages @winlink.org
+// Check locally input smtp: messages for local winlink.org users
+// Provide facility to allow only one connect on a port
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-//#define SPECIALVERSION "Paclink"
+//#define SPECIALVERSION "Ken"
 
 #include "GetVersion.h"
 
@@ -5354,6 +5359,32 @@ nextline:
 
 		if (Msg->to[0])
 			FWDCount = MatchMessagetoBBSList(Msg, conn);
+		else
+		{
+			// If addressed @winlink.org, and to a local user, Keep here.
+			
+			char * Call;
+			char * AT;
+
+			Call = _strupr(_strdup(Msg->via));
+			AT = strlop(Call, '@');
+
+			if (_stricmp(AT, "WINLINK.ORG") == 0)
+			{
+				struct UserInfo * user = LookupCall(Call);
+
+				if (user)
+				{
+					if (user->flags & F_POLLRMS)
+					{
+						Logprintf(LOG_BBS, conn, '?', "SMTP Message @ winlink.org, but local RMS user - leave here");
+						strcpy(Msg->to, Call);
+						strcpy(Msg->via, AT);
+					}
+				}
+			}
+			free(Call);
+		}
 
 		if (!(conn->BBSFlags & BBS))
 		{
@@ -6025,18 +6056,37 @@ InBand:
 	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") ||
 			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE"))
 	{
-		char * Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+		char * Cmd;
+	LoopBack:
+		Cmd = Scripts[++ForwardingInfo->ScriptIndex];
 		
 		if (Cmd && memcmp(Cmd, "TIMES", 5) != 0 && memcmp(Cmd, "ELSE", 4) != 0)			// Only Check until script is finished
 		{
-/*			if (strcmp(Cmd, "*** LINKED TO *") == 0)
+			if (memcmp(Cmd, "INTERLOCK ", 10) == 0)
 			{
-				// Used for RMS to switch to a user call for polling RMS
+				// Used to limit connects on a port to 1
 
-				nodeprintf(conn, "*** LINKED TO %s\r", ForwardingInfo->UserCall);
+				int Port;
+				char Option[80];
+
+				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
+
+				sscanf(&Cmd[10], "%d %s", &Port, &Option);
+
+				if (CountConnectionsOnPort(Port))
+				{
+					// if option is FAIL, look for an ELSE, otherwise if WAIT n, set poll timer and exit
+								
+					Logprintf(LOG_BBS, conn, '?', "Interlocked Port is busy - quitting");
+					Disconnect(conn->BPQStream);
+					return FALSE;
+				}
+
+				goto LoopBack;
+
 			}
 			else
-*/
+
 			if (memcmp(Cmd, "RADIO AUTH", 10) == 0)
 			{
 				// Generate a Password to enable RADIO commands on a remote node
@@ -6059,7 +6109,6 @@ InBand:
 			}
 
 			nodeprintf(conn, "%s\r", Cmd);
-		
 		}
 		return TRUE;
 	}
@@ -6639,6 +6688,29 @@ struct UserInfo * FindRMS()
 	
 	return NULL;
 }
+
+int CountConnectionsOnPort(int CheckPort)
+{
+	int n, Count = 0;
+	CIRCUIT * conn;
+	int port, sesstype, paclen, maxframe, l4window;
+	char callsign[11];
+
+	for (n = 0; n < NumberofStreams; n++)
+	{
+		conn = &Connections[n];
+		
+		if (conn->Active)
+		{
+			GetConnectionInfo(conn->BPQStream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+			if (port == CheckPort)
+				Count++;
+		}
+	}
+
+	return Count;
+}
+
 /*
 VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo)
 {
