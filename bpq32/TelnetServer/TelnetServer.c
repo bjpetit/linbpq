@@ -28,6 +28,9 @@
 //	Version 2.1.8  january 2010
 //  Change connected message to be fixed text. (for Outpost)
 
+//	Version 2.1.9 June 2010
+//  Prevent overlong packets being sent to node (for Outpost forwarding, etc)
+
 #include "stdafx.h"
 #include "TelnetServer.h"
 #include "bpq32.h"
@@ -717,7 +720,19 @@ MsgLoop:
 				if (sockptr->Callsign[0] != '@') 
 					ChangeSessionCallsign(Stream, EncodeCall(sockptr->Callsign));
 			}
-              
+
+			// Line could be up to 500 chars if coming from a program rather than an interative user
+			// Limit send to node to 255
+
+			if (InputLen > 255)
+			{		
+				SendMsg(Stream, MsgPtr, 255);
+				sockptr->InputLen -= 255;
+				InputLen -= 255;
+
+				memmove(MsgPtr,MsgPtr+255,InputLen);
+			}
+	           
 			SendMsg(Stream, MsgPtr, InputLen);
 		
 			sockptr->InputLen = 0;
@@ -763,7 +778,17 @@ MsgLoop:
             else
 			{
 				*(LFPtr-1)=13;
-				SendMsg(Stream, MsgPtr, MsgLen);
+
+				// Line could be up to 500 chars if coming from a program rather than an interative user
+				// Limit send to node to 255. Should really use PACLEN instead of 255....
+
+				if (MsgLen > 255)
+				{		
+					SendMsg(Stream, MsgPtr, 255);
+					SendMsg(Stream, MsgPtr + 255, MsgLen - 255);
+				}
+				else
+					SendMsg(Stream, MsgPtr, MsgLen);
 			}
 
 	

@@ -488,6 +488,10 @@
 // Check locally input smtp: messages for local winlink.org users
 // Provide facility to allow only one connect on a port
 
+// Version 1.0.4.8
+
+//	Only reset last listed on L or LR commands.
+
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -3633,7 +3637,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		BBSputs(conn, "A - Abort Output\r");
 		BBSputs(conn, "B - Logoff\r");
 		BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
-		BBSputs(conn, "L - List Message(s) - L = List New, LM = List Mine L> Call, L< Call = List to or from\r");
+		BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
+		BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
 		BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
 		BBSputs(conn, "                      LN LY LH LK LF L$ - List Mesaage with corresponding Status\r");
 		BBSputs(conn, "                      LB LP - List Mesaage with corresponding Type\r");
@@ -4127,9 +4132,6 @@ VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
 				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
 
-	if (Msg->number > conn->lastmsg) 
-		conn->lastmsg = Msg->number;
-
 }
 
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1)
@@ -4176,8 +4178,9 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			else
 				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg);
 
-		return;
+			conn->lastmsg = LatestMsg;
 
+		return;
 
 
 	case 'L':				// List Last

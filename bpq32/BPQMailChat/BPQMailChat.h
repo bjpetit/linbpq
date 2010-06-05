@@ -1077,6 +1077,7 @@ VOID SendMsgUI(struct MsgInfo * Msg);
 VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);
 VOID SeeifBBSUIFrame(struct _MESSAGEX * buff, int len);
 struct MsgInfo * FindMessageByNumber(int msgno);
+int CountConnectionsOnPort(int CheckPort);
 
 // Message Routing Routtines
 
