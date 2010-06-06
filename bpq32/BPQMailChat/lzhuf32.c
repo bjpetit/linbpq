@@ -1034,7 +1034,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 					if (_stricmp(Msg->via, "winlink.org") == 0)
 					{
-						memmove(FullTo, &FullTo[5], strlen(FullTo - 5));
+						memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
 						_strupr(FullTo);
 					}
 					else
@@ -1054,7 +1054,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			if (strlen(FullTo) > 6)
 				FullTo[6] = 0;
-
 
 			strcpy(Msg->to, FullTo);
 
