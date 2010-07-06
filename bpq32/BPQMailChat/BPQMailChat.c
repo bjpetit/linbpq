@@ -492,7 +492,19 @@
 
 //	Only reset last listed on L or LR commands.
 
+// Version 1.0.4.9
 
+// Fix error in handling smtp: messages to winlink.org addresses from Airmail
+
+// Version 1.0.4.10
+
+// Fix Badwords processing
+// Add Connect Script PAUSE command
+
+// Version 1.0.4.11
+
+// Suppress display amd listing of held messages
+// Add option to exclude SYSOP messages from LM, KM, etc
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -3142,6 +3154,7 @@ VOID GetBadWordFile()
 	while (ptr1)
 	{
 		if (*ptr1 == '\n') ptr1++;
+
 		ptr2 = strtok_s(NULL, "\r\n", &ptr1);
 		if (ptr2)
 		{
@@ -3170,8 +3183,8 @@ BOOL CheckBadWord(char * Word, char * Msg)
 
 		// Only bad if it ia not part of a longer word
 
-		if ((ptr1 == Msg) || !(isalpha(*(ptr1 - 1))))	// No alpha before
-			if (!(isalpha(*(ptr1 + len))))			// No alpha after
+		if ((ptr2 == Msg) || !(isalpha(*(ptr2 - 1))))	// No alpha before
+			if (!(isalpha(*(ptr2 + len))))			// No alpha after
 				return TRUE;					// Bad word
 	
 		// Keep searching
@@ -3984,7 +3997,7 @@ void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		{
 			Msg = MsgHddrPtr[i];
 
-			if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
+			if ((_stricmp(Msg->to, user->Call) == 0) || (conn->sysop && _stricmp(Msg->to, "SYSOP") == 0 && user->flags & F_SYSOP_IN_LM))
 			{
 				if (Msg->type == 'P' && Msg->status == 'Y')
 				{
@@ -4019,7 +4032,6 @@ void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 			if (Arg1)
 				if (KillMessagesTo(conn, user, Arg1) == 0)
 				BBSputs(conn, "No Messages found\r");
-		
 		
 			return;
 		}
@@ -4310,7 +4322,7 @@ int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 			continue;
 
 		if ((_stricmp(MsgHddrPtr[i]->to, Call) == 0) ||
-			((conn->sysop) && (_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0)  && (_stricmp(Call, SYSOPCall) == 0)))
+			((conn->sysop) && ((_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0)) && (user->flags & F_SYSOP_IN_LM)))
 		{
 			Msgs++;
 			ListMessage(MsgHddrPtr[i], conn);
@@ -4372,12 +4384,15 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 		{
 			if (SYSOP) return m;			// Sysop can list or read anything
 	
-			if (Msg->type == 'B' || Msg->type == 'T') return m;
-
-			if (Msg->type == 'P')
+			if (Msg->status != 'H')
 			{
-				if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
-					return m;
+				if (Msg->type == 'B' || Msg->type == 'T') return m;
+
+				if (Msg->type == 'P')
+				{
+					if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+						return m;
+				}
 			}
 		}
 
@@ -4391,13 +4406,12 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
 {
-	// Return TRUE if user ias allowed to read message
+	// Return TRUE if user is allowed to read message
 	
 	if (SYSOP) return TRUE;			// Sysop can list or read anything
 
-	if (Msg->status != 'K')
+	if ((Msg->status != 'K') && (Msg->status != 'H'))
 	{
-	
 		if (Msg->type == 'B' || Msg->type == 'T') return TRUE;
 
 		if (Msg->type == 'P')
@@ -4425,12 +4439,15 @@ int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
 		{
 			if (SYSOP) return m;			// Sysop can list or read anything
 
-			if (Msg->type == 'B' || Msg->type == 'T') return m;
-
-			if (Msg->type == 'P')
+			if (Msg->status != 'H')
 			{
-				if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
-					return m;
+				if (Msg->type == 'B' || Msg->type == 'T') return m;
+
+				if (Msg->type == 'P')
+				{
+					if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+						return m;
+				}
 			}
 		}
 
@@ -4499,7 +4516,7 @@ void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		{
 			Msg = MsgHddrPtr[i];
 
-			if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
+			if ((_stricmp(Msg->to, user->Call) == 0) || (conn->sysop && _stricmp(Msg->to, "SYSOP") == 0 && user->flags & F_SYSOP_IN_LM))
 				if (Msg->status == 'N')
 					ReadMessage(conn, user, Msg->number);
 		}
@@ -5896,8 +5913,8 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 struct DelayParam
 {
 	struct UserInfo * User;
+	CIRCUIT * conn;
 	int Delay;
-
 };
 
 struct DelayParam DParam;		// Not 100% safe, but near enough
@@ -5910,6 +5927,19 @@ VOID ConnectDelayThread(struct DelayParam * DParam)
 	Sleep(Delay);
 
 	ConnecttoBBS(User);
+	
+	return;
+}
+
+VOID ConnectPauseThread(struct DelayParam * DParam)
+{
+	CIRCUIT * conn = DParam->conn;
+	int Delay = DParam->Delay;
+	char Msg[] = "Pause Ok\r    ";
+
+	Sleep(Delay);
+
+	ProcessBBSConnectScript(conn, Msg, 9);
 	
 	return;
 }
@@ -6110,6 +6140,21 @@ InBand:
 				conn->SkipPrompt = TRUE;
 				return TRUE;
 			}
+
+			if (memcmp(Cmd, "PAUSE", 5) == 0)
+			{
+				// Pause script
+
+				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
+
+				DParam.Delay = atoi(&Cmd[6]) * 1000;
+				DParam.conn = conn;
+
+				_beginthread(ConnectPauseThread, 0, &DParam);
+
+				return TRUE;
+			}
+
 
 			nodeprintf(conn, "%s\r", Cmd);
 		}

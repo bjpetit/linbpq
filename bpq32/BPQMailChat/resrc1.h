@@ -61,8 +61,8 @@
 #define LASTCONNECT                     1052
 #define CONN_IN                         1053
 #define IDC_CHATCALLS                   1064
-#define RMS_SSID1                       1070
 #define IDC_CHATCOLOURS                 1065
+#define RMS_SSID1                       1070
 #define RMS_SSID2                       1071
 #define RMS_SSID3                       1072
 #define ISP_SMTP_AUTH                   3009
@@ -84,6 +84,7 @@
 #define IDC_HOLDMAIL                    5011
 #define IDC_SEEN                        5012
 #define IDC_POLLRMS                     5012
+#define IDC_SYSOP_IN_LM                 5013
 #define IDC_EDITTEXT                    6104
 #define IDC_LOGLIFETIME                 9025
 #define IDC_USEB1                       9876

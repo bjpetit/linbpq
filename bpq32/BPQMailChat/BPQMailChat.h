@@ -416,7 +416,8 @@ struct UserInfo{
 #define F_PMS        0x0800
 #define F_EMAIL      0x1000
 #define F_HOLDMAIL   0x2000
-#define F_POLLRMS	  0x4000
+#define F_POLLRMS	 0x4000
+#define F_SYSOP_IN_LM 0x8000
 
 /* #define F_PWD        0x1000 */
 
