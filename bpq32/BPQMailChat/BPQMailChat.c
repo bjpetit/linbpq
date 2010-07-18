@@ -505,6 +505,8 @@
 
 // Suppress display amd listing of held messages
 // Add option to exclude SYSOP messages from LM, KM, etc
+// Fix crash whan receiving messages with long lines via plain text forwarding
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -2311,6 +2313,13 @@ int Disconnected (Stream)
 			if (conn->PacLinkCalls)
 				free(conn->PacLinkCalls);
 
+			if (conn->InputBuffer)
+			{
+				free(conn->InputBuffer);
+				conn->InputBuffer = NULL;
+				conn->InputBufferLen = 0;
+			}
+
 			if (conn->InputMode == 'B')
 			{
 				// Save partly received message for a restart
@@ -2385,7 +2394,7 @@ int DoReceivedData(int Stream)
 	CIRCUIT * conn;
 	struct UserInfo * user;
 	char * ptr, * ptr2;
-	char Buffer[10000];
+	char * Buffer;
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -2397,9 +2406,10 @@ int DoReceivedData(int Stream)
 			{ 
 				// May have several messages per packet, or message split over packets
 
-				if (conn->InputLen > 9600)	// Shouldnt have lines longer  than this in text mode
+				if (conn->InputLen + 1000 > conn->InputBufferLen )	// Shouldnt have lines longer  than this in text mode
 				{
-					conn->InputLen=0;
+					conn->InputBufferLen += 1000;
+					conn->InputBuffer = realloc(conn->InputBuffer, conn->InputBufferLen);
 				}
 				
 				GetMsg(Stream, &conn->InputBuffer[conn->InputLen], &InputLen, &count);
@@ -2466,6 +2476,8 @@ int DoReceivedData(int Stream)
 
 						MsgLen = conn->InputLen - (ptr2-ptr);
 
+						Buffer = malloc(MsgLen + 100);
+
 						memcpy(Buffer, conn->InputBuffer, MsgLen);
 						__try
 						{
@@ -2486,6 +2498,7 @@ int DoReceivedData(int Stream)
 							return 0;
 						}
 
+						free(Buffer);
 
 						if (*ptr == 0 || *ptr == '\n')
 						{

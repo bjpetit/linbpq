@@ -28,8 +28,8 @@ int Height, Width, LastY;
 static char kbbuf[160];
 static int kbptr=0;
 
-#define MAXLINE 10000
-static char readbuff[MAXLINE+100];
+static char * readbuff;
+static int readbufflen;
 
 static BOOL StripLF = TRUE;
 static BOOL MonBBS = TRUE;
@@ -85,6 +85,9 @@ BOOL CreateMonitor()
 	
     if (!hMonitor)
         return (FALSE);
+
+	readbuff = zalloc(1000);
+	readbufflen = 1000;
 
 	hMenu=GetMenu(hMonitor);
 
@@ -241,7 +244,10 @@ static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 
 
 			hMonitor = NULL;
-			
+
+			free(readbuff);
+			readbufflen = 0;
+
 			break;
 
 		default:
@@ -270,12 +276,11 @@ int WritetoMonitorWindow(char * Msg, int len)
 	char * ptr1, * ptr2;
 	int index;
 
-	if (len+PartLinePtr > MAXLINE)
-		PartLinePtr = 0;
-
-	if (len > MAXLINE)
-		len = MAXLINE;
-
+	if (len+PartLinePtr > readbufflen)
+	{
+		readbufflen += len+PartLinePtr;
+		readbuff = realloc(readbuff, readbufflen);
+	}
 
 	if (PartLinePtr != 0)
 		SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );		
@@ -297,8 +302,8 @@ int WritetoMonitorWindow(char * Msg, int len)
 
 lineloop:
 
-	if (PartLinePtr > 300)
-		PartLinePtr = 0;
+//	if (PartLinePtr > 300)
+//		PartLinePtr = 0;
 
 	if (len > 0)
 	{

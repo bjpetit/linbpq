@@ -89,8 +89,6 @@ struct UserRec
 	char * Password;
 };
 
-#define InputBufferLen 500
-
 //#define ln_ibuf 128
 #define deftopic "General"
 
@@ -112,7 +110,7 @@ struct UserRec
 #define id_send   'S'    // Data for one user.
 #define id_topic  'T'    // User changes topic.
 #define id_user   'I'    // User login information.
-#define id_keepalive   'K'    // User login information.
+#define id_keepalive   'K'    // Node-Node Keepalive.
 
 #define o_all    1  // To all users.
 #define o_one    2  // To a specific user.
@@ -270,8 +268,9 @@ typedef struct ConnectionInfo_S
     BOOL GotHeader;
 	UCHAR InputMode;			// Line by Line or Binary
 
-    UCHAR InputBuffer[1000];
-    int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+    UCHAR * InputBuffer;
+    int InputBufferLen;
+    int InputLen;				// Data we have already = Offset of end of an incomplete packet;
 
 //	int PartPacketPointer;
 	struct UserInfo * UserPointer;
@@ -287,7 +286,7 @@ typedef struct ConnectionInfo_S
 
 	UCHAR * OutputQueue;		// Messages to user
 	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
-	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+	int OutputGetPointer;		// Next byte to send. When Getpointer = Queue Length all is sent - free the buffer and start again.
 
 	int CloseAfterFlush;		// Close session when all sent. Set to 100ms intervals to wait.
 	
@@ -620,7 +619,7 @@ struct FBBHeaderLine
 };
 
 #define MAXSTACK 20
-#define MAXLINE 10000
+//#define MAXLINE 10000
 #define INPUTLEN 512
 
 struct ConsoleInfo 
@@ -644,8 +643,8 @@ struct ConsoleInfo
 	char kbbuf[INPUTLEN];
 	int kbptr;
 
-	char readbuff[MAXLINE+100];
-
+	char * readbuff;		// Malloc'ed
+	int readbufflen;		// Current Length
 	char * KbdStack[MAXSTACK];
 
 	int StackIndex;

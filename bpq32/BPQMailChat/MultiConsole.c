@@ -169,6 +169,9 @@ BOOL CreateConsole(int Stream)
 	if (!hConsole)
         return (FALSE);
 
+	Cinfo->readbuff = zalloc(1000);
+	Cinfo->readbufflen = 1000;
+
 	hMenu=GetMenu(hConsole);
 	Cinfo->hMenu = hMenu;
 
@@ -501,7 +504,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	LPRECT lprc;
 	int i;
 	struct ConsoleInfo * Cinfo;
-    UCHAR tchBuffer[1000];
+    UCHAR tchBuffer[100000];
 	UCHAR * buf = tchBuffer;
     TEXTMETRIC tm; 
     int y;  
@@ -726,10 +729,13 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 			Sleep(500);
 
+			free(Cinfo->readbuff);
+			Cinfo->readbufflen = 0;
+
 			free(Cinfo->Console);
 			Cinfo->Console = 0;
 			Cinfo->hConsole = NULL;
-			
+
 			break;
 
 		default:
@@ -933,11 +939,11 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 	char * ptr1, * ptr2;
 	int index;
 
-	if (len+Cinfo->PartLinePtr > MAXLINE)
-		Cinfo->PartLinePtr = 0;
-
-	if (len > MAXLINE)
-		len = MAXLINE;
+	if (len + Cinfo->PartLinePtr > Cinfo->readbufflen)
+	{
+		Cinfo->readbufflen += len + Cinfo->PartLinePtr;
+		Cinfo->readbuff = realloc(Cinfo->readbuff, Cinfo->readbufflen);
+	}
 
 	if (Cinfo->PartLinePtr != 0)
 		SendMessage(Cinfo->hwndOutput,LB_DELETESTRING,Cinfo->PartLineIndex,(LPARAM)(LPCTSTR) 0 );		
@@ -962,13 +968,9 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 			}
 	
 		} while (ptr2);
-
 	}
 
 lineloop:
-
-	if (Cinfo->PartLinePtr > MAXLINE)
-		Cinfo->PartLinePtr = 0;
 
 	if (len > 0)
 	{
@@ -987,7 +989,6 @@ lineloop:
 			memmove(Cinfo->readbuff,ptr1,len);
 
 			return (0);
-
 		}
 
 		*(ptr2++)=0;
