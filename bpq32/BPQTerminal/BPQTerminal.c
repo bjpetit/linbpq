@@ -749,7 +749,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		//Parse the menu selections:
 		
-		if (wmId > BPQBASE && wmId < BPQBASE + 17)
+		if (wmId > BPQBASE && wmId < BPQBASE + 32)
 		{
 			TogglePort(hWnd,wmId,0x1 << (wmId - (BPQBASE + 1)));
 			break;

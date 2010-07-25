@@ -95,8 +95,36 @@
 #include <ctype.h>
 #include <conio.h>
 
+// Dummy file routines - write to buffer instead
+
+char Buffer[100000];
+
+char * fp2;
+
+VOID bputc(int Ch, char * ptr)
+{
+	*fp2++ = Ch;
+}
+
+VOID bputi(int Ch, char * ptr);
+
+VOID bputs(char * Val, char * ptr)
+{
+	int Len = strlen(Val);
+	memcpy(fp2, Val, Len);
+	fp2 += Len;
+}
+
+VOID bseek(char * ptr, int offset, int dummy)
+{
+	fp2 = &Buffer[offset];
+}
 
 
+int btell(char * ptr)
+{
+	return fp2 - &Buffer[0];
+}
 #pragma pack(1) 
 
 struct CONFIGTABLE
@@ -239,7 +267,6 @@ extern int __cdecl tncports(int i);
 extern int __cdecl dedports(int i);
 extern int __cdecl index(char *s,char *t);
 extern int __cdecl verify(char *s,char c);
-extern int __cdecl fputi(int i,struct _iobuf *fp);
 int  strip(char *rec);
 extern int __cdecl call_check(char *callsign);
 extern int __cdecl callstring(int i,char *value,char *rec);
@@ -263,7 +290,9 @@ extern int __cdecl simple(int i);
 //char value[];
 //char rec[];
 
+char Buffer[100000];
 
+char * fp2;
 
 int FIRSTAPPL=1;
 BOOL Comment = FALSE;
@@ -394,7 +423,7 @@ static int kissflags = 0;
 int paramok[PARAMLIM];		/* PARAMETER OK FLAG  */
 
 FILE *fp1;			/* TEXT INPUT FILE    */
-FILE *fp2;			/* BINARY OUTPUT FILE */
+FILE *fp3;			// Output
 
 static char s1[80];
 static char s2[80];
@@ -501,7 +530,8 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	   exit(1);
 	}
 
-	if ((fp2 = fopen(outputname,"wb")) == NULL)
+	
+	if ((fp3 = fopen(outputname,"wb")) == NULL)
 	{
 	   printf("Could not open file %s\n",outputname);
 
@@ -510,13 +540,14 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	   exit(1);
 	}
 
+	fp2 = &Buffer[0];
 #endif
 
 
 	printf("Source: %s, Destination=%s\n\n",inputname,outputname);
 
 	for (i=0; i<2560; i++)
-	   fputc('\0',fp2);
+	   bputc('\0',fp2);
 
 	strip(rec);
 
@@ -542,15 +573,15 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	if (paramok[45]==1)
 	{
 		paramok[16]=1;	//  APPL1CALL overrides BBSCALL
-		fseek(fp2,(long) 20,SEEK_SET);
+		bseek(fp2,(long) 20,SEEK_SET);
 
 		for (i=0; i<10; i++)
 		{
 			if (bbscall[i] == 0)
 				
-				fputc(32,fp2);
+				bputc(32,fp2);
 			else
-				fputc(bbscall[i],fp2);
+				bputc(bbscall[i],fp2);
 		}
 			
 	}
@@ -558,15 +589,15 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	if (paramok[53]==1)
 	{
 		paramok[14]=1;	//  APPL1ALIAS overrides BBSALIAS
-		fseek(fp2,(long) 30,SEEK_SET);
+		bseek(fp2,(long) 30,SEEK_SET);
 
 		for (i=0; i<10; i++)
 		{
 			if (bbsalias[i] == 0)
 				
-				fputc(32,fp2);
+				bputc(32,fp2);
 			else
-				fputc(bbsalias[i],fp2);
+				bputc(bbsalias[i],fp2);
 
 		}
 			
@@ -575,8 +606,8 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	if (paramok[61]==1) 
 	{
 		paramok[33]=1;	//  APPL1QUAL overrides BBSQUAL
-		fseek(fp2,(long) 118,SEEK_SET);
-		fputi(bbsqual,fp2);
+		bseek(fp2,(long) 118,SEEK_SET);
+		bputi(bbsqual,fp2);
 	}
 			
 	
@@ -610,8 +641,8 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	   heading = 1;
 	}
 
-	fseek(fp2,(long) 255,SEEK_SET);
-	fputc(FILEVERSION,fp2);
+	bseek(fp2,(long) 255,SEEK_SET);
+	bputc(FILEVERSION,fp2);
 
 	if (Comment)
 	{
@@ -620,7 +651,14 @@ main( int argc, char *argv[ ], char *envp[ ] )
 	}
 
 	fclose(fp1);
-	fclose(fp2);
+
+
+	
+	fseek(fp3,(long) 0,SEEK_SET);
+
+	fwrite(Buffer, portoffset + 176, 1, fp3);
+
+	fclose(fp3);
 
 	if (heading == 0)
 	{
@@ -761,15 +799,15 @@ char rec[];
 	{
 		FIRSTAPPL=0;
 		
-		fseek(fp2,(long) portoffset,SEEK_SET);
+		bseek(fp2,(long) portoffset,SEEK_SET);
 
 		for (i=0; i<160; i++)
-			fputc(' ',fp2);
+			bputc(' ',fp2);
 
 		for (i=0; i<16; i++)
-			fputc(0,fp2);
+			bputc(0,fp2);
 
-		fseek(fp2,(long) portoffset,SEEK_SET);
+		bseek(fp2,(long) portoffset,SEEK_SET);
 
 	}
 
@@ -789,22 +827,22 @@ char rec[];
 	{
 		FIRSTAPPL=0;
 		
-		fseek(fp2,(long) portoffset,SEEK_SET);
+		bseek(fp2,(long) portoffset,SEEK_SET);
 
 		for (j=0; j<160; j++)
-			fputc(' ',fp2);
+			bputc(' ',fp2);
 
 		for (j=0; j<16; j++)
-			fputc(0,fp2);
+			bputc(0,fp2);
 
-		fseek(fp2,(long) portoffset,SEEK_SET);
+		bseek(fp2,(long) portoffset,SEEK_SET);
 
 	}
 
 	fileoffset=fileoffset+portoffset;
 
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	k = sscanf(value," %d",&j);
 
@@ -817,7 +855,7 @@ char rec[];
 	
 	if (i==61) bbsqual=j;
 
-	fputi(j,fp2);
+	bputi(j,fp2);
 	return(1);
 }
 
@@ -827,7 +865,7 @@ int i;
 char value[];
 char rec[];
 {
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	if (call_check(value) == 1)
 	{
@@ -850,7 +888,7 @@ char rec[];
 {
 	int j,k;
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	k = sscanf(value," %d",&j);
 
@@ -861,7 +899,7 @@ char rec[];
 	   return(0);
 	}
 
-	fputi(j,fp2);
+	bputi(j,fp2);
 	return(1);
 }
 
@@ -877,7 +915,7 @@ char rec[];
 {
 	int j = -1;
 	int k = 0;
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	k = sscanf(value," %xH",&j);
 
@@ -888,7 +926,7 @@ char rec[];
 	   return(0);
 	}
 
-	fputi(j,fp2);
+	bputi(j,fp2);
 	return(1);
 }
 
@@ -908,8 +946,8 @@ char rec[];
 
 	if (value_int == 0 || value_int == 1)
 	{
-	   fseek(fp2,(long) fileoffset,SEEK_SET);
-	   fputc(value_int,fp2);
+	   bseek(fp2,(long) fileoffset,SEEK_SET);
+	   bputc(value_int,fp2);
 	   return(1);
 	}
 	else
@@ -933,8 +971,8 @@ char rec[];
 
 	if (value_int < 256 )
 	{
-	   fseek(fp2,(long) fileoffset,SEEK_SET);
-	   fputc(value_int,fp2);
+	   bseek(fp2,(long) fileoffset,SEEK_SET);
+	   bputc(value_int,fp2);
 	   return(1);
 	}
 	else
@@ -973,26 +1011,26 @@ char rec[];
 	int j16 = 0;
 	int num;
 	
-        fseek(fp2,(long) fileoffset,SEEK_SET);
+        bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	num = sscanf(value," %d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,",&j1,&j2,&j3,&j4,&j5,&j6,&j7,&j8,&j9,&j10,&j11,&j12,&j13,&j14,&j15,&j16);
 
-	fputc(j1,fp2);
-	fputc(j2,fp2);
-	fputc(j3,fp2);
-	fputc(j4,fp2);
-	fputc(j5,fp2);
-	fputc(j6,fp2);
-	fputc(j7,fp2);
-	fputc(j8,fp2);
-	fputc(j9,fp2);
-	fputc(j10,fp2);
-	fputc(j11,fp2);
-	fputc(j12,fp2);
-	fputc(j13,fp2);
-	fputc(j14,fp2);
-	fputc(j15,fp2);
-	fputc(j16,fp2);
+	bputc(j1,fp2);
+	bputc(j2,fp2);
+	bputc(j3,fp2);
+	bputc(j4,fp2);
+	bputc(j5,fp2);
+	bputc(j6,fp2);
+	bputc(j7,fp2);
+	bputc(j8,fp2);
+	bputc(j9,fp2);
+	bputc(j10,fp2);
+	bputc(j11,fp2);
+	bputc(j12,fp2);
+	bputc(j13,fp2);
+	bputc(j14,fp2);
+	bputc(j15,fp2);
+	bputc(j16,fp2);
 
 	return(1);
 }
@@ -1010,7 +1048,7 @@ char rec[];
 
    int num,j;
 
-   fseek(fp2,(long) fileoffset,SEEK_SET);
+   bseek(fp2,(long) fileoffset,SEEK_SET);
 
    strcat(rec,commas);		// Ensure 8 commas
 
@@ -1031,7 +1069,7 @@ char rec[];
             j = *ptr1++;
           }
     
-        fputs(appl,fp2);
+        bputs(appl,fp2);
         num++;
      }
 
@@ -1050,21 +1088,21 @@ char key_word[];
 {
 	char rec[MAXLINE];
 
-        fseek(fp2,(long) fileoffset,SEEK_SET);
+        bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	strip(rec);
 
 	while (index(rec,"***") != 0 && !feof(fp1))
 	{
 	   rec[strlen(rec) - 1] = '\r';
-	   fputs(rec,fp2);
+	   bputs(rec,fp2);
 
 	   fgets(rec,MAXLINE,fp1);
  	}
 
-	fputc('\0',fp2);
+	bputc('\0',fp2);
 
-	if (ftell(fp2) > fileoffset+510)
+	if (btell(fp2) > fileoffset+510)
 	{
            printf("Text too long: %s - file may be corrupt\n",key_word);
 	   return(0);
@@ -1080,20 +1118,20 @@ int doBText(int i, char key_word[])
 {
 	char rec[MAXLINE];
 
-        fseek(fp2,(long) fileoffset,SEEK_SET);
+        bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	strip(rec);
 
 	while (index(rec,"***") != 0 && !feof(fp1))
 	{
 	   rec[strlen(rec) - 1] = '\r';
-	   fputs(rec,fp2);
+	   bputs(rec,fp2);
 	   fgets(rec,MAXLINE,fp1);
  	}
 
-	fputc('\0',fp2);
+	bputc('\0',fp2);
 
-	if (ftell(fp2) > fileoffset+120)
+	if (btell(fp2) > fileoffset+120)
 	{
 		printf("Text too long: %s - (max 120 bytes) file may be corrupt\n",key_word);
 		return(0);
@@ -1126,7 +1164,7 @@ int i;
 	int ppacl;	
 	int inp3;	
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	strip(rec);
 
@@ -1148,7 +1186,7 @@ int i;
 
 	      err_flag = 1;
 	   }
-	   fputc(quality,fp2);
+	   bputc(quality,fp2);
 
 	   if (port < 1 || port > 16)
 	   {
@@ -1156,7 +1194,7 @@ int i;
 			printf("%s\n\n",rec);
 			err_flag = 1;
 	   }
-	   fputc(port,fp2);
+	   bputc(port,fp2);
 
 	   // Use top bit of window as INP3 Flag, next as NoKeepAlive
 
@@ -1166,10 +1204,10 @@ int i;
 	   if (inp3 & 2)
 		   pwind |= 0x40;
 
-	   fputc(pwind, fp2);
+	   bputc(pwind, fp2);
 
-	   fputi(pfrack,fp2);
-	   fputc(ppacl,fp2);
+	   bputi(pfrack,fp2);
+	   bputc(ppacl,fp2);
 
 	   if (err_flag == 1)
 	   {
@@ -1181,9 +1219,9 @@ int i;
 	   strip(rec);
 	}
 
-	fputc('\0',fp2);
+	bputc('\0',fp2);
 
-	if (ftell(fp2) > fileoffset+510)
+	if (btell(fp2) > fileoffset+510)
 	{
 	   puts("Route information too long - file may be corrupt");
 	   main_err = 1;
@@ -1217,13 +1255,13 @@ int ports(int i)
 
 	poffset[23]=256;
 
-	fseek(fp2,(long) portoffset,SEEK_SET);
+	bseek(fp2,(long) portoffset,SEEK_SET);
 
 	for (i=0; i<512; i++)
-	   fputc('\0',fp2);
+	   bputc('\0',fp2);
 
-	fseek(fp2,(long) portoffset,SEEK_SET);
-        fputi(portnum,fp2);
+	bseek(fp2,(long) portoffset,SEEK_SET);
+        bputi(portnum,fp2);
 
 	while (endport == 0 && !feof(fp1))
 	{
@@ -1236,8 +1274,8 @@ int ports(int i)
 	   return(0);
 	} 
 
-	fseek(fp2,(long) portoffset+112,SEEK_SET);
-        fputi(kissflags,fp2);
+	bseek(fp2,(long) portoffset+112,SEEK_SET);
+        bputi(kissflags,fp2);
 
 	portoffset = portoffset + 512;
 	portnum = portnum +1;
@@ -1257,8 +1295,8 @@ int i;
 	Set default APPLFLAGS to 6
 */
 
-	fseek(fp2,(long) tncportoffset+5,SEEK_SET);
-	fputc(6,fp2);
+	bseek(fp2,(long) tncportoffset+5,SEEK_SET);
+	bputc(6,fp2);
 
 	while (endport == 0 && !feof(fp1))
 	{
@@ -1288,8 +1326,8 @@ int i;
 	Set default APPLFLAGS to 6
 */
 
-	fseek(fp2,(long) tncportoffset+5,SEEK_SET);
-	fputc(6,fp2);
+	bseek(fp2,(long) tncportoffset+5,SEEK_SET);
+	bputc(6,fp2);
 
 	while (endport == 0 && !feof(fp1))
 	{
@@ -1356,9 +1394,7 @@ char s[], c;
 /*   PUT A TWO BYTE INTEGER ONTO THE FILE				*/
 /************************************************************************/
 
-fputi(i, fp)
-int i;
-FILE *fp;
+VOID bputi(int i, char * ptr)
 {
 	int high;
 	int low;
@@ -1366,10 +1402,10 @@ FILE *fp;
 	high = i / 256;
 	low = i % 256;
 
-	fputc(low,fp);
-	fputc(high,fp);
+	bputc(low, ptr);
+	bputc(high, ptr);
 
-	return 0;
+	return;
 }
 
 
@@ -1488,7 +1524,7 @@ char callsign[];
 	for (i=0; i< 10; i++)
 		callsign[i]=toupper(callsign[i]);
 
-	fputs(callsign,fp2);
+	bputs(callsign,fp2);
 
 	return(err_flag);
 }
@@ -1505,10 +1541,10 @@ char rec[];
 {
 	unsigned int j;
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	for (j = 0;( j < strlen(value)); j++)
-	    fputc(value[j],fp2);
+	    bputc(value[j],fp2);
 
         return(1);
 }
@@ -1607,8 +1643,8 @@ char rec[];
               	cn = 1;
 		endport=1;
 
-	        fseek(fp2,(long) portoffset+255,SEEK_SET);
-	        fputc('\0',fp2);
+	        bseek(fp2,(long) portoffset+255,SEEK_SET);
+	        bputc('\0',fp2);
 
 		break;
 
@@ -1637,8 +1673,8 @@ char rec[];
 	strcat(workstring,"                             ");
 	workstring[30] = '\0';
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
-        fputs(workstring,fp2);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
+        bputs(workstring,fp2);
         return(1);
 }
 
@@ -1659,8 +1695,8 @@ char rec[];
 	strcat(workstring,"                ");
 	workstring[16] = '\0';
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
-        fputs(workstring,fp2);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
+        bputs(workstring,fp2);
         return(1);
 }
 
@@ -1697,7 +1733,7 @@ char rec[];
 	if (_stricmp(value,"PA0HZP") == 0)
 	   hw = 20;
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	if (hw == 255)
 	{
@@ -1706,7 +1742,7 @@ char rec[];
 	   return (0);
 	}
 	else
-           fputi(hw,fp2);
+           bputi(hw,fp2);
 
 	return(1);
 }
@@ -1734,7 +1770,7 @@ char rec[];
 	   hw = 10;
 
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	if (hw == 255)
 	{
@@ -1743,7 +1779,7 @@ char rec[];
 	   return (0);
 	}
 	else
-           fputi(hw,fp2);
+           bputi(hw,fp2);
 
 	return(1);
 }
@@ -1770,9 +1806,9 @@ char rec[];
 	   return(0);
 	}
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
-        fputi(hw,fp2);
+        bputi(hw,fp2);
         return(1);
 }
 
@@ -1781,8 +1817,8 @@ int i;
 char value[];
 char rec[];
 {
-	fseek(fp2,(long) fileoffset,SEEK_SET);
-	fputc(value[0],fp2);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
+	bputc(value[0],fp2);
         return(1);
 }
 
@@ -1794,12 +1830,12 @@ char rec[];
 {
 	int j;
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	for (j = 11;( rec[j] > ' '); j++)
 
 	{
-	    fputc(rec[j],fp2);
+	    bputc(rec[j],fp2);
 	    poffset[23]++;
 	}
 
@@ -1934,7 +1970,7 @@ char rec[];
 	if (_stricmp(value,"PK232/AA4RE") == 0)
 	   hw = 6;
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	if (hw == 255)
 	{
@@ -1943,7 +1979,7 @@ char rec[];
 	   return (0);
 	}
 	else
-           fputc(hw,fp2);
+           bputc(hw,fp2);
 
 	return(1);
 }
@@ -1957,8 +1993,8 @@ char rec[];
 
 	value_int = atoi(value);
 
-	fseek(fp2,(long) fileoffset,SEEK_SET);
-	fputc(value_int,fp2);
+	bseek(fp2,(long) fileoffset,SEEK_SET);
+	bputc(value_int,fp2);
 	return(1);
 }
 
@@ -2111,7 +2147,6 @@ static int defaults [] =
 
 int simple(int i)
 {
-	int numwritten;
 
 	// Set up the basic config header
 
@@ -2158,9 +2193,9 @@ int simple(int i)
 	for (i=0; i < PARAMLIM; i++)
 	   paramok[i]=1;
 
-	fseek(fp2,(long) 0,SEEK_SET);
+	bseek(fp2,(long) 0,SEEK_SET);
 
-	numwritten = fwrite(&Cfg, sizeof(Cfg), 1, fp2);
+	memcpy(Buffer, &Cfg, sizeof(Cfg));
 
 	paramok[15]=0;		/* Must have callsign */
 

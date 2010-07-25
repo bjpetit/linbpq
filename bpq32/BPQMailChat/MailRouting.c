@@ -970,12 +970,30 @@ NOHA:
 			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
 				continue;
 
-			// Check AT 
+			// Check implied AT 
 
 			if ((strcmp(ATBBS, bbs->Call) == 0))			// @BBS = BBS		
-//					CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches implied AT %s", ATBBS, bbs->Call);
+
+				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+				{
+					if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
+					{
+						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+						ForwardingInfo->MsgCount++;
+						if (ForwardingInfo->SendNew)
+							ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
+					}
+				}
+				return 1;
+			}
+
+			// Check AT 
+
+			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches AT %s", ATBBS, bbs->Call);
 
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{

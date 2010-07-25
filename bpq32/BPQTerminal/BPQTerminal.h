@@ -25,23 +25,23 @@
 
 #define BPQBASE                        WM_USER
 //
-//	Port monitoring flags use BPQBASE -> BPQBASE+16
+//	Port monitoring flags use BPQBASE -> BPQBASE+100
 
-#define BPQMTX			BPQBASE+40
-#define BPQMCOM			BPQBASE+41
-#define BPQCOPYMON		BPQBASE+42
-#define BPQCOPYOUT		BPQBASE+43
-#define BPQCLEARMON		BPQBASE+44
-#define BPQCLEAROUT		BPQBASE+45
-#define BPQBELLS		BPQBASE+46
-#define BPQCHAT			BPQBASE+47
-#define BPQHELP			BPQBASE+48
-#define BPQStripLF		BPQBASE+49
-#define BPQLogOutput	BPQBASE+50
-#define BPQLogMonitor	BPQBASE+51
-#define BPQSendDisconnected	BPQBASE+52
-#define BPQMNODES		BPQBASE+53
-#define MONCOLOUR		BPQBASE+54
+#define BPQMTX			BPQBASE+140
+#define BPQMCOM			BPQBASE+141
+#define BPQCOPYMON		BPQBASE+142
+#define BPQCOPYOUT		BPQBASE+143
+#define BPQCLEARMON		BPQBASE+144
+#define BPQCLEAROUT		BPQBASE+145
+#define BPQBELLS		BPQBASE+146
+#define BPQCHAT			BPQBASE+147
+#define BPQHELP			BPQBASE+148
+#define BPQStripLF		BPQBASE+149
+#define BPQLogOutput	BPQBASE+150
+#define BPQLogMonitor	BPQBASE+151
+#define BPQSendDisconnected	BPQBASE+152
+#define BPQMNODES		BPQBASE+153
+#define MONCOLOUR		BPQBASE+154
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

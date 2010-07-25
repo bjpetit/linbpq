@@ -19,10 +19,10 @@
 #define KVerstring "4.10.14.3\0"
 
 #define SCSVers 1,1,1,13
-#define SCSVerstring "1,1,1,13\0"
+#define SCSVerstring "1.1.1.13\0"
 
-#define KAMVers 1,2,1,1
-#define KAMVerstring "1,2,1,1\0"
+#define KAMVers 1,2,1,2
+#define KAMVerstring "1.2.1.2\0"
 
 #define VKISSVers 1,3,1,6
 #define VKISSVerstring "1.3.1.6\0"
