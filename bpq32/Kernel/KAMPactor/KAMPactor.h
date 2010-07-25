@@ -28,7 +28,6 @@ struct STREAMINFO
 	int BytesAcked;
 	int BytesRXed;
 	int BytesOutstanding;		// For Packet Channels
-
 };
 
 
@@ -64,6 +63,8 @@ struct TNCINFO
 	int Mem2;
 
 	BOOL HFPacket;					// Set if HF port is in Packet mode instead of Pactor Mode
+
+	BOOL NeedTurnRound;				// Set if need to send Pactor Turnround before data
 
 	HWND hDlg;						// Status Window Handle
 	

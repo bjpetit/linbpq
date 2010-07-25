@@ -10,6 +10,10 @@
 //	Map Rig control port to a Virtual Serial Port.
 //	Add Support for packet port(s).
 
+// July 2010
+// Support up to 32 BPQ Ports
+
+
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS

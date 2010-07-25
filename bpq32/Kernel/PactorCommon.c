@@ -21,7 +21,7 @@ UCHAR * BPQDirectory;
 
 RECT Rect;
 
-struct TNCINFO * TNCInfo[18] = {NULL};		// Records are Malloc'd
+struct TNCINFO * TNCInfo[34] = {NULL};		// Records are Malloc'd
 
 BOOL ReadConfigFile(char * filename);
 int ProcessLine(char * buf);
@@ -400,7 +400,7 @@ ProcessLine(char * buf)
 	BPQport = atoi(ptr);
 
 
-	if(BPQport > 0 && BPQport < 17)
+	if(BPQport > 0 && BPQport < 33)
 	{
 		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
 		memset(TNC, 0, sizeof(struct TNCINFO));

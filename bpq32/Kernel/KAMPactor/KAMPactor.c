@@ -4,6 +4,12 @@
 //	Uses BPQ EXTERNAL interface
 //
 
+// Version 1.2.1.2 July 2010
+
+// Send Change to ISS before each transmission
+// Support up to 32 BPQ Ports
+
+
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -832,6 +838,8 @@ VOID KAMPoll(int Port)
 				TNC->HFPacket = FALSE;
 
 				TNC->NeedPACTOR = 50;				// Need to Send PACTOR command after 5 secs
+				TNC->NeedTurnRound = FALSE;
+
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
 			}
 			else
@@ -914,8 +922,6 @@ VOID KAMPoll(int Port)
 
 		}
 
-
-
 		if (TNC->TNCOK && TNC->Streams[Stream].BPQtoPACTOR_Q)
 		{
 			int datalen;
@@ -935,7 +941,13 @@ VOID KAMPoll(int Port)
 					wsprintf(TXMsg, "D1%c", Stream + '@');
 				else if (TNC->HFPacket)
 					memcpy(TXMsg, "D2A", 3);
-					
+
+				if (TNC->NeedTurnRound)
+				{
+					EncodeAndSend(TNC, "T", 1);			// Changeover to ISS 
+					TNC->NeedTurnRound = FALSE;
+				}
+
 				memcpy(&TXMsg[3], buffptr + 2, datalen);
 				EncodeAndSend(TNC, TXMsg, datalen + 3);
 				ReleaseBuffer(buffptr);
@@ -948,7 +960,10 @@ VOID KAMPoll(int Port)
 					SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
 
 					if ((TNC->HFPacket == 0) && (TNC->Streams[0].BPQtoPACTOR_Q == 0))		// Nothing following
+					{
 						EncodeAndSend(TNC, "E", 1);			// Changeover when all sent
+						TNC->NeedTurnRound = TRUE;
+					}
 				}
 
 				return;

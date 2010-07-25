@@ -3,6 +3,9 @@
 #include "resrc1.h"
 #include "Versions.h"
 
+#define IDI_ICON2                       2
+
+
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //

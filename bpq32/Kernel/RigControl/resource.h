@@ -3,7 +3,7 @@
 // Used by SCSPactor.rc
 //
 
-#define IDI_ICON2                       3
+#define IDI_ICON2                       2
 #define RIG_CONFIG			1001
 
 // Next default values for new objects

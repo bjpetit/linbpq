@@ -2,7 +2,7 @@
 // Microsoft Developer Studio generated include file.
 // Used by SCSPactor.rc
 //
-#define IDI_ICON2                       3
+#define IDI_ICON2                       2
 #define IDD_PACTORSTATUS                101
 #define IDC_1                        1001
 #define IDC_2                        1002

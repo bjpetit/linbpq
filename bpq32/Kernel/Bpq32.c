@@ -223,6 +223,11 @@
 // Fix resetting IDLE Timer on Pactor/WINMOR sessions
 // Send L4 KEEPLI messages based on IDLETIME
 
+// 410o		July 2010
+
+// Read bpqcfg.txt instead of .bin
+// Support 32 bit MMASK (Allowing 32 Ports)
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
@@ -412,7 +417,7 @@ char PopupText[30][100]={""};
 
 byte	MCOM;
 char	MTX;
-USHORT	MMASK;
+ULONG	MMASK;
 
 UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
 
@@ -420,6 +425,8 @@ BOOL	Perl;
 HANDLE Mutex;
 
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
+
+BOOL ProcessConfig();
 
 DllExport int APIENTRY WritetoConsole(char * buff);
 
@@ -1252,6 +1259,18 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			SetupBPQDirectory();
 
+			if (!ProcessConfig())
+			{
+				SetupConsoleWindow();
+				ShowWindow(hWnd, SW_RESTORE);
+				SendMessage(hWnd, WM_PAINT, 0, 0);
+
+				MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
+
+				FreeSemaphore();
+				return (0);
+			}
+
 			if (START() !=0)
 			{
 				Sleep(3000);
@@ -1338,7 +1357,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		
 		MCOM=1;
 		MTX=1;
-		MMASK=0xffff;
+		MMASK=0xffffffff;
 
 		return 1;
    		
@@ -3628,6 +3647,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}		
 			if (wmId == BPQCLEARRECONFIG)
 			{
+				if (!ProcessConfig())
+				{
+					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
+					return (0);
+				}
+		
 				ClearNodes();
 				WritetoConsole("Nodes file Cleared\n");
 				ReconfigFlag=TRUE;	
@@ -3636,6 +3661,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			if (wmId == BPQRECONFIG)
 			{
+				if (!ProcessConfig())
+				{
+					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
+					return (0);
+				}
 				SaveNodes();
 				WritetoConsole("Nodes Saved\n");
 				ReconfigFlag=TRUE;	

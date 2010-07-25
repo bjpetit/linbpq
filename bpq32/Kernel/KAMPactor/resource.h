@@ -3,7 +3,7 @@
 // Used by KAMPactor.rc
 //
 #define IDC_PACTORLEVEL                 1008
-#define IDI_ICON2                       3
+#define IDI_ICON2                       2
 
 #define IDC_1                        1001
 #define IDC_2                        1002

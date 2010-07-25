@@ -11,7 +11,10 @@
 // March 22 2010
 
 // Send FAULTS to Monitor Window
-// Force PROTOCOL = WINMOR/PACTOR (to simmplifiy Config)
+// Force PROTOCOL = WINMOR/PACTOR (to simplifiy Config)
+
+// July 2010
+// Support up to 32 BPQ Ports
 
 
 #define _CRT_SECURE_NO_DEPRECATE
