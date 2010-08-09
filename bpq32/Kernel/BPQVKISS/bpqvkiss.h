@@ -8,8 +8,8 @@ typedef struct VCOMStruct
    HANDLE  ComDev ;
    BYTE    Port;
    BOOL    Connected;
-   UCHAR	RXBUFFER[MAXBLOCK];		// Raw chars from Comms
    UCHAR	RXMSG[512];				// Msg being built
+   UCHAR	RXBUFFER[MAXBLOCK];		// Raw chars from Comms
    int		RXBCOUNT;				// chars in RXBUFFER
    UCHAR * RXBPTR;					// get pointer for RXBUFFER (put ptr is RXBCOUNT) 
    UCHAR * RXMPTR;					// put pointer for RXMSG

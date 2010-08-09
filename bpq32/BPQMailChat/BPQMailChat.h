@@ -1100,7 +1100,7 @@ extern BOOL cfgMinToTray;
 
 extern CIRCUIT * Console;
 
-extern UCHAR ChatApplMask;
+extern ULONG ChatApplMask;
 extern char Verstring[];
 
 extern char SignoffMsg[];

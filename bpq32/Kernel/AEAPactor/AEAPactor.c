@@ -461,9 +461,10 @@ BOOL CloseConnection(struct TNCINFO * conn)
 
    SetCommMask(conn->hDevice, 0);
 
-   // drop DTR
+   // drop DTR and RTS
 
    EscapeCommFunction(conn->hDevice, CLRDTR);
+   EscapeCommFunction(conn->hDevice, CLRRTS);
 
    // purge any outstanding reads/writes and close device handle
 

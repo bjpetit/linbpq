@@ -1,7 +1,12 @@
 // C equivalents of ASM STRUCS
 
+// Aug 2010 Extend Applmask to 32 bit
 
 #define BUFFLEN	360
+
+#define ApplStringLen 48			// Length of each config entry
+#define NumberofAppls 32			// Max APPLICATIONS= values
+
 
 #define NRPID 0xcf			// NETROM PID
 
@@ -158,7 +163,7 @@ struct BPQVECSTRUC
 {
 	ULONG	HOSTSESSION;	// Pointer to Session
 	UCHAR	HOSTFLAGS;		// ALLOCATED AND STATE CHANGE FLAGS
-	UCHAR	HOSTAPPLMASK;
+	ULONG	HOSTAPPLMASK;
 	UCHAR	HOSTAPPLFLAGS;
 	UCHAR	HOSTSTREAM;		// STREAM NUMBER
 	PMESSAGE	HOSTTRACEQ;

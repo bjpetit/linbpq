@@ -227,6 +227,12 @@
 
 // Read bpqcfg.txt instead of .bin
 // Support 32 bit MMASK (Allowing 32 Ports)
+// Support 32 bit APPLMASK (Allowing 32 Applications)
+// Allow more commands
+// Allow longer command aliases
+// Fix logic error in RIGControl Port Initialisation (wasn't always raising RTS and DTR
+// Clear RIGControl RTS and DTR on close
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -280,7 +286,7 @@ DllExport UCHAR NEXTID = 55;
 DllExport WORD MAXCIRCUITS = 50;
 DllExport UCHAR L4DEFAULTWINDOW = 4;
 DllExport WORD L4T1 = 60;
-DllExport struct APPLCALLS APPLCALLTABLE[8];
+DllExport struct APPLCALLS APPLCALLTABLE[NumberofAppls];
 DllExport char * APPLS;
 
 extern char AUTOSAVE;
@@ -1876,26 +1882,26 @@ DllExport UCHAR * APIENTRY GetBBSAlias()
 
 DllExport VOID APIENTRY GetApplCallVB(int Appl, char * ApplCall)
 {
-	if (Appl < 1 || Appl > 8 ) return;
+	if (Appl < 1 || Appl > NumberofAppls ) return;
 
 	strncpy(ApplCall,(char *)&APPLCALLTABLE[Appl-1].APPLCALL_TEXT, 10);
 }
 DllExport char * APIENTRY GetApplCall(int Appl)
 {
-	if (Appl < 1 || Appl > 8 ) return NULL;
+	if (Appl < 1 || Appl > NumberofAppls ) return NULL;
 
 	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLCALL_TEXT);
 }
 DllExport char * APIENTRY GetApplAlias(int Appl)
 {
-	if (Appl < 1 || Appl > 8 ) return NULL;
+	if (Appl < 1 || Appl > NumberofAppls ) return NULL;
 
 	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLALIAS_TEXT);
 }
 
 DllExport long APIENTRY GetApplQual(int Appl)
 {
-	if (Appl < 1 || Appl > 8 ) return 0;
+	if (Appl < 1 || Appl > NumberofAppls ) return 0;
 
 	return (APPLCALLTABLE[Appl-1].APPLQUAL);
 }
@@ -1908,7 +1914,7 @@ DllExport BOOL APIENTRY SetApplCall(int Appl, char * NewCall)
 	char Call[10]="          ";
 	int i;
 
-	if (Appl < 1 || Appl > 8 ) return FALSE;
+	if (Appl < 1 || Appl > NumberofAppls ) return FALSE;
 	
 	i=strlen(NewCall);
 
@@ -1931,7 +1937,7 @@ DllExport BOOL APIENTRY SetApplAlias(int Appl, char * NewCall)
 	char Call[10]="          ";
 	int i;
 
-	if (Appl < 1 || Appl > 8 ) return FALSE;
+	if (Appl < 1 || Appl > NumberofAppls ) return FALSE;
 	
 	i=strlen(NewCall);
 
@@ -1953,7 +1959,7 @@ DllExport BOOL APIENTRY SetApplAlias(int Appl, char * NewCall)
 
 DllExport BOOL APIENTRY SetApplQual(int Appl, int NewQual)
 {
-	if (Appl < 1 || Appl > 8 ) return FALSE;
+	if (Appl < 1 || Appl > NumberofAppls ) return FALSE;
 	
 	APPLCALLTABLE[Appl-1].APPLQUAL=NewQual;
 
@@ -2387,7 +2393,7 @@ DllExport int APIENTRY SessionControl(int stream, int command, int param)
 DllExport int APIENTRY SetAppl(int stream, int flags, int mask)
 {
 //	Sets Application Flags and Mask for stream. (BPQHOST function 1)
-//	AH = 1	Set application mask to value in DL (or even DX if 16
+//	AH = 1	Set application mask to value in EDX (or even DX if 16
 //		applications are ever to be supported).
 //
 //		Set application flag(s) to value in CL (or CX).

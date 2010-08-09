@@ -6,6 +6,10 @@
 
 //	Add Scan Control for SCS 
 
+// August 2010
+
+// Fix logic error in Port Initialisation (wasn't always raising RTS and DTR
+// Clear RTS and DTR on close
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -1237,7 +1241,9 @@ DllExport BOOL APIENTRY Rig_Close()
 	for (p = 0; p < NumberofPorts; p++)
 	{
 		PORT = PORTInfo[p];
-		
+		EscapeCommFunction(PORT->hDevice,CLRDTR);
+		EscapeCommFunction(PORT->hDevice,CLRRTS);
+
 		CloseHandle(PORT->hDevice);
 	}
 
@@ -1451,7 +1457,7 @@ OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed)
 
 	fRetVal = SetCommState(PORT->hDevice, &dcb);
 
-	if (PORT->PortType == !PTT)
+	if (PORT->PortType != PTT)
 	{
 		EscapeCommFunction(PORT->hDevice,SETDTR);
 		EscapeCommFunction(PORT->hDevice,SETRTS);

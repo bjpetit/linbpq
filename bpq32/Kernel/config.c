@@ -1,3 +1,10 @@
+
+//	July 2010
+
+//	BPQ32 now reads bpqcfg.txt. This module converts it to the original binary format.
+
+//	Based on the standalonw bpqcfg.c
+
 /************************************************************************/
 /*	CONFIG.C  Jonathan Naylor G4KLX, 19th November 1988		*/
 /*									*/
@@ -13,7 +20,7 @@
 
 //	1999 - Win32 Version (but should also compile in 16 bit
 
-//	5/12/99 - Add DDLNAME Param for ext driver
+//	5/12/99 - Add DLLNAME Param for ext driver
 
 //	26/11/02 - Added AUTOSAVE
 
@@ -91,7 +98,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <io.h>
+#include "asmstrucs.h"
 #include <ctype.h>
 #include <conio.h>
 
@@ -140,8 +147,18 @@ VOID __cdecl Consoleprintf(const char * format, ...)
 	return;
 }
 
+#define ApplOffset 80000			// Applications offset in config buffer
 
 #pragma pack(1) 
+
+struct APPLCONFIG
+{
+	char Command[12];
+	char CommandAlias[48];
+	char ApplCall[10];
+	char ApplAlias[10];
+	int ApplQual;
+};
 
 struct CONFIGTABLE
 {
@@ -283,8 +300,9 @@ extern int __cdecl tncports(int i);
 extern int __cdecl dedports(int i);
 extern int __cdecl index(char *s,char *t);
 extern int __cdecl verify(char *s,char c);
-int  strip(char *rec);
-extern int __cdecl call_check(char *callsign);
+int strip(char *rec);
+int call_check(char *callsign);
+int call_check_internal(char * callsign);
 extern int __cdecl callstring(int i,char *value,char *rec);
 int decode_port_rec(char *rec);
 extern int __cdecl doid(int i,char *value,char *rec);
@@ -301,6 +319,9 @@ extern int __cdecl dec_byte(int i,char *value,char *rec);
 extern int __cdecl do_kiss(char *value,char *rec);
 extern int __cdecl decode_ded_rec(char *rec);
 extern int __cdecl simple(int i);
+
+BOOL ProcessAPPLDef(char * rec);
+
 
 //int i;
 //char value[];
@@ -350,7 +371,7 @@ static int offset[] =
 384, 512, 1024, 1536, 2560, 72,
 74, 76, 78, 96, 100,
 102, 103, 105, 107, 120, 118,
-256, 66, 2048, 71, 70, 67,
+ApplOffset, 66, 2048, 71, 70, 67,
 3000, 98, 0, 109, 110,
 0,10,20,30,
 40,50,60,70,
@@ -418,8 +439,6 @@ static int proutine[] =
 
 #define PPARAMLIM 45
 
-
-
 static int fileoffset = 0;
 static int portoffset = 2560;
 static int tncportoffset = 384;
@@ -429,6 +448,8 @@ static int porterror = 0;
 static int tncporterror = 0;
 static int dedporterror = 0;
 static int kissflags = 0;
+static int NextAppl = 0;
+
 
 /************************************************************************/
 /* Global variables							*/
@@ -447,8 +468,7 @@ static char s6[80];
 static char s7[80];
 static char s8[80];
 
-char spaces[]="                ";
-char commas[]=",,,,,,,,";
+char commas[]=",,,,,,,,,,,,,,,,";
 
 char bbscall[11];
 char bbsalias[11];
@@ -458,46 +478,77 @@ int bbsqual;
 /************************************************************************/
 /*   MAIN PROGRAM							*/
 /************************************************************************/
+ 
+int heading = 0;
 
 BOOL ProcessConfig()
 {
 	int i;
- 	int heading = 0;
 	char rec[MAXLINE];
 	int Cfglen = sizeof(struct CONFIGTABLE);
+	struct APPLCONFIG * App;
 
+ 	heading = 0;
 	fileoffset = 0;
 	portoffset = 2560;
 	tncportoffset = 384;
 	portnum = 1;
+	NextAppl = 0;
 
-	Consoleprintf("Configuration file Preprocessor for Version 4.10n March 2010.");
+	Consoleprintf("Configuration file Preprocessor.");
 
 	if (BPQDirectory[0] == 0)
 	{
-		strcpy(inputname, "bpqcfg.txt");
+		strcpy(inputname, "bpq32.cfg");
 	}
 		else
 	{
 		strcpy(inputname,BPQDirectory);
 		strcat(inputname,"\\");
-		strcat(inputname, "bpqcfg.txt");
+		strcat(inputname, "bpq32.cfg");
 	}
 
 	if ((fp1 = fopen(inputname,"r")) == NULL)
 	{
-	   Consoleprintf("Could not open file %s",inputname);
-	   return FALSE;
+	   Consoleprintf("Could not open file %s - trying bpqcfg.txt", inputname);
+
+		if (BPQDirectory[0] == 0)
+		{
+			strcpy(inputname, "bpqcfg.txt");
+		}
+			else
+		{
+			strcpy(inputname,BPQDirectory);
+			strcat(inputname,"\\");
+			strcat(inputname, "bpqcfg.txt");
+		}
+
+		if ((fp1 = fopen(inputname,"r")) == NULL)
+		{
+			Consoleprintf("Could not open file %s",inputname);
+			return FALSE;
+		}
 	}
+
+	Consoleprintf("Using Configuration file %s",inputname);
 
 	Buffer = malloc(100000);
 
 	memset(Buffer, 0, 100000);
 
-	fp2 = Buffer;
+	App = (struct APPLCONFIG *)&Buffer[ApplOffset];
 
-	for (i=0; i<2560; i++)
-	   bputc('\0',fp2);
+	for (i=0; i < NumberofAppls; i++)
+	{
+		memset(App->Command, ' ', 12);
+		memset(App->CommandAlias, ' ', 48);
+		memset(App->ApplCall, ' ', 10);
+		memset(App->ApplAlias, ' ', 10);
+
+		App++;
+	}
+
+	fp2 = Buffer;
 
 	strip(rec);
 
@@ -511,6 +562,10 @@ BOOL ProcessConfig()
 	paramok[17]=1;          /* dont need TNCPORTS */
 
 	paramok[32]=1;          /* dont need UNPROTO */
+
+	paramok[35]=1;          /* dont need EMS */
+	paramok[37]=1;          /* dont need DESQVIEW */
+	paramok[38]=1;          /* dont need HOSTINTERRUPT */
 
 	paramok[40]=1;			/* or DEDHOST */
 
@@ -629,6 +684,22 @@ char rec[];
 	char key_word[20];
 	char value[300];
 
+	if (memcmp(rec, "APPLICATION ", 12) == 0)
+	{
+		// New Style APPLICATION Definition
+
+		char save[300];
+
+		strcpy(save, rec);			// Save in case error
+		
+		if (!ProcessAPPLDef(&rec[12]))
+		{
+			Consoleprintf("Invalid Record %s", save);
+			heading = 1;
+		}
+		return 0;
+	}
+
 	if (index(rec,"=") >= 0)
 	   sscanf(rec,"%[^=]=%s",key_word,value);
 	else
@@ -733,28 +804,38 @@ int i;
 char value[];
 char rec[];
 {
-	if (i==45) strcpy(bbscall,value);
-	if (i==53) strcpy(bbsalias,value);
+	int Appl;
+	struct APPLCONFIG * App;
 
-	if (FIRSTAPPL)
+	// Appl1Call is 0, Appl1Alias 800, 10 byte values 
+	
+	Appl = fileoffset/10;
+
+	if (call_check_internal(value))
 	{
-		FIRSTAPPL=0;
-		
-		bseek(fp2,(long) portoffset,SEEK_SET);
+		// Invalid
 
-		for (i=0; i<160; i++)
-			bputc(' ',fp2);
-
-		for (i=0; i<16; i++)
-			bputc(0,fp2);
-
-		bseek(fp2,(long) portoffset,SEEK_SET);
-
+		return 0;
 	}
 
-	fileoffset=fileoffset+portoffset;
+	App = (struct APPLCONFIG *)&Buffer[ApplOffset + Appl * sizeof(struct APPLCONFIG) ];	if (Appl > 7)
+	{
+		// Aliases
 
-	return callsign (i,value,rec);
+		App -= 8;
+		memcpy(App->ApplAlias, value, 10);
+	}
+	else
+	{
+		memcpy(App->ApplCall, value, 10);
+	}
+
+	if (i==45)
+		strcpy(bbscall,value);
+	if (i==53)
+		strcpy(bbsalias,value);
+
+	return 1;
 }
 
 int appl_qual(i, value, rec)
@@ -762,28 +843,14 @@ int i;
 char value[];
 char rec[];
 {
-	int j,k;
+	int j, k, Appl;
+	struct APPLCONFIG * App;
+
+	// Appl1Qual is 160, 2 byte values 
 	
-	if (FIRSTAPPL)
-	{
-		FIRSTAPPL=0;
-		
-		bseek(fp2,(long) portoffset,SEEK_SET);
+	Appl = (fileoffset - 160) / 2;
 
-		for (j=0; j<160; j++)
-			bputc(' ',fp2);
-
-		for (j=0; j<16; j++)
-			bputc(0,fp2);
-
-		bseek(fp2,(long) portoffset,SEEK_SET);
-
-	}
-
-	fileoffset=fileoffset+portoffset;
-
-
-	bseek(fp2,(long) fileoffset,SEEK_SET);
+	App = (struct APPLCONFIG *)&Buffer[ApplOffset + Appl * sizeof(struct APPLCONFIG) ];
 
 	k = sscanf(value," %d",&j);
 
@@ -796,7 +863,7 @@ char rec[];
 	
 	if (i==61) bbsqual=j;
 
-	bputi(j,fp2);
+	App->ApplQual = j;
 	return(1);
 }
 
@@ -810,7 +877,7 @@ char rec[];
 
 	if (call_check(value) == 1)
 	{
-	   bputs("%s",rec);
+	   Consoleprintf("%s",rec);
 	   return(0);
 	}
 
@@ -981,39 +1048,48 @@ int i;
 char value[];
 char rec[];
 {
+	char appl[250];	// In case trailing spaces
 
-   char appl[20];
+	char * ptr1;
+	char * ptr2;
+	struct APPLCONFIG * App;
+	int j;
 
-   char * ptr1;
-   char * ptr2;
-
-   int num,j;
-
-   bseek(fp2,(long) fileoffset,SEEK_SET);
-
-   strcat(rec,commas);		// Ensure 8 commas
+ //  strcat(rec,commas);		// Ensure 16 commas
 
    ptr1=&rec[13];		// skip APPLICATIONS=
-   num=0;
 
-   while (num < 8)
-  
-     {
-       strcpy(appl,spaces);
-       ptr2=appl;
+   while (NextAppl < NumberofAppls)
+   {
+	   App = (struct APPLCONFIG *)&Buffer[ApplOffset + NextAppl++ * sizeof(struct APPLCONFIG) ];
+
+       memset(appl, ' ', 250);
+	   ptr2=appl;
  		
        j = *ptr1++;
 
-       while (j != ',')
-         {
-            *(ptr2++) = toupper(j);
-            j = *ptr1++;
-          }
-    
-        bputs(appl,fp2);
-        num++;
-     }
+       while (j != ',' && j)
+       {
+		   *(ptr2++) = toupper(j);
+		   j = *ptr1++;
+	   }
 
+	   ptr2 = strchr(appl, '/');
+
+	   if (ptr2)
+	   {
+		   // Command has an Alias
+
+		   *ptr2++ = 0;
+		   memcpy(App->CommandAlias, ptr2, 48);
+		   strcat(appl, "            ");
+	   }
+	   
+	   memcpy(App->Command, appl, 12);
+	   
+	   if (*(ptr1 - 1) == 0)
+		   return 1;
+   }
 
 	return(1);
 }
@@ -1426,8 +1502,7 @@ char rec[];
 /*   TEST VALIDITY OF CALLSIGN						*/
 /************************************************************************/
 
-int call_check(callsign)
-char callsign[];
+int call_check_internal(char * callsign)
 {
 	char call[20];
 	int ssid;
@@ -1465,9 +1540,14 @@ char callsign[];
 	for (i=0; i< 10; i++)
 		callsign[i]=toupper(callsign[i]);
 
-	bputs(callsign,fp2);
-
 	return(err_flag);
+}
+
+int call_check(char * callsign)
+{
+	int err = call_check_internal(callsign);
+	bputs(callsign,fp2);
+	return err;
 }
 
 
@@ -2149,3 +2229,68 @@ VOID FreeConfig()
 }
 
 /* END OF CODE */
+
+BOOL ProcessAPPLDef(char * buf)
+{
+	// New Style APPL definition
+
+	// APPL n,COMMAND,CMDALIAS,APPLCALL,APPLALIAS,APPLQUAL
+
+	char * ptr;
+	char * Context;
+	int Appl;
+	struct APPLCONFIG * App;
+
+	_strupr(buf);
+
+	ptr = strtok_s(buf, ", /\n\r", &Context);
+
+	if (ptr == 0) return FALSE;
+
+	Appl = atoi(ptr);
+
+	if (Appl < 1 || Appl > 31) return FALSE;
+
+	App = (struct APPLCONFIG *)&Buffer[ApplOffset + (Appl - 1) * sizeof(struct APPLCONFIG) ];
+
+	ptr = strchr(Context, ',');
+	if (ptr == 0)  return FALSE;
+
+	(*ptr++) = 0;
+
+	if (strlen(Context) > 12) return FALSE;
+
+	memcpy(App->Command, Context, strlen(Context));
+
+	Context = ptr;
+
+	ptr = strchr(Context, ',');
+	if (ptr == 0)  return FALSE;
+
+	(*ptr++) = 0;
+
+	if (strlen(Context) > 48) return FALSE;
+
+	memcpy(App->CommandAlias, Context, strlen(Context));
+
+	Context = ptr;
+
+	ptr = strtok_s(NULL, ", /\n\r", &Context);
+	if (ptr == 0) return TRUE;						// Allow Missing Call
+	if (strlen(ptr) > 10) return FALSE;
+
+	memcpy(App->ApplCall, ptr, strlen(ptr));
+
+	ptr = strtok_s(NULL, ", /\n\r", &Context);
+	if (ptr == 0) return TRUE;						// Allow missing Alias
+	if (strlen(ptr) > 10) return FALSE;
+
+	memcpy(App->ApplAlias, ptr, strlen(ptr));
+
+	ptr = strtok_s(NULL, ", /\n\r", &Context);
+	if (ptr == 0) return TRUE;						// Allow missing Quality
+
+	App->ApplQual = atoi(ptr);
+
+	return TRUE;
+}

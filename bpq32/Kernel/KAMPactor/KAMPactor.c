@@ -9,6 +9,10 @@
 // Send Change to ISS before each transmission
 // Support up to 32 BPQ Ports
 
+// Version 1.2.1.3 August 2010 
+
+// Drop RTS as well as DTR on close
+
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -481,9 +485,10 @@ BOOL CloseConnection(struct TNCINFO * conn)
 
    SetCommMask(conn->hDevice, 0);
 
-   // drop DTR
+   // drop DTR and RTS
 
    EscapeCommFunction(conn->hDevice, CLRDTR);
+   EscapeCommFunction(conn->hDevice, CLRRTS);
 
    // purge any outstanding reads/writes and close device handle
 

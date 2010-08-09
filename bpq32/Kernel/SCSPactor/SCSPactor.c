@@ -11,8 +11,12 @@
 //	Add Support for packet port(s).
 
 // July 2010
+
 // Support up to 32 BPQ Ports
 
+// Version 1.1.1.14 August 2010 
+
+// Drop RTS as well as DTR on close
 
 
 #define WIN32_LEAN_AND_MEAN
@@ -501,9 +505,10 @@ BOOL CloseConnection(struct TNCINFO * conn)
 
    SetCommMask(conn->hDevice, 0);
 
-   // drop DTR
+   // drop DTR and RTS
 
    EscapeCommFunction(conn->hDevice, CLRDTR);
+   EscapeCommFunction(conn->hDevice, CLRRTS);
 
    // purge any outstanding reads/writes and close device handle
 

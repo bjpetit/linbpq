@@ -610,8 +610,8 @@ char LoginMsg[]="user:";
 char BlankCall[]="         ";
 
 
-UCHAR BBSApplMask;
-UCHAR ChatApplMask;
+ULONG BBSApplMask;
+ULONG ChatApplMask;
 
 int BBSApplNum=0;
 int ChatApplNum=0;

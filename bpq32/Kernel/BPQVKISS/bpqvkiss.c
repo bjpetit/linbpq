@@ -256,7 +256,7 @@ int GetRXMessage(int port,UCHAR * buff)
 
 	if (pVCOMInfo->MSGREADY)
 	{
-		len=pVCOMInfo->RXMPTR-&pVCOMInfo->RXMSG[1];		// DOnt need KISS Control Byte
+		len=pVCOMInfo->RXMPTR-&pVCOMInfo->RXMSG[1];		// Don't need KISS Control Byte
 		
  		if (pVCOMInfo->RXMSG[0] != 0)
 		{
@@ -302,6 +302,9 @@ void CheckReceivedData(PVCOMINFO pVCOMInfo)
 		pVCOMInfo->RXBCOUNT = ReadCommBlock(pVCOMInfo, (LPSTR) &pVCOMInfo->RXBUFFER, MAXBLOCK-1 );
 		pVCOMInfo->RXBPTR=(UCHAR *)&pVCOMInfo->RXBUFFER; 
 	}
+
+	if (pVCOMInfo->RXBCOUNT == 0)
+		return;
 
 	while (pVCOMInfo->RXBCOUNT != 0)
 	{
@@ -354,6 +357,9 @@ void CheckReceivedData(PVCOMINFO pVCOMInfo)
 		*(pVCOMInfo->RXMPTR++) = c;
 
 	}
+
+	if (pVCOMInfo->RXMPTR - (UCHAR *)&pVCOMInfo->RXMSG > 500)
+		pVCOMInfo->RXMPTR=(UCHAR *)&pVCOMInfo->RXMSG;
 	
  	return;
 }
