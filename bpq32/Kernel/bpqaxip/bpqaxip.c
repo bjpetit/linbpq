@@ -643,7 +643,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				//
 
 				wsprintf(errmsg,"BPQAXIP Invalid CRC=%d Source=%s Port %d",crc,inet_ntoa(rxaddr.sin_addr),udpport[i]);
-				OutputDebugString(errmsg);
+				Debugprintf(errmsg);
+				rxbuff[len] = 0;
+				Debugprintf(rxbuff);
+
 
 				return (0);
 			}

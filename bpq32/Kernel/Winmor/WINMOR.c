@@ -15,7 +15,7 @@
 
 // July 2010
 // Support up to 32 BPQ Ports
-
+// Support up to 32 Applications
 
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -917,7 +917,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	strcat(TNC->InitScript,"PROCESSID\r\n");
 
 
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < 32; i++)
 	{
 		APPL=&APPLCALLTABLE[i];
 
@@ -1383,7 +1383,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			// See which application the connect is for
 
-			for (App = 0; App < 8; App++)
+			for (App = 0; App < 32; App++)
 			{
 				APPL=&APPLCALLTABLE[App];
 				memcpy(Appl, APPL->APPLCALL_TEXT, 10);
@@ -1396,7 +1396,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					break;
 			}
 
-			if (App < 8)
+			if (App < 32)
 			{
 				char AppName[13];
 

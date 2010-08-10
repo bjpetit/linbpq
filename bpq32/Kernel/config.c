@@ -575,6 +575,10 @@ BOOL ProcessConfig()
 
 	paramok[44]=1;			/* or L4APPL */
 
+
+	paramok[16]=1;	//  BBSCALL
+	paramok[14]=1;	//  BBSALIAS
+
 	if (paramok[45]==1)
 	{
 		paramok[16]=1;	//  APPL1CALL overrides BBSCALL

@@ -2372,7 +2372,7 @@ DllExport int APIENTRY SessionControl(int stream, int command, int param)
 	mov	ah,6
 	mov	al,byte ptr stream
 	mov	cl,byte ptr command
-	mov dl,byte ptr param
+	mov edx,param
 
 	call	BPQHOSTAPI
 

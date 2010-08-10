@@ -503,13 +503,17 @@
 
 // Version 1.0.4.11
 
-// Suppress display amd listing of held messages
+// Suppress display and listing of held messages
 // Add option to exclude SYSOP messages from LM, KM, etc
 // Fix crash whan receiving messages with long lines via plain text forwarding
 
 // Version 1.0.4.12 Jul 2010
 
 // Route P messages on AT
+// Allow Applications above 8
+
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
