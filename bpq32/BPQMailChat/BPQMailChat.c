@@ -512,6 +512,19 @@
 // Route P messages on AT
 // Allow Applications above 8
 
+// Version 1.0.4.13 Aug 2010
+
+// Fix TidyString for addresses of form John Wiseman <john.wiseman@ntlworld.com>
+// Add Try/Except around socket routines
+
+// Version 1.0.4.14 Aug 2010
+
+// Trap "Error - TNC Not Ready" in forward script response
+// Fix restart after program error
+// Add INFO command
+// Add SYSOP-configurable HELP Text.
+
+
 
 
 
@@ -760,6 +773,8 @@ VOID CheckProgramErrors()
 {
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
+	char ProgName[256];
+
 	ProgramErrors++;
 
 	if (ProgramErrors > 25)
@@ -788,7 +803,9 @@ VOID CheckProgramErrors()
 		SInfo.cbReserved2=0; 
   		SInfo.lpReserved2=NULL; 
 
-		CreateProcess("BPQMailChat.exe" ,"BPQMailChat.exe WAIT" , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+		GetModuleFileName(NULL, ProgName, 256);
+
+		CreateProcess(ProgName ,"BPQMailChat.exe WAIT" , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 					
 		exit(0);
 	}
@@ -1236,27 +1253,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WSA_DATA: // Notification on data socket
 
-		Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
+		{__try {Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));}
+		My__except_Routine("Socket_Data");}
+		
 		return 0;
 
 	case NNTP_DATA: // Notification on data socket
 
-		NNTP_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
+		{__try {NNTP_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));}
+		My__except_Routine("NNTP_Data");}
 		return 0;
 
 	case WSA_ACCEPT: /* Notification if a socket connection is pending. */
 
-		Socket_Accept(wParam);
+		{__try {Socket_Accept(wParam);}
+		My__except_Routine("Socket_Accept");}
 		return 0;
 
 	case NNTP_ACCEPT: /* Notification if a socket connection is pending. */
 
-		NNTP_Accept(wParam);
+		{__try {NNTP_Accept(wParam);} 
+		My__except_Routine("NNTP_Accept");}
 		return 0;
 
 	case WSA_CONNECT: /* Notification if a socket connection completed. */
 
-		Socket_Connect(wParam, WSAGETSELECTERROR(lParam));
+		{__try {Socket_Connect(wParam, WSAGETSELECTERROR(lParam));} My__except_Routine("Socket_COnnect");}
 		return 0;
 
 
@@ -3557,6 +3579,31 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (_memicmp(Cmd, "Info", CmdLen) == 0)
+	{
+		char * Save;
+		char * MsgBytes = Save = ReadInfoFile("Info.txt");
+
+		if (MsgBytes)
+		{
+			int Length;
+
+			// Remove lf chars
+
+			Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+			QueueMsg(conn, MsgBytes, Length);
+			free(Save);
+		}
+		else
+			BBSputs(conn, "SYSOP has not created an INFO file\r");
+
+
+		SendPrompt(conn, user);
+		return;	
+	}
+
+
 	if (_memicmp(Cmd, "Name", CmdLen) == 0)
 	{
 		if (Arg1)
@@ -3667,19 +3714,37 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if ((_memicmp(Cmd, "Help", CmdLen) == 0) || (_memicmp(Cmd, "?", 1) == 0))
 	{
-		BBSputs(conn, "A - Abort Output\r");
-		BBSputs(conn, "B - Logoff\r");
-		BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
-		BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
-		BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
-		BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
-		BBSputs(conn, "                      LN LY LH LK LF L$ - List Mesaage with corresponding Status\r");
-		BBSputs(conn, "                      LB LP - List Mesaage with corresponding Type\r");
-		BBSputs(conn, "N Name - Set Name\r");
-		BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
-		BBSputs(conn, "Q QTH - Set QTH\r");
-		BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
-		BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, SR Num - Send Reply, SC Num - Send Copy\r");
+		char * Save;
+		char * MsgBytes = Save = ReadInfoFile("Help.txt");
+
+		if (MsgBytes)
+		{
+			int Length;
+
+			// Remove lf chars
+
+			Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+			QueueMsg(conn, MsgBytes, Length);
+			free(Save);
+		}
+		else
+		{
+			BBSputs(conn, "A - Abort Output\r");
+			BBSputs(conn, "B - Logoff\r");
+			BBSputs(conn, "INFO - Display information about this BBS\r");
+			BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
+			BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
+			BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
+			BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
+			BBSputs(conn, "                      LN LY LH LK LF L$ - List Mesaage with corresponding Status\r");
+			BBSputs(conn, "                      LB LP - List Mesaage with corresponding Type\r");
+			BBSputs(conn, "N Name - Set Name\r");
+			BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
+			BBSputs(conn, "Q QTH - Set QTH\r");
+			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
+			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, SR Num - Send Reply, SC Num - Send Copy\r");
+		}
 
 		SendPrompt(conn, user);
 
@@ -4709,8 +4774,6 @@ char * ReadMessageFile(int msgno)
 	MsgBytes[FileSize]=0;
 
 	return MsgBytes;
-
-
 }
 
 /*
@@ -4734,6 +4797,43 @@ Title        : Error-report
 
 [End of Message #1378 from G8BPQ]
 */
+
+char * ReadInfoFile(char * File)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	char * MsgBytes;
+	int ReadLen;
+ 
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s", BaseDir, File);
+	
+	hFile = CreateFile(MsgFile,
+					GENERIC_READ,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_EXISTING,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+
+	if (hFile == INVALID_HANDLE_VALUE)
+		return NULL;
+
+	FileSize = GetFileSize(hFile, NULL);
+
+	MsgBytes=malloc(FileSize+1);
+
+	ReadFile(hFile, MsgBytes, FileSize, &ReadLen, NULL); 
+
+	CloseHandle(hFile);
+
+	MsgBytes[FileSize]=0;
+
+	return MsgBytes;
+
+
+}
 
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
 {
@@ -6047,7 +6147,7 @@ InBand:
 
 	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
-		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - PORT IN USE") ||
+		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - ") ||
 		strstr(Buffer, "DISCONNECTED"))
 	{
 		// Connect Failed

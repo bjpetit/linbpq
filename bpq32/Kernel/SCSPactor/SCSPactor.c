@@ -18,6 +18,10 @@
 
 // Drop RTS as well as DTR on close
 
+// Version 1.2.1.1 August 2010 
+
+// Save Minimized State
+
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -235,7 +239,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			if (retCode == ERROR_SUCCESS)
 			{
-				wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+				wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
 				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
 				RegCloseKey(hKey);

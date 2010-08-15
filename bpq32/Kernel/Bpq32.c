@@ -233,6 +233,15 @@
 // Fix logic error in RIGControl Port Initialisation (wasn't always raising RTS and DTR
 // Clear RIGControl RTS and DTR on close
 
+// 410o		Build 2 August 2010
+
+// Fix couple of errors in config (needed APPLICATIONS and BBSCALL/ALIAS/QUAL)
+// Fix Kenwood Rig Control when more than one message received at once.
+// Save minimzed state of Rigcontrol Window
+
+// 410o		Build 3 August 2010
+
+// Fix reporting of set errors in scan to a random session
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -3431,8 +3440,8 @@ int SetupConsoleWindow()
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Actions");
 
 	AppendMenu(hPopMenu,MF_STRING,BPQSAVENODES,"Save Nodes to file BPQNODES.DAT");
-	AppendMenu(hPopMenu,MF_STRING,BPQRECONFIG,"Save Nodes, Re-read bpqcfg.bin and reconfigure node");
-	AppendMenu(hPopMenu,MF_STRING,BPQCLEARRECONFIG,"Clear Nodes, Re-read bpqcfg.bin and reconfigure node");
+	AppendMenu(hPopMenu,MF_STRING,BPQRECONFIG,"Save Nodes, Re-read bpq32.cfg and reconfigure node");
+	AppendMenu(hPopMenu,MF_STRING,BPQCLEARRECONFIG,"Clear Nodes, Re-read bpq32.cfg and reconfigure node");
 	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
 
 	AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
@@ -3714,7 +3723,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (wmId >= 40000 && wmId < 40100)
 			{ 
 				handle=hWndArray[wmId-40000];
-				ShowWindow(handle, SW_RESTORE);
+				PostMessage(handle, WM_SYSCOMMAND, SC_RESTORE, 0);
+				//ShowWindow(handle, SW_RESTORE);
 				SetForegroundWindow(handle);
 				return 0;
 			}		

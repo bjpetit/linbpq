@@ -148,7 +148,7 @@ VOID NRRecordRoute(char * Buff, int Len)
 
 		Msg->CHAIN = NULL;
 
-		ptr1 = &NRRSession->L4TX_Q;
+		ptr1 = (UCHAR *)&NRRSession->L4TX_Q;
 
 		_asm {	
 			

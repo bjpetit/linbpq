@@ -578,6 +578,7 @@ BOOL ProcessConfig()
 
 	paramok[16]=1;	//  BBSCALL
 	paramok[14]=1;	//  BBSALIAS
+	paramok[33]=1;	//  BBSQUAL
 
 	if (paramok[45]==1)
 	{
@@ -701,6 +702,9 @@ char rec[];
 			Consoleprintf("Invalid Record %s", save);
 			heading = 1;
 		}
+		else
+				paramok[34]=1;		// Got APPLICATIONS
+
 		return 0;
 	}
 

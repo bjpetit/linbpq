@@ -1,5 +1,5 @@
 //
-//	DLL to inteface SCS TNC in Pactor Mode to BPQ32 switch 
+//	Rig Control Module
 //
 
 // Dec 29 2009
@@ -10,6 +10,10 @@
 
 // Fix logic error in Port Initialisation (wasn't always raising RTS and DTR
 // Clear RTS and DTR on close
+
+// Fix Kenwood processing of multiple messages in one packet.
+
+// Fix reporting of set errors in scan to the wrong session
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -75,8 +79,7 @@ int CreateYaesuLine(struct RIGINFO * RIG);
 VOID ProcessYaesuFrame(PORT);
 VOID YaesuPoll(struct PORTINFO * PORT);
 VOID ProcessYaesuCmdAck(struct PORTINFO * PORT);
-
-VOID ProcessKenwoodFrame(PORT);
+VOID ProcessKenwoodFrame(struct PORTINFO * PORT, int Length);
 VOID KenwoodPoll(struct PORTINFO * PORT);
 
 int Q_ADD_RIG(UINT *Q,UINT *BUFF);
@@ -132,6 +135,8 @@ LOGFONT LFTTYFONT ;
 
 int NumberofPorts = 0;
 
+BOOL Minimized = FALSE;			// Start Minimized flag
+
 struct PORTINFO * PORTInfo[18] = {NULL};		// Records are Malloc'd
 
 int ProcessLine(char * buf);
@@ -173,7 +178,14 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		switch (wmId) { 
 
+		case SC_RESTORE:
+
+			Minimized = FALSE;
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+
 		case  SC_MINIMIZE: 
+
+			Minimized = TRUE;
 
 			if (MinimizetoTray)
 				return ShowWindow(hWnd, SW_HIDE);		
@@ -277,7 +289,7 @@ BOOL CreateRigWindow()
 		retCode = RegQueryValueEx(hKey,"Size",0, (ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &Minimized);
 	}
 
 	Top = Rect.top;
@@ -287,7 +299,12 @@ BOOL CreateRigWindow()
 	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
 
 	GetWindowRect(hDlg, &Rect);	// Get Actual Position
-	ShowWindow(hDlg, SW_SHOWNORMAL);
+
+	if (Minimized)
+		ShowWindow(hDlg, SW_HIDE);
+	else
+		ShowWindow(hDlg, SW_SHOWNORMAL);
+
 
 	return TRUE;
 }
@@ -352,6 +369,7 @@ BOOL ReadConfigFile()
 
 GetLine(char * buf)
 {
+	int len;
 loop:
 	if (fgets(buf, 255, file) == NULL)
 		return 0;
@@ -360,9 +378,13 @@ loop:
 	if (buf[0] == '#') goto loop;
 	if (buf[0] == ';') goto loop;
 
-	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
-	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
-	buf[strlen(buf)] = 13;
+	len = strlen(buf);
+	if (buf[len-1] < 0x20) buf[len-1] = 0;
+	len = strlen(buf);
+	if (buf[len-1] < 0x20) buf[len-1] = 0;
+	len = strlen(buf);
+	buf[len] = 13;
+	buf[len + 1] = 0;
 
 	strcpy(errbuf,buf);			// save in case of error
 
@@ -680,7 +702,7 @@ NextPort:
 					}
 					else if	(PORT->PortType == KENWOOD)
 					{	
-						FreqPtr += wsprintf(FreqPtr, "FA00%s;MD%d;", FreqString, ModeNo);
+						FreqPtr += wsprintf(FreqPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 					}
 
 					*(FreqPtr) = 0;
@@ -1136,11 +1158,9 @@ portok:
 			return FALSE;
 		}
 
-		// Send Mode then Freq - setting Mode seems to change frequency
-
 		Poll = (UCHAR *)&buffptr[2];
 
-		buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;", FreqString, ModeNo);
+		buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 		
 		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1263,7 +1283,7 @@ DllExport BOOL APIENTRY Rig_Close()
 
 	if (retCode == ERROR_SUCCESS)
 	{
-		wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+		wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
 		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
 		RegCloseKey(hKey);
@@ -1545,7 +1565,7 @@ void CheckRX(struct PORTINFO * PORT)
 
 	case KENWOOD:
 	
-		if (Length < 3)				// Minimum Frame Sise
+		if (Length < 2)				// Minimum Frame Sise
 			return;
 
 		if (Length > 50)			// Garbage
@@ -1557,7 +1577,7 @@ void CheckRX(struct PORTINFO * PORT)
 		if (PORT->RXBuffer[Length-1] != ';')
 			return;	
 
-		ProcessKenwoodFrame(PORT, PORT->RXBuffer, Length);	
+		ProcessKenwoodFrame(PORT, Length);	
 
 		PORT->RXLen = 0;		// Ready for next frame	
 		return;
@@ -1895,13 +1915,17 @@ ok:
 	if (Msg[4] == 0xFA)
 	{
 		// Reject
-		PORT->Timeout = 0;
-		if (PORT->TXBuffer[4] == 5)
-			SendResponse(RIG->Session, "Sorry - Set Frequency Command Rejected");
-		else
-		if (PORT->TXBuffer[4] == 6)
-			SendResponse(RIG->Session, "Sorry - Set Mode Command Rejected");
 
+		PORT->Timeout = 0;
+
+		if (!PORT->AutoPoll)
+		{
+			if (PORT->TXBuffer[4] == 5)
+				SendResponse(RIG->Session, "Sorry - Set Frequency Command Rejected");
+			else
+			if (PORT->TXBuffer[4] == 6)
+				SendResponse(RIG->Session, "Sorry - Set Mode Command Rejected");
+		}
 		return;
 	}
 
@@ -2308,8 +2332,9 @@ ScanExit:
 	return;
 }
 
+//FA00014103000;MD2;
 
-VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
+VOID ProcessKenwoodFrame(struct PORTINFO * PORT, int Length)
 {
 	UCHAR * Poll = PORT->TXBuffer;
 	UCHAR * Msg = PORT->RXBuffer;
@@ -2319,7 +2344,11 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 //	char Valchar[_CVTBUFSIZE];
 	char Status[80];
 //	unsigned int Mode;
+	char * ptr;
+	int CmdLen;
 
+	Msg[Length] = 0;
+	
 	if (PORT->PORTOK == FALSE)
 	{
 		// Just come up
@@ -2332,6 +2361,23 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 
 	RIG->RIGOK = TRUE;
 
+	if (!PORT->AutoPoll)
+	{
+		// Response to a RADIO Command
+
+		if (Msg[0] == '?')
+			SendResponse(RIG->Session, "Sorry - Command Rejected");
+		else
+			SendResponse(RIG->Session, "Mode and Frequency Set OK");
+	
+		PORT->AutoPoll = TRUE;
+	}
+
+Loop:
+
+	ptr = strchr(Msg, ';');
+	CmdLen = ptr - Msg +1;
+
 	if (Msg[0] == 'F' && Msg[1] == 'A')
 	{
 		int F1, F2 = atoi(&Msg[7]);
@@ -2342,22 +2388,30 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT)
 		SetWindowText(RIG->hFREQ, Status);
 
 		PORT->Timeout = 0;
-
-		return;
 	}
-
-	if (Msg[0] == 'M' && Msg[1] == 'D')
+	else if (Msg[0] == 'M' && Msg[1] == 'D')
 	{
 		int Mode = Msg[2] - 48;
 
 		if (Mode > 7) Mode = 7;
 
 		SetWindowText(RIG->hMODE, KenwoodModes[Mode]);
-
-		return;
 	}
 
+	if (CmdLen < Length)
+	{
+		// Another Message in Buffer
 
+		ptr++;
+		Length -= (ptr - Msg);
+
+		if (Length <= 0)
+			return;
+
+		memmove(Msg, ptr, Length +1);
+
+		goto Loop;
+	}
 }
 
 
@@ -2455,11 +2509,11 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 			if (*(ptr) == 0)			// End of list - reset to start
 				ptr = CheckTimeBands(RIG);
 
-			memcpy(PORT->TXBuffer, ptr, 18);
+			memcpy(PORT->TXBuffer, ptr, 24);
 
-			RIG->FreqPtr += 18;
+			RIG->FreqPtr += 24;
 	
-			PORT->TXLen = 18;
+			PORT->TXLen = 24;
 			RigWriteCommBlock(PORT);
 			PORT->CmdSent = 1;
 			PORT->Retries = 0;	
@@ -2483,11 +2537,11 @@ ScanExit:
 
 		memcpy(Poll, buffptr+2, datalen);
 
-		PORT->TXLen = datalen;					// First send the set Freq
+		PORT->TXLen = datalen;
 		RigWriteCommBlock(PORT);
 		PORT->CmdSent = Poll[4];
 		PORT->Timeout = 0;
-		RIG->PollCounter = 1;
+		RIG->PollCounter = 10;
 
 		ReleaseBuffer(buffptr);
 		PORT->AutoPoll = FALSE;

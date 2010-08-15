@@ -913,6 +913,7 @@ void TrytoSend();
 void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
 struct MsgInfo * FindMessage(char * Call, int msgno, BOOL sysop);
 char * ReadMessageFile(int msgno);
+char * ReadInfoFile(char * File);
 char * FormatDateAndTime(time_t Datim, BOOL DateOnly);
 int	CriticalErrorHandler(char * error);
 BOOL DoSendCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);

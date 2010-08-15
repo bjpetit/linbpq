@@ -18,6 +18,7 @@ struct RIGINFO * (FAR WINAPI * Rig_GETPTTREC) ();
 
 UCHAR * BPQDirectory;
 
+static BOOL Minimized;				// Start Minimized Flag
 
 RECT Rect;
 
@@ -169,8 +170,14 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 		switch (wmId) { 
 
+		case SC_RESTORE:
+
+			Minimized = FALSE;
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+
 		case  SC_MINIMIZE: 
 
+			Minimized = TRUE;
 			if (MinimizetoTray)
 				return ShowWindow(hWnd, SW_HIDE);		
 		
@@ -266,7 +273,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &Minimized);
 	}
 
 	Top = Rect.top;
@@ -276,7 +283,10 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 
 	MoveWindow(TNC->hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
 
-	ShowWindow(TNC->hDlg, SW_SHOWNORMAL);
+	if (Minimized)
+		ShowWindow(TNC->hDlg, SW_HIDE);
+	else
+		ShowWindow(TNC->hDlg, SW_SHOWNORMAL);
 
 	return TRUE;
 }

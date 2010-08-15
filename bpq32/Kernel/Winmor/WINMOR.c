@@ -17,6 +17,11 @@
 // Support up to 32 BPQ Ports
 // Support up to 32 Applications
 
+// Version 1.2.1.2 August 2010 
+
+// Save Minimized State
+// Handle new "BLOCKED by Busy channel" message from TNC
+
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
@@ -93,7 +98,6 @@ DllImport struct APPLCALLS APPLCALLTABLE[];
 DllImport char APPLS;
 
 #define MAXBPQPORTS 16
-
 
 static time_t ltime;
 
@@ -216,7 +220,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			if (retCode == ERROR_SUCCESS)
 			{
-				wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+				wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
 				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
 				RegCloseKey(hKey);
@@ -888,7 +892,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(Msg," ** Error - no info in WINMOR.cfg for this port");
+		wsprintf(Msg," ** Error - no info in BPQtoWINMOR.cfg for this port");
 		WritetoConsole(Msg);
 
 		return (int) ExtProc;
@@ -1572,6 +1576,12 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->PlaybackDevices = _strdup(&Buffer[16]);
 	}
 	// Others should be responses to commands
+
+	if (_memicmp(Buffer, "BLOCKED", 6) == 0)
+	{
+		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		return;
+	}
 
 	buffptr = Q_REM(&FREE_Q);
 

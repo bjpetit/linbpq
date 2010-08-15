@@ -1404,6 +1404,17 @@ TidyString(char * Address)
 
 	_strupr(Address);
 
+	ptr1 = strchr(Address, '<');
+
+	if (ptr1)
+	{
+		ptr1++;
+		ptr2 = strlop(ptr1, '>');
+		strcpy(Address, ptr1);
+
+		return 0;
+	}
+
 	ptr1 = Address;
 
 	while (*ptr1 == ' ') ptr1++;
