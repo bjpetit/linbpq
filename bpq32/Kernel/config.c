@@ -559,6 +559,7 @@ BOOL ProcessConfig()
 	   strip(rec);
 	}
 
+	paramok[8]=1;          /* dont need TRANSDELAY */
 	paramok[17]=1;          /* dont need TNCPORTS */
 
 	paramok[32]=1;          /* dont need UNPROTO */

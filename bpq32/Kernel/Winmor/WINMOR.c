@@ -57,6 +57,7 @@ KillTNC(struct TNCINFO * TNC);
 RestartTNC(struct TNCINFO * TNC);
 KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
+SendReporttoWL2K();
 
 static char ClassName[]="WINMORSTATUS";
 
@@ -543,6 +544,13 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 	
+			if (_memicmp(&buff[8], "XXX\r", 4) == 0)
+			{
+				SendReporttoWL2K();
+				return 0;
+			}
+
+
 			if (TNC->FECMode)
 			{
 				char Buffer[300];
@@ -2083,4 +2091,109 @@ VOID MoveWindows(struct TNCINFO * TNC)
 
 	MoveWindow(TNC->hMonitor,4 , 200, ClientWidth-8, ClientHeight-205, TRUE);
 
+}
+
+
+BOOL SendReporttoWL2K()
+{
+	SOCKET sock;
+	short Port = 8778;
+	char Host[] = "winlink.org";
+
+	char Message[] = "02'GM8BPQ-10', 'GM8BPQ', 'IO68VL', 7000000, 22, 0, 50, 50, 0, 000, 'Testing', 1";
+	char Message1[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 3574500, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
+	char Message2[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 7078500, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
+	char Message3[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 10134500, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
+	char Message4[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 14112000, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
+
+	SOCKADDR_IN sinx; 
+	SOCKADDR_IN destaddr;
+	int addrlen=sizeof(sinx);
+	struct hostent * HostEnt;
+	int err;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	char errmsg[80];
+	int Error;              // catches return value of WSAStartup
+    WORD VersionRequested;   // passed to WSAStartup
+    WSADATA WsaData;            // receives data from WSAStartup
+
+
+	VersionRequested = MAKEWORD(1, 0);
+    Error = WSAStartup(VersionRequested, &WsaData);
+
+    if (Error)
+	{
+       MessageBox(NULL,
+            TEXT("Could not initialise WinSock"),
+            TEXT("WINMOR"), MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
+        return FALSE;
+	}
+
+	// Resolve Name if needed
+
+	destaddr.sin_family = AF_INET; 
+	destaddr.sin_port = htons(Port);
+
+	destaddr.sin_addr.s_addr = inet_addr(Host);
+	destaddr.sin_port = htons(Port);
+
+	if (destaddr.sin_addr.s_addr == INADDR_NONE)
+	{
+	//	Resolve name to address
+
+		HostEnt = gethostbyname (Host);
+		 
+		if (!HostEnt)
+		{
+			err = WSAGetLastError();
+
+			wsprintf(errmsg, TEXT("Res Falied %d %x"),err, err);
+			MessageBox(NULL, errmsg, NULL, MB_OK);
+
+			return FALSE;			// Resolve failed
+		}
+		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+	}
+
+	//   Allocate a Socket entry
+
+	sock=socket(AF_INET,SOCK_DGRAM,0);
+
+	if (sock == INVALID_SOCKET)
+	{
+  	 	return FALSE; 
+	}
+
+	ioctlsocket (sock, FIONBIO, &param);
+ 
+	setsockopt (sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt, 4);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = htons(8778);
+
+	destaddr.sin_family = AF_INET;
+
+	if (bind(sock, (LPSOCKADDR) &sinx, sizeof(sinx)) != 0 )
+	{
+		//
+		//	Bind Failed
+		//
+		err = WSAGetLastError();
+		wsprintf(errmsg, "Bind Failed for UDP socket - error code = %d", err);
+		MessageBox(NULL,errmsg,NULL, MB_OK);
+		return FALSE;
+	}
+	
+	sendto(sock, Message1, strlen(Message1),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+	sendto(sock, Message2, strlen(Message2),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+	sendto(sock, Message3, strlen(Message3),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+	sendto(sock, Message4, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+	Sleep(500);
+
+	closesocket(sock);
+
+	return TRUE;
 }
