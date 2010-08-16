@@ -495,7 +495,14 @@ main( int argc, char *argv[ ], char *envp[ ] )
 
 #endif
 
-	puts("Configuration file Preprocessor for Version 4.10n March 2010.\n");
+	puts("Configuration file Preprocessor for Version 4.10o August 2010.\n\n");
+
+
+	puts("\nBPQ32 now reads the text file bpq32.cfg. There is no need to run BPQCfg\n");
+
+	AnyKey();		// Give user time to read msg
+
+	exit(1);
 
 #ifdef THOR
 

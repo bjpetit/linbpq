@@ -610,7 +610,6 @@ BOOL cfgMinToTray;
 
 BOOL DisconnectOnClose=FALSE;
 
-
 char PasswordMsg[100]="Password:";
 
 char cfgHOSTPROMPT[100];
@@ -5636,14 +5635,14 @@ void chat_link_out (LINK *link)
 			conn->u.link = link;
 			conn->Flags = CHATMODE | CHATLINK;
 
-			ConnectUsingAppl(conn->BPQStream, ChatApplMask);
-
 			n=sprintf_s(Msg, sizeof(Msg), "Connecting to Chat Node %s", conn->u.link->alias);
 
 			strcpy(conn->Callsign, conn->u.link->alias);
 
 			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
-	
+
+			ConnectUsingAppl(conn->BPQStream, ChatApplMask);
+
 			//	Connected Event will trigger connect to remote system
 
 			return;
@@ -6010,9 +6009,9 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 			conn->BBSFlags |= RunningConnectScript;
 			conn->UserPointer = user;
 
-			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
-
 			Logprintf(LOG_BBS, conn, '|', "Connecting to BBS %s", user->Call);
+
+			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
 
 			strcpy(conn->Callsign, user->Call);
 

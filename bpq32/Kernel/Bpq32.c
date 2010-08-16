@@ -243,6 +243,14 @@
 
 // Fix reporting of set errors in scan to a random session
 
+// 410o		Build 4 August 2010
+
+
+
+
+// Change All xxx Ports are in use to no xxxx Ports are available if there are no sessions with applmask
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 

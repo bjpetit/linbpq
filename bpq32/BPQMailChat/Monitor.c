@@ -453,6 +453,9 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 	struct tm * tm;
 	char Stamp[20];
 	time_t T;
+	struct _EXCEPTION_POINTERS exinfo;
+
+	__try{
 
 	if (hMonitor )
 	{
@@ -461,7 +464,6 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 			WritetoMonitorWindow((char *)&Flag, 1);
 			WritetoMonitorWindow(Msg, MsgLen);
 			WritetoMonitorWindow(CRLF , 1);
-
 		}
 		else if (Flags == LOG_CHAT && MonCHAT)
 		{	
@@ -511,11 +513,10 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 	if (Flags == LOG_CHAT && !LogCHAT)
 		return;
 
-
 	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) OpenLogfile(Flags);
 
 	if (LogHandle[Flags] == INVALID_HANDLE_VALUE) return;
-
+	
 	T = time(NULL);
 	tm = gmtime(&T);	
 	
@@ -543,6 +544,11 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 
 	CloseHandle(LogHandle[Flags]);
 
+	}
+	My__except_Routine("WriteLogLine");
+
 	LogHandle[Flags] = INVALID_HANDLE_VALUE;
+
+	
 
 }

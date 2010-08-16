@@ -42,7 +42,7 @@ void GetSemaphore(struct SEM * Semaphore)
 	if (Semaphore->Flag != 0)
 	{
 		Semaphore->Clashes++;
-		Debugprintf("MailChat Semaphore Clash");
+//		Debugprintf("MailChat Semaphore Clash");
 	}
 loop1:
 

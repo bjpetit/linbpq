@@ -15,8 +15,8 @@
 #define IPVers 1,2,1,6
 #define IPVerstring "1.2.1.6\0"
 
-#define KVers 4,10,15,3
-#define KVerstring "4.10.15.3\0"
+#define KVers 4,10,15,4
+#define KVerstring "4.10.15.4\0"
 
 #define SCSVers 1,2,1,1
 #define SCSVerstring "1.2.1.1\0"
