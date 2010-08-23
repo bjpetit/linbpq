@@ -524,15 +524,21 @@
 // Add INFO command
 // Add SYSOP-configurable HELP Text.
 
+// Version 1.0.4.15 Aug 2010
 
+// Semaphore Connect/Disconnect
+// Semaphore RemoveTempBIDS
 
+// Version 1.0.4.16 Aug 2010
+
+// Remove prompt after receiving unrecognised line in MBL mode. (for MSYS)
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-//#define SPECIALVERSION "Ken"
+#define SPECIALVERSION "Jerry"
 
 #include "GetVersion.h"
 
@@ -569,15 +575,16 @@ char szBuff[80];
 
 ConnectionInfo Connections[MaxSockets+1];
 
-
 struct SEM ChatSemaphore = {0, 0};
 
 struct SEM AllocSemaphore = {0, 0};
 
+struct SEM ConSemaphore = {0, 0};
+
 struct UserInfo ** UserRecPtr=NULL;
 int NumberofUsers=0;
 
-struct UserInfo * BBSChain = NULL;						// Chain of users that are BBSes
+struct UserInfo * BBSChain = NULL;					// Chain of users that are BBSes
 
 struct MsgInfo ** MsgHddrPtr=NULL;
 int NumberofMessages=0;
@@ -598,7 +605,7 @@ int NumberofBadWords=0;
 char * BadFile = NULL;
 
 int LatestMsg = 0;
-struct SEM MsgNoSemaphore = {0, 0};			// For locking updates to LatestMsg
+struct SEM MsgNoSemaphore = {0, 0};					// For locking updates to LatestMsg
 int HighestBBSNumber = 0;
 
 int MaxMsgno = 60000;
@@ -1234,9 +1241,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (change == 1)
 				{
 					if (state == 1) // Connected	
-					{__try {Connected(wParam);} My__except_Routine("Connected");}
+					{
+						GetSemaphore(&ConSemaphore);
+						__try {Connected(wParam);}
+						My__except_Routine("Connected");
+						FreeSemaphore(&ConSemaphore);
+					}
 					else
-						__try{Disconnected(wParam);} My__except_Routine("Disconnected");
+					{
+						GetSemaphore(&ConSemaphore);
+						__try{Disconnected(wParam);}
+						My__except_Routine("Disconnected");
+						FreeSemaphore(&ConSemaphore);
+					}
 				}
 			}
 			My__except_Routine("DoStateChange");
@@ -1920,6 +1937,7 @@ int RefreshMainWindow()
 	SetDlgItemInt(hWnd, IDC_CHATSEM, ChatSemaphore.Clashes, FALSE);
 	SetDlgItemInt(hWnd, IDC_MSGSEM, MsgNoSemaphore.Clashes, FALSE);
 	SetDlgItemInt(hWnd, IDC_ALLOCSEM, AllocSemaphore.Clashes, FALSE);
+	SetDlgItemInt(hWnd, IDC_CONSEM, ConSemaphore.Clashes, FALSE);
 
 	now = time(NULL);
 
@@ -2334,7 +2352,9 @@ int Disconnected (Stream)
 		if (Stream == conn->BPQStream)
 		{
 			if (conn->Active == FALSE)
+			{
 				return 0;
+			}
 
 			ClearQueue(conn);
 
@@ -2376,7 +2396,6 @@ int Disconnected (Stream)
 					__try {logout(conn);} My__except_Routine("logout");
 
 				}
-
 				return 0;
 			}
 
@@ -2410,7 +2429,6 @@ int Disconnected (Stream)
 			return 0;
 		}
 	}
-
 	return 0;
 }
 
@@ -2443,6 +2461,8 @@ int DoReceivedData(int Stream)
 				GetMsg(Stream, &conn->InputBuffer[conn->InputLen], &InputLen, &count);
 
 				if (InputLen == 0) return 0;
+
+				conn->Watchdog = 900;				// 15 Minutes
 
 				conn->InputLen += InputLen;
 
@@ -3138,15 +3158,20 @@ VOID RemoveTempBIDS(CIRCUIT * conn)
 		BIDRec ** NewTempBIDRecPtr = zalloc((NumberofTempBIDs+1) * 4);
 		int i = 0, n;
 
+		GetSemaphore(&AllocSemaphore);
+
 		for (n = 1; n <= NumberofTempBIDs; n++)
 		{
 			ptr = TempBIDRecPtr[n];
 
-			if (ptr->u.conn == conn)
-				// Remove this entry 
-				free(ptr);
-			else
-				NewTempBIDRecPtr[++i] = ptr;
+			if (ptr)
+			{
+				if (ptr->u.conn == conn)
+					// Remove this entry 
+					free(ptr);
+				else
+					NewTempBIDRecPtr[++i] = ptr;
+			}
 		}
 
 		NumberofTempBIDs = i;
@@ -3154,7 +3179,9 @@ VOID RemoveTempBIDS(CIRCUIT * conn)
 		free(TempBIDRecPtr);
 
 		TempBIDRecPtr = NewTempBIDRecPtr;
+		FreeSemaphore(&AllocSemaphore);
 	}
+
 }
 
 VOID GetBadWordFile()

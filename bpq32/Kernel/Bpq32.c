@@ -245,10 +245,13 @@
 
 // 410o		Build 4 August 2010
 
-
-
-
 // Change All xxx Ports are in use to no xxxx Ports are available if there are no sessions with applmask
+// Fix validation of TRANSDELAY
+
+// 410o		Build 5 August 2010
+
+//	Add Repeater Shift and Set Data Mode options to Rigcontrol (for ICOM only)
+//	Add WINMOR mode control option to RigControl
 
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -311,10 +314,12 @@ extern char AUTOSAVE;
 extern char MYNODECALL;	// 10 chars,not null terminated
 extern char SIGNONMSG;
 
-extern QCOUNT;
-extern struct BPQVECSTRUC BPQHOSTVECTOR[65];
+extern QCOUNT; 
+extern struct BPQVECSTRUC BPQHOSTVECTOR[];
 extern struct BPQVECSTRUC IPHOSTVECTOR;
 extern char * CONFIGFILENAME;
+
+DllExport struct BPQVECSTRUC * BPQHOSTVECPTR;
 
 extern int BPQHOSTAPI();
 extern int START();
@@ -1239,6 +1244,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		
 		GetSemaphore();
 
+		BPQHOSTVECPTR = &BPQHOSTVECTOR[0];
+
 		SemHeldByAPI = 4;
 
 		LoadToolHelperRoutines();
@@ -1923,6 +1930,12 @@ DllExport long APIENTRY GetApplQual(int Appl)
 	return (APPLCALLTABLE[Appl-1].APPLQUAL);
 }
 
+DllExport char * APIENTRY GetApplName(int Appl)
+{
+	if (Appl < 1 || Appl > NumberofAppls ) return NULL;
+
+	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLCMD);
+}
 BOOL UpdateNodesForApp(int Appl);
 DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 

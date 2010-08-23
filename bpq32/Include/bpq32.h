@@ -203,6 +203,8 @@ char * APIENTRY GetApplAlias(int Appl);
 
 long APIENTRY GetApplQual(int Appl);
 
+char * APIENTRY GetApplNabe(int Appl);
+
 BOOL APIENTRY SetApplCall(int Appl, char * NewCall);
 
 BOOL APIENTRY SetApplAlias(int Appl, char * NewCall);
@@ -422,6 +424,8 @@ char * (FAR WINAPI * GetApplCall) (int Appl);
 
 char * (FAR WINAPI * GetApplAlias) (int Appl);
 
+char * (FAR WINAPI * GetApplName) (int Appl);
+
 long (FAR WINAPI * GetApplQual) (int Appl);
 
 BOOL (FAR WINAPI * SetApplCall) (int Appl, char * NewCall);
@@ -527,6 +531,7 @@ BOOL GetAPI()
 	GetApplCall = (char * (__stdcall *) (int Appl))GetProcAddress(ExtDriver,"_GetApplCall@4");
 	GetApplAlias = (char * (__stdcall *) (int Appl))GetProcAddress(ExtDriver,"_GetApplAlias@4");
 	GetApplQual  = (long (__stdcall *)(int Appl))GetProcAddress(ExtDriver,"_GetApplQual@4");
+	GetApplName = (char * (__stdcall *) (int Appl))GetProcAddress(ExtDriver,"_GetApplName@4");
 	SetApplCall = (BOOL (__stdcall *)(int Appl, char * NewCall))GetProcAddress(ExtDriver,"_SetApplCall@8");
 	SetApplAlias = (BOOL (__stdcall *)(int Appl, char * NewCall))GetProcAddress(ExtDriver,"_SetApplAlias@8");
 	SetApplQual = (BOOL (__stdcall *)(int Appl, int NewQual))GetProcAddress(ExtDriver,"_SetApplQual@8");

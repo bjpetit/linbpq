@@ -148,6 +148,7 @@ VOID __cdecl Consoleprintf(const char * format, ...)
 }
 
 #define ApplOffset 80000			// Applications offset in config buffer
+#define InfoOffset 85000			// Applications offset in config buffer
 
 #pragma pack(1) 
 
@@ -292,7 +293,7 @@ extern int __cdecl bin_switch(int i,char *value,char *rec);
 extern int __cdecl dec_switch(int i,char *value,char *rec);
 extern int __cdecl numbers(int i,char *value,char *rec);
 extern int __cdecl applstrings(int i,char *value,char *rec);
-extern int __cdecl dotext(int i,char *key_word);
+extern int __cdecl dotext(int i,char *key_word, int max);
 extern int __cdecl doBText(int i,char *key_word);
 int routes(int i);
 int ports(int i);
@@ -368,7 +369,7 @@ static int offset[] =
 40, 42, 44, 46, 48, 50,
 52, 54, 56, 58, 64, 68,
 69, 10, 30, 0, 20,
-384, 512, 1024, 1536, 2560, 72,
+384, 512, InfoOffset, 1536, 2560, 72,
 74, 76, 78, 96, 100,
 102, 103, 105, 107, 120, 118,
 ApplOffset, 66, 2048, 71, 70, 67,
@@ -387,7 +388,7 @@ static int routine[] =
 1, 1, 1, 1, 1, 1,
 1, 1, 1, 1, 1, 2,
 2, 0, 0, 0, 0,
-3, 4, 4, 5, 6, 1,
+3, 4, 20, 5, 6, 1,
 1, 1, 1, 1, 1,
 2, 1, 1, 1, 7, 1,
 8, 2, 4, 2, 9, 10,
@@ -745,10 +746,14 @@ char rec[];
 		break;
 
              case 4:
-             	cn = dotext(i,key_word);             /* TEXT PARMS */
+             	cn = dotext(i,key_word, 510);             /* TEXT PARMS */
 		break;
 
-             case 5:
+             case 20:
+             	cn = dotext(i,key_word, 1000);             /* INFO TEXT PARM */
+		break;
+
+			 case 5:
              	cn = routes(i);                      /* ROUTES TO LOCK IN */
 		break;
 
@@ -1108,9 +1113,7 @@ char rec[];
 /*    USE FOR FREE FORM TEXT IN MESSAGES				*/
 /************************************************************************/
 
-int dotext(i, key_word)
-int i;
-char key_word[];
+int dotext(int i, char * key_word, int max)
 {
 	char rec[MAXLINE];
 
@@ -1128,7 +1131,7 @@ char key_word[];
 
 	bputc('\0',fp2);
 
-	if (btell(fp2) > fileoffset+510)
+	if (btell(fp2) > fileoffset+max)
 	{
            Consoleprintf("Text too long: %s - file may be corrupt\r\n",key_word);
 	   return(0);
@@ -2263,7 +2266,11 @@ BOOL ProcessAPPLDef(char * buf)
 	App = (struct APPLCONFIG *)&Buffer[ApplOffset + (Appl - 1) * sizeof(struct APPLCONFIG) ];
 
 	ptr = strchr(Context, ',');
-	if (ptr == 0)  return FALSE;
+	if (ptr == 0)
+	{
+		ptr = strchr(Context, ' ');				// There is a space on end of command
+		if (ptr == 0)  return FALSE;			// No comma or space meeans no param
+	}
 
 	(*ptr++) = 0;
 
@@ -2274,7 +2281,16 @@ BOOL ProcessAPPLDef(char * buf)
 	Context = ptr;
 
 	ptr = strchr(Context, ',');
-	if (ptr == 0)  return FALSE;
+
+	if (ptr == 0)
+	{
+		// No comma, so must be last param - this is ok
+		
+		if (strlen(Context) > 48) return FALSE;
+
+		memcpy(App->CommandAlias, Context, strlen(Context));
+		return TRUE;
+	}
 
 	(*ptr++) = 0;
 

@@ -12,9 +12,9 @@ HINSTANCE hRigModule = 0;
 BOOL (FAR WINAPI * Rig_Command) ();
 BOOL (FAR WINAPI * Rig_Init) ();
 BOOL (FAR WINAPI * Rig_Poll) ();
-
 VOID (FAR WINAPI * Rig_PTT) ();
 struct RIGINFO * (FAR WINAPI * Rig_GETPTTREC) ();
+struct ScanEntry ** (FAR WINAPI * CheckTimeBands) ();
 
 UCHAR * BPQDirectory;
 
@@ -394,6 +394,7 @@ ProcessLine(char * buf)
 	int BPQport;
 	int len=510;
 	struct TNCINFO * TNC;
+	char errbuf[256];
 
 	ptr = strtok(buf, " \t\n\r");
 
@@ -487,6 +488,8 @@ ProcessLine(char * buf)
 			if (GetLine(buf) == 0)
 				return TRUE;
 
+			strcpy(errbuf, buf);
+
 			if (memcmp(buf, "****", 4) == 0)
 				return TRUE;
 
@@ -509,9 +512,6 @@ ProcessLine(char * buf)
 #ifdef KAM
 
 			if (_memicmp(buf, "OLDMODE", 7) == 0)
-	
-				// SCS Virtual COM Channel
-
 				TNC->OldMode = TRUE;
 			else
 #endif
@@ -520,12 +520,76 @@ ProcessLine(char * buf)
 			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
 			{}
 			else
+
+			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
+			{
+				// WL2KREPORT Host, Port, G8BPQ,IO68VL,Testing BPQ,RIGCONTROL
+				char * Context;
+						
+				p_cmd = strtok_s(&buf[10], ", \t\n\r", &Context);
+				if (p_cmd)
+				{
+					TNC->Host = _strdup(p_cmd);
+					p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
+					if (p_cmd)
+					{
+					TNC->Port = atoi(p_cmd);
+					if (TNC->Port == 0) goto BadLine;
+					p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
+					if (p_cmd)
+					{
+					if (strlen(p_cmd) > 9) goto BadLine;
+					strcpy(TNC->BaseCall, p_cmd);
+					p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
+					if (p_cmd)
+					{
+						if (strlen(p_cmd) != 6) goto BadLine;
+						strcpy(TNC->GridSquare, p_cmd);
+						p_cmd = strtok_s(NULL, ",\t\n\r", &Context);
+						if (p_cmd)
+						{
+							if (strlen(p_cmd) > 79) goto BadLine;
+							strcpy(TNC->Comment, p_cmd);
+							p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
+							if (p_cmd)
+							{
+								if (strcmp(p_cmd, "RIGCONTROL") == 0)
+									TNC->UseRigCtrlFreqs = TRUE;
+								else
+								{
+									if (strlen(p_cmd) > 11) goto BadLine;
+									strcpy(TNC->WL2KFreq, p_cmd);
+									TNC->WL2KMode = 21;
+									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
+									if (p_cmd)
+									{
+										if (p_cmd[0] == 'W')
+											TNC->WL2KMode = 22;
+									}
+								}
+							}
+						}
+					}
+				}
+				}
+				}
+				TNC->UpdateWL2K = TRUE;
+				TNC->UpdateWL2KTimer = 3000;	// Send first after 5 Mins
+				goto Okline;
+			BadLine:
+				WritetoConsole(" Bad config record ");
+				WritetoConsole(errbuf);
+				WritetoConsole("\r\n");
+			Okline:;
+			}
+			else
+
 #endif
 				strcat (TNC->InitScript, buf);
 		}
 	}
 
-	return (FALSE);
+	return (TRUE);
 	
 }
 
@@ -552,7 +616,8 @@ BOOL LoadRigDriver()
 		Rig_Poll = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Poll@0");
 		Rig_Command = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Command@8");
 		Rig_PTT = (VOID (__stdcall *)())GetProcAddress(hRigModule,"_Rig_PTT@8");
-		Rig_GETPTTREC = (struct RIGINFO *  (__stdcall *)())GetProcAddress(hRigModule,"_Rig_GETPTTREC@4");
+		Rig_GETPTTREC = (struct RIGINFO * (__stdcall *)())GetProcAddress(hRigModule,"_Rig_GETPTTREC@4");
+		CheckTimeBands = (struct ScanEntry ** (__stdcall *)())GetProcAddress(hRigModule,"_CheckTimeBands@4");
 	}
 	return TRUE;
 }

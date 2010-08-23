@@ -57,7 +57,7 @@ BEGIN
     LTEXT           "Local",IDC_STATIC,241,3,21,10
     LTEXT           "",IDC_UTC,215,3,25,10
     LTEXT           "",IDC_LOCAL,269,3,25,10
-    LISTBOX         100,1,16,190,130,WS_VSCROLL
+    LISTBOX         100,2,16,190,130,WS_VSCROLL
     LTEXT           "Chat Nodes",IDC_STATIC,197,25,40,10
     LTEXT           "",IDC_NODES,243,25,20,10
     LTEXT           "Chat Users",IDC_STATIC,197,35,40,10
@@ -78,6 +78,8 @@ BEGIN
     LTEXT           "0",IDC_MSGSEM,274,115,20,10
     LTEXT           "0",IDC_ALLOCSEM,274,125,20,10
     LTEXT           "",IDC_USERS,243,35,20,10
+    LTEXT           "Con SEM Clashes",IDC_STATIC,197,135,68,10
+    LTEXT           "0",IDC_CONSEM,274,135,20,10
 END
 
 CONSOLEWINDOW DIALOG DISCARDABLE  17, 25, 400, 301

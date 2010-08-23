@@ -2198,7 +2198,6 @@ VOID ChatTimer()
 	{
 		ChatTmr = 1;
 		node_keepalive();
-		ProgramErrors = 0;
 	}
 }
 
@@ -2318,6 +2317,7 @@ VOID SendChatLinkStatus()
 	char Msg[256] = {0};
 	LINK * link;
 	int len = 0;
+	CIRCUIT *circuit;
 
 	if (ChatApplNum == 0)
 		return;
@@ -2330,6 +2330,37 @@ VOID SendChatLinkStatus()
 
 	for (link = link_hd; link; link = link->next)
 	{
+		if (link->flags & p_linked)
+		{
+			// Verify connection
+
+			for (circuit = circuit_hd; circuit; circuit = circuit->next)
+			{
+				if (strcmp(circuit->Callsign, link->alias) == 0)
+				{
+					if (circuit->Active == 0)
+					{
+						// BPQ Session is dead - Simulate a Disconnect
+
+						circuit->Active = TRUE;				// So disconnect will wokr
+						Disconnected(circuit->BPQStream);
+						NeedStatus = TRUE;					// Reenter
+						return;								// Link Chain has changed
+					}
+					break;
+				}
+			}
+
+			if (circuit == 0)
+			{
+				// No BPQ Session - is the only answer to restart the node?
+
+				Logprintf(LOG_DEBUG, NULL, '!', "Chat is a mess - forcing a restart");
+	//			ProgramErrors = 26;
+	//			CheckProgramErrors();
+			}
+		}
+
 		len = wsprintf(Msg, "%s%s %c ", Msg, link->call, '0' + link->flags);
 
 		if (len > 240)

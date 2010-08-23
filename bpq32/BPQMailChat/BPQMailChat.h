@@ -20,8 +20,9 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
-	CheckProgramErrors();\
+		CheckProgramErrors();\
 }
+
 /*
 #define My__except_Routine(Message) \
 __except(memcpy(&exinfox, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
@@ -37,7 +38,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 		exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress, Message,\
 		exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,\
 		exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi);\
-	CheckProgramErrors();\
+	FreeSemaphore(&ChatSemaphore);\
 	if (conn->BPQStream <  0)\
 		CloseConsole(conn->BPQStream);\
 	else\
@@ -320,6 +321,7 @@ typedef struct ConnectionInfo_S
 	BOOL RMSExpress;					// Set if receiving messages from RMS Express
 	char ** PacLinkCalls;				// Calls we are getting messages for
 	BOOL SkipPrompt;					// Set if a remote node sends a > at the end of his CTEXT
+	int Watchdog;						// Hung Circuit Detect.
 
 } ConnectionInfo, CIRCUIT;
 
@@ -1151,6 +1153,7 @@ extern WPRec ** WPRecPtr;
 extern int NumberofWPrecs;
 
 extern struct SEM AllocSemaphore;
+extern struct SEM ConSemaphore;
 extern struct SEM MsgNoSemaphore;
 
 extern struct MsgInfo * MsgnotoMsg[];	// Message Number to Message Slot List.

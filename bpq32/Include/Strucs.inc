@@ -603,6 +603,7 @@ APPLALIAS		DB	6 DUP (0)
 APFiller		DB	0
 APPLQUAL		DW	0
 APPNODEPOINTER	DD	0			; Pointer to "NODES" entry for this App (if L4)
+APPLCMDNAME		DB	13 DUP (0)  ; Command to invoke this APPL
 
 APPLCALLS		ENDS
 

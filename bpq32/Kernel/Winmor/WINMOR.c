@@ -22,6 +22,21 @@
 // Save Minimized State
 // Handle new "BLOCKED by Busy channel" message from TNC
 
+// Version 1.2.1.4 August 2010 
+
+// Add Scan control of BW setting
+// Reset TNC if stuck in Disconnecting
+// Add option to send reports to WL2K
+// Disconnect if appl not available
+
+// Version 1.2.1.5 August 2010 
+
+// Updates to WL2K Reporting
+// Send Watchdog polls every minute and retrart if no response.
+// Don't connect if channel is busy (unless specifically overridden)
+
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
@@ -57,7 +72,8 @@ KillTNC(struct TNCINFO * TNC);
 RestartTNC(struct TNCINFO * TNC);
 KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
-SendReporttoWL2K();
+SendReporttoWL2K(struct TNCINFO * TNC);
+BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
 
 static char ClassName[]="WINMORSTATUS";
 
@@ -98,6 +114,10 @@ DllImport WORD L4T1;
 DllImport struct APPLCALLS APPLCALLTABLE[];
 DllImport char APPLS;
 
+
+
+DllImport struct BPQVECSTRUC * BPQHOSTVECPTR;
+
 #define MAXBPQPORTS 16
 
 static time_t ltime;
@@ -114,7 +134,6 @@ static char * WINMORHostName[MAXBPQPORTS+1];		// WINMOR Host - may be dotted dec
 
 static unsigned int WINMORInst = 0;
 static int AttachedProcesses=0;
-
 
 static HANDLE STDOUT=0;
 
@@ -305,6 +324,65 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	{
 	case 1:				// poll
 
+
+		if (TNC->BusyDelay)
+		{
+			// Still Busy?
+
+			if ((TNC->Busy & CDBusy) == 0)
+			{
+				// No, so send
+
+				send(TNC->WINMORSock, TNC->ConnectCmd, strlen(TNC->ConnectCmd), 0);
+				TNC->Connecting = TRUE;
+
+				memset(TNC->RemoteCall, 0, 10);
+				memcpy(TNC->RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
+
+				wsprintf(Status, "%s Connecting to %s", TNC->MyCall, TNC->RemoteCall);
+				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+				free(TNC->ConnectCmd);
+				TNC->BusyDelay = 0;
+			}
+			else
+			{
+				// Wait Longer
+
+				TNC->BusyDelay--;
+
+				if (TNC->BusyDelay == 0)
+				{
+					// Timed out - Send Error Response
+
+					UINT * buffptr = Q_REM(&FREE_Q);
+
+					if (buffptr == 0) return (0);			// No buffers, so ignore
+
+					buffptr[1]=39;
+					memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
+
+					Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+					free(TNC->ConnectCmd);
+
+				}
+			}
+		}
+
+
+
+		if (TNC->HeartBeat++ > 600)			// Every Minute
+		{
+			TNC->HeartBeat = 0;
+
+			if (TNC->CONNECTED)
+
+				// Probe link
+
+				send(TNC->WINMORSock, "BUFFERS\r\n", 9, 0);
+			
+		}
+
 		if (TNC->FECMode)
 		{
 			if (TNC->FECIDTimer++ > 6000)		// ID every 10 Mins
@@ -329,7 +407,45 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		if (TNC->TimeSinceLast++ > 18000)			// 30 MINS
+		if (TNC->NeedDisc)
+		{
+			TNC->NeedDisc--;
+
+			if (TNC->NeedDisc == 0)
+			{
+				// Send the DISCONNECT
+
+				send(TNC->WINMORSock, "DISCONNECT\r\n", 12, 0);
+			}
+		}
+
+
+		if (TNC->DiscPending)
+		{
+			TNC->DiscPending--;
+
+			if (TNC->DiscPending == 0)
+			{
+				// Too long in Disc Pending - Kill and Restart TNC
+
+				KillTNC(TNC);
+				RestartTNC(TNC);
+			}
+		}
+		if (TNC->UpdateWL2K)
+		{
+			TNC->UpdateWL2KTimer--;
+
+			if (TNC->UpdateWL2KTimer == 0)
+			{
+				TNC->UpdateWL2KTimer = 36000;		// Every Hour
+				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+					SendReporttoWL2K(TNC);
+			}
+		}
+
+
+		if (TNC->TimeSinceLast++ > 700)			// Allow 10 secs ofr Keepalive
 		{
 			// Restart TNC
 		
@@ -506,7 +622,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			ReleaseBuffer(buffptr);
 
 			return (1);
-
 		}
 
 		return (0);
@@ -546,7 +661,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	
 			if (_memicmp(&buff[8], "XXX\r", 4) == 0)
 			{
-				SendReporttoWL2K();
+				CheckAppl(TNC, "RMS         "); // Is RMS Available?
+
+				SendReporttoWL2K(TNC);
+
 				return 0;
 			}
 
@@ -599,6 +717,23 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
+			if (_memicmp(&buff[8], "OVERRIDEBUSY", 12) == 0)
+			{
+				UINT * buffptr = Q_REM(&FREE_Q);
+
+				TNC->OverrideBusy = TRUE;
+
+				if (buffptr)
+				{
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} OK\r");
+					Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+				}
+
+				return 0;
+
+			}
+
+
 			if (_memicmp(&buff[8], "MAXCONREQ", 9) == 0)
 			{
 				if (buff[17] != 13)
@@ -611,6 +746,19 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 					send(TNC->WINMORSock,&buff[8],strlen(&buff[8]), 0);
 					return 0;
+				}
+			}
+
+			if ((_memicmp(&buff[8], "BW 500", 6) == 0) || (_memicmp(&buff[8], "BW 1600", 7) == 0))
+			{
+				// Generate a local response
+				
+				UINT * buffptr = Q_REM(&FREE_Q);
+
+				if (buffptr)
+				{
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} OK\r");
+					Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 				}
 			}
 
@@ -649,6 +797,24 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 				Connect[txlen] = 0;
 
 				_strupr(Connect);
+
+				// See if Busy
+				
+				if (TNC->Busy & CDBusy)
+				{
+					// Channel Busy. Unless override set, wait
+
+					if (TNC->OverrideBusy == 0)
+					{
+						// Save Command, and wait up to 10 secs
+
+						TNC->ConnectCmd = _strdup(Connect);
+						TNC->BusyDelay = 100;		// 10 secs
+						return 0;
+					}
+				}
+
+				TNC->OverrideBusy = FALSE;
 
 				bytes=send(TNC->WINMORSock, Connect, txlen, 0);
 				TNC->Connecting = TRUE;
@@ -793,6 +959,18 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		if (Param == 3)		// Release  Permission
 		{
 //			send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+			return 0;
+		}
+
+		if (Param == 4)		// Set Wide Mode
+		{
+			send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
+			return 0;
+		}
+
+		if (Param == 5)		// Set Wide Mode
+		{
+			send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
 			return 0;
 		}
 
@@ -1259,8 +1437,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
 	}
 	else
+	{
 		TNC->TimeSinceLast = 0;
-
+		TNC->HeartBeat = 0;
+	}
 
 	Buffer[MsgLen - 2] = 0;			// Remove CRLF
 
@@ -1413,15 +1593,30 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				char AppName[13];
 
 				memcpy(AppName, &ApplPtr[App * 21], 12);
-				MsgLen = wsprintf(Buffer, "%s\r", AppName);
-				buffptr = Q_REM(&FREE_Q);
 
-				if (buffptr == 0) return;			// No buffers, so ignore
+				// Make sure app is available
 
-				buffptr[1] = MsgLen;
-				memcpy(buffptr+2, Buffer, MsgLen);
+				if (CheckAppl(TNC, AppName))
+				{
+					MsgLen = wsprintf(Buffer, "%s\r", AppName);
+					buffptr = Q_REM(&FREE_Q);
 
-				Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+					if (buffptr == 0) return;			// No buffers, so ignore
+
+					buffptr[1] = MsgLen;
+					memcpy(buffptr+2, Buffer, MsgLen);
+
+					Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+				}
+				else
+				{
+					char Msg[] = "Application not available\r\n";
+					
+					// Send a Message, then a disconenct
+					
+					send(TNC->WINMORDataSock, Msg, strlen(Msg), 0);
+					TNC->NeedDisc = 100;	// 10 secs
+				}
 			}
 			return;
 		}
@@ -1512,7 +1707,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "MODE", 4) == 0)
 	{
-		Debugprintf("WINMOR RX: %s", Buffer);
+	//	Debugprintf("WINMOR RX: %s", Buffer);
 		SetDlgItemText(TNC->hDlg, IDC_MODE, &Buffer[5]);
 		return;
 	}
@@ -1531,13 +1726,19 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		else
 			TNC->ConnectPending = FALSE;
 
+		if (_memicmp(&Buffer[9], "DISCONNECTING", 13) == 0)	// So we can timout stuck discpending
+			TNC->DiscPending = 600;
+
+		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)	// Save Pending state for scan control
+			TNC->DiscPending = FALSE;
+
 		SetDlgItemText(TNC->hDlg, IDC_PROTOSTATE, &Buffer[9]);
 		return;
 	}
 
 	if (_memicmp(Buffer, "BUFFERS", 7) == 0)
 	{
-		Debugprintf("WINMOR RX: %s", Buffer);
+	//	Debugprintf("WINMOR RX: %s", Buffer);
 		SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, &Buffer[8]);
 		return;
 	}
@@ -1696,7 +1897,7 @@ loop:
 	}
 
 
-	Debugprintf("Winmor: RXD %d bytes", InputLen);
+	//Debugprintf("Winmor: RXD %d bytes", InputLen);
 
 	if (InputLen == 0)
 	{
@@ -1834,6 +2035,8 @@ int Socket_Data(int sock, int error, int eventcode)
 
 			i=wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 			WritetoConsole(ErrMsg);
+
+			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to WINMOR TNC lost");
 				
 			TNC->CONNECTING = FALSE;
 			TNC->CONNECTED = FALSE;
@@ -1970,7 +2173,7 @@ RestartTNC(struct TNCINFO * TNC)
 	SInfo.cbReserved2=0; 
   	SInfo.lpReserved2=NULL; 
 
-	CreateProcess(TNC->ProgramPath, TNC->ProgramPath, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+	CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 
 	return 0;
 }
@@ -2093,20 +2296,69 @@ VOID MoveWindows(struct TNCINFO * TNC)
 
 }
 
-
-BOOL SendReporttoWL2K()
+BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 {
-	SOCKET sock;
-	short Port = 8778;
-	char Host[] = "winlink.org";
+	struct APPLCALLS * APPL;
+	struct BPQVECSTRUC * PORTVEC;
+	int Allocated = 0, Available = 0;
+	int App, Stream;
+	// See if there is an RMS Application
 
-	char Message[] = "02'GM8BPQ-10', 'GM8BPQ', 'IO68VL', 7000000, 22, 0, 50, 50, 0, 000, 'Testing', 1";
-	char Message1[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 3574500, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
-	char Message2[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 7078500, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
-	char Message3[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 10134500, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
-	char Message4[] = "02'KE7XO-10', 'KE7XO', 'DM26KF', 14112000, 21, 0, 50, 30, 0, 000, '24/7 BPQ', 1";
+	Debugprintf("Checking if RMS is running");
 
-	SOCKADDR_IN sinx; 
+
+	for (App = 0; App < 32; App++)
+	{
+		APPL=&APPLCALLTABLE[App];
+
+		if (memcmp(APPL->APPLCMD, Appl, 12) == 0)
+		{
+			int ApplMask = 1 << App;
+
+			memcpy(TNC->RMSCall, APPL->APPLCALL_TEXT, 9);		// Need Null on end
+
+			// See if App is running
+
+			PORTVEC=BPQHOSTVECPTR;
+
+			for (Stream = 0; Stream < 64; Stream++)
+			{	
+				if (PORTVEC->HOSTAPPLMASK & ApplMask)
+				{
+					Allocated++;
+
+					if (PORTVEC->HOSTSESSION == 0 && (PORTVEC->HOSTFLAGS &3) == 0)
+					{
+						// Free and no outstanding report
+						
+						return TRUE;		// Running
+					}
+				}
+				PORTVEC++;
+			}
+		}
+	}
+
+	return FALSE;			// Not Running
+}
+
+VOID SendReporttoWL2KThread(struct TNCINFO * TNC);
+
+BOOL SendReporttoWL2K(struct TNCINFO * TNC)
+{
+	Debugprintf("Starting WL2K Update Thread");
+
+	_beginthread(SendReporttoWL2KThread,0,(int)TNC);
+
+	return 0;
+}
+
+SOCKET sock;
+
+VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
+{
+	char Message[100];
+	
 	SOCKADDR_IN destaddr;
 	int addrlen=sizeof(sinx);
 	struct hostent * HostEnt;
@@ -2118,6 +2370,13 @@ BOOL SendReporttoWL2K()
     WORD VersionRequested;   // passed to WSAStartup
     WSADATA WsaData;            // receives data from WSAStartup
 
+	struct ScanEntry ** Freqptr;
+	char * Valchar;
+	int dec, sign;
+	char FreqString[80]="";
+	int Mode;
+	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
+
 
 	VersionRequested = MAKEWORD(1, 0);
     Error = WSAStartup(VersionRequested, &WsaData);
@@ -2127,73 +2386,207 @@ BOOL SendReporttoWL2K()
        MessageBox(NULL,
             TEXT("Could not initialise WinSock"),
             TEXT("WINMOR"), MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
-        return FALSE;
+        return;
 	}
 
 	// Resolve Name if needed
 
 	destaddr.sin_family = AF_INET; 
-	destaddr.sin_port = htons(Port);
-
-	destaddr.sin_addr.s_addr = inet_addr(Host);
-	destaddr.sin_port = htons(Port);
+	destaddr.sin_addr.s_addr = inet_addr(TNC->Host);
+	destaddr.sin_port = htons(TNC->Port);
 
 	if (destaddr.sin_addr.s_addr == INADDR_NONE)
 	{
 	//	Resolve name to address
 
-		HostEnt = gethostbyname (Host);
+		Debugprintf("Resolving %s", TNC->Host);
+		HostEnt = gethostbyname (TNC->Host);
 		 
 		if (!HostEnt)
 		{
 			err = WSAGetLastError();
 
-			wsprintf(errmsg, TEXT("Res Falied %d %x"),err, err);
-			MessageBox(NULL, errmsg, NULL, MB_OK);
+			wsprintf(errmsg, TEXT("Resolve Failed for %s %d %x"), TNC->Host, err, err);
+			MessageBox(NULL, errmsg, "WINMOR Reporting", MB_OK);
 
-			return FALSE;			// Resolve failed
+			return;			// Resolve failed
 		}
 		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
 	}
 
 	//   Allocate a Socket entry
 
+
+	if (sock)
+		closesocket(sock);
+
 	sock=socket(AF_INET,SOCK_DGRAM,0);
 
 	if (sock == INVALID_SOCKET)
 	{
-  	 	return FALSE; 
+  	 	return; 
 	}
 
 	ioctlsocket (sock, FIONBIO, &param);
  
 	setsockopt (sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt, 4);
 
-	sinx.sin_family = AF_INET;
-	sinx.sin_addr.s_addr = INADDR_ANY;
-	sinx.sin_port = htons(8778);
-
 	destaddr.sin_family = AF_INET;
 
-	if (bind(sock, (LPSOCKADDR) &sinx, sizeof(sinx)) != 0 )
+	if (TNC->UseRigCtrlFreqs)
 	{
-		//
-		//	Bind Failed
-		//
-		err = WSAGetLastError();
-		wsprintf(errmsg, "Bind Failed for UDP socket - error code = %d", err);
-		MessageBox(NULL,errmsg,NULL, MB_OK);
-		return FALSE;
-	}
-	
-	sendto(sock, Message1, strlen(Message1),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-	sendto(sock, Message2, strlen(Message2),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-	sendto(sock, Message3, strlen(Message3),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-	sendto(sock, Message4, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+		int HHStart;
+		int HHEnd;
 
-	Sleep(500);
+		if (TNC->RIG == 0)
+			TNC->RIG = Rig_GETPTTREC(TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+
+		if (TNC->RIG)
+		{
+			struct WL2KInfo * WL2KInfoPtr;
+			int n = 0;
+
+			TimeBands = TNC->RIG->TimeBands;
+
+			if (TimeBands == NULL)
+				return;
+
+			// Build Frequency list if needed
+
+			if (TNC->WL2KInfoList[0].Bandwidth == 0)
+			{
+				// Not set up yet
+
+			Debugprintf("Building Freq List");
+
+			__try {
+
+			while(TimeBands[1])
+			{
+				Debugprintf("TimeBands %x", TimeBands);
+				Debugprintf("TimeBands[1] %x", TimeBands[1]);
+
+				Freqptr = TimeBands[1]->Scanlist;
+	
+				if (Freqptr == NULL)
+					return;			
+		
+				while (Freqptr[0])
+				{
+
+					Debugprintf("Building Freq List Entry %x", Freqptr);
+					Debugprintf("*Freqptr %x", *Freqptr);
+
+					__try 
+					{
+
+					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
+
+					if (Freqptr[0]->Bandwidth == 'W')
+						Mode = 22;
+					else
+						Mode = 21;
+
+					HHStart = TimeBands[1]->Start /3600;
+					HHEnd = TimeBands[1]->End /3600;
+
+					// See if freq already defined
+
+					n = 0;
+					
+					WL2KInfoPtr = &TNC->WL2KInfoList[0];
+
+					while (WL2KInfoPtr->Bandwidth)
+					{
+						if (strcmp(WL2KInfoPtr->Freq, Valchar) == 0)
+						{
+							// Add timeband to freq
+
+							wsprintf(WL2KInfoPtr->TimeList, "%s,%02d-%02d",
+								WL2KInfoPtr->TimeList, HHStart, HHEnd);
+
+							goto gotfreq;
+						}
+
+						WL2KInfoPtr = &TNC->WL2KInfoList[++n];
+					}
+
+					// Not found - add it
+
+					WL2KInfoPtr->Freq = _strdup(Valchar);
+					WL2KInfoPtr->TimeList = malloc(100);
+
+					wsprintf(WL2KInfoPtr->TimeList, "%02d-%02d", HHStart, HHEnd);
+					WL2KInfoPtr->Bandwidth = Mode;
+
+				
+				gotfreq:
+					;
+					}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{
+						Debugprintf("Program Error processing freq entry");
+					}
+
+					Freqptr++;
+					Debugprintf("Freqptr now %x", Freqptr);
+					Debugprintf("*Freqptr now %x", *Freqptr);
+
+				}
+				TimeBands++;
+				Debugprintf("TimeBands now %x", TimeBands);
+				Debugprintf("TimeBands[1] now %x", TimeBands[1]);
+			}
+			}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{
+						Debugprintf("Program Error processing freq list");
+					}
+
+			}
+		
+			// Send each entry in the list
+
+			__try
+			{
+
+			n = 0;
+					
+			WL2KInfoPtr = &TNC->WL2KInfoList[0];
+
+			while (WL2KInfoPtr->Bandwidth)
+			{
+				wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+					TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
+					WL2KInfoPtr->Bandwidth, WL2KInfoPtr->TimeList);
+
+				Debugprintf("Sending %s", Message);
+
+				sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+				WL2KInfoPtr = &TNC->WL2KInfoList[++n];
+			}
+			}
+			__except(EXCEPTION_EXECUTE_HANDLER)
+			{
+				Debugprintf("Program Error sending freq list");
+			}
+
+		}
+	}
+	else
+	{
+		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, TNC->Comment);
+
+		Debugprintf("Sending %s", Message);
+		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+	}
+
+	Sleep(100);
 
 	closesocket(sock);
+	sock = 0;
 
-	return TRUE;
+	return;
 }

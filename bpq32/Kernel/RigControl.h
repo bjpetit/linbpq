@@ -2,27 +2,42 @@
 #include <winioctl.h>
 #include "Rigresource.h"
 
-#define IDI_ICON2                       2
+#define IDI_ICON2 2
 
 #define MAXBLOCK 4096
 
 struct TimeScan
 {
 	time_t Start;
-	char * Scanlist;
+	time_t End;
+	struct ScanEntry ** Scanlist;
+};
+
+struct ScanEntry
+{
+	//	Holds info for one frequency change. May Need to set Feeq, Mode, Repeater Split, Pactor/Winmor Bandwidth
+
+	double Freq;		// In case nneded to report to WL2K
+	char Bandwidth;
+	char * Cmd1;
+	int xCmd1Len;
+	char * Cmd2;
+	int xCmd2Len;
+	char * Cmd3;
+	int Cmd3Len;
 };
 
 struct RIGINFO
 {
 //	struct TRANSPORTENTRY * AttachedSession;
 
-	int BPQtoRADIO_Q;			// Frames for PACTOR
+	int BPQtoRADIO_Q;			// Frames from switch for radio
 
 	UINT BPQPort;				// Port this radio is attached to. Bit Map, as may be more than one port controlling radio
-	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
+	struct _EXTPORTDATA * PortRecord[32]; // BPQ32 port record(s) for this rig (null terminated list)
 
 	UCHAR RigAddr;
-	int ScanStopped;			// Scanning enabled of zero. Bits used for interlocked scanning (eg winmor/pactor on same port
+	int ScanStopped;			// Scanning enabled if zero. Bits used for interlocked scanning (eg winmor/pactor on same port
 	int ScanCounter;
 	int PollCounter;			// Don't poll too often;
 	int ScanFreq;				// Scan Rate
@@ -33,8 +48,8 @@ struct RIGINFO
 	BOOL RIGOK;					// RIG is reponding
 
 	int Session;				// BPQ L4 Record Number
-	UCHAR Mode;					// Save to send after getting freq ack
-	UCHAR Filter;
+//	UCHAR Mode;					// Save to send after getting freq ack
+//	UCHAR Filter;
 
 	char RigName[10];
 
@@ -43,9 +58,9 @@ struct RIGINFO
 
 	char * FreqText;			// Frequency list in text format
 
-	// Frequency list is a block of Set Freq/Mode commands in link format, null terminated
+	// Frequency list is a block of ScanEntry structs, each holding Set Freq/Mode commands in link format, null terminated
 
-	char * FreqPtr;
+	struct ScanEntry ** FreqPtr;
 
 	int PTTMode;				// PTT COntrol Flags.
 
@@ -94,7 +109,11 @@ struct PORTINFO
 	int RXLen;						// Data in RXBUffer
 	HWND hStatus;
 	BOOL AutoPoll;					// set if last command was a Timer poll 
-
+	// Local ScanStruct for Interactive Commands
+	struct ScanEntry * FreqPtr;		// Block we are currently sending.
+	struct ScanEntry ScanEntry;	
+	char Line2[10];
+	char Line3[10];
 };
 
 

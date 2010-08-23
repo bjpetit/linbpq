@@ -13,6 +13,7 @@
 #define IDC_USERS2                      513
 #define IDC_MSGSEM                      514
 #define IDC_ALLOCSEM                    515
+#define IDC_CONSEM	                    517
 #define IDC_REMOVED                     1006
 #define IDC_KILLED                      1007
 #define IDC_LIVE                        1008

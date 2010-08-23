@@ -253,6 +253,7 @@ struct APPLCALLS
 	USHORT APPLQUAL;
 	struct DEST_LIST * NODEPOINTER;	// Pointer to "NODES" entry for this App (if L4)
 
+	char APPLCMD[13];				//
 
 } applcalls;
 

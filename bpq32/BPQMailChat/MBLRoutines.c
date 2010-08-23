@@ -290,7 +290,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		return;
 	}
 
-	nputs(conn, ">\r");
+//	nputs(conn, ">\r");
 
 }
 

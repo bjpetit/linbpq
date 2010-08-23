@@ -26,7 +26,6 @@
 #include "time.h"
 #include <commctrl.h>
 
-
 //#include <process.h>
 //#include <time.h>
 
@@ -87,7 +86,6 @@ int Q_ADD_RIG(UINT *Q,UINT *BUFF);
 extern  struct TRANSPORTENTRY * L4TABLE;
 
 
-
 VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
 BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 
@@ -110,11 +108,9 @@ char YaesuModes[16][6] = {"LSB",  "USB", "CW", "CWR", "AM", "", "", "", "FM", ""
 
 char KenwoodModes[8][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "????"};
 
-
 char AuthPassword[100] = "";
 
 char LastPassword[17];
-
 
 //
 //	Code Common to Pactor Modules
@@ -313,13 +309,14 @@ struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
 {
 	struct TimeScan * Band = malloc(sizeof (struct TimeScan));
 	
-	RIG->TimeBands = realloc(RIG->TimeBands, (++RIG->NumberofBands+1)*4);
+	RIG->TimeBands = realloc(RIG->TimeBands, (++RIG->NumberofBands+2)*4);
 	RIG->TimeBands[RIG->NumberofBands] = Band;
+	RIG->TimeBands[RIG->NumberofBands+1] = NULL;
 
 	return Band;
 }
 
-char * CheckTimeBands(struct RIGINFO * RIG)
+DllExport struct ScanEntry ** APIENTRY CheckTimeBands(struct RIGINFO * RIG)
 {
 	int i = 0;
 	time_t NOW = time(NULL) % 86400;
@@ -400,10 +397,14 @@ ProcessLine(char * buf)
 	int len = 510;
 	struct PORTINFO * PORT;
 	struct RIGINFO * RIG;
-	char * FreqPtr;
+	struct ScanEntry ** FreqPtr;
+	char * CmdPtr;
 	char * Context;
 	int Portno;
 	struct PORTCONTROL * PortRecord;
+	char Split, Data;
+	char Bandwidth;
+	struct TimeScan * SaveBand;
 
 NextPort:
 
@@ -541,9 +542,12 @@ NextPort:
 				if (ptr != NULL)
 				{
 					struct TimeScan * Band = AllocateTimeRec(RIG);
+					SaveBand = Band;
 
 					Band->Start = 0;
+					Band->End = 84540;	//23:59
 					FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
+					memset(FreqPtr, 0, 1000);
 				}
 
 				while(ptr)
@@ -568,13 +572,18 @@ NextPort:
 					{
 						// New TimeBand
 
-						struct TimeScan * Band = AllocateTimeRec(RIG);
+						struct TimeScan * Band;
+						
+						Band = AllocateTimeRec(RIG);
 
-						*FreqPtr = 0;		// Terminate Last Band
+						*FreqPtr = (struct ScanEntry *)0;		// Terminate Last Band
 						
 						Band->Start = (atoi(ptr) * 3600) + (atoi(&ptr[3]) * 60);
+						Band->End = 84540;	//23:59
+						SaveBand->End = Band->Start - 60;
 
 						FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
+						memset(FreqPtr, 0, 1000);
 
 						ptr = strtok_s(NULL, " \t\n\r", &Context);
 											
@@ -582,14 +591,31 @@ NextPort:
 					
 						if (Modeptr)
 							*Modeptr++ = 0;
-
 					}
-
 
 					Freq = atof(ptr);
 
+					// Mode can include 1/2/3 for Icom Filers. W/N for Winmor/Pactor Bandwidth, and +/-/S for Repeater Shift (S = Simplex) 
+					// First is always Mode
+
+					Split = Data = Bandwidth = 0;
+
 					if (Modeptr)
 					{
+						if (strchr(&Modeptr[1], '+'))
+							Split = '+';
+						else if (strchr(&Modeptr[1], '-'))
+							Split = '-';
+						else if (strchr(&Modeptr[1], 'S'))
+							Split = 'S';
+						else if (strchr(&Modeptr[1], 'D'))
+							Data = 1;
+						
+						if (strchr(&Modeptr[1], 'W'))
+							Bandwidth = 'W';
+						else if (strchr(&Modeptr[1], 'N'))
+							Bandwidth = 'N';
+
 						switch(PORT->PortType)
 						{
 						case ICOM:						
@@ -619,7 +645,6 @@ NextPort:
 							}
 							break;
 						}
-
 					}
 
 					Freq = Freq * 1000000.0;
@@ -641,71 +666,107 @@ NextPort:
 					if (dec == 5)	// 0.01 - .1
 						wsprintf(FreqString, "000%s", Valchar);
 
+					FreqPtr[0] = malloc(sizeof(struct ScanEntry));
+					memset(FreqPtr[0], 0, sizeof(struct ScanEntry));
+
+					FreqPtr[0]->Freq = Freq;
+					FreqPtr[0]->Bandwidth = Bandwidth;
+
+					CmdPtr = FreqPtr[0]->Cmd1 = malloc(40);
+
 					if 	(PORT->PortType == ICOM)
 					{
-					*(FreqPtr++) = 0xFE;
-					*(FreqPtr++) = 0xFE;
-					*(FreqPtr++) = RIG->RigAddr;
-					*(FreqPtr++) = 0xE0;
-					*(FreqPtr++) = 0x5;		// Set frequency command
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = RIG->RigAddr;
+					*(CmdPtr++) = 0xE0;
+					*(CmdPtr++) = 0x5;		// Set frequency command
 
 					// Need to convert two chars to bcd digit
 	
-					*(FreqPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
-					*(FreqPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
-					*(FreqPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
-					*(FreqPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
-					*(FreqPtr++) = (FreqString[0] - 48);
+					*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
+					*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
+					*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
+					*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+					*(CmdPtr++) = (FreqString[0] - 48);
 
-					*(FreqPtr++) = 0xFD;
+					*(CmdPtr++) = 0xFD;
 
 					if (Modeptr)
-					{
-						*(FreqPtr++) = 0xFE;
-						*(FreqPtr++) = 0xFE;
-						*(FreqPtr++) = RIG->RigAddr;
-						*(FreqPtr++) = 0xE0;
-						*(FreqPtr++) = 0x6;		// Set Mode
-						*(FreqPtr++) = ModeNo;
-						*(FreqPtr++) = Modeptr[1] - '0';
-						*(FreqPtr++) = 0xFD;
-					}
-					else
-					{
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-					}
+					{						
+						CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = RIG->RigAddr;
+						*(CmdPtr++) = 0xE0;
+						*(CmdPtr++) = 0x6;		// Set Mode
+						*(CmdPtr++) = ModeNo;
+						*(CmdPtr++) = Modeptr[1] - '0';
+						*(CmdPtr++) = 0xFD;
 
+						if (Split)
+						{
+							CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+							FreqPtr[0]->Cmd3Len = 7;
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = RIG->RigAddr;
+							*(CmdPtr++) = 0xE0;
+							*(CmdPtr++) = 0xF;		// Set Mode
+							if (Split == 'S')
+								*(CmdPtr++) = 0x10;
+							else
+								if (Split == '+')
+									*(CmdPtr++) = 0x12;
+							else
+								if (Split == '-')
+									*(CmdPtr++) = 0x11;
+			
+							*(CmdPtr++) = 0xFD;
+						}
+						else
+						{
+							if (Data)
+							{
+								CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+								FreqPtr[0]->Cmd3Len = 8;
+								*(CmdPtr++) = 0xFE;
+								*(CmdPtr++) = 0xFE;
+								*(CmdPtr++) = RIG->RigAddr;
+								*(CmdPtr++) = 0xE0;
+								*(CmdPtr++) = 0x1a;		
+								*(CmdPtr++) = 0x6;		// Set Data
+								*(CmdPtr++) = 0x1;		//On		
+								*(CmdPtr++) = 0xFD;
+							}
+						}
+					}
 					}
 					else if	(PORT->PortType == YAESU)
 					{	
 						//Send Mode first - changing mode can change freq
 
-						*(FreqPtr++) = ModeNo;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 0;
-						*(FreqPtr++) = 7;
+						*(CmdPtr++) = ModeNo;
+						*(CmdPtr++) = 0;
+						*(CmdPtr++) = 0;
+						*(CmdPtr++) = 0;
+						*(CmdPtr++) = 7;
 
-						*(FreqPtr++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
-						*(FreqPtr++) = (FreqString[3] - 48) | ((FreqString[2] - 48) << 4);
-						*(FreqPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
-						*(FreqPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
-						*(FreqPtr++) = 1;
+						*(CmdPtr++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
+						*(CmdPtr++) = (FreqString[3] - 48) | ((FreqString[2] - 48) << 4);
+						*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
+						*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
+						*(CmdPtr++) = 1;
 					
 					}
 					else if	(PORT->PortType == KENWOOD)
 					{	
-						FreqPtr += wsprintf(FreqPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+						CmdPtr += wsprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 					}
 
-					*(FreqPtr) = 0;
+					*(CmdPtr) = 0;
+
+					FreqPtr++;
 
 					RIG->ScanCounter = 20;
 
@@ -880,7 +941,7 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 {
 	int n, Port, ModeNo, Filter;
 	double Freq = 0.0;
-	char FreqString[80]="", Mode[80];
+	char FreqString[80]="", Mode[80], Data[80] = "";
 	UINT * buffptr;
 	UCHAR * Poll;
 	char * 	Valchar ;
@@ -889,8 +950,12 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 	int i, p;
 	struct RIGINFO * RIG;
 	struct TRANSPORTENTRY * L4 = L4TABLE;
+	char * ptr;
 
 	//	Only Allow RADIO from Secure Applications
+
+	ptr = strchr(Command, 13);
+	if (ptr) *(ptr) = 0;						// Null Terminate
 
 	if (memcmp(Command, " AUTH ", 6) == 0)
 	{
@@ -929,7 +994,7 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 		return FALSE;
 	}
 
-	n = sscanf(Command,"%d %s %s %d ", &Port, &FreqString, &Mode  , &Filter);
+	n = sscanf(Command,"%d %s %s %d %s", &Port, &FreqString, &Mode, &Filter, &Data);
 
 	// Look for the port 
 
@@ -959,7 +1024,7 @@ portok:
 
 	if (n > 1)
 	{
-		if (strcmp(FreqString, "SCANSTART") == 0)
+		if (_stricmp(FreqString, "SCANSTART") == 0)
 		{
 			if (RIG->NumberofBands)
 			{
@@ -982,7 +1047,7 @@ portok:
 			return FALSE;
 		}
 
-		if (strcmp(FreqString, "SCANSTOP") == 0)
+		if (_stricmp(FreqString, "SCANSTOP") == 0)
 		{
 			RIG->ScanStopped |= (1 << Port);
 			SetWindowText(RIG->hSCAN, "");
@@ -1021,23 +1086,30 @@ portok:
 	switch (PORT->PortType)
 	{ 
 	case ICOM:
-	
-		if (n != 4)
-		{
-			strcpy(Command, "Sorry - Invalid Format - should be Port Freq Mode Filter Width\r");
-			return FALSE;
-		}
 
-		for (ModeNo = 0; ModeNo < 8; ModeNo++)
-		{
-			if (_stricmp(Modes[ModeNo], Mode) == 0)
-				break;
-		}
+		if (n == 2)
+			// Set Freq Only
 
-		if (ModeNo == 8)
+			ModeNo = -1;
+		else
 		{
-			wsprintf(Command, "Sorry - Invalid Mode\r");
-			return FALSE;
+			if (n < 4)
+			{
+				strcpy(Command, "Sorry - Invalid Format - should be Port Freq Mode Filter Width\r");
+				return FALSE;
+			}
+
+			for (ModeNo = 0; ModeNo < 8; ModeNo++)
+			{
+				if (_stricmp(Modes[ModeNo], Mode) == 0)
+					break;
+			}
+
+			if (ModeNo == 8)
+			{
+				wsprintf(Command, "Sorry - Invalid Mode\r");
+				return FALSE;
+			}
 		}
 
 		buffptr = Q_REM_RIG(&FREE_Q_RIG);
@@ -1061,20 +1133,29 @@ portok:
 		*(Poll++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
 		*(Poll++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
 		*(Poll++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
-		*(Poll++)  = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+		*(Poll++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
 		*(Poll++) = (FreqString[0] - 48);
 		*(Poll++) = 0xFD;
 
-		*(Poll++) = 0xFE;
-		*(Poll++) = 0xFE;
-		*(Poll++) = RIG->RigAddr;
-		*(Poll++) = 0xE0;
-		*(Poll++) = 0x6;		// Set Mode
-		*(Poll++) = ModeNo;
-		*(Poll++) = Filter;
-		*(Poll++) = 0xFD;
+		if (ModeNo == -1)			// Dont Set
+		{
+			*(Poll++) = 0;
+		}
+		else
+		{
+			*(Poll++) = 0xFE;
+			*(Poll++) = 0xFE;
+			*(Poll++) = RIG->RigAddr;
+			*(Poll++) = 0xE0;
+			*(Poll++) = 0x6;		// Set Mode
+			*(Poll++) = ModeNo;
+			*(Poll++) = Filter;
+			*(Poll++) = 0xFD;
 
-		buffptr[1] = 19;
+			*(Poll++) = Data[0];
+		}
+
+		buffptr[1] = 20;
 		
 		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1172,6 +1253,8 @@ portok:
 
 int BittoInt(UINT BitMask)
 {
+	// Returns bit position of first 1 bit in BitMask
+	
 	int i = 0;
 	while ((BitMask & 1) == 0)
 	{	
@@ -1234,8 +1317,24 @@ DllExport BOOL APIENTRY Rig_Init()
 
 		for (i=0; i < PORT->ConfiguredRigs; i++)
 		{
+			int j;
+			int k = 0;
+			int BitMask;
+
 			RIG = &PORT->Rigs[i];
-			RIG->PortRecord = (struct _EXTPORTDATA *)GetPortTableEntry(BittoInt(RIG->BPQPort)); // BPQ32 port record for this port
+			BitMask = RIG->BPQPort;
+
+			// Get record for each port in Port Bitmap
+			
+			for (j = 0; j < 32; j++)
+			{
+				if (BitMask & 1)
+				{	
+					RIG->PortRecord[k++] = (struct _EXTPORTDATA *)GetPortTableEntry(j); // BPQ32 port record for this port
+				}
+				BitMask >>= 1;
+			}
+
 			RIG->PORT = PORT;		// For PTT
 			
 			if (RIG->NumberofBands)
@@ -1693,13 +1792,13 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 		{
 			//	Send Next Freq
 
-			UCHAR * ptr;
+			struct ScanEntry ** ptr;
 
 			// Get Permission to change
 
 			if (RIG->WaitingForPermission)
 			{
-				RIG->OKtoChange = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
+				RIG->OKtoChange = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
 	
 				if (RIG->OKtoChange == 1)
 					goto DoChange;
@@ -1719,8 +1818,8 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 			}
 			else
 			{
-				if (RIG->PortRecord->PORT_EXT_ADDR)
-					RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
+				if (RIG->PortRecord[0]->PORT_EXT_ADDR)
+					RIG->WaitingForPermission = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 				// If it returns zero there is no need to wait.
 				
@@ -1740,12 +1839,31 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 			if (ptr == NULL)
 				return;					// No Freqs
 		
-			if (*(ptr) == 0)			// End of list - reset to start
+			if (ptr[0] == (struct ScanEntry *)0)			// End of list - reset to start
 				ptr = CheckTimeBands(RIG);
 
-			memcpy(PORT->TXBuffer, ptr, 19);
+			PORT->FreqPtr = ptr[0];			// Save Scan Command Block
 
-			RIG->FreqPtr += 19;
+			// If Bandwidth Change needed, do it
+
+			if (ptr[0]->Bandwidth)
+			{
+				i = 0;
+
+				while (RIG->PortRecord[i])
+				{
+					if (ptr[0]->Bandwidth == 'W')
+						RIG->PortRecord[i]->PORT_EXT_ADDR(6, RIG->PortRecord[i]->PORTCONTROL.PORTNUMBER, 4);	// Set Wide Mode
+					else
+						RIG->PortRecord[i]->PORT_EXT_ADDR(6, RIG->PortRecord[i]->PORTCONTROL.PORTNUMBER, 5);	// Set Narrow Mode
+					i++;
+				}
+			}
+
+
+			memcpy(PORT->TXBuffer, ptr[0]->Cmd1, 24);
+
+			RIG->FreqPtr++;
 	
 			PORT->TXLen = 11;
 			RigWriteCommBlock(PORT);
@@ -1768,6 +1886,39 @@ ScanExit:
 		datalen=buffptr[1];
 
 		memcpy(Poll, buffptr+2, datalen);
+
+		// Build a ScanEntry struct for the Set Mode bit
+
+
+		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
+
+		if (Poll[11])
+		{
+			PORT->ScanEntry.Cmd2 = (char *)&PORT->Line2;	// Put The Set mode Command into ScanStruct
+			memcpy(PORT->Line2, &Poll[11], 8);
+
+			if (Poll[19])		// Need Data Mode
+			{
+				char * CmdPtr = (char *)&PORT->Line3;
+
+				PORT->ScanEntry.Cmd3 = (char *)&PORT->Line3;
+				PORT->ScanEntry.Cmd3Len = 8;
+
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = RIG->RigAddr;
+				*(CmdPtr++) = 0xE0;
+				*(CmdPtr++) = 0x1a;		
+				*(CmdPtr++) = 0x6;		// Set Data
+				*(CmdPtr++) = 0x1;		//On		
+				*(CmdPtr++) = 0xFD;
+			}
+			else
+				PORT->ScanEntry.Cmd3 = NULL;			// No Shift
+		}
+		else
+			PORT->ScanEntry.Cmd2 = NULL;		// No Mode
+		
 
 		PORT->TXLen = 11;					// First send the set Freq
 		RigWriteCommBlock(PORT);
@@ -1866,9 +2017,9 @@ ok:
 
 		if (PORT->TXBuffer[4] == 5)
 		{
-			if (PORT->TXBuffer[11])
+			if (PORT->FreqPtr->Cmd2)
 			{
-				memcpy(PORT->TXBuffer, &PORT->TXBuffer[11], 8);
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd2, 8);
 				PORT->TXLen = 8;
 				RigWriteCommBlock(PORT);
 				PORT->Retries = 2;
@@ -1877,6 +2028,9 @@ ok:
 			{
 				if (!PORT->AutoPoll)
 					SendResponse(RIG->Session, "Frequency Set OK");
+		
+				PORT->Timeout = 0;
+
 			}
 
 			return;
@@ -1884,11 +2038,28 @@ ok:
 
 		if (PORT->TXBuffer[4] == 6)
 		{
+			if (PORT->FreqPtr->Cmd3)
+			{
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd3, 10);
+				PORT->TXLen = PORT->FreqPtr->Cmd3Len;
+				RigWriteCommBlock(PORT);
+				PORT->Retries = 2;
+				return;
+			}
+
+			goto SetFinished;
+		}
+
+		if (PORT->TXBuffer[4] == 0x0f || PORT->TXBuffer[4] == 0x01a)	// Set DUP or Set Data
+		{
+
+SetFinished:
+
 			// Set Mode Response - if scanning read freq, else return OK to user
 
 			if (RIG->ScanStopped == 0)
 			{
-				RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 3);	// Release Perrmission
+				RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 3);	// Release Perrmission
 
 				Poll[0] = 0xFE;
 				Poll[1] = 0xFE;
@@ -1925,6 +2096,9 @@ ok:
 			else
 			if (PORT->TXBuffer[4] == 6)
 				SendResponse(RIG->Session, "Sorry - Set Mode Command Rejected");
+			else
+			if (PORT->TXBuffer[4] == 0x0f)
+				SendResponse(RIG->Session, "Sorry - Set Shift Command Rejected");
 		}
 		return;
 	}
@@ -2079,7 +2253,7 @@ VOID ProcessYaesuCmdAck(struct PORTINFO * PORT)
 
 	if (PORT->CmdSent == 1)						// Set Freq
 	{
-		RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 3);	// Release Perrmission
+		RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 3);	// Release Perrmission
 
 		if (Msg[0])
 		{
@@ -2222,13 +2396,13 @@ VOID YaesuPoll(struct PORTINFO * PORT)
 		{
 			//	Send Next Freq
 
-			UCHAR * ptr;
+			struct ScanEntry ** ptr;
 
 			// Get Permission to change
 
 			if (RIG->WaitingForPermission)
 			{
-				RIG->OKtoChange = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
+				RIG->OKtoChange = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
 	
 				if (RIG->OKtoChange == 1)
 					goto DoChange;
@@ -2248,8 +2422,8 @@ VOID YaesuPoll(struct PORTINFO * PORT)
 			}
 			else
 			{
-				if (RIG->PortRecord->PORT_EXT_ADDR)
-					RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
+				if (RIG->PortRecord[0]->PORT_EXT_ADDR)
+					RIG->WaitingForPermission = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 				// If it returns zero there is no need to wait.
 				
@@ -2270,12 +2444,12 @@ VOID YaesuPoll(struct PORTINFO * PORT)
 			if (ptr == NULL)
 				return;					// No Freqs
 		
-			if (*(ptr) == 0)			// End of list - reset to start
+			if (ptr[0] == (struct ScanEntry *)0)			// End of list - reset to start
 				ptr = CheckTimeBands(RIG);
 
-			memcpy(PORT->TXBuffer, ptr, 10);
+			memcpy(PORT->TXBuffer, ptr[0]->Cmd1, 24);
 
-			RIG->FreqPtr += 10;
+			RIG->FreqPtr++;
 	
 			PORT->TXLen = 5;
 			RigWriteCommBlock(PORT);
@@ -2456,15 +2630,17 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 	{
 		if (RIG->ScanCounter <= 0)
 		{
+			int i = 0;
+			
 			//	Send Next Freq
 
-			UCHAR * ptr;
+			struct ScanEntry ** ptr;
 
 			// Get Permission to change
 
 			if (RIG->WaitingForPermission)
 			{
-				RIG->OKtoChange = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
+				RIG->OKtoChange = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 2);	// Get Ok Flag
 	
 				if (RIG->OKtoChange == 1)
 					goto DoChange;
@@ -2484,8 +2660,8 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 			}
 			else
 			{
-				if (RIG->PortRecord->PORT_EXT_ADDR)
-					RIG->WaitingForPermission = RIG->PortRecord->PORT_EXT_ADDR(6, RIG->PortRecord->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
+				if (RIG->PortRecord[0]->PORT_EXT_ADDR)
+					RIG->WaitingForPermission = RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 1);	// Request Perrmission
 				
 				// If it returns zero there is no need to wait.
 				
@@ -2506,12 +2682,24 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 			if (ptr == NULL)
 				return;					// No Freqs
 		
-			if (*(ptr) == 0)			// End of list - reset to start
+			if (ptr[0] == (struct ScanEntry *)0)			// End of list - reset to start
 				ptr = CheckTimeBands(RIG);
 
-			memcpy(PORT->TXBuffer, ptr, 24);
+			// If Bandwidth Change needed, do it
 
-			RIG->FreqPtr += 24;
+			if (ptr[0]->Bandwidth)
+			{
+				while (RIG->PortRecord[i])
+				{
+					if (ptr[0]->Bandwidth = 'W')
+						RIG->PortRecord[i]->PORT_EXT_ADDR(6, RIG->PortRecord[i]->PORTCONTROL.PORTNUMBER, 4);	// Set Wide Mode
+					else
+						RIG->PortRecord[i]->PORT_EXT_ADDR(6, RIG->PortRecord[i]->PORTCONTROL.PORTNUMBER, 5);	// Set Narrow Mode
+				}
+			}
+			memcpy(PORT->TXBuffer, ptr[0]->Cmd1, 24);
+
+			RIG->FreqPtr++;
 	
 			PORT->TXLen = 24;
 			RigWriteCommBlock(PORT);
@@ -2519,6 +2707,11 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 			PORT->Retries = 0;	
 			PORT->Timeout = 0;
 			PORT->AutoPoll = TRUE;
+
+			// Ther isn't a response to a set command, so clear Scan Lock here
+			
+			RIG->PortRecord[0]->PORT_EXT_ADDR(6, RIG->PortRecord[0]->PORTCONTROL.PORTNUMBER, 3);	// Release Perrmission
+
 
 			return;
 		}

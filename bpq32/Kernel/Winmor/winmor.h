@@ -4,6 +4,14 @@
 #pragma pack(1)
 #pragma pack()
 
+struct WL2KInfo
+{
+	char * Freq;
+	char Bandwidth;
+	char * TimeList;		// eg 06-10,12-15
+};
+
+#define MAXFREQS 20
 
 typedef struct TNCINFO
 { 
@@ -28,7 +36,9 @@ typedef struct TNCINFO
 	BOOL Attached;				// Set what attached to a BPQ32 stream
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
 	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.
+	BOOL DiscPending;			// Set if Disconnect Pending Received. So we can time out stuck in Disconnecting
 
+	int NeedDisc;				// Timer to send DISC if appl not available
 	BOOL FECMode;				// In FEC Mode
 	BOOL FEC1600;				// Use 1600 Hz FEC Mode
 	int FECIDTimer;				// Time in FEC Mode. Used to trigger ID broadcasts
@@ -72,12 +82,34 @@ typedef struct TNCINFO
 	time_t LastRestart;
 	
 	int TimeSinceLast;				// Time since last message from TNC (10ths of a sec)
+	int HeartBeat;
 
 	int Interlock;					// Port Interlock Group
 
 	HWND hDlg;						// Status Window Handle
 	HWND hMonitor;					// Handle to Monitor control
 	HMENU hPopMenu;					// Actions Menu Handle
+
+	BOOL OverrideBusy;
+	int BusyDelay;					// Timer for busy timeout
+	char * ConnectCmd;				// Saved command if waiting for busy to clear
+
+	// Fields for reporting to WL2K Map
+
+	char * Host;
+	short Port;
+
+	int UpdateWL2KTimer;
+	BOOL UpdateWL2K;
+	char RMSCall[10];
+	char BaseCall[10];
+	char GridSquare[7];
+	char Comment[80];
+	BOOL UseRigCtrlFreqs;
+	char WL2KFreq[12];
+	char WL2KMode;
+
+	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
 
 };
 
