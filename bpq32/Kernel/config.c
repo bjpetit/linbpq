@@ -148,7 +148,8 @@ VOID __cdecl Consoleprintf(const char * format, ...)
 }
 
 #define ApplOffset 80000			// Applications offset in config buffer
-#define InfoOffset 85000			// Applications offset in config buffer
+#define InfoOffset 85000			// Infomsg offset in config buffer
+#define InfoMax	2000				// Max Info 
 
 #pragma pack(1) 
 
@@ -750,7 +751,7 @@ char rec[];
 		break;
 
              case 20:
-             	cn = dotext(i,key_word, 1000);             /* INFO TEXT PARM */
+             	cn = dotext(i,key_word, InfoMax);         /* INFO TEXT PARM */
 		break;
 
 			 case 5:
@@ -1115,6 +1116,8 @@ char rec[];
 
 int dotext(int i, char * key_word, int max)
 {
+	int len;
+	
 	char rec[MAXLINE];
 
         bseek(fp2,(long) fileoffset,SEEK_SET);
@@ -1130,6 +1133,8 @@ int dotext(int i, char * key_word, int max)
  	}
 
 	bputc('\0',fp2);
+
+	len = btell(fp2) - fileoffset;
 
 	if (btell(fp2) > fileoffset+max)
 	{

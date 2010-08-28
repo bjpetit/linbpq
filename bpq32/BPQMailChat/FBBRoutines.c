@@ -23,6 +23,12 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	if (conn->Flags & GETTINGMESSAGE)
 	{
 		ProcessMsgLine(conn, user, Buffer, len);
+		if (conn->Flags & GETTINGMESSAGE)
+
+			// Still going
+			return;
+
+		SetupNextFBBMessage(conn);
 		return;
 	}
 

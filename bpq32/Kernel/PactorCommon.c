@@ -36,6 +36,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	int i;
 	struct TNCINFO * TNC;
 #endif
+#ifdef SCS
+	int i;
+	struct TNCINFO * TNC;
+#endif
 
 	switch (message) { 
 
@@ -146,15 +150,32 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			
 		return TRUE;
 
-#else
+#endif
+
+#ifdef SCS
 
 	case WM_COMMAND:
+
+		for (i=1; i<17; i++)
+		{
+			TNC = TNCInfo[i];
+			if (TNC == NULL)
+				continue;
+			
+			if (TNC->hDlg == hWnd)
+				break;
+		}
 
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
 		switch (wmId) {
 
+	case IDC_TEST:
+
+		SendExitEnter(TNC);
+
+		break;
 
 		default:
 
@@ -479,9 +500,16 @@ ProcessLine(char * buf)
 
 		// Read Initialisation lines
 
+
 		TNC->InitScript = malloc(1000);
 
 		TNC->InitScript[0] = 0;
+
+#ifdef AEA
+
+		strcpy(TNC->InitScript, "RESTART\r");
+
+#endif
 
 		while(TRUE)
 		{

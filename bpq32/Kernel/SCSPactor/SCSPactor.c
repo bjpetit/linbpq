@@ -62,6 +62,7 @@ DllImport USHORT CTEXTLEN;
 DllImport UINT FULL_CTEXT;
 DllImport BPQTRACE();
 
+BOOL EnterExit = FALSE;
 
 RECT Rect;
 
@@ -282,10 +283,11 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			ReadVCommBlock(TNC, Block, 100);
 
 	
+		if (EnterExit)
+			return 0;
+		
 		DEDPoll(port);
-
 		CheckRX(TNC);
-
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
@@ -463,6 +465,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 		
+	PortEntry->PORTCONTROL.PROTOCOL = 10;
+	PortEntry->PORTCONTROL.PORTQUALITY = 0;
+
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
@@ -1350,8 +1355,188 @@ VOID DoTermModeTimeout(struct TNCINFO * TNC)
 	}
 }
 
-	
+BOOL CheckRXText(struct TNCINFO * TNC)
+{
+	BOOL       fReadStat;
+	COMSTAT    ComStat;
+	DWORD      dwErrorFlags;
+	int Length;
 
+	// only try to read number of bytes in queue 
+
+	if (TNC->RXLen == 500)
+		TNC->RXLen = 0;
+
+	ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+
+	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
+
+	if (Length == 0)
+		return FALSE;					// Nothing doing
+
+	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
+	
+	if (!fReadStat)
+	{
+		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
+		return FALSE;
+	}
+	
+	TNC->RXLen += Length;
+
+	Length = TNC->RXLen;
+
+	TNC->RXBuffer[TNC->RXLen] = 0;
+
+	if (strlen(TNC->RXBuffer) < TNC->RXLen)
+		TNC->RXLen = 0;
+
+	if (strstr(TNC->RXBuffer, "cmd: ") == 0)
+		return 0;				// Wait for rest of frame
+
+	// Complete Char Mode Frame
+
+	TNC->RXLen = 0;		// Ready for next frame
+
+	return TRUE;
+					
+}
+
+BOOL CheckRXHost(struct TNCINFO * TNC)
+{
+	BOOL       fReadStat;
+	COMSTAT    ComStat;
+	DWORD      dwErrorFlags;
+	int Length;
+	unsigned short crc;
+	char UnstuffBuffer[500];
+
+	// only try to read number of bytes in queue 
+
+	if (TNC->RXLen == 500)
+		TNC->RXLen = 0;
+
+	ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+
+	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
+
+	if (Length == 0)
+		return FALSE;					// Nothing doing
+
+	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
+	
+	if (!fReadStat)
+	{
+		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
+		return FALSE;
+	}
+	
+	TNC->RXLen += Length;
+
+	Length = TNC->RXLen;
+
+	if (Length < 6)				// Minimum Frame Sise
+		return FALSE;
+
+	if (TNC->RXBuffer[2] == 170)
+	{
+		// Retransmit Request
+	
+		TNC->RXLen = 0;
+		return FALSE;				// Ignore for now
+	}
+
+	// Can't unstuff into same buffer - fails if partial msg received, and we unstuff twice
+
+	Length = Unstuff(&TNC->RXBuffer[2], &UnstuffBuffer[2], Length - 2);
+
+	if (Length == -1)
+	{
+		// Unstuff returned an errors (170 not followed by 0)
+
+		TNC->RXLen = 0;
+		return FALSE;				// Ignore for now
+	}
+
+	crc = compute_crc(&UnstuffBuffer[2], Length);
+
+	if (crc == 0xf0b8)		// Good CRC
+	{
+		TNC->RXLen = 0;		// Ready for next frame
+		return TRUE;
+	}
+
+	// Bad CRC - assume incomplete frame, and wait for rest. If it was a full bad frame, timeout and retry will recover link.
+
+	return FALSE;
+}
+
+
+#include "Mmsystem.h"
+
+SendExitEnter(struct TNCINFO * TNC)
+{
+	int n;
+	DWORD Starttime = timeGetTime();
+	
+	// Send Exit/Enter Host Sequence
+
+		UCHAR * Poll = TNC->TXBuffer;
+
+		EnterExit = TRUE;
+
+		Poll[2] = 31;
+		Poll[3] = 0x41;
+		Poll[4] = 0x5;
+		memcpy(&Poll[5], "JHOST0", 6);
+
+		CRCStuffAndSend(TNC, Poll, 11);
+
+	n = 0;
+
+	while (CheckRXHost(TNC) == FALSE)
+	{
+		Sleep(10);
+		n++;
+		if (n > 100) break;
+	}
+
+	memcpy(Poll, "MYL 3\r", 6);
+
+	TNC->TXLen = 6;
+	WriteCommBlock(TNC);
+
+	n = 0;
+
+	while (CheckRXText(TNC) == FALSE)
+	{
+		Sleep(10);
+		n++;
+		if (n > 100) break;
+	}
+
+	memcpy(Poll, "JHOST4\r", 7);
+
+	TNC->TXLen = 7;
+	WriteCommBlock(TNC);
+
+	// No response expected
+
+	Poll[2] = 0;
+	TNC->Toggle = 0;
+	Poll[3] = 0x41;
+	Poll[4] = 0;			// Len-1
+	Poll[5] = 'G';			// Poll
+
+	CRCStuffAndSend(TNC, Poll, 6);
+	TNC->InternalCmd = FALSE;
+
+	EnterExit = FALSE;
+
+	Debugprintf("Switch took %d millisecs",  timeGetTime() - Starttime); 
+
+	return 0;
+}
 
 
 VOID ExitHost(struct TNCINFO * TNC)

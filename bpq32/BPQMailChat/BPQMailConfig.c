@@ -468,6 +468,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BBSCall, BBSName);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_SYSOPCALL, SYSOPCall);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_SYSTOSYSOPCALL, SendSYStoSYSOPCall);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDir);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
@@ -1350,7 +1351,7 @@ VOID SaveBBSConfig()
 	GetDlgItemText(hwndDisplay, IDC_HRoute, HRoute, 50);
 	GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDir, 50);
 	EnableUI = IsDlgButtonChecked(hwndDisplay, IDC_ENABLEUI);
-
+	SendSYStoSYSOPCall = IsDlgButtonChecked(hwndDisplay, IDC_SYSTOSYSOPCALL);
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
 	POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
@@ -1371,7 +1372,7 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "H-Route", 0, REG_SZ,(BYTE *)&HRoute, strlen(HRoute));
 		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDir, strlen(BaseDir));
 		retCode = RegSetValueEx(hKey, "EnableUI",0, REG_DWORD,(BYTE *)&EnableUI,4);
-				
+		retCode = RegSetValueEx(hKey, "SendSYStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendSYStoSYSOPCall,4);
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
 		retCode = RegSetValueEx(hKey, "NNTPPort",0,REG_DWORD,(BYTE *)&NNTPInPort,4);
@@ -1814,6 +1815,9 @@ VOID SaveWindowConfig()
 		wsprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
 		retCode = RegSetValueEx(hKey,"MonitorSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
+		wsprintf(Size,"%d,%d,%d,%d",DebugRect.left,DebugRect.right,DebugRect.top,DebugRect.bottom);
+		retCode = RegSetValueEx(hKey,"DebugSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
 		wsprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
 		retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
@@ -1888,6 +1892,10 @@ TryAgain:
 		RegQueryValueEx(hKey,"EnableUI",0,			
 			(ULONG *)&Type,(UCHAR *)&EnableUI,(ULONG *)&Vallen);
 		
+		Vallen=4;
+		RegQueryValueEx(hKey,"SendSYStoSYSOPCall",0,			
+			(ULONG *)&Type,(UCHAR *)&SendSYStoSYSOPCall,(ULONG *)&Vallen);
+
 		Vallen=4;
 		RegQueryValueEx(hKey,"MaxTXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxTXSize,(ULONG *)&Vallen);
@@ -2014,6 +2022,13 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		sscanf(Size,"%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom);
+
+		Vallen=80;
+		RegQueryValueEx(hKey,"DebugSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		sscanf(Size,"%d,%d,%d,%d",&DebugRect.left,&DebugRect.right,&DebugRect.top,&DebugRect.bottom);
+		retCode = RegSetValueEx(hKey,"DebugSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
 		Vallen=80;
 		RegQueryValueEx(hKey,"WindowSize",0,			

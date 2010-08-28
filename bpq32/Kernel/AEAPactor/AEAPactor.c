@@ -27,6 +27,8 @@
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
 
+#define AEA 1
+
 static char ClassName[]="PACTORSTATUS";
 #include "..\PactorCommon.c"
  
@@ -150,6 +152,15 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	OutputDebugString(Mess);
 
 	return;
+}
+VOID ShowTraffic(struct TNCINFO * TNC)
+{
+	char Status[80];
+
+	wsprintf(Status, "RX %d TX %d ACKED %d ", 
+		TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
+
+	SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
 }
 
 
@@ -317,7 +328,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		if(TNC->Streams[Stream].Connected)
 		{
-			TNC->Streams[Stream].FramesOutstanding++;
+			TNC->Streams[Stream].FramesQueued++;
 			TNC->Streams[Stream].BytesOutstanding += txlen;
 		}
 		return (0);
@@ -330,18 +341,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			MOV	EAX,buff
 			mov Stream,eax
 		}
-
-		if (Stream == 0)
-		{
-			if (TNC->Streams[0].FramesOutstanding  > 4)
-				(1 | TNC->HostMode << 8);
-		}
-		else
-		{
-			if (TNC->Streams[Stream].FramesOutstanding > 3 ||
-				TNC->Streams[Stream].BytesOutstanding > 500 )	
-				return (1 | TNC->HostMode << 8);		}
-
+			
+		if (TNC->Streams[0].FramesQueued  > 4)
+			(1 | TNC->HostMode << 8);
+	
 		return TNC->HostMode << 8;		// OK
 
 	case 4:				// reinit
@@ -397,18 +400,6 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->InitScript = _strupr(TNC->InitScript);
 
-	ptr = strstr(TNC->InitScript, "MAXUSERS");
-	
-	if (ptr)
-	{
-		ptr = strchr(ptr,'/');  // to the separator
-		if (ptr)
-			PortEntry->MAXHOSTMODESESSIONS = atoi(++ptr) + 1;
-	}
-
-	if (PortEntry->MAXHOSTMODESESSIONS > 26)
-		PortEntry->MAXHOSTMODESESSIONS = 26;
-
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
@@ -416,13 +407,16 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
+	PortEntry->PORTCONTROL.PROTOCOL = 10;
+	PortEntry->PORTCONTROL.PORTQUALITY = 0;
+
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
-	// Set the ax.25 MYCALL
+	// Set the ax.25 MYCALL and EAS ON|
 
-//	wsprintf(msg, "MYCALL %s/%s\r", TNC->NodeCall, TNC->NodeCall);
-	wsprintf(msg, "MYCALL %s\r", TNC->NodeCall);
+
+	wsprintf(msg, "EAS ON\rMYCALL %s\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
 
 	MinimizetoTray = GetMinimizetoTrayFlag();
@@ -706,6 +700,7 @@ BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
 	{
 		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
 	}
+	TNC->Timeout = 50;
 
 	return TRUE;
 }
@@ -717,15 +712,14 @@ VOID AEAPoll(int Port)
 	char Status[80];
 	int Stream;
 
-	// If Pactor Session has just been attached, drop back to cmd mode and set Pactor Call to 
-	// the connecting user's callsign
+	// If Pactor Session has just been attached, set Pactor Call to the connecting user's callsign
 
 	if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Streams[0].Attached == 0)
 	{
 		// New Attach
 
 		int calllen;
-		UCHAR TXMsg[1000] = "D20";
+		UCHAR TXMsg[1000];
 		int datalen;
 		char Msg[80];
 
@@ -734,12 +728,10 @@ VOID AEAPoll(int Port)
 		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
 		TNC->Streams[0].MyCall[calllen] = 0;
 		
-//		EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
 		datalen = wsprintf(TXMsg, "OMf%s", TNC->Streams[0].MyCall);
 		EncodeAndSend(TNC, TXMsg, datalen);
 		TNC->InternalCmd = 'M';
 		TNC->CommandBusy = TRUE;
-		TNC->Timeout = 50;
 
 		wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
@@ -789,9 +781,16 @@ VOID AEAPoll(int Port)
 		}
 	}
 
+	// if we have just restarted or TNC appears to be in terminal mode, run Initialisation Sequence
+
+	if (!TNC->HostMode)
+	{
+		DoTNCReinit(TNC);
+		return;
+	}	
+
 	if (TNC->CommandBusy)
 		goto Poll;
-
 
 	//If sending internal command list, send next element
 
@@ -814,8 +813,8 @@ VOID AEAPoll(int Port)
 			TNC->CmdSet = end;
 		
 			EncodeAndSend(TNC, start, len);
+			TNC->InternalCmd = 'X';
 			TNC->CommandBusy = TRUE;
-			TNC->Timeout = 50;
 
 			return;
 		}
@@ -833,14 +832,17 @@ VOID AEAPoll(int Port)
 
 			TNC->Streams[Stream].Attached = FALSE;
 			TNC->Streams[Stream].Connected = FALSE;
-			TNC->Streams[Stream].FramesOutstanding = 0;
+			TNC->Streams[Stream].FramesQueued = 0;
 			TNC->Streams[Stream].BytesOutstanding = 0;
 
 			if (Stream == 0)					// Pactor Stream
 			{
 				EncodeAndSend(TNC, "OPA", 3);		// ??Return to packet mode??
 				TNC->NeedPACTOR = 50;				// Need to Send PACTOR command after 5 secs
+				TNC->InternalCmd = 'P';
+				TNC->CommandBusy = TRUE;
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
+
 			}
 			else
 			{
@@ -849,7 +851,6 @@ VOID AEAPoll(int Port)
 				wsprintf(TXMsg, "%cDI", Stream + '@');
 //				EncodeAndSend(TNC, TXMsg, 4);
 				EncodeAndSend(TNC, TXMsg, 4);		// Send twice - must force a disconnect
-				TNC->Timeout = 50;
 			}
 
 			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
@@ -864,14 +865,6 @@ VOID AEAPoll(int Port)
 				ReleaseBuffer(buffptr);
 			}
 		}
-	}
-
-	// if we have just restarted or TNC appears to be in terminal mode, run Initialisation Sequence
-
-	if (!TNC->HostMode)
-	{
-		DoTNCReinit(TNC);
-		return;
 	}
 
 	if (TNC->NeedPACTOR)
@@ -889,11 +882,8 @@ VOID AEAPoll(int Port)
 
 			TNC->CmdSet = TNC->CmdSave = malloc(100);
 
-			wsprintf(TNC->CmdSet, "OPt\r");
-
-//			EncodeAndSend(TNC, "OPt", 3);			// Back to Pactor Listen
+			wsprintf(TNC->CmdSet, "OPt\r");  // Queue Back to Pactor Listen
 			TNC->InternalCmd = 'T';
-			TNC->Timeout = 50;
 			TNC->IntCmdDelay--;
 
 			// Restart Scanning
@@ -920,17 +910,19 @@ VOID AEAPoll(int Port)
 			
 			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 
+			TNC->Streams[Stream].FramesQueued--;
+
 			datalen=buffptr[1];
 			MsgPtr = (UCHAR *)&buffptr[2];
 
 			if (TNC->Streams[Stream].Connected)
 			{
-				if (TNC->TXRXState == 'R' && TNC->CommandBusy == FALSE)
-				{
-					EncodeAndSend(TNC, "OAG", 3);
-					TNC->InternalCmd = 'A';
-					TNC->CommandBusy = TRUE;
-				}
+//				if (TNC->TXRXState == 'R' && TNC->CommandBusy == FALSE)
+//				{
+//					EncodeAndSend(TNC, "OAG", 3);
+//					TNC->InternalCmd = 'A';
+//					TNC->CommandBusy = TRUE;
+//				}
 
 				wsprintf(TXMsg, "%c", Stream + ' ');
 					
@@ -938,18 +930,11 @@ VOID AEAPoll(int Port)
 				EncodeAndSend(TNC, TXMsg, datalen + 1);
 				ReleaseBuffer(buffptr);
 				TNC->Streams[Stream].BytesTXed += datalen; 
-
+				TNC->Timeout = 0;
 				TNC->DataBusy = TRUE;
 
 				if (Stream == 0)
-				{
-					wsprintf(Status, "RX %d TX %d ACKED %d ",
-						TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
-					SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
-
-					if (TNC->Streams[0].BPQtoPACTOR_Q == 0)		// Nothing following
-						EncodeAndSend(TNC, "\0x1a", 1);         // ? Changeover when all sent
-				}
+					ShowTraffic(TNC);
 
 				return;
 			}
@@ -995,7 +980,6 @@ VOID AEAPoll(int Port)
 						datalen = wsprintf(TXMsg, "%cCO %s", Stream + '@', TNC->Streams[Stream].RemoteCall);
 
 					EncodeAndSend(TNC, TXMsg, datalen);
-					TNC->Timeout = 50;
 					TNC->InternalCmd = 'C';			// So we dont send the reply to the user.
 					ReleaseBuffer(buffptr);
 					TNC->Streams[Stream].Connecting = TRUE;
@@ -1009,16 +993,15 @@ VOID AEAPoll(int Port)
 					{
 						EncodeAndSend(TNC, "OPA", 3);			// ??Return to packet mode??
 						TNC->NeedPACTOR = 50;
+						TNC->CommandBusy = TRUE;
 					}
 					else
 					{
 						wsprintf(TXMsg, "%cDI", Stream + '@');
 						EncodeAndSend(TNC, TXMsg, 3);
 						TNC->CmdStream = Stream;
-						TNC->Timeout = 50;
 					}
 
-					TNC->Timeout = 0;					//	Don't expect a response
 					TNC->Streams[Stream].Connecting = FALSE;
 					TNC->Streams[Stream].ReportDISC = TRUE;
 					ReleaseBuffer(buffptr);
@@ -1035,7 +1018,6 @@ VOID AEAPoll(int Port)
 
 				EncodeAndSend(TNC, TXMsg, datalen);
 				ReleaseBuffer(buffptr);
-				TNC->Timeout = 50;
 				TNC->InternalCmd = 0;
 				TNC->CommandBusy = TRUE;
 				TNC->CmdStream = Stream;
@@ -1054,31 +1036,26 @@ VOID AEAPoll(int Port)
 			EncodeAndSend(TNC, "OOP", 3);
 			TNC->InternalCmd = 'S';
 			TNC->CommandBusy = TRUE;
-
-			TNC->Timeout = 50;
 			TNC->IntCmdDelay = 20;	// Every 5 secs
 			return;
 		}
-/*		if (TNC->IntCmdDelay <=0)
-		{
-			EncodeAndSend(TNC, "?", 1);
-			TNC->InternalCmd = '?';
-			TNC->Timeout = 50;
-			return;
-		}
-*/
 		else
 			TNC->IntCmdDelay--;
 	}
 
 Poll:
+	// Nothing doing - send Poll (but not too often)
+
+	TNC->PollDelay++;
+
+	if (TNC->PollDelay < 3)
+		return;
+
+	TNC->PollDelay = 0;
 
 	EncodeAndSend(TNC, "OGG", 3);			// Poll
 
-	TNC->Timeout = 50;
-
 	return;
-
 }
 
 VOID DoTNCReinit(struct TNCINFO * TNC)
@@ -1090,7 +1067,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 
 	if (TNC->ReinitState == 0)
 	{
-		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
+		// Just Starting - Send a CR to see if in Terminal or Host Mode
 
 		char Status[80];
 		
@@ -1101,7 +1078,6 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 		TNC->TXLen = 1;
 
 		WriteCommBlock(TNC);
-		TNC->Timeout = 50;
 
 		return;
 	}
@@ -1144,7 +1120,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 
 		TNC->TXLen = len;
 		WriteCommBlock(TNC);
-		TNC->Timeout = 50;
+
 
 		return;
 
@@ -1208,7 +1184,7 @@ VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 		return;
 	}
 
-	if (TNC->ReinitState == 4)		// Send INTFACE, Need RESET
+	if (TNC->ReinitState == 4)		
 	{
 		TNC->ReinitState = 5;
 			
@@ -1262,6 +1238,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	{
 		// Echoed Data
 
+		TNC->Streams[0].BytesAcked += Len -1;
+		ShowTraffic(TNC);
+
 		return;
 	}
 
@@ -1282,11 +1261,8 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		if (Stream == 0)
-		{
-			wsprintf(Status, "RX %d TX %d ACKED %d ", 
-					TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
-			SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
-		}
+			ShowTraffic(TNC);
+
 		return;
 	}
 
@@ -1317,11 +1293,22 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					Msg[12] = 0;
 					SetDlgItemText(TNC->hDlg, IDC_3, Msg);
 
+					// Testing.. I think ZF returns buffers
+
+					EncodeAndSend(TNC, "OZF", 3);
+					TNC->InternalCmd = 'Z';
+					TNC->CommandBusy = TRUE;
 				}
 			
 				return;
 			}
-		
+
+			if (TNC->InternalCmd == 'Z')		// Buffers?
+			{
+				Msg[Len] = 0;
+				SetDlgItemText(TNC->hDlg, IDC_4, &Msg[3]);
+				return;
+			}
 			return;
 		}
 
@@ -1351,9 +1338,32 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		if (Stream == 15)
 		{
-			// Data Ack
+			// SOH $5F X X $00 ETB data acknowledgement 
 
-			TNC->DataBusy = FALSE;
+			if (Msg[1] == 'X' && Msg[2] == 'X' && Msg[3] == 0)
+			{
+				TNC->DataBusy = FALSE;
+
+				// If nothing more to send, turn round link
+						
+				if (TNC->Streams[0].BPQtoPACTOR_Q == 0)		// Nothing following
+				{
+					EncodeAndSend(TNC, "OAG", 3);
+					TNC->InternalCmd = 'A';
+					TNC->CommandBusy = TRUE;
+				}
+			}
+			return;
+		}
+
+		if (strstr(Buffer, "Transmit data remaining"))
+		{
+			// Seems to cause problems - restart TNC
+
+			TNC->TNCOK = FALSE;
+			TNC->HostMode = 0;
+			TNC->ReinitState = 0;
+
 			return;
 		}
 
@@ -1379,7 +1389,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	
 				TNC->Streams[Stream].Connecting = FALSE;
 				TNC->Streams[Stream].Connected = FALSE;				// In case!
-				TNC->Streams[Stream].FramesOutstanding = 0;
+				TNC->Streams[Stream].FramesQueued = 0;
 
 				return;
 			}
@@ -1389,7 +1399,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			TNC->Streams[Stream].Connecting = FALSE;
 			TNC->Streams[Stream].Connected = FALSE;		// Back to Command Mode
 			TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
-			TNC->Streams[Stream].FramesOutstanding = 0;
+			TNC->Streams[Stream].FramesQueued = 0;
 
 			if (Stream == 0)
 			{
@@ -1397,6 +1407,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				EncodeAndSend(TNC, "OPA", 3);			// ??Return to packet mode??
 				TNC->NeedPACTOR = 20;
+				TNC->InternalCmd = 'P';
+				TNC->CommandBusy = TRUE;
+
 			}
 
 			return;
@@ -1427,9 +1440,8 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				if (Rig_Command)
 					Rig_Command(-1, Msg);
 
-				wsprintf(Status, "RX %d TX %d ACKED %d ", 
-					TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
-				SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
+				ShowTraffic(TNC);
+
 			}
 
 			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
@@ -1546,165 +1558,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				return;
 			}
 		}
-
-
-	}
-
-
-	//	See if Poll Reply or Data
-
-	Msg[Len] = 0; // Terminate
-
-	if (Msg[0] == 'M')					// Monitor
-	{
-		DoMonitor(TNC, Msg, Len);
-		return;
-	}
-
-
-	if (Msg[0] == 'E')					// Data Echo
-	{
-		if (Msg[1] == '2')				// HF Port
-		{
-			TNC->Streams[0].BytesAcked += Len -3;
-			wsprintf(Status, "RX %d TX %d ACKED %d ",
-				TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
-			SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
-
-			if (TNC->Streams[0].BytesTXed - TNC->Streams[0].BytesAcked < 500)
-				TNC->Streams[0].FramesOutstanding = 0;
-		}
-		return;
-	}
-
-	if (Msg[0] == 'D')					// Data
-	{	
-		// Pass to Appl
-
-		buffptr = Q_REM(&FREE_Q);
-		if (buffptr == NULL) return;			// No buffers, so ignore
-
-		Len-=3;							// Remove Header
-
-		buffptr[1] = Len;				// Length
-		TNC->Streams[Stream].BytesRXed += Len;
-		memcpy(&buffptr[2], Buffer, Len);
-		Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
-
-		if (Stream == 0)
-		{
-			wsprintf(Status, "RX %d TX %d ACKED %d ", 
-					TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
-			SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
-		}
-		return;
-	}
-
-
-	if (Msg[0] == 'C')					// Command Reponse
-	{
-		TNC->Timeout = 0;
-	
-		// See if we need to process locally (Response to our command, Incoming Call, Disconencted, etc
-
-		// See if a response to internal command
-
-		if (TNC->InternalCmd)
-		{
-			// Process it
-
-			if (TNC->InternalCmd == 'S')		// Status
-			{
-				char * Line;
-				char * ptr;
-					
-				// Message is line giving free bytes, followed by a line for each active (packet) stream
-
-				// FREE BYTES 1366/5094
-				// A/2 #1145(12) CONNECTED to KE7XO-3
-				// S/2 CONNECTED to NLV
-
-				// each line is teminated by CR, and by the time it gets here it is null terminated
-
-				Line = strchr(&Msg[3], 13);
-				if (Line == 0) return;
-				ptr =  strchr(&Msg[13], '/');
-				if (ptr == 0) return;
-
-//				TNC->Mem1 = atoi(&Msg[13]);
-//				TNC->Mem2 = atoi(++ptr);
-
-				while (Line[1] != 0)		// End of stream
-				{
-					Stream = Line[1] - '@';
-					if (Line[5] == '#')
-					{
-						TNC->Streams[Stream].BytesOutstanding = atoi(&Line[6]);
-						ptr = strchr(&Line[6], '(');
-						if (ptr)
-							TNC->Streams[Stream].FramesOutstanding = atoi(++ptr);
-					}
-					else
-					{
-						TNC->Streams[Stream].BytesOutstanding = 0;
-						TNC->Streams[Stream].FramesOutstanding = 0;
-					}
-						
-					Line = strchr(&Line[1], 13);
-				}
-				return;
-			}
-			return;
-		}
-
-		// Pass to Appl
-
-		Stream = TNC->CmdStream;
-
-
-		buffptr = Q_REM(&FREE_Q);
-
-		if (buffptr == NULL) return;			// No buffers, so ignore
-
-		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"AEA} %s", Buffer);
-
-		Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
-
-		return;
-	}
-
-	if (Msg[0] == 'I')					// ISS/IRS State
-	{
-		if (Msg[2] == '1')
-			SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
-		else
-			SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
-
-		return;
-	}
-
-	if (Msg[0] == '?')					// Status
-	{
-		TNC->Timeout = 0;
-		return;
-	}
-
-	if (Msg[0] == 'S')					// Status
-	{
-		if (Len < 4)
-		{
-			// Reset Response FEND FEND S00 FEND
-					
-			char Status[80];
-
-			TNC->Timeout = 0;
-
-			wsprintf(Status,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
-			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
-
-			return;
-		}
-	}		
+	}	
 }
 
 

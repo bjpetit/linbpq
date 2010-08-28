@@ -10,7 +10,7 @@ struct STREAMINFO
 
 	int PACTORtoBPQ_Q;			// Frames for BPQ
 	int BPQtoPACTOR_Q;			// Frames for PACTOR
-	int	FramesOutstanding;		// Frames Queued - used for flow control
+	int	FramesQueued;		// Frames Queued - used for flow control
 	BOOL InternalCmd;			// Last Command was generated internally
 	int	IntCmdDelay;			// To limit internal commands
 
@@ -43,6 +43,7 @@ struct TNCINFO
 	BOOL InternalCmd;			// Last Command was generated internally
 	int CmdStream;				// Stream last command was issued on
 	int	IntCmdDelay;			// To limit internal commands
+	int xx;						// Toggle CO and Pg
 
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 
@@ -65,6 +66,8 @@ struct TNCINFO
 
 	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
 	BOOL CommandBusy;				// Waiting for Command ACK
+
+	int PollDelay;					// Don't poll too often;
 
 	char * CmdSet;					// A series of commands to send to the TNC
 	char * CmdSave;					// Base address for free

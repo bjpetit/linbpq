@@ -4,6 +4,7 @@ BUFFLEN		EQU	360		; ??
 
 MAXAPPLS	EQU	32		; Max Application Commands
 ApplOffset	EQU 80000	; Applications string in buffer
+C_INFOMSG	EQU	85000	; Info Msg in buffer
 ApplStringLen EQU 48	; Length of each config entry
 
 ALIASLEN	EQU	32		; Max chars in command alias

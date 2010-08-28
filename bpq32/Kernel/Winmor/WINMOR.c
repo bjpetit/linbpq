@@ -32,7 +32,7 @@
 // Version 1.2.1.5 August 2010 
 
 // Updates to WL2K Reporting
-// Send Watchdog polls every minute and retrart if no response.
+// Send Watchdog polls every minute and restart if no response.
 // Don't connect if channel is busy (unless specifically overridden)
 
 
@@ -1096,6 +1096,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
+	PortEntry->PORTCONTROL.PORTQUALITY = 0;
+
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate

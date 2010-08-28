@@ -31,6 +31,7 @@ struct ConnectionInfo
 	BOOL DoingCommand;			// Processing Telnet Command
 	BOOL DoEcho;				// Telnet Echo option accepted
 	BOOL FBBMode;				// Pure TCP for FBB forwarding
+	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

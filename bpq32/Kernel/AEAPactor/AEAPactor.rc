@@ -1,7 +1,7 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
-#include "Versions.h"
+#include "..\..\include\Versions.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -89,7 +89,7 @@ BEGIN
     LTEXT           "Comms State",IDC_STATIC,5,10,45,10
     LTEXT           "",IDC_COMMSSTATE,60,10,145,11
     LTEXT           "Traffic",IDC_STATIC,5,100,30,10
-    LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,60,100,140,11
+    LTEXT           "RX 0 TX 0",IDC_TRAFFIC,60,100,140,11
 END
 
 

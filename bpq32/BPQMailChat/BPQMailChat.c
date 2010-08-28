@@ -533,12 +533,19 @@
 
 // Remove prompt after receiving unrecognised line in MBL mode. (for MSYS)
 
+// Version 1.0.4.17 Aug 2010
+
+// Fix receiving multiple messages in FBB Uncompressed Mode
+// Try to trap phantom chat node ocnnections
+// Add delay to close
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Jerry"
+#define SPECIALVERSION "Test"
 
 #include "GetVersion.h"
 
@@ -689,6 +696,7 @@ BOOL KISSOnly = FALSE;
 BOOL ALLOWCOMPRESSED = TRUE;
 
 BOOL EnableUI = FALSE;
+BOOL SendSYStoSYSOPCall = FALSE;
 
 UCHAR * OtherNodes=NULL;
 
@@ -902,14 +910,27 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	ClearChatLinkStatus();
 	SendChatLinkStatus();
 
+	hWnd = CreateWindow("STATIC", "MailChat Closing - Please Wait", 0,
+				200, 200, 250, 40, NULL, NULL, hInstance, NULL);
+
+	ShowWindow(hWnd, nCmdShow);
+
 	Sleep(1000);				// A bit of time for links to close
 
 	SendChatLinkStatus();		// Send again to reduce chance of being missed
+
+	Sleep(2000);
+
+	DestroyWindow(hWnd);
 
 	if (ConsHeader[0]->hConsole)
 		DestroyWindow(ConsHeader[0]->hConsole);
 	if (ConsHeader[1]->hConsole)
 		DestroyWindow(ConsHeader[1]->hConsole);
+	if (hMonitor)
+		DestroyWindow(hMonitor);
+	if (hDebug)
+		DestroyWindow(hDebug);
 
 	SaveUserDatabase();
 	SaveMessageDatabase();
@@ -1543,6 +1564,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			GetWindowRect(ConsHeader[1]->hConsole, &ConsHeader[1]->ConsoleRect);	// For save soutine
 		if (hMonitor)
 			GetWindowRect(hMonitor,	&MonitorRect);	// For save soutine
+		if (hDebug)
+			GetWindowRect(hDebug,	&DebugRect);	// For save soutine
 
 		KillTimer(hWnd,1);
 		KillTimer(hWnd,2);
@@ -6836,7 +6859,11 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
 	FreeSemaphore(&MsgNoSemaphore);
  
 	strcpy(Msg->from, "SYSTEM");
-	strcpy(Msg->to, "SYSOP");
+	if (SendSYStoSYSOPCall)
+		strcpy(Msg->to, SYSOPCall);
+	else
+		strcpy(Msg->to, "SYSOP");
+
 	strcpy(Msg->title, Title);
 
 	Msg->type = 'P';

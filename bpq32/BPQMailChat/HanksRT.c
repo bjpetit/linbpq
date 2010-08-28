@@ -2342,7 +2342,7 @@ VOID SendChatLinkStatus()
 					{
 						// BPQ Session is dead - Simulate a Disconnect
 
-						circuit->Active = TRUE;				// So disconnect will wokr
+						circuit->Active = TRUE;				// So disconnect will work
 						Disconnected(circuit->BPQStream);
 						NeedStatus = TRUE;					// Reenter
 						return;								// Link Chain has changed
@@ -2355,7 +2355,8 @@ VOID SendChatLinkStatus()
 			{
 				// No BPQ Session - is the only answer to restart the node?
 
-				Logprintf(LOG_DEBUG, NULL, '!', "Chat is a mess - forcing a restart");
+				Logprintf(LOG_DEBUG, NULL, '!', "Stuck Chat Sesion Detected");
+	//			Logprintf(LOG_DEBUG, NULL, '!', "Chat is a mess - forcing a restart");
 	//			ProgramErrors = 26;
 	//			CheckProgramErrors();
 			}
@@ -2381,6 +2382,3 @@ VOID ClearChatLinkStatus()
 	}
 }
 
-/*
-Hi Alll.  Things are quite up here.  We had a nice day.  Overcast cool about +5 deg C.  cooling off a bit tonight to -2.  I had a nice chat with John G8BPQ this morning about the software etc.  Things lookign good, and he opes and thinks he's fixed the bugs in the CHAT so I guess we'll see.  bk to net kk
-*/

@@ -131,7 +131,7 @@ BBS_CONFIG DIALOG DISCARDABLE  0, 0, 368, 280
 STYLE WS_CHILD
 FONT 8, "System"
 BEGIN
-    EDITTEXT        1001,83,103,68,14,ES_UPPERCASE
+    EDITTEXT        1001,83,103,47,14,ES_UPPERCASE
     LTEXT           "Base Directory",IDC_STATIC,7,143,66,12
     LTEXT           "BBS Call",IDC_STATIC,7,105,37,12
     LTEXT           "BBS Appl Number",IDC_STATIC,7,166,61,10
@@ -152,8 +152,8 @@ BEGIN
                     IDC_STATIC,8,52,357,27
     LTEXT           "The Application Number defines which BPQ32 Application gives access to the BBS. Note this a the APPLNumber (1-8) not an Appication Mask, as uses in many BPQ32 programs.",
                     IDC_STATIC,10,27,353,18
-    LTEXT           "SYSOP Call",IDC_STATIC,163,106,42,12
-    EDITTEXT        1008,208,103,68,14,ES_UPPERCASE
+    LTEXT           "SYSOP Call",IDC_STATIC,137,105,42,12
+    EDITTEXT        1008,188,103,42,14,ES_UPPERCASE
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,249,225,91,14
     LTEXT           "eMail Server Params:",IDC_STATIC,7,208,135,10
@@ -164,6 +164,9 @@ BEGIN
     PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,158,186,91,13
     LTEXT           "NNTP Port",IDC_STATIC,7,227,39,12
     EDITTEXT        IDC_NNTPPort,47,225,29,14
+    CONTROL         "Send SYSTEM Msgs to SYSOP call",IDC_SYSTOSYSOPCALL,
+                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,237,
+                    105,128,10
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -186,7 +189,7 @@ END
 IDD_USEREDIT DIALOGEX 20, 20, 244, 261
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit User"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     COMBOBOX        5000,7,7,57,88,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
                     WS_VSCROLL | WS_TABSTOP

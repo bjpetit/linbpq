@@ -1311,6 +1311,11 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 			// Connect. If command has a via string and first call is numeric use it as a port number
 
+			if (StreamNo == 0)
+			{
+				Stream = 'A';
+				StreamNo = 1;
+			}
 
 			if (Arg2 && Arg3)	
 			{
@@ -1371,6 +1376,12 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 		if (_stricmp(Cmd, "D") == 0)
 		{
 			// Disconnect
+
+			if (StreamNo == 0)
+			{
+				Stream = 'A';
+				StreamNo = 1;
+			}
 
 			SessionControl(conn->Channels[StreamNo]->BPQStream, 2, 0);
 

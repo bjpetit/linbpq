@@ -57,10 +57,13 @@ int NumberofUsers=0;
 struct UserRec ** UserRecPtr;
 int CurrentConnections=0;
 
+struct UserRec RelayUser;
+
 int CurrentSockets=0;
 
 int Port=8010;
 int FBBPort=0;
+int RelayPort=8772;
 
 BOOL cfgMinToTray;
 
@@ -89,6 +92,7 @@ BOOL LogEnabled=FALSE;
 
 SOCKET sock;
 SOCKET FBBsock;
+SOCKET Relaysock;
 
 
 
@@ -109,6 +113,7 @@ int Socket_Accept(int SocketId);
 int Socket_Data(int SocketId,int error, int eventcode);
 int DataSocket_Read(struct ConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_ReadFBB(struct ConnectionInfo * sockptr, SOCKET sock);
+int DataSocket_ReadRelay(struct ConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_Write(struct tConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_Disconnect(struct ConnectionInfo * sockptr);
 BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len);
@@ -477,6 +482,11 @@ int Socket_Accept(int SocketId)
 			else
 				sockptr->FBBMode = FALSE;
 
+			if (SocketId == Relaysock)
+				sockptr->RelayMode = TRUE;
+			else
+				sockptr->RelayMode = FALSE;
+	
 			if (CurrentSockets < n)
 			{
 				// Just Created a new one - add an item to disconnect menu
@@ -507,11 +517,17 @@ int Socket_Accept(int SocketId)
 
 				return 0;
 			}
-		
-			if (sockptr->FBBMode == FALSE)
+			if (sockptr->RelayMode)
 			{
-				send(sock, Negotiate, 6, 0);
-				send(sock,LoginMsg,strlen(LoginMsg),0);
+				send(sock,"\r\rCallsign :\r", 13,0);
+			}
+			else
+			{
+				if (sockptr->FBBMode == FALSE)
+				{
+					send(sock, Negotiate, 6, 0);
+					send(sock,LoginMsg,strlen(LoginMsg),0);
+				}
 			}
 			return 0;
 		}
@@ -551,7 +567,10 @@ int Socket_Data(int sock, int error, int eventcode)
 					if (sockptr->FBBMode)
 						return DataSocket_ReadFBB(sockptr,sock);
 					else
-						return DataSocket_Read(sockptr,sock);
+						if (sockptr->RelayMode)
+							return DataSocket_ReadRelay(sockptr,sock);
+						else
+							return DataSocket_Read(sockptr,sock);
 
 				case FD_WRITE:
 
@@ -964,6 +983,216 @@ MsgLoop:
 
 	return 0;
 }
+
+int DataSocket_ReadRelay(struct ConnectionInfo * sockptr, SOCKET sock)
+{
+	int len=0, maxlen, InputLen, MsgLen, Stream, n;
+	char NLMsg[3]={13,10,0};
+	byte * LFPtr;
+	byte * MsgPtr;
+	char logmsg[120];
+	char RelayMsg[] = "No CMS connection available - using local BPQMailChat\r";
+
+
+	ioctlsocket(sock,FIONREAD,&len);
+
+	maxlen = InputBufferLen - sockptr->InputLen;
+	
+	if (len > maxlen) len=maxlen;
+
+	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
+
+	if (len == SOCKET_ERROR || len ==0)
+	{
+		// Failed or closed - clear connection
+
+		return 0;
+	}
+
+	sockptr->InputLen+=len;
+
+	// Extract lines from input stream
+
+	MsgPtr = &sockptr->InputBuffer[0];
+	InputLen = sockptr->InputLen;
+
+MsgLoop:
+
+	if (sockptr->LoginState == 2)
+	{
+		// Data. FBB is binary
+
+		// Send to Node
+
+		Stream = sockptr->BPQStream;
+
+		if (InputLen > 256)
+		{		
+			SendMsg(Stream, MsgPtr, 256);
+			sockptr->InputLen -= 256;
+
+			InputLen -= 256;
+
+			memmove(MsgPtr,MsgPtr+256,InputLen);
+
+			goto MsgLoop;
+		}
+			
+		SendMsg(Stream, MsgPtr, InputLen);
+		sockptr->InputLen = 0;
+
+		return 0;
+	}
+	
+	if (InputLen > 256)
+	{
+		// Long message received when waiting for user or password - just ignore
+
+		sockptr->InputLen=0;
+
+		return 0;
+	}
+
+	LFPtr=memchr(MsgPtr, 13, InputLen);
+	
+	if (LFPtr == 0)
+		return 0;							// Waitr for more
+	
+	// Got a CR
+
+	// Process data up to the cr
+
+	MsgLen=LFPtr-MsgPtr;
+
+	switch (sockptr->LoginState)
+	{
+
+	case 0:
+		
+        //   Check Username
+        //
+
+		*(LFPtr)=0;				 // remove cr
+        
+        if (LogEnabled)
+		{
+			wsprintf(logmsg,"%d %d.%d.%d.%d User=%s\n",
+				sockptr->Number,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+				MsgPtr);
+
+			WriteLog (logmsg);
+		}
+
+		MsgPtr++;
+
+		// Save callsign  for *** linked
+               
+		strcpy(sockptr->Callsign, MsgPtr);
+                                
+		send(sock, "Password :\r", 11,0);
+                
+		sockptr->Retries = 0;
+		sockptr->LoginState = 1;
+        sockptr->InputLen = 0;
+
+		n=sockptr->Number;
+
+		ModifyMenu(hDisMenu,n-1,MF_BYPOSITION | MF_STRING,IDM_DISCONNECT + n,MsgPtr);
+
+		ShowConnections();
+
+        return 0;
+	
+       
+	case 1:
+		   
+		*(LFPtr)=0;				 // remove cr
+            
+        if (LogEnabled)
+		{
+			wsprintf(logmsg,"%d %d.%d.%d.%d Password=%s\n",
+				sockptr->Number,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+				sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+				MsgPtr);
+
+			WriteLog (logmsg);
+		}
+
+		sockptr->UserPointer  = &RelayUser;
+
+		Stream = sockptr->BPQStream;
+			
+		if (Stream == 0)
+		{
+			Stream = FindFreeStream();
+
+			if (Stream == 255)
+			{
+				// no free streams - send error and close
+
+				return 0;
+			}
+
+			sockptr->BPQStream = Stream;
+
+			BPQSetHandle(Stream, MainWnd);
+
+		}
+
+		send(sock, RelayMsg, strlen(RelayMsg), 0);
+
+		Connect(Stream);
+  
+		if (sockptr->Callsign[0] != ' ') 
+			ChangeSessionCallsign(Stream, EncodeCall(sockptr->Callsign));
+
+		sockptr->LoginState = 2;
+
+		sockptr->InputLen = 0;
+
+		if (LogEnabled)
+		{
+			wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted BPQ Stream=%d Callsign %s\n",
+					sockptr->Number,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
+					sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
+					Stream,
+					sockptr->Callsign);
+
+			WriteLog (logmsg);
+		}
+
+		ShowConnections();
+		InputLen=InputLen-(MsgLen+1);
+
+		sockptr->InputLen=InputLen;
+
+		// Connect to the BBS
+
+		SendMsg(Stream, "BBS\r", 4);
+
+		ShowConnections();
+	
+		return 0;
+	
+	default:
+
+		return 0;
+
+	}
+
+	return 0;
+}
+
 
 int DataSocket_ReadFBB(struct ConnectionInfo * sockptr, SOCKET sock)
 {
@@ -1434,6 +1663,59 @@ BOOL Initialise()
 			return FALSE;
 
 		}
+	}
+
+	if (RelayPort)
+	{
+
+	RelayUser.UserName = _strdup("RMSRELAY");
+
+	Relaysock = socket( AF_INET, SOCK_STREAM, 0);
+
+    if (Relaysock == INVALID_SOCKET)
+	{
+        wsprintf(szBuff, "socket() failed error %d", WSAGetLastError());
+		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+		return FALSE;
+        
+	}
+ 
+	psin=&local_sin;
+
+	psin->sin_family = AF_INET;
+	psin->sin_addr.s_addr = INADDR_ANY;
+    psin->sin_port = htons(RelayPort);        // Convert to network ordering 
+
+ 
+    if (bind( Relaysock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+	{
+         wsprintf(szBuff, "bind(Relaysock) failed Error %d", WSAGetLastError());
+
+         MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+         closesocket( Relaysock );
+
+		 return FALSE;
+	}
+
+    if (listen( Relaysock, MAX_PENDING_CONNECTS ) < 0)
+	{
+		wsprintf(szBuff, "listen(Relaysock) failed Error %d", WSAGetLastError());
+
+		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+
+		return FALSE;
+	}
+   
+	if ((status = WSAAsyncSelect( Relaysock, MainWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
+	{
+		wsprintf(szBuff, "WSAAsyncSelect failed Error %d", WSAGetLastError());
+
+		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+
+		closesocket( Relaysock );
+		
+		return FALSE;
+	}
 	}
 
 	if (cfgMinToTray)

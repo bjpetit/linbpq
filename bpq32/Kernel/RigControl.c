@@ -112,8 +112,6 @@ char AuthPassword[100] = "";
 
 char LastPassword[17];
 
-//
-//	Code Common to Pactor Modules
 
 #define BGCOLOUR RGB(236,233,216)
 

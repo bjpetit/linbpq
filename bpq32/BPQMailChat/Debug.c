@@ -19,8 +19,9 @@ static HWND hwndOutput;
 static HMENU hMenu;		// handle of menu 
 
 #define InputBoxHeight 25
-RECT MonitorRect;
-RECT OutputRect;
+
+RECT DebugRect;
+
 
 int Height, Width, LastY;
 
@@ -110,12 +111,12 @@ BOOL CreateDebugWindow()
 
 	ShowWindow(hDebug, SW_SHOWNORMAL);
 
-	if (MonitorRect.right < 100 || MonitorRect.bottom < 100)
+	if (DebugRect.right < 100 || DebugRect.bottom < 100)
 	{
-		GetWindowRect(hDebug,	&MonitorRect);
+		GetWindowRect(hDebug,	&DebugRect);
 	}
 
-	MoveWindow(hDebug,MonitorRect.left,MonitorRect.top, MonitorRect.right-MonitorRect.left, MonitorRect.bottom-MonitorRect.top, TRUE);
+	MoveWindow(hDebug,DebugRect.left,DebugRect.top, DebugRect.right-DebugRect.left, DebugRect.bottom-DebugRect.top, TRUE);
 
 	MoveWindows();
 
@@ -233,7 +234,7 @@ static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 		
 			// Remove the subclass from the edit control. 
 
-			GetWindowRect(hWnd,	&MonitorRect);	// For save soutine
+			GetWindowRect(hWnd,	&DebugRect);	// For save soutine
 
             SetWindowLong(hwndInput, GWL_WNDPROC, 
                 (LONG) wpOrigInputProc); 

@@ -13,7 +13,7 @@
 #define IDC_USERS2                      513
 #define IDC_MSGSEM                      514
 #define IDC_ALLOCSEM                    515
-#define IDC_CONSEM	                    517
+#define IDC_CONSEM                      517
 #define IDC_REMOVED                     1006
 #define IDC_KILLED                      1007
 #define IDC_LIVE                        1008
@@ -66,6 +66,7 @@
 #define RMS_SSID1                       1070
 #define RMS_SSID2                       1071
 #define RMS_SSID3                       1072
+#define IDC_SYSTOSYSOPCALL              1073
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -124,7 +125,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
 #define _APS_NEXT_COMMAND_VALUE         40019
-#define _APS_NEXT_CONTROL_VALUE         1073
+#define _APS_NEXT_CONTROL_VALUE         1074
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

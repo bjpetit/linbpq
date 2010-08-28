@@ -1210,6 +1210,7 @@ extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
 extern BOOL ALLOWCOMPRESSED;
 extern BOOL EnableUI;
+extern BOOL SendSYStoSYSOPCall;
 extern BOOL UIEnabled[];
 extern char * UIDigi[];
 
@@ -1234,6 +1235,7 @@ extern char *month[];
 
 extern HWND hDebug;
 extern RECT MonitorRect;
+extern RECT DebugRect;
 extern HWND hMonitor;
 //extern HWND hConsole;
 //extern RECT ConsoleRect;

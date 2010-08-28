@@ -252,6 +252,7 @@
 
 //	Add Repeater Shift and Set Data Mode options to Rigcontrol (for ICOM only)
 //	Add WINMOR mode control option to RigControl
+//  Extend INFOMSG to 2000 bytes
 
 
 #define _CRT_SECURE_NO_DEPRECATE 
