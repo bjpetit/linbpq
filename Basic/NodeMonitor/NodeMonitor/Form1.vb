@@ -200,157 +200,180 @@ Public Class Form1
 
             Len = s.ReceiveFrom(Buff, RemoteEP)
 
-            If Buff(14) = 3 Then
+            Try
 
-               If Buff(15) = 207 And Buff(16) = 255 Then
+               If Buff(14) = 3 Then
 
-                  Nalias = GetString(Buff, 17, 22)
-                  Nalias = RTrim(Nalias)
-                  Callsign = GetCall(Buff, 7)
-                  UpdateNode(Callsign, True)
-                  Debug.Print(Now & " NODES from " & Callsign & " " & Nalias & " Len " & Len.ToString & _
-                    " " & RemoteEP.ToString)
+                  If Buff(15) = 207 And Buff(16) = 255 Then
 
-                  Node(Nalias) = 60
-
-                  For i = 23 To Len - 20 Step 21
-                     Callsign = GetCall(Buff, i)
-                     UpdateNode(Callsign, True)
-                     Nalias = GetString(Buff, i + 7, i + 12)
+                     Nalias = GetString(Buff, 17, 22)
                      Nalias = RTrim(Nalias)
+                     Callsign = GetCall(Buff, 7)
+                     UpdateNode(Callsign, True)
+                     Debug.Print(Now & " NODES from " & Callsign & " " & Nalias & " Len " & Len.ToString & _
+                       " " & RemoteEP.ToString)
+
                      Node(Nalias) = 60
-                     '            debug.print(Callsign & " " & Nalias)
-                  Next
 
-               Else ' Not Nodes
+                     For i = 23 To Len - 20 Step 21
+                        Callsign = GetCall(Buff, i)
+                        UpdateNode(Callsign, True)
+                        Nalias = GetString(Buff, i + 7, i + 12)
+                        Nalias = RTrim(Nalias)
+                        Node(Nalias) = 60
+                        '            debug.print(Callsign & " " & Nalias)
+                     Next
 
-                  CallTo = GetCall(Buff, 0)
+                  Else ' Not Nodes
 
-                  If CallTo = "DUMMY" Then
+                     CallTo = GetCall(Buff, 0)
 
-                     Dim Report As String
-                     Dim Elements() As String
-                     Dim n As Integer, ptr As Integer
-                     Dim CallFrom As String
-                     Dim NewState As Integer
+                     If CallTo = "DUMMY" Then
 
-                     CallFrom = GetCall(Buff, 7)
+                        Dim Report As String
+                        Dim Elements() As String
+                        Dim n As Integer, ptr As Integer
+                        Dim CallFrom As String
+                        Dim NewState As Integer
 
-                     UpdateNode(CallFrom, True)
+                        CallFrom = GetCall(Buff, 7)
 
-                     Report = GetString(Buff, 16, Len - 5)
+                        UpdateNode(CallFrom, True)
 
-                     ' Try
+                        Report = GetString(Buff, 16, Len - 5)
 
-                     ' My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", _
-                     '     Now & " " & CallFrom & " " & Report & " " & RemoteEP.ToString & vbCrLf, True)
+                        Try
 
-                     'Catch ex As Exception
+                           ' Try
 
-                     ' End Try
+                           ' My.Computer.FileSystem.WriteAllText("ChatMonLog.txt", _
+                           '     Now & " " & CallFrom & " " & Report & " " & RemoteEP.ToString & vbCrLf, True)
 
-                     If Report.Length > 2 Then
+                           'Catch ex As Exception
 
-                        Elements = Split(Report, " ")
+                           ' End Try
 
-                        If Elements(0) = "INFO" Then
+                           If Report.Length > 2 Then
 
-                           Try
+                              Elements = Split(Report, " ")
 
-                              Dim latstring As String
-                              Dim lonstring As String
-                              Dim LatLon() As String
-                              Dim index As Integer = FindCall(CallFrom)
+                              If Elements(0) = "INFO" Then
 
-                              Report = Mid(Report, 6)
-                              Elements = Split(Report, "|")
+                                 Try
 
-                              If Elements.Length = 3 Then
+                                    Dim latstring As String
+                                    Dim lonstring As String
+                                    Dim LatLon() As String
+                                    Dim index As Integer = FindCall(CallFrom)
 
-                                 If Elements(0).Length > 0 Then
+                                    Report = Mid(Report, 6)
+                                    Elements = Split(Report, "|")
 
-                                    ' Update Lat/Lon
+                                    If Elements.Length = 3 Then
 
-                                    If InStr(Elements(0), ",") > 0 Then
+                                       If Elements(0).Length > 0 Then
 
-                                       ' Comma Separated - easy!
+                                          ' Update Lat/Lon
 
-                                       LatLon = Split(LTrim(Elements(0)), ",")
-                                       latstring = LatLon(0)
-                                       lonstring = LatLon(1)
+                                          If InStr(Elements(0), ",") > 0 Then
 
-                                    Else
+                                             ' Comma Separated - easy!
 
-                                       LatLon = Split(LTrim(Elements(0)), " ")
+                                             LatLon = Split(LTrim(Elements(0)), ",")
+                                             latstring = LatLon(0)
+                                             lonstring = LatLon(1)
 
-                                       ' May have spaces round N/S/E/W - if so get 4 elements
+                                          Else
 
-                                       If LatLon.Length = 4 Then
-                                          latstring = LatLon(0) & " " & LatLon(1)
-                                          lonstring = LatLon(2) & " " & LatLon(3)
+                                             LatLon = Split(LTrim(Elements(0)), " ")
+
+                                             ' May have spaces round N/S/E/W - if so get 4 elements
+
+                                             If LatLon.Length = 4 Then
+                                                latstring = LatLon(0) & " " & LatLon(1)
+                                                lonstring = LatLon(2) & " " & LatLon(3)
+                                             Else
+                                                latstring = LatLon(0)
+                                                lonstring = LatLon(1)
+                                             End If
+
+                                          End If
+
+                                          Nodes(index).Lat = DecodeLat(latstring).ToString
+                                          Nodes(index).Lon = DecodeLon(lonstring).ToString
+
+                                       End If
+
+                                       ' Update Popup text and flag if present
+
+                                       If Elements(1).Length > 0 Then Nodes(index).Comment = Elements(1)
+                                       If Elements(2).Length > 0 Then Nodes(index).PopupMode = CInt(Elements(2))
+
+                                       Changed = True
+
+                                       SaveNodesFile()
+
+                                    End If
+
+                                 Catch ex As Exception
+
+                                    Debug.Print("Decode INFO Failed - " & ex.Message())
+
+                                 End Try
+
+                              Else
+
+                                 For n = 0 To Elements.Length - 1 Step 2
+
+                                    If Elements(n).Length > 3 Then
+
+                                       UpdateNode(Elements(n), False)
+
+                                       ptr = FindChatPair(CallFrom, Elements(n))
+
+                                       NewState = CInt(Elements(n + 1))
+
+                                       ChatLinks(ptr).KillTimer = 0
+
+                                       If ChatLinks(ptr).Call1 = CallFrom Then
+                                          If NewState <> ChatLinks(ptr).Call1State Then Changed = True
+                                          ChatLinks(ptr).Call1State = NewState
+                                          ChatLinks(ptr).Timeout1 = 21
                                        Else
-                                          latstring = LatLon(0)
-                                          lonstring = LatLon(1)
+                                          If NewState <> ChatLinks(ptr).Call2State Then Changed = True
+                                          ChatLinks(ptr).Call2State = NewState
+                                          ChatLinks(ptr).Timeout2 = 21
                                        End If
 
                                     End If
 
-                                    Nodes(index).Lat = DecodeLat(latstring).ToString
-                                    Nodes(index).Lon = DecodeLon(lonstring).ToString
+                                 Next
 
-                                 End If
+                              End If ' INFO/CHAT LINKS
+                           End If ' Len > 2
 
-                                 ' Update Popup text and flag if present
+                        Catch ex As Exception
+                           ' 
+                           'Duff DUMMY frame - print it
 
-                                 If Elements(1).Length > 0 Then Nodes(index).Comment = Elements(1)
-                                 If Elements(2).Length > 0 Then Nodes(index).PopupMode = CInt(Elements(2))
+                           Try
 
-                                 Changed = True
+                              My.Computer.FileSystem.WriteAllText("ChatDebugLog.txt", _
+                                  Now & " " & CallFrom & " " & Report & " " & RemoteEP.ToString & vbCrLf, True)
 
-                                 SaveNodesFile()
-
-                              End If
-
-                           Catch ex As Exception
-
-                              Debug.Print("Decode INFO Failed - " & ex.Message())
+                           Catch exx As Exception
 
                            End Try
 
-                        Else
+                        End Try
+                     End If ' Call = DUMMY
+                  End If ' NODES 
+               End If  ' Not UI
 
-                           For n = 0 To Elements.Length - 1 Step 2
+            Catch ex As Exception
 
-                              If Elements(n) <> "XX" Then
+            End Try
 
-                                 UpdateNode(Elements(n), False)
-
-                                 ptr = FindChatPair(CallFrom, Elements(n))
-
-                                 NewState = CInt(Elements(n + 1))
-
-                                 ChatLinks(ptr).KillTimer = 0
-
-                                 If ChatLinks(ptr).Call1 = CallFrom Then
-                                    If NewState <> ChatLinks(ptr).Call1State Then Changed = True
-                                    ChatLinks(ptr).Call1State = NewState
-                                    ChatLinks(ptr).Timeout1 = 21
-                                 Else
-                                    If NewState <> ChatLinks(ptr).Call2State Then Changed = True
-                                    ChatLinks(ptr).Call2State = NewState
-                                    ChatLinks(ptr).Timeout2 = 21
-                                 End If
-
-                              End If
-
-                           Next
-
-
-                        End If ' INFO/CHAT LINKS
-                     End If ' Len > 2
-                  End If ' Call = DUMMY
-               End If ' NODES 
-            End If  ' Not UI
 
          End While
 
