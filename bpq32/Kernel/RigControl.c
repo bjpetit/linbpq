@@ -1858,7 +1858,6 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 				}
 			}
 
-
 			memcpy(PORT->TXBuffer, ptr[0]->Cmd1, 24);
 
 			RIG->FreqPtr++;

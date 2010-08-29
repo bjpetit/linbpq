@@ -415,8 +415,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	// Set the ax.25 MYCALL and EAS ON|
 
-
-	wsprintf(msg, "EAS ON\rMYCALL %s\r", TNC->NodeCall);
+	wsprintf(msg, "EAS ON\rMYCALL %s\rHPOLL ON\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
 
 	MinimizetoTray = GetMinimizetoTrayFlag();

@@ -173,7 +173,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
 	case IDC_TEST:
 
-		SendExitEnter(TNC);
+//		SendExitEnter(TNC);
 
 		break;
 

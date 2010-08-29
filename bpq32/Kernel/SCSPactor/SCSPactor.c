@@ -22,6 +22,10 @@
 
 // Save Minimized State
 
+// Version 1.2.1.2 August 2010 
+
+// implement scan bandwidth change
+
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -88,6 +92,7 @@ VOID DoTermModeTimeout(struct TNCINFO * TNC);
 BOOL OpenVirtualSerialPort(struct TNCINFO * TNC);
 int ReadVCommBlock(struct TNCINFO * TNC, char * Block, int MaxLength);
 VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
+Switchmode(struct TNCINFO * TNC, int Mode);
 
 
 DllImport UCHAR NEXTID;
@@ -408,8 +413,25 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		return 0;
+		if (Param == 4)		// Set Wide Mode
+		{
+			if (TNC->Bandwidth != 'W')
+			{
+				TNC->Bandwidth = 'W';
+				Switchmode(TNC, 3);
+			}
+			return 0;
+		}
 
+		if (Param == 5)		// Set Narrow Mode
+		{
+			if (TNC->Bandwidth != 'N')
+			{
+				TNC->Bandwidth = 'N';
+				Switchmode(TNC, 2);
+			}
+			return 0;
+		}
 	}
 
 	return 0;
@@ -1187,6 +1209,17 @@ VOID DEDPoll(int Port)
 					return;
 				}
 
+				if (memcmp(Buffer, "MYLEVEL ", 8) == 0)
+				{
+					Switchmode(TNC, Buffer[8] - '0');
+
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Ok\r");		
+					Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+
+					return;
+				}
+
+
 				if (Buffer[0] == 'C' && datalen > 2)	// Connect
 				{
 					if (*(++Buffer) == ' ') Buffer++;		// Space isn't needed
@@ -1474,7 +1507,7 @@ BOOL CheckRXHost(struct TNCINFO * TNC)
 
 #include "Mmsystem.h"
 
-SendExitEnter(struct TNCINFO * TNC)
+Switchmode(struct TNCINFO * TNC, int Mode)
 {
 	int n;
 	DWORD Starttime = timeGetTime();
@@ -1496,12 +1529,12 @@ SendExitEnter(struct TNCINFO * TNC)
 
 	while (CheckRXHost(TNC) == FALSE)
 	{
-		Sleep(10);
+		Sleep(5);
 		n++;
 		if (n > 100) break;
 	}
 
-	memcpy(Poll, "MYL 3\r", 6);
+	wsprintf(Poll, "MYL %d\r", Mode);
 
 	TNC->TXLen = 6;
 	WriteCommBlock(TNC);
@@ -1510,7 +1543,7 @@ SendExitEnter(struct TNCINFO * TNC)
 
 	while (CheckRXText(TNC) == FALSE)
 	{
-		Sleep(10);
+		Sleep(5);
 		n++;
 		if (n > 100) break;
 	}
@@ -1522,6 +1555,8 @@ SendExitEnter(struct TNCINFO * TNC)
 
 	// No response expected
 
+	Sleep(10);
+
 	Poll[2] = 0;
 	TNC->Toggle = 0;
 	Poll[3] = 0x41;
@@ -1530,10 +1565,11 @@ SendExitEnter(struct TNCINFO * TNC)
 
 	CRCStuffAndSend(TNC, Poll, 6);
 	TNC->InternalCmd = FALSE;
+	TNC->Timeout = 5;		// 1/2 sec - In case missed
 
 	EnterExit = FALSE;
 
-	Debugprintf("Switch took %d millisecs",  timeGetTime() - Starttime); 
+	Debugprintf("Switch to MYLEVEL %d took %d millisecs", Mode, timeGetTime() - Starttime); 
 
 	return 0;
 }

@@ -91,6 +91,8 @@ struct TNCINFO
 
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
 
+	char Bandwidth;					// Currently set Mode W or N
+
 };
 
 

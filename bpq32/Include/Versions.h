@@ -18,8 +18,8 @@
 #define KVers 4,10,15,5
 #define KVerstring "4.10.15.5\0"
 
-#define SCSVers 1,2,1,1
-#define SCSVerstring "1.2.1.1\0"
+#define SCSVers 1,2,1,2
+#define SCSVerstring "1.2.1.2\0"
 
 #define KAMVers 1,2,1,4
 #define KAMVerstring "1.2.1.4\0"

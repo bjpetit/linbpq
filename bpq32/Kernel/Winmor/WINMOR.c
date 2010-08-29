@@ -968,7 +968,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		if (Param == 5)		// Set Wide Mode
+		if (Param == 5)		// Set Narrow Mode
 		{
 			send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
 			return 0;
