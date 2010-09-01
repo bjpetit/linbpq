@@ -478,7 +478,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	}
 
 	PortEntry->MAXHOSTMODESESSIONS = MaxStreams;		// Default
-	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.15 call on each stream
+	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
 
 	TNC->PortRecord = PortEntry;
 

@@ -403,9 +403,17 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
+	{
+		Debugprintf("PORTCALL not set - Using NODECALL");
 		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+	}
 	else
+	{
+		Debugprintf("Using PORTCALL");
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
+	}
+
+	Debugprintf("Pactor Call set to %s", TNC->NodeCall);
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
@@ -640,6 +648,10 @@ void CheckRX(struct TNCINFO * TNC)
 	if (TNC->RXBuffer[Length-1] != ETB)
 		return;					// Wait till we have a full frame
 
+	if (TNC->RXBuffer[Length-2] == DLE)
+		return;					// DLE ETB isn't end of frameW
+
+
 	ProcessHostFrame(TNC, TNC->RXBuffer, Length);	// Could have multiple packets in buffer
 
 	TNC->RXLen = 0;		// Ready for next frame
@@ -654,16 +666,18 @@ VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
 	UCHAR * FendPtr;
 	int NewLen;
 
-	//	Split into Packets. By far the most likely is a single KISS frame
-	//	so treat as special case
+	//	Split into Packets. By far the most likely is a single packet, so treat as special case
 
-//	if (rxbuffer[1] == FEND)			// Two FENDS - probably got out of sync
-//	{
-//		rxbuffer++;
-//		Len--;
-//	}
-	
 	FendPtr = memchr(&rxbuffer[1], ETB, Len-1);
+
+FENDLoop:
+
+	if (*(FendPtr - 1) == DLE)
+	{
+		FendPtr++;
+		FendPtr = memchr(FendPtr, ETB, Len-1);
+		goto FENDLoop;
+	}
 	
 	if (FendPtr == &rxbuffer[Len-1])
 	{
@@ -711,41 +725,6 @@ VOID AEAPoll(int Port)
 	char Status[80];
 	int Stream;
 
-	// If Pactor Session has just been attached, set Pactor Call to the connecting user's callsign
-
-	if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Streams[0].Attached == 0)
-	{
-		// New Attach
-
-		int calllen;
-		UCHAR TXMsg[1000];
-		int datalen;
-		char Msg[80];
-
-		TNC->Streams[0].Attached = TRUE;
-
-		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
-		TNC->Streams[0].MyCall[calllen] = 0;
-		
-		datalen = wsprintf(TXMsg, "OMf%s", TNC->Streams[0].MyCall);
-		EncodeAndSend(TNC, TXMsg, datalen);
-		TNC->InternalCmd = 'M';
-		TNC->CommandBusy = TRUE;
-
-		wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
-		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
-
-		// Stop Scanning
-
-		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-		
-		if (Rig_Command)
-			Rig_Command(-1, Msg);
-
-		return;
-
-	}
-	
 	if (TNC->Timeout)
 	{
 		TNC->Timeout--;
@@ -791,6 +770,47 @@ VOID AEAPoll(int Port)
 	if (TNC->CommandBusy)
 		goto Poll;
 
+
+	// We don't check for a new attach unless Timeout and CommandBusy are both zero, as we need to send a command.
+
+	// If Pactor Session has just been attached, set Pactor Call to the connecting user's callsign
+
+
+	if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Streams[0].Attached == 0)
+	{
+		// New Attach
+
+		int calllen;
+		UCHAR TXMsg[1000];
+		int datalen;
+		char Msg[80];
+
+		TNC->Streams[0].Attached = TRUE;
+
+		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
+		TNC->Streams[0].MyCall[calllen] = 0;
+		
+		datalen = wsprintf(TXMsg, "OMf%s", TNC->Streams[0].MyCall);
+		EncodeAndSend(TNC, TXMsg, datalen);
+		TNC->InternalCmd = 'M';
+		TNC->CommandBusy = TRUE;
+
+		wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
+		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+		// Stop Scanning
+
+		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+		if (Rig_Command)
+			Rig_Command(-1, Msg);
+
+		// Shouldn't we also take out of standby mode?? PN is Pactor Listen, for monitoring
+
+		return;
+
+	}
+	
 	//If sending internal command list, send next element
 
 	if (TNC->CmdSet)
@@ -881,7 +901,7 @@ VOID AEAPoll(int Port)
 
 			TNC->CmdSet = TNC->CmdSave = malloc(100);
 
-			wsprintf(TNC->CmdSet, "OPt\r");  // Queue Back to Pactor Listen
+			wsprintf(TNC->CmdSet, "OPt\r");  // Queue Back to Pactor Standby
 			TNC->InternalCmd = 'T';
 			TNC->IntCmdDelay--;
 

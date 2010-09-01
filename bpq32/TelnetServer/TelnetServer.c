@@ -74,7 +74,7 @@ char PasswordMsg[100]="Password:";
 
 char cfgHOSTPROMPT[100];
 
-char cfgCTEXT[100];
+char cfgCTEXT[300];
 
 char cfgLOCALECHO[100];
 
@@ -83,10 +83,11 @@ char disMsg[] = "Disconnected by SYSOP\r\n";
 
 int MaxSessions=10;
 
-char LoginMsg[]="user:";
+char LoginMsg[100]="user:";
 
 char BlankCall[]="         ";
 
+char RelayAPPL[20] = "";
 
 BOOL LogEnabled=FALSE;
 
@@ -1178,7 +1179,7 @@ MsgLoop:
 
 		// Connect to the BBS
 
-		SendMsg(Stream, "BBS\r", 4);
+		SendMsg(Stream, RelayAPPL, strlen(RelayAPPL));
 
 		ShowConnections();
 	
@@ -1667,55 +1668,47 @@ BOOL Initialise()
 
 	if (RelayPort)
 	{
+		RelayUser.UserName = _strdup("RMSRELAY");
+		Relaysock = socket( AF_INET, SOCK_STREAM, 0);
 
-	RelayUser.UserName = _strdup("RMSRELAY");
-
-	Relaysock = socket( AF_INET, SOCK_STREAM, 0);
-
-    if (Relaysock == INVALID_SOCKET)
-	{
-        wsprintf(szBuff, "socket() failed error %d", WSAGetLastError());
-		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
-		return FALSE;
-        
+		if (Relaysock == INVALID_SOCKET)
+		{
+			wsprintf(szBuff, "socket() failed error %d", WSAGetLastError());
+			MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+			return FALSE;
 	}
  
-	psin=&local_sin;
+		psin=&local_sin;
+		psin->sin_family = AF_INET;
+		psin->sin_addr.s_addr = INADDR_ANY;
+		psin->sin_port = htons(RelayPort);        // Convert to network ordering 
 
-	psin->sin_family = AF_INET;
-	psin->sin_addr.s_addr = INADDR_ANY;
-    psin->sin_port = htons(RelayPort);        // Convert to network ordering 
+	    if (bind( Relaysock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+		{
+			 wsprintf(szBuff, "bind(Relaysock) failed Error %d", WSAGetLastError());
+			MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+			closesocket( Relaysock );
 
- 
-    if (bind( Relaysock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
-	{
-         wsprintf(szBuff, "bind(Relaysock) failed Error %d", WSAGetLastError());
+			return FALSE;
+		}
 
-         MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
-         closesocket( Relaysock );
+		if (listen( Relaysock, MAX_PENDING_CONNECTS ) < 0)
+		{
+			wsprintf(szBuff, "listen(Relaysock) failed Error %d", WSAGetLastError());
+			MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
 
-		 return FALSE;
-	}
-
-    if (listen( Relaysock, MAX_PENDING_CONNECTS ) < 0)
-	{
-		wsprintf(szBuff, "listen(Relaysock) failed Error %d", WSAGetLastError());
-
-		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
-
-		return FALSE;
-	}
+			return FALSE;
+		}
    
-	if ((status = WSAAsyncSelect( Relaysock, MainWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
-	{
-		wsprintf(szBuff, "WSAAsyncSelect failed Error %d", WSAGetLastError());
+		if ((status = WSAAsyncSelect( Relaysock, MainWnd, WSA_ACCEPT, FD_ACCEPT)) > 0)
+		{
+			wsprintf(szBuff, "WSAAsyncSelect failed Error %d", WSAGetLastError());
 
-		MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
-
-		closesocket( Relaysock );
+			MessageBox(MainWnd, szBuff, "Telnet Server", MB_OK);
+			closesocket(Relaysock);
 		
-		return FALSE;
-	}
+			return FALSE;
+		}
 	}
 
 	if (cfgMinToTray)
@@ -2080,6 +2073,13 @@ int ParseIniFile(char * fn)
 
 		if (_stricmp(param,"FBBPORT") == 0)
 			FBBPort = atoi(value);
+
+		if (_stricmp(param,"RELAYAPPL") == 0)
+		{
+			RelayPort = 8778;
+			strcpy(RelayAPPL,value);
+			strcat RelayAPPL. "\r";
+		}
 
 		//		if (strcmp(param,"LOGINRESPONSE") == 0) cfgLOGINRESPONSE = value;
 //	    if (strcmp(param,"PASSWORDRESPONSE") == 0) cfgPASSWORDRESPONSE = value;

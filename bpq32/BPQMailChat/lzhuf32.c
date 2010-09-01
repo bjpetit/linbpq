@@ -905,6 +905,11 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				memcpy(ptr2, "@winlink.org", 12);
 				count += 12;
 				conn->TempMsg->length += 12;
+
+				// Also set Emailfrom, in case read on BBS (eg by outpost)
+				
+				strcpy(Msg->emailfrom, "@winlink.org");
+
 			}
 
 		}

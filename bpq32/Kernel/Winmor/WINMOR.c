@@ -1097,7 +1097,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
-
+	PortEntry->MAXHOSTMODESESSIONS = 1;	
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate

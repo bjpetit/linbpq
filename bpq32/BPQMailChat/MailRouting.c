@@ -737,6 +737,9 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 					free(Call);
 
+					if (user->flags & F_BBS)	// User is also a BBS, so set FWD bit so he can get it
+						set_fwd_bit(Msg->fbbs, user->BBSNumber);
+
 					return 1;
 				}
 			}
@@ -773,6 +776,9 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 			if (user->flags & F_POLLRMS)
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace @ winlink.org, but local RMS user - leave here");
+		
+				if (user->flags & F_BBS)	// User is also a BBS, so set FWD bit so he can get it
+					set_fwd_bit(Msg->fbbs, user->BBSNumber);
 
 				return 1;					// Route found
 			}

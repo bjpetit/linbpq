@@ -780,6 +780,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 			char Date[80];
 			char * Dateptr;
 			int i, s;
+			char SSID[10];
 
 			SetDlgItemText(hDlg, IDC_NAME, user->Name);
 			SetDlgItemText(hDlg, IDC_PASSWORD, user->pass);
@@ -809,7 +810,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SetDlgItemInt(hDlg, BYTES_IN, user->BytesForwardedIn, FALSE);
 			SetDlgItemInt(hDlg, BYTES_OUT, user->BytesForwardedOut, FALSE);
 
-
+/*
 			for (i = 0; i < 3; i++)
 			{
 			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_RESETCONTENT,0 , 0);
@@ -830,13 +831,23 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"14");
 			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"15");
 			}
+*/			
+			SendDlgItemMessage(hDlg, RMS_SSID1, WM_SETTEXT, 0, "");
+			SendDlgItemMessage(hDlg, RMS_SSID2, WM_SETTEXT, 0, "");
+			SendDlgItemMessage(hDlg, RMS_SSID3, WM_SETTEXT, 0, "");
 
 			i = 0;
 			for (s = 0; s < 16; s++)
 			{
 				if (user->RMSSSIDBits & (1 << s))
 				{
-					SendDlgItemMessage(hDlg, RMS_SSID1 + i++, CB_SETCURSEL, s, 0);
+					if (i)
+						wsprintf(SSID, "%d", s);
+					else
+						SSID[0] = 0;
+
+					SendDlgItemMessage(hDlg, RMS_SSID1 + i++, WM_SETTEXT, 0, SSID);
+//					SendDlgItemMessage(hDlg, RMS_SSID1 + i++, CB_SETCURSEL, s, 0);
 					if (i == 3)
 						break;
 				}

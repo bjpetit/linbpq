@@ -536,16 +536,22 @@
 // Version 1.0.4.17 Aug 2010
 
 // Fix receiving multiple messages in FBB Uncompressed Mode
-// Try to trap phantom chat node ocnnections
+// Try to trap phantom chat node connections
 // Add delay to close
 
+
+// Version 1.0.4.18 Aug 2010
+
+// Add "Send SYSTEM messages to SYSOP Call" Option
+// set fwd bit on local winlink.org msgs if user is a BBS
+// add winlink.org to from address of messages from WL2K that don't already have an @ 
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Test"
+//#define SPECIALVERSION "Test"
 
 #include "GetVersion.h"
 
@@ -911,7 +917,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	SendChatLinkStatus();
 
 	hWnd = CreateWindow("STATIC", "MailChat Closing - Please Wait", 0,
-				200, 200, 250, 40, NULL, NULL, hInstance, NULL);
+				150, 200, 350, 40, NULL, NULL, hInstance, NULL);
 
 	ShowWindow(hWnd, nCmdShow);
 
@@ -5569,6 +5575,9 @@ nextline:
 						Logprintf(LOG_BBS, conn, '?', "SMTP Message @ winlink.org, but local RMS user - leave here");
 						strcpy(Msg->to, Call);
 						strcpy(Msg->via, AT);
+						if (user->flags & F_BBS)	// User is a BBS, so set FWD bit so he can get it
+							set_fwd_bit(Msg->fbbs, user->BBSNumber);
+
 					}
 				}
 			}
