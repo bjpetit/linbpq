@@ -1,7 +1,7 @@
 
 
-#define AEAVers 1,1,1,1
-#define AEAVerstring "1.1.1.1\0"
+#define AEAVers 1,1,1,2
+#define AEAVerstring "1.1.1.2\0"
 
 #define AXIPVers 1,15,2,10
 #define AXIPVerstring "1.15.2.10\0"

@@ -274,7 +274,11 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 #ifdef WINMOR
 	wsprintf(Title,"WINMOR Status - Port %d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 #else
+#ifdef HAL
+	wsprintf(Title,"HAL Status - COM%d", TNC->PortRecord->PORTCONTROL.IOBASE);
+#else
 	wsprintf(Title,"Pactor Status - COM%d", TNC->PortRecord->PORTCONTROL.IOBASE);
+#endif
 #endif
 	SetWindowText(TNC->hDlg, Title);
 

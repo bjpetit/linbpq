@@ -31,6 +31,10 @@
 //	Version 2.1.9 June 2010
 //  Prevent overlong packets being sent to node (for Outpost forwarding, etc)
 
+//	Version 2.1.10 September 2010
+
+//  Fix loss of las letter of callsign  if newline missing from USER line.
+
 #include "stdafx.h"
 #include "TelnetServer.h"
 #include "bpq32.h"
@@ -2022,7 +2026,6 @@ int ParseIniFile(char * fn)
 	char * param;
 	char * value;
 	char * Context, *ptr, *User, *Pwd, *UserCall, *pos;
-	BOOL FBB;
 	HKEY hKey=0;
 	UCHAR Value[100];
 	UCHAR * BPQDirectory;
@@ -2049,9 +2052,13 @@ int ParseIniFile(char * fn)
 
 	while(fgets(buf, 255, file) != NULL)
 	{
+		int End = strlen(buf) -1;
+		
 		strcpy(errbuf,buf);			// save in case of error
 
-		buf[strlen(buf)-1]=0;			// remove newline
+		if (buf[End] == 10)
+			buf[End]=0;			// remove newline
+
 		ptr=strchr(buf,'=');
 
 		if (!ptr)
@@ -2077,8 +2084,8 @@ int ParseIniFile(char * fn)
 		if (_stricmp(param,"RELAYAPPL") == 0)
 		{
 			RelayPort = 8778;
-			strcpy(RelayAPPL,value);
-			strcat RelayAPPL. "\r";
+			strcpy(RelayAPPL, value);
+			strcat(RelayAPPL, "\r");
 		}
 
 		//		if (strcmp(param,"LOGINRESPONSE") == 0) cfgLOGINRESPONSE = value;
@@ -2106,8 +2113,6 @@ int ParseIniFile(char * fn)
 
 		if (_stricmp(param,"USER") == 0)
 		{
-			FBB = FALSE;
-			
 			User = strtok_s(value, ", ", &Context);
 			Pwd = strtok_s(NULL, ", ", &Context);
 			UserCall = strtok_s(NULL, ", ", &Context);

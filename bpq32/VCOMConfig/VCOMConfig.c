@@ -2,6 +2,9 @@
 //
 //	Program to Configure BPQ Virtual Serial Ports
 
+// Version 1.0.1.1 September 2010
+
+// Increace numbe rof Virtual Ports to 20
 
 #include "stdafx.h"
 #include "resource.h"

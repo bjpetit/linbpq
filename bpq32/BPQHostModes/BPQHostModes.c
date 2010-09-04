@@ -14,9 +14,9 @@
 
 //		Fix crash on close if port can't be opened
 
-// Version 1.1.3 May 2010
+// Version 1.1.3 October 2010
 
-//		Support Real Serial Port Pairs (Param of REAL selects this mode)
+//		Support Real Serial Port Pairs 
 
 
 #include "stdafx.h"
@@ -130,8 +130,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	HKEY hKey=0;
 
 	UNREFERENCED_PARAMETER(hPrevInstance);
-
-	COMType = toupper(lpCmdLine[0]);
 	
 	MyRegisterClass(hInstance);
 
@@ -317,35 +315,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	init.dwSize=sizeof(init);
 	ret=InitCommonControlsEx(&init);
 
-/*	hList = CreateWindowEx(WS_EX_CLIENTEDGE, WC_EDIT , "4", WS_CHILD | WS_BORDER | WS_VISIBLE,
-                 60,183,25,20, hWnd, NULL, hInstance, NULL);
-
-
-	hList = CreateWindow(WC_BUTTON , "Kant", BS_AUTORADIOBUTTON | WS_GROUP | WS_CHILD,
-                 100,186,70,14, hWnd, NULL, hInstance, NULL);
-
-   ShowWindow(hList, nCmdShow);
-
-		hList = CreateWindow(WC_BUTTON , "DED", BS_AUTORADIOBUTTON | WS_CHILD,
-                 180,186,100,14, hWnd, NULL, hInstance, NULL);
-
-   ShowWindow(hList, nCmdShow);
-
-	hList = CreateWindow(WC_BUTTON , "Kant", BS_AUTORADIOBUTTON | WS_GROUP | WS_CHILD,
-                 100,216,70,14, hWnd, NULL, hInstance, NULL);
-
-   ShowWindow(hList, nCmdShow);
-
-		hList = CreateWindow(WC_BUTTON , "DED", BS_AUTOCHECKBOX  | WS_CHILD,
-                 180,216,100,14, hWnd, NULL, hInstance, NULL);
-
-		//171,118,49,14
-   ShowWindow(hList, nCmdShow);
-*/
-
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"BPQ Hostmodes Emulator Version %s", VersionString);
+	wsprintf(Title,"BPQ Hostmodes Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
 
@@ -526,7 +498,7 @@ BOOL Initialise()
 	char Key[20];
 	int numChannels, ComPort, DEDMode, InHostMode, ApplMask;
 	RECT Rect;
-
+	BOOL REAL = FALSE;
 	HKEY hKey=0;
 	
 #pragma warning(push)
@@ -544,6 +516,14 @@ BOOL Initialise()
                               0,
                               KEY_QUERY_VALUE,
                               &hKey);
+
+	RegQueryValueEx(hKey, "COMType", 0, &Type, (UCHAR *)&REAL, &Vallen);
+
+	if (REAL)
+	{
+		COMType = 'R';
+		Button_SetCheck(GetDlgItem(hWnd, IDC_REALPORTS), BST_CHECKED);
+	}
 
 //'   Get Params from Registry
 
@@ -700,9 +680,10 @@ BOOL Initialise()
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 
 	GetWindowRect(hWnd, &Rect);      
-	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 550, CurrentConnections*30+130, 0);
+	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 520, CurrentConnections*30+130, 0);
 	SetWindowPos(GetDlgItem(hWnd, TN_ADD), NULL, 180, CurrentConnections*30+50, 70, 30, 0);
 	SetWindowPos(GetDlgItem(hWnd, TN_SAVE), NULL, 300, CurrentConnections*30+50, 80, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_REALPORTS), NULL, 10, CurrentConnections*30+50, 150, 30, 0);
 
 	Refresh();
 
@@ -897,9 +878,10 @@ int AddLine(HWND hWnd)
 	Connections[++CurrentConnections] = conn;
 
 	GetWindowRect(hWnd, &Rect);      
-	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 550, CurrentConnections*30+130, 0);
+	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 520, CurrentConnections*30+130, 0);
 	SetWindowPos(GetDlgItem(hWnd, TN_ADD), NULL, 180, CurrentConnections*30+50, 70, 30, 0);
 	SetWindowPos(GetDlgItem(hWnd, TN_SAVE), NULL, 300, CurrentConnections*30+50, 80, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_REALPORTS), NULL, 10, CurrentConnections*30+50, 150, 30, 0);
 
 	CreateDialogLine(CurrentConnections);
 
@@ -913,7 +895,7 @@ int SaveConfig(HWND hWnd)
 	int i;
 	int retCode,disp;
 	char Key[20];
-	BOOL DED;
+	BOOL DED, REAL;
 	int Port, ApplMask, Streams, Len;
 	BOOL DUFF=FALSE;
 	HKEY hKey=0;
@@ -930,6 +912,10 @@ int SaveConfig(HWND hWnd)
 							  &disp);
 
 	if (retCode != ERROR_SUCCESS) return 0;
+
+	REAL = Button_GetCheck(GetDlgItem(hWnd, IDC_REALPORTS));
+
+	RegSetValueEx(hKey, "COMType",0 ,REG_DWORD, (BYTE *)&REAL, 4);
 
 	for (i = 1; i <= CurrentConnections; i++)
 	{
@@ -1000,12 +986,11 @@ int SaveConfig(HWND hWnd)
 			RegDeleteValue(hKey,Key);		// Clear
 
 		}
-
 	}
 
 	RegCloseKey(hKey);
 
-	MessageBox(MainWnd,"You must restart BPQKHOST for changes to be actioned","BPQKHOST",0);
+	MessageBox(MainWnd,"You must restart BPQHostModes for changes to be actioned","BPQHostModes",0);
 
 	return 0;
 }

@@ -1,6 +1,6 @@
 
 #include <winioctl.h>
-#include "resrc1.h"
+#include "resource.h"
 
 #define MAXBLOCK 4096
 
@@ -28,23 +28,28 @@ struct STREAMINFO
 	int BytesAcked;
 	int BytesRXed;
 	int BytesOutstanding;		// For Packet Channels
-	int TimeInSend;			// Too long in send mode timer
+
+	int DefaultMode;
+	int CurrentMode;
+
+	// Mode Equates
+
+	#define Clover 1
+	#define Pactor 2
+	#define AMTOR 3
+
 };
 
 
 
 struct TNCINFO
 {
-	struct STREAMINFO Streams[27];	// 0 is Pactor on HF port, Rest are ax.25 on VHF port.
+	struct STREAMINFO Streams[1];	// Only Supports one stream
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
 	char * InitScript;			// Initialisation Commands
-	char * InitPtr;				// Next Command
-	int	ReinitState;			// Reinit State Machine
+	int InitScriptLen;			// Length
 	BOOL TNCOK;					// TNC is reponding
 	BOOL InternalCmd;			// Last Command was generated internally
-	int CmdStream;				// Stream last command was issued on
-	int	IntCmdDelay;			// To limit internal commands
-	int xx;						// Toggle CO and Pg
 
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 
@@ -57,16 +62,17 @@ struct TNCINFO
 //	int Retries;
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent
-	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
-	int RXLen;						// Data in RXBUffer
+	UCHAR DataBuffer[500];			// Data Chars split from  received stream
+	UCHAR CmdBuffer[500];			// Cmd/Response chars split from received stream
+	int DataLen;					// Data in DataBuffer
+	int CmdLen;						// Data in CmdBuffer
+	BOOL CmdEsc;						// Set if last char rxed was 0x80
+	BOOL DataEsc;					// Set if last char rxed was 0x81
 
 	char TXRXState;					// Current State
 	int Mem2;
 
 	HWND hDlg;						// Status Window Handle
-
-	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
-	BOOL CommandBusy;				// Waiting for Command ACK
 
 	int PollDelay;					// Don't poll too often;
 

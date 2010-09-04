@@ -1,4 +1,4 @@
-//Microsoft eMbedded Visual C++ generated resource script.
+//Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
 
@@ -7,10 +7,7 @@
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
-#include "windows.h"
-
-#define IDC_STATIC                      -1
-
+#include "afxres.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -38,9 +35,9 @@ BPQICON                 ICON    DISCARDABLE     "BPQ.ICO"
 // Dialog
 //
 
-KHOSTMAINWINDOW DIALOG FIXED IMPURE  100, 100, 352, 300
+KHOSTMAINWINDOW DIALOG FIXED IMPURE  100, 100, 400, 300
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "BPQ Hostmode Emulator"
+CAPTION "BPQ Hostmodes Emulator Version 1.2.3.4"
 CLASS "KHOSTMAINWINDOW"
 FONT 8, "MS Sans Serif"
 BEGIN
@@ -48,7 +45,8 @@ BEGIN
     PUSHBUTTON      "Save Settings",TN_SAVE,171,118,49,14
     LTEXT           "COM    Streams  Applmask              Mode               RTS   CTS   DCD   DSR   DTR",
                     IDC_STATIC,76,9,280,10
-
+    CONTROL         "Use Real COM Ports",IDC_REALPORTS,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,55,180,90,15
 END
 
 
@@ -59,8 +57,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,3,1
- PRODUCTVERSION 1,1,3,1
+ FILEVERSION 1,1,3,2
+ PRODUCTVERSION 1,1,3,2
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -77,12 +75,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "G8BPQ\0"
             VALUE "FileDescription", "BPQKantHost\0"
-            VALUE "FileVersion", "1, 1, 3, 1\0"
+            VALUE "FileVersion", "1, 1, 3, 2\0"
             VALUE "InternalName", "KantHost\0"
             VALUE "LegalCopyright", "© Copyright G8BPQ 2010\0"
             VALUE "OriginalFilename", "KantHost\0"
             VALUE "ProductName", "BPQ32 Kantronics Hostmode Emulator\0"
-            VALUE "ProductVersion", "1, 1, 3, 1\0"
+            VALUE "ProductVersion", "1, 1, 3, 2\0"
         END
     END
     BLOCK "VarFileInfo"

@@ -4,6 +4,11 @@
 //	Uses BPQ EXTERNAL interface
 //
 
+// Version 1.1.1.2 Sept 2010
+
+// Fix CTEXT
+// Turn round link when all acked (not all sent)
+
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -576,7 +581,7 @@ void CheckRX(struct TNCINFO * TNC)
 
 	// only try to read number of bytes in queue 
 
-	if (TNC->RXLen == 500)
+	if (TNC->RXLen >= 500)
 		TNC->RXLen = 0;
 
 	ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
@@ -608,11 +613,14 @@ void CheckRX(struct TNCINFO * TNC)
 
 		if (TNC->HostMode)
 		{
+			Debugprintf("AEA Bad Host Frame");
 			TNC->RXLen = 0;		// Ready for next frame
 			return;
 		}
 
 		TNC->RXBuffer[TNC->RXLen] = 0;
+
+		Debugprintf("AEA Got Term mode Frame");
 
 //		if (TNC->RXBuffer[TNC->RXLen-2] != ':')
 		if (strstr(TNC->RXBuffer, "cmd:") == 0)
@@ -622,15 +630,7 @@ void CheckRX(struct TNCINFO * TNC)
 
 		TNC->RXLen = 0;		// Ready for next frame
 					
-		if (TNC->HostMode == 0)
-		{
-			// We think TNC is in Terminal Mode
-			ProcessTermModeResponse(TNC);
-			return;
-		}
-		// We thought it was in Host Mode, but are wrong.
-
-		TNC->HostMode = FALSE;
+		ProcessTermModeResponse(TNC);
 		return;
 	}
 
@@ -1127,7 +1127,6 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 
 			TNC->HostMode = TRUE;		// Should now be in Host Mode
 			TNC->NeedPACTOR = 50;		// Need to Send PACTOR command after 5 secs
-//			TNC->ReinitState = 40;	// Need Reset 
 
 			return;
 		}
@@ -1168,16 +1167,6 @@ VOID DoTermModeTimeout(struct TNCINFO * TNC)
 		DoTNCReinit(TNC);				// See if worked
 		return;
 	}
-
-	if (TNC->ReinitState == 3)
-	{
-		// Entering Host Mode
-	
-		// Assume ok
-
-		TNC->HostMode = TRUE;
-		return;
-	}
 }
 
 	
@@ -1185,6 +1174,8 @@ VOID DoTermModeTimeout(struct TNCINFO * TNC)
 VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
+
+	Debugprintf("AEA Initstate %d Response %s", TNC->ReinitState, TNC->RXBuffer);
 
 	if (TNC->ReinitState == 0 || TNC->ReinitState == 1) 
 	{
@@ -1200,23 +1191,6 @@ VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 		// Sending Init Commands
 
 		DoTNCReinit(TNC);		// Send Next Command
-		return;
-	}
-
-	if (TNC->ReinitState == 4)		
-	{
-		TNC->ReinitState = 5;
-			
-		TNC->HostMode = TRUE;		// Should now be in Host Mode
-		TNC->NeedPACTOR = 50;		// Need to Send PACTOR command after 5 secs
-
-		return;
-	}
-
-	if (TNC->ReinitState == 5)		// RESET sent
-	{
-		TNC->ReinitState = 5;
-
 		return;
 	}
 }
@@ -1260,6 +1234,25 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		TNC->Streams[0].BytesAcked += Len -1;
 		ShowTraffic(TNC);
 
+		// If nothing more to send, turn round link
+
+/*
+		Debugprintf("AEA Bytes Sent %d Bytes ACKED %d", TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
+						
+		if ((TNC->Streams[0].BPQtoPACTOR_Q == 0) &&
+			(TNC->Streams[0].BytesAcked == TNC->Streams[0].BytesTXed))		// Nothing following and all acked
+		{
+			Debugprintf("AEA All Sent and Acked");
+		}
+
+		if (TNC->Streams[0].BytesAcked == TNC->Streams[0].BytesTXed)		// Nothing following and all acked
+		{
+			Debugprintf("AEA Sent = Acked - sending Turnround");
+			EncodeAndSend(TNC, "OAG", 3);
+			TNC->InternalCmd = 'A';
+			TNC->CommandBusy = TRUE;
+		}
+*/
 		return;
 	}
 
@@ -1305,9 +1298,32 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					TNC->TXRXState = Msg[6];
 
 					if (Msg[6] == 'S')
+					{
 						SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
+
+						// Make sure we aren't stuck in Send
+
+						if ((TNC->Streams[0].BPQtoPACTOR_Q == 0) &&
+							(TNC->Streams[0].BytesAcked == TNC->Streams[0].BytesTXed))		// Nothing following and all acked
+						{
+							// We aren't sending, but could have just received a switch, but not processes
+							// and replied to incoming data
+
+							if (TNC->Streams[0].TimeInSend++ > 10)			// About 30 secs
+							{
+								Debugprintf("AEA - Seems to be stuck in Send");
+								EncodeAndSend(TNC, "OAG", 3);
+								TNC->InternalCmd = 'A';
+								TNC->CommandBusy = TRUE;
+							}
+						}
+					}
+
 					else
+					{
 						SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
+						TNC->Streams[0].TimeInSend = 0;
+					}
 
 					Msg[12] = 0;
 					SetDlgItemText(TNC->hDlg, IDC_3, Msg);
@@ -1371,6 +1387,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					TNC->InternalCmd = 'A';
 					TNC->CommandBusy = TRUE;
 				}
+
 			}
 			return;
 		}
@@ -1511,6 +1528,12 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
 
+				// We are going to Send something, so turn link round
+				
+				EncodeAndSend(TNC, "OAG", 3);
+				TNC->InternalCmd = 'A';
+				TNC->CommandBusy = TRUE;
+
 				if (Stream == 0)
 				{
 					wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
@@ -1529,26 +1552,25 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 					return;
 				}
-
+				
 				if (FULL_CTEXT)
 				{
-					char CTBuff[300] = "D20";
+					char CTBuff[300];
 					int Len = CTEXTLEN, CTPaclen = 50;
 					int Next = 0;
 
-					if (Stream > 0)
-						wsprintf(CTBuff, "D1%c%", Stream + '@');
+					CTBuff[0] = Stream + ' ';
 
 					while (Len > CTPaclen)		// CTEXT Paclen
 					{
-						memcpy(&CTBuff[3], &CTEXTMSG[Next], CTPaclen);
-						EncodeAndSend(TNC, CTBuff, CTPaclen + 3);
+						memcpy(&CTBuff[1], &CTEXTMSG[Next], CTPaclen);
+						EncodeAndSend(TNC, CTBuff, CTPaclen + 1);
 						Next += CTPaclen;
 						Len -= CTPaclen;
 					}
 
-					memcpy(&CTBuff[3], &CTEXTMSG[Next], Len);
-					EncodeAndSend(TNC, CTBuff, Len + 3);
+					memcpy(&CTBuff[1], &CTEXTMSG[Next], Len);
+					EncodeAndSend(TNC, CTBuff, Len + 1);
 				}
 				return;
 

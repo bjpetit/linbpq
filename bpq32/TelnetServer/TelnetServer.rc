@@ -83,8 +83,8 @@ BEGIN
     DEFPUSHBUTTON   "OK",IDOK,195,6,30,11,WS_GROUP
 END
 
-#define Vers 2,1,9,1
-#define Verstring "2.1.9.1\0"
+#define Vers 2,1,10,1
+#define Verstring "2.1.10.1\0"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION Vers
