@@ -376,7 +376,7 @@ BOOL ReadConfigFile(char * fn)
 	{
 		wsprintf(buf," Config file %s not found ",Value);
 		WritetoConsole(buf);
-		return (TRUE);			// Dont need it at the moment
+		return (TRUE);			// Will give Port Not Defined error later
 	}
 
 	while(fgets(buf, 255, file) != NULL)
@@ -412,7 +412,7 @@ loop:
 
 ProcessLine(char * buf)
 {
-	char * ptr,* p_cmd;
+	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;
 	char * p_port = 0;
 	unsigned short WINMORport = 0;
@@ -617,7 +617,63 @@ ProcessLine(char * buf)
 			else
 
 #endif
+#ifdef HAL
+
+			if (_memicmp(buf, "TONES", 5) == 0)
+			{
+				int tone1 = 0, tone2 = 0;
+
+				ptr = strtok(&buf[6], " ,/\t\n\r");
+				if (ptr)
+				{
+					tone1 = atoi(ptr);
+					ptr = strtok(NULL, " ,/\t\n\r");
+					if (ptr)
+					{
+						tone2 = atoi(ptr);
+						ptr = &TNC->InitScript[TNC->InitScriptLen];
+
+						*(ptr++) = SetTones;		// Set Tones (Mark, Space HI byte first)
+						*(ptr++) = tone1 >> 8;
+						*(ptr++) = tone1 & 0xff;
+						*(ptr++) = tone2 >> 8;
+						*(ptr++) = tone2 & 0xff;
+
+						TNC->InitScriptLen += 5;
+
+						goto OkLine;
+					}
+				}
+				goto BadLine;
+			}
+			if (_memicmp(buf, "DEFAULTMODE ", 12) == 0)
+			{
+					
+				ptr = strtok(&buf[12], " ,\t\n\r");
+				if (ptr)
+				{
+					if (_stricmp(ptr, "CLOVER") == 0)
+						TNC->DefaultMode = Clover;
+					else if (_stricmp(ptr, "PACTOR") == 0)
+						TNC->DefaultMode = Pactor;
+					else if (_stricmp(ptr, "AMTOR") == 0)
+						TNC->DefaultMode = AMTOR;
+					else goto BadLine;
+				
+				goto OkLine;
+				}
+				else goto BadLine;
+			}
+
+		BadLine:
+			WritetoConsole(" Bad config record ");
+			WritetoConsole(errbuf);
+			WritetoConsole("\r\n");
+		OkLine:;
+
+#else
 				strcat (TNC->InitScript, buf);
+#endif
 		}
 	}
 

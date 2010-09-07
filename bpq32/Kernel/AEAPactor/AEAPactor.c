@@ -22,9 +22,6 @@
 //#include <process.h>
 //#include <time.h>
 
-#define VERSION_MAJOR 1
-#define VERSION_MINOR 0
-
 #include "AEAPactor.h"
 #include "ASMStrucs.h"
 
@@ -274,9 +271,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		AEAPoll(port);
-
 		CheckRX(TNC);
+		AEAPoll(port);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
@@ -922,7 +918,7 @@ VOID AEAPoll(int Port)
 		if (TNC->TNCOK && TNC->Streams[Stream].BPQtoPACTOR_Q && TNC->DataBusy == FALSE)
 		{
 			int datalen;
-			UCHAR TXMsg[1000] = "D20";
+			UCHAR TXMsg[1000];
 			INT * buffptr;
 			UCHAR * MsgPtr;
 			char Status[80];
@@ -936,12 +932,22 @@ VOID AEAPoll(int Port)
 
 			if (TNC->Streams[Stream].Connected)
 			{
-//				if (TNC->TXRXState == 'R' && TNC->CommandBusy == FALSE)
-//				{
-//					EncodeAndSend(TNC, "OAG", 3);
-//					TNC->InternalCmd = 'A';
-//					TNC->CommandBusy = TRUE;
-//				}
+				if (Stream == 0)
+				{
+					// If in IRS state for too long, force turnround
+
+					if (TNC->TXRXState == 'R')
+					{
+						if (TNC->Streams[0].TimeInRX++ > 15)
+						{
+							EncodeAndSend(TNC, "OAG", 3);
+							TNC->InternalCmd = 'A';
+							TNC->CommandBusy = TRUE;
+							return;
+						}
+					}
+					TNC->Streams[0].TimeInRX = 0;
+				}
 
 				wsprintf(TXMsg, "%c", Stream + ' ');
 					
@@ -1055,7 +1061,7 @@ VOID AEAPoll(int Port)
 			EncodeAndSend(TNC, "OOP", 3);
 			TNC->InternalCmd = 'S';
 			TNC->CommandBusy = TRUE;
-			TNC->IntCmdDelay = 20;	// Every 5 secs
+			TNC->IntCmdDelay = 9;	// Every second
 			return;
 		}
 		else
@@ -1298,32 +1304,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					TNC->TXRXState = Msg[6];
 
 					if (Msg[6] == 'S')
-					{
 						SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
-
-						// Make sure we aren't stuck in Send
-
-						if ((TNC->Streams[0].BPQtoPACTOR_Q == 0) &&
-							(TNC->Streams[0].BytesAcked == TNC->Streams[0].BytesTXed))		// Nothing following and all acked
-						{
-							// We aren't sending, but could have just received a switch, but not processes
-							// and replied to incoming data
-
-							if (TNC->Streams[0].TimeInSend++ > 10)			// About 30 secs
-							{
-								Debugprintf("AEA - Seems to be stuck in Send");
-								EncodeAndSend(TNC, "OAG", 3);
-								TNC->InternalCmd = 'A';
-								TNC->CommandBusy = TRUE;
-							}
-						}
-					}
-
 					else
-					{
 						SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
-						TNC->Streams[0].TimeInSend = 0;
-					}
 
 					Msg[12] = 0;
 					SetDlgItemText(TNC->hDlg, IDC_3, Msg);
@@ -1392,7 +1375,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			return;
 		}
 
-		if (strstr(Buffer, "Transmit data remaining"))
+/*		if (strstr(Buffer, "Transmit data remaining"))
 		{
 			// Seems to cause problems - restart TNC
 
@@ -1402,7 +1385,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 			return;
 		}
-
+*/
 		if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "Timeout"))
 		{
 			if ((TNC->Streams[Stream].Connecting | TNC->Streams[Stream].Connected) == 0)
@@ -1439,13 +1422,12 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 			if (Stream == 0)
 			{
-				// Need to reset Pactor Call in case it was changed
+				// Claar any data from buffers 
 
-				EncodeAndSend(TNC, "OPA", 3);			// ??Return to packet mode??
+				EncodeAndSend(TNC, "OTC", 3);			// ??Return to packet mode??
 				TNC->NeedPACTOR = 20;
-				TNC->InternalCmd = 'P';
+				TNC->InternalCmd = 'T';
 				TNC->CommandBusy = TRUE;
-
 			}
 
 			return;

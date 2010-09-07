@@ -270,9 +270,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		KAMPoll(port);
-
 		CheckRX(TNC);
+		KAMPoll(port);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
@@ -850,7 +849,6 @@ VOID KAMPoll(int Port)
 				TNC->HFPacket = FALSE;
 
 				TNC->NeedPACTOR = 50;				// Need to Send PACTOR command after 5 secs
-				TNC->NeedTurnRound = FALSE;
 
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
 			}
@@ -953,11 +951,21 @@ VOID KAMPoll(int Port)
 					wsprintf(TXMsg, "D1%c", Stream + '@');
 				else if (TNC->HFPacket)
 					memcpy(TXMsg, "D2A", 3);
-
-				if (TNC->NeedTurnRound)
+				else
 				{
-					EncodeAndSend(TNC, "T", 1);			// Changeover to ISS 
-					TNC->NeedTurnRound = FALSE;
+					// Pactor
+
+					// If in IRS state for too long, force turnround
+
+					if (TNC->TXRXState == 'R')
+					{
+						if (TNC->TimeInRX++ > 15)
+						{
+							EncodeAndSend(TNC, "T", 1);			// Changeover to ISS 
+							return;
+						}
+					}
+					TNC->TimeInRX = 0;
 				}
 
 				memcpy(&TXMsg[3], buffptr + 2, datalen);
@@ -974,7 +982,6 @@ VOID KAMPoll(int Port)
 					if ((TNC->HFPacket == 0) && (TNC->Streams[0].BPQtoPACTOR_Q == 0))		// Nothing following
 					{
 						EncodeAndSend(TNC, "E", 1);			// Changeover when all sent
-						TNC->NeedTurnRound = TRUE;
 					}
 				}
 
@@ -1422,10 +1429,15 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	if (Msg[0] == 'I')					// ISS/IRS State
 	{
 		if (Msg[2] == '1')
+		{
 			SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
+			TNC->TXRXState = 'S';
+		}
 		else
+		{
 			SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
-
+			TNC->TXRXState = 'R';
+		}
 		return;
 	}
 

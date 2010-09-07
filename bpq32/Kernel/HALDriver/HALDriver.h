@@ -56,7 +56,7 @@ struct TNCINFO
 	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
 
 	HANDLE hDevice;
-	BOOL HostMode;					// Set if in DED Host Mode
+	BOOL HostMode;					// Set if TNC initialised
 	BOOL NeedPACTOR;				// Set if need to send PACTOR to put into Standby Mode
 	int Timeout;					// Timeout response counter
 //	int Retries;
@@ -76,8 +76,35 @@ struct TNCINFO
 
 	int PollDelay;					// Don't poll too often;
 
-	char * CmdSet;					// A series of commands to send to the TNC
-	char * CmdSave;					// Base address for free
+	// HAL only supports one session, so don't need separate stream info
+
+	int PACTORtoBPQ_Q;			// Frames for BPQ
+	int BPQtoPACTOR_Q;			// Frames for PACTOR
+	int	FramesQueued;		// Frames Queued - used for flow control
+	int	IntCmdDelay;			// To limit internal commands
+
+	BOOL Attached;					// Set what attached to a BPQ32 stream
+	BOOL Connected;				// When set, all data is passed as data instead of commands
+	BOOL Connecting;			// Set when Outward Connect in progress
+	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
+
+	char MyCall[10]	;				// Call we are using
+	char RemoteCall[10];			// Callsign
+
+	int BytesTXed;
+	int BytesAcked;
+	int BytesRXed;
+	int BytesOutstanding;		// For Packet Channels
+
+	int DefaultMode;
+	int CurrentMode;
+
+	// Mode Equates
+
+	#define Clover 1
+	#define Pactor 2
+	#define AMTOR 3
+
 
 };
 

@@ -291,8 +291,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		if (EnterExit)
 			return 0;
 		
-		DEDPoll(port);
 		CheckRX(TNC);
+		DEDPoll(port);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{

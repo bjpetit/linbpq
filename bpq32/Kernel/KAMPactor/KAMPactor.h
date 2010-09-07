@@ -64,7 +64,8 @@ struct TNCINFO
 
 	BOOL HFPacket;					// Set if HF port is in Packet mode instead of Pactor Mode
 
-	BOOL NeedTurnRound;				// Set if need to send Pactor Turnround before data
+	int TimeInRX;					// Time waiting for ISS before sending
+	char TXRXState;					// Current ISS/IRS State
 
 	HWND hDlg;						// Status Window Handle
 	

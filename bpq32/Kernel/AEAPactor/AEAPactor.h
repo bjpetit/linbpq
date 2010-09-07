@@ -28,7 +28,7 @@ struct STREAMINFO
 	int BytesAcked;
 	int BytesRXed;
 	int BytesOutstanding;		// For Packet Channels
-	int TimeInSend;			// Too long in send mode timer
+	int TimeInRX;				// Too long in send mode timer
 };
 
 
@@ -60,7 +60,7 @@ struct TNCINFO
 	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
 	int RXLen;						// Data in RXBUffer
 
-	char TXRXState;					// Current State
+	char TXRXState;					// Current ISS/IRS State
 	int Mem2;
 
 	HWND hDlg;						// Status Window Handle
