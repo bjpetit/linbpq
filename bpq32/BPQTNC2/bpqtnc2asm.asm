@@ -338,7 +338,7 @@ BTCMD		DB	'BTEXT   ',2
 	DB	'MONITOR ',3
 	DD	ONOFF,TRACEFLAG
 
-MYC	DB	'MYCALL  ',3
+MYC	DB	'MYCALL  ',2
 	DD	SETMYCALL,0
 
 ;	CMDX	<'NEWMODE',2,ONOFF,NEWMODE>
@@ -2730,10 +2730,13 @@ REINIT:
 	CALL _GetApplCall
 
 	mov esi,eax
+	cmp byte ptr[esi],0
+	jne @f
+	mov	esi, offset _nodecall
+@@:
 	lea edi,MYCALL[EBX]
 	mov	ecx,10
 	rep movsb
-
 
 	RET
 

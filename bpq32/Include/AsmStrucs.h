@@ -482,7 +482,10 @@ typedef struct _EXTPORTDATA
 	int MAXHOSTMODESESSIONS;			// Max Host Sessions supported (Used for KAM Pactor + ax.25 support)
 	struct TRANSPORTENTRY * ATTACHEDSESSIONS[27];	// For PACTOR. etc
 	BOOL PERMITGATEWAY;				//  Set if ax.25 ports can change callsign (ie SCS, not KAM
-
+	int SCANCAPABILITIES;			//Type of scan control Controller supports (None, Simple, Connect Lock)
+#define NONE 0
+#define SIMPLE 1
+#define CONLOCK 2
 
 }	EXTPORTDATA, *PEXTPORTDATA;
 
@@ -583,6 +586,7 @@ typedef struct MHSTRUC
 	UCHAR MHCALL[7];
 	__time32_t MHTIME;
 	BYTE MHDIGI;
+	char MHFreq[12];
 };
 
 #pragma pack()

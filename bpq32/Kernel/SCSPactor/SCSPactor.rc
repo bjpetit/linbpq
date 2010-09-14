@@ -1,6 +1,8 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resrc1.h"
+#include "Versions.h"
+
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -31,8 +33,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,2,1,1
- PRODUCTVERSION 1,2,1,1
+ FILEVERSION SCSVers
+ PRODUCTVERSION SCSVers
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -50,12 +52,12 @@ BEGIN
             VALUE "Comments", "SCS Pactor interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "SCSPactor\0"
-            VALUE "FileVersion", "1.2.1.1\0"
+            VALUE "FileVersion", SCSVerstring
             VALUE "InternalName", "SCSPactor\0"
-            VALUE "LegalCopyright", "Copyright © 2009 G8BPQ\0"
+            VALUE "LegalCopyright", "Copyright © 2010 G8BPQ\0"
             VALUE "OriginalFilename", "SCSPactor.dll\0"
             VALUE "ProductName", "  SCSPactor\0"
-            VALUE "ProductVersion", "1.2.1.1\0"
+            VALUE "ProductVersion", SCSVerstring
         END
     END
     BLOCK "VarFileInfo"

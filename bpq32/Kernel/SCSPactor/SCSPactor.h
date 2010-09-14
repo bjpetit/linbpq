@@ -45,6 +45,16 @@ struct STREAMINFO
 
 };
 
+struct WL2KInfo
+{
+	char * Freq;
+	char Bandwidth;
+	char * TimeList;		// eg 06-10,12-15
+};
+
+
+#define MAXFREQS 20
+
 struct TNCINFO
 { 
 	struct STREAMINFO Streams[MaxStreams+1];	// 0 is Pactor 1 - 10 are ax.25.
@@ -92,6 +102,31 @@ struct TNCINFO
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
 
 	char Bandwidth;					// Currently set Mode W or N
+
+	BOOL OverrideBusy;
+	int BusyDelay;					// Timer for busy timeout
+	char * ConnectCmd;				// Saved command if waiting for busy to clear
+	int Mode;						// Mode Flag
+	int Busy;						// Busy Flag
+
+	// Fields for reporting to WL2K Map
+
+	char * Host;
+	short Port;
+
+	int UpdateWL2KTimer;
+	BOOL UpdateWL2K;
+	char RMSCall[10];
+	char BaseCall[10];
+	char GridSquare[7];
+	char Comment[80];
+	BOOL UseRigCtrlFreqs;
+	char WL2KFreq[12];
+	char WL2KMode;
+
+	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
+
+	int PacketChannels;
 
 };
 

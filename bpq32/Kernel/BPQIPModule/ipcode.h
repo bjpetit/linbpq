@@ -92,9 +92,9 @@ typedef struct _ICMPMSG
 } ICMPMSG, *PICMPMSG;
 
 
-typedef struct _IPMESSAGE
+typedef struct _BUFFHEADER
 {
-//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+//	BASIC LINK LEVEL HEADER BUFFER LAYOUT
 
 	struct _MESSAGE * CHAIN;
 
@@ -109,11 +109,12 @@ typedef struct _IPMESSAGE
 	UCHAR	CTL;
 	UCHAR	PID; 
 
-};
+}BUFFHEADER, *PBUFFHEADER;
+
 
 typedef struct _AXARP
 {
-	struct _IPMESSAGE MSGHDDR;
+	struct _BUFFHEADER MSGHDDR;
 	
 	USHORT	HWTYPE;      //    DB      0,3             ; AX.25
 	USHORT	PID;			//	DB      0,0CCH          ; PID

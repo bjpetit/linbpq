@@ -105,6 +105,7 @@ struct TNCINFO
 	#define Pactor 2
 	#define AMTOR 3
 
+	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
 
 };
 

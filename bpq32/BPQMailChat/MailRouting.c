@@ -1060,7 +1060,7 @@ NOHA:
 
 	// Flood Bulls go to all matching BBSs in the flood area, so the order of checking doesn't matter
 
-	// For now I will only route on AT (for none-hierarchical addresses) and HA
+	// For now I will only route on AT (for non-hierarchical addresses) and HA
 
 	// Ver 1.0.4.2 - Try including TO
 

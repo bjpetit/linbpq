@@ -19,6 +19,7 @@ struct ScanEntry
 
 	double Freq;		// In case nneded to report to WL2K
 	char Bandwidth;
+	char Antenna;
 	char * Cmd1;
 	int xCmd1Len;
 	char * Cmd2;
@@ -48,8 +49,7 @@ struct RIGINFO
 	BOOL RIGOK;					// RIG is reponding
 
 	int Session;				// BPQ L4 Record Number
-//	UCHAR Mode;					// Save to send after getting freq ack
-//	UCHAR Filter;
+	int	DebugDelay;	
 
 	char RigName[10];
 
@@ -80,10 +80,13 @@ struct RIGINFO
 	char Valchar[15];
 };
 
+// PortType Equates
+
 #define ICOM 1
 #define YAESU 2
 #define KENWOOD 3
 #define PTT 4
+#define ANT 5
 
 struct PORTINFO
 {
@@ -93,8 +96,7 @@ struct PORTINFO
 	struct RIGINFO Rigs[10];	// Rigs off a port
 	char * InitPtr;				// Next Command
 	int CmdSent;				// Last Command sent
-	int CmdStream;				// Stream last command was issued on
-//	int	IntCmdDelay;			// To limit internal commands
+	int CmdStream;				// Stream last command was issued o
 	int	ConfiguredRigs;			// Radios on this interface
 	int CurrentRig;				// Radio last accessed.
 

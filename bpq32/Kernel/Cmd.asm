@@ -2889,7 +2889,7 @@ CMDC05:
 
 NOTWINPAC:
 ;
-;	If on a KAM with ax.25 on port 2, do an Attach command, then pass on connect
+;	If on a KAM or SCS with ax.25 on port 2, do an Attach command, then pass on connect
 ;
 	MOV	ECX, MAXHOSTMODESESSIONS[EBX]
 	cmp	ECX,1
@@ -4210,13 +4210,10 @@ DOTIME:
 ;	DO TIME
 ;
 	
-	MOV	EAX,MHTIME[ESI]			; TICKS
-
 	push esi
 	push	edi
 	
-	PUSH EAX
-	
+	PUSH ESI
 	call	_FormatMH
 	mov	esi, eax
 	

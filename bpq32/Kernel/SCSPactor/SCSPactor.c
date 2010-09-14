@@ -24,10 +24,15 @@
 
 // Version 1.2.1.2 August 2010 
 
-// implement scan bandwidth change
+// Implement scan bandwidth change
 
+// Version 1.2.1.3 September 2010 
 
-#define WIN32_LEAN_AND_MEAN
+// Don't connect if channel is busy
+// Add WL2K reporting
+// Add PACKETCHANNELS config command
+// And Port Selector (P1 or P2) for Packet Ports
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -54,12 +59,12 @@
 static char ClassName[]="PACTORSTATUS";
 
 #define SCS
+#define WL2K
+#define NARROWMODE 12
+#define WIDEMODE 16			// PIII only
 
 #include "..\PactorCommon.c"
  
-#define DllImport	__declspec(dllimport)
-#define DllExport	__declspec(dllexport)
-
 DllImport UINT CRCTAB;
 DllImport char * CTEXTMSG;
 DllImport USHORT CTEXTLEN;
@@ -267,7 +272,15 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	int Stream = 0;
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
-		return 0;							// Port not open
+		return 0;			// Port not open
+
+	if (!TNC->RIG)
+	{
+		TNC->RIG = Rig_GETPTTREC(port);
+
+		if (TNC->RIG == 0)
+			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
+	}	
 
 	switch (fn)
 	{
@@ -289,7 +302,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	
 		if (EnterExit)
-			return 0;
+			return 0;						// Switching to Term mode to change bandwidth
 		
 		CheckRX(TNC);
 		DEDPoll(port);
@@ -399,9 +412,13 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 1)		// Request Permission
 		{
-			TNC->WantToChangeFreq = TRUE;
-			TNC->OKToChangeFreq = FALSE;
-			return TRUE;
+			if (TNC->TNCOK)
+			{
+				TNC->WantToChangeFreq = TRUE;
+				TNC->OKToChangeFreq = FALSE;
+				return TRUE;
+			}
+			return 0;		// Don't lock scan if TNC isn't reponding
 		}
 
 		if (Param == 2)		// Check  Permission
@@ -409,6 +426,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
+			TNC->WantToChangeFreq = FALSE;
 			TNC->DontWantToChangeFreq = TRUE;
 			return 0;
 		}
@@ -477,8 +495,12 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		TNC->Streams[Stream].DEDStream = Stream;
 	}
 
-	PortEntry->MAXHOSTMODESESSIONS = MaxStreams;		// Default
+	if (TNC->PacketChannels > MaxStreams)
+		TNC->PacketChannels = MaxStreams;
+
+	PortEntry->MAXHOSTMODESESSIONS = TNC->PacketChannels + 1;
 	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
+	PortEntry->SCANCAPABILITIES = CONLOCK;				// Scan Control 3 stage/conlock 
 
 	TNC->PortRecord = PortEntry;
 
@@ -515,26 +537,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 VOID KISSCLOSE(int Port)
 { 
-	DestroyTTYInfo(Port);
-}
+	struct TNCINFO * conn = TNCInfo[Port];
 
-BOOL NEAR DestroyTTYInfo(int port)
-{
-   // force connection closed (if not already closed)
-
-   CloseConnection(TNCInfo[port]);
-
-   return TRUE;
-
-} // end of DestroyTTYInfo()
-
-
-BOOL CloseConnection(struct TNCINFO * conn)
-{
-   // disable event notification and wait for thread
-   // to halt
-
-   SetCommMask(conn->hDevice, 0);
+	SetCommMask(conn->hDevice, 0);
 
    // drop DTR and RTS
 
@@ -546,9 +551,9 @@ BOOL CloseConnection(struct TNCINFO * conn)
    PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
    CloseHandle(conn->hDevice);
  
-   return TRUE;
+   return;
 
-} // end of CloseConnection()
+}
 
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 {
@@ -843,6 +848,20 @@ VOID DEDPoll(int Port)
 	int Stream = 0;
 	int nn;
 
+	if (TNC->UpdateWL2K)
+	{
+		TNC->UpdateWL2KTimer--;
+
+		if (TNC->UpdateWL2KTimer == 0)
+		{
+			TNC->UpdateWL2KTimer = 36000;		// Every Hour
+			if (strcmp(TNC->ApplCmd, "RMS") == 0)
+				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+					SendReporttoWL2K(TNC);
+		}
+	}
+
+
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
 		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && TNC->Streams[Stream].Attached == 0)
@@ -921,6 +940,69 @@ VOID DEDPoll(int Port)
 			}
 		}
 	}
+
+	// We delay clearing busy for 3 secs
+
+	if (TNC->Busy)
+		if (TNC->Mode != 7)
+			TNC->Busy--;
+
+	if (TNC->BusyDelay)		// Waiting to send connect
+	{
+		// Still Busy?
+
+		if (TNC->Busy == 0)
+		{
+			// No, so send
+
+			int datalen = strlen(TNC->ConnectCmd);
+			
+			Poll[2] = TNC->Streams[0].DEDStream;		// Channel
+			Poll[3] = 1;			// Command
+			Poll[4] = datalen - 1;
+
+			memcpy(&Poll[5], TNC->ConnectCmd, datalen);
+		
+		
+			CRCStuffAndSend(TNC, Poll, datalen + 5);
+
+			TNC->Streams[0].InternalCmd = TNC->Streams[0].Connected;
+			TNC->Streams[0].Connecting = TRUE;
+
+			wsprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
+			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+			free(TNC->ConnectCmd);
+			TNC->BusyDelay = 0;
+			return;
+		}
+		else
+		{
+			// Wait Longer
+
+			TNC->BusyDelay--;
+
+			if (TNC->BusyDelay == 0)
+			{
+				// Timed out - Send Error Response
+
+				UINT * buffptr = Q_REM(&FREE_Q);
+
+				if (buffptr == 0) return;			// No buffers, so ignore
+
+				buffptr[1]=39;
+				memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
+
+				Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+				free(TNC->ConnectCmd);
+
+			}
+		}
+	}
+
+
+
+
 
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
@@ -1187,11 +1269,21 @@ VOID DEDPoll(int Port)
 				Buffer[datalen] = 0;	// Null Terminate
 				_strupr(Buffer);
 
-				if (_memicmp(Buffer, "D\r", 2) == 0)
+				if (_memicmp(Buffer, "D", 1) == 0)
 				{
 					TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
+					ReleaseBuffer(buffptr);
 					return;
 				}
+
+				if (strcmp(Buffer, "XXX") == 0)
+				{
+					CheckAppl(TNC, "RMS         "); // Is RMS Available?
+					SendReporttoWL2K(TNC);
+
+					return;
+				}
+
 
 				if (memcmp(Buffer, "RADIO ", 6) == 0)
 				{
@@ -1219,18 +1311,60 @@ VOID DEDPoll(int Port)
 					return;
 				}
 
+				if (_memicmp(Buffer, "OVERRIDEBUSY", 12) == 0)
+				{
+					TNC->OverrideBusy = TRUE;
+
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "SCS} OK\r");
+					Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+
+					return;
+				}
 
 				if (Buffer[0] == 'C' && datalen > 2)	// Connect
 				{
 					if (*(++Buffer) == ' ') Buffer++;		// Space isn't needed
+
+					if ((memcmp(Buffer, "P1 ", 3) == 0) ||(memcmp(Buffer, "P2 ", 3) == 0))
+					{
+						// Port Selector for Packet Connect convert to 2:CALL
+
+						Buffer[0] = Buffer[1];		
+						Buffer[1] = ':';
+						memmove(&Buffer[2], &Buffer[3], datalen--);
+						Buffer += 2;
+					}
 					memcpy(TNC->Streams[Stream].RemoteCall, Buffer, 9);
-					TNC->Streams[Stream].Connecting = TRUE;
 
 					if (Stream == 0)
 					{
+						// See if Busy
+				
+						if (TNC->Busy)
+						{
+							// Channel Busy. Unless override set, wait
+
+							if (TNC->OverrideBusy == 0)
+							{
+								// Save Command, and wait up to 10 secs
+
+								Buffer -=2;
+								TNC->ConnectCmd = _strdup(Buffer);
+								TNC->BusyDelay = 100;		// 10 secs
+								ReleaseBuffer(buffptr);
+								return;
+							}
+						}
+
+						TNC->OverrideBusy = FALSE;
+
+
 						wsprintf(Status, "%s Connecting to %s", TNC->Streams[Stream].MyCall, TNC->Streams[Stream].RemoteCall);
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 					}
+
+					TNC->Streams[Stream].Connecting = TRUE;
+
 				}
 			}
 
@@ -1505,12 +1639,11 @@ BOOL CheckRXHost(struct TNCINFO * TNC)
 }
 
 
-#include "Mmsystem.h"
+//#include "Mmsystem.h"
 
 Switchmode(struct TNCINFO * TNC, int Mode)
 {
 	int n;
-	DWORD Starttime = timeGetTime();
 	
 	// Send Exit/Enter Host Sequence
 
@@ -1568,8 +1701,6 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 	TNC->Timeout = 5;		// 1/2 sec - In case missed
 
 	EnterExit = FALSE;
-
-	Debugprintf("Switch to MYLEVEL %d took %d millisecs", Mode, timeGetTime() - Starttime); 
 
 	return 0;
 }
@@ -1966,8 +2097,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				if (Stream == 0)
 				{
 					wsprintf(Status, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-		
 					if (Rig_Command) Rig_Command(-1, Status);
+
+					UpdateMH(TNC, Call, '+');
 				}
 
 				if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
@@ -1996,9 +2128,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					Buffer[len-1] = 0;
 
 					memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign 
-
-					if (Stream == 0)
-						UpdateMH(TNC, Call, '+');
 
 					ConvToAX25(Call, Session->L4USER);
 					ConvToAX25(GetNodeCall(), Session->L4MYCALL);
@@ -2130,7 +2259,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	if (Msg[3] == 7)
 	{
 		char StatusMsg[60];
-		int Status, Mode, ISS, Offset;
+		int Status, ISS, Offset;
 		
 		if (Msg[2] == 0xfe)						// Status Poll Response
 		{
@@ -2146,7 +2275,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 			TNC->Streams[0].PTCStatus3 = Offset; 
 
-			Mode = (Status >> 4) & 7;
+			TNC->Mode = (Status >> 4) & 7;
 			ISS = Status & 8;
 			Status &= 7;
 
@@ -2159,7 +2288,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
 
 			SetDlgItemText(TNC->hDlg, IDC_2, status[Status]);
-			SetDlgItemText(TNC->hDlg, IDC_3, ModeText[Mode]);
+			SetDlgItemText(TNC->hDlg, IDC_3, ModeText[TNC->Mode]);
+
+			if (TNC->Mode == 7)
+				TNC->Busy = 30;				// 3 sec delay
 
 			if (Offset == 128)		// Undefined
 				wsprintf(StatusMsg, "Mode %s Speed Level %d Freq Offset Unknown",

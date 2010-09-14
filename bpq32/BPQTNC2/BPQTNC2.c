@@ -10,6 +10,10 @@
 
 //		Add MYCALL support
 
+// Version 1.1.3 September 2010
+
+// Accept MY for MYCALL - was MYC
+
 #include "stdafx.h"
 #include "bpqtnc2.h"
 #define DYNLOADBPQ
@@ -553,7 +557,6 @@ VOID CALLBACK TimerProc()
 	int retval, more;
 	char TXMsg[1000];
 	int RXCount, TXCount, Read, resp;
-	char msg[100];
 
 
 	CheckTimer();
@@ -596,9 +599,6 @@ VOID CALLBACK TimerProc()
 			if (RXCount > 0)
 			{
 				resp = BPQSerialGetData(conn->hDevice, rxbuffer, 80, &Read);
-
-				wsprintf(msg, "BPQTNC2 %d %d\n", RXCount, TXCount);
-				OutputDebugString(msg);
 		
 				GetSemaphore();
 			

@@ -1030,10 +1030,12 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	int OrigLen, MsgLen, B2HddrLen, CompLen;
 	char Date[20];
 	struct tm * tm;
+	char B2From[80];
 	char B2To[80];
 	struct MsgInfo * Msg = FBBHeader->FwdMsg;
 //	char DebugMsg[1000]="";
 	char * xptr;
+	struct UserInfo * FromUser;
 
 	MsgBytes = ReadMessageFile(Msg->number);
 
@@ -1171,11 +1173,56 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 			wsprintf(B2To, "%s@%s", Msg->to, Msg->via);
 		else
 			strcpy(B2To, Msg->to);
+
+	// Try to create a full from: addrsss so RMS Express can reply
 	
+	strcpy(B2From, Msg->from);
+
+	Logprintf(LOG_BBS, conn, '?', "B2 From %s", B2From);
+
+	if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
+		strcpy(B2From, Msg->emailfrom);
+	else
+	{
+		FromUser = LookupCall(Msg->from);
+
+		if (FromUser)
+		{
+			Logprintf(LOG_BBS, conn, '?', "B2 From - Local User");
+
+			// Local User. If Home BBS is specified, use it
+
+			if (FromUser->flags & F_POLLRMS)
+			{
+				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User With Poll Set");
+				wsprintf(B2From, "%s@winlink.org", Msg->from);
+			}
+			else
+			{
+				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User With Poll Not Set");
+				if (FromUser->HomeBBS[0])
+					wsprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
+				else
+					wsprintf(B2From, "%s@%s", Msg->from, BBSName);
+			}
+		}
+		else
+		{
+			WPRecP WP = LookupWP(Msg->from);
+
+			Logprintf(LOG_BBS, conn, '?', "B2 From - not local User");
+
+			if (WP)
+				wsprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
+		}
+	}
+
+	Logprintf(LOG_BBS, conn, '?', "B2 From Finally %s", B2From);
+
 	B2HddrLen = wsprintf(UnCompressed,
 			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
 			Msg->bid, Date, (Msg->type == 'P') ? "Private" : "Bulletin",
-			Msg->from, B2To, Msg->title, BBSName, MsgLen);
+			B2From, B2To, Msg->title, BBSName, MsgLen);
 
 	strcat(UnCompressed, Rline);
 	strcat(UnCompressed, MsgBytes);

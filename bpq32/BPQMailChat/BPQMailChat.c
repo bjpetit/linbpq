@@ -546,6 +546,10 @@
 // set fwd bit on local winlink.org msgs if user is a BBS
 // add winlink.org to from address of messages from WL2K that don't already have an @ 
 
+// Version 1.0.4.19 Sept 2010
+
+// Build a B2 From: address if possible, so RMS Express can reply to packet messages.
+// Fix handling of addresses from WL2K with SSID's
 
 // Use Windows Sound Events for (Chat "user join" alert)
 

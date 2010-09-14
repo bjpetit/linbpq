@@ -439,7 +439,7 @@ Pollloop:
 
 				len = axmsg->LENGTH;
 
-				len-= sizeof(MESSAGE);
+				len-= sizeof(BUFFHEADER);
 				len--;						// Remove Frag Control Byte
 
 				memcpy(&Buffer[EthOffset], ptr, len);
@@ -464,7 +464,7 @@ fragloop:
 
 				len = axmsg->LENGTH;
 
-				len-= sizeof(MESSAGE);
+				len-= sizeof(BUFFHEADER);
 				len--;						// Remove Frag Control Byte
 
 				memcpy(nextfrag, ptr, len);
@@ -1188,7 +1188,7 @@ VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR)
 
 VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 {
-	PMESSAGE Msgptr = (PMESSAGE)IPptr;
+	PBUFFHEADER Msgptr = (PBUFFHEADER)IPptr;
 	int Len;
 
 	(UCHAR *)Msgptr--;
@@ -1200,13 +1200,11 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 
 	if (Mode == 'D')		// Datagram
 	{
-		Send_AX_Datagram(Msgptr, Len, Port, HWADDR);
+		Send_AX_Datagram((PMESSAGE)Msgptr, Len, Port, HWADDR);
 		return;
 	}
 
-	Send_AX_Connected(Msgptr, Len, Port, HWADDR);
-
-
+	Send_AX_Connected((PMESSAGE)Msgptr, Len, Port, HWADDR);
 }
 
 PARPDATA AllocARPEntry()

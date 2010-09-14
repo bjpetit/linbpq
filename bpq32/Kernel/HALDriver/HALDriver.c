@@ -16,6 +16,7 @@
 
 #include "HALDriver.h"
 #include "ASMStrucs.h"
+#include "..\RigControl.h"
 
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
@@ -30,8 +31,6 @@
 static char ClassName[]="HALSTATUS";
 #include "..\PactorCommon.c"
  
-#define DllImport	__declspec(dllimport)
-#define DllExport	__declspec(dllexport)
 
 DllImport UINT CRCTAB;
 DllImport char * CTEXTMSG;
@@ -53,9 +52,7 @@ char status[23][50] = {"IDLE", "TFC", "RQ", "ERR", "PHS", "OVER", "FSK TX",
 struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL NEAR OpenConnection(int);
 BOOL NEAR SetupConnection(int);
-BOOL CloseConnection(struct TNCINFO * conn);
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
-BOOL NEAR DestroyTTYInfo(int port);
 void CheckRX(struct TNCINFO * TNC);
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 VOID HALPoll(int Port);
@@ -73,8 +70,6 @@ VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 
 BOOL HALConnected(struct TNCINFO * TNC, char * Call);
 VOID HALDisconnected(struct TNCINFO * TNC);
-
-//	Note that AEA host Mode uses SOH/ETB delimiters, with DLE stuffing
 
 VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 VOID SendCmd(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
@@ -259,6 +254,14 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
+	if (!TNC->RIG)
+	{
+		TNC->RIG = Rig_GETPTTREC(port);		// Get Rig COntrol Pointer
+
+		if (TNC->RIG == 0)
+			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
+	}	
+
 	switch (fn)
 	{
 	case 1:				// poll
@@ -442,26 +445,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
  
 VOID KISSCLOSE(int Port)
 { 
-	DestroyTTYInfo(Port);
-}
+	struct TNCINFO * conn = TNCInfo[Port];
 
-BOOL NEAR DestroyTTYInfo(int port)
-{
-   // force connection closed (if not already closed)
-
-   CloseConnection(TNCInfo[port]);
-
-   return TRUE;
-
-} // end of DestroyTTYInfo()
-
-
-BOOL CloseConnection(struct TNCINFO * conn)
-{
-   // disable event notification and wait for thread
-   // to halt
-
-   SetCommMask(conn->hDevice, 0);
+	SetCommMask(conn->hDevice, 0);
 
    // drop DTR and RTS
 
@@ -473,9 +459,9 @@ BOOL CloseConnection(struct TNCINFO * conn)
    PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
    CloseHandle(conn->hDevice);
  
-   return TRUE;
+   return;
 
-} // end of CloseConnection()
+}
 
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 {

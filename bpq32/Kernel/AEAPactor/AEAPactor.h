@@ -73,6 +73,8 @@ struct TNCINFO
 	char * CmdSet;					// A series of commands to send to the TNC
 	char * CmdSave;					// Base address for free
 
+	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+
 };
 
 

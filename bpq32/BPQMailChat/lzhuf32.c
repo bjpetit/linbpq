@@ -1060,6 +1060,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			if (strlen(FullTo) > 6)
 				FullTo[6] = 0;
 
+			strlop(FullTo, '-');
+
 			strcpy(Msg->to, FullTo);
 
 			RecpTo=realloc(RecpTo, (Recipients+1)*4);
@@ -1150,6 +1152,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					ptr = strchr(Call, 13);
 					if (ptr)
 						*ptr = 0;
+
+					strlop(Call, '-');
 					
 					user = LookupCall(Call);
 
@@ -1267,6 +1271,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			free(SaveMsg);
 			free(SaveBody);
 			conn->MailBuffer = NULL;
+			conn->MailBufferSize=0;
 
 			SetupNextFBBMessage(conn);
 			return;
@@ -1278,7 +1283,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			conn->CloseAfterFlush = 20;			// 2 Secs
 
 			return;
-
 
 		}
 		else

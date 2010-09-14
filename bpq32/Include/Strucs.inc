@@ -221,6 +221,7 @@ DLLHANDLE		DD	?
 MAXHOSTMODESESSIONS DD ?	; Max Host Sessions supported (Used for KAM Pactor + ax.25 support)
 ATTACHEDSESSIONS	DD	27 DUP (0); Owning Sessions for PACTOR, etc
 PERMITGATEWAY		DD	0		; Set if ax.25 ports can change callsign (ie SCS, not KAM
+SCANCAPABILITIES	DD	0		; Type of scan control Controller supports (None, Simple, Connect Lock)
 
 EXTDATA	ENDS
 
@@ -589,6 +590,7 @@ MHSTRUC	STRUC
 MHCALL		DB	7 DUP (0)
 MHTIME		DD	0		; ? FROM BIOS	
 MHDIGI		DB	0
+MHFreq		DB  12 DUP (0)
 
 MHSTRUC	ENDS
 

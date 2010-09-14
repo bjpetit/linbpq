@@ -48,8 +48,6 @@
 static char ClassName[]="PACTORSTATUS";
 #include "..\PactorCommon.c"
  
-#define DllImport	__declspec(dllimport)
-#define DllExport	__declspec(dllexport)
 
 DllImport UINT CRCTAB;
 DllImport char * CTEXTMSG;
@@ -255,6 +253,14 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
+	if (!TNC->RIG)
+	{
+		TNC->RIG = Rig_GETPTTREC(port);
+
+		if (TNC->RIG == 0)
+			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
+	}	
+
 	switch (fn)
 	{
 	case 1:				// poll
@@ -446,6 +452,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
+	PortEntry->SCANCAPABILITIES = NONE;		// No Scan Control 
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -470,26 +477,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
  
 VOID KISSCLOSE(int Port)
 { 
-	DestroyTTYInfo(Port);
-}
+	struct TNCINFO * conn = TNCInfo[Port];
 
-BOOL NEAR DestroyTTYInfo(int port)
-{
-   // force connection closed (if not already closed)
-
-   CloseConnection(TNCInfo[port]);
-
-   return TRUE;
-
-} // end of DestroyTTYInfo()
-
-
-BOOL CloseConnection(struct TNCINFO * conn)
-{
-   // disable event notification and wait for thread
-   // to halt
-
-   SetCommMask(conn->hDevice, 0);
+	SetCommMask(conn->hDevice, 0);
 
    // drop DTR and RTS
 
@@ -501,9 +491,9 @@ BOOL CloseConnection(struct TNCINFO * conn)
    PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
    CloseHandle(conn->hDevice);
  
-   return TRUE;
+   return;
 
-} // end of CloseConnection()
+}
 
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 {
@@ -766,6 +756,7 @@ VOID KAMPoll(int Port)
 
 		TNC->Streams[0].Attached = TRUE;
 		TNC->HFPacket = FALSE;
+		TNC->TimeInRX = 0;
 
 		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
 		TNC->Streams[0].MyCall[calllen] = 0;
@@ -838,9 +829,9 @@ VOID KAMPoll(int Port)
 			TNC->Streams[Stream].FramesOutstanding = 0;
 			TNC->Streams[Stream].BytesOutstanding = 0;
 
-
 			if (Stream == 0)					// Pactor Stream
 			{
+				TNC->TimeInRX = 0;
 				if (TNC->HFPacket)
 					EncodeAndSend(TNC, "C2AD", 4);		// Disconnect
 				else
@@ -940,10 +931,6 @@ VOID KAMPoll(int Port)
 			UCHAR * MsgPtr;
 			char Status[80];
 			
-			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-
-			datalen=buffptr[1];
-			MsgPtr = (UCHAR *)&buffptr[2];
 
 			if (TNC->Streams[Stream].Connected)
 			{
@@ -955,18 +942,22 @@ VOID KAMPoll(int Port)
 				{
 					// Pactor
 
+					// Dont send if IRS State
 					// If in IRS state for too long, force turnround
 
 					if (TNC->TXRXState == 'R')
 					{
 						if (TNC->TimeInRX++ > 15)
-						{
 							EncodeAndSend(TNC, "T", 1);			// Changeover to ISS 
-							return;
-						}
+						else
+							goto Poll;
 					}
 					TNC->TimeInRX = 0;
 				}
+
+				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+				datalen=buffptr[1];
+				MsgPtr = (UCHAR *)&buffptr[2];
 
 				memcpy(&TXMsg[3], buffptr + 2, datalen);
 				EncodeAndSend(TNC, TXMsg, datalen + 3);
@@ -987,8 +978,12 @@ VOID KAMPoll(int Port)
 
 				return;
 			}
-			else
+			else // Not Connected
 			{
+				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+				datalen=buffptr[1];
+				MsgPtr = (UCHAR *)&buffptr[2];
+
 				// Command. Do some sanity checking and look for things to process locally
 
 				datalen--;				// Exclude CR
@@ -1098,6 +1093,8 @@ VOID KAMPoll(int Port)
 			}
 		}
 	}
+
+Poll:
 
 	// Need to poll data and control channel (for responses to commands)
 
@@ -1668,9 +1665,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				return;
 			}
 		}
-
 	}
-
 }
 
 

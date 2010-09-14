@@ -20,13 +20,24 @@ UCHAR * BPQDirectory;
 
 static BOOL Minimized;				// Start Minimized Flag
 
+#define DllImport	__declspec( dllimport )
+#define DllExport	__declspec( dllexport )
+
+DllImport struct APPLCALLS APPLCALLTABLE[];
+DllImport char APPLS;
+DllImport struct BPQVECSTRUC * BPQHOSTVECPTR;
+
 RECT Rect;
+
+struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34] = {NULL};		// Records are Malloc'd
 
 BOOL ReadConfigFile(char * filename);
 int ProcessLine(char * buf);
+VOID __cdecl Debugprintf(const char * format, ...);
 
+unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -330,7 +341,8 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 
 	for (i = 0; i < 20; i++)
 	{
-		if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) && MH->MHDIGI == Mode)) // Spare our our entry
+		if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) &&
+			MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare our our entry
 		{
 			// Move others down and add at front
 
@@ -342,6 +354,7 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 			memcpy (MHBASE->MHCALL, AXCall, 7);
 			MHBASE->MHDIGI = Mode;
 			MHBASE->MHTIME = _time32(NULL);
+			strcpy(MHBASE->MHFreq, TNC->RIG->Valchar);
 
 			return;
 		}
@@ -540,6 +553,13 @@ ProcessLine(char * buf)
 
 				TNC->VCOMPort = atoi(&buf[14]);
 			else
+				
+			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)
+	
+				// Packet Channels
+
+				TNC->PacketChannels = atoi(&buf[14]);
+			else
 #endif
 #ifdef KAM
 
@@ -552,7 +572,8 @@ ProcessLine(char * buf)
 			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
 			{}
 			else
-
+#endif
+#ifdef WL2K
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			{
 				// WL2KREPORT Host, Port, G8BPQ,IO68VL,Testing BPQ,RIGCONTROL
@@ -591,12 +612,12 @@ ProcessLine(char * buf)
 								{
 									if (strlen(p_cmd) > 11) goto BadLine;
 									strcpy(TNC->WL2KFreq, p_cmd);
-									TNC->WL2KMode = 21;
+									TNC->WL2KMode = NARROWMODE;
 									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
 									if (p_cmd)
 									{
 										if (p_cmd[0] == 'W')
-											TNC->WL2KMode = 22;
+											TNC->WL2KMode = WIDEMODE;
 									}
 								}
 							}
@@ -710,4 +731,294 @@ BOOL LoadRigDriver()
 	return TRUE;
 }
 
+// WL2K Reporting Code.
 
+#ifdef WL2K
+
+static SOCKADDR_IN sinx; 
+
+BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
+{
+	struct APPLCALLS * APPL;
+	struct BPQVECSTRUC * PORTVEC;
+	int Allocated = 0, Available = 0;
+	int App, Stream;
+	// See if there is an RMS Application
+
+	Debugprintf("Checking if RMS is running");
+
+
+	for (App = 0; App < 32; App++)
+	{
+		APPL=&APPLCALLTABLE[App];
+
+		if (memcmp(APPL->APPLCMD, Appl, 12) == 0)
+		{
+			int ApplMask = 1 << App;
+
+			memcpy(TNC->RMSCall, APPL->APPLCALL_TEXT, 9);		// Need Null on end
+
+			// See if App is running
+
+			PORTVEC=BPQHOSTVECPTR;
+
+			for (Stream = 0; Stream < 64; Stream++)
+			{	
+				if (PORTVEC->HOSTAPPLMASK & ApplMask)
+				{
+					Allocated++;
+
+					if (PORTVEC->HOSTSESSION == 0 && (PORTVEC->HOSTFLAGS &3) == 0)
+					{
+						// Free and no outstanding report
+						
+						return TRUE;		// Running
+					}
+				}
+				PORTVEC++;
+			}
+		}
+	}
+
+	return FALSE;			// Not Running
+}
+
+VOID SendReporttoWL2KThread(struct TNCINFO * TNC);
+
+BOOL SendReporttoWL2K(struct TNCINFO * TNC)
+{
+	Debugprintf("Starting WL2K Update Thread");
+
+	_beginthread(SendReporttoWL2KThread,0,(int)TNC);
+
+	return 0;
+}
+
+SOCKET sock;
+
+VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
+{
+	char Message[100];
+	
+	SOCKADDR_IN destaddr;
+	int addrlen=sizeof(sinx);
+	struct hostent * HostEnt;
+	int err;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	char errmsg[80];
+	int Error;              // catches return value of WSAStartup
+    WORD VersionRequested;   // passed to WSAStartup
+    WSADATA WsaData;            // receives data from WSAStartup
+
+	struct ScanEntry ** Freqptr;
+	char * Valchar;
+	int dec, sign;
+	char FreqString[80]="";
+	int Mode;
+	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
+
+
+	VersionRequested = MAKEWORD(1, 0);
+    Error = WSAStartup(VersionRequested, &WsaData);
+
+    if (Error)
+	{
+       MessageBox(NULL,
+            TEXT("Could not initialise WinSock"),
+            TEXT("WINMOR"), MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
+        return;
+	}
+
+	// Resolve Name if needed
+
+	destaddr.sin_family = AF_INET; 
+	destaddr.sin_addr.s_addr = inet_addr(TNC->Host);
+	destaddr.sin_port = htons(TNC->Port);
+
+	if (destaddr.sin_addr.s_addr == INADDR_NONE)
+	{
+	//	Resolve name to address
+
+		Debugprintf("Resolving %s", TNC->Host);
+		HostEnt = gethostbyname (TNC->Host);
+		 
+		if (!HostEnt)
+		{
+			err = WSAGetLastError();
+
+			wsprintf(errmsg, TEXT("Resolve Failed for %s %d %x"), TNC->Host, err, err);
+			MessageBox(NULL, errmsg, "WINMOR Reporting", MB_OK);
+
+			return;			// Resolve failed
+		}
+		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+	}
+
+	//   Allocate a Socket entry
+
+
+	if (sock)
+		closesocket(sock);
+
+	sock=socket(AF_INET,SOCK_DGRAM,0);
+
+	if (sock == INVALID_SOCKET)
+	{
+  	 	return; 
+	}
+
+	ioctlsocket (sock, FIONBIO, &param);
+ 
+	setsockopt (sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt, 4);
+
+	destaddr.sin_family = AF_INET;
+
+	if (TNC->UseRigCtrlFreqs)
+	{
+		int HHStart;
+		int HHEnd;
+
+		if (TNC->RIG == 0)
+			TNC->RIG = Rig_GETPTTREC(TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+
+		if (TNC->RIG)
+		{
+			struct WL2KInfo * WL2KInfoPtr;
+			int n = 0;
+
+			TimeBands = TNC->RIG->TimeBands;
+
+			if (TimeBands == NULL)
+				return;
+
+			// Build Frequency list if needed
+
+			if (TNC->WL2KInfoList[0].Bandwidth == 0)
+			{
+				// Not set up yet
+
+			Debugprintf("Building Freq List");
+
+			__try {
+
+			while(TimeBands[1])
+			{
+				Freqptr = TimeBands[1]->Scanlist;
+	
+				if (Freqptr == NULL)
+					return;			
+		
+				while (Freqptr[0])
+				{
+					__try 
+					{
+
+					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
+
+					if (Freqptr[0]->Bandwidth == 'W')
+						Mode = WIDEMODE;
+					else
+						Mode = NARROWMODE;
+
+					HHStart = TimeBands[1]->Start /3600;
+					HHEnd = TimeBands[1]->End /3600;
+
+					// See if freq already defined
+
+					n = 0;
+					
+					WL2KInfoPtr = &TNC->WL2KInfoList[0];
+
+					while (WL2KInfoPtr->Bandwidth)
+					{
+						if (strcmp(WL2KInfoPtr->Freq, Valchar) == 0)
+						{
+							// Add timeband to freq
+
+							wsprintf(WL2KInfoPtr->TimeList, "%s,%02d-%02d",
+								WL2KInfoPtr->TimeList, HHStart, HHEnd);
+
+							goto gotfreq;
+						}
+
+						WL2KInfoPtr = &TNC->WL2KInfoList[++n];
+					}
+
+					// Not found - add it
+
+					WL2KInfoPtr->Freq = _strdup(Valchar);
+					WL2KInfoPtr->TimeList = malloc(100);
+
+					wsprintf(WL2KInfoPtr->TimeList, "%02d-%02d", HHStart, HHEnd);
+					WL2KInfoPtr->Bandwidth = Mode;
+
+				
+				gotfreq:
+					;
+					}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{
+						Debugprintf("Program Error processing freq entry");
+					}
+
+					Freqptr++;
+
+				}
+				TimeBands++;
+			}
+			}
+					__except(EXCEPTION_EXECUTE_HANDLER)
+					{
+						Debugprintf("Program Error processing freq list");
+					}
+
+			}
+		
+			// Send each entry in the list
+
+			__try
+			{
+
+			n = 0;
+					
+			WL2KInfoPtr = &TNC->WL2KInfoList[0];
+
+			while (WL2KInfoPtr->Bandwidth)
+			{
+				wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+					TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
+					WL2KInfoPtr->Bandwidth, WL2KInfoPtr->TimeList);
+
+				Debugprintf("Sending %s", Message);
+
+				sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+				WL2KInfoPtr = &TNC->WL2KInfoList[++n];
+			}
+			}
+			__except(EXCEPTION_EXECUTE_HANDLER)
+			{
+				Debugprintf("Program Error sending freq list");
+			}
+
+		}
+	}
+	else
+	{
+		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, TNC->Comment);
+
+		Debugprintf("Sending %s", Message);
+		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+	}
+
+	Sleep(100);
+
+	closesocket(sock);
+	sock = 0;
+
+	return;
+}
+
+#endif

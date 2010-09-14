@@ -251,8 +251,9 @@
 // 410o		Build 5 August 2010
 
 //	Add Repeater Shift and Set Data Mode options to Rigcontrol (for ICOM only)
-//	Add WINMOR mode control option to RigControl
+//	Add WINMOR and SCS Pactor mode control option to RigControl
 //  Extend INFOMSG to 2000 bytes
+//  Improve Scan freq change lock (check both SCS and WINMOR Ports)
 
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -340,7 +341,6 @@ extern int SENDNETFRAME();
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
-
 DllExport int APIENTRY CloseBPQ32();
 
 BOOL (FAR WINAPI * Init_IP) ();
@@ -391,7 +391,7 @@ int col=0;
 HANDLE OpenConfigFile(char * file);
 
 VOID SetupBPQDirectory();
-unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
+unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
 #define TRAY_ICON_ID	1		//				ID number for the Notify Icon
 #define MY_TRAY_ICON_MESSAGE	WM_APP	//		the message ID sent to our window
@@ -1643,16 +1643,17 @@ HANDLE OpenConfigFile(char *fn)
 
 }
 
- char * FormatMH(time_t szClock)
+ char * FormatMH(struct MHSTRUC * MH)
  {
 	struct tm * TM;
 	static char MHTime[50];
+	time_t szClock = MH->MHTIME;
 	
 	szClock = (_time32(NULL) - szClock);
 	TM = gmtime(&szClock);
 
-	wsprintf(MHTime, "%.2d:%.2d:%.2d:%.2d\r",
-		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec);
+	wsprintf(MHTime, "%.2d:%.2d:%.2d:%.2d  %s\r",
+		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, MH->MHFreq);
 
 	return MHTime;
 

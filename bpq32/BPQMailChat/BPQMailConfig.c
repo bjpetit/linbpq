@@ -832,9 +832,9 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"15");
 			}
 */			
-			SendDlgItemMessage(hDlg, RMS_SSID1, WM_SETTEXT, 0, "");
-			SendDlgItemMessage(hDlg, RMS_SSID2, WM_SETTEXT, 0, "");
-			SendDlgItemMessage(hDlg, RMS_SSID3, WM_SETTEXT, 0, "");
+			SendDlgItemMessage(hDlg, RMS_SSID1, WM_SETTEXT, 0, (LPARAM)"");
+			SendDlgItemMessage(hDlg, RMS_SSID2, WM_SETTEXT, 0, (LPARAM)"");
+			SendDlgItemMessage(hDlg, RMS_SSID3, WM_SETTEXT, 0, (LPARAM)"");
 
 			i = 0;
 			for (s = 0; s < 16; s++)
@@ -846,7 +846,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 					else
 						SSID[0] = 0;
 
-					SendDlgItemMessage(hDlg, RMS_SSID1 + i++, WM_SETTEXT, 0, SSID);
+					SendDlgItemMessage(hDlg, RMS_SSID1 + i++, WM_SETTEXT, 0, (LPARAM)SSID);
 //					SendDlgItemMessage(hDlg, RMS_SSID1 + i++, CB_SETCURSEL, s, 0);
 					if (i == 3)
 						break;

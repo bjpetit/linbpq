@@ -9,6 +9,10 @@
 // Fix CTEXT
 // Turn round link when all acked (not all sent)
 
+// Version 1.1.1.3 Sept 2010
+
+// Turn round link if too long in receive
+
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -24,6 +28,7 @@
 
 #include "AEAPactor.h"
 #include "ASMStrucs.h"
+#include "..\RigControl.h"
 
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
@@ -34,8 +39,6 @@
 static char ClassName[]="PACTORSTATUS";
 #include "..\PactorCommon.c"
  
-#define DllImport	__declspec(dllimport)
-#define DllExport	__declspec(dllexport)
 
 DllImport UINT CRCTAB;
 DllImport char * CTEXTMSG;
@@ -256,6 +259,14 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
+	if (!TNC->RIG)
+	{
+		TNC->RIG = Rig_GETPTTREC(port);
+
+		if (TNC->RIG == 0)
+			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
+	}	
+	
 	switch (fn)
 	{
 	case 1:				// poll
@@ -418,6 +429,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
+	PortEntry->SCANCAPABILITIES = NONE;		// No Scan Interlock 
+
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -438,30 +451,11 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	return ((int)ExtProc);
 }
 
-
- 
 VOID KISSCLOSE(int Port)
 { 
-	DestroyTTYInfo(Port);
-}
+	struct TNCINFO * conn = TNCInfo[Port];
 
-BOOL NEAR DestroyTTYInfo(int port)
-{
-   // force connection closed (if not already closed)
-
-   CloseConnection(TNCInfo[port]);
-
-   return TRUE;
-
-} // end of DestroyTTYInfo()
-
-
-BOOL CloseConnection(struct TNCINFO * conn)
-{
-   // disable event notification and wait for thread
-   // to halt
-
-   SetCommMask(conn->hDevice, 0);
+	SetCommMask(conn->hDevice, 0);
 
    // drop DTR and RTS
 
@@ -473,9 +467,9 @@ BOOL CloseConnection(struct TNCINFO * conn)
    PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
    CloseHandle(conn->hDevice);
  
-   return TRUE;
+   return;
 
-} // end of CloseConnection()
+}
 
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 {
@@ -509,7 +503,6 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 
 		return (FALSE);
 	}
-
 
 	SetupComm(conn->hDevice, 4096, 4096); // setup device buffers
 
@@ -565,7 +558,6 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 	wsprintf(buf,"COM%d Open", Port);
 	SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
 
-	
 	return TRUE;
 }
 void CheckRX(struct TNCINFO * TNC)
@@ -782,6 +774,7 @@ VOID AEAPoll(int Port)
 		char Msg[80];
 
 		TNC->Streams[0].Attached = TRUE;
+		TNC->Streams[0].TimeInRX = 0;
 
 		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
 		TNC->Streams[0].MyCall[calllen] = 0;
@@ -852,12 +845,14 @@ VOID AEAPoll(int Port)
 
 			if (Stream == 0)					// Pactor Stream
 			{
-				EncodeAndSend(TNC, "OPA", 3);		// ??Return to packet mode??
+				EncodeAndSend(TNC, "ODI", 3);	// ??Return to packet mode??
+
+				TNC->CmdSet = TNC->CmdSave = malloc(100);
+
 				TNC->NeedPACTOR = 50;				// Need to Send PACTOR command after 5 secs
 				TNC->InternalCmd = 'P';
 				TNC->CommandBusy = TRUE;
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
-
 			}
 			else
 			{
@@ -888,16 +883,12 @@ VOID AEAPoll(int Port)
 
 		if (TNC->NeedPACTOR == 0)
 		{
-			int datalen;
-			UCHAR TXMsg[80];
-
-			datalen = wsprintf(TXMsg, "OMf%s", TNC->NodeCall);
-			EncodeAndSend(TNC, TXMsg, datalen);
+			EncodeAndSend(TNC, "OPA", 3);	// ??Return to packet mode??
 			TNC->CommandBusy = TRUE;
 
 			TNC->CmdSet = TNC->CmdSave = malloc(100);
 
-			wsprintf(TNC->CmdSet, "OPt\r");  // Queue Back to Pactor Standby
+			wsprintf(TNC->CmdSet, "OMf%s\rOPt\r", TNC->NodeCall);  // Queue Back to Pactor Standby
 			TNC->InternalCmd = 'T';
 			TNC->IntCmdDelay--;
 
@@ -923,13 +914,6 @@ VOID AEAPoll(int Port)
 			UCHAR * MsgPtr;
 			char Status[80];
 			
-			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-
-			TNC->Streams[Stream].FramesQueued--;
-
-			datalen=buffptr[1];
-			MsgPtr = (UCHAR *)&buffptr[2];
-
 			if (TNC->Streams[Stream].Connected)
 			{
 				if (Stream == 0)
@@ -943,11 +927,17 @@ VOID AEAPoll(int Port)
 							EncodeAndSend(TNC, "OAG", 3);
 							TNC->InternalCmd = 'A';
 							TNC->CommandBusy = TRUE;
-							return;
 						}
+						else
+							goto GetStatus;
 					}
 					TNC->Streams[0].TimeInRX = 0;
 				}
+
+				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+				TNC->Streams[Stream].FramesQueued--;
+				datalen=buffptr[1];
+				MsgPtr = (UCHAR *)&buffptr[2];
 
 				wsprintf(TXMsg, "%c", Stream + ' ');
 					
@@ -965,6 +955,11 @@ VOID AEAPoll(int Port)
 			}
 			else
 			{
+				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+				TNC->Streams[Stream].FramesQueued--;
+				datalen=buffptr[1];
+				MsgPtr = (UCHAR *)&buffptr[2];
+
 				// Command. Do some sanity checking and look for things to process locally
 
 				datalen--;				// Exclude CR
@@ -1016,7 +1011,7 @@ VOID AEAPoll(int Port)
 				{
 					if (Stream == 0)
 					{
-						EncodeAndSend(TNC, "OPA", 3);			// ??Return to packet mode??
+						EncodeAndSend(TNC, "ODI", 3);			// ??Return to packet mode??
 						TNC->NeedPACTOR = 50;
 						TNC->CommandBusy = TRUE;
 					}
@@ -1049,6 +1044,8 @@ VOID AEAPoll(int Port)
 			}
 		}
 	}
+
+GetStatus:
 
 	// Need to poll data and control channel (for responses to commands)
 
@@ -1364,13 +1361,13 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				// If nothing more to send, turn round link
 						
-				if (TNC->Streams[0].BPQtoPACTOR_Q == 0)		// Nothing following
+/*				if (TNC->Streams[0].BPQtoPACTOR_Q == 0)		// Nothing following
 				{
 					EncodeAndSend(TNC, "OAG", 3);
 					TNC->InternalCmd = 'A';
 					TNC->CommandBusy = TRUE;
 				}
-
+*/
 			}
 			return;
 		}
@@ -1424,7 +1421,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				// Claar any data from buffers 
 
-				EncodeAndSend(TNC, "OTC", 3);			// ??Return to packet mode??
+				EncodeAndSend(TNC, "OTC", 3);			// Clear buffers
 				TNC->NeedPACTOR = 20;
 				TNC->InternalCmd = 'T';
 				TNC->CommandBusy = TRUE;
