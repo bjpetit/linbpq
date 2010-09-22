@@ -3,6 +3,10 @@
 
 //	Add Start Minimized Option
 
+// Version 1.0.6 September 2010
+
+// Support IP Module as part of BPQ32.dll
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -624,6 +628,8 @@ int DoIPStatus()
 		//should have first entry, and number of entries. Should always be at least 1.
 
 		ARPCount = IPStats->ARPEntries;
+		if (ARPCount == 0)
+			ARPCount = 1;
 	}
 
 	DoARPLine(IPStatsState++);
@@ -689,23 +695,23 @@ BOOL LoadIPDriver()
 	char msg[128];
 	int err=0;
 	UCHAR Value[MAX_PATH];
-	char DLL[]="BPQIPModule.dll";
+	char DLL[]="BPQ32.dll";
 	
 	// If no directory, use current
 
 	BPQDirectory=GetBPQDirectory();
 
-	if (BPQDirectory[0] == 0)
+//	if (BPQDirectory[0] == 0)
 	{
 		strcpy(Value, DLL);
 	}
-		else
+/*		else
 	{
 		strcpy(Value,BPQDirectory);
 		strcat(Value,"\\");
 		strcat(Value, DLL);
 	}
-		
+*/		
 	hIPModule=LoadLibrary(Value);
 
 	if (hIPModule == NULL)

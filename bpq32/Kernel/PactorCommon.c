@@ -134,9 +134,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
  
 			break;
 
-		case WINMOR_KILLPOPUPS:
+		case WINMOR_RESTARTAFTERFAILURE:
 
-			KillPopups(TNC);
+			RestartAfterFailure = !RestartAfterFailure;
+			CheckMenuItem(TNC->hPopMenu, WINMOR_RESTARTAFTERFAILURE, (RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
+
 			break;
 
 		default:
@@ -310,6 +312,13 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 
 		if (retCode == ERROR_SUCCESS)
 			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &Minimized);
+
+#ifdef WINMOR
+
+		retCode = RegQueryValueEx(hKey,"RestartAfterFailure",0,			
+			(ULONG *)&Type,(UCHAR *)&RestartAfterFailure,(ULONG *)&Vallen);
+#endif
+
 	}
 
 	Top = Rect.top;
@@ -706,6 +715,9 @@ BOOL LoadRigDriver()
 {
 	char msg[128];
 	int err=0;
+
+	if (hRigModule)
+		return TRUE;					// Already done it.
 
 	hRigModule = GetModuleHandle("bpq32.dll");
 		

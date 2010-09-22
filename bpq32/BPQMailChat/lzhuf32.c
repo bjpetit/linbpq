@@ -862,6 +862,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 		if (_memicmp(ptr1, "From:", 5) == 0)
 		{
+			memcpy(FullFrom, ptr1, linelen);
+			FullFrom[linelen] = 0;
+
 			if (conn->Paclink)
 			{
 				// Messages just have the call - need to add @winlink.org
@@ -885,8 +888,24 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			}
 			else
 			{
-				if (linelen > 12) linelen = 12;
-				memcpy(Msg->from, &ptr1[6], linelen-6);
+				char SaveFrom[100];
+				char * FromHA;
+
+				// B2 From may now contain an @BBS 
+
+				strcpy(SaveFrom, FullFrom);
+				
+				FromHA = strlop(SaveFrom, '@');
+
+				if (strlen(SaveFrom) > 12) SaveFrom[12] = 0;
+				strcpy(Msg->from, &SaveFrom[6]);
+
+				if (FromHA)
+				{
+					if (strlen(FromHA) > 39) FromHA[39] = 0;
+					Msg->emailfrom[0] = '@';
+					strcpy(&Msg->emailfrom[1], _strupr(FromHA));
+				}
 
 				// Remove any SSID
 

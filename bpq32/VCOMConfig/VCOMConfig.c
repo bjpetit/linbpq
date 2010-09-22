@@ -1129,7 +1129,7 @@ BOOLEAN InstallDriver(SC_HANDLE  SchSCManager, LPCTSTR    DriverName, LPCTSTR   
                                SERVICE_AUTO_START,	   // when to start service
                                SERVICE_ERROR_NORMAL,   // severity if service fails to start
                                ServiceExe,             // address of name of binary file
-                               NULL,                   // service does not belong to a group
+                               "Base",                 // service group
                                NULL,                   // no tag requested
                                NULL,                   // no dependency names
                                NULL,                   // use LocalSystem account

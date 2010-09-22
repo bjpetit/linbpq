@@ -723,28 +723,30 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		Call = _strupr(_strdup(Msg->via));
 		AT = strlop(Call, '@');
 
-		if (_stricmp(AT, "WINLINK.ORG") == 0)
+		if (AT)
 		{
-			user = LookupCall(Call);
-
-			if (user)
+			if (_stricmp(AT, "WINLINK.ORG") == 0)
 			{
-				if (user->flags & F_POLLRMS)
+				user = LookupCall(Call);
+
+				if (user)
 				{
-					Logprintf(LOG_BBS, conn, '?', "Message @ winlink.org, but local RMS user - leave here");
-					strcpy(Msg->to, Call);
-					strcpy(Msg->via, AT);
+					if (user->flags & F_POLLRMS)
+					{
+						Logprintf(LOG_BBS, conn, '?', "Message @ winlink.org, but local RMS user - leave here");
+						strcpy(Msg->to, Call);
+						strcpy(Msg->via, AT);
 
-					free(Call);
+						free(Call);
 
-					if (user->flags & F_BBS)	// User is also a BBS, so set FWD bit so he can get it
-						set_fwd_bit(Msg->fbbs, user->BBSNumber);
-
-					return 1;
+						if (user->flags & F_BBS)	// User is also a BBS, so set FWD bit so he can get it
+							set_fwd_bit(Msg->fbbs, user->BBSNumber);
+	
+						return 1;
+					}
 				}
 			}
 		}
-		
 		free(Call);
 
 		// To = RMS, but not winlink.org, or not local user.

@@ -401,8 +401,9 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		return (int)ExtProc;
 	}
 
-	PortEntry->MAXHOSTMODESESSIONS = 1;		// Default
+	TNC->RIG = NULL;		// In case restart
 
+	PortEntry->MAXHOSTMODESESSIONS = 1;		// Default
 
 	TNC->PortRecord = PortEntry;
 

@@ -598,6 +598,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDM_USERMSG, WelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_NEWUSERMSG, NewWelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_CHATUSERMSG, ChatWelcomeMsg);
+		SetDlgItemText(pHdr->hwndDisplay, IDM_EXPERTUSERMSG, ExpertWelcomeMsg);
 
 
 		break;
@@ -1737,6 +1738,12 @@ VOID SaveWelcomeMsgs()
 	
 	RegSetValueEx(hKey, "ChatWelcomeMsg", 0, REG_SZ, Value, strlen(Value));
 
+	GetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, Value, 10000);
+
+	free(ExpertWelcomeMsg);
+	ExpertWelcomeMsg = _strdup(Value);
+	
+	RegSetValueEx(hKey, "ExpertWelcomeMsg", 0, REG_SZ, Value, strlen(Value));
 
 	RegCloseKey(hKey);
 
@@ -2059,7 +2066,6 @@ TryAgain:
 			RegQueryValueEx(hKey,"WelcomeMsg",0, (ULONG *)&Type, WelcomeMsg, (ULONG *)&Vallen);
 		}
 		else
-			
 			WelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
 
 		RegQueryValueEx(hKey,"NewUserWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -2086,7 +2092,18 @@ TryAgain:
 			
 			"G8BPQ Chat Server.\r\nType /h for command summary.\r\nBringing up links to other nodes.\r\n"
 			"This may take a minute or two.\r\nThe /p command shows what nodes are linked.\r\n");
+	
+		Vallen=0;
+		
+		RegQueryValueEx(hKey,"ExpertWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
 
+		if (Vallen)
+		{
+			ExpertWelcomeMsg = malloc(Vallen);
+			RegQueryValueEx(hKey,"ExpertWelcomeMsg",0, (ULONG *)&Type, ExpertWelcomeMsg, (ULONG *)&Vallen);
+		}
+		else
+			ExpertWelcomeMsg = _strdup("");
 
 		Vallen=80;
 

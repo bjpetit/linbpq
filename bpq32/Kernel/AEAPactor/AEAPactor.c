@@ -13,6 +13,11 @@
 
 // Turn round link if too long in receive
 
+// Version 1.1.1.4 September 2010
+
+// Fix Freq Display after Node reconfig
+
+
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -405,6 +410,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 		return (int)ExtProc;
 	}
+
+	TNC->RIG = NULL;		// In case restart
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
 

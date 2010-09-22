@@ -16,7 +16,7 @@
 #define IDC_PLAYBACK                    1008
 #define IDC_CAPTURE                     1009
 #define WINMOR_KILL                     1010
-#define WINMOR_KILLPOPUPS               1011
+#define WINMOR_RESTARTAFTERFAILURE      1011
 #define IDC_LIST1                       1013
 #define IDC_WINMORTRACE                 1013
 #define WINMORCONFIG                    30006

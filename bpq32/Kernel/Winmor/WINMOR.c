@@ -35,7 +35,10 @@
 // Send Watchdog polls every minute and restart if no response.
 // Don't connect if channel is busy (unless specifically overridden)
 
+// Version 1.2.1.6 September 2010
 
+// Add option to kill and restart TNC after each transfer
+// Fix PTT operation after Node reconfig
 
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -76,6 +79,8 @@ SendReporttoWL2K(struct TNCINFO * TNC);
 BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
 
 static char ClassName[]="WINMORSTATUS";
+
+BOOL RestartAfterFailure = FALSE;
 
 #define WINMOR
 #define WL2K
@@ -242,6 +247,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			{
 				wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
 				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+				retCode = RegSetValueEx(hKey,"RestartAfterFailure",0,REG_DWORD,(BYTE *)&RestartAfterFailure, 4);
 
 				RegCloseKey(hKey);
 			}
@@ -1086,6 +1093,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		return (int) ExtProc;
 	}
 
+	TNC->RIG = NULL;		// In case restart
+
 	LoadRigDriver();
 
 	TNC->PortRecord = PortEntry;
@@ -1164,11 +1173,12 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)TNC->hPopMenu,"Actions");
 
-//	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_CONFIG, "Show Soundcards");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILL, "Kill Winmor TNC");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart Winmor TNC");
-	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILLPOPUPS, "Hide Popups");
+	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after failed Transfer");
 	
+	CheckMenuItem(TNC->hPopMenu, WINMOR_RESTARTAFTERFAILURE, (RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
+
 	DrawMenuBar(TNC->hDlg);	
 
 	TNC->hMonitor = GetDlgItem(TNC->hDlg, IDC_WINMORTRACE); 
@@ -1511,6 +1521,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		UpdateMH(TNC, Call, '+');
 
+		TNC->HadConnect = TRUE;
+
 		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0)
 		{
 			// Incomming Connect
@@ -1741,8 +1753,18 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			TNC->DiscPending = 600;
 
 		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)	// Save Pending state for scan control
+		{
 			TNC->DiscPending = FALSE;
-
+			if (RestartAfterFailure)
+			{
+				if (TNC->HadConnect)
+				{
+					TNC->HadConnect = FALSE;
+					KillTNC(TNC);
+					RestartTNC(TNC);
+				}
+			}
+		}
 		SetDlgItemText(TNC->hDlg, IDC_PROTOSTATE, &Buffer[9]);
 		return;
 	}
@@ -1828,8 +1850,7 @@ int ProcessReceivedData(struct TNCINFO * TNC)
 				
 	InputLen=recv(TNC->WINMORSock, &TNC->TCPBuffer[TNC->InputLen], 1000 - TNC->InputLen, 0);
 
-
-	if (InputLen == 0)
+	if (InputLen == 0 || InputLen == SOCKET_ERROR)
 	{
 		// Does this mean closed?
 		
@@ -2185,35 +2206,6 @@ RestartTNC(struct TNCINFO * TNC)
   	SInfo.lpReserved2=NULL; 
 
 	CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
-
-	return 0;
-}
-
-int LoopProtect;
-
-BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM  lParam)
-{
-	char wtext[100];
-	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
-	
-	if (LoopProtect++ > 100000)
-		return FALSE;
-	
-	GetWindowText(hwnd, wtext, 99);
-
-	if (memcmp(wtext,"Registration", 12) == 0)
-	{
-		ShowWindow(hwnd, SW_HIDE);
-	}
-	
-	return (TRUE);
-}
-
-KillPopups(struct TNCINFO * TNC)
-{
-	LoopProtect = 0;
-	
-	EnumWindows(EnumWindowsProc, (LPARAM)TNC);
 
 	return 0;
 }

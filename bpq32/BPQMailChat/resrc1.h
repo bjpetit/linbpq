@@ -45,6 +45,7 @@
 #define IDM_USERMSG                     1034
 #define IDM_CHATUSERMSG                 1035
 #define IDM_NEWUSERMSG                  1036
+#define IDM_EXPERTUSERMSG               1038
 #define IDM_MSGSAVE                     1037
 #define IDC_MAPPOSITION                 1039
 #define IDC_HOVER                       1040

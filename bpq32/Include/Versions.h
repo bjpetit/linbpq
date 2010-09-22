@@ -1,7 +1,7 @@
 
 
-#define AEAVers 1,1,1,3
-#define AEAVerstring "1.1.1.3\0"
+#define AEAVers 1,1,1,4
+#define AEAVerstring "1.1.1.4\0"
 
 #define AXIPVers 1,15,2,10
 #define AXIPVerstring "1.15.2.10\0"
@@ -15,18 +15,18 @@
 #define IPVers 1,2,1,6
 #define IPVerstring "1.2.1.6\0"
 
-#define KVers 4,10,15,5
-#define KVerstring "4.10.15.5\0"
+#define KVers 4,10,15,6
+#define KVerstring "4.10.15.6\0"
 
-#define SCSVers 1,2,1,3
-#define SCSVerstring "1.2.1.3\0"
+#define SCSVers 1,2,1,4
+#define SCSVerstring "1.2.1.4\0"
 
-#define KAMVers 1,2,1,4
-#define KAMVerstring "1.2.1.4\0"
+#define KAMVers 1,2,1,5
+#define KAMVerstring "1.2.1.5\0"
 
 #define VKISSVers 1,3,1,6
 #define VKISSVerstring "1.3.1.6\0"
 
-#define WINMORVers 1,2,1,5
-#define WINMORVerstring "1.2.1.5\0"
+#define WINMORVers 1,2,1,6
+#define WINMORVerstring "1.2.1.6\0"
 

@@ -550,6 +550,20 @@
 
 // Build a B2 From: address if possible, so RMS Express can reply to packet messages.
 // Fix handling of addresses from WL2K with SSID's
+// L@ now only matches up to length of input string.
+// Remove "Type H for help" from login prompt.
+
+// Version 1.0.4.20 Sept 2010
+
+// Process FBB 'E' response
+// Handle FROM addresses with an @BBS
+// Fix FROM addresses with @ on end.
+// Extend delay before close after sending FQ on winmor/pactor sessions.
+
+// Version 1.0.4.21 Sept 2010
+
+// Fix handling B2 From: with an HA
+// Add "Expert User" welcome message.
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -671,6 +685,7 @@ char * WelcomeMsg = NULL;
 char * NewWelcomeMsg = NULL;
 char * ChatWelcomeMsg = NULL;
 char * NewChatWelcomeMsg = NULL;
+char * ExpertWelcomeMsg = NULL;
 
 char BBSName[100];
 
@@ -1029,6 +1044,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	{
 		if (MyElements[n]) free(MyElements[n]);
 	}
+
+	free(WelcomeMsg);
+	free(NewWelcomeMsg);
+	free(ChatWelcomeMsg);
+	free(ExpertWelcomeMsg);
 
 	_CrtDumpMemoryLeaks();
 
@@ -2225,7 +2245,7 @@ int Connected(Stream)
 	CIRCUIT * conn;
 	struct UserInfo * user = NULL;
 	char callsign[10];
-	int port, sesstype, paclen, maxframe, l4window;
+	int port, paclen, maxframe, l4window;
 	char ConnectedMsg[] = "*** CONNECTED    ";
 	char Msg[100];
 	char Title[100];
@@ -2264,7 +2284,7 @@ int Connected(Stream)
 			conn->Active = TRUE;
 			conn->BPQStream = Stream;
 
-			GetConnectionInfo(Stream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+			GetConnectionInfo(Stream, callsign, &port, &conn->SessType, &paclen, &maxframe, &l4window);
 
 			strlop(callsign, ' ');		// Remove trailing spaces
 
@@ -2314,7 +2334,7 @@ int Connected(Stream)
 
 			//	Set SYSOP flag if user is defined as SYSOP and Host Session 
 			
-			if (((sesstype & 0x20) == 0x20) && (user->flags & F_SYSOP))
+			if (((conn->SessType & Sess_BPQHOST) == Sess_BPQHOST) && (user->flags & F_SYSOP))
 				conn->sysop = TRUE;
 
 			Mask = 1 << (GetApplNum(Stream) - 1);
@@ -2347,6 +2367,7 @@ int Connected(Stream)
 					B1 = conn->UserPointer->ForwardingInfo->AllowB1;
 					B2 = conn->UserPointer->ForwardingInfo->AllowB2;
 				}
+
 				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
 				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
 					ALLOWCOMPRESSED ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", "F");
@@ -2965,6 +2986,10 @@ Next:
 
 		MsgnotoMsg[Msg->number] = Msg;
 
+		// Look for corrupt FROM address (ending in @)
+
+		strlop(Msg->from, '@');
+
 		BuildNNTPList(Msg);				// Build NNTP Groups list
 
 		// If any forward bits are set, increment count on corresponding BBS record.
@@ -3371,7 +3396,9 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 		return;
 	}
 
-	if (conn->NewUser)
+	if (user->flags & F_Expert)
+		ExpandAndSendMessage(conn, ExpertWelcomeMsg, LOG_BBS);
+	else if (conn->NewUser)
 		ExpandAndSendMessage(conn, NewWelcomeMsg, LOG_BBS);
 	else
 		ExpandAndSendMessage(conn, WelcomeMsg, LOG_BBS);
@@ -3379,7 +3406,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 	if (user->HomeBBS[0] == 0)
 		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");
 
-	nodeprintf(conn, "Type H for help.\rde %s>\r", BBSName);
+	nodeprintf(conn, "de %s>\r", BBSName);
 }
 
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
@@ -4504,7 +4531,7 @@ int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 		if (MsgHddrPtr[i]->status == 'K')
 			continue;
 
-		if (_stricmp(MsgHddrPtr[i]->via, Call) == 0)
+		if (_memicmp(MsgHddrPtr[i]->via, Call, strlen(Call)) == 0)
 		{
 			Msgs++;
 			ListMessage(MsgHddrPtr[i], conn);
@@ -5072,7 +5099,7 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 			*ATBBS = _strupr(strtok_s(NULL, seps, &Context));
 		}
 		else if(strcmp(ptr, "<") == 0)
-		{
+		{			
 			*From = strtok_s(NULL, seps, &Context);
 		}
 		else if (ptr[0] == '$')
@@ -5149,6 +5176,7 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 {
 	struct MsgInfo * Msg;
 	char * via = NULL;
+	char * FromHA;
 
 	// Create a temp msg header entry
 
@@ -5261,7 +5289,19 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 		strcpy(Msg->via, via);
 	}
 
+	// Look for HA in From (even if we shouldn't be getting it!)
+
+	FromHA = strlop(From, '@');
+
+	if (strlen(From) > 6) From[6] = 0;
 	strcpy(Msg->from, From);
+
+	if (FromHA)
+	{
+		if (strlen(FromHA) > 39) FromHA[39] = 0;
+		Msg->emailfrom[0] = '@';
+		strcpy(&Msg->emailfrom[1], _strupr(FromHA));
+	}
 
 	if (Title)					// Only used by SR and SC
 	{

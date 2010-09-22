@@ -580,20 +580,24 @@ WELCOMEMSG DIALOG DISCARDABLE  26, 5, 381, 266
 STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
-    EDITTEXT        IDM_USERMSG,5,20,340,50,ES_MULTILINE | ES_AUTOVSCROLL | 
+    LTEXT           "Normal User Welcome Message",IDC_STATIC,5,7,130,8
+    EDITTEXT        IDM_USERMSG,5,20,340,45,ES_MULTILINE | ES_AUTOVSCROLL | 
                     ES_AUTOHSCROLL | ES_WANTRETURN
-    EDITTEXT        IDM_CHATUSERMSG,5,93,340,50,ES_MULTILINE | 
+    LTEXT           "Chat Welcome Message",IDC_STATIC,5,67,130,8
+    EDITTEXT        IDM_CHATUSERMSG,5,80,340,45,ES_MULTILINE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
-    EDITTEXT        IDM_NEWUSERMSG,5,167,340,50,ES_MULTILINE | 
+    LTEXT           "New User Welcome Message",IDC_STATIC,5,127,130,8
+    EDITTEXT        IDM_NEWUSERMSG,5,140,340,45,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "Expert User Welcome Message",IDC_STATIC,5,187,130,8,
+    EDITTEXT        IDM_EXPERTUSERMSG,5,200,340,25,ES_MULTILINE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
     DEFPUSHBUTTON   "Save",IDM_MSGSAVE,166,250,50,14,BS_CENTER | BS_VCENTER
-    LTEXT           "Normal User Welcome Message",IDC_STATIC,5,7,130,8
-    LTEXT           "Chat Welcome Message",IDC_STATIC,5,80,130,8
-    LTEXT           "New User Welcome Message",IDC_STATIC,5,155,130,8
     LTEXT           "$U : Callsign of the connected user    $I : First name of the connected user  ",
                     IDC_STATIC,5,227,365,10
     LTEXT           "$L : Number of the latest message    $N : Number of active messages.    $Z : Last message read by user",
                     IDC_STATIC,5,238,365,10
+                    NOT WS_GROUP
 END
 
 IDD_MAINTRESULTS DIALOG DISCARDABLE  0, 0, 181, 114

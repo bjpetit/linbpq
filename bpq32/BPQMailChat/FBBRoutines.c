@@ -67,7 +67,10 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			// LinFBB needs a Disconnect Here
 
-			conn->CloseAfterFlush = 20;			// 2 Secs
+			if ((conn->SessType & Sess_PACTOR) == 0)
+				conn->CloseAfterFlush = 20;			// 2 Secs
+			else
+				conn->CloseAfterFlush = 450;		// 45 Secs 2 is far too short for PACTOR/WINMOR
 		}
 		return;
 
@@ -82,8 +85,15 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			FBBHeader = &conn->FBBHeaders[i];
 
 			Respptr++;
-				
-			if ((*Respptr == '-') || (*Respptr == 'N') || (*Respptr == 'R'))				// Not wanted
+
+			if (*Respptr == 'E')
+			{
+				// Rejected 
+
+				Logprintf(LOG_BBS, conn, '?', "Proposal %d Rejected by far end", i + 1);
+			}
+			
+			if ((*Respptr == '-') || (*Respptr == 'N') || (*Respptr == 'R') || (*Respptr == 'E'))				// Not wanted
 			{
 				user->MsgsRejectedOut++;
 				
@@ -1192,14 +1202,16 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 			// Local User. If Home BBS is specified, use it
 
+/*
 			if (FromUser->flags & F_POLLRMS)
 			{
 				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User With Poll Set");
 				wsprintf(B2From, "%s@winlink.org", Msg->from);
 			}
 			else
+*/
 			{
-				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User With Poll Not Set");
+//				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User With Poll Not Set");
 				if (FromUser->HomeBBS[0])
 					wsprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
 				else

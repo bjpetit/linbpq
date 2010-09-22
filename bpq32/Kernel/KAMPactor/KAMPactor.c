@@ -17,6 +17,11 @@
 
 // Save Minimized State
 
+// Version 1.2.1.5 September 2010
+
+// Fix Freq Display after Node reconfig
+
+
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -424,6 +429,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 		return (int)ExtProc;
 	}
+
+	TNC->RIG = NULL;		// In case restart
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
 

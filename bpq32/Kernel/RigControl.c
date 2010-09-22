@@ -1702,9 +1702,6 @@ OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed)
 	CommTimeOuts.WriteTotalTimeoutMultiplier = 0;
 	CommTimeOuts.WriteTotalTimeoutConstant = 1000;
 	SetCommTimeouts(PORT->hDevice, &CommTimeOuts);
-
-#define FC_DTRDSR       0x01
-#define FC_RTSCTS       0x02
 	
 	dcb.DCBlength = sizeof(DCB);
 	GetCommState(PORT->hDevice, &dcb);
@@ -1922,6 +1919,9 @@ GetPermissionToChange(struct PORTINFO * PORT, struct RIGINFO *RIG)
 		{
 			// Permission Refused. Wait Scan Interval and try again
 
+			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval",
+				RIG->PortRecord[0]->PORT_DLL_NAME); 
+
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
 
@@ -1939,8 +1939,9 @@ GetPermissionToChange(struct PORTINFO * PORT, struct RIGINFO *RIG)
 		// If it returns zero there is no need to wait.
 				
 		if (RIG->WaitingForPermission)
+		{
 			return FALSE;
-
+		}		
 	}
 
 DoChange:
@@ -1957,6 +1958,12 @@ DoChange:
 		{
 			// 1 means can't change - release all
 
+			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval", PortRecord->PORT_DLL_NAME); 
+
+			RIG->WaitingForPermission = FALSE;
+			SetWindowText(RIG->hSCAN, "-");
+			RIG->ScanCounter = 10 * RIG->ScanFreq; 
+
 			ReleasePermission(RIG);
 			return FALSE;
 		}
@@ -1967,15 +1974,18 @@ DoChange:
 	RIG->WaitingForPermission = FALSE;
 
 	RIG->ScanCounter = 10 * RIG->ScanFreq; 
-	
+
 	ptr = RIG->FreqPtr;
 
 	if (ptr == NULL)
+	{
+		Debugprintf("Scan Debug - No freqs - quitting"); 
 		return FALSE;					 // No Freqs
-		
+	}
 	if (ptr[0] == (struct ScanEntry *)0) // End of list - reset to start
+	{
 		ptr = CheckTimeBands(RIG);
-
+	}
 	PORT->FreqPtr = ptr[0];				// Save Scan Command Block
 
 	// Do Bandwidth and antenna switches (if needed)
@@ -2014,7 +2024,8 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 	{
 		SwitchAntenna(RIG, ptr->Antenna);
 	}
-	return;					// Change Freq
+
+	return;	
 }
 
 VOID ICOMPoll(struct PORTINFO * PORT)
@@ -2073,6 +2084,7 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 
 	RIG->DebugDelay ++;
 
+/*
 	if (RIG->DebugDelay > 600)
 	{
 		RIG->DebugDelay = 0;
@@ -2080,7 +2092,7 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 			RIG->NumberofBands, RIG->RIGOK, RIG->ScanStopped, RIG->ScanCounter,
 			RIG->WaitingForPermission);
 	}
-
+*/
 	if (RIG->NumberofBands && RIG->RIGOK && (RIG->ScanStopped == 0))
 	{
 		if (RIG->ScanCounter <= 0)
@@ -2827,7 +2839,7 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 				PORT->Timeout = 0;
 				PORT->AutoPoll = TRUE;
 
-				// Ther isn't a response to a set command, so clear Scan Lock here
+				// There isn't a response to a set command, so clear Scan Lock here
 			
 				ReleasePermission(RIG);			// Release Perrmission
 

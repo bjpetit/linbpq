@@ -33,6 +33,11 @@
 // Add PACKETCHANNELS config command
 // And Port Selector (P1 or P2) for Packet Ports
 
+// Version 1.2.1.4 September 2010
+
+// Fix Freq Display after Node reconfig
+
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -485,6 +490,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 		return (int) ExtProc;
 	}
+
+	TNC->RIG = NULL;		// In case restart
 
 	// Set up DED addresses for streams (first stream (Pactor) = DED 31
 	

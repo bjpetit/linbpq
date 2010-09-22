@@ -23,7 +23,7 @@ TODo	?Time Out ARP
 		?Multiple Adapters
 */
 
-#pragma data_seg("_BPQIPDATA")
+#pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE 
 
@@ -32,22 +32,20 @@ TODo	?Time Out ARP
 #include "windows.h"
 #include <stdio.h>
 #include "AsmStrucs.h"
-#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
-#define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
+//#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
+//#define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
 
 
 #include "IPCode.h"
 #include "pcap.h"
 
-char MYCALL[7];	// 7 chars, ax.25 format
+static char MYCALL[7];	// 7 chars, ax.25 format
 
-struct BPQVECSTRUC * IPHOSTVECTOR;
+extern struct BPQVECSTRUC IPHOSTVECTOR;
 
-VOID * (FAR WINAPI * GetIPVectorAddr) ();
-VOID (FAR  WINAPI * RelBuff) ();
-UINT (FAR WINAPI * GETSENDNETFRAMEADDR) ();
-VOID (FAR WINAPI * Send_AX) (PMESSAGE Block, DWORD Len, UCHAR Port);
+BOOL APIENTRY  GETSENDNETFRAMEADDR();
+BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 
 
 //       ARP REQUEST (AX.25)
@@ -95,13 +93,12 @@ char ConfigClassName[]="CONFIG";
 
 HWND hResWnd;
 
-BOOL MinimizetoTray=FALSE;
-BOOL StartMinimized=FALSE;
+extern BOOL StartMinimized;
+extern BOOL MinimizetoTray;
 
 int baseline=0;
 
 unsigned char  hostaddr[64];
-
 
 
 // Following two fields used by stats to get round shared memmory problem
@@ -130,7 +127,7 @@ int IPPortMask = 0;
 
 IPSTATS IPStats = {0};
 
-UCHAR * BPQDirectory;
+UCHAR BPQDirectory[];
 
 char ARPFN[MAX_PATH];
 char CFGFN[MAX_PATH];
@@ -161,6 +158,7 @@ HANDLE hInstance;
 
 char VersionString[100];
 
+/*
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
 	hInstance=hInst;
@@ -193,7 +191,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	}
 }
 
-
+*/
 
 Dll BOOL APIENTRY Init_IP()
 {
@@ -209,7 +207,7 @@ Dll BOOL APIENTRY Init_IP()
 
 	HMODULE HM;
 
-	HM=GetModuleHandle("bpqipmodule.dll");
+	HM=GetModuleHandle("bpq32.dll");
 
 	RH=FindResource(HM,MAKEINTRESOURCE(VS_VERSION_INFO),RT_VERSION);
 
@@ -225,20 +223,17 @@ Dll BOOL APIENTRY Init_IP()
 					isDebug);
 
 
-	GetAPI();
+/*
+GetAPI();
 
 	GetIPVectorAddr = (char * (__stdcall *) ())GetProcAddress(ExtDriver,"_GetIPVectorAddr@0");
 	RelBuff = (VOID (__stdcall *) ())GetProcAddress(ExtDriver,"_RelBuff@4");
 	GETSENDNETFRAMEADDR = (UINT (__stdcall *) ())GetProcAddress(ExtDriver,"_GETSENDNETFRAMEADDR@0");
 	Send_AX = (UINT (__stdcall *) (PMESSAGE Block, DWORD Len, UCHAR Port))GetProcAddress(ExtDriver,"_Send_AX@12");
-
+*/
 
 	NUMBEROFPORTS=GetNumberofPorts();
-	IPHOSTVECTOR=GetIPVectorAddr();
-	SENDNETFRAME=GETSENDNETFRAMEADDR();
 	ConvToAX25(GetNodeCall(), MYCALL);
-
-	BPQDirectory=GetBPQDirectory();
 
 	if (BPQDirectory[0] == 0)
 	{
@@ -275,7 +270,7 @@ Dll BOOL APIENTRY Init_IP()
 
 	// Clear old packets
 
-	IPHOSTVECTOR->HOSTAPPLFLAGS = 0x80;			// Request IP frams from Node
+	IPHOSTVECTOR.HOSTAPPLFLAGS = 0x80;			// Request IP frams from Node
 
 	// Set up static fields in ARP messages
 
@@ -317,9 +312,6 @@ Dll BOOL APIENTRY Init_IP()
 	}
 
 	ReadARP();
-
-	MinimizetoTray=GetMinimizetoTrayFlag();
-	if (GetStartMinimizedFlag) StartMinimized=GetStartMinimizedFlag();
 
 	if (NeedResolver)
 		_beginthread(ResolveNames, 0, NULL );
@@ -383,14 +375,14 @@ Pollloop:
 		// Ignore anything else
 	}
 
-	if (IPHOSTVECTOR->HOSTTRACEQ != 0)
+	if (IPHOSTVECTOR.HOSTTRACEQ != 0)
 	{
-		PMESSAGE axmsg;
-		PMESSAGE savemsg;
+		PBUFFHEADER axmsg;
+		PBUFFHEADER savemsg;
 
-		axmsg = IPHOSTVECTOR->HOSTTRACEQ;
+		axmsg = IPHOSTVECTOR.HOSTTRACEQ;
 
-		IPHOSTVECTOR->HOSTTRACEQ = axmsg->CHAIN;
+		IPHOSTVECTOR.HOSTTRACEQ = axmsg->CHAIN;
 
 		savemsg=axmsg;
 
@@ -450,10 +442,10 @@ Pollloop:
 fragloop:
 				RelBuff(savemsg);
 
-				if (IPHOSTVECTOR->HOSTTRACEQ == 0)	goto Pollloop;		// Shouldn't happen
+				if (IPHOSTVECTOR.HOSTTRACEQ == 0)	goto Pollloop;		// Shouldn't happen
 
-				axmsg = IPHOSTVECTOR->HOSTTRACEQ;
-				IPHOSTVECTOR->HOSTTRACEQ = axmsg->CHAIN;
+				axmsg = IPHOSTVECTOR.HOSTTRACEQ;
+				IPHOSTVECTOR.HOSTTRACEQ = axmsg->CHAIN;
 				savemsg=axmsg;
 
 				ptr = &axmsg->PID;
@@ -574,7 +566,7 @@ VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 
 	return;
 }
-VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port)
+static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port)
 {
 	memcpy(&Block[7],ToCall, 7);
 	memcpy(&Block[14],FromCall, 7);
@@ -1315,7 +1307,7 @@ Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 }
 
 
-BOOL ReadConfigFile()
+static BOOL ReadConfigFile()
 {
 
 // IPAddr 192.168.0.129
@@ -1356,7 +1348,7 @@ BOOL ReadConfigFile()
 }
 
 
-ProcessLine(char * buf)
+static ProcessLine(char * buf)
 {
 	PCHAR ptr, p_value, p_origport, p_host, p_port;
 	int i, port, mappedport, ipad;

@@ -33,7 +33,7 @@
 
 //	Version 2.1.10 September 2010
 
-//  Fix loss of las letter of callsign  if newline missing from USER line.
+//  Fix loss of last letter of callsign if newline missing from USER line.
 //  Add RMS Relay Mode 
 
 #include "stdafx.h"

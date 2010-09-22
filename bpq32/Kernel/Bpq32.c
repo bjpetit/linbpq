@@ -255,6 +255,14 @@
 //  Extend INFOMSG to 2000 bytes
 //  Improve Scan freq change lock (check both SCS and WINMOR Ports)
 
+// 410o		Build 6 September 2010
+
+// Incorporate IPGateway in main code.
+// Fix GetSessionInfo for Pactor/Winmor Ports
+// Add Antenna Selection to RigControl
+// Allow Bandwidth options on RADIO command line (as well as in Scan definitions)
+
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -343,8 +351,11 @@ VOID __cdecl Debugprintf(const char * format, ...);
 
 DllExport int APIENTRY CloseBPQ32();
 
-BOOL (FAR WINAPI * Init_IP) ();
-BOOL (FAR WINAPI * Poll_IP) ();
+//BOOL (FAR WINAPI * Init_IP) ();
+//BOOL (FAR WINAPI * Poll_IP) ();
+
+BOOL APIENTRY Init_IP();
+BOOL APIENTRY Poll_IP();
 
 BOOL APIENTRY Rig_Init();
 BOOL APIENTRY Rig_Close();
@@ -957,7 +968,8 @@ FirstInit()
 
  	WritetoConsole("\n\nPort Initialisation Complete\n");
 
-	if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
+	if (IPRequired)	IPActive = Init_IP();
+//	if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
 
 	if (RigRequired) RigActive = Rig_Init();
 
@@ -967,7 +979,7 @@ FirstInit()
 
 	return 0;
 }
-
+/*
 BOOL LoadIPDriver()
 {
 	char msg[128];
@@ -1007,7 +1019,7 @@ BOOL LoadIPDriver()
 	}
 	return TRUE;
 }
-/*
+
 BOOL LoadRigDriver()
 {
 	char msg[128];
@@ -1116,7 +1128,7 @@ Check_Timer()
 //		NPHandle=CreateNamedPipe("\\\\.\\pipe\\BPQ32pipe",
 //					PIPE_ACCESS_DUPLEX,0,64,4096,4096,1000,NULL);
 
-		if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
+		if (IPRequired)	IPActive = Init_IP();
 
 		if (RigRequired) RigActive = Rig_Init();
 

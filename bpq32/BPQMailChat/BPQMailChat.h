@@ -322,6 +322,15 @@ typedef struct ConnectionInfo_S
 	char ** PacLinkCalls;				// Calls we are getting messages for
 	BOOL SkipPrompt;					// Set if a remote node sends a > at the end of his CTEXT
 	int Watchdog;						// Hung Circuit Detect.
+	int SessType;						// BPQ32 sesstype bits
+
+#define Sess_L2LINK 1
+#define Sess_SESSION	2
+#define Sess_UPLINK	4
+#define Sess_DOWNLINK 8
+#define Sess_BPQHOST 0x20
+#define Sess_PACTOR	0x40
+
 
 } ConnectionInfo, CIRCUIT;
 
@@ -1133,6 +1142,7 @@ extern char * WelcomeMsg;
 extern char * NewWelcomeMsg;
 extern char * ChatWelcomeMsg;
 extern char * NewChatWelcomeMsg;
+extern char * ExpertWelcomeMsg;
 
 
 extern int Ver[4];
