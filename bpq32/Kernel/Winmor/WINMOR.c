@@ -40,6 +40,11 @@
 // Add option to kill and restart TNC after each transfer
 // Fix PTT operation after Node reconfig
 
+// Version 1.2.2.1 September 2010
+
+// Add option to get config from bpq32.cfg
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
@@ -79,6 +84,9 @@ SendReporttoWL2K(struct TNCINFO * TNC);
 BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
 
 static char ClassName[]="WINMORSTATUS";
+static char WindowTitle[] = "WINMOR";
+static int RigControlRow = 180;
+
 
 BOOL RestartAfterFailure = FALSE;
 
@@ -100,10 +108,8 @@ BOOL RestartAfterFailure = FALSE;
 DllImport int ResetExtDriver(int num);
 void ConnecttoWINMORThread(int port);
 VOID ProcessDataSocketData(int port);
-BOOL ReadConfigFile(char * filename);
 int ConnecttoWINMOR();
 int ProcessReceivedData(struct TNCINFO * TNC);
-int ProcessLine(char * buf);
 VOID ReleaseTNC(struct TNCINFO * TNC);
 VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
 VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
@@ -188,7 +194,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	char Key[80];
 	int retCode, disp;
 
-	switch( ul_reason_being_called )
+	switch(ul_reason_being_called)
 	{
 	case DLL_PROCESS_ATTACH:
 		
@@ -196,18 +202,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	
 		if (WINMORInst == 0)			// First entry
 		{
-			GetAPI();					// Load BPQ32
-
 			WINMORInst = GetCurrentProcessId();
-
-//			STDOUT = GetStdHandle(STD_OUTPUT_HANDLE);
-
-			if (!InitWS2())
-				return FALSE;
-
-			if (!InitWINMOR())
-				return FALSE;
-
 		}
 		return 1;
    		
@@ -324,7 +319,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		TNC->RIG = Rig_GETPTTREC(port);
 
 		if (TNC->RIG == 0)
+		{
 			TNC->RIG = &DummyRig;		// Not using Rig control, so use Dummy
+			TNC->PTTMode = 0;			// Can't use PTT if no rig
+		}
 
 		TNC->RIG->PTTMode = TNC->PTTMode;
 	}	
@@ -914,8 +912,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 4:				// reinit
 
-//		return(ReadConfigFile("BPQAXIP.CFG"));
-
 		return (0);
 
 	case 5:				// Close
@@ -1061,6 +1057,7 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
 	}
 }
 
+BOOL FirstInit = TRUE;
 
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
@@ -1072,14 +1069,29 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	struct TNCINFO * TNC;
 	char Aux[100] = "MYAUX ";
 	char Appl[10];
+	char * TempScript;
 
 	//
 	//	Will be called once for each WINMOR port 
 	//
 	//	The Socket to connect to is in IOBASE
 	//
+
+	if (FirstInit)
+	{
+		FirstInit = FALSE;
+
+		GetAPI();					// Load BPQ32
+		LoadRigDriver();
+
+		InitWS2();
+
+		InitWINMOR();
+	}
 	
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
+
+	ReadConfigFile("BPQtoWINMOR.CFG", port);
 
 	TNC = TNCInfo[port];
 
@@ -1093,9 +1105,14 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		return (int) ExtProc;
 	}
 
-	TNC->RIG = NULL;		// In case restart
-
-	LoadRigDriver();
+	if (TNC->RigConfigMsg)
+	{
+		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
+		if (TNC->RIG)
+			TNC->RIG->PTTMode = TNC->PTTMode;
+	}
+	else
+		TNC->RIG = NULL;		// In case restart
 
 	TNC->PortRecord = PortEntry;
 
@@ -1115,7 +1132,29 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
+	// Set Essential Params and MYCALL
+
+	// Put overridable ones on front, essential ones on end
+
+	TempScript = malloc(1000);
+
+	strcpy(TempScript, "LOG True\r\n");
+	strcat(TempScript, "DebugLog True\r\n");
+	strcat(TempScript, "CWID False\r\n");
+	strcat(TempScript, "BW 1600\r\n");
+	strcat(TempScript, "ROBUST False\r\n");
+	strcat(TempScript, "MODE AUTO\r\n");
+
+	strcat(TempScript, TNC->InitScript);
+
+	free(TNC->InitScript);
+	TNC->InitScript = TempScript;
+
 	// Set MYCALL
+
+
+	strcat(TNC->InitScript,"FECRCV True\r\n");
+	strcat(TNC->InitScript,"AUTOBREAK True\r\n");
 
 	wsprintf(Msg, "MYC %s\r\nCODEC TRUE\r\nLISTEN TRUE\r\nMYC\r\n", TNC->NodeCall);
 	strcat(TNC->InitScript, Msg);
@@ -1238,8 +1277,6 @@ InitWINMOR()
 	BOOL bcopt=TRUE;
 	int i;
 
-	ReadConfigFile("BPQtoWINMOR.CFG");
-
 	// Build buffer pool
 	
 	for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
@@ -1247,12 +1284,6 @@ InitWINMOR()
 		ReleaseBuffer(&BufferPool[100*i]);
 	}
 	 
-	//
-	//	Open MH window if needed
-	
-	//if (MHEnabled)
-	//	CreateMHWindow();
-	
 	return (TRUE);		
 }
 

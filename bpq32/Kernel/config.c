@@ -91,6 +91,13 @@
 
 //		Add NoKeepAlive ROUTE option
 
+// Converted to intenal bpq32 process
+
+// Spetember 2010
+
+// Add option of embedded port configuration 
+
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -102,9 +109,13 @@
 #include <ctype.h>
 #include <conio.h>
 
+#define DllExport	__declspec(dllexport)
+
 // Dummy file routines - write to buffer instead
 
 char * Buffer;
+
+char * PortConfig[34] = {NULL};
 
 char * fp2;
 
@@ -302,7 +313,7 @@ extern int __cdecl tncports(int i);
 extern int __cdecl dedports(int i);
 extern int __cdecl index(char *s,char *t);
 extern int __cdecl verify(char *s,char c);
-int strip(char *rec);
+int GetNextLine(char * rec);
 int call_check(char *callsign);
 int call_check_internal(char * callsign);
 extern int __cdecl callstring(int i,char *value,char *rec);
@@ -483,7 +494,7 @@ int bbsqual;
  
 int heading = 0;
 
-BOOL ProcessConfig()
+DllExport BOOL ProcessConfig()
 {
 	int i;
 	char rec[MAXLINE];
@@ -496,6 +507,15 @@ BOOL ProcessConfig()
 	tncportoffset = 384;
 	portnum = 1;
 	NextAppl = 0;
+
+	for (i=0; i < 34; i++)
+	{
+		if (PortConfig[i])
+		{
+			free(PortConfig[i]);
+			PortConfig[i] = NULL;
+		}
+	}
 
 	Consoleprintf("Configuration file Preprocessor.");
 
@@ -552,13 +572,13 @@ BOOL ProcessConfig()
 
 	fp2 = Buffer;
 
-	strip(rec);
+	GetNextLine(rec);
 
 	while (!feof(fp1))
 	{
 	   decode_rec(rec);
 
-	   strip(rec);
+	   GetNextLine(rec);
 	}
 
 	paramok[8]=1;          /* dont need TRANSDELAY */
@@ -691,6 +711,42 @@ char rec[];
 
 	char key_word[20];
 	char value[300];
+
+	if (_memicmp(rec, "IPGATEWAY", 9) == 0 && rec[9] != '=')	// IPGATEWAY, not IPGATEWAY=
+	{
+		// Create Embedded IPGateway Config
+
+		// Copy all subsequent lines up to **** to a memory buffer
+
+		char * ptr;
+		struct CONFIGTABLE * cfg = (struct CONFIGTABLE * )Buffer;
+		
+		PortConfig[33] = ptr = malloc(50000);
+
+		*ptr = 0;
+
+		GetNextLine(rec);
+
+		while (!feof(fp1))
+		{
+			if (_memicmp(rec, "****", 4) == 0)
+			{
+				PortConfig[33] = realloc(PortConfig[33], (strlen(ptr) + 1));
+				cfg->C_IP = 1;
+				return 0;
+			}
+
+			strcat(ptr, rec);
+			strcat(ptr, "\r\n");
+			GetNextLine(rec);
+		}
+
+		Consoleprintf("Missing **** for IPGateway Config %d", portnum);
+		heading = 1;
+
+		return 0;
+	}
+
 
 	if (memcmp(rec, "APPLICATION ", 12) == 0)
 	{
@@ -1122,7 +1178,7 @@ int dotext(int i, char * key_word, int max)
 
         bseek(fp2,(long) fileoffset,SEEK_SET);
 
-	strip(rec);
+	GetNextLine(rec);
 
 	while (index(rec,"***") != 0 && !feof(fp1))
 	{
@@ -1154,7 +1210,7 @@ int doBText(int i, char key_word[])
 
         bseek(fp2,(long) fileoffset,SEEK_SET);
 
-	strip(rec);
+	GetNextLine(rec);
 
 	while (index(rec,"***") != 0 && !feof(fp1))
 	{
@@ -1200,7 +1256,7 @@ int i;
 
 	bseek(fp2,(long) fileoffset,SEEK_SET);
 
-	strip(rec);
+	GetNextLine(rec);
 
 	while (index(rec,"***") != 0 && !feof(fp1))
 	{
@@ -1250,7 +1306,7 @@ int i;
 	      err_flag = 0;
 	   }
 
-	   strip(rec);
+	   GetNextLine(rec);
 	}
 
 	bputc('\0',fp2);
@@ -1299,7 +1355,7 @@ int ports(int i)
 
 	while (endport == 0 && !feof(fp1))
 	{
-	   strip(rec);
+	   GetNextLine(rec);
 	   decode_port_rec(rec);
 	}
 	if (porterror != 0)
@@ -1334,7 +1390,7 @@ int i;
 
 	while (endport == 0 && !feof(fp1))
 	{
-	   strip(rec);
+	   GetNextLine(rec);
 	   decode_tnc_rec(rec);
 	}
 	if (tncporterror != 0)
@@ -1365,7 +1421,7 @@ int i;
 
 	while (endport == 0 && !feof(fp1))
 	{
-	   strip(rec);
+	   GetNextLine(rec);
 	   decode_ded_rec(rec);
 	}
 	if (dedporterror != 0)
@@ -1447,8 +1503,7 @@ VOID bputi(int i, char * ptr)
 /*   GET NEXT LINE THAT ISN'T BLANK OR IS A COMMENT LINE		*/
 /************************************************************************/
 
-strip(rec)
-char rec[];
+int GetNextLine(char *rec)
 {
 	int i, j;
 	char * ret;
@@ -1599,6 +1654,47 @@ char rec[];
 
 	char key_word[20];
 	char value[300];
+
+	if (_memicmp(rec, "CONFIG", 6) == 0)
+	{
+		// Create Embedded PORT Config
+
+		// Copy all subseuent lines up to ENDPORT to a memory buffer
+
+		char * ptr;
+		
+		if (PortConfig[portnum])	// Alreasdy defined?
+		{
+			Consoleprintf("Port %d already defined", portnum);
+			heading = 1;
+			return 0;
+		}
+
+		PortConfig[portnum] = ptr = malloc(50000);
+
+		*ptr = 0;
+
+		GetNextLine(rec);
+
+		while (!feof(fp1))
+		{
+			if (_memicmp(rec, "ENDPORT", 7) == 0)
+			{
+				PortConfig[portnum] = realloc(PortConfig[portnum], (strlen(ptr) + 1));		
+				endport = 1;
+				return 0;
+			}
+
+			strcat(ptr, rec);
+			strcat(ptr, "\r\n");
+			GetNextLine(rec);
+		}
+
+		Consoleprintf("Missing ENDPORT for Port %d", portnum);
+		heading = 1;
+
+		return 0;
+	}
 
 	if (index(rec,"=") >= 0)
 	   sscanf(rec,"%[^=]=%s",key_word,value);
@@ -2240,7 +2336,7 @@ int simple(int i)
 	return(1);
 }
 
-VOID FreeConfig()
+DllExport VOID FreeConfig()
 {
 	free(Buffer);
 }

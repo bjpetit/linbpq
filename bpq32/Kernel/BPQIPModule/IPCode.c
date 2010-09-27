@@ -47,6 +47,8 @@ extern struct BPQVECSTRUC IPHOSTVECTOR;
 BOOL APIENTRY  GETSENDNETFRAMEADDR();
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 
+BOOL ProcessConfig();
+BOOL FreeConfig();
 
 //       ARP REQUEST (AX.25)
 
@@ -73,7 +75,7 @@ int SecTimer = 10;
 
 BOOL NeedResolver = FALSE;
 
-int map_table_len=0;
+int map_table_len = 0;
 //int index=0;					// pointer for table search
 int ResolveIndex=-1;			// pointer to entry being resolved
 
@@ -95,6 +97,7 @@ HWND hResWnd;
 
 extern BOOL StartMinimized;
 extern BOOL MinimizetoTray;
+extern char * PortConfig[];
 
 int baseline=0;
 
@@ -380,7 +383,7 @@ Pollloop:
 		PBUFFHEADER axmsg;
 		PBUFFHEADER savemsg;
 
-		axmsg = IPHOSTVECTOR.HOSTTRACEQ;
+		axmsg = (PBUFFHEADER)IPHOSTVECTOR.HOSTTRACEQ;
 
 		IPHOSTVECTOR.HOSTTRACEQ = axmsg->CHAIN;
 
@@ -444,7 +447,7 @@ fragloop:
 
 				if (IPHOSTVECTOR.HOSTTRACEQ == 0)	goto Pollloop;		// Shouldn't happen
 
-				axmsg = IPHOSTVECTOR.HOSTTRACEQ;
+				axmsg = (PBUFFHEADER)IPHOSTVECTOR.HOSTTRACEQ;
 				IPHOSTVECTOR.HOSTTRACEQ = axmsg->CHAIN;
 				savemsg=axmsg;
 
@@ -975,8 +978,6 @@ ForUs:
 	Len = ntohs(IPptr->IPLENGTH);
 	Len-=20;
 
-
-
 	for (index=0; index < map_table_len; index++)
 	{
 		if ((map_table[index].sourceport == TCPptr->DESTPORT) &&
@@ -1002,7 +1003,6 @@ ForUs:
 			CheckSumAndSend(IPptr, TCPptr, Len);
 			return;
 		}
-
 	}
 }
 
@@ -1317,9 +1317,43 @@ static BOOL ReadConfigFile()
 
 // MAP 192.168.0.100 1001 n9pmo.dyndns.org 1000
 
+	char * Config;
+	char * ptr1, * ptr2;
 
 	FILE *file;
 	char buf[256],errbuf[256];
+
+	map_table_len = 0;				// For reread
+
+	Config = PortConfig[33];		// Config fnom bpq32.cfg
+
+	if (Config)
+	{
+		// Using config from bpq32.cfg
+
+		ptr1 = Config;
+
+		ptr2 = strchr(ptr1, 13);
+		while(ptr2)
+		{
+			memcpy(buf, ptr1, ptr2 - ptr1);
+			buf[ptr2 - ptr1] = 0;
+			ptr1 = ptr2 + 2;
+			ptr2 = strchr(ptr1, 13);
+
+			strcpy(errbuf,buf);			// save in case of error
+	
+			if (!ProcessLine(buf))
+			{
+				WritetoConsole("IP Gateway bad config record ");
+				WritetoConsole(errbuf);
+			}
+		}
+	}
+	else
+	{
+
+
 	
 	if ((file = fopen(CFGFN,"r")) == NULL)
 	{
@@ -1343,7 +1377,7 @@ static BOOL ReadConfigFile()
 	}
 	
 	fclose(file);
-
+	}
 	return (TRUE);
 }
 
@@ -1439,7 +1473,6 @@ static ProcessLine(char * buf)
 		map_table[map_table_len++].mappedport = ntohs(mappedport);
 	
 		NeedResolver = TRUE;
-
 
 		return (TRUE);
 	}
@@ -1705,7 +1738,6 @@ BOOL ProcessARPLine(char * buf)
 			Arp->ARPTIMER =  86400;
 		}
 	}
-
 	return TRUE;
 }
 
@@ -1834,19 +1866,19 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
 
-/*
+
 		if (wmId == BPQREREAD)
 		{
-			CloseSockets();
-			ReadConfigFile("BPQAXIP.CFG");
-			_beginthread(OpenSockets, 0, NULL );
+			ProcessConfig();
+			FreeConfig();
+
+			ReadConfigFile("IPGateway.CFG");
 			PostMessage(hResWnd, WM_TIMER,0,0);
 			InvalidateRect(hWnd,NULL,TRUE);
 
-
 			return 0;
 		}
-
+/*
 		if (wmId == BPQADDARP)
 		{
 			if (ConfigWnd == 0)
@@ -1978,10 +2010,8 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			WSAAsyncGetHostByName (hWnd,WM_USER+99,
 						map_table[ResolveIndex].hostname,
 						buf,MAXGETHOSTSTRUCT);
-			break;
-			
+			break;	
 		}
-
 
 		default:
 			return (DefWindowProc(hWnd, message, wParam, lParam));
@@ -1996,7 +2026,7 @@ void ResolveNames( void *dummy )
 	WNDCLASS  wc;
 	int i;
 	char WindowTitle[100];
-//	HMENU hMenu,hPopMenu;
+	HMENU hMenu,hPopMenu;
 
 	// Fill in window class structure with parameters that describe
     // the main window.
@@ -2020,12 +2050,12 @@ void ResolveNames( void *dummy )
  
 	if (map_table_len > 10 )
 	{
-		Windowlength=10*14+60;
+		Windowlength=10*14+100;
 		WindowParam=WS_OVERLAPPEDWINDOW | WS_VSCROLL;
 	}
 	else
 	{
-		Windowlength=(map_table_len)*14+60;
+		Windowlength=(map_table_len)*14+100;
 		WindowParam=WS_OVERLAPPEDWINDOW ;
 	}
 
@@ -2038,19 +2068,19 @@ void ResolveNames( void *dummy )
 
 		i=GetLastError();
 
-	/*
+	
 	hMenu=CreateMenu();
 	hPopMenu=CreatePopupMenu();
 	SetMenu(hResWnd,hMenu);
 
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Update");
 
-	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"ReRead AXIP.cfg");
-	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Add Entry");
+	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"ReRead Config");
+//	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Add Entry");
 
 	DrawMenuBar(hResWnd);	
 
-*/
+
 	LFTTYFONT.lfHeight =			12;
     LFTTYFONT.lfWidth =          8 ;
     LFTTYFONT.lfEscapement =     0 ;

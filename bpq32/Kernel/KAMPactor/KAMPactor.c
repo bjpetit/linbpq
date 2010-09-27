@@ -20,8 +20,11 @@
 // Version 1.2.1.5 September 2010
 
 // Fix Freq Display after Node reconfig
+// Only use AutoConnect APPL for Pactor Connects
 
+// Version 1.2.2.1 September 2010
 
+// Add option to get config from bpq32.cfg
 
 #define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
@@ -51,6 +54,9 @@
 #define KAM 1
 
 static char ClassName[]="PACTORSTATUS";
+static char WindowTitle[] = "KAM Pactor";
+static int RigControlRow = 190;
+
 #include "..\PactorCommon.c"
  
 
@@ -188,21 +194,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	case DLL_PROCESS_ATTACH:
 
 		hInstance = hInst;
-
-		// Read Config
-
-		GetAPI();					// Load BPQ32
-		ReadConfigFile("KAMPACTOR.CFG");
-
-		// Build buffer pool
-
-		FREE_Q = 0;			// In case reloading;
-
-		for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
-		{	
-			ReleaseBuffer(&BufferPool[100*i]);
-		}
-
 		return 1;
    		
 	case DLL_THREAD_ATTACH:
@@ -400,6 +391,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	return 0;
 
 }
+BOOL FirstInit = TRUE;
 
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
@@ -413,10 +405,31 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
+	if (FirstInit)
+	{
+		int i;
+
+		FirstInit = FALSE;
+
+		GetAPI();					// Load BPQ32
+		LoadRigDriver();
+
+		// Build buffer pool
+
+		FREE_Q = 0;			// In case reloading;
+
+		for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
+		{	
+			ReleaseBuffer(&BufferPool[100*i]);
+		}
+	}
+
 	wsprintf(msg,"KAM Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
+
+	ReadConfigFile("KAMPACTOR.CFG", port);
 
 	TNC = TNCInfo[port];
 
@@ -430,7 +443,13 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		return (int)ExtProc;
 	}
 
-	TNC->RIG = NULL;		// In case restart
+	if (TNC->RigConfigMsg)
+	{
+		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
+	}
+	else
+		TNC->RIG = NULL;		// In case restart
+
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
 
@@ -473,8 +492,6 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	CreatePactorWindow(TNC);
 	
-	LoadRigDriver();
-
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
 	return ((int)ExtProc);
@@ -1606,19 +1623,19 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
 
 					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
-				}
 
-				// If an autoconnect APPL is defined, send it
+					// If an autoconnect APPL is defined, send it	
 
-				if (TNC->ApplCmd)
-				{
-					buffptr = Q_REM(&FREE_Q);
-					if (buffptr == 0) return;			// No buffers, so ignore
+					if (TNC->ApplCmd)
+					{
+						buffptr = Q_REM(&FREE_Q);
+						if (buffptr == 0) return;			// No buffers, so ignore
 
-					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
-					Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
+						Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
-					return;
+						return;
+					}
 				}
 
 				if (FULL_CTEXT)

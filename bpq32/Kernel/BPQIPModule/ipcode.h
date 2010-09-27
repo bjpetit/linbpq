@@ -1,5 +1,7 @@
 // Header file for BPQ32 IP over ax.25 support
 
+#define BPQREREAD						403
+#define BPQADDARP						404
 
 //extern struct PORTCONTROL * PORTTABLE;
 

@@ -100,6 +100,7 @@ struct TNCINFO
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
 
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+	char * RigConfigMsg;			// Message to pass to rig control
 
 	char Bandwidth;					// Currently set Mode W or N
 

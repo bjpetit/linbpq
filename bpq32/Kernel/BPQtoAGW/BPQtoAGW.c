@@ -31,6 +31,10 @@
 
 //		Changes for dynamic unload of bpq32.dll
 
+//	Version 1.5.1 September 2010
+
+//		Add option to get config from BPQ32.cfg
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -52,16 +56,17 @@ unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, 
 #define DllExport	__declspec( dllexport )
 
 DllImport int ResetExtDriver(int num);
+DllImport char * PortConfig[33];
 
 void ConnecttoAGWThread(int port);
 
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);
 
-BOOL ReadConfigFile(char * filename);
+BOOL ReadConfigFile(char * filename, int Port);
 int ConnecttoAGW();
 int ProcessReceivedData(int bpqport);
-int ProcessLine(char * buf);
+ProcessLine(char * buf, int Port, BOOL CheckPort);
 
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
@@ -91,7 +96,7 @@ static struct AGWHEADER RXHeader;
 #pragma pack()
 
 
-#define MAXBPQPORTS 16
+#define MAXBPQPORTS 32
 #define MAXAGWPORTS 16
 
 //LOGFONT LFTTYFONT ;
@@ -166,18 +171,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		
 		if (AGWInst == 0)				// First entry
 		{
-			GetAPI();					// Load BPQ32
-
 			AGWInst = GetCurrentProcessId();
-
-//			STDOUT = GetStdHandle(STD_OUTPUT_HANDLE);
-
-			if (!InitWS2())
-				return FALSE;
-
-			if (!InitAGWPE())
-				return FALSE;
-
 		}
 		return 1;
    		
@@ -225,8 +219,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	unsigned int bytes,txlen=0;
 	char ErrMsg[255];
-
-
 
 	switch (fn)
 	{
@@ -464,6 +456,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	return 0;
 }
 
+BOOL FirstInit = TRUE;
 
 DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 
@@ -477,9 +470,18 @@ DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 	//
 	//	The Socket to connect to is in IOBASE
 	//
-	
 
+	if (FirstInit)
+	{
+		FirstInit = FALSE;
+
+		GetAPI();					// Load BPQ32
+		InitWS2();
+		InitAGWPE();
+	}
 	port=PortEntry->PORTNUMBER;
+
+	ReadConfigFile("BPQtoAGW.CFG", port);
 
 	AGWChannel[port]=PortEntry->CHANNELNUM-65;
 
@@ -573,25 +575,14 @@ InitAGWPE()
 	BOOL bcopt=TRUE;
 	int i;
 
-
-	ReadConfigFile("BPQtoAGW.CFG");
-
-
 	// Build buffer pool
 	
 	for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
 	{	
 		ReleaseBuffer(&BufferPool[100*i]);
 	}
-	 
-	//
-	//	Open MH window if needed
-	
-	//if (MHEnabled)
-	//	CreateMHWindow();
-	
-	return (TRUE);
-		
+
+	return (TRUE);		
 }
 
 /*
@@ -611,13 +602,41 @@ InitAGWPE()
 */
 
 
-BOOL ReadConfigFile(char * fn)
+BOOL ReadConfigFile(char * fn, int Port)
 {
 	FILE *file;
 	char buf[256],errbuf[256];
 
 	UCHAR Value[100];
 	UCHAR * BPQDirectory;
+	char * Config;
+
+	Config = PortConfig[Port];
+
+	if (Config)
+	{
+		// Using config from bpq32.cfg
+
+		char * ptr1 = Config, * ptr2;
+
+		ptr2 = strchr(ptr1, 13);
+		while(ptr2)
+		{
+			memcpy(buf, ptr1, ptr2 - ptr1);
+			buf[ptr2 - ptr1] = 0;
+			ptr1 = ptr2 + 2;
+			ptr2 = strchr(ptr1, 13);
+
+			strcpy(errbuf,buf);			// save in case of error
+	
+			if (!ProcessLine(buf, Port, FALSE))
+			{
+				WritetoConsole("BPQEther - Bad config record ");
+				WritetoConsole(errbuf);
+			}
+		}
+		return (TRUE);
+	}
 
 	BPQDirectory=GetBPQDirectory();
 
@@ -631,9 +650,7 @@ BOOL ReadConfigFile(char * fn)
 		strcat(Value,"\\");
 		strcat(Value,fn);
 	}
-		
-	
-
+			
 	if ((file = fopen(Value,"r")) == NULL)
 	{
 //		n=wsprintf(buf,"BPQtoAGW - Config file %s not found ",Value);
@@ -646,7 +663,7 @@ BOOL ReadConfigFile(char * fn)
 	{
 		strcpy(errbuf,buf);			// save in case of error
 	
-		if (!ProcessLine(buf))
+		if (!ProcessLine(buf, Port, TRUE))
 		{
 			WritetoConsole("BPQtoAGW - Bad config record ");
 			WritetoConsole(errbuf);
@@ -660,8 +677,7 @@ BOOL ReadConfigFile(char * fn)
 
 }
 
-
-ProcessLine(char * buf)
+ProcessLine(char * buf, int Port, BOOL CheckPort)
 {
 	char * ptr,* p_user,* p_password;
 	char * p_ipad;
@@ -679,17 +695,23 @@ ProcessLine(char * buf)
 
 	if(*ptr ==';') return (TRUE);			// comment
 
-
-	BPQport=0;
-
-	BPQport = atoi(ptr);
-
-	if(BPQport > 0 && BPQport <17)
+	if (CheckPort)
 	{
 		p_ipad = strtok(NULL, " \t\n\r");
-		
+			
 		if (p_ipad == NULL) return (FALSE);
-	
+
+		BPQport = atoi(ptr);
+
+		if (Port != BPQport) return TRUE;		// Not for us
+	}
+	else
+	{
+		BPQport = Port;
+		p_ipad = ptr;
+	}
+	if(BPQport > 0 && BPQport <33)
+	{	
 		p_udpport = strtok(NULL, " \t\n\r");
 			
 		if (p_udpport == NULL) return (FALSE);
@@ -704,7 +726,6 @@ ProcessLine(char * buf)
 		if (AGWHostName[BPQport] == NULL) return TRUE;
 
 		strcpy(AGWHostName[BPQport],p_ipad);
-
 
 		p_user = strtok(NULL, " \t\n\r");
 			
@@ -731,7 +752,6 @@ ProcessLine(char * buf)
 		strcpy(&AGWSignon[BPQport][291],p_password);
 
 		return (TRUE);
-
 	}
 
 	//

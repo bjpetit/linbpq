@@ -74,6 +74,7 @@ struct TNCINFO
 	char * CmdSave;					// Base address for free
 
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+	char * RigConfigMsg;			// Message to pass to rig control
 
 };
 

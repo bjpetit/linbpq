@@ -29,6 +29,10 @@
 #define SetTones 0xec
 
 static char ClassName[]="HALSTATUS";
+
+static char WindowTitle[] = "HAL";
+static int RigControlRow = 190;
+
 #include "..\PactorCommon.c"
  
 
@@ -179,21 +183,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	case DLL_PROCESS_ATTACH:
 
 		hInstance = hInst;
-
-		// Read Config
-
-		GetAPI();					// Load BPQ32
-		ReadConfigFile("HALDriver.cfg");
-
-		// Build buffer pool
-
-		FREE_Q = 0;			// In case reloading;
-
-		for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
-		{	
-			ReleaseBuffer(&BufferPool[100*i]);
-		}
-
 		return 1;
    		
 	case DLL_THREAD_ATTACH:
@@ -372,6 +361,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 }
 
+BOOL FirstInit = TRUE;
+
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[80];
@@ -384,10 +375,31 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
+	if (FirstInit)
+	{
+		int i;
+		
+		FirstInit = FALSE;
+
+		GetAPI();					// Load BPQ32
+		LoadRigDriver();
+
+		// Build buffer pool
+
+		FREE_Q = 0;			// In case reloading;
+
+		for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
+		{	
+			ReleaseBuffer(&BufferPool[100*i]);
+		}
+	}
+
 	wsprintf(msg,"HAL Driver COM%d", PortEntry->PORTCONTROL.IOBASE);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
+
+	ReadConfigFile("HALDRIVER.CFG", port);
 
 	TNC = TNCInfo[port];
 
@@ -401,7 +413,13 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		return (int)ExtProc;
 	}
 
-	TNC->RIG = NULL;		// In case restart
+	if (TNC->RigConfigMsg)
+	{
+		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
+	}
+	else
+		TNC->RIG = NULL;		// In case restart
+
 
 	PortEntry->MAXHOSTMODESESSIONS = 1;		// Default
 
@@ -435,8 +453,6 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	CreatePactorWindow(TNC);
 	
-	LoadRigDriver();
-
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
 	return ((int)ExtProc);

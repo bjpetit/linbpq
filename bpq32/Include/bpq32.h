@@ -248,7 +248,6 @@ BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 
 VOID APIENTRY md5 (char *arg, unsigned char * checksum);
 
-
 #else
 
 struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntry) (int portslot);

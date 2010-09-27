@@ -70,6 +70,7 @@ struct TNCINFO
 	HWND hDlg;						// Status Window Handle
 	
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+	char * RigConfigMsg;			// Message to pass to rig control
 
 };
 

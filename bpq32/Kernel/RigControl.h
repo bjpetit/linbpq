@@ -35,6 +35,8 @@ struct RIGINFO
 	int BPQtoRADIO_Q;			// Frames from switch for radio
 
 	UINT BPQPort;				// Port this radio is attached to. Bit Map, as may be more than one port controlling radio
+	int PortNum;				// Number of port that defined this rig
+	
 	struct _EXTPORTDATA * PortRecord[32]; // BPQ32 port record(s) for this rig (null terminated list)
 
 	UCHAR RigAddr;

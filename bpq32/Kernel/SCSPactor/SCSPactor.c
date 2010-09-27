@@ -36,6 +36,11 @@
 // Version 1.2.1.4 September 2010
 
 // Fix Freq Display after Node reconfig
+// Only use AutoConnect APPL for Pactor Connects
+
+// Version 1.2.2.1 September 2010
+
+// Add option to get config from bpq32.cfg
 
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -62,6 +67,8 @@
 #include "bpq32.h"
 
 static char ClassName[]="PACTORSTATUS";
+static char WindowTitle[] = "SCS Pactor";
+static int RigControlRow = 210;
 
 #define SCS
 #define WL2K
@@ -94,8 +101,6 @@ unsigned short int compute_crc(unsigned char *buf,int len);
 int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
 VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-BOOL ReadConfigFile(char * filename);
-int ProcessLine(char * buf);
 VOID ExitHost(struct TNCINFO * TNC);
 VOID DoTNCReinit(struct TNCINFO * TNC);
 VOID DoTermModeTimeout(struct TNCINFO * TNC);
@@ -208,20 +213,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		hInstance = hInst;
 	
-		// Read Config
-
-		GetAPI();					// Load BPQ32
-		ReadConfigFile("SCSPACTOR.CFG");
-
-		// Build buffer pool
-
-		FREE_Q = 0;			// In case reloading;
-
-		for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
-		{	
-			ReleaseBuffer(&BufferPool[100*i]);
-		}
-
 		return 1;
    		
 	case DLL_THREAD_ATTACH:
@@ -456,10 +447,10 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 	}
-
 	return 0;
-
 }
+
+BOOL FirstInit = TRUE;
 
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
@@ -468,16 +459,38 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	int port;
 	char * ptr;
 	int Stream = 0;
+	char * TempScript;
 
 	//
 	//	Will be called once for each Pactor Port
 	//	The COM port number is in IOBASE
 	//
 
+	if (FirstInit)
+	{
+		int i;
+
+		FirstInit = FALSE;
+
+		GetAPI();					// Load BPQ32
+		LoadRigDriver();
+
+		// Build buffer pool
+
+		FREE_Q = 0;			// In case reloading;
+
+		for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
+		{	
+			ReleaseBuffer(&BufferPool[100*i]);
+		}
+	}
+
 	wsprintf(msg,"Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
+
+	ReadConfigFile("SCSPACTOR.CFG", port);
 
 	TNC = TNCInfo[port];
 
@@ -491,7 +504,12 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 		return (int) ExtProc;
 	}
 
-	TNC->RIG = NULL;		// In case restart
+	if (TNC->RigConfigMsg)
+	{
+		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
+	}
+	else
+		TNC->RIG = NULL;		// In case restart
 
 	// Set up DED addresses for streams (first stream (Pactor) = DED 31
 	
@@ -522,7 +540,48 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
-	// Set MYCALL
+	// Set Essential Params and MYCALL
+
+	// Set TONES to 4
+	// Tones may be changed but I want this as standard
+
+	TempScript = malloc(1000);
+
+	strcpy(TempScript, "TONES 4\r");
+	strcat(TempScript, "MAXERR 30\r");      //    Max retries 
+	strcat(TempScript, "MODE 0\r");      //       ASCII mode, no PTC II compression (Forwarding will use FBB Compression)
+
+	strcat(TempScript, TNC->InitScript);
+
+	free(TNC->InitScript);
+	TNC->InitScript = TempScript;
+
+	// Others go on end so they can't be overriden
+
+	strcat(TNC->InitScript, "ADDLF 0\r");      //      Auto Line Feed disabled
+	strcat(TNC->InitScript, "ARX 0\r");      //        Amtor Phasing disabled
+	strcat(TNC->InitScript, "BELL 0\r");      //       Disable Bell
+	strcat(TNC->InitScript, "BC 0\r");      //         FEC reception is disabled
+	strcat(TNC->InitScript, "BKCHR 2\r");      //      Breakin Char = 2
+	strcat(TNC->InitScript, "CHOBELL 0\r");      //    Changeover Bell off
+	strcat(TNC->InitScript, "CMSG 0\r");      //       Connect Message Off
+	strcat(TNC->InitScript, "CWID 0 2\r");      //     CW ID disabled
+	strcat(TNC->InitScript, "LFIGNORE 0\r");      //   No insertion of Line feed
+	strcat(TNC->InitScript, "LISTEN 0\r");      //     Pactor Listen disabled
+	strcat(TNC->InitScript, "MAIL 0\r");      //       Disable internal mailbox reporting
+	strcat(TNC->InitScript, "MAXSUM 20\r");      //    Max count for memory ARQ
+	strcat(TNC->InitScript, "REMOTE 0\r");      //     Disable remote control
+	strcat(TNC->InitScript, "PAC CBELL 0\r");      //  
+	strcat(TNC->InitScript, "PAC CMSG 0\r");      //  
+	strcat(TNC->InitScript, "PAC PRBOX 0\r");      //  	Turn off Packet Radio Mailbox
+
+	
+	//  Automatic Status must be enabled for BPQ32
+	//  Pactor must use Host Mode Chanel 31
+	//  PDuplex must be set. The Node code relies on automatic IRS/ISS changeover
+	//	5 second duplex timer
+
+	strcat(TNC->InitScript, "STATUS 2\rPTCHN 31\rPDUPLEX 1\rPDTIMER 5\r");
 
 	wsprintf(msg, "MYCALL %s\rPAC MYCALL %s\r", TNC->NodeCall, TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
@@ -530,8 +589,6 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
 	CreatePactorWindow(TNC);
-
-	LoadRigDriver();
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
@@ -2163,18 +2220,18 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 							wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
 					
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
-					}
+					
+						// If an autoconnect APPL is defined, send it
 
-					// If an autoconnect APPL is defined, send it
+						if (TNC->ApplCmd)
+						{
+							buffptr = Q_REM(&FREE_Q);
+							if (buffptr == 0) return;			// No buffers, so ignore
 
-					if (TNC->ApplCmd)
-					{
-						buffptr = Q_REM(&FREE_Q);
-						if (buffptr == 0) return;			// No buffers, so ignore
-
-						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
-						Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
-						return;
+							buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
+							Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+							return;
+						}
 					}
 
 					if (FULL_CTEXT)

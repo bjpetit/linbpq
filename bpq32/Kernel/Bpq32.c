@@ -262,7 +262,13 @@
 // Add Antenna Selection to RigControl
 // Allow Bandwidth options on RADIO command line (as well as in Scan definitions)
 
+// 410o		Build 7 September 2010
 
+// Move rigcontol display to driver windows
+// Move rigontrol config to driver config.
+// Allow driver and IPGateway config info in bpq32.cfg
+// Move IPGateway into bpq32.dll
+// Add option to reread IP Gateway config.
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T

@@ -1,14 +1,13 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
-#include "..\..\include\Versions.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
-#include "windows.h"
+#include "winres.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -29,8 +28,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION AEAVers
- PRODUCTVERSION AEAVers
+ FILEVERSION 1,1,1,4
+ PRODUCTVERSION 1,1,1,4
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -48,12 +47,12 @@ BEGIN
             VALUE "Comments", "AEA/Timewave Pactor interface for G8BPQ Packet Switch\0"
             VALUE "CompanyName", " \0"
             VALUE "FileDescription", "AEAPactor\0"
-            VALUE "FileVersion", AEAVerstring
+            VALUE "FileVersion", "1.1.1.4\0"
             VALUE "InternalName", "AEAPactor\0"
             VALUE "LegalCopyright", "Copyright © 2010 G8BPQ\0"
             VALUE "OriginalFilename", "AEAPactor.dll\0"
             VALUE "ProductName", "  AEAPactor\0"
-            VALUE "ProductVersion", AEAVerstring
+            VALUE "ProductVersion", "1.1.1.4\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -76,20 +75,20 @@ CAPTION "Pactor Status"
 CLASS "PACTORSTATUS"
 FONT 8, "FixedSys"
 BEGIN
-    LTEXT           "",IDC_1,60,70,54,11
-    LTEXT           "",IDC_2,60,55,90,11
-    LTEXT           "",IDC_3,60,40,75,11
-    LTEXT           "0",IDC_4,60,85,54,11
-    LTEXT           "TX/RX State",IDC_STATIC,6,70,44,10
-    LTEXT           "Status",IDC_STATIC,5,55,30,10
-    LTEXT           "Mode",IDC_STATIC,5,40,30,10
-    LTEXT           "Buffers",IDC_STATIC,5,85,30,10
-    LTEXT           "",IDC_TNCSTATE,60,25,195,11
-    LTEXT           "TNC State",IDC_STATIC,5,25,40,10
-    LTEXT           "Comms State",IDC_STATIC,5,10,45,10
-    LTEXT           "",IDC_COMMSSTATE,60,10,145,11
-    LTEXT           "Traffic",IDC_STATIC,5,100,30,10
-    LTEXT           "RX 0 TX 0",IDC_TRAFFIC,60,100,140,11
+    LTEXT           "",IDC_1,60,64,54,11
+    LTEXT           "",IDC_2,60,50,90,11
+    LTEXT           "",IDC_3,60,36,75,11
+    LTEXT           "0",IDC_4,60,78,54,11
+    LTEXT           "TX/RX State",IDC_STATIC,6,64,44,10
+    LTEXT           "Status",IDC_STATIC,5,50,30,10
+    LTEXT           "Mode",IDC_STATIC,5,36,30,10
+    LTEXT           "Buffers",IDC_STATIC,5,78,30,10
+    LTEXT           "",IDC_TNCSTATE,60,22,195,11
+    LTEXT           "TNC State",IDC_STATIC,5,22,40,10
+    LTEXT           "Comms State",IDC_STATIC,5,8,45,10
+    LTEXT           "",IDC_COMMSSTATE,60,8,145,11
+    LTEXT           "Traffic",IDC_STATIC,5,92,30,10
+    LTEXT           "RX 0 TX 0",IDC_TRAFFIC,60,93,140,11
 END
 
 

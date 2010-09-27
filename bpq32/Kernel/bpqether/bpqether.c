@@ -20,6 +20,11 @@
 
 //		Changes for dynamic unload of bpq32.dll
 
+// Version 1.3.1 Spetmber 2010
+
+//		Add option to get config from bpq32.dll
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
@@ -42,6 +47,8 @@
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
  
+DllImport char * PortConfig[33];
+
 typedef struct PCAPStruct
 {
    pcap_t	*adhandle;
@@ -103,7 +110,7 @@ int InitPCAP(void);
 FARPROCX GetAddress(char * Proc);
 
 BOOL ReadConfigFile(char * fn,int Port);
-int ProcessLine(char * buf,int Port);
+int ProcessLine(char * buf,int Port, BOOL CheckPort);
 int OpenPCAP(int IOBASE, int PORTNUMBER);
 
 
@@ -401,7 +408,7 @@ int OpenPCAP(int IOBASE, int port)
 
 	Adapter[0]=0;
 
-	if (!ReadConfigFile("BPQETHER.CFG",port))
+	if (!ReadConfigFile("BPQETHER.CFG", port))
 		return (FALSE);
 
 	/* Open the adapter */
@@ -465,19 +472,46 @@ int OpenPCAP(int IOBASE, int port)
 }
 
 
-BOOL ReadConfigFile(char * fn,int Port)
+BOOL ReadConfigFile(char * fn, int Port)
 {
 
 //TYPE	1	08FF                              # Ethernet Type
 //ETH	1	FF:FF:FF:FF:FF:FF				#	Target Ethernet AddrMAP G8BPQ-7 10.2.77.1                  # IP 93 for compatibility
-//ADAPTER	1	\Device\NPF_{21B601E8-8088-4F7D-9629-EDE2A9243CF4}	# Adapter Name
+//ADAPTER	1	\Device\NPF_{21B601E8-8088-4F7D-96 29-EDE2A9243CF4}	# Adapter Name
 
 	FILE *file;
 	char buf[256],errbuf[256];
 
 	UCHAR Value[MAX_PATH];
-
 	UCHAR * BPQDirectory;
+	char * Config;
+
+	Config = PortConfig[Port];
+
+	if (Config)
+	{
+		// Using config from bpq32.cfg
+
+		char * ptr1 = Config, * ptr2;
+
+		ptr2 = strchr(ptr1, 13);
+		while(ptr2)
+		{
+			memcpy(buf, ptr1, ptr2 - ptr1);
+			buf[ptr2 - ptr1] = 0;
+			ptr1 = ptr2 + 2;
+			ptr2 = strchr(ptr1, 13);
+
+			strcpy(errbuf,buf);			// save in case of error
+	
+			if (!ProcessLine(buf, Port, FALSE))
+			{
+				WritetoConsole("BPQEther - Bad config record ");
+				WritetoConsole(errbuf);
+			}
+		}
+		return (TRUE);
+	}
 
 	BPQDirectory=GetBPQDirectory();
 
@@ -506,7 +540,7 @@ BOOL ReadConfigFile(char * fn,int Port)
 	{
 		strcpy(errbuf,buf);			// save in case of error
 	
-		if (!ProcessLine(buf,Port))
+		if (!ProcessLine(buf, Port, TRUE))
 		{
 			WritetoConsole("BPQEther bad config record ");
 			WritetoConsole(errbuf);
@@ -522,7 +556,7 @@ BOOL ReadConfigFile(char * fn,int Port)
 }
 
 
-ProcessLine(char * buf,int Port)
+ProcessLine(char * buf, int Port, BOOL CheckPort)
 {
 	char * ptr;
 	char * p_port;
@@ -541,7 +575,7 @@ ProcessLine(char * buf,int Port)
 
 	if(*ptr ==';') return (TRUE);			// comment
 
-	if(_stricmp(ptr,"ADAPTER") == 0)
+	if (CheckPort)
 	{
 		p_port = strtok(NULL, " \t\n\r");
 			
@@ -550,25 +584,18 @@ ProcessLine(char * buf,int Port)
 		port = atoi(p_port);
 
 		if (Port != port) return TRUE;		// Not for us
-			
+	}
+
+	if(_stricmp(ptr,"ADAPTER") == 0)
+	{
 		p_Adapter = strtok(NULL, " \t\n\r");
 		
 		strcpy(Adapter,p_Adapter);
-
 		return (TRUE);
-
 	}
 
 	if(_stricmp(ptr,"TYPE") == 0)
 	{
-		p_port = strtok(NULL, " \t\n\r");
-			
-		if (p_port == NULL) return (FALSE);
-
-		port = atoi(p_port);
-
-		if (Port != port) return TRUE;		// Not for us
-			
 		p_type = strtok(NULL, " \t\n\r");
 		
 		if (p_type == NULL) return (FALSE);
@@ -578,22 +605,12 @@ ProcessLine(char * buf,int Port)
 		if (num != 1) return FALSE;
 
 		PCAPInfo[Port].EtherType=htons(a);
-
 		return (TRUE);
 
 	}
 
 	if(_stricmp(ptr,"RXMODE") == 0)
 	{
-		p_port = strtok(NULL, " \t\n\r");
-			
-		if (p_port == NULL) return (FALSE);
-
-		port = atoi(p_port);
-
-		if (Port != port) return TRUE;		// Not for us
-			
-
 		p_port = strtok(NULL, " \t\n\r");
 			
 		if (p_port == NULL) return (FALSE);
@@ -621,15 +638,6 @@ ProcessLine(char * buf,int Port)
 			
 		if (p_port == NULL) return (FALSE);
 
-		port = atoi(p_port);
-
-		if (Port != port) return TRUE;		// Not for us
-			
-
-		p_port = strtok(NULL, " \t\n\r");
-			
-		if (p_port == NULL) return (FALSE);
-
 		if(_stricmp(p_port,"RLI") == 0)
 		{
 			PCAPInfo[Port].RLITX=TRUE;
@@ -648,15 +656,6 @@ ProcessLine(char * buf,int Port)
 
 	if(_stricmp(ptr,"DEST") == 0)
 	{
-		p_port = strtok(NULL, " \t\n\r");
-			
-		if (p_port == NULL) return (FALSE);
-
-		port = atoi(p_port);
-
-		if (Port != port) return TRUE;		// Not for us
-			
-	
 		p_mac = strtok(NULL, " \t\n\r");
 		
 		if (p_mac == NULL) return (FALSE);
@@ -680,16 +679,7 @@ ProcessLine(char * buf,int Port)
 	}
 
 	if(_stricmp(ptr,"SOURCE") == 0)
-	{
-		p_port = strtok(NULL, " \t\n\r");
-			
-		if (p_port == NULL) return (FALSE);
-
-		port = atoi(p_port);
-
-		if (Port != port) return TRUE;		// Not for us
-			
-	
+	{	
 		p_mac = strtok(NULL, " \t\n\r");
 		
 		if (p_mac == NULL) return (FALSE);
@@ -704,7 +694,6 @@ ProcessLine(char * buf,int Port)
 		PCAPInfo[Port].EthSource[3]=d;
 		PCAPInfo[Port].EthSource[4]=e;
 		PCAPInfo[Port].EthSource[5]=f;
-
 
 	//	strcpy(Adapter,p_Adapter);
 

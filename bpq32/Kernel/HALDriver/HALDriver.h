@@ -106,6 +106,7 @@ struct TNCINFO
 	#define AMTOR 3
 
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+	char * RigConfigMsg;			// Message to pass to rig control
 
 };
 

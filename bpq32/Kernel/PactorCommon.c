@@ -1,6 +1,8 @@
 //
 //	Code Common to Pactor Modules
 
+#include <commctrl.h>
+
 #define BGCOLOUR RGB(236,233,216)
 
 BOOL MinimizetoTray = FALSE;
@@ -10,11 +12,12 @@ HBRUSH bgBrush;
 HINSTANCE hRigModule = 0;
 
 BOOL (FAR WINAPI * Rig_Command) ();
-BOOL (FAR WINAPI * Rig_Init) ();
+struct RIGINFO * (FAR WINAPI * RigConfig) ();
 BOOL (FAR WINAPI * Rig_Poll) ();
 VOID (FAR WINAPI * Rig_PTT) ();
 struct RIGINFO * (FAR WINAPI * Rig_GETPTTREC) ();
 struct ScanEntry ** (FAR WINAPI * CheckTimeBands) ();
+
 
 UCHAR * BPQDirectory;
 
@@ -26,6 +29,7 @@ static BOOL Minimized;				// Start Minimized Flag
 DllImport struct APPLCALLS APPLCALLTABLE[];
 DllImport char APPLS;
 DllImport struct BPQVECSTRUC * BPQHOSTVECPTR;
+DllImport char * PortConfig[33];
 
 RECT Rect;
 
@@ -33,11 +37,15 @@ struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34] = {NULL};		// Records are Malloc'd
 
-BOOL ReadConfigFile(char * filename);
-int ProcessLine(char * buf);
+BOOL ReadConfigFile(char * filename, int Port);
+int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+
+// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
+
+
 
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -257,6 +265,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 	char Key[80];
 	char Size[80];
 	int Top, Left;
+	HANDLE hDlg;
 
 	if (TNC->hDlg)
 	{
@@ -282,21 +291,17 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 
 	RegisterClass(&wc);
 
-	TNC->hDlg = CreateDialog(hInstance,ClassName,0,NULL);
+	TNC->hDlg = hDlg = CreateDialog(hInstance,ClassName,0,NULL);
 	
 #ifdef WINMOR
-	wsprintf(Title,"WINMOR Status - Port %d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+	wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 #else
-#ifdef HAL
-	wsprintf(Title,"HAL Status - COM%d", TNC->PortRecord->PORTCONTROL.IOBASE);
-#else
-	wsprintf(Title,"Pactor Status - COM%d", TNC->PortRecord->PORTCONTROL.IOBASE);
+	wsprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);
 #endif
-#endif
-	SetWindowText(TNC->hDlg, Title);
+	SetWindowText(hDlg, Title);
 
 	if (MinimizetoTray)
-		AddTrayMenuItem(TNC->hDlg, Title);
+		AddTrayMenuItem(hDlg, Title);
 
 
 	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
@@ -324,14 +329,46 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC)
 	Top = Rect.top;
 	Left = Rect.left;
 
-	GetWindowRect(TNC->hDlg, &Rect);	// Get the real size
+	GetWindowRect(hDlg, &Rect);	// Get the real size
 
-	MoveWindow(TNC->hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
 
 	if (Minimized)
-		ShowWindow(TNC->hDlg, SW_HIDE);
+		ShowWindow(hDlg, SW_HIDE);
 	else
-		ShowWindow(TNC->hDlg, SW_SHOWNORMAL);
+		ShowWindow(hDlg, SW_SHOWNORMAL);
+
+	if (TNC->RIG)
+	{
+		struct RIGINFO * RIG = TNC->RIG;
+		int RigRow = RigControlRow;
+
+		RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
+                 10, RigRow, 80,20, hDlg, NULL, hInstance, NULL);
+	
+		RIG->hCAT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 90, RigRow, 40,20, hDlg, NULL, hInstance, NULL);
+	
+		RIG->hFREQ = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 135, RigRow, 100,20, hDlg, NULL, hInstance, NULL);
+	
+		RIG->hMODE = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 240, RigRow, 60,20, hDlg, NULL, hInstance, NULL);
+	
+		RIG->hSCAN = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 300, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
+
+		RIG->hPTT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
+
+		//if (PORT->PortType == ICOM)
+		//{
+		//	wsprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
+		//	SetWindowText(RIG->hCAT, msg);
+		//}
+		SetWindowText(RIG->hLabel, RIG->RigName);
+
+	}
 
 	return TRUE;
 }
@@ -374,10 +411,40 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 }
 
 FILE *file;
+char * Config;
+char * ptr1, * ptr2;
 
-BOOL ReadConfigFile(char * fn)
+BOOL ReadConfigFile(char * fn, int Port)
 {
 	char buf[256],errbuf[256];
+	
+	Config = PortConfig[Port];
+
+	if (Config)
+	{
+		// Using config from bpq32.cfg
+
+		ptr1 = Config;
+
+		ptr2 = strchr(ptr1, 13);
+		while(ptr2)
+		{
+			memcpy(buf, ptr1, ptr2 - ptr1);
+			buf[ptr2 - ptr1] = 0;
+			ptr1 = ptr2 + 2;
+			ptr2 = strchr(ptr1, 13);
+
+			strcpy(errbuf,buf);			// save in case of error
+	
+			if (!ProcessLine(buf, Port))
+			{
+				WritetoConsole("Bad config record ");
+				WritetoConsole(errbuf);
+			}
+		}
+	}
+	else
+	{
 
 	UCHAR Value[100];
 
@@ -405,7 +472,7 @@ BOOL ReadConfigFile(char * fn)
 	{
 		strcpy(errbuf,buf);			// save in case of error
 	
-		if (!ProcessLine(buf))
+		if (!ProcessLine(buf, Port))
 		{
 			WritetoConsole(" Bad config record ");
 			WritetoConsole(errbuf);
@@ -413,13 +480,29 @@ BOOL ReadConfigFile(char * fn)
 	}
 
 	fclose(file);
+	file = NULL;
+	}
 	return (TRUE);
 }
 GetLine(char * buf)
 {
 loop:
-	if (fgets(buf, 255, file) == NULL)
-		return 0;
+
+	if (file)
+	{
+		if (fgets(buf, 255, file) == NULL)
+			return 0;
+	}
+	else
+	{
+		if (ptr2 == NULL) 
+			return 0;
+
+		memcpy(buf, ptr1, ptr2 - ptr1 + 2);
+		buf[ptr2 - ptr1 + 2] = 0;
+		ptr1 = ptr2 + 2;
+		ptr2 = strchr(ptr1, 13);
+	}
 
 	if (buf[0] < 0x20) goto loop;
 	if (buf[0] == '#') goto loop;
@@ -432,7 +515,7 @@ loop:
 	return 1;
 }
 
-ProcessLine(char * buf)
+ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;
@@ -442,6 +525,8 @@ ProcessLine(char * buf)
 	int len=510;
 	struct TNCINFO * TNC;
 	char errbuf[256];
+
+	strcpy(errbuf, buf);
 
 	ptr = strtok(buf, " \t\n\r");
 
@@ -453,20 +538,81 @@ ProcessLine(char * buf)
 
 	ptr = strtok(NULL, " \t\n\r");
 
+	if (_stricmp(buf, "ADDR") == 0)			// Winmor Using BPQ32 COnfig
+	{
+		BPQport = Port;
+		p_ipad = ptr;
+	}
+	else
+	if (_stricmp(buf, "APPL") == 0)			// Using BPQ32 COnfig
+	{
+		BPQport = Port;
+		p_cmd = ptr;
+	}
+	else
+	if (_stricmp(buf, "PORT") != 0)			// Using Old Config
+	{
+		// New config without a PORT or APPL  - this is a Config Command
+
+		strcpy(buf, errbuf);
+
+		BPQport = Port;
+
+		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+		memset(TNC, 0, sizeof(struct TNCINFO));
+
+		TNC->InitScript = malloc(1000);
+		TNC->InitScript[0] = 0;
+#ifdef AEA
+		strcpy(TNC->InitScript, "RESTART\r");
+#endif
+		goto ConfigLine;
+	}
+	else
+
+	{
+
+		// Old Config from file
+
 	BPQport=0;
-
 	BPQport = atoi(ptr);
+	
+	p_cmd = strtok(NULL, " \t\n\r");
 
+	#ifdef WINMOR
 
+		p_ipad = strtok(NULL, " \t\n\r");
+
+	#endif
+
+	if (Port && Port != BPQport)
+	{
+		// Want a particular port, and this isn't it
+
+		while(TRUE)
+		{
+			if (GetLine(buf) == 0)
+				return TRUE;
+
+			if (memcmp(buf, "****", 4) == 0)
+				return TRUE;
+
+		}
+	}
+	}
 	if(BPQport > 0 && BPQport < 33)
 	{
 		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
 		memset(TNC, 0, sizeof(struct TNCINFO));
 
-#ifdef WINMOR
+		TNC->InitScript = malloc(1000);
+		TNC->InitScript[0] = 0;
+#ifdef AEA
+		strcpy(TNC->InitScript, "RESTART\r");
+#endif
 
-		p_ipad = strtok(NULL, " \t\n\r");
-		
+#ifdef WINMOR
+	
 		if (p_ipad == NULL) return (FALSE);
 	
 		p_port = strtok(NULL, " \t\n\r");
@@ -514,8 +660,6 @@ ProcessLine(char * buf)
 		else
 			p_cmd = ptr;
 
-
-#else
 		p_cmd = strtok(NULL, " \t\n\r");
 #endif			
 		if (p_cmd != NULL)
@@ -526,22 +670,11 @@ ProcessLine(char * buf)
 
 		// Read Initialisation lines
 
-
-		TNC->InitScript = malloc(1000);
-
-		TNC->InitScript[0] = 0;
-
-#ifdef AEA
-
-		strcpy(TNC->InitScript, "RESTART\r");
-
-#endif
-
 		while(TRUE)
 		{
 			if (GetLine(buf) == 0)
 				return TRUE;
-
+ConfigLine:
 			strcpy(errbuf, buf);
 
 			if (memcmp(buf, "****", 4) == 0)
@@ -554,15 +687,22 @@ ProcessLine(char * buf)
 				*ptr = 0;
 			}
 
+			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
+			{
 #ifdef SCS
-
-			if (_memicmp(buf, "RIGCONTROL COM", 14) == 0)
+				if (_memicmp(buf, "RIGCONTROL VCOM", 15) == 0)
 	
-				// SCS Virtual COM Channel
+					// SCS Virtual COM Channel
 
-				TNC->VCOMPort = atoi(&buf[14]);
+					TNC->VCOMPort = atoi(&buf[15]);		
+#endif
+				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
+
+				TNC->RigConfigMsg = _strdup(buf);
+			}
 			else
-				
+
+#ifdef SCS				
 			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)
 	
 				// Packet Channels
@@ -733,7 +873,7 @@ BOOL LoadRigDriver()
 	}
 	else
 	{
-		Rig_Init = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Init@0");
+		RigConfig = (struct RIGINFO * (__stdcall *)())GetProcAddress(hRigModule,"_RigConfig@8");
 		Rig_Poll = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Poll@0");
 		Rig_Command = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Command@8");
 		Rig_PTT = (VOID (__stdcall *)())GetProcAddress(hRigModule,"_Rig_PTT@8");
@@ -912,6 +1052,8 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 			Debugprintf("Building Freq List");
 
+			Mode = NARROWMODE;
+
 			__try {
 
 			while(TimeBands[1])
@@ -930,7 +1072,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 					if (Freqptr[0]->Bandwidth == 'W')
 						Mode = WIDEMODE;
-					else
+					else if (Freqptr[0]->Bandwidth == 'N')
 						Mode = NARROWMODE;
 
 					HHStart = TimeBands[1]->Start /3600;
@@ -1034,3 +1176,5 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 }
 
 #endif
+
+

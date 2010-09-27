@@ -107,6 +107,10 @@
 //		Clear data connections if no data for 60 mins
 //		Repaint MH Window after clear.
 
+// Version 1.15.5 Spetmber 2010
+
+//		Add option to get config from bpq32.dll
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <winsock2.h>
@@ -122,6 +126,7 @@
 #define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
+#include "AsmStrucs.h"
 
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_DATA WM_USER + 2
@@ -151,6 +156,9 @@
 //unsigned long _beginthread( void( *start_address )( void *), unsigned stack_size, char * arglist);
 
 DllImport int ResetExtDriver(int num);
+DllImport BOOL ProcessConfig();
+DllImport VOID FreeConfig();
+DllImport char * PortConfig[33];
 
 
 //UCHAR * APIENTRY GetBPQDirectory();
@@ -172,7 +180,7 @@ unsigned int find_arp(unsigned char * call);
 BOOL add_arp_entry(unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode);
 BOOL add_bc_entry(unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
-BOOL ReadConfigFile(char * filename);
+BOOL ReadConfigFile(char * filename, int Port);
 int ProcessLine(char * buf);
 int CheckKeepalives();
 BOOL CopyScreentoBuffer(char * buff);
@@ -345,6 +353,8 @@ int AttachedProcesses=0;
 
 HWND hResWnd, hMHWnd, ConfigWnd;
 
+int Port;
+
 BOOL GotMsg;
 
 HANDLE STDOUT=0;
@@ -352,7 +362,7 @@ DWORD n;
 
 int baseline=0;
 
-int InitAXIP(void);
+int InitAXIP(int Port);
 BOOL InitWS2(void);
 
 RECT ResRect;
@@ -743,7 +753,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	case 4:				// reinit
 
 		CloseSockets();
-		ReadConfigFile("BPQAXIP.CFG");
+		ReadConfigFile("BPQAXIP.CFG", port);
 		_beginthread(OpenSockets, 0, NULL );
 		PostMessage(hResWnd, WM_TIMER,0,0);
 
@@ -805,14 +815,16 @@ DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 {
 	WritetoConsole("AXIP ");
 
+	Port = PortEntry->PORTNUMBER;
+
 	if (!InitWS2()) return 0;
 
-	if (!InitAXIP()) return 0;
+	if (!InitAXIP(Port)) return 0;
 
 	return ((int) ExtProc);
 }
 
-BOOL InitWS2(void)
+BOOL InitWS2()
 {
     int           Error;              // catches return value of WSAStartup
     WORD          VersionRequested;   // passed to WSAStartup
@@ -857,7 +869,7 @@ struct tagVS_FIXEDFILEINFO * HG;
 
 char VersionString[100];
 
-InitAXIP()
+InitAXIP(int Port)
 {
 	HRSRC RH;
   	struct tagVS_FIXEDFILEINFO * HG;
@@ -889,7 +901,7 @@ InitAXIP()
 	//	Read config first, to get UDP info if needed
 	//
 
-	if (!ReadConfigFile("BPQAXIP.CFG"))
+	if (!ReadConfigFile("BPQAXIP.CFG", Port))
 		return (FALSE);
 
 	MinimizetoTray=GetMinimizetoTrayFlag();
@@ -1228,7 +1240,11 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		if (wmId == BPQREREAD)
 		{
 			CloseSockets();
-			ReadConfigFile("BPQAXIP.CFG");
+
+			ProcessConfig();
+			FreeConfig();
+
+			ReadConfigFile("BPQAXIP.CFG", Port);
 			_beginthread(OpenSockets, 0, NULL );
 			PostMessage(hResWnd, WM_TIMER,0,0);
 			InvalidateRect(hWnd,NULL,TRUE);
@@ -1565,7 +1581,7 @@ void ResolveNames( void *dummy )
 
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Update");
 
-	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"ReRead AXIP.cfg");
+	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"ReRead Config");
 	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Add Entry");
 
 	DrawMenuBar(hResWnd);	
@@ -1901,7 +1917,7 @@ crcloop:
 
   }
 
-BOOL ReadConfigFile(char * fn)
+BOOL ReadConfigFile(char * fn, int Port)
 {
 
 /* Linux Format
@@ -1936,8 +1952,44 @@ broadcast QST-0 NODES-0
 	HKEY hKey=0;
 	UCHAR Value[100];
 	UCHAR * BPQDirectory;
+	char * Config;
+
+	Config = PortConfig[Port];
+
+	if (Config)
+	{
+		// Using config from bpq32.cfg
+
+		char * ptr1 = Config, * ptr2;
+
+		arp_table_len=0;
+		NumberofBroadcastAddreses = 0;
+		NumberofUDPPorts=0;
+		needip=FALSE;
+
+		ptr2 = strchr(ptr1, 13);
+		while(ptr2)
+		{
+			memcpy(buf, ptr1, ptr2 - ptr1);
+			buf[ptr2 - ptr1] = 0;
+			ptr1 = ptr2 + 2;
+			ptr2 = strchr(ptr1, 13);
+
+			strcpy(errbuf,buf);			// save in case of error
+	
+			if (!ProcessLine(buf))
+			{
+				WritetoConsole("BPQAXIP - Bad config record ");
+				WritetoConsole(errbuf);
+			}
+		}
+	}
+	else
+	{
+	
 
 	BPQDirectory=GetBPQDirectory();
+
 
 	wsprintf(errbuf, "BPQAXIP BPQ Directory = %s Filename = %s\n", BPQDirectory, fn);
 	OutputDebugString(errbuf);
@@ -1987,7 +2039,7 @@ broadcast QST-0 NODES-0
 	}
 	
 	fclose(file);
-
+	}
 	if (NumberofUDPPorts > MAXUDPPORTS)
 	{
 		n=wsprintf(buf,"BPQAXIP - Too many UDP= lines - max is %d\n",MAXUDPPORTS);

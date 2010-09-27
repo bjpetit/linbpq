@@ -84,7 +84,7 @@ VOID ProcessKenwoodFrame(struct PORTINFO * PORT, int Length);
 VOID KenwoodPoll(struct PORTINFO * PORT);
 VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna);
 VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr);
-
+VOID SetupScanInterLockGroups(struct RIGINFO *RIG);
 
 int Q_ADD_RIG(UINT *Q,UINT *BUFF);
 
@@ -343,12 +343,12 @@ DllExport struct ScanEntry ** APIENTRY CheckTimeBands(struct RIGINFO * RIG)
 FILE *file;
 
 char errbuf[256];
-
+/*
 BOOL ReadConfigFile()
 {
 	char buf[256];
 
-	NumberofPorts = 0;
+//	NumberofPorts = 0;
 
 	if ((file = fopen(CFGFN,"r")) == NULL)
 		return (TRUE);
@@ -404,7 +404,6 @@ ProcessLine(char * buf)
 	char * CmdPtr;
 	char * Context;
 	int Portno;
-	struct PORTCONTROL * PortRecord;
 	char Split, Data;
 	char Bandwidth, Antenna;
 	struct TimeScan * SaveBand;
@@ -508,27 +507,7 @@ NextPort:
 				Portno = atoi(ptr);
 					
 				RIG->BPQPort |=  (1 << Portno);
-
-				// See if other ports in same scan/interlock group
-
-				PortRecord = GetPortTableEntry(Portno);
-
-				if (PortRecord->PORTINTERLOCK)
-				{
-					// Interlocked Ports
-
-					int LockGroup = PortRecord->PORTINTERLOCK;
-					
-					PortRecord = PortRecord->PORTPOINTER;
-					
-					while (PortRecord)
-					{
-						if (LockGroup == PortRecord->PORTINTERLOCK)
-							RIG->BPQPort |=  (1 << PortRecord->PORTNUMBER);
-
-						PortRecord = PortRecord->PORTPOINTER;
-					}
-				}
+				RIG->PortNum = Portno;
 
 				if (PORT->PortType == PTT || PORT->PortType == ANT)
 				{
@@ -807,7 +786,7 @@ NextPort:
 	
 }
 
-
+*/
 // Get buffer from Queue
 
 UINT * Q_REM_RIG(UINT *Q)
@@ -1386,7 +1365,8 @@ DllExport BOOL APIENTRY Rig_Init()
 	int i, p;
 	struct RIGINFO * RIG;
 
-	if (BPQDirectory[0] == 0)
+/*
+if (BPQDirectory[0] == 0)
 	{
 		strcpy(CFGFN,"RigControl.cfg");
 	}
@@ -1398,7 +1378,7 @@ DllExport BOOL APIENTRY Rig_Init()
 	}
 	
 	ReadConfigFile();
-
+*/
 	if (NumberofPorts == 0)
 	{
 		return TRUE;
@@ -1413,7 +1393,7 @@ DllExport BOOL APIENTRY Rig_Init()
 		ReleaseBuffer(&BufferPool[100*i]);
 	}
 
-	CreateRigWindow();
+//	CreateRigWindow();
 
 	Row = 0;
 
@@ -1421,7 +1401,7 @@ DllExport BOOL APIENTRY Rig_Init()
 	{
 		PORT = PORTInfo[p];
 		
-		CreateDisplay(PORT);
+//		CreateDisplay(PORT);
 
 		OpenCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
 	}
@@ -1438,6 +1418,8 @@ DllExport BOOL APIENTRY Rig_Init()
 			struct _EXTPORTDATA * PortEntry;
 
 			RIG = &PORT->Rigs[i];
+
+			SetupScanInterLockGroups(RIG);
 
 			// Get record for each port in Port Bitmap
 
@@ -1490,7 +1472,7 @@ DllExport BOOL APIENTRY Rig_Init()
 				CheckTimeBands(RIG);		// Set initial timeband
 		}
 	}
-	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
+//	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
 
 	WritetoConsole("\nRig Control Enabled\n");
 
@@ -1501,10 +1483,6 @@ DllExport BOOL APIENTRY Rig_Close()
 {
 	struct PORTINFO * PORT;
 	int p;
-	int retCode, disp;
-	HKEY hKey=0;
-	char Size[80];
-	char Key[80];
 
 	for (p = 0; p < NumberofPorts; p++)
 	{
@@ -1515,9 +1493,12 @@ DllExport BOOL APIENTRY Rig_Close()
 		CloseHandle(PORT->hDevice);
 	}
 
+	NumberofPorts = 0;		// For possible restart
+
 	if (hDlg == NULL)
 		return 1;
 
+/*
 	ShowWindow(hDlg, SW_RESTORE);
 	GetWindowRect(hDlg, &Rect);
 
@@ -1538,7 +1519,7 @@ DllExport BOOL APIENTRY Rig_Close()
 	}
 
 	DestroyWindow(hDlg);
-	
+	*/
 	return TRUE;
 }
 
@@ -2437,6 +2418,9 @@ VOID CreatePortLine(struct PORTINFO * PORT)
 
 int CreateICOMLine(struct RIGINFO * RIG)
 {
+	if (RIG->hLabel)
+		return 0;
+
 	Row +=20;
 	
 	RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
@@ -2941,6 +2925,437 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna)
 	}	
 }
 
+// Called by Port Driver .dll to add/update rig info 
+
+// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
+
+
+DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
+{
+	int i;
+	char * ptr;
+	int COMPort;
+	char * RigName;
+	int RigAddr;
+	struct PORTINFO * PORT;
+	struct RIGINFO * RIG;
+	struct ScanEntry ** FreqPtr;
+	char * CmdPtr;
+	char * Context;
+	char Split, Data;
+	char Bandwidth, Antenna;
+	struct TimeScan * SaveBand;
+
+	_strupr(buf);
+
+	ptr = strtok_s(&buf[10], " \t\n\r", &Context);
+
+	if (ptr == NULL) return FALSE;
+
+	if (memcmp(ptr, "AUTH", 4) == 0)
+	{
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+		if (ptr == NULL) return FALSE;
+		if (strlen(ptr) > 100) return FALSE;
+
+		strcpy(AuthPassword, ptr);
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+	}
+
+	if (memcmp(ptr, "COM", 3) == 0)
+		COMPort = atoi(&ptr[3]);
+	else if (memcmp(ptr, "VCOM", 4) == 0)
+		COMPort = atoi(&ptr[4]);
+	else
+		return FALSE;
+
+	// See if port is already defined. We may be adding another radio (ICOM only) or updating an existing one
+
+	for (i = 0; i < NumberofPorts; i++)
+	{
+		PORT = PORTInfo[i];
+
+		if (PORT->IOBASE == COMPort)
+			goto PortFound;
+	}
+
+	// Allocate a new one
+
+	PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct PORTINFO));
+	memset(PORT, 0, sizeof(struct PORTINFO));
+
+	PORT->IOBASE = COMPort;
+
+PortFound:
+
+	ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+	if (ptr == NULL) return (FALSE);
+
+	PORT->SPEED = atoi(ptr);
+
+	ptr = strtok_s(NULL, " \t\n\r", &Context);
+	if (ptr == NULL) return (FALSE);
+
+//		if (strcmp(ptr, "ICOM") == 0 || strcmp(ptr, "YAESU") == 0 
+//			|| strcmp(ptr, "KENWOOD") == 0 || strcmp(ptr, "PTTONLY") == 0 || strcmp(ptr, "ANTENNA") == 0)
+
+			// RADIO IC706 4E 5 14.103/U1 14.112/u1 18.1/U1 10.12/l1
+			// Read RADIO Lines
+
+	if (strcmp(ptr, "ICOM") == 0)
+		PORT->PortType = ICOM;
+	else
+	if (strcmp(ptr, "YAESU") == 0)
+		PORT->PortType = YAESU;
+	else
+	if (strcmp(ptr, "KENWOOD") == 0)
+		PORT->PortType = KENWOOD;
+	else
+	if (strcmp(ptr, "PTTONLY") == 0)
+		PORT->PortType = PTT;
+	else
+	if (strcmp(ptr, "ANTENNA") == 0)
+		PORT->PortType = ANT;
+	else
+		return FALSE;
+
+	ptr = strtok_s(NULL, " \t\n\r", &Context);
+	if (ptr == NULL) return (FALSE);
+
+	if (strlen(ptr) > 9) return FALSE;
+	
+	RigName =  ptr;
+
+	// If ICOM, we may be adding a new Rig
+
+	ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+	if 	(PORT->PortType == ICOM)
+	{
+		if (ptr == NULL) return (FALSE);
+		sscanf(ptr, "%x", &RigAddr);
+
+		// See if already defined
+
+		for (i = 0; i < PORT->ConfiguredRigs; i++)
+		{
+			RIG = &PORT->Rigs[i];
+
+			if (RIG->RigAddr == RigAddr)
+				goto RigFound;
+		}
+
+		// Allocate a new one
+
+		RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
+		RIG->RigAddr = RigAddr;
+
+	RigFound:
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+		if (ptr == NULL) return (FALSE);
+	}
+	else
+	{
+		// Only allows one RIG
+
+		PORT->ConfiguredRigs = 1;
+		RIG = &PORT->Rigs[0];
+	}
+	
+	strcpy(RIG->RigName, RigName);
+
+	RIG->PortNum = Port;
+	RIG->BPQPort |=  (1 << Port);
+
+	if (PORT->PortType == PTT || PORT->PortType == ANT)
+		return RIG;
+
+	if (ptr == NULL) return (FALSE);
+	RIG->ScanFreq = atoi(ptr);
+
+	RIG->FreqText = _strdup(Context);
+
+	ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		// Frequency List
+
+		if (ptr)
+			if (ptr[0] == ';' || ptr[0] == '#')
+				ptr = NULL;
+
+		if (ptr != NULL)
+		{
+			struct TimeScan * Band = AllocateTimeRec(RIG);
+			SaveBand = Band;
+
+			Band->Start = 0;
+			Band->End = 84540;	//23:59
+			FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
+			memset(FreqPtr, 0, 1000);
+		}
+
+		while(ptr)
+		{
+			int ModeNo;
+			double Freq = 0.0;
+			char FreqString[80]="";
+			char * Valchar;
+			char * Modeptr;
+			int dec, sign;
+
+			if (ptr[0] == ';' || ptr[0] == '#')
+				break;
+
+			Modeptr = strchr(ptr, '/');
+					
+			if (Modeptr)
+				*Modeptr++ = 0;
+
+			if (strchr(ptr, ':'))
+			{
+				// New TimeBand
+
+				struct TimeScan * Band;
+						
+				Band = AllocateTimeRec(RIG);
+
+				*FreqPtr = (struct ScanEntry *)0;		// Terminate Last Band
+						
+				Band->Start = (atoi(ptr) * 3600) + (atoi(&ptr[3]) * 60);
+				Band->End = 84540;	//23:59
+				SaveBand->End = Band->Start - 60;
+
+				FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
+				memset(FreqPtr, 0, 1000);
+
+				ptr = strtok_s(NULL, " \t\n\r", &Context);
+											
+				Modeptr = strchr(ptr, '/');
+					
+				if (Modeptr)
+					*Modeptr++ = 0;
+			}
+
+			Freq = atof(ptr);
+
+			// Mode can include 1/2/3 for Icom Filers. W/N for Winmor/Pactor Bandwidth, and +/-/S for Repeater Shift (S = Simplex) 
+			// First is always Mode
+
+			Split = Data = Bandwidth = Antenna = 0;
+
+			if (Modeptr)
+			{
+				if (strchr(&Modeptr[1], '+'))
+					Split = '+';
+				else if (strchr(&Modeptr[1], '-'))
+					Split = '-';
+				else if (strchr(&Modeptr[1], 'S'))
+					Split = 'S';
+				else if (strchr(&Modeptr[1], 'D'))
+					Data = 1;
+						
+				if (strchr(&Modeptr[1], 'W'))
+					Bandwidth = 'W';
+				else if (strchr(&Modeptr[1], 'N'))
+					Bandwidth = 'N';
+
+				if (strstr(&Modeptr[1], "A1"))
+					Antenna = '1';
+				else if (strstr(&Modeptr[1], "A2"))
+					Antenna = '2';
+				if (strstr(&Modeptr[1], "A3"))
+					Antenna = '3';
+				else if (strstr(&Modeptr[1], "A4"))
+					Antenna = '4';
+
+				switch(PORT->PortType)
+						{
+						case ICOM:						
+						
+							for (ModeNo = 0; ModeNo < 8; ModeNo++)
+							{
+								if (Modes[ModeNo][0] == Modeptr[0])
+									break;
+							}
+							break;
+
+						case YAESU:						
+						
+							for (ModeNo = 0; ModeNo < 16; ModeNo++)
+							{
+								if (YaesuModes[ModeNo][0] == Modeptr[0])
+									break;
+							}
+							break;
+
+						case KENWOOD:						
+						
+							for (ModeNo = 0; ModeNo < 8; ModeNo++)
+							{
+								if (KenwoodModes[ModeNo][0] == Modeptr[0])
+									break;
+							}
+							break;
+						}
+					}
+
+					Freq = Freq * 1000000.0;
+
+					Valchar = _fcvt(Freq, 0, &dec, &sign);
+
+					if (dec == 9)	// 10-100
+						wsprintf(FreqString, "%s", Valchar);
+					else
+					if (dec == 8)	// 10-100
+						wsprintf(FreqString, "0%s", Valchar);		
+					else
+					if (dec == 7)	// 1-10
+						wsprintf(FreqString, "00%s", Valchar);
+					else
+					if (dec == 6)	// 0.1 - 1
+						wsprintf(FreqString, "000%s", Valchar);
+					else
+					if (dec == 5)	// 0.01 - .1
+						wsprintf(FreqString, "000%s", Valchar);
+
+					FreqPtr[0] = malloc(sizeof(struct ScanEntry));
+					memset(FreqPtr[0], 0, sizeof(struct ScanEntry));
+
+					FreqPtr[0]->Freq = Freq;
+					FreqPtr[0]->Bandwidth = Bandwidth;
+					FreqPtr[0]->Antenna = Antenna;
+
+					CmdPtr = FreqPtr[0]->Cmd1 = malloc(40);
+
+					if 	(PORT->PortType == ICOM)
+					{
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = RIG->RigAddr;
+					*(CmdPtr++) = 0xE0;
+					*(CmdPtr++) = 0x5;		// Set frequency command
+
+					// Need to convert two chars to bcd digit
+	
+					*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
+					*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
+					*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
+					*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+					*(CmdPtr++) = (FreqString[0] - 48);
+
+					*(CmdPtr++) = 0xFD;
+
+					if (Modeptr)
+					{						
+						CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = 0xFE;
+						*(CmdPtr++) = RIG->RigAddr;
+						*(CmdPtr++) = 0xE0;
+						*(CmdPtr++) = 0x6;		// Set Mode
+						*(CmdPtr++) = ModeNo;
+						*(CmdPtr++) = Modeptr[1] - '0';
+						*(CmdPtr++) = 0xFD;
+
+						if (Split)
+						{
+							CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+							FreqPtr[0]->Cmd3Len = 7;
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = RIG->RigAddr;
+							*(CmdPtr++) = 0xE0;
+							*(CmdPtr++) = 0xF;		// Set Mode
+							if (Split == 'S')
+								*(CmdPtr++) = 0x10;
+							else
+								if (Split == '+')
+									*(CmdPtr++) = 0x12;
+							else
+								if (Split == '-')
+									*(CmdPtr++) = 0x11;
+			
+							*(CmdPtr++) = 0xFD;
+						}
+						else
+						{
+							if (Data)
+							{
+								CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+								FreqPtr[0]->Cmd3Len = 8;
+								*(CmdPtr++) = 0xFE;
+								*(CmdPtr++) = 0xFE;
+								*(CmdPtr++) = RIG->RigAddr;
+								*(CmdPtr++) = 0xE0;
+								*(CmdPtr++) = 0x1a;		
+								*(CmdPtr++) = 0x6;		// Set Data
+								*(CmdPtr++) = 0x1;		//On		
+								*(CmdPtr++) = 0xFD;
+							}
+						}
+					}
+					}
+					else if	(PORT->PortType == YAESU)
+					{	
+						//Send Mode first - changing mode can change freq
+
+						*(CmdPtr++) = ModeNo;
+						*(CmdPtr++) = 0;
+						*(CmdPtr++) = 0;
+						*(CmdPtr++) = 0;
+						*(CmdPtr++) = 7;
+
+						*(CmdPtr++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
+						*(CmdPtr++) = (FreqString[3] - 48) | ((FreqString[2] - 48) << 4);
+						*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
+						*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
+						*(CmdPtr++) = 1;
+					
+					}
+					else if	(PORT->PortType == KENWOOD)
+					{	
+						CmdPtr += wsprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+					}
+
+					*(CmdPtr) = 0;
+
+		FreqPtr++;
+
+		RIG->ScanCounter = 20;
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);		// Next Freq
+	}
+
+	return RIG;
+}
+
+VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
+{
+	struct PORTCONTROL * PortRecord;
+
+	// See if other ports in same scan/interlock group
+
+	PortRecord = GetPortTableEntry(RIG->PortNum);
+
+	if (PortRecord->PORTINTERLOCK)		// Port has Interlock defined
+	{
+		// Find records in same Interlock Group
+
+		int LockGroup = PortRecord->PORTINTERLOCK;
+					
+		PortRecord = PortRecord->PORTPOINTER;
+					
+		while (PortRecord)
+		{
+			if (LockGroup == PortRecord->PORTINTERLOCK)
+				RIG->BPQPort |=  (1 << PortRecord->PORTNUMBER);
+
+			PortRecord = PortRecord->PORTPOINTER;
+		}
+	}
+}
 
 
 /*

@@ -71,6 +71,8 @@ typedef struct TNCINFO
 
 	struct _EXTPORTDATA * PortRecord;
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record (For PTT)
+	char * RigConfigMsg;			// Message to pass to rig control
+
 	int PTTMode;					// PTT Mode Flags
 
 	int WIMMORPID;
