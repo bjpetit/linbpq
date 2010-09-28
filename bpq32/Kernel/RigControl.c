@@ -3027,11 +3027,38 @@ PortFound:
 	
 	RigName =  ptr;
 
+	// If PTTONLY, may be defining another rig using the other control line
+
+	if (PORT->PortType == PTT)
+	{
+		// See if already defined
+
+		for (i = 0; i < PORT->ConfiguredRigs; i++)
+		{
+			RIG = &PORT->Rigs[i];
+
+			if (RIG->PortNum == Port)
+				goto PTTFound;
+		}
+
+		// Allocate a new one
+
+		RIG = &PORT->Rigs[PORT->ConfiguredRigs++];
+
+	PTTFound:
+
+		strcpy(RIG->RigName, RigName);
+		RIG->PortNum = Port;
+		RIG->BPQPort |=  (1 << Port);
+
+		return RIG;
+	}
+
 	// If ICOM, we may be adding a new Rig
 
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 
-	if 	(PORT->PortType == ICOM)
+	if (PORT->PortType == ICOM)
 	{
 		if (ptr == NULL) return (FALSE);
 		sscanf(ptr, "%x", &RigAddr);

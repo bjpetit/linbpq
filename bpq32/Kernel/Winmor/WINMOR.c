@@ -1214,7 +1214,7 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_KILL, "Kill Winmor TNC");
 	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTART, "Kill and Restart Winmor TNC");
-	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after failed Transfer");
+	AppendMenu(TNC->hPopMenu, MF_STRING, WINMOR_RESTARTAFTERFAILURE, "Restart TNC after each Connection");
 	
 	CheckMenuItem(TNC->hPopMenu, WINMOR_RESTARTAFTERFAILURE, (RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
 
