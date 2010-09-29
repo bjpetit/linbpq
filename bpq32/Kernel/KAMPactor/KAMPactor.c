@@ -206,7 +206,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
     
 	case DLL_PROCESS_DETACH:
 
-		for (i=1; i<17; i++)
+		for (i=1; i<33; i++)
 		{
 			TNC = TNCInfo[i];
 			if (TNC == NULL)
@@ -232,6 +232,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 				RegCloseKey(hKey);
 			}
+			if (MinimizetoTray)	
+				DeleteTrayMenuItem(TNC->hDlg);
 		}
 		return 1;
 	}

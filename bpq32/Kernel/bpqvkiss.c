@@ -38,20 +38,17 @@
 #include "bpqvkiss.h"
 #include "ASMStrucs.h"
 
-#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
-#define EXTDLL			// Use GetMuduleHandle instead of LoadLibrary 
+//#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
+//#define EXTDLL			// Use GetMuduleHandle instead of LoadLibrary 
 #include "bpq32.h"
  
-#define DllImport	__declspec( dllimport )
-#define DllExport	__declspec( dllexport )
 
-
-int	ASYINIT(int comport, int speed, int bpqport);
+static int	ASYINIT(int comport, int speed, int bpqport);
 int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int GetRXMessage(int port,UCHAR * buff);
 void CheckReceivedData(PVCOMINFO  pVCOMInfo);
-int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength );
-BOOL WriteCommBlock(int port, LPSTR lpByte , DWORD dwBytesToWrite);
+static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength );
+static BOOL WriteCommBlock(int port, LPSTR lpByte , DWORD dwBytesToWrite);
 
 PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 
@@ -60,35 +57,10 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
-BOOL Win98 = FALSE;
+static BOOL Win98 = FALSE;
 
-HANDLE STDOUT=0;
 
-BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
-{
-	switch( ul_reason_being_called )
-	{
-	case DLL_PROCESS_ATTACH:
-
-		return 1;
-   		
-	case DLL_THREAD_ATTACH:
-		
-		return 1;
-    
-	case DLL_THREAD_DETACH:
-	
-		return 1;
-    
-	case DLL_PROCESS_DETACH:
-	
-		return 1;
-	}
- 
-	return 1;
-}
-
-DllExport int ExtProc(int fn, int port,unsigned char * buff)
+static int ExtProc(int fn, int port,unsigned char * buff)
 {
 	int len,txlen=0;
 	char txbuff[1000];
@@ -137,7 +109,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 }
 
-DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
+UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry)
 {
 	char msg[80];
 	
@@ -145,8 +117,6 @@ DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 	//	Will be called once for each port to be mapped to a BPQ Virtual COM Port
 	//	The VCOM port number is in IOBASE
 	//
-
-	GetAPI();
 
 	wsprintf(msg,"VKISS COM%d", PortEntry->IOBASE);
 	WritetoConsole(msg);
@@ -157,10 +127,10 @@ DllExport int APIENTRY ExtInit(struct PORTCONTROL *  PortEntry)
 	
 	ASYINIT(PortEntry->IOBASE,9600, PortEntry->PORTNUMBER);
 
-	return ((int) ExtProc);
+	return ((UINT) ExtProc);
 }
 
-int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
+static int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
 	int i,txptr=0;
 	UCHAR c;
@@ -243,7 +213,7 @@ int	ASYINIT(int comport, int speed, int bpqport)
 	return (TRUE) ;
 }
 
-int GetRXMessage(int port,UCHAR * buff)
+static int GetRXMessage(int port,UCHAR * buff)
 {
 	int len;
 	PVCOMINFO pVCOMInfo ;
@@ -289,7 +259,7 @@ int GetRXMessage(int port,UCHAR * buff)
 	return 0;					// nothing doing
 }
 
-void CheckReceivedData(PVCOMINFO pVCOMInfo)
+static void CheckReceivedData(PVCOMINFO pVCOMInfo)
 {
  	UCHAR c;
 
@@ -364,7 +334,7 @@ void CheckReceivedData(PVCOMINFO pVCOMInfo)
  	return;
 }
 
-PVCOMINFO CreateInfo( int port,int speed, int bpqport )
+static PVCOMINFO CreateInfo( int port,int speed, int bpqport )
 {
    PVCOMINFO pVCOMInfo ;
 
@@ -386,7 +356,7 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )
 	return (pVCOMInfo);
 }
 
-BOOL NEAR DestroyTTYInfo( int port )
+static BOOL NEAR DestroyTTYInfo( int port )
 {
    PVCOMINFO pVCOMInfo ;
 
@@ -402,7 +372,7 @@ BOOL NEAR DestroyTTYInfo( int port )
 } 
 
 
-int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
+static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
 {
 	DWORD      dwLength;
 	
@@ -419,7 +389,7 @@ int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
 
 }
 
-BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
+static BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
 {
 	ULONG bytesReturned;
 

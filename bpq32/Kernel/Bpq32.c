@@ -325,6 +325,11 @@ DllExport WORD L4T1 = 60;
 DllExport struct APPLCALLS APPLCALLTABLE[NumberofAppls];
 DllExport char * APPLS;
 
+UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI AXIPExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI ETHERExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
+
 extern char AUTOSAVE;
 
 extern char MYNODECALL;	// 10 chars,not null terminated
@@ -367,6 +372,9 @@ BOOL APIENTRY Rig_Init();
 BOOL APIENTRY Rig_Close();
 BOOL APIENTRY Rig_Poll();
 BOOL APIENTRY Rig_Command();
+
+VOID IPClose();
+VOID AXIPClose();
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -473,6 +481,7 @@ HANDLE Mutex;
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
 
 BOOL ProcessConfig();
+VOID FreeConfig();
 
 DllExport int APIENTRY WritetoConsole(char * buff);
 
@@ -1104,7 +1113,18 @@ Check_Timer()
 	{
 		OutputDebugString("BPQ32 Reinitialising External Ports and Attaching Timer\n");
 
-//		LoadToolHelperRoutines();
+		if (!ProcessConfig())
+		{
+			SetupConsoleWindow();
+			ShowWindow(hWnd, SW_RESTORE);
+			SendMessage(hWnd, WM_PAINT, 0, 0);
+
+			MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
+
+			FreeSemaphore();
+			return (0);
+		}
+
 
 		GetVersionInfo("bpq32.dll");
 
@@ -1137,6 +1157,8 @@ Check_Timer()
 		if (IPRequired)	IPActive = Init_IP();
 
 		if (RigRequired) RigActive = Rig_Init();
+
+		FreeConfig();
 
 		_beginthread(MonitorThread,0,0);
 
@@ -1439,12 +1461,19 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (TimerInst == ProcessID)
 		{
+			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
+	
 			KillTimer(NULL,TimerHandle);
 			TimerHandle=0;
 			TimerInst=0xffffffff;
 			Tell_Sessions();
 			OutputDebugString("BPQ32 Process with Timer closing\n");
+
+			AXIPClose();
+			IPClose();
 			
+			Rig_Close();
+
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
 
@@ -3056,7 +3085,23 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 		strcat(Value,"\\");
 		strcat(Value,PORTVEC->PORT_DLL_NAME);
 	}
-		
+
+	// Several Drivers are now built into bpq32.dll
+
+	_strupr(Value);
+
+	if (strstr(Value, "BPQVKISS"))
+		return (UINT) VCOMExtInit;
+
+	if (strstr(Value, "BPQAXIP"))
+		return (UINT) AXIPExtInit;
+
+	if (strstr(Value, "BPQETHER"))
+		return (UINT) ETHERExtInit;
+
+	if (strstr(Value, "BPQtoAGW"))
+		return (UINT) AGWExtInit;
+
 	ExtDriver=LoadLibrary(Value);
 
 	if (ExtDriver == NULL)

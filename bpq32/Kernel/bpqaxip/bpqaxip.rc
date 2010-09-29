@@ -1,7 +1,7 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "resource.h"
-#include "Versions.h"
+#include "..\..\Include\Versions.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////

@@ -221,7 +221,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			WINMORInst=0;
 		}
 
-		for (i=1; i<17; i++)
+		for (i=1; i<33; i++)
 		{
 			TNC = TNCInfo[i];
 			if (TNC == NULL)
