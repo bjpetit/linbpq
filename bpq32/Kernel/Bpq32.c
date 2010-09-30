@@ -267,8 +267,9 @@
 // Move rigcontol display to driver windows
 // Move rigontrol config to driver config.
 // Allow driver and IPGateway config info in bpq32.cfg
-// Move IPGateway into bpq32.dll
+// Move IPGateway, AXIP, VKISS, AGW and WINMOR drivers into bpq32.dll
 // Add option to reread IP Gateway config.
+// Fix Reinit after process with timer closes (error in TellSessions).
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -329,6 +330,7 @@ UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AXIPExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
 
 extern char AUTOSAVE;
 
@@ -375,6 +377,7 @@ BOOL APIENTRY Rig_Command();
 
 VOID IPClose();
 VOID AXIPClose();
+VOID WINMORClose();
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -851,7 +854,8 @@ VOID CALLBACK TimerProc(
 			int i;
 			struct BPQVECSTRUC * HOSTVEC;
 			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
-	
+			WSADATA       WsaData;            // receives data from WSAStartup
+
 			ReconfigFlag = FALSE;
 
 			lineno=0;
@@ -874,9 +878,16 @@ VOID CALLBACK TimerProc(
 				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 			}
 
+			WINMORClose();
+			AXIPClose();
+			IPClose();
+			
 			Rig_Close();
+			WSACleanup();
 
 			Sleep(2000);
+
+			WSAStartup(MAKEWORD(2, 0), &WsaData);
 
 			_asm{
 
@@ -969,11 +980,16 @@ HANDLE NPHandle;
 
 FirstInit()
 {
+    WSADATA       WsaData;            // receives data from WSAStartup
+
 	// First Time Ports and Timer init
 
 	// Moved from DLLINIT to sort out perl problem, and meet MS Guidelines on minimising DLLMain 
 
-	
+	// Call wsastartup - most systems need winsock, and duplicate statups could be a problem
+
+    WSAStartup(MAKEWORD(2, 0), &WsaData);
+ 	
 	INITIALISEPORTS();
 
 	SetupConsoleWindow();
@@ -1111,6 +1127,8 @@ Check_Timer()
 
 	if (TimerHandle == 0)
 	{
+	    WSADATA       WsaData;            // receives data from WSAStartup
+
 		OutputDebugString("BPQ32 Reinitialising External Ports and Attaching Timer\n");
 
 		if (!ProcessConfig())
@@ -1139,6 +1157,8 @@ Check_Timer()
 		SetupBPQDirectory();
 
 		Sleep(1000);			// Allow time for sockets to close	
+
+		WSAStartup(MAKEWORD(2, 0), &WsaData);
 
 		INITIALISEPORTS();
 
@@ -1187,42 +1207,16 @@ Tell_Sessions()
 	//	API, and cause a new timer to be allocated
 	//
 	HWND hWnd;
-	int bpqport;
+	int i;
 
-	_asm{
-
-;
-	MOV	EBX,OFFSET BPQHOSTVECTOR
-	MOV	EAX,1
-	
-TELL_LOOP:
-
-	TEST	BYTE PTR 4[EBX],80H
-	JZ SHORT NOT_ALLOCED
-
-	push	eax
-
-	mov		bpqport,eax
-	mov		eax,dword ptr 12[EBX]
-	mov		hWnd,eax
-
-	}
-
-	PostMessage(hWnd,BPQMsg,bpqport,1);
-	PostMessage(hWnd,BPQMsg,bpqport,2);
-
-	_asm {
-
-	pop		eax
-
-NOT_ALLOCED:
-
-	ADD	EBX,VECTORLENGTH
-	INC	EAX
-
-	CMP	EAX,65
-	JNE SHORT TELL_LOOP
-
+	for (i=1;i<65;i++)
+	{
+		if (BPQHOSTVECTOR[i-1].HOSTFLAGS & 0x80)
+		{
+			hWnd = BPQHOSTVECTOR[i-1].HOSTHANDLE;
+			PostMessage(hWnd, BPQMsg,i, 1);
+			PostMessage(hWnd, BPQMsg,i, 2);
+		}
 	}
 	return (0);
 }
@@ -1454,6 +1448,18 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (Mutex) CloseHandle(Mutex);
 
+		//	Remove our entry from PID List
+
+		for (i=0;  i< AttachedProcesses; i++)
+			if (AttachedPIDList[i] == ProcessID)
+				break;
+
+		for (; i< AttachedProcesses; i++)
+		{
+			AttachedPIDType[i]=AttachedPIDType[i+1];
+			AttachedPIDList[i]=AttachedPIDList[i+1];
+		}
+
 		ShowWindow(hWnd, SW_RESTORE);
 		GetWindowRect(hWnd, &Rect);
 
@@ -1466,29 +1472,19 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			KillTimer(NULL,TimerHandle);
 			TimerHandle=0;
 			TimerInst=0xffffffff;
-			Tell_Sessions();
 			OutputDebugString("BPQ32 Process with Timer closing\n");
 
+			WINMORClose();
 			AXIPClose();
 			IPClose();
-			
 			Rig_Close();
+			WSACleanup();
 
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
 
-		}
+			Tell_Sessions();			// So anther process can get timet
 
-		//	Remove our entry from PID List
-
-		for (i=0;  i< AttachedProcesses; i++)
-			if (AttachedPIDList[i] == ProcessID)
-				break;
-
-		for (; i< AttachedProcesses; i++)
-		{
-			AttachedPIDType[i]=AttachedPIDType[i+1];
-			AttachedPIDList[i]=AttachedPIDList[i+1];
 		}
 
 		AttachedProcesses--;
@@ -1535,7 +1531,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 					PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
 				}
 			}
-			Rig_Close();
 		}
 
 		GetProcess(GetCurrentProcessId(),pgm);
@@ -1560,7 +1555,9 @@ DllExport int APIENTRY CloseBPQ32()
 		TimerHandle=0;
 		TimerInst=0xffffffff;
 		Tell_Sessions();
-		
+
+		WSACleanup();
+
 		OutputDebugString("BPQ32 Process with Timer called CloseBPQ32\n");
 
 		for (i=0;i<NUMBEROFPORTS;i++)
@@ -3099,9 +3096,12 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "BPQETHER"))
 		return (UINT) ETHERExtInit;
 
-	if (strstr(Value, "BPQtoAGW"))
+	if (strstr(Value, "BPQTOAGW"))
 		return (UINT) AGWExtInit;
 
+	if (strstr(Value, "WINMOR"))
+		return (UINT) WinmorExtInit;
+	
 	ExtDriver=LoadLibrary(Value);
 
 	if (ExtDriver == NULL)

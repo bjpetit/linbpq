@@ -374,7 +374,7 @@ BOOL FirstInit = TRUE;
 
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
-	char msg[80];
+	char msg[500];
 	struct TNCINFO * TNC;
 	int port;
 	char * ptr;
@@ -424,9 +424,20 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	if (TNC->RigConfigMsg)
 	{
+		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
+
 		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
-	}
-	else
+			
+		if (TNC->RIG == NULL)
+		{
+			// Report Error
+
+			wsprintf(msg,"Invalid Rig Config %s", SaveRigConfig);
+			WritetoConsole(msg);
+
+		}
+		free(SaveRigConfig);
+	}	else
 		TNC->RIG = NULL;		// In case restart
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default

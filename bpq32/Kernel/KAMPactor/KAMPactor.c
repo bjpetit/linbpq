@@ -397,10 +397,11 @@ BOOL FirstInit = TRUE;
 
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
-	char msg[80];
+	char msg[500];
 	struct TNCINFO * TNC;
 	int port;
 	char * ptr;
+	char * TempScript;
 
 	//
 	//	Will be called once for each Pactor Port
@@ -447,7 +448,19 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	if (TNC->RigConfigMsg)
 	{
+		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
+
 		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
+			
+		if (TNC->RIG == NULL)
+		{
+			// Report Error
+
+			wsprintf(msg,"Invalid Rig Config %s", SaveRigConfig);
+			WritetoConsole(msg);
+
+		}
+		free(SaveRigConfig);
 	}
 	else
 		TNC->RIG = NULL;		// In case restart
@@ -485,7 +498,40 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
+	// Set Essential Params and MYCALL
+
+	TempScript = malloc(4000);
+
+	strcpy(TempScript, "MARK 1400\r");
+	strcat(TempScript, "SPACE 1600\r");
+	strcat(TempScript, "INV ON\r");
+
+	strcat(TempScript, TNC->InitScript);
+
+	free(TNC->InitScript);
+	TNC->InitScript = TempScript;
+
+	// Others go on end so they can't be overriden
+
+	strcat(TNC->InitScript, "ECHO OFF\r");
+	strcat(TNC->InitScript, "XMITECHO ON\r");
+	strcat(TNC->InitScript, "TXFLOW OFF\r");
+	strcat(TNC->InitScript, "XFLOW OFF\r");
+	strcat(TNC->InitScript, "TRFLOW OFF\r");
+	strcat(TNC->InitScript, "AUTOCR 0\r");
+	strcat(TNC->InitScript, "AUTOLF OFF\r");
+	strcat(TNC->InitScript, "CRADD OFF\r");
+	strcat(TNC->InitScript, "CRSUP OFF\r");
+	strcat(TNC->InitScript, "CRSUP OFF/OFF\r");
+	strcat(TNC->InitScript, "LFADD OFF/OFF\r");
+	strcat(TNC->InitScript, "LFADD OFF\r");
+	strcat(TNC->InitScript, "LFSUP OFF/OFF\r");
+	strcat(TNC->InitScript, "LFSUP OFF\r");
+	strcat(TNC->InitScript, "RING OFF\r");
+	strcat(TNC->InitScript, "ARQBBS OFF\r");
+
 	// Set the ax.25 MYCALL
+
 
 	wsprintf(msg, "MYCALL %s/%s\r", TNC->NodeCall, TNC->NodeCall);
 	strcat(TNC->InitScript, msg);

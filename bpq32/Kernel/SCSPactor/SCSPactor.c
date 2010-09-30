@@ -457,7 +457,7 @@ BOOL FirstInit = TRUE;
 
 DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 {
-	char msg[80];
+	char msg[500];
 	struct TNCINFO * TNC;
 	int port;
 	char * ptr;
@@ -509,7 +509,19 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	if (TNC->RigConfigMsg)
 	{
+		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
+
 		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
+			
+		if (TNC->RIG == NULL)
+		{
+			// Report Error
+
+			wsprintf(msg,"Invalid Rig Config %s", SaveRigConfig);
+			WritetoConsole(msg);
+
+		}
+		free(SaveRigConfig);
 	}
 	else
 		TNC->RIG = NULL;		// In case restart
@@ -1425,13 +1437,11 @@ VOID DEDPoll(int Port)
 
 						TNC->OverrideBusy = FALSE;
 
-
 						wsprintf(Status, "%s Connecting to %s", TNC->Streams[Stream].MyCall, TNC->Streams[Stream].RemoteCall);
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 					}
 
 					TNC->Streams[Stream].Connecting = TRUE;
-
 				}
 			}
 

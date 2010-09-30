@@ -43,8 +43,6 @@
 
 #include "AsmStrucs.h"
 
-#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
-#define EXTDLL			// Use GetMuduleHandle instead of LoadLibrary 
 #include "bpq32.h"
 
 #define VERSION_MAJOR         2
@@ -139,8 +137,6 @@ static int addrlen=sizeof(sinx);
 //static short AGWPort=0;
 
 static BOOL InitAGWPE(void);
-static BOOL InitWS2(void);
-
 
 static time_t ltime,lasttime[MAXBPQPORTS+1];
 
@@ -428,9 +424,6 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 	if (FirstInit)
 	{
 		FirstInit = FALSE;
-
-		GetAPI();					// Load BPQ32
-		InitWS2();
 		InitAGWPE();
 	}
 	port=PortEntry->PORTNUMBER;
@@ -485,42 +478,6 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 	return ((int) ExtProc);
 
 }
-
-BOOL InitWS2(void)
-{
-    int           Error;              // catches return value of WSAStartup
-    WORD          VersionRequested;   // passed to WSAStartup
-    WSADATA       WsaData;            // receives data from WSAStartup
-    BOOL          ReturnValue = TRUE; // return value
-
-    // Start WinSock 2.  If it fails, we don't need to call
-    // WSACleanup().
-
-    VersionRequested = MAKEWORD(VERSION_MAJOR, VERSION_MINOR);
-    Error = WSAStartup(VersionRequested, &WsaData);
-    if (Error) {
-        MessageBox(NULL,
-            "Could not find high enough version of WinSock",
-            "BPQtoAGW", MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
-        ReturnValue = FALSE;
-    } else {
-
-        // Now confirm that the WinSock 2 DLL supports the exact version
-        // we want. If not, make sure to call WSACleanup().
- 
-		if (LOBYTE(WsaData.wVersion) != VERSION_MAJOR ||
-            HIBYTE(WsaData.wVersion) != VERSION_MINOR) {
-            MessageBox(NULL,
-                "Could not find the correct version of WinSock",
-                "BPQtoAGW",  MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
-            WSACleanup();
-            ReturnValue = FALSE;
-        }
-    }
-
-	return(ReturnValue);
-
-} // InitWS2()
 
 
 InitAGWPE()

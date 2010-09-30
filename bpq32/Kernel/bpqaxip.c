@@ -359,7 +359,6 @@ DWORD n;
 static int baseline=0;
 
 int InitAXIP(int Port);
-BOOL InitWS2(void);
 
 RECT ResRect;
 RECT MHRect;
@@ -812,53 +811,10 @@ UINT WINAPI AXIPExtInit(struct PORTCONTROL *  PortEntry)
 
 	Port = PortEntry->PORTNUMBER;
 
-	if (!InitWS2()) return 0;
-
 	if (!InitAXIP(Port)) return 0;
 
 	return ((int) ExtProc);
 }
-
-BOOL InitWS2()
-{
-    int           Error;              // catches return value of WSAStartup
-    WORD          VersionRequested;   // passed to WSAStartup
-    WSADATA       WsaData;            // receives data from WSAStartup
-    BOOL          ReturnValue = TRUE; // return value
-	int err;
-
-    // Start WinSock 2.  If it fails, we don't need to call
-    // WSACleanup().
-
-    VersionRequested = MAKEWORD(VERSION_MAJOR, VERSION_MINOR);
-    Error = WSAStartup(VersionRequested, &WsaData);
-    if (Error) {
-					
-		err = WSAGetLastError();
-
-        MessageBox(NULL,
-            "Could not find high enough version of WinSock",
-            "BPQ AXIP", MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
-        ReturnValue = FALSE;
- 
-	} else {
-
-        // Now confirm that the WinSock 2 DLL supports the exact version
-        // we want. If not, make sure to call WSACleanup().
- 
-		if (LOBYTE(WsaData.wVersion) != VERSION_MAJOR ||
-            HIBYTE(WsaData.wVersion) != VERSION_MINOR) {
-            MessageBox(NULL,
-                "Could not find the correct version of WinSock",
-                "BPQ AXIP",  MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
-            WSACleanup();
-            ReturnValue = FALSE;
-        }
-    }
-
-	return(ReturnValue);
-
-} // InitWS2()
   	
 struct tagVS_FIXEDFILEINFO * HG;
 
@@ -878,7 +834,7 @@ InitAXIP(int Port)
 	HMODULE HM;
 
 
-	HM=GetModuleHandle("bpqaxip.dll");
+	HM=GetModuleHandle("bpq32.dll");
 
 	RH=FindResource(HM,MAKEINTRESOURCE(VS_VERSION_INFO),RT_VERSION);
 

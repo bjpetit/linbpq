@@ -319,7 +319,6 @@ GetAPI();
 	if (NeedResolver)
 		_beginthread(IPResolveNames, 0, NULL );
 
-
 	WritetoConsole("\nIP Support Enabled\n");
 
 	return TRUE;

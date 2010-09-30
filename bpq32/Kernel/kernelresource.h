@@ -37,6 +37,23 @@
 #define RIGCONFIG                       30006
 #define IDC_STATIC                      -1
 
+#define IDC_PROTOSTATE                  1000
+#define IDC_CHANSTATE                   1001
+#define IDC_MODE                        1002
+#define IDC_TNCSTATE                    1003
+#define IDC_COMMSSTATE                  1004
+#define IDC_TRAFFIC                     1005
+#define WINMOR_CONFIG                   1006
+#define IDC_RESTARTS                    1006
+#define WINMOR_RESTART                  1007
+#define IDC_RESTARTTIME                 1007
+#define IDC_PLAYBACK                    1008
+#define IDC_CAPTURE                     1009
+#define WINMOR_KILL                     1010
+#define WINMOR_RESTARTAFTERFAILURE      1011
+#define IDC_LIST1                       1013
+#define IDC_WINMORTRACE                 1013
+#define WINMORCONFIG                    30006
 
 
 // Next default values for new objects
