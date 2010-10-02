@@ -108,12 +108,12 @@ VOID nputs(CIRCUIT * conn, char * buf)
 	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
 }
 
-VOID nputc(CIRCUIT * conn, char buf)
+VOID nputc(CIRCUIT * conn, char chr)
 {
-	// Seems to send buf to socket
+	// Seems to send chr to socket
 
-	WriteLogLine(conn, '>',&buf,  1, LOG_CHAT);
-	QueueMsg(conn, &buf, 1);
+	WriteLogLine(conn, '>',&chr,  1, LOG_CHAT);
+	QueueMsg(conn, &chr, 1);
 }
 
 
@@ -431,6 +431,63 @@ void ReportBadLeave(ncall, ucall)
 }
 
 
+struct DUPINFO DupInfo[MAXDUPS];
+
+BOOL CheckforDups(CIRCUIT * circuit, char * Call, char * Msg)
+{
+	// Primitive duplicate suppression - see if same call and text reeived in last few secons
+	
+	time_t Now = time(NULL);
+	time_t DupCheck = Now - DUPSECONDS;
+	int i, saveindex = -1;
+
+	for (i = 0; i < MAXDUPS; i++)
+	{
+		if (DupInfo[i].DupTime < DupCheck)
+		{
+			// too old - use first if we need to save it 
+
+			if (saveindex == -1)
+			{
+				saveindex = i;
+				continue;
+			}
+
+			if ((strcmp(Call, DupInfo[i].DupUser) == 0) && (memcmp(Msg, DupInfo[i].DupText, strlen(DupInfo[i].DupText)) == 0))
+			{
+				// Uplicate, so discard, but save time
+
+				DupInfo[i].DupTime = Now;
+				Logprintf(LOG_CHAT, circuit, '?', "Duplicate Message From %s %s supressed", Call, Msg);
+
+				return TRUE;					// Duplicate
+			}
+		}
+	}
+
+	// Not in list
+
+	if (saveindex == -1)
+	{
+		// List is full
+
+		saveindex = MAXDUPS - 1;	// Stick on end	
+	}
+
+	DupInfo[saveindex].DupTime = Now;
+	strcpy(DupInfo[saveindex].DupUser, Call);
+
+	if (strlen(Msg) > 99)
+	{
+		memcpy(DupInfo[saveindex].DupText, Msg, 99);
+		DupInfo[saveindex].DupText[99] = 0;
+	}
+	else
+		strcpy(DupInfo[saveindex].DupText, Msg);
+
+	return FALSE;
+}
+
 void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 {
 	NODE    *node, *ln;
@@ -464,6 +521,12 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 // Data from user ucall at node ncall.
 
 		case id_data :
+
+			// Check for dups
+
+			if (CheckforDups(ckt_from, ucall, f1))
+				break;
+
 			user = user_find(ucall, ncall);
 			user->lastmsgtime = time(NULL);
 			if (!user) break;

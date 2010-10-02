@@ -43,7 +43,6 @@ typedef struct _RTTMSG
 #define DllExport	__declspec( dllexport )
 
 extern int SENDNETFRAME();
-extern VOID Q_ADD();
 extern int COUNTNODES();
 extern short L4LIMIT;
 
@@ -200,11 +199,13 @@ VOID DecayNETROMRoutes(struct ROUTE * Route)
 
 		if (Dest->NRROUTE1.ROUT_NEIGHBOUR == Route)
 		{
-			if (Dest->NRROUTE1.ROUT_OBSCOUNT)
+			if (Dest->NRROUTE1.ROUT_OBSCOUNT && Dest->NRROUTE1.ROUT_OBSCOUNT < 128)	 // Not if locked
+			{
 				Dest->NRROUTE1.ROUT_OBSCOUNT--;
 				if (Dest->NRROUTE1.ROUT_OBSCOUNT)
 					Dest->NRROUTE1.ROUT_OBSCOUNT--;
 
+			}
 			if (Dest->NRROUTE1.ROUT_OBSCOUNT == 0)
 			{
 				// Route expired

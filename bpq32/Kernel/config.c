@@ -115,7 +115,7 @@
 
 char * Buffer;
 
-char * PortConfig[34] = {NULL};
+extern char * PortConfig[34];
 
 char * fp2;
 

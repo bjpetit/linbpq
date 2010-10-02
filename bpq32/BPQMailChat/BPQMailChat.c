@@ -565,6 +565,12 @@
 // Fix handling B2 From: with an HA
 // Add "Expert User" welcome message.
 
+// Version 1.0.4.22 Sept 2010
+
+// Version 1.0.4.23 Oct 2010
+
+// Add Dup message supression
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"

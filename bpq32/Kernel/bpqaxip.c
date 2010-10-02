@@ -1189,6 +1189,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		{
 			MHEnabled=TRUE;
 			CreateMHWindow();
+			ShowWindow(hMHWnd, SW_RESTORE);		// In case Start Minimized set
 		}
 		break;
 

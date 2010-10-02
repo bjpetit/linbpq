@@ -53,6 +53,16 @@
 #define WINMOR_RESTARTAFTERFAILURE      1011
 #define IDC_LIST1                       1013
 #define IDC_WINMORTRACE                 1013
+
+#define IDC_PACTORLEVEL                101
+#define IDC_1                        1001
+#define IDC_2                        1002
+#define IDC_3                        1003
+#define IDC_4                        1004
+
+
+#define IDC_TEST                        1008
+
 #define WINMORCONFIG                    30006
 
 

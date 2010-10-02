@@ -82,6 +82,18 @@ typedef struct SEM
 	int Clashes;
 };
 
+//Chat Duplicate suppression Code
+
+#define MAXDUPS 10			// Number to keep
+#define DUPSECONDS 5		// TIme to Keep
+
+typedef struct DUPINFO
+{
+	time_t DupTime;
+	char  DupUser[10];
+	char  DupText[100];
+};
+
 
 struct UserRec
 {

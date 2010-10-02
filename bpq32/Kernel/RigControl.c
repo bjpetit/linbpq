@@ -43,11 +43,10 @@ static char ClassName[] = "RIGCONTROL";
 #define DllExport	__declspec(dllexport)
 #define Dll	__declspec( dllexport )
 
-
-DllImport UINT CRCTAB;
-DllImport char * CTEXTMSG;
-DllImport USHORT CTEXTLEN;
-DllImport UINT FULL_CTEXT;
+extern UINT FREE_Q;
+UINT ReleaseBuffer(UINT *BUFF);
+UINT * Q_REM(UINT *Q);
+int C_Q_ADD(UINT *Q,UINT *BUFF);
 
 RECT Rect;
 
@@ -86,7 +85,9 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna);
 VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr);
 VOID SetupScanInterLockGroups(struct RIGINFO *RIG);
 
-int Q_ADD_RIG(UINT *Q,UINT *BUFF);
+UINT ReleaseBuffer(UINT *BUFF);
+UINT * Q_REM(UINT *Q);
+int C_Q_ADD(UINT *Q,UINT *BUFF);
 
 extern  struct TRANSPORTENTRY * L4TABLE;
 
@@ -96,13 +97,6 @@ BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 
 INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-// Buffer Pool
-
-#define NUMBEROFBUFFERS 20
-
-static UINT FREE_Q_RIG=0;
-
-static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
 
 char Modes[8][6] = {"LSB",  "USB", "AM", "CW", "RTTY", "FM", "WFM", "????"};
 
@@ -787,57 +781,6 @@ NextPort:
 }
 
 */
-// Get buffer from Queue
-
-UINT * Q_REM_RIG(UINT *Q)
-{
-	UINT  * first,next;
-	
-	(int)first=Q[0];
-	if (first == 0) return (0);			// Empty
-	
-	next=first[0];						// Address of next buffer
-	Q[0]=next;
-
-	return (first);
-}
-
-// Return Buffer to Free Queue
-
-UINT ReleaseBuffer(UINT *BUFF)
-{
-	UINT * pointer;
-	
-	(UINT)pointer=FREE_Q_RIG;
-	*BUFF=(UINT)pointer;
-	FREE_Q_RIG=(UINT)BUFF;
-
-	return (0);
-}
-
-
-int Q_ADD_RIG(UINT *Q,UINT *BUFF)
-{
-	UINT * next;
-	
-	BUFF[0]=0;							// Clear chain in new buffer
-
-	if (Q[0] == 0)						// Empty
-	{
-		Q[0]=(UINT)BUFF;				// New one on front
-		return(0);
-	}
-
-	(int)next=Q[0];
-
-	while (next[0]!=0)
-		next=(UINT *)next[0];			// Chain to end of queue
-
-	next[0]=(UINT)BUFF;					// New one on end
-
-	return(0);
-}
-
 
 DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 {
@@ -1149,7 +1092,7 @@ portok:
 			}
 		}
 
-		buffptr = Q_REM_RIG(&FREE_Q_RIG);
+		buffptr = Q_REM(&FREE_Q);
 
 		if (buffptr == 0)
 		{
@@ -1234,7 +1177,7 @@ portok:
 
 		buffptr[1] = 200;
 		
-		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
+		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
 		return TRUE;
 
@@ -1258,7 +1201,7 @@ portok:
 			return FALSE;
 		}
 
-		buffptr = Q_REM_RIG(&FREE_Q_RIG);
+		buffptr = Q_REM(&FREE_Q);
 
 		if (buffptr == 0)
 		{
@@ -1292,7 +1235,7 @@ portok:
 					
 		buffptr[1] = 10;
 		
-		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
+		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
 		return TRUE;
 
@@ -1317,7 +1260,7 @@ portok:
 		}
 
 
-		buffptr = Q_REM_RIG(&FREE_Q_RIG);
+		buffptr = Q_REM(&FREE_Q);
 
 		if (buffptr == 0)
 		{
@@ -1337,7 +1280,7 @@ portok:
 
 		buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 		
-		Q_ADD_RIG(&RIG->BPQtoRADIO_Q, buffptr);
+		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
 		return TRUE;
 
@@ -1383,17 +1326,6 @@ if (BPQDirectory[0] == 0)
 	{
 		return TRUE;
 	}
-
-	// Build buffer pool
-
-	FREE_Q_RIG = 0;			// In case reloading;
-
-	for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
-	{	
-		ReleaseBuffer(&BufferPool[100*i]);
-	}
-
-//	CreateRigWindow();
 
 	Row = 0;
 
@@ -2100,7 +2032,7 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 		int datalen;
 		UINT * buffptr;
 			
-		buffptr=Q_REM_RIG(&RIG->BPQtoRADIO_Q);
+		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
 
 		datalen=buffptr[1];
 
@@ -2400,7 +2332,7 @@ SendResponse(int Session, char * Msg)
 
 	VEC = L4->L4TARGET;
 
-	Q_ADD_RIG((UINT *)&L4->L4TX_Q, (UINT *)Buffer);
+	C_Q_ADD((UINT *)&L4->L4TX_Q, (UINT *)Buffer);
 
 	PostMessage(VEC->HOSTHANDLE, BPQMsg, VEC->HOSTSTREAM, 2);  
 
@@ -2624,7 +2556,7 @@ VOID YaesuPoll(struct PORTINFO * PORT)
 		int datalen;
 		UINT * buffptr;
 			
-		buffptr=Q_REM_RIG(&RIG->BPQtoRADIO_Q);
+		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
 
 		datalen=buffptr[1];
 
@@ -2794,13 +2726,10 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 
 		SetWindowText(RIG->hFREQ, "------------------");
 		SetWindowText(RIG->hMODE, "----------");
-//		SetWindowText(RIG->hFREQ, "145.810000");
-//		SetWindowText(RIG->hMODE, "RTTY/1");
 
 		RIG->RIGOK = FALSE;
 
 		return;
-
 	}
 
 	// Send Data if avail, else send poll
@@ -2811,7 +2740,7 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 		{
 			//	Send Next Freq
 
-			if	(GetPermissionToChange(PORT, RIG))
+			if (GetPermissionToChange(PORT, RIG))
 			{
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 				RIG->FreqPtr++;
@@ -2837,7 +2766,7 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 		int datalen;
 		UINT * buffptr;
 			
-		buffptr=Q_REM_RIG(&RIG->BPQtoRADIO_Q);
+		buffptr=Q_REM(&RIG->BPQtoRADIO_Q);
 
 		datalen=buffptr[1];
 
@@ -3170,7 +3099,7 @@ PortFound:
 			// Mode can include 1/2/3 for Icom Filers. W/N for Winmor/Pactor Bandwidth, and +/-/S for Repeater Shift (S = Simplex) 
 			// First is always Mode
 
-			Split = Data = Bandwidth = Antenna = 0;
+			Split = Data = Bandwidth = Antenna = ModeNo = 0;
 
 			if (Modeptr)
 			{

@@ -66,10 +66,10 @@ int ConnecttoAGW();
 int ProcessReceivedData(int bpqport);
 static ProcessLine(char * buf, int Port, BOOL CheckPort);
 
-static UINT ReleaseBuffer(UINT *BUFF);
-static UINT * Q_REM(UINT *Q);
-static int Q_ADD(UINT *Q,UINT *BUFF);
-
+UINT ReleaseBuffer(UINT *BUFF);
+UINT * Q_REM(UINT *Q);
+int C_Q_ADD(UINT *Q,UINT *BUFF);
+extern UINT FREE_Q;
 
 #pragma pack(1)
 
@@ -136,8 +136,6 @@ static int addrlen=sizeof(sinx);
 
 //static short AGWPort=0;
 
-static BOOL InitAGWPE(void);
-
 static time_t ltime,lasttime[MAXBPQPORTS+1];
 
 static BOOL CONNECTING[MAXBPQPORTS+1];
@@ -145,14 +143,6 @@ static BOOL CONNECTED[MAXBPQPORTS+1];
 
 //HANDLE hInstance;
 
-
-// Buffer Pool
-
-#define NUMBEROFBUFFERS 20
-
-static UINT FREE_Q=0;
-
-static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
 
 static fd_set readfs;
 static fd_set writefs;
@@ -363,7 +353,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			
 			// Get a buffer
 						
-//			buffptr=Q_REM(&FREE_Q);
+//			buffptr=GetBuff();
 
 //			if (buffptr == 0)
 //			{
@@ -380,7 +370,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 //			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
 
-//			Q_ADD(&BPQtoAGW_Q[MasterPort[port]],buffptr);
+//			C_Q_ADD(&BPQtoAGW_Q[MasterPort[port]],buffptr);
 	
 //			return (0);
 		}
@@ -406,8 +396,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	return 0;
 }
 
-static BOOL FirstInit = TRUE;
-
 UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 
 {
@@ -421,11 +409,6 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 	//	The Socket to connect to is in IOBASE
 	//
 
-	if (FirstInit)
-	{
-		FirstInit = FALSE;
-		InitAGWPE();
-	}
 	port=PortEntry->PORTNUMBER;
 
 	ReadConfigFile("BPQtoAGW.CFG", port);
@@ -477,23 +460,6 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 	
 	return ((int) ExtProc);
 
-}
-
-
-InitAGWPE()
-{
-	u_long param=1;
-	BOOL bcopt=TRUE;
-	int i;
-
-	// Build buffer pool
-	
-	for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
-	{	
-		ReleaseBuffer(&BufferPool[100*i]);
-	}
-
-	return (TRUE);		
 }
 
 /*
@@ -854,7 +820,7 @@ int ProcessReceivedData(int port)
 
 				// Get a buffer
 						
-				buffptr=Q_REM(&FREE_Q);
+				buffptr=GetBuff();
 
 				if (buffptr == 0) return (0);			// No buffers, so ignore
 
@@ -863,7 +829,7 @@ int ProcessReceivedData(int port)
 				buffptr[1]=datalen;
 				memcpy(buffptr+2,&Message,datalen);
 
-				Q_ADD(&AGWtoBPQ_Q[BPQPort[RXHeader.Port][MasterPort[port]]],buffptr);
+				C_Q_ADD(&AGWtoBPQ_Q[BPQPort[RXHeader.Port][MasterPort[port]]],buffptr);
 
 			}
 
@@ -881,67 +847,4 @@ int ProcessReceivedData(int port)
 	return (0);
 
 }
-
-
-// Get buffer from Queue
-
-UINT * Q_REM(UINT *Q)
-{
-	UINT  * first,next;
-	
-	(int)first=Q[0];
-	
-	if (first == 0) return (0);			// Empty
-	
-	next=first[0];						// Address of next buffer
-	
-	Q[0]=next;
-
-	return (first);
-
-}
-
-
-// Return Buffer to Free Queue
-
-UINT ReleaseBuffer(UINT *BUFF)
-{
-	UINT * pointer;
-	
-	(UINT)pointer=FREE_Q;
-
-	*BUFF=(UINT)pointer;
-
-	FREE_Q=(UINT)BUFF;
-
-	return (0);
-
-}
-
-
-int Q_ADD(UINT *Q,UINT *BUFF)
-{
-	UINT * next;
-	
-	BUFF[0]=0;							// Clear chain in new buffer
-
-	if (Q[0] == 0)						// Empty
-	{
-		Q[0]=(UINT)BUFF;				// New one on front
-
-		return(0);
-	}
-
-	(int)next=Q[0];
-
-	while (next[0]!=0)
-
-		next=(UINT *)next[0];			// Chain to end of queue
-
-	next[0]=(UINT)BUFF;					// New one on end
-
-	return(0);
-
-}
-
 

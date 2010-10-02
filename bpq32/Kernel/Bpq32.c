@@ -317,6 +317,7 @@ extern short NUMBEROFPORTS;
 extern long PORTENTRYLEN;
 extern long LINKTABLELEN;
 extern struct PORTCONTROL * PORTTABLE;
+extern UINT FREE_Q;
 
 DllExport struct TRANSPORTENTRY * L4TABLE = 0;
 DllExport UCHAR NEXTID = 55;
@@ -4297,4 +4298,69 @@ DllExport BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase)
 
 	return FALSE;
 }
+
+
+// C Routines to access the main BPQ32 buffer pool
+
+// Get buffer from Queue
+
+UINT * Q_REM(UINT *Q)
+{
+	UINT  * first,next;
+	
+	(int)first=Q[0];
+	
+	if (first == 0) return (0);			// Empty
+	
+	next=first[0];						// Address of next buffer
+	
+	Q[0]=next;
+
+	return (first);
+
+}
+
+
+// Return Buffer to Free Queue
+
+UINT ReleaseBuffer(UINT *BUFF)
+{
+	UINT * pointer;
+	
+	(UINT)pointer=FREE_Q;
+
+	*BUFF=(UINT)pointer;
+
+	FREE_Q=(UINT)BUFF;
+
+	QCOUNT++;
+
+	return 0;
+}
+
+int C_Q_ADD(UINT *Q,UINT *BUFF)
+{
+	UINT * next;
+	
+	BUFF[0]=0;							// Clear chain in new buffer
+
+	if (Q[0] == 0)						// Empty
+	{
+		Q[0]=(UINT)BUFF;				// New one on front
+
+		return(0);
+	}
+
+	(int)next=Q[0];
+
+	while (next[0]!=0)
+
+		next=(UINT *)next[0];			// Chain to end of queue
+
+	next[0]=(UINT)BUFF;					// New one on end
+
+	return(0);
+
+}
+
 
