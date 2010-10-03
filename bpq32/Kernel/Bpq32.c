@@ -384,6 +384,9 @@ BOOL APIENTRY Rig_Command();
 VOID IPClose();
 VOID AXIPClose();
 VOID WINMORClose();
+VOID SCSClose();
+VOID KAMClose();
+
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -887,6 +890,8 @@ VOID CALLBACK TimerProc(
 			WINMORClose();
 			AXIPClose();
 			IPClose();
+			SCSClose();;
+			KAMClose();
 			
 			Rig_Close();
 			WSACleanup();
@@ -1243,7 +1248,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	HKEY hKey=0;
 	char Size[80];
 
-	
 	int i;
 	unsigned int ProcessID;
 
@@ -1480,7 +1484,20 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			TimerInst=0xffffffff;
 			OutputDebugString("BPQ32 Process with Timer closing\n");
 
+			// Call Port Close Routines
+			
+			for (i=0;i<NUMBEROFPORTS;i++)
+			{
+				if (PORTVEC->PORT_EXT_ADDR)
+					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);
+
+			PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
+			}
+
+
 			WINMORClose();
+			SCSClose();;
+			KAMClose();
 			AXIPClose();
 			IPClose();
 			Rig_Close();

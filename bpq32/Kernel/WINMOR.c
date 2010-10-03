@@ -101,9 +101,6 @@ extern BOOL RestartAfterFailure;
 #define BGCOLOUR RGB(236,233,216)
 
 extern BOOL MinimizetoTray;
-HANDLE hInstance;
-HBRUSH bgBrush;
-
 
 BOOL WINAPI Rig_Command();
 struct RIGINFO * WINAPI RigConfig();
@@ -227,23 +224,23 @@ static ProcessLine(char * buf, int Port)
 	{
 		// Old Config from file
 
-	BPQport=0;
-	BPQport = atoi(ptr);
+		BPQport=0;
+		BPQport = atoi(ptr);
 	
-	if (Port && Port != BPQport)
-	{
-		// Want a particular port, and this isn't it
-
-		while(TRUE)
+		if (Port && Port != BPQport)
 		{
-			if (GetLine(buf) == 0)
-				return TRUE;
+			// Want a particular port, and this isn't it
 
-			if (memcmp(buf, "****", 4) == 0)
-				return TRUE;
+			while(TRUE)
+			{
+				if (GetLine(buf) == 0)
+					return TRUE;
 
+				if (memcmp(buf, "****", 4) == 0)
+					return TRUE;
+
+			}
 		}
-	}
 	}
 	if(BPQport > 0 && BPQport < 33)
 	{
@@ -253,7 +250,8 @@ static ProcessLine(char * buf, int Port)
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
 	
-		p_ipad = strtok(NULL, " \t\n\r");
+		if (p_ipad == NULL)
+			p_ipad = strtok(NULL, " \t\n\r");
 
 		if (p_ipad == NULL) return (FALSE);
 	
@@ -331,29 +329,22 @@ ConfigLine:
 
 			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
 			{
-#ifdef SCS
-				if (_memicmp(buf, "RIGCONTROL VCOM", 15) == 0)
-	
-					// SCS Virtual COM Channel
-
-					TNC->VCOMPort = atoi(&buf[15]);		
-#endif
 				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
 				TNC->RigConfigMsg = _strdup(buf);
 			}
 			else
 				
-/*			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)
-				TNC->PacketChannels = atoi(&buf[14]);
-			else
-
-			if (_memicmp(buf, "OLDMODE", 7) == 0)
-				TNC->OldMode = TRUE;
-			else
-*/
 			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
 			{}
+			else
+
+			if (_memicmp(buf, "PATH", 4) == 0)
+			{
+				char * Context;
+				p_cmd = strtok_s(&buf[5], "\n\r", &Context);
+				if (p_cmd) TNC->ProgramPath = _strdup(p_cmd);
+			}
 			else
 
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
@@ -419,60 +410,6 @@ ConfigLine:
 			}
 			else
 
-/*
-			if (TNC->Hardware == H_HAL && _memicmp(buf, "TONES", 5) == 0)
-			{
-				int tone1 = 0, tone2 = 0;
-
-				ptr = strtok(&buf[6], " ,/\t\n\r");
-				if (ptr)
-				{
-					tone1 = atoi(ptr);
-					ptr = strtok(NULL, " ,/\t\n\r");
-					if (ptr)
-					{
-						tone2 = atoi(ptr);
-						ptr = &TNC->InitScript[TNC->InitScriptLen];
-
-						*(ptr++) = SetTones;		// Set Tones (Mark, Space HI byte first)
-						*(ptr++) = tone1 >> 8;
-						*(ptr++) = tone1 & 0xff;
-						*(ptr++) = tone2 >> 8;
-						*(ptr++) = tone2 & 0xff;
-
-						TNC->InitScriptLen += 5;
-
-						goto OkLine;
-					}
-				}
-				goto BadLine;
-			}
-			if (_memicmp(TNC->Hardware == H_HAL && buf, "DEFAULTMODE ", 12) == 0)
-			{
-					
-				ptr = strtok(&buf[12], " ,\t\n\r");
-				if (ptr)
-				{
-					if (_stricmp(ptr, "CLOVER") == 0)
-						TNC->DefaultMode = Clover;
-					else if (_stricmp(ptr, "PACTOR") == 0)
-						TNC->DefaultMode = Pactor;
-					else if (_stricmp(ptr, "AMTOR") == 0)
-						TNC->DefaultMode = AMTOR;
-					else goto BadLine;
-				
-				goto OkLine;
-				}
-				else goto BadLine;
-			}
-
-		BadLine:
-			WritetoConsole(" Bad config record ");
-			WritetoConsole(errbuf);
-			WritetoConsole("\r\n");
-
-		OkLine:;
-*/
 			strcat (TNC->InitScript, buf);
 		}
 	}
@@ -835,6 +772,9 @@ VOID WINMORClose()
 			if (TNC == NULL)
 				continue;
 
+			if (TNC->Hardware != H_WINMOR)
+				continue;
+
 			ShowWindow(TNC->hDlg, SW_RESTORE);
 			GetWindowRect(TNC->hDlg, &Rect);
 
@@ -856,7 +796,13 @@ VOID WINMORClose()
 				RegCloseKey(hKey);
 			}
 	 	
-			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+			if (TNC->WIMMORPID)
+			{
+				KillTNC(TNC);
+				if (!TNC->WeStartedTNC)
+					RestartTNC(TNC);
+			}
+
 			Sleep(100);
 			shutdown(TNC->WINMORDataSock, SD_BOTH);
 			Sleep(100);
@@ -1499,9 +1445,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		return (0);
 
-	
-
-
 	case 3:	
 		
 		// CHECK IF OK TO SEND (And check TNC Status)
@@ -1694,6 +1637,9 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 
 		return (int) ExtProc;
 	}
+
+	if (TNC->ProgramPath)
+		TNC->WeStartedTNC = RestartTNC(TNC);
 
 	TNC->Hardware = H_WINMOR;
 
@@ -2360,6 +2306,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		{
 			GetModuleFileNameEx(hProc, 0,  ExeName, 255);
 			CloseHandle(hProc);
+
+			if (TNC->ProgramPath)
+				free(TNC->ProgramPath);
+
 			TNC->ProgramPath = _strdup(ExeName);
 		}
 
@@ -2725,9 +2675,7 @@ RestartTNC(struct TNCINFO * TNC)
 	SInfo.cbReserved2=0; 
   	SInfo.lpReserved2=NULL; 
 
-	CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
-
-	return 0;
+	return CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 }
 
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
