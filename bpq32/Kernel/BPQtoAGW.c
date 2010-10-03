@@ -71,6 +71,8 @@ UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
 extern UINT FREE_Q;
 
+extern UCHAR BPQDirectory[];
+
 #pragma pack(1)
 
 static struct AGWHEADER
@@ -485,7 +487,6 @@ BOOL ReadConfigFile(char * fn, int Port)
 	char buf[256],errbuf[256];
 
 	UCHAR Value[100];
-	UCHAR * BPQDirectory;
 	char * Config;
 
 	Config = PortConfig[Port];
@@ -514,8 +515,6 @@ BOOL ReadConfigFile(char * fn, int Port)
 		}
 		return (TRUE);
 	}
-
-	BPQDirectory=GetBPQDirectory();
 
 	if (BPQDirectory[0] == 0)
 	{

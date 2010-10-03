@@ -86,7 +86,7 @@ static char WindowTitle[] = "WINMOR";
 static int RigControlRow = 180;
 
 
-BOOL RestartAfterFailure = FALSE;
+extern BOOL RestartAfterFailure;
 
 #define WINMOR
 #define WL2K
@@ -113,7 +113,7 @@ struct RIGINFO * WINAPI Rig_GETPTTREC();
 struct ScanEntry ** WINAPI CheckTimeBands();
 VOID __cdecl Debugprintf(const char * format, ...);
 
-extern UCHAR * BPQDirectory;
+extern UCHAR BPQDirectory[];
 
 static BOOL Minimized;				// Start Minimized Flag
 
@@ -127,302 +127,14 @@ static RECT Rect;
 
 struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
-struct TNCINFO * TNCInfo[34] = {NULL};		// Records are Malloc'd
+struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-static BOOL ReadConfigFile(char * filename, int Port);
 static int ProcessLine(char * buf, int Port);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
-
-
-static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	int wmId, wmEvent;
-
-	int i;
-	struct TNCINFO * TNC;
-
-	switch (message) { 
-
-//		case WM_ACTIVATE:
-
-//			SetFocus(hwndInput);
-//			break;
-
-
-	case WSA_DATA: // Notification on data socket
-
-		Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
-		return 0;
-
-	case WM_INITMENUPOPUP:
-
-		for (i=1; i<33; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-			
-			if (TNC->hDlg == hWnd)
-				break;
-		}
-
-
-		if (wParam == (WPARAM)TNC->hPopMenu)
-		{
-			if (TNC->ProgramPath)
-			{
-				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
-				{
-					EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
-					EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
-		
-					return TRUE;
-				}
-			}
-
-			EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_GRAYED);
-			EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_GRAYED);
-		}
-			
-		break;
-
-	case WM_COMMAND:
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		for (i=1; i<33; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-		
-			if (TNC->hDlg == hWnd)
-				break;
-		}
-
-
-		switch (wmId) {
-
-//		case WINMOR_CONFIG:
-//
-//			DialogBoxParam(hInstance, MAKEINTRESOURCE(WINMORCONFIG), hWnd, ConfigDialogProc, (LPARAM)TNC);
-//			break;
-
-		case WINMOR_KILL:
-
-			KillTNC(TNC);
-			break;
-
-		case WINMOR_RESTART:
-
-			KillTNC(TNC);
-			RestartTNC(TNC);
- 
-			break;
-
-		case WINMOR_RESTARTAFTERFAILURE:
-
-			RestartAfterFailure = !RestartAfterFailure;
-			CheckMenuItem(TNC->hPopMenu, WINMOR_RESTARTAFTERFAILURE, (RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
-
-			break;
-
-//		case IDC_TEST:
-
-//			SendExitEnter(TNC);
-
-//			break;
-
-		default:
-
-			return 0;
-
-		}
-
-	case WM_SIZING:
-
-		for (i=1; i<33; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-		
-			if (TNC->hDlg == hWnd)
-				break;
-		}
-
-		MoveWindows(TNC);
-			
-		return TRUE;
-
-	case WM_SYSCOMMAND:
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		switch (wmId) { 
-
-		case SC_RESTORE:
-
-			Minimized = FALSE;
-			return (DefWindowProc(hWnd, message, wParam, lParam));
-
-		case  SC_MINIMIZE: 
-
-			Minimized = TRUE;
-			if (MinimizetoTray)
-				return ShowWindow(hWnd, SW_HIDE);		
-		
-			default:
-		
-				return (DefWindowProc(hWnd, message, wParam, lParam));
-		}
-
-		case WM_CTLCOLORDLG:
-			return (LONG)bgBrush;
-
-		 case WM_CTLCOLORSTATIC:
-		{
-			HDC hdcStatic = (HDC)wParam;
-			SetTextColor(hdcStatic, RGB(0, 0, 0));
-			SetBkMode(hdcStatic, TRANSPARENT);
-			return (LONG)bgBrush;
-		}
-
-		case WM_DESTROY:
-		
-			// Remove the subclass from the edit control. 
-
-
-			if (MinimizetoTray) 
-				DeleteTrayMenuItem(hWnd);
-
-			break;
-
-		default:
-			return (DefWindowProc(hWnd, message, wParam, lParam));
-
-	}
-	return (0);
-}
-
-BOOL CreatePactorWindow(struct TNCINFO * TNC)
-{
-    WNDCLASS  wc;
-	char Title[80];
-	int retCode, Type, Vallen;
-	HKEY hKey=0;
-	char Key[80];
-	char Size[80];
-	int Top, Left;
-	HANDLE hDlg;
-
-	if (TNC->hDlg)
-	{
-		ShowWindow(TNC->hDlg, SW_SHOWNORMAL);
-		SetForegroundWindow(TNC->hDlg);
-		return FALSE;							// Already open
-	}
-
-	bgBrush = CreateSolidBrush(BGCOLOUR);
-
-	wc.style = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-    wc.lpfnWndProc = WndProc;       
-                                        
-    wc.cbClsExtra = 0;                
-    wc.cbWndExtra = DLGWINDOWEXTRA;
-	wc.hInstance = hInstance;
-    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(IDI_ICON2) );
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = bgBrush; 
-
-	wc.lpszMenuName = NULL;	
-	wc.lpszClassName = ClassName; 
-
-	RegisterClass(&wc);
-
-	TNC->hDlg = hDlg = CreateDialog(hInstance,ClassName,0,NULL);
-	
-	if (TNC->Hardware == H_WINMOR)
-		wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-	else
-		wsprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);
-
-	SetWindowText(hDlg, Title);
-
-	if (MinimizetoTray)
-		AddTrayMenuItem(hDlg, Title);
-
-
-	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-	
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		Vallen=80;
-
-		retCode = RegQueryValueEx(hKey,"Size",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &Minimized);
-
-		if (TNC->Hardware == H_WINMOR)	
-			retCode = RegQueryValueEx(hKey,"RestartAfterFailure",0,			
-				(ULONG *)&Type,(UCHAR *)&RestartAfterFailure,(ULONG *)&Vallen);
-	}
-	Top = Rect.top;
-	Left = Rect.left;
-
-	GetWindowRect(hDlg, &Rect);	// Get the real size
-
-	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
-
-	if (Minimized)
-		ShowWindow(hDlg, SW_HIDE);
-	else
-		ShowWindow(hDlg, SW_SHOWNORMAL);
-
-	if (TNC->RIG)
-	{
-		struct RIGINFO * RIG = TNC->RIG;
-		int RigRow = RigControlRow;
-
-		RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
-                 10, RigRow, 80,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hCAT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 90, RigRow, 40,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hFREQ = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 135, RigRow, 100,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hMODE = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 240, RigRow, 60,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hSCAN = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 300, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
-
-		RIG->hPTT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
-
-		//if (PORT->PortType == ICOM)
-		//{
-		//	wsprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
-		//	SetWindowText(RIG->hCAT, msg);
-		//}
-		SetWindowText(RIG->hLabel, RIG->RigName);
-
-	}
-
-	return TRUE;
-}
 
 
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
@@ -461,112 +173,7 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 	return;
 }
 
-FILE *file;
-char * Config;
-char * ptr1, * ptr2;
-
-BOOL ReadConfigFile(char * fn, int Port)
-{
-	char buf[256],errbuf[256];
-	
-	Config = PortConfig[Port];
-
-	if (Config)
-	{
-		// Using config from bpq32.cfg
-
-		ptr1 = Config;
-
-		ptr2 = strchr(ptr1, 13);
-		while(ptr2)
-		{
-			memcpy(buf, ptr1, ptr2 - ptr1);
-			buf[ptr2 - ptr1] = 0;
-			ptr1 = ptr2 + 2;
-			ptr2 = strchr(ptr1, 13);
-
-			strcpy(errbuf,buf);			// save in case of error
-	
-			if (!ProcessLine(buf, Port))
-			{
-				WritetoConsole("Bad config record ");
-				WritetoConsole(errbuf);
-			}
-		}
-	}
-	else
-	{
-
-	UCHAR Value[100];
-
-	BPQDirectory=GetBPQDirectory();
-
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value,fn);
-	}
-	else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value,fn);
-	}
-		
-	if ((file = fopen(Value,"r")) == NULL)
-	{
-		wsprintf(buf," Config file %s not found ",Value);
-		WritetoConsole(buf);
-		return (TRUE);			// Will give Port Not Defined error later
-	}
-
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-	
-		if (!ProcessLine(buf, Port))
-		{
-			WritetoConsole(" Bad config record ");
-			WritetoConsole(errbuf);
-		}			
-	}
-
-	fclose(file);
-	file = NULL;
-	}
-	return (TRUE);
-}
-GetLine(char * buf)
-{
-loop:
-
-	if (file)
-	{
-		if (fgets(buf, 255, file) == NULL)
-			return 0;
-	}
-	else
-	{
-		if (ptr2 == NULL) 
-			return 0;
-
-		memcpy(buf, ptr1, ptr2 - ptr1 + 2);
-		buf[ptr2 - ptr1 + 2] = 0;
-		ptr1 = ptr2 + 2;
-		ptr2 = strchr(ptr1, 13);
-	}
-
-	if (buf[0] < 0x20) goto loop;
-	if (buf[0] == '#') goto loop;
-	if (buf[0] == ';') goto loop;
-
-	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
-	if (buf[strlen(buf)-1] < 0x20) buf[strlen(buf)-1] = 0;
-	buf[strlen(buf)] = 13;
-
-	return 1;
-}
-
-ProcessLine(char * buf, int Port)
+static ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
 	char * p_ipad = 0;
@@ -614,28 +221,15 @@ ProcessLine(char * buf, int Port)
 
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
-#ifdef AEA
-		strcpy(TNC->InitScript, "RESTART\r");
-#endif
 		goto ConfigLine;
 	}
 	else
-
 	{
-
 		// Old Config from file
 
 	BPQport=0;
 	BPQport = atoi(ptr);
 	
-	p_cmd = strtok(NULL, " \t\n\r");
-
-	#ifdef WINMOR
-
-		p_ipad = strtok(NULL, " \t\n\r");
-
-	#endif
-
 	if (Port && Port != BPQport)
 	{
 		// Want a particular port, and this isn't it
@@ -658,12 +252,9 @@ ProcessLine(char * buf, int Port)
 
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
-#ifdef AEA
-		strcpy(TNC->InitScript, "RESTART\r");
-#endif
-
-#ifdef WINMOR
 	
+		p_ipad = strtok(NULL, " \t\n\r");
+
 		if (p_ipad == NULL) return (FALSE);
 	
 		p_port = strtok(NULL, " \t\n\r");
@@ -712,7 +303,7 @@ ProcessLine(char * buf, int Port)
 			p_cmd = ptr;
 
 		p_cmd = strtok(NULL, " \t\n\r");
-#endif			
+		
 		if (p_cmd != NULL)
 		{
 			if (p_cmd[0] != ';' && p_cmd[0] != '#')
@@ -1201,7 +792,7 @@ extern char APPLS;
 
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 
-#define MAXBPQPORTS 16
+#define MAXBPQPORTS 32
 
 static time_t ltime;
 
@@ -2090,7 +1681,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 	
 	port = PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("BPQtoWINMOR.CFG", port);
+	ReadConfigFile("BPQtoWINMOR.CFG", port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -2218,7 +1809,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
-	CreatePactorWindow(TNC);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow);
 
 	hMenu=CreateMenu();
 	TNC->hPopMenu=CreatePopupMenu();
@@ -2943,7 +2534,7 @@ loop:
 }
 
 
-int Socket_Data(int sock, int error, int eventcode)
+int Winmor_Socket_Data(int sock, int error, int eventcode)
 {
 	int i=0;
 	struct TNCINFO * TNC;
@@ -3211,20 +2802,3 @@ lineloop:
 	index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
 
 }
-
-
-
-VOID MoveWindows(struct TNCINFO * TNC)
-{
-	RECT rcClient;
-	int ClientHeight, ClientWidth;
-
-	GetClientRect(TNC->hDlg, &rcClient); 
-
-	ClientHeight = rcClient.bottom;
-	ClientWidth = rcClient.right;
-
-	MoveWindow(TNC->hMonitor,4 , 200, ClientWidth-8, ClientHeight-205, TRUE);
-
-}
-

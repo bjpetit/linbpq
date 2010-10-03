@@ -271,6 +271,9 @@
 // Add option to reread IP Gateway config.
 // Fix Reinit after process with timer closes (error in TellSessions).
 
+// 410p		Build 1 October 2010
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
@@ -329,6 +332,8 @@ DllExport char * APPLS;
 
 UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AXIPExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI SCSExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI KAMExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
@@ -399,7 +404,7 @@ struct _DATABASE * DataBase  = (struct _DATABASE *)&DATABASE;
 DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
 DllExport long  MONDECODEPTR=(long)&MONDECODE;
 
-UCHAR BPQDirectory[MAX_PATH] = "";
+UCHAR BPQDirectory[MAX_PATH]="";
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 
@@ -3100,6 +3105,12 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "BPQTOAGW"))
 		return (UINT) AGWExtInit;
 
+	if (strstr(Value, "KAMPACTOR"))
+		return (UINT) KAMExtInit;
+
+	if (strstr(Value, "SCSPACTOR"))
+		return (UINT) SCSExtInit;
+
 	if (strstr(Value, "WINMOR"))
 		return (UINT) WinmorExtInit;
 	
@@ -3385,6 +3396,73 @@ int DoNodes()
 	}
 
 	return (0);
+}
+int APIENTRY Restart()
+{
+	int i, Count = AttachedProcesses;
+	HANDLE hProc;
+	DWORD PID;
+
+	for (i = 0; i < Count; i++)
+	{
+		PID = AttachedPIDList[i];
+		
+		// Kill Timer Owner last
+
+		if (TimerInst != PID)
+		{
+			hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, PID);
+
+			if (hProc)
+			{
+				TerminateProcess(hProc, 0);
+				CloseHandle(hProc);
+			}
+		}
+	}
+
+	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TimerInst);
+
+		if (hProc)
+		{
+			TerminateProcess(hProc, 0);
+			CloseHandle(hProc);
+		}
+
+	
+	return 0;
+}
+
+int APIENTRY Reboot()
+{
+	// Run shutdown -r -f
+
+	STARTUPINFO  SInfo;
+    PROCESS_INFORMATION PInfo;
+	char Cmd[] = "shutdown -r -f";
+
+	SInfo.cb=sizeof(SInfo);
+	SInfo.lpReserved=NULL; 
+	SInfo.lpDesktop=NULL; 
+	SInfo.lpTitle=NULL; 
+	SInfo.dwFlags=0; 
+	SInfo.cbReserved2=0; 
+  	SInfo.lpReserved2=NULL; 
+
+	return CreateProcess(NULL, Cmd, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+}
+
+int APIENTRY Reconfig()
+{
+	if (!ProcessConfig())
+	{
+		return (0);
+	}
+	SaveNodes();
+	WritetoConsole("Nodes Saved\n");
+	ReconfigFlag=TRUE;	
+	WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
+	return 1;
 }
 
 DllExport int APIENTRY SaveNodes ()

@@ -450,29 +450,26 @@ BOOL CheckforDups(CIRCUIT * circuit, char * Call, char * Msg)
 			if (saveindex == -1)
 			{
 				saveindex = i;
-				continue;
 			}
-
-			if ((strcmp(Call, DupInfo[i].DupUser) == 0) && (memcmp(Msg, DupInfo[i].DupText, strlen(DupInfo[i].DupText)) == 0))
-			{
-				// Uplicate, so discard, but save time
-
-				DupInfo[i].DupTime = Now;
-				Logprintf(LOG_CHAT, circuit, '?', "Duplicate Message From %s %s supressed", Call, Msg);
-
-				return TRUE;					// Duplicate
-			}
+			continue;	
 		}
+
+		if ((strcmp(Call, DupInfo[i].DupUser) == 0) && (memcmp(Msg, DupInfo[i].DupText, strlen(DupInfo[i].DupText)) == 0))
+		{
+			// Duplicate, so discard, but save time
+
+			DupInfo[i].DupTime = Now;
+			Logprintf(LOG_CHAT, circuit, '?', "Duplicate Message From %s %s supressed", Call, Msg);
+
+			return TRUE;					// Duplicate
+		}
+		
 	}
 
 	// Not in list
 
-	if (saveindex == -1)
-	{
-		// List is full
-
+	if (saveindex == -1)  // List is full
 		saveindex = MAXDUPS - 1;	// Stick on end	
-	}
 
 	DupInfo[saveindex].DupTime = Now;
 	strcpy(DupInfo[saveindex].DupUser, Call);
@@ -518,7 +515,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 
 	switch(Buffer[TYPE_O])
 	{
-// Data from user ucall at node ncall.
+		// Data from user ucall at node ncall.
 
 		case id_data :
 
@@ -540,7 +537,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 			}
 			break;
 
-// User ucall at node ncall changed their Name/QTH info.
+		// User ucall at node ncall changed their Name/QTH info.
 
 		case id_user :
 
@@ -558,7 +555,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 			upduser(user);
 			break;
 
-// User ucall logged into node ncall.
+		// User ucall logged into node ncall.
 
 		case id_join :
 
@@ -593,7 +590,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 
 			break;
 
-// User ucall logged out of node ncall.
+		// User ucall logged out of node ncall.
 
 		case id_leave :
 
@@ -619,7 +616,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 			user_leave(user);
 			break;
 
-// Node ncall lost its link to node ucall, alias f1.
+		// Node ncall lost its link to node ucall, alias f1.
 
 		case id_unlink :
 
@@ -649,9 +646,9 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 
 			break;
 
-// Node ncall acquired a link to node ucall, alias f1.
-// If we are not linked, is no problem, don't link.
-// If we are linked, is a loop, do what? (Try ignore!)
+		// Node ncall acquired a link to node ucall, alias f1.
+		// If we are not linked, is no problem, don't link.
+		// If we are linked, is a loop, do what? (Try ignore!)
 
 		case id_link :
 
@@ -670,7 +667,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 
 			break;
 
-// User ucall at node ncall sent f2 to user f1.
+		// User ucall at node ncall sent f2 to user f1.
 
 		case id_send :
 			user = user_find(ucall, ncall);
@@ -686,7 +683,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 				echo(ckt_from, node, Buffer);  // Relay to other nodes.
 			break;
 
-// User ucall at node ncall changed topic.
+		// User ucall at node ncall changed topic.
 
 		case id_topic :
 			user = user_find(ucall, ncall);
@@ -732,7 +729,7 @@ void state_tell(CIRCUIT *circuit, char * Version)
 	node = cn_inc(circuit, circuit->u.link->call, circuit->u.link->alias, Version);
 	node_tell(node, id_link); // Tell other nodes about this new link
 
-// Tell the node that just linked here about nodes known on other links.
+	// Tell the node that just linked here about nodes known on other links.
 
 	for (node = node_hd; node; node = node->next)
 	{
@@ -740,7 +737,7 @@ void state_tell(CIRCUIT *circuit, char * Version)
 		  node_xmit(node, id_link, circuit);
 	}
 
-// Tell the node that just linked here about known users, and their topics.
+	// Tell the node that just linked here about known users, and their topics.
 
 	for (user = user_hd; user; user = user->next)
 	{
@@ -748,6 +745,7 @@ void state_tell(CIRCUIT *circuit, char * Version)
 		topic_xmit(user, circuit);
 	}
 }
+
 static void circuit_free(CIRCUIT *circuit)
 {
 	CIRCUIT *c, *cp;

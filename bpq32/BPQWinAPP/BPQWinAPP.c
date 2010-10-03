@@ -1,4 +1,8 @@
 
+// Version 1. 0. 2. 1 October 2010
+
+//	Add Delay on start option, and dynamically load bpq32
+
 #include <windows.h>
 
 #include <stdlib.h>
@@ -6,16 +10,14 @@
 #include <malloc.h>	
 #include <memory.h>
 
-
-//#include "bpqterm.h"
-#include "..\include\bpq32.h"			// BPQ32 API Defines
+#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
+#include "bpq32.h"
 
 #define BPQICON 400
 
 HINSTANCE hInst; 
 char AppName[] = "BPQ32";
 char Title[80] = "Program to hold BPQ32.dll in memory";
-
 
 // Foward declarations of functions included in this code module:
 
@@ -25,10 +27,7 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 
-int APIENTRY SetupTrayIcon();
-
 int TimerHandle = 0;
-
 
 LOGFONT LFTTYFONT ;
 
@@ -47,19 +46,22 @@ BOOL MinimizetoTray=FALSE;
 //	message loop.
 //
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-
 {
 	MSG msg;
 
-	
+	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delay 5 Secs				
+		Sleep(5000);
+
+	GetAPI();
+
 	if (!InitApplication(hInstance)) 
-			return (FALSE);
+		return (FALSE);
 
 	if (!InitInstance(hInstance, nCmdShow))
 		return (FALSE);
 
-
 	// Main message loop:
+
 	while (GetMessage(&msg, NULL, 0, 0)) 
 	{
 		TranslateMessage(&msg);
@@ -69,7 +71,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	KillTimer(NULL,TimerHandle);
 
 	return (msg.wParam);
-
 }
 
 //

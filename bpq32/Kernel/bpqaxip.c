@@ -155,12 +155,8 @@
 int ResetExtDriver(int num);
 BOOL ProcessConfig();
 VOID FreeConfig();
-char * PortConfig[33];
-
-
-//UCHAR * APIENTRY GetBPQDirectory();
-
-//UCHAR * (FAR WINAPI * GetBPQDirectory)();
+char * PortConfig[34];
+extern UCHAR BPQDirectory[];
 
 
 void ResolveNames(void *dummy);
@@ -1879,7 +1875,7 @@ crcloop:
 
   }
 
-BOOL ReadConfigFile(char * fn, int Port)
+static BOOL ReadConfigFile(char * fn, int Port)
 {
 
 /* Linux Format
@@ -1913,7 +1909,6 @@ broadcast QST-0 NODES-0
 
 	HKEY hKey=0;
 	UCHAR Value[100];
-	UCHAR * BPQDirectory;
 	char * Config;
 
 	Config = PortConfig[Port];
@@ -1949,10 +1944,6 @@ broadcast QST-0 NODES-0
 	else
 	{
 	
-
-	BPQDirectory=GetBPQDirectory();
-
-
 	wsprintf(errbuf, "BPQAXIP BPQ Directory = %s Filename = %s\n", BPQDirectory, fn);
 	OutputDebugString(errbuf);
 
@@ -2010,7 +2001,7 @@ broadcast QST-0 NODES-0
 	return (TRUE);
 }
 
-ProcessLine(char * buf)
+static ProcessLine(char * buf)
 {
 	char * ptr;
 	char * p_call;

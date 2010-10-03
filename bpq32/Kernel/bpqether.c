@@ -75,9 +75,7 @@ struct tagMSG Msg;
 
 short udpport=0;
 
-
-DllImport int ResetExtDriver(int num);
-
+extern UCHAR BPQDirectory[];
 
 unsigned int OurInst = 0;
 
@@ -479,7 +477,6 @@ static BOOL ReadConfigFile(char * fn, int Port)
 	char buf[256],errbuf[256];
 
 	UCHAR Value[MAX_PATH];
-	UCHAR * BPQDirectory;
 	char * Config;
 
 	Config = PortConfig[Port];
@@ -508,8 +505,6 @@ static BOOL ReadConfigFile(char * fn, int Port)
 		}
 		return (TRUE);
 	}
-
-	BPQDirectory=GetBPQDirectory();
 
 	if (BPQDirectory[0] == 0)
 	{

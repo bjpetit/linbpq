@@ -248,6 +248,8 @@ BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 
 VOID APIENTRY md5 (char *arg, unsigned char * checksum);
 
+int APIENTRY SetupTrayIcon();
+
 #else
 
 struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntry) (int portslot);
@@ -444,6 +446,8 @@ int (FAR WINAPI * AddTrayMenuItem)(HWND hWnd, char * Label);
 //int APIENTRY DeleteTrayMenuItem();
 int (FAR WINAPI * DeleteTrayMenuItem)(HWND hWnd);
 
+int (FAR WINAPI * SetupTrayIcon)();
+
 BOOL (FAR WINAPI * GetStartMinimizedFlag)();
 
 // Log a message to the bpq32 console.
@@ -538,6 +542,8 @@ BOOL GetAPI()
 	GetMinimizetoTrayFlag = (BOOL (__stdcall *)())GetProcAddress(ExtDriver,"_GetMinimizetoTrayFlag@0");
 	AddTrayMenuItem = (int (__stdcall *)(HWND hWnd, char * Label))GetProcAddress(ExtDriver,"_AddTrayMenuItem@8");
 	DeleteTrayMenuItem = (int (__stdcall *)(HWND hWnd))GetProcAddress(ExtDriver,"_DeleteTrayMenuItem@4");
+	SetupTrayIcon = (BOOL (__stdcall *)())GetProcAddress(ExtDriver,"_SetupTrayIcon@0");
+	
 	GetStartMinimizedFlag = (BOOL (__stdcall *)())GetProcAddress(ExtDriver,"_GetStartMinimizedFlag@0");
 	WritetoConsole = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_WritetoConsole@4");
 	CheckTimer = (int (__stdcall *)(char *))GetProcAddress(ExtDriver,"_CheckTimer@0");

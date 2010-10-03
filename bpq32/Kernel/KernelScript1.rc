@@ -95,6 +95,51 @@ BEGIN
 END
 
 
+PACTORSTATUS DIALOG DISCARDABLE  0, 0, 284, 134
+STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Pactor Status"
+CLASS "PACTORSTATUS"
+FONT 8, "FixedSys"
+BEGIN
+    LTEXT           "",IDC_1,56,57,54,10
+    LTEXT           "",IDC_2,56,44,54,10
+    LTEXT           "",IDC_3,56,31,75,10
+    LTEXT           "0",IDC_4,56,70,54,10
+    LTEXT           "TX/RX State",IDC_STATIC,5,57,44,10
+    LTEXT           "Status",IDC_STATIC,5,44,30,10
+    LTEXT           "Mode",IDC_STATIC,5,31,30,10
+    LTEXT           "Buffers",IDC_STATIC,5,70,30,10
+    LTEXT           "",IDC_TNCSTATE,57,15,223,11
+    LTEXT           "TNC State",IDC_STATIC,5,18,40,10
+    LTEXT           "Comms State",IDC_STATIC,5,5,45,10
+    LTEXT           "",IDC_COMMSSTATE,56,5,145,10
+    LTEXT           "Traffic",IDC_STATIC,5,83,30,10
+    LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,56,83,140,10
+    LTEXT           "Mode",IDC_PACTORLEVEL,5,96,215,10
+END
+
+KAMPACTORSTATUS DIALOG DISCARDABLE  0, 0, 249, 125
+STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Pactor Status"
+CLASS "KAMPACTORSTATUS"
+FONT 8, "FixedSys"
+BEGIN
+    LTEXT           "",IDC_1,60,57,54,10
+    LTEXT           "",IDC_2,60,44,54,10
+    LTEXT           "",IDC_3,60,31,75,10
+    LTEXT           "0",IDC_4,60,70,54,10
+    LTEXT           "TX/RX State",IDC_STATIC,5,57,44,10
+    LTEXT           "Status",IDC_STATIC,5,44,30,10
+    LTEXT           "Mode",IDC_STATIC,5,31,30,10
+    LTEXT           "Buffers",IDC_STATIC,5,70,30,10
+    LTEXT           "",IDC_TNCSTATE,60,18,125,10
+    LTEXT           "TNC State",IDC_STATIC,5,18,40,10
+    LTEXT           "Comms State",IDC_STATIC,5,5,45,10
+    LTEXT           "",IDC_COMMSSTATE,60,5,185,10
+    LTEXT           "Traffic",IDC_STATIC,5,83,30,10
+    LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,60,83,140,10
+END
+
 
 #ifndef _MAC
 /////////////////////////////////////////////////////////////////////////////

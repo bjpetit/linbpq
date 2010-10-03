@@ -40,8 +40,8 @@
 #define IDC_PROTOSTATE                  1000
 #define IDC_CHANSTATE                   1001
 #define IDC_MODE                        1002
-#define IDC_TNCSTATE                    1003
-#define IDC_COMMSSTATE                  1004
+#define IDC_TNCSTATE                    1203
+#define IDC_COMMSSTATE                  1204
 #define IDC_TRAFFIC                     1005
 #define WINMOR_CONFIG                   1006
 #define IDC_RESTARTS                    1006
