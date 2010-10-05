@@ -61,6 +61,8 @@ typedef struct TNCINFO
 #define H_AEA 4
 #define H_HAL 5
 
+	BOOL Minimized;				// Start Minimized flag
+
 	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
 	int BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
 
@@ -87,6 +89,7 @@ typedef struct TNCINFO
 	BOOL FECMode;				// In FEC Mode
 	BOOL FEC1600;				// Use 1600 Hz FEC Mode
 	int FECIDTimer;				// Time in FEC Mode. Used to trigger ID broadcasts
+	BOOL RestartAfterFailure;
 
 	int Busy;					// Channel Busy Flags
 
@@ -155,6 +158,9 @@ typedef struct TNCINFO
 	char WL2KFreq[12];
 	char WL2KMode;
 
+	char NARROWMODE;
+	char WIDEMODE;				// Mode numbers to report to WL2K
+
 	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
 
 	struct STREAMINFO Streams[27];	// 0 is Pactor 1 - 10 are ax.25.
@@ -213,6 +219,23 @@ typedef struct TNCINFO
 
 };
 
+
 BOOL ReadConfigFile(char * filename, int Port, int ProcLine());
 GetLine(char * buf);
 BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow);
+BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
+BOOL SendReporttoWL2K(struct TNCINFO * TNC);
+DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE);
+VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode);
+VOID SaveWindowPos(int port);
+
+#define Report_P1 11
+#define Report_P12 12 
+#define Report_P123 13
+#define Report_P2 14
+#define Report_P23 15
+#define Report_P3 16
+
+#define Report_WINMOR500 21
+#define Report_WINMOR1600 22  
+

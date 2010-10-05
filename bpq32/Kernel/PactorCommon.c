@@ -385,7 +385,7 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 
 	ConvToAX25(Call, AXCall);
 
-	for (i = 0; i < 20; i++)
+	for (i = 0; i < MHENTRIES; i++)
 	{
 		if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) &&
 			MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare our our entry

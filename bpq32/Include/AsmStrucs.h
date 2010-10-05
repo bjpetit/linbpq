@@ -4,8 +4,11 @@
 
 #define BUFFLEN	360
 
-#define ApplStringLen 48			// Length of each config entry
-#define NumberofAppls 32			// Max APPLICATIONS= values
+#define ApplStringLen 48	// Length of each config entry
+#define NumberofAppls 32	// Max APPLICATIONS= values
+
+#define MHENTRIES 30		// Entries in MH List
+
 
 
 #define NRPID 0xcf			// NETROM PID

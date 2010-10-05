@@ -24,37 +24,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "time.h"
-#include <commctrl.h>
 
 //#include <process.h>
 //#include <time.h>
-
-#define VERSION_MAJOR 1
-#define VERSION_MINOR 0
 
 #include "RigControl.h"
 #include "ASMStrucs.h"
 
 #include "bpq32.h"
 
-static char ClassName[] = "RIGCONTROL";
- 
-#define DllImport	__declspec(dllimport)
-#define DllExport	__declspec(dllexport)
-#define Dll	__declspec( dllexport )
+#define DllImport	__declspec( dllimport )
+#define DllExport	__declspec( dllexport )
+
 
 extern UINT FREE_Q;
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
 
-RECT Rect;
-
 int Row = -20;
 
-extern UCHAR BPQDirectory[];
-
-char CFGFN[MAX_PATH];
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
@@ -68,14 +57,8 @@ void CheckRX(struct PORTINFO * PORT);
 OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed);
 VOID ICOMPoll(struct PORTINFO * PORT);
 VOID ProcessFrame(struct PORTINFO * PORT, UCHAR * rxbuff, int len);
-BOOL ReadConfigFile();
-int ProcessLine(char * buf);
 VOID ProcessHostFrame(struct PORTINFO * PORT, UCHAR * rxbuffer, int Len);
 SendResponse(int Stream, char * Msg);
-VOID CreateDisplay(struct PORTINFO * PORT);
-VOID CreatePortLine(struct PORTINFO * PORT);
-int CreateICOMLine(struct RIGINFO * RIG);
-int CreateYaesuLine(struct RIGINFO * RIG);
 VOID ProcessYaesuFrame(PORT);
 VOID YaesuPoll(struct PORTINFO * PORT);
 VOID ProcessYaesuCmdAck(struct PORTINFO * PORT);
@@ -85,12 +68,7 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna);
 VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr);
 VOID SetupScanInterLockGroups(struct RIGINFO *RIG);
 
-UINT ReleaseBuffer(UINT *BUFF);
-UINT * Q_REM(UINT *Q);
-int C_Q_ADD(UINT *Q,UINT *BUFF);
-
 extern  struct TRANSPORTENTRY * L4TABLE;
-
 
 VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
 BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
@@ -111,196 +89,10 @@ char AuthPassword[100] = "";
 
 char LastPassword[17];
 
-
-#define BGCOLOUR RGB(236,233,216)
-
-extern BOOL MinimizetoTray;
-extern BOOL StartMinimized;
-
-HANDLE hInstance;
-HBRUSH bgBrush;
-
-RECT Rect;
-HWND hDlg;						// Status Window Handle
-
-HFONT hFont;
-LOGFONT LFTTYFONT ;
-
 int NumberofPorts = 0;
 
-BOOL Minimized = FALSE;			// Start Minimized flag
+struct PORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
 
-struct PORTINFO * PORTInfo[18] = {NULL};		// Records are Malloc'd
-
-int ProcessLine(char * buf);
-
-static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	int wmId, wmEvent;
-	
-	switch (message) { 
-
-//		case WM_ACTIVATE:
-
-//			SetFocus(hwndInput);
-//			break;
-
-
-	case WM_COMMAND:
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		switch (wmId) {
-
-//		case RIG_CONFIG:
-
-//			DialogBox(hInstance, MAKEINTRESOURCE(RIGCONFIG), hDlg, ConfigDialogProc);
-//			break;
-
-		default:
-
-			return 0;
-
-		}
-
-	case WM_SYSCOMMAND:
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		switch (wmId) { 
-
-		case SC_RESTORE:
-
-			Minimized = FALSE;
-			return (DefWindowProc(hWnd, message, wParam, lParam));
-
-		case  SC_MINIMIZE: 
-
-			Minimized = TRUE;
-
-			if (MinimizetoTray)
-				return ShowWindow(hWnd, SW_HIDE);		
-		
-			default:
-		
-				return (DefWindowProc(hWnd, message, wParam, lParam));
-		}
-
-		case WM_CTLCOLORDLG:
-			return (LONG)bgBrush;
-
-		 case WM_CTLCOLORSTATIC:
-		{
-			HDC hdcStatic = (HDC)wParam;
-			SetTextColor(hdcStatic, RGB(0, 0, 0));
-			SetBkMode(hdcStatic, TRANSPARENT);
-			return (LONG)bgBrush;
-		}
-
-		case WM_SIZING:
-			
-			return TRUE;
-
-
-		case WM_DESTROY:
-		
-			if (MinimizetoTray) 
-				DeleteTrayMenuItem(hWnd);
-
-			break;
-
-		default:
-			return (DefWindowProc(hWnd, message, wParam, lParam));
-
-	}
-	return (0);
-}
-
-//HMENU hPopMenu;
-
-
-BOOL CreateRigWindow()
-{
-    WNDCLASS  wc;
-	char Title[80];
-	int retCode, Type, Vallen;
-	HKEY hKey=0;
-	char Key[80];
-	char Size[80];
-	int Top, Left;
-//	HMENU hMenu;
-
-	bgBrush = CreateSolidBrush(BGCOLOUR);
-
-	wc.style = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-    wc.lpfnWndProc = WndProc;       
-                                        
-    wc.cbClsExtra = 0;                
-    wc.cbWndExtra = DLGWINDOWEXTRA;
-	wc.hInstance = hInstance;
-    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(IDI_ICON2) );
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = bgBrush; 
-
-	wc.lpszMenuName = NULL;	
-	wc.lpszClassName = ClassName; 
-
-	RegisterClass(&wc);
-
-	hDlg = CreateDialog(hInstance,ClassName,0,NULL);
-
-/*
-	hMenu=CreateMenu();
-	TNC->hPopMenu=CreatePopupMenu();
-	SetMenu(hDlg,hMenu);
-
-	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)TNC->hPopMenu,"Actions");
-
-	AppendMenu(TNC->hPopMenu,MF_STRING,RIG_CONFIG,"Configure");
-	
-	DrawMenuBar(hDlg);	
-*/
-	
-	wsprintf(Title,"Rig Control");
-
-	SetWindowText(hDlg, Title);
-
-	if (MinimizetoTray)
-		AddTrayMenuItem(hDlg, Title);
-
-
-	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\RIGCONTROL");
-	
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		Vallen=80;
-
-		retCode = RegQueryValueEx(hKey,"Size",0, (ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &Minimized);
-	}
-
-	Top = Rect.top;
-	Left = Rect.left;
-
-	GetWindowRect(hDlg, &Rect);	// Get the real size
-	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
-
-	GetWindowRect(hDlg, &Rect);	// Get Actual Position
-
-	if (Minimized)
-		ShowWindow(hDlg, SW_HIDE);
-	else
-		ShowWindow(hDlg, SW_SHOWNORMAL);
-
-
-	return TRUE;
-}
 
 struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
 {
@@ -1427,87 +1219,7 @@ DllExport BOOL APIENTRY Rig_Close()
 
 	NumberofPorts = 0;		// For possible restart
 
-	if (hDlg == NULL)
-		return 1;
-
-/*
-	ShowWindow(hDlg, SW_RESTORE);
-	GetWindowRect(hDlg, &Rect);
-
-	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\RIGCONTROL");
-	
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
-		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		RegCloseKey(hKey);
-	}
-
-	DestroyWindow(hDlg);
-	*/
 	return TRUE;
-}
-
-VOID CreateDisplay(struct PORTINFO * PORT)
-{
-	int i;
-	char msg[80];
-	struct RIGINFO * RIG;
-
-	CreatePortLine(PORT);
-
-	Row +=25;
-
-		if (PORT->PortType == ICOM)
-		{
-			CreateWindow(WC_STATIC, "Radio      CI-V Addr",
-				WS_CHILD | WS_VISIBLE, 5, Row, 150, 20, hDlg, NULL, hInstance, NULL);
-			CreateWindow(WC_STATIC, "Freq                   Mode",
-				WS_CHILD | WS_VISIBLE, 135, Row, 200, 20, hDlg, NULL, hInstance, NULL);
-
-		}
-		else
-		if (PORT->PortType == PTT)
-		{
-			CreateWindow(WC_STATIC, "Radio",
-				WS_CHILD | WS_VISIBLE, 5, Row, 60,20, hDlg, NULL, hInstance, NULL);
-			CreateWindow(WC_STATIC, "PTT",
-				WS_CHILD | WS_VISIBLE, 300, Row, 60,20, hDlg, NULL, hInstance, NULL);
-		}
-		else if (PORT->PortType == ANT)
-		{
-			CreateWindow(WC_STATIC, "Radio",
-				WS_CHILD | WS_VISIBLE, 5, Row, 60,20, hDlg, NULL, hInstance, NULL);
-			CreateWindow(WC_STATIC, "Ant",
-				WS_CHILD | WS_VISIBLE, 300, Row, 60,20, hDlg, NULL, hInstance, NULL);
-		}
-		else
-		{
-			CreateWindow(WC_STATIC, "Radio",
-				WS_CHILD | WS_VISIBLE, 5, Row, 60, 20, hDlg, NULL, hInstance, NULL);
-			CreateWindow(WC_STATIC, "Freq                   Mode",
-				WS_CHILD | WS_VISIBLE, 135, Row, 200, 20, hDlg, NULL, hInstance, NULL);
-		}
-	Row += 5;
-
-	for (i=0; i < PORT->ConfiguredRigs; i++)
-	{
-		RIG = &PORT->Rigs[i];
-		CreateICOMLine(RIG);
-		if (PORT->PortType == ICOM)
-		{
-			wsprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
-			SetWindowText(RIG->hCAT, msg);
-		}
-		SetWindowText(RIG->hLabel, PORT->Rigs[i].RigName);
-	}
 }
 
 
@@ -2339,49 +2051,8 @@ SendResponse(int Session, char * Msg)
 	return 0;
 }
 
-VOID CreatePortLine(struct PORTINFO * PORT)
-{
-	Row +=25;
-	
-	PORT->hStatus = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
-                5, Row, 290 ,20, hDlg, NULL, hInstance, NULL);
-}
 
 
-int CreateICOMLine(struct RIGINFO * RIG)
-{
-	if (RIG->hLabel)
-		return 0;
-
-	Row +=20;
-	
-	RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
-                 5, Row, 80,20, hDlg, NULL, hInstance, NULL);
-	
-	RIG->hCAT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 90, Row, 40,20, hDlg, NULL, hInstance, NULL);
-	
-	RIG->hFREQ = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 135, Row, 100,20, hDlg, NULL, hInstance, NULL);
-	
-	RIG->hMODE = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 240, Row, 60,20, hDlg, NULL, hInstance, NULL);
-	
-	RIG->hSCAN = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 300, Row, 20,20, hDlg, NULL, hInstance, NULL);
-
-	RIG->hPTT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 320, Row, 20,20, hDlg, NULL, hInstance, NULL);
-
-//SendMessage(RIG->hLabel, WM_SETFONT,(WPARAM) hFont, 0);
-//	SendMessage(RIG->hCAT, WM_SETFONT,(WPARAM) hFont, 0);
-//	SendMessage(RIG->hFREQ, WM_SETFONT,(WPARAM) hFont, 0);
-//	SendMessage(RIG->hMODE, WM_SETFONT,(WPARAM) hFont, 0);
-
-
-
-	return 0;
-}
 VOID ProcessYaesuCmdAck(struct PORTINFO * PORT)
 {
 	UCHAR * Poll = PORT->TXBuffer;

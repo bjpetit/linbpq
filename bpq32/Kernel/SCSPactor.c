@@ -55,9 +55,6 @@
 //#include <process.h>
 //#include <time.h>
 
-#define VERSION_MAJOR 1
-#define VERSION_MINOR 0
-
 #include "SCSPactor.h"
 #include "ASMStrucs.h"
 #include "RigControl.h"
@@ -68,23 +65,13 @@ static char ClassName[]="PACTORSTATUS";
 static char WindowTitle[] = "SCS Pactor";
 static int RigControlRow = 210;
 
-HANDLE hInstance;
-
 #define SCS
 #define WL2K
 #define NARROWMODE 12
 #define WIDEMODE 16			// PIII only
 
-//
-//	Code Common to Pactor Modules
-
-#include <commctrl.h>
-
-#define BGCOLOUR RGB(236,233,216)
 
 extern BOOL MinimizetoTray;
-
-static HBRUSH bgBrush;
 
 BOOL WINAPI Rig_Command();
 struct RIGINFO * WINAPI RigConfig();
@@ -94,8 +81,6 @@ struct RIGINFO * WINAPI Rig_GETPTTREC();
 struct ScanEntry ** WINAPI CheckTimeBands();
 
 extern UCHAR BPQDirectory[];
-
-extern BOOL Minimized;				// Start Minimized Flag
 
 extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
@@ -108,263 +93,9 @@ struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-GetLine(char * buf);
-int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
-BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
-BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
-
-// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-/*
-
-static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	int wmId, wmEvent;
-
-#ifdef WINMOR
-	int i;
-	struct TNCINFO * TNC;
-#endif
-#ifdef SCS
-	int i;
-	struct TNCINFO * TNC;
-#endif
-
-	switch (message) { 
-
-//		case WM_ACTIVATE:
-
-//			SetFocus(hwndInput);
-//			break;
-
-
-#ifdef WINMOR
-
-	case WSA_DATA: // Notification on data socket
-
-		Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
-		return 0;
-
-	case WM_INITMENUPOPUP:
-
-		for (i=1; i<17; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-			
-			if (TNC->hDlg == hWnd)
-				break;
-		}
-
-
-		if (wParam == (WPARAM)TNC->hPopMenu)
-		{
-			if (TNC->ProgramPath)
-			{
-				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
-				{
-					EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
-					EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
-		
-					return TRUE;
-				}
-			}
-
-			EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_GRAYED);
-			EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_GRAYED);
-		}
-			
-		break;
-
-	case WM_COMMAND:
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		for (i=1; i<17; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-		
-			if (TNC->hDlg == hWnd)
-				break;
-		}
-
-
-		switch (wmId) {
-
-//		case WINMOR_CONFIG:
-//
-//			DialogBoxParam(hInstance, MAKEINTRESOURCE(WINMORCONFIG), hWnd, ConfigDialogProc, (LPARAM)TNC);
-//			break;
-
-		case WINMOR_KILL:
-
-			KillTNC(TNC);
-			break;
-
-		case WINMOR_RESTART:
-
-			KillTNC(TNC);
-			RestartTNC(TNC);
- 
-			break;
-
-		case WINMOR_RESTARTAFTERFAILURE:
-
-			RestartAfterFailure = !RestartAfterFailure;
-			CheckMenuItem(TNC->hPopMenu, WINMOR_RESTARTAFTERFAILURE, (RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
-
-			break;
-
-		default:
-
-			return 0;
-
-		}
-
-	case WM_SIZING:
-
-		for (i=1; i<17; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-		
-			if (TNC->hDlg == hWnd)
-				break;
-		}
-
-		MoveWindows(TNC);
-			
-		return TRUE;
-
-#endif
-
-#ifdef SCS
-
-	case WM_COMMAND:
-
-		for (i=1; i<17; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-			
-			if (TNC->hDlg == hWnd)
-				break;
-		}
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		switch (wmId) {
-
-	case IDC_TEST:
-
-//		SendExitEnter(TNC);
-
-		break;
-
-		default:
-
-			return 0;
-
-		}
-#endif
-
-	case WM_SYSCOMMAND:
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		switch (wmId) { 
-
-		case SC_RESTORE:
-
-			Minimized = FALSE;
-			return (DefWindowProc(hWnd, message, wParam, lParam));
-
-		case  SC_MINIMIZE: 
-
-			Minimized = TRUE;
-			if (MinimizetoTray)
-				return ShowWindow(hWnd, SW_HIDE);		
-		
-			default:
-		
-				return (DefWindowProc(hWnd, message, wParam, lParam));
-		}
-
-		case WM_CTLCOLORDLG:
-			return (LONG)bgBrush;
-
-		 case WM_CTLCOLORSTATIC:
-		{
-			HDC hdcStatic = (HDC)wParam;
-			SetTextColor(hdcStatic, RGB(0, 0, 0));
-			SetBkMode(hdcStatic, TRANSPARENT);
-			return (LONG)bgBrush;
-		}
-
-		case WM_DESTROY:
-		
-			// Remove the subclass from the edit control. 
-
-
-			if (MinimizetoTray) 
-				DeleteTrayMenuItem(hWnd);
-
-			break;
-
-		default:
-			return (DefWindowProc(hWnd, message, wParam, lParam));
-
-	}
-	return (0);
-}
-
-*/
-static VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
-{
-	struct MHSTRUC * MH = TNC->PortRecord->PORTCONTROL.PORTMHEARD;
-	struct MHSTRUC * MHBASE = MH;
-	UCHAR AXCall[8];
-	int i;
-
-	if (MH == 0) return;
-
-	ConvToAX25(Call, AXCall);
-
-	for (i = 0; i < 20; i++)
-	{
-		if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) &&
-			MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare our our entry
-		{
-			// Move others down and add at front
-
-			if (i != 0)				// First
-			{
-				memmove(MHBASE + 1, MHBASE, i * sizeof(struct MHSTRUC));
-			}
-
-			memcpy (MHBASE->MHCALL, AXCall, 7);
-			MHBASE->MHDIGI = Mode;
-			MHBASE->MHTIME = _time32(NULL);
-			strcpy(MHBASE->MHFreq, TNC->RIG->Valchar);
-
-			return;
-		}
-		MH++;
-	}
-
-	return;
-}
 
 static ProcessLine(char * buf, int Port)
 {
@@ -414,9 +145,6 @@ static ProcessLine(char * buf, int Port)
 
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
-#ifdef AEA
-		strcpy(TNC->InitScript, "RESTART\r");
-#endif
 		goto ConfigLine;
 	}
 	else
@@ -429,12 +157,6 @@ static ProcessLine(char * buf, int Port)
 	BPQport = atoi(ptr);
 	
 	p_cmd = strtok(NULL, " \t\n\r");
-
-	#ifdef WINMOR
-
-		p_ipad = strtok(NULL, " \t\n\r");
-
-	#endif
 
 	if (Port && Port != BPQport)
 	{
@@ -458,61 +180,7 @@ static ProcessLine(char * buf, int Port)
 
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
-#ifdef AEA
-		strcpy(TNC->InitScript, "RESTART\r");
-#endif
 
-#ifdef WINMOR
-	
-		if (p_ipad == NULL) return (FALSE);
-	
-		p_port = strtok(NULL, " \t\n\r");
-			
-		if (p_port == NULL) return (FALSE);
-
-		WINMORport = atoi(p_port);
-
-		TNC->destaddr.sin_family = AF_INET;
-		TNC->destaddr.sin_port = htons(WINMORport);
-		TNC->Datadestaddr.sin_family = AF_INET;
-		TNC->Datadestaddr.sin_port = htons(WINMORport+1);
-
-		TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
-
-		if (TNC->WINMORHostName == NULL) return TRUE;
-
-		strcpy(TNC->WINMORHostName,p_ipad);
-
-		ptr = strtok(NULL, " \t\n\r");
-
-		if (ptr)
-		{
-			if (_stricmp(ptr, "PTT") == 0)
-			{
-				ptr = strtok(NULL, " \t\n\r");
-
-				if (ptr)
-				{
-					if (_stricmp(ptr, "CI-V") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "RTS") == 0)
-						TNC->PTTMode = PTTRTS;
-					else if (_stricmp(ptr, "DTR") == 0)
-						TNC->PTTMode = PTTDTR;
-					else if (_stricmp(ptr, "DTRRTS") == 0)
-						TNC->PTTMode = PTTDTR | PTTRTS;
-
-					p_cmd = strtok(NULL, " \t\n\r");
-				}
-			}
-			else
-				p_cmd = ptr;
-		}
-		else
-			p_cmd = ptr;
-
-		p_cmd = strtok(NULL, " \t\n\r");
-#endif			
 		if (p_cmd != NULL)
 		{
 			if (p_cmd[0] != ';' && p_cmd[0] != '#')
@@ -540,463 +208,38 @@ ConfigLine:
 
 			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
 			{
-#ifdef SCS
 				char * vcom = strstr(buf, "VCOM");
 				if (vcom)
 	
 					// SCS Virtual COM Channel
 
 					TNC->VCOMPort = atoi(&vcom[4]);		
-#endif
+
 				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
 				TNC->RigConfigMsg = _strdup(buf);
 			}
 			else
-
-#ifdef SCS				
+				
 			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)
 	
 				// Packet Channels
 
 				TNC->PacketChannels = atoi(&buf[14]);
 			else
-#endif
-#ifdef KAM
 
-			if (_memicmp(buf, "OLDMODE", 7) == 0)
-				TNC->OldMode = TRUE;
-			else
-#endif
-#ifdef WINMOR
-
-			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
-			{}
-			else
-#endif
-#ifdef WL2K
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-			{
-				// WL2KREPORT Host, Port, G8BPQ,IO68VL,Testing BPQ,RIGCONTROL
-				char * Context;
-						
-				p_cmd = strtok_s(&buf[10], ", \t\n\r", &Context);
-				if (p_cmd)
-				{
-					TNC->Host = _strdup(p_cmd);
-					p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
-					if (p_cmd)
-					{
-					TNC->Port = atoi(p_cmd);
-					if (TNC->Port == 0) goto BadLine;
-					p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
-					if (p_cmd)
-					{
-					if (strlen(p_cmd) > 9) goto BadLine;
-					strcpy(TNC->BaseCall, p_cmd);
-					p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
-					if (p_cmd)
-					{
-						if (strlen(p_cmd) != 6) goto BadLine;
-						strcpy(TNC->GridSquare, p_cmd);
-						p_cmd = strtok_s(NULL, ",\t\n\r", &Context);
-						if (p_cmd)
-						{
-							if (strlen(p_cmd) > 79) goto BadLine;
-							strcpy(TNC->Comment, p_cmd);
-							p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-							if (p_cmd)
-							{
-								if (strcmp(p_cmd, "RIGCONTROL") == 0)
-									TNC->UseRigCtrlFreqs = TRUE;
-								else
-								{
-									if (strlen(p_cmd) > 11) goto BadLine;
-									strcpy(TNC->WL2KFreq, p_cmd);
-									TNC->WL2KMode = NARROWMODE;
-									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-									if (p_cmd)
-									{
-										if (p_cmd[0] == 'W')
-											TNC->WL2KMode = WIDEMODE;
-									}
-								}
-							}
-						}
-					}
-				}
-				}
-				}
-				TNC->UpdateWL2K = TRUE;
-				TNC->UpdateWL2KTimer = 3000;	// Send first after 5 Mins
-				goto Okline;
-			BadLine:
-				WritetoConsole(" Bad config record ");
-				WritetoConsole(errbuf);
-				WritetoConsole("\r\n");
-			Okline:;
-			}
+				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
 			else
 
-#endif
-#ifdef HAL
-
-			if (_memicmp(buf, "TONES", 5) == 0)
-			{
-				int tone1 = 0, tone2 = 0;
-
-				ptr = strtok(&buf[6], " ,/\t\n\r");
-				if (ptr)
-				{
-					tone1 = atoi(ptr);
-					ptr = strtok(NULL, " ,/\t\n\r");
-					if (ptr)
-					{
-						tone2 = atoi(ptr);
-						ptr = &TNC->InitScript[TNC->InitScriptLen];
-
-						*(ptr++) = SetTones;		// Set Tones (Mark, Space HI byte first)
-						*(ptr++) = tone1 >> 8;
-						*(ptr++) = tone1 & 0xff;
-						*(ptr++) = tone2 >> 8;
-						*(ptr++) = tone2 & 0xff;
-
-						TNC->InitScriptLen += 5;
-
-						goto OkLine;
-					}
-				}
-				goto BadLine;
-			}
-			if (_memicmp(buf, "DEFAULTMODE ", 12) == 0)
-			{
-					
-				ptr = strtok(&buf[12], " ,\t\n\r");
-				if (ptr)
-				{
-					if (_stricmp(ptr, "CLOVER") == 0)
-						TNC->DefaultMode = Clover;
-					else if (_stricmp(ptr, "PACTOR") == 0)
-						TNC->DefaultMode = Pactor;
-					else if (_stricmp(ptr, "AMTOR") == 0)
-						TNC->DefaultMode = AMTOR;
-					else goto BadLine;
-				
-				goto OkLine;
-				}
-				else goto BadLine;
-			}
-
-		BadLine:
-			WritetoConsole(" Bad config record ");
-			WritetoConsole(errbuf);
-			WritetoConsole("\r\n");
-		OkLine:;
-
-#else
 				strcat (TNC->InitScript, buf);
-#endif
+
 		}
 	}
 
 	return (TRUE);
 	
 }
-
-// WL2K Reporting Code.
-
-#ifdef XXXX
-
-static SOCKADDR_IN sinx; 
-
-static BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
-{
-	struct APPLCALLS * APPL;
-	struct BPQVECSTRUC * PORTVEC;
-	int Allocated = 0, Available = 0;
-	int App, Stream;
-	// See if there is an RMS Application
-
-	Debugprintf("Checking if RMS is running");
-
-
-	for (App = 0; App < 32; App++)
-	{
-		APPL=&APPLCALLTABLE[App];
-
-		if (memcmp(APPL->APPLCMD, Appl, 12) == 0)
-		{
-			int ApplMask = 1 << App;
-
-			memcpy(TNC->RMSCall, APPL->APPLCALL_TEXT, 9);		// Need Null on end
-
-			// See if App is running
-
-			PORTVEC=BPQHOSTVECPTR;
-
-			for (Stream = 0; Stream < 64; Stream++)
-			{	
-				if (PORTVEC->HOSTAPPLMASK & ApplMask)
-				{
-					Allocated++;
-
-					if (PORTVEC->HOSTSESSION == 0 && (PORTVEC->HOSTFLAGS &3) == 0)
-					{
-						// Free and no outstanding report
-						
-						return TRUE;		// Running
-					}
-				}
-				PORTVEC++;
-			}
-		}
-	}
-
-	return FALSE;			// Not Running
-}
-
-VOID SendReporttoWL2KThread(struct TNCINFO * TNC);
-
-BOOL SendReporttoWL2K(struct TNCINFO * TNC)
-{
-	Debugprintf("Starting WL2K Update Thread");
-
-	_beginthread(SendReporttoWL2KThread,0,(int)TNC);
-
-	return 0;
-}
-
-SOCKET sock;
-
-VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
-{
-	char Message[100];
-	
-	SOCKADDR_IN destaddr;
-	int addrlen=sizeof(sinx);
-	struct hostent * HostEnt;
-	int err;
-	u_long param=1;
-	BOOL bcopt=TRUE;
-	char errmsg[80];
-	int Error;              // catches return value of WSAStartup
-    WORD VersionRequested;   // passed to WSAStartup
-    WSADATA WsaData;            // receives data from WSAStartup
-
-	struct ScanEntry ** Freqptr;
-	char * Valchar;
-	int dec, sign;
-	char FreqString[80]="";
-	int Mode;
-	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
-
-
-	VersionRequested = MAKEWORD(1, 0);
-    Error = WSAStartup(VersionRequested, &WsaData);
-
-    if (Error)
-	{
-       MessageBox(NULL,
-            TEXT("Could not initialise WinSock"),
-            TEXT("WINMOR"), MB_OK | MB_ICONSTOP | MB_SETFOREGROUND);
-        return;
-	}
-
-	// Resolve Name if needed
-
-	destaddr.sin_family = AF_INET; 
-	destaddr.sin_addr.s_addr = inet_addr(TNC->Host);
-	destaddr.sin_port = htons(TNC->Port);
-
-	if (destaddr.sin_addr.s_addr == INADDR_NONE)
-	{
-	//	Resolve name to address
-
-		Debugprintf("Resolving %s", TNC->Host);
-		HostEnt = gethostbyname (TNC->Host);
-		 
-		if (!HostEnt)
-		{
-			err = WSAGetLastError();
-
-			wsprintf(errmsg, TEXT("Resolve Failed for %s %d %x"), TNC->Host, err, err);
-			MessageBox(NULL, errmsg, "WINMOR Reporting", MB_OK);
-
-			return;			// Resolve failed
-		}
-		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
-	}
-
-	//   Allocate a Socket entry
-
-
-	if (sock)
-		closesocket(sock);
-
-	sock=socket(AF_INET,SOCK_DGRAM,0);
-
-	if (sock == INVALID_SOCKET)
-	{
-  	 	return; 
-	}
-
-	ioctlsocket (sock, FIONBIO, &param);
- 
-	setsockopt (sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt, 4);
-
-	destaddr.sin_family = AF_INET;
-
-	if (TNC->UseRigCtrlFreqs)
-	{
-		int HHStart;
-		int HHEnd;
-
-		if (TNC->RIG == 0)
-			TNC->RIG = Rig_GETPTTREC(TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-
-		if (TNC->RIG)
-		{
-			struct WL2KInfo * WL2KInfoPtr;
-			int n = 0;
-
-			TimeBands = TNC->RIG->TimeBands;
-
-			if (TimeBands == NULL)
-				return;
-
-			// Build Frequency list if needed
-
-			if (TNC->WL2KInfoList[0].Bandwidth == 0)
-			{
-				// Not set up yet
-
-			Debugprintf("Building Freq List");
-
-			Mode = NARROWMODE;
-
-			__try {
-
-			while(TimeBands[1])
-			{
-				Freqptr = TimeBands[1]->Scanlist;
-	
-				if (Freqptr == NULL)
-					return;			
-		
-				while (Freqptr[0])
-				{
-					__try 
-					{
-
-					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
-
-					if (Freqptr[0]->Bandwidth == 'W')
-						Mode = WIDEMODE;
-					else if (Freqptr[0]->Bandwidth == 'N')
-						Mode = NARROWMODE;
-
-					HHStart = TimeBands[1]->Start /3600;
-					HHEnd = TimeBands[1]->End /3600;
-
-					// See if freq already defined
-
-					n = 0;
-					
-					WL2KInfoPtr = &TNC->WL2KInfoList[0];
-
-					while (WL2KInfoPtr->Bandwidth)
-					{
-						if (strcmp(WL2KInfoPtr->Freq, Valchar) == 0)
-						{
-							// Add timeband to freq
-
-							wsprintf(WL2KInfoPtr->TimeList, "%s,%02d-%02d",
-								WL2KInfoPtr->TimeList, HHStart, HHEnd);
-
-							goto gotfreq;
-						}
-
-						WL2KInfoPtr = &TNC->WL2KInfoList[++n];
-					}
-
-					// Not found - add it
-
-					WL2KInfoPtr->Freq = _strdup(Valchar);
-					WL2KInfoPtr->TimeList = malloc(100);
-
-					wsprintf(WL2KInfoPtr->TimeList, "%02d-%02d", HHStart, HHEnd);
-					WL2KInfoPtr->Bandwidth = Mode;
-
-				
-				gotfreq:
-					;
-					}
-					__except(EXCEPTION_EXECUTE_HANDLER)
-					{
-						Debugprintf("Program Error processing freq entry");
-					}
-
-					Freqptr++;
-
-				}
-				TimeBands++;
-			}
-			}
-					__except(EXCEPTION_EXECUTE_HANDLER)
-					{
-						Debugprintf("Program Error processing freq list");
-					}
-
-			}
-		
-			// Send each entry in the list
-
-			__try
-			{
-
-			n = 0;
-					
-			WL2KInfoPtr = &TNC->WL2KInfoList[0];
-
-			while (WL2KInfoPtr->Bandwidth)
-			{
-				wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
-					TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
-					WL2KInfoPtr->Bandwidth, WL2KInfoPtr->TimeList);
-
-				Debugprintf("Sending %s", Message);
-
-				sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-
-				WL2KInfoPtr = &TNC->WL2KInfoList[++n];
-			}
-			}
-			__except(EXCEPTION_EXECUTE_HANDLER)
-			{
-				Debugprintf("Program Error sending freq list");
-			}
-
-		}
-	}
-	else
-	{
-		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
-			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, TNC->Comment);
-
-		Debugprintf("Sending %s", Message);
-		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-	}
-
-	Sleep(100);
-
-	closesocket(sock);
-	sock = 0;
-
-	return;
-}
-
-#endif
-
 
 
 extern UINT CRCTAB;
@@ -1046,49 +289,6 @@ char status[8][8] = {"ERROR",  "REQUEST", "TRAFFIC", "IDLE", "OVER", "PHASE", "S
 char ModeText[8][14] = {"STANDBY", "AMTOR-ARQ",  "PACTOR-ARQ", "AMTOR-FEC", "PACTOR-FEC", "RTTY / CW", "LISTEN", "Channel-Busy"};
 
 char PactorLevelText[4][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR-III"};
-
-VOID SCSClose()
-{
-	int i;
-	int retCode, disp;
-	HKEY hKey=0;
-	char Size[80];
-	char Key[80];
-	struct TNCINFO * TNC;
-
-	
-		for (i=1; i<33; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-			if (TNC->hDlg == NULL)
-				continue;
-
-			ShowWindow(TNC->hDlg, SW_RESTORE);
-			GetWindowRect(TNC->hDlg, &Rect);
-
-			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", i);
-	
-			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-			if (retCode == ERROR_SUCCESS)
-			{
-				wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
-				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-				RegCloseKey(hKey);
-			}
-			if (MinimizetoTray)	
-				DeleteTrayMenuItem(TNC->hDlg);
-
-		}
- 
-}
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -1220,13 +420,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		CloseHandle(TNCInfo[port]->hDevice);
 				
-		PostMessage(TNC->hDlg, WM_DESTROY,0,0);
-		DestroyWindow(TNC->hDlg);
-
-		if (MinimizetoTray)	
-			DeleteTrayMenuItem(TNC->hDlg);
-
-		TNC->hDlg = 0;
+		SaveWindowPos(port);
 
 		return (0);
 
@@ -1314,6 +508,8 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 		return (int) ExtProc;
 	}
+
+	TNC->Hardware = H_SCS;
 
 	if (TNC->RigConfigMsg)
 	{

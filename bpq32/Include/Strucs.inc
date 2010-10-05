@@ -9,6 +9,8 @@ ApplStringLen EQU 48	; Length of each config entry
 
 ALIASLEN	EQU	32		; Max chars in command alias
 
+MHENTRIES	EQU	30		; Entries in MH List
+
 ;
 ;	BUFFLEN-4 = L2 POINTER (FOR CLEARING TIMEOUT WHEN ACKMODE USED)
 ;	BUFFLEN-8 = TIMESTAMP

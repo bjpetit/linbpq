@@ -609,7 +609,6 @@ VOID ProcessEthIPMsg(PETHMSG Buffer)
 	if (memcmp(&Buffer[6], ourMACAddr,6 ) ==0 ) 
 		return;		// Discard our sends
 
-
 	ProcessIPMsg(ipptr, Buffer->SOURCE, 'E', 255);
 }
 
@@ -1357,31 +1356,25 @@ static BOOL ReadConfigFile()
 	}
 	else
 	{
-
-
-	
-	if ((file = fopen(CFGFN,"r")) == NULL)
-	{
-		wsprintf(buf,"Config file %s could not be opened ",CFGFN);
-		WritetoConsole(buf);
-
-		return (FALSE);
-	}
-
-
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-	
-		if (!ProcessLine(buf))
+		if ((file = fopen(CFGFN,"r")) == NULL)
 		{
-			WritetoConsole("IP Gateway bad config record ");
-			WritetoConsole(errbuf);
+			wsprintf(buf,"Config file %s could not be opened ",CFGFN);
+			WritetoConsole(buf);
+
+			return (FALSE);
 		}
-				
-	}
+
+		while(fgets(buf, 255, file) != NULL)
+		{
+			strcpy(errbuf,buf);			// save in case of error
 	
-	fclose(file);
+			if (!ProcessLine(buf))
+			{
+				WritetoConsole("IP Gateway bad config record ");
+				WritetoConsole(errbuf);
+			}			
+		}
+		fclose(file);
 	}
 	return (TRUE);
 }

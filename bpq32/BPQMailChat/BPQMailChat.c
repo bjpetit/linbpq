@@ -570,6 +570,9 @@
 // Version 1.0.4.23 Oct 2010
 
 // Add Dup message supression
+// Dont change B2 from if going to RMS
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -1153,7 +1156,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 			if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
 			{
-				KISSOnly = FALSE;
+				if (PORTVEC->PORTCONTROL.PROTOCOL != 10)	// Pactor/WINMOR
+					KISSOnly = FALSE;
 
 				if (_memicmp(PORTVEC->PORT_DLL_NAME, "BPQAXIP.DLL", 11) == 0)
 					AXIPPort = PORTVEC->PORTCONTROL.PORTNUMBER;

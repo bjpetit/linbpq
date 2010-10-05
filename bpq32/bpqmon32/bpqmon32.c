@@ -235,9 +235,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 		AddTrayMenuItem(hWnd, "BPQMon32");
 	}
-
-
-
 	
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);

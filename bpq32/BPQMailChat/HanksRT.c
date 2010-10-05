@@ -2416,7 +2416,7 @@ VOID SendChatLinkStatus()
 			{
 				// No BPQ Session - is the only answer to restart the node?
 
-				Logprintf(LOG_DEBUG, NULL, '!', "Stuck Chat Sesion Detected");
+	//			Logprintf(LOG_DEBUG, NULL, '!', "Stuck Chat Sesion Detected");
 	//			Logprintf(LOG_DEBUG, NULL, '!', "Chat is a mess - forcing a restart");
 	//			ProgramErrors = 26;
 	//			CheckProgramErrors();

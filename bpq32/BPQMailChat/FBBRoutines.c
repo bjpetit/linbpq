@@ -1190,42 +1190,32 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	Logprintf(LOG_BBS, conn, '?', "B2 From %s", B2From);
 
-	if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
-		strcpy(B2From, Msg->emailfrom);
-	else
+	if (strcmp(conn->Callsign, "RMS") != 0)		// if going to RMS - just send calll
 	{
-		FromUser = LookupCall(Msg->from);
-
-		if (FromUser)
+		if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
+			strcpy(B2From, Msg->emailfrom);
+		else
 		{
-			Logprintf(LOG_BBS, conn, '?', "B2 From - Local User");
+			FromUser = LookupCall(Msg->from);
 
-			// Local User. If Home BBS is specified, use it
+			if (FromUser)
+			{
+				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User");
 
-/*
-			if (FromUser->flags & F_POLLRMS)
-			{
-				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User With Poll Set");
-				wsprintf(B2From, "%s@winlink.org", Msg->from);
-			}
-			else
-*/
-			{
-//				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User With Poll Not Set");
 				if (FromUser->HomeBBS[0])
 					wsprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
 				else
 					wsprintf(B2From, "%s@%s", Msg->from, BBSName);
 			}
-		}
-		else
-		{
-			WPRecP WP = LookupWP(Msg->from);
+			else
+			{
+				WPRecP WP = LookupWP(Msg->from);
 
-			Logprintf(LOG_BBS, conn, '?', "B2 From - not local User");
+				Logprintf(LOG_BBS, conn, '?', "B2 From - not local User");
 
-			if (WP)
-				wsprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
+				if (WP)
+					wsprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
+			}
 		}
 	}
 
