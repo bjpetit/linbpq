@@ -271,8 +271,10 @@
 // Add option to reread IP Gateway config.
 // Fix Reinit after process with timer closes (error in TellSessions).
 
-// 410p		Build 1 October 2010
+// 410p		Build 2 October 2010
 
+// Move KAM and SCS drivers to bpq32.dll
+// Support more than one axip port.
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -382,9 +384,6 @@ BOOL APIENTRY Rig_Poll();
 BOOL APIENTRY Rig_Command();
 
 VOID IPClose();
-VOID AXIPClose();
-VOID WINMORClose();
-
 
 int Flag=(int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -884,9 +883,7 @@ VOID CALLBACK TimerProc(
 				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 			}
 
-			AXIPClose();
 			IPClose();
-			
 			Rig_Close();
 			WSACleanup();
 
@@ -921,9 +918,11 @@ VOID CALLBACK TimerProc(
 				}
 			}
 			
-			WritetoConsole("\n\nReconfiguration Complete\n");	
+			WritetoConsole("\n\nReconfiguration Complete\n");
+
+			if (IPRequired)	IPActive = Init_IP();
 			
-			if (RigRequired) RigActive = Rig_Init();
+			RigActive = Rig_Init();
 			
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
@@ -1005,9 +1004,8 @@ FirstInit()
  	WritetoConsole("\n\nPort Initialisation Complete\n");
 
 	if (IPRequired)	IPActive = Init_IP();
-//	if (IPRequired)	if (LoadIPDriver())	IPActive = Init_IP();
 
-	if (RigRequired) RigActive = Rig_Init();
+	RigActive = Rig_Init();
 
 	_beginthread(MonitorThread,0,0);
 	
@@ -1181,7 +1179,7 @@ Check_Timer()
 
 		if (IPRequired)	IPActive = Init_IP();
 
-		if (RigRequired) RigActive = Rig_Init();
+		RigActive = Rig_Init();
 
 		FreeConfig();
 
@@ -1491,7 +1489,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 			}
 
-			AXIPClose();
 			IPClose();
 			Rig_Close();
 			WSACleanup();

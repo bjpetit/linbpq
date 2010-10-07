@@ -328,6 +328,11 @@ VOID IPClose()
 {
 	if (MinimizetoTray)
 		DeleteTrayMenuItem(hResWnd);
+
+	PostMessage(hResWnd, WM_DESTROY,0,0);
+	DestroyWindow(hResWnd);
+
+	hResWnd= NULL;
 }
 
 Dll BOOL APIENTRY Poll_IP()

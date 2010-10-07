@@ -164,7 +164,7 @@ BEGIN
     BEGIN
         BLOCK "080904b0"
         BEGIN
-            VALUE "Comments", "G8BPQ Packet Switch V4.10n\0"
+            VALUE "Comments", "G8BPQ Packet Switch V4.10p\0"
             VALUE "CompanyName", "G8BPQ\0"
             VALUE "FileDescription", "bpq32\0"
             VALUE "FileVersion", KVerstring

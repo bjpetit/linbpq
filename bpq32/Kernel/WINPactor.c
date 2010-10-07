@@ -180,6 +180,9 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			break;
 	}
 
+	if (TNC == NULL)
+		return (DefWindowProc(hWnd, message, wParam, lParam));
+
 	switch (message) { 
 
 	case WSA_DATA:				// Notification on data socket
@@ -211,8 +214,6 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 		wmId    = LOWORD(wParam);
 		wmEvent = HIWORD(wParam);
-
-		for (i=1; i<33; i++)
 
 		switch (wmId) {
 
@@ -808,7 +809,11 @@ VOID SaveWindowPos(int port)
 	}
 	if (MinimizetoTray)	
 		DeleteTrayMenuItem(TNC->hDlg);
- 
+
+//	PostMessage(TNC->hDlg, WM_QUIT,0,0);
+	PostMessage(TNC->hDlg, WM_DESTROY,0,0);
+	DestroyWindow(TNC->hDlg);
+
 	TNC->hDlg = NULL;
 
 	return;
