@@ -52,7 +52,8 @@
 #include "windows.h"
 #include <stdio.h>
 #include <time.h>
-#include <Psapi.h>
+
+int (WINAPI FAR *GetModuleFileNameExPtr)();
 
 #define SD_RECEIVE      0x00
 #define SD_SEND         0x01
@@ -1841,17 +1842,20 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		// Get the File Name in case we want to restart it.
 
-		hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
-
-		if (hProc)
+		if (GetModuleFileNameExPtr)
 		{
-			GetModuleFileNameEx(hProc, 0,  ExeName, 255);
-			CloseHandle(hProc);
+			hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
 
-			if (TNC->ProgramPath)
-				free(TNC->ProgramPath);
+			if (hProc)
+			{
+				GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
+				CloseHandle(hProc);
 
-			TNC->ProgramPath = _strdup(ExeName);
+				if (TNC->ProgramPath)
+					free(TNC->ProgramPath);
+
+				TNC->ProgramPath = _strdup(ExeName);
+			}
 		}
 
 		// Set Window Title to reflect BPQ Port Description

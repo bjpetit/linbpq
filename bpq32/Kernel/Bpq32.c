@@ -982,9 +982,13 @@ VOID CALLBACK TimerProc(
 
 HANDLE NPHandle;
 
+int (WINAPI FAR *GetModuleFileNameExPtr)();
+
 FirstInit()
 {
     WSADATA       WsaData;            // receives data from WSAStartup
+	HINSTANCE ExtDriver=0;
+
 
 	// First Time Ports and Timer init
 
@@ -993,7 +997,14 @@ FirstInit()
 	// Call wsastartup - most systems need winsock, and duplicate statups could be a problem
 
     WSAStartup(MAKEWORD(2, 0), &WsaData);
- 	
+
+	// Load Psapi.dll if possible
+
+	ExtDriver=LoadLibrary("Psapi.dll");
+
+	if (ExtDriver)
+		GetModuleFileNameExPtr = (FARPROCX)GetProcAddress(ExtDriver,"GetModuleFileNameExA");
+	
 	INITIALISEPORTS();
 
 	SetupConsoleWindow();
