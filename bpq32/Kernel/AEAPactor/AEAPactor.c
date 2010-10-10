@@ -18,7 +18,6 @@
 // Fix Freq Display after Node reconfig
 // Only use AutoConnect APPL for Pactor Connects
 
-#define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -179,14 +178,8 @@ VOID ShowTraffic(struct TNCINFO * TNC)
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
-	int i;
-	int retCode, disp;
-	HKEY hKey=0;
-	char Size[80];
-	char Key[80];
-	struct TNCINFO * TNC;
 
-	switch(ul_reason_being_called)
+switch(ul_reason_being_called)
 	{
 	case DLL_PROCESS_ATTACH:
 
@@ -203,39 +196,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
     
 	case DLL_PROCESS_DETACH:
 
-		for (i=1; i<17; i++)
-		{
-			TNC = TNCInfo[i];
-			if (TNC == NULL)
-				continue;
-			if (TNC->hDlg == NULL)
-				continue;
-
-			EncodeAndSend(TNC, "OHON", 4);		// HOST N
-			Sleep(50);
-
-			ShowWindow(TNC->hDlg, SW_RESTORE);
-			GetWindowRect(TNC->hDlg, &Rect);
-
-			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", i);
-	
-			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-			if (retCode == ERROR_SUCCESS)
-			{
-				wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
-				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-				RegCloseKey(hKey);
-			}
-
-			CloseHandle(TNC->hDevice);
-
-		}
 		return 1;
 	}
  
@@ -248,6 +208,11 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Stream;
+	int retCode, disp;
+	HKEY hKey=0;
+	char Size[80];
+	char Key[80];
+
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
@@ -358,7 +323,37 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		CloseHandle(TNCInfo[port]->hDevice);
+		EncodeAndSend(TNC, "OHON", 4);		// HOST N
+		Sleep(50);
+
+		ShowWindow(TNC->hDlg, SW_RESTORE);
+		GetWindowRect(TNC->hDlg, &Rect);
+
+		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", port);
+	
+		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
+                      KEY_ALL_ACCESS,
+					  NULL,	// Security Attrs
+                      &hKey,
+					&disp);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
+			retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+			RegCloseKey(hKey);
+		}
+
+		CloseHandle(TNC->hDevice);
+
+		if (MinimizetoTray)	
+			DeleteTrayMenuItem(TNC->hDlg);
+
+		PostMessage(TNC->hDlg, WM_DESTROY,0,0);
+		DestroyWindow(TNC->hDlg);
+
+
 		return (0);
 
 	case 6:				// Scan Control

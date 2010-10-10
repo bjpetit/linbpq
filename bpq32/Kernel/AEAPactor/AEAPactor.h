@@ -4,6 +4,10 @@
 
 #define MAXBLOCK 4096
 
+
+//#include "..\TNCINFO.h"
+
+
 struct STREAMINFO
 {
 //	struct TRANSPORTENTRY * AttachedSession;

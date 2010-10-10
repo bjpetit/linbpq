@@ -293,6 +293,7 @@ int tnctypes(int i, char value[],char rec[]);
 int do_kiss (char value[],char rec[]);
 int dec_byte(i, value, rec);
 
+extern char PWTEXT[];
 
 extern int __cdecl main(int argc,char **argv,char **envp);
 extern int __cdecl decode_rec(char *rec);
@@ -747,6 +748,15 @@ char rec[];
 		return 0;
 	}
 
+	if (memcmp(rec, "PASSWORD ", 9) == 0)
+	{
+		// SYSOP Password
+
+		if (strlen(rec) > 88) rec[88] = 0;
+		
+		strcpy(PWTEXT, &rec[9]);
+		return 0;
+	}
 
 	if (memcmp(rec, "APPLICATION ", 12) == 0)
 	{

@@ -37,7 +37,7 @@ struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34] = {NULL};		// Records are Malloc'd
 
-BOOL ReadConfigFile(char * filename, int Port);
+
 int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
 

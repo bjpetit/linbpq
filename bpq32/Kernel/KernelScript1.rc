@@ -140,6 +140,35 @@ BEGIN
     LTEXT           "RX 0 TX 0 ACKED 0",IDC_TRAFFIC,60,83,140,10
 END
 
+TELNETSERVER DIALOG DISCARDABLE  120, 50, 200, 125
+STYLE DS_MODALFRAME | DS_3DLOOK | WS_POPUPWINDOW | WS_DLGFRAME | WS_MINIMIZEBOX
+CAPTION "G8BPQ Telnet Server 2.1.10.1 September 2010"
+CLASS "TELNETSERVER"
+FONT 8, "FixedSys"
+BEGIN
+	CONTROL "    User       Callsign BPQ Stream",
+		 101, "STATIC", SS_LEFT | WS_CHILD | WS_VISIBLE, 0, 2, 196, 8
+	LISTBOX         100, 2, 10, 190, 100,NOT WS_TABSTOP | WS_VSCROLL
+END
+
+IDC_TELNETSERVER MENU
+
+BEGIN
+    POPUP "Actions"
+    BEGIN
+        POPUP "Logging Options", MENUBREAK
+        BEGIN
+            MENUITEM "Logging Enabled"	IDM_LOGGING
+        END
+        POPUP "Disconnect User"
+        BEGIN
+            MENUITEM "."	IDM_DISCONNECT
+        END
+    END
+END
+
+
+
 
 #ifndef _MAC
 /////////////////////////////////////////////////////////////////////////////

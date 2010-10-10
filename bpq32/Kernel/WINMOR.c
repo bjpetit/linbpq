@@ -438,12 +438,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				// No, so send
 
 				send(TNC->WINMORSock, TNC->ConnectCmd, strlen(TNC->ConnectCmd), 0);
-				TNC->Connecting = TRUE;
+				TNC->Streams[0].Connecting = TRUE;
 
-				memset(TNC->RemoteCall, 0, 10);
-				memcpy(TNC->RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
+				memset(TNC->Streams[0].RemoteCall, 0, 10);
+				memcpy(TNC->Streams[0].RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
 
-				wsprintf(Status, "%s Connecting to %s", TNC->MyCall, TNC->RemoteCall);
+				wsprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 				free(TNC->ConnectCmd);
@@ -583,28 +583,28 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Attached == 0)
+		if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Streams[0].Attached == 0)
 		{
 			// New Attach
 
 			int calllen;
 			char Msg[80];
 
-			TNC->Attached = TRUE;
+			TNC->Streams[0].Attached = TRUE;
 
-			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->MyCall);
-			TNC->MyCall[calllen] = 0;
+			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
+			TNC->Streams[0].MyCall[calllen] = 0;
 
 			// Stop Listening, and set MYCALL to user's call
 
 			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
-			ChangeMYC(TNC, TNC->MyCall);
+			ChangeMYC(TNC, TNC->Streams[0].MyCall);
 
 			// Stop other ports in same group
 
 			SuspendOtherPorts(TNC);
 
-			wsprintf(Status, "In Use by %s", TNC->MyCall);
+			wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 			// Stop Scanning
@@ -615,18 +615,18 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		}
 
-		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0 && TNC->Attached)
+		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0 && TNC->Streams[0].Attached)
 		{
 			// Node has disconnected - clear any connection
 
 			send(TNC->WINMORSock,"DISCONNECT\r\n", 12, 0);
 
-			TNC->Attached = FALSE;
+			TNC->Streams[0].Attached = FALSE;
 			
-			if (TNC->Connecting || TNC->Connected)
+			if (TNC->Streams[0].Connecting || TNC->Streams[0].Connected)
 			{
-				TNC->Connected = FALSE;
-				TNC->Connecting = FALSE;
+				TNC->Streams[0].Connected = FALSE;
+				TNC->Streams[0].Connecting = FALSE;
 				TNC->Disconnecting = TRUE;
 
 				TNC->DiscTimeout = 300;			// 30 Secs
@@ -643,9 +643,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		}
 
-		if (TNC->ReportDISC)
+		if (TNC->Streams[0].ReportDISC)
 		{
-			TNC->ReportDISC = FALSE;
+			TNC->Streams[0].ReportDISC = FALSE;
 			buff[4] = 0;
 			return -1;
 		}
@@ -705,7 +705,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					WritetoConsole(ErrMsg);
 					TNC->CONNECTING = FALSE;
 					TNC->CONNECTED = FALSE;
-					TNC->ReportDISC = TRUE;
+					TNC->Streams[0].ReportDISC = TRUE;
 				}
 			}
 		
@@ -754,13 +754,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 														// till it clears
 		txlen=(buff[6]<<8) + buff[5]-8;	
 		
-		if (TNC->Connected)
+		if (TNC->Streams[0].Connected)
 			bytes=send(TNC->WINMORDataSock,(const char FAR *)&buff[8],txlen,0);
 		else
 		{
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
 			{
-				TNC->ReportDISC = TRUE;		// Tell Node
+				TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
 				return 0;
 			}
 	
@@ -782,7 +782,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				// Send FEC Data
 
 				buff[8 + txlen] = 0;
-				len = wsprintf(Buffer, "%-9s: %s", TNC->MyCall, &buff[8]);
+				len = wsprintf(Buffer, "%-9s: %s", TNC->Streams[0].MyCall, &buff[8]);
 
 				send(TNC->WINMORDataSock, Buffer, len, 0);
 
@@ -872,7 +872,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
 			{
-				TNC->ReportDISC = TRUE;		// Tell Node
+				TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
 				return 0;
 			}
 
@@ -922,12 +922,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				TNC->OverrideBusy = FALSE;
 
 				bytes=send(TNC->WINMORSock, Connect, txlen, 0);
-				TNC->Connecting = TRUE;
+				TNC->Streams[0].Connecting = TRUE;
 
-				memset(TNC->RemoteCall, 0, 10);
-				memcpy(TNC->RemoteCall, &Connect[8], txlen-10);
+				memset(TNC->Streams[0].RemoteCall, 0, 10);
+				memcpy(TNC->Streams[0].RemoteCall, &Connect[8], txlen-10);
 
-				wsprintf(Status, "%s Connecting to %s", TNC->MyCall, TNC->RemoteCall);
+				wsprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 			}
 			else
@@ -998,7 +998,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		// CHECK IF OK TO SEND (And check TNC Status)
 
-		if (TNC->Attached == 0)
+		if (TNC->Streams[0].Attached == 0)
 			return TNC->CONNECTED << 8 | 1;
 
 		return (TNC->CONNECTED << 8 | TNC->Disconnecting << 15);		// OK
@@ -1297,7 +1297,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 
 	hMenu=CreateMenu();
 	TNC->hPopMenu=CreatePopupMenu();
@@ -1581,67 +1581,16 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		{
 			// Incomming Connect
 
-			struct TRANSPORTENTRY * Session;
-			int Index = 0;
-
-			// Stop Scanner
-
-			char Msg[80];
-
-			wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-		
-			Rig_Command(-1, Msg);
-
 			// Stop other ports in same group
 
 			SuspendOtherPorts(TNC);
 
-			Session=L4TABLE;
-
-			// Find a free Circuit Entry
-
-			while (Index < MAXCIRCUITS)
-			{
-				if (Session->L4USER[0] == 0)
-					break;
-
-				Session++;
-				Index++;
-			}
-
-			if (Index == MAXCIRCUITS)
-				return;					// Tables Full
-
-			Buffer[MsgLen-1] = 0;
-
-			memcpy(TNC->RemoteCall, Call, 9);	// Save Text Callsign 
-
-			ConvToAX25(Call, Session->L4USER);
-
-			ConvToAX25(&Buffer[10], Session->L4USER);
-			ConvToAX25(GetNodeCall(), Session->L4MYCALL);
-
-			Session->CIRCUITINDEX = Index;
-			Session->CIRCUITID = NEXTID;
-			NEXTID++;
-			if (NEXTID == 0) NEXTID++;		// Keep non-zero
-
-			TNC->PortRecord->ATTACHEDSESSIONS[0] = Session;
-			TNC->Attached = TRUE;
-
-			Session->L4TARGET = TNC->PortRecord;
-	
-			Session->L4CIRCUITTYPE = UPLINK+PACTOR;
-			Session->L4WINDOW = L4DEFAULTWINDOW;
-			Session->L4STATE = 5;
-			Session->SESSIONT1 = L4T1;
-
-			TNC->Connected = TRUE;			// Subsequent data to data channel
+			ProcessIncommingConnect(TNC, Call, 0);
 
 			if (TNC->RIG)
-				wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
+				wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
 			else
-				wsprintf(Status, "%s Connected to %s Inbound", TNC->RemoteCall, TNC->TargetCall);
+				wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->TargetCall);
 
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
@@ -1665,6 +1614,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				char AppName[13];
 
 				memcpy(AppName, &ApplPtr[App * 21], 12);
+				AppName[12] = 0;
 
 				// Make sure app is available
 
@@ -1710,13 +1660,13 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
-			TNC->Connecting = FALSE;
-			TNC->Connected = TRUE;			// Subsequent data to data channel
+			TNC->Streams[0].Connecting = FALSE;
+			TNC->Streams[0].Connected = TRUE;			// Subsequent data to data channel
 
 			if (TNC->RIG)
-				wsprintf(Status, "%s Connected to %s Outbound Freq %s",  TNC->MyCall, TNC->RemoteCall, TNC->RIG->Valchar);
+				wsprintf(Status, "%s Connected to %s Outbound Freq %s",  TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall, TNC->RIG->Valchar);
 			else
-				wsprintf(Status, "%s Connected to %s Outbound", TNC->MyCall, TNC->RemoteCall);
+				wsprintf(Status, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
@@ -1735,16 +1685,16 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			return;
 		}
 
-		if (TNC->Connecting)
+		if (TNC->Streams[0].Connecting)
 		{
 			// Report Connect Failed, and drop back to command mode
 
-			TNC->Connecting = FALSE;
+			TNC->Streams[0].Connecting = FALSE;
 			buffptr = GetBuff();
 
 			if (buffptr == 0) return;			// No buffers, so ignore
 
-			buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} Failure with %s\r", TNC->RemoteCall);
+			buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Winmor} Failure with %s\r", TNC->Streams[0].RemoteCall);
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 
@@ -1755,9 +1705,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		// Release Session
 
-		TNC->Connecting = FALSE;
-		TNC->Connected = FALSE;		// Back to Command Mode
-		TNC->ReportDISC = TRUE;		// Tell Node
+		TNC->Streams[0].Connecting = FALSE;
+		TNC->Streams[0].Connected = FALSE;		// Back to Command Mode
+		TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
 
 		if (TNC->Disconnecting)		// 
 			ReleaseTNC(TNC);
@@ -1925,7 +1875,7 @@ static int ProcessReceivedData(struct TNCINFO * TNC)
 		}
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;
-		TNC->ReportDISC = TRUE;
+		TNC->Streams[0].ReportDISC = TRUE;
 
 		return 0;					
 	}
@@ -2003,7 +1953,7 @@ loop:
 	
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;
-		TNC->ReportDISC = TRUE;
+		TNC->Streams[0].ReportDISC = TRUE;
 
 		ReleaseBuffer(buffptr);
 		return;					
@@ -2085,8 +2035,8 @@ int Winmor_Socket_Data(int sock, int error, int eventcode)
 			TNC->CONNECTED = FALSE;
 			TNC->Alerted = FALSE;
 
-			if (TNC->Attached)
-				TNC->ReportDISC = TRUE;
+			if (TNC->Streams[0].Attached)
+				TNC->Streams[0].ReportDISC = TRUE;
 
 			return 0;
 

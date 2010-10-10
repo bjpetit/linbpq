@@ -65,8 +65,6 @@ struct ScanEntry ** WINAPI CheckTimeBands();
 VOID __cdecl Debugprintf(const char * format, ...);
 
 
-BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow);
-
 extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
@@ -551,7 +549,7 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
@@ -1641,51 +1639,10 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				// Incoming Connect
 
-				struct TRANSPORTENTRY * Session;
-				int Index = 0;
-
-				Session=L4TABLE;
-
-				// Find a free Circuit Entry
-
-				while (Index < MAXCIRCUITS)
-				{
-					if (Session->L4USER[0] == 0)
-						break;
-
-					Session++;
-					Index++;
-				}
-
-				if (Index == MAXCIRCUITS)
-					return;					// Tables Full
-
-				TNC->Streams[Stream].Attached = TRUE;
-
 				if (Msg[1] == '2' && Msg[2] == 'A')
 					TNC->HFPacket = TRUE;
 
-				strcpy(TNC->Streams[Stream].RemoteCall, Call);	// Save Text Callsign 
-
-				ConvToAX25(Call, Session->L4USER);
-				ConvToAX25(TNC->NodeCall, Session->L4MYCALL);
-	
-				Session->CIRCUITINDEX = Index;
-				Session->CIRCUITID = NEXTID;
-				NEXTID++;
-				if (NEXTID == 0) NEXTID++;		// Keep non-zero
-
-				TNC->PortRecord->ATTACHEDSESSIONS[Stream] = Session;
-
-				Session->L4TARGET = TNC->PortRecord;
-				Session->L4CIRCUITTYPE = UPLINK+PACTOR;
-				Session->L4WINDOW = L4DEFAULTWINDOW;
-				Session->L4STATE = 5;
-				Session->SESSIONT1 = L4T1;
-				Session->SESSPACLEN = 100;
-				Session->KAMSESSION = Stream;
-
-				TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
+				ProcessIncommingConnect(TNC, Call, Stream);
 
 				if (Stream == 0)
 				{

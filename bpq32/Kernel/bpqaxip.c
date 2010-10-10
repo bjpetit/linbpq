@@ -756,9 +756,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 5:				// Terminate
 
 		CloseSockets(PORT);
-		PostMessage(PORT->hResWnd, WM_QUIT,0,0);
-		PostMessage(PORT->hMHWnd, WM_DESTROY,0,0);
 		DestroyWindow(PORT->hMHWnd);
+		DestroyWindow(PORT->hResWnd);
 
 		if (MinimizetoTray)	
 			DeleteTrayMenuItem(PORT->hResWnd);
@@ -2564,14 +2563,12 @@ int Socket_Accept(int SocketId)
 
 			if (sock == INVALID_SOCKET)
 			{
-				sprintf(Msg, " accept() failed Error %d", WSAGetLastError());
-				MessageBox(PORT->hResWnd, Msg, "BPQAXIP", MB_OK);
+				Debugprintf("accept() failed Error %d", WSAGetLastError());
 				return FALSE;
 			}
 
 			Debugprintf("Connect accepted - Socket %d", sock);
 
-  
 			if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&bOptVal, 4) != SOCKET_ERROR)
 			{
 

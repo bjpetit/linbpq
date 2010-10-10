@@ -24,6 +24,14 @@ HANDLE hInstance;
 HBRUSH bgBrush;
 #define BGCOLOUR RGB(236,233,216)
 
+extern UCHAR NEXTID;
+extern struct TRANSPORTENTRY * L4TABLE;
+extern WORD MAXCIRCUITS;
+extern UCHAR L4DEFAULTWINDOW;
+extern WORD L4T1;
+
+BOOL WINAPI Rig_Command();
+
 KillTNC(struct TNCINFO * TNC);
 RestartTNC(struct TNCINFO * TNC);
 
@@ -33,7 +41,7 @@ VOID __cdecl Debugprintf(const char * format, ...);
 
 extern UCHAR BPQDirectory[];
 
-RECT Rect;
+static RECT Rect;
 
 extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
@@ -46,6 +54,19 @@ struct TNCINFO * TNCInfo[34] = {NULL};		// Records are Malloc'd
 #define WSA_CONNECT WM_USER + 3
 
 int Winmor_Socket_Data(int sock, int error, int eventcode);
+
+VOID * zalloc(int len)
+{
+	// malloc and clear
+
+	void * ptr;
+
+	ptr=malloc(len);
+	memset(ptr, 0, len);
+
+	return ptr;
+}
+
 
 VOID MoveWindows(struct TNCINFO * TNC)
 {
@@ -297,7 +318,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	return (0);
 }
 
-BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow)
+BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, LPCSTR MENU)
 {
     WNDCLASS  wc;
 	char Title[80];
@@ -318,7 +339,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
 	wc.style = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-    wc.lpfnWndProc = PacWndProc;       
+    wc.lpfnWndProc = WndProc;       
                                         
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
@@ -327,14 +348,14 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = bgBrush; 
 
-	wc.lpszMenuName = NULL;	
+	wc.lpszMenuName = MENU;;	
 	wc.lpszClassName = ClassName; 
 
 	RegisterClass(&wc);
 
 	TNC->hDlg = hDlg = CreateDialog(hInstance,ClassName,0,NULL);
 	
-	if (TNC->Hardware == H_WINMOR)
+	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET)
 		wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 	else
 		wsprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);
@@ -817,5 +838,65 @@ VOID SaveWindowPos(int port)
 	TNC->hDlg = NULL;
 
 	return;
+}
+
+BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
+{
+	struct TRANSPORTENTRY * Session;
+	int Index = 0;
+
+	// Stop Scanner
+
+	if (Stream == 0)
+	{
+		char Msg[80];
+
+		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		
+		Rig_Command(-1, Msg);
+	
+	}
+	
+	Session=L4TABLE;
+
+			// Find a free Circuit Entry
+
+			while (Index < MAXCIRCUITS)
+			{
+				if (Session->L4USER[0] == 0)
+					break;
+
+				Session++;
+				Index++;
+			}
+
+			if (Index == MAXCIRCUITS)
+				return FALSE;					// Tables Full
+
+			memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign 
+
+			ConvToAX25(Call, Session->L4USER);
+			ConvToAX25(GetNodeCall(), Session->L4MYCALL);
+
+			Session->CIRCUITINDEX = Index;
+			Session->CIRCUITID = NEXTID;
+			NEXTID++;
+			if (NEXTID == 0) NEXTID++;		// Keep non-zero
+
+			TNC->PortRecord->ATTACHEDSESSIONS[Stream] = Session;
+			TNC->Streams[Stream].Attached = TRUE;
+
+			Session->L4TARGET = TNC->PortRecord;
+	
+			Session->L4CIRCUITTYPE = UPLINK+PACTOR;
+			Session->L4WINDOW = L4DEFAULTWINDOW;
+			Session->L4STATE = 5;
+			Session->SESSIONT1 = L4T1;
+			Session->SESSPACLEN = 100;
+			Session->KAMSESSION = Stream;
+
+			TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
+
+			return TRUE;
 }
 

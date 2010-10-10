@@ -274,7 +274,14 @@
 // 410p		Build 2 October 2010
 
 // Move KAM and SCS drivers to bpq32.dll
+
+// 410p		Build 3 October 2010
+
 // Support more than one axip port.
+
+// 410p		Build 4 October 2010
+
+// Dynamically load psapi.dll (for 98/ME)
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -339,6 +346,7 @@ UINT WINAPI KAMExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry);
 
 extern char AUTOSAVE;
 
@@ -441,7 +449,7 @@ HMENU trayMenu=0;
 
 HWND hWnd;
 
-RECT Rect;			// Window Position
+static RECT Rect;			// Window Position
 
 DllExport int APIENTRY DumpSystem();
 DllExport int APIENTRY SaveNodes ();
@@ -1388,21 +1396,26 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				//	Read SYSOP password
 				//
 
-				handle = OpenConfigFile("PASSWORD.BPQ");
+				if (PWTEXT[0] == 0)
+				{
+					handle = OpenConfigFile("PASSWORD.BPQ");
 
-				if (handle == INVALID_HANDLE_VALUE)
-				{
-					WritetoConsole("Can't open PASSWORD.BPQ\n");
-					PWLEN=0;
-					PWTEXT[0]=0;
+					if (handle == INVALID_HANDLE_VALUE)
+					{
+						WritetoConsole("Can't open PASSWORD.BPQ\n");
+						PWLEN=0;
+						PWTEXT[0]=0;
+					}
+					else
+					{
+						ReadFile(handle,PWTEXT,78,&n,NULL); 
+						CloseHandle(handle);
+					}
 				}
-				else
-				{
-					ReadFile(handle,PWTEXT,78,&n,NULL); 
-					for (i=0;PWTEXT[i] > 0x1f;i++); //Scan for cr or null 
-					PWLEN=i;
-					CloseHandle(handle);
-				}
+			
+				for (i=0;PWTEXT[i] > 0x20;i++); //Scan for cr or null 
+				PWLEN=i;
+				
 			}
 		}
 		else
@@ -1492,7 +1505,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			for (i=0;i<NUMBEROFPORTS;i++)
 			{
 				if (PORTVEC->PORTCONTROL.PORTTYPE == 0x10)			// External
-					if (PORTVEC->PORT_EXT_ADDR)
+					if (PORTVEC->PORT_EXT_ADDR && PORTVEC->DLLhandle == NULL) // Don't call if real .dll - it's not there!
 						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);	// Close External Ports
 				
 				PORTVEC->PORTCONTROL.PORTCLOSECODE(PORTVEC->PORTCONTROL.IOBASE);
@@ -3133,6 +3146,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "WINMOR"))
 		return (UINT) WinmorExtInit;
 	
+	if (strstr(Value, "TELNET"))
+		return (UINT) TelnetExtInit;
+
 	ExtDriver=LoadLibrary(Value);
 
 	if (ExtDriver == NULL)

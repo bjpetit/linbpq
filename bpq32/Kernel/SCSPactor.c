@@ -87,7 +87,7 @@ extern char APPLS;
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 
-RECT Rect;
+static RECT Rect;
 
 struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
@@ -604,7 +604,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
@@ -2026,7 +2026,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				ptr = strchr(Call, 13);	
 				if (ptr) *ptr = 0;
 
-
 				TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
 				TNC->Streams[Stream].Connecting = FALSE;
 
@@ -2046,47 +2045,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				{
 					// Incomming Connect
 
-					struct TRANSPORTENTRY * Session;
-					int Index = 0;
-
-					Session=L4TABLE;
-
-					// Find a free Circuit Entry
-
-					while (Index < MAXCIRCUITS)
-					{
-						if (Session->L4USER[0] == 0)
-							break;
-
-						Session++;
-						Index++;
-					}
-
-					if (Index == MAXCIRCUITS)
-						return;					// Tables Full
-
-					Buffer[len-1] = 0;
-
-					memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign 
-
-					ConvToAX25(Call, Session->L4USER);
-					ConvToAX25(GetNodeCall(), Session->L4MYCALL);
-	
-					Session->CIRCUITINDEX = Index;
-					Session->CIRCUITID = NEXTID;
-					NEXTID++;
-					if (NEXTID == 0) NEXTID++;		// Keep non-zero
-
-					TNC->PortRecord->ATTACHEDSESSIONS[Stream] = Session;
-					TNC->Streams[Stream].Attached = TRUE;
-
-					Session->L4TARGET = TNC->PortRecord;
-					Session->L4CIRCUITTYPE = UPLINK+PACTOR;
-					Session->L4WINDOW = L4DEFAULTWINDOW;
-					Session->L4STATE = 5;
-					Session->SESSIONT1 = L4T1;
-					Session->SESSPACLEN = 100;
-					Session->KAMSESSION = Stream;
+					ProcessIncommingConnect(TNC, Call, Stream);
 
 					if (Stream == 0)
 					{

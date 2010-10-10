@@ -62,6 +62,11 @@
 
 
 #define IDC_TEST                        1008
+#define IDM_LOGGING						2100
+#define IDM_DISCONNECT					2000
+
+#define IDC_TELNETSERVER			109
+
 
 #define WINMORCONFIG                    30006
 

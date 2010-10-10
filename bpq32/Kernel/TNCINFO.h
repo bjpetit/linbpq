@@ -8,6 +8,55 @@ struct WL2KInfo
 	char * TimeList;		// eg 06-10,12-15
 };
 
+// Telnet Server User Record
+
+struct UserRec
+{
+	char * Callsign;
+	char * UserName;
+	char * Password;
+};
+
+struct TCPINFO
+{
+	int NumberofUsers;
+	struct UserRec ** UserRecPtr;
+	int CurrentConnections;
+
+	struct UserRec RelayUser;
+
+	int CurrentSockets;
+
+	int TCPPort;
+	int FBBPort;
+	int RelayPort;
+
+	BOOL DisconnectOnClose;
+
+	char PasswordMsg[100];
+
+	char cfgHOSTPROMPT[100];
+
+	char cfgCTEXT[300];
+
+	char cfgLOCALECHO[100];
+
+	int MaxSessions;
+
+	char LoginMsg[100];
+
+	char RelayAPPL[20];
+
+	SOCKET sock;
+	SOCKET FBBsock;
+	SOCKET Relaysock;
+	HMENU hActionMenu;
+	HMENU hLogMenu;
+	HMENU hDisMenu;					// Disconnect Menu Handle
+
+
+};
+
 
 struct STREAMINFO
 {
@@ -39,9 +88,10 @@ struct STREAMINFO
 	UCHAR PTCStatus2;			// Status Bytes
 	UCHAR PTCStatus3;			// Status Bytes
 
-	char * CmdSet;			// A series of commands to send to the TNC
+	char * CmdSet;				// A series of commands to send to the TNC
 	char * CmdSave;				// Base address for free
 
+	struct ConnectionInfo * ConnectionInfo;	// TCP Server Connection Info
 };
 
 
@@ -60,6 +110,7 @@ typedef struct TNCINFO
 #define H_KAM 3
 #define H_AEA 4
 #define H_HAL 5
+#define H_TELNET 6
 
 	BOOL Minimized;				// Start Minimized flag
 
@@ -73,14 +124,12 @@ typedef struct TNCINFO
 	char * WINMORHostName;		// WINMOR Host - may be dotted decimal or DNS Name
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
 
+
     UCHAR TCPBuffer[1000];		// For converting byte stream to messages
     int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
 
-	BOOL Connected;				// When set, all data is passed to Data Socket
-	BOOL Connecting;
 	BOOL Disconnecting;			// Disconnect Sent - waiting for DISCONNECTED or Timout
 	int	DiscTimeout;			// Disconnect Timeout counter.
-	BOOL Attached;				// Set what attached to a BPQ32 stream
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
 	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.
 	BOOL DiscPending;			// Set if Disconnect Pending Received. So we can time out stuck in Disconnecting
@@ -98,8 +147,6 @@ typedef struct TNCINFO
 
 	BOOL FECPending;			// Need an FEC Send when channel is next idle
 
-	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
-
 	time_t lasttime;
 
 	BOOL CONNECTING;			// TCP Session Flags
@@ -108,8 +155,6 @@ typedef struct TNCINFO
 	BOOL DATACONNECTING;
 	BOOL DATACONNECTED;
 
-	char MyCall[10]	;				// Call we are using
-	char RemoteCall[10];			// Callsign
 	char NodeCall[10];				// Call we listen for (PORTCALL or NODECALL
 	char CurrentMYC[10];			// Save current call so we don't change it unnecessarily
 
@@ -217,17 +262,31 @@ typedef struct TNCINFO
 	BOOL NeedPACTOR;				// Set if need to send PACTOR to put into Standby Mode
 	int CmdStream;					// Stream last command was issued on
 
+	struct TCPINFO * TCPInfo;		// Telnet Server Specific Data
+
+	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
+	BOOL CommandBusy;				// Waiting for Command ACK
+
+	char * CmdSet;					// A series of commands to send to the TNC
+	char * CmdSave;					// Base address for free
+
+
+
 };
 
+VOID * zalloc(int len);
 
 BOOL ReadConfigFile(char * filename, int Port, int ProcLine());
 GetLine(char * buf);
-BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow);
+BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, LPCSTR MENU);
 BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
 BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE);
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode);
 VOID SaveWindowPos(int port);
+BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream);
+
+LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 #define Report_P1 11
 #define Report_P12 12 
