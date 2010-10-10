@@ -1,7 +1,0 @@
-C:\Dev\Source\Basic\AEASim\AEASim\obj\Debug\ResolveAssemblyReference.cache
-C:\Dev\Source\Basic\AEASim\AEASim\bin\Debug\AEASim.exe
-C:\Dev\Source\Basic\AEASim\AEASim\bin\Debug\AEASim.pdb
-C:\Dev\Source\Basic\AEASim\AEASim\bin\Debug\AEASim.xml
-C:\Dev\Source\Basic\AEASim\AEASim\obj\Debug\AEASim.exe
-C:\Dev\Source\Basic\AEASim\AEASim\obj\Debug\AEASim.xml
-C:\Dev\Source\Basic\AEASim\AEASim\obj\Debug\AEASim.pdb
