@@ -30,35 +30,33 @@
 //#include <process.h>
 //#include <time.h>
 
-#include "AEAPactor.h"
+#include "TNCINFO.h"
 #include "ASMStrucs.h"
-#include "..\RigControl.h"
+#include "RigControl.h"
 
-#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
-#define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
 
-#define AEA 1
 
-static char ClassName[]="PACTORSTATUS";
+static char ClassName[]="AEAPACTORSTATUS";
 
 static char WindowTitle[] = "AEA Pactor";
 static int RigControlRow = 200;
-
-#include "..\PactorCommon.c"
-
-DllImport UINT CRCTAB;
-DllImport char * CTEXTMSG;
-DllImport USHORT CTEXTLEN;
-DllImport UINT FULL_CTEXT;
 
 #define	SOH	0x01	// CONTROL CODES 
 #define	ETB	0x17
 #define	DLE	0x10
 
-int MaxStreams = 26;
+#define MaxStreams 26
 
-char status[8][8] = {"STANDBY",  "PHASING", "CHGOVER", "IDLE", "TRAFFIC", "ERROR", "RQ", "XXXX"};
+static RECT Rect;
+
+struct RIGINFO DummyRig;		// Used if not using Rigcontrol
+
+struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+
+
+
+static char status[8][8] = {"STANDBY",  "PHASING", "CHGOVER", "IDLE", "TRAFFIC", "ERROR", "RQ", "XXXX"};
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL NEAR OpenConnection(int);
@@ -87,132 +85,146 @@ VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-DllImport UCHAR NEXTID;
-DllImport struct TRANSPORTENTRY * L4TABLE;
-DllImport WORD MAXCIRCUITS;
-DllImport UCHAR L4DEFAULTWINDOW;
-DllImport WORD L4T1;
-
-// Buffer Pool
-
-#define NUMBEROFBUFFERS 20
-
-static UINT FREE_Q=0;
-
-static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
-
-// Get buffer from Queue
-
-UINT * Q_REM(UINT *Q)
+ProcessLine(char * buf, int Port)
 {
-	UINT  * first,next;
-	
-	(int)first=Q[0];
-	if (first == 0) return (0);			// Empty
-	
-	next=first[0];						// Address of next buffer
-	Q[0]=next;
+	UCHAR * ptr,* p_cmd;
+	char * p_ipad = 0;
+	char * p_port = 0;
+	unsigned short WINMORport = 0;
+	int BPQport;
+	int len=510;
+	struct TNCINFO * TNC;
+	char errbuf[256];
 
-	return (first);
-}
+	strcpy(errbuf, buf);
 
-// Return Buffer to Free Queue
+	ptr = strtok(buf, " \t\n\r");
 
-UINT ReleaseBuffer(UINT *BUFF)
-{
-	UINT * pointer;
-	
-	(UINT)pointer=FREE_Q;
-	*BUFF=(UINT)pointer;
-	FREE_Q=(UINT)BUFF;
+	if(ptr == NULL) return (TRUE);
 
-	return (0);
-}
+	if(*ptr =='#') return (TRUE);			// comment
 
+	if(*ptr ==';') return (TRUE);			// comment
 
-int Q_ADD(UINT *Q,UINT *BUFF)
-{
-	UINT * next;
-	
-	BUFF[0]=0;							// Clear chain in new buffer
+	ptr = strtok(NULL, " \t\n\r");
 
-	if (Q[0] == 0)						// Empty
+	if (_stricmp(buf, "ADDR") == 0)			// Winmor Using BPQ32 COnfig
 	{
-		Q[0]=(UINT)BUFF;				// New one on front
-		return(0);
+		BPQport = Port;
+		p_ipad = ptr;
+	}
+	else
+	if (_stricmp(buf, "APPL") == 0)			// Using BPQ32 COnfig
+	{
+		BPQport = Port;
+		p_cmd = ptr;
+	}
+	else
+	if (_stricmp(buf, "PORT") != 0)			// Using Old Config
+	{
+		// New config without a PORT or APPL  - this is a Config Command
+
+		strcpy(buf, errbuf);
+
+		BPQport = Port;
+
+		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+		memset(TNC, 0, sizeof(struct TNCINFO));
+
+		TNC->InitScript = malloc(1000);
+		TNC->InitScript[0] = 0;
+
+		strcpy(TNC->InitScript, "RESTART\r");
+
+		goto ConfigLine;
+	}
+	else
+
+	{
+
+		// Old Config from file
+
+	BPQport=0;
+	BPQport = atoi(ptr);
+	
+	p_cmd = strtok(NULL, " \t\n\r");
+
+	if (Port && Port != BPQport)
+	{
+		// Want a particular port, and this isn't it
+
+		while(TRUE)
+		{
+			if (GetLine(buf) == 0)
+				return TRUE;
+
+			if (memcmp(buf, "****", 4) == 0)
+				return TRUE;
+
+		}
+	}
+	}
+	if(BPQport > 0 && BPQport < 33)
+	{
+		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+		memset(TNC, 0, sizeof(struct TNCINFO));
+
+		TNC->InitScript = malloc(1000);
+		TNC->InitScript[0] = 0;
+
+		strcpy(TNC->InitScript, "RESTART\r");
+
+		if (p_cmd != NULL)
+		{
+			if (p_cmd[0] != ';' && p_cmd[0] != '#')
+				TNC->ApplCmd=_strdup(p_cmd);
+		}
+
+		// Read Initialisation lines
+
+		while(TRUE)
+		{
+			if (GetLine(buf) == 0)
+				return TRUE;
+ConfigLine:
+			strcpy(errbuf, buf);
+
+			if (memcmp(buf, "****", 4) == 0)
+				return TRUE;
+
+			ptr = strchr(buf, ';');
+			if (ptr)
+			{
+				*ptr++ = 13;
+				*ptr = 0;
+			}
+
+			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
+			{
+				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
+
+				TNC->RigConfigMsg = _strdup(buf);
+			}
+			else
+			
+			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
+				DecodeWL2KReportLine(TNC, buf, Report_P1, Report_P1);
+			else
+				strcat (TNC->InitScript, buf);
+		}
 	}
 
-	(int)next=Q[0];
-
-	while (next[0]!=0)
-		next=(UINT *)next[0];			// Chain to end of queue
-
-	next[0]=(UINT)BUFF;					// New one on end
-
-	return(0);
-}
-
-VOID __cdecl Debugprintf(const char * format, ...)
-{
-	char Mess[255];
-	va_list(arglist);
-
-	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
-
-	OutputDebugString(Mess);
-
-	return;
-}
-VOID ShowTraffic(struct TNCINFO * TNC)
-{
-	char Status[80];
-
-	wsprintf(Status, "RX %d TX %d ACKED %d ", 
-		TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
-
-	SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
+	return (TRUE);
 }
 
 
-BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
-{
 
-switch(ul_reason_being_called)
-	{
-	case DLL_PROCESS_ATTACH:
-
-		hInstance = hInst;
-		return 1;
-   		
-	case DLL_THREAD_ATTACH:
-		
-		return 1;
-    
-	case DLL_THREAD_DETACH:
-	
-		return 1;
-    
-	case DLL_PROCESS_DETACH:
-
-		return 1;
-	}
- 
-	return 1;
-}
-
-DllExport int ExtProc(int fn, int port,unsigned char * buff)
+static int ExtProc(int fn, int port,unsigned char * buff)
 {
 	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Stream;
-	int retCode, disp;
-	HKEY hKey=0;
-	char Size[80];
-	char Key[80];
-
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
@@ -270,7 +282,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 2:				// send
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = GetBuff();
 
 		if (buffptr == 0) return (0);			// No buffers, so ignore
 
@@ -285,7 +297,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			buffptr[1] = 36;
 			memcpy(buffptr+2, "No Connection to PACTOR TNC\r", 36);
 
-			Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 			
 			return 0;
 		}
@@ -294,7 +306,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
-		Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
+		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 
 		if(TNC->Streams[Stream].Connected)
 		{
@@ -326,33 +338,9 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 		EncodeAndSend(TNC, "OHON", 4);		// HOST N
 		Sleep(50);
 
-		ShowWindow(TNC->hDlg, SW_RESTORE);
-		GetWindowRect(TNC->hDlg, &Rect);
-
-		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", port);
-	
-		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
-                      KEY_ALL_ACCESS,
-					  NULL,	// Security Attrs
-                      &hKey,
-					&disp);
-
-		if (retCode == ERROR_SUCCESS)
-		{
-			wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
-			retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-			RegCloseKey(hKey);
-		}
+		SaveWindowPos(port);
 
 		CloseHandle(TNC->hDevice);
-
-		if (MinimizetoTray)	
-			DeleteTrayMenuItem(TNC->hDlg);
-
-		PostMessage(TNC->hDlg, WM_DESTROY,0,0);
-		DestroyWindow(TNC->hDlg);
-
 
 		return (0);
 
@@ -365,9 +353,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 }
 
-BOOL FirstInit = TRUE;
 
-DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
+UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[500];
 	struct TNCINFO * TNC;
@@ -379,31 +366,12 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
-	if (FirstInit)
-	{
-		int i;
-		
-		FirstInit = FALSE;
-
-		GetAPI();					// Load BPQ32
-		LoadRigDriver();
-
-		// Build buffer pool
-
-		FREE_Q = 0;			// In case reloading;
-
-		for ( i  = 0; i < NUMBEROFBUFFERS; i++ )
-		{	
-			ReleaseBuffer(&BufferPool[100*i]);
-		}
-	}
-
 	wsprintf(msg,"AEA Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("AEAPACTOR.CFG", port);
+	ReadConfigFile("AEAPACTOR.CFG", port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -416,6 +384,8 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 		return (int)ExtProc;
 	}
+
+	TNC->Hardware = H_AEA;
 
 	if (TNC->RigConfigMsg)
 	{
@@ -471,123 +441,14 @@ DllExport int APIENTRY ExtInit(EXTPORTDATA *  PortEntry)
 
 	MinimizetoTray = GetMinimizetoTrayFlag();
 
-	CreatePactorWindow(TNC);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
 	return ((int)ExtProc);
 }
 
-VOID KISSCLOSE(int Port)
-{ 
-	struct TNCINFO * conn = TNCInfo[Port];
-
-	SetCommMask(conn->hDevice, 0);
-
-   // drop DTR and RTS
-
-   EscapeCommFunction(conn->hDevice, CLRDTR);
-   EscapeCommFunction(conn->hDevice, CLRRTS);
-
-   // purge any outstanding reads/writes and close device handle
-
-   PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
-   CloseHandle(conn->hDevice);
- 
-   return;
-
-}
-
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
-{
-	char szPort[15];
-	char buf[80];
-	BOOL fRetVal;
-	COMMTIMEOUTS CommTimeOuts;
-
-	DCB	dcb;
-
-	// load the COM prefix string and append port number
-   
-	wsprintf( szPort, "//./COM%d", Port) ;
-
-	// open COMM device
-
-	conn->hDevice =
-      CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
-                  0,                    // exclusive access
-                  NULL,                 // no security attrs
-                  OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
-                  NULL );
-				  
-	if (conn->hDevice == (HANDLE) -1)
-	{
-		wsprintf(buf," COM%d Setup Failed %d ", Port, GetLastError());
-		WritetoConsole(buf);
-		OutputDebugString(buf);
-		SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
-
-		return (FALSE);
-	}
-
-	SetupComm(conn->hDevice, 4096, 4096); // setup device buffers
-
-	// purge any information in the buffer
-
-	PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
-
-	// set up for overlapped I/O
-	  
-	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF;
-	CommTimeOuts.ReadTotalTimeoutMultiplier = 0;
-	CommTimeOuts.ReadTotalTimeoutConstant = 0;
-	CommTimeOuts.WriteTotalTimeoutMultiplier = 0;
-	CommTimeOuts.WriteTotalTimeoutConstant = 1000;
-	SetCommTimeouts(conn->hDevice, &CommTimeOuts);
-
-#define FC_DTRDSR       0x01
-#define FC_RTSCTS       0x02
-	
-	dcb.DCBlength = sizeof(DCB);
-	GetCommState(conn->hDevice, &dcb);
-
-	 // setup hardware flow control
-
-	dcb.fDtrControl = DTR_CONTROL_ENABLE;
-//	dcb.fRtsControl = RTS_CONTROL_HANDSHAKE;
-	dcb.fRtsControl = RTS_CONTROL_ENABLE;
-
-	dcb.BaudRate = Speed;
-	dcb.ByteSize = 8;
-	dcb.Parity = NOPARITY;
-	dcb.StopBits = ONESTOPBIT;
-
-	dcb.fInX = dcb.fOutX = 0;
-	dcb.XonChar = 0;
-	dcb.XoffChar = 0;
-	dcb.XonLim = 0;
-	dcb.XoffLim = 0;
-
-	// other various settings
-
-	dcb.fBinary = TRUE;
-	dcb.fParity = TRUE;
-
-	fRetVal = SetCommState(conn->hDevice, &dcb);
-
-//	conn->RTS = 1;
-//	conn->DTR = 1;
-
-	EscapeCommFunction(conn->hDevice,SETDTR);
-	EscapeCommFunction(conn->hDevice,SETRTS);
-
-	wsprintf(buf,"COM%d Open", Port);
-	SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
-
-	return TRUE;
-}
-void CheckRX(struct TNCINFO * TNC)
+static void CheckRX(struct TNCINFO * TNC)
 {
 	BOOL       fReadStat;
 	COMSTAT    ComStat;
@@ -676,7 +537,7 @@ void CheckRX(struct TNCINFO * TNC)
 
 }
 
-VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
+static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
 {
 	UCHAR * FendPtr;
 	int NewLen;
@@ -715,7 +576,7 @@ FENDLoop:
 
 
 
-BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
+static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
 	BOOL        fWriteStat;
 	DWORD       dwBytesWritten;
@@ -818,8 +679,7 @@ VOID AEAPoll(int Port)
 
 		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 		
-		if (Rig_Command)
-			Rig_Command(-1, Msg);
+		Rig_Command(-1, Msg);
 
 		// Shouldn't we also take out of standby mode?? PN is Pactor Listen, for monitoring
 
@@ -923,8 +783,7 @@ VOID AEAPoll(int Port)
 
 			wsprintf(Status, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
 		
-			if (Rig_Command)
-				Rig_Command(-1, Status);
+			Rig_Command(-1, Status);
 
 			return;
 		}
@@ -1003,7 +862,7 @@ VOID AEAPoll(int Port)
 					else
 					{
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &MsgPtr[40]);
-						Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 					}
 					return;
 				}
@@ -1107,7 +966,7 @@ Poll:
 	return;
 }
 
-VOID DoTNCReinit(struct TNCINFO * TNC)
+static VOID DoTNCReinit(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -1175,7 +1034,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 	}
 }
 
-VOID DoTermModeTimeout(struct TNCINFO * TNC)
+static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -1199,9 +1058,7 @@ VOID DoTermModeTimeout(struct TNCINFO * TNC)
 	}
 }
 
-	
-
-VOID ProcessTermModeResponse(struct TNCINFO * TNC)
+static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 {
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -1225,7 +1082,7 @@ VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 	}
 }
 
-VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
+static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
 	UINT * buffptr;
 	char * Buffer = &Msg[1];			// Data portion of frame
@@ -1292,7 +1149,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		// Pass to Appl
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = GetBuff();
 		if (buffptr == NULL) return;	// No buffers, so ignore
 
 		Len--;							// Remove Header
@@ -1300,7 +1157,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		buffptr[1] = Len;				// Length
 		TNC->Streams[Stream].BytesRXed += Len;
 		memcpy(&buffptr[2], Buffer, Len);
-		Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		if (Stream == 0)
 			ShowTraffic(TNC);
@@ -1323,17 +1180,17 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 //				if (Msg[3] == 'P' && Msg[4] == 'G')
 				{
-					SetDlgItemText(TNC->hDlg, IDC_2, status[Msg[5] - 0x30]);
+					SetDlgItemText(TNC->hDlg, IDC_STATE, status[Msg[5] - 0x30]);
 					
 					TNC->TXRXState = Msg[6];
 
 					if (Msg[6] == 'S')
-						SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
+						SetDlgItemText(TNC->hDlg, IDC_TXRX, "Sender");
 					else
-						SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
+						SetDlgItemText(TNC->hDlg, IDC_TXRX, "Receiver");
 
 					Msg[12] = 0;
-					SetDlgItemText(TNC->hDlg, IDC_3, Msg);
+					SetDlgItemText(TNC->hDlg, IDC_MODE, Msg);
 
 					// Testing.. I think ZF returns buffers
 
@@ -1359,7 +1216,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		Stream = TNC->CmdStream;
 
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = GetBuff();
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 
@@ -1368,7 +1225,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"AEA} %s", Buffer);
 
-		Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		return;
 
@@ -1423,12 +1280,12 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				// Connect Failed
 			
-				buffptr = Q_REM(&FREE_Q);
+				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
 				buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
 
-				Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 	
 				TNC->Streams[Stream].Connecting = FALSE;
 				TNC->Streams[Stream].Connected = FALSE;				// In case!
@@ -1478,9 +1335,8 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				char Msg[80];
 				
 				wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
-		
-				if (Rig_Command)
-					Rig_Command(-1, Msg);
+
+				Rig_Command(-1, Msg);
 
 				ShowTraffic(TNC);
 
@@ -1549,11 +1405,11 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 					if (TNC->ApplCmd)
 					{
-						buffptr = Q_REM(&FREE_Q);
+						buffptr = GetBuff();
 						if (buffptr == 0) return;			// No buffers, so ignore
 
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
-						Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 						return;
 					}
@@ -1585,12 +1441,12 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				// Connect Complete
 			
-				buffptr = Q_REM(&FREE_Q);
+				buffptr = GetBuff();
 				if (buffptr == 0) return;			// No buffers, so ignore
 
 				buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", Call);;
 
-				Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 	
 				TNC->Streams[Stream].Connecting = FALSE;
 				TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
@@ -1628,7 +1484,7 @@ int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len)
 
 }
 
-VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len)
+static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len)
 {
 	// Send A Packet With DLE Encoding Encoding
 
@@ -1637,7 +1493,7 @@ VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len)
 	WriteCommBlock(TNC);
 }
 
-int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
+static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
 	int i,txptr=0;
 	UCHAR c;
@@ -1667,7 +1523,7 @@ int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 
 }
 
-VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
+static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
 	// Update HM list and maube pass to monitor somehow
 

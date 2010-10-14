@@ -151,14 +151,13 @@
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
 
-//unsigned long _beginthread( void( *start_address )( void *), unsigned stack_size, char * arglist);
+VOID * zalloc(int len);
 
 int ResetExtDriver(int num);
 BOOL ProcessConfig();
 VOID FreeConfig();
 char * PortConfig[34];
 extern UCHAR BPQDirectory[];
-
 
 void ResolveNames(struct PORTINFO * PORT);
 void OpenSockets(struct PORTINFO * PORT);
@@ -250,12 +249,13 @@ struct MHTableEntry
 
 struct PORTINFO
 {
+	int Port;
+
 	struct MHTableEntry MHTable[MaxMHEntries];
 	struct broadcast_table_entry BroadcastAddresses[MAX_BROADCASTS];
 
 	int NumberofBroadcastAddreses;
 	BOOL Checkifcanreply;
-
 	
 	int arp_table_len;
 	int ResolveIndex;			// pointer to entry being resolved
@@ -294,13 +294,10 @@ struct PORTINFO
 };
 
 extern BOOL MinimizetoTray;
-
 extern BOOL StartMinimized;
-	int Port;
 
-	SOCKADDR_IN sinx; 
-	SOCKADDR_IN destaddr;
-
+SOCKADDR_IN sinx; 
+SOCKADDR_IN destaddr;
 
 #define IP_AXIP 93				   // IP Protocol for AXIP
 
@@ -365,100 +362,7 @@ RECT MHRect;
 static char ConfigClassName[]="CONFIG";
 
 HANDLE hInstance;
-/*
-BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
-{
-	int retCode, disp;
-	HKEY hKey=0;
-	char Size[80];
 
-	hInstance=hInst;
-
-	switch( ul_reason_being_called )
-	{
-	case DLL_PROCESS_ATTACH:
-		
-		AttachedProcesses++;
-		
-		if (AXIPInst == 0)				// First entry
-		{
-			GetAPI();
-			AXIPInst = GetCurrentProcessId();
-		}
-		return 1;
-   		
-	case DLL_THREAD_ATTACH:
-		
-		return 1;
-    
-	case DLL_THREAD_DETACH:
-	
-		return 1;
-    
-	case DLL_PROCESS_DETACH:
-	
-		if (AXIPInst == GetCurrentProcessId())
-		{
-		//	KillTimer(NULL,TimerHandle);
-		//	TimerHandle=0;
-		//	ResetExtDriver(2);
-			
-		//	AXIPInst=0;
-		//	Tell_Sessions();
-		//	MessageBox(NULL,"Process holding AXIP closing","BPQ32",MB_OK);
-		}
-		
-		AttachedProcesses--;
-
-		if (AttachedProcesses == 0)
-		{
-        	if (MinimizetoTray)
-			{
-				DeleteTrayMenuItem(hMHWnd);
-				DeleteTrayMenuItem(hResWnd);
-			}
-
-			ShowWindow(hMHWnd, SW_RESTORE);
-			GetWindowRect(hMHWnd, &MHRect);
-
-			ShowWindow(hResWnd, SW_RESTORE);
-			GetWindowRect(hResWnd, &ResRect);
-	
-			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
-                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQAXIP",
-                              0,	// Reserved
-							  0,	// Class
-							  0,	// Options
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-			if (retCode == ERROR_SUCCESS)
-			{
-				wsprintf(Size,"%d,%d,%d,%d",MHRect.left,MHRect.right,MHRect.top,MHRect.bottom);
-				retCode = RegSetValueEx(hKey,"MHSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-				wsprintf(Size,"%d,%d,%d,%d",ResRect.left,ResRect.right,ResRect.top,ResRect.bottom);
-				retCode = RegSetValueEx(hKey,"ResSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-				RegCloseKey(hKey);
-			}
-
-//			CloseSockets();
-
-//			DestroyWindow(hResWnd);
-//			PostMessage(hResWnd, WM_QUIT,0,0);
-//			DestroyWindow(hMHWnd);
-
-	//		FreeLibrary(ExtDriver);
-		}
-		return 1;
-	}
- 
-	return 1;
-	
-}
-*/
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
 	struct iphdr * iphdrptr;
@@ -469,7 +373,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	char errmsg[100];
 	SOCKADDR_IN rxaddr;
 	struct PORTINFO * PORT = Portlist[port];
-
 
 	switch (fn)
 	{
@@ -806,45 +709,14 @@ UINT WINAPI AXIPExtInit(struct PORTCONTROL *  PortEntry)
 {	
 	WritetoConsole("AXIP ");
 
-	Port = PortEntry->PORTNUMBER;
-
-	if (!InitAXIP(Port)) return 0;
+	if (!InitAXIP(PortEntry->PORTNUMBER)) return 0;
 
 	return ((int) ExtProc);
 }
-  	
-struct tagVS_FIXEDFILEINFO * HG;
-
-char VersionString[100];
 
 InitAXIP(int Port)
 {
-	HRSRC RH;
-  	struct tagVS_FIXEDFILEINFO * HG;
-
-#ifdef _DEBUG 
-	char isDebug[]="Debug Build";
-#else
-	char isDebug[]="";
-#endif
-
-	HMODULE HM;
 	struct PORTINFO * PORT;
-
-	HM=GetModuleHandle("bpq32.dll");
-
-	RH=FindResource(HM,MAKEINTRESOURCE(VS_VERSION_INFO),RT_VERSION);
-
-	HG=LoadResource(HM,RH);
-
-	(int)HG+=40;
-
-	sprintf(VersionString,"%d.%d.%d.%d %s",
-					HIWORD(HG->dwFileVersionMS),
-					LOWORD(HG->dwFileVersionMS),
-					HIWORD(HG->dwFileVersionLS),
-					LOWORD(HG->dwFileVersionLS),
-					isDebug);
 
 	//
 	//	Read config first, to get UDP info if needed
@@ -859,13 +731,15 @@ InitAXIP(int Port)
 
 	PORT = Portlist[Port];
 
-	if (PORT ==NULL)
+	if (PORT == NULL)
 		return FALSE;
+
+	PORT->Port = Port;
 
 	if (PORT->NeedResolver)
 		_beginthread(ResolveNames, 0, PORT );
 
-	time( &PORT->lasttime );			// Get initial time value
+	time(&PORT->lasttime);			// Get initial time value
  
 	_beginthread(OpenSockets, 0, PORT );
 
@@ -1115,18 +989,23 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	struct PORTINFO * PORT;
 	
 	int nScrollCode,nPos;
+	int i, Port;
 
-		int i;
+	// Find our PORT Entry
 
-	for (i=1; i<33; i++)
+	for (Port = 1; Port < 33; Port++)
 	{
-		PORT = Portlist[i];
+		PORT = Portlist[Port];
 		if (PORT == NULL)
 			continue;
 		
 		if (PORT->hResWnd == hWnd)
 			break;
 	}
+
+	if (PORT == NULL)
+		return (DefWindowProc(hWnd, message, wParam, lParam));
+
 	
 	i=1;
 
@@ -1154,7 +1033,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
 		PORT->arp_table[PORT->ResolveIndex].error=i;
 
-		if (i ==0)
+		if (i ==0 )
 		{
 			// resolved ok
 
@@ -1515,7 +1394,7 @@ static void ResolveNames(struct PORTINFO * PORT)
 		WindowParam=WS_OVERLAPPEDWINDOW ;
 	}
 
-	sprintf(WindowTitle,"AXIP Resolver Version %s",VersionString);
+	sprintf(WindowTitle,"AXIP Port %d Resolver", PORT->Port);
 
 	PORT->hResWnd = hResWnd = CreateWindow("AXAppName",WindowTitle,
 		WindowParam,
@@ -1583,7 +1462,7 @@ static void ResolveNames(struct PORTINFO * PORT)
 	if (MinimizetoTray)
 	{
 		//	Set up Tray ICON
-		AddTrayMenuItem(hResWnd, "AXIP Resolver");
+		AddTrayMenuItem(hResWnd, WindowTitle);
 	}
 
 	if (StartMinimized)
@@ -1808,7 +1687,7 @@ void CreateMHWindow(struct PORTINFO * PORT)
 
 	RegisterClass(&wc);
 
-	sprintf(WindowTitle,"AXIP MHEARD Version %s",VersionString);
+	sprintf(WindowTitle,"AXIP Port %d MHEARD", PORT->Port);
   
 	PORT->hMHWnd = hMHWnd =CreateWindow("MHAppName", WindowTitle, WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, 0, 400, 150,
@@ -1856,7 +1735,7 @@ void CreateMHWindow(struct PORTINFO * PORT)
 	{
 		//	Set up Tray ICON
 
-		AddTrayMenuItem(PORT->hMHWnd, "AXIP MHEARD");
+		AddTrayMenuItem(PORT->hMHWnd, WindowTitle);
 	}
 
 	if (StartMinimized)
@@ -1938,16 +1817,32 @@ broadcast QST-0 NODES-0
 
 	Config = PortConfig[Port];
 
+	if (Portlist[Port])					// Already defined, so must be re-read
+	{
+		PORT = Portlist[Port];
+
+		PORT->NumberofBroadcastAddreses = 0;
+		PORT->needip = FALSE;
+		PORT->NeedTCP = FALSE;
+		PORT->MHAvailable = FALSE;
+		PORT->MHEnabled = FALSE;
+		PORT->NumberofUDPPorts = 0;
+		PORT->NeedResolver = FALSE;
+		PORT->arp_table_len = 0;
+		PORT->AutoAddARP = FALSE;
+	}
+	else
+	{
+		Portlist[Port] = PORT = zalloc(sizeof (struct PORTINFO));
+	}
+
+	PORT->Checkifcanreply = TRUE;
+
 	if (Config)
 	{
 		char * ptr1 = Config, * ptr2;
 
 		// Using config from bpq32.cfg
-
-		Portlist[Port] = PORT = malloc(sizeof (struct PORTINFO));
-		memset(PORT, 0, sizeof (struct PORTINFO));
-
-		PORT->Checkifcanreply = TRUE;
 
 		ptr2 = strchr(ptr1, 13);
 		while(ptr2)
@@ -1971,7 +1866,6 @@ broadcast QST-0 NODES-0
 	
 	wsprintf(errbuf, "BPQAXIP BPQ Directory = %s Filename = %s\n", BPQDirectory, fn);
 	OutputDebugString(errbuf);
-
 
 	if (BPQDirectory[0] == 0)
 	{
@@ -1999,11 +1893,6 @@ broadcast QST-0 NODES-0
 
 		return (FALSE);
 	}
-
-	Portlist[Port] = PORT = malloc(sizeof (struct PORTINFO));
-	memset(PORT, 0, sizeof (struct PORTINFO));
-
-	PORT->Checkifcanreply = TRUE;
 
 	while(fgets(buf, 255, file) != NULL)
 	{
@@ -2535,7 +2424,6 @@ int Socket_Accept(int SocketId)
 	int addrlen, i;
 	struct arp_table_entry * sockptr;
 	SOCKET sock;
-	char Msg[100];
 	int index;
 	BOOL bOptVal = TRUE;
 	struct PORTINFO * PORT;

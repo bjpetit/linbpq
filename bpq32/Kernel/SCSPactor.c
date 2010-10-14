@@ -2,7 +2,7 @@
 //	DLL to inteface SCS TNC in Pactor Mode to BPQ32 switch 
 //
 //	Uses BPQ EXTERNAL interface
-//
+
 
 // Dec 29 2009
 
@@ -55,7 +55,10 @@
 //#include <process.h>
 //#include <time.h>
 
-#include "SCSPactor.h"
+#define MaxStreams 10			// First is used for Pactor, even though Pactor uses channel 31
+
+#include "TNCInfo.h"
+
 #include "ASMStrucs.h"
 #include "RigControl.h"
 
@@ -65,20 +68,12 @@ static char ClassName[]="PACTORSTATUS";
 static char WindowTitle[] = "SCS Pactor";
 static int RigControlRow = 210;
 
-#define SCS
-#define WL2K
+
 #define NARROWMODE 12
 #define WIDEMODE 16			// PIII only
 
 
 extern BOOL MinimizetoTray;
-
-BOOL WINAPI Rig_Command();
-struct RIGINFO * WINAPI RigConfig();
-BOOL WINAPI Rig_Poll();
-VOID WINAPI Rig_PTT();
-struct RIGINFO * WINAPI Rig_GETPTTREC();
-struct ScanEntry ** WINAPI CheckTimeBands();
 
 extern UCHAR BPQDirectory[];
 
@@ -241,13 +236,6 @@ ConfigLine:
 	
 }
 
-
-extern UINT CRCTAB;
-extern char * CTEXTMSG;
-extern USHORT CTEXTLEN;
-extern UINT FULL_CTEXT;
-extern BPQTRACE();
-
 BOOL EnterExit = FALSE;
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
@@ -257,7 +245,6 @@ BOOL CloseConnection(struct TNCINFO * conn);
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
 BOOL NEAR DestroyTTYInfo(int port);
 void CheckRX(struct TNCINFO * TNC);
-static OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 VOID DEDPoll(int Port);
 VOID CRCStuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 unsigned short int compute_crc(unsigned char *buf,int len);
@@ -490,7 +477,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
-	wsprintf(msg,"Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
+	wsprintf(msg,"SCS Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
@@ -601,8 +588,6 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	wsprintf(msg, "MYCALL %s\rPAC MYCALL %s\r", TNC->NodeCall, TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
-
-	MinimizetoTray = GetMinimizetoTrayFlag();
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 
@@ -824,7 +809,7 @@ VOID DEDPoll(int Port)
 
 		if (TNC->UpdateWL2KTimer == 0)
 		{
-			TNC->UpdateWL2KTimer = 36000;		// Every Hour
+			TNC->UpdateWL2KTimer = 32910;		// Every Hour
 			if (strcmp(TNC->ApplCmd, "RMS") == 0)
 				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
 					SendReporttoWL2K(TNC);
@@ -1941,7 +1926,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					if (TNC->TXBuffer[6]== 'B')	// Buffer Status
 					{
 						TNC->Buffers = atoi(Buffer);
-						SetDlgItemText(TNC->hDlg, IDC_4, Buffer);
+						SetDlgItemText(TNC->hDlg, IDC_BUFFERS, Buffer);
 						return;
 					}
 				}
@@ -2182,12 +2167,12 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				TNC->Streams[0].PTCStatus1, TNC->Streams[0].PTCStatus2, TNC->Streams[0].PTCStatus3);
 			
 			if (ISS)
-				SetDlgItemText(TNC->hDlg, IDC_1, "Sender");
+				SetDlgItemText(TNC->hDlg, IDC_TXRX, "Sender");
 			else
-				SetDlgItemText(TNC->hDlg, IDC_1, "Receiver");
+				SetDlgItemText(TNC->hDlg, IDC_TXRX, "Receiver");
 
-			SetDlgItemText(TNC->hDlg, IDC_2, status[Status]);
-			SetDlgItemText(TNC->hDlg, IDC_3, ModeText[TNC->Mode]);
+			SetDlgItemText(TNC->hDlg, IDC_STATE, status[Status]);
+			SetDlgItemText(TNC->hDlg, IDC_MODE, ModeText[TNC->Mode]);
 
 			if (TNC->Mode == 7)
 				TNC->Busy = 30;				// 3 sec delay
@@ -2234,98 +2219,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		return;
 	}
-}
-
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
-{
-	char szPort[15];
-	char buf[80];
-	BOOL fRetVal;
-	COMMTIMEOUTS CommTimeOuts;
-
-	DCB	dcb;
-
-	// load the COM prefix string and append port number
-   
-	wsprintf( szPort, "//./COM%d", Port) ;
-
-	// open COMM device
-
-	conn->hDevice =
-      CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
-                  0,                    // exclusive access
-                  NULL,                 // no security attrs
-                  OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
-                  NULL );
-				  
-	if (conn->hDevice == (HANDLE) -1)
-	{
-		wsprintf(buf," COM%d Setup Failed %d ", Port, GetLastError());
-		WritetoConsole(buf);
-		OutputDebugString(buf);
-		SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
-
-		return (FALSE);
-	}
-
-
-	SetupComm(conn->hDevice, 4096, 4096); // setup device buffers
-
-	// purge any information in the buffer
-
-	PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
-
-	// set up for overlapped I/O
-	  
-	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF;
-	CommTimeOuts.ReadTotalTimeoutMultiplier = 0;
-	CommTimeOuts.ReadTotalTimeoutConstant = 0;
-	CommTimeOuts.WriteTotalTimeoutMultiplier = 0;
-	CommTimeOuts.WriteTotalTimeoutConstant = 1000;
-	SetCommTimeouts(conn->hDevice, &CommTimeOuts);
-
-#define FC_DTRDSR       0x01
-#define FC_RTSCTS       0x02
-	
-	dcb.DCBlength = sizeof(DCB);
-	GetCommState(conn->hDevice, &dcb);
-
-	 // setup hardware flow control
-
-	dcb.fDtrControl = DTR_CONTROL_ENABLE;
-//	dcb.fRtsControl = RTS_CONTROL_HANDSHAKE;
-	dcb.fRtsControl = RTS_CONTROL_ENABLE;
-
-	dcb.BaudRate = Speed;
-	dcb.ByteSize = 8;
-	dcb.Parity = NOPARITY;
-	dcb.StopBits = ONESTOPBIT;
-
-	dcb.fInX = dcb.fOutX = 0;
-	dcb.XonChar = 0;
-	dcb.XoffChar = 0;
-	dcb.XonLim = 0;
-	dcb.XoffLim = 0;
-
-	// other various settings
-
-	dcb.fBinary = TRUE;
-	dcb.fParity = TRUE;
-
-	fRetVal = SetCommState(conn->hDevice, &dcb);
-
-//	conn->RTS = 1;
-//	conn->DTR = 1;
-
-	EscapeCommFunction(conn->hDevice,SETDTR);
-	EscapeCommFunction(conn->hDevice,SETRTS);
-
-	wsprintf(buf,"COM%d Open", Port);
-	SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
-
-	
-	return TRUE;
 }
 
 

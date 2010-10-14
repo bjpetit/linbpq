@@ -54,7 +54,7 @@ BOOL RigCloseConnection(struct PORTINFO * PORT);
 BOOL NEAR RigWriteCommBlock(struct PORTINFO * PORT);
 BOOL NEAR DestroyTTYInfo(int port);
 void CheckRX(struct PORTINFO * PORT);
-OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed);
+static OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed);
 VOID ICOMPoll(struct PORTINFO * PORT);
 VOID ProcessFrame(struct PORTINFO * PORT, UCHAR * rxbuff, int len);
 VOID ProcessHostFrame(struct PORTINFO * PORT, UCHAR * rxbuffer, int Len);

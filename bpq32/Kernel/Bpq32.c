@@ -283,6 +283,14 @@
 
 // Dynamically load psapi.dll (for 98/ME)
 
+// 410p		Build 5 October 2010
+
+// Incorporate TelnetServer
+// Fix AXIP ReRead COnfig
+// Report AXIP accept() fails to syslog, not a popup.
+
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
@@ -299,13 +307,12 @@
 
 #include "AsmStrucs.h"
 
-///#define SPECIALVERSION "PACTOR Test"
+//#define SPECIALVERSION "Test"
 
 #include "GetVersion.h"
 
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
-
 
 #define	CHECKLOADED		  0
 #define	SETAPPLFLAGS	  1
@@ -324,7 +331,6 @@
 //#define	SENDNETFRAME	  14
 #define	GETTIME			  15
 
-
 extern short NUMBEROFPORTS;
 extern long PORTENTRYLEN;
 extern long LINKTABLELEN;
@@ -342,7 +348,9 @@ DllExport char * APPLS;
 UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AXIPExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI SCSExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI AEAExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI KAMExtInit(struct PORTCONTROL *  PortEntry);
+UINT WINAPI HALExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
@@ -376,6 +384,8 @@ extern int RAWTX();
 extern int RELBUFF();
 extern int SENDNETFRAME();
 
+char LOCATOR[10] = "";		// Maidenhead Locator for Reporting
+
 VOID __cdecl Debugprintf(const char * format, ...);
 
 DllExport int APIENTRY CloseBPQ32();
@@ -393,7 +403,7 @@ BOOL APIENTRY Rig_Command();
 
 VOID IPClose();
 
-int Flag=(int) &Flag;			//	 for Dump Analysis
+int Flag = (int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
 int MINORVERSION=9;
 
@@ -409,8 +419,8 @@ UINT Sem_edi = 0;
 
 struct _DATABASE * DataBase  = (struct _DATABASE *)&DATABASE;
 
-DllExport long  BPQHOSTAPIPTR=(long)&BPQHOSTAPI;
-DllExport long  MONDECODEPTR=(long)&MONDECODE;
+DllExport long  BPQHOSTAPIPTR = (long)&BPQHOSTAPI;
+DllExport long  MONDECODEPTR = (long)&MONDECODE;
 
 UCHAR BPQDirectory[MAX_PATH]="";
 
@@ -433,7 +443,7 @@ int col=0;
 HANDLE OpenConfigFile(char * file);
 
 VOID SetupBPQDirectory();
-unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+unsigned long _beginthread(void(*start_address)(), unsigned stack_size, int arglist);
 
 #define TRAY_ICON_ID	1		//				ID number for the Notify Icon
 #define MY_TRAY_ICON_MESSAGE	WM_APP	//		the message ID sent to our window
@@ -476,13 +486,12 @@ HINSTANCE hRigModule = 0;
 
 BOOL ReconfigFlag=FALSE;
 
-int AttachedPIDList[100]={0};
-int AttachedPIDType[100]={0};
+int AttachedPIDList[100] = {0};
+int AttachedPIDType[100] = {0};
 
-HWND hWndArray[100]={0};
-int PIDArray[100]={0};
-char PopupText[30][100]={""};
-
+HWND hWndArray[100] = {0};
+int PIDArray[100] = {0};
+char PopupText[30][100] = {""};
 
 // Next 3 should be uninitialised so they are local to each process
 
@@ -3136,6 +3145,12 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "BPQTOAGW"))
 		return (UINT) AGWExtInit;
+
+	if (strstr(Value, "AEAPACTOR"))
+		return (UINT) AEAExtInit;
+
+	if (strstr(Value, "HALDRIVER"))
+		return (UINT) HALExtInit;
 
 	if (strstr(Value, "KAMPACTOR"))
 		return (UINT) KAMExtInit;

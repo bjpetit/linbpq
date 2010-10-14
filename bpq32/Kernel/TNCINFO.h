@@ -1,5 +1,12 @@
+//
+// Common definitons for Pactor-like Modules
 
-#define MAXFREQS 20
+#include <winioctl.h>
+#include "kernelresource.h"
+
+#define MAXBLOCK 4096
+
+#define MAXFREQS 20			// RigControl freqs to scan
 
 struct WL2KInfo
 {
@@ -15,6 +22,7 @@ struct UserRec
 	char * Callsign;
 	char * UserName;
 	char * Password;
+	char * Appl;				// Autoconnect APPL
 };
 
 struct TCPINFO
@@ -62,9 +70,10 @@ struct STREAMINFO
 {
 //	struct TRANSPORTENTRY * AttachedSession;
 
-	int PACTORtoBPQ_Q;			// Frames for BPQ
-	int BPQtoPACTOR_Q;			// Frames for PACTOR
+	UINT PACTORtoBPQ_Q;			// Frames for BPQ
+	UINT BPQtoPACTOR_Q;			// Frames for PACTOR
 	int	FramesOutstanding;		// Frames Queued - used for flow control
+	int	FramesQueued;		// Frames Queued - used for flow control
 	BOOL InternalCmd;			// Last Command was generated internally
 	int	IntCmdDelay;			// To limit internal commands
 
@@ -92,6 +101,8 @@ struct STREAMINFO
 	char * CmdSave;				// Base address for free
 
 	struct ConnectionInfo * ConnectionInfo;	// TCP Server Connection Info
+
+	int TimeInRX;				// Too long in send mode timer
 };
 
 
@@ -102,6 +113,7 @@ typedef struct TNCINFO
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
 	char * InitScript;			// Initialisation Commands
+	int InitScriptLen;			// Length
 
 	int Hardware;				// Hardware Type
 
@@ -270,7 +282,33 @@ typedef struct TNCINFO
 	char * CmdSet;					// A series of commands to send to the TNC
 	char * CmdSave;					// Base address for free
 
+	int DefaultMode;
+	int CurrentMode;
 
+	// Mode Equates
+
+	#define Clover 1
+	#define Pactor 2
+	#define AMTOR 3
+
+	UCHAR DataBuffer[500];			// Data Chars split from  received stream
+	UCHAR CmdBuffer[500];			// Cmd/Response chars split from received stream
+	int DataLen;					// Data in DataBuffer
+	int CmdLen;						// Data in CmdBuffer
+	BOOL CmdEsc;						// Set if last char rxed was 0x80
+	BOOL DataEsc;					// Set if last char rxed was 0x81
+	int PollDelay;					// Don't poll too often;
+
+	int DataMode;					// How to treat data 
+
+#define RXDATA  0x30				// Switch to Receive Data characters
+#define TXDATA  0x31				// Switch to Transmit Data characters
+#define SECDATA 0x32				// Switch to RX data from secondary port
+
+	int TXMode;					// Where to send data 
+
+#define TXMODEM 0x33				// Send TX data to modem
+#define TXSEC   0x34				// Send TX data to secondary port
 
 };
 
@@ -285,6 +323,41 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode);
 VOID SaveWindowPos(int port);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream);
+VOID ShowTraffic(struct TNCINFO * TNC);
+OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
+VOID * APIENTRY GetBuff();
+UINT ReleaseBuffer(UINT *BUFF);
+UINT * Q_REM(UINT *Q);
+int C_Q_ADD(UINT *Q,UINT *BUFF);
+
+extern UCHAR NEXTID;
+extern struct TRANSPORTENTRY * L4TABLE;
+extern WORD MAXCIRCUITS;
+extern UCHAR L4DEFAULTWINDOW;
+extern WORD L4T1;
+extern struct APPLCALLS APPLCALLTABLE[];
+extern char APPLS;
+
+extern UINT CRCTAB;
+extern char * CTEXTMSG;
+extern USHORT CTEXTLEN;
+extern UINT FULL_CTEXT;
+extern BPQTRACE();
+
+
+extern struct BPQVECSTRUC * BPQHOSTVECPTR;
+
+static int ProcessLine(char * buf, int Port);
+VOID __cdecl Debugprintf(const char * format, ...);
+
+extern BOOL MinimizetoTray;
+
+BOOL WINAPI Rig_Command();
+struct RIGINFO * WINAPI RigConfig();
+BOOL WINAPI Rig_Poll();
+VOID WINAPI Rig_PTT();
+struct RIGINFO * WINAPI Rig_GETPTTREC();
+struct ScanEntry ** WINAPI CheckTimeBands();
 
 LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -298,3 +371,20 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 #define Report_WINMOR500 21
 #define Report_WINMOR1600 22  
 
+#define IOCTL_SERIAL_IS_COM_OPEN CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_GETDATA     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x801,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_SETDATA     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x802,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define IOCTL_SERIAL_SET_CTS     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x803,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_SET_DSR     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x804,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_SET_DCD     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x805,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define IOCTL_SERIAL_CLR_CTS     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x806,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_CLR_DSR     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x807,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_SERIAL_CLR_DCD     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x808,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define IOCTL_BPQ_ADD_DEVICE     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x809,METHOD_BUFFERED,FILE_ANY_ACCESS)
+#define IOCTL_BPQ_DELETE_DEVICE  CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x80a,METHOD_BUFFERED,FILE_ANY_ACCESS)
+
+#define W98_SERIAL_GETDATA     0x801
+#define W98_SERIAL_SETDATA     0x802

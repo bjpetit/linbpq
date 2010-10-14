@@ -900,3 +900,105 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
 			return TRUE;
 }
 
+VOID ShowTraffic(struct TNCINFO * TNC)
+{
+	char Status[80];
+
+	wsprintf(Status, "RX %d TX %d ACKED %d ", 
+		TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
+
+	SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
+}
+
+OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
+{
+	char szPort[15];
+	char buf[80];
+	BOOL fRetVal;
+	COMMTIMEOUTS CommTimeOuts;
+
+	DCB	dcb;
+
+	// load the COM prefix string and append port number
+   
+	wsprintf( szPort, "//./COM%d", Port) ;
+
+	// open COMM device
+
+	conn->hDevice =
+      CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+				  
+	if (conn->hDevice == (HANDLE) -1)
+	{
+		wsprintf(buf," COM%d Setup Failed %d ", Port, GetLastError());
+		WritetoConsole(buf);
+		OutputDebugString(buf);
+		SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
+
+		return (FALSE);
+	}
+
+
+	SetupComm(conn->hDevice, 4096, 4096); // setup device buffers
+
+	// purge any information in the buffer
+
+	PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
+
+	// set up for overlapped I/O
+	  
+	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF;
+	CommTimeOuts.ReadTotalTimeoutMultiplier = 0;
+	CommTimeOuts.ReadTotalTimeoutConstant = 0;
+	CommTimeOuts.WriteTotalTimeoutMultiplier = 0;
+	CommTimeOuts.WriteTotalTimeoutConstant = 1000;
+	SetCommTimeouts(conn->hDevice, &CommTimeOuts);
+
+#define FC_DTRDSR       0x01
+#define FC_RTSCTS       0x02
+	
+	dcb.DCBlength = sizeof(DCB);
+	GetCommState(conn->hDevice, &dcb);
+
+	 // setup hardware flow control
+
+	dcb.fDtrControl = DTR_CONTROL_ENABLE;
+//	dcb.fRtsControl = RTS_CONTROL_HANDSHAKE;
+	dcb.fRtsControl = RTS_CONTROL_ENABLE;
+
+	dcb.BaudRate = Speed;
+	dcb.ByteSize = 8;
+	dcb.Parity = NOPARITY;
+	dcb.StopBits = ONESTOPBIT;
+
+	dcb.fInX = dcb.fOutX = 0;
+	dcb.XonChar = 0;
+	dcb.XoffChar = 0;
+	dcb.XonLim = 0;
+	dcb.XoffLim = 0;
+
+	// other various settings
+
+	dcb.fBinary = TRUE;
+	dcb.fParity = TRUE;
+
+	fRetVal = SetCommState(conn->hDevice, &dcb);
+
+//	conn->RTS = 1;
+//	conn->DTR = 1;
+
+	EscapeCommFunction(conn->hDevice,SETDTR);
+	EscapeCommFunction(conn->hDevice,SETRTS);
+
+	wsprintf(buf,"COM%d Open", Port);
+	SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
+
+	
+	return TRUE;
+}
+

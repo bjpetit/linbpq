@@ -60,8 +60,7 @@ int (WINAPI FAR *GetModuleFileNameExPtr)();
 #define SD_BOTH         0x02
 
 #include "bpq32.h"
-#include "winmor.h"
-
+#include "TNCINFO.h"
 #include "RigControl.h"
 
 #include "AsmStrucs.h"
@@ -99,14 +98,6 @@ static int RigControlRow = 180;
 #define BGCOLOUR RGB(236,233,216)
 
 extern BOOL MinimizetoTray;
-
-BOOL WINAPI Rig_Command();
-struct RIGINFO * WINAPI RigConfig();
-BOOL WINAPI Rig_Poll();
-VOID WINAPI Rig_PTT();
-struct RIGINFO * WINAPI Rig_GETPTTREC();
-struct ScanEntry ** WINAPI CheckTimeBands();
-VOID __cdecl Debugprintf(const char * format, ...);
 
 extern UCHAR BPQDirectory[];
 
@@ -545,7 +536,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (TNC->UpdateWL2KTimer == 0)
 			{
-				TNC->UpdateWL2KTimer = 36000;		// Every Hour
+				TNC->UpdateWL2KTimer = 32910;		// Every Hour
 				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
 					SendReporttoWL2K(TNC);
 			}

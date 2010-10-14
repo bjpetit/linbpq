@@ -294,6 +294,7 @@ int do_kiss (char value[],char rec[]);
 int dec_byte(i, value, rec);
 
 extern char PWTEXT[];
+extern char LOCATOR[];
 
 extern int __cdecl main(int argc,char **argv,char **envp);
 extern int __cdecl decode_rec(char *rec);
@@ -748,7 +749,7 @@ char rec[];
 		return 0;
 	}
 
-	if (memcmp(rec, "PASSWORD ", 9) == 0)
+	if (_memicmp(rec, "PASSWORD", 8) == 0)
 	{
 		// SYSOP Password
 
@@ -758,7 +759,17 @@ char rec[];
 		return 0;
 	}
 
-	if (memcmp(rec, "APPLICATION ", 12) == 0)
+	if (_memicmp(rec, "LOCATOR", 7) == 0)
+	{
+		// Station Maidenhead Locator
+
+		if (strlen(rec) > 14) rec[14] = 0;
+		
+		strcpy(LOCATOR, &rec[8]);
+		return 0;
+	}
+
+	if (_memicmp(rec, "APPLICATION ", 12) == 0 || _memicmp(rec, "APPLICATION=", 12) == 0)
 	{
 		// New Style APPLICATION Definition
 

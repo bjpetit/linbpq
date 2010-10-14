@@ -39,7 +39,10 @@
 
 #define IDC_PROTOSTATE                  1000
 #define IDC_CHANSTATE                   1001
-#define IDC_MODE                        1002
+#define IDC_TXRX                        1001
+#define IDC_STATE                       1002
+#define IDC_BUFFERS                     1004
+#define IDC_MODE                        1902
 #define IDC_TNCSTATE                    1203
 #define IDC_COMMSSTATE                  1204
 #define IDC_TRAFFIC                     1005
@@ -53,12 +56,12 @@
 #define WINMOR_RESTARTAFTERFAILURE      1011
 #define IDC_LIST1                       1013
 #define IDC_WINMORTRACE                 1013
+#define IDC_LEDS                        1030
+
+
 
 #define IDC_PACTORLEVEL                101
-#define IDC_1                        1001
-#define IDC_2                        1002
-#define IDC_3                        1003
-#define IDC_4                        1004
+
 
 
 #define IDC_TEST                        1008
@@ -78,7 +81,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        124
 #define _APS_NEXT_COMMAND_VALUE         40002
-#define _APS_NEXT_CONTROL_VALUE         1030
+#define _APS_NEXT_CONTROL_VALUE         1040
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

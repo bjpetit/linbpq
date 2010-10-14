@@ -926,7 +926,7 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 	int index, Len;
 	PTCPMSG TCPptr;
 
-	if (IPptr->VERLEN != 0x45) return; //Only support Type = 4, Len = 20
+	if (IPptr->VERLEN != 0x45) return;  // Only support Type = 4, Len = 20
 
 	if (!CheckIPChecksum(IPptr)) return;
 
@@ -941,6 +941,7 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 		if (Arp != NULL)
 		{
 			Arp->IPADDR = IPptr->IPSOURCE;
+
 			if (Type == 'E')
 			{
 				memcpy(Arp->HWADDR, MACADDR, 6);
@@ -957,6 +958,7 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 			SaveARP();
 		}
 	}
+
 
 	// See if for us - if not pass to router
 

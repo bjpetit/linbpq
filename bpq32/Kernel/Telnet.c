@@ -40,14 +40,6 @@ static int RigControlRow = 190;
 
 extern BOOL MinimizetoTray;
 
-BOOL WINAPI Rig_Command();
-struct RIGINFO * WINAPI RigConfig();
-BOOL WINAPI Rig_Poll();
-VOID WINAPI Rig_PTT();
-struct RIGINFO * WINAPI Rig_GETPTTREC();
-struct ScanEntry ** WINAPI CheckTimeBands();
-VOID __cdecl Debugprintf(const char * format, ...);
-
 static BOOL OpenSockets(struct TNCINFO * TNC);
 
 extern struct APPLCALLS APPLCALLTABLE[];
@@ -277,9 +269,6 @@ ProcessLine(char * buf, int Port)
 	return TRUE;
 }
 
-extern char * CTEXTMSG;
-extern USHORT CTEXTLEN;
-extern UINT FULL_CTEXT;
 extern BPQTRACE();
 
 static int MaxStreams = 26;
