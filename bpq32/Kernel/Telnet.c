@@ -38,8 +38,6 @@ static char ClassName[]="TELNETSERVER";
 static char WindowTitle[] = "Telnet Server";
 static int RigControlRow = 190;
 
-extern BOOL MinimizetoTray;
-
 static BOOL OpenSockets(struct TNCINFO * TNC);
 
 extern struct APPLCALLS APPLCALLTABLE[];
@@ -107,6 +105,8 @@ int SendtoSocket(SOCKET sock,char * Msg);
 int WriteLog(char * msg);
 byte * EncodeCall(byte * Call);
 
+BOOL ProcessConfig();
+VOID FreeConfig();
 
 ProcessLine(char * buf, int Port)
 {
@@ -308,10 +308,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Stream;
 	struct ConnectionInfo * sockptr;
 
-	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
-		return 0;							// Port not open
-
-
 	switch (fn)
 	{
 	case 1:				// poll
@@ -327,7 +323,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		CheckRX(TNC);
 		TelnetPoll(port);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -440,11 +435,6 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	if (TNCInfo[port])
-		free(TNCInfo[port]);
-	
-	TNCInfo[port] = NULL;
-
 	ReadConfigFile("BPQTelnetServer.cfg", port, ProcessLine);
 
 	TNC = TNCInfo[port];
@@ -461,6 +451,8 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 	}
 
 	TCP = TNC->TCPInfo;
+
+	TNC->Port = port;
 
 	TNC->Hardware = H_TELNET;
 
@@ -830,8 +822,11 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	HDC hdc;
 	struct ConnectionInfo * sockptr;
 	SOCKET sock;
-	int i;
+	int i, n;
 	struct TNCINFO * TNC;
+	struct _EXTPORTDATA * PortRecord;
+	HWND SavehDlg;
+
 //	struct ConnectionInfo * ConnectionInfo;
 
 	for (i=1; i<33; i++)
@@ -923,6 +918,60 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			break;
 
+		case TELNET_RECONFIG:
+
+			ProcessConfig();
+			FreeConfig();
+
+			for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
+			{
+				sockptr = TNC->Streams[n].ConnectionInfo;
+				closesocket(sockptr->socket);
+			}
+	
+			shutdown(TNC->TCPInfo->sock, SD_BOTH);
+			shutdown(TNC->TCPInfo->FBBsock, SD_BOTH);
+			shutdown(TNC->TCPInfo->Relaysock, SD_BOTH);
+			Sleep(500);
+			closesocket(TNC->TCPInfo->sock);
+			closesocket(TNC->TCPInfo->FBBsock);
+			closesocket(TNC->TCPInfo->Relaysock);
+
+			// Save info from old TNC record
+			
+			n = TNC->Port;
+			PortRecord = TNC->PortRecord;
+			SavehDlg = TNC->hDlg;
+
+			// Free old TCP Session Stucts
+
+			for (i = 0; i <= TNC->TCPInfo->MaxSessions; i++)
+			{
+				free(TNC->Streams[i].ConnectionInfo);
+			}
+
+			ReadConfigFile("", TNC->Port, ProcessLine);
+
+			TNC = TNCInfo[n];
+			TNC->Port = n;
+			TNC->Hardware = H_TELNET;
+			TNC->hDlg = SavehDlg;
+			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
+
+
+			// Malloc TCP Session Stucts
+
+			for (i = 0; i <= TNC->TCPInfo->MaxSessions; i++)
+			{
+				TNC->Streams[i].ConnectionInfo = zalloc(sizeof(struct ConnectionInfo));
+			}
+
+			TNC->PortRecord = PortRecord;
+
+			Sleep(500);
+			OpenSockets(TNC);
+
+			break;
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}

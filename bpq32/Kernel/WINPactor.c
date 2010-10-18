@@ -88,7 +88,12 @@ char * ptr1, * ptr2;
 BOOL ReadConfigFile(char * fn, int Port, int ProcLine())
 {
 	char buf[256],errbuf[256];
+
+	if (TNCInfo[Port])					// If restarting, free old config
+		free(TNCInfo[Port]);
 	
+	TNCInfo[Port] = NULL;
+
 	Config = PortConfig[Port];
 
 	if (Config)
@@ -356,7 +361,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	TNC->hDlg = hDlg = CreateDialog(hInstance,ClassName,0,NULL);
 	
 	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET)
-		wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
 	else
 		wsprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);
 
@@ -366,7 +371,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 		AddTrayMenuItem(hDlg, Title);
 
 
-	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->Port);
 	
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
 
@@ -518,7 +523,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 	destaddr.sin_family = AF_INET; 
 	destaddr.sin_addr.s_addr = inet_addr(TNC->Host);
-	destaddr.sin_port = htons(TNC->Port);
+	destaddr.sin_port = htons(TNC->WL2KPort);
 
 	if (destaddr.sin_addr.s_addr == INADDR_NONE)
 	{
@@ -698,8 +703,8 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 		p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
 		if (p_cmd)
 		{
-			TNC->Port = atoi(p_cmd);
-			if (TNC->Port == 0) goto BadLine;
+			TNC->WL2KPort = atoi(p_cmd);
+			if (TNC->WL2KPort == 0) goto BadLine;
 			p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
 			if (p_cmd)
 			{
@@ -851,7 +856,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
 	{
 		char Msg[80];
 
-		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		wsprintf(Msg, "%d SCANSTOP", TNC->Port);
 		
 		Rig_Command(-1, Msg);
 	
@@ -1000,5 +1005,81 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 
 	
 	return TRUE;
+}
+
+VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM,
+			VOID TidyCloseProc(), VOID ForcedCloseProc(), VOID CloseComplete())
+{
+	UINT * buffptr;
+
+	if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
+	{
+		// Node has disconnected - clear any connection
+
+		if (STREAM->Disconnecting)
+		{
+			// Already detected the detach, and have started to close
+
+			STREAM->DisconnectingTimeout--;
+			
+			if (STREAM->DisconnectingTimeout)
+				return;							// Give it a bit longer
+
+			// Close has timed out - force a disc, and clear
+
+			ForcedCloseProc(TNC, Stream);		// Send Tidy Disconnect
+
+			goto NotConnected;
+		}
+
+		// New Disconnect
+
+		Debugprintf("New Disconnect Port %d Q %x", TNC->Port, STREAM->BPQtoPACTOR_Q);
+			
+		if (STREAM->Connected || STREAM->Connecting)
+		{
+			// Need to do a tidy close
+
+			STREAM->Disconnecting = TRUE;
+			STREAM->DisconnectingTimeout = 300;			// 30 Secs
+
+			if (Stream == 0)
+				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Disconnecting");
+
+			if (STREAM->BPQtoPACTOR_Q)					// Still data to send?
+				return;									// Will close when all acked
+			
+			TidyCloseProc(TNC, Stream);					// Send Tidy Disconnect
+
+			return;
+		}
+
+		// Not connected 
+NotConnected:
+
+		STREAM->Disconnecting = FALSE;
+		STREAM->Attached = FALSE;
+		STREAM->Connecting = FALSE;
+		STREAM->Connected = FALSE;
+
+		if (Stream == 0)
+			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
+
+		STREAM->FramesQueued = 0;
+		STREAM->FramesOutstanding = 0;
+		CloseComplete(TNC, Stream);
+
+		while(STREAM->BPQtoPACTOR_Q)
+		{
+			buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+		while(STREAM->PACTORtoBPQ_Q)
+		{
+			buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
+			ReleaseBuffer(buffptr);
+		}
+	}
 }
 

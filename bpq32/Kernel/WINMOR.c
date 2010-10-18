@@ -97,8 +97,6 @@ static int RigControlRow = 180;
 
 #define BGCOLOUR RGB(236,233,216)
 
-extern BOOL MinimizetoTray;
-
 extern UCHAR BPQDirectory[];
 
 extern struct APPLCALLS APPLCALLTABLE[];
@@ -600,39 +598,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// Stop Scanning
 
-			wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			wsprintf(Msg, "%d SCANSTOP", TNC->Port);
 	
 			Rig_Command(-1, Msg);
 
 		}
 
-		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0 && TNC->Streams[0].Attached)
-		{
-			// Node has disconnected - clear any connection
-
-			send(TNC->WINMORSock,"DISCONNECT\r\n", 12, 0);
-
-			TNC->Streams[0].Attached = FALSE;
-			
-			if (TNC->Streams[0].Connecting || TNC->Streams[0].Connected)
-			{
-				TNC->Streams[0].Connected = FALSE;
-				TNC->Streams[0].Connecting = FALSE;
-				TNC->Disconnecting = TRUE;
-
-				TNC->DiscTimeout = 300;			// 30 Secs
-				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Disconnecting");
-			}
-			else
-				ReleaseTNC(TNC);
-
-			if (TNC->FECMode)
-			{
-				TNC->FECMode = FALSE;
-				send(TNC->WINMORSock,"SENDID 0\r\n", 10, 0);
-			}
-
-		}
+		if (TNC->Streams[0].Attached)
+			CheckForDetach(TNC, 0, &TNC->Streams[0], TidyClose, ForcedClose, CloseComplete);
 
 		if (TNC->Streams[0].ReportDISC)
 		{
@@ -641,12 +614,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return -1;
 		}
 
-		if (TNC->DiscTimeout)
-		{
-			TNC->DiscTimeout--;
-			if (TNC->DiscTimeout == 0)
-				ReleaseTNC(TNC);
-		}
+	
 
 			if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
 			{
@@ -702,7 +670,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		// See if any frames for this port
 
-		if (TNC->WINMORtoBPQ_Q !=0)
+		if (TNC->WINMORtoBPQ_Q != 0)
 		{
 			buffptr=Q_REM(&TNC->WINMORtoBPQ_Q);
 
@@ -796,7 +764,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
 			{
-				wsprintf(&buff[8], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &buff[14]);
+				wsprintf(&buff[8], "%d %s", TNC->Port, &buff[14]);
 
 				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff[8]))
 				{
@@ -992,7 +960,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		if (TNC->Streams[0].Attached == 0)
 			return TNC->CONNECTED << 8 | 1;
 
-		return (TNC->CONNECTED << 8 | TNC->Disconnecting << 15);		// OK
+		return (TNC->CONNECTED << 8 | TNC->Streams[0].Disconnecting << 15);		// OK
 			
 		break;
 
@@ -1069,9 +1037,6 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 
 	UCHAR TXMsg[1000];
 
-	TNC->Disconnecting = FALSE;
-	TNC->DiscTimeout = 0;
-
 	ChangeMYC(TNC, TNC->NodeCall);
 
 	send(TNC->WINMORSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
@@ -1080,7 +1045,7 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 
 	//	Start Scanner
 				
-	wsprintf(TXMsg, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+	wsprintf(TXMsg, "%d SCANSTART 15", TNC->Port);
 
 	Rig_Command(-1, TXMsg);
 
@@ -1171,6 +1136,8 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 		return (int) ExtProc;
 	}
 
+	TNC->Port = port;
+
 	if (TNC->ProgramPath)
 		TNC->WeStartedTNC = RestartTNC(TNC);
 
@@ -1212,6 +1179,8 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->MAXHOSTMODESESSIONS = 1;	
 	PortEntry->SCANCAPABILITIES = SIMPLE;			// Scan Control - pending connect only
 
+	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
+		PortEntry->PORTCONTROL.PORTPACLEN = 236;
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -1285,8 +1254,6 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 			strcpy(TNC->WINMORHostName,"127.0.0.1");
 
 	}
-
-	MinimizetoTray = GetMinimizetoTrayFlag();
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 
@@ -1700,8 +1667,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->Streams[0].Connected = FALSE;		// Back to Command Mode
 		TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
 
-		if (TNC->Disconnecting)		// 
+		if (TNC->Streams[0].Disconnecting)		// 
 			ReleaseTNC(TNC);
+
+		TNC->Streams[0].Disconnecting = FALSE;
 
 		return;
 	}
@@ -1861,7 +1830,7 @@ static int ProcessReceivedData(struct TNCINFO * TNC)
 		
 		if (!TNC->CONNECTING)
 		{
-			wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", TNC->Port);
 			WritetoConsole(ErrMsg);
 		}
 		TNC->CONNECTING = FALSE;
@@ -2017,7 +1986,7 @@ int Winmor_Socket_Data(int sock, int error, int eventcode)
 
 		case FD_CLOSE:
 
-			i=wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			i=wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", TNC->Port);
 			WritetoConsole(ErrMsg);
 
 			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to WINMOR TNC lost");
@@ -2235,4 +2204,24 @@ lineloop:
 
 	index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
 
+}
+VOID TidyClose(struct TNCINFO * TNC, int Stream)
+{
+	send(TNC->WINMORSock,"DISCONNECT\r\n", 12, 0);
+}
+
+VOID ForcedClose(struct TNCINFO * TNC, int Stream)
+{
+	send(TNC->WINMORSock,"DIRTYDISCONNECT\r\n", 17, 0);
+}
+
+VOID CloseComplete(struct TNCINFO * TNC, int Stream)
+{
+	ReleaseTNC(TNC);
+
+	if (TNC->FECMode)
+	{
+		TNC->FECMode = FALSE;
+		send(TNC->WINMORSock,"SENDID 0\r\n", 10, 0);
+	}
 }

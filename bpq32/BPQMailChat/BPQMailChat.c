@@ -572,6 +572,9 @@
 // Add Dup message supression
 // Dont change B2 from if going to RMS
 
+// Version 1.0.4.24 Oct 2010
+
+// Add "Save Registry Config" command
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -1520,8 +1523,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			CreateMonitor();
 			break;
 
-		case IDM_DEBUG:
+		case BPQSAVEREG:
 
+			CreateRegBackup();
+			break;
+
+		case IDM_DEBUG:
 			CreateDebugWindow();
 			break;
 
@@ -2339,6 +2346,9 @@ int Connected(Stream)
 
 			if (paclen == 0)
 				paclen = 236;
+
+			if (conn->SessType & Sess_PACTOR)
+				paclen = 100;
 			
 			conn->paclen=paclen;
 
@@ -4432,6 +4442,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	case 'Y':
 	case 'F':
 	case '%':
+	case 'D':			// Delivered NTS Traffic can be listed by anyone
 		{
 			int m = NumberofMessages;
 				
@@ -4450,26 +4461,26 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		return;
 
 	case 'K':
+	{
+		int i, Msgs = 0;
+
+		for (i=NumberofMessages; i>0; i--)
 		{
-			int i, Msgs = 0;
-
-			for (i=NumberofMessages; i>0; i--)
+			if (MsgHddrPtr[i]->status == 'K')
 			{
-				if (MsgHddrPtr[i]->status == 'K')
-				{
-					Msgs++;
-					ListMessage(MsgHddrPtr[i], conn);
-				}
+				Msgs++;
+				ListMessage(MsgHddrPtr[i], conn);
 			}
-
-			if (Msgs == 0)
-				BBSputs(conn, "No Messages found\r");
-
 		}
+
+		if (Msgs == 0)
+			BBSputs(conn, "No Messages found\r");
+
+	}
 
 	case 'P':
 	case 'B':
-	case 'T':
+	case 'T':			// NTS Traffic can be listed by anyone
 		{
 			int m = NumberofMessages;
 				

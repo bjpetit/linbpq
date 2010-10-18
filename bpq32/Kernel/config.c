@@ -117,6 +117,8 @@ char * Buffer;
 
 extern char * PortConfig[34];
 
+BOOL PortDefined[34];
+
 char * fp2;
 
 VOID bputc(int Ch, char * ptr)
@@ -510,13 +512,14 @@ DllExport BOOL ProcessConfig()
 	portnum = 1;
 	NextAppl = 0;
 
-	for (i=0; i < 34; i++)
+	for (i = 0; i < 34; i++)
 	{
 		if (PortConfig[i])
 		{
 			free(PortConfig[i]);
 			PortConfig[i] = NULL;
 		}
+		PortDefined[i] = FALSE;
 	}
 
 	Consoleprintf("Configuration file Preprocessor.");
@@ -1155,7 +1158,9 @@ char rec[];
    {
 	   App = (struct APPLCONFIG *)&Buffer[ApplOffset + NextAppl++ * sizeof(struct APPLCONFIG) ];
 
-       memset(appl, ' ', 250);
+       memset(appl, ' ', 249);
+	   appl[249] = 0;
+
 	   ptr2=appl;
  		
        j = *ptr1++;
@@ -1355,7 +1360,7 @@ int i;
 /*     CONVERT PORT DEFINITIONS TO BINARY				*/
 /************************************************************************/
 int hw;		// Hardware type
-
+int LogicalPortNum;				// As set by PORTNUM
 
 int ports(int i)
 {
@@ -1374,6 +1379,8 @@ int ports(int i)
 	bseek(fp2,(long) portoffset,SEEK_SET);
         bputi(portnum,fp2);
 
+	LogicalPortNum = portnum;
+
 	while (endport == 0 && !feof(fp1))
 	{
 	   GetNextLine(rec);
@@ -1383,13 +1390,21 @@ int ports(int i)
 	{
 	   Consoleprintf("Error in port definition");
 	   return(0);
-	} 
+	}
+
+	if (PortDefined[LogicalPortNum]) // Already defined?
+	{
+		Consoleprintf("Port %d already defined", LogicalPortNum);
+		heading = 1;
+	}
+
+	PortDefined[LogicalPortNum] = TRUE;
 
 	bseek(fp2,(long) portoffset+112,SEEK_SET);
         bputi(kissflags,fp2);
 
 	portoffset = portoffset + 512;
-	portnum = portnum +1;
+	portnum++;
 	
 	return(1); 
 
@@ -1667,6 +1682,7 @@ char rec[];
 		RADIO PORT PROCESSING 
 */
 
+
 decode_port_rec(rec)
 char rec[];
 {
@@ -1683,31 +1699,29 @@ char rec[];
 		// Copy all subseuent lines up to ENDPORT to a memory buffer
 
 		char * ptr;
-		
-		if (PortConfig[portnum])	// Alreasdy defined?
+
+		if (LogicalPortNum > 32)
 		{
-			Consoleprintf("Port %d already defined", portnum);
-			heading = 1;
-			return 0;
+			Consoleprintf("Portnum %d is invalid", LogicalPortNum);
+			LogicalPortNum = 0;
 		}
 
-		PortConfig[portnum] = ptr = malloc(50000);
-
+		PortConfig[LogicalPortNum] = ptr = malloc(50000);
 		*ptr = 0;
-
+	
 		GetNextLine(rec);
 
 		while (!feof(fp1))
 		{
 			if (_memicmp(rec, "ENDPORT", 7) == 0)
 			{
-				PortConfig[portnum] = realloc(PortConfig[portnum], (strlen(ptr) + 1));		
+				PortConfig[LogicalPortNum] = realloc(PortConfig[LogicalPortNum], (strlen(ptr) + 1));		
 				endport = 1;
 				return 0;
 			}
-
 			strcat(ptr, rec);
 			strcat(ptr, "\r\n");
+			
 			GetNextLine(rec);
 		}
 
@@ -1721,6 +1735,13 @@ char rec[];
 	   sscanf(rec,"%[^=]=%s",key_word,value);
 	else
 	   sscanf(rec,"%s",key_word);
+
+	if (_stricmp(key_word, "portnum") == 0)
+	{
+		// Save as LogicalPortNum
+
+		LogicalPortNum = atoi(value);
+	}
 
 /************************************************************************/
 /*      SEARCH FOR KEYWORD IN TABLE					*/

@@ -2933,3 +2933,60 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 	return (INT_PTR)FALSE;
 }
 
+CreateRegBackup()
+{
+	char cmd[256];
+	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
+	char RegFileName[MAX_PATH];
+
+	wsprintf(RegFileName, "%s\\BPQMailChat.reg", BaseDir);
+
+	// Keep 4 Generations
+
+	strcpy(Backup2, RegFileName);
+	strcat(Backup2, ".bak.3");
+
+	strcpy(Backup1, RegFileName);
+	strcat(Backup1, ".bak.2");
+
+	DeleteFile(Backup2);			// Remove old .bak.3
+	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+	strcpy(Backup2, RegFileName);
+	strcat(Backup2, ".bak.1");
+
+	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+	strcpy(Backup1, RegFileName);
+	strcat(Backup1, ".bak");
+
+	MoveFile(Backup1, Backup2);		//Move .bak to .bak.1
+
+	strcpy(Backup2, RegFileName);
+	strcat(Backup2, ".bak");
+
+	CopyFile(RegFileName, Backup2, FALSE);	// Copy to .bak
+
+
+	wsprintf(cmd,
+		"regedit /E \"%s\\BPQMailChat.reg\" HKEY_LOCAL_MACHINE\\Software\\G8BPQ\\BPQ32\\BPQMailChat", BaseDir);
+
+		
+	SInfo.cb=sizeof(SInfo);
+	SInfo.lpReserved=NULL; 
+	SInfo.lpDesktop=NULL; 
+	SInfo.lpTitle=NULL; 
+	SInfo.dwFlags=0; 
+	SInfo.cbReserved2=0; 
+  	SInfo.lpReserved2=NULL; 
+
+	CreateProcess(NULL , cmd , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+					
+
+	return 1;
+}
+
+

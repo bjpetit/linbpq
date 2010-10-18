@@ -73,13 +73,17 @@ struct STREAMINFO
 	UINT PACTORtoBPQ_Q;			// Frames for BPQ
 	UINT BPQtoPACTOR_Q;			// Frames for PACTOR
 	int	FramesOutstanding;		// Frames Queued - used for flow control
-	int	FramesQueued;		// Frames Queued - used for flow control
+	int	FramesQueued;			// Frames Queued - used for flow control
 	BOOL InternalCmd;			// Last Command was generated internally
 	int	IntCmdDelay;			// To limit internal commands
 
 	BOOL Attached;				// Set what attached to a BPQ32 stream
 	BOOL Connected;				// When set, all data is passed as data instead of commands
 	BOOL Connecting;			// Set when Outward Connect in progress
+	BOOL Disconnecting;			// Set when disconnect in progress
+								// Used when appplication disconnects the bpq session, and
+								// prevents new attaches while a didy disconnect is in progress
+	int DisconnectingTimeout;	// A hard disconnect occurs if this expires before the disconnect complete
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 
 	int DEDStream;				// Stream number for DED interface (same as index except for pactor)
@@ -124,6 +128,8 @@ typedef struct TNCINFO
 #define H_HAL 5
 #define H_TELNET 6
 
+	int Port;					// BPQ Port Number
+
 	BOOL Minimized;				// Start Minimized flag
 
 	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
@@ -140,8 +146,6 @@ typedef struct TNCINFO
     UCHAR TCPBuffer[1000];		// For converting byte stream to messages
     int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
 
-	BOOL Disconnecting;			// Disconnect Sent - waiting for DISCONNECTED or Timout
-	int	DiscTimeout;			// Disconnect Timeout counter.
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
 	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.
 	BOOL DiscPending;			// Set if Disconnect Pending Received. So we can time out stuck in Disconnecting
@@ -203,7 +207,7 @@ typedef struct TNCINFO
 	// Fields for reporting to WL2K Map
 
 	char * Host;
-	short Port;
+	short WL2KPort;
 
 	int UpdateWL2KTimer;
 	BOOL UpdateWL2K;
@@ -310,6 +314,7 @@ typedef struct TNCINFO
 #define TXMODEM 0x33				// Send TX data to modem
 #define TXSEC   0x34				// Send TX data to secondary port
 
+	BOOL XONXOFF;					// Set if hardware is using XON/XOFF
 };
 
 VOID * zalloc(int len);
@@ -329,6 +334,13 @@ VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
+
+static VOID TidyClose(struct TNCINFO * TNC, int Stream);
+static VOID ForcedClose(struct TNCINFO * TNC, int Stream);
+static VOID CloseComplete(struct TNCINFO * TNC, int Stream);
+
+VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM,
+				VOID TidyClose(), VOID ForcedClose(), VOID CloseComplete());
 
 extern UCHAR NEXTID;
 extern struct TRANSPORTENTRY * L4TABLE;

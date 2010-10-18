@@ -307,7 +307,7 @@
 
 #include "AsmStrucs.h"
 
-//#define SPECIALVERSION "Test"
+#define SPECIALVERSION "Clover Test"
 
 #include "GetVersion.h"
 
@@ -4347,7 +4347,7 @@ DllExport PMESSAGE APIENTRY GetBuff()
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
-	char Mess[255];
+	char Mess[10000];
 	va_list(arglist);
 
 	va_start(arglist, format);

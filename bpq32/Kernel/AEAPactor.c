@@ -385,6 +385,8 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 		return (int)ExtProc;
 	}
 
+	TNC->Port = port;
+
 	TNC->Hardware = H_AEA;
 
 	if (TNC->RigConfigMsg)
@@ -430,6 +432,8 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
 	PortEntry->SCANCAPABILITIES = NONE;		// No Scan Interlock 
 
+	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
+		PortEntry->PORTCONTROL.PORTPACLEN = 100;
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -438,8 +442,6 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	wsprintf(msg, "EAS ON\rMYCALL %s\rHPOLL ON\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
-
-	MinimizetoTray = GetMinimizetoTrayFlag();
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
@@ -677,7 +679,7 @@ VOID AEAPoll(int Port)
 
 		// Stop Scanning
 
-		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		wsprintf(Msg, "%d SCANSTOP", TNC->Port);
 		
 		Rig_Command(-1, Msg);
 
@@ -781,7 +783,7 @@ VOID AEAPoll(int Port)
 
 			// Restart Scanning
 
-			wsprintf(Status, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			wsprintf(Status, "%d SCANSTART 15", TNC->Port);
 		
 			Rig_Command(-1, Status);
 
@@ -854,7 +856,7 @@ VOID AEAPoll(int Port)
 
 				if ((Stream == 0) && memcmp(MsgPtr, "RADIO ", 6) == 0)
 				{
-					wsprintf(&MsgPtr[40], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &MsgPtr[6]);
+					wsprintf(&MsgPtr[40], "%d %s", TNC->Port, &MsgPtr[6]);
 					if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &MsgPtr[40]))
 					{
 						ReleaseBuffer(buffptr);
@@ -1334,7 +1336,7 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				char Msg[80];
 				
-				wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+				wsprintf(Msg, "%d SCANSTOP", TNC->Port);
 
 				Rig_Command(-1, Msg);
 

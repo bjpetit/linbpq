@@ -72,9 +72,6 @@ static int RigControlRow = 210;
 #define NARROWMODE 12
 #define WIDEMODE 16			// PIII only
 
-
-extern BOOL MinimizetoTray;
-
 extern UCHAR BPQDirectory[];
 
 extern struct APPLCALLS APPLCALLTABLE[];
@@ -495,7 +492,8 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 		return (int) ExtProc;
 	}
-
+	
+	TNC->Port = port;
 	TNC->Hardware = H_SCS;
 
 	if (TNC->RigConfigMsg)
@@ -542,6 +540,9 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 		
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
+
+	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
+		PortEntry->PORTCONTROL.PORTPACLEN = 100;
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -844,7 +845,7 @@ VOID DEDPoll(int Port)
 
 				// Stop Scanner
 		
-				wsprintf(Status, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+				wsprintf(Status, "%d SCANSTOP", TNC->Port);
 		
 				Rig_Command(-1, Status);
 			}
@@ -981,7 +982,7 @@ VOID DEDPoll(int Port)
 				
 			if (Stream == 0)
 			{
-				wsprintf(Status, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+				wsprintf(Status, "%d SCANSTART 15", TNC->Port);
 				Rig_Command(-1, Status);
 			}
 
@@ -1241,7 +1242,7 @@ VOID DEDPoll(int Port)
 
 				if (memcmp(Buffer, "RADIO ", 6) == 0)
 				{
-					wsprintf(&Buffer[40], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &Buffer[6]);
+					wsprintf(&Buffer[40], "%d %s", TNC->Port, &Buffer[6]);
 
 					if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &Buffer[40]))
 					{
@@ -2020,7 +2021,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 				if (Stream == 0)
 				{
-					wsprintf(Status, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+					wsprintf(Status, "%d SCANSTOP", TNC->Port);
 					Rig_Command(-1, Status);
 
 					UpdateMH(TNC, Call, '+');
@@ -2340,7 +2341,7 @@ VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	}
 
 	Monframe.LENGTH = 23;				// Control Frame
-	Monframe.PORT = TNC->PortRecord->PORTCONTROL.PORTNUMBER;
+	Monframe.PORT = TNC->Port;
 
 
 	ptr = strstr(Msg, "fm ");

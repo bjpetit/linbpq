@@ -685,6 +685,23 @@ VOID SetupHAddresesP(struct BBSForwardingInfo * ForwardingInfo)
 	ForwardingInfo->HADDRSP[Count] = NULL;
 }
 
+VOID CheckAndSend(struct MsgInfo * Msg, CIRCUIT * conn, struct UserInfo * bbs) 
+{
+	struct BBSForwardingInfo * ForwardingInfo = bbs->ForwardingInfo;
+		
+	if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
+	{
+		if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
+		{
+			set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+			ForwardingInfo->MsgCount++;
+			if (ForwardingInfo->SendNew)
+				ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
+
+		}
+	}
+}
+
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 {
 	struct UserInfo * bbs;
@@ -936,6 +953,14 @@ NOHA:
 		HElements[1], HElements[2], HElements[3], HElements[4]);
 
 
+
+	// if NTS Traffic. Route on Wildcarded TO.
+
+	//   If no match, route on AT (Should be NTSxx)
+
+	//   If no match, send to any BBS with routing to state XX and NTS flag set
+
+
 	if (Msg->type == 'P' || Flood == 0)
 	{
 		// P messages are only sent to one BBS, but check the TO and AT of all BBSs before routing on HA,
@@ -949,24 +974,14 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
-			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
+			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P') && (Msg->type != 'T'))
 				continue;
 			
 			if (CheckBBSToList(Msg, bbs, ForwardingInfo))
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace TO %s Matches BBS %s", Msg->to, bbs->Call);
 
-				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
-				{
-					if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
-					{
-						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-						ForwardingInfo->MsgCount++;
-						if (ForwardingInfo->SendNew)
-							ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
-
-					}
-				}
+				CheckAndSend(Msg, conn, bbs);
 				return 1;
 			}
 		}
@@ -975,7 +990,7 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
-			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
+			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P') && (Msg->type != 'T'))
 				continue;
 
 			// Check implied AT 
@@ -984,16 +999,8 @@ NOHA:
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches implied AT %s", ATBBS, bbs->Call);
 
-				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
-				{
-					if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
-					{
-						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-						ForwardingInfo->MsgCount++;
-						if (ForwardingInfo->SendNew)
-							ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
-					}
-				}
+				CheckAndSend(Msg, conn, bbs);
+
 				return 1;
 			}
 
@@ -1003,22 +1010,38 @@ NOHA:
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches AT %s", ATBBS, bbs->Call);
 
-				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
-				{
-					if ((conn == NULL) || (!(conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0))) // Dont send back
-					{
-						set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-						ForwardingInfo->MsgCount++;
-						if (ForwardingInfo->SendNew)
-							ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
-					}
-				}
+				CheckAndSend(Msg, conn, bbs);
+
 				return 1;
 			}
 		}
 
-		// We should choose the BBS with most matching elements (ie match on #23.GBR better that GBR)
+		// If NTS, Look for a BBS with NTS flag in state xx
 
+		if (Msg->type == 'T' && strlen(ATBBS) == 5)
+		{
+			if (memcmp(ATBBS, "NTS", 3) == 0)
+			{
+				char state[3];
+
+				strcpy(state, &ATBBS[3]);
+
+				for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+				{		
+					ForwardingInfo = bbs->ForwardingInfo;
+			
+					if (FALSE)
+					{
+						if (CheckBBSToList(Msg, bbs, ForwardingInfo))
+							CheckAndSend(Msg, conn, bbs);
+
+						return 1;
+					}
+				}
+			}
+		}
+
+		// We should choose the BBS with most matching elements (ie match on #23.GBR better that GBR)
 
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
@@ -1044,16 +1067,8 @@ NOHA:
 		{
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace HR Best Match is %s", bestbbs->Call);
 
-			if (_stricmp(bestbbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
-			{
-				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bestbbs->Call) != 0)) // Dont send back
-				{
-					set_fwd_bit(Msg->fbbs, bestbbs->BBSNumber);
-					bestbbs->ForwardingInfo->MsgCount++;
-					if (ForwardingInfo->SendNew)
-						ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
-				}
-			}
+			CheckAndSend(Msg, conn, bbs);
+		
 			return 1;
 		}
 
@@ -1091,16 +1106,8 @@ NOHA:
 		{
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace AT %s Matches BBS %s", Msg->to, bbs->Call);
 
-			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
-			{
-				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
-				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
-					if (ForwardingInfo->SendNew)
-						ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
-				}
-			}
+			CheckAndSend(Msg, conn, bbs);
+
 			Count++;
 			continue;
 		}
@@ -1112,16 +1119,8 @@ NOHA:
 				HElements[0], HElements[1], HElements[2], 
 				HElements[3], HElements[4], bbs->Call);
 	
-			if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
-			{
-				if ((conn == NULL) || (!conn->BBSFlags & BBS) || (_stricmp(conn->UserPointer->Call, bbs->Call) != 0)) // Dont send back
-				{
-					set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
-					ForwardingInfo->MsgCount++;
-					if (ForwardingInfo->SendNew)
-						ForwardingInfo->FwdTimer = ForwardingInfo->FwdInterval;
-				}
-			}
+			CheckAndSend(Msg, conn, bbs);
+
 			Count++;
 		}
 	}

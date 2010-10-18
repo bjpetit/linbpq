@@ -2,8 +2,8 @@
 //
 #include "kernelresource.h"
 
-#define KVers 4,10,16,5
-#define KVerstring "4.10.16.5\0"
+#define KVers 4,10,16,6
+#define KVerstring "4.10.16.6\0"
 #define KVerComments "G8BPQ Packet Switch V4.10p\0"
 #define KVerCopyright "Copyright © 2001-2010 John Wiseman G8BPQ\0"
 
@@ -130,7 +130,7 @@ BEGIN
     LTEXT           "Mode",IDC_PACTORLEVEL,5,96,215,10
 END
 
-KAMPACTORSTATUS DIALOG DISCARDABLE  0, 0, 249, 125
+KAMPACTORSTATUS DIALOG DISCARDABLE  0, 0, 269, 125
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Pactor Status"
 CLASS "KAMPACTORSTATUS"
@@ -142,9 +142,9 @@ BEGIN
     LTEXT           "",IDC_STATE,60,44,54,10
     LTEXT           "TX/RX State",IDC_STATIC,5,57,44,10
     LTEXT           "",IDC_TXRX,60,57,54,10
-    LTEXT           "Buffers",IDC_STATIC,5,70,30,10
+    LTEXT           "Free Space",IDC_STATIC,5,70,45,10
     LTEXT           "0",IDC_BUFFERS,60,70,54,10
-    LTEXT           "",IDC_TNCSTATE,60,18,125,10
+    LTEXT           "",IDC_TNCSTATE,60,18,205,10
     LTEXT           "TNC State",IDC_STATIC,5,18,40,10
     LTEXT           "Comms State",IDC_STATIC,5,5,45,10
     LTEXT           "",IDC_COMMSSTATE,60,5,185,10
@@ -187,7 +187,6 @@ BEGIN
     LISTBOX         100,2,10,190,100,WS_VSCROLL
 END
 
-
 AEAPACTORSTATUS DIALOG DISCARDABLE  0, 0, 259, 125
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Pactor Status"
@@ -211,7 +210,6 @@ BEGIN
 END
 
 
-
 /////////////////////////////////////////////////////////////////////////////
 //
 // Menu
@@ -229,6 +227,7 @@ BEGIN
         BEGIN
             MENUITEM ".",                           IDM_DISCONNECT
         END
+        MENUITEM "ReRead Config",               TELNET_RECONFIG
     END
 END
 
@@ -238,7 +237,6 @@ END
 //
 // Version
 //
-
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION KVers

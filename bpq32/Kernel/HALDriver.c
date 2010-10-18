@@ -76,6 +76,52 @@ VOID SendCmd(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
+//static HANDLE LogHandle[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
+
+//char * Logs[4] = {"1", "2", "3", "4"};
+
+//char BaseDir[]="c:";
+
+static VOID CloseLogfile(int Flags)
+{
+//	CloseHandle(LogHandle[Flags]);
+//	LogHandle[Flags] = INVALID_HANDLE_VALUE;
+}
+
+static VOID OpenLogfile(int Flags)
+{
+/*
+UCHAR FN[MAX_PATH];
+	time_t T;
+	struct tm * tm;
+
+	T = time(NULL);
+	tm = gmtime(&T);	
+
+	wsprintf(FN,"%s\\HALLog_%02d%02d%02d_%s.bin", BaseDir, tm->tm_mday, tm->tm_hour, tm->tm_min, Logs[Flags]);
+
+	LogHandle[Flags] = CreateFile(FN,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	SetFilePointer(LogHandle[Flags], 0, 0, FILE_END);
+
+	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
+*/
+}
+
+static void WriteLogLine(int Flags, char * Msg, int MsgLen)
+{
+//	int cnt;
+//	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
+}
+
+
+
 ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
@@ -113,8 +159,7 @@ ProcessLine(char * buf, int Port)
 
 		BPQport = Port;
 
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
+		TNC = TNCInfo[BPQport] = zalloc(sizeof(struct TNCINFO));
 
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
@@ -148,11 +193,10 @@ ProcessLine(char * buf, int Port)
 	}
 	if(BPQport > 0 && BPQport < 33)
 	{
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
-
+		TNC = TNCInfo[BPQport] = zalloc(sizeof(struct TNCINFO));
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
+
 		if (p_cmd != NULL)
 		{
 			if (p_cmd[0] != ';' && p_cmd[0] != '#')
@@ -189,6 +233,11 @@ ConfigLine:
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			{
 				DecodeWL2KReportLine(TNC, buf, Report_P1, Report_P1);
+				continue;
+			}
+			if (_memicmp(buf, "NEEDXONXOFF", 10) == 0)
+			{
+				TNC->XONXOFF = TRUE;
 				continue;
 			}
 
@@ -252,10 +301,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
+	struct STREAMINFO * STREAM;
 	int Stream;
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
+
+	STREAM = &TNC->Streams[0];
 
 	if (!TNC->RIG)
 	{
@@ -271,9 +323,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		//for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
-			if (TNC->Streams[0].ReportDISC)
+			if (STREAM->ReportDISC)
 			{
-				TNC->Streams[0].ReportDISC = FALSE;
+				STREAM->ReportDISC = FALSE;
 				buff[4] = 0;
 
 				return -1;
@@ -285,11 +337,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		//for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
-			if (TNC->Streams[0].PACTORtoBPQ_Q !=0)
+			if (STREAM->PACTORtoBPQ_Q !=0)
 			{
 				int datalen;
 			
-				buffptr=Q_REM(&TNC->Streams[0].PACTORtoBPQ_Q);
+				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
 
 				datalen=buffptr[1];
 
@@ -325,7 +377,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			buffptr[1] = 36;
 			memcpy(buffptr+2, "No Connection to PACTOR TNC\r", 36);
 
-			C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 			
 			return 0;
 		}
@@ -334,13 +386,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
-		C_Q_ADD(&TNC->Streams[0].BPQtoPACTOR_Q, buffptr);
+		C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 
-		if(TNC->Streams[0].Connected)
-		{
-			TNC->Streams[0].FramesQueued++;
-			TNC->Streams[0].BytesOutstanding += txlen;
-		}
+		STREAM->FramesQueued++;
+
 		return (0);
 
 
@@ -352,10 +401,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			mov Stream,eax
 		}
 			
-		if (TNC->Streams[0].FramesQueued  > 4)
-			(1 | TNC->HostMode << 8);
+		if (STREAM->FramesQueued  > 4)
+			return (1 | TNC->HostMode << 8);
 	
-		return TNC->HostMode << 8;		// OK
+		return TNC->HostMode << 8 | STREAM->Disconnecting << 15;		// OK, but lock attach if disconnecting
 
 	case 4:				// reinit
 
@@ -407,6 +456,10 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 
 		return (int)ExtProc;
 	}
+	
+	TNC->Port = port;
+
+	TNC->Hardware = H_HAL;
 
 	if (TNC->RigConfigMsg)
 	{
@@ -447,6 +500,9 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
 
+	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
+		PortEntry->PORTCONTROL.PORTPACLEN = 100;
+
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
@@ -457,9 +513,9 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->PollDelay = 999999999;
 
-	// Set ClearOnDisc, EAS and MYCALL
+	// Set Disable +?, ExpandedStatus , Channel Stats Off, ClearOnDisc, EAS and MYCALL
 
-	len = wsprintf(Msg, "%c%c%c%c%c%s", 0x56, 0x41, ClearOnDisc, SetEAS, SetMYCALL, TNC->NodeCall);
+	len = wsprintf(Msg, "%c%c%c%c%c%c%s", 0xcc, 0x56, 0x41, ClearOnDisc, SetEAS, SetMYCALL, TNC->NodeCall);
 	len++;					// We include the NULL
 
 	memcpy(&TNC->InitScript[TNC->InitScriptLen], Msg, len); 
@@ -515,12 +571,15 @@ static void CheckRX(struct TNCINFO * TNC)
 		return;					// Nothing doing
 
 	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
+
+	WriteLogLine(0, &TNC->RXBuffer[TNC->RXLen], Length);
 	
 	if (!fReadStat)
 	{
 		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
 		return;
 	}
+
 /*
 	if (TNC->RXBuffer[0] == 0x80)
 		TNC->HostMode = TRUE;
@@ -550,14 +609,37 @@ static void CheckRX(struct TNCINFO * TNC)
 
 	// The USB version also uses 0x91 0x31 to eacape 0x11, 0x91 0x33 for 0x13 and 0x91 0xB1 for 0x91
 
-	Xptr = memchr(&TNC->RXBuffer, 0x91, Length);			// See if packet contains 0x91 escape
+	// If USB version, we might get unescaped xon and xoff, which we must ignore
 
-	if (Xptr)
+	if (TNC->XONXOFF)
+	{
+		Xptr = memchr(&TNC->RXBuffer, 0x11, Length);
 	
-		// Make sure we have the escaped char as well
+		while(Xptr)
+		{
+			Debugprintf("XON Port %d", TNC->Port);
+			memmove(Xptr, Xptr + 1, Length-- - (TNC->RXBuffer - Xptr));
+			Xptr = memchr(&TNC->RXBuffer, 0x11, Length);
+		}
 
-		if ((Xptr - (char *)&TNC->RXBuffer) == Length - 1)		// x91 is last char
-			return;
+		Xptr = memchr(&TNC->RXBuffer, 0x13, Length);
+	
+		while(Xptr)
+		{
+			Debugprintf("XOFF Port %d", TNC->Port);
+			memmove(Xptr, Xptr + 1, Length-- - (TNC->RXBuffer - Xptr));
+			Xptr = memchr(&TNC->RXBuffer, 0x13, Length);
+		}
+	
+		Xptr = memchr(&TNC->RXBuffer, 0x91, Length);			// See if packet contains 0x91 escape
+
+		if (Xptr)
+	
+			// Make sure we have the escaped char as well
+	
+			if ((Xptr - (char *)&TNC->RXBuffer) == Length - 1)		// x91 is last char
+				return;
+	}
 
 	ProcessHALBuffer(TNC, Length);
 
@@ -589,20 +671,22 @@ static BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
 VOID HALPoll(int Port)
 {
 	struct TNCINFO * TNC = TNCInfo[Port];
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+
 	UCHAR * Poll = TNC->TXBuffer;
 	char Status[80];
 	UCHAR TXMsg[1000];
 	int datalen;
 
 	if (TNC->Timeout)
-	{
+	{  
 		TNC->Timeout--;
 		
 		if (TNC->Timeout)			// Still waiting
 			return;
 
 		// Timed Out
-/*
+
 		TNC->TNCOK = FALSE;
 		TNC->HostMode = 0;
 				
@@ -613,11 +697,11 @@ VOID HALPoll(int Port)
 		{
 			if (TNC->PortRecord->ATTACHEDSESSIONS[0])		// Connected
 			{
-				TNC->Streams[0].Connected = FALSE;		// Back to Command Mode
-				TNC->Streams[0].ReportDISC = TRUE;		// Tell Nod
+				STREAM->Connected = FALSE;		// Back to Command Mode
+				STREAM->ReportDISC = TRUE;		// Tell Node
 			}
 		}
-*/
+
 	}
 
 	// if we have just restarted or TNC appears to be in terminal mode, run Initialisation Sequence
@@ -629,74 +713,42 @@ VOID HALPoll(int Port)
 			return;
 		}	
 
-
-	if (TNC->PortRecord->ATTACHEDSESSIONS[0] && TNC->Streams[0].Attached == 0)
+	if (TNC->PortRecord->ATTACHEDSESSIONS[0] && STREAM->Attached == 0)
 	{
 		// New Attach
 
 		int calllen;
 		char Msg[80];
 
-		TNC->Streams[0].Attached = TRUE;
+		STREAM->Attached = TRUE;
 
-		TNC->Streams[0].BytesRXed = TNC->Streams[0].BytesTXed = TNC->Streams[0].BytesAcked = 0;
+		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->BytesAcked = 0;
 
-		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
-		TNC->Streams[0].MyCall[calllen] = 0;
+		calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, STREAM->MyCall);
+		STREAM->MyCall[calllen] = 0;
 		
-		datalen = wsprintf(TXMsg, "%c%s", SetMYCALL, TNC->Streams[0].MyCall);
+		datalen = wsprintf(TXMsg, "%c%s", SetMYCALL, STREAM->MyCall);
 		SendCmd(TNC, TXMsg, datalen + 1);			// Send the NULL
 
-		wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
+		wsprintf(Status, "In Use by %s", STREAM->MyCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 		// Stop Scanning
 
-		wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+		wsprintf(Msg, "%d SCANSTOP", TNC->Port);
 		
 		Rig_Command(-1, Msg);
 
-		SendCmd(TNC, "\x48", 1);		// Listen off
+		SendCmd(TNC, "\x42", 1);		// Connect Enable off
 
 		return;
 
 	}
-	
+
 	//for (Stream = 0; Stream <= MaxStreams; Stream++)
-	{
-		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0 && TNC->Streams[0].Attached)
-		{
-			// Node has disconnected - clear any connection
-			
-			UINT * buffptr;
-			UCHAR * Poll = TNC->TXBuffer;
 
-			TNC->Streams[0].Attached = FALSE;
-			TNC->Streams[0].FramesQueued = 0;
-			TNC->Streams[0].BytesOutstanding = 0;
-
-			if (TNC->Streams[0].Connected || TNC->Streams[0].Connecting)
-				SendCmd(TNC, "\x07", 1);		// Disconnect
-			
-			TNC->Streams[0].Connected = FALSE;
-
-			TNC->NeedPACTOR = 30;
-
-			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
-
-			while(TNC->Streams[0].BPQtoPACTOR_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[0].BPQtoPACTOR_Q);
-				ReleaseBuffer(buffptr);
-			}
-
-			while(TNC->Streams[0].PACTORtoBPQ_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[0].PACTORtoBPQ_Q);
-				ReleaseBuffer(buffptr);
-			}
-		}
-	}
+	if (STREAM->Attached)
+		CheckForDetach(TNC, 0, STREAM, TidyClose, ForcedClose, CloseComplete);
 
 	if (TNC->NeedPACTOR)
 	{
@@ -720,7 +772,6 @@ VOID HALPoll(int Port)
 				SendCmd(TNC, "\x84", 1);		// FSK
 				SendCmd(TNC, "\x83", 1);		// Select P-MODE Standby
 				SendCmd(TNC, "\x58", 1);		// Listen
-				SendCmd(TNC, "\x57", 1);		// Enable TX buffer clear on disconnect
 
 				break;
 
@@ -728,7 +779,6 @@ VOID HALPoll(int Port)
 
 				SendCmd(TNC, "\x80", 1);		// Clover
 				SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
-				SendCmd(TNC, "\x57", 1);		// Enable TX buffer clear on disconnect
 				SendCmd(TNC, "\x41", 1);		// No Statistics
 
 				break;			
@@ -738,7 +788,7 @@ VOID HALPoll(int Port)
 
 			// Restart Scanning
 
-			wsprintf(Status, "%d SCANSTART 15", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+			wsprintf(Status, "%d SCANSTART 15", TNC->Port);
 		
 			Rig_Command(-1, Status);
 
@@ -746,9 +796,11 @@ VOID HALPoll(int Port)
 		}
 	}
 
+#define MAXHALTX 256
+
 	//for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
-		if (TNC->TNCOK && TNC->Streams[0].BPQtoPACTOR_Q && TNC->Streams[0].BytesAcked >= TNC->Streams[0].BytesTXed)
+		if (TNC->TNCOK && STREAM->BPQtoPACTOR_Q && (STREAM->BytesTXed - STREAM->BytesAcked < 600))
 		{
 			int datalen;
 			UINT * buffptr;
@@ -756,31 +808,33 @@ VOID HALPoll(int Port)
 			char Status[80];
 			char TXMsg[500];
 			
-			buffptr = (UINT * )TNC->Streams[0].BPQtoPACTOR_Q;
+			buffptr = (UINT * )STREAM->BPQtoPACTOR_Q;
 			datalen=buffptr[1];
 			MsgPtr = (UCHAR *)&buffptr[2];
 
-			if (TNC->Streams[0].Connected)
+			if (STREAM->Connected)
 			{
 				// Must send data in small chunks - the Hal has limited buffer space
 
-#define MAXHALTX 50
+				// If in IRS force a turnround 
 
-				if (datalen > MAXHALTX)
+				if (TNC->TXRXState == 'R' && TNC->CurrentMode != Clover)
 				{
-					EncodeAndSend(TNC, MsgPtr, MAXHALTX);
-					TNC->Streams[0].BytesTXed += MAXHALTX; 
-					memmove(MsgPtr, &MsgPtr[MAXHALTX], datalen - MAXHALTX);
-					buffptr[1] -= MAXHALTX;
+					if (TNC->TimeInRX++ > 15)
+						SendCmd(TNC, "\x87", 1);		// Changeover to ISS 
+					else
+						goto Poll;
 				}
-				else
-				{	
-					EncodeAndSend(TNC, MsgPtr, datalen);
-					buffptr=Q_REM(&TNC->Streams[0].BPQtoPACTOR_Q);
-					ReleaseBuffer(buffptr);
-					TNC->Streams[0].BytesTXed += datalen; 
-					TNC->Streams[0].FramesQueued--;
-				}
+
+				TNC->TimeInRX = 0;
+					
+				EncodeAndSend(TNC, MsgPtr, datalen);
+				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
+				ReleaseBuffer(buffptr);
+				WriteLogLine(2, MsgPtr, datalen);
+
+				STREAM->BytesTXed += datalen; 
+				STREAM->FramesQueued--;
 
 				ShowTraffic(TNC);
 
@@ -788,9 +842,8 @@ VOID HALPoll(int Port)
 			}
 			else
 			{
-
-				buffptr=Q_REM(&TNC->Streams[0].BPQtoPACTOR_Q);
-				TNC->Streams[0].FramesQueued--;
+				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
+				STREAM->FramesQueued--;
 
 				// Command. Do some sanity checking and look for things to process locally
 
@@ -800,7 +853,7 @@ VOID HALPoll(int Port)
 
 				if (memcmp(MsgPtr, "RADIO ", 6) == 0)
 				{
-					wsprintf(&MsgPtr[40], "%d %s", TNC->PortRecord->PORTCONTROL.PORTNUMBER, &MsgPtr[6]);
+					wsprintf(&MsgPtr[40], "%d %s", TNC->Port, &MsgPtr[6]);
 					if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &MsgPtr[40]))
 					{
 						ReleaseBuffer(buffptr);
@@ -808,7 +861,7 @@ VOID HALPoll(int Port)
 					else
 					{
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &MsgPtr[40]);
-						C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
 					return;
 				}
@@ -816,8 +869,14 @@ VOID HALPoll(int Port)
 				if (memcmp(MsgPtr, "MODE CLOVER", 11) == 0)
 				{
 					TNC->CurrentMode = Clover;
-						buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"HAL} Ok\r");
-						C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"HAL} Ok\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+			
+					SetDlgItemText(TNC->hDlg, IDC_MODE, "Clover");
+
+					SendCmd(TNC, "\x80", 1);		// Clover
+					SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
+					SendCmd(TNC, "\x41", 1);		// No Statistics
 
 					return;
 				}
@@ -826,7 +885,11 @@ VOID HALPoll(int Port)
 				{
 					TNC->CurrentMode = Pactor;
 					buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"HAL} Ok\r");
-					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+
+					SendCmd(TNC, "\x84", 1);		// FSK
+					SendCmd(TNC, "\x83", 1);		// Select P-MODE Standby
+					SendCmd(TNC, "\x48", 1);		// Listen Off
 
 					return;
 				}
@@ -834,15 +897,14 @@ VOID HALPoll(int Port)
 				{
 					TNC->CurrentMode = AMTOR;
 					buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"HAL} Ok\r");
-					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
 					return;
 				}
 
 				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2)	// Connect
 				{
-					memcpy(TNC->Streams[0].RemoteCall, &MsgPtr[2], 9);
-					TNC->Streams[0].Connecting = TRUE;
+					memcpy(STREAM->RemoteCall, &MsgPtr[2], 9);
 
 					switch (TNC->CurrentMode)
 					{
@@ -851,10 +913,11 @@ VOID HALPoll(int Port)
 						SendCmd(TNC, "\x84", 1);		// FSK
 						SendCmd(TNC, "\x83", 1);		// Select P-MODE Standby
 
-						datalen = wsprintf(TXMsg, "%\x19%s", TNC->Streams[0].RemoteCall);
+						datalen = wsprintf(TXMsg, "%\x19%s", STREAM->RemoteCall);
 					
-						wsprintf(Status, "%s Connecting to %s - PACTOR", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
+						wsprintf(Status, "%s Connecting to %s - PACTOR", STREAM->MyCall, STREAM->RemoteCall);
 
+						// DOnt set connecting till we get the 19 response so we can trap listen as a fail
 						break;
 
 					case Clover:
@@ -862,9 +925,9 @@ VOID HALPoll(int Port)
 						SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
 						SendCmd(TNC, "\x57", 1);		// Enable TX buffer clear on disconnect
 
-						datalen = wsprintf(TXMsg, "%\x10%s", TNC->Streams[0].RemoteCall);
+						datalen = wsprintf(TXMsg, "%\x11%s", STREAM->RemoteCall);
 					
-						wsprintf(Status, "%s Connecting to %s - CLOVER", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
+						wsprintf(Status, "%s Connecting to %s - CLOVER", STREAM->MyCall, STREAM->RemoteCall);
 
 						break;			
 					}
@@ -873,28 +936,25 @@ VOID HALPoll(int Port)
 					SendCmd(TNC, TXMsg, datalen + 1);	// Include NULL
 
 					ReleaseBuffer(buffptr);
-					TNC->Streams[0].Connecting = TRUE;
 
 					return;
 				}
 
 				if (memcmp(MsgPtr, "CLOVER ", 7) == 0)
 				{
-					memcpy(TNC->Streams[0].RemoteCall, &MsgPtr[2], 9);
-					TNC->Streams[0].Connecting = TRUE;
+					memcpy(STREAM->RemoteCall, &MsgPtr[2], 9);
 
 					SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
 					SendCmd(TNC, "\x57", 1);		// Enable TX buffer clear on disconnect
 
-					datalen = wsprintf(TXMsg, "%\x11%s", TNC->Streams[0].RemoteCall);
+					datalen = wsprintf(TXMsg, "%\x11%s", STREAM->RemoteCall);
 					SendCmd(TNC, TXMsg, datalen + 1);	// Include NULL
 					
 					wsprintf(Status, "%s Connecting to %s - CLOVER",
-					TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
+					STREAM->MyCall, STREAM->RemoteCall);
 					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 					ReleaseBuffer(buffptr);
-					TNC->Streams[0].Connecting = TRUE;
 
 					return;
 				}
@@ -904,8 +964,8 @@ VOID HALPoll(int Port)
 					SendCmd(TNC, "\x07", 1);		// Normal Disconnect
 					TNC->NeedPACTOR = 50;
 	
-					TNC->Streams[0].Connecting = FALSE;
-					TNC->Streams[0].ReportDISC = TRUE;
+					STREAM->Connecting = FALSE;
+					STREAM->ReportDISC = TRUE;
 					ReleaseBuffer(buffptr);
 
 					return;
@@ -917,13 +977,13 @@ VOID HALPoll(int Port)
 					&TXMsg[0], &TXMsg[1], &TXMsg[2], &TXMsg[3], &TXMsg[4], &TXMsg[6], &TXMsg[6], &TXMsg[7], 
 					&TXMsg[8], &TXMsg[9], &TXMsg[10], &TXMsg[11], &TXMsg[12], &TXMsg[13], &TXMsg[14], &TXMsg[15]);
 
-				SendCmd(TNC, TXMsg, datalen);
+//				SendCmd(TNC, TXMsg, datalen);
 				ReleaseBuffer(buffptr);
 				TNC->InternalCmd = 0;
 			}
 		}
 	}
-
+Poll:
 	// Nothing doing - send Poll (but not too often)
 
 	TNC->PollDelay++;
@@ -933,9 +993,12 @@ VOID HALPoll(int Port)
 
 	TNC->PollDelay = 0;
 
-	SendCmd(TNC, "\x7d" , 1);			// Use Get LEDS as Poll
+	if (TNC->TNCOK)
+		SendCmd(TNC, "\x7d" , 1);			// Use Get LEDS as Poll
+	else
+		SendCmd(TNC, "\x09" , 1);			// Reset
 
-	TNC->Timeout = 20;
+	TNC->Timeout = 100;
 
 	return;
 }
@@ -944,8 +1007,8 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 {
 	// TNC Has Restarted, send init commands (can probably send all at once)
 
-	TNC->TXBuffer[0] = 0x1b;
-	TNC->TXLen = 1;
+//	TNC->TXBuffer[0] = 0x1b;
+//	TNC->TXLen = 1;
 
 	WriteCommBlock(TNC);
 
@@ -957,9 +1020,14 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 	TNC->DataMode = RXDATA;		// Start with RX Data
 
 	SendCmd(TNC, "\x7d" , 1);	// Use Get LEDS as Poll
-	SendCmd(TNC, "\xc9" , 1);	// Huffman Off
+//	SendCmd(TNC, "\xc9" , 1);	// Huffman Off
+	SendCmd(TNC, "\x57", 1);	// Enable TX buffer clear on disconnect
 
-	TNC->Timeout = 20;
+	SendCmd(TNC, "\x60\x06", 2);	// Robust Mode Retries
+
+//	SendCmd(TNC, "\x6f\x03" , 2);	// Undocumented XON/XOFF On - used to see if old or new style modem
+
+	TNC->Timeout = 50;
 
 	return;
 
@@ -971,41 +1039,51 @@ VOID ProcessHALData(struct TNCINFO * TNC)
 
 	UINT * buffptr;
 	int Len = TNC->DataLen;
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	TNC->DataLen = 0;
 
 	if (TNC->DataMode == TXDATA)
 	{
-		TNC->Streams[0].BytesAcked += Len;
-		Debugprintf("Acked %d", Len);
+		STREAM->BytesAcked += Len;
+//		Debugprintf("Acked %d", Len);
 
-		if (TNC->Streams[0].BytesAcked > TNC->Streams[0].BytesTXed)
+		if (STREAM->BytesAcked > STREAM->BytesTXed)
 			Debugprintf("Too Much Acked");
 
-		if (TNC->CurrentMode != Clover)
+		if ((STREAM->BPQtoPACTOR_Q == 0) && STREAM->BytesAcked >= STREAM->BytesTXed)
 		{
-			if ((TNC->Streams[0].BPQtoPACTOR_Q == 0) && TNC->Streams[0].BytesAcked >= TNC->Streams[0].BytesTXed)
-			{
-				// All sent - turn round link
+			// All sent 
 
-				SendCmd(TNC, "\x0c" , 1);	// Turnround
-			}
+			if (STREAM->Disconnecting)
+				TidyClose(TNC, 0);
+			else
+				if (TNC->CurrentMode != Clover)
+			
+				// turn round link
+
+					SendCmd(TNC, "\x0c" , 1);	// Turnround
+			
 		}
 	}
 	else
 	{
 		if (TNC->DataMode == RXDATA)
 		{
-			Debugprintf("RXed %d", Len);
+//			Debugprintf("RXed %d", Len);
 			buffptr = GetBuff();
-			if (buffptr == NULL) return;	// No buffers, so ignore
+			if (buffptr == NULL) 
+				return;	// No buffers, so ignore
 
 			buffptr[1] = Len;				// Length
-			TNC->Streams[0].BytesRXed += Len;
+
+			WriteLogLine(1, TNC->DataBuffer, Len);
+
+			STREAM->BytesRXed += Len;
 
 			memcpy(&buffptr[2], TNC->DataBuffer, Len);
 
-			C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 		}
 	}
 
@@ -1046,7 +1124,8 @@ VOID ProcessHALBuffer(struct TNCINFO * TNC, int Length)
 		if (CmdEsc)
 		{
 			CmdEsc = FALSE;
-			if (Char == 0x91)
+
+			if (TNC->XONXOFF && Char == 0x91)
 			{
 				// XON/XOFF escape. We ensured above that data follows so we can process it inline
 
@@ -1085,7 +1164,7 @@ NotData:
 			{
 				Char = *(inptr++);
 
-				if (Char == 0x91)
+				if (TNC->XONXOFF && Char == 0x91)
 				{
 					// XON/XOFF escape within data. We ensured above that data follows so we
 					// can process it here
@@ -1142,6 +1221,7 @@ VOID ProcessHALCmd(struct TNCINFO * TNC)
 	int Leds;
 	int Len;
 	int Used;
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 CmdLoop:
 
@@ -1150,6 +1230,12 @@ CmdLoop:
 
 	if (Len == 0)
 		return;
+
+	TNC->TNCOK = TRUE;
+	TNC->Timeout = 0;
+
+	wsprintf(Status,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+	SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
 
 	// We may have more than one response in the buffer, and only each cmd/response decoder knows how many it needs
 
@@ -1197,8 +1283,8 @@ CmdLoop:
 
 			SetDlgItemText(TNC->hDlg, IDC_MODE, status[StatusByte]);
 
-	//		if (TNC->Streams[0].Connecting)
-	//			HALDisconnected(TNC);
+			if (STREAM->Connecting)
+				HALDisconnected(TNC);
 
 			break;
 
@@ -1241,12 +1327,6 @@ CmdLoop:
 
 		if (Len < 2) return;		// Wait for more
 	
-		TNC->TNCOK = TRUE;
-		TNC->Timeout = 0;
-
-		wsprintf(Status,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
-		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
-
 		Leds = TNC->CmdBuffer[1];
 		wsprintf(Status,"  %c   %c    %c    %c     %c %c ", 
 			(Leds & 0x20)? 'X' : ' ',
@@ -1261,6 +1341,23 @@ CmdLoop:
 
 		Used = 2;
 		break;
+
+	case 0x21:				// Monitored FEC CCB
+	case 0x22:				// Monitored ARQ CCB
+
+		// As the reply is variable, make sure we have the terminating NULL
+
+		if (memchr(TNC->CmdBuffer, 0, Len) == NULL)
+			return;					// Wait for more
+
+		Call = &TNC->CmdBuffer[1];
+		Used = strlen(Call) + 2;	// Opcode and Null
+
+		UpdateMH(TNC, Call, '!');
+
+		break;
+
+
 
 
 	case 0x27:						// Clover ARQ LINK REQUEST status message 
@@ -1285,6 +1382,21 @@ CmdLoop:
 		// Don't need to do anything (but may save Session type later
 
 		Used = 3;
+		break;
+
+
+	case 0x28:				// Monitored Call
+
+		// As the reply is variable, make sure we have the terminating NULL
+
+		if (memchr(TNC->CmdBuffer, 0, Len) == NULL)
+			return;					// Wait for more
+
+		Call = &TNC->CmdBuffer[1];
+		Used = strlen(Call) + 2;	// Opcode and Null
+
+		// Could possibly be used for APPLCALLS by changing MYCALL when we see a call to one of our calls
+
 		break;
 
 
@@ -1364,25 +1476,25 @@ CmdLoop:
 
 		switch (StatusByte)
 		{
-		case 0x00:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Channel idle"); break;
-		case 0x01:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Channel occupied with non-Clover signal"); break;
-		case 0x42:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Linked stations monitored"); break;
-		case 0x64:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Attempting normal link"); break;
-		case 0x65:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Attempting robust link"); break;
-		case 0x66:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Calling ARQ CQ"); break;
-		case 0x78:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Clover Control Block (CCB) send retry"); break;
-		case 0x79:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Clover Control Block (CCB) receive retry"); break;
-		case 0x7D:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Clover Control Block (CCB) received successfully"); break;
-		case 0x8A:		SetDlgItemText(TNC->hDlg, IDC_MODE, "TX data block sent"); break;
-		case 0x8B:		SetDlgItemText(TNC->hDlg, IDC_MODE, "RX data block received ok (precedes data block)"); break;
-		case 0x8C:		SetDlgItemText(TNC->hDlg, IDC_MODE, "TX data block re-sent"); break;
-		case 0x8D:		SetDlgItemText(TNC->hDlg, IDC_MODE, "RX data block decode failed (precedes data block)"); break;
-		case 0x8E:		SetDlgItemText(TNC->hDlg, IDC_MODE, "TX idle"); break;
-		case 0x8F:		SetDlgItemText(TNC->hDlg, IDC_MODE, "RX idle"); break;
-		case 0x9C:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Link failed: CCB send retries exceeded"); break;
-		case 0x9D:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Link failed: CCB receive retries exceeded"); break;
-		case 0x9E:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Link failed: protocol error"); break;
-		case 0xA0:		SetDlgItemText(TNC->hDlg, IDC_MODE, "Receiving FEC SYNC sequence"); break;
+		case 0x00:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Channel idle"); break;
+		case 0x01:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Channel occupied with non-Clover signal"); break;
+		case 0x42:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Linked stations monitored"); break;
+		case 0x64:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Attempting normal link"); break;
+		case 0x65:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Attempting robust link"); break;
+		case 0x66:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Calling ARQ CQ"); break;
+		case 0x78:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Clover Control Block (CCB) send retry"); break;
+		case 0x79:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Clover Control Block (CCB) receive retry"); break;
+		case 0x7D:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Clover Control Block (CCB) received successfully"); break;
+		case 0x8A:		SetDlgItemText(TNC->hDlg, IDC_STATE, "TX data block sent"); break;
+		case 0x8B:		SetDlgItemText(TNC->hDlg, IDC_STATE, "RX data block received ok (precedes data block)"); break;
+		case 0x8C:		SetDlgItemText(TNC->hDlg, IDC_STATE, "TX data block re-sent"); break;
+		case 0x8D:		SetDlgItemText(TNC->hDlg, IDC_STATE, "RX data block decode failed (precedes data block)"); break;
+		case 0x8E:		SetDlgItemText(TNC->hDlg, IDC_STATE, "TX idle"); break;
+		case 0x8F:		SetDlgItemText(TNC->hDlg, IDC_STATE, "RX idle"); break;
+		case 0x9C:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Link failed: CCB send retries exceeded"); break;
+		case 0x9D:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Link failed: CCB receive retries exceeded"); break;
+		case 0x9E:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Link failed: protocol error"); break;
+		case 0xA0:		SetDlgItemText(TNC->hDlg, IDC_STATE, "Receiving FEC SYNC sequence"); break;
 		}
 
 		Used = 2;
@@ -1406,12 +1518,31 @@ CmdLoop:
 
 		if (Len < 3) return;		// Wait for more
 
-		Debugprintf("HAL Command Error Cmd %X Error %X", TNC->CmdBuffer[1], TNC->CmdBuffer[2]);
+		if (TNC->CmdBuffer[1] == 0x6f && TNC->CmdBuffer[2] == 0x31)
+		{
+			// Reject of XON/XOFF enable
+
+//			TNC->XONXOFF = FALSE;
+//			Debugprintf("BPQ32 HAL Port %d - Disabling XON/XOFF mode", TNC->Port);
+		}
+		else
+			Debugprintf("HAL Port %d Command Error Cmd %X Error %X", TNC->Port, TNC->CmdBuffer[1], TNC->CmdBuffer[2]);
 
 		Used = 3;
 		break;
 
 		// Following are all immediate commands - response is echo of command
+
+	case 0x6f:				// XON/XOFF on
+		
+//		TNC->XONXOFF = TRUE;	// And drop through
+//		Debugprintf("BPQ32 HAL Port %d - Enabling XON/XOFF mode", TNC->Port);
+
+	case 0x19:			// Call P-MODE to <CALL>
+	case 0x10:			// Robust Link to <CALL> using MYCALL
+	case 0x11:			// Normal Link to <CALL> using MYCALL
+
+		STREAM->Connecting = TRUE;
 
 	case 0x00:			// P Load LOD file
 	case 0x01:			// P Load S28 file
@@ -1428,16 +1559,16 @@ CmdLoop:
 	case 0x0D:			//F Force RTTY TX (Baudot/ASCII)
 	case 0x0E:			//F Go to RTTY RX (Baudot/ASCII)
 	case 0x0F:			//Go to LOD/S28 file loader
-	case 0x10:			// Robust Link to <CALL> using MYCALL
-	case 0x11:			// Normal Link to <CALL> using MYCALL
 	case SetMYCALL:		// Set MYCALL Response
-	case 0x19:			// Call P-MODE to <CALL>
+
 	case 0x1E:			// Set MYALTCALL Response
 
 	case 0x41:
+	case 0x42:
 	case 0x46:
 	case 0x47:
 	case 0x48:
+	case 0x4d:
 	case 0x52:			// Enable adaptive Clover format
 	case 0x54:			// Enable adaptive Clover format
 
@@ -1445,6 +1576,7 @@ CmdLoop:
 	case 0x57:			// Clear buffers on disc
 	case 0x58:
 	case 0x59:
+	case 0x60:			// Robust Mode Retries
 
 	case 0x80:			//Switch to CLOVER mode
 	case 0x81:			//Select AMTOR Standby
@@ -1464,6 +1596,7 @@ CmdLoop:
 	case 0x8F:			//Close PTT only (no tones)
 
 	case 0xC9:			//Huffman Off/On
+	case 0xCC:
 	case 0xD9:			//Close PTT only (no tones)
 
 	case SetTones:
@@ -1482,7 +1615,7 @@ CmdLoop:
 
 		// We didn't recognise command, so don't know how long it is - disaster!
 
-		Debugprintf("HAL Unrecognised Command %x", Opcode);
+		Debugprintf("HAL Port %d Unrecognised Command %x", TNC->Port, Opcode);
 		TNC->CmdLen = 0;
 
 		return;
@@ -1510,14 +1643,20 @@ CmdLoop:
 	
 VOID HALDisconnected(struct TNCINFO * TNC)
 {
-	if ((TNC->Streams[0].Connecting | TNC->Streams[0].Connected) == 0)
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+
+	CloseLogfile(0);
+	CloseLogfile(1);
+	CloseLogfile(2);
+
+	if ((STREAM->Connecting | STREAM->Connected) == 0)
 	{
 		// Not connected or Connecting. Probably response to going into Pactor Listen Mode
 
 		return;
 	}
 
-	if (TNC->Streams[0].Connecting)
+	if (STREAM->Connecting && STREAM->Disconnecting == FALSE)
 	{
 		UINT * buffptr;
 		char Status[80];
@@ -1528,27 +1667,31 @@ VOID HALDisconnected(struct TNCINFO * TNC)
 	
 		if (buffptr)
 		{
-			buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[0].RemoteCall);
+			buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", STREAM->RemoteCall);
 
-			C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 		}
 
-		TNC->Streams[0].Connecting = FALSE;
-		TNC->Streams[0].Connected = FALSE;				// In case!
-		TNC->Streams[0].FramesQueued = 0;
+		STREAM->Connecting = FALSE;
+		STREAM->Connected = FALSE;				// In case!
+		STREAM->FramesQueued = 0;
 
-		wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
+		wsprintf(Status, "In Use by %s", STREAM->MyCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
 		return;
 	}
 
-	// Must Have been connected - Release Session
+	// Connected, ot Disconnecting - Release Session
 
-	TNC->Streams[0].Connecting = FALSE;
-	TNC->Streams[0].Connected = FALSE;		// Back to Command Mode
-	TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
-	TNC->Streams[0].FramesQueued = 0;
+	STREAM->Connecting = FALSE;
+	STREAM->Connected = FALSE;		// Back to Command Mode
+	STREAM->FramesQueued = 0;
+
+	if (STREAM->Disconnecting == FALSE)
+		STREAM->ReportDISC = TRUE;		// Tell Node
+
+	STREAM->Disconnecting = FALSE;
 
 	// Need to reset Pactor Call in case it was changed
 
@@ -1560,14 +1703,19 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	char Msg[80];
 	UINT * buffptr;
 	char Status[80];
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+	char CallCopy[80];
 
-	UpdateMH(TNC, Call, '+');
+	strcpy(CallCopy, Call);
+	strcat(CallCopy, "          ");			// Some routines expect 10 char calls
 
-	TNC->Streams[0].BytesRXed = TNC->Streams[0].BytesTXed = TNC->Streams[0].BytesAcked = 0;
+	UpdateMH(TNC, CallCopy, '+');
+
+	STREAM->BytesRXed = STREAM->BytesTXed = STREAM->BytesAcked = 0;
 
 	// Stop Scanner
 
-	wsprintf(Msg, "%d SCANSTOP", TNC->PortRecord->PORTCONTROL.PORTNUMBER);
+	wsprintf(Msg, "%d SCANSTOP", TNC->Port);
 		
 	Rig_Command(-1, Msg);
 
@@ -1575,14 +1723,21 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 
 	TNC->DataMode = RXDATA; 
 
+	OpenLogfile(0);
+	OpenLogfile(1);
+	OpenLogfile(2);
+
 	if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0)
 	{
 		// Incoming Connect
 
-		ProcessIncommingConnect(TNC, Call, 0);
+		ProcessIncommingConnect(TNC, CallCopy, 0);
 					
-		wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
+		wsprintf(Status, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+		if (TNC->CurrentMode != Clover)
+			SendCmd(TNC, "\x87", 1);		// Changeover to ISS 
 
 		// If an autoconnect APPL is defined, send it
 
@@ -1592,51 +1747,36 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 			if (buffptr == 0) return TRUE;			// No buffers, so ignore
 
 			buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
-			C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
 			return TRUE;
 		}
 
 		if (FULL_CTEXT)
 		{
-			char CTBuff[300] = "D20";
-			int Len = CTEXTLEN, CTPaclen = 50;
-			int Next = 0;
+			EncodeAndSend(TNC, CTEXTMSG, CTEXTLEN);
+			WriteLogLine(2, CTEXTMSG, CTEXTLEN);
 
-	/*		while (Len > CTPaclen)		// CTEXT Paclen
-			{
-						memcpy(&CTBuff[3], &CTEXTMSG[Next], CTPaclen);
-						SendCmd(TNC, CTBuff, CTPaclen + 3);
-						Next += CTPaclen;
-						Len -= CTPaclen;
-					}
-
-					memcpy(&CTBuff[3], &CTEXTMSG[Next], Len);
-					SendCmd(TNC, CTBuff, Len + 3);
-				}
-				return;
-*/
+			STREAM->BytesTXed += CTEXTLEN;
 		}
+		return TRUE;
 	}
-	else
-	{
-			// Connect Complete
+
+	// Connect Complete
 			
-			buffptr = GetBuff();
-			if (buffptr == 0) return TRUE;			// No buffers, so ignore
+	buffptr = GetBuff();
+	if (buffptr == 0) return TRUE;			// No buffers, so ignore
 
-			buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", Call);;
+	buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", Call);;
 
-			C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+	C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 	
-			TNC->Streams[0].Connecting = FALSE;
-			TNC->Streams[0].Connected = TRUE;			// Subsequent data to data channel
+	STREAM->Connecting = FALSE;
+	STREAM->Connected = TRUE;			// Subsequent data to data channel
 
-			wsprintf(Status, "%s Connected to %s Outbound", TNC->NodeCall, TNC->Streams[0].RemoteCall);
-				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+	wsprintf(Status, "%s Connected to %s Outbound", TNC->NodeCall, STREAM->RemoteCall);
+		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
-		
-	}
 	return TRUE;
 }	
 
@@ -1694,5 +1834,22 @@ int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 	return txptr;
 
 }
+
+VOID TidyClose(struct TNCINFO * TNC, int Stream)
+{
+		SendCmd(TNC, "\x07", 1);		// Tidy Disconnect
+}
+
+VOID ForcedClose(struct TNCINFO * TNC, int Stream)
+{
+		SendCmd(TNC, "\x06", 1);		// Hard Disconnect
+}
+
+VOID CloseComplete(struct TNCINFO * TNC, int Stream)
+{
+		TNC->NeedPACTOR = 30;	
+}
+
+
 
 

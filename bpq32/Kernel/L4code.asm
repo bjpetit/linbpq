@@ -2688,9 +2688,39 @@ DONTSTAY:
 ;	PACTOR-type (Session linked to Port)
 ;
 	MOVZX EAX, KAMSESSION[EBX]
-	SHL EAX,2
-
+	SHL EAX,2	
+;
+;	If any data is queued, move it to the port entry, so it can be sent before the disconnect
+;
 	ADD	EAX, L4TARGET[EBX]
+;
+;	EAX is the port record
+;
+SEEIFMORE:
+
+	PUSH EAX
+	
+	LEA	ESI,L4TX_Q[EBX]
+	CALL Q_REM
+	JZ NOMORE
+		
+	POP	EAX	
+	
+	PUSH	EAX
+	PUSH	ECX
+	PUSH	EDI			; Msg for 'c' Routines
+	PUSH	EBX			; VECTOR for  'c' Routines
+	MOV	EBX,EAX
+	CALL	PORTTXROUTINE[EBX]	; LEVEL 2 PROCESS
+	POP	EBX
+	POP	EDI
+	POP	ECX
+	POP EAX
+
+	JMP SHORT SEEIFMORE	
+
+NOMORE:
+	POP	EAX
 	MOV	ATTACHEDSESSIONS[EAX],0
 	
 	CALL	CLEARSESSIONENTRY	; CLEAR L4 ENTRY 

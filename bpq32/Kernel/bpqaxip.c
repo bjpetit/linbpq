@@ -157,6 +157,7 @@ int ResetExtDriver(int num);
 BOOL ProcessConfig();
 VOID FreeConfig();
 char * PortConfig[34];
+
 extern UCHAR BPQDirectory[];
 
 void ResolveNames(struct PORTINFO * PORT);
@@ -827,12 +828,14 @@ void OpenSockets(struct PORTINFO * PORT)
 
 		if (bind(PORT->udpsock[i], (LPSOCKADDR) &sinx, sizeof(sinx)) != 0 )
 		{
-			//
+			char Title[20];
+
 			//	Bind Failed
-			//
+
 			err = WSAGetLastError();
 			wsprintf(Msg, "Bind Failed for UDP socket - error code = %d", err);
-			MessageBox(NULL,Msg,NULL, MB_OK);
+			wsprintf(Title, "AXIP Port %d", PORT->Port);
+			MessageBox(NULL, Msg, Title, MB_OK);
 			return;
 		}
 	}

@@ -45,8 +45,8 @@
 #define IDM_USERMSG                     1034
 #define IDM_CHATUSERMSG                 1035
 #define IDM_NEWUSERMSG                  1036
-#define IDM_EXPERTUSERMSG               1038
 #define IDM_MSGSAVE                     1037
+#define IDM_EXPERTUSERMSG               1038
 #define IDC_MAPPOSITION                 1039
 #define IDC_HOVER                       1040
 #define IDC_CLICK                       1041
@@ -119,13 +119,14 @@
 #define IDM_CHATCONSOLE                 40016
 #define ID_ACTIONS_UPDATECHATMAPINFO    40017
 #define IDM_EDITCHATCOLOURS             40018
+#define BPQSAVEREG                      40019
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
-#define _APS_NEXT_COMMAND_VALUE         40019
+#define _APS_NEXT_COMMAND_VALUE         40020
 #define _APS_NEXT_CONTROL_VALUE         1074
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
