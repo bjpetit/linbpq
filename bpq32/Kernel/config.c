@@ -297,6 +297,7 @@ int dec_byte(i, value, rec);
 
 extern char PWTEXT[];
 extern char LOCATOR[];
+extern int AXIPPort;
 
 extern int __cdecl main(int argc,char **argv,char **envp);
 extern int __cdecl decode_rec(char *rec);
@@ -511,6 +512,8 @@ DllExport BOOL ProcessConfig()
 	tncportoffset = 384;
 	portnum = 1;
 	NextAppl = 0;
+	LOCATOR[0] = 0;
+	AXIPPort = 0;
 
 	for (i = 0; i < 34; i++)
 	{

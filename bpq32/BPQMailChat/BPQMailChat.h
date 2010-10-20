@@ -611,6 +611,7 @@ struct BBSForwardingInfo
 	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
 	BOOL Forwarding;				// Forward in progress
 	int MaxFBBBlockSize;
+	BOOL AllowCompressed;			// Allow FBB COmpressed
 	BOOL AllowB1;					// Enable B1
 	BOOL AllowB2;					// Enable B2 
 	BOOL PersonalOnly;				// Only Forward Personals
@@ -998,6 +999,7 @@ struct UserInfo * FindRMS();
 VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo);
 BOOL ConnecttoBBS (struct UserInfo * user);
 BOOL SetupNewBBS(struct UserInfo * user);
+VOID CreateRegBackup();
 
 // FBB Routines
 
@@ -1118,6 +1120,7 @@ BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwa
 BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
 BOOL CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
+int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo);
 
 extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;
@@ -1230,7 +1233,6 @@ extern int NumberofMessages;
 extern int HighestBBSNumber;
 extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
-extern BOOL ALLOWCOMPRESSED;
 extern BOOL EnableUI;
 extern BOOL SendSYStoSYSOPCall;
 extern BOOL UIEnabled[];

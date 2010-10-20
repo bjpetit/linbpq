@@ -334,9 +334,9 @@ BEGIN
                     WS_VSCROLL
     LTEXT           "Times",IDC_STATIC,299,46,30,13
     CONTROL         "Use B1 Protocol",IDC_USEB1,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,238,262,64,8
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,294,262,64,8
     CONTROL         "Use B2 Protocol",IDC_USEB2,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,319,262,67,8
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,361,262,67,8
     EDITTEXT        IDC_CALL,343,59,92,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL
@@ -362,6 +362,8 @@ BEGIN
     CONTROL         "Send new messages without waiting for poll timer",
                     IDC_SENDNEW,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
                     BS_MULTILINE | WS_TABSTOP,125,221,175,8
+    CONTROL         "Allow Binary",IDC_ALLOWCOMP,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,227,262,58,8
 END
 
 IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68

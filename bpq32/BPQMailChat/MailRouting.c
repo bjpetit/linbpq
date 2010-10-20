@@ -953,12 +953,61 @@ NOHA:
 		HElements[1], HElements[2], HElements[3], HElements[4]);
 
 
+	if (Msg->type == 'T')
+	{
+		int depth = 0;
+		int bestmatch = 0;
+		struct UserInfo * bestbbs = NULL;
 
-	// if NTS Traffic. Route on Wildcarded TO.
 
-	//   If no match, route on AT (Should be NTSxx)
+		// if NTS Traffic. Route on Wildcarded TO.
 
-	//   If no match, send to any BBS with routing to state XX and NTS flag set
+		//   If no match, route on AT (Should be NTSxx)
+
+		//   If no match, send to any BBS with routing to state XX and NTS flag set
+
+		// We should choose the BBS with most matching elements (ie match on #23.GBR better that GBR)
+
+		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+		{		
+			ForwardingInfo = bbs->ForwardingInfo;
+
+			depth = CheckBBSToForNTS(Msg, bbs, ForwardingInfo);
+
+			if (depth)
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS Matches TO BBS %s Length %d", bbs->Call, depth);
+		
+				if (depth > bestmatch)
+				{
+					bestmatch = depth;
+					bestbbs = bbs;
+				}
+			}
+		}
+		if (bestbbs)
+		{
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS Best Match is %s", bestbbs->Call);
+
+			CheckAndSend(Msg, conn, bestbbs);
+		
+			return 1;
+		}
+
+		// Check AT 
+
+		if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+		{
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS %s Matches AT %s", ATBBS, bbs->Call);
+
+			CheckAndSend(Msg, conn, bbs);
+
+			return 1;
+		}
+
+		return FALSE;	// No match
+	}
+
 
 
 	if (Msg->type == 'P' || Flood == 0)
@@ -990,7 +1039,7 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
-			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P') && (Msg->type != 'T'))
+			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
 				continue;
 
 			// Check implied AT 
@@ -999,6 +1048,7 @@ NOHA:
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches implied AT %s", ATBBS, bbs->Call);
 
+		
 				CheckAndSend(Msg, conn, bbs);
 
 				return 1;
@@ -1013,31 +1063,6 @@ NOHA:
 				CheckAndSend(Msg, conn, bbs);
 
 				return 1;
-			}
-		}
-
-		// If NTS, Look for a BBS with NTS flag in state xx
-
-		if (Msg->type == 'T' && strlen(ATBBS) == 5)
-		{
-			if (memcmp(ATBBS, "NTS", 3) == 0)
-			{
-				char state[3];
-
-				strcpy(state, &ATBBS[3]);
-
-				for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
-				{		
-					ForwardingInfo = bbs->ForwardingInfo;
-			
-					if (FALSE)
-					{
-						if (CheckBBSToList(Msg, bbs, ForwardingInfo))
-							CheckAndSend(Msg, conn, bbs);
-
-						return 1;
-					}
-				}
 			}
 		}
 
@@ -1067,7 +1092,7 @@ NOHA:
 		{
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace HR Best Match is %s", bestbbs->Call);
 
-			CheckAndSend(Msg, conn, bbs);
+			CheckAndSend(Msg, conn, bestbbs);
 		
 			return 1;
 		}
@@ -1274,6 +1299,57 @@ int CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct B
 					bestmatch = i;
 			}
 			k++;
+		}
+	}
+	return bestmatch;
+}
+
+
+int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo)
+{
+	char ** Calls;
+	char * Call;
+	char * ptr;
+	int bestmatch = 0;
+	int MatchLen = 0;
+
+	// Look for Matches on TO using Wildcarded Addresses. Intended for use with NTS traffic, with TO = ZIPCode
+	
+	// We forward to the BBS with the most specific match - ie minimum *'s in match
+
+	if (ForwardingInfo->TOCalls)
+	{
+		Calls = ForwardingInfo->TOCalls;
+
+		while(Calls[0])
+		{
+			Call = Calls[0];
+			ptr = strchr(Call, '*');
+			if (ptr)
+			{
+				MatchLen = ptr - Call;
+
+				if (memcmp(Msg->to, Call, MatchLen) == 0)
+				{
+					// Match - de we have a better one?
+
+					if (MatchLen > bestmatch)
+						bestmatch = MatchLen;
+				}
+			}
+			else
+			{
+				//no star - just do a normal compare
+				
+				if (strcmp(Msg->to, Call) == 0)
+				{
+					MatchLen = strlen(Call);
+					if (MatchLen > bestmatch)
+						bestmatch = MatchLen;
+				}
+			}
+
+			Calls++;
 		}
 	}
 	return bestmatch;

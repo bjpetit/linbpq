@@ -739,6 +739,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
+			CheckDlgButton(hDlg, IDC_ALLOWCOMP, ForwardingInfo->AllowCompressed);
 			CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
 			CheckDlgButton(hDlg, IDC_PERSONALONLY, ForwardingInfo->PersonalOnly);
@@ -1571,6 +1572,9 @@ VOID SaveFWDConfig(HWND hDlg)
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_USEB1);
 		retCode = RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
+
+		Rev = IsDlgButtonChecked(hDlg, IDC_ALLOWCOMP);
+		retCode = RegSetValueEx(hKey,"AllowCompressed", 0, REG_DWORD, (BYTE *)&Rev,4);
 
 		Val = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
 		retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&Val,4);
@@ -2933,7 +2937,7 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 	return (INT_PTR)FALSE;
 }
 
-CreateRegBackup()
+VOID CreateRegBackup()
 {
 	char cmd[256];
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
@@ -2985,8 +2989,7 @@ CreateRegBackup()
 
 	CreateProcess(NULL , cmd , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 					
-
-	return 1;
+	return ;
 }
 
 

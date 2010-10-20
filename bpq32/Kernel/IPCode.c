@@ -159,81 +159,10 @@ FARPROCX GetAddress(char * Proc);
 
 HANDLE hInstance;
 
-char VersionString[100];
-
-/*
-BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
-{
-	hInstance=hInst;
-
-	switch( ul_reason_being_called )
-	{
-	case DLL_PROCESS_ATTACH:
-		
-//		AttachedProcesses++;
-		
-		return 1;
-   		
-	case DLL_THREAD_ATTACH:
-		
-		return 1;
-    
-	case DLL_THREAD_DETACH:
-	
-		return 1;
-    
-	case DLL_PROCESS_DETACH:
-			
-        	if (MinimizetoTray)
-			{
-				DeleteTrayMenuItem(hResWnd);
-			}
-
-
-	return 1;
-	}
-}
-
-*/
 
 Dll BOOL APIENTRY Init_IP()
 {
 	ARPDATA * ARPptr;
-	HRSRC RH;
-  	struct tagVS_FIXEDFILEINFO * HG;
-
-#ifdef _DEBUG 
-	char isDebug[]="Debug Build";
-#else
-	char isDebug[]="";
-#endif
-
-	HMODULE HM;
-
-	HM=GetModuleHandle("bpq32.dll");
-
-	RH=FindResource(HM,MAKEINTRESOURCE(VS_VERSION_INFO),RT_VERSION);
-
-	HG=LoadResource(HM,RH);
-
-	(int)HG+=40;
-
-	sprintf(VersionString,"%d.%d.%d.%d %s",
-					HIWORD(HG->dwFileVersionMS),
-					LOWORD(HG->dwFileVersionMS),
-					HIWORD(HG->dwFileVersionLS),
-					LOWORD(HG->dwFileVersionLS),
-					isDebug);
-
-
-/*
-GetAPI();
-
-	GetIPVectorAddr = (char * (__stdcall *) ())GetProcAddress(ExtDriver,"_GetIPVectorAddr@0");
-	RelBuff = (VOID (__stdcall *) ())GetProcAddress(ExtDriver,"_RelBuff@4");
-	GETSENDNETFRAMEADDR = (UINT (__stdcall *) ())GetProcAddress(ExtDriver,"_GETSENDNETFRAMEADDR@0");
-	Send_AX = (UINT (__stdcall *) (PMESSAGE Block, DWORD Len, UCHAR Port))GetProcAddress(ExtDriver,"_Send_AX@12");
-*/
 
 	NUMBEROFPORTS=GetNumberofPorts();
 	ConvToAX25(GetNodeCall(), MYCALL);
@@ -2064,7 +1993,7 @@ void IPResolveNames( void *dummy )
 		WindowParam=WS_OVERLAPPEDWINDOW ;
 	}
 
-	sprintf(WindowTitle,"IP Gateway Resolver Version %s", VersionString);
+	sprintf(WindowTitle,"IP Gateway Resolver");
 
 	hResWnd = CreateWindow("IPAppName",WindowTitle,
 		WindowParam,

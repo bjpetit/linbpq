@@ -247,8 +247,7 @@ BOOL CreateConsole(int Stream)
 	Cinfo->Console->PageLen = user->PageLen;
 	Cinfo->Console->Paging = (user->PageLen > 0);
 
-	nodeprintf(Cinfo->Console, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-		ALLOWCOMPRESSED ? "B" : "", "", "", "F");
+	nodeprintf(Cinfo->Console, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3], "B", "", "", "F");
 
 	if (user->Name[0] == 0)
 	{

@@ -814,6 +814,17 @@ VOID HALPoll(int Port)
 
 			if (STREAM->Connected)
 			{
+				if (TNC->SwallowSignon)
+				{
+					TNC->SwallowSignon = FALSE;	
+					if (strstr(MsgPtr, "Connected"))	// Discard *** connected
+					{
+						ReleaseBuffer(buffptr);
+						STREAM->FramesQueued--;
+						return;
+					}
+				}
+
 				// Must send data in small chunks - the Hal has limited buffer space
 
 				// If in IRS force a turnround 
@@ -1682,7 +1693,7 @@ VOID HALDisconnected(struct TNCINFO * TNC)
 		return;
 	}
 
-	// Connected, ot Disconnecting - Release Session
+	// Connected, or Disconnecting - Release Session
 
 	STREAM->Connecting = FALSE;
 	STREAM->Connected = FALSE;		// Back to Command Mode
@@ -1748,6 +1759,7 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 
 			buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
 			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+			TNC->SwallowSignon = TRUE;
 
 			return TRUE;
 		}

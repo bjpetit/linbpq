@@ -134,8 +134,6 @@ ProcessLine(char * buf, int Port)
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
 
-		strcpy(TNC->InitScript, "RESTART\r");
-
 		goto ConfigLine;
 	}
 	else
@@ -171,8 +169,6 @@ ProcessLine(char * buf, int Port)
 
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
-
-		strcpy(TNC->InitScript, "RESTART\r");
 
 		if (p_cmd != NULL)
 		{
@@ -224,6 +220,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
+	struct STREAMINFO * STREAM;
 	int Stream;
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
@@ -311,7 +308,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		if(TNC->Streams[Stream].Connected)
 		{
 			TNC->Streams[Stream].FramesQueued++;
-			TNC->Streams[Stream].BytesOutstanding += txlen;
 		}
 		return (0);
 
@@ -323,11 +319,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			MOV	EAX,buff
 			mov Stream,eax
 		}
-			
-		if (TNC->Streams[0].FramesQueued  > 4)
-			(1 | TNC->HostMode << 8);
+
+		STREAM = &TNC->Streams[Stream];
+
+		if (STREAM->FramesQueued  > 4)
+			return 1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15;	// Busy
 	
-		return TNC->HostMode << 8;		// OK
+		return TNC->HostMode << 8 | STREAM->Disconnecting << 15;		// OK, but lock attach if disconnecting;		// OK
 
 	case 4:				// reinit
 
@@ -359,6 +357,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	char msg[500];
 	struct TNCINFO * TNC;
 	int port;
+	char * TempScript;
 	char * ptr;
 
 	//
@@ -404,12 +403,11 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 
 		}
 		free(SaveRigConfig);
-	}	else
+	}
+	else
 		TNC->RIG = NULL;		// In case restart
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
-
-	// look for the MAXUSERS config line, and get the limits
 
 	TNC->InitScript = _strupr(TNC->InitScript);
 
@@ -438,9 +436,41 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
-	// Set the ax.25 MYCALL and EAS ON|
+	// Set Essential Params and MYCALL
 
-	wsprintf(msg, "EAS ON\rMYCALL %s\rHPOLL ON\r", TNC->NodeCall);
+	TempScript = malloc(4000);
+
+	strcpy(TempScript, "RESTART\r");
+	strcat(TempScript, "EXPERT ON\r");
+	strcat(TempScript, "PTHUFF 0\r");
+	strcat(TempScript, "PT200 ON\r");
+	strcat(TempScript, "WIDESHFT OFF\r");
+	strcat(TempScript, "CONMODE TRANS\r");
+	strcat(TempScript, "ARQT 30\r");
+
+	strcat(TempScript, TNC->InitScript);
+
+	free(TNC->InitScript);
+	TNC->InitScript = TempScript;
+
+	// Others go on end so they can't be overriden
+
+	strcat(TNC->InitScript, "XMITOK ON\r");
+	strcat(TNC->InitScript, "XFLOW OFF\r");
+	strcat(TNC->InitScript, "RXREV OFF\r");
+	strcat(TNC->InitScript, "FLOW OFF\r");
+	strcat(TNC->InitScript, "AWLEN 8\r");
+	strcat(TNC->InitScript, "AUTOBAUD OFF\r");
+	strcat(TNC->InitScript, "8BITCONV ON\r");
+	strcat(TNC->InitScript, "ALFPAC OFF\r");
+	strcat(TNC->InitScript, "ALFDISP OFF\r");
+	strcat(TNC->InitScript, "ACRRTTY 0\r");
+	strcat(TNC->InitScript, "HPOLL ON\r");
+	strcat(TNC->InitScript, "EAS ON\r\r");
+
+	// Set the ax.25 MYCALL
+
+	wsprintf(msg, "MYCALL %s\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
@@ -599,6 +629,7 @@ static BOOL WriteCommBlock(struct TNCINFO * TNC)
 VOID AEAPoll(int Port)
 {
 	struct TNCINFO * TNC = TNCInfo[Port];
+	struct STREAMINFO * STREAM;
 	UCHAR * Poll = TNC->TXBuffer;
 	char Status[80];
 	int Stream;
@@ -647,7 +678,6 @@ VOID AEAPoll(int Port)
 
 	if (TNC->CommandBusy)
 		goto Poll;
-
 
 	// We don't check for a new attach unless Timeout and CommandBusy are both zero, as we need to send a command.
 
@@ -717,53 +747,12 @@ VOID AEAPoll(int Port)
 		}
 	}
 
-
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
-		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0 && TNC->Streams[Stream].Attached)
-		{
-			// Node has disconnected - clear any connection
-			
-			UINT * buffptr;
-			UCHAR * Poll = TNC->TXBuffer;
+		STREAM = &TNC->Streams[Stream];
 
-			TNC->Streams[Stream].Attached = FALSE;
-			TNC->Streams[Stream].Connected = FALSE;
-			TNC->Streams[Stream].FramesQueued = 0;
-			TNC->Streams[Stream].BytesOutstanding = 0;
-
-			if (Stream == 0)					// Pactor Stream
-			{
-				EncodeAndSend(TNC, "ODI", 3);	// ??Return to packet mode??
-
-				TNC->CmdSet = TNC->CmdSave = malloc(100);
-
-				TNC->NeedPACTOR = 50;				// Need to Send PACTOR command after 5 secs
-				TNC->InternalCmd = 'P';
-				TNC->CommandBusy = TRUE;
-				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
-			}
-			else
-			{
-				UCHAR TXMsg[10];
-
-				wsprintf(TXMsg, "%cDI", Stream + '@');
-//				EncodeAndSend(TNC, TXMsg, 4);
-				EncodeAndSend(TNC, TXMsg, 4);		// Send twice - must force a disconnect
-			}
-
-			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				ReleaseBuffer(buffptr);
-			}
-
-			while(TNC->Streams[Stream].PACTORtoBPQ_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
-				ReleaseBuffer(buffptr);
-			}
-		}
+		if (STREAM->Attached)
+			CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
 	}
 
 	if (TNC->NeedPACTOR)
@@ -789,7 +778,6 @@ VOID AEAPoll(int Port)
 
 			return;
 		}
-
 	}
 
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -827,9 +815,27 @@ VOID AEAPoll(int Port)
 				datalen=buffptr[1];
 				MsgPtr = (UCHAR *)&buffptr[2];
 
+				if (TNC->SwallowSignon)
+				{
+					TNC->SwallowSignon = FALSE;	
+					if (strstr(MsgPtr, "Connected"))	// Discard *** connected
+					{
+						ReleaseBuffer(buffptr);
+						return;
+					}
+				}
+
 				wsprintf(TXMsg, "%c", Stream + ' ');
 					
 				memcpy(&TXMsg[1], buffptr + 2, datalen);
+				
+				// If nothing more to send, turn round link
+
+				if (TNC->TEXTMODE && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
+				{
+					TXMsg[++datalen] = 0x1a;
+				}
+
 				EncodeAndSend(TNC, TXMsg, datalen + 1);
 				ReleaseBuffer(buffptr);
 				TNC->Streams[Stream].BytesTXed += datalen; 
@@ -839,12 +845,14 @@ VOID AEAPoll(int Port)
 				if (Stream == 0)
 					ShowTraffic(TNC);
 
+				if (STREAM->Disconnecting && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
+					TidyClose(TNC, 0);
+
 				return;
 			}
 			else
 			{
 				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				TNC->Streams[Stream].FramesQueued--;
 				datalen=buffptr[1];
 				MsgPtr = (UCHAR *)&buffptr[2];
 
@@ -852,7 +860,7 @@ VOID AEAPoll(int Port)
 
 				datalen--;				// Exclude CR
 				MsgPtr[datalen] = 0;	// Null Terminate
-//				_strupr(MsgPtr);
+				_strupr(MsgPtr);
 
 				if ((Stream == 0) && memcmp(MsgPtr, "RADIO ", 6) == 0)
 				{
@@ -869,6 +877,29 @@ VOID AEAPoll(int Port)
 					return;
 				}
 
+				if (memcmp(MsgPtr, "MODE CONV", 9) == 0)
+				{
+					TNC->TEXTMODE = TRUE;
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"AEA} Ok\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+
+					EncodeAndSend(TNC, "OCECONV", 7);
+					TNC->CommandBusy = TRUE;
+
+					return;
+				}
+
+				if (memcmp(MsgPtr, "MODE TRANS", 9) == 0)
+				{
+					TNC->TEXTMODE = FALSE;
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"AEA} Ok\r");
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+
+					EncodeAndSend(TNC, "OCETRANS", 8);
+					TNC->CommandBusy = TRUE;
+
+					return;
+				}
 
 				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2)	// Connect
 				{
@@ -1092,6 +1123,7 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	char Status[80];
 	int Stream = 0;
 	int Opcode;
+	struct STREAMINFO * STREAM;
 
 	// Any valid frame is an ACK
 
@@ -1102,6 +1134,8 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	Stream = Msg[0] & 15;
 	Opcode = Msg[0] >> 4;
+
+	STREAM = &TNC->Streams[Stream];
 
 	if (Msg[0] == 'O' && Msg[1] == 'G' && Msg[2] == 'G')
 	{
@@ -1123,21 +1157,15 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		TNC->Streams[0].BytesAcked += Len -1;
 		ShowTraffic(TNC);
 
-		// If nothing more to send, turn round link
+/*		// If nothing more to send, turn round link
 
-/*
 		Debugprintf("AEA Bytes Sent %d Bytes ACKED %d", TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
 						
 		if ((TNC->Streams[0].BPQtoPACTOR_Q == 0) &&
 			(TNC->Streams[0].BytesAcked == TNC->Streams[0].BytesTXed))		// Nothing following and all acked
 		{
-			Debugprintf("AEA All Sent and Acked");
-		}
-
-		if (TNC->Streams[0].BytesAcked == TNC->Streams[0].BytesTXed)		// Nothing following and all acked
-		{
 			Debugprintf("AEA Sent = Acked - sending Turnround");
-			EncodeAndSend(TNC, "OAG", 3);
+			EncodeAndSend(TNC, " \x1a", 2);
 			TNC->InternalCmd = 'A';
 			TNC->CommandBusy = TRUE;
 		}
@@ -1216,6 +1244,7 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		// Reply to Manual command - Pass to Appl
 
 		Stream = TNC->CmdStream;
+		STREAM = &TNC->Streams[Stream];
 
 
 		buffptr = GetBuff();
@@ -1278,7 +1307,7 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				return;
 			}
 	
-			if (TNC->Streams[Stream].Connecting)
+			if (STREAM->Connecting && STREAM->Disconnecting == FALSE)
 			{
 				// Connect Failed
 			
@@ -1296,12 +1325,20 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				return;
 			}
 
-			// Must Have been connected - Release Session
+			// Connected, or Disconnecting - Release Session
 
 			TNC->Streams[Stream].Connecting = FALSE;
 			TNC->Streams[Stream].Connected = FALSE;		// Back to Command Mode
-			TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
 			TNC->Streams[Stream].FramesQueued = 0;
+
+			if (STREAM->Disconnecting == FALSE)
+				STREAM->ReportDISC = TRUE;		// Tell Node
+
+			STREAM->Disconnecting = FALSE;
+
+			// Need to reset Pactor Call in case it was changed
+
+			TNC->NeedPACTOR = 20;
 
 			if (Stream == 0)
 			{
@@ -1348,58 +1385,16 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				// Incoming Connect
 
-				struct TRANSPORTENTRY * Session;
-				int Index = 0;
-
-				Session=L4TABLE;
-
-				// Find a free Circuit Entry
-
-				while (Index < MAXCIRCUITS)
-				{
-					if (Session->L4USER[0] == 0)
-						break;
-
-					Session++;
-					Index++;
-				}
-
-				if (Index == MAXCIRCUITS)
-					return;					// Tables Full
-
-				TNC->Streams[Stream].Attached = TRUE;
-
-
-				strcpy(TNC->Streams[Stream].RemoteCall, Call);	// Save Text Callsign 
-
-				ConvToAX25(Call, Session->L4USER);
-				ConvToAX25(TNC->NodeCall, Session->L4MYCALL);
-	
-				Session->CIRCUITINDEX = Index;
-				Session->CIRCUITID = NEXTID;
-				NEXTID++;
-				if (NEXTID == 0) NEXTID++;		// Keep non-zero
-
-				TNC->PortRecord->ATTACHEDSESSIONS[Stream] = Session;
-
-				Session->L4TARGET = TNC->PortRecord;
-				Session->L4CIRCUITTYPE = UPLINK+PACTOR;
-				Session->L4WINDOW = L4DEFAULTWINDOW;
-				Session->L4STATE = 5;
-				Session->SESSIONT1 = L4T1;
-				Session->SESSPACLEN = 100;
-				Session->KAMSESSION = Stream;
-
-				TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
-
-				// We are going to Send something, so turn link round
-				
-				EncodeAndSend(TNC, "OAG", 3);
-				TNC->InternalCmd = 'A';
-				TNC->CommandBusy = TRUE;
+				ProcessIncommingConnect(TNC, Call, Stream);
 
 				if (Stream == 0)
 				{
+					// We are going to Send something, so turn link round
+				
+					EncodeAndSend(TNC, "OAG", 3);
+					TNC->InternalCmd = 'A';
+					TNC->CommandBusy = TRUE;
+				
 					wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
 					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
@@ -1412,6 +1407,8 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+												
+						TNC->SwallowSignon = TRUE;
 
 						return;
 					}
@@ -1452,8 +1449,7 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	
 				TNC->Streams[Stream].Connecting = FALSE;
 				TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
-
-				
+	
 				if (Stream == 0)
 				{
 					wsprintf(Status, "%s Connected to %s Outbound", TNC->NodeCall, TNC->Streams[0].RemoteCall);
@@ -1538,4 +1534,30 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	UpdateMH(TNC, &Msg[3], ' ');
 
 }
+VOID TidyClose(struct TNCINFO * TNC, int Stream)
+{
+	if (Stream == 0)					// Pactor Stream
+	{
+		EncodeAndSend(TNC, "ODI", 3);	// Disconnect
 
+		TNC->InternalCmd = 'P';
+		TNC->CommandBusy = TRUE;
+	}
+	else
+	{
+		UCHAR TXMsg[10];
+
+		wsprintf(TXMsg, "%cDI", Stream + '@');
+		EncodeAndSend(TNC, TXMsg, 4);		// Send twice - must force a disconnect
+	}
+}
+
+VOID ForcedClose(struct TNCINFO * TNC, int Stream)
+{
+	TidyClose(TNC, Stream);			// Send DI again - can't do much else
+}
+
+VOID CloseComplete(struct TNCINFO * TNC, int Stream)
+{
+	TNC->NeedPACTOR = 50;	
+}

@@ -709,8 +709,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		}
 
 		if (TNC->BPQtoWINMOR_Q)
-			return 0;		// Socket is blocked - just drop packets
-														// till it clears
+			return 0;		// Socket is blocked - just drop packets till it clears
+
+		if (TNC->SwallowSignon)
+		{
+			TNC->SwallowSignon = FALSE;		// Discard *** connected
+			return 0;
+		}
+
+
 		txlen=(buff[6]<<8) + buff[5]-8;	
 		
 		if (TNC->Streams[0].Connected)
@@ -1587,6 +1594,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					memcpy(buffptr+2, Buffer, MsgLen);
 
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+					TNC->SwallowSignon = TRUE;
 				}
 				else
 				{

@@ -141,7 +141,7 @@ typedef struct TNCINFO
 	char * WINMORSignon;		// Pointer to message for secure signin
 	char * WINMORHostName;		// WINMOR Host - may be dotted decimal or DNS Name
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
-
+	BOOL SwallowSignon;			// Set to suppress *** connected to APPL
 
     UCHAR TCPBuffer[1000];		// For converting byte stream to messages
     int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
@@ -282,6 +282,8 @@ typedef struct TNCINFO
 
 	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
 	BOOL CommandBusy;				// Waiting for Command ACK
+
+	BOOL TEXTMODE;					// Set if AEA in text mode
 
 	char * CmdSet;					// A series of commands to send to the TNC
 	char * CmdSave;					// Base address for free

@@ -100,6 +100,18 @@ BOOL ReadConfigFile(char * fn, int Port, int ProcLine())
 	{
 		// Using config from bpq32.cfg
 
+		if (strlen(Config) == 0)
+		{
+			// Empty Config File - OK for most types
+
+			struct TNCINFO * TNC = TNCInfo[Port] = zalloc(sizeof(struct TNCINFO));
+
+			TNC->InitScript = malloc(2);
+			TNC->InitScript[0] = 0;
+		
+			return TRUE;
+		}
+
 		ptr1 = Config;
 
 		ptr2 = strchr(ptr1, 13);
@@ -457,7 +469,7 @@ BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 	{
 		APPL=&APPLCALLTABLE[App];
 
-		if (memcmp(APPL->APPLCMD, Appl, 12) == 0)
+		if (_memicmp(APPL->APPLCMD, Appl, 12) == 0)
 		{
 			int ApplMask = 1 << App;
 

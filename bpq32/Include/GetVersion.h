@@ -7,14 +7,15 @@ VOID GetVersionInfo(char * File)
 {
 	HRSRC RH;
   	struct tagVS_FIXEDFILEINFO * HG;
-#ifdef _DEBUG 
-	char isDebug[40]="Debug Build ";
-#else
 	char isDebug[40]="";
-#endif
 	HMODULE HM;
+
 #ifdef SPECIALVERSION
 	strcat(isDebug, SPECIALVERSION);
+	strcat(isDebug, " ");
+#endif
+#ifdef _DEBUG 
+	strcat(isDebug, "Debug Build");
 #endif
 
 	HM=GetModuleHandle(File);

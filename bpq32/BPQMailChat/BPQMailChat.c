@@ -575,6 +575,8 @@
 // Version 1.0.4.24 Oct 2010
 
 // Add "Save Registry Config" command
+// Add forwarding on wildcarded TO for NTS
+// Add option to force text mode forwarding
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -729,8 +731,6 @@ char MailDir[MAX_PATH];
 char RlineVer[50];
 
 BOOL KISSOnly = FALSE;
-
-BOOL ALLOWCOMPRESSED = TRUE;
 
 BOOL EnableUI = FALSE;
 BOOL SendSYStoSYSOPCall = FALSE;
@@ -2380,17 +2380,18 @@ int Connected(Stream)
 			}
 			else
 			{
-				BOOL B1 = FALSE, B2 = FALSE;
+				BOOL B1 = FALSE, B2 = FALSE, B = FALSE;
 
 				if(conn->UserPointer->ForwardingInfo)
 				{
+					B = conn->UserPointer->ForwardingInfo->AllowCompressed;
 					B1 = conn->UserPointer->ForwardingInfo->AllowB1;
 					B2 = conn->UserPointer->ForwardingInfo->AllowB2;
 				}
 
 				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
 				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
-					ALLOWCOMPRESSED ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", "F");
+					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "F": "");
 			}
 
 			if (user->Name[0] == 0)
@@ -5899,6 +5900,11 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
 
 		Vallen=4;
+		ForwardingInfo->AllowCompressed = TRUE;					// Default On
+		retCode += RegQueryValueEx(hKey, "AllowCompressed", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowCompressed,(ULONG *)&Vallen);
+
+		Vallen=4;
 		retCode += RegQueryValueEx(hKey, "Use B1 Protocol", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB1,(ULONG *)&Vallen);
 
@@ -6573,19 +6579,22 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 		case 'F':			// FBB Blocked Forwarding
 
-			conn->BBSFlags |= FBBForwarding | BBS;
-			conn->BBSFlags &= ~MBLFORWARDING;
+			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
+			{
+				conn->BBSFlags |= FBBForwarding | BBS;
+				conn->BBSFlags &= ~MBLFORWARDING;
 		
-			conn->Paging = FALSE;
+				conn->Paging = FALSE;
 
-			// Allocate a Header Block
+				// Allocate a Header Block
 
-			conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
+				conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
+			}
 			break;
 
 		case 'B':
 
-			if (ALLOWCOMPRESSED)
+			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
 			{
 				conn->BBSFlags |= FBBCompressed;
 

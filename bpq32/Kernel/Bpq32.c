@@ -289,7 +289,13 @@
 // Fix AXIP ReRead COnfig
 // Report AXIP accept() fails to syslog, not a popup.
 
+// 410p		Build 6 October 2010
 
+// Includes HAL support
+// Changes to Pactor Drivers disconnect code
+// AXIP now sends with source port = dest port, unless overridden by SOURCEPORT param
+// Config now checks for duplicate port definitions
+// Add Node Map reporting
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -307,7 +313,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Clover Test"
+#define SPECIALVERSION "Beta"
 
 #include "GetVersion.h"
 
@@ -383,8 +389,12 @@ extern int FINDFREEDESTINATION();
 extern int RAWTX();
 extern int RELBUFF();
 extern int SENDNETFRAME();
+extern char MYCALL[];			// 7 chars, ax.25 format
 
-char LOCATOR[10] = "";		// Maidenhead Locator for Reporting
+
+char LOCATOR[10] = "";			// Maidenhead Locator for Reporting
+int AXIPPort = 0;				// Port to report to
+char ReportDest[7];
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
@@ -440,9 +450,14 @@ char Screen[MAXLINELEN*MAXSCREENLEN]={0};
 int lineno=0;
 int col=0;
 
+#define REPORTINTERVAL 15 * 549;	// Magic Ticks Per Minute for PC's nominal 100 ms timer 
+int ReportTimer = 0;
+
 HANDLE OpenConfigFile(char * file);
 
 VOID SetupBPQDirectory();
+VOID SendLocation();
+
 unsigned long _beginthread(void(*start_address)(), unsigned stack_size, int arglist);
 
 #define TRAY_ICON_ID	1		//				ID number for the Notify Icon
@@ -992,8 +1007,19 @@ VOID CALLBACK TimerProc(
 
 	}
 
-	FreeSemaphore();
-		
+	FreeSemaphore();			// SendLocation needs to get the semaphore
+
+	if (ReportTimer)
+	{
+		ReportTimer--;
+	
+		if (ReportTimer == 0)
+		{
+			ReportTimer = REPORTINTERVAL;
+			SendLocation();
+		}
+	}
+
 	return;
 }
 
@@ -1028,6 +1054,13 @@ FirstInit()
 
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 	TimerInst=GetCurrentProcessId();
+
+	if (AXIPPort && LOCATOR[0])
+	{
+		// Enable Node Map Reports
+
+		ReportTimer = 60;
+	}
 
  	WritetoConsole("\n\nPort Initialisation Complete\n");
 
@@ -1212,6 +1245,15 @@ Check_Timer()
 		FreeConfig();
 
 		_beginthread(MonitorThread,0,0);
+
+		ReportTimer = 0;
+
+		if (AXIPPort && LOCATOR[0])
+		{
+			// Enable Node Map Reports
+
+			ReportTimer = 60;
+		}
 
 		FreeSemaphore();
 
@@ -4488,6 +4530,33 @@ int C_Q_ADD(UINT *Q,UINT *BUFF)
 	next[0]=(UINT)BUFF;					// New one on end
 
 	return(0);
+
+}
+
+VOID SendLocation()
+{
+	MESSAGE AXMSG;
+	PMESSAGE AXPTR = &AXMSG;
+	char Msg[100];
+	int Len;
+
+	Len = wsprintf(Msg, "%s %s", LOCATOR, VersionString);
+
+	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	memcpy(AXPTR->DEST, ReportDest, 7);
+	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+	AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+	AXPTR->CTL = 3;		//UI
+	AXPTR->PID = 0xf0;
+	memcpy(AXPTR->L2DATA, Msg, Len);
+
+	SendRaw(AXIPPort, (char *)&AXMSG.DEST, Len + 16);
+
+	return;
 
 }
 

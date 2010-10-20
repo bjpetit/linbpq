@@ -160,6 +160,10 @@ char * PortConfig[34];
 
 extern UCHAR BPQDirectory[];
 
+extern char LOCATOR[];
+extern int AXIPPort;
+extern char ReportDest[];
+
 void ResolveNames(struct PORTINFO * PORT);
 void OpenSockets(struct PORTINFO * PORT);
 void CloseSockets();
@@ -171,7 +175,8 @@ int Update_MH_List(struct PORTINFO * PORT, struct in_addr ipad, char * call, cha
 int Update_MH_KeepAlive(struct PORTINFO * PORT, struct in_addr ipad, char proto, short port);
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
-BOOL add_arp_entry(struct PORTINFO * PORT, unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode);
+BOOL add_arp_entry(struct PORTINFO * PORT, unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name,
+		int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort);
 BOOL add_bc_entry(struct PORTINFO * PORT, unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 BOOL ReadConfigFile(char * filename, int Port);
@@ -226,6 +231,7 @@ struct arp_table_entry
 	BOOL TCPState;
 	UINT TCPThreadID;			// Thread ID if TCP Master
 	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
+	int SocketIndex;			// The socket to use (sets the from Address
 	struct PORTINFO * PORT;
 };
 
@@ -454,7 +460,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 								if (PORT->AutoAddARP)
 
-									return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0);
+									return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0, 0);
 
 								else
 
@@ -539,7 +545,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 							// Can't reply. If AutoConfig is set, add to table and accept, else reject
 
 							if (PORT->AutoAddARP)
-								return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, PORT->udpport[i], inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0);
+								return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, htons(rxaddr.sin_port), inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i]);
 							else
 								return 0;
 					}
@@ -696,7 +702,7 @@ VOID SendFrame(struct PORTINFO * PORT, struct arp_table_entry * arp_table, UCHAR
 		destaddr.sin_addr.s_addr = arp_table->ipaddr;
 		destaddr.sin_port = htons(arp_table->port);
 
-		if (arp_table->port == 0) txsock = PORT->sock; else txsock = PORT->udpsock[0];
+		if (arp_table->port == 0) txsock = PORT->sock; else txsock = PORT->udpsock[arp_table->SocketIndex];
 
 		sendto(txsock,buff, txlen,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 			
@@ -726,16 +732,29 @@ InitAXIP(int Port)
 	if (!ReadConfigFile("BPQAXIP.CFG", Port))
 		return (FALSE);
 
-	//
-    //	Start Resolver Thread if needed
-	//
-
 	PORT = Portlist[Port];
 
 	if (PORT == NULL)
 		return FALSE;
 
+	if (LOCATOR[0] && AXIPPort == 0)
+	{
+		int ipad = INADDR_NONE;
+		
+		// If reporting, add MAP entry to first AXIP Port
+
+		AXIPPort = Port; 
+
+		ConvToAX25("DUMMY-1", ReportDest);
+
+		add_arp_entry(PORT, ReportDest, &ipad, 7 , 10090 , "g8bpq.no-ip.com", 0, 0, FALSE, 0, 10093);
+	}
+
 	PORT->Port = Port;
+
+	//
+    //	Start Resolver Thread if needed
+	//
 
 	if (PORT->NeedResolver)
 		_beginthread(ResolveNames, 0, PORT );
@@ -1310,7 +1329,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 			{
 				if (convtoax25(call,axcall,&calllen))
 				{
-					add_arp_entry(PORT, axcall,&ipad,calllen,port,host,Interval, BCFlag, FALSE, 0);
+					add_arp_entry(PORT, axcall,&ipad,calllen,port,host,Interval, BCFlag, FALSE, 0, port);
 					PostMessage(PORT->hResWnd, WM_TIMER,0,0);
 					return(DestroyWindow(hWnd));
 				}
@@ -1928,7 +1947,7 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 	char * p_Interval;
 
 	int calllen;
-	int	port;
+	int	port, SourcePort;
 	int bcflag;
 	char axcall[7];
 	unsigned int ipad;
@@ -2000,6 +2019,7 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 		port=0;				// Raw IP
 		bcflag=0;
 		TCPMode=0;
+		SourcePort = 0;
 
 //
 //		Look for (optional) KEEPALIVE, DYNAMIC, UDP or BROADCAST params
@@ -2031,6 +2051,17 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 				if (p_udpport == NULL) return (FALSE);
 
 				port = atoi(p_udpport);
+				p_UDP = strtok(NULL, " \t\n\r");
+				continue;
+			}
+
+			if (_stricmp(p_UDP,"SOURCEPORT") == 0)
+			{
+				p_udpport = strtok(NULL, " \t\n\r");
+			
+				if (p_udpport == NULL) return (FALSE);
+
+				SourcePort = atoi(p_udpport);
 				p_UDP = strtok(NULL, " \t\n\r");
 				continue;
 			}
@@ -2079,7 +2110,10 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 
 		if (convtoax25(p_call,axcall,&calllen))
 		{
-			add_arp_entry(PORT, axcall,&ipad,calllen,port,p_ipad,Interval, bcflag, FALSE, TCPMode);
+			if (SourcePort == 0)
+				SourcePort = port;
+
+			add_arp_entry(PORT, axcall,&ipad,calllen,port,p_ipad,Interval, bcflag, FALSE, TCPMode, SourcePort);
 			return (TRUE);
 		}
 	}		// End of Process MAP
@@ -2189,9 +2223,11 @@ BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call,int * calllen
 	return (FALSE);
 }
 
-BOOL add_arp_entry(struct PORTINFO * PORT, unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPFlag)
+BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, ULONG * ip, int len, int port,
+				   UCHAR * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPFlag, int SourcePort)
 {
 	struct arp_table_entry * arp;
+	int i;
 
 	if (PORT->arp_table_len == MAX_ENTRIES)
 		//
@@ -2231,6 +2267,17 @@ BOOL add_arp_entry(struct PORTINFO * PORT, unsigned char * call, unsigned long *
 
 	PORT->NeedResolver |= TCPFlag;					// Need Resolver window to handle tcp socket messages
 	PORT->NeedTCP |= TCPFlag;
+
+	// If the we are listening on the UDP port, use it as source port
+
+	for (i = 0; i < MAXUDPPORTS; i++)
+	{
+		if (PORT->udpport[i] == SourcePort)
+		{
+			arp->SocketIndex = i;				// Use as source socket, therefore source port
+			break;
+		}
+	}
 
 	return (TRUE);
 }

@@ -403,6 +403,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 5:				// Close
 
 		CloseHandle(TNCInfo[port]->hDevice);
+
+		if (TNC->VCOMHandle)
+			CloseHandle(TNC->VCOMHandle);
 				
 		SaveWindowPos(port);
 
@@ -1201,23 +1204,33 @@ VOID DEDPoll(int Port)
 		{
 			int datalen;
 			UINT * buffptr;
+			char * Buffer;
 			
 			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 
 			datalen=buffptr[1];
+			Buffer = (char *)&buffptr[2];	// Data portion of frame
 
 			Poll[2] = TNC->Streams[Stream].DEDStream;		// Channel
 
 			if (TNC->Streams[Stream].Connected)
 			{
+				if (TNC->SwallowSignon && Stream == 0)
+				{
+					TNC->SwallowSignon = FALSE;	
+					if (strstr(Buffer, "Connected"))	// Discard *** connected
+					{
+						ReleaseBuffer(buffptr);
+						return;
+					}
+				}
+
 				Poll[3] = 0;			// Data?
 				TNC->Streams[Stream].BytesTXed += datalen;
 			}
 			else
 			{
 				// Command. Do some sanity checking and look for things to process locally
-
-				char * Buffer = (char *)&buffptr[2];	// Data portion of frame
 
 				Poll[3] = 1;			// Command
 				datalen--;				// Exclude CR
@@ -2051,6 +2064,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 							buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
 							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+							TNC->SwallowSignon = TRUE;
 							return;
 						}
 					}

@@ -518,8 +518,8 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	strcat(TempScript, "SPACE 1600\r");
 	strcat(TempScript, "SHIFT MODEM\r");
 	strcat(TempScript, "INV ON\r");
+	strcat(TempScript, "PTERRS 30\r");			// Default Retries
 	strcat(TempScript, "MAXUSERS 1/10\r");
-
 	strcat(TempScript, TNC->InitScript);
 
 	free(TNC->InitScript);
@@ -951,6 +951,17 @@ VOID KAMPoll(int Port)
 				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
 				datalen=buffptr[1];
 				MsgPtr = (UCHAR *)&buffptr[2];
+
+				if (TNC->SwallowSignon && Stream == 0)
+				{
+					TNC->SwallowSignon = FALSE;	
+					if (strstr(MsgPtr, "Connected"))	// Discard *** connected
+					{
+						ReleaseBuffer(buffptr);
+						return;
+					}
+				}
+
 				WriteLogLine(2, MsgPtr, datalen);
 				Next = 0;
 				STREAM->BytesTXed += datalen; 
@@ -1618,6 +1629,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
+						TNC->SwallowSignon = TRUE;
 						return;
 					}
 				}
@@ -1821,3 +1833,37 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		TNC->NeedPACTOR = 50;	
 }
 
+
+
+/*
+
+
+MARK 1400
+SPACE 1600
+SHIFT MODEM
+INV ON
+MAXUSERS 1/10
+PTERRS 30
+
+	// Others go on end so they can't be overriden
+
+ECHO OFF
+XMITECHO ON
+TXFLOW OFF
+XFLOW OFF
+TRFLOW OFF
+AUTOCR 0
+AUTOLF OFF
+CRADD OFF
+CRSUP OFF
+CRSUP OFF/OFF
+LFADD OFF/OFF
+LFADD OFF
+LFSUP OFF/OFF
+LFSUP OFF
+RING OFF
+ARQBBS OFF
+
+MYCALL 
+
+*/
