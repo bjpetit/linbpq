@@ -70,7 +70,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			if ((conn->SessType & Sess_PACTOR) == 0)
 				conn->CloseAfterFlush = 20;			// 2 Secs
 			else
-				conn->CloseAfterFlush = 450;		// 45 Secs 2 is far too short for PACTOR/WINMOR
+				conn->CloseAfterFlush = 20;			// PACTOR/WINMOR drivers support deferred disc so 5 secs should be enough
 		}
 		return;
 
@@ -99,7 +99,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				
 				// Zap the entry
 
-				if (conn->Paclink)					// Not using Bit Masks
+				if (conn->Paclink || conn->RMSExpress)			// Not using Bit Masks
 				{
 					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
 					FBBHeader->FwdMsg->datechanged=time(NULL);

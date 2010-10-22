@@ -422,6 +422,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
+		EncodeAndSend(TNC, "Q", 1);			// Exit Host Mode
+		Sleep(50);
+
 		CloseHandle(TNCInfo[port]->hDevice);
 
 		SaveWindowPos(port);
@@ -1790,21 +1793,19 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 		if (TNC->HFPacket)
 			EncodeAndSend(TNC, "C2AD", 4);		// Disconnect
 		else
-			EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
+			EncodeAndSend(TNC, "D", 1);			// ??Return to packet mode??
 //			EncodeAndSend(TNC, "C20TOR", 6);		// Disconnect
 
 		TNC->HFPacket = FALSE;
-		TNC->NeedPACTOR = 50;
 	}
 	else
 	{
 		UCHAR TXMsg[10];
 
 		wsprintf(TXMsg, "C1%cD", Stream + '@');
-		EncodeAndSend(TNC, TXMsg, 4);		// Send twice - must force a disconnect
+		EncodeAndSend(TNC, TXMsg, 4);
 		TNC->Timeout = 50;
 	}
-
 }
 
 VOID ForcedClose(struct TNCINFO * TNC, int Stream)
@@ -1812,6 +1813,7 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 	if (Stream == 0)					// Pactor Stream
 	{
 		TNC->TimeInRX = 0;
+
 		if (TNC->HFPacket)
 			EncodeAndSend(TNC, "C2AD", 4);		// Disconnect
 		else

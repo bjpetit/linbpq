@@ -31,8 +31,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 1 VERSIONINFO
- FILEVERSION 2,0,9,2
- PRODUCTVERSION 2,0,9,2
+ FILEVERSION 2,0,10,1
+ PRODUCTVERSION 2,0,10,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0xbL
@@ -50,12 +50,12 @@ BEGIN
             VALUE "Comments", "Written by:John Wiseman, G8BPQ\0"
             VALUE "CompanyName", "\0"
             VALUE "FileDescription", "Simple Terminal Program for G8BPQ Switch\0"
-            VALUE "FileVersion", "2.0.9.2\0"
+            VALUE "FileVersion", "2.0.10.1\0"
             VALUE "InternalName", "BPQTerm\0"
             VALUE "LegalCopyright", "Copyright © John Wiseman 1999-2010\0"
             VALUE "OriginalFilename", "\0"
             VALUE "ProductName", "Generic\0"
-            VALUE "ProductVersion", "2.0.9.2\0"
+            VALUE "ProductVersion", "2.0.10.1\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -147,13 +147,14 @@ BEGIN
         MENUITEM "Log Monitor",                 BPQLogMonitor
         MENUITEM "Log Output",                  BPQLogOutput
         MENUITEM "Send Disconnected",           BPQSendDisconnected
+        MENUITEM "Chat Terminal Mode",          CHATTERM
     END
     POPUP "Monitor"
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX
         MENUITEM "Monitor Supervisory",         BPQMCOM
         MENUITEM "Monitor NODES",               BPQMNODES
-		MENUITEM "Enable Colour",				MONCOLOUR
+        MENUITEM "Enable Colour",               MONCOLOUR
     END
     POPUP "Edit"
     BEGIN

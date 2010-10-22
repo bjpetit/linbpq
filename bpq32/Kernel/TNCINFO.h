@@ -284,6 +284,7 @@ typedef struct TNCINFO
 	BOOL CommandBusy;				// Waiting for Command ACK
 
 	BOOL TEXTMODE;					// Set if AEA in text mode
+	BOOL NeedTurnRound;				// Set if we have sent data, so need to send ctrl/z 
 
 	char * CmdSet;					// A series of commands to send to the TNC
 	char * CmdSave;					// Base address for free

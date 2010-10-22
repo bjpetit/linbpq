@@ -539,15 +539,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						memcpy(call, &buff[14], 7);
 						call[6] &= 0x7e;		// Mask End of Address bit
 
-						if (CheckSourceisResolvable(PORT, call, PORT->udpport[i], rxaddr))
+						if (CheckSourceisResolvable(PORT, call, htons(rxaddr.sin_port), rxaddr))
 							return 1;
 						else
+						{
 							// Can't reply. If AutoConfig is set, add to table and accept, else reject
-
+		
 							if (PORT->AutoAddARP)
-								return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, htons(rxaddr.sin_port), inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i]);
+								return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, htons(rxaddr.sin_port), inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i]);		
 							else
 								return 0;
+						}
 					}
 					else
 						return(1);
@@ -671,8 +673,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (MinimizetoTray)	
 			DeleteTrayMenuItem(PORT->hResWnd);
-
-//		FreeLibrary(ExtDriver);
 
 		break;
 	}
@@ -2270,7 +2270,7 @@ BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, ULONG * ip, int len, in
 
 	// If the we are listening on the UDP port, use it as source port
 
-	for (i = 0; i < MAXUDPPORTS; i++)
+	for (i = 0; i < PORT->NumberofUDPPorts; i++)
 	{
 		if (PORT->udpport[i] == SourcePort)
 		{

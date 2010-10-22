@@ -577,13 +577,15 @@
 // Add "Save Registry Config" command
 // Add forwarding on wildcarded TO for NTS
 // Add option to force text mode forwarding
+// Define new users as a temporaty BBS if SID received in reply to Name prompt
+// Reduce delay before sending close after sending FQ on pactor sessions
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-//#define SPECIALVERSION "Test"
+#define SPECIALVERSION "Test 3"
 
 #include "GetVersion.h"
 
@@ -693,7 +695,7 @@ char BBSSID[]="[BPQ-%d.%d.%d.%d-%s%s%s%sH$]\r";
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
-char NewUserPrompt[100]="Please enter your Name: ";
+char NewUserPrompt[100]="Please enter your Name\r>\r";
 
 char * WelcomeMsg = NULL;
 char * NewWelcomeMsg = NULL;
@@ -2381,12 +2383,30 @@ int Connected(Stream)
 			else
 			{
 				BOOL B1 = FALSE, B2 = FALSE, B = FALSE;
+				struct	BBSForwardingInfo * ForwardingInfo;
 
-				if(conn->UserPointer->ForwardingInfo)
+				if ((user->flags & F_Temp_B2_BBS) && (user->ForwardingInfo == NULL))
 				{
-					B = conn->UserPointer->ForwardingInfo->AllowCompressed;
-					B1 = conn->UserPointer->ForwardingInfo->AllowB1;
-					B2 = conn->UserPointer->ForwardingInfo->AllowB2;
+					// An RMS Express user that needs a temporary BBS struct
+
+					ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+
+					ForwardingInfo->AllowCompressed = TRUE;
+					B1 = user->ForwardingInfo->AllowB1;
+					B2 = user->ForwardingInfo->AllowB2 = TRUE;
+				}
+
+				if (conn->NewUser)
+				{
+					B = TRUE;
+					B2 = TRUE;
+				}
+
+				if (user->ForwardingInfo)
+				{
+					B = user->ForwardingInfo->AllowCompressed;
+					B1 = user->ForwardingInfo->AllowB1;
+					B2 = user->ForwardingInfo->AllowB2;
 				}
 
 				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
@@ -2561,6 +2581,13 @@ int DoReceivedData(int Stream)
 				{
 
 			loop:
+
+				if (conn->InputLen == 1 && conn->InputBuffer[0] == 0)		// Single Null
+				{
+					conn->InputLen = 0;
+					return 0;
+				}
+
 				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
 
 				if (ptr)	//  CR in buffer
@@ -3520,15 +3547,38 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	}
 	if (conn->Flags & GETTINGUSER)
 	{
-		memcpy(user->Name, Buffer, len-1);
 		conn->Flags &=  ~GETTINGUSER;
-		SendWelcomeMsg(conn->BPQStream, conn, user);
-		UpdateWPWithUserInfo(user);
-		SaveUserDatabase();
 
-		return;
+		if (memcmp(Buffer, ";FW:", 4) == 0 || Buffer[0] == '[')
+		{
+			struct	BBSForwardingInfo * ForwardingInfo;
+			
+			// New User is a BBS - create a temp struct for it
+
+			if ((user->flags & (F_BBS | F_Temp_B2_BBS)) == 0)			// It could already be a BBS without a user name
+			{
+				// Not defined as BBS - allocate and initialise forwarding structure
+		
+				user->flags |= F_Temp_B2_BBS;
+
+				// An RMS Express user that needs a temporary BBS struct
+
+				ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+
+				ForwardingInfo->AllowCompressed = TRUE;
+				conn->UserPointer->ForwardingInfo->AllowB2 = TRUE;
+			}
+			SaveUserDatabase();
+		}
+		else
+		{
+			memcpy(user->Name, Buffer, len-1);
+			SendWelcomeMsg(conn->BPQStream, conn, user);
+			SaveUserDatabase();
+			UpdateWPWithUserInfo(user);
+			return;
+		}
 	}
-
 
 	// Process Command
 
@@ -3600,7 +3650,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	{
 		// If a BBS, set BBS Flag
 
-		if (user->flags & F_BBS)
+		if (user->flags & ( F_BBS | F_Temp_B2_BBS))
 		{
 			if (user->ForwardingInfo)
 			{
@@ -6783,6 +6833,24 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 		Msg=MsgHddrPtr[m];
 
 		// If forwarding to Paclink or RMS Express, look for any message matching the requested call list with statis 'N'
+
+		if ((user->flags & F_Temp_B2_BBS) || conn->RMSExpress)
+		{
+			if (conn->PacLinkCalls == NULL)
+			{
+				// create a list with just the user call
+
+				char * ptr1;
+
+				conn->PacLinkCalls = zalloc(30);
+
+				ptr1 = (char *)conn->PacLinkCalls;
+				ptr1 += 10;
+				strcpy(ptr1, user->Call);
+
+				conn->PacLinkCalls[0] = ptr1;
+			}
+		}
 
 		if (conn->PacLinkCalls)
 		{

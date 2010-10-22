@@ -384,8 +384,7 @@ struct UserInfo{
 	long	nbcon;				/* 4  Number of connexions in*/
 	time_t	TimeLastConnected;  //Last connexion date */
 //	long	lastyap __a2__  ;	/* 4  Last YN date */
-	short	flags    ;	/* 2  Flags */
-	short	on_base  ;	/* 2  ON Base number */
+	ULONG	flags    ;	/* 4  Flags */
 
 	UCHAR	PageLen;			// Lines Per Page
 	UCHAR	lang      ;	/* 1  Language */
@@ -440,6 +439,7 @@ struct UserInfo{
 #define F_HOLDMAIL   0x2000
 #define F_POLLRMS	 0x4000
 #define F_SYSOP_IN_LM 0x8000
+#define F_Temp_B2_BBS 0x10000
 
 /* #define F_PWD        0x1000 */
 

@@ -800,7 +800,8 @@ int Do_User_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_HOLDMAIL, (user->flags & F_HOLDMAIL));
 			CheckDlgButton(hDlg, IDC_POLLRMS, (user->flags & F_POLLRMS));
 			CheckDlgButton(hDlg, IDC_SYSOP_IN_LM, (user->flags & F_SYSOP_IN_LM));
-
+			CheckDlgButton(hDlg, RMS_EXPRESS_USER, (user->flags & F_Temp_B2_BBS));
+			
 			EnableWindow(GetDlgItem(hDlg, IDC_SYSOP_IN_LM), user->flags & F_SYSOP);
 
 			SetDlgItemInt(hDlg, CONN_IN, user->nbcon, FALSE);
@@ -1096,6 +1097,12 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (IsDlgButtonChecked(hDlg, IDC_SYSOP_IN_LM))
 		user->flags |= F_SYSOP_IN_LM; else user->flags &= ~F_SYSOP_IN_LM;
+
+	if (IsDlgButtonChecked(hDlg, RMS_EXPRESS_USER))
+		user->flags |= F_Temp_B2_BBS; else user->flags &= ~F_Temp_B2_BBS;
+
+	if (user->flags & F_BBS)
+		user->flags &= ~F_Temp_B2_BBS;		// Can't be both
 
 	user->RMSSSIDBits = 0;
 

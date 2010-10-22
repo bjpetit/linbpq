@@ -74,7 +74,7 @@ VOID DoTermModeTimeout(struct TNCINFO * TNC);
 
 VOID ProcessPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
-VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
+VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKNormCommand(struct TNCINFO * TNC, UCHAR * rxbuffer);
 VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
@@ -388,6 +388,8 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->Hardware = H_AEA;
 
+	TNC->TEXTMODE = TRUE;
+
 	if (TNC->RigConfigMsg)
 	{
 		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
@@ -445,7 +447,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	strcat(TempScript, "PTHUFF 0\r");
 	strcat(TempScript, "PT200 ON\r");
 	strcat(TempScript, "WIDESHFT OFF\r");
-	strcat(TempScript, "CONMODE TRANS\r");
+	strcat(TempScript, "CONMODE CONV\r");
 	strcat(TempScript, "ARQT 30\r");
 
 	strcat(TempScript, TNC->InitScript);
@@ -589,7 +591,7 @@ FENDLoop:
 	
 	if (FendPtr == &rxbuffer[Len-1])
 	{
-		ProcessKHOSTPacket(TNC, &rxbuffer[1], Len - 2);
+		ProcessAEAPacket(TNC, &rxbuffer[1], Len - 2);
 		return;
 	}
 		
@@ -597,7 +599,7 @@ FENDLoop:
 
 	NewLen =  FendPtr - rxbuffer -1;
 
-	ProcessKHOSTPacket(TNC, &rxbuffer[1], NewLen);
+	ProcessAEAPacket(TNC, &rxbuffer[1], NewLen);
 	
 	// Loop Back
 
@@ -732,9 +734,9 @@ VOID AEAPoll(int Port)
 		{
 			free(TNC->CmdSave);
 			TNC->CmdSet = NULL;
-			}
-			else
-			{
+		}
+		else
+		{
 			end = strchr(start, 13);
 			len = ++end - start -1;	// exclude cr
 			TNC->CmdSet = end;
@@ -766,8 +768,9 @@ VOID AEAPoll(int Port)
 
 			TNC->CmdSet = TNC->CmdSave = malloc(100);
 
-			wsprintf(TNC->CmdSet, "OMf%s\rOPt\r", TNC->NodeCall);  // Queue Back to Pactor Standby
+			wsprintf(TNC->CmdSet, "OMf%s\rOPt\rOCECONV\r", TNC->NodeCall);  // Queue Back to Pactor Standby
 			TNC->InternalCmd = 'T';
+			TNC->TEXTMODE = TRUE;
 			TNC->IntCmdDelay--;
 
 			// Restart Scanning
@@ -825,16 +828,40 @@ VOID AEAPoll(int Port)
 					}
 				}
 
+				// If in CONV, and data looks binary, switch to TRAN
+
+				TNC->NeedTurnRound = TRUE;		// Sending data, so need turnround at end
+
+				if (TNC->TEXTMODE)
+				{
+					int i, j;
+
+					for (i = 0; i < datalen; i++)
+					{
+						j = MsgPtr[1];
+
+						if (j > 127 || j == 26 || j == 3)
+						{
+							TNC->TEXTMODE = FALSE;
+							EncodeAndSend(TNC, "OCETRANS", 8);
+							Debugprintf("Switching to TRAMS");
+							TNC->CommandBusy = TRUE;
+							TNC->InternalCmd = 'A';	
+							break;
+						}
+					}
+				}
+
 				wsprintf(TXMsg, "%c", Stream + ' ');
 					
 				memcpy(&TXMsg[1], buffptr + 2, datalen);
 				
 				// If nothing more to send, turn round link
 
-				if (TNC->TEXTMODE && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
-				{
-					TXMsg[++datalen] = 0x1a;
-				}
+//				if (TNC->TEXTMODE && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
+//				{
+//					TXMsg[++datalen] = 0x1a;
+//				}
 
 				EncodeAndSend(TNC, TXMsg, datalen + 1);
 				ReleaseBuffer(buffptr);
@@ -1115,7 +1142,7 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 	}
 }
 
-static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
+static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
 	UINT * buffptr;
 	char * Buffer = &Msg[1];			// Data portion of frame
@@ -1130,7 +1157,7 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	TNC->TNCOK = TRUE;
 	TNC->Timeout = 0;
 
-	Len = DLEDecode(Msg, Msg, Len);	// Remove KISS transparency
+	Len = DLEDecode(Msg, Msg, Len);		// Remove KISS transparency
 
 	Stream = Msg[0] & 15;
 	Opcode = Msg[0] >> 4;
@@ -1150,7 +1177,7 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		}
 	}
 
-	if (Opcode == 2)
+	if (Msg[0] == '/')			// 2F
 	{
 		// Echoed Data
 
@@ -1276,13 +1303,26 @@ static VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				// If nothing more to send, turn round link
 						
-/*				if (TNC->Streams[0].BPQtoPACTOR_Q == 0)		// Nothing following
+				if (TNC->Streams[0].BPQtoPACTOR_Q == 0 && TNC->NeedTurnRound)		// Nothing following
 				{
-					EncodeAndSend(TNC, "OAG", 3);
-					TNC->InternalCmd = 'A';
-					TNC->CommandBusy = TRUE;
+					if (TNC->TEXTMODE == 0)
+					{
+						// In Trans - switch back
+
+						TNC->TEXTMODE = TRUE;
+						EncodeAndSend(TNC, "OCECONV", 7);
+						Debugprintf("Switching to CONV");
+						TNC->CommandBusy = TRUE;
+						TNC->InternalCmd = 'A';	
+					}
+					
+					TNC->NeedTurnRound = FALSE;
+					EncodeAndSend(TNC, " \x1a", 2);
+					TNC->Timeout = 0;						//  No response to data
+
+//					TNC->CommandBusy = TRUE;
 				}
-*/
+
 			}
 			return;
 		}

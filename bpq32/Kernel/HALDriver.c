@@ -486,16 +486,12 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
 	{
-		Debugprintf("PORTCALL not set - Using NODECALL");
 		memcpy(TNC->NodeCall, GetNodeCall(), 10);
 	}
 	else
 	{
-		Debugprintf("Using PORTCALL");
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 	}
-
-	Debugprintf("HAL Call set to %s", TNC->NodeCall);
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
@@ -780,6 +776,8 @@ VOID HALPoll(int Port)
 				SendCmd(TNC, "\x80", 1);		// Clover
 				SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
 				SendCmd(TNC, "\x41", 1);		// No Statistics
+				SendCmd(TNC, "\x60\x09", 2);	// Robust Retries
+				SendCmd(TNC, "\x61\x09", 2);	// Normal Retries
 
 				break;			
 			}
@@ -1588,7 +1586,7 @@ CmdLoop:
 	case 0x58:
 	case 0x59:
 	case 0x60:			// Robust Mode Retries
-
+	case 0x61:			// Normal Mode Retries
 	case 0x80:			//Switch to CLOVER mode
 	case 0x81:			//Select AMTOR Standby
 	case 0x82:			//Select AMTOR FEC

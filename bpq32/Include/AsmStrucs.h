@@ -590,6 +590,7 @@ typedef struct MHSTRUC
 	__time32_t MHTIME;
 	BYTE MHDIGI;
 	char MHFreq[12];
+	char MHLocator[6];
 };
 
 #pragma pack()

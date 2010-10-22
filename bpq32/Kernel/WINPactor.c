@@ -821,13 +821,6 @@ VOID SaveWindowPos(int port)
 	if (TNC->hDlg == NULL)
 		return;
 
-	if (TNC->WIMMORPID)
-	{
-		KillTNC(TNC);
-		if (!TNC->WeStartedTNC)
-			RestartTNC(TNC);
-	}
-
 	ShowWindow(TNC->hDlg, SW_RESTORE);
 	GetWindowRect(TNC->hDlg, &Rect);
 

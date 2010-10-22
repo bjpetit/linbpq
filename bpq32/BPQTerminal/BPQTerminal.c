@@ -42,6 +42,9 @@
 
 // Add colour for monitor and BPQ Chat
 
+// Version 2.0.0 October 2010
+
+// Add Chat Terminal Mode (sends keepalives)
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -197,6 +200,7 @@ BOOL LogOutput = FALSE;
 BOOL SendDisconnected = TRUE;
 BOOL MonitorNODES = TRUE;
 BOOL MonitorColour = TRUE;
+BOOL ChatMode = FALSE;
 
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
@@ -214,6 +218,40 @@ BOOL MinimizetoTray=FALSE;
 //BOOL StartMinimized = FALSE;
 
 HWND MainWnd;
+
+VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT idEvent,DWORD dwTime );
+
+TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
+
+int TimerHandle = 0;
+
+int SlowTimer;
+
+VOID CALLBACK TimerProc(
+
+    HWND  hwnd,	// handle of window for timer messages 
+    UINT  uMsg,	// WM_TIMER message
+    UINT  idEvent,	// timer identifier
+    DWORD  dwTime) 	// current system time	
+{
+	// entered every 10 secs
+
+	CheckTimer();
+
+	if (!CONNECTED)
+		return;
+
+	if (!ChatMode)
+		return;
+
+	SlowTimer++;
+
+	if (SlowTimer > 50)				// About 9 mins
+	{
+		SlowTimer = 0;
+		SendMsg(Stream, "\0", 1);
+	}
+}
 
 //
 //  FUNCTION: WinMain(HANDLE, HANDLE, LPSTR, int)
@@ -327,6 +365,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 		RegCloseKey(hKey);
 	}
+
+	KillTimer(NULL, TimerHandle);
 
 	return (msg.wParam);
 }
@@ -641,6 +681,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	CheckTimer();
 
+	TimerHandle = SetTimer(NULL, 0, 10000, lpTimerFunc);
+
 	return (TRUE);
 }
 
@@ -857,6 +899,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ToggleParam(hWnd, &LogOutput, BPQLogOutput);
 			break;
 
+		case CHATTERM:
+
+			ToggleParam(hWnd, &ChatMode, CHATTERM);
+			break;
+
+			
 		case BPQSendDisconnected:
 
 			ToggleParam(hWnd, &SendDisconnected, BPQSendDisconnected);
@@ -1061,6 +1109,8 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			kbbuf[kbptr]=13;
 
+			SlowTimer = 0;
+
 			// Echo, with set Black escape
 
 			memcpy(&DisplayLine[2], kbbuf, kbptr+1);
@@ -1261,10 +1311,10 @@ DoStateChange(HWND hWnd)
 		{
 			// Connected
 			
-			CONNECTED=TRUE;
+			CONNECTED = TRUE;
+			SlowTimer = 0;
 
 	//		GetCallsign(Stream, callsign);
-
 			
 			GetConnectionInfo(Stream, callsign,
 										 &port, &sesstype, &paclen,

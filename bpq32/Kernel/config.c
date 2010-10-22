@@ -760,6 +760,8 @@ char rec[];
 		// SYSOP Password
 
 		if (strlen(rec) > 88) rec[88] = 0;
+
+		_strupr(rec);
 		
 		strcpy(PWTEXT, &rec[9]);
 		return 0;

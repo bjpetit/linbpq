@@ -956,7 +956,7 @@ NOHA:
 	if (Msg->type == 'T')
 	{
 		int depth = 0;
-		int bestmatch = 0;
+		int bestmatch = -1;
 		struct UserInfo * bestbbs = NULL;
 
 
@@ -974,7 +974,7 @@ NOHA:
 
 			depth = CheckBBSToForNTS(Msg, bbs, ForwardingInfo);
 
-			if (depth)
+			if (depth > -1)
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS Matches TO BBS %s Length %d", bbs->Call, depth);
 		
@@ -996,15 +996,19 @@ NOHA:
 
 		// Check AT 
 
-		if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
-		{
-			Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS %s Matches AT %s", ATBBS, bbs->Call);
+		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+		{		
+			ForwardingInfo = bbs->ForwardingInfo;
 
-			CheckAndSend(Msg, conn, bbs);
+			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS %s Matches AT %s", ATBBS, bbs->Call);
 
-			return 1;
+				CheckAndSend(Msg, conn, bbs);
+
+				return 1;
+			}
 		}
-
 		return FALSE;	// No match
 	}
 
@@ -1310,7 +1314,7 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForw
 	char ** Calls;
 	char * Call;
 	char * ptr;
-	int bestmatch = 0;
+	int bestmatch = -1;
 	int MatchLen = 0;
 
 	// Look for Matches on TO using Wildcarded Addresses. Intended for use with NTS traffic, with TO = ZIPCode

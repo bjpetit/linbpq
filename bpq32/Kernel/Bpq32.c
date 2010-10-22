@@ -296,6 +296,7 @@
 // AXIP now sends with source port = dest port, unless overridden by SOURCEPORT param
 // Config now checks for duplicate port definitions
 // Add Node Map reporting
+// Fix WINMOR deferred disconnect.
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -313,7 +314,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Beta"
+#define SPECIALVERSION "Test 2"
 
 #include "GetVersion.h"
 
@@ -1059,7 +1060,7 @@ FirstInit()
 	{
 		// Enable Node Map Reports
 
-		ReportTimer = 60;
+		ReportTimer = 600;
 	}
 
  	WritetoConsole("\n\nPort Initialisation Complete\n");
@@ -1192,6 +1193,7 @@ Check_Timer()
 	if (TimerHandle == 0)
 	{
 	    WSADATA       WsaData;            // receives data from WSAStartup
+		HINSTANCE ExtDriver=0;
 
 		OutputDebugString("BPQ32 Reinitialising External Ports and Attaching Timer\n");
 
@@ -1224,6 +1226,13 @@ Check_Timer()
 
 		WSAStartup(MAKEWORD(2, 0), &WsaData);
 
+		// Load Psapi.dll if possible
+
+		ExtDriver  =LoadLibrary("Psapi.dll");
+
+		if (ExtDriver)
+			GetModuleFileNameExPtr = (FARPROCX)GetProcAddress(ExtDriver,"GetModuleFileNameExA");
+
 		INITIALISEPORTS();
 
 		WritetoConsole("\n\nPort Reinitialisation Complete\n");
@@ -1252,7 +1261,7 @@ Check_Timer()
 		{
 			// Enable Node Map Reports
 
-			ReportTimer = 60;
+			ReportTimer = 600;
 		}
 
 		FreeSemaphore();
@@ -1546,9 +1555,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		{
 			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 	
-			KillTimer(NULL,TimerHandle);
-			TimerHandle=0;
-			TimerInst=0xffffffff;
 			OutputDebugString("BPQ32 Process with Timer closing\n");
 
 			// Call Port Close Routines
@@ -1570,6 +1576,10 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
+
+			KillTimer(NULL,TimerHandle);
+			TimerHandle=0;
+			TimerInst=0xffffffff;
 
 			Tell_Sessions();			// So anther process can get timet
 
@@ -1639,13 +1649,6 @@ DllExport int APIENTRY CloseBPQ32()
 
 	if (TimerInst == GetCurrentProcessId())
 	{	
-		KillTimer(NULL,TimerHandle);
-		TimerHandle=0;
-		TimerInst=0xffffffff;
-		Tell_Sessions();
-
-		WSACleanup();
-
 		OutputDebugString("BPQ32 Process with Timer called CloseBPQ32\n");
 
 		for (i=0;i<NUMBEROFPORTS;i++)
@@ -1656,6 +1659,13 @@ DllExport int APIENTRY CloseBPQ32()
 
 			PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 		}
+
+		KillTimer(NULL,TimerHandle);
+		TimerHandle=0;
+		TimerInst=0xffffffff;
+		Tell_Sessions();
+
+		WSACleanup();
 	}
 	
 	return 0;
@@ -4559,5 +4569,4 @@ VOID SendLocation()
 	return;
 
 }
-
 

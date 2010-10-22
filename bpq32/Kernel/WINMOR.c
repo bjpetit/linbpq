@@ -462,9 +462,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-
-
-		if (TNC->HeartBeat++ > 600)			// Every Minute
+		if (TNC->HeartBeat++ > 600 || (TNC->Streams[0].Connected && TNC->HeartBeat > 50))			// Every Minute unless connected
 		{
 			TNC->HeartBeat = 0;
 
@@ -977,16 +975,26 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+/*		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
 		Sleep(500);
 		shutdown(TNC->WINMORDataSock, SD_BOTH);
 		Sleep(500);
 		shutdown(TNC->WINMORSock, SD_BOTH);
 		Sleep(500);
+*/
 		closesocket(TNC->WINMORDataSock);
 		closesocket(TNC->WINMORSock);
 
 		SaveWindowPos(port);
+
+		if (TNC->WIMMORPID)
+		{
+			KillTNC(TNC);
+
+			if (!TNC->WeStartedTNC)
+				RestartTNC(TNC);
+		}
+
 		return (0);
 
 	case 6:				// Scan Stop Interface
@@ -1219,7 +1227,6 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 	wsprintf(Msg, "MYC %s\r\nCODEC TRUE\r\nLISTEN TRUE\r\nMYC\r\n", TNC->NodeCall);
 	strcat(TNC->InitScript, Msg);
 	strcat(TNC->InitScript,"PROCESSID\r\n");
-
 
 	for (i = 0; i < 32; i++)
 	{
@@ -1474,7 +1481,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	else
 	{
 		TNC->TimeSinceLast = 0;
-		TNC->HeartBeat = 0;
 	}
 
 	Buffer[MsgLen - 2] = 0;			// Remove CRLF
@@ -1710,19 +1716,25 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
+	{
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
-
+		return;
+	}
 
 	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
 	{
+		SetDlgItemText(TNC->hDlg, IDC_PROTOSTATE, &Buffer[9]);
+
 		if (_memicmp(&Buffer[9], "CONNECTPENDING", 14) == 0)	// Save Pending state for scan control
 			TNC->ConnectPending = TRUE;
 		else
 			TNC->ConnectPending = FALSE;
-
+	
 		if (_memicmp(&Buffer[9], "DISCONNECTING", 13) == 0)	// So we can timout stuck discpending
+		{
 			TNC->DiscPending = 600;
-
+			return;
+		}
 		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)	// Save Pending state for scan control
 		{
 			TNC->DiscPending = FALSE;
@@ -1739,14 +1751,37 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					}
 				}
 			}
+			return;
 		}
-		SetDlgItemText(TNC->hDlg, IDC_PROTOSTATE, &Buffer[9]);
+
+		if (strcmp(&Buffer[9], "ISS") == 0)	// Save Pending state for scan control
+			TNC->TXRXState = 'S';
+		else if (strcmp(&Buffer[9], "IRS") == 0)
+			TNC->TXRXState = 'R';
+	
 		return;
 	}
 
 	if (_memicmp(Buffer, "BUFFERS", 7) == 0)
 	{
-	//	Debugprintf("WINMOR RX: %s", Buffer);
+		int inq, inrx, Sent, BPM;
+
+		sscanf(&Buffer[8], "%d%d%d%d%d", &inq, &inrx, &TNC->Streams[0].BytesOutstanding, &Sent, &BPM);
+
+		if (TNC->Streams[0].BytesOutstanding == 0)
+		{
+			// all sent
+			
+			if (TNC->Streams[0].Disconnecting)						// Disconnect when all sent
+			{
+				if (TNC->NeedDisc == 0)
+					TNC->NeedDisc = 60;								// 6 secs
+			}
+//			else
+//			if (TNC->TXRXState == 'S')
+//				send(TNC->WINMORSock,"OVER\r\n", 6, 0);
+
+		}
 		SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, &Buffer[8]);
 		return;
 	}
@@ -1763,7 +1798,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		if (GetModuleFileNameExPtr)
 		{
 			hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
-
+	
 			if (hProc)
 			{
 				GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
@@ -1802,6 +1837,12 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	// Others should be responses to commands
 
 	if (_memicmp(Buffer, "BLOCKED", 6) == 0)
+	{
+		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		return;
+	}
+
+	if (_memicmp(Buffer, "OVER", 4) == 0)
 	{
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 		return;
@@ -2138,7 +2179,10 @@ RestartTNC(struct TNCINFO * TNC)
 	SInfo.cbReserved2=0; 
   	SInfo.lpReserved2=NULL; 
 
-	return CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+	if (TNC->ProgramPath)
+		return CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+
+	return 0;
 }
 
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
@@ -2215,7 +2259,10 @@ lineloop:
 }
 VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {
-	send(TNC->WINMORSock,"DISCONNECT\r\n", 12, 0);
+	// If all acked, send disc
+	
+	if (TNC->Streams[0].BytesOutstanding == 0)
+		send(TNC->WINMORSock,"DISCONNECT\r\n", 12, 0);
 }
 
 VOID ForcedClose(struct TNCINFO * TNC, int Stream)

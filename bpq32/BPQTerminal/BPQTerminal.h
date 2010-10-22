@@ -42,6 +42,9 @@
 #define BPQSendDisconnected	BPQBASE+152
 #define BPQMNODES		BPQBASE+153
 #define MONCOLOUR		BPQBASE+154
+
+#define CHATTERM        BPQBASE+155
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

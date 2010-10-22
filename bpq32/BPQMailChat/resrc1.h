@@ -64,6 +64,7 @@
 #define CONN_IN                         1053
 #define IDC_CHATCALLS                   1064
 #define IDC_CHATCOLOURS                 1065
+#define RMS_EXPRESS_USER                1066
 #define RMS_SSID1                       1070
 #define RMS_SSID2                       1071
 #define RMS_SSID3                       1072
