@@ -37,6 +37,10 @@ Partial Class ConfigBox
       Me.Label6 = New System.Windows.Forms.Label
       Me.PortNum = New System.Windows.Forms.TextBox
       Me.AutoUpdateBox = New System.Windows.Forms.CheckBox
+      Me.Label7 = New System.Windows.Forms.Label
+      Me.NodeURLBox = New System.Windows.Forms.TextBox
+      Me.NodeOutputFileBox = New System.Windows.Forms.TextBox
+      Me.Label8 = New System.Windows.Forms.Label
       Me.TableLayoutPanel1.SuspendLayout()
       Me.SuspendLayout()
       '
@@ -48,7 +52,7 @@ Partial Class ConfigBox
       Me.TableLayoutPanel1.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50.0!))
       Me.TableLayoutPanel1.Controls.Add(Me.OK_Button, 0, 0)
       Me.TableLayoutPanel1.Controls.Add(Me.Cancel_Button, 1, 0)
-      Me.TableLayoutPanel1.Location = New System.Drawing.Point(277, 274)
+      Me.TableLayoutPanel1.Location = New System.Drawing.Point(277, 312)
       Me.TableLayoutPanel1.Name = "TableLayoutPanel1"
       Me.TableLayoutPanel1.RowCount = 1
       Me.TableLayoutPanel1.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50.0!))
@@ -77,16 +81,16 @@ Partial Class ConfigBox
       'Label1
       '
       Me.Label1.AutoSize = True
-      Me.Label1.Location = New System.Drawing.Point(16, 144)
+      Me.Label1.Location = New System.Drawing.Point(16, 151)
       Me.Label1.Name = "Label1"
-      Me.Label1.Size = New System.Drawing.Size(52, 13)
+      Me.Label1.Size = New System.Drawing.Size(77, 13)
       Me.Label1.TabIndex = 1
-      Me.Label1.Text = "FTP URL"
+      Me.Label1.Text = "Chat FTP URL"
       '
       'Label2
       '
       Me.Label2.AutoSize = True
-      Me.Label2.Location = New System.Drawing.Point(16, 174)
+      Me.Label2.Location = New System.Drawing.Point(16, 184)
       Me.Label2.Name = "Label2"
       Me.Label2.Size = New System.Drawing.Size(60, 13)
       Me.Label2.TabIndex = 2
@@ -95,7 +99,7 @@ Partial Class ConfigBox
       'Label3
       '
       Me.Label3.AutoSize = True
-      Me.Label3.Location = New System.Drawing.Point(16, 204)
+      Me.Label3.Location = New System.Drawing.Point(16, 217)
       Me.Label3.Name = "Label3"
       Me.Label3.Size = New System.Drawing.Size(53, 13)
       Me.Label3.TabIndex = 3
@@ -103,21 +107,21 @@ Partial Class ConfigBox
       '
       'URLBox
       '
-      Me.URLBox.Location = New System.Drawing.Point(128, 141)
+      Me.URLBox.Location = New System.Drawing.Point(128, 147)
       Me.URLBox.Name = "URLBox"
       Me.URLBox.Size = New System.Drawing.Size(233, 20)
       Me.URLBox.TabIndex = 4
       '
       'UserBox
       '
-      Me.UserBox.Location = New System.Drawing.Point(128, 171)
+      Me.UserBox.Location = New System.Drawing.Point(128, 180)
       Me.UserBox.Name = "UserBox"
       Me.UserBox.Size = New System.Drawing.Size(168, 20)
       Me.UserBox.TabIndex = 5
       '
       'PasswordBox
       '
-      Me.PasswordBox.Location = New System.Drawing.Point(128, 201)
+      Me.PasswordBox.Location = New System.Drawing.Point(128, 213)
       Me.PasswordBox.Name = "PasswordBox"
       Me.PasswordBox.PasswordChar = Global.Microsoft.VisualBasic.ChrW(42)
       Me.PasswordBox.Size = New System.Drawing.Size(100, 20)
@@ -126,7 +130,7 @@ Partial Class ConfigBox
       'Label4
       '
       Me.Label4.AutoSize = True
-      Me.Label4.Location = New System.Drawing.Point(16, 84)
+      Me.Label4.Location = New System.Drawing.Point(16, 85)
       Me.Label4.Name = "Label4"
       Me.Label4.Size = New System.Drawing.Size(99, 13)
       Me.Label4.TabIndex = 7
@@ -142,15 +146,15 @@ Partial Class ConfigBox
       'Label5
       '
       Me.Label5.AutoSize = True
-      Me.Label5.Location = New System.Drawing.Point(16, 114)
+      Me.Label5.Location = New System.Drawing.Point(16, 118)
       Me.Label5.Name = "Label5"
-      Me.Label5.Size = New System.Drawing.Size(59, 13)
+      Me.Label5.Size = New System.Drawing.Size(84, 13)
       Me.Label5.TabIndex = 9
-      Me.Label5.Text = "Output FIle"
+      Me.Label5.Text = "Chat Output FIle"
       '
       'OutputFileBox
       '
-      Me.OutputFileBox.Location = New System.Drawing.Point(128, 111)
+      Me.OutputFileBox.Location = New System.Drawing.Point(128, 114)
       Me.OutputFileBox.Name = "OutputFileBox"
       Me.OutputFileBox.Size = New System.Drawing.Size(268, 20)
       Me.OutputFileBox.TabIndex = 10
@@ -204,13 +208,49 @@ Partial Class ConfigBox
       Me.AutoUpdateBox.Text = "Enable Autoupdate"
       Me.AutoUpdateBox.UseVisualStyleBackColor = True
       '
+      'Label7
+      '
+      Me.Label7.AutoSize = True
+      Me.Label7.Location = New System.Drawing.Point(16, 283)
+      Me.Label7.Name = "Label7"
+      Me.Label7.Size = New System.Drawing.Size(58, 13)
+      Me.Label7.TabIndex = 16
+      Me.Label7.Text = "Node URL"
+      '
+      'NodeURLBox
+      '
+      Me.NodeURLBox.Location = New System.Drawing.Point(128, 279)
+      Me.NodeURLBox.Name = "NodeURLBox"
+      Me.NodeURLBox.Size = New System.Drawing.Size(233, 20)
+      Me.NodeURLBox.TabIndex = 17
+      '
+      'NodeOutputFileBox
+      '
+      Me.NodeOutputFileBox.Location = New System.Drawing.Point(128, 246)
+      Me.NodeOutputFileBox.Name = "NodeOutputFileBox"
+      Me.NodeOutputFileBox.Size = New System.Drawing.Size(268, 20)
+      Me.NodeOutputFileBox.TabIndex = 19
+      '
+      'Label8
+      '
+      Me.Label8.AutoSize = True
+      Me.Label8.Location = New System.Drawing.Point(16, 250)
+      Me.Label8.Name = "Label8"
+      Me.Label8.Size = New System.Drawing.Size(88, 13)
+      Me.Label8.TabIndex = 18
+      Me.Label8.Text = "Node Output FIle"
+      '
       'ConfigBox
       '
       Me.AcceptButton = Me.OK_Button
       Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.CancelButton = Me.Cancel_Button
-      Me.ClientSize = New System.Drawing.Size(435, 315)
+      Me.ClientSize = New System.Drawing.Size(435, 356)
+      Me.Controls.Add(Me.NodeOutputFileBox)
+      Me.Controls.Add(Me.Label8)
+      Me.Controls.Add(Me.NodeURLBox)
+      Me.Controls.Add(Me.Label7)
       Me.Controls.Add(Me.AutoUpdateBox)
       Me.Controls.Add(Me.PortNum)
       Me.Controls.Add(Me.Label6)
@@ -257,5 +297,9 @@ Partial Class ConfigBox
    Friend WithEvents Label6 As System.Windows.Forms.Label
    Friend WithEvents PortNum As System.Windows.Forms.TextBox
    Friend WithEvents AutoUpdateBox As System.Windows.Forms.CheckBox
+   Friend WithEvents Label7 As System.Windows.Forms.Label
+   Friend WithEvents NodeURLBox As System.Windows.Forms.TextBox
+   Friend WithEvents NodeOutputFileBox As System.Windows.Forms.TextBox
+   Friend WithEvents Label8 As System.Windows.Forms.Label
 
 End Class

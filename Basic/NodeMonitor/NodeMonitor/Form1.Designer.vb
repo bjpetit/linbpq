@@ -28,18 +28,24 @@ Partial Class Form1
       Me.EditNodesListToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
       Me.Label1 = New System.Windows.Forms.Label
       Me.Label2 = New System.Windows.Forms.Label
-      Me.Defined = New System.Windows.Forms.TextBox
-      Me.Active = New System.Windows.Forms.TextBox
+      Me.ChatDefined = New System.Windows.Forms.TextBox
+      Me.ChatActive = New System.Windows.Forms.TextBox
       Me.Label3 = New System.Windows.Forms.Label
       Me.Lastupdated = New System.Windows.Forms.TextBox
       Me.Timer2 = New System.Windows.Forms.Timer(Me.components)
       Me.Timer3 = New System.Windows.Forms.Timer(Me.components)
+      Me.NodeActive = New System.Windows.Forms.TextBox
+      Me.NodeDefined = New System.Windows.Forms.TextBox
+      Me.Label4 = New System.Windows.Forms.Label
+      Me.Label5 = New System.Windows.Forms.Label
+      Me.NodeLastUpdated = New System.Windows.Forms.TextBox
+      Me.Label6 = New System.Windows.Forms.Label
       Me.MenuStrip1.SuspendLayout()
       Me.SuspendLayout()
       '
       'ReloadButton
       '
-      Me.ReloadButton.Location = New System.Drawing.Point(96, 227)
+      Me.ReloadButton.Location = New System.Drawing.Point(96, 302)
       Me.ReloadButton.Name = "ReloadButton"
       Me.ReloadButton.Size = New System.Drawing.Size(100, 27)
       Me.ReloadButton.TabIndex = 0
@@ -84,32 +90,32 @@ Partial Class Form1
       Me.Label1.AutoSize = True
       Me.Label1.Location = New System.Drawing.Point(12, 51)
       Me.Label1.Name = "Label1"
-      Me.Label1.Size = New System.Drawing.Size(78, 13)
+      Me.Label1.Size = New System.Drawing.Size(103, 13)
       Me.Label1.TabIndex = 2
-      Me.Label1.Text = "Defined Nodes"
+      Me.Label1.Text = "Defined Chat Nodes"
       '
       'Label2
       '
       Me.Label2.AutoSize = True
       Me.Label2.Location = New System.Drawing.Point(12, 91)
       Me.Label2.Name = "Label2"
-      Me.Label2.Size = New System.Drawing.Size(71, 13)
+      Me.Label2.Size = New System.Drawing.Size(96, 13)
       Me.Label2.TabIndex = 3
-      Me.Label2.Text = "Active Nodes"
+      Me.Label2.Text = "Active Chat Nodes"
       '
-      'Defined
+      'ChatDefined
       '
-      Me.Defined.Location = New System.Drawing.Point(94, 48)
-      Me.Defined.Name = "Defined"
-      Me.Defined.Size = New System.Drawing.Size(35, 20)
-      Me.Defined.TabIndex = 4
+      Me.ChatDefined.Location = New System.Drawing.Point(131, 48)
+      Me.ChatDefined.Name = "ChatDefined"
+      Me.ChatDefined.Size = New System.Drawing.Size(35, 20)
+      Me.ChatDefined.TabIndex = 4
       '
-      'Active
+      'ChatActive
       '
-      Me.Active.Location = New System.Drawing.Point(94, 88)
-      Me.Active.Name = "Active"
-      Me.Active.Size = New System.Drawing.Size(36, 20)
-      Me.Active.TabIndex = 5
+      Me.ChatActive.Location = New System.Drawing.Point(131, 88)
+      Me.ChatActive.Name = "ChatActive"
+      Me.ChatActive.Size = New System.Drawing.Size(36, 20)
+      Me.ChatActive.TabIndex = 5
       '
       'Label3
       '
@@ -122,7 +128,7 @@ Partial Class Form1
       '
       'Lastupdated
       '
-      Me.Lastupdated.Location = New System.Drawing.Point(94, 128)
+      Me.Lastupdated.Location = New System.Drawing.Point(131, 128)
       Me.Lastupdated.Name = "Lastupdated"
       Me.Lastupdated.Size = New System.Drawing.Size(134, 20)
       Me.Lastupdated.TabIndex = 7
@@ -135,15 +141,69 @@ Partial Class Form1
       'Timer3
       '
       '
+      'NodeActive
+      '
+      Me.NodeActive.Location = New System.Drawing.Point(131, 208)
+      Me.NodeActive.Name = "NodeActive"
+      Me.NodeActive.Size = New System.Drawing.Size(36, 20)
+      Me.NodeActive.TabIndex = 11
+      '
+      'NodeDefined
+      '
+      Me.NodeDefined.Location = New System.Drawing.Point(131, 168)
+      Me.NodeDefined.Name = "NodeDefined"
+      Me.NodeDefined.Size = New System.Drawing.Size(35, 20)
+      Me.NodeDefined.TabIndex = 10
+      '
+      'Label4
+      '
+      Me.Label4.AutoSize = True
+      Me.Label4.Location = New System.Drawing.Point(12, 211)
+      Me.Label4.Name = "Label4"
+      Me.Label4.Size = New System.Drawing.Size(74, 13)
+      Me.Label4.TabIndex = 9
+      Me.Label4.Text = "Active  Nodes"
+      '
+      'Label5
+      '
+      Me.Label5.AutoSize = True
+      Me.Label5.Location = New System.Drawing.Point(12, 171)
+      Me.Label5.Name = "Label5"
+      Me.Label5.Size = New System.Drawing.Size(78, 13)
+      Me.Label5.TabIndex = 8
+      Me.Label5.Text = "Defined Nodes"
+      '
+      'NodeLastUpdated
+      '
+      Me.NodeLastUpdated.Location = New System.Drawing.Point(129, 248)
+      Me.NodeLastUpdated.Name = "NodeLastUpdated"
+      Me.NodeLastUpdated.Size = New System.Drawing.Size(134, 20)
+      Me.NodeLastUpdated.TabIndex = 13
+      '
+      'Label6
+      '
+      Me.Label6.AutoSize = True
+      Me.Label6.Location = New System.Drawing.Point(10, 251)
+      Me.Label6.Name = "Label6"
+      Me.Label6.Size = New System.Drawing.Size(71, 13)
+      Me.Label6.TabIndex = 12
+      Me.Label6.Text = "Last Updated"
+      '
       'Form1
       '
       Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-      Me.ClientSize = New System.Drawing.Size(292, 266)
+      Me.ClientSize = New System.Drawing.Size(292, 367)
+      Me.Controls.Add(Me.NodeLastUpdated)
+      Me.Controls.Add(Me.Label6)
+      Me.Controls.Add(Me.NodeActive)
+      Me.Controls.Add(Me.NodeDefined)
+      Me.Controls.Add(Me.Label4)
+      Me.Controls.Add(Me.Label5)
       Me.Controls.Add(Me.Lastupdated)
       Me.Controls.Add(Me.Label3)
-      Me.Controls.Add(Me.Active)
-      Me.Controls.Add(Me.Defined)
+      Me.Controls.Add(Me.ChatActive)
+      Me.Controls.Add(Me.ChatDefined)
       Me.Controls.Add(Me.Label2)
       Me.Controls.Add(Me.Label1)
       Me.Controls.Add(Me.ReloadButton)
@@ -163,13 +223,19 @@ Partial Class Form1
    Friend WithEvents ConfigToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
    Friend WithEvents Label1 As System.Windows.Forms.Label
    Friend WithEvents Label2 As System.Windows.Forms.Label
-   Friend WithEvents Defined As System.Windows.Forms.TextBox
-   Friend WithEvents Active As System.Windows.Forms.TextBox
+   Friend WithEvents ChatDefined As System.Windows.Forms.TextBox
+   Friend WithEvents ChatActive As System.Windows.Forms.TextBox
    Friend WithEvents Label3 As System.Windows.Forms.Label
    Friend WithEvents Lastupdated As System.Windows.Forms.TextBox
    Friend WithEvents ConfigMonitorToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
    Friend WithEvents EditNodesListToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
    Friend WithEvents Timer2 As System.Windows.Forms.Timer
    Friend WithEvents Timer3 As System.Windows.Forms.Timer
+   Friend WithEvents NodeActive As System.Windows.Forms.TextBox
+   Friend WithEvents NodeDefined As System.Windows.Forms.TextBox
+   Friend WithEvents Label4 As System.Windows.Forms.Label
+   Friend WithEvents Label5 As System.Windows.Forms.Label
+   Friend WithEvents NodeLastUpdated As System.Windows.Forms.TextBox
+   Friend WithEvents Label6 As System.Windows.Forms.Label
 
 End Class

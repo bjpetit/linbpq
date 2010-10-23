@@ -42,41 +42,41 @@ Public Class AddNode
             Exit Sub
          End If
 
-         ReDim Preserve Nodes(NodeIndex + 1)
+         ReDim Preserve ChatNodes(ChatNodeIndex + 1)
 
-         Nodes(NodeIndex).Callsign = Callsign
-         Nodes(NodeIndex).NAlias = NAlias
-         Nodes(NodeIndex).Lat = Lat.ToString
-         Nodes(NodeIndex).Lon = Lon.ToString
-         Nodes(NodeIndex).downIcon = downIcon
-         Nodes(NodeIndex).upIcon = upIcon
-         Nodes(NodeIndex).Comment = Comment
+         ChatNodes(ChatNodeIndex).Callsign = Callsign
+         ChatNodes(ChatNodeIndex).NAlias = NAlias
+         ChatNodes(ChatNodeIndex).Lat = Lat.ToString
+         ChatNodes(ChatNodeIndex).Lon = Lon.ToString
+         ChatNodes(ChatNodeIndex).downIcon = downIcon
+         ChatNodes(ChatNodeIndex).upIcon = upIcon
+         ChatNodes(ChatNodeIndex).Comment = Comment
          If HoverButton.Checked Then
-            Nodes(NodeIndex).PopupMode = 0
+            ChatNodes(ChatNodeIndex).PopupMode = 0
          Else
-            Nodes(NodeIndex).PopupMode = 1
+            ChatNodes(ChatNodeIndex).PopupMode = 1
          End If
 
-         NodeIndex = NodeIndex + 1
+         ChatNodeIndex = ChatNodeIndex + 1
 
       Else
 
          ' Find call 
 
-         For i = 0 To NodeIndex - 1
+         For i = 0 To ChatNodeIndex - 1
 
-            If (Nodes(i).Callsign = CallBox.SelectedItem.ToString) Then
+            If (ChatNodes(i).Callsign = CallBox.SelectedItem.ToString) Then
 
-               Nodes(i).NAlias = NAlias
-               Nodes(i).Lat = Lat.ToString
-               Nodes(i).Lon = Lon.ToString
-               Nodes(i).downIcon = downIcon
-               Nodes(i).upIcon = upIcon
-               Nodes(i).Comment = Comment
+               ChatNodes(i).NAlias = NAlias
+               ChatNodes(i).Lat = Lat.ToString
+               ChatNodes(i).Lon = Lon.ToString
+               ChatNodes(i).downIcon = downIcon
+               ChatNodes(i).upIcon = upIcon
+               ChatNodes(i).Comment = Comment
                If HoverButton.Checked Then
-                  Nodes(1).PopupMode = 0
+                  ChatNodes(1).PopupMode = 0
                Else
-                  Nodes(1).PopupMode = 1
+                  ChatNodes(1).PopupMode = 1
 
                End If
 
@@ -92,9 +92,9 @@ Public Class AddNode
       CallBox.Text = ""
 
 
-      For i = 0 To NodeIndex - 1
+      For i = 0 To ChatNodeIndex - 1
 
-         If Nodes(i).Deleted = False Then CallBox.Items.Add(Nodes(i).Callsign)
+         If ChatNodes(i).Deleted = False Then CallBox.Items.Add(ChatNodes(i).Callsign)
 
       Next
 
@@ -114,9 +114,9 @@ Public Class AddNode
       Dim i As Integer
       ' Fill in the call combo box
 
-      For i = 0 To NodeIndex - 1
+      For i = 0 To ChatNodeIndex - 1
 
-         If Nodes(i).Deleted = False Then CallBox.Items.Add(Nodes(i).Callsign)
+         If ChatNodes(i).Deleted = False Then CallBox.Items.Add(ChatNodes(i).Callsign)
 
       Next
 
@@ -133,20 +133,20 @@ Public Class AddNode
 
       ' Find call 
 
-      For i = 0 To NodeIndex - 1
+      For i = 0 To ChatNodeIndex - 1
 
-         If (Nodes(i).Callsign = CallBox.SelectedItem.ToString) Then
+         If (ChatNodes(i).Callsign = CallBox.SelectedItem.ToString) Then
 
-            LatBox.Text = Nodes(i).Lat
-            LonBox.Text = Nodes(i).Lon
-            PopupBox.Text = Nodes(i).Comment
-            HoverButton.Checked = (Nodes(i).PopupMode = 0)
-            ClickButton.Checked = (Nodes(i).PopupMode = 1)
-            UpIconBox.Text = Nodes(i).upIcon
-            DownIconBox.Text = Nodes(i).downIcon
+            LatBox.Text = ChatNodes(i).Lat
+            LonBox.Text = ChatNodes(i).Lon
+            PopupBox.Text = ChatNodes(i).Comment
+            HoverButton.Checked = (ChatNodes(i).PopupMode = 0)
+            ClickButton.Checked = (ChatNodes(i).PopupMode = 1)
+            UpIconBox.Text = ChatNodes(i).upIcon
+            DownIconBox.Text = ChatNodes(i).downIcon
 
-            LOC.Text = ToLOC(CDbl(Nodes(i).Lat), CDbl(Nodes(i).Lon))
-            DDMMSS.Text = ToDDMMSS(CDbl(Nodes(i).Lat), CDbl(Nodes(i).Lon))
+            LOC.Text = ToLOC(CDbl(ChatNodes(i).Lat), CDbl(ChatNodes(i).Lon))
+            DDMMSS.Text = ToDDMMSS(CDbl(ChatNodes(i).Lat), CDbl(ChatNodes(i).Lon))
 
             Try
 
@@ -409,18 +409,20 @@ Public Class AddNode
 
       Dim i As Integer
 
-      Nodes(SelectedItem).Deleted = True
+      ChatNodes(SelectedItem).Deleted = True
 
       CallBox.Items.Clear()
       CallBox.Text = ""
 
-      For i = 0 To NodeIndex - 1
+      For i = 0 To ChatNodeIndex - 1
 
-         If Nodes(i).Deleted = False Then CallBox.Items.Add(Nodes(i).Callsign)
+         If ChatNodes(i).Deleted = False Then CallBox.Items.Add(ChatNodes(i).Callsign)
 
       Next
 
 
    End Sub
 
+
+ 
 End Class

@@ -127,11 +127,19 @@ Module NodeMonitor
 
       Using sw As StreamWriter = New StreamWriter(My.Settings.FileName)
 
+         For i = 0 To ChatNodeIndex - 1
+
+            sw.WriteLine(ChatNodes(i).Callsign & "," & Nodes(i).Locator & "," & _
+                  Nodes(i).Lat & "," & Nodes(i).Lon & "," & Nodes(i).downIcon & "," & _
+                  Nodes(i).upIcon & "," & ChatNodes(i).PopupMode & "," & ChatNodes(i).Comment)
+
+         Next
+
          For i = 0 To NodeIndex - 1
 
-            sw.WriteLine(Nodes(i).Callsign & "," & Nodes(i).NAlias & "," & _
-                  Nodes(i).Lat & "," & Nodes(i).Lon & "," & Nodes(i).downIcon & "," & _
-                  Nodes(i).upIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment)
+            sw.WriteLine("NODE," & Nodes(i).Callsign & "," & Nodes(i).Locator & "," & _
+                  Nodes(i).Lat & "," & Nodes(i).Lon & "," & Nodes(i).Version & "," & _
+                  Nodes(i).PopupMode)
 
          Next
 
