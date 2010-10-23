@@ -18,6 +18,9 @@
 
 //		Support Real Serial Port Pairs 
 
+// Version 1.1.4 October 2010 
+ 
+//		Don't fail if no VCOM Driver (for WIN 64)
 
 #include "stdafx.h"
 #include "bpqhostmodes.h"
@@ -573,18 +576,20 @@ BOOL Initialise()
 
 	RegCloseKey(hKey);
 
-	// If running Win98 must open COM Device before opening the /vxd. Don't know why
-
-	// Make Sure BPQVCOM is available
-	
-	if (!Win98 && COMType != 'R')
+	if (CurrentConnections)	
 	{
-		hControl = BPQOpenSerialControl(&Errorval);
+		// If running Win98 must open COM Device before opening the /vxd. Don't know why
 
-		if (hControl == (HANDLE) -1)
+		// Make Sure BPQVCOM is available
+	
+		if (!Win98 && COMType != 'R')
 		{
-			MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed","",0);
-			return FALSE;
+			hControl = BPQOpenSerialControl(&Errorval);
+
+			if (hControl == (HANDLE) -1)
+			{
+				MessageBox (MainWnd, "BPQ Virtual COM Driver Control Channel Open Failed","",0);
+			}
 		}
 	}
 

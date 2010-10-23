@@ -932,7 +932,7 @@ int FindFreeBBSNumber()
 				goto nexti;				// In use
 		}
 
-		// Not used by BBS - checkj messages
+		// Not used by BBS - check messages
 
 		for (m = 1; m <= NumberofMessages; m++)
 		{
@@ -1103,6 +1103,7 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (user->flags & F_BBS)
 		user->flags &= ~F_Temp_B2_BBS;		// Can't be both
+
 
 	user->RMSSSIDBits = 0;
 

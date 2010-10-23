@@ -585,7 +585,7 @@
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Test 3"
+#define SPECIALVERSION "Test 4"
 
 #include "GetVersion.h"
 
@@ -2392,8 +2392,8 @@ int Connected(Stream)
 					ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 
 					ForwardingInfo->AllowCompressed = TRUE;
-					B1 = user->ForwardingInfo->AllowB1;
-					B2 = user->ForwardingInfo->AllowB2 = TRUE;
+					B2 = ForwardingInfo->AllowB2 = TRUE;
+
 				}
 
 				if (conn->NewUser)
@@ -5929,6 +5929,8 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 
 	ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 
+	ForwardingInfo->AllowCompressed = TRUE;					// Default On
+
 	strcat(Key, user->Call);
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
 
@@ -5950,7 +5952,6 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
 
 		Vallen=4;
-		ForwardingInfo->AllowCompressed = TRUE;					// Default On
 		retCode += RegQueryValueEx(hKey, "AllowCompressed", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowCompressed,(ULONG *)&Vallen);
 
@@ -6974,7 +6975,10 @@ int CountMessagestoForward (int BBSNumber)
 }
 int check_fwd_bit(char *mask, int bbsnumber)
 {
-	return (mask[(bbsnumber - 1) / 8] & (1 << ((bbsnumber - 1) % 8)));
+	if (bbsnumber)
+		return (mask[(bbsnumber - 1) / 8] & (1 << ((bbsnumber - 1) % 8)));
+	else
+		return 0;
 }
 
 
