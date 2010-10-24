@@ -298,6 +298,8 @@
 // Add Node Map reporting
 // Fix WINMOR deferred disconnect.
 
+// Add NOKEEPALIVES Port Param
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
@@ -314,7 +316,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 2"
+#define SPECIALVERSION "Test 3"
 
 #include "GetVersion.h"
 
@@ -1791,12 +1793,16 @@ HANDLE OpenConfigFile(char *fn)
 	struct tm * TM;
 	static char MHTime[50];
 	time_t szClock = MH->MHTIME;
+	char LOC[7];
 	
+	memcpy(LOC, MH->MHLocator, 6);
+	LOC[6] = 0;
+
 	szClock = (_time32(NULL) - szClock);
 	TM = gmtime(&szClock);
 
-	wsprintf(MHTime, "%.2d:%.2d:%.2d:%.2d  %s\r",
-		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, MH->MHFreq);
+	wsprintf(MHTime, "%.2d:%.2d:%.2d:%.2d  %s %s\r",
+		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, MH->MHFreq, LOC);
 
 	return MHTime;
 
@@ -4551,6 +4557,36 @@ VOID SendLocation()
 	int Len;
 
 	Len = wsprintf(Msg, "%s %s", LOCATOR, VersionString);
+
+	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	memcpy(AXPTR->DEST, ReportDest, 7);
+	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+	AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+	AXPTR->CTL = 3;		//UI
+	AXPTR->PID = 0xf0;
+	memcpy(AXPTR->L2DATA, Msg, Len);
+
+	SendRaw(AXIPPort, (char *)&AXMSG.DEST, Len + 16);
+
+	return;
+
+}
+
+VOID SendMH(char * call, char * freq, char * LOC, char * Mode)
+{
+	MESSAGE AXMSG;
+	PMESSAGE AXPTR = &AXMSG;
+	char Msg[100];
+	int Len;
+
+	if (AXIPPort == 0 || LOCATOR[0] == 0)
+		return;
+
+	Len = wsprintf(Msg, "MH %s,%s,%s,%s", call, freq, LOC, Mode);
 
 	// Block includes the Msg Header (7 bytes), Len Does not!
 

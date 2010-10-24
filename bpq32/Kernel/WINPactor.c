@@ -776,18 +776,37 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 	struct MHSTRUC * MHBASE = MH;
 	UCHAR AXCall[8];
 	int i;
+	char * LOC, *  LOCEND;
+	char ReportMode[20];
+	char NoLOC[7] = "";
 
 	if (MH == 0) return;
 
 	ConvToAX25(Call, AXCall);
 
+	LOC = strchr(Call, '(');
+
+	if (LOC)
+	{
+		LOCEND = strchr(Call, ')');
+		if (LOCEND)
+		{
+			LOC--;
+			*(LOC++) = 0;
+			*(LOCEND) = 0;
+			LOC++;
+		}		
+	}
+	else
+		LOC = NoLOC;
+
 	for (i = 0; i < MHENTRIES; i++)
 	{
 		if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) &&
-			MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare our our entry
+			MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare or our entry
 		{
 			// Move others down and add at front
-
+		DoMove:
 			if (i != 0)				// First
 			{
 				memmove(MHBASE + 1, MHBASE, i * sizeof(struct MHSTRUC));
@@ -797,13 +816,27 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 			MHBASE->MHDIGI = Mode;
 			MHBASE->MHTIME = _time32(NULL);
 			strcpy(MHBASE->MHFreq, TNC->RIG->Valchar);
+			memcpy(MHBASE->MHLocator, LOC, 6);
+			
+			ReportMode[0] = TNC->Hardware + '@';
+			ReportMode[1] = Mode;
+			ReportMode[2] = TNC->RIG->CurrentBandWidth;
+			ReportMode[3] = 0;
+
+			SendMH(Call, TNC->RIG->Valchar, LOC, ReportMode);
 
 			return;
 		}
 		MH++;
 	}
 
-	return;
+	//	TABLE FULL AND ENTRY NOT FOUND - MOVE DOWN ONE, AND ADD TO TOP
+
+
+	i = MHENTRIES - 1;
+
+	goto DoMove;
+
 }
 
 VOID SaveWindowPos(int port)

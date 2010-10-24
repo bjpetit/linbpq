@@ -471,6 +471,7 @@ struct PORTCONTROL
 	UCHAR PORTMAXDIGIS;		// DIGIS ALLOWED ON THIS PORT
 	char PORTALIAS2[7];		// 2ND ALIAS FOR DIGIPEATING FOR APRS
 	char PORTBCALL[7];		// Source call for Beacon
+	char PortNoKeepAlive;	// Default to no Keepalives
 
 }	portcontrol;
 

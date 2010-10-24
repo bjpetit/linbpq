@@ -278,7 +278,8 @@ struct PORTCONFIG
 	UCHAR CWIDTYPE;			// 121,
 	short MINQUAL;			// 122, 
 	short MAXDIGIS;			//  123,
-	char Pad[4];				// 127,
+	char DefaultNoKeepAlives; // 124
+	char Pad[3];				// 127,
 	char UNPROTO[72];		//  128, 
 	char PORTALIAS2[10];	//    200,
 	char DLLNAME[16];		//  210,
@@ -429,7 +430,8 @@ static char *pkeywords[] =
 "PACLEN", "CWID", "PORTCALL", "PORTALIAS", "ENDPORT", "VALIDCALLS",
 "QUALADJUST", "DIGIFLAG", "DIGIPORT", "USERS" ,"UNPROTO", "PORTNUM",
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
-"TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME", "BCALL", "DIGIMASK"
+"TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
+"BCALL", "DIGIMASK", "NOKEEPALIVES"
 };           /* parameter keywords */
 
 static int poffset[] =
@@ -440,7 +442,8 @@ static int poffset[] =
 66, 80, 90, 100, 127, 256,
 68, 70, 71 ,74, 128, 0,
 76, 78, 110, 112, 114, 116,
-118, 120, 121, 122, 123, 200, 210, 226, 72
+118, 120, 121, 122, 123, 200, 210,
+226, 72, 124
 };		/* offset for corresponding data in config file */
 
 static int proutine[] = 
@@ -451,11 +454,12 @@ static int proutine[] =
 1, 0, 0, 0, 9, 10,
 1, 13, 13, 1, 11, 1,
 1, 2, 2, 12, 1, 1,
-1, 7, 7, 13, 13, 0, 14, 0, 1
+1, 7, 7, 13, 13, 0, 14,
+0, 1, 2
 };		/* routine to process parameter */
 
 
-#define PPARAMLIM 45
+#define PPARAMLIM 46
 
 static int fileoffset = 0;
 static int portoffset = 2560;

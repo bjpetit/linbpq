@@ -65,8 +65,6 @@ int (WINAPI FAR *GetModuleFileNameExPtr)();
 
 #include "AsmStrucs.h"
 
-
-
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_DATA WM_USER + 2
 #define WSA_CONNECT WM_USER + 3
@@ -90,12 +88,7 @@ static int RigControlRow = 180;
 #define NARROWMODE 21
 #define WIDEMODE 22
 
-//
-//	Code Common to Pactor Modules
-
 #include <commctrl.h>
-
-#define BGCOLOUR RGB(236,233,216)
 
 extern UCHAR BPQDirectory[];
 
@@ -1693,8 +1686,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		// Add to MHEARD
 
-		UpdateMH(TNC, &Buffer[8], '!');
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		UpdateMH(TNC, &Buffer[8], '!');
 		
 		if (!TNC->FECMode)
 			return;							// If in FEC mode pass ID messages to user.

@@ -1183,6 +1183,9 @@ SETTAIL:
 	MOV	AL,8
 @@:
 	MOV	PORTMAXDIGIS[EBX],AL
+	
+	MOV	AL,CONFIGTABLE+124	; Default No Keepalives
+	MOV	PortNoKeepAlive[EBX], AL
 
 ;	SET UP CWID
 ;

@@ -1635,6 +1635,8 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 		{
 			PortRecord = RIG->PortRecord[i];
 
+			RIG->CurrentBandWidth = ptr->Bandwidth;
+
 			if (ptr->Bandwidth == 'W')
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 4);	// Set Wide Mode
 			else

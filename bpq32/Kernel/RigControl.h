@@ -79,7 +79,8 @@ struct RIGINFO
 	HWND hSCAN;
 	HWND hPTT;
 
-	char Valchar[15];
+	char Valchar[15];			// Freq as char string
+	char CurrentBandWidth;
 };
 
 // PortType Equates

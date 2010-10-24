@@ -1793,7 +1793,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 		if (TNC->HFPacket)
 			EncodeAndSend(TNC, "C2AD", 4);		// Disconnect
 		else
-			EncodeAndSend(TNC, "D", 1);			// ??Return to packet mode??
+			EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
 //			EncodeAndSend(TNC, "C20TOR", 6);		// Disconnect
 
 		TNC->HFPacket = FALSE;
