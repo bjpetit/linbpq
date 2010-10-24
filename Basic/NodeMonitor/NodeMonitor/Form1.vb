@@ -17,7 +17,19 @@ Public Structure NodeData
    Public KillTimer As Integer
    Public Locator As String
    Public Version As String
+   Public HeardNodes() As HeardData
 
+End Structure
+
+Public Structure HeardData
+   Public Callsign As String
+   Public Time As DateTime
+   Public Lat As String
+   Public Lon As String
+   Public Freq As String
+   Public Locator As String
+   Public Heard As Boolean
+   Public Connect As Boolean
 End Structure
 
 Public Structure ChatNodeData
@@ -287,7 +299,11 @@ Public Class Form1
                      Dim Report As String
                      Dim Elements() As String
                      Dim CallFrom As String
+                     Dim HeardCall As String
                      Dim Index As Integer
+                     Dim Freq As String
+                     Dim LOC As String
+                     Dim Flags As String
 
                      ' Node Map Update
 
@@ -295,25 +311,51 @@ Public Class Form1
 
                      Try
 
-                        If Report.Length > 2 Then
+                        If Microsoft.VisualBasic.Left(Report, 3) = "MH " Then
 
-                           Elements = Split(Report, " ", 2)
+                           ' Heard or COnnection Report
 
-                           If Elements.Length = 2 Then
+                           Elements = Split(Mid(Report, 4), ",")
 
-                              CallFrom = GetCall(Buff, 7)
+                           If Elements.Length < 4 Then Continue While
 
-                              index = FindNodeCall(CallFrom)
+                           CallFrom = GetCall(Buff, 7)
 
-                              UpdateNode(index, Elements(0), Elements(1))
+                           Index = FindNodeCall(CallFrom)
 
 
-                           End If
+                           HeardCall = Elements(0)
+                           Freq = Elements(1)
+                           LOC = Elements(2)
+                           Flags = Elements(3)
+
+                           UpdateHeardData(Index, HeardCall, Freq, LOC, Flags)
+
+                           Continue While
+
                         End If
+
+                  ' Node Report
+
+                  If Report.Length > 2 Then
+
+                     Elements = Split(Report, " ", 2)
+
+                     If Elements.Length = 2 Then
+
+                        CallFrom = GetCall(Buff, 7)
+
+                        Index = FindNodeCall(CallFrom)
+
+                        UpdateNode(Index, Elements(0), Elements(1))
+
+
+                     End If
+                  End If
 
                      Catch ex As Exception
 
-                     End Try
+            End Try
 
                      Continue While
 
@@ -757,6 +799,7 @@ Public Class Form1
    Private Sub ReadNodesFile()
 
       Dim returnValue As String
+      Dim HeardNodes() As HeardData = New HeardData() {}
 
       Try
 
@@ -790,11 +833,47 @@ Public Class Form1
                Nodes(NodeIndex).KillTimer = 23
                Nodes(NodeIndex).Count = 20
 
+               Nodes(NodeIndex).HeardNodes = HeardNodes
+
+
                NodeIndex = NodeIndex + 1
 
                Continue For
 
             End If
+
+            If Trim(Elements(0)) = "MH" Then
+
+               Dim Lat As Double, Lon As Double
+               Dim HeardIndex As Integer
+               Dim Index As Integer = FindNodeCall(Elements(1))
+
+               With Nodes(Index)
+
+                  HeardIndex = .HeardNodes.Length
+
+                  ReDim Preserve .HeardNodes(HeardIndex)
+
+                  With .HeardNodes(HeardIndex)
+
+                     .Callsign = Elements(2)
+                     .Freq = Elements(6)
+                     .Locator = Elements(5)
+
+                     .Lat = Elements(4)
+                     .Lon = Elements(3)
+
+                     ' .Heard = CBool(InStr(Flags, "!"))
+
+                     .Time = CDate(Elements(7))
+
+                  End With
+               End With
+
+               Continue For
+
+            End If
+
 
 
             If Trim(Elements(0)) <> "XX" Then
@@ -929,6 +1008,8 @@ Public Class Form1
 
    Function FindNodeCall(ByVal Call1 As String) As Integer
 
+      Dim HeardNodes() As HeardData = New HeardData() {}
+
       Dim i As Integer
 
       For i = 0 To NodeIndex - 1
@@ -948,6 +1029,8 @@ Public Class Form1
       Nodes(NodeIndex).PopupMode = 0
       Nodes(NodeIndex).Locator = ""
       Nodes(NodeIndex).Version = ""
+
+      Nodes(NodeIndex).HeardNodes = HeardNodes
 
       NodeIndex = NodeIndex + 1
 
@@ -1193,16 +1276,31 @@ Public Class Form1
 
             For i = 0 To NodeIndex - 1
 
-               If Nodes(i).KillTimer < 24 Then ' Not heard of for a while - don't display
+               With Nodes(i)
 
-                  If Nodes(i).Count = 0 Then
-                     sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).downIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
-                  Else
-                     sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).upIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
+                  If Nodes(i).KillTimer < 24 Then ' Not heard of for a while - don't display
+
+                     If Nodes(i).Count = 0 Then
+                        sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).downIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
+                     Else
+                        sw.Write(.Callsign & "," & .Lon & "," & .Lat & "," & .upIcon & "," & .PopupMode & "," & .Comment & "," & vbCrLf & "|")
+
+
+                        Dim HeardCount As Integer = .HeardNodes.Length
+                        Dim HeardIndex As Integer
+
+                        For HeardIndex = 0 To HeardCount - 1
+
+                           With .HeardNodes(HeardIndex)
+
+                              sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & "," & vbCrLf & "|")
+
+                           End With
+
+                        Next
+                     End If
                   End If
-
-               End If
-
+               End With
             Next
 
             sw.Close()
@@ -1237,6 +1335,39 @@ Public Class Form1
 
       End If
 
+   End Sub
+
+   Sub UpdateHeardData(ByVal Index As Integer, ByVal HeardCall As String, ByVal Freq As String, ByVal LOC As String, ByVal Flags As String)
+
+      Dim Lat As Double, Lon As Double
+      Dim HeardIndex As Integer
+
+      With Nodes(Index)
+
+         HeardIndex = .HeardNodes.Length
+
+         ReDim Preserve .HeardNodes(HeardIndex)
+
+         With .HeardNodes(HeardIndex)
+
+            .Callsign = HeardCall
+            .Freq = Freq
+            .Locator = LOC
+
+            FromLOC(LOC, Lat, Lon)
+
+            Lat = Lat + Rnd() / 24
+            Lon = Lon + Rnd() / 12
+
+            .Lat = Lat.ToString
+            .Lon = Lon.ToString
+
+
+            .Heard = CBool(InStr(Flags, "!"))
+            .Time = Now
+
+         End With
+      End With
    End Sub
 
 

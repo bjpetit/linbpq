@@ -137,10 +137,26 @@ Module NodeMonitor
 
          For i = 0 To NodeIndex - 1
 
-            sw.WriteLine("NODE," & Nodes(i).Callsign & "," & Nodes(i).Locator & "," & _
-                  Nodes(i).Lat & "," & Nodes(i).Lon & "," & Nodes(i).Version & "," & _
-                  Nodes(i).PopupMode)
+            With Nodes(i)
 
+               sw.WriteLine("NODE," & .Callsign & "," & .Locator & "," & _
+                      .Lat & "," & .Lon & "," & .Version & "," & _
+                      .PopupMode)
+
+
+               Dim HeardCount As Integer = .HeardNodes.Length
+               Dim HeardIndex As Integer
+
+               For HeardIndex = 0 To HeardCount - 1
+
+                  With .HeardNodes(HeardIndex)
+
+                     sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & "," & .Locator & "," & .Freq & "," & .Time & vbCrLf)
+
+                  End With
+
+               Next
+            End With
          Next
 
          sw.Close()
