@@ -40,6 +40,7 @@ Partial Class Form1
       Me.Label5 = New System.Windows.Forms.Label
       Me.NodeLastUpdated = New System.Windows.Forms.TextBox
       Me.Label6 = New System.Windows.Forms.Label
+      Me.Button1 = New System.Windows.Forms.Button
       Me.MenuStrip1.SuspendLayout()
       Me.SuspendLayout()
       '
@@ -62,7 +63,7 @@ Partial Class Form1
       Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ConfigToolStripMenuItem})
       Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
       Me.MenuStrip1.Name = "MenuStrip1"
-      Me.MenuStrip1.Size = New System.Drawing.Size(292, 27)
+      Me.MenuStrip1.Size = New System.Drawing.Size(292, 24)
       Me.MenuStrip1.TabIndex = 1
       Me.MenuStrip1.Text = "MenuStrip1"
       '
@@ -70,19 +71,19 @@ Partial Class Form1
       '
       Me.ConfigToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ConfigMonitorToolStripMenuItem, Me.EditNodesListToolStripMenuItem})
       Me.ConfigToolStripMenuItem.Name = "ConfigToolStripMenuItem"
-      Me.ConfigToolStripMenuItem.Size = New System.Drawing.Size(67, 23)
+      Me.ConfigToolStripMenuItem.Size = New System.Drawing.Size(50, 20)
       Me.ConfigToolStripMenuItem.Text = "Config"
       '
       'ConfigMonitorToolStripMenuItem
       '
       Me.ConfigMonitorToolStripMenuItem.Name = "ConfigMonitorToolStripMenuItem"
-      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(199, 24)
+      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(155, 22)
       Me.ConfigMonitorToolStripMenuItem.Text = "Config Monitor"
       '
       'EditNodesListToolStripMenuItem
       '
       Me.EditNodesListToolStripMenuItem.Name = "EditNodesListToolStripMenuItem"
-      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(199, 24)
+      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(155, 22)
       Me.EditNodesListToolStripMenuItem.Text = "Edit Nodes List"
       '
       'Label1
@@ -189,11 +190,21 @@ Partial Class Form1
       Me.Label6.TabIndex = 12
       Me.Label6.Text = "Last Updated"
       '
+      'Button1
+      '
+      Me.Button1.Location = New System.Drawing.Point(109, 335)
+      Me.Button1.Name = "Button1"
+      Me.Button1.Size = New System.Drawing.Size(75, 23)
+      Me.Button1.TabIndex = 14
+      Me.Button1.Text = "Button1"
+      Me.Button1.UseVisualStyleBackColor = True
+      '
       'Form1
       '
       Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.ClientSize = New System.Drawing.Size(292, 367)
+      Me.Controls.Add(Me.Button1)
       Me.Controls.Add(Me.NodeLastUpdated)
       Me.Controls.Add(Me.Label6)
       Me.Controls.Add(Me.NodeActive)
@@ -237,5 +248,6 @@ Partial Class Form1
    Friend WithEvents Label5 As System.Windows.Forms.Label
    Friend WithEvents NodeLastUpdated As System.Windows.Forms.TextBox
    Friend WithEvents Label6 As System.Windows.Forms.Label
+   Friend WithEvents Button1 As System.Windows.Forms.Button
 
 End Class

@@ -135,6 +135,16 @@ Module NodeMonitor
 
          Next
 
+         For i = 0 To CallsignData.Length - 1
+
+            With CallsignData(i)
+
+               sw.WriteLine("CALL," & .Callsign & "," & .Locator & "," & .Lat & "," & .Lon & "," & .LocType)
+
+            End With
+
+         Next
+
          For i = 0 To NodeIndex - 1
 
             With Nodes(i)
@@ -151,7 +161,18 @@ Module NodeMonitor
 
                   With .HeardNodes(HeardIndex)
 
-                     sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & "," & .Locator & "," & .Freq & "," & .Time & vbCrLf)
+                     Dim j As Integer
+
+                     sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & _
+                       "," & .Lat & "," & .Locator & "," & .HeardItems.Length & ",")
+
+                     For j = 0 To .HeardItems.Length - 1
+                        With .HeardItems(j)
+                           sw.Write(.Freq & "," & .Time & "," & .Flags & ",")
+                        End With
+                     Next
+
+                     sw.Write(vbCrLf)
 
                   End With
 
