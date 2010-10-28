@@ -749,8 +749,13 @@ VOID KAMPoll(int Port)
 		{
 			TNC->UpdateWL2KTimer = 32910;		// Every Hour
 			if (strcmp(TNC->ApplCmd, "RMS") == 0)
+			{
 				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+				{
+					memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
 					SendReporttoWL2K(TNC);
+				}
+			}
 		}
 	}
 

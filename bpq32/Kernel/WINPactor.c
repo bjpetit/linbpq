@@ -464,7 +464,6 @@ BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 
 	Debugprintf("Checking if RMS is running");
 
-
 	for (App = 0; App < 32; App++)
 	{
 		APPL=&APPLCALLTABLE[App];
@@ -784,11 +783,17 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 
 	ConvToAX25(Call, AXCall);
 
-	LOC = strchr(Call, '(');
+	if (TNC->Hardware != H_WINMOR)			// Only WINMOR has a locator
+	{
+		LOC = NoLOC;
+		goto NOLOC;
+	}
+
+	LOC = memchr(Call, '(', 20);
 
 	if (LOC)
 	{
-		LOCEND = strchr(Call, ')');
+		LOCEND = memchr(Call, ')', 30);
 		if (LOCEND)
 		{
 			LOC--;
@@ -800,43 +805,55 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 	else
 		LOC = NoLOC;
 
+NOLOC:
+
 	for (i = 0; i < MHENTRIES; i++)
 	{
-		if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) &&
-			MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare or our entry
+		if (Mode == ' ')			// Packet
 		{
-			// Move others down and add at front
-		DoMove:
-			if (i != 0)				// First
-			{
-				memmove(MHBASE + 1, MHBASE, i * sizeof(struct MHSTRUC));
-			}
-
-			memcpy (MHBASE->MHCALL, AXCall, 7);
-			MHBASE->MHDIGI = Mode;
-			MHBASE->MHTIME = _time32(NULL);
-			strcpy(MHBASE->MHFreq, TNC->RIG->Valchar);
-			memcpy(MHBASE->MHLocator, LOC, 6);
-			
-			ReportMode[0] = TNC->Hardware + '@';
-			ReportMode[1] = Mode;
-			ReportMode[2] = TNC->RIG->CurrentBandWidth;
-			ReportMode[3] = 0;
-
-			SendMH(Call, TNC->RIG->Valchar, LOC, ReportMode);
-
-			return;
+			if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) && MH->MHDIGI == Mode)) // Spare or our entry
+				goto DoMove;
+		}
+		else
+		{
+			if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) &&
+				MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare or our entry
+				goto DoMove;
 		}
 		MH++;
 	}
 
 	//	TABLE FULL AND ENTRY NOT FOUND - MOVE DOWN ONE, AND ADD TO TOP
 
-
 	i = MHENTRIES - 1;
+		
+	// Move others down and add at front
+DoMove:
+	if (i != 0)				// First
+		memmove(MHBASE + 1, MHBASE, i * sizeof(struct MHSTRUC));
 
-	goto DoMove;
+	memcpy (MHBASE->MHCALL, AXCall, 7);
+	MHBASE->MHDIGI = Mode;
+	MHBASE->MHTIME = _time32(NULL);
 
+	if (Mode == ' ')					// Packet Data
+	{
+		MHBASE->MHLocator[0] = 0;
+		MHBASE->MHFreq[0] = 0;
+		return;
+	}
+
+	memcpy(MHBASE->MHLocator, LOC, 6);
+	strcpy(MHBASE->MHFreq, TNC->RIG->Valchar);
+			
+	ReportMode[0] = TNC->Hardware + '@';
+	ReportMode[1] = Mode;
+	ReportMode[2] = TNC->RIG->CurrentBandWidth;
+	ReportMode[3] = 0;
+
+	SendMH(TNC->Hardware, Call, TNC->RIG->Valchar, LOC, ReportMode);
+
+	return;
 }
 
 VOID SaveWindowPos(int port)

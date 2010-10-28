@@ -337,7 +337,7 @@ VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
-VOID SendMH(char * call, char * freq, char * LOC, char * Mode);
+VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode);
 
 static VOID TidyClose(struct TNCINFO * TNC, int Stream);
 static VOID ForcedClose(struct TNCINFO * TNC, int Stream);

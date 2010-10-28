@@ -644,9 +644,17 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 
 				if (ptr3)
 				{
-					strcpy(Boundary, &ptr3[10]);
+					ptr3+=9;
+
+					if ((*ptr3) == '"')
+						ptr3++;
+
+					strcpy(Boundary, ptr3);
 					ptr3 = strchr(Boundary, '"');
 					if (ptr3) *ptr3 = 0;
+					ptr3 = strchr(Boundary, 13);			// CR
+					if (ptr3) *ptr3 = 0;
+
 				}
 				else
 					return FALSE;						// Can't do anything without a boundary ??
@@ -666,6 +674,9 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 	// Skip to first Boundary (over the non MIME Alt Part)
 
 	ptr = FindPart(Body, Boundary, &Partlen);
+
+	if (ptr == NULL)
+		return FALSE;			// Couldn't find separator
 
 	free(ptr);
 	
@@ -708,6 +719,9 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 	// Assume Multipart/Mixed - Message with attachments
 
 	ptr = FindPart(Body, Boundary, &Partlen);
+
+	if (ptr == NULL)
+		return FALSE;			// Couldn't find separator
 
 	while (ptr)
 	{

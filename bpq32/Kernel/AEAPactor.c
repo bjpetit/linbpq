@@ -834,17 +834,18 @@ VOID AEAPoll(int Port)
 
 				if (TNC->TEXTMODE)
 				{
-					int i, j;
+					int i;
+					UCHAR j;
 
 					for (i = 0; i < datalen; i++)
 					{
-						j = MsgPtr[1];
+						j = MsgPtr[i];
 
-						if (j > 127 || j == 26 || j == 3)
+						if (j > 127 || j == 26 || j < 10)
 						{
 							TNC->TEXTMODE = FALSE;
 							EncodeAndSend(TNC, "OCETRANS", 8);
-							Debugprintf("Switching to TRAMS");
+							Debugprintf("Switching to TRANS");
 							TNC->CommandBusy = TRUE;
 							TNC->InternalCmd = 'A';	
 							break;

@@ -286,7 +286,7 @@
 // 410p		Build 5 October 2010
 
 // Incorporate TelnetServer
-// Fix AXIP ReRead COnfig
+// Fix AXIP ReRead Config
 // Report AXIP accept() fails to syslog, not a popup.
 
 // 410p		Build 6 October 2010
@@ -297,6 +297,7 @@
 // Config now checks for duplicate port definitions
 // Add Node Map reporting
 // Fix WINMOR deferred disconnect.
+// Report Pactor PORTCALL to WL2K instead of RMS Applcall
 
 // Add NOKEEPALIVES Port Param
 
@@ -316,7 +317,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 3"
+#define SPECIALVERSION "Test 6"
 
 #include "GetVersion.h"
 
@@ -4576,7 +4577,7 @@ VOID SendLocation()
 
 }
 
-VOID SendMH(char * call, char * freq, char * LOC, char * Mode)
+VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
 {
 	MESSAGE AXMSG;
 	PMESSAGE AXPTR = &AXMSG;
@@ -4600,7 +4601,14 @@ VOID SendMH(char * call, char * freq, char * LOC, char * Mode)
 	AXPTR->PID = 0xf0;
 	memcpy(AXPTR->L2DATA, Msg, Len);
 
-	SendRaw(AXIPPort, (char *)&AXMSG.DEST, Len + 16);
+	if (Hardware == 1)		// H_WINMOR
+	{
+		GetSemaphore();
+		Send_AX(&AXMSG, Len + 16, AXIPPort) ;
+		FreeSemaphore(0);
+	}
+	else
+		Send_AX(&AXMSG, Len + 16, AXIPPort) ;
 
 	return;
 

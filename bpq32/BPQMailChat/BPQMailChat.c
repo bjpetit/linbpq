@@ -579,13 +579,13 @@
 // Add option to force text mode forwarding
 // Define new users as a temporaty BBS if SID received in reply to Name prompt
 // Reduce delay before sending close after sending FQ on pactor sessions
-
+// Fix processing of MIME boundary from GMail
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Test 4"
+#define SPECIALVERSION "Test 5"
 
 #include "GetVersion.h"
 

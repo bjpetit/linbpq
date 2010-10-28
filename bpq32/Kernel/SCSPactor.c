@@ -815,8 +815,13 @@ VOID DEDPoll(int Port)
 		{
 			TNC->UpdateWL2KTimer = 32910;		// Every Hour
 			if (strcmp(TNC->ApplCmd, "RMS") == 0)
+			{
 				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+				{
+					memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
 					SendReporttoWL2K(TNC);
+				}
+			}
 		}
 	}
 
@@ -1243,15 +1248,6 @@ VOID DEDPoll(int Port)
 					ReleaseBuffer(buffptr);
 					return;
 				}
-
-				if (strcmp(Buffer, "XXX") == 0)
-				{
-					CheckAppl(TNC, "RMS         "); // Is RMS Available?
-					SendReporttoWL2K(TNC);
-
-					return;
-				}
-
 
 				if (memcmp(Buffer, "RADIO ", 6) == 0)
 				{
@@ -2013,6 +2009,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			{
 				char * Call = strstr(Buffer, " to ");
 				char * ptr;
+				char MHCall[30];
 
 				Call += 4;
 
@@ -2037,7 +2034,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					wsprintf(Status, "%d SCANSTOP", TNC->Port);
 					Rig_Command(-1, Status);
 
-					UpdateMH(TNC, Call, '+');
+					memcpy(MHCall, Call, 9);
+					MHCall[9] = 0;
+
+					UpdateMH(TNC, MHCall, '+');
 				}
 
 				if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
