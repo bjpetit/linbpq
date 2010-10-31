@@ -856,11 +856,8 @@ Public Class Form1
                With Nodes(NodeIndex)
 
                   .Callsign = Trim(Elements(1))
-                  .Locator = Trim(Elements(2))
-                  .Lat = Trim(Elements(3))
-                  .Lon = Trim(Elements(4))
-                  .Version = Trim(Elements(5))
-                  .PopupMode = CInt(Elements(6))
+                  .Version = Trim(Elements(2))
+                  .PopupMode = CInt(Elements(3))
 
                   .upIcon = "greenmarker.png"
                   .downIcon = "redmarker.png"
@@ -873,9 +870,9 @@ Public Class Form1
 
                   Dim CallIndex As Integer = FindCallsign(Elements(1))
 
-                  CallsignData(CallIndex).Lat = .Lat
-                  CallsignData(CallIndex).Lon = .Lon
-                  CallsignData(CallIndex).Locator = .Locator
+                  .Lat = CallsignData(CallIndex).Lat
+                  .Lon = CallsignData(CallIndex).Lon
+                  .Locator = CallsignData(CallIndex).Locator
 
                End With
 
@@ -914,17 +911,20 @@ Public Class Form1
 
                   End If
 
-                  If .LocType < APRS And .Locator = "" Then
+                  If .LocType < APRSSSID And .Locator = "" Then
 
                      ' If we have a locator, but position is less good, update it
 
-                     LookupCall(.Callsign, Lat, Lon)
+                     Dim LookupResult As Integer
+
+                     LookupResult = LookupCall(.Callsign, Lat, Lon)
                      .Lat = Lat.ToString
                      .Lon = Lon.ToString
-                     If Lon <> 0 Then .LocType = APRS
+                     If Lon <> 0 Then .LocType = LookupResult
 
                   End If
 
+                  If .Lat = "0" Then .Lat = Rnd().ToString
 
                End With
 
@@ -954,16 +954,16 @@ Public Class Form1
                      .Lat = CallsignData(CallIndex).Lat
                      .Lon = CallsignData(CallIndex).Lon
 
-                     Dim Count As Integer = CInt(Elements(6)) - 1
+                     Dim Count As Integer = CInt(Elements(3)) - 1
                      Dim j As Integer
                      ReDim Preserve .HeardItems(Count)
 
                      For j = 0 To Count
 
                         With .HeardItems(j)
-                           .Time = CDate(Elements(8 + (j * 3)))
-                           .Flags = Elements(9 + j * 3)
-                           .Freq = Elements(7 + j * 3)
+                           .Time = CDate(Elements(5 + (j * 3)))
+                           .Flags = Elements(6 + j * 3)
+                           .Freq = Elements(4 + j * 3)
                         End With
 
                      Next
@@ -1569,12 +1569,14 @@ Public Class Form1
 
    End Sub
 
-   Sub LookupCall(ByVal Callsign As String, ByRef Lat As Double, ByRef Lon As Double)
+   Function LookupCall(ByVal Callsign As String, ByRef Lat As Double, ByRef Lon As Double) As Integer
 
       Dim client As New WebClient()
       Dim Reply As String = ""
       Dim ptr As Integer
       Dim Posn As String
+
+      LookupCall = 0
 
       Lat = 0
       Lon = 0
@@ -1593,12 +1595,69 @@ Public Class Form1
             Posn = Mid(Posn, ptr + 1)
             ptr = InStr(Posn, "&")
             Lon = CDbl(Mid(Posn, 1, ptr - 1))
+
+            Return APRS
+
          End If
 
       Catch ex As Exception
       End Try
 
-   End Sub
+      ' Try a wildcard search
+
+      ptr = InStr(Callsign, "-")
+
+      If ptr > 0 Then
+         Callsign = Mid(Callsign, 1, ptr - 1)
+      End If
+
+      Callsign = Callsign & "*"
+
+      Try
+         Reply = client.DownloadString("http://www.findu.com/cgi-bin/find.cgi?" & Callsign)
+
+
+         ptr = InStr(Reply, "<br><a href=""http://maps.google.com/maps")
+         If ptr > 0 Then
+
+            Posn = Mid(Reply, ptr + 45, 100)
+            ptr = InStr(Posn, ",")
+
+            Lat = CDbl(Mid(Posn, 1, ptr - 1))
+            Posn = Mid(Posn, ptr + 1)
+            ptr = InStr(Posn, "&")
+            Lon = CDbl(Mid(Posn, 1, ptr - 1))
+
+            Return APRSSSID
+
+         End If
+
+         ptr = InStr(Reply, "<h2>Stations Matching")
+         If ptr > 0 Then
+            Posn = Mid(Reply, ptr + 45)
+            ptr = InStr(Posn, "ALIGN")
+            Posn = Mid(Posn, ptr + 4)
+            ptr = InStr(Posn, "ALIGN")
+            Posn = Mid(Posn, ptr, 100)
+            ptr = InStr(Posn, "<td> ")
+            Posn = Mid(Posn, ptr + 4, 100)
+            ptr = InStr(Posn, "<")
+            Lat = CDbl(Mid(Posn, 1, ptr - 1))
+            ptr = InStr(Posn, "<td> ")
+            Posn = Mid(Posn, ptr + 4, 100)
+            ptr = InStr(Posn, "<")
+            Lon = CDbl(Mid(Posn, 1, ptr - 1))
+
+            Return APRSSSID
+
+         End If
+
+      Catch ex As Exception
+      End Try
+
+
+
+   End Function
 
 
    Function FindCallsign(ByVal Callsign As String) As Integer
