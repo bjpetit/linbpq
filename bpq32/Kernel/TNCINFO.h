@@ -3,6 +3,7 @@
 
 #include <winioctl.h>
 #include "kernelresource.h"
+#include "rigcontrol.h"
 
 #define MAXBLOCK 4096
 
@@ -130,6 +131,8 @@ typedef struct TNCINFO
 
 	int Port;					// BPQ Port Number
 
+	struct RIGINFO DummyRig;	// Used if not using Rigcontrol
+
 	BOOL Minimized;				// Start Minimized flag
 
 	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
@@ -218,6 +221,7 @@ typedef struct TNCINFO
 	BOOL UseRigCtrlFreqs;
 	char WL2KFreq[12];
 	char WL2KMode;
+	BOOL DontReportNarrowOnWideFreqs;
 
 	char NARROWMODE;
 	char WIDEMODE;				// Mode numbers to report to WL2K

@@ -60,7 +60,6 @@
 #include "TNCInfo.h"
 
 #include "ASMStrucs.h"
-#include "RigControl.h"
 
 #include "bpq32.h"
 
@@ -80,8 +79,6 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 
 static RECT Rect;
-
-struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
@@ -285,14 +282,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;			// Port not open
-
-	if (!TNC->RIG)
-	{
-		TNC->RIG = Rig_GETPTTREC(port);
-
-		if (TNC->RIG == 0)
-			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
-	}	
 
 	switch (fn)
 	{
@@ -515,8 +504,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 		}
 		free(SaveRigConfig);
 	}
-	else
-		TNC->RIG = NULL;		// In case restart
+
 
 	// Set up DED addresses for streams (first stream (Pactor) = DED 31
 	

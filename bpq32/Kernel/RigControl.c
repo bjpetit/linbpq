@@ -44,29 +44,32 @@ int C_Q_ADD(UINT *Q,UINT *BUFF);
 
 int Row = -20;
 
+extern struct PORTCONTROL * PORTTABLE;
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
-struct PORTINFO * CreateTTYInfo(int port, int speed);
+struct RIGPORTINFO * CreateTTYInfo(int port, int speed);
 BOOL NEAR OpenConnection(int);
 BOOL NEAR SetupConnection(int);
-BOOL RigCloseConnection(struct PORTINFO * PORT);
-BOOL NEAR RigWriteCommBlock(struct PORTINFO * PORT);
+BOOL RigCloseConnection(struct RIGPORTINFO * PORT);
+BOOL NEAR RigWriteCommBlock(struct RIGPORTINFO * PORT);
 BOOL NEAR DestroyTTYInfo(int port);
-void CheckRX(struct PORTINFO * PORT);
-static OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed);
-VOID ICOMPoll(struct PORTINFO * PORT);
-VOID ProcessFrame(struct PORTINFO * PORT, UCHAR * rxbuff, int len);
-VOID ProcessHostFrame(struct PORTINFO * PORT, UCHAR * rxbuffer, int Len);
+void CheckRX(struct RIGPORTINFO * PORT);
+static OpenCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed);
+VOID ICOMPoll(struct RIGPORTINFO * PORT);
+VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuff, int len);
+VOID ProcessHostFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len);
 SendResponse(int Stream, char * Msg);
 VOID ProcessYaesuFrame(PORT);
-VOID YaesuPoll(struct PORTINFO * PORT);
-VOID ProcessYaesuCmdAck(struct PORTINFO * PORT);
-VOID ProcessKenwoodFrame(struct PORTINFO * PORT, int Length);
-VOID KenwoodPoll(struct PORTINFO * PORT);
+VOID YaesuPoll(struct RIGPORTINFO * PORT);
+VOID ProcessYaesuCmdAck(struct RIGPORTINFO * PORT);
+VOID ProcessKenwoodFrame(struct RIGPORTINFO * PORT, int Length);
+VOID KenwoodPoll(struct RIGPORTINFO * PORT);
 VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna);
 VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr);
 VOID SetupScanInterLockGroups(struct RIGINFO *RIG);
+
+VOID SetupPortRIGPointers();
 
 extern  struct TRANSPORTENTRY * L4TABLE;
 
@@ -91,7 +94,7 @@ char LastPassword[17];
 
 int NumberofPorts = 0;
 
-struct PORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
+struct RIGPORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
 
 
 struct TimeScan * AllocateTimeRec(struct RIGINFO * RIG)
@@ -184,7 +187,7 @@ ProcessLine(char * buf)
 	char * ptr;
 	int Radio;
 	int len = 510;
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 	struct RIGINFO * RIG;
 	struct ScanEntry ** FreqPtr;
 	char * CmdPtr;
@@ -220,8 +223,8 @@ NextPort:
 	{
 		// New Port definition
 
-		PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct PORTINFO));
-		memset(PORT, 0, sizeof(struct PORTINFO));
+		PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct RIGPORTINFO));
+		memset(PORT, 0, sizeof(struct RIGPORTINFO));
 
 		PORT->IOBASE = atoi(&ptr[3]);
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
@@ -576,7 +579,7 @@ NextPort:
 
 DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 {
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 
 	if (RIG == NULL) return;
 
@@ -652,7 +655,7 @@ DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 DllExport struct RIGINFO * APIENTRY Rig_GETPTTREC(int Port)
 {
 	struct RIGINFO * RIG;
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 	int i, p;
 
 	for (p = 0; p < NumberofPorts; p++)
@@ -682,7 +685,7 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 	UCHAR * Poll;
 	char * 	Valchar ;
 	int dec, sign;
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 	int i, p;
 	struct RIGINFO * RIG;
 	struct TRANSPORTENTRY * L4 = L4TABLE;
@@ -1096,7 +1099,7 @@ int BittoInt(UINT BitMask)
 
 DllExport BOOL APIENTRY Rig_Init()
 {
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 	int i, p;
 	struct RIGINFO * RIG;
 
@@ -1198,6 +1201,8 @@ if (BPQDirectory[0] == 0)
 	}
 //	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
 
+	SetupPortRIGPointers();
+
 	WritetoConsole("\nRig Control Enabled\n");
 
 	return TRUE;
@@ -1205,7 +1210,7 @@ if (BPQDirectory[0] == 0)
 
 DllExport BOOL APIENTRY Rig_Close()
 {
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 	int p;
 
 	for (p = 0; p < NumberofPorts; p++)
@@ -1227,7 +1232,7 @@ DllExport BOOL APIENTRY Rig_Poll()
 {
 	int p;
 	
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 
 	for (p = 0; p < NumberofPorts; p++)
 	{
@@ -1260,7 +1265,7 @@ DllExport BOOL APIENTRY Rig_Poll()
 }
  
 
-BOOL RigCloseConnection(struct PORTINFO * PORT)
+BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 {
    // disable event notification and wait for thread
    // to halt
@@ -1280,7 +1285,7 @@ BOOL RigCloseConnection(struct PORTINFO * PORT)
 
 } // end of CloseConnection()
 
-OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed)
+OpenCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed)
 {
 	char szPort[15];
 	char buf[80];
@@ -1366,7 +1371,7 @@ OpenCOMMPort(struct PORTINFO * PORT, int Port, int Speed)
 	return TRUE;
 }
 
-void CheckRX(struct PORTINFO * PORT)
+void CheckRX(struct RIGPORTINFO * PORT)
 {
 	BOOL       fReadStat;
 	COMSTAT    ComStat;
@@ -1461,7 +1466,7 @@ void CheckRX(struct PORTINFO * PORT)
 	}
 }
 
-VOID ProcessHostFrame(struct PORTINFO * PORT, UCHAR * rxbuffer, int Len)
+VOID ProcessHostFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len)
 {
 	UCHAR * FendPtr;
 	int NewLen;
@@ -1491,7 +1496,7 @@ VOID ProcessHostFrame(struct PORTINFO * PORT, UCHAR * rxbuffer, int Len)
 
 
 
-BOOL NEAR RigWriteCommBlock(struct PORTINFO * PORT)
+BOOL NEAR RigWriteCommBlock(struct RIGPORTINFO * PORT)
 {
 	BOOL        fWriteStat;
 	DWORD       dwBytesWritten;
@@ -1523,7 +1528,7 @@ VOID ReleasePermission(struct RIGINFO *RIG)
 	}
 }
 
-GetPermissionToChange(struct PORTINFO * PORT, struct RIGINFO *RIG)
+GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 {
 	struct ScanEntry ** ptr;
 	struct _EXTPORTDATA * PortRecord;
@@ -1655,7 +1660,7 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 	return;	
 }
 
-VOID ICOMPoll(struct PORTINFO * PORT)
+VOID ICOMPoll(struct RIGPORTINFO * PORT)
 {
 	UCHAR * Poll = PORT->TXBuffer;
 	int i;
@@ -1822,7 +1827,7 @@ VOID ICOMPoll(struct PORTINFO * PORT)
 }
 
 
-VOID ProcessFrame(struct PORTINFO * PORT, UCHAR * Msg, int framelen)
+VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * Msg, int framelen)
 {
 	char Status[80];
 	UCHAR * Poll = PORT->TXBuffer;
@@ -2055,7 +2060,7 @@ SendResponse(int Session, char * Msg)
 
 
 
-VOID ProcessYaesuCmdAck(struct PORTINFO * PORT)
+VOID ProcessYaesuCmdAck(struct RIGPORTINFO * PORT)
 {
 	UCHAR * Poll = PORT->TXBuffer;
 	UCHAR * Msg = PORT->RXBuffer;
@@ -2123,7 +2128,7 @@ VOID ProcessYaesuCmdAck(struct PORTINFO * PORT)
 	}
 
 }
-VOID ProcessYaesuFrame(struct PORTINFO * PORT)
+VOID ProcessYaesuFrame(struct RIGPORTINFO * PORT)
 {
 	UCHAR * Poll = PORT->TXBuffer;
 	UCHAR * Msg = PORT->RXBuffer;
@@ -2165,7 +2170,7 @@ VOID ProcessYaesuFrame(struct PORTINFO * PORT)
 		SetWindowText(RIG->hMODE, Status);
 }
 
-VOID YaesuPoll(struct PORTINFO * PORT)
+VOID YaesuPoll(struct RIGPORTINFO * PORT)
 {
 	UCHAR * Poll = PORT->TXBuffer;
 	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
@@ -2277,7 +2282,7 @@ VOID YaesuPoll(struct PORTINFO * PORT)
 
 //FA00014103000;MD2;
 
-VOID ProcessKenwoodFrame(struct PORTINFO * PORT, int Length)
+VOID ProcessKenwoodFrame(struct RIGPORTINFO * PORT, int Length)
 {
 	UCHAR * Poll = PORT->TXBuffer;
 	UCHAR * Msg = PORT->RXBuffer;
@@ -2373,7 +2378,7 @@ Loop:
 }
 
 
-VOID KenwoodPoll(struct PORTINFO * PORT)
+VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 {
 	UCHAR * Poll = PORT->TXBuffer;
 	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Kenwood
@@ -2495,7 +2500,7 @@ VOID KenwoodPoll(struct PORTINFO * PORT)
 }
 VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna)
 {
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 	char Ant[3]="  ";
 
 	if (RIG == NULL) return;
@@ -2539,7 +2544,7 @@ DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
 	int COMPort;
 	char * RigName;
 	int RigAddr;
-	struct PORTINFO * PORT;
+	struct RIGPORTINFO * PORT;
 	struct RIGINFO * RIG;
 	struct ScanEntry ** FreqPtr;
 	char * CmdPtr;
@@ -2583,8 +2588,8 @@ DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
 
 	// Allocate a new one
 
-	PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct PORTINFO));
-	memset(PORT, 0, sizeof(struct PORTINFO));
+	PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct RIGPORTINFO));
+	memset(PORT, 0, sizeof(struct RIGPORTINFO));
 
 	PORT->IOBASE = COMPort;
 
@@ -2974,7 +2979,7 @@ VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
 
 		int LockGroup = PortRecord->PORTINTERLOCK;
 					
-		PortRecord = PortRecord->PORTPOINTER;
+		PortRecord = PORTTABLE;
 					
 		while (PortRecord)
 		{
@@ -2992,7 +2997,7 @@ int CRow;
 
 HANDLE hComPort, hSpeed, hRigType, hButton, hAddr, hLabel, hTimes, hFreqs, hBPQPort;
 
-VOID CreateRigConfigLine(HWND hDlg, struct PORTINFO * PORT, struct RIGINFO * RIG)
+VOID CreateRigConfigLine(HWND hDlg, struct RIGPORTINFO * PORT, struct RIGINFO * RIG)
 {
 	char Port[10];
 
@@ -3031,7 +3036,7 @@ VOID CreateRigConfigLine(HWND hDlg, struct PORTINFO * PORT, struct RIGINFO * RIG
 
 }
 
-VOID CreatePortConfigLine(HWND hDlg, struct PORTINFO * PORT)
+VOID CreatePortConfigLine(HWND hDlg, struct RIGPORTINFO * PORT)
 {	
 	char Port[20]; 
 	int i;
@@ -3089,7 +3094,7 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 	{
 	case WM_INITDIALOG:
 	{
-		struct PORTINFO * PORT;
+		struct RIGPORTINFO * PORT;
 		struct RIGINFO * RIG;
 		int i, p;
 

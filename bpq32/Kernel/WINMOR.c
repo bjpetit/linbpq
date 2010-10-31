@@ -61,7 +61,6 @@ int (WINAPI FAR *GetModuleFileNameExPtr)();
 
 #include "bpq32.h"
 #include "TNCINFO.h"
-#include "RigControl.h"
 
 #include "AsmStrucs.h"
 
@@ -98,8 +97,6 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 
 static RECT Rect;
-
-struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
@@ -392,19 +389,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	if (TNC == NULL)
 		return 0;							// Port not defined
-
-	if (!TNC->RIG)
-	{
-		TNC->RIG = Rig_GETPTTREC(port);
-
-		if (TNC->RIG == 0)
-		{
-			TNC->RIG = &DummyRig;		// Not using Rig control, so use Dummy
-			TNC->PTTMode = 0;			// Can't use PTT if no rig
-		}
-
-		TNC->RIG->PTTMode = TNC->PTTMode;
-	}	
 
 	switch (fn)
 	{
@@ -1169,9 +1153,6 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 		}
 		free(SaveRigConfig);
 	}
-	else
-		TNC->RIG = NULL;		// In case restart
-
 
 	TNC->PortRecord = PortEntry;
 

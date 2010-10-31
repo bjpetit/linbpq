@@ -70,7 +70,7 @@ struct RIGINFO
 	#define PTTDTR		2
 	#define PTTCI_V		4
 
-	struct PORTINFO * PORT;		// For PTT Routines
+	struct RIGPORTINFO * PORT;		// For PTT Routines
 
 	HWND hLabel;
 	HWND hCAT;
@@ -91,7 +91,7 @@ struct RIGINFO
 #define PTT 4
 #define ANT 5
 
-struct PORTINFO
+struct RIGPORTINFO
 {
 	int PortType;				// ICOM, Yaesu, Etc
 	int IOBASE;

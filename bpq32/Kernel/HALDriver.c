@@ -15,7 +15,6 @@
 
 #include "TNCInfo.h"
 #include "ASMStrucs.h"
-#include "RigControl.h"
 
 #include "bpq32.h"
 
@@ -34,8 +33,6 @@ static char WindowTitle[] = "HAL";
 static int RigControlRow = 230;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
-struct RIGINFO DummyRig;		// Used if not using Rigcontrol
-
 
 #define	SOH	0x01	// CONTROL CODES 
 #define	ETB	0x17
@@ -309,14 +306,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	STREAM = &TNC->Streams[0];
 
-	if (!TNC->RIG)
-	{
-		TNC->RIG = Rig_GETPTTREC(port);		// Get Rig COntrol Pointer
-
-		if (TNC->RIG == 0)
-			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
-	}	
-
 	switch (fn)
 	{
 	case 1:				// poll
@@ -476,8 +465,7 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 
 		}
 		free(SaveRigConfig);
-	}	else
-		TNC->RIG = NULL;		// In case restart
+	}
 
 
 	PortEntry->MAXHOSTMODESESSIONS = 1;		// Default

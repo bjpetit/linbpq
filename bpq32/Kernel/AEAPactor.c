@@ -32,7 +32,6 @@
 
 #include "TNCINFO.h"
 #include "ASMStrucs.h"
-#include "RigControl.h"
 
 #include "bpq32.h"
 
@@ -49,8 +48,6 @@ static int RigControlRow = 200;
 #define MaxStreams 26
 
 static RECT Rect;
-
-struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
@@ -226,14 +223,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
-	if (!TNC->RIG)
-	{
-		TNC->RIG = Rig_GETPTTREC(port);
-
-		if (TNC->RIG == 0)
-			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
-	}	
-	
 	switch (fn)
 	{
 	case 1:				// poll
@@ -406,8 +395,6 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 		}
 		free(SaveRigConfig);
 	}
-	else
-		TNC->RIG = NULL;		// In case restart
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
 

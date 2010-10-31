@@ -15,7 +15,6 @@
 #include "bpq32.h"
 #include "kernelresource.h"
 #include "TNCINFO.h"
-#include "RigControl.h"
 #include "AsmStrucs.h"
 
 extern char * PortConfig[33];
@@ -528,6 +527,8 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	int dec, sign;
 	char FreqString[80]="";
 	int Mode;
+	char BandWidth;
+
 	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
 
 	// Resolve Name if needed
@@ -596,6 +597,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 			Debugprintf("Building Freq List");
 
 			Mode = TNC->NARROWMODE;
+			BandWidth = 'N';
 
 			__try {
 
@@ -612,9 +614,24 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
 
 					if (Freqptr[0]->Bandwidth == 'W')
+					{
+						BandWidth = 'W';
 						Mode = TNC->WIDEMODE;
+					}
 					else if (Freqptr[0]->Bandwidth == 'N')
+					{
+						BandWidth = 'N';
 						Mode = TNC->NARROWMODE;
+					}
+
+					if (BandWidth == 'W')
+					{
+						if (TNC->DontReportNarrowOnWideFreqs && TNC->WIDEMODE == TNC->NARROWMODE)
+						{
+							Freqptr++;
+							continue;
+						}
+					}
 
 					HHStart = TimeBands[1]->Start /3600;
 					HHEnd = TimeBands[1]->End /3600;
@@ -734,8 +751,18 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 							p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
 							if (p_cmd)
 							{
-								if (strcmp(p_cmd, "RIGCONTROL") == 0)
+								if (_stricmp(p_cmd, "RIGCONTROL") == 0)
+								{
 									TNC->UseRigCtrlFreqs = TRUE;
+									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
+									if (p_cmd)
+									{
+										if (_stricmp(p_cmd, "DontReportNarrowOnWideFreqs") == 0)
+										{
+											TNC->DontReportNarrowOnWideFreqs = TRUE;
+										}
+									}
+								}
 								else
 								{
 									if (strlen(p_cmd) > 11) goto BadLine;
@@ -778,6 +805,8 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 	char * LOC, *  LOCEND;
 	char ReportMode[20];
 	char NoLOC[7] = "";
+	double Freq;
+	char ReportFreq[_CVTBUFSIZE] = "";
 
 	if (MH == 0) return;
 
@@ -843,15 +872,22 @@ DoMove:
 		return;
 	}
 
+	// Adjust freq to centre
+
+	if (TNC->RIG->Valchar[0])
+	{
+		Freq = atof(TNC->RIG->Valchar) + 0.0015;
+		_gcvt(Freq, 9, ReportFreq);
+	}
 	memcpy(MHBASE->MHLocator, LOC, 6);
-	strcpy(MHBASE->MHFreq, TNC->RIG->Valchar);
+	strcpy(MHBASE->MHFreq, ReportFreq);
 			
 	ReportMode[0] = TNC->Hardware + '@';
 	ReportMode[1] = Mode;
 	ReportMode[2] = TNC->RIG->CurrentBandWidth;
 	ReportMode[3] = 0;
 
-	SendMH(TNC->Hardware, Call, TNC->RIG->Valchar, LOC, ReportMode);
+	SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
 
 	return;
 }
@@ -1137,4 +1173,38 @@ NotConnected:
 		}
 	}
 }
+VOID SetupPortRIGPointers()
+{
+	struct TNCINFO * TNC;
+	int port;
+
+// For each Winmor/Pactor port set up the TNC to RIG pointers
+
+	for (port = 1; port < 33; port++)
+	{
+		TNC = TNCInfo[port];
+
+		if (TNC == NULL)
+			continue;
+
+		if (TNC->RIG == NULL)
+			TNC->RIG = Rig_GETPTTREC(port);
+	
+		if (TNC->RIG == NULL)
+			TNC->RIG = &TNC->DummyRig;		// Not using Rig control, so use Dummy
+	
+		if (TNC->WL2KFreq[0])
+		{
+			// put in ValChar for MH reporting
+
+			double Freq;
+
+			Freq = atof(TNC->WL2KFreq);
+			Freq = Freq/1000000.;
+
+			_gcvt(Freq, 9, TNC->RIG->Valchar);
+		}
+	}
+}
+
 

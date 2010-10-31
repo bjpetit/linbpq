@@ -28,7 +28,6 @@
 
 #include "ASMStrucs.h"
 
-#include "RigControl.h"
 #include "TelnetServer.h"
 #include "bpq32.h"
 
@@ -46,8 +45,6 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 
 static RECT Rect;
-
-struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
@@ -492,7 +489,7 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 	
 	OpenSockets(TNC);
 
-	TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
+	TNC->RIG = &TNC->DummyRig;			// Not using Rig control, so use Dummy
 
 	return ((int)ExtProc);
 }
@@ -956,7 +953,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			TNC->Port = n;
 			TNC->Hardware = H_TELNET;
 			TNC->hDlg = SavehDlg;
-			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
+			TNC->RIG = &TNC->DummyRig;			// Not using Rig control, so use Dummy
 
 
 			// Malloc TCP Session Stucts

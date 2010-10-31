@@ -43,8 +43,6 @@
 #include "TNCInfo.h"
 #include "ASMStrucs.h"
 
-#include "RigControl.h"
-
 #include "bpq32.h"
 
 #define NARROWMODE Report_P1
@@ -61,8 +59,6 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 
 static RECT Rect;
-
-struct RIGINFO DummyRig;		// Used if not using Rigcontrol
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
@@ -292,14 +288,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;							// Port not open
 
-	if (!TNC->RIG)
-	{
-		TNC->RIG = Rig_GETPTTREC(port);
-
-		if (TNC->RIG == 0)
-			TNC->RIG = &DummyRig;			// Not using Rig control, so use Dummy
-	}	
-
 	switch (fn)
 	{
 	case 1:				// poll
@@ -491,8 +479,6 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 		}
 		free(SaveRigConfig);
 	}
-	else
-		TNC->RIG = NULL;		// In case restart
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
 
@@ -748,12 +734,15 @@ VOID KAMPoll(int Port)
 		if (TNC->UpdateWL2KTimer == 0)
 		{
 			TNC->UpdateWL2KTimer = 32910;		// Every Hour
-			if (strcmp(TNC->ApplCmd, "RMS") == 0)
+			if (TNC->ApplCmd)
 			{
-				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+				if (strcmp(TNC->ApplCmd, "RMS") == 0)
 				{
-					memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
-					SendReporttoWL2K(TNC);
+					if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+					{
+						memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
+						SendReporttoWL2K(TNC);
+					}
 				}
 			}
 		}
