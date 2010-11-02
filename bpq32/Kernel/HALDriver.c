@@ -1350,7 +1350,7 @@ CmdLoop:
 		Call = &TNC->CmdBuffer[1];
 		Used = strlen(Call) + 2;	// Opcode and Null
 
-		UpdateMH(TNC, Call, '!');
+		UpdateMH(TNC, Call, '!', 0);
 
 		break;
 
@@ -1706,8 +1706,6 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	strcpy(CallCopy, Call);
 	strcat(CallCopy, "          ");			// Some routines expect 10 char calls
 
-	UpdateMH(TNC, CallCopy, '+');
-
 	STREAM->BytesRXed = STREAM->BytesTXed = STREAM->BytesAcked = 0;
 
 	// Stop Scanner
@@ -1773,7 +1771,10 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	STREAM->Connected = TRUE;			// Subsequent data to data channel
 
 	wsprintf(Status, "%s Connected to %s Outbound", TNC->NodeCall, STREAM->RemoteCall);
-		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+	UpdateMH(TNC, CallCopy, '+', 'O');
+
 
 	return TRUE;
 }	

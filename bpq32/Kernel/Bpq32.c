@@ -299,6 +299,11 @@
 // Fix WINMOR deferred disconnect.
 // Report Pactor PORTCALL to WL2K instead of RMS Applcall
 
+// 410p		Build 7 October 2010
+
+// Add In/Out flag to Map reporting, and report centre, not dial
+
+
 // Add NOKEEPALIVES Port Param
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -317,7 +322,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 6"
+#define SPECIALVERSION "Test 1"
 
 #include "GetVersion.h"
 

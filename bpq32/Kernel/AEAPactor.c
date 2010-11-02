@@ -47,6 +47,10 @@ static int RigControlRow = 200;
 
 #define MaxStreams 26
 
+#define PTOVER 0x19					// Pactor Turnround Char
+
+char OverMsg[3] = " \x19";
+
 static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
@@ -74,7 +78,6 @@ VOID ProcessKPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKNormCommand(struct TNCINFO * TNC, UCHAR * rxbuffer);
 VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
-VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 
 //	Note that AEA host Mode uses SOH/ETB delimiters, with DLE stuffing
 
@@ -456,6 +459,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	strcat(TNC->InitScript, "ACRRTTY 0\r");
 	strcat(TNC->InitScript, "HPOLL ON\r");
 	strcat(TNC->InitScript, "EAS ON\r\r");
+	strcat(TNC->InitScript, "PTOVER $19\r\r");
 
 	// Set the ax.25 MYCALL
 
@@ -828,7 +832,7 @@ VOID AEAPoll(int Port)
 					{
 						j = MsgPtr[i];
 
-						if (j > 127 || j == 26 || j < 10)
+						if (j > 127 ||  j == 25 || j < 10)
 						{
 							TNC->TEXTMODE = FALSE;
 							EncodeAndSend(TNC, "OCETRANS", 8);
@@ -854,6 +858,7 @@ VOID AEAPoll(int Port)
 				EncodeAndSend(TNC, TXMsg, datalen + 1);
 				ReleaseBuffer(buffptr);
 				TNC->Streams[Stream].BytesTXed += datalen; 
+				Debugprintf("Stream %d Sending %d, BytesTXED now %d", Stream, datalen, TNC->Streams[Stream].BytesTXed);
 				TNC->Timeout = 0;
 				TNC->DataBusy = TRUE;
 
@@ -1169,22 +1174,35 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	{
 		// Echoed Data
 
-		TNC->Streams[0].BytesAcked += Len -1;
+		Len--;
+
+		TNC->Streams[0].BytesAcked += Len;
+
+		Debugprintf("Ack for %d, BytesAcked now %d", Len, TNC->Streams[0].BytesAcked);
 		ShowTraffic(TNC);
 
-/*		// If nothing more to send, turn round link
-
-		Debugprintf("AEA Bytes Sent %d Bytes ACKED %d", TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
+		// If nothing more to send, turn round link
 						
-		if ((TNC->Streams[0].BPQtoPACTOR_Q == 0) &&
-			(TNC->Streams[0].BytesAcked == TNC->Streams[0].BytesTXed))		// Nothing following and all acked
-		{
-			Debugprintf("AEA Sent = Acked - sending Turnround");
-			EncodeAndSend(TNC, " \x1a", 2);
-			TNC->InternalCmd = 'A';
-			TNC->CommandBusy = TRUE;
+		if ((TNC->Streams[0].BPQtoPACTOR_Q == 0) && TNC->NeedTurnRound &&
+			(TNC->Streams[0].BytesAcked >= TNC->Streams[0].BytesTXed))		// Nothing following and all acked
+			{
+				Debugprintf("AEA Sent = Acked - sending Turnround");
+						
+				if (TNC->TEXTMODE == 0)
+				{
+					// In Trans - switch back
+
+					TNC->TEXTMODE = TRUE;
+					EncodeAndSend(TNC, "OCECONV", 7);
+					Debugprintf("Switching to CONV");
+					TNC->CommandBusy = TRUE;
+					TNC->InternalCmd = 'A';	
+				}
+					
+				TNC->NeedTurnRound = FALSE;
+				EncodeAndSend(TNC, OverMsg, 2);
+				TNC->Timeout = 0;						//  No response to data
 		}
-*/
 		return;
 	}
 
@@ -1289,7 +1307,8 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				TNC->DataBusy = FALSE;
 
-				// If nothing more to send, turn round link
+	/*
+	// If nothing more to send, turn round link
 						
 				if (TNC->Streams[0].BPQtoPACTOR_Q == 0 && TNC->NeedTurnRound)		// Nothing following
 				{
@@ -1305,12 +1324,11 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					}
 					
 					TNC->NeedTurnRound = FALSE;
-					EncodeAndSend(TNC, " \x1a", 2);
+					EncodeAndSend(TNC, OverMsg, 2);
 					TNC->Timeout = 0;						//  No response to data
 
-//					TNC->CommandBusy = TRUE;
 				}
-
+*/
 			}
 			return;
 		}
@@ -1390,7 +1408,6 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			if (Stream == 0)
 			{
 				Buffer[Len-2] = 0;
-				UpdateMH(TNC, Call, '+');
 			}
 
 			TNC->Streams[Stream].BytesRXed = TNC->Streams[Stream].BytesTXed = TNC->Streams[Stream].BytesAcked = 0;
@@ -1482,6 +1499,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				{
 					wsprintf(Status, "%s Connected to %s Outbound", TNC->NodeCall, TNC->Streams[0].RemoteCall);
 					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+					UpdateMH(TNC, Call, '+', 'O');
 				}
 
 				return;
@@ -1549,19 +1567,7 @@ static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 
 }
 
-static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
-{
-	// Update HM list and maube pass to monitor somehow
 
-	UCHAR * ptr;
-
-	ptr = strchr(&Msg[3], '>');
-
-	if (ptr) *(ptr) = 0;
-
-	UpdateMH(TNC, &Msg[3], ' ');
-
-}
 VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {
 	if (Stream == 0)					// Pactor Stream

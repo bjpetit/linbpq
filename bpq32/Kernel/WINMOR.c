@@ -1518,8 +1518,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		ptr = strchr(Call, ' ');	
 		if (ptr) *ptr = 0;
 
-		UpdateMH(TNC, Call, '+');
-
 		TNC->HadConnect = TRUE;
 
 		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0)
@@ -1615,6 +1613,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				wsprintf(Status, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+			UpdateMH(TNC, Call, '+', 'O');
 
 			return;
 		}
@@ -1668,7 +1667,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		// Add to MHEARD
 
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
-		UpdateMH(TNC, &Buffer[8], '!');
+		UpdateMH(TNC, &Buffer[8], '!', 0);
 		
 		if (!TNC->FECMode)
 			return;							// If in FEC mode pass ID messages to user.

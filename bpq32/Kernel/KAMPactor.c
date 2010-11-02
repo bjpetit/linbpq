@@ -734,11 +734,17 @@ VOID KAMPoll(int Port)
 		if (TNC->UpdateWL2KTimer == 0)
 		{
 			TNC->UpdateWL2KTimer = 32910;		// Every Hour
+			
 			if (TNC->ApplCmd)
 			{
-				if (strcmp(TNC->ApplCmd, "RMS") == 0)
+				if (memcmp(TNC->ApplCmd, "RMS", 3) == 0)
 				{
-					if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+					char Appl[30];
+					
+					strcpy(Appl, TNC->ApplCmd);
+					strcat (Appl, "          ");
+					
+					if (CheckAppl(TNC, Appl)) // Is RMS Available?
 					{
 						memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
 						SendReporttoWL2K(TNC);
@@ -1568,7 +1574,6 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			if (Stream == 0 && TNC->HFPacket == 0)
 			{
 				Buffer[Len-4] = 0;
-				UpdateMH(TNC, Call, '+');
 			}
 
 			STREAM->BytesRXed = STREAM->BytesTXed = STREAM->BytesAcked = 0;
@@ -1681,6 +1686,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						wsprintf(Status, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 
 					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+					UpdateMH(TNC, Call, '+', 'O');
+
 				}
 
 				return;
@@ -1776,7 +1784,7 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	if (ptr) *(ptr) = 0;
 
-	UpdateMH(TNC, &Msg[3], ' ');
+	UpdateMH(TNC, &Msg[3], ' ', 0);
 
 }
 VOID TidyClose(struct TNCINFO * TNC, int Stream)

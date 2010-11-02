@@ -448,7 +448,6 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 }
 
 
-
 // WL2K Reporting Code.
 
 static SOCKADDR_IN sinx; 
@@ -796,7 +795,7 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 	return 0;
 }
 
-VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
+VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 {
 	struct MHSTRUC * MH = TNC->PortRecord->PORTCONTROL.PORTMHEARD;
 	struct MHSTRUC * MHBASE = MH;
@@ -811,6 +810,14 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode)
 	if (MH == 0) return;
 
 	ConvToAX25(Call, AXCall);
+
+	// Adjust freq to centre
+
+	if (Mode != ' ' && TNC->RIG->Valchar[0])
+	{
+		Freq = atof(TNC->RIG->Valchar) + 0.0015;
+		_gcvt(Freq, 9, ReportFreq);
+	}
 
 	if (TNC->Hardware != H_WINMOR)			// Only WINMOR has a locator
 	{
@@ -846,7 +853,7 @@ NOLOC:
 		else
 		{
 			if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) &&
-				MH->MHDIGI == Mode && strcmp(MH->MHFreq, TNC->RIG->Valchar) == 0)) // Spare or our entry
+				MH->MHDIGI == Mode && strcmp(MH->MHFreq, ReportFreq) == 0)) // Spare or our entry
 				goto DoMove;
 		}
 		MH++;
@@ -872,20 +879,14 @@ DoMove:
 		return;
 	}
 
-	// Adjust freq to centre
-
-	if (TNC->RIG->Valchar[0])
-	{
-		Freq = atof(TNC->RIG->Valchar) + 0.0015;
-		_gcvt(Freq, 9, ReportFreq);
-	}
 	memcpy(MHBASE->MHLocator, LOC, 6);
 	strcpy(MHBASE->MHFreq, ReportFreq);
 			
 	ReportMode[0] = TNC->Hardware + '@';
 	ReportMode[1] = Mode;
-	ReportMode[2] = TNC->RIG->CurrentBandWidth;
-	ReportMode[3] = 0;
+	ReportMode[2] = (TNC->RIG->CurrentBandWidth) ? TNC->RIG->CurrentBandWidth : '?';
+	ReportMode[3] = Direction;
+	ReportMode[4] = 0;
 
 	SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
 
@@ -950,7 +951,8 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
 		wsprintf(Msg, "%d SCANSTOP", TNC->Port);
 		
 		Rig_Command(-1, Msg);
-	
+
+		UpdateMH(TNC, Call, '+', 'I');
 	}
 	
 	Session=L4TABLE;
@@ -1199,7 +1201,7 @@ VOID SetupPortRIGPointers()
 
 			double Freq;
 
-			Freq = atof(TNC->WL2KFreq);
+			Freq = atof(TNC->WL2KFreq) - 1500;
 			Freq = Freq/1000000.;
 
 			_gcvt(Freq, 9, TNC->RIG->Valchar);

@@ -1468,7 +1468,6 @@ MsgLoop:
 			char * ct = TCP->cfgCTEXT;
 
 			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
-			UpdateMH(TNC, sockptr->Callsign, '+');
 
             sockptr->LoginState = 2;
             
@@ -1665,7 +1664,6 @@ MsgLoop:
 		sockptr->UserPointer  = &RelayUser;
 
 		ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
-		UpdateMH(TNC, sockptr->Callsign, '+');
 
 		send(sock, RelayMsg, strlen(RelayMsg), 0);
 
@@ -1881,7 +1879,6 @@ MsgLoop:
 		if (strcmp(MsgPtr, sockptr->UserPointer->Password) == 0)
 		{
 			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
-			UpdateMH(TNC, sockptr->Callsign, '+');
 
             sockptr->LoginState = 2;
             

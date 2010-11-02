@@ -332,7 +332,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
 BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE);
-VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode);
+VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
 VOID SaveWindowPos(int port);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream);
 VOID ShowTraffic(struct TNCINFO * TNC);

@@ -802,12 +802,21 @@ VOID DEDPoll(int Port)
 		if (TNC->UpdateWL2KTimer == 0)
 		{
 			TNC->UpdateWL2KTimer = 32910;		// Every Hour
-			if (strcmp(TNC->ApplCmd, "RMS") == 0)
+		
+			if (TNC->ApplCmd)
 			{
-				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
+				if (memcmp(TNC->ApplCmd, "RMS", 3) == 0)
 				{
-					memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
-					SendReporttoWL2K(TNC);
+					char Appl[30];
+					
+					strcpy(Appl, TNC->ApplCmd);
+					strcat (Appl, "          ");
+					
+					if (CheckAppl(TNC, Appl)) // Is RMS Available?
+					{
+						memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
+						SendReporttoWL2K(TNC);
+					}
 				}
 			}
 		}
@@ -2024,8 +2033,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 					memcpy(MHCall, Call, 9);
 					MHCall[9] = 0;
-
-					UpdateMH(TNC, MHCall, '+');
 				}
 
 				if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
@@ -2103,7 +2110,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						else
 							wsprintf(Status, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 
-					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+						UpdateMH(TNC, Call, '+', 'O');
+
 					}
 	
 					return;
@@ -2350,7 +2360,7 @@ VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	ConvToAX25(&ptr[3], Monframe.ORIGIN);
 
-	UpdateMH(TNC, &ptr[3], ' ');
+	UpdateMH(TNC, &ptr[3], ' ', 0);
 
 	ptr = strstr(ptr, "to ");
 

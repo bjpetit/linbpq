@@ -1119,6 +1119,7 @@ if (BPQDirectory[0] == 0)
 */
 	if (NumberofPorts == 0)
 	{
+		SetupPortRIGPointers();
 		return TRUE;
 	}
 
