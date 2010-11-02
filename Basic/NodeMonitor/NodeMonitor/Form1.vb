@@ -1396,6 +1396,7 @@ Public Class Form1
                   Dim HeardCount As Integer = .HeardNodes.Length
                   Dim HeardIndex As Integer
                   Dim LineCount As Integer = 0
+                  Dim Age As TimeSpan
 
                   For HeardIndex = 0 To HeardCount - 1
 
@@ -1404,14 +1405,18 @@ Public Class Form1
                         '         If .Lat <> "0" Then
                         Dim HTML As String = ""
 
-                        sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & ",")
                         For j = 0 To .HeardItems.Length - 1
                            With .HeardItems(j)
-                              HTML = HTML & .Time & " " & .Freq & " " & .Flags & " <br>"
+                              Age = Now - .Time
+                              If Age.TotalDays < 4 Then
+                                 HTML = HTML & .Time & " " & .Freq & " " & .Flags & " <br>"
+                              End If
                            End With
                         Next
-                        sw.Write(HTML & vbCrLf & "|")
-
+                        If HTML <> "" Then
+                           sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & ",")
+                           sw.Write(HTML & vbCrLf & "|")
+                        End If
                         ' End If
                      End With
                   Next
@@ -1482,10 +1487,12 @@ Public Class Form1
 
             ' If we have a locator, but position is less good, update it
 
-            LookupCall(Locator, Lat, Lon)
+            Dim LookupResult As Integer
+
+            LookupResult = LookupCall(HeardCall, Lat, Lon)
             .Lat = Lat.ToString
             .Lon = Lon.ToString
-            If Lon <> 0 Then .LocType = APRS
+            If Lon <> 0 Then .LocType = lookupresult
 
          End If
 
