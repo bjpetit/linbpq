@@ -1404,17 +1404,22 @@ Public Class Form1
 
                         '         If .Lat <> "0" Then
                         Dim HTML As String = ""
-
+                        Dim Protocol As Integer = 0
                         For j = 0 To .HeardItems.Length - 1
                            With .HeardItems(j)
                               Age = Now - .Time
                               If Age.TotalDays < 4 Then
                                  HTML = HTML & .Time & " " & .Freq & " " & .Flags & " <br>"
+                                 If Mid(.Flags, 1, 1) = "A" Then
+                                    Protocol = Protocol Or 1
+                                 Else
+                                    Protocol = Protocol Or 2
+                                 End If
                               End If
                            End With
                         Next
                         If HTML <> "" Then
-                           sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & ",")
+                           sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & "," & Protocol.ToString & ",")
                            sw.Write(HTML & vbCrLf & "|")
                         End If
                         ' End If
