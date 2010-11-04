@@ -95,13 +95,14 @@ VOID ProcessKPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 VOID ProcessKNormCommand(struct ConnectionInfo * conn, UCHAR * rxbuffer);
 VOID ProcessDEDPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
+VOID ProcessSCSPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 BOOL TfPut(struct ConnectionInfo * conn, UCHAR character); 
 BOOL InitDED(struct ConnectionInfo * conn);
 int PUTCHARx(struct ConnectionInfo * conn, UCHAR c);
 int DOCOMMAND(struct ConnectionInfo * conn);
 
 BOOL OpenRealPort(struct ConnectionInfo * conn);
-VOID RealPortThread(int i);
+VOID CRCStuffAndSend(struct ConnectionInfo * conn, UCHAR * Msg, int Len);
 
 //	Note that Kantronics host Mode uses KISS format Packets (without a KISS COntrol Byte)
 
@@ -115,6 +116,8 @@ VOID CALLBACK TimerProc();
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
 UINT_PTR TimerHandle = 0;
 
+unsigned short int compute_crc(unsigned char *buf,int len);
+extern short CRCTAB;
 
 BOOL cfgMinToTray;
 
@@ -261,6 +264,7 @@ HWND hStreams[MaxConnections+1];
 HWND hMask[MaxConnections+1];
 HWND hKant[MaxConnections+1];
 HWND hDED[MaxConnections+1];
+HWND hSCS[MaxConnections+1];
 HWND hRTS[MaxConnections+1];
 HWND hCTS[MaxConnections+1];
 HWND hDTR[MaxConnections+1];
@@ -372,29 +376,34 @@ int CreateDialogLine(int i)
 	SendMessage(hMask[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 	hKant[i] = CreateWindow(WC_BUTTON , "Kant", BS_AUTORADIOBUTTON | WS_GROUP | WS_CHILD | WS_VISIBLE ,
-                 250,row+5,50,14, hWnd, NULL, hInst, NULL);
+                 240,row+5,50,14, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hKant[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 	hDED[i] = CreateWindow(WC_BUTTON , "DED", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
-                 305,row+5,50,14, hWnd, NULL, hInst, NULL);
+                 290,row+5,50,14, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hDED[i], WM_SETFONT,(WPARAM) hFont, 0);
 
+	hSCS[i] = CreateWindow(WC_BUTTON , "SCS", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
+                 340,row+5,50,14, hWnd, NULL, hInst, NULL);
+
+	SendMessage(hSCS[i], WM_SETFONT,(WPARAM) hFont, 0);
+
 	hRTS[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
-                 360,row+5,14,14, hWnd, NULL, hInst, NULL);
+                 400,row+5,14,14, hWnd, NULL, hInst, NULL);
 
 	hCTS[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
-                 390,row+5,14,14, hWnd, NULL, hInst, NULL);
+                 430,row+5,14,14, hWnd, NULL, hInst, NULL);
 
 	hDCD[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
-                 420,row+5,14,14, hWnd, NULL, hInst, NULL);
+                 460,row+5,14,14, hWnd, NULL, hInst, NULL);
 
 	hDSR[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
-                 450,row+5,14,14, hWnd, NULL, hInst, NULL);
+                 490,row+5,14,14, hWnd, NULL, hInst, NULL);
 
 	hDTR[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
-                 480,row+5,14,14, hWnd, NULL, hInst, NULL);
+                 520,row+5,14,14, hWnd, NULL, hInst, NULL);
 
 	return 0;
 }
@@ -499,7 +508,7 @@ BOOL Initialise()
 	struct StreamInfo * channel;
 	int retCode,Type,Vallen;
 	char Key[20];
-	int numChannels, ComPort, DEDMode, InHostMode, ApplMask;
+	int numChannels, ComPort, DEDMode, SCSMode, InHostMode, ApplMask;
 	RECT Rect;
 	BOOL REAL = FALSE;
 	HKEY hKey=0;
@@ -560,6 +569,11 @@ BOOL Initialise()
 			retCode = RegQueryValueEx(hKey,Key,0,			
 				(ULONG *)&Type,(UCHAR *)&DEDMode,(ULONG *)&Vallen);
 
+			wsprintf(Key,"Port%dSCSMode",i);
+			Vallen=4;
+			retCode = RegQueryValueEx(hKey,Key,0,			
+				(ULONG *)&Type,(UCHAR *)&SCSMode,(ULONG *)&Vallen);
+
 			conn = malloc(sizeof (struct ConnectionInfo));
 			memset(conn, 0, sizeof (struct ConnectionInfo));
 			Connections[++CurrentConnections] = conn;
@@ -568,6 +582,7 @@ BOOL Initialise()
 			conn->numChannels = numChannels;
 			conn->ComPort = ComPort;
 			conn->DEDMode = DEDMode;
+			conn->SCSMode = SCSMode;
 			conn->InHostMode = InHostMode;
 
 		}
@@ -666,7 +681,7 @@ BOOL Initialise()
 						InitBPQStream(i, &conn->Channels[j]->BPQStream);            
 		}
 
-		if (conn->DEDMode)
+		if (conn->DEDMode || conn->SCSMode)
 			InitDED(conn);
 
 	}
@@ -685,7 +700,7 @@ BOOL Initialise()
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 
 	GetWindowRect(hWnd, &Rect);      
-	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 520, CurrentConnections*30+130, 0);
+	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 560, CurrentConnections*30+130, 0);
 	SetWindowPos(GetDlgItem(hWnd, TN_ADD), NULL, 180, CurrentConnections*30+50, 70, 30, 0);
 	SetWindowPos(GetDlgItem(hWnd, TN_SAVE), NULL, 300, CurrentConnections*30+50, 80, 30, 0);
 	SetWindowPos(GetDlgItem(hWnd, IDC_REALPORTS), NULL, 10, CurrentConnections*30+50, 150, 30, 0);
@@ -712,7 +727,9 @@ int Refresh()
 		if (conn->ComPort > 0)
 		{
 
-		if (conn->DEDMode)
+		if (conn->SCSMode)
+			SendMessage(hSCS[i],BM_SETCHECK, 1,0);
+		else if (conn->DEDMode)
 			SendMessage(hDED[i],BM_SETCHECK, 1,0);
 		else
 			SendMessage(hKant[i],BM_SETCHECK, 1,0);
@@ -801,6 +818,8 @@ VOID CALLBACK TimerProc()
 			conn->RXBPtr += Read;
 			if (conn->DEDMode)
 				ProcessDEDPacket(conn, (UCHAR *)&conn->RXBuffer, conn->RXBPtr);
+			else if (conn->SCSMode)
+				ProcessSCSPacket(conn, (UCHAR *)&conn->RXBuffer, conn->RXBPtr);
 			else
 				ProcessPacket(conn, (UCHAR *)&conn->RXBuffer, conn->RXBPtr);
 		}
@@ -838,7 +857,7 @@ VOID CALLBACK TimerProc()
 		}
 
 		}
-		if (conn->DEDMode)
+		if (conn->DEDMode || conn->SCSMode)
 		{
 			int Len=0;
 			UCHAR Message[1000];
@@ -900,7 +919,7 @@ int SaveConfig(HWND hWnd)
 	int i;
 	int retCode,disp;
 	char Key[20];
-	BOOL DED, REAL;
+	BOOL DED, SCS, REAL;
 	int Port, ApplMask, Streams, Len;
 	BOOL DUFF=FALSE;
 	HKEY hKey=0;
@@ -957,6 +976,7 @@ int SaveConfig(HWND hWnd)
 			}
 		
 			DED = Button_GetCheck(hDED[i]);
+			SCS = Button_GetCheck(hSCS[i]);
 	
 			if (!DUFF)
 			{
@@ -971,6 +991,9 @@ int SaveConfig(HWND hWnd)
 
 				wsprintf(Key,"Port%dDEDMode",i);
 				RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&DED, 4);
+
+				wsprintf(Key,"Port%dSCSMode",i);
+				RegSetValueEx(hKey,Key,0,REG_DWORD,(BYTE *)&SCS, 4);
 			}
 		}
 		else		// if Port = 0
@@ -2482,23 +2505,23 @@ BOOL TfPut(struct ConnectionInfo * conn, UCHAR character)
 
 	if (conn->HOSTSTATE == 0)
 	{
-		conn->MSGCHANNEL = character;			// WORKING FIELD
+		conn->MSGCHANNEL = character;
 		conn->HOSTSTATE++;
 		return TRUE;
 	}
 
 	if (conn->HOSTSTATE == 1)
 	{
-		conn->MSGTYPE = character;			// WORKING FIELD
+		conn->MSGTYPE = character;
 		conn->HOSTSTATE++;
 		return TRUE;
 	}
 
 	if (conn->HOSTSTATE == 2)
 	{
-		conn->MSGCOUNT = character;			// WORKING FIELD
+		conn->MSGCOUNT = character;
 		conn->MSGLENGTH = character;
-		conn->MSGCOUNT++;			// WORKING FIELD
+		conn->MSGCOUNT++;
 		conn->MSGLENGTH ++;
 
 		conn->HOSTSTATE++;
@@ -4523,7 +4546,6 @@ CONVAX90:
 	TEST	AH,1			; LAST BIT SET?
 	RET
 
-	
 
 PUTCHAR:
 
@@ -4536,10 +4558,53 @@ PUTCHAR:
 	popad
 	ret
 }
-
 }
+VOID ProcessSCSTextCommand(struct ConnectionInfo * conn, char * Command, int Len)
+{
+	// Command to SCS in non-Host mode.
+
+	// We can probably just dump anything but JHOST 4 and MYCALL
+
+	if (_memicmp(Command, "JHOST4", 6) == 0)
+	{
+		conn->InHostMode = TRUE;
+		conn->Toggle = 0;
+		return;
+	}
+
+	if (_memicmp(Command, "TERM 4", 6) == 0)
+	{
+		conn->Term4Mode = TRUE;
+	}
 
 
+	if (_memicmp(Command, "MYC", 3) == 0)
+	{
+		char * ptr = strchr(Command, ' ');
+		if (ptr)
+		{
+			Command[Len-1] = 0;		// Remove CR
+			strcpy(conn->MYCall, ++ptr); 
+		}
+	}
+
+	if (conn->Term4Mode)
+	{
+		PUTCHARx(conn, 4);
+//		PUTCHARx(conn, 13);
+	}
+//	else
+	{
+//		PUTCHARx(conn, 13);
+		PUTCHARx(conn, 'c');
+		PUTCHARx(conn, 'm');
+		PUTCHARx(conn, 'd');
+		PUTCHARx(conn, ':');
+		PUTCHARx(conn, ' ');
+	}
+
+	return;
+}
 
 int DOCOMMAND(struct ConnectionInfo * conn)
 {
@@ -4550,7 +4615,6 @@ int DOCOMMAND(struct ConnectionInfo * conn)
 
 	wsprintf(Errbuff, "BPQHOST Port %d Normal Mode CMD %s\n",conn->ComPort, conn->LINEBUFFER);  
 	OutputDebugString(Errbuff);
-
  
 	if (conn->LINEBUFFER[0] != 0x1b)
 		goto NOTCOMMAND;		// DATA IN NORMAL MODE - IGNORE
@@ -4733,5 +4797,449 @@ BOOL OpenRealPort(struct ConnectionInfo * conn)
 
 } 
 
+int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len)
+{
+	int i, j=0;
+
+	for (i=0; i<len; i++, j++)
+	{
+		MsgOut[j] = MsgIn[i];
+		if (MsgIn[i] == 170)			// Remove next byte
+		{
+			i++;
+			if (MsgIn[i] != 0)
+				if (i != len) return -1;
+		}
+	}
+
+	return j;
+}
 
 
+UCHAR SCSReply[400];
+int ReplyLen;
+
+
+BOOL CheckStatusChange(struct ConnectionInfo * conn, int Channel, int BPQStream)
+{
+	int state, change;
+	
+	SessionState(BPQStream, &state, &change);
+
+	if (change == 1)
+	{
+		if (state == 1)
+		{
+			// Connected
+
+			GetCallsign(BPQStream, CONCALL);
+
+			SCSReply[2] = Channel;
+			SCSReply[3] = 3;
+			ReplyLen  = wsprintf(&SCSReply[4], "(%d) CONNECTED to %s\x0", Channel, CONCALL);
+			ReplyLen += 5;
+			CRCStuffAndSend(conn, SCSReply, ReplyLen);
+
+			return TRUE;
+		}
+		// Disconnected
+		
+		SCSReply[2] = Channel;
+		SCSReply[3] = 3;
+		ReplyLen  = wsprintf(&SCSReply[4], "(%d) DISCONNECTED", Channel);
+		ReplyLen += 5;		// Include Null
+		CRCStuffAndSend(conn, SCSReply, ReplyLen);
+
+		return TRUE;
+
+	}
+
+	return FALSE;
+
+}
+
+BOOL CheckForData(struct ConnectionInfo * conn, int Channel, int BPQStream)
+{
+	int Length, Count;
+
+	GetMsg(BPQStream, &SCSReply[5], &Length, &Count);
+
+	if (Length == 0)
+		return FALSE;
+
+	SCSReply[2] = Channel;
+	SCSReply[3] = 7;
+	SCSReply[4] = Length - 1;
+
+	ReplyLen = Length + 5;
+	CRCStuffAndSend(conn, SCSReply, ReplyLen);
+
+	return TRUE;
+}
+
+VOID ProcessSCSHostFrame(struct ConnectionInfo * conn, UCHAR *  Buffer, int Length)
+{
+	int Channel = Buffer[0];
+	int Command = Buffer[1] & 0x3f;
+	int Len = Buffer[2];
+	struct StreamInfo * channel;
+	UCHAR TXBuff[400];
+	int BPQStream;
+	char * MYCall;
+	UCHAR Stream;
+	int TXLen;
+
+	// SCS Channel 31 is the Pactor channel, mapped to the first stream
+
+	if (Channel == 0)
+		Stream = -1;
+	else
+	if (Channel == 31)
+		Stream = 0;
+	else
+		Stream = Channel;
+
+	channel = conn->Channels[Stream];
+
+	if (conn->Toggle == (Buffer[1] & 0x80) && (Buffer[1] & 0x40) == 0)
+	{
+		// Repeat Condition
+
+		//CRCStuffAndSend(conn, SCSReply, ReplyLen);
+		//return;
+	}
+
+	conn->Toggle = (Buffer[1] & 0x80);
+	conn->Toggle ^= 0x80;
+
+	if (Channel == 255 &&  Len == 0)
+	{
+		// General Poll
+
+		SCSReply[2] = 255;
+		SCSReply[3] = 1;
+		SCSReply[4] = 0;
+
+		ReplyLen = 5;
+		CRCStuffAndSend(conn, SCSReply, 5);
+		return;
+	}
+
+	if (Channel == 254)			// Status
+	{
+		// Extended Status Poll
+
+		SCSReply[2] = 254;
+		SCSReply[3] = 7;		// Status
+		SCSReply[4] = 3;		// Len -1
+		SCSReply[5] = 0;
+		SCSReply[6] = 0;
+		SCSReply[7] = 0;
+		SCSReply[8] = 0;
+
+		ReplyLen = 9;
+		CRCStuffAndSend(conn, SCSReply, 9);
+		return;
+	}
+
+
+	if (Command == 0)
+	{
+		// Data Frame
+
+		SendMsg(channel->BPQStream, &Buffer[3], Buffer[2]+ 1);
+
+		goto AckIt;
+	}
+
+	switch (Buffer[3])
+	{
+	case 'J':				// JHOST
+
+		conn->InHostMode = FALSE;
+		return;
+
+	case 'G':				// Specific Poll
+
+		if (CheckStatusChange(conn, Channel, channel->BPQStream))
+			return;						// It has sent reply
+
+		if (CheckForData(conn, Channel, channel->BPQStream))
+			return;						// It has sent reply
+
+		SCSReply[2] = Channel;
+		SCSReply[3] = 0;
+		ReplyLen = 4;
+		CRCStuffAndSend(conn, SCSReply, 4);
+		return;
+
+	case 'C':				// Connect
+
+		// Could be real, or just C to request status
+
+		if (Channel == 0)
+			goto AckIt;
+
+		if (Length == 0)
+		{
+			// STATUS REQUEST - IF CONNECTED, GET CALL
+/*
+	MOV	EDI,OFFSET CHECKCALL	; FOR ANY RETURNED DATA
+	MOV	BYTE PTR [EDI],0		; FIDDLE FOR CONNECTED CHECK
+
+	MOV	AH,8
+	MOV	AL,MSGCHANNEL		; GET STATUS, AND CALL IF ANY
+	CALL	NODE
+;
+	CMP	CHECKCALL,0
+	JE	NOTCONNECTED
+
+	MOV	ESI,OFFSET SWITCH
+	MOV	ECX,LSWITCH
+
+	JMP SHORT SENDCMDREPLY
+
+NOTCONNECTED:
+
+	MOV	ESI,OFFSET NOTCONMSG
+	MOV	ECX,LNOTCON
+
+	JMP SENDCMDREPLY
+*/
+
+			return;
+		}
+		Buffer[Length - 2] = 0;
+
+		TXLen = wsprintf(TXBuff, "C %s\r", &Buffer[5]);
+		BPQStream = channel->BPQStream;
+		MYCall = (PUCHAR)&channel->MYCall;
+
+		if (MYCall[0] == 0)
+			MYCall = (char *)&conn->MYCall;
+
+		Connect(BPQStream);
+
+		if (MYCall[0] > 0)
+		{
+			ChangeSessionCallsign(BPQStream, EncodeCall(MYCall));
+		}
+
+		SendMsg(BPQStream, TXBuff, TXLen);
+
+	AckIt:
+
+		SCSReply[2] = Channel;
+		SCSReply[3] = 0;
+		ReplyLen = 4;
+		CRCStuffAndSend(conn, SCSReply, 4);
+		return;
+
+	case 'D':
+
+		// Disconnect
+
+		Disconnect(channel->BPQStream);
+		goto AckIt;
+		
+	case '%':
+
+		// %X commands
+
+		switch (Buffer[4])
+		{
+		case 'V':					// Version
+
+			SCSReply[2] = Channel;
+			SCSReply[3] = 1;
+			strcpy(&SCSReply[4], "4.8 1.32");
+			ReplyLen = 13;
+			CRCStuffAndSend(conn, SCSReply, 13);
+
+			return;
+		case 'M':
+			
+		default:
+						
+			SCSReply[2] = Channel;
+			SCSReply[3] = 1;
+			SCSReply[4] = 0;
+
+			ReplyLen = 5;
+			CRCStuffAndSend(conn, SCSReply, 5);
+
+			return;
+		}
+	case '@':
+	default:
+						
+		SCSReply[2] = Channel;
+		SCSReply[3] = 1;
+		SCSReply[4] = 0;
+
+		ReplyLen = 5;
+		CRCStuffAndSend(conn, SCSReply, 5);
+	}
+}
+
+VOID ProcessSCSPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Length)
+{
+	unsigned short crc;
+	char UnstuffBuffer[500];
+
+	// DED mode doesn't have an end of frame delimiter. We need to know if we have a full frame
+
+	// Fortunately this is a polled protocol, so we only get one frame at a time
+
+	// If first char != 170, then probably a Terminal Mode Frame. Wait for CR on end
+
+	// If first char is 170, we could check rhe length field, but that could be corrupt, as
+	// we haen't checked CRC. All I can think of is to check the CRC and if it is ok, assume frame is
+	// complete. If CRC is duff, we will eventually time out and get a retry. The retry code
+	// can clear the RC buffer
+			
+	if (rxbuffer[0] != 170)
+	{
+		char *ptr;
+		int cmdlen;
+		
+		// Char Mode Frame I think we need to see CR on end (and we could have more than one in buffer
+
+		// If we think we are in host mode, then to could be noise - just discard.
+
+		if (conn->InHostMode)
+		{
+			conn->RXBPtr = 0;
+			return;
+		}
+
+		rxbuffer[Length] = 0;
+Loop:
+		ptr = strchr(rxbuffer, 13);
+
+		if (ptr == 0)
+			return;		// Wait for rest of frame
+
+		ptr++;
+
+		cmdlen = ptr - rxbuffer;
+
+		// Complete Char Mode Frame
+
+		conn->RXBPtr -= cmdlen;		// Ready for next frame
+					
+		ProcessSCSTextCommand(conn, rxbuffer, cmdlen);
+
+		if (conn->RXBPtr)
+		{
+			memmove(rxbuffer, ptr, conn->RXBPtr);
+			goto Loop;
+		}
+		return;
+	}
+
+	// Receiving a Host Mode frame
+
+	if (Length < 6)				// Minimum Frame Sise
+		return;
+
+	if (rxbuffer[2] == 170)
+	{
+		// Retransmit Request
+	
+		conn->RXBPtr = 0;
+		return;				// Ignore for now
+	}
+
+	// Can't unstuff into same buffer - fails if partial msg received, and we unstuff twice
+
+
+	Length = Unstuff(&rxbuffer[2], &UnstuffBuffer[2], Length - 2);
+
+	if (Length == -1)
+	{
+		// Unstuff returned an errors (170 not followed by 0)
+
+		conn->RXBPtr = 0;
+		return;				// Ignore for now
+	}
+	crc = compute_crc(&UnstuffBuffer[2], Length);
+
+	if (crc == 0xf0b8)		// Good CRC
+	{
+		conn->RXBPtr = 0;		// Ready for next frame
+		ProcessSCSHostFrame(conn, &UnstuffBuffer[2], Length);
+		return;
+	}
+
+	// Bad CRC - assume incomplete frame, and wait for rest. If it was a full bad frame, timeout and retry will recover link.
+
+	return;
+}
+
+unsigned short int compute_crc(unsigned char *buf,int len)
+{
+	int fcs;
+
+	_asm{
+
+	mov	esi,buf
+	mov	ecx,len
+	mov	edx,-1		; initial value
+
+crcloop:
+
+	lodsb
+
+	XOR	DL,AL		; OLD FCS .XOR. CHAR
+	MOVZX EBX,DL		; CALC INDEX INTO TABLE FROM BOTTOM 8 BITS
+	ADD	EBX,EBX
+	MOV	DL,DH		; SHIFT DOWN 8 BITS
+	XOR	DH,DH		; AND CLEAR TOP BITS
+	XOR	DX,CRCTAB[EBX]	; XOR WITH TABLE ENTRY
+	
+	loop	crcloop
+
+	mov	fcs,EDX
+
+	}	
+
+	return (fcs);
+
+  }
+
+VOID CRCStuffAndSend(struct ConnectionInfo * conn, UCHAR * Msg, int Len)
+{
+	unsigned short int crc;
+	UCHAR StuffedMsg[500];
+	int i, j;
+
+	crc = compute_crc(&Msg[2], Len-2);
+	crc ^= 0xffff;
+
+	Msg[Len++] = (crc&0xff);
+	Msg[Len++] = (crc>>8);
+
+	for (i = j = 2; i < Len; i++)
+	{
+		StuffedMsg[j++] = Msg[i];
+		if (Msg[i] == 170)
+		{
+			StuffedMsg[j++] = 0;
+		}
+	}
+
+	if (j != i)
+	{
+		Len = j;
+		memcpy(Msg, StuffedMsg, j);
+	}
+
+	Msg[0] = 170;
+	Msg[1] = 170;
+
+	BPQSerialSendData(COMType, conn->hDevice, Msg, Len);
+}
+
+
+				

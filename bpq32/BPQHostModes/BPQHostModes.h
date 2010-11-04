@@ -6,6 +6,9 @@ struct ConnectionInfo
 { 
 	int ComPort;
 	BOOL DEDMode;			// True for DED mode, False for Kant mode
+	BOOL SCSMode;			// True for SCS varient of DED
+	BOOL Term4Mode;			// Used by Airmail
+	BOOL Toggle;				// SCS Sequence Toggle
 	BOOL InHostMode;
 	int numChannels;
 	int ApplMask;
@@ -27,6 +30,8 @@ struct ConnectionInfo
 	int	RXBPtr;
 
 	BOOL Echo;
+
+	char MYCall[11];			// 
 
 	// DED Mode Fields
 

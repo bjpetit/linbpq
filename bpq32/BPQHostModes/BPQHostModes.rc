@@ -35,7 +35,7 @@ BPQICON                 ICON    DISCARDABLE     "BPQ.ICO"
 // Dialog
 //
 
-KHOSTMAINWINDOW DIALOG FIXED IMPURE  100, 100, 400, 300
+KHOSTMAINWINDOW DIALOG FIXED IMPURE  100, 100, 432, 300
 STYLE DS_MODALFRAME | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "BPQ Hostmodes Emulator Version 1.2.3.4"
 CLASS "KHOSTMAINWINDOW"
@@ -43,8 +43,8 @@ FONT 8, "MS Sans Serif"
 BEGIN
     PUSHBUTTON      "Add Entry",TN_ADD,171,118,49,14
     PUSHBUTTON      "Save Settings",TN_SAVE,171,118,49,14
-    LTEXT           "COM    Streams  Applmask              Mode               RTS   CTS   DCD   DSR   DTR",
-                    IDC_STATIC,76,9,280,10
+    LTEXT           "COM    Streams  Applmask              Mode                            RTS   CTS   DCD   DSR   DTR",
+                    IDC_STATIC,76,9,294,10
     CONTROL         "Use Real COM Ports",IDC_REALPORTS,"Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP,55,180,90,15
 END
@@ -128,7 +128,7 @@ GUIDELINES DESIGNINFO DISCARDABLE
 BEGIN
     "KHOSTMAINWINDOW", DIALOG
     BEGIN
-        RIGHTMARGIN, 285
+        RIGHTMARGIN, 317
         BOTTOMMARGIN, 145
     END
 END

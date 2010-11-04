@@ -43,6 +43,7 @@ extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
+extern UCHAR BPQDirectory[];
 
 static RECT Rect;
 
@@ -2097,8 +2098,21 @@ int WriteLog(char * msg)
 
 	time_t ltime;
     struct tm today;
- 
-	if ((file = fopen("BPQTelnetServer.log","a")) == NULL)
+
+	UCHAR Value[100];
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(Value, "BPQTelnetServer.log");
+	}
+	else
+	{
+		strcpy(Value, BPQDirectory);
+		strcat(Value, "\\");
+		strcat(Value, "BPQTelnetServer.log");
+	}
+		
+	if ((file = fopen("Value", "a")) == NULL)
 		return FALSE;
 
 	time( &ltime );

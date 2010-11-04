@@ -302,7 +302,7 @@
 // 410p		Build 7 October 2010
 
 // Add In/Out flag to Map reporting, and report centre, not dial
-
+// Write Telnet log to BPQ Directory
 
 // Add NOKEEPALIVES Port Param
 
@@ -322,7 +322,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 1"
+#define SPECIALVERSION "Test 2"
 
 #include "GetVersion.h"
 

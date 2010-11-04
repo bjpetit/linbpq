@@ -58,7 +58,7 @@ void CheckRX(struct RIGPORTINFO * PORT);
 static OpenCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed);
 VOID ICOMPoll(struct RIGPORTINFO * PORT);
 VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuff, int len);
-VOID ProcessHostFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len);
+VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len);
 SendResponse(int Stream, char * Msg);
 VOID ProcessYaesuFrame(PORT);
 VOID YaesuPoll(struct RIGPORTINFO * PORT);
@@ -1417,7 +1417,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		if (PORT->RXBuffer[Length-1] != 0xfd)
 			return;	
 
-		ProcessHostFrame(PORT, PORT->RXBuffer, Length);	// Could have multiple packets in buffer
+		ProcessICOMFrame(PORT, PORT->RXBuffer, Length);	// Could have multiple packets in buffer
 
 		PORT->RXLen = 0;		// Ready for next frame	
 		return;
@@ -1467,7 +1467,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 	}
 }
 
-VOID ProcessHostFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len)
+VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len)
 {
 	UCHAR * FendPtr;
 	int NewLen;
@@ -1491,7 +1491,7 @@ VOID ProcessHostFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len)
 	
 	// Loop Back
 
-	ProcessHostFrame(PORT, FendPtr+1, Len - NewLen);
+	ProcessICOMFrame(PORT, FendPtr+1, Len - NewLen);
 	return;
 }
 

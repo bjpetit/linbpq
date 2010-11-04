@@ -1556,6 +1556,7 @@ static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 		case ETB:
 
 			outbuff[txptr++] = DLE;
+			Debugprintf("Escaping %c", c);
 		}
 		
 		outbuff[txptr++] = c;

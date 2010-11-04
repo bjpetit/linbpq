@@ -661,7 +661,7 @@ static void CheckRX(struct TNCINFO * TNC)
 
 }
 
-static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
+VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
 {
 	UCHAR * FendPtr;
 	int NewLen;
