@@ -123,6 +123,8 @@ Public Class Form1
 
       Dim i As Integer
 
+      Locator = UCase(Locator)
+
       i = Asc(Mid(Locator, 1, 1))
       Lon = (i - 65) * 20
 
@@ -344,7 +346,7 @@ Public Class Form1
                         If Microsoft.VisualBasic.Left(Report, 3) = "MH " Then
                            Try
                               My.Computer.FileSystem.WriteAllText("MonMHLog.txt", _
-                                 Now & " " & CallFrom & " " & Report & vbCrLf, True)
+                                 Now.ToUniversalTime & " " & CallFrom & " " & Report & vbCrLf, True)
 
                            Catch ex As Exception
                            End Try
@@ -527,7 +529,7 @@ Public Class Form1
                         Try
 
                            My.Computer.FileSystem.WriteAllText("ChatDebugLog.txt", _
-                               Now & " " & CallFrom & " " & Report & " " & RemoteEP.ToString & vbCrLf, True)
+                               Now.ToUniversalTime & " " & CallFrom & " " & Report & " " & RemoteEP.ToString & vbCrLf, True)
 
                         Catch exx As Exception
 
@@ -671,11 +673,11 @@ Public Class Form1
 
       If ChatChanged Then
 
-         Lastupdated.Text = Now.ToString
+         Lastupdated.Text = Now.ToUniversalTime.ToString
 
          Using sw As StreamWriter = New StreamWriter(My.Settings.OutputFileName)
 
-            sw.Write(Now & vbCrLf & "|")
+            sw.Write(Now.ToUniversalTime & vbCrLf & "|")
 
             For i = 0 To ChatNodeIndex - 1
 
@@ -833,7 +835,7 @@ Public Class Form1
    Private Sub ReadNodesFile()
 
       Dim returnValue As String
-
+      Dim strLine As String = ""
       Try
 
          returnValue = File.ReadAllText(My.Settings.FileName)
@@ -842,7 +844,7 @@ Public Class Form1
 
          Dim strLines() As String = returnValue.Split(Chr(10))
          Dim Elements() As String
-         For Each strLine As String In strLines
+         For Each strLine In strLines
 
             If strLine.Length < 10 Then Exit For
 
@@ -887,7 +889,7 @@ Public Class Form1
                Dim Count As Integer = CallsignData.Length
                Dim Lat As Double, Lon As Double
                ReDim Preserve CallsignData(Count)
- 
+
                With CallsignData(Count)
 
                   .Callsign = Trim(Elements(1))
@@ -961,7 +963,7 @@ Public Class Form1
                      For j = 0 To Count
 
                         With .HeardItems(j)
-                           .Time = CDate(Elements(5 + (j * 3)))
+                           .Time = DateTime.FromOADate(CDbl(Elements(5 + (j * 3))))
                            .Flags = Elements(6 + j * 3)
                            .Freq = Elements(4 + j * 3)
                         End With
@@ -1004,6 +1006,8 @@ Public Class Form1
 
       Catch ex As Exception
 
+         MsgBox(ex.Message)
+         MsgBox(strline)
          MsgBox("Failed to read Node Definition file " & My.Settings.FileName)
 
       End Try
@@ -1374,11 +1378,11 @@ Public Class Form1
 
       If NodeChanged = False Then Return
 
-      NodeLastUpdated.Text = Now.ToString
+      NodeLastUpdated.Text = Now.ToUniversalTime.ToString
 
       Using sw As StreamWriter = New StreamWriter(My.Settings.NodesFileName)
 
-         sw.Write(Now & vbCrLf & "|")
+         sw.Write(Now.ToUniversalTime & vbCrLf & "|")
 
          For i = 0 To NodeIndex - 1
 
@@ -1407,7 +1411,7 @@ Public Class Form1
                         Dim Protocol As Integer = 0
                         For j = 0 To .HeardItems.Length - 1
                            With .HeardItems(j)
-                              Age = Now - .Time
+                              Age = Now.ToUniversalTime - .Time
                               If Age.TotalDays < 4 Then
                                  HTML = HTML & .Time & " " & .Freq & " " & .Flags & " <br>"
                                  If Mid(.Flags, 1, 1) = "A" Then
@@ -1523,7 +1527,7 @@ Public Class Form1
 
                         If .Freq = Freq And .Flags = Flags Then
 
-                           .Time = Now
+                           .Time = Now.ToUniversalTime
                            Return
 
                         End If
@@ -1540,7 +1544,7 @@ Public Class Form1
 
                      .Freq = Freq
                      .Flags = Flags
-                     .Time = Now
+                     .Time = Now.ToUniversalTime
 
                      Return
 
@@ -1571,7 +1575,7 @@ Public Class Form1
 
                .Freq = Freq
                .Flags = Flags
-               .Time = Now
+               .Time = Now.ToUniversalTime
 
             End With
 

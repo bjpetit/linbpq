@@ -164,7 +164,7 @@ Module NodeMonitor
 
                      For j = 0 To .HeardItems.Length - 1
                         With .HeardItems(j)
-                           sw.Write(.Freq & "," & .Time & "," & .Flags & ",")
+                           sw.Write(.Freq & "," & .Time.ToOADate & "," & .Flags & ",")
                         End With
                      Next
 
