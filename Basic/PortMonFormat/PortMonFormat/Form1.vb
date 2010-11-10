@@ -8,11 +8,11 @@ Public Class Form1
 
       Dim returnValue As String
 
-      Using sw As StreamWriter = New StreamWriter("c:\aeaport.log.txt")
+      Using sw As StreamWriter = New StreamWriter("c:\kamport.log.txt")
 
          Try
 
-            returnValue = File.ReadAllText("c:\aeaport.log")
+            returnValue = File.ReadAllText("c:\kamport.log")
 
             Dim strLines() As String = returnValue.Split(Chr(10))
             Dim Elements() As String
@@ -21,7 +21,7 @@ Public Class Form1
             Dim i As Integer, j As Integer
             Dim DispChars As String
             Dim spaces As String = Space(100)
-
+            Dim Len As Integer
 
 
             For Each strLine As String In strLines
@@ -30,6 +30,7 @@ Public Class Form1
                If Elements(3) = "IRP_MJ_READ" Or Elements(3) = "IRP_MJ_WRITE" Then
 
                   Fields = Split(Elements(6), ":")
+                  Len = CInt(Mid(Fields(0), 7))
                   HexBytes = Split(Fields(1), " ")
 
                   DispChars = "                          "
@@ -44,7 +45,7 @@ Public Class Form1
                   Next
 
 
-                  sw.Write(Elements(1) & vbTab & Mid(Elements(3), 8) & vbTab & Mid(Fields(1) & spaces, 1, 70) & DispChars & vbCrLf)
+                  sw.Write(Elements(1) & vbTab & Mid(Elements(3), 8) & vbTab & Len.ToString & vbTab & DispChars & Mid(Fields(1) & spaces, 1, 70) & vbCrLf)
 
                End If
 
@@ -55,6 +56,10 @@ Public Class Form1
          End Try
 
       End Using
+
+   End Sub
+
+   Private Sub Form1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 
    End Sub
 End Class
