@@ -1356,8 +1356,8 @@ DoReceivedData(HWND hWnd)
 		do {
 
 			GetMsg(Stream, &Msg[0],&len,&count);
-		
 			WritetoOutputWindow(Msg, len);
+			SlowTimer = 0;
 
 		} while (count > 0);
 	}

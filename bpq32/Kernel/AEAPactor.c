@@ -47,9 +47,9 @@ static int RigControlRow = 200;
 
 #define MaxStreams 26
 
-#define PTOVER 0x19					// Pactor Turnround Char
+#define PTOVER 0x1a					// Pactor Turnround Char
 
-char OverMsg[3] = " \x19";
+char OverMsg[3] = " \x1a";
 
 static RECT Rect;
 
@@ -380,7 +380,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->Hardware = H_AEA;
 
-	TNC->TEXTMODE = TRUE;
+	TNC->TEXTMODE = FALSE;
 
 	if (TNC->RigConfigMsg)
 	{
@@ -437,7 +437,6 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	strcat(TempScript, "PTHUFF 0\r");
 	strcat(TempScript, "PT200 ON\r");
 	strcat(TempScript, "WIDESHFT OFF\r");
-	strcat(TempScript, "CONMODE CONV\r");
 	strcat(TempScript, "ARQT 30\r");
 
 	strcat(TempScript, TNC->InitScript);
@@ -459,7 +458,8 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	strcat(TNC->InitScript, "ACRRTTY 0\r");
 	strcat(TNC->InitScript, "HPOLL ON\r");
 	strcat(TNC->InitScript, "EAS ON\r\r");
-	strcat(TNC->InitScript, "PTOVER $19\r\r");
+	strcat(TNC->InitScript, "CONMODE TRANS\r");
+	strcat(TNC->InitScript, "PTOVER $1A\r\r");
 
 	// Set the ax.25 MYCALL
 
@@ -479,6 +479,7 @@ static void CheckRX(struct TNCINFO * TNC)
 	COMSTAT    ComStat;
 	DWORD      dwErrorFlags;
 	int Length;
+	int Len;
 
 	// only try to read number of bytes in queue 
 
@@ -491,9 +492,16 @@ static void CheckRX(struct TNCINFO * TNC)
 
 	if (Length == 0)
 		return;					// Nothing doing
-
-	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
 	
+	while (Length > 20)
+	{
+		fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
+		TNC->RXLen += 20;
+		Length -= 20;
+	}
+
+	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
+
 	if (!fReadStat)
 	{
 		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
@@ -521,8 +529,6 @@ static void CheckRX(struct TNCINFO * TNC)
 
 		TNC->RXBuffer[TNC->RXLen] = 0;
 
-		Debugprintf("AEA Got Term mode Frame");
-
 //		if (TNC->RXBuffer[TNC->RXLen-2] != ':')
 		if (strstr(TNC->RXBuffer, "cmd:") == 0)
 			return;				// Wait for rest of frame
@@ -549,9 +555,8 @@ static void CheckRX(struct TNCINFO * TNC)
 	if (TNC->RXBuffer[Length-1] != ETB)
 		return;					// Wait till we have a full frame
 
-	if (TNC->RXBuffer[Length-2] == DLE)
-		return;					// DLE ETB isn't end of frameW
-
+	if (TNC->RXBuffer[Length-2] == DLE && TNC->RXBuffer[Length-3] != DLE)
+		return;					// ??? DLE ETB isn't end of frame, but DLE DLE ETB is
 
 	ProcessHostFrame(TNC, TNC->RXBuffer, Length);	// Could have multiple packets in buffer
 
@@ -568,12 +573,13 @@ static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len)
 	int NewLen;
 
 	//	Split into Packets. By far the most likely is a single packet, so treat as special case
+	//  Beware of DLE ETB and DLE DLE ETB!
 
 	FendPtr = memchr(&rxbuffer[1], ETB, Len-1);
 
 FENDLoop:
 
-	if (*(FendPtr - 1) == DLE)
+	if (*(FendPtr - 1) == DLE && *(FendPtr - 2) != DLE)
 	{
 		FendPtr++;
 		FendPtr = memchr(FendPtr, ETB, Len-1);
@@ -607,13 +613,21 @@ static BOOL WriteCommBlock(struct TNCINFO * TNC)
 	DWORD       dwBytesWritten;
 	DWORD       dwErrorFlags;
 	COMSTAT     ComStat;
+	int Offset = 0;
+	int Len = TNC->TXLen;
 
-	fWriteStat = WriteFile(TNC->hDevice, TNC->TXBuffer, TNC->TXLen, &dwBytesWritten, NULL);
-
-	if ((!fWriteStat) || (TNC->TXLen != dwBytesWritten))
+	while (Len > 20)
 	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+		WriteFile(TNC->hDevice, &TNC->TXBuffer[Offset], 20, &dwBytesWritten, NULL);
+		Len -= 20;
+		Offset += 20;
 	}
+
+	fWriteStat = WriteFile(TNC->hDevice, &TNC->TXBuffer[Offset], Len, &dwBytesWritten, NULL);
+
+	if ((!fWriteStat) || (Len != dwBytesWritten))
+		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+
 	TNC->Timeout = 50;
 
 	return TRUE;
@@ -788,6 +802,11 @@ VOID AEAPoll(int Port)
 			{
 				if (Stream == 0)
 				{
+					// Limit amount in TX
+
+					if (TNC->Streams[0].BytesTXed - TNC->Streams[0].BytesAcked > 200)
+						continue;
+
 					// If in IRS state for too long, force turnround
 
 					if (TNC->TXRXState == 'R')
@@ -832,7 +851,7 @@ VOID AEAPoll(int Port)
 					{
 						j = MsgPtr[i];
 
-						if (j > 127 ||  j == 25 || j < 10)
+						if (j > 127 ||  j == 26 || j < 10)
 						{
 							TNC->TEXTMODE = FALSE;
 							EncodeAndSend(TNC, "OCETRANS", 8);
@@ -848,13 +867,6 @@ VOID AEAPoll(int Port)
 					
 				memcpy(&TXMsg[1], buffptr + 2, datalen);
 				
-				// If nothing more to send, turn round link
-
-//				if (TNC->TEXTMODE && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
-//				{
-//					TXMsg[++datalen] = 0x1a;
-//				}
-
 				EncodeAndSend(TNC, TXMsg, datalen + 1);
 				ReleaseBuffer(buffptr);
 				TNC->Streams[Stream].BytesTXed += datalen; 
@@ -1172,9 +1184,16 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	if (Msg[0] == '/')			// 2F
 	{
+		char * Eptr;
+		
 		// Echoed Data
 
 		Len--;
+
+		Eptr = memchr(Buffer, 0x1c, Len);
+
+		if (Eptr) 
+			Debugprintf("Echoed 1c followed by %x", *(++Eptr));
 
 		TNC->Streams[0].BytesAcked += Len;
 
@@ -1197,6 +1216,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					Debugprintf("Switching to CONV");
 					TNC->CommandBusy = TRUE;
 					TNC->InternalCmd = 'A';	
+					TNC->NeedTRANS = TRUE;
 				}
 					
 				TNC->NeedTurnRound = FALSE;
@@ -1271,6 +1291,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				SetDlgItemText(TNC->hDlg, IDC_BUFFERS, &Msg[3]);
 				return;
 			}
+
 			return;
 		}
 
@@ -1307,43 +1328,21 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				TNC->DataBusy = FALSE;
 
-	/*
-	// If nothing more to send, turn round link
-						
-				if (TNC->Streams[0].BPQtoPACTOR_Q == 0 && TNC->NeedTurnRound)		// Nothing following
+				if (TNC->NeedTRANS)		// Sent CTRL/Z in conv mode - switch back to trans
 				{
-					if (TNC->TEXTMODE == 0)
-					{
-						// In Trans - switch back
-
-						TNC->TEXTMODE = TRUE;
-						EncodeAndSend(TNC, "OCECONV", 7);
-						Debugprintf("Switching to CONV");
-						TNC->CommandBusy = TRUE;
-						TNC->InternalCmd = 'A';	
-					}
-					
-					TNC->NeedTurnRound = FALSE;
-					EncodeAndSend(TNC, OverMsg, 2);
-					TNC->Timeout = 0;						//  No response to data
-
+					TNC->NeedTRANS = FALSE;
+					TNC->TEXTMODE = FALSE;
+					EncodeAndSend(TNC, "OCETRANS", 8);
+					Debugprintf("Switching to TRANS");
+					TNC->CommandBusy = TRUE;
+					TNC->InternalCmd = 'A';	
 				}
-*/
+				else
+					EncodeAndSend(TNC, "OGG", 3);			// Send another Poll
 			}
 			return;
 		}
 
-/*		if (strstr(Buffer, "Transmit data remaining"))
-		{
-			// Seems to cause problems - restart TNC
-
-			TNC->TNCOK = FALSE;
-			TNC->HostMode = 0;
-			TNC->ReinitState = 0;
-
-			return;
-		}
-*/
 		if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "Timeout"))
 		{
 			if ((TNC->Streams[Stream].Connecting | TNC->Streams[Stream].Connected) == 0)
@@ -1514,14 +1513,14 @@ int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len)
 	int i,txptr=0;
 	UCHAR c;
 
-	for (i=0;i<len;i++)
+	for (i=0; i<len; i++)
 	{
-		c=inbuff[i];
+		c = inbuff[i];
 
 		if (c == DLE)
 			c = inbuff[++i];
 
-		outbuff[txptr++]=c;
+		outbuff[txptr++] = c;
 	}
 
 	return txptr;
@@ -1539,15 +1538,15 @@ static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len)
 
 static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 {
-	int i,txptr=0;
+	int i, txptr = 0;
 	UCHAR c;
 
-	outbuff[0]=SOH;
+	outbuff[0] = SOH;
 	txptr=1;
 
-	for (i=0;i<len;i++)
+	for (i=0; i<len; i++)
 	{
-		c=inbuff[i];
+		c = inbuff[i];
 		
 		switch (c)
 		{
@@ -1556,13 +1555,13 @@ static int DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len)
 		case ETB:
 
 			outbuff[txptr++] = DLE;
-			Debugprintf("Escaping %c", c);
+//			Debugprintf("Escaping %x", c);
 		}
 		
 		outbuff[txptr++] = c;
 	}
 
-	outbuff[txptr++]=ETB;
+	outbuff[txptr++] = ETB;
 
 	return txptr;
 

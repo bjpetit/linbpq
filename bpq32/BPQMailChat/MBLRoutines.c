@@ -182,7 +182,8 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);
 		free(MsgBytes);
 			
-		nodeprintf(conn, "%c\r", 26);
+//		nodeprintf(conn, "%c\r", 26);
+		nodeprintf(conn, "/ex\r");
 
 		conn->FBBMsgsSent = TRUE;
 

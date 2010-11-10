@@ -1354,9 +1354,6 @@ CmdLoop:
 
 		break;
 
-
-
-
 	case 0x27:						// Clover ARQ LINK REQUEST status message 
 		
 		//indicates an incoming link request to either MYCALL ($8027 $8000), or MYALTCALL ($8027 $8001).

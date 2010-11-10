@@ -367,6 +367,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		if(STREAM->Connected)
 		{
 			STREAM->FramesOutstanding++;
+			STREAM->FramesQueued++;
+
 			STREAM->BytesOutstanding += txlen;
 		}
 		return (0);
@@ -392,7 +394,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 			else
 			{
-				if (TNC->Streams[0].FramesOutstanding  > 4)
+				if (TNC->Streams[0].FramesQueued > 4)
 					return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);
 			}
 		}
@@ -938,6 +940,11 @@ VOID KAMPoll(int Port)
 				{
 					// Pactor
 
+					// Limit amount in TX, so we keep some on the TX Q and don't send turnround too early
+
+					if (TNC->Streams[0].BytesTXed - TNC->Streams[0].BytesAcked > 200)
+						continue;
+
 					// Dont send if IRS State
 					// If in IRS state for too long, force turnround
 
@@ -952,6 +959,8 @@ VOID KAMPoll(int Port)
 				}
 
 				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
+				STREAM->FramesQueued--;
+
 				datalen=buffptr[1];
 				MsgPtr = (UCHAR *)&buffptr[2];
 
@@ -1345,7 +1354,9 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	{
 		if (Msg[1] == '2')				// HF Port
 		{
-			TNC->Streams[0].BytesAcked += Len - 3;
+			if (TNC->Streams[0].BytesTXed)
+				TNC->Streams[0].BytesAcked += Len - 3;	// We get an ack before the first send
+
 			wsprintf(Status, "RX %d TX %d ACKED %d ",
 				TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
 			SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);

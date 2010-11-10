@@ -289,6 +289,7 @@ typedef struct TNCINFO
 
 	BOOL TEXTMODE;					// Set if AEA in text mode
 	BOOL NeedTurnRound;				// Set if we have sent data, so need to send ctrl/z 
+	BOOL NeedTRANS;					// Set if we have to send TRANS when ctrl/z is acked. 
 
 	char * CmdSet;					// A series of commands to send to the TNC
 	char * CmdSave;					// Base address for free
@@ -298,9 +299,9 @@ typedef struct TNCINFO
 
 	// Mode Equates
 
-	#define Clover 1
-	#define Pactor 2
-	#define AMTOR 3
+	#define Clover 'C'
+	#define Pactor 'P'
+	#define AMTOR 'A'
 
 	UCHAR DataBuffer[500];			// Data Chars split from  received stream
 	UCHAR CmdBuffer[500];			// Cmd/Response chars split from received stream

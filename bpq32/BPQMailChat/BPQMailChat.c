@@ -581,11 +581,13 @@
 // Reduce delay before sending close after sending FQ on pactor sessions
 // Fix processing of MIME boundary from GMail
 
+// Send /ex instead of ctrl/z for text mode forwarding
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Test 5"
+#define SPECIALVERSION "Test 6"
 
 #include "GetVersion.h"
 
@@ -5933,6 +5935,8 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 	strcat(Key, user->Call);
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
 
+	Debugprintf(Key);
+
 	if (retCode == ERROR_SUCCESS)
 	{
 		ForwardingInfo->ConnectScript = GetMultiStringValue(hKey,  "Connect Script");
@@ -6021,6 +6025,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 			SetupHAddresesP(ForwardingInfo);
 
 		if (ForwardingInfo->BBSHA)
+		{
 			if (ForwardingInfo->BBSHA[0])
 				SetupHAElements(ForwardingInfo);
 			else
@@ -6028,6 +6033,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 				free(ForwardingInfo->BBSHA);
 				ForwardingInfo->BBSHA = NULL;
 			}
+		}
 	}
 
 	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
@@ -6223,8 +6229,11 @@ VOID ConnectDelayThread(struct DelayParam * DParam)
 	struct UserInfo * User = DParam->User;
 	int Delay = DParam->Delay;
 
+	User->ForwardingInfo->Forwarding = TRUE;		// Minimize window for two connects
+
 	Sleep(Delay);
 
+	User->ForwardingInfo->Forwarding = TRUE;
 	ConnecttoBBS(User);
 	
 	return;

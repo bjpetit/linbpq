@@ -884,7 +884,10 @@ DoMove:
 			
 	ReportMode[0] = TNC->Hardware + '@';
 	ReportMode[1] = Mode;
-	ReportMode[2] = (TNC->RIG->CurrentBandWidth) ? TNC->RIG->CurrentBandWidth : '?';
+	if (TNC->Hardware == H_HAL)
+		ReportMode[2] = TNC->CurrentMode; 
+	else
+		ReportMode[2] = (TNC->RIG->CurrentBandWidth) ? TNC->RIG->CurrentBandWidth : '?';
 	ReportMode[3] = Direction;
 	ReportMode[4] = 0;
 

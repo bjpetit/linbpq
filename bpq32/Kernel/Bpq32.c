@@ -322,7 +322,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 2"
+#define SPECIALVERSION "Test 6"
 
 #include "GetVersion.h"
 
