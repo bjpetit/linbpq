@@ -319,6 +319,7 @@ typedef struct ConnectionInfo_S
 
 	int BBSNumber;						// The BBS number (offset into bitlist of BBSes to forward a message to
 	int NextMessagetoForward;			// Next index to check in forward cycle
+	char LastForwardType;				// Last type of messages forwarded
 	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block
 	char FBBReplyChars[36];				//The +-=!nnnn chars for the 5 proposals
 	int FBBReplyIndex;					// current Reply Pointer
@@ -522,7 +523,8 @@ struct MsgInfo
 #define MSGSTATUS_F 2
 #define MSGSTATUS_K 3
 #define MSGSTATUS_H 4
-#define MSGSTATUS_$ 5
+#define MSGSTATUS_D 5
+#define MSGSTATUS_$ 6
 
 struct NNTPRec
 {
@@ -917,6 +919,7 @@ int QueueMsg(	ConnectionInfo * conn, char * msg, int len);
 VOID SendUnbuffered(int stream, char * msg, int len);
 //int GetFileList(char * Dir);
 VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn);
+void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
 void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);

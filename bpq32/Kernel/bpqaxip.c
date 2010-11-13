@@ -747,7 +747,7 @@ InitAXIP(int Port)
 
 		ConvToAX25("DUMMY-1", ReportDest);
 
-		add_arp_entry(PORT, ReportDest, &ipad, 7 , 10090 , "g8bpq.no-ip.com", 0, 0, FALSE, 0, 10093);
+		add_arp_entry(PORT, ReportDest, &ipad, 7 , 81 , "update.g8bpq.net", 0, 0, FALSE, 0, 10093);
 	}
 
 	PORT->Port = Port;
@@ -1105,6 +1105,18 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			FreeConfig();
 
 			ReadConfigFile("BPQAXIP.CFG", Port);
+
+			if (LOCATOR[0] && AXIPPort == Port)
+			{
+				int ipad = INADDR_NONE;
+		
+				// If reporting, add MAP entry to first AXIP Port
+
+				ConvToAX25("DUMMY-1", ReportDest);
+
+				add_arp_entry(PORT, ReportDest, &ipad, 7 , 81 , "update.g8bpq.net", 0, 0, FALSE, 0, 10093);
+			}
+
 			_beginthread(OpenSockets, 0, PORT );
 			PostMessage(PORT->hResWnd, WM_TIMER,0,0);
 			InvalidateRect(hWnd,NULL,TRUE);
@@ -1217,9 +1229,10 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
 			CONVFROMAX25(PORT->arp_table[index].callsign,outcall);
 								
-			i=wsprintf(line,"%.10s = %.64s = %-.30s %c %c",
+			i=wsprintf(line,"%.10s = %.64s %d = %-.30s %c %c",
 				outcall,
 				PORT->arp_table[index].hostname,
+				PORT->arp_table[index].port,
 				PORT->hostaddr,
 				PORT->arp_table[index].BCFlag ? 'B' : ' ',
 				PORT->arp_table[index].TCPState ? 'C' : ' ');

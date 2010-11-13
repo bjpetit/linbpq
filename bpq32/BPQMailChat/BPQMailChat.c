@@ -582,12 +582,15 @@
 // Fix processing of MIME boundary from GMail
 
 // Send /ex instead of ctrl/z for text mode forwarding
+// Send [WL2K-BPQ... SID if user flagged as RMS Express
+// Fix Chat Map reporting when more than one AXIP port
+// Add Message State D for NTS Messages
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Test 6"
+#define SPECIALVERSION "Test 7"
 
 #include "GetVersion.h"
 
@@ -692,7 +695,7 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[BPQ.%d.%d.%d.%d-%s%s%s%sH$]\r";
+char BBSSID[]="[%s%d.%d.%d.%d-%s%s%s%sH$]\r";
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
@@ -1165,8 +1168,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 				if (PORTVEC->PORTCONTROL.PROTOCOL != 10)	// Pactor/WINMOR
 					KISSOnly = FALSE;
 
-				if (_memicmp(PORTVEC->PORT_DLL_NAME, "BPQAXIP.DLL", 11) == 0)
-					AXIPPort = PORTVEC->PORTCONTROL.PORTNUMBER;
+				if (AXIPPort == 0)
+					if (_memicmp(PORTVEC->PORT_DLL_NAME, "BPQAXIP.DLL", 11) == 0)
+						AXIPPort = PORTVEC->PORTCONTROL.PORTNUMBER;
 			}
 		}
 	}
@@ -2394,7 +2398,7 @@ int Connected(Stream)
 
 					ForwardingInfo->AllowCompressed = TRUE;
 					B2 = ForwardingInfo->AllowB2 = TRUE;
-
+					user->BBSNumber = 80;
 				}
 
 				if (conn->NewUser)
@@ -2411,7 +2415,9 @@ int Connected(Stream)
 				}
 
 				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
-				nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
+
+				nodeprintf(conn, BBSSID, user->flags & F_Temp_B2_BBS ? "WL2K-BPQ." : "BPQ-",
+					Ver[0], Ver[1], Ver[2], Ver[3],
 					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "F": "");
 			}
 
@@ -3723,6 +3729,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (_memicmp(Cmd, "D", 1) == 0)
+	{
+		DoDeliveredCommand(conn, user, Cmd, Arg1, Context);
+		SendPrompt(conn, user);
+		return;
+	}
+
 	if (_memicmp(Cmd, "K", 1) == 0)
 	{
 		DoKillCommand(conn, user, Cmd, Arg1, Context);
@@ -4209,6 +4222,46 @@ VOID FlagAsKilled(struct MsgInfo * Msg)
 			}
 		}
 	}
+}
+
+void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	int msgno=-1;
+	struct MsgInfo * Msg;
+	
+	while (Arg1)
+	{
+		msgno = atoi(Arg1);
+
+		Msg = MsgnotoMsg[msgno];
+
+		if (Msg == NULL)
+		{
+			nodeprintf(conn, "Message %d not found\r", msgno);
+			goto Next;
+		}
+
+		if (Msg->type != 'T')
+		{
+			nodeprintf(conn, "Message %d not an NTS Message\r", msgno);
+			goto Next;
+		}
+
+		if (Msg->status == 'N')
+		{
+			nodeprintf(conn, "Message %d has not been read\r", msgno);
+			goto Next;
+		}
+
+		Msg->status = 'D';
+		Msg->datechanged=time(NULL);
+
+		nodeprintf(conn, "Message #%d Flagged as Delivered\r", msgno);
+	Next:
+		Arg1 = strtok_s(NULL, " \r", &Context);
+	}
+
+	return;
 }
 
 
@@ -4859,7 +4912,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		nodeprintf(conn, "\r\r[End of Message #%d from %s]\r", msgno, Msg->from);
 
-		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
+		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)) || Msg->type == 'T')
 		{
 			if ((Msg->status != 'K') && (Msg->status != 'H'))
 			{
@@ -6586,7 +6639,8 @@ CheckForSID:
 
 		// Only delare B1 and B2 if other end did, and we are configued for it
 
-		nodeprintf(conn, BBSSID, Ver[0], Ver[1], Ver[2], Ver[3],
+		nodeprintf(conn, BBSSID, "BPQ-",
+			Ver[0], Ver[1], Ver[2], Ver[3],
 			(conn->BBSFlags & FBBCompressed) ? "B" : "", 
 			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
@@ -6818,9 +6872,60 @@ char * DateAndTimeForHLine(time_t Datim)
 	
 	return Date;
 }
-
+BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type);
 
 BOOL FindMessagestoForward (CIRCUIT * conn)
+{
+	struct UserInfo * user = conn->UserPointer;
+
+	if ((user->flags & F_Temp_B2_BBS) || conn->RMSExpress)
+	{
+		if (conn->PacLinkCalls == NULL)
+		{
+			// create a list with just the user call
+
+			char * ptr1;
+
+			conn->PacLinkCalls = zalloc(30);
+
+			ptr1 = (char *)conn->PacLinkCalls;
+			ptr1 += 10;
+			strcpy(ptr1, user->Call);
+
+			conn->PacLinkCalls[0] = ptr1;
+		}
+	}
+
+	if (FindMessagestoForwardLoop(conn, 'T'))
+	{
+		conn->LastForwardType = 'T';
+		return TRUE;
+	}
+
+	if (conn->LastForwardType == 'T')
+		conn->NextMessagetoForward = FirstMessageIndextoForward;
+
+	if (FindMessagestoForwardLoop(conn, 'P'))
+	{
+		conn->LastForwardType = 'P';
+		return TRUE;
+	}
+
+	if (conn->LastForwardType == 'P')
+		conn->NextMessagetoForward = FirstMessageIndextoForward;
+
+	if (FindMessagestoForwardLoop(conn, 'B'))
+	{
+		conn->LastForwardType = 'B';
+		return TRUE;
+	}
+
+	conn->LastForwardType = 0;
+	return FALSE;
+}
+
+
+BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type)
 {
 	// See if any messages are queued for this BBS
 
@@ -6834,32 +6939,11 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 
 	conn->FBBIndex = 0;
 
-//	if (user->ForwardingInfo->MsgCount == 0)
-//		return FALSE;
-
 	for (m = conn->NextMessagetoForward; m <= NumberofMessages; m++)
 	{
 		Msg=MsgHddrPtr[m];
 
 		// If forwarding to Paclink or RMS Express, look for any message matching the requested call list with statis 'N'
-
-		if ((user->flags & F_Temp_B2_BBS) || conn->RMSExpress)
-		{
-			if (conn->PacLinkCalls == NULL)
-			{
-				// create a list with just the user call
-
-				char * ptr1;
-
-				conn->PacLinkCalls = zalloc(30);
-
-				ptr1 = (char *)conn->PacLinkCalls;
-				ptr1 += 10;
-				strcpy(ptr1, user->Call);
-
-				conn->PacLinkCalls[0] = ptr1;
-			}
-		}
 
 		if (conn->PacLinkCalls)
 		{
@@ -6870,15 +6954,15 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 			while (Call)
 			{
 				if (_stricmp(Msg->to, Call) == 0)
-					if (Msg->status == 'N') 
+					if (Msg->status == 'N' && Msg->type == Type) 
 					goto Forwardit;
 				
 				Call = conn->PacLinkCalls[index++];
 			}
-			continue;
+//			continue;
 		}
 
-		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
+		if (Msg->type == Type && (Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
 		{
 			// Message to be sent - do a consistancy check (State, etc)
 
@@ -6975,7 +7059,7 @@ int CountMessagestoForward (int BBSNumber)
 	{
 		Msg=MsgHddrPtr[m];
 
-		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+		if ((Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
 			n++;
 	}
 

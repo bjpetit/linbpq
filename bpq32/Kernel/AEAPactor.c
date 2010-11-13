@@ -773,9 +773,9 @@ VOID AEAPoll(int Port)
 
 			TNC->CmdSet = TNC->CmdSave = malloc(100);
 
-			wsprintf(TNC->CmdSet, "OMf%s\rOPt\rOCECONV\r", TNC->NodeCall);  // Queue Back to Pactor Standby
+			wsprintf(TNC->CmdSet, "OMf%s\rOPt\rOCETRANS\r", TNC->NodeCall);  // Queue Back to Pactor Standby
 			TNC->InternalCmd = 'T';
-			TNC->TEXTMODE = TRUE;
+			TNC->TEXTMODE = FALSE;
 			TNC->IntCmdDelay--;
 
 			// Restart Scanning

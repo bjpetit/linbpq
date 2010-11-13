@@ -1101,8 +1101,8 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 	if (IsDlgButtonChecked(hDlg, RMS_EXPRESS_USER))
 		user->flags |= F_Temp_B2_BBS; else user->flags &= ~F_Temp_B2_BBS;
 
-	if (user->flags & F_BBS)
-		user->flags &= ~F_Temp_B2_BBS;		// Can't be both
+//	if (user->flags & F_BBS)
+//		user->flags &= ~F_Temp_B2_BBS;		// Can't be both
 
 
 	user->RMSSSIDBits = 0;
@@ -1203,6 +1203,7 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 			case 'F': Sel = MSGSTATUS_F; break;
 			case 'K': Sel = MSGSTATUS_K; break;
 			case 'H': Sel = MSGSTATUS_H; break;
+			case 'D': Sel = MSGSTATUS_D; break;
 			case '$': Sel = MSGSTATUS_$; break;
 			}
 
@@ -2394,6 +2395,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "F");
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "K");
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "H");
+		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "D");
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "$");
 
 		for (n = 1; n <= NBBBS; n++ )

@@ -303,6 +303,9 @@
 
 // Add In/Out flag to Map reporting, and report centre, not dial
 // Write Telnet log to BPQ Directory
+// Add Port to AXIP resolver display
+// Send Reports to update.g8bpq.net:81
+
 
 // Add NOKEEPALIVES Port Param
 
@@ -322,7 +325,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 6"
+#define SPECIALVERSION "Test 9"
 
 #include "GetVersion.h"
 

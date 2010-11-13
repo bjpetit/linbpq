@@ -255,7 +255,7 @@ BOOL NEAR SetupConnection(int);
 BOOL CloseConnection(struct TNCINFO * conn);
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
 BOOL NEAR DestroyTTYInfo(int port);
-void CheckRX(struct TNCINFO * TNC);
+void CheckRXKAM(struct TNCINFO * TNC);
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 VOID KAMPoll(int Port);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
@@ -276,7 +276,7 @@ VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+int KAMExtProc(int fn, int port,unsigned char * buff)
 {
 	int txlen = 0;
 	UINT * buffptr;
@@ -305,7 +305,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		CheckRX(TNC);
+		CheckRXKAM(TNC);
 		KAMPoll(port);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -459,7 +459,7 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 		wsprintf(msg," ** Error - no info in KAMPACTOR.cfg for this port");
 		WritetoConsole(msg);
 
-		return (int)ExtProc;
+		return (int)KAMExtProc;
 	}
 	TNC->Port = port;
 
@@ -561,12 +561,12 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
 
-	return ((int)ExtProc);
+	return ((int)KAMExtProc);
 }
 
 
 
-static void CheckRX(struct TNCINFO * TNC)
+void CheckRXKAM(struct TNCINFO * TNC)
 {
 	BOOL       fReadStat;
 	COMSTAT    ComStat;

@@ -180,11 +180,20 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			BBSputs(conn, "\r\n");
 
 		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);
+
+		Debugprintf("Last bytes of message %d %d %d",
+			MsgPtr[conn->FwdMsg->length - 2],
+			MsgPtr[conn->FwdMsg->length - 1],
+			MsgPtr[conn->FwdMsg->length]);
+
+//		if (MsgPtr[conn->FwdMsg->length - 2] == '\r')
+//			nodeprintf(conn, "/ex\r");
+//		else
+
+		nodeprintf(conn, "\r\n/ex\r");
+
 		free(MsgBytes);
 			
-//		nodeprintf(conn, "%c\r", 26);
-		nodeprintf(conn, "/ex\r");
-
 		conn->FBBMsgsSent = TRUE;
 
 		return;

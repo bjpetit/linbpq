@@ -520,25 +520,27 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 		{
 			if (conn->Paclink || conn->RMSExpress)
 			{
-				// Kill Messages sent to paclink
+				// Kill Messages sent to paclink/RMS Express unless BBS FWD bit set
 
-				FlagAsKilled(FBBHeader->FwdMsg);
-			}
-			else
-			{
-				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
-				set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
-
-				//  Only mark as forwarded if sent to all BBSs that should have it
-			
-				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+				if (check_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber) == 0)
 				{
-					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
-					FBBHeader->FwdMsg->datechanged=time(NULL);
+					FlagAsKilled(FBBHeader->FwdMsg);
+					continue;
 				}
-
-				conn->UserPointer->ForwardingInfo->MsgCount--;
 			}
+
+			clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+			set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
+
+			//  Only mark as forwarded if sent to all BBSs that should have it
+			
+			if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+			{
+				FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
+				FBBHeader->FwdMsg->datechanged=time(NULL);
+			}
+
+			conn->UserPointer->ForwardingInfo->MsgCount--;
 		}
 	}
 	memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));

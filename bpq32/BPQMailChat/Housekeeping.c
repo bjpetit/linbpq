@@ -268,6 +268,7 @@ VOID ExpireMessages()
 				continue;	
 
 			case 'Y':
+			case 'D':
 
 				if (Msg->datechanged < PRLimit) KillMsg(Msg);
 

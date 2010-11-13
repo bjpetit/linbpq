@@ -517,7 +517,6 @@ DllExport BOOL ProcessConfig()
 	portnum = 1;
 	NextAppl = 0;
 	LOCATOR[0] = 0;
-	AXIPPort = 0;
 
 	for (i = 0; i < 34; i++)
 	{
