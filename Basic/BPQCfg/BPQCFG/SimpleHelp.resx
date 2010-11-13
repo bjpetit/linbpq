@@ -122,7 +122,7 @@
  Pactor, KISS or AGWPE ports. It is not intended for more advanced setups, such as 
 those using ax/ip or NETROM
 
-The program can either create a new bpqcfg.bin file, or update an existing one.
+The program can either create a new bpqcfg.txt file, or update an existing one.
 It will create a WINMORtoBPQ.cfg and a RigControl.cfg if needed. It does not create
 Pactor configuration files, as the contents of these depends on controller models and
 user preferences.

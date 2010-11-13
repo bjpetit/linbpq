@@ -93,6 +93,18 @@
     <Compile Include="AddNode.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="WebWindow.Designer.vb">
+      <DependentUpon>WebWindow.vb</DependentUpon>
+    </Compile>
+    <Compile Include="WebWindow.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UpdateNodeDialog.Designer.vb">
+      <DependentUpon>UpdateNodeDialog.vb</DependentUpon>
+    </Compile>
+    <Compile Include="UpdateNodeDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Form1.vb">
       <SubType>Form</SubType>
     </Compile>
@@ -136,6 +148,14 @@
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>
       <CustomToolNamespace>My.Resources</CustomToolNamespace>
       <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UpdateNodeDialog.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>UpdateNodeDialog.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="WebWindow.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>WebWindow.vb</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

@@ -4,10 +4,11 @@ Imports System.Text
 Imports System
 Imports System.IO
 
+
+
 Public Structure NodeData
    Public Callsign As String
-   Public Lat As String
-   Public Lon As String
+   Public CallIndex As Integer
    Public downIcon As String
    Public upIcon As String
    Public PopupMode As Integer
@@ -15,7 +16,6 @@ Public Structure NodeData
    Public Count As Integer
    Public Deleted As Boolean
    Public KillTimer As Integer
-   Public Locator As String
    Public Version As String
    Public HeardNodes() As HeardData
 
@@ -23,9 +23,7 @@ End Structure
 
 Public Structure HeardData
    Public Callsign As String
-   Public Lat As String
-   Public Lon As String
-   Public Locator As String
+   Public CallIndex As Integer
    Public HeardItems() As HeardItem
 
 End Structure
@@ -92,15 +90,7 @@ End Module
 
 Public Class Form1
 
-   ' ocation Source Equates
-
-   Const APRSSSID As Integer = 1    ' APRS for another SSID
-   Const APRS As Integer = 2        ' APRS
-
-   Const LOCSSID As Integer = 4     ' Locator for another SSID
-   Const LOC As Integer = 5         ' Locator
-
-   Const USER As Integer = 10       ' User Input
+   ' Location Source Equates
 
    Public Buff(1000) As Byte
    Private thrServer As Thread
@@ -357,7 +347,6 @@ Public Class Form1
 
                            If Elements.Length < 4 Then Continue While
 
-
                            Index = FindNodeCall(CallFrom)
 
                            HeardCall = Elements(0)
@@ -365,7 +354,7 @@ Public Class Form1
                            LOC = Elements(2)
                            Flags = Elements(3)
 
-                           UpdateHeardData(Index, HeardCall, Freq, LOC, Flags)
+                           UpdateHeardData(Index, HeardCall, Freq, LOC, Flags, Now.ToUniversalTime, True)
 
                            Continue While
 
@@ -799,23 +788,28 @@ Public Class Form1
 
       Nodes(Index).KillTimer = 0
 
-      If Nodes(Index).Locator <> Locator Then
+      With CallsignData(Nodes(Index).CallIndex)
 
-         Nodes(Index).Locator = Locator
+         If .Locator <> Locator Then
 
-         ' Randomize - Square is one 5 minutes longitude * 2,5 minutes latitude
+            .Locator = Locator
 
-         FromLOC(Locator, Lat, Lon)
+            ' Randomize - Square is one 5 minutes longitude * 2,5 minutes latitude
 
-         Lat = Lat + Rnd() / 24
-         Lon = Lon + Rnd() / 12
+            FromLOC(Locator, Lat, Lon)
 
-         Nodes(Index).Lat = Lat.ToString
-         Nodes(Index).Lon = Lon.ToString
+            Lat = Lat + Rnd() / 24
+            Lon = Lon + Rnd() / 12
 
-         NodeChanged = True
+            .Lat = Lat.ToString
+            .Lon = Lon.ToString
 
-      End If
+            NodeChanged = True
+
+         End If
+
+      End With
+
 
       If Nodes(Index).Version <> Version Then
 
@@ -852,33 +846,24 @@ Public Class Form1
 
             If Trim(Elements(0)) = "NODE" Then
 
-               ReDim Preserve Nodes(NodeIndex + 1)
-               Dim HeardNodes() As HeardData = New HeardData() {}
+               Dim Callsign As String = Trim(Elements(1))
+               Dim Index As Integer = FindNodeCall(Callsign)
 
-               With Nodes(NodeIndex)
+               With Nodes(Index)
 
-                  .Callsign = Trim(Elements(1))
                   .Version = Trim(Elements(2))
                   .PopupMode = CInt(Elements(3))
 
                   .upIcon = "greenmarker.png"
                   .downIcon = "redmarker.png"
-                  .Comment = Nodes(NodeIndex).Callsign & " " & .Locator & "  " & .Version
+
+                  .CallIndex = FindCallsign(Elements(1))
+                  .Comment = Nodes(Index).Callsign & " " & CallsignData(.CallIndex).Locator & "  " & .Version
 
                   .KillTimer = 23
                   .Count = 20
 
-                  .HeardNodes = HeardNodes
-
-                  Dim CallIndex As Integer = FindCallsign(Elements(1))
-
-                  .Lat = CallsignData(CallIndex).Lat
-                  .Lon = CallsignData(CallIndex).Lon
-                  .Locator = CallsignData(CallIndex).Locator
-
                End With
-
-               NodeIndex = NodeIndex + 1
 
                Continue For
 
@@ -886,47 +871,32 @@ Public Class Form1
 
             If Trim(Elements(0)) = "CALL" Then
 
-               Dim Count As Integer = CallsignData.Length
-               Dim Lat As Double, Lon As Double
-               ReDim Preserve CallsignData(Count)
+               Dim t As Integer = CallsignData.Length
+               Dim Callsign As String = Trim(Elements(1))
+  
+               Dim Index As Integer = FindCallsign(Elements(1))
 
-               With CallsignData(Count)
+               With CallsignData(Index)
 
-                  .Callsign = Trim(Elements(1))
                   .Locator = Trim(Elements(2))
                   .Lat = Trim(Elements(3))
                   .Lon = Trim(Elements(4))
                   .LocType = CInt(Trim(Elements(5)))
 
-                  If .LocType < LOC And .Locator <> "" Then
+                  '                If .LocType < APRSSSID And .Locator = "" Then
 
-                     ' If we have a locator, but position is less good, update it
+                  ' If we have a locator, but position is less good, update it
 
-                     FromLOC(.Locator, Lat, Lon)
+                  '               Dim LookupResult As Integer
 
-                     Lat = Lat + Rnd() / 24
-                     Lon = Lon + Rnd() / 12
+                  '              LookupResult = LookupCall(.Callsign, Lat, Lon)
+                  '             .Lat = Lat.ToString
+                  '            .Lon = Lon.ToString
+                  '           If Lon <> 0 Then .LocType = LookupResult
 
-                     .Lat = Lat.ToString
-                     .Lon = Lon.ToString
-                     .LocType = LOC
+                  '          End If
 
-                  End If
-
-                  If .LocType < APRSSSID And .Locator = "" Then
-
-                     ' If we have a locator, but position is less good, update it
-
-                     Dim LookupResult As Integer
-
-                     LookupResult = LookupCall(.Callsign, Lat, Lon)
-                     .Lat = Lat.ToString
-                     .Lon = Lon.ToString
-                     If Lon <> 0 Then .LocType = LookupResult
-
-                  End If
-
-                  If .Lat = "0" Then .Lat = Rnd().ToString
+                  '         If .Lat = "0" Then .Lat = Rnd().ToString
 
                End With
 
@@ -934,43 +904,26 @@ Public Class Form1
 
             End If
 
-
             If Trim(Elements(0)) = "MH" Then
 
-               Dim HeardIndex As Integer
                Dim Index As Integer = FindNodeCall(Elements(1))
+               Dim Time As DateTime
+               Dim Flags As String
+               Dim Freq As String
 
                With Nodes(Index)
 
-                  HeardIndex = .HeardNodes.Length
+                  Dim Count As Integer = CInt(Elements(3)) - 1
+                  Dim j As Integer
 
-                  ReDim Preserve .HeardNodes(HeardIndex)
+                  For j = 0 To Count
 
-                  With .HeardNodes(HeardIndex)
+                     Time = DateTime.FromOADate(CDbl(Elements(5 + (j * 3))))
+                     Flags = Elements(6 + j * 3)
+                     Freq = Elements(4 + j * 3)
+                     UpdateHeardData(Index, Elements(2), Freq, "", Flags, Time, False)
 
-                     .Callsign = Elements(2)
-
-                     Dim CallIndex As Integer = FindCallsign(Elements(2))
-
-                     .Locator = CallsignData(CallIndex).Locator
-                     .Lat = CallsignData(CallIndex).Lat
-                     .Lon = CallsignData(CallIndex).Lon
-
-                     Dim Count As Integer = CInt(Elements(3)) - 1
-                     Dim j As Integer
-                     ReDim Preserve .HeardItems(Count)
-
-                     For j = 0 To Count
-
-                        With .HeardItems(j)
-                           .Time = DateTime.FromOADate(CDbl(Elements(5 + (j * 3))))
-                           .Flags = Elements(6 + j * 3)
-                           .Freq = Elements(4 + j * 3)
-                        End With
-
-                     Next
-
-                  End With
+                  Next
 
                End With
 
@@ -1129,13 +1082,11 @@ Public Class Form1
       With Nodes(NodeIndex)
 
          .Callsign = Call1
-         .Lat = "0"
-         .Lon = "0"
+         .CallIndex = FindCallsign(Call1)
          .upIcon = "greenmarker.png"
          .downIcon = "redmarker.png"
          .Comment = Call1
          .PopupMode = 0
-         .Locator = ""
          .Version = ""
 
          .HeardNodes = HeardNodes
@@ -1376,7 +1327,10 @@ Public Class Form1
 
       NodeActive.Text = j.ToString
 
-      If NodeChanged = False Then Return
+      If NodeChanged = False Then
+         SaveNodesFile()
+         Return
+      End If
 
       NodeLastUpdated.Text = Now.ToUniversalTime.ToString
 
@@ -1391,11 +1345,10 @@ Public Class Form1
                If Nodes(i).KillTimer < 24 Then ' Not heard of for a while - don't display
 
                   If Nodes(i).Count = 0 Then
-                     sw.Write(Nodes(i).Callsign & "," & Nodes(i).Lon & "," & Nodes(i).Lat & "," & Nodes(i).downIcon & "," & Nodes(i).PopupMode & "," & Nodes(i).Comment & "," & vbCrLf & "|")
+                     sw.Write(.Callsign & "," & CallsignData(.CallIndex).Lon & "," & CallsignData(.CallIndex).Lat & "," & .downIcon & "," & .PopupMode & "," & .Comment & "," & vbCrLf & "|")
                   Else
-                     sw.Write(.Callsign & "," & .Lon & "," & .Lat & "," & .upIcon & "," & .PopupMode & "," & .Comment & "," & vbCrLf & "|")
+                     sw.Write(.Callsign & "," & CallsignData(.CallIndex).Lon & "," & CallsignData(.CallIndex).Lat & "," & .upIcon & "," & .PopupMode & "," & .Comment & "," & vbCrLf & "|")
                   End If
-
 
                   Dim HeardCount As Integer = .HeardNodes.Length
                   Dim HeardIndex As Integer
@@ -1423,13 +1376,17 @@ Public Class Form1
                            End With
                         Next
                         If HTML <> "" Then
-                           sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & "," & Protocol.ToString & ",")
+                           With CallsignData(.CallIndex)
+                              sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & "," & Protocol.ToString & ",")
+                           End With
+
                            sw.Write(HTML & vbCrLf & "|")
+
                         End If
                         ' End If
                      End With
                   Next
-             End If
+               End If
             End With
          Next
 
@@ -1465,7 +1422,7 @@ Public Class Form1
 
    End Sub
 
-   Sub UpdateHeardData(ByVal Index As Integer, ByVal HeardCall As String, ByVal Freq As String, ByVal Locator As String, ByVal Flags As String)
+   Sub UpdateHeardData(ByVal Index As Integer, ByVal HeardCall As String, ByVal Freq As String, ByVal Locator As String, ByVal Flags As String, ByVal Time As DateTime, ByVal TryAPRS As Boolean)
 
       Dim Lat As Double, Lon As Double
       Dim HeardIndex As Integer, ItemIndex As Integer
@@ -1479,7 +1436,7 @@ Public Class Form1
 
       With CallsignData(CallIndex)
 
-         If .LocType < LOC And Locator <> "" Then
+         If .LocType <= LOC And Locator <> "" And Locator <> .Locator Then
 
             ' If we have a locator, but position is less good, update it
 
@@ -1492,20 +1449,25 @@ Public Class Form1
 
          End If
 
-         If .LocType < APRS And Locator = "" Then
+         If TryAPRS Then
 
-            ' If we have a locator, but position is less good, update it
+            If .LocType < APRSSSID And Locator = "" Then
 
-            Dim LookupResult As Integer
+               ' If we don't have a locator, try to get posn from APRS
 
-            LookupResult = LookupCall(HeardCall, Lat, Lon)
-            .Lat = Lat.ToString
-            .Lon = Lon.ToString
-            If Lon <> 0 Then .LocType = lookupresult
+               Dim LookupResult As Integer
 
+               LookupResult = LookupCall(HeardCall, Lat, Lon)
+               .Lat = Lat.ToString
+               .Lon = Lon.ToString
+               If Lon <> 0 Then .LocType = LookupResult
+
+            End If
          End If
 
       End With
+
+      HeardIndex = FindHeardCallEntry(Index, HeardCall, CallIndex)
 
       With Nodes(Index)
 
@@ -1513,44 +1475,81 @@ Public Class Form1
 
          ' If present, update it (Match Call, Freq abd Mode)
 
+         With .HeardNodes(HeardIndex)
+
+            If .Callsign = HeardCall Then
+
+               If .HeardItems IsNot Nothing Then
+
+                  FreqModeCount = .HeardItems.Length
+
+
+
+                  For ItemIndex = 0 To FreqModeCount - 1
+
+
+                     If .HeardItems(ItemIndex).Freq = Freq And .HeardItems(ItemIndex).Flags = Flags Then
+
+                        ' Move this to end, and move others back
+
+                        Dim i As Integer
+
+                        For i = ItemIndex To FreqModeCount - 2
+
+                           .HeardItems(i) = .HeardItems(i + 1)
+
+                        Next
+
+                        With .HeardItems(FreqModeCount - 1)
+
+                           .Time = Time
+                           .Freq = Freq
+                           .Flags = Flags
+
+                        End With
+
+                        Return
+
+                     End If
+
+                  Next
+
+               End If
+               ' Item Not Present
+
+               ReDim Preserve .HeardItems(FreqModeCount)
+
+               With .HeardItems(FreqModeCount)
+
+                  .Freq = Freq
+                  .Flags = Flags
+                  .Time = Time
+
+                  Return
+
+               End With
+
+            End If
+
+         End With
+
+      End With
+
+   End Sub
+
+   Function FindHeardCallEntry(ByVal Index As Integer, ByVal HeardCall As String, ByVal Callindex As Integer) As Integer
+
+      Dim Count As Integer, HeardIndex As Integer
+
+      With Nodes(Index)
+
+         Count = .HeardNodes.Length
+
          For HeardIndex = 0 To Count - 1
 
             With .HeardNodes(HeardIndex)
 
-               If .Callsign = HeardCall Then
-
-                  FreqModeCount = .HeardItems.Length
-
-                  For ItemIndex = 0 To FreqModeCount - 1
-
-                     With .HeardItems(ItemIndex)
-
-                        If .Freq = Freq And .Flags = Flags Then
-
-                           .Time = Now.ToUniversalTime
-                           Return
-
-                        End If
-
-                     End With
-
-                  Next
-
-                  ' Item Not Present
-
-                  ReDim Preserve .HeardItems(FreqModeCount)
-
-                  With .HeardItems(FreqModeCount)
-
-                     .Freq = Freq
-                     .Flags = Flags
-                     .Time = Now.ToUniversalTime
-
-                     Return
-
-                  End With
-
-               End If
+               If .Callsign = HeardCall Then Return HeardIndex
 
             End With
 
@@ -1565,25 +1564,17 @@ Public Class Form1
          With .HeardNodes(HeardIndex)
 
             .Callsign = HeardCall
-
-            .Lat = CallsignData(CallIndex).Lat.ToString
-            .Lon = CallsignData(CallIndex).Lon.ToString
-
-            ReDim Preserve .HeardItems(0)
-
-            With .HeardItems(0)
-
-               .Freq = Freq
-               .Flags = Flags
-               .Time = Now.ToUniversalTime
-
-            End With
+            .CallIndex = Callindex
 
          End With
 
+         Return HeardIndex
+
       End With
 
-   End Sub
+   End Function
+
+
 
    Function LookupCall(ByVal Callsign As String, ByRef Lat As Double, ByRef Lon As Double) As Integer
 
@@ -1678,17 +1669,17 @@ Public Class Form1
 
    Function FindCallsign(ByVal Callsign As String) As Integer
 
-      Dim Count As Integer = CallSignData.Length
+      Dim Count As Integer = CallsignData.Length
 
       Dim i As Integer
 
       For i = 0 To Count - 1
 
-         If CallSignData(i).Callsign = CallSign Then Return i
+         If CallsignData(i).Callsign = Callsign Then Return i
 
       Next
 
-      ReDim Preserve CallSignData(Count)
+      ReDim Preserve CallsignData(Count)
 
       With CallsignData(Count)
 
@@ -1705,4 +1696,9 @@ Public Class Form1
    End Function
 
 
+   Private Sub EditBPQ32NodesListToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles EditBPQ32NodesListToolStripMenuItem.Click
+      UpdateNodeDialog.Visible = True
+      UpdateNodeDialog.Activate()
+
+   End Sub
 End Class

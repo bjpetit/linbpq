@@ -14,33 +14,33 @@ Public Class SimpleForm
 
    Dim menuItem7 As New MenuItem()
 
-   Public WINMORPort(16) As NumTextBox
-   Public WINMORPTT(16) As ComboBox
-   Public PTTCOMM(16) As ComboBox
+   Public WINMORPort(32) As NumTextBox
+   Public WINMORPTT(32) As ComboBox
+   Public PTTCOMM(32) As ComboBox
 
-   Public DriveLevel(16) As BPQCFG.NumTextBox
-   Public BW(16) As ComboBox
-   Public DebugLog(16) As CheckBox
-   Public CWID(16) As CheckBox
-   Public BusyLock(16) As CheckBox
-   Public MyLabel1(16) As Label
-   Public MyLabel2(16) As Label
-   Public MyLabel3(16) As Label
-   Public MyLabel4(16) As Label
-   Public IDBox(16) As TextBox
-   Public IDLabel(16) As Label
+   Public DriveLevel(32) As BPQCFG.NumTextBox
+   Public BW(32) As ComboBox
+   Public DebugLog(32) As CheckBox
+   Public CWID(32) As CheckBox
+   Public BusyLock(32) As CheckBox
+   Public MyLabel1(32) As Label
+   Public MyLabel2(32) As Label
+   Public MyLabel3(32) As Label
+   Public MyLabel4(32) As Label
+   Public IDBox(32) As TextBox
+   Public IDLabel(32) As Label
 
-   Public BAUD(16) As NonNullCombobox
-   Public COMM(16) As NonNullCombobox
+   Public BAUD(32) As NonNullCombobox
+   Public COMM(32) As NonNullCombobox
 
-   Public AGWLabel(16) As Label
-   Public ChanLabel(16) As Label
-   Public ChannelBox(16) As ComboBox
-   Public AGWPortBox(16) As BPQCFG.DTNumTextBox
+   Public AGWLabel(32) As Label
+   Public ChanLabel(32) As Label
+   Public ChannelBox(32) As ComboBox
+   Public AGWPortBox(32) As BPQCFG.DTNumTextBox
 
-   Public SaveProc(16) As SavePortValue
+   Public SaveProc(32) As SavePortValue
 
-   Public PORTTABS(16) As System.Windows.Forms.TabPage
+   Public PORTTABS(32) As System.Windows.Forms.TabPage
 
    Dim NumberofWinmorPorts As Integer = 0
    Dim NumberofAGWPorts As Integer = 0
@@ -145,9 +145,10 @@ Public Class SimpleForm
       End While
 
 
-      CfgFile = BPQDirectory & "\bpqcfg.bin"
+      CfgFile = BPQDirectory & "\bpqcfg.txt"
 
-      Form1.ReadConfig()
+      ReDim Config(2560)
+      Form1.ReadTextConfig()
 
       If InStr(CfgFile, ".") > 0 Then CfgFile = Microsoft.VisualBasic.Left(CfgFile, InStr(CfgFile, ".") - 1)
 
@@ -858,7 +859,7 @@ Public Class SimpleForm
    Private Sub CreateFiles_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles CreateFiles.Click
 
 
-      If MsgBox("This will update your bpqcfg.bin and your BPQtoWINMOR.cfg and RigControl.cfg (if you have WINMOR port(s) defined)" & vbCrLf & _
+      If MsgBox("This will update your bpqcfg.txt and your BPQtoWINMOR.cfg and RigControl.cfg (if you have WINMOR port(s) defined)" & vbCrLf & _
       "Two generations of backup are created, with extensions of .save and .old" & vbCrLf & _
       "Do you want to continue ?", _
        MsgBoxStyle.YesNo + MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config") = MsgBoxResult.No Then Return
@@ -1183,7 +1184,7 @@ Public Class SimpleForm
 
       Dim FileName As String
 
-      FileName = BPQDirectory & "\bpqcfg.bin"
+      FileName = BPQDirectory & "\bpqcfg.txt"
 
       Try
          File.Copy(FileName & ".save", FileName & ".old", True)
@@ -1196,8 +1197,9 @@ Public Class SimpleForm
 
       Form1.CopyConfigtoArray()
 
-      File.WriteAllBytes(FileName, NewConfigBytes)
+      CfgFile = BPQDirectory & "\bpqcfg"
 
+      Form1.SaveasTextwithComments()
       Form1.UpdateAppls()
 
       ReDim Config(NewConfigBytes.Length - 1)

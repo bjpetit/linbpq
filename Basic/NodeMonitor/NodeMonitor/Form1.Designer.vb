@@ -41,6 +41,7 @@ Partial Class Form1
       Me.NodeLastUpdated = New System.Windows.Forms.TextBox
       Me.Label6 = New System.Windows.Forms.Label
       Me.Button1 = New System.Windows.Forms.Button
+      Me.EditBPQ32NodesListToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
       Me.MenuStrip1.SuspendLayout()
       Me.SuspendLayout()
       '
@@ -63,28 +64,28 @@ Partial Class Form1
       Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ConfigToolStripMenuItem})
       Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
       Me.MenuStrip1.Name = "MenuStrip1"
-      Me.MenuStrip1.Size = New System.Drawing.Size(292, 24)
+      Me.MenuStrip1.Size = New System.Drawing.Size(292, 27)
       Me.MenuStrip1.TabIndex = 1
       Me.MenuStrip1.Text = "MenuStrip1"
       '
       'ConfigToolStripMenuItem
       '
-      Me.ConfigToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ConfigMonitorToolStripMenuItem, Me.EditNodesListToolStripMenuItem})
+      Me.ConfigToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ConfigMonitorToolStripMenuItem, Me.EditNodesListToolStripMenuItem, Me.EditBPQ32NodesListToolStripMenuItem})
       Me.ConfigToolStripMenuItem.Name = "ConfigToolStripMenuItem"
-      Me.ConfigToolStripMenuItem.Size = New System.Drawing.Size(50, 20)
+      Me.ConfigToolStripMenuItem.Size = New System.Drawing.Size(67, 23)
       Me.ConfigToolStripMenuItem.Text = "Config"
       '
       'ConfigMonitorToolStripMenuItem
       '
       Me.ConfigMonitorToolStripMenuItem.Name = "ConfigMonitorToolStripMenuItem"
-      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(155, 22)
+      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(252, 24)
       Me.ConfigMonitorToolStripMenuItem.Text = "Config Monitor"
       '
       'EditNodesListToolStripMenuItem
       '
       Me.EditNodesListToolStripMenuItem.Name = "EditNodesListToolStripMenuItem"
-      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(155, 22)
-      Me.EditNodesListToolStripMenuItem.Text = "Edit Nodes List"
+      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(252, 24)
+      Me.EditNodesListToolStripMenuItem.Text = "Edit Chat Nodes List"
       '
       'Label1
       '
@@ -199,6 +200,12 @@ Partial Class Form1
       Me.Button1.Text = "Button1"
       Me.Button1.UseVisualStyleBackColor = True
       '
+      'EditBPQ32NodesListToolStripMenuItem
+      '
+      Me.EditBPQ32NodesListToolStripMenuItem.Name = "EditBPQ32NodesListToolStripMenuItem"
+      Me.EditBPQ32NodesListToolStripMenuItem.Size = New System.Drawing.Size(252, 24)
+      Me.EditBPQ32NodesListToolStripMenuItem.Text = "Edit BPQ32 Nodes List"
+      '
       'Form1
       '
       Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
@@ -249,5 +256,6 @@ Partial Class Form1
    Friend WithEvents NodeLastUpdated As System.Windows.Forms.TextBox
    Friend WithEvents Label6 As System.Windows.Forms.Label
    Friend WithEvents Button1 As System.Windows.Forms.Button
+   Friend WithEvents EditBPQ32NodesListToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
 
 End Class

@@ -2,6 +2,15 @@ Imports System.IO
 
 Module NodeMonitor
 
+   Public Const APRSSSID As Integer = 1    ' APRS for another SSID
+   Public Const APRS As Integer = 2        ' APRS
+
+   Const LOCSSID As Integer = 4     ' Locator for another SSID
+   Public Const LOC As Integer = 5         ' Locator
+
+   Public Const USER As Integer = 10       ' User Input
+
+
    Public Function DecodeLat(ByVal LString As String) As Double
 
       Dim North As Boolean = False
@@ -126,57 +135,58 @@ Module NodeMonitor
             FileIO.RecycleOption.SendToRecycleBin, FileIO.UICancelOption.DoNothing)
 
       Using sw As StreamWriter = New StreamWriter(My.Settings.FileName)
+         With ChatNodes(i)
+            For i = 0 To ChatNodeIndex - 1
 
-         For i = 0 To ChatNodeIndex - 1
+               sw.WriteLine(ChatNodes(i).Callsign & "," & .NAlias & "," & _
+                     .Lat & "," & .Lon & "," & .downIcon & "," & _
+                     .upIcon & "," & .PopupMode & "," & .Comment)
 
-            sw.WriteLine(ChatNodes(i).Callsign & "," & Nodes(i).Locator & "," & _
-                  Nodes(i).Lat & "," & Nodes(i).Lon & "," & Nodes(i).downIcon & "," & _
-                  Nodes(i).upIcon & "," & ChatNodes(i).PopupMode & "," & ChatNodes(i).Comment)
+            Next
+            end with
 
-         Next
+            For i = 0 To CallsignData.Length - 1
 
-         For i = 0 To CallsignData.Length - 1
+               With CallsignData(i)
 
-            With CallsignData(i)
+                  sw.WriteLine("CALL," & .Callsign & "," & .Locator & "," & .Lat & "," & .Lon & "," & .LocType)
 
-               sw.WriteLine("CALL," & .Callsign & "," & .Locator & "," & .Lat & "," & .Lon & "," & .LocType)
+               End With
 
-            End With
+            Next
 
-         Next
+            For i = 0 To NodeIndex - 1
 
-         For i = 0 To NodeIndex - 1
+               With Nodes(i)
 
-            With Nodes(i)
+                  sw.WriteLine("NODE," & .Callsign & "," & .Version & "," & .PopupMode)
 
-               sw.WriteLine("NODE," & .Callsign & "," & .Version & "," & .PopupMode)
+                  Dim HeardCount As Integer = .HeardNodes.Length
+                  Dim HeardIndex As Integer
 
-               Dim HeardCount As Integer = .HeardNodes.Length
-               Dim HeardIndex As Integer
+                  For HeardIndex = 0 To HeardCount - 1
 
-               For HeardIndex = 0 To HeardCount - 1
+                     With .HeardNodes(HeardIndex)
 
-                  With .HeardNodes(HeardIndex)
+                        Dim j As Integer
 
-                     Dim j As Integer
+                        sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .HeardItems.Length & ",")
 
-                     sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .HeardItems.Length & ",")
+                        For j = 0 To .HeardItems.Length - 1
+                           With .HeardItems(j)
+                              sw.Write(.Freq & "," & .Time.ToOADate & "," & .Flags & ",")
+                           End With
+                        Next
 
-                     For j = 0 To .HeardItems.Length - 1
-                        With .HeardItems(j)
-                           sw.Write(.Freq & "," & .Time.ToOADate & "," & .Flags & ",")
-                        End With
-                     Next
+                        sw.Write(vbCrLf)
 
-                     sw.Write(vbCrLf)
+                     End With
 
-                  End With
+                  Next
+               End With
+            Next
 
-               Next
-            End With
-         Next
-
-         sw.Close()
+            sw.Close()
 
       End Using
 

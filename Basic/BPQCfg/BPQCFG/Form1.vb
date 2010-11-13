@@ -91,9 +91,9 @@ Public Class Form1
       topMenuItem.Text = "&File"
       menuItem1.Text = "&Open"
       menuItem2.Text = "&Validate"
-      menuItem3.Text = "&Update Source and Create Binary"
-      menuItem4.Text = "&Create Binary"
-      menuItem5.Text = "Create &Source"
+      '   menuItem3.Text = "&Update Source and Create Binary"
+      '  menuItem4.Text = "&Create Binary"
+      menuItem5.Text = "Save Config"
       menuItem6.Text = "Switch to Simple Configuration Mode"
       menuItem7.Text = "&Exit"
 
@@ -102,8 +102,8 @@ Public Class Form1
       ' Add the menu items to the main menu.
       topMenuItem.MenuItems.Add(menuItem1)
       topMenuItem.MenuItems.Add(menuItem2)
-      topMenuItem.MenuItems.Add(menuItem3)
-      topMenuItem.MenuItems.Add(menuItem4)
+      '    topMenuItem.MenuItems.Add(menuItem3)
+      '   topMenuItem.MenuItems.Add(menuItem4)
       topMenuItem.MenuItems.Add(menuItem5)
       topMenuItem.MenuItems.Add(menuItem6)
 
@@ -112,8 +112,8 @@ Public Class Form1
       ' Add functionality to the menu items using the Click event. 
       AddHandler menuItem1.Click, AddressOf Me.Open_Click
       AddHandler menuItem2.Click, AddressOf Me.Validate_Click
-      AddHandler menuItem3.Click, AddressOf Me.Save_SourceandBinary
-      AddHandler menuItem4.Click, AddressOf Me.Save_Binary
+      '  AddHandler menuItem3.Click, AddressOf Me.Save_SourceandBinary
+      ' AddHandler menuItem4.Click, AddressOf Me.Save_Binary
       AddHandler menuItem5.Click, AddressOf Me.Save_Source
       AddHandler menuItem6.Click, AddressOf Me.Switch_To_Simple
       AddHandler menuItem7.Click, AddressOf Exit_Click
@@ -403,7 +403,7 @@ Public Class Form1
 
       OpenFileDialog1.Title = "Open config file"
       OpenFileDialog1.InitialDirectory = BPQDirectory
-      OpenFileDialog1.Filter = "cfg binary files  (*.bin)|*.bin|cfg source (*.txt)|*.txt"
+      OpenFileDialog1.Filter = "cfg source (*.txt)|*.txt"
       OpenFileDialog1.FilterIndex = My.Settings.BinOrTextOpen
       OpenFileDialog1.FileName = My.Settings.CfgFileOpenName
       OpenFileDialog1.RestoreDirectory = True
@@ -1422,7 +1422,7 @@ loop1:   LineNo = LineNo + 1
 
    End Sub
 
-   Private Sub SaveasTextwithComments()
+   Public Sub SaveasTextwithComments()
 
       Dim i As Integer, j As Integer, p As Integer, Line As String, Comment As String
 

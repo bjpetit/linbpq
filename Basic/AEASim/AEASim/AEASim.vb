@@ -57,7 +57,7 @@ Public Class AEASIM
 
       Dim Access As Long = &HC0000000
 
-      SerHandle = CreateFile("\\.\bpq101", Access And &HFFFFFFFF, _
+      SerHandle = CreateFile("\\.\bpq104", Access And &HFFFFFFFF, _
        0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0)
 
       If SerHandle > 4294967290 Then

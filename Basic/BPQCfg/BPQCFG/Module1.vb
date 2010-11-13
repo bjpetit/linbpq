@@ -149,7 +149,7 @@ Module Module1
    Public ApplCall(8) As BPQCFG.CallsignTextBox
    Public ApplAlias(8) As BPQCFG.AliasTextBox
 
-   Public PortTab(16) As TabPage
+   Public PortTab(32) As TabPage
 
    Public CurrentPort As Integer
 
@@ -425,7 +425,7 @@ Module Module1
    End Sub
    Public Sub AddPortTab()
 
-      If NumberOfPorts = 16 Then Exit Sub
+      If NumberOfPorts = 32 Then Exit Sub
 
       Adding = True ' Suppress triggereing updates to TYPE
 
@@ -1855,8 +1855,8 @@ Module Module1
       TxtCfg(72).Checkbox = True
 
       For i = 1 To NumofPortConfigParams
-         ReDim TxtPortCfg(i).Value(16)
-         ReDim TxtPortCfg(i).LineNo(16)
+         ReDim TxtPortCfg(i).Value(32)
+         ReDim TxtPortCfg(i).LineNo(32)
       Next
 
       TxtPortCfg(1).Key = "PORTNUM"

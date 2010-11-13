@@ -42,7 +42,12 @@ Partial Class SerialLink
       Me.Label4 = New System.Windows.Forms.Label
       Me.RemoteCOM = New System.Windows.Forms.ComboBox
       Me.RemoteBAUD = New System.Windows.Forms.ComboBox
+      Me.COMTypeR = New System.Windows.Forms.RadioButton
+      Me.COMTypeV = New System.Windows.Forms.RadioButton
+      Me.GroupBox1 = New System.Windows.Forms.GroupBox
+      Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
       CType(Me.AxWinsock1, System.ComponentModel.ISupportInitialize).BeginInit()
+      Me.GroupBox1.SuspendLayout()
       Me.SuspendLayout()
       '
       'SerialPort1
@@ -229,11 +234,48 @@ Partial Class SerialLink
       Me.RemoteBAUD.Size = New System.Drawing.Size(109, 21)
       Me.RemoteBAUD.TabIndex = 24
       '
+      'COMTypeR
+      '
+      Me.COMTypeR.AutoSize = True
+      Me.COMTypeR.Location = New System.Drawing.Point(0, 14)
+      Me.COMTypeR.Name = "COMTypeR"
+      Me.COMTypeR.Size = New System.Drawing.Size(74, 17)
+      Me.COMTypeR.TabIndex = 25
+      Me.COMTypeR.TabStop = True
+      Me.COMTypeR.Text = "Real COM"
+      Me.COMTypeR.UseVisualStyleBackColor = True
+      '
+      'COMTypeV
+      '
+      Me.COMTypeV.AutoSize = True
+      Me.COMTypeV.Location = New System.Drawing.Point(0, 38)
+      Me.COMTypeV.Name = "COMTypeV"
+      Me.COMTypeV.Size = New System.Drawing.Size(81, 17)
+      Me.COMTypeV.TabIndex = 26
+      Me.COMTypeV.TabStop = True
+      Me.COMTypeV.Text = "Virtual COM"
+      Me.COMTypeV.UseVisualStyleBackColor = True
+      '
+      'GroupBox1
+      '
+      Me.GroupBox1.Controls.Add(Me.COMTypeR)
+      Me.GroupBox1.Controls.Add(Me.COMTypeV)
+      Me.GroupBox1.Location = New System.Drawing.Point(204, 152)
+      Me.GroupBox1.Name = "GroupBox1"
+      Me.GroupBox1.Size = New System.Drawing.Size(109, 74)
+      Me.GroupBox1.TabIndex = 27
+      Me.GroupBox1.TabStop = False
+      '
+      'Timer1
+      '
+      Me.Timer1.Interval = 10
+      '
       'SerialLink
       '
       Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.ClientSize = New System.Drawing.Size(323, 333)
+      Me.Controls.Add(Me.GroupBox1)
       Me.Controls.Add(Me.RemoteBAUD)
       Me.Controls.Add(Me.RemoteCOM)
       Me.Controls.Add(Me.Label4)
@@ -256,6 +298,8 @@ Partial Class SerialLink
       Me.Name = "SerialLink"
       Me.Text = "Serial Link"
       CType(Me.AxWinsock1, System.ComponentModel.ISupportInitialize).EndInit()
+      Me.GroupBox1.ResumeLayout(False)
+      Me.GroupBox1.PerformLayout()
       Me.ResumeLayout(False)
       Me.PerformLayout()
 
@@ -281,5 +325,9 @@ Partial Class SerialLink
    Friend WithEvents Label4 As System.Windows.Forms.Label
    Friend WithEvents RemoteCOM As System.Windows.Forms.ComboBox
    Friend WithEvents RemoteBAUD As System.Windows.Forms.ComboBox
+   Friend WithEvents COMTypeR As System.Windows.Forms.RadioButton
+   Friend WithEvents COMTypeV As System.Windows.Forms.RadioButton
+   Friend WithEvents GroupBox1 As System.Windows.Forms.GroupBox
+   Friend WithEvents Timer1 As System.Windows.Forms.Timer
 
 End Class

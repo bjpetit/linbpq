@@ -1,11 +1,55 @@
 
 Imports System.Threading
-
-
+Imports System
+Imports System.Text
 
 Public Class SerialLink
 
+   Private Const GENERIC_WRITE As UInteger = &H40000000
+   Private Const GENERIC_READ As Long = &H80000000
+   Private Const FILE_ATTRIBUTE_NORMAL As UInteger = &H80
+   Private Const CREATE_ALWAYS As UInteger = 2
+   Private Const OPEN_ALWAYS As UInteger = 4
+   Private Const INVALID_HANDLE_VALUE As Long = -1
+   Const OPEN_EXISTING As UInteger = 3
+   Const FILE_SHARE_READ As UInteger = &H1
+   Const FILE_SHARE_WRITE As UInteger = &H2
+   Const FILE_FLAG_NO_BUFFERING As UInteger = &H20000000
+
+   Const FILE_DEVICE_SERIAL_PORT As UInteger = &H1B
+   Const METHOD_BUFFERED As UInteger = 0
+   Const FILE_ANY_ACCESS As UInteger = 0
+
+   Const IOCTL_SERIAL_IS_COM_OPEN As UInteger = FILE_DEVICE_SERIAL_PORT << 16 Or &H800 << 2
+   Const IOCTL_SERIAL_GETDATA As UInteger = (FILE_DEVICE_SERIAL_PORT << 16) Or (&H801 << 2)
+   Const IOCTL_SERIAL_SETDATA As UInteger = (FILE_DEVICE_SERIAL_PORT << 16) Or (&H802 << 2)
+
+   Private Declare Function CloseHandle Lib "kernel32" _
+   (ByVal hObject As Long) As Long
+
+   Private Declare Function WriteFile Lib "kernel32" _
+      (ByVal hFile As Long, ByVal lpBuffer As String, _
+      ByVal nNumberOfBytesToWrite As Long, _
+      ByVal lpNumberOfBytesWritten As Long, _
+      ByVal lpOverlapped As Long) As Long
+
+
+   Private Declare Function CreateFile Lib "kernel32" Alias "CreateFileA" _
+      (ByVal lpFileName As String, _
+      ByVal dwDesiredAccess As UInteger, _
+      ByVal dwShareMode As UInteger, _
+      ByVal lpSecurityAttributes As UInteger, _
+      ByVal dwCreationDisposition As UInteger, _
+      ByVal dwFlagsAndAttributes As UInteger, _
+      ByVal hTemplateFile As UInteger) As UInteger
+
+   Private Declare Function DeviceIoControl Lib "kernel32" (ByVal hDevice As UInteger, ByVal dwIoControlCode As UInteger, _
+      ByVal lpInBuffer As String, ByVal nInBufferSize As Integer, ByVal lpOutBuffer As String, _
+      ByVal nOutBufferSize As Integer, ByRef lpBytesReturned As Integer, ByVal lpOverlapped As UInteger) As UInteger
+
+
    Dim TCPOpen As Boolean
+   Dim VCOMOpen As Boolean
 
    Private Sub SerialLink_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 
@@ -14,6 +58,9 @@ Public Class SerialLink
 
       OptSerial.Checked = My.Settings.OptSerial
       OptTCPMaster.Checked = My.Settings.OptTCPMaster
+
+      COMTypeR.Checked = My.Settings.RealCOM
+      COMTypeV.Checked = My.Settings.VirtualCOM
 
       OptTCPSlave.Checked = My.Settings.OptTCPSlave
 
@@ -42,7 +89,6 @@ Public Class SerialLink
       RemoteBAUD.Items.Add("1200")
 
       RemoteBAUD.SelectedIndex = RemoteBAUD.FindString(My.Settings.RemoteBaud)
-
 
    End Sub
 
@@ -82,7 +128,10 @@ waitloop:
       If OptSerial.Checked Then
          SerialPort1.Write(Msg, 0, len)
       Else
-         If TCPOpen Then AxWinsock1.SendData(Msg)
+         Try
+            If TCPOpen Then AxWinsock1.SendData(Msg)
+         Catch ex As Exception
+         End Try
       End If
 
    End Sub
@@ -104,7 +153,7 @@ waitloop:
          If OptSerial.Checked Then
 
             SerialPort1.Open()
-
+  
          ElseIf OptTCPSlave.Checked Then
 
             AxWinsock1.Close()
@@ -128,7 +177,11 @@ waitloop:
 
          End If
 
-         SerialPort2.Open()
+         If COMTypeR.Checked Then
+            SerialPort2.Open()
+         Else
+            OpenVCOM()
+         End If
 
       Catch ex As Exception
          Debug.Print(ex.Message)
@@ -136,7 +189,12 @@ waitloop:
       End Try
 
       CheckBox1.Checked = SerialPort1.IsOpen
-      CheckBox2.Checked = SerialPort2.IsOpen
+
+      If COMTypeR.Checked Then
+         CheckBox2.Checked = SerialPort2.IsOpen
+      Else
+         CheckBox2.Checked = VCOMOpen
+      End If
 
    End Sub
 
@@ -155,16 +213,25 @@ waitloop:
 
       ElseIf OptTCPMaster.Checked Then
 
-         AxWinsock1.Close()
+         Try
+            AxWinsock1.Close()
+         Catch ex As Exception
+         End Try
+
          TCPState.Text = "Closed"
          TCPOpen = False
 
       End If
 
-      SerialPort2.Close()
-
       CheckBox1.Checked = SerialPort1.IsOpen
-      CheckBox2.Checked = SerialPort2.IsOpen
+
+      If COMTypeR.Checked Then
+         SerialPort2.Close()
+         CheckBox2.Checked = SerialPort2.IsOpen
+      Else
+         CloseVCOM()
+         CheckBox2.Checked = VCOMOpen
+      End If
 
    End Sub
 
@@ -198,11 +265,30 @@ waitloop:
 
       Dim Len As Integer = e.bytesTotal
       Dim Msg(Len) As Byte
+      Dim Msgstring As String
 
-      AxWinsock1.GetData(Msg)
+      Try
+         AxWinsock1.GetData(Msg)
 
-      SerialPort2.Write(Msg, 0, Msg.Length)
+         If COMTypeR.Checked Then
+            SerialPort2.Write(Msg, 0, Msg.Length)
+         Else
+            Msgstring = GetString(Msg)
+loop1:
+            If Msgstring.Length < 500 Then
+               PutMessage(GetString(Msg))
+            Else
+               ' split it up
+               PutMessage(Mid(Msgstring, 1, 500))
+               Msgstring = Mid(Msgstring, 500)
+               GoTo loop1
 
+            End If
+
+         End If
+
+      Catch ex As Exception
+      End Try
 
    End Sub
 
@@ -270,6 +356,123 @@ waitloop:
 
       SerialPort1.BaudRate = sender.SelectedItem()
       My.Settings.RemoteBaud = sender.SelectedItem()
+
+   End Sub
+   Dim SerHandle As UInteger
+
+
+   Private Sub OpenVCOM()
+
+      Dim Access As Long = &HC0000000
+
+      Dim PortNum As String = Mid$(SerialPort2.PortName, 4)
+
+      Dim PortName As String = "\\.\bpq" & PortNum
+
+      SerHandle = CreateFile(PortName, Access And &HFFFFFFFF, _
+       0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0)
+
+      If SerHandle > 4294967290 Then
+         Dim err As New ComponentModel.Win32Exception
+         MsgBox(err.Message)
+         VCOMOpen = False
+         Timer1.Enabled = False
+      Else
+         VCOMOpen = True
+         Timer1.Enabled = True
+      End If
+
+   End Sub
+
+
+   Private Sub CloseVCOM()
+
+      VCOMOpen = False
+      CloseHandle(SerHandle)
+      Timer1.Enabled = False
+
+   End Sub
+
+   Public Function GetBytes(ByVal strText As String) As Byte()
+
+      ' Converts a text string to a byte array...
+
+      Dim bytBuffer(strText.Length - 1) As Byte
+
+      For intIndex As Integer = 0 To bytBuffer.Length - 1
+         bytBuffer(intIndex) = CByte(Asc(strText.Substring(intIndex, 1)))
+      Next
+
+      Return bytBuffer
+
+   End Function
+
+   Public Function GetString(ByVal bytBuffer() As Byte) As String
+
+      ' Converts a byte array to a text string...
+
+      Dim sbdInput As New StringBuilder
+
+      For intIndex As Integer = 0 To bytBuffer.Length - 1
+         sbdInput.Append(Chr(bytBuffer(intIndex)))
+      Next
+
+      Return sbdInput.ToString
+
+   End Function
+
+
+   Function GetMessage() As Byte()
+
+      Dim BytesReturned As Integer
+      Dim Msg As String = Space(1000)
+
+      DeviceIoControl(SerHandle, IOCTL_SERIAL_GETDATA, 0, 0, Msg, Msg.Length, BytesReturned, 0)
+
+      Msg = Mid(Msg, 1, BytesReturned)
+
+      Return GetBytes(Msg)
+
+   End Function
+
+
+   Sub PutMessage(ByVal Msg As String)
+
+      Dim BytesReturned As Integer
+
+      DeviceIoControl(SerHandle, IOCTL_SERIAL_SETDATA, Msg, Msg.Length, 0, 0, BytesReturned, 0)
+
+   End Sub
+
+   Private Sub Timer1_Tick(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Timer1.Tick
+
+      Dim Msg() As Byte = GetMessage()
+
+      If Msg.Length > 0 Then
+
+         If OptSerial.Checked Then
+            SerialPort1.Write(Msg, 0, Msg.Length)
+         Else
+            Try
+               If TCPOpen Then AxWinsock1.SendData(Msg)
+            Catch ex As Exception
+            End Try
+         End If
+
+      End If
+
+
+   End Sub
+
+   Private Sub COMTypeR_CheckedChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles COMTypeR.CheckedChanged
+
+      My.Settings.RealCOM = COMTypeR.Checked
+
+   End Sub
+
+   Private Sub COMTypeV_CheckedChanged(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles COMTypeV.CheckedChanged
+
+      My.Settings.VirtualCOM = COMTypeV.Checked
 
    End Sub
 End Class

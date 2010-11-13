@@ -220,7 +220,7 @@ Partial Class AddNode
       '
       Me.IconTune.Location = New System.Drawing.Point(344, 208)
       Me.IconTune.Name = "IconTune"
-      Me.IconTune.Size = New System.Drawing.Size(88, 45)
+      Me.IconTune.Size = New System.Drawing.Size(88, 56)
       Me.IconTune.TabIndex = 31
       Me.IconTune.Value = 5
       '
@@ -318,7 +318,7 @@ Partial Class AddNode
       Me.Name = "AddNode"
       Me.ShowInTaskbar = False
       Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent
-      Me.Text = "Maintain Node List"
+      Me.Text = "Maintain Chat Node List"
       CType(Me.PictureBox1, System.ComponentModel.ISupportInitialize).EndInit()
       CType(Me.PictureBox2, System.ComponentModel.ISupportInitialize).EndInit()
       CType(Me.IconTune, System.ComponentModel.ISupportInitialize).EndInit()
