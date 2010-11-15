@@ -2017,6 +2017,9 @@ int Winmor_Socket_Data(int sock, int error, int eventcode)
 			TNC->CONNECTED = FALSE;
 			TNC->Alerted = FALSE;
 
+			if (TNC->PTTMode)
+				Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+
 			if (TNC->Streams[0].Attached)
 				TNC->Streams[0].ReportDISC = TRUE;
 
@@ -2123,6 +2126,9 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 KillTNC(struct TNCINFO * TNC)
 {
 	HANDLE hProc;
+
+	if (TNC->PTTMode)
+		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
 
 	if (TNC->WIMMORPID == 0) return 0;
 

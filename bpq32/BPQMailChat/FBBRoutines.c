@@ -305,10 +305,20 @@ badparam:
 		return;
 
 ok:
+
+		// Check Filters
+
+		if (CheckRejFilters(FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS))
+		{
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+			user->MsgsRejectedIn++;
+		}
+
 		// If P Message, dont immediately reject on a Duplicate BID. Check if we still have the message
 		//	If we do, reject  it. If not, accept it again. (do we need some loop protection ???)
 
-		if (DoWeWantIt(FBBHeader) == FALSE)
+		else if (DoWeWantIt(FBBHeader) == FALSE)
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';

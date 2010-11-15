@@ -585,12 +585,15 @@
 // Send [WL2K-BPQ... SID if user flagged as RMS Express
 // Fix Chat Map reporting when more than one AXIP port
 // Add Message State D for NTS Messages
+// Forward messages in priority order - T, P, B
+// Add Reject and Hold Filters
+// Fix holding messages to local RMS users when received as part of a multiple addressee message
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
 
-#define SPECIALVERSION "Test 7"
+#define SPECIALVERSION "Test 10"
 
 #include "GetVersion.h"
 
@@ -748,6 +751,16 @@ char zeros[NBMASK];						// For forward bitmask tests
 time_t MaintClock;						// Time to run housekeeping
 
 struct MsgInfo * MsgnotoMsg[100000];	// Message Number to Message Slot List.
+
+// Filter Params
+
+char ** RejFrom;					// Reject on FROM Call
+char ** RejTo;						// Reject on TO Call
+char ** RejAt;						// Reject on AT Call
+
+char ** HoldFrom;					// Hold on FROM Call
+char ** HoldTo;						// Hold on TO Call
+char ** HoldAt;						// Hold on AT Call
 
 int ProgramErrors = 0;
 
@@ -3903,18 +3916,20 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			BBSputs(conn, "A - Abort Output\r");
 			BBSputs(conn, "B - Logoff\r");
+			BBSputs(conn, "D - Flag NTS Message(s) as Delivered - D num\r");
 			BBSputs(conn, "INFO - Display information about this BBS\r");
 			BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
 			BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
 			BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
 			BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
-			BBSputs(conn, "                      LN LY LH LK LF L$ - List Mesaage with corresponding Status\r");
-			BBSputs(conn, "                      LB LP - List Mesaage with corresponding Type\r");
+			BBSputs(conn, "                      LN LY LH LK LF L$ LD - List Mesaage with corresponding Status\r");
+			BBSputs(conn, "                      LB LP LT - List Mesaage with corresponding Type\r");
 			BBSputs(conn, "N Name - Set Name\r");
 			BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
 			BBSputs(conn, "Q QTH - Set QTH\r");
 			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
-			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, SR Num - Send Reply, SC Num - Send Copy\r");
+			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, ST Send NTS,\r");
+			BBSputs(conn, "                   SR Num - Send Reply, SC Num - Send Copy\r");
 		}
 
 		SendPrompt(conn, user);
@@ -5306,6 +5321,20 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 
 	// Create a temp msg header entry
 
+	if (CheckRejFilters(From, ToCall, ATBBS))
+	{
+		if ((conn->BBSFlags & BBS))
+		{
+			nodeprintf(conn, "NO - REJECTED\r");
+			nodeprintf(conn, ">\r");
+		}
+		else
+			nodeprintf(conn, "*** Error - Message Filters prevent sending this message\r");
+
+		return FALSE;
+	}
+
+
 	Msg = malloc(sizeof (struct MsgInfo));
 
 	if (Msg == 0)
@@ -5704,6 +5733,12 @@ nextline:
 			HoldReason = "Bad word in title or body";
 		}
 
+		if (CheckHoldFilters(Msg->from, Msg->to, Msg->via))
+		{
+			Msg->status = 'H';
+			HoldReason = "Matched Hold Filters";
+		}
+
 		CreateMessageFile(conn, Msg);
 
 		BIDRec = AllocateBIDRecord();
@@ -5987,8 +6022,6 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 
 	strcat(Key, user->Call);
 	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
-
-	Debugprintf(Key);
 
 	if (retCode == ERROR_SUCCESS)
 	{
@@ -7177,6 +7210,111 @@ int CountConnectionsOnPort(int CheckPort)
 	}
 
 	return Count;
+}
+
+
+BOOL CheckRejFilters(char * From, char * To, char * ATBBS)
+{
+	char ** Calls;
+
+	if (RejFrom && From)
+	{
+		Calls = RejFrom;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], From) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (RejTo && To)
+	{
+		Calls = RejTo;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], To) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (RejAt && ATBBS)
+	{
+		Calls = RejAt;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], ATBBS) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	return FALSE;		// Ok to accept
+}
+
+BOOL CheckHoldFilters(char * From, char * To, char * ATBBS)
+{
+	char ** Calls;
+
+	if (HoldFrom && From)
+	{
+		Calls = HoldFrom;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], From) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (HoldTo && To)
+	{
+		Calls = HoldTo;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], To) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (HoldAt && ATBBS)
+	{
+		Calls = HoldAt;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], ATBBS) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	return FALSE;		// Ok to accept
+}
+
+BOOL CheckifLocalRMSUser(char * FullTo)
+{
+	struct UserInfo * user = LookupCall(FullTo);
+
+	if (user)
+		if (user->flags & F_POLLRMS)
+			return TRUE;
+
+	return FALSE;
+		
 }
 
 /*

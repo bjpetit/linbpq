@@ -1003,6 +1003,10 @@ VOID FindNextRMSUser(struct BBSForwardingInfo * FWDInfo);
 BOOL ConnecttoBBS (struct UserInfo * user);
 BOOL SetupNewBBS(struct UserInfo * user);
 VOID CreateRegBackup();
+VOID SaveFilters(HWND hDlg);
+BOOL CheckRejFilters(char * From, char * To, char * ATBBS);
+BOOL CheckHoldFilters(char * From, char * To, char * ATBBS);
+BOOL CheckifLocalRMSUser(char * FullTo);
 
 // FBB Routines
 
@@ -1161,6 +1165,18 @@ extern char * NewWelcomeMsg;
 extern char * ChatWelcomeMsg;
 extern char * NewChatWelcomeMsg;
 extern char * ExpertWelcomeMsg;
+
+
+// Filter Params
+
+extern char ** RejFrom;					// Reject on FROM Call
+extern char ** RejTo;						// Reject on TO Call
+extern char ** RejAt;						// Reject on AT Call
+
+extern char ** HoldFrom;					// Hold on FROM Call
+extern char ** HoldTo;						// Hold on TO Call
+extern char ** HoldAt;						// Hold on AT Call
+
 
 
 extern int Ver[4];

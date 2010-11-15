@@ -305,6 +305,8 @@
 // Write Telnet log to BPQ Directory
 // Add Port to AXIP resolver display
 // Send Reports to update.g8bpq.net:81
+// Add support for FT100 to Rigcontrol
+// Add timeout to Rigcontrol PTT
 
 
 // Add NOKEEPALIVES Port Param
@@ -325,7 +327,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 9"
+#define SPECIALVERSION "Test 12"
 
 #include "GetVersion.h"
 

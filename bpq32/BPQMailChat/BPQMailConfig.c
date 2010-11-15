@@ -4,7 +4,7 @@
 //	Configuration Module
 
 #include "stdafx.h"
-#define C_PAGES 5
+#define C_PAGES 6
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
@@ -13,6 +13,7 @@ int CurrentPage=0;				// Page currently on show in tabbed Dialog
 #define CHATPARAMS 2
 #define MAINTPARAMS 3
 #define WELCOMEMSGS 4
+#define FILTERS 5
 
 
 typedef struct tag_dlghdr {
@@ -280,6 +281,11 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			SaveWelcomeMsgs();
 			return TRUE;
 
+		case IDC_FILTERSAVE:
+
+			SaveFilters(hDlg);
+			return TRUE;
+
 		}
 		break;
 	}
@@ -348,6 +354,8 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	tie.pszText = "Welcome Messages";
 	TabCtrl_InsertItem(pHdr->hwndTab, 4, &tie);
 
+	tie.pszText = "Message Filters";
+	TabCtrl_InsertItem(pHdr->hwndTab, 5, &tie);
 
 	// Lock the resources for the three child dialog boxes.
 
@@ -356,6 +364,7 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	pHdr->apRes[2] = DoLockDlgRes("CHAT_CONFIG");
 	pHdr->apRes[3] = DoLockDlgRes("MAINT");
 	pHdr->apRes[4] = DoLockDlgRes("WELCOMEMSG");
+	pHdr->apRes[5] = DoLockDlgRes("FILTERS");
 
 	// Determine the bounding rectangle for all child dialog boxes.
 
@@ -600,9 +609,96 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDM_CHATUSERMSG, ChatWelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_EXPERTUSERMSG, ExpertWelcomeMsg);
 
-
 		break;
 
+	case FILTERS:
+
+		Text[0] = 0;
+
+		if (RejFrom)
+		{
+			char ** Call = RejFrom;
+			while(Call[0])
+			{
+				wsprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_REJFROM, Text);
+
+		Text[0] = 0;
+
+		if (RejTo)
+		{
+			char ** Call = RejTo;
+			while(Call[0])
+			{
+				wsprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_REJTO, Text);
+
+		Text[0] = 0;
+
+		if (RejAt)
+		{
+			char ** Call = RejAt;
+			while(Call[0])
+			{
+				wsprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_REJAT, Text);
+
+		Text[0] = 0;
+
+		if (HoldFrom)
+		{
+			char ** Call = HoldFrom;
+			while(Call[0])
+			{
+				wsprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_HOLDFROM, Text);
+
+		Text[0] = 0;
+
+		if (HoldTo)
+		{
+			char ** Call = HoldTo;
+			while(Call[0])
+			{
+				wsprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_HOLDTO, Text);
+
+		Text[0] = 0;
+
+		if (HoldAt)
+		{
+			char ** Call = HoldAt;
+			while(Call[0])
+			{
+				wsprintf(Line, "%s\r\n", Call[0]);
+				strcat(Text, Line);
+				Call++;
+			}
+		}
+		SetDlgItemText(pHdr->hwndDisplay, IDC_HOLDAT, Text);
+
+
+		break;
 
 	}
 
@@ -1764,6 +1860,38 @@ VOID SaveWelcomeMsgs()
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 }
 
+VOID SaveFilters(HWND hDlg)
+{
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
+	HKEY hKey=0;
+	int retCode, disp;
+
+	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_REJFROM, hKey, "RejFrom");
+	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_REJTO, hKey, "RejTo");
+	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_REJAT, hKey, "RejAt");
+
+	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HOLDFROM, hKey, "HoldFrom");
+	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HOLDTO, hKey, "HoldTo");
+	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HOLDAT, hKey, "HoldAt");
+
+	RejFrom = GetMultiStringValue(hKey,  "RejFrom");
+	RejTo = GetMultiStringValue(hKey,  "RejTo");
+	RejAt = GetMultiStringValue(hKey,  "RejAt");
+
+	HoldFrom = GetMultiStringValue(hKey,  "HoldFrom");
+	HoldTo = GetMultiStringValue(hKey,  "HoldTo");
+	HoldAt = GetMultiStringValue(hKey,  "HoldAt");
+
+	wsprintf(InfoBoxText, "Configuration Saved");
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+
+	RegCloseKey(hKey);
+}
+
+
 
 
 VOID ReinitializeFWDStruct(struct UserInfo * user)
@@ -2119,6 +2247,15 @@ TryAgain:
 			ExpertWelcomeMsg = _strdup("");
 
 		Vallen=80;
+
+
+		RejFrom = GetMultiStringValue(hKey,  "RejFrom");
+		RejTo = GetMultiStringValue(hKey,  "RejTo");
+		RejAt = GetMultiStringValue(hKey,  "RejAt");
+
+		HoldFrom = GetMultiStringValue(hKey,  "HoldFrom");
+		HoldTo = GetMultiStringValue(hKey,  "HoldTo");
+		HoldAt = GetMultiStringValue(hKey,  "HoldAt");
 
 		if (RegQueryValueEx(hKey,"Version",0, (ULONG *)&Type, (UCHAR *)&Size, (ULONG *)&Vallen) == 0)
 			sscanf(Size,"%d,%d,%d,%d", &LastVer[0], &LastVer[1], &LastVer[2], &LastVer[3]);

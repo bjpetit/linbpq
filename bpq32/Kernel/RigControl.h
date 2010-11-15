@@ -64,11 +64,15 @@ struct RIGINFO
 
 	struct ScanEntry ** FreqPtr;
 
-	int PTTMode;				// PTT COntrol Flags.
+	int PTTMode;				// PTT Control Flags.
 
 	#define PTTRTS		1
 	#define PTTDTR		2
 	#define PTTCI_V		4
+
+	int PTTTimer;				// PTT Timer watchdog
+
+	#define PTTLimit 200
 
 	struct RIGPORTINFO * PORT;		// For PTT Routines
 
@@ -90,6 +94,7 @@ struct RIGINFO
 #define KENWOOD 3
 #define PTT 4
 #define ANT 5
+#define FT100 6
 
 struct RIGPORTINFO
 {

@@ -69,6 +69,13 @@
 #define RMS_SSID2                       1071
 #define RMS_SSID3                       1072
 #define IDC_SYSTOSYSOPCALL              1073
+#define IDC_HOLDFROM                    1074
+#define IDC_HOLDTO                      1075
+#define IDC_HOLDAT                      1076
+#define IDC_REJFROM                     1077
+#define IDC_REJTO                       1078
+#define IDC_REJAT                       1079
+#define IDC_FILTERSAVE                  1080
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -129,7 +136,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
 #define _APS_NEXT_COMMAND_VALUE         40020
-#define _APS_NEXT_CONTROL_VALUE         1074
+#define _APS_NEXT_CONTROL_VALUE         1081
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

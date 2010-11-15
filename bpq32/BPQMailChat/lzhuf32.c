@@ -839,6 +839,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		char ** RecpTo = NULL;				// May be several Recipients
 		char ** HddrTo = NULL;				// May be several Recipients
 		char ** Via = NULL;					// May be several Recipients
+		__int32 LocalMsg[1000]	;				// Set if Recipient is a local wl2k address
+
 		__int32 B2To;							// Offset to To: fields in B2 header
 		__int32 Recipients = 0;
 		struct _EXCEPTION_POINTERS exinfo;
@@ -940,6 +942,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			memset(FullTo, 0, 99);
 			memcpy(FullTo, &ptr1[4], linelen-4);
 			memcpy(HddrTo[Recipients], ptr1, linelen+2);
+			LocalMsg[Recipients] = FALSE;
 
 			Logprintf(LOG_BBS, conn, '?', "B2 Msg To: %s", FullTo);
 
@@ -1001,6 +1004,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				{
 					strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
 					RMSMsgs ++;
+					LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
 				}
 
 			}
@@ -1021,15 +1025,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					{
 						// Packet Message
 
-			//			memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
 						_strupr(FullTo);
 						_strupr(Msg->via);
-						
-						// Update the saved to: line (remove the smtp:)
-
-			//			strcpy(&HddrTo[Recipients][4], &HddrTo[Recipients][9]);
 						BBSMsgs++;
-
 					}
 					else
 					{
@@ -1040,14 +1038,13 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 						strcpy(FullTo,"RMS");
 						RMSMsgs ++;
 					}
-
 				}
 				else
 				{
 					strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
 					RMSMsgs ++;
+					LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
 				}
-
 			}
 
 			else			// Not Paclink or RMS Express
@@ -1060,6 +1057,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					{
 						memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
 						_strupr(FullTo);
+						LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
 					}
 					else
 					{
@@ -1218,6 +1216,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			for (i = 0; i < Recipients; i++)
 			{
+				if (LocalMsg[i])
+					continue;						// For a local RMS user
+				
 				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
 					_stricmp(RecpTo[i], "RMS") == 0)
 				{
@@ -1254,9 +1255,11 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			for (i = 0; i < Recipients; i++)
 			{
-				// Only Process Non - RMS Dests
+				// Only Process Non - RMS Dests or local RMS Users
 
-				if (_stricmp (Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+				if (LocalMsg[i] == 0)
+					if (_stricmp (Via[i], "WINLINK.ORG") == 0 ||
+						_memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
 						_stricmp(RecpTo[i], "RMS") == 0)		
 					continue;
 

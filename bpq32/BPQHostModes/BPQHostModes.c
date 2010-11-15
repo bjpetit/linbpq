@@ -376,19 +376,19 @@ int CreateDialogLine(int i)
 	SendMessage(hMask[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 	hKant[i] = CreateWindow(WC_BUTTON , "Kant", BS_AUTORADIOBUTTON | WS_GROUP | WS_CHILD | WS_VISIBLE ,
-                 240,row+5,50,14, hWnd, NULL, hInst, NULL);
+                 270,row+5,50,14, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hKant[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 	hDED[i] = CreateWindow(WC_BUTTON , "DED", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
-                 290,row+5,50,14, hWnd, NULL, hInst, NULL);
+                 330,row+5,50,14, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hDED[i], WM_SETFONT,(WPARAM) hFont, 0);
 
-	hSCS[i] = CreateWindow(WC_BUTTON , "SCS", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
-                 340,row+5,50,14, hWnd, NULL, hInst, NULL);
+//	hSCS[i] = CreateWindow(WC_BUTTON , "SCS", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
+//               340,row+5,50,14, hWnd, NULL, hInst, NULL);
 
-	SendMessage(hSCS[i], WM_SETFONT,(WPARAM) hFont, 0);
+//	SendMessage(hSCS[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 	hRTS[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
                  400,row+5,14,14, hWnd, NULL, hInst, NULL);
