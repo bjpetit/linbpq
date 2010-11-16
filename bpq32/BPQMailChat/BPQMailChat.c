@@ -589,6 +589,11 @@
 // Add Reject and Hold Filters
 // Fix holding messages to local RMS users when received as part of a multiple addressee message
 
+// Version 1.0.4.25 Nov 2010
+
+// Renumbered for release
+// Add option to save Registry Config during Housekeeping
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"

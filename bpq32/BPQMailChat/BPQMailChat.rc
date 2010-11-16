@@ -811,6 +811,9 @@ BEGIN
     CONTROL         "Supress Mailing of Housekeeping Results",
                     IDC_MAINTNOMAIL,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
                     BS_MULTILINE | WS_TABSTOP,5,135,98,27
+    CONTROL         "Save Registry",IDC_MAINTSAVEREG,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
+                    WS_TABSTOP,5,167,98,10
 END
 
 FILTERS DIALOG DISCARDABLE  26, 5, 382, 287
@@ -1078,7 +1081,6 @@ BEGIN
     "FILTERS", DIALOG
     BEGIN
         RIGHTMARGIN, 242
-        BOTTOMMARGIN, 266
     END
 END
 #endif    // APSTUDIO_INVOKED

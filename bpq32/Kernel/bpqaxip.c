@@ -160,10 +160,6 @@ char * PortConfig[34];
 
 extern UCHAR BPQDirectory[];
 
-extern char LOCATOR[];
-extern int AXIPPort;
-extern char ReportDest[];
-
 void ResolveNames(struct PORTINFO * PORT);
 void OpenSockets(struct PORTINFO * PORT);
 void CloseSockets();
@@ -737,19 +733,6 @@ InitAXIP(int Port)
 	if (PORT == NULL)
 		return FALSE;
 
-	if (LOCATOR[0] && AXIPPort == 0)
-	{
-		int ipad = INADDR_NONE;
-		
-		// If reporting, add MAP entry to first AXIP Port
-
-		AXIPPort = Port; 
-
-		ConvToAX25("DUMMY-1", ReportDest);
-
-		add_arp_entry(PORT, ReportDest, &ipad, 7 , 81 , "update.g8bpq.net", 0, 0, FALSE, 0, 10093);
-	}
-
 	PORT->Port = Port;
 
 	//
@@ -1105,17 +1088,6 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			FreeConfig();
 
 			ReadConfigFile("BPQAXIP.CFG", Port);
-
-			if (LOCATOR[0] && AXIPPort == Port)
-			{
-				int ipad = INADDR_NONE;
-		
-				// If reporting, add MAP entry to first AXIP Port
-
-				ConvToAX25("DUMMY-1", ReportDest);
-
-				add_arp_entry(PORT, ReportDest, &ipad, 7 , 81 , "update.g8bpq.net", 0, 0, FALSE, 0, 10093);
-			}
 
 			_beginthread(OpenSockets, 0, PORT );
 			PostMessage(PORT->hResWnd, WM_TIMER,0,0);

@@ -1285,6 +1285,7 @@ extern HWND hMonitor;
 extern int LogAge;
 extern BOOL DeletetoRecycleBin;
 extern BOOL SuppressMaintEmail;
+extern BOOL SaveRegDuringMaint;
 extern int PR;
 extern int PUR;
 extern int PF;

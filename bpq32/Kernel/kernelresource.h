@@ -20,6 +20,7 @@
 #define BPQCLEARRECONFIG                408
 #define BPQMINTOTRAY                    409
 #define BPQSTARTMIN                     410
+#define BPQSAVEREG						411
 #define ID_EXIT                         1000
 #define IDC_PROTOSTATE                  1000
 #define IDB_HIDE                        1001

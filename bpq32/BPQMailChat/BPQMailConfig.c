@@ -556,6 +556,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		CheckDlgButton(pHdr->hwndDisplay, IDC_DELETETORECYCLE, DeletetoRecycleBin);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTNOMAIL, SuppressMaintEmail);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTSAVEREG, SaveRegDuringMaint);
 
 		if (LTFROM)
 		{
@@ -1798,6 +1799,9 @@ VOID SaveMAINTConfig()
 	SuppressMaintEmail = IsDlgButtonChecked(hwndDisplay, IDC_MAINTNOMAIL);
 	retCode = RegSetValueEx(hKey,"SuppressMaintEmail", 0, REG_DWORD, (BYTE *)&SuppressMaintEmail,4);
 
+	SaveRegDuringMaint = IsDlgButtonChecked(hwndDisplay, IDC_MAINTSAVEREG);
+	retCode = RegSetValueEx(hKey,"MaintSaveReg", 0, REG_DWORD, (BYTE *)&SaveRegDuringMaint,4);
+
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTFROM, hKey, "LTFROM");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTTO, hKey, "LTTO");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTAT, hKey, "LTAT");
@@ -2399,6 +2403,10 @@ TryAgain:
 			RegQueryValueEx(hKey, "SuppressMaintEmail", 0,			
 				(ULONG *)&Type,(UCHAR *)&SuppressMaintEmail,(ULONG *)&Vallen);
 
+			Vallen=4;
+			RegQueryValueEx(hKey, "MaintSaveReg", 0,			
+				(ULONG *)&Type,(UCHAR *)&SaveRegDuringMaint,(ULONG *)&Vallen);
+			
 			LTFROM = GetOverrides(hKey, "LTFROM");
 			LTTO = GetOverrides(hKey, "LTTO");
 			LTAT = GetOverrides(hKey, "LTAT");

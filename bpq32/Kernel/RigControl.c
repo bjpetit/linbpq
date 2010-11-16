@@ -1557,10 +1557,10 @@ void CheckRX(struct RIGPORTINFO * PORT)
 
 		// Only responseshould be a 16 byte info frame
 	
-		if (Length < 16)		// Frame Sise
+		if (Length < 32)		// Frame Sise
 			return;
 
-		if (Length > 16)			// Frame Sise
+		if (Length > 32)			// Frame Sise
 		{
 			PORT->RXLen = 0;	// Corruption - reset and wait for retry	
 			return;
@@ -2212,7 +2212,7 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 	wsprintf(Status,"%s", RIG->Valchar);
 	SetWindowText(RIG->hFREQ, Status);
 
-	Mode = Msg[5];
+	Mode = Msg[5] & 15;
 
 	if (Mode > 8) Mode = 8;
 

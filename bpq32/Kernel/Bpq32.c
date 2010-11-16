@@ -307,7 +307,11 @@
 // Send Reports to update.g8bpq.net:81
 // Add support for FT100 to Rigcontrol
 // Add timeout to Rigcontrol PTT
+// Ads Save Registry Command
 
+// 410p		Build 8 November 2010
+
+// Renumbered for release
 
 // Add NOKEEPALIVES Port Param
 
@@ -327,7 +331,7 @@
 
 #include "AsmStrucs.h"
 
-#define SPECIALVERSION "Test 12"
+//#define SPECIALVERSION "Test 15"
 
 #include "GetVersion.h"
 
@@ -407,7 +411,7 @@ extern char MYCALL[];			// 7 chars, ax.25 format
 
 
 char LOCATOR[10] = "";			// Maidenhead Locator for Reporting
-int AXIPPort = 0;				// Port to report to
+
 char ReportDest[7];
 
 VOID __cdecl Debugprintf(const char * format, ...);
@@ -547,6 +551,11 @@ BOOL LoadIPDriver();
 BOOL Send_IP(VOID * Block, DWORD len);
 VOID CheckforLostProcesses();
 BOOL LoadRigDriver();
+
+VOID CreateRegBackup();
+VOID ResolveUpdateThread();
+VOID OpenReportingSocket();
+
 
 BOOL IPActive = FALSE;
 BOOL IPRequired = FALSE;
@@ -1069,11 +1078,12 @@ FirstInit()
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 	TimerInst=GetCurrentProcessId();
 
-	if (AXIPPort && LOCATOR[0])
+	if (LOCATOR[0])
 	{
 		// Enable Node Map Reports
 
 		ReportTimer = 600;
+		OpenReportingSocket();
 	}
 
  	WritetoConsole("\n\nPort Initialisation Complete\n");
@@ -1270,11 +1280,12 @@ Check_Timer()
 
 		ReportTimer = 0;
 
-		if (AXIPPort && LOCATOR[0])
+		if (LOCATOR[0])
 		{
 			// Enable Node Map Reports
 
 			ReportTimer = 600;
+			OpenReportingSocket();
 		}
 
 		FreeSemaphore();
@@ -3726,6 +3737,7 @@ int SetupConsoleWindow()
 	AppendMenu(hPopMenu,MF_STRING,BPQSAVENODES,"Save Nodes to file BPQNODES.DAT");
 	AppendMenu(hPopMenu,MF_STRING,BPQRECONFIG,"Save Nodes, Re-read bpq32.cfg and reconfigure node");
 	AppendMenu(hPopMenu,MF_STRING,BPQCLEARRECONFIG,"Clear Nodes, Re-read bpq32.cfg and reconfigure node");
+	AppendMenu(hPopMenu,MF_STRING,BPQSAVEREG,"Save Registry Configuration");
 	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
 
 	AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
@@ -3975,6 +3987,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (wmId == BPQDUMP)
 			{
 				DumpSystem();
+				return 0;
+			}
+
+			if (wmId == BPQSAVEREG)
+			{
+				CreateRegBackup();
 				return 0;
 			}
 
@@ -4560,6 +4578,24 @@ int C_Q_ADD(UINT *Q,UINT *BUFF)
 
 }
 
+unsigned short int compute_crc(unsigned char *buf, int txlen);
+
+SOCKADDR_IN reportdest;
+
+SOCKET ReportSocket;
+
+VOID SendReportMsg(char * buff, int txlen)
+{
+ 	unsigned short int crc = compute_crc(buff, txlen);
+
+	crc ^= 0xffff;
+
+	buff[txlen++] = (crc&0xff);
+	buff[txlen++] = (crc>>8);
+
+	sendto(ReportSocket, buff, txlen, 0, (LPSOCKADDR)&reportdest, sizeof(reportdest));
+
+}
 VOID SendLocation()
 {
 	MESSAGE AXMSG;
@@ -4581,7 +4617,7 @@ VOID SendLocation()
 	AXPTR->PID = 0xf0;
 	memcpy(AXPTR->L2DATA, Msg, Len);
 
-	SendRaw(AXIPPort, (char *)&AXMSG.DEST, Len + 16);
+	SendReportMsg((char *)&AXMSG.DEST, Len + 16);
 
 	return;
 
@@ -4594,7 +4630,7 @@ VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
 	char Msg[100];
 	int Len;
 
-	if (AXIPPort == 0 || LOCATOR[0] == 0)
+	if (ReportSocket == 0 || LOCATOR[0] == 0)
 		return;
 
 	Len = wsprintf(Msg, "MH %s,%s,%s,%s", call, freq, LOC, Mode);
@@ -4611,16 +4647,126 @@ VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
 	AXPTR->PID = 0xf0;
 	memcpy(AXPTR->L2DATA, Msg, Len);
 
-	if (Hardware == 1)		// H_WINMOR
-	{
-		GetSemaphore();
-		Send_AX(&AXMSG, Len + 16, AXIPPort) ;
-		FreeSemaphore(0);
-	}
-	else
-		Send_AX(&AXMSG, Len + 16, AXIPPort) ;
+	SendReportMsg((char *)&AXMSG.DEST, Len + 16) ;
 
 	return;
 
+}
+
+VOID CreateRegBackup()
+{
+	char cmd[256];
+	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
+	char RegFileName[MAX_PATH];
+	char Msg[80];
+
+	wsprintf(RegFileName, "%s\\BPQ32.reg", BPQDirectory);
+
+	// Keep 4 Generations
+
+	strcpy(Backup2, RegFileName);
+	strcat(Backup2, ".bak.3");
+
+	strcpy(Backup1, RegFileName);
+	strcat(Backup1, ".bak.2");
+
+	DeleteFile(Backup2);			// Remove old .bak.3
+	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+	strcpy(Backup2, RegFileName);
+	strcat(Backup2, ".bak.1");
+
+	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+	strcpy(Backup1, RegFileName);
+	strcat(Backup1, ".bak");
+
+	MoveFile(Backup1, Backup2);		//Move .bak to .bak.1
+
+	strcpy(Backup2, RegFileName);
+	strcat(Backup2, ".bak");
+
+	CopyFile(RegFileName, Backup2, FALSE);	// Copy to .bak
+
+
+	wsprintf(cmd,
+		"regedit /E \"%s\\BPQ32.reg\" HKEY_LOCAL_MACHINE\\Software\\G8BPQ\\BPQ32", BPQDirectory);
+
+		
+	SInfo.cb=sizeof(SInfo);
+	SInfo.lpReserved=NULL; 
+	SInfo.lpDesktop=NULL; 
+	SInfo.lpTitle=NULL; 
+	SInfo.dwFlags=0; 
+	SInfo.cbReserved2=0; 
+  	SInfo.lpReserved2=NULL; 
+
+	if (CreateProcess(NULL , cmd , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+		wsprintf(Msg, "Registry Save Initiated\n", fn);
+	else
+		wsprintf(Msg, "Registry Save Failed\n", fn);
+
+	WritetoConsole(Msg);
+
+					
+	return ;
+}
+
+
+
+VOID OpenReportingSocket()
+{
+	u_long param=1;
+	BOOL bcopt=TRUE;
+
+	ReportSocket = socket(AF_INET,SOCK_DGRAM,0);
+
+	if (ReportSocket == INVALID_SOCKET)
+	{
+		Debugprintf("Failed to create Reporting socket");
+		ReportSocket = 0;
+  	 	return; 
+	}
+
+	ioctlsocket (ReportSocket, FIONBIO, &param);
+ 
+	setsockopt (ReportSocket, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
+
+	reportdest.sin_family = AF_INET;
+	reportdest.sin_port = htons(81);
+
+	ConvToAX25("DUMMY-1", ReportDest);
+
+	_beginthread(ResolveUpdateThread,0,(int)0);
+}
+
+VOID ResolveUpdateThread()
+{
+	struct hostent * HostEnt;
+	int err;
+
+	while (TRUE)
+	{
+		//	Resolve name to address
+
+		Debugprintf("Resolving %s", "update.g8bpq.net");
+		HostEnt = gethostbyname ("update.g8bpq.net");
+		 
+		if (HostEnt)
+		{
+			memcpy(&reportdest.sin_addr.s_addr,HostEnt->h_addr,4);
+			Sleep(1000 * 60 * 30);
+		}
+		else
+		{	
+			err = WSAGetLastError();
+
+			Debugprintf("Resolve Failed for update.g8bpq.net %d %x", err, err);
+			Sleep(1000 * 60 * 5);
+		}
+	}
 }
 

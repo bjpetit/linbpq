@@ -33,6 +33,7 @@
 #define IDC_EDIT1                       1019
 #define IDC_MSGTO                       1020
 #define IDC_MSGTITLE                    1021
+#define IDC_MAINTSAVEREG                1021
 #define IDC_MSGBID                      1022
 #define IDSEND                          1023
 #define IDCANCELMSG                     1024

@@ -443,6 +443,8 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
+	Debugprintf("KAM Extinit %x", KAMExtInit);
+
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
 	wsprintf(msg,"KAM Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
@@ -599,12 +601,7 @@ void CheckRXKAM(struct TNCINFO * TNC)
 
 	Length = TNC->RXLen;
 
-	// DED mode doesn't have an end of frame delimiter. We need to know if we have a full frame
-
-	// Fortunately this is a polled protocol, so we only get one frame at a time
-
 	// If first char != FEND, then probably a Terminal Mode Frame. Wait for CR on end
-
 			
 	if (TNC->RXBuffer[0] != FEND)
 	{

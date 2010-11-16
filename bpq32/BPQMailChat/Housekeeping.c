@@ -8,6 +8,8 @@ int LogAge = 7;
 
 BOOL DeletetoRecycleBin = FALSE;
 BOOL SuppressMaintEmail = FALSE;
+BOOL SaveRegDuringMaint = FALSE;
+
 int PR = 30;
 int PUR = 30;
 int PF = 30;
@@ -193,6 +195,9 @@ VOID DoHouseKeeping(BOOL Manual)
 		retCode = RegSetValueEx(hKey,"LastHouseKeepingTime",0,REG_DWORD,(BYTE *)&NOW,4);
 		RegCloseKey(hKey);
 	}
+
+	if (SaveRegDuringMaint)
+		CreateRegBackup();
 
 	if (Manual)
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
