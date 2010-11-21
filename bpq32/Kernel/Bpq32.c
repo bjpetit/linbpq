@@ -311,9 +311,17 @@
 
 // 410p		Build 8 November 2010
 
+// Add NOKEEPALIVES Port Param
 // Renumbered for release
 
-// Add NOKEEPALIVES Port Param
+// 410p		Build 9 November 2010
+
+// Get Bandwith for map report from WL2K Report Command
+// Fix freq display for FT100 (ws KHz, not MHz
+
+
+
+#define SPECIALVERSION "Test 1"
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -330,8 +338,6 @@
 #include "SHELLAPI.H"
 
 #include "AsmStrucs.h"
-
-//#define SPECIALVERSION "Test 15"
 
 #include "GetVersion.h"
 
@@ -379,6 +385,9 @@ UINT WINAPI ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI SoundModemExtInit(EXTPORTDATA * PortEntry);
+
+
 
 extern char AUTOSAVE;
 
@@ -1518,8 +1527,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		FreeSemaphore();
 
-		AttachedPIDType[AttachedProcesses]=Perl;
-		AttachedPIDList[AttachedProcesses++]=GetCurrentProcessId();
+		AttachedPIDType[AttachedProcesses] = Perl;
+		AttachedPIDList[AttachedProcesses++] = GetCurrentProcessId();
 		AttachedPerlProcesses+=Perl;
 
 		if (_stricmp(pgm,"bpq32.exe") == 0 &&  AttachingProcess == 1) AttachingProcess=0;
@@ -3243,6 +3252,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	
 	if (strstr(Value, "TELNET"))
 		return (UINT) TelnetExtInit;
+
+	if (strstr(Value, "SOUNDMODEM"))
+		return (UINT) SoundModemExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

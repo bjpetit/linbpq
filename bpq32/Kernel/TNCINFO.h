@@ -220,7 +220,8 @@ typedef struct TNCINFO
 	char Comment[80];
 	BOOL UseRigCtrlFreqs;
 	char WL2KFreq[12];
-	char WL2KMode;
+	char WL2KMode;				// WL2K reporting mode
+	char WL2KModeChar;			// W or N
 	BOOL DontReportNarrowOnWideFreqs;
 
 	char NARROWMODE;

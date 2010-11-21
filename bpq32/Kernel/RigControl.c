@@ -2205,7 +2205,7 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 
 	Freq =  (Msg[1] << 24) + (Msg[2] << 16) + (Msg[3] << 8) + Msg[4];
 	
-	FreqF = (Freq * 1.25) / 1000;
+	FreqF = (Freq * 1.25) / 1000000;
 
 	_gcvt(FreqF, 9, RIG->Valchar);
 

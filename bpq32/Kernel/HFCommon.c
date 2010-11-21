@@ -767,11 +767,15 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 									if (strlen(p_cmd) > 11) goto BadLine;
 									strcpy(TNC->WL2KFreq, p_cmd);
 									TNC->WL2KMode = NARROWMODE;
+									TNC->WL2KModeChar = 'N';
 									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
 									if (p_cmd)
 									{
 										if (p_cmd[0] == 'W')
-										TNC->WL2KMode = WIDEMODE;
+										{
+											TNC->WL2KMode = WIDEMODE;
+											TNC->WL2KModeChar = 'W';
+										}
 									}
 								}
 							}
@@ -1208,6 +1212,7 @@ VOID SetupPortRIGPointers()
 			Freq = Freq/1000000.;
 
 			_gcvt(Freq, 9, TNC->RIG->Valchar);
+			TNC->RIG->CurrentBandWidth = TNC->WL2KModeChar;
 		}
 	}
 }
