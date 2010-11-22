@@ -23,6 +23,7 @@
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
 
+extern UCHAR BPQDirectory[];
 
 #pragma pack(1)
 
@@ -82,10 +83,11 @@ typedef struct SOUNDTNCINFO
 	HWND hDlg;							// Status Window Handle
 	struct CHANNELINFO Channellist[5];	// Max Channels
 	int PERSIST;						// CSMA PERSIST
+	int TXDELAY;
 	int TXQ;
-
-	int State;					// Channel State Flags
+	int State;							// Channel State Flags
 	int PID;
+	int ProcessMonitor;					// Timer for checking that the modem is running
 	BOOL WeStartedTNC;
 };
 
@@ -153,6 +155,7 @@ UINT WINAPI SoundModemExtInit(struct PORTCONTROL *  PortEntry)
 	SoundCard = &SoundCardList[SoundCardNumber];
 	SoundCard->SoundCardNumber = SoundCardNumber;
 	SoundCard->PERSIST = PortEntry->PORTPERSISTANCE;
+	SoundCard->TXDELAY = PortEntry->PORTTXDELAY;
 
 	Chan = &SoundCard->Channellist[Channel];
 
@@ -164,6 +167,7 @@ UINT WINAPI SoundModemExtInit(struct PORTCONTROL *  PortEntry)
 	PortToChannel[Port] = Channel;
 
 	Portlist[Port] = Chan;
+	Debugprintf("Starting TNC %d", SoundCard->WeStartedTNC);
 
 	if (SoundCard->WeStartedTNC == 0)
 		SoundCard->WeStartedTNC = RestartSoundTNC(SoundCard);
@@ -185,6 +189,32 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 	{
 	case 1:				// poll
 
+		TNC->ProcessMonitor++;
+		
+		if (TNC->ProcessMonitor > 300)
+		{
+			TNC->ProcessMonitor = 0;
+			
+			if (TNC->PID)
+			{
+				HANDLE hProc;
+				hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->PID);
+
+				if (hProc)
+				{	
+					DWORD ExitCode = 0;
+
+					GetExitCodeProcess(hProc, &ExitCode);
+					if (ExitCode != STILL_ACTIVE)
+						RestartSoundTNC(TNC);
+
+ 					CloseHandle(hProc);
+				}
+			}
+			else
+				RestartSoundTNC(TNC);
+		}
+	
 		if (State & 0x20)
 			PORTVEC->SENDING++;
 
@@ -195,7 +225,6 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 
 		if (buffptr)
 		{
-			Debugprintf("Got Frame Port %d", port);
 			len = buffptr[1];
 
 			memcpy(&buff[7], &buffptr[2], len);
@@ -272,6 +301,7 @@ KillSoundTNC(struct SOUNDTNCINFO * TNC)
 RestartSoundTNC(struct SOUNDTNCINFO * TNC)
 {
 	char cmdLine[80];
+	char Prog[256];
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 
@@ -283,9 +313,13 @@ RestartSoundTNC(struct SOUNDTNCINFO * TNC)
 	SInfo.cbReserved2=0; 
   	SInfo.lpReserved2=NULL; 
 
-	wsprintf(cmdLine, "BPQSoundModem.exe %d %d", TNC->SoundCardNumber, TNC->PERSIST); 
+	TNC->PID = 0;			// So we don't try again
 
-	return CreateProcess("BPQSoundModem.exe", cmdLine, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+	wsprintf(cmdLine, "BPQSoundModem.exe %d %d %d",
+		TNC->SoundCardNumber, TNC->PERSIST, TNC->TXDELAY); 
+	wsprintf(Prog, "%s\\BPQSoundModem.exe", BPQDirectory);
+
+	return CreateProcess(Prog, cmdLine, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 
 	return 0;
 }
@@ -302,6 +336,9 @@ enum SMCmds
 
 DllExport UINT APIENTRY SoundCardInterface(int CardNo, int Function, UINT Param1, UINT Param2)
 {
+	UINT * buffptr;
+	L1FRAME * rxf;
+
 	switch (Function)
 	{
 	case INIT:	
@@ -323,18 +360,39 @@ DllExport UINT APIENTRY SoundCardInterface(int CardNo, int Function, UINT Param1
 		// See if anything on the TXQ
 
 		SoundCardList[CardNo].State = Param1;		// PTT and DCD State bits
+		buffptr = Q_REM(&SoundCardList[CardNo].TXQ);
 
-		return (UINT)Q_REM(&SoundCardList[CardNo].TXQ);
+		if (buffptr)
+		{
+			memcpy((void *)Param2, buffptr, buffptr[1] + 12);
+			ReleaseBuffer(buffptr);
+			return 1;
+		}
+
+		return 0;
+
 
 	case RXPACKET:
 
 		// A received Packet. Param1 is buffer, Param2 the channel
 
-		C_Q_ADD(&RXQ[SoundCardList[CardNo].Channellist[Param2].BPQPort], (UINT *)Param1);
+		buffptr = GetBuff();
+
+		if (buffptr)
+		{
+			rxf = (L1FRAME *)Param1;
+
+			buffptr[1] = rxf->len;
+			memcpy(buffptr+2, rxf->frame, rxf->len);
+
+			C_Q_ADD(&RXQ[SoundCardList[CardNo].Channellist[Param2].BPQPort], buffptr);
+		}
 		
 		break;
 
 	case CLOSING:
+
+		SoundCardList[CardNo].ProcessMonitor = 250;		// Restart in 5 secs
 		break;
 	}
 	return 0;
@@ -342,5 +400,9 @@ DllExport UINT APIENTRY SoundCardInterface(int CardNo, int Function, UINT Param1
 
 
 
-	
+/*
+Packet: fm F6AUC-0 to APX194-0 via RS0ISS-4 UI  pid=F0
+=4329.20N/00130.45W-PHG2330 Anglet Cote Basque
+*/
+
 

@@ -321,7 +321,7 @@
 
 
 
-#define SPECIALVERSION "Test 1"
+#define SPECIALVERSION "Test 2"
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -4429,17 +4429,23 @@ DllExport UINT APIENTRY GETSENDNETFRAMEADDR()
 DllExport VOID APIENTRY RelBuff(PMESSAGE Msg)
 {
 	_asm{
-
+		pushad
 		mov	edi,Msg
 		call RELBUFF
+		popad
 	}
 }
 
 DllExport PMESSAGE APIENTRY GetBuff()
 {
+	UINT Temp;
+	
 	_asm{
+		pushad
  		call GETBUFF
-		mov eax, edi
+		mov Temp, edi
+		popad
+		mov eax, Temp
 	}
 }
 

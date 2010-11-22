@@ -87,9 +87,12 @@ typedef struct
 static UINT FREE_Q = 0;
 static UINT BufferPool[100*NUMBEROFBUFFERS];		// 400 Byte buffers
 
+int QCount = 0;
+
 UINT * Q_REM(UINT *Q);
-int Q_ADD(UINT *Q,UINT *BUFF);
-UINT ReleaseBuffer(UINT *BUFF);
+VOID Q_ADD(UINT *Q,UINT *BUFF);
+UINT * GetBuffer();
+VOID ReleaseBuffer(UINT *BUFF);
 
 ATOM MyRegisterClass(HINSTANCE hInstance);
 BOOL InitApplication(HINSTANCE);
@@ -123,12 +126,12 @@ LOGFONT LFTTYFONT ;
 HFONT hFont ;
 
 BOOL MinimizetoTray=FALSE;
+BOOL Minimized = FALSE;
 
 HWND hPTT;
 HWND hDCD;
 
 int State;
-
 
 int ChannelCount;		// Channels defined on this soundcard
 
@@ -146,6 +149,7 @@ int ConfigNo;
 char Config[20];
 
 UINT PORTPERSISTANCE = 64;
+char TXDELAY[10] = "500";
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
@@ -166,7 +170,11 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	// The Command Line is the registry key of the config - eg BPQ32_0 For fisrt soundcard
 
-	sscanf(lpCmdLine, "%d %d", &ConfigNo, &PORTPERSISTANCE);
+	if (sscanf(lpCmdLine, "%d %d %s", &ConfigNo, &PORTPERSISTANCE, &TXDELAY) != 3)
+	{
+		MessageBox(NULL,"BPQSoundModem Should only be run by BPQ32","BPQ32",MB_ICONSTOP);
+		return(999);
+	}
 
 	SoundCardInterface(ConfigNo, INIT, GetCurrentProcessId(), 0);
  
@@ -190,7 +198,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	if (cfgMinToTray)
 		DeleteTrayMenuItem(hWnd);
 
-
 	return (msg.wParam);
 }
 
@@ -201,17 +208,8 @@ VOID RXThread()
 		rxf = (L1FRAME *)SoundModem(drv_rx_frame, 0, 0, 0);
 
 		if (rxf)
-		{
-			UINT * buffptr = (UINT *)SoundCardInterface(ConfigNo, GETBUFFER, 0, 0);
+			SoundCardInterface(ConfigNo, RXPACKET, (UINT)rxf, rxf->kanal);
 
-			if (buffptr)
-			{
-				buffptr[1] = rxf->len;
-				memcpy(buffptr+2, rxf->frame, rxf->len);
-				SoundCardInterface(ConfigNo, RXPACKET, (UINT)buffptr, rxf->kanal);
-				rxf = NULL;
-			}
-		} 
 		Sleep(50);
 	}
 }
@@ -222,11 +220,14 @@ HBRUSH bgBrush;
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-	int err, ret, i=0;
+	int retCode, Type, Vallen;
+	char Key[80];
+	int err, ret, i=0, Top, Left;
+	char Size[80];
+	RECT Rect = {0};
 	char Title[80];
 	HKEY hKey = 0;
 	HKEY hKey2 = 0;
-	char Key[80];
 	char msg[80];
 	WNDCLASS  wc;
 	struct modemchannel * Info;
@@ -262,40 +263,50 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\SOUNDMODEM\\PORT%d", ConfigNo);
+	
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"Size",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &Minimized);
+
+	}
+
+	Top = Rect.top;
+	Left = Rect.left;
+
+	GetWindowRect(hWnd, &Rect);	// Get the real size
+
+	MoveWindow(hWnd, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+
 	hDCD = GetDlgItem(hWnd, IDC_DCD);
 	hPTT = GetDlgItem(hWnd, IDC_PTT);
 
 	cfgMinToTray = GetMinimizetoTrayFlag();
 
-	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
-		if (cfgMinToTray)
-			ShowWindow(hWnd, SW_HIDE);
-		else
-			ShowWindow(hWnd, nCmdShow);
+	if (Minimized)
+		ShowWindow(hWnd, SW_HIDE);
 	else
-		ShowWindow(hWnd, nCmdShow);
+		ShowWindow(hWnd, SW_SHOWNORMAL);
 
    	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(hWnd, "SoundModem TNC");
-
-	ExtDriver=LoadLibrary("soundmodem.dll");
-
-	if (ExtDriver)
-		SoundModem = (FARPROCX)GetProcAddress(ExtDriver,"flexnet_driver");
-
-	if (SoundModem == NULL)
 	{
-		wsprintf(msg,"Couldn't Load soundmodem.dll");
-		SetDlgItemText(hWnd, IDC_STATUS, msg);
-
-		return TRUE;
+		wsprintf(Title, "SoundModem %d", ConfigNo);
+		AddTrayMenuItem(hWnd, Title);
 	}
 
 	wsprintf(Key, "SOFTWARE\\FlexNet\\SoundModem\\%s", Config);
 
-	ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
+	ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_ALL_ACCESS, &hKey);
 
 	if (ret != ERROR_SUCCESS)
 	{
@@ -305,9 +316,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return TRUE;
 	}
 
+	// Make Sure ConfigName is set
+
+	retCode = RegQueryValueEx(hKey, "ConfigName", 0,			
+			&Type, (UCHAR *)&msg, &Vallen);
+	
+	if (retCode || strcmp(Config, msg))
+		retCode = RegSetValueEx(hKey, "ConfigName",0 ,REG_SZ, Config, strlen(Config));
+
 	wsprintf(Key, "SOFTWARE\\FlexNet\\SoundModem\\%s\\audio", Config);
 
-	ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey2);
+	ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_ALL_ACCESS, &hKey2);
 
 	wsprintf(msg,"Couldn't find SoundCard Config");
 
@@ -323,6 +342,30 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	SetDlgItemText(hWnd, IDC_SOUNDCARD, msg);
 	RegCloseKey(hKey2);
 
+	// Set TXDELAY
+
+	wsprintf(Key, "SOFTWARE\\FlexNet\\SoundModem\\%s\\chaccess", Config);
+
+	ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_ALL_ACCESS, &hKey2);
+
+	if (ret == ERROR_SUCCESS)
+	{
+		ret = RegSetValueEx(hKey2, "txdelay",0 ,REG_SZ, TXDELAY, strlen(TXDELAY));
+		RegCloseKey(hKey2);
+	}
+
+	ExtDriver=LoadLibrary("soundmodem.dll");
+
+	if (ExtDriver)
+		SoundModem = (FARPROCX)GetProcAddress(ExtDriver,"flexnet_driver");
+
+	if (SoundModem == NULL)
+	{
+		wsprintf(msg,"Couldn't Load soundmodem.dll");
+		SetDlgItemText(hWnd, IDC_STATUS, msg);
+
+		return TRUE;
+	}
 
 	SoundModem(drv_init_device, 0, 0, hKey);
 
@@ -359,7 +402,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 			SoundModem(drv_init_kanal, i, 0, 0);
 			Info = (struct modemchannel *)SoundModem(drv_confinfo, i, 0, 0);
 
-			wsprintf(msg," (%s) %d", Info->devname, Info->bitrate);
+			wsprintf(msg,"%s %d", Info->devname, Info->bitrate);
 			SetDlgItemText(hWnd, IDC_MODEM1 + i, msg);
 		}
 	}
@@ -379,7 +422,8 @@ VOID TimerProc()
 	// Look for messages from BPQ32 and run csma timer
 
 	L1FRAME * txf;
-	UINT * buffptr;
+	UINT Buffer[100];
+
 	int NewState = SoundModem(drv_ch_state, 0);
 
 	if (State != NewState)
@@ -387,29 +431,26 @@ VOID TimerProc()
 		RECT Rect = {0, 0, 1000, 100};
 		State = NewState;
 		InvalidateRect(hWnd, &Rect, FALSE);
-		Debugprintf("State %x", State);
 	}
 
-	buffptr = (UINT *)SoundCardInterface(ConfigNo, POLL, State, 0);	// Pass State to BPQ32 for stats
-
-	if (buffptr)	
+	if (SoundCardInterface(ConfigNo, POLL, State, (UINT)&Buffer))	// Pass State to BPQ32 for stats
 	{
-		int Channel =  buffptr[2];
+		int Channel =  Buffer[2];
 
 		if (TXQ)
 		{
 			// Already have some queued, so must queue this one
 
 			UINT * buffptr2;
-		
+
 		Queueit:
 
-			buffptr2 = Q_REM(&FREE_Q);
+			buffptr2 = GetBuffer();
 
 			if (buffptr2)
 			{
-				memcpy(buffptr2, buffptr, buffptr[1] + 12);
-				Q_ADD(&TXQ, buffptr);
+				memcpy(buffptr2, Buffer, Buffer[1] + 12);
+				Q_ADD(&TXQ, buffptr2);
 			}
 			return;
 		}
@@ -425,14 +466,12 @@ VOID TimerProc()
 
 		Sendit:
 
-			Debugprintf("TX Frame chan %d", Channel);
-
 			if (txf = (L1FRAME *)SoundModem(drv_get_framebuf, Channel, 0, 0))
 			{
-				int len = buffptr[1];
+				int len = Buffer[1];
 			
-				txf->len = len;
-				memcpy(txf->frame, &buffptr[3], len);
+				txf->len = len; 
+				memcpy(txf->frame, &Buffer[3], len);
 				txf->txdelay = 0;
 				SoundModem(drv_tx_frame, 0, 0, 0);
 			}
@@ -469,10 +508,9 @@ VOID TimerProc()
 						int len = buffptr[1];
 						txf->len = len;
 						memcpy(txf->frame, &buffptr[3], len);
-						ReleaseBuffer(buffptr);
-
 						SoundModem(drv_tx_frame, 0, 0, 0);
 					}
+					ReleaseBuffer(buffptr);
 				}
 			}
 		}
@@ -482,6 +520,11 @@ VOID TimerProc()
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
+	HKEY hKey=0;
+	char Size[80];
+	char Key[80];
+	int retCode, disp;
+	RECT Rect;
 
 	switch (message) { 
 
@@ -519,36 +562,51 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
-		switch (wmId) { 
+		switch (wmId)
+		{
+		case SC_RESTORE:
 
+			Minimized = FALSE;
+			return (DefWindowProc(hWnd, message, wParam, lParam));
 
 		case  SC_MINIMIZE: 
 
+			Minimized = TRUE;
+			
 			if (MinimizetoTray)
-
 				return ShowWindow(hWnd, SW_HIDE);
 			else
 				return (DefWindowProc(hWnd, message, wParam, lParam));
-				
-				
+						
 			break;
 		
-		
-			default:
-		
+		default:
 				return (DefWindowProc(hWnd, message, wParam, lParam));
 		}
 
+		case WM_CLOSE:
 
-	case WM_CLOSE:
-		
+			ShowWindow(hWnd, SW_RESTORE);
+			GetWindowRect(hWnd, &Rect);
+
+			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\SOUNDMODEM\\PORT%d", ConfigNo);
+	
+			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
+				KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+			if (retCode == ERROR_SUCCESS)
+			{
+				wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
+				retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+				RegCloseKey(hKey);
+			}
+
 			PostQuitMessage(0);
 
 			if (MinimizetoTray) 
 				DeleteTrayMenuItem(hWnd);
 
 			break;
-
 
 		default:
 			return (DefWindowProc(hWnd, message, wParam, lParam));
@@ -641,39 +699,57 @@ TXFrame()
 
 */
 
+UINT * GetBuffer()
+{
+	// Get Buffer from Free Queue
+	
+	char Msg[80];
 
+	UINT * Buff = Q_REM(&FREE_Q);
+
+	if (Buff)
+		QCount--;
+
+	wsprintf(Msg, "%d", QCount);
+	SetDlgItemText(hWnd, IDC_BUFFS, Msg);
+
+	return Buff;
+}
 
 // Get buffer from Queue
 
 UINT * Q_REM(UINT *Q)
 {
 	UINT  * first,next;
-	
+
 	(int)first = Q[0];
 	if (first == 0) return (0);			// Empty
 	
 	next=first[0];						// Address of next buffer
 	Q[0]=next;
 	return (first);
-
 }
 
 
 // Return Buffer to Free Queue
 
-UINT ReleaseBuffer(UINT *BUFF)
+VOID ReleaseBuffer(UINT *BUFF)
 {
 	UINT * pointer;
+	char Msg[80];
 	
 	(UINT)pointer=FREE_Q;
 	*BUFF=(UINT)pointer;
 	FREE_Q=(UINT)BUFF;
 
-	return (0);
+	QCount++;
+
+	wsprintf(Msg, "%d", QCount);
+	SetDlgItemText(hWnd, IDC_BUFFS, Msg);
 }
 
 
-int Q_ADD(UINT *Q,UINT *BUFF)
+VOID Q_ADD(UINT *Q,UINT *BUFF)
 {
 	UINT * next;
 	
@@ -681,18 +757,15 @@ int Q_ADD(UINT *Q,UINT *BUFF)
 	if (Q[0] == 0)						// Empty
 	{
 		Q[0]=(UINT)BUFF;				// New one on front
-		return(0);
+		return;
 	}
 
 	(int)next=Q[0];
 
 	while (next[0]!= 0)
-
 		next = (UINT *)next[0];			// Chain to end of queue
 
 	next[0] = (UINT)BUFF;				// New one on end
-
-	return(0);
 }
 
 

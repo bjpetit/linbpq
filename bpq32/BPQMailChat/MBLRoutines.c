@@ -199,53 +199,6 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		return;
 	}
 
-	if (Buffer[len-2] == '>')
-	{
-		// If we have just sent a nessage, Flag it as sent
-
-		if (conn->FBBMsgsSent)
-		{
-			conn->FBBMsgsSent = FALSE;
-
-			clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
-			set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
-
-			//  Only mark as forwarded if sent to all BBSs that should have it
-			
-			if (memcmp(conn->FwdMsg->fbbs, zeros, NBMASK) == 0)
-			{
-				conn->FwdMsg->status = 'F';			// Mark as forwarded
-				conn->FwdMsg->datechanged=time(NULL);
-			}
-
-			conn->UserPointer->ForwardingInfo->MsgCount--;
-		}
-
-		// Send Message or request reverse using MBL-style forwarding
-
-		if (FindMessagestoForward(conn))
-		{
-			struct MsgInfo * Msg;
-				
-			// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
-
-			Msg = conn->FwdMsg;
-		
-			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
-					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
-					Msg->from, Msg->bid);
-			return;
-
-		}
-		else
-		{
-			BBSputs(conn, "F>\r");
-			return;
-		}
-	}
-
-	Buffer[len] = 0;
-
 	if (_stricmp(Buffer, "F>\r") == 0)
 	{
 		// Reverse forward request
@@ -292,6 +245,53 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		Sleep(400);
 		Disconnect(conn->BPQStream);
 		return;
+	}
+
+
+
+	if (Buffer[len-2] == '>')
+	{
+		// If we have just sent a nessage, Flag it as sent
+
+		if (conn->FBBMsgsSent)
+		{
+			conn->FBBMsgsSent = FALSE;
+
+			clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
+			set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
+
+			//  Only mark as forwarded if sent to all BBSs that should have it
+			
+			if (memcmp(conn->FwdMsg->fbbs, zeros, NBMASK) == 0)
+			{
+				conn->FwdMsg->status = 'F';			// Mark as forwarded
+				conn->FwdMsg->datechanged=time(NULL);
+			}
+
+			conn->UserPointer->ForwardingInfo->MsgCount--;
+		}
+
+		// Send Message or request reverse using MBL-style forwarding
+
+		if (FindMessagestoForward(conn))
+		{
+			struct MsgInfo * Msg;
+				
+			// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
+
+			Msg = conn->FwdMsg;
+		
+			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+					Msg->from, Msg->bid);
+			return;
+
+		}
+		else
+		{
+			BBSputs(conn, "F>\r");
+			return;
+		}
 	}
 
 	if (_stricmp(Buffer, "*** DONE\r") == 0)

@@ -10,10 +10,9 @@
 #define IDC_MODEM3                      1012
 #define IDC_MODEM4                      1013
 #define IDC_MODEM5                      1014
-
 #define IDC_PTT                         1018
 #define IDC_DCD                         1019
-
+#define IDC_BUFFS                       1020
 #define IDC_STATIC                      -1
 
 // Next default values for new objects

@@ -594,12 +594,16 @@
 // Renumbered for release
 // Add option to save Registry Config during Housekeeping
 
+// Version 1.0.4.26 Nov 2010
+
+// Fix F> loop when doing MBL forwarding between BPQ BBSes
+
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
-
-#define SPECIALVERSION "Test 10"
-
+#include "verhddr.h"
 #include "GetVersion.h"
 
 #define MAX_LOADSTRING 100
