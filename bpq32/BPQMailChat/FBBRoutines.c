@@ -260,6 +260,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		ptr = strtok_s(NULL, seps, &Context);
 
 		if (ptr == NULL) goto badparam;
+		strlop(ptr, '-');						// Remove any (illegal) ssid
 
 		if (strlen(ptr) > 6 ) goto badparam;
 
@@ -277,7 +278,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (ptr == NULL) goto badparam;
 
-		if (strlen(ptr) > 7 ) goto badparam;
+		if (strlen(ptr) > 6 ) goto badparam;
+		strlop(ptr, '-');						// Remove any (illegal) ssid
 
 		strcpy(FBBHeader->To, ptr);
 
@@ -1103,7 +1105,6 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 					}
 				}
 			}
-
 		}
 
 		// Add R: Line at start of body. Will Need to Update Body Length

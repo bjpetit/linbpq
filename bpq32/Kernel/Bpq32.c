@@ -317,11 +317,14 @@
 // 410p		Build 9 November 2010
 
 // Get Bandwith for map report from WL2K Report Command
-// Fix freq display for FT100 (ws KHz, not MHz
+// Fix freq display for FT100 (ws KHz, not MHz)
+// Don't try to change SCS mode whilst initialising
+// Allow reporting of Lat/Lon as well as Locator
+// Fix Telnet Log Name
+// Fix stating with Minimized windows when Minimizetotray isn't set
 
 
-
-#define SPECIALVERSION "Test 2"
+#include "KVerhddr.h"
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -338,6 +341,10 @@
 #include "SHELLAPI.H"
 
 #include "AsmStrucs.h"
+
+#include "SHELLAPI.H"
+#include "kernelresource.h"
+#include <tlhelp32.h>
 
 #include "GetVersion.h"
 
@@ -419,7 +426,7 @@ extern int SENDNETFRAME();
 extern char MYCALL[];			// 7 chars, ax.25 format
 
 
-char LOCATOR[10] = "";			// Maidenhead Locator for Reporting
+char LOCATOR[80] = "";			// Maidenhead Locator for Reporting
 
 char ReportDest[7];
 
@@ -621,7 +628,6 @@ void FreeSemaphore()
 	return; 
 }
 
-#include <tlhelp32.h>
 
 typedef  int (WINAPI FAR *FARPROCX)();
 
@@ -3683,9 +3689,6 @@ DllExport int APIENTRY ClearNodes ()
 // As we can't minimize the console window to the tray, I'll use an ordinary
 // window instead. This also gives me somewhere to post the messages to
 
-
-#include "SHELLAPI.H"
-#include "kernelresource.h"
 
 char AppName[] = "BPQ32";
 char Title[80] = "BPQ32.dll Console";

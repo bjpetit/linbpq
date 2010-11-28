@@ -597,6 +597,9 @@
 // Version 1.0.4.26 Nov 2010
 
 // Fix F> loop when doing MBL forwarding between BPQ BBSes
+// Allow multiple To: addresses, separated by ;
+// Allow Houskeeping Lifetime Overrides to apply to Unsent Messages.
+// Set Unforwarded Bulls to status '$'
 
 
 
@@ -1465,7 +1468,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		if (wParam == (WPARAM)hDisMenu)
 		{
-			// Set up Forward Menu
+			// Set up Disconnect Menu
 
 			CIRCUIT * conn;
 			char MenuLine[30];
@@ -1555,6 +1558,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQSAVEREG:
 
 			CreateRegBackup();
+			break;
+
+		case RESCANMSGS:
+
+			ReRouteMessages();
 			break;
 
 		case IDM_DEBUG:
@@ -2943,12 +2951,39 @@ Next:
 
 VOID CopyUserDatabase()
 {
-	char Backup[MAX_PATH];
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
 
-	strcpy(Backup, UserDatabasePath);
-	strcat(Backup, ".bak");
+	// Keep 4 Generations
 
-	CopyFile(UserDatabasePath, Backup, FALSE);
+	strcpy(Backup2, UserDatabasePath);
+	strcat(Backup2, ".bak.3");
+
+	strcpy(Backup1, UserDatabasePath);
+	strcat(Backup1, ".bak.2");
+
+	DeleteFile(Backup2);			// Remove old .bak.3
+	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+	strcpy(Backup2, UserDatabasePath);
+	strcat(Backup2, ".bak.1");
+
+	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+	strcpy(Backup1, UserDatabasePath);
+	strcat(Backup1, ".bak");
+
+	MoveFile(Backup1, Backup2);		//Move .bak to .bak.1
+
+	strcpy(Backup2, UserDatabasePath);
+	strcat(Backup2, ".bak");
+
+	CopyFile(UserDatabasePath, Backup2, FALSE);	// Copy to .bak
+
+	strcpy(Backup1, UserDatabasePath);
+	strcat(Backup1, ".bak");
+
+	CopyFile(UserDatabasePath, Backup1, FALSE);
 }
 
 VOID SaveUserDatabase()
@@ -5220,21 +5255,139 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 	return FALSE;
 }
 
+char * CheckToAddress(CIRCUIT * conn, char * Addr)
+{
+	// Check one element of Multiple Address
+
+	if (!(conn->BBSFlags & BBS))
+	{
+		// if a normal user, check that TO and/or AT are known and warn if not.
+
+		if (_stricmp(Addr, "SYSOP") == 0)
+		{
+			return _strdup(Addr);
+		}
+
+		if (strchr(Addr, '@') == 0)
+		{
+			// No routing, if not a user and not known to forwarding or WP warn
+
+			struct UserInfo * ToUser = LookupCall(Addr);
+
+			if (ToUser)
+			{
+				// Local User. If Home BBS is specified, use it
+
+				if (ToUser->HomeBBS[0])
+				{
+					char * NewAddr = malloc(250);
+					nodeprintf(conn, "Address %s - @%s added from HomeBBS\r", Addr, ToUser->HomeBBS);
+					wsprintf(NewAddr, "%s@%s", Addr, ToUser->HomeBBS);
+					return NewAddr;
+				}
+			}
+			else
+			{
+				WPRecP WP = LookupWP(Addr);
+
+				if (WP)
+				{
+					char * NewAddr = malloc(250);
+
+					nodeprintf(conn, "Address %s - @%s added from WP\r", Addr, WP->first_homebbs);
+					wsprintf(NewAddr, "%s@%s", Addr, WP->first_homebbs);
+					return NewAddr;
+				}
+			}
+		}
+	}
+
+	// Check SMTP and RMS Addresses
+
+	if ((_memicmp(Addr, "rms:", 4) == 0) || (_memicmp(Addr, "rms/", 4) == 0))
+	{
+		Addr[3] = ':';			// Replace RMS/ with RMS:
+			
+		if (!FindRMS())
+		{
+			nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+			return FALSE;
+		}
+	}
+	else if ((_memicmp(Addr, "smtp:", 5) == 0) || (_memicmp(Addr, "smtp/", 5) == 0))
+	{
+		Addr[4] = ':';			// Replace smpt/ with smtp:
+
+		if (ISP_Gateway_Enabled)
+		{
+			if ((conn->UserPointer->flags & F_EMAIL) == 0)
+			{
+				nodeprintf(conn, "*** Error - You need to ask the SYSOP to allow you to use Internet Mail\r");
+				return FALSE;
+			}
+		}
+		else
+		{
+			nodeprintf(conn, "*** Error - Sending mail to smtp addresses is disabled\r");
+			return FALSE;
+		}
+	}
+
+	return _strdup(Addr);
+}
+
+
 BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, char ** ATBBS, char ** BID)
 {
 	char * ptr;
 	char seps[] = " \t\r";
 	WPRecP WP;
+	char * Addr = *To;
+	int Len;
 
-	// Accept call@call (without spaces) - but check for smtp addresses
+	conn->ToCount = 0;
 
-	if (_memicmp(*To, "smtp:", 5) != 0 && _memicmp(*To, "rms:", 4) != 0  && _memicmp(*To, "rms/", 4) != 0)
+	// SB WANT @ ALLCAN < N6ZFJ $4567_N0ARY
+
+	if (strchr(Context, ';') || strchr(Addr, ';'))
 	{
-		ptr = strchr(*To, '@');
+		// Multiple Addresses - put address list back together
 
-		if (ptr)
+		Addr[strlen(Addr)] = ' ';
+		Context = Addr;
+
+		while (strchr(Context, ';'))
 		{
-			*ATBBS = strlop(*To, '@');
+			// Multiple Addressees
+
+			Addr = strtok_s(NULL, ";", &Context);
+			Len = strlen(Addr);
+			conn->To = realloc(conn->To, (conn->ToCount+1)*4);
+			if (conn->To[conn->ToCount] = CheckToAddress(conn, Addr))
+				conn->ToCount++;
+		}
+
+		Addr = strtok_s(NULL, seps, &Context);
+
+		Len = strlen(Addr);
+		conn->To=realloc(conn->To, (conn->ToCount+1)*4);
+		if (conn->To[conn->ToCount] = CheckToAddress(conn, Addr))
+			conn->ToCount++;
+	}
+	else
+	{
+		// Single Call
+
+		// Accept call@call (without spaces) - but check for smtp addresses
+
+		if (_memicmp(*To, "smtp:", 5) != 0 && _memicmp(*To, "rms:", 4) != 0  && _memicmp(*To, "rms/", 4) != 0)
+		{
+			ptr = strchr(*To, '@');
+
+			if (ptr)
+			{
+				*ATBBS = strlop(*To, '@');
+			}
 		}
 	}
 
@@ -5286,7 +5439,7 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 			return TRUE;
 		}
 
-		if (!*ATBBS)
+		if (!*ATBBS && conn->ToCount == 0)
 		{
 			// No routing, if not a user and not known to forwarding or WP warn
 
@@ -5330,19 +5483,24 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 
 	// Create a temp msg header entry
 
-	if (CheckRejFilters(From, ToCall, ATBBS))
+	if (conn->ToCount)
 	{
-		if ((conn->BBSFlags & BBS))
-		{
-			nodeprintf(conn, "NO - REJECTED\r");
-			nodeprintf(conn, ">\r");
-		}
-		else
-			nodeprintf(conn, "*** Error - Message Filters prevent sending this message\r");
-
-		return FALSE;
 	}
+	else
+	{
+		if (CheckRejFilters(From, ToCall, ATBBS))
+		{	
+			if ((conn->BBSFlags & BBS))
+			{
+				nodeprintf(conn, "NO - REJECTED\r");
+				nodeprintf(conn, ">\r");
+			}
+			else
+				nodeprintf(conn, "*** Error - Message Filters prevent sending this message\r");
 
+			return FALSE;
+		}
+	}
 
 	Msg = malloc(sizeof (struct MsgInfo));
 
@@ -5395,68 +5553,78 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 
 	}
 
-	if (_memicmp(ToCall, "rms:", 4) == 0)
+	if (conn->ToCount)
 	{
-		if (!FindRMS())
-		{
-			nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
-			return FALSE;
-		}
-
-		via=strlop(ToCall, ':');
-		_strupr(ToCall);
-	}
-	else if (_memicmp(ToCall, "rms/", 4) == 0)
-	{
-		if (!FindRMS())
-		{
-			nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
-			return FALSE;
-		}
-
-		via=strlop(ToCall, '/');
-		_strupr(ToCall);
-	}
-	else if (_memicmp(ToCall, "smtp:", 5) == 0)
-	{
-		if (ISP_Gateway_Enabled)
-		{
-			if ((conn->UserPointer->flags & F_EMAIL) == 0)
-			{
-				nodeprintf(conn, "*** Error - You need to ask the SYSOP to allow you to use Internet Mail\r");
-				return FALSE;
-			}
-			via=strlop(ToCall, ':');
-			ToCall[0] = 0;
-		}
-		else
-		{
-			nodeprintf(conn, "*** Error - Sending mail to smtp addresses is disabled\r");
-			return FALSE;
-		}
 	}
 	else
 	{
-		_strupr(ToCall);
-		if (ATBBS)
-			via=_strupr(ATBBS);
-	}
+		if (_memicmp(ToCall, "rms:", 4) == 0)
+		{
+			if (!FindRMS())
+			{
+				nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+				return FALSE;
+			}
 
-	if (strlen(ToCall) > 6) ToCall[6] = 0;
+			via=strlop(ToCall, ':');
+			_strupr(ToCall);
+		}
+		else if (_memicmp(ToCall, "rms/", 4) == 0)
+		{
+			if (!FindRMS())
+			{
+				nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+				return FALSE;
+			}
+
+			via=strlop(ToCall, '/');
+			_strupr(ToCall);
+		}
+		else if (_memicmp(ToCall, "smtp:", 5) == 0)
+		{
+			if (ISP_Gateway_Enabled)
+			{
+				if ((conn->UserPointer->flags & F_EMAIL) == 0)
+				{
+					nodeprintf(conn, "*** Error - You need to ask the SYSOP to allow you to use Internet Mail\r");
+					return FALSE;
+				}
+				via=strlop(ToCall, ':');
+				ToCall[0] = 0;
+			}
+			else
+			{
+				nodeprintf(conn, "*** Error - Sending mail to smtp addresses is disabled\r");
+				return FALSE;
+			}
+		}
+		else
+		{
+			_strupr(ToCall);
+			if (ATBBS)
+				via=_strupr(ATBBS);
+		}
+
+		strlop(ToCall, '-');						// Remove any (illegal) ssid
+		if (strlen(ToCall) > 6) ToCall[6] = 0;
 	
-	strcpy(Msg->to, ToCall);
+		strcpy(Msg->to, ToCall);
 
-	if (via)
-	{
-		if (strlen(via) > 40) via[40] = 0;
+		if (via)
+		{
+			if (strlen(via) > 40) via[40] = 0;
 
-		strcpy(Msg->via, via);
-	}
+			strcpy(Msg->via, via);
+		}
+
+	}		// End of Multiple Dests
 
 	// Look for HA in From (even if we shouldn't be getting it!)
 
 	FromHA = strlop(From, '@');
 
+
+	strlop(From, '-');						// Remove any (illegal) ssid
 	if (strlen(From) > 6) From[6] = 0;
 	strcpy(Msg->from, From);
 
@@ -5533,6 +5701,285 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 
 		user->MsgsReceived++;
 		user->BytesForwardedIn += conn->TempMsg->length;
+
+		if (conn->ToCount)
+		{
+			// Multiple recipients
+
+			struct MsgInfo * Msg = conn->TempMsg;
+			int i;
+			struct MsgInfo * SaveMsg = Msg;
+			char * SaveBody = conn->MailBuffer;
+			int SaveMsgLen = Msg->length; 
+			BOOL SentToRMS = FALSE;
+			int ToLen = 0;
+			char * ToString = zalloc(conn->ToCount * 100);
+
+			// If no BID provided, allocate one
+			
+			if (Msg->bid[0] == 0)
+				sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg + 1, BBSName);
+
+			for (i = 0; i < conn->ToCount; i++)
+			{
+				char * Addr = conn->To[i];
+				char * Via;
+
+				if (_memicmp (Addr, "SMTP:", 5) == 0)
+				{
+					// For Email
+
+					conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+					memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+					conn->MailBuffer = malloc(SaveMsgLen + 10);
+					memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+					Msg->to[0] = 0;
+					strcpy(Msg->via, &Addr[5]);
+
+					CreateMessageFromBuffer(conn);
+					continue;
+				}
+
+				if (_memicmp (Addr, "RMS:", 4) == 0)
+				{
+					// Add to B2 Message for RMS
+
+					Addr+=4;
+					
+					Via = strlop(Addr, '@');
+				
+					if (Via && _stricmp(Via, "winlink.org") == 0)
+					{
+						if (CheckifLocalRMSUser(Addr))
+						{
+							// Local RMS - Leave Here
+	
+							Via = 0;							// Drop Through
+							goto PktMsg;
+						}
+						else
+						{
+							ToLen = wsprintf(ToString, "%sTo: %s\r\n", ToString, Addr);
+							continue;
+						}
+					}
+
+					ToLen = wsprintf(ToString, "%sTo: %s@%s\r\n", ToString, Addr, Via);
+					continue;
+				}
+
+				_strupr(Addr);
+				
+				Via = strlop(Addr, '@');
+
+				if (Via && _stricmp(Via, "winlink.org") == 0)
+				{
+					if (CheckifLocalRMSUser(Addr))
+					{
+						// Local RMS - Leave Here
+
+						Via = 0;							// Drop Through
+					}
+					else
+					{
+						ToLen = wsprintf(ToString, "%sTo: %s\r\n", ToString, Addr);
+
+						// Add to B2 Message for RMS
+
+						continue;
+					}
+				}
+
+			PktMsg:		
+				
+				conn->LocalMsg = FALSE;
+
+				// Normal BBS Message
+
+				if (_stricmp(Addr, "SYSOP") == 0)
+					conn->LocalMsg = TRUE;
+				else
+				{
+					struct UserInfo * ToUser = LookupCall(Addr);
+
+					if (ToUser)
+						conn->LocalMsg = TRUE;
+				}
+
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 10);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+				strcpy(Msg->to, Addr);
+
+				if (Via)
+				{
+					Msg->bid[0] = 0;					// if we are forwarding it, we must change BID to be safe
+					strcpy(Msg->via, Via);
+				}
+
+				CreateMessageFromBuffer(conn);
+			}
+
+			if (ToLen)
+			{
+				char B2Hddr[1000];
+				int B2HddrLen;
+				char DateString[80];
+				struct tm * tm;
+				time_t Date = time(NULL);
+
+				tm = gmtime(&Date);	
+	
+				wsprintf(DateString, "%04d%/%02d/%02d %02d:%02d",
+					tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 1000 + ToLen);
+
+				Msg->B2Flags = B2Msg;
+
+				B2HddrLen = wsprintf(B2Hddr,
+					"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\n%sSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
+					SaveMsg->bid, DateString, "Private",
+					SaveMsg->from, ToString, SaveMsg->title, BBSName, SaveMsgLen);
+
+				memcpy(conn->MailBuffer, B2Hddr, B2HddrLen);
+				memcpy(&conn->MailBuffer[B2HddrLen], SaveBody, SaveMsgLen);
+
+				Msg->length += B2HddrLen;
+
+				strcpy(Msg->to, "RMS");
+
+				CreateMessageFromBuffer(conn);
+
+			}
+
+			free(SaveMsg);
+			free(SaveBody);
+			conn->MailBuffer = NULL;
+			conn->MailBufferSize=0;
+
+			if (!(conn->BBSFlags & BBS))
+				SendPrompt(conn, conn->UserPointer);
+			else
+				if (!(conn->BBSFlags & FBBForwarding))
+						BBSputs(conn, ">\r");
+
+			/*
+			// From a client - Create one copy with all RMS recipients, and another for each packet recipient	
+
+			// Merge all RMS To: lines 
+
+			ToLen = 0;
+			ToString[0] = 0;
+
+			for (i = 0; i < Recipients; i++)
+			{
+				if (LocalMsg[i])
+					continue;						// For a local RMS user
+				
+				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+					_stricmp(RecpTo[i], "RMS") == 0)
+				{
+					ToLen += strlen(HddrTo[i]);
+					strcat(ToString, HddrTo[i]);
+				}
+			}
+
+			if (ToLen)
+			{
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 1000);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+
+				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+				memcpy(&conn->MailBuffer[B2To], ToString, ToLen); 
+
+				conn->TempMsg->length += ToLen;
+
+				strcpy(Msg->to, "RMS");
+				strcpy(Msg->via, "winlink.org");
+
+				// Must Change the BID
+
+				Msg->bid[0] = 0;
+
+				CreateMessageFromBuffer(conn);
+			}
+
+			}
+
+			free(ToString);
+
+			for (i = 0; i < Recipients; i++)
+			{
+				// Only Process Non - RMS Dests or local RMS Users
+
+				if (LocalMsg[i] == 0)
+					if (_stricmp (Via[i], "WINLINK.ORG") == 0 ||
+						_memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+						_stricmp(RecpTo[i], "RMS") == 0)		
+					continue;
+
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 1000);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+				// Add our To: 
+
+				ToLen = strlen(HddrTo[i]);
+
+				if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
+					memcpy(HddrTo[i], "To", 2);
+
+				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+				memcpy(&conn->MailBuffer[B2To], HddrTo[i], ToLen); 
+
+				conn->TempMsg->length += ToLen;
+
+				strcpy(Msg->to, RecpTo[i]);
+				strcpy(Msg->via, Via[i]);
+				
+				Msg->bid[0] = 0;
+
+				CreateMessageFromBuffer(conn);
+			}
+			}	// End not from RMS
+
+			free(SaveMsg);
+			free(SaveBody);
+			conn->MailBuffer = NULL;
+			conn->MailBufferSize=0;
+
+			SetupNextFBBMessage(conn);
+			return;
+	
+			} My__except_Routine("Process Multiple Destinations");
+
+			BBSputs(conn, "*** Program Error Processing Multiple Destinations\r");
+			Flush(conn);
+			conn->CloseAfterFlush = 20;			// 2 Secs
+
+			return;
+*/
+
+			conn->ToCount = 0;
+
+			return;
+		}
+
 
 		CreateMessageFromBuffer(conn);
 		return;
@@ -5809,19 +6256,23 @@ nextline:
 			}
 			else
 			{
-				if (FWDCount ==  0 && conn->LocalMsg == 0)
+				if (FWDCount ==  0 && conn->LocalMsg == 0 && Msg->type != 'B')
 					// Not Local and no forward route
 					nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
 			}
-			SendPrompt(conn, conn->UserPointer);
+			if (conn->ToCount == 0)
+				SendPrompt(conn, conn->UserPointer);
 		}
 		else
 			if (!(conn->BBSFlags & FBBForwarding))
-				BBSputs(conn, ">\r");
+				if (conn->ToCount == 0)
+					BBSputs(conn, ">\r");
 
 		if(Msg->to[0] == 0)
 			SMTPMsgCreated=TRUE;
 
+		if (Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+			Msg->status = '$';				// Has forwarding
 
 		if (Msg->status == 'H')
 		{

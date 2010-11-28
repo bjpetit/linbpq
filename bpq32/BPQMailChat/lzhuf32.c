@@ -706,8 +706,8 @@ BOOL CheckifPacket(char * Via)
 	if (FindContinent(ptr1))
 		return TRUE;			// Packet
 
-//	if (FindCountry(ptr1))
-//		return TRUE;			// Packet
+	if (_stricmp(ptr1, "MARS") == 0)
+		return TRUE;			// Packet
 
 	return FALSE;
 }
@@ -1051,6 +1051,23 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			{
 				if (_memicmp(&ptr1[4], "SMTP:", 5) == 0)
 				{
+					// Airmail Sends MARS messages as SMTP
+					
+					if (CheckifPacket(Msg->via))
+					{
+						// Packet Message
+
+						memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
+						_strupr(FullTo);
+						_strupr(Msg->via);
+						
+						// Update the saved to: line (remove the smtp:)
+
+						strcpy(&HddrTo[Recipients][4], &HddrTo[Recipients][9]);
+						BBSMsgs++;
+						goto BBSMsg;
+					}
+
 					// If a winlink.org address we need to convert to call
 
 					if (_stricmp(Msg->via, "winlink.org") == 0)
@@ -1069,6 +1086,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 				else
 				{
+		BBSMsg:		
 					_strupr(FullTo);
 					_strupr(Msg->via);
 				}
@@ -1222,6 +1240,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
 					_stricmp(RecpTo[i], "RMS") == 0)
 				{
+					if (ToLen == 0)			// First Addr
+						memcpy(HddrTo[i], "To", 2);			// In Case CC
+
 					ToLen += strlen(HddrTo[i]);
 					strcat(ToString, HddrTo[i]);
 				}

@@ -9,6 +9,7 @@ int LogAge = 7;
 BOOL DeletetoRecycleBin = FALSE;
 BOOL SuppressMaintEmail = FALSE;
 BOOL SaveRegDuringMaint = FALSE;
+BOOL OverrideUnsent = FALSE;
 
 int PR = 30;
 int PUR = 30;
@@ -343,6 +344,10 @@ VOID ExpireMessages()
 		gotit:
 
 			BFLimit = now - BLimit*86400;
+
+			if (OverrideUnsent)
+				if (BLimit != BF)		// Have we an override?
+					BNFLimit = BFLimit;
 
 			switch (Msg->status)
 			{

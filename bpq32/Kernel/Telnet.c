@@ -2112,7 +2112,7 @@ int WriteLog(char * msg)
 		strcat(Value, "BPQTelnetServer.log");
 	}
 		
-	if ((file = fopen("Value", "a")) == NULL)
+	if ((file = fopen(Value, "a")) == NULL)
 		return FALSE;
 
 	time( &ltime );

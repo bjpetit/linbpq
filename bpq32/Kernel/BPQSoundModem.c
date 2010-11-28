@@ -290,11 +290,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hPTT = GetDlgItem(hWnd, IDC_PTT);
 
 	cfgMinToTray = GetMinimizetoTrayFlag();
-
+		
 	if (Minimized)
-		ShowWindow(hWnd, SW_HIDE);
+		if (MinimizetoTray)
+			ShowWindow(hWnd, SW_HIDE);
+		else
+			ShowWindow(hWnd, SW_SHOWMINIMIZED);
 	else
-		ShowWindow(hWnd, SW_SHOWNORMAL);
+		ShowWindow(hWnd, SW_RESTORE);
 
    	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 

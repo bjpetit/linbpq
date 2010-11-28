@@ -403,6 +403,41 @@ DllExport UINT APIENTRY SoundCardInterface(int CardNo, int Function, UINT Param1
 /*
 Packet: fm F6AUC-0 to APX194-0 via RS0ISS-4 UI  pid=F0
 =4329.20N/00130.45W-PHG2330 Anglet Cote Basque
+
+
+
+Packet: fm RS0ISS-11 to F6CDZ-0 RR1+
+
+Packet: fm RS0ISS-11 to F6CDZ-0 DISC+
+
+Packet: fm RS0ISS-11 to F6CDZ-0 DISC+
+
+Packet: fm DB1VQ-0 to APRS-0 via RS0ISS-4 UI  pid=F0
+=4919.40N/00705.14E`73' Via Satellite {UISS52}
+
+Packet: fm LA4FPA-6 to APU25N-0 via RS0ISS-4,WIDE2-2 UI^ pid=F0
+=6021.00N/00521.51E`Erling ,Bergen, JP20qi
+
+Packet: fm DH4LAR-10 to APEG02-0 via RS0ISS-4 UI  pid=F0
+=5453.45N/00817.30E-73' Via Satellite {UISS52}
+
+Packet: fm OW0VIK-0 to V2PPST-0 via WIDE1-0,WIDE2-1 UIv pid=F0
+'|JEl .#/]=
+
+Packet: fm DF9EY-0 to CQ-0 via RS0ISS-4 UI^ pid=F0
+:DB1VQ    :einen schoenen Morgen OM
+.
+Packet: fm F6CDZ-0 to APRS-0 via RS0ISS-4 UI  pid=F0
+=4912.00N/00609.44E`Maizieres les Metz - Lorraine - Daniel. 73 {UISS52}
+
+Packet: fm F6CDZ-0 to APRS-0 via RS0ISS-4 UI  pid=F0
+* F6CDZ Daniel *
+.    ___  ___
+.   (__ )(__ )
+.    / /  (_ \
+.   (_/  (___/
+
+
 */
 
 

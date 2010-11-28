@@ -772,11 +772,21 @@ char rec[];
 
 	if (_memicmp(rec, "LOCATOR", 7) == 0)
 	{
-		// Station Maidenhead Locator
+		// Station Maidenhead Locator or Lat/Long
 
-		if (strlen(rec) > 14) rec[14] = 0;
-		
-		strcpy(LOCATOR, &rec[8]);
+		char * Context;		
+		char * ptr1 = strtok_s(&rec[7], " ,=\t\n\r:", &Context);
+		char * ptr2 = strtok_s(NULL, " ,=\t\n\r:", &Context);
+
+		if (ptr1)
+		{
+			strcpy(LOCATOR, ptr1);
+			if (ptr2)
+			{
+				strcat(LOCATOR, ":");
+				strcat(LOCATOR, ptr2);
+			}
+		}
 		return 0;
 	}
 

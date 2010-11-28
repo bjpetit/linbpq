@@ -77,6 +77,7 @@
 #define IDC_REJTO                       1078
 #define IDC_REJAT                       1079
 #define IDC_FILTERSAVE                  1080
+#define IDC_OVERRIDEUNSENT				1081
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -130,14 +131,15 @@
 #define ID_ACTIONS_UPDATECHATMAPINFO    40017
 #define IDM_EDITCHATCOLOURS             40018
 #define BPQSAVEREG                      40019
+#define RESCANMSGS                      40020
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
-#define _APS_NEXT_COMMAND_VALUE         40020
-#define _APS_NEXT_CONTROL_VALUE         1081
+#define _APS_NEXT_COMMAND_VALUE         40021
+#define _APS_NEXT_CONTROL_VALUE         1082
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

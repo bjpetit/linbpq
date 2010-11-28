@@ -1607,16 +1607,19 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 	
 	// Send Exit/Enter Host Sequence
 
-		UCHAR * Poll = TNC->TXBuffer;
+	UCHAR * Poll = TNC->TXBuffer;
 
-		EnterExit = TRUE;
+	if (TNC->HostMode == 0)
+		return 0;							// Don't try if initialising
 
-		Poll[2] = 31;
-		Poll[3] = 0x41;
-		Poll[4] = 0x5;
-		memcpy(&Poll[5], "JHOST0", 6);
+	EnterExit = TRUE;
 
-		CRCStuffAndSend(TNC, Poll, 11);
+	Poll[2] = 31;
+	Poll[3] = 0x41;
+	Poll[4] = 0x5;
+	memcpy(&Poll[5], "JHOST0", 6);
+
+	CRCStuffAndSend(TNC, Poll, 11);
 
 	n = 0;
 

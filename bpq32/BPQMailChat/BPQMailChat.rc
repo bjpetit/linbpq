@@ -755,30 +755,30 @@ STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
     LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before being deleted",
-                    IDC_STATIC,149,13,216,28
-    LTEXT           "Read",IDC_STATIC,159,68,46,10
-    EDITTEXT        IDM_PR,224,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+                    IDC_STATIC,149,13,226,22
+    LTEXT           "Read",IDC_STATIC,159,46,46,10
+    EDITTEXT        IDM_PR,224,46,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Unread",IDC_STATIC,159,83,46,10
-    EDITTEXT        IDM_PUR,224,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Unread",IDC_STATIC,159,61,46,10
+    EDITTEXT        IDM_PUR,224,61,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Forwarded",IDC_STATIC,159,98,46,10
-    EDITTEXT        IDM_PF,224,98,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Forwarded",IDC_STATIC,159,76,46,10
+    EDITTEXT        IDM_PF,224,76,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Not Forwarded",IDC_STATIC,159,113,49,10
-    EDITTEXT        IDM_PNF,224,113,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Not Forwarded",IDC_STATIC,159,91,49,10
+    EDITTEXT        IDM_PNF,224,91,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Forwarded",IDC_STATIC,264,68,49,10
-    EDITTEXT        IDM_BF,324,68,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Forwarded",IDC_STATIC,264,46,49,10
+    EDITTEXT        IDM_BF,324,46,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Not Forwarded",IDC_STATIC,264,83,49,10
-    EDITTEXT        IDM_BNF,324,83,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Not Forwarded",IDC_STATIC,264,61,49,10
+    EDITTEXT        IDM_BNF,324,61,20,10,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    GROUPBOX        "Personals",IDC_STATIC,149,58,108,71
-    GROUPBOX        "Bulletins",IDC_STATIC,259,58,103,71
-    LTEXT           "The following boxes allow you to specify different values for different Bulletin origins and destinations.",
-                    IDC_STATIC,151,136,214,19
-    LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,156,158,
+    GROUPBOX        "Personals",IDC_STATIC,149,36,108,71
+    GROUPBOX        "Bulletins",IDC_STATIC,259,36,103,71
+    LTEXT           "The following boxes allow you to specify different values for different Bulletin origins and destinations. Normally these apply to Sent Messages, to apply to unsent,  check box below",
+                    IDC_STATIC,151,113,214,27
+    LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,151,146,
                     154,8
     LTEXT           "From",IDC_STATIC,176,173,28,12
     EDITTEXT        IDM_LTFROM,151,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
@@ -814,6 +814,9 @@ BEGIN
     CONTROL         "Save Registry",IDC_MAINTSAVEREG,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
                     WS_TABSTOP,5,167,98,10
+    CONTROL         "Apply Overrides to Unsent Bulls",IDC_OVERRIDEUNSENT,
+                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
+                    WS_TABSTOP,151,160,195,10
 END
 
 FILTERS DIALOG DISCARDABLE  26, 5, 382, 287
@@ -874,6 +877,7 @@ BEGIN
 
         MENUITEM "Update Chat Map Info",        ID_ACTIONS_UPDATECHATMAPINFO
         MENUITEM "Save Registry Configuration", BPQSAVEREG
+        MENUITEM "Rerun Message Routing",       RESCANMSGS
     END
     POPUP "&Configuration"
     BEGIN

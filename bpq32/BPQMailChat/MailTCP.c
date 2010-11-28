@@ -1212,7 +1212,7 @@ ZvVx9G1hcg==
 	{
 		SendSock(sockptr, "250 Ok");
 		sockptr->State = 0;
-		sockptr->Recipients;
+		sockptr->Recipients = 0;
 //		Sleep(500);
 //		shutdown(sock, 0);
 		return;

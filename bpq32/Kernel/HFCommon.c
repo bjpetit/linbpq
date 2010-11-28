@@ -406,11 +406,15 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	GetWindowRect(hDlg, &Rect);	// Get the real size
 
 	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
-
+	
 	if (TNC->Minimized)
-		ShowWindow(hDlg, SW_HIDE);
+		if (MinimizetoTray)
+			ShowWindow(hDlg, SW_HIDE);
+		else
+			ShowWindow(hDlg, SW_SHOWMINIMIZED);
 	else
-		ShowWindow(hDlg, SW_SHOWNORMAL);
+		ShowWindow(hDlg, SW_RESTORE);
+
 
 	if (TNC->RIG)
 	{

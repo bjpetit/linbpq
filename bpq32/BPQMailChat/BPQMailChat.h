@@ -313,9 +313,12 @@ typedef struct ConnectionInfo_S
 
 	long lastmsg;				// Last Listed. Stored here, updated in user record only on clean close
 	BOOL sysop;					// Set if user is authenticated as a sysop
-	UINT BBSFlags;					// Set if defined as a bbs and SID received
-	struct MsgInfo * TempMsg;		// Header while message is being received
-	struct MsgInfo * FwdMsg;		// Header while message is being forwarded
+	UINT BBSFlags;						// Set if defined as a bbs and SID received
+	struct MsgInfo * TempMsg;			// Header while message is being received
+	struct MsgInfo * FwdMsg;			// Header while message is being forwarded
+
+	char ** To;							// May be several Recipients
+	int ToCount;
 
 	int BBSNumber;						// The BBS number (offset into bitlist of BBSes to forward a message to
 	int NextMessagetoForward;			// Next index to check in forward cycle
@@ -1128,6 +1131,7 @@ BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwar
 BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
 BOOL CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
 int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo);
+VOID ReRouteMessages();
 
 extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;
@@ -1286,6 +1290,7 @@ extern int LogAge;
 extern BOOL DeletetoRecycleBin;
 extern BOOL SuppressMaintEmail;
 extern BOOL SaveRegDuringMaint;
+extern BOOL OverrideUnsent;
 extern int PR;
 extern int PUR;
 extern int PF;

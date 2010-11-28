@@ -1289,7 +1289,7 @@ VOID ConnecttoWINMORThread(port)
 	struct hostent * HostEnt;
 	struct TNCINFO * TNC = TNCInfo[port];
 
-	Sleep(1000);		// Allow init to complete 
+	Sleep(5000);		// Allow init to complete 
 
 	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
 	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);

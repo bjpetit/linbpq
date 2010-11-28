@@ -363,10 +363,6 @@ struct ALIAS * FindAlias(char * Name)
 	return NULL;
 }
 
-#ifdef NEWROUTING
-
-
-
 VOID SetupMyHA()
 {
 	int Elements = 1;					// Implied WW on front
@@ -723,7 +719,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 	strcpy(RouteElements, Msg->via);
 
-	Logprintf(LOG_BBS, conn, '?', "Routing Trace To %s Via %s", Msg->to, RouteElements);
+	Logprintf(LOG_BBS, conn, '?', "Msg %d Routing Trace To %s Via %s", Msg->number, Msg->to, RouteElements);
 
 //	See if sending @ winlink.org
 
@@ -1358,5 +1354,86 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForw
 	}
 	return bestmatch;
 }
-#endif
+
+VOID ReRouteMessages()
+{
+	// Pass all messages to the Mail Routing routine.
+
+	// Used if a new BBS is set up, or to readdress messages from a failed BBS
+
+	struct MsgInfo * Msg;
+	int n;
+	char SaveStatus;
+	char Savefbbs[NBMASK];
+
+	for (n = 1; n <= NumberofMessages; n++)
+	{
+		Msg = MsgHddrPtr[n];
+
+		// if killed, or forwarded and not a bull, ignore
+
+		// If status was F and we add anther BBS, set back to N
+
+		if (Msg->status == 'K' || (Msg->status == 'F' &&  Msg->type != 'B'))
+			continue;
+
+
+		if (Msg->type == 'B')
+			SaveStatus = Msg->status;
+
+		memcpy(Savefbbs, Msg->fbbs, NBMASK);
+
+		memset(Msg->fbbs, 0, NBMASK);
+
+		MatchMessagetoBBSList(Msg, NULL);
+
+		if (memcmp(Savefbbs, Msg->fbbs, NBMASK) != 0)
+		{
+			// Have changed Message Routing
+
+			// Clear fwd bits on any BBS it has been sent to
+
+			if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+			{	
+				struct UserInfo * user;
+
+				for (user = BBSChain; user; user = user->BBSNext)
+				{
+					if (check_fwd_bit(Msg->fbbs, user->BBSNumber))		// for this BBS?	
+					{
+						if (check_fwd_bit(Msg->forw, user->BBSNumber))	// Already sent?
+							 clear_fwd_bit(Msg->fbbs, user->BBSNumber);
+
+					}
+				}
+
+				// If still some bits set, change to $
+
+				if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+				{
+					if (FirstMessageIndextoForward > n)
+						FirstMessageIndextoForward = n;
+
+					if (Msg->type == 'B' && SaveStatus == 'F')
+						Msg->status = '$';
+				}
+				else
+				{
+					// all clear - set to N or F
+
+					if (Msg->type == 'B')
+					{
+						if (memcmp(Msg->forw, zeros, NBMASK) == 0)
+							Msg->status = 'N';						// Not sent anywhere, and nowhere to send, so N
+						else
+							Msg->status = 'F';
+					}
+				}
+			}
+		}
+	}
+}
+
+
+
 
