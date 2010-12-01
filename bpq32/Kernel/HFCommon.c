@@ -613,8 +613,10 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 		
 				while (Freqptr[0])
 				{
-
 					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
+
+					if (BandWidth == 'R')
+							continue;							// Don't Report Robust Packet
 
 					if (Freqptr[0]->Bandwidth == 'W')
 					{

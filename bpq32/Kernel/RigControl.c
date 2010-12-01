@@ -1768,7 +1768,9 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 
 			RIG->CurrentBandWidth = ptr->Bandwidth;
 
-			if (ptr->Bandwidth == 'W')
+			if (ptr->Bandwidth == 'R')			// Robust Packet
+				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 6);	// Set Robust Packet
+			else if (ptr->Bandwidth == 'W')
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 4);	// Set Wide Mode
 			else
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 5);	// Set Narrow Mode
@@ -2996,6 +2998,8 @@ PortFound:
 				Bandwidth = 'W';
 			else if (strchr(&Modeptr[1], 'N'))
 				Bandwidth = 'N';
+			else if (strchr(&Modeptr[1], 'R'))			// Robust Packet
+				Bandwidth = 'R';
 
 			if (strstr(&Modeptr[1], "A1"))
 				Antenna = '1';

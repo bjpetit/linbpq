@@ -317,11 +317,11 @@
 // 410p		Build 9 November 2010
 
 // Get Bandwith for map report from WL2K Report Command
-// Fix freq display for FT100 (ws KHz, not MHz)
+// Fix freq display for FT100 (was KHz, not MHz)
 // Don't try to change SCS mode whilst initialising
 // Allow reporting of Lat/Lon as well as Locator
 // Fix Telnet Log Name
-// Fix stating with Minimized windows when Minimizetotray isn't set
+// Fix starting with Minimized windows when Minimizetotray isn't set
 
 
 #include "KVerhddr.h"
