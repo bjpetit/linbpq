@@ -209,7 +209,7 @@ Public Class Form1
       Catch ex As Exception
 
       End Try
-      SaveNodesFile()
+      SaveNodesFile(True)
 
    End Sub
 
@@ -470,7 +470,7 @@ Public Class Form1
 
                                     ChatChanged = True
 
-                                    SaveNodesFile()
+                                    SaveNodesFile(True)
 
                                  End If
 
@@ -794,12 +794,34 @@ Public Class Form1
 
             .Locator = Locator
 
-            ' Randomize - Square is one 5 minutes longitude * 2,5 minutes latitude
+            If Locator.Length = 6 Then
 
-            FromLOC(Locator, Lat, Lon)
+               ' Locator
 
-            Lat = Lat + Rnd() / 24
-            Lon = Lon + Rnd() / 12
+               FromLOC(Locator, Lat, Lon)
+
+               ' Randomize - Square is one 5 minutes longitude * 2,5 minutes latitude
+
+               Lat = Lat + Rnd() / 24
+               Lon = Lon + Rnd() / 12
+
+               .LocType = LOC
+
+            Else
+
+               ' Assume Lat/Lon - comma separared
+
+               Dim LatLon() As String = Split(Locator, ":")
+
+               If LatLon.Length < 2 Then Return
+
+               Lat = CDbl(LatLon(0))
+               Lon = CDbl(LatLon(1))
+
+               .LocType = USER
+
+
+            End If
 
             .Lat = Lat.ToString
             .Lon = Lon.ToString
@@ -810,19 +832,25 @@ Public Class Form1
 
       End With
 
+      With Nodes(Index)
 
-      If Nodes(Index).Version <> Version Then
+         If .Version <> Version Then
 
-         NodeChanged = True
-         Nodes(Index).Version = Version
+            NodeChanged = True
+            .Version = Version
 
-      End If
+         End If
 
-      Nodes(Index).Comment = Nodes(Index).Callsign & " " & Locator & "  " & Version
+         If Locator.Length = 6 Then
+            .Comment = .Callsign & " " & Locator & " Ver " & Version
+         Else
+            .Comment = .Callsign & " Ver " & Version
+         End If
 
-      If Nodes(Index).Count = 0 Then NodeChanged = True
+         If .Count = 0 Then NodeChanged = True
 
-      Nodes(Index).Count = 60
+         .Count = 60
+      End With
 
    End Sub
 
@@ -858,7 +886,12 @@ Public Class Form1
                   .downIcon = "redmarker.png"
 
                   .CallIndex = FindCallsign(Elements(1))
-                  .Comment = Nodes(Index).Callsign & " " & CallsignData(.CallIndex).Locator & "  " & .Version
+
+                  If CallsignData(.CallIndex).Locator.Length = 6 Then
+                     .Comment = Nodes(Index).Callsign & " " & CallsignData(.CallIndex).Locator & " Ver " & .Version
+                  Else
+                     .Comment = Nodes(Index).Callsign & " Ver " & .Version
+                  End If
 
                   .KillTimer = 23
                   .Count = 20
@@ -1328,7 +1361,7 @@ Public Class Form1
       NodeActive.Text = j.ToString
 
       If NodeChanged = False Then
-         SaveNodesFile()
+         SaveNodesFile(False)
          Return
       End If
 
@@ -1336,7 +1369,7 @@ Public Class Form1
 
       Using sw As StreamWriter = New StreamWriter(My.Settings.NodesFileName)
 
-         sw.Write(Now.ToUniversalTime & vbCrLf & "|")
+         sw.Write(Now.ToUniversalTime & " - " & j.ToString & " Active Nodes" & vbCrLf & "|")
 
          For i = 0 To NodeIndex - 1
 

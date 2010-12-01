@@ -98,7 +98,7 @@ Public Class AddNode
 
       Next
 
-      SaveNodesFile()
+      SaveNodesFile(True)
 
       Me.DialogResult = System.Windows.Forms.DialogResult.OK
 
