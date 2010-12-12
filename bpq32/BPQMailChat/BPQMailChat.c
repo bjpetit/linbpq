@@ -600,6 +600,7 @@
 // Allow multiple To: addresses, separated by ;
 // Allow Houskeeping Lifetime Overrides to apply to Unsent Messages.
 // Set Unforwarded Bulls to status '$'
+// Accept MARS and USA as continent codes for MARS Packet Addresses
 
 
 

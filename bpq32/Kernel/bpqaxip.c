@@ -1063,7 +1063,6 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		}
 		break;
 
-
 	case WM_CHAR:
 
 		if (PORT->MHEnabled == FALSE && PORT->MHAvailable)

@@ -643,6 +643,25 @@ DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 			PORT->Timeout = 0;
 			return;
 
+		case FT2000:
+
+			if (PTTState)
+			{
+				strcpy(Poll,"TX1;");
+				PORT->TXLen = 4;
+			}
+			else
+			{
+				strcpy(Poll,"TX0;");
+				PORT->TXLen = 4;
+			}
+
+			RigWriteCommBlock(PORT);
+
+			PORT->Retries = 1;
+			PORT->Timeout = 0;
+			return;
+
 		case FT100:
 
 			*(Poll++) = 0;
@@ -1125,6 +1144,7 @@ portok:
 		return TRUE;
 
 	case KENWOOD:
+	case FT2000:
 			
 		if (n < 3)
 		{
@@ -1163,7 +1183,10 @@ portok:
 
 		Poll = (UCHAR *)&buffptr[20];
 
-		buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+		if (PORT->PortType == FT2000)
+			buffptr[1] = wsprintf(Poll, "FA%s;MD0%d;FA;MD;", &FreqString[1], ModeNo);
+		else
+			buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 		
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1363,6 +1386,7 @@ DllExport BOOL APIENTRY Rig_Poll()
 			break;
 
 		case KENWOOD:
+		case FT2000:
 			
 			KenwoodPoll(PORT);
 			break;
@@ -1572,6 +1596,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		return;
 
 	case KENWOOD:
+	case FT2000:
 	
 		if (Length < 2)				// Minimum Frame Sise
 			return;
@@ -1681,7 +1706,7 @@ GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
 
-			RIG->ScanCounter = 10 * RIG->ScanFreq; 
+			RIG->ScanCounter = RIG->ScanFreq; 
 			return FALSE;
 		}
 		
@@ -1718,7 +1743,7 @@ DoChange:
 
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
-			RIG->ScanCounter = 10 * RIG->ScanFreq; 
+			RIG->ScanCounter = RIG->ScanFreq; 
 
 			ReleasePermission(RIG);
 			return FALSE;
@@ -1729,7 +1754,7 @@ DoChange:
 	SetWindowText(RIG->hSCAN, "S");
 	RIG->WaitingForPermission = FALSE;
 
-	RIG->ScanCounter = 10 * RIG->ScanFreq; 
+	RIG->ScanCounter = RIG->ScanFreq; 
 
 	ptr = RIG->FreqPtr;
 
@@ -1768,9 +1793,11 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 
 			RIG->CurrentBandWidth = ptr->Bandwidth;
 
-			if (ptr->Bandwidth == 'R')			// Robust Packet
-				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 6);	// Set Robust Packet
-			else if (ptr->Bandwidth == 'W')
+//			if (ptr->Bandwidth == 'R')			// Robust Packet
+//				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 6);	// Set Robust Packet
+//			else 
+				
+			if (ptr->Bandwidth == 'W')
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 4);	// Set Wide Mode
 			else
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 5);	// Set Narrow Mode
@@ -2508,13 +2535,21 @@ Loop:
 	ptr = strchr(Msg, ';');
 	CmdLen = ptr - Msg +1;
 
-	if (Msg[0] == 'F' && Msg[1] == 'A' && CmdLen > 10)
+	if (Msg[0] == 'F' && Msg[1] == 'A' && CmdLen > 9)
 	{
 		char FreqDecimal[10];
 		int F1, i;
 
-		memcpy(FreqDecimal,&Msg[7], 6);
-
+		if (PORT->PortType == FT2000)
+		{
+			memcpy(FreqDecimal,&Msg[5], 6);
+			Msg[5] = 0;
+		}
+		else
+		{
+			memcpy(FreqDecimal,&Msg[7], 6);
+			Msg[7] = 0;
+		}
 		FreqDecimal[6] = 0;
 
 		for (i = 5; i > 2; i--)
@@ -2525,7 +2560,7 @@ Loop:
 				break;
 		}
 
-		Msg[7] = 0;
+
 		F1 = atoi(&Msg[2]);
 
 		wsprintf(Status,"%d.%s", F1, FreqDecimal);
@@ -2537,6 +2572,9 @@ Loop:
 	else if (Msg[0] == 'M' && Msg[1] == 'D')
 	{
 		int Mode = Msg[2] - 48;
+
+		if (PORT->PortType == FT2000)
+			Mode = Msg[3] - 48;
 
 		if (Mode > 7) Mode = 7;
 
@@ -2605,7 +2643,10 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 				RIG->FreqPtr++;
 	
-				PORT->TXLen = 24;
+				if (PORT->PortType == FT2000)
+					PORT->TXLen = 22;
+				else
+					PORT->TXLen = 24;
 				RigWriteCommBlock(PORT);
 				PORT->CmdSent = 1;
 				PORT->Retries = 0;	
@@ -2735,6 +2776,7 @@ DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
 	char Bandwidth, Antenna;
 	struct TimeScan * SaveBand;
 	char PTTRigName[] = "PTT";
+	double ScanFreq;
 
 	_strupr(buf);
 
@@ -2835,7 +2877,13 @@ PortFound:
 	if (strcmp(RigName, "FT100") == 0 && PORT->PortType == YAESU)
 	{
 		PORT->PortType = FT100;
-		Debugprintf("Setting FT100 Mode");
+	}
+
+	// FT2000 seems to be different to most other YAESU types
+
+	if (strcmp(RigName, "FT2000") == 0 && PORT->PortType == YAESU)
+	{
+		PORT->PortType = FT2000;
 	}
 
 	// If PTTONLY, may be defining another rig using the other control line
@@ -2911,7 +2959,10 @@ PortFound:
 		return RIG;
 
 	if (ptr == NULL) return (FALSE);
-	RIG->ScanFreq = atoi(ptr);
+	
+	ScanFreq = atof(ptr);
+
+	RIG->ScanFreq = ScanFreq * 10;
 
 	RIG->FreqText = _strdup(Context);
 
@@ -2998,8 +3049,8 @@ PortFound:
 				Bandwidth = 'W';
 			else if (strchr(&Modeptr[1], 'N'))
 				Bandwidth = 'N';
-			else if (strchr(&Modeptr[1], 'R'))			// Robust Packet
-				Bandwidth = 'R';
+//			else if (strchr(&Modeptr[1], 'R'))			// Robust Packet
+//				Bandwidth = 'R';
 
 			if (strstr(&Modeptr[1], "A1"))
 				Antenna = '1';
@@ -3030,7 +3081,8 @@ PortFound:
 				}
 				break;
 
-			case KENWOOD:						
+			case KENWOOD:
+			case FT2000:
 						
 				for (ModeNo = 0; ModeNo < 8; ModeNo++)
 				{
@@ -3167,6 +3219,10 @@ PortFound:
 		else if	(PORT->PortType == KENWOOD)
 		{	
 			CmdPtr += wsprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+		}
+		else if	(PORT->PortType == FT2000)
+		{	
+			CmdPtr += wsprintf(CmdPtr, "FA%s;MD0%d;FA;MD;", &FreqString[1], ModeNo);
 		}
 		else if	(PORT->PortType == FT100)
 		{	

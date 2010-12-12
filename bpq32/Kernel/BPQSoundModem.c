@@ -119,8 +119,6 @@ char ClassName[]="SOUNDMAINWINDOW";					// the main window class name
 
 HWND hWnd;
 
-BOOL cfgMinToTray;
-
 LOGFONT LFTTYFONT ;
 
 HFONT hFont ;
@@ -195,7 +193,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	SoundCardInterface(ConfigNo, CLOSING, 0, 0);
 
-	if (cfgMinToTray)
+	if (MinimizetoTray)
 		DeleteTrayMenuItem(hWnd);
 
 	return (msg.wParam);
@@ -289,7 +287,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hDCD = GetDlgItem(hWnd, IDC_DCD);
 	hPTT = GetDlgItem(hWnd, IDC_PTT);
 
-	cfgMinToTray = GetMinimizetoTrayFlag();
+	MinimizetoTray = GetMinimizetoTrayFlag();
 		
 	if (Minimized)
 		if (MinimizetoTray)
@@ -301,7 +299,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
-	if (cfgMinToTray)
+	if (MinimizetoTray)
 	{
 		wsprintf(Title, "SoundModem %d", ConfigNo);
 		AddTrayMenuItem(hWnd, Title);

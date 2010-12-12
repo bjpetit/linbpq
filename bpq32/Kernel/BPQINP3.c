@@ -1357,6 +1357,7 @@ UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
 		}
 
 		ptr2+=wsprintf(ptr2, "  %s:%s% %d %4.2d\r", alias, call, hops, rtt);
+		alias[0] = 0;
 
 		ptr1++;
 		msglen--;		// EOP

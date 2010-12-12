@@ -116,7 +116,7 @@ ProcessLine(char * buf, int Port)
 	char errbuf[256];
 	char * param;
 	char * value;
-	char * Context, *User, *Pwd, *UserCall;
+	char * Context, *User, *Pwd, *UserCall, *Secure;
 	UINT i;
 	int End = strlen(buf) -1;
 	struct TNCINFO * TNC;
@@ -226,6 +226,7 @@ ProcessLine(char * buf, int Port)
 			User = strtok_s(value, ", ", &Context);
 			Pwd = strtok_s(NULL, ", ", &Context);
 			UserCall = strtok_s(NULL, ", ", &Context);
+			Secure = strtok_s(NULL, ", ", &Context);
 
 			if (User == 0 || Pwd == 0)
 				// invalid record
@@ -249,13 +250,18 @@ ProcessLine(char * buf, int Port)
 			else
 				TCP->UserRecPtr = realloc(TCP->UserRecPtr, (TCP->NumberofUsers+1)*4);
 
-			USER = malloc(12);
+			USER = zalloc(sizeof(struct UserRec));
 
 			TCP->UserRecPtr[TCP->NumberofUsers] = USER;
  
 			USER->Callsign=malloc(strlen(UserCall)+1);
 			USER->Password=malloc(strlen(Pwd)+1);
 			USER->UserName=malloc(strlen(User)+1);
+			USER->Secure = FALSE;
+
+			if (Secure)
+				if (_stricmp(Secure, "SYSOP") == 0)
+					USER->Secure = TRUE;
 
 			strcpy(USER->UserName,User);
 			strcpy(USER->Password,Pwd);
@@ -1176,6 +1182,7 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 		struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 
 		ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
+		TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 	}
 			
 	buffptr[1] = MsgLen;				// Length
@@ -1469,6 +1476,8 @@ MsgLoop:
 			char * ct = TCP->cfgCTEXT;
 
 			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
+
+			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 
             sockptr->LoginState = 2;
             

@@ -95,6 +95,7 @@ struct RIGINFO
 #define PTT 4
 #define ANT 5
 #define FT100 6
+#define FT2000 7
 
 struct RIGPORTINFO
 {

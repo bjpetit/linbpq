@@ -217,6 +217,15 @@ ConfigLine:
 				TNC->PacketChannels = atoi(&buf[14]);
 			else
 
+			if (_memicmp(buf, "SCANFORROBUSTPACKET", 19) == 0)
+			{
+				// Spend a percentage of scan time in Robust Packet Mode
+
+				double Robust = atof(&buf[19]);
+				TNC->RobustTime = Robust * 10;
+			}
+			else
+
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
 			else
@@ -392,6 +401,21 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
+		// Ensure in Pactor
+
+		TNC->TXBuffer[2] = 31;
+		TNC->TXBuffer[3] = 0x1;
+		TNC->TXBuffer[4] = 0x1;
+		memcpy(&TNC->TXBuffer[5], "PT", 2);
+
+		CRCStuffAndSend(TNC, TNC->TXBuffer, 7);
+
+		Sleep(25);
+
+		ExitHost(TNC);
+
+		Sleep(25);
+
 		CloseHandle(TNCInfo[port]->hDevice);
 
 		if (TNC->VCOMHandle)
@@ -439,8 +463,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				Switchmode(TNC, 3);
 			}
 
-			if (TNC->HFPacket)
-				SwitchToPactor(TNC);
+			if (TNC->RobustTime)
+				SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
 			
 			return 0;
 		
@@ -454,14 +478,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				Switchmode(TNC, 2);
 			}
 
-			if(TNC->HFPacket)
-				SwitchToPactor(TNC);
+			if (TNC->RobustTime)
+				SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
 
 			return 0;
 
-		case 6:		// Set Robust Packet
+		case 6:		// Changing Freq (Called if changing freq but not bandwidth
 
-			SwitchToPacket(TNC);
+			if (TNC->RobustTime)
+				SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
 		}
 
 	}
@@ -558,8 +583,8 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	TempScript = malloc(1000);
 
-	strcpy(TempScript, "TONES 4\r");			// Tones may be changed but I want this as standard
-
+	strcpy(TempScript, "EXIT\r");				// In case in pac: mode
+	strcat(TempScript, "TONES 4\r");			// Tones may be changed but I want this as standard
 	strcat(TempScript, "MAXERR 30\r");			// Max retries 
 	strcat(TempScript, "MODE 0\r");				// ASCII mode, no PTC II compression (Forwarding will use FBB Compression)
 	strcat(TempScript, "MAXSUM 20\r");			// Max count for memory ARQ
@@ -612,7 +637,7 @@ static void CheckRX(struct TNCINFO * TNC)
 	BOOL       fReadStat;
 	COMSTAT    ComStat;
 	DWORD      dwErrorFlags;
-	int Length;
+	int Length, Len;
 	unsigned short crc;
 	char UnstuffBuffer[500];
 
@@ -628,7 +653,16 @@ static void CheckRX(struct TNCINFO * TNC)
 	if (Length == 0)
 		return;					// Nothing doing
 
-	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
+	while (Length > 20)
+	{
+		fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
+		TNC->RXLen += Len;
+		Length -= Len;
+	}
+
+	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
+
+//	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
 	
 	if (!fReadStat)
 	{
@@ -636,7 +670,7 @@ static void CheckRX(struct TNCINFO * TNC)
 		return;
 	}
 	
-	TNC->RXLen += Length;
+	TNC->RXLen += Len;
 
 	Length = TNC->RXLen;
 
@@ -670,7 +704,7 @@ static void CheckRX(struct TNCINFO * TNC)
 		if (strlen(TNC->RXBuffer) < TNC->RXLen)
 			TNC->RXLen = 0;
 
-		if (strstr(TNC->RXBuffer, "cmd: ") == 0)
+		if ((strstr(TNC->RXBuffer, "cmd: ") == 0) && (strstr(TNC->RXBuffer, "pac: ") == 0))
 
 			return;				// Wait for rest of frame
 
@@ -838,6 +872,15 @@ VOID DEDPoll(int Port)
 		}
 	}
 
+	if (TNC->SwitchToPactor)
+	{
+		TNC->SwitchToPactor--;
+	
+		if (TNC->SwitchToPactor == 0)
+			SwitchToPactor(TNC);
+	}
+		
+
 
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
@@ -867,6 +910,7 @@ VOID DEDPoll(int Port)
 				// Stop Scanner
 		
 				wsprintf(Status, "%d SCANSTOP", TNC->Port);
+				TNC->SwitchToPactor = 0;						// Cancel any RP to Pactor switch
 		
 				Rig_Command(-1, Status);
 			}
@@ -985,6 +1029,21 @@ VOID DEDPoll(int Port)
 			// Node has disconnected us. If connected to remote, disconnect.
 			// Then set mycall back to Node or Port Call
 		
+			if (TNC->Streams[Stream].Connected)
+			{
+				// Node has disconnected
+			
+				UCHAR * Poll = TNC->TXBuffer;
+
+				TNC->Streams[Stream].Connected = FALSE;
+				TNC->TXBuffer[2] = TNC->Streams[Stream].DEDStream;
+				TNC->TXBuffer[3] = 0x1;
+				TNC->TXBuffer[4] = 0x0;
+				TNC->TXBuffer[5] = 'D';
+
+				CRCStuffAndSend(TNC, TNC->TXBuffer, 6);
+			}
+
 			TNC->Streams[Stream].Attached = FALSE;
 
 			TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
@@ -1023,21 +1082,8 @@ VOID DEDPoll(int Port)
 			}
 
 			if (TNC->Streams[Stream].Connected)
-			{
-				// Node has disconnected
-			
-				UCHAR * Poll = TNC->TXBuffer;
+				return;			// We've sent a disconnect
 
-				TNC->Streams[Stream].Connected = FALSE;
-				TNC->TXBuffer[2] = TNC->Streams[Stream].DEDStream;
-				TNC->TXBuffer[3] = 0x1;
-				TNC->TXBuffer[4] = 0x0;
-				TNC->TXBuffer[5] = 'D';
-
-				CRCStuffAndSend(TNC, TNC->TXBuffer, 6);
-
-				return;
-			}
 		}
 	}
 
@@ -1324,7 +1370,6 @@ VOID DEDPoll(int Port)
 				{
 					Poll[2] = TNC->Streams[0].DEDStream = 30;			// Last Packet Channel
 					memmove(Buffer, &Buffer[1], datalen--);
-
 				}
 
 				if (Buffer[0] == 'C' && datalen > 2)	// Connect
@@ -1342,6 +1387,8 @@ VOID DEDPoll(int Port)
 					}
 					memcpy(TNC->Streams[Stream].RemoteCall, Buffer, 9);
 
+					TNC->Streams[Stream].Connecting = TRUE;
+
 					if (Stream == 0)
 					{
 						// See if Busy
@@ -1352,8 +1399,15 @@ VOID DEDPoll(int Port)
 
 							if (TNC->OverrideBusy == 0)
 							{
-								// Save Command, and wait up to 10 secs
+								// Send Mode Command Now, Save Command, and wait up to 10 secs
 
+								TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
+
+								if (TNC->Streams[0].DEDStream == 30)
+									wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r", TNC->Streams[0].MyCall);
+								else
+									wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r", TNC->Streams[0].MyCall);
+	
 								Buffer -=2;
 								TNC->ConnectCmd = _strdup(Buffer);
 								TNC->BusyDelay = 100;		// 10 secs
@@ -1362,13 +1416,23 @@ VOID DEDPoll(int Port)
 							}
 						}
 
+						// Send Mode Command followed by connect 
+
+						TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
+
+						if (TNC->Streams[0].DEDStream == 30)
+							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
+						else
+							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
+
 						TNC->OverrideBusy = FALSE;
 
 						wsprintf(Status, "%s Connecting to %s", TNC->Streams[Stream].MyCall, TNC->Streams[Stream].RemoteCall);
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
-					}
 
-					TNC->Streams[Stream].Connecting = TRUE;
+						TNC->Streams[0].InternalCmd = FALSE;
+						return;
+					}
 				}
 			}
 
@@ -1563,7 +1627,7 @@ BOOL CheckRXText(struct TNCINFO * TNC)
 	if (strlen(TNC->RXBuffer) < TNC->RXLen)
 		TNC->RXLen = 0;
 
-	if (strstr(TNC->RXBuffer, "cmd: ") == 0)
+	if ((strstr(TNC->RXBuffer, "cmd: ") == 0) && (strstr(TNC->RXBuffer, "pac: ") == 0))
 		return 0;				// Wait for rest of frame
 
 	// Complete Char Mode Frame
@@ -1659,6 +1723,25 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 
 	EnterExit = TRUE;
 
+	if (TNC->HFPacket)
+	{
+		Poll[2] = 31;
+		Poll[3] = 0x1;
+		Poll[4] = 0x1;
+		memcpy(&Poll[5], "PT", 2);
+		CRCStuffAndSend(TNC, Poll, 7);
+
+		TNC->HFPacket = FALSE;
+
+		n = 0;
+		while (CheckRXHost(TNC) == FALSE)
+		{
+			Sleep(5);
+			n++;
+			if (n > 100) break;
+		}
+	}
+
 	Poll[2] = 31;
 	Poll[3] = 0x41;
 	Poll[4] = 0x5;
@@ -1698,7 +1781,7 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 
 	Sleep(10);
 
-	Poll[2] = 0;
+	Poll[2] = 255;			// Channel
 	TNC->Toggle = 0;
 	Poll[3] = 0x41;
 	Poll[4] = 0;			// Len-1
@@ -1707,14 +1790,6 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 	CRCStuffAndSend(TNC, Poll, 6);
 	TNC->InternalCmd = FALSE;
 	TNC->Timeout = 5;		// 1/2 sec - In case missed
-
-	if (TNC->HFPacket)
-	{
-		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
-		wsprintf(TNC->Streams[0].CmdSet, "PT\r");
-
-		TNC->HFPacket = FALSE;
-	}
 
 	EnterExit = FALSE;
 
@@ -1735,6 +1810,8 @@ VOID SwitchToPacket(struct TNCINFO * TNC)
 	wsprintf(TNC->Streams[0].CmdSet, "PR\r");
 
 	TNC->HFPacket = TRUE;
+
+	TNC->SwitchToPactor = TNC->RobustTime;
 }
 
 
@@ -2034,7 +2111,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (Msg[3] == 3)					// Status
 		{			
-			if (strstr(Buffer, "DISCONNECTED"))
+			if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "LINK FAILURE"))
 			{
 				if ((TNC->Streams[Stream].Connecting | TNC->Streams[Stream].Connected) == 0)
 					return;
@@ -2099,6 +2176,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 				if (Stream == 0 || TNC->HFPacket)
 				{
+					TNC->SwitchToPactor = 0;						// Cancel any RP to Pactor switch
+
 					wsprintf(Status, "%d SCANSTOP", TNC->Port);
 					Rig_Command(-1, Status);
 

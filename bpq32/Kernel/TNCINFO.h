@@ -24,6 +24,7 @@ struct UserRec
 	char * UserName;
 	char * Password;
 	char * Appl;				// Autoconnect APPL
+	BOOL Secure;				// Authorised User
 };
 
 struct TCPINFO
@@ -269,6 +270,8 @@ typedef struct TNCINFO
 	int Mode;						// Mode Flag
 
 	int PacketChannels;
+	int RobustTime;					// For PTC, Spend this part of scan cycle (in 10th secs) in Robust Packet Mode 
+	int SwitchToPactor;				// Countdown to switch
 
 	BOOL OldMode;					// Use PACTOR instead of TOR (for old software)
 

@@ -1322,9 +1322,9 @@ int i;
 	   }
 	   bputc(quality,fp2);
 
-	   if (port < 1 || port > 16)
+	   if (port < 1 || port > 32)
 	   {
-			Consoleprintf("Port number must be between 1 and 16");
+			Consoleprintf("Port number must be between 1 and 32");
 			Consoleprintf("%s\r\n",rec);
 			err_flag = 1;
 	   }

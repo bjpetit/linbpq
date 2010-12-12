@@ -615,8 +615,8 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 				{
 					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
 
-					if (BandWidth == 'R')
-							continue;							// Don't Report Robust Packet
+//					if (BandWidth == 'R')
+//							continue;							// Don't Report Robust Packet
 
 					if (Freqptr[0]->Bandwidth == 'W')
 					{
@@ -649,7 +649,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 					while (WL2KInfoPtr->Bandwidth)
 					{
-						if (strcmp(WL2KInfoPtr->Freq, Valchar) == 0)
+						if ((strcmp(WL2KInfoPtr->Freq, Valchar) == 0) && WL2KInfoPtr->Bandwidth == Mode)
 						{
 							// Add timeband to freq
 

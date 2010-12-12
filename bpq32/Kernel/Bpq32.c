@@ -322,6 +322,9 @@
 // Allow reporting of Lat/Lon as well as Locator
 // Fix Telnet Log Name
 // Fix starting with Minimized windows when Minimizetotray isn't set
+// Extra Program Error trapping in SessionControl
+// Fix reporting same freq with different bandwidths at different times.
+// Code changes to support SCS Robust Packet Mode.
 
 
 #include "KVerhddr.h"
@@ -823,7 +826,7 @@ VOID CheckforLostProcesses()
 			{
 				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\r\n");
 				Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
-					Sem_eax, Sem_ebx = 0, Sem_ecx = 0, Sem_edx = 0, Sem_esi = 0, Sem_edi); 
+					Sem_eax, Sem_ebx, Sem_ecx, Sem_edx, Sem_esi, Sem_edi); 
 
 				Semaphore=0;
 			}
@@ -2581,26 +2584,75 @@ DllExport int APIENTRY SessionControl(int stream, int command, int param)
 //	Send Session Control command (BPQHOST function 6)
 //;	CL=0 CONNECT USING APPL MASK IN DL
 //;	CL=1, CONNECT. CL=2 - DISCONNECT. CL=3 RETURN TO NODE
-	_asm {
 
-	pushfd
-	cld
-	pushad
+	struct _EXCEPTION_POINTERS exinfo;
+	UINT SaveSP;
 
-	mov	ah,6
-	mov	al,byte ptr stream
-	mov	cl,byte ptr command
-	mov edx,param
+	_asm {mov SaveSP,ESP}
+	
+	__try 
+	{
+		_asm {
 
-	call	BPQHOSTAPI
+		pushfd
+		cld
+		pushad
 
-	popad
-	popfd
+		mov	ah,6
+		mov	al,byte ptr stream
+		mov	cl,byte ptr command
+		mov edx,param
+
+		call	BPQHOSTAPI
+
+		popad
+		popfd
+
+		}
+	}
+	__except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)
+	{
+		unsigned int SPPtr;
+		unsigned int SPVal;
+
+		DWORD Stack[16];
+		
+		SPPtr = exinfo.ContextRecord->Esp;	
+
+		__asm{
+
+		mov eax, SPPtr
+		mov SPVal,eax
+		lea edi,Stack
+		mov esi,eax
+		mov ecx,64
+		rep movsb
+
+		}
+
+		Debugprintf("BPQ32 *** Program Error %x at %x in Session Control",
+			exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress);
+
+		Debugprintf("EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x ESP %x",
+			exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,
+			exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi, SPVal);
+		
+		Debugprintf("Stack:");
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			SPVal, Stack[0], Stack[1], Stack[2], Stack[3], Stack[4], Stack[5], Stack[6], Stack[7]);
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			SPVal+32, Stack[8], Stack[9], Stack[10], Stack[11], Stack[12], Stack[13], Stack[14], Stack[15]);
+
+		if (Semaphore && SemProcessID == GetCurrentProcessId())
+			FreeSemaphore();
 
 	}
 
-	return (0);
+	_asm {mov ESP, SaveSP}
 
+	return 0;
 }
 
 
@@ -2981,8 +3033,6 @@ BPQRET:
 	FreeSemaphore();
 
 	return(retcode);
-
-
 }
 
 DllExport int APIENTRY AllocateStream(int stream)
@@ -3050,19 +3100,16 @@ DllExport int APIENTRY DeallocateStream(int stream)
 
 DllExport int APIENTRY BPQSetHandle(int Stream, HWND hWnd)
 { 
-	
 	BPQHOSTVECTOR[Stream-1].HOSTHANDLE=hWnd;
-
 	return (0);
-
 }
 
 #define L4USER 0
 
 DllExport int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall)
 { 
-
 	// Equivalent to "*** linked to" command
+
 	_asm {
 
 	pushfd
@@ -3080,14 +3127,12 @@ DllExport int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall)
 	MOV	ECX,7
 	REP MOVSB
 
-
 	popad
 	popfd
 
 	}
 
 	return (0);
-
 }
 
 
