@@ -601,8 +601,11 @@
 // Allow Houskeeping Lifetime Overrides to apply to Unsent Messages.
 // Set Unforwarded Bulls to status '$'
 // Accept MARS and USA as continent codes for MARS Packet Addresses
+// Add option to send Non-delivery notifications.
 
+// Version 1.0.4.26 Dec 2010
 
+// Add MSGTYPES fwd file option
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -1191,6 +1194,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 			if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
 			{
+				if (_memicmp(PORTVEC->PORT_DLL_NAME, "TELNET.DLL", 1) == 0)
+					KISSOnly = FALSE;
+
 				if (PORTVEC->PORTCONTROL.PROTOCOL != 10)	// Pactor/WINMOR
 					KISSOnly = FALSE;
 
@@ -2311,9 +2317,12 @@ int Connected(Stream)
 		
 		if (Stream == conn->BPQStream)
 		{
+
 			if (conn->Active)
 			{
 				// Probably an outgoing connect
+		
+				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 
 				if (conn->BBSFlags & RunningConnectScript)
 				{
@@ -2338,6 +2347,8 @@ int Connected(Stream)
 			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->Active = TRUE;
 			conn->BPQStream = Stream;
+
+			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 
 			GetConnectionInfo(Stream, callsign, &port, &conn->SessType, &paclen, &maxframe, &l4window);
 
@@ -6950,6 +6961,32 @@ InBand:
 		
 		if (Cmd && memcmp(Cmd, "TIMES", 5) != 0 && memcmp(Cmd, "ELSE", 4) != 0)			// Only Check until script is finished
 		{
+			if (memcmp(Cmd, "MSGTYPE", 7) == 0)
+			{
+				// Select Types to send. Only send types in param. Only reverse if R in param
+
+				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
+
+				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = FALSE;
+
+				strcpy(conn->MSGTYPES, &Cmd[8]);
+
+				if (strchr(&Cmd[8], 'B')) conn->SendB = TRUE;
+				if (strchr(&Cmd[8], 'P')) conn->SendP = TRUE;
+				if (strchr(&Cmd[8], 'T')) conn->SendT = TRUE;
+				if (strchr(&Cmd[8], 'R')) conn->DoReverse = TRUE;
+
+				// If nothing to do, terminate script
+
+				if (conn->DoReverse || SeeifMessagestoForward(conn->UserPointer->BBSNumber, conn))
+					goto LoopBack;
+
+				Logprintf(LOG_BBS, conn, '?', "Nothing to do - quitting");
+				Disconnect(conn->BPQStream);
+				return FALSE;
+
+			}
+
 			if (memcmp(Cmd, "INTERLOCK ", 10) == 0)
 			{
 				// Used to limit connects on a port to 1
@@ -7131,7 +7168,7 @@ CheckForSID:
 			//nodeprintf(conn,";FW: GM8BPQ-1 G8BPQ G8BPQ-5 GM8BPQ G8BPQ-1 GM8BPQ-2 BPQTST\r");
 		}
 
-		// Only delare B1 and B2 if other end did, and we are configued for it
+		// Only declare B1 and B2 if other end did, and we are configued for it
 
 		nodeprintf(conn, BBSSID, "BPQ-",
 			Ver[0], Ver[1], Ver[2], Ver[3],
@@ -7140,6 +7177,13 @@ CheckForSID:
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
 			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
 
+
+		if (conn->BPQBBS && conn->MSGTYPES[0])
+
+			// Send a ; MSGTYPES to control what he sends us
+
+			nodeprintf(conn, "; MSGTYPES %s\r", conn->MSGTYPES);
+
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
 
 		conn->UserPointer->ConnectsOut++;
@@ -7147,7 +7191,15 @@ CheckForSID:
 		if (conn->BBSFlags & FBBForwarding)
 		{
 			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
-				BBSputs(conn, "FF\r");
+			{
+				if (conn->DoReverse)
+					BBSputs(conn, "FF\r");
+				else
+				{
+					BBSputs(conn, "FQ\r");
+					conn->CloseAfterFlush = 20;			// 2 Secs
+				}
+			}
 
 			return TRUE;
 		}
@@ -7167,6 +7219,11 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 		conn->RMSExpress = TRUE;
 		conn->Paclink = FALSE;
 	}
+
+	// See if BPQ for selective forwarding 
+
+	if (strstr(SID, "BPQ"))
+		conn->BPQBBS = TRUE;
 
 	while (len > 0)
 	{
@@ -7285,7 +7342,7 @@ VOID FWDTimerProc()
 
 				if (ForwardingInfo->Enabled)
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (SeeifMessagestoForward(user->BBSNumber) || ForwardingInfo->ReverseFlag)
+						if (SeeifMessagestoForward(user->BBSNumber, NULL) || ForwardingInfo->ReverseFlag)
 /*
 							if (strcmp(user->Call, "RMS") == 0)
 							{
@@ -7323,7 +7380,7 @@ void StartForwarding(int BBSNumber)
 			if (ForwardingInfo)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (SeeifMessagestoForward(BBSNumber) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
+						if (SeeifMessagestoForward(BBSNumber, NULL) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
 /*							if (strcmp(user->Call, "RMS") == 0)
 							{
 								if (ForwardingInfo->UserIndex == 0)
@@ -7390,7 +7447,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 		}
 	}
 
-	if (FindMessagestoForwardLoop(conn, 'T'))
+	if (conn->SendT && FindMessagestoForwardLoop(conn, 'T'))
 	{
 		conn->LastForwardType = 'T';
 		return TRUE;
@@ -7399,7 +7456,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	if (conn->LastForwardType == 'T')
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
 
-	if (FindMessagestoForwardLoop(conn, 'P'))
+	if (conn->SendP && FindMessagestoForwardLoop(conn, 'P'))
 	{
 		conn->LastForwardType = 'P';
 		return TRUE;
@@ -7408,7 +7465,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	if (conn->LastForwardType == 'P')
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
 
-	if (FindMessagestoForwardLoop(conn, 'B'))
+	if (conn->SendB && FindMessagestoForwardLoop(conn, 'B'))
 	{
 		conn->LastForwardType = 'B';
 		return TRUE;
@@ -7524,9 +7581,11 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type)
 	return Found;
 }
 
-BOOL SeeifMessagestoForward (int BBSNumber)
+BOOL SeeifMessagestoForward (int BBSNumber, CIRCUIT * conn)
 {
 	// See if any messages are queued for this BBS
+
+	// Conn is not NULL, also check Msg Type
 
 	int m;
 	struct MsgInfo * Msg;
@@ -7536,7 +7595,17 @@ BOOL SeeifMessagestoForward (int BBSNumber)
 		Msg=MsgHddrPtr[m];
 
 		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
-			return TRUE;
+		{
+			if (conn)
+			{
+				char Type = Msg->type;
+
+				if ((conn->SendB && Type == 'B') || (conn->SendP && Type == 'P') || (conn->SendT && Type == 'T'))
+					return TRUE;
+			}
+			else
+				return TRUE;
+		}
 	}
 
 	return FALSE;

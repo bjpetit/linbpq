@@ -35,6 +35,7 @@
 #define IDC_MSGTITLE                    1021
 #define IDC_MAINTSAVEREG                1021
 #define IDC_MSGBID                      1022
+#define IDC_MAINTNONDELIVERY            1022
 #define IDSEND                          1023
 #define IDCANCELMSG                     1024
 #define IDC_ALIAS                       1025
@@ -77,7 +78,7 @@
 #define IDC_REJTO                       1078
 #define IDC_REJAT                       1079
 #define IDC_FILTERSAVE                  1080
-#define IDC_OVERRIDEUNSENT				1081
+#define IDC_OVERRIDEUNSENT              1081
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101

@@ -325,6 +325,7 @@
 // Extra Program Error trapping in SessionControl
 // Fix reporting same freq with different bandwidths at different times.
 // Code changes to support SCS Robust Packet Mode.
+// Add FT2000 to Rigcontrol
 
 
 #include "KVerhddr.h"

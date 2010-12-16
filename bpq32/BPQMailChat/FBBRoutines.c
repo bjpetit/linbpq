@@ -39,8 +39,20 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	}
 
 	// Should be FA FB F> FS FF FQ
-	if (Buffer[0] == ';')
-		return;							// winlink comment
+
+	if (Buffer[0] == ';')			// winlink comment or BPQ Type Select
+	{
+		if (memcmp(Buffer, "; MSGTYPES", 7) == 0)
+		{
+			conn->SendB = conn->SendP = conn->SendT = FALSE;
+
+			if (strchr(&Buffer[10], 'B')) conn->SendB = TRUE;
+			if (strchr(&Buffer[10], 'P')) conn->SendP = TRUE;
+			if (strchr(&Buffer[10], 'T')) conn->SendT = TRUE;
+		}
+
+		return;
+	}
 
 	if (Buffer[0] != 'F')
 	{
@@ -209,6 +221,9 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 	case 'Q':
 
+		if (conn->FBBMsgsSent)
+			FlagSentMessages(conn, user);
+
 		Disconnect(conn->BPQStream);
 		return;
 
@@ -218,6 +233,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (conn->FBBMsgsSent)
 			FlagSentMessages(conn, user);			// Mark previously sent messages
 
+		if (conn->DoReverse == FALSE)				// Dont accept messages
+			return;
 
 		// Accumulate checksum
 
@@ -356,6 +373,9 @@ ok:
 		if (conn->FBBMsgsSent)
 			FlagSentMessages(conn, user);			// Mark previously sent messages
 
+		if (conn->DoReverse == FALSE)				// Dont accept messages
+			return;
+
 		// Accumulate checksum
 
 		for (i=0; i< len; i++)
@@ -462,6 +482,13 @@ ok2:
 
 		// Optional Checksum
 
+		if (conn->DoReverse == FALSE)				// Dont accept messages
+		{
+			Logprintf(LOG_BBS, conn, '?', "Reverse Forwarding not allowed");
+			Disconnect(conn->BPQStream);
+			return;
+		}
+
 		if (len > 3)
 		{
 			int sum;
@@ -499,7 +526,14 @@ ok2:
 			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
 			{
 				conn->InputMode = 0;
-				BBSputs(conn, "FF\r");
+				
+				if (conn->DoReverse)
+					BBSputs(conn, "FF\r");
+				else
+				{
+					BBSputs(conn, "FQ\r");
+					conn->CloseAfterFlush = 20;			// 2 Secs
+				}
 			}
 		}
 		else
@@ -577,7 +611,6 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 
 		conn->FBBChecksum = 0;
 		conn->InputMode = 0;
-
 
 		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
 		{

@@ -558,8 +558,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTNOMAIL, SuppressMaintEmail);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTSAVEREG, SaveRegDuringMaint);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_OVERRIDEUNSENT, OverrideUnsent);
-
-
+		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTNONDELIVERY , SendNonDeliveryMsgs);
 
 		if (LTFROM)
 		{
@@ -1808,6 +1807,10 @@ VOID SaveMAINTConfig()
 	OverrideUnsent = IsDlgButtonChecked(hwndDisplay, IDC_OVERRIDEUNSENT);
 	retCode = RegSetValueEx(hKey,"OverrideUnsent", 0, REG_DWORD, (BYTE *)&OverrideUnsent,4);
 
+	SendNonDeliveryMsgs = IsDlgButtonChecked(hwndDisplay, IDC_MAINTNONDELIVERY);
+	retCode = RegSetValueEx(hKey,"SendNonDeliveryMsgs", 0, REG_DWORD, (BYTE *)&SendNonDeliveryMsgs,4);
+
+
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTFROM, hKey, "LTFROM");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTTO, hKey, "LTTO");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTAT, hKey, "LTAT");
@@ -2416,6 +2419,10 @@ TryAgain:
 			Vallen=4;
 			RegQueryValueEx(hKey, "OverrideUnsent", 0,			
 				(ULONG *)&Type,(UCHAR *)&OverrideUnsent,(ULONG *)&Vallen);
+
+			Vallen=4;
+			RegQueryValueEx(hKey, "SendNonDeliveryMsgs", 0,			
+				(ULONG *)&Type,(UCHAR *)&SendNonDeliveryMsgs,(ULONG *)&Vallen);
 
 			LTFROM = GetOverrides(hKey, "LTFROM");
 			LTTO = GetOverrides(hKey, "LTTO");

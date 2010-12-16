@@ -24,6 +24,8 @@
 
 HINSTANCE hInst; 
 
+BOOL TXEnable = TRUE;
+
 #define MAXFLEN 400     /* Maximale Laenge eines Frames */
                         /* maximum length of a frame */
 typedef signed short    i16;
@@ -412,6 +414,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	TimerHandle = SetTimer(hWnd,WM_TIMER, 100, NULL);
 
+	CheckDlgButton(hWnd, IDC_TXEN, 1);
+
 	return (TRUE);
 
 }
@@ -437,6 +441,9 @@ VOID TimerProc()
 	if (SoundCardInterface(ConfigNo, POLL, State, (UINT)&Buffer))	// Pass State to BPQ32 for stats
 	{
 		int Channel =  Buffer[2];
+
+		if (TXEnable == FALSE)
+			return;
 
 		if (TXQ)
 		{
@@ -557,6 +564,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			return (LONG)bgBrush;
 		}
+
+		case WM_COMMAND:
+
+		wmId    = LOWORD(wParam);
+		wmEvent = HIWORD(wParam);
+
+		switch (wmId) {
+
+		case IDC_TXEN:
+
+			TXEnable = IsDlgButtonChecked(hWnd, IDC_TXEN);		
+			break;
+
+		default:
+
+			return 0;
+		}
+
 
 		case WM_SYSCOMMAND:
 

@@ -91,6 +91,9 @@ char FT100Modes[9][6] = {"LSB",  "USB", "CW", "CWR", "AM", "DIG", "FM", "WFM", "
 
 char KenwoodModes[8][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "????"};
 
+char FT2000Modes[16][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "PKT-L", "FSK-R", "PKT-FM", "FM-N", "PKT-U", "????"};
+
+
 char AuthPassword[100] = "";
 
 char LastPassword[17];
@@ -132,453 +135,6 @@ DllExport struct ScanEntry ** APIENTRY CheckTimeBands(struct RIGINFO * RIG)
 	return RIG->FreqPtr;
 }
 
-FILE *file;
-
-char errbuf[256];
-/*
-BOOL ReadConfigFile()
-{
-	char buf[256];
-
-//	NumberofPorts = 0;
-
-	if ((file = fopen(CFGFN,"r")) == NULL)
-		return (TRUE);
-
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-		if (!ProcessLine(buf))
-		{
-			WritetoConsole(" Bad config record ");
-			WritetoConsole(errbuf);
-		}			
-	}
-
-	fclose(file);
-	return (TRUE);
-}
-
-GetLine(char * buf)
-{
-	int len;
-loop:
-	if (fgets(buf, 255, file) == NULL)
-		return 0;
-
-	if (buf[0] < 0x20) goto loop;
-	if (buf[0] == '#') goto loop;
-	if (buf[0] == ';') goto loop;
-
-	len = strlen(buf);
-	if (buf[len-1] < 0x20) buf[len-1] = 0;
-	len = strlen(buf);
-	if (buf[len-1] < 0x20) buf[len-1] = 0;
-	len = strlen(buf);
-	buf[len] = 13;
-	buf[len + 1] = 0;
-
-	strcpy(errbuf,buf);			// save in case of error
-
-	_strupr(buf);
-
-	return 1;
-}
-
-ProcessLine(char * buf)
-{
-	char * ptr;
-	int Radio;
-	int len = 510;
-	struct RIGPORTINFO * PORT;
-	struct RIGINFO * RIG;
-	struct ScanEntry ** FreqPtr;
-	char * CmdPtr;
-	char * Context;
-	int Portno;
-	char Split, Data;
-	char Bandwidth, Antenna;
-	struct TimeScan * SaveBand;
-
-NextPort:
-
-	ptr = strtok_s(buf, " \t\n\r", &Context);
-
-	if(ptr == NULL) return (TRUE);
-
-	if(*ptr =='#') return (TRUE);			// comment
-
-	if(*ptr ==';') return (TRUE);			// comment
-
-	if (memcmp(ptr, "AUTH", 4) == 0)
-	{
-		ptr = strtok_s(NULL, " \t\n\r", &Context);
-		if (ptr == NULL) return FALSE;
-		if (strlen(ptr) > 100) return FALSE;
-
-		strcpy(AuthPassword, ptr);
-		return TRUE;
-	}
-
-//#COM58 19200 ICOM
-
-	if (memcmp(ptr, "COM", 3) == 0)
-	{
-		// New Port definition
-
-		PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct RIGPORTINFO));
-		memset(PORT, 0, sizeof(struct RIGPORTINFO));
-
-		PORT->IOBASE = atoi(&ptr[3]);
-		ptr = strtok_s(NULL, " \t\n\r", &Context);
-		if(ptr == NULL) return (FALSE);
-
-		// Don't need speed for PTTONLY or ANTENNA
-
-		if ((strcmp(ptr, "PTTONLY") != 0) && (strcmp(ptr, "ANTENNA") != 0))
-		{
-			PORT->SPEED = atoi(ptr);
-			ptr = strtok_s(NULL, " \t\n\r", &Context);
-			if(ptr == NULL) return (FALSE);
-		}
-
-		if (strcmp(ptr, "ICOM") == 0 || strcmp(ptr, "YAESU") == 0 
-			|| strcmp(ptr, "KENWOOD") == 0 || strcmp(ptr, "PTTONLY") == 0 || strcmp(ptr, "ANTENNA") == 0)
-		{
-			// RADIO IC706 4E 5 14.103/U1 14.112/u1 18.1/U1 10.12/l1
-			// Read RADIO Lines
-
-			if (strcmp(ptr, "ICOM") == 0)
-				PORT->PortType = ICOM;
-			else
-			if (strcmp(ptr, "YAESU") == 0)
-				PORT->PortType = YAESU;
-			else
-			if (strcmp(ptr, "KENWOOD") == 0)
-				PORT->PortType = KENWOOD;
-			else
-			if (strcmp(ptr, "PTTONLY") == 0)
-				PORT->PortType = PTT;
-			else
-			if (strcmp(ptr, "ANTENNA") == 0)
-				PORT->PortType = ANT;
-
-			Radio = 0;
-
-			while(TRUE)
-			{
-				if (GetLine(buf) == 0)
-					return TRUE;
-
-				if (memcmp(buf, "COM", 3) == 0)
-					goto NextPort;
-
-				RIG = &PORT->Rigs[Radio];
-
-				ptr = strtok_s(buf, " \t\n\r", &Context);
-				if (ptr == NULL) return (FALSE);
-
-				ptr = strtok_s(NULL, " \t\n\r", &Context);
-				if (ptr == NULL) return (FALSE);
-
-				if (strlen(ptr) > 9) return FALSE;
-				strcpy(RIG->RigName, ptr);
-
-				ptr = strtok_s(NULL, " \t\n\r", &Context);
-				if (ptr == NULL) return (FALSE);
-
-				if 	(PORT->PortType == ICOM)
-				{
-					sscanf(ptr, "%x", &RIG->RigAddr);
-					if (RIG->RigAddr == 0) return FALSE;
-
-					ptr = strtok_s(NULL, " \t\n\r", &Context);
-					if (ptr == NULL) return (FALSE);
-				}
-
-				Portno = atoi(ptr);
-					
-				RIG->BPQPort |=  (1 << Portno);
-				RIG->PortNum = Portno;
-
-				if (PORT->PortType == PTT || PORT->PortType == ANT)
-				{
-					goto Next;
-				}
-
-				ptr = strtok_s(NULL, " \t\n\r", &Context);
-				if (ptr == NULL) return (FALSE);
-
-				RIG->ScanFreq = atoi(ptr);
-
-				RIG->FreqText = _strdup(Context);
-
-				ptr = strtok_s(NULL, " \t\n\r", &Context);
-
-				// Frequency List
-
-				if (ptr)
-					if (ptr[0] == ';' || ptr[0] == '#')
-						ptr = NULL;
-
-				if (ptr != NULL)
-				{
-					struct TimeScan * Band = AllocateTimeRec(RIG);
-					SaveBand = Band;
-
-					Band->Start = 0;
-					Band->End = 84540;	//23:59
-					FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
-					memset(FreqPtr, 0, 1000);
-				}
-
-				while(ptr)
-				{
-					int ModeNo;
-					double Freq = 0.0;
-					char FreqString[80]="";
-					char * Valchar;
-					char * Modeptr;
-
-					int dec, sign;
-
-					if (ptr[0] == ';' || ptr[0] == '#')
-						break;
-
-					Modeptr = strchr(ptr, '/');
-					
-					if (Modeptr)
-						*Modeptr++ = 0;
-
-					if (strchr(ptr, ':'))
-					{
-						// New TimeBand
-
-						struct TimeScan * Band;
-						
-						Band = AllocateTimeRec(RIG);
-
-						*FreqPtr = (struct ScanEntry *)0;		// Terminate Last Band
-						
-						Band->Start = (atoi(ptr) * 3600) + (atoi(&ptr[3]) * 60);
-						Band->End = 84540;	//23:59
-						SaveBand->End = Band->Start - 60;
-
-						FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
-						memset(FreqPtr, 0, 1000);
-
-						ptr = strtok_s(NULL, " \t\n\r", &Context);
-											
-						Modeptr = strchr(ptr, '/');
-					
-						if (Modeptr)
-							*Modeptr++ = 0;
-					}
-
-					Freq = atof(ptr);
-
-					// Mode can include 1/2/3 for Icom Filers. W/N for Winmor/Pactor Bandwidth, and +/-/S for Repeater Shift (S = Simplex) 
-					// First is always Mode
-
-					Split = Data = Bandwidth = Antenna = 0;
-
-					if (Modeptr)
-					{
-						if (strchr(&Modeptr[1], '+'))
-							Split = '+';
-						else if (strchr(&Modeptr[1], '-'))
-							Split = '-';
-						else if (strchr(&Modeptr[1], 'S'))
-							Split = 'S';
-						else if (strchr(&Modeptr[1], 'D'))
-							Data = 1;
-						
-						if (strchr(&Modeptr[1], 'W'))
-							Bandwidth = 'W';
-						else if (strchr(&Modeptr[1], 'N'))
-							Bandwidth = 'N';
-
-						if (strstr(&Modeptr[1], "A1"))
-							Antenna = '1';
-						else if (strstr(&Modeptr[1], "A2"))
-							Antenna = '2';
-						if (strstr(&Modeptr[1], "A3"))
-							Antenna = '3';
-						else if (strstr(&Modeptr[1], "A4"))
-							Antenna = '4';
-
-
-						switch(PORT->PortType)
-						{
-						case ICOM:						
-						
-							for (ModeNo = 0; ModeNo < 8; ModeNo++)
-							{
-								if (Modes[ModeNo][0] == Modeptr[0])
-									break;
-							}
-							break;
-
-						case YAESU:						
-						
-							for (ModeNo = 0; ModeNo < 16; ModeNo++)
-							{
-								if (YaesuModes[ModeNo][0] == Modeptr[0])
-									break;
-							}
-							break;
-
-						case KENWOOD:						
-						
-							for (ModeNo = 0; ModeNo < 8; ModeNo++)
-							{
-								if (KenwoodModes[ModeNo][0] == Modeptr[0])
-									break;
-							}
-							break;
-						}
-					}
-
-					Freq = Freq * 1000000.0;
-
-					Valchar = _fcvt(Freq, 0, &dec, &sign);
-
-					if (dec == 9)	// 10-100
-						wsprintf(FreqString, "%s", Valchar);
-					else
-					if (dec == 8)	// 10-100
-						wsprintf(FreqString, "0%s", Valchar);		
-					else
-					if (dec == 7)	// 1-10
-						wsprintf(FreqString, "00%s", Valchar);
-					else
-					if (dec == 6)	// 0.1 - 1
-						wsprintf(FreqString, "000%s", Valchar);
-					else
-					if (dec == 5)	// 0.01 - .1
-						wsprintf(FreqString, "000%s", Valchar);
-
-					FreqPtr[0] = malloc(sizeof(struct ScanEntry));
-					memset(FreqPtr[0], 0, sizeof(struct ScanEntry));
-
-					FreqPtr[0]->Freq = Freq;
-					FreqPtr[0]->Bandwidth = Bandwidth;
-					FreqPtr[0]->Antenna = Antenna;
-
-					CmdPtr = FreqPtr[0]->Cmd1 = malloc(40);
-
-					if 	(PORT->PortType == ICOM)
-					{
-					*(CmdPtr++) = 0xFE;
-					*(CmdPtr++) = 0xFE;
-					*(CmdPtr++) = RIG->RigAddr;
-					*(CmdPtr++) = 0xE0;
-					*(CmdPtr++) = 0x5;		// Set frequency command
-
-					// Need to convert two chars to bcd digit
-	
-					*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
-					*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
-					*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
-					*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
-					*(CmdPtr++) = (FreqString[0] - 48);
-
-					*(CmdPtr++) = 0xFD;
-
-					if (Modeptr)
-					{						
-						CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
-						*(CmdPtr++) = 0xFE;
-						*(CmdPtr++) = 0xFE;
-						*(CmdPtr++) = RIG->RigAddr;
-						*(CmdPtr++) = 0xE0;
-						*(CmdPtr++) = 0x6;		// Set Mode
-						*(CmdPtr++) = ModeNo;
-						*(CmdPtr++) = Modeptr[1] - '0';
-						*(CmdPtr++) = 0xFD;
-
-						if (Split)
-						{
-							CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-							FreqPtr[0]->Cmd3Len = 7;
-							*(CmdPtr++) = 0xFE;
-							*(CmdPtr++) = 0xFE;
-							*(CmdPtr++) = RIG->RigAddr;
-							*(CmdPtr++) = 0xE0;
-							*(CmdPtr++) = 0xF;		// Set Mode
-							if (Split == 'S')
-								*(CmdPtr++) = 0x10;
-							else
-								if (Split == '+')
-									*(CmdPtr++) = 0x12;
-							else
-								if (Split == '-')
-									*(CmdPtr++) = 0x11;
-			
-							*(CmdPtr++) = 0xFD;
-						}
-						else
-						{
-							if (Data)
-							{
-								CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-								FreqPtr[0]->Cmd3Len = 8;
-								*(CmdPtr++) = 0xFE;
-								*(CmdPtr++) = 0xFE;
-								*(CmdPtr++) = RIG->RigAddr;
-								*(CmdPtr++) = 0xE0;
-								*(CmdPtr++) = 0x1a;		
-								*(CmdPtr++) = 0x6;		// Set Data
-								*(CmdPtr++) = 0x1;		//On		
-								*(CmdPtr++) = 0xFD;
-							}
-						}
-					}
-					}
-					else if	(PORT->PortType == YAESU)
-					{	
-						//Send Mode first - changing mode can change freq
-
-						*(CmdPtr++) = ModeNo;
-						*(CmdPtr++) = 0;
-						*(CmdPtr++) = 0;
-						*(CmdPtr++) = 0;
-						*(CmdPtr++) = 7;
-
-						*(CmdPtr++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
-						*(CmdPtr++) = (FreqString[3] - 48) | ((FreqString[2] - 48) << 4);
-						*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
-						*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
-						*(CmdPtr++) = 1;
-					
-					}
-					else if	(PORT->PortType == KENWOOD)
-					{	
-						CmdPtr += wsprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
-					}
-
-					*(CmdPtr) = 0;
-
-					FreqPtr++;
-
-					RIG->ScanCounter = 20;
-
-					ptr = strtok_s(NULL, " \t\n\r", &Context);
-				}
-			Next:
-				Radio++;
-				PORT->ConfiguredRigs++;
-				
-			}
-		}
-		return FALSE; //Unknown type
-	}
-
-	return (FALSE);
-	
-}
-
-*/
 
 DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 {
@@ -1152,9 +708,9 @@ portok:
 			return FALSE;
 		}
 
-		for (ModeNo = 0; ModeNo < 8; ModeNo++)
+		for (ModeNo = 0; ModeNo < 14; ModeNo++)
 		{
-			if (_stricmp(KenwoodModes[ModeNo], Mode) == 0)
+			if (_stricmp(FT2000Modes[ModeNo], Mode) == 0)
 				break;
 		}
 
@@ -1184,7 +740,7 @@ portok:
 		Poll = (UCHAR *)&buffptr[20];
 
 		if (PORT->PortType == FT2000)
-			buffptr[1] = wsprintf(Poll, "FA%s;MD0%d;FA;MD;", &FreqString[1], ModeNo);
+			buffptr[1] = wsprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
 		else
 			buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 		
@@ -2542,8 +2098,8 @@ Loop:
 
 		if (PORT->PortType == FT2000)
 		{
-			memcpy(FreqDecimal,&Msg[5], 6);
-			Msg[5] = 0;
+			memcpy(FreqDecimal,&Msg[4], 6);
+			Msg[4] = 0;
 		}
 		else
 		{
@@ -2571,14 +2127,20 @@ Loop:
 	}
 	else if (Msg[0] == 'M' && Msg[1] == 'D')
 	{
-		int Mode = Msg[2] - 48;
-
+		int Mode;
+		
 		if (PORT->PortType == FT2000)
+		{
 			Mode = Msg[3] - 48;
-
-		if (Mode > 7) Mode = 7;
-
-		SetWindowText(RIG->hMODE, KenwoodModes[Mode]);
+			if (Mode > 13) Mode = 13;
+			SetWindowText(RIG->hMODE, FT2000Modes[Mode]);
+		}
+		else
+		{
+			Mode = Msg[2] - 48;
+			if (Mode > 7) Mode = 7;
+			SetWindowText(RIG->hMODE, KenwoodModes[Mode]);
+		}
 	}
 
 	if (CmdLen < Length)
@@ -3082,7 +2644,6 @@ PortFound:
 				break;
 
 			case KENWOOD:
-			case FT2000:
 						
 				for (ModeNo = 0; ModeNo < 8; ModeNo++)
 				{
@@ -3090,6 +2651,22 @@ PortFound:
 						break;
 				}
 				break;
+
+			case FT2000:
+						
+				if (strstr(Modeptr, "PL"))
+					ModeNo = 8;
+				else if (strstr(Modeptr, "PU"))
+					ModeNo = 12;
+				else
+				{
+					for (ModeNo = 0; ModeNo < 13; ModeNo++)
+					{
+						if (FT2000Modes[ModeNo][0] == Modeptr[0])
+							break;
+					}
+				}
+					break;
 
 			case FT100:						
 				
@@ -3222,7 +2799,7 @@ PortFound:
 		}
 		else if	(PORT->PortType == FT2000)
 		{	
-			CmdPtr += wsprintf(CmdPtr, "FA%s;MD0%d;FA;MD;", &FreqString[1], ModeNo);
+			CmdPtr += wsprintf(CmdPtr, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
 		}
 		else if	(PORT->PortType == FT100)
 		{	

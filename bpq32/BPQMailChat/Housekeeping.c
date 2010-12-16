@@ -10,6 +10,7 @@ BOOL DeletetoRecycleBin = FALSE;
 BOOL SuppressMaintEmail = FALSE;
 BOOL SaveRegDuringMaint = FALSE;
 BOOL OverrideUnsent = FALSE;
+BOOL SendNonDeliveryMsgs = TRUE;
 
 int PR = 30;
 int PUR = 30;
@@ -25,6 +26,8 @@ struct Override ** LTTO;
 struct Override ** LTAT;
 
 int DeleteLogFiles();
+
+VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Forwarded, int Age);
 
 int LastFWDTime;
 
@@ -259,11 +262,23 @@ VOID ExpireMessages()
 
 				if (memcmp(Msg->fbbs, zeros, NBMASK) == 0)
 				{
-					if (Msg->datecreated < PURLimit) KillMsg(Msg);
+					if (Msg->datecreated < PURLimit)
+					{
+						if (SendNonDeliveryMsgs) 
+							SendNonDeliveryMessage(Msg, TRUE, PUR);
+
+						KillMsg(Msg);
+					}
 				}
 				else
 				{
-					if (Msg->datecreated < PNFLimit) KillMsg(Msg);
+					if (Msg->datecreated < PNFLimit)
+					{
+						if (SendNonDeliveryMsgs) 
+							SendNonDeliveryMessage(Msg, FALSE, PNF);
+
+						KillMsg(Msg);
+					}
 				}
 				continue;	
 	
@@ -649,3 +664,92 @@ int DeleteLogFiles()
    FindClose(hFind);
    return dwError;
 }
+
+
+VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
+{
+	struct MsgInfo * Msg = AllocateMsgRecord();
+	BIDRec * BIDRec;
+	char MailBuffer[1000];
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int WriteLen=0;
+	char From[100];
+	char * Via;
+	struct UserInfo * FromUser;
+
+
+	// Try to create a from Address. ( ? check RMS)
+
+	strcpy(From, OldMsg->from);
+
+	FromUser = LookupCall(OldMsg->from);
+
+	if (FromUser)
+	{
+		if (FromUser->HomeBBS[0])
+			wsprintf(From, "%s@%s", OldMsg->from, FromUser->HomeBBS);
+		else
+			wsprintf(From, "%s@%s", OldMsg->from, BBSName);
+	}
+	else
+	{
+		WPRecP WP = LookupWP(OldMsg->from);
+
+		if (WP)
+			wsprintf(From, "%s@%s", OldMsg->from, WP->first_homebbs);
+	}
+
+	GetSemaphore(&MsgNoSemaphore);
+	Msg->number = ++LatestMsg;
+	MsgnotoMsg[Msg->number] = Msg;
+
+	FreeSemaphore(&MsgNoSemaphore);
+ 
+	strcpy(Msg->from, SYSOPCall);
+
+	Via = strlop(From, '@');
+
+	strcpy(Msg->to, From);
+	strcpy(Msg->via, Via);
+
+	strcpy(Msg->title, "Non-delivery Notification");
+	
+	if (Unread)
+		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s has not been read for %d days. Message had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->from, Age);
+	else
+		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s could not be delivered in %d days. Message had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->from, Age);
+
+
+	Msg->type = 'P';
+	Msg->status = 'N';
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+
+	BIDRec = AllocateBIDRecord();
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+	
+	hFile = CreateFile(MsgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
+		CloseHandle(hFile);
+	}
+
+	MatchMessagetoBBSList(Msg, NULL);
+}
+
+

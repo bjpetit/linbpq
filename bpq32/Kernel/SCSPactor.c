@@ -126,6 +126,7 @@ static ProcessLine(char * buf, int Port)
 		// New config without a PORT or APPL  - this is a Config Command
 
 		strcpy(buf, errbuf);
+		strcat(buf, "\r");
 
 		BPQport = Port;
 
@@ -289,6 +290,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Param;
 	char Block[100];
 	int Stream = 0;
+	struct STREAMINFO * STREAM;
+
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
 		return 0;			// Port not open
@@ -383,17 +386,20 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			mov Stream,eax
 		}
 
+		STREAM = &TNC->Streams[Stream];
+
 		if (Stream == 0)
 		{
-			if (TNC->Streams[0].FramesOutstanding  > 4)
-				return (1 | TNC->HostMode << 8);
+			if (STREAM->FramesOutstanding  > 4)
+				return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);
 		}
 		else
 		{
-			if (TNC->Streams[Stream].FramesOutstanding > 3 || TNC->Buffers < 200)	
-				return (1 | TNC->HostMode << 8);		}
+			if (STREAM->FramesOutstanding > 3 || TNC->Buffers < 200)	
+				return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);		}
 
-		return TNC->HostMode << 8;		// OK
+		return TNC->HostMode << 8 | STREAM->Disconnecting << 15;		// OK, but lock attach if disconnecting
+
 
 	case 4:				// reinit
 
@@ -844,6 +850,7 @@ VOID DEDPoll(int Port)
 	char Status[80];
 	int Stream = 0;
 	int nn;
+	struct STREAMINFO * STREAM;
 
 	if (TNC->UpdateWL2K)
 	{
@@ -1022,69 +1029,13 @@ VOID DEDPoll(int Port)
 
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
-		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0 && TNC->Streams[Stream].Attached)
-		{
-			UINT * buffptr;
+		STREAM = &TNC->Streams[Stream];
 
-			// Node has disconnected us. If connected to remote, disconnect.
-			// Then set mycall back to Node or Port Call
-		
-			if (TNC->Streams[Stream].Connected)
-			{
-				// Node has disconnected
-			
-				UCHAR * Poll = TNC->TXBuffer;
+		if (STREAM->Attached)
+			CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
 
-				TNC->Streams[Stream].Connected = FALSE;
-				TNC->TXBuffer[2] = TNC->Streams[Stream].DEDStream;
-				TNC->TXBuffer[3] = 0x1;
-				TNC->TXBuffer[4] = 0x0;
-				TNC->TXBuffer[5] = 'D';
-
-				CRCStuffAndSend(TNC, TNC->TXBuffer, 6);
-			}
-
-			TNC->Streams[Stream].Attached = FALSE;
-
-			TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-
-			if (Stream == 0 || TNC->HFPacket)
-			{
-				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
-				wsprintf(Status, "%d SCANSTART 15", TNC->Port);
-				Rig_Command(-1, Status);
-
-				if (TNC->HFPacket)
-				{
-					wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r", TNC->NodeCall);
-					TNC->Streams[0].DEDStream = 30;		// Packet Channel
-				}
-				else
-				{
-					wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r", TNC->NodeCall);
-					TNC->Streams[0].DEDStream = 31;		// Pactor Channel
-				}
-			}
-			else
-				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->NodeCall);
-
-
-			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				ReleaseBuffer(buffptr);
-			}
-
-			while(TNC->Streams[Stream].PACTORtoBPQ_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
-				ReleaseBuffer(buffptr);
-			}
-
-			if (TNC->Streams[Stream].Connected)
-				return;			// We've sent a disconnect
-
-		}
+		if (TNC->Timeout)
+			return;				// We've sent something
 	}
 
 	// if we have just restarted or TNC appears to be in terminal mode, run Initialisation Sequence
@@ -1253,9 +1204,6 @@ VOID DEDPoll(int Port)
 			TNC->IntCmdDelay--;
 	}
 
-
-
-
 	// If busy, send status poll, send Data if avail
 
 	// We need to start where we last left off, or a busy stream will lock out the others
@@ -1265,7 +1213,6 @@ VOID DEDPoll(int Port)
 		Stream = TNC->LastStream++;
 
 		if (TNC->LastStream > MaxStreams) TNC->LastStream = 0;
-
 
 		if (TNC->TNCOK && TNC->Streams[Stream].BPQtoPACTOR_Q)
 		{
@@ -1294,15 +1241,28 @@ VOID DEDPoll(int Port)
 
 				Poll[3] = 0;			// Data?
 				TNC->Streams[Stream].BytesTXed += datalen;
-			}
-			else
-			{
-				// Command. Do some sanity checking and look for things to process locally
 
-				Poll[3] = 1;			// Command
-				datalen--;				// Exclude CR
-				Buffer[datalen] = 0;	// Null Terminate
-				_strupr(Buffer);
+				Poll[4] = datalen - 1;
+				memcpy(&Poll[5], buffptr+2, datalen);
+		
+				ReleaseBuffer(buffptr);
+		
+				CRCStuffAndSend(TNC, Poll, datalen + 5);
+
+				TNC->Streams[Stream].InternalCmd = TNC->Streams[Stream].Connected;
+
+				if (STREAM->Disconnecting && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
+					TidyClose(TNC, 0);
+
+				return;
+			}
+			
+			// Command. Do some sanity checking and look for things to process locally
+
+			Poll[3] = 1;			// Command
+			datalen--;				// Exclude CR
+			Buffer[datalen] = 0;	// Null Terminate
+			_strupr(Buffer);
 
 				if (_memicmp(Buffer, "D", 1) == 0)
 				{
@@ -1434,7 +1394,6 @@ VOID DEDPoll(int Port)
 						return;
 					}
 				}
-			}
 
 			Poll[4] = datalen - 1;
 			memcpy(&Poll[5], buffptr+2, datalen);
@@ -2111,12 +2070,14 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (Msg[3] == 3)					// Status
 		{			
+			struct STREAMINFO * STREAM = &TNC->Streams[Stream];
+
 			if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "LINK FAILURE"))
 			{
 				if ((TNC->Streams[Stream].Connecting | TNC->Streams[Stream].Connected) == 0)
 					return;
 
-				if (TNC->Streams[Stream].Connecting)
+				if (STREAM->Connecting && STREAM->Disconnecting == FALSE)
 				{
 					// Connect Failed
 			
@@ -2125,28 +2086,31 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 					buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
 
-					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 	
-					TNC->Streams[Stream].Connecting = FALSE;
-					TNC->Streams[Stream].Connected = FALSE;				// In case!
-					TNC->Streams[Stream].FramesOutstanding = 0;
+					STREAM->Connecting = FALSE;
+					STREAM->Connected = FALSE;				// In case!
+					STREAM->FramesOutstanding = 0;
 
 					if (Stream == 0)
 					{
-						wsprintf(Status, "In Use by %s", TNC->Streams[Stream].MyCall);
+						wsprintf(Status, "In Use by %s", STREAM->MyCall);
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 					}
 
 					return;
 				}
 					
-				// Must Have been connected - Release Session
+				// Must Have been connected or disconnecting - Release Session
 
-				TNC->Streams[Stream].Connecting = FALSE;
-				TNC->Streams[Stream].Connected = FALSE;		// Back to Command Mode
-				TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
-				TNC->Streams[Stream].FramesOutstanding = 0;
+				STREAM->Connecting = FALSE;
+				STREAM->Connected = FALSE;		// Back to Command Mode
+				STREAM->FramesOutstanding = 0;
 
+				if (STREAM->Disconnecting == FALSE)
+					STREAM->ReportDISC = TRUE;		// Tell Node
+
+				STREAM->Disconnecting = FALSE;
 				return;
 			}
 
@@ -2183,14 +2147,13 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 					memcpy(MHCall, Call, 9);
 					MHCall[9] = 0;
-
-					UpdateMH(TNC, MHCall, '+', 'I');
-
 				}
 
 				if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
 				{
 					// Incomming Connect
+
+					UpdateMH(TNC, MHCall, '+', 'I');
 
 					ProcessIncommingConnect(TNC, Call, Stream);
 
@@ -2601,23 +2564,50 @@ VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	}
 
-
-	
-
-
-
-
-
-
-
 // Message in EDI
-
-
-
-
-
-
 
 }
 //1:fm G8BPQ to KD6PGI-1 ctl I11^ pid F0
 //fm KD6PGI-1 to G8BPQ ctl DISC+
+
+VOID TidyClose(struct TNCINFO * TNC, int Stream)
+{
+	// Queue it as we may have just sent data
+
+	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
+	wsprintf(TNC->Streams[0].CmdSet, "D\r");
+}
+
+
+VOID ForcedClose(struct TNCINFO * TNC, int Stream)
+{
+	TidyClose(TNC, Stream);			// I don't think Hostmode has a DD
+}
+
+VOID CloseComplete(struct TNCINFO * TNC, int Stream)
+{
+	char Status[80];
+	
+	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
+
+	if (Stream == 0)
+	{
+		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
+		wsprintf(Status, "%d SCANSTART 15", TNC->Port);
+		Rig_Command(-1, Status);
+
+		if (TNC->HFPacket)
+		{
+			wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r", TNC->NodeCall);
+			TNC->Streams[0].DEDStream = 30;		// Packet Channel
+		}
+		else
+		{
+			wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r", TNC->NodeCall);
+			TNC->Streams[0].DEDStream = 31;		// Pactor Channel
+		}
+	}
+	else
+		wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->NodeCall);
+}
+

@@ -285,13 +285,10 @@ typedef struct ConnectionInfo_S
     int InputBufferLen;
     int InputLen;				// Data we have already = Offset of end of an incomplete packet;
 
-//	int PartPacketPointer;
 	struct UserInfo * UserPointer;
     int Retries;
 	int	LoginState;				// 1 = user ok, 2 = password ok
 	int Flags;
-//	BOOL DoingCommand;			// Processing Telnet Command
-//	BOOL DoEcho;				// Telnet Echo option accepted
 
 	// Data to the user is kept in a malloc'd buffer. This can be appended to,
 	// and data sucked out under both terminal and system flow control. PACLEN is
@@ -322,6 +319,12 @@ typedef struct ConnectionInfo_S
 
 	int BBSNumber;						// The BBS number (offset into bitlist of BBSes to forward a message to
 	int NextMessagetoForward;			// Next index to check in forward cycle
+	BOOL BPQBBS;						// Set if SID indicates other end is BPQ
+	char MSGTYPES[10];					// Any MSGTYPEFLAGS
+	BOOL SendT;							// Send T messages
+	BOOL SendP;							// Send P messages
+	BOOL SendB;							// Send Bulls
+	BOOL DoReverse;						// Request Reverse Forward
 	char LastForwardType;				// Last type of messages forwarded
 	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block
 	char FBBReplyChars[36];				//The +-=!nnnn chars for the 5 proposals
@@ -969,7 +972,7 @@ BOOL Reverse_Forward(struct UserInfo * user);
 ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 BOOL FBBDoForward(CIRCUIT * conn);
 BOOL FindMessagestoForward(CIRCUIT * conn);
-BOOL SeeifMessagestoForward(int BBSNumber);
+BOOL SeeifMessagestoForward(int BBSNumber, CIRCUIT * Conn);
 int CountMessagestoForward(int BBSNumber);
 VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
 MultiLineDialogToREG_MULTI_SZ(HWND hWnd, int DLGItem, HKEY hKey, char * ValueName);
@@ -1291,6 +1294,8 @@ extern BOOL DeletetoRecycleBin;
 extern BOOL SuppressMaintEmail;
 extern BOOL SaveRegDuringMaint;
 extern BOOL OverrideUnsent;
+extern BOOL SendNonDeliveryMsgs;
+
 extern int PR;
 extern int PUR;
 extern int PF;

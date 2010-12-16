@@ -21,7 +21,7 @@ typedef struct _MESSAGEX
 {
 //	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
 
-	struct _MESSAGE * CHAIN;
+	struct _MESSAGEX * CHAIN;
 
 	UCHAR	PORT;
 	USHORT	LENGTH;
@@ -38,6 +38,14 @@ typedef struct _MESSAGEX
 }MESSAGEX, *PMESSAGEX;
 
 #pragma pack()
+
+PMESSAGEX DG_Q;					// Queue of messages to be sent to node
+
+struct SEM DGSemaphore = {0, 0}; // For locking access to DG_Q;
+
+VOID UnQueueRaw(UINT Param);
+unsigned long _beginthread(void(*start_address),
+				unsigned stack_size, int Param);
 
 
 VOID SetupUIInterface()
@@ -90,6 +98,8 @@ VOID SetupUIInterface()
 		}
 	}
 
+	_beginthread(UnQueueRaw, 0, 0);
+
 	__try
 	{
 		SendLatestUI(0);
@@ -117,6 +127,38 @@ VOID Free_UI()
 		}
 	}
 }
+
+VOID QueueRaw(int Port, PMESSAGEX AXMSG, int Len)
+{
+	PMESSAGEX AXCopy = zalloc(400);
+	PMESSAGEX AXNext;
+
+	AXMSG->PORT = Port;
+	AXMSG->LENGTH = Len;
+	AXMSG->CHAIN = 0;					// Clear chain in new buffer
+
+	memcpy(AXCopy, AXMSG, Len + 10);
+
+	GetSemaphore(&DGSemaphore);
+
+	if (DG_Q == 0)						// Empty
+	{
+		DG_Q = AXCopy;
+		FreeSemaphore(&DGSemaphore);
+		return;
+	}
+
+	AXNext = DG_Q;
+
+	while (AXNext->CHAIN)
+		AXNext = AXNext->CHAIN;			// Chain to end of queue
+
+	AXNext->CHAIN = AXCopy;				// New one on end
+
+	FreeSemaphore(&DGSemaphore);
+}
+
+
 	
 struct MsgInfo * FindMessageByNumber(int msgno)
  {
@@ -287,10 +329,33 @@ VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 	AXPTR->PID = 0xf0;
 	memcpy(AXPTR->DATA, Msg, Len);
 
-	SendRaw(Port, (char *)&AXMSG.DEST, Len + 16);
+	QueueRaw(Port, &AXMSG, Len + 16);
 
 	return;
 
+}
+
+VOID UnQueueRaw(UINT Param)
+{
+	PMESSAGEX AXMSG;
+
+	while (TRUE)
+	{
+		GetSemaphore(&DGSemaphore);
+
+		if (DG_Q)
+		{
+			AXMSG = DG_Q;
+			DG_Q = AXMSG->CHAIN;
+
+			SendRaw(AXMSG->PORT, (char *)&AXMSG->DEST, AXMSG->LENGTH);
+			free(AXMSG);
+		}
+	
+		FreeSemaphore(&DGSemaphore);
+
+		Sleep(5000);
+	}
 }
 
 VOID ProcessUItoMe(char * msg, int len)

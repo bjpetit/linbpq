@@ -826,11 +826,12 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 		strcpy(RouteElements, Alias->Alias);
 
-		if ((ReaddressReceived && (conn->BBSFlags & BBS)) || (ReaddressLocal && ((conn->BBSFlags & BBS) == 0)))
-			strcpy(Msg->via, Alias->Alias);
+		if (conn)
+			if ((ReaddressReceived && (conn->BBSFlags & BBS)) || (ReaddressLocal && ((conn->BBSFlags & BBS) == 0)))
+				strcpy(Msg->via, Alias->Alias);
 	}
 
-// Make sure HA is complete (starting at WW)
+	// Make sure HA is complete (starting at WW)
 
 	if (RouteElements[0] == 0)
 		goto NOHA;

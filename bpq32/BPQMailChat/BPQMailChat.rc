@@ -780,43 +780,46 @@ BEGIN
                     IDC_STATIC,151,113,214,27
     LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,151,146,
                     154,8
-    LTEXT           "From",IDC_STATIC,176,173,28,12
-    EDITTEXT        IDM_LTFROM,151,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "From",IDC_STATIC,176,160,28,12
+    EDITTEXT        IDM_LTFROM,151,172,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "To",IDC_STATIC,247,173,27,12
-    EDITTEXT        IDM_LTTO,221,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "To",IDC_STATIC,247,160,27,12
+    EDITTEXT        IDM_LTTO,221,172,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "At",IDC_STATIC,316,173,15,12
-    EDITTEXT        IDM_LTAT,289,185,64,55,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "At",IDC_STATIC,316,160,15,12
+    EDITTEXT        IDM_LTAT,289,172,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
     DEFPUSHBUTTON   "Save",IDM_MAINTSAVE,166,250,50,14,BS_CENTER | 
                     BS_VCENTER
     GROUPBOX        "Lifetimes",IDC_STATIC,144,0,231,244
     GROUPBOX        "Parameters",IDC_STATIC,3,3,133,241
-    LTEXT           "Max Message Number",IDC_STATIC,7,23,77,10
-    LTEXT           "BID Lifetime (Days)",IDC_STATIC,7,46,77,10
-    LTEXT           "Maintenance Time (UTC)   Enter as HHMM",IDC_STATIC,7,69,
+    LTEXT           "Max Message Number",IDC_STATIC,7,46,77,10
+    LTEXT           "BID Lifetime (Days)",IDC_STATIC,7,65,77,10
+    LTEXT           "Maintenance Time (UTC)   Enter as HHMM",IDC_STATIC,7,21,
                     83,25
-    EDITTEXT        IDC_MAXMSG,96,22,25,12,ES_CENTER | ES_NUMBER
-    EDITTEXT        IDC_BIDLIFETIME,96,45,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDC_MAXMSG,96,45,25,12,ES_CENTER | ES_NUMBER
+    EDITTEXT        IDC_BIDLIFETIME,96,64,25,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    EDITTEXT        IDC_MAINTTIME,96,68,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDC_MAINTTIME,96,23,25,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    LTEXT           "Log File Lifetime (Days)",IDC_STATIC,7,93,80,10
-    EDITTEXT        IDC_LOGLIFETIME,96,91,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+    LTEXT           "Log File Lifetime (Days)",IDC_STATIC,7,85,80,10
+    EDITTEXT        IDC_LOGLIFETIME,96,83,25,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     CONTROL         "Delete Log and Message Files to Recycle Bin",
                     IDC_DELETETORECYCLE,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,105,98,27
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,100,115,20
     CONTROL         "Supress Mailing of Housekeeping Results",
                     IDC_MAINTNOMAIL,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
-                    BS_MULTILINE | WS_TABSTOP,5,135,98,27
+                    BS_MULTILINE | WS_TABSTOP,5,140,115,20
     CONTROL         "Save Registry",IDC_MAINTSAVEREG,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,5,167,98,10
+                    WS_TABSTOP,5,165,115,10
+    CONTROL         "Send Non-delivery Notifications for P and T messages",
+                    IDC_MAINTNONDELIVERY,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,120,115,20
     CONTROL         "Apply Overrides to Unsent Bulls",IDC_OVERRIDEUNSENT,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,151,160,195,10
+                    WS_TABSTOP,153,231,195,10
 END
 
 FILTERS DIALOG DISCARDABLE  26, 5, 382, 287

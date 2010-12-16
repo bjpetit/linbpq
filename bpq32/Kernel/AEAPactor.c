@@ -125,6 +125,7 @@ ProcessLine(char * buf, int Port)
 		// New config without a PORT or APPL  - this is a Config Command
 
 		strcpy(buf, errbuf);
+		strcat(buf, "\r");
 
 		BPQport = Port;
 
