@@ -899,6 +899,8 @@ VOID DEDPoll(int Port)
 
 			// Set call to connecting user's call
 
+			// If Stream 0 Put in Pactor Mode so Busy Detect will work
+
 			int calllen=0;
 
 			TNC->Streams[Stream].Attached = TRUE;
@@ -913,6 +915,8 @@ VOID DEDPoll(int Port)
 			{
 				wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->Streams[Stream].MyCall);
 
 				// Stop Scanner
 		
@@ -982,24 +986,12 @@ VOID DEDPoll(int Port)
 		{
 			// No, so send
 
-			int datalen = strlen(TNC->ConnectCmd);
-			
-			Poll[2] = TNC->Streams[0].DEDStream;		// Channel
-			Poll[3] = 1;			// Command
-			Poll[4] = datalen - 1;
-
-			memcpy(&Poll[5], TNC->ConnectCmd, datalen);
-		
-		
-			CRCStuffAndSend(TNC, Poll, datalen + 5);
-
-			TNC->Streams[0].InternalCmd = TNC->Streams[0].Connected;
+			TNC->Streams[0].CmdSet = TNC->ConnectCmd;
 			TNC->Streams[0].Connecting = TRUE;
 
 			wsprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
-			free(TNC->ConnectCmd);
 			TNC->BusyDelay = 0;
 			return;
 		}
@@ -1021,6 +1013,7 @@ VOID DEDPoll(int Port)
 				memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
 
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+
 				free(TNC->ConnectCmd);
 
 			}
@@ -1119,9 +1112,7 @@ VOID DEDPoll(int Port)
 
 			return;
 		}
-
 	}
-
 
 	// Send Radio Command if avail
 
@@ -1345,12 +1336,24 @@ VOID DEDPoll(int Port)
 						memmove(&Buffer[2], &Buffer[3], datalen--);
 						Buffer += 2;
 					}
+
 					memcpy(TNC->Streams[Stream].RemoteCall, Buffer, 9);
 
 					TNC->Streams[Stream].Connecting = TRUE;
 
 					if (Stream == 0)
 					{
+						// Send Call, Mode Command followed by connect 
+
+						TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
+
+						if (TNC->Streams[0].DEDStream == 30)
+							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
+						else
+							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
+
+						ReleaseBuffer(buffptr);
+					
 						// See if Busy
 				
 						if (TNC->Busy)
@@ -1360,30 +1363,20 @@ VOID DEDPoll(int Port)
 							if (TNC->OverrideBusy == 0)
 							{
 								// Send Mode Command Now, Save Command, and wait up to 10 secs
+								// No, leave in Pactor, or Busy Detect won't work. Queue the whole conect sequence
 
-								TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
+								TNC->ConnectCmd = TNC->Streams[0].CmdSet;
+								TNC->Streams[0].CmdSet = NULL;
 
-								if (TNC->Streams[0].DEDStream == 30)
-									wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r", TNC->Streams[0].MyCall);
-								else
-									wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r", TNC->Streams[0].MyCall);
-	
-								Buffer -=2;
-								TNC->ConnectCmd = _strdup(Buffer);
+								wsprintf(Status, "Waiting for clear channel");
+								SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
 								TNC->BusyDelay = 100;		// 10 secs
-								ReleaseBuffer(buffptr);
+								TNC->Streams[Stream].Connecting = FALSE;	// Not connecting Yet
+
 								return;
 							}
 						}
-
-						// Send Mode Command followed by connect 
-
-						TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
-
-						if (TNC->Streams[0].DEDStream == 30)
-							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
-						else
-							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
 
 						TNC->OverrideBusy = FALSE;
 
@@ -2151,10 +2144,15 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 				if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
 				{
-					// Incomming Connect
+					// Incoming Connect
 
-					UpdateMH(TNC, MHCall, '+', 'I');
-
+					if (TNC->HFPacket)
+					{
+						char Save = TNC->RIG->CurrentBandWidth;
+						TNC->RIG->CurrentBandWidth = 'R';
+						UpdateMH(TNC, MHCall, '+', 'I');
+						TNC->RIG->CurrentBandWidth = Save;
+					}
 					ProcessIncommingConnect(TNC, Call, Stream);
 
 					if (Stream == 0 || TNC->HFPacket)
@@ -2228,8 +2226,13 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
-						UpdateMH(TNC, Call, '+', 'O');
-
+						if (TNC->HFPacket)
+						{
+							char Save = TNC->RIG->CurrentBandWidth;
+							TNC->RIG->CurrentBandWidth = 'R';
+							UpdateMH(TNC, Call, '+', 'O');
+							TNC->RIG->CurrentBandWidth = Save;
+						}
 					}
 	
 					return;
@@ -2574,8 +2577,8 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {
 	// Queue it as we may have just sent data
 
-	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
-	wsprintf(TNC->Streams[0].CmdSet, "D\r");
+	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
+	wsprintf(TNC->Streams[Stream].CmdSet, "D\r");
 }
 
 
@@ -2590,7 +2593,7 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 	
 	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
 
-	if (Stream == 0)
+	if (Stream == 0 || TNC->HFPacket)
 	{
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
 		wsprintf(Status, "%d SCANSTART 15", TNC->Port);
@@ -2598,12 +2601,12 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 		if (TNC->HFPacket)
 		{
-			wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r", TNC->NodeCall);
+			wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPR\r", TNC->NodeCall);
 			TNC->Streams[0].DEDStream = 30;		// Packet Channel
 		}
 		else
 		{
-			wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r", TNC->NodeCall);
+			wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->NodeCall);
 			TNC->Streams[0].DEDStream = 31;		// Pactor Channel
 		}
 	}

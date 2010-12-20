@@ -159,7 +159,7 @@ BEGIN
     LTEXT           "eMail Server Params:",IDC_STATIC,7,208,135,10
     CONTROL         "Enable UI System",IDC_ENABLEUI,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,6,187,83,10
-    LTEXT           "Enable UI System activates FBB compatible UI broadcating of Message Headers",
+    LTEXT           "Enable UI System activates FBB compatible UI broadcasting of Message Headers",
                     IDC_STATIC,10,81,358,15
     PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,158,186,91,13
     LTEXT           "NNTP Port",IDC_STATIC,7,227,39,12

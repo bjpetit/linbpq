@@ -320,10 +320,11 @@ typedef struct ConnectionInfo_S
 	int BBSNumber;						// The BBS number (offset into bitlist of BBSes to forward a message to
 	int NextMessagetoForward;			// Next index to check in forward cycle
 	BOOL BPQBBS;						// Set if SID indicates other end is BPQ
-	char MSGTYPES[10];					// Any MSGTYPEFLAGS
+	char MSGTYPES[20];					// Any MSGTYPEFLAGS
 	BOOL SendT;							// Send T messages
 	BOOL SendP;							// Send P messages
 	BOOL SendB;							// Send Bulls
+	int MaxBLen;						// Max Size for this session
 	BOOL DoReverse;						// Request Reverse Forward
 	char LastForwardType;				// Last type of messages forwarded
 	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block
@@ -1113,7 +1114,7 @@ VOID SetupUIInterface();
 VOID Free_UI();
 VOID SendLatestUI(int Port);
 VOID SendMsgUI(struct MsgInfo * Msg);
-VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR);
+VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue);
 VOID SeeifBBSUIFrame(struct _MESSAGEX * buff, int len);
 struct MsgInfo * FindMessageByNumber(int msgno);
 int CountConnectionsOnPort(int CheckPort);

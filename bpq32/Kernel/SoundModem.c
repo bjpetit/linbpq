@@ -268,7 +268,7 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 		if (TNC->PID)
 		{
 			KillSoundTNC(TNC);
-			Sleep(100);
+			Sleep(1000);
 		}
 
 		return (0);

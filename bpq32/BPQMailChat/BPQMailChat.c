@@ -603,7 +603,7 @@
 // Accept MARS and USA as continent codes for MARS Packet Addresses
 // Add option to send Non-delivery notifications.
 
-// Version 1.0.4.26 Dec 2010
+// Version 1.0.4.27 Dec 2010
 
 // Add MSGTYPES fwd file option
 
@@ -2323,6 +2323,7 @@ int Connected(Stream)
 				// Probably an outgoing connect
 		
 				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
+				conn->MaxBLen = 99999999;
 
 				if (conn->BBSFlags & RunningConnectScript)
 				{
@@ -2349,6 +2350,7 @@ int Connected(Stream)
 			conn->BPQStream = Stream;
 
 			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
+			conn->MaxBLen = 99999999;
 
 			GetConnectionInfo(Stream, callsign, &port, &conn->SessType, &paclen, &maxframe, &l4window);
 
@@ -6963,6 +6965,8 @@ InBand:
 		{
 			if (memcmp(Cmd, "MSGTYPE", 7) == 0)
 			{
+				char * ptr;
+				
 				// Select Types to send. Only send types in param. Only reverse if R in param
 
 				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
@@ -6971,10 +6975,17 @@ InBand:
 
 				strcpy(conn->MSGTYPES, &Cmd[8]);
 
-				if (strchr(&Cmd[8], 'B')) conn->SendB = TRUE;
 				if (strchr(&Cmd[8], 'P')) conn->SendP = TRUE;
 				if (strchr(&Cmd[8], 'T')) conn->SendT = TRUE;
 				if (strchr(&Cmd[8], 'R')) conn->DoReverse = TRUE;
+
+				ptr = strchr(&Cmd[8], 'B');
+				if (ptr)
+				{
+					conn->SendB = TRUE;
+					conn->MaxBLen = atoi(++ptr);
+					if (conn->MaxBLen == 0) conn->MaxBLen = 99999999;
+				}
 
 				// If nothing to do, terminate script
 
@@ -7423,7 +7434,7 @@ char * DateAndTimeForHLine(time_t Datim)
 	
 	return Date;
 }
-BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type);
+BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen);
 
 BOOL FindMessagestoForward (CIRCUIT * conn)
 {
@@ -7447,7 +7458,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 		}
 	}
 
-	if (conn->SendT && FindMessagestoForwardLoop(conn, 'T'))
+	if (conn->SendT && FindMessagestoForwardLoop(conn, 'T', 99999999))
 	{
 		conn->LastForwardType = 'T';
 		return TRUE;
@@ -7456,7 +7467,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	if (conn->LastForwardType == 'T')
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
 
-	if (conn->SendP && FindMessagestoForwardLoop(conn, 'P'))
+	if (conn->SendP && FindMessagestoForwardLoop(conn, 'P', 99999999))
 	{
 		conn->LastForwardType = 'P';
 		return TRUE;
@@ -7465,7 +7476,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	if (conn->LastForwardType == 'P')
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
 
-	if (conn->SendB && FindMessagestoForwardLoop(conn, 'B'))
+	if (conn->SendB && FindMessagestoForwardLoop(conn, 'B', conn->MaxBLen))
 	{
 		conn->LastForwardType = 'B';
 		return TRUE;
@@ -7476,7 +7487,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 }
 
 
-BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type)
+BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 {
 	// See if any messages are queued for this BBS
 
@@ -7505,7 +7516,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type)
 			while (Call)
 			{
 				if (_stricmp(Msg->to, Call) == 0)
-					if (Msg->status == 'N' && Msg->type == Type) 
+					if (Msg->status == 'N' && Msg->type == Type && Msg->length <= MaxLen) 
 					goto Forwardit;
 				
 				Call = conn->PacLinkCalls[index++];
@@ -7513,7 +7524,8 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type)
 //			continue;
 		}
 
-		if (Msg->type == Type && (Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
+		if (Msg->type == Type && Msg->length <= MaxLen && (Msg->status != 'H')
+			&& (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
 		{
 			// Message to be sent - do a consistancy check (State, etc)
 

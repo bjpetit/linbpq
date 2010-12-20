@@ -1173,6 +1173,7 @@ NotConnected:
 
 		STREAM->FramesQueued = 0;
 		STREAM->FramesOutstanding = 0;
+
 		CloseComplete(TNC, Stream);
 
 		while(STREAM->BPQtoPACTOR_Q)

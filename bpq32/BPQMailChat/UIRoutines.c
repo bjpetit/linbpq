@@ -201,7 +201,7 @@ VOID SendMsgUI(struct MsgInfo * Msg)
 	for (i=1; i <= NumPorts; i++)
 	{
 		if (Mask & 1)
-			Send_AX_Datagram(msg, len, i, AXDEST);
+			Send_AX_Datagram(msg, len, i, AXDEST, TRUE);
 		
 		Mask>>=1;
 	}
@@ -226,7 +226,7 @@ VOID SendHeaders(int Number, int Port)
 		{
 			if (len > (200 - strlen(Msg->title)))
 			{
-				Send_AX_Datagram(msg, len, Port, AXDEST);
+				Send_AX_Datagram(msg, len, Port, AXDEST, FALSE);
 				len=0;
 			}
 
@@ -240,7 +240,7 @@ VOID SendHeaders(int Number, int Port)
 		{
 			if (len > 230)
 			{
-				Send_AX_Datagram(msg, len, Port, AXDEST);
+				Send_AX_Datagram(msg, len, Port, AXDEST, FALSE);
 				len=0;
 			}
 			len += wsprintf(&msg[len], "%-6d #\r", Number);
@@ -249,7 +249,7 @@ VOID SendHeaders(int Number, int Port)
 		Number++;
 	}
 
-	Send_AX_Datagram(msg, len, Port, AXDEST);
+	Send_AX_Datagram(msg, len, Port, AXDEST, FALSE);
 
 }
 VOID SendDummyUI(int num)
@@ -264,7 +264,7 @@ VOID SendDummyUI(int num)
 	for (i=1; i <= NumPorts; i++)
 	{
 		if (Mask & 1)
-			Send_AX_Datagram(msg, len, i, AXDEST);
+			Send_AX_Datagram(msg, len, i, AXDEST, TRUE);
 		
 		Mask>>=1;
 	}
@@ -281,20 +281,20 @@ VOID SendLatestUI(int Port)
 
 	if (Port)
 	{
-		Send_AX_Datagram(msg, len, Port, AXDEST);
+		Send_AX_Datagram(msg, len, Port, AXDEST, FALSE);
 		return;
 	}
 
 	for (i=1; i <= NumPorts; i++)
 	{
 		if (Mask & 1)
-			Send_AX_Datagram(msg, len, i, AXDEST);
+			Send_AX_Datagram(msg, len, i, AXDEST, TRUE);
 		
 		Mask>>=1;
 	}
 }
 
-VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR)
+VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue)
 {
 	MESSAGEX AXMSG;
 
@@ -329,7 +329,10 @@ VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 	AXPTR->PID = 0xf0;
 	memcpy(AXPTR->DATA, Msg, Len);
 
-	QueueRaw(Port, &AXMSG, Len + 16);
+	if (Queue)
+		QueueRaw(Port, &AXMSG, Len + 16);
+	else
+		SendRaw(Port, (char *)&AXMSG.DEST, Len + 16);
 
 	return;
 

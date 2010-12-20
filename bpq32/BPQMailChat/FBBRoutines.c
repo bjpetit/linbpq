@@ -44,13 +44,21 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	{
 		if (memcmp(Buffer, "; MSGTYPES", 7) == 0)
 		{
+			char * ptr;
+			
 			conn->SendB = conn->SendP = conn->SendT = FALSE;
 
-			if (strchr(&Buffer[10], 'B')) conn->SendB = TRUE;
 			if (strchr(&Buffer[10], 'P')) conn->SendP = TRUE;
 			if (strchr(&Buffer[10], 'T')) conn->SendT = TRUE;
-		}
 
+			ptr = strchr(&Buffer[10], 'B');
+			if (ptr)
+			{
+				conn->SendB = TRUE;
+				conn->MaxBLen = atoi(++ptr);
+				if (conn->MaxBLen == 0) conn->MaxBLen = 99999999;
+			}
+		}
 		return;
 	}
 

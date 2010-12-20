@@ -326,6 +326,7 @@
 // Fix reporting same freq with different bandwidths at different times.
 // Code changes to support SCS Robust Packet Mode.
 // Add FT2000 to Rigcontrol
+// Only Send CTEXT to connects to Node (not to connects to an Application Call)
 
 
 #include "KVerhddr.h"
