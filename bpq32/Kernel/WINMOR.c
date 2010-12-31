@@ -384,8 +384,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	char ErrMsg[255];
 	int Param;
 	HKEY hKey=0;
-
 	struct TNCINFO * TNC = TNCInfo[port];
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	if (TNC == NULL)
 		return 0;							// Port not defined
@@ -475,11 +475,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		if (TNC->NeedDisc)
+		if (STREAM->NeedDisc)
 		{
-			TNC->NeedDisc--;
+			STREAM->NeedDisc--;
 
-			if (TNC->NeedDisc == 0)
+			if (STREAM->NeedDisc == 0)
 			{
 				// Send the DISCONNECT
 
@@ -1444,6 +1444,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	UINT * buffptr;
 	char Status[80];
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	if (_memicmp(Buffer, "FAULT failure to Restart Sound card", 20) == 0)
 	{
@@ -1581,7 +1582,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					// Send a Message, then a disconenct
 					
 					send(TNC->WINMORDataSock, Msg, strlen(Msg), 0);
-					TNC->NeedDisc = 100;	// 10 secs
+					STREAM->NeedDisc = 100;	// 10 secs
 				}
 			}
 			return;
@@ -1747,8 +1748,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			
 			if (TNC->Streams[0].Disconnecting)						// Disconnect when all sent
 			{
-				if (TNC->NeedDisc == 0)
-					TNC->NeedDisc = 60;								// 6 secs
+				if (STREAM->NeedDisc == 0)
+					STREAM->NeedDisc = 60;								// 6 secs
 			}
 //			else
 //			if (TNC->TXRXState == 'S')

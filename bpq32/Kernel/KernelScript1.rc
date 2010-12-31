@@ -223,13 +223,10 @@ BEGIN
             MENUITEM ".",                           IDM_DISCONNECT
         END
         MENUITEM "ReRead Config",               TELNET_RECONFIG
+        MENUITEM "CMS Access Enabled",          CMSENABLED
     END
+    MENUITEM "",                            65535
 END
-
-
-#ifndef _MAC
-
-#endif    // !_MAC
 
 
 #ifdef APSTUDIO_INVOKED

@@ -9,12 +9,26 @@
 
 #define MAXFREQS 20			// RigControl freqs to scan
 
+struct PacketReportInfo
+{
+	int mode;              // see below (an integer)
+	int baud;              // see below (an integer)
+	int power;             // actual power if known, default to 100 for HF, 30 for VHF/UHF (an integer)
+	int height;            // antenna height in feet if known, default to 25
+	int gain;              // antenna gain if known, default to 0
+	int direction;         // primary antenna direction in degrees if known, use 000 for omni (an integer)
+};
+
 struct WL2KInfo
 {
 	char * Freq;
 	char Bandwidth;
 	char * TimeList;		// eg 06-10,12-15
+	struct PacketReportInfo * PacketData;
 };
+
+
+
 
 // Telnet Server User Record
 
@@ -26,6 +40,8 @@ struct UserRec
 	char * Appl;				// Autoconnect APPL
 	BOOL Secure;				// Authorised User
 };
+
+#define MaxCMS	10				// Numbr of addresses we can keep - currently 4 are used.
 
 struct TCPINFO
 {
@@ -40,6 +56,13 @@ struct TCPINFO
 	int TCPPort;
 	int FBBPort;
 	int RelayPort;
+	BOOL CMS;					// Allow Connect to CMS
+	BOOL CMSOK;					// Internet link is ok.
+	struct in_addr CMSAddr[MaxCMS];
+	BOOL CMSFailed[MaxCMS];		// Set if connect to CMS failed.
+	int NumberofCMSAddrs;
+	int NextCMSAddr;			// Round Robin Pointer
+	int CheckCMSTimer;			// CMS Poll Timer
 
 	BOOL DisconnectOnClose;
 
@@ -109,6 +132,8 @@ struct STREAMINFO
 	struct ConnectionInfo * ConnectionInfo;	// TCP Server Connection Info
 
 	int TimeInRX;				// Too long in send mode timer
+	int NeedDisc;				// Timer to send DISC if appl not available
+
 };
 
 
@@ -153,7 +178,6 @@ typedef struct TNCINFO
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
 	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.
 	BOOL DiscPending;			// Set if Disconnect Pending Received. So we can time out stuck in Disconnecting
-	int NeedDisc;				// Timer to send DISC if appl not available
 	BOOL HadConnect;				// Flag to say have been in session
 	BOOL FECMode;				// In FEC Mode
 	BOOL FEC1600;				// Use 1600 Hz FEC Mode
@@ -207,6 +231,7 @@ typedef struct TNCINFO
 	BOOL OverrideBusy;
 	int BusyDelay;					// Timer for busy timeout
 	char * ConnectCmd;				// Saved command if waiting for busy to clear
+	BOOL UseAPPLCalls;				// Robust Packet to use Applcalls
 
 	// Fields for reporting to WL2K Map
 

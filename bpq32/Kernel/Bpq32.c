@@ -400,6 +400,7 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI SoundModemExtInit(EXTPORTDATA * PortEntry);
 
 
+extern char * Buffer;	// Config Area
 
 extern char AUTOSAVE;
 
@@ -822,7 +823,7 @@ VOID CheckforLostProcesses()
 				}
 			}
 
-			// If process ) the semaphore, release it
+			// If process had the semaphore, release it
 
 			if (Semaphore == 1 && ProcessID == SemProcessID)
 			{
@@ -830,7 +831,8 @@ VOID CheckforLostProcesses()
 				Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
 					Sem_eax, Sem_ebx, Sem_ecx, Sem_edx, Sem_esi, Sem_edi); 
 
-				Semaphore=0;
+				Semaphore = 0;
+				SemHeldByAPI = 0;
 			}
 
 			for (i=1;i<65;i++)
@@ -880,7 +882,7 @@ VOID MonitorTimerThread(int x)
 			// Timer owning Process has died - Force a new timer to be created
 			//	New timer thread will detect lost process and tidy up
 		
-			OutputDebugString("BPQ32 Process with Timer died\n");
+			Debugprintf("BPQ32 Process %d with Timer died", TimerInst);
 
 			// If process was holding the semaphore, release it
 
@@ -888,8 +890,9 @@ VOID MonitorTimerThread(int x)
 			{
 				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\r\n");
 				Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
-					Sem_eax, Sem_ebx = 0, Sem_ecx = 0, Sem_edx = 0, Sem_esi = 0, Sem_edi); 
-				Semaphore=0;
+					Sem_eax, Sem_ebx, Sem_ecx, Sem_edx, Sem_esi, Sem_edi); 
+				Semaphore = 0;
+				SemHeldByAPI = 0;
 			}
 
 //			KillTimer(NULL,TimerHandle);
@@ -906,6 +909,34 @@ VOID MonitorTimerThread(int x)
 	} while (TRUE);
 }
 
+VOID SetApplPorts()
+{
+	// If any appl has an alias, get port number
+
+	struct APPLCONFIG * App;
+	struct APPLCALLS * APPL;
+
+	char C[80];
+	char Port[80];
+	char Call[80];
+
+	int i, n;
+
+	App = (struct APPLCONFIG *)&Buffer[ApplOffset];
+
+	for (i=0; i < NumberofAppls; i++)
+	{
+		APPL=&APPLCALLTABLE[i];
+
+		if (APPL->APPLHASALIAS)
+		{
+			n = sscanf(App->CommandAlias, "%s %s %s", &C, &Port, &Call);
+			if (n == 3)
+				APPL->APPLPORT = atoi(Port);
+		}
+		App++;
+	}
+}
 
 VOID CALLBACK TimerProc(
 
@@ -970,11 +1001,14 @@ VOID CALLBACK TimerProc(
 
 			pushad
 			call START
-
 			call INITIALISEPORTS			// Restart Ports
 
 			popad
 			}
+
+			SetApplPorts();
+
+			FreeConfig();
 
 			for (i=1;i<66;i++)			// Include IP Vec
 			{
@@ -1469,6 +1503,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			}
 			else
 			{
+				SetApplPorts();
 				InitDone=(int) &InitDone;
 				BPQMsg = RegisterWindowMessage(BPQWinMsg);
 //				TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
@@ -1631,6 +1666,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		AttachedProcesses--;
 		AttachedPerlProcesses-=Perl;
+
+		if (AUTOSAVE == 1 && AttachedProcesses < 2) SaveNodes();	// Soundmo	
+
 
 		if (AttachedProcesses == 0)
 		{

@@ -311,8 +311,16 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 			{
 				Sleep(1000);
 				Disconnect(conn->BPQStream);
-			}
-			
+			}	
+			return;
+		}
+
+		if (_memicmp(&Buffer[1], "Keepalive", 4) == 0)
+		{
+			conn->u.user->rtflags ^= u_keepalive;
+			upduser(conn->u.user);
+			nprintf(conn, "Keepalive is %s\r",  (conn->u.user->rtflags & u_keepalive) ? "Enabled" : "Disabled");
+			conn->u.user->lastsendtime = time(NULL);
 			return;
 		}
 
@@ -584,7 +592,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 			ckt_from->refcnt++;
 			text_tellu_Joined(user);
 			strnew(&user->name, f1);
-			strnew(&user->qth,  f2);
+			strnew(&user->qth, f2);
 			upduser(user);
 //			makelinks();					// Bring up our links if not already up
 
@@ -611,7 +619,7 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 			cn_dec(ckt_from, node);
 			node_dec(node);
 			strnew(&user->name, f1);
-			strnew(&user->qth,  f2);
+			strnew(&user->qth, f2);
 			upduser(user);
 			user_leave(user);
 			break;
@@ -1180,6 +1188,8 @@ void put_text(CIRCUIT * circuit, USER * user, UCHAR * buf)
 	}	
 	else	
 		nputs(circuit, buf);
+
+	circuit->u.user->lastsendtime = time(NULL);
 }
 
 void text_tellu(USER *user, char *text, char *to, int who)
@@ -1208,8 +1218,7 @@ void text_tellu(USER *user, char *text, char *to, int who)
 
 			case o_all:
 
-				if (circuit->u.user->rtflags & u_colour)	// Use Colour
-					put_text(circuit, user, buf);	// Send adding Colour if wanted
+				put_text(circuit, user, buf);		// Send adding Colour if wanted
 	
 				break;
 	
@@ -1715,6 +1724,7 @@ int rtloginu (CIRCUIT *circuit, BOOL Local)
 	text_tellu_Joined(user);
 	user_tell(user, id_join);
 	show_users(circuit);
+	user->lastsendtime = time(NULL);
 //	makelinks();
 
 	return TRUE;
@@ -1937,6 +1947,8 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 
 	user = circuit->u.user;
 
+//	user->lastsendtime = time(NULL);
+
 	switch(tolower(Buffer[1]))
 	{
 		case 'a' :
@@ -1968,7 +1980,9 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are not case sensitive\r/P - Show Ports and Links.\r");
 			nputs(circuit, "/A - Toggle Alert on user join.\r");
 			nputs(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal.\r");
-			nputs(circuit, "/E - Toggle Echo.\r/S CALL Text - Send Text to that station only.\r");
+			nputs(circuit, "/E - Toggle Echo.\r");
+			nputs(circuit, "/KEEPALIVE - Toggle sending Keepalive messages every 10 minutes.\r");
+			nputs(circuit, "/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
 			nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");
 			return TRUE;
@@ -2156,6 +2170,7 @@ VOID ChatTimer()
 	CIRCUIT *c;
 	char Msg[1000];
 	int len;
+	time_t NOW = time(NULL);
 
 	ClearDebugWindow();
 
@@ -2177,9 +2192,9 @@ VOID ChatTimer()
 	
 		if (user->circuit->rtcflags & p_user)	// Local User
 		{
-			if ((time(NULL) - user->lastmsgtime) > 7200)
+			if ((NOW - user->lastmsgtime) > 7200)
 			{
-				nprintf(user->circuit, "*** Disconnected - Idle time exceeded");
+				nprintf(user->circuit, "*** Disconnected - Idle time exceeded\r");
 				Sleep(1000);
 
 				if (user->circuit->BPQStream < 0)
@@ -2193,8 +2208,13 @@ VOID ChatTimer()
 					break;
 				}
 			}
-		}
 
+			if (user->rtflags & u_keepalive && (NOW - user->lastsendtime) > 600)
+			{
+				nprintf(user->circuit, "Chat Keepalive\r");
+				user->lastsendtime = NOW;
+			}
+		}
 	}
 
 

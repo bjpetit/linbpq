@@ -607,6 +607,16 @@
 
 // Add MSGTYPES fwd file option
 
+// Version 1.0.4.28 Dec 2010
+
+// Renumbered for release
+
+// Version 1.0.4.29 Dec 2010
+
+// Fix rescan requeuing where bull was rejected by a BBS
+// Fiz flagging bulls received by NNTP with $ if they need to be forwarded.
+// Add Chat Keepalive option.
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
@@ -4507,9 +4517,14 @@ VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
 
 	else
 		if (Msg->via[0] != 0)
+		{
+			char Via[80];
+			strcpy(Via, Msg->via);
+			strlop(Via, '.');			// Only show first part of via
 			nodeprintf(conn, "%-6d %s %c%c   %5d %-7s@%-6s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->via, FullFrom, Msg->title);
-	else
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, FullFrom, Msg->title);
+		}
+		else
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
 				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
 
@@ -6525,6 +6540,9 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
+
+		if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
+			ForwardingInfo->AllowCompressed = TRUE;
 
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey, "FWD Personals Only", 0,			

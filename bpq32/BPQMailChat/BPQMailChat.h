@@ -251,9 +251,10 @@ typedef struct cn_t
 
 // Users. Could be connected at any node.
 
-#define u_echo 0x0002     // User wants his text echoed to him.
-#define u_bells 0x0004    // User wants bell when other users join.
-#define u_colour 0x0008    // User wants BPQTerminal colour codes.
+#define u_echo 0x0002		// User wants his text echoed to him.
+#define u_bells 0x0004		// User wants bell when other users join.
+#define u_colour 0x0008		// User wants BPQTerminal colour codes.
+#define u_keepalive 0x0010	// User wants Keepalive Messages.
 
 typedef struct ConnectionInfo_S
 {
@@ -476,7 +477,8 @@ typedef struct user_t
 	TOPIC   *topic;         // Topic user is in.
 	int     rtflags;
 	time_t	lastmsgtime;	// Time of last input from user
-	int Colour;			// For Console Display
+	time_t	lastsendtime;	// Time of last output to user
+	int Colour;				// For Console Display
 } USER;
 
 #pragma pack()

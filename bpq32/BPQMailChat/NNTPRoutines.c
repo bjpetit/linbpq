@@ -188,6 +188,9 @@ CreateNNTPMessage(char * From, char * To, char * MsgTitle, time_t Date, char * M
 
 	MatchMessagetoBBSList(Msg, 0);
 
+	if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+		Msg->status = '$';				// Has forwarding
+
 	BuildNNTPList(Msg);				// Build NNTP Groups list
 
 	return CreateSMTPMessageFile(MsgBody, Msg);

@@ -117,6 +117,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			// Zap the entry
 
 			clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
+			set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
 			conn->UserPointer->ForwardingInfo->MsgCount--;
 		}
 

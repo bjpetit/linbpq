@@ -20,7 +20,7 @@
 #define BPQCLEARRECONFIG                408
 #define BPQMINTOTRAY                    409
 #define BPQSTARTMIN                     410
-#define BPQSAVEREG						411
+#define BPQSAVEREG                      411
 #define ID_EXIT                         1000
 #define IDC_PROTOSTATE                  1000
 #define IDB_HIDE                        1001
@@ -62,6 +62,7 @@
 #define RIGCONFIG                       30006
 #define WINMORCONFIG                    30006
 #define TELNET_RECONFIG                 40002
+#define CMSENABLED                      40003
 
 // Next default values for new objects
 // 
@@ -69,7 +70,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        124
-#define _APS_NEXT_COMMAND_VALUE         40003
+#define _APS_NEXT_COMMAND_VALUE         40004
 #define _APS_NEXT_CONTROL_VALUE         1040
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

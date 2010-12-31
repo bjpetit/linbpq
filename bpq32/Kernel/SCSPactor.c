@@ -84,6 +84,8 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
+char NodeCall[11];		// Nodecall, Null Terminated
+
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
 static ProcessLine(char * buf, int Port)
@@ -225,12 +227,15 @@ ConfigLine:
 				double Robust = atof(&buf[19]);
 				TNC->RobustTime = Robust * 10;
 			}
+
+			if (_memicmp(buf, "USEAPPLCALLS", 12) == 0)
+				TNC->UseAPPLCalls = TRUE;
+
 			else
 
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
 			else
-
 				strcat (TNC->InitScript, buf);
 
 		}
@@ -584,6 +589,14 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
+
+	// get NODECALL for RP tests
+
+	memcpy(NodeCall, GetNodeCall(), 10);
+		
+	ptr=strchr(NodeCall, ' ');
+	if (ptr) *(ptr) = 0;					// Null Terminate
+
 
 	// Set TONES to 4
 
@@ -2067,7 +2080,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 			if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "LINK FAILURE"))
 			{
-				if ((TNC->Streams[Stream].Connecting | TNC->Streams[Stream].Connected) == 0)
+				if ((STREAM->Connecting | STREAM->Connected) == 0)
 					return;
 
 				if (STREAM->Connecting && STREAM->Disconnecting == FALSE)
@@ -2124,10 +2137,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				ptr = strchr(Call, 13);	
 				if (ptr) *ptr = 0;
 
-				TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
-				TNC->Streams[Stream].Connecting = FALSE;
+				STREAM->Connected = TRUE;			// Subsequent data to data channel
+				STREAM->Connecting = FALSE;
 
-				TNC->Streams[Stream].BytesRXed = TNC->Streams[Stream].BytesTXed = 0;
+				STREAM->BytesRXed = STREAM->BytesTXed = 0;
 
 				//	Stop Scanner
 
@@ -2145,6 +2158,12 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
 				{
 					// Incoming Connect
+
+					struct APPLCALLS * APPL;
+					char * ApplPtr = &APPLS;
+					int App;
+					char Appl[10];
+					char DestCall[10];
 
 					if (TNC->HFPacket)
 					{
@@ -2165,8 +2184,72 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 					
 						// If an autoconnect APPL is defined, send it
+						// See which application the connect is for
 
-						if (TNC->ApplCmd)
+						strcpy(DestCall, STREAM->MyCall);
+					
+						if (TNC->UseAPPLCalls && strcmp(DestCall, TNC->NodeCall) != 0)		// Not Connect to Node Call
+						{		
+							for (App = 0; App < 32; App++)
+							{
+								APPL=&APPLCALLTABLE[App];
+								memcpy(Appl, APPL->APPLCALL_TEXT, 10);
+								ptr=strchr(Appl, ' ');
+
+								if (ptr)
+									*ptr = 0;
+	
+								if (_stricmp(DestCall, Appl) == 0)
+									break;
+							}
+
+							if (App < 32)
+							{
+								char AppName[13];
+
+								memcpy(AppName, &ApplPtr[App * 21], 12);
+								AppName[12] = 0;
+
+								// Make sure app is available
+
+								if (CheckAppl(TNC, AppName))
+								{
+									int MsgLen = wsprintf(Buffer, "%s\r", AppName);
+									buffptr = GetBuff();
+
+									if (buffptr == 0) return;			// No buffers, so ignore
+
+									buffptr[1] = MsgLen;
+									memcpy(buffptr+2, Buffer, MsgLen);
+
+									C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+									TNC->SwallowSignon = TRUE;
+								}
+								else
+								{
+									char Msg[] = "Application not available\r\n";
+					
+									// Send a Message, then a disconenct
+					
+									buffptr = GetBuff();
+									if (buffptr == 0) return;			// No buffers, so ignore
+
+									buffptr[1] = strlen(Msg);
+									memcpy(&buffptr[2], Msg, strlen(Msg));
+									C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
+
+									STREAM->NeedDisc = 100;	// 10 secs
+								}
+								return;
+							}
+
+							// Not to a known appl - drop through to Node
+						}
+
+						if (TNC->HFPacket && TNC->UseAPPLCalls)
+							goto DontUseAPPLCmd;
+	
+						if (TNC->ApplCmd)	
 						{
 							buffptr = GetBuff();
 							if (buffptr == 0) return;			// No buffers, so ignore
@@ -2176,7 +2259,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 							TNC->SwallowSignon = TRUE;
 							return;
 						}
-					}
+
+					}	// End of Stream 0 or RP or Drop through from not APPL Connect
+				
+				DontUseAPPLCmd:
 
 					if (FULL_CTEXT)
 					{
@@ -2190,7 +2276,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 							buffptr[1] = CTPaclen;
 							memcpy(&buffptr[2], &CTEXTMSG[Next], CTPaclen);
-							C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
+							C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 
 							Next += CTPaclen;
 							Len -= CTPaclen;
@@ -2201,7 +2287,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 						buffptr[1] = Len;
 						memcpy(&buffptr[2], &CTEXTMSG[Next], Len);
-						C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
+						C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
 					}
 
 					return;
@@ -2244,7 +2330,67 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (Msg[3] == 4 || Msg[3] == 5)
 		{
+			struct STREAMINFO * STREAM = &TNC->Streams[1];		// RP Stream
+
 			// Monitor
+
+			if (TNC->HFPacket && TNC->UseAPPLCalls && strstr(&Msg[4], "SABM") && STREAM->Connected == FALSE)
+			{
+				// See if a call to Nodecall or one of our APPLCALLS - if so, stop scan and switch MYCALL
+
+				char DestCall[10] = "NOCALL  ";
+				char * ptr1 = strstr(&Msg[7], "to ");
+				int i;
+				struct APPLCALLS * APPL;
+				char Appl[11];
+				char Status[80];
+
+				if (ptr1) memcpy(DestCall, &ptr1[3], 10);
+				
+				ptr1 = strchr(DestCall, ' ');
+				if (ptr1) *(ptr1) = 0;					// Null Terminate
+
+				Debugprintf("RP SABM Received for %s" , DestCall);
+
+				if (strcmp(TNC->NodeCall, DestCall) != 0)
+				{
+					// Not Calling NodeCall/Portcall
+
+					if (strcmp(NodeCall, DestCall) == 0)
+						goto SetThisCall;
+
+					// See if to one of our ApplCalls
+
+					for (i = 0; i < 32; i++)
+					{
+						APPL=&APPLCALLTABLE[i];
+
+						if (APPL->APPLCALL_TEXT[0] > ' ')
+						{
+							char * ptr;
+							memcpy(Appl, APPL->APPLCALL_TEXT, 10);
+							ptr=strchr(Appl, ' ');
+
+							if (ptr) *ptr = 0;
+
+							if (strcmp(Appl, DestCall) == 0)
+							{
+						SetThisCall:
+								Debugprintf("RP SABM is for NODECALL or one of our APPLCalls - setting MYCALL to %s and pausing scan", DestCall);
+
+								wsprintf(Status, "%d SCANSTART 30", TNC->Port);
+								Rig_Command(-1, Status);
+								TNC->SwitchToPactor = 0;		// Stay in RP
+
+								strcpy(STREAM->MyCall, DestCall);
+								STREAM->CmdSet = STREAM->CmdSave = malloc(100);
+								wsprintf(STREAM->CmdSet, "I%s\r", DestCall);
+								break;
+							}
+						}
+					}
+				}
+			}
 
 			DoMonitor(TNC, &Msg[3], framelen - 3);
 			return;

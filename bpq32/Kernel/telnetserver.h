@@ -3,9 +3,8 @@
 #include "resource.h"
 
 #define WSA_ACCEPT WM_USER + 1
-#define WSA_DATA WM_USER + 2
-
-
+#define WSA_CONNECT WM_USER + 2
+#define WSA_DATA WM_USER + 3
 
 #define InputBufferLen 500
 
@@ -28,6 +27,7 @@ struct ConnectionInfo
 	BOOL FBBMode;				// Pure TCP for FBB forwarding
 	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
 	BOOL Auth;					// Set if User is flagged as a Secure User
+	int CMSIndex;				// Pointer to CMS used for this connect
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

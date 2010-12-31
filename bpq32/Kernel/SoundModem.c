@@ -25,6 +25,10 @@
 
 extern UCHAR BPQDirectory[];
 
+extern char AUTOSAVE;
+
+APIENTRY SaveNodes ();
+
 #pragma pack(1)
 
 #define MAXFLEN 400     /* Maximale Laenge eines Frames */
@@ -267,7 +271,8 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 
 		if (TNC->PID)
 		{
-			KillSoundTNC(TNC);
+			KillSoundTNC(TNC);			
+			if (AUTOSAVE == 1) SaveNodes();	
 			Sleep(1000);
 		}
 

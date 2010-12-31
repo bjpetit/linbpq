@@ -160,20 +160,7 @@ VOID __cdecl Consoleprintf(const char * format, ...)
 	return;
 }
 
-#define ApplOffset 80000			// Applications offset in config buffer
-#define InfoOffset 85000			// Infomsg offset in config buffer
-#define InfoMax	2000				// Max Info 
-
 #pragma pack(1) 
-
-struct APPLCONFIG
-{
-	char Command[12];
-	char CommandAlias[48];
-	char ApplCall[10];
-	char ApplAlias[10];
-	int ApplQual;
-};
 
 struct CONFIGTABLE
 {

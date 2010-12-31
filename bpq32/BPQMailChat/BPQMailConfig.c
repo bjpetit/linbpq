@@ -836,6 +836,9 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 
 			SetDlgItemText(hDlg, IDC_CALL, Text);
 
+			if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
+				ForwardingInfo->AllowCompressed = TRUE;
+
 			CheckDlgButton(hDlg, IDC_FWDENABLE, ForwardingInfo->Enabled);
 			CheckDlgButton(hDlg, IDC_REVERSE, ForwardingInfo->ReverseFlag);
 			CheckDlgButton(hDlg, IDC_ALLOWCOMP, ForwardingInfo->AllowCompressed);

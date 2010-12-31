@@ -464,7 +464,7 @@ BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 	int App, Stream;
 	// See if there is an RMS Application
 
-	Debugprintf("Checking if RMS is running");
+	Debugprintf("Checking if %s is running", Appl);
 
 	for (App = 0; App < 32; App++)
 	{
@@ -475,6 +475,24 @@ BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 			int ApplMask = 1 << App;
 
 			memcpy(TNC->RMSCall, APPL->APPLCALL_TEXT, 9);		// Need Null on end
+
+			// If App has an alias, assume it is running , unless a CMS alias - then check CMS
+
+			if (APPL->APPLHASALIAS)
+			{
+				if (APPL->APPLPORT)
+				{
+					TNC = TNCInfo[APPL->APPLPORT];
+					{
+						if (TNC)
+						{
+							if (TNC->TCPInfo && !TNC->TCPInfo->CMSOK)
+							return FALSE;
+						}
+					}
+				}
+				return TRUE;
+			}
 
 			// See if App is running
 
@@ -572,6 +590,41 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt, 4);
 
 	destaddr.sin_family = AF_INET;
+
+	if (TNC->TCPInfo && TNC->TCPInfo->CMS)
+	{
+		// Telnet reporting Packet Freqs
+
+		struct WL2KInfo * WL2KInfoPtr;
+		int n = 0;
+		struct PacketReportInfo * PktInfo;
+				
+		WL2KInfoPtr = &TNC->WL2KInfoList[0];
+
+		while (WL2KInfoPtr->PacketData)
+		{
+			PktInfo = WL2KInfoPtr->PacketData;
+
+			wsprintf(Message, "02'%s', '%s', '%s', %s, %d, %d, %d, %d, %d, %03d, '%s', 1",
+				TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
+				PktInfo->mode, PktInfo->baud, PktInfo->power, PktInfo->height, PktInfo->gain, PktInfo->direction,
+				TNC->Comment);
+
+			Debugprintf("Sending %s", Message);
+
+			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+			WL2KInfoPtr = &TNC->WL2KInfoList[++n];
+		}
+
+		Sleep(100);
+
+		closesocket(sock);
+		sock = 0;
+
+		return;
+	}
+
 
 	if (TNC->UseRigCtrlFreqs)
 	{
@@ -768,6 +821,63 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 										}
 									}
 								}
+								else if (_stricmp(p_cmd, "PACKET") == 0)
+								{
+									// WL2KREPORT Host, Port, G8BPQ, IO68VL,Testing BPQ,PACKET,Freq,Baud,Power,Height,Gain,Direction
+
+									struct WL2KInfo * WL2KInfoPtr;
+									int n = 0;
+									char * Freq;
+									char * param;
+									int Speed, Mode;
+
+									Freq = strtok_s(NULL, " ,\t\n\r", &Context);
+									param = strtok_s(NULL, " ,\t\n\r", &Context);
+
+									if (Freq)
+									{
+										struct PacketReportInfo * PktInfo;
+
+										WL2KInfoPtr = &TNC->WL2KInfoList[0];
+
+										while (WL2KInfoPtr->PacketData)			//Find next entry
+										{
+											WL2KInfoPtr = &TNC->WL2KInfoList[++n];
+										}
+
+										PktInfo = WL2KInfoPtr->PacketData = zalloc(sizeof(struct PacketReportInfo));
+
+										WL2KInfoPtr->Freq = _strdup(Freq);
+										PktInfo->baud = (param)? atoi(param): 1200;
+										param = strtok_s(NULL, " ,\t\n\r", &Context);
+										PktInfo->power = (param)? atoi(param) : 0;
+										param = strtok_s(NULL, " ,\t\n\r", &Context);
+										PktInfo->height = (param)? atoi(param) : 0;
+										param = strtok_s(NULL, " ,\t\n\r", &Context);
+										PktInfo->gain = (param)? atoi(param) : 0;
+										param = strtok_s(NULL, " ,\t\n\r", &Context);
+										PktInfo->direction = (param)? atoi(param) : 0;
+
+										Speed = PktInfo->baud;
+										
+										if (Speed <= 1200)
+											Mode = 0;
+										else if (Speed <= 2400)
+											Mode = 1;
+										else if (Speed <= 4800)
+											Mode = 2;
+										else if (Speed <= 9600)
+											Mode = 3;
+										else if (Speed <= 19200)
+											Mode = 4;
+										else if (Speed <= 38400)
+											Mode = 5;
+										else
+											Mode = 6;
+
+										PktInfo->mode = Mode;
+									}
+								}
 								else
 								{
 									if (strlen(p_cmd) > 11) goto BadLine;
@@ -846,6 +956,11 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 			*(LOC++) = 0;
 			*(LOCEND) = 0;
 			LOC++;
+			if (strlen(LOC) != 6)
+			{
+				Debugprintf("Corrupt LOC %s %s", Call, LOC);
+				LOC = NoLOC;
+			}
 		}		
 	}
 	else

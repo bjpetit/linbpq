@@ -127,6 +127,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				else
 				{
 					clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+					set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
 
 					if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
 					{

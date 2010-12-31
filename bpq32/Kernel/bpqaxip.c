@@ -2535,8 +2535,8 @@ int Socket_Connect(int SocketId, int Error)
 			continue;
 
 	index = 0;
-	while (index < PORT->arp_table_len)
 
+	while (index < PORT->arp_table_len)
 	{
 		sockptr = &PORT->arp_table[index++];
 

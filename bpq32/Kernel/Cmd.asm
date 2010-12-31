@@ -4376,6 +4376,11 @@ ATTACHCMD:
 
 @@:
 	sub	al, '@'
+	jc ATTERR
+	
+	cmp EAX, 10 ; MAXHOSTMODESESSIONS[EBX]
+	jae ATTERR
+	
 	shl eax,2
 	jmp @f
 attpactor:

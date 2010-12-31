@@ -51,6 +51,20 @@ extern int NUMBEROFNODES;
 
 #pragma pack(1) 
 
+#define ApplOffset 80000			// Applications offset in config buffer
+#define InfoOffset 85000			// Infomsg offset in config buffer
+#define InfoMax	2000				// Max Info 
+
+struct APPLCONFIG
+{
+	char Command[12];
+	char CommandAlias[48];
+	char ApplCall[10];
+	char ApplAlias[10];
+	int ApplQual;
+};
+
+
 typedef struct _LINKTABLE
 {
 //;
@@ -257,6 +271,8 @@ struct APPLCALLS
 	struct DEST_LIST * NODEPOINTER;	// Pointer to "NODES" entry for this App (if L4)
 
 	char APPLCMD[13];				//
+	BOOL APPLHASALIAS;
+	int APPLPORT;					// Port used if APPL has an Alias
 
 } applcalls;
 

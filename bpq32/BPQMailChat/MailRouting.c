@@ -1415,7 +1415,7 @@ VOID ReRouteMessages()
 					if (FirstMessageIndextoForward > n)
 						FirstMessageIndextoForward = n;
 
-					if (Msg->type == 'B' && SaveStatus == 'F')
+					if (Msg->type == 'B')
 						Msg->status = '$';
 				}
 				else

@@ -216,14 +216,6 @@ VOID DecayNETROMRoutes(struct ROUTE * Route)
 					{
 						// No More Routes - ZAP Dest
 
-						#ifdef _DEBUG
-						{
-							char call[11]="";
-							ConvFromAX25(Dest->DEST_CALL, call);
-							Debugprintf("Deleting NR Node %s", call);
-						}
-						#endif
-
 						_asm
 						{
 							pushad
