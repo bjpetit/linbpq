@@ -354,33 +354,35 @@ Public Class Form1
                            LOC = Elements(2)
                            Flags = Elements(3)
 
+                           If LOC.Length <> 6 Then LOC = ""
+
                            UpdateHeardData(Index, HeardCall, Freq, LOC, Flags, Now.ToUniversalTime, True)
 
                            Continue While
 
                         End If
 
-                        ' Node Report
+                  ' Node Report
 
-                        If Report.Length > 2 Then
+                  If Report.Length > 2 Then
 
-                           Elements = Split(Report, " ", 2)
+                     Elements = Split(Report, " ", 2)
 
-                           If Elements.Length = 2 Then
+                     If Elements.Length = 2 Then
 
-                              CallFrom = GetCall(Buff, 7)
+                        CallFrom = GetCall(Buff, 7)
 
-                              Index = FindNodeCall(CallFrom)
+                        Index = FindNodeCall(CallFrom)
 
-                              UpdateNode(Index, Elements(0), Elements(1))
+                        UpdateNode(Index, Elements(0), Elements(1))
 
 
-                           End If
-                        End If
+                     End If
+                  End If
 
                      Catch ex As Exception
 
-                     End Try
+            End Try
 
                      Continue While
 
