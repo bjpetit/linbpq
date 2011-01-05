@@ -30,14 +30,11 @@ VOID SendChatLinkStatus();
 
 char * strlop(char * buf, char delim)
 {
-	// Seems to Terminate buf at delim, and return rest of string
+	// Terminate buf at delim, and return rest of string
 
-	char * ptr;
-	
-	ptr=strchr(buf, delim);
+	char * ptr = strchr(buf, delim);
 
-	if (ptr == NULL)
-		return NULL;
+	if (ptr == NULL) return NULL;
 
 	*(ptr)++=0;
 

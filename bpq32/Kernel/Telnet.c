@@ -45,7 +45,7 @@ extern UCHAR BPQDirectory[];
 
 static RECT Rect;
 
-struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 
 #define MaxSockets 26
@@ -90,9 +90,9 @@ int Disconnected(Stream);
 int DeleteConnection(con);
 static int Socket_Accept(struct TNCINFO * TNC, int SocketId);
 static int Socket_Data(struct TNCINFO * TNC, int SocketId,int error, int eventcode);
-static int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock);
-int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock);
-int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock);
+static int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
+int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
+int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
 int DataSocket_Write(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_Disconnect(struct TNCINFO * TNC, struct ConnectionInfo * sockptr);
 BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len);
@@ -120,7 +120,6 @@ ProcessLine(char * buf, int Port)
 	char * param;
 	char * value;
 	char * Context, *User, *Pwd, *UserCall, *Secure, * Appl;
-	UINT i;
 	int End = strlen(buf) -1;
 	struct TNCINFO * TNC;
 	struct TCPINFO * TCP;
@@ -144,12 +143,11 @@ ProcessLine(char * buf, int Port)
 
 	if (TNCInfo[Port] == NULL)
 	{
-
 		TNC = TNCInfo[Port] = zalloc(sizeof(struct TNCINFO));
 		TCP = TNC->TCPInfo = zalloc(sizeof (struct TCPINFO)); // Telnet Server Specific Data
 
 		TCP->MaxSessions = 10;				// Default Values
-
+		TNC->Hardware = H_TELNET;
 	}
 
 	TNC = TNCInfo[Port];
@@ -244,21 +242,10 @@ ProcessLine(char * buf, int Port)
 			Appl = strtok_s(NULL, ", ", &Context);
 			Secure = strtok_s(NULL, ", ", &Context);
 
-			if (User == 0 || Pwd == 0) // invalid record
+			if (User == 0 || Pwd == 0 || UserCall == 0) // invalid record
 				return 0;
 
-			// Callsign may be missing
-			
-			if (UserCall) 
-			{							
-				if (UserCall[0] == 0)
-					UserCall=&BlankCall[0];
-				else
-					for (i=0; i<strlen(UserCall);i++)
-						UserCall[i]=toupper(UserCall[i]);
-			}
-			else
-				UserCall=&BlankCall[0];
+			_strupr(UserCall);
 
 			if (TCP->NumberofUsers == 0)
 				TCP->UserRecPtr = malloc(4);
@@ -758,13 +745,22 @@ VOID TelnetPoll(int Port)
 			char Msg[80];	
 			UINT * buffptr;
 
-			TNC->Streams[Stream].Attached = FALSE;
-			TNC->Streams[Stream].Connected = FALSE;
+			STREAM->Attached = FALSE;
+			STREAM->Connected = FALSE;
 
             if (!sockptr->FBBMode)
 			{
 				wsprintf(Msg,"*** Disconnected from Stream %d\r\n",Stream);
 				send(sock, Msg, strlen(Msg),0);
+			}
+
+			if (LogEnabled)
+			{
+				char logmsg[120];
+				wsprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d\n",
+					sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed);
+
+				WriteLog (logmsg);
 			}
 
 			if (TCP->DisconnectOnClose)
@@ -794,7 +790,6 @@ VOID TelnetPoll(int Port)
 		if (STREAM->BPQtoPACTOR_Q)
 		{
 			int datalen;
-			UCHAR TXMsg[1000] = "D20";
 			UINT * buffptr;
 			UCHAR * MsgPtr;
 			SOCKET sock;
@@ -802,9 +797,12 @@ VOID TelnetPoll(int Port)
 
 			if (TNC->Streams[Stream].Connected)
 			{
-				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
 				datalen=buffptr[1];
+
 				MsgPtr = (UCHAR *)&buffptr[2];
+
+				STREAM->BytesTXed += datalen;
 
 				sock = sockptr->socket;
 	
@@ -1213,6 +1211,8 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->UserPointer = 0;
 			sockptr->DoEcho = FALSE;
 
+			TNC->Streams[n].BytesRXed = TNC->Streams[n].BytesTXed = 0;
+
 			if (SocketId == TCP->FBBsock)
 				sockptr->FBBMode = TRUE;
 			else
@@ -1284,12 +1284,12 @@ int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 				case FD_READ:
 
 					if (sockptr->FBBMode)
-						return DataSocket_ReadFBB(TNC, sockptr,sock);
+						return DataSocket_ReadFBB(TNC, sockptr, sock, &TNC->Streams[n]);
 					else
 						if (sockptr->RelayMode)
-							return DataSocket_ReadRelay(TNC, sockptr,sock);
+							return DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
 						else
-							return DataSocket_Read(TNC, sockptr,sock);
+							return DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
 
 				case FD_WRITE:
 
@@ -1346,7 +1346,7 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 }
 
 
-int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock)
+int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM)
 {
 	int len=0, maxlen, InputLen, MsgLen, i, n,charsAfter;
 	char NLMsg[3]={13,10,0};
@@ -1507,10 +1507,7 @@ MsgLoop:
 
 		// Normal Data State
 			
-//		send(sock,"\n",1,0);
-
-                 
-	//	*(LFPtr-1)=0;
+		STREAM->BytesRXed += MsgLen;
 
 		// Line could be up to 500 chars if coming from a program rather than an interative user
 		// Limit send to node to 255. Should really use PACLEN instead of 255....
@@ -1628,26 +1625,27 @@ MsgLoop:
 		{
 			char * ct = TCP->cfgCTEXT;
 			char * Appl;
+			int ctlen = strlen(ct);
 
 			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
 
 			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 
             sockptr->LoginState = 2;
-            
             sockptr->InputLen = 0;
             
-            if (strlen(ct) > 0)  send(sock, ct, strlen(ct), 0);
+            if (ctlen > 0)  send(sock, ct, ctlen, 0);
+
+			STREAM->BytesTXed = ctlen;
 
             if (LogEnabled)
 			{
-				wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted BPQ Stream=%d Callsign %s\n",
+				wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted Callsign %s\n",
 					sockptr->Number,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
-					sockptr->Number,
 					sockptr->Callsign);
 
 				WriteLog (logmsg);
@@ -1689,9 +1687,9 @@ MsgLoop:
 	return 0;
 }
 
-int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock)
+int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM)
 {
-	int len=0, maxlen, InputLen, MsgLen, Stream, n;
+	int len=0, maxlen, InputLen, MsgLen, n;
 	char NLMsg[3]={13,10,0};
 	byte * LFPtr;
 	byte * MsgPtr;
@@ -1729,7 +1727,7 @@ MsgLoop:
 
 		// Send to Node
 
-		Stream = sockptr->BPQStream;
+		STREAM->BytesRXed += InputLen;
 
 		if (InputLen > 256)
 		{		
@@ -1842,13 +1840,12 @@ MsgLoop:
 
 		if (LogEnabled)
 		{
-			wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted BPQ Stream=%d Callsign %s\n",
+			wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted Callsign %s\n",
 					sockptr->Number,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
-					Stream,
 					sockptr->Callsign);
 
 			WriteLog (logmsg);
@@ -1877,7 +1874,7 @@ MsgLoop:
 }
 
 
-int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock)
+int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM)
 {
 	int len=0, maxlen, InputLen, MsgLen, i, n;
 	char NLMsg[3]={13,10,0};
@@ -1916,6 +1913,8 @@ MsgLoop:
 		// Data. FBB is binary
 
 		// Send to Node
+
+		STREAM->BytesRXed += InputLen;
 
 		if (InputLen > 256)
 		{		
@@ -2080,13 +2079,12 @@ MsgLoop:
             
             if (LogEnabled)
 			{
-				wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted BPQ Stream=%d Callsign %s\n",
+				wsprintf(logmsg,"%d %d.%d.%d.%d Call Accepted  Callsign %s\n",
 					sockptr->Number,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b1,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b2,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b3,
 					sockptr->sin.sin_addr.S_un.S_un_b.s_b4,
-					sockptr->Number,
 					sockptr->Callsign);
 
 				WriteLog (logmsg);
@@ -2391,6 +2389,18 @@ int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error)
 				TNC->Streams[Stream].Connecting = FALSE;
 				TNC->Streams[Stream].Connected = TRUE;
 				ShowConnections(TNC);
+
+				TNC->Streams[Stream].BytesRXed = TNC->Streams[Stream].BytesTXed = 0;
+
+				if (LogEnabled)
+				{
+					char logmsg[120];
+					wsprintf(logmsg,"%d %s Connected to CMS\n",
+						sockptr->Number, TNC->Streams[Stream].MyCall);
+
+					WriteLog (logmsg);
+				}
+
 
 				return 0;
 			}

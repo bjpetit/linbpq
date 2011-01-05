@@ -328,6 +328,14 @@
 // Add FT2000 to Rigcontrol
 // Only Send CTEXT to connects to Node (not to connects to an Application Call)
 
+// Released as Build 10
+
+// 410p		Build 11 January 2011
+
+// Fix MH Update for SCS Outgoing Calls
+// Add Direct CMS Access to TelnetServer
+// Restructure DISCONNECT processing to run in Timer owning process
+
 
 #include "KVerhddr.h"
 
@@ -3132,7 +3140,7 @@ DllExport int APIENTRY DeallocateStream(int stream)
 	PORTVEC->STREAMOWNER=0;
 	PORTVEC->HOSTAPPLFLAGS=0;
 	PORTVEC->HOSTAPPLMASK=0;
-	PORTVEC->HOSTFLAGS=0;
+	PORTVEC->HOSTFLAGS &= 0x7f;			// Clear Allocated. Must leave any DISC Pending bits
 	PORTVEC->HOSTHANDLE=0;
 
 	return(0);

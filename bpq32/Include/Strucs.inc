@@ -39,6 +39,12 @@ STREAMOWNER	DD	0		; PID of Process owning stream
 
 BPQVECSTRUC	ENDS
 
+; HOSTFLAGS = Bit 80 = Allocated
+;			  Bit 40 = Disc Request
+;			  Bit 20 = Stay Flag
+;			  Bit 02 and 01 State Change Bits
+
+
 VECTORLENGTH	EQU	TYPE BPQVECSTRUC
 
 ;

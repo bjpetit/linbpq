@@ -1,4 +1,6 @@
 
+#pragma data_seg("_BPQDATA")
+
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
@@ -46,7 +48,7 @@ extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 
-struct TNCINFO * TNCInfo[34] = {NULL};		// Records are Malloc'd
+struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_DATA WM_USER + 2
@@ -65,6 +67,20 @@ VOID * zalloc(int len)
 
 	return ptr;
 }
+
+char * strlop(char * buf, char delim)
+{
+	// Terminate buf at delim, and return rest of string
+
+	char * ptr = strchr(buf, delim);
+
+	if (ptr == NULL) return NULL;
+
+	*(ptr)++=0;
+
+	return ptr;
+}
+
 
 
 VOID MoveWindows(struct TNCINFO * TNC)
@@ -776,11 +792,15 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE)
 {
-	// WL2KREPORT Host, Port, G8BPQ, IO68VL,Testing BPQ,RIGCONTROL
+	// WL2KREPORT Host, Port, G8BPQ, IO68VL, Testing BPQ, RIGCONTROL
+	// WL2KREPORT Host, Port, G8BPQ, IO68VL, Testing BPQ, Freq, Mode
+	// WL2KREPORT Host, Port, G8BPQ, IO68VL, Testing BPQ, Freq, Baud, Power, Height, Gain, Direction
 	
 	char * Context;
 	char * p_cmd;
 	char errbuf[256];
+
+	strcpy(errbuf, buf); 
 
 	p_cmd = strtok_s(&buf[10], ", \t\n\r", &Context);
 	if (p_cmd)
@@ -796,6 +816,8 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 			{
 				if (strlen(p_cmd) > 9) goto BadLine;
 				strcpy(TNC->BaseCall, p_cmd);
+				strlop(TNC->BaseCall, '-');					// Remove any SSID
+
 				p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
 				if (p_cmd)
 				{
@@ -821,9 +843,13 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 										}
 									}
 								}
-								else if (_stricmp(p_cmd, "PACKET") == 0)
+								else if (TNC->Hardware == H_TELNET)
 								{
-									// WL2KREPORT Host, Port, G8BPQ, IO68VL,Testing BPQ,PACKET,Freq,Baud,Power,Height,Gain,Direction
+									struct PacketReportInfo * PktInfo;
+
+									// Packet Report - has power and antenna info
+
+									// WL2KREPORT Host, Port, G8BPQ, IO68VL,Testing BPQ,Freq,Baud,Power,Height,Gain,Direction
 
 									struct WL2KInfo * WL2KInfoPtr;
 									int n = 0;
@@ -831,52 +857,50 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 									char * param;
 									int Speed, Mode;
 
-									Freq = strtok_s(NULL, " ,\t\n\r", &Context);
+									Freq = p_cmd;
 									param = strtok_s(NULL, " ,\t\n\r", &Context);
 
-									if (Freq)
+									if (atoi(Freq) == 0)	// Invalid
+										goto BadLine;					
+
+									WL2KInfoPtr = &TNC->WL2KInfoList[0];
+
+									while (WL2KInfoPtr->PacketData)			//Find next entry
 									{
-										struct PacketReportInfo * PktInfo;
-
-										WL2KInfoPtr = &TNC->WL2KInfoList[0];
-
-										while (WL2KInfoPtr->PacketData)			//Find next entry
-										{
-											WL2KInfoPtr = &TNC->WL2KInfoList[++n];
-										}
-
-										PktInfo = WL2KInfoPtr->PacketData = zalloc(sizeof(struct PacketReportInfo));
-
-										WL2KInfoPtr->Freq = _strdup(Freq);
-										PktInfo->baud = (param)? atoi(param): 1200;
-										param = strtok_s(NULL, " ,\t\n\r", &Context);
-										PktInfo->power = (param)? atoi(param) : 0;
-										param = strtok_s(NULL, " ,\t\n\r", &Context);
-										PktInfo->height = (param)? atoi(param) : 0;
-										param = strtok_s(NULL, " ,\t\n\r", &Context);
-										PktInfo->gain = (param)? atoi(param) : 0;
-										param = strtok_s(NULL, " ,\t\n\r", &Context);
-										PktInfo->direction = (param)? atoi(param) : 0;
-
-										Speed = PktInfo->baud;
-										
-										if (Speed <= 1200)
-											Mode = 0;
-										else if (Speed <= 2400)
-											Mode = 1;
-										else if (Speed <= 4800)
-											Mode = 2;
-										else if (Speed <= 9600)
-											Mode = 3;
-										else if (Speed <= 19200)
-											Mode = 4;
-										else if (Speed <= 38400)
-											Mode = 5;
-										else
-											Mode = 6;
-
-										PktInfo->mode = Mode;
+										WL2KInfoPtr = &TNC->WL2KInfoList[++n];
 									}
+
+									PktInfo = WL2KInfoPtr->PacketData = zalloc(sizeof(struct PacketReportInfo));
+
+									WL2KInfoPtr->Freq = _strdup(Freq);
+									PktInfo->baud = (param)? atoi(param): 1200;
+									param = strtok_s(NULL, " ,\t\n\r", &Context);
+									PktInfo->power = (param)? atoi(param) : 0;
+									param = strtok_s(NULL, " ,\t\n\r", &Context);
+									PktInfo->height = (param)? atoi(param) : 0;
+									param = strtok_s(NULL, " ,\t\n\r", &Context);
+									PktInfo->gain = (param)? atoi(param) : 0;
+									param = strtok_s(NULL, " ,\t\n\r", &Context);
+									PktInfo->direction = (param)? atoi(param) : 0;
+
+									Speed = PktInfo->baud;
+										
+									if (Speed <= 1200)
+										Mode = 0;
+									else if (Speed <= 2400)
+										Mode = 1;
+									else if (Speed <= 4800)
+										Mode = 2;
+									else if (Speed <= 9600)
+										Mode = 3;
+									else if (Speed <= 19200)
+										Mode = 4;
+									else if (Speed <= 38400)
+										Mode = 5;
+									else
+										Mode = 6;
+
+									PktInfo->mode = Mode;
 								}
 								else
 								{
@@ -885,6 +909,7 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 									TNC->WL2KMode = NARROWMODE;
 									TNC->WL2KModeChar = 'N';
 									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
+
 									if (p_cmd)
 									{
 										if (p_cmd[0] == 'W')
@@ -905,13 +930,13 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 		TNC->NARROWMODE = NARROWMODE;
 		TNC->WIDEMODE = WIDEMODE;			// PIII only
 
-		goto Okline;
+		return 0;
+
 	BadLine:
 		WritetoConsole(" Bad config record ");
 		WritetoConsole(errbuf);
 		WritetoConsole("\r\n");
-	Okline:;
-			
+
 	return 0;
 }
 
@@ -956,7 +981,7 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 			*(LOC++) = 0;
 			*(LOCEND) = 0;
 			LOC++;
-			if (strlen(LOC) != 6)
+			if (strlen(LOC) != 6 && strlen(LOC) != 0)
 			{
 				Debugprintf("Corrupt LOC %s %s", Call, LOC);
 				LOC = NoLOC;

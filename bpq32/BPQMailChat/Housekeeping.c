@@ -678,7 +678,6 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	char * Via;
 	struct UserInfo * FromUser;
 
-
 	// Try to create a from Address. ( ? check RMS)
 
 	strcpy(From, OldMsg->from);
@@ -711,14 +710,20 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	Via = strlop(From, '@');
 
 	strcpy(Msg->to, From);
-	strcpy(Msg->via, Via);
+	if (Via)
+		strcpy(Msg->via, Via);
 
+	if (strcmp(From, "RMS:") == 0)
+	{
+		strcpy(Msg->to, "RMS");
+		strcpy(Msg->via, OldMsg->emailfrom);
+	}
 	strcpy(Msg->title, "Non-delivery Notification");
 	
 	if (Unread)
-		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s has not been read for %d days. Message had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->from, Age);
+		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s has not been read for %d days.\r\nMessage had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->to, Age);
 	else
-		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s could not be delivered in %d days. Message had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->from, Age);
+		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s could not be delivered in %d days.\r\nMessage had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->to, Age);
 
 
 	Msg->type = 'P';

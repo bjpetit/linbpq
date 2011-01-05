@@ -877,7 +877,6 @@ BEGIN
         END
         MENUITEM "Housekeeping",                IDM_HOUSEKEEPING
         MENUITEM "Send Msg from Clipboard",     ID_ACTIONS_SENDMSGFROMCLIPBOARD
-
         MENUITEM "Update Chat Map Info",        ID_ACTIONS_UPDATECHATMAPINFO
         MENUITEM "Save Registry Configuration", BPQSAVEREG
         MENUITEM "Rerun Message Routing",       RESCANMSGS

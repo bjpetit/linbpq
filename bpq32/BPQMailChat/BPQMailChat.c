@@ -609,13 +609,15 @@
 
 // Version 1.0.4.28 Dec 2010
 
-// Renumbered for release
+// Renumbered to for release
 
-// Version 1.0.4.29 Dec 2010
+// Version 1.0.4.30 Dec 2010
 
 // Fix rescan requeuing where bull was rejected by a BBS
 // Fiz flagging bulls received by NNTP with $ if they need to be forwarded.
 // Add Chat Keepalive option.
+// Fix bug in non-delivery notification.
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -890,7 +892,6 @@ VOID CheckProgramErrors()
 				DeleteTrayMenuItem(hDebug);
 		}
 
-		
 		SInfo.cb=sizeof(SInfo);
 		SInfo.lpReserved=NULL; 
 		SInfo.lpDesktop=NULL; 
@@ -901,7 +902,9 @@ VOID CheckProgramErrors()
 
 		GetModuleFileName(NULL, ProgName, 256);
 
-		CreateProcess(ProgName ,"BPQMailChat.exe WAIT" , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+		Debugprintf("Attempting to Restart %s", ProgName);
+
+		CreateProcess(ProgName ,"MailChat.exe WAIT" , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 					
 		exit(0);
 	}
@@ -1459,7 +1462,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (IsClipboardFormatAvailable(CF_TEXT))
 				EnableMenuItem(hActionMenu,ID_ACTIONS_SENDMSGFROMCLIPBOARD, MF_BYCOMMAND | MF_ENABLED);
 			else
-				EnableMenuItem(hActionMenu,ID_ACTIONS_SENDMSGFROMCLIPBOARD, MF_BYCOMMAND | MF_DISABLED);
+				EnableMenuItem(hActionMenu,ID_ACTIONS_SENDMSGFROMCLIPBOARD, MF_BYCOMMAND | MF_GRAYED );
 			
 			return TRUE;
 		}
@@ -4315,6 +4318,12 @@ void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char
 	while (Arg1)
 	{
 		msgno = atoi(Arg1);
+				
+		if (msgno > 100000)
+		{
+			BBSputs(conn, "Message Number too high\r");
+			return;
+		}
 
 		Msg = MsgnotoMsg[msgno];
 
@@ -4545,7 +4554,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			char * Arg2, * Arg3;
 			char * Context;
 			char seps[] = " -\t\r";
-			int From=LatestMsg, To=0;
+			UINT From=LatestMsg, To=0;
 			char * Range = strchr(Arg1, '-');
 			
 			Arg2 = strtok_s(Arg1, seps, &Context);
@@ -4560,6 +4569,11 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 				if (Range)
 					From = LatestMsg;
 
+			if (From > 100000 || To > 100000)
+			{
+				BBSputs(conn, "Message Number too high\r");
+				return;
+			}
 
 			if (Cmd[1])
 				ListMessagesInRangeForwards(conn, user, user->Call, From, To);
@@ -4889,6 +4903,12 @@ void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		while (Arg1)
 		{
 			msgno = atoi(Arg1);
+			if (msgno > 100000)
+			{
+				BBSputs(conn, "Message Number too high\r");
+				return;
+			}
+
 			ReadMessage(conn, user, msgno);
 			Arg1 = strtok_s(NULL, " \r", &Context);
 		}
@@ -5204,6 +5224,12 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 		msgno = atoi(Arg1);
 
+		if (msgno > 100000)
+		{
+			BBSputs(conn, "Message Number too high\r");
+			return FALSE;
+		}
+
 		OldMsg = FindMessage(user->Call, msgno, conn->sysop);
 
 		if (OldMsg == NULL)
@@ -5246,6 +5272,12 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		}
 
 		msgno = atoi(Arg1);
+
+		if (msgno > 100000)
+		{
+			BBSputs(conn, "Message Number too high\r");
+			return FALSE;
+		}
 
 		Arg1 = strtok_s(NULL, seps, &Context);
 

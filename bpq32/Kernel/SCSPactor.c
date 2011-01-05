@@ -2177,9 +2177,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					if (Stream == 0 || TNC->HFPacket)
 					{
 						if (TNC->RIG)
-							wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
+							wsprintf(Status, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
 						else
-							wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
+							wsprintf(Status, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
 					
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 					
@@ -2301,31 +2301,33 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 					buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", Call);;
 
-					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
 					if (Stream == 0)
 					{
 						if (TNC->RIG)
-							wsprintf(Status, "%s Connected to %s Outbound Freq %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall, TNC->RIG->Valchar);
+							wsprintf(Status, "%s Connected to %s Outbound Freq %s", STREAM->MyCall, STREAM->RemoteCall, TNC->RIG->Valchar);
 						else
-							wsprintf(Status, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
+							wsprintf(Status, "%s Connected to %s Outbound", STREAM->MyCall, STREAM->RemoteCall);
 
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
-						if (TNC->HFPacket)
+						if (STREAM->DEDStream == 30)	// Robust Mode
 						{
 							char Save = TNC->RIG->CurrentBandWidth;
 							TNC->RIG->CurrentBandWidth = 'R';
 							UpdateMH(TNC, Call, '+', 'O');
 							TNC->RIG->CurrentBandWidth = Save;
 						}
+						else
+						{
+							UpdateMH(TNC, Call, '+', 'O');
+						}
 					}
-	
 					return;
 				}
 			}
 			return;
-
 		}
 
 		if (Msg[3] == 4 || Msg[3] == 5)

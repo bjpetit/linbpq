@@ -327,7 +327,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	if (!InitInstance(hInstance, nCmdShow))
 		return (FALSE);
 
-
 	// Main message loop:
 	while (GetMessage(&msg, NULL, 0, 0)) 
 	{
