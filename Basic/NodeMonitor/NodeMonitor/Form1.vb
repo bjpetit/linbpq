@@ -28,6 +28,11 @@ Public Structure HeardData
 
 End Structure
 
+Public Structure HeardByData
+   Public Callsign As String
+   Public CallIndex As Integer
+   Public Time As DateTime
+End Structure
 Public Structure CallsignStruct
 
    Public Callsign As String
@@ -35,6 +40,7 @@ Public Structure CallsignStruct
    Public Lon As String
    Public Locator As String
    Public LocType As Integer
+   Public HeardBy() As HeardByData
 
 End Structure
 
@@ -110,14 +116,12 @@ Public Class Form1
 
    Public Sub FromLOC(ByVal Locator As String, ByRef Lat As Double, ByRef Lon As Double)
 
-
       Dim i As Integer
 
       Locator = UCase(Locator)
 
       i = Asc(Mid(Locator, 1, 1))
       Lon = (i - 65) * 20
-
 
       i = Asc(Mid(Locator, 3, 1))
       Lon = Lon + (i - 48) * 2
@@ -133,6 +137,9 @@ Public Class Form1
 
       i = Asc(Mid(Locator, 6, 1))
       Lat = Lat + (i - 65) / 24
+
+      If Lon < 0 Or Lon > 360 Then Lon = 180
+      If Lat < 0 Or Lat > 180 Then Lat = 90
 
       Lon = Lon - 180
       Lat = Lat - 90
@@ -1344,6 +1351,8 @@ Public Class Form1
    Private Sub UpdateNodesMap()
 
       Dim i As Integer, j As Integer = 0
+      Dim Lat As Single, Lon As Single
+      Dim HF As String
 
       NodeDefined.Text = NodeIndex.ToString
 
@@ -1379,10 +1388,24 @@ Public Class Form1
 
                If Nodes(i).KillTimer < 24 Then ' Not heard of for a while - don't display
 
-                  If Nodes(i).Count = 0 Then
-                     sw.Write(.Callsign & "," & CallsignData(.CallIndex).Lon & "," & CallsignData(.CallIndex).Lat & "," & .downIcon & "," & .PopupMode & "," & .Comment & "," & vbCrLf & "|")
+                  Lat = CSng(CallsignData(.CallIndex).Lat)
+                  Lon = CSng(CallsignData(.CallIndex).Lon)
+
+                  If Lat = 0.0 And Lon = 0.0 Then
+                     Lat = Lat + Rnd() / 24
+                     Lon = Lon + Rnd() / 12
+                  End If
+
+                  If Nodes(i).HeardNodes.Length = 0 Then
+                     HF = "0"
                   Else
-                     sw.Write(.Callsign & "," & CallsignData(.CallIndex).Lon & "," & CallsignData(.CallIndex).Lat & "," & .upIcon & "," & .PopupMode & "," & .Comment & "," & vbCrLf & "|")
+                     HF = "1"
+                  End If
+
+                  If Nodes(i).Count = 0 Then
+                     sw.Write(.Callsign & "," & Lon.ToString & "," & Lat.ToString & "," & .downIcon & "," & .PopupMode & "," & .Comment & "," & HF & "," & vbCrLf & "|")
+                  Else
+                     sw.Write(.Callsign & "," & Lon.ToString & "," & Lat.ToString & "," & .upIcon & "," & .PopupMode & "," & .Comment & "," & HF & "," & vbCrLf & "|")
                   End If
 
                   Dim HeardCount As Integer = .HeardNodes.Length
@@ -1394,7 +1417,6 @@ Public Class Form1
 
                      With .HeardNodes(HeardIndex)
 
-                        '         If .Lat <> "0" Then
                         Dim HTML As String = ""
                         Dim Protocol As Integer = 0
                         For j = 0 To .HeardItems.Length - 1
@@ -1410,7 +1432,29 @@ Public Class Form1
                               End If
                            End With
                         Next
-                        If HTML <> "" Then
+
+                        ' Add 'who has heard me' to popup
+
+                        If HTML.Length > 0 Then
+                           HTML = HTML & "<br>Heard By<br>"
+
+                           Dim Index As Integer = FindCallsign(.Callsign)
+
+                           With CallsignData(Index)
+
+                              If .HeardBy IsNot Nothing Then
+
+                                 For Index = 0 To .HeardBy.Length - 1
+                                    Age = Now.ToUniversalTime - .HeardBy(Index).Time
+                                    If Age.TotalDays < 4 Then
+                                       HTML = HTML & .HeardBy(Index).Callsign & "<br>"
+                                    End If
+                                 Next
+
+                              End If
+
+                           End With
+
                            With CallsignData(.CallIndex)
                               sw.Write("MH," & Nodes(i).Callsign & "," & .Callsign & "," & .Lon & "," & .Lat & "," & Protocol.ToString & ",")
                            End With
@@ -1418,7 +1462,6 @@ Public Class Form1
                            sw.Write(HTML & vbCrLf & "|")
 
                         End If
-                        ' End If
                      End With
                   Next
                End If
@@ -1464,10 +1507,13 @@ Public Class Form1
       Dim Count As Integer
       Dim FreqModeCount As Integer
       Dim CallIndex As Integer
+      Dim HeardBy As Integer
 
       NodeChanged = True
 
       CallIndex = FindCallsign(HeardCall)
+
+      HeardBy = FindCallsign(Nodes(Index).Callsign)
 
       With CallsignData(CallIndex)
 
@@ -1518,10 +1564,7 @@ Public Class Form1
 
                   FreqModeCount = .HeardItems.Length
 
-
-
                   For ItemIndex = 0 To FreqModeCount - 1
-
 
                      If .HeardItems(ItemIndex).Freq = Freq And .HeardItems(ItemIndex).Flags = Flags Then
 
@@ -1560,7 +1603,8 @@ Public Class Form1
                   .Flags = Flags
                   .Time = Time
 
-                  Return
+                  UpdateHeardBy(CallIndex, HeardBy, Freq, Flags, Time)
+
 
                End With
 
@@ -1570,7 +1614,76 @@ Public Class Form1
 
       End With
 
+      UpdateHeardBy(CallIndex, HeardBy, Freq, Flags, Time)
+
+
    End Sub
+
+   Sub UpdateHeardBy(ByVal HeardBy As Integer, ByVal Heard As Integer, ByVal Freq As String, ByVal Flags As String, ByVal Time As DateTime)
+
+      Dim HeardIndex As Integer
+
+      HeardIndex = FindHeardByCallEntry(Heard, HeardBy)
+      Try
+         CallsignData(HeardBy).HeardBy(HeardIndex).Time = Time
+      Catch ex As Exception
+
+      End Try
+
+   End Sub
+
+   Function FindHeardByCallEntry(ByVal HeardBy As Integer, ByVal Heard As Integer) As Integer
+
+      Dim Count As Integer, HeardIndex As Integer
+
+      With CallsignData(Heard)
+
+         If .HeardBy Is Nothing Then
+
+            ReDim Preserve .HeardBy(1)
+
+            With .HeardBy(0)
+
+               .Callsign = CallsignData(HeardBy).Callsign
+               .CallIndex = HeardBy
+
+            End With
+
+            Return 0
+
+         End If
+
+         Count = .HeardBy.Length
+
+         For HeardIndex = 0 To Count - 2
+
+            With .HeardBy(HeardIndex)
+
+               If .CallIndex = HeardBy Then Return HeardIndex
+
+            End With
+
+         Next
+
+         ' Not Present
+
+         HeardIndex = Count
+
+         ReDim Preserve .HeardBy(HeardIndex)
+
+         With .HeardBy(HeardIndex - 1)
+
+            .Callsign = CallsignData(HeardBy).Callsign
+            .CallIndex = HeardBy
+
+         End With
+
+         Return HeardIndex - 1
+
+      End With
+
+   End Function
+
 
    Function FindHeardCallEntry(ByVal Index As Integer, ByVal HeardCall As String, ByVal Callindex As Integer) As Integer
 
