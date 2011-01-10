@@ -14,6 +14,12 @@
 
 // Accept MY for MYCALL - was MYC
 
+// Build 1 Jan 2010
+
+// Rebuilt with redundant VSP code removed to get round Virus detect problem
+
+
+
 #include "stdafx.h"
 #include "bpqtnc2.h"
 #define DYNLOADBPQ

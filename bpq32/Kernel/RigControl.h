@@ -101,6 +101,7 @@ struct RIGPORTINFO
 {
 	int PortType;				// ICOM, Yaesu, Etc
 	int IOBASE;
+	int PTTIOBASE;				// Port for Hardware PTT - may be same as control port.
 	int SPEED;
 	struct RIGINFO Rigs[10];	// Rigs off a port
 	char * InitPtr;				// Next Command
@@ -114,6 +115,7 @@ struct RIGPORTINFO
 	BOOL PORTOK;				// PORT is reponding
 
 	HANDLE hDevice;					// COM device Handle
+	HANDLE hPTTDevice;				// May use a different port for PTT
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent
 	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once

@@ -664,6 +664,8 @@ struct SEM AllocSemaphore = {0, 0};
 
 struct SEM ConSemaphore = {0, 0};
 
+struct SEM ScriptSEM = {0, 0};
+
 struct UserInfo ** UserRecPtr=NULL;
 int NumberofUsers=0;
 
@@ -877,6 +879,8 @@ VOID CheckProgramErrors()
 
 	if (ProgramErrors > 25)
 	{
+		ProgramErrors = 0;				// Don't want to restart twice if we get anther error.
+
 		Logprintf(LOG_DEBUG, NULL, '!', "Too Many Program Errors - Closing");
 
 		if (cfgMinToTray)
@@ -1410,10 +1414,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	case WSA_CONNECT: /* Notification if a socket connection completed. */
 
-		{__try {Socket_Connect(wParam, WSAGETSELECTERROR(lParam));} My__except_Routine("Socket_COnnect");}
+		{__try {Socket_Connect(wParam, WSAGETSELECTERROR(lParam));}
+		My__except_Routine("Socket_COnnect");}
 		return 0;
 
+	case WM_KEYUP:
 
+		switch (wParam)
+		{	
+		case VK_F2:
+			CreateConsole(-1);
+			return 0;
+
+		case VK_F3:
+			CreateConsole(-2);
+			return 0;
+
+		case VK_F4:
+			CreateMonitor();
+			return 0;
+
+		case VK_F5:
+			CreateDebugWindow();
+			return 0;
+
+
+		}
+		return 0;
  			
 	case WM_TIMER:
 
@@ -1789,8 +1816,26 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 			MsgnotoMsg[Msg->number] = Msg;
 
 			strcpy(Msg->from, SYSOPCall);
-			Vptr = strlop(HDest, '@');
-	
+
+			if (_memicmp(HDest, "rms:", 4) == 0 || _memicmp(HDest, "rms/", 4) == 0)
+			{
+				Vptr=&HDest[4];
+				strcpy(Msg->to, "RMS");
+
+			}
+			else if (_memicmp(HDest, "smtp:", 5) == 0)
+			{
+			if (ISP_Gateway_Enabled)
+
+				Vptr=&HDest[5];
+				Msg->to[0] = 0;
+			}
+			else
+			{
+				Vptr = strlop(HDest, '@');
+				strcpy(Msg->to, _strupr(HDest));
+			}
+
 			if (Vptr)
 			{
 				if (strlen(Vptr) > 40)
@@ -1799,7 +1844,6 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 				strcpy(Msg->via, Vptr);
 			}
 
-			strcpy(Msg->to, HDest);
 
 			GetDlgItemText(hDlg, IDC_MSGTITLE, Msg->title, 61);
 			GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
@@ -2342,7 +2386,7 @@ int Connected(Stream)
 				{
 					// BBS Outgoing Connect
 
-					conn->paclen = 128;
+					conn->paclen = 236;
 
 					// Run first line of connect script
 
@@ -2352,7 +2396,7 @@ int Connected(Stream)
 		
 				if (conn->rtcflags == p_linkini)
 				{
-					conn->paclen = 128;
+					conn->paclen = 236;
 					nprintf(conn, "c %s\r", conn->u.link->call);
 					return 0;
 				}
@@ -3584,12 +3628,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			ProcessFBBLine(conn, user, Buffer, len);
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			Debugprintf("MAILCHAT *** Program Error in ProcessFBBLine");
-			Disconnect(conn->BPQStream);
-			CheckProgramErrors();
-		}
+		My_except_RoutineWithDiscBBS("ProcessFBBLine");
+
 		return;
 	}
 
@@ -3599,12 +3639,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			ProcessMsgLine(conn, user, Buffer, len);
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			Debugprintf("MAILCHAT *** Program Error in ProcessMSGLine");
-			Disconnect(conn->BPQStream);
-			CheckProgramErrors();
-		}
+		My_except_RoutineWithDiscBBS("ProcessMsgLine");
+	
 		return;	}
 
 	if (conn->Flags & GETTINGTITLE)
@@ -3613,12 +3649,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			ProcessMsgTitle(conn, user, Buffer, len);
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			Debugprintf("MAILCHAT *** Program Error in ProcessMsgTitle");
-			Disconnect(conn->BPQStream);
-			CheckProgramErrors();
-		}
+		My_except_RoutineWithDiscBBS("ProcessMsgTitle");
+
 		return;
 	}
 
@@ -3628,12 +3660,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			ProcessMBLLine(conn, user, Buffer, len);
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			Debugprintf("MAILCHAT *** Program Error in ProcessMBLLine");
-			Disconnect(conn->BPQStream);
-			CheckProgramErrors();
-		}
+		My_except_RoutineWithDiscBBS("ProcessMBLLine");
+
 		return;
 	}
 	if (conn->Flags & GETTINGUSER)
@@ -6137,6 +6165,17 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 		ptr1 = conn->MailBuffer;
 		OurCount = 0;
 
+		// If it is a B2 Message, Must Skip B2 Header
+
+		if (Msg->B2Flags & B2Msg)
+		{
+			ptr1 = strstr(ptr1, "\r\n\r\n");
+			if (ptr1)
+				ptr1 += 4;
+			else
+				ptr1 = conn->MailBuffer;
+		}
+
 nextline:
 
 		if (memcmp(ptr1, "R:", 2) == 0)
@@ -6865,6 +6904,20 @@ VOID ConnectPauseThread(struct DelayParam * DParam)
 unsigned long _beginthread( void( *start_address )(struct DelayParam * DParam),
 				unsigned stack_size, struct DelayParam * DParam);
 
+/*
+BOOL ProcessBBSConnectScriptInner(CIRCUIT * conn, char * Buffer, int len);
+
+
+BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
+{
+	BOOL Ret;
+	GetSemaphore(&ScriptSEM);
+	Ret = ProcessBBSConnectScriptInner(conn, Buffer, len);
+	FreeSemaphore(&ScriptSEM);
+
+	return Ret;
+}
+*/
 BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 {
 	struct	BBSForwardingInfo * ForwardingInfo = conn->UserPointer->ForwardingInfo;
@@ -7008,6 +7061,7 @@ InBand:
 			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE"))
 	{
 		char * Cmd;
+
 	LoopBack:
 		Cmd = Scripts[++ForwardingInfo->ScriptIndex];
 		
@@ -7045,7 +7099,6 @@ InBand:
 				Logprintf(LOG_BBS, conn, '?', "Nothing to do - quitting");
 				Disconnect(conn->BPQStream);
 				return FALSE;
-
 			}
 
 			if (memcmp(Cmd, "INTERLOCK ", 10) == 0)
@@ -7060,18 +7113,14 @@ InBand:
 				sscanf(&Cmd[10], "%d %s", &Port, &Option);
 
 				if (CountConnectionsOnPort(Port))
-				{
-					// if option is FAIL, look for an ELSE, otherwise if WAIT n, set poll timer and exit
-								
+				{								
 					Logprintf(LOG_BBS, conn, '?', "Interlocked Port is busy - quitting");
 					Disconnect(conn->BPQStream);
 					return FALSE;
 				}
 
 				goto LoopBack;
-
 			}
-			else
 
 			if (memcmp(Cmd, "RADIO AUTH", 10) == 0)
 			{
@@ -7107,7 +7156,6 @@ InBand:
 
 				return TRUE;
 			}
-
 
 			nodeprintf(conn, "%s\r", Cmd);
 		}
@@ -7489,6 +7537,9 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen);
 BOOL FindMessagestoForward (CIRCUIT * conn)
 {
 	struct UserInfo * user = conn->UserPointer;
+	struct _EXCEPTION_POINTERS exinfo;
+
+	__try {
 
 	if ((user->flags & F_Temp_B2_BBS) || conn->RMSExpress)
 	{
@@ -7534,6 +7585,11 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 
 	conn->LastForwardType = 0;
 	return FALSE;
+
+	} My__except_Routine("FindMessagestoForward");
+
+	return FALSE;
+
 }
 
 
@@ -7548,6 +7604,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 	BOOL Found = FALSE;
 	char RLine[100];
 	int TotalSize = 0;
+	time_t NOW = time(NULL);
 
 	conn->FBBIndex = 0;
 
@@ -7616,7 +7673,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 				// Set up R:Line, so se can add its length to the sise
 
-				tm = gmtime(&Msg->datecreated);	
+				tm = gmtime(&NOW);	
 	
 				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -7625,7 +7682,28 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 				// If using B2 forwarding we need the message size and Compressed size for FC proposal
 
 				if (conn->BBSFlags & FBBB2Mode)
-					CreateB2Message(conn, FBBHeader, RLine);
+				{
+					if (CreateB2Message(conn, FBBHeader, RLine) == FALSE)
+					{
+						char * MailBuffer = malloc(100);
+						char Title[100];
+						int Length;
+						
+						// Corrupt B2 Message
+						
+						Debugprintf("Corrupt B2 Message found - Message will be held");
+						conn->FBBIndex--;
+						TotalSize -= Msg->length;
+						memset(&conn->FBBHeaders[conn->FBBIndex], 0, sizeof(struct FBBHeaderLine));
+
+						Length = wsprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+						wsprintf(Title, "Message %d Held - %s", Msg->number, "Corrupt B2 Message");
+						SendMessageToSYSOP(Title, MailBuffer, Length);
+			
+						Msg->status = 'H';
+						continue;
+					}
+				}
 
 				if (conn->FBBIndex == 5  || TotalSize > user->ForwardingInfo->MaxFBBBlockSize)
 					return TRUE;							// Got max number or too big

@@ -173,7 +173,7 @@ DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 
 			*(Poll++) = 0xFD;
 	
-			PORT->TXLen = 8;		// First send the set Freq
+			PORT->TXLen = 8;
 			RigWriteCommBlock(PORT);
 
 			PORT->Retries = 1;
@@ -226,7 +226,23 @@ DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 			*(Poll++) = PTTState;	// OFF/ON
 			*(Poll++) = 15;
 	
-			PORT->TXLen = 5;		// First send the set Freq
+			PORT->TXLen = 5;
+			RigWriteCommBlock(PORT);
+
+			PORT->Retries = 1;
+			PORT->Timeout = 0;
+
+			return;
+
+		case YAESU:  // 897 - maybe others
+
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = PTTState ? 0x08 : 0x88;		// CMD = 08 : PTT ON CMD = 88 : PTT OFF
+	
+			PORT->TXLen = 5;
 			RigWriteCommBlock(PORT);
 
 			PORT->Retries = 1;
@@ -239,15 +255,15 @@ DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 
 	if (RIG->PTTMode & PTTRTS)
 		if (PTTState)
-			EscapeCommFunction(PORT->hDevice,SETRTS);
+			EscapeCommFunction(PORT->hPTTDevice,SETRTS);
 		else
-			EscapeCommFunction(PORT->hDevice,CLRRTS);
+			EscapeCommFunction(PORT->hPTTDevice,CLRRTS);
 
 	if (RIG->PTTMode & PTTDTR)
 		if (PTTState)
-			EscapeCommFunction(PORT->hDevice,SETDTR);
+			EscapeCommFunction(PORT->hPTTDevice,SETDTR);
 		else
-			EscapeCommFunction(PORT->hDevice,CLRDTR);
+			EscapeCommFunction(PORT->hPTTDevice,CLRDTR);
 		
 }
 
@@ -359,7 +375,7 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 
 portok:
 
-	if (RIG->RIGOK == 0)
+	if (RIG->RIGOK == 0 && Session != -1)
 	{
 		wsprintf(Command, "Sorry - Radio not responding\r");
 		return FALSE;
@@ -771,21 +787,8 @@ DllExport BOOL APIENTRY Rig_Init()
 	struct RIGPORTINFO * PORT;
 	int i, p;
 	struct RIGINFO * RIG;
-
-/*
-if (BPQDirectory[0] == 0)
-	{
-		strcpy(CFGFN,"RigControl.cfg");
-	}
-	else
-	{
-		strcpy(CFGFN,BPQDirectory);
-		strcat(CFGFN,"\\");
-		strcat(CFGFN,"RigControl.cfg");
-	}
-	
-	ReadConfigFile();
-*/
+	char szPort[15];
+   
 	if (NumberofPorts == 0)
 	{
 		SetupPortRIGPointers();
@@ -801,6 +804,29 @@ if (BPQDirectory[0] == 0)
 //		CreateDisplay(PORT);
 
 		OpenCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+
+		if (PORT->PTTIOBASE)		// Using separare port for PTT?
+		{
+			wsprintf(szPort, "//./COM%d", PORT->PTTIOBASE) ;
+
+			PORT->hPTTDevice = CreateFile(szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+				  
+			if (PORT->hPTTDevice == (HANDLE) -1)
+			{
+				char buf[80];
+
+				wsprintf(buf," COM%d Setup Failed - Error %d ", PORT->PTTIOBASE, GetLastError());
+				WritetoConsole(buf);
+				OutputDebugString(buf);
+				SetWindowText(PORT->hStatus, &buf[1]);
+				PORT->hPTTDevice = 0;
+			}
+		}
+		else
+			PORT->hPTTDevice = PORT->hDevice;	// Use same port for PTT
 	}
 
 	for (p = 0; p < NumberofPorts; p++)
@@ -890,6 +916,9 @@ DllExport BOOL APIENTRY Rig_Close()
 		EscapeCommFunction(PORT->hDevice,CLRRTS);
 
 		CloseHandle(PORT->hDevice);
+
+		if (PORT->hPTTDevice != PORT->hDevice)
+			CloseHandle(PORT->hPTTDevice);
 	}
 
 	NumberofPorts = 0;		// For possible restart
@@ -2392,6 +2421,14 @@ PortFound:
 
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 	if (ptr == NULL) return (FALSE);
+
+
+	if (memcmp(ptr, "PTTCOM", 6) == 0)
+	{
+		PORT->PTTIOBASE = atoi(&ptr[6]);
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+		if (ptr == NULL) return (FALSE);
+	}
 
 //		if (strcmp(ptr, "ICOM") == 0 || strcmp(ptr, "YAESU") == 0 
 //			|| strcmp(ptr, "KENWOOD") == 0 || strcmp(ptr, "PTTONLY") == 0 || strcmp(ptr, "ANTENNA") == 0)

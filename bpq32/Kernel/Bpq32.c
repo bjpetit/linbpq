@@ -336,6 +336,10 @@
 // Add Direct CMS Access to TelnetServer
 // Restructure DISCONNECT processing to run in Timer owning process
 
+// 410p		Build 12 January 2011
+
+// Add option for Hardware PTT to use a different com port from the scan port 
+// Add CAT PTT for Yaesu 897 (and maybe others)
 
 #include "KVerhddr.h"
 
@@ -3063,20 +3067,14 @@ ALLOC_LOOP:
 
 	MOV	EAX,255
 
-	JMP BPQRET
-
 OK_TO_ALLOC:
-
-	OR	BYTE PTR 4[EBX],128	; SET ALLOCATED BIT
-
-BPQRET:
 
 	mov	retcode,eax
 }
 	if (retcode != 255)
 	{
 		BPQHOSTVECTOR[retcode-1].STREAMOWNER=GetCurrentProcessId();
-		BPQHOSTVECTOR[retcode-1].HOSTFLAGS |= 128; // SET ALLOCATED BIT
+		BPQHOSTVECTOR[retcode-1].HOSTFLAGS = 128; // SET ALLOCATED BIT, clear others
 	}
 	FreeSemaphore();
 
@@ -3140,7 +3138,7 @@ DllExport int APIENTRY DeallocateStream(int stream)
 	PORTVEC->STREAMOWNER=0;
 	PORTVEC->HOSTAPPLFLAGS=0;
 	PORTVEC->HOSTAPPLMASK=0;
-	PORTVEC->HOSTFLAGS &= 0x7f;			// Clear Allocated. Must leave any DISC Pending bits
+	PORTVEC->HOSTFLAGS &= 0x60;			// Clear Allocated. Must leave any DISC Pending bits
 	PORTVEC->HOSTHANDLE=0;
 
 	return(0);

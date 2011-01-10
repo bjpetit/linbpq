@@ -91,7 +91,7 @@ int DeleteConnection(con);
 static int Socket_Accept(struct TNCINFO * TNC, int SocketId);
 static int Socket_Data(struct TNCINFO * TNC, int SocketId,int error, int eventcode);
 static int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
-int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
+int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
 int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
 int DataSocket_Write(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_Disconnect(struct TNCINFO * TNC, struct ConnectionInfo * sockptr);
@@ -785,7 +785,22 @@ VOID TelnetPoll(int Port)
 
 	for (Stream = 0; Stream <= TCP->MaxSessions; Stream++)
 	{
+//		struct TRANSPORTENTRY * SESS;
+
 		STREAM = &TNC->Streams[Stream];
+		
+//		SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+
+//		if (SESS && STREAM->ConnectionInfo->UserPointer == &CMSUser)
+//		{
+			// CMS Session - Suppress IDLETIME
+
+//			SESS->L4KILLTIMER = 0;
+//			SESS = SESS->L4CROSSLINK;
+//			if (SESS)
+//				SESS->L4KILLTIMER = 0;
+
+//		}
 		
 		if (STREAM->BPQtoPACTOR_Q)
 		{
@@ -1019,8 +1034,10 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			if (TCP->CMS)
 				CheckCMS(TNC);
 			else
+			{
+				TCP->CMSOK = FALSE;
 				DrawMenuBar(TNC->hDlg);	
-
+			}
 			break;
 
 
@@ -1272,8 +1289,7 @@ int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 
 	//	Find Connection Record
 
-	for (n = 0; n <= 10; n++)
-//	for (n = 0; n <= TCP->CurrentSockets; n++)
+	for (n = 0; n <= TCP->CurrentSockets; n++)
 	{
 		sockptr = TNC->Streams[n].ConnectionInfo;
 	
@@ -1284,7 +1300,7 @@ int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 				case FD_READ:
 
 					if (sockptr->FBBMode)
-						return DataSocket_ReadFBB(TNC, sockptr, sock, &TNC->Streams[n]);
+						return DataSocket_ReadFBB(TNC, sockptr, sock, n);
 					else
 						if (sockptr->RelayMode)
 							return DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
@@ -1874,7 +1890,7 @@ MsgLoop:
 }
 
 
-int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM)
+int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream)
 {
 	int len=0, maxlen, InputLen, MsgLen, i, n;
 	char NLMsg[3]={13,10,0};
@@ -1883,7 +1899,8 @@ int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SO
 	char logmsg[120];
 	struct UserRec * USER;
 	struct TCPINFO * TCP = TNC->TCPInfo;
-
+	struct STREAMINFO * STREAM = &TNC->Streams[Stream];
+	
 	ioctlsocket(sock,FIONREAD,&len);
 
 	maxlen = InputBufferLen - sockptr->InputLen;
@@ -1912,18 +1929,23 @@ MsgLoop:
 	{
 		// Data. FBB is binary
 
+		int Paclen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
+
+		if (Paclen == 0)
+			Paclen = 256;
+
 		// Send to Node
 
 		STREAM->BytesRXed += InputLen;
 
-		if (InputLen > 256)
+		if (InputLen > Paclen)
 		{		
-			SendtoNode(TNC, sockptr->Number, MsgPtr, 256);
-			sockptr->InputLen -= 256;
+			SendtoNode(TNC, sockptr->Number, MsgPtr, Paclen);
+			sockptr->InputLen -= Paclen;
 
-			InputLen -= 256;
+			InputLen -= Paclen;
 
-			memmove(MsgPtr,MsgPtr+256,InputLen);
+			memmove(MsgPtr,MsgPtr+Paclen,InputLen);
 
 			goto MsgLoop;
 		}

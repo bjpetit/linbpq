@@ -2186,8 +2186,8 @@ VOID ChatTimer()
 			(user->topic) ? user->topic->name : "** Missing Topic **"); 
 		WritetoDebugWindow(Msg, len);
 		i++;
-	
-		if (user->circuit->rtcflags & p_user)	// Local User
+
+		if (user->circuit && user->circuit->rtcflags & p_user)	// Local User
 		{
 			if ((NOW - user->lastmsgtime) > 7200)
 			{
@@ -2243,11 +2243,13 @@ VOID ChatTimer()
 			CT * ct;
 			ptr = sprintf_s(buff, sizeof(buff), "%s Topics: ", c->u.user->call);
 	
-			for (ct = c->topic; ct; ct = ct->next)
+			if (c->topic)
 			{
-				ptr+= sprintf_s(&buff[ptr], sizeof(buff) - ptr, "%s ", ct->topic->name);
+				for (ct = c->topic; ct; ct = ct->next)
+				{
+					ptr+= sprintf_s(&buff[ptr], sizeof(buff) - ptr, "%s ", ct->topic->name);
+				}
 			}
-
 			WritetoDebugWindow(buff, ptr);
 			WritetoDebugWindow("\r\n", 2);
 

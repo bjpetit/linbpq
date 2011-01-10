@@ -1088,7 +1088,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 			
 }
 
-VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rline)
+BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rline)
 {
 	char * MsgBytes;
 	UCHAR * Compressed;
@@ -1099,19 +1099,22 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	char B2From[80];
 	char B2To[80];
 	struct MsgInfo * Msg = FBBHeader->FwdMsg;
-//	char DebugMsg[1000]="";
-	char * xptr;
 	struct UserInfo * FromUser;
+	int BodyLineToBody;
+	int RlineLen = strlen(Rline) ;
+	struct _EXCEPTION_POINTERS exinfo;
+
+	__try {
 
 	MsgBytes = ReadMessageFile(Msg->number);
 
 	if (MsgBytes == 0)
 	{
-		MsgBytes = _strdup("Message file not found\r\n");
-		Msg->length = strlen(MsgBytes);
+		Debugprintf("B2 Messages - Message File not found");
+		return FALSE;
 	}
 
-	UnCompressed = zalloc(Msg->length+2000);
+	UnCompressed = zalloc(Msg->length + 2000);
 	OrigLen = Msg->length;
 
 	// If a B2 Message  add R:line at start of Body, but otherwise leave intact.
@@ -1121,7 +1124,7 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	{
 		char * ptr, *ptr2;
 		int BodyLen;
-		int BodyLineLen, RlineLen = strlen(Rline);
+		int BodyLineLen;
 		int Index;
 		
 		MsgLen = OrigLen + RlineLen;
@@ -1152,14 +1155,53 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		// Add R: Line at start of body. Will Need to Update Body Length
 
 		ptr = strstr(MsgBytes, "Body:");
+
+		if (ptr == 0)
+		{
+			Debugprintf("B2 Messages without Body: Line");
+			return FALSE;
+		}
 		ptr2 = strstr(ptr, "\r\n");
 
 		Index = ptr - MsgBytes;		// Bytes Before Body: line
 
+		if (Index <= 0 || Index > MsgLen)
+		{
+			Debugprintf("B2 Message Body: line position invalid - %d", Index);
+			return FALSE;
+		}
+
 		BodyLen = atoi(&ptr[5]);
+	
+		if (BodyLen <= 0 || BodyLen > MsgLen)
+		{
+			Debugprintf("B2 Message Length from Body: line invalid - Msg len %d From Body %d", MsgLen, BodyLen);
+			return FALSE;
+		}
+
 		BodyLineLen = (ptr2 - ptr) + 2;
-		BodyLen += RlineLen;
 		MsgLen -= BodyLineLen;		// Length of Body Line may change
+
+		ptr = strstr(ptr2, "\r\n\r\n");	// Blank line before Body
+
+		if (ptr == 0)
+		{
+			Debugprintf("B2 Message - No Blank Line before Body");
+			return FALSE;
+		}
+
+		ptr += 4;
+	
+		ptr2 +=2;					// Line Following Original Body: Line
+
+		BodyLineToBody = ptr - ptr2;
+
+		if (memcmp(ptr, "R:", 2) != 0)    // No R line, so must be our message
+		{
+			strcat(Rline, "\r\n");
+			RlineLen += 2;
+		}
+		BodyLen += RlineLen;
 
 		memcpy(UnCompressed, MsgBytes, Index);	// Up to Old Body;
 		BodyLineLen = wsprintf(&UnCompressed[Index], "Body: %d\r\n", BodyLen);
@@ -1167,15 +1209,15 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		MsgLen += BodyLineLen;		// Length of Body Line may have changed
 		Index += BodyLineLen;
 
-		ptr = strstr(ptr2, "\r\n\r\n");	// Blank line before Body
+		if (BodyLineToBody < 0 || BodyLineToBody > 1000)
+		{
+			Debugprintf("B2 Message - Body too far from Body Line - %d", BodyLineToBody);
+			return FALSE;
+		}
 
-		ptr+=4;
-	
-		ptr2 +=2;					// Line Following Original Body: Line
+		memcpy(&UnCompressed[Index], ptr2, BodyLineToBody); // Stuff Between Body: Line and Body
 
-		memcpy(&UnCompressed[Index], ptr2, ptr - ptr2); // Stuff Between Body: Line and Body
-
-		Index += (ptr - ptr2);
+		Index += (BodyLineToBody);
 
 		memcpy(&UnCompressed[Index], Rline, RlineLen);
 		Index += RlineLen;
@@ -1185,27 +1227,29 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 		Compressed = zalloc(2 * MsgLen + 200);
 
+		__try {
+
 		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
-
-		ptr = strstr(UnCompressed, "\r\n\r\n");	// Blank line before Body
-
-//		memcpy(DebugMsg, UnCompressed, ptr - UnCompressed);
-//		Debugprintf("Paclin Trace: %s", DebugMsg);
 
 		FBBHeader->CompressedMsg = Compressed;
 		FBBHeader->CSize = CompLen;
 
 		free(UnCompressed);
+		return TRUE;
 
-		return;
+		} My__except_Routine("Encode B2Message");
+
+		return FALSE;
 	}
 
-
+	
 	if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
+	{
 		strcat(Rline, "\r\n");
+		RlineLen += 2;
+	}
 
-	MsgLen = OrigLen + strlen(Rline);
-
+	MsgLen = OrigLen + RlineLen;
 
 //	if (conn->RestartFrom == 0)
 //	{
@@ -1281,17 +1325,13 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 			Msg->bid, Date, (Msg->type == 'P') ? "Private" : "Bulletin",
 			B2From, B2To, Msg->title, BBSName, MsgLen);
 
-	strcat(UnCompressed, Rline);
-	strcat(UnCompressed, MsgBytes);
+
+	memcpy(&UnCompressed[B2HddrLen], Rline, RlineLen);
+	memcpy(&UnCompressed[B2HddrLen + RlineLen], MsgBytes, OrigLen);		// Rest of Message
 
 	MsgLen += B2HddrLen;
 
 	FBBHeader->Size = MsgLen;
-
-	xptr = strstr(UnCompressed, "\r\n\r\n");	// Blank line before Body
-
-//	memcpy(DebugMsg, UnCompressed, xptr - UnCompressed);
-//	Debugprintf("Paclin Trace: %s", DebugMsg);
 
 	Compressed = zalloc(2 * MsgLen + 200);
 
@@ -1301,6 +1341,13 @@ VOID CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	FBBHeader->CSize = CompLen;
 
 	free(UnCompressed);
+
+	return TRUE;  
+
+	} My__except_Routine("CreateB2Nessage");
+
+	return FALSE;
+
 }
 
 VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)

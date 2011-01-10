@@ -1143,7 +1143,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
 			Session->L4WINDOW = L4DEFAULTWINDOW;
 			Session->L4STATE = 5;
 			Session->SESSIONT1 = L4T1;
-			Session->SESSPACLEN = 100;
+			Session->SESSPACLEN = TNC->PortRecord->PORTCONTROL.PORTPACLEN;
 			Session->KAMSESSION = Stream;
 
 			TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel

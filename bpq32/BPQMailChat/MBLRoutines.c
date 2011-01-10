@@ -177,7 +177,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 			conn->FwdMsg->number, BBSName, HRoute, RlineVer);
 
-		if (memcmp(MsgBytes, "R:", 2) != 0)    // No R line, so must be our message
+		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message
 			BBSputs(conn, "\r\n");
 
 		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);

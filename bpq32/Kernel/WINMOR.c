@@ -1756,6 +1756,21 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 //				send(TNC->WINMORSock,"OVER\r\n", 6, 0);
 
 		}
+		else
+		{
+			// Make sure Node Keepalive doesn't kill session.
+
+			struct TRANSPORTENTRY * SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
+
+			if (SESS)
+			{
+				SESS->L4KILLTIMER = 0;
+				SESS = SESS->L4CROSSLINK;
+				if (SESS)
+					SESS->L4KILLTIMER = 0;
+			}
+		}
+
 		SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, &Buffer[8]);
 		return;
 	}
