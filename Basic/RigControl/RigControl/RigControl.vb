@@ -67,7 +67,7 @@ Public Class RigControl
 
       End If
 
-      ICOMHandle = CreateFile("\\.\bpq61", Access And &HFFFFFFFF, _
+      ICOMHandle = CreateFile("\\.\bpq64", Access And &HFFFFFFFF, _
         0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0)
 
       If ICOMHandle > 4294967290 Then
@@ -77,7 +77,7 @@ Public Class RigControl
 
       End If
 
-      KenwoodHandle = CreateFile("\\.\bpq63", Access And &HFFFFFFFF, _
+      KenwoodHandle = CreateFile("\\.\bpq61", Access And &HFFFFFFFF, _
         0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0)
 
       If KenwoodHandle > 4294967290 Then
