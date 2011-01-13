@@ -341,6 +341,13 @@
 // Add option for Hardware PTT to use a different com port from the scan port 
 // Add CAT PTT for Yaesu 897 (and maybe others)
 
+// 410p		Build 13 January 2011
+
+// Fix RMS Packet ports busy after restart
+// Fix CMS Telnet with MAXSESSIONS > 10
+
+
+
 #include "KVerhddr.h"
 
 #define _CRT_SECURE_NO_DEPRECATE 

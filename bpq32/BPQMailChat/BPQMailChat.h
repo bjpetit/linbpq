@@ -1064,6 +1064,7 @@ int RemoveLF(char * Message, int len);
 
 // Utilities
 
+BOOL isdigits(char * string);
 void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
 

@@ -295,7 +295,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		}
 	}
 
-	if (_stricmp(Buffer, "*** DONE\r") == 0)
+	if (_stricmp(Buffer, "*** DONE\r") == 0 || _stricmp(Buffer, "*** What?\r"))
 	{
 		Disconnect(conn->BPQStream);
 		return;

@@ -1226,7 +1226,7 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 {
 	struct MsgInfo * Msg;
 	BIDRec * BIDRec;
-
+	char * To;
 	char * via;
 
 	// Allocate a message Record slot
@@ -1256,29 +1256,37 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 	if (Date)
 		Msg->datecreated = Date;
 
-	TidyString(sockptr->RecpTo[i]);
+	To = sockptr->RecpTo[i];
 
-	if (_memicmp(sockptr->RecpTo[i], "rms:", 4) == 0)
+	TidyString(To);
+
+	if (_memicmp(To, "bull/", 5) == 0)
 	{
-		via = _strlwr(strlop(sockptr->RecpTo[i], ':'));
+		Msg->type = 'B';
+		memmove(To, &To[5], strlen(&To[4]));
 	}
-	else if (_memicmp(sockptr->RecpTo[i], "rms/", 4) == 0)
+
+	if (_memicmp(To, "rms:", 4) == 0)
 	{
-		via = _strlwr(strlop(sockptr->RecpTo[i], '/'));
+		via = _strlwr(strlop(To, ':'));
 	}
-	else if (_memicmp(sockptr->RecpTo[i], "smtp:", 5) == 0)
+	else if (_memicmp(To, "rms/", 4) == 0)
 	{
-		via = _strlwr(strlop(sockptr->RecpTo[i], ':'));
-		sockptr->RecpTo[i][0] = 0;
+		via = _strlwr(strlop(To, '/'));
 	}
-	else if (_memicmp(sockptr->RecpTo[i], "smtp/", 5) == 0)
+	else if (_memicmp(To, "smtp:", 5) == 0)
 	{
-		via = _strlwr(strlop(sockptr->RecpTo[i], '/'));
-		sockptr->RecpTo[i][0] = 0;
+		via = _strlwr(strlop(To, ':'));
+		To[0] = 0;
+	}
+	else if (_memicmp(To, "smtp/", 5) == 0)
+	{
+		via = _strlwr(strlop(To, '/'));
+		To[0] = 0;
 	}
 	else
 	{
-		via = strlop(sockptr->RecpTo[i], '@');
+		via = strlop(To, '@');
 	}
 
 	if (via)
@@ -1297,9 +1305,9 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 		}
 	}
 
-	if (strlen(sockptr->RecpTo[i]) > 6) sockptr->RecpTo[i][6]=0;
+	if (strlen(To) > 6) To[6]=0;
 
-	strcpy(Msg->to, sockptr->RecpTo[i]);
+	strcpy(Msg->to, To);
 
 	strcpy(Msg->from, sockptr->MailFrom);
 
@@ -1307,6 +1315,17 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 	if(Msg->to[0] == 0)
 		SMTPMsgCreated=TRUE;
+
+	// If NTS message (TO is numeric and AT is NTSxx or NTSxx.NTS - Outlook won't accept x@y)
+
+	if (isdigits(Msg->to) && memcmp(Msg->via, "NTS", 3) == 0)
+	{
+		if (Msg->via[5] == 0 || strcmp(&Msg->via[5], ".NTS") == 0)
+		{
+			Msg->type = 'T';
+			Msg->via[5] = 0;
+		}
+	}
 
 	if (B2Flag)
 	{
@@ -1345,22 +1364,27 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 		Msg->length += B2HddrLen;
 
-		free(sockptr->RecpTo[i]);
+		free(To);
 	
 		// Set up forwarding bitmap
 
 		MatchMessagetoBBSList(Msg, 0);
 
-		return CreateSMTPMessageFile(NewBody, Msg);
+		if (Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+			Msg->status = '$';				// Has forwarding
 
+		return CreateSMTPMessageFile(NewBody, Msg);
 
 	}
 
-	free(sockptr->RecpTo[i]);
+	free(To);
 
 	// Set up forwarding bitmap
 
 	MatchMessagetoBBSList(Msg, 0);
+
+	if (Msg->type == 'B' && memcmp( Msg->fbbs, zeros, NBMASK) != 0)
+		Msg->status = '$';				// Has forwarding
 
 	return CreateSMTPMessageFile(MsgBody, Msg);
 		

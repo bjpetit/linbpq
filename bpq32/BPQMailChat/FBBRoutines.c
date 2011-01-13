@@ -955,7 +955,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 	*Outputptr++ = strlen(Title) + 8;
 	strcpy(Outputptr, Title);
 	Outputptr += strlen(Title) +1;
-	wsprintf(Outputptr, "%06d", conn->RestartFrom);
+	wsprintf(Outputptr, "%6d", conn->RestartFrom);
 	Outputptr += 7;
 
 	DataOffset = Outputptr - Output;	// Used if restarting
@@ -1057,15 +1057,15 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 		}
 	}
 
-	while (CompLen > 256)
+	while (CompLen > 250)
 	{
 		*Outputptr++ = 2;
-		*Outputptr++ = 0;
+		*Outputptr++ = 250;
 
-		memcpy(Outputptr, Compressedptr, 256);
-		Outputptr += 256;
-		Compressedptr += 256;
-		CompLen -= 256;
+		memcpy(Outputptr, Compressedptr, 250);
+		Outputptr += 250;
+		Compressedptr += 250;
+		CompLen -= 250;
 	}
 
 	*Outputptr++ = 2;
@@ -1106,15 +1106,23 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	__try {
 
+	if (Msg == NULL)
+		Debugprintf("Msg  = NULL");
+
+
 	MsgBytes = ReadMessageFile(Msg->number);
 
 	if (MsgBytes == 0)
 	{
-		Debugprintf("B2 Messages - Message File not found");
+		Debugprintf("B2 Message - Message File not found");
 		return FALSE;
 	}
 
 	UnCompressed = zalloc(Msg->length + 2000);
+
+	if (UnCompressed == NULL)
+		Debugprintf("B2 Message - zalloc for %d failed", Msg->length + 2000);
+
 	OrigLen = Msg->length;
 
 	// If a B2 Message  add R:line at start of Body, but otherwise leave intact.
@@ -1126,13 +1134,13 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		int BodyLen;
 		int BodyLineLen;
 		int Index;
-		
+
 		MsgLen = OrigLen + RlineLen;
 
 		if (conn->Paclink)
 		{
 			// Remove any HA on the TO address
-			
+		
 			ptr = strstr(MsgBytes, "To:");
 			if (ptr)
 			{
@@ -1192,7 +1200,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 		ptr += 4;
 	
-		ptr2 +=2;					// Line Following Original Body: Line
+		ptr2 += 2;					// Line Following Original Body: Line
 
 		BodyLineToBody = ptr - ptr2;
 
@@ -1200,6 +1208,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		{
 			strcat(Rline, "\r\n");
 			RlineLen += 2;
+			MsgLen += 2;
 		}
 		BodyLen += RlineLen;
 
@@ -1214,15 +1223,15 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 			Debugprintf("B2 Message - Body too far from Body Line - %d", BodyLineToBody);
 			return FALSE;
 		}
-
 		memcpy(&UnCompressed[Index], ptr2, BodyLineToBody); // Stuff Between Body: Line and Body
 
-		Index += (BodyLineToBody);
+		Index += BodyLineToBody;
 
 		memcpy(&UnCompressed[Index], Rline, RlineLen);
 		Index += RlineLen;
-		memcpy(&UnCompressed[Index], ptr, MsgLen);		// Rest of Message
-		
+
+		memcpy(&UnCompressed[Index], ptr, MsgLen - Index);		// Rest of Message
+
 		FBBHeader->Size = MsgLen;
 
 		Compressed = zalloc(2 * MsgLen + 200);
@@ -1344,7 +1353,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	return TRUE;  
 
-	} My__except_Routine("CreateB2Nessage");
+	} My__except_Routine("CreateB2Message");
 
 	return FALSE;
 

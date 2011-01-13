@@ -618,6 +618,15 @@
 // Add Chat Keepalive option.
 // Fix bug in non-delivery notification.
 
+// Version 1.0.4.32 Jan 2011
+
+// Allow "Send from Clipboard" to send to rms: or smtp:
+// Allow messages received via SMTP to be bulls (TO preceeded by bull/) or NTS (to nnnnn@NTSXX or nnnnn@NTSXX.NTS)
+// Fix corruption of messages converted to B2 if body contains binary data
+// Fix occasional program error when forwarding B2 messages
+// Limit FBB protocol data blocks to 250 to try to fix restart problem.
+// Add F2 to F5 to open windows.
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 

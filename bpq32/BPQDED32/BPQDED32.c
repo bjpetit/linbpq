@@ -31,6 +31,9 @@
 
 //		Enforce PACLEN
 
+//  Version 1.11 January 2011
+
+//		Fix for allowing more than 8 APPLS
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -47,7 +50,7 @@ typedef int (FAR *FARPROCX)();
 
 int AllocateStream();
 int DeallocateStream(int stream);
-void SetMask(int stream,int flags,int mask);
+void SetMask(int stream,int flags,UINT mask);
 
 FARPROCX CheckTimer;
 FARPROCX GETBPQAPI;
@@ -81,7 +84,7 @@ int MSGLENGTH=0;
 char MSGTYPE=0;
 char MSGCHANNEL=0;
 
-int APPLMASK=1;
+UINT APPLMASK=1;
 
 char APPLFLAGS=0x42;		// REQUEST AUTOTIMERS, MSG TO USER
 char DEDMODE=' ';			// CLUSTER MODE - DONT ALLOW DUP CONNECTS
@@ -291,7 +294,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			AttachedProcesses++;
 
 			_itoa(AttachedProcesses,buff,10);
-			strcpy(Errbuff,	"BPQDED32 V 1.0.3.4 Process Attach - total = ");
+			strcpy(Errbuff,	"BPQDED32 V 1.1.1.1 Process Attach - total = ");
 			strcat(Errbuff,buff);
 			OutputDebugString(Errbuff);
 
@@ -588,7 +591,7 @@ int DeallocateStream(int stream)
 }
 
 
-void SetMask(stream,flags,mask)
+void SetMask(int stream, int flags, UINT mask)
 {
 	_asm {
 		
@@ -946,7 +949,7 @@ ICMD:
 
 	_asm {
 
-	MOV	DL,BYTE PTR APPLMASK
+	MOV	EDX,APPLMASK
 	CALL	SETAPPLMASK
 
 	JMP	SENDHOSTOK
@@ -1068,7 +1071,7 @@ DISABLEMONITOR:
 
 MONCOM:
 
-	MOV	DL,BYTE PTR APPLMASK
+	MOV	EDX,APPLMASK
 	MOV	AL,1			; FIRST PORT
 	MOV	AH,1			; SET APPL MASK
 
@@ -1157,7 +1160,7 @@ JCMD:
 ;
 ;	DISABLE SWITCH HOST MODE INTERFACE
 ;
-	MOV	DL,0			; APPL MASK
+	MOV	EDX,0			; APPL MASK
 	CALL	SETAPPLMASK
 JCOMM00:
 	JMP	SENDHOSTOK
@@ -2000,7 +2003,7 @@ HOSTxxx:
 ;
 ;	ENABLE SWITCH HOST MODE INTERFACE
 ;
-	MOV	DL,BYTE PTR APPLMASK
+	MOV	EDX,APPLMASK
 	CALL	SETAPPLMASK
 
 ;	send host mode ack

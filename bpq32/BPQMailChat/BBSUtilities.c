@@ -232,3 +232,16 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 	WriteLogLine(conn, '>', NewMessage,  len, LOG);
 	QueueMsg(conn, NewMessage, len);
 }
+
+BOOL isdigits(char * string)
+{
+	// Returns TRUE id sting is decimal digits
+
+	int i, n = strlen(string);
+	
+	for (i = 0; i < n; i++)
+	{
+		if (isdigit(string[i]) == FALSE) return FALSE;
+	}
+	return TRUE;
+}

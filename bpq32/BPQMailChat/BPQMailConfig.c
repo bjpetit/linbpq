@@ -937,16 +937,16 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SendDlgItemMessage(hDlg, RMS_SSID1 + i, CB_ADDSTRING,0 , (LPARAM)"15");
 			}
 */			
-			SendDlgItemMessage(hDlg, RMS_SSID1, WM_SETTEXT, 0, (LPARAM)"");
-			SendDlgItemMessage(hDlg, RMS_SSID2, WM_SETTEXT, 0, (LPARAM)"");
-			SendDlgItemMessage(hDlg, RMS_SSID3, WM_SETTEXT, 0, (LPARAM)"");
+			SendDlgItemMessage(hDlg, RMS_SSID1, WM_SETTEXT, 0, (LPARAM)"-");
+			SendDlgItemMessage(hDlg, RMS_SSID2, WM_SETTEXT, 0, (LPARAM)"-");
+			SendDlgItemMessage(hDlg, RMS_SSID3, WM_SETTEXT, 0, (LPARAM)"-");
 
 			i = 0;
 			for (s = 0; s < 16; s++)
 			{
 				if (user->RMSSSIDBits & (1 << s))
 				{
-					if (i)
+					if (s)
 						wsprintf(SSID, "%d", s);
 					else
 						SSID[0] = 0;
@@ -1210,16 +1210,27 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 	user->RMSSSIDBits = 0;
 
 	SendDlgItemMessage(hDlg, RMS_SSID1, WM_GETTEXT, 3, (LPARAM)(LPCTSTR)&RMSSSID);
-	SSID = atoi(RMSSSID);
-	user->RMSSSIDBits |= (1 << (SSID));
 
+	if (RMSSSID[0] != '-')
+	{
+		SSID = atoi(RMSSSID);
+		user->RMSSSIDBits |= (1 << (SSID));
+	}
 	SendDlgItemMessage(hDlg, RMS_SSID2, WM_GETTEXT, 3, (LPARAM)(LPCTSTR)&RMSSSID);
-	SSID = atoi(RMSSSID);
-	user->RMSSSIDBits |= (1 << (SSID));
+	
+	if (RMSSSID[0] != '-')
+	{
+		SSID = atoi(RMSSSID);
+		user->RMSSSIDBits |= (1 << (SSID));
+	}
 
 	SendDlgItemMessage(hDlg, RMS_SSID3, WM_GETTEXT, 3, (LPARAM)(LPCTSTR)&RMSSSID);
-	SSID = atoi(RMSSSID);
-	user->RMSSSIDBits |= (1 << (SSID));
+
+	if (RMSSSID[0] != '-')
+	{
+		SSID = atoi(RMSSSID);
+		user->RMSSSIDBits |= (1 << (SSID));
+	}
 
 	SaveUserDatabase();
 

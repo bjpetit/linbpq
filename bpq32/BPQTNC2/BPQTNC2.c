@@ -14,7 +14,7 @@
 
 // Accept MY for MYCALL - was MYC
 
-// Build 1 Jan 2010
+// Version 1.1.3 Build 1 Jan 2011
 
 // Rebuilt with redundant VSP code removed to get round Virus detect problem
 

@@ -1145,7 +1145,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		// MEASUREITEMSTRUCT structure and MYITEM structure. 
  
 		lpmis = (LPMEASUREITEMSTRUCT) lParam;  
-		lpmis->itemWidth = 330; 
+		lpmis->itemWidth = 300; 
 
 		return TRUE; 
 
@@ -1164,15 +1164,15 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			if (TNC->TCPInfo->CMS)
 			{
 				if (TNC->TCPInfo->CMSOK)
-				  TextOut(lpdis->hDC, 350, lpdis->rcItem.top + 2, "CMS OK", 6);
+				  TextOut(lpdis->hDC, 340, lpdis->rcItem.top + 2, "CMS OK", 6);
 				else
 				{
 					SetTextColor(lpdis->hDC, RGB(255, 0, 0));
-					TextOut(lpdis->hDC, 350, lpdis->rcItem.top + 2, "NO CMS", 6);
+					TextOut(lpdis->hDC, 340, lpdis->rcItem.top + 2, "NO CMS", 6);
 				}
 			}
 			else
-				TextOut(lpdis->hDC, 350, lpdis->rcItem.top + 2, "             ", 13);
+				TextOut(lpdis->hDC, 340, lpdis->rcItem.top + 2, "             ", 13);
 
             return TRUE; 
  

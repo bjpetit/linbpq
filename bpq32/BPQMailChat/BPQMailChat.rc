@@ -877,6 +877,7 @@ BEGIN
         END
         MENUITEM "Housekeeping",                IDM_HOUSEKEEPING
         MENUITEM "Send Msg from Clipboard",     ID_ACTIONS_SENDMSGFROMCLIPBOARD
+
         MENUITEM "Update Chat Map Info",        ID_ACTIONS_UPDATECHATMAPINFO
         MENUITEM "Save Registry Configuration", BPQSAVEREG
         MENUITEM "Rerun Message Routing",       RESCANMSGS
@@ -891,10 +892,10 @@ BEGIN
     END
     POPUP "Windows"
     BEGIN
-        MENUITEM "BBS Console",                 IDM_CONSOLE
-        MENUITEM "Chat Console",                IDM_CHATCONSOLE
-        MENUITEM "Monitor",                     IDM_MONITOR
-        MENUITEM "Debug Chat",                  IDM_DEBUG
+        MENUITEM "BBS Console (F2)",            IDM_CONSOLE
+        MENUITEM "Chat Console (F3)",           IDM_CHATCONSOLE
+        MENUITEM "Monitor (F4)",                IDM_MONITOR
+        MENUITEM "Debug Chat (F5)",             IDM_DEBUG
     END
     POPUP "&Help"
     BEGIN

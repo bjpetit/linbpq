@@ -27,8 +27,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Version
 //
 
-#define Vers 1,1,0,1
-#define Verstring "1.1.0.1\0"
+#define Vers 1,1,1,1
+#define Verstring "1.1.1.1\0"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION Vers
@@ -51,7 +51,7 @@ BEGIN
             VALUE "FileDescription", "Allows programs written for TFWIN32 or TF2AGW to be used with G8BPQ's 32 Bit Switch\0"
             VALUE "FileVersion", Verstring
             VALUE "InternalName", "BPQDED32\0"
-            VALUE "LegalCopyright", "Copyright © 2007-8 John Wiseman G8BPQ\0"
+            VALUE "LegalCopyright", "Copyright © 2007-2011 John Wiseman G8BPQ\0"
             VALUE "OriginalFilename", "bpqded32\0"
             VALUE "ProductName", "bpqded32\0"
             VALUE "ProductVersion", Verstring
