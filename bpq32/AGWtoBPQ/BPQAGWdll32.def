@@ -1,0 +1,6 @@
+
+EXPORTS
+    AGWStartPoll
+	AGWGetData
+	AGWClose
+	AGWPutData

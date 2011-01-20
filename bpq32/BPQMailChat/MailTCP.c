@@ -1334,6 +1334,7 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 		char B2To[80];
 		char * NewBody;
 		char DateString[80];
+		char * TypeString;
 		struct tm * tm;
 
 		tm = gmtime(&Date);	
@@ -1353,9 +1354,16 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 		
 		Msg->B2Flags = B2Msg | Attachments;
 
+		if (Msg->type == 'P')
+			TypeString = "Private" ;
+		else if (Msg->type == 'B')
+			TypeString = "Bulletin";
+		else if (Msg->type == 'T')
+			TypeString = "Traffic";
+
 		B2HddrLen = wsprintf(B2Hddr,
 			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n",
-			Msg->bid, DateString, "Private",
+			Msg->bid, DateString, TypeString,
 			Msg->from, B2To, Msg->title, BBSName);
 
 		NewBody = MsgBody - B2HddrLen;

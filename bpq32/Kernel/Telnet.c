@@ -58,11 +58,10 @@ BOOL cfgMinToTray;
 char AttemptsMsg[] = "Too many attempts - Disconnected\r\n";
 char disMsg[] = "Disconnected by SYSOP\r\n";
 
-
 char BlankCall[]="         ";
 
-BOOL LogEnabled=FALSE;
-
+BOOL LogEnabled = FALSE;
+BOOL CMSLogEnabled = TRUE;
 
 VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
@@ -100,6 +99,7 @@ int ShowConnections(struct TNCINFO * TNC);
 int Terminate();
 int SendtoSocket(SOCKET sock,char * Msg);
 int WriteLog(char * msg);
+VOID WriteCMSLog(char * msg);
 byte * EncodeCall(byte * Call);
 
 BOOL CheckCMS(struct TNCINFO * TNC);
@@ -168,6 +168,9 @@ ProcessLine(char * buf, int Port)
 	else
 	if (_stricmp(param,"LOGGING") == 0)
 		LogEnabled = atoi(value);
+	else
+	if (_stricmp(param,"CMSLOGGING") == 0)
+		CMSLogEnabled = atoi(value);
 	else
 	if (_stricmp(param,"DisconnectOnClose") == 0)
 		TCP->DisconnectOnClose = atoi(value);
@@ -305,11 +308,77 @@ VOID ProcessKNormCommand(struct TNCINFO * TNC, UCHAR * rxbuffer);
 VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 
-//	Note that Kantronics host Mode uses KISS format Packets (without a KISS COntrol Byte)
 
-VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
-int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
-int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
+static VOID WritetoTrace(int Stream, char * Msg, int Len)
+{
+	int index = 0;
+	UCHAR * ptr1 = Msg, * ptr2;
+	UCHAR Line[1000];
+	int LineLen, i;
+	char logmsg[200];
+
+lineloop:
+
+	if (Len > 0)
+	{
+		//	copy text to file a line at a time	
+					
+		ptr2=memchr(ptr1,13,Len);
+
+		if (ptr2)
+		{
+			ptr2++;
+			LineLen = ptr2 - ptr1;
+			Len -= LineLen;
+			memcpy(Line, ptr1, LineLen);
+			memcpy(&Line[LineLen - 1], "<cr>", 4);
+			LineLen += 3;
+
+			if ((*ptr2) == 10)
+			{
+				memcpy(&Line[LineLen], "<lf>", 4);
+				LineLen += 4;
+				ptr2++;
+				Len --;
+			}
+			
+			Line[LineLen] = 0;
+
+			// If line contains any data above 7f, assume binary and dont display
+
+			for (i = 0; i < LineLen; i++)
+			{
+				if (Line[i] > 127)
+					goto Skip;
+			}
+
+			if (strlen(Line) < 100)
+			{
+				wsprintf(logmsg,"%d %s\r\n", Stream, Line);
+				WriteCMSLog (logmsg);
+			}
+
+		Skip:
+			ptr1 = ptr2;
+			goto lineloop;
+		}
+
+		for (i = 0; i < Len; i++)
+		{
+			if (ptr1[i] > 127)
+				break;
+		}
+
+		if (i == Len)
+		{
+			if (strlen(ptr1) < 100)
+			{
+				wsprintf(logmsg,"%d %s\r\n", Stream, ptr1);
+				WriteCMSLog (logmsg);
+			}
+		}
+	}
+}
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -318,6 +387,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct TNCINFO * TNC = TNCInfo[port];
 	int Stream;
 	struct ConnectionInfo * sockptr;
+	struct STREAMINFO * STREAM;
 
 	switch (fn)
 	{
@@ -325,9 +395,23 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
-			if (TNC->Streams[Stream].ReportDISC)
+			STREAM = &TNC->Streams[Stream];
+
+			if (STREAM->NeedDisc)
 			{
-				TNC->Streams[Stream].ReportDISC = FALSE;
+				STREAM->NeedDisc--;
+
+				if (STREAM->NeedDisc == 0)
+				{
+					// Send the DISCONNECT
+
+					STREAM->ReportDISC = TRUE;
+				}
+			}
+
+			if (STREAM->ReportDISC)
+			{
+				STREAM->ReportDISC = FALSE;
 				buff[4] = Stream;
 
 				return -1;
@@ -338,11 +422,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
-			if (TNC->Streams[Stream].PACTORtoBPQ_Q !=0)
+			STREAM = &TNC->Streams[Stream];
+
+			if (STREAM->PACTORtoBPQ_Q !=0)
 			{
 				int datalen;
 			
-				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
+				buffptr=Q_REM(&STREAM->PACTORtoBPQ_Q);
 
 				datalen=buffptr[1];
 
@@ -435,12 +521,6 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 	int i;
 	HMENU hMenu;		// handle of menu 
 
-
-	//
-	//	Will be called once for each Pactor Port
-	//	The COM port number is in IOBASE
-	//
-
 	wsprintf(msg,"Telnet Server");
 	WritetoConsole(msg);
 
@@ -449,7 +529,6 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 	ReadConfigFile("BPQTelnetServer.cfg", port, ProcessLine);
 
 	TNC = TNCInfo[port];
-
 
 	if (TNC == NULL)
 	{
@@ -493,7 +572,8 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	TCP->hDisMenu=GetSubMenu(TCP->hActionMenu,1);
 
-	CheckMenuItem(TCP->hLogMenu,0,MF_BYPOSITION | LogEnabled<<3);
+	CheckMenuItem(TCP->hLogMenu,0, MF_BYPOSITION | LogEnabled<<3);
+	CheckMenuItem(TCP->hLogMenu, 1, MF_BYPOSITION | CMSLogEnabled<<3);
 
 	ModifyMenu(hMenu, 1, MF_BYPOSITION | MF_OWNERDRAW | MF_STRING, 10000,  0); 
 
@@ -509,7 +589,7 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 
 		wsprintf(msg,"%d", i);
 
-		if (i != 0)
+		if (i > 1)
 			AppendMenu(TCP->hDisMenu, MF_STRING, IDM_DISCONNECT ,msg);
 	}
 
@@ -754,21 +834,38 @@ VOID TelnetPoll(int Port)
 				send(sock, Msg, strlen(Msg),0);
 			}
 
-			if (LogEnabled)
+			if (sockptr->UserPointer == &CMSUser)
 			{
-				char logmsg[120];
-				wsprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d\n",
-					sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed);
+				if (CMSLogEnabled)
+				{
+					char logmsg[120];
+					wsprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d\r\n",
+						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed);
 
-				WriteLog (logmsg);
+					WriteCMSLog (logmsg);
+				}
+				// Always Disconnect CMS Socket
+
+				DataSocket_Disconnect(TNC, sockptr);	
+			}
+			else
+			{
+				if (LogEnabled)
+				{
+					char logmsg[120];
+					wsprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d\n",
+						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed);
+
+					WriteLog (logmsg);
+				}
+
+				if (TCP->DisconnectOnClose)
+				{
+					Sleep(1000);
+					DataSocket_Disconnect(TNC, sockptr);
+				}
 			}
 
-			if (TCP->DisconnectOnClose)
-			{
-				Sleep(1000);
-				DataSocket_Disconnect(TNC, sockptr);
-			}
-	
 			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
 			{
 				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
@@ -820,7 +917,10 @@ VOID TelnetPoll(int Port)
 				STREAM->BytesTXed += datalen;
 
 				sock = sockptr->socket;
-	
+
+				if (sockptr->UserPointer  == &CMSUser)
+					WritetoTrace(Stream, MsgPtr, datalen);
+
 				if (sockptr->FBBMode)
 				{
 					send(sock, MsgPtr, datalen, 0);
@@ -854,7 +954,8 @@ VOID TelnetPoll(int Port)
 					}
 					while (datalen>0);
 				}
-	
+				
+				ReleaseBuffer(buffptr);
 				return;
 			}
 			else // Not Connected
@@ -872,6 +973,7 @@ VOID TelnetPoll(int Port)
 				if (_memicmp(MsgPtr, "D", 1) == 0)
 				{
 					TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
+					ReleaseBuffer(buffptr);
 					return;
 				}
 				
@@ -884,6 +986,7 @@ VOID TelnetPoll(int Port)
 					{
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Error - Invalid Connect Command\r");
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						STREAM->NeedDisc = 10;
 						return;
 					}
 
@@ -891,6 +994,7 @@ VOID TelnetPoll(int Port)
 					{
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Error - Only connects to CMS are allowed\r");
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						STREAM->NeedDisc = 10;
 						return;
 					}
 
@@ -898,17 +1002,21 @@ VOID TelnetPoll(int Port)
 					{
 						buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Error - CMS Not Available\r");
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						STREAM->NeedDisc = 10;
 						return;
 					}
 
 					TNC->Streams[Stream].Connecting = TRUE;
 
 					CMSConnect(TNC, TCP, STREAM, Stream);
+					ReleaseBuffer(buffptr);
+
 					return;
 				}
 
 				buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "Error - Invalid Command\r");
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+				STREAM->NeedDisc = 10;
 				return;
 			}
 		}
@@ -1051,6 +1159,15 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			break;
 
+		case IDM_CMS_LOGGING:
+
+			// Toggle Logging Flag
+
+			LogEnabled = !LogEnabled;
+			CheckMenuItem(TNC->TCPInfo->hLogMenu, 1, MF_BYPOSITION | CMSLogEnabled<<3);
+
+			break;
+
 		case TELNET_RECONFIG:
 
 			ProcessConfig();
@@ -1109,7 +1226,8 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 				TNC->Streams[i].ConnectionInfo = zalloc(sizeof(struct ConnectionInfo));
 				TCP->CurrentSockets = i;  //Record max used to save searching all entries
 
-				ModifyMenu(TCP->hDisMenu,i ,MF_BYPOSITION | MF_STRING,IDM_DISCONNECT + 1, ".");
+				if (i > 0)
+					ModifyMenu(TCP->hDisMenu,i - 1 ,MF_BYPOSITION | MF_STRING,IDM_DISCONNECT + 1, ".");
 			}
 
 			TNC->PortRecord = PortRecord;
@@ -1240,7 +1358,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			else
 				sockptr->RelayMode = FALSE;
 	
-			ModifyMenu(hDisMenu,n-1,MF_BYPOSITION | MF_STRING,IDM_DISCONNECT + n," ");
+			ModifyMenu(hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, ".");
 
 			DrawMenuBar(TNC->hDlg);	
 			ShowConnections(TNC);
@@ -1591,7 +1709,7 @@ MsgLoop:
 
 				n=sockptr->Number;
 
-				ModifyMenu(TCP->hDisMenu, n, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
+				ModifyMenu(TCP->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
 
 				ShowConnections(TNC);;
 
@@ -1820,7 +1938,7 @@ MsgLoop:
 
 		n=sockptr->Number;
 
-		ModifyMenu(TCP->hDisMenu, n, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
+		ModifyMenu(TCP->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
 
 		ShowConnections(TNC);;
 
@@ -1934,6 +2052,9 @@ MsgLoop:
 		if (Paclen == 0)
 			Paclen = 256;
 
+		if (sockptr->UserPointer == &CMSUser)
+			WritetoTrace(Stream, MsgPtr, InputLen);
+
 		// Send to Node
 
 		STREAM->BytesRXed += InputLen;
@@ -1975,6 +2096,14 @@ MsgLoop:
 	// Process data up to the cr
 
 	MsgLen=LFPtr-MsgPtr;
+
+	if (MsgLen == 0)						// Just CR
+	{
+		MsgPtr++;							// Skip it
+		InputLen--;
+		goto MsgLoop;
+	}
+
 
 	switch (sockptr->LoginState)
 	{
@@ -2037,7 +2166,7 @@ MsgLoop:
 
 				n=sockptr->Number;
 
-				ModifyMenu(TCP->hDisMenu, n, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
+				ModifyMenu(TCP->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, MsgPtr);
 
 				ShowConnections(TNC);;
 
@@ -2130,7 +2259,7 @@ MsgLoop:
 
 			Appl = sockptr->UserPointer->Appl;
 			
-			if (Appl)
+			if (Appl[0])
 				SendtoNode(TNC, sockptr->Number, Appl, strlen(Appl));
 
 			return 0;
@@ -2174,7 +2303,7 @@ int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr
 
 		n = sockptr->Number;
 
-		ModifyMenu(TNC->TCPInfo->hDisMenu, n, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, ".");
+		ModifyMenu(TNC->TCPInfo->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, ".");
 
 		sockptr->SocketActive = FALSE;
 	
@@ -2350,6 +2479,50 @@ int WriteLog(char * msg)
 	return 0;
 }
 
+VOID WriteCMSLog(char * msg)
+{
+	UCHAR Value[MAX_PATH];
+	time_t T;
+	struct tm * tm;
+	HANDLE Handle;
+	char LogMsg[256];
+	int MsgLen, cnt;
+
+	if (CMSLogEnabled == FALSE)
+		 return;
+
+	T = time(NULL);
+	tm = gmtime(&T);
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(Value, "CMSAccess");
+	}
+	else
+	{
+		strcpy(Value, BPQDirectory);
+		strcat(Value, "\\");
+		strcat(Value, "CMSAccess");
+	}
+
+	wsprintf(Value, "%s_%04d%02d%02d.log", Value,
+				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+
+	Handle = CreateFile(Value, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (Handle == INVALID_HANDLE_VALUE)
+		return;
+
+	SetFilePointer(Handle, 0, 0, FILE_END);
+
+	MsgLen = wsprintf(LogMsg, "%02d:%02d:%02d %s", tm->tm_hour, tm->tm_min, tm->tm_sec, msg);
+
+	WriteFile(Handle ,LogMsg , MsgLen, &cnt, NULL);
+
+	CloseHandle(Handle);
+
+	return;
+}
 int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error)
 {
 	struct ConnectionInfo * sockptr;
@@ -2414,13 +2587,13 @@ int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error)
 
 				TNC->Streams[Stream].BytesRXed = TNC->Streams[Stream].BytesTXed = 0;
 
-				if (LogEnabled)
+				if (CMSLogEnabled)
 				{
 					char logmsg[120];
-					wsprintf(logmsg,"%d %s Connected to CMS\n",
+					wsprintf(logmsg,"%d %s Connected to CMS\r\n",
 						sockptr->Number, TNC->Streams[Stream].MyCall);
 
-					WriteLog (logmsg);
+					WriteCMSLog (logmsg);
 				}
 
 
@@ -2569,6 +2742,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 			DrawMenuBar(TNC->hDlg);	
 			ReportError(STREAM, "All CMS Servers are inaccessible");
 			closesocket(sock);
+			STREAM->NeedDisc = 10;
 			TNC->Streams[Stream].Connecting = FALSE;
 			sockptr->SocketActive = FALSE;
 			ShowConnections(TNC);
@@ -2603,7 +2777,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 		return FALSE;
 	}
 
-	ModifyMenu(TCP->hDisMenu, Stream, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + Stream, "CMS");
+	ModifyMenu(TCP->hDisMenu, Stream - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + Stream, "CMS");
 
 	if (connect(sockptr->socket,(LPSOCKADDR) &destaddr, sizeof(destaddr)) == 0)
 	{

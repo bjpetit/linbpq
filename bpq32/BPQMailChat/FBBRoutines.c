@@ -48,15 +48,30 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			
 			conn->SendB = conn->SendP = conn->SendT = FALSE;
 
-			if (strchr(&Buffer[10], 'P')) conn->SendP = TRUE;
-			if (strchr(&Buffer[10], 'T')) conn->SendT = TRUE;
-
 			ptr = strchr(&Buffer[10], 'B');
+	
 			if (ptr)
 			{
 				conn->SendB = TRUE;
 				conn->MaxBLen = atoi(++ptr);
 				if (conn->MaxBLen == 0) conn->MaxBLen = 99999999;
+			}
+
+			ptr = strchr(&Buffer[10], 'T');
+	
+			if (ptr)
+			{
+				conn->SendT = TRUE;
+				conn->MaxTLen = atoi(++ptr);
+				if (conn->MaxTLen == 0) conn->MaxTLen = 99999999;
+			}
+			ptr = strchr(&Buffer[10], 'P');
+
+			if (ptr)
+			{
+				conn->SendP = TRUE;
+				conn->MaxPLen = atoi(++ptr);
+				if (conn->MaxPLen == 0) conn->MaxPLen = 99999999;
 			}
 		}
 		return;
@@ -888,7 +903,10 @@ loop:
 		{
 			__try 
 			{
+				UCHAR Save = conn->InputMode;
+				conn->InputMode = 0;		//  So we won't save Restart data if decode fails
 				Decode(conn);
+				conn->InputMode = Save;
 			}
 			__except(EXCEPTION_EXECUTE_HANDLER)
 			{
@@ -1102,6 +1120,8 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	struct UserInfo * FromUser;
 	int BodyLineToBody;
 	int RlineLen = strlen(Rline) ;
+	char * TypeString;
+
 	struct _EXCEPTION_POINTERS exinfo;
 
 	__try {
@@ -1329,10 +1349,16 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	Logprintf(LOG_BBS, conn, '?', "B2 From Finally %s", B2From);
 
+	if (Msg->type == 'P')
+		TypeString = "Private" ;
+	else if (Msg->type == 'B')
+		TypeString = "Bulletin";
+	else if (Msg->type == 'T')
+		TypeString = "Traffic";
+
 	B2HddrLen = wsprintf(UnCompressed,
 			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
-			Msg->bid, Date, (Msg->type == 'P') ? "Private" : "Bulletin",
-			B2From, B2To, Msg->title, BBSName, MsgLen);
+			Msg->bid, Date, TypeString, B2From, B2To, Msg->title, BBSName, MsgLen);
 
 
 	memcpy(&UnCompressed[B2HddrLen], Rline, RlineLen);

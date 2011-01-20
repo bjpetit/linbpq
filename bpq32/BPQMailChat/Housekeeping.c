@@ -257,6 +257,7 @@ VOID ExpireMessages()
 			switch (Msg->status)
 			{
 			case 'N':
+			case 'H':
 
 				// Is it unforwarded or unread?
 
@@ -369,6 +370,8 @@ VOID ExpireMessages()
 			case '$':
 			case 'N':
 			case ' ':
+			case 'H':
+
 
 				if (Msg->datecreated < BNFLimit) KillMsg(Msg);
 				break;	

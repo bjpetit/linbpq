@@ -2371,8 +2371,13 @@ VOID SetupChat()
 VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len)
 {
 	MESSAGEX AXMSG;
-
 	PMESSAGEX AXPTR = &AXMSG;
+
+	if (Len > 256)
+	{
+		Debugprintf("Send_MON_Datagram Error Msg = %s Len = %d", Msg, Len);
+		return;
+	}
 
 	// Block includes the Msg Header (7 bytes), Len Does not!
 

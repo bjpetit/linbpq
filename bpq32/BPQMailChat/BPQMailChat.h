@@ -340,6 +340,8 @@ typedef struct ConnectionInfo_S
 	BOOL SendP;							// Send P messages
 	BOOL SendB;							// Send Bulls
 	int MaxBLen;						// Max Size for this session
+	int MaxPLen;						// Max Size for this session
+	int MaxTLen;						// Max Size for this session
 	BOOL DoReverse;						// Request Reverse Forward
 	char LastForwardType;				// Last type of messages forwarded
 	struct FBBHeaderLine * FBBHeaders;	// The Headers from an FFB forward block

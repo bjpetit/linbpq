@@ -216,11 +216,12 @@ BEGIN
     BEGIN
         POPUP "Logging Options", MENUBREAK
         BEGIN
-            MENUITEM "Logging Enabled",             IDM_LOGGING
+            MENUITEM "Log incoming connections",    IDM_LOGGING
+            MENUITEM "Log CMS Connections",         IDM_CMS_LOGGING
         END
         POPUP "Disconnect User"
         BEGIN
-            MENUITEM ".",                           IDM_DISCONNECT
+            MENUITEM "1",                           IDM_DISCONNECT
         END
         MENUITEM "ReRead Config",               TELNET_RECONFIG
         MENUITEM "CMS Access Enabled",          CMSENABLED

@@ -1,5 +1,5 @@
 ﻿
-#define Vers 1,0,4,32
-#define Verstring "1.0.4.32\0"
+#define Vers 1,0,4,35
+#define Verstring "1.0.4.35\0"
 
-//#define SPECIALVERSION "Test 7"
+//#define SPECIALVERSION "Test 1"

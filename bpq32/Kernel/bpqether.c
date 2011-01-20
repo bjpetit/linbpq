@@ -55,10 +55,11 @@ typedef struct PCAPStruct
    short	EtherType;
    BOOL		RLITX;
    BOOL		RLIRX;
+   BOOL		Promiscuous;
 
 } PCAPINFO, *PPCAPINFO ;
 
-PCAPINFO PCAPInfo[16];
+PCAPINFO PCAPInfo[32];
 
 //PPCAPINFO PCAPInfo[16]={0};
 
@@ -409,7 +410,7 @@ int OpenPCAP(int IOBASE, int port)
 	if ((PCAPInfo[port].adhandle= pcap_open_livex(Adapter,	// name of the device
 							 65536,			// portion of the packet to capture. 
 											// 65536 grants that the whole packet will be captured on all the MACs.
-							 1,				// promiscuous mode (nonzero means promiscuous)
+							 PCAPInfo[port].Promiscuous,	// promiscuous mode (nonzero means promiscuous)
 							 1,				// read timeout
 							 errbuf			// error buffer
 							 )) == NULL)
@@ -468,8 +469,7 @@ int OpenPCAP(int IOBASE, int port)
 
 static BOOL ReadConfigFile(char * fn, int Port)
 {
-
-//TYPE	1	08FF                              # Ethernet Type
+//TYPE	1	08FF                            # Ethernet Type
 //ETH	1	FF:FF:FF:FF:FF:FF				#	Target Ethernet AddrMAP G8BPQ-7 10.2.77.1                  # IP 93 for compatibility
 //ADAPTER	1	\Device\NPF_{21B601E8-8088-4F7D-96 29-EDE2A9243CF4}	# Adapter Name
 
@@ -480,6 +480,8 @@ static BOOL ReadConfigFile(char * fn, int Port)
 	char * Config;
 
 	Config = PortConfig[Port];
+
+	PCAPInfo[Port].Promiscuous = 1;				// Default
 
 	if (Config)
 	{
@@ -600,6 +602,18 @@ static ProcessLine(char * buf, int Port, BOOL CheckPort)
 
 	}
 
+	if(_stricmp(ptr,"promiscuous") == 0)
+	{
+		ptr = strtok(NULL, " \t\n\r");
+		
+		if (ptr == NULL) return (FALSE);
+
+		PCAPInfo[Port].Promiscuous = atoi(ptr);
+
+		return (TRUE);
+
+	}
+
 	if(_stricmp(ptr,"RXMODE") == 0)
 	{
 		p_port = strtok(NULL, " \t\n\r");
@@ -621,7 +635,6 @@ static ProcessLine(char * buf, int Port, BOOL CheckPort)
 		return FALSE;
 	
 	}
-
 
 	if(_stricmp(ptr,"TXMODE") == 0)
 	{
@@ -666,7 +679,6 @@ static ProcessLine(char * buf, int Port, BOOL CheckPort)
 	//	strcpy(Adapter,p_Adapter);
 
 		return (TRUE);
-
 	}
 
 	if(_stricmp(ptr,"SOURCE") == 0)

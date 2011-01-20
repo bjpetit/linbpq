@@ -627,6 +627,21 @@
 // Limit FBB protocol data blocks to 250 to try to fix restart problem.
 // Add F2 to F5 to open windows.
 
+// Version 1.0.4.33 Jan 2011
+
+// Fix holding old bulls with forwarding info.
+
+// Version 1.0.4.33 Jan 2011
+
+// Prevent transfer restarting after a program error.
+// Allow Housekeeping to kill held messages.
+
+// Version 1.0.4.34 Jan 2011
+
+// Add Size limits for P and T messages to MSGTYPES command
+// Fix Error in MBL processing when blank lines received (introduced in .33)
+// Trap possible PE in Send_MON_Datagram
+// Don't use paging on chat sessions
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -2389,7 +2404,7 @@ int Connected(Stream)
 				// Probably an outgoing connect
 		
 				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
-				conn->MaxBLen = 99999999;
+				conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
 
 				if (conn->BBSFlags & RunningConnectScript)
 				{
@@ -2416,7 +2431,7 @@ int Connected(Stream)
 			conn->BPQStream = Stream;
 
 			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
-			conn->MaxBLen = 99999999;
+			conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
 
 			GetConnectionInfo(Stream, callsign, &port, &conn->SessType, &paclen, &maxframe, &l4window);
 
@@ -2455,9 +2470,6 @@ int Connected(Stream)
 			conn->UserPointer = user;
 
 			conn->lastmsg = user->lastmsg;
-
-			conn->PageLen = user->PageLen;
-			conn->Paging = (user->PageLen > 0);
 
 			conn->NextMessagetoForward = FirstMessageIndextoForward;
 
@@ -2499,6 +2511,9 @@ int Connected(Stream)
 			{
 				BOOL B1 = FALSE, B2 = FALSE, B = FALSE;
 				struct	BBSForwardingInfo * ForwardingInfo;
+
+				conn->PageLen = user->PageLen;				// No paging for chat
+				conn->Paging = (user->PageLen > 0);
 
 				if ((user->flags & F_Temp_B2_BBS) && (user->ForwardingInfo == NULL))
 				{
@@ -6168,7 +6183,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 
 		// if message body had R: lines, get date created from last (not very accurate, but best we can do)
 
-		// Also check if we have had message beofre to detect loops
+		// Also check if we have had message before to detect loops
 
 
 		ptr1 = conn->MailBuffer;
@@ -6254,7 +6269,7 @@ nextline:
 					Msg->status = 'H';
 					HoldReason = "Suspect Date Sent";
 				}
-				else if (Age > BidLifetime)
+				else if (Age > BidLifetime || Age > 30)
 				{
 					Msg->status = 'H';
 					HoldReason = "Message too old";
@@ -6380,7 +6395,7 @@ nextline:
 		if(Msg->to[0] == 0)
 			SMTPMsgCreated=TRUE;
 
-		if (Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+		if (Msg->status != 'H' && Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
 			Msg->status = '$';				// Has forwarding
 
 		if (Msg->status == 'H')
@@ -7088,16 +7103,32 @@ InBand:
 
 				strcpy(conn->MSGTYPES, &Cmd[8]);
 
-				if (strchr(&Cmd[8], 'P')) conn->SendP = TRUE;
-				if (strchr(&Cmd[8], 'T')) conn->SendT = TRUE;
 				if (strchr(&Cmd[8], 'R')) conn->DoReverse = TRUE;
 
 				ptr = strchr(&Cmd[8], 'B');
+	
 				if (ptr)
 				{
 					conn->SendB = TRUE;
 					conn->MaxBLen = atoi(++ptr);
 					if (conn->MaxBLen == 0) conn->MaxBLen = 99999999;
+				}
+
+				ptr = strchr(&Cmd[8], 'T');
+	
+				if (ptr)
+				{
+					conn->SendT = TRUE;
+					conn->MaxTLen = atoi(++ptr);
+					if (conn->MaxTLen == 0) conn->MaxTLen = 99999999;
+				}
+				ptr = strchr(&Cmd[8], 'P');
+
+				if (ptr)
+				{
+					conn->SendP = TRUE;
+					conn->MaxPLen = atoi(++ptr);
+					if (conn->MaxPLen == 0) conn->MaxPLen = 99999999;
 				}
 
 				// If nothing to do, terminate script
@@ -7568,7 +7599,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 		}
 	}
 
-	if (conn->SendT && FindMessagestoForwardLoop(conn, 'T', 99999999))
+	if (conn->SendT && FindMessagestoForwardLoop(conn, 'T', conn->MaxTLen))
 	{
 		conn->LastForwardType = 'T';
 		return TRUE;
@@ -7577,7 +7608,7 @@ BOOL FindMessagestoForward (CIRCUIT * conn)
 	if (conn->LastForwardType == 'T')
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
 
-	if (conn->SendP && FindMessagestoForwardLoop(conn, 'P', 99999999))
+	if (conn->SendP && FindMessagestoForwardLoop(conn, 'P', conn->MaxPLen))
 	{
 		conn->LastForwardType = 'P';
 		return TRUE;
