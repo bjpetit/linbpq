@@ -82,16 +82,17 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 int NewLine();
 
+VOID SendTraceOptions();
+
 int	ProcessBuff(char * readbuff,int len);
 
-int EnableConnectMenu(HWND hWnd);
-int EnableDisconnectMenu(HWND hWnd);
-int	DisableConnectMenu(HWND hWnd);
-int DisableDisconnectMenu(HWND hWnd);
+VOID EnableConnectMenu(HWND hWnd);
+VOID EnableDisconnectMenu(HWND hWnd);
+VOID DisableConnectMenu(HWND hWnd);
+VOID DisableDisconnectMenu(HWND hWnd);
 int DoReceivedData(HWND hWnd);
 int	DoStateChange(HWND hWnd);
 int ToggleFlags(HWND hWnd, int Item, int mask);
-int CopyScreentoBuffer(char * buff);
 int DoMonData(HWND hWnd);
 int TogglePort(HWND hWnd, int Item, int mask);
 int ToggleMTX(HWND hWnd);
@@ -106,8 +107,8 @@ VOID WritetoOutputWindow(char * Msg, int len);
 int SendMsg(char * msg, int len);
 TCPConnect(char * Host, int Port);
 int Telnet_Connected(SOCKET sock, int Error);
-int DataSocket_Read(SOCKET sock);
-int Socket_Data(int sock, int error, int eventcode);
+VOID DataSocket_Read(SOCKET sock);
+VOID Socket_Data(int sock, int error, int eventcode);
 
 COLORREF Colours[256] = {0,
 		RGB(0,0,0), RGB(0,0,128), RGB(0,0,192), RGB(0,0,255),				// 1 - 4
@@ -174,12 +175,22 @@ int Height, Width, LastY;
 
 int maxlinelen = 80;
 
-char Host[100] = "localhost";
-int Port = 0;
-char UserName[80] = "";
-char Password[80] = "";
+char Host[5][100] = {"localhost"};
+int Port[5] = {0};
+char UserName[5][80] = {""};
+char Password[5][80] = {""};
+
+char HN[5][6] = {"Host1", "Host2", "Host3", "Host4"};
+char PN[5][6] = {"Port1", "Port2", "Port3", "Port4"};
+char PASSN[5][6] = {"Pass1", "Pass2", "Pass3", "Pass4"};
+char UN[5][6] = {"User1", "User2", "User3", "User4"};
+
+int CurrentHost = 0;
+int CfgNo = 0;
 
 SOCKET sock;
+
+BOOL MonData = FALSE;
 
 char Key[80];
 int portmask=0;
@@ -190,7 +201,7 @@ char kbbuf[160];
 int kbptr=0;
 char readbuff[100000];				// for stupid bbs programs
 
-int ptr=0;
+//int ptr=0;
 
 int Stream;
 int len,count;
@@ -198,7 +209,6 @@ int len,count;
 char callsign[10];
 int state;
 int change;
-int applmask = 0;
 int applflags = 2;				// Message to Application
 int Sessno = 0;
 
@@ -213,6 +223,7 @@ BOOL SendDisconnected = TRUE;
 BOOL MonitorNODES = TRUE;
 BOOL MonitorColour = TRUE;
 BOOL ChatMode = FALSE;
+int MonPorts = 1;
 
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
@@ -280,6 +291,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	int retCode, disp;
 	HKEY hKey=0;
 	char Size[80];
+	int n;
 
 /*	PCHAR p1, p2, p3;
 
@@ -362,14 +374,21 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		retCode = RegSetValueEx(hKey,"PortMask",0,REG_DWORD,(BYTE *)&portmask,4);
 		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
 		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
-		retCode = RegSetValueEx(hKey,"Host",0,REG_SZ,Host, strlen(Host));
-		retCode = RegSetValueEx(hKey,"User",0,REG_SZ, UserName, strlen(UserName));
-		retCode = RegSetValueEx(hKey,"Password",0,REG_SZ,Password, strlen(Password));
-		retCode = RegSetValueEx(hKey,"Port",0,REG_DWORD,(BYTE *)&Port,4);
+		for (n = 0; n < 4; n++)
+		{
+			retCode = RegSetValueEx(hKey, HN[n], 0,REG_SZ, Host[n], strlen(Host[n]));
+			retCode = RegSetValueEx(hKey, UN[n], 0,REG_SZ, UserName[n], strlen(UserName[n]));
+			retCode = RegSetValueEx(hKey, PASSN[n] ,0,REG_SZ, Password[n], strlen(Password[n]));
+			retCode = RegSetValueEx(hKey,PN[n], 0,REG_DWORD,(BYTE *)&Port[n],4);
+		}
 		retCode = RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
 		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
 		retCode = RegSetValueEx(hKey,"Split",0,REG_BINARY,(BYTE *)&Split,sizeof(Split));
 		retCode = RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
+		retCode = RegSetValueEx(hKey,"MonNODES",0,REG_DWORD,(BYTE *)&MonitorNODES,4);
+		retCode = RegSetValueEx(hKey,"MonPorts",0,REG_DWORD,(BYTE *)&MonPorts,4);
+		retCode = RegSetValueEx(hKey,"ChatMode",0,REG_DWORD,(BYTE *)&ChatMode,4);
+		
 
 		wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
 		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
@@ -435,7 +454,7 @@ HMENU hMenu, hPopMenu1, hPopMenu2, hPopMenu3;		// handle of menu
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-	int i, tempmask=0xffff;
+	int i, n, tempmask=0xffff;
 	char msg[20];
 	int retCode,Type,Vallen;
 	HKEY hKey=0;
@@ -485,21 +504,18 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	if (retCode == ERROR_SUCCESS)
 	{
 		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"ApplMask",0,			
-			(ULONG *)&Type,(UCHAR *)&applmask,(ULONG *)&Vallen);
-		
+		retCode = RegQueryValueEx(hKey,"MonNODES",0, &Type,(UCHAR *)&MonitorNODES, &Vallen);
 		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"MTX",0,			
-			(ULONG *)&Type,(UCHAR *)&mtxparam,(ULONG *)&Vallen);
-		
+		retCode = RegQueryValueEx(hKey,"MonPorts",0, &Type,(UCHAR *)&MonPorts, &Vallen);
 		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"MCOM",0,			
-			(ULONG *)&Type,(UCHAR *)&mcomparam,(ULONG *)&Vallen);
-		
+		retCode = RegQueryValueEx(hKey, "MTX" ,0, &Type,(UCHAR *)&mtxparam, &Vallen);
 		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"PortMask",0,			
-			(ULONG *)&Type,(UCHAR *)&tempmask,(ULONG *)&Vallen);
-		
+		retCode = RegQueryValueEx(hKey, "MCOM", 0, &Type,(UCHAR *)&mcomparam, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "PortMask" ,0, &Type,(UCHAR *)&tempmask, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "ChatMode" ,0, &Type,(UCHAR *)&ChatMode, &Vallen);
+
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"MONColour",0,			
 			(ULONG *)&Type,(UCHAR *)&MonitorColour,(ULONG *)&Vallen);
@@ -520,28 +536,20 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey,"Split",0,			
 			(ULONG *)&Type,(UCHAR *)&Split,(ULONG *)&Vallen);
 
-		Vallen=80;
-		retCode = RegQueryValueEx(hKey,"Host",0,			
-			(ULONG *)&Type,(UCHAR *)&Host,(ULONG *)&Vallen);
+		for (n = 0; n < 3; n++)
+		{
+			Vallen=80;
+			retCode = RegQueryValueEx(hKey, HN[n] ,0, (ULONG *)&Type,(UCHAR *)&Host[n], &Vallen);
 
-		Vallen=80;
-		retCode = RegQueryValueEx(hKey,"User",0,			
-			(ULONG *)&Type,(UCHAR *)&UserName,(ULONG *)&Vallen);
+			Vallen=80;
+			retCode = RegQueryValueEx(hKey, UN[n], 0, (ULONG *)&Type,(UCHAR *)&UserName[n], &Vallen);
 
-		Vallen=80;
-		retCode = RegQueryValueEx(hKey,"Password",0,			
-			(ULONG *)&Type,(UCHAR *)&Password,(ULONG *)&Vallen);
+			Vallen=80;
+			retCode = RegQueryValueEx(hKey, PASSN[n],0, (ULONG *)&Type,(UCHAR *)&Password[n], &Vallen);
 
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"Port",0,			
-			(ULONG *)&Type,(UCHAR *)&Port,(ULONG *)&Vallen);
-
-		retCode = RegSetValueEx(hKey,"Host",0,REG_SZ,Host, strlen(Host));
-		retCode = RegSetValueEx(hKey,"User",0,REG_SZ, UserName, strlen(UserName));
-		retCode = RegSetValueEx(hKey,"Password",0,REG_SZ,Password, strlen(Password));
-		retCode = RegSetValueEx(hKey,"Port",0,REG_DWORD,(BYTE *)&Port,4);
-
-
+			Vallen=4;
+			retCode = RegQueryValueEx(hKey, PN[n], 0, (ULONG *)&Type, (UCHAR *)&Port[n], &Vallen);
+			}
 		Vallen=80;
 		retCode = RegQueryValueEx(hKey,"Size",0,			
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
@@ -563,10 +571,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	MoveWindow(hWnd,Rect.left,Rect.top, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
 	MoveWindows();
-
-	//
-	//	Enable Async notification
-	//
 	
 	GetVersionInfo(NULL);
 
@@ -587,9 +591,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hMenu=GetMenu(hWnd);
 
-	hPopMenu1=GetSubMenu(hMenu,1);
+	hPopMenu1=GetSubMenu(hMenu,3);
 
-	for (i=1;i <= 2;i++)
+	for (i = 1; i <= MonPorts; i++)
 	{
 		wsprintf(msg,"Port %d",i);
 
@@ -601,43 +605,28 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		else
 			AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i,msg);
 	}
-	
-	if (mtxparam & 1)
-		CheckMenuItem(hMenu,BPQMTX,MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQMTX,MF_UNCHECKED);
 
-	if (mcomparam & 1)
-		CheckMenuItem(hMenu,BPQMCOM,MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQMCOM,MF_UNCHECKED);
-	
-  	if (Bells & 1)
-		CheckMenuItem(hMenu,BPQBELLS, MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQBELLS, MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQMTX, (mtxparam) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQMCOM,(mcomparam) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQBELLS, (Bells) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQStripLF, (StripLF) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, CHATTERM, (ChatMode) ? MF_CHECKED : MF_UNCHECKED);
 
-  	if (SendDisconnected & 1)
-		CheckMenuItem(hMenu,BPQSendDisconnected, MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQSendDisconnected, MF_UNCHECKED);
+	ModifyMenu(hMenu, BPQCONNECT1, MF_BYCOMMAND, BPQCONNECT1, Host[0]);
+	ModifyMenu(hMenu, BPQCONNECT2, MF_BYCOMMAND, BPQCONNECT2, Host[1]);
+	ModifyMenu(hMenu, BPQCONNECT3, MF_BYCOMMAND, BPQCONNECT3, Host[2]);
+	ModifyMenu(hMenu, BPQCONNECT4, MF_BYCOMMAND, BPQCONNECT4, Host[3]);
 
-  	if (StripLF & 1)
-		CheckMenuItem(hMenu,BPQStripLF, MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQStripLF, MF_UNCHECKED);
-
-	CheckMenuItem(hMenu,BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
-
-	CheckMenuItem(hMenu,MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
+	EnableMenuItem(hMenu,BPQDISCONNECT,MF_GRAYED);
 
 	DrawMenuBar(hWnd);	
 
 	if (portmask) applflags |= 0x80;
 
-//	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SendTraceOptions();
 	
-
 	DragCursor = LoadCursor(hInstance, "IDC_DragSize");
 	Cursor = LoadCursor(NULL, IDC_ARROW);
 
@@ -663,10 +652,10 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 	{
 	case WM_INITDIALOG:
 
-		SetDlgItemText(hDlg, IDC_HOST, Host);
-		SetDlgItemInt(hDlg, IDC_PORT, Port, FALSE);
-		SetDlgItemText(hDlg, IDC_USER, UserName);
-		SetDlgItemText(hDlg, IDC_PASS, Password);
+		SetDlgItemText(hDlg, IDC_HOST, Host[CfgNo]);
+		SetDlgItemInt(hDlg, IDC_PORT, Port[CfgNo], FALSE);
+		SetDlgItemText(hDlg, IDC_USER, UserName[CfgNo]);
+		SetDlgItemText(hDlg, IDC_PASS, Password[CfgNo]);
 
 		return (INT_PTR)TRUE;
 
@@ -688,10 +677,13 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		{
 		case IDOK:
 
-			GetDlgItemText(hDlg, IDC_HOST, Host, 99);
-			Port = GetDlgItemInt(hDlg, IDC_PORT,NULL, FALSE);
-			GetDlgItemText(hDlg, IDC_USER, UserName, 79);
-			GetDlgItemText(hDlg, IDC_PASS, Password, 79);
+			GetDlgItemText(hDlg, IDC_HOST, Host[CfgNo], 99);
+			Port[CfgNo] = GetDlgItemInt(hDlg, IDC_PORT,NULL, FALSE);
+			GetDlgItemText(hDlg, IDC_USER, UserName[CfgNo], 79);
+			GetDlgItemText(hDlg, IDC_PASS, Password[CfgNo], 79);
+
+			ModifyMenu(hMenu, BPQCONNECT1 + CfgNo, MF_BYCOMMAND, BPQCONNECT1 + CfgNo, Host[CfgNo]);
+
 
 		case IDCANCEL:
 
@@ -820,9 +812,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ToggleMCOM(hWnd);
 			break;
 
-		case BPQCONNECT:
+		case BPQCONNECT1:
+		case BPQCONNECT2:
+		case BPQCONNECT3:
+		case BPQCONNECT4:
 
-			TCPConnect(Host, Port);
+			CurrentHost = wmId - BPQCONNECT1;
+
+			TCPConnect(Host[CurrentHost], Port[CurrentHost]);
 			break;
 			        
 		case BPQDISCONNECT:
@@ -850,7 +847,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ToggleParam(hWnd, &ChatMode, CHATTERM);
 			break;
 
-		case BPQ_CONFIG:
+		case IDC_HOST1:
+		case IDC_HOST2:
+		case IDC_HOST3:
+		case IDC_HOST4:
+
+			CfgNo = wmId - IDC_HOST1;
 
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
 			break;
@@ -858,21 +860,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQMNODES:
 
 			ToggleParam(hWnd, &MonitorNODES, BPQMNODES);
+			SendTraceOptions();
 			break;
+
+
+		case MONITOR_ADDPORT:
+
+		wsprintf(Buffer,"Port %d", ++MonPorts);
+		
+		AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + MonPorts, Buffer);
+
 
 		case MONCOLOUR:
 
 			ToggleParam(hWnd, &MonitorColour, MONCOLOUR);
+			SendTraceOptions();
 			break;
 
 		case BPQLogMonitor:
 
 			ToggleParam(hWnd, &LogMonitor, BPQLogMonitor);
-			break;
-
-		case BPQCHAT:
-
-			ToggleChat(hWnd);
 			break;
 
 		case BPQCLEARMON:
@@ -1024,7 +1031,11 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			int i;
 	
 			if (!Connected && ! Connecting)
-				TCPConnect(Host, Port);
+			{
+				TCPConnect(Host[CurrentHost], Port[CurrentHost]);
+				SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
+				return 0;
+			}
 
 			kbptr=SendMessage(hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) kbbuf);
 
@@ -1343,8 +1354,17 @@ VOID WritetoOutputWindow(char * Msg, int len)
 					{
 						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
 					}
+					if (index > 1200)
+						
+					do{
 
+						index=SendMessage(hwndOutput,LB_DELETESTRING, 0, 0);
 
+					
+						} while (index > 1000);
+
+					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+					
 					PartLinePtr=0;
 
 					len-=(ptr2-ptr1);
@@ -1360,172 +1380,94 @@ VOID WritetoOutputWindow(char * Msg, int len)
 						}
 					}
 
-					if (index > 1200)
-						
-					do{
-
-						index=SendMessage(hwndOutput,LB_DELETESTRING, 0, 0);
-
-					
-						} while (index > 1000);
-
-					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
 
 					goto lineloop;
 				}
 }
-}			
+}	
 
-DoMonData(HWND hWnd)
+char MonSave[1000];
+int MonSaveLen;
+
+VOID WritetoMonWindow(char * Msg, int len)
 {
-/*	char * ptr1, * ptr2;
-	int index, stamp;
-	int len;
-	unsigned char buffer[1024] = "\x1b\xb", monbuff[512];
+	char * ptr1 = Msg, * ptr2;
+	int index;
 
-
-if (MONCount(Stream) > 0)
+	if (MonSaveLen)
 	{
-		do {
-		
-			stamp=GetRaw(Stream, monbuff,&len,&count);
-
-			if (MonitorColour)
-			{
-				if (monbuff[4] & 0x80)		// TX
-					buffer[1] = 91;
-				else
-					buffer[1] = 17;
-			}
-
-			// See if a NODES
-
-			if (!MonitorNODES && monbuff[21] == 3 && monbuff[22] == 0xcf && monbuff[23] == 0xff)
-				len = 0;
-			else
-			{
-				len=DecodeFrame(monbuff,&buffer[2],stamp);
-				len +=2;
-			}
-
-			ptr1=&buffer[0];
-
-		lineloop:
-
-			if (len > 0)
-			{
-				//	copy text to control a line at a time	
-
-				ptr2=memchr(ptr1,13,len);
-				
-				if (ptr2 == 0)
-				{
-					// no newline. Move data to start of buffer and Save pointer
-
-					memmove(buffer,ptr1,len);
-
-					return (0);
-
-				}
-				else
-				{
-					*(ptr2++)=0;
-
-					index=SendMessage(hwndMon,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
-
-					if (LogMonitor) WriteMonitorLine(ptr1, ptr2 - ptr1);
-
-					if (index > 1200)
-
-					do{
-
-						index=SendMessage(hwndMon,LB_DELETESTRING, 0, 0);
-					
-						} while (index > 1000);
-
-					SendMessage(hwndMon,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
-
-					len-=(ptr2-ptr1);
-
-					ptr1=ptr2;
-					
-					goto lineloop;
-				}
-			}
-			
-		} while (count > 0);
+		// Have part line - append to it
+		memcpy(&MonSave[MonSaveLen], Msg, len);
+		MonSaveLen += len;
+		ptr1 = MonSave;
+		len = MonSaveLen;
+		MonSaveLen = 0;
 	}
-	*/
-	return (0);
+
+lineloop:
+
+	if (len <=  0)
+		return;
+
+	//	copy text to control a line at a time	
+
+	ptr2 = memchr(ptr1,13,len);
+				
+	if (ptr2 == 0)	// No CR
+	{
+		memmove(MonSave, ptr1, len);
+		MonSaveLen = len;
+		return;
+	}
+
+	*(ptr2++) = 0;
+
+	index = SendMessage(hwndMon, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) ptr1 );
+
+	if (LogMonitor) WriteMonitorLine(ptr1, ptr2 - ptr1);
+
+	if (index > 1200)
+		do {index=SendMessage(hwndMon,LB_DELETESTRING, 0, 0);} while (index > 1000);
+
+	SendMessage(hwndMon,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+
+	len -= (ptr2 - ptr1);
+	ptr1 = ptr2;
+					
+	goto lineloop;
 }
 
-
-
-
-
-int DisableConnectMenu(HWND hWnd)
+VOID DisableConnectMenu(HWND hWnd)
 {
-	HMENU hMenu;	// handle of menu 
-
-	hMenu=GetMenu(hWnd);
-	 
-	EnableMenuItem(hMenu,BPQCONNECT,MF_GRAYED);
-
-	return (0);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT1, MF_GRAYED);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT2, MF_GRAYED);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT3, MF_GRAYED);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT4, MF_GRAYED);
 }	
-int DisableDisconnectMenu(HWND hWnd)
+VOID DisableDisconnectMenu(HWND hWnd)
 {
-	HMENU hMenu;	// handle of menu 
-
-	hMenu=GetMenu(hWnd);
-	 
-	EnableMenuItem(hMenu,BPQDISCONNECT,MF_GRAYED);
-	return (0);
+	EnableMenuItem(GetMenu(hWnd), BPQDISCONNECT, MF_GRAYED);
+	DrawMenuBar(hWnd);
 }	
 
-int	EnableConnectMenu(HWND hWnd)
+VOID EnableConnectMenu(HWND hWnd)
 {
 	HMENU hMenu;	// handle of menu 
 
 	hMenu=GetMenu(hWnd);
 	 
-	EnableMenuItem(hMenu,BPQCONNECT,MF_ENABLED);
-	return (0);
+	EnableMenuItem(hMenu,BPQCONNECT1,MF_ENABLED);
+	EnableMenuItem(hMenu,BPQCONNECT2,MF_ENABLED);
+	EnableMenuItem(hMenu,BPQCONNECT3,MF_ENABLED);
+	EnableMenuItem(hMenu,BPQCONNECT4,MF_ENABLED);
 }	
 
-int EnableDisconnectMenu(HWND hWnd)
+VOID EnableDisconnectMenu(HWND hWnd)
 {
-	HMENU hMenu;	// handle of menu 
-
-	hMenu=GetMenu(hWnd);
-	 
-	EnableMenuItem(hMenu,BPQDISCONNECT,MF_ENABLED);
-
-    return (0);
+ 	EnableMenuItem(GetMenu(hWnd), BPQDISCONNECT, MF_ENABLED);
+	DrawMenuBar(hWnd);
 }
 
-
-int ToggleAppl(HWND hWnd, int Item, int mask)
-{
-	HMENU hMenu;	// handle of menu 
-
-	hMenu=GetMenu(hWnd);
-	
-	applmask = applmask ^ mask;
-	
-	if (applmask & mask)
-
-		CheckMenuItem(hMenu,Item,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,Item,MF_UNCHECKED);
-
-//	SetAppl(Stream,applflags,applmask);
-
-    return (0);
-  
-}
 
 int ToggleFlags(HWND hWnd, int Item, int mask)
 {
@@ -1547,12 +1489,6 @@ int ToggleFlags(HWND hWnd, int Item, int mask)
   
 }
 
-CopyScreentoBuffer(char * buff)
-{
-
-	return (0);
-}
-	
 int TogglePort(HWND hWnd, int Item, int mask)
 {
 	portmask ^= mask;
@@ -1562,14 +1498,7 @@ int TogglePort(HWND hWnd, int Item, int mask)
 	else
 		CheckMenuItem(hMenu,Item,MF_UNCHECKED);
 
-	if (portmask)
-		applflags |= 0x80;
-	else
-		applflags &= 0x7f;
-
-//	SetAppl(Stream,applflags,applmask);
-
-//	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SendTraceOptions();
 
     return (0);
   
@@ -1586,7 +1515,7 @@ int ToggleMTX(HWND hWnd)
 
 		CheckMenuItem(hMenu,BPQMTX,MF_UNCHECKED);
 
-//	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SendTraceOptions();
 
     return (0);
   
@@ -1603,7 +1532,7 @@ int ToggleMCOM(HWND hWnd)
 
 		CheckMenuItem(hMenu,BPQMCOM,MF_UNCHECKED);
 
-//	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SendTraceOptions();
 
     return (0);
   
@@ -1617,23 +1546,6 @@ int ToggleParam(HWND hWnd, BOOL * Param, int Item)
     return (0);
 }
 
-int ToggleChat(HWND hWnd)
-{	
-	applmask = applmask ^ 02;
-	
-	if (applmask & 02)
-
-		CheckMenuItem(hMenu,BPQCHAT,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,BPQCHAT,MF_UNCHECKED);
-
-//	SetAppl(Stream,applflags,applmask);
-
-    return (0);
-  
-}
 void MoveWindows()
 {
 	RECT rcMain, rcClient;
@@ -1858,13 +1770,15 @@ int Telnet_Connected(SOCKET sock, int Error)
 	Connecting = FALSE;
 	Connected = TRUE;
 
-	Len = wsprintf(Msg, "%s\r%s\ri\r", UserName, Password);
+	Len = wsprintf(Msg, "%s\r%s\rBPQTermTCP\r", UserName[CurrentHost], Password[CurrentHost]);
 	
 	SendMsg(Msg, Len);
 
+	SendTraceOptions();
+
 	SlowTimer = 0;
 			
-	wsprintf(Title,"BPQTermTCP Version %s - Connected to %s", VersionString, Host);
+	wsprintf(Title,"BPQTermTCP Version %s - Connected to %s", VersionString, Host[CurrentHost]);
 	SetWindowText(hWnd,Title);
 	DisableConnectMenu(hWnd);
 	EnableDisconnectMenu(hWnd);
@@ -1872,7 +1786,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 	return 0;
 }
 
-int Socket_Data(int sock, int error, int eventcode)
+VOID Socket_Data(int sock, int error, int eventcode)
 {
 	char Title[100];
 
@@ -1880,14 +1794,15 @@ int Socket_Data(int sock, int error, int eventcode)
 	{
 		case FD_READ:
 			
-			return DataSocket_Read(sock);
+			DataSocket_Read(sock);
+			return;
 
 		case FD_WRITE:
 		case FD_OOB:
 		case FD_ACCEPT:
 		case FD_CONNECT:
 
-			return 0;
+			return;
 
 		case FD_CLOSE:
 
@@ -1907,16 +1822,18 @@ int Socket_Data(int sock, int error, int eventcode)
 
 			SocketActive = FALSE;
 			Connected = FALSE;
-			return 0;
+			return ;
 	}
-
-	return 0;
+	return ;
 }
 
-int DataSocket_Read(SOCKET sock)
+VOID DataSocket_Read(SOCKET sock)
 {
-	int len=0;
+	int len = 0, MonLen;
 	char Buffer[500];
+	char * ptr;
+	char * Buffptr;
+	char * FEptr = 0;
 
 	ioctlsocket(sock, FIONREAD, &len);
 
@@ -1928,18 +1845,112 @@ int DataSocket_Read(SOCKET sock)
 	{
 		// Failed or closed - clear connection
 
-		return 0;
+		return;
 	}
 
-	WritetoOutputWindow(Buffer, len);
+	// Look for MON delimiters (FF/FE)
+
+	Buffptr = Buffer;
+
+	if (MonData)
+	{
+		// Already in MON State
+
+		FEptr = memchr(Buffptr, 0xfe, len);
+
+		if (!FEptr)
+		{
+			// no FE - so send all to monitor
+			
+			WritetoMonWindow(Buffptr, len);
+			return;
+		}
+
+		MonData = FALSE;
+
+		MonLen = FEptr - Buffptr;		// Mon Data, Excluding the FE
+
+		WritetoMonWindow(Buffptr, MonLen);
+
+		Buffptr = ++FEptr;				// Char following FE
+
+		if (++MonLen < len)
+		{
+			len -= MonLen;
+			goto MonLoop;				// See if next in MON or Data
+		}
+
+		// Nothing Left
+
+		return ;
+	}
+
+MonLoop:
+
+	if (ptr = memchr(Buffptr, 0xff, len))
+	{
+		// Buffer contains Mon Data
+
+		if (ptr > Buffptr)
+		{
+			// Some Normal Data before the FF
+
+			int NormLen = ptr - Buffptr;				// Before the FF
+			WritetoOutputWindow(Buffptr, NormLen);
+
+			len -= NormLen;
+			Buffptr = ptr;
+			goto MonLoop;
+		}
+
+		MonData = TRUE;
+
+		FEptr = memchr(Buffptr, 0xfe, len);
+
+		if (FEptr)
+		{
+			MonData = FALSE;
+
+			MonLen = FEptr + 1 - Buffptr;				// MonLen includes FF and FE
+			WritetoMonWindow(Buffptr+1, MonLen - 2);
+
+			len -= MonLen;
+			Buffptr += MonLen;							// Char Following FE
+
+			if (len <= 0)
+				return;
+
+			goto MonLoop;
+		}
+		else
+		{
+			// No FE, so rest of buffer is MON Data
+			
+			WritetoMonWindow(Buffptr+1, len -1);		// Exclude FF
+			return;
+		}
+	}
+
+	// No FF, so must be session data
+
+	WritetoOutputWindow(Buffptr, len);
+
 	SlowTimer = 0;
-
-	return 0;
+	return;
 }
-
 
 int SendMsg(char * msg, int len)
 {
 	send(sock, msg, len, 0);
 	return 0;
+}
+
+VOID SendTraceOptions()
+{
+	char Buffer[80];
+
+	int Len = wsprintf(Buffer,"\\\\\\\\%x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour);
+
+	send(sock, Buffer, Len, 0);
+
 }

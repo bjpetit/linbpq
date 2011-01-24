@@ -961,6 +961,8 @@ LENGTH_OK:
 	push	ECX
 	lodsb
 	
+	and al,7fH			; Mask top bit
+	
 	cmp	AL,0AH
 	JE	MONOK
 	CMP	AL,0DH

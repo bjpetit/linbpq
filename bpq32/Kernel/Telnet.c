@@ -43,10 +43,12 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 extern UCHAR BPQDirectory[];
 
+extern struct BPQVECSTRUC TELNETMONVEC;
+extern int MONDECODE();
+
 static RECT Rect;
 
 extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
-
 
 #define MaxSockets 26
 
@@ -67,11 +69,6 @@ VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
-
-extern struct APPLCALLS APPLCALLTABLE[];
-extern char APPLS;
-
-extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 
 static int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
@@ -179,7 +176,17 @@ ProcessLine(char * buf, int Port)
 			TCP->TCPPort = atoi(value);
 		else
 		if (_stricmp(param,"FBBPORT") == 0)
-			TCP->FBBPort = atoi(value);
+		{
+			int n = 0;
+			char * context;
+			char * ptr = strtok_s(value, ", ", &context);
+
+			while (ptr && n < 99)
+			{
+				TCP->FBBPort[n++] = atoi(ptr);
+				ptr = strtok_s(NULL, ", ", &context);
+			}
+		}
 		else
 		if (_stricmp(param,"RELAYAPPL") == 0)
 		{
@@ -385,6 +392,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int txlen = 0, n;
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
+	struct TCPINFO * TCP;
+
 	int Stream;
 	struct ConnectionInfo * sockptr;
 	struct STREAMINFO * STREAM;
@@ -456,12 +465,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		// Find TNC Record
 
 		Stream = buff[4];
-		
+		STREAM = &TNC->Streams[Stream];
+
 		txlen=(buff[6]<<8) + buff[5]-8;	
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
-		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
+		C_Q_ADD(&STREAM->BPQtoPACTOR_Q, buffptr);
+		STREAM->FramesQueued++;
 
 		return (0);
 
@@ -474,6 +485,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			mov Stream,eax
 		}
 
+		STREAM = &TNC->Streams[Stream];
+
+		if (STREAM->FramesQueued  > 4)
+			return (257);						// Busy
+
 		return 256;		// OK
 
 	case 4:				// reinit
@@ -484,19 +500,29 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 #define SD_BOTH         0x02
 
-		for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
+		TCP = TNC->TCPInfo;
+
+		for (n = 1; n <= TCP->CurrentSockets; n++)
 		{
 			sockptr = TNC->Streams[n].ConnectionInfo;
 			closesocket(sockptr->socket);
 		}
 	
-		shutdown(TNC->TCPInfo->sock, SD_BOTH);
-		shutdown(TNC->TCPInfo->FBBsock, SD_BOTH);
-		shutdown(TNC->TCPInfo->Relaysock, SD_BOTH);
+		shutdown(TCP->sock, SD_BOTH);
+
+		n = 0;
+		while (TCP->FBBsock[n])
+			shutdown(TCP->FBBsock[n++], SD_BOTH);
+
+		shutdown(TCP->Relaysock, SD_BOTH);
 		Sleep(500);
-		closesocket(TNC->TCPInfo->sock);
-		closesocket(TNC->TCPInfo->FBBsock);
-		closesocket(TNC->TCPInfo->Relaysock);
+		closesocket(TCP->sock);
+
+		n = 0;
+		while (TCP->FBBsock[n])
+			closesocket(TCP->FBBsock[n++]);
+
+		closesocket(TCP->Relaysock);
 
 		SaveWindowPos(port);
 		
@@ -561,6 +587,8 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
+	TELNETMONVEC.HOSTAPPLFLAGS = 0x80;		// Requext Monitoring
+
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, TelWndProc, MAKEINTRESOURCE(IDC_TELNETSERVER));
 
 	hMenu=GetMenu(TNC->hDlg);
@@ -613,6 +641,7 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 	SOCKET Relaysock;
 	char szBuff[80];
 	struct TCPINFO * TCP = TNC->TCPInfo;
+	int n;
 
 	if (TCP->TCPPort)
 	{
@@ -662,52 +691,46 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 
 	}
 	}
-	if (TCP->FBBPort)
+	n = 0;
+
+	while (TCP->FBBPort[n])
 	{
-		if (TCP->FBBPort == TCP->TCPPort)
+		TCP->FBBsock[n] = FBBsock = socket( AF_INET, SOCK_STREAM, 0);
+
+		if (FBBsock == INVALID_SOCKET)
 		{
-			TCP->FBBsock = FBBsock = sock;
+			wsprintf(szBuff, " socket() failed error %d", WSAGetLastError());
+			WritetoConsole(szBuff);
+			return FALSE;
 		}
-		else
+ 
+		psin=&local_sin;
+		psin->sin_port = htons(TCP->FBBPort[n++]);        // Convert to network ordering 
+
+		if (bind(FBBsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 		{
-			TCP->FBBsock = FBBsock = socket( AF_INET, SOCK_STREAM, 0);
+			wsprintf(szBuff, " bind(FBBsock %d) failed Error %d", TCP->FBBPort[n-1], WSAGetLastError());
+			WritetoConsole(szBuff);
+			closesocket(FBBsock);
 
-			if (FBBsock == INVALID_SOCKET)
-			{
-				wsprintf(szBuff, "socket() failed error %d", WSAGetLastError());
-				WritetoConsole(szBuff);
-				return FALSE;
-			}
- 
-			psin=&local_sin;
-			psin->sin_port = htons(TCP->FBBPort);        // Convert to network ordering 
+			return FALSE;
+		}
 
- 
-			if (bind(FBBsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
-			{
-				 wsprintf(szBuff, "bind(FBBsock) failed Error %d", WSAGetLastError());
-				 WritetoConsole(szBuff);
-				closesocket( FBBsock );
+		if (listen(FBBsock, MAX_PENDING_CONNECTS ) < 0)
+		{
+			wsprintf(szBuff, " listen(FBBsock) failed Error %d", WSAGetLastError());
+			WritetoConsole(szBuff);
 
-				return FALSE;
-			}
-
-			if (listen(FBBsock, MAX_PENDING_CONNECTS ) < 0)
-			{
-				wsprintf(szBuff, "listen(FBBsock) failed Error %d", WSAGetLastError());
-				WritetoConsole(szBuff);
-
-				return FALSE;
-			}
+			return FALSE;
+		}
    
-			if ((status = WSAAsyncSelect(FBBsock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
-			{
-				wsprintf(szBuff, "WSAAsyncSelect failed Error %d", WSAGetLastError());
-				WritetoConsole(szBuff);
-				closesocket( FBBsock );
+		if ((status = WSAAsyncSelect(FBBsock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
+		{
+			wsprintf(szBuff, " WSAAsyncSelect failed Error %d", WSAGetLastError());
+			WritetoConsole(szBuff);
+			closesocket( FBBsock );
 		
-				return FALSE;
-			}
+			return FALSE;
 		}
 	}
 	if (TCP->RelayPort)
@@ -757,6 +780,32 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 	return TRUE;
 }
 
+int TelDecodeFrame(char * msg, char * buffer, int Stamp)
+{
+	UINT returnit;
+
+	_asm {
+
+	pushfd
+	cld
+	pushad
+
+	mov	esi,msg
+	mov	eax,Stamp
+	mov	edi,buffer
+
+	call	MONDECODE
+
+	mov	returnit,ecx
+
+	popad
+	popfd
+
+	}				// End of ASM
+
+	return (returnit);
+}
+
 
 VOID TelnetPoll(int Port)
 {
@@ -799,6 +848,52 @@ VOID TelnetPoll(int Port)
 		}
 	}
 
+
+	if (TELNETMONVEC.HOSTTRACEQ)
+	{
+		int stamp, len;
+		BOOL MonitorNODES = FALSE;
+		UINT * monbuff;
+		UCHAR * monchars;
+
+		unsigned char buffer[1024] = "\xff\x1b\xb";
+
+		monbuff = Q_REM((UINT *)&TELNETMONVEC.HOSTTRACEQ);
+		monchars = (UCHAR *)monbuff;
+
+		stamp = monbuff[88];
+
+		if ((UCHAR)monbuff[2] & 0x80)		// TX
+			buffer[2] = 91;
+		else
+			buffer[2] = 17;
+	
+		for (Stream = 0; Stream <= TCP->MaxSessions; Stream++)
+		{
+			STREAM = &TNC->Streams[Stream];
+
+			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream])
+			{
+				struct ConnectionInfo * sockptr = STREAM->ConnectionInfo;
+
+				if (!sockptr->MonitorNODES && monchars[21] == 3 && monchars[22] == 0xcf && monchars[23] == 0xff)
+					len = 0;
+				else
+				{
+					SetTraceOptions(sockptr->MMASK, sockptr->MTX, sockptr->MCOM);
+					len = TelDecodeFrame((char *)monbuff,&buffer[3],stamp);
+					if (len)
+					{
+						len += 3;
+						buffer[len++] = 0xfe;
+						send(STREAM->ConnectionInfo->socket, buffer, len, 0);
+					}
+				}
+			}
+		}
+
+		ReleaseBuffer(monbuff);
+	}
 	
 	for (Stream = 0; Stream <= TCP->MaxSessions; Stream++)
 	{
@@ -812,6 +907,7 @@ VOID TelnetPoll(int Port)
 			TNC->Streams[Stream].MyCall[calllen] = 0;
 
 			STREAM->Attached = TRUE;
+			STREAM->FramesQueued= 0;
 
 			continue;
 		}
@@ -882,23 +978,8 @@ VOID TelnetPoll(int Port)
 
 	for (Stream = 0; Stream <= TCP->MaxSessions; Stream++)
 	{
-//		struct TRANSPORTENTRY * SESS;
-
 		STREAM = &TNC->Streams[Stream];
-		
-//		SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
-
-//		if (SESS && STREAM->ConnectionInfo->UserPointer == &CMSUser)
-//		{
-			// CMS Session - Suppress IDLETIME
-
-//			SESS->L4KILLTIMER = 0;
-//			SESS = SESS->L4CROSSLINK;
-//			if (SESS)
-//				SESS->L4KILLTIMER = 0;
-
-//		}
-		
+				
 		if (STREAM->BPQtoPACTOR_Q)
 		{
 			int datalen;
@@ -907,13 +988,13 @@ VOID TelnetPoll(int Port)
 			SOCKET sock;
 			struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 
+			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+			STREAM->FramesQueued--;
+			datalen=buffptr[1];
+			MsgPtr = (UCHAR *)&buffptr[2];
+
 			if (TNC->Streams[Stream].Connected)
 			{
-				buffptr=Q_REM(&STREAM->BPQtoPACTOR_Q);
-				datalen=buffptr[1];
-
-				MsgPtr = (UCHAR *)&buffptr[2];
-
 				STREAM->BytesTXed += datalen;
 
 				sock = sockptr->socket;
@@ -956,13 +1037,10 @@ VOID TelnetPoll(int Port)
 				}
 				
 				ReleaseBuffer(buffptr);
-				return;
+				continue;
 			}
 			else // Not Connected
 			{
-				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				datalen=buffptr[1];
-				MsgPtr = (UCHAR *)&buffptr[2];
 
 				// Command. Do some sanity checking and look for things to process locally
 
@@ -1021,7 +1099,8 @@ VOID TelnetPoll(int Port)
 			}
 		}
 	}
-return;
+
+	return;
 }
 
 
@@ -1179,14 +1258,24 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 				sockptr->SocketActive = FALSE;
 				closesocket(sockptr->socket);
 			}
-	
-			shutdown(TNC->TCPInfo->sock, SD_BOTH);
-			shutdown(TNC->TCPInfo->FBBsock, SD_BOTH);
-			shutdown(TNC->TCPInfo->Relaysock, SD_BOTH);
+
+			TCP = TNC->TCPInfo;
+
+			shutdown(TCP->sock, SD_BOTH);
+
+			n = 0;
+			while (TCP->FBBsock[n])
+				shutdown(TCP->FBBsock[n++], SD_BOTH);
+
+			shutdown(TCP->Relaysock, SD_BOTH);
 			Sleep(500);
-			closesocket(TNC->TCPInfo->sock);
-			closesocket(TNC->TCPInfo->FBBsock);
-			closesocket(TNC->TCPInfo->Relaysock);
+			closesocket(TCP->sock);
+
+			n = 0;
+			while (TCP->FBBsock[n])
+				closesocket(TCP->FBBsock[n++]);
+
+			closesocket(TCP->Relaysock);
 
 			// Save info from old TNC record
 			
@@ -1345,19 +1434,20 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->LoginState = 0;
 			sockptr->UserPointer = 0;
 			sockptr->DoEcho = FALSE;
+			sockptr->BPQTermMode = FALSE;
 
 			TNC->Streams[n].BytesRXed = TNC->Streams[n].BytesTXed = 0;
+			TNC->Streams[n].FramesQueued = 0;
 
-			if (SocketId == TCP->FBBsock)
-				sockptr->FBBMode = TRUE;
-			else
-				sockptr->FBBMode = FALSE;
+			sockptr->FBBMode = FALSE;	
+			sockptr->RelayMode = FALSE;
 
 			if (SocketId == TCP->Relaysock)
 				sockptr->RelayMode = TRUE;
 			else
-				sockptr->RelayMode = FALSE;
-	
+			if (SocketId != TCP->sock)				// We can have several listening FBB mode sockets
+				sockptr->FBBMode = TRUE;
+
 			ModifyMenu(hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, ".");
 
 			DrawMenuBar(TNC->hDlg);	
@@ -2012,9 +2102,9 @@ int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SO
 {
 	int len=0, maxlen, InputLen, MsgLen, i, n;
 	char NLMsg[3]={13,10,0};
-	byte * LFPtr;
+	byte * CRPtr;
 	byte * MsgPtr;
-	char logmsg[120];
+	char logmsg[1000];
 	struct UserRec * USER;
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	struct STREAMINFO * STREAM = &TNC->Streams[Stream];
@@ -2023,7 +2113,7 @@ int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SO
 
 	maxlen = InputBufferLen - sockptr->InputLen;
 	
-	if (len > maxlen) len=maxlen;
+	if (len > maxlen) len = maxlen;
 
 	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
 
@@ -2047,10 +2137,26 @@ MsgLoop:
 	{
 		// Data. FBB is binary
 
-		int Paclen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
+		int Paclen = 0;
+
+		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream])
+			Paclen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
 
 		if (Paclen == 0)
 			Paclen = 256;
+
+		if (sockptr->BPQTermMode)
+		{
+			if (memcmp(MsgPtr, "\\\\\\\\", 4) == 0)
+			{
+				// Monitor Control
+
+				sscanf(&MsgPtr[4], "%x %x %x %x %x",
+					&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES, &sockptr->MonitorColour);
+				sockptr->InputLen = 0;
+				return 0;
+			}
+		}
 
 		if (sockptr->UserPointer == &CMSUser)
 			WritetoTrace(Stream, MsgPtr, InputLen);
@@ -2086,16 +2192,16 @@ MsgLoop:
 		return 0;
 	}
 
-	LFPtr=memchr(MsgPtr, 13, InputLen);
+	CRPtr = memchr(MsgPtr, 13, InputLen);
 	
-	if (LFPtr == 0)
+	if (CRPtr == 0)
 		return 0;							// Waitr for more
 	
 	// Got a CR
 
 	// Process data up to the cr
 
-	MsgLen=LFPtr-MsgPtr;
+	MsgLen = CRPtr - MsgPtr;
 
 	if (MsgLen == 0)						// Just CR
 	{
@@ -2136,7 +2242,7 @@ MsgLoop:
         //   Check Username
         //
 
-		*(LFPtr)=0;				 // remove cr
+		*(CRPtr)=0;				 // remove cr
         
         if (LogEnabled)
 		{
@@ -2176,15 +2282,13 @@ MsgLoop:
 				
 				if (InputLen > 0)
 				{
-					memmove(MsgPtr,LFPtr+1,InputLen);
-
+					memmove(MsgPtr, CRPtr+1, InputLen);
 					goto MsgLoop;
 				}
 			}
 		}
-        
-        //   Not found
-        
+
+        //   User Not found
         
         if (sockptr->Retries++ == 4)
 		{
@@ -2201,10 +2305,10 @@ MsgLoop:
 		}
 
 		return 0;
-       
+
 	case 1:
 		   
-		*(LFPtr)=0;				 // remove cr
+		*(CRPtr)=0;				 // remove cr
             
         if (LogEnabled)
 		{
@@ -2250,10 +2354,19 @@ MsgLoop:
 
 			if (InputLen > 0)
 			{
-				memmove(MsgPtr,LFPtr+1,InputLen);
-				MsgPtr[InputLen] = 13;
-				SendtoNode(TNC, sockptr->Number, MsgPtr, InputLen+1);
-				sockptr->InputLen=0;
+				memmove(MsgPtr, CRPtr+1, InputLen);
+
+				if (_memicmp(MsgPtr, "BPQTermTCP", 10) == 0)
+				{
+					send(sock, "Connected to TelnetServer\r", 26, 0);
+					sockptr->BPQTermMode = TRUE;
+				}
+				else
+				{
+					MsgPtr[InputLen] = 13;
+					SendtoNode(TNC, sockptr->Number, MsgPtr, InputLen+1);
+				}
+				sockptr->InputLen = 0;
 				return 0;
 			}
 
@@ -2285,13 +2398,9 @@ MsgLoop:
 	default:
 
 		return 0;
-
 	}
-
 	return 0;
 }
-
-
 
 int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr)
 {

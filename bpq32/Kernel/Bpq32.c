@@ -3031,7 +3031,7 @@ DllExport int APIENTRY SetTraceOptions(int mask, int mtxparam, int mcomparam)
 
 	mov	eax,mask	
 	mov	ebx,mtxparam
-	mov	ecx,mcomparam
+	mov	ecx,mcomparam 
 
 	call	BPQMONOPTIONS
 

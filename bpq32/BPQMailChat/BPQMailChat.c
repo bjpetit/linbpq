@@ -636,12 +636,17 @@
 // Prevent transfer restarting after a program error.
 // Allow Housekeeping to kill held messages.
 
-// Version 1.0.4.34 Jan 2011
+// Version 1.0.4.35 Jan 2011
 
 // Add Size limits for P and T messages to MSGTYPES command
 // Fix Error in MBL processing when blank lines received (introduced in .33)
 // Trap possible PE in Send_MON_Datagram
 // Don't use paging on chat sessions
+
+// Version 1.0.4.36 Jan 2011
+
+// Fix error after handling first FBB block.
+// Add $X and $x welcome message options.
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -2394,7 +2399,7 @@ int Connected(Stream)
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
-		conn = &Connections[n];
+  		conn = &Connections[n];
 		
 		if (Stream == conn->BPQStream)
 		{
@@ -3551,8 +3556,6 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 {
 	LINK    *link;
 	KNOWNNODE *node;
-	char Welcome[] = "Hello $I. Latest Message is $L, Last listed is $Z$W";
-
 
 	if (conn->Flags & CHATMODE)
 	{	

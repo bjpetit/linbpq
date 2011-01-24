@@ -27,6 +27,13 @@ struct ConnectionInfo
 	BOOL FBBMode;				// Pure TCP for FBB forwarding
 	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
 	BOOL Auth;					// Set if User is flagged as a Secure User
+	BOOL BPQTermMode;			// Set if connected to BPQTermTCP
+	BOOL MonitorNODES;			// Monitor Control Flags
+	UINT MMASK;
+	BOOL MCOM;
+	BOOL MonitorColour;
+	BOOL MTX;
+
 	int CMSIndex;				// Pointer to CMS used for this connect
 };
 

@@ -32,8 +32,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 1 VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
+ FILEVERSION 1,0,0,4
+ PRODUCTVERSION 1,0,0,4
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0xbL
@@ -51,12 +51,12 @@ BEGIN
             VALUE "Comments", "Written by:John Wiseman, G8BPQ\0"
             VALUE "CompanyName", "\0"
             VALUE "FileDescription", "Simple TCP Terminal Program for G8BPQ Switch\0"
-            VALUE "FileVersion", "1.0.0.1\0"
+            VALUE "FileVersion", "1.0.0.4\0"
             VALUE "InternalName", "BPQTermTCP\0"
             VALUE "LegalCopyright", "Copyright © John Wiseman 2011\0"
             VALUE "OriginalFilename", "\0"
             VALUE "ProductName", "BPQTermTCP\0"
-            VALUE "ProductVersion", "1.0.0.1\0"
+            VALUE "ProductVersion", "1.0.0.4\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -164,21 +164,34 @@ MENU_1 MENU DISCARDABLE
 BEGIN
     POPUP "Setup"
     BEGIN
-        MENUITEM "TCP Host",                    BPQ_CONFIG
-        MENUITEM "Connect",                     BPQCONNECT
-        MENUITEM "Disconnect",                  BPQDISCONNECT, GRAYED
+        POPUP "TCP Hosts"
+        BEGIN
+            MENUITEM "Host 1",                      IDC_HOST1
+            MENUITEM "Host 2",                      IDC_HOST2
+            MENUITEM "Host 3",                      IDC_HOST3
+            MENUITEM "Host 4",                      IDC_HOST4
+        END
         MENUITEM "Enable Bells",                BPQBELLS
         MENUITEM "Strip Linefeeds",             BPQStripLF
         MENUITEM "Log Monitor",                 BPQLogMonitor
         MENUITEM "Log Output",                  BPQLogOutput
         MENUITEM "Chat Terminal Mode",          CHATTERM
     END
-    POPUP "Monitor", GRAYED
+    POPUP "Connect"
+    BEGIN
+        MENUITEM "Host 1",                      BPQCONNECT1
+        MENUITEM "Host 2",                      BPQCONNECT2
+        MENUITEM "Host 3",                      BPQCONNECT3
+        MENUITEM "Host 4",                      BPQCONNECT4
+    END
+    MENUITEM "Disconnect",                  BPQDISCONNECT
+    POPUP "Monitor"
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX
         MENUITEM "Monitor Supervisory",         BPQMCOM
         MENUITEM "Monitor NODES",               BPQMNODES
         MENUITEM "Enable Colour",               MONCOLOUR
+        MENUITEM "Add Port",                    MONITOR_ADDPORT
     END
     POPUP "Edit"
     BEGIN
@@ -187,7 +200,6 @@ BEGIN
         MENUITEM "Clear Monitor Window",        BPQCLEARMON
         MENUITEM "Clear Output Window",         BPQCLEAROUT
     END
-    MENUITEM "Help",                        BPQHELP
 END
 
 

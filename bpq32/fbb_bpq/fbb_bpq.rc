@@ -1,13 +1,13 @@
 //Microsoft Developer Studio generated resource script.
 //
+#include "resource.h"
+
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
-#include "resource.h"
-#include "verhddr.h"
-#include "windows.h"
+#include "afxres.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -21,25 +21,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 #pragma code_page(1252)
 #endif //_WIN32
 
-/////////////////////////////////////////////////////////////////////////////
-//
-// Dialog
-//
-
-IDD_ABOUTBOX DIALOG DISCARDABLE  22, 17, 202, 69
-STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "About"
-FONT 8, "System"
-BEGIN
-    ICON            107,IDC_MYICON,14,9,20,20
-    LTEXT           "G8BPQ Mail and Chat Version ",-1,39,15,101,8,
-                    SS_NOPREFIX | NOT WS_GROUP
-    LTEXT           Verstring,-1,139,15,58,8,NOT WS_GROUP
-    LTEXT           "Copyright (C) G8BPQ 2009-2011",-1,44,32,115,13,NOT 
-                    WS_GROUP    DEFPUSHBUTTON   "OK",IDOK,88,51,30,11,BS_CENTER | BS_VCENTER | WS_GROUP
-END
-
-
 #ifndef _MAC
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -47,8 +28,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION Vers
- PRODUCTVERSION Vers
+ FILEVERSION 1,0,0,1
+ PRODUCTVERSION 1,0,0,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -63,14 +44,15 @@ BEGIN
     BEGIN
         BLOCK "080904b0"
         BEGIN
-            VALUE "CompanyName", "John Wiseman, G8BPQ\0"
-            VALUE "FileDescription", "Mail and Chat server for  G8BPQ's 32 Bit Switch\0"
-            VALUE "FileVersion", Verstring
-            VALUE "InternalName", "BPQMailChat\0"
-            VALUE "LegalCopyright", "Copyright © 2009-2011 John Wiseman G8BPQ\0"
-            VALUE "OriginalFilename", "BPQMailChat\0"
-            VALUE "ProductName", "BPQMailChat\0"
-            VALUE "ProductVersion", Verstring
+            VALUE "Comments", "BPQ Interface DLL for WinFBB\0"
+            VALUE "CompanyName", "Original provided with WinFBB, modified by G8BPQ March 2006\0"
+            VALUE "FileDescription", "bpq\0"
+            VALUE "FileVersion", "1, 0, 0, 1\0"
+            VALUE "InternalName", "bpq\0"
+            VALUE "LegalCopyright", "Copyright © 2006\0"
+            VALUE "OriginalFilename", "bpq.dll\0"
+            VALUE "ProductName", "  bpq\0"
+            VALUE "ProductVersion", "1, 0, 0, 1\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -90,13 +72,12 @@ END
 
 1 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "resrc2.h\0"
+    "resource.h\0"
 END
 
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "#include ""resource.h""\r\n"
-    "#include ""verhddr.h""\r\n"
+    "#include ""afxres.h""\r\n"
     "\0"
 END
 
@@ -106,22 +87,6 @@ BEGIN
     "\0"
 END
 
-#endif    // APSTUDIO_INVOKED
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// DESIGNINFO
-//
-
-#ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO DISCARDABLE 
-BEGIN
-    IDD_ABOUTBOX, DIALOG
-    BEGIN
-        RIGHTMARGIN, 200
-    END
-END
 #endif    // APSTUDIO_INVOKED
 
 #endif    // English (U.K.) resources

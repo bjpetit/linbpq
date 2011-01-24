@@ -1363,5 +1363,3 @@ VOID SetupPortRIGPointers()
 		}
 	}
 }
-
-

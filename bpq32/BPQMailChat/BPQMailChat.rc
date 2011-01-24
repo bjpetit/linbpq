@@ -597,8 +597,8 @@ BEGIN
     EDITTEXT        IDM_EXPERTUSERMSG,5,200,340,25,ES_MULTILINE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
     DEFPUSHBUTTON   "Save",IDM_MSGSAVE,166,250,50,14,BS_CENTER | BS_VCENTER
-    LTEXT           "$U : Callsign of the connected user    $I : First name of the connected user  ",
-                    IDC_STATIC,5,227,365,10
+    LTEXT           "$U : Callsign of the user      $I : First name of the user      $X Messages for user       $x Unread messages",
+                    IDC_STATIC,5,228,369,8
     LTEXT           "$L : Number of the latest message    $N : Number of active messages.    $Z : Last message read by user",
                     IDC_STATIC,5,238,365,10
 END

@@ -4,7 +4,6 @@
 //
 #define IDR_MENU1                       101
 #define BPQMENU                         101
-#define BPQCONNECT                      102
 #define BPQDISCONNECT                   103
 #define IDD_CONFIG                      104
 #define BPQICON                         400
@@ -12,7 +11,6 @@
 #define IDC_PORT                        1005
 #define IDC_USER                        1006
 #define IDC_PASS                        1007
-
 #define BPQMTX                          1164
 #define BPQMCOM                         1165
 #define BPQCOPYMON                      1166
@@ -42,7 +40,15 @@
 #define BPQFLAGS2                       40011
 #define BPQFLAGS3                       40012
 #define BPQFLAGS4                       40013
-#define BPQ_CONFIG                      40015
+#define IDC_HOST1                       40016
+#define IDC_HOST2                       40017
+#define IDC_HOST3                       40018
+#define IDC_HOST4                       40019
+#define BPQCONNECT1                     40020
+#define BPQCONNECT2                     40021
+#define BPQCONNECT3                     40022
+#define BPQCONNECT4                     40023
+#define MONITOR_ADDPORT                 40024
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -51,7 +57,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        105
-#define _APS_NEXT_COMMAND_VALUE         40016
+#define _APS_NEXT_COMMAND_VALUE         40025
 #define _APS_NEXT_CONTROL_VALUE         1005
 #define _APS_NEXT_SYMED_VALUE           104
 #endif

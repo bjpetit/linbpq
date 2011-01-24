@@ -138,6 +138,32 @@ int compare(const void *arg1, const void *arg2)
    return _stricmp(*(char**)arg1 , *(char**)arg2);
 }
 
+int CountMessagesTo(CIRCUIT * conn, int * Unread)
+{
+	int i, Msgs = 0;
+	UCHAR * Call = conn->Callsign;
+
+	*Unread = 0;
+
+	for (i = NumberofMessages; i > 0; i--)
+	{
+		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
+		if (_stricmp(MsgHddrPtr[i]->to, Call) == 0)
+		{
+			Msgs++;
+			if (MsgHddrPtr[i]->status == 'N')
+				*Unread = *Unread + 1;
+
+		}
+	}
+	
+	return(Msgs);
+}
+
+
+
 // Costimised message handling routines.
 /*
 	Variables - a subset of those used by FBB
@@ -163,6 +189,7 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 	char Dollar[] = "$";
 	char CR[] = "\r";
 	char num[20];
+	int Msgs = 0, Unread = 0;
 
 
 	ptr = strchr(OldP, '$');
@@ -210,7 +237,18 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 			break;
 
 		case 'X': // Number of messages for the user.
+
+			Msgs = CountMessagesTo(conn, &Unread);
+			wsprintf(num, "%d", Msgs);
+			pptr = num;
+			break;
+
 		case 'x': // Number of new messages for the user.
+
+			Msgs = CountMessagesTo(conn, &Unread);
+			wsprintf(num, "%d", Unread);
+			pptr = num;
+			break;
 
 		default:
 

@@ -903,10 +903,8 @@ loop:
 		{
 			__try 
 			{
-				UCHAR Save = conn->InputMode;
 				conn->InputMode = 0;		//  So we won't save Restart data if decode fails
-				Decode(conn);
-				conn->InputMode = Save;
+				Decode(conn);				// Setup Next Message will reset InputMode if needed
 			}
 			__except(EXCEPTION_EXECUTE_HANDLER)
 			{

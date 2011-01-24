@@ -54,7 +54,7 @@ struct TCPINFO
 	int CurrentSockets;
 
 	int TCPPort;
-	int FBBPort;
+	int FBBPort[100];
 	int RelayPort;
 	BOOL CMS;					// Allow Connect to CMS
 	BOOL CMSOK;					// Internet link is ok.
@@ -81,12 +81,11 @@ struct TCPINFO
 	char RelayAPPL[20];
 
 	SOCKET sock;
-	SOCKET FBBsock;
+	SOCKET FBBsock[100];
 	SOCKET Relaysock;
 	HMENU hActionMenu;
 	HMENU hLogMenu;
 	HMENU hDisMenu;					// Disconnect Menu Handle
-
 
 };
 
