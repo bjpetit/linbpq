@@ -32,8 +32,8 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 
 1 VERSIONINFO
- FILEVERSION 1,0,0,4
- PRODUCTVERSION 1,0,0,4
+ FILEVERSION 1,0,0,7
+ PRODUCTVERSION 1,0,0,7
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0xbL
@@ -51,12 +51,12 @@ BEGIN
             VALUE "Comments", "Written by:John Wiseman, G8BPQ\0"
             VALUE "CompanyName", "\0"
             VALUE "FileDescription", "Simple TCP Terminal Program for G8BPQ Switch\0"
-            VALUE "FileVersion", "1.0.0.4\0"
+            VALUE "FileVersion", "1.0.0.7\0"
             VALUE "InternalName", "BPQTermTCP\0"
             VALUE "LegalCopyright", "Copyright © John Wiseman 2011\0"
             VALUE "OriginalFilename", "\0"
             VALUE "ProductName", "BPQTermTCP\0"
-            VALUE "ProductVersion", "1.0.0.4\0"
+            VALUE "ProductVersion", "1.0.0.7\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -130,11 +130,10 @@ BEGIN
     LISTBOX         116,5,6,290,134,LBS_MULTIPLESEL | LBS_OWNERDRAWFIXED | 
                     LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
                     WS_HSCROLL
-    LISTBOX         117,5,156,290,109,LBS_MULTIPLESEL | LBS_OWNERDRAWFIXED | 
-                    LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
-                    WS_HSCROLL
     EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
     CTEXT           "",119,0,145,300,5,SS_NOTIFY
+//    EDITTEXT        117,6,145,290,130,ES_MULTILINE | ES_AUTOVSCROLL | 
+//                    ES_AUTOHSCROLL | ES_NOHIDESEL | ES_READONLY | WS_VSCROLL
 END
 
 IDD_CONFIG DIALOG DISCARDABLE  0, 0, 181, 129
@@ -162,6 +161,14 @@ END
 
 MENU_1 MENU DISCARDABLE 
 BEGIN
+    POPUP "Connect"
+    BEGIN
+        MENUITEM "Host 1",                      BPQCONNECT1
+        MENUITEM "Host 2",                      BPQCONNECT2
+        MENUITEM "Host 3",                      BPQCONNECT3
+        MENUITEM "Host 4",                      BPQCONNECT4
+    END
+    MENUITEM "Disconnect",                  BPQDISCONNECT
     POPUP "Setup"
     BEGIN
         POPUP "TCP Hosts"
@@ -177,14 +184,6 @@ BEGIN
         MENUITEM "Log Output",                  BPQLogOutput
         MENUITEM "Chat Terminal Mode",          CHATTERM
     END
-    POPUP "Connect"
-    BEGIN
-        MENUITEM "Host 1",                      BPQCONNECT1
-        MENUITEM "Host 2",                      BPQCONNECT2
-        MENUITEM "Host 3",                      BPQCONNECT3
-        MENUITEM "Host 4",                      BPQCONNECT4
-    END
-    MENUITEM "Disconnect",                  BPQDISCONNECT
     POPUP "Monitor"
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX

@@ -692,3 +692,94 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 	SaveWPDatabase();
 
 }
+
+VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *Param)
+{
+	// Process the I call command
+
+	WPRec * ptr = NULL;
+	int i;
+	char ATBBS[100];
+	char * HA;
+	char * Rest;
+
+	_strupr(Param);
+	Type = toupper(Type);
+
+	switch (Type)
+	{
+	case 0:
+
+		for (i=1; i <= NumberofWPrecs; i++)
+		{
+			ptr = WPRecPtr[i];
+
+			if (wildcardcompare(ptr->callsign, Param))
+			{
+				nodeprintf(conn, "%s  %s %s %s %s\r", ptr->callsign, ptr->first_homebbs, ptr->name, ptr->first_zip, ptr->first_qth);
+			}
+		}
+		
+		return;
+
+	case'@':			// AT BBS
+
+		for (i=1; i <= NumberofWPrecs; i++)
+		{
+			ptr = WPRecPtr[i];
+
+			strcpy(ATBBS, ptr->first_homebbs);
+			strlop(ATBBS,'.');
+
+			if (wildcardcompare(ATBBS, Param))
+			{
+				nodeprintf(conn, "%s  %s %s %s %s\r", ptr->callsign, ptr->first_homebbs, ptr->name, ptr->first_zip, ptr->first_qth);
+			}
+		}
+		
+	case'H':			// Hierarchic Element
+
+		for (i=1; i <= NumberofWPrecs; i++)
+		{
+			ptr = WPRecPtr[i];
+
+			strcpy(ATBBS, ptr->first_homebbs);
+
+			Rest = strlop(ATBBS,'.');
+
+			if (Rest == 0)
+				continue;
+
+			HA = strtok_s(Rest, ".", &Rest);
+
+			while (HA)
+			{
+				if (wildcardcompare(HA, Param))
+				{
+					nodeprintf(conn, "%s  %s %s %s %s\r", ptr->callsign, ptr->first_homebbs, ptr->name, ptr->first_zip, ptr->first_qth);
+				}
+				
+				HA = strtok_s(NULL, ".", &Rest);
+			}
+		}
+		return;
+
+	case'Z':			// ZIP
+
+		for (i=1; i <= NumberofWPrecs; i++)
+		{
+			ptr = WPRecPtr[i];
+
+			if (ptr->first_zip[0] == 0)
+				continue;
+
+			if (wildcardcompare(ptr->first_zip, Param))
+			{
+				nodeprintf(conn, "%s  %s %s %s %s\r", ptr->callsign, ptr->first_homebbs, ptr->name, ptr->first_zip, ptr->first_qth);
+			}
+		}
+		return;
+	}
+	nodeprintf(conn, "Invalid I command option %c", Type);
+}
+

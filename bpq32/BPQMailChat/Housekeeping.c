@@ -305,6 +305,7 @@ VOID ExpireMessages()
 		case 'B':
 
 			BLimit = BF;
+			BNFLimit = now - BNF*86400;
 
 			// Check FROM Overrides
 
@@ -373,13 +374,15 @@ VOID ExpireMessages()
 			case 'H':
 
 
-				if (Msg->datecreated < BNFLimit) KillMsg(Msg);
+				if (Msg->datecreated < BNFLimit)
+					KillMsg(Msg);
 				break;	
 
 			case 'F':
 			case 'Y':
 
-				if (Msg->datecreated < BFLimit) KillMsg(Msg);
+				if (Msg->datecreated < BFLimit) 
+					KillMsg(Msg);
 				break;	
 			}			
 		}

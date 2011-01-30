@@ -648,6 +648,14 @@
 // Fix error after handling first FBB block.
 // Add $X and $x welcome message options.
 
+// Version 1.0.4.37 Jan 2011
+
+// Change L command not to list the last message if no new ones are available
+// Add LC I I@ IH IZ commands
+// Add option to send warning to sysop if forwarded P or T message has nowhere to go
+// Fixes for Winpack Compressed Download
+// Fix Houskeeping when "Apply Overrides to Unsent Bulls" is set.
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
@@ -956,6 +964,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	_invalid_parameter_handler oldHandler, newHandler;
 	char Msg[100];
 	int i = 60;
+	struct NNTPRec * NNTPREC;
+	struct NNTPRec * SaveNNTPREC;
 
 	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delay 60 Secs
 	{	
@@ -1102,10 +1112,14 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	if (TempBIDRecPtr)
 		free(TempBIDRecPtr);
 
-	for (n = 1; n <= NumberofNNTPRecs; n++)
-		free(NNTPRecPtr[n]);
+	NNTPREC = FirstNNTPRec;
 
-	free(NNTPRecPtr);
+	while (NNTPREC)
+	{
+		SaveNNTPREC = NNTPREC->Next;
+		free(NNTPREC);
+		NNTPREC = SaveNNTPREC;
+	}
 
 	free(OtherNodes);
 
@@ -2403,7 +2417,6 @@ int Connected(Stream)
 		
 		if (Stream == conn->BPQStream)
 		{
-
 			if (conn->Active)
 			{
 				// Probably an outgoing connect
@@ -3889,11 +3902,22 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
-	if (_memicmp(Cmd, "Info", CmdLen) == 0)
+	if (_memicmp(Cmd, "I", 1) == 0)
 	{
 		char * Save;
-		char * MsgBytes = Save = ReadInfoFile("Info.txt");
+		char * MsgBytes;
 
+		if (Arg1)
+		{
+			// User WP lookup
+
+			DoWPLookup(conn, user, Cmd[1], Arg1);
+			SendPrompt(conn, user);
+			return;	
+		}
+
+
+		MsgBytes = Save = ReadInfoFile("Info.txt");
 		if (MsgBytes)
 		{
 			int Length;
@@ -4044,12 +4068,18 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "B - Logoff\r");
 			BBSputs(conn, "D - Flag NTS Message(s) as Delivered - D num\r");
 			BBSputs(conn, "INFO - Display information about this BBS\r");
+			BBSputs(conn, "I CALL - Lookup CALL in WP Allows *CALL CALL* *CALL* wildcards\r");
+			BBSputs(conn, "I@ PARAM - Lookup @BBS in WP\r");
+			BBSputs(conn, "IZ PARAM - Lookup Zip Codes in WP\r");
+			BBSputs(conn, "IH PARAM - Lookup HA elements in WP - eg USA EU etc\r");
+
 			BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
 			BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
 			BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
 			BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
 			BBSputs(conn, "                      LN LY LH LK LF L$ LD - List Mesaage with corresponding Status\r");
 			BBSputs(conn, "                      LB LP LT - List Mesaage with corresponding Type\r");
+			BBSputs(conn, "                      LC List TO fields of all active bulletins\r");
 			BBSputs(conn, "N Name - Set Name\r");
 			BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
 			BBSputs(conn, "Q QTH - Set QTH\r");
@@ -4638,10 +4668,12 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		}
 		else
 
-			if (Cmd[1])
-				ListMessagesInRangeForwards(conn, user, user->Call, LatestMsg, conn->lastmsg);
+			if (LatestMsg == conn->lastmsg)
+				BBSputs(conn, "No New Messages\r");
+			else if (Cmd[1])
+				ListMessagesInRangeForwards(conn, user, user->Call, LatestMsg, conn->lastmsg + 1);
 			else
-				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg);
+				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg + 1);
 
 			conn->lastmsg = LatestMsg;
 
@@ -4760,12 +4792,58 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 			return;
 		}
+
+	case 'C':
+	{
+		struct NNTPRec * ptr = FirstNNTPRec;
+		char Cat[100];
+		char NextCat[100];
+		int Line = 0;
+		int Count;
+
+		while (ptr)
+		{
+			// if the next name is the same, combine  counts
+			
+			strcpy(Cat, ptr->NewsGroup);
+			strlop(Cat, '.');
+			Count = ptr->Count;
+		Catloop:
+			if (ptr->Next)
+			{
+				strcpy(NextCat, ptr->Next->NewsGroup);
+				strlop(NextCat, '.');
+				if (strcmp(Cat, NextCat) == 0)
+				{
+					ptr = ptr->Next;
+					Count += ptr->Count;
+					goto Catloop;
+				}
+			}
+
+			nodeprintf(conn, "%-6s %-3d", Cat, Count);
+			Line += 10;
+			if (Line > 80)
+			{
+				Line = 0;
+				nodeprintf(conn, "\r");
+			}
+			
+			ptr = ptr->Next;
 		}
+
+		if (Line)
+			nodeprintf(conn, "\r\r");
+		else
+			nodeprintf(conn, "\r");
+
+		return;
+	}
 	
 	nodeprintf(conn, "*** Error: Invalid List option %c\r", Cmd[1]);
 
-}
-	
+	}
+}	
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 {
 	int i, Msgs = 0;
@@ -4776,7 +4854,8 @@ int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 			continue;
 
 		if ((_stricmp(MsgHddrPtr[i]->to, Call) == 0) ||
-			((conn->sysop) && ((_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0)) && (user->flags & F_SYSOP_IN_LM)))
+			((conn->sysop) && _stricmp(Call, SYSOPCall) == 0 &&
+			_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0 && (user->flags & F_SYSOP_IN_LM)))
 		{
 			Msgs++;
 			ListMessage(MsgHddrPtr[i], conn);
@@ -6224,6 +6303,11 @@ nextline:
 
 			ptr2 = ptr1;			// save
 			ptr1 = strchr(ptr1, '\r');
+			if (ptr1 == 0)
+			{
+				Debugprintf("Corrupt Message %s from %s - truncated within R: line", Msg->bid, Msg->from);
+				return;
+			}
 			ptr1++;
 			if (*ptr1 == '\n') ptr1++;
 
@@ -6370,6 +6454,24 @@ nextline:
 				}
 			}
 			free(Call);
+		}
+
+		// Warn SYSOP if P or T forwarded in, and has nowhere to go
+
+		if ((conn->BBSFlags & BBS) && Msg->type != 'B' && FWDCount == 0 && WarnNoRoute)
+		{
+			if (Msg->via[0])
+			{	
+				if (_stricmp(Msg->via, BBSName))		// Not for our BBS and no forwardimg
+					SendWarningToSYSOP(Msg);
+			}
+			else
+			{
+				// No via - is it for a local user?
+				
+				if (LookupCall(Msg->to) == 0)
+					SendWarningToSYSOP(Msg);
+			}
 		}
 
 		if (!(conn->BBSFlags & BBS))
@@ -7832,6 +7934,18 @@ void clear_fwd_bit (char *mask, int bbsnumber)
 	if (bbsnumber)
 		mask[(bbsnumber - 1) / 8] &= (~(1 << ((bbsnumber - 1) % 8)));
 }
+
+VOID SendWarningToSYSOP(struct MsgInfo * Msg)
+{
+	int Length=0;
+	char * MailBuffer = malloc(100);
+	char Title[100];
+
+	Length += wsprintf(MailBuffer, "Warning - Message %d has nowhere to go", Msg->number);
+	wsprintf(Title, "Warning - Message %d has nowhere to go", Msg->number);
+	SendMessageToSYSOP(Title, MailBuffer, Length);
+}
+
 
 
 VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)

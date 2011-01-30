@@ -19,7 +19,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 	if (_memicmp(Buffer, "F< ", 3) == 0)
 	{
-		// FBB COonpressed request from system using UI Messages
+		// FBB Compressed request from system using UI Messages
 
 		int Number = atoi(&Buffer[3]);
 		struct MsgInfo * Msg = FindMessageByNumber(Number);
@@ -43,6 +43,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		{
 			SendCompressed(conn, Msg);
 			BBSputs(conn, ">\r");
+			Msg->status = 'Y';					// Mark as read
 		}
 		else
 		{
@@ -295,13 +296,40 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		}
 	}
 
-	if (_stricmp(Buffer, "*** DONE\r") == 0 || _stricmp(Buffer, "*** What?\r") == 0)
+	// Winpack after doing ocmpressed downloads sends KM or B
+
+	if (_stricmp(Buffer, "*** DONE\r") == 0 || _stricmp(Buffer, "*** What?\r") == 0 
+		|| _stricmp(Buffer, "B\r") == 0)
 	{
 		Disconnect(conn->BPQStream);
 		return;
 	}
 
-//	nputs(conn, ">\r");
+	if (_stricmp(Buffer, "KM\r") == 0)
+	{
+		int i;
+		struct MsgInfo * Msg;
+
+		for (i = NumberofMessages; i > 0; i--)
+		{
+			Msg = MsgHddrPtr[i];
+
+			if ((_stricmp(Msg->to, user->Call) == 0))
+			{
+				if (Msg->type == 'P' && Msg->status == 'Y')
+				{
+					FlagAsKilled(Msg);
+					nodeprintf(conn, "Message #%d Killed\r", Msg->number);
+				}
+			}
+		}
+
+		SendPrompt(conn, user);
+		return;
+	}
+
+
+//	
 
 }
 

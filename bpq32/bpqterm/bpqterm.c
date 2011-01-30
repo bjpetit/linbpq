@@ -171,10 +171,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	MinimizetoTray=GetMinimizetoTrayFlag();
 
 
-	hWnd = CreateWindow(AppName, Title, WS_OVERLAPPEDWINDOW,
+/*	hWnd = CreateWindow(AppName, Title, WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, 0, 500, SCREENLEN*14+50,
 		NULL, NULL, hInstance, NULL);
-
+*/
+	hWnd = CreateWindowEx(0, AppName, Title, WS_OVERLAPPEDWINDOW |WS_HSCROLL| WS_VSCROLL,
+		CW_USEDEFAULT, 0, 500, SCREENLEN*14+50,
+		NULL, NULL, hInstance, NULL);
 	if (!hWnd) {
 		return (FALSE);
 	}

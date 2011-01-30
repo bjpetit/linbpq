@@ -876,17 +876,22 @@ VOID TelnetPoll(int Port)
 			{
 				struct ConnectionInfo * sockptr = STREAM->ConnectionInfo;
 
-				if (!sockptr->MonitorNODES && monchars[21] == 3 && monchars[22] == 0xcf && monchars[23] == 0xff)
-					len = 0;
-				else
+				if (sockptr->BPQTermMode)
 				{
-					SetTraceOptions(sockptr->MMASK, sockptr->MTX, sockptr->MCOM);
-					len = TelDecodeFrame((char *)monbuff,&buffer[3],stamp);
-					if (len)
+					if (!sockptr->MonitorNODES && monchars[21] == 3 && monchars[22] == 0xcf && monchars[23] == 0xff)
 					{
-						len += 3;
-						buffer[len++] = 0xfe;
-						send(STREAM->ConnectionInfo->socket, buffer, len, 0);
+						len = 0;
+					}
+					else
+					{
+						SetTraceOptions(sockptr->MMASK, sockptr->MTX, sockptr->MCOM);
+						len = TelDecodeFrame((char *)monbuff,&buffer[3],stamp);
+						if (len)
+						{
+							len += 3;
+							buffer[len++] = 0xfe;
+							send(STREAM->ConnectionInfo->socket, buffer, len, 0);
+						}
 					}
 				}
 			}
@@ -2191,6 +2196,15 @@ MsgLoop:
 
 		return 0;
 	}
+	
+	if (MsgPtr[0] == 10)			// LF
+	{
+		// Remove the LF
+
+		InputLen--;
+
+		memmove(MsgPtr, MsgPtr+1, InputLen);
+	}
 
 	CRPtr = memchr(MsgPtr, 13, InputLen);
 	
@@ -2352,8 +2366,14 @@ MsgLoop:
 
 			// What is left is the Command to connect to the BBS
 
-			if (InputLen > 0)
+			if (InputLen > 1)
 			{
+				if (*(CRPtr+1) == 10)
+				{
+					CRPtr++;
+					InputLen--;
+				}
+
 				memmove(MsgPtr, CRPtr+1, InputLen);
 
 				if (_memicmp(MsgPtr, "BPQTermTCP", 10) == 0)
@@ -2829,6 +2849,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	sockptr->LoginState = 2;
 	sockptr->UserPointer = 0;
 	sockptr->DoEcho = FALSE;
+	sockptr->BPQTermMode = FALSE;
 
 	sockptr->FBBMode = TRUE;		// Raw Data
 

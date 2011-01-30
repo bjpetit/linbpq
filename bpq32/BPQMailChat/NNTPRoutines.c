@@ -4,8 +4,9 @@
 
 #include "stdafx.h"
 
-struct NNTPRec ** NNTPRecPtr=NULL;
-int NumberofNNTPRecs=0;
+struct NNTPRec * FirstNNTPRec = NULL;
+
+//int NumberofNNTPRecs=0;
 
 SOCKET nntpsock;
 
@@ -18,31 +19,16 @@ char *day[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 VOID ReleaseNNTPSock(SOCKET sock);
 
-struct NNTPRec * AllocateNNTPRecord()
-{
-	struct NNTPRec * REC = zalloc(sizeof (struct NNTPRec));
-	
-	GetSemaphore(&AllocSemaphore);
-
-	NNTPRecPtr=realloc(NNTPRecPtr,(++NumberofNNTPRecs+1)*4);
-	NNTPRecPtr[NumberofNNTPRecs] = REC;
-
-	FreeSemaphore(&AllocSemaphore);
-
-	return REC;
-}
-
 struct NNTPRec * LookupNNTP(char * Group)
 {
-	struct NNTPRec * ptr = NULL;
-	int i;
+	struct NNTPRec * ptr = FirstNNTPRec;
 
-	for (i=1; i <= NumberofNNTPRecs; i++)
+	while (ptr)
 	{
-		ptr = NNTPRecPtr[i];
-
 		if (_stricmp(ptr->NewsGroup, Group) == 0)
 			return ptr;
+
+		ptr = ptr->Next;
 	}
 
 	return NULL;
@@ -53,9 +39,12 @@ struct NNTPRec * LookupNNTP(char * Group)
 VOID BuildNNTPList(struct MsgInfo * Msg)
 {
 	struct NNTPRec * REC;
+	struct NNTPRec * OLDREC;
+	struct NNTPRec * PREVREC = 0;
+
 	char FullGroup[100];
 					
-	if (Msg->type != 'B')
+	if (Msg->type != 'B' || Msg->status == 'K' || Msg->status == 'H')
 		return;
 
 	wsprintf(FullGroup, "%s.%s", Msg->to, Msg->via);
@@ -64,9 +53,46 @@ VOID BuildNNTPList(struct MsgInfo * Msg)
 
 	if (REC == NULL)
 	{
-		// New Group
+		// New Group. Allocate a record, and put at correct place in chain (alpha order)
 
-		REC = AllocateNNTPRecord();
+		REC = zalloc(sizeof (struct NNTPRec));
+		OLDREC = FirstNNTPRec;
+
+		if (OLDREC == 0)					// First record
+		{
+			FirstNNTPRec = REC;
+			goto DoneIt;
+		}
+		else
+		{
+			// Follow chain till we find one with a later name
+
+			while(OLDREC)
+			{
+				if (strcmp(OLDREC->NewsGroup, FullGroup) > 0)
+				{
+					// chain in here
+
+					REC->Next = OLDREC;
+					if (PREVREC)
+						PREVREC->Next = REC;
+					else
+						FirstNNTPRec = REC;
+					goto DoneIt;
+						
+				}
+				else
+				{
+					PREVREC = OLDREC;
+					OLDREC = OLDREC->Next;
+				}
+			}
+
+			// Run off end - chain to PREVREC
+
+			PREVREC->Next = REC;
+		}
+DoneIt:
 		strcpy(REC->NewsGroup, FullGroup);
 		REC->FirstMsg = Msg->number;
 		REC->DateCreated = Msg->datecreated;
@@ -422,13 +448,10 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if(memcmp(Buffer, "GROUP", 5) == 0)
 	{
-		int i;
-		struct NNTPRec * REC = NULL;
+		struct NNTPRec * REC = FirstNNTPRec;
 
-		for (i=1; i <= NumberofNNTPRecs; i++)
+		while (REC)
 		{
-			REC = NNTPRecPtr[i];
-
 			if (_stricmp(REC->NewsGroup, &Buffer[6]) == 0)
 			{
 				sockprintf(sockptr, "211 %d %d %d %s", REC->Count, REC->FirstMsg, REC->LastMsg, REC->NewsGroup);
@@ -436,6 +459,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				sockptr->NNTPGroup = REC;
 				return;
 			}
+			REC =REC->Next;
 		}
 	
 		sockprintf(sockptr, "411 no such news group");
@@ -444,48 +468,51 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if(_memicmp(Buffer, "LISTGROUP", 9) == 0)
 	{
-		int i;
 		struct NNTPRec * REC = sockptr->NNTPGroup;
 		struct MsgInfo * Msg;
 		int MsgNo ;
 
-		if (REC == NULL)
+		// Either currently selected, or a param follows
+
+		if (REC == NULL && Buffer[10] == 0)
 		{
-			if (Buffer[10] == 0)
-			{
-				sockprintf(sockptr, "412 No Group Selected");
-				return;
-			}
+			sockprintf(sockptr, "412 No Group Selected");
+			return;
+		}
 
-			for (i=1; i <= NumberofNNTPRecs; i++)
-			{
-				REC = NNTPRecPtr[i];
+		if (Buffer[10] == 0)
+			goto GotGroup;
+		
+		REC = FirstNNTPRec;
 
-				if (_stricmp(REC->NewsGroup, &Buffer[10]) == 0)
+		while(REC)
+		{
+			if (_stricmp(REC->NewsGroup, &Buffer[10]) == 0)
+			{
+			GotGroup:
+
+				sockprintf(sockptr, "211 Article Numbers Follows");
+				sockptr->NNTPNum = 0;
+				sockptr->NNTPGroup = REC;
+
+				for (MsgNo = REC->FirstMsg; MsgNo <= REC->LastMsg; MsgNo++)
 				{
-					sockprintf(sockptr, "211 Article Numbers Follows");
-					sockptr->NNTPNum = 0;
-					sockptr->NNTPGroup = REC;
+					Msg=MsgnotoMsg[MsgNo];
 
-					for (MsgNo = REC->FirstMsg; MsgNo <= REC->LastMsg; MsgNo++)
+					if (Msg)
 					{
-						Msg=MsgnotoMsg[MsgNo];
-
-						if (Msg)
+						char FullGroup[100];
+						wsprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
+						if (_stricmp(FullGroup, REC->NewsGroup) == 0)
 						{
-							char FullGroup[100];
-							wsprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
-							if (_stricmp(FullGroup, REC->NewsGroup) == 0)
-							{
-								sockprintf(sockptr, "%d", MsgNo);
-							}
+							sockprintf(sockptr, "%d", MsgNo);
 						}
 					}
-
-					SendSock(sockptr,".");
-					return;
 				}
+				SendSock(sockptr,".");
+				return;
 			}
+			REC = REC->Next;
 		}
 		sockprintf(sockptr, "411 no such news group");
 		return;
@@ -499,16 +526,14 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if(memcmp(Buffer, "LIST",4) == 0)
 	{
-		int i;
-		struct NNTPRec * REC = NULL;
-		
+		struct NNTPRec * REC = FirstNNTPRec;
+
 		SendSock(sockptr, "215 list of newsgroups follows");
-
-		for (i=1; i <= NumberofNNTPRecs; i++)
+	
+		while (REC)
 		{
-			REC = NNTPRecPtr[i];
-
 			sockprintf(sockptr, "%s %d %d y", REC->NewsGroup, REC->LastMsg, REC->FirstMsg);
+			REC = REC->Next;
 		}
 
 		SendSock(sockptr,".");
@@ -519,8 +544,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	
 	if(memcmp(Buffer, "NEWGROUPS", 9) == 0)
 	{
-		int i;
-		struct NNTPRec * REC = NULL;
+		struct NNTPRec * REC = FirstNNTPRec;
 		struct tm rtime;
 		char Offset[20] = "";
 		time_t Time;
@@ -541,12 +565,11 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		
 		SendSock(sockptr, "231 list of new newsgroups follows");
 
-		for (i=1; i <= NumberofNNTPRecs; i++)
+		while(REC)
 		{
-			REC = NNTPRecPtr[i];
-
 			if (REC->DateCreated > Time)
 				sockprintf(sockptr, "%s %d %d y", REC->NewsGroup, REC->LastMsg, REC->FirstMsg);
+			REC = REC->Next;
 		}
 
 		SendSock(sockptr,".");

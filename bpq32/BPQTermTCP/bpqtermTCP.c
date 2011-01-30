@@ -1,7 +1,7 @@
 
 // Version 2.0.1 November 2007
 
-// Change resizing algorithm
+// Change resizing algorith
 
 
 // Version 2.0.2 January 2008
@@ -54,6 +54,8 @@
 #include <stdio.h>
 #include <malloc.h>	
 #include <memory.h>
+//#define _RICHEDIT_VER	0x0100
+#include <Richedit.h> 
 
 #include "bpqtermTCP.h"
 #include "GetVersion.h"
@@ -81,11 +83,9 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 int NewLine();
-
+VOID DoRefresh(struct RTFTerm * OPData);
 VOID SendTraceOptions();
-
 int	ProcessBuff(char * readbuff,int len);
-
 VOID EnableConnectMenu(HWND hWnd);
 VOID EnableDisconnectMenu(HWND hWnd);
 VOID DisableConnectMenu(HWND hWnd);
@@ -103,7 +103,7 @@ void MoveWindows();
 void CopyToClipboard(HWND hWnd);
 BOOL OpenMonitorLogfile();
 void WriteMonitorLine(char * Msg, int MsgLen);
-VOID WritetoOutputWindow(char * Msg, int len);
+VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len);
 int SendMsg(char * msg, int len);
 TCPConnect(char * Host, int Port);
 int Telnet_Connected(SOCKET sock, int Error);
@@ -142,16 +142,14 @@ COLORREF Colours[256] = {0,
 		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,2552,255)
 };
 
-
-
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
-LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
+//LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 
 
 WNDPROC wpOrigInputProc; 
-WNDPROC wpOrigOutputProc; 
+//WNDPROC wpOrigOutputProc; 
 WNDPROC wpOrigMonProc; 
 WNDPROC wpOrigSplitProc; 
 
@@ -159,6 +157,8 @@ HWND hwndInput;
 HWND hwndOutput;
 HWND hwndMon;
 HWND hwndSplit;
+
+HMENU trayMenu;
 
 int xsize,ysize;		// Screen size at startup
 
@@ -168,8 +168,10 @@ int SplitPos=300;
 #define InputBoxHeight 25
 RECT Rect;
 RECT MonRect;
-RECT OutputRect;
+//RECT OutputRect;
 RECT SplitRect;
+
+int OutputBoxHeight;
 
 int Height, Width, LastY;
 
@@ -185,6 +187,47 @@ char PN[5][6] = {"Port1", "Port2", "Port3", "Port4"};
 char PASSN[5][6] = {"Pass1", "Pass2", "Pass3", "Pass4"};
 char UN[5][6] = {"User1", "User2", "User3", "User4"};
 
+#define MAXLINES 1000
+#define LINELEN 200
+
+char RTFHeader[4000];
+
+int RTFHddrLen;
+
+typedef struct RTFTerm
+{
+	int CurrentLine;				// Line we are writing to in circular buffer.
+
+	int Index;
+	BOOL SendHeader;
+	BOOL Finished;
+
+	char OutputScreen[MAXLINES][LINELEN];
+
+	int Colourvalue[MAXLINES];
+	int LineLen[MAXLINES];
+
+	int CurrentColour;
+};
+
+int Thumb = 0;
+
+struct RTFTerm OutputData;
+
+/*
+int CurrentLine = 0;				// Line we are writing to in circular buffer.
+
+int Index;
+BOOL SendHeader = TRUE;
+BOOL Finished = TRUE;
+
+char OutputScreen[MAXLINES][LINELEN];
+
+int Colourvalue[MAXLINES];
+int LineLen[MAXLINES];
+
+int CurrentColour = 1;
+*/
 int CurrentHost = 0;
 int CfgNo = 0;
 
@@ -230,10 +273,6 @@ HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 HCURSOR DragCursor;
 HCURSOR	Cursor;
 
-LOGFONT LFTTYFONT ;
-
-HFONT hFont ;
-
 BOOL MinimizetoTray=FALSE;
 //BOOL StartMinimized = FALSE;
 
@@ -250,6 +289,29 @@ TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
 int TimerHandle = 0;
 
 int SlowTimer;
+
+VOID SaveIntValue(char * Key, int Value)
+{
+	char Val[100];
+
+	wsprintf(Val, "%d", Value);
+	WritePrivateProfileString("Session 1", Key, Val, ".\\BPQTermTCP.ini");
+}
+
+VOID SaveStringValue(char * Key, char * Value)
+{
+	WritePrivateProfileString("Session 1", Key, Value, ".\\BPQTermTCP.ini");
+}
+
+int GetIntValue(char * Key)
+{
+	return GetPrivateProfileInt("Session 1", Key, 0, ".\\BPQTermTCP.ini");
+}
+
+VOID GetStringValue(char * Key, char * Value, int Len)
+{
+	GetPrivateProfileString("Session 1", Key, "", Value, Len, ".\\BPQTermTCP.ini");
+}
 
 VOID CALLBACK TimerProc(
 
@@ -288,60 +350,9 @@ VOID CALLBACK TimerProc(
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	MSG msg;
-	int retCode, disp;
-	HKEY hKey=0;
 	char Size[80];
 	int n;
 
-/*	PCHAR p1, p2, p3;
-
-	p1 = strtok(lpCmdLine, " ,\t\n\r");
-	p2 = strtok(NULL, " ,\t\n\r");
-	p3 = strtok(NULL, " ,\t\n\r");
-
-	if (nCmdShow == SW_SHOWMINIMIZED)
-		StartMinimized = TRUE;
-
-	if (p1)
-	{
-		if (strlen(p1) > 5)
-		{
-			if (_stricmp(p1, "StartMinimized") == 0)
-				StartMinimized = TRUE;
-
-			if (p2) Sessno = atoi(p2);
-			if (p3) sscanf(p3,"%x", &applflags);
-		}
-		else 
-		{		
-			if (p2)
-			{
-				if (strlen(p2) > 5)
-				{
-					if (_stricmp(p2, "StartMinimized") == 0)
-						StartMinimized = TRUE;
-		
-					if (p1) Sessno = atoi(p1);
-					if (p3) sscanf(p3,"%x", &applflags);
-				}
-			}
-			else
-			{
-				if (p3)
-				{
-					if (strlen(p3) > 5)
-					{
-						if (_stricmp(p3, "StartMinimized") == 0)
-							StartMinimized = TRUE;
-
-						if (p1) Sessno = atoi(p1);
-						if (p2) sscanf(p2,"%x", &applflags);
-					}
-				}
-			}
-		}
-	}
-*/
 	sscanf(lpCmdLine,"%d %x",&Sessno, &applflags);
 
 	if (!InitApplication(hInstance)) 
@@ -357,44 +368,33 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		DispatchMessage(&msg);
 	}
 
-	// Save Config
-	
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
-                              Key,
-                              0,	// Reserved
-							  0,	// Class
-							  0,	// Options
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
+	SaveIntValue("PortMask", portmask);
+	SaveIntValue("Bells", Bells);
+	SaveIntValue("StripLF", StripLF);
 
-	if (retCode == ERROR_SUCCESS)
+	for (n = 0; n < 4; n++)
 	{
-		retCode = RegSetValueEx(hKey,"PortMask",0,REG_DWORD,(BYTE *)&portmask,4);
-		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
-		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
-		for (n = 0; n < 4; n++)
-		{
-			retCode = RegSetValueEx(hKey, HN[n], 0,REG_SZ, Host[n], strlen(Host[n]));
-			retCode = RegSetValueEx(hKey, UN[n], 0,REG_SZ, UserName[n], strlen(UserName[n]));
-			retCode = RegSetValueEx(hKey, PASSN[n] ,0,REG_SZ, Password[n], strlen(Password[n]));
-			retCode = RegSetValueEx(hKey,PN[n], 0,REG_DWORD,(BYTE *)&Port[n],4);
-		}
-		retCode = RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
-		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
-		retCode = RegSetValueEx(hKey,"Split",0,REG_BINARY,(BYTE *)&Split,sizeof(Split));
-		retCode = RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
-		retCode = RegSetValueEx(hKey,"MonNODES",0,REG_DWORD,(BYTE *)&MonitorNODES,4);
-		retCode = RegSetValueEx(hKey,"MonPorts",0,REG_DWORD,(BYTE *)&MonPorts,4);
-		retCode = RegSetValueEx(hKey,"ChatMode",0,REG_DWORD,(BYTE *)&ChatMode,4);
-		
-
-		wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
-		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		RegCloseKey(hKey);
+		SaveStringValue(HN[n], Host[n]);
+		SaveStringValue(UN[n], UserName[n]);
+		SaveStringValue(PASSN[n], Password[n]);
+		SaveIntValue(PN[n], Port[n]);
 	}
+	SaveIntValue("MTX",mtxparam);
+	SaveIntValue("MCOM", mcomparam);
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+		SaveIntValue("Split", Split * 100);
+#pragma warning(pop)
+
+	SaveIntValue("MONColour", MonitorColour);
+	SaveIntValue("MonNODES", MonitorNODES);
+	SaveIntValue("MonPorts", MonPorts);
+	SaveIntValue("ChatMode", ChatMode);
+	SaveIntValue("CurrentHost", CurrentHost);
+	
+	wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+	SaveStringValue("Size", Size);
 
 	KillTimer(NULL, TimerHandle);
 
@@ -440,31 +440,18 @@ BOOL InitApplication(HINSTANCE hInstance)
 HMENU hMenu, hPopMenu1, hPopMenu2, hPopMenu3;		// handle of menu 
 
 
-//
-//   FUNCTION: InitInstance(HANDLE, int)
-//
-//   PURPOSE: Saves instance handle and creates main window 
-//
-//   COMMENTS:
-//
-//        In this function, we save the instance handle in a global variable and
-//        create and display the main program window.
-//
-
-
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	int i, n, tempmask=0xffff;
 	char msg[20];
-	int retCode,Type,Vallen;
-	HKEY hKey=0;
 	char Size[80];
 	WSADATA WsaData;            // receives data from WSAStartup
+	char RTFColours[3000];
+	struct RTFTerm * OPData;
 
 	hInst = hInstance; // Store instance handle in our global variable
 
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
-
 
 	// Create a dialog box as the main window
 
@@ -475,89 +462,90 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	MainWnd=hWnd;
 
+	// Set up RTF Header, including Colours String;
+
+	memcpy(RTFColours, "{\\colortbl ;", 12);
+	n = 12;
+
+	for (i = 1; i < 100; i++)
+	{
+		COLORREF Colour = Colours[i];
+		n += wsprintf(&RTFColours[n], "\\red%d\\green%d\\blue%d;", GetRValue(Colour), GetGValue(Colour),GetBValue(Colour));
+	}
+
+	RTFColours[n++] = '}';
+	RTFColours[n] = 0;
+
+	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset0 FixedSys;}}");
+	strcat(RTFHeader, RTFColours);
+	strcat(RTFHeader, "\\viewkind4\\uc1\\pard\\f0");
+
+	RTFHddrLen = strlen(RTFHeader);
+
+	// Create a Rich Text Control 
+
+	OPData = &OutputData;
+
+	OPData->SendHeader = TRUE;
+	OPData->Finished = TRUE;
+	OPData->CurrentColour = 1;
+
+	LoadLibrary("riched20.dll");
+
+	hwndOutput = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASS, "",
+		WS_CHILD |  WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_NOHIDESEL | WS_VSCROLL | ES_READONLY,
+		6,145,290,130, MainWnd, NULL, hInstance, NULL);
+
+	// Register for Mouse Events for Copy/Paste
+	
+	SendMessage(hwndOutput, EM_SETEVENTMASK, (WPARAM)0, (LPARAM)ENM_MOUSEEVENTS | ENM_SCROLLEVENTS);
+	SendMessage(hwndOutput, EM_EXLIMITTEXT, 0, MAXLINES * LINELEN);
+
+	trayMenu = CreatePopupMenu();
+
+	AppendMenu(trayMenu,MF_STRING,40000,"Copy");
+
 	// Retrieve the handlse to the edit controls. 
 
 	hwndInput = GetDlgItem(hWnd, 118); 
-	hwndOutput = GetDlgItem(hWnd, 117); 
 	hwndSplit = GetDlgItem(hWnd, 119); 
 	hwndMon = GetDlgItem(hWnd, 116); 
  
 	// Set our own WndProcs for the controls. 
 
 	wpOrigInputProc = (WNDPROC) SetWindowLong(hwndInput, GWL_WNDPROC, (LONG) InputProc); 
-	wpOrigOutputProc = (WNDPROC)SetWindowLong(hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 	wpOrigMonProc = (WNDPROC)SetWindowLong(hwndMon, GWL_WNDPROC, (LONG)MonProc);
 	wpOrigSplitProc = (WNDPROC)SetWindowLong(hwndSplit, GWL_WNDPROC, (LONG)SplitProc);
 
-	// Get saved config from Registry
+	// Get saved config from ini
 
-	// Get config from Registry 
+	MonitorNODES = GetIntValue("MonNODES");
+	MonPorts = GetIntValue("MonPorts");
+	mtxparam = GetIntValue("MTX");
+	mcomparam = GetIntValue("MCOM");
+	tempmask = GetIntValue("PortMask");
+	ChatMode = GetIntValue("ChatMode");
+	MonitorColour = GetIntValue("MONColour");
+	Bells = GetIntValue("Bells");
+	StripLF = GetIntValue("StripLF");
+	CurrentHost = GetIntValue("CurrentHost");
+	Split = GetIntValue("Split");
+	if (Split == 0)
+		Split = 50;
 
-	wsprintf(Key,"SOFTWARE\\G8BPQ\\BPQ32\\BPQTermTCP");
+	Split /= 100;		// Stored as a %,used as 0 - 1
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
-                              Key,
-                              0,
-                              KEY_QUERY_VALUE,
-                              &hKey);
-
-	if (retCode == ERROR_SUCCESS)
+	for (n = 0; n < 3; n++)
 	{
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"MonNODES",0, &Type,(UCHAR *)&MonitorNODES, &Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"MonPorts",0, &Type,(UCHAR *)&MonPorts, &Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "MTX" ,0, &Type,(UCHAR *)&mtxparam, &Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "MCOM", 0, &Type,(UCHAR *)&mcomparam, &Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "PortMask" ,0, &Type,(UCHAR *)&tempmask, &Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "ChatMode" ,0, &Type,(UCHAR *)&ChatMode, &Vallen);
-
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"MONColour",0,			
-			(ULONG *)&Type,(UCHAR *)&MonitorColour,(ULONG *)&Vallen);
-
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"Bells",0,			
-			(ULONG *)&Type,(UCHAR *)&Bells,(ULONG *)&Vallen);
-	
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"StripLF",0,			
-			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
-
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "SendDisconnected",0,			
-			(ULONG *)&Type,(UCHAR *)&StripLF,(ULONG *)&Vallen);
-	
-		Vallen=8;
-		retCode = RegQueryValueEx(hKey,"Split",0,			
-			(ULONG *)&Type,(UCHAR *)&Split,(ULONG *)&Vallen);
-
-		for (n = 0; n < 3; n++)
-		{
-			Vallen=80;
-			retCode = RegQueryValueEx(hKey, HN[n] ,0, (ULONG *)&Type,(UCHAR *)&Host[n], &Vallen);
-
-			Vallen=80;
-			retCode = RegQueryValueEx(hKey, UN[n], 0, (ULONG *)&Type,(UCHAR *)&UserName[n], &Vallen);
-
-			Vallen=80;
-			retCode = RegQueryValueEx(hKey, PASSN[n],0, (ULONG *)&Type,(UCHAR *)&Password[n], &Vallen);
-
-			Vallen=4;
-			retCode = RegQueryValueEx(hKey, PN[n], 0, (ULONG *)&Type, (UCHAR *)&Port[n], &Vallen);
-			}
-		Vallen=80;
-		retCode = RegQueryValueEx(hKey,"Size",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
-	
+		GetStringValue(HN[n], Host[n], 100);
+		GetStringValue(UN[n], UserName[n], 80);
+		GetStringValue(PASSN[n], Password[n], 80);
+		Port[n] = GetIntValue(PN[n]);
 	}
 
+	GetStringValue("Size", Size, 80);
+	sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+	
 	if (Rect.right < 100 || Rect.bottom < 100)
 	{
 		GetWindowRect(hWnd,	&Rect);
@@ -566,7 +554,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	Height = Rect.bottom-Rect.top;
 	Width = Rect.right-Rect.left;
 
+#pragma warning(push)
+#pragma warning(disable:4244)
 	SplitPos=Height*Split;
+#pragma warning(pop)
 
 	MoveWindow(hWnd,Rect.left,Rect.top, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
@@ -614,10 +605,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	CheckMenuItem(hMenu, MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, CHATTERM, (ChatMode) ? MF_CHECKED : MF_UNCHECKED);
 
-	ModifyMenu(hMenu, BPQCONNECT1, MF_BYCOMMAND, BPQCONNECT1, Host[0]);
-	ModifyMenu(hMenu, BPQCONNECT2, MF_BYCOMMAND, BPQCONNECT2, Host[1]);
-	ModifyMenu(hMenu, BPQCONNECT3, MF_BYCOMMAND, BPQCONNECT3, Host[2]);
-	ModifyMenu(hMenu, BPQCONNECT4, MF_BYCOMMAND, BPQCONNECT4, Host[3]);
+	for (i = 0; i < 4; i++)
+	{
+		if (Host[i][0])
+		{
+			ModifyMenu(hMenu, IDC_HOST1 + i, MF_BYCOMMAND, IDC_HOST1 + i, Host[i]);
+			ModifyMenu(hMenu, BPQCONNECT1 + i, MF_BYCOMMAND, BPQCONNECT1 + i, Host[i]);
+		}
+	}
 
 	EnableMenuItem(hMenu,BPQDISCONNECT,MF_GRAYED);
 
@@ -683,6 +678,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			GetDlgItemText(hDlg, IDC_PASS, Password[CfgNo], 79);
 
 			ModifyMenu(hMenu, BPQCONNECT1 + CfgNo, MF_BYCOMMAND, BPQCONNECT1 + CfgNo, Host[CfgNo]);
+			ModifyMenu(hMenu, IDC_HOST1 + CfgNo, MF_BYCOMMAND, IDC_HOST1 + CfgNo, Host[CfgNo]);
 
 
 		case IDCANCEL:
@@ -730,7 +726,44 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		Telnet_Connected(wParam, WSAGETSELECTERROR(lParam));
 		return 0;
 
-   
+//		case WM_CREATE:
+ 
+//  SendMessage(hWndRichEdit, EM_SETEVENTMASK, (WPARAM)0 (LPARAM)ENM_MOUSEEVENTS);
+//  break;
+
+	case WM_NOTIFY:
+	{
+		const MSGFILTER * pF = (MSGFILTER *)lParam;
+		POINT pos;
+		CHARRANGE Range;
+
+		if(pF->nmhdr.hwndFrom == hwndOutput)
+		{
+			if(pF->msg == WM_MOUSEMOVE)
+				return TRUE;
+
+			if(pF->msg == WM_VSCROLL)
+			{
+				Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+				DoRefresh(&OutputData);
+//				return TRUE;		
+			}
+			if(pF->msg == WM_RBUTTONDOWN)
+			{
+				// Only allow popup if something is selected
+
+				SendMessage(hwndOutput, EM_EXGETSEL , 0, (WPARAM)&Range);
+				if (Range.cpMin == Range.cpMax)
+					return TRUE;
+
+				GetCursorPos(&pos);
+				TrackPopupMenu(trayMenu, 0, pos.x, pos.y, 0, hWnd, 0);
+				return TRUE;
+			}
+		}
+		break;
+	}
+
 	case WM_MEASUREITEM: 
  
 		lpmis = (LPMEASUREITEMSTRUCT) lParam; 
@@ -801,7 +834,42 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		
 		switch (wmId) {
-        
+
+		case 40000:
+		{
+			int len=0;
+			HGLOBAL	hMem;
+			char * ptr;
+			CHARRANGE Range;
+
+			// Copy Rich Text Selection to Clipboard
+	
+			SendMessage(hwndOutput, EM_EXGETSEL , 0, (WPARAM)&Range);
+	
+			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, Range.cpMax - Range.cpMin + 1);
+
+			if (hMem != 0)
+			{
+				ptr=GlobalLock(hMem);
+	
+				if (OpenClipboard(MainWnd))
+				{
+					len = SendMessage(hwndOutput, EM_GETSELTEXT  , 0, (WPARAM)ptr);
+
+					GlobalUnlock(hMem);
+					EmptyClipboard();
+					SetClipboardData(CF_TEXT,hMem);
+					CloseClipboard();
+				}
+			}
+			else
+				GlobalFree(hMem);
+
+			SetFocus(hwndInput);
+		}
+
+		return TRUE;
+
 		case BPQMTX:
 	
 			ToggleMTX(hWnd);
@@ -937,7 +1005,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			Height = lprc->bottom-lprc->top;
 			Width = lprc->right-lprc->left;
 
+#pragma warning(push)
+#pragma warning(disable:4244)
 			SplitPos=Height*Split;
+#pragma warning(pop)
 
 			MoveWindows();
 			
@@ -971,7 +1042,7 @@ int StackIndex=0;
  
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
-	char DisplayLine[200] = "\x1b\xb";
+	char DisplayLine[200] = "\x1b\x21";
 	
 	if (uMsg == WM_KEYUP)
 	{
@@ -1061,7 +1132,8 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			memcpy(&DisplayLine[2], kbbuf, kbptr+1);
 
-			WritetoOutputWindow(DisplayLine, kbptr+3);
+			WritetoOutputWindow(&OutputData, DisplayLine, kbptr+3);
+			DoRefresh(&OutputData);
 		
 			// Replace null with CR, and send to Node
 
@@ -1082,77 +1154,16 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
         return 0; 
 		}
-
 	}
- 
     return CallWindowProc(wpOrigInputProc, hwnd, uMsg, wParam, lParam); 
 } 
 
 //int FirstItem=-1, LastItem=-1, SELECTING=FALSE, MOVED=FALSE, LastSelected=0;
 
-LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-
-	// Trap mouse messages, so we cant select stuff in output and mon windows,
-	//	otherwise scrolling doesnt work.
-
-/*	if (uMsg == WM_MOUSEMOVE)
-	{
-		if (SELECTING)
-		{
-			MOVED=TRUE;
-			LastItem = SendMessage(hwndOutput, LB_ITEMFROMPOINT, 0, lParam );
-		
-			if (LastItem < LastSelected)
-				SendMessage(hwndOutput, LB_SETSEL, FALSE, LastSelected);
-
-			if (LastItem > LastSelected)
-				SendMessage(hwndOutput, LB_SETSEL, TRUE, LastItem);
-
-			LastSelected=LastItem;
-		}
-
-        return TRUE; 
-	}
-
-	if (uMsg == WM_LBUTTONDOWN) 
-	{
-		SendMessage(hwndOutput, LB_SELITEMRANGE, 0, MAKELPARAM(0, 32767));
-
-		FirstItem = SendMessage(hwndOutput, LB_ITEMFROMPOINT, 0, lParam );
-		SendMessage(hwndOutput, LB_SETSEL, TRUE, FirstItem);
-
-		SELECTING=TRUE;
-		MOVED=FALSE;
-
-        return TRUE; 
-	}
-
-	if (uMsg == WM_LBUTTONUP) 
-	{
-		LastItem = SendMessage(hwndOutput, LB_ITEMFROMPOINT, 0, lParam );
-		
-		SendMessage(hwndOutput, LB_SELITEMRANGE, 0, MAKELPARAM(0, 32767));
-		if (MOVED) SendMessage(hwndOutput, LB_SELITEMRANGE, 1, MAKELPARAM(FirstItem, LastItem));
-
-		FirstItem=-1;
-
-		SELECTING=FALSE;
-
-		return TRUE; 
-	}
-*/
-
-	if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) 
-        return TRUE; 
-
-	return CallWindowProc(wpOrigOutputProc, hwnd, uMsg, wParam, lParam); 
-} 
-
 LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-   if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) 
-        return TRUE; 
+	 if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) 
+		 return TRUE; 
  
     return CallWindowProc(wpOrigMonProc, hwnd, uMsg, wParam, lParam); 
 } 
@@ -1182,6 +1193,7 @@ LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			ReleaseCapture();
 			MoveWindows();
+			DoRefresh(&OutputData);
 			return 0;
 
 		case WM_MOUSEMOVE:
@@ -1189,202 +1201,333 @@ LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
  			// Used to size split between Monitor and Output Windows
 
 			SetCursor(DragCursor);
-
-/*			if (wParam && MK_LBUTTON)
-			{
-				xPos = LOWORD(lParam);  // horizontal position of cursor 
-				yPos = lParam >> 16;  // vertical position of cursor 
- 
-				if (LastY == 0)
-	
-					LastY=yPos;
-
-				else
-				{
-					if (yPos > LastY)
-						SplitPos = SplitPos + 1;
-					if (yPos < LastY)
-						SplitPos = SplitPos - 1;
-
-//					if (Split < .1) Split = .1;
-//					if (Split > .9) Split = .9;
-
-					LastY=yPos;
-
-
-//					MoveWindows();
-				}
-				return 0;
-			}
-			else
-
-				LastY=0;
-
 			break;
-*/	
-
-			break;
-
-
-
 	}
 
     return CallWindowProc(wpOrigSplitProc, hwnd, uMsg, wParam, lParam); 
 } 
 
+DWORD CALLBACK EditStreamCallback(struct RTFTerm * OPData, LPBYTE lpBuff, LONG cb, PLONG pcb)
+{
+	int ReqLen = cb;
+	int i;
+	int Line;
+
+	if (cb != 4092)
+		return 0;
+
+	if (OPData->SendHeader)
+	{
+		// Return header
+
+		memcpy(lpBuff, RTFHeader, RTFHddrLen);
+		*pcb = RTFHddrLen;
+		OPData->SendHeader = FALSE;
+		OPData->Finished = FALSE;
+		OPData->Index = 0;
+		return 0;
+	}
+
+	if (OPData->Finished)
+	{
+		*pcb = 0;
+		return 0;
+	}
+	
+/*
+	if (BufferLen > cb)
+	{
+		memcpy(lpBuff, &Buffer[Offset], cb);
+		BufferLen -= cb;
+		Offset += cb;
+		*pcb = cb;
+		return 0;
+	}
+
+	memcpy(lpBuff, &Buffer[Offset], BufferLen);
+
+    *pcb = BufferLen;
+*/
+
+	// Return 10 line at a time
+
+	for (i = 0; i < 10; i++);
+	{
+	Line = OPData->Index++ + OPData->CurrentLine - MAXLINES;
+
+	if (Line <0)
+		Line = Line + MAXLINES;
+
+	wsprintf(lpBuff, "\\cf%d ", OPData->Colourvalue[Line]);
+	strcat(lpBuff, OPData->OutputScreen[Line]);
+	strcat(lpBuff, "\\line");
+
+	if (OPData->Index == MAXLINES)
+	{
+		OPData->Finished = TRUE;
+		strcat(lpBuff, "}");
+		i = 10;
+	}
+	}
+	*pcb = strlen(lpBuff);
+	return 0;
+}
 
 
+VOID DoRefresh(struct RTFTerm * OPData)
+{
+	EDITSTREAM es = {0};
+	int Min, Max;
+	POINT Point;
+	SCROLLINFO ScrollInfo;
+	int LoopTrap = 0;
+
+	if ((Thumb + OutputBoxHeight) > 15000 || Thumb == 0)		// Don't bother writing to screen if scrolled back
+	{
+		es.pfnCallback = EditStreamCallback;
+		es.dwCookie = (DWORD_PTR)OPData;
+		OPData->SendHeader = TRUE;
+		SendMessage(hwndOutput, EM_STREAMIN, SF_RTF, (LPARAM)&es);
+	}
+
+	GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);
+	ScrollInfo.cbSize = sizeof(ScrollInfo);
+    ScrollInfo.fMask = SIF_ALL;
+
+	Point.x = 0;
+	Point.y = 15020 - OutputBoxHeight;					// Space 20 above bottom
+	GetScrollInfo(hwndOutput, SB_VERT, &ScrollInfo);
+
+	while (ScrollInfo.nMax < Point.y && LoopTrap++ < 20)
+	{
+		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+		GetScrollInfo(hwndOutput, SB_VERT, &ScrollInfo);
+	}
+
+	if (LoopTrap)
+		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+
+	if (ScrollInfo.nPos > 14500 || ScrollInfo.nPos == 0)		// Don't Scroll if user has scrolled back 
+		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+
+}
+
+VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
+{
+	int Len = strlen(Line);
+	char * ptr1 = Line;
+	char * ptr2;
+	int l, Index;
+	char LineCopy[LINELEN * 2];
+	
+	if (Line[0] ==  0x1b && Len > 2)
+	{
+		// Save Colour Char
 		
-VOID WritetoOutputWindow(char * Msg, int len)
+		OPData->CurrentColour = Line[1] - 10;
+		ptr1 +=2;
+		Len -= 2;
+	}
+
+	strcpy(OPData->OutputScreen[OPData->CurrentLine], ptr1);
+
+	// Look for chars we need to escape (\  { })
+
+	ptr1 = OPData->OutputScreen[OPData->CurrentLine];
+	Index = 0;
+	ptr2 = strchr(ptr1, '\\');				// Look for Backslash first, as we may add some later
+
+	if (ptr2)
+	{
+		while (ptr2)
+		{
+			l = ++ptr2 - ptr1;
+			memcpy(&LineCopy[OPData->Index], ptr1, l);	// Copy Including found char
+			Index += l;
+			LineCopy[Index++] = '\\';
+			Len++;
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, '\\');
+		}
+		strcpy(&LineCopy[OPData->Index], ptr1);			// Copy in rest
+		strcpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
+	}
+
+	ptr1 = OPData->OutputScreen[OPData->CurrentLine];
+	Index = 0;
+	ptr2 = strchr(ptr1, '{');
+
+	if (ptr2)
+	{
+		while (ptr2)
+		{
+			l = ptr2 - ptr1;
+			memcpy(&LineCopy[Index], ptr1, l);
+			Index += l;
+			LineCopy[Index++] = '\\';
+			LineCopy[Index++] = '{';
+			Len++;
+			ptr1 = ++ptr2;
+			ptr2 = strchr(ptr1, '{');
+		}
+		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
+		strcpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
+	}
+
+	ptr1 = OPData->OutputScreen[OPData->CurrentLine];
+	Index = 0;
+	ptr2 = strchr(ptr1, '}');				// Look for Backslash first, as we may add some later
+
+	if (ptr2)
+	{
+		while (ptr2)
+		{
+			l = ptr2 - ptr1;
+			memcpy(&LineCopy[Index], ptr1, l);	// Copy 
+			Index += l;
+			LineCopy[Index++] = '\\';
+			LineCopy[Index++] = '}';
+			Len++;
+			ptr1 = ++ptr2;
+			ptr2 = strchr(ptr1, '}');
+		}
+		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
+		strcpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
+	}
+
+
+	OPData->Colourvalue[OPData->CurrentLine] = OPData->CurrentColour;
+	OPData->LineLen[OPData->CurrentLine++] = Len;
+	if (OPData->CurrentLine >= MAXLINES) OPData->CurrentLine = 0;
+}
+
+VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len)
 {
 	char * ptr1, * ptr2;
-	int index;
 
+	if (PartLinePtr != 0)
+	{
+		if (Msg[0] == 0x1b && len > 1) 
+		{
+			Msg += 2;		// Remove Colour Escape
+			len -= 2;
+		}
+	}
+	
+	memcpy(&readbuff[PartLinePtr], Msg, len);
 		
-			if (PartLinePtr != 0)
+	len += PartLinePtr;
+
+	ptr1=&readbuff[0];
+	readbuff[len]=0;
+
+	if (Bells)
+	{
+		do {
+			ptr2=memchr(ptr1,7,len);
+
+			if (ptr2)
 			{
-				SendMessage(hwndOutput,LB_DELETESTRING,PartLineIndex,(LPARAM)(LPCTSTR) 0 );	
-				if (Msg[0] == 0x1b && len > 1) 
-				{
-					Msg += 2;		// Remove Colour Escape
-					len -= 2;
-				}
+				*(ptr2)=32;
+				Beep(440,250);
 			}
-			memcpy(&readbuff[PartLinePtr], Msg, len);
+		} while (ptr2);
+	}
+
+lineloop:
+
+	if (len > 0)
+	{
+		//	copy text to buffer a line at a time	
+	
+		ptr2=memchr(ptr1,13,len);
+
+		if (ptr2 == 0)
+		{
+			// no newline. Move data to start of buffer and Save pointer
+
+			PartLinePtr = len;
+			memmove(readbuff,ptr1,len);
+			InvalidateRect(hwndOutput, NULL, FALSE);
+			return;
+		}
 		
-			len=len+PartLinePtr;
+		*(ptr2++)=0;
 
-			ptr1=&readbuff[0];
-			readbuff[len]=0;
-
-			if (Bells)
-			{
-				do {
-
-					ptr2=memchr(ptr1,7,len);
+		if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
 					
-					if (ptr2)
-					{
-						*(ptr2)=32;
-						Beep(440,250);
-					}
-	
-				} while (ptr2);
+		// If len is greater that screen with, fold
+
+		if ((ptr2 - ptr1) > maxlinelen)
+		{
+			char * ptr3;
+			char * saveptr1 = ptr1;
+			int linelen = ptr2 - ptr1;
+			int foldlen;
+			char save;
+					
+		foldloop:
+
+			ptr3 = ptr1 + maxlinelen;
+					
+			while(*ptr3!= 0x20 && ptr3 > ptr1)
+			{
+				ptr3--;
+			}
+			foldlen = ptr3 - ptr1 ;
+
+			if (foldlen == 0)
+			{
+				// No space before, so split at width
+
+				foldlen = maxlinelen;
+				ptr3 = ptr1 + maxlinelen;
 
 			}
-
-		lineloop:
-
-			if (len > 0)
+			else
 			{
-				//	copy text to control a line at a time	
-	
-				ptr2=memchr(ptr1,13,len);
-				
-				if (ptr2 == 0)
-				{
-					// no newline. Move data to start of buffer and Save pointer
+				ptr3++ ; // Omit space
+				linelen--;
+			}
+			save = ptr1[foldlen];
+			ptr1[foldlen] = 0;
 
-					PartLinePtr=len;
+			AddLinetoWindow(OPData, ptr1);
 
-					PartLineIndex=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+			ptr1[foldlen] = save;
+			linelen -= foldlen;
+			ptr1 = ptr3;
+
+			if (linelen > maxlinelen)
+				goto foldloop;
+						
+			AddLinetoWindow(OPData, ptr1);						
+			ptr1 = saveptr1;
+					
+		}
+		else
+			AddLinetoWindow(OPData, ptr1);
+
 			
-					memmove(readbuff,ptr1,len);
+		PartLinePtr=0;
 
-					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) PartLineIndex, MAKELPARAM(FALSE, 0));
+		len-=(ptr2-ptr1);
 
-					return;
+		ptr1=ptr2;
 
-				}
-				else
-				{
-					*(ptr2++)=0;
-
-					if (LogOutput) WriteMonitorLine(ptr1, ptr2 - ptr1);
-					
-					// If len is greater that screen with, fold
-
-					if ((ptr2 - ptr1) > maxlinelen)
-					{
-						char * ptr3;
-						char * saveptr1 = ptr1;
-						int linelen = ptr2 - ptr1;
-						int foldlen;
-						char save;
-					
-					foldloop:
-
-						ptr3 = ptr1 + maxlinelen;
-					
-						while(*ptr3!= 0x20 && ptr3 > ptr1)
-						{
-							ptr3--;
+		if ((len > 0) && StripLF)
+		{
+			if (*ptr1 == 0x0a)					// Line Feed
+			{
+				ptr1++;
+				len--;
 						}
-						
-						foldlen = ptr3 - ptr1 ;
-
-						if (foldlen == 0)
-						{
-							// No space before, so split at width
-
-							foldlen = maxlinelen;
-							ptr3 = ptr1 + maxlinelen;
-
-						}
-						else
-						{
-							ptr3++ ; // Omit space
-							linelen--;
-						}
-						save = ptr1[foldlen];
-						ptr1[foldlen] = 0;
-						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
-						ptr1[foldlen] = save;
-						linelen -= foldlen;
-						ptr1 = ptr3;
-
-						if (linelen > maxlinelen)
-							goto foldloop;
-						
-						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
-						ptr1 = saveptr1;
-					}
-
-					else
-					{
-						index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
-					}
-					if (index > 1200)
-						
-					do{
-
-						index=SendMessage(hwndOutput,LB_DELETESTRING, 0, 0);
-
-					
-						} while (index > 1000);
-
-					SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
-					
-					PartLinePtr=0;
-
-					len-=(ptr2-ptr1);
-
-					ptr1=ptr2;
-
-					if ((len > 0) && StripLF)
-					{
-						if (*ptr1 == 0x0a)					// Line Feed
-						{
-							ptr1++;
-							len--;
-						}
-					}
-
-
-					goto lineloop;
-				}
+		}
+		goto lineloop;
+	}
 }
-}	
+
+
 
 char MonSave[1000];
 int MonSaveLen;
@@ -1557,8 +1700,10 @@ void MoveWindows()
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 
+	OutputBoxHeight = ClientHeight - SplitPos - InputBoxHeight - SplitBarHeight - SplitBarHeight;
+
 	MoveWindow(hwndMon,2, 0, ClientWidth-4, SplitPos, TRUE);
-	MoveWindow(hwndOutput,2, SplitPos+SplitBarHeight, ClientWidth-4, ClientHeight-SplitPos-InputBoxHeight-SplitBarHeight-SplitBarHeight, TRUE);
+	MoveWindow(hwndOutput,2, SplitPos+SplitBarHeight, ClientWidth-4, OutputBoxHeight, TRUE);
 	MoveWindow(hwndInput,2, ClientHeight-InputBoxHeight-2, ClientWidth-4, InputBoxHeight, TRUE);
 	MoveWindow(hwndSplit,0, SplitPos, ClientWidth, SplitBarHeight, TRUE);
 
@@ -1814,12 +1959,8 @@ VOID Socket_Data(int sock, int error, int eventcode)
 			DisableDisconnectMenu(hWnd);
 			EnableConnectMenu(hWnd);
 
-			if (SendDisconnected)
-			{
-				int index=SendMessage(hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) "*** Disconnected");		
-				SendMessage(hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
-			}
-
+			WritetoOutputWindow(&OutputData, "*** Disconnected\r", 17);		
+			DoRefresh(&OutputData);
 			SocketActive = FALSE;
 			Connected = FALSE;
 			return ;
@@ -1882,6 +2023,7 @@ VOID DataSocket_Read(SOCKET sock)
 
 		// Nothing Left
 
+		DoRefresh(&OutputData);
 		return ;
 	}
 
@@ -1896,7 +2038,7 @@ MonLoop:
 			// Some Normal Data before the FF
 
 			int NormLen = ptr - Buffptr;				// Before the FF
-			WritetoOutputWindow(Buffptr, NormLen);
+			WritetoOutputWindow(&OutputData, Buffptr, NormLen);
 
 			len -= NormLen;
 			Buffptr = ptr;
@@ -1918,8 +2060,9 @@ MonLoop:
 			Buffptr += MonLen;							// Char Following FE
 
 			if (len <= 0)
+			{
 				return;
-
+			}
 			goto MonLoop;
 		}
 		else
@@ -1927,14 +2070,15 @@ MonLoop:
 			// No FE, so rest of buffer is MON Data
 			
 			WritetoMonWindow(Buffptr+1, len -1);		// Exclude FF
+//			DoRefresh();
 			return;
 		}
 	}
 
 	// No FF, so must be session data
 
-	WritetoOutputWindow(Buffptr, len);
-
+	WritetoOutputWindow(&OutputData, Buffptr, len);
+	DoRefresh(&OutputData);
 	SlowTimer = 0;
 	return;
 }

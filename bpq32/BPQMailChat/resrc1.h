@@ -105,6 +105,7 @@
 #define IDC_READDRESSLOCAL              9877
 #define IDC_READDRESSRXED               9878
 #define IDC_ALLOWCOMP                   9879
+#define IDC_WARNNOROUTE                 9881
 #define IDD_MAINTRESULTS                30001
 #define IDD_EDITWP                      30002
 #define IDD_UICONFIG                    30003

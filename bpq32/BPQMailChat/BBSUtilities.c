@@ -283,3 +283,50 @@ BOOL isdigits(char * string)
 	}
 	return TRUE;
 }
+
+BOOL wildcardcompare(char * Target, char * Match)
+{
+	// Do a compare with string *string string* *string*
+
+	// Strings should all be UC
+
+	char Pattern[100];
+	char * firststar;
+
+	strcpy(Pattern, Match);
+	firststar = strchr(Pattern,'*');
+
+	if (firststar)
+	{
+		int Len = strlen(Pattern);
+
+		if (Pattern[0] == '*' && Pattern[Len - 1] == '*')		// * at start and end
+		{
+			Pattern[Len - 1] = 0;
+			return (BOOL)(strstr(Target, &Pattern[1]));
+		}
+		if (Pattern[0] == '*')		// * at start
+		{
+			// Compare the last len - 1 chars of Target
+
+			int Targlen = strlen(Target);
+			int Comparelen = Targlen - (Len - 1);
+
+			if (Len == 1)			// Just *
+				return TRUE;
+
+			if (Comparelen < 0)	// Too Short
+				return FALSE;
+
+			return (memcmp(&Target[Comparelen], &Pattern[1], Len - 1) == 0);
+		}
+
+		// Must be * at end - compare first Len-1 char
+
+		return (memcmp(Target, Pattern, Len - 1) == 0);
+
+	}
+
+	// No WildCards - straight strcmp
+	return (strcmp(Target, Pattern) == 0);
+}

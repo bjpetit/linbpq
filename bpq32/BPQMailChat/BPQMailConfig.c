@@ -1725,12 +1725,14 @@ VOID SaveFWDConfig(HWND hDlg)
 
 	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_ALIAS, hKey, "FWD Aliases");
 
-	Rev = IsDlgButtonChecked(hDlg, IDC_READDRESSLOCAL);
-	retCode = RegSetValueEx(hKey,"Readdress Local", 0, REG_DWORD, (BYTE *)&Rev,4);
+	ReaddressLocal = IsDlgButtonChecked(hDlg, IDC_READDRESSLOCAL);
+	retCode = RegSetValueEx(hKey,"Readdress Local", 0, REG_DWORD, (BYTE *)&ReaddressLocal,4);
 
-	Rev = IsDlgButtonChecked(hDlg, IDC_READDRESSRXED);
-	retCode = RegSetValueEx(hKey,"Readdress Received", 0, REG_DWORD, (BYTE *)&Rev,4);
+	ReaddressReceived = IsDlgButtonChecked(hDlg, IDC_READDRESSRXED);
+	retCode = RegSetValueEx(hKey,"Readdress Received", 0, REG_DWORD, (BYTE *)&ReaddressReceived,4);
 
+	WarnNoRoute = IsDlgButtonChecked(hDlg, IDC_WARNNOROUTE);
+	retCode = RegSetValueEx(hKey,"Warn No Route", 0, REG_DWORD, (BYTE *)&WarnNoRoute,4);
 
 	// Reinitialise Aliases
 
@@ -2093,13 +2095,19 @@ TryAgain:
 		AliasText = GetMultiStringValue(hKey,  "FWD Aliases");
 
 		Vallen=4;
-		RegQueryValueEx(hKey,"Readdress Local",0,			
-			(ULONG *)&Type,(UCHAR *)&ReaddressLocal,(ULONG *)&Vallen);
+		RegQueryValueEx(hKey, "Readdress Local",0,			
+			(ULONG *)&Type,(UCHAR *)&ReaddressLocal, &Vallen);
 
 		Vallen=4;
-		RegQueryValueEx(hKey,"Readdress Received",0,			
-			(ULONG *)&Type,(UCHAR *)&ReaddressReceived,(ULONG *)&Vallen);
+		RegQueryValueEx(hKey, "Readdress Received",0,			
+			(ULONG *)&Type,(UCHAR *)&ReaddressReceived, &Vallen);
 
+		Vallen=4;
+		RegQueryValueEx(hKey, "Warn No Route",0,			
+			(ULONG *)&Type,(UCHAR *)&WarnNoRoute, &Vallen);
+
+
+		
 		Vallen=100;
 
 		retCode += RegQueryValueEx(hKey,"BBSName",0,			
@@ -2723,6 +2731,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		CheckDlgButton(hDlg, IDC_READDRESSLOCAL, ReaddressLocal);
 		CheckDlgButton(hDlg, IDC_READDRESSRXED, ReaddressReceived);
+		CheckDlgButton(hDlg, IDC_WARNNOROUTE, WarnNoRoute);
 
 		return (INT_PTR)TRUE;
 

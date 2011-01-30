@@ -349,6 +349,13 @@
 // Add CMS logging.
 // Add non - Promiscuous mode option for BPQETHER 
 
+// 410p		Build 14 January 2011
+
+// Add support for BPQTermTCP
+// Allow more that one FBBPORT
+// Allow Telnet FBB mode sessions to send CRLF as well as CR on user and pass msgs
+
+
 #include "KVerhddr.h"
 
 #define _CRT_SECURE_NO_DEPRECATE 

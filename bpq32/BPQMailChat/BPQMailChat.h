@@ -555,6 +555,7 @@ struct NNTPRec
 {
 	// Used for NNTP access to Bulls
 
+	struct NNTPRec * Next;	// Record held in chain, so can be held sorted
 	char NewsGroup[64];		// = Bull TO.at field
 	int	FirstMsg;			// Lowest Number
 	int LastMsg;			// Highest Number
@@ -1032,6 +1033,9 @@ VOID SaveFilters(HWND hDlg);
 BOOL CheckRejFilters(char * From, char * To, char * ATBBS);
 BOOL CheckHoldFilters(char * From, char * To, char * ATBBS);
 BOOL CheckifLocalRMSUser(char * FullTo);
+VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *Context);
+BOOL wildcardcompare(char * Target, char * Match);
+VOID SendWarningToSYSOP(struct MsgInfo * Msg);
 
 // FBB Routines
 
@@ -1213,8 +1217,8 @@ extern struct MsgInfo ** MsgHddrPtr;
 extern BIDRec ** BIDRecPtr;
 extern int NumberofBIDs;
 
-extern struct NNTPRec ** NNTPRecPtr;
-extern int NumberofNNTPRecs;
+extern struct NNTPRec * FirstNNTPRec;
+//extern int NumberofNNTPRecs;
 
 
 extern int NumberofMessages;
@@ -1337,5 +1341,6 @@ extern struct ALIAS ** Aliases;
 
 extern BOOL ReaddressLocal;
 extern BOOL ReaddressReceived;
+extern BOOL WarnNoRoute;
 
 struct ConsoleInfo * ConsHeader[];

@@ -22,6 +22,7 @@ int MyElementCount;
 
 BOOL ReaddressLocal;
 BOOL ReaddressReceived;
+BOOL WarnNoRoute = TRUE;
 
 
 struct Continent
