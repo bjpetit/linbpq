@@ -1,27 +1,45 @@
 
-// Version 1. 0. 2. 1 October 2010
-
-//	Add Delay on start option, and dynamically load bpq32
+//	Program to send ax.25 Beacons from a BPQ32 Switch
 
 #define _CRT_SECURE_NO_DEPRECATE 
-#define WIN32_LEAN_AND_MEAN
 #define _USE_32BIT_TIME_T
 
 #include <windows.h>
-#include "time.h"
-
-#include <stdlib.h>
+#include <windowsx.h>
 #include <stdio.h>
-//#include <malloc.h>	
-//#include <memory.h>
+#include "commctrl.h"
 
-#define DllImport	__declspec( dllimport )
-#define DllExport	__declspec( dllexport )
-
-//#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
 #include "bpq32.h"
 #include "ASMStrucs.h"
 #include "BPQUIUtil.h"
+#define UIUTIL
+#include "GetVersion.h"
+
+#pragma pack(1)
+
+typedef struct _MESSAGEX
+{
+//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+
+	struct _MESSAGEX * CHAIN;
+
+	UCHAR	PORT;
+	USHORT	LENGTH;
+
+	UCHAR	DEST[7];
+	UCHAR	ORIGIN[7];
+
+//	 MAY BE UP TO 56 BYTES OF DIGIS
+
+	UCHAR	CTL;
+	UCHAR	PID;
+	UCHAR	DATA[256];
+	UCHAR	PADDING[56];			// In case he have Digis
+
+}MESSAGEX, *PMESSAGEX;
+
+#pragma pack()
+
 
 HINSTANCE hInst; 
 
@@ -33,57 +51,20 @@ typedef signed short    i16;
 typedef unsigned char   byte;
 typedef unsigned long   u32;
 
-// soundmodem.dll Command Codes
+HWND hCheck[33];
+HWND hLabel[33];
+HWND hUIBox[33];
 
-enum drvc
-        {
-        drv_interfaceversion=1, drv_ident, drv_version,
-        drv_config, drv_confinfo, drv_init_device, drv_get_ch_cnt,
-        drv_exit, drv_ch_active, drv_init_kanal,
-        drv_stat, drv_ch_state, drv_scale,
-        drv_tx_calib, drv_set_led, drv_rx_frame,
-        drv_get_framebuf, drv_tx_frame,
-        drv_get_txdelay, drv_get_mode, drv_get_baud,
-        drv_set_txdelay
-        };
+UINT UIPortMask = 0;
+BOOL UIEnabled[33];
+char * UIDigi[33];
+char * UIDigiAX[33];		// ax.25 version of digistring
+int UIDigiLen[33];			// Length of AX string
 
-struct modemchannel {
-	char devname[64];
-	unsigned int regchnum;
+char UIDEST[11];			// Dest for Beacons
 
-	unsigned int rxrunning;
-	UINT rxthread;
-	struct modulator *modch;
-	struct demodulator *demodch;
-	void *modstate;
-	void *demodstate;
-
-	byte dcd;
-	byte mode;
-	unsigned int bitrate;
-	unsigned int scale;
-	unsigned int calib;
-
-};
-
-#pragma pack(1)
-
-typedef struct
-{
-    i16  len;               /* Laenge des Frames - length of the frame */
-    byte kanal;             /* Kanalnummer - channel number */
-    byte txdelay;           /* RX: Gemessenes TxDelay [*10ms],
-                                   0 wenn nicht unterstuetzt
-                               TX: Zu sendendes TxDelay */
-                            /* RX: measured transmitter keyup delay (TxDelay) in 10ms units,
-                                   0 if not supported
-                               TX: transmitter keyup delay (TxDelay) that should be sent */
-    byte frame[MAXFLEN];    /* L1-Frame (ohne CRC) - L1 frame without CRC */
-} L1FRAME;
-
-
-
-#pragma pack()
+char AXDEST[7];
+char MYCALL[7];
 
 #define NUMBEROFBUFFERS 20
 
@@ -103,22 +84,12 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 HANDLE _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
-
-DllImport UINT APIENTRY SoundCardInterface(int Port, int Function, UINT Param1, UINT Param2);
-
-enum SMCmds
-{
-	INIT,
-	CHECKCHAN,		// See if channel is configured
-	GETBUFFER,
-	POLL,
-	RXPACKET,
-	CLOSING
-};
+VOID SetupUI();
+VOID SendBeacons();
 
 int TimerHandle = 0;
 
-char ClassName[]="SOUNDMAINWINDOW";					// the main window class name
+char ClassName[]="UIMAINWINDOW";					// the main window class name
 
 HWND hWnd;
 
@@ -134,7 +105,10 @@ HWND hDCD;
 
 int State;
 
-int ChannelCount;		// Channels defined on this soundcard
+UCHAR FN[256] = "";	// Filename
+int Interval;		// Beacon Interval (Mins)
+BOOL SendFromFile;
+char Message[1000];	// Beacon Text
 
 typedef UINT (FAR *FARPROCX)();
 
@@ -143,7 +117,6 @@ UINT (FAR *SoundModem)() = NULL;
 HINSTANCE ExtDriver=0;
 HANDLE hRXThread;
 
-L1FRAME * rxf;
 UINT TXQ;
 
 int ConfigNo;
@@ -151,6 +124,29 @@ char Config[20];
 
 UINT PORTPERSISTANCE = 64;
 char TXDELAY[10] = "500";
+
+VOID * zalloc(int len)
+{
+	void * ptr;
+
+	ptr=malloc(len);
+	memset(ptr, 0, len);
+	return ptr;
+}
+
+char * strlop(char * buf, char delim)
+{
+	// Terminate buf at delim, and return rest of string
+
+	char * ptr = strchr(buf, delim);
+
+	if (ptr == NULL) return NULL;
+
+	*(ptr)++=0;
+
+	return ptr;
+}
+
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
@@ -170,19 +166,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	MSG msg;
 	HKEY hKey=0;
 	int retCode, disp;
-
-
-	// The Command Line is the registry key of the config - eg BPQ32_0 For fisrt soundcard
-
-	if (sscanf(lpCmdLine, "%d %d %s", &ConfigNo, &PORTPERSISTANCE, &TXDELAY) != 3)
-	{
-//		MessageBox(NULL,"BPQSoundModem Should only be run by BPQ32","BPQ32",MB_ICONSTOP);
-//		return(999);
-	}
-
-	SoundCardInterface(ConfigNo, INIT, GetCurrentProcessId(), 0);
- 
-	wsprintf(Config, "BPQ32_%d", ConfigNo);
 
 	if (!InitInstance(hInstance, nCmdShow))
 		return (FALSE);
@@ -208,35 +191,61 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	return (msg.wParam);
 }
 
-VOID RXThread()
-{
-	while (TRUE)
-	{
-		rxf = (L1FRAME *)SoundModem(drv_rx_frame, 0, 0, 0);
-
-		if (rxf)
-			SoundCardInterface(ConfigNo, RXPACKET, (UINT)rxf, rxf->kanal);
-
-		Sleep(50);
-	}
-}
-
 HBRUSH bgBrush;
 
 #define BGCOLOUR RGB(236,233,216)
+
+int CreateDialogLine(HWND hWnd, int i, int row)
+{
+	char PortNo[60];
+	char PortDesc[31];
+
+	// Only allow UI on ax.25 ports
+
+	struct _EXTPORTDATA * PORTVEC;
+
+	PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntry(i);
+
+	if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
+		if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
+			return FALSE;
+
+
+	GetPortDescription(i, PortDesc);
+	wsprintf(PortNo, "Port %2d %30s", GetPortNumber(i), PortDesc);
+	
+	hCheck[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
+                 50,row+7,14,14, hWnd, NULL, hInst, NULL);
+
+	Button_SetCheck(hCheck[i], UIEnabled[i]);
+
+	hLabel[i] = CreateWindow(WC_STATIC , PortNo,  WS_CHILD | WS_VISIBLE,
+                 80,row+5,300,22, hWnd, NULL, hInst, NULL);
+	
+	SendMessage(hLabel[i], WM_SETFONT,(WPARAM) hFont, 0);
+
+
+	hUIBox[i] = CreateWindowEx(WS_EX_CLIENTEDGE, WC_EDIT , "", WS_CHILD | WS_BORDER | WS_VISIBLE | ES_UPPERCASE,
+                 400,row,200,22, hWnd, NULL, hInst, NULL);
+
+	SendMessage(hUIBox[i], WM_SETFONT,(WPARAM) hFont, 0);
+	SetWindowText(hUIBox[i], UIDigi[i]);
+
+	return TRUE;
+}
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	int retCode, Type, Vallen;
 	char Key[80];
-	int err, i=0, n, Top, Left;
+	int err, i=0;
 	char Size[80];
 	RECT Rect = {0};
 	char Title[80];
 	HKEY hKey = 0;
 	HKEY hKey2 = 0;
 	WNDCLASS  wc;
-	struct _EXTPORTDATA * PORTVEC;
+	int Row = 210;
 
 	hInst = hInstance; // Store instance handle in our global variable
 
@@ -259,7 +268,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hWnd=CreateDialog(hInst,ClassName,0,NULL);
 
-	wsprintf(Title, "Unproto Interface");
+	GetVersionInfo(NULL);
+	wsprintf(Title,"BPQ32 Beacon Utility Version %s", VersionString);
 
 	SetWindowText(hWnd, Title);
 
@@ -287,17 +297,85 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey, "PortMask", 0,			
 			(ULONG *)&Type, (UCHAR *)&UIMask, (ULONG *)&Vallen);
 
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "Interval", 0,			
+			(ULONG *)&Type, (UCHAR *)&Interval, (ULONG *)&Vallen);
 
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "SendFromFile", 0,			
+			(ULONG *)&Type, (UCHAR *)&SendFromFile, (ULONG *)&Vallen);
+
+		CheckDlgButton(hWnd, IDC_FROMFILE, SendFromFile);
+
+		SetDlgItemInt(hWnd, IDC_INTERVAL, Interval, FALSE);
+
+		Vallen=10;
+		retCode = RegQueryValueEx(hKey, "UIDEST", 0, &Type, &UIDEST[0], &Vallen);
+		SetDlgItemText(hWnd, IDC_UIDEST, UIDEST);
+
+		Vallen=255;
+		retCode = RegQueryValueEx(hKey, "FileName", 0, &Type, &FN[0], &Vallen);
+		SetDlgItemText(hWnd, IDC_FILENAME, FN);
+
+		Vallen=999;
+		retCode = RegQueryValueEx(hKey, "Message", 0, &Type, &Message[0], &Vallen);
+		SetDlgItemText(hWnd, IDC_MESSAGE, Message);
+		RegCloseKey(hKey);
 	}
 
-	Top = Rect.top;
-	Left = Rect.left;
+	for (i=1; i<=32; i++)
+	{
+		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil\\UIPort%d", i);
 
-	GetWindowRect(hWnd, &Rect);	// Get the real size
+		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+                              Key,
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
 
-	MoveWindow(hWnd, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+		if (retCode == ERROR_SUCCESS)
+		{
+			Vallen=4;
+			RegQueryValueEx(hKey,"Enabled",0,			
+					(ULONG *)&Type,(UCHAR *)&UIEnabled[i],(ULONG *)&Vallen);
+	
+			Vallen=0;
+			RegQueryValueEx(hKey,"Digis",0,			
+				(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+			if (Vallen)
+			{
+				UIDigi[i] = malloc(Vallen);
+				RegQueryValueEx(hKey,"Digis",0,			
+					(ULONG *)&Type, UIDigi[i], (ULONG *)&Vallen);
+			}
+			
+			RegCloseKey(hKey);
+		}
+	}
+
+	SetupUI();
+
+   	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
 	MinimizetoTray = GetMinimizetoTrayFlag();
+
+	if (MinimizetoTray)
+	{
+		wsprintf(Title, "UIRoutine");
+		AddTrayMenuItem(hWnd, Title);
+	}
+
+	CheckTimer();		// Force BPQ32 to initialise
+
+	for (i = 1; i <= GetNumberofPorts(); i++)
+		if (CreateDialogLine(hWnd, i, Row))
+			Row += 30;
+
+	GetWindowRect(hWnd, &Rect);      
+	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 650, Row+100, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDOK), NULL, 260, Row+20, 60, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, ID_TEST), NULL, 330, Row+20, 60, 30, 0);
 		
 	if (Minimized)
 		if (MinimizetoTray)
@@ -307,43 +385,68 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	else
 		ShowWindow(hWnd, SW_RESTORE);
 
-   	BPQMsg = RegisterWindowMessage(BPQWinMsg);
-
-	if (MinimizetoTray)
-	{
-		wsprintf(Title, "UIRoutine");
-		AddTrayMenuItem(hWnd, Title);
-	}
-
-	for (n = 1; n <= 32; n++)
-	{
-		ShowWindow(GetDlgItem(hWnd, BASECHECK + n), SW_HIDE);
-	}
-
-	for (n = 1; n <= GetNumberofPorts(); n++)
-	{
-		i = GetPortNumber(n);
-		ShowWindow(GetDlgItem(hWnd, BASECHECK + i), SW_SHOW);
-
-		PORTVEC = (struct _EXTPORTDATA *)GetPortTableEntry(i);
-
-		if (PORTVEC->PORTCONTROL.PORTTYPE != 16 || PORTVEC->PORTCONTROL.PROTOCOL != 10)	// Pactor/WINMOR
-			EnableWindow(GetDlgItem(hWnd, BASECHECK + i), TRUE);
-
-		if (UIMask & (1<<(i-1)))
-			CheckDlgButton(hWnd, BASECHECK + 1, 1);
-	}
-	TimerHandle = SetTimer(hWnd,WM_TIMER, 100, NULL);
-
 	return (TRUE);
 }
 
+
 VOID TimerProc()
 {
-	// Called every 100 ms (or so!)
+	 SendBeacons();
+}
 
-	// Look for messages from BPQ32 
+VOID Free_UI()
+{
+	int i;
 
+	for (i = 1; i <= 32; i++)
+	{
+		if (UIDigi[i])
+		{
+			free(UIDigi[i]);
+			UIDigi[i] = NULL;
+		}
+
+		if (UIDigiAX[i])
+		{
+			free(UIDigiAX[i]);
+			UIDigiAX[i] = NULL;
+		}
+	}
+}
+
+SaveUIConfig()
+{
+	int Num = GetNumberofPorts();
+	int i, Len, retCode, disp;
+	char Key[80];
+	HKEY hKey;
+
+	Free_UI();
+
+	for (i=1; i<=Num; i++)
+	{
+		UIEnabled[i] =  Button_GetCheck(hCheck[i]);
+	
+		Len = GetWindowTextLength(hUIBox[i]);
+	
+		UIDigi[i] = malloc(Len+1);
+		GetWindowText(hUIBox[i], UIDigi[i], Len+1);
+		
+		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil\\UIPort%d", i);
+
+		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+                         Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+		if (retCode == ERROR_SUCCESS)
+		{		
+			retCode = RegSetValueEx(hKey, "Enabled", 0, REG_DWORD,(BYTE *)&UIEnabled[i], 4);
+			retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ,(BYTE *)UIDigi[i],strlen(UIDigi[i]));
+
+			RegCloseKey(hKey);
+		}
+	}
+	
+	return TRUE;
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -354,6 +457,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	char Key[80];
 	int retCode, disp;
 	RECT Rect;
+	OPENFILENAME ofn;
+	BOOL OK;
 
 	switch (message) { 
 
@@ -391,20 +496,55 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		wmId    = LOWORD(wParam);
 		wmEvent = HIWORD(wParam);
 
-		if (wmId > BASECHECK && wmId < BASECHECK + 33)
-		{
-			int Mask = 0x1 << (wmId - (BASECHECK + 1));
-			BOOL Active = IsDlgButtonChecked(hWnd, wmId);	
-			
-			if (Active)
-				UIMask |= Mask;
-			else
-				UIMask &= ~Mask;
-
-			return 0;
-		}
-
 		switch (wmId) {
+
+		case IDC_FILE:
+
+			memset(&ofn, 0, sizeof (OPENFILENAME));
+			ofn.lStructSize = sizeof (OPENFILENAME);
+			ofn.hwndOwner = hWnd;
+			ofn.lpstrFile = FN;
+			ofn.nMaxFile = 250;
+			ofn.lpstrTitle = "File to send as beacon";
+			ofn.lpstrInitialDir = GetBPQDirectory();
+
+			if (GetOpenFileName(&ofn))
+				SetDlgItemText(hWnd, IDC_FILENAME, FN);
+
+			break;
+
+		case IDOK:
+
+			GetDlgItemText(hWnd, IDC_UIDEST, UIDEST, 10); 
+			GetDlgItemText(hWnd, IDC_FILENAME, FN, 255); 
+			GetDlgItemText(hWnd, IDC_MESSAGE, Message, 1000); 
+	
+			Interval = GetDlgItemInt(hWnd, IDC_INTERVAL, &OK, FALSE); 
+			SendFromFile = IsDlgButtonChecked(hWnd, IDC_FROMFILE);
+			
+			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+					"SOFTWARE\\G8BPQ\\BPQ32\\UIUtil", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
+			if (retCode == ERROR_SUCCESS)
+			{
+				retCode = RegSetValueEx(hKey, "UIDEST", 0, REG_SZ,(BYTE *)&UIDEST, strlen(UIDEST));
+				retCode = RegSetValueEx(hKey, "FileName", 0, REG_SZ,(BYTE *)&FN, strlen(FN));
+				retCode = RegSetValueEx(hKey, "Message", 0, REG_SZ,(BYTE *)&Message, strlen(Message));
+				retCode = RegSetValueEx(hKey, "Interval", 0, REG_DWORD,(BYTE *)&Interval, 4);
+				retCode = RegSetValueEx(hKey, "SendFromFile", 0, REG_DWORD,(BYTE *)&SendFromFile, 4);
+
+				RegCloseKey(hKey);
+			}
+
+			SaveUIConfig();
+			SetupUI();
+
+			return TRUE;
+
+		case ID_TEST:
+
+			SendBeacons();
+			return TRUE;
 
 		default:
 
@@ -444,7 +584,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ShowWindow(hWnd, SW_RESTORE);
 			GetWindowRect(hWnd, &Rect);
 
-			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\SOUNDMODEM\\PORT%d", ConfigNo);
+			strcpy(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil");
 	
 			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
 				KEY_ALL_ACCESS, NULL, &hKey, &disp);
@@ -470,89 +610,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	return (0);
 }
-/*
-TXFrame()
-{
-	int State = SoundModem(drv_ch_state, 0);
-	L1FRAME * txf;
-
-	0x40   RxB RxBuffer is not empty
-    0x20   PTT Transmitter is keyed on
-    0x10   DCD Receiver is active
-    0x08   FDX Channel is full duplex, receiver can always receive
-    0x04   TBY Transmitter not ready, for example because of ongoing
-                    calibration
-
-
-			State = SoundModem(drv_ch_state, 0);
-
-
-
-	if (State & 0x20)		// Already sending so send this one
-			goto Sendit;
-
-		if (State & 0x10)	// If DCD active queue it.
-			goto Queueit;
-
-	Sendit:
-
-		if (txf = (L1FRAME *)SoundModem(drv_get_framebuf, Channel, 0, 0))
-		{
-			txlen = (buff[6] << 8) + buff[5] - 7;
-			txf->len = txlen;
-			memcpy(txf->frame, &buff[7], txlen);
-			txf->txdelay = 0;
-			SoundModem(drv_tx_frame, 0, 0, 0);
-			return 0;
-		}
-					
-		return (0);
-
-				if (State & 0x20)
-			PORTVEC->SENDING++;
-
-		if (State & 0x10)
-		{
-			PORTVEC->ACTIVE++;
-		}
-		else
-		{
-			// DCD False - if frames queued, try to send
-
-			if (PORT->TXQ)
-			{
-				UCHAR rnd = rand() & 255;
-				
-				Debugprintf ("CSMA rnd = %d, PP = %d", rnd, PORTVEC->PORTPERSISTANCE);
-				
-				if (rnd > PORTVEC->PORTPERSISTANCE)
-				{
-					Debugprintf("Waiting SLOTTIME");
-				}
-				else
-				{
-					UINT * buffptr;
-
-					while (PORT->TXQ)
-					{
-						buffptr = Q_REM(&PORT->TXQ);
-						if (txf = (L1FRAME *)SoundModem(drv_get_framebuf, PORT->Channel, 0, 0))
-						{
-							txlen = buffptr[1];
-							txf->len = txlen;
-							memcpy(txf->frame, &buffptr[2], txlen);
-							ReleaseBuffer(buffptr);
-
-							SoundModem(drv_tx_frame, 0, 0, 0);
-						}
-					}
-				}
-			}
-		}
-
-
-
-*/
 
 UINT * GetBuffer()
 {
@@ -614,5 +671,186 @@ VOID Q_ADD(UINT *Q,UINT *BUFF)
 
 	next[0] = (UINT)BUFF;				// New one on end
 }
+
+VOID SetupUI()
+{
+	int i;
+
+	ConvToAX25(GetNodeCall(), MYCALL);
+	ConvToAX25(UIDEST, AXDEST);
+
+	UIPortMask = 0;
+
+	for (i = 1; i <= GetNumberofPorts(); i++)
+	{
+		if (UIEnabled[i])
+		{
+			char DigiString[100], * DigiLeft;
+
+			UIPortMask |= 1 << (i-1);
+			UIDigiLen[i] = 0;
+
+			if (UIDigi[i])
+			{
+				UIDigiAX[i] = zalloc(100);
+				strcpy(DigiString, UIDigi[i]);
+				DigiLeft = strlop(DigiString,',');
+
+				while(DigiString[0])
+				{
+					ConvToAX25(DigiString, &UIDigiAX[i][UIDigiLen[i]]);
+					UIDigiLen[i] += 7;
+
+					if (DigiLeft)
+					{
+						_asm
+						{
+							mov eax,dword ptr [DigiLeft] 
+							push eax
+							lea	eax,[DigiString] 
+							push eax
+							call strcpy
+							add	esp,8
+						}
+						DigiLeft = strlop(DigiString,',');
+					}
+					else
+						DigiString[0] = 0;
+				}
+			}
+		}
+	}
+	if (TimerHandle)
+	{
+		KillTimer(hWnd, TimerHandle);
+		TimerHandle = 0;
+	}
+	if (Interval)
+		TimerHandle = SetTimer(hWnd, WM_TIMER, Interval * 60000, NULL);
+}
+
+
+VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue)
+{
+	MESSAGEX AXMSG;
+	PMESSAGEX AXPTR = &AXMSG;
+	int DataLen = Len;
+
+	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	memcpy(AXPTR->DEST, HWADDR, 7);
+	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+	AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+	if (UIDigi[Port])
+	{
+		// This port has a digi string
+
+		int DigiLen = UIDigiLen[Port];
+
+		memcpy(&AXPTR->CTL, UIDigiAX[Port], DigiLen);
+		
+		_asm{					// Adjusting pointers to structs is difficult in C!
+			mov	eax,AXPTR
+			add eax, DigiLen
+			mov AXPTR,EAX
+		}
+
+		Len += DigiLen;
+
+	}
+	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+	AXPTR->CTL = 3;		//UI
+	AXPTR->PID = 0xf0;
+	memcpy(AXPTR->DATA, Msg, DataLen);
+
+//	if (Queue)
+//		QueueRaw(Port, &AXMSG, Len + 16);
+//	else
+		SendRaw(Port, (char *)&AXMSG.DEST, Len + 16);
+
+	return;
+
+}
+
+
+VOID SendUI(char * Msg, int Len)
+{
+	int Mask = UIPortMask;
+	int NumPorts = GetNumberofPorts();
+	int i;
+
+	for (i=1; i <= NumPorts; i++)
+	{
+		if (Mask & 1)
+			Send_AX_Datagram(Msg, Len, i, AXDEST, TRUE);
+		
+		Mask>>=1;
+	}
+}
+
+int RemoveLF(char * Message, int len)
+{
+	// Remove lf chars
+
+	char * ptr1, * ptr2;
+
+	ptr1 = ptr2 = Message;
+
+	while (len-- > 0)
+	{
+		*ptr2 = *ptr1;
+	
+		if (*ptr1 == '\r')
+			if (*(ptr1+1) == '\n')
+			{
+				ptr1++;
+				len--;
+			}
+		ptr1++;
+		ptr2++;
+	}
+
+	return (ptr2 - Message);
+}
+
+
+
+VOID SendBeacons()
+{
+	char UIMessage[1024];
+	int Len = strlen(Message);
+	int Index = 0;
+
+	if (SendFromFile)
+	{
+		HANDLE Handle;
+
+		Handle = CreateFile(FN, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+		if (Handle == INVALID_HANDLE_VALUE)
+			return;
+		
+		ReadFile(Handle, &UIMessage, 1024, &Len, NULL); 
+		CloseHandle(Handle);
+
+	}
+	else
+		strcpy(UIMessage, Message);
+
+	
+	Len =  RemoveLF(UIMessage, Len);
+
+	while (Len > 256)
+	{
+		SendUI(&UIMessage[Index], 256);
+		Index += 256;
+		Len -= 256;
+	}
+
+	SendUI(&UIMessage[Index], Len);
+}
+
 
 
