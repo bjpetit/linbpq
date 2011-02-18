@@ -1551,6 +1551,9 @@ BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader)
 	BIDRec * BID;
 	int m;
 
+	if (RefuseBulls && FBBHeader->MsgType == 'B')
+		return FALSE;
+
 	if (FBBHeader->Size > MaxRXSize)
 		return FALSE;
 	

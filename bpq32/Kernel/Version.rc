@@ -3,7 +3,7 @@
 // Version
 //
 
-#include "KVerhddr.h"
+#include "Versions.h"
 #include "afxres.h"
 
 VS_VERSION_INFO VERSIONINFO

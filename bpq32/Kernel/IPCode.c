@@ -32,11 +32,7 @@ TODo	?Time Out ARP
 #include "windows.h"
 #include <stdio.h>
 #include "AsmStrucs.h"
-//#define DYNLOADBPQ		// Dynamically Load BPQ32.dll
-//#define EXTDLL			// Use GetModuleHandle instead of LoadLibrary 
 #include "bpq32.h"
-
-
 #include "IPCode.h"
 #include "pcap.h"
 
@@ -1970,7 +1966,7 @@ void IPResolveNames( void *dummy )
         wc.cbClsExtra    = 0;
         wc.cbWndExtra    = 0;
         wc.hInstance     = hInstance;
-        wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(IDI_ICON2));
+        wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
         wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
         wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
 		wc.lpszMenuName =  NULL ;

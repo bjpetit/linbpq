@@ -459,8 +459,7 @@ DECODEDNAME	DB	20 DUP (0)	; CALL IN ALIAS:CALL FORMAT
 STATS	DB	'Time active (mins)          '
 		db	1
 STATSTIME	DD	0
-
-		db	'Semaphore Get/Rel/Clashes   '
+SEMSTATS db	'Semaphore Get/Rel/Clashes   '
 		db	3
 
 _SEMGETS	DD	0
@@ -648,7 +647,7 @@ _BPQDATA	ENDS
 
 _TEXT	SEGMENT
 
-	EXTRN _SaveNodes@0:NEAR, _Reconfig@0:NEAR, _Reboot@0:NEAR, _Restart@0:NEAR, _FormatMH:NEAR
+	EXTRN _SaveNodes@0:NEAR, _Reconfig@0:NEAR, _Reboot@0:NEAR, _Restart@0:NEAR, _FormatMH:NEAR, _FormatUptime:NEAR
 
 	PUBLIC	COMMANDHANDLER,_COUNTNODES,B2HEX,GETVALUE
 
@@ -3748,7 +3747,17 @@ CMDSTATS:
 	PUBLIC	DOSYSSTATS
 DOSYSSTATS:
 
-	MOV	ESI,OFFSET32 STATS
+;	Pass the Uptime to FormatUptime to display dd hh mm
+
+	push	STATSTIME
+	call _FormatUptime
+	add	esp,4
+	
+	mov	esi,eax
+	mov	ecx,STATSLEN + 10
+	REP MOVSB
+
+	MOV	ESI,OFFSET32 SEMSTATS
 
 	PUBLIC	CMDST00
 CMDST00:

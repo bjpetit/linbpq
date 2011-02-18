@@ -3,7 +3,7 @@ char VersionString[50]="";
 char VersionStringWithBuild[50]="";
 int Ver[4];
 
-VOID GetVersionInfo(char * File)
+VOID GetVersionInfo(TCHAR * File)
 {
 	HRSRC RH;
   	struct tagVS_FIXEDFILEINFO * HG;

@@ -376,7 +376,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInstance;
-    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(IDI_ICON2) );
+    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(BPQICON) );
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = bgBrush; 
 

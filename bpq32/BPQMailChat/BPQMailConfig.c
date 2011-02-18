@@ -30,9 +30,9 @@ DLGTEMPLATE *apRes[C_PAGES];
 HWND hwndDlg;		// Config Dialog
 HWND hwndDisplay;   // Current child dialog box
 
-HWND hCheck[17];
-HWND hLabel[17];
-HWND hUIBox[17];
+HWND hCheck[33];
+HWND hLabel[33];
+HWND hUIBox[33];
 HFONT hFont;
 LOGFONT LFTTYFONT ;
 
@@ -139,7 +139,8 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			 OnSelChanged(hDlg);
 				 return TRUE;
          // More cases on WM_NOTIFY switch.
-
+		case NM_CHAR:
+			return TRUE;
         }
 
        break;
@@ -155,6 +156,16 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
         SetBkMode(hdcStatic, TRANSPARENT);
         return (LONG)bgBrush;
     }
+
+	
+	case WM_KEYUP:
+
+		if (wParam == VK_TAB)
+			return TRUE;
+
+
+		break;
+
 
 
 	case WM_COMMAND:
@@ -216,6 +227,19 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 
 	switch (message)
 	{
+	case WM_NOTIFY:
+
+        switch (((LPNMHDR)lParam)->code)
+        {
+		case TCN_SELCHANGE:
+			 OnSelChanged(hDlg);
+				 return TRUE;
+         // More cases on WM_NOTIFY switch.
+		case NM_CHAR:
+			return TRUE;
+        }
+
+       break;
 	case WM_INITDIALOG:
 		OnChildDialogInit( hDlg);
 		return (INT_PTR)TRUE;
@@ -288,8 +312,8 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 
 		}
 		break;
-	}
-	
+
+	}	
 	return (INT_PTR)FALSE;
 }
 
@@ -483,6 +507,8 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSStreams, MaxStreams, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_ENABLEUI, EnableUI);
+		SetDlgItemInt(pHdr->hwndDisplay, MAILFOR_MINS, MailForInterval, FALSE);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_REFUSEBULLS, RefuseBulls);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_POP3Port, POP3InPort, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_NNTPPort, NNTPInPort, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_SMTPPort, SMTPInPort, FALSE);
@@ -1478,14 +1504,15 @@ VOID SaveBBSConfig()
 	int retCode,disp;
 
 	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-		
+		"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
 	GetDlgItemText(hwndDisplay, IDC_BBSCall, BBSName, 50);
 	GetDlgItemText(hwndDisplay, IDC_SYSOPCALL, SYSOPCall, 50);
 	GetDlgItemText(hwndDisplay, IDC_HRoute, HRoute, 50);
 	GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDir, 50);
 	EnableUI = IsDlgButtonChecked(hwndDisplay, IDC_ENABLEUI);
+	RefuseBulls = IsDlgButtonChecked(hwndDisplay, IDC_REFUSEBULLS);
+	MailForInterval = GetDlgItemInt(hwndDisplay, MAILFOR_MINS, &OK1, FALSE);
 	SendSYStoSYSOPCall = IsDlgButtonChecked(hwndDisplay, IDC_SYSTOSYSOPCALL);
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
@@ -1507,11 +1534,14 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "H-Route", 0, REG_SZ,(BYTE *)&HRoute, strlen(HRoute));
 		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDir, strlen(BaseDir));
 		retCode = RegSetValueEx(hKey, "EnableUI",0, REG_DWORD,(BYTE *)&EnableUI,4);
+		retCode = RegSetValueEx(hKey, "RefuseBulls",0, REG_DWORD,(BYTE *)&RefuseBulls,4);
 		retCode = RegSetValueEx(hKey, "SendSYStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendSYStoSYSOPCall,4);
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
 		retCode = RegSetValueEx(hKey, "NNTPPort",0,REG_DWORD,(BYTE *)&NNTPInPort,4);
 		retCode = RegSetValueEx(hKey, "RemoteEmail",0,REG_DWORD,(BYTE *)&RemoteEmail,4);
+		retCode = RegSetValueEx(hKey, "MailForInterval", 0, REG_DWORD,(BYTE *)&MailForInterval, 4);
+		retCode = RegSetValueEx(hKey, "MailForText", 0, REG_SZ,(BYTE *)&MailForText, strlen(MailForText));
 
 		RegCloseKey(hKey);
 
@@ -1839,6 +1869,8 @@ VOID SaveMAINTConfig()
 
 	RegCloseKey(hKey);
 
+	if (MaxMsgno > 99000) MaxMsgno = 99000;
+
 	wsprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
@@ -2075,11 +2107,16 @@ TryAgain:
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"BBSApplNum",0,			
 			(ULONG *)&Type,(UCHAR *)&BBSApplNum,(ULONG *)&Vallen);
+		
+		Vallen=4;
+		RegQueryValueEx(hKey, "EnableUI", 0, &Type, (UCHAR *)&EnableUI, &Vallen);
 
 		Vallen=4;
-		RegQueryValueEx(hKey,"EnableUI",0,			
-			(ULONG *)&Type,(UCHAR *)&EnableUI,(ULONG *)&Vallen);
-		
+		RegQueryValueEx(hKey, "MailForInterval", 0, &Type, (UCHAR *)&MailForInterval, &Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey, "RefuseBulls", 0, &Type, (UCHAR *)&RefuseBulls, &Vallen);
+
 		Vallen=4;
 		RegQueryValueEx(hKey,"SendSYStoSYSOPCall",0,			
 			(ULONG *)&Type,(UCHAR *)&SendSYStoSYSOPCall,(ULONG *)&Vallen);
@@ -2105,13 +2142,12 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey, "Warn No Route",0,			
 			(ULONG *)&Type,(UCHAR *)&WarnNoRoute, &Vallen);
-
-
 		
 		Vallen=100;
+		retCode += RegQueryValueEx(hKey, "BBSName",0 , &Type, (UCHAR *)&BBSName, &Vallen);
 
-		retCode += RegQueryValueEx(hKey,"BBSName",0,			
-			(ULONG *)&Type,(UCHAR *)&BBSName,(ULONG *)&Vallen);
+		Vallen=100;
+		retCode += RegQueryValueEx(hKey, "MailForText",0 , &Type, (UCHAR *)&MailForText, &Vallen);
 
 		Vallen=100;
 		retCode += RegQueryValueEx(hKey,"SYSOPCall",0,			
@@ -2323,7 +2359,7 @@ TryAgain:
 */
 		RegCloseKey(hKey);
 
-		for (i=1; i<=16; i++)
+		for (i=1; i<=32; i++)
 		{
 			int retCode;
 			char Key[100];
@@ -2375,6 +2411,8 @@ TryAgain:
 			Vallen=4;
 			retCode += RegQueryValueEx(hKey,"MaxMsgno",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxMsgno,(ULONG *)&Vallen);
+
+			if (MaxMsgno > 99000) MaxMsgno = 99000;
 
 			Vallen=4;
 			RegQueryValueEx(hKey,"LogLifetime",0,			
@@ -2792,11 +2830,21 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 
 
-int CreateDialogLine(HWND hWnd, int i)
+int CreateDialogLine(HWND hWnd, int i, int row)
 {
-	int row = (i) * 30 + 10;
 	char PortNo[60];
 	char PortDesc[31];
+
+	// Only allow UI on ax.25 ports
+
+	struct _EXTPORTDATA * PORTVEC;
+
+	PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntry(i);
+
+	if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
+		if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
+			return FALSE;
+
 
 	GetPortDescription(i, PortDesc);
 	wsprintf(PortNo, "Port %2d %30s", GetPortNumber(i), PortDesc);
@@ -2807,19 +2855,18 @@ int CreateDialogLine(HWND hWnd, int i)
 	Button_SetCheck(hCheck[i], UIEnabled[i]);
 
 	hLabel[i] = CreateWindow(WC_STATIC , PortNo,  WS_CHILD | WS_VISIBLE,
-                 30,row+5,200,22, hWnd, NULL, hInst, NULL);
+                 30,row+5,300,22, hWnd, NULL, hInst, NULL);
 	
 	SendMessage(hLabel[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 
 	hUIBox[i] = CreateWindowEx(WS_EX_CLIENTEDGE, WC_EDIT , "", WS_CHILD | WS_BORDER | WS_VISIBLE | ES_UPPERCASE,
-                 215,row,200,22, hWnd, NULL, hInst, NULL);
+                 315,row,200,22, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hUIBox[i], WM_SETFONT,(WPARAM) hFont, 0);
 	SetWindowText(hUIBox[i], UIDigi[i]);
 
-
-	return 0;
+	return TRUE;
 }
 
 
@@ -2864,14 +2911,12 @@ SaveUIConfig()
 			RegCloseKey(hKey);
 		}
 	}
-
+	
 	wsprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
-
-	if (EnableUI)
+	if (BBSApplNum)
 		SetupUIInterface();
-
 
 	return TRUE;
 }
@@ -2880,22 +2925,25 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 {
 	int Command, i;
 	RECT Rect;
-		
-	UNREFERENCED_PARAMETER(lParam);
+	int Row = 50;
 
 	switch (message)
 	{
 	case WM_INITDIALOG:
 
+		SetDlgItemText(hDlg, IDC_MAILFOR, MailForText); 
+
 		for (i = 1; i <= GetNumberofPorts(); i++)
 		{
-			CreateDialogLine(hDlg, i);
+			if (CreateDialogLine(hDlg, i, Row))
+				Row += 30;
+
 		}
 
 		GetWindowRect(hDlg, &Rect);      
-		SetWindowPos(hDlg, HWND_TOP, Rect.left, Rect.top, 550, i*30+130, 0);
-		SetWindowPos(GetDlgItem(hDlg, IDOK), NULL, 180, i*30+50, 70, 30, 0);
-		SetWindowPos(GetDlgItem(hDlg, IDCANCEL), NULL, 300, i*30+50, 80, 30, 0);
+		SetWindowPos(hDlg, HWND_TOP, Rect.left, Rect.top, 550, Row+100, 0);
+		SetWindowPos(GetDlgItem(hDlg, IDOK), NULL, 180, Row+20, 70, 30, 0);
+		SetWindowPos(GetDlgItem(hDlg, IDCANCEL), NULL, 300, Row+20, 80, 30, 0);
 
 
 		return (INT_PTR)TRUE;
@@ -2913,7 +2961,23 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 		
 			case IDOK:
 
+				GetDlgItemText(hDlg, IDC_MAILFOR, MailForText, 99); 
+				{
+					HKEY hKey=0;
+					int retCode,disp;
+
+					retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+						"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
+					if (retCode == ERROR_SUCCESS)
+					{
+						retCode = RegSetValueEx(hKey, "MailForText", 0, REG_SZ,(BYTE *)&MailForText, strlen(MailForText));
+						RegCloseKey(hKey);
+					}
+				}
+
 				SaveUIConfig();
+				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
 
 			case 0:

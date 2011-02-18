@@ -325,6 +325,7 @@ typedef struct ConnectionInfo_S
 
 	long lastmsg;				// Last Listed. Stored here, updated in user record only on clean close
 	BOOL sysop;					// Set if user is authenticated as a sysop
+	BOOL Secure_Session;		// Set if Local Terminal, or Telnet connect with SYSOP status
 	UINT BBSFlags;						// Set if defined as a bbs and SID received
 	struct MsgInfo * TempMsg;			// Header while message is being received
 	struct MsgInfo * FwdMsg;			// Header while message is being forwarded
@@ -674,13 +675,21 @@ struct FBBHeaderLine
 //#define MAXLINE 10000
 #define INPUTLEN 512
 
+#define MAXLINES 1000
+#define LINELEN 200
+
+char RTFHeader[4000];
+
+int RTFHddrLen;
+
+
+
 struct ConsoleInfo 
 {
 	struct ConsoleInfo * next;
 	CIRCUIT * Console;
 	int BPQStream;
 	WNDPROC wpOrigInputProc; 
-	WNDPROC wpOrigOutputProc; 
 	HWND hConsole;
 	HWND hwndInput;
 	HWND hwndOutput;
@@ -691,7 +700,6 @@ struct ConsoleInfo
 	int Height, Width, LastY;
 
 	int ClientHeight, ClientWidth;
-
 	char kbbuf[INPUTLEN];
 	int kbptr;
 
@@ -727,7 +735,24 @@ struct ConsoleInfo
 	COLORREF FGColour;		// Text Colour
 	COLORREF BGColour;		// Background Colour
 	COLORREF DefaultColour;	// Default Text Colour
- 
+
+	int CurrentLine;				// Line we are writing to in circular buffer.
+
+	int Index;
+	BOOL SendHeader;
+	BOOL Finished;
+
+	char OutputScreen[MAXLINES][LINELEN];
+
+	int Colourvalue[MAXLINES];
+	int LineLen[MAXLINES];
+
+	int CurrentColour;
+	int Thumb;
+	int FirstTime;
+	BOOL Scrolled;				// Set if scrolled back
+	int RTFHeight;				// Height of RTF control in pixels 
+
 };
 
 
@@ -952,6 +977,7 @@ void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
 int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
 int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
+void DoUnholdCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 
 VOID FlagAsKilled(struct MsgInfo * Msg);
 int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
@@ -1105,7 +1131,7 @@ int SendSock(SocketConn * sockptr, char * msg);
 VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...);
 VOID SendFromQueue(SocketConn * sockptr);
 VOID SendMultiPartMessage(SocketConn * sockptr, struct MsgInfo * Msg, UCHAR * msgbytes);
-
+int CountMessagesTo(struct UserInfo * user, int * Unread);
 
 BOOL SendtoISP();
 
@@ -1284,11 +1310,12 @@ extern int HighestBBSNumber;
 extern HMENU hFWDMenu;									// Forward Menu Handle
 extern char zeros[];						// For forward bitmask tests
 extern BOOL EnableUI;
+extern BOOL RefuseBulls;
 extern BOOL SendSYStoSYSOPCall;
 extern BOOL UIEnabled[];
 extern char * UIDigi[];
-
-
+extern int MailForInterval;
+extern char MailForText[];
 
 extern BOOL ISP_Gateway_Enabled;
 

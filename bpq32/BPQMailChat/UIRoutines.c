@@ -5,16 +5,18 @@
 #include "stdafx.h"
 
 char UIDEST[10] = "FBB";
+char UIMAIL[10] = "MAIL";
 char AXDEST[7];
+char AXMAIL[7];
 char MYCALL[7];
 
 #pragma pack(1)
 
 UINT UIPortMask = 0;
-BOOL UIEnabled[17];
-char * UIDigi[17];
-char * UIDigiAX[17];		// ax.25 version of digistring
-int UIDigiLen[17];			// Length of AX string
+BOOL UIEnabled[33];
+char * UIDigi[33];
+char * UIDigiAX[33];		// ax.25 version of digistring
+int UIDigiLen[33];			// Length of AX string
 
 
 typedef struct _MESSAGEX
@@ -34,6 +36,7 @@ typedef struct _MESSAGEX
 	UCHAR	CTL;
 	UCHAR	PID;
 	UCHAR	DATA[256];
+	UCHAR	DIGIS[56];				// Padding in case we have digis
 
 }MESSAGEX, *PMESSAGEX;
 
@@ -55,6 +58,7 @@ VOID SetupUIInterface()
 
 	ConvToAX25(GetApplCall(BBSApplNum), MYCALL);
 	ConvToAX25(UIDEST, AXDEST);
+	ConvToAX25(UIMAIL, AXMAIL);
 
 	UIPortMask = 0;
 
@@ -100,6 +104,7 @@ VOID SetupUIInterface()
 
 	_beginthread(UnQueueRaw, 0, 0);
 
+	if (EnableUI)
 	__try
 	{
 		SendLatestUI(0);
@@ -112,7 +117,7 @@ VOID Free_UI()
 {
 	int i;
 
-	for (i = 1; i <= 16; i++)
+	for (i = 1; i <= 32; i++)
 	{
 		if (UIDigi[i])
 		{
@@ -486,7 +491,60 @@ VOID SeeifBBSUIFrame(PMESSAGEX buff, int len)
 //				len=ConvFromAX25(Routes->NEIGHBOUR_DIGI1,Portcall);
 //			Portcall[len]=0;
 
+char MailForHeader[] = "\rMail For:";
 
+VOID SendMailFor(char * Msg)
+{
+	int Mask = UIPortMask;
+	int NumPorts = GetNumberofPorts();
+	int i;
+
+	for (i=1; i <= NumPorts; i++)
+	{
+		if (Mask & 1)
+			Send_AX_Datagram(Msg, strlen(Msg), i, AXDEST, TRUE);
+		
+		Mask>>=1;
+	}
+}
+
+
+VOID SendMailForThread()
+{
+	struct UserInfo * user;
+	char MailForMessage[256] = "";
+
+	struct UserInfo * ptr = NULL;
+	int i, Unread;
+
+	while (MailForInterval)
+	{
+		strcpy(MailForMessage, MailForText);
+		strcat(MailForMessage, MailForHeader);
+
+		for (i=1; i <= NumberofUsers; i++)
+		{
+			user = UserRecPtr[i];
+
+			CountMessagesTo(user, &Unread);
+	
+			if (Unread)
+			{
+				if (strlen(MailForMessage) > 240)
+				{
+					SendMailFor(MailForMessage);
+					strcpy(MailForMessage, MailForText);
+					strcat(MailForMessage, MailForHeader);
+				}
+				strcat(MailForMessage, " ");
+				strcat(MailForMessage, user->Call);
+			}
+		}
+
+		SendMailFor(MailForMessage);
+		Sleep(MailForInterval * 60000);
+	}
+}
 
 
 

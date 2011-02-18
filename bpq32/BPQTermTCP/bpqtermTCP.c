@@ -60,6 +60,8 @@
 #include "bpqtermTCP.h"
 #include "GetVersion.h"
 
+#define BPQICON 2
+
 #define BGCOLOUR RGB(236,233,216)
 
 #define WSA_ACCEPT WM_USER + 1
@@ -100,7 +102,8 @@ int ToggleMCOM(HWND hWnd);
 int ToggleParam(HWND hWnd, BOOL * Param, int Item);
 int ToggleChat(HWND hWnd);
 void MoveWindows();
-void CopyToClipboard(HWND hWnd);
+void CopyListToClipboard(HWND hWnd);
+void CopyRichTextToClipboard(HWND hWnd);
 BOOL OpenMonitorLogfile();
 void WriteMonitorLine(char * Msg, int MsgLen);
 VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len);
@@ -208,26 +211,16 @@ typedef struct RTFTerm
 	int LineLen[MAXLINES];
 
 	int CurrentColour;
+	int Thumb;
+	int FirstTime;
+	int RTFHeight;				// Height of RTF control in pixels
+	BOOL Scrolled;				// Window is scrolled back
+
 };
 
-int Thumb = 0;
 
 struct RTFTerm OutputData;
 
-/*
-int CurrentLine = 0;				// Line we are writing to in circular buffer.
-
-int Index;
-BOOL SendHeader = TRUE;
-BOOL Finished = TRUE;
-
-char OutputScreen[MAXLINES][LINELEN];
-
-int Colourvalue[MAXLINES];
-int LineLen[MAXLINES];
-
-int CurrentColour = 1;
-*/
 int CurrentHost = 0;
 int CfgNo = 0;
 
@@ -289,6 +282,19 @@ TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
 int TimerHandle = 0;
 
 int SlowTimer;
+
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[1000];
+	va_list(arglist);int Len;
+
+	va_start(arglist, format);
+	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
+	strcat(Mess, "\r\n");
+	OutputDebugString(Mess);
+	return;
+}
+
 
 VOID SaveIntValue(char * Key, int Value)
 {
@@ -426,8 +432,8 @@ BOOL InitApplication(HINSTANCE hInstance)
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInstance;
-    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE( BPQICON ) );
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(BPQICON));
+    wc.hCursor = NULL; //LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = bgBrush; 
 
 	wc.lpszMenuName = NULL;	
@@ -476,7 +482,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	RTFColours[n++] = '}';
 	RTFColours[n] = 0;
 
-	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset0 FixedSys;}}");
+//	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset204 FixedSys;}}");
+	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1 FixedSys;}}");
 	strcat(RTFHeader, RTFColours);
 	strcat(RTFHeader, "\\viewkind4\\uc1\\pard\\f0");
 
@@ -498,7 +505,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	// Register for Mouse Events for Copy/Paste
 	
-	SendMessage(hwndOutput, EM_SETEVENTMASK, (WPARAM)0, (LPARAM)ENM_MOUSEEVENTS | ENM_SCROLLEVENTS);
+	SendMessage(hwndOutput, EM_SETEVENTMASK, (WPARAM)0, (LPARAM)ENM_MOUSEEVENTS | ENM_SCROLLEVENTS | ENM_KEYEVENTS);
 	SendMessage(hwndOutput, EM_EXLIMITTEXT, 0, MAXLINES * LINELEN);
 
 	trayMenu = CreatePopupMenu();
@@ -706,7 +713,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	UCHAR Buffer[1000];
 	UCHAR * buf = Buffer;
     TEXTMETRIC tm; 
-    int y;  
+    int y, i;  
     LPMEASUREITEMSTRUCT lpmis; 
     LPDRAWITEMSTRUCT lpdis; 
 
@@ -731,6 +738,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 //  SendMessage(hWndRichEdit, EM_SETEVENTMASK, (WPARAM)0 (LPARAM)ENM_MOUSEEVENTS);
 //  break;
 
+
+	case WM_CTLCOLOREDIT:
+		
+		if (OutputData.Scrolled)
+		{
+			HDC hdcStatic = (HDC)wParam;
+			SetBkMode(hdcStatic, TRANSPARENT);
+
+			return (LONG)GetStockObject(LTGRAY_BRUSH);
+		}
+		return (DefWindowProc(hWnd, message, wParam, lParam));
+
 	case WM_NOTIFY:
 	{
 		const MSGFILTER * pF = (MSGFILTER *)lParam;
@@ -739,15 +758,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		if(pF->nmhdr.hwndFrom == hwndOutput)
 		{
-			if(pF->msg == WM_MOUSEMOVE)
-				return TRUE;
-
 			if(pF->msg == WM_VSCROLL)
 			{
-				Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+//				OutputData.Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
 				DoRefresh(&OutputData);
 //				return TRUE;		
 			}
+
+			if(pF->msg == WM_KEYUP)
+			{
+				if (pF->wParam == VK_PRIOR || pF->wParam == VK_NEXT)
+				{
+//					OutputData.Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+					DoRefresh(&OutputData);
+				}
+			}
+
 			if(pF->msg == WM_RBUTTONDOWN)
 			{
 				// Only allow popup if something is selected
@@ -957,17 +983,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case BPQCLEAROUT:
 
-			SendMessage(hwndOutput,LB_RESETCONTENT, 0, 0);		
+			for (i = 0; i < MAXLINES; i++)
+			{
+				OutputData.OutputScreen[i][0] = 0;
+			}
+
+			OutputData.CurrentLine = 0;
+			DoRefresh(&OutputData);
 			break;
 
 		case BPQCOPYMON:
 
-			CopyToClipboard(hwndMon);
+			CopyListToClipboard(hwndMon);
 			break;
 
 		case BPQCOPYOUT:
 		
-			CopyToClipboard(hwndOutput);
+			CopyRichTextToClipboard(hwndOutput);
 			break;
 
 		case BPQHELP:
@@ -1043,6 +1075,17 @@ int StackIndex=0;
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
 	char DisplayLine[200] = "\x1b\x21";
+
+	if (uMsg == WM_CTLCOLOREDIT)
+	{
+		HBRUSH Brush = CreateSolidBrush(RGB(0, 255, 0));
+		HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+		SetBkMode(hdcStatic, TRANSPARENT);
+
+		return (LONG)Brush;
+	}
+
 	
 	if (uMsg == WM_KEYUP)
 	{
@@ -1207,8 +1250,9 @@ LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return CallWindowProc(wpOrigSplitProc, hwnd, uMsg, wParam, lParam); 
 } 
 
-DWORD CALLBACK EditStreamCallback(struct RTFTerm * OPData, LPBYTE lpBuff, LONG cb, PLONG pcb)
+DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, LPBYTE lpBuff, LONG cb, PLONG pcb)
 {
+	struct RTFTerm * OPData	= (struct RTFTerm *)Cookie;
 	int ReqLen = cb;
 	int i;
 	int Line;
@@ -1273,43 +1317,87 @@ DWORD CALLBACK EditStreamCallback(struct RTFTerm * OPData, LPBYTE lpBuff, LONG c
 	return 0;
 }
 
+VOID ForceRefresh(struct RTFTerm * OPData)
+{
+	OPData->Thumb = 25000;
+	DoRefresh(OPData);
+	OPData->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+}
 
 VOID DoRefresh(struct RTFTerm * OPData)
 {
 	EDITSTREAM es = {0};
-	int Min, Max;
+	int Min, Max, Pos;
 	POINT Point;
 	SCROLLINFO ScrollInfo;
 	int LoopTrap = 0;
 
-	if ((Thumb + OutputBoxHeight) > 15000 || Thumb == 0)		// Don't bother writing to screen if scrolled back
+	OPData->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+
+	Pos = OPData->Thumb + OutputBoxHeight;
+
+	if (Pos > OPData->RTFHeight - 10)		// Don't bother writing to screen if scrolled back
 	{
 		es.pfnCallback = EditStreamCallback;
 		es.dwCookie = (DWORD_PTR)OPData;
 		OPData->SendHeader = TRUE;
 		SendMessage(hwndOutput, EM_STREAMIN, SF_RTF, (LPARAM)&es);
 	}
+	else
+		Debugprintf("Pos %d RTFHeight %d - Not refreshing", Pos, OPData->RTFHeight);
 
 	GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);
 	ScrollInfo.cbSize = sizeof(ScrollInfo);
     ScrollInfo.fMask = SIF_ALL;
 
-	Point.x = 0;
-	Point.y = 15020 - OutputBoxHeight;					// Space 20 above bottom
 	GetScrollInfo(hwndOutput, SB_VERT, &ScrollInfo);
 
-	while (ScrollInfo.nMax < Point.y && LoopTrap++ < 20)
+//	Debugprintf("Thumb %d Pos %d Min %d Max %d nMax %d ClientH %d RTFHeight %d",
+//		OPData->Thumb, Pos, Min, Max, ScrollInfo.nMax, OutputBoxHeight, OPData->RTFHeight);
+
+	if (OPData->FirstTime == FALSE)
 	{
+		// RTF Controls don't immediately scroll to end - don't know why.
+		
+		OPData->FirstTime = TRUE;
+		Point.x = 0;
+		Point.y = 25000;					// Should be plenty for any font
+
+		while (LoopTrap++ < 20)
+		{
+			SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+		}
+
+		GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);	// Get Actual Height
+		OPData->RTFHeight = Max;
+		Point.x = 0;
+		Point.y = OPData->RTFHeight - ScrollInfo.nPage;
 		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
-		GetScrollInfo(hwndOutput, SB_VERT, &ScrollInfo);
+		OPData->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
 	}
 
-	if (LoopTrap)
-		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+	Point.x = 0;
+	Point.y = OPData->RTFHeight - ScrollInfo.nPage;
 
-	if (ScrollInfo.nPos > 14500 || ScrollInfo.nPos == 0)		// Don't Scroll if user has scrolled back 
+	if (OPData->Thumb > (Point.y - 10))		// Don't Scroll if user has scrolled back 
+	{
+//		Debugprintf("Scrolling to %d", Point.y);
 		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+		if (OPData->Scrolled)
+		{
+			OPData->Scrolled = FALSE;
+			InvalidateRect(hwndInput, NULL, TRUE);
+		}
+		return;
+	}
 
+	Debugprintf("Thumb = %d Point.y = %d - Not Scrolling", OPData->Thumb, Point.y);
+
+	if (!OPData->Scrolled)
+	{
+		OPData->Scrolled = TRUE;
+		InvalidateRect(hwndInput, NULL, TRUE);
+	}
 }
 
 VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
@@ -1320,7 +1408,7 @@ VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
 	int l, Index;
 	char LineCopy[LINELEN * 2];
 	
-	if (Line[0] ==  0x1b && Len > 2)
+	if (Line[0] ==  0x1b && Len > 1)
 	{
 		// Save Colour Char
 		
@@ -1407,6 +1495,8 @@ VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len)
 
 	if (PartLinePtr != 0)
 	{
+		OPData->CurrentLine--;				// Overwrite part line in buffer
+		
 		if (Msg[0] == 0x1b && len > 1) 
 		{
 			Msg += 2;		// Remove Colour Escape
@@ -1448,7 +1538,7 @@ lineloop:
 
 			PartLinePtr = len;
 			memmove(readbuff,ptr1,len);
-			InvalidateRect(hwndOutput, NULL, FALSE);
+			AddLinetoWindow(OPData, ptr1);
 			return;
 		}
 		
@@ -1586,6 +1676,7 @@ VOID DisableConnectMenu(HWND hWnd)
 	EnableMenuItem(GetMenu(hWnd), BPQCONNECT2, MF_GRAYED);
 	EnableMenuItem(GetMenu(hWnd), BPQCONNECT3, MF_GRAYED);
 	EnableMenuItem(GetMenu(hWnd), BPQCONNECT4, MF_GRAYED);
+	DrawMenuBar(hWnd);	
 }	
 VOID DisableDisconnectMenu(HWND hWnd)
 {
@@ -1603,6 +1694,7 @@ VOID EnableConnectMenu(HWND hWnd)
 	EnableMenuItem(hMenu,BPQCONNECT2,MF_ENABLED);
 	EnableMenuItem(hMenu,BPQCONNECT3,MF_ENABLED);
 	EnableMenuItem(hMenu,BPQCONNECT4,MF_ENABLED);
+	DrawMenuBar(hWnd);	
 }	
 
 VOID EnableDisconnectMenu(HWND hWnd)
@@ -1715,7 +1807,38 @@ void MoveWindows()
 	maxlinelen = ClientWidth/8 - 1;
 }
 
-void CopyToClipboard(HWND hWnd)
+void CopyRichTextToClipboard(HWND hWnd)
+{
+	int len=0;
+	HGLOBAL	hMem;
+	char * ptr;
+
+	// Copy Rich Text to Clipboard
+	
+	len = SendMessage(hwndOutput, WM_GETTEXTLENGTH, 0, 0);
+	
+	hMem = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, len + 1);
+
+	if (hMem != 0)
+	{
+		ptr=GlobalLock(hMem);
+
+		if (OpenClipboard(MainWnd))
+		{
+			len = SendMessage(hwndOutput, WM_GETTEXT  , len, (LPARAM)ptr);
+
+			GlobalUnlock(hMem);
+			EmptyClipboard();
+			SetClipboardData(CF_TEXT,hMem);
+			CloseClipboard();
+		}
+	}
+	else
+		GlobalFree(hMem);
+}
+
+
+void CopyListToClipboard(HWND hWnd)
 {
 	int i,n, len=0;
 	HGLOBAL	hMem;
@@ -1874,6 +1997,9 @@ TCPConnect(char * Host, int Port)
 			wsprintf(Title,"BPQTermTCP Version %s - Connecting to %s", VersionString, Host);
 			SetWindowText(hWnd,Title);
 
+			EnableDisconnectMenu(hWnd);
+			DisableConnectMenu(hWnd);
+
 			return TRUE;
 		}
 		else
@@ -1904,6 +2030,12 @@ int Telnet_Connected(SOCKET sock, int Error)
 		closesocket(sock);
 		Connecting = FALSE;
 		SocketActive = FALSE;
+
+		wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+		SetWindowText(hWnd,Title);
+		DisableDisconnectMenu(hWnd);
+		EnableConnectMenu(hWnd);
+
 		return 0;
 
 	}
@@ -2055,6 +2187,7 @@ MonLoop:
 
 			MonLen = FEptr + 1 - Buffptr;				// MonLen includes FF and FE
 			WritetoMonWindow(Buffptr+1, MonLen - 2);
+			DoRefresh(&OutputData);
 
 			len -= MonLen;
 			Buffptr += MonLen;							// Char Following FE

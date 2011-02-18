@@ -1694,8 +1694,8 @@ char rec[];
 	int i;
 	int cn = 1;			/* RETURN CODE FROM ROUTINES */
 
-	char key_word[20];
-	char value[300];
+	char key_word[20]="";
+	char value[300]="";
 
 	if (_memicmp(rec, "CONFIG", 6) == 0)
 	{
@@ -1752,7 +1752,7 @@ char rec[];
 /*      SEARCH FOR KEYWORD IN TABLE					*/
 /************************************************************************/
 
-	for (i=0; _stricmp(pkeywords[i],key_word) != 0 && i < PPARAMLIM; i++)
+	for (i=0; i < PPARAMLIM && _stricmp(pkeywords[i],key_word) != 0  ; i++)
 	   ;
 
 	if (i == PPARAMLIM)

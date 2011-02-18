@@ -940,8 +940,8 @@ VOID TelnetPoll(int Port)
 				if (CMSLogEnabled)
 				{
 					char logmsg[120];
-					wsprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d\r\n",
-						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed);
+					wsprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d Time %d Seconds\r\n",
+						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed, time(NULL) - sockptr->ConnectTime);
 
 					WriteCMSLog (logmsg);
 				}
@@ -1440,6 +1440,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->UserPointer = 0;
 			sockptr->DoEcho = FALSE;
 			sockptr->BPQTermMode = FALSE;
+			sockptr->ConnectTime = time(NULL);
 
 			TNC->Streams[n].BytesRXed = TNC->Streams[n].BytesTXed = 0;
 			TNC->Streams[n].FramesQueued = 0;
@@ -2341,6 +2342,7 @@ MsgLoop:
 			char * Appl;
 
 			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
+			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 
             sockptr->LoginState = 2;
             
@@ -2710,6 +2712,7 @@ int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error)
 				sockptr->DoEcho = FALSE;
 				sockptr->FBBMode = TRUE;
 				sockptr->RelayMode = FALSE;
+				sockptr->ConnectTime = time(NULL);
 				TNC->Streams[Stream].Connecting = FALSE;
 				TNC->Streams[Stream].Connected = TRUE;
 				ShowConnections(TNC);

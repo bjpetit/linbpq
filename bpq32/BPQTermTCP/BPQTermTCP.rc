@@ -25,49 +25,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 #pragma code_page(1252)
 #endif //_WIN32
 
-#ifndef _MAC
-/////////////////////////////////////////////////////////////////////////////
-//
-// Version
-//
-
-1 VERSIONINFO
- FILEVERSION 1,0,0,7
- PRODUCTVERSION 1,0,0,7
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0xbL
-#else
- FILEFLAGS 0xaL
-#endif
- FILEOS 0x10001L
- FILETYPE 0x1L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "040904e4"
-        BEGIN
-            VALUE "Comments", "Written by:John Wiseman, G8BPQ\0"
-            VALUE "CompanyName", "\0"
-            VALUE "FileDescription", "Simple TCP Terminal Program for G8BPQ Switch\0"
-            VALUE "FileVersion", "1.0.0.7\0"
-            VALUE "InternalName", "BPQTermTCP\0"
-            VALUE "LegalCopyright", "Copyright © John Wiseman 2011\0"
-            VALUE "OriginalFilename", "\0"
-            VALUE "ProductName", "BPQTermTCP\0"
-            VALUE "ProductVersion", "1.0.0.7\0"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x409, 1252
-    END
-END
-
-#endif    // !_MAC
-
-
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -91,21 +48,14 @@ END
 
 3 TEXTINCLUDE DISCARDABLE 
 BEGIN
+    "#include ""..\\Include\\Versions.h""\r\n"
+    "#include ""..\\StdVer.inc""\r\n"
     "\r\n"
     "\0"
 END
 
 #endif    // APSTUDIO_INVOKED
 
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Icon
-//
-
-// Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-BPQICON                 ICON    DISCARDABLE     "..\\BPQICON.ICO"
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -132,8 +82,6 @@ BEGIN
                     WS_HSCROLL
     EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
     CTEXT           "",119,0,145,300,5,SS_NOTIFY
-//    EDITTEXT        117,6,145,290,130,ES_MULTILINE | ES_AUTOVSCROLL | 
-//                    ES_AUTOHSCROLL | ES_NOHIDESEL | ES_READONLY | WS_VSCROLL
 END
 
 IDD_CONFIG DIALOG DISCARDABLE  0, 0, 181, 129
@@ -141,16 +89,16 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "TCP Host Config"
 FONT 8, "MS Sans Serif"
 BEGIN
+    LTEXT           "Host",IDC_STATIC,7,15,24,9
+    EDITTEXT        IDC_HOST,46,13,114,12,ES_AUTOHSCROLL
+    LTEXT           "Port",IDC_STATIC,7,32,24,9
+    EDITTEXT        IDC_PORT,46,30,53,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "User",IDC_STATIC,7,49,24,9
+    EDITTEXT        IDC_USER,46,47,89,12,ES_AUTOHSCROLL
+    LTEXT           "Password",IDC_STATIC,7,66,39,9
+    EDITTEXT        IDC_PASS,46,64,90,12,ES_AUTOHSCROLL
     DEFPUSHBUTTON   "Save",IDOK,33,91,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,95,91,50,14
-    EDITTEXT        IDC_HOST,46,13,114,12,ES_AUTOHSCROLL
-    EDITTEXT        IDC_PORT,46,30,53,12,ES_AUTOHSCROLL | ES_NUMBER
-    EDITTEXT        IDC_USER,46,47,89,12,ES_AUTOHSCROLL
-    EDITTEXT        IDC_PASS,46,64,90,12,ES_AUTOHSCROLL
-    LTEXT           "Host",IDC_STATIC,7,15,24,9
-    LTEXT           "Port",IDC_STATIC,7,32,24,9
-    LTEXT           "User",IDC_STATIC,7,49,24,9
-    LTEXT           "Password",IDC_STATIC,7,66,39,9
 END
 
 
@@ -230,6 +178,8 @@ END
 //
 // Generated from the TEXTINCLUDE 3 resource.
 //
+#include "..\Include\Versions.h"
+#include "..\StdVer.inc"
 
 
 /////////////////////////////////////////////////////////////////////////////

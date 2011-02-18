@@ -66,7 +66,7 @@ BOOL CreateDebugWindow()
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInst;
-    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(IDI_BPQMailChat) );
+    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = bgBrush; 
 

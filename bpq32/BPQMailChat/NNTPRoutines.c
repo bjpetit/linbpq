@@ -55,6 +55,8 @@ VOID BuildNNTPList(struct MsgInfo * Msg)
 	{
 		// New Group. Allocate a record, and put at correct place in chain (alpha order)
 
+		GetSemaphore(&AllocSemaphore);
+
 		REC = zalloc(sizeof (struct NNTPRec));
 		OLDREC = FirstNNTPRec;
 
@@ -96,6 +98,8 @@ DoneIt:
 		strcpy(REC->NewsGroup, FullGroup);
 		REC->FirstMsg = Msg->number;
 		REC->DateCreated = Msg->datecreated;
+
+		FreeSemaphore(&AllocSemaphore);
 	}
 
 	REC->LastMsg = Msg->number;

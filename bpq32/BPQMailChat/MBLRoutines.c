@@ -74,6 +74,13 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (Cmd[1] == 0) Cmd[1] = 'P';
 
+		if (RefuseBulls && Cmd[1] == 'B')
+		{
+			nodeprintf(conn, "NO - BULLS NOT ACCEPTED\r");
+			nodeprintf(conn, ">\r");
+			return;
+		}
+
 		To = strtok_s(NULL, seps, &Context);
 
 		ptr = strtok_s(NULL, seps, &Context);

@@ -354,9 +354,12 @@
 // Add support for BPQTermTCP
 // Allow more that one FBBPORT
 // Allow Telnet FBB mode sessions to send CRLF as well as CR on user and pass msgs
+// Add session length to CMS Telnet logging.
+// Return Secure Session Flag from GetConnectionInfo
+// Show Uptime as dd/hh/mm
 
-
-#include "KVerhddr.h"
+#define Kernel
+#include "Versions.h"
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -1890,10 +1893,22 @@ HANDLE OpenConfigFile(char *fn)
 
 	OutputDebugString(Msg);
 
-
 	return(handle);
-
 }
+
+char * FormatUptime(int Uptime)
+ {
+	struct tm * TM;
+	static char UPTime[50];
+	time_t szClock = Uptime * 60;
+
+	TM = gmtime(&szClock);
+
+	wsprintf(UPTime, "Uptime (Days Hours Mins)     %.2d:%.2d:%.2d\r",
+		TM->tm_yday, TM->tm_hour, TM->tm_min);
+
+	return UPTime;
+ }
 
  char * FormatMH(struct MHSTRUC * MH)
  {
@@ -2584,8 +2599,9 @@ DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 										 int * port, int * sesstype, int * paclen,
 										 int * maxframe, int * l4window)
 {
+	struct TRANSPORTENTRY *	HSESSION;
 
-	int retcode=0;
+	// Return the Secure Session Flag rather than not connected
 
 	_asm {
 		
@@ -2611,16 +2627,6 @@ DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 
 	call	BPQHOSTAPI
 
-	mov	retcode,0			// Connected
-
-	cmp	edx,-1
-	jne	conn
-
-	mov	retcode,1			// Not Connected
-	mov	edx,0
-
-conn:
-
 	mov	esi,paclen
 	mov	[esi],ebx
 
@@ -2637,13 +2643,19 @@ conn:
 	mov	esi,l4window
 	mov	[esi],edx
 
-
 	popad
 	popfd
 
-	}				// End of ASM
+	}// End of ASM
 
-	return (retcode);
+	HSESSION = BPQHOSTVECTOR[stream-1].HOSTSESSION;
+	if (HSESSION)
+	{
+		HSESSION = HSESSION->L4CROSSLINK;
+		if (HSESSION) 
+			return HSESSION->Secure_Session;
+	}
+	return 0;
 }
 
 DllExport int APIENTRY SessionControl(int stream, int command, int param)
@@ -3827,7 +3839,7 @@ int SetupConsoleWindow()
 	wc.cbClsExtra    = 0;
 	wc.cbWndExtra    = 0;
 	wc.hInstance     = hInstance;
-	wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(IDI_ICON2));     
+	wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));     
 	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);    
 	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);	
 	wc.lpszMenuName	 = 0;     
@@ -3992,7 +4004,7 @@ doneit:
 		//LoadIcon(NULL, IDI_APPLICATION);
 
 		(HICON)LoadImage( hInstance,
-			MAKEINTRESOURCE(IDI_ICON2),
+			MAKEINTRESOURCE(BPQICON),
 			IMAGE_ICON,
 			GetSystemMetrics(SM_CXSMICON),
 			GetSystemMetrics(SM_CYSMICON),

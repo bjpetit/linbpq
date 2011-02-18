@@ -7,8 +7,6 @@
 #define IDM_EXIT 105
 #define IDM_CONSOLE 120
 #define IDM_MONITOR 121
-#define IDI_BPQMailChat 107
-#define IDI_SMALL 108
 #define IDC_BPQMailChat 109
 #define IDM_DISCONNECT 2000
 #define IDM_LOGGING 2100

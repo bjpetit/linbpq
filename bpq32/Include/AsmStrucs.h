@@ -2,6 +2,8 @@
 
 // Aug 2010 Extend Applmask to 32 bit
 
+#define BPQICON 2
+
 #define BUFFLEN	360
 
 #define ApplStringLen 48	// Length of each config entry
@@ -178,7 +180,7 @@ typedef struct _MESSAGE
 
 struct BPQVECSTRUC
 {
-	ULONG	HOSTSESSION;	// Pointer to Session
+	struct TRANSPORTENTRY *	HOSTSESSION;	// Pointer to Session
 	UCHAR	HOSTFLAGS;		// ALLOCATED AND STATE CHANGE FLAGS
 	ULONG	HOSTAPPLMASK;
 	UCHAR	HOSTAPPLFLAGS;

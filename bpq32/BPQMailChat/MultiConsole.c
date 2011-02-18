@@ -61,9 +61,13 @@ static LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 static LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 void MoveWindows(struct ConsoleInfo * Cinfo);
 VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo);
-
+VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line);
+VOID DoRefresh(struct ConsoleInfo * Cinfo);
 
 #define BGCOLOUR RGB(236,233,216)
+
+
+HMENU trayMenu = 0;
 
 BOOL CreateConsole(int Stream)
 {
@@ -73,10 +77,9 @@ BOOL CreateConsole(int Stream)
 	HKEY hKey=0;
 	int retCode,Type,Vallen;
 	char Size[80] = "";
-
+	char RTFColours[3000];
 	struct ConsoleInfo * Cinfo;
-
-	if (BBSConsole.next == NULL) BBSConsole.next = &ChatConsole;
+	int i, n;
 	
 	if (Stream == -1) 
 		Cinfo = &BBSConsole;
@@ -89,8 +92,12 @@ BOOL CreateConsole(int Stream)
 	{
 		ShowWindow(Cinfo->hConsole, SW_SHOWNORMAL);
 		SetForegroundWindow(Cinfo->hConsole);
-		return FALSE;							// Alreaqy open
+		return FALSE;							// Already open
 	}
+
+	memset(Cinfo, 0, sizeof(struct ConsoleInfo));
+
+	if (BBSConsole.next == NULL) BBSConsole.next = &ChatConsole;
 
 	Cinfo->BPQStream = Stream;
 
@@ -143,8 +150,6 @@ BOOL CreateConsole(int Stream)
 
 		sscanf(Size,"%d,%d,%d,%d", &Cinfo->ConsoleRect.left, &Cinfo->ConsoleRect.right,
 			&Cinfo->ConsoleRect.top, &Cinfo->ConsoleRect.bottom);
-
-
 	}
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
@@ -155,7 +160,7 @@ BOOL CreateConsole(int Stream)
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInst;
-    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(IDI_BPQMailChat) );
+    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = bgBrush; 
 
@@ -184,15 +189,56 @@ BOOL CreateConsole(int Stream)
 
 	DrawMenuBar(hWnd);	
 
-	// Retrieve the handlse to the edit controls. 
+	if (trayMenu == 0)
+	{
+		trayMenu = CreatePopupMenu();
+		AppendMenu(trayMenu,MF_STRING,40000,"Copy");
+	}
+
+	// Set up RTF Header, including Colours String;
+
+	memcpy(RTFColours, "{\\colortbl ;", 12);
+	n = 12;
+
+	for (i = 1; i < 100; i++)
+	{
+		COLORREF Colour = Colours[i];
+		n += wsprintf(&RTFColours[n], "\\red%d\\green%d\\blue%d;", GetRValue(Colour), GetGValue(Colour),GetBValue(Colour));
+	}
+
+	RTFColours[n++] = '}';
+	RTFColours[n] = 0;
+
+	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1 FixedSys;}}");
+//	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fcharset204\\fprq1 FixedSys;}}");
+	strcat(RTFHeader, RTFColours);
+	strcat(RTFHeader, "\\viewkind4\\uc1\\pard\\f0");
+
+	RTFHddrLen = strlen(RTFHeader);
+
+	// Create a Rich Text Control 
+
+	Cinfo->SendHeader = TRUE;
+	Cinfo->Finished = TRUE;
+	Cinfo->CurrentColour = 1;
+
+	LoadLibrary("riched20.dll");
+
+	Cinfo->hwndOutput = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASS, "",
+		WS_CHILD |  WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_NOHIDESEL | WS_VSCROLL | ES_READONLY,
+		6,145,290,130, hConsole, NULL, hInst, NULL);
+
+	// Register for Mouse Events for Copy/Paste
+	
+	SendMessage(Cinfo->hwndOutput, EM_SETEVENTMASK, (WPARAM)0, (LPARAM)ENM_MOUSEEVENTS | ENM_SCROLLEVENTS | ENM_KEYEVENTS);
+	SendMessage(Cinfo->hwndOutput, EM_EXLIMITTEXT, 0, MAXLINES * LINELEN);
+
 
 	Cinfo->hwndInput = GetDlgItem(hConsole, 118); 
-	Cinfo->hwndOutput = GetDlgItem(hConsole, 117); 
  
 	// Set our own WndProcs for the controls. 
 
 	Cinfo->wpOrigInputProc = (WNDPROC) SetWindowLong(Cinfo->hwndInput, GWL_WNDPROC, (LONG) InputProc); 
-	Cinfo->wpOrigOutputProc = (WNDPROC)SetWindowLong(Cinfo->hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 
 	if (cfgMinToTray)
 		if (Stream == -1)
@@ -346,20 +392,20 @@ VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 void MoveWindows(struct ConsoleInfo * Cinfo)
 {
 	RECT rcClient;
-	int ClientHeight, ClientWidth;
+	int ClientWidth;
 
 
 	GetClientRect(Cinfo->hConsole, &rcClient); 
 
-	ClientHeight = rcClient.bottom;
+	Cinfo->ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 
-	MoveWindow(Cinfo->hwndOutput,2, 2, ClientWidth-4, ClientHeight-InputBoxHeight-4, TRUE);
-	MoveWindow(Cinfo->hwndInput,2, ClientHeight-InputBoxHeight-2, ClientWidth-4, InputBoxHeight, TRUE);
+	MoveWindow(Cinfo->hwndOutput,2, 2, ClientWidth-4, Cinfo->ClientHeight-InputBoxHeight-4, TRUE);
+	MoveWindow(Cinfo->hwndInput,2, Cinfo->ClientHeight-InputBoxHeight-2, ClientWidth-4, InputBoxHeight, TRUE);
 
 	GetClientRect(Cinfo->hwndOutput, &rcClient); 
 
-	ClientHeight = rcClient.bottom;
+	Cinfo->ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 	
 	Cinfo->WarnLen = ClientWidth/8 - 1;
@@ -520,8 +566,67 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		 Cinfo = InitHeader;
 	
 	switch (message) {
- 
-        case WM_MEASUREITEM: 
+
+	case WM_CTLCOLOREDIT:
+		
+		if (Cinfo->Scrolled)
+		{
+			HDC hdcStatic = (HDC)wParam;
+			SetBkMode(hdcStatic, TRANSPARENT);
+
+			return (LONG)GetStockObject(LTGRAY_BRUSH);
+		}
+		return (DefWindowProc(hWnd, message, wParam, lParam));
+
+
+	case WM_VSCROLL:
+		break;
+
+	case WM_NOTIFY:
+	{
+		const MSGFILTER * pF = (MSGFILTER *)lParam;
+		POINT pos;
+		CHARRANGE Range;
+
+		if(pF->nmhdr.hwndFrom == Cinfo->hwndOutput)
+		{
+			if(pF->msg == WM_VSCROLL)
+			{
+//				int Command = LOWORD(pF->wParam);
+//				int Pos = HIWORD(pF->wParam);
+				
+//				Cinfo->Thumb = SendMessage(Cinfo->hwndOutput, EM_GETTHUMB, 0, 0);
+
+				DoRefresh(Cinfo);
+				break;		
+			}
+
+			if(pF->msg == WM_KEYUP)
+			{
+				if (pF->wParam == VK_PRIOR || pF->wParam == VK_NEXT)
+				{
+//					Cinfo->Thumb = SendMessage(Cinfo->hwndOutput, EM_GETTHUMB, 0, 0);
+					DoRefresh(Cinfo);
+				}
+			}
+			
+			if(pF->msg == WM_RBUTTONDOWN)
+			{
+				// Only allow popup if something is selected
+
+				SendMessage(Cinfo->hwndOutput, EM_EXGETSEL , 0, (WPARAM)&Range);
+				if (Range.cpMin == Range.cpMax)
+					return TRUE;
+
+				GetCursorPos(&pos);
+				TrackPopupMenu(trayMenu, 0, pos.x, pos.y, 0, hWnd, 0);
+				return TRUE;
+			}
+		}
+		break;
+	}
+	
+	case WM_MEASUREITEM: 
  
             lpmis = (LPMEASUREITEMSTRUCT) lParam; 
  
@@ -587,6 +692,41 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 		switch (wmId) {
 
+		case 40000:
+		{
+			int len=0;
+			HGLOBAL	hMem;
+			char * ptr;
+			CHARRANGE Range;
+
+			// Copy Rich Text Selection to Clipboard
+	
+			SendMessage(Cinfo->hwndOutput, EM_EXGETSEL , 0, (WPARAM)&Range);
+	
+			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, Range.cpMax - Range.cpMin + 1);
+
+			if (hMem != 0)
+			{
+				ptr=GlobalLock(hMem);
+	
+				if (OpenClipboard(Cinfo->hConsole))
+				{
+					len = SendMessage(Cinfo->hwndOutput, EM_GETSELTEXT  , 0, (WPARAM)ptr);
+
+					GlobalUnlock(hMem);
+					EmptyClipboard();
+					SetClipboardData(CF_TEXT,hMem);
+					CloseClipboard();
+				}
+			}
+			else
+				GlobalFree(hMem);
+
+			SetFocus(Cinfo->hwndInput);
+		}
+
+
+
 
 		case BPQBELLS:
 
@@ -620,6 +760,16 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			break;
 
 		case BPQCLEAROUT:
+
+			for (i = 0; i < MAXLINES; i++)
+			{
+				Cinfo->OutputScreen[i][0] = 0;
+			}
+
+			Cinfo->CurrentLine = 0;
+			DoRefresh(Cinfo);
+			break;
+
 
 			SendMessage(Cinfo->hwndOutput,LB_RESETCONTENT, 0, 0);		
 			break;
@@ -862,10 +1012,12 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				memcpy(&Msg[2], Cinfo->kbbuf, Cinfo->kbptr+1);
 
 				WritetoConsoleWindow(Cinfo->BPQStream, Msg, Cinfo->kbptr+3);
+
 			}
 			else
 				WritetoConsoleWindow(Cinfo->BPQStream, Cinfo->kbbuf, Cinfo->kbptr+1);
 
+			DoRefresh(Cinfo);
 			ProcessLine(Cinfo->Console, user, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
 
 			SendMessage(Cinfo->hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
@@ -891,27 +1043,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return CallWindowProc(Cinfo->wpOrigInputProc, hwnd, uMsg, wParam, lParam); 
 } 
 
-LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	struct ConsoleInfo * Cinfo;
 
-	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
-	{
-		if (Cinfo->hwndOutput == hWnd)
-			break;
-	}
-
-	if (Cinfo == NULL)
-		 Cinfo = InitHeader;
-	
-	// Trap mouse messages, so we can't select stuff in output and mon windows,
-	//	otherwise scrolling doesnt work.
-
-	if (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST) 
-       return TRUE; 
-
-	return CallWindowProc(Cinfo->wpOrigOutputProc, hwnd, uMsg, wParam, lParam); 
-} 
 
 int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len);
 
@@ -926,6 +1058,7 @@ int WritetoConsoleWindow(int Stream, char * Msg, int len)
 			if (Cinfo->BPQStream == Stream)
 			{
 				WritetoConsoleWindowSupport(Cinfo, Msg, len);
+				DoRefresh(Cinfo);
 				return 0;
 			}
 		}
@@ -936,7 +1069,6 @@ int WritetoConsoleWindow(int Stream, char * Msg, int len)
 int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 {
 	char * ptr1, * ptr2;
-	int index;
 
 	if (len + Cinfo->PartLinePtr > Cinfo->readbufflen)
 	{
@@ -945,7 +1077,15 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 	}
 
 	if (Cinfo->PartLinePtr != 0)
-		SendMessage(Cinfo->hwndOutput,LB_DELETESTRING,Cinfo->PartLineIndex,(LPARAM)(LPCTSTR) 0 );		
+	{
+		Cinfo->CurrentLine--;				// Overwrite part line in buffer
+
+		if (Msg[0] == 0x1b && len > 1) 
+		{
+			Msg += 2;		// Remove Colour Escape
+			len -= 2;
+		}
+	}
 
 	memcpy(&Cinfo->readbuff[Cinfo->PartLinePtr], Msg, len);
 		
@@ -981,11 +1121,10 @@ lineloop:
 		{
 			// no newline. Move data to start of buffer and Save pointer
 
-			Cinfo->PartLineIndex=SendMessage(Cinfo->hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
-			SendMessage(Cinfo->hwndOutput,LB_SETCARETINDEX,(WPARAM) Cinfo->PartLineIndex, MAKELPARAM(FALSE, 0));
-
 			Cinfo->PartLinePtr=len;
 			memmove(Cinfo->readbuff,ptr1,len);
+			AddLinetoWindow(Cinfo, ptr1);
+//			InvalidateRect(Cinfo->hwndOutput, NULL, FALSE);
 
 			return (0);
 		}
@@ -1028,7 +1167,7 @@ lineloop:
 			}
 			save = ptr1[foldlen];
 			ptr1[foldlen] = 0;
-			index=SendMessage(Cinfo->hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
+			AddLinetoWindow(Cinfo, ptr1);
 			ptr1[foldlen] = save;
 			linelen -= foldlen;
 			ptr1 = ptr3;
@@ -1036,15 +1175,12 @@ lineloop:
 			if (linelen > Cinfo->maxlinelen)
 				goto foldloop;
 						
-			if (linelen > 0)
-				index=SendMessage(Cinfo->hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );
+			AddLinetoWindow(Cinfo, ptr1);
 
 			ptr1 = saveptr1;
 		}
 		else
-		{
-			index=SendMessage(Cinfo->hwndOutput,LB_ADDSTRING,0,(LPARAM)(LPCTSTR) ptr1 );					
-		}
+			AddLinetoWindow(Cinfo, ptr1);
 
 		Cinfo->PartLinePtr=0;
 
@@ -1060,16 +1196,6 @@ lineloop:
 				len--;
 			}
 		}
-
-		if (index > 1200)
-						
-		do{
-
-			index=SendMessage(Cinfo->hwndOutput,LB_DELETESTRING, 0, 0);
-			
-			} while (index > 1000);
-
-		SendMessage(Cinfo->hwndOutput,LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
 
 		goto lineloop;
 	}
@@ -1132,6 +1258,237 @@ void CopyToClipboard(HWND hWnd)
 				GlobalFree(hMem);		
 	}
 }
+
+
+DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LONG cb, PLONG pcb)
+{
+	int ReqLen = cb;
+	int i;
+	int Line;
+
+	if (cb != 4092)
+		return 0;
+
+	if (Cinfo->SendHeader)
+	{
+		// Return header
+
+		memcpy(lpBuff, RTFHeader, RTFHddrLen);
+		*pcb = RTFHddrLen;
+		Cinfo->SendHeader = FALSE;
+		Cinfo->Finished = FALSE;
+		Cinfo->Index = 0;
+		return 0;
+	}
+
+	if (Cinfo->Finished)
+	{
+		*pcb = 0;
+		return 0;
+	}
+	
+/*
+	if (BufferLen > cb)
+	{
+		memcpy(lpBuff, &Buffer[Offset], cb);
+		BufferLen -= cb;
+		Offset += cb;
+		*pcb = cb;
+		return 0;
+	}
+
+	memcpy(lpBuff, &Buffer[Offset], BufferLen);
+
+    *pcb = BufferLen;
+*/
+
+	// Return 10 line at a time
+
+	for (i = 0; i < 10; i++);
+	{
+	Line = Cinfo->Index++ + Cinfo->CurrentLine - MAXLINES;
+
+	if (Line <0)
+		Line = Line + MAXLINES;
+
+	wsprintf(lpBuff, "\\cf%d ", Cinfo->Colourvalue[Line]);
+	strcat(lpBuff, Cinfo->OutputScreen[Line]);
+	strcat(lpBuff, "\\line");
+
+	if (Cinfo->Index == MAXLINES)
+	{
+		Cinfo->Finished = TRUE;
+		strcat(lpBuff, "}");
+		i = 10;
+	}
+	}
+	*pcb = strlen(lpBuff);
+	return 0;
+}
+
+
+VOID DoRefresh(struct ConsoleInfo * Cinfo)
+{
+	EDITSTREAM es = {0};
+	int Min, Max, Pos;
+	POINT Point;
+	SCROLLINFO ScrollInfo;
+	int LoopTrap = 0;
+	HWND hwndOutput = Cinfo->hwndOutput;
+
+	Cinfo->Thumb = SendMessage(Cinfo->hwndOutput, EM_GETTHUMB, 0, 0);
+
+	Pos = Cinfo->Thumb + Cinfo->ClientHeight;
+
+	if ((Cinfo->Thumb + Cinfo->ClientHeight) > Cinfo->RTFHeight - 10)		// Don't bother writing to screen if scrolled back
+	{
+		es.pfnCallback = EditStreamCallback;
+		es.dwCookie = (DWORD_PTR)Cinfo;
+		Cinfo->SendHeader = TRUE;
+		SendMessage(hwndOutput, EM_STREAMIN, SF_RTF, (LPARAM)&es);
+	}
+
+	GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);
+	ScrollInfo.cbSize = sizeof(ScrollInfo);
+    ScrollInfo.fMask = SIF_ALL;
+
+	GetScrollInfo(hwndOutput, SB_VERT, &ScrollInfo);
+
+//	Debugprintf("Pos %d Max %d Min %d nMax %d ClientH %d", Pos, Min, Max, ScrollInfo.nMax, Cinfo->ClientHeight);
+
+	if (Cinfo->FirstTime == FALSE)
+	{
+		// RTF Controls don't immediately scroll to end - don't know why.
+		
+		Cinfo->FirstTime = TRUE;
+		Point.x = 0;
+		Point.y = 25000;					// Should be plenty for any font
+
+		while (LoopTrap++ < 20)
+		{
+			SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+		}
+
+		GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);	// Get Actual Height
+		Cinfo->RTFHeight = Max;
+		Point.x = 0;
+		Point.y = Cinfo->RTFHeight - ScrollInfo.nPage;
+		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+		Cinfo->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+	}
+
+	Point.x = 0;
+	Point.y = Cinfo->RTFHeight - ScrollInfo.nPage;
+
+	if (Cinfo->Thumb > (Point.y - 10))		// Don't Scroll if user has scrolled back 
+	{
+		SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+
+		if (Cinfo->Scrolled)
+		{
+			Cinfo->Scrolled = FALSE;
+			InvalidateRect(Cinfo->hwndInput, NULL, TRUE);
+		}
+		return;
+	}
+
+	if (!Cinfo->Scrolled)
+	{
+		Cinfo->Scrolled = TRUE;
+		InvalidateRect(Cinfo->hwndInput, NULL, TRUE);
+	}
+}
+
+VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line)
+{
+	int Len = strlen(Line);
+	char * ptr1 = Line;
+	char * ptr2;
+	int l, Index;
+	char LineCopy[LINELEN * 2];
+	
+	if (Line[0] ==  0x1b && Len > 1)
+	{
+		// Save Colour Char
+		
+		Cinfo->CurrentColour = Line[1] - 10;
+		ptr1 +=2;
+		Len -= 2;
+	}
+
+	strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], ptr1);
+
+	// Look for chars we need to escape (\  { })
+
+	ptr1 = Cinfo->OutputScreen[Cinfo->CurrentLine];
+	Index = 0;
+	ptr2 = strchr(ptr1, '\\');				// Look for Backslash first, as we may add some later
+
+	if (ptr2)
+	{
+		while (ptr2)
+		{
+			l = ++ptr2 - ptr1;
+			memcpy(&LineCopy[Index], ptr1, l);	// Copy Including found char
+			Index += l;
+			LineCopy[Index++] = '\\';
+			Len++;
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, '\\');
+		}
+		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
+		strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
+	}
+
+	ptr1 = Cinfo->OutputScreen[Cinfo->CurrentLine];
+	Index = 0;
+	ptr2 = strchr(ptr1, '{');
+
+	if (ptr2)
+	{
+		while (ptr2)
+		{
+			l = ptr2 - ptr1;
+			memcpy(&LineCopy[Index], ptr1, l);
+			Index += l;
+			LineCopy[Index++] = '\\';
+			LineCopy[Index++] = '{';
+			Len++;
+			ptr1 = ++ptr2;
+			ptr2 = strchr(ptr1, '{');
+		}
+		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
+		strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
+	}
+
+	ptr1 = Cinfo->OutputScreen[Cinfo->CurrentLine];
+	Index = 0;
+	ptr2 = strchr(ptr1, '}');				// Look for Backslash first, as we may add some later
+
+	if (ptr2)
+	{
+		while (ptr2)
+		{
+			l = ptr2 - ptr1;
+			memcpy(&LineCopy[Index], ptr1, l);	// Copy 
+			Index += l;
+			LineCopy[Index++] = '\\';
+			LineCopy[Index++] = '}';
+			Len++;
+			ptr1 = ++ptr2;
+			ptr2 = strchr(ptr1, '}');
+		}
+		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
+		strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
+	}
+
+
+	Cinfo->Colourvalue[Cinfo->CurrentLine] = Cinfo->CurrentColour;
+	Cinfo->LineLen[Cinfo->CurrentLine++] = Len;
+	if (Cinfo->CurrentLine >= MAXLINES) Cinfo->CurrentLine = 0;
+}
+
+
 /*
 #define XBITMAP 80 
 #define YBITMAP 20 

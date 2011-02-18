@@ -50,6 +50,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <mmsystem.h> 
+#include <Richedit.h>
 
 #include "BPQMailChat.h"
 #include "bpq32.h"

@@ -138,10 +138,10 @@ int compare(const void *arg1, const void *arg2)
    return _stricmp(*(char**)arg1 , *(char**)arg2);
 }
 
-int CountMessagesTo(CIRCUIT * conn, int * Unread)
+int CountMessagesTo(struct UserInfo * user, int * Unread)
 {
 	int i, Msgs = 0;
-	UCHAR * Call = conn->Callsign;
+	UCHAR * Call = user->Call;
 
 	*Unread = 0;
 
@@ -238,14 +238,14 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 
 		case 'X': // Number of messages for the user.
 
-			Msgs = CountMessagesTo(conn, &Unread);
+			Msgs = CountMessagesTo(conn->UserPointer, &Unread);
 			wsprintf(num, "%d", Msgs);
 			pptr = num;
 			break;
 
 		case 'x': // Number of new messages for the user.
 
-			Msgs = CountMessagesTo(conn, &Unread);
+			Msgs = CountMessagesTo(conn->UserPointer, &Unread);
 			wsprintf(num, "%d", Unread);
 			pptr = num;
 			break;

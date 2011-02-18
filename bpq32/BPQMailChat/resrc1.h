@@ -4,6 +4,7 @@
 //
 #define IDSENDTOMAP                     3
 #define IDI_ICON1                       101
+#define IDD_PROPPAGE_LARGE              107
 #define IDC_NODES2                      505
 #define IDC_MAXSEND                     506
 #define IDC_MAXRECV                     507
@@ -24,8 +25,10 @@
 #define IDC_BIDSLEFT                    1011
 #define IDC_ENABLEUI                    1012
 #define IDC_USEB2                       1013
+#define IDC_REFUSEBULLS                 1013
 #define IDC_CHATSEM                     1014
 #define IDC_PERSONALONLY                1014
+#define MAILFOR_MINS                    1014
 #define IDC_SENDNEW                     1015
 #define IDC_UICONFIG                    1016
 #define IDC_DELETETORECYCLE             1017
@@ -79,6 +82,7 @@
 #define IDC_REJAT                       1079
 #define IDC_FILTERSAVE                  1080
 #define IDC_OVERRIDEUNSENT              1081
+#define IDC_MAILFOR                     1082
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -134,14 +138,15 @@
 #define IDM_EDITCHATCOLOURS             40018
 #define BPQSAVEREG                      40019
 #define RESCANMSGS                      40020
+#define ID_HELP_ONLINEHELP              40021
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
-#define _APS_NEXT_COMMAND_VALUE         40021
-#define _APS_NEXT_CONTROL_VALUE         1082
+#define _APS_NEXT_COMMAND_VALUE         40022
+#define _APS_NEXT_CONTROL_VALUE         1083
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

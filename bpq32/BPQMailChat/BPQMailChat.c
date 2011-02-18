@@ -655,11 +655,21 @@
 // Add option to send warning to sysop if forwarded P or T message has nowhere to go
 // Fixes for Winpack Compressed Download
 // Fix Houskeeping when "Apply Overrides to Unsent Bulls" is set.
+// Add console copy/paste.
+// Add "No Bulls" Option.
+// Add "Mail For" Beacon.
+// Tidied up Tab order in config dialogs to help text-to-speech programs.
+// Limit MaxMsgno to 99000.
+
+// Version 1.0.4.38 Feb 2011
+
+// Renumbered for release
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
-#include "verhddr.h"
+#define MAILCHAT
+#include "Versions.h"
 #include "GetVersion.h"
 
 #define MAX_LOADSTRING 100
@@ -778,6 +788,7 @@ char * NewChatWelcomeMsg = NULL;
 char * ExpertWelcomeMsg = NULL;
 
 char BBSName[100];
+char MailForText[100];
 
 char HRoute[100];
 
@@ -809,7 +820,9 @@ char RlineVer[50];
 BOOL KISSOnly = FALSE;
 
 BOOL EnableUI = FALSE;
+BOOL RefuseBulls = FALSE;
 BOOL SendSYStoSYSOPCall = FALSE;
+int MailForInterval = 0;
 
 UCHAR * OtherNodes=NULL;
 
@@ -839,6 +852,11 @@ LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK    ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
+unsigned long _beginthread( void( *start_address )(struct DelayParam * DParam),
+				unsigned stack_size, struct DelayParam * DParam);
+
+VOID SendMailForThread();
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -986,6 +1004,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		DestroyWindow(hWnd);
 	}
 
+	__try {
+
 	// Trap CRT Errors
 	
 	newHandler = myInvalidParameterHandler;
@@ -997,6 +1017,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	MyRegisterClass(hInstance);
 
 	// Perform application initialization:
+
+
 	if (!InitInstance (hInstance, nCmdShow))
 	{
 		return FALSE;
@@ -1007,6 +1029,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	// Main message loop:
 
 	Logprintf(LOG_DEBUG, NULL, '!', "Program Starting");
+	Debugprintf("BPQMailChat Starting");
+
+	} My__except_Routine("Init");
 
 	while (GetMessage(&msg, NULL, 0, 0))
 	{
@@ -1201,12 +1226,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.cbClsExtra		= 0;
 	wcex.cbWndExtra		= DLGWINDOWEXTRA;
 	wcex.hInstance		= hInstance;
-	wcex.hIcon			= LoadIcon(hInstance, MAKEINTRESOURCE(IDI_BPQMailChat));
+	wcex.hIcon			= LoadIcon(hInstance, MAKEINTRESOURCE(BPQICON));
 	wcex.hCursor		= LoadCursor(NULL, IDC_ARROW);
 	wcex.hbrBackground	= bgBrush;
 	wcex.lpszMenuName	= MAKEINTRESOURCE(IDC_BPQMailChat);
 	wcex.lpszClassName	= szWindowClass;
-	wcex.hIconSm		= LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+	wcex.hIconSm		= LoadIcon(wcex.hInstance, MAKEINTRESOURCE(BPQICON));
 
 	return RegisterClassEx(&wcex);
 }
@@ -1235,6 +1260,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	char Size[80];
 	RECT InitRect;
 	RECT SessRect;
+	struct _EXCEPTION_POINTERS exinfo;
 
 	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
 
@@ -1348,8 +1374,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    UpdateWindow(hWnd);
 
    WSAStartup(MAKEWORD(2, 0), &WsaData);
+
+   __try {
     
    return Initialise();
+
+   }My__except_Routine("Initialise");
+
+   return FALSE;
 }
 
 //
@@ -1461,7 +1493,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		My__except_Routine("Socket_COnnect");}
 		return 0;
 
-	case WM_KEYUP:
+	case WM_KEYUP:	
 
 		switch (wParam)
 		{	
@@ -1480,6 +1512,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case VK_F5:
 			CreateDebugWindow();
 			return 0;
+
+		case VK_TAB:
+			return TRUE;
+
+		break;
+
 
 
 		}
@@ -1661,6 +1699,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDM_ABOUT:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+			break;
+
+		case ID_HELP_ONLINEHELP:
+
+			ShellExecute(hWnd,"open",
+				"http://www.cantab.net/users/john.wiseman/Documents/BPQ%20Mail%20and%20Chat%20Server.htm",
+				"", NULL, SW_SHOWNORMAL); 
+		
 			break;
 
 		case IDM_CONFIG:
@@ -2354,8 +2400,12 @@ BOOL Initialise()
 
 	InitialiseNNTP();
 
-	if (EnableUI)
+	if (BBSApplNum)
+	{
 		SetupUIInterface();
+		if (MailForInterval)
+			_beginthread(SendMailForThread, 0, 0);
+	}
 
 	if (cfgMinToTray)
 	{
@@ -2451,7 +2501,8 @@ int Connected(Stream)
 			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 			conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
 
-			GetConnectionInfo(Stream, callsign, &port, &conn->SessType, &paclen, &maxframe, &l4window);
+			conn->Secure_Session = GetConnectionInfo(Stream, callsign,
+				&port, &conn->SessType, &paclen, &maxframe, &l4window);
 
 			strlop(callsign, ' ');		// Remove trailing spaces
 
@@ -2502,6 +2553,9 @@ int Connected(Stream)
 			//	Set SYSOP flag if user is defined as SYSOP and Host Session 
 			
 			if (((conn->SessType & Sess_BPQHOST) == Sess_BPQHOST) && (user->flags & F_SYSOP))
+				conn->sysop = TRUE;
+
+			if (conn->Secure_Session && (user->flags & F_SYSOP))
 				conn->sysop = TRUE;
 
 			Mask = 1 << (GetApplNum(Stream) - 1);
@@ -3522,7 +3576,7 @@ VOID GetBadWordFile()
 
 BOOL CheckBadWord(char * Word, char * Msg)
 {
-	char * ptr1 = Msg, * ptr2;
+	UCHAR * ptr1 = Msg, * ptr2;
 	int len = strlen(Word);
 
 	while (*ptr1)					// Stop at end
@@ -3902,6 +3956,14 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (_memicmp(Cmd, "UH", 2) == 0 && conn->sysop)
+	{
+		DoUnholdCommand(conn, user, Cmd, Arg1, Context);
+		SendPrompt(conn, user);
+		return;
+	}
+
+
 	if (_memicmp(Cmd, "I", 1) == 0)
 	{
 		char * Save;
@@ -4086,6 +4148,9 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
 			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, ST Send NTS,\r");
 			BBSputs(conn, "                   SR Num - Send Reply, SC Num - Send Copy\r");
+			if (conn->sysop)
+				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
+
 		}
 
 		SendPrompt(conn, user);
@@ -4441,7 +4506,68 @@ void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char
 	return;
 }
 
+void DoUnholdCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	int msgno=-1;
+	int i;
+	struct MsgInfo * Msg;
+	
+	// Param is either ALL or a list of numbers
 
+	if (Arg1 == NULL)
+	{
+		nodeprintf(conn, "No message number\r");
+		return;
+	}
+
+	if (_stricmp(Arg1, "ALL") == 0)
+	{
+		for (i=NumberofMessages; i>0; i--)
+		{
+			Msg = MsgHddrPtr[i];
+
+			if (Msg->status == 'H')
+			{
+				if (Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+					Msg->status = '$';				// Has forwarding
+				else
+					Msg->status = 'N';
+				
+				nodeprintf(conn, "Message #%d Unheld\r", Msg->number);
+			}
+		}
+		return;
+	}
+
+	while (Arg1)
+	{
+		msgno = atoi(Arg1);
+		Msg = MsgnotoMsg[msgno];
+		
+		if (Msg)
+		{
+			if (Msg->status == 'H')
+			{
+				if (Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+					Msg->status = '$';				// Has forwarding
+				else
+					Msg->status = 'N';
+
+				nodeprintf(conn, "Message #%d Unheld\r", msgno);
+			}
+			else
+			{
+				nodeprintf(conn, "Message #%d was not held\r", msgno);
+			}
+		}
+		else
+				nodeprintf(conn, "Message #%d not found\r", msgno);
+		
+		Arg1 = strtok_s(NULL, " \r", &Context);
+	}
+
+	return;
+}
 
 void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
 {
@@ -4731,11 +4857,10 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		
 		return;
 
-	case 'H':				// List Status
 	case 'N':
 	case 'Y':
 	case 'F':
-	case '%':
+	case '$':
 	case 'D':			// Delivered NTS Traffic can be listed by anyone
 		{
 			int m = NumberofMessages;
@@ -4755,22 +4880,27 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		return;
 
 	case 'K':
-	{
-		int i, Msgs = 0;
+	case 'H':				// List Status
 
-		for (i=NumberofMessages; i>0; i--)
+		if (conn->sysop)
 		{
-			if (MsgHddrPtr[i]->status == 'K')
+			int i, Msgs = 0;
+
+			for (i=NumberofMessages; i>0; i--)
 			{
-				Msgs++;
-				ListMessage(MsgHddrPtr[i], conn);
+				if (MsgHddrPtr[i]->status == toupper(Cmd[1]))
+				{
+					Msgs++;
+					ListMessage(MsgHddrPtr[i], conn);
+				}
 			}
+
+			if (Msgs == 0)
+				BBSputs(conn, "No Messages found\r");
 		}
+		else
+				BBSputs(conn, "LH or LK can only be used by SYSOP\r");
 
-		if (Msgs == 0)
-			BBSputs(conn, "No Messages found\r");
-
-	}
 
 	case 'P':
 	case 'B':
@@ -5333,8 +5463,15 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 		
 		Cmd[1] = 'P';
 
-	case 'P':
 	case 'B':
+
+		if (RefuseBulls)
+		{
+			nodeprintf(conn, "*** Error: This system doesn't allow sending Bulls\r");
+			return FALSE;
+		}
+
+	case 'P':
 	case 'T':
 				
 		if (Arg1 == NULL)
@@ -6519,6 +6656,7 @@ nextline:
 		SaveMessageDatabase();
 		SaveBIDDatabase();
 
+		if (EnableUI)
 		__try
 		{
 			SendMsgUI(Msg);
@@ -7030,8 +7168,6 @@ VOID ConnectPauseThread(struct DelayParam * DParam)
 	return;
 }
 
-unsigned long _beginthread( void( *start_address )(struct DelayParam * DParam),
-				unsigned stack_size, struct DelayParam * DParam);
 
 /*
 BOOL ProcessBBSConnectScriptInner(CIRCUIT * conn, char * Buffer, int len);
@@ -7467,6 +7603,12 @@ CheckForSID:
 VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 {
 	// scan backwards for first '-'
+
+	if (strstr(SID, "BPQCHATSERVER"))
+	{
+		Disconnect(conn->BPQStream);
+		return;
+	}
 
 	if (strstr(SID, "RMS Ex"))
 	{

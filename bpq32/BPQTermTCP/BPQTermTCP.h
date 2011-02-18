@@ -1,12 +1,11 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Developer Studio generated include file.
-// Used by BPQTermTCPcutpaste.rc
+// Used by BPQTermTCP.rc
 //
 #define IDR_MENU1                       101
 #define BPQMENU                         101
 #define BPQDISCONNECT                   103
 #define IDD_CONFIG                      104
-#define BPQICON                         400
 #define IDC_HOST                        1004
 #define IDC_PORT                        1005
 #define IDC_USER                        1006

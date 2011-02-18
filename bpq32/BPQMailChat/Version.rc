@@ -6,7 +6,7 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include "resource.h"
-#include "verhddr.h"
+#include "Versions.h"
 #include "windows.h"
 
 /////////////////////////////////////////////////////////////////////////////
@@ -35,7 +35,7 @@ BEGIN
     LTEXT           "G8BPQ Mail and Chat Version ",-1,39,15,101,8,
                     SS_NOPREFIX | NOT WS_GROUP
     LTEXT           Verstring,-1,139,15,58,8,NOT WS_GROUP
-    LTEXT           "Copyright (C) G8BPQ 2009-2011",-1,44,32,115,13,NOT 
+    LTEXT           VerCopyright,-1,44,32,115,13,NOT 
                     WS_GROUP    DEFPUSHBUTTON   "OK",IDOK,88,51,30,11,BS_CENTER | BS_VCENTER | WS_GROUP
 END
 
@@ -45,7 +45,7 @@ END
 //
 // Version
 //
-
+/*
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION Vers
  PRODUCTVERSION Vers
@@ -78,7 +78,7 @@ BEGIN
         VALUE "Translation", 0x809, 1200
     END
 END
-
+*/
 #endif    // !_MAC
 
 
@@ -96,12 +96,13 @@ END
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
     "#include ""resource.h""\r\n"
-    "#include ""verhddr.h""\r\n"
+    "#include ""Versions.h""\r\n"
     "\0"
 END
 
 3 TEXTINCLUDE DISCARDABLE 
 BEGIN
+    "#include ""..\\StdVer.inc""\r\n"
     "\r\n"
     "\0"
 END
@@ -135,6 +136,7 @@ END
 // Generated from the TEXTINCLUDE 3 resource.
 //
 
+#include "..\\StdVer.inc"
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
