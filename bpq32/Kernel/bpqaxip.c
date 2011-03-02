@@ -160,6 +160,8 @@ char * PortConfig[34];
 
 extern UCHAR BPQDirectory[];
 
+extern HKEY REGTREE;
+
 void ResolveNames(struct PORTINFO * PORT);
 void OpenSockets(struct PORTINFO * PORT);
 void CloseSockets();
@@ -1407,7 +1409,7 @@ static void ResolveNames(struct PORTINFO * PORT)
 		CW_USEDEFAULT, 0, 400, Windowlength,
 		NULL, NULL, hInstance, NULL);
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                 "SOFTWARE\\G8BPQ\\BPQ32\\BPQAXIP",    
                               0,
                               KEY_QUERY_VALUE,
@@ -1700,7 +1702,7 @@ void CreateMHWindow(struct PORTINFO * PORT)
 		NULL, NULL, hInstance, NULL);
 
 		
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                 "SOFTWARE\\G8BPQ\\BPQ32\\BPQAXIP",    
                               0,
                               KEY_QUERY_VALUE,

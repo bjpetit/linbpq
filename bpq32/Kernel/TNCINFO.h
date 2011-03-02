@@ -153,6 +153,7 @@ typedef struct TNCINFO
 #define H_AEA 4
 #define H_HAL 5
 #define H_TELNET 6
+#define H_DED 7
 
 	int Port;					// BPQ Port Number
 
@@ -171,8 +172,20 @@ typedef struct TNCINFO
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
 	BOOL SwallowSignon;			// Set to suppress *** connected to APPL
 
-    UCHAR TCPBuffer[1000];		// For converting byte stream to messages
-    int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+    union
+	{
+		UCHAR TCPBuffer[1000];		// For converting byte stream to messages
+		UCHAR DEDBuffer[1000];		// For converting byte stream to messages
+	};
+	int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
+
+	int	MSGCOUNT;				// DED WORKING FIELD
+	int	MSGLENGTH;				// DED Msg Len
+	int	MSGCHANNEL;				// DED Msg Channel Number
+	int	MSGTYPE;				// DED Msg Type
+
+	int HOSTSTATE;				// ded HOST state machine
+
 
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
 	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.

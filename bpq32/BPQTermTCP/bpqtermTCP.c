@@ -58,6 +58,8 @@
 #include <Richedit.h> 
 
 #include "bpqtermTCP.h"
+#define TermTCP
+#include "Versions.h"
 #include "GetVersion.h"
 
 #define BPQICON 2
@@ -209,7 +211,7 @@ typedef struct RTFTerm
 
 	int Colourvalue[MAXLINES];
 	int LineLen[MAXLINES];
-
+	int CharWidth;
 	int CurrentColour;
 	int Thumb;
 	int FirstTime;
@@ -274,6 +276,7 @@ HWND MainWnd, hWnd;
 BOOL SocketActive = FALSE;
 BOOL Connecting = FALSE;
 BOOL Connected = FALSE;
+BOOL Disconnecting = FALSE;
 
 VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT idEvent,DWORD dwTime );
 
@@ -454,10 +457,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	WSADATA WsaData;            // receives data from WSAStartup
 	char RTFColours[3000];
 	struct RTFTerm * OPData;
+	char Temp[1000];
 
 	hInst = hInstance; // Store instance handle in our global variable
 
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
+
+	OutputData.CharWidth = 8;
 
 	// Create a dialog box as the main window
 
@@ -469,6 +475,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	MainWnd=hWnd;
 
 	// Set up RTF Header, including Colours String;
+
 
 	memcpy(RTFColours, "{\\colortbl ;", 12);
 	n = 12;
@@ -482,10 +489,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	RTFColours[n++] = '}';
 	RTFColours[n] = 0;
 
-//	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset204 FixedSys;}}");
-	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1 FixedSys;}}");
+//	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset204 ;}}");
+	wsprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1\\cpg%d %s;}}", 437, "FixedSys");
 	strcat(RTFHeader, RTFColours);
-	strcat(RTFHeader, "\\viewkind4\\uc1\\pard\\f0");
+	wsprintf(Temp, "\\viewkind4\\uc1\\pard\\f0\\fs%d", 20);
+	strcat(RTFHeader, Temp);
 
 	RTFHddrLen = strlen(RTFHeader);
 
@@ -572,7 +580,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"BPQTermTCPVersion %s", VersionString);
+	wsprintf(Title,"BPQTermTCP Version %s", VersionString);
 
 	SetWindowText(hWnd,Title);
 		
@@ -918,7 +926,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			        
 		case BPQDISCONNECT:
 			
+			if (Disconnecting)
+			{
+				// Force close
+					
+				if (SocketActive)
+					closesocket(sock);
+
+				wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+				SetWindowText(hWnd,Title);
+				DisableDisconnectMenu(hWnd);
+				EnableConnectMenu(hWnd);
+
+				WritetoOutputWindow(&OutputData, "*** Disconnected\r", 17);		
+				DoRefresh(&OutputData);
+				SocketActive = FALSE;
+				Connected = FALSE;
+				Disconnecting = FALSE;	
+
+				break;
+			}
+
 			shutdown(sock, 2);		// SD_BOTH
+			Disconnecting = TRUE;
 			break;
 						
 		case BPQBELLS:
@@ -1029,6 +1059,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		
 				return (DefWindowProc(hWnd, message, wParam, lParam));
 		}
+
+		case WM_SIZE:
+
+			MoveWindows();
+			
+			return TRUE;
 
 		case WM_SIZING:
 
@@ -1174,6 +1210,16 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			// Echo, with set Black escape
 
 			memcpy(&DisplayLine[2], kbbuf, kbptr+1);
+
+			if (OutputData.Scrolled)
+			{
+				POINT Point;
+				Point.x = 0;
+				Point.y = 25000;					// Should be plenty for any font
+
+				SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+				OutputData.Scrolled = FALSE;
+			}
 
 			WritetoOutputWindow(&OutputData, DisplayLine, kbptr+3);
 			DoRefresh(&OutputData);
@@ -1430,14 +1476,14 @@ VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
 		while (ptr2)
 		{
 			l = ++ptr2 - ptr1;
-			memcpy(&LineCopy[OPData->Index], ptr1, l);	// Copy Including found char
+			memcpy(&LineCopy[Index], ptr1, l);	// Copy Including found char
 			Index += l;
 			LineCopy[Index++] = '\\';
 			Len++;
 			ptr1 = ptr2;
 			ptr2 = strchr(ptr1, '\\');
 		}
-		strcpy(&LineCopy[OPData->Index], ptr1);			// Copy in rest
+		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
 		strcpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
 	}
 
@@ -1804,7 +1850,10 @@ void MoveWindows()
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 	
-	maxlinelen = ClientWidth/8 - 1;
+	if (ClientWidth > 16)
+		maxlinelen = ClientWidth/OutputData.CharWidth - 1;
+
+	InvalidateRect(hWnd, NULL, TRUE);
 }
 
 void CopyRichTextToClipboard(HWND hWnd)
@@ -2095,6 +2144,7 @@ VOID Socket_Data(int sock, int error, int eventcode)
 			DoRefresh(&OutputData);
 			SocketActive = FALSE;
 			Connected = FALSE;
+			Disconnecting = FALSE;	
 			return ;
 	}
 	return ;

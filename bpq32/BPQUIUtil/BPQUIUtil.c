@@ -368,6 +368,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	CheckTimer();		// Force BPQ32 to initialise
 
+	SetTimer(hWnd, 1, 5000, NULL);			// Fast Timer for Node CheckTimer()
+
 	for (i = 1; i <= GetNumberofPorts(); i++)
 		if (CreateDialogLine(hWnd, i, Row))
 			Row += 30;
@@ -464,7 +466,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case WM_TIMER:
 
-			TimerProc();
+			if (wParam == 1)
+				CheckTimer();			// Check Node Timer
+			else
+				TimerProc();
+
 			return 0;
 
 		case WM_CTLCOLORDLG:
@@ -709,7 +715,7 @@ VOID SetupUI()
 							push eax
 							lea	eax,[DigiString] 
 							push eax
-							call strcpy
+							call strcpy				// Must compile this with no Optimisations
 							add	esp,8
 						}
 						DigiLeft = strlop(DigiString,',');
@@ -727,6 +733,9 @@ VOID SetupUI()
 	}
 	if (Interval)
 		TimerHandle = SetTimer(hWnd, WM_TIMER, Interval * 60000, NULL);
+
+	TimerHandle = SetTimer(hWnd, 1, 5000, NULL);			// Fast Timer for Node CheckTimer()
+
 }
 
 

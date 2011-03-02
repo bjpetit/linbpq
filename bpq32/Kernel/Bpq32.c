@@ -358,6 +358,14 @@
 // Return Secure Session Flag from GetConnectionInfo
 // Show Uptime as dd/hh/mm
 
+// 4.10.16.17	March 2011
+
+// Add "Close all programs" command
+// Add BPQ Program Directory registry key
+// Use HKEY_CURRENT_USER on Viata and above (and move registry if necessary)
+  
+
+
 #define Kernel
 #include "Versions.h"
 
@@ -428,6 +436,7 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI SoundModemExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI DEDExtInit(EXTPORTDATA * PortEntry);
 
 
 extern char * Buffer;	// Config Area
@@ -435,7 +444,6 @@ extern char * Buffer;	// Config Area
 extern char AUTOSAVE;
 
 extern char MYNODECALL;	// 10 chars,not null terminated
-extern char SIGNONMSG;
 
 extern QCOUNT; 
 extern struct BPQVECSTRUC BPQHOSTVECTOR[];
@@ -460,6 +468,10 @@ extern int RAWTX();
 extern int RELBUFF();
 extern int SENDNETFRAME();
 extern char MYCALL[];			// 7 chars, ax.25 format
+
+char SIGNONMSG[128] = "";
+char SESSIONHDDR[80] = "";
+int SESSHDDRLEN = 0;
 
 
 char LOCATOR[80] = "";			// Maidenhead Locator for Reporting
@@ -503,8 +515,12 @@ DllExport long  BPQHOSTAPIPTR = (long)&BPQHOSTAPI;
 DllExport long  MONDECODEPTR = (long)&MONDECODE;
 
 UCHAR BPQDirectory[MAX_PATH]="";
+UCHAR BPQProgramDirectory[MAX_PATH]="";
 
 static char BPQWinMsg[] = "BPQWindowMessage";
+
+HKEY REGTREE = HKEY_CURRENT_USER;
+char REGTREETEXT[100] = "HKEY_CURRENT_USER";
 
 UINT BPQMsg=0;
 
@@ -607,7 +623,7 @@ BOOL LoadRigDriver();
 VOID CreateRegBackup();
 VOID ResolveUpdateThread();
 VOID OpenReportingSocket();
-
+VOID CloseAllPrograms();
 
 BOOL IPActive = FALSE;
 BOOL IPRequired = FALSE;
@@ -1324,7 +1340,7 @@ Check_Timer()
 		lineno=0;
 		memset(Screen, ' ', LINELEN*SCREENLEN);
 
-		WritetoConsole(&SIGNONMSG);
+		WritetoConsole(&SIGNONMSG[0]);
 		WritetoConsole("Reinitialising...\n");
  
 		SetupBPQDirectory();
@@ -1510,6 +1526,11 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			memset(Screen, ' ', LINELEN*SCREENLEN);
 
 			GetVersionInfo("bpq32.dll");
+
+			wsprintf (SIGNONMSG, "G8BPQ AX25 Packet Switch System Version %s %s\r\n%s\r\n",
+				TextVerstring, Datestring, VerCopyright);
+				 
+			SESSHDDRLEN = wsprintf(SESSIONHDDR, "G8BPQ Network System %s for Win32 (", TextVerstring);
 
 			SetupBPQDirectory();
 
@@ -1706,7 +1727,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			
 			if (AUTOSAVE == 1) SaveNodes();	
 			
-			retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+			retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,	// Reserved
 							  0,	// Class
@@ -1783,20 +1804,76 @@ DllExport int APIENTRY CloseBPQ32()
 	return 0;
 }
 
+BOOL CopyReg(HKEY hKeyIn, HKEY hKeyOut);
 
 VOID SetupBPQDirectory()
 {
-	HKEY hKey=0;
+	HKEY hKey = 0;
+	HKEY hKeyIn = 0;
+	HKEY hKeyOut = 0;
+	int disp;
 	int retCode,Type,Vallen=MAX_PATH,i;
 	char msg[512];
-
+	char ValfromReg[MAX_PATH] = "";
 	char DLLName[256]="Not Known";
+
+/*
+•NT4 was/is '4' 
+•Win 95 is 4.00.950 
+•Win 98 is 4.10.1998 
+•Win 98 SE is 4.10.2222 
+•Win ME is 4.90.3000 
+•2000 is NT 5.0.2195 
+•XP is actually 5.1 
+•Vista is 6.0 
+•Win7 is 6.1 
+
+	i = _osver;		/ Build
+	i = _winmajor;
+	i = _winminor;
+*/
+#pragma warning(push)
+#pragma warning(disable : 4996)
+
+	if (_winver < 0x0600)
+
+#pragma warning(pop)
+	{
+		// Below Vista
+
+		REGTREE = HKEY_LOCAL_MACHINE;
+		strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
+		ValfromReg[0] = 0;
+	}
+	else
+	{
+		// If necessary, move reg from HKEY_LOCAL_MACHINE to HKEY_CURRENT_USER
+
+		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+                              "SOFTWARE\\G8BPQ\\BPQ32",
+                              0,
+                              KEY_READ,
+                              &hKeyIn);
+
+		retCode = RegCreateKeyEx(HKEY_CURRENT_USER, "SOFTWARE\\G8BPQ\\BPQ32", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKeyOut, &disp);
+
+		// See if Version Key exists in HKEY_CURRENT_USER - if it does, we have already done the copy
+
+		Vallen = MAX_PATH;
+		retCode = RegQueryValueEx(hKeyOut, "Version" ,0 , &Type,(UCHAR *)&msg, &Vallen);
+
+		if (retCode != ERROR_SUCCESS)
+			CopyReg(hKeyIn, hKeyOut);
+
+		RegCloseKey(hKeyIn);
+		RegCloseKey(hKeyOut);
+	}
 
 	GetModuleFileName(hInstance,DLLName,256);
 
 	BPQDirectory[0]=0;
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,
                               KEY_QUERY_VALUE,
@@ -1806,32 +1883,33 @@ VOID SetupBPQDirectory()
 	{
 		// Try "BPQ Directory"
 		
+		Vallen = MAX_PATH;
 		retCode = RegQueryValueEx(hKey,"BPQ Directory",0,			
-			&Type,(UCHAR *)&BPQDirectory,&Vallen);
+			&Type,(UCHAR *)&ValfromReg,&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
 		{
-			if (strlen(BPQDirectory) == 2 && BPQDirectory[0] == '"' && BPQDirectory[1] == '"')
-				BPQDirectory[0]=0;
+			if (strlen(ValfromReg) == 2 && ValfromReg[0] == '"' && ValfromReg[1] == '"')
+				ValfromReg[0]=0;
 		}
 
-		if (BPQDirectory[0] == 0)
+		if (ValfromReg[0] == 0)
 		{
 			// BPQ Directory absent or = "" - try "Config File Location"
 
-			Vallen=MAX_PATH;
+			Vallen = MAX_PATH;
 			
 			retCode = RegQueryValueEx(hKey,"Config File Location",0,			
-				&Type,(UCHAR *)&BPQDirectory,&Vallen);
+				&Type,(UCHAR *)&ValfromReg,&Vallen);
 
 			if (retCode == ERROR_SUCCESS)
 			{
-				if (strlen(BPQDirectory) == 2 && BPQDirectory[0] == '"' && BPQDirectory[1] == '"')
-					BPQDirectory[0]=0;
+				if (strlen(ValfromReg) == 2 && ValfromReg[0] == '"' && ValfromReg[1] == '"')
+					ValfromReg[0]=0;
 			}
 		}
 
-		if (BPQDirectory[0] == 0) GetCurrentDirectory(MAX_PATH, BPQDirectory);
+ 		if (ValfromReg[0] == 0) GetCurrentDirectory(MAX_PATH, ValfromReg);
 
 		// Get StartMinimized and MinimizetoTray flags
 
@@ -1841,10 +1919,35 @@ VOID SetupBPQDirectory()
 		Vallen = 4;
 		retCode = RegQueryValueEx(hKey, "Minimize to Tray", 0, &Type, (UCHAR *)&MinimizetoTray, &Vallen);
 
+//		ExpandEnvironmentStrings("%APPDATA%\\BPQ32", BPQDirectory, MAX_PATH);
+		ExpandEnvironmentStrings(ValfromReg, BPQDirectory, MAX_PATH);
+
+		// Also get "BPQ Program Directory"
+
+		ValfromReg[0] = 0;
+		Vallen = MAX_PATH;
+
+		retCode = RegQueryValueEx(hKey, "BPQ Program Directory",0 , &Type, (UCHAR *)&ValfromReg, &Vallen);
+
 		RegCloseKey(hKey);
 	}
 
-	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n",VersionStringWithBuild, DLLName, pgm);
+	ExpandEnvironmentStrings(ValfromReg, BPQProgramDirectory, MAX_PATH);
+
+	if (BPQProgramDirectory[0] == 0)
+		strcpy(BPQProgramDirectory, BPQDirectory);
+
+	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionStringWithBuild, DLLName, pgm);
+	WritetoConsole(msg);
+	OutputDebugString(msg);
+
+#pragma warning(push)
+#pragma warning(disable : 4996)
+
+	i=sprintf(msg,"Windows Ver %d.%d, Using Registry Key %s\n" ,_winmajor,  _winminor, REGTREETEXT);
+
+#pragma warning(pop)
+
  	WritetoConsole(msg);
 	OutputDebugString(msg);
 	
@@ -1853,6 +1956,12 @@ VOID SetupBPQDirectory()
 	msg[i-1]=0;
 	OutputDebugString(msg);
 
+	retCode = RegCreateKeyEx(REGTREE, "SOFTWARE\\G8BPQ\\BPQ32", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	wsprintf(msg,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
+	retCode = RegSetValueEx(hKey, "Version",0, REG_SZ,(BYTE *)msg, strlen(msg) + 1);
+
+	RegCloseKey(hKey);
 	return;	
 }
 
@@ -2412,7 +2521,7 @@ DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 
 DllExport UCHAR * APIENTRY GetSignOnMsg()
 {
-	return (&SIGNONMSG);
+	return (&SIGNONMSG[0]);
 }
 
 DllExport char * APIENTRY GetVersionString()
@@ -2420,8 +2529,22 @@ DllExport char * APIENTRY GetVersionString()
 	return ((char *)&VersionStringWithBuild);
 }
 
+DllExport HKEY APIENTRY GetRegistryKey()
+{
+	return REGTREE;
+}
+
+DllExport char * APIENTRY GetRegistryKeyText()
+{
+	return REGTREETEXT;;
+}
 
 DllExport UCHAR * APIENTRY GetBPQDirectory()
+{
+	return (&BPQDirectory[0]);
+}
+
+DllExport UCHAR * APIENTRY GetProgramDirectory()
 {
 	return (&BPQDirectory[0]);
 }
@@ -3380,6 +3503,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "SOUNDMODEM"))
 		return (UINT) SoundModemExtInit;
 
+	if (strstr(Value, "DEDHOSTTNC"))
+		return (UINT) DEDExtInit;
+
 	ExtDriver=LoadLibrary(Value);
 
 	if (ExtDriver == NULL)
@@ -3875,6 +4001,7 @@ int SetupConsoleWindow()
 
 	AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
 	AppendMenu(hPopMenu,MF_STRING | (MinimizetoTray)? MF_CHECKED:MF_UNCHECKED, BPQMINTOTRAY, "Minimize to Notification Area (System Tray)" );
+	AppendMenu(hPopMenu,MF_STRING, BPQCLOSEALL, "Close all BPQ32 Programs");
 	
 	DrawMenuBar(hWnd);	
 
@@ -3893,13 +4020,13 @@ int SetupConsoleWindow()
    LFTTYFONT.lfClipPrecision =  CLIP_DEFAULT_PRECIS ;
    LFTTYFONT.lfQuality =        DEFAULT_QUALITY ;
    LFTTYFONT.lfPitchAndFamily = FIXED_PITCH | FF_MODERN ;
-   lstrcpy( LFTTYFONT.lfFaceName, "Fixedsys" ) ;
+   lstrcpy( LFTTYFONT.lfFaceName, "Terminal" ) ;
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 	
 	SetWindowText(hWnd,Title);
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                 "SOFTWARE\\G8BPQ\\BPQ32",    
                               0,
                               KEY_QUERY_VALUE,
@@ -4033,7 +4160,7 @@ VOID SaveConfig()
 	HKEY hKey=0;
 	int retCode, disp;
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,	// Reserved
 							  0,	// Class
@@ -4120,6 +4247,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (wmId == BPQDUMP)
 			{
 				DumpSystem();
+				return 0;
+			}
+
+			if (wmId == BPQCLOSEALL)
+			{
+				CloseAllPrograms();
 				return 0;
 			}
 
@@ -4420,7 +4553,7 @@ BOOLEAN StartBPQ32()
 
 	Value[0]=0;
 
-	ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	ret = RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,
                               KEY_QUERY_VALUE,
@@ -4795,12 +4928,13 @@ VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
 VOID CreateRegBackup()
 {
 	char cmd[256];
-	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION
 	char Backup1[MAX_PATH];
 	char Backup2[MAX_PATH];
 	char RegFileName[MAX_PATH];
 	char Msg[80];
+	SHELLEXECUTEINFO   sei;
+	STARTUPINFO SInfo;
+	PROCESS_INFORMATION PInfo;
 
 	wsprintf(RegFileName, "%s\\BPQ32.reg", BPQDirectory);
 
@@ -4830,27 +4964,55 @@ VOID CreateRegBackup()
 
 	CopyFile(RegFileName, Backup2, FALSE);	// Copy to .bak
 
+	if (REGTREE == HKEY_LOCAL_MACHINE)		// < Vista
+	{
+		wsprintf(cmd,
+			"regedit /E \"%s\\BPQ32.reg\" %s\\Software\\G8BPQ\\BPQ32", BPQDirectory, REGTREETEXT);
 
-	wsprintf(cmd,
-		"regedit /E \"%s\\BPQ32.reg\" HKEY_LOCAL_MACHINE\\Software\\G8BPQ\\BPQ32", BPQDirectory);
+		ZeroMemory(&SInfo, sizeof(SInfo));
 
-		
-	SInfo.cb=sizeof(SInfo);
-	SInfo.lpReserved=NULL; 
-	SInfo.lpDesktop=NULL; 
-	SInfo.lpTitle=NULL; 
-	SInfo.dwFlags=0; 
-	SInfo.cbReserved2=0; 
-  	SInfo.lpReserved2=NULL; 
+		SInfo.cb=sizeof(SInfo);
+		SInfo.lpReserved=NULL; 
+		SInfo.lpDesktop=NULL; 
+		SInfo.lpTitle=NULL; 
+		SInfo.dwFlags=0; 
+		SInfo.cbReserved2=0; 
+  		SInfo.lpReserved2=NULL; 
 
-	if (CreateProcess(NULL , cmd , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
-		wsprintf(Msg, "Registry Save Initiated\n", fn);
+		if (CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0 ,NULL, NULL, &SInfo, &PInfo) == 0)
+		{
+			wsprintf(Msg, "Error: CreateProcess for regedit failed 0%d\n", GetLastError() );
+		   	WritetoConsole(Msg);
+			return;
+		}
+	}
 	else
-		wsprintf(Msg, "Registry Save Failed\n", fn);
+	{
 
+		wsprintf(cmd,
+			"/E \"%s\\BPQ32.reg\" %s\\Software\\G8BPQ\\BPQ32", BPQDirectory, REGTREETEXT);	
+
+	    ZeroMemory(&sei, sizeof(sei));
+
+		sei.cbSize          = sizeof(SHELLEXECUTEINFOW);
+		sei.hwnd            = hWnd;
+		sei.fMask           = SEE_MASK_FLAG_DDEWAIT | SEE_MASK_FLAG_NO_UI;
+		sei.lpVerb          = "runas";
+		sei.lpFile          = "regedit.exe";
+		sei.lpParameters    = cmd;
+		sei.nShow           = SW_SHOWNORMAL;
+
+		if (!ShellExecuteEx(&sei))
+		 {
+		    wsprintf(Msg, "Error: ShellExecuteEx for regedit failed %d\n", GetLastError() );
+		   	WritetoConsole(Msg);
+			return;
+		}
+	}
+
+	wsprintf(Msg, "Registry Save Initiated\n", fn);
 	WritetoConsole(Msg);
-
-					
+			
 	return ;
 }
 
@@ -4907,5 +5069,137 @@ VOID ResolveUpdateThread()
 			Sleep(1000 * 60 * 5);
 		}
 	}
+}
+
+BOOL CALLBACK EnumForCloseProc(HWND hwnd, LPARAM  lParam)
+{
+	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
+	UINT ProcessId;
+
+	GetWindowThreadProcessId(hwnd, &ProcessId);
+
+	for (i=0; i< AttachedProcesses; i++)
+	{
+		if (AttachedPIDList[i] == ProcessId)
+		{
+			PostMessage(hwnd, WM_CLOSE, 0, 0);
+			break;
+		}
+	}
+	
+	return (TRUE);
+}
+
+
+VOID CloseAllPrograms()
+{
+	// Close all attached BPQ32 programs
+
+	EnumWindows(EnumForCloseProc, (LPARAM)NULL);
+}
+
+
+#define MAX_KEY_LENGTH 255
+#define MAX_VALUE_NAME 16383
+#define MAX_VALUE_DATA 65536
+
+BOOL CopyReg(HKEY hKeyIn, HKEY hKeyOut)
+{
+	TCHAR    achKey[MAX_KEY_LENGTH];   // buffer for subkey name
+    DWORD    cbName;                   // size of name string 
+    TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
+    DWORD    cchClassName = MAX_PATH;  // size of class string 
+    DWORD    cSubKeys=0;               // number of subkeys 
+    DWORD    cbMaxSubKey;              // longest subkey size 
+    DWORD    cchMaxClass;              // longest class string 
+    DWORD    cValues;              // number of values for key 
+    DWORD    cchMaxValue;          // longest value name 
+    DWORD    cbMaxValueData;       // longest value data 
+    DWORD    cbSecurityDescriptor; // size of security descriptor 
+    FILETIME ftLastWriteTime;      // last write time 
+ 
+    DWORD i, retCode; 
+ 
+    TCHAR  achValue[MAX_VALUE_NAME]; 
+    DWORD cchValue = MAX_VALUE_NAME; 
+ 
+    // Get the class name and the value count. 
+    retCode = RegQueryInfoKey(
+        hKeyIn,                    // key handle 
+        achClass,                // buffer for class name 
+        &cchClassName,           // size of class string 
+        NULL,                    // reserved 
+        &cSubKeys,               // number of subkeys 
+        &cbMaxSubKey,            // longest subkey size 
+        &cchMaxClass,            // longest class string 
+        &cValues,                // number of values for this key 
+        &cchMaxValue,            // longest value name 
+        &cbMaxValueData,         // longest value data 
+        &cbSecurityDescriptor,   // security descriptor 
+        &ftLastWriteTime);       // last write time 
+ 
+    // Enumerate the subkeys, until RegEnumKeyEx fails.
+    
+    if (cSubKeys)
+    {
+        Debugprintf( "\nNumber of subkeys: %d\n", cSubKeys);
+
+        for (i=0; i<cSubKeys; i++) 
+        { 
+            cbName = MAX_KEY_LENGTH;
+            retCode = RegEnumKeyEx(hKeyIn, i,
+                     achKey, 
+                     &cbName, 
+                     NULL, 
+                     NULL, 
+                     NULL, 
+                     &ftLastWriteTime); 
+
+            if (retCode == ERROR_SUCCESS) 
+            {
+                HKEY NextKeyIn;
+                HKEY NextKeyOut;
+				int disp;
+
+				Debugprintf(TEXT("(%d) %s\n"), i+1, achKey);
+				retCode = RegOpenKeyEx(hKeyIn, achKey, 0, KEY_READ, &NextKeyIn);
+				retCode += RegCreateKeyEx(hKeyOut, achKey, 0, 0, 0, KEY_ALL_ACCESS, NULL, &NextKeyOut, &disp);
+
+				if (retCode == 0)
+					CopyReg(NextKeyIn, NextKeyOut);
+            }
+        }
+    } 
+ 
+    // Enumerate the key values. 
+
+    if (cValues) 
+    {
+        Debugprintf( "\nNumber of values: %d\n", cValues);
+
+        for (i=0, retCode=ERROR_SUCCESS; i<cValues; i++) 
+        { 
+			int Type;
+			int ValLen = MAX_VALUE_DATA;
+			UCHAR Value[MAX_VALUE_DATA] = "";
+
+            cchValue = MAX_VALUE_NAME; 
+            achValue[0] = '\0'; 
+            retCode = RegEnumValue(hKeyIn, i, 
+                achValue, 
+                &cchValue, 
+                NULL, 
+                &Type,
+                &Value[0],
+                &ValLen);
+ 
+            if (retCode == ERROR_SUCCESS ) 
+            { 
+                Debugprintf(TEXT("(%d) %s = %s len %d\n"), i+1, achValue, Value, ValLen); 
+				retCode = RegSetValueEx(hKeyOut, achValue, 0 , Type, (BYTE *)&Value[0], ValLen);
+            } 
+        }
+    }
+	return TRUE;
 }
 

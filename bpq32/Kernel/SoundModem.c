@@ -23,7 +23,7 @@
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
 
-extern UCHAR BPQDirectory[];
+extern UCHAR BPQProgramDirectory[];
 
 extern char AUTOSAVE;
 
@@ -322,7 +322,7 @@ RestartSoundTNC(struct SOUNDTNCINFO * TNC)
 
 	wsprintf(cmdLine, "BPQSoundModem.exe %d %d %d",
 		TNC->SoundCardNumber, TNC->PERSIST, TNC->TXDELAY); 
-	wsprintf(Prog, "%s\\BPQSoundModem.exe", BPQDirectory);
+	wsprintf(Prog, "%s\\BPQSoundModem.exe", BPQProgramDirectory);
 
 	return CreateProcess(Prog, cmdLine, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 

@@ -31,6 +31,8 @@ extern WORD MAXCIRCUITS;
 extern UCHAR L4DEFAULTWINDOW;
 extern WORD L4T1;
 
+extern HKEY REGTREE;
+
 BOOL WINAPI Rig_Command();
 
 KillTNC(struct TNCINFO * TNC);
@@ -400,7 +402,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->Port);
 	
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
 
 	if (retCode == ERROR_SUCCESS)
 	{
@@ -1066,7 +1068,7 @@ VOID SaveWindowPos(int port)
 
 	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", port);
 	
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0,
+	retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0,
             KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	if (retCode == ERROR_SUCCESS)

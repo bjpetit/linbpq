@@ -63,7 +63,7 @@ END
 
 #endif    // !_MAC
 
-BPQICON                 ICON    DISCARDABLE     "BPQ.ICO"
+BPQICON                 ICON    DISCARDABLE     "..\BPQICON.ICO"
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 //	Split Messasge, User and BBS Editing from Main Config.
 //	Add word wrap to Console input and output
 //  Flash Console on chat user connect
-//	Fix procesing Name response in chat mode
+//	Fix procesfing Name response in chat mode
 //	Fix processing of *RTL from station not defined as a Chat Node
 //	Fix overlength lines ln List responses
 //  Housekeeping expires BIDs 
@@ -665,6 +665,15 @@
 
 // Renumbered for release
 
+// Version 1.0.4.39 March 2011
+
+// Add POLLRMS command
+
+// Changes for Vista/Win7 (registry key change)
+
+
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
@@ -681,6 +690,12 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 UCHAR * (FAR WINAPI * GetVersionStringptr)();
 struct _EXTPORTDATA * (FAR WINAPI * GetPortTableEntryptr)();
+
+HKEY (FAR WINAPI * GetRegistryKey)();
+char * (FAR WINAPI * GetRegistryKeyText)();
+
+HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
+char * REGTREETEXT = "HKEY_LOCAL_MACHINE";
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
@@ -812,6 +827,7 @@ char BadWordsPath[MAX_PATH];
 char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
 
 char BaseDir[MAX_PATH];
+char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
 
 char MailDir[MAX_PATH];
 
@@ -1266,6 +1282,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
 	GetPortTableEntryptr = (struct _EXTPORTDATA *(__stdcall *)())GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
+	GetRegistryKey = (HKEY(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKey@0");
+	GetRegistryKeyText = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKeyText@0");
+
+	if (GetRegistryKey && GetRegistryKeyText)
+	{
+		REGTREE = GetRegistryKey();
+		REGTREETEXT = GetRegistryKeyText();
+	}
+	else
+		MessageBox(NULL, "WARNING - You have an old version of BPQ32.DLL. Please upgrade",
+				"BPQMailChat", MB_ICONINFORMATION);
 
 	if (GetPortTableEntryptr)
 	{
@@ -1295,7 +1322,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	// Get Window Size  From Registry
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
                               0,
                               KEY_QUERY_VALUE,
@@ -1536,8 +1563,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				ChatTimer();
 				if (MaintClock < time(NULL))
 				{				
-					DoHouseKeeping(FALSE);
 					MaintClock += 86400;					
+					Debugprintf("|Enter HouseKeeping");
+					DoHouseKeeping(FALSE);
+
 				}
 			}
 			My__except_Routine("Slow Timer");
@@ -2009,7 +2038,7 @@ INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 	{
 	case WM_INITDIALOG:
 
-		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+		retCode = RegOpenKeyEx (REGTREE,
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
 
 		if (retCode == ERROR_SUCCESS)
@@ -2068,7 +2097,7 @@ INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			Click = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
 			Hover = SendDlgItemMessage(hDlg, IDC_HOVER, BM_GETCHECK, 0 ,0);
 
-			retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			retCode = RegOpenKeyEx (REGTREE,
 				"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
 
 			if (retCode == ERROR_SUCCESS)
@@ -2615,7 +2644,7 @@ int Connected(Stream)
 
 				nodeprintf(conn, BBSSID, user->flags & F_Temp_B2_BBS ? "WL2K-BPQ." : "BPQ-",
 					Ver[0], Ver[1], Ver[2], Ver[3],
-					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "F": "");
+					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "FW": "");
 			}
 
 			if (user->Name[0] == 0)
@@ -4210,45 +4239,109 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
-/*	if (_memicmp(Cmd, "POLLRMS", 6) == 0)
+	if (_memicmp(Cmd, "POLLRMS", 6) == 0)
 	{
-		struct UserInfo * RMS;
-
-		RMS = FindRMS();
-
-		if (!RMS)
+		char RMSLine[200] = "Polling for calls";
+		char RMSCall[10];
+		struct UserInfo * RMSUser = user;
+		int s;
+Loop:
+		if (Arg1)
 		{
-			BBSputs(conn, "Forwarding via RMS is not configured\r");
-			SendPrompt(conn, user);
-			return;
+			// Update	
+			if (_stricmp(Arg1, "Enable") == 0)
+			{
+				RMSUser->flags |= F_POLLRMS;
+				Arg1 = strtok_s(NULL, seps, &Context);
+				goto Display;
+			}
+			else if (_stricmp(Arg1, "Disable") == 0)
+			{
+				RMSUser->flags &= ~F_POLLRMS;
+				Arg1 = strtok_s(NULL, seps, &Context);
+				goto Display;
+			}
+			else if (strlen(Arg1) > 2)
+			{
+				// Callsign - if SYSOP, following commands apply to selected user
+
+				if ((user->flags & F_SYSOP) == 0)
+				{
+					nodeprintf(conn, "Changing RMS Poll params for another user needs SYSOP status\r");
+					SendPrompt(conn, user);
+					return;
+				}
+				RMSUser = LookupCall(Arg1);
+
+				if (RMSUser == NULL)
+				{
+					nodeprintf(conn, "User %s not found\r", Arg1);
+					SendPrompt(conn, user);
+					return;
+				}
+
+				Arg1 = strtok_s(NULL, seps, &Context);
+
+				if (Arg1 == NULL)
+					goto Display;
+				
+				if (_stricmp(Arg1, "Enable") == 0 || _stricmp(Arg1, "Disable") == 0 || (strlen(Arg1) < 3))
+					goto Loop;
+
+				goto Display;
+			}
+			{
+				// A list of SSID's to poll
+
+				RMSUser->RMSSSIDBits = 0;
+
+				while(Arg1 && strlen(Arg1) < 3)
+				{
+					s = atoi(Arg1);
+					if (s < 16)
+						RMSUser->RMSSSIDBits |= (1 << (s));
+
+					Arg1 = strtok_s(NULL, seps, &Context);
+				}
+			}
+		}
+		// Drop through to display
+Display:
+		strcpy(RMSLine, "Polling for calls");
+
+		if (RMSUser->flags & F_POLLRMS)
+		{
+			if (RMSUser->RMSSSIDBits == 0) RMSUser->RMSSSIDBits = 1;
+			{
+				for (s = 0; s < 16; s++)
+				{
+					if (RMSUser->RMSSSIDBits & (1 << s))
+					{
+						strcat(RMSLine, " ");
+						if (s)
+						{
+							wsprintf(RMSCall, "%s-%d", RMSUser->Call, s);
+							strcat(RMSLine, RMSCall);
+						}
+						else
+							strcat(RMSLine, RMSUser->Call);
+						
+					}
+				}
+			}
+			strcat(RMSLine, "\r");	
+			nodeprintf(conn, RMSLine);
 		}
 		else
-		{
-			if (RMS->ForwardingInfo->Forwarding)
-			{
-				BBSputs(conn, "RMS is busy - try again in a minute or so\r");
-				SendPrompt(conn, user);
-				return;
-			}
+			nodeprintf(conn, "RMS Polling for %s disabled\r", RMSUser->Call);
 
-			strcpy(RMS->ForwardingInfo->UserCall, user->Call);
-			RMS->ForwardingInfo->UserIndex = -1;		// Not part of user scan
-
-			if (ConnecttoBBS(RMS))
-			{
-				RMS->ForwardingInfo->Forwarding = TRUE;
-				BBSputs(conn, "RMS poll initiated\r");
-			}
-			else
-				BBSputs(conn, "RMS poll failed\r");
-
-			SendPrompt(conn, user);
-			return;
-		}
-
+		if (Arg1)
+			goto Loop;
+	
+		SendPrompt(conn, user);
 		return;
 	}
-*/
+
 	if (conn->Flags == 0)
 	{
 		BBSputs(conn, "Invalid Command\r");
@@ -6595,7 +6688,8 @@ nextline:
 
 		// Warn SYSOP if P or T forwarded in, and has nowhere to go
 
-		if ((conn->BBSFlags & BBS) && Msg->type != 'B' && FWDCount == 0 && WarnNoRoute)
+		if ((conn->BBSFlags & BBS) && Msg->type != 'B' && FWDCount == 0 && WarnNoRoute &&
+			strcmp(Msg->to, "SYSOP") && strcmp(Msg->to, "WP"))
 		{
 			if (Msg->via[0])
 			{	
@@ -6848,7 +6942,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 	ForwardingInfo->AllowCompressed = TRUE;					// Default On
 
 	strcat(Key, user->Call);
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, Key, 0, KEY_QUERY_VALUE, &hKey);
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
 
 	if (retCode == ERROR_SUCCESS)
 	{
@@ -7565,7 +7659,7 @@ CheckForSID:
 			(conn->BBSFlags & FBBCompressed) ? "B" : "", 
 			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
-			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
+			(conn->BBSFlags & FBBForwarding) ? "FW" : ""); 
 
 
 		if (conn->BPQBBS && conn->MSGTYPES[0])

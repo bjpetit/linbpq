@@ -58,11 +58,20 @@
 
 #include "bpqterminal.h"
 #include "bpq32.h"	// BPQ32 API Defines
+#define BPQTerm
+#include "Versions.h"
 #include "GetVersion.h"
 
 #define BGCOLOUR RGB(236,233,216)
 
 HBRUSH bgBrush;
+
+
+HKEY FAR WINAPI GetRegistryKey();
+char * FAR WINAPI GetRegistryKeyText();
+
+HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
+//char * REGKEYTEXT = "HKEY_LOCAL_MACHINE";
 
 HINSTANCE hInst; 
 char AppName[] = "BPQTerm 32";
@@ -167,6 +176,9 @@ RECT SplitRect;
 int Height, Width, LastY;
 
 int maxlinelen = 80;
+int CharWidth = 8;
+
+int ClientHeight, ClientWidth;
 
 
 char Key[80];
@@ -336,7 +348,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	// Save Config
 	
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                               Key,
                               0,	// Reserved
 							  0,	// Class
@@ -429,8 +441,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int retCode,Type,Vallen;
 	HKEY hKey=0;
 	char Size[80];
+	TEXTMETRIC tm; 
+	HDC dc;
 
 	hInst = hInstance; // Store instance handle in our global variable
+
+//	REGTREE = GetRegistryKey();
+//	REGKEYTEXT = GetRegistryKeyText();
+
+//	else
+//		MessageBox(NULL, "WARNING - You have an old version of BPQ32.DLL. Please upgrade",
+//				"BPQMailChat", MB_ICONINFORMATION);
+
+
 
 	MinimizetoTray=GetMinimizetoTrayFlag();
 
@@ -457,13 +480,14 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	wpOrigMonProc = (WNDPROC)SetWindowLong(hwndMon, GWL_WNDPROC, (LONG)MonProc);
 	wpOrigSplitProc = (WNDPROC)SetWindowLong(hwndSplit, GWL_WNDPROC, (LONG)SplitProc);
 
+
 	// Get saved config from Registry
 
 	// Get config from Registry 
 
 	wsprintf(Key,"SOFTWARE\\G8BPQ\\BPQ32\\BPQTerminal\\Session%d",Sessno);
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                               Key,
                               0,
                               KEY_QUERY_VALUE,
@@ -682,6 +706,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	TimerHandle = SetTimer(NULL, 0, 10000, lpTimerFunc);
 
+	dc = GetDC(hwndOutput);
+	GetTextMetrics(dc, &tm);
+
 	return (TRUE);
 }
 
@@ -748,7 +775,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					
 					SendMessage(lpdis->hwndItem, LB_GETTEXT, lpdis->itemID, (LPARAM) Buffer); 
  
-                    GetTextMetrics(lpdis->hDC, &tm); 
+                    GetTextMetrics(lpdis->hDC, &tm);
+
+					if (lpdis->hwndItem == hwndOutput)
+					{
+						CharWidth = tm.tmAveCharWidth;
+						maxlinelen = ClientWidth/CharWidth - 1;
+					}
  
                     y = (lpdis->rcItem.bottom + lpdis->rcItem.top - tm.tmHeight) / 2;
 
@@ -990,6 +1023,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			
 			return TRUE;
 
+		case WM_SIZE:
+
+			MoveWindows();
+			return TRUE;
 
 		case WM_DESTROY:
 		
@@ -1792,7 +1829,6 @@ int ToggleChat(HWND hWnd)
 void MoveWindows()
 {
 	RECT rcMain, rcClient;
-	int ClientHeight, ClientWidth;
 
 	GetWindowRect(hWnd, &rcMain);
 	GetClientRect(hWnd, &rcClient); 
@@ -1810,7 +1846,7 @@ void MoveWindows()
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 	
-	maxlinelen = ClientWidth/8 - 1;
+	maxlinelen = ClientWidth/CharWidth - 1;
 }
 
 void CopyToClipboard(HWND hWnd)

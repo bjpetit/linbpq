@@ -503,7 +503,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDC_SYSOPCALL, SYSOPCall);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_SYSTOSYSOPCALL, SendSYStoSYSOPCall);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
-		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDir);
+		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDirRaw);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSStreams, MaxStreams, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_ENABLEUI, EnableUI);
@@ -1503,13 +1503,13 @@ VOID SaveBBSConfig()
 	HKEY hKey=0;
 	int retCode,disp;
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
 		"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 	
 	GetDlgItemText(hwndDisplay, IDC_BBSCall, BBSName, 50);
 	GetDlgItemText(hwndDisplay, IDC_SYSOPCALL, SYSOPCall, 50);
 	GetDlgItemText(hwndDisplay, IDC_HRoute, HRoute, 50);
-	GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDir, 50);
+	GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDirRaw, 50);
 	EnableUI = IsDlgButtonChecked(hwndDisplay, IDC_ENABLEUI);
 	RefuseBulls = IsDlgButtonChecked(hwndDisplay, IDC_REFUSEBULLS);
 	MailForInterval = GetDlgItemInt(hwndDisplay, MAILFOR_MINS, &OK1, FALSE);
@@ -1532,7 +1532,7 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "BBSName", 0, REG_SZ,(BYTE *)&BBSName, strlen(BBSName));
 		retCode = RegSetValueEx(hKey, "SYSOPCall", 0, REG_SZ,(BYTE *)&SYSOPCall, strlen(SYSOPCall));
 		retCode = RegSetValueEx(hKey, "H-Route", 0, REG_SZ,(BYTE *)&HRoute, strlen(HRoute));
-		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDir, strlen(BaseDir));
+		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDirRaw, strlen(BaseDirRaw));
 		retCode = RegSetValueEx(hKey, "EnableUI",0, REG_DWORD,(BYTE *)&EnableUI,4);
 		retCode = RegSetValueEx(hKey, "RefuseBulls",0, REG_DWORD,(BYTE *)&RefuseBulls,4);
 		retCode = RegSetValueEx(hKey, "SendSYStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendSYStoSYSOPCall,4);
@@ -1560,7 +1560,7 @@ VOID SaveISPConfig()
 	HKEY hKey=0;
 	int retCode,disp;
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 		
@@ -1617,7 +1617,7 @@ VOID SaveChatConfig()
 	char * ptr1;
 
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	OldChatAppl = ChatApplNum;
@@ -1698,7 +1698,7 @@ VOID SaveFWDConfig(HWND hDlg)
 	{
 		strcat(Key, CurrentConfigCall);
 
-		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+		retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_ATCALLS, hKey, "ATCalls");
 		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_TOCALLS, hKey, "ToCalls");
@@ -1744,7 +1744,7 @@ VOID SaveFWDConfig(HWND hDlg)
 		
 	// Interval and Max Sizes and Aliases are not user specific
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, 
+	retCode = RegCreateKeyEx(REGTREE, 
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	MaxTXSize = GetDlgItemInt(hDlg, IDC_MAXSEND, &OK, FALSE);
@@ -1799,7 +1799,7 @@ VOID SaveMAINTConfig()
 	HKEY hKey=0;
 	int retCode, disp, val;
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	MaxMsgno = GetDlgItemInt(hwndDisplay, IDC_MAXMSG, &OK1, FALSE);
@@ -1884,7 +1884,7 @@ VOID SaveWelcomeMsgs()
 	HKEY hKey=0;
 	int retCode, disp;
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	GetDlgItemText(hwndDisplay, IDM_USERMSG, Value, 10000);
@@ -1927,7 +1927,7 @@ VOID SaveFilters(HWND hDlg)
 	HKEY hKey=0;
 	int retCode, disp;
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_REJFROM, hKey, "RejFrom");
@@ -2013,7 +2013,7 @@ VOID SaveWindowConfig()
 	int retCode, disp;
 	char Size[80];
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
                               0,	// Reserved
 							  0,	// Class
@@ -2051,7 +2051,7 @@ VOID SaveWindowConfig()
 		RegCloseKey(hKey);
 	}
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole",
                               0,	// Reserved
 							  0,	// Class
@@ -2086,12 +2086,15 @@ BOOL GetConfigFromRegistry()
 	HKEY hKey=0;
 	int retCode,Type,Vallen, i;
 	char Size[80];
+	char msg[255];
 
 	// Get Config From Registry
 
+	wsprintf(BaseDirRaw, "%s\\BPQMailChat", GetBPQDirectory());
+
 TryAgain:
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
 
 	if (retCode == ERROR_SUCCESS)
@@ -2159,7 +2162,9 @@ TryAgain:
 
 		Vallen=MAX_PATH;
 		retCode += RegQueryValueEx(hKey,"BaseDir",0,			
-			(ULONG *)&Type,(UCHAR *)&BaseDir,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&BaseDirRaw,(ULONG *)&Vallen);
+
+		ExpandEnvironmentStrings(BaseDirRaw, BaseDir, MAX_PATH);
 
 		// Get length of Chatnodes String
 				
@@ -2219,7 +2224,6 @@ TryAgain:
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"ISPPOP3Port",0,			
 			(ULONG *)&Type,(UCHAR *)&ISPPOP3Port,(ULONG *)&Vallen);
-
 
 		Vallen=50;
 		retCode += RegQueryValueEx(hKey,"ISPAccountName",0,			
@@ -2366,7 +2370,7 @@ TryAgain:
 			
 			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
 
-			retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			retCode = RegOpenKeyEx (REGTREE,
                               Key,
                               0,
                               KEY_QUERY_VALUE,
@@ -2395,7 +2399,7 @@ TryAgain:
 			}
 		}
 	
-		retCode += RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+		retCode += RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping",
                               0,
                               KEY_QUERY_VALUE,
@@ -2492,8 +2496,11 @@ TryAgain:
 
 		if (retCode)
 		{
-				MessageBox(NULL, "Some Config Params Missing - Opening Configuration Dialog",
-						"BPQMailChat", MB_ICONINFORMATION);
+				retCode = MessageBox(NULL, "Some Config Params Missing - Opening Configuration Dialog",
+						"BPQMailChat", MB_OKCANCEL);
+					
+				if (retCode ==IDCANCEL)
+					return FALSE;
 
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
 				goto TryAgain;
@@ -2503,8 +2510,12 @@ TryAgain:
 		return TRUE;
 	}
 	
-	MessageBox(NULL, "Registry Key HKEY_LOCAL_MACHINE\\SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat could not be opened - Opening Configuration Dialog",
-						"BPQMailChat", MB_ICONINFORMATION);
+	wsprintf(msg, "Registry Key %s\\SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat could not be opened - Opening Configuration Dialog", REGTREETEXT);
+
+	retCode = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+
+	if (retCode ==IDCANCEL)
+		return FALSE;
 
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
 	goto TryAgain;
@@ -2900,7 +2911,7 @@ SaveUIConfig()
 		
 		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
 
-		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+		retCode = RegCreateKeyEx(REGTREE,
                          Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 		if (retCode == ERROR_SUCCESS)
@@ -2966,7 +2977,7 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 					HKEY hKey=0;
 					int retCode,disp;
 
-					retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+					retCode = RegCreateKeyEx(REGTREE,
 						"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 	
 					if (retCode == ERROR_SUCCESS)
@@ -3205,6 +3216,9 @@ VOID CreateRegBackup()
 	char Backup2[MAX_PATH];
 	char RegFileName[MAX_PATH];
 
+	Debugprintf("Create Reg Backup");
+
+
 	wsprintf(RegFileName, "%s\\BPQMailChat.reg", BaseDir);
 
 	// Keep 4 Generations
@@ -3233,11 +3247,9 @@ VOID CreateRegBackup()
 
 	CopyFile(RegFileName, Backup2, FALSE);	// Copy to .bak
 
-
 	wsprintf(cmd,
-		"regedit /E \"%s\\BPQMailChat.reg\" HKEY_LOCAL_MACHINE\\Software\\G8BPQ\\BPQ32\\BPQMailChat", BaseDir);
+		"regedit /E \"%s\\BPQMailChat.reg\" %s\\Software\\G8BPQ\\BPQ32\\BPQMailChat", BaseDir, REGTREETEXT);
 
-		
 	SInfo.cb=sizeof(SInfo);
 	SInfo.lpReserved=NULL; 
 	SInfo.lpDesktop=NULL; 
@@ -3246,7 +3258,7 @@ VOID CreateRegBackup()
 	SInfo.cbReserved2=0; 
   	SInfo.lpReserved2=NULL; 
 
-	CreateProcess(NULL , cmd , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+	CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0 ,NULL, NULL, &SInfo, &PInfo);
 					
 	return ;
 }

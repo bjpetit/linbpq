@@ -3,7 +3,7 @@
 // Used by bpqterm.rc
 //
 
-#define BPQICON                         400
+#define BPQICON                         2
 
 #define IDR_MENU1                       101
 #define BPQMENU                         101

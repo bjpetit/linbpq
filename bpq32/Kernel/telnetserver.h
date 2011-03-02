@@ -33,8 +33,8 @@ struct ConnectionInfo
 	BOOL MCOM;
 	BOOL MonitorColour;
 	BOOL MTX;
-
 	int CMSIndex;				// Pointer to CMS used for this connect
+	time_t ConnectTime;	
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

@@ -104,15 +104,15 @@ BOOL CreateConsole(int Stream)
 	// Get Config From Registry
 
 	if (Stream == -1)
-		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+		retCode = RegOpenKeyEx (REGTREE,
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
 	else
 	{
-		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+		retCode = RegOpenKeyEx (REGTREE,
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole", 0, KEY_ALL_ACCESS, &hKey);
 
 		if (retCode != ERROR_SUCCESS)
-			retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+			retCode = RegOpenKeyEx (REGTREE,
 				"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
 
 	}
@@ -369,10 +369,10 @@ VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 	}
 
 	if (Cinfo->BPQStream == -1)
-		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+		retCode = RegCreateKeyEx(REGTREE,
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
 	else
-		retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+		retCode = RegCreateKeyEx(REGTREE,
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
 
 
@@ -394,8 +394,10 @@ void MoveWindows(struct ConsoleInfo * Cinfo)
 	RECT rcClient;
 	int ClientWidth;
 
-
 	GetClientRect(Cinfo->hConsole, &rcClient); 
+
+	if (rcClient.bottom == 0)		// Minimised
+		return;
 
 	Cinfo->ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
@@ -826,6 +828,10 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			
 		return TRUE;
 
+	case WM_SIZE:
+
+		MoveWindows(Cinfo);		
+		return TRUE;
 		
 	case WM_CLOSE:
 
@@ -1016,6 +1022,16 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			}
 			else
 				WritetoConsoleWindow(Cinfo->BPQStream, Cinfo->kbbuf, Cinfo->kbptr+1);
+
+			if (Cinfo->Scrolled)
+			{
+				POINT Point;
+				Point.x = 0;
+				Point.y = 25000;					// Should be plenty for any font
+
+				SendMessage(Cinfo->hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+				Cinfo->Scrolled = FALSE;
+			}
 
 			DoRefresh(Cinfo);
 			ProcessLine(Cinfo->Console, user, &Cinfo->kbbuf[0], Cinfo->kbptr+1);
@@ -1325,7 +1341,6 @@ DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LON
 	*pcb = strlen(lpBuff);
 	return 0;
 }
-
 
 VOID DoRefresh(struct ConsoleInfo * Cinfo)
 {

@@ -191,7 +191,7 @@ VOID DoHouseKeeping(BOOL Manual)
 	
 	NOW = time(NULL);
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
           "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	if (retCode == ERROR_SUCCESS)

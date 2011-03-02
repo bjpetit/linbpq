@@ -1186,6 +1186,9 @@ BOOL CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct	
 int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo);
 VOID ReRouteMessages();
 
+extern HKEY REGTREE;	
+extern char * REGTREETEXT;
+
 extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;
 
@@ -1202,6 +1205,7 @@ extern int LastVer[4];				// In case we need to do somthing the first time a ver
 
 extern HWND MainWnd;
 extern char BaseDir[];
+extern char BaseDirRaw[];
 extern char MailDir[];
 extern char WPDatabasePath[];
 extern char RlineVer[50];
@@ -1293,7 +1297,6 @@ extern char BBSName[];
 extern char HRoute[];
 extern int BBSApplNum;
 extern int ChatApplNum;
-extern char BaseDir[];
 extern int SMTPInPort;
 extern int POP3InPort;
 extern int NNTPInPort;

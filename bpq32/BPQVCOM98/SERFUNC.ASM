@@ -549,8 +549,6 @@ ArgVar	RefData,DWORD
 	Debug_Printf	"BPQVC PortEnableNotification %x %x", <hPort, lpFunc>
 	RestoreReg <ad>
 
-
-
 	mov	edx,hPort
 	mov	ecx,lpFunc
 	mov	eax,RefData

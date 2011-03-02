@@ -62,7 +62,11 @@ int APIENTRY GetStreamPID(int Stream);
 // Returns Path of BPQDirectroy
 
 UCHAR * APIENTRY GetBPQDirectory();
-
+UCHAR * APIENTRY GetProgramDirectory();
+/*
+HKEY APIENTRY GetRegistryKey();
+char * APIENTRY GetRegistryKeyText();
+*/
 UCHAR * APIENTRY GetSignOnMsg();
 
 UCHAR * APIENTRY GetVersionString();
@@ -261,6 +265,10 @@ ULONG (FAR WINAPI * GETBPQAPI)();
 ULONG (FAR WINAPI * GETMONDECODE)();
 
 UCHAR * (FAR WINAPI * GetBPQDirectory)();
+UCHAR * (FAR WINAPI * GetProgramDirectory)();
+UCHAR * (FAR WINAPI * GetRegistryKeyText)();
+KHEY (FAR WINAPI * GetRegistryKey)();
+
 UCHAR * (FAR WINAPI * GetSignOnMsg)();
 UCHAR * (FAR WINAPI * GetVersionString)();
 
@@ -498,6 +506,11 @@ BOOL GetAPI()
 	MONCount = (int (__stdcall *)(int stream))GetProcAddress(ExtDriver,"_MONCount@4");
 	GetCallsign = (int (__stdcall *)(int stream, char * callsign))GetProcAddress(ExtDriver,"_GetCallsign@8");
 	GetBPQDirectory = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetBPQDirectory@0");
+	GetProgramDirectory = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetProgramDirectory@0");
+
+	GetRegistryKey = (HKEY(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKey@0");
+	GetRegistryKeyText = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKeyText@0");
+
 	GetSignOnMsg = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetSignOnMsg@0");
 	GetVersionString = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
 	GetConnectionInfo = (int (__stdcall *)(int, char *,int *, int *, int *,int *, int *))GetProcAddress(ExtDriver,"_GetConnectionInfo@28");
