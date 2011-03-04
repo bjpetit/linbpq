@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual C++ Express 2005
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AIS_MM_Iface", "AIS_MM_Iface\AIS_MM_Iface.vcproj", "{1F710E92-7AD7-44D9-A666-EF5ACACF3C27}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IFTest", "IFTest\IFTest.vcproj", "{BADC4331-E19C-47AD-9F10-0B624233D39B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1F710E92-7AD7-44D9-A666-EF5ACACF3C27}.Debug|Win32.ActiveCfg = Debug|Win32
+		{1F710E92-7AD7-44D9-A666-EF5ACACF3C27}.Debug|Win32.Build.0 = Debug|Win32
+		{1F710E92-7AD7-44D9-A666-EF5ACACF3C27}.Release|Win32.ActiveCfg = Release|Win32
+		{1F710E92-7AD7-44D9-A666-EF5ACACF3C27}.Release|Win32.Build.0 = Release|Win32
+		{BADC4331-E19C-47AD-9F10-0B624233D39B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{BADC4331-E19C-47AD-9F10-0B624233D39B}.Debug|Win32.Build.0 = Debug|Win32
+		{BADC4331-E19C-47AD-9F10-0B624233D39B}.Release|Win32.ActiveCfg = Release|Win32
+		{BADC4331-E19C-47AD-9F10-0B624233D39B}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
