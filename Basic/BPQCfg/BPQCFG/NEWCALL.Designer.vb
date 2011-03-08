@@ -19,60 +19,83 @@ Partial Class NEWCALL
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
-        Me.OK_Button = New System.Windows.Forms.Button
-        Me.Label2 = New System.Windows.Forms.Label
-        Me.NodeCall = New System.Windows.Forms.TextBox
-        Me.SuspendLayout()
-        '
-        'OK_Button
-        '
-        Me.OK_Button.Anchor = System.Windows.Forms.AnchorStyles.None
-        Me.OK_Button.Enabled = False
-        Me.OK_Button.Location = New System.Drawing.Point(38, 105)
-        Me.OK_Button.Name = "OK_Button"
-        Me.OK_Button.Size = New System.Drawing.Size(75, 23)
-        Me.OK_Button.TabIndex = 0
-        Me.OK_Button.Text = "Next"
-        '
-        'Label2
-        '
-        Me.Label2.AutoSize = True
-        Me.Label2.Location = New System.Drawing.Point(19, 18)
-        Me.Label2.Name = "Label2"
-        Me.Label2.Size = New System.Drawing.Size(53, 13)
-        Me.Label2.TabIndex = 3
-        Me.Label2.Text = "Node Call"
-        '
-        'NodeCall
-        '
-        Me.NodeCall.CharacterCasing = System.Windows.Forms.CharacterCasing.Upper
-        Me.NodeCall.Location = New System.Drawing.Point(95, 17)
-        Me.NodeCall.Name = "NodeCall"
-        Me.NodeCall.Size = New System.Drawing.Size(79, 20)
-        Me.NodeCall.TabIndex = 4
-        '
-        'NEWCALL
-        '
-        Me.AcceptButton = Me.OK_Button
-        Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
-        Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(255, 154)
-        Me.Controls.Add(Me.OK_Button)
-        Me.Controls.Add(Me.NodeCall)
-        Me.Controls.Add(Me.Label2)
-        Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog
-        Me.MaximizeBox = False
-        Me.MinimizeBox = False
-        Me.Name = "NEWCALL"
-        Me.ShowInTaskbar = False
-        Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent
-        Me.Text = "Enter Node Callsign"
-        Me.ResumeLayout(False)
-        Me.PerformLayout()
+      Me.OK_Button = New System.Windows.Forms.Button
+      Me.Label2 = New System.Windows.Forms.Label
+      Me.NodeCall = New System.Windows.Forms.TextBox
+      Me.Locator = New System.Windows.Forms.TextBox
+      Me.Label1 = New System.Windows.Forms.Label
+      Me.SuspendLayout()
+      '
+      'OK_Button
+      '
+      Me.OK_Button.Anchor = System.Windows.Forms.AnchorStyles.None
+      Me.OK_Button.Enabled = False
+      Me.OK_Button.Location = New System.Drawing.Point(38, 105)
+      Me.OK_Button.Name = "OK_Button"
+      Me.OK_Button.Size = New System.Drawing.Size(75, 23)
+      Me.OK_Button.TabIndex = 0
+      Me.OK_Button.Text = "Next"
+      '
+      'Label2
+      '
+      Me.Label2.AutoSize = True
+      Me.Label2.Location = New System.Drawing.Point(19, 18)
+      Me.Label2.Name = "Label2"
+      Me.Label2.Size = New System.Drawing.Size(53, 13)
+      Me.Label2.TabIndex = 3
+      Me.Label2.Text = "Node Call"
+      '
+      'NodeCall
+      '
+      Me.NodeCall.CharacterCasing = System.Windows.Forms.CharacterCasing.Upper
+      Me.NodeCall.Location = New System.Drawing.Point(95, 17)
+      Me.NodeCall.Name = "NodeCall"
+      Me.NodeCall.Size = New System.Drawing.Size(79, 20)
+      Me.NodeCall.TabIndex = 4
+      '
+      'Locator
+      '
+      Me.Locator.CharacterCasing = System.Windows.Forms.CharacterCasing.Upper
+      Me.Locator.Location = New System.Drawing.Point(95, 48)
+      Me.Locator.Name = "Locator"
+      Me.Locator.Size = New System.Drawing.Size(79, 20)
+      Me.Locator.TabIndex = 6
+      '
+      'Label1
+      '
+      Me.Label1.AutoSize = True
+      Me.Label1.Location = New System.Drawing.Point(19, 49)
+      Me.Label1.Name = "Label1"
+      Me.Label1.Size = New System.Drawing.Size(43, 13)
+      Me.Label1.TabIndex = 5
+      Me.Label1.Text = "Locator"
+      '
+      'NEWCALL
+      '
+      Me.AcceptButton = Me.OK_Button
+      Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
+      Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
+      Me.ClientSize = New System.Drawing.Size(255, 154)
+      Me.Controls.Add(Me.Locator)
+      Me.Controls.Add(Me.Label1)
+      Me.Controls.Add(Me.OK_Button)
+      Me.Controls.Add(Me.NodeCall)
+      Me.Controls.Add(Me.Label2)
+      Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog
+      Me.MaximizeBox = False
+      Me.MinimizeBox = False
+      Me.Name = "NEWCALL"
+      Me.ShowInTaskbar = False
+      Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent
+      Me.Text = "Enter Node Callsign"
+      Me.ResumeLayout(False)
+      Me.PerformLayout()
 
-    End Sub
+   End Sub
     Friend WithEvents OK_Button As System.Windows.Forms.Button
     Friend WithEvents Label2 As System.Windows.Forms.Label
-    Friend WithEvents NodeCall As System.Windows.Forms.TextBox
+   Friend WithEvents NodeCall As System.Windows.Forms.TextBox
+   Friend WithEvents Locator As System.Windows.Forms.TextBox
+   Friend WithEvents Label1 As System.Windows.Forms.Label
 
 End Class

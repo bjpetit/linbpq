@@ -14,22 +14,6 @@ Public Class SimpleForm
 
    Dim menuItem7 As New MenuItem()
 
-   Public WINMORPort(32) As NumTextBox
-   Public WINMORPTT(32) As ComboBox
-   Public PTTCOMM(32) As ComboBox
-
-   Public DriveLevel(32) As BPQCFG.NumTextBox
-   Public BW(32) As ComboBox
-   Public DebugLog(32) As CheckBox
-   Public CWID(32) As CheckBox
-   Public BusyLock(32) As CheckBox
-   Public MyLabel1(32) As Label
-   Public MyLabel2(32) As Label
-   Public MyLabel3(32) As Label
-   Public MyLabel4(32) As Label
-   Public IDBox(32) As TextBox
-   Public IDLabel(32) As Label
-
    Public BAUD(32) As NonNullCombobox
    Public COMM(32) As NonNullCombobox
 
@@ -37,10 +21,6 @@ Public Class SimpleForm
    Public ChanLabel(32) As Label
    Public ChannelBox(32) As ComboBox
    Public AGWPortBox(32) As BPQCFG.DTNumTextBox
-
-   Public SaveProc(32) As SavePortValue
-
-   Public PORTTABS(32) As System.Windows.Forms.TabPage
 
    Dim NumberofWinmorPorts As Integer = 0
    Dim NumberofAGWPorts As Integer = 0
@@ -61,25 +41,16 @@ Public Class SimpleForm
 
          End If
 
-         Form1.CopyConfigtoArray()
+         If MsgBox("Do you want to save before exiting?", _
+                   MsgBoxStyle.YesNo + MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config") = MsgBoxResult.Yes Then
 
-         If CompareConfig() = False Or AGWAppl <> OriginalAGWAppl Then
-
-            If MsgBox("Changes have not been saved - do you want to save before exiting?", _
-                      MsgBoxStyle.YesNo + MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config") = MsgBoxResult.Yes Then
-               CreateFiles_Click(Nothing, Nothing)
-
-            End If
          End If
       End If
-
 
       DontAskBeforeClose = True  ' So Form1.closing doesn't ask again
       Form1.Close()
 
    End Sub
-
-
 
    Private Sub SimpleForm_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 
@@ -111,7 +82,7 @@ Public Class SimpleForm
 
       AddHandler menuItem1.Click, AddressOf Form1.Open_Click
       AddHandler menuItem2.Click, AddressOf Form1.Validate_Click
-      AddHandler menuItem3.Click, AddressOf Form1.Save_Binary
+      'AddHandler menuItem3.Click, AddressOf Form1.Save_Binary
       'AddHandler menuItem4.Click, AddressOf Me.Switch_To_Advanced
       AddHandler menuItem7.Click, AddressOf Exit_Click
       ' Assign mainMenu1 to the form.
@@ -132,7 +103,6 @@ Public Class SimpleForm
 
    End Sub
 
-
    Private Sub LoadConfig_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles LoadConfig.Click
 
       IDMsgLabel.Visible = False
@@ -144,10 +114,10 @@ Public Class SimpleForm
          Form1.TabControl2.Controls.RemoveAt(0)
       End While
 
+      CfgFile = BPQDirectory & "\bpq32.cfg"
 
-      CfgFile = BPQDirectory & "\bpqcfg.txt"
+      CfgFile = Environment.ExpandEnvironmentVariables(CfgFile)
 
-      ReDim Config(2560)
       Form1.ReadTextConfig()
 
       If InStr(CfgFile, ".") > 0 Then CfgFile = Microsoft.VisualBasic.Left(CfgFile, InStr(CfgFile, ".") - 1)
@@ -167,13 +137,15 @@ Public Class SimpleForm
       NumberofWinmorPorts = 0
       NumberofAGWPorts = 0
 
-      While TabControl1.Controls.Count
-         TabControl1.Controls.RemoveAt(0)
-      End While
+      '    While TabControl1.Controls.Count
+      'TabControl1.Controls.RemoveAt(0)
+      'End While
 
       TabControl1.Visible = True
 
       NodeCallBox.Text = Form1.NodeCallBox.Text
+      LocatorBox.Text = Form1.LocatorBox.Text
+      PasswordBox.Text = Form1.PasswordBox.Text
       InfoMsgBox.Text = Form1.InfoMsgBox.Text
       CTEXTBox.Text = Form1.CTEXTBox.Text
       IDMsgBox.Text = Form1.IDMsgBox.Text
@@ -191,17 +163,17 @@ Public Class SimpleForm
 
       For Port = 1 To NumberOfPorts
 
-         If TxtPortCfg(PORTTYPE).Value(Port) = "1" Then
+         If TxtPortCfg(PORTTYPE).Value(Port) = "INTERNAL" Then
             CreateLOOPBACKTab(Port)
 
-         ElseIf TxtPortCfg(PORTTYPE).Value(Port) = "0" Then
+         ElseIf TxtPortCfg(PORTTYPE).Value(Port) = "ASYNC" Then
             CreateKISSTab(Port)
             IDMsgLabel.Visible = True
             IDIntLabel.Visible = True
             IDMsgBox.Visible = True
             IDIntervalBox.Visible = True
 
-         ElseIf TxtPortCfg(PORTTYPE).Value(Port) = "2" Then
+         ElseIf TxtPortCfg(PORTTYPE).Value(Port) = "EXTERNAL" Then
 
             If UCase(TxtPortCfg(DLLNAME).Value(Port)).Contains("WINMOR") Then
                CreateWINMORTab(Port)
@@ -227,7 +199,7 @@ Public Class SimpleForm
 
       Next
 
-      If NumberofWinmorPorts Then ReadWINMORCfg()
+      '     If NumberofWinmorPorts Then ReadWINMORCfg()
 
       AddPortButton.Enabled = True
       CreateFiles.Enabled = True
@@ -245,7 +217,7 @@ Public Class SimpleForm
 
          Do
             Line = Textfile.ReadLine
-            ProcessLine(Line)
+            ProcessWinmorLine(Line, Port)
 
          Loop Until Textfile.EndOfStream
 
@@ -262,45 +234,7 @@ Public Class SimpleForm
 
    Dim Port As Integer
 
-   Sub ProcessLine(ByVal buf As String)
-
-      Try
-
-
-         buf = UCase(buf)
-
-         If buf.StartsWith("PORT") Then
-
-            Dim Fields() As String = Split(buf)
-
-            Port = Fields(1)
-            WINMORPort(Port).Text = Fields(3)
-            If Fields.Length > 5 Then
-               If Fields(4) = "PTT" And Fields(5) <> "" Then
-                  WINMORPTT(Port).SelectedIndex = WINMORPTT(Port).FindStringExact(Fields(5))
-               End If
-            End If
-            Return
-
-         End If
-
-         If buf.Contains("BUSYBLOCK") Then
-            BusyLock(Port).Checked = buf.Contains("TRUE")
-         ElseIf buf.Contains("CWID") Then
-            CWID(Port).Checked = buf.Contains("TRUE")
-         ElseIf buf.Contains("DEBUGLOG") Then
-            DebugLog(Port).Checked = buf.Contains("TRUE")
-         ElseIf buf.Contains("DRIVELEVEL") Then
-            DriveLevel(Port).Text = Mid(buf, 12)
-         ElseIf buf.Contains("BW ") Then
-            BW(Port).SelectedIndex = BW(Port).FindStringExact(Mid(buf, 4))
-         End If
-
-      Catch ex As Exception
-
-      End Try
-
-   End Sub
+ 
 
    Private Sub ReadRigCfg()
 
@@ -362,9 +296,16 @@ Public Class SimpleForm
 
    Private Sub Create_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Create.Click
 
+      Dim Port As Integer
+
       While TabControl1.Controls.Count
          TabControl1.Controls.RemoveAt(0)
       End While
+
+      For Port = 1 To 32
+         PORTTABS(Port) = Nothing
+
+      Next
 
       While Form1.TabControl2.Controls.Count
          Form1.TabControl2.Controls.RemoveAt(0)
@@ -392,7 +333,13 @@ Public Class SimpleForm
 
          NodeCallBox.Text = NEWCALL.NodeCall.Text
          Form1.NodeCallBox.Text = NEWCALL.NodeCall.Text
+         LocatorBox.Text = NEWCALL.Locator.Text
+         Form1.LocatorBox.Text = NEWCALL.Locator.Text
          AddPort_Click(sender, e)
+
+         Advanced_Click(sender, e)
+         Form1.Switch_To_Simple(sender, e)
+
 
       End If
    End Sub
@@ -403,11 +350,8 @@ Public Class SimpleForm
 
       If AddPort.ShowDialog = Windows.Forms.DialogResult.OK Then
 
-         ExtendConfig()
 
-         ConfigLength = Config.Length
-
-         NumberOfPortsinConfig = Int((ConfigLength - 2560) / 512)
+         NumberOfPortsinConfig = NumberOfPortsinConfig + 1
 
          NewConfig = True
          AddPortTab()
@@ -415,9 +359,8 @@ Public Class SimpleForm
 
          Port = NumberOfPorts
 
-         PortConfigPointer = 2560 + ((Port - 1) * 512)
-
-         Form1.GetPortInfoFromBinary(Port)
+         RigControl(Port) = ""
+         WL2KReport(Port) = ""
 
          TxtPortCfg(PORTID).Value(Port) = AddPort.PORTID.Text
 
@@ -427,9 +370,9 @@ Public Class SimpleForm
 
             CreateWINMORTab(Port)
 
-            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = 2  ' External
+            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = "EXTERNAL"
             TxtPortCfg(DLLNAME).Value(NumberOfPorts) = "WINMOR.dll"
-            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = 5
+            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = "WINMOR"
             WINMORPTT(NumberOfPorts).SelectedIndex = 0
             CWID(NumberOfPorts).Checked = False
             BW(NumberOfPorts).SelectedIndex = 1
@@ -438,15 +381,18 @@ Public Class SimpleForm
             WINMORPort(NumberOfPorts).Text = 8500 + NumberofWinmorPorts * 2
             NumberofWinmorPorts = NumberofWinmorPorts + 1
 
+            CreateWINMORTab(Port)
+
+
          ElseIf PortTypeString.Contains("Pactor") Then
 
             CreatePactorTab(NumberOfPorts)
 
             Dim DLL As String = Mid(PortTypeString, 1, 3) & "Pactor.dll"
 
-            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = 2   ' External
+            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = "EXTERNAL"
             TxtPortCfg(DLLNAME).Value(NumberOfPorts) = DLL
-            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = 6
+            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = "WINMOR"
 
             COMM(Port).SelectedIndex = 0
             BAUD(Port).SelectedIndex = 0
@@ -455,8 +401,8 @@ Public Class SimpleForm
 
             CreateKISSTab(NumberOfPorts)
 
-            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = 0      ' KISS
-            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = 0
+            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = "ASYNC"      ' KISS
+            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = "KISS"
             SetDefaultL2Params(NumberOfPorts)
             IDMsgLabel.Visible = True
             IDIntLabel.Visible = True
@@ -464,7 +410,7 @@ Public Class SimpleForm
             IDIntervalBox.Visible = True
 
             COMM(Port).SelectedIndex = 0
-            BAUD(Port).SelectedIndex = 0
+            BAUD(Port).SelectedIndex = 2
             ChannelBox(Port).SelectedIndex = 0
 
 
@@ -475,9 +421,9 @@ Public Class SimpleForm
 
             CreateAGWTab(NumberOfPorts)
 
-            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = 2          ' Start with minimal (Internal)
+            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = "EXTERNAL"
             TxtPortCfg(DLLNAME).Value(NumberOfPorts) = "BPQtoAGW.dll"
-            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = 0
+            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = "KISS"
             IDMsgLabel.Visible = True
             IDIntLabel.Visible = True
             IDMsgBox.Visible = True
@@ -493,8 +439,8 @@ Public Class SimpleForm
 
             CreateLOOPBACKTab(NumberOfPorts)
 
-            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = 1  ' Internal
-            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = 0
+            TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = "INTERNAL"  ' Internal
+            TxtPortCfg(PROTOCOL).Value(NumberOfPorts) = ""
 
             SetDefaultL2Params(NumberOfPorts)
 
@@ -513,13 +459,15 @@ Public Class SimpleForm
       TxtPortCfg(FRACK).Value(NumberOfPorts) = 7000
       TxtPortCfg(RESPTIME).Value(NumberOfPorts) = 1000
       TxtPortCfg(RETRIES).Value(NumberOfPorts) = 10
-      TxtPortCfg(PACLEN).Value(NumberOfPorts) = 236
+      TxtPortCfg(PACLEN).Value(NumberOfPorts) = 128 ' 236
       TxtPortCfg(MAXFRAME).Value(NumberOfPorts) = 4
       TxtPortCfg(CHANNEL).Value(NumberOfPorts) = "A"
 
    End Sub
 
-   Private Sub CreateTab(ByVal Port As Integer)
+   Sub CreateTab(ByVal Port As Integer)
+
+      If PORTTABS(Port) IsNot Nothing Then Return
 
       PORTTABS(Port) = New TabPage
 
@@ -534,7 +482,7 @@ Public Class SimpleForm
       '
       'IDLable
       '
-      IDLabel(Port).Location = New System.Drawing.Point(21, 14)
+      IDLabel(Port).Location = New System.Drawing.Point(21, 8)
       IDLabel(Port).Size = New System.Drawing.Size(18, 13)
       IDLabel(Port).Text = "ID"
       '
@@ -543,7 +491,7 @@ Public Class SimpleForm
       PORTTABS(Port).Controls.Add(IDLabel(Port))
       PORTTABS(Port).Controls.Add(IDBox(Port))
 
-      IDBox(Port).Location = New System.Drawing.Point(68, 10)
+      IDBox(Port).Location = New System.Drawing.Point(68, 5)
       IDBox(Port).Name = "IDBOX"
       IDBox(Port).Text = TxtPortCfg(PORTID).Value(Port)
       IDBox(Port).Size = New System.Drawing.Size(266, 20)
@@ -556,129 +504,36 @@ Public Class SimpleForm
 
 
 
-   Private Sub CreateWINMORTab(ByVal Port As Integer)
+   Sub SaveWINMOR(ByVal Port As Integer)
 
-      CreateTab(Port)
+      PortConfig(Port) = "ADDR " & "127.0.0.1 " & WINMORPort(Port).Text & " PTT " & WINMORPTT(Port).SelectedItem
+      If PathBox(Port).Text <> "" Then
+         PortConfig(Port) = PortConfig(Port) & " PATH " & PathBox(Port).Text & vbCrLf
+      Else
+         PortConfig(Port) = PortConfig(Port) & vbCrLf
 
-      MyLabel1(Port) = New Label
-      MyLabel2(Port) = New Label
-      MyLabel3(Port) = New Label
-      MyLabel4(Port) = New Label
+      End If
 
-      MyLabel1(Port).Location = New System.Drawing.Point(360, 41)
-      MyLabel1(Port).Size = New System.Drawing.Size(28, 13)
-      MyLabel1(Port).Text = "PTT"
-      '
-      MyLabel2(Port).Location = New System.Drawing.Point(161, 41)
-      MyLabel2(Port).Size = New System.Drawing.Size(61, 13)
-      MyLabel2(Port).Text = "Drive Level"
-      '
-      MyLabel3(Port).Location = New System.Drawing.Point(21, 41)
-      MyLabel3(Port).Size = New System.Drawing.Size(90, 13)
-      MyLabel3(Port).Text = "Winmor TNC Port"
+      If RigControl(Port).Length Then PortConfig(Port) = PortConfig(Port) + "RIGCONTROL " & RigControl(Port) & vbCrLf
+      If WL2KReport(Port).Length Then PortConfig(Port) = PortConfig(Port) + "WL2KREPORT " & WL2KReport(Port) & vbCrLf
 
-      MyLabel4(Port).Location = New System.Drawing.Point(270, 41)
-      MyLabel4(Port).Size = New System.Drawing.Size(28, 13)
-      MyLabel4(Port).Text = "BW"
+      PortConfig(Port) = PortConfig(Port) + "DebugLog " & DebugLog(Port).Checked & vbCrLf
+      PortConfig(Port) = PortConfig(Port) + "CWID " & CWID(Port).Checked & vbCrLf
+      PortConfig(Port) = PortConfig(Port) + "BUSYLOCK " & BusyLock(Port).Checked & vbCrLf
+      PortConfig(Port) = PortConfig(Port) + "DRIVELEVEL " & DriveLevel(Port).Text & vbCrLf
+      PortConfig(Port) = PortConfig(Port) + "BW " & BW(Port).Text & vbCrLf
 
-      PORTTABS(Port).Controls.Add(MyLabel1(Port))
-      PORTTABS(Port).Controls.Add(MyLabel2(Port))
-      PORTTABS(Port).Controls.Add(MyLabel3(Port))
-      PORTTABS(Port).Controls.Add(MyLabel4(Port))
+      '      If WINMORPTT(Port).Text <> "VOX" Then
+      'OutFile.WriteLine("VOX False")
+      'End If
 
-      PORTTABS(Port).Name = "WINMOR"
-      PORTTABS(Port).Text = "WINMOR"
+      If WINMORPTT(Port).Text <> "VOX" AndAlso RigControl(Port) = "" Then
 
-      WINMORPTT(Port) = New NonNullCombobox
-      DriveLevel(Port) = New BPQCFG.NumTextBox(100)
-      WINMORPort(Port) = New BPQCFG.NumTextBox(65535)
-      CWID(Port) = New System.Windows.Forms.CheckBox
-      BusyLock(Port) = New System.Windows.Forms.CheckBox
-      DebugLog(Port) = New System.Windows.Forms.CheckBox
-      BW(Port) = New NonNullCombobox
-      PTTCOMM(Port) = New System.Windows.Forms.ComboBox
+         PortConfig(Port) = PortConfig(Port) + "RIGCONTROL " & PTTCOMM(Port).Text & " 9600 PTTONLY" & vbCrLf
 
-
-      PORTTABS(Port).Controls.Add(Me.WINMORPTT(Port))
-      PORTTABS(Port).Controls.Add(Me.DriveLevel(Port))
-      PORTTABS(Port).Controls.Add(Me.WINMORPort(Port))
-      PORTTABS(Port).Controls.Add(Me.CWID(Port))
-      PORTTABS(Port).Controls.Add(Me.BusyLock(Port))
-      PORTTABS(Port).Controls.Add(Me.DebugLog(Port))
-      PORTTABS(Port).Controls.Add(Me.BW(Port))
-      PORTTABS(Port).Controls.Add(Me.PTTCOMM(Port))
-
-      'DriveLevel
-      '
-      Me.DriveLevel(Port).Location = New System.Drawing.Point(223, 37)
-      Me.DriveLevel(Port).Name = "DriveLevel"
-      Me.DriveLevel(Port).Size = New System.Drawing.Size(39, 20)
-      Me.DriveLevel(Port).Text = "100"
-      '
-      'WinmorPort
-      '
-      Me.WINMORPort(Port).Location = New System.Drawing.Point(118, 37)
-      Me.WINMORPort(Port).Name = Port
-      Me.WINMORPort(Port).Size = New System.Drawing.Size(39, 20)
-      Me.WINMORPort(Port).Text = "8500"
-
-      AddHandler WINMORPort(Port).Validating, AddressOf ValidatingNumberNonZero
-
-      '
-      'WINMORPTT
-      '
-      Me.WINMORPTT(Port).DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
-      Me.WINMORPTT(Port).Items.AddRange(New Object() {"VOX", "CI-V", "RTS", "DTR", "DTRRTS"})
-      Me.WINMORPTT(Port).Location = New System.Drawing.Point(390, 37)
-      Me.WINMORPTT(Port).Name = Port
-      Me.WINMORPTT(Port).Size = New System.Drawing.Size(75, 21)
-      Me.WINMORPTT(Port).SelectedIndex = 0
-
-      AddHandler WINMORPTT(Port).SelectedIndexChanged, AddressOf PTTChanged
-
-      PTTCOMM(Port).Location = New System.Drawing.Point(475, 37)
-      PTTCOMM(Port).Size = New System.Drawing.Size(70, 21)
-      PTTCOMM(Port).Visible = False    ' Default is VOX
-
-      For Each sp As String In My.Computer.Ports.SerialPortNames
-         PTTCOMM(Port).Items.Add(sp)
-      Next
-
-      BW(Port).DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
-      BW(Port).Items.AddRange(New Object() {"500", "1600"})
-      BW(Port).Location = New System.Drawing.Point(300, 37)
-      BW(Port).Name = Port
-      BW(Port).Size = New System.Drawing.Size(55, 21)
-      '
-      'CWID
-      '
-      Me.CWID(Port).Location = New System.Drawing.Point(198, 68)
-      Me.CWID(Port).Name = "CWID"
-      Me.CWID(Port).Size = New System.Drawing.Size(85, 17)
-      Me.CWID(Port).Text = "Enble CWID"
-      '
-      'BusyLock
-      '
-      Me.BusyLock(Port).AutoSize = True
-      Me.BusyLock(Port).Location = New System.Drawing.Point(109, 68)
-      Me.BusyLock(Port).Name = "BusyLock"
-      Me.BusyLock(Port).Size = New System.Drawing.Size(76, 17)
-      Me.BusyLock(Port).TabIndex = 50
-      Me.BusyLock(Port).Text = "Busy Lock"
-      Me.BusyLock(Port).UseVisualStyleBackColor = True
-      '
-      'DebugLog
-      '
-      Me.DebugLog(Port).AutoSize = True
-      Me.DebugLog(Port).Location = New System.Drawing.Point(24, 68)
-      Me.DebugLog(Port).Name = "DebugLog"
-      Me.DebugLog(Port).Size = New System.Drawing.Size(79, 17)
-      Me.DebugLog(Port).TabIndex = 49
-      Me.DebugLog(Port).Text = "Debug Log"
-      Me.DebugLog(Port).UseVisualStyleBackColor = True
+      End If
 
    End Sub
-
 
    Private Sub CreatePactorTab(ByVal Port As Integer)
 
@@ -732,16 +587,16 @@ Public Class SimpleForm
       MyLabel2(Port).Size = New System.Drawing.Size(53, 13)
       MyLabel2(Port).Text = "COM Port"
       '
-      Me.BAUD(Port) = New NonNullCombobox
-      Me.COMM(Port) = New NonNullCombobox
+      BAUD(Port) = New NonNullCombobox
+      COMM(Port) = New NonNullCombobox
       '
       'BAUD
       '
-      Me.BAUD(Port).FormattingEnabled = True
-      Me.BAUD(Port).Location = New System.Drawing.Point(237, 45)
-      Me.BAUD(Port).Name = Port
-      Me.BAUD(Port).Size = New System.Drawing.Size(109, 21)
-      Me.BAUD(Port).TabIndex = 25
+      BAUD(Port).FormattingEnabled = True
+      BAUD(Port).Location = New System.Drawing.Point(237, 45)
+      BAUD(Port).Name = Port
+      BAUD(Port).Size = New System.Drawing.Size(109, 21)
+      BAUD(Port).TabIndex = 25
       '
       'COM
       '
@@ -762,7 +617,7 @@ Public Class SimpleForm
 
       FindString = "COM" & TxtPortCfg(IOADDR).Value(Port)
 
-      COMM(Port).SelectedIndex = COMM(Port).FindStringExact(FindString)
+      COMM(Port).SelectedItem = FindString
 
       BAUD(Port).Items.Add("38400")
       BAUD(Port).Items.Add("19200")
@@ -773,7 +628,7 @@ Public Class SimpleForm
 
       FindString = TxtPortCfg(SPEED).Value(Port)
 
-      BAUD(Port).SelectedIndex = BAUD(Port).FindStringExact(FindString)
+      BAUD(Port).SelectedItem = FindString
 
    End Sub
 
@@ -789,8 +644,6 @@ Public Class SimpleForm
       CreateChannelBox(Port, 360)
 
       SaveProc(Port) = AddressOf SaveKISS
-
-
 
    End Sub
 
@@ -859,13 +712,16 @@ Public Class SimpleForm
    Private Sub CreateFiles_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles CreateFiles.Click
 
 
-      If MsgBox("This will update your bpqcfg.txt and your BPQtoWINMOR.cfg and RigControl.cfg (if you have WINMOR port(s) defined)" & vbCrLf & _
+      If MsgBox("This will update your bpq32.cfg" & vbCrLf & _
       "Two generations of backup are created, with extensions of .save and .old" & vbCrLf & _
       "Do you want to continue ?", _
        MsgBoxStyle.YesNo + MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config") = MsgBoxResult.No Then Return
 
 
       Form1.NodeCallBox.Text = NodeCallBox.Text
+      Form1.LocatorBox.Text = LocatorBox.Text
+      Form1.PasswordBox.Text = PasswordBox.Text
+
       Form1.InfoMsgBox.Text = InfoMsgBox.Text
       Form1.CTEXTBox.Text = CTEXTBox.Text
       Form1.IDMsgBox.Text = IDMsgBox.Text
@@ -898,126 +754,6 @@ Public Class SimpleForm
 
       SaveConfig()
 
-      ' If any WINMOR ports defined. create BPQtoWINMOR.cfg
-      Dim i As Integer
-      Dim GotWINMOR As Boolean
-      Dim NeedRigControl As Boolean = False
-
-      Dim OutFile As System.IO.StreamWriter
-      Dim Line As String
-
-      For i = 1 To NumberOfPorts
-         If UCase(TxtPortCfg(DLLNAME).Value(i)) = "WINMOR.DLL" Then
-            GotWINMOR = True
-            Exit For
-         End If
-      Next
-
-      If GotWINMOR = False Then Return
-
-      Dim FileName As String = BPQDirectory & "\BPQtoWINMOR.cfg"
-
-      Try
-         File.Copy(FileName & ".save", FileName & ".old", True)
-      Catch ex As Exception
-      End Try
-      Try
-         File.Copy(FileName, FileName & ".save", True)
-      Catch ex As Exception
-      End Try
-
-      OutFile = My.Computer.FileSystem.OpenTextFileWriter(FileName, False, System.Text.Encoding.ASCII)
-
-      OutFile.WriteLine("#	Config file for WINMOR.dll Created by WinBPQCfg")
-      OutFile.WriteLine("")
-
-      For i = 1 To NumberOfPorts
-         If UCase(TxtPortCfg(DLLNAME).Value(i)) = "WINMOR.DLL" Then
-
-            Line = "PORT " & i & " 127.0.0.1 " & WINMORPort(i).Text & " PTT " & WINMORPTT(i).Text
-            OutFile.WriteLine(Line)
-
-            OutFile.WriteLine("LOG True")
-            Line = "DebugLog " & DebugLog(i).Checked
-            OutFile.WriteLine(Line)
-            Line = "CWID " & CWID(i).Checked
-            OutFile.WriteLine(Line)
-            Line = "BUSYLOCK " & BusyLock(i).Checked
-            OutFile.WriteLine(Line)
-            Line = "DRIVELEVEL " & DriveLevel(i).Text
-            OutFile.WriteLine(Line)
-            Line = "BW " & BW(i).Text
-            OutFile.WriteLine(Line)
-
-            OutFile.WriteLine("ROBUST False")
-            OutFile.WriteLine("MODE AUTO")
-            OutFile.WriteLine("FECRCV True")
-
-            If WINMORPTT(i).Text <> "VOX" Then
-               NeedRigControl = True
-               OutFile.WriteLine("VOX False")
-            End If
-
-            OutFile.WriteLine("****")
-            OutFile.WriteLine("")
-
-         End If
-      Next
-
-      OutFile.Close()
-
-      If NeedRigControl Then
-
-         If CanCreateRigControl Then
-
-
-            Dim LastCOM As String = ""
-
-            FileName = BPQDirectory & "\RigControl.cfg"
-
-            Try
-               File.Copy(FileName & ".save", FileName & ".old", True)
-            Catch ex As Exception
-            End Try
-            Try
-               File.Copy(FileName, FileName & ".save", True)
-            Catch ex As Exception
-            End Try
-
-            OutFile = My.Computer.FileSystem.OpenTextFileWriter(FileName, False, System.Text.Encoding.ASCII)
-
-            OutFile.WriteLine("#	Rig Control file for WINMOR PTT Created by WinBPQCfg")
-            OutFile.WriteLine("")
-
-            For i = 1 To NumberOfPorts
-
-               If UCase(TxtPortCfg(DLLNAME).Value(i)) = "WINMOR.DLL" Then
-
-                  If WINMORPTT(i).Text <> "VOX" Then
-
-                     If PTTCOMM(i).Text <> LastCOM Then
-                        OutFile.WriteLine("")
-                        Line = PTTCOMM(i).Text & " 9600 PTTONLY"
-                        OutFile.WriteLine(Line)
-                        LastCOM = PTTCOMM(i).Text
-                     End If
-
-                     Line = "RADIO WINMOR " & i
-                     OutFile.WriteLine(Line)
-
-                  End If
-               End If
-            Next
-
-            OutFile.WriteLine("")
-            OutFile.Close()
-
-         Else
-
-         End If
-      End If
-
-
       MsgBox("File creation complete", MsgBoxStyle.OkOnly + MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config")
 
 
@@ -1033,7 +769,8 @@ Public Class SimpleForm
          Form1.CTEXTBox.Text = CTEXTBox.Text
          Form1.IDMsgBox.Text = IDMsgBox.Text
          Form1.IDIntervalBox.Text = IDIntervalBox.Text
-
+         Form1.PasswordBox.Text = PasswordBox.Text
+         Form1.LocatorBox.Text = LocatorBox.Text
          ApplName(1).Text = Appl1.Text
          ApplName(2).Text = Appl2.Text
          ApplName(3).Text = Appl3.Text
@@ -1074,22 +811,14 @@ Public Class SimpleForm
 
          If NewConfig Then
 
-            ReDim Config(2560 + 176 + 512 - 1)   ' Length seems to have a extra byte!
-
-            ConfigLength = Config.Length
-
             NumberOfPortsinConfig = 1
 
             AddPortTab()
 
             NumberOfPorts = 1
 
-            PortConfigPointer = 2560
-
-            Form1.GetPortInfoFromBinary(1)
-
             TxtPortCfg(PORTID).Value(1) = "Loopback"
-            TxtPortCfg(PORTTYPE).Value(1) = "1"           ' Start with minimal (Internal)
+            TxtPortCfg(PORTTYPE).Value(1) = "INTERNAL"           ' Start with minimal (Internal)
             TYPE.SelectedIndex = 0
             PROTOCOLBox.SelectedIndex = 1
 
@@ -1149,7 +878,7 @@ Public Class SimpleForm
       TabControl1.SelectedIndex = TabControl1.SelectedIndex
    End Sub
 
-   Delegate Sub SavePortValue(ByVal Port As Integer)
+
 
    Sub SavePactor(ByVal Port As Integer)
 
@@ -1184,7 +913,7 @@ Public Class SimpleForm
 
       Dim FileName As String
 
-      FileName = BPQDirectory & "\bpqcfg.txt"
+      FileName = BPQDirectory & "\bpq32.cfg"
 
       Try
          File.Copy(FileName & ".save", FileName & ".old", True)
@@ -1195,20 +924,10 @@ Public Class SimpleForm
       Catch ex As Exception
       End Try
 
-      Form1.CopyConfigtoArray()
-
-      CfgFile = BPQDirectory & "\bpqcfg"
+      CfgFile = BPQDirectory & "\bpq32"
 
       Form1.SaveasTextwithComments()
       Form1.UpdateAppls()
-
-      ReDim Config(NewConfigBytes.Length - 1)
-
-      Dim i As Integer
-
-      For i = 0 To Config.Length - 1
-         Config(i) = NewConfigBytes(i)
-      Next
 
       Return True
 
@@ -1219,7 +938,9 @@ Public Class SimpleForm
    End Sub
 
 
-   Private Sub BackgroundWorker1_DoWork(ByVal sender As System.Object, ByVal e As System.ComponentModel.DoWorkEventArgs) Handles BackgroundWorker1.DoWork
+   Private Sub BackgroundWorker1_DoWork(ByVal sender As System.Object, ByVal e As System.ComponentModel.DoWorkEventArgs)
 
    End Sub
+
+
 End Class

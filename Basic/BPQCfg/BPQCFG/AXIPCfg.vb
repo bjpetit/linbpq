@@ -24,11 +24,9 @@ Public Class AXIPCfg
         If Not (Me.ValidateChildren()) Then
 
             MsgBox("Validation failed", MsgBoxStyle.MsgBoxSetForeground, "WinBPQ AXIP Config")
-
             Exit Sub
 
         End If
-
 
         File = My.Computer.FileSystem.OpenTextFileWriter(BPQDirectory & "\bpqaxip.cfg", False, System.Text.Encoding.ASCII)
 
@@ -79,29 +77,29 @@ Public Class AXIPCfg
 
     Private Sub AXIPCfg_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 
-        Dim Line As String
-        Dim Textfile As System.IO.StreamReader
-        Textfile = My.Computer.FileSystem.OpenTextFileReader(BPQDirectory & "\bpqaxip.cfg", System.Text.Encoding.ASCII)
+      '  Dim Line As String
+      ' Dim Textfile As System.IO.StreamReader
+      '       Textfile = My.Computer.FileSystem.OpenTextFileReader(BPQDirectory & "\bpqaxip.cfg", System.Text.Encoding.ASCII)
 
 
-        Do
-            Line = Textfile.ReadLine
-            ProcessLine(Line)
+      '      Do
+      'Line = Textfile.ReadLine
+      'ProcessLine(Line)
 
-        Loop Until Textfile.EndOfStream
+      ' Loop Until Textfile.EndOfStream
 
-        Textfile.Close()
+      'Textfile.Close()
 
-        AddAXIPLine()
+      'AddAXIPLine()
 
-        If UDPPort(1) <> 0 Then UDPPort1.Text= UDPPort(1)
-        If UDPPort(2) <> 0 Then UDPPort2.Text = UDPPort(2)
-        If UDPPort(3) <> 0 Then UDPPort3.Text = UDPPort(3)
-        If UDPPort(4) <> 0 Then UDPPort4.Text = UDPPort(4)
-        If UDPPort(5) <> 0 Then UDPPort5.Text = UDPPort(5)
-        If UDPPort(6) <> 0 Then UDPPort6.Text = UDPPort(6)
-        If UDPPort(7) <> 0 Then UDPPort7.Text = UDPPort(7)
-        If UDPPort(8) <> 0 Then UDPPort8.Text = UDPPort(8)
+      'If UDPPort(1) <> 0 Then UDPPort1.Text = UDPPort(1)
+      'If UDPPort(2) <> 0 Then UDPPort2.Text = UDPPort(2)
+      'If UDPPort(3) <> 0 Then UDPPort3.Text = UDPPort(3)
+      'If UDPPort(4) <> 0 Then UDPPort4.Text = UDPPort(4)
+      'If UDPPort(5) <> 0 Then UDPPort5.Text = UDPPort(5)
+      'If UDPPort(6) <> 0 Then UDPPort6.Text = UDPPort(6)
+      'If UDPPort(7) <> 0 Then UDPPort7.Text = UDPPort(7)
+      'If UDPPort(8) <> 0 Then UDPPort8.Text = UDPPort(8)
 
     End Sub
 
