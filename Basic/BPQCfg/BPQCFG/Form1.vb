@@ -5,6 +5,7 @@ Imports System
 Imports System.ServiceProcess
 Imports System.Diagnostics
 Imports System.Threading
+Imports System.Environment
 
 
 Public Class Form1
@@ -42,22 +43,34 @@ Public Class Form1
 
    End Sub
 
+
    Private Sub Form1_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
 
       Dim errmsg As String
 
+      osInfo = OSVersion
+
+      If osInfo.Version.Major >= 6 Then
+         RegTree = "HKEY_CURRENT_USER"
+      Else
+         RegTree = "HKEY_LOCAL_MACHINE"
+
+      End If
+
       errmsg = Space(256)
 
       BPQDirectory = My.Computer.Registry.GetValue _
-         ("HKEY_LOCAL_MACHINE\Software\G8BPQ\BPQ32", "BPQ Directory", ".")
+         (RegTree & "\Software\G8BPQ\BPQ32", "BPQ Directory", ".")
+
+      BPQDirectory = Environment.ExpandEnvironmentVariables(BPQDirectory)
 
       OriginalAGWAppl = My.Computer.Registry.GetValue _
-         ("HKEY_LOCAL_MACHINE\Software\G8BPQ\BPQ32\AGWtoBPQ", "ApplMask", "0")
+         (RegTree & "\Software\G8BPQ\BPQ32\AGWtoBPQ", "ApplMask", "0")
 
 
-      OpenVCOMControlChannel()
+      '  OpenVCOMControlChannel()
 
-      CloseHandle(VCOMHandle)
+      ' CloseHandle(VCOMHandle)
 
       '     Dim scServices() As ServiceController
       '    scServices = ServiceController.GetServices()
@@ -121,7 +134,6 @@ Public Class Form1
       InitLabels()
       InitHandlers()
       CreateRoutePage()
-      CreateTNCPage()
 
       If My.Settings.StartMode = "S" Then
          SimpleForm.Visible = True
@@ -175,7 +187,9 @@ Public Class Form1
       If TabControl2.SelectedIndex = NumberOfPorts Then
          NumberOfPortsinConfig = NumberOfPortsinConfig + 1
          AddPortTab()
+         SetDefaultL2Params(NumberOfPortsinConfig)
          LoadPortParams(NumberOfPorts)
+         RefreshPortPage()
       Else
          SavePortInfo()
          HasConfigText = False
@@ -332,7 +346,17 @@ Public Class Form1
       My.Settings.CfgFileSaveName = CfgFile
       My.Settings.Save()
 
-      '       CopyConfigtoArray()
+      Dim FileName As String
+
+      FileName = CfgFile & ".cfg"
+      Try
+         File.Copy(FileName & ".save", FileName & ".old", True)
+      Catch ex As Exception
+      End Try
+      Try
+         File.Copy(FileName, FileName & ".save", True)
+      Catch ex As Exception
+      End Try
 
       SaveasTextwithComments()
 
@@ -371,27 +395,38 @@ Public Class Form1
 
    End Sub
 
-
-   Dim Lines As Integer
+   Public Lines As Integer
    Dim AllLines() As String
-   Dim ParamAtLine() As Integer
-
-
 
    Public Sub ReadTextConfig()
 
       Dim Line As String, i As Integer
 
-      BPQ32.Checked = True
-      BPQCODE.Checked = False
-
       While TabControl2.TabPages.Count > 0
          TabControl2.TabPages.RemoveAt(0)
       End While
 
+      For i = 1 To NumberOfPortsinConfig
+         ClearPort(i)
+      Next
+
 
       NumberOfPorts = 0
       NumberOfPortsinConfig = 0
+
+      ClearConfig()
+
+
+      For i = 1 To 32
+
+         ApplName(i).Text = ""
+         ApplCmdAlias(i).Text = ""
+         ApplType(i).Text = ""
+         ApplQual(i).Text = ""
+         ApplCall(i).Text = ""
+         ApplAlias(i).Text = ""
+
+      Next
 
       AllLines = File.ReadAllLines(CfgFile, System.Text.Encoding.ASCII)
       Lines = AllLines.Length
@@ -423,18 +458,12 @@ Public Class Form1
 
       TabControl2.SelectedIndex = 0
 
-      If BPQ32.Checked = BPQCODE.Checked Then
-         MsgBox("Can't Determine if system is BPQ32 or DOS BPQCODE" & vbCrLf & _
-                "Please make the appropriate selection 'Config Type BPQ32' or 'DOS BPQCODE'", _
-                 MsgBoxStyle.MsgBoxSetForeground, "WinBPQ Config")
-      End If
-
       TabControl1.SelectedIndex = 1
 
       For i = 1 To 8
 
          DEDMask(i) = My.Computer.Registry.GetValue _
-             ("HKEY_LOCAL_MACHINE\Software\G8BPQ\BPQ32\DEDAppl", ApplCall(i).Text, 0)
+             (RegTree & "\Software\G8BPQ\BPQ32\DEDAppl", ApplCall(i).Text, 0)
 
          If (DEDMask(i) >> (i - 1)) And 1 = 1 Then ApplType(i).SelectedIndex = 2
 
@@ -459,7 +488,7 @@ GetNext:
       LineNo = LineNo + 1
       If LineNo >= Lines Then Return Nothing
 
-      line = AllLines(LineNo)
+      line = Trim(AllLines(LineNo))
 
       If line.Length = 0 Then GoTo GetNext
 
@@ -474,7 +503,6 @@ loop1:   LineNo = LineNo + 1
          GoTo GetNext
 
       End If
-
 
       Do
 
@@ -784,12 +812,13 @@ lineloop:
 
             Line = AllLines(LineNo)
 
-            If Line Is Nothing Or Line = "ENDPORT" Then
+            If Line Is Nothing Or Trim(Line) = "ENDPORT" Then
                IDBox(NumberOfPortsinConfig).Text = TxtPortCfg(PORTID).Value(NumberOfPortsinConfig)
                Exit Sub
             End If
 
             If WinmorPort Then
+               Line = Trim(Line)
                If UCase(Line).StartsWith("WL2KREPORT") Then
                   WL2KReport(Port) = WL2KReport(Port) & Mid(Line, 12)
                   ParamAtLine(LineNo) = -1
@@ -813,7 +842,7 @@ lineloop:
             GoTo lineloop
 
          End If
-         If Line Is Nothing Or Line = "ENDPORT" Then
+         If Line Is Nothing Or Trim(Line) = "ENDPORT" Then
             IDBox(NumberOfPortsinConfig).Text = TxtPortCfg(PORTID).Value(NumberOfPortsinConfig)
             Exit Sub
 
@@ -931,12 +960,12 @@ lineloop:
       Dim ApplDone As Boolean = False
 
       SavePortNo = 0
-      SaveTNCPortNo = 0
+      '     SaveTNCPortNo = 0
 
 
-      For i = 0 To 15
-         COMPort(i).Tag = False                   ' Indicate not written
-      Next
+      '   For i = 0 To 15
+      'COMPort(i).Tag = False                   ' Indicate not written
+      '   Next
 
       CfgFile = Environment.ExpandEnvironmentVariables(CfgFile)
 
@@ -945,6 +974,10 @@ lineloop:
       If Lines = 0 Then
 
          ' We didnt have a source text, so just save without trying to match input file
+
+
+         textfile.WriteLine("; Updated by WinBPQCFG")
+         textfile.WriteLine("")
 
          For i = 3 To NumberofParams         ' Omit Obolete DOS Params
 
@@ -988,20 +1021,37 @@ lineloop:
 
          Next
 
-         For i = 0 To 15
+         '       For i = 0 To 15
+         '
+         '       WriteTNCPortLine(i, textfile)
+         '
+         '       Next
 
-            WriteTNCPortLine(i, textfile)
-
-         Next
+         textfile.WriteLine("")
+         textfile.WriteLine(";------")
+         textfile.WriteLine("; Port Definitions")
+         textfile.WriteLine(";------")
+         textfile.WriteLine("")
 
          While SavePortNo < NumberOfPorts
 
             SavePortNo = SavePortNo + 1
-            textfile.WriteLine("PORT")
-            AddNewPortLines(textfile)
-            textfile.WriteLine("ENDPORT")
+
+            If DeletedPort(SavePortNo) = False Then
+               textfile.WriteLine("PORT")
+               AddNewPortLines(textfile)
+               textfile.WriteLine("ENDPORT")
+               textfile.WriteLine("")
+            End If
 
          End While
+
+         textfile.WriteLine("")
+         textfile.WriteLine(";------")
+         textfile.WriteLine("; Locked Routes")
+         textfile.WriteLine(";------")
+         textfile.WriteLine("")
+
 
          textfile.WriteLine("ROUTES:")
 
@@ -1024,6 +1074,13 @@ lineloop:
          Next
 
          textfile.WriteLine("***")
+
+         textfile.WriteLine("")
+         textfile.WriteLine(";------")
+         textfile.WriteLine("; Application Definitions")
+         textfile.WriteLine(";------")
+         textfile.WriteLine("")
+
 
          For j = 1 To 32
 
@@ -1060,7 +1117,7 @@ lineloop:
             Continue For
          End If
 
-         If p = -1 Then Continue For ' Embedded Config
+         If p = -1 Then Continue For ' Embedded Config or deleted port
 
          Line = AllLines(i)
 
@@ -1088,7 +1145,7 @@ lineloop:
 
          If p = 40 Then               ' TNCPORT
 
-            i = SaveTNCPortWithComments(i, textfile)
+            '         i = SaveTNCPortWithComments(i, textfile)
 
             Continue For
 
@@ -1096,9 +1153,11 @@ lineloop:
 
          If p = 41 Then               ' PORT
 
-            i = SavePortWithComments(i, textfile)
+            Dim ret As Integer
 
-            textfile.WriteLine(AllLines(i))         ' ENDPORT Line
+            ret = SavePortWithComments(i, textfile)
+
+            If (ret) Then textfile.WriteLine(AllLines(i)) ' ENDPORT Line
 
             Continue For
 
@@ -1111,12 +1170,15 @@ lineloop:
             While SavePortNo < NumberOfPorts
 
                SavePortNo = SavePortNo + 1
-               textfile.WriteLine("PORT")
-               AddNewPortLines(textfile)
-               textfile.WriteLine("ENDPORT")
+
+               If DeletedPort(SavePortNo) = False Then
+                  textfile.WriteLine("PORT")
+                  AddNewPortLines(textfile)
+                  textfile.WriteLine("ENDPORT")
+                  textfile.WriteLine("")
+               End If
 
             End While
-
 
             i = SaveRoutesWithComments(i, textfile)
 
@@ -1237,11 +1299,11 @@ lineloop:
       Next
 
 
-      For i = 0 To 15
-
-         WriteTNCPortLine(i, textfile)
-
-      Next
+      '    For i = 0 To 15
+      '
+      '   WriteTNCPortLine(i, textfile)
+      '
+      '   Next
 
       textfile.Close()
 
@@ -1328,7 +1390,7 @@ lineloop:
 
    End Function
 
-   Function SavePortWithComments(ByVal n As Integer, ByVal textfile As System.IO.StreamWriter) As Integer
+   Function SavePortWithComments(ByRef n As Integer, ByVal textfile As System.IO.StreamWriter) As Integer
 
 
       '   Not so simple as main config, as number of lines may have altered
@@ -1341,9 +1403,25 @@ lineloop:
 
       Dim i As Integer, j As Integer, p As Integer, line As String, comment As String
 
-      textfile.WriteLine(AllLines(n))         ' The PORT line
-
       SavePortNo = SavePortNo + 1
+
+      If DeletedPort(SavePortNo) Then
+
+         ' Skip all lines to ENDPORT
+
+         For i = n + 1 To Lines
+
+            line = AllLines(i)
+            If Microsoft.VisualBasic.Left(line, 7) = "ENDPORT" Then
+               n = i
+               Return 0
+            End If
+         Next
+
+
+      End If
+
+      textfile.WriteLine(AllLines(n))         ' The PORT line
 
       For i = n + 1 To Lines
 
@@ -1382,7 +1460,10 @@ lineloop:
 
             If p = IOADDR Then
 
-               textfile.WriteLine(" IOADDR=" & Hex(TxtPortCfg(IOADDR).Value(SavePortNo)) & comment)
+               If TxtPortCfg(IOADDR).Value(SavePortNo) <> "" Then
+                  textfile.WriteLine(" IOADDR=" & Hex(TxtPortCfg(IOADDR).Value(SavePortNo)) & comment)
+               End If
+
                Continue For
 
             End If
@@ -1437,7 +1518,8 @@ lineloop:
          If Microsoft.VisualBasic.Left(line, 7) = "ENDPORT" Then
 
             AddNewPortLines(textfile)
-            Return i
+            n = i
+            Return 1
 
          End If
 
@@ -1447,7 +1529,7 @@ lineloop:
 
    End Function
 
-   Function SaveTNCPortWithComments(ByVal n As Integer, ByVal textfile As System.IO.StreamWriter) As Integer
+   Function SaveTNCPortWithCommentsx(ByVal n As Integer, ByVal textfile As System.IO.StreamWriter) As Integer
 
 
       '   Not worth a .lot of effort, as only supported for DOS compatibility
@@ -1455,10 +1537,10 @@ lineloop:
 
       Dim i As Integer, line As String
 
-      i = SaveTNCPortNo
-
-      WriteTNCPortLine(i, textfile)
-
+      '   i = SaveTNCPortNo
+      '
+      '   WriteTNCPortLine(i, textfile)
+      '
       SaveTNCPortNo = SaveTNCPortNo + 1
 
       For i = n + 1 To Lines
@@ -1474,7 +1556,7 @@ lineloop:
       Next
 
    End Function
-   Sub WriteTNCPortLine(ByVal i As Integer, ByVal textfile As System.IO.StreamWriter)
+   Sub WriteTNCPortLinex(ByVal i As Integer, ByVal textfile As System.IO.StreamWriter)
 
       If COMPort(i).Tag = False Then
 
@@ -1509,7 +1591,7 @@ lineloop:
 
             If p = PORTNUM Then
 
-               If TxtPortCfg(PORTNUM).Value(SavePortNo) And TxtPortCfg(PORTNUM).Value(SavePortNo) <> SavePortNo Then
+               If TxtPortCfg(PORTNUM).Value(SavePortNo) <> "" AndAlso TxtPortCfg(PORTNUM).Value(SavePortNo) <> SavePortNo Then
 
                   textfile.WriteLine(" PORTNUM=" & TxtPortCfg(PORTNUM).Value(SavePortNo))
 
@@ -1557,7 +1639,7 @@ lineloop:
 
             If p = IOADDR Then
 
-               If TxtPortCfg(IOADDR).Value(SavePortNo) <> "0" Then
+               If TxtPortCfg(IOADDR).Value(SavePortNo) <> "0" AndAlso TxtPortCfg(IOADDR).Value(SavePortNo) <> "" Then
 
                   textfile.WriteLine(" IOADDR=" & Hex(TxtPortCfg(IOADDR).Value(SavePortNo)))
 
@@ -1589,11 +1671,11 @@ lineloop:
                Continue For
 
             End If
+
             If TxtPortCfg(p).Checkbox Then
 
                If TxtPortCfg(p).Value(SavePortNo) = "True" Then
                   textfile.WriteLine(" " & TxtPortCfg(p).Key & "=" & TxtPortCfg(p).SetValue)
-
                End If
 
             Else
@@ -1605,7 +1687,6 @@ lineloop:
                   End If
                End If
             End If
-
          End If
 
       Next
@@ -1655,40 +1736,10 @@ lineloop:
 
    End Sub
 
-
    Private Sub Form1_Resize(ByVal sender As Object, ByVal e As System.EventArgs) Handles Me.Resize
 
       TabControl1.Width = Me.Width - 25
       TabControl1.Height = Me.Height - 70
-
-   End Sub
-
-   Private Sub BPQ32_Validated(ByVal sender As Object, ByVal e As System.EventArgs) Handles BPQ32.Validated
-      ErrorProvider1.SetError(BPQ32, "")
-      ErrorProvider1.SetError(BPQCODE, "")
-   End Sub
-
-
-   Private Sub BPQ32_Validating(ByVal sender As Object, ByVal e As System.ComponentModel.CancelEventArgs) Handles BPQ32.Validating
-
-      If BPQ32.Checked = BPQCODE.Checked Then
-         ErrorProvider1.SetError(sender, "Select either BPQ32 or BPQCODE")
-         e.Cancel = True
-      End If
-
-   End Sub
-
-   Private Sub BPQCODE_Validated(ByVal sender As Object, ByVal e As System.EventArgs) Handles BPQCODE.Validated
-      ErrorProvider1.SetError(BPQ32, "")
-      ErrorProvider1.SetError(BPQCODE, "")
-   End Sub
-
-   Private Sub BPQCODE_Validating(ByVal sender As Object, ByVal e As System.ComponentModel.CancelEventArgs) Handles BPQCODE.Validating
-
-      If BPQ32.Checked = BPQCODE.Checked Then
-         ErrorProvider1.SetError(sender, "Select either BPQ32 or BPQCODE")
-         e.Cancel = True
-      End If
 
    End Sub
 
@@ -1705,8 +1756,6 @@ lineloop:
 
    Public Sub CreateSimpleConfig()
 
-      BPQ32.Checked = True
-
       NumberOfPortsinConfig = 0
       NumberOfPorts = 0
 
@@ -1719,18 +1768,13 @@ lineloop:
       L4TimeOutBox.Text = 60
       BuffersBox.Text = 999
       PACLENBox.Text = 236
-      TransDelayBox.Text = 1
       T3Box.Text = 180
       IdleTimeBox.Text = 900
-
-      EMSBox.Checked = 0
 
       EnableLinked.SelectedIndex = 2
 
       BBSBox.Checked = 1
       NodeBox.Checked = 1
-      HostInterruptBox.Text = 127
-      DesqViewBox.Checked = 0
       MaxLinksBox.Text = 64
       MaxNodesBox.Text = 250
       MaxRoutesBox.Text = 64
@@ -1752,4 +1796,7 @@ lineloop:
 
    End Sub
 
+   Private Sub TabPage1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles TabPage1.Click
+
+   End Sub
 End Class

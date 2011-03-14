@@ -34,13 +34,13 @@ Public Class NumOrEmptyTextBox
 
     Private MaxValue As Integer
 
-    Sub New()
+   Sub New(ByVal Max As Integer)
 
-        AddHandler Me.Validating, AddressOf ValidatingNumberorNull
-        AddHandler Me.Validated, AddressOf ValidatedSub
-        Me.Max = Max
+      AddHandler Me.Validating, AddressOf ValidatingNumberorNull
+      AddHandler Me.Validated, AddressOf ValidatedSub
+      Me.Max = Max
 
-    End Sub
+   End Sub
 
     Public Property Max() As Integer
         Get

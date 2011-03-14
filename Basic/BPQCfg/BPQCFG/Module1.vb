@@ -6,6 +6,10 @@ Module Module1
    ' Public Declare Function GetNextAdapter Lib "c:\bpq32\bpqadaptersdll.dll" _
    '      Alias "_GetNextAdapter@8" (ByVal Name As String, ByVal Desc As String) As Integer
 
+   Public osInfo As OperatingSystem
+
+   Public RegTree As String
+
    Public BPQDirectory As String
    Public CfgFile As String
    Public AGWAppl As Integer
@@ -14,6 +18,9 @@ Module Module1
 
    Public NewConfig As Boolean
    Public Adding As Boolean
+
+   Public ParamAtLine() As Integer
+
 
    '  Public Config As Byte()
    '  Public NewConfigBytes() As Byte
@@ -30,9 +37,7 @@ Module Module1
    Public HasConfigText As Boolean = False
 
    Public SaveProc(32) As SavePortValue
-
    Public PORTTABS(32) As System.Windows.Forms.TabPage
-
 
    Public WINMORPort(32) As NumTextBox
    Public WINMORPTT(32) As ComboBox
@@ -55,6 +60,8 @@ Module Module1
    Public RigControl(32) As String
    Public WL2KReport(32) As String
 
+   Public DeletedPort(32) As Boolean
+
    Public Structure TxtCfgInfoStruct
 
       Public Key As String
@@ -71,7 +78,7 @@ Module Module1
       Public Key As String
       Public Value() As String    ' Text value of param
       Public CfgField As Object ' Textbox (or Whatever) containing value
-      Public Offset As Integer
+      '      Public Offset As Integer
       Public Len As Integer
       Public Checkbox As Boolean ' Set if Checkbox
       Public SetValue As String   ' Value for boolean param
@@ -80,18 +87,16 @@ Module Module1
 
    End Structure
 
-
    Public Const NumberofParams = 75
 
    Public TxtCfg(NumberofParams) As TxtCfgInfoStruct
-   Public TxtPortCfg(44) As TxtPortCfgInfoStruct
+   Public TxtPortCfg(NumofPortConfigParams) As TxtPortCfgInfoStruct
    Public SavePortNo As Integer
    Public SaveTNCPortNo As Integer
 
    Public Const BBSCALL = 8
    Public Const BBSALIAS = 9
    Public Const BBSQUAL = 30
-
 
    Public Const APPL1CALL = 45
    Public Const APPL1ALIAS = 46
@@ -101,7 +106,7 @@ Module Module1
    Public Const IPGATEWAY = 71
    Public Const APPLPARAM = 74
 
-   Public Const NumofPortConfigParams = 44
+   Public Const NumofPortConfigParams = 45
    Public Const PORTNUM = 1
    Public Const PORTID = 2
    Public Const PORTTYPE = 3
@@ -146,6 +151,7 @@ Module Module1
    Public Const USERS = 42
    Public Const VALIDCALLS = 43
    Public Const DIGIMASK = 44
+   Public Const NOKEEPALIVES = 45
 
 
    Public CurrRow As Integer, CurrCol As Integer
@@ -189,7 +195,7 @@ Module Module1
    Public INTLEVELBox As NumTextBox = New NumTextBox(255)
    Public SPEEDBox As NumTextBox = New NumTextBox(65535)
    Public CHANNELBox As TextBox = New TextBox
-   Public DLLNAMEBox As TextBox = New TextBox
+   Public WithEvents DLLNAMEBox As ComboBox = New ComboBox
    Public WithEvents PortConfigButton As Button = New Button
    Public BBSFLAGBox As CheckBox = New CheckBox
    Public QUALITYBox As NumTextBox = New NumTextBox(255)
@@ -213,12 +219,13 @@ Module Module1
    Public DIGIMASKBox As NumTextBox = New NumTextBox(65535)
    Public USERSBox As NumTextBox = New NumTextBox(255)
    Public UNPROTOBox As TextBox = New TextBox
-   Public PORTNUMBox As NumTextBox = New NumTextBox(16)
+   Public PORTNUMBox As NumOrEmptyTextBox = New NumOrEmptyTextBox(32)
    Public TXTAILBox As NumTextBox = New NumTextBox(100)
    Public ALIAS_IS_BBSBox As CheckBox = New CheckBox
    Public L3ONLYBox As CheckBox = New CheckBox
    'Public KISSOPTIONSBox As TextBox = New TextBox
    Public WithEvents KISSOptionsBox As New System.Windows.Forms.CheckedListBox
+   Public NoKeepalivesBox As CheckBox = New CheckBox
 
 
    Public INTERLOCKBox As NumTextBox = New NumTextBox(16)
@@ -292,12 +299,12 @@ Module Module1
    '  Public Const PA0HZP = 10
 
    Public Types() As String = New String() _
-   {"ASYNC", "INTERNAL", "EXTERNAL", "PC120", "DRSI", "DE56", "TOSH", "QUAD", _
+   {"DELETED", "ASYNC", "INTERNAL", "EXTERNAL", "PC120", "DRSI", "DE56", "TOSH", "QUAD", _
    "RLC100", "RLC400", "BAYCOM", _
    "PA0HZP"}
 
    Public Protos() As String = New String() {"KISS", "NETROM", "BPQKISS", "HDLC", "L2", "WINMOR", "PACTOR"}
-
+   Public DLLNames() As String = New String() {"BPQVKISS.dll", "BPQAXIP.dll", "BPQETHER.dll", "BPQTOAGW.dll", "AEAPACTOR.dll", "HALDRIVER.dll", "KAMPACTOR.dll", "SCSPACTOR.dll", "WINMOR.dll", "TELNET.dll", "SOUNDMODEM.dll", "DEDHOSTTNC"}
    Public MapTypes() As Integer = {0, 3, 4, 5, 6, 7, 8, 1, 2, 9, 10}
 
    Public unMapTypes() As Integer = {0, 7, 8, 1, 2, 3, 4, 5, 6, 9, 10}
@@ -333,7 +340,7 @@ Module Module1
       For i = 0 To 31
          RouteCall(i) = New CallsignTextBox
          RouteQual(i) = New NumTextBox(255)
-         RoutePort(i) = New NumTextBox(16)
+         RoutePort(i) = New NumTextBox(32)
          RouteMaxFrame(i) = New NumTextBox(7)
          RouteFrack(i) = New NumTextBox(10000)
          RoutePaclen(i) = New NumTextBox(256)
@@ -379,7 +386,7 @@ Module Module1
 
    End Sub
 
-   Public Sub CreateTNCPage()
+   Public Sub CreateTNCPagez()
 
       Dim i As Integer
       Dim ComboBoxSize = New System.Drawing.Size(100, 22)
@@ -392,7 +399,7 @@ Module Module1
       For i = 1 To 10
          COMLabel(i) = New Label
          COMLabel(i).Size = New System.Drawing.Size(40, 30)
-         Form1.BPQ16Tab.Controls.Add(COMLabel(i))
+         '     Form1.BPQ16Tab.Controls.Add(COMLabel(i))
 
       Next
 
@@ -444,11 +451,11 @@ Module Module1
          COMType(i).Text = TNCTypes(0)
          '        COMType(i).locked = True
 
-         Form1.BPQ16Tab.Controls.Add(COMPort(i))
-         Form1.BPQ16Tab.Controls.Add(COMType(i))
-         Form1.BPQ16Tab.Controls.Add(COMAPPLMask(i))
-         Form1.BPQ16Tab.Controls.Add(COMKISSMask(i))
-         Form1.BPQ16Tab.Controls.Add(COMAPPLFlags(i))
+         '   Form1.BPQ16Tab.Controls.Add(COMPort(i))
+         '   Form1.BPQ16Tab.Controls.Add(COMType(i))
+         '  Form1.BPQ16Tab.Controls.Add(COMAPPLMask(i))
+         '  Form1.BPQ16Tab.Controls.Add(COMKISSMask(i))
+         '  Form1.BPQ16Tab.Controls.Add(COMAPPLFlags(i))
 
          CurrRow = CurrRow + 30
 
@@ -471,7 +478,7 @@ Module Module1
       NumberOfPorts = NumberOfPorts + 1
 
       TxtPortCfg(PORTTYPE).Value(NumberOfPorts) = "INTERNAL"          ' Start with minimal (Internal)
-      TxtPortCfg(PORTNUM).Value(NumberOfPorts) = NumberOfPorts
+      'TxtPortCfg(PORTNUM).Value(NumberOfPorts) = NumberOfPorts
       ' TxtPortCfg(PORTID).Value(NumberOfPorts) = "New Port"
       TxtPortCfg(IOADDR).Value(NumberOfPorts) = 0
       TxtPortCfg(KISSOPTIONS).Value(NumberOfPorts) = 0
@@ -546,7 +553,13 @@ Module Module1
 
             TxtPortCfg(i).CfgField.Checked = TxtPortCfg(i).Value(CurrentPort)
          Else
-            TxtPortCfg(i).CfgField.text = TxtPortCfg(i).Value(CurrentPort)
+            Dim xx As String = TxtPortCfg(i).Value(CurrentPort)
+            Try
+               TxtPortCfg(i).CfgField.text = xx 'TxtPortCfg(i).Value(CurrentPort)
+
+            Catch ex As Exception
+
+            End Try
 
          End If
 
@@ -577,6 +590,9 @@ Module Module1
 
    Public Sub RefreshPortPage()
 
+      Dim PType As String
+      Dim DLL As String
+
       If CurrentPort = 0 Then Exit Sub
 
       PortTab(CurrentPort).Controls.Clear() '  RemoveAt(0)
@@ -594,18 +610,30 @@ Module Module1
       CurrRow = Row2
       CurrCol = Col2a
 
-      If TxtPortCfg(PORTTYPE).Value(CurrentPort) <> "INTERNAL" And TxtPortCfg(PORTTYPE).Value(CurrentPort) <> "EXTERNAL" Then ' External 
+      PType = UCase(TxtPortCfg(PORTTYPE).Value(CurrentPort))
+
+      If PType = "DELETED" Then Return
+
+      If PType <> "INTERNAL" And PType <> "EXTERNAL" Then
          DrawLabel(PROTOCOLLabel)
          DrawComboBox(PROTOCOLBox)
       End If
 
+      If PType = "EXTERNAL" Then ' External
 
-      If TxtPortCfg(PORTTYPE).Value(CurrentPort) = "EXTERNAL" Then ' External 
+         DLL = LCase(TxtPortCfg(DLLNAME).Value(CurrentPort))
          DrawLabel(DLLNAMELabel)
-         DrawBox(DLLNAMEBox)
+         DrawComboBox(DLLNAMEBox)
          CurrCol = CurrCol + 15
 
-         If LCase(DLLNAMEBox.Text) = "bpqtoagw.dll" Then
+         If DLL = "" Then
+            Return
+         End If
+
+         If DLL = "bpqtoagw.dll" Then
+
+            CurrRow = Row3
+            CurrCol = 8
 
             DrawLabel(CHANNELLabel)
             DrawBox(CHANNELBox)
@@ -615,106 +643,177 @@ Module Module1
 
          End If
 
-      End If
+         If DLL = "winmor.dll" Then
 
-      CurrRow = Row3
-      CurrCol = 8
+            Dim Port As Integer = CurrentPort
 
-      If LCase(DLLNAMEBox.Text) = "winmor.dll" Then
+            If MyLabel3(Port) Is Nothing Then
+               CreateWINMORControls(Port)
+            End If
 
-         Dim Port As Integer = CurrentPort
+            CurrRow = Row3
+            CurrCol = 8
 
-         If MyLabel1(Port) Is Nothing Then
-            CreateWINMORControls(Port)
+            MyLabel1(CurrentPort).Location = New System.Drawing.Point(360, 74)
+            MyLabel2(CurrentPort).Location = New System.Drawing.Point(161, 74)
+            MyLabel3(CurrentPort).Location = New System.Drawing.Point(Col1, 74)
+            MyLabel4(CurrentPort).Location = New System.Drawing.Point(270, 74)
+
+            PortTab(CurrentPort).Controls.Add(MyLabel1(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(MyLabel2(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(MyLabel3(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(MyLabel4(CurrentPort))
+
+            PortTab(CurrentPort).Controls.Add(WINMORPTT(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(DriveLevel(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(WINMORPort(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(CWID(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(BusyLock(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(DebugLog(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(BW(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(PTTCOMM(CurrentPort))
+
+            DriveLevel(CurrentPort).Location = New System.Drawing.Point(223, 71)
+            WINMORPort(CurrentPort).Location = New System.Drawing.Point(118, 71)
+            WINMORPTT(CurrentPort).Location = New System.Drawing.Point(390, 71)
+            PTTCOMM(CurrentPort).Location = New System.Drawing.Point(475, 71)
+            BW(CurrentPort).Location = New System.Drawing.Point(300, 71)
+            CWID(CurrentPort).Location = New System.Drawing.Point(198, Row4)
+            BusyLock(CurrentPort).Location = New System.Drawing.Point(109, Row4)
+            DebugLog(CurrentPort).Location = New System.Drawing.Point(Col1 + 2, Row4)
+
+            CurrRow = Row4
+            CurrCol = 300
+            DrawLabel(PORTCALLLabel)
+            DrawBox(PORTCALLBox)
+            '      CurrRow = Row3
+            '    CurrCol = 300
+            DrawLabel(INTERLOCKLabel)
+            DrawBox(INTERLOCKBox)
+
+            PathLabel(Port).Location = New System.Drawing.Point(Col1, Row5 + 3)
+            PathBox(Port).Location = New System.Drawing.Point(Col1 + 100, Row5)
+
+            PortTab(CurrentPort).Controls.Add(PathLabel(Port))
+            PortTab(CurrentPort).Controls.Add(PathBox(Port))
+
+            CurrRow = Row6
+            CurrCol = 8
+            DrawLabel(RigControlLabel)
+            CurrCol = 40
+            DrawBox(RigControlBox)
+            RigControlBox.Text = RigControl(Port)
+
+            CurrRow = Row7
+            CurrCol = 8
+            DrawLabel(WL2KReportLabel)
+            CurrCol = 40
+            DrawBox(WL2KReportBox)
+            WL2KReportBox.Text = WL2KReport(Port)
+
+            TxtPortCfg(SPEED).Value(NumberOfPorts) = ""
+            TxtPortCfg(IOADDR).Value(NumberOfPorts) = ""
+
+            ClearDefaultL2Params(Port)
+
+            Dim i As Integer
+
+            For i = 1 To NumofPortConfigParams
+
+               If TxtPortCfg(i).Checkbox Then
+
+                  TxtPortCfg(i).CfgField.Checked = TxtPortCfg(i).Value(CurrentPort)
+               Else
+                  Dim xx As String = TxtPortCfg(i).Value(CurrentPort)
+                  Try
+                     TxtPortCfg(i).CfgField.text = xx 'TxtPortCfg(i).Value(CurrentPort)
+
+                  Catch ex As Exception
+
+                  End Try
+
+               End If
+
+            Next
+
+            Exit Sub
+
          End If
 
-         MyLabel1(CurrentPort).Location = New System.Drawing.Point(360, 74)
-         MyLabel2(CurrentPort).Location = New System.Drawing.Point(161, 74)
-         MyLabel3(CurrentPort).Location = New System.Drawing.Point(Col1, 74)
-         MyLabel4(CurrentPort).Location = New System.Drawing.Point(270, 74)
+         If InStr(DLL, "pactor") Or InStr(DLL, "hal") Then
 
-         PortTab(CurrentPort).Controls.Add(MyLabel1(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(MyLabel2(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(MyLabel3(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(MyLabel4(CurrentPort))
+            PortTab(CurrentPort).Controls.Add(PortConfigButton)
 
-         PortTab(CurrentPort).Controls.Add(WINMORPTT(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(DriveLevel(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(WINMORPort(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(CWID(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(BusyLock(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(DebugLog(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(BW(CurrentPort))
-         PortTab(CurrentPort).Controls.Add(PTTCOMM(CurrentPort))
+            CurrRow = Row3
+            CurrCol = 8
 
-         DriveLevel(CurrentPort).Location = New System.Drawing.Point(223, 71)
-         WINMORPort(CurrentPort).Location = New System.Drawing.Point(118, 71)
-         WINMORPTT(CurrentPort).Location = New System.Drawing.Point(390, 71)
-         PTTCOMM(CurrentPort).Location = New System.Drawing.Point(475, 71)
-         BW(CurrentPort).Location = New System.Drawing.Point(300, 71)
-         CWID(CurrentPort).Location = New System.Drawing.Point(198, Row4)
-         BusyLock(CurrentPort).Location = New System.Drawing.Point(109, Row4)
-         DebugLog(CurrentPort).Location = New System.Drawing.Point(Col1 + 2, Row4)
+            DrawLabel(IOADDRLabel)
+            DrawBox(IOADDRBox)
+            DrawLabel(SPEEDLabel)
+            DrawBox(SPEEDBox)
 
-         PathLabel(Port).Location = New System.Drawing.Point(Col1, Row5 + 3)
-         PathBox(Port).Location = New System.Drawing.Point(Col1 + 100, Row5)
+            DrawLabel(PORTCALLLabel)
+            DrawBox(PORTCALLBox)
+            '      CurrRow = Row3
+            '    CurrCol = 300
+            DrawLabel(INTERLOCKLabel)
+            DrawBox(INTERLOCKBox)
 
-         PortTab(CurrentPort).Controls.Add(PathLabel(Port))
-         PortTab(CurrentPort).Controls.Add(PathBox(Port))
+            CurrRow = Row4
+            CurrCol = 8
 
-         CurrRow = Row6
-         CurrCol = 8
-         DrawLabel(RigControlLabel)
-         CurrCol = 40
-         DrawBox(RigControlBox)
-         RigControlBox.Text = RigControl(Port)
+            DrawBox(PortParamsBox)
+            PortParamsBox.Text = PortConfig(CurrentPort)
+            HasConfigText = True
 
-         CurrRow = Row7
-         CurrCol = 8
-         DrawLabel(WL2KReportLabel)
-         CurrCol = 40
-         DrawBox(WL2KReportBox)
-         WL2KReportBox.Text = WL2KReport(Port)
+            ClearDefaultL2Params(CurrentPort)
 
-         Exit Sub
+            Dim i As Integer
 
-      End If
+            For i = 1 To NumofPortConfigParams
 
-      If InStr(LCase(DLLNAMEBox.Text), "pactor") Then
+               If TxtPortCfg(i).Checkbox Then
 
-         DrawLabel(IOADDRLabel)
-         DrawBox(IOADDRBox)
-         DrawLabel(SPEEDLabel)
-         DrawBox(SPEEDBox)
+                  TxtPortCfg(i).CfgField.Checked = TxtPortCfg(i).Value(CurrentPort)
+               Else
+                  Dim xx As String = TxtPortCfg(i).Value(CurrentPort)
+                  Try
+                     TxtPortCfg(i).CfgField.text = xx 'TxtPortCfg(i).Value(CurrentPort)
 
-         CurrRow = Row4
-         CurrCol = 8
+                  Catch ex As Exception
 
-         DrawBox(PortParamsBox)
-         PortParamsBox.Text = PortConfig(CurrentPort)
-         HasConfigText = True
+                  End Try
 
-         Exit Sub
+               End If
 
-      End If
+            Next
 
-      If LCase(DLLNAMEBox.Text).StartsWith("telnet") Then
+            Exit Sub
 
-         CurrRow = Row3
-         CurrCol = 8
+         End If
 
-         DrawBox(PortParamsBox)
-         PortParamsBox.Text = PortConfig(CurrentPort)
-         HasConfigText = True
+         If DLL.StartsWith("telnet") Then
 
-         Exit Sub
+            CurrRow = Row3
+            CurrCol = 8
+
+            DrawBox(PortParamsBox)
+            PortParamsBox.Text = PortConfig(CurrentPort)
+            HasConfigText = True
+
+            ClearDefaultL2Params(CurrentPort)
+
+            PortTab(CurrentPort).Controls.Add(PortConfigButton)
+
+            Exit Sub
+
+         End If
+
+         If DLL = "bpqaxip.dll" Or DLL = "bpqether.dll" Or (PortConfig(CurrentPort) IsNot Nothing AndAlso PortConfig(CurrentPort).Length) Then
+            PortTab(CurrentPort).Controls.Add(PortConfigButton)
+         End If
 
       End If
-
-      If LCase(DLLNAMEBox.Text) = "bpqaxip.dll" Or (PortConfig(CurrentPort) IsNot Nothing AndAlso PortConfig(CurrentPort).Length) Then
-         PortTab(CurrentPort).Controls.Add(PortConfigButton)
-      End If
-
 
       If TxtPortCfg(PORTTYPE).Value(CurrentPort) <> "INTERNAL" And TxtPortCfg(PORTTYPE).Value(CurrentPort) <> "EXTERNAL" Then ' External 
 
@@ -824,6 +923,7 @@ Module Module1
       DrawBox(MAXDIGISBox)
 
       DrawcheckBox(BBSFLAGBox)
+      DrawcheckBox(NoKeepalivesBox)
 
       If CurrCol <> 8 Then
          CurrCol = 8
@@ -906,7 +1006,10 @@ Module Module1
 
 
       DLLNAMEBox.Location = New System.Drawing.Point(Col3a + 70, Row2)
-      DLLNAMEBox.Size = LargeTextBoxSize
+      DLLNAMEBox.Size = ComboBoxSize
+      DLLNAMEBox.Sorted = True
+      DLLNAMEBox.Items.AddRange(DLLNames)
+      DLLNAMEBox.DropDownStyle = ComboBoxStyle.DropDown
 
       IOADDRLabel.Text = "IOAddr"
       IOADDRLabel.Size = New System.Drawing.Size(70, 17)
@@ -1090,17 +1193,57 @@ Module Module1
       RigControlLabel.Size = New System.Drawing.Size(80, 17)
       RigControlBox.Size = New System.Drawing.Size(500, 13)
 
+      NoKeepalivesBox.Text = "No Keepalives"
+      NoKeepalivesBox.CheckAlign = ContentAlignment.MiddleRight
+      NoKeepalivesBox.Size = CheckBoxSize
+
+
    End Sub
 
    Public Sub InitHandlers()
 
       AddHandler TYPE.SelectedIndexChanged, AddressOf TYPESelectedIndexChanged
       AddHandler PROTOCOLBox.SelectedIndexChanged, AddressOf PROTOCOLSelectedIndexChanged
+      AddHandler DLLNAMEBox.SelectedIndexChanged, AddressOf DLLNameSelectedIndexChanged
 
    End Sub
 
 
    Private Sub TYPESelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs)
+
+      If TYPE.SelectedItem = "DELETED" Then
+
+         DeletedPort(CurrentPort) = True
+      Else
+         DeletedPort(CurrentPort) = False
+
+
+         'Dim i As Integer, SavePort As Integer = CurrentPort
+
+         'Form1.TabControl2.TabPages.RemoveAt(NumberOfPorts - 1)
+
+         'Dim p As Integer
+
+         'For p = 1 To NumofPortConfigParams
+
+         'ParamAtLine(TxtPortCfg(p).LineNo(SavePort)) = -1
+
+         'Next
+
+         'CurrentPort = SavePort
+
+         'For i = CurrentPort To NumberOfPorts
+         'CopyPort(i, i + 1)
+         'Next
+
+         'ClearPort(NumberOfPorts)
+         'NumberOfPorts = NumberOfPorts - 1
+         'If CurrentPort > NumberOfPorts Then CurrentPort = 1
+         'LoadPortParams(CurrentPort)
+         'RefreshPortPage()
+         'Return
+
+      End If
 
       TxtPortCfg(PORTTYPE).Value(CurrentPort) = TYPE.SelectedItem
       If Adding = False Then RefreshPortPage()
@@ -1113,6 +1256,19 @@ Module Module1
 
    End Sub
 
+   Private Sub DLLNameSelectedIndexChanged(ByVal sender As System.Object, ByVal e As System.EventArgs)
+
+      TxtPortCfg(DLLNAME).Value(CurrentPort) = DLLNAMEBox.SelectedItem
+
+      '     If MyLabel3(CurrentPort) Is Nothing Then
+
+      '    CreateWINMORControls(CurrentPort)
+
+      '   End If
+
+      If Adding = False Then RefreshPortPage()
+
+   End Sub
 
 
 
@@ -1455,7 +1611,7 @@ Module Module1
    Public Sub SetAGWAppl()
 
       My.Computer.Registry.SetValue _
-      ("HKEY_LOCAL_MACHINE\Software\G8BPQ\BPQ32\AGWtoBPQ", "ApplMask", AGWAppl)
+      (RegTree & "\Software\G8BPQ\BPQ32\AGWtoBPQ", "ApplMask", AGWAppl)
 
    End Sub
 
@@ -1500,7 +1656,11 @@ Module Module1
       Dim i As Integer
 
       Try
-         My.Computer.Registry.LocalMachine.DeleteSubKey("Software\G8BPQ\BPQ32\DEDAppl")
+         If osInfo.Version.Major >= 6 Then
+            My.Computer.Registry.CurrentUser.DeleteSubKey("Software\G8BPQ\BPQ32\DEDAppl")
+         Else
+            My.Computer.Registry.LocalMachine.DeleteSubKey("Software\G8BPQ\BPQ32\DEDAppl")
+         End If
 
       Catch ex As Exception
       End Try
@@ -1510,7 +1670,7 @@ Module Module1
          If ApplType(i).SelectedIndex = 2 Then
 
             My.Computer.Registry.SetValue _
-                ("HKEY_LOCAL_MACHINE\Software\G8BPQ\BPQ32\DEDAppl", ApplCall(i).Text, 1 << (i - 1))
+                (RegTree & "\Software\G8BPQ\BPQ32\DEDAppl", ApplCall(i).Text, 1 << (i - 1))
          End If
 
       Next
@@ -1529,13 +1689,6 @@ Module Module1
    Public Sub InitTextCfgKeywords()
 
       Dim i As Integer
-
-      TxtCfg(1).Key = "HOSTINTERRUPT"
-      TxtCfg(1).CfgField = Form1.HostInterruptBox
-
-      TxtCfg(2).Key = "EMS"
-      TxtCfg(2).CfgField = Form1.EMSBox
-      TxtCfg(2).Checkbox = True
 
       TxtCfg(3).Key = "PASSWORD"
       TxtCfg(3).CfgField = Form1.PasswordBox
@@ -1765,205 +1918,163 @@ Module Module1
 
       TxtPortCfg(1).Key = "PORTNUM"
       TxtPortCfg(1).CfgField = PORTNUMBox
-      TxtPortCfg(1).Offset = 0
 
       TxtPortCfg(2).Key = "ID"
       TxtPortCfg(2).CfgField = PortIDBox
-      TxtPortCfg(2).Offset = 2
       TxtPortCfg(2).Len = 30
 
       TxtPortCfg(3).Key = "TYPE"
       TxtPortCfg(3).CfgField = TYPE
-      TxtPortCfg(3).Offset = 32
 
       TxtPortCfg(4).Key = "DLLNAME"
       TxtPortCfg(4).CfgField = DLLNAMEBox
-      TxtPortCfg(4).Offset = 210
       TxtPortCfg(4).Len = 16
 
       TxtPortCfg(5).Key = "PROTOCOL"
       TxtPortCfg(5).CfgField = PROTOCOLBox
-      TxtPortCfg(5).Offset = 34
 
       TxtPortCfg(6).Key = "KISSOPTIONS"
       TxtPortCfg(6).CfgField = KISSOptionsBox
-      TxtPortCfg(6).Offset = 112
 
       TxtPortCfg(7).Key = "IOADDR"
       TxtPortCfg(7).CfgField = IOADDRBox
-      TxtPortCfg(7).Offset = 36
 
       TxtPortCfg(8).Key = "INTLEVEL"
       TxtPortCfg(8).CfgField = INTLEVELBox
-      TxtPortCfg(8).Offset = 38
 
       TxtPortCfg(9).Key = "SPEED"
       TxtPortCfg(9).CfgField = SPEEDBox
-      TxtPortCfg(9).Offset = 40
 
       TxtPortCfg(10).Key = "CHANNEL"
       TxtPortCfg(10).CfgField = CHANNELBox
-      TxtPortCfg(10).Offset = 42
 
       TxtPortCfg(11).Key = "MHEARD"
       TxtPortCfg(11).CfgField = MHEARDBox
-      TxtPortCfg(11).Offset = 120
       TxtPortCfg(11).Checkbox = True
       TxtPortCfg(11).SetValue = "N"
       TxtPortCfg(11).UnSetValue = "Y"
 
       TxtPortCfg(12).Key = "QUALITY"
       TxtPortCfg(12).CfgField = QUALITYBox
-      TxtPortCfg(12).Offset = 46
 
       TxtPortCfg(13).Key = "MAXFRAME"
       TxtPortCfg(13).CfgField = MAXFRAMEBox
-      TxtPortCfg(13).Offset = 48
 
       TxtPortCfg(14).Key = "TXDELAY"
       TxtPortCfg(14).CfgField = TXDELAYBox
-      TxtPortCfg(14).Offset = 50
 
       TxtPortCfg(15).Key = "TXTAIL"
       TxtPortCfg(15).CfgField = TXTAILBox
-      TxtPortCfg(15).Offset = 76
 
       TxtPortCfg(16).Key = "SLOTTIME"
       TxtPortCfg(16).CfgField = SLOTTIMEBox
-      TxtPortCfg(16).Offset = 52
 
       TxtPortCfg(17).Key = "PERSIST"
       TxtPortCfg(17).CfgField = PERSISTBox
-      TxtPortCfg(17).Offset = 54
 
       TxtPortCfg(18).Key = "FULLDUP"
       TxtPortCfg(18).CfgField = FULLDUPBox
-      TxtPortCfg(18).Offset = 56
       TxtPortCfg(18).Checkbox = True
       TxtPortCfg(18).SetValue = "1"
 
       TxtPortCfg(19).Key = "SOFTDCD"
       TxtPortCfg(19).CfgField = SOFTDCDBox
-      TxtPortCfg(19).Offset = 58
       TxtPortCfg(19).Checkbox = True
       TxtPortCfg(19).SetValue = "1"
 
       TxtPortCfg(20).Key = "FRACK"
       TxtPortCfg(20).CfgField = FRACKBox
-      TxtPortCfg(20).Offset = 60
 
       TxtPortCfg(21).Key = "RESPTIME"
       TxtPortCfg(21).CfgField = RESPTIMEBox
-      TxtPortCfg(21).Offset = 62
 
       TxtPortCfg(22).Key = "RETRIES"
       TxtPortCfg(22).CfgField = RETRIESBox
-      TxtPortCfg(22).Offset = 64
 
       TxtPortCfg(23).Key = "PACLEN"
       TxtPortCfg(23).CfgField = PACLENBox
-      TxtPortCfg(23).Offset = 66
 
       TxtPortCfg(24).Key = "MAXDIGIS"
       TxtPortCfg(24).CfgField = MAXDIGISBox
-      TxtPortCfg(24).Offset = 123
 
       TxtPortCfg(25).Key = "DIGIFLAG"
       TxtPortCfg(25).CfgField = DIGIFLAGBox
-      TxtPortCfg(25).Offset = 70
 
       TxtPortCfg(26).Key = "DIGIPORT"
       TxtPortCfg(26).CfgField = DIGIPORTBox
-      TxtPortCfg(26).Offset = 71
 
 
       TxtPortCfg(27).Key = "CWID"
       TxtPortCfg(27).CfgField = CWIDBox
-      TxtPortCfg(27).Offset = 80
       TxtPortCfg(27).Len = 10
 
       TxtPortCfg(28).Key = "CWIDTYPE"
       TxtPortCfg(28).CfgField = CWIDTYPEBox
-      TxtPortCfg(28).Offset = 121
       TxtPortCfg(28).Checkbox = True
       TxtPortCfg(28).SetValue = "ONOFF"
 
       TxtPortCfg(29).Key = "PORTCALL"
       TxtPortCfg(29).CfgField = PORTCALLBox
-      TxtPortCfg(29).Offset = 90
       TxtPortCfg(29).Len = 10
 
       TxtPortCfg(30).Key = "PORTALIAS"
       TxtPortCfg(30).CfgField = PORTALIASBox
-      TxtPortCfg(30).Offset = 100
       TxtPortCfg(30).Len = 10
 
       TxtPortCfg(31).Key = "PORTALIAS2"
       TxtPortCfg(31).CfgField = PORTALIAS2Box
-      TxtPortCfg(31).Offset = 200
       TxtPortCfg(31).Len = 10
 
       TxtPortCfg(32).Key = "ALIAS_IS_BBS"
       TxtPortCfg(32).CfgField = ALIAS_IS_BBSBox
-      TxtPortCfg(32).Offset = 78
       TxtPortCfg(32).Checkbox = True
       TxtPortCfg(32).SetValue = "1"
 
       TxtPortCfg(33).Key = "BBSFLAG"
       TxtPortCfg(33).CfgField = BBSFLAGBox
-      TxtPortCfg(33).Offset = 44
       TxtPortCfg(33).Checkbox = True
       TxtPortCfg(33).SetValue = "1"
 
       TxtPortCfg(34).Key = "MINQUAL"
       TxtPortCfg(34).CfgField = MINQUALBox
-      TxtPortCfg(34).Offset = 122
 
       TxtPortCfg(35).Key = "NODESPACLEN"
       TxtPortCfg(35).CfgField = NODESPACLENBox
-      TxtPortCfg(35).Offset = 116
 
       TxtPortCfg(36).Key = "QUALADJUST"
       TxtPortCfg(36).CfgField = QUALADJUSTBox
-      TxtPortCfg(36).Offset = 68
 
       TxtPortCfg(37).Key = "BCALL"
       TxtPortCfg(37).CfgField = BCALLBox
-      TxtPortCfg(37).Offset = 226
       TxtPortCfg(37).Len = 10
 
       TxtPortCfg(38).Key = "UNPROTO"
       TxtPortCfg(38).CfgField = UNPROTOBox
-      TxtPortCfg(38).Offset = 128
       TxtPortCfg(38).Len = 72
 
       TxtPortCfg(39).Key = "L3ONLY"
       TxtPortCfg(39).CfgField = L3ONLYBox
-      TxtPortCfg(39).Offset = 110
       TxtPortCfg(39).Checkbox = True
       TxtPortCfg(39).SetValue = "1"
 
       TxtPortCfg(40).Key = "INTERLOCK"
       TxtPortCfg(40).CfgField = INTERLOCKBox
-      TxtPortCfg(40).Offset = 114
 
       TxtPortCfg(41).Key = "TXPORT"
       TxtPortCfg(41).CfgField = TXPORTBox
-      TxtPortCfg(41).Offset = 118
 
       TxtPortCfg(42).Key = "USERS"
       TxtPortCfg(42).CfgField = USERSBox
-      TxtPortCfg(42).Offset = 74
 
       TxtPortCfg(43).Key = "VALIDCALLS"
       TxtPortCfg(43).CfgField = VALIDCALLSBox
-      TxtPortCfg(43).Offset = 256
       TxtPortCfg(43).Len = 256
-
 
       TxtPortCfg(44).Key = "DIGIMASK"
       TxtPortCfg(44).CfgField = DIGIMASKBox
-      TxtPortCfg(44).Offset = 72
+
+      TxtPortCfg(45).Key = "NOKEEPALIVES"
+      TxtPortCfg(45).CfgField = DIGIMASKBox
 
 
 
@@ -2172,7 +2283,7 @@ Module Module1
 
       SimpleForm.CreateTab(Port)
 
-      If MyLabel1(Port) Is Nothing Then
+      If MyLabel3(Port) Is Nothing Then
 
          CreateWINMORControls(Port)
 
@@ -2225,8 +2336,93 @@ Module Module1
 
    End Sub
 
+   Public Sub SetDefaultL2Params(ByVal NumberOfPorts As Integer)
 
+      TxtPortCfg(FRACK).Value(NumberOfPorts) = 7000
+      TxtPortCfg(RESPTIME).Value(NumberOfPorts) = 1000
+      TxtPortCfg(RETRIES).Value(NumberOfPorts) = 10
+      TxtPortCfg(PACLEN).Value(NumberOfPorts) = 128 ' 236
+      TxtPortCfg(MAXFRAME).Value(NumberOfPorts) = 2
+      TxtPortCfg(CHANNEL).Value(NumberOfPorts) = "A"
+      TxtPortCfg(TXDELAY).Value(NumberOfPorts) = 300
+      TxtPortCfg(SLOTTIME).Value(NumberOfPorts) = 100
+      TxtPortCfg(PERSIST).Value(NumberOfPorts) = 64
 
+   End Sub
+
+   Public Sub ClearDefaultL2Params(ByVal NumberOfPorts As Integer)
+
+      TxtPortCfg(FRACK).Value(NumberOfPorts) = ""
+      TxtPortCfg(RESPTIME).Value(NumberOfPorts) = ""
+      TxtPortCfg(RETRIES).Value(NumberOfPorts) = ""
+      TxtPortCfg(PACLEN).Value(NumberOfPorts) = ""
+      TxtPortCfg(MAXFRAME).Value(NumberOfPorts) = ""
+      TxtPortCfg(CHANNEL).Value(NumberOfPorts) = ""
+      TxtPortCfg(TXDELAY).Value(NumberOfPorts) = ""
+      TxtPortCfg(SLOTTIME).Value(NumberOfPorts) = ""
+      TxtPortCfg(PERSIST).Value(NumberOfPorts) = ""
+
+   End Sub
+
+   Sub ClearPort(ByVal Port As Integer)
+
+      Dim p As Integer
+
+      For p = 1 To NumofPortConfigParams
+
+         TxtPortCfg(p).Value(Port) = Nothing
+         ParamAtLine(TxtPortCfg(p).LineNo(Port)) = -1
+         TxtPortCfg(p).LineNo(Port) = 0
+
+      Next
+
+      PortConfig(Port) = Nothing
+
+   End Sub
+
+   Sub CopyPort(ByVal Port As Integer, ByVal From As Integer)
+
+      Dim p As Integer
+
+      For p = 1 To NumofPortConfigParams
+         TxtPortCfg(p).Value(Port) = TxtPortCfg(p).Value(From)
+         '       ParamAtLine(TxtPortCfg(p).LineNo(Port)) = ParamAtLine(TxtPortCfg(p).LineNo(From))
+      Next
+
+      PortConfig(Port) = PortConfig(From)
+
+   End Sub
+
+   Sub ClearConfig()
+
+      Dim i As Integer, j As Integer
+
+      For j = 1 To 32
+
+         For i = 1 To NumofPortConfigParams
+            TxtPortCfg(i).Value(j) = Nothing
+            TxtPortCfg(i).LineNo(j) = 0
+         Next
+
+         PortConfig(j) = Nothing
+         DeletedPort(j) = False
+
+      Next
+
+      For i = 0 To 31
+         RouteCall(i).Text = ""
+         RouteQual(i).Text = ""
+         RoutePort(i).Text = ""
+         RouteMaxFrame(i).Text = ""
+         RouteFrack(i).Text = ""
+         RoutePaclen(i).Text = ""
+         Routeinp3(i).Text = ""
+         RouteComment(i) = ""
+         RouteLineno(i) = 0
+
+      Next
+
+   End Sub
 
 End Module
 

@@ -296,7 +296,9 @@ Public Class SimpleForm
 
    Private Sub Create_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Create.Click
 
-      Dim Port As Integer
+      Dim Port As Integer, i As Integer
+
+      Form1.lines = 0
 
       While TabControl1.Controls.Count
          TabControl1.Controls.RemoveAt(0)
@@ -304,13 +306,44 @@ Public Class SimpleForm
 
       For Port = 1 To 32
          PORTTABS(Port) = Nothing
+         ClearPort(Port)
+      Next
+
+      ClearConfig()
+
+      For i = 1 To 32
+
+         ApplName(i).Text = ""
+         ApplCmdAlias(i).Text = ""
+         ApplType(i).Text = ""
+         ApplQual(i).Text = ""
+         ApplCall(i).Text = ""
+         ApplAlias(i).Text = ""
 
       Next
+
+      Appl1.Text = ApplName(1).Text
+      Appl2.Text = ApplName(2).Text
+      Appl3.Text = ApplName(3).Text
+      Appl4.Text = ApplName(4).Text
+
+      Appl1Call.Text = ApplCall(1).Text
+      Appl2Call.Text = ApplCall(2).Text
+      Appl3Call.Text = ApplCall(3).Text
+      Appl4Call.Text = ApplCall(4).Text
+
+      NodeCallBox.Text = ""
+      LocatorBox.Text = ""
+      PasswordBox.Text = ""
+      InfoMsgBox.Text = ""
+      CTEXTBox.Text = ""
+      IDMsgBox.Text = ""
+      IDIntervalBox.Text = "0"
+
 
       While Form1.TabControl2.Controls.Count
          Form1.TabControl2.Controls.RemoveAt(0)
       End While
-
 
       IDMsgLabel.Visible = False
       IDIntLabel.Visible = False
@@ -335,6 +368,9 @@ Public Class SimpleForm
          Form1.NodeCallBox.Text = NEWCALL.NodeCall.Text
          LocatorBox.Text = NEWCALL.Locator.Text
          Form1.LocatorBox.Text = NEWCALL.Locator.Text
+
+         CTEXTBox.Text = "Welcome to " & NodeCallBox.Text & "'s BPQ32 Node"
+         InfoMsgBox.Text = NodeCallBox.Text & "'s BPQ32 Node. Enter ? for list of commands"
          AddPort_Click(sender, e)
 
          Advanced_Click(sender, e)
@@ -451,17 +487,6 @@ Public Class SimpleForm
          LoadPortParams(NumberOfPorts) ' Copy to Advanced Mode fields
 
       End If
-
-   End Sub
-
-   Private Sub SetDefaultL2Params(ByVal NumberOfPorts As Integer)
-
-      TxtPortCfg(FRACK).Value(NumberOfPorts) = 7000
-      TxtPortCfg(RESPTIME).Value(NumberOfPorts) = 1000
-      TxtPortCfg(RETRIES).Value(NumberOfPorts) = 10
-      TxtPortCfg(PACLEN).Value(NumberOfPorts) = 128 ' 236
-      TxtPortCfg(MAXFRAME).Value(NumberOfPorts) = 4
-      TxtPortCfg(CHANNEL).Value(NumberOfPorts) = "A"
 
    End Sub
 
