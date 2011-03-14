@@ -1536,6 +1536,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 			if (!ProcessConfig())
 			{
+				StartMinimized = FALSE;
+				MinimizetoTray = FALSE;
 				SetupConsoleWindow();
 				ShowWindow(hWnd, SW_RESTORE);
 				SendMessage(hWnd, WM_PAINT, 0, 0);
@@ -4051,8 +4053,6 @@ int SetupConsoleWindow()
 
 	MoveWindow(hWnd,Rect.left,Rect.top, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
-
-		
 	if (StartMinimized)
 		if (MinimizetoTray)
 			ShowWindow(hWnd, SW_HIDE);
@@ -4061,13 +4061,10 @@ int SetupConsoleWindow()
 	else
 		ShowWindow(hWnd, SW_RESTORE);
 
-
 	SetupTrayIcon();
 
 	return 0;
-
 }
-
 
 DllExport int APIENTRY SetupTrayIcon()
 {

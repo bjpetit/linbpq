@@ -12,9 +12,18 @@ int main(int argc, char **argv)
 {     
 	HKEY hKey=0;
 	int retCode,i;
+	HKEY REGTREE = HKEY_CURRENT_USER;
+	char * REGTREETEXT = "HKEY_CURRENT_USER";
 
+	printf("ClearRegistryPath Version 2.0.0\n\n");
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	if (_winver < 0x600)
+	{
+		REGTREE = HKEY_LOCAL_MACHINE;
+		REGTREETEXT = "HKEY_LOCAL_MACHINE";
+	}
+
+	retCode = RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,
                               KEY_ALL_ACCESS,
@@ -26,7 +35,7 @@ int main(int argc, char **argv)
 
 		retCode = RegDeleteValue(hKey,"BPQ Directory");
 
-		printf("Registry Key \"HKEY_LOCAL_MACHINE\\SOFTWARE\\G8BPQ\\BPQ32\" opened\n\n");
+		printf("Registry Key \"%s\\SOFTWARE\\G8BPQ\\BPQ32\" opened\n\n", REGTREETEXT);
 
 		if (retCode == ERROR_SUCCESS)
 	
@@ -34,13 +43,13 @@ int main(int argc, char **argv)
 		else
 			printf("Registry Value \"BPQ Directory\" not found\n");
 
-		retCode = RegDeleteValue(hKey,"Config File Location");
+		retCode = RegDeleteValue(hKey,"BPQ Program Directory");
 
 		if (retCode == ERROR_SUCCESS)
 	
-			printf("Registry Value \"Config File Location\" deleted\n");	
+			printf("Registry Value \"BPQ Program Directory\" deleted\n");	
 		else
-			printf("Registry Value \"Config File Location\" not found\n");
+			printf("Registry Value \"BPQ Program Directory\" not found\n");
 			
 		RegCloseKey(hKey);	
 	

@@ -600,6 +600,7 @@ DllExport BOOL ProcessConfig()
 	paramok[16]=1;	//  BBSCALL
 	paramok[14]=1;	//  BBSALIAS
 	paramok[33]=1;	//  BBSQUAL
+	paramok[34]=1;	//  APPLICATIONS
 
 	if (paramok[45]==1)
 	{
@@ -707,8 +708,8 @@ char rec[];
 	int i;
 	int cn = 1;			/* RETURN CODE FROM ROUTINES */
 
-	char key_word[20];
-	char value[300];
+	char key_word[20] = "";
+	char value[300] = "";
 
 	if (_memicmp(rec, "IPGATEWAY", 9) == 0 && rec[9] != '=')	// IPGATEWAY, not IPGATEWAY=
 	{
@@ -1210,6 +1211,10 @@ int dotext(int i, char * key_word, int max)
         bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	GetNextLine(rec);
+
+	if (index(rec,"***") == 0)
+		bputc('\r',fp2);
+
 
 	while (index(rec,"***") != 0 && !feof(fp1))
 	{

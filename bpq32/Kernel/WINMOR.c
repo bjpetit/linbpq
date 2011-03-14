@@ -1180,8 +1180,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	TempScript = malloc(1000);
 
-	strcpy(TempScript, "LOG True\r\n");
-	strcat(TempScript, "DebugLog True\r\n");
+	strcpy(TempScript, "DebugLog True\r\n");
 	strcat(TempScript, "CWID False\r\n");
 	strcat(TempScript, "BW 1600\r\n");
 	strcat(TempScript, "ROBUST False\r\n");

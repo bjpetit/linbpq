@@ -1450,7 +1450,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 
 			if (SocketId == TCP->Relaysock)
 				sockptr->RelayMode = TRUE;
-			else
+
 			if (SocketId != TCP->sock)				// We can have several listening FBB mode sockets
 				sockptr->FBBMode = TRUE;
 
@@ -1513,13 +1513,13 @@ int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 			{
 				case FD_READ:
 
+					if (sockptr->RelayMode)
+						return DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
+					
 					if (sockptr->FBBMode)
 						return DataSocket_ReadFBB(TNC, sockptr, sock, n);
 					else
-						if (sockptr->RelayMode)
-							return DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
-						else
-							return DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
+						return DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
 
 				case FD_WRITE:
 
@@ -2081,10 +2081,9 @@ MsgLoop:
 			WriteLog (logmsg);
 		}
 
-		ShowConnections(TNC);;
-		InputLen=InputLen-(MsgLen+1);
+		ShowConnections(TNC);
 
-		sockptr->InputLen=InputLen;
+		sockptr->InputLen = 0;
 
 		// Connect to the BBS
 

@@ -15,7 +15,7 @@
 
 #define Vers 1,0,2,0
 #define Verstring "1.0.2.0\0"
-#define SPECIALVERSION "Test 3"
+#define SPECIALVERSION "Test 5"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"

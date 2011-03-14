@@ -220,6 +220,12 @@ typedef struct RTFTerm
 
 };
 
+char FontName[100] = "FixedSys";
+int FontSize = 20;
+int FontWidth = 8;
+int CodePage = 437;
+int CharSet = 0;
+
 
 struct RTFTerm OutputData;
 
@@ -312,9 +318,9 @@ VOID SaveStringValue(char * Key, char * Value)
 	WritePrivateProfileString("Session 1", Key, Value, ".\\BPQTermTCP.ini");
 }
 
-int GetIntValue(char * Key)
+int GetIntValue(char * Key, int Default)
 {
-	return GetPrivateProfileInt("Session 1", Key, 0, ".\\BPQTermTCP.ini");
+	return GetPrivateProfileInt("Session 1", Key, Default, ".\\BPQTermTCP.ini");
 }
 
 VOID GetStringValue(char * Key, char * Value, int Len)
@@ -405,6 +411,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
 	SaveStringValue("Size", Size);
 
+	SaveStringValue("FontName", FontName);
+	SaveIntValue("CharSet", CharSet);
+	SaveIntValue("CodePage", CodePage);
+	SaveIntValue("FontSize", FontSize);
+	SaveIntValue("FontWidth", FontWidth);
+
 	KillTimer(NULL, TimerHandle);
 
 	return (msg.wParam);
@@ -448,34 +460,13 @@ BOOL InitApplication(HINSTANCE hInstance)
 
 HMENU hMenu, hPopMenu1, hPopMenu2, hPopMenu3;		// handle of menu 
 
-
-BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
+VOID SetupRTFHddr()
 {
-	int i, n, tempmask=0xffff;
-	char msg[20];
-	char Size[80];
-	WSADATA WsaData;            // receives data from WSAStartup
+	int i, n;
 	char RTFColours[3000];
-	struct RTFTerm * OPData;
 	char Temp[1000];
 
-	hInst = hInstance; // Store instance handle in our global variable
-
-	WSAStartup(MAKEWORD(2, 0), &WsaData);
-
-	OutputData.CharWidth = 8;
-
-	// Create a dialog box as the main window
-
-	hWnd = CreateDialog(hInst,ClassName,0,NULL);
-	
-    if (!hWnd)
-        return (FALSE);
-
-	MainWnd=hWnd;
-
 	// Set up RTF Header, including Colours String;
-
 
 	memcpy(RTFColours, "{\\colortbl ;", 12);
 	n = 12;
@@ -490,12 +481,91 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	RTFColours[n] = 0;
 
 //	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset204 ;}}");
-	wsprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1\\cpg%d %s;}}", 437, "FixedSys");
+	wsprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1\\cpg%d\\fcharset%d %s;}}", CodePage,CharSet, FontName);
 	strcat(RTFHeader, RTFColours);
-	wsprintf(Temp, "\\viewkind4\\uc1\\pard\\f0\\fs%d", 20);
+	wsprintf(Temp, "\\viewkind4\\uc1\\pard\\f0\\fs%d", FontSize);
 	strcat(RTFHeader, Temp);
 
 	RTFHddrLen = strlen(RTFHeader);
+}
+
+
+BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
+{
+	int i, n, tempmask=0xffff;
+	char msg[20];
+	char Size[80];
+	WSADATA WsaData;            // receives data from WSAStartup
+	struct RTFTerm * OPData;
+
+	hInst = hInstance; // Store instance handle in our global variable
+
+	WSAStartup(MAKEWORD(2, 0), &WsaData);
+
+		// Get saved config from ini
+
+	MonitorNODES = GetIntValue("MonNODES", 0);
+	MonPorts = GetIntValue("MonPorts", 0);
+	mtxparam = GetIntValue("MTX", 0);
+	mcomparam = GetIntValue("MCOM", 0);
+	tempmask = GetIntValue("PortMask", 0);
+	ChatMode = GetIntValue("ChatMode", 0);
+	MonitorColour = GetIntValue("MONColour", 0);
+	Bells = GetIntValue("Bells", 0);
+	StripLF = GetIntValue("StripLF", 0);
+	CurrentHost = GetIntValue("CurrentHost", 0);
+	Split = GetIntValue("Split", 0);
+	if (Split == 0)
+		Split = 50;
+
+	Split /= 100;		// Stored as a %,used as 0 - 1
+
+	for (n = 0; n < 3; n++)
+	{
+		GetStringValue(HN[n], Host[n], 100);
+		GetStringValue(UN[n], UserName[n], 80);
+		GetStringValue(PASSN[n], Password[n], 80);
+		Port[n] = GetIntValue(PN[n], 0);
+	}
+
+	GetStringValue("FontName", FontName, 99);
+
+	if (FontName[0] == 0)
+		strcpy(FontName, "FixedSys");
+
+	CharSet =  GetIntValue("CharSet", 0);
+	CodePage =  GetIntValue("CodePage", 437);
+	FontSize =  GetIntValue("FontSize", 20);
+	FontWidth = GetIntValue("FontWidth", 8);
+
+	OutputData.CharWidth = FontWidth;
+
+	// Create a dialog box as the main window
+
+	hWnd = CreateDialog(hInst,ClassName,0,NULL);
+	
+    if (!hWnd)
+        return (FALSE);
+
+	MainWnd=hWnd;
+
+	GetStringValue("Size", Size, 80);
+	sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+	
+	if (Rect.right < 100 || Rect.bottom < 100)
+	{
+		GetWindowRect(hWnd,	&Rect);
+	}
+
+	Height = Rect.bottom-Rect.top;
+	Width = Rect.right-Rect.left;
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+	SplitPos=Height*Split;
+#pragma warning(pop)
+
+	SetupRTFHddr();
 
 	// Create a Rich Text Control 
 
@@ -531,48 +601,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	wpOrigInputProc = (WNDPROC) SetWindowLong(hwndInput, GWL_WNDPROC, (LONG) InputProc); 
 	wpOrigMonProc = (WNDPROC)SetWindowLong(hwndMon, GWL_WNDPROC, (LONG)MonProc);
 	wpOrigSplitProc = (WNDPROC)SetWindowLong(hwndSplit, GWL_WNDPROC, (LONG)SplitProc);
-
-	// Get saved config from ini
-
-	MonitorNODES = GetIntValue("MonNODES");
-	MonPorts = GetIntValue("MonPorts");
-	mtxparam = GetIntValue("MTX");
-	mcomparam = GetIntValue("MCOM");
-	tempmask = GetIntValue("PortMask");
-	ChatMode = GetIntValue("ChatMode");
-	MonitorColour = GetIntValue("MONColour");
-	Bells = GetIntValue("Bells");
-	StripLF = GetIntValue("StripLF");
-	CurrentHost = GetIntValue("CurrentHost");
-	Split = GetIntValue("Split");
-	if (Split == 0)
-		Split = 50;
-
-	Split /= 100;		// Stored as a %,used as 0 - 1
-
-	for (n = 0; n < 3; n++)
-	{
-		GetStringValue(HN[n], Host[n], 100);
-		GetStringValue(UN[n], UserName[n], 80);
-		GetStringValue(PASSN[n], Password[n], 80);
-		Port[n] = GetIntValue(PN[n]);
-	}
-
-	GetStringValue("Size", Size, 80);
-	sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
-	
-	if (Rect.right < 100 || Rect.bottom < 100)
-	{
-		GetWindowRect(hWnd,	&Rect);
-	}
-
-	Height = Rect.bottom-Rect.top;
-	Width = Rect.right-Rect.left;
-
-#pragma warning(push)
-#pragma warning(disable:4244)
-	SplitPos=Height*Split;
-#pragma warning(pop)
 
 	MoveWindow(hWnd,Rect.left,Rect.top, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
@@ -695,6 +723,80 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			ModifyMenu(hMenu, BPQCONNECT1 + CfgNo, MF_BYCOMMAND, BPQCONNECT1 + CfgNo, Host[CfgNo]);
 			ModifyMenu(hMenu, IDC_HOST1 + CfgNo, MF_BYCOMMAND, IDC_HOST1 + CfgNo, Host[CfgNo]);
 
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+
+}
+
+INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	POINT Point;
+	int Min, Max;
+
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+		SetDlgItemText(hDlg, IDC_FONTNAME, FontName);
+		SetDlgItemInt(hDlg, IDC_CHARSET, CharSet, FALSE);
+		SetDlgItemInt(hDlg, IDC_CODEPAGE, CodePage, FALSE);
+		SetDlgItemInt(hDlg, IDC_FONTSIZE, FontSize, FALSE);
+		SetDlgItemInt(hDlg, IDC_FONTWIDTH, FontWidth, FALSE);
+
+		return (INT_PTR)TRUE;
+
+	case WM_CTLCOLORDLG:
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
+
+	case WM_COMMAND:
+		switch (LOWORD(wParam))
+		{
+		case IDOK:
+
+			GetDlgItemText(hDlg, IDC_FONTNAME, FontName, 99);
+			CharSet = GetDlgItemInt(hDlg, IDC_CHARSET, NULL, FALSE);
+			CodePage = GetDlgItemInt(hDlg, IDC_CODEPAGE, NULL, FALSE);
+			FontSize = GetDlgItemInt(hDlg, IDC_FONTSIZE, NULL, FALSE);
+			FontWidth = GetDlgItemInt(hDlg, IDC_FONTWIDTH, NULL, FALSE);
+
+			SaveStringValue("FontName", FontName);
+			SaveIntValue("CharSet", CharSet);
+			SaveIntValue("CodePage", CodePage);
+			SaveIntValue("FontSize", FontSize);
+			SaveIntValue("FontWidth", FontWidth);
+
+			OutputData.CharWidth = FontWidth;
+
+			SetupRTFHddr();
+
+			Point.x = 0;
+			Point.y = 25000;					// Should be plenty for any font
+
+			SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
+			OutputData.Scrolled = FALSE;
+
+			GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);	// Get Actual Height
+			OutputData.RTFHeight = Max;
+
+			DoRefresh(&OutputData);
+
+			return TRUE;
 
 		case IDCANCEL:
 
@@ -981,6 +1083,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
 			break;
 
+		case ID_SETUP_FONT:
+
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_FONT), hWnd, FontConfigWndProc);
+			break;
+
 		case BPQMNODES:
 
 			ToggleParam(hWnd, &MonitorNODES, BPQMNODES);
@@ -1050,10 +1157,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		switch (wmId) { 
 
-		case  SC_MINIMIZE: 
+		case SC_RESTORE:
 
-			if (MinimizetoTray)
-				return ShowWindow(hWnd, SW_HIDE);		
+		case SC_MINIMIZE: 
 		
 			default:
 		
@@ -1838,6 +1944,9 @@ void MoveWindows()
 	ClientHeight = rcClient.bottom;
 	ClientWidth = rcClient.right;
 
+	if (ClientWidth == 0)		// Minimized
+		return;
+
 	OutputBoxHeight = ClientHeight - SplitPos - InputBoxHeight - SplitBarHeight - SplitBarHeight;
 
 	MoveWindow(hwndMon,2, 0, ClientWidth-4, SplitPos, TRUE);
@@ -1994,11 +2103,17 @@ TCPConnect(char * Host, int Port)
 
 		//	Resolve name to address
 
+		wsprintf(Title,"BPQTermTCP Version %s - Resolving %s", VersionString, Host);
+		SetWindowText(hWnd,Title);
+
 		HostEnt = gethostbyname(Host);
 		 
 		 if (!HostEnt)
 		 {
 			MessageBox(NULL, "Resolve HostName Failed", "BPQTermTCP", MB_OK);
+			wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+			SetWindowText(hWnd,Title);
+
 			return FALSE;			// Resolve failed
 		 }
 
