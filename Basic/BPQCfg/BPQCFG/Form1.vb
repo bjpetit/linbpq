@@ -458,7 +458,7 @@ Public Class Form1
 
       TabControl2.SelectedIndex = 0
 
-      TabControl1.SelectedIndex = 1
+      TabControl1.SelectedIndex = 0
 
       For i = 1 To 8
 
@@ -498,7 +498,7 @@ GetNext:
       If Mid(line, 1, 2) = "/*" Then
 loop1:   LineNo = LineNo + 1
          If LineNo >= Lines Then Return Nothing
-         line = AllLines(LineNo)
+         line = Trim(AllLines(LineNo))
          If Mid(line, 1, 2) <> "*/" Then GoTo loop1
          GoTo GetNext
 
@@ -572,6 +572,7 @@ loop1:   LineNo = LineNo + 1
          ' Get Params up to ***
 
          ParamAtLine(LineNo) = IPGATEWAY
+         TxtCfg(IPGATEWAY).LineNo = LineNo
 
          Dim n As Integer = 0
          PortConfig(0) = ""
@@ -627,6 +628,14 @@ lineloop:
             If i = 44 Then        ' Applications
                ProcessTextApps(Value)
                Exit Sub
+            End If
+
+            If i = 71 Then        ' Old IPGateway
+
+               MsgBox("IPGATEWAY= Param no longer supported. Use new format " & vbCrLf & "IPGATEWAY" & vbCrLf & "Params" & vbCrLf & "****")
+               ParamAtLine(LineNo) = -1
+               Exit Sub
+
             End If
 
             If Not TxtCfg(i).CfgField Is Nothing Then
@@ -981,6 +990,8 @@ lineloop:
 
          For i = 3 To NumberofParams         ' Omit Obolete DOS Params
 
+            If i = BBSCALL Then i = BBSALIAS + 1
+            If i = BBSQUAL Then i = i + 1
             If i = APPL1CALL Then i = MAXHOPS ' Skip all APPLCALL/ALIAS/QUAL - 
 
             If TxtCfg(i).CfgField IsNot Nothing Then
@@ -1119,6 +1130,8 @@ lineloop:
 
          If p = -1 Then Continue For ' Embedded Config or deleted port
 
+         If p = BBSCALL Or p = BBSALIAS Or p = BBSQUAL Then Continue For
+
          Line = AllLines(i)
 
          j = InStr(Line, ";")
@@ -1218,9 +1231,11 @@ lineloop:
 
          If p = IPGATEWAY Then
 
-            textfile.WriteLine(Line)
-            textfile.Write(PortConfig(0))
-            textfile.WriteLine("****")
+            If PortConfig(0) <> "" Then
+               textfile.WriteLine(Line)
+               textfile.Write(PortConfig(0))
+               textfile.WriteLine("****")
+            End If
 
             Continue For
 
@@ -1272,10 +1287,24 @@ lineloop:
       ' Output all values that were not in original file
 
 
-      For i = 3 To 44                 ' Up to APPLCALLS
+      For i = 3 To NumberofParams
+
+         If i = APPL1CALL Then i = APPL8QUAL + 1 ' Skip APPLCALLS etc
 
          If i = BBSCALL Or i = BBSALIAS Or i = BBSQUAL Or i = 10 Then ' Unproto
             Continue For
+         End If
+
+         If i = IPGATEWAY Then
+
+            If TxtCfg(i).LineNo = 0 AndAlso PortConfig(0) <> "" Then
+               textfile.WriteLine("IPGATEWAY")
+               textfile.Write(PortConfig(0))
+               textfile.WriteLine("****")
+            End If
+
+            Continue For
+
          End If
 
          If TxtCfg(i).LineNo = 0 Then
@@ -1788,7 +1817,6 @@ lineloop:
       BTIntervalBox.Text = 60
       AutoSaveBox.Checked = 1
       CIsChatBox.Checked = 1
-      IPGatewayBox.Checked = 0
       MaxRTTBox.Text = 90
       MaxHopsBox.Text = 4
 
@@ -1796,7 +1824,10 @@ lineloop:
 
    End Sub
 
-   Private Sub TabPage1_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles TabPage1.Click
+   Private Sub IPGateway_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles IPGatewayButton.Click
+
+      ipgatewayconfig.visible = True
+      IPGatewayConfig.IPConfigBox.Text = PortConfig(0)
 
    End Sub
 End Class

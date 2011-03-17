@@ -103,8 +103,8 @@ Module Module1
    Public Const APPL1QUAL = 47
    Public Const APPL8QUAL = 68
    Public Const MAXHOPS = 69
-   Public Const IPGATEWAY = 71
    Public Const APPLPARAM = 74
+   Public Const IPGATEWAY = 75
 
    Public Const NumofPortConfigParams = 45
    Public Const PORTNUM = 1
@@ -630,7 +630,7 @@ Module Module1
             Return
          End If
 
-         If DLL = "bpqtoagw.dll" Then
+         If DLL = "bpqtoagw.dll" Or DLL = "bpqvkiss.dll" Then
 
             CurrRow = Row3
             CurrCol = 8
@@ -1014,18 +1014,22 @@ Module Module1
       IOADDRLabel.Text = "IOAddr"
       IOADDRLabel.Size = New System.Drawing.Size(70, 17)
       IOADDRBox.Size = TextBoxSize
+      Form1.ToolTip1.SetToolTip(IOADDRBox, "COM port number for async ports. TCP port for AGWPE ports. IO Port address for HDLC Cards")
 
       INTLEVELLabel.Text = "IntLevel"
       INTLEVELLabel.Size = New System.Drawing.Size(70, 17)
       INTLEVELBox.Size = SmallTextBoxSize
+      Form1.ToolTip1.SetToolTip(INTLEVELBox, "Interrupt number for HDLC Cards")
 
       SPEEDLabel.Text = "Speed"
       SPEEDLabel.Size = LabelSize
       SPEEDBox.Size = TextBoxSize
+      Form1.ToolTip1.SetToolTip(SPEEDBox, "Async port speed for KISS. Radio port speed for HDLC cards")
 
       CHANNELLabel.Text = "Channel"
       CHANNELLabel.Size = LabelSize
       CHANNELBox.Size = SmallTextBoxSize
+      Form1.ToolTip1.SetToolTip(CHANNELBox, "Port on Multiport TNCs. A Letter, A-Z")
 
       BBSFLAGBox.Text = "BBS Banned"
       BBSFLAGBox.CheckAlign = ContentAlignment.MiddleRight
@@ -1114,10 +1118,12 @@ Module Module1
       USERSLabel.Text = "Users"
       USERSLabel.Size = LabelSize
       USERSBox.Size = SmallTextBoxSize
+      Form1.ToolTip1.SetToolTip(USERSBox, "Used to limit number of connects on this port")
 
       UNPROTOLabel.Text = "Unproto"
       UNPROTOLabel.Size = LabelSize
       UNPROTOBox.Size = New System.Drawing.Size(460, 17)
+      Form1.ToolTip1.SetToolTip(UNPROTOBox, "Dest address for beacons on this port. If not set, beacons are not sent on this port.")
 
       TXTAILLabel.Text = "TxTail"
       TXTAILLabel.Size = LabelSize
@@ -1130,6 +1136,7 @@ Module Module1
       L3ONLYBox.Text = "L3Only"
       L3ONLYBox.CheckAlign = ContentAlignment.MiddleRight
       L3ONLYBox.Size = CheckBoxSize
+      Form1.ToolTip1.SetToolTip(L3ONLYBox, "If set only Node-Node connections are allowed on this port.")
 
       KISSOPTIONSLabel.Text = "KissOptions"
       KISSOPTIONSLabel.Size = LabelSize
@@ -1145,14 +1152,17 @@ Module Module1
       INTERLOCKLabel.Text = "Interlock"
       INTERLOCKLabel.Size = LabelSize
       INTERLOCKBox.Size = SmallTextBoxSize
+      Form1.ToolTip1.SetToolTip(INTERLOCKBox, "Fox HDLC ports, ports with same value will not transmit at the same time. For WINMOR/Pactor, ports with the same value share a radio, so only one may be used at a time.")
 
       NODESPACLENLabel.Text = "NodePacLen"
-      NODESPACLENLabel.Size = LabelSize
+      NODESPACLENLabel.Size = New System.Drawing.Size(70, 17)
       NODESPACLENBox.Size = SmallTextBoxSize
+      Form1.ToolTip1.SetToolTip(NODESPACLENBox, "PACLEN for NODES broadcasts")
 
       TXPORTLabel.Text = "TxPort"
       TXPORTLabel.Size = LabelSize
       TXPORTBox.Size = SmallTextBoxSize
+      Form1.ToolTip1.SetToolTip(TXPORTBox, "TX frames will be redirected to this port.")
 
       MHEARDBox.Text = "Suppress MHeard"
       MHEARDBox.CheckAlign = ContentAlignment.MiddleRight
@@ -1167,6 +1177,7 @@ Module Module1
       MINQUALLabel.Text = "MinQual"
       MINQUALLabel.Size = LabelSize
       MINQUALBox.Size = SmallTextBoxSize
+      Form1.ToolTip1.SetToolTip(MINQUALBox, "Minimum quality a node must have to be included in a NODES broadcast.")
 
       MAXDIGISLabel.Text = "MaxDigis"
       MAXDIGISLabel.Size = LabelSize
@@ -1179,6 +1190,7 @@ Module Module1
       BCALLLabel.Text = "BCALL"
       BCALLLabel.Size = LabelSize
       BCALLBox.Size = CallTextBoxSize
+      Form1.ToolTip1.SetToolTip(BCALLBox, "Source call for beacons on this port.")
 
       PortParamsBox.Size = New System.Drawing.Size(600, 300)
       PortParamsBox.ScrollBars = ScrollBars.Both
@@ -1196,6 +1208,7 @@ Module Module1
       NoKeepalivesBox.Text = "No Keepalives"
       NoKeepalivesBox.CheckAlign = ContentAlignment.MiddleRight
       NoKeepalivesBox.Size = CheckBoxSize
+      Form1.ToolTip1.SetToolTip(NoKeepalivesBox, "If set, node will not attempt to keep links to neighbours open when not it use.")
 
 
    End Sub
@@ -1894,9 +1907,9 @@ Module Module1
       TxtCfg(70).Key = "MAXRTT"
       TxtCfg(70).CfgField = Form1.MaxRTTBox
 
-      TxtCfg(IPGATEWAY).Key = "IPGATEWAY"
-      TxtCfg(IPGATEWAY).CfgField = Form1.IPGatewayBox
-      TxtCfg(IPGATEWAY).Checkbox = True
+      TxtCfg(71).Key = "IPGATEWAY"
+      '      TxtCfg(71).CfgField = Form1.IPGatewayBox
+      '     TxtCfg(71).Checkbox = True
 
       TxtCfg(72).Key = "C_IS_CHAT"
       TxtCfg(72).CfgField = Form1.CIsChatBox
@@ -1905,9 +1918,8 @@ Module Module1
 
       TxtCfg(APPLPARAM).Key = "APPLICATION"
 
-      TxtCfg(75).Key = "IPGATEWAY"
-      'TxtCfg(75).CfgField 
-      TxtCfg(75).MultiLineText = True
+      TxtCfg(IPGATEWAY).Key = "IPGATEWAY"
+      TxtCfg(IPGATEWAY).MultiLineText = True
 
 
 
@@ -2074,9 +2086,9 @@ Module Module1
       TxtPortCfg(44).CfgField = DIGIMASKBox
 
       TxtPortCfg(45).Key = "NOKEEPALIVES"
-      TxtPortCfg(45).CfgField = DIGIMASKBox
-
-
+      TxtPortCfg(45).CfgField = NoKeepalivesBox
+      TxtPortCfg(45).Checkbox = True
+      TxtPortCfg(45).SetValue = "1"
 
    End Sub
 
@@ -2371,10 +2383,9 @@ Module Module1
       For p = 1 To NumofPortConfigParams
 
          TxtPortCfg(p).Value(Port) = Nothing
-         ParamAtLine(TxtPortCfg(p).LineNo(Port)) = -1
          TxtPortCfg(p).LineNo(Port) = 0
 
-      Next
+5:    Next
 
       PortConfig(Port) = Nothing
 

@@ -298,7 +298,9 @@ Public Class SimpleForm
 
       Dim Port As Integer, i As Integer
 
-      Form1.lines = 0
+      Form1.Lines = 0
+
+      ReDim ParamAtLine(0)
 
       While TabControl1.Controls.Count
          TabControl1.Controls.RemoveAt(0)

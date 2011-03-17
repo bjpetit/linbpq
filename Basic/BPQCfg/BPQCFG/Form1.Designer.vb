@@ -47,8 +47,8 @@ Partial Class Form1
       Me.BBSBox = New System.Windows.Forms.CheckBox
       Me.EnableLinked = New System.Windows.Forms.ComboBox
       Me.Label84 = New System.Windows.Forms.Label
-      Me.IPGatewayBox = New System.Windows.Forms.CheckBox
       Me.CIsChatBox = New System.Windows.Forms.CheckBox
+      Me.Label4 = New System.Windows.Forms.Label
       Me.Label52 = New System.Windows.Forms.Label
       Me.Label62 = New System.Windows.Forms.Label
       Me.Label63 = New System.Windows.Forms.Label
@@ -80,6 +80,7 @@ Partial Class Form1
       Me.ApplAliasLabel = New System.Windows.Forms.Label
       Me.ApplCallLabel = New System.Windows.Forms.Label
       Me.TabPage2 = New System.Windows.Forms.TabPage
+      Me.Label2 = New System.Windows.Forms.Label
       Me.xTextBox41 = New System.Windows.Forms.TextBox
       Me.xTextBox40 = New System.Windows.Forms.TextBox
       Me.xTextBox39 = New System.Windows.Forms.TextBox
@@ -95,6 +96,7 @@ Partial Class Form1
       Me.Label40 = New System.Windows.Forms.Label
       Me.Label39 = New System.Windows.Forms.Label
       Me.TabPage6 = New System.Windows.Forms.TabPage
+      Me.IPGatewayButton = New System.Windows.Forms.Button
       Me.Label48 = New System.Windows.Forms.Label
       Me.Label60 = New System.Windows.Forms.Label
       Me.Label53 = New System.Windows.Forms.Label
@@ -264,6 +266,12 @@ Partial Class Form1
       Me.ComboBox3.Size = New System.Drawing.Size(168, 21)
       Me.ComboBox3.TabIndex = 1
       '
+      'ToolTip1
+      '
+      Me.ToolTip1.AutoPopDelay = 8000
+      Me.ToolTip1.InitialDelay = 500
+      Me.ToolTip1.ReshowDelay = 100
+      '
       'CheckBox6
       '
       Me.CheckBox6.AutoSize = True
@@ -412,18 +420,6 @@ Partial Class Form1
       Me.ToolTip1.SetToolTip(Me.Label84, "CONTROLS PROCESSING OF *** LINKED COMMAND" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "  Y ALLOWS UNRESTRICTED USE" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "  A ALLOW" & _
               "S USE BY APPLICATION PROGRAM" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "  None  (OR ANY OTHER VALUE) DISABLE" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & ";")
       '
-      'IPGatewayBox
-      '
-      Me.IPGatewayBox.AutoSize = True
-      Me.IPGatewayBox.CheckAlign = System.Drawing.ContentAlignment.MiddleRight
-      Me.IPGatewayBox.Location = New System.Drawing.Point(410, 184)
-      Me.IPGatewayBox.Name = "IPGatewayBox"
-      Me.IPGatewayBox.Size = New System.Drawing.Size(81, 17)
-      Me.IPGatewayBox.TabIndex = 56
-      Me.IPGatewayBox.Text = "IP Gateway"
-      Me.ToolTip1.SetToolTip(Me.IPGatewayBox, "If set the NODES and ROUTES tables will" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "be saved when the node shuts down" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
-      Me.IPGatewayBox.UseVisualStyleBackColor = True
-      '
       'CIsChatBox
       '
       Me.CIsChatBox.AutoSize = True
@@ -433,8 +429,18 @@ Partial Class Form1
       Me.CIsChatBox.Size = New System.Drawing.Size(68, 17)
       Me.CIsChatBox.TabIndex = 57
       Me.CIsChatBox.Text = "C is Chat"
-      Me.ToolTip1.SetToolTip(Me.CIsChatBox, "If set the NODES and ROUTES tables will" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "be saved when the node shuts down" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
+      Me.ToolTip1.SetToolTip(Me.CIsChatBox, "If set entring the C command" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "without a calls connects you to APPL 2" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
       Me.CIsChatBox.UseVisualStyleBackColor = True
+      '
+      'Label4
+      '
+      Me.Label4.AutoSize = True
+      Me.Label4.Location = New System.Drawing.Point(323, 208)
+      Me.Label4.Name = "Label4"
+      Me.Label4.Size = New System.Drawing.Size(52, 13)
+      Me.Label4.TabIndex = 48
+      Me.Label4.Text = "MaxHops"
+      Me.ToolTip1.SetToolTip(Me.Label4, "Maximim Hopcount for INP3 routes received ")
       '
       'Label52
       '
@@ -743,8 +749,8 @@ Partial Class Form1
       'TabPage2
       '
       Me.TabPage2.AutoScroll = True
-      Me.TabPage2.Controls.Add(Me.MaxHopsBox)
-      Me.TabPage2.Controls.Add(Me.MaxRTTBox)
+      Me.TabPage2.Controls.Add(Me.Label4)
+      Me.TabPage2.Controls.Add(Me.Label2)
       Me.TabPage2.Controls.Add(Me.xTextBox41)
       Me.TabPage2.Controls.Add(Me.xTextBox40)
       Me.TabPage2.Controls.Add(Me.xTextBox39)
@@ -759,6 +765,8 @@ Partial Class Form1
       Me.TabPage2.Controls.Add(Me.Label41)
       Me.TabPage2.Controls.Add(Me.Label40)
       Me.TabPage2.Controls.Add(Me.Label39)
+      Me.TabPage2.Controls.Add(Me.MaxHopsBox)
+      Me.TabPage2.Controls.Add(Me.MaxRTTBox)
       Me.TabPage2.Controls.Add(Me.MaxRoutesBox)
       Me.TabPage2.Controls.Add(Me.MaxNodesBox)
       Me.TabPage2.Controls.Add(Me.ObsMinBox)
@@ -778,6 +786,15 @@ Partial Class Form1
       Me.TabPage2.TabIndex = 6
       Me.TabPage2.Text = "Network (L3/L4) Params"
       Me.TabPage2.UseVisualStyleBackColor = True
+      '
+      'Label2
+      '
+      Me.Label2.AutoSize = True
+      Me.Label2.Location = New System.Drawing.Point(172, 208)
+      Me.Label2.Name = "Label2"
+      Me.Label2.Size = New System.Drawing.Size(49, 13)
+      Me.Label2.TabIndex = 20
+      Me.Label2.Text = "MaxRTT"
       '
       'xTextBox41
       '
@@ -925,8 +942,8 @@ Partial Class Form1
       'TabPage6
       '
       Me.TabPage6.AutoScroll = True
+      Me.TabPage6.Controls.Add(Me.IPGatewayButton)
       Me.TabPage6.Controls.Add(Me.CIsChatBox)
-      Me.TabPage6.Controls.Add(Me.IPGatewayBox)
       Me.TabPage6.Controls.Add(Me.Label84)
       Me.TabPage6.Controls.Add(Me.EnableLinked)
       Me.TabPage6.Controls.Add(Me.BBSBox)
@@ -955,6 +972,15 @@ Partial Class Form1
       Me.TabPage6.TabIndex = 5
       Me.TabPage6.Text = "System/L2 Params"
       Me.TabPage6.UseVisualStyleBackColor = True
+      '
+      'IPGatewayButton
+      '
+      Me.IPGatewayButton.Location = New System.Drawing.Point(398, 182)
+      Me.IPGatewayButton.Name = "IPGatewayButton"
+      Me.IPGatewayButton.Size = New System.Drawing.Size(107, 23)
+      Me.IPGatewayButton.TabIndex = 58
+      Me.IPGatewayButton.Text = "Config IP Gateway"
+      Me.IPGatewayButton.UseVisualStyleBackColor = True
       '
       'Label48
       '
@@ -1366,7 +1392,7 @@ Partial Class Form1
       Me.MaxHopsBox.Size = New System.Drawing.Size(38, 20)
       Me.MaxHopsBox.TabIndex = 47
       Me.MaxHopsBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxHopsBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+      Me.ToolTip1.SetToolTip(Me.MaxHopsBox, "Max Hopcount for INP3 Routes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
       '
       'MaxRTTBox
       '
@@ -1377,7 +1403,7 @@ Partial Class Form1
       Me.MaxRTTBox.Size = New System.Drawing.Size(38, 20)
       Me.MaxRTTBox.TabIndex = 46
       Me.MaxRTTBox.Text = "0"
-      Me.ToolTip1.SetToolTip(Me.MaxRTTBox, "Max number of Nodes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10) & "in Nodes Table")
+      Me.ToolTip1.SetToolTip(Me.MaxRTTBox, "Max Round Trip Time for INP3 Routes" & Global.Microsoft.VisualBasic.ChrW(13) & Global.Microsoft.VisualBasic.ChrW(10))
       '
       'MaxRoutesBox
       '
@@ -1482,6 +1508,7 @@ Partial Class Form1
       Me.L3TTLBox.Size = New System.Drawing.Size(43, 20)
       Me.L3TTLBox.TabIndex = 3
       Me.L3TTLBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.L3TTLBox, "Hop Count limit for NETROM packets.")
       '
       'NodesIntervalBox
       '
@@ -1492,6 +1519,7 @@ Partial Class Form1
       Me.NodesIntervalBox.Size = New System.Drawing.Size(39, 20)
       Me.NodesIntervalBox.TabIndex = 1
       Me.NodesIntervalBox.Text = "0"
+      Me.ToolTip1.SetToolTip(Me.NodesIntervalBox, "Time between NETROM NODES broadcasts")
       '
       'Form1
       '
@@ -1524,36 +1552,36 @@ Partial Class Form1
       Me.ResumeLayout(False)
 
    End Sub
-    Friend WithEvents Label67 As System.Windows.Forms.Label
-    Friend WithEvents Label68 As System.Windows.Forms.Label
-    Friend WithEvents Label69 As System.Windows.Forms.Label
-    Friend WithEvents Label70 As System.Windows.Forms.Label
-    Friend WithEvents Label71 As System.Windows.Forms.Label
-    Friend WithEvents Label72 As System.Windows.Forms.Label
-    Friend WithEvents Label73 As System.Windows.Forms.Label
-    Friend WithEvents Label74 As System.Windows.Forms.Label
-    Friend WithEvents Label75 As System.Windows.Forms.Label
-    Friend WithEvents ComboBox2 As System.Windows.Forms.ComboBox
-    Friend WithEvents Label76 As System.Windows.Forms.Label
-    Friend WithEvents ComboBox3 As System.Windows.Forms.ComboBox
-    Friend WithEvents HelpProvider1 As System.Windows.Forms.HelpProvider
+   Friend WithEvents Label67 As System.Windows.Forms.Label
+   Friend WithEvents Label68 As System.Windows.Forms.Label
+   Friend WithEvents Label69 As System.Windows.Forms.Label
+   Friend WithEvents Label70 As System.Windows.Forms.Label
+   Friend WithEvents Label71 As System.Windows.Forms.Label
+   Friend WithEvents Label72 As System.Windows.Forms.Label
+   Friend WithEvents Label73 As System.Windows.Forms.Label
+   Friend WithEvents Label74 As System.Windows.Forms.Label
+   Friend WithEvents Label75 As System.Windows.Forms.Label
+   Friend WithEvents ComboBox2 As System.Windows.Forms.ComboBox
+   Friend WithEvents Label76 As System.Windows.Forms.Label
+   Friend WithEvents ComboBox3 As System.Windows.Forms.ComboBox
+   Friend WithEvents HelpProvider1 As System.Windows.Forms.HelpProvider
    Friend WithEvents ToolTip1 As System.Windows.Forms.ToolTip
    Friend WithEvents Label52 As System.Windows.Forms.Label
-    Friend WithEvents Label62 As System.Windows.Forms.Label
-    Friend WithEvents Label63 As System.Windows.Forms.Label
-    Friend WithEvents CheckBox2 As System.Windows.Forms.CheckBox
-    Friend WithEvents CheckBox3 As System.Windows.Forms.CheckBox
+   Friend WithEvents Label62 As System.Windows.Forms.Label
+   Friend WithEvents Label63 As System.Windows.Forms.Label
+   Friend WithEvents CheckBox2 As System.Windows.Forms.CheckBox
+   Friend WithEvents CheckBox3 As System.Windows.Forms.CheckBox
    Friend WithEvents CheckBox5 As System.Windows.Forms.CheckBox
-    Friend WithEvents Label77 As System.Windows.Forms.Label
-    Friend WithEvents CheckBox6 As System.Windows.Forms.CheckBox
-    Friend WithEvents CheckBox7 As System.Windows.Forms.CheckBox
-    Friend WithEvents CheckBox8 As System.Windows.Forms.CheckBox
-    Friend WithEvents Label78 As System.Windows.Forms.Label
-    Friend WithEvents Label79 As System.Windows.Forms.Label
-    Friend WithEvents Label80 As System.Windows.Forms.Label
-    Friend WithEvents Label81 As System.Windows.Forms.Label
-    Friend WithEvents Label82 As System.Windows.Forms.Label
-    Friend WithEvents Label83 As System.Windows.Forms.Label
+   Friend WithEvents Label77 As System.Windows.Forms.Label
+   Friend WithEvents CheckBox6 As System.Windows.Forms.CheckBox
+   Friend WithEvents CheckBox7 As System.Windows.Forms.CheckBox
+   Friend WithEvents CheckBox8 As System.Windows.Forms.CheckBox
+   Friend WithEvents Label78 As System.Windows.Forms.Label
+   Friend WithEvents Label79 As System.Windows.Forms.Label
+   Friend WithEvents Label80 As System.Windows.Forms.Label
+   Friend WithEvents Label81 As System.Windows.Forms.Label
+   Friend WithEvents Label82 As System.Windows.Forms.Label
+   Friend WithEvents Label83 As System.Windows.Forms.Label
    Friend WithEvents ErrorProvider1 As System.Windows.Forms.ErrorProvider
    Friend WithEvents Timer1 As System.Windows.Forms.Timer
    Friend WithEvents TabControl1 As System.Windows.Forms.TabControl
@@ -1581,7 +1609,6 @@ Partial Class Form1
    Friend WithEvents Label1 As System.Windows.Forms.Label
    Friend WithEvents TabPage6 As System.Windows.Forms.TabPage
    Friend WithEvents CIsChatBox As System.Windows.Forms.CheckBox
-   Friend WithEvents IPGatewayBox As System.Windows.Forms.CheckBox
    Friend WithEvents Label84 As System.Windows.Forms.Label
    Friend WithEvents EnableLinked As System.Windows.Forms.ComboBox
    Friend WithEvents BBSBox As System.Windows.Forms.CheckBox
@@ -1646,5 +1673,8 @@ Partial Class Form1
    Friend WithEvents PortsTab As System.Windows.Forms.TabPage
    Friend WithEvents TabControl2 As System.Windows.Forms.TabControl
    Friend WithEvents NewPortPage As System.Windows.Forms.TabPage
+   Friend WithEvents Label4 As System.Windows.Forms.Label
+   Friend WithEvents Label2 As System.Windows.Forms.Label
+   Friend WithEvents IPGatewayButton As System.Windows.Forms.Button
 
 End Class

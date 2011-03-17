@@ -167,9 +167,6 @@ Max is 256. Should not normally be set ot more than 236, as anything larger will
 have to be fragmented to pass over a NETROM link.
 </value>
   </data>
-  <metadata name="MaxHopsBox.Locked" type="System.Boolean, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
-    <value>True</value>
-  </metadata>
   <data name="xTextBox41.Text" xml:space="preserve">
     <value>Level 4 (L4) provides a reliable connection, by retransmitting lost packets. and resequencing packets received
 out of order. L4Window is the number of packets that can be sent before waiting for an acknowledgment. Timeout
@@ -182,6 +179,9 @@ before failing the connection. L4Delay is the time between receiving a packet an
 The termiinology can be confusing. Iin this context, a NODE is a station running the  NET/ROM protocol
 and a ROUTE is a direct  link between two NODES. </value>
   </data>
+  <metadata name="MaxHopsBox.Locked" type="System.Boolean, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089">
+    <value>True</value>
+  </metadata>
   <data name="xTextBox65.Text" xml:space="preserve">
     <value>The node supports up to 32 applications that a user may access  by connecting to the switch, and entering  the Application Name. With BPQ32, each application can have a Callsign, Alias and  Quality. The user can connect directly to these calls, instead of having to connect ot the switch, then enter the name.  The DOS version only allows direct connects to the first application, and Appl1Call, etc  are refered to as BBSCALL . 
 If quality is non-zero, the Call and Alias will be included in the NODES broadcast, allowing L4 connects from 

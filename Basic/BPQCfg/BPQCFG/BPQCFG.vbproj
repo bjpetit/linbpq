@@ -94,6 +94,12 @@
       <DependentUpon>Form1.vb</DependentUpon>
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="IPGatewayConfig.Designer.vb">
+      <DependentUpon>IPGatewayConfig.vb</DependentUpon>
+    </Compile>
+    <Compile Include="IPGatewayConfig.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Module1.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
@@ -153,6 +159,10 @@
     <EmbeddedResource Include="Form1.resx">
       <SubType>Designer</SubType>
       <DependentUpon>Form1.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="IPGatewayConfig.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>IPGatewayConfig.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
