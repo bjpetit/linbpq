@@ -363,7 +363,7 @@
 // Add "Close all programs" command
 // Add BPQ Program Directory registry key
 // Use HKEY_CURRENT_USER on Viata and above (and move registry if necessary)
-  
+// Time out IP Gateway ARP entries, and only reload ax.25 ARP entries
 
 
 #define Kernel

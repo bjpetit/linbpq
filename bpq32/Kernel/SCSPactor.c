@@ -871,7 +871,7 @@ VOID SCSPoll(int Port)
 
 		if (TNC->UpdateWL2KTimer == 0)
 		{
-			TNC->UpdateWL2KTimer = 32910;		// Every Hour
+			TNC->UpdateWL2KTimer = 32910/2;		// Every Hour
 		
 			if (TNC->ApplCmd)
 			{

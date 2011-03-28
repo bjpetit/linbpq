@@ -633,7 +633,9 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
 			WL2KInfoPtr = &TNC->WL2KInfoList[++n];
-		}
+		}	
+
+		sendto(sock, "00,G8BPQ-10,BPQ Packet,4.10.16.17", 33,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
 		Sleep(100);
 
@@ -642,7 +644,6 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 		return;
 	}
-
 
 	if (TNC->UseRigCtrlFreqs)
 	{

@@ -274,6 +274,7 @@ typedef struct TNCINFO
 
 	char * InitPtr;				// Next Command
 	int	ReinitState;			// Reinit State Machine
+	int	ReinitCount;			// Count for DED Recovery
 	BOOL TNCOK;					// TNC is reponding
 	int	FramesOutstanding;		// Frames Queued - used for flow control
 	BOOL InternalCmd;			// Last Command was generated internally
@@ -301,6 +302,7 @@ typedef struct TNCINFO
 
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
+	int StreamtoPoll;
 
 	char Bandwidth;					// Currently set Mode W or N
 

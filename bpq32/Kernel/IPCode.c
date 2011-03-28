@@ -46,6 +46,8 @@ BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 BOOL ProcessConfig();
 BOOL FreeConfig();
 
+#define ARPTIMEOUT 86400
+
 //       ARP REQUEST (AX.25)
 
 AXARP AXARPREQMSG = {0};
@@ -572,7 +574,7 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 		Arp->ARPINTERFACE = 255;
 		memcpy(Arp->HWADDR, arpptr->SENDHWADDR ,6);
 		Arp->ARPVALID = TRUE;
-		Arp->ARPTIMER =  86400;
+		Arp->ARPTIMER =  ARPTIMEOUT;
 		SaveARP();
 	
 AlreadyThere:
@@ -643,7 +645,7 @@ Update:
 		Arp->ARPTYPE = 'E';
 		Arp->ARPINTERFACE = 255;
 		Arp->ARPVALID = TRUE;
-		Arp->ARPTIMER =  86400;
+		Arp->ARPTIMER =  ARPTIMEOUT;
 		SaveARP();
 
 SendBack:
@@ -724,7 +726,7 @@ VOID ProcessAXARPMsg(PAXARP arpptr)
 			Arp->ARPTYPE = 'D';
 			Arp->ARPINTERFACE = arpptr->MSGHDDR.PORT;
 			Arp->ARPVALID = TRUE;
-			Arp->ARPTIMER =  86400;
+			Arp->ARPTIMER =  ARPTIMEOUT;
 		}
 
 AlreadyThere:
@@ -791,7 +793,7 @@ Update:
 		Arp->ARPTYPE = 'D';
 		Arp->ARPINTERFACE = arpptr->MSGHDDR.PORT;
 		Arp->ARPVALID = TRUE;
-		Arp->ARPTIMER =  86400;
+		Arp->ARPTIMER =  ARPTIMEOUT;
 
 SendBack:
 
@@ -879,11 +881,12 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
 			Arp->ARPTYPE = Type;
 			Arp->ARPINTERFACE = Port;
 			Arp->ARPVALID = TRUE;
-			Arp->ARPTIMER =  86400;
+			Arp->ARPTIMER =  ARPTIMEOUT;
 			SaveARP();
 		}
 	}
-
+	else
+		Arp->ARPTIMER =  ARPTIMEOUT;				// Refresh
 
 	// See if for us - if not pass to router
 
@@ -1195,6 +1198,7 @@ PARPDATA AllocARPEntry()
 
 	}
  }
+
 PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found)
 {
 	PARPDATA Arp = NULL;
@@ -1223,6 +1227,38 @@ PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found)
 	else
 		return NULL;
 }
+
+VOID RemoveARP(PARPDATA Arp)
+{
+	int i;
+
+	for (i=0; i < NumberofARPEntries; i++)
+	{
+		if (Arp == ARPRecords[i])
+		{
+			if (i == 0)
+			{
+				// Dont remove first - it is the Default Gateway. Se to re-resolve
+
+				Arp->ARPVALID = FALSE;
+				Arp->ARPTIMER = 5;
+				return;
+			}
+
+			while (i < NumberofARPEntries)
+			{
+				ARPRecords[i] = ARPRecords[i+1];
+				i++;
+			}
+			free(Arp);
+			NumberofARPEntries--;
+			return;
+		}
+	}
+}
+
+
+
 	
 Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 {
@@ -1431,6 +1467,17 @@ static ProcessLine(char * buf)
 
 				SendARPMsg(Arp);
 			}
+			continue;
+		}
+
+		// Time out active entries
+
+		Arp->ARPTIMER--;
+			
+		if (Arp->ARPTIMER == 0)
+		{
+			// Remove Entry
+				RemoveARP(Arp);
 		}
 	}
 }
@@ -1643,6 +1690,7 @@ BOOL ProcessARPLine(char * buf)
 		if ((Port == 0) || (Port > NUMBEROFPORTS)) return FALSE;
 
 	}
+
 	Arp = LookupARP(IPAddr, TRUE, &Found);
 
 	if (!Found)
@@ -1665,7 +1713,7 @@ BOOL ProcessARPLine(char * buf)
 			Arp->ARPTYPE = *p_type;
 			Arp->ARPINTERFACE = Port;
 			Arp->ARPVALID = TRUE;
-			Arp->ARPTIMER =  86400;
+			Arp->ARPTIMER =  (Arp->ARPTYPE == 'E')? 300 : ARPTIMEOUT;
 		}
 	}
 	return TRUE;

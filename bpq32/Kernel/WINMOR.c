@@ -509,7 +509,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (TNC->UpdateWL2KTimer == 0)
 			{
-				TNC->UpdateWL2KTimer = 32910;		// Every Hour
+				TNC->UpdateWL2KTimer = 32910/2;		// Every Hour
 				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
 					SendReporttoWL2K(TNC);
 			}
