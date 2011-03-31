@@ -103,6 +103,9 @@
 #define IDC_SEEN                        5012
 #define IDC_POLLRMS                     5012
 #define IDC_SYSOP_IN_LM                 5013
+#define FILTER_FROM                     6006
+#define FILTER_TO                       6007
+#define FILTER_VIA                      6008
 #define IDC_EDITTEXT                    6104
 #define IDC_LOGLIFETIME                 9025
 #define IDC_USEB1                       9876

@@ -204,6 +204,23 @@ BEGIN
     LTEXT           "RX 0 TX 0",IDC_TRAFFIC,60,93,140,11
 END
 
+TRACKERSTATUS DIALOG DISCARDABLE  0, 0, 345, 92
+STYLE WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "Dialog"
+FONT 8, "FixedSys"
+BEGIN
+    LTEXT           "",IDC_MODE,58,31,100,13
+    LTEXT           "0",IDC_BUFFERS,58,44,72,8
+    LTEXT           "Mode",IDC_STATIC,5,31,40,12
+    LTEXT           "Buffers",IDC_STATIC,5,44,40,12
+    LTEXT           "",IDC_TNCSTATE,58,18,260,13
+    LTEXT           "TNC State",IDC_STATIC,5,18,53,12
+    LTEXT           "Comms State",IDC_STATIC,5,5,60,12
+    LTEXT           "",IDC_COMMSSTATE,58,5,193,13
+    LTEXT           "Traffic",IDC_STATIC,5,57,40,12
+    LTEXT           "RX 0 TX 0",IDC_TRAFFIC,58,57,187,13
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -258,6 +275,9 @@ END
 #endif    // APSTUDIO_INVOKED
 
 #endif    // English (U.K.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
 
 #ifndef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////

@@ -362,9 +362,11 @@
 
 // Add "Close all programs" command
 // Add BPQ Program Directory registry key
-// Use HKEY_CURRENT_USER on Viata and above (and move registry if necessary)
+// Use HKEY_CURRENT_USER on Vista and above (and move registry if necessary)
 // Time out IP Gateway ARP entries, and only reload ax.25 ARP entries
-
+// Add support for SCS Tracker HF Modes
+// Fix WL2K Reporting
+// Report Version to WL2K
 
 #define Kernel
 #include "Versions.h"
@@ -436,7 +438,7 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry);
 UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI SoundModemExtInit(EXTPORTDATA * PortEntry);
-UINT WINAPI DEDExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI TrackerExtInit(EXTPORTDATA * PortEntry);
 
 
 extern char * Buffer;	// Config Area
@@ -3505,8 +3507,8 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "SOUNDMODEM"))
 		return (UINT) SoundModemExtInit;
 
-	if (strstr(Value, "DEDHOSTTNC"))
-		return (UINT) DEDExtInit;
+	if (strstr(Value, "SCSTRACKER"))
+		return (UINT) TrackerExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

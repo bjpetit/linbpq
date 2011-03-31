@@ -43,6 +43,10 @@ struct UserInfo * CurrentBBS;	// User Record of selected BBS iin Forwarding Conf
 
 char InfoBoxText[100];			// Text to display in Config Info Popup
 
+char Filter_FROM[20];
+char Filter_TO[20];
+char Filter_VIA[60];				// Filters for Edit Message Dialog
+
 DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName);
 VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
@@ -2605,7 +2609,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 	int Command, n;
 	char msgno[20];
 	struct UserInfo * user;
-
+	struct MsgInfo * Msg;
 
 	UNREFERENCED_PARAMETER(lParam);
 	switch (message)
@@ -2690,6 +2694,34 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		case IDC_SAVEMSG:
 
 			Do_Save_Msg(hDlg);
+			return TRUE;
+
+		case FILTER_FROM:
+		case FILTER_TO:
+		case FILTER_VIA:
+
+			if (HIWORD(wParam) == 0x300)
+			{
+				GetDlgItemText(hDlg, FILTER_FROM, Filter_FROM, 10);
+				GetDlgItemText(hDlg, FILTER_TO, Filter_TO, 10);
+				GetDlgItemText(hDlg, FILTER_VIA, Filter_VIA, 50);
+
+				SendDlgItemMessage(hDlg, 0, LB_RESETCONTENT, 0, 0);
+				
+				for (n = NumberofMessages; n >= 1; n--)
+				{
+					Msg = MsgHddrPtr[n];
+					
+					if ((!Filter_TO[0] || strstr(Msg->to, Filter_TO)) &&
+						(!Filter_FROM[0] || strstr(Msg->from, Filter_FROM)) &&
+						(!Filter_VIA[0] || strstr(Msg->via, Filter_VIA)))
+					{
+						sprintf_s(msgno, sizeof(msgno), "%d", Msg->number);
+						SendDlgItemMessage(hDlg, 0, LB_ADDSTRING, 0, (LPARAM)msgno);
+					} 
+				}
+			}
+
 			return TRUE;
 
 		}

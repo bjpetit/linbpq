@@ -153,7 +153,7 @@ typedef struct TNCINFO
 #define H_AEA 4
 #define H_HAL 5
 #define H_TELNET 6
-#define H_DED 7
+#define H_TRK 7
 
 	int Port;					// BPQ Port Number
 
@@ -318,6 +318,8 @@ typedef struct TNCINFO
 	int Mem2;
 
 	BOOL HFPacket;					// Set if HF port is in Packet mode instead of Pactor Mode
+	BOOL Robust;					// Set if SCS Tracker is in Robust Packet mode
+	BOOL RobustDefault;				// Set if SCS Tracker default is Robust Packet mode
 
 	int TimeInRX;					// Time waiting for ISS before sending
 	char TXRXState;					// Current ISS/IRS State

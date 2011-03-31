@@ -670,8 +670,9 @@
 // Add POLLRMS command
 
 // Changes for Vista/Win7 (registry key change)
-
-
+// Workaround for changes to RMS Express
+// Fix AUTH bug in SMTP server
+// Add filter to Edit Messages dialog
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -790,7 +791,7 @@ int ChatApplNum=0;
 int	NumberofStreams=0;
 int MaxStreams=0;
 
-char BBSSID[]="[%s%d.%d.%d.%d-%s%s%s%sH$]\r";
+char BBSSID[]="[%s%d.%d.%d.%d-%s%s%s%sIHJM$]\r";
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
@@ -2645,6 +2646,11 @@ int Connected(Stream)
 				nodeprintf(conn, BBSSID, user->flags & F_Temp_B2_BBS ? "WL2K-BPQ." : "BPQ-",
 					Ver[0], Ver[1], Ver[2], Ver[3],
 					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "FW": "");
+
+				 if (user->flags & F_Temp_B2_BBS)
+					 nodeprintf(conn,";PQ: 66427529\r");
+
+	//			nodeprintf(conn,"[WL2K-BPQ.1.0.4.39-B2FWIHJM$]\r");
 			}
 
 			if (user->Name[0] == 0)
@@ -3712,7 +3718,10 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 	if (user->HomeBBS[0] == 0)
 		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");
 
-	nodeprintf(conn, "de %s>\r", BBSName);
+	if (user->flags & F_Temp_B2_BBS)
+		nodeprintf(conn, "%s CMS >\r", BBSName);
+	else
+		nodeprintf(conn, "de %s>\r", BBSName);
 }
 
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)

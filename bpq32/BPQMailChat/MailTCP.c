@@ -1161,6 +1161,12 @@ ZvVx9G1hcg==
 	
 	if(_memicmp(Buffer, "MAIL FROM:", 10) == 0)
 	{
+		if (sockptr->State != Authenticated)
+		{
+			SendSock(sockptr, "530 Authentication required");
+			return;
+		}
+		
 		sockptr->MailFrom = zalloc(Len);
 		memcpy(sockptr->MailFrom, &Buffer[10], Len-12);
 			
@@ -1171,6 +1177,12 @@ ZvVx9G1hcg==
 
 	if(_memicmp(Buffer, "RCPT TO:", 8) == 0)
 	{
+		if (sockptr->State != Authenticated)
+		{
+			SendSock(sockptr, "530 Authentication required");
+			return;
+		}
+
 		sockptr->RecpTo=realloc(sockptr->RecpTo, (sockptr->Recipients+1)*4);
 		sockptr->RecpTo[sockptr->Recipients] = zalloc(Len);
 

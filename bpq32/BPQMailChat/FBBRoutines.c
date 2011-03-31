@@ -136,21 +136,21 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 				if (conn->Paclink || conn->RMSExpress)			// Not using Bit Masks
 				{
+					// Kill Messages sent to paclink/RMS Express unless BBS FWD bit set
+
+					if (check_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber) == 0)
+						FlagAsKilled(FBBHeader->FwdMsg);
+				}
+				
+				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
+				set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
+
+				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
+				{
 					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
 					FBBHeader->FwdMsg->datechanged=time(NULL);
 				}
-				else
-				{
-					clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
-					set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
-
-					if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
-					{
-						FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
-						FBBHeader->FwdMsg->datechanged=time(NULL);
-					}
-				}
-
+				
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 
 				conn->UserPointer->ForwardingInfo->MsgCount--;

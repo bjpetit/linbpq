@@ -33,6 +33,8 @@ extern WORD L4T1;
 
 extern HKEY REGTREE;
 
+extern int Ver[];
+
 BOOL WINAPI Rig_Command();
 
 KillTNC(struct TNCINFO * TNC);
@@ -569,6 +571,10 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	char BandWidth;
 
 	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
+	char * ptr;
+
+	ptr = strchr(TNC->RMSCall, ' ');
+	if (ptr) *ptr = 0;				// Null Terminate
 
 	// Resolve Name if needed
 
@@ -633,9 +639,18 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
 			WL2KInfoPtr = &TNC->WL2KInfoList[++n];
-		}	
+		}
 
-		sendto(sock, "00,G8BPQ-10,BPQ Packet,4.10.16.17", 33,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+		wsprintf(Message, "00,%s,RMS Packet,BPQ%d.%d.%d",
+				TNC->RMSCall, Ver[0], Ver[1], Ver[2]);
+
+		Debugprintf("Sending %s", Message);
+
+		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+
+//		sendto(sock, "00,G8BPQ-10,RMS Packet,BPQ4.10.16", 33,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+//		sendto(sock, "00,G8BPQ-10,RMS Packet,2.1.0.5", 30,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
 		Sleep(100);
 
