@@ -1839,7 +1839,8 @@ VOID SetupBPQDirectory()
 #pragma warning(push)
 #pragma warning(disable : 4996)
 
-	if (_winver < 0x0600)
+//	if (_winver < 0x0600)
+	if (TRUE)
 
 #pragma warning(pop)
 	{

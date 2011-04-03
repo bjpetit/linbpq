@@ -2589,7 +2589,39 @@ int ReadVCommBlock(struct TNCINFO * TNC, char * Block, int MaxLength)
    return 0;
 
 }
-MESSAGE Monframe;		// I frames come in two parts.
+#pragma pack(1) 
+
+typedef struct _MESSAGEY
+{
+//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+
+	struct _MESSAGEY * CHAIN;
+
+	UCHAR	PORT;
+	USHORT	LENGTH;
+
+	UCHAR	DEST[7];
+	UCHAR	ORIGIN[7];
+
+//	 MAY BE UP TO 56 BYTES OF DIGIS
+
+	UCHAR	CTL;
+	UCHAR	PID; 
+
+	union 
+	{                   /*  array named screen */
+		UCHAR L2DATA[256];
+		struct _L3MESSAGE L3MSG;
+
+	};
+
+	char Padding[100];
+
+}MESSAGEY;
+
+#pragma pack() 
+
+static MESSAGEY Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
@@ -2611,6 +2643,20 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		pushad
 
 		mov edi, offset Monframe
+
+		push	ecx
+		push	edx
+	
+		push	0
+		call	time
+
+		add	esp,4
+	
+		pop		edx
+		pop		ecx
+
+		MOV	TIMESTAMP[EDI],EAX
+
 		mov eax, BPQTRACE
 		call eax
 

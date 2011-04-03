@@ -648,10 +648,6 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
-
-//		sendto(sock, "00,G8BPQ-10,RMS Packet,BPQ4.10.16", 33,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-//		sendto(sock, "00,G8BPQ-10,RMS Packet,2.1.0.5", 30,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
-
 		Sleep(100);
 
 		closesocket(sock);
@@ -776,7 +772,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 			n = 0;
 					
 			WL2KInfoPtr = &TNC->WL2KInfoList[0];
-
+//02'KB1TCE-5', 'KB1TCE', 'FN54KB', 14105700, 21, 0, 100, 25, 0, 000, '00-23', 1
 			while (WL2KInfoPtr->Bandwidth)
 			{
 				wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
@@ -793,11 +789,18 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	}
 	else
 	{
-		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 100, 25, 0, 000, '%s', 1",
 			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, TNC->Comment);
 
 		Debugprintf("Sending %s", Message);
 		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+//		wsprintf(Message, "03%s", TNC->RMSCall);
+
+//		Debugprintf("Sending %s", Message);
+
+//		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
 	}
 
 	Sleep(100);

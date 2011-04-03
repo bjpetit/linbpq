@@ -869,6 +869,19 @@ VOID DEDPoll(int Port)
 
 		}
 	}
+
+	if (TNC->NeedPACTOR)
+	{
+		TNC->NeedPACTOR--;
+
+		if (TNC->NeedPACTOR == 0)
+		{
+			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
+			wsprintf(TNC->Streams[0].CmdSet, "%%B%s\rI%s\r",
+				(TNC->RobustDefault) ? "R600" : "300", TNC->NodeCall);
+		}
+	}
+
 		
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
@@ -1769,8 +1782,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 							// Not to a known appl - drop through to Node
 						}
 
-						if (TNC->UseAPPLCalls)
-							goto DontUseAPPLCmd;
+				//		if (TNC->UseAPPLCalls)
+				//			goto DontUseAPPLCmd;
 	
 						if (TNC->ApplCmd)	
 						{
@@ -1882,10 +1895,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					// Not Calling NodeCall/Portcall
 
 					if (strcmp(NodeCall, DestCall) == 0)
-					{
-						Debugprintf("RP SABM is for NODECALL");
 						goto SetThisCall;
-					}
 
 					// See if to one of our ApplCalls
 
@@ -1967,8 +1977,39 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	}
 }
 
+#pragma pack(1) 
 
-MESSAGE Monframe;		// I frames come in two parts.
+typedef struct _MESSAGEY
+{
+//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+
+	struct _MESSAGEY * CHAIN;
+
+	UCHAR	PORT;
+	USHORT	LENGTH;
+
+	UCHAR	DEST[7];
+	UCHAR	ORIGIN[7];
+
+//	 MAY BE UP TO 56 BYTES OF DIGIS
+
+	UCHAR	CTL;
+	UCHAR	PID; 
+
+	union 
+	{                   /*  array named screen */
+		UCHAR L2DATA[256];
+		struct _L3MESSAGE L3MSG;
+
+	};
+
+	char Padding[100];
+
+}MESSAGEY;
+
+#pragma pack() 
+
+static MESSAGEY Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
@@ -2090,6 +2131,20 @@ VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		pushad
 
 		mov edi, offset Monframe
+		
+		push	ecx
+		push	edx
+	
+		push	0
+		call	time
+
+		add	esp,4
+	
+		pop		edx
+		pop		ecx
+
+		MOV	TIMESTAMP[EDI],EAX
+
 		mov eax, BPQTRACE
 		call eax
 
@@ -2120,12 +2175,9 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
 	char Status[80];
+
+	TNC->NeedPACTOR = 20;		// Delay a bit for UA to be sent before changing mode and call
 	
-	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-
-	wsprintf(TNC->Streams[0].CmdSet, "%%B%s\rI%s\r",
-		(TNC->RobustDefault) ? "R600" : "300", TNC->NodeCall);
-
 	TNC->SwitchToPactor = TNC->RobustTime;
 
 	wsprintf(Status, "%d SCANSTART 15", TNC->Port);

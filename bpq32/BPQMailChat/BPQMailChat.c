@@ -665,7 +665,7 @@
 
 // Renumbered for release
 
-// Version 1.0.4.39 March 2011
+// Version 1.0.4.40 April 2011
 
 // Add POLLRMS command
 

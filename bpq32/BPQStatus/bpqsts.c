@@ -21,9 +21,7 @@
 #include "..\include\bpq32.h"			// BPQ32 API Defines
 #include "..\include\asmstrucs.h"
 
-#include "..\kernel\BPQIPModule\ipcode.h"
-
-#define BPQICON 400
+#include "..\kernel\ipcode.h"
 
 HINSTANCE hInst; 
 char AppName[] = "BPQ Node Stream Status";
