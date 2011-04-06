@@ -22,9 +22,16 @@
  
 //		Don't fail if no VCOM Driver (for WIN 64)
 
+// Version 1.1.5 April 2011
+
+//		Add option to Close Kant Mode sessions after receiving node failure message
+
+
 #include "stdafx.h"
 #include "bpqhostmodes.h"
 #include "bpq32.h"
+#define HOSTMODES
+#include "Versions.h"
 #include "GetVersion.h"
 
 // Global Variables:
@@ -46,6 +53,7 @@ BOOL Win98 = FALSE;		// Running on Win98
 
 char COMType = 'V';		// Serial Port Type - Real or BPQ Virtual
 
+int CloseDelay = 10;	// Close after connect fail delay
 
 struct ConnectionInfo * Connections[MaxConnections+1];
 
@@ -223,10 +231,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 #define BGCOLOUR RGB(236,233,233)
 
+HBRUSH bgBrush;
+
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
     WNDCLASS  wc;
-	HBRUSH bgBrush;
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -236,7 +245,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
 	wc.hInstance = hInstance;
-    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE( BPQICON ) );
+    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(BPQICON) );
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = bgBrush; 
 	wc.lpszMenuName = NULL;	
@@ -345,6 +354,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 int CreateDialogLine(int i)
 {
 	int row = i * 30 + 10;
+	int col;
 
 	hCheck[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
                  10,row+5,14,14, hWnd, NULL, hInst, NULL);
@@ -375,18 +385,20 @@ int CreateDialogLine(int i)
 
 	SendMessage(hMask[i], WM_SETFONT,(WPARAM) hFont, 0);
 
+	col = 270;
+
 	hKant[i] = CreateWindow(WC_BUTTON , "Kant", BS_AUTORADIOBUTTON | WS_GROUP | WS_CHILD | WS_VISIBLE ,
-                 270,row+5,50,14, hWnd, NULL, hInst, NULL);
+                 col, row+5, 50, 14, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hKant[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 	hDED[i] = CreateWindow(WC_BUTTON , "DED", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
-                 330,row+5,50,14, hWnd, NULL, hInst, NULL);
+                 col + 50, row + 5, 50, 14, hWnd, NULL, hInst, NULL);
 
 	SendMessage(hDED[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 //	hSCS[i] = CreateWindow(WC_BUTTON , "SCS", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
-//               340,row+5,50,14, hWnd, NULL, hInst, NULL);
+//             col + 100, row+5,50, 14, hWnd, NULL, hInst, NULL);
 
 //	SendMessage(hSCS[i], WM_SETFONT,(WPARAM) hFont, 0);
 
@@ -461,6 +473,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	switch (message)
 	{
 
+	case WM_CTLCOLORSTATIC:
+		{
+        HDC hdcStatic = (HDC) wParam;
+        SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkColor(hdcStatic, BGCOLOUR);
+		return (INT_PTR)bgBrush;
+		}
 
 	case WM_COMMAND:
 		wmId    = LOWORD(wParam);
@@ -537,7 +556,11 @@ BOOL Initialise()
 		Button_SetCheck(GetDlgItem(hWnd, IDC_REALPORTS), BST_CHECKED);
 	}
 
-//'   Get Params from Registry
+	RegQueryValueEx(hKey, "CloseDelay", 0, &Type, (UCHAR *)&CloseDelay, &Vallen);
+
+	SetDlgItemInt(hWnd, IDC_CLOSEDELAY, CloseDelay, FALSE);
+
+//'   Get Port Params from Registry
 
 	for (i = 1; i <= MaxConnections; i++)
 	{
@@ -701,9 +724,11 @@ BOOL Initialise()
 
 	GetWindowRect(hWnd, &Rect);      
 	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 560, CurrentConnections*30+130, 0);
-	SetWindowPos(GetDlgItem(hWnd, TN_ADD), NULL, 180, CurrentConnections*30+50, 70, 30, 0);
-	SetWindowPos(GetDlgItem(hWnd, TN_SAVE), NULL, 300, CurrentConnections*30+50, 80, 30, 0);
-	SetWindowPos(GetDlgItem(hWnd, IDC_REALPORTS), NULL, 10, CurrentConnections*30+50, 150, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, TN_ADD), NULL, 380, CurrentConnections*30+50, 70, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, TN_SAVE), NULL, 460, CurrentConnections*30+50, 80, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_REALPORTS), NULL, 10, CurrentConnections*30+55, 140, 20, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_CLOSEDELAYTEXT), NULL, 155, CurrentConnections*30+55, 150, 20, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_CLOSEDELAY), NULL, 310, CurrentConnections*30+55, 30, 20, 0);
 
 	Refresh();
 
@@ -763,6 +788,18 @@ VOID CALLBACK TimerProc()
 	for (i = 1; i <= CurrentConnections; i++)
 	{
 		conn = Connections[i];
+
+		for (j = 1; j <= conn->numChannels; j++)
+		{
+			channel = conn->Channels[j];
+			if (channel->Connected)
+				if (channel->CloseTimer)
+				{
+					channel->CloseTimer--;
+					if (channel->CloseTimer == 0)
+						Disconnect(channel->BPQStream);
+				}
+		}
 
 		ConCount = 0;
     
@@ -902,10 +939,12 @@ int AddLine(HWND hWnd)
 	Connections[++CurrentConnections] = conn;
 
 	GetWindowRect(hWnd, &Rect);      
-	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 520, CurrentConnections*30+130, 0);
-	SetWindowPos(GetDlgItem(hWnd, TN_ADD), NULL, 180, CurrentConnections*30+50, 70, 30, 0);
-	SetWindowPos(GetDlgItem(hWnd, TN_SAVE), NULL, 300, CurrentConnections*30+50, 80, 30, 0);
-	SetWindowPos(GetDlgItem(hWnd, IDC_REALPORTS), NULL, 10, CurrentConnections*30+50, 150, 30, 0);
+	SetWindowPos(hWnd, HWND_TOP, Rect.left, Rect.top, 560, CurrentConnections*30+130, 0);
+	SetWindowPos(GetDlgItem(hWnd, TN_ADD), NULL, 380, CurrentConnections*30+50, 70, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, TN_SAVE), NULL, 460, CurrentConnections*30+50, 80, 30, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_REALPORTS), NULL, 10, CurrentConnections*30+55, 140, 20, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_CLOSEDELAYTEXT), NULL, 155, CurrentConnections*30+55, 150, 20, 0);
+	SetWindowPos(GetDlgItem(hWnd, IDC_CLOSEDELAY), NULL, 310, CurrentConnections*30+55, 30, 20, 0);
 
 	CreateDialogLine(CurrentConnections);
 
@@ -939,7 +978,10 @@ int SaveConfig(HWND hWnd)
 
 	REAL = Button_GetCheck(GetDlgItem(hWnd, IDC_REALPORTS));
 
+	CloseDelay = GetDlgItemInt(hWnd, IDC_CLOSEDELAY, NULL, FALSE);
+
 	RegSetValueEx(hKey, "COMType",0 ,REG_DWORD, (BYTE *)&REAL, 4);
+	RegSetValueEx(hKey, "CloseDelay",0 ,REG_DWORD, (BYTE *)&CloseDelay, 4);
 
 	for (i = 1; i <= CurrentConnections; i++)
 	{
@@ -1047,7 +1089,7 @@ VOID ProcessPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 {
 	UCHAR * FendPtr;
 	int NewLen;
-	
+
 	if (!conn->InHostMode)
 	{
 		//	In Terminal Mode - Pass to Term Mode Handler
@@ -1252,6 +1294,7 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 	Chan = rxbuffer[1];
 	Stream = rxbuffer[2];
+
 	StreamNo = Stream == '0' ? 0 : Stream - '@';
 
 	if (StreamNo > conn->numChannels)
@@ -1432,6 +1475,8 @@ VOID ProcessKHOSTPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 
 		TXLen = KissDecode(&rxbuffer[3], TXBuff, Len-3);
 		SendMsg(conn->Channels[StreamNo]->BPQStream, TXBuff, TXLen);
+
+		conn->Channels[StreamNo]->CloseTimer = 0;			// Cancel Timer
 
 		return;
 
@@ -2051,7 +2096,9 @@ int Disconnected (Stream)
 					BPQSerialClrDCD(conn->hDevice);
 					Refresh();
 				}
+
 				channel->Connected = FALSE;
+				channel->CloseTimer = 0;
 
 				return 0;
 			}
@@ -2084,6 +2131,17 @@ int DoReceivedData(int Stream)
 
 					if (len > 0)
 					{
+						// If a failure, set a close timer (for Airmail, etc)
+
+						if (strstr(&Buffer[3], "} Downlink connect needs port number") ||
+							strstr(&Buffer[3], "} Failure with ") ||
+							strstr(&Buffer[3], "} Sorry, "))
+							channel->CloseTimer = CloseDelay * 10;
+
+						else
+							channel->CloseTimer = 0;			// Cancel Timer
+
+
 						if (conn->InHostMode)
 						{
 							Buffer[0] = 'D';

@@ -1,11 +1,11 @@
 #ifdef Kernel
 
-#define Vers 4,10,16,17
-#define Verstring "4.10.16.17\0"
-#define TextVerstring "V4.10.16\0"
+#define Vers 5,0,0,1
+#define Verstring "5.0.0.1\0"
+#define TextVerstring "V5.0.0.1\0"
 #define Datestring "February 2011"
-#define SPECIALVERSION "Test 3"
-#define VerComments "G8BPQ Packet Switch V4.10.16\0"
+//#define SPECIALVERSION "Test 4"
+#define VerComments "G8BPQ Packet Switch V5.0.0.1\0"
 #define VerCopyright "Copyright © 2001-2011 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 
@@ -15,7 +15,7 @@
 
 #define Vers 1,0,2,0
 #define Verstring "1.0.2.0\0"
-#define SPECIALVERSION "Test 5"
+//#define SPECIALVERSION "Test 5"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"
@@ -35,14 +35,26 @@
 
 #ifdef MAILCHAT
 
-#define Vers 1,0,4,39
-#define Verstring "1.0.4.39\0"
-#define SPECIALVERSION "Test 1"
-#define VerComments "Beacon Utility for G8BPQ Packet Switch\0"
+#define Vers 1,0,4,40
+#define Verstring "1.0.4.40\0"
+//#define SPECIALVERSION "Test 3"
+#define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2011 John Wiseman G8BPQ\0"
-#define VerDesc "Mail and Chat server for  G8BPQ's 32 Bit Switch\0"
+#define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"
 
 #endif
+
+#ifdef HOSTMODES
+
+#define Vers 1,1,5,1
+#define Verstring "1.1.5.1\0"
+//#define SPECIALVERSION "Test 3"
+#define VerComments "Host Modes Emulator for G8BPQ Packet Switch\0"
+#define VerCopyright "Copyright © 2009-2011 John Wiseman G8BPQ\0"
+#define VerDesc "Host Modes Emulator for G8BPQ's 32 Bit Switch\0"
+
+#endif
+
 
 #ifdef UIUTIL
 

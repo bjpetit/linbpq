@@ -23,15 +23,6 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 
 /////////////////////////////////////////////////////////////////////////////
 //
-// Icon
-//
-
-// Icon with lowest ID value placed first to ensure application icon
-// remains consistent on all systems.
-BPQICON                 ICON    DISCARDABLE     "BPQ.ICO"
-
-/////////////////////////////////////////////////////////////////////////////
-//
 // Dialog
 //
 
@@ -41,55 +32,16 @@ CAPTION "BPQ Hostmodes Emulator Version 1.2.3.4"
 CLASS "KHOSTMAINWINDOW"
 FONT 8, "MS Sans Serif"
 BEGIN
-    PUSHBUTTON      "Add Entry",TN_ADD,171,118,49,14
-    PUSHBUTTON      "Save Settings",TN_SAVE,171,118,49,14
+    PUSHBUTTON      "Add Entry",TN_ADD,354,116,49,14
+    PUSHBUTTON      "Save Settings",TN_SAVE,298,117,49,14
     LTEXT           "COM    Streams  Applmask              Mode                            RTS   CTS   DCD   DSR   DTR",
                     IDC_STATIC,76,9,294,10
     CONTROL         "Use Real COM Ports",IDC_REALPORTS,"Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP,55,180,90,15
+                    BS_AUTOCHECKBOX | WS_TABSTOP,28,122,90,15
+    LTEXT           " Close after connect fail delay",IDC_CLOSEDELAYTEXT,135,
+                    124,96,21,SS_CENTERIMAGE
+    EDITTEXT        IDC_CLOSEDELAY,238,123,21,14,ES_AUTOHSCROLL
 END
-
-
-#ifndef _MAC
-/////////////////////////////////////////////////////////////////////////////
-//
-// Version
-//
-
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,4,1
- PRODUCTVERSION 1,1,4,1
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
-#else
- FILEFLAGS 0x0L
-#endif
- FILEOS 0x40004L
- FILETYPE 0x1L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "080904b0"
-        BEGIN
-            VALUE "CompanyName", "G8BPQ\0"
-            VALUE "FileDescription", "BPQKantHost\0"
-            VALUE "FileVersion", "1, 1, 4, 1\0"
-            VALUE "InternalName", "KantHost\0"
-            VALUE "LegalCopyright", "© Copyright G8BPQ 2010\0"
-            VALUE "OriginalFilename", "KantHost\0"
-            VALUE "ProductName", "BPQ32 Kantronics Hostmode Emulator\0"
-            VALUE "ProductVersion", "1, 1, 4, 1\0"
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x809, 1200
-    END
-END
-
-#endif    // !_MAC
 
 
 #ifdef APSTUDIO_INVOKED
@@ -109,8 +61,10 @@ BEGIN
     "\0"
 END
 
-3 TEXTINCLUDE DISCARDABLE 
+3 TEXTINCLUDE MOVEABLE PURE 
 BEGIN
+    "#include ""..\\Include\\Versions.h""\r\n"
+    "#include ""..\\StdVer.inc""\r\n"
     "\r\n"
     "\0"
 END
@@ -128,7 +82,7 @@ GUIDELINES DESIGNINFO DISCARDABLE
 BEGIN
     "KHOSTMAINWINDOW", DIALOG
     BEGIN
-        RIGHTMARGIN, 317
+        RIGHTMARGIN, 403
         BOTTOMMARGIN, 145
     END
 END
@@ -144,6 +98,8 @@ END
 //
 // Generated from the TEXTINCLUDE 3 resource.
 //
+#include "..\Include\Versions.h"
+#include "..\StdVer.inc"
 
 
 /////////////////////////////////////////////////////////////////////////////

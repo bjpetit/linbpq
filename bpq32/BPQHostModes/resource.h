@@ -5,10 +5,11 @@
 #define BPQTNC2                         101
 #define IDI_TELNETSERVER                107
 #define IDI_SMALL                       108
-#define BPQICON                         400
 #define TN_ADD                          1034
 #define TN_SAVE                         1035
 #define IDC_REALPORTS                   1042
+#define IDC_CLOSEDELAY                  1043
+#define IDC_CLOSEDELAYTEXT              1044
 #define TN_KANT                         1052
 #define TN_DED                          1053
 #define IDC_RADIO1                      1054
@@ -95,7 +96,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        102
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1043
+#define _APS_NEXT_CONTROL_VALUE         1045
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

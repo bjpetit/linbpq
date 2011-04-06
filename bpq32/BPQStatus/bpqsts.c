@@ -195,7 +195,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    LFTTYFONT.lfClipPrecision =  CLIP_DEFAULT_PRECIS ;
    LFTTYFONT.lfQuality =        DEFAULT_QUALITY ;
    LFTTYFONT.lfPitchAndFamily = FIXED_PITCH | FF_MODERN ;
-   lstrcpy( LFTTYFONT.lfFaceName, "Fixedsys" ) ;
+   lstrcpy( LFTTYFONT.lfFaceName, "Terminal" ) ;
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 	

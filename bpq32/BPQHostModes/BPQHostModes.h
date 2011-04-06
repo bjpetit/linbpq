@@ -2,6 +2,8 @@
 
 #include "resource.h"
 
+#define BPQICON 2
+
 struct ConnectionInfo
 { 
 	int ComPort;
@@ -65,6 +67,7 @@ struct StreamInfo
 							// FRAMES QUEUED TO NODE
     int BPQStream;
 	BOOL Connected;					// Set if connected to Node
+	int CloseTimer;					// Used to close session after connect failure
 	UCHAR MYCall[30];
 };
 
