@@ -7657,8 +7657,6 @@ CheckForSID:
 			strcat(FWLine, "\r");	
 
 			nodeprintf(conn, FWLine);
-
-			//nodeprintf(conn,";FW: GM8BPQ-1 G8BPQ G8BPQ-5 GM8BPQ G8BPQ-1 GM8BPQ-2 BPQTST\r");
 		}
 
 		// Only declare B1 and B2 if other end did, and we are configued for it
@@ -7668,7 +7666,7 @@ CheckForSID:
 			(conn->BBSFlags & FBBCompressed) ? "B" : "", 
 			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
-			(conn->BBSFlags & FBBForwarding) ? "FW" : ""); 
+			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
 
 
 		if (conn->BPQBBS && conn->MSGTYPES[0])

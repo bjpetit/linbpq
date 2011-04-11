@@ -474,12 +474,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 
 	case WM_CTLCOLORSTATIC:
-		{
+	{
         HDC hdcStatic = (HDC) wParam;
         SetTextColor(hdcStatic, RGB(0, 0, 0));
         SetBkColor(hdcStatic, BGCOLOUR);
 		return (INT_PTR)bgBrush;
-		}
+	}
 
 	case WM_COMMAND:
 		wmId    = LOWORD(wParam);
