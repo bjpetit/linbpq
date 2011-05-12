@@ -179,32 +179,35 @@ BEGIN
     CONTROL         "Send SYSTEM Msgs to SYSOP call",IDC_SYSTOSYSOPCALL,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,237,
                     104,128,12
-    LTEXT           "H Route",IDC_STATIC,7,125,37,12
-    EDITTEXT        IDC_HRoute,83,123,119,13,ES_UPPERCASE
-    LTEXT           "Base Directory",IDC_STATIC,7,143,66,12
-    EDITTEXT        IDC_BaseDir,83,143,212,14
-    LTEXT           "BBS Appl Number",IDC_STATIC,7,166,61,10
-    EDITTEXT        IDC_BBSAppl,83,163,29,14
-    LTEXT           "BBS Streams",IDC_STATIC,157,165,45,10
-    EDITTEXT        IDC_BBSStreams,208,164,29,14
+    LTEXT           "H Route",IDC_STATIC,7,122,37,12
+    EDITTEXT        IDC_HRoute,83,120,119,13,ES_UPPERCASE
+    LTEXT           "Base Directory",IDC_STATIC,7,137,66,12
+    EDITTEXT        IDC_BaseDir,83,137,212,14
+    LTEXT           "BBS Appl Number",IDC_STATIC,7,156,61,10
+    EDITTEXT        IDC_BBSAppl,83,154,29,14
+    LTEXT           "BBS Streams",IDC_STATIC,157,156,45,10
+    EDITTEXT        IDC_BBSStreams,208,155,29,14
     CONTROL         "Refuse Bulls",IDC_REFUSEBULLS,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,264,165,53,10
+                    BS_LEFTTEXT | WS_TABSTOP,264,156,53,10
     CONTROL         "Enable FBB UI System",IDC_ENABLEUI,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,187,87,10
-    LTEXT           "Send Mail For Beacons Every",IDC_STATIC,102,187,100,12
-    EDITTEXT        MAILFOR_MINS,205,186,22,12,ES_UPPERCASE
-    LTEXT           "Minutes",IDC_STATIC,232,187,30,12
-    PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,267,185,91,13
-    LTEXT           "eMail Server Params:",IDC_STATIC,7,208,135,10
-    LTEXT           "NNTP Port",IDC_STATIC,7,227,39,12
-    EDITTEXT        IDC_NNTPPort,47,225,29,14
-    LTEXT           "POP3 Port",IDC_STATIC,90,227,37,12
-    EDITTEXT        IDC_POP3Port,130,225,29,14
-    LTEXT           "SMTP Port",IDC_STATIC,170,227,37,12
-    EDITTEXT        IDC_SMTPPort,210,225,29,14
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,175,87,10
+    LTEXT           "Send Mail For Beacons Every",IDC_STATIC,102,175,100,12
+    EDITTEXT        MAILFOR_MINS,205,174,22,12,ES_UPPERCASE
+    LTEXT           "Minutes",IDC_STATIC,232,175,30,12
+    PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,267,173,91,13
+    LTEXT           "eMail Server Params:",IDC_STATIC,7,215,135,10
+    LTEXT           "NNTP Port",IDC_STATIC,7,235,39,12
+    EDITTEXT        IDC_NNTPPort,47,233,29,14
+    LTEXT           "POP3 Port",IDC_STATIC,90,235,37,12
+    EDITTEXT        IDC_POP3Port,130,233,29,14
+    LTEXT           "SMTP Port",IDC_STATIC,170,235,37,12
+    EDITTEXT        IDC_SMTPPort,210,233,29,14
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,249,224,91,14
-    DEFPUSHBUTTON   "Save",1100,144,248,50,14,BS_CENTER | BS_VCENTER
+                    WS_TABSTOP,249,232,91,14
+    DEFPUSHBUTTON   "Save",1100,144,258,50,14,BS_CENTER | BS_VCENTER
+    CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
+                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,
+                    194,138,12
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -233,7 +236,7 @@ BEGIN
                     WS_VSCROLL | WS_TABSTOP
     CONTROL         "BBS",IDC_BBSFLAG,"Button",BS_AUTOCHECKBOX | BS_LEFT | 
                     WS_TABSTOP,72,9,57,10
-    CONTROL         "PMS",1065,"Button",BS_AUTOCHECKBOX | BS_LEFT | 
+    CONTROL         "PMS",IDC_PMSFLAG,"Button",BS_AUTOCHECKBOX | BS_LEFT | 
                     WS_TABSTOP,72,21,57,10
     CONTROL         "Sysop",IDC_SYSOP,"Button",BS_AUTOCHECKBOX | BS_LEFT | 
                     WS_TABSTOP,72,33,57,10
@@ -421,7 +424,7 @@ END
 IDD_MSGEDIT DIALOGEX 20, 20, 381, 266
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit Message"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     RTEXT           "Msg",IDC_STATIC,7,7,19,8
     LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 

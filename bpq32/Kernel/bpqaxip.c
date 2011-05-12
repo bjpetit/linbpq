@@ -1393,12 +1393,12 @@ static void ResolveNames(struct PORTINFO * PORT)
 
 	if (PORT->arp_table_len > 10 )
 	{
-		Windowlength=10*14+60;
+		Windowlength=10*14+70;
 		WindowParam=WS_OVERLAPPEDWINDOW | WS_VSCROLL;
 	}
 	else
 	{
-		Windowlength=(PORT->arp_table_len)*14+60;
+		Windowlength=(PORT->arp_table_len)*14+70;
 		WindowParam=WS_OVERLAPPEDWINDOW ;
 	}
 
@@ -1460,7 +1460,7 @@ static void ResolveNames(struct PORTINFO * PORT)
     LFTTYFONT.lfClipPrecision =  CLIP_DEFAULT_PRECIS ;
     LFTTYFONT.lfQuality =        DEFAULT_QUALITY ;
     LFTTYFONT.lfPitchAndFamily = FIXED_PITCH | FF_MODERN ;
-    lstrcpy( LFTTYFONT.lfFaceName, "Fixedsys" ) ;
+    lstrcpy( LFTTYFONT.lfFaceName, "Terminal" ) ;
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 

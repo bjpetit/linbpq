@@ -1002,10 +1002,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				GlobalFree(hMem);
 
 			SetFocus(hwndInput);
+			return TRUE;
 		}
-
-		return TRUE;
-
+		
 		case BPQMTX:
 	
 			ToggleMTX(hWnd);

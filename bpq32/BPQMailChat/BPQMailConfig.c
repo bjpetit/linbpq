@@ -506,6 +506,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BBSCall, BBSName);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_SYSOPCALL, SYSOPCall);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_SYSTOSYSOPCALL, SendSYStoSYSOPCall);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_DONTHOLDNEW, DontHoldNewUsers);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDirRaw);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
@@ -1518,6 +1519,7 @@ VOID SaveBBSConfig()
 	RefuseBulls = IsDlgButtonChecked(hwndDisplay, IDC_REFUSEBULLS);
 	MailForInterval = GetDlgItemInt(hwndDisplay, MAILFOR_MINS, &OK1, FALSE);
 	SendSYStoSYSOPCall = IsDlgButtonChecked(hwndDisplay, IDC_SYSTOSYSOPCALL);
+	DontHoldNewUsers = IsDlgButtonChecked(hwndDisplay, IDC_DONTHOLDNEW);
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
 	POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
@@ -1540,6 +1542,7 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "EnableUI",0, REG_DWORD,(BYTE *)&EnableUI,4);
 		retCode = RegSetValueEx(hKey, "RefuseBulls",0, REG_DWORD,(BYTE *)&RefuseBulls,4);
 		retCode = RegSetValueEx(hKey, "SendSYStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendSYStoSYSOPCall,4);
+		retCode = RegSetValueEx(hKey, "DontHoldNewUsers",0, REG_DWORD,(BYTE *)&DontHoldNewUsers,4);
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
 		retCode = RegSetValueEx(hKey, "NNTPPort",0,REG_DWORD,(BYTE *)&NNTPInPort,4);
@@ -1896,28 +1899,28 @@ VOID SaveWelcomeMsgs()
 	free(WelcomeMsg);
 	WelcomeMsg = _strdup(Value);
 	
-	RegSetValueEx(hKey, "WelcomeMsg", 0, REG_SZ, Value, strlen(Value));
+	RegSetValueEx(hKey, "WelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
 
 	GetDlgItemText(hwndDisplay, IDM_NEWUSERMSG, Value, 10000);
 
 	free(NewWelcomeMsg);
 	NewWelcomeMsg = _strdup(Value);
 	
-	RegSetValueEx(hKey, "NewUserWelcomeMsg", 0, REG_SZ, Value, strlen(Value));
+	RegSetValueEx(hKey, "NewUserWelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
 
 	GetDlgItemText(hwndDisplay, IDM_CHATUSERMSG, Value, 10000);
 
 	free(ChatWelcomeMsg);
 	ChatWelcomeMsg = _strdup(Value);
-	
-	RegSetValueEx(hKey, "ChatWelcomeMsg", 0, REG_SZ, Value, strlen(Value));
+
+	RegSetValueEx(hKey, "ChatWelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
 
 	GetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, Value, 10000);
 
 	free(ExpertWelcomeMsg);
 	ExpertWelcomeMsg = _strdup(Value);
 	
-	RegSetValueEx(hKey, "ExpertWelcomeMsg", 0, REG_SZ, Value, strlen(Value));
+	RegSetValueEx(hKey, "ExpertWelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
 
 	RegCloseKey(hKey);
 
@@ -2127,6 +2130,10 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey,"SendSYStoSYSOPCall",0,			
 			(ULONG *)&Type,(UCHAR *)&SendSYStoSYSOPCall,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"DontHoldNewUsers",0,			
+			(ULONG *)&Type,(UCHAR *)&DontHoldNewUsers,(ULONG *)&Vallen);
 
 		Vallen=4;
 		RegQueryValueEx(hKey,"MaxTXSize",0,			
@@ -3241,15 +3248,15 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 
 VOID CreateRegBackup()
 {
-	char cmd[256];
-	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION
 	char Backup1[MAX_PATH];
 	char Backup2[MAX_PATH];
 	char RegFileName[MAX_PATH];
+	HANDLE handle;
+	char Msg[256];
+	char RegLine[256];
+	int len, written;
 
 	Debugprintf("Create Reg Backup");
-
 
 	wsprintf(RegFileName, "%s\\BPQMailChat.reg", BaseDir);
 
@@ -3279,20 +3286,26 @@ VOID CreateRegBackup()
 
 	CopyFile(RegFileName, Backup2, FALSE);	// Copy to .bak
 
-	wsprintf(cmd,
-		"regedit /E \"%s\\BPQMailChat.reg\" %s\\Software\\G8BPQ\\BPQ32\\BPQMailChat", BaseDir, REGTREETEXT);
+	handle = CreateFile(RegFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
-	SInfo.cb=sizeof(SInfo);
-	SInfo.lpReserved=NULL; 
-	SInfo.lpDesktop=NULL; 
-	SInfo.lpTitle=NULL; 
-	SInfo.dwFlags=0; 
-	SInfo.cbReserved2=0; 
-  	SInfo.lpReserved2=NULL; 
+	if (handle == INVALID_HANDLE_VALUE)
+	{
+		wsprintf(Msg, "Failed to open Registry Save File\n");
+		WritetoConsole(Msg);
+		return;
+	}
 
-	CreateProcess(NULL, cmd, NULL, NULL, FALSE, 0 ,NULL, NULL, &SInfo, &PInfo);
-					
-	return ;
+	len = wsprintf(RegLine, "Windows Registry Editor Version 5.00\r\n\r\n");
+	WriteFile(handle, RegLine, len, &written, NULL);
+
+	if (SaveReg("Software\\G8BPQ\\BPQ32\\BPQMailChat", handle))
+		WritetoConsole("Registry Save complete\n");
+	else
+		WritetoConsole("Registry Save failed\n");
+
+	CloseHandle(handle);			
+
+	return;
 }
 
 

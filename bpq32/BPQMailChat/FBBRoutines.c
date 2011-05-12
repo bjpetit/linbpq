@@ -464,6 +464,24 @@ ok:
 		FBBHeader->CSize = atoi(ptr);
 		FBBHeader->B2Message = TRUE;
 
+		// If using BPQ Extensions (From To AT in proposal) Check Filters
+
+		Buffer[len - 1] = 0;
+
+		if (conn->BPQBBS)
+		{
+			char * From = strtok_s(NULL, seps, &Context);
+			char * ATBBS = strtok_s(NULL, seps, &Context);
+			char * To = strtok_s(NULL, seps, &Context);
+
+			if (From && To && ATBBS && CheckRejFilters(From, To, ATBBS))
+			{
+				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
+				conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+				user->MsgsRejectedIn++;
+				return;
+			}
+		}
 		goto ok2;
 
 badparam2:
@@ -669,12 +687,27 @@ BOOL FBBDoForward(CIRCUIT * conn)
 
 			if (conn->BBSFlags & FBBB2Mode)
 
-				// FC EM A3EDD4P00P55 377 281 0
+				if (conn->BPQBBS)
+					
+					// Add From and To Header for Filters
 
-				proplen = wsprintf(proposal, "FC EM %s %d %d %d\r", 
-					FBBHeader->BID,
-					FBBHeader->Size,
-					FBBHeader->CSize, 0);
+					proplen = wsprintf(proposal, "FC EM %s %d %d %s %s %s\r", 
+						FBBHeader->BID,
+						FBBHeader->Size,
+						FBBHeader->CSize,
+						FBBHeader->From,
+						(FBBHeader->ATBBS[0]) ? FBBHeader->ATBBS : conn->UserPointer->Call, 
+						FBBHeader->To);
+
+				else
+
+					// FC EM A3EDD4P00P55 377 281 0
+
+					proplen = wsprintf(proposal, "FC EM %s %d %d %d\r", 
+						FBBHeader->BID,
+						FBBHeader->Size,
+						FBBHeader->CSize, 0);
+
 			else
 				proplen = wsprintf(proposal, "%s %c %s %s %s %s %d\r", 
 					(conn->BBSFlags & FBBCompressed) ? "FA" : "FB",

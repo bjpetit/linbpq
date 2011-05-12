@@ -248,7 +248,7 @@ ConfigLine:
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
-int MaxStreams = 26;
+static int MaxStreams = 26;
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL NEAR OpenConnection(int);

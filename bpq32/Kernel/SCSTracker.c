@@ -184,11 +184,6 @@ UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
 
-static char status[8][8] = {"ERROR",  "REQUEST", "TRAFFIC", "IDLE", "OVER", "PHASE", "SYNCH", ""};
-
-static char ModeText[8][14] = {"STANDBY", "AMTOR-ARQ",  "PACTOR-ARQ", "AMTOR-FEC", "PACTOR-FEC", "RTTY / CW", "LISTEN", "Channel-Busy"};
-
-static char PactorLevelText[4][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR-III"};
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -198,6 +193,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Param;
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
+	int TNCOK;
 
 
 	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
@@ -287,19 +283,21 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			mov Stream,eax
 		}
 
+		TNCOK = (TNC->HostMode == 1 && TNC->ReinitState != 10 && TNC->ReinitState == 1);
+
 		STREAM = &TNC->Streams[Stream];
 
 		if (Stream == 0)
 		{
 			if (STREAM->FramesOutstanding  > 4)
-				return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);
+				return (1 | TNCOK << 8 | STREAM->Disconnecting << 15);
 		}
 		else
 		{
 			if (STREAM->FramesOutstanding > 3 || TNC->Buffers < 200)	
-				return (1 | TNC->HostMode << 8 | STREAM->Disconnecting << 15);		}
+				return (1 | TNCOK << 8 | STREAM->Disconnecting << 15);		}
 
-		return TNC->HostMode << 8 | STREAM->Disconnecting << 15;		// OK, but lock attach if disconnecting
+		return TNCOK << 8 | STREAM->Disconnecting << 15;		// OK, but lock attach if disconnecting
 
 
 	case 4:				// reinit

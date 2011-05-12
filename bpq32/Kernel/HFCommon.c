@@ -468,6 +468,8 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 	}
 
+	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
+
 	return TRUE;
 }
 

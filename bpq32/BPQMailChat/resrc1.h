@@ -75,6 +75,7 @@
 #define RMS_SSID3                       1072
 #define IDC_SYSTOSYSOPCALL              1073
 #define IDC_HOLDFROM                    1074
+#define IDC_DONTHOLDNEW                 1074
 #define IDC_HOLDTO                      1075
 #define IDC_HOLDAT                      1076
 #define IDC_REJFROM                     1077

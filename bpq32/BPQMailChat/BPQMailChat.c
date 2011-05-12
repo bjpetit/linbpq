@@ -674,6 +674,15 @@
 // Fix AUTH bug in SMTP server
 // Add filter to Edit Messages dialog
 
+// Version 1.0.4.41 April 2011
+
+// Extend B2 proposals to other BPQMail systems so Reject Filter will work.
+// Add Edit User Command
+// Use internal Registry Save routine instead of Regedit
+// Fix Start Forward/All
+// Allow Winpack Compressed Upload/Download if PMS flag set (as well as BBS flag) 
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -839,6 +848,7 @@ BOOL KISSOnly = FALSE;
 BOOL EnableUI = FALSE;
 BOOL RefuseBulls = FALSE;
 BOOL SendSYStoSYSOPCall = FALSE;
+BOOL DontHoldNewUsers = FALSE;
 int MailForInterval = 0;
 
 UCHAR * OtherNodes=NULL;
@@ -2477,6 +2487,8 @@ BOOL Initialise()
 
 	RefreshMainWindow();
 
+	CreateBBSTrafficReport();
+
 	return TRUE;
 }
 
@@ -2557,7 +2569,8 @@ int Connected(Stream)
 
 				if (user == NULL) return 0; //		Cant happen??
 
-				user->flags |= F_HOLDMAIL;
+				if (!DontHoldNewUsers)
+					user->flags |= F_HOLDMAIL;
 
 				conn->NewUser = TRUE;
 
@@ -2616,6 +2629,17 @@ int Connected(Stream)
 
 				conn->PageLen = user->PageLen;				// No paging for chat
 				conn->Paging = (user->PageLen > 0);
+
+				if ((user->flags & F_PMS) && ((user->flags & F_BBS) == 0))
+				{
+					// If we have already allocated a FWD struct, get rid of it
+
+					if (user->ForwardingInfo)
+					{
+						free(user->ForwardingInfo);
+						user->ForwardingInfo = NULL;
+					}
+				}
 
 				if ((user->flags & F_Temp_B2_BBS) && (user->ForwardingInfo == NULL))
 				{
@@ -3913,7 +3937,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 					Disconnect(conn->BPQStream);
 					return;
 				}
-
 			}
 
 			if (user->ForwardingInfo)
@@ -3921,7 +3944,10 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				user->ForwardingInfo->Forwarding = TRUE;
 				user->ForwardingInfo->FwdTimer = 0;			// So we dont send to immediately
 			}
+		}
 
+		if (user->flags & ( F_BBS | F_PMS | F_Temp_B2_BBS))
+		{
 			Parse_SID(conn, &Buffer[1], len-4);
 			
 			if (conn->BBSFlags & FBBForwarding)
@@ -3934,7 +3960,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				BBSputs(conn, ">\r");
 
 		}
-		
+
 		return;
 	}
 
@@ -4187,8 +4213,11 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, ST Send NTS,\r");
 			BBSputs(conn, "                   SR Num - Send Reply, SC Num - Send Copy\r");
 			if (conn->sysop)
+			{
 				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
+				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
 
+			}
 		}
 
 		SendPrompt(conn, user);
@@ -4247,6 +4276,96 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 		return;
 	}
+
+	if ((_memicmp(Cmd, "EDITUSER", 5) == 0) || (_memicmp(Cmd, "EU", 2) == 0))
+	{
+		char Line[200] = "User Flags:";
+		struct UserInfo * EUser = user;
+
+		if ((user->flags & F_SYSOP) == 0)
+		{
+			nodeprintf(conn, "Edit User needs SYSOP status\r");
+			SendPrompt(conn, user);
+			return;
+		}
+
+		if (Arg1 == 0 || _stricmp(Arg1, "HELP") == 0)
+		{
+			nodeprintf(conn, "EDITUSER CALLSIGN to Display\r");
+			nodeprintf(conn, "EDITUSER CALLSIGN FLAG1 FLAG2 ...  to set, -FLAG1 -FLAG2 ...  to clear\r");
+			nodeprintf(conn, "EDITUSER: Flags are: EXC(luded) EXP(ert) SYSOP BBS EMAIL HOLD\r");
+
+			SendPrompt(conn, user);
+			return;
+		}
+
+
+		EUser = LookupCall(Arg1);
+
+		if (EUser == 0)
+		{
+			nodeprintf(conn, "User %s not found\r", Arg1);
+			SendPrompt(conn, user);
+			return;
+		}
+
+		Arg1 = strtok_s(NULL, seps, &Context);
+
+		if (Arg1 == NULL)
+			goto UDisplay;
+					
+		// A set of flags to change +Flag or -Flag
+		
+		while(Arg1 && strlen(Arg1) > 2)
+		{
+			_strupr(Arg1);
+
+			if (strstr(Arg1, "EXC"))
+				if (Arg1[0] != '-') user->flags |= F_Excluded; else user->flags &= ~F_Excluded;
+			if (strstr(Arg1, "EXP"))
+				if (Arg1[0] != '-') user->flags |= F_Expert; else user->flags &= ~F_Expert;
+			if (strstr(Arg1, "SYS"))
+				if (Arg1[0] != '-') user->flags |= F_SYSOP; else user->flags &= ~F_SYSOP;
+			if (strstr(Arg1, "BBS"))
+				if (Arg1[0] != '-') user->flags |= F_BBS; else user->flags &= ~F_BBS;
+			if (strstr(Arg1, "EMAIL"))
+				if (Arg1[0] != '-') user->flags |= F_EMAIL; else user->flags &= ~F_EMAIL;
+			if (strstr(Arg1, "HOLD"))
+				if (Arg1[0] != '-') user->flags |= F_HOLDMAIL; else user->flags &= ~F_HOLDMAIL;
+
+			Arg1 = strtok_s(NULL, seps, &Context);
+		}
+
+		SaveUserDatabase();
+
+		// Drop through to display
+UDisplay:
+
+		if (user->flags & F_Excluded)
+			strcat(Line, " EXC");
+
+		if (user->flags & F_Expert)
+			strcat(Line, " EXP");
+
+		if (user->flags & F_SYSOP)
+			strcat(Line, " SYSOP");
+
+		if (user->flags & F_BBS)
+			strcat(Line, " BBS");
+
+		if (user->flags & F_EMAIL)
+			strcat(Line, " EMAIL");
+
+		if (user->flags & F_HOLDMAIL)
+			strcat(Line, " HOLD");
+
+		strcat(Line, "\r");	
+		nodeprintf(conn, Line);
+	
+		SendPrompt(conn, user);
+		return;
+	}
+
 
 	if (_memicmp(Cmd, "POLLRMS", 6) == 0)
 	{
@@ -4347,6 +4466,7 @@ Display:
 		if (Arg1)
 			goto Loop;
 	
+		SaveUserDatabase();
 		SendPrompt(conn, user);
 		return;
 	}
@@ -4844,11 +4964,11 @@ VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
 			strcpy(Via, Msg->via);
 			strlop(Via, '.');			// Only show first part of via
 			nodeprintf(conn, "%-6d %s %c%c   %5d %-7s@%-6s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, FullFrom, Msg->title);
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, Msg->from, Msg->title);
 		}
 		else
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->from, Msg->title);
 
 }
 
@@ -7739,6 +7859,15 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 			break;
 
 		case 'F':			// FBB Blocked Forwarding
+		
+			if (conn->UserPointer->flags & F_PMS)
+			{
+				// We need to allocate a forwarding structure
+
+					conn->UserPointer->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+					conn->UserPointer->ForwardingInfo->AllowCompressed = TRUE;
+					conn->UserPointer->BBSNumber = 80;
+			}
 
 			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
 			{
@@ -7877,7 +8006,7 @@ void StartForwarding(int BBSNumber)
 			if (ForwardingInfo)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (SeeifMessagestoForward(BBSNumber, NULL) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
+						if (SeeifMessagestoForward(user->BBSNumber, NULL) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
 /*							if (strcmp(user->Call, "RMS") == 0)
 							{
 								if (ForwardingInfo->UserIndex == 0)

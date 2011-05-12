@@ -763,4 +763,51 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	MatchMessagetoBBSList(Msg, NULL);
 }
 
+VOID CreateBBSTrafficReport()
+{
+	struct UserInfo * User;
+	int i;
+	char Line[200];
+	int len, written;
+	char File[100];
+	HANDLE hFile;
+
+	sprintf_s(File, sizeof(File), "%s\\Traffic.txt", BaseDir);
+	
+	hFile = CreateFile(File,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	if (hFile == INVALID_HANDLE_VALUE)
+		return;
+
+	len = wsprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
+	WriteFile(hFile, Line, len, &written, NULL);
+	len = wsprintf(Line, "               In        Out     Rxed        Sent     Rxed       Sent         In         Out\r\n\r\n");
+	WriteFile(hFile, Line, len, &written, NULL);
+		
+
+	for (i=1; i <= NumberofUsers; i++)
+	{
+		User = UserRecPtr[i];
+
+		len = wsprintf(Line, "%s %-7s %5d %8d %10d %10d %10d %10d %10d %10d\r\n",
+			(User->flags & F_BBS)? "(B)": "   ",
+			User->Call, User->nbcon, User->ConnectsOut, User->MsgsReceived, User->MsgsSent, 
+			User->BytesForwardedIn, User->BytesForwardedOut,
+			User->MsgsRejectedIn, User->MsgsRejectedOut);
+		
+		WriteFile(hFile, Line, len, &written, NULL);
+
+	}
+
+	CloseHandle(hFile);
+}
+
+
+
 

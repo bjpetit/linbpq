@@ -1004,7 +1004,7 @@ void chat_link_out (LINK *link);
 ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len);
 BOOL SaveConfig();
 BOOL GetConfigFromRegistry();
-VOID Parse_SID(ConnectionInfo * conn, char * SID, int len);
+VOID Parse_SID(CIRCUIT * conn, char * SID, int len);
 VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len);
 VOID ProcessFBBLine(ConnectionInfo * conn, struct UserInfo * user, UCHAR * Buffer, int len);
 VOID SetupNextFBBMessage(CIRCUIT * conn);
@@ -1150,6 +1150,7 @@ BOOL RemoveKilledMessages();
 VOID Renumber_Messages();
 BOOL ExpireBIDs();
 VOID MailHousekeepingResults();
+VOID CreateBBSTrafficReport();
 
 // WP Routines
 
@@ -1315,6 +1316,7 @@ extern char zeros[];						// For forward bitmask tests
 extern BOOL EnableUI;
 extern BOOL RefuseBulls;
 extern BOOL SendSYStoSYSOPCall;
+extern BOOL DontHoldNewUsers;
 extern BOOL UIEnabled[];
 extern char * UIDigi[];
 extern int MailForInterval;

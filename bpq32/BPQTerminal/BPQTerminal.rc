@@ -32,7 +32,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 
 1 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "bpqterm.h\0"
+    "bpqterminal.h\0"
 END
 
 2 TEXTINCLUDE DISCARDABLE 
@@ -78,6 +78,25 @@ BEGIN
     CTEXT           "",119,0,145,300,5,SS_NOTIFY
 END
 
+IDD_FONT DIALOG DISCARDABLE  0, 0, 186, 113
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Font Setup"
+FONT 8, "MS Sans Serif"
+BEGIN
+    DEFPUSHBUTTON   "Save",IDOK,39,93,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,92,93,50,14
+    LTEXT           "Name",IDC_STATIC,7,10,24,9
+    LTEXT           "Code Page",IDC_STATIC,6,70,44,9
+    EDITTEXT        IDC_CODEPAGE,53,68,39,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Font Width",IDC_STATIC,7,40,41,9
+    EDITTEXT        IDC_FONTNAME,53,8,89,12,ES_AUTOHSCROLL
+    LTEXT           "Char Set",IDC_STATIC,7,55,39,9
+    EDITTEXT        IDC_CHARSET,53,53,40,12,ES_AUTOHSCROLL | ES_NUMBER
+    EDITTEXT        IDC_FONTWIDTH,53,38,39,12,ES_AUTOHSCROLL | ES_NUMBER
+    EDITTEXT        IDC_FONTSIZE,53,23,38,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Font Size",IDC_STATIC,7,25,44,9
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -88,16 +107,8 @@ MENU_1 MENU DISCARDABLE
 BEGIN
     POPUP "Action"
     BEGIN
-        MENUITEM "AutoConnect",                 BPQAUTOCONNECT, CHECKED
         MENUITEM "Connect",                     BPQCONNECT
         MENUITEM "Disconnect",                  BPQDISCONNECT, GRAYED
-        MENUITEM "Enable Bells",                BPQBELLS
-        MENUITEM "Enable Chat",                 BPQCHAT
-        MENUITEM "Strip Linefeeds",             BPQStripLF
-        MENUITEM "Log Monitor",                 BPQLogMonitor
-        MENUITEM "Log Output",                  BPQLogOutput
-        MENUITEM "Send Disconnected",           BPQSendDisconnected
-        MENUITEM "Chat Terminal Mode",          CHATTERM
     END
     POPUP "Monitor"
     BEGIN
@@ -105,6 +116,19 @@ BEGIN
         MENUITEM "Monitor Supervisory",         BPQMCOM
         MENUITEM "Monitor NODES",               BPQMNODES
         MENUITEM "Enable Colour",               MONCOLOUR
+    END
+    POPUP "Config"
+    BEGIN
+        MENUITEM "Font",                        ID_SETUP_FONT
+        MENUITEM "AutoConnect",                 BPQAUTOCONNECT, CHECKED
+        MENUITEM "Enable Bells",                BPQBELLS
+        MENUITEM "Enable Chat",                 BPQCHAT
+        MENUITEM "Strip Linefeeds",             BPQStripLF
+        MENUITEM "Log Monitor",                 BPQLogMonitor
+        MENUITEM "Log Output",                  BPQLogOutput
+        MENUITEM "Send Disconnected",           BPQSendDisconnected
+        MENUITEM "Chat Terminal Mode",          CHATTERM
+
     END
     POPUP "Edit"
     BEGIN

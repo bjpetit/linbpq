@@ -368,6 +368,12 @@
 // Fix WL2K Reporting
 // Report Version to WL2K
 
+// Above released as 5.0.0.1
+
+// 5.0.1.1
+
+// Add caching of CMS Server IP addresses
+
 #define Kernel
 #include "Versions.h"
 
@@ -626,6 +632,7 @@ VOID CreateRegBackup();
 VOID ResolveUpdateThread();
 VOID OpenReportingSocket();
 VOID CloseAllPrograms();
+DllExport BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
 
 BOOL IPActive = FALSE;
 BOOL IPRequired = FALSE;
@@ -1839,8 +1846,8 @@ VOID SetupBPQDirectory()
 #pragma warning(push)
 #pragma warning(disable : 4996)
 
-//	if (_winver < 0x0600)
-	if (TRUE)
+	if (_winver < 0x0600)
+//	if (TRUE)
 
 #pragma warning(pop)
 	{
@@ -4927,14 +4934,17 @@ VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
 
 VOID CreateRegBackup()
 {
-	char cmd[256];
 	char Backup1[MAX_PATH];
 	char Backup2[MAX_PATH];
 	char RegFileName[MAX_PATH];
 	char Msg[80];
-	SHELLEXECUTEINFO   sei;
-	STARTUPINFO SInfo;
-	PROCESS_INFORMATION PInfo;
+	HANDLE handle;
+	int len, written;
+	char RegLine[300];
+
+//	SHELLEXECUTEINFO   sei;
+//	STARTUPINFO SInfo;
+//	PROCESS_INFORMATION PInfo;
 
 	wsprintf(RegFileName, "%s\\BPQ32.reg", BPQDirectory);
 
@@ -4963,6 +4973,27 @@ VOID CreateRegBackup()
 	strcat(Backup2, ".bak");
 
 	CopyFile(RegFileName, Backup2, FALSE);	// Copy to .bak
+
+	handle = CreateFile(RegFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (handle == INVALID_HANDLE_VALUE)
+	{
+		wsprintf(Msg, "Failed to open Registry Save File\n");
+		WritetoConsole(Msg);
+		return;
+	}
+
+	len = wsprintf(RegLine, "Windows Registry Editor Version 5.00\r\n\r\n");
+	WriteFile(handle, RegLine, len, &written, NULL);
+
+	if (SaveReg("Software\\G8BPQ\\BPQ32", handle))
+		WritetoConsole("Registry Save complete\n");
+	else
+		WritetoConsole("Registry Save failed\n");
+
+	CloseHandle(handle);			
+	return ;
+/*
 
 	if (REGTREE == HKEY_LOCAL_MACHINE)		// < Vista
 	{
@@ -5014,6 +5045,7 @@ VOID CreateRegBackup()
 	WritetoConsole(Msg);
 			
 	return ;
+*/
 }
 
 
@@ -5200,6 +5232,223 @@ BOOL CopyReg(HKEY hKeyIn, HKEY hKeyOut)
             } 
         }
     }
+	return TRUE;
+}
+
+
+DllExport BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile)
+{
+	TCHAR    achKey[MAX_KEY_LENGTH];   // buffer for subkey name
+    DWORD    cbName;                   // size of name string 
+    TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
+    DWORD    cchClassName = MAX_PATH;  // size of class string 
+    DWORD    cSubKeys=0;               // number of subkeys 
+    DWORD    cbMaxSubKey;              // longest subkey size 
+    DWORD    cchMaxClass;              // longest class string 
+    DWORD    cValues;              // number of values for key 
+    DWORD    cchMaxValue;          // longest value name 
+    DWORD    cbMaxValueData;       // longest value data 
+    DWORD    cbSecurityDescriptor; // size of security descriptor 
+    FILETIME ftLastWriteTime;      // last write time 
+ 
+    DWORD i, retCode; 
+	HKEY hKeyIn;
+    TCHAR  achValue[MAX_VALUE_NAME]; 
+    DWORD cchValue = MAX_VALUE_NAME; 
+	int len, written;
+	char RegLine[300];
+	char * ptr1, * ptr2;
+	char c;
+
+	retCode = RegOpenKeyEx (REGTREE, KeyIn, 0, KEY_READ, &hKeyIn);
+	
+	if (retCode != ERROR_SUCCESS)
+	{
+		Debugprintf("Open Reg Key %s failed", KeyIn);
+		return FALSE;
+	}
+
+	len = wsprintf(RegLine, "[%s\\%s]\r\n", REGTREETEXT, KeyIn);
+
+	WriteFile(hFile, RegLine, len, &written, NULL);
+ 
+    // Get the class name and the value count. 
+    retCode = RegQueryInfoKey(
+        hKeyIn,                    // key handle 
+        achClass,                // buffer for class name 
+        &cchClassName,           // size of class string 
+        NULL,                    // reserved 
+        &cSubKeys,               // number of subkeys 
+        &cbMaxSubKey,            // longest subkey size 
+        &cchMaxClass,            // longest class string 
+        &cValues,                // number of values for this key 
+        &cchMaxValue,            // longest value name 
+        &cbMaxValueData,         // longest value data 
+        &cbSecurityDescriptor,   // security descriptor 
+        &ftLastWriteTime);       // last write time 
+
+	    // Enumerate the key values. 
+
+    if (cValues) 
+	{
+        for (i=0, retCode=ERROR_SUCCESS; i<cValues; i++) 
+		{
+			int Type, k;
+			int ValLen = MAX_VALUE_DATA;
+			UCHAR Value[MAX_VALUE_DATA] = "";
+			UCHAR ValCopy[MAX_VALUE_DATA];
+
+			UINT Intval;
+
+            cchValue = MAX_VALUE_NAME; 
+            achValue[0] = '\0'; 
+            retCode = RegEnumValue(hKeyIn, i, 
+                achValue, 
+                &cchValue, 
+                NULL, 
+                &Type,
+                &Value[0],
+                &ValLen);
+ 
+            if (retCode == ERROR_SUCCESS ) 
+            {
+				// Encode the param depending on Type
+
+				    switch(Type)
+					{
+					case REG_NONE:						//( 0 )   // No value type
+						break;
+					case REG_SZ:						//( 1 )   // Unicode nul terminated string
+						
+						// Need to escape any \ or " in Value
+						
+						ptr1 = Value;
+						ptr2 = ValCopy;
+
+						c = *ptr1++;
+
+						while (c)
+						{	
+							switch (c)
+							{
+								case '\\':
+								case '"':
+									*ptr2++ = '\\';
+							}
+							*ptr2++ = c;
+							c = *ptr1++;
+						}
+						*ptr2 = 0;
+					
+						len = wsprintf(RegLine, "\"%s\"=\"%s\"\r\n", achValue, ValCopy);
+						break;
+
+					case REG_EXPAND_SZ:					//( 2 )   // Unicode nul terminated string
+														// (with environment variable references)
+						break;
+
+					case REG_BINARY:					//( 3 )   // Free form binary - hex:86,50 etc
+
+						len = wsprintf(RegLine, "\"%s\"=hex:%02x,", achValue, Value[0]);
+						for (k = 1; k < ValLen; k++)
+						{
+							if (len > 76)
+							{
+								len = wsprintf(RegLine, "%s\\\r\n", RegLine);
+								WriteFile(hFile, RegLine, len, &written, NULL);
+								strcpy(RegLine, "  ");
+								len = 2;
+							}
+
+							len = wsprintf(RegLine, "%s%02x,", RegLine, Value[k]);
+						}
+						RegLine[--len] = 0x0d;
+						RegLine[++len] = 0x0a;	
+						len++;
+
+						break;
+
+					case REG_DWORD:						//( 4 )   // 32-bit number
+//					case REG_DWORD_LITTLE_ENDIAN:		//( 4 )   // 32-bit number (same as REG_DWORD)
+					
+						memcpy(&Intval, Value, 4);
+						len = wsprintf(RegLine, "\"%s\"=dword:%08x\r\n", achValue, Intval);
+					break;
+				
+					case REG_DWORD_BIG_ENDIAN:			//( 5 )   // 32-bit number
+						break;
+					case REG_LINK:						//( 6 )   // Symbolic Link (unicode)
+						break;
+					case REG_MULTI_SZ:					//( 7 )   // Multiple Unicode strings
+
+						len = wsprintf(RegLine, "\"%s\"=hex(7):%02x,00,", achValue, Value[0]);
+						for (k = 1; k < ValLen; k++)
+						{
+							if (len > 76)
+							{
+								len = wsprintf(RegLine, "%s\\\r\n", RegLine);
+								WriteFile(hFile, RegLine, len, &written, NULL);
+								strcpy(RegLine, "  ");
+								len = 2;
+							}
+							len = wsprintf(RegLine, "%s%02x,", RegLine, Value[k]);
+							if (len > 76)
+							{
+								len = wsprintf(RegLine, "%s\\\r\n", RegLine);
+								WriteFile(hFile, RegLine, len, &written, NULL);
+								strcpy(RegLine, "  ");
+							}
+							len = wsprintf(RegLine, "%s00,", RegLine);
+						}
+
+						RegLine[--len] = 0x0d;
+						RegLine[++len] = 0x0a;	
+						len++;
+						break;
+
+					case REG_RESOURCE_LIST:				//( 8 )   // Resource list in the resource map
+						break;
+					case REG_FULL_RESOURCE_DESCRIPTOR:	//( 9 )  // Resource list in the hardware description
+						break;
+					case REG_RESOURCE_REQUIREMENTS_LIST://( 10 )
+						break;
+					case REG_QWORD:						//( 11 )  // 64-bit number
+//					case REG_QWORD_LITTLE_ENDIAN:		//( 11 )  // 64-bit number (same as REG_QWORD)
+						break;
+
+					}
+				
+				WriteFile(hFile, RegLine, len, &written, NULL);
+            } 
+        }
+	}	
+	
+	WriteFile(hFile, "\r\n", 2, &written, NULL);
+	
+    // Enumerate the subkeys, until RegEnumKeyEx fails.
+    
+    if (cSubKeys)
+    {
+        for (i=0; i<cSubKeys; i++) 
+        { 
+            cbName = MAX_KEY_LENGTH;
+            retCode = RegEnumKeyEx(hKeyIn, i,
+                     achKey, 
+                     &cbName, 
+                     NULL, 
+                     NULL, 
+                     NULL, 
+                     &ftLastWriteTime); 
+
+            if (retCode == ERROR_SUCCESS) 
+            {
+                char NextKeyIn[MAX_KEY_LENGTH];
+
+				wsprintf(NextKeyIn, "%s\\%s", KeyIn, achKey);
+				SaveReg(NextKeyIn, hFile);
+            }
+        }
+    } 
 	return TRUE;
 }
 

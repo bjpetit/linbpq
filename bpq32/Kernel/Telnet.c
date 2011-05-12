@@ -46,6 +46,8 @@ extern UCHAR BPQDirectory[];
 extern struct BPQVECSTRUC TELNETMONVEC;
 extern int MONDECODE();
 
+extern HKEY REGTREE;
+
 static RECT Rect;
 
 extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
@@ -105,6 +107,9 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error);
 BOOL ProcessConfig();
 VOID FreeConfig();
+VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo);
+VOID GetCMSCachedInfo(struct TNCINFO * TNC);
+BOOL CMSCheck(struct TNCINFO * TNC, struct TCPINFO * TCP);
 
 ProcessLine(char * buf, int Port)
 {
@@ -600,7 +605,7 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	TCP->hDisMenu=GetSubMenu(TCP->hActionMenu,1);
 
-	CheckMenuItem(TCP->hLogMenu,0, MF_BYPOSITION | LogEnabled<<3);
+	CheckMenuItem(TCP->hLogMenu, 0, MF_BYPOSITION | LogEnabled<<3);
 	CheckMenuItem(TCP->hLogMenu, 1, MF_BYPOSITION | CMSLogEnabled<<3);
 
 	ModifyMenu(hMenu, 1, MF_BYPOSITION | MF_OWNERDRAW | MF_STRING, 10000,  0); 
@@ -1231,8 +1236,6 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 				DrawMenuBar(TNC->hDlg);	
 			}
 			break;
-
-
 
 		case IDM_LOGGING:
 
@@ -2698,6 +2701,8 @@ int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error)
 */
 				}
 
+				SaveCMSHostInfo(TNC->Port, TNC->TCPInfo, sockptr->CMSIndex);
+
 				buffptr[1]  = wsprintf((UCHAR *)&buffptr[2], "*** %s Connected to CMS\r", TNC->Streams[Stream].MyCall);;
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 		
@@ -2766,16 +2771,38 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 	struct hostent *remoteHost;
     char **pAlias;
 	int i = 0;
+	BOOL INETOK = FALSE;
+
+	// First make sure we have a functioning DNS
+
+	TCP->UseCachedCMSAddrs = FALSE;
+	
+	HostEnt = gethostbyname("a.root-servers.net");
+		 
+	if (HostEnt)
+		INETOK = TRUE;			// We have connectivity
+	else
+	{
+		Debugprintf("Resolve root nameserver failed");
+
+		// Most likely is a local Internet Outage, but we could have Internet, but no name servers
+
+		// Either way, switch to using cached CMS addresses. CMS Validation will check connectivity
+
+		TCP->UseCachedCMSAddrs = TRUE;
+		goto CheckServers;
+	}
 
 	HostEnt = gethostbyname("server.winlink.org");
 		 
-	if (!HostEnt)
+	if (!HostEnt || HostEnt->h_addr_list[1] == 0)	// Resolve Failed, or Returned only one Host
 	{
 		Debugprintf("Resolve CMS Failed");
-		TCP->CMSOK = FALSE;
-		DrawMenuBar(TNC->hDlg);	
 
-		return FALSE;			// Resolve failed
+		// Switch to Cached Servers
+		
+		TCP->UseCachedCMSAddrs = TRUE;
+		goto CheckServers;
 	}
 
 	while (HostEnt->h_addr_list[i] != 0 && i < MaxCMS)
@@ -2789,34 +2816,214 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 	TCP->NumberofCMSAddrs = i;
 
 	i = 0;
-	while (i <  TCP->NumberofCMSAddrs)
-	{
-		remoteHost = gethostbyaddr((char *) &TCP->CMSAddr[i++], 4, AF_INET);
 
-	   if (remoteHost == NULL)
-	   {
-		    int dwError = WSAGetLastError();
-	        if (dwError != 0)
+	while (i < TCP->NumberofCMSAddrs)
+	{
+		if (TCP->CMSName[i])
+			free(TCP->CMSName[i]);
+		   		
+		remoteHost = gethostbyaddr((char *) &TCP->CMSAddr[i], 4, AF_INET);
+
+		if (remoteHost == NULL)
+		{
+			int dwError = WSAGetLastError();
+	
+			TCP->CMSName[i] = NULL;
+
+			if (dwError != 0)
 			{
-	            if (dwError == WSAHOST_NOT_FOUND)
-		            printf("Host not found\n");
+				if (dwError == WSAHOST_NOT_FOUND)
+					printf("Host not found\n");
 				else if (dwError == WSANO_DATA)
-			       printf("No data record found\n");
+					printf("No data record found\n");
 			}
 	   }
 	   else
 	   { 
 		   Debugprintf("Official name #%d: %s",i,  remoteHost->h_name);
+		   
+		   TCP->CMSName[i] = _strdup(remoteHost->h_name);			// Save Host Name
+	
 		   for (pAlias = remoteHost->h_aliases; *pAlias != 0; pAlias++)
 		   {
 			   Debugprintf("\tAlternate name #%d: %s", ++i, *pAlias);
 		   }
 	   }
+		i++;
 	}
-	TCP->CMSOK = TRUE;
+
+CheckServers:
+
+	CheckMenuItem(TNC->TCPInfo->hActionMenu, 4, MF_BYPOSITION | TCP->UseCachedCMSAddrs<<3);
+
+	if (TCP->UseCachedCMSAddrs)
+	{
+		// Get Cached Servers from Registry - Names are in RegTree\G8BPQ\BPQ32\PACTOR\PORTn\CMSInfo
+
+		GetCMSCachedInfo(TNC);
+	}
+
+	if (TCP->NumberofCMSAddrs == 0)
+	{
+		TCP->CMSOK = FALSE;
+		DrawMenuBar(TNC->hDlg);	
+
+		return TRUE;
+	}
+
+	// if we don't know we have Internet connectivity, make sure we can connect to at least one of them
+
+	TCP->CMSOK = INETOK | CMSCheck(TNC, TCP);		// If we know we have Inet, dont check connectivity
 	DrawMenuBar(TNC->hDlg);	
 
 	return TRUE;
+}
+
+#define MAX_KEY_LENGTH 255
+#define MAX_VALUE_NAME 255
+#define MAX_VALUE_DATA 255
+
+
+VOID GetCMSCachedInfo(struct TNCINFO * TNC)
+{
+	struct TCPINFO * TCP = TNC->TCPInfo;
+    TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
+    DWORD    cchClassName = MAX_PATH;  // size of class string 
+    DWORD    cSubKeys=0;               // number of subkeys 
+    DWORD    cbMaxSubKey;              // longest subkey size 
+    DWORD    cchMaxClass;              // longest class string 
+    DWORD    cValues;              // number of values for key 
+    DWORD    cchMaxValue;          // longest value name 
+    DWORD    cbMaxValueData;       // longest value data 
+    DWORD    cbSecurityDescriptor; // size of security descriptor 
+    FILETIME ftLastWriteTime;      // last write time 
+ 
+    DWORD i, retCode; 
+ 
+    TCHAR  achValue[MAX_VALUE_NAME]; 
+    DWORD cchValue = MAX_VALUE_NAME; 
+
+	HKEY hKey=0;
+	char Key[80];
+
+	Debugprintf("Getting cached CMS Server info"); 
+
+	TCP->NumberofCMSAddrs = 0;
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d\\CMSInfo", TNC->Port);
+	
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode != ERROR_SUCCESS)
+	{
+		Debugprintf("Cached CMS Server info key not found"); 
+		return;
+	}
+
+    // Get the class name and the value count. 
+    retCode = RegQueryInfoKey(
+        hKey,                    // key handle 
+        achClass,                // buffer for class name 
+        &cchClassName,           // size of class string 
+        NULL,                    // reserved 
+        &cSubKeys,               // number of subkeys 
+        &cbMaxSubKey,            // longest subkey size 
+        &cchMaxClass,            // longest class string 
+        &cValues,                // number of values for this key 
+        &cchMaxValue,            // longest value name 
+        &cbMaxValueData,         // longest value data 
+        &cbSecurityDescriptor,   // security descriptor 
+        &ftLastWriteTime);       // last write time 
+ 
+    // Enumerate the key values. 
+
+    if (cValues == 0)
+	{
+		Debugprintf("No Cached CMS Servers found"); 
+		return;
+	}
+
+	for (i=0, retCode=ERROR_SUCCESS; i<cValues; i++) 
+	{ 
+		int Type;
+		int ValLen = MAX_VALUE_DATA;
+		UCHAR Value[MAX_VALUE_DATA] = "";
+
+		cchValue = MAX_VALUE_NAME; 
+		achValue[0] = '\0'; 
+	
+		retCode = RegEnumValue(hKey, i, achValue, &cchValue, NULL, &Type, Value, &ValLen);
+ 
+		if (retCode == ERROR_SUCCESS) 
+		{
+			char Time[80], IPADDR[80];
+			ULONG IPAD;
+			
+			Debugprintf("%s = %s", achValue, Value); 
+			sscanf(Value, "%s %s", &Time, &IPADDR);
+
+			IPAD = inet_addr(IPADDR);
+			memcpy(&TCP->CMSAddr[i], &IPAD, 4);
+
+			TCP->CMSFailed[i] = FALSE;
+		
+			if (TCP->CMSName[i])
+				free(TCP->CMSName[i]);
+		   		
+			TCP->CMSName[i] = _strdup(achValue);			// Save Host Name
+		}
+	}
+
+	RegCloseKey(hKey);
+
+	TCP->NumberofCMSAddrs = i;
+	return;
+}
+
+BOOL CMSCheck(struct TNCINFO * TNC, struct TCPINFO * TCP)
+{
+	// Make sure at least one CMS can be connected to
+
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	SOCKET sock;
+	SOCKADDR_IN sinx; 
+	SOCKADDR_IN destaddr;
+	int addrlen=sizeof(sinx);
+	int n = 0;
+
+	destaddr.sin_family = AF_INET; 
+	destaddr.sin_port = htons(8772);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = 0;
+
+	for (n = 0; n < TCP->NumberofCMSAddrs;  n++)
+	{
+		sock = socket(AF_INET, SOCK_STREAM, 0);
+
+		if (sock == INVALID_SOCKET)
+			return FALSE;
+	
+		memcpy(&destaddr.sin_addr.s_addr, &TCP->CMSAddr[n], 4);
+
+		setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
+
+		if (bind(sock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+	  	 	return FALSE;
+
+		if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) == 0)
+		{
+			closesocket(sock);
+			return TRUE;
+		}
+
+		// Failed - try next
+
+		closesocket(sock);
+	}
+	return FALSE;
 }
 
 
@@ -2944,6 +3151,34 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	return FALSE;
 
 }
+
+VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
+{
+	HKEY hKey=0;
+	char Info[80];
+	char Key[80];
+	int retCode, disp;
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d\\CMSInfo", port);
+	
+	retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0,
+            KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		wsprintf(Info,"%d %d.%d.%d.%d", time(NULL),
+			TCP->CMSAddr[CMSNo].S_un.S_un_b.s_b1,
+			TCP->CMSAddr[CMSNo].S_un.S_un_b.s_b2,
+			TCP->CMSAddr[CMSNo].S_un.S_un_b.s_b3,
+			TCP->CMSAddr[CMSNo].S_un.S_un_b.s_b4);
+
+		retCode = RegSetValueEx(hKey, TCP->CMSName[CMSNo], 0, REG_SZ, (BYTE *)&Info, strlen(Info));
+		RegCloseKey(hKey);
+	}
+
+	return;
+}
+
 /*
 
 Keep this in cse we ever do general outgoing TCP

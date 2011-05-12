@@ -58,8 +58,10 @@ struct TCPINFO
 	int RelayPort;
 	BOOL CMS;					// Allow Connect to CMS
 	BOOL CMSOK;					// Internet link is ok.
+	BOOL UseCachedCMSAddrs;
 	struct in_addr CMSAddr[MaxCMS];
 	BOOL CMSFailed[MaxCMS];		// Set if connect to CMS failed.
+	char * CMSName[MaxCMS];		// Reverse DNS Name of Server
 	int NumberofCMSAddrs;
 	int NextCMSAddr;			// Round Robin Pointer
 	int CheckCMSTimer;			// CMS Poll Timer

@@ -254,6 +254,8 @@ VOID APIENTRY md5 (char *arg, unsigned char * checksum);
 
 int APIENTRY SetupTrayIcon();
 
+BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
+
 #else
 
 struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntry) (int portslot);

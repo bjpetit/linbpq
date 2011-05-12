@@ -8,6 +8,27 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 {
 	Buffer[len] = 0;
 
+	// Winpack can send a second SID to switch to upload mode
+
+	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
+	{
+		if (user->flags & (F_PMS))
+		{
+			Parse_SID(conn, &Buffer[1], len-4);
+			
+			if (conn->BBSFlags & FBBForwarding)
+			{
+				conn->FBBIndex = 0;		// ready for first block;
+				conn->FBBChecksum = 0;
+				memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
+			}
+			else
+				BBSputs(conn, ">\r");
+		}
+
+		return;
+	}
+
 	if (Buffer[0] == 6 && Buffer[1] == 5)
 	{
 		// ?? Sally send there after a failed tranfer
