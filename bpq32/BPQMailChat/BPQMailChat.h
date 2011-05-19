@@ -402,6 +402,11 @@ typedef struct FBBRestartData
 
 #pragma pack(1)
 
+struct TempUserInfo
+{
+	int LastAuthCode;				// Protect against playback attack
+};
+
 struct UserInfo{
 
 	char	Call[10];			//	Connected call without SSID	
@@ -421,7 +426,8 @@ struct UserInfo{
 	char	BBSNumber;			// BBS Bitmap Index Number
 	struct	BBSForwardingInfo * ForwardingInfo;
 	struct  UserInfo * BBSNext;	// links BBS record
-	char	xfree[10];			/* 10 Spare */
+	struct  TempUserInfo * Temp;	// Working Fields - not saved in user file
+	char	xfree[6];			/* 6 Spare */
 	char	theme;				/* 1  Current topic */
 
 	char	Name[18];			/* 18 1st Name */
@@ -1062,6 +1068,12 @@ BOOL CheckifLocalRMSUser(char * FullTo);
 VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *Context);
 BOOL wildcardcompare(char * Target, char * Match);
 VOID SendWarningToSYSOP(struct MsgInfo * Msg);
+VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+VOID DoPollRMSCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo);
+VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+
 
 // FBB Routines
 

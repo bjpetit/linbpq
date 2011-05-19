@@ -855,7 +855,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 	// Now have all the parts - build a B2 Message. Leave the first part of header for later,
 	// as we may have multiple recipients. Start with the Body: Line.
 
-	// We nned to add the first part of header later, so start message part way down buffer.
+	// We need to add the first part of header later, so start message part way down buffer.
 	// Make sure buffer is big enough.
 
 	if ((sockptr->MailSize + 2000) > sockptr->MailBufferSize)
@@ -916,7 +916,10 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			int linelen, MsgLen;
 			char Msgtitle[62];
 			BOOL B2Flag;
-
+			int ToLen = 0;
+			char * ToString;
+			char * Via;
+			
 			// Scan headers for a Subject: or Date: Line (Headers end at blank line)
 
 			ptr1 = sockptr->MailBuffer;
@@ -1000,12 +1003,14 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 				}
 			}
 
+			ptr1 = ptr2 + 2;		// Skip crlf
+			
 			if (linelen)			// Not Null line
 			{
-				ptr1 = ptr2 + 2;		// Skip crlf
 				goto Loop;
 			}
 
+			ptr2 = ptr1;
 			ptr1 = sockptr->MailBuffer;
 
 			MsgLen = sockptr->MailSize - (ptr2 - ptr1);
@@ -1021,28 +1026,159 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			B2Flag = CheckforMIME(sockptr, sockptr->MailBuffer, &ptr2, &MsgLen);	// Will reformat message if necessary. 
 
+			// If any recipients are via RMS, create one message for them, and separate messages for all others
+
+			ToString = zalloc(sockptr->Recipients * 100);
+	
 			for (i=0; i < sockptr->Recipients; i++)
 			{
-				CreateSMTPMessage(sockptr, i, Msgtitle, Date, ptr2, MsgLen, B2Flag);
+				char Addr[256];					// Need copy, as we may change it then decide it isn't for RMS
+				
+				strcpy(Addr, sockptr->RecpTo[i]);
+
+				TidyString(Addr);
+
+				if ((_memicmp (Addr, "RMS:", 4) == 0) |(_memicmp (Addr, "RMS/", 4) == 0))
+				{
+					// Add to B2 Message for RMS
+										
+					_strlwr(Addr);
+					
+					Via = strlop(&Addr[4], '@');
+				
+					if (Via && _stricmp(Via, "winlink.org") == 0)
+					{
+						if (CheckifLocalRMSUser(Addr)) // if local RMS - Leave Here
+							continue;
+						
+						ToLen = wsprintf(ToString, "%sTo: %s\r\n", ToString, &Addr[4]);
+						*sockptr->RecpTo[i] = 0;		// So we dont create individual one later
+						continue;
+					}
+
+					ToLen = wsprintf(ToString, "%sTo: %s@%s\r\n", ToString, &Addr[4], Via);
+					*sockptr->RecpTo[i] = 0;			// So we dont create individual one later
+					continue;
+				}
+
+				_strupr(Addr);
+				
+				Via = strlop(Addr, '@');
+
+				if (Via && _stricmp(Via, "winlink.org") == 0)
+				{
+					if (CheckifLocalRMSUser(Addr)) // if local RMS - Leave Here
+						continue;
+					
+					ToLen = wsprintf(ToString, "%sTo: %s\r\n", ToString, Addr);
+					*sockptr->RecpTo[i] = 0;		// So we dont create individual one later
+
+					continue;
+				}
+			}
+
+			if (ToLen)						// Have some RMS Addresses
+			{
+				char B2Hddr[1000];
+				int B2HddrLen;
+				char DateString[80];
+				char * NewBody;
+				struct tm * tm;
+				struct MsgInfo * Msg;
+				BIDRec * BIDRec;
+
+				Msg = AllocateMsgRecord();
+		
+				// Set number here so they remain in sequence
+		
+				Msg->number = ++LatestMsg;
+				MsgnotoMsg[Msg->number] = Msg;
+				Msg->length = MsgLen;
+
+				sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+
+				Msg->type = 'P';
+				Msg->status = 'N';
+				strcpy(Msg->to, "RMS");
+				strcpy(Msg->from, sockptr->MailFrom);
+				strcpy(Msg->title, Msgtitle);
+
+				BIDRec = AllocateBIDRecord();
+
+				strcpy(BIDRec->BID, Msg->bid);
+				BIDRec->mode = Msg->type;
+				BIDRec->u.msgno = LOWORD(Msg->number);
+				BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+				Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+				if (Date)
+					Msg->datecreated = Date;
+
+				tm = gmtime(&Date);	
+	
+				wsprintf(DateString, "%04d%/%02d/%02d %02d:%02d",
+					tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+				if (B2Flag)				// Message has attachments, so Body: line is present
+				{
+					Msg->B2Flags = B2Msg | Attachments;
+		
+					B2HddrLen = wsprintf(B2Hddr,
+						"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\n%sSubject: %s\r\nMbo: %s\r\n",
+						Msg->bid, DateString, "Private", Msg->from, ToString, Msg->title, BBSName);
+				}
+				else
+				{
+					Msg->B2Flags = B2Msg;
+					B2HddrLen = wsprintf(B2Hddr,
+						"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\n%sSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
+						Msg->bid, DateString, "Private", Msg->from, ToString, Msg->title, BBSName, Msg->length);
+
+				}
+			
+				NewBody = ptr2 - B2HddrLen;
+
+				memcpy(NewBody, B2Hddr, B2HddrLen);
+
+				Msg->length += B2HddrLen;
+
+				free(ToString);
+	
+				// Set up forwarding bitmap
+
+				MatchMessagetoBBSList(Msg, 0);
+
+				CreateSMTPMessageFile(NewBody, Msg);
+			}
+			
+
+
+
+
+
+
+			for (i=0; i < sockptr->Recipients; i++)
+			{
+				if (*sockptr->RecpTo[i])			// not already sent to RMS?
+					CreateSMTPMessage(sockptr, i, Msgtitle, Date, ptr2, MsgLen, B2Flag);
+				else
+					free(sockptr->RecpTo[i]);
 			}
 
 			free(sockptr->RecpTo);
+			sockptr->RecpTo = NULL;
 			free(sockptr->MailFrom);
 			free(sockptr->MailBuffer);
 
 			sockptr->MailBufferSize=0;
 			sockptr->MailBuffer=0;
 			sockptr->MailSize = 0;
-
 	
-			SendSock(sockptr, "250 Ok");
-			
-			//else			
-			//	send(sock, "450 Ok\r\n", 8,0);
-
 			sockptr->Flags = 0;
 			sockptr->Recipients = 0;
 
+			SendSock(sockptr, "250 Ok");
 			return;
 		}
 

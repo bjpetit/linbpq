@@ -280,6 +280,8 @@ BOOL CreateConsole(int Stream)
 		user = AllocateUserRecord(SYSOPCall);
 
 		if (user == NULL) return 0; //		Cant happen??
+	
+		user->Temp = zalloc(sizeof (struct TempUserInfo));
 	}
 
 	time(&user->TimeLastConnected);

@@ -681,7 +681,10 @@
 // Use internal Registry Save routine instead of Regedit
 // Fix Start Forward/All
 // Allow Winpack Compressed Upload/Download if PMS flag set (as well as BBS flag) 
-
+// Add FWD SYSOP command
+// Fix security on POLLRMS command
+// Add AUTH command
+// Leave selection in same place after Delete User
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -2409,8 +2412,10 @@ BOOL Initialise()
 	user = LookupCall(BBSName);
 		
 	if (user == NULL)
+	{
 		user = AllocateUserRecord(BBSName);
-
+		user->Temp = zalloc(sizeof (struct TempUserInfo));
+	}
 	if ((user->flags & F_BBS) == 0)
 	{
 		// Not Defined as a BBS
@@ -2560,6 +2565,7 @@ int Connected(Stream)
 				char * MailBuffer = malloc(100);
 
 				user = AllocateUserRecord(callsign);
+				user->Temp = zalloc(sizeof (struct TempUserInfo));
 
 				Length += wsprintf(MailBuffer, "New User %s Connected to Mailbox\r\n", callsign);
 
@@ -3144,6 +3150,7 @@ Next:
 	{
 		user = AllocateUserRecord(UserRec.Call);
 		memcpy(user, &UserRec,  sizeof (UserRec));
+		user->Temp = zalloc(sizeof (struct TempUserInfo));
 
 		user->ForwardingInfo = NULL;	// In case left behind on crash
 		user->BBSNext = NULL;
@@ -3976,6 +3983,12 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	Arg1 = strtok_s(NULL, seps, &Context);
 	CmdLen = strlen(Cmd);
 
+	if (_stricmp(Cmd, "AUTH") == 0)
+	{
+		DoAuthCmd(conn, user, Arg1, Context);
+		return;
+	}
+
 	if (_memicmp(Cmd, "Abort", 1) == 0)
 	{
 		ClearQueue(conn);
@@ -4203,7 +4216,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
 			BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
 			BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
-			BBSputs(conn, "                      LN LY LH LK LF L$ LD - List Mesaage with corresponding Status\r");
+			BBSputs(conn, "                      LN LY LH LK LF L$ LD - List Message with corresponding Status\r");
 			BBSputs(conn, "                      LB LP LT - List Mesaage with corresponding Type\r");
 			BBSputs(conn, "                      LC List TO fields of all active bulletins\r");
 			BBSputs(conn, "N Name - Set Name\r");
@@ -4216,7 +4229,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			{
 				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
 				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
-
+				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
 			}
 		}
 
@@ -4279,195 +4292,19 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if ((_memicmp(Cmd, "EDITUSER", 5) == 0) || (_memicmp(Cmd, "EU", 2) == 0))
 	{
-		char Line[200] = "User Flags:";
-		struct UserInfo * EUser = user;
-
-		if ((user->flags & F_SYSOP) == 0)
-		{
-			nodeprintf(conn, "Edit User needs SYSOP status\r");
-			SendPrompt(conn, user);
-			return;
-		}
-
-		if (Arg1 == 0 || _stricmp(Arg1, "HELP") == 0)
-		{
-			nodeprintf(conn, "EDITUSER CALLSIGN to Display\r");
-			nodeprintf(conn, "EDITUSER CALLSIGN FLAG1 FLAG2 ...  to set, -FLAG1 -FLAG2 ...  to clear\r");
-			nodeprintf(conn, "EDITUSER: Flags are: EXC(luded) EXP(ert) SYSOP BBS EMAIL HOLD\r");
-
-			SendPrompt(conn, user);
-			return;
-		}
-
-
-		EUser = LookupCall(Arg1);
-
-		if (EUser == 0)
-		{
-			nodeprintf(conn, "User %s not found\r", Arg1);
-			SendPrompt(conn, user);
-			return;
-		}
-
-		Arg1 = strtok_s(NULL, seps, &Context);
-
-		if (Arg1 == NULL)
-			goto UDisplay;
-					
-		// A set of flags to change +Flag or -Flag
-		
-		while(Arg1 && strlen(Arg1) > 2)
-		{
-			_strupr(Arg1);
-
-			if (strstr(Arg1, "EXC"))
-				if (Arg1[0] != '-') user->flags |= F_Excluded; else user->flags &= ~F_Excluded;
-			if (strstr(Arg1, "EXP"))
-				if (Arg1[0] != '-') user->flags |= F_Expert; else user->flags &= ~F_Expert;
-			if (strstr(Arg1, "SYS"))
-				if (Arg1[0] != '-') user->flags |= F_SYSOP; else user->flags &= ~F_SYSOP;
-			if (strstr(Arg1, "BBS"))
-				if (Arg1[0] != '-') user->flags |= F_BBS; else user->flags &= ~F_BBS;
-			if (strstr(Arg1, "EMAIL"))
-				if (Arg1[0] != '-') user->flags |= F_EMAIL; else user->flags &= ~F_EMAIL;
-			if (strstr(Arg1, "HOLD"))
-				if (Arg1[0] != '-') user->flags |= F_HOLDMAIL; else user->flags &= ~F_HOLDMAIL;
-
-			Arg1 = strtok_s(NULL, seps, &Context);
-		}
-
-		SaveUserDatabase();
-
-		// Drop through to display
-UDisplay:
-
-		if (user->flags & F_Excluded)
-			strcat(Line, " EXC");
-
-		if (user->flags & F_Expert)
-			strcat(Line, " EXP");
-
-		if (user->flags & F_SYSOP)
-			strcat(Line, " SYSOP");
-
-		if (user->flags & F_BBS)
-			strcat(Line, " BBS");
-
-		if (user->flags & F_EMAIL)
-			strcat(Line, " EMAIL");
-
-		if (user->flags & F_HOLDMAIL)
-			strcat(Line, " HOLD");
-
-		strcat(Line, "\r");	
-		nodeprintf(conn, Line);
-	
-		SendPrompt(conn, user);
+		DoEditUserCmd(conn, user, Arg1, Context);
 		return;
 	}
 
-
-	if (_memicmp(Cmd, "POLLRMS", 6) == 0)
+	if (_stricmp(Cmd, "POLLRMS") == 0)
 	{
-		char RMSLine[200] = "Polling for calls";
-		char RMSCall[10];
-		struct UserInfo * RMSUser = user;
-		int s;
-Loop:
-		if (Arg1)
-		{
-			// Update	
-			if (_stricmp(Arg1, "Enable") == 0)
-			{
-				RMSUser->flags |= F_POLLRMS;
-				Arg1 = strtok_s(NULL, seps, &Context);
-				goto Display;
-			}
-			else if (_stricmp(Arg1, "Disable") == 0)
-			{
-				RMSUser->flags &= ~F_POLLRMS;
-				Arg1 = strtok_s(NULL, seps, &Context);
-				goto Display;
-			}
-			else if (strlen(Arg1) > 2)
-			{
-				// Callsign - if SYSOP, following commands apply to selected user
+		DoPollRMSCmd(conn, user, Arg1, Context);
+		return;
+	}
 
-				if ((user->flags & F_SYSOP) == 0)
-				{
-					nodeprintf(conn, "Changing RMS Poll params for another user needs SYSOP status\r");
-					SendPrompt(conn, user);
-					return;
-				}
-				RMSUser = LookupCall(Arg1);
-
-				if (RMSUser == NULL)
-				{
-					nodeprintf(conn, "User %s not found\r", Arg1);
-					SendPrompt(conn, user);
-					return;
-				}
-
-				Arg1 = strtok_s(NULL, seps, &Context);
-
-				if (Arg1 == NULL)
-					goto Display;
-				
-				if (_stricmp(Arg1, "Enable") == 0 || _stricmp(Arg1, "Disable") == 0 || (strlen(Arg1) < 3))
-					goto Loop;
-
-				goto Display;
-			}
-			{
-				// A list of SSID's to poll
-
-				RMSUser->RMSSSIDBits = 0;
-
-				while(Arg1 && strlen(Arg1) < 3)
-				{
-					s = atoi(Arg1);
-					if (s < 16)
-						RMSUser->RMSSSIDBits |= (1 << (s));
-
-					Arg1 = strtok_s(NULL, seps, &Context);
-				}
-			}
-		}
-		// Drop through to display
-Display:
-		strcpy(RMSLine, "Polling for calls");
-
-		if (RMSUser->flags & F_POLLRMS)
-		{
-			if (RMSUser->RMSSSIDBits == 0) RMSUser->RMSSSIDBits = 1;
-			{
-				for (s = 0; s < 16; s++)
-				{
-					if (RMSUser->RMSSSIDBits & (1 << s))
-					{
-						strcat(RMSLine, " ");
-						if (s)
-						{
-							wsprintf(RMSCall, "%s-%d", RMSUser->Call, s);
-							strcat(RMSLine, RMSCall);
-						}
-						else
-							strcat(RMSLine, RMSUser->Call);
-						
-					}
-				}
-			}
-			strcat(RMSLine, "\r");	
-			nodeprintf(conn, RMSLine);
-		}
-		else
-			nodeprintf(conn, "RMS Polling for %s disabled\r", RMSUser->Call);
-
-		if (Arg1)
-			goto Loop;
-	
-		SaveUserDatabase();
-		SendPrompt(conn, user);
+	if (_stricmp(Cmd, "FWD") == 0)
+	{
+		DoFwdCmd(conn, user, Arg1, Context);
 		return;
 	}
 

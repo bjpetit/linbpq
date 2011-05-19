@@ -330,3 +330,25 @@ BOOL wildcardcompare(char * Target, char * Match)
 	// No WildCards - straight strcmp
 	return (strcmp(Target, Pattern) == 0);
 }
+
+VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo)
+{
+	HKEY hKey=0;
+	int disp;
+	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
+
+	strcat(Key, Call);
+
+	RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	RegSetValueEx(hKey, "Enabled", 0, REG_DWORD, (BYTE *)&ForwardingInfo->Enabled, 4);
+
+	RegSetValueEx(hKey, "RequestReverse", 0, REG_DWORD, (BYTE *)&ForwardingInfo->ReverseFlag, 4);
+	
+	RegSetValueEx(hKey, "FWDInterval", 0, REG_DWORD, (BYTE *)&ForwardingInfo->FwdInterval, 4);
+	
+	RegSetValueEx(hKey, "FWD New Immediately", 0, REG_DWORD, (BYTE *)&ForwardingInfo->SendNew, 4);
+
+	
+	RegCloseKey(hKey);
+}

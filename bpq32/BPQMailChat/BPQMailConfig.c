@@ -890,6 +890,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 	return 0;
 
 }
+int Sel;
 
 int Do_User_Sel_Changed(HWND hDlg)
 {
@@ -898,7 +899,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 
 	struct UserInfo * user;
 
-	int Sel = SendDlgItemMessage(hDlg, IDC_USER, CB_GETCURSEL, 0, 0);
+	Sel = SendDlgItemMessage(hDlg, IDC_USER, CB_GETCURSEL, 0, 0);
 
 	if (Sel == -1)
 		SendDlgItemMessage(hDlg, IDC_USER, WM_GETTEXT, Sel, (LPARAM)(LPCTSTR)&CurrentConfigCall);
@@ -1032,6 +1033,8 @@ VOID Do_Add_User(HWND hDlg)
 	else
 	{
 		user = AllocateUserRecord(CurrentConfigCall);
+		user->Temp = zalloc(sizeof (struct TempUserInfo));
+
 		CurrentConfigIndex=NumberofUsers;
 		Do_Save_User(hDlg, FALSE);
 		wsprintf(InfoBoxText, "User %s added and info saved", CurrentConfigCall);
@@ -1151,6 +1154,11 @@ VOID Do_Delete_User(HWND hDlg)
 		DeleteBBS(user);
 	
 	free(user);
+
+	// Position to same place in list
+
+	SendDlgItemMessage(hDlg, IDC_USER, CB_SETCURSEL, Sel, 0);
+	Do_User_Sel_Changed(hDlg);
 
 	return;
 

@@ -162,7 +162,7 @@
 
 //				Changes for PACTOR and WINMOR to support the ATTACH command
 //				Enable INP3 if configured on a route.
-//				Fox count of nodes in Stats Display
+//				Fix count of nodes in Stats Display
 //				Overwrite the worst quality unused route if a call is received from a node not in your
 //				table when the table is full
 
@@ -264,8 +264,8 @@
 
 // 410o		Build 7 September 2010
 
-// Move rigcontol display to driver windows
-// Move rigontrol config to driver config.
+// Move rigconrtol display to driver windows
+// Move rigcontrol config to driver config.
 // Allow driver and IPGateway config info in bpq32.cfg
 // Move IPGateway, AXIP, VKISS, AGW and WINMOR drivers into bpq32.dll
 // Add option to reread IP Gateway config.
@@ -307,7 +307,7 @@
 // Send Reports to update.g8bpq.net:81
 // Add support for FT100 to Rigcontrol
 // Add timeout to Rigcontrol PTT
-// Ads Save Registry Command
+// Add Save Registry Command
 
 // 410p		Build 8 November 2010
 
@@ -373,6 +373,8 @@
 // 5.0.1.1
 
 // Add caching of CMS Server IP addresses
+// Initialise TNC State on Pactor Dialogs
+// Add Shortened (6 digit) AUTH mode.
 
 #define Kernel
 #include "Versions.h"
@@ -4752,43 +4754,37 @@ DllExport VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase,
 	}
 
 	Password[16] = 0;
-
-	Debugprintf("%s %d", Password, TimeOffset);
-
 	return;
 }
 DllExport BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase)
 {
 	char CheckPassword[17];
-	
-	CreateOneTimePassword(CheckPassword, KeyPhrase, 0);
+	int Offsets[10] = {0, -1, 1, -2, 2, -3, 3, -4, 4};
+	int i, Pass;
 
-	if (memcmp(Password, CheckPassword, 16) == 0)
-		return TRUE;
+	if (strlen(Password) < 16)
+		Pass = atoi(Password);
 
-	CreateOneTimePassword(CheckPassword, KeyPhrase, -1);
+	for (i = 0; i < 9; i++)
+	{
+		CreateOneTimePassword(CheckPassword, KeyPhrase, Offsets[i]);
 
-	if (memcmp(Password, CheckPassword, 16) == 0)
-		return TRUE;
+		if (strlen(Password) < 16)
+		{
+			// Using a numeric extract 
 
-	CreateOneTimePassword(CheckPassword, KeyPhrase, 1);
+			long long Val;
 
-	if (memcmp(Password, CheckPassword, 16) == 0)
-		return TRUE;
-	CreateOneTimePassword(CheckPassword, KeyPhrase, -2);
+			memcpy(&Val, CheckPassword, 8);
+			Val = Val %= 1000000;
 
-	if (memcmp(Password, CheckPassword, 16) == 0)
-		return TRUE;
-
-	CreateOneTimePassword(CheckPassword, KeyPhrase, 2);
-
-	if (memcmp(Password, CheckPassword, 16) == 0)
-		return TRUE;
-
-	CreateOneTimePassword(CheckPassword, KeyPhrase, -3);
-
-	if (memcmp(Password, CheckPassword, 16) == 0)
-		return TRUE;
+			if (Pass == Val)
+				return TRUE;
+		}
+		else
+			if (memcmp(Password, CheckPassword, 16) == 0)
+				return TRUE;
+	}
 
 	return FALSE;
 }
