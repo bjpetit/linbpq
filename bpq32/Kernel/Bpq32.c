@@ -375,6 +375,7 @@
 // Add caching of CMS Server IP addresses
 // Initialise TNC State on Pactor Dialogs
 // Add Shortened (6 digit) AUTH mode.
+// Update MH with all frames (not just I/UI)
 
 #define Kernel
 #include "Versions.h"
