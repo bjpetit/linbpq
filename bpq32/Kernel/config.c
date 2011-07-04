@@ -693,7 +693,27 @@ DllExport BOOL ProcessConfig()
    	   Consoleprintf("Conversion failed");
    	   return FALSE;
 	}
-  	
+/*
+	{
+		char fn[200];
+		HANDLE handle;
+		int cnt;
+
+		wsprintf(fn,"%s\\CFDUMP1",BPQDirectory);
+
+		handle = CreateFile(fn,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+	
+		WriteFile(handle,Buffer,100000,&cnt,NULL);
+
+	 	CloseHandle(handle);
+	}
+  */	
 	return TRUE;
 }
 

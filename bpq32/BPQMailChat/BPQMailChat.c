@@ -685,6 +685,7 @@
 // Fix security on POLLRMS command
 // Add AUTH command
 // Leave selection in same place after Delete User
+// Combine SMTP server messages to multiple WL2K addresses into one message to WL2k
 
 
 // Use Windows Sound Events for (Chat "user join" alert)

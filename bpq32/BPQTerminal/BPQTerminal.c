@@ -1641,8 +1641,8 @@ VOID DoRefresh(struct RTFTerm * OPData)
 		OPData->SendHeader = TRUE;
 		SendMessage(hwndOutput, EM_STREAMIN, SF_RTF, (LPARAM)&es);
 	}
-	else
-		Debugprintf("Pos %d RTFHeight %d - Not refreshing", Pos, OPData->RTFHeight);
+//	else
+//		Debugprintf("Pos %d RTFHeight %d - Not refreshing", Pos, OPData->RTFHeight);
 
 	GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);
 	ScrollInfo.cbSize = sizeof(ScrollInfo);
@@ -1689,7 +1689,7 @@ VOID DoRefresh(struct RTFTerm * OPData)
 		return;
 	}
 
-	Debugprintf("Thumb = %d Point.y = %d - Not Scrolling", OPData->Thumb, Point.y);
+//	Debugprintf("Thumb = %d Point.y = %d - Not Scrolling", OPData->Thumb, Point.y);
 
 	if (!OPData->Scrolled)
 	{

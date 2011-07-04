@@ -116,9 +116,14 @@
 
 //		Allow multiple axip ports.
 
+//  June 2011
+
+//		Add IPv6 support
+
 #define _CRT_SECURE_NO_DEPRECATE
 
-#include <winsock2.h>
+#include "winsock2.h"
+#include "WS2tcpip.h"
 #include "windows.h"
 #include <stdio.h>
 #include <process.h>
@@ -194,6 +199,7 @@ int Socket_Data(int sock, int error, int eventcode);
 VOID TCPConnectThread(struct arp_table_entry * arp);
 VOID __cdecl Debugprintf(const char * format, ...);
 BOOL OpenListeningSocket(struct PORTINFO * PORT, struct arp_table_entry * arp);
+VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
 
 #pragma pack(1) 
 
@@ -206,30 +212,45 @@ struct arp_table_entry
 {
 	unsigned char callsign[7];
 	unsigned char len;			// bytes to compare (6 or 7)
+	BOOL IPv6;
+
 	union
 	{
 		struct in_addr in_addr;
 		unsigned int ipaddr;
+		struct in6_addr in6_addr;
 	};
+
 	unsigned short port;
 	unsigned char hostname[64];
 	unsigned int error;
 	BOOL ResolveFlag;			// True if need to resolve name
 	unsigned int keepalive;
 	unsigned int keepaliveinit;
-	BOOL BCFlag;				// Frue if we want broadcasts to got to this call
+	BOOL BCFlag;				// True if we want broadcasts to got to this call
 	BOOL AutoAdded;				// Set if Entry created as a result of AUTOADDMAP
 	SOCKET TCPListenSock;			// Listening socket if slave
 	SOCKET TCPSock;
 	int  TCPMode;				// TCPMaster ot TCPSlave
 	UCHAR * TCPBuffer;			// Area for building TCP message from byte stream
 	int InputLen;				// Bytes in TCPBuffer
-	SOCKADDR_IN sin; 
-	SOCKADDR_IN destaddr;
+
+	union
+	{
+		SOCKADDR_IN6 sin6;  
+		SOCKADDR_IN sin;
+	};
+
+	union
+	{
+		SOCKADDR_IN6 destaddr6;  
+		SOCKADDR_IN destaddr;
+	};
+
 	BOOL TCPState;
 	UINT TCPThreadID;			// Thread ID if TCP Master
 	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
-	int SocketIndex;			// The socket to use (sets the from Address
+	int SourceSocket;			// The socket to use (sets the from Address
 	struct PORTINFO * PORT;
 };
 
@@ -246,7 +267,11 @@ struct MHTableEntry
 	unsigned char callsign[7];
 	char proto;
 	short port;
-	struct in_addr ipaddr;
+	union
+	{
+		struct in_addr ipaddr;
+		struct in_addr6 ipaddr6;
+	};
 	time_t	LastHeard;		// Time last packet received
 	int Keepalive;
 };
@@ -281,6 +306,7 @@ struct PORTINFO
 	BOOL GotMsg;
 
 	int udpport[MAXUDPPORTS+2];
+	BOOL IPv6[MAXUDPPORTS+2];
 
 	int NumberofUDPPorts;
 
@@ -288,7 +314,7 @@ struct PORTINFO
 	BOOL NeedResolver;
 	BOOL NeedTCP;
 
-	SOCKET sock;
+	SOCKET sock;						// IP 93 Sock
 	SOCKET udpsock[MAXUDPPORTS+2];
 
 	time_t ltime,lasttime;
@@ -301,8 +327,16 @@ struct PORTINFO
 extern BOOL MinimizetoTray;
 extern BOOL StartMinimized;
 
-SOCKADDR_IN sinx; 
-SOCKADDR_IN destaddr;
+union
+{
+	SOCKADDR_IN sinx; 
+	SOCKADDR_IN6 sinx6; 
+} sinx;
+union
+{
+	SOCKADDR_IN destaddr;
+	SOCKADDR_IN6 destaddr6;
+} destaddr;
 
 #define IP_AXIP 93				   // IP Protocol for AXIP
 
@@ -376,7 +410,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	char rxbuff[500];
 	char axcall[7];
 	char errmsg[100];
-	SOCKADDR_IN rxaddr;
+	union
+	{
+		SOCKADDR_IN rxaddr;
+		SOCKADDR_IN6 rxaddr6;
+	} RXaddr;
 	struct PORTINFO * PORT = Portlist[port];
 
 	switch (fn)
@@ -395,7 +433,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (PORT->needip)
 		{
-			len = recvfrom(PORT->sock,rxbuff,500,0,(LPSOCKADDR)&rxaddr,&addrlen);
+			len = recvfrom(PORT->sock,rxbuff,500,0,(LPSOCKADDR)&RXaddr.rxaddr,&addrlen);
 
 			if (len == -1)
 			{		
@@ -412,7 +450,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					if (memcmp(&rxbuff[20], "Keepalive", 9) == 0 )
 					{
 						if (PORT->MHEnabled)
-							Update_MH_KeepAlive(PORT, rxaddr.sin_addr,'I',93);
+							Update_MH_KeepAlive(PORT, RXaddr.rxaddr.sin_addr,'I',93);
 	
 						return 0;
 					}
@@ -424,7 +462,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					
 						if (len > MAXDATA)
 						{
-							wsprintf(errmsg,"BPQAXIP Invalid Msg Len=%d Source=%s",len,inet_ntoa(rxaddr.sin_addr));
+							wsprintf(errmsg,"BPQAXIP Invalid Msg Len=%d Source=%s",len,inet_ntoa(RXaddr.rxaddr.sin_addr));
 							OutputDebugString(errmsg);
 							DumpFrameInHex(&rxbuff[20], len);
 							return 0;
@@ -440,7 +478,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						//
 
 						if (PORT->MHEnabled)
-							Update_MH_List(PORT, rxaddr.sin_addr,&buff[14],'I',93);
+							Update_MH_List(PORT, RXaddr.rxaddr.sin_addr,&buff[14],'I',93);
 
 						if (PORT->Checkifcanreply)
 						{
@@ -449,7 +487,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 							memcpy(call, &buff[14], 7);
 							call[6] &= 0x7e;		// Mask End of Address bit
 
-							if (CheckSourceisResolvable(PORT, call, 0, rxaddr))
+							if (CheckSourceisResolvable(PORT, call, 0, RXaddr.rxaddr))
 
 								return 1;
 
@@ -458,7 +496,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 								if (PORT->AutoAddARP)
 
-									return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, 0, inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0, 0);
+									return add_arp_entry(PORT, call, (PVOID)&RXaddr.rxaddr.sin_addr, 7, 0, inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, 0);
 
 								else
 
@@ -471,7 +509,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					//	CRC Error
 					//
 						
-					wsprintf(errmsg,"BPQAXIP Invalid CRC=%d Source=%s",crc,inet_ntoa(rxaddr.sin_addr));
+					wsprintf(errmsg,"BPQAXIP Invalid CRC=%d Source=%s",crc,inet_ntoa(RXaddr.rxaddr.sin_addr));
 						OutputDebugString(errmsg);
 
 					return (0);
@@ -488,7 +526,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		for (i=0;i<PORT->NumberofUDPPorts;i++)
 		{
-			len = recvfrom(PORT->udpsock[i],rxbuff,500,0,(LPSOCKADDR)&rxaddr,&addrlen);
+			len = recvfrom(PORT->udpsock[i],rxbuff,500,0,(LPSOCKADDR)&RXaddr.rxaddr,&addrlen);
 	
 			if (len == -1)
 			{		
@@ -499,7 +537,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (memcmp(rxbuff, "Keepalive", 9) == 0 )
 				{
 					if (PORT->MHEnabled)
-						Update_MH_KeepAlive(PORT, rxaddr.sin_addr, 'U', PORT->udpport[i]);
+						Update_MH_KeepAlive(PORT, RXaddr.rxaddr.sin_addr, 'U', PORT->udpport[i]);
 	
 					continue;
 				}
@@ -512,7 +550,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 					if (len > MAXDATA)
 					{
-						wsprintf(errmsg,"BPQAXIP Invalid Msg Len=%d Source=%s Port %d",len,inet_ntoa(rxaddr.sin_addr),PORT->udpport[i]);
+						wsprintf(errmsg,"BPQAXIP Invalid Msg Len=%d Source=%s Port %d",len,inet_ntoa(RXaddr.rxaddr.sin_addr),PORT->udpport[i]);
 						OutputDebugString(errmsg);
 						DumpFrameInHex(&rxbuff[0], len);
 						return 0;
@@ -528,7 +566,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					//
 
 					if (PORT->MHEnabled)
-						Update_MH_List(PORT, rxaddr.sin_addr,&buff[14],'U',PORT->udpport[i]);	
+						Update_MH_List(PORT, RXaddr.rxaddr.sin_addr,&buff[14],'U',PORT->udpport[i]);	
 
 					if (PORT->Checkifcanreply)
 					{
@@ -537,14 +575,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						memcpy(call, &buff[14], 7);
 						call[6] &= 0x7e;		// Mask End of Address bit
 
-						if (CheckSourceisResolvable(PORT, call, htons(rxaddr.sin_port), rxaddr))
+						if (CheckSourceisResolvable(PORT, call, htons(RXaddr.rxaddr.sin_port), RXaddr.rxaddr))
 							return 1;
 						else
 						{
 							// Can't reply. If AutoConfig is set, add to table and accept, else reject
 		
 							if (PORT->AutoAddARP)
-								return add_arp_entry(PORT, call, (PVOID)&rxaddr.sin_addr, 7, htons(rxaddr.sin_port), inet_ntoa(rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i]);		
+								return add_arp_entry(PORT, call, (PVOID)&RXaddr.rxaddr.sin_addr, 7, htons(RXaddr.rxaddr.sin_port), inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i]);		
 							else
 								return 0;
 						}
@@ -557,7 +595,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				//	CRC Error
 				//
 
-				wsprintf(errmsg,"BPQAXIP Invalid CRC=%d Source=%s Port %d",crc,inet_ntoa(rxaddr.sin_addr),PORT->udpport[i]);
+				wsprintf(errmsg,"BPQAXIP Invalid CRC=%d Source=%s Port %d",crc,inet_ntoa(RXaddr.rxaddr.sin_addr),PORT->udpport[i]);
 				Debugprintf(errmsg);
 				rxbuff[len] = 0;
 				Debugprintf(rxbuff);
@@ -679,7 +717,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 VOID SendFrame(struct PORTINFO * PORT, struct arp_table_entry * arp_table, UCHAR * buff, int txlen)
 {				
-	int txsock;
+	int txsock, i;
 
 	if (arp_table->TCPMode)
 	{
@@ -694,15 +732,42 @@ VOID SendFrame(struct PORTINFO * PORT, struct arp_table_entry * arp_table, UCHAR
 
 		return;
 	}
+
+	// Set up source port if not already done
+
+	if (arp_table->SourceSocket == 0)
+	{
+
+	// First Set Default for Protocol
+
+	for (i = 0; i < PORT->NumberofUDPPorts; i++)
+	{
+		if (PORT->IPv6[i] == arp_table->IPv6)
+		{
+			arp_table->SourceSocket = PORT->udpsock[i];	// Use as source socket, therefore source port
+			break;
+		}
+	}
+
+	for (i = 0; i < PORT->NumberofUDPPorts; i++)
+	{
+		if (PORT->udpport[i] == arp_table->port && PORT->IPv6[i] == arp_table->IPv6)
+		{
+			arp_table->SourceSocket = PORT->udpsock[i];	// Use as source socket, therefore source port
+			break;
+		}
+	}
+	}
 			
 	if (arp_table->ipaddr != 0)
 	{
-		destaddr.sin_addr.s_addr = arp_table->ipaddr;
-		destaddr.sin_port = htons(arp_table->port);
+		destaddr.destaddr.sin_addr.s_addr = arp_table->ipaddr;
+		destaddr.destaddr.sin_port = htons(arp_table->port);
+		destaddr.destaddr.sin_family = AF_INET;
 
-		if (arp_table->port == 0) txsock = PORT->sock; else txsock = PORT->udpsock[arp_table->SocketIndex];
+		if (arp_table->port == 0) txsock = PORT->sock; else txsock = arp_table->SourceSocket;
 
-		sendto(txsock,buff, txlen,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+		sendto(txsock, buff, txlen, 0, (LPSOCKADDR)&destaddr.destaddr, sizeof(destaddr));
 			
 		// reset Keepalive Timer
 					
@@ -789,12 +854,9 @@ void OpenSockets(struct PORTINFO * PORT)
  
 		setsockopt (PORT->sock,SOL_SOCKET,SO_BROADCAST,(const char FAR *)&bcopt,4);
 
-		sinx.sin_family = AF_INET;
-		sinx.sin_addr.s_addr = INADDR_ANY;
-		sinx.sin_port = 0;
-
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_port = htons(0);
+		sinx.sinx.sin_family = AF_INET;
+		sinx.sinx.sin_addr.s_addr = INADDR_ANY;
+		sinx.sinx.sin_port = 0;
 
 		if (bind(PORT->sock, (LPSOCKADDR) &sinx, sizeof(sinx)) != 0 )
 		{
@@ -810,7 +872,10 @@ void OpenSockets(struct PORTINFO * PORT)
 
 	for (i=0;i<PORT->NumberofUDPPorts;i++)
 	{
-		PORT->udpsock[i]=socket(AF_INET,SOCK_DGRAM,0);
+		if (PORT->IPv6[i])
+			PORT->udpsock[i]=socket(AF_INET6,SOCK_DGRAM,0);
+		else
+			PORT->udpsock[i]=socket(AF_INET,SOCK_DGRAM,0);
 
 		if (PORT->udpsock[i] == INVALID_SOCKET)
 		{
@@ -823,14 +888,20 @@ void OpenSockets(struct PORTINFO * PORT)
  
 		setsockopt (PORT->udpsock[i],SOL_SOCKET,SO_BROADCAST,(const char FAR *)&bcopt,4);
 
-		sinx.sin_family = AF_INET;
-		sinx.sin_addr.s_addr = INADDR_ANY;
-		sinx.sin_port = htons(PORT->udpport[i]);
+		if (PORT->IPv6[i])
+		{
+			sinx.sinx.sin_family = AF_INET6;
+			memset (&sinx.sinx6.sin6_addr, 0, 16);
+		}
+		else
+		{
+			sinx.sinx.sin_family = AF_INET;
+			sinx.sinx.sin_addr.s_addr = INADDR_ANY;
+		}
+		
+		sinx.sinx.sin_port = htons(PORT->udpport[i]);
 
-		destaddr.sin_family = AF_INET;
-		destaddr.sin_port = htons(0);
-
-		if (bind(PORT->udpsock[i], (LPSOCKADDR) &sinx, sizeof(sinx)) != 0 )
+		if (bind(PORT->udpsock[i], (LPSOCKADDR) &sinx.sinx, sizeof(sinx)) != 0 )
 		{
 			char Title[20];
 
@@ -1194,8 +1265,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			}
 			else
 			{
-				memcpy(&ipad,&PORT->arp_table[index].ipaddr,4);
-				strncpy(PORT->hostaddr,inet_ntoa(ipad),16);
+				Format_Addr((unsigned char *)&PORT->arp_table[index].ipaddr, PORT->hostaddr, PORT->arp_table[index].IPv6);
 			}
 				
 			memcpy(&ipad,&PORT->arp_table[index].ipaddr,4);
@@ -1234,15 +1304,43 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			
 		for (PORT->ResolveIndex=0; PORT->ResolveIndex < PORT->arp_table_len; PORT->ResolveIndex++)
 		{	
-			if (PORT->arp_table[PORT->ResolveIndex].ResolveFlag)
+			struct arp_table_entry * arp = &PORT->arp_table[PORT->ResolveIndex];
+
+			if (arp->ResolveFlag)
 			{
-				WSAAsyncGetHostByName (hWnd,WM_USER+99,
-						PORT->arp_table[PORT->ResolveIndex].hostname,
-						PORT->buf,MAXGETHOSTSTRUCT);
-				break;
+				struct addrinfo hints, *res;
+
+				//wsprintf(PortString, "%d", Port);
+
+				// Use IPv6 compatible lookup
+
+				memset(&hints, 0, sizeof hints);
+				hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+				hints.ai_socktype = SOCK_DGRAM;
+				getaddrinfo(arp->hostname, NULL, &hints, &res);
+
+				if (res)
+				{
+					arp->error = 0;
+					if (res->ai_family == AF_INET)
+					{
+						memcpy(&arp->ipaddr, &res->ai_addr->sa_data[2], 4);
+						arp->IPv6 = FALSE;
+					}
+					else
+					{
+						PSOCKADDR_IN6 sa6 = (PSOCKADDR_IN6)res->ai_addr;
+
+						memcpy(&arp->in6_addr, &sa6->sin6_addr, 16);
+						arp->IPv6 = TRUE;
+					}
+				}
+				else
+					PORT->arp_table[PORT->ResolveIndex].error = GetLastError();
+				
+				InvalidateRect(hWnd,NULL,FALSE);
 			}
 		}
-
 
 		default:
 			return (DefWindowProc(hWnd, message, wParam, lParam));
@@ -1953,14 +2051,22 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 	{
 		if (PORT->NumberofUDPPorts > MAXUDPPORTS) PORT->NumberofUDPPorts--;
 
-		p_udpport = strtok(NULL, " \t\n\r");
+		p_udpport = strtok(NULL, " ,\t\n\r");
 			
 		if (p_udpport == NULL) return (FALSE);
 
 		PORT->udpport[PORT->NumberofUDPPorts] = atoi(p_udpport);
 
-		if (PORT->udpport[PORT->NumberofUDPPorts++] == 0) return (FALSE);
-		
+		if (PORT->udpport[PORT->NumberofUDPPorts] == 0) return (FALSE);
+
+		ptr = strtok(NULL, " \t\n\r");
+
+		if (ptr)
+			if (_stricmp(ptr, "ipv6") == 0)
+				PORT->IPv6[PORT->NumberofUDPPorts] = TRUE;
+
+		PORT->NumberofUDPPorts++;
+
 		return (TRUE);
 	}
 
@@ -2229,15 +2335,46 @@ BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, ULONG * ip, int len, in
 
 	if (*ip == INADDR_NONE)
 	{
-		arp->ResolveFlag=TRUE;
-		PORT->NeedResolver=TRUE;
+		// Host Name, or possibly IPv6 Numeric Address
+
 		*ip = 0;
+
+		if (strchr(name, ':'))
+		{
+			// IPv6 Numeric
+			
+			char PortString[10];
+			struct addrinfo hints, *res;
+
+			wsprintf(PortString, "%d", port);
+
+			memset(&hints, 0, sizeof hints);
+			hints.ai_family = AF_INET6;		// use IPv4 or IPv6, whichever
+			hints.ai_socktype = SOCK_DGRAM;
+			getaddrinfo(name, PortString, &hints, &res);
+
+			if (res)
+			{
+				PSOCKADDR_IN6 sa6 = (PSOCKADDR_IN6)res->ai_addr;
+				memcpy(&arp->in6_addr, &sa6->sin6_addr, 16);
+
+				arp->IPv6 = TRUE;
+				arp->ResolveFlag=FALSE;
+			}
+		}
+		else
+		{
+			arp->ResolveFlag=TRUE;
+			PORT->NeedResolver=TRUE;
+		}
 	}
 	else
+	{
 		arp->ResolveFlag=FALSE;
+		memcpy (&arp->ipaddr,ip,4);
+	}
 
 	memcpy (&arp->callsign,call,7);
-	memcpy (&arp->ipaddr,ip,4);
 	strncpy((char *)&arp->hostname,name,64);
 	arp->len = len;
 	arp->port = port;
@@ -2254,16 +2391,6 @@ BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, ULONG * ip, int len, in
 	PORT->NeedResolver |= TCPFlag;					// Need Resolver window to handle tcp socket messages
 	PORT->NeedTCP |= TCPFlag;
 
-	// If the we are listening on the UDP port, use it as source port
-
-	for (i = 0; i < PORT->NumberofUDPPorts; i++)
-	{
-		if (PORT->udpport[i] == SourcePort)
-		{
-			arp->SocketIndex = i;				// Use as source socket, therefore source port
-			break;
-		}
-	}
 
 	return (TRUE);
 }
@@ -2305,8 +2432,8 @@ int CheckKeepalives(struct PORTINFO * PORT)
 
 				if (arp->ipaddr != 0)
 				{
-					destaddr.sin_addr.s_addr = arp->ipaddr;
-					destaddr.sin_port = arp->port;
+					destaddr.destaddr.sin_addr.s_addr = arp->ipaddr;
+					destaddr.destaddr.sin_port = arp->port;
 
 					if (arp->port == 0) txsock = PORT->sock; else txsock = PORT->udpsock[0];
 
@@ -2916,3 +3043,108 @@ wait:
 
 }
 
+static VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6)
+{
+	unsigned char * src;
+	char zeros[12] = "";
+	char * ptr;
+	struct
+	{
+		int base, len;
+	} best, cur;
+	unsigned int words[8];
+	int i;
+
+	if (IPV6 == FALSE)
+	{
+		wsprintf(Output, "%d.%d.%d.%d", Addr[0], Addr[1], Addr[2], Addr[3]);
+		return;
+	}
+
+	src = Addr;
+
+	// See if Encapsulated IPV4 addr
+
+	if (src[12] != 0)
+	{
+		if (memcmp(src, zeros, 12) == 0)	// 12 zeros, followed by non-zero
+		{
+			wsprintf(Output, "::%d.%d.%d.%d", src[12], src[13], src[14], src[15]);
+			return;
+		}
+	}
+
+	// COnvert 16 bytes to 8 words
+	
+	for (i = 0; i < 16; i += 2)
+	    words[i / 2] = (src[i] << 8) | src[i + 1];
+
+	// Look for longest run of zeros
+	
+	best.base = -1;
+	cur.base = -1;
+	
+	for (i = 0; i < 8; i++)
+	{
+		if (words[i] == 0)
+		{
+	        if (cur.base == -1)
+				cur.base = i, cur.len = 1;		// New run, save start
+	          else
+	            cur.len++;						// Continuation - increment length
+		}
+		else
+		{
+			// End of a run of zeros
+
+			if (cur.base != -1)
+			{
+				// See if this run is longer
+				
+				if (best.base == -1 || cur.len > best.len)
+					best = cur;
+				
+				cur.base = -1;	// Start again
+			}
+		}
+	}
+	
+	if (cur.base != -1)
+	{
+		if (best.base == -1 || cur.len > best.len)
+			best = cur;
+	}
+	
+	if (best.base != -1 && best.len < 2)
+	    best.base = -1;
+	
+	ptr = Output;
+	  
+	for (i = 0; i < 8; i++)
+	{
+		/* Are we inside the best run of 0x00's? */
+
+		if (best.base != -1 && i >= best.base && i < (best.base + best.len))
+		{
+			// Just output one : for whole string of zeros
+			
+			*ptr++ = ':';
+			i = best.base + best.len - 1;	// skip rest of zeros
+			continue;
+		}
+	    
+		/* Are we following an initial run of 0x00s or any real hex? */
+		
+		if (i != 0)
+			*ptr++ = ':';
+		
+		ptr += sprintf (ptr, "%x", words[i]);
+	        
+		//	Was it a trailing run of 0x00's?
+	}
+
+	if (best.base != -1 && (best.base + best.len) == 8)
+		*ptr++ = ':';
+	
+	*ptr++ = '\0';	
+}

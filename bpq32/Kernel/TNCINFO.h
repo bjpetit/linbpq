@@ -56,6 +56,8 @@ struct TCPINFO
 	int TCPPort;
 	int FBBPort[100];
 	int RelayPort;
+	BOOL IPV4;					// Allow Connect using IPV4
+	BOOL IPV6;					// Allow Connect using IPV6
 	BOOL CMS;					// Allow Connect to CMS
 	BOOL CMSOK;					// Internet link is ok.
 	BOOL UseCachedCMSAddrs;
@@ -85,6 +87,9 @@ struct TCPINFO
 	SOCKET sock;
 	SOCKET FBBsock[100];
 	SOCKET Relaysock;
+	SOCKET sock6;
+	SOCKET FBBsock6[100];
+	SOCKET Relaysock6;
 	HMENU hActionMenu;
 	HMENU hLogMenu;
 	HMENU hDisMenu;					// Disconnect Menu Handle

@@ -24,8 +24,8 @@ static char ClassName[]="TRACKERSTATUS";
 static char WindowTitle[] = "SCS Tracker";
 static int RigControlRow = 140;
 
-#define NARROWMODE 12
-#define WIDEMODE 12			// PIII only
+#define NARROWMODE 30
+#define WIDEMODE 30			// PIII only
 
 extern UCHAR BPQDirectory[];
 
@@ -140,10 +140,10 @@ ConfigLine:
 		if (_memicmp(buf, "DEFAULT ROBUST", 14) == 0)
 			TNC->RobustDefault = TRUE;
 		else
-//
-//		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-//			DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
-//		else
+
+		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
+			DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
+		else
 			strcat (TNC->InitScript, buf);
 	}
 	return (TRUE);
@@ -279,11 +279,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		_asm 
 		{
+
 			MOV	EAX,buff
 			mov Stream,eax
 		}
 
-		TNCOK = (TNC->HostMode == 1 && TNC->ReinitState != 10 && TNC->ReinitState == 1);
+		TNCOK = (TNC->HostMode == 1 && TNC->ReinitState != 10);
 
 		STREAM = &TNC->Streams[Stream];
 
@@ -712,20 +713,12 @@ VOID DEDPoll(int Port)
 		{
 			TNC->UpdateWL2KTimer = 32910/2;		// Every Half Hour
 		
-			if (TNC->ApplCmd)
+			if (TNC->UseAPPLCalls || (TNC->ApplCmd && memcmp(TNC->ApplCmd, "RMS", 3)) == 0)
 			{
-				if (memcmp(TNC->ApplCmd, "RMS", 3) == 0)
+				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
 				{
-					char Appl[30];
-					
-					strcpy(Appl, TNC->ApplCmd);
-					strcat (Appl, "          ");
-					
-					if (CheckAppl(TNC, Appl)) // Is RMS Available?
-					{
-						memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
-						SendReporttoWL2K(TNC);
-					}
+				//		memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
+					SendReporttoWL2K(TNC);
 				}
 			}
 		}
@@ -2025,7 +2018,10 @@ VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
 
 	ConvToAX25(&ptr[3], Monframe.ORIGIN);
 
-	UpdateMH(TNC, &ptr[3], ' ', 0);
+	if (TNC->Robust)
+		UpdateMH(TNC, &ptr[3], '.', 0);
+	else
+		UpdateMH(TNC, &ptr[3], ' ', 0);
 
 	ptr = strstr(ptr, "to ");
 

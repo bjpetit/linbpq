@@ -44,6 +44,9 @@ int C_Q_ADD(UINT *Q,UINT *BUFF);
 
 int Row = -20;
 
+BOOL RIG_DEBUG = FALSE;
+
+
 extern struct PORTCONTROL * PORTTABLE;
 
 VOID __cdecl Debugprintf(const char * format, ...);
@@ -399,6 +402,9 @@ portok:
 					SetWindowText(RIG->hSCAN, "S");
 
 				wsprintf(Command, "Ok\r");
+
+				if (RIG_DEBUG)
+					Debugprintf("BPQ32 SCANSTART Port %d", Port);
 			}
 			else
 				wsprintf(Command, "Sorry no Scan List defined for this port\r");
@@ -412,6 +418,10 @@ portok:
 			SetWindowText(RIG->hSCAN, "");
 
 			wsprintf(Command, "Ok\r");
+
+			if (RIG_DEBUG)
+				Debugprintf("BPQ32 SCANSTOP Port %d", Port);
+
 			return FALSE;
 		}
 	}
@@ -1473,6 +1483,9 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 
 			if	(GetPermissionToChange(PORT, RIG))
 			{
+				if (RIG_DEBUG)
+					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 				RIG->FreqPtr++;
 	
@@ -1500,6 +1513,10 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		memcpy(&PORT->ScanEntry, buffptr+2, sizeof(struct ScanEntry));
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
+
+		if (RIG_DEBUG)
+			Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+
 		
 		memcpy(Poll, &buffptr[20], 12);
 
@@ -1992,6 +2009,9 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 			if	(GetPermissionToChange(PORT, RIG))
 			{
+				if (RIG_DEBUG)
+					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 				RIG->FreqPtr++;
 
@@ -2030,6 +2050,9 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
+		if (RIG_DEBUG)
+			Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
 		memcpy(Poll, &buffptr[20], datalen);
@@ -2231,6 +2254,9 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 			if (GetPermissionToChange(PORT, RIG))
 			{
+				if (RIG_DEBUG)
+					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 				RIG->FreqPtr++;
 	
@@ -2268,6 +2294,9 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
+		if (RIG_DEBUG)
+			Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
 		memcpy(Poll, &buffptr[20], datalen);
@@ -2376,6 +2405,9 @@ DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
 	ptr = strtok_s(&buf[10], " \t\n\r", &Context);
 
 	if (ptr == NULL) return FALSE;
+
+	if (memcmp(ptr, "DEBUG", 5) == 0)
+		RIG_DEBUG = TRUE;
 
 	if (memcmp(ptr, "AUTH", 4) == 0)
 	{

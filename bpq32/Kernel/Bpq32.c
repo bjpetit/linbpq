@@ -376,6 +376,9 @@
 // Initialise TNC State on Pactor Dialogs
 // Add Shortened (6 digit) AUTH mode.
 // Update MH with all frames (not just I/UI)
+// Add IPV6 Support for TelnetServer
+// Fix TNC OK Test for Tracker
+// Fix crash in CMS mode if terminal disconnects while tcp commect in progress
 
 #define Kernel
 #include "Versions.h"

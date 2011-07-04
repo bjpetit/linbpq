@@ -700,9 +700,18 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 				{
 					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
 
-//					if (BandWidth == 'R')
-//							continue;							// Don't Report Robust Packet
-
+					if (TNC->Hardware == H_TRK)
+					{	if (Freqptr[0]->Bandwidth == 'R')
+						{
+							BandWidth = 'W';
+							Mode = TNC->NARROWMODE;
+						}
+						else
+						{
+							Freqptr++;
+							continue;							// Don't Report HF Packet
+						}
+					}
 					if (Freqptr[0]->Bandwidth == 'W')
 					{
 						BandWidth = 'W';

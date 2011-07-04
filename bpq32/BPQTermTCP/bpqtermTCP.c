@@ -48,6 +48,8 @@
 
 #define _CRT_SECURE_NO_DEPRECATE
 
+#include "winsock2.h"
+#include "WS2tcpip.h"
 #include <windows.h>
 
 #include <stdlib.h>
@@ -520,7 +522,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	Split /= 100;		// Stored as a %,used as 0 - 1
 
-	for (n = 0; n < 3; n++)
+	for (n = 0; n < 4; n++)
 	{
 		GetStringValue(HN[n], Host[n], 100);
 		GetStringValue(UN[n], UserName[n], 80);
@@ -2081,14 +2083,37 @@ TCPConnect(char * Host, int Port)
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	SOCKADDR_IN sinx; 
-	SOCKADDR_IN destaddr;
 	int addrlen=sizeof(sinx);
-	int i;
-		
-	sock = socket(AF_INET, SOCK_STREAM, 0);
+	char PortString[10];
+
+	struct addrinfo hints, *res;
+
+	wsprintf(PortString, "%d", Port);
+
+
+	// get host info, make socket, and connect it
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+	hints.ai_socktype = SOCK_STREAM;
+	getaddrinfo(Host, PortString, &hints, &res);
+
+	if (!res)
+	{
+		MessageBox(NULL, "Resolve HostName Failed", "BPQTermTCP", MB_OK);
+		wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+		SetWindowText(hWnd,Title);
+
+		return FALSE;			// Resolve failed
+	
+	}
+
+	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	
 	WSAAsyncSelect(sock, hWnd, WSA_DATA,
 		FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
+
+/*
 	
 	// Resolve Name if needed
 
@@ -2134,14 +2159,14 @@ TCPConnect(char * Host, int Port)
 		MessageBox(NULL, "Bind Failed", "BPQTermTCP", MB_OK);
   	 	return FALSE; 
 	}
-
+*/
 	if ((status = WSAAsyncSelect(sock, hWnd, WSA_CONNECT, FD_CONNECT)) > 0)
 	{
 		closesocket(sock);
 		return FALSE;
 	}
 
-	if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) == 0)
+	if (connect(sock, res->ai_addr, res->ai_addrlen) == 0)
 	{
 		//
 		//	Connected successful

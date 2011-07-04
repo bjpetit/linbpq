@@ -12,7 +12,11 @@ struct ConnectionInfo
 {
 	int Number;					// Number of record - for Connections display
     SOCKET socket;
-	SOCKADDR_IN sin;  
+	union
+	{
+		SOCKADDR_IN6 sin6;  
+		SOCKADDR_IN sin;
+	};
 	BOOL SocketActive;
     int BPQStream;
     byte Callsign[10];

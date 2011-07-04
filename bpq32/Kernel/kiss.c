@@ -23,9 +23,9 @@
 int WritetoConsoleLocal(char * buff);
 
    
-int ASYSEND(int port, char * buffer,int count)
+int ASYSEND(int port, char * buffer, int count)
 {
-   WriteCommBlock(port,buffer, count);
+   WriteCommBlock(port, buffer, count);
    return (0);
 }
 
@@ -149,7 +149,7 @@ BOOL NEAR OpenConnection( int port)
 
   // load the COM prefix string and append port number
    
-  wsprintf( szPort, "\\\\.\\COM%d", PORT( npTTYInfo ) ) ;
+  wsprintf( szPort, "\\\\.\\COM%d", PORT(npTTYInfo));
 
    // open COMM device
 
@@ -192,11 +192,11 @@ BOOL NEAR OpenConnection( int port)
       SetCommTimeouts( COMDEV( npTTYInfo ), &CommTimeOuts ) ;
    }
 	
-	fRetVal = SetupConnection( port ) ;
+	fRetVal = SetupConnection(port);
 
 	if (fRetVal)
 	{
-		CONNECTED( npTTYInfo ) = TRUE ;
+		CONNECTED(npTTYInfo) = TRUE;
 
 		// assert DTR
 
@@ -209,11 +209,11 @@ BOOL NEAR OpenConnection( int port)
 	   WritetoConsoleLocal(buf);
 	   OutputDebugString(buf);
 
-      CONNECTED( npTTYInfo ) = FALSE ;
-      CloseHandle( COMDEV( npTTYInfo ) ) ;
+      CONNECTED(npTTYInfo) = FALSE;
+      CloseHandle(COMDEV(npTTYInfo));
    }
 
-   return ( fRetVal ) ;
+   return fRetVal;
 
 } // end of OpenConnection()
 
@@ -399,42 +399,20 @@ int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength )
 
 } // end of ReadCommBlock()
 
-//---------------------------------------------------------------------------
-//  BOOL NEAR WriteCommBlock( HWND hWnd, BYTE *pByte )
-//
-//  Description:
-//     Writes a block of data to the COM port specified in the associated
-//     TTY info structure.
-//
-//  Parameters:
-//     HWND hWnd
-//        handle to TTY window
-//
-//     BYTE *pByte
-//        pointer to data to write to port
-//
-//  Win-32 Porting Issues:
-//     - WriteComm() has been replaced by WriteFile() in Win-32.
-//     - Overlapped I/O has been implemented.
-//
-//---------------------------------------------------------------------------
 
-BOOL NEAR WriteCommBlock( int port, LPSTR lpByte , DWORD dwBytesToWrite)
+BOOL NEAR WriteCommBlock(int port, LPSTR lpByte, DWORD dwBytesToWrite)
 {
-
-	BOOL        fWriteStat ;
-	DWORD       dwBytesWritten ;
-	NPTTYINFO   npTTYInfo ;
+	BOOL        fWriteStat;
+	DWORD       dwBytesWritten;
+	NPTTYINFO   npTTYInfo;
 	DWORD       dwErrorFlags;
 	COMSTAT     ComStat;
-
 
 	if (NULL == (npTTYInfo = KISSInfo[port]))
 		return ( FALSE ) ;
 
-	fWriteStat = WriteFile( COMDEV( npTTYInfo ), lpByte, dwBytesToWrite,
-	                       &dwBytesWritten, NULL ) ;
-
+	fWriteStat = WriteFile(COMDEV(npTTYInfo), lpByte, dwBytesToWrite,
+	                       &dwBytesWritten, NULL );
 
 	if ((!fWriteStat) || (dwBytesToWrite != dwBytesWritten))
 	{
