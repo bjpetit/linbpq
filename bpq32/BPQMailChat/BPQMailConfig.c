@@ -31,6 +31,7 @@ HWND hwndDlg;		// Config Dialog
 HWND hwndDisplay;   // Current child dialog box
 
 HWND hCheck[33];
+HWND hNullCheck[33];
 HWND hLabel[33];
 HWND hUIBox[33];
 HFONT hFont;
@@ -2401,6 +2402,11 @@ TryAgain:
 				RegQueryValueEx(hKey,"Enabled",0,			
 					(ULONG *)&Type,(UCHAR *)&UIEnabled[i],(ULONG *)&Vallen);
 		
+				Vallen=4;
+
+				RegQueryValueEx(hKey,"SendNull",0,			
+					(ULONG *)&Type,(UCHAR *)&UINull[i],(ULONG *)&Vallen);
+		
 				Vallen=0;
 				RegQueryValueEx(hKey,"Digis",0,			
 					(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -2924,6 +2930,11 @@ int CreateDialogLine(HWND hWnd, int i, int row)
 	SendMessage(hUIBox[i], WM_SETFONT,(WPARAM) hFont, 0);
 	SetWindowText(hUIBox[i], UIDigi[i]);
 
+	hNullCheck[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
+                 550,row+4,14,14, hWnd, NULL, hInst, NULL);
+
+	Button_SetCheck(hNullCheck[i], UINull[i]);
+
 	return TRUE;
 }
 
@@ -2950,6 +2961,7 @@ SaveUIConfig()
 	for (i=1; i<=Num; i++)
 	{
 		UIEnabled[i] =  Button_GetCheck(hCheck[i]);
+		UINull[i] =  Button_GetCheck(hNullCheck[i]);
 	
 		Len = GetWindowTextLength(hUIBox[i]);
 	
@@ -2964,6 +2976,7 @@ SaveUIConfig()
 		if (retCode == ERROR_SUCCESS)
 		{		
 			retCode = RegSetValueEx(hKey, "Enabled", 0, REG_DWORD,(BYTE *)&UIEnabled[i], 4);
+			retCode = RegSetValueEx(hKey, "SendNull", 0, REG_DWORD,(BYTE *)&UINull[i], 4);
 			retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ,(BYTE *)UIDigi[i], strlen(UIDigi[i]));
 
 			RegCloseKey(hKey);
@@ -2999,7 +3012,7 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 		}
 
 		GetWindowRect(hDlg, &Rect);      
-		SetWindowPos(hDlg, HWND_TOP, Rect.left, Rect.top, 550, Row+100, 0);
+		SetWindowPos(hDlg, HWND_TOP, Rect.left, Rect.top, 620, Row+100, 0);
 		SetWindowPos(GetDlgItem(hDlg, IDOK), NULL, 180, Row+20, 70, 30, 0);
 		SetWindowPos(GetDlgItem(hDlg, IDCANCEL), NULL, 300, Row+20, 80, 30, 0);
 

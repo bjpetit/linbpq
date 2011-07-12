@@ -1195,7 +1195,8 @@ void text_tellu(USER *user, char *text, char *to, int who)
 	UCHAR Buffer[2048];
 	UCHAR *buf = &Buffer[4];
 
-	sprintf(buf, "%-6.6s %c %s\r", user->call, (who == o_one) ? '>' : ':', text);
+//	sprintf(buf, "%-6.6s %c %s\r", user->call, (who == o_one) ? '>' : ':', text);
+	sprintf(buf, "%-6.6s %s %c %s\r", user->call, user->name, (who == o_one) ? '>' : ':', text);
 
 // Send it to all connected users in the same topic.
 // Echo to originator if requested.

@@ -1330,6 +1330,7 @@ extern BOOL RefuseBulls;
 extern BOOL SendSYStoSYSOPCall;
 extern BOOL DontHoldNewUsers;
 extern BOOL UIEnabled[];
+extern BOOL UINull[];
 extern char * UIDigi[];
 extern int MailForInterval;
 extern char MailForText[];

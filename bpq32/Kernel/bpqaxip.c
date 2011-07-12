@@ -174,12 +174,12 @@ void CloseSockets();
 
 static int CONVFROMAX25(char * incall, char * outcall);
 void CreateMHWindow(struct PORTINFO * PORT);
-int Update_MH_List(struct PORTINFO * PORT, struct in_addr ipad, char * call, char proto, short port);
+int Update_MH_List(struct PORTINFO * PORT, UCHAR * ipad, char * call, char proto, short port, BOOL IPv6);
 int Update_MH_KeepAlive(struct PORTINFO * PORT, struct in_addr ipad, char proto, short port);
 unsigned short int compute_crc(unsigned char *buf,int l);
 unsigned int find_arp(unsigned char * call);
-BOOL add_arp_entry(struct PORTINFO * PORT, unsigned char * call, unsigned long * ip, int len, int port,unsigned char * name,
-		int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort);
+BOOL add_arp_entry(struct PORTINFO * PORT, unsigned char * call, UCHAR * ip, int len, int port,unsigned char * name,
+		int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort, BOOL IPv6);
 BOOL add_bc_entry(struct PORTINFO * PORT, unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
 BOOL ReadConfigFile(char * filename, int Port);
@@ -188,7 +188,7 @@ int CheckKeepalives(struct PORTINFO * PORT);
 BOOL CopyScreentoBuffer(char * buff, struct PORTINFO * PORT);
 int DumpFrameInHex(unsigned char * msg, int len);
 VOID SendFrame(struct PORTINFO * PORT, struct arp_table_entry * arp_table, UCHAR * buff, int txlen);
-BOOL CheckSourceisResolvable(struct PORTINFO * PORT, char * call, int Port, SOCKADDR_IN rxaddr);
+BOOL CheckSourceisResolvable(struct PORTINFO * PORT, char * call, int Port, VOID * rxaddr);
 int DataSocket_Read(struct arp_table_entry * sockptr, SOCKET sock);
 int GetMessageFromBuffer(struct PORTINFO * PORT, char * Buffer);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
@@ -214,12 +214,12 @@ struct arp_table_entry
 	unsigned char len;			// bytes to compare (6 or 7)
 	BOOL IPv6;
 
-	union
-	{
-		struct in_addr in_addr;
-		unsigned int ipaddr;
-		struct in6_addr in6_addr;
-	};
+//	union
+//	{
+//		struct in_addr in_addr;
+//		unsigned int ipaddr;
+//		struct in6_addr in6_addr;
+//	};
 
 	unsigned short port;
 	unsigned char hostname[64];
@@ -234,12 +234,6 @@ struct arp_table_entry
 	int  TCPMode;				// TCPMaster ot TCPSlave
 	UCHAR * TCPBuffer;			// Area for building TCP message from byte stream
 	int InputLen;				// Bytes in TCPBuffer
-
-	union
-	{
-		SOCKADDR_IN6 sin6;  
-		SOCKADDR_IN sin;
-	};
 
 	union
 	{
@@ -274,6 +268,7 @@ struct MHTableEntry
 	};
 	time_t	LastHeard;		// Time last packet received
 	int Keepalive;
+	BOOL IPv6;
 };
 
 
@@ -332,11 +327,13 @@ union
 	SOCKADDR_IN sinx; 
 	SOCKADDR_IN6 sinx6; 
 } sinx;
+/*
 union
 {
 	SOCKADDR_IN destaddr;
 	SOCKADDR_IN6 destaddr6;
 } destaddr;
+*/
 
 #define IP_AXIP 93				   // IP Protocol for AXIP
 
@@ -380,7 +377,7 @@ HFONT hFont ;
 
 #pragma pack()
 
-int addrlen=sizeof(SOCKADDR_IN);
+int addrlen=sizeof(SOCKADDR_IN6);
 
 extern short CRCTAB;
 
@@ -478,7 +475,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						//
 
 						if (PORT->MHEnabled)
-							Update_MH_List(PORT, RXaddr.rxaddr.sin_addr,&buff[14],'I',93);
+							Update_MH_List(PORT, &RXaddr.rxaddr.sin_addr.s_net, &buff[14], 'I', 93, 0);
 
 						if (PORT->Checkifcanreply)
 						{
@@ -487,7 +484,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 							memcpy(call, &buff[14], 7);
 							call[6] &= 0x7e;		// Mask End of Address bit
 
-							if (CheckSourceisResolvable(PORT, call, 0, RXaddr.rxaddr))
+							if (CheckSourceisResolvable(PORT, call, 0, &RXaddr))
 
 								return 1;
 
@@ -496,7 +493,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 								if (PORT->AutoAddARP)
 
-									return add_arp_entry(PORT, call, (PVOID)&RXaddr.rxaddr.sin_addr, 7, 0, inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, 0);
+									return add_arp_entry(PORT, call, &RXaddr.rxaddr.sin_addr.s_net, 7, 0, inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, 0, FALSE);
 
 								else
 
@@ -520,7 +517,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				//
 	
 				return (0);
-	
 			}
 		}
 
@@ -566,23 +562,33 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					//
 
 					if (PORT->MHEnabled)
-						Update_MH_List(PORT, RXaddr.rxaddr.sin_addr,&buff[14],'U',PORT->udpport[i]);	
+						if (PORT->IPv6[i])
+							Update_MH_List(PORT, (UCHAR *)&RXaddr.rxaddr6.sin6_addr, &buff[14], 'U', PORT->udpport[i], TRUE);	
+						else
+							Update_MH_List(PORT, &RXaddr.rxaddr.sin_addr.s_net, &buff[14], 'U', PORT->udpport[i], FALSE);	
 
 					if (PORT->Checkifcanreply)
 					{
 						char call[7];
-
+ 
 						memcpy(call, &buff[14], 7);
 						call[6] &= 0x7e;		// Mask End of Address bit
 
-						if (CheckSourceisResolvable(PORT, call, htons(RXaddr.rxaddr.sin_port), RXaddr.rxaddr))
+						if (CheckSourceisResolvable(PORT, call, htons(RXaddr.rxaddr.sin_port), &RXaddr))
 							return 1;
 						else
 						{
 							// Can't reply. If AutoConfig is set, add to table and accept, else reject
 		
 							if (PORT->AutoAddARP)
-								return add_arp_entry(PORT, call, (PVOID)&RXaddr.rxaddr.sin_addr, 7, htons(RXaddr.rxaddr.sin_port), inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i]);		
+								if (PORT->IPv6[i])
+								{
+									char Addr[80];
+									Format_Addr((UCHAR *)&RXaddr.rxaddr6.sin6_addr, Addr, TRUE);
+									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr6.sin6_addr, 7, htons(RXaddr.rxaddr6.sin6_port), Addr, 0, TRUE, TRUE, 0, PORT->udpport[i], TRUE);		
+								}
+								else
+									return add_arp_entry(PORT, call, &RXaddr.rxaddr.sin_addr.s_net, 7, htons(RXaddr.rxaddr.sin_port), inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i], FALSE);		
 							else
 								return 0;
 						}
@@ -759,15 +765,12 @@ VOID SendFrame(struct PORTINFO * PORT, struct arp_table_entry * arp_table, UCHAR
 	}
 	}
 			
-	if (arp_table->ipaddr != 0)
+	if (arp_table->error == 0)
 	{
-		destaddr.destaddr.sin_addr.s_addr = arp_table->ipaddr;
-		destaddr.destaddr.sin_port = htons(arp_table->port);
-		destaddr.destaddr.sin_family = AF_INET;
-
 		if (arp_table->port == 0) txsock = PORT->sock; else txsock = arp_table->SourceSocket;
 
-		sendto(txsock, buff, txlen, 0, (LPSOCKADDR)&destaddr.destaddr, sizeof(destaddr));
+		if (sendto(txsock, buff, txlen, 0, (struct sockaddr *)&arp_table->destaddr6, sizeof(arp_table->destaddr6))== -1)
+			i = GetLastError();
 			
 		// reset Keepalive Timer
 					
@@ -1059,8 +1062,6 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	PAINTSTRUCT ps;
 	HDC hdc;
 	HFONT    hOldFont ;
-	struct hostent * hostptr;
-	struct in_addr ipad;
 	char line[100];
 	char outcall[10];
 	int index,displayline;
@@ -1104,7 +1105,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 		Socket_Connect(wParam, WSAGETSELECTERROR(lParam));
 		return 0;
 
-
+/*
 	case WM_USER+99:
 
 		i=WSAGETASYNCERROR(lParam);
@@ -1135,7 +1136,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			}
 		}
 		break;
-
+*/
 	case WM_CHAR:
 
 		if (PORT->MHEnabled == FALSE && PORT->MHAvailable)
@@ -1265,11 +1266,12 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			}
 			else
 			{
-				Format_Addr((unsigned char *)&PORT->arp_table[index].ipaddr, PORT->hostaddr, PORT->arp_table[index].IPv6);
+				if (PORT->arp_table[index].IPv6)	
+					Format_Addr((unsigned char *)&PORT->arp_table[index].destaddr6.sin6_addr, PORT->hostaddr, PORT->arp_table[index].IPv6);
+				else
+					Format_Addr((unsigned char *)&PORT->arp_table[index].destaddr.sin_addr, PORT->hostaddr, PORT->arp_table[index].IPv6);
 			}
 				
-			memcpy(&ipad,&PORT->arp_table[index].ipaddr,4);
-
 			CONVFROMAX25(PORT->arp_table[index].callsign,outcall);
 								
 			i=wsprintf(line,"%.10s = %.64s %d = %-.30s %c %c",
@@ -1310,10 +1312,6 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			{
 				struct addrinfo hints, *res;
 
-				//wsprintf(PortString, "%d", Port);
-
-				// Use IPv6 compatible lookup
-
 				memset(&hints, 0, sizeof hints);
 				hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 				hints.ai_socktype = SOCK_DGRAM;
@@ -1324,16 +1322,20 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 					arp->error = 0;
 					if (res->ai_family == AF_INET)
 					{
-						memcpy(&arp->ipaddr, &res->ai_addr->sa_data[2], 4);
+						memcpy(&arp->destaddr.sin_addr.s_addr, &res->ai_addr->sa_data[2], 4);
 						arp->IPv6 = FALSE;
+						arp->destaddr.sin_family = AF_INET;
 					}
 					else
 					{
 						PSOCKADDR_IN6 sa6 = (PSOCKADDR_IN6)res->ai_addr;
 
-						memcpy(&arp->in6_addr, &sa6->sin6_addr, 16);
+						memcpy(&arp->destaddr6.sin6_addr, &sa6->sin6_addr, 16);
 						arp->IPv6 = TRUE;
+						arp->destaddr.sin_family = AF_INET6;
 					}
+					arp->destaddr.sin_port = htons(arp->port);
+					freeaddrinfo(res);
 				}
 				else
 					PORT->arp_table[PORT->ResolveIndex].error = GetLastError();
@@ -1413,7 +1415,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 			{
 				if (convtoax25(call,axcall,&calllen))
 				{
-					add_arp_entry(PORT, axcall,&ipad,calllen,port,host,Interval, BCFlag, FALSE, 0, port);
+					add_arp_entry(PORT, axcall,0,calllen,port,host,Interval, BCFlag, FALSE, 0, port, FALSE);
 					PostMessage(PORT->hResWnd, WM_TIMER,0,0);
 					return(DestroyWindow(hWnd));
 				}
@@ -1697,10 +1699,14 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 		{	
 			if (PORT->MHTable[index].proto != 0)
 			{
+				char Addr[80];
+				
+				Format_Addr((unsigned char *)&PORT->MHTable[index].ipaddr6, Addr, PORT->MHTable[index].IPv6);
+
 				CONVFROMAX25(PORT->MHTable[index].callsign,outcall);
 
 				i=wsprintf(line,"%-10s%-15s %c %-6d %-25s%c",outcall,
-						inet_ntoa(PORT->MHTable[index].ipaddr),
+						Addr,
 						PORT->MHTable[index].proto,
 						PORT->MHTable[index].port,
 						asctime(gmtime( &PORT->MHTable[index].LastHeard )),
@@ -2034,7 +2040,6 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 	int	port, SourcePort;
 	int bcflag;
 	char axcall[7];
-	unsigned int ipad;
 	int Interval;
 	int Dynamic=FALSE;
 	int TCPMode;
@@ -2101,10 +2106,6 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 		
 		if (p_ipad == NULL) return (FALSE);
 	
-		ipad = inet_addr(p_ipad);
-
-//		if (ipad == INADDR_NONE) return (FALSE);
-
 		p_UDP = strtok(NULL, " \t\n\r");
 
 		Interval=0;
@@ -2205,7 +2206,7 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 			if (SourcePort == 0)
 				SourcePort = port;
 
-			add_arp_entry(PORT, axcall,&ipad,calllen,port,p_ipad,Interval, bcflag, FALSE, TCPMode, SourcePort);
+			add_arp_entry(PORT, axcall, 0, calllen, port, p_ipad, Interval, bcflag, FALSE, TCPMode, SourcePort, FALSE);
 			return (TRUE);
 		}
 	}		// End of Process MAP
@@ -2315,11 +2316,10 @@ BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call,int * calllen
 	return (FALSE);
 }
 
-BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, ULONG * ip, int len, int port,
-				   UCHAR * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPFlag, int SourcePort)
+BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, UCHAR * ip, int len, int port,
+				   UCHAR * name, int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPFlag, int SourcePort, BOOL IPv6)
 {
 	struct arp_table_entry * arp;
-	int i;
 
 	if (PORT->arp_table_len == MAX_ENTRIES)
 		//
@@ -2329,50 +2329,14 @@ BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, ULONG * ip, int len, in
 
 	arp = &PORT->arp_table[PORT->arp_table_len];
 
+	arp->SourceSocket = 0;
+
 	arp->PORT = PORT;
 
 	if (port == 0) PORT->needip = 1;			// Enable Raw IP Mode
 
-	if (*ip == INADDR_NONE)
-	{
-		// Host Name, or possibly IPv6 Numeric Address
-
-		*ip = 0;
-
-		if (strchr(name, ':'))
-		{
-			// IPv6 Numeric
-			
-			char PortString[10];
-			struct addrinfo hints, *res;
-
-			wsprintf(PortString, "%d", port);
-
-			memset(&hints, 0, sizeof hints);
-			hints.ai_family = AF_INET6;		// use IPv4 or IPv6, whichever
-			hints.ai_socktype = SOCK_DGRAM;
-			getaddrinfo(name, PortString, &hints, &res);
-
-			if (res)
-			{
-				PSOCKADDR_IN6 sa6 = (PSOCKADDR_IN6)res->ai_addr;
-				memcpy(&arp->in6_addr, &sa6->sin6_addr, 16);
-
-				arp->IPv6 = TRUE;
-				arp->ResolveFlag=FALSE;
-			}
-		}
-		else
-		{
-			arp->ResolveFlag=TRUE;
-			PORT->NeedResolver=TRUE;
-		}
-	}
-	else
-	{
-		arp->ResolveFlag=FALSE;
-		memcpy (&arp->ipaddr,ip,4);
-	}
+	arp->ResolveFlag=TRUE;
+	PORT->NeedResolver=TRUE;
 
 	memcpy (&arp->callsign,call,7);
 	strncpy((char *)&arp->hostname,name,64);
@@ -2391,6 +2355,25 @@ BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, ULONG * ip, int len, in
 	PORT->NeedResolver |= TCPFlag;					// Need Resolver window to handle tcp socket messages
 	PORT->NeedTCP |= TCPFlag;
 
+	if (ip)
+	{
+		// Only have an IP address if dynamically added - so update destaddr
+
+		if (IPv6)
+		{
+			memcpy(&arp->destaddr6.sin6_addr, ip, 16);
+			arp->IPv6 = TRUE;
+			arp->destaddr.sin_family = AF_INET6;
+		}
+		else
+		{
+			memcpy(&arp->destaddr.sin_addr.s_addr, ip, 4);
+			arp->IPv6 = FALSE;
+			arp->destaddr.sin_family = AF_INET;
+		}
+		arp->destaddr.sin_port = htons(arp->port);
+		InvalidateRect(PORT->hResWnd, NULL, FALSE);
+	}
 
 	return (TRUE);
 }
@@ -2430,14 +2413,11 @@ int CheckKeepalives(struct PORTINFO * PORT)
 			//
 				arp->keepalive=arp->keepaliveinit;
 
-				if (arp->ipaddr != 0)
+				if (arp->error == 0)
 				{
-					destaddr.destaddr.sin_addr.s_addr = arp->ipaddr;
-					destaddr.destaddr.sin_port = arp->port;
-
 					if (arp->port == 0) txsock = PORT->sock; else txsock = PORT->udpsock[0];
 
-					sendto(txsock,"Keepalive",9,0,(LPSOCKADDR)&destaddr,sizeof(destaddr));			
+					sendto(txsock,"Keepalive",9,0,(LPSOCKADDR)&arp->destaddr,sizeof(arp->destaddr));			
 				}
 			}
 		}
@@ -2457,7 +2437,7 @@ int CheckKeepalives(struct PORTINFO * PORT)
 	return (0);
 }
 
-BOOL CheckSourceisResolvable(struct PORTINFO * PORT, char * call, int Port, SOCKADDR_IN rxaddr)
+BOOL CheckSourceisResolvable(struct PORTINFO * PORT, char * call, int Port, VOID * rxaddr)
 {
 	// Makes sure we can reply to call before accepting message
 
@@ -2474,7 +2454,16 @@ BOOL CheckSourceisResolvable(struct PORTINFO * PORT, char * call, int Port, SOCK
 
 			if (arp->AutoAdded)
 			{
-				memcpy (&arp->ipaddr, (PVOID)&rxaddr.sin_addr, 4);
+				if (arp->IPv6)
+				{
+					SOCKADDR_IN6 * SA6 = rxaddr;
+					memcpy(&arp->destaddr6.sin6_addr, &SA6->sin6_addr, 16);
+				}
+				else
+				{
+					SOCKADDR_IN * SA = rxaddr;
+					memcpy(&arp->destaddr.sin_addr.s_addr, &SA->sin_addr, 4);
+				}
 				arp->port = Port;
 			}
 			return 1;		// Ok to process
@@ -2485,31 +2474,34 @@ BOOL CheckSourceisResolvable(struct PORTINFO * PORT, char * call, int Port, SOCK
 	return (0);				// Not in list
 }
 
-int Update_MH_List(struct PORTINFO * PORT, struct in_addr ipad, char * call, char proto, short port)
+int Update_MH_List(struct PORTINFO * PORT, UCHAR * ipad, char * call, char proto, short port, BOOL IPv6)
 {
 	int index;
 	char callsign[7];
 	int SaveKeepalive=0;
+	struct MHTableEntry * MH;
 
 	memcpy(callsign,call,7);
 	callsign[6] &= 0x3e;				// Mask non-ssid bits
 
 	for (index = 0; index < MaxMHEntries; index++)
 	{
-		if (PORT->MHTable[index].callsign[0] == 0) 
+		MH = &PORT->MHTable[index];
+		
+		if (MH->callsign[0] == 0) 
 
 			//	empty entry, so call not present. Move all down, and add to front
 
 			goto MoveEntries;
 
-		if (memcmp(PORT->MHTable[index].callsign,callsign,7) == 0 &&
-					memcmp(&PORT->MHTable[index].ipaddr,&ipad,4) == 0 &&
-					PORT->MHTable[index].proto == proto &&
-					PORT->MHTable[index].port == port)
+		if (memcmp(MH->callsign,callsign,7) == 0 &&
+			memcmp(&MH->ipaddr, ipad, (MH->IPv6) ? 16 : 4) == 0 &&
+					MH->proto == proto &&
+					MH->port == port)
 		{
 			// Entry found, move preceeding entries down and put on front
 
-			SaveKeepalive = PORT->MHTable[index].Keepalive;
+			SaveKeepalive = MH->Keepalive;
 			goto MoveEntries;
 		}
 	}
@@ -2527,13 +2519,16 @@ MoveEntries:
 	if (index > 0)
 		memmove(&PORT->MHTable[1],&PORT->MHTable[0],index*sizeof(struct MHTableEntry));
 
-	memcpy(PORT->MHTable[0].callsign,callsign,7);
+	MH = &PORT->MHTable[0];
 
-	PORT->MHTable[0].ipaddr = ipad;
-	PORT->MHTable[0].proto = proto;
-	PORT->MHTable[0].port = port;
-	time(&PORT->MHTable[0].LastHeard);
-	PORT->MHTable[0].Keepalive = SaveKeepalive;
+	memcpy(MH->callsign,callsign,7);
+	memcpy(&MH->ipaddr6, ipad, (IPv6) ? 16 : 4);
+	MH->proto = proto;
+
+	MH->port = port;
+	time(&MH->LastHeard);
+	MH->Keepalive = SaveKeepalive;
+	MH->IPv6 = IPv6;
 	InvalidateRect(PORT->hMHWnd,NULL,FALSE);
 	return 0;
 
@@ -2608,9 +2603,11 @@ int Socket_Accept(int SocketId)
 
 		if (sockptr->TCPListenSock == SocketId)
 		{
+			struct sockaddr sin;
+			
 			addrlen=sizeof(struct sockaddr);
 
-			sock = accept(SocketId, (struct sockaddr *)&sockptr->sin, &addrlen);
+			sock = accept(SocketId, &sin, &addrlen);
 
 			if (sock == INVALID_SOCKET)
 			{
@@ -2829,7 +2826,7 @@ int GetMessageFromBuffer(struct PORTINFO * PORT, char * Buffer)
 						memcpy(Buffer, sockptr->TCPBuffer, MsgLen);
 
 						if (PORT->MHEnabled)
-							Update_MH_List(PORT, sockptr->in_addr, &Buffer[7],'T', sockptr->port);
+							Update_MH_List(PORT, &sockptr->destaddr.sin_addr.s_net, &Buffer[7],'T', sockptr->port, 0);
 
 						sockptr->TCPOK = 0;
 
@@ -2850,7 +2847,7 @@ int GetMessageFromBuffer(struct PORTINFO * PORT, char * Buffer)
 					if (MsgLen > 1)
 					{
 						if (PORT->MHEnabled)
-							Update_MH_List(PORT, sockptr->in_addr, &Buffer[7],'T', sockptr->port);
+							Update_MH_List(PORT, &sockptr->destaddr.sin_addr.s_net, &Buffer[7],'T', sockptr->port, 0);
 
 						sockptr->TCPOK = 0;
 
@@ -2942,8 +2939,6 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 	{		
 		if (arp->TCPState == 0)
 		{
-			arp->destaddr.sin_addr.s_addr = arp->ipaddr;
-
 			Debugprintf("TCP Connect Closing socket %d IP %s", arp->TCPSock, arp->hostname);
 	
 			closesocket(arp->TCPSock);
@@ -2970,10 +2965,6 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 			sinx.sin_addr.s_addr = INADDR_ANY;
 			sinx.sin_port = 0;
 
-			arp->destaddr.sin_family = AF_INET; 
-			arp->destaddr.sin_addr.s_addr = arp->ipaddr;
-			arp->destaddr.sin_port = htons(arp->port);
-
 			if (bind(arp->TCPSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
 			{
 				//
@@ -2996,7 +2987,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 
 			arp->TCPState = TCPConnecting;
 
-			if (connect(arp->TCPSock,(LPSOCKADDR) &arp->destaddr, sizeof(destaddr)) == 0)
+			if (connect(arp->TCPSock,(LPSOCKADDR) &arp->destaddr, sizeof(arp->destaddr)) == 0)
 			{
 				//
 				//	Connected successful

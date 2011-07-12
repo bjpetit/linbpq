@@ -14,6 +14,7 @@ char MYCALL[7];
 
 UINT UIPortMask = 0;
 BOOL UIEnabled[33];
+BOOL UINull[33];
 char * UIDigi[33];
 char * UIDigiAX[33];		// ax.25 version of digistring
 int UIDigiLen[33];			// Length of AX string
@@ -484,36 +485,36 @@ VOID SeeifBBSUIFrame(PMESSAGEX buff, int len)
 	return;
 }
 
-
-
-
 //	ConvToAX25(GetNodeCall(), MYCALL);
 //				len=ConvFromAX25(Routes->NEIGHBOUR_DIGI1,Portcall);
 //			Portcall[len]=0;
 
 char MailForHeader[] = "\rMail For:";
 
-VOID SendMailFor(char * Msg)
+VOID SendMailFor(char * Msg, BOOL HaveCalls)
 {
 	int Mask = UIPortMask;
 	int NumPorts = GetNumberofPorts();
 	int i;
 
+	if (!HaveCalls)
+		strcat(Msg, "None");
+
 	for (i=1; i <= NumPorts; i++)
 	{
 		if (Mask & 1)
-			Send_AX_Datagram(Msg, strlen(Msg), i, AXDEST, TRUE);
+			if (HaveCalls || UINull[i])
+				Send_AX_Datagram(Msg, strlen(Msg), i, AXDEST, TRUE);
 		
 		Mask>>=1;
 	}
 }
 
-
 VOID SendMailForThread()
 {
 	struct UserInfo * user;
 	char MailForMessage[256] = "";
-
+	BOOL HaveMailFor;
 	struct UserInfo * ptr = NULL;
 	int i, Unread;
 
@@ -521,6 +522,7 @@ VOID SendMailForThread()
 	{
 		strcpy(MailForMessage, MailForText);
 		strcat(MailForMessage, MailForHeader);
+		HaveMailFor = FALSE;
 
 		for (i=1; i <= NumberofUsers; i++)
 		{
@@ -532,16 +534,17 @@ VOID SendMailForThread()
 			{
 				if (strlen(MailForMessage) > 240)
 				{
-					SendMailFor(MailForMessage);
+					SendMailFor(MailForMessage, TRUE);
 					strcpy(MailForMessage, MailForText);
 					strcat(MailForMessage, MailForHeader);
 				}
 				strcat(MailForMessage, " ");
 				strcat(MailForMessage, user->Call);
+				HaveMailFor = TRUE;
 			}
 		}
 
-		SendMailFor(MailForMessage);
+		SendMailFor(MailForMessage, HaveMailFor);
 		Sleep(MailForInterval * 60000);
 	}
 }

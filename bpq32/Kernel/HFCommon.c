@@ -794,6 +794,18 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 				sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
+				// Also report RP (Type 30) if scanning for rebust on PTC controollers
+				
+				if (TNC->Hardware == H_SCS && TNC->RobustTime)
+				{
+					wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+						TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
+						30, WL2KInfoPtr->TimeList);
+
+					Debugprintf("Sending %s", Message);
+
+					sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+				}
 				WL2KInfoPtr = &TNC->WL2KInfoList[++n];
 			}
 		}

@@ -4,7 +4,7 @@
 #define Verstring "5.0.0.2\0"
 #define TextVerstring "V5.0.0.2\0"
 #define Datestring "May 2011"
-#define SPECIALVERSION "Test 4"
+#define SPECIALVERSION "Test 5"
 #define VerComments "G8BPQ Packet Switch V5.0.0.2\0"
 #define VerCopyright "Copyright © 2001-2011 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
@@ -58,8 +58,8 @@
 
 #ifdef UIUTIL
 
-#define Vers 0,0,0,2
-#define Verstring "0.0.0.2\0"
+#define Vers 0,0,0,3
+#define Verstring "0.0.0.3\0"
 #define VerComments "Beacon Utility for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011 John Wiseman G8BPQ\0"
 #define VerDesc "Beacon Utility for G8BPQ Switch\0"
