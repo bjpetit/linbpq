@@ -1096,12 +1096,13 @@ nexti:;
 
 BOOL SetupNewBBS(struct UserInfo * user)
 {
-	user->BBSNext = BBSChain;
-	BBSChain = user;
 	user->BBSNumber = FindFreeBBSNumber();
 
 	if (user->BBSNumber == 0)
 		return FALSE;
+
+	user->BBSNext = BBSChain;
+	BBSChain = user;
 
 	SortBBSChain();
 
@@ -1203,6 +1204,15 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 			if(SetupNewBBS(user))
 				user->flags |= F_BBS;
+			else
+			{
+				// Failed - too many bbs's defined
+
+				wsprintf(InfoBoxText, "Cannot set user to be a BBS - you already have 80 BBS's defined");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				user->flags &= ~F_BBS;
+				CheckDlgButton(hDlg, IDC_BBSFLAG, (user->flags & F_BBS));
+			}
 		}
 	}
 	else
@@ -2996,7 +3006,7 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 {
 	int Command, i;
 	RECT Rect;
-	int Row = 50;
+	int Row = 80;
 
 	switch (message)
 	{

@@ -68,7 +68,7 @@ static char WindowTitle[] = "SCS Pactor";
 static int RigControlRow = 210;
 
 
-#define NARROWMODE 12
+#define NARROWMODE 12		// PI/II
 #define WIDEMODE 16			// PIII only
 
 extern UCHAR BPQDirectory[];

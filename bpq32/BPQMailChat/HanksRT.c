@@ -321,6 +321,14 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 			return;
 		}
 
+		if (_memicmp(&Buffer[1], "Shownames", 4) == 0)
+		{
+			conn->u.user->rtflags ^= u_shownames;
+			upduser(conn->u.user);
+			nprintf(conn, "Shownames is %s\r",  (conn->u.user->rtflags & u_shownames) ? "Enabled" : "Disabled");
+			conn->u.user->lastsendtime = time(NULL);
+			return;
+		}
 		rt_cmd(conn, Buffer);
 
 		return;
@@ -1195,16 +1203,20 @@ void text_tellu(USER *user, char *text, char *to, int who)
 	UCHAR Buffer[2048];
 	UCHAR *buf = &Buffer[4];
 
-//	sprintf(buf, "%-6.6s %c %s\r", user->call, (who == o_one) ? '>' : ':', text);
-	sprintf(buf, "%-6.6s %s %c %s\r", user->call, user->name, (who == o_one) ? '>' : ':', text);
-
 // Send it to all connected users in the same topic.
 // Echo to originator if requested.
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
 		if (!(circuit->rtcflags & p_user)) continue;  // Circuit is a link.
+
 		if ((circuit->u.user == user) && !(user->rtflags & u_echo)) continue;
+
+		if (circuit->u.user->rtflags & u_shownames)
+			sprintf(buf, "%-6.6s %s %c %s\r", user->call, user->name, (who == o_one) ? '>' : ':', text);
+		else
+			sprintf(buf, "%-6.6s %c %s\r", user->call, (who == o_one) ? '>' : ':', text);
+
 
 		switch(who)
 		{
@@ -1979,7 +1991,8 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			nputs(circuit, "/A - Toggle Alert on user join.\r");
 			nputs(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal.\r");
 			nputs(circuit, "/E - Toggle Echo.\r");
-			nputs(circuit, "/KEEPALIVE - Toggle sending Keepalive messages every 10 minutes.\r");
+			nputs(circuit, "/Keepalive - Toggle sending Keepalive messages every 10 minutes.\r");
+			nputs(circuit, "/ShowNames - Toggle displaying name as weel as call on each message.\r");
 			nputs(circuit, "/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
 			nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");

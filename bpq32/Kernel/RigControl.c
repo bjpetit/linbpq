@@ -2619,6 +2619,7 @@ PortFound:
 	while(ptr)
 	{
 		int ModeNo;
+		int Supress;
 		double Freq = 0.0;
 		char FreqString[80]="";
 		char * Valchar;
@@ -2647,6 +2648,8 @@ PortFound:
 			Band->End = 84540;	//23:59
 			SaveBand->End = Band->Start - 60;
 
+			SaveBand = Band;
+
 			FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
 			memset(FreqPtr, 0, 1000);
 
@@ -2663,7 +2666,7 @@ PortFound:
 		// Mode can include 1/2/3 for Icom Filers. W/N for Winmor/Pactor Bandwidth, and +/-/S for Repeater Shift (S = Simplex) 
 		// First is always Mode
 
-		Split = Data = Bandwidth = Antenna = ModeNo = 0;
+		Split = Data = Bandwidth = Antenna = ModeNo = Supress = 0;
 
 		if (Modeptr)
 		{
@@ -2680,8 +2683,11 @@ PortFound:
 				Bandwidth = 'W';
 			else if (strchr(&Modeptr[1], 'N'))
 				Bandwidth = 'N';
-			else if (strchr(&Modeptr[1], 'R'))			// Robust Packet
+			else if (strchr(&Modeptr[1], 'R'))		// Robust Packet
 				Bandwidth = 'R';
+
+			if (strchr(&Modeptr[1], 'X'))			// Dont Report
+				Supress = 1;
 
 			if (strstr(&Modeptr[1], "A1"))
 				Antenna = '1';
@@ -2774,6 +2780,8 @@ PortFound:
 		FreqPtr[0]->Freq = Freq;
 		FreqPtr[0]->Bandwidth = Bandwidth;
 		FreqPtr[0]->Antenna = Antenna;
+		FreqPtr[0]->Supress = Supress;
+
 
 		CmdPtr = FreqPtr[0]->Cmd1 = malloc(40);
 

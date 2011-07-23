@@ -1,0 +1,132 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "BPQUIUtil.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "windows.h"
+#undef APSTUDIO_HIDDEN_SYMBOLS
+#include "Versions.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.K.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+BPQICON                 ICON    DISCARDABLE     "..\\BPQIcon.ICO"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+UIMAINWINDOW DIALOG DISCARDABLE  100, 100, 323, 304
+STYLE WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "BPQ32 UI Utility"
+CLASS "UIMAINWINDOW"
+FONT 8, "FixedSys"
+BEGIN
+END
+
+PORTPAGE DIALOG DISCARDABLE  26, 5, 366, 186
+STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "FixedSys"
+BEGIN
+    LTEXT           "Send Beacon Every",IDC_STATIC,17,25,68,14,
+                    SS_CENTERIMAGE
+    EDITTEXT        IDC_INTERVAL,90,26,20,12,ES_AUTOHSCROLL
+    LTEXT           "Minutes to ",IDC_STATIC,117,25,55,14,SS_CENTERIMAGE
+    EDITTEXT        IDC_UIDEST,175,26,59,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Send From File",IDC_FROMFILE,"Button",BS_AUTOCHECKBOX | 
+                    BS_VCENTER | WS_TABSTOP,17,59,68,13
+    EDITTEXT        IDC_FILENAME,89,58,223,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "Find File",IDC_FILE,316,58,40,12
+    DEFPUSHBUTTON   "Save",IDOK,122,142,40,12
+    DEFPUSHBUTTON   "Test",ID_TEST,205,142,40,12
+    EDITTEXT        IDC_MESSAGE,20,84,294,52,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "",IDC_PORTNAME,12,9,139,14,SS_CENTERIMAGE
+    LTEXT           "Path",IDC_STATIC,17,42,57,14,SS_CENTERIMAGE
+    EDITTEXT        IDC_UIDIGIS,90,42,223,12,ES_UPPERCASE | ES_AUTOHSCROLL
+END
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "BPQUIUtil.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#include ""windows.h""\r\n"
+    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#include ""Versions.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""..\\StdVer.inc""\r\n"
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    "PORTPAGE", DIALOG
+    BEGIN
+        BOTTOMMARGIN, 139
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.K.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#include "..\StdVer.inc"
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

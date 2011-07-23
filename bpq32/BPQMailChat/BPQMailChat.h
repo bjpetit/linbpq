@@ -269,6 +269,7 @@ typedef struct cn_t
 #define u_bells 0x0004		// User wants bell when other users join.
 #define u_colour 0x0008		// User wants BPQTerminal colour codes.
 #define u_keepalive 0x0010	// User wants Keepalive Messages.
+#define u_shownames 0x0020	// User wants name as well as call on each message.
 
 typedef struct ConnectionInfo_S
 {

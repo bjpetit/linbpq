@@ -295,7 +295,7 @@ typedef struct TNCINFO
 	int Retries;
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent
-	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
+	UCHAR RXBuffer[520];			// Message being received - may not arrive all at once
 	UINT RXLen;						// Data in RXBUffer
 	UCHAR Toggle;					// Sequence bit
 	int Buffers;					// Free buffers in TNC

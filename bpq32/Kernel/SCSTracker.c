@@ -461,7 +461,8 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 	TempScript = malloc(1000);
 
 	strcpy(TempScript, "M UISC\r");
-	strcat(TempScript, "%F 1500\r");			// Tones may be changed but I want this as standard
+	strcpy(TempScript, "F 200\r");			// Sets SABM retry time to about 5 secs
+	strcat(TempScript, "%F 1500\r");		// Tones may be changed but I want this as standard
 
 	strcat(TempScript, TNC->InitScript);
 

@@ -20,6 +20,7 @@ struct ScanEntry
 	double Freq;		// In case nneded to report to WL2K
 	char Bandwidth;
 	char Antenna;
+	char Supress;		// Dont report this one to WL2K
 	char * Cmd1;
 	int xCmd1Len;
 	char * Cmd2;

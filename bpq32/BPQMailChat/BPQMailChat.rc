@@ -164,9 +164,9 @@ BBS_CONFIG DIALOG DISCARDABLE  0, 0, 368, 280
 STYLE WS_CHILD
 FONT 8, "System"
 BEGIN
-    LTEXT           "BBS Call is the base callsign,without SSID. This is not necessarily the same as the Applicaion Callsign defined in the BPQ32 configuration. SYSOPCall is the callsign used by the local console.",
+    LTEXT           "BBS Call is the base callsign, without SSID. This is not necessarily the same as the Application Callsign defined in the BPQ32 configuration. SYSOP Call is the callsign used by the local console.",
                     IDC_STATIC,10,4,354,23
-    LTEXT           "The Application Number defines which BPQ32 Application gives access to the BBS. Note this a the APPLNumber (1-8) not an Appication Mask, as uses in many BPQ32 programs.",
+    LTEXT           "The Application Number defines which BPQ32 Application gives access to the BBS. Note this is the APPLNumber (1-8) not an Application Mask, as used in many BPQ32 programs.",
                     IDC_STATIC,10,27,353,18
     LTEXT           "The eMail Server Params configure the NNTP, SMTP and POP3 Servers, which allow  normal Internet email and News clients to get messages from, and post mesages to the BBS. If you don't want to use this, set them to zero.",
                     IDC_STATIC,8,52,357,27
@@ -219,9 +219,9 @@ BEGIN
     EDITTEXT        2002,185,125,87,88,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
     DEFPUSHBUTTON   "Save",2100,172,226,50,14,BS_CENTER | BS_VCENTER
-    LTEXT           "The Application Number defines which BPQ32 Application gives access to the Chat Server. Note this a the APPLNumber (1-8) not an Appication Mask, as uses in many BPQ32 programs.",
+    LTEXT           "The Application Number defines which BPQ32 Application gives access to the Chat Server. Note this is the APPLNumber (1-8) not an Application Mask, as uses in many BPQ32 programs.",
                     -1,10,10,353,18
-    LTEXT           "the Nodes to link to box defines which other Chat Nodes should be connected to, or from which connections may be accepted. The format is ALIAS:CALL, eg BPQCHT:G8BPQ-4. Note these must be directly connectable - ie in your NODES table.",
+    LTEXT           "The Nodes to link to box defines which other Chat Nodes should be connected to, or from which connections may be accepted. The format is ALIAS:CALL, eg BPQCHT:G8BPQ-4. Note these must be directly connectable - ie in your NODES table.",
                     -1,10,30,355,25
     LTEXT           "The Callsign of the Chat Node is not defined here - It is obtained from the BPQ32 APPLCALL parameter corresponding to the Chat Appl Number.",
                     -1,10,60,360,25
@@ -310,7 +310,7 @@ BEGIN
     LTEXT           "Port",-1,250,130,19,13
     EDITTEXT        3005,275,144,29,15
     EDITTEXT        3003,275,127,29,15
-    LTEXT           "This page configures the BBS <> Internet Mail Gateway. The Gateway allows local users to send messages to Internet emal addresses, and get replies from those messages",
+    LTEXT           "This page configures the BBS <> Internet Mail Gateway. The Gateway allows local users to send messages to Internet email addresses, and get replies from those messages",
                     -1,10,10,353,20
     LTEXT           "My Domain",-1,10,112,51,7
     LTEXT           "ISP Account Password",-1,10,180,80,13
@@ -711,7 +711,7 @@ BEGIN
     PUSHBUTTON      "Save",IDC_SAVEWP,171,216,56,17,BS_CENTER | BS_VCENTER
 END
 
-IDD_UICONFIG DIALOG DISCARDABLE  0, 0, 324, 120
+IDD_UICONFIG DIALOG DISCARDABLE  0, 0, 324, 151
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "UI Configuration"
 FONT 8, "System"
@@ -720,7 +720,9 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,175,99,50,14
     LTEXT           "Mailfor Header",IDC_STATIC,5,5,50,10
     EDITTEXT        IDC_MAILFOR,60,4,245,10,ES_AUTOHSCROLL
-    LTEXT           "Send Null Mailfor",IDC_STATIC,244,14,60,10
+    LTEXT           "Send Null Mailfor",IDC_STATIC,244,25,60,10
+    LTEXT           "(use \\r to insert newline in message)",IDC_STATIC,60,
+                    15,125,10
 END
 
 IDD_CHATCOLCONFIG DIALOG DISCARDABLE  0, 0, 224, 120
@@ -962,7 +964,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 117
         TOPMARGIN, 2
-        BOTTOMMARGIN, 113
+        BOTTOMMARGIN, 144
     END
 
     IDD_MSGFROMCLIPBOARD, DIALOG

@@ -489,8 +489,52 @@ VOID SeeifBBSUIFrame(PMESSAGEX buff, int len)
 //				len=ConvFromAX25(Routes->NEIGHBOUR_DIGI1,Portcall);
 //			Portcall[len]=0;
 
-char MailForHeader[] = "\rMail For:";
+char MailForHeader[] = "Mail For:";
 
+char MailForExpanded[100];
+
+VOID ExpandMailFor()
+{
+	char * OldP = MailForText;
+	char * NewP = MailForExpanded;
+	char * ptr, * pptr;
+	int len;
+	char Dollar[] = "\\";
+	char CR[] = "\r";
+
+	ptr = strchr(OldP, '\\');
+
+	while (ptr)
+	{
+		len = ptr - OldP;		// Chars before Backslash
+		memcpy(NewP, OldP, len);
+		NewP += len;
+
+		switch (*++ptr)
+		{
+		case 'r': // Inserts a carriage return.
+		case 'R': // Inserts a carriage return.
+
+			pptr = CR;
+			break;
+
+		default:
+
+			pptr = Dollar;		// Just Copy Backslash
+		}
+
+		len = strlen(pptr);
+		memcpy(NewP, pptr, len);
+		NewP += len;
+
+		OldP = ++ptr;
+		ptr = strchr(OldP, '\\');
+	}
+
+	strcpy(NewP, OldP);
+}
+
+	
 VOID SendMailFor(char * Msg, BOOL HaveCalls)
 {
 	int Mask = UIPortMask;
@@ -498,13 +542,13 @@ VOID SendMailFor(char * Msg, BOOL HaveCalls)
 	int i;
 
 	if (!HaveCalls)
-		strcat(Msg, "None");
+		strcat(Msg, "None ");
 
 	for (i=1; i <= NumPorts; i++)
 	{
 		if (Mask & 1)
 			if (HaveCalls || UINull[i])
-				Send_AX_Datagram(Msg, strlen(Msg), i, AXDEST, TRUE);
+				Send_AX_Datagram(Msg, strlen(Msg) - 1, i, AXDEST, TRUE);
 		
 		Mask>>=1;
 	}
@@ -520,8 +564,13 @@ VOID SendMailForThread()
 
 	while (MailForInterval)
 	{
-		strcpy(MailForMessage, MailForText);
-		strcat(MailForMessage, MailForHeader);
+		ExpandMailFor();
+
+		if (MailForText[0])				// User supplied header
+			strcpy(MailForMessage, MailForExpanded);
+		else
+			strcpy(MailForMessage, MailForHeader);
+
 		HaveMailFor = FALSE;
 
 		for (i=1; i <= NumberofUsers; i++)
@@ -535,11 +584,14 @@ VOID SendMailForThread()
 				if (strlen(MailForMessage) > 240)
 				{
 					SendMailFor(MailForMessage, TRUE);
-					strcpy(MailForMessage, MailForText);
-					strcat(MailForMessage, MailForHeader);
+
+					if (MailForText[0])				// User supplied header
+						strcpy(MailForMessage, MailForExpanded);
+					else
+						strcpy(MailForMessage, MailForHeader);
 				}
-				strcat(MailForMessage, " ");
 				strcat(MailForMessage, user->Call);
+				strcat(MailForMessage, " ");
 				HaveMailFor = TRUE;
 			}
 		}

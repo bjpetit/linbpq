@@ -377,7 +377,8 @@ HFONT hFont ;
 
 #pragma pack()
 
-int addrlen=sizeof(SOCKADDR_IN6);
+int addrlen6 = sizeof(SOCKADDR_IN6);
+int addrlen = sizeof(SOCKADDR_IN);
 
 extern short CRCTAB;
 
@@ -522,7 +523,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		for (i=0;i<PORT->NumberofUDPPorts;i++)
 		{
-			len = recvfrom(PORT->udpsock[i],rxbuff,500,0,(LPSOCKADDR)&RXaddr.rxaddr,&addrlen);
+		
+			if (PORT->IPv6[i])
+				len = recvfrom(PORT->udpsock[i],rxbuff,500,0,(LPSOCKADDR)&RXaddr.rxaddr, &addrlen6);
+			else
+				len = recvfrom(PORT->udpsock[i],rxbuff,500,0,(LPSOCKADDR)&RXaddr.rxaddr, &addrlen);
 	
 			if (len == -1)
 			{		
@@ -1359,7 +1364,6 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 	BOOL OK1,OK2,OK3;
 
 	char call[10], host[65];
-	unsigned int ipad;
 	int Interval;
 	int calllen;
 	int	port;
@@ -1406,8 +1410,6 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 				port=GetDlgItemInt(PORT->ConfigWnd,1003,&OK3,FALSE);
 			else
 				port=0;
-
-			ipad = inet_addr(host);
 
 			Interval=0;
 

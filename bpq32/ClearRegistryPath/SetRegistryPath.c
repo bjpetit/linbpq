@@ -13,9 +13,19 @@ int main(int argc, char **argv)
 	char ProgDir[MAX_PATH];
 	HKEY REGTREE = HKEY_CURRENT_USER;
 	char * REGTREETEXT = "HKEY_CURRENT_USER";
+	BOOL Quiet = FALSE;
 
 	printf("SetRegistryPath Version 2.0.0\n\n");
 
+	if (argc >1)
+	{
+		if (_stricmp(argv[1], "/quiet") == 0)
+		{
+			Quiet = TRUE;
+			argv[1] = argv[2];
+			argc--;
+		}
+	}
 	if (_winver < 0x600)
 	{
 		REGTREE = HKEY_LOCAL_MACHINE;
@@ -76,10 +86,11 @@ int main(int argc, char **argv)
 		else
 			printf("Registry Value \"BPQ Program Directory\" create failed\n");
 
-
-		printf("\nPress any key to Exit");
-		i = _getch();
-
+		if (!Quiet)
+		{
+			printf("\nPress any key to Exit");
+			i = _getch();
+		}
 		return 0;
 
 	}

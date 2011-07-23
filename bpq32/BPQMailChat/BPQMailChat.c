@@ -686,6 +686,8 @@
 // Add AUTH command
 // Leave selection in same place after Delete User
 // Combine SMTP server messages to multiple WL2K addresses into one message to WL2k
+// Add option to show name as well as call on Chat messages
+// Fix program error if you try to define more than 80 BBS's
 
 
 // Use Windows Sound Events for (Chat "user join" alert)

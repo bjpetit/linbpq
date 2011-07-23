@@ -376,9 +376,12 @@
 // Initialise TNC State on Pactor Dialogs
 // Add Shortened (6 digit) AUTH mode.
 // Update MH with all frames (not just I/UI)
-// Add IPV6 Support for TelnetServer
+// Add IPV6 Support for TelnetServer and AXIP
 // Fix TNC OK Test for Tracker
 // Fix crash in CMS mode if terminal disconnects while tcp commect in progress
+// Add WL2K reporting for Robust Packet
+// Add option to suppress WL2K reporting for specific frequencies
+// Fix Timeband processing for Rig Control
 
 #define Kernel
 #include "Versions.h"

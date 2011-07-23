@@ -60,6 +60,9 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 int Winmor_Socket_Data(int sock, int error, int eventcode);
 
+int ModetoBaud[30] = {0,0,0,0,0,0,0,0,0,0,0,			// 0 = 10
+					  200,600,3200,600,3200,3200};	// 11 - 16
+
 VOID * zalloc(int len)
 {
 	// malloc and clear
@@ -570,6 +573,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	int dec, sign;
 	char FreqString[80]="";
 	int Mode;
+	int Baud;
 	char BandWidth;
 
 	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
@@ -698,10 +702,17 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 		
 				while (Freqptr[0])
 				{
+					if (Freqptr[0]->Supress)
+					{
+						Freqptr++;
+						continue;							// Don't Report HF Packet
+					}
+
 					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
 
 					if (TNC->Hardware == H_TRK)
-					{	if (Freqptr[0]->Bandwidth == 'R')
+					{
+						if (Freqptr[0]->Bandwidth == 'R')
 						{
 							BandWidth = 'W';
 							Mode = TNC->NARROWMODE;
@@ -745,10 +756,22 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 					{
 						if ((strcmp(WL2KInfoPtr->Freq, Valchar) == 0) && WL2KInfoPtr->Bandwidth == Mode)
 						{
-							// Add timeband to freq
+							// Add timeband to freq. First see if contiguous hours
 
-							wsprintf(WL2KInfoPtr->TimeList, "%s,%02d-%02d",
-								WL2KInfoPtr->TimeList, HHStart, HHEnd);
+							int len = strlen(WL2KInfoPtr->TimeList);
+							int LastHour = atoi(&WL2KInfoPtr->TimeList[len - 2]);
+
+							if (HHStart - LastHour == 1)	// Next Hour
+							{
+								// Replace end time
+
+
+								WL2KInfoPtr->TimeList[len - 2] = 0;
+					
+								wsprintf(WL2KInfoPtr->TimeList, "%s%02d",	WL2KInfoPtr->TimeList, HHEnd);
+							}
+							else
+								wsprintf(WL2KInfoPtr->TimeList, "%s,%02d-%02d",	WL2KInfoPtr->TimeList, HHStart, HHEnd);
 
 							goto gotfreq;
 						}
@@ -786,19 +809,22 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 //02'KB1TCE-5', 'KB1TCE', 'FN54KB', 14105700, 21, 0, 100, 25, 0, 000, '00-23', 1
 			while (WL2KInfoPtr->Bandwidth)
 			{
-				wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+
+				Baud = ModetoBaud[WL2KInfoPtr->Bandwidth];
+
+				wsprintf(Message, "02'%s', '%s', '%s', %s, %d, %d, 0, 0, 0, 000, '%s', 1",
 					TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
-					WL2KInfoPtr->Bandwidth, WL2KInfoPtr->TimeList);
+					WL2KInfoPtr->Bandwidth, Baud, WL2KInfoPtr->TimeList);
 
 				Debugprintf("Sending %s", Message);
 
 				sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
-				// Also report RP (Type 30) if scanning for rebust on PTC controollers
+				// Also report RP (Type 30) if scanning for rebust on PTC controllers
 				
 				if (TNC->Hardware == H_SCS && TNC->RobustTime)
 				{
-					wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 0, 0, 0, 000, '%s', 1",
+					wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 600, 0, 0, 0, 000, '%s', 1",
 						TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
 						30, WL2KInfoPtr->TimeList);
 
@@ -812,11 +838,26 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	}
 	else
 	{
-		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 0, 100, 25, 0, 000, '%s', 1",
-			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, TNC->Comment);
+
+		Baud = ModetoBaud[TNC->WL2KMode];
+		
+		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, %d, 100, 25, 0, 000, '%s', 1",
+			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, Baud, TNC->Comment);
 
 		Debugprintf("Sending %s", Message);
 		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+		// Also report RP (Type 30) if scanning for rebust on PTC controllers
+
+		if (TNC->Hardware == H_SCS && TNC->RobustTime)
+		{
+			wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 600, 100, 25, 0, 000, '%s', 1",
+				TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, 30, TNC->Comment);
+
+			Debugprintf("Sending %s", Message);
+			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+		}
+
 
 //		wsprintf(Message, "03%s", TNC->RMSCall);
 
