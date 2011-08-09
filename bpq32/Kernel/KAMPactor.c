@@ -257,7 +257,6 @@ BOOL CloseConnection(struct TNCINFO * conn);
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
 BOOL NEAR DestroyTTYInfo(int port);
 void CheckRXKAM(struct TNCINFO * TNC);
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 VOID KAMPoll(int Port);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
 VOID ProcessTermModeResponse(struct TNCINFO * TNC);
@@ -562,7 +561,7 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, TRUE);
 
 	return ((int)KAMExtProc);
 }

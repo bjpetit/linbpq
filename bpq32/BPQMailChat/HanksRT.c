@@ -1992,7 +1992,7 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			nputs(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal.\r");
 			nputs(circuit, "/E - Toggle Echo.\r");
 			nputs(circuit, "/Keepalive - Toggle sending Keepalive messages every 10 minutes.\r");
-			nputs(circuit, "/ShowNames - Toggle displaying name as weel as call on each message.\r");
+			nputs(circuit, "/ShowNames - Toggle displaying name as well as call on each message.\r");
 			nputs(circuit, "/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
 			nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");

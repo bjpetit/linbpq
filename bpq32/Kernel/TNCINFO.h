@@ -116,6 +116,7 @@ struct STREAMINFO
 								// prevents new attaches while a didy disconnect is in progress
 	int DisconnectingTimeout;	// A hard disconnect occurs if this expires before the disconnect complete
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
+	BOOL DiscWhenAllSent;		// Close session when all msgs have been sent to node
 
 	int DEDStream;				// Stream number for DED interface (same as index except for pactor)
 
@@ -139,7 +140,6 @@ struct STREAMINFO
 
 	int TimeInRX;				// Too long in send mode timer
 	int NeedDisc;				// Timer to send DISC if appl not available
-
 };
 
 
@@ -161,6 +161,7 @@ typedef struct TNCINFO
 #define H_HAL 5
 #define H_TELNET 6
 #define H_TRK 7
+#define H_TRKM 7
 
 	int Port;					// BPQ Port Number
 
@@ -289,6 +290,7 @@ typedef struct TNCINFO
 
 
 	HANDLE hDevice;
+	int ReopenTimer;			//	Used to reopen device if failed (eg USB port removed)
 	BOOL HostMode;					// Set if in DED Host Mode
 //	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
 	int Timeout;					// Timeout response counter
@@ -389,7 +391,7 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
 VOID SaveWindowPos(int port);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream);
 VOID ShowTraffic(struct TNCINFO * TNC);
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
+OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet);
 VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);

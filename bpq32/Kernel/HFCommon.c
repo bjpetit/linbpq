@@ -1246,7 +1246,7 @@ VOID ShowTraffic(struct TNCINFO * TNC)
 	SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
 }
 
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
+OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet)
 {
 	char szPort[15];
 	char buf[80];
@@ -1272,13 +1272,14 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed)
 	if (conn->hDevice == (HANDLE) -1)
 	{
 		wsprintf(buf," COM%d Setup Failed %d ", Port, GetLastError());
-		WritetoConsole(buf);
-		OutputDebugString(buf);
-		SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
-
+		
+		if (!Quiet)
+			WritetoConsole(buf);
+		if (conn->hDlg)
+			SetDlgItemText(conn->hDlg, IDC_COMMSSTATE, buf);
+	
 		return (FALSE);
 	}
-
 
 	SetupComm(conn->hDevice, 4096, 4096); // setup device buffers
 

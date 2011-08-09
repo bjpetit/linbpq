@@ -318,7 +318,6 @@ BOOL CloseConnection(struct TNCINFO * conn);
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
 BOOL NEAR DestroyTTYInfo(int port);
 void CheckRX(struct TNCINFO * TNC);
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 VOID TelnetPoll(int Port);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
 VOID ProcessTermModeResponse(struct TNCINFO * TNC);

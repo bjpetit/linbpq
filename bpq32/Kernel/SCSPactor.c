@@ -643,7 +643,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, TRUE);
 
 	if (TNC->VCOMPort)
 		OpenVirtualSerialPort(TNC);

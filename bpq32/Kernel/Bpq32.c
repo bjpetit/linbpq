@@ -367,6 +367,8 @@
 // Add support for SCS Tracker HF Modes
 // Fix WL2K Reporting
 // Report Version to WL2K
+// Add Driver to support Tracker with multiple sessions (but no scanning, wl2k report, etc)
+
 
 // Above released as 5.0.0.1
 
@@ -382,6 +384,7 @@
 // Add WL2K reporting for Robust Packet
 // Add option to suppress WL2K reporting for specific frequencies
 // Fix Timeband processing for Rig Control
+// New Driver for SCS Tracker allowing multiple connects, so Tracker can be used for user access 
 
 #define Kernel
 #include "Versions.h"
@@ -454,6 +457,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI SoundModemExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TrackerExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI TrackerMExtInit(EXTPORTDATA * PortEntry);
 
 
 extern char * Buffer;	// Config Area
@@ -1112,9 +1116,14 @@ VOID CALLBACK TimerProc(
 	{
 		unsigned int SPPtr;
 		unsigned int SPVal;
+		unsigned int eip;
+		unsigned int rev;
+		int i;
 
 		DWORD Stack[16];
-		
+		DWORD CodeDump[16];
+
+		eip = exinfo.ContextRecord->Eip;	
 		SPPtr = exinfo.ContextRecord->Esp;	
 
 		__asm{
@@ -1125,6 +1134,12 @@ VOID CALLBACK TimerProc(
 		mov esi,eax
 		mov ecx,64
 		rep movsb
+
+		lea edi,CodeDump
+		mov esi,eip
+		mov ecx,64
+		rep movsb
+
 
 	}
 
@@ -1144,6 +1159,24 @@ VOID CALLBACK TimerProc(
 
 		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
 			SPVal+32, Stack[8], Stack[9], Stack[10], Stack[11], Stack[12], Stack[13], Stack[14], Stack[15]);
+
+		Debugprintf("Code:");
+
+		for (i = 0; i < 16; i++)
+		{
+			rev = (CodeDump[i] & 0xff) << 24;
+			rev |= (CodeDump[i] & 0xff00) << 8;
+			rev |= (CodeDump[i] & 0xff0000) >> 8;
+			rev |= (CodeDump[i] & 0xff000000) >> 24;
+
+			CodeDump[i] = rev;
+		}
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			eip, CodeDump[0], CodeDump[1], CodeDump[2], CodeDump[3], CodeDump[4], CodeDump[5], CodeDump[6], CodeDump[7]);
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			eip+32, CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15]);
 
 
 	}
@@ -2837,9 +2870,15 @@ DllExport int APIENTRY SessionControl(int stream, int command, int param)
 	{
 		unsigned int SPPtr;
 		unsigned int SPVal;
+		unsigned int eip;
+		unsigned int rev;
+
+		int i;
 
 		DWORD Stack[16];
-		
+		DWORD CodeDump[16];
+
+		eip = exinfo.ContextRecord->Eip;	
 		SPPtr = exinfo.ContextRecord->Esp;	
 
 		__asm{
@@ -2848,6 +2887,11 @@ DllExport int APIENTRY SessionControl(int stream, int command, int param)
 		mov SPVal,eax
 		lea edi,Stack
 		mov esi,eax
+		mov ecx,64
+		rep movsb
+
+		lea edi,CodeDump
+		mov esi,eip
 		mov ecx,64
 		rep movsb
 
@@ -2867,6 +2911,24 @@ DllExport int APIENTRY SessionControl(int stream, int command, int param)
 
 		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
 			SPVal+32, Stack[8], Stack[9], Stack[10], Stack[11], Stack[12], Stack[13], Stack[14], Stack[15]);
+
+		Debugprintf("Code:");
+
+		for (i = 0; i < 16; i++)
+		{
+			rev = (CodeDump[i] & 0xff) << 24;
+			rev |= (CodeDump[i] & 0xff00) << 8;
+			rev |= (CodeDump[i] & 0xff0000) >> 8;
+			rev |= (CodeDump[i] & 0xff000000) >> 24;
+
+			CodeDump[i] = rev;
+		}
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			eip, CodeDump[0], CodeDump[1], CodeDump[2], CodeDump[3], CodeDump[4], CodeDump[5], CodeDump[6], CodeDump[7]);
+
+		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
+			eip+32, CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15]);
 
 		if (Semaphore && SemProcessID == GetCurrentProcessId())
 			FreeSemaphore();
@@ -3526,6 +3588,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "SCSTRACKER"))
 		return (UINT) TrackerExtInit;
+
+	if (strstr(Value, "TRKMULTI"))
+		return (UINT) TrackerMExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

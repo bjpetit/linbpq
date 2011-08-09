@@ -49,7 +49,7 @@ VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * C
 	{
 		nodeprintf(conn, "EDITUSER CALLSIGN to Display\r");
 		nodeprintf(conn, "EDITUSER CALLSIGN FLAG1 FLAG2 ...  to set, -FLAG1 -FLAG2 ...  to clear\r");
-		nodeprintf(conn, "EDITUSER: Flags are: EXC(luded) EXP(ert) SYSOP BBS EMAIL HOLD\r");
+		nodeprintf(conn, "EDITUSER: Flags are: EXC(luded) EXP(ert) SYSOP BBS PMS EMAIL HOLD\r");
 
 		SendPrompt(conn, user);
 		return;
@@ -83,6 +83,8 @@ VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * C
 			if (Arg1[0] != '-') EUser->flags |= F_SYSOP; else EUser->flags &= ~F_SYSOP;
 		if (strstr(Arg1, "BBS"))
 			if (Arg1[0] != '-') EUser->flags |= F_BBS; else EUser->flags &= ~F_BBS;
+		if (strstr(Arg1, "PMS"))
+			if (Arg1[0] != '-') EUser->flags |= F_PMS; else EUser->flags &= ~F_PMS;
 		if (strstr(Arg1, "EMAIL"))
 			if (Arg1[0] != '-') EUser->flags |= F_EMAIL; else EUser->flags &= ~F_EMAIL;
 		if (strstr(Arg1, "HOLD"))
@@ -107,6 +109,9 @@ UDisplay:
 
 	if (EUser->flags & F_BBS)
 		strcat(Line, " BBS");
+
+	if (EUser->flags & F_PMS)
+		strcat(Line, " PMS");
 
 	if (EUser->flags & F_EMAIL)
 		strcat(Line, " EMAIL");

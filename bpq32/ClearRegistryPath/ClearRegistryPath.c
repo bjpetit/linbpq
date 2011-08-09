@@ -4,9 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include "sioctl.h"
 
-
+// Use LOCAL_MACHINE on Vista or above
+// Add /quiet option
 
 int main(int argc, char **argv)
 {     
@@ -14,8 +14,13 @@ int main(int argc, char **argv)
 	int retCode,i;
 	HKEY REGTREE = HKEY_CURRENT_USER;
 	char * REGTREETEXT = "HKEY_CURRENT_USER";
+	BOOL Quiet = FALSE;
 
-	printf("ClearRegistryPath Version 2.0.0\n\n");
+	printf("ClearRegistryPath Version 2.0.1\n\n");
+
+	if (argc > 1)
+		if (_stricmp(argv[1], "/quiet") == 0)
+			Quiet = TRUE;
 
 	if (_winver < 0x600)
 	{
@@ -53,8 +58,11 @@ int main(int argc, char **argv)
 			
 		RegCloseKey(hKey);	
 	
-		printf("\nPress any key to Exit");
-		i = _getch();
+		if (!Quiet)
+		{
+			printf("\nPress any key to Exit");
+			i = _getch();
+		}
 
 		return 0;
 

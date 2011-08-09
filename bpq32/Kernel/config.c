@@ -1840,7 +1840,7 @@ char rec[];
 			break;
 
         case 14:
-            cn = dodll(i,value,rec);               /* ID PARMS */
+            cn = dodll(i,value,rec);               /* DLL PARMS */
 			break;
 
 			

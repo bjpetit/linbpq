@@ -51,7 +51,6 @@ BOOL NEAR OpenConnection(int);
 BOOL NEAR SetupConnection(int);
 BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
 void CheckRX(struct TNCINFO * TNC);
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed);
 VOID HALPoll(int Port);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
 VOID ProcessTermModeResponse(struct TNCINFO * TNC);
@@ -508,7 +507,7 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, TRUE);
 
 	SendCmd(TNC, "\x09" , 1);		// Reset
 

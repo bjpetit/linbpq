@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Use LOCAL_MACHINE on Vista or above
+// Add /quiet option
+
 int main(int argc, char **argv)
 {     
 	HKEY hKey=0, hSubKey = 0;
@@ -15,7 +18,11 @@ int main(int argc, char **argv)
 	char * REGTREETEXT = "HKEY_CURRENT_USER";
 	BOOL Quiet = FALSE;
 
-	printf("SetRegistryPath Version 2.0.0\n\n");
+	printf("SetRegistryPath Version 2.0.1\n\n");
+
+	if (argc > 2)
+		if (_stricmp(argv[2], "/quiet") == 0)
+			Quiet = TRUE;
 
 	if (argc >1)
 	{
@@ -95,7 +102,7 @@ int main(int argc, char **argv)
 
 	}
 
-	printf("Registry Key \"%s\\SOFTWARE\\G8BPQ\\BPQ32\" not found\n",REGTREETEXT);
+	printf("Registry Key \"%s\\SOFTWARE\\G8BPQ\\BPQ32\" could not be opened\n",REGTREETEXT);
 	
 	printf("\nPress any key to Exit");
 	i = _getch();
