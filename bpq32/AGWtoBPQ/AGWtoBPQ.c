@@ -32,6 +32,9 @@ HWND ConfigWnd;
 
 HBRUSH bgBrush;
 
+HKEY REGTREE = HKEY_CURRENT_USER;
+char REGTREETEXT[100] = "HKEY_CURRENT_USER";
+
 BOOL cfgMinToTray;
 
 int controlStream;
@@ -162,6 +165,20 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
     HWND  hWnd;             
 
 	hInst = hInstance;
+
+#pragma warning(push)
+#pragma warning(disable : 4996)
+
+	if (_winver < 0x0600)
+
+#pragma warning(pop)
+	{
+		// Below Vista
+
+		REGTREE = HKEY_LOCAL_MACHINE;
+		strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
+	}
+
 
     // Create a dialog box as the main window
 
@@ -452,7 +469,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 
 			if (OK1 && OK2 && OK3==1)
 			{
-				retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+				retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\AGWtoBPQ",
                               0,	// Reserved
 							  0,	// Class
@@ -564,7 +581,7 @@ BOOL Initialise()
 
 	// Get config from Registry 
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\AGWtoBPQ",
                               0,
                               KEY_QUERY_VALUE,

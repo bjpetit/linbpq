@@ -458,7 +458,7 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI SoundModemExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TrackerExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TrackerMExtInit(EXTPORTDATA * PortEntry);
-
+UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry);
 
 extern char * Buffer;	// Config Area
 
@@ -3579,6 +3579,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "WINMOR"))
 		return (UINT) WinmorExtInit;
+	
+	if (strstr(Value, "V4"))
+		return (UINT) V4ExtInit;
 	
 	if (strstr(Value, "TELNET"))
 		return (UINT) TelnetExtInit;

@@ -26,6 +26,9 @@
 
 //		Add option to Close Kant Mode sessions after receiving node failure message
 
+// Version 1.1.6 August 2011
+
+//		Updated to use HKEY_CURRENT_USER on Vista and above
 
 #include "stdafx.h"
 #include "bpqhostmodes.h"
@@ -36,6 +39,9 @@
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
+
+HKEY REGTREE = HKEY_CURRENT_USER;
+char REGTREETEXT[100] = "HKEY_CURRENT_USER";
 
 char ClassName[]="KHOSTMAINWINDOW";					// the main window class name
 
@@ -168,7 +174,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Open Registry to save Default Mode (HOST/TERM) Flag
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQHOSTMODES",
                               0,	// Reserved
 							  0,	// Class
@@ -289,6 +295,20 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	INITCOMMONCONTROLSEX init;
 
 	hInst = hInstance; // Store instance handle in our global variable
+
+	#pragma warning(push)
+#pragma warning(disable : 4996)
+
+	if (_winver < 0x0600)
+
+#pragma warning(pop)
+	{
+		// Below Vista
+
+		REGTREE = HKEY_LOCAL_MACHINE;
+		strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
+	}
+
 
 	hWnd=CreateDialog(hInst,ClassName,0,NULL);
 
@@ -542,7 +562,7 @@ BOOL Initialise()
 
 	// Get config from Registry 
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
 		"SOFTWARE\\G8BPQ\\BPQ32\\BPQHOSTMODES",
                               0,
                               KEY_QUERY_VALUE,
@@ -964,7 +984,7 @@ int SaveConfig(HWND hWnd)
 	HKEY hKey=0;
 	char Val[80];
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQHOSTMODES",
                               0,	// Reserved
 							  0,	// Class

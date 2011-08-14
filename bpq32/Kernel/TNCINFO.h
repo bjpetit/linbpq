@@ -162,6 +162,7 @@ typedef struct TNCINFO
 #define H_TELNET 6
 #define H_TRK 7
 #define H_TRKM 7
+#define H_V4 8
 
 	int Port;					// BPQ Port Number
 

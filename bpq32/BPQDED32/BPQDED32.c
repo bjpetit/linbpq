@@ -371,13 +371,25 @@ BOOLEAN WINAPI CheckifBPQ32isLoaded()
 
 	if (Mutex == NULL)
 	{	
+		HKEY REGTREE = HKEY_CURRENT_USER;
+
 		OutputDebugString("BPQDED32 bpq32.dll is not already loaded - Loading BPQ32.exe");
 
 		// Get address of BPQ Directory
 
+#pragma warning(push)
+#pragma warning(disable : 4996)
+		if (_winver < 0x0600)
+#pragma warning(pop)
+		{
+			// Below Vista
+
+		REGTREE = HKEY_LOCAL_MACHINE;
+		}
+
 		Value[0]=0;
 
-		ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+		ret = RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,
                               KEY_QUERY_VALUE,
@@ -385,7 +397,7 @@ BOOLEAN WINAPI CheckifBPQ32isLoaded()
 
 		if (ret == ERROR_SUCCESS)
 		{
-			ret = RegQueryValueEx(hKey, "BPQ Directory", 0, &Type,(UCHAR *)&Value, &Vallen);
+			ret = RegQueryValueEx(hKey, "BPQ Program Directory", 0, &Type,(UCHAR *)&Value, &Vallen);
 		
 			if (ret == ERROR_SUCCESS)
 			{
@@ -397,9 +409,9 @@ BOOLEAN WINAPI CheckifBPQ32isLoaded()
 			if (Value[0] == 0)
 			{
 		
-				// BPQ Directory absent or = "" - "try Config File Location"
+				// BPQ Program Directory absent or = "" - "try BPQ Directory"
 			
-				ret = RegQueryValueEx(hKey,"Config File Location",0,			
+				ret = RegQueryValueEx(hKey,"BPQ Directory",0,			
 							&Type,(UCHAR *)&Value,&Vallen);
 
 				if (ret == ERROR_SUCCESS)

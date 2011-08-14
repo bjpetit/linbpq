@@ -185,7 +185,7 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 
 		if(res==-1)
 		{
-			WritetoConsole("Error RX\n");
+//			WritetoConsole("Error RX\n");
 
 			return 0;
 		}

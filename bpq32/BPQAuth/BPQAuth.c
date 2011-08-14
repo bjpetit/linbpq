@@ -31,6 +31,9 @@ char ClassName[]="AUTHMAINWINDOW";					// the main window class name
 
 HWND hWnd;
 
+HKEY REGTREE = HKEY_CURRENT_USER;
+char REGTREETEXT[100] = "HKEY_CURRENT_USER";
+
 HINSTANCE hInst;
 HANDLE TimerHandle;
 
@@ -68,11 +71,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	KillTimer(NULL, 1);
 	
-//	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\G8BPQ\\BPQ32\\AUTH", 0, 0, 0,
-//				KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-//	RegSetValueEx(hKey,"PortMask",0,REG_DWORD,(BYTE *)&UIMask,4);
-
 	return (msg.wParam);
 }
 
@@ -94,6 +92,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int Row = 210;
 
 	hInst = hInstance; // Store instance handle in our global variable
+
+#pragma warning(push)
+#pragma warning(disable : 4996)
+
+	if (_winver < 0x0600)
+
+#pragma warning(pop)
+	{
+		// Below Vista
+
+		REGTREE = HKEY_LOCAL_MACHINE;
+		strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
+	}
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -128,7 +139,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\AUTH");
 	
-	retCode = RegOpenKeyEx (HKEY_CURRENT_USER, Key, 0, KEY_QUERY_VALUE, &hKey);
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
 
 	if (retCode == ERROR_SUCCESS)
 	{
@@ -236,7 +247,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			strcpy(Key, "SOFTWARE\\G8BPQ\\BPQ32\\AUTH");
 	
-			retCode = RegCreateKeyEx(HKEY_CURRENT_USER, Key, 0, 0, 0,
+			retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0,
 				KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 			if (retCode == ERROR_SUCCESS)

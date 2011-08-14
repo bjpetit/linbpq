@@ -46,8 +46,8 @@
 
 #ifdef HOSTMODES
 
-#define Vers 1,1,5,1
-#define Verstring "1.1.5.1\0"
+#define Vers 1,1,6,1
+#define Verstring "1.1.6.1\0"
 //#define SPECIALVERSION "Test 3"
 #define VerComments "Host Modes Emulator for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2011 John Wiseman G8BPQ\0"

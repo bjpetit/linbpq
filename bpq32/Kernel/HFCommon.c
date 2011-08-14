@@ -256,7 +256,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		{
 			if (TNC->ProgramPath)
 			{
-				if (strstr(TNC->ProgramPath, "WINMOR TNC"))
+				if (strstr(TNC->ProgramPath, " TNC"))
 				{
 					EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
 					EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
@@ -394,7 +394,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 	TNC->hDlg = hDlg = CreateDialog(hInstance,ClassName,0,NULL);
 	
-	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET)
+	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET || TNC->Hardware == H_V4)
 		wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
 	else
 		wsprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);

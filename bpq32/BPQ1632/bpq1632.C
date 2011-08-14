@@ -44,6 +44,9 @@ UCHAR BPQDirectory[MAX_PATH];
 
 HINSTANCE ExtDriver=0;
 
+HKEY REGTREE = HKEY_CURRENT_USER;
+char REGTREETEXT[100] = "HKEY_CURRENT_USER";
+
 typedef int (FAR *FARPROCX)();
 
 int *BPQAPI=0;
@@ -106,8 +109,6 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 		NotFirstUse[i] = FALSE;
 	}
 
-
-
 	// See if BPQ32 is running - if we create it in the NTVDM address space by
 	// loading bpq32.dll it will not work.
 
@@ -117,12 +118,25 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 	{	
 		OutputDebugString("BPQ1632 bpq32.dll is not already loaded - Loading BPQ32.exe\n");
 
+#pragma warning(push)
+#pragma warning(disable : 4996)
+
+		if (_winver < 0x0600)
+
+#pragma warning(pop)
+		{
+			// Below Vista
+
+			REGTREE = HKEY_LOCAL_MACHINE;
+			strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
+		}
+
 		// Get address of BPQ Directory
 
 		Value[0]=0;
 
 
-		ret = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+		ret = RegOpenKeyEx (REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,
                               KEY_QUERY_VALUE,
@@ -130,9 +144,8 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 
 		if (ret == ERROR_SUCCESS)
 		{
-			ret = RegQueryValueEx(hKey,"BPQ Directory",0,			
+			ret = RegQueryValueEx(hKey,"BPQ Program Directory",0,			
 								&Type,(UCHAR *)&Value,&Vallen);
-
 		
 			if (ret == ERROR_SUCCESS)
 			{
@@ -140,13 +153,12 @@ BOOL __declspec(dllexport) __cdecl InitialiseBPQ32()
 					Value[0]=0;
 			}
 
-
 			if (Value[0] == 0)
 			{
 		
-				// BPQ Directory absent or = "" - "try Config File Location"
+				// BPQ Program Directory absent or = "" - "try Config File Location"
 			
-				ret = RegQueryValueEx(hKey,"Config File Location",0,			
+				ret = RegQueryValueEx(hKey,"BPQ Directory",0,			
 							&Type,(UCHAR *)&Value,&Vallen);
 
 
