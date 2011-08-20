@@ -1389,7 +1389,10 @@ VOID ConnecttoWINMORThread(port)
 		send(TNC->WINMORSock, TNC->InitScript , strlen(TNC->InitScript), 0);
 		TNC->Alerted = TRUE;
 
-		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connected to WINMOR TNC");
+		if (TNC->Hardware == H_V4)
+			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connected to V4 TNC");
+		else
+			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connected to WINMOR TNC");
 
 		// Use Async Notification on the Control port to give a fast enough response for Serial PTT
 
@@ -2026,10 +2029,10 @@ int Winmor_Socket_Data(int sock, int error, int eventcode)
 
 		case FD_CLOSE:
 
-			i=wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", TNC->Port);
+			i=wsprintf(ErrMsg, "TCP Connection lost for BPQ Port %d\r\n", TNC->Port);
 			WritetoConsole(ErrMsg);
 
-			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to WINMOR TNC lost");
+			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to TNC lost");
 				
 			TNC->CONNECTING = FALSE;
 			TNC->CONNECTED = FALSE;

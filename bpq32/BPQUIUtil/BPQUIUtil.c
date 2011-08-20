@@ -45,7 +45,6 @@ typedef struct _MESSAGEX
 #pragma pack()
 
 HKEY REGTREE = HKEY_CURRENT_USER;
-char REGTREETEXT[100] = "HKEY_CURRENT_USER";
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
@@ -228,18 +227,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance; // Store instance handle in our global variable
 
-#pragma warning(push)
-#pragma warning(disable : 4996)
-
-	if (_winver < 0x0600)
-
-#pragma warning(pop)
-	{
-		// Below Vista
-
-		REGTREE = HKEY_LOCAL_MACHINE;
-		strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
-	}
+	REGTREE = GetRegistryKey();
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 

@@ -317,7 +317,7 @@ static VOID ChangeMYC(struct TNCINFO * TNC, char * Call)
 //	send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
 //	TNC->StartSent = TRUE;
 
-	send(TNC->WINMORSock, "MYCALL\r\n", 5, 0);
+//	send(TNC->WINMORSock, "MYCALL\r\n", 8, 0);
 }
 
 static int ExtProc(int fn, int port,unsigned char * buff)
@@ -390,11 +390,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			TNC->HeartBeat = 0;
 
-//		if (TNC->CONNECTED)
+			if (TNC->CONNECTED)
 
 				// Probe link
 
-//				send(TNC->WINMORSock, "BUFFER\r\n", 8, 0);
+				send(TNC->WINMORSock, "BUFFER\r\n", 8, 0);
 			
 		}
 
@@ -420,17 +420,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
 				}
 			}
-		}
-
-		if (STREAM->NeedDisc)
-		{
-			STREAM->NeedDisc--;
-
-			if (STREAM->NeedDisc == 0)
-			{
-				// Send the DISCONNECT
-
-				send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);			}
 		}
 
 		if (TNC->DiscPending)
@@ -501,6 +490,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			char Msg[80];
 
 			TNC->Streams[0].Attached = TRUE;
+			TNC->Streams[0].ARQENDSent = FALSE;
 
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4USER, TNC->Streams[0].MyCall);
 			TNC->Streams[0].MyCall[calllen] = 0;
@@ -673,7 +663,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				send(TNC->WINMORDataSock, Buffer, len, 0);
 
-				if (TNC->Busy)
+/*				if (TNC->Busy)
 				{
 					TNC->FECPending = 1;
 				}
@@ -684,7 +674,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					else
 						send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
 				}
-				return 0;
+*/				return 0;
 			}
 
 
@@ -718,20 +708,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 
-/*			if (_memicmp(&buff[8], "FEC\r", 4) == 0 || _memicmp(&buff[8], "FEC ", 4) == 0)
+			if (_memicmp(&buff[8], "FEC\r", 4) == 0 || _memicmp(&buff[8], "FEC ", 4) == 0)
 			{
 				TNC->FECMode = TRUE;
 				TNC->FECIDTimer = 0;
-				send(TNC->WINMORSock,"FECRCV TRUE\r\nFECRCV\r\n", 21, 0);
-		
-				if (_memicmp(&buff[8], "FEC 1600", 8) == 0)
-					TNC->FEC1600 = TRUE;
-				else
-					TNC->FEC1600 = FALSE;
-
+				send(TNC->WINMORSock,"MODE FEC\r\n", 10, 0);
+				SetDlgItemText(TNC->hDlg, IDC_MODE, "FEC");
 				return 0;
 			}
-*/
+
 			// See if a Connect Command. If so, start codec and set Connecting
 
 			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
@@ -1108,6 +1093,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 
 	wsprintf(Msg, "MYCALL %s\r\nCODEC TRUE\r\nMYCALL\r\n", TNC->NodeCall);
 	strcat(TNC->InitScript, Msg);
+
 	strcat(TNC->InitScript,"PROCESSID\r\n");
 
 	strcpy(TNC->CurrentMYC, TNC->NodeCall);
@@ -1151,6 +1137,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 	i=wsprintf(Msg,"V4 Host %s %d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
 	WritetoConsole(Msg);
 
+	SetDlgItemText(TNC->hDlg, IDC_MODE, "ARQ");
 	ConnecttoWINMOR(port);
 
 	time(&TNC->lasttime);			// Get initial time value
@@ -1416,60 +1403,30 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	if (_memicmp(Buffer, "MODE", 4) == 0)
-	{
-	//	Debugprintf("WINMOR RX: %s", Buffer);
-		SetDlgItemText(TNC->hDlg, IDC_MODE, &Buffer[5]);
-		return;
-	}
-
 	if (_memicmp(Buffer, "PENDING", 6) == 0)
 		return;
 
+/*
+
+	if (_memicmp(Buffer, "FAULT Not connected!", 20) == 0)
+	{
+		// If in response to ARQEND, assume Disconnected was missed
+
+		if (TNC->Streams[0].Disconnecting) 
+		{
+			TNC->Streams[0].Connecting = FALSE;
+			TNC->Streams[0].Connected = FALSE;		// Back to Command Mode
+			TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
+
+			ReleaseTNC(TNC);
+		
+			TNC->Streams[0].Disconnecting = FALSE;
+		}
+	}
+*/
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
 	{
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
-		return;
-	}
-
-	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
-	{
-		SetDlgItemText(TNC->hDlg, IDC_PROTOSTATE, &Buffer[9]);
-
-		if (_memicmp(&Buffer[9], "CONNECTPENDING", 14) == 0)	// Save Pending state for scan control
-			TNC->ConnectPending = TRUE;
-		else
-			TNC->ConnectPending = FALSE;
-	
-		if (_memicmp(&Buffer[9], "DISCONNECTING", 13) == 0)	// So we can timout stuck discpending
-		{
-			TNC->DiscPending = 600;
-			return;
-		}
-		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)	// Save Pending state for scan control
-		{
-			TNC->DiscPending = FALSE;
-			if (TNC->RestartAfterFailure)
-			{
-				if (TNC->HadConnect)
-				{
-					TNC->HadConnect = FALSE;
-
-					if (TNC->WIMMORPID)
-					{
-						KillTNC(TNC);
-						RestartTNC(TNC);
-					}
-				}
-			}
-			return;
-		}
-
-		if (strcmp(&Buffer[9], "ISS") == 0)	// Save Pending state for scan control
-			TNC->TXRXState = 'S';
-		else if (strcmp(&Buffer[9], "IRS") == 0)
-			TNC->TXRXState = 'R';
-	
 		return;
 	}
 
@@ -1483,17 +1440,12 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			
 			if (TNC->Streams[0].Disconnecting)						// Disconnect when all sent
 			{
-				send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);
-				Debugprintf("ARQEND");
-
-//				if (STREAM->NeedDisc == 0)
-//					STREAM->NeedDisc = 60;								// 6 secs
+				if (TNC->Streams[0].ARQENDSent == FALSE)
+				{
+					send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);
+					TNC->Streams[0].ARQENDSent = TRUE;
+				}
 			}
-//			else
-//			if (TNC->TXRXState == 'S')
-//			if (TNC->TXRXState == 'S')
-//				send(TNC->WINMORSock,"OVER\r\n", 6, 0);
-
 		}
 		else
 		{
@@ -1544,20 +1496,6 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
 	}
 
-	if ((_memicmp(Buffer, "FAULT Not from state FEC", 24) == 0) || (_memicmp(Buffer, "FAULT Blocked by Busy Lock", 24) == 0))
-	{
-		if (TNC->FECMode)
-		{
-			Sleep(1000);
-			
-			if (TNC->FEC1600)
-				send(TNC->WINMORSock,"FECSEND 1600\r\n", 14, 0);
-			else
-				send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
-			return;
-		}
-	}
-
 	if (_memicmp(Buffer, "PLAYBACKDEVICES", 15) == 0)
 	{
 		TNC->PlaybackDevices = _strdup(&Buffer[16]);
@@ -1570,7 +1508,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	if (_memicmp(Buffer, "OVER", 4) == 0)
+	if (_memicmp(Buffer, "CONREQ", 6) == 0)
 	{
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 		return;
@@ -1753,12 +1691,15 @@ static VOID TidyClose(struct TNCINFO * TNC, int Stream)
 	// If all acked, send disc
 	
 	if (TNC->Streams[0].BytesOutstanding == 0)
+	{
 		send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);
+		TNC->Streams[0].ARQENDSent = TRUE;
+	}
 }
 
 static VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 {
-	send(TNC->WINMORSock,"ABORT\r\n", 17, 0);
+	send(TNC->WINMORSock,"ABORT\r\n", 7, 0);
 }
 
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
@@ -1768,6 +1709,7 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 	if (TNC->FECMode)
 	{
 		TNC->FECMode = FALSE;
-		send(TNC->WINMORSock,"SENDID 0\r\n", 10, 0);
+		send(TNC->WINMORSock,"MODE ARQ\r\n", 10, 0);
+		SetDlgItemText(TNC->hDlg, IDC_MODE, "ARQ");
 	}
 }

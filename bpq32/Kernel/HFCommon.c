@@ -1138,6 +1138,7 @@ VOID SaveWindowPos(int port)
 	char Size[80];
 	char Key[80];
 	int retCode, disp;
+	int Minimized;
 
 	TNC = TNCInfo[port];
 	if (TNC == NULL)
@@ -1146,6 +1147,8 @@ VOID SaveWindowPos(int port)
 	if (TNC->hDlg == NULL)
 		return;
 
+	Minimized = TNC->Minimized;
+	
 	ShowWindow(TNC->hDlg, SW_RESTORE);
 	GetWindowRect(TNC->hDlg, &Rect);
 
@@ -1156,7 +1159,7 @@ VOID SaveWindowPos(int port)
 
 	if (retCode == ERROR_SUCCESS)
 	{
-		wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, TNC->Minimized);
+		wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
 		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
 		retCode = RegSetValueEx(hKey,"TNC->RestartAfterFailure",0,REG_DWORD,(BYTE *)&TNC->RestartAfterFailure, 4);

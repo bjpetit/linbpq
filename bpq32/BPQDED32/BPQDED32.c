@@ -35,6 +35,10 @@
 
 //		Fix for allowing more than 8 APPLS
 
+// Version 1.1.2.1 August 2011
+
+//		Use HKEY_CURRENT_USER on Vista+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"

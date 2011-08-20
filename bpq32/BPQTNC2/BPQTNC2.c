@@ -18,7 +18,9 @@
 
 // Rebuilt with redundant VSP code removed to get round Virus detect problem
 
+// Version 1.1.4 Build 1 August 2011
 
+// Use HKEY_CURRENT_USER on Vista+
 
 #include "stdafx.h"
 #include "bpqtnc2.h"
@@ -30,7 +32,8 @@
 
 #define MAX_LOADSTRING 100
 
-// Global Variables:
+HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
+
 HINSTANCE hInst;								// current instance
 TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 
@@ -281,6 +284,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	BPQHOSTAPI= GETBPQAPI();
 	MONDECODE = GETMONDECODE();
 
+	REGTREE = GetRegistryKey();
+
 	hWnd=CreateDialog(hInst,ClassName,0,NULL);
 
 
@@ -390,7 +395,7 @@ BOOL Initialise()
 	// Get config from Registry 
 
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+	retCode = RegOpenKeyEx (REGTREE,
 		"SOFTWARE\\G8BPQ\\BPQ32\\BPQTNC2",
                               0,
                               KEY_QUERY_VALUE,
@@ -806,7 +811,7 @@ int SaveConfig(HWND hWnd)
 	BOOL DUFF=FALSE;
 	HKEY hKey=0;
 
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE,
+	retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32\\BPQTNC2",
                               0,	// Reserved
 							  0,	// Class

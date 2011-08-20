@@ -71,9 +71,6 @@ BEGIN
     LISTBOX         116,5,6,290,134,LBS_MULTIPLESEL | LBS_OWNERDRAWFIXED | 
                     LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
                     WS_HSCROLL
-    LISTBOX         117,5,156,290,109,LBS_MULTIPLESEL | LBS_OWNERDRAWFIXED | 
-                    LBS_HASSTRINGS | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
-                    WS_HSCROLL
     EDITTEXT        118,5,280,440,15,ES_AUTOHSCROLL | ES_NOHIDESEL
     CTEXT           "",119,0,145,300,5,SS_NOTIFY
 END
@@ -109,6 +106,7 @@ BEGIN
     BEGIN
         MENUITEM "Connect",                     BPQCONNECT
         MENUITEM "Disconnect",                  BPQDISCONNECT, GRAYED
+        MENUITEM "Reset Window Split",          ID_ACTION_RESETWINDOWSPLIT
     END
     POPUP "Monitor"
     BEGIN
@@ -128,7 +126,6 @@ BEGIN
         MENUITEM "Log Output",                  BPQLogOutput
         MENUITEM "Send Disconnected",           BPQSendDisconnected
         MENUITEM "Chat Terminal Mode",          CHATTERM
-
     END
     POPUP "Edit"
     BEGIN

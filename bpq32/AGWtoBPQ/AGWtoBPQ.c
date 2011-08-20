@@ -17,6 +17,11 @@
 //	Version 1.2.1 February 2009
 //	Fix buffer overflow in Mon Decode
 
+//	Version 1.2.2 February 2009
+
+//		Get Registry Tree from BPQ32.dll
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "stdafx.h"
@@ -33,7 +38,6 @@ HWND ConfigWnd;
 HBRUSH bgBrush;
 
 HKEY REGTREE = HKEY_CURRENT_USER;
-char REGTREETEXT[100] = "HKEY_CURRENT_USER";
 
 BOOL cfgMinToTray;
 
@@ -166,19 +170,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance;
 
-#pragma warning(push)
-#pragma warning(disable : 4996)
-
-	if (_winver < 0x0600)
-
-#pragma warning(pop)
-	{
-		// Below Vista
-
-		REGTREE = HKEY_LOCAL_MACHINE;
-		strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
-	}
-
+	REGTREE = GetRegistryKey();
 
     // Create a dialog box as the main window
 

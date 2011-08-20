@@ -117,6 +117,7 @@ struct STREAMINFO
 	int DisconnectingTimeout;	// A hard disconnect occurs if this expires before the disconnect complete
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 	BOOL DiscWhenAllSent;		// Close session when all msgs have been sent to node
+	BOOL ARQENDSent;			// Set when V4 ARQEND Sent
 
 	int DEDStream;				// Stream number for DED interface (same as index except for pactor)
 

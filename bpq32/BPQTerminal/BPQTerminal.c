@@ -46,6 +46,13 @@
 
 // Add Chat Terminal Mode (sends keepalives)
 
+// Version 2.1.0 August 2011
+
+//		Add Copy/Paste capability to output window.
+//		Add Font Selection
+//		Get Registry Tree from BPQ32.dll
+//		Add Command to reset Monitor/Output window split
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -58,6 +65,11 @@
 #include <Richedit.h> 
 
 #include "bpqterminal.h"
+
+#define BPQBASE                        WM_USER
+//
+//	Port monitoring flags use BPQBASE -> BPQBASE+100
+
 #include "bpq32.h"	// BPQ32 API Defines
 #define BPQTerm
 #include "Versions.h"
@@ -72,7 +84,6 @@ HKEY FAR WINAPI GetRegistryKey();
 char * FAR WINAPI GetRegistryKeyText();
 
 HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
-//char * REGKEYTEXT = "HKEY_LOCAL_MACHINE";
 
 HINSTANCE hInst; 
 char AppName[] = "BPQTerm 32";
@@ -526,14 +537,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance; // Store instance handle in our global variable
 
-//	REGTREE = GetRegistryKey();
-//	REGKEYTEXT = GetRegistryKeyText();
-
-//	else
-//		MessageBox(NULL, "WARNING - You have an old version of BPQ32.DLL. Please upgrade",
-//				"BPQMailChat", MB_ICONINFORMATION);
-
-
+	REGTREE = GetRegistryKey();
 
 	MinimizetoTray=GetMinimizetoTrayFlag();
 
@@ -549,7 +553,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	// Retrieve the handlse to the edit controls. 
 
 	hwndInput = GetDlgItem(hWnd, 118); 
-	hwndOutput = GetDlgItem(hWnd, 117); 
+//	hwndOutput = GetDlgItem(hWnd, 117); 
 	hwndSplit = GetDlgItem(hWnd, 119); 
 	hwndMon = GetDlgItem(hWnd, 116); 
  
@@ -1070,6 +1074,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			
 			SessionControl(Stream, 2, 0);
 			break;
+
+
+		case ID_ACTION_RESETWINDOWSPLIT:
+			
+			Split = 0.5;
+			SplitPos=Height*Split;
+			MoveWindows();
+
+			break;
 			
 		case BPQAUTOCONNECT:
 
@@ -1204,7 +1217,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case BPQHELP:
 
-			HtmlHelp(hWnd,"BPQTerminal.chm",HH_HELP_FINDER,0);  
+			ShellExecute(hWnd,"open",
+				"http://www.cantab.net/users/john.wiseman/Documents/BPQTerminal.htm",
+				"", NULL, SW_SHOWNORMAL); 
 			break;
 
 		default:
@@ -2195,6 +2210,9 @@ void MoveWindows()
 {
 	RECT rcMain, rcClient;
 	int ClientHeight, ClientWidth;
+
+	if (hWnd == 0)
+		return;
 
 	GetWindowRect(hWnd, &rcMain);
 	GetClientRect(hWnd, &rcClient); 

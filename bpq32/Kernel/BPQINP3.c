@@ -418,15 +418,15 @@ VOID UpdateNode(struct ROUTE * Route, UCHAR * axcall, UCHAR * alias, int  hops, 
 
 	if (hops > MaxHops && hops < 255)
 	{
-		ConvFromAX25(axcall, call);
-		Debugprintf("Node %s Hops %d RTT %d Ignored - Hop Count too high", call, hops, rtt);
+//		ConvFromAX25(axcall, call);
+//		Debugprintf("Node %s Hops %d RTT %d Ignored - Hop Count too high", call, hops, rtt);
 		return;
 	}
 
 	if (rtt > MAXRTT  && rtt < 60000)
 	{
-		ConvFromAX25(axcall, call);
-		Debugprintf("Node %s Hops %d RTT %d Ignored - rtt too high", call, hops, rtt);
+//		ConvFromAX25(axcall, call);
+//		Debugprintf("Node %s Hops %d RTT %d Ignored - rtt too high", call, hops, rtt);
 		return;
 	}
 

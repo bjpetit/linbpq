@@ -28,7 +28,7 @@
 
 // Version 1.1.6 August 2011
 
-//		Updated to use HKEY_CURRENT_USER on Vista and above
+//		Get Registry Tree from BPQ32.dll
 
 #include "stdafx.h"
 #include "bpqhostmodes.h"
@@ -41,7 +41,6 @@
 HINSTANCE hInst;								// current instance
 
 HKEY REGTREE = HKEY_CURRENT_USER;
-char REGTREETEXT[100] = "HKEY_CURRENT_USER";
 
 char ClassName[]="KHOSTMAINWINDOW";					// the main window class name
 
@@ -296,25 +295,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance; // Store instance handle in our global variable
 
-	#pragma warning(push)
-#pragma warning(disable : 4996)
-
-	if (_winver < 0x0600)
-
-#pragma warning(pop)
-	{
-		// Below Vista
-
-		REGTREE = HKEY_LOCAL_MACHINE;
-		strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
-	}
-
+	REGTREE = GetRegistryKey();
 
 	hWnd=CreateDialog(hInst,ClassName,0,NULL);
-
-
-   //hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-    //  CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, NULL, NULL, hInstance, NULL);
 
    if (!hWnd)
    {
@@ -323,7 +306,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    }
 
    MainWnd=hWnd;
-
    
 	 // setup default font information
 

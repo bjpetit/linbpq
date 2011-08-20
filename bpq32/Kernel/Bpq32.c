@@ -385,6 +385,7 @@
 // Add option to suppress WL2K reporting for specific frequencies
 // Fix Timeband processing for Rig Control
 // New Driver for SCS Tracker allowing multiple connects, so Tracker can be used for user access 
+// New Driver for V4 TNC
 
 #define Kernel
 #include "Versions.h"

@@ -63,10 +63,10 @@ int APIENTRY GetStreamPID(int Stream);
 
 UCHAR * APIENTRY GetBPQDirectory();
 UCHAR * APIENTRY GetProgramDirectory();
-/*
+
 HKEY APIENTRY GetRegistryKey();
 char * APIENTRY GetRegistryKeyText();
-*/
+
 UCHAR * APIENTRY GetSignOnMsg();
 
 UCHAR * APIENTRY GetVersionString();
@@ -269,7 +269,7 @@ ULONG (FAR WINAPI * GETMONDECODE)();
 UCHAR * (FAR WINAPI * GetBPQDirectory)();
 UCHAR * (FAR WINAPI * GetProgramDirectory)();
 UCHAR * (FAR WINAPI * GetRegistryKeyText)();
-KHEY (FAR WINAPI * GetRegistryKey)();
+HKEY (FAR WINAPI * GetRegistryKey)();
 
 UCHAR * (FAR WINAPI * GetSignOnMsg)();
 UCHAR * (FAR WINAPI * GetVersionString)();
