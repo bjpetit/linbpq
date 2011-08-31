@@ -48,6 +48,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				RuntimeLibrary="1"
@@ -72,7 +73,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib"
+				AdditionalDependencies="..\lib\bpq32.lib "
 				OutputFile="c:\DevProgs\bpq32\BPQSoundModem.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -142,6 +143,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
+				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -166,7 +168,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib"
+				AdditionalDependencies="..\lib\bpq32.lib "
 				OutputFile="c:\DevProgs\bpq32\BPQSoundModem.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

@@ -6,8 +6,8 @@
 
 #include "stdafx.h"
 
-#define DllImport	__declspec( dllimport )
-#define DllExport	__declspec( dllexport )
+#define DllImport	__declspec(dllimport)
+#define DllExport	__declspec(dllexport)
 
 HINSTANCE ExtDriver=0;
 
@@ -50,6 +50,8 @@ FARPROCX MM_TrackGetPointsPtr;
 
 char Dllname[6]="mmapi";
 
+CRITICAL_SECTION CriticalSection; 
+
 
 LRESULT CALLBACK WndProc(HWND  hwnd, UINT  uMsg, WPARAM  wParam,LPARAM  lParam);
 int InitialiseMM();
@@ -75,8 +77,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
     
 	case DLL_PROCESS_DETACH:
 	
+	    DeleteCriticalSection(&CriticalSection);
 		return 1;
-    
 	}
  
 	return 1;
@@ -164,19 +166,50 @@ int InitialiseMM()
 	MM_TrackGetNumPointsPtr=GetAddress("?MM_TrackGetNumPoints@@YAHPAXPAH@Z");
 	MM_TrackGetPointsPtr=GetAddress("?MM_TrackGetPoints@@YAHPAXHHPAN1PAIPAM@Z");
 
-
+   // Initialize the critical section one time only.
+    if (!InitializeCriticalSectionAndSpinCount(&CriticalSection, 0x00000400)) 
+        return FALSE;
 
 	return TRUE;
-
 }
-
 
 
 #define MMAPI_API __declspec( dllexport )
 
+MMAPI_API int API_Clashes = 0;
+
+MMAPI_API int APIENTRY LockAPI()
+{
+    if (TryEnterCriticalSection(&CriticalSection))
+		return 0;
+
+	API_Clashes++;
+
+TryAgain:
+
+	Sleep(10);
+
+	if (TryEnterCriticalSection(&CriticalSection))
+		return 0;
+
+	goto TryAgain;
+}
+
+MMAPI_API int APIENTRY UnlockAPI()
+{  
+	LeaveCriticalSection(&CriticalSection);
+	return 0;
+}
+
+
 MMAPI_API int APIENTRY MM_Start(BOOL run_mmnav)
 {
-	return MM_StartPtr(run_mmnav);
+	int ret;
+	
+	LockAPI();
+	ret = MM_StartPtr(run_mmnav);
+	UnlockAPI();
+	return ret;
 }
 
 // Initialize the library. If run_mmnav is true, launch MMNav if it is not already running.
@@ -198,7 +231,12 @@ MMAPI_API int APIENTRY MM_ShowWindow(int cmd)
 
 // Control the MMNav main window. cmd is SW_SHOW, SW_MINIMIZE, etc.
 {
-	return MM_ShowWindowPtr(cmd);
+	int ret;
+	
+	LockAPI();
+	ret = MM_ShowWindowPtr(cmd);
+	UnlockAPI();
+	return ret;
 }
 
 MMAPI_API int APIENTRY MM_SetWindow(double max_lat, double min_lat, double max_lon, double min_lon)
@@ -210,55 +248,93 @@ MMAPI_API int APIENTRY MM_SetWindow(double max_lat, double min_lat, double max_l
 // map. Note: The zoom level is limited to factors of two, and
 // the size and shape of the window are not changed by this function.
 {
-	return MM_SetWindowPtr(max_lat, min_lat, max_lon, min_lon);
+	int ret;
+	
+	LockAPI();
+	ret = MM_SetWindowPtr(max_lat, min_lat, max_lon, min_lon);
+	UnlockAPI();
+	return ret;
 }
 MMAPI_API int APIENTRY MM_GetWindow(double *,double *,double *,double *);
 
 MMAPI_API int APIENTRY MM_PosnCreate(char const * name,HANDLE *h)
 {
-	return MM_PosnCreatePtr(name,h);
+	int ret;
+	
+	LockAPI();
+	ret = MM_PosnCreatePtr(name,h);
+	UnlockAPI();
+	return ret;
 }
 
 
 
 MMAPI_API int APIENTRY MM_PosnUpdate(void * h,unsigned int i, double d1, double d2, double d3,double d4,double d5,double d6,double d7,unsigned long j,char const * a)
 {
-	return MM_PosnUpdatePtr(h,i,d1,d2,d3,d4,d5,d6,d7,j,a);
+	int ret;
+	
+	LockAPI();
+	ret = MM_PosnUpdatePtr(h,i,d1,d2,d3,d4,d5,d6,d7,j,a);
+	UnlockAPI();
+	return ret;
 }
 
 MMAPI_API int APIENTRY MM_PosnDetails(void * h,char const * a,char const * b ,char const * c)
-{
-	return MM_PosnDetailsPtr(h, a, b, c);
+{ 
+	int ret;
+	
+	LockAPI();
+	ret = MM_PosnDetailsPtr(h, a, b, c);
+	UnlockAPI();
+	return ret;
 }
 
 MMAPI_API int APIENTRY MM_GetCurrentPositionObj(HANDLE *h)
 {
-	return MM_GetCurrentPositionObjPtr(h);
+	int ret;
+	
+	LockAPI();
+	ret =  MM_GetCurrentPositionObjPtr(h);
+	UnlockAPI();
+	return ret;
 }
 
 MMAPI_API int APIENTRY MM_SetPosnPolygon(void * h ,int x,int * y)
 {
-	return MM_SetPosnPolygonPtr(h, x, y);
+	int ret;
+	
+	LockAPI();
+	ret = MM_SetPosnPolygonPtr(h, x, y);
+	UnlockAPI();
+	return ret;
 }
 
 MMAPI_API int APIENTRY MM_GetCurrentPosition(double *lat, double *lon, double *course, double *speed, double *altitude)
 
 // Returns the most recent position received from GPS. Pass NULL if you are not interested
 //  in all returned values
-{
-	return MM_GetCurrentPositionPtr(lat, lon, course, speed, altitude);
+{ 
+	int ret;
+	
+	LockAPI();
+	ret = MM_GetCurrentPositionPtr(lat, lon, course, speed, altitude);
+	UnlockAPI();
+	return ret;
 }
 
 
 MMAPI_API int APIENTRY MM_GetCurrentPositionStruct(struct MM_position_data2 * s)
 {
-	return MM_GetCurrentPositionStructPtr(s);
+	int ret;
+	
+	LockAPI();
+	ret = MM_GetCurrentPositionStructPtr(s);
+	UnlockAPI();
+	return ret;
 }
 
 
-MMAPI_API int APIENTRY MM_SetCurrentPosition(double lat, double lon, 
-
-double course, double speed, double altitude, int valid)
+MMAPI_API int APIENTRY MM_SetCurrentPosition(double lat, double lon, double course, double speed, double altitude, int valid)
 
 // Sets the current position object.
 //  NB. The GPS in MMnav should be set to "None" when using this function.
@@ -266,7 +342,12 @@ double course, double speed, double altitude, int valid)
 //  alternates on and off with each call. If valid is zero, the icon is shown
 //  in grey. The API only supports a single Position object.
 {
-	return MM_SetCurrentPositionPtr(lat, lon, course, speed, altitude, valid);
+	int ret;
+	
+	LockAPI();
+	ret = MM_SetCurrentPositionPtr(lat, lon, course, speed, altitude, valid);
+	UnlockAPI();
+	return ret;
 }
  
 
@@ -281,7 +362,12 @@ MMAPI_API int APIENTRY MM_ObjFind(const TCHAR *name, int type, HANDLE *h)
 //  first. Type is MM_OT... values below.
 
 {
-	return MM_ObjFindPtr(name, type, h);
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjFindPtr(name, type, h);
+	UnlockAPI();
+	return ret;
 }
  
 
@@ -297,16 +383,26 @@ MMAPI_API int APIENTRY MM_ObjGetType(HANDLE h, int *type)
 #define MM_OT_POSITION 8
 #define MM_OT_CHART 16
 #define MM_OT_TEXT 32
-{
-	return MM_ObjGetTypePtr(h, type);
+{ 
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjGetTypePtr(h, type);
+	UnlockAPI();
+	return ret;
 }
 
 
 MMAPI_API int APIENTRY MM_ObjGetName(HANDLE h, TCHAR *name, int max_chars)
 
 // Returns the name of the object;
-{
-	return MM_ObjGetNamePtr(h, name, max_chars);
+{ 
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjGetNamePtr(h, name, max_chars);
+	UnlockAPI();
+	return ret;
 }
 
 
@@ -317,11 +413,21 @@ MMAPI_API int APIENTRY MM_ObjDelete(HANDLE h)
 //  are not locked are are not part of any other routes are 
 //  also deleted.
 {
-	return MM_ObjDeletePtr(h);
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjDeletePtr(h);
+	UnlockAPI();
+	return ret;
 }
 MMAPI_API int APIENTRY MM_ObjRename(HANDLE h, const TCHAR *name)
 {
-	return MM_ObjRenamePtr( h, name);
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjRenamePtr( h, name);
+	UnlockAPI();
+	return ret;
 }
 
 // Rename object.
@@ -330,7 +436,12 @@ MMAPI_API int APIENTRY MM_ObjLock(HANDLE h, BOOL locked)
 {
 // Control whether user can change/delete the object.
 
-	return MM_ObjLockPtr(h, locked);
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjLockPtr(h, locked);
+	UnlockAPI();
+	return ret;
 }
 
 // Control whether user can change/delete the object.
@@ -344,7 +455,12 @@ MMAPI_API int APIENTRY MM_ObjGetCategory(HANDLE h, TCHAR *category, int max_char
 // Returns the category of the object;
 
 {
-	return MM_ObjGetCategoryPtr(h, category, max_chars);
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjGetCategoryPtr(h, category, max_chars);
+	UnlockAPI();
+	return ret;
 }
 
 
@@ -352,7 +468,12 @@ MMAPI_API int APIENTRY MM_ObjSetCategory(HANDLE h, const TCHAR *category)
 
 // Change the object's category
 {
-	return MM_ObjSetCategoryPtr(h, category);
+	int ret;
+	
+	LockAPI();
+	ret = MM_ObjSetCategoryPtr(h, category);
+	UnlockAPI();
+	return ret;
 }
 
 MMAPI_API int APIENTRY MM_AddIcon(const TCHAR *bmp_filename, int id)
@@ -374,7 +495,12 @@ MMAPI_API int APIENTRY MM_RemoveIcon(int id);
 
 MMAPI_API int APIENTRY MM_MarkCreate(const TCHAR *name, double lat, double lon, int icon_id, HANDLE *h)
 {
-	return MM_MarkCreatePtr(name,  lat, lon, icon_id, h);
+	int ret;
+	
+	LockAPI();
+	ret = MM_MarkCreatePtr(name,  lat, lon, icon_id, h);
+	UnlockAPI();
+	return ret;
 }
 
 // Create a new mark / waypoint. The icon_id is one of the mm_smbl values below, or an icon id
@@ -384,7 +510,12 @@ MMAPI_API int APIENTRY MM_MarkCreate(const TCHAR *name, double lat, double lon, 
 
 MMAPI_API int APIENTRY MM_MarkMove(HANDLE h, double lat, double lon)
 {
-	return MM_MarkMovePtr(h, lat, lon);
+	int ret;
+	
+	LockAPI();
+	ret = MM_MarkMovePtr(h, lat, lon);
+	UnlockAPI();
+	return ret;
 }
 
 // Change the position of a mark / waypoint
@@ -393,7 +524,12 @@ MMAPI_API int APIENTRY MM_MarkGetPosition(HANDLE h, double *lat, double *lon)
 
 // Return the lat/lon of the mark / waypoint
 {
-	return MM_MarkGetPositionPtr(h, lat, lon);
+	int ret;
+	
+	LockAPI();
+	ret = MM_MarkGetPositionPtr(h, lat, lon);
+	UnlockAPI();
+	return ret;
 }
 
 
@@ -417,7 +553,12 @@ MMAPI_API int APIENTRY MM_MarkSetRadius(HANDLE h, float radius, int alarm_type);
 
 MMAPI_API int APIENTRY MM_MarkSetComment(HANDLE h,char const * Comment)
 {
-	return MM_MarkSetCommentPtr(h, Comment);
+	int ret;
+	
+	LockAPI();
+	ret = MM_MarkSetCommentPtr(h, Comment);
+	UnlockAPI();
+	return ret;
 }
 
  
@@ -436,18 +577,33 @@ MMAPI_API int APIENTRY MM_RouteGetWP(HANDLE hRoute, int i, HANDLE *h)
 //  i==0 is the first WP. h is returned NULL if i is >=
 // the number of WP.
 {
-	return MM_RouteGetWPPtr(hRoute, i, h);
+	int ret;
+	
+	LockAPI();
+	ret = MM_RouteGetWPPtr(hRoute, i, h);
+	UnlockAPI();
+	return ret;
 }
 
 MMAPI_API int APIENTRY MM_TrackCreate(TCHAR *name, COLORREF color, BOOL closed_polygon, HANDLE *h)
 {
-	return MM_TrackCreatePtr(name, color, closed_polygon, h);
+	int ret;
+	
+	LockAPI();
+	ret = MM_TrackCreatePtr(name, color, closed_polygon, h);
+	UnlockAPI();
+	return ret;
 }
 // Creates an empty track
 
 MMAPI_API int APIENTRY MM_TrackAdd(HANDLE hTrack, int n, double *lat, double *lon, unsigned int *times, float *altitude)
 {
-	return MM_TrackAddPtr(hTrack, n, lat, lon, times, altitude);
+	int ret;
+	
+	LockAPI();
+	ret = MM_TrackAddPtr(hTrack, n, lat, lon, times, altitude);
+	UnlockAPI();
+	return ret;
 }
 
 // Adds n points to the end of the track. 
@@ -456,7 +612,12 @@ MMAPI_API int APIENTRY MM_TrackAdd(HANDLE hTrack, int n, double *lat, double *lo
 
 MMAPI_API int APIENTRY MM_TrackGetNumPoints(HANDLE hTrack, int *n)
 {
-	return MM_TrackGetNumPointsPtr(hTrack, n);
+	int ret;
+	
+	LockAPI();
+	ret = MM_TrackGetNumPointsPtr(hTrack, n);
+	UnlockAPI();
+	return ret;
 }
 
 // returns via n the number of points in the track
@@ -464,7 +625,12 @@ MMAPI_API int APIENTRY MM_TrackGetNumPoints(HANDLE hTrack, int *n)
 MMAPI_API int APIENTRY MM_TrackGetPoints(HANDLE hTrack, int start, int n,
 double *lat, double *lon, unsigned int *times, float *altitude)
 {
-	return MM_TrackGetPointsPtr(hTrack, start, n, lat, lon, times, altitude);
+	int ret;
+	
+	LockAPI();
+	ret = MM_TrackGetPointsPtr(hTrack, start, n, lat, lon, times, altitude);
+	UnlockAPI();
+	return ret;
 }
 // returns n track data points, starting from the zero-based index 'start'
 // times and/or altitude pointers may be NULL 

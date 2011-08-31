@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="BPQAPRSDigi"
+	Name="BPQAPRS"
 	ProjectGUID="{DA2D929F-0A83-49BB-9878-778E85982D47}"
-	RootNamespace="BPQAPRSDigi"
+	RootNamespace="BPQAPRS"
 	>
 	<Platforms>
 		<Platform
@@ -49,19 +49,20 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Debug/BPQAPRSDigi.tlb"
+				TypeLibraryName=".\Debug/BPQAPRS.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
+				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				RuntimeLibrary="1"
-				PrecompiledHeaderFile="C:\msdev\Intermed\Debug/BPQAPRSDigi.pch"
+				PrecompiledHeaderFile="C:\msdev\Intermed\Debug/BPQAPRS.pch"
 				AssemblerListingLocation="C:\msdev\Intermed\Debug/"
 				ObjectFile="C:\msdev\Intermed\Debug/"
-				ProgramDataBaseFileName="BPQAPRSDigi.pdb"
+				ProgramDataBaseFileName="BPQAPRS.pdb"
 				BrowseInformation="1"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
@@ -80,12 +81,14 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib "
-				OutputFile="c:\program files\bpq32\BPQAPRSRelay.exe"
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib ..\lib\zlibwapi.lib"
+				OutputFile="c:\Devprogs\bpq32\BPQAPRSRelay.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
+				IgnoreAllDefaultLibraries="false"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\Debug/BPQAPRSDigi.pdb"
+				ProgramDatabaseFile=".\Debug/BPQAPRS.pdb"
 				SubSystem="2"
 				TargetMachine="1"
 			/>
@@ -101,7 +104,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Debug/BPQAPRSDigi.bsc"
+				OutputFile=".\Debug/BPQAPRS.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -146,7 +149,7 @@
 				MkTypLibCompatible="true"
 				SuppressStartupBanner="true"
 				TargetEnvironment="1"
-				TypeLibraryName=".\Release/BPQAPRSDigi.tlb"
+				TypeLibraryName=".\Release/BPQAPRS.tlb"
 				HeaderFileName=""
 			/>
 			<Tool
@@ -157,10 +160,10 @@
 				StringPooling="true"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
-				PrecompiledHeaderFile="C:\msdev\Intermed\Release/BPQAPRSDigi.pch"
+				PrecompiledHeaderFile="C:\msdev\Intermed\Release/BPQAPRS.pch"
 				AssemblerListingLocation="C:\msdev\Intermed\Release/"
 				ObjectFile="C:\msdev\Intermed\Release/"
-				ProgramDataBaseFileName="BPQAPRSDigi.pdb"
+				ProgramDataBaseFileName="BPQAPRS.pdb"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
 			/>
@@ -178,10 +181,10 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib "
-				OutputFile="c:\program files\bpq32\BPQAPRSRelay.exe"
+				OutputFile="c:\Devprogs\bpq32\BPQAPRSRelay.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				ProgramDatabaseFile=".\Release/BPQAPRSDigi.pdb"
+				ProgramDatabaseFile=".\Release/BPQAPRS.pdb"
 				SubSystem="2"
 				TargetMachine="1"
 			/>
@@ -197,7 +200,7 @@
 			<Tool
 				Name="VCBscMakeTool"
 				SuppressStartupBanner="true"
-				OutputFile=".\Release/BPQAPRSDigi.bsc"
+				OutputFile=".\Release/BPQAPRS.bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -221,33 +224,105 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
 			>
 			<File
-				RelativePath="..\..\..\..\Source\BPQ32\BPQAPRSDigi\BPQAPRSDigi.c"
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\BPQAPRS.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\BPQAPRS.rc"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
 					>
 					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions="APRS"
+						AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
 					Name="Release|Win32"
 					>
 					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions="NDEBUG APRS"
+						AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
 					/>
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\..\..\..\Source\BPQ32\BPQAPRSDigi\BPQAPRSDigi.rc"
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\hdlccrc.asm"
 				>
 			</File>
 			<File
-				RelativePath="..\..\..\..\Source\BPQ32\BPQAprsDigi\hdlccrc.asm"
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\png.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngerror.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngfile.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pnggccrd.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngget.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngmem.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngpread.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngread.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngrio.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngrtran.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngrutil.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngset.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngtrans.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngvcrd.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngwio.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngwrite.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngwtran.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\pngwutil.c"
 				>
 			</File>
 		</Filter>

@@ -60,7 +60,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="c:\windows\$(ProjectName).dll"
+				OutputFile="c:\devprogs\AIS\$(ProjectName).dll"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"

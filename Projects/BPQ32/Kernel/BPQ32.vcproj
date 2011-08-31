@@ -72,7 +72,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="wsock32.lib  "
+				AdditionalDependencies="WS2_32.Lib"
 				OutputFile="\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="2"
 				ModuleDefinitionFile="S:\Dev\Source\bpq32\Kernel\bpq32.def"
@@ -171,13 +171,13 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="wsock32.lib  Psapi.lib"
+				AdditionalDependencies="WS2_32.Lib"
 				OutputFile="\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="1"
 				ModuleDefinitionFile="S:\Dev\Source\bpq32\Kernel\bpq32.def"
 				GenerateDebugInformation="false"
 				GenerateMapFile="true"
-				MapFileName="c:\bpqpdn.map"
+				MapFileName="\DevProgs\BPQ32\bpqpdn.map"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -267,10 +267,6 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\Kernel\DEDHostTNC.c"
-				>
-			</File>
-			<File
 				RelativePath="S:\DEV\Source\BPQ32\Kernel\HALDriver.c"
 				>
 			</File>
@@ -327,15 +323,27 @@
 				>
 			</File>
 			<File
+				RelativePath="S:\DEV\Source\BPQ32\Kernel\SCSTrackeMultir.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\Kernel\SCSTracker.c"
+				>
+			</File>
+			<File
 				RelativePath="S:\DEV\Source\BPQ32\Kernel\SoundModem.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\Kernel\Telnet.c"
+				RelativePath="S:\DEV\Source\BPQ32\Kernel\TelnetV6.c"
 				>
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\Kernel\Tnccode.asm"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\Kernel\V4.c"
 				>
 			</File>
 			<File

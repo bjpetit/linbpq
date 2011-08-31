@@ -366,6 +366,18 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="S:\DEV\Source\BPQ32\BPQMailChat\MailCommands.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						BrowseInformation="1"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath="S:\DEV\Source\BPQ32\BPQMailChat\MailRouting.c"
 				>
 				<FileConfiguration

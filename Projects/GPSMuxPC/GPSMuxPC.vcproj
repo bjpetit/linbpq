@@ -18,7 +18,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="..\..\Intermed\$(ProjectName)\(ConfigurationName"
+			IntermediateDirectory="..\..\Intermed\$(ProjectName)\$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -67,6 +67,8 @@
 				OutputFile="C:\DevProgs\GPSMux\$(ProjectName).exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
+				GenerateMapFile="true"
+				MapFileName="$(IntDir)\$(InputName).map"
 				SubSystem="2"
 				LinkTimeCodeGeneration="0"
 				TargetMachine="1"
@@ -197,6 +199,14 @@
 		<File
 			RelativePath="S:\DEV\Source\GPSMuxPC\GPSMuxPC.rc"
 			>
+			<FileConfiguration
+				Name="Debug|Win32"
+				>
+				<Tool
+					Name="VCResourceCompilerTool"
+					AdditionalIncludeDirectories="S:\DEV\Source\AIS"
+				/>
+			</FileConfiguration>
 		</File>
 		<File
 			RelativePath="S:\DEV\Source\GPSMuxPC\stdafx.c"
