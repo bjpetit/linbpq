@@ -26,7 +26,7 @@
 
 #define Vers 2,1,0,1
 #define Verstring "2.1.0.1\0"
-//#define SPECIALVERSION "Test 1"
+//#define SPECIALVERSION "Test 2"
 #define VerComments "Simple Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 1999-2011 John Wiseman G8BPQ\0"
 #define VerDesc "Simple Terminal Program for G8BPQ Switch\0"
@@ -37,7 +37,7 @@
 
 #define Vers 1,0,4,42
 #define Verstring "1.0.4.42\0"
-//#define SPECIALVERSION "Test 12"
+//#define SPECIALVERSION "Test 2"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2011 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"
@@ -76,3 +76,12 @@
 
 #endif
 
+#ifdef APRS
+
+#define Vers 0,0,0,1
+#define Verstring "0.0.0.1\0"
+#define VerComments  "APRS Digipeater and APRS-IS Gateway for G8BPQ Switch\0"
+#define VerCopyright "Copyright © 2011 John Wiseman G8BPQ\0"
+#define VerDesc "APRS Digipeater and APRS-IS Gateway for G8BPQ Switch\0"
+
+#endif
