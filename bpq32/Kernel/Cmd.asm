@@ -1059,6 +1059,7 @@ CMDI00:
 	JMP	SENDCOMMANDREPLY
 
 	extern _VersionStringWithBuild:byte
+	extern _VersionString:byte
 	
 VERS	DB	'Version '
 
@@ -1069,7 +1070,8 @@ CMDV00:
 	MOV	ECX, 8
 	REP MOVSB
 
-	MOV	ESI,OFFSET _VersionStringWithBuild
+;	MOV	ESI,OFFSET _VersionStringWithBuild
+	MOV	ESI,OFFSET _VersionString
 @@:
 	lodsb
 	or al,al

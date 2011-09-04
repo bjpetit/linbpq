@@ -1918,7 +1918,8 @@ VOID SetupBPQDirectory()
 		retCode = RegQueryValueEx(hKeyOut, "Version" ,0 , &Type,(UCHAR *)&msg, &Vallen);
 
 		if (retCode != ERROR_SUCCESS)
-			CopyReg(hKeyIn, hKeyOut);
+			if (hKeyIn)
+				CopyReg(hKeyIn, hKeyOut);
 
 		RegCloseKey(hKeyIn);
 		RegCloseKey(hKeyOut);
@@ -1992,7 +1993,8 @@ VOID SetupBPQDirectory()
 	if (BPQProgramDirectory[0] == 0)
 		strcpy(BPQProgramDirectory, BPQDirectory);
 
-	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionStringWithBuild, DLLName, pgm);
+//	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionStringWithBuild, DLLName, pgm);
+	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionString, DLLName, pgm);
 	WritetoConsole(msg);
 	OutputDebugString(msg);
 
@@ -2581,7 +2583,8 @@ DllExport UCHAR * APIENTRY GetSignOnMsg()
 
 DllExport char * APIENTRY GetVersionString()
 {
-	return ((char *)&VersionStringWithBuild);
+//	return ((char *)&VersionStringWithBuild);
+	return ((char *)&VersionString);
 }
 
 DllExport HKEY APIENTRY GetRegistryKey()
