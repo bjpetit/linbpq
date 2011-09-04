@@ -707,8 +707,8 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 UCHAR * (FAR WINAPI * GetVersionStringptr)();
 struct _EXTPORTDATA * (FAR WINAPI * GetPortTableEntryptr)();
 
-HKEY (FAR WINAPI * GetRegistryKey)();
-char * (FAR WINAPI * GetRegistryKeyText)();
+//HKEY (FAR WINAPI * GetRegistryKey)();
+//char * (FAR WINAPI * GetRegistryKeyText)();
 
 HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
 char * REGTREETEXT = "HKEY_LOCAL_MACHINE";
@@ -1299,6 +1299,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
 	GetPortTableEntryptr = (struct _EXTPORTDATA *(__stdcall *)())GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
+/*
 	GetRegistryKey = (HKEY(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKey@0");
 	GetRegistryKeyText = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKeyText@0");
 
@@ -1310,6 +1311,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	else
 		MessageBox(NULL, "WARNING - You have an old version of BPQ32.DLL. Please upgrade",
 				"BPQMailChat", MB_ICONINFORMATION);
+*/
 
 	if (GetPortTableEntryptr)
 	{
@@ -4804,11 +4806,11 @@ VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
 			strcpy(Via, Msg->via);
 			strlop(Via, '.');			// Only show first part of via
 			nodeprintf(conn, "%-6d %s %c%c   %5d %-7s@%-6s %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, Msg->from, Msg->title);
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, FullFrom, Msg->title);
 		}
 		else
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
-				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Msg->from, Msg->title);
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
 
 }
 
@@ -5573,7 +5575,7 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 
 		Arg1=&OldMsg->from[0];
 
-		if (_stricmp(Arg1, "SMTP:") == 0 || _stricmp(Arg1, "RMS:") == 0)
+		if (_stricmp(Arg1, "SMTP:") == 0 || _stricmp(Arg1, "RMS:") == 0 || OldMsg->emailfrom)
 		{
 			// SMTP message. Need to get the real sender from the message
 
@@ -6033,6 +6035,12 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 	{
 		strcpy(Msg->title, Title);
 		conn->Flags |= GETTINGMESSAGE;
+
+		// Create initial buffer of 10K. Expand if needed later
+
+		conn->MailBuffer=malloc(10000);
+		conn->MailBufferSize=10000;
+
 		nodeprintf(conn, "Enter Message Text (end with /ex or ctrl/z)\r");
 		return TRUE;
 	}
