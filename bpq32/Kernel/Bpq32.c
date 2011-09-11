@@ -1890,8 +1890,6 @@ VOID SetupBPQDirectory()
 #pragma warning(disable : 4996)
 
 	if (_winver < 0x0600)
-//	if (TRUE)
-
 #pragma warning(pop)
 	{
 		// Below Vista
@@ -5302,7 +5300,11 @@ BOOL CopyReg(HKEY hKeyIn, HKEY hKeyOut)
  
             if (retCode == ERROR_SUCCESS ) 
             { 
-                Debugprintf(TEXT("(%d) %s = %s len %d\n"), i+1, achValue, Value, ValLen); 
+				if (ValLen == 4)
+					Debugprintf(TEXT("(%d) %s = %x len %d\n"), i+1, achValue, *Value, ValLen); 
+				else
+					Debugprintf(TEXT("(%d) %s = %s len %d\n"), i+1, achValue, Value, ValLen); 
+
 				retCode = RegSetValueEx(hKeyOut, achValue, 0 , Type, (BYTE *)&Value[0], ValLen);
             } 
         }

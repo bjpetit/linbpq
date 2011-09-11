@@ -1313,6 +1313,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 				"BPQMailChat", MB_ICONINFORMATION);
 */
 
+	REGTREE = GetRegistryKey();
+	REGTREETEXT = GetRegistryKeyText();
+
 	if (GetPortTableEntryptr)
 	{
 		int n;
