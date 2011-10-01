@@ -395,7 +395,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				// Probe link
 
 				send(TNC->WINMORSock, "BUFFER\r\n", 8, 0);
-			
 		}
 
 		if (TNC->FECMode)
@@ -419,6 +418,19 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					else
 						send(TNC->WINMORSock,"FECSEND 500\r\n", 13, 0);
 				}
+			}
+		}
+
+		if (STREAM->NeedDisc)
+		{
+			STREAM->NeedDisc--;
+
+			if (STREAM->NeedDisc == 0)
+			{
+				// Send the DISCONNECT
+
+				send(TNC->WINMORSock,"ARQEND\r\n", 8, 0);
+				TNC->Streams[0].ARQENDSent = TRUE;
 			}
 		}
 
@@ -611,8 +623,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (buffptr == 0) return (0);			// No buffers, so ignore
 
-			buffptr[1]=36;
-			memcpy(buffptr+2,"No Connection to WINMOR Virtual TNC\r", 36);
+			buffptr[1] = 24;
+			memcpy(buffptr + 2, "No Connection to V4 TNC\r", 24);
 
 			C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 			
@@ -628,7 +640,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-
 		txlen=(buff[6]<<8) + buff[5]-8;	
 		
 		if (TNC->Streams[0].Connected)
@@ -641,16 +652,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 	
-			if (_memicmp(&buff[8], "XXX\r", 4) == 0)
-			{
-				CheckAppl(TNC, "RMS         "); // Is RMS Available?
-
-				SendReporttoWL2K(TNC);
-
-				return 0;
-			}
-
-
 			if (TNC->FECMode)
 			{
 				char Buffer[300];
@@ -914,7 +915,7 @@ VOID V4ProcessDataSocketData(int port)
 	// Info on Data Socket - just packetize and send on
 	
 	struct TNCINFO * TNC = TNCInfo[port];
-	int InputLen, PacLen = 236;
+	int InputLen, PacLen = 236, i;
 	UINT * buffptr;
 	char * msg;
 		
@@ -950,7 +951,36 @@ loop:
 		return;					
 	}
 
+
 	msg = (char *)&buffptr[2];
+
+	// Message should always be received in 17 char chunks. 17th is a status byte
+	// In ARQ, 6 = "Echo as sent" ack
+
+	if (InputLen != 17)
+	{
+		Debugprintf("V4 TNC incorrect RX Len  = %d", InputLen);
+		goto loop;
+	}
+
+	if (msg[16] == 0x06)
+		goto loop;
+
+	InputLen = 16;
+
+	for (i = 0; i < 16; i++)
+	{
+		if (msg[i] == 0)
+			break;
+
+		if (msg[i] == 10)
+			continue;
+
+		if (msg[i] < 0x20 || msg[i] > 0x7e)
+			msg[i] = '?';
+	}
+
+
 	msg[InputLen] = 0;	
 	
 	WritetoTrace(TNC, msg, InputLen);
@@ -1242,6 +1272,9 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		char Call[11];
 		char * ptr;
 		char * ApplPtr = &APPLS;
+		struct APPLCALLS * APPL;
+		int App;
+		char Appl[10];
 
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
@@ -1261,6 +1294,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			SuspendOtherPorts(TNC);
 
 			ProcessIncommingConnect(TNC, Call, 0);
+			TNC->Streams[0].ARQENDSent = FALSE;
 
 			if (TNC->RIG)
 				wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
@@ -1271,7 +1305,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			// See which application the connect is for
 
-/*			for (App = 0; App < 32; App++)
+			for (App = 0; App < 32; App++)
 			{
 				APPL=&APPLCALLTABLE[App];
 				memcpy(Appl, APPL->APPLCALL_TEXT, 10);
@@ -1280,7 +1314,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				if (ptr)
 					*ptr = 0;
 	
-				if (_stricmp(TNC->TargetCall, Appl) == 0)
+				if (_stricmp(TNC->CurrentMYC, Appl) == 0)
 					break;
 			}
 
@@ -1316,7 +1350,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					STREAM->NeedDisc = 100;	// 10 secs
 				}
 			}
-*/
+
 			return;
 		}
 		else
@@ -1510,8 +1544,50 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "CONREQ", 6) == 0)
 	{
+		// if to one of our APPLCALLS, change TNC MYCALL
+
+		struct APPLCALLS * APPL;
+		char Appl[11];
+		char Target[20];
+		char * ptr;
+		int i;
+
+		memcpy(Target, &Buffer[7], 12);
+		ptr = memchr(Target, ' ', 12);
+		if (ptr)
+			*ptr = 0;
+
+		if (strcmp(Target, TNC->NodeCall) == 0)
+			ChangeMYC(TNC, Target);
+		else
+		{
+			for (i = 0; i < 32; i++)
+			{
+				APPL=&APPLCALLTABLE[i];
+
+				if (APPL->APPLCALL_TEXT[0] > ' ')
+				{
+					memcpy(Appl, APPL->APPLCALL_TEXT, 10);
+					ptr=strchr(Appl, ' ');
+
+					if (ptr)
+						*ptr = 0;
+	
+					if (strcmp(Appl, Target) == 0)
+					{
+						ChangeMYC(TNC, Target);
+						break;
+					}
+				}
+			}
+		}
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
-		return;
+
+		// Update MH
+
+		ptr = strstr(Buffer, " de ");
+		if (ptr)
+			UpdateMH(TNC, ptr + 4, '!', 'O');
 	}
 
 	buffptr = GetBuff();
@@ -1545,7 +1621,7 @@ int V4ProcessReceivedData(struct TNCINFO * TNC)
 		
 		if (!TNC->CONNECTING)
 		{
-			wsprintf(ErrMsg, "WINMOR Connection lost for BPQ Port %d\r\n", TNC->Port);
+			wsprintf(ErrMsg, "V4TNC Connection lost for BPQ Port %d\r\n", TNC->Port);
 			WritetoConsole(ErrMsg);
 		}
 		TNC->CONNECTING = FALSE;
@@ -1705,6 +1781,8 @@ static VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
 	ReleaseTNC(TNC);
+
+	ChangeMYC(TNC, TNC->NodeCall);		// In case changed to an applcall
 
 	if (TNC->FECMode)
 	{

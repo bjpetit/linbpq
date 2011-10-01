@@ -206,10 +206,12 @@ typedef struct TNCINFO
 	int FECIDTimer;				// Time in FEC Mode. Used to trigger ID broadcasts
 	BOOL RestartAfterFailure;
 
-	int Busy;					// Channel Busy Flags
+	int Busy;					// Channel Busy Timer/Counter . Non-zero = Busy
 
-#define CDBusy 1
-#define PTTBusy 2
+	int BusyFlags;				// Channel Busy Flags
+
+#define CDBusy 1				// For WINMOR - reported busy (set till reported clear)
+#define PTTBusy 2				// PTT Active
 
 	BOOL FECPending;			// Need an FEC Send when channel is next idle
 
@@ -249,6 +251,9 @@ typedef struct TNCINFO
 
 	HWND hMonitor;					// Handle to Monitor control
 	HMENU hPopMenu;					// Actions Menu Handle
+
+	int BusyHold;					// Hold Time from SCS reporting channel free till we call 
+	int BusyWait;					// Time to wait for clear channel before connect
 
 	BOOL OverrideBusy;
 	int BusyDelay;					// Timer for busy timeout
@@ -406,6 +411,8 @@ static VOID CloseComplete(struct TNCINFO * TNC, int Stream);
 
 VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM,
 				VOID TidyClose(), VOID ForcedClose(), VOID CloseComplete());
+
+BOOL InterlockedCheckBusy(struct TNCINFO * ThisTNC);
 
 extern UCHAR NEXTID;
 extern struct TRANSPORTENTRY * L4TABLE;

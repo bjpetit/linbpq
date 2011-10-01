@@ -372,7 +372,7 @@
 
 // Above released as 5.0.0.1
 
-// 5.0.1.1
+// 5.2.0.1
 
 // Add caching of CMS Server IP addresses
 // Initialise TNC State on Pactor Dialogs
@@ -386,6 +386,10 @@
 // Fix Timeband processing for Rig Control
 // New Driver for SCS Tracker allowing multiple connects, so Tracker can be used for user access 
 // New Driver for V4 TNC
+
+// 5.2.1.1
+
+// Combine busy detector on Interlocked Ports (SCS PTC and WINMOR)
 
 #define Kernel
 #include "Versions.h"
@@ -1007,12 +1011,12 @@ VOID SetApplPorts()
 	}
 }
 
-VOID CALLBACK TimerProc(
-
+VOID CALLBACK TimerProc
+(
     HWND  hwnd,	// handle of window for timer messages 
     UINT  uMsg,	// WM_TIMER message
     UINT  idEvent,	// timer identifier
-    DWORD  dwTime) 	// current system time	
+    DWORD  dwTime)	// current system time	
 {
 	struct _EXCEPTION_POINTERS exinfo;
 
@@ -1113,79 +1117,16 @@ VOID CALLBACK TimerProc(
 		
 		TIMERINTERRUPT();
 	}
-	__except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)
-	{
-		unsigned int SPPtr;
-		unsigned int SPVal;
-		unsigned int eip;
-		unsigned int rev;
-		int i;
-
-		DWORD Stack[16];
-		DWORD CodeDump[16];
-
-		eip = exinfo.ContextRecord->Eip;	
-		SPPtr = exinfo.ContextRecord->Esp;	
-
-		__asm{
-
-		mov eax, SPPtr
-		mov SPVal,eax
-		lea edi,Stack
-		mov esi,eax
-		mov ecx,64
-		rep movsb
-
-		lea edi,CodeDump
-		mov esi,eip
-		mov ecx,64
-		rep movsb
-
-
-	}
-
-
-		Debugprintf("BPQ32 *** Program Error %x at %x in Timer Processing",
-			exinfo.ExceptionRecord->ExceptionCode, exinfo.ExceptionRecord->ExceptionAddress);
-
-		
-		Debugprintf("EAX %x EBX %x ECX %x EDX %x ESI %x EDI %x ESP %x",
-			exinfo.ContextRecord->Eax, exinfo.ContextRecord->Ebx, exinfo.ContextRecord->Ecx,
-			exinfo.ContextRecord->Edx, exinfo.ContextRecord->Esi, exinfo.ContextRecord->Edi, SPVal);
-		
-		Debugprintf("Stack:");
-
-		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
-			SPVal, Stack[0], Stack[1], Stack[2], Stack[3], Stack[4], Stack[5], Stack[6], Stack[7]);
-
-		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
-			SPVal+32, Stack[8], Stack[9], Stack[10], Stack[11], Stack[12], Stack[13], Stack[14], Stack[15]);
-
-		Debugprintf("Code:");
-
-		for (i = 0; i < 16; i++)
-		{
-			rev = (CodeDump[i] & 0xff) << 24;
-			rev |= (CodeDump[i] & 0xff00) << 8;
-			rev |= (CodeDump[i] & 0xff0000) >> 8;
-			rev |= (CodeDump[i] & 0xff000000) >> 24;
-
-			CodeDump[i] = rev;
-		}
-
-		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
-			eip, CodeDump[0], CodeDump[1], CodeDump[2], CodeDump[3], CodeDump[4], CodeDump[5], CodeDump[6], CodeDump[7]);
-
-		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
-			eip+32, CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15]);
-
+	
+	#define EXCEPTMSG "Timer Processing"
+	#include "StdExcept.c"
 
 	}
 
 	FreeSemaphore();			// SendLocation needs to get the semaphore
 
 	if (ReportTimer)
-	{
+	{		
 		ReportTimer--;
 	
 		if (ReportTimer == 0)

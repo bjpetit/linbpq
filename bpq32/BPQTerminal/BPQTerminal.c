@@ -53,6 +53,11 @@
 //		Get Registry Tree from BPQ32.dll
 //		Add Command to reset Monitor/Output window split
 
+// Version 2.1.1 August 2011
+
+//		Wrap overlong lines
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -563,9 +568,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	wpOrigMonProc = (WNDPROC)SetWindowLong(hwndMon, GWL_WNDPROC, (LONG)MonProc);
 	wpOrigSplitProc = (WNDPROC)SetWindowLong(hwndSplit, GWL_WNDPROC, (LONG)SplitProc);
 
-
-	// Get saved config from Registry
-
 	// Get config from Registry 
 
 	wsprintf(Key,"SOFTWARE\\G8BPQ\\BPQ32\\BPQTerminal\\Session%d",Sessno);
@@ -644,6 +646,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "FontWidth", 0, &Type, (UCHAR *)&FontWidth, &Vallen);
 
+		RegCloseKey(hKey);
 	}
 
 	OutputData.CharWidth = FontWidth;
@@ -1805,6 +1808,9 @@ VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
 VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len)
 {
 	char * ptr1, * ptr2;
+
+	if (PartLinePtr > LINELEN)
+		Msg[len++] = 13;					// Force a newline
 
 	if (PartLinePtr != 0)
 	{

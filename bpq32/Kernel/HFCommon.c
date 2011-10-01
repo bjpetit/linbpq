@@ -1126,7 +1126,8 @@ DoMove:
 	ReportMode[3] = Direction;
 	ReportMode[4] = 0;
 
-	SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
+	if (TNC->Hardware != H_TRK)
+		SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
 
 	return;
 }
@@ -1451,4 +1452,35 @@ VOID SetupPortRIGPointers()
 			TNC->RIG->CurrentBandWidth = TNC->WL2KModeChar;
 		}
 	}
+}
+
+BOOL InterlockedCheckBusy(struct TNCINFO * ThisTNC)
+{
+	// See if this port, or any interlocked ports are reporting channel busy
+
+	struct TNCINFO * TNC;
+	int i, Interlock = ThisTNC->Interlock;
+
+	if (ThisTNC->Busy)
+		return TRUE;				// Our port is busy
+		
+	if (Interlock == 0)
+		return ThisTNC->Busy;		// No Interlock
+
+	for (i=1; i<33; i++)
+	{
+		TNC = TNCInfo[i];
+	
+		if (TNC == NULL)
+			continue;
+
+		if (TNC == ThisTNC)
+			continue;
+
+		if (Interlock == TNC->Interlock)	// Same Group	
+			if (TNC->Busy)
+				return TRUE;				// Interlocked port is busy
+
+	}
+	return FALSE;					// None Busy
 }

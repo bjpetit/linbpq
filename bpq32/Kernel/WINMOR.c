@@ -286,6 +286,14 @@ ConfigLine:
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
 			else
+			if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
+				TNC->BusyHold = atoi(&buf[8]);
+
+			else
+			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Hold Time for Busy Detect
+				TNC->BusyWait = atoi(&buf[8]);
+
+			else
 
 			strcat (TNC->InitScript, buf);
 		}
@@ -395,12 +403,21 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	{
 	case 1:				// poll
 
+		if (TNC->Busy)							//  Count down to clear
+		{
+			if ((TNC->BusyFlags & CDBusy) == 0)	// TNC Has reported not busy
+			{
+				TNC->Busy--;
+				if (TNC->Busy == 0)
+					SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Clear");
+			}
+		}
 
 		if (TNC->BusyDelay)
 		{
 			// Still Busy?
 
-			if ((TNC->Busy & CDBusy) == 0)
+			if (InterlockedCheckBusy(TNC) == FALSE)
 			{
 				// No, so send
 
@@ -728,7 +745,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				send(TNC->WINMORDataSock, Buffer, len, 0);
 
-				if (TNC->Busy)
+				if (TNC->BusyFlags)
 				{
 					TNC->FECPending = 1;
 				}
@@ -847,7 +864,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				// See if Busy
 				
-				if (TNC->Busy & CDBusy)
+				if (InterlockedCheckBusy(TNC))
 				{
 					// Channel Busy. Unless override set, wait
 
@@ -856,7 +873,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						// Save Command, and wait up to 10 secs
 
 						TNC->ConnectCmd = _strdup(Connect);
-						TNC->BusyDelay = 100;		// 10 secs
+						TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
 						return 0;
 					}
 				}
@@ -1135,6 +1152,9 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 		TNC->WeStartedTNC = RestartTNC(TNC);
 
 	TNC->Hardware = H_WINMOR;
+
+	if (TNC->BusyWait == 0)
+		TNC->BusyWait = 10;
 
 	if (TNC->RigConfigMsg)
 	{
@@ -1465,14 +1485,14 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "PTT T", 5) == 0)
 	{
-		TNC->Busy |= PTTBusy;
+		TNC->Busy = TNC->BusyHold * 10;				// BusyHold  delay
+
 		if (TNC->PTTMode)
 			Rig_PTT(TNC->RIG, TRUE);
 		return;
 	}
 	if (_memicmp(Buffer, "PTT F", 5) == 0)
 	{
-		TNC->Busy &= ~PTTBusy;
 		if (TNC->PTTMode)
 			Rig_PTT(TNC->RIG, FALSE);
 		return;
@@ -1480,15 +1500,20 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "BUSY TRUE", 9) == 0)
 	{	
-		TNC->Busy |= CDBusy;
+		TNC->BusyFlags |= CDBusy;
+		TNC->Busy = TNC->BusyHold * 10;				// BusyHold  delay
+
 		SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Busy");
 		return;
 	}
 
 	if (_memicmp(Buffer, "BUSY FALSE", 10) == 0)
 	{
-		TNC->Busy &= ~CDBusy;
-		SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Clear");
+		TNC->BusyFlags &= ~CDBusy;
+		if (TNC->BusyHold)
+			SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "BusyHold");
+		else
+			SetDlgItemText(TNC->hDlg, IDC_CHANSTATE, "Clear");
 		return;
 	}
 

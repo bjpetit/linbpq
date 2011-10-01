@@ -242,15 +242,19 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 
 	if (conn->Flags & CHATLINK)
 	{
+		struct _EXCEPTION_POINTERS exinfo;
+
 		__try 
 		{
 			chkctl(conn, Buffer, len);
 		}
-		__except(EXCEPTION_EXECUTE_HANDLER)
-		{
-			Debugprintf("MAILCHAT *** Program Error procesing Chat Node Message %s", Buffer);
-			Disconnect(conn->BPQStream);
-			CheckProgramErrors();
+
+		#define EXCEPTMSG "Process Chat Line"
+		#include "StdExcept.c"
+
+		Debugprintf("MAILCHAT *** Was procesing Chat Node Message %s", Buffer);
+		Disconnect(conn->BPQStream);
+		CheckProgramErrors();
 		}
 		return;
 	}
@@ -1287,7 +1291,10 @@ static void topic_xmit(USER *user, CIRCUIT *circuit)
 
 static void node_xmit(NODE *node, char kind, CIRCUIT *circuit)
 {
-	__try{
+	struct _EXCEPTION_POINTERS exinfo;
+
+	__try
+	{
 		if (!cn_find(circuit, node))
 			if (node->Version && (kind == id_link))
 				nprintf(circuit, "%c%c%s %s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias, node->Version);
@@ -1295,8 +1302,12 @@ static void node_xmit(NODE *node, char kind, CIRCUIT *circuit)
 				nprintf(circuit, "%c%c%s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias);
 
 	}
-	__except(EXCEPTION_EXECUTE_HANDLER)
-		{Debugprintf("*PE*node_xmit Corrupt Rec %x %x %x", node, node->call, node->alias);}
+
+	#define EXCEPTMSG "node_xmit"
+	#include "StdExcept.c"
+
+	Debugprintf("Corrupt Rec %x %x %x", node, node->call, node->alias);
+	}
 
 }
 
@@ -1482,35 +1493,46 @@ void link_drop(CIRCUIT *circuit)
 			user_leave(user);
 		}
 	}
-
-	} My__except_Routine("link_drop clear users");
+	}
+	#define EXCEPTMSG "link_drop clear users"
+	#include "StdExcept.c"
+	}
 
 // Any node known from the dropped link is no longer known.
 
-	__try{
-
+	__try
+	{
 	for (cn = circuit->hnode; cn; cn = cn->next)
 	{
-		__try{
+		__try
+		{
 			node_tell(cn->node, id_unlink);
-		} My__except_Routine("link_drop clear nodes node tell");
-
-		__try{
+		}
+		#define EXCEPTMSG "link_drop clear nodes node tell"
+		#include "StdExcept.c"
+		}
+		__try
+		{
 			node_dec(cn->node);
-		} My__except_Routine("link_drop clear nodes node dec");
+		}
+		#define EXCEPTMSG "link_drop clear nodes node dec"
+		#include "StdExcept.c"
+		}
 	}
-	} My__except_Routine("link_drop clear nodes");
-
+	}
+	#define EXCEPTMSG "link_drop clear nodes"
+	#include "StdExcept.c"
+	}
 
 // The circuit is no longer used.
 
-	__try{
-
-
+	__try
+	{
 	circuit_free(circuit);
-
-    } My__except_Routine("link_drop clear circuit");
-
+	}
+    #define EXCEPTMSG "link_drop clear circuit"
+	#include "StdExcept.c"
+	}
 	NeedStatus = TRUE;
 }
 

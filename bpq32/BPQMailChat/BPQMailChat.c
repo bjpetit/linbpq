@@ -690,6 +690,10 @@
 // Fix program error if you try to define more than 80 BBS's
 
 
+// Changes to program error reporting.
+// BBS "Returh to Node" command added
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
@@ -1466,11 +1470,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		if (lParam & BPQDataAvail)
 		{
-			__try
-			{
+			//	Dont trap error at this level - let Node error handler pick it up
+//			__try
+//			{
 				DoReceivedData(wParam);
-			}
-			My__except_Routine("DoReceivedData")
+//			}
+//			My__except_Routine("DoReceivedData")
 			return 0;
 		}
 		if (lParam & BPQStateChange)
@@ -4018,6 +4023,20 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			CloseConsole(conn->BPQStream);
 
 		return;
+	}
+
+	if (_memicmp(Cmd, "Node", 4) == 0)
+	{
+		SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+		user->lastmsg = conn->lastmsg;
+		Sleep(1000);
+			
+		if (conn->BPQStream > 0)
+			ReturntoNode(conn->BPQStream);
+		else
+			CloseConsole(conn->BPQStream);
+
+		return;						
 	}
 
 	if (_memicmp(Cmd, "D", 1) == 0)

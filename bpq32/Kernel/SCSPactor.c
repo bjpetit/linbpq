@@ -213,11 +213,17 @@ ConfigLine:
 			}
 			else
 				
-			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)
-	
-				// Packet Channels
-
+			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)	// Packet Channels
 				TNC->PacketChannels = atoi(&buf[14]);
+		
+			else
+			if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
+				TNC->BusyHold = atoi(&buf[8]);
+
+			else
+			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Hold Time for Busy Detect
+				TNC->BusyWait = atoi(&buf[8]);
+
 			else
 
 			if (_memicmp(buf, "SCANFORROBUSTPACKET", 19) == 0)
@@ -539,6 +545,12 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	
 	TNC->Port = port;
 	TNC->Hardware = H_SCS;
+
+	if (TNC->BusyHold == 0)
+		TNC->BusyHold = 3;
+
+	if (TNC->BusyWait == 0)
+		TNC->BusyWait = 10;
 
 	if (TNC->RigConfigMsg)
 	{
@@ -985,7 +997,7 @@ VOID SCSPoll(int Port)
 		}
 	}
 
-	// We delay clearing busy for 3 secs
+	// We delay clearing busy for BusyHold secs
 
 	if (TNC->Busy)
 		if (TNC->Mode != 7)
@@ -995,7 +1007,7 @@ VOID SCSPoll(int Port)
 	{
 		// Still Busy?
 
-		if (TNC->Busy == 0)
+		if (InterlockedCheckBusy(TNC) == 0)
 		{
 			// No, so send
 
@@ -1369,13 +1381,13 @@ VOID SCSPoll(int Port)
 					
 						// See if Busy
 				
-						if (TNC->Busy)
+						if (InterlockedCheckBusy(TNC))
 						{
 							// Channel Busy. Unless override set, wait
 
 							if (TNC->OverrideBusy == 0)
 							{
-								// Send Mode Command Now, Save Command, and wait up to 10 secs
+								// Send Mode Command now, save command, and wait up to 10 secs
 								// No, leave in Pactor, or Busy Detect won't work. Queue the whole conect sequence
 
 								TNC->ConnectCmd = TNC->Streams[0].CmdSet;
@@ -1384,7 +1396,7 @@ VOID SCSPoll(int Port)
 								wsprintf(Status, "Waiting for clear channel");
 								SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
-								TNC->BusyDelay = 100;		// 10 secs
+								TNC->BusyDelay = TNC->BusyWait * 10;
 								TNC->Streams[Stream].Connecting = FALSE;	// Not connecting Yet
 
 								return;
@@ -2456,7 +2468,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			SetDlgItemText(TNC->hDlg, IDC_MODE, ModeText[TNC->Mode]);
 
 			if (TNC->Mode == 7)
-				TNC->Busy = 30;				// 3 sec delay
+				TNC->Busy = TNC->BusyHold * 10;				// BusyHold  delay
 
 			if (Offset == 128)		// Undefined
 				wsprintf(StatusMsg, "Mode %s Speed Level %d Freq Offset Unknown",

@@ -1,11 +1,11 @@
 #ifdef Kernel
 
-#define Vers 5,0,1,1
-#define Verstring "5.0.1.1\0"
-#define TextVerstring "V5.0.1.1\0"
-#define Datestring "August 2011"
-//#define SPECIALVERSION "Test 11"
-#define VerComments "G8BPQ Packet Switch V5.0.1.1\0"
+#define Vers 5,2,0,1
+#define Verstring "5.2.0.1\0"
+#define TextVerstring "V5.2.0.1\0"
+#define Datestring "September 2011"
+//#define SPECIALVERSION "Test 1"
+#define VerComments "G8BPQ Packet Switch V5.2.0.1\0"
 #define VerCopyright "Copyright © 2001-2011 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 
@@ -24,8 +24,8 @@
 
 #ifdef BPQTerm
 
-#define Vers 2,1,0,1
-#define Verstring "2.1.0.1\0"
+#define Vers 2,1,1,1
+#define Verstring "2.1.1.1\0"
 //#define SPECIALVERSION "Test 2"
 #define VerComments "Simple Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 1999-2011 John Wiseman G8BPQ\0"
@@ -35,9 +35,9 @@
 
 #ifdef MAILCHAT
 
-#define Vers 1,0,4,42
-#define Verstring "1.0.4.42\0"
-//#define SPECIALVERSION "Test 2"
+#define Vers 1,0,4,43
+#define Verstring "1.0.4.43\0"
+#define SPECIALVERSION "Test 1"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2011 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"
