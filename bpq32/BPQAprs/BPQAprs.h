@@ -1,8 +1,9 @@
 struct STATIONRECORD
 {  
-    char Callsign[10];
+    char Callsign[12];
 	char Path[120];
 	char Comment[256];
+	char LastPacket[400];
     double Lat;
     double Lon;
     double Course;
@@ -18,12 +19,18 @@ struct STATIONRECORD
     time_t TimeLastUpdated;
 	int iconRow;
 	int iconCol;			// Symbol Pointer
-	int DispX;				// Position on display buffer
+	int DispX;				// Position in display buffer
 	int DispY;
 
 } StationRecord;
 
-
+struct OSMQUEUE
+{
+	struct OSMQUEUE * Next;
+	int	Zoom;
+	int x;
+	int y;
+};
 
 #define BPQBASE                        WM_USER
 //

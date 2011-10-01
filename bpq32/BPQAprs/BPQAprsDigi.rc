@@ -21,6 +21,54 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 #pragma code_page(1252)
 #endif //_WIN32
 
+#ifndef _MAC
+
+BPQICON         ICON    DISCARDABLE     "..\bpqicon.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+
+1 VERSIONINFO
+ FILEVERSION 0,0,1,1
+ PRODUCTVERSION 0,0,1,1
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0xbL
+#else
+ FILEFLAGS 0xaL
+#endif
+ FILEOS 0x10001L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904e4"
+        BEGIN
+            VALUE "Comments", "Written by:John Wiseman, G8BPQ\0"
+            VALUE "CompanyName", "\0"
+            VALUE "FileDescription", "Simple APRS Digipeater for G8BPQ Switch\0"
+            VALUE "FileVersion", "0.1\0"
+            VALUE "InternalName", "BPQAPRSDigi\0"
+            VALUE "LegalCopyright", "Copyright © John Wiseman 2010\0"
+            VALUE "OriginalFilename", "\0"
+            VALUE "ProductName", "BPQAPRSDigi.\0"
+            VALUE "ProductVersion", "0.1\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END
+
+
+#endif    // !_MAC
+
+
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -40,28 +88,11 @@ END
 
 3 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "#include ""..\\Include\\Versions.h""\r\n"
-    "#include ""..\\StdVer.inc""\r\n"
     "\r\n"
     "\0"
 END
 
 #endif    // APSTUDIO_INVOKED
-
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Bitmap
-//
-
-IDB_SYMBOL1             BITMAP  DISCARDABLE     "mysymb.bmp"
-IDB_SYMBOL2             BITMAP  DISCARDABLE     "mysymb2.bmp"
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Dialog
-//
-
 
 #endif    // English (U.K.) resources
 /////////////////////////////////////////////////////////////////////////////
@@ -73,8 +104,6 @@ IDB_SYMBOL2             BITMAP  DISCARDABLE     "mysymb2.bmp"
 //
 // Generated from the TEXTINCLUDE 3 resource.
 //
-#include "..\Include\Versions.h"
-#include "..\StdVer.inc"
 
 
 /////////////////////////////////////////////////////////////////////////////
