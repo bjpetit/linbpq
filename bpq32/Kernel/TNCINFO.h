@@ -384,6 +384,8 @@ typedef struct TNCINFO
 #define TXSEC   0x34				// Send TX data to secondary port
 
 	BOOL XONXOFF;					// Set if hardware is using XON/XOFF
+
+	double LastFreq;				// Used by V4 to see if freq has changed
 };
 
 VOID * zalloc(int len);

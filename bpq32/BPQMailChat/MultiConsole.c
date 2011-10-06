@@ -4,6 +4,8 @@
 
 #include "stdafx.h"
 
+extern BOOL WINE;
+
 char ClassName[]="CONSOLEWINDOW";
 
 char SYSOPCall[50];
@@ -1284,8 +1286,8 @@ DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LON
 	int i;
 	int Line;
 
-	if (cb != 4092)
-		return 0;
+//	if (cb != 4092)
+//		return 0;
 
 	if (Cinfo->SendHeader)
 	{
@@ -1353,7 +1355,10 @@ VOID DoRefresh(struct ConsoleInfo * Cinfo)
 	int LoopTrap = 0;
 	HWND hwndOutput = Cinfo->hwndOutput;
 
-	Cinfo->Thumb = SendMessage(Cinfo->hwndOutput, EM_GETTHUMB, 0, 0);
+	if(WINE)
+		Cinfo->Thumb = 30000;
+	else
+		Cinfo->Thumb = SendMessage(Cinfo->hwndOutput, EM_GETTHUMB, 0, 0);
 
 	Pos = Cinfo->Thumb + Cinfo->ClientHeight;
 

@@ -221,7 +221,7 @@ ConfigLine:
 				TNC->BusyHold = atoi(&buf[8]);
 
 			else
-			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Hold Time for Busy Detect
+			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
 				TNC->BusyWait = atoi(&buf[8]);
 
 			else

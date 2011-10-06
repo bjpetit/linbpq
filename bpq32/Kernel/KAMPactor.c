@@ -231,6 +231,11 @@ ConfigLine:
 			if (_memicmp(buf, "OLDMODE", 7) == 0)
 				TNC->OldMode = TRUE;
 			else
+		
+			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
+				TNC->BusyWait = atoi(&buf[8]);
+
+			else
 
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
@@ -238,9 +243,7 @@ ConfigLine:
 				strcat (TNC->InitScript, buf);
 		}
 	}
-
 	return (TRUE);
-	
 }
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
@@ -466,6 +469,9 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	TNC->Port = port;
 
 	TNC->Hardware = H_KAM;
+
+	if (TNC->BusyWait == 0)
+		TNC->BusyWait = 10;
 
 	if (TNC->RigConfigMsg)
 	{
@@ -869,6 +875,54 @@ VOID KAMPoll(int Port)
 		return;
 	}
 
+	if (TNC->BusyDelay)		// Waiting to send connect
+	{
+		// Still Busy?
+
+		if (InterlockedCheckBusy(TNC) == 0)
+		{
+			// No, so send
+
+			EncodeAndSend(TNC, TNC->ConnectCmd, strlen(TNC->ConnectCmd));
+			free(TNC->ConnectCmd);
+
+			TNC->Timeout = 50;
+			TNC->InternalCmd = 'C';			// So we dont send the reply to the user.
+			STREAM->Connecting = TRUE;
+
+			TNC->Streams[0].Connecting = TRUE;
+
+			wsprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
+			SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+			TNC->BusyDelay = 0;
+			return;
+		}
+		else
+		{
+			// Wait Longer
+
+			TNC->BusyDelay--;
+
+			if (TNC->BusyDelay == 0)
+			{
+				// Timed out - Send Error Response
+
+				UINT * buffptr = GetBuff();
+
+				if (buffptr == 0) return;			// No buffers, so ignore
+
+				buffptr[1]=39;
+				memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
+
+				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+
+				free(TNC->ConnectCmd);
+
+			}
+		}
+	}
+
 	if (TNC->NeedPACTOR)
 	{
 		TNC->NeedPACTOR--;
@@ -1063,12 +1117,28 @@ VOID KAMPoll(int Port)
 
 					if (Stream == 0)
 					{
-	//					TNC->HFPacket = TRUE;
-
 						if (TNC->HFPacket)
 							datalen = wsprintf(TXMsg, "C2AC %s", TNC->Streams[0].RemoteCall);
 						else
 							datalen = wsprintf(TXMsg, "C20PACTOR %s", TNC->Streams[0].RemoteCall);
+						
+						// If Pactor, check busy detecters on any interlocked ports
+
+						if (TNC->HFPacket == 0 && InterlockedCheckBusy(TNC) && TNC->OverrideBusy == 0)
+						{
+							// Channel Busy. Wait
+
+							TNC->ConnectCmd = _strdup(TXMsg);
+
+							wsprintf(Status, "Waiting for clear channel");
+							SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+							TNC->BusyDelay = TNC->BusyWait * 10;
+
+							return;
+						}
+
+						TNC->OverrideBusy = FALSE;
 
 						wsprintf(Status, "%s Connecting to %s",
 							TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);

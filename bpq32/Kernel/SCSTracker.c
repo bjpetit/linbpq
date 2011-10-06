@@ -1339,6 +1339,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 	Stream = TNC->MSGCHANNEL - 1;
 
+	if (Stream < 0 || Stream > 32)
+		return;
+
 	//	See if Poll Reply or Data
 	
 	if (TNC->MSGTYPE == 0)

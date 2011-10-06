@@ -647,8 +647,8 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 			WL2KInfoPtr = &TNC->WL2KInfoList[++n];
 		}
 
-		wsprintf(Message, "00,%s,RMS Packet,BPQ%d.%d.%d",
-				TNC->RMSCall, Ver[0], Ver[1], Ver[2]);
+		wsprintf(Message, "00,%s,BPQ32,%d.%d.%d.%d",
+				TNC->RMSCall, Ver[0], Ver[1], Ver[2], Ver[3]);
 
 		Debugprintf("Sending %s", Message);
 
@@ -834,6 +834,11 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 				}
 				WL2KInfoPtr = &TNC->WL2KInfoList[++n];
 			}
+			wsprintf(Message, "00,%s,BPQ32,%d.%d.%d.%d",
+			TNC->RMSCall, Ver[0], Ver[1], Ver[2], Ver[3]);
+
+			Debugprintf("Sending %s", Message);
+			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 		}
 	}
 	else
@@ -858,6 +863,11 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 		}
 
+		wsprintf(Message, "00,%s,BPQ32,%d.%d.%d.%d",
+		TNC->RMSCall, Ver[0], Ver[1], Ver[2], Ver[3]);
+
+		Debugprintf("Sending %s", Message);
+		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
 
 //		wsprintf(Message, "03%s", TNC->RMSCall);
 

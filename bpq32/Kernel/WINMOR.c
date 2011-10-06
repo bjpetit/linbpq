@@ -290,7 +290,7 @@ ConfigLine:
 				TNC->BusyHold = atoi(&buf[8]);
 
 			else
-			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Hold Time for Busy Detect
+			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
 				TNC->BusyWait = atoi(&buf[8]);
 
 			else
@@ -1396,6 +1396,8 @@ VOID ConnecttoWINMORThread(port)
 		TNC->CONNECTING = FALSE;
 		return;
 	}
+
+	TNC->LastFreq = 0;			//	so V4 display will be updated
 
 	if (connect(TNC->WINMORDataSock,(LPSOCKADDR) &TNC->Datadestaddr,sizeof(TNC->Datadestaddr)) == 0)
 	{

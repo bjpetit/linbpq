@@ -84,6 +84,7 @@ struct RIGINFO
 	HWND hSCAN;
 	HWND hPTT;
 
+	double RigFreq;
 	char Valchar[15];			// Freq as char string
 	char CurrentBandWidth;
 };

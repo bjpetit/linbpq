@@ -41,7 +41,7 @@ static VOID ChangeMYC(struct TNCINFO * TNC, char * Call);
 
 static char ClassName[]="V4STATUS";
 static char WindowTitle[] = "V4TNC";
-static int RigControlRow = 180;
+static int RigControlRow = 160;
 
 #define V4
 #define NARROWMODE 0
@@ -224,7 +224,9 @@ ConfigLine:
 			}
 
 			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-			{}		// Ingore
+			{
+				TNC->RigConfigMsg = _strdup(buf);
+			}
 			else
 				
 			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
@@ -340,7 +342,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	switch (fn)
 	{
 	case 1:				// poll
-
 
 		if (TNC->BusyDelay)
 		{
@@ -462,6 +463,18 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 */
+		if (TNC->RIG)
+		{
+			if (TNC->RIG->RigFreq != TNC->LastFreq)
+			{
+				char FREQMsg[80];
+				int Len;
+				
+				TNC->LastFreq = TNC->RIG->RigFreq;
+				Len = sprintf(FREQMsg, "DISPLAY CF:%1.4f\r\n", TNC->LastFreq + .0015);
+				send(TNC->WINMORSock,FREQMsg, Len, 0);
+			}
+		}
 
 		if (TNC->TimeSinceLast++ > 700)			// Allow 10 secs for Keepalive
 		{
@@ -537,8 +550,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return -1;
 		}
 
-	
-
 			if (TNC->CONNECTED == FALSE && TNC->CONNECTING == FALSE)
 			{
 				//	See if time to reconnect
@@ -546,6 +557,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				time(&ltime);
 				if (ltime - TNC->lasttime >9 )
 				{
+					TNC->LastFreq = 0;			//	so display will be updated
 					ConnecttoWINMOR(port);
 					TNC->lasttime = ltime;
 				}
@@ -839,24 +851,29 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-/*		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+		// I cant see why, but Winsock is unavailable at this time
+
+		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+		winerr = WSAGetLastError();
+/*
 		Sleep(500);
+
+		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+		Sleep(500);
+
 		shutdown(TNC->WINMORDataSock, SD_BOTH);
-		Sleep(500);
 		shutdown(TNC->WINMORSock, SD_BOTH);
 		Sleep(500);
 */
+
 		closesocket(TNC->WINMORDataSock);
 		closesocket(TNC->WINMORSock);
 
 		SaveWindowPos(port);
 
-		if (TNC->WIMMORPID)
+		if (TNC->WIMMORPID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
-
-			if (!TNC->WeStartedTNC)
-				RestartTNC(TNC);
 		}
 
 		return (0);
@@ -1058,7 +1075,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 
 	TNC->Hardware = H_V4;
 
-/*
+
 	if (TNC->RigConfigMsg)
 	{
 		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
@@ -1077,7 +1094,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 		}
 		free(SaveRigConfig);
 	}
-*/
+
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)

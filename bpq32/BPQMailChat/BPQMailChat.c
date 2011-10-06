@@ -692,6 +692,7 @@
 
 // Changes to program error reporting.
 // BBS "Returh to Node" command added
+// Move config to "Standard" location (BPQ Directory/BPQMailChat.
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -699,9 +700,12 @@
 #include "stdafx.h"
 #define MAILCHAT
 #include "Versions.h"
+
 #include "GetVersion.h"
 
 #define MAX_LOADSTRING 100
+
+BOOL WINE = FALSE;
 
 INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -1300,6 +1304,18 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	struct _EXCEPTION_POINTERS exinfo;
 
 	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
+
+	// See if running under WINE
+
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, "SOFTWARE\\Wine",  0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		RegCloseKey(hKey);
+		WINE =TRUE;
+		Debugprintf("Running under WINE");
+	}
+
 
 	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
 	GetPortTableEntryptr = (struct _EXTPORTDATA *(__stdcall *)())GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
@@ -2289,6 +2305,7 @@ BOOL Initialise()
 	char * ptr1;
 	int Attrs, ret;
 	char msg[MAX_PATH + 50];
+	char ProperBaseDir[MAX_PATH];
 
 
 	//	Register message for posting by BPQDLL
@@ -2332,6 +2349,123 @@ BOOL Initialise()
 			ret = MessageBox(NULL, msg, "BPQMailChat", MB_ICONSTOP);
 
 			return FALSE;
+		}
+	}
+
+	// If BaseDir is not the same as BPQ Directory/BPQMailChat move the files.
+
+	wsprintf(ProperBaseDir, "%s\\BPQMailChat", GetBPQDirectory());
+	
+	len = strlen(ProperBaseDir);
+	ptr1 = ProperBaseDir;
+
+	while (*ptr1)
+	{
+		if (*(ptr1) == '/') *(ptr1) = '\\';
+		ptr1++;
+	}
+
+	len = strlen(BaseDir);
+	ptr1 = BaseDir;
+
+	while (*ptr1)
+	{
+		if (*(ptr1) == '/') *(ptr1) = '\\';
+		ptr1++;
+	}
+
+	if (_stricmp(BaseDir, ProperBaseDir))				// Different?
+	{
+		sprintf_s(msg, sizeof(msg), "Base Directory %s will be moved to %s\r\nClick OK to continue or Cancel to abort", BaseDir, ProperBaseDir);
+		ret = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+
+		if (ret == IDOK)
+		{
+			STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+			PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
+			int ExitCode;
+			char Command[1000];
+
+			SInfo.cb=sizeof(SInfo);
+			SInfo.lpReserved=NULL; 
+			SInfo.lpDesktop=NULL; 
+			SInfo.lpTitle=NULL; 
+			SInfo.dwFlags=0; 
+			SInfo.cbReserved2=0; 
+  			SInfo.lpReserved2=NULL; 
+
+			wsprintf(Command, "XCOPY.exe %s %s /s /e /i /y", BaseDir, ProperBaseDir);
+			
+			ret = CreateProcess(NULL , Command, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+
+			if (ret == 0)
+			{
+				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", GetLastError());
+				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+				return FALSE;
+			}
+
+			ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
+
+			while(ret && ExitCode == STILL_ACTIVE)
+			{
+				ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
+			}
+
+			if (ret == 0 || ExitCode != 0)
+			{
+				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", GetLastError());
+				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+				return FALSE;
+			}
+
+			CloseHandle(PInfo.hProcess);			
+			CloseHandle(PInfo.hThread);
+
+			wsprintf(Command, "cmd.exe /c RMDIR /s /q %s", BaseDir);
+			ret = CreateProcess(NULL , Command, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+
+			if (ret == 0)
+			{
+				sprintf_s(msg, sizeof(msg), "Delete failed - Error %d", GetLastError());
+				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+				return FALSE;
+			}
+
+			ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
+
+			while(ret && ExitCode == STILL_ACTIVE)
+			{
+				ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
+			}
+					
+			if (ret == 0 || ExitCode != 0)
+			{
+				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", GetLastError());
+				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+				return FALSE;
+			}
+
+			CloseHandle(PInfo.hProcess);			
+			CloseHandle(PInfo.hThread);
+
+			if (ExitCode == 0)
+			{
+				HKEY hKey=0;
+				int retCode,disp;
+				
+				strcpy(BaseDir, ProperBaseDir);
+				strcpy(BaseDirRaw, ProperBaseDir);
+
+				retCode = RegCreateKeyEx(REGTREE,
+					"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
+				if (retCode == ERROR_SUCCESS)
+				{		
+					retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDirRaw, strlen(BaseDirRaw));
+					RegCloseKey(hKey);
+				}
+			}
 		}
 	}
 

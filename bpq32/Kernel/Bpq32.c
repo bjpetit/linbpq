@@ -389,7 +389,10 @@
 
 // 5.2.1.1
 
-// Combine busy detector on Interlocked Ports (SCS PTC and WINMOR)
+// Combine busy detector on Interlocked Ports (SCS PTC, WINMOR or KAM)
+// Improved program error logging
+// WL2K reporting changed to new format agreed with Lee Inman
+
 
 #define Kernel
 #include "Versions.h"
@@ -1698,6 +1701,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			IPClose();
 			Rig_Close();
 			WSACleanup();
+			WSAGetLastError();
 
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
@@ -1715,13 +1719,10 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (AUTOSAVE == 1 && AttachedProcesses < 2) SaveNodes();	// Soundmo	
 
-
 		if (AttachedProcesses == 0)
 		{
 			KillTimer(NULL,TimerHandle);
-			
-			if (AUTOSAVE == 1) SaveNodes();	
-			
+						
 			retCode = RegCreateKeyEx(REGTREE,
                               "SOFTWARE\\G8BPQ\\BPQ32",
                               0,	// Reserved
@@ -1751,7 +1752,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				
 				for (i=0;i<NUMBEROFPORTS;i++)
 				{
-					if (PORTVEC->DLLhandle)
+					if (PORTVEC->PORTCONTROL.PORTTYPE == 0x10 && PORTVEC->DLLhandle)
 						FreeLibrary(PORTVEC->DLLhandle);
 
 					PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;

@@ -53,7 +53,7 @@
 //		Get Registry Tree from BPQ32.dll
 //		Add Command to reset Monitor/Output window split
 
-// Version 2.1.1 August 2011
+// Version 2.1.1 October 2011
 
 //		Wrap overlong lines
 
@@ -305,6 +305,8 @@ int TimerHandle = 0;
 
 int SlowTimer;
 
+BOOL WINE;
+
 VOID __cdecl Debugprintf(const char * format, ...)
 {
 	char Mess[1000];
@@ -541,6 +543,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	struct RTFTerm * OPData;
 
 	hInst = hInstance; // Store instance handle in our global variable
+
+	// See if running under WINE
+
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, "SOFTWARE\\Wine",  0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		RegCloseKey(hKey);
+		WINE = TRUE;
+		Debugprintf("Running under WINE");
+	}
 
 	REGTREE = GetRegistryKey();
 
@@ -1573,8 +1586,8 @@ DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, LPBYTE lpBuff, LONG cb, PLON
 	int i;
 	int Line;
 
-	if (cb != 4092)
-		return 0;
+//	if (cb != 4092)
+//		return 0;
 
 	if (OPData->SendHeader)
 	{
@@ -1648,7 +1661,10 @@ VOID DoRefresh(struct RTFTerm * OPData)
 	SCROLLINFO ScrollInfo;
 	int LoopTrap = 0;
 
-	OPData->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+	if(WINE)
+		OPData->Thumb = 30000;
+	else
+		OPData->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
 
 	Pos = OPData->Thumb + OutputBoxHeight;
 

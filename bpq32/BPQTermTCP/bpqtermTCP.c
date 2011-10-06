@@ -81,6 +81,8 @@ char AppName[] = "BPQTerm 32";
 char ClassName[] = "BPQMAINWINDOW";
 char Title[80];
 
+BOOL WINE;
+
 // Foward declarations of functions included in this code module:
 
 ATOM MyRegisterClass(CONST WNDCLASS*);
@@ -499,12 +501,25 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	char Size[80];
 	WSADATA WsaData;            // receives data from WSAStartup
 	struct RTFTerm * OPData;
+	int retCode;
+	HKEY hKey=0;
+
 
 	hInst = hInstance; // Store instance handle in our global variable
 
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
 
-		// Get saved config from ini
+	// See if running under WINE
+
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, "SOFTWARE\\Wine",  0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		RegCloseKey(hKey);
+		WINE =TRUE;
+		Debugprintf("Running under WINE");
+	}
+// Get saved config from ini
 
 	MonitorNODES = GetIntValue("MonNODES", 0);
 	MonPorts = GetIntValue("MonPorts", 0);
@@ -1410,8 +1425,8 @@ DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, LPBYTE lpBuff, LONG cb, PLON
 	int i;
 	int Line;
 
-	if (cb != 4092)
-		return 0;
+//	if (cb != 4092)
+//		return 0;
 
 	if (OPData->SendHeader)
 	{
@@ -1485,7 +1500,10 @@ VOID DoRefresh(struct RTFTerm * OPData)
 	SCROLLINFO ScrollInfo;
 	int LoopTrap = 0;
 
-	OPData->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
+	if(WINE)
+		OPData->Thumb = 30000;
+	else
+		OPData->Thumb = SendMessage(hwndOutput, EM_GETTHUMB, 0, 0);
 
 	Pos = OPData->Thumb + OutputBoxHeight;
 

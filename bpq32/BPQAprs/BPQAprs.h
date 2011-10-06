@@ -19,6 +19,7 @@ struct STATIONRECORD
     time_t TimeLastUpdated;
 	int iconRow;
 	int iconCol;			// Symbol Pointer
+	char IconOverlay;
 	int DispX;				// Position in display buffer
 	int DispY;
 

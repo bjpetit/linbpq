@@ -34,7 +34,6 @@
 #define APRS
 #include "Versions.h"
 #include "GetVersion.h"
-#define BPQICON 2
 #include "BPQAPRS.h"
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
@@ -267,7 +266,7 @@ BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
 int NewLine(HWND hWnd);
-int	ProcessBuff(HWND hWnd, UCHAR * readbuff,int len,int stamp);
+VOID	ProcessBuff(HWND hWnd, MESSAGE * buff,int len,int stamp);
 int TogglePort(HWND hWnd, int Item, int mask);
 int CopyScreentoBuffer(char * buff);
 VOID SendFrame(UCHAR * buff, int txlen);
@@ -557,8 +556,8 @@ BOOL InitApplication(HINSTANCE hInstance)
 	return RegisterClass(&wc);
 }
 
-int len,count,i;
-char msg[20];
+//int len,count,i;
+//char msg[20];
 
 HMENU hMenu,hPopMenu1,hPopMenu2,hPopMenu3;		// handle of menu 
 
@@ -891,7 +890,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	int DeltaX, DeltaY;
 	double MouseLat, MouseLon;
 	char MouseLoc[80];
-
+	int len, count;
 	int stamp;
 	int nScrollCode,nPos;
 
@@ -905,7 +904,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			
 			if (len > 0)
 			{
-				ProcessBuff(hWnd,readbuff,len,stamp);
+				ProcessBuff(hWnd, (MESSAGE*)readbuff,len,stamp);
 				if (count == 0)
 					InvalidateRect(hWnd,NULL,FALSE);
 			}
@@ -1331,24 +1330,112 @@ crcloop:
 int line=240;
 int col=0;
 
-int	ProcessBuff(HWND hWnd, UCHAR * buff,int buflen, int timestamp)
+VOID ProcessBuff(HWND hWnd, MESSAGE * buff, int buflen, int timestamp)
 {
 	int len;
 	unsigned char buffer[1024];
+	int Digis = 0;
+	MESSAGE * AdjBuff = buff;		// Adjusted for digis
+
+	// See if digipeaters present. 
+
+	while ((AdjBuff->ORIGIN[6] & 1) == 0 && Digis < 9)
+	{
+		_asm {
+			mov eax, AdjBuff
+			add eax, 7
+			mov AdjBuff, eax
+		}
+
+		Digis ++;
+	}
+
+	if (Digis > 8)
+		return;					// Corrupt
+/*
+		MOV	ECX,8			; MAX DIGIS (NOT OUR LIMIT - AX25'S)
+	PUBLIC	L2DIGI00
+L2DIGI00:
+	TEST	MSGORIGIN+6[EDI],1
+	JZ SHORT L2DIGI02		; MORE TO COME
+;
+	JMP	L2DIGI10		; END OF LIST
+
+	PUBLIC	L2DIGI02
+L2DIGI02:
+
+	ADD	EDI,7
+;
+	TEST	MSGORIGIN+6[EDI],80H	; REPEATED BIT
+	JZ SHORT L2DIGI05		; NOT SET
+
+	LOOP	L2DIGI00
+;
+;	MESSAGE CORRUPT - DISCARD IT
+;
+	JMP	L2DISCARD
+
+	PUBLIC	L2DIGI05
+L2DIGI05:
+;
+;	FRAME HAS NOT BEEN REPEATED THROUGH CURRENT DIGI -
+;	   SEE IF WE ARE MEANT TO DIGI IT
+;
+	PUSH	EDI
+	MOV	ESI,OFFSET32 _MYCALL
+	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
+ 	CALL	COMPARECALLS
+	POP	EDI
+	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
+;
+	PUSH	EDI
+	MOV	ESI,OFFSET32 MYALIAS
+	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
+ 	CALL	COMPARECALLS
+	POP	EDI
+	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
+
+	PUSH	EDI
+	LEA	ESI,PORTALIAS[EBP]
+	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
+ 	CALL	COMPARECALLS
+	POP	EDI
+	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
+
+	PUSH	EDI
+	LEA	ESI,PORTALIAS2[EBP]
+	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
+ 	CALL	COMPARECALLS
+	POP	EDI
+	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
+
+	PUBLIC	DISCARDIT
+DISCARDIT:
+	
+	JMP	L2DISCARD
+
+	PUBLIC	L2DIGIPEAT
+L2DIGIPEAT:
+
+*/
+
+
+	if (AdjBuff->CTL != 3)				// Only UI
+		return;			
 
 	// See if a NODES
 
-	if (buff[21] == 3 && buff[22] == 0xcf && buff[23] == 0xff)
-		return 0;
+	if (buff->PID == 0xcf && buff->L2DATA[0] == 0xff)
+		return ;
 
-	len=DecodeFrame(buff, buffer, timestamp);
+	len=DecodeFrame((char *)buff,  buffer, timestamp);
 
 	if (strstr(buffer, "<UI") == 0)
-		return 0;
+		return ;
 
 	ProcessRFFrame(buffer, len);
 								
-	return (0);
+	return ;
 }
 int xNewLine()
 {
@@ -1694,7 +1781,7 @@ VOID APRSISThread()
 	SOCKADDR_IN destaddr;
 	int addrlen=sizeof(sinx);
 	struct hostent * HostEnt;
-	int err;
+	int len, err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	char Buffer[1000];
@@ -1812,6 +1899,9 @@ VOID APRSISThread()
 				}
 				else
 					ptr = 0;
+
+				if (inptr < 0)
+					break;
 			}
 		}
 	}
@@ -1893,7 +1983,7 @@ VOID RefreshTile(char * FN, int TileZoom, int Tilex, int Tiley)
 
 	int StartRow, StartCol;
 	UCHAR * pbImage = NULL;
-	int x, y;
+	int x, y, i;
 
 	if (TileZoom != Zoom)
 		return;					// Zoom level has changed
@@ -2149,6 +2239,7 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 {
 	int X, Y, Pointer, i, c, index, bit, mask, calllen;
 	UINT j;
+	char Overlay;
 
 
 //	if (ptr->Lat > 60)
@@ -2177,6 +2268,65 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 			j += 337 * 3;
 		}
 
+		// If an overlay is specified, add it
+
+		Overlay = ptr->IconOverlay;
+
+		if (Overlay)
+		{
+			Pointer = ((Y - 4) * 2048 * 3) + (X * 3) - 9;
+			mask = 1;
+
+			for (index = 0 ; index < 7 ; index++)
+			{
+				Image[Pointer++] = 255;				// Blank line above chars 
+				Image[Pointer++] = 255;
+				Image[Pointer++] = 255;
+			}
+			Pointer += 2041 * 3;
+
+			for (i = 0; i < 7; i++)
+			{
+				Image[Pointer++] = 255;				// Blank col 
+				Image[Pointer++] = 255;
+				Image[Pointer++] = 255;
+
+				for (index = 0 ; index < 5 ; index++)
+				{
+					c = ASCII[Overlay - 0x20][index];	// Font data
+					bit = c & mask;
+
+
+					if (bit)
+					{
+						Image[Pointer++] = 0;
+						Image[Pointer++] = 0;
+						Image[Pointer++] = 0;
+					}
+					else
+					{
+						Image[Pointer++] = 255;
+						Image[Pointer++] = 255;
+						Image[Pointer++] = 255;
+					}
+				}
+				Image[Pointer++] = 255;				// Blank col 
+				Image[Pointer++] = 255;
+				Image[Pointer++] = 255;
+
+				mask <<= 1;
+				Pointer += 2041 * 3;
+			}
+			for (index = 0 ; index < 7 ; index++)
+			{
+				Image[Pointer++] = 255;				// Blank line above chars 
+				Image[Pointer++] = 255;
+				Image[Pointer++] = 255;
+			}
+			Pointer += 2041 * 3;
+
+		}
+		
 		calllen = strlen(ptr->Callsign) * 6 + 4;
 	
 		// Draw Callsign Box
@@ -2684,9 +2834,17 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 	}
 
 	SymChar -= '!';
+	
+	Station->IconOverlay = 0;
 
-	if (SymSet == '\\')
+	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
+	{
 		SymChar += 96;
+		Station->IconOverlay = SymSet;
+	}
+	else
+		if (SymSet == '\\')
+			SymChar += 96;
 
 	Station->iconRow = SymChar >> 4;
 	Station->iconCol = SymChar & 15;
@@ -2858,8 +3016,16 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 
 	SymChar -= '!';
 
-	if (SymSet == '\\')
+	Station->IconOverlay = 0;
+
+	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
+	{
 		SymChar += 96;
+		Station->IconOverlay = SymSet;
+	}
+	else
+		if (SymSet == '\\')
+			SymChar += 96;
 
 	Station->iconRow = SymChar >> 4;
 	Station->iconCol = SymChar & 15;

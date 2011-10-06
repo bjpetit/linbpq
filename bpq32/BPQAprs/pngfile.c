@@ -272,7 +272,8 @@ BOOL PngLoadImage (PTSTR pstrFileName, png_byte **ppbImageData,
         return FALSE;
     }
 */
-    fclose (pfFile);
+    if (pfFile)
+		fclose (pfFile);
 
     return TRUE;
 }

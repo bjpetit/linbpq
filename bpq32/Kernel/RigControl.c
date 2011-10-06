@@ -1546,7 +1546,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		return;
 	}
 
-	if (RIG->RIGOK && (RIG->ScanStopped == 0))
+	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
 		return;						// no point in reading freq if we are about to change it
 		
 	if (RIG->PollCounter)
@@ -1734,18 +1734,17 @@ SetFinished:
 	if (PORT->PORTOK == FALSE)
 	{
 		// Just come up
-		char Status[80];
+//		char Status[80];
 		
 		PORT->PORTOK = TRUE;
-		wsprintf(Status,"COM%d PORT link OK", PORT->IOBASE);
-		SetWindowText(PORT->hStatus, Status);
+//		wsprintf(Status,"COM%d PORT link OK", PORT->IOBASE);
+//		SetWindowText(PORT->hStatus, Status);
 	}
 
 	if (Msg[4] == 3)
 	{
 		// Rig Frequency
 		int n, j, Freq = 0, decdigit;
-		double FreqF;
 
 		for (j = 9; j > 4; j--)
 		{
@@ -1756,10 +1755,10 @@ SetFinished:
 			Freq = (Freq *100 ) + decdigit;
 		}
 
-		FreqF = Freq / 1000000.0;
+		RIG->RigFreq = Freq / 1000000.0;
 
 //		Valchar = _fcvt(FreqF, 6, &dec, &sign);
-		_gcvt(FreqF, 9, RIG->Valchar);
+		_gcvt(RIG->RigFreq, 9, RIG->Valchar);
  
 		wsprintf(Status,"%s", RIG->Valchar);
 		SetWindowText(RIG->hFREQ, Status);
@@ -2571,7 +2570,7 @@ PortFound:
 	RigFound:
 
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
-		if (ptr == NULL) return (FALSE);
+//		if (ptr == NULL) return (FALSE);
 	}
 	else
 	{
@@ -2589,7 +2588,7 @@ PortFound:
 	if (PORT->PortType == PTT || PORT->PortType == ANT)
 		return RIG;
 
-	if (ptr == NULL) return (FALSE);
+	if (ptr == NULL) return RIG;					// No Scanning, just Interactive control
 	
 	ScanFreq = atof(ptr);
 
