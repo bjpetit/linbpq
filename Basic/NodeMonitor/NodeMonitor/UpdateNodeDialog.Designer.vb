@@ -158,11 +158,11 @@ Partial Class UpdateNodeDialog
       '
       'Button2
       '
-      Me.Button2.Location = New System.Drawing.Point(37, 235)
+      Me.Button2.Location = New System.Drawing.Point(88, 274)
       Me.Button2.Name = "Button2"
-      Me.Button2.Size = New System.Drawing.Size(85, 52)
+      Me.Button2.Size = New System.Drawing.Size(108, 26)
       Me.Button2.TabIndex = 40
-      Me.Button2.Text = "Button2"
+      Me.Button2.Text = "Get Loc from Page"
       Me.Button2.UseVisualStyleBackColor = True
       '
       'UpdateNodeDialog

@@ -20,12 +20,14 @@ Partial Class Form1
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
       Me.components = New System.ComponentModel.Container
+      Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(Form1))
       Me.ReloadButton = New System.Windows.Forms.Button
       Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
       Me.MenuStrip1 = New System.Windows.Forms.MenuStrip
       Me.ConfigToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
       Me.ConfigMonitorToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
       Me.EditNodesListToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
+      Me.EditBPQ32NodesListToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
       Me.Label1 = New System.Windows.Forms.Label
       Me.Label2 = New System.Windows.Forms.Label
       Me.ChatDefined = New System.Windows.Forms.TextBox
@@ -41,8 +43,9 @@ Partial Class Form1
       Me.NodeLastUpdated = New System.Windows.Forms.TextBox
       Me.Label6 = New System.Windows.Forms.Label
       Me.Button1 = New System.Windows.Forms.Button
-      Me.EditBPQ32NodesListToolStripMenuItem = New System.Windows.Forms.ToolStripMenuItem
+      Me.AxBPQCtrl2 = New AxBPQCTRLLib.AxBPQCtrl
       Me.MenuStrip1.SuspendLayout()
+      CType(Me.AxBPQCtrl2, System.ComponentModel.ISupportInitialize).BeginInit()
       Me.SuspendLayout()
       '
       'ReloadButton
@@ -64,7 +67,7 @@ Partial Class Form1
       Me.MenuStrip1.Items.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ConfigToolStripMenuItem})
       Me.MenuStrip1.Location = New System.Drawing.Point(0, 0)
       Me.MenuStrip1.Name = "MenuStrip1"
-      Me.MenuStrip1.Size = New System.Drawing.Size(292, 27)
+      Me.MenuStrip1.Size = New System.Drawing.Size(292, 24)
       Me.MenuStrip1.TabIndex = 1
       Me.MenuStrip1.Text = "MenuStrip1"
       '
@@ -72,20 +75,26 @@ Partial Class Form1
       '
       Me.ConfigToolStripMenuItem.DropDownItems.AddRange(New System.Windows.Forms.ToolStripItem() {Me.ConfigMonitorToolStripMenuItem, Me.EditNodesListToolStripMenuItem, Me.EditBPQ32NodesListToolStripMenuItem})
       Me.ConfigToolStripMenuItem.Name = "ConfigToolStripMenuItem"
-      Me.ConfigToolStripMenuItem.Size = New System.Drawing.Size(67, 23)
+      Me.ConfigToolStripMenuItem.Size = New System.Drawing.Size(50, 20)
       Me.ConfigToolStripMenuItem.Text = "Config"
       '
       'ConfigMonitorToolStripMenuItem
       '
       Me.ConfigMonitorToolStripMenuItem.Name = "ConfigMonitorToolStripMenuItem"
-      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(252, 24)
+      Me.ConfigMonitorToolStripMenuItem.Size = New System.Drawing.Size(179, 22)
       Me.ConfigMonitorToolStripMenuItem.Text = "Config Monitor"
       '
       'EditNodesListToolStripMenuItem
       '
       Me.EditNodesListToolStripMenuItem.Name = "EditNodesListToolStripMenuItem"
-      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(252, 24)
+      Me.EditNodesListToolStripMenuItem.Size = New System.Drawing.Size(179, 22)
       Me.EditNodesListToolStripMenuItem.Text = "Edit Chat Nodes List"
+      '
+      'EditBPQ32NodesListToolStripMenuItem
+      '
+      Me.EditBPQ32NodesListToolStripMenuItem.Name = "EditBPQ32NodesListToolStripMenuItem"
+      Me.EditBPQ32NodesListToolStripMenuItem.Size = New System.Drawing.Size(179, 22)
+      Me.EditBPQ32NodesListToolStripMenuItem.Text = "Edit BPQ32 Nodes List"
       '
       'Label1
       '
@@ -200,17 +209,22 @@ Partial Class Form1
       Me.Button1.Text = "Button1"
       Me.Button1.UseVisualStyleBackColor = True
       '
-      'EditBPQ32NodesListToolStripMenuItem
+      'AxBPQCtrl2
       '
-      Me.EditBPQ32NodesListToolStripMenuItem.Name = "EditBPQ32NodesListToolStripMenuItem"
-      Me.EditBPQ32NodesListToolStripMenuItem.Size = New System.Drawing.Size(252, 24)
-      Me.EditBPQ32NodesListToolStripMenuItem.Text = "Edit BPQ32 Nodes List"
+      Me.AxBPQCtrl2.Enabled = True
+      Me.AxBPQCtrl2.Location = New System.Drawing.Point(215, 182)
+      Me.AxBPQCtrl2.Name = "AxBPQCtrl2"
+      Me.AxBPQCtrl2.OcxState = CType(resources.GetObject("AxBPQCtrl2.OcxState"), System.Windows.Forms.AxHost.State)
+      Me.AxBPQCtrl2.Size = New System.Drawing.Size(100, 50)
+      Me.AxBPQCtrl2.TabIndex = 15
+      Me.AxBPQCtrl2.Visible = False
       '
       'Form1
       '
       Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
       Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
       Me.ClientSize = New System.Drawing.Size(292, 367)
+      Me.Controls.Add(Me.AxBPQCtrl2)
       Me.Controls.Add(Me.Button1)
       Me.Controls.Add(Me.NodeLastUpdated)
       Me.Controls.Add(Me.Label6)
@@ -231,6 +245,7 @@ Partial Class Form1
       Me.Text = "NodeMonitor"
       Me.MenuStrip1.ResumeLayout(False)
       Me.MenuStrip1.PerformLayout()
+      CType(Me.AxBPQCtrl2, System.ComponentModel.ISupportInitialize).EndInit()
       Me.ResumeLayout(False)
       Me.PerformLayout()
 
@@ -257,5 +272,6 @@ Partial Class Form1
    Friend WithEvents Label6 As System.Windows.Forms.Label
    Friend WithEvents Button1 As System.Windows.Forms.Button
    Friend WithEvents EditBPQ32NodesListToolStripMenuItem As System.Windows.Forms.ToolStripMenuItem
+   Friend WithEvents AxBPQCtrl2 As AxBPQCTRLLib.AxBPQCtrl
 
 End Class

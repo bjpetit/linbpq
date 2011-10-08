@@ -878,6 +878,10 @@ Public Class Form1
          For Each strLine In strLines
 
             If strLine.Length < 10 Then Exit For
+            If strLine.Length > 5000 Then
+               Continue For
+            End If
+
 
             Elements = Split(strLine, ",")
 
@@ -915,7 +919,7 @@ Public Class Form1
 
                Dim t As Integer = CallsignData.Length
                Dim Callsign As String = Trim(Elements(1))
-  
+
                Dim Index As Integer = FindCallsign(Elements(1))
 
                With CallsignData(Index)
@@ -1388,8 +1392,13 @@ Public Class Form1
 
                If Nodes(i).KillTimer < 24 Then ' Not heard of for a while - don't display
 
-                  Lat = CSng(CallsignData(.CallIndex).Lat)
-                  Lon = CSng(CallsignData(.CallIndex).Lon)
+                  Try
+                     Lat = CSng(CallsignData(.CallIndex).Lat)
+                     Lon = CSng(CallsignData(.CallIndex).Lon)
+                  Catch ex As Exception
+                     Lat = 0
+                     Lon = 0
+                  End Try
 
                   If Lat = 0.0 And Lon = 0.0 Then
                      Lat = Lat + Rnd() / 24
@@ -1426,12 +1435,18 @@ Public Class Form1
                                  HTML = HTML & .Time & " " & .Freq & " " & .Flags & " <br>"
                                  If Mid(.Flags, 1, 1) = "A" Then
                                     Protocol = Protocol Or 1
+                                 ElseIf Mid(.Flags, 1, 1) = "H" Then
+                                    Protocol = Protocol Or 4
                                  Else
                                     Protocol = Protocol Or 2
                                  End If
-                              End If
+                                 End If
                            End With
                         Next
+
+                        If Protocol > 4 Then
+                           Protocol = 3         ' V4 plus anything - B
+                        End If
 
                         ' Add 'who has heard me' to popup
 
@@ -1510,6 +1525,8 @@ Public Class Form1
       Dim HeardBy As Integer
 
       NodeChanged = True
+
+      If HeardCall.Length > 9 Then Return
 
       CallIndex = FindCallsign(HeardCall)
 
@@ -1828,6 +1845,11 @@ Public Class Form1
       Next
 
       ReDim Preserve CallsignData(Count)
+
+      If Count = 1891 Then
+         Debug.Print("xx")
+
+      End If
 
       With CallsignData(Count)
 
