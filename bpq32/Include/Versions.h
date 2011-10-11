@@ -1,11 +1,11 @@
 #ifdef Kernel
 
-#define Vers 5,2,1,2
-#define Verstring "5.2.1.2\0"
-#define TextVerstring "V5.2.1.2\0"
+#define Vers 5,2,1,3
+#define Verstring "5.2.1.3\0"
+#define TextVerstring "V5.2.1.3\0"
 #define Datestring "October 2011"
 //#define SPECIALVERSION "Test 1"
-#define VerComments "G8BPQ Packet Switch V5.2.1.2\0"
+#define VerComments "G8BPQ Packet Switch V5.2.1.3\0"
 #define VerCopyright "Copyright © 2001-2011 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 

@@ -53,6 +53,8 @@ extern HKEY REGTREE;
 
 static RECT Rect;
 
+extern short L4LIMIT;
+
 extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 #define MaxSockets 26
@@ -346,7 +348,7 @@ lineloop:
 	{
 		//	copy text to file a line at a time	
 					
-		ptr2=memchr(ptr1,13,Len);
+		ptr2 = memchr(ptr1, 13 , Len);
 
 		if (ptr2)
 		{
@@ -386,13 +388,15 @@ lineloop:
 			goto lineloop;
 		}
 
+		// No CR
+
 		for (i = 0; i < Len; i++)
 		{
 			if (ptr1[i] > 127)
 				break;
 		}
 
-		if (i == Len)
+		if (i == Len)			// No binary data
 		{
 			if (strlen(ptr1) < 100)
 			{
@@ -419,7 +423,22 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 1:				// poll
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
-		{
+		{	
+			struct TRANSPORTENTRY * SESS;
+			struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
+
+			if (sockptr && sockptr->UserPointer == &CMSUser)	// Connected to CMS
+			{
+				SESS = TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number];
+
+				if (SESS)
+				{
+					n = SESS->L4KILLTIMER;
+					if (n < (L4LIMIT - 120))
+						SESS->L4KILLTIMER = L4LIMIT - 120;
+				}
+			}
+
 			STREAM = &TNC->Streams[Stream];
 
 			if (STREAM->NeedDisc)
@@ -2330,6 +2349,7 @@ int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SO
 
 	MsgPtr = &sockptr->InputBuffer[0];
 	InputLen = sockptr->InputLen;
+	MsgPtr[InputLen] = 0;
 
 MsgLoop:
 
@@ -2360,6 +2380,14 @@ MsgLoop:
 
 		if (sockptr->UserPointer == &CMSUser)
 			WritetoTrace(Stream, MsgPtr, InputLen);
+
+		if (InputLen == 8 && memcmp(MsgPtr, ";;;;;;\r\n", 8) == 0)
+		{
+			//	CMS Keepalive
+
+			sockptr->InputLen = 0;
+			return 0;
+		}
 
 		// Send to Node
 

@@ -1,7 +1,6 @@
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
 
-
 #define MARGIN 0
 
 // standard includes
@@ -19,9 +18,7 @@
 
 #include <setjmp.h>
 
-
 #define M_PI       3.14159265358979323846
-
 
 // application includes
 
@@ -40,7 +37,7 @@ int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
 int PageCount;
 
-int PortNum[33];		// Tab nunber to port
+int PortNum[33];				// Tab nunber to port
 
 UINT UIPortMask = 0;
 BOOL UIEnabled[33];
@@ -51,6 +48,23 @@ int UIDigiLen[33];			// Length of AX string
 char UIDEST[33][11];		// Dest for Beacons
 
 char AXDEST[33][7];
+
+char * APRSCall;
+
+int GPSPort;
+int GPSSpeed;
+
+char * FloodCalls;			// Calls to relay using n-n without tracing
+char * TraceCalls;			// Calls to relay using n-n with tracing
+char * DigiCalls;			// Calls for normal relaying
+
+char * StatusMsg;
+char * BeaconPath;
+BOOL TraceDigi;				// Add Trace to packets relayed on Digi Calls
+
+
+int MaxTraceHops;
+int MaxFloodHops;
 
 RECT Rect;
 
@@ -253,9 +267,9 @@ char szTitle[80]   = "BPQAPRS" ; // The title bar text
 
 BOOL APRSISOpen = FALSE;
 
-int StationCount=0;
+int StationCount = 0;
 
-struct STATIONRECORD ** StationRecords;
+struct STATIONRECORD ** StationRecords = NULL;
 
 struct OSMQUEUE OSMQueue = {NULL,0,0,0};
 
@@ -294,18 +308,15 @@ VOID RefreshTile(char * FN, int Zoom, int x, int y);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
 
-SOCKADDR_IN destaddr;
+SOCKADDR_IN destaddr = {0};
 
-unsigned int ipaddr;
+unsigned int ipaddr = 0;
 
 unsigned short port = 10091;
 UCHAR BPQPort = 7;
 
 char Host[] = "tile.openstreetmap.org";
 
-char Screen[22000];
-char readbuff[512];
-int baseline=216;
 int Stream;
 
 extern short CRCTAB;
@@ -529,7 +540,18 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		RegCloseKey(hKey);
 	}
 
+	if (FloodCalls)
+		free(FloodCalls);
+
+	if (TraceCalls)
+		free(TraceCalls);
+
+	if (DigiCalls)
+		free(DigiCalls);
+
 //	KillTimer(NULL, TimerHandle);
+
+	_CrtDumpMemoryLeaks();
 
 	return (msg.wParam);
 }
@@ -575,6 +597,17 @@ HBRUSH bgBrush;
 
 #define BGCOLOUR RGB(236,233,216)
 
+VOID GetStringVal(HKEY hKey, char * Key, char ** Val)
+{
+	int Vallen = 0, Type;
+	int retCode = RegQueryValueEx(hKey, Key, 0, &Type, (UCHAR *)Val, &Vallen);
+
+	if(Vallen)
+	{
+		*Val = malloc(Vallen + 1);
+		retCode = RegQueryValueEx(hKey, Key, 0, &Type, *Val, &Vallen);
+	}
+}
 	
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -611,8 +644,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 			(ULONG *)&Type,(UCHAR *)&tempmask,(ULONG *)&Vallen);
 
 		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"Zoom",0,			
-			(ULONG *)&Type,(UCHAR *)&Zoom,(ULONG *)&Vallen);
+		retCode = RegQueryValueEx(hKey,"Zoom",0, (ULONG *)&Type,(UCHAR *)&Zoom,(ULONG *)&Vallen);
 
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"SetBaseX",0,			
@@ -636,14 +668,30 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 		sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
 
+		GetStringVal(hKey, "APRSCall", &APRSCall);
+		GetStringVal(hKey, "StatusMsg", &StatusMsg);
+		GetStringVal(hKey, "BeaconPath", &BeaconPath);
+		GetStringVal(hKey, "TraceCalls", &TraceCalls);
+		GetStringVal(hKey, "FloodCalls", &FloodCalls);
+		GetStringVal(hKey, "DigiCalls", &DigiCalls);
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "GPSPort", 0, (ULONG *)&Type, (UCHAR *)&GPSPort, (ULONG *)&Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "GPSSpeed", 0, (ULONG *)&Type, (UCHAR *)&GPSSpeed, (ULONG *)&Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "MaxTraceHops", 0, (ULONG *)&Type, (UCHAR *)&MaxTraceHops, (ULONG *)&Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "MaxFloodHops", 0, (ULONG *)&Type, (UCHAR *)&MaxFloodHops, (ULONG *)&Vallen);
+
 		RegCloseKey(hKey);
 	}
 
 
 	if (BPQDirectory[0] == 0)
-		wsprintf(OSMDir, "OSMTiles");
+		wsprintf(OSMDir, "BPQAPRS/OSMTiles");
 	else
-		wsprintf(OSMDir,"%s\\OSMTiles", BPQDirectory);
+		wsprintf(OSMDir,"%s/BPQAPRS/OSMTiles", BPQDirectory);
 
 	if (BPQDirectory[0] == 0)
 		wsprintf(Symbols, "BPQAPRS/Symbols.png");
@@ -656,6 +704,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	
 	LoadImageFile (NULL, Symbols, &iconImage, &ImgSizeX, &ImgSizeY, &ImgChannels, &bgColor);
 
+	if (iconImage == NULL)
+	{
+		MessageBox(NULL, "Couldn't Icon File Symbols.png", "BPQAPRS", MB_OK);
+		return (FALSE);
+	}
+	
 	hInst = hInstance; // Store instance handle in our global variable
 
 	hWnd = CreateWindow(szAppName, szTitle,
@@ -694,8 +748,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 	
 	SetTimer(hWnd,1,10000,NULL);
-
-	memset(Screen, ' ', 20000); 
 
 	for (Stream = 63; Stream > 0; Stream--)
 	{
@@ -736,7 +788,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu1,"Ports");
-	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu2,"Flags");
+	AppendMenu(hMenu, MF_STRING, IDM_CONFIG, "Basic Setup");
+//	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu2,"Basic Setup");
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu3,"Help");
 
 	for (i=1;i <= GetNumberofPorts();i++)
@@ -856,6 +909,95 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 	return (INT_PTR)FALSE;
 }
 
+int  SaveIntValtoReg(HWND hDlg, int Item, HKEY hKey, char * Key)
+{
+	int OK;
+	int Val = GetDlgItemInt(hDlg, Item, &OK, FALSE);
+
+	RegSetValueEx(hKey, Key, 0, REG_DWORD, (UCHAR *)&Val, 4);
+
+	return Val;
+}
+
+
+VOID SaveStringValtoReg(HWND hDlg, int Item, HKEY hKey, char * Key, char ** Val)
+{
+	int MsgLen = SendDlgItemMessage(hDlg, Item, WM_GETTEXTLENGTH, 0 ,0);
+
+	if (*Val)
+		free(*Val);
+
+	*Val = malloc(MsgLen+1);
+	GetDlgItemText(hDlg, Item, *Val, MsgLen+1);
+
+	RegSetValueEx(hKey, Key, 0, REG_SZ, *Val, strlen(*Val) + 1);
+
+}
+
+INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+		if (APRSCall)
+			SetDlgItemText(hDlg, IDC_MYCALL, APRSCall);
+		if (StatusMsg)
+			SetDlgItemText(hDlg, IDC_STATUSTEXT, StatusMsg);
+		if (BeaconPath)
+			SetDlgItemText(hDlg, IDC_PATH, BeaconPath);
+		if (FloodCalls)
+			SetDlgItemText(hDlg, IDC_UIFLOOD, FloodCalls);
+		if (TraceCalls)
+			SetDlgItemText(hDlg, IDC_UITRACE, TraceCalls);
+		if (DigiCalls)
+			SetDlgItemText(hDlg, IDC_UIDIGI, DigiCalls);
+
+		SetDlgItemInt(hDlg, IDC_GPSPORT, GPSPort, FALSE);
+		SetDlgItemInt(hDlg, IDC_GPSBAUD, GPSSpeed, FALSE);
+		SetDlgItemInt(hDlg, IDC_TRACEMAXN, MaxTraceHops, FALSE);
+		SetDlgItemInt(hDlg, IDC_FLOODMAXN, MaxFloodHops, FALSE);
+
+
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+
+		if (LOWORD(wParam) == IDOK)
+		{
+			// Save Config
+
+			HKEY hKey;
+
+			int retCode = RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS", 0, KEY_ALL_ACCESS, &hKey);
+
+			SaveStringValtoReg(hDlg, IDC_MYCALL, hKey, "APRSCall" , &APRSCall);
+			SaveStringValtoReg(hDlg, IDC_STATUSTEXT, hKey, "StatusMsg" , &StatusMsg);
+			SaveStringValtoReg(hDlg, IDC_PATH, hKey, "BeaconPath" , &BeaconPath);
+
+			SaveStringValtoReg(hDlg, IDC_UIDIGI, hKey, "DigiCalls" , &DigiCalls);
+			SaveStringValtoReg(hDlg, IDC_UITRACE, hKey, "TraceCalls" , &TraceCalls);
+			SaveStringValtoReg(hDlg, IDC_UIFLOOD, hKey, "FloodCalls" , &FloodCalls);
+
+			GPSPort = SaveIntValtoReg(hDlg, IDC_GPSPORT, hKey, "GPSPort");
+			GPSSpeed = SaveIntValtoReg(hDlg, IDC_GPSBAUD, hKey, "GPSSpeed");
+			MaxTraceHops = SaveIntValtoReg(hDlg, IDC_TRACEMAXN, hKey, "MaxTraceHops");
+			MaxFloodHops = SaveIntValtoReg(hDlg, IDC_FLOODMAXN, hKey, "MaxFloodHops");
+
+			RegCloseKey(hKey);
+		}
+
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
 
 
 //
@@ -886,13 +1028,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	int wmId, wmEvent;
 	PAINTSTRUCT ps;
 	HDC hdc;
-	HGLOBAL	hMem;
+//	HGLOBAL	hMem;
 	int DeltaX, DeltaY;
 	double MouseLat, MouseLon;
 	char MouseLoc[80];
 	int len, count;
 	int stamp;
 	int nScrollCode,nPos;
+	char readbuff[512];
 
 	if (message == BPQMsg)
 	{
@@ -900,11 +1043,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			do {
 		
-			stamp=GetRaw(Stream, readbuff,&len,&count);
+			stamp=GetRaw(Stream, readbuff, &len, &count);
 			
 			if (len > 0)
 			{
-				ProcessBuff(hWnd, (MESSAGE*)readbuff,len,stamp);
+				ProcessBuff(hWnd, (MESSAGE*)readbuff, len, stamp);
 				if (count == 0)
 					InvalidateRect(hWnd,NULL,FALSE);
 			}
@@ -1115,7 +1258,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			nScrollCode = (int) LOWORD(wParam); // scroll bar value 
 			nPos = (short int) HIWORD(wParam);  // scroll box position 
 
-			//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
+/*			//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
 
 			if (nScrollCode == 0)
 			{
@@ -1132,7 +1275,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 
 			SetScrollPos(hWnd,SB_VERT,baseline,TRUE);
-
+*/
 			InvalidateRect(hWnd,NULL,FALSE);
 			break;
 		
@@ -1266,11 +1409,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 				break;
 			
+			case IDM_CONFIG:
+
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_BASICSETUP), hWnd, ConfigWndProc);
+				break;
+			
 			case BPQCOPY:
 		
 				//
 				//	Copy buffer to clipboard
 				//
+/*
 				hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE,sizeof(Screen));
 		
 				if (hMem != 0)
@@ -1288,6 +1437,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						GlobalFree(hMem);
 					}
 				}
+*/
 				break;
 			}
 
@@ -1296,7 +1446,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	return (0);
 }
-
+/*
 unsigned short int compute_crc(unsigned char *buf,int len)
 {
 	int fcs;
@@ -1326,9 +1476,17 @@ crcloop:
 	return (fcs);
 }
 
-
+*/
 int line=240;
 int col=0;
+
+VOID CheckDigi(MESSAGE * buff, UCHAR * DigiCall)
+{
+	char Digi[8];
+
+	memcpy(Digi, DigiCall, 7);
+	Digi[6] &= 0x1e;			// Mask non-ssid bits
+}
 
 VOID ProcessBuff(HWND hWnd, MESSAGE * buff, int buflen, int timestamp)
 {
@@ -1336,8 +1494,11 @@ VOID ProcessBuff(HWND hWnd, MESSAGE * buff, int buflen, int timestamp)
 	unsigned char buffer[1024];
 	int Digis = 0;
 	MESSAGE * AdjBuff = buff;		// Adjusted for digis
+	BOOL FirstUnused = FALSE;
 
 	// See if digipeaters present. 
+
+	len=DecodeFrame((char *)buff,  buffer, timestamp);
 
 	while ((AdjBuff->ORIGIN[6] & 1) == 0 && Digis < 9)
 	{
@@ -1346,8 +1507,16 @@ VOID ProcessBuff(HWND hWnd, MESSAGE * buff, int buflen, int timestamp)
 			add eax, 7
 			mov AdjBuff, eax
 		}
-
 		Digis ++;
+
+		if (FirstUnused == FALSE && (AdjBuff->ORIGIN[6] & 0x80) == 0)
+		{
+			// Unused Digi - see if we should digi it
+
+			FirstUnused = TRUE;
+			CheckDigi(buff, AdjBuff->ORIGIN);
+		}
+
 	}
 
 	if (Digis > 8)
@@ -1437,43 +1606,7 @@ L2DIGIPEAT:
 								
 	return ;
 }
-int xNewLine()
-{
-	while (col <80)
-		Screen[line*80+col++] = ' ';
-	
-	col=0;
-	line++;
-	if (line >= 250)
-	{
-		line=0;
-	}
 
-	baseline=line-25;
-
-	if (baseline<0)
-		baseline=baseline+249;
-
-	return (0);
-}
-
-int NewLine(HWND hWnd)
-{
-
-	col=0;
-	line++;
-	if (line > 240)
-	{
-		memmove(Screen,Screen+80,19200);
-		memset(Screen+19200,' ',80);
-		line=240;
-		baseline=216;
-	}
-
-		SetScrollPos(hWnd,SB_VERT,baseline,TRUE);
-
-	return (0);
-}
 
 int TogglePort(HWND hWnd, int Item, int mask)
 {
@@ -1491,41 +1624,6 @@ int TogglePort(HWND hWnd, int Item, int mask)
 
     return (0);
   
-}
-
-int CopyScreentoBuffer(char * buff)
-{
-	int i,j;
-	char line [82];
-	
-	for (i=0;i != 241; i++)
-	{
-		memcpy(line,&Screen[i*80],80);
-		
-		//
-		//	scan line backwards, and replace last space with crlf
-		//
-
-		for (j=79;j != -1; j--)
-		{
-			if (line[j] == ' ')
-				continue;
-
-			if (j == -1)
-				break;			// Ignore blank lines
-
-			j++;
-			line[j++] = '\r';
-			line[j++] = '\n';
-		
-			memcpy(buff,line,j);
-			buff+=j;
-
-			break;
-		}
-	}
-
-	return (0);
 }
 
 VOID ResolveThread()
@@ -1622,6 +1720,11 @@ VOID OSMThread()
 		wsprintf(Tile, "/%02d/%d/%d.png", Zoom, x, y);
 		wsprintf(FN, "%s%s", OSMDir, Tile);
 
+		if (GetFileAttributes(FN) != INVALID_FILE_ATTRIBUTES)
+		{
+			Debugprintf(" File %s Exists - skipping", FN);
+			continue;
+		}
 
 		Len = wsprintf(Request, "GET %s HTTP/1.0\r\n", Tile);
 
@@ -1717,23 +1820,20 @@ VOID OSMThread()
 										// Invalid Path
 									
 										char * Dir = _strdup(FN);
-										ptr = strchr(Dir,'/');
-										if (ptr)
+										int Len = strlen(Dir);
+
+										while (Len && Dir[Len] != '/' && Dir[Len] != '\\')
 										{
-											ptr = strchr(++ptr,'/');
-											if (ptr)
-											{
-												ptr = strchr(++ptr,'/');
-												*ptr = 0;
-												CreateDirectory(Dir, NULL);
-												Handle = CreateFile(FN, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+											Len --;
+										}
+										Dir[Len] = 0;
+										CreateDirectory(Dir, NULL);
+										Handle = CreateFile(FN, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	
-												if (Handle != INVALID_HANDLE_VALUE)
-												{
-													WriteFile(Handle ,ptr , FileLen, &cnt, NULL);
-													CloseHandle(Handle);
-												}
-											}
+										if (Handle != INVALID_HANDLE_VALUE)
+										{
+											WriteFile(Handle ,ptr , FileLen, &cnt, NULL);
+											CloseHandle(Handle);
 										}
 										free(Dir);
 									}
@@ -1975,6 +2075,10 @@ VOID LoadImageSet(int Zoom, int startx, int starty)
 			}
 		}
 	}
+
+	if (pbImage)
+		free(pbImage);
+
 }
 
 VOID RefreshTile(char * FN, int TileZoom, int Tilex, int Tiley)
@@ -2022,6 +2126,8 @@ VOID RefreshTile(char * FN, int TileZoom, int Tilex, int Tiley)
 		else
 			memset(&Image[((StartRow +i) * 2048 * 3) + StartCol], 0x80, 768);
 	}
+	if (pbImage)
+		free(pbImage);
 }
 
 BOOL LoadImageFile (HWND hwnd, PTSTR pstrPathName,
@@ -2613,6 +2719,8 @@ void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, doubl
 
 //   Not found - add on end
 
+	EnterCriticalSection(&Crit);
+
 	if (StationCount == 0)
 
 		StationRecords = malloc(4);
@@ -2630,6 +2738,8 @@ void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, doubl
 	ptr->TimeAdded = time(NULL);
 
 	StationCount++;
+
+	LeaveCriticalSection(&Crit);
 
 	UpdateStation(Call, "", "", V_Lat, V_Lon, V_SOG, V_COG, iconRow, iconCol);
 

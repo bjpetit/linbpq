@@ -447,8 +447,8 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 	if (TNC->PacketChannels > MaxStreams)
 		TNC->PacketChannels = MaxStreams;
 
-	PortEntry->MAXHOSTMODESESSIONS = 1; //TNC->PacketChannels + 1;
-	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
+	PortEntry->MAXHOSTMODESESSIONS = 1;				//TNC->PacketChannels + 1;
+	PortEntry->PERMITGATEWAY = TRUE;				// Can change ax.25 call on each stream
 	PortEntry->SCANCAPABILITIES = NONE;				// Scan Control 3 stage/conlock 
 
 	TNC->PortRecord = PortEntry;

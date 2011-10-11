@@ -1425,7 +1425,7 @@ Tell_Sessions()
 
 HANDLE hInstance=0;
 
-char pgm[256];		// Uninitialised
+char pgm[256];		// Uninitialised so per process
 
 int xx = sizeof(struct ROUTE);
 
@@ -1842,27 +1842,34 @@ VOID SetupBPQDirectory()
 	}
 	else
 	{
-		// If necessary, move reg from HKEY_LOCAL_MACHINE to HKEY_CURRENT_USER
+		if (_stricmp(pgm, "regsvr32.exe") == 0)
+		{
+			Debugprintf("BPQ32 loaded by regsvr32.exe - Registry not copied");
+		}
+		else
+		{
+			// If necessary, move reg from HKEY_LOCAL_MACHINE to HKEY_CURRENT_USER
 
-		retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
-                              "SOFTWARE\\G8BPQ\\BPQ32",
-                              0,
-                              KEY_READ,
-                              &hKeyIn);
+			retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE,
+				                  "SOFTWARE\\G8BPQ\\BPQ32",
+					              0,
+						          KEY_READ,
+							      &hKeyIn);
 
-		retCode = RegCreateKeyEx(HKEY_CURRENT_USER, "SOFTWARE\\G8BPQ\\BPQ32", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKeyOut, &disp);
+			retCode = RegCreateKeyEx(HKEY_CURRENT_USER, "SOFTWARE\\G8BPQ\\BPQ32", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKeyOut, &disp);
 
-		// See if Version Key exists in HKEY_CURRENT_USER - if it does, we have already done the copy
+			// See if Version Key exists in HKEY_CURRENT_USER - if it does, we have already done the copy
 
-		Vallen = MAX_PATH;
-		retCode = RegQueryValueEx(hKeyOut, "Version" ,0 , &Type,(UCHAR *)&msg, &Vallen);
+			Vallen = MAX_PATH;
+			retCode = RegQueryValueEx(hKeyOut, "Version" ,0 , &Type,(UCHAR *)&msg, &Vallen);
 
-		if (retCode != ERROR_SUCCESS)
-			if (hKeyIn)
-				CopyReg(hKeyIn, hKeyOut);
+			if (retCode != ERROR_SUCCESS)
+				if (hKeyIn)
+					CopyReg(hKeyIn, hKeyOut);
 
-		RegCloseKey(hKeyIn);
-		RegCloseKey(hKeyOut);
+			RegCloseKey(hKeyIn);
+			RegCloseKey(hKeyOut);
+		}
 	}
 
 	GetModuleFileName(hInstance,DLLName,256);
@@ -1953,12 +1960,21 @@ VOID SetupBPQDirectory()
 	msg[i-1]=0;
 	OutputDebugString(msg);
 
-	retCode = RegCreateKeyEx(REGTREE, "SOFTWARE\\G8BPQ\\BPQ32", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	// Don't write the Version Key if loaded by regsvr32.exe (Installer is runnin with Admin)
 
-	wsprintf(msg,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
-	retCode = RegSetValueEx(hKey, "Version",0, REG_SZ,(BYTE *)msg, strlen(msg) + 1);
+	if (_stricmp(pgm, "regsvr32.exe") == 0)
+	{
+		Debugprintf("BPQ32 loaded by regsvr32.exe - Version String not written");
+	}
+	else
+	{
+		retCode = RegCreateKeyEx(REGTREE, "SOFTWARE\\G8BPQ\\BPQ32", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
-	RegCloseKey(hKey);
+		wsprintf(msg,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
+		retCode = RegSetValueEx(hKey, "Version",0, REG_SZ,(BYTE *)msg, strlen(msg) + 1);
+
+		RegCloseKey(hKey);
+	}
 	return;	
 }
 
@@ -2544,7 +2560,7 @@ DllExport UCHAR * APIENTRY GetBPQDirectory()
 
 DllExport UCHAR * APIENTRY GetProgramDirectory()
 {
-	return (&BPQDirectory[0]);
+	return (&BPQProgramDirectory[0]);
 }
 
 // Version for Visual Basic

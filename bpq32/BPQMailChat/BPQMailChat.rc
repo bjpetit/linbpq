@@ -166,7 +166,7 @@ FONT 8, "System"
 BEGIN
     LTEXT           "BBS Call is the base callsign, without SSID. This is not necessarily the same as the Application Callsign defined in the BPQ32 configuration. SYSOP Call is the callsign used by the local console.",
                     IDC_STATIC,10,4,354,23
-    LTEXT           "The Application Number defines which BPQ32 Application gives access to the BBS. Note this is the APPLNumber (1-8) not an Application Mask, as used in many BPQ32 programs.",
+    LTEXT           "The Application Number defines which BPQ32 Application gives access to the BBS. Note this is the APPLNumber (1-32) not an Application Mask, as used in many BPQ32 programs.",
                     IDC_STATIC,10,27,353,18
     LTEXT           "The eMail Server Params configure the NNTP, SMTP and POP3 Servers, which allow  normal Internet email and News clients to get messages from, and post mesages to the BBS. If you don't want to use this, set them to zero.",
                     IDC_STATIC,8,52,357,27
@@ -174,7 +174,7 @@ BEGIN
                     IDC_STATIC,10,81,358,15
     LTEXT           "BBS Call",IDC_STATIC,7,105,37,12
     EDITTEXT        IDC_BBSCall,83,103,47,14,ES_UPPERCASE
-    LTEXT           "SYSOP Call",IDC_STATIC,137,105,42,12
+    LTEXT           "SYSOP Call",IDC_STATIC,139,105,42,12
     EDITTEXT        IDC_SYSOPCALL,188,103,42,14,ES_UPPERCASE
     CONTROL         "Send SYSTEM Msgs to SYSOP call",IDC_SYSTOSYSOPCALL,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,237,
@@ -182,11 +182,11 @@ BEGIN
     LTEXT           "H Route",IDC_STATIC,7,122,37,12
     EDITTEXT        IDC_HRoute,83,120,119,13,ES_UPPERCASE
     LTEXT           "Base Directory",IDC_STATIC,7,137,66,12
-    EDITTEXT        IDC_BaseDir,83,137,212,14
+    EDITTEXT        IDC_BaseDir,83,137,212,14,ES_READONLY
     LTEXT           "BBS Appl Number",IDC_STATIC,7,156,61,10
-    EDITTEXT        IDC_BBSAppl,83,154,29,14
-    LTEXT           "BBS Streams",IDC_STATIC,157,156,45,10
-    EDITTEXT        IDC_BBSStreams,208,155,29,14
+    EDITTEXT        IDC_BBSAppl,83,154,29,12
+    LTEXT           "Streams",IDC_STATIC,171,156,32,10
+    EDITTEXT        IDC_BBSStreams,205,154,29,12
     CONTROL         "Refuse Bulls",IDC_REFUSEBULLS,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,264,156,53,10
     CONTROL         "Enable FBB UI System",IDC_ENABLEUI,"Button",
@@ -212,6 +212,7 @@ END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
 STYLE WS_CHILD
+FONT 8, "System"
 BEGIN
     LTEXT           "Chat Appl Number",-1,115,109,61,8
     EDITTEXT        2001,185,106,29,14
@@ -219,7 +220,7 @@ BEGIN
     EDITTEXT        2002,185,125,87,88,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
     DEFPUSHBUTTON   "Save",2100,172,226,50,14,BS_CENTER | BS_VCENTER
-    LTEXT           "The Application Number defines which BPQ32 Application gives access to the Chat Server. Note this is the APPLNumber (1-8) not an Application Mask, as uses in many BPQ32 programs.",
+    LTEXT           "The Application Number defines which BPQ32 Application gives access to the Chat Server. Note this is the APPLNumber (1-32) not an Application Mask, as uses in many BPQ32 programs.",
                     -1,10,10,353,18
     LTEXT           "The Nodes to link to box defines which other Chat Nodes should be connected to, or from which connections may be accepted. The format is ALIAS:CALL, eg BPQCHT:G8BPQ-4. Note these must be directly connectable - ie in your NODES table.",
                     -1,10,30,355,25

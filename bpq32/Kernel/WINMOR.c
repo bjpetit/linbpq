@@ -453,6 +453,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 					free(TNC->ConnectCmd);
 
+					wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
+					SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
 				}
 			}
 		}
@@ -872,6 +875,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					{
 						// Save Command, and wait up to 10 secs
 
+						
+						wsprintf(Status, "Waiting for clear channel");
+						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
 						TNC->ConnectCmd = _strdup(Connect);
 						TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
 						return 0;
@@ -1155,6 +1162,9 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	if (TNC->BusyWait == 0)
 		TNC->BusyWait = 10;
+
+	if (TNC->BusyHold == 0)
+		TNC->BusyHold = 1;
 
 	if (TNC->RigConfigMsg)
 	{

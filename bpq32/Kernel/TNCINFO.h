@@ -454,6 +454,11 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 #define Report_P23 15
 #define Report_P3 16
 
+#define Report_P1234 17
+#define Report_P234 18
+#define Report_P34 19
+
+
 #define Report_WINMOR500 21
 #define Report_WINMOR1600 22  
 

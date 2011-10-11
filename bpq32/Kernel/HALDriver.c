@@ -467,6 +467,7 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 		free(SaveRigConfig);
 	}
 
+	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->MAXHOSTMODESESSIONS = 1;		// Default
 

@@ -692,7 +692,8 @@
 
 // Changes to program error reporting.
 // BBS "Returh to Node" command added
-// Move config to "Standard" location (BPQ Directory/BPQMailChat.
+// Move config to "Standard" location (BPQ Directory/BPQMailChat) .
+// Fix crash if "Edit Message" clicked with no message selected.
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -2296,6 +2297,26 @@ PSOCKADDR_IN psin;
 
 SOCKET sock;
 
+VOID SetProperBaseDir(char * ProperBaseDir)
+{	
+	HKEY hKey=0;
+	int retCode,disp;
+				
+	strcpy(BaseDir, ProperBaseDir);
+	strcpy(BaseDirRaw, ProperBaseDir);
+
+	retCode = RegCreateKeyEx(REGTREE,
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
+	if (retCode == ERROR_SUCCESS)
+	{		
+		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDirRaw, strlen(BaseDirRaw));
+		RegCloseKey(hKey);
+	}
+}
+
+	
+
 BOOL Initialise()
 {
 	int i, ptr, len;
@@ -2306,7 +2327,7 @@ BOOL Initialise()
 	int Attrs, ret;
 	char msg[MAX_PATH + 50];
 	char ProperBaseDir[MAX_PATH];
-
+	char ProgramDir[MAX_PATH];
 
 	//	Register message for posting by BPQDLL
 
@@ -2317,47 +2338,23 @@ BOOL Initialise()
 
 	wsprintf(SignoffMsg, "73 de %s\r", BBSName);
 
-	// Make Sure BASEDIR Exists
-
-	Attrs = GetFileAttributes(BaseDir);
-
-	if (Attrs == -1)
-	{
-		sprintf_s(msg, sizeof(msg), "Base Directory %s not found - should it be created?", BaseDir);
-		ret = MessageBox(NULL, msg, "BPQMailChat", MB_YESNO);
-
-		if (ret == IDYES)
-		{
-			ret = CreateDirectory(BaseDir, NULL);
-			if (ret == 0)
-			{
-				MessageBox(NULL, "Failed to created Base Directory - exiting", "BPQMailChat", MB_ICONSTOP);
-				return FALSE;
-			}
-		}
-		else
-		{
-			MessageBox(NULL, "Can't Continue without a Base Directory - exiting", "BPQMailChat", MB_ICONSTOP);
-			return FALSE;
-		}
-	}
-	else
-	{
-		if (!(Attrs & FILE_ATTRIBUTE_DIRECTORY))
-		{
-			sprintf_s(msg, sizeof(msg), "Base Directory %s is a file not a directory - exiting", BaseDir);
-			ret = MessageBox(NULL, msg, "BPQMailChat", MB_ICONSTOP);
-
-			return FALSE;
-		}
-	}
-
-	// If BaseDir is not the same as BPQ Directory/BPQMailChat move the files.
+	// See if we need to warn of possible problem with BaseDir moved by installer
 
 	wsprintf(ProperBaseDir, "%s\\BPQMailChat", GetBPQDirectory());
 	
 	len = strlen(ProperBaseDir);
 	ptr1 = ProperBaseDir;
+
+	while (*ptr1)
+	{
+		if (*(ptr1) == '/') *(ptr1) = '\\';
+		ptr1++;
+	}
+
+	wsprintf(ProgramDir, "%s\\BPQMailChat", GetProgramDirectory());
+	
+	len = strlen(ProgramDir);
+	ptr1 = ProgramDir;
 
 	while (*ptr1)
 	{
@@ -2373,6 +2370,78 @@ BOOL Initialise()
 		if (*(ptr1) == '/') *(ptr1) = '\\';
 		ptr1++;
 	}
+
+	// If  BPQ Directory is not the same as BPQ Program Directory, and BaseDir is not the same as 
+	// either, warn user and exit.
+
+	if (_stricmp(ProgramDir, ProperBaseDir))			// Different?
+	{
+		if (_stricmp(BaseDir, ProperBaseDir) && _stricmp(BaseDir, ProgramDir))			// Different?
+		{
+			sprintf_s(msg, sizeof(msg), "BPQMailChat files may not be in the correct location\r\nPlease check that they are at %s, and move them if they are not\r\n\r\nPress OK when files are in the correct location, or Cancel to exit", ProperBaseDir);
+			ret = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+
+			if (ret == IDCANCEL)
+				return FALSE;
+
+			// User says they are ok - set BaseDir to ProperBaseDir
+			
+			SetProperBaseDir(ProperBaseDir);
+		}
+
+		// If BaseDir is same as ProgramDir (but not ProperBaseDir), It is likely the installer has just moved it
+
+		if (_stricmp(BaseDir, ProgramDir) == 0)			// Different?
+		{
+			SetProperBaseDir(ProperBaseDir);
+		}
+	}
+
+	// Make Sure BASEDIR Exists
+
+	Attrs = GetFileAttributes(BaseDir);
+
+	if (Attrs == -1)
+	{
+		Attrs = GetFileAttributes(ProperBaseDir);		// May have been moved by install
+
+		if (Attrs != -1)
+		{			
+			SetProperBaseDir(ProperBaseDir);
+		}
+		else
+		{
+			sprintf_s(msg, sizeof(msg), "Base Directory %s not found - should it be created?", BaseDir);
+			ret = MessageBox(NULL, msg, "BPQMailChat", MB_YESNO);
+
+			if (ret == IDYES)
+			{
+				ret = CreateDirectory(BaseDir, NULL);
+				if (ret == 0)
+				{
+					MessageBox(NULL, "Failed to created Base Directory - exiting", "BPQMailChat", MB_ICONSTOP);
+					return FALSE;
+				}
+			}
+			else
+			{
+				MessageBox(NULL, "Can't Continue without a Base Directory - exiting", "BPQMailChat", MB_ICONSTOP);
+				return FALSE;
+			}
+		}
+	}
+	else
+	{
+		if (!(Attrs & FILE_ATTRIBUTE_DIRECTORY))
+		{
+			sprintf_s(msg, sizeof(msg), "Base Directory %s is a file not a directory - exiting", BaseDir);
+			ret = MessageBox(NULL, msg, "BPQMailChat", MB_ICONSTOP);
+
+			return FALSE;
+		}
+	}
+
+	// If BaseDir is not the same as BPQ Directory/BPQMailChat move the files.
 
 	if (_stricmp(BaseDir, ProperBaseDir))				// Different?
 	{
@@ -2441,7 +2510,7 @@ BOOL Initialise()
 					
 			if (ret == 0 || ExitCode != 0)
 			{
-				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", GetLastError());
+				sprintf_s(msg, sizeof(msg), "Delete failed - Error %d", GetLastError());
 				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
 				return FALSE;
 			}

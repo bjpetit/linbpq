@@ -254,6 +254,9 @@ BOOL PngLoadImage (PTSTR pstrFileName, png_byte **ppbImageData,
         
         free (ppbRowPointers);
         ppbRowPointers = NULL;
+
+		png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+
         
         // yepp, done
     }

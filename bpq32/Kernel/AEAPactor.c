@@ -418,6 +418,8 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	Debugprintf("Pactor Call set to %s", TNC->NodeCall);
 
+	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
 	PortEntry->SCANCAPABILITIES = NONE;		// No Scan Interlock 

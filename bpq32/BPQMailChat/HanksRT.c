@@ -22,7 +22,6 @@ BOOL NeedStatus = FALSE;
 
 char Verstring[80];
 
-
 static void node_dec(NODE *node);
 static KNOWNNODE *knownnode_add(char *call);
 VOID SendChatLinkStatus();

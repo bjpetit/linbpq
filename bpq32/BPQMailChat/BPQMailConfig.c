@@ -2719,6 +2719,13 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		case IDC_EDITTEXT:
 
+			if (CurrentMsgIndex == -1)
+			{
+				wsprintf(InfoBoxText, "Please select a message to Edit");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				return;
+			}
+
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_EDITMSGTEXT), hDlg, EditMsgTextDialogProc);
 			return TRUE;
 

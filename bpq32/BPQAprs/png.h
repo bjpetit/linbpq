@@ -364,6 +364,37 @@
 /* include all user configurable info, including optional assembler routines */
 #include "pngconf.h"
 
+
+#include <crtdbg.h>
+
+/* Memory block identification */
+#define _FREE_BLOCK      0
+#define _NORMAL_BLOCK    1
+#define _CRT_BLOCK       2
+#define _IGNORE_BLOCK    3
+#define _CLIENT_BLOCK    4
+#define _MAX_BLOCKS      5
+
+
+#ifdef _DEBUG
+
+VOID * _malloc_dbg_trace(int len, int type, char * file, int line);
+
+#define   malloc(s)             _malloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   calloc(c, s)          _calloc_dbg(c, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   realloc(p, s)         _realloc_dbg(p, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   _recalloc(p, c, s)    _recalloc_dbg(p, c, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   _expand(p, s)         _expand_dbg(p, s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#define   free(p)               _free_dbg(p, _NORMAL_BLOCK)
+#define   _strdup(s)			_strdup_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
+
+
+#define   zalloc(s)             _zalloc_dbg(s, _NORMAL_BLOCK, __FILE__, __LINE__)
+#else
+#define   zalloc(s)             _zalloc(s)
+#endif
+
+
 /*
  * Added at libpng-1.2.8 */
 /* Ref MSDN: Private as priority over Special

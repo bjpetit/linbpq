@@ -117,6 +117,7 @@ VOID SetupUIInterface()
 VOID Free_UI()
 {
 	int i;
+	PMESSAGEX AXMSG;
 
 	for (i = 1; i <= 32; i++)
 	{
@@ -131,6 +132,13 @@ VOID Free_UI()
 			free(UIDigiAX[i]);
 			UIDigiAX[i] = NULL;
 		}
+	}
+
+	if (DG_Q)
+	{
+		AXMSG = DG_Q;
+		DG_Q = AXMSG->CHAIN;
+		free(AXMSG);
 	}
 }
 

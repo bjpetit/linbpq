@@ -588,6 +588,8 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->PortRecord = PortEntry;
 
+	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
 		memcpy(TNC->NodeCall, GetNodeCall(), 10);
 	else
