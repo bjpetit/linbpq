@@ -81,14 +81,15 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib ..\lib\zlibwapi.lib"
-				OutputFile="c:\Devprogs\bpq32\BPQAPRSRelay.exe"
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib ..\lib\zlibstat.lib comctl32.lib"
+				OutputFile="c:\Devprogs\bpq32\BPQAPRS.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				IgnoreAllDefaultLibraries="false"
 				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug/BPQAPRS.pdb"
+				GenerateMapFile="true"
 				SubSystem="2"
 				TargetMachine="1"
 			/>
@@ -180,7 +181,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib "
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib ..\lib\zlibwapi.lib  comctl32.lib"
 				OutputFile="c:\Devprogs\bpq32\BPQAPRSRelay.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -248,10 +249,6 @@
 						AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
 					/>
 				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\hdlccrc.asm"
-				>
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\BPQAPRS\png.c"

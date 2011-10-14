@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 9.00
 # Visual C++ Express 2005
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BPQ32", "BPQ32.vcproj", "{8EFA1E59-8654-4A23-8102-AA77A074D57C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BPQSoundModem", "BPQSoundModem.vcproj", "{6D5976D7-0CA7-43D5-9752-462BA7AFF804}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -15,10 +13,6 @@ Global
 		{8EFA1E59-8654-4A23-8102-AA77A074D57C}.Debug|Win32.Build.0 = Debug|Win32
 		{8EFA1E59-8654-4A23-8102-AA77A074D57C}.Release|Win32.ActiveCfg = Release|Win32
 		{8EFA1E59-8654-4A23-8102-AA77A074D57C}.Release|Win32.Build.0 = Release|Win32
-		{6D5976D7-0CA7-43D5-9752-462BA7AFF804}.Debug|Win32.ActiveCfg = Debug|Win32
-		{6D5976D7-0CA7-43D5-9752-462BA7AFF804}.Debug|Win32.Build.0 = Debug|Win32
-		{6D5976D7-0CA7-43D5-9752-462BA7AFF804}.Release|Win32.ActiveCfg = Release|Win32
-		{6D5976D7-0CA7-43D5-9752-462BA7AFF804}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
