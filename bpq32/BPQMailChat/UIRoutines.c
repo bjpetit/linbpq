@@ -562,7 +562,7 @@ VOID SendMailFor(char * Msg, BOOL HaveCalls)
 	}
 }
 
-VOID SendMailForThread()
+VOID SendMailForThread(VOID * Param)
 {
 	struct UserInfo * user;
 	char MailForMessage[256] = "";

@@ -47,7 +47,7 @@ static int	ASYINIT(int comport, int speed, int bpqport);
 int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int GetRXMessage(int port,UCHAR * buff);
 void CheckReceivedData(PVCOMINFO  pVCOMInfo);
-static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength );
+static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, DWORD nMaxLength );
 static BOOL WriteCommBlock(int port, LPSTR lpByte , DWORD dwBytesToWrite);
 
 PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
@@ -58,6 +58,7 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 #define	TFESC	0xDD
 
 static BOOL Win98 = FALSE;
+static BOOL NewVCOM = FALSE;		// Use new User Mode VCOM Driver
 
 
 static int ExtProc(int fn, int port,unsigned char * buff)
@@ -191,6 +192,17 @@ int	ASYINIT(int comport, int speed, int bpqport)
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
 	}
+	else if (NewVCOM)
+	{
+		wsprintf( szPort, "\\\\.\\pipe\\BPQCOM%d", comport ) ;
+
+		VCOMInfo[bpqport]->ComDev = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+	}		  
 	else
 	{
 		wsprintf( szPort, "\\\\.\\BPQ%d", comport ) ;
@@ -371,21 +383,31 @@ static BOOL NEAR DestroyTTYInfo( int port )
 
 } 
 
-
-static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, int nMaxLength)
+static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, DWORD nMaxLength)
 {
-	DWORD      dwLength;
-	
-	dwLength = 0;
+	DWORD dwLength = 0;
+	DWORD Available = 0;
 
 	if (Win98)
-		DeviceIoControl(
-			pVCOMInfo->ComDev, (pVCOMInfo->Port << 16) |W98_SERIAL_GETDATA,NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
+		DeviceIoControl(pVCOMInfo->ComDev, (pVCOMInfo->Port << 16) | W98_SERIAL_GETDATA,
+					NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
+
+	else if (NewVCOM)
+	{
+		PeekNamedPipe(pVCOMInfo->ComDev, NULL, 0, NULL, &Available, NULL);
+
+		if (Available > nMaxLength)
+			Available = nMaxLength;
+		
+		if (Available)
+			ReadFile(pVCOMInfo->ComDev, lpszBlock, Available, &dwLength, NULL);
+	}
+
 	else
 		DeviceIoControl(
 			pVCOMInfo->ComDev,IOCTL_SERIAL_GETDATA,NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
 
-   return ( dwLength ) ;
+   return (dwLength);
 
 }
 
@@ -396,6 +418,10 @@ static BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
 	if (Win98)
 		return DeviceIoControl(
 			VCOMInfo[port]->ComDev,(VCOMInfo[port]->Port << 16) | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
+
+	else if (NewVCOM)
+		return WriteFile(VCOMInfo[port]->ComDev, Message, MsgLen, &bytesReturned, NULL);
+
 	else
 		return DeviceIoControl(
 			VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);

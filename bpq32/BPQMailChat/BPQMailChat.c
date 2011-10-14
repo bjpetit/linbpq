@@ -689,6 +689,7 @@
 // Add option to show name as well as call on Chat messages
 // Fix program error if you try to define more than 80 BBS's
 
+// Version 1.0.4.45 April 2011
 
 // Changes to program error reporting.
 // BBS "Returh to Node" command added
@@ -853,6 +854,8 @@ char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
 
 char BaseDir[MAX_PATH];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
+char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
+
 
 char MailDir[MAX_PATH];
 
@@ -895,10 +898,10 @@ INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK    ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-unsigned long _beginthread( void( *start_address )(struct DelayParam * DParam),
-				unsigned stack_size, struct DelayParam * DParam);
+unsigned long _beginthread( void( *start_address )(VOID * DParam),
+				unsigned stack_size, VOID * DParam);
 
-VOID SendMailForThread();
+VOID SendMailForThread(VOID * Param);
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -1026,6 +1029,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int i = 60;
 	struct NNTPRec * NNTPREC;
 	struct NNTPRec * SaveNNTPREC;
+
 
 	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delay 60 Secs
 	{	
@@ -2315,7 +2319,94 @@ VOID SetProperBaseDir(char * ProperBaseDir)
 	}
 }
 
-	
+BOOL MyMoveFile(char * FN)
+{
+	char From[MAX_PATH];
+	char To[MAX_PATH];
+
+	DWORD dwError = 0;
+
+	wsprintf(From, "%s\\%s", BaseDir, FN);
+	wsprintf(To, "%s\\%s", ProperBaseDir, FN);
+
+	dwError = CopyFile(From, To, 0);
+	if (dwError == 0)
+		return (GetLastError());
+	else
+		return 0;
+}
+
+
+
+// Copy all files needed to run the BBS. Backups are not copied. Used when BaseDir is not BPQMailChat
+
+BOOL CopyBBSFiles()
+{
+	WIN32_FIND_DATA ffd;
+	char szDir[MAX_PATH];
+	char From[MAX_PATH];
+	char To[MAX_PATH];
+
+	HANDLE hFind = INVALID_HANDLE_VALUE;
+	DWORD dwError=0;
+
+	// Copy all mail messages from BaseDir/Mail to ProperBaseDir/Mail
+
+	CreateDirectory(ProperBaseDir, NULL);		// Just in case
+
+	strcpy(szDir, ProperBaseDir);
+	strcat(szDir, "\\");
+	strcat(szDir, "Mail");
+
+	CreateDirectory(szDir, NULL);
+
+	strcpy(szDir, BaseDir);
+	strcat(szDir, "\\Mail\\m_*.mes");
+
+	// Find the first file in the directory.
+
+	hFind = FindFirstFile(szDir, &ffd);
+
+	if (INVALID_HANDLE_VALUE == hFind) 
+	{
+		dwError = GetLastError();
+		if (dwError == 2)				// No Files
+			goto CopyFiles;
+
+		return (dwError);
+	}
+	do
+	{
+		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			OutputDebugString(ffd.cFileName);
+		else
+		{
+			wsprintf(From, "%s\\Mail\\%s", BaseDir, ffd.cFileName);
+			wsprintf(To, "%s\\Mail\\%s", ProperBaseDir, ffd.cFileName);
+
+			dwError = CopyFile(From, To, 0);
+			if (dwError == 0)
+				return (GetLastError());
+		}
+	}
+	while (FindNextFile(hFind, &ffd) != 0);
+
+
+
+	FindClose(hFind);
+CopyFiles:
+	MyMoveFile("Info.txt");
+	MyMoveFile("Help.txt");
+	MyMoveFile("BPQBBSUsers.dat");
+	MyMoveFile("DIRMES.SYS");
+	MyMoveFile("WFBID.SYS");
+	MyMoveFile("WP.SYS");
+	MyMoveFile("BADWORDS.SYS");
+	MyMoveFile("RTKnown.txt");
+	MyMoveFile("ChatUsers.txt");
+
+	return 0;
+}
 
 BOOL Initialise()
 {
@@ -2325,8 +2416,7 @@ BOOL Initialise()
 	HKEY hKey=0;
 	char * ptr1;
 	int Attrs, ret;
-	char msg[MAX_PATH + 50];
-	char ProperBaseDir[MAX_PATH];
+	char msg[500];
 	char ProgramDir[MAX_PATH];
 
 	//	Register message for posting by BPQDLL
@@ -2445,15 +2535,19 @@ BOOL Initialise()
 
 	if (_stricmp(BaseDir, ProperBaseDir))				// Different?
 	{
-		sprintf_s(msg, sizeof(msg), "Base Directory %s will be moved to %s\r\nClick OK to continue or Cancel to abort", BaseDir, ProperBaseDir);
+		sprintf_s(msg, sizeof(msg), "Base Directory %s will be changed to %s\r\n\r\nCurrent MailChat files (but not backups) will be copied to the new BaseDir\rOriginal files will be left in case you need to revert. These may be deleted when you are happy with the system\r\rClick OK to continue or Cancel to abort", BaseDir, ProperBaseDir);
 		ret = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
 
 		if (ret == IDOK)
 		{
-			STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-			PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 			int ExitCode;
+
+
+/*			STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+			PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 			char Command[1000];
+
+			// if BaseDir is i
 
 			SInfo.cb=sizeof(SInfo);
 			SInfo.lpReserved=NULL; 
@@ -2483,7 +2577,7 @@ BOOL Initialise()
 
 			if (ret == 0 || ExitCode != 0)
 			{
-				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", GetLastError());
+				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", ExitCode);
 				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
 				return FALSE;
 			}
@@ -2510,13 +2604,16 @@ BOOL Initialise()
 					
 			if (ret == 0 || ExitCode != 0)
 			{
-				sprintf_s(msg, sizeof(msg), "Delete failed - Error %d", GetLastError());
+				sprintf_s(msg, sizeof(msg), "Delete failed - Error %d", ExitCode);
 				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
 				return FALSE;
 			}
 
 			CloseHandle(PInfo.hProcess);			
 			CloseHandle(PInfo.hThread);
+*/
+
+			ExitCode = CopyBBSFiles();
 
 			if (ExitCode == 0)
 			{
@@ -2534,6 +2631,12 @@ BOOL Initialise()
 					retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDirRaw, strlen(BaseDirRaw));
 					RegCloseKey(hKey);
 				}
+			}
+			else
+			{
+				sprintf_s(msg, sizeof(msg), "Copy Failed - Error %d", ExitCode);
+				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+				return FALSE;
 			}
 		}
 	}
@@ -4450,6 +4553,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "                      LB LP LT - List Mesaage with corresponding Type\r");
 			BBSputs(conn, "                      LC List TO fields of all active bulletins\r");
 			BBSputs(conn, "N Name - Set Name\r");
+			BBSputs(conn, "NODE - Return to Node\r");
 			BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
 			BBSputs(conn, "Q QTH - Set QTH\r");
 			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");

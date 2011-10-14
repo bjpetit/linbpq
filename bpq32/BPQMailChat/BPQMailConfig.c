@@ -2531,7 +2531,7 @@ TryAgain:
 
 		if (retCode)
 		{
-				retCode = MessageBox(NULL, "Some Config Params Missing - Opening Configuration Dialog",
+				retCode = MessageBox(NULL, "Some Config Params Missing - Opening Configuration Dialog\r\rNote. All Tabs must be saved, even if no changes are made to the Tab",
 						"BPQMailChat", MB_OKCANCEL);
 					
 				if (retCode ==IDCANCEL)
@@ -2545,7 +2545,7 @@ TryAgain:
 		return TRUE;
 	}
 	
-	wsprintf(msg, "Registry Key %s\\SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat could not be opened - Opening Configuration Dialog", REGTREETEXT);
+	wsprintf(msg, "Registry Key %s\\SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat could not be opened - Opening Configuration Dialog\r\rNote. All Tabs must be saved, even if no changes are made to the Tab", REGTREETEXT);
 
 	retCode = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
 
@@ -2723,7 +2723,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			{
 				wsprintf(InfoBoxText, "Please select a message to Edit");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-				return;
+				return TRUE;
 			}
 
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_EDITMSGTEXT), hDlg, EditMsgTextDialogProc);
