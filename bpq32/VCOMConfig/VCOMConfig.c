@@ -4,7 +4,7 @@
 
 // Version 1.0.1.1 September 2010
 
-// Increace numbe rof Virtual Ports to 20
+// Increace number of Virtual Ports to 20
 
 #include "stdafx.h"
 #include "resource.h"
@@ -1516,7 +1516,6 @@ BOOLEAN SetupDriverName(PUCHAR DriverLocation)
 
 	strcat(DriverLocation, "\\");
 	strcat(DriverLocation, DRIVERFILENAME);
-
 
     //
     // Insure driver file is in the specified directory.
