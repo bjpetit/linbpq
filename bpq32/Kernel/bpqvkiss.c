@@ -48,7 +48,7 @@ int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int GetRXMessage(int port,UCHAR * buff);
 void CheckReceivedData(PVCOMINFO  pVCOMInfo);
 static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, DWORD nMaxLength );
-static BOOL WriteCommBlock(int port, LPSTR lpByte , DWORD dwBytesToWrite);
+static BOOL WriteCommBlock(int port, UCHAR * lpByte , DWORD dwBytesToWrite);
 
 PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 
@@ -58,13 +58,31 @@ PVCOMINFO CreateInfo( int port,int speed, int bpqport )	;
 #define	TFESC	0xDD
 
 static BOOL Win98 = FALSE;
-static BOOL NewVCOM = FALSE;		// Use new User Mode VCOM Driver
 
+struct PORTCONTROL * PORTVEC[33];
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
 	int len,txlen=0;
 	char txbuff[1000];
+
+	if (VCOMInfo[port]->ComDev == (HANDLE) -1)
+	{
+		// Try to reopen every 30 secs
+
+		VCOMInfo[port]->ReopenTimer++;
+
+		if (VCOMInfo[port]->ReopenTimer < 300)
+			return 0;
+
+		VCOMInfo[port]->ReopenTimer = 0;
+		
+		ASYINIT(PORTVEC[port]->IOBASE, 9600, port);
+
+		if (VCOMInfo[port]->ComDev == (HANDLE) -1)
+			return 0;
+	}
+
 
 	switch (fn)
 	{
@@ -95,6 +113,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		break;
 
 	case 4:				// reinit
+		
+		CloseHandle(VCOMInfo[port]->ComDev);
+		VCOMInfo[port]->ComDev =(HANDLE) -1;
+		VCOMInfo[port]->ReopenTimer = 250;
 
 		return (0);
 
@@ -121,12 +143,14 @@ UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry)
 
 	wsprintf(msg,"VKISS COM%d", PortEntry->IOBASE);
 	WritetoConsole(msg);
+
+	PORTVEC[PortEntry->PORTNUMBER] = PortEntry;
 	
-	CreateInfo(PortEntry->IOBASE,9600, PortEntry->PORTNUMBER);
+	CreateInfo(PortEntry->IOBASE, 9600, PortEntry->PORTNUMBER);
 
 	// Open File
 	
-	ASYINIT(PortEntry->IOBASE,9600, PortEntry->PORTNUMBER);
+	ASYINIT(PortEntry->IOBASE, 9600, PortEntry->PORTNUMBER);
 
 	return ((UINT) ExtProc);
 }
@@ -173,7 +197,7 @@ int	ASYINIT(int comport, int speed, int bpqport)
 {
    char       szPort[ 30 ];
    char buf[256];
-   int n;
+   int n, Err;
 
 #pragma warning( push )
 #pragma warning( disable : 4996 )
@@ -187,13 +211,12 @@ int	ASYINIT(int comport, int speed, int bpqport)
 	{
 		VCOMInfo[bpqport]->ComDev = CreateFile( "\\\\.\\BPQVCOMM.VXD", GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
-                  NULL,                 // no security attrs
+	               NULL,                 // no security attrs
                   OPEN_EXISTING,
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
 	}
-	else if (NewVCOM)
-	{
+   else{
 		wsprintf( szPort, "\\\\.\\pipe\\BPQCOM%d", comport ) ;
 
 		VCOMInfo[bpqport]->ComDev = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
@@ -202,18 +225,31 @@ int	ASYINIT(int comport, int speed, int bpqport)
                   OPEN_EXISTING,
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
-	}		  
-	else
-	{
-		wsprintf( szPort, "\\\\.\\BPQ%d", comport ) ;
 
-		VCOMInfo[bpqport]->ComDev = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+			//Handle = CreateFile(Value, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+
+		Err = GetLastError();
+
+		if (VCOMInfo[bpqport]->ComDev != (HANDLE) -1)
+		{
+			VCOMInfo[bpqport]->NewVCOM = TRUE;
+			Err = GetFileType(VCOMInfo[bpqport]->ComDev);
+		}
+		else
+		{
+			// Try old style 	
+
+			wsprintf( szPort, "\\\\.\\BPQ%d", comport ) ;
+
+			VCOMInfo[bpqport]->ComDev = CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
                   NULL,                 // no security attrs
                   OPEN_EXISTING,
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
-	}		  
+		}
+   }  
 	if (VCOMInfo[bpqport]->ComDev == (HANDLE) -1 )
 	{
 		n=wsprintf(buf,"Virtual COM Port %d could not be opened ",comport);
@@ -392,15 +428,64 @@ static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, DWORD nMaxLength
 		DeviceIoControl(pVCOMInfo->ComDev, (pVCOMInfo->Port << 16) | W98_SERIAL_GETDATA,
 					NULL,0,lpszBlock,nMaxLength, &dwLength,NULL);
 
-	else if (NewVCOM)
+	else if (pVCOMInfo->NewVCOM)
 	{
-		PeekNamedPipe(pVCOMInfo->ComDev, NULL, 0, NULL, &Available, NULL);
+		int ret = PeekNamedPipe(pVCOMInfo->ComDev, NULL, 0, NULL, &Available, NULL);
+
+		if (ret == 0)
+		{
+			ret = GetLastError();
+
+			if (ret == ERROR_BROKEN_PIPE)
+			{
+				CloseHandle(pVCOMInfo->ComDev);
+				pVCOMInfo->ComDev = INVALID_HANDLE_VALUE;
+				return 0;
+			}
+		}
 
 		if (Available > nMaxLength)
 			Available = nMaxLength;
 		
 		if (Available)
+		{
+			UCHAR * ptr1 = lpszBlock;
+			UCHAR * ptr2 = lpszBlock;
+			UCHAR c;
+			int Length;
+			
 			ReadFile(pVCOMInfo->ComDev, lpszBlock, Available, &dwLength, NULL);
+
+			// Have to look foro FF escape chars
+
+			Length = dwLength;
+
+			while (Length != 0)
+			{
+				c = *(ptr1++);
+				Length--;
+
+				if (c == 0xff)
+				{
+					c = c = *(ptr1++);
+					Length--;
+					
+					if (c == 0xff)			// ff ff means ff
+					{
+						dwLength--;
+					}
+					else
+					{
+						// This is connection statua from other end
+
+						dwLength -= 2;
+						pVCOMInfo->NewVCOMConnected = c;
+						continue;
+					}
+				}
+				*(ptr2++) = c;
+			}
+		}
 	}
 
 	else
@@ -411,7 +496,7 @@ static int ReadCommBlock(PVCOMINFO  pVCOMInfo, LPSTR lpszBlock, DWORD nMaxLength
 
 }
 
-static BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
+static BOOL WriteCommBlock(int port, UCHAR * Message, DWORD MsgLen)
 {
 	ULONG bytesReturned;
 
@@ -419,9 +504,32 @@ static BOOL WriteCommBlock(int port, LPSTR Message , DWORD MsgLen)
 		return DeviceIoControl(
 			VCOMInfo[port]->ComDev,(VCOMInfo[port]->Port << 16) | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
 
-	else if (NewVCOM)
-		return WriteFile(VCOMInfo[port]->ComDev, Message, MsgLen, &bytesReturned, NULL);
+	else if (VCOMInfo[port]->NewVCOM)
+	{
+		// Have to escape all oxff chars, as these are used to get status info 
 
+		UCHAR NewMessage[1000];
+		UCHAR * ptr1 = Message;
+		UCHAR * ptr2 = NewMessage;
+		UCHAR c;
+
+		int Length = MsgLen;
+
+		while (Length != 0)
+		{
+			c = *(ptr1++);
+			*(ptr2++) = c;
+
+			if (c == 0xff)
+			{
+				*(ptr2++) = c;
+				MsgLen++;
+			}
+			Length--;
+		}
+
+		return WriteFile(VCOMInfo[port]->ComDev, NewMessage, MsgLen, &bytesReturned, NULL);
+	}
 	else
 		return DeviceIoControl(
 			VCOMInfo[port]->ComDev,IOCTL_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);

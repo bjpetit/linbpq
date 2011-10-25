@@ -88,6 +88,54 @@ char NodeCall[11];		// Nodecall, Null Terminated
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
+static HANDLE LogHandle[32] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
+
+//char * Logs[4] = {"1", "2", "3", "4"};
+
+char BaseDir[MAX_PATH]="c:\\";
+
+static VOID CloseLogFile(int Flags)
+{
+	CloseHandle(LogHandle[Flags]);
+	LogHandle[Flags] = INVALID_HANDLE_VALUE;
+}
+
+static BOOL OpenLogFile(int Flags)
+{
+	UCHAR FN[MAX_PATH];
+
+	time_t T;
+	struct tm * tm;
+
+	T = time(NULL);
+	tm = gmtime(&T);	
+
+	wsprintf(FN,"%s\\SCSLog_%02d%02d_%d.txt", GetBPQDirectory(), tm->tm_mon + 1, tm->tm_mday, Flags);
+
+	LogHandle[Flags] = CreateFile(FN,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					OPEN_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	SetFilePointer(LogHandle[Flags], 0, 0, FILE_END);
+
+	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
+
+}
+
+static void WriteLogLine(int Flags, char * Msg, int MsgLen)
+{
+	int cnt;
+	WriteFile(LogHandle[Flags], Msg , MsgLen, &cnt, NULL);
+	WriteFile(LogHandle[Flags], "\r\n" , 2, &cnt, NULL);
+}
+
+
+
+
 static ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr,* p_cmd;
@@ -99,104 +147,45 @@ static ProcessLine(char * buf, int Port)
 	struct TNCINFO * TNC;
 	char errbuf[256];
 
-	strcpy(errbuf, buf);
-
-	ptr = strtok(buf, " \t\n\r");
-
-	if(ptr == NULL) return (TRUE);
-
-	if(*ptr =='#') return (TRUE);			// comment
-
-	if(*ptr ==';') return (TRUE);			// comment
-
-	ptr = strtok(NULL, " \t\n\r");
-
-	if (_stricmp(buf, "ADDR") == 0)			// Winmor Using BPQ32 COnfig
-	{
-		BPQport = Port;
-		p_ipad = ptr;
-	}
-	else
-	if (_stricmp(buf, "APPL") == 0)			// Using BPQ32 COnfig
-	{
-		BPQport = Port;
-		p_cmd = ptr;
-	}
-	else
-	if (_stricmp(buf, "PORT") != 0)			// Using Old Config
-	{
-		// New config without a PORT or APPL  - this is a Config Command
-
-		strcpy(buf, errbuf);
-		strcat(buf, "\r");
-
-		BPQport = Port;
-
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
-
-		TNC->InitScript = malloc(1000);
-		TNC->InitScript[0] = 0;
-		goto ConfigLine;
-	}
-	else
-
-	{
-
-		// Old Config from file
-
-	BPQport=0;
-	BPQport = atoi(ptr);
+	BPQport = Port;
 	
-	p_cmd = strtok(NULL, " \t\n\r");
+	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+	memset(TNC, 0, sizeof(struct TNCINFO));
 
-	if (Port && Port != BPQport)
+	TNC->InitScript = malloc(1000);
+	TNC->InitScript[0] = 0;
+	
+	goto ConfigLine;
+
+
+	// Read Initialisation lines
+
+	while(TRUE)
 	{
-		// Want a particular port, and this isn't it
-
-		while(TRUE)
-		{
-			if (GetLine(buf) == 0)
-				return TRUE;
-
-			if (memcmp(buf, "****", 4) == 0)
-				return TRUE;
-
-		}
-	}
-	}
-	if(BPQport > 0 && BPQport < 33)
-	{
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
-
-		TNC->InitScript = malloc(1000);
-		TNC->InitScript[0] = 0;
-
-		if (p_cmd != NULL)
-		{
-			if (p_cmd[0] != ';' && p_cmd[0] != '#')
-				TNC->ApplCmd=_strdup(p_cmd);
-		}
-
-		// Read Initialisation lines
-
-		while(TRUE)
-		{
-			if (GetLine(buf) == 0)
-				return TRUE;
+		if (GetLine(buf) == 0)
+			return TRUE;
 ConfigLine:
-			strcpy(errbuf, buf);
 
-			if (memcmp(buf, "****", 4) == 0)
-				return TRUE;
+		strcpy(errbuf, buf);
 
-			ptr = strchr(buf, ';');
-			if (ptr)
-			{
-				*ptr++ = 13;
-				*ptr = 0;
-			}
+		if (memcmp(buf, "****", 4) == 0)
+			return TRUE;
+
+		ptr = strchr(buf, ';');
+		if (ptr)
+		{
+			*ptr++ = 13;
+			*ptr = 0;
+		}
+		
+		if (_memicmp(buf, "APPL", 4) == 0)
+		{
+			p_cmd = strtok(&buf[4], " \t\n\r");
+
+			if (p_cmd && p_cmd[0] != ';' && p_cmd[0] != '#')
+				TNC->ApplCmd=_strdup(_strupr(p_cmd));
+		}
+		else
 
 			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
 			{
@@ -233,9 +222,17 @@ ConfigLine:
 				double Robust = atof(&buf[19]);
 				TNC->RobustTime = Robust * 10;
 			}
-
+			else
 			if (_memicmp(buf, "USEAPPLCALLS", 12) == 0)
 				TNC->UseAPPLCalls = TRUE;
+			else
+
+			if (_memicmp(buf, "DRAGON", 6) == 0)
+				TNC->Dragon = TRUE;
+			else
+
+			if (_memicmp(buf, "MAXLEVEL", 8) == 0)		// Wait time beofre failing connect if busy
+				TNC->MaxLevel = atoi(&buf[8]);
 
 			else
 
@@ -245,7 +242,7 @@ ConfigLine:
 				strcat (TNC->InitScript, buf);
 
 		}
-	}
+	
 
 	return (TRUE);
 	
@@ -477,7 +474,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->Bandwidth != 'W')
 			{
 				TNC->Bandwidth = 'W';
-				Switchmode(TNC, 3);
+				Switchmode(TNC, TNC->MaxLevel);
 			}
 
 			if (TNC->RobustTime)
@@ -529,7 +526,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("SCSPACTOR.CFG", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -537,7 +534,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in SCSPACTOR.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
 		WritetoConsole(msg);
 
 		return (int) ExtProc;
@@ -546,11 +543,18 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	TNC->Port = port;
 	TNC->Hardware = H_SCS;
 
+	OpenLogFile(TNC->Port);
+	CloseLogFile(TNC->Port);
+
+
 	if (TNC->BusyHold == 0)
 		TNC->BusyHold = 3;
 
 	if (TNC->BusyWait == 0)
 		TNC->BusyWait = 10;
+
+	if (TNC->MaxLevel == 0)
+		TNC->MaxLevel = 3;
 
 	if (TNC->RigConfigMsg)
 	{
@@ -943,8 +947,11 @@ VOID SCSPoll(int Port)
 				wsprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 
-				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->Streams[Stream].MyCall);
-
+				if (TNC->Dragon)
+					wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->Streams[Stream].MyCall);
+				else
+					wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->Streams[Stream].MyCall);
+				
 				// Stop Scanner
 		
 				wsprintf(Status, "%d SCANSTOP", TNC->Port);
@@ -1095,6 +1102,11 @@ VOID SCSPoll(int Port)
 				Poll[4] = len - 1;
 				memcpy(&Poll[5], start, len);
 		
+
+				OpenLogFile(TNC->Port);
+				WriteLogLine(TNC->Port, &Poll[5], len);
+				CloseLogFile(TNC->Port);
+
 				CRCStuffAndSend(TNC, Poll, len + 5);
 
 				return;
@@ -1264,6 +1276,9 @@ VOID SCSPoll(int Port)
 				memcpy(&Poll[5], buffptr+2, datalen);
 		
 				ReleaseBuffer(buffptr);
+				OpenLogFile(TNC->Port);
+				WriteLogLine(TNC->Port, &Poll[5], datalen);
+				CloseLogFile(TNC->Port);
 		
 				CRCStuffAndSend(TNC, Poll, datalen + 5);
 
@@ -1377,7 +1392,10 @@ VOID SCSPoll(int Port)
 						if (TNC->Streams[0].DEDStream == 30)
 							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPR\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
 						else
-							wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
+							if (TNC->Dragon)
+								wsprintf(TNC->Streams[0].CmdSet, "I%s\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
+							else
+								wsprintf(TNC->Streams[0].CmdSet, "I%s\rPT\r%s\r", TNC->Streams[0].MyCall, buffptr+2);
 
 						ReleaseBuffer(buffptr);
 					
@@ -1420,6 +1438,10 @@ VOID SCSPoll(int Port)
 		
 			ReleaseBuffer(buffptr);
 		
+			OpenLogFile(TNC->Port);
+			WriteLogLine(TNC->Port, &Poll[5], datalen);
+			CloseLogFile(TNC->Port);
+
 			CRCStuffAndSend(TNC, Poll, datalen + 5);
 
 			TNC->Streams[Stream].InternalCmd = TNC->Streams[Stream].Connected;
@@ -1968,6 +1990,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		if (buffptr == NULL) return;			// No buffers, so ignore
 
 		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"Pactor} Ok\r");
+
+		OpenLogFile(TNC->Port);
+		WriteLogLine(TNC->Port, (UCHAR *)&buffptr[2], buffptr[1]);
+		CloseLogFile(TNC->Port);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
@@ -2815,7 +2841,11 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		}
 		else
 		{
-			wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->NodeCall);
+			if (TNC->Dragon)
+				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->NodeCall);
+			else
+				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->NodeCall);
+
 			TNC->Streams[0].DEDStream = 31;		// Pactor Channel
 		}
 	}

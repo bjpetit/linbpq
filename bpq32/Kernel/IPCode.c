@@ -1292,7 +1292,6 @@ static BOOL ReadConfigFile()
 	char * Config;
 	char * ptr1, * ptr2;
 
-	FILE *file;
 	char buf[256],errbuf[256];
 
 	map_table_len = 0;				// For reread
@@ -1321,28 +1320,6 @@ static BOOL ReadConfigFile()
 				WritetoConsole(errbuf);
 			}
 		}
-	}
-	else
-	{
-		if ((file = fopen(CFGFN,"r")) == NULL)
-		{
-			wsprintf(buf,"Config file %s could not be opened ",CFGFN);
-			WritetoConsole(buf);
-
-			return (FALSE);
-		}
-
-		while(fgets(buf, 255, file) != NULL)
-		{
-			strcpy(errbuf,buf);			// save in case of error
-	
-			if (!ProcessLine(buf))
-			{
-				WritetoConsole("IP Gateway bad config record ");
-				WritetoConsole(errbuf);
-			}			
-		}
-		fclose(file);
 	}
 	return (TRUE);
 }
@@ -1850,7 +1827,7 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			ProcessConfig();
 			FreeConfig();
 
-			ReadConfigFile("IPGateway.CFG");
+			ReadConfigFile();
 			PostMessage(hResWnd, WM_TIMER,0,0);
 			InvalidateRect(hWnd,NULL,TRUE);
 

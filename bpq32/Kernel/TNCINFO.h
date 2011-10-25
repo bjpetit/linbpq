@@ -324,6 +324,8 @@ typedef struct TNCINFO
 
 	int Mode;						// Mode Flag
 
+	BOOL Dragon;					// Set if P4Dragon
+	BOOL MaxLevel;					// Pactor Level to set for Wide Mode (3 or 4)
 	int PacketChannels;
 	int RobustTime;					// For PTC, Spend this part of scan cycle (in 10th secs) in Robust Packet Mode 
 	int SwitchToPactor;				// Countdown to switch
@@ -390,7 +392,7 @@ typedef struct TNCINFO
 
 VOID * zalloc(int len);
 
-BOOL ReadConfigFile(char * filename, int Port, int ProcLine());
+BOOL ReadConfigFile(int Port, int ProcLine());
 GetLine(char * buf);
 BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, LPCSTR MENU);
 BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);

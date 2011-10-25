@@ -10,7 +10,7 @@
 //	409r	August 2005 Treat NULL string in Registry as use current directory
 //						Allow shutdown to close BPQ Applications
 
-//	409s	October 2005 Add DLLExport entries to API for BPQTNC2
+//	409s	October 2005 Add DLL:Export entries to API for BPQTNC2
 
 //	409t	January 2006
 //
@@ -387,12 +387,17 @@
 // New Driver for SCS Tracker allowing multiple connects, so Tracker can be used for user access 
 // New Driver for V4 TNC
 
-// 5.2.1.1
+// 5.2.1.3 October 2011
 
 // Combine busy detector on Interlocked Ports (SCS PTC, WINMOR or KAM)
 // Improved program error logging
 // WL2K reporting changed to new format agreed with Lee Inman
 
+// 5.2.1.4
+
+// Connects from the console to an APPLCALL or APPLALIAS now invoke any Command Alias that has been defined.
+// Fix reporting of Tracker freqs to WL2K.
+// Fix Tracker monitoring setup (sending M UISC)
 
 #define Kernel
 #include "Versions.h"
@@ -1489,12 +1494,14 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		GetProcess(GetCurrentProcessId(),pgm);
 
 		if (_stricmp(pgm,"BPQTelnetServer.exe") == 0)
-			AuthorisedProgram = FALSE;
-		else
-			AuthorisedProgram = TRUE;
+		{
+			MessageBox(NULL,"BPQTelnetServer is no longer supported\r\n\r\nUse the TelnetServer in BPQ32.dll", "BPQ32", MB_OK);
+			return 0;
+		}
+
+		AuthorisedProgram = TRUE;
 
 		if (_stricmp(pgm,"perl.exe") == 0 || _stricmp(pgm,"ntvdm.exe") == 0)
-
 			Perl=1;
 		else
 			Perl=0;

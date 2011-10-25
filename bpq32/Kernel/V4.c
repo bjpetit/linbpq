@@ -851,20 +851,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		// I cant see why, but Winsock is unavailable at this time
-
 		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
-		winerr = WSAGetLastError();
-/*
-		Sleep(500);
-
-		send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
-		Sleep(500);
-
+		Sleep(100);
 		shutdown(TNC->WINMORDataSock, SD_BOTH);
 		shutdown(TNC->WINMORSock, SD_BOTH);
-		Sleep(500);
-*/
+		Sleep(100);
 
 		closesocket(TNC->WINMORDataSock);
 		closesocket(TNC->WINMORSock);
@@ -1054,7 +1045,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 	
 	port = PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -1062,7 +1053,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(Msg," ** Error - no configuration info for this port");
+		wsprintf(Msg," ** Error - no info in BPQ32.cfg for this port");
 		WritetoConsole(Msg);
 
 		return (int) ExtProc;

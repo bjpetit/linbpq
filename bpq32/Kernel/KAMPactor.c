@@ -453,7 +453,7 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	wsprintf(msg,"KAM Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
 	WritetoConsole(msg);
 
-	ReadConfigFile("KAMPACTOR.CFG", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -461,7 +461,7 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in KAMPACTOR.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
 		WritetoConsole(msg);
 
 		return (int)KAMExtProc;

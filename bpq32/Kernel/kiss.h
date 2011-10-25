@@ -37,7 +37,7 @@
 
 // terminal size
 
-#define MAXBLOCK        80
+#define MAXBLOCK        512
 
 #define MAXLEN_TEMPSTR  81
 

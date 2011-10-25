@@ -103,7 +103,7 @@ static char Dllname[6]="wpcap";
 int InitPCAP(void);
 static FARPROCX GetAddress(char * Proc);
 
-static BOOL ReadConfigFile(char * fn,int Port);
+static BOOL ReadConfigFile(int Port);
 static int ProcessLine(char * buf,int Port, BOOL CheckPort);
 static int OpenPCAP(int IOBASE, int PORTNUMBER);
 
@@ -403,7 +403,7 @@ int OpenPCAP(int IOBASE, int port)
 
 	Adapter[0]=0;
 
-	if (!ReadConfigFile("BPQETHER.CFG", port))
+	if (!ReadConfigFile(port))
 		return (FALSE);
 
 	/* Open the adapter */
@@ -467,16 +467,13 @@ int OpenPCAP(int IOBASE, int port)
 }
 
 
-static BOOL ReadConfigFile(char * fn, int Port)
+static BOOL ReadConfigFile(int Port)
 {
 //TYPE	1	08FF                            # Ethernet Type
 //ETH	1	FF:FF:FF:FF:FF:FF				#	Target Ethernet AddrMAP G8BPQ-7 10.2.77.1                  # IP 93 for compatibility
 //ADAPTER	1	\Device\NPF_{21B601E8-8088-4F7D-96 29-EDE2A9243CF4}	# Adapter Name
 
-	FILE *file;
 	char buf[256],errbuf[256];
-
-	UCHAR Value[MAX_PATH];
 	char * Config;
 
 	Config = PortConfig[Port];
@@ -507,45 +504,11 @@ static BOOL ReadConfigFile(char * fn, int Port)
 		}
 		return (TRUE);
 	}
-
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value,fn);
-	}
-	else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value,fn);
-	}
 		
-	
-	if ((file = fopen(Value,"r")) == NULL)
-	{
-		n=wsprintf(buf,"Config file %s could not be opened ",Value);
-		WritetoConsole(buf);
+	n=wsprintf(buf,"No config info found");
+	WritetoConsole(buf);
 
-		return (FALSE);
-	}
-
-
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-	
-		if (!ProcessLine(buf, Port, TRUE))
-		{
-			WritetoConsole("BPQEther bad config record ");
-			WritetoConsole(errbuf);
-		}
-				
-			//	MessageBox(NULL,errbuf,"BPQAXIP - Bad config record",MB_OK);
-	}
-	
-	fclose(file);
-
-	return (TRUE);
-
+	return (FALSE);
 }
 
 

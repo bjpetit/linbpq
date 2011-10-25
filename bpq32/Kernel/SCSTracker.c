@@ -25,7 +25,7 @@ static char WindowTitle[] = "SCS Tracker";
 static int RigControlRow = 140;
 
 #define NARROWMODE 30
-#define WIDEMODE 30			// PIII only
+#define WIDEMODE 30			// Robust
 
 extern UCHAR BPQDirectory[];
 
@@ -54,14 +54,6 @@ static ProcessLine(char * buf, int Port)
 	char errbuf[256];
 
 	strcpy(errbuf, buf);
-
-	ptr = strtok(buf, " \t\n\r");
-
-	if(ptr == NULL) return (TRUE);
-
-	if(*ptr =='#') return (TRUE);			// comment
-
-	if(*ptr ==';') return (TRUE);			// comment
 
 	BPQport = Port;
 
@@ -104,7 +96,7 @@ ConfigLine:
 
 		if (_memicmp(buf, "APPL", 4) == 0)
 		{
-			p_cmd = strtok(NULL, " \t\n\r");
+			p_cmd = strtok(&buf[4], " \t\n\r");
 
 			if (p_cmd && p_cmd[0] != ';' && p_cmd[0] != '#')
 				TNC->ApplCmd=_strdup(_strupr(p_cmd));
@@ -118,7 +110,7 @@ ConfigLine:
 		}
 		else
 		
-//		if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)
+//		if (_mem`icmp(buf, "PACKETCHANNELS", 14) == 0)
 
 
 //			// Packet Channels
@@ -210,7 +202,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, FALSE);
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == (HANDLE) -1)
 			return 0;
@@ -402,7 +394,7 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -477,7 +469,7 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 	TempScript = malloc(1000);
 
 	strcpy(TempScript, "M UISC\r");
-	strcpy(TempScript, "F 200\r");			// Sets SABM retry time to about 5 secs
+	strcat(TempScript, "F 200\r");			// Sets SABM retry time to about 5 secs
 	strcat(TempScript, "%F 1500\r");		// Tones may be changed but I want this as standard
 
 	strcat(TempScript, TNC->InitScript);
@@ -510,7 +502,7 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 	}
 
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, TRUE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	TNC->InitPtr = TNC->InitScript;
 
@@ -1338,9 +1330,6 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	}
 
 	Stream = TNC->MSGCHANNEL - 1;
-
-	if (Stream < 0 || Stream > 32)
-		return;
 
 	//	See if Poll Reply or Data
 	

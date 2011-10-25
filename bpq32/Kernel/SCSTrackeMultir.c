@@ -55,14 +55,6 @@ static ProcessLine(char * buf, int Port)
 
 	strcpy(errbuf, buf);
 
-	ptr = strtok(buf, " \t\n\r");
-
-	if(ptr == NULL) return (TRUE);
-
-	if(*ptr =='#') return (TRUE);			// comment
-
-	if(*ptr ==';') return (TRUE);			// comment
-
 	BPQport = Port;
 
 	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
@@ -195,7 +187,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, FALSE);
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == (HANDLE) -1)
 			return 0;
@@ -399,7 +391,7 @@ UINT WINAPI TrackerMExtInit(EXTPORTDATA *  PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -456,7 +448,7 @@ UINT WINAPI TrackerMExtInit(EXTPORTDATA *  PortEntry)
 	TempScript = malloc(1000);
 
 	strcpy(TempScript, "M UISC\r");
-	strcpy(TempScript, "F 200\r");			// Sets SABM retry time to about 5 secs
+	strcat(TempScript, "F 200\r");			// Sets SABM retry time to about 5 secs
 	strcat(TempScript, "%F 1500\r");		// Tones may be changed but I want this as standard
 
 	strcat(TempScript, TNC->InitScript);
@@ -474,7 +466,7 @@ UINT WINAPI TrackerMExtInit(EXTPORTDATA *  PortEntry)
 	wsprintf(msg, "I %s\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, TRUE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	TNC->InitPtr = TNC->InitScript;
 

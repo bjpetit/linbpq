@@ -554,7 +554,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		shutdown(TCP->sock6, SD_BOTH);
 
 		n = 0;
-		while (TCP->FBBsock[n])
+		while (TCP->FBBsock6[n])
 			shutdown(TCP->FBBsock6[n++], SD_BOTH);
 
 		shutdown(TCP->Relaysock6, SD_BOTH);
@@ -572,7 +572,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		n = 0;
 		while (TCP->FBBsock6[n])
-			closesocket(TCP->FBBsock[n++]);
+			closesocket(TCP->FBBsock6[n++]);
 
 		closesocket(TCP->Relaysock6);
 		SaveWindowPos(port);
@@ -603,7 +603,7 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("BPQTelnetServer.cfg", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -611,7 +611,7 @@ UINT WINAPI TelnetExtInit(EXTPORTDATA * PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in BPQTelnetServer.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
 		WritetoConsole(msg);
 
 		return (int)ExtProc;
@@ -1520,7 +1520,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 				free(TNC->Streams[i].ConnectionInfo);
 			}
 
-			ReadConfigFile("", TNC->Port, ProcessLine);
+			ReadConfigFile(TNC->Port, ProcessLine);
 
 			TNC = TNCInfo[n];
 			TNC->Port = n;

@@ -60,8 +60,9 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 int Winmor_Socket_Data(int sock, int error, int eventcode);
 
-int ModetoBaud[30] = {0,0,0,0,0,0,0,0,0,0,0,			// 0 = 10
-					  200,600,3200,600,3200,3200};	// 11 - 16
+int ModetoBaud[31] = {0,0,0,0,0,0,0,0,0,0,0,			// 0 = 10
+					  200,600,3200,600,3200,3200,		// 11 - 16
+					  0,0,0,0,0,0,0,0,0,0,0,0,0,600};	// 17 - 30
 
 VOID * zalloc(int len)
 {
@@ -103,11 +104,10 @@ VOID MoveWindows(struct TNCINFO * TNC)
 	MoveWindow(TNC->hMonitor,4 , 200, ClientWidth-8, ClientHeight-205, TRUE);
 }
 
-FILE *file;
 char * Config;
 char * ptr1, * ptr2;
 
-BOOL ReadConfigFile(char * fn, int Port, int ProcLine())
+BOOL ReadConfigFile(int Port, int ProcLine())
 {
 	char buf[256],errbuf[256];
 
@@ -139,8 +139,8 @@ BOOL ReadConfigFile(char * fn, int Port, int ProcLine())
 		ptr2 = strchr(ptr1, 13);
 		while(ptr2)
 		{
-			memcpy(buf, ptr1, ptr2 - ptr1);
-			buf[ptr2 - ptr1] = 0;
+			memcpy(buf, ptr1, ptr2 - ptr1 + 1);
+			buf[ptr2 - ptr1 + 1] = 0;
 			ptr1 = ptr2 + 2;
 			ptr2 = strchr(ptr1, 13);
 
@@ -155,63 +155,24 @@ BOOL ReadConfigFile(char * fn, int Port, int ProcLine())
 	}
 	else
 	{
-
-	UCHAR Value[100];
-
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value,fn);
-	}
-	else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value,fn);
-	}
-		
-	if ((file = fopen(Value,"r")) == NULL)
-	{
-		wsprintf(buf," Config file %s not found ",Value);
+		wsprintf(buf,"No Configuration info");
 		WritetoConsole(buf);
-		return (TRUE);			// Will give Port Not Defined error later
 	}
 
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-	
-		if (!ProcLine(buf, Port))
-		{
-			WritetoConsole(" Bad config record ");
-			WritetoConsole(errbuf);
-		}			
-	}
-
-	fclose(file);
-	file = NULL;
-	}
 	return (TRUE);
 }
 GetLine(char * buf)
 {
 loop:
 
-	if (file)
-	{
-		if (fgets(buf, 255, file) == NULL)
-			return 0;
-	}
-	else
-	{
-		if (ptr2 == NULL) 
-			return 0;
+	if (ptr2 == NULL) 
+		return 0;
 
-		memcpy(buf, ptr1, ptr2 - ptr1 + 2);
-		buf[ptr2 - ptr1 + 2] = 0;
-		ptr1 = ptr2 + 2;
-		ptr2 = strchr(ptr1, 13);
-	}
-
+	memcpy(buf, ptr1, ptr2 - ptr1 + 2);
+	buf[ptr2 - ptr1 + 2] = 0;
+	ptr1 = ptr2 + 2;
+	ptr2 = strchr(ptr1, 13);
+	
 	if (buf[0] < 0x20) goto loop;
 	if (buf[0] == '#') goto loop;
 	if (buf[0] == ';') goto loop;

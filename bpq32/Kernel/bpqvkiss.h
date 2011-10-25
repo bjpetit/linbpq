@@ -15,10 +15,13 @@ typedef struct VCOMStruct
    UCHAR * RXMPTR;					// put pointer for RXMSG
    BOOL	   MSGREADY;				// Complete msg in RXMSG
    BOOL	   ESCFLAG;					// FESC received
+   BOOL		NewVCOM;				// Set if using User Mode VCOM Driver
+   BOOL		NewVCOMConnected;		// Set if COM side is connected
+   int		ReopenTimer;			// Open retry delay timer 	
    
 } VCOMINFO, *PVCOMINFO ;
 
-PVCOMINFO VCOMInfo[16]={0};
+PVCOMINFO VCOMInfo[32]={0};
 
 #define IOCTL_SERIAL_IS_COM_OPEN CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERIAL_GETDATA     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x801,METHOD_BUFFERED,FILE_ANY_ACCESS)

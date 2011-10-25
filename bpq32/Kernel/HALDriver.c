@@ -433,14 +433,14 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("HALDRIVER.CFG", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 	TNC = TNCInfo[port];
 
 	if (TNC == NULL)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in HALDriver.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
 		WritetoConsole(msg);
 
 		return (int)ExtProc;

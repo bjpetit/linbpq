@@ -141,7 +141,8 @@ BOOL NEAR OpenConnection( int port)
 	BOOL       fRetVal ;
 	NPTTYINFO  npTTYInfo ;
 	COMMTIMEOUTS  CommTimeOuts ;
-   
+	int Err;
+
 	char buf[100];
 
 	if (NULL == (npTTYInfo = KISSInfo[port]))
@@ -170,9 +171,12 @@ BOOL NEAR OpenConnection( int port)
 		return ( FALSE ) ;
 	}
 
+
    else
    {
-      // setup device buffers
+	Err = GetFileType(COMDEV( npTTYInfo ));
+
+	// setup device buffers
 
       SetupComm( COMDEV( npTTYInfo ), 4096, 4096 ) ;
 

@@ -362,7 +362,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	ReadConfigFile("AEAPACTOR.CFG", port, ProcessLine);
+	ReadConfigFile(port, ProcessLine);
 
 	TNC = TNCInfo[port];
 
@@ -370,7 +370,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in AEAPACTOR.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
 		WritetoConsole(msg);
 
 		return (int)ExtProc;

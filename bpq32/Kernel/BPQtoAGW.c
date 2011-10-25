@@ -61,7 +61,7 @@ void ConnecttoAGWThread(int port);
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);
 
-static BOOL ReadConfigFile(char * filename, int Port);
+static BOOL ReadConfigFile(int Port);
 int ConnecttoAGW();
 int ProcessReceivedData(int bpqport);
 static ProcessLine(char * buf, int Port, BOOL CheckPort);
@@ -413,7 +413,7 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 
 	port=PortEntry->PORTNUMBER;
 
-	ReadConfigFile("BPQtoAGW.CFG", port);
+	ReadConfigFile(port);
 
 	AGWChannel[port]=PortEntry->CHANNELNUM-65;
 
@@ -481,12 +481,9 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 */
 
 
-BOOL ReadConfigFile(char * fn, int Port)
+BOOL ReadConfigFile(int Port)
 {
-	FILE *file;
 	char buf[256],errbuf[256];
-
-	UCHAR Value[100];
 	char * Config;
 
 	Config = PortConfig[Port];
@@ -516,41 +513,7 @@ BOOL ReadConfigFile(char * fn, int Port)
 		return (TRUE);
 	}
 
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value,fn);
-	}
-	else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value,fn);
-	}
-			
-	if ((file = fopen(Value,"r")) == NULL)
-	{
-//		n=wsprintf(buf,"BPQtoAGW - Config file %s not found ",Value);
-//		WriteFile(STDOUT,buf,n,&n,NULL);
-
-		return (TRUE);			// Dont need it at the moment
-	}
-
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-	
-		if (!ProcessLine(buf, Port, TRUE))
-		{
-			WritetoConsole("BPQtoAGW - Bad config record ");
-			WritetoConsole(errbuf);
-		}
-				
-	}
-
-	fclose(file);
-
 	return (TRUE);
-
 }
 
 ProcessLine(char * buf, int Port, BOOL CheckPort)
