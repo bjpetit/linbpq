@@ -57,6 +57,10 @@
 
 //		Wrap overlong lines
 
+// Version 2.1.2 October 2011
+
+//		Call CloseBPQ32 on exit
+//		Fix ClearOutputWindow
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -71,7 +75,7 @@
 
 #include "bpqterminal.h"
 
-#define BPQBASE                        WM_USER
+#define BPQBASE WM_USER
 //
 //	Port monitoring flags use BPQBASE -> BPQBASE+100
 
@@ -459,6 +463,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	}
 
 	KillTimer(NULL, TimerHandle);
+
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
 
 	return (msg.wParam);
 }
@@ -872,7 +878,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	UCHAR Buffer[1000];
 	UCHAR * buf = Buffer;
     TEXTMETRIC tm; 
-    int y;  
+    int i, y;  
     LPMEASUREITEMSTRUCT lpmis; 
     LPDRAWITEMSTRUCT lpdis; 
 
@@ -1218,7 +1224,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case BPQCLEAROUT:
 
-			SendMessage(hwndOutput,LB_RESETCONTENT, 0, 0);		
+			for (i = 0; i < MAXLINES; i++)
+			{
+				OutputData.OutputScreen[i][0] = 0;
+			}
+
+			OutputData.CurrentLine = 0;
+			DoRefresh(&OutputData);
+
 			break;
 
 		case BPQCOPYMON:

@@ -30,6 +30,7 @@
 #define IDLOAD                          2012
 #define IDUNLOAD                        2013
 #define IDC_DRIVER                      2014
+#define IDUMDF                          2014
 #define IDC_LIST                        2017
 #define IDC_COMBO1                      2018
 #define IDC_REFRESH                     2020

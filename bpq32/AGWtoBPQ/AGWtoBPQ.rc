@@ -68,7 +68,7 @@ AGWMAINWINDOW DIALOGEX FIXED IMPURE  100, 100, 273, 215
 STYLE DS_MODALFRAME | DS_3DLOOK | WS_POPUPWINDOW | WS_DLGFRAME | WS_MINIMIZEBOX | WS_SIZEBOX
 CLASS "AGWMAINWINDOW"
 MENU MENU_1
-CAPTION "AGWtoBPQ Version 1.2.2"
+CAPTION "AGWtoBPQ Version 1.2.3"
 FONT 8, "FixedSys"
 BEGIN
 	CONTROL "",1004, "LISTBOX", LBS_NOTIFY | WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL, 2, 2, 269, 220
@@ -87,8 +87,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,2,2,1
- PRODUCTVERSION 1,2,2,1
+ FILEVERSION 1,2,3,1
+ PRODUCTVERSION 1,2,3,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -105,12 +105,12 @@ BEGIN
         BEGIN
 		VALUE "CompanyName", "G8BPQ\0"
             VALUE "FileDescription", "AGWtoBPQ\0"
-            VALUE "FileVersion", "1, 2, 2, 1\0"
+            VALUE "FileVersion", "1, 2, 3, 1\0"
             VALUE "InternalName", "AGWtoBPQ\0"
             VALUE "LegalCopyright", "© Copyright G8BPQ\0"
             VALUE "OriginalFilename", "AGWtoBPQ\0"
             VALUE "ProductName", "G8BPQ AGWPE to BPQ32 Interface\0"
-            VALUE "ProductVersion", "1, 2, 2, 1\0"
+            VALUE "ProductVersion", "1, 2, 3, 1\0"
         END
     END
     BLOCK "VarFileInfo"

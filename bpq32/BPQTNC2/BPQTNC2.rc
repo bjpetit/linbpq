@@ -134,8 +134,8 @@ END
 
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,1,4,1
- PRODUCTVERSION 1,1,4,1
+ FILEVERSION 1,1,5,1
+ PRODUCTVERSION 1,1,5,1
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -152,12 +152,12 @@ BEGIN
         BEGIN
 		VALUE "CompanyName", "G8BPQ\0"
             VALUE "FileDescription", "BPQTNC2\0"
-            VALUE "FileVersion", "1.1.4.1\0"
+            VALUE "FileVersion", "1.1.5.1\0"
             VALUE "InternalName", "BPQTNC2\0"
             VALUE "LegalCopyright", "© Copyright G8BPQ\0"
             VALUE "OriginalFilename", "BPQTNC2\0"
             VALUE "ProductName", "BPQ32 TNC2 Emulator\0"
-            VALUE "ProductVersion", "1.1.4.1\0"
+            VALUE "ProductVersion", "1.1.5.1\0"
         END
     END
     BLOCK "VarFileInfo"

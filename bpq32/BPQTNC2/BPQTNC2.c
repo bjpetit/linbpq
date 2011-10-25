@@ -22,6 +22,10 @@
 
 // Use HKEY_CURRENT_USER on Vista+
 
+// Version 1.1.5 Build 1 October 2011
+
+// Call CloseBPQ32 on exit
+
 #include "stdafx.h"
 #include "bpqtnc2.h"
 #define DYNLOADBPQ
@@ -215,6 +219,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		if (conn->Created) BPQSerialDeleteDevice(hControl, &conn->ComPort, &Errorval);
 
 	}
+
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
 
 	return (int) msg.wParam;
 }

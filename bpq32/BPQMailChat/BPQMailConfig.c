@@ -911,7 +911,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 	{
 		user = UserRecPtr[CurrentConfigIndex];
 
-		if (strcmp(user->Call, CurrentConfigCall) == 0)
+		if (_stricmp(user->Call, CurrentConfigCall) == 0)
 		{
 			struct tm *tm;
 			char Date[80];
@@ -1128,7 +1128,7 @@ VOID Do_Delete_User(HWND hDlg)
 
 	user = UserRecPtr[CurrentConfigIndex];
 
-	if (strcmp(CurrentConfigCall, user->Call) != 0)
+	if (_stricmp(CurrentConfigCall, user->Call) != 0)
 	{
 		wsprintf(InfoBoxText, "Inconsistancy detected - user not deleted");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -1533,7 +1533,7 @@ VOID SaveBBSConfig()
 	GetDlgItemText(hwndDisplay, IDC_BBSCall, BBSName, 50);
 	GetDlgItemText(hwndDisplay, IDC_SYSOPCALL, SYSOPCall, 50);
 	GetDlgItemText(hwndDisplay, IDC_HRoute, HRoute, 50);
-	GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDirRaw, 50);
+	GetDlgItemText(hwndDisplay, IDC_BaseDir, BaseDirRaw, MAX_PATH -1);
 	EnableUI = IsDlgButtonChecked(hwndDisplay, IDC_ENABLEUI);
 	RefuseBulls = IsDlgButtonChecked(hwndDisplay, IDC_REFUSEBULLS);
 	MailForInterval = GetDlgItemInt(hwndDisplay, MAILFOR_MINS, &OK1, FALSE);
@@ -2113,6 +2113,7 @@ BOOL GetConfigFromRegistry()
 	int retCode,Type,Vallen, i;
 	char Size[80];
 	char msg[255];
+	char * ptr;
 
 	// Get Config From Registry
 
@@ -2194,8 +2195,12 @@ TryAgain:
 		retCode += RegQueryValueEx(hKey,"BaseDir",0,			
 			(ULONG *)&Type,(UCHAR *)&BaseDirRaw,(ULONG *)&Vallen);
 
-		ExpandEnvironmentStrings(BaseDirRaw, BaseDir, MAX_PATH);
+		ptr = &BaseDirRaw[strlen(BaseDirRaw) -1];
 
+		if (*ptr == '\\' || *ptr == '/')
+			*ptr = 0;
+
+		ExpandEnvironmentStrings(BaseDirRaw, BaseDir, MAX_PATH);
 		// Get length of Chatnodes String
 				
 		Vallen=0;

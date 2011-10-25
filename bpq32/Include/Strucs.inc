@@ -548,6 +548,7 @@ APPNODEPOINTER	DD	0			; Pointer to "NODES" entry for this App (if L4)
 APPLCMDNAME		DB	13 DUP (0)  ; Command to invoke this APPL
 APPLHASALIAS	DD	0
 APPLPORT		DD	0			; Port if Appl has an alias
+APPLALIASPTR	DD	0			; Pointer to Alias if defined
 
 APPLCALLS		ENDS
 

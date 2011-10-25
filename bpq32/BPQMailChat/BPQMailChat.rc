@@ -182,7 +182,7 @@ BEGIN
     LTEXT           "H Route",IDC_STATIC,7,122,37,12
     EDITTEXT        IDC_HRoute,83,120,119,13,ES_UPPERCASE
     LTEXT           "Base Directory",IDC_STATIC,7,137,66,12
-    EDITTEXT        IDC_BaseDir,83,137,212,14,ES_READONLY
+    EDITTEXT        IDC_BaseDir,83,137,212,14,ES_AUTOHSCROLL | ES_READONLY
     LTEXT           "BBS Appl Number",IDC_STATIC,7,156,61,10
     EDITTEXT        IDC_BBSAppl,83,154,29,12
     LTEXT           "Streams",IDC_STATIC,171,156,32,10
@@ -1057,6 +1057,7 @@ BEGIN
     POPUP "Options"
     BEGIN
         MENUITEM "Enable Bells",                BPQBELLS
+        MENUITEM "Flash insstead of Beep on Bell", BPQFLASHONBELL
         MENUITEM "Strip Linefeeds",             BPQStripLF
         MENUITEM "Wrap Input  ",                IDM_WRAPTEXT
         MENUITEM "Beep if Input too long",      IDM_WARNINPUT

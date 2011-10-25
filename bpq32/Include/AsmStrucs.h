@@ -276,6 +276,7 @@ struct APPLCALLS
 	char APPLCMD[13];				//
 	BOOL APPLHASALIAS;
 	int APPLPORT;					// Port used if APPL has an Alias
+	char * APPLALIASPTRl;			// Pointer to Alias if defined
 
 } applcalls;
 

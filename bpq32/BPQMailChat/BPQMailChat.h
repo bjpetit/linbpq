@@ -717,6 +717,7 @@ struct ConsoleInfo
 	int StackIndex;
 
 	BOOL Bells;
+	BOOL FlashOnBell;		// Flash instead of Beep
 	BOOL StripLF;
 
 	BOOL WarnWrap;

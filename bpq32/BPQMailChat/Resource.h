@@ -99,6 +99,7 @@
 #define BPQLogOutput 1050
 #define BPQLogMonitor 1051
 #define BPQSendDisconnected 1052
+#define BPQFLASHONBELL 1053
 
 #define MONBBS 1060
 #define MONCHAT 1061

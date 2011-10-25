@@ -12,7 +12,7 @@
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
-#include "windows.h"
+#include "afxres.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -80,6 +80,7 @@ BEGIN
     EDITTEXT        IDC_EDIT20,180,58,19,15,ES_AUTOHSCROLL
     LTEXT           " 11     12      13      14      15      16      17     18       19      20",
                     IDC_STATIC,5,43,205,10
+    DEFPUSHBUTTON   "Create UMDF Port",IDUMDF,155,220,70,14
 END
 
 

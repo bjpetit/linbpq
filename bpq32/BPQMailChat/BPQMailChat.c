@@ -689,12 +689,21 @@
 // Add option to show name as well as call on Chat messages
 // Fix program error if you try to define more than 80 BBS's
 
-// Version 1.0.4.45 April 2011
+// Version 1.0.4.45 October 2011
 
 // Changes to program error reporting.
 // BBS "Returh to Node" command added
 // Move config to "Standard" location (BPQ Directory/BPQMailChat) .
 // Fix crash if "Edit Message" clicked with no message selected.
+
+// Version 1.0.4.46 October 2011
+
+//	Fix BaseDir test when BaseDir ends with \ or /
+//  Fix long BaseDir values (>50 chars)
+
+
+//  Call CloseBPQ32 on exit
+
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -1089,7 +1098,11 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 				DispatchMessage(&msg);
 			}
 		}
-		My__except_Routine("GetMessageLoop");
+		#define EXCEPTMSG "GetMessageLoop"
+		#include "StdExcept.c"
+
+		CheckProgramErrors();
+		}
 	}
 
 	__try
@@ -1234,7 +1247,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	My__except_Routine("Close Processing");
 
 	SaveWindowConfig();
-	
+
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
+
 	return (int) msg.wParam;
 }
 

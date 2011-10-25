@@ -129,6 +129,10 @@ BOOL CreateConsole(int Stream)
 			(ULONG *)&Type,(UCHAR *)&Cinfo->Bells,(ULONG *)&Vallen);
 	
 		Vallen=4;
+		RegQueryValueEx(hKey,"FlashOnBell",0,			
+			(ULONG *)&Type,(UCHAR *)&Cinfo->FlashOnBell,(ULONG *)&Vallen);
+	
+		Vallen=4;
 		RegQueryValueEx(hKey,"StripLF",0,			
 			(ULONG *)&Type,(UCHAR *)&Cinfo->StripLF,(ULONG *)&Vallen);
 
@@ -183,6 +187,7 @@ BOOL CreateConsole(int Stream)
 	Cinfo->hMenu = hMenu;
 
 	CheckMenuItem(hMenu,BPQBELLS, (Cinfo->Bells) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu,BPQFLASHONBELL, (Cinfo->FlashOnBell) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,BPQStripLF, (Cinfo->StripLF) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_WARNINPUT, (Cinfo->WarnWrap) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_WRAPTEXT, (Cinfo->WrapInput) ? MF_CHECKED : MF_UNCHECKED);
@@ -383,6 +388,7 @@ VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 	if (retCode == ERROR_SUCCESS)
 	{
 		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Cinfo->Bells,4);
+		retCode = RegSetValueEx(hKey,"FlashOnBell",0,REG_DWORD,(BYTE *)&Cinfo->FlashOnBell,4);
 		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&Cinfo->StripLF,4);
 		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&Cinfo->WarnWrap,4);
 		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&Cinfo->WrapInput,4);
@@ -737,6 +743,11 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		case BPQBELLS:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->Bells, BPQBELLS);
+			break;
+
+		case BPQFLASHONBELL:
+
+			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->FlashOnBell, BPQFLASHONBELL);
 			break;
 
 		case BPQStripLF:
@@ -1123,7 +1134,11 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 			if (ptr2)
 			{
 				*(ptr2)=32;
-				Beep(440,250);
+
+				if (Cinfo->FlashOnBell)
+					FlashWindow(Cinfo->hConsole, TRUE);
+				else
+					Beep(440,250);
 			}
 	
 		} while (ptr2);

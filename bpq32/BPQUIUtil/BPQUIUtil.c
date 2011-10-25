@@ -1,6 +1,10 @@
 
 //	Program to send ax.25 Beacons from a BPQ32 Switch
 
+// Version 0.1.1.0 Octorber 2011
+
+//		Call CloseBPQ32 on exit
+
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -203,6 +207,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	if (MinimizetoTray)
 		DeleteTrayMenuItem(hWnd);
+
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
 
 	return (msg.wParam);
 }

@@ -241,6 +241,8 @@ int SetBaseY = 0;
 
 int Zoom = 3;
 
+int MaxZoom = 14;
+
 static int cxWinSize, cyWinSize;
 static int cxImgSize, cyImgSize;
 static int cImgChannels;
@@ -553,6 +555,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	_CrtDumpMemoryLeaks();
 
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
+
 	return (msg.wParam);
 }
 
@@ -616,6 +620,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int retCode,Type,Vallen;
 	HKEY hKey=0;
 	char Size[80];
+	char FN[MAX_PATH];
 
 	BOOL bcopt=TRUE;
 	u_long param=1;
@@ -626,6 +631,32 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	REGTREE = GetRegistryKey();
 	MinimizetoTray = GetMinimizetoTrayFlag();
+
+	if (BPQDirectory[0] == 0)
+		wsprintf(OSMDir, "BPQAPRS/OSMTiles");
+	else
+		wsprintf(OSMDir,"%s/BPQAPRS/OSMTiles", BPQDirectory);
+
+	if (BPQDirectory[0] == 0)
+		wsprintf(Symbols, "BPQAPRS/Symbols.png");
+	else
+		wsprintf(Symbols, "%s/BPQAPRS/Symbols.png", BPQDirectory);
+
+	// Make sure top level OSM Dirs are there
+
+
+	for (Zoom = 0; Zoom < 20; Zoom++)
+	{
+		wsprintf(FN, "%s/%02d", OSMDir, Zoom);
+
+		if (GetFileAttributes(FN) == INVALID_FILE_ATTRIBUTES)
+		{
+			Debugprintf("Creating %s", FN);
+			CreateDirectory(FN, NULL);
+		}
+	}
+
+	Zoom = 3;
 
 	// Get config from Registry 
 
@@ -686,17 +717,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 		RegCloseKey(hKey);
 	}
-
-
-	if (BPQDirectory[0] == 0)
-		wsprintf(OSMDir, "BPQAPRS/OSMTiles");
-	else
-		wsprintf(OSMDir,"%s/BPQAPRS/OSMTiles", BPQDirectory);
-
-	if (BPQDirectory[0] == 0)
-		wsprintf(Symbols, "BPQAPRS/Symbols.png");
-	else
-		wsprintf(Symbols, "%s/BPQAPRS/Symbols.png", BPQDirectory);
 
 
 	InitializeCriticalSection(&Crit); 
@@ -1021,7 +1041,7 @@ BOOL MouseLeftDown = FALSE;
 int DownX;			// Mouse coords when left button was pressed
 int DownY;
 
-int Statwidths[] = {150, 300, 400, 800, 810, -1};
+int Statwidths[] = {150, 200, 250, 300, 350, 800, -1};
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1097,9 +1117,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				Zoom = 3;
 				return TRUE;
 			}
-			if (Zoom > 14)
+			if (Zoom > MaxZoom)
 			{
-				Zoom = 14;
+				Zoom = MaxZoom;
 				return TRUE;
 			}
 			
@@ -2626,6 +2646,10 @@ void RefreshStationList()
 
 	wsprintf(Msg, "%d", OSMQueueCount);
 	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 2, (LPARAM)Msg);
+
+	wsprintf(Msg, "%d", Zoom);
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
+
 
 	for (i = 0; i < StationCount; i++)
 	{

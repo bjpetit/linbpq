@@ -2,14 +2,15 @@
 
 #include "resource.h"
 
-#define BPQICON 2
-
 struct ConnectionInfo
 { 
 	int ComPort;
+	BOOL NewVCOM;			// Set if using new style (User Mode) Virtual COM driver
+	BOOL COMConnected;		// Set when COM port on New Style driver is connected
 	BOOL DEDMode;			// True for DED mode, False for Kant mode
 	BOOL SCSMode;			// True for SCS varient of DED
 	BOOL Term4Mode;			// Used by Airmail
+	BOOL PACMode;			// SCS in Packet Mode
 	BOOL Toggle;				// SCS Sequence Toggle
 	BOOL InHostMode;
 	int numChannels;
@@ -39,7 +40,7 @@ struct ConnectionInfo
 
 	unsigned char LINEBUFFER[300];		// MSG FROM PC APPL
 	unsigned char * CURSOR;				// Pointer into
-	unsigned char PCBUFFER[512];		//	BUFFER TO PC APPLICATION
+	unsigned char PCBUFFER[522];		//	BUFFER TO PC APPLICATION
 	unsigned char * RXPOINTER;
 	unsigned char * PUTPTR;
 	int RXCOUNT;

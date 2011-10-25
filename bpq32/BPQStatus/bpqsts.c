@@ -7,6 +7,10 @@
 
 // Support IP Module as part of BPQ32.dll
 
+// Version 1.0.7 October 2011
+
+// Call CloseBPQ32 on exit
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -107,7 +111,10 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	{
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
-	}		
+	}
+
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
+
 	return (msg.wParam);
 
 	lpCmdLine; // This will prevent 'unused formal parameter' warnings

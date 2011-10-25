@@ -21,6 +21,9 @@
 
 //		Get Registry Tree from BPQ32.dll
 
+//	Version 1.2.3 October 2011
+
+//		Call CloseBPQ32 on exit
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -124,6 +127,8 @@ int APIENTRY WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	
 	Terminate();
     
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
+
 	return (msg.wParam);	  
 }
 

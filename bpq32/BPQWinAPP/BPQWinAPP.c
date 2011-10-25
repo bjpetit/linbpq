@@ -3,6 +3,11 @@
 
 //	Add Delay on start option, and dynamically load bpq32
 
+// Version 1. 0. 3. 1 October 2011
+
+//		Call CloseBPQ32 on exit
+
+
 #include <windows.h>
 
 #include <stdlib.h>
@@ -69,6 +74,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	}
 
 	KillTimer(NULL,TimerHandle);
+
+	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
 
 	return (msg.wParam);
 }

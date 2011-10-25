@@ -123,6 +123,13 @@ BOOL PngLoadImage (PTSTR pstrFileName, png_byte **ppbImageData,
     if (!png_check_sig(pbSig, 8))
     {
         *ppbImageData = pbImageData = NULL;
+
+		if (pfFile)
+			fclose (pfFile);
+
+		Debugprintf("Bad file %s", pstrFileName);
+		DeleteFile(pstrFileName);
+
         return FALSE;
     }
 
