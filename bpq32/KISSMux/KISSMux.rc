@@ -1,0 +1,254 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_GPSMUXPC            ICON    DISCARDABLE     "..\\bpqicon.ico"
+IDI_SMALL               ICON    DISCARDABLE     "..\\bpqicon.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+KISSMUXMAINWINDOW DIALOG FIXED IMPURE  100, 100, 262, 231
+STYLE DS_MODALFRAME | DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | 
+    WS_SYSMENU
+CAPTION "KISS Mux Version 1.0.0"
+CLASS "KISSMUXMAINWINDOW"
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "Check1",5000,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,35,
+                    10,10
+    EDITTEXT        3000,28,34,17,12,ES_AUTOHSCROLL
+    EDITTEXT        4000,50,34,13,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Check1",5001,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,48,
+                    10,10
+    EDITTEXT        3001,28,47,17,12,ES_AUTOHSCROLL
+    EDITTEXT        4001,50,47,13,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Check1",5002,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,61,
+                    10,10
+    EDITTEXT        3002,28,60,17,12,ES_AUTOHSCROLL
+    EDITTEXT        4002,50,60,13,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Check1",5003,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,74,
+                    10,10
+    EDITTEXT        3003,28,73,17,12,ES_AUTOHSCROLL
+    EDITTEXT        4003,50,73,13,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Check1",5004,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,87,
+                    10,10
+    EDITTEXT        3004,28,86,17,12,ES_AUTOHSCROLL
+    EDITTEXT        4004,50,86,13,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Check1",5005,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,
+                    100,10,10
+    EDITTEXT        3005,28,99,17,12,ES_AUTOHSCROLL
+    EDITTEXT        4005,50,99,13,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    EDITTEXT        IDC_COM1,26,151,17,12,ES_AUTOHSCROLL
+    LTEXT           "COM",IDC_STATIC,6,153,20,10
+    EDITTEXT        IDC_SPEED1,46,151,29,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_COM2,26,169,17,12,ES_AUTOHSCROLL
+    LTEXT           "COM",IDC_STATIC,6,172,20,10
+    EDITTEXT        IDC_SPEED2,46,169,29,12,ES_AUTOHSCROLL
+    CONTROL         "Check1",IDC_UDP,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,
+                    218,10,10
+    LTEXT           "UDP",IDC_STATIC,26,218,29,10
+    PUSHBUTTON      "Save",IDC_SAVE,195,175,30,15
+    LTEXT           "Virtual KISS Links to Applications",IDC_STATIC,54,6,111,
+                    12
+    CONTROL         "Check1",5006,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,73,
+                    35,10,10
+    CONTROL         "Check1",5007,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,73,
+                    48,10,10
+    CONTROL         "Check1",5008,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,73,
+                    61,10,10
+    CONTROL         "Check1",5009,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,73,
+                    74,10,10
+    CONTROL         "Check1",5010,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,73,
+                    87,10,10
+    CONTROL         "Check1",5011,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,73,
+                    100,10,10
+    LTEXT           "Links to KISS TNC's",IDC_STATIC,55,126,81,9
+    LTEXT           "Port Speed      Polled  CKSum  ACKMode",IDC_STATIC,31,
+                    139,133,12
+    CONTROL         "Check1",IDC_POLLED1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,84,152,10,10
+    CONTROL         "Check1",IDC_CKSUM1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,109,152,10,10
+    CONTROL         "Check1",IDC_ACKMODE1,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,134,152,10,10
+    CONTROL         "Check1",IDC_POLLED2,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,84,169,10,10
+    CONTROL         "Check1",IDC_CKSUM2,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,109,169,10,10
+    CONTROL         "Check1",IDC_ACKMODE2,"Button",BS_AUTOCHECKBOX | 
+                    WS_TABSTOP,134,169,10,10
+    LTEXT           "Port   Type   Loop  CKSum                 Channel Map",
+                    IDC_STATIC,28,19,192,8
+    EDITTEXT        7001,114,34,12,12,ES_UPPERCASE
+    EDITTEXT        7002,126,34,12,12,ES_UPPERCASE
+    EDITTEXT        7003,138,34,12,12,ES_UPPERCASE
+    EDITTEXT        7004,150,34,12,12,ES_UPPERCASE
+    EDITTEXT        7005,162,34,12,12,ES_UPPERCASE
+    EDITTEXT        7006,174,34,12,12,ES_UPPERCASE
+    EDITTEXT        7007,186,34,12,12,ES_UPPERCASE
+    EDITTEXT        7008,198,34,12,12,ES_UPPERCASE
+    EDITTEXT        7009,210,34,12,12,ES_UPPERCASE
+    EDITTEXT        7010,222,34,12,12,ES_UPPERCASE
+    EDITTEXT        7011,114,47,12,12,ES_UPPERCASE
+    EDITTEXT        7012,126,47,12,12,ES_UPPERCASE
+    EDITTEXT        7013,138,47,12,12,ES_UPPERCASE
+    EDITTEXT        7014,150,47,12,12,ES_UPPERCASE
+    EDITTEXT        7015,162,47,12,12,ES_UPPERCASE
+    EDITTEXT        7016,174,47,12,12,ES_UPPERCASE
+    EDITTEXT        7017,186,47,12,12,ES_UPPERCASE
+    EDITTEXT        7018,198,47,12,12,ES_UPPERCASE
+    EDITTEXT        7019,210,47,12,12,ES_UPPERCASE
+    EDITTEXT        7020,222,47,12,12,ES_UPPERCASE
+    EDITTEXT        7021,114,60,12,12,ES_UPPERCASE
+    EDITTEXT        7022,126,60,12,12,ES_UPPERCASE
+    EDITTEXT        7023,138,60,12,12,ES_UPPERCASE
+    EDITTEXT        7024,150,60,12,12,ES_UPPERCASE
+    EDITTEXT        7025,162,60,12,12,ES_UPPERCASE
+    EDITTEXT        7026,174,60,12,12,ES_UPPERCASE
+    EDITTEXT        7027,186,60,12,12,ES_UPPERCASE
+    EDITTEXT        7028,198,60,12,12,ES_UPPERCASE
+    EDITTEXT        7029,210,60,12,12,ES_UPPERCASE
+    EDITTEXT        7030,222,60,12,12,ES_UPPERCASE
+    EDITTEXT        7031,114,73,12,12,ES_UPPERCASE
+    EDITTEXT        7032,126,73,12,12,ES_UPPERCASE
+    EDITTEXT        7033,138,73,12,12,ES_UPPERCASE
+    EDITTEXT        7034,150,73,12,12,ES_UPPERCASE
+    EDITTEXT        7035,162,73,12,12,ES_UPPERCASE
+    EDITTEXT        7036,174,73,12,12,ES_UPPERCASE
+    EDITTEXT        7037,186,73,12,12,ES_UPPERCASE
+    EDITTEXT        7038,198,73,12,12,ES_UPPERCASE
+    EDITTEXT        7039,210,73,12,12,ES_UPPERCASE
+    EDITTEXT        7040,222,73,12,12,ES_UPPERCASE
+    EDITTEXT        7041,114,86,12,12,ES_UPPERCASE
+    EDITTEXT        7042,126,86,12,12,ES_UPPERCASE
+    EDITTEXT        7043,138,86,12,12,ES_UPPERCASE
+    EDITTEXT        7044,150,86,12,12,ES_UPPERCASE
+    EDITTEXT        7045,162,86,12,12,ES_UPPERCASE
+    EDITTEXT        7046,174,86,12,12,ES_UPPERCASE
+    EDITTEXT        7047,186,86,12,12,ES_UPPERCASE
+    EDITTEXT        7048,198,86,12,12,ES_UPPERCASE
+    EDITTEXT        7049,210,86,12,12,ES_UPPERCASE
+    EDITTEXT        7050,222,86,12,12,ES_UPPERCASE
+    EDITTEXT        7051,114,99,12,12,ES_UPPERCASE
+    EDITTEXT        7052,126,99,12,12,ES_UPPERCASE
+    EDITTEXT        7053,138,99,12,12,ES_UPPERCASE
+    EDITTEXT        7054,150,99,12,12,ES_UPPERCASE
+    EDITTEXT        7055,162,99,12,12,ES_UPPERCASE
+    EDITTEXT        7056,174,99,12,12,ES_UPPERCASE
+    EDITTEXT        7057,186,99,12,12,ES_UPPERCASE
+    EDITTEXT        7058,198,99,12,12,ES_UPPERCASE
+    EDITTEXT        7059,210,99,12,12,ES_UPPERCASE
+    EDITTEXT        7060,222,99,12,12,ES_UPPERCASE
+    CONTROL         "Check1",5012,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,91,
+                    35,10,10
+    CONTROL         "Check1",5013,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,91,
+                    48,10,10
+    CONTROL         "Check1",5014,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,91,
+                    61,10,10
+    CONTROL         "Check1",5015,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,91,
+                    73,10,10
+    CONTROL         "Check1",5016,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,91,
+                    86,10,10
+    CONTROL         "Check1",5017,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,91,
+                    100,10,10
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    "KISSMUXMAINWINDOW", DIALOG
+    BEGIN
+        RIGHTMARGIN, 255
+        BOTTOMMARGIN, 230
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.K.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
+#pragma code_page(1252)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.K.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
