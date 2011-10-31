@@ -341,6 +341,14 @@
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\Kernel\Tnccode.asm"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="MASM"
+						AssembledCodeListingFile="c:\tnccode"
+					/>
+				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\Kernel\V4.c"

@@ -3,6 +3,10 @@ Microsoft Visual Studio Solution File, Format Version 9.00
 # Visual C++ Express 2005
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BPQAPRS", "BPQAPRS.vcproj", "{DA2D929F-0A83-49BB-9878-778E85982D47}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BPQAPRSRelay", "BPQAPRSRelay.vcproj", "{5F704EA7-0783-4FE2-81E5-97422E763C22}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Passgen", "BPQAprs\Passgen\Passgen.vcproj", "{B5E82D44-D6FF-480B-85B5-1257E5721A61}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -13,6 +17,14 @@ Global
 		{DA2D929F-0A83-49BB-9878-778E85982D47}.Debug|Win32.Build.0 = Debug|Win32
 		{DA2D929F-0A83-49BB-9878-778E85982D47}.Release|Win32.ActiveCfg = Release|Win32
 		{DA2D929F-0A83-49BB-9878-778E85982D47}.Release|Win32.Build.0 = Release|Win32
+		{5F704EA7-0783-4FE2-81E5-97422E763C22}.Debug|Win32.ActiveCfg = Debug|Win32
+		{5F704EA7-0783-4FE2-81E5-97422E763C22}.Debug|Win32.Build.0 = Debug|Win32
+		{5F704EA7-0783-4FE2-81E5-97422E763C22}.Release|Win32.ActiveCfg = Release|Win32
+		{5F704EA7-0783-4FE2-81E5-97422E763C22}.Release|Win32.Build.0 = Release|Win32
+		{B5E82D44-D6FF-480B-85B5-1257E5721A61}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B5E82D44-D6FF-480B-85B5-1257E5721A61}.Debug|Win32.Build.0 = Debug|Win32
+		{B5E82D44-D6FF-480B-85B5-1257E5721A61}.Release|Win32.ActiveCfg = Release|Win32
+		{B5E82D44-D6FF-480B-85B5-1257E5721A61}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
