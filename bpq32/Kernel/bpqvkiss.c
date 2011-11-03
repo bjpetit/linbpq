@@ -43,7 +43,7 @@
 #include "bpq32.h"
  
 
-static int	ASYINIT(int comport, int speed, int bpqport);
+static int	ASYINIT(int comport, int speed, int bpqport, BOOL Report);
 int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int GetRXMessage(int port,UCHAR * buff);
 void CheckReceivedData(PVCOMINFO  pVCOMInfo);
@@ -77,7 +77,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		VCOMInfo[port]->ReopenTimer = 0;
 		
-		ASYINIT(PORTVEC[port]->IOBASE, 9600, port);
+		ASYINIT(PORTVEC[port]->IOBASE, 9600, port, FALSE);
 
 		if (VCOMInfo[port]->ComDev == (HANDLE) -1)
 			return 0;
@@ -150,7 +150,7 @@ UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry)
 
 	// Open File
 	
-	ASYINIT(PortEntry->IOBASE, 9600, PortEntry->PORTNUMBER);
+	ASYINIT(PortEntry->IOBASE, 9600, PortEntry->PORTNUMBER, TRUE);
 
 	return ((UINT) ExtProc);
 }
@@ -193,7 +193,7 @@ static int	kissencode(UCHAR * inbuff, UCHAR * outbuff, int len)
 
 }
 
-int	ASYINIT(int comport, int speed, int bpqport)
+int	ASYINIT(int comport, int speed, int bpqport, BOOL Report)
 {
    char       szPort[ 30 ];
    char buf[256];
@@ -250,7 +250,7 @@ int	ASYINIT(int comport, int speed, int bpqport)
                   NULL );
 		}
    }  
-	if (VCOMInfo[bpqport]->ComDev == (HANDLE) -1 )
+	if (VCOMInfo[bpqport]->ComDev == (HANDLE) -1 && Report)
 	{
 		n=wsprintf(buf,"Virtual COM Port %d could not be opened ",comport);
 		WritetoConsole(buf);

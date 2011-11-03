@@ -29,14 +29,24 @@ int ASYSEND(int port, char * buffer, int count)
    return (0);
 }
 
+VOID ASYDISP(int port, char Channel)
+{
+	char Msg[20];
+		
+	wsprintf(Msg,"ASYNC COM%d Chan %c", port, Channel);
 
-int	ASYINIT(int port, int speed, int PortVector,int RXVector)
+	WritetoConsoleLocal(Msg);
+	return;
+}
+
+
+int	ASYINIT(int port, int speed, int PortVector, int RXVector, char Channel )
 {
 	char Msg[20];
 	
 	NPTTYINFO npTTYInfo ;
 	
-	wsprintf(Msg,"ASYNC COM%d ", port);
+	wsprintf(Msg,"ASYNC COM%d Chan %c", port, Channel);
 
 	WritetoConsoleLocal(Msg);
 

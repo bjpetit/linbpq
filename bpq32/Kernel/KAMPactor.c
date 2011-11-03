@@ -569,7 +569,7 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, TRUE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	return ((int)KAMExtProc);
 }

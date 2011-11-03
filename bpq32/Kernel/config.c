@@ -115,9 +115,9 @@
 
 char * Buffer;
 
-extern char * PortConfig[34];
+extern char * PortConfig[35];
 
-BOOL PortDefined[34];
+BOOL PortDefined[35];
 
 char * fp2;
 
@@ -761,6 +761,40 @@ char rec[];
 		}
 
 		Consoleprintf("Missing **** for IPGateway Config %d", portnum);
+		heading = 1;
+
+		return 0;
+	}
+
+	if (_memicmp(rec, "APRSDIGI", 8) == 0)
+	{		
+		// Create Embedded APRS Config
+
+		// Copy all subsequent lines up to **** to a memory buffer
+
+		char * ptr;
+		struct CONFIGTABLE * cfg = (struct CONFIGTABLE * )Buffer;
+		
+		PortConfig[34] = ptr = malloc(50000);
+
+		*ptr = 0;
+
+		GetNextLine(rec);
+
+		while (!feof(fp1))
+		{
+			if (_memicmp(rec, "****", 4) == 0)
+			{
+				PortConfig[34] = realloc(PortConfig[34], (strlen(ptr) + 1));
+				return 0;
+			}
+
+			strcat(ptr, rec);
+			strcat(ptr, "\r\n");
+			GetNextLine(rec);
+		}
+
+		Consoleprintf("Missing **** for APRS Config %d", portnum);
 		heading = 1;
 
 		return 0;

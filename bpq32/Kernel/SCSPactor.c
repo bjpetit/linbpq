@@ -42,6 +42,9 @@
 
 // Add option to get config from bpq32.cfg
 
+// October 2011
+
+// Changes for P4Dragon
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -288,7 +291,7 @@ char status[8][8] = {"ERROR",  "REQUEST", "TRAFFIC", "IDLE", "OVER", "PHASE", "S
 
 char ModeText[8][14] = {"STANDBY", "AMTOR-ARQ",  "PACTOR-ARQ", "AMTOR-FEC", "PACTOR-FEC", "RTTY / CW", "LISTEN", "Channel-Busy"};
 
-char PactorLevelText[4][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR-III"};
+char PactorLevelText[5][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR-III", "PACTOR-IV"};
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -301,8 +304,25 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct STREAMINFO * STREAM;
 
 
-	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
-		return 0;			// Port not open
+	if (TNC == NULL)
+		return 0;
+	
+	if (TNC->hDevice == (HANDLE) -1)
+	{
+		// Try to reopen every 30 secs
+
+		TNC->ReopenTimer++;
+
+		if (TNC->ReopenTimer < 300)
+			return 0;
+
+		TNC->ReopenTimer = 0;
+		
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+
+		if (TNC->hDevice == (HANDLE) -1)
+			return 0;
+	}
 
 	switch (fn)
 	{
@@ -410,6 +430,23 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 
 	case 4:				// reinit
+
+		// Ensure in Pactor
+
+		TNC->TXBuffer[2] = 31;
+		TNC->TXBuffer[3] = 0x1;
+		TNC->TXBuffer[4] = 0x1;
+		memcpy(&TNC->TXBuffer[5], "PT", 2);
+
+		CRCStuffAndSend(TNC, TNC->TXBuffer, 7);
+
+		Sleep(25);
+		ExitHost(TNC);
+		Sleep(50);
+		CloseHandle(TNC->hDevice);
+		TNC->hDevice =(HANDLE) -1;
+		TNC->ReopenTimer = 250;
+		TNC->HostMode = FALSE;
 
 		return (0);
 
@@ -626,6 +663,11 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	strcat(TempScript, "MODE 0\r");				// ASCII mode, no PTC II compression (Forwarding will use FBB Compression)
 	strcat(TempScript, "MAXSUM 20\r");			// Max count for memory ARQ
 	strcat(TempScript, "CWID 0 2\r");			// CW ID disabled
+	strcat(TempScript, "PTCC 0\r");				// Dragon out of PTC Compatibility Mode
+	strcat(TempScript, "VER\r");				// Try to determine Controller Type
+
+	wsprintf(msg, "MYLEVEL %d\r", TNC->MaxLevel);
+	strcat(TempScript, msg);					// Default Level to MAXLEVEL
 
 	strcat(TempScript, TNC->InitScript);
 
@@ -661,7 +703,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, TRUE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	if (TNC->VCOMPort)
 		OpenVirtualSerialPort(TNC);
@@ -683,7 +725,20 @@ static void CheckRX(struct TNCINFO * TNC)
 	if (TNC->RXLen == 500)
 		TNC->RXLen = 0;
 
-	ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+	if (ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat) == 0)
+	{
+		// Device failed. Close and try to reopen
+
+//		CloseHandle(TNC->hDevice);
+		
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+
+		if (TNC->hDevice == (HANDLE) -1)
+			return;
+		
+		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+	}
+
 
 	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
 
@@ -746,6 +801,10 @@ static void CheckRX(struct TNCINFO * TNC)
 			return;				// Wait for rest of frame
 
 		// Complete Char Mode Frame
+
+		OpenLogFile(TNC->Port);
+		WriteLogLine(TNC->Port, TNC->RXBuffer, strlen(TNC->RXBuffer));
+		CloseLogFile(TNC->Port);
 
 		TNC->RXLen = 0;		// Ready for next frame
 					
@@ -1103,9 +1162,9 @@ VOID SCSPoll(int Port)
 				memcpy(&Poll[5], start, len);
 		
 
-				OpenLogFile(TNC->Port);
-				WriteLogLine(TNC->Port, &Poll[5], len);
-				CloseLogFile(TNC->Port);
+//				OpenLogFile(TNC->Port);
+//				WriteLogLine(TNC->Port, &Poll[5], len);
+//				CloseLogFile(TNC->Port);
 
 				CRCStuffAndSend(TNC, Poll, len + 5);
 
@@ -1276,9 +1335,9 @@ VOID SCSPoll(int Port)
 				memcpy(&Poll[5], buffptr+2, datalen);
 		
 				ReleaseBuffer(buffptr);
-				OpenLogFile(TNC->Port);
-				WriteLogLine(TNC->Port, &Poll[5], datalen);
-				CloseLogFile(TNC->Port);
+//				OpenLogFile(TNC->Port);
+//				WriteLogLine(TNC->Port, &Poll[5], datalen);
+//				CloseLogFile(TNC->Port);
 		
 				CRCStuffAndSend(TNC, Poll, datalen + 5);
 
@@ -1438,9 +1497,9 @@ VOID SCSPoll(int Port)
 		
 			ReleaseBuffer(buffptr);
 		
-			OpenLogFile(TNC->Port);
-			WriteLogLine(TNC->Port, &Poll[5], datalen);
-			CloseLogFile(TNC->Port);
+//			OpenLogFile(TNC->Port);
+//			WriteLogLine(TNC->Port, &Poll[5], datalen);
+//			CloseLogFile(TNC->Port);
 
 			CRCStuffAndSend(TNC, Poll, datalen + 5);
 
@@ -1991,9 +2050,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"Pactor} Ok\r");
 
-		OpenLogFile(TNC->Port);
-		WriteLogLine(TNC->Port, (UCHAR *)&buffptr[2], buffptr[1]);
-		CloseLogFile(TNC->Port);
+//		OpenLogFile(TNC->Port);
+//		WriteLogLine(TNC->Port, (UCHAR *)&buffptr[2], buffptr[1]);
+//		CloseLogFile(TNC->Port);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 

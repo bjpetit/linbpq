@@ -311,6 +311,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 4:				// reinit
 
+		ExitHost(TNC);
+		Sleep(50);
+		CloseHandle(TNC->hDevice);
+		TNC->hDevice =(HANDLE) -1;
+		TNC->ReopenTimer = 250;
+		TNC->HostMode = FALSE;
+
 		return (0);
 
 	case 5:				// Close
@@ -321,7 +328,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		Sleep(25);
 
-		CloseHandle(TNCInfo[port]->hDevice);
+		CloseHandle(TNC->hDevice);
 				
 		SaveWindowPos(port);
 
@@ -969,6 +976,20 @@ VOID DEDPoll(int Port)
 
 				if (STREAM->Disconnecting && TNC->Streams[Stream].BPQtoPACTOR_Q == 0)
 					TidyClose(TNC, 0);
+
+				// Make sure Node Keepalive doesn't kill session.
+				
+				{
+					struct TRANSPORTENTRY * SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
+
+					if (SESS)
+					{
+						SESS->L4KILLTIMER = 0;
+						SESS = SESS->L4CROSSLINK;
+						if (SESS)
+							SESS->L4KILLTIMER = 0;
+					}
+				}
 
 				ShowTraffic(TNC);
 				return;

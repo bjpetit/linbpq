@@ -161,7 +161,7 @@ VOID * zalloc(int len);
 int ResetExtDriver(int num);
 BOOL ProcessConfig();
 VOID FreeConfig();
-char * PortConfig[34];
+char * PortConfig[35];
 
 extern UCHAR BPQDirectory[];
 

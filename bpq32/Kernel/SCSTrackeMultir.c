@@ -496,7 +496,7 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 //		CloseHandle(TNC->hDevice);
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, FALSE);
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == (HANDLE) -1)
 			return;

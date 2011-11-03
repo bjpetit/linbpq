@@ -515,12 +515,14 @@ char ReportDest[7];
 VOID __cdecl Debugprintf(const char * format, ...);
 
 DllExport int APIENTRY CloseBPQ32();
+DllExport int APIENTRY SessionControl(int stream, int command, int param);
 
-//BOOL (FAR WINAPI * Init_IP) ();
-//BOOL (FAR WINAPI * Poll_IP) ();
 
 BOOL APIENTRY Init_IP();
 BOOL APIENTRY Poll_IP();
+
+BOOL APIENTRY Init_APRS();
+BOOL APIENTRY Poll_APRS();
 
 BOOL APIENTRY Rig_Init();
 BOOL APIENTRY Rig_Close();
@@ -528,6 +530,7 @@ BOOL APIENTRY Rig_Poll();
 BOOL APIENTRY Rig_Command();
 
 VOID IPClose();
+VOID APRSClose();
 
 int Flag = (int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -664,6 +667,8 @@ BOOL IPActive = FALSE;
 BOOL IPRequired = FALSE;
 BOOL RigRequired = TRUE;
 BOOL RigActive = FALSE;
+
+BOOL APRSActive = FALSE;
 
 Tell_Sessions();
 
@@ -1071,6 +1076,7 @@ VOID CALLBACK TimerProc
 			}
 
 			IPClose();
+			APRSClose();
 			Rig_Close();
 			WSACleanup();
 
@@ -1111,6 +1117,7 @@ VOID CALLBACK TimerProc
 			WritetoConsole("\n\nReconfiguration Complete\n");
 
 			if (IPRequired)	IPActive = Init_IP();
+			APRSActive = Init_APRS();
 			
 			RigActive = Rig_Init();
 			
@@ -1122,6 +1129,7 @@ VOID CALLBACK TimerProc
 	{
 		if (IPActive) Poll_IP();
 		if (RigActive) Rig_Poll();
+		if (APRSActive) Poll_APRS();
 		
 		TIMERINTERRUPT();
 	}
@@ -1190,6 +1198,8 @@ FirstInit()
  	WritetoConsole("\n\nPort Initialisation Complete\n");
 
 	if (IPRequired)	IPActive = Init_IP();
+	
+	APRSActive = Init_APRS();
 
 	RigActive = Rig_Init();
 
@@ -1664,7 +1674,12 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		for (i=1;i<65;i++)
 		{
 			if (BPQHOSTVECTOR[i-1].STREAMOWNER == ProcessID)
+			{
+				// If connected, disconnect
+
+				SessionControl(i, 2, 0);
 				DeallocateStream(i);
+			}
 		}
 
 		if (Mutex) CloseHandle(Mutex);
@@ -1706,6 +1721,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			}
 
 			IPClose();
+			APRSClose();
 			Rig_Close();
 			WSACleanup();
 			WSAGetLastError();

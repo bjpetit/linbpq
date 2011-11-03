@@ -1317,6 +1317,7 @@ static BOOL ReadConfigFile()
 			if (!ProcessLine(buf))
 			{
 				WritetoConsole("IP Gateway bad config record ");
+				strcat(errbuf, "\r");
 				WritetoConsole(errbuf);
 			}
 		}
