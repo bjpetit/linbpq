@@ -10,7 +10,7 @@ Abstract:
 
     This module contains the type definitions for the UMDF VirtualSerial sample
     driver's device callback class.
-
+F
 Environment:
 
     Windows User-Mode Driver Framework (WUDF)
@@ -22,6 +22,7 @@ Environment:
 #include "serial.h"
 
 DEFINE_GUID(GUID_DEVINTERFACE_MODEM,0x2c7089aa, 0x2e0e,0x11d1,0xb1, 0x14, 0x00, 0xc0, 0x4f, 0xc2, 0xaa, 0xe4);
+DEFINE_GUID(GUID_DEVINTERFACE_COMPORTx,0x86e0d1e0, 0x8089, 0x11d0, 0x9c, 0xe4, 0x08, 0x00, 0x3e, 0x30, 0x1f, 0x73);
 
 #define SYMBOLIC_LINK_NAME_PREFIX   L"\\DosDevices\\Global\\"
 #define PIPE_NAME_PREFIX   L"\\\\.\\pipe\\BPQ"
@@ -32,6 +33,8 @@ DEFINE_GUID(GUID_DEVINTERFACE_MODEM,0x2c7089aa, 0x2e0e,0x11d1,0xb1, 0x14, 0x00, 
 
 class CMyDevice : 
     public CUnknown,
+	public IFileCallbackCleanup,
+    public IFileCallbackClose,
     public IObjectCleanup
 {
 
@@ -47,6 +50,10 @@ private:
     //
 
     ULONG m_BaudRate;
+
+	// Wait Mask
+
+    ULONG m_WaitMask;
 
     //
     // Modem control register
@@ -121,6 +128,7 @@ public:
 	HANDLE PipeHandle;
 	WCHAR PipeFullName[100];
 	BOOL PipeConnected;
+	UCHAR COMConnected;			// Set if COM side is open
 
     //
     // The factory method used to create an instance of this driver.
@@ -188,53 +196,65 @@ public:
         AddRef();
         return static_cast<IObjectCleanup *>(this);
     }    
-    
-    virtual
-    void
-    STDMETHODCALLTYPE
-    OnCleanup(
-        IWDFObject*  pWdfObject
-        );
-    
+
+    IFileCallbackClose * QueryIFileCallbackClose(VOID)
+    {
+        AddRef();
+        return static_cast<IFileCallbackClose *>(this);
+    }    
+
+    IFileCallbackCleanup * QueryIFileCallbackCleanup(VOID)
+    {
+        AddRef();
+        return static_cast<IFileCallbackCleanup *>(this);
+    }    
+
+
+    virtual void STDMETHODCALLTYPE OnCleanup(IWDFObject*  pWdfObject);
+    virtual void STDMETHODCALLTYPE OnCloseFile(IWDFFile* pWdfFileObject);
+    virtual void STDMETHODCALLTYPE OnCleanupFile(IWDFFile* pWdfFileObject);
+
         
-    ULONG
-    GetBaudRate(
-        VOID
-        )
+    ULONG GetBaudRate(VOID)
     {
         return m_BaudRate;
     }
 
-    void
-    SetBaudRate(
-        __in ULONG BaudRate
-        )
+    void SetBaudRate(__in ULONG BaudRate)
     {
         m_BaudRate = BaudRate;
 
         return;
     }
 
-    ULONG *
-    GetModemControlRegisterPtr(
-        VOID
-        )
+    ULONG GetWaitMask(VOID)
+    {
+        return m_WaitMask;
+    }
+
+    void SetWaitMask(__in ULONG WaitMask)
+    {
+        m_WaitMask = WaitMask;
+
+        return;
+    }
+
+    ULONG * GetWaitMaskPtr(VOID)
+    {
+        return &m_WaitMask;
+    }
+   
+	ULONG * GetModemControlRegisterPtr(VOID)
     {
         return &m_MCR;
     }
 
-    ULONG *
-    GetFifoControlRegisterPtr(
-        VOID
-        )
+    ULONG * GetFifoControlRegisterPtr(VOID)
     {
         return &m_FCR;
     }
 
-    ULONG *
-    GetLineControlRegisterPtr(
-        VOID
-        )
+    ULONG * GetLineControlRegisterPtr(VOID)
     {
         return &m_LCR;
     }

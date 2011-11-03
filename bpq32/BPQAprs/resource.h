@@ -36,6 +36,10 @@
 #define IDC_FLOODMAXN                   1064
 #define IDC_GPSPORT                     1065
 #define IDC_GPSBAUD                     1066
+#define IDC_ISHOST                      1067
+#define IDC_ISPORT                      1068
+#define IDC_PASSCODE                    1069
+#define IDC_FILTER                      1070
 
 // Next default values for new objects
 // 

@@ -54,9 +54,16 @@ char * APRSCall;
 int GPSPort;
 int GPSSpeed;
 
-char * FloodCalls;			// Calls to relay using n-n without tracing
-char * TraceCalls;			// Calls to relay using n-n with tracing
-char * DigiCalls;			// Calls for normal relaying
+//char * FloodCalls;			// Calls to relay using n-n without tracing
+//char * TraceCalls;			// Calls to relay using n-n with tracing
+//char * DigiCalls;			// Calls for normal relaying
+
+short ISPort = 14580;
+char ISHost[256] = "england.aprs2.net";
+//char Host[] = "aprswest.net";
+
+char ISPasscode[10] = "10122";
+char ISFilter[1000] = "a/61/-10/49/2"; 
 
 char * StatusMsg;
 char * BeaconPath;
@@ -542,14 +549,14 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		RegCloseKey(hKey);
 	}
 
-	if (FloodCalls)
-		free(FloodCalls);
+//	if (FloodCalls)
+//		free(FloodCalls);
 
-	if (TraceCalls)
-		free(TraceCalls);
+//	if (TraceCalls)
+//		free(TraceCalls);
 
-	if (DigiCalls)
-		free(DigiCalls);
+//	if (DigiCalls)
+//		free(DigiCalls);
 
 //	KillTimer(NULL, TimerHandle);
 
@@ -702,9 +709,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		GetStringVal(hKey, "APRSCall", &APRSCall);
 		GetStringVal(hKey, "StatusMsg", &StatusMsg);
 		GetStringVal(hKey, "BeaconPath", &BeaconPath);
-		GetStringVal(hKey, "TraceCalls", &TraceCalls);
-		GetStringVal(hKey, "FloodCalls", &FloodCalls);
-		GetStringVal(hKey, "DigiCalls", &DigiCalls);
+//		GetStringVal(hKey, "TraceCalls", &TraceCalls);
+//		GetStringVal(hKey, "FloodCalls", &FloodCalls);
+//		GetStringVal(hKey, "DigiCalls", &DigiCalls);
 
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "GPSPort", 0, (ULONG *)&Type, (UCHAR *)&GPSPort, (ULONG *)&Vallen);
@@ -714,6 +721,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey, "MaxTraceHops", 0, (ULONG *)&Type, (UCHAR *)&MaxTraceHops, (ULONG *)&Vallen);
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "MaxFloodHops", 0, (ULONG *)&Type, (UCHAR *)&MaxFloodHops, (ULONG *)&Vallen);
+
+		Vallen=255;
+		retCode = RegQueryValueEx(hKey, "ISHost", 0, &Type, ISHost, &Vallen);
+
+		Vallen=9;
+		retCode = RegQueryValueEx(hKey, "ISPasscode", 0, &Type, ISPasscode, &Vallen);
+
+		Vallen=999;
+		retCode = RegQueryValueEx(hKey, "ISFilter", 0, &Type, ISFilter, &Vallen);
 
 		RegCloseKey(hKey);
 	}
@@ -939,6 +955,11 @@ int  SaveIntValtoReg(HWND hDlg, int Item, HKEY hKey, char * Key)
 	return Val;
 }
 
+VOID SaveFixedStringValtoReg(HWND hDlg, int Item, HKEY hKey, char * Key, char * Val, int MaxLen)
+{
+	GetDlgItemText(hDlg, Item, Val, MaxLen);
+	RegSetValueEx(hKey, Key, 0, REG_SZ, Val, strlen(Val) + 1);
+}
 
 VOID SaveStringValtoReg(HWND hDlg, int Item, HKEY hKey, char * Key, char ** Val)
 {
@@ -951,7 +972,6 @@ VOID SaveStringValtoReg(HWND hDlg, int Item, HKEY hKey, char * Key, char ** Val)
 	GetDlgItemText(hDlg, Item, *Val, MsgLen+1);
 
 	RegSetValueEx(hKey, Key, 0, REG_SZ, *Val, strlen(*Val) + 1);
-
 }
 
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -967,18 +987,22 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			SetDlgItemText(hDlg, IDC_STATUSTEXT, StatusMsg);
 		if (BeaconPath)
 			SetDlgItemText(hDlg, IDC_PATH, BeaconPath);
-		if (FloodCalls)
-			SetDlgItemText(hDlg, IDC_UIFLOOD, FloodCalls);
-		if (TraceCalls)
-			SetDlgItemText(hDlg, IDC_UITRACE, TraceCalls);
-		if (DigiCalls)
-			SetDlgItemText(hDlg, IDC_UIDIGI, DigiCalls);
+//		if (FloodCalls)
+//			SetDlgItemText(hDlg, IDC_UIFLOOD, FloodCalls);
+//		if (TraceCalls)
+//			SetDlgItemText(hDlg, IDC_UITRACE, TraceCalls);
+//		if (DigiCalls)
+//			SetDlgItemText(hDlg, IDC_UIDIGI, DigiCalls);
 
 		SetDlgItemInt(hDlg, IDC_GPSPORT, GPSPort, FALSE);
 		SetDlgItemInt(hDlg, IDC_GPSBAUD, GPSSpeed, FALSE);
-		SetDlgItemInt(hDlg, IDC_TRACEMAXN, MaxTraceHops, FALSE);
-		SetDlgItemInt(hDlg, IDC_FLOODMAXN, MaxFloodHops, FALSE);
+//		SetDlgItemInt(hDlg, IDC_TRACEMAXN, MaxTraceHops, FALSE);
+//		SetDlgItemInt(hDlg, IDC_FLOODMAXN, MaxFloodHops, FALSE);
 
+		SetDlgItemText(hDlg, IDC_ISHOST, ISHost);
+		SetDlgItemInt(hDlg, IDC_ISPORT, ISPort, FALSE);
+		SetDlgItemText(hDlg, IDC_PASSCODE, ISPasscode);
+		SetDlgItemText(hDlg, IDC_FILTER, ISFilter);
 
 		return (INT_PTR)TRUE;
 
@@ -996,14 +1020,19 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			SaveStringValtoReg(hDlg, IDC_STATUSTEXT, hKey, "StatusMsg" , &StatusMsg);
 			SaveStringValtoReg(hDlg, IDC_PATH, hKey, "BeaconPath" , &BeaconPath);
 
-			SaveStringValtoReg(hDlg, IDC_UIDIGI, hKey, "DigiCalls" , &DigiCalls);
-			SaveStringValtoReg(hDlg, IDC_UITRACE, hKey, "TraceCalls" , &TraceCalls);
-			SaveStringValtoReg(hDlg, IDC_UIFLOOD, hKey, "FloodCalls" , &FloodCalls);
+//			SaveStringValtoReg(hDlg, IDC_UIDIGI, hKey, "DigiCalls" , &DigiCalls);
+//			SaveStringValtoReg(hDlg, IDC_UITRACE, hKey, "TraceCalls" , &TraceCalls);
+//			SaveStringValtoReg(hDlg, IDC_UIFLOOD, hKey, "FloodCalls" , &FloodCalls);
 
 			GPSPort = SaveIntValtoReg(hDlg, IDC_GPSPORT, hKey, "GPSPort");
 			GPSSpeed = SaveIntValtoReg(hDlg, IDC_GPSBAUD, hKey, "GPSSpeed");
 			MaxTraceHops = SaveIntValtoReg(hDlg, IDC_TRACEMAXN, hKey, "MaxTraceHops");
 			MaxFloodHops = SaveIntValtoReg(hDlg, IDC_FLOODMAXN, hKey, "MaxFloodHops");
+
+			SaveFixedStringValtoReg(hDlg, IDC_ISHOST, hKey, "ISHost", ISHost, 255);
+			ISPort = SaveIntValtoReg(hDlg, IDC_ISPORT, hKey, "ISPort");
+			SaveFixedStringValtoReg(hDlg, IDC_PASSCODE, hKey, "ISPasscode", ISPasscode, 9);
+			SaveFixedStringValtoReg(hDlg, IDC_FILTER, hKey, "ISFilter", ISFilter, 999);
 
 			RegCloseKey(hKey);
 		}
@@ -1889,12 +1918,7 @@ VOID APRSISThread()
 {
 	// Receive from core server
 
-	short Port = 14580;
-	char Host[] = "england.aprs2.net";
-	//char Host[] = "aprswest.net";
-
-	char Signon[] = "user G8BPQ pass 10122 vers BPQ32 2011/08/20 filter  a/61/-10/49/2\r\n";
-//	char Filter[] = "#filter \r\n"; 
+	char Signon[1000] = "user G8BPQ pass 10122 vers BPQ32 2011/08/20 filter  a/61/-10/49/2\r\n";
 
 	SOCKET sock;
 	SOCKADDR_IN sinx; 
@@ -1913,18 +1937,22 @@ VOID APRSISThread()
 
 	Debugprintf("APRS IS Thread");
 
+	wsprintf(Signon, "user %s pass %s vers BPQ32 2011/08/20 filter  %s\r\n",
+			APRSCall, ISPasscode, ISFilter);
+
+
 	// Resolve Name if needed
 
 	destaddr.sin_family = AF_INET; 
-	destaddr.sin_port = htons(Port);
+	destaddr.sin_port = htons(ISPort);
 
-	destaddr.sin_addr.s_addr = inet_addr(Host);
+	destaddr.sin_addr.s_addr = inet_addr(ISHost);
 
 	if (destaddr.sin_addr.s_addr == INADDR_NONE)
 	{
 	//	Resolve name to address
 
-		HostEnt = gethostbyname (Host);
+		HostEnt = gethostbyname (ISHost);
 		 
 		if (!HostEnt)
 		{

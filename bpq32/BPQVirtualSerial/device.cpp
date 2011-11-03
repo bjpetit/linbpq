@@ -28,8 +28,6 @@ Environment:
 #include "device.tmh"
 #include "windef.h"
 
-
-
 VOID __cdecl Debugprintf(const WCHAR * format, ...)
 {
 	WCHAR Mess[10000];
@@ -43,20 +41,7 @@ VOID __cdecl Debugprintf(const WCHAR * format, ...)
 	return;
 }
 
-
-DWORD WINAPI ThreadProc(VOID * p)
-{
-	CMyDevice *pDevice = (CMyDevice *)p;
-	
-	while(p)
-	{
-		OutputDebugString(pDevice->PipeFullName);
-		Sleep(5000);
-	}
-
-	OutputDebugString(L"New Thread Terminated");
-	return 0;
-}
+DWORD WINAPI ThreadProc(VOID * p);
 
 DWORD WINAPI PipeThreadProc(VOID * p)
 {
@@ -64,19 +49,31 @@ DWORD WINAPI PipeThreadProc(VOID * p)
 	BOOL Resp;
 	BOOL Keepgoing = 1;
 
+	pDevice->PipeConnected = FALSE;
+
 	while (Keepgoing)
-	{
+	{		
 		if (pDevice->PipeConnected == FALSE)
 		{
+			Debugprintf(L"Connecting to Pipe %d Addr %x", pDevice->PipeHandle, &pDevice->PipeHandle);
+
 			Resp = ConnectNamedPipe(pDevice->PipeHandle, NULL);
 
 			// Will block until connect completes
 
 			if (Resp)
 			{
+				UCHAR Reply[3] = {0xff, 0};
+				DWORD Written;
+				
 				OutputDebugString(L"Pipe Connected");
 				pDevice->PipeConnected = TRUE;
-				Sleep(5000);
+
+				// Send current CPM connected state to Host
+	
+				Reply[1] = pDevice->COMConnected;
+
+				WriteFile(pDevice->PipeHandle, Reply, 2, &Written, NULL);
 			}
 			else
 			{
@@ -84,6 +81,7 @@ DWORD WINAPI PipeThreadProc(VOID * p)
 				Sleep(5000);
 			}
 		}
+		Sleep(100);
 	}
 	OutputDebugString(L"Pipe Thread Terminated");
 	return 0;
@@ -256,29 +254,30 @@ CMyDevice::Configure(VOID)
     size_t PipeFullNameCch = 0;
     WCHAR *pdoName = NULL;
     PCMyQueue defaultQueue;
+	SECURITY_ATTRIBUTES SA;
+	SECURITY_DESCRIPTOR SD;
 
     HRESULT hr;
+
+	Debugprintf(L"Entered Configure");
 
     PropVariantInit(&comPortPV);
 
     //
     // Create device interface
     //
-    hr = m_FxDevice->CreateDeviceInterface((LPGUID) &GUID_DEVINTERFACE_MODEM,
+
+  
+	hr = m_FxDevice->CreateDeviceInterface((LPGUID) &GUID_DEVINTERFACE_COMPORTx,
                                            NULL);
 
     if (FAILED(hr))
     {
-        Trace(
-            TRACE_LEVEL_ERROR,
-            L"ERROR: Cannot create device interface (%!GUID!)",
-            &GUID_DEVINTERFACE_MODEM
-            );
-
+		Debugprintf(L"ERROR: Cannot create device interface %d", hr);
         goto Exit;
     }
 
-    hr = m_FxDevice->AssignDeviceInterfaceState((LPGUID) &GUID_DEVINTERFACE_MODEM,
+    hr = m_FxDevice->AssignDeviceInterfaceState((LPGUID) &GUID_DEVINTERFACE_COMPORTx,
                                                 NULL,
                                                 TRUE);
 
@@ -416,7 +415,15 @@ CMyDevice::Configure(VOID)
 
 	// Create Pipe
 
-	PipeHandle = CreateNamedPipe(PipeFullName, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE, 1, 4096, 4096, 0, NULL);
+	InitializeSecurityDescriptor(&SD, SECURITY_DESCRIPTOR_REVISION);
+
+	SetSecurityDescriptorDacl(&SD, TRUE, NULL, FALSE);
+
+	SA.nLength = sizeof(SECURITY_ATTRIBUTES);
+	SA.lpSecurityDescriptor = &SD;
+	SA.bInheritHandle = FALSE;
+
+	PipeHandle = CreateNamedPipe(PipeFullName, PIPE_ACCESS_DUPLEX, PIPE_TYPE_BYTE, 1, 4096, 4096, 0, &SA);
 
 	if (PipeHandle == INVALID_HANDLE_VALUE)
 		OutputDebugString(L"Pipe Create Failed");
@@ -424,9 +431,9 @@ CMyDevice::Configure(VOID)
 	{
 		DWORD ThreadId;
 		
-		OutputDebugString(L"Pipe Create OK");
-		CreateThread(NULL, 0, ThreadProc, this, 0, &ThreadId);
+		Debugprintf(L"Pipe Create OK Handle %d Addr %x", PipeHandle, &PipeHandle);
 		CreateThread(NULL, 0, PipeThreadProc, this, 0, &ThreadId);
+		CreateThread(NULL, 0, ThreadProc, this, 0, &ThreadId);
 	}
 
 	OutputDebugString(L"Returned from CreateThread");
@@ -570,18 +577,92 @@ CMyDevice::QueryInterface(
 {
     HRESULT hr;
 
-    if(IsEqualIID(InterfaceId, __uuidof(IObjectCleanup))) 
-    {    
+    if(IsEqualIID(InterfaceId, __uuidof(IObjectCleanup))) {    
         *Object = QueryIObjectCleanup();
         hr = S_OK;  
-    }
-    else
+	} else if(IsEqualIID(InterfaceId, __uuidof(IFileCallbackClose))) {
+        *Object = QueryIFileCallbackClose();
+        hr = S_OK;  
+	} else if(IsEqualIID(InterfaceId, __uuidof(IFileCallbackCleanup))) {
+        *Object = QueryIFileCallbackCleanup();
+        hr = S_OK;  
+    } else
     {
         hr = CUnknown::QueryInterface(InterfaceId, Object);
     }
     
     return hr;
 }
+
+
+VOID
+CMyDevice::OnCloseFile(
+    __in IWDFFile* pWdfFileObject
+    )
+/*++
+
+  Routine Description:
+
+    This method is called when an app closes the file handle to this device.
+    This will free the context memory associated with this file object, close
+    the connection object associated with this file object and delete the file
+    handle i/o target object associated with this file object.
+
+  Arguments:
+
+    pWdfFileObject - the framework file object for which close is handled.
+
+  Return Value:
+
+    None
+
+--*/
+{
+	UCHAR Reply[3] = {0xff, 0};
+	DWORD Written;
+
+	UNREFERENCED_PARAMETER(pWdfFileObject);
+	Debugprintf(L"OnCloseFile Called");
+
+	COMConnected = FALSE;
+	
+	if (PipeConnected)	
+		WriteFile(PipeHandle, Reply, 2, &Written, NULL);
+}
+
+
+VOID
+CMyDevice::OnCleanupFile(
+    __in IWDFFile* pWdfFileObject
+    )
+/*++
+
+  Routine Description:
+
+    This method is when app with open handle device terminates.
+
+  Arguments:
+
+    pWdfFileObject - the framework file object for which close is handled.
+
+  Return Value:
+
+    None
+
+--*/
+{
+	UCHAR Reply[3] = {0xff, 0};
+	DWORD Written;
+
+	UNREFERENCED_PARAMETER(pWdfFileObject);
+	Debugprintf(L"OnCleanupFile Called");
+	
+	COMConnected = FALSE;
+
+	if (PipeConnected)	
+		WriteFile(PipeHandle, Reply, 2, &Written, NULL);
+}
+
 
 VOID 
 CMyDevice::OnCleanup(

@@ -99,13 +99,13 @@ BEGIN
     CONTROL         "Check1",IDC_CKSUM1,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,109,152,10,10
     CONTROL         "Check1",IDC_ACKMODE1,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,134,152,10,10
+                    WS_DISABLED | WS_TABSTOP,134,152,10,10
     CONTROL         "Check1",IDC_POLLED2,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,84,169,10,10
     CONTROL         "Check1",IDC_CKSUM2,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,109,169,10,10
     CONTROL         "Check1",IDC_ACKMODE2,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,134,169,10,10
+                    WS_DISABLED | WS_TABSTOP,134,169,10,10
     LTEXT           "Port   Type   Loop  CKSum                 Channel Map",
                     IDC_STATIC,28,19,192,8
     EDITTEXT        7001,114,34,12,12,ES_UPPERCASE

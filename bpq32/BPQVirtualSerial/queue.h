@@ -21,7 +21,7 @@ Environment:
 #include "internal.h"
 
 // Set ring buffer size
-#define DATA_BUFFER_SIZE 1024
+#define DATA_BUFFER_SIZE 16384
 
 //
 // Macro definition for defining IOCTL and FSCTL function control codes.  Note
@@ -42,6 +42,7 @@ class CMyQueue :
     public IQueueCallbackDeviceIoControl,
     public IQueueCallbackRead,
     public IQueueCallbackWrite,
+	public IQueueCallbackCreate,
     public CUnknown
 {
     UCHAR           m_CommandMatchState; // Device state
@@ -51,9 +52,9 @@ class CMyQueue :
     BOOL            m_CurrentlyConnected;
     
     IWDFIoQueue    *m_FxQueue;           // Default parallel queue
-    IWDFIoQueue    *m_FxReadQueue;       // Manual queue for pending reads
+ //   IWDFIoQueue    *m_FxReadQueue;       // Manual queue for pending reads
     
-    CRingBuffer    m_RingBuffer;        // Ring buffer for pending data
+ //   CRingBuffer    m_RingBuffer;        // Ring buffer for pending data
     
     PCMyDevice     m_Device;
 
@@ -65,8 +66,8 @@ class CMyQueue :
         m_IgnoreNextChar(FALSE),
         m_ConnectionStateChanged(FALSE),
         m_CurrentlyConnected(FALSE),
-        m_FxQueue(NULL),
-        m_FxReadQueue(NULL)
+        m_FxQueue(NULL)
+  //      m_FxReadQueue(NULL)
     {
         WUDF_TEST_DRIVER_ASSERT(pDevice);
 
@@ -84,9 +85,8 @@ class CMyQueue :
     VOID
     CMyQueue::ProcessWriteBytes(
         __in_bcount(Length) PUCHAR Characters,
-        __in SIZE_T Length
-        );
-        
+        __in SIZE_T Length);
+       
 public:
 
     static 
@@ -115,13 +115,16 @@ public:
         return static_cast<IQueueCallbackDeviceIoControl *>(this);
     }
     
-    IQueueCallbackRead *
-    QueryIQueueCallbackRead(
-        VOID
-        )
+    IQueueCallbackRead * QueryIQueueCallbackRead(VOID)
     {
         AddRef();
         return static_cast<IQueueCallbackRead *>(this);
+    }
+
+    IQueueCallbackCreate * QueryIQueueCallbackCreate(VOID)
+    {
+        AddRef();
+        return static_cast<IQueueCallbackCreate *>(this);
     }
 
     IQueueCallbackWrite *
@@ -186,11 +189,16 @@ public:
     virtual
     VOID
     STDMETHODCALLTYPE
-    OnWrite( 
-        __in IWDFIoQueue *pWdfQueue,
-        __in IWDFIoRequest *pWdfRequest,
-        __in SIZE_T NumOfBytesToWrite
-        );
+    OnWrite(__in IWDFIoQueue *pWdfQueue, __in IWDFIoRequest *pWdfRequest, __in SIZE_T NumOfBytesToWrite);
+
+   //IQueueCallbackWrite
+ //   STDMETHOD_(void,OnWrite)(__in IWDFIoQueue* pWdfQueue,__in IWDFIoRequest* pWdfRequest,__in SIZE_T NumOfBytesToWrite);
+
+    //IQueueCallbackCreate
+    virtual
+    VOID STDMETHODCALLTYPE
+	OnCreateFile(__in IWDFIoQueue* pWdfQueue,__in IWDFIoRequest* pWDFRequest,__in IWDFFile* pWdfFileObject);
+
 
     // IQueueCallbackRead
     //

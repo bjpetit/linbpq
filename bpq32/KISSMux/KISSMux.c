@@ -404,29 +404,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    GetConfig();
 
-   InitWS();
+//   InitWS();
   
    InitPorts();
 
    TimerHandle=SetTimer(hWnd,IDT_TIMER1,100,NULL);
  		
-/*	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "0");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "1");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "2");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "3");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Send VDO");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Send ADC");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Send AIS GPS");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "BT is PDA");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Send STALK");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "9");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "10");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "11");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "12");
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "Reboot");
-
-	SendDlgItemMessage(hWnd, IDC_COMBO1, CB_SETCURSEL, 0, 0);
-*/
    return TRUE;
 }
 
@@ -440,9 +423,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //  WM_DESTROY	- post a quit message and return
 //
 //
-
-char RMBMsg[100];
-int RMBPtr = 0;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {

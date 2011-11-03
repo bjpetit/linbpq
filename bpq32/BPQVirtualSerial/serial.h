@@ -23,7 +23,7 @@ Author:
 // headers, so we will need this definition to avoid compilation
 // errors.
 //
-#define GUID_DEVINTERFACE_COMPORT GUID_CLASS_COMPORT
+//#define GUID_DEVINTERFACE_COMPORT GUID_CLASS_COMPORT
 
 //
 // This defines the bit used to control whether the device is sending

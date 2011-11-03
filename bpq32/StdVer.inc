@@ -72,12 +72,12 @@ BEGIN
                     WS_GROUP
     LTEXT           "APRS® is a registered trademark of Bob Bruninga.",-1,27,
                     43,173,13,NOT WS_GROUP
+    LTEXT           "  Includes code from libpng (http://www.libpng.org",-1,
+                    31,59,180,8,NOT WS_GROUP
     LTEXT           "             libpng version 1.2.8 - December 3, 2004\n    Copyright (c) 1998-2004 Glenn Randers-Pehrson\n    Copyright (c) 1996-1997 Andreas Dilger\n    Copyright (c) 1995-1996 Guy Eric Schalnat, Group 42, Inc.\n",
                     -1,15,73,200,40,NOT WS_GROUP
     LTEXT           "Includes code from zlib (http://zlib.net)",-1,49,117,
                     135,10,NOT WS_GROUP
-    LTEXT           "  Includes code from libpng (http://www.libpng.org",-1,
-                    31,59,180,8,NOT WS_GROUP
 END
 
 #endif

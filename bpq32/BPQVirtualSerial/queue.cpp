@@ -20,6 +20,14 @@ Environment:
 
 #include "internal.h"
 
+VOID __cdecl Debugprintf(const WCHAR * format, ...);
+
+VOID ProcessWriteBytes(CMyDevice *pDevice, __in_bcount(Length) PUCHAR Characters, __in SIZE_T Length);
+
+CRingBuffer    m_RingBuffer;        // Ring buffer for pending data
+IWDFIoQueue    *m_FxReadQueue;      // Manual queue for pending reads
+IWDFIoQueue    *m_FxWaitQueue;      // Manual queue for pending IOCTL Wait on Mask
+
 //
 // IUnknown implementation
 //
@@ -96,6 +104,55 @@ Return Value:
     return hr;
 }
 
+DWORD WINAPI ThreadProc(VOID * p)
+{
+	CMyDevice *pDevice = (CMyDevice *)p;
+
+	Debugprintf(L"Background Thread Started %x", pDevice);
+
+	while(p)
+	{
+		DWORD Available, Resp, Err = 0;
+
+		if (pDevice->PipeConnected)
+		{
+			Resp = PeekNamedPipe(pDevice->PipeHandle, NULL, 0, NULL, &Available, NULL);
+
+			if (Resp == 0)
+			{
+				Err = GetLastError();
+
+				if (Err == ERROR_BROKEN_PIPE)
+				{
+					pDevice->PipeConnected = FALSE;
+					Resp = DisconnectNamedPipe(pDevice->PipeHandle);
+					Err = GetLastError();
+
+					Debugprintf(L"Pipe Connection Lost");
+				}
+			}
+
+			if (Available)
+			{
+				char Buffer[512];
+	
+				if (Available > 512)
+					Available = 512;
+		
+				ReadFile(pDevice->PipeHandle, Buffer, Available, &Available, NULL);
+
+				ProcessWriteBytes(pDevice, (PUCHAR)Buffer, Available);
+			}
+		}
+		Sleep(100);
+	}
+
+	OutputDebugString(L"Background Thread Terminated");
+	return 0;
+}
+
+
+
 HRESULT CMyQueue::Initialize(__in IWDFDevice *FxDevice)
 {
     IWDFIoQueue *fxQueue;
@@ -143,21 +200,23 @@ HRESULT CMyQueue::Initialize(__in IWDFDevice *FxDevice)
     // exits
     //
 
-    {
-        hr = FxDevice->CreateIoQueue(NULL,
-                                     FALSE,
-                                     WdfIoQueueDispatchManual,
-                                     TRUE,
-                                     FALSE,
-                                     &fxQueue);
-    }
+	hr = FxDevice->CreateIoQueue(NULL, FALSE, WdfIoQueueDispatchManual, TRUE, FALSE, &fxQueue);
 
     if (FAILED(hr))
-    {
         goto Exit;
-    }
 
     m_FxReadQueue = fxQueue;
+
+    fxQueue->Release();
+
+	// Create Q for IOCTL WAIT_ON_MASK
+
+	hr = FxDevice->CreateIoQueue(NULL, FALSE, WdfIoQueueDispatchManual, TRUE, FALSE, &fxQueue);
+
+    if (FAILED(hr))
+        goto Exit;
+
+    m_FxWaitQueue = fxQueue;
 
     fxQueue->Release();
 
@@ -188,6 +247,9 @@ Return Value:
 
     if (IsEqualIID(InterfaceId, __uuidof(IQueueCallbackWrite))) {
         *Object = QueryIQueueCallbackWrite();
+        hr = S_OK;
+    } else if (IsEqualIID(InterfaceId, __uuidof(IQueueCallbackCreate))) {
+        *Object = QueryIQueueCallbackCreate();
         hr = S_OK;
     } else if (IsEqualIID(InterfaceId, __uuidof(IQueueCallbackRead))) {
         *Object = QueryIQueueCallbackRead();
@@ -245,8 +307,130 @@ Return Value:
     WUDF_TEST_DRIVER_ASSERT(pWdfRequest);
     WUDF_TEST_DRIVER_ASSERT(m_Device);
 
+
     switch (ControlCode)
     {
+		case IOCTL_SERIAL_GET_COMMSTATUS:
+		{
+            SERIAL_STATUS Status;
+			SIZE_T availableData = 0;
+
+            ZeroMemory(&Status, sizeof(SERIAL_STATUS));
+
+			m_RingBuffer.GetAvailableData(&availableData);
+
+            Status.AmountInInQueue = availableData;
+
+            pWdfRequest->GetOutputMemory(&outputMemory);
+
+            if (NULL == outputMemory)
+                hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+
+            if (SUCCEEDED(hr))
+                hr = outputMemory->CopyFromBuffer(0, (void*) &Status, sizeof(SERIAL_STATUS));
+
+            if (SUCCEEDED(hr))
+                reqCompletionInfo = sizeof(SERIAL_STATUS);
+
+            break;
+        }
+
+		case IOCTL_SERIAL_SET_WAIT_MASK:
+        {
+            //
+            //
+            ULONG *pMask = NULL;
+
+            pWdfRequest->GetInputMemory(&inputMemory);
+            if (NULL == inputMemory)
+            {
+                hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+
+            if (SUCCEEDED(hr))
+            {
+                pMask = m_Device->GetWaitMaskPtr();
+                WUDF_TEST_DRIVER_ASSERT(pMask);
+
+                hr = inputMemory->CopyToBuffer(0,
+                                               (void*) pMask,
+                                               sizeof(ULONG));
+            }
+
+			Debugprintf(L"Set Wait Mask %x", m_Device->GetWaitMask());
+
+            break;
+        }
+        case IOCTL_SERIAL_GET_WAIT_MASK:
+        {
+            ULONG *pMask = NULL;
+
+            pWdfRequest->GetOutputMemory(&outputMemory);
+            if (NULL == outputMemory)
+            {
+                hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+
+            if (SUCCEEDED(hr))
+            {
+                pMask = m_Device->GetWaitMaskPtr();
+                WUDF_TEST_DRIVER_ASSERT(pMask);
+
+                hr = outputMemory->CopyFromBuffer(0,
+                                                  (void*) pMask,
+                                                  sizeof(ULONG));
+            }
+
+            if (SUCCEEDED(hr))
+            {
+                reqCompletionInfo = sizeof(ULONG);
+            }
+
+			Debugprintf(L"Get Wait Mask %x", m_Device->GetWaitMask());
+
+            break;
+        }
+
+        case IOCTL_SERIAL_WAIT_ON_MASK:
+        {
+            ULONG Mask = m_Device->GetWaitMask();
+			ULONG n;
+			ULONG DAV = 1;
+
+			Debugprintf(L"Wait On Mask - Mask is %x", Mask);
+
+			if (Mask & 1)				// RX Avail
+			{
+				m_RingBuffer.GetAvailableData(&n);
+
+				if (n)
+				{
+					Debugprintf(L"%d Avail - Completing", n);
+					
+					pWdfRequest->GetOutputMemory(&outputMemory);
+
+					if (NULL == outputMemory)
+				        hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+					
+					if (SUCCEEDED(hr))
+						hr = outputMemory->CopyFromBuffer(0, (void*) &DAV, sizeof(ULONG));
+
+					if (SUCCEEDED(hr))
+						reqCompletionInfo = sizeof(ULONG);
+
+					Debugprintf(L"Wait On Mask Returned %x", DAV);
+
+					break;
+				}
+			}
+			// Save till data avail
+
+			pWdfRequest->ForwardToIoQueue(m_FxWaitQueue);
+
+			Debugprintf(L"No Data  - Wait On Mask Queued");
+		
+			return;
+		}
         case IOCTL_SERIAL_SET_BAUD_RATE:
         {
             //
@@ -254,8 +438,12 @@ Return Value:
             // actual hardware, we just store the baud rate and don't do
             // anything with it.
             //
-            SERIAL_BAUD_RATE baudRateBuffer;
-            ZeroMemory(&baudRateBuffer, sizeof(SERIAL_BAUD_RATE));
+			
+			SERIAL_BAUD_RATE baudRateBuffer;
+            
+			Debugprintf(L"IOCTL_SERIAL_SET_BAUD_RATE");
+
+			ZeroMemory(&baudRateBuffer, sizeof(SERIAL_BAUD_RATE));
 
             pWdfRequest->GetInputMemory(&inputMemory);
             if (NULL == inputMemory)
@@ -280,7 +468,8 @@ Return Value:
         case IOCTL_SERIAL_GET_BAUD_RATE:
         {
             SERIAL_BAUD_RATE baudRateBuffer;
-            ZeroMemory(&baudRateBuffer, sizeof(SERIAL_BAUD_RATE));
+ 			Debugprintf(L"IOCTL_SERIAL_GET_BAUD_RATE");
+           ZeroMemory(&baudRateBuffer, sizeof(SERIAL_BAUD_RATE));
 
             baudRateBuffer.BaudRate = m_Device->GetBaudRate();
 
@@ -712,6 +901,9 @@ Return Value:
 
             break;
         }
+		default:
+			
+			Debugprintf(L"Unimplemented IOCTL %x", ControlCode);
 
     }
 
@@ -770,17 +962,51 @@ Return Value:
     // Get memory object
     //
 
+	Debugprintf(L"OnWrite Called %d", BytesToWrite);
+
     pWdfRequest->GetInputMemory(&pRequestMemory);
 
     //
     // Process input. Send to Pipe if connected
     //
 
-	if (this->m_Device->PipeConnected == TRUE)
+	if (this->m_Device->PipeConnected)
 	{
-		DWORD Written;
-		
-		WriteFile(this->m_Device->PipeHandle, (PUCHAR)pRequestMemory->GetDataBuffer(NULL), BytesToWrite, &Written, NULL);
+		// Have to escape all oxff chars, as these are used to report status info 
+
+		UCHAR NewMessage[1000];
+		UCHAR * ptr1 = (PUCHAR)pRequestMemory->GetDataBuffer(NULL);
+		UCHAR * ptr2 = NewMessage;
+		UCHAR c;
+		DWORD Written, NewLen = 0;
+		int Length = BytesToWrite;
+		int Resp;
+
+		while (Length != 0)
+		{
+			c = *(ptr1++);
+			*(ptr2++) = c;
+			NewLen++;
+
+			if (c == 0xff)
+			{
+				*(ptr2++) = c;
+				NewLen++;
+			}
+			Length--;
+
+			if (NewLen > 998)
+			{
+				// About to overflow temp buffer - write this, and reset pointers
+				
+				Resp = WriteFile(this->m_Device->PipeHandle, NewMessage, NewLen, &Written, NULL);
+
+				NewLen = 0;
+				ptr2 = NewMessage;
+			}
+		}
+
+		Resp = WriteFile(this->m_Device->PipeHandle, NewMessage, NewLen, &Written, NULL);
 	}
 
  //   ProcessWriteBytes((PUCHAR)pRequestMemory->GetDataBuffer(NULL), BytesToWrite);
@@ -859,6 +1085,8 @@ Return Value:
 
     UNREFERENCED_PARAMETER(pWdfQueue);
 
+	Debugprintf(L"Onread Called %d", SizeInBytes);
+
     //
     // Get memory object
     //
@@ -901,22 +1129,16 @@ Exit:
     return;
 }
 
-VOID
-CMyQueue::ProcessWriteBytes(
-    __in_bcount(Length) PUCHAR Characters,
-    __in SIZE_T Length
-    )
+VOID ProcessWriteBytes(CMyDevice *pDevice, __in_bcount(Length) PUCHAR Characters, __in SIZE_T Length)
+
+
 /*++
 Routine Description:
 
-    This function is called when the framework receives IRP_MJ_WRITE
-    requests from the system. The write event handler(FmEvtIoWrite) calls ProcessWriteBytes.
+    This function is called when data is received from the pipe
 
-	Bytes are sent to the Pipe Handle if the pipe is open
 
-Arguments:
-
-    Characters - Pointer to the write IRP's system buffer.
+    Characters - Bytes from pipe
 
     Length - Length of the IO operation
                  The default property of the queue is to not dispatch
@@ -931,111 +1153,192 @@ Return Value:
 --*/
 
 {
+	IWDFIoRequest* pSavedRequest = NULL;
+	SIZE_T availableData = 0;
+	SIZE_T savedRequestBufferSize = 0;
+	HRESULT hr = S_OK;
+	UCHAR currentCharacter;
+	UCHAR Reply[3] = {0xff};
 
-    UCHAR currentCharacter;
-    UCHAR connectString[] = "\r\nCONNECT\r\n";
-    UCHAR connectStringCch = ARRAY_SIZE(connectString) - 1;
-    UCHAR okString[] = "\r\nOK\r\n";
-    UCHAR okStringCch = ARRAY_SIZE(okString) - 1;
-
-    while (Length != 0) {
-
+	while (Length != 0)
+	{
         currentCharacter = *(Characters++);
         Length--;
 
-        if(currentCharacter == '\0')
-        {
-            continue;
-        }
+		if (currentCharacter == 0xff)			// Command Excape
+		{
+			currentCharacter = *(Characters++);
+			Length--;
 
-        m_RingBuffer.Write(&currentCharacter, sizeof(currentCharacter));
+			switch(currentCharacter)
+			{
+				case 0xff:			// FF FF means FF
+					
+									
+					if (pDevice->COMConnected)
+						m_RingBuffer.Write(&currentCharacter, sizeof(currentCharacter));
+					
+					break;
 
-        switch (m_CommandMatchState) {
-            case COMMAND_MATCH_STATE_IDLE:
-                if ((currentCharacter == 'a') || (currentCharacter == 'A'))
-                {
-                    //
-                    //  got an A
-                    //
-                    m_CommandMatchState=COMMAND_MATCH_STATE_GOT_A;
-                    m_ConnectCommand=FALSE;
-                    m_IgnoreNextChar=FALSE;
-                }
+				case 01:
 
-            break;
+						//Request for current connect status
 
-            case COMMAND_MATCH_STATE_GOT_A:
-                if ((currentCharacter == 't') || (currentCharacter == 'T'))
-                {
-                    //
-                    //  got a T
-                    //
-                    m_CommandMatchState=COMMAND_MATCH_STATE_GOT_T;
-                }
-                else
-                {
-                    m_CommandMatchState=COMMAND_MATCH_STATE_IDLE;
-                }
+						Reply[1] = pDevice->COMConnected;			
+						DWORD Written;
+		
+						WriteFile(pDevice->PipeHandle, Reply, 2, &Written, NULL);
+						break;
+			}
+		}
+		else
+		{
+			if (pDevice->COMConnected)
+				m_RingBuffer.Write(&currentCharacter, sizeof(currentCharacter));
+		}
+	}
 
-            break;
+	// See if we can complete any read requests
+				 
+	// Get the amount of data available in the ring buffer
+				
+	m_RingBuffer.GetAvailableData(&availableData);
 
-            case COMMAND_MATCH_STATE_GOT_T:
+	Debugprintf(L"avdata %d", availableData);
 
-                if (!m_IgnoreNextChar)
-                {
-                    //
-                    //  the last char was not a special char
-                    //  check for CONNECT command
-                    //
-                    if ((currentCharacter == 'A') || (currentCharacter == 'a'))
-                    {
+	if (availableData > 0)
+	{        
+		hr = m_FxReadQueue->RetrieveNextRequest(&pSavedRequest);
 
-                        m_ConnectCommand=TRUE;
-                    }
+		Debugprintf(L"Retrieve Read Request Returned %d", hr);
 
-                    if ((currentCharacter == 'D') || (currentCharacter == 'd'))
-                    {
+		if ((pSavedRequest == NULL) || (FAILED(hr)))
+		{
+			// See if a pending Wait on Mask
 
-                        m_ConnectCommand=TRUE;
-                    }
-                }
+			hr = m_FxWaitQueue->RetrieveNextRequest(&pSavedRequest);
 
-                m_IgnoreNextChar=TRUE;
+			Debugprintf(L"Look for Queued Wait on Mask");
 
-                if (currentCharacter == '\r')
-                {
-                    //
-                    //  got a CR, send a response to the command
-                    //
-                    m_CommandMatchState = COMMAND_MATCH_STATE_IDLE;
+			if ((pSavedRequest == NULL) || (FAILED(hr)))
+			{
+				Debugprintf(L"Retrieve Wait Request Returned %d", hr);
+				return;
+			}
+			
+			// Post the WAIT request
 
-                    if (m_ConnectCommand)
-                    {
-                        //
-                        //  place <cr><lf>CONNECT<cr><lf>  in the buffer
-                        //
-                        m_RingBuffer.Write(connectString, connectStringCch);
+			Debugprintf(L"Got Wait on Mask");
 
-                        //
-                        //  connected now raise CD
-                        //
-                        m_CurrentlyConnected = TRUE;
-                        m_ConnectionStateChanged = TRUE;
+		    SIZE_T reqCompletionInfo = 0;
+			IWDFMemory *outputMemory = NULL;
+			ULONG DAV = 1;
 
-                    }
-                    else
-                    {
-                        //
-                        //  place <cr><lf>OK<cr><lf>  in the buffer
-                        //
-                        m_RingBuffer.Write(okString, okStringCch);
-                    }
-                }
+			pSavedRequest->GetOutputMemory(&outputMemory);
 
-            break;
-            default:
-            break;
-        }
-    }
+			if (NULL == outputMemory)
+				      hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+					
+			if (SUCCEEDED(hr))
+				hr = outputMemory->CopyFromBuffer(0, (void*) &DAV, sizeof(ULONG));
+
+			if (SUCCEEDED(hr))
+				reqCompletionInfo = sizeof(ULONG);
+
+			Debugprintf(L"Wait On Mask Posted %x", DAV);
+
+		    if (outputMemory)
+				
+				outputMemory->Release();
+  
+			pSavedRequest->CompleteWithInformation(hr, reqCompletionInfo);
+			return;
+
+		}
+
+		pSavedRequest->GetReadParameters(&savedRequestBufferSize, NULL, NULL);
+
+//		CMyQueue::OnRead(m_FxQueue, pSavedRequest, savedRequestBufferSize);
+
+		IWDFMemory* pRequestMemory = NULL;
+		SIZE_T BytesCopied = 0;
+   
+		pSavedRequest->GetOutputMemory(&pRequestMemory);
+
+		hr = m_RingBuffer.Read((PBYTE)pRequestMemory->GetDataBuffer(NULL),
+                            savedRequestBufferSize,
+                            &BytesCopied);
+
+		//
+		// Release memory object.
+		//
+		SAFE_RELEASE(pRequestMemory);
+
+	  if (FAILED(hr))
+		{
+			//
+		  // Error reading buffer
+			//
+			pSavedRequest->Complete(hr);
+			goto Exit;
+		}
+
+         pSavedRequest->CompleteWithInformation(hr, BytesCopied);
+
+		// RetrieveNextRequest from a manual queue increments the reference
+		// counter by 1. We need to decrement it, otherwise the request will
+		// not be released and there will be an object leak.
+Exit:
+		SAFE_RELEASE(pSavedRequest);
+	}
+
     return;
+}
+
+STDMETHODIMP_(void)
+CMyQueue::OnCreateFile(
+    __in IWDFIoQueue* pWdfQueue,
+    __in IWDFIoRequest* pWdfRequest,
+    __in IWDFFile* pWdfFileObject
+    )
+
+/*++
+
+Routine Description:
+
+    Create callback from the framework for this default parallel queue 
+    
+    The create request will create a socket connection , create a file i/o target associated 
+    with the socket handle for this connection and store in the file object context.
+
+Aruments:
+    
+    pWdfQueue - Framework Queue instance
+    pWdfRequest - Framework Request  instance
+    pWdfFileObject - WDF file object for this create
+
+ Return Value:
+
+    VOID
+
+--*/
+{
+	HRESULT hr = S_OK;
+	UCHAR Reply[3] = {0xff, 1};
+	DWORD Written;
+
+	UNREFERENCED_PARAMETER(pWdfRequest);
+    UNREFERENCED_PARAMETER(pWdfFileObject);
+    UNREFERENCED_PARAMETER(pWdfQueue);
+
+	Debugprintf(L"OnCreate Called");
+	pWdfRequest->Complete(hr);
+
+	this->m_Device->COMConnected = TRUE;
+
+	if (this->m_Device->PipeConnected)
+		WriteFile(this->m_Device->PipeHandle, Reply, 2, &Written, NULL);
+
+	Debugprintf(L"Status Sent");
+
 }
