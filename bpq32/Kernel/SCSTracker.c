@@ -895,6 +895,8 @@ VOID DEDPoll(int Port)
 			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
 			wsprintf(TNC->Streams[0].CmdSet, "%%B%s\rI%s\r",
 				(TNC->RobustDefault) ? "R600" : "300", TNC->NodeCall);
+			
+			strcpy(TNC->Streams[0].MyCall, TNC->NodeCall);
 		}
 	}
 

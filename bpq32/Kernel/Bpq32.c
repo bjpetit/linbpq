@@ -399,6 +399,10 @@
 // Fix reporting of Tracker freqs to WL2K.
 // Fix Tracker monitoring setup (sending M UISC)
 
+// Fix possible call/application routing error on RP
+// Changes for P4Dragon
+// Include APRS Digi/IGate
+
 #define Kernel
 #include "Versions.h"
 

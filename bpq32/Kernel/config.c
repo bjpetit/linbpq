@@ -748,7 +748,7 @@ char rec[];
 
 		while (!feof(fp1))
 		{
-			if (_memicmp(rec, "****", 4) == 0)
+			if (_memicmp(rec, "****", 3) == 0)
 			{
 				PortConfig[33] = realloc(PortConfig[33], (strlen(ptr) + 1));
 				cfg->C_IP = 1;
@@ -783,7 +783,7 @@ char rec[];
 
 		while (!feof(fp1))
 		{
-			if (_memicmp(rec, "****", 4) == 0)
+			if (_memicmp(rec, "****", 3) == 0)
 			{
 				PortConfig[34] = realloc(PortConfig[34], (strlen(ptr) + 1));
 				return 0;

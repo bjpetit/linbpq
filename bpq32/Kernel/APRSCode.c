@@ -38,7 +38,7 @@ int TelDecodeFrame(char * msg, char * buffer, int Stamp);		// Unsemaphored Decod
 static VOID UpdateHeard(UCHAR * Call, int Port);
 BOOL CheckforDups(char * Call, char * Msg, int Len);
 VOID ProcessQuery(char * Query);
-
+VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int Len);		
 
 BOOL ProcessConfig();
 BOOL FreeConfig();
@@ -66,16 +66,31 @@ static int SecTimer = 10;
 UINT APRSPortMask = 0;
 
 char * APRSCall = NULL;
+UCHAR AXCall[7];
 
 int GPSPort = 0;
 int GPSSpeed = 0;
 
-char * LAT = NULL;
-char * LON = NULL;
+char LAT[] = "0000.00N";	// in standard APRS Format      
+char LON[] = "00000.00W";	//in standard APRS Format
 
+BOOL PosnSet = FALSE;
+/*
+The null position should be include the \. symbol (unknown/indeterminate
+position). For example, a Position Report for a station with unknown position
+will contain the coordinates …0000.00N\00000.00W.…
+*/
 char * FloodCalls = 0;			// Calls to relay using N-n without tracing
 char * TraceCalls = 0;			// Calls to relay using N-n with tracing
 char * DigiCalls = 0;			// Calls for normal relaying
+
+UCHAR FloodAX[10][7] = {0};
+UCHAR TraceAX[10][7] = {0};
+UCHAR DigiAX[10][7] = {0};
+
+int FloodLen[10];
+int TraceLen[10];
+int DigiLen[10];
 
 short ISPort = 0;
 char ISHost[256] = "";
@@ -146,6 +161,12 @@ Dll BOOL APIENTRY Init_APRS()
 
 	if (ReadConfigFile() == 0)
 		return FALSE;
+
+	if (PosnSet == 0)
+	{
+		SYMBOL = '.';
+		SYMSET = '\\';				// Undefined Posn Symbol
+	}
 
 	// Convert Dest ADDRS to AX.25
 
@@ -294,13 +315,10 @@ Dll VOID APIENTRY Poll_APRS()
 			char * ptr2;
 			char * ptr3;
 			char * ptr4;
-			ULONG SaveMMASK;
+			ULONG SaveMMASK = MMASK; 
 
-			SaveMMASK = MMASK;
 			MMASK = 0xffff;
-
 			len = TelDecodeFrame((char *)monchars,  buffer, stamp);
-		
 			MMASK = SaveMMASK;
 
 			if(len == 0)
@@ -348,7 +366,11 @@ Dll VOID APIENTRY Poll_APRS()
 			{
 				len = wsprintf(ISMsg, "%s>%s,qAC,%s:%s", ptr1, ptr4, APRSCall, ptr2 + 2);
 
-				send(sock, ISMsg, len, 0);
+//				send(sock, ISMsg, len, 0);
+				ptr1 = strchr(ISMsg, 13);
+				if (ptr1)
+					*ptr1 = 0;
+				
 				Debugprintf(ISMsg);
 
 			}
@@ -369,15 +391,26 @@ Dll VOID APIENTRY Poll_APRS()
 				goto OK;
 		}
 
-		// Not to an APRS Destination
+		switch(AdjBuff->L2DATA[0])
+		{
+			case '`':
+			case 0x27:					// '
+			case 0x1c:
+			case 0x1d:					// MIC-E
+
+				break;
+			default:
+
+				// Not to an APRS Destination
 			
-		ReleaseBuffer(monbuff);
-		continue;
+				ReleaseBuffer(monbuff);
+				continue;
+		}
 
 OK:
-		// If there are digis, we may need to digi it.
+		// If there are unused digis, we may need to digi it.
 
-		if (Digis == 0)
+		if (Digis == 0 || FirstUnused == 0)
 		{
 			// No Digis, so finished
 
@@ -395,11 +428,117 @@ OK:
 
 		// Pass to Digi Code
 
+		CheckandDigi(&Msg, Port, FirstUnused, Digis, len);		// Digi if necessary		
+
 		ReleaseBuffer(monbuff);
 	}
 
 	return;
 }
+
+VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int Len)
+{
+	UCHAR * Digi = &Msg->DIGIS[--FirstUnused][0];
+	UCHAR * Call;
+	int Index = 0;
+	int SSID;
+
+	// Check ordinary digi first
+
+	Call = &DigiAX[0][0];
+	SSID = Digi[6] & 0x1e;
+
+	while (*Call)
+	{
+		if ((memcmp(Digi, Call, 6) == 0) && ((Call[6] & 0x1e) == SSID))
+		{
+			// mark as used;
+
+			Digi[6] |= 0x80;	// Used bit
+
+			Send_AX_Datagram(Msg, Len, Port);
+			return;
+		}
+		Call += 7;
+		Index++;
+	}
+
+	Call = &TraceAX[0][0];
+	Index = 0;
+
+	while (*Call)
+	{
+		if (memcmp(Digi, Call, TraceLen[Index]) == 0)
+		{
+			// if possible move calls along
+			// insert our call, set used
+			// decrement ssid, and if zero, mark as used;
+
+			SSID = (Digi[6] & 0x1E) >> 1;
+
+			if (SSID == 0)	
+				return;					// Shouldn't have SSID 0 for Rrace/Flood
+
+			if (SSID > MaxTraceHops)
+				SSID = MaxTraceHops;	// Enforce our limit
+
+			SSID--;
+
+			if (SSID ==0)				// Finihed with it ?
+				Digi[6] = (SSID << 1) | 0xe0;	// Used and Fixed bits
+			else
+				Digi[6] = (SSID << 1) | 0x60;	// Fixed bits
+
+			if (Digis < 8)
+			{
+				memmove(Digi + 7, Digi, (Digis - FirstUnused) * 7);
+			}
+				
+			memcpy(Digi, AXCall, 7);
+			Digi[6] |= 0x80;
+
+			Send_AX_Datagram(Msg, Len, Port);
+
+			return;
+		}
+		Call += 7;
+		Index++;
+	}
+
+	Index = 0;
+	Call = &FloodAX[0][0];
+
+	while (*Call)
+	{
+		if (memcmp(Digi, Call, FloodLen[Index]) == 0)
+		{
+			// decrement ssid, and if zero, mark as used;
+
+			SSID = (Digi[6] & 0x1E) >> 1;
+
+			if (SSID == 0)	
+				return;					// Shouldn't have SSID 0 for Trace/Flood
+
+			if (SSID > MaxFloodHops)
+				SSID = MaxFloodHops;	// Enforce our limit
+
+			SSID--;
+
+			if (SSID ==0)						// Finihed with it ?
+				Digi[6] = (SSID << 1) | 0xe0;	// Used and Fixed bits
+			else
+				Digi[6] = (SSID << 1) | 0x60;	// Fixed bits
+
+			Send_AX_Datagram(Msg, Len, Port);
+
+			return;
+		}
+		Call += 7;
+		Index++;
+	}
+}
+
+
   
 static VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
 {
@@ -468,9 +607,36 @@ static BOOL ReadConfigFile()
 				WritetoConsole(errbuf);
 			}
 		}
+		return TRUE;
 	}
-	return (TRUE);
+	return FALSE;
 }
+
+BOOL ConvertCalls(char * DigiCalls, UCHAR * AX, int * Lens)
+{
+	int Index = 0;
+	char * ptr;
+	char * Context;
+	UCHAR Work[10][7] = {0};
+	int Len[10] = {0};
+		
+//	DigiAX = zalloc(50);
+
+	ptr = strtok_s(DigiCalls, ", ", &Context);
+	while(ptr)
+	{
+		if (Index == 10) return FALSE;
+
+		ConvToAX25(ptr, &Work[Index][0]);
+		Len[Index++] = strlen(ptr);
+		ptr = strtok_s(NULL, ", ", &Context);
+	}
+
+	memcpy(AX, Work, 70);
+	memcpy(Lens, Len, 40);
+	return TRUE;
+}
+
 
 
 static ProcessLine(char * buf)
@@ -522,7 +688,7 @@ static ProcessLine(char * buf)
 
 		// Convert to ax.25
 
-		return TRUE;
+		return ConvToAX25(APRSCall, AXCall);
 	}
 
 	if (_stricmp(ptr, "BEACONPATH") == 0)
@@ -577,18 +743,21 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr, "TRACECALLS") == 0)
 	{
 		TraceCalls = _strdup(_strupr(p_value));
+		ConvertCalls(TraceCalls, &TraceAX[0][0], &TraceLen[0]);
 		return TRUE;
 	}
 
 	if (_stricmp(ptr, "FLOODCALLS") == 0)
 	{
 		FloodCalls = _strdup(_strupr(p_value));
+		ConvertCalls(FloodCalls, &FloodAX[0][0], &FloodLen[0]);
 		return TRUE;
 	}
 
 	if (_stricmp(ptr, "DIGICALLS") == 0)
 	{
 		DigiCalls = _strdup(_strupr(p_value));
+		ConvertCalls(DigiCalls, &DigiAX[0][0], &DigiLen[0]);
 		return TRUE;
 	}
 
@@ -606,19 +775,21 @@ static ProcessLine(char * buf)
 
 	if (_stricmp(ptr, "LAT") == 0)
 	{
-		LAT = _strdup(_strupr(p_value));
-		if (strlen(LAT) != 8)
+		if (strlen(p_value) != 8)
 			return FALSE;
 
+		memcpy(LAT, _strupr(p_value), 8);
+		PosnSet = TRUE;
 		return TRUE;
 	}
 
 	if (_stricmp(ptr, "LON") == 0)
 	{
-		LON = _strdup(_strupr(p_value));
-		if (strlen(LON) != 9)
+		if (strlen(p_value) != 9)
 			return FALSE;
 
+		memcpy(LON, _strupr(p_value), 9);
+		PosnSet = TRUE;
 		return TRUE;
 	}
 
@@ -714,6 +885,8 @@ VOID SendBeacon()
 		Len = wsprintf(ISMsg, "%s>APRS,TCPIP*:!%s%c%s%c %s\r\n", APRSCall, LAT, SYMSET, LON, SYMBOL, StatusMsg);
 		send(sock, ISMsg, Len, 0);
 		Debugprintf(ISMsg);
+
+		IStatusCounter = 5;
 	}
 }
 
@@ -721,21 +894,27 @@ VOID SendIStatus()
 {
 	int Port;
 	DIGIMESSAGE Msg;
-	
 	int Len;
 
-	Msg.PID = 0xf0;
-	Msg.CTL = 3;
-
-	Len = wsprintf(Msg.L2DATA, "<IGATE,MSG_CNT=%d,LOC_CNT=%d", 0 , HEARDENTRIES);
-
-	for (Port = 1; Port <= NUMBEROFPORTS; Port++)
+	if (APRSISOpen)
 	{
-		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
+		Msg.PID = 0xf0;
+		Msg.CTL = 3;
+
+		Len = wsprintf(Msg.L2DATA, "<IGATE,MSG_CNT=%d,LOC_CNT=%d", 0 , HEARDENTRIES);
+
+		for (Port = 1; Port <= NUMBEROFPORTS; Port++)
 		{
-			memcpy(Msg.DEST, &BeaconHeader[Port][0][0],  BeaconHddrLen[Port] + 1);
-			Send_AX_Datagram(&Msg, Len + 2, Port);
+			if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
+			{
+				memcpy(Msg.DEST, &BeaconHeader[Port][0][0],  BeaconHddrLen[Port] + 1);
+				Send_AX_Datagram(&Msg, Len + 2, Port);
+			}
 		}
+
+		Len = wsprintf(Msg.L2DATA, "%s>APRS,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d", APRSCall, 0 , HEARDENTRIES);
+		send(sock, Msg.L2DATA, Len, 0);
+		Debugprintf(Msg.L2DATA);
 	}
 }
 
@@ -972,6 +1151,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 	time_t Now = time(NULL);
 	time_t DupCheck = Now - DUPSECONDS;
 	int i, saveindex = -1;
+	char * ptr1;
 
 	for (i = 0; i < MAXDUPS; i++)
 	{
@@ -995,6 +1175,10 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 			// Duplicate, so discard
 
 			Msg[Len] = 0;
+			ptr1 = strchr(Msg, 13);
+			if (ptr1)
+				*ptr1 = 0;
+
 			Debugprintf("Duplicate Message supressed %s", Msg);
 			return TRUE;					// Duplicate
 		}

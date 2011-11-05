@@ -1632,14 +1632,6 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
-	char Status[80];
-
-	TNC->NeedPACTOR = 20;		// Delay a bit for UA to be sent before changing mode and call
-	
-	TNC->SwitchToPactor = TNC->RobustTime;
-
-	wsprintf(Status, "%d SCANSTART 15", TNC->Port);
-	Rig_Command(-1, Status);
 }
 
 

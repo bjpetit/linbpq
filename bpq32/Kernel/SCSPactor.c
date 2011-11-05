@@ -720,6 +720,8 @@ static void CheckRX(struct TNCINFO * TNC)
 	unsigned short crc;
 	char UnstuffBuffer[500];
 
+	ComStat.cbInQue = 0;
+
 	// only try to read number of bytes in queue 
 
 	if (TNC->RXLen == 500)
@@ -730,6 +732,8 @@ static void CheckRX(struct TNCINFO * TNC)
 		// Device failed. Close and try to reopen
 
 //		CloseHandle(TNC->hDevice);
+
+		Debugprintf("SCS Pactor COMM Error - recycling port");
 		
 		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
@@ -738,7 +742,6 @@ static void CheckRX(struct TNCINFO * TNC)
 		
 		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
 	}
-
 
 	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
 
@@ -1162,9 +1165,9 @@ VOID SCSPoll(int Port)
 				memcpy(&Poll[5], start, len);
 		
 
-//				OpenLogFile(TNC->Port);
-//				WriteLogLine(TNC->Port, &Poll[5], len);
-//				CloseLogFile(TNC->Port);
+				OpenLogFile(TNC->Port);
+				WriteLogLine(TNC->Port, &Poll[5], len);
+				CloseLogFile(TNC->Port);
 
 				CRCStuffAndSend(TNC, Poll, len + 5);
 
@@ -1335,9 +1338,9 @@ VOID SCSPoll(int Port)
 				memcpy(&Poll[5], buffptr+2, datalen);
 		
 				ReleaseBuffer(buffptr);
-//				OpenLogFile(TNC->Port);
-//				WriteLogLine(TNC->Port, &Poll[5], datalen);
-//				CloseLogFile(TNC->Port);
+				OpenLogFile(TNC->Port);
+				WriteLogLine(TNC->Port, &Poll[5], datalen);
+				CloseLogFile(TNC->Port);
 		
 				CRCStuffAndSend(TNC, Poll, datalen + 5);
 
@@ -1497,9 +1500,9 @@ VOID SCSPoll(int Port)
 		
 			ReleaseBuffer(buffptr);
 		
-//			OpenLogFile(TNC->Port);
-//			WriteLogLine(TNC->Port, &Poll[5], datalen);
-//			CloseLogFile(TNC->Port);
+			OpenLogFile(TNC->Port);
+			WriteLogLine(TNC->Port, &Poll[5], datalen);
+			CloseLogFile(TNC->Port);
 
 			CRCStuffAndSend(TNC, Poll, datalen + 5);
 
@@ -2050,9 +2053,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"Pactor} Ok\r");
 
-//		OpenLogFile(TNC->Port);
-//		WriteLogLine(TNC->Port, (UCHAR *)&buffptr[2], buffptr[1]);
-//		CloseLogFile(TNC->Port);
+		OpenLogFile(TNC->Port);
+		WriteLogLine(TNC->Port, (UCHAR *)&buffptr[2], buffptr[1]);
+		CloseLogFile(TNC->Port);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
@@ -2884,8 +2887,11 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
 	char Status[80];
-	
-	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
+	struct STREAMINFO * STREAM = &TNC->Streams[Stream];
+
+	STREAM->CmdSet = STREAM->CmdSave = malloc(100);
+
+	strcpy(STREAM->MyCall, TNC->NodeCall);
 
 	if (Stream == 0 || TNC->HFPacket)
 	{
@@ -2895,20 +2901,20 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 		if (TNC->HFPacket)
 		{
-			wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPR\r", TNC->NodeCall);
+			wsprintf(STREAM->CmdSet, "I%s\rPR\r", TNC->NodeCall);
 			TNC->Streams[0].DEDStream = 30;		// Packet Channel
 		}
 		else
 		{
 			if (TNC->Dragon)
-				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->NodeCall);
+				wsprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);
 			else
-				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->NodeCall);
+				wsprintf(STREAM->CmdSet, "I%s\rPT\r", TNC->NodeCall);
 
 			TNC->Streams[0].DEDStream = 31;		// Pactor Channel
 		}
 	}
 	else
-		wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->NodeCall);
+		wsprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);
 }
 

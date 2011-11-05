@@ -46,6 +46,10 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 extern UCHAR BPQDirectory[];
 
+extern byte	MCOM;
+extern char	MTX;
+extern ULONG MMASK;
+
 extern struct BPQVECSTRUC TELNETMONVEC;
 extern int MONDECODE();
 
@@ -1095,8 +1099,14 @@ VOID TelnetPoll(int Port)
 					}
 					else
 					{
+						ULONG SaveMMASK = MMASK;
+						BOOL SaveMTX = MTX;
+						BOOL SaveMCOM = MCOM;
+
 						SetTraceOptions(sockptr->MMASK, sockptr->MTX, sockptr->MCOM);
 						len = TelDecodeFrame((char *)monbuff,&buffer[3],stamp);
+						SetTraceOptions(SaveMMASK, SaveMTX, SaveMCOM);
+
 						if (len)
 						{
 							len += 3;

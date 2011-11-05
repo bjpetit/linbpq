@@ -519,9 +519,9 @@ NEXT_DIGI:
 	add	ESI,7
 	sub	FRAME_LENGTH,7		; Reduce length
 
+	push	ECX	
 	push	ESI
 
-	push	ECX
 	lea	ESI,MSGORIGIN[ESI]
 	call	CONVFROMAX25		; Convert to call
 
@@ -537,15 +537,27 @@ NEXT_DIGI:
 
 	test	AH,80H
 	jz	NOT_REPEATED
+	
+;	We should only put a * on the last repeated
 
+	test	AH,1		; if last address must be last repeated
+	jnz	NEEDSTAR
+	
+	pop	ESI
+	test MSGORIGIN+13[ESI],80H
+	push ESI
+	jnz NOSTAR			; Repeated by next
+
+NEEDSTAR:
 	mov	AL,'*'
 	call	PUTCHAR
 
-	PUBLIC	NOT_REPEATED
+NOSTAR:
 NOT_REPEATED:
 
-	pop	ECX
 	pop	ESI
+	pop	ECX
+
 	loop	NEXT_DIGI
 
 	PUBLIC	NO_MORE_DIGIS
