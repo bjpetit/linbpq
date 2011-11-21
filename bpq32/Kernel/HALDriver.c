@@ -1746,7 +1746,7 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 			return TRUE;
 		}
 
-		if (FULL_CTEXT)
+		if (FULL_CTEXT && HFCTEXTLEN == 0)
 		{
 			EncodeAndSend(TNC, CTEXTMSG, CTEXTLEN);
 			WriteLogLine(2, CTEXTMSG, CTEXTLEN);

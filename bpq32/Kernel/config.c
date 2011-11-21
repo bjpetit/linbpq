@@ -284,6 +284,8 @@ int do_kiss (char value[],char rec[]);
 int dec_byte(i, value, rec);
 
 extern char PWTEXT[];
+extern char HFCTEXT[];
+extern int HFCTEXTLEN;
 extern char LOCATOR[];
 extern int AXIPPort;
 
@@ -313,6 +315,7 @@ extern int __cdecl callstring(int i,char *value,char *rec);
 int decode_port_rec(char *rec);
 extern int __cdecl doid(int i,char *value,char *rec);
 extern int __cdecl dodll(int i,char *value,char *rec);
+extern int __cdecl doDriver(int i,char *value,char *rec);
 extern int __cdecl hwtypes(int i,char *value,char *rec);
 extern int __cdecl protocols(int i,char *value,char *rec);
 extern int __cdecl bbsflag(int i,char *value,char *rec);
@@ -418,7 +421,7 @@ static char *pkeywords[] =
 "QUALADJUST", "DIGIFLAG", "DIGIPORT", "USERS" ,"UNPROTO", "PORTNUM",
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
-"BCALL", "DIGIMASK", "NOKEEPALIVES"
+"BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER"
 };           /* parameter keywords */
 
 static int poffset[] =
@@ -430,7 +433,7 @@ static int poffset[] =
 68, 70, 71 ,74, 128, 0,
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
-226, 72, 124
+226, 72, 124, 36, 210
 };		/* offset for corresponding data in config file */
 
 static int proutine[] = 
@@ -442,11 +445,11 @@ static int proutine[] =
 1, 13, 13, 1, 11, 1,
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
-0, 1, 2
+0, 1, 2, 1, 15
 };		/* routine to process parameter */
 
 
-#define PPARAMLIM 46
+#define PPARAMLIM 48
 
 static int fileoffset = 0;
 static int portoffset = 2560;
@@ -809,6 +812,17 @@ char rec[];
 		_strupr(rec);
 		
 		strcpy(PWTEXT, &rec[9]);
+		return 0;
+	}
+
+	if (_memicmp(rec, "HFCTEXT", 7) == 0)
+	{
+		// HF only CTEXT (normlly short to reduce traffic)
+
+		if (strlen(rec) > 87) rec[87] = 0;
+		strcpy(HFCTEXT, &rec[8]);
+		HFCTEXTLEN = strlen(HFCTEXT);
+		HFCTEXT[HFCTEXTLEN - 1] = '\r';
 		return 0;
 	}
 
@@ -1877,6 +1891,10 @@ char rec[];
             cn = dodll(i,value,rec);               /* DLL PARMS */
 			break;
 
+        case 15:
+            cn = doDriver(i,value,rec);               /* DLL PARMS */
+			break;
+
 			
 			
 			case 9:
@@ -1930,6 +1948,25 @@ char rec[];
 	if (j > 24)
 	{
 	   Consoleprintf("DLL name too long - Truncated");
+	   Consoleprintf("%s\r\n",rec);
+	}
+	strcat(workstring,"                ");
+	workstring[16] = '\0';
+
+	bseek(fp2,(long) fileoffset,SEEK_SET);
+        bputs(workstring,fp2);
+        return(1);
+}
+
+int doDriver(int i, char * value, char * rec)
+{
+	unsigned int j;
+	for (j = 7;( j < strlen(rec)+1); j++)
+	    workstring[j-7] = rec[j];
+
+	if (j > 23)
+	{
+	   Consoleprintf("Driver name too long - Truncated");
 	   Consoleprintf("%s\r\n",rec);
 	}
 	strcat(workstring,"                ");

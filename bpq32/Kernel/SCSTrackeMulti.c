@@ -39,6 +39,7 @@ static RECT Rect;
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
+char * strlop(char * buf, char delim);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
@@ -167,7 +168,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int txlen = 0;
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
-	int Param;
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 	int TNCOK;
@@ -323,51 +323,27 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		return (0);
 
-	case 6:				// Scan Stop Interface
+	case 6:
 
-		_asm 
-		{
-			MOV	EAX,buff
-			mov Param,eax
-		}
+		return 0;				// No scan interface
 
-		switch (Param)
-		{
-		case 1:		// Request Permission
+	case 7:						// Send UI
 
-			if (TNC->TNCOK)
-			{
-				TNC->WantToChangeFreq = TRUE;
-				TNC->OKToChangeFreq = TRUE;
-				return 0;
-			}
-			return 0;		// Don't lock scan if TNC isn't reponding
-		
-
-		case 2:		// Check  Permission
-			return TNC->OKToChangeFreq;
-
-		case 3:		// Release  Permission
-		
-			TNC->WantToChangeFreq = FALSE;
-			TNC->DontWantToChangeFreq = TRUE;
-			return 0;
-		
-		case 4:		// Set Wide Mode - Not Used
-		
-			return 0;
-		
-		case 5:		// Set Narrow Mode Used for Normal Packet
-		
-			SwitchToNormPacket(TNC);
+		if (!TNC->TNCOK)			
 			return 0;
 
-		case 6:		// Changing Freq (Called if changing freq but not bandwidth
+		buffptr = GetBuff();
 
-			SwitchToRPacket(TNC);
-			return 0;
-		}
+		if (buffptr == 0) return (0);			// No buffers, so ignore
+
+		txlen=(buff[6]<<8) + buff[5] - 7;
+		buffptr[1] = txlen;
+		memcpy(buffptr+2, &buff[7], txlen);
+		
+		C_Q_ADD(&TNC->UI_Q, buffptr);
+		return (0);
 	}
+
 	return 0;
 }
 
@@ -698,8 +674,8 @@ static VOID DEDPoll(int Port)
 
 			if (Stream)			//Leave Stream 0 call alone
 			{
-				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->Streams[Stream].MyCall);
+				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
+				wsprintf(TNC->Streams[Stream].CmdSet, "%c%c%cI%s\0", Stream, 1, 1, TNC->Streams[Stream].MyCall);
 			}
 		}
 	}
@@ -777,7 +753,7 @@ static VOID DEDPoll(int Port)
 			
 			TNC->InitPtr = end;
 
-			Poll[0] = 0;		// Channel
+			Poll[0] = 0;			// Channel
 			Poll[1] = 1;			// Command
 			Poll[2] = len - 1;
 			memcpy(&Poll[3], start, len);
@@ -798,23 +774,21 @@ static VOID DEDPoll(int Port)
 
 			start = TNC->Streams[Stream].CmdSet;
 		
-			if (*(start) == 0)			// End of Script
+			if (*(start + 2) == 0)			// End of Script
 			{
 				free(TNC->Streams[Stream].CmdSave);
 				TNC->Streams[Stream].CmdSet = NULL;
 			}
 			else
 			{
-				end = strchr(start, 13);
+				end = strchr(start + 3, 0);
 				len = ++end - start -1;	// exclude cr
 				TNC->Streams[Stream].CmdSet = end;
 
-				Poll[0] = TNC->Streams[Stream].DEDStream;		// Channel
-				Poll[1] = 1;			// Command
-				Poll[2] = len - 1;
-				memcpy(&Poll[3], start, len);
+				memcpy(&Poll[0], start, len);
+				Poll[2] = len - 4;
 		
-				StuffAndSend(TNC, Poll, len + 3);
+				StuffAndSend(TNC, Poll, len);
 
 				return;
 			}
@@ -910,9 +884,10 @@ static VOID DEDPoll(int Port)
 
 				TNC->Streams[Stream].Connecting = TRUE;
 
-				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
+				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
 							
-				wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r%s\r", TNC->Streams[Stream].MyCall, buffptr+2);
+				wsprintf(TNC->Streams[Stream].CmdSet, "%c%c%cI%s%c%c%c%c%s\0", Stream, 1, 1,
+					TNC->Streams[Stream].MyCall, 0, Stream, 1, 1, buffptr+2);
 
 				ReleaseBuffer(buffptr);
 	
@@ -931,8 +906,60 @@ static VOID DEDPoll(int Port)
 
 			return;
 		}
+	}
 
-	
+	if (TNC->TNCOK && TNC->UI_Q)
+	{
+		int datalen;
+		UINT * buffptr;
+		char * Buffer;
+		char CCMD[80] = "C";
+		char Call[12] = "           ";
+			
+		buffptr=Q_REM(&TNC->UI_Q);
+		
+		datalen=buffptr[1];
+		Buffer = (char *)&buffptr[2];	// Data portion of frame
+		Buffer[datalen] = 0;
+
+		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
+							
+//		wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r%s\r", TNC->Streams[Stream].MyCall, buffptr+2);
+
+		// Buffer has an ax.25 header, which we need to pick out and set as channel 0 Connect address
+		// before sending the beacon
+
+		ConvFromAX25(Buffer, &Call[1]);			// Dest
+		strlop(&Call[1], ' ');
+		strcat(CCMD, Call);
+		Buffer += 14;							// Skip Origin
+		datalen -= 7;
+
+		while ((Buffer[-1] & 1) == 0)
+		{
+			ConvFromAX25(Buffer, &Call[1]);
+			strlop(&Call[1], ' ');
+			strcat(CCMD, Call);
+			Buffer += 7;	// End of addr
+			datalen -= 7;
+		}
+
+		if (Buffer[0] == 3)				// UI
+		{
+			Buffer += 2;
+			datalen -= 2;
+
+			Poll[0] = 0;				// UI Channel
+			Poll[1] = 1;				// Data
+			Poll[2] = strlen(CCMD) - 1;
+			strcpy(&Poll[3], CCMD);
+			StuffAndSend(TNC, Poll, Poll[2] + 4);
+
+			wsprintf(TNC->Streams[0].CmdSet, "%c%c%c%s\0", 0, 0, 1, Buffer);
+		}
+
+		ReleaseBuffer(buffptr);
+		return;
 	}
 
 	// if frames outstanding, issue a poll (but not too often)
@@ -1460,7 +1487,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 					ProcessIncommingConnect(TNC, Call, Stream);
 
-					if (FULL_CTEXT)
+					if (FULL_CTEXT && HFCTEXTLEN == 0)
 					{
 						int Len = CTEXTLEN, CTPaclen = 100;
 						int Next = 0;
@@ -1560,7 +1587,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 								TNC->SwitchToPactor = 600;		// Don't change modes for 60 secs
 
 								strcpy(STREAM->MyCall, DestCall);
-								STREAM->CmdSet = STREAM->CmdSave = malloc(100);
+								STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
 								wsprintf(STREAM->CmdSet, "I%s\r", DestCall);
 								break;
 							}
@@ -1620,8 +1647,8 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {
 	// Queue it as we may have just sent data
 
-	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-	wsprintf(TNC->Streams[Stream].CmdSet, "D\r");
+	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
+	wsprintf(TNC->Streams[Stream].CmdSet, "%c%c%cD\0", Stream, 1, 1);
 }
 
 

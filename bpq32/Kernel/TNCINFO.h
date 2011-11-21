@@ -9,6 +9,8 @@
 
 #define MAXFREQS 20			// RigControl freqs to scan
 
+int HFCTEXTLEN;
+
 struct PacketReportInfo
 {
 	int mode;              // see below (an integer)
@@ -27,8 +29,25 @@ struct WL2KInfo
 	struct PacketReportInfo * PacketData;
 };
 
+#pragma pack(1)
 
+// AGWPE Header Structure
 
+static struct AGWHEADER
+{
+	byte Port;
+	byte filler1[3];
+	char DataKind;
+	byte filler2;
+	unsigned char PID;
+	byte filler3;
+	unsigned char callfrom[10];
+	unsigned char callto[10];
+	int DataLength;
+	int reserved;
+};
+
+#pragma pack()
 
 // Telnet Server User Record
 
@@ -124,6 +143,8 @@ struct STREAMINFO
 	char MyCall[10]	;			// Call we are using
 	char RemoteCall[10];		// Callsign
 
+	char AGWKey[21];			// Session Key for AGW Session Based Drivers
+
 	int BytesTXed;
 	int BytesAcked;
 	int BytesRXed;
@@ -143,7 +164,14 @@ struct STREAMINFO
 	int NeedDisc;				// Timer to send DISC if appl not available
 };
 
+typedef struct AGWINFO
+{
+	// Fields for AGW Session based Ports (eg UZ7HO Modem)
 
+	struct AGWHEADER TXHeader;
+	struct AGWHEADER RXHeader;
+	int MaxSessions;
+};
 
 typedef struct TNCINFO
 { 
@@ -164,6 +192,7 @@ typedef struct TNCINFO
 #define H_TRK 7
 #define H_TRKM 7
 #define H_V4 8
+#define H_UZ7HO 9
 
 	int Port;					// BPQ Port Number
 
@@ -173,6 +202,8 @@ typedef struct TNCINFO
 
 	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
 	int BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
+
+	UINT UI_Q;				// Unproto Frames
 
 	SOCKET WINMORSock;			// Control Socket
 	SOCKET WINMORDataSock;		// Data Socket
@@ -338,6 +369,8 @@ typedef struct TNCINFO
 	BOOL HFPacket;					// Set if HF port is in Packet mode instead of Pactor Mode
 	BOOL Robust;					// Set if SCS Tracker is in Robust Packet mode
 	BOOL RobustDefault;				// Set if SCS Tracker default is Robust Packet mode
+	BOOL ForceRobust;				// Don't allow Normal Packet even if scan requests it.
+	char NormSpeed[8];				// Speed Param for Normal Packet on Tracker
 
 	int TimeInRX;					// Time waiting for ISS before sending
 	char TXRXState;					// Current ISS/IRS State
@@ -346,6 +379,7 @@ typedef struct TNCINFO
 	int CmdStream;					// Stream last command was issued on
 
 	struct TCPINFO * TCPInfo;		// Telnet Server Specific Data
+	struct AGWINFO * AGWInfo;		// AGW Stream Mode Specific Data
 
 	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
 	BOOL CommandBusy;				// Waiting for Command ACK

@@ -2367,7 +2367,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				
 				DontUseAPPLCmd:
 
-					if (FULL_CTEXT)
+					if (FULL_CTEXT && HFCTEXTLEN == 0)
 					{
 						int Len = CTEXTLEN, CTPaclen = 100;
 						int Next = 0;

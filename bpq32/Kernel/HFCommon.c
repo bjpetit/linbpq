@@ -64,6 +64,9 @@ int ModetoBaud[31] = {0,0,0,0,0,0,0,0,0,0,0,			// 0 = 10
 					  200,600,3200,600,3200,3200,		// 11 - 16
 					  0,0,0,0,0,0,0,0,0,0,0,0,0,600};	// 17 - 30
 
+char HFCTEXT[81] = "";
+int HFCTEXTLEN = 0;
+
 VOID * zalloc(int len)
 {
 	// malloc and clear
@@ -1097,8 +1100,7 @@ DoMove:
 	ReportMode[3] = Direction;
 	ReportMode[4] = 0;
 
-	if (TNC->Hardware != H_TRK)
-		SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
+	SendMH(TNC->Hardware, Call, ReportFreq, LOC, ReportMode);
 
 	return;
 }
@@ -1154,6 +1156,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
 {
 	struct TRANSPORTENTRY * Session;
 	int Index = 0;
+	UINT * buffptr;
 
 	// Stop Scanner
 
@@ -1170,45 +1173,54 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
 	
 	Session=L4TABLE;
 
-			// Find a free Circuit Entry
+	// Find a free Circuit Entry
 
-			while (Index < MAXCIRCUITS)
-			{
-				if (Session->L4USER[0] == 0)
-					break;
+	while (Index < MAXCIRCUITS)
+	{
+		if (Session->L4USER[0] == 0)
+			break;
 
-				Session++;
-				Index++;
-			}
+		Session++;
+		Index++;
+	}
 
-			if (Index == MAXCIRCUITS)
-				return FALSE;					// Tables Full
+	if (Index == MAXCIRCUITS)
+		return FALSE;					// Tables Full
 
-			memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign 
+	memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign 
 
-			ConvToAX25(Call, Session->L4USER);
-			ConvToAX25(GetNodeCall(), Session->L4MYCALL);
+	ConvToAX25(Call, Session->L4USER);
+	ConvToAX25(GetNodeCall(), Session->L4MYCALL);
 
-			Session->CIRCUITINDEX = Index;
-			Session->CIRCUITID = NEXTID;
-			NEXTID++;
-			if (NEXTID == 0) NEXTID++;		// Keep non-zero
+	Session->CIRCUITINDEX = Index;
+	Session->CIRCUITID = NEXTID;
+	NEXTID++;
+	if (NEXTID == 0) NEXTID++;		// Keep non-zero
 
-			TNC->PortRecord->ATTACHEDSESSIONS[Stream] = Session;
-			TNC->Streams[Stream].Attached = TRUE;
+	TNC->PortRecord->ATTACHEDSESSIONS[Stream] = Session;
+	TNC->Streams[Stream].Attached = TRUE;
 
-			Session->L4TARGET = TNC->PortRecord;
+	Session->L4TARGET = TNC->PortRecord;
 	
-			Session->L4CIRCUITTYPE = UPLINK+PACTOR;
-			Session->L4WINDOW = L4DEFAULTWINDOW;
-			Session->L4STATE = 5;
-			Session->SESSIONT1 = L4T1;
-			Session->SESSPACLEN = TNC->PortRecord->PORTCONTROL.PORTPACLEN;
-			Session->KAMSESSION = Stream;
+	Session->L4CIRCUITTYPE = UPLINK+PACTOR;
+	Session->L4WINDOW = L4DEFAULTWINDOW;
+	Session->L4STATE = 5;
+	Session->SESSIONT1 = L4T1;
+	Session->SESSPACLEN = TNC->PortRecord->PORTCONTROL.PORTPACLEN;
+	Session->KAMSESSION = Stream;
 
-			TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
+	TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
 
-			return TRUE;
+	if (HFCTEXTLEN)
+	{
+		buffptr = GetBuff();
+		if (buffptr == 0) return TRUE;			// No buffers
+					
+		buffptr[1] = HFCTEXTLEN;
+		memcpy(&buffptr[2], HFCTEXT, HFCTEXTLEN);
+		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
+	}
+	return TRUE;	
 }
 
 VOID ShowTraffic(struct TNCINFO * TNC)

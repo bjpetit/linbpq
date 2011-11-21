@@ -1716,7 +1716,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					}
 				}
 
-				if (FULL_CTEXT)
+				if (FULL_CTEXT && HFCTEXTLEN == 0)
 				{
 					char CTBuff[300] = "D20";
 					int Len = CTEXTLEN, CTPaclen = 50;

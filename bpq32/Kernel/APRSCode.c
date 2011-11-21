@@ -19,6 +19,8 @@
 #include <time.h>
 
 #define MAXAGE 7200		// 2 Hours
+#define MAXCALLS 20		// Max Flood, Trace and Digi
+#define GATETIMELIMIT 1800 // Don't gate to RF if station not heard for this time
 
 static BOOL APIENTRY  GETSENDNETFRAMEADDR();
 static VOID DoSecTimer();
@@ -30,15 +32,22 @@ VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Consoleprintf(const char * format, ...);
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 static VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
+char * strlop(char * buf, char delim);
 VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
 int TelDecodeFrame(char * msg, char * buffer, int Stamp);		// Unsemaphored DecodeFrame
-static VOID UpdateHeard(UCHAR * Call, int Port);
+struct APRSSTATIONRECORD * UpdateHeard(UCHAR * Call, int Port);
 BOOL CheckforDups(char * Call, char * Msg, int Len);
 VOID ProcessQuery(char * Query);
+VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlusDigis);
 VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int Len);		
+VOID SendBeacon(int toPort);
+VOID ProcessAPRSISMsg(char * APRSMsg);
+static VOID SendtoDigiPorts(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
+struct APRSSTATIONRECORD * LookupStation(char * call);
+
 
 BOOL ProcessConfig();
 BOOL FreeConfig();
@@ -66,7 +75,9 @@ static int SecTimer = 10;
 UINT APRSPortMask = 0;
 
 char * APRSCall = NULL;
-UCHAR AXCall[7];
+UCHAR AXCall[7] = "";
+
+char CallPadded[10] = "         ";
 
 int GPSPort = 0;
 int GPSSpeed = 0;
@@ -84,13 +95,13 @@ char * FloodCalls = 0;			// Calls to relay using N-n without tracing
 char * TraceCalls = 0;			// Calls to relay using N-n with tracing
 char * DigiCalls = 0;			// Calls for normal relaying
 
-UCHAR FloodAX[10][7] = {0};
-UCHAR TraceAX[10][7] = {0};
-UCHAR DigiAX[10][7] = {0};
+UCHAR FloodAX[MAXCALLS][7] = {0};
+UCHAR TraceAX[MAXCALLS][7] = {0};
+UCHAR DigiAX[MAXCALLS][7] = {0};
 
-int FloodLen[10];
-int TraceLen[10];
-int DigiLen[10];
+int FloodLen[MAXCALLS];
+int TraceLen[MAXCALLS];
+int DigiLen[MAXCALLS];
 
 short ISPort = 0;
 char ISHost[256] = "";
@@ -100,6 +111,8 @@ char * StatusMsg = 0;
 int StatusMsgLen = 0;
 
 char * BeaconPath[33] = {0};
+
+char CrossPortMap[33][33] = {0};
 
 UCHAR BeaconHeader[33][10][7] = {""};	//	Dest, Source and up to 8 digis 
 int BeaconHddrLen[33] = {0};			// Actual Length used
@@ -126,14 +139,19 @@ char APRSDESTS[][7] = {"AIR*", "ALL*", "AP*", "BEACON", "CQ*", "GPS*", "DF*", "D
 UCHAR AXDESTS[30][7] = {""};
 int AXDESTLEN[30] = {0};
 
+UCHAR axTCPIP[7];
+UCHAR axRFONLY[7];
+UCHAR axNOGATE[7];
+
 // Heard Station info
 
 int HEARDENTRIES = 0;
 int MAXHEARDENTRIES = 0;
+int MHLEN = sizeof(struct APRSSTATIONRECORD);
 
 // Area is allocated as needed
 
-struct APRSHEARDSTRUC * MHDATA = NULL;
+struct APRSSTATIONRECORD * MHDATA = NULL;
 
 SOCKET sock = (SOCKET) NULL;
 
@@ -158,6 +176,35 @@ Dll BOOL APIENTRY Init_APRS()
 	char * DCall;
 
 	ConvToAX25(GetNodeCall(), MYCALL);
+
+	ConvToAX25("TCPIP", axTCPIP);
+	ConvToAX25("RFONLY", axRFONLY);
+	ConvToAX25("NOGATE", axNOGATE);
+
+	// Clear in case reconfig
+
+	if (FloodCalls)
+		{free(FloodCalls); FloodCalls = NULL;}
+	if (TraceCalls)
+		{free(TraceCalls); TraceCalls = NULL;}
+	if (DigiCalls)
+		{free(TraceCalls); TraceCalls = NULL;}
+
+	memset(&FloodAX[0][0], 0, sizeof(FloodAX));
+	memset(&TraceAX[0][0], 0, sizeof(TraceAX));
+	memset(&DigiAX[0][0], 0, sizeof(DigiAX));
+
+	APRSPortMask = 0;
+
+	memset(&CrossPortMap[0][0], 0, sizeof(CrossPortMap));
+
+	for (i = 1; i <= NUMBEROFPORTS; i++)
+	{
+		CrossPortMap[i][i] = TRUE;			// Set Defaults - Same Port
+		CrossPortMap[i][0] = TRUE;			// and APRS-IS
+	}
+
+	PosnSet = 0;
 
 	if (ReadConfigFile() == 0)
 		return FALSE;
@@ -186,7 +233,7 @@ Dll BOOL APIENTRY Init_APRS()
 	HEARDENTRIES = 0;
 	MAXHEARDENTRIES = 50;
 
-	MHDATA = zalloc(MAXHEARDENTRIES * sizeof(struct APRSHEARDSTRUC));
+	MHDATA = zalloc(MAXHEARDENTRIES * sizeof(struct APRSSTATIONRECORD));
 
 	APRSMONVEC.HOSTAPPLFLAGS = 0x80;		// Request Monitoring
 
@@ -197,8 +244,21 @@ Dll BOOL APIENTRY Init_APRS()
 	return TRUE;
 }
 
+#define SD_RECEIVE      0x00
+#define SD_SEND         0x01
+#define SD_BOTH         0x02
+
 VOID APRSClose()
 {
+	free (MHDATA);
+
+	if (sock)
+	{		
+		shutdown(sock, SD_BOTH);
+		Sleep(50);
+
+		closesocket(sock);
+	}
 }
 
 Dll VOID APIENTRY Poll_APRS()
@@ -224,6 +284,16 @@ Dll VOID APIENTRY Poll_APRS()
 		DIGIMESSAGE Msg = {0};
 		int Port, i;
 		char * DEST;
+		unsigned char buffer[1024];
+		char ISMsg[500];
+		char * ptr1;
+		char * Payload;
+		char * ptr3;
+		char * ptr4;
+		ULONG SaveMMASK = MMASK; 
+		BOOL ThirdParty = FALSE;
+		BOOL NoGate = FALSE;
+		struct APRSSTATIONRECORD * MH;
 
 		monbuff = Q_REM((UINT *)&APRSMONVEC.HOSTTRACEQ);
 
@@ -261,6 +331,10 @@ Dll VOID APIENTRY Poll_APRS()
 				add eax, 7
 				mov AdjBuff, eax
 			}
+
+			if (memcmp(AdjBuff->ORIGIN, axTCPIP, 6) == 0)
+				ThirdParty = TRUE;
+
 			Digis ++;
 
 			if (FirstUnused == FALSE && (AdjBuff->ORIGIN[6] & 0x80) == 0)
@@ -279,6 +353,14 @@ Dll VOID APIENTRY Poll_APRS()
 			continue;					// Corrupt
 		}
 
+		if (Digis)
+		{
+			if (memcmp(AdjBuff->ORIGIN, axNOGATE, 6) == 0 || memcmp(AdjBuff->ORIGIN, axRFONLY, 6) == 0)
+
+				// Last digis is NOGATE or RFONLY - dont send to IS
+
+				NoGate = TRUE;
+		}
 		if (AdjBuff->CTL != 3 || AdjBuff->PID != 0xf0)				// Only UI
 		{
 			ReleaseBuffer(monbuff);
@@ -290,91 +372,94 @@ Dll VOID APIENTRY Poll_APRS()
 			continue;			
 		}
 
-		// I think all PID F0 UI frames go to APRS-IS
+		// Decode Frame to TNC2 Monitor Format
+
+		MMASK = 0xffff;
+		len = TelDecodeFrame((char *)monchars,  buffer, stamp);
+		MMASK = SaveMMASK;
+
+		if(len == 0)
+		{
+			// Couldn't Decode
+
+			ReleaseBuffer(monbuff);
+			continue;			
+		}
+
+		buffer[len++] = 10;
+		buffer[len] = 0;
+		ptr1 = &buffer[10];				// Skip Timestamp
+		Payload = strchr(ptr1, ':') + 2; // Start of Payload
+		ptr3 = strchr(ptr1, ' ');		// End of addresses
+		*ptr3 = 0;
+
+		// if digis, remove any unactioned ones
+
+		if (Digis)
+		{
+			ptr4 = strchr(ptr1, '*');		// Last Used Digi
+
+			if (ptr4)
+			{
+				// We need header up to ptr4
+
+				*(ptr4) = 0;
+			}
+			else
+			{
+				// No digis actioned - remove them all
+
+				ptr4 = strchr(ptr1, ',');		// End of Dest
+				*ptr4 = 0;
+			}
+		}
+
+		ptr4 = strchr(ptr1, '>');		// End of Source
+		*ptr4++ = 0;
+
+		MH = UpdateHeard(ptr1, Port);
+
+		if (ThirdParty)
+			MH->IGate= TRUE;			// if we've seen msgs to TCPIP, it must be an Igate
+
+		if (NoGate)
+			goto NoIS;
+
+		// I think all PID F0 UI frames go to APRS-IS,
+		// Except General Queries, and Messages Addressed to us
 
 		// or should we process Query frames locally ??
 
-		if (AdjBuff->L2DATA[0] == '?')
+		if (Payload[0] == '?')
 		{
 			// General Query
 
-			ProcessQuery(&AdjBuff->L2DATA[1]);
+			ProcessQuery(&Payload[1]);
 
 			// ?? Should we pass addressed Queries to IS ??
 	
 			goto NoIS;
 		}
 
-		if (ISPort)
+		if (Payload[0] == ':' && memcmp(&Payload[1], CallPadded, 9) == 0)
 		{
-			// APRS-IS Configured
+			// Message for us
 
-			unsigned char buffer[1024];
-			char ISMsg[500];
-			char * ptr1;
-			char * ptr2;
-			char * ptr3;
-			char * ptr4;
-			ULONG SaveMMASK = MMASK; 
+			if (Payload[11] == '?')			// Only queries - the node doesnt do messaging
+				ProcessSpecificQuery(&Payload[12], Port, ptr1, ptr4);
 
-			MMASK = 0xffff;
-			len = TelDecodeFrame((char *)monchars,  buffer, stamp);
-			MMASK = SaveMMASK;
+			goto NoIS;
+		}
 
-			if(len == 0)
-			{
-				// Couldn't Decode
+		if (APRSISOpen && CrossPortMap[Port][0])	// No point if not open
+		{
+			len = wsprintf(ISMsg, "%s>%s,qAC,%s:%s", ptr1, ptr4, APRSCall, Payload);
 
-				ReleaseBuffer(monbuff);
-				continue;			
-			}
-
-			buffer[len++] = 10;
-			buffer[len] = 0;
-			ptr1 = &buffer[10];				// Skip Timestamp
-			ptr2 = strchr(ptr1, ':');		// Start of Payload
-			ptr3 = strchr(ptr1, ' ');		// End of addresses
-			*ptr3 = 0;
-
-			// if digis, remove any unactioned ones
-
-			if (Digis)
-			{
-				ptr4 = strchr(ptr1, '*');		// Last Used Digi
-
-				if (ptr4)
-				{
-					// We need header up to ptr4
-
-					*(ptr4) = 0;
-				}
-				else
-				{
-					// No digis actioned - remove them all
-
-					ptr4 = strchr(ptr1, ',');		// End of Dest
-
-					*ptr4 = 0;
-				}
-			}
-
-			ptr4 = strchr(ptr1, '>');		// End of Source
-			*ptr4++ = 0;
-			UpdateHeard(ptr1, Port);
-
-			if (APRSISOpen)			// No point if not
-			{
-				len = wsprintf(ISMsg, "%s>%s,qAC,%s:%s", ptr1, ptr4, APRSCall, ptr2 + 2);
-
-//				send(sock, ISMsg, len, 0);
-				ptr1 = strchr(ISMsg, 13);
-				if (ptr1)
-					*ptr1 = 0;
-				
-				Debugprintf(ISMsg);
-
-			}
+			send(sock, ISMsg, len, 0);
 	
+			ptr1 = strchr(ISMsg, 13);
+			if (ptr1) *ptr1 = 0;
+			Debugprintf(ISMsg);
 		}	
 	
 	NoIS:
@@ -456,7 +541,7 @@ VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int L
 
 			Digi[6] |= 0x80;	// Used bit
 
-			Send_AX_Datagram(Msg, Len, Port);
+			SendtoDigiPorts(Msg, Len, Port);
 			return;
 		}
 		Call += 7;
@@ -497,7 +582,7 @@ VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int L
 			memcpy(Digi, AXCall, 7);
 			Digi[6] |= 0x80;
 
-			Send_AX_Datagram(Msg, Len, Port);
+			SendtoDigiPorts(Msg, Len, Port);
 
 			return;
 		}
@@ -529,7 +614,7 @@ VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int L
 			else
 				Digi[6] = (SSID << 1) | 0x60;	// Fixed bits
 
-			Send_AX_Datagram(Msg, Len, Port);
+			SendtoDigiPorts(Msg, Len, Port);
 
 			return;
 		}
@@ -540,6 +625,45 @@ VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int L
 
 
   
+static VOID SendtoDigiPorts(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
+{
+	//	Can't use API SENDRAW, as that tries to get the semaphore, which we already have
+	//  Len is the Payload Length (from CTL onwards)
+	// The message can contain DIGIS - The payload must be copied forwards if there are less than 8
+
+	// We send to all ports enabled in CrossPortMap
+
+	UCHAR * EndofDigis = &Block->CTL;
+	int i = 0;
+	int toPort;
+
+	while (Block->DIGIS[i][0] && i < 8)
+	{
+		i++;
+	}
+
+	EndofDigis = &Block->DIGIS[i][0];
+	*(EndofDigis -1) |= 1;					// Set End of Address Bit
+
+	if (i != 8)
+		memmove(EndofDigis, &Block->CTL, Len);
+
+	Len = Len + (i * 7) + 14;					// Include Source, Dest and Digis
+
+//	Block->DEST[6] &= 0x7e;						// Clear End of Call
+//	Block->ORIGIN[6] |= 1;						// Set End of Call
+
+//	Block->CTL = 3;		//UI
+
+	for (toPort = 1; toPort <= NUMBEROFPORTS; toPort++)
+	{
+		if (CrossPortMap[Port][toPort])
+		Send_AX((PMESSAGE)Block, Len, toPort);
+	}
+	return;
+
+}
+
 static VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
 {
 	//	Can't use API SENDRAW, as that tries to get the semaphore, which we already have
@@ -575,6 +699,7 @@ static VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
 	return;
 
 }
+
 static BOOL ReadConfigFile()
 {
 	char * Config;
@@ -617,23 +742,23 @@ BOOL ConvertCalls(char * DigiCalls, UCHAR * AX, int * Lens)
 	int Index = 0;
 	char * ptr;
 	char * Context;
-	UCHAR Work[10][7] = {0};
-	int Len[10] = {0};
+	UCHAR Work[MAXCALLS][7] = {0};
+	int Len[MAXCALLS] = {0};
 		
 //	DigiAX = zalloc(50);
 
 	ptr = strtok_s(DigiCalls, ", ", &Context);
 	while(ptr)
 	{
-		if (Index == 10) return FALSE;
+		if (Index == MAXCALLS) return FALSE;
 
 		ConvToAX25(ptr, &Work[Index][0]);
 		Len[Index++] = strlen(ptr);
 		ptr = strtok_s(NULL, ", ", &Context);
 	}
 
-	memcpy(AX, Work, 70);
-	memcpy(Lens, Len, 40);
+	memcpy(AX, Work, sizeof(Work));
+	memcpy(Lens, Len, sizeof(Len));
 	return TRUE;
 }
 
@@ -685,13 +810,14 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr, "APRSCALL") == 0)
 	{
 		APRSCall = _strdup(_strupr(p_value));
+		memcpy(CallPadded, APRSCall, strlen(APRSCall));	// Call Padded to 9 chars for APRS Messaging
 
 		// Convert to ax.25
 
 		return ConvToAX25(APRSCall, AXCall);
 	}
 
-	if (_stricmp(ptr, "BEACONPATH") == 0)
+	if (_stricmp(ptr, "APRSPATH") == 0)
 	{
 		int Digi = 2;
 		int Port;
@@ -704,8 +830,10 @@ static ProcessLine(char * buf)
 		if (Port < 1 || Port > NUMBEROFPORTS)
 			return FALSE;
 
+		APRSPortMask |= 1 << (Port - 1);
+
 		if (Context == NULL)
-			return FALSE;
+			return TRUE;					// No dest - a receive-only port
 
 		BeaconPath[Port] = _strdup(_strupr(Context));
 	
@@ -726,10 +854,45 @@ static ProcessLine(char * buf)
 		}
 
 		BeaconHddrLen[Port] = Digi * 7;
-		APRSPortMask |= 1 << (Port - 1);
 
 		return TRUE;
 	}
+
+	if (_stricmp(ptr, "DIGIMAP") == 0)
+	{
+		int DigiTo;
+		int Port;
+		char * Context;
+
+		p_value = strtok_s(p_value, "=\t\n\r", &Context);
+
+		Port = atoi(p_value);
+
+		if (Port < 1 || Port > NUMBEROFPORTS)
+			return FALSE;
+
+		if (Context == NULL)
+			return FALSE;
+
+		CrossPortMap[Port][Port] = FALSE;	// Cancel Default mapping
+		CrossPortMap[Port][0] = FALSE;		// Cancel Default APRSIS
+	
+		ptr = strtok_s(NULL, ",\t\n\r", &Context);
+
+		while (ptr)
+		{
+			DigiTo = atoi(ptr);				// this gives zero for IS
+	
+			if (DigiTo > NUMBEROFPORTS)
+				return FALSE;
+
+			CrossPortMap[Port][DigiTo] = TRUE;	
+			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
+		}
+
+		return TRUE;
+	}
+
 
 	if (_stricmp(ptr, "BeaconInterval") == 0)
 	{
@@ -841,6 +1004,63 @@ static ProcessLine(char * buf)
 	return (FALSE);	
 }
 
+VOID SendAPRSMessage(char * Message, int toPort)
+{
+	int Port;
+	DIGIMESSAGE Msg;
+	
+	int Len;
+
+
+
+	if (toPort && BeaconHddrLen[toPort])
+	{
+		memcpy(Msg.DEST, &BeaconHeader[toPort][0][0],  BeaconHddrLen[toPort] + 1);
+		Msg.PID = 0xf0;
+		Msg.CTL = 3;
+		Len = wsprintf(Msg.L2DATA, "%s", Message);
+		Send_AX_Datagram(&Msg, Len + 2, toPort);
+
+		return;
+	}
+
+	for (Port = 1; Port <= NUMBEROFPORTS; Port++)
+	{
+		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
+		{
+			memcpy(Msg.DEST, &BeaconHeader[Port][0][0],  BeaconHddrLen[Port] + 1);
+			Msg.PID = 0xf0;
+			Msg.CTL = 3;
+			Len = wsprintf(Msg.L2DATA, "%s", Message);
+			Send_AX_Datagram(&Msg, Len + 2, Port);
+		}
+	}
+}
+
+
+VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlusDigis)
+{
+	if (memcmp(Query, "APRSS", 5) == 0)
+	{
+		SendBeacon(Port);
+		return;
+	}
+
+	if (_memicmp(Query, "APRST", 5) == 0 || _memicmp(Query, "PING?", 5) == 0)
+	{
+		// Trace Route
+		//:KH2ZV   :?APRST :N8UR     :KH2Z>APRS,DIGI1,WIDE*:
+		//:G8BPQ-14 :Path - G8BPQ-14>APU25N
+
+		char Message[255];
+	
+		wsprintf(Message, ":%-9s:Path - %s>%s", Origin, Origin, DestPlusDigis);
+		SendAPRSMessage(Message, Port);
+
+		return;
+	}
+}
+
 VOID ProcessQuery(char * Query)
 {
 	if (memcmp(Query, "IGATE?", 6) == 0)
@@ -855,22 +1075,34 @@ VOID ProcessQuery(char * Query)
 		return;
 	}
 }
-VOID SendBeacon()
+VOID SendBeacon(int toPort)
 {
 	int Port;
 	DIGIMESSAGE Msg;
 	
 	int Len;
 
+	Len = wsprintf(Msg.L2DATA, "!%s%c%s%c %s", LAT, SYMSET, LON, SYMBOL, StatusMsg);
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
 
-	Len = wsprintf(Msg.L2DATA, "!%s%c%s%c %s", LAT, SYMSET, LON, SYMBOL, StatusMsg);
+	if (toPort && BeaconHddrLen[toPort])
+	{
+		memcpy(Msg.DEST, &BeaconHeader[toPort][0][0],  BeaconHddrLen[toPort] + 1);
+		Send_AX_Datagram(&Msg, Len + 2, toPort);
+
+		return;
+	}
 
 	for (Port = 1; Port <= NUMBEROFPORTS; Port++)
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
+		
+			Len = wsprintf(Msg.L2DATA, "!%s%c%s%c %s", LAT, SYMSET, LON, SYMBOL, StatusMsg);
+			Msg.PID = 0xf0;
+			Msg.CTL = 3;
+
 			memcpy(Msg.DEST, &BeaconHeader[Port][0][0],  BeaconHddrLen[Port] + 1);
 			Send_AX_Datagram(&Msg, Len + 2, Port);
 		}
@@ -912,7 +1144,7 @@ VOID SendIStatus()
 			}
 		}
 
-		Len = wsprintf(Msg.L2DATA, "%s>APRS,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d", APRSCall, 0 , HEARDENTRIES);
+		Len = wsprintf(Msg.L2DATA, "%s>APRS,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d\r\n", APRSCall, 0 , HEARDENTRIES);
 		send(sock, Msg.L2DATA, Len, 0);
 		Debugprintf(Msg.L2DATA);
 	}
@@ -938,7 +1170,7 @@ VOID DoSecTimer()
 		if (BeaconCounter == 0)
 		{
 			BeaconCounter = BeaconInterval * 60;
-			SendBeacon();
+			SendBeacon(0);
 		}
 	}
 
@@ -1077,9 +1309,9 @@ VOID APRSISThread(BOOL Report)
 				memcpy(&APRSMsg, APRSinMsg, len);	
 
 				APRSMsg[len - 2] = 0;
-//				DecodeAPRSISMsg(APRSMsg);
-				Debugprintf(APRSMsg);
 
+				Debugprintf(APRSMsg);
+				ProcessAPRSISMsg(APRSMsg);
 
 				inptr -= len;						// bytes left
 
@@ -1104,35 +1336,146 @@ VOID APRSISThread(BOOL Report)
 	Debugprintf("BPQ32 APRS IS Thread Exited");
 
 	ISDelayTimer = 30;		// Retry pretty quickly
-
 	return;
 }
 
-static VOID UpdateHeard(UCHAR * Call, int Port)
+VOID ProcessAPRSISMsg(char * APRSMsg)
 {
-	struct APRSHEARDSTRUC * MH = MHDATA;
-	struct APRSHEARDSTRUC * MHBASE = MH;
+	char * Payload;
+	char * Source;
+	char * Dest;
+	char IGateCall[10] = "         ";
+	char * ptr;
+	char Message[255];
+	struct APRSSTATIONRECORD * MH;
+	time_t NOW = time(NULL);
+
+
+//}WB4APR-14>APRS,RELAY,TCPIP,G9RXG*::G3NRWVVVV:Hi Ian{001
+//KE7XO-2>hg,TCPIP*,qAC,T2USASW::G8BPQ-14 :Path - G8BPQ-14>APU25N
+//IGATECALL>APRS,GATEPATH}FROMCALL>TOCALL,TCPIP,IGATECALL*:original packet data
+
+	if (APRSMsg[0] == '#')		// Comment
+		return;
+	
+	Payload = strchr(APRSMsg, ':');
+
+	// Gate call of originating Igate
+
+	ptr = Payload;
+	*(Payload++) = 0;
+
+	while (ptr[0] != ',')
+		ptr--;
+
+	ptr++;
+
+	memcpy(IGateCall, ptr, strlen(ptr));
+
+	MH = LookupStation(IGateCall);
+
+	if (MH)
+		MH->IGate = TRUE;						// If we have seen this station on RF, set it as an Igate
+
+	Source = APRSMsg;
+	Dest = strchr(APRSMsg, '>');
+	*(Dest++) = 0;				// Termainate Source
+	ptr = strchr(Dest, ',');
+	*ptr = 0;
+
+	MH = UpdateHeard(Source, 0);
+
+	// See if we should gate to RF. 
+
+	// Have we heard dest recently? (use the message dest (not ax.25 dest) - does this mean we only gate Messages?
+	// Not if it is an Igate (it will get a copy direct)
+	// Have we recently sent a message from this call - if so, we gate the next Position
+
+	if (Payload[0] == ':')		// Message
+	{
+		char MsgDest[10];
+		struct APRSSTATIONRECORD * STN;
+
+		memcpy(MsgDest, &Payload[1], 9);
+		MsgDest[9] = 0;
+
+		STN = LookupStation(MsgDest);
+
+		if (STN && STN->Port && !STN->IGate && (NOW - STN->MHTIME) < GATETIMELIMIT) 
+		{
+			wsprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
+			SendAPRSMessage(Message, STN->Port);
+
+			MH->LASTMSG = NOW;
+
+			return;
+		}
+	}
+
+	// Not a message. Only gate if have sent a message recently
+
+	if ((NOW - MH->LASTMSG) < 900)
+	{
+		wsprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
+		SendAPRSMessage(Message, 0);		// Send to all APRS Ports
+	}
+}
+
+struct APRSSTATIONRECORD * LookupStation(char * Call)
+{
+	struct APRSSTATIONRECORD * MH = MHDATA;
+	int i;
+
+	// We keep call in ascii format, as that is what we get from APRS-IS, and we have it in that form
+
+	for (i = 0; i < HEARDENTRIES; i++)
+	{
+		if (memcmp(Call, MH->MHCALL, 9) == 0)
+			return MH;
+
+		MH++;
+	}
+
+	return NULL;
+}
+
+struct APRSSTATIONRECORD * UpdateHeard(UCHAR * Call, int Port)
+{
+	struct APRSSTATIONRECORD * MH = MHDATA;
+	struct APRSSTATIONRECORD * MHBASE = MH;
 	int i;
 	time_t NOW = time(NULL);
 	time_t OLDEST = NOW - MAXAGE;
 
-	// We keep call in ascii format, as that is what we get from APRS-IS, and we have it in that form
+	// We keep call in ascii format, space padded, as that is what we get from APRS-IS, and we have it in that form
 
 	for (i = 0; i < MAXHEARDENTRIES; i++)
 	{
-		if ((MH->MHCALL[0] == 0) || memcmp(Call, MH->MHCALL, 10) == 0) // Spare or our entry
+		if (memcmp(Call, MH->MHCALL, 10) == 0)
+		{
+			// if from APRS-IS, only update if record hasn't been heard via RF
+			
+			if (Port == 0 && MH->Port) 
+				return MH;					// Don't update RF with IS
+
+			if (Port == MH->Port)
 				goto DoMove;
+		}
+
+		if (MH->MHCALL[0] == 0)		// Spare entry
+			goto DoMove;
+
 		MH++;
 	}
 
 	//	TABLE FULL AND ENTRY NOT FOUND - MOVE DOWN ONE, AND ADD TO TOP
 
-	i = MHENTRIES - 1;
+	i = MAXHEARDENTRIES - 1;
 		
 	// Move others down and add at front
 DoMove:
 	if (i != 0)				// First
-		memmove(MHBASE + 1, MHBASE, i * sizeof(struct APRSHEARDSTRUC));
+		memmove(MHBASE + 1, MHBASE, i * sizeof(struct APRSSTATIONRECORD));
 
 	if (i >= HEARDENTRIES) 
 		HEARDENTRIES = i + 1;
@@ -1141,7 +1484,7 @@ DoMove:
 	MHBASE->Port = Port;
 	MHBASE->MHTIME = NOW;
 
-	return;
+	return MH;
 }
 
 BOOL CheckforDups(char * Call, char * Msg, int Len)
@@ -1200,3 +1543,20 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 	return FALSE;
 }
 
+char * FormatAPRSMH(struct APRSSTATIONRECORD * MH)
+ {
+	 // Called from CMD.ASM
+
+	struct tm * TM;
+	static char MHLine[50];
+	time_t szClock = MH->MHTIME;
+
+	szClock = (_time32(NULL) - szClock);
+	TM = gmtime(&szClock);
+
+	wsprintf(MHLine, "%s %d %.2d:%.2d:%.2d:%.2d %s\r",
+		MH->MHCALL, MH->Port, TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, (MH->IGate) ? "Igate" : "");
+
+	return MHLine;
+
+ }

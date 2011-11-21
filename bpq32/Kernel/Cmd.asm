@@ -271,6 +271,9 @@ CQCALL	DB	'CQ          ',2
 	DB	'MHEARD      ',1
 	DD	MHCMD,0
 
+	DB	'APRSMH      ',4
+	DD	APRSMHCMD,0
+
 	DB	'ATTACH      ',1
 	DD	ATTACHCMD,0
 
@@ -636,6 +639,7 @@ _BPQDATA	ENDS
 _TEXT	SEGMENT
 
 	EXTRN _SaveNodes@0:NEAR, _Reconfig@0:NEAR, _Reboot@0:NEAR, _Restart@0:NEAR, _FormatMH:NEAR, _FormatUptime:NEAR
+	EXTRN _MHDATA:DWORD, _MAXHEARDENTRIES:DWORD, _FormatAPRSMH:NEAR, _MHLEN:DWORD
 
 	PUBLIC	COMMANDHANDLER,_COUNTNODES,B2HEX,GETVALUE
 
@@ -4266,6 +4270,53 @@ DOTIME:
 MHEND:
 
 	JMP	SENDCOMMANDREPLY
+
+APRSMHCMD:
+;
+;	DISPLAY APRES HEARD LIST
+;
+
+	MOV	ESI,_MHDATA 
+	MOV	ECX,_MAXHEARDENTRIES
+
+AMHLOOP:
+	
+	CMP	DWORD PTR [ESI],0
+	JE SHORT AMHEND
+
+	CALL	CHECKBUFFER
+	
+	push ecx
+	push esi
+	
+	push edi
+	PUSH ESI
+	call _FormatAPRSMH
+	mov	esi, eax
+	add	esp,4
+	pop	edi
+	
+@@:
+	lodsb
+	or	al,al
+	jz	@f
+	
+	stosb
+	jmp @B
+	
+@@:
+
+	pop	esi
+	POP	ECX
+
+	ADD	ESI, _MHLEN
+
+	LOOP	AMHLOOP
+	
+AMHEND:
+	JMP	SENDCOMMANDREPLY
+
+
 
 	PUBLIC RADIOCMD
 

@@ -402,6 +402,8 @@
 // Fix possible call/application routing error on RP
 // Changes for P4Dragon
 // Include APRS Digi/IGate
+// Tracker monitoring now includes DIGIS
+// Support sending UI frames using TRKMULTI
 
 #define Kernel
 #include "Versions.h"
@@ -476,6 +478,7 @@ UINT WINAPI SoundModemExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TrackerExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TrackerMExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI UZ7HOExtInit(EXTPORTDATA * PortEntry);
 
 extern char * Buffer;	// Config Area
 
@@ -3581,6 +3584,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "TRKMULTI"))
 		return (UINT) TrackerMExtInit;
+
+	if (strstr(Value, "UZ7HO"))
+		return (UINT) UZ7HOExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

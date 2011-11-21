@@ -1749,7 +1749,7 @@ GETRAWEND:
 	PUBLIC	_RAWTX
 _RAWTX:
 ;
-;	ES:ESI = MESSAGE, CX = LENGTH, AL = PORT
+;	ESI = MESSAGE, CX = LENGTH, AL = PORT
 ;
 ;	GET A BUFFER
 ;
@@ -1763,9 +1763,6 @@ _RAWTX:
 
 	CALL	GETPORTTABLEENTRY
 	
-	CMP	PROTOCOL[EBX],10		; PACTOR/WINMOR Style
-	JE SHORT RAWERROR
-
 	PUSH	ESI			; USERS BUFFER
 	CALL	GETBUFF
 	POP	ESI
@@ -1783,6 +1780,30 @@ _RAWTX:
 
 	MOV	MSGLENGTH[EDI],CX
 ;
+	CMP	PROTOCOL[EBX],10		; PACTOR/WINMOR Style
+	JNE SHORT RAWNOTPACTOR
+
+;	Pactor Style. Probably will only be used for Tracker uneless we do APRS over V4 or WINMOR
+
+	push	edi					; buffer
+
+	MOVZX	EAX,PORTNUMBER[EBX]
+	push	eax					; Port
+	push	7					; Function
+	
+	CALL	PORT_EXT_ADDR[EBX]
+
+	add		esp,8
+	
+	pop	edi
+	call	relbuff
+	
+	mov	eax,0
+	RET
+
+RAWNOTPACTOR:
+
+
 	MOV	AL,PORTNUMBER[EBX]
 	MOV	MSGPORT[EDI],AL
 

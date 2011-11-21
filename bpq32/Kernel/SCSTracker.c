@@ -39,6 +39,7 @@ static RECT Rect;
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 VOID __cdecl Debugprintf(const char * format, ...);
+char * strlop(char * buf, char delim);
 
 char NodeCall[11];		// Nodecall, Null Terminated
 
@@ -53,8 +54,6 @@ static ProcessLine(char * buf, int Port)
 	struct TNCINFO * TNC;
 	char errbuf[256];
 
-	strcpy(errbuf, buf);
-
 	BPQport = Port;
 
 	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
@@ -62,18 +61,9 @@ static ProcessLine(char * buf, int Port)
 
 	TNC->InitScript = malloc(1000);
 	TNC->InitScript[0] = 0;
-	goto ConfigLine;
 
-	strcpy(buf, errbuf);
-	strcat(buf, "\r");
+	strcpy(TNC->NormSpeed, "300");		// HF Packet
 
-	BPQport = Port;
-
-	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-	memset(TNC, 0, sizeof(struct TNCINFO));
-
-	TNC->InitScript = malloc(1000);
-	TNC->InitScript[0] = 0;
 	goto ConfigLine;
 
 	while(TRUE)
@@ -132,11 +122,25 @@ ConfigLine:
 		if (_memicmp(buf, "DEFAULT ROBUST", 14) == 0)
 			TNC->RobustDefault = TRUE;
 		else
+		if (_memicmp(buf, "FORCE ROBUST", 12) == 0)
+			TNC->ForceRobust = TNC->RobustDefault = TRUE;
+		else
 
 		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
 		else
 			strcat (TNC->InitScript, buf);
+
+		// If %B param, extract speed
+
+		if (_memicmp(buf, "%B", 2) == 0)
+		{
+			ptr = strchr(buf, '\r');
+			if (ptr) *ptr = 0;
+			strcpy(TNC->NormSpeed, &buf[3]);
+		}
+
+
 	}
 	return (TRUE);
 
@@ -378,7 +382,23 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			SwitchToRPacket(TNC);
 			return 0;
 		}
-	}
+
+	case 7:						// Send UI
+
+		if (!TNC->TNCOK)			
+			return 0;
+
+		buffptr = GetBuff();
+
+		if (buffptr == 0) return (0);			// No buffers, so ignore
+
+		txlen=(buff[6]<<8) + buff[5]-8;	
+		buffptr[1] = txlen;
+		memcpy(buffptr+2, &buff[8], txlen);
+		
+		C_Q_ADD(&TNC->UI_Q, buffptr);
+		return (0);
+}
 	return 0;
 }
 
@@ -500,14 +520,14 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 		TNC->Robust = TRUE;
 		strcat(TNC->InitScript, "%B R600\r");
 		SetDlgItemText(TNC->hDlg, IDC_MODE, "Robust Packet");
-
 	}
 	else
 	{
-		strcat(TNC->InitScript, "%B 300\r");
+		char Cmd[40];
+		wsprintf(Cmd, "%%B %s\r", TNC->NormSpeed);
+		strcat(TNC->InitScript, Cmd);
 		SetDlgItemText(TNC->hDlg, IDC_MODE, "HF Packet");
 	}
-
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
@@ -764,8 +784,8 @@ VOID DEDPoll(int Port)
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
 			TNC->Streams[Stream].MyCall[calllen] = 0;
 
-			TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-			wsprintf(TNC->Streams[Stream].CmdSet, "IDSPTNC\r", TNC->Streams[Stream].MyCall);
+			TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
+			wsprintf(TNC->Streams[Stream].CmdSet, "\1\1\1IDSPTNC\0", TNC->Streams[Stream].MyCall);
 
 			if (Stream == 0)
 			{
@@ -874,7 +894,7 @@ VOID DEDPoll(int Port)
 			
 			TNC->InitPtr = end;
 
-			Poll[0] = 0;		// Channel
+			Poll[0] = 0;			// Channel
 			Poll[1] = 1;			// Command
 			Poll[2] = len - 1;
 			memcpy(&Poll[3], start, len);
@@ -892,14 +912,12 @@ VOID DEDPoll(int Port)
 
 		if (TNC->NeedPACTOR == 0)
 		{
-			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
-			wsprintf(TNC->Streams[0].CmdSet, "%%B%s\rI%s\r",
-				(TNC->RobustDefault) ? "R600" : "300", TNC->NodeCall);
+			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
+			wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s\0", (TNC->RobustDefault) ? "R600" : TNC->NormSpeed, 0, TNC->NodeCall);
 			
 			strcpy(TNC->Streams[0].MyCall, TNC->NodeCall);
 		}
 	}
-
 		
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
@@ -910,23 +928,21 @@ VOID DEDPoll(int Port)
 
 			start = TNC->Streams[Stream].CmdSet;
 		
-			if (*(start) == 0)			// End of Script
+			if (*(start + 2) == 0)			// End of Script
 			{
 				free(TNC->Streams[Stream].CmdSave);
 				TNC->Streams[Stream].CmdSet = NULL;
 			}
 			else
 			{
-				end = strchr(start, 13);
-				len = ++end - start -1;	// exclude cr
+				end = strchr(start + 3, 0);
+				len = ++end - start -1;	// exclude null
 				TNC->Streams[Stream].CmdSet = end;
 
-				Poll[0] = TNC->Streams[Stream].DEDStream;		// Channel
-				Poll[1] = 1;			// Command
-				Poll[2] = len - 1;
-				memcpy(&Poll[3], start, len);
+				memcpy(&Poll[0], start, len);
+				Poll[2] = len - 4;
 		
-				StuffAndSend(TNC, Poll, len + 3);
+				StuffAndSend(TNC, Poll, len);
 
 				return;
 			}
@@ -1046,9 +1062,13 @@ VOID DEDPoll(int Port)
 
 			if ((Stream == 0) && memcmp(Buffer, "HFPACKET", 8) == 0)
 			{
-				TNC->Robust = FALSE;
-				buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "TRK} OK\r");
+				if (TNC->ForceRobust)
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "TRK} HF Packet Disabled\r");
+				else
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "TRK} OK\r");
+									
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+				TNC->Robust = FALSE;
 				SetDlgItemText(TNC->hDlg, IDC_MODE, "HF Packet");
 				return;
 			}
@@ -1065,10 +1085,10 @@ VOID DEDPoll(int Port)
 				{
 					// Send MYCall, Mode Command followed by connect 
 
-					TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
+					TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
 							
-					wsprintf(TNC->Streams[0].CmdSet, "%%B%s\rI%s\r%s\r",
-						(TNC->Robust) ? "R600" : "300", TNC->Streams[0].MyCall, buffptr+2);
+					wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s%c\1\1\1%s\0",
+						(TNC->Robust) ? "R600" : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0,  buffptr+2);
 
 					ReleaseBuffer(buffptr);
 	
@@ -1090,9 +1110,61 @@ VOID DEDPoll(int Port)
 			TNC->Streams[Stream].InternalCmd = TNC->Streams[Stream].Connected;
 
 			return;
+		}	
+	}
+
+	if (TNC->TNCOK && TNC->UI_Q)
+	{
+		int datalen;
+		UINT * buffptr;
+		char * Buffer;
+		char CCMD[80] = "C";
+		char Call[12] = "           ";
+			
+		buffptr=Q_REM(&TNC->UI_Q);
+		
+		datalen=buffptr[1];
+		Buffer = (char *)&buffptr[2];	// Data portion of frame
+		Buffer[datalen] = 0;
+
+		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
+							
+//		wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r%s\r", TNC->Streams[Stream].MyCall, buffptr+2);
+
+		// Buffer has an ax.25 header, which we need to pick out and set as channel 0 Connect address
+		// before sending the beacon
+
+		ConvFromAX25(Buffer, &Call[1]);			// Dest
+		strlop(&Call[1], ' ');
+		strcat(CCMD, Call);
+		Buffer += 14;							// Skip Origin
+		datalen -= 7;
+
+		while ((Buffer[-1] & 1) == 0)
+		{
+			ConvFromAX25(Buffer, &Call[1]);
+			strlop(&Call[1], ' ');
+			strcat(CCMD, Call);
+			Buffer += 7;	// End of addr
+			datalen -= 7;
 		}
 
-	
+		if (Buffer[0] == 3)				// UI
+		{
+			Buffer += 2;
+			datalen -= 2;
+
+			Poll[0] = 0;				// UI Channel
+			Poll[1] = 1;				// Data
+			Poll[2] = strlen(CCMD) - 1;
+			strcpy(&Poll[3], CCMD);
+			StuffAndSend(TNC, Poll, Poll[2] + 4);
+
+			wsprintf(TNC->Streams[0].CmdSet, "%c%c%c%s\0", 0, 0, 1, Buffer);
+		}
+
+		ReleaseBuffer(buffptr);
+		return;
 	}
 
 	// if frames outstanding, issue a poll (but not too often)
@@ -1232,7 +1304,7 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 			Poll[0] = 1;
 			TNC->TXLen = 1;
 			WriteCommBlock(TNC);
-			TNC->Timeout = 5;				// 1/2 secs
+			TNC->Timeout = 2;				// 1/2 secs
 
 			return;
 		}
@@ -1716,7 +1788,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 				
 				DontUseAPPLCmd:
 
-					if (FULL_CTEXT)
+					if (FULL_CTEXT && HFCTEXTLEN == 0)
 					{
 						int Len = CTEXTLEN, CTPaclen = 100;
 						int Next = 0;
@@ -1837,8 +1909,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 								TNC->SwitchToPactor = 600;		// Don't change modes for 60 secs
 
 								strcpy(STREAM->MyCall, DestCall);
-								STREAM->CmdSet = STREAM->CmdSave = malloc(100);
-								wsprintf(STREAM->CmdSet, "I%s\r", DestCall);
+								STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
+								wsprintf(STREAM->CmdSet, "\1\1\1I%s\0", DestCall);
 								break;
 							}
 						}
@@ -1929,81 +2001,139 @@ static MESSAGEY Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
+MESSAGEY * AdjMsg;		// Adjusted fir digis
+
 
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
 {
 	// Convert to ax.25 form and pass to monitor
 
-	UCHAR * ptr;
+	// Only update MH on UI, SABM, UA
+
+	UCHAR * ptr, * starptr;
+	char * context;
+	char MHCall[11];
 
 	Monframe.LENGTH = 23;				// Control Frame
 	Monframe.PORT = TNC->Port;
-
+	
+	AdjMsg = &Monframe;					// Adjusted fir digis
 	ptr = strstr(Msg, "fm ");
 
 	ConvToAX25(&ptr[3], Monframe.ORIGIN);
 
-	if (TNC->Robust)
-		UpdateMH(TNC, &ptr[3], '.', 0);
-	else
-		UpdateMH(TNC, &ptr[3], ' ', 0);
+	memcpy(MHCall, &ptr[3], 11);
+	strlop(MHCall, ' ');
 
 	ptr = strstr(ptr, "to ");
 
 	ConvToAX25(&ptr[3], Monframe.DEST);
 
-	Monframe.ORIGIN[6] |= 1;				// Set end of address
+	ptr = strstr(ptr, "via ");
 
-	ptr = strstr(ptr, "ctl ");
+	if (ptr)
+	{
+		// We have digis
+
+		char Save[100];
+
+		memcpy(Save, &ptr[4], 60);
+
+		ptr = strtok_s(Save, " ", &context);
+DigiLoop:
+		_asm 
+		{	
+			mov eax,AdjMsg 
+			add eax, 7
+			mov	AdjMsg, eax
+		}
+
+		Monframe.LENGTH += 7;
+
+		starptr = strchr(ptr, '*');
+		if (starptr)
+			*(starptr) = 0;
+
+		ConvToAX25(ptr, AdjMsg->ORIGIN);
+
+		if (starptr)
+			AdjMsg->ORIGIN[6] |= 0x80;				// Set end of address
+
+		ptr = strtok_s(NULL, " ", &context);
+
+		if (memcmp(ptr, "ctl", 3))
+			goto DigiLoop;
+	}
+	AdjMsg->ORIGIN[6] |= 1;				// Set end of address
+
+	ptr = strstr(Msg, "ctl ");
 
 	if (memcmp(&ptr[4], "SABM", 4) == 0)
-		Monframe.CTL = 0x2f;
+	{
+		AdjMsg->CTL = 0x2f;
+		if (TNC->Robust)
+			UpdateMH(TNC, MHCall, '.', 0);
+		else
+			UpdateMH(TNC, MHCall, ' ', 0);
+	}
 	else  
 	if (memcmp(&ptr[4], "DISC", 4) == 0)
-		Monframe.CTL = 0x43;
+		AdjMsg->CTL = 0x43;
 	else 
 	if (memcmp(&ptr[4], "UA", 2) == 0)
-		Monframe.CTL = 0x63;
+	{
+		AdjMsg->CTL = 0x63;
+		if (TNC->Robust)
+			UpdateMH(TNC, MHCall, '.', 0);
+		else
+			UpdateMH(TNC, MHCall, ' ', 0);
+	}
 	else  
 	if (memcmp(&ptr[4], "DM", 2) == 0)
-		Monframe.CTL = 0x0f;
+		AdjMsg->CTL = 0x0f;
 	else 
 	if (memcmp(&ptr[4], "UI", 2) == 0)
-		Monframe.CTL = 0x03;
+	{
+		AdjMsg->CTL = 0x03;
+		if (TNC->Robust)
+			UpdateMH(TNC, MHCall, '.', 0);
+		else
+			UpdateMH(TNC, MHCall, ' ', 0);
+	}
 	else 
 	if (memcmp(&ptr[4], "RR", 2) == 0)
-		Monframe.CTL = 0x1 | (ptr[6] << 5);
+		AdjMsg->CTL = 0x1 | (ptr[6] << 5);
 	else 
 	if (memcmp(&ptr[4], "RNR", 3) == 0)
-		Monframe.CTL = 0x5 | (ptr[7] << 5);
+		AdjMsg->CTL = 0x5 | (ptr[7] << 5);
 	else 
 	if (memcmp(&ptr[4], "REJ", 3) == 0)
-		Monframe.CTL = 0x9 | (ptr[7] << 5);
+		AdjMsg->CTL = 0x9 | (ptr[7] << 5);
 	else 
 	if (memcmp(&ptr[4], "FRMR", 4) == 0)
-		Monframe.CTL = 0x87;
+		AdjMsg->CTL = 0x87;
 	else  
 	if (ptr[4] == 'I')
 	{
-		Monframe.CTL = (ptr[5] << 5) | (ptr[6] & 7) << 1 ;
+		AdjMsg->CTL = (ptr[5] << 5) | (ptr[6] & 7) << 1 ;
 	}
 
 	if (strchr(&ptr[4], '+'))
 	{
-		Monframe.CTL |= 0x10;
+		AdjMsg->CTL |= 0x10;
 		Monframe.DEST[6] |= 0x80;				// SET COMMAND
 	}
 
 	if (strchr(&ptr[4], '-'))	
 	{
-		Monframe.CTL |= 0x10;
+		AdjMsg->CTL |= 0x10;
 		Monframe.ORIGIN[6] |= 0x80;				// SET COMMAND
 	}
 
 	if (Type == 5)								// More to come
 	{
 		ptr = strstr(ptr, "pid ");	
-		sscanf(&ptr[3], "%x", &Monframe.PID);
+		sscanf(&ptr[3], "%x", &AdjMsg->PID);
 		return;	
 	}
 
@@ -2042,7 +2172,7 @@ VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
 	// // Second part of I or UI
 
-	memcpy(Monframe.L2DATA, Msg, Len);
+	memcpy(AdjMsg->L2DATA, Msg, Len);
 	Monframe.LENGTH += Len;
 
 	_asm {
@@ -2081,8 +2211,8 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {
 	// Queue it as we may have just sent data
 
-	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-	wsprintf(TNC->Streams[Stream].CmdSet, "D\r");
+	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
+	wsprintf(TNC->Streams[Stream].CmdSet, "\1\1\1D\0");
 }
 
 
@@ -2105,16 +2235,19 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 VOID SwitchToRPacket(struct TNCINFO * TNC)
 {
-	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
-	wsprintf(TNC->Streams[0].CmdSet, "%%B R600\r");
+	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
+	wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B R600\0");
 	TNC->Robust = TRUE;
 	SetDlgItemText(TNC->hDlg, IDC_MODE, "Robust Packet");
 }
 
 VOID SwitchToNormPacket(struct TNCINFO * TNC)
 {
-	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
-	wsprintf(TNC->Streams[0].CmdSet, "%%B 300\r");
+	if (TNC->ForceRobust)
+		return;
+	
+	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
+	wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", TNC->NormSpeed);
 	TNC->Robust = FALSE;
 	SetDlgItemText(TNC->hDlg, IDC_MODE, "HF Packet");
 }

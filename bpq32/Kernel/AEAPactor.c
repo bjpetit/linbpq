@@ -1460,7 +1460,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					}
 				}
 
-				if (FULL_CTEXT)
+				if (FULL_CTEXT && HFCTEXTLEN == 0)
 				{
 					char CTBuff[300];
 					int Len = CTEXTLEN, CTPaclen = 50;

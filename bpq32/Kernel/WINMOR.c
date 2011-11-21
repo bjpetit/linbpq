@@ -130,61 +130,16 @@ static ProcessLine(char * buf, int Port)
 
 	if(*ptr ==';') return (TRUE);			// comment
 
+	if (_stricmp(buf, "ADDR"))
+		return FALSE;						// Must start with ADDR
+
 	ptr = strtok(NULL, " \t\n\r");
 
-	if (_stricmp(buf, "ADDR") == 0)			// Winmor Using BPQ32 COnfig
-	{
-		BPQport = Port;
-		p_ipad = ptr;
-	}
-	else
-	if (_stricmp(buf, "APPL") == 0)			// Using BPQ32 COnfig
-	{
-		BPQport = Port;
-		p_cmd = ptr;
-	}
-	else
-	if (_stricmp(buf, "PORT") != 0)			// Using Old Config
-	{
-		// New config without a PORT or APPL  - this is a Config Command
+	BPQport = Port;
+	p_ipad = ptr;
 
-		strcpy(buf, errbuf);
-
-		BPQport = Port;
-
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
-
-		TNC->InitScript = malloc(1000);
-		TNC->InitScript[0] = 0;
-		goto ConfigLine;
-	}
-	else
-	{
-		// Old Config from file
-
-		BPQport=0;
-		BPQport = atoi(ptr);
-	
-		if (Port && Port != BPQport)
-		{
-			// Want a particular port, and this isn't it
-
-			while(TRUE)
-			{
-				if (GetLine(buf) == 0)
-					return TRUE;
-
-				if (memcmp(buf, "****", 4) == 0)
-					return TRUE;
-
-			}
-		}
-	}
-	if(BPQport > 0 && BPQport < 33)
-	{
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
+	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+	memset(TNC, 0, sizeof(struct TNCINFO));
 
 		TNC->InitScript = malloc(1000);
 		TNC->InitScript[0] = 0;
@@ -250,7 +205,7 @@ static ProcessLine(char * buf, int Port)
 		{
 			if (GetLine(buf) == 0)
 				return TRUE;
-ConfigLine:
+
 			strcpy(errbuf, buf);
 
 			if (memcmp(buf, "****", 4) == 0)
@@ -297,7 +252,7 @@ ConfigLine:
 
 			strcat (TNC->InitScript, buf);
 		}
-	}
+
 
 	return (TRUE);	
 }
@@ -704,9 +659,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;		// Don't try if not connected
 		}
 
-		if (TNC->BPQtoWINMOR_Q)
-			return 0;		// Socket is blocked - just drop packets till it clears
-
+		if (TNC->Streams[0].BPQtoPACTOR_Q)		//Used for CTEXT
+		{
+			UINT * buffptr = Q_REM(&TNC->Streams[0].BPQtoPACTOR_Q);
+			txlen=buffptr[1];
+			memcpy(txbuff,buffptr+2,txlen);
+			bytes = send(TNC->WINMORDataSock,(const char FAR *)&txbuff,txlen,0);
+			ReleaseBuffer(buffptr);
+		}
+		
 		if (TNC->SwallowSignon)
 		{
 			TNC->SwallowSignon = FALSE;		// Discard *** connected
@@ -1324,7 +1285,7 @@ VOID ConnecttoWINMORThread(port)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname (WINMORHostName[port]);
+		 HostEnt = gethostbyname (&TNC->WINMORHostName[port]);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
