@@ -484,12 +484,12 @@ Dll VOID APIENTRY Poll_APRS()
 			case 0x1d:					// MIC-E
 
 				break;
-			default:
+		//	default:
 
 				// Not to an APRS Destination
 			
-				ReleaseBuffer(monbuff);
-				continue;
+//				ReleaseBuffer(monbuff);
+//				continue;
 		}
 
 OK:
@@ -832,7 +832,7 @@ static ProcessLine(char * buf)
 
 		APRSPortMask |= 1 << (Port - 1);
 
-		if (Context == NULL)
+		if (Context == NULL || Context[0] == 0)
 			return TRUE;					// No dest - a receive-only port
 
 		BeaconPath[Port] = _strdup(_strupr(Context));

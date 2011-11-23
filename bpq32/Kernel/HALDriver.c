@@ -1724,7 +1724,7 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	{
 		// Incoming Connect
 
-		ProcessIncommingConnect(TNC, CallCopy, 0);
+		ProcessIncommingConnect(TNC, CallCopy, 0, TRUE);
 					
 		wsprintf(Status, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
 		SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);

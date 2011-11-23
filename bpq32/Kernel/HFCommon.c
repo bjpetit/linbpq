@@ -1152,7 +1152,7 @@ VOID SaveWindowPos(int port)
 	return;
 }
 
-BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
+BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT)
 {
 	struct TRANSPORTENTRY * Session;
 	int Index = 0;
@@ -1211,7 +1211,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream)
 
 	TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
 
-	if (HFCTEXTLEN)
+	if (HFCTEXTLEN && SENDCTEXT)
 	{
 		buffptr = GetBuff();
 		if (buffptr == 0) return TRUE;			// No buffers

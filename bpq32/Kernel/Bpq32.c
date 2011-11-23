@@ -398,12 +398,14 @@
 // Connects from the console to an APPLCALL or APPLALIAS now invoke any Command Alias that has been defined.
 // Fix reporting of Tracker freqs to WL2K.
 // Fix Tracker monitoring setup (sending M UISC)
-
 // Fix possible call/application routing error on RP
 // Changes for P4Dragon
 // Include APRS Digi/IGate
 // Tracker monitoring now includes DIGIS
-// Support sending UI frames using TRKMULTI
+// Support sending UI frames using SCSTRACKER, SCTRKMULTI and UZ7HO drivers
+// Include driver for UZ7HO soundcard modem.
+// Accept DRIVER as well as DLLNAME, and COMPORT as well as IOADDR in bpq32.cfg. COMPORT is decimal
+// No longer supports separate config files, or BPQTELNETSERVER.exe
 
 #define Kernel
 #include "Versions.h"

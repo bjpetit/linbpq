@@ -226,7 +226,7 @@ struct PORTCONFIG
 {
 	short PORTNUM;
 	char ID[30];			//2
-	short TYPE;			// 32,
+	short TYPE;			    // 32,
 	short PROTOCOL;			// 34,
 	short IOADDR;			// 36,
 	short INTLEVEL;			// 38,
@@ -263,19 +263,19 @@ struct PORTCONFIG
 	short TXPORT;			// 118,
 	UCHAR MHEARD;			// 120,
 	UCHAR CWIDTYPE;			// 121,
-	short MINQUAL;			// 122, 
-	short MAXDIGIS;			//  123,
+	char MINQUAL;			// 122, 
+	char MAXDIGIS;			//  123,
 	char DefaultNoKeepAlives; // 124
 	char Pad[3];				// 127,
 	char UNPROTO[72];		//  128, 
-	char PORTALIAS2[10];	//    200,
+	char PORTALIAS2[10];	//  200,
 	char DLLNAME[16];		//  210,
 	char BCALL[10];			// 226,
 	char Pad2[20];
 	char VALIDCALLS[256];	//   256,
 };
 
-struct PORTCONFIG PortRec;
+struct PORTCONFIG * PortRec;
 
 #pragma pack()
 
@@ -1451,6 +1451,8 @@ int ports(int i)
 
 	bseek(fp2,(long) portoffset,SEEK_SET);
 
+	PortRec = (struct PORTCONFIG *)fp2;
+
 	for (i=0; i<512; i++)
 	   bputc('\0',fp2);
 
@@ -1950,12 +1952,14 @@ char rec[];
 	   Consoleprintf("DLL name too long - Truncated");
 	   Consoleprintf("%s\r\n",rec);
 	}
+		
+	_strupr(workstring);
 	strcat(workstring,"                ");
-	workstring[16] = '\0';
 
-	bseek(fp2,(long) fileoffset,SEEK_SET);
-        bputs(workstring,fp2);
-        return(1);
+	memcpy(PortRec->DLLNAME, workstring, 16);
+	PortRec->TYPE = 16;		// External
+
+	return(1);
 }
 
 int doDriver(int i, char * value, char * rec)
@@ -1969,12 +1973,14 @@ int doDriver(int i, char * value, char * rec)
 	   Consoleprintf("Driver name too long - Truncated");
 	   Consoleprintf("%s\r\n",rec);
 	}
-	strcat(workstring,"                ");
-	workstring[16] = '\0';
 
-	bseek(fp2,(long) fileoffset,SEEK_SET);
-        bputs(workstring,fp2);
-        return(1);
+	_strupr(workstring);
+	strcat(workstring,"                ");
+
+	memcpy(PortRec->DLLNAME, workstring, 16);
+	PortRec->TYPE = 16;				// External
+
+	return 1;
 }
 
 

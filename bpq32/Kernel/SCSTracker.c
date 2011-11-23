@@ -382,23 +382,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			SwitchToRPacket(TNC);
 			return 0;
 		}
-
-	case 7:						// Send UI
-
-		if (!TNC->TNCOK)			
-			return 0;
-
-		buffptr = GetBuff();
-
-		if (buffptr == 0) return (0);			// No buffers, so ignore
-
-		txlen=(buff[6]<<8) + buff[5]-8;	
-		buffptr[1] = txlen;
-		memcpy(buffptr+2, &buff[8], txlen);
-		
-		C_Q_ADD(&TNC->UI_Q, buffptr);
-		return (0);
-}
+	}
 	return 0;
 }
 
@@ -864,6 +848,15 @@ VOID DEDPoll(int Port)
 		if (STREAM->Attached)
 			CheckForDetach(TNC, Stream, STREAM, TidyClose, ForcedClose, CloseComplete);
 
+		if (STREAM->NeedDisc)
+		{
+			STREAM->NeedDisc--;
+
+			if (STREAM->NeedDisc == 0)
+					STREAM->ReportDISC = TRUE;
+
+		}
+
 		if (TNC->Timeout)
 			return;				// We've sent something
 	}
@@ -1113,18 +1106,19 @@ VOID DEDPoll(int Port)
 		}	
 	}
 
-	if (TNC->TNCOK && TNC->UI_Q)
+	if (TNC->TNCOK && TNC->PortRecord->UI_Q)
 	{
 		int datalen;
-		UINT * buffptr;
 		char * Buffer;
 		char CCMD[80] = "C";
-		char Call[12] = "           ";
+		char Call[12] = "           ";	
+		struct _MESSAGE * buffptr;
 			
-		buffptr=Q_REM(&TNC->UI_Q);
+		(UINT *)buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 		
-		datalen=buffptr[1];
-		Buffer = (char *)&buffptr[2];	// Data portion of frame
+		datalen = buffptr->LENGTH - 7;
+		Buffer = &buffptr->DEST[0];		// Raw Frame
+		
 		Buffer[datalen] = 0;
 
 		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
@@ -1163,7 +1157,7 @@ VOID DEDPoll(int Port)
 			wsprintf(TNC->Streams[0].CmdSet, "%c%c%c%s\0", 0, 0, 1, Buffer);
 		}
 
-		ReleaseBuffer(buffptr);
+		ReleaseBuffer((UINT *)buffptr);
 		return;
 	}
 
@@ -1691,7 +1685,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 						TNC->RIG->CurrentBandWidth = Save;
 					}
 
-					ProcessIncommingConnect(TNC, Call, Stream);
+					ProcessIncommingConnect(TNC, Call, Stream, TRUE);
 
 					if (Stream == 0)
 					{

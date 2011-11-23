@@ -2275,7 +2275,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						UpdateMH(TNC, MHCall, '+', 'I');
 						TNC->RIG->CurrentBandWidth = Save;
 					}
-					ProcessIncommingConnect(TNC, Call, Stream);
+					ProcessIncommingConnect(TNC, Call, Stream, TRUE);
 
 					if (Stream == 0 || TNC->HFPacket)
 					{

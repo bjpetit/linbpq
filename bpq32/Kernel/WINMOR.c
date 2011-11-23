@@ -1526,7 +1526,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			SuspendOtherPorts(TNC);
 
-			ProcessIncommingConnect(TNC, Call, 0);
+			ProcessIncommingConnect(TNC, Call, 0, TRUE);
 
 			if (TNC->RIG)
 				wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);

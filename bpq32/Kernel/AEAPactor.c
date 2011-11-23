@@ -1431,7 +1431,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				// Incoming Connect
 
-				ProcessIncommingConnect(TNC, Call, Stream);
+				ProcessIncommingConnect(TNC, Call, Stream, TRUE);
 
 				if (Stream == 0)
 				{

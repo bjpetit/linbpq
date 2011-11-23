@@ -9,7 +9,8 @@
 
 #define MAXFREQS 20			// RigControl freqs to scan
 
-int HFCTEXTLEN;
+extern char HFCTEXT[81];
+extern int HFCTEXTLEN;
 
 struct PacketReportInfo
 {
@@ -171,6 +172,7 @@ typedef struct AGWINFO
 	struct AGWHEADER TXHeader;
 	struct AGWHEADER RXHeader;
 	int MaxSessions;
+	int ConnTimeOut;
 };
 
 typedef struct TNCINFO
@@ -203,13 +205,12 @@ typedef struct TNCINFO
 	int WINMORtoBPQ_Q;			// Frames for BPQ, indexed by BPQ Port
 	int BPQtoWINMOR_Q;			// Frames for WINMOR. indexed by WINMOR port. Only used it TCP session is blocked
 
-	UINT UI_Q;				// Unproto Frames
-
 	SOCKET WINMORSock;			// Control Socket
 	SOCKET WINMORDataSock;		// Data Socket
 
 	char * WINMORSignon;		// Pointer to message for secure signin
 	char * WINMORHostName;		// WINMOR Host - may be dotted decimal or DNS Name
+	int WINMORPort;				//
 	char * ApplCmd;				// Application to connect to on incoming connect (null = leave at command handler)
 	BOOL SwallowSignon;			// Set to suppress *** connected to APPL
 
@@ -434,7 +435,7 @@ BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE);
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
 VOID SaveWindowPos(int port);
-BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream);
+BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT);
 VOID ShowTraffic(struct TNCINFO * TNC);
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet);
 VOID * APIENTRY GetBuff();

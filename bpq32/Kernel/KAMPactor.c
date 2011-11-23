@@ -1688,7 +1688,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				if (Msg[1] == '2' && Msg[2] == 'A')
 					TNC->HFPacket = TRUE;
 
-				ProcessIncommingConnect(TNC, Call, Stream);
+				ProcessIncommingConnect(TNC, Call, Stream, TRUE);
 
 				if (Stream == 0)
 				{

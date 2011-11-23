@@ -1800,7 +1800,7 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 
 		struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 
-		ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
+		ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE);
 		TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 	}
 			
@@ -2085,7 +2085,7 @@ MsgLoop:
 			char * Appl;
 			int ctlen = strlen(ct);
 
-			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
+			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE);
 
 			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 
@@ -2284,7 +2284,7 @@ MsgLoop:
 
 		sockptr->UserPointer  = &RelayUser;
 
-		ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
+		ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE);
 
 		send(sock, RelayMsg, strlen(RelayMsg), 0);
 
@@ -2573,7 +2573,7 @@ MsgLoop:
 		{
 			char * Appl;
 
-			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number);
+			ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE);
 			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 
             sockptr->LoginState = 2;

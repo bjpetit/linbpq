@@ -1785,18 +1785,10 @@ _RAWTX:
 
 ;	Pactor Style. Probably will only be used for Tracker uneless we do APRS over V4 or WINMOR
 
-	push	edi					; buffer
+;	Attach to UI_Q
 
-	MOVZX	EAX,PORTNUMBER[EBX]
-	push	eax					; Port
-	push	7					; Function
-	
-	CALL	PORT_EXT_ADDR[EBX]
-
-	add		esp,8
-	
-	pop	edi
-	call	relbuff
+	LEA	ESI,UI_Q[EBX]
+	CALL	_Q_ADD			; PUT ON QUEUE
 	
 	mov	eax,0
 	RET

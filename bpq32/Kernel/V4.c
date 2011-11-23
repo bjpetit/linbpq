@@ -1301,7 +1301,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			SuspendOtherPorts(TNC);
 
-			ProcessIncommingConnect(TNC, Call, 0);
+			ProcessIncommingConnect(TNC, Call, 0, TRUE);
 			TNC->Streams[0].ARQENDSent = FALSE;
 
 			if (TNC->RIG)
