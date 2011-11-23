@@ -45,47 +45,13 @@ HANDLE hControl;
 struct PortInfo Ports[OUTPORTS + 1] = {0};			// Extra for UDP Out
 struct PortInfo InPorts[2] = {0};
 
-UINT GPSType = 0xffff;		// Source of Postion info - 1 = Phillips 2 = AIT1000. ffff = not posn message
-
-BOOL RMCMsg;
-
-struct SatInfo SATS[40];
-
-int SatsInView = 0;
-int SatsInFix = 0;
-int Recnum = 0;
-int RecCount = 0;
-int FixType = 0;
-int FixD = 0;			// 2/3D
-
-int GSVTimeout;
-int FixTimeout;
-
-RECT SatRect1 = {5, 180, 300, 200};
-RECT SatRect2 = {5, 200, 300, 300};
-
-char SimFileName[256];
-int SimRate=100;
-BOOL FileOpen;
-HANDLE hInputFile;
-HANDLE hSpeedLog, HBattLog;
 int LastTickCount; 
 
 int RecoveryTimer;			// Serial Port recovery
 
-double PI = 3.1415926535;
-double P2 = 3.1415926535 / 180;
-
-double Latitude, Longtitude, SOG, COG, LatIncrement, LongIncrement;
-double LastSOG = -1.0;
-
-BOOL SendUDP = TRUE;
-BOOL FilterVDO = FALSE;
-
-
 // Global Variables:
 HINSTANCE hInst;								// current instance
-TCHAR szTitle[]="GPSMuxPC";						// The title bar text
+TCHAR szTitle[]="KISSMux";						// The title bar text
 TCHAR szWindowClass[]="KISSMUXMAINWINDOW";			// the main window class name
 
 #define	FEND	0xC0	// KISS CONTROL CODES 
@@ -94,10 +60,6 @@ TCHAR szWindowClass[]="KISSMUXMAINWINDOW";			// the main window class name
 #define	TFESC	0xDD
 
 struct tcp_table_entry tcp_table;
-
-int WindSpeedAcc = 0;
-int WindSpeedCount = 0;
-double WaterSpeed = 0;
 
 int CksumErrs;
 int Msgs;
@@ -130,7 +92,6 @@ void VirSerTimer();
 void SimTimerProc();
 void PollKISSIn();
 VOID RealPortThread(struct PortInfo * portptr);
-void DistributeMessage(char * GPSMsg, int len, BOOL TOGPS);
 void SelectSource(int Index, BOOL Recovering);
 BOOL OpenRealPort(struct PortInfo * portptr);
 int Refresh(struct PortInfo * portptr);
@@ -178,7 +139,6 @@ UINT * GetBuffer();
 VOID ReleaseBuffer(UINT *BUFF);
 
 // C Routines to access buffer pool
-
 
 
 UINT * GetBuffer()
@@ -515,12 +475,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 
 		case IDC_RESTART:
-
-		GetDlgItemText(hWnd,IDC_LAT,Work,50);	
-		Latitude=atof(Work);
-
-		GetDlgItemText(hWnd,IDC_LONG,Work,50);
-		Longtitude=atof(Work);
 		
 		break;
 
@@ -533,7 +487,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDC_UDP:
 
-			SendUDP = IsDlgButtonChecked(hWnd, IDC_UDP);
+//			SendUDP = IsDlgButtonChecked(hWnd, IDC_UDP);
 			break;
 
 		case IDC_TCP:
@@ -1437,96 +1391,6 @@ void SendToGPS(char * GPSMsg, int len)
 	}
 }
 
-
-void DistributeMessage(char * GPSMsg, int len, BOOL TOGPS)
-{
-	int Written, resp, i;
-	struct PortInfo * portptr;
-
-	SetDlgItemText(hWnd,IDC_Trace,GPSMsg);
-
-	if (SendUDP)
-	{
-		txaddr.sin_family = AF_INET;
-		txaddr.sin_port = htons(8874);
-		txaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-		sendto(udpsock, GPSMsg, len, 0, (LPSOCKADDR)&txaddr, addrlen);
-	}
-
-	if (TOGPS)
-	{
-		for (i = 0; i < 2; i++)
-		{
-			portptr = &InPorts[i];
-			
-			if (!portptr->PortEnabled || !portptr->hDevice)
-				continue;
-
-			memset(&portptr->Overlapped, 0, sizeof(portptr->Overlapped));
-			WriteFile(portptr->hDevice, GPSMsg, len, &Written, &portptr->Overlapped);
-		}
-	
-		GPSType = 0xffff;
-		RMCMsg = FALSE;
-
-		return;
-	}
-
-	for (i = 0; i < OUTPORTS; i++)
-	{
-		portptr = &Ports[i];
-
-		if (portptr->PortEnabled)
-		{
-			if (portptr->PortType[0] == 'V')
-			{
-				if (portptr->NewVCOM)
-				{
-					// Have to escape all oxff chars, as these are used to get status info 
-
-					UCHAR NewMessage[1000];
-					UCHAR * ptr1 = GPSMsg;
-					UCHAR * ptr2 = NewMessage;
-					UCHAR c;
-
-					int Length = len;
-					int Newlen = len;
-
-					while (Length != 0)
-					{
-						c = *(ptr1++);
-						*(ptr2++) = c;
-
-						if (c == 0xff)
-						{
-							*(ptr2++) = c;
-							Newlen++;
-						}
-						Length--;
-					}					
-					resp =  WriteFile(portptr->hDevice, NewMessage, Newlen, &Written, NULL);
-				}
-				else
-					resp = BPQSerialSendData(portptr->hDevice, GPSMsg, len);
-				GetLastError();
-			}
-
-			if (portptr->PortType[0] == 'R')
-			{
-				memset(&portptr->Overlapped, 0, sizeof(portptr->Overlapped));
-				WriteFile(portptr->hDevice, GPSMsg, len, &Written, &portptr->Overlapped);
-			}
-		}
-	}
-
-	GPSType = 0xffff;
-	RMCMsg = FALSE;
-
-	return;
-}
-
-
 VOID RealPortThread(struct PortInfo * portptr)
 {
 	int ModemStat;
@@ -1719,125 +1583,6 @@ void SelectSource(int Index, BOOL Recovering)
 }
 
 
-void SimulateRMC()
-{
-	char Msg[100];
-	char NS='N', EW='E';
-	char LatString[20], LongString[20], DateString[7], TimeString[7], CRCSTRING[3];
-	time_t ltime;
-	struct tm *newtime;
-
-
-//Dim Msg As String, LatString As String, LongString As String, SogString As String, CoGString As String
-//Dim DateString As String
-//
-//Dim CRC As Integer, resp As Long
-	int Degrees, CRC;
-	UINT i;
-	double Minutes, Long;
-	char Work[50];
-
-//Dim x As Long
-//Dim CRCSTRING As String
-
-	int TickCount, Interval;
-/*
-'        RMC - Recommended minimum specific GPS/Transit data
-'        RMC , 225446, A, 4916.45, N, 12311.12, W, 0.5, 54.7, 191194, 20.3, E * 68
-'           225446       Time of fix 22:54:46 UTC
-'           A            Navigation receiver warning A = OK, V = warning
-'           4916.45,N    Latitude 49 deg. 16.45 min North
-'           12311.12,W   Longitude 123 deg. 11.12 min West
-'           000.5        Speed over ground, Knots
-'           054.7        Course Made Good, True
-'           191194       Date of fix  19 November 1994
-'           020.3,E      Magnetic variation 20.3 deg East
-'           *68          mandatory checksum
-
-'
-' Convert lat and long to rather odd NMEA format
-'
-*/
-
-	TickCount = GetTickCount();
-
-	Interval = TickCount - LastTickCount;  // Milliseconds since last tick
-
-	LastTickCount = TickCount;
-
-	GetDlgItemText(hWnd,IDC_HEADING,Work,50);
-	COG=atof(Work);
-
-	GetDlgItemText(hWnd,IDC_SPEED,Work,50);			
-	SOG=atof(Work);
-
-
-	LatIncrement = SOG * cos(COG * P2) / 216000 * Interval / 1000;
-
-	LongIncrement = SOG * sin(COG * P2) / cos(Latitude * P2) / 216000 * Interval / 1000;
-
-	Latitude = Latitude + LatIncrement;
-	Longtitude = Longtitude + LongIncrement;
-
-	if (Latitude < 0)
-	{
-		NS = 'S';
-		Latitude=-Latitude;
-	}
-	if (Longtitude < 0)
-	{
-		EW = 'W';
-		Long=-Longtitude;
-	}
-	else
-		Long=Longtitude;
-
-#pragma warning(push)
-#pragma warning(disable:4244)
-
-	Degrees = Latitude;
-	Minutes = Latitude* 60.0 - (60 * Degrees);
-
-	sprintf(LatString,"%02d%2.3f,%c",Degrees, Minutes, NS);
-		
-//		= Format(Degrees, "00") + Format(Minutes, "00.0000") + "," + NS
-//	Text1 = Format(Degrees) + Chr(176) + Format(Minutes, " 00.000") + "' " + NS
-
-	Degrees = Long;
-
-#pragma warning(pop)
-
-	Minutes = Long * 60 - 60 * Degrees;
-
-	sprintf(LongString,"%03d%3.3f,%c",Degrees, Minutes, EW);
-
-	time(&ltime);				     /* Get time in seconds */
-	newtime = gmtime(&ltime);		 /* Convert time to struct */
-                                     /* tm form */
-	wsprintf(DateString,"%02d%02d%02d", newtime->tm_mday,newtime->tm_mon+1,newtime->tm_year-100);
-	wsprintf(TimeString,"%02d%02d%02d", newtime->tm_hour,newtime->tm_min,newtime->tm_sec );
-
-	sprintf(Msg,"$GPRMC,%s,A,%s,%s,%.1f,%.1f,%s,000.0,W*",TimeString, LatString, LongString, SOG, COG, DateString);
-
-	CRC = 0;
-
-	for (i = 1; i < strlen(Msg) - 1; i++)
-	{
-		CRC = CRC ^ Msg[i];
-	}
-
-	wsprintf(CRCSTRING,"%02X", CRC);
-
-	strcat(Msg,CRCSTRING);
-	strcat(Msg,"\r\n");
-
-//Msg = Msg + CRCSTRING + vbCrLf
-
-	DistributeMessage(Msg, strlen(Msg), FALSE);
-
-	return;
-
-}
 
 // TCP Support (for GPS via ActiveSync)
 
@@ -1999,7 +1744,7 @@ int DataSocket_Read(struct tcp_table_entry * sockptr, SOCKET sock)
 	if (InputLen == 0)
 		return 0;					// Does this mean closed?
 
-	 DistributeMessage(&sockptr->TCPBuffer[0], InputLen, FALSE);
+//	 DistributeMessage(&sockptr->TCPBuffer[0], InputLen, FALSE);
 
 	return 0;
 }

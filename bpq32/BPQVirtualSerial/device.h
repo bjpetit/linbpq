@@ -129,6 +129,8 @@ public:
 	WCHAR PipeFullName[100];
 	BOOL PipeConnected;
 	UCHAR COMConnected;			// Set if COM side is open
+	UCHAR RTS;					// Set if COM side RTS is on
+	UCHAR DTR;					// Set if COM side DTR is on
 
     //
     // The factory method used to create an instance of this driver.

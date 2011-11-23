@@ -69,10 +69,9 @@ DWORD WINAPI PipeThreadProc(VOID * p)
 				OutputDebugString(L"Pipe Connected");
 				pDevice->PipeConnected = TRUE;
 
-				// Send current CPM connected state to Host
+				// Send current COM connected state to Host
 	
-				Reply[1] = pDevice->COMConnected;
-
+				Reply[1] = pDevice->COMConnected | 	(pDevice->RTS << 1) | (pDevice->DTR << 2);
 				WriteFile(pDevice->PipeHandle, Reply, 2, &Written, NULL);
 			}
 			else
@@ -522,8 +521,11 @@ CMyDevice::Configure(VOID)
         goto Exit;
     }
 
-    defaultQueue->Release();    
-    
+    defaultQueue->Release(); 
+
+	RTS = 0;
+	DTR = 0;
+	COMConnected = 0;
     
 Exit:
 
@@ -625,6 +627,8 @@ CMyDevice::OnCloseFile(
 	Debugprintf(L"OnCloseFile Called");
 
 	COMConnected = FALSE;
+	RTS = 0;
+	DTR = 0;
 	
 	if (PipeConnected)	
 		WriteFile(PipeHandle, Reply, 2, &Written, NULL);
@@ -658,11 +662,12 @@ CMyDevice::OnCleanupFile(
 	Debugprintf(L"OnCleanupFile Called");
 	
 	COMConnected = FALSE;
-
+	RTS = 0;
+	DTR = 0;
+	
 	if (PipeConnected)	
 		WriteFile(PipeHandle, Reply, 2, &Written, NULL);
 }
-
 
 VOID 
 CMyDevice::OnCleanup(

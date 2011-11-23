@@ -304,6 +304,9 @@ Return Value:
     IWDFMemory *outputMemory = NULL;
     UINT i;
 
+	UCHAR Reply[3] = {0xff};
+	DWORD Written;
+
     WUDF_TEST_DRIVER_ASSERT(pWdfRequest);
     WUDF_TEST_DRIVER_ASSERT(m_Device);
 
@@ -319,7 +322,10 @@ Return Value:
 
 			m_RingBuffer.GetAvailableData(&availableData);
 
-            Status.AmountInInQueue = availableData;
+#pragma warning(push)
+#pragma warning(disable : 4244)
+           Status.AmountInInQueue = availableData;
+#pragma warning(pop)
 
             pWdfRequest->GetOutputMemory(&outputMemory);
 
@@ -394,7 +400,7 @@ Return Value:
         case IOCTL_SERIAL_WAIT_ON_MASK:
         {
             ULONG Mask = m_Device->GetWaitMask();
-			ULONG n;
+			SIZE_T n;
 			ULONG DAV = 1;
 
 			Debugprintf(L"Wait On Mask - Mask is %x", Mask);
@@ -431,6 +437,36 @@ Return Value:
 		
 			return;
 		}
+
+		case IOCTL_SERIAL_SET_RTS:
+
+			this->m_Device->RTS = TRUE;
+			goto RTSDRTCommon;
+
+		case IOCTL_SERIAL_CLR_RTS:
+
+			this->m_Device->RTS = FALSE;
+			goto RTSDRTCommon;
+
+		case IOCTL_SERIAL_SET_DTR:
+
+			this->m_Device->DTR = TRUE;
+			goto RTSDRTCommon;
+
+		case IOCTL_SERIAL_CLR_DTR:
+
+			this->m_Device->DTR = FALSE;
+
+		RTSDRTCommon:
+
+			Reply[1] = this->m_Device->COMConnected | (this->m_Device->RTS << 1) | (this->m_Device->DTR << 2);
+	
+			if (this->m_Device->PipeConnected)
+				WriteFile(this->m_Device->PipeHandle, Reply, 2, &Written, NULL);
+
+			break;
+
+
         case IOCTL_SERIAL_SET_BAUD_RATE:
         {
             //
@@ -979,7 +1015,10 @@ Return Value:
 		UCHAR * ptr2 = NewMessage;
 		UCHAR c;
 		DWORD Written, NewLen = 0;
+#pragma warning(push)
+#pragma warning(disable : 4244)
 		int Length = BytesToWrite;
+#pragma warning(pop)
 		int Resp;
 
 		while (Length != 0)
@@ -1184,7 +1223,7 @@ Return Value:
 
 						//Request for current connect status
 
-						Reply[1] = pDevice->COMConnected;			
+						Reply[1] = pDevice->COMConnected | (pDevice->RTS << 1) | (pDevice->DTR << 2);
 						DWORD Written;
 		
 						WriteFile(pDevice->PipeHandle, Reply, 2, &Written, NULL);
@@ -1336,6 +1375,8 @@ Aruments:
 
 	this->m_Device->COMConnected = TRUE;
 
+	Reply[1] = 1 | (this->m_Device->RTS << 1) | (this->m_Device->DTR << 2);
+	
 	if (this->m_Device->PipeConnected)
 		WriteFile(this->m_Device->PipeHandle, Reply, 2, &Written, NULL);
 
