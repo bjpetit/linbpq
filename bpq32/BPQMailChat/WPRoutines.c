@@ -7,6 +7,8 @@
 int CurrentWPIndex;
 char CurrentWPCall[10];
 
+time_t LASTWPSendTime;
+
 
 VOID DoWPUpdate(WPRec *WP, char Type, char * Name, char * HA, char * QTH, char * ZIP, time_t WPDate);
 VOID Do_Save_WPRec(HWND hDlg);
@@ -145,6 +147,21 @@ WPRec * LookupWP(char * Call)
 	return NULL;
 }
 
+char * FormatWPDate(time_t Datim)
+{
+	struct tm *tm;
+	static char Date[]="xx-xxx-xx";
+
+	tm = gmtime(&Datim);
+	
+	if (tm)
+		sprintf_s(Date, sizeof(Date), "%02d-%3s-%02d",
+					tm->tm_mday, month[tm->tm_mon], tm->tm_year - 100);
+
+	return Date;
+}
+
+
 int Do_WP_Sel_Changed(HWND hDlg)
 {
 	// Update WP display with newly selected rec
@@ -177,8 +194,8 @@ int Do_WP_Sel_Changed(HWND hDlg)
 			SetDlgItemInt(hDlg, IDC_CHANGED, WP->changed, FALSE);
 			SetDlgItemInt(hDlg, IDC_SEEN, WP->seen, FALSE);
 
-			SetDlgItemText(hDlg, IDC_LASTSEEN, FormatDateAndTime(WP->last_seen, TRUE));
-			SetDlgItemText(hDlg, IDC_LASTMODIFIED, FormatDateAndTime(WP->last_modif, TRUE));
+			SetDlgItemText(hDlg, IDC_LASTSEEN, FormatWPDate(WP->last_seen));
+			SetDlgItemText(hDlg, IDC_LASTMODIFIED, FormatWPDate(WP->last_modif));
 	
 			return 0;
 		}
@@ -402,6 +419,7 @@ VOID GetWPInfoFromRLine(char * From, char * FirstRLine, time_t RLineTime)
 		WP->last_seen = RLineTime;
 
 		WP->Type = 'G';
+		WP->changed = TRUE;
 
 		return;
 	}
@@ -549,6 +567,7 @@ it will not be replaced. This flag will be used in case the WP update messages a
 						WP->Type = Type;
 						WP->last_modif = WPDate;
 						WP->last_seen = WPDate;
+						WP->changed = TRUE;
 						WP->seen++;
 					}
 				}	
@@ -570,17 +589,17 @@ VOID DoWPUpdate(WPRec * WP, char Type, char * Name, char * HA, char * QTH, char 
 	// First Update any unknown field
 
 	if(Name)
-		if (WP->name == NULL) {strcpy(WP->name, Name); WP->last_modif = WPDate;}
+		if (WP->name == NULL) {strcpy(WP->name, Name); WP->last_modif = WPDate; WP->changed = TRUE;}
 
 	if (QTH)
 	{
-		if (WP->first_qth == NULL) {strcpy(WP->first_qth, QTH); WP->last_modif = WPDate;}
-		if (WP->secnd_qth == NULL) {strcpy(WP->secnd_qth, QTH); WP->last_modif = WPDate;}
+		if (WP->first_qth == NULL) {strcpy(WP->first_qth, QTH); WP->last_modif = WPDate; WP->changed = TRUE;}
+		if (WP->secnd_qth == NULL) {strcpy(WP->secnd_qth, QTH); WP->last_modif = WPDate; WP->changed = TRUE;}
 	}
 	if (ZIP)
 	{
-		if (WP->first_zip == NULL) {strcpy(WP->first_zip, ZIP); WP->last_modif = WPDate;}
-		if (WP->secnd_zip == NULL) {strcpy(WP->secnd_zip, ZIP); WP->last_modif = WPDate;}
+		if (WP->first_zip == NULL) {strcpy(WP->first_zip, ZIP); WP->last_modif = WPDate; WP->changed = TRUE;}
+		if (WP->secnd_zip == NULL) {strcpy(WP->secnd_zip, ZIP); WP->last_modif = WPDate; WP->changed = TRUE;}
 	}
 	
 	WP->last_seen = WPDate;
@@ -716,7 +735,8 @@ VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *
 
 			if (wildcardcompare(ptr->callsign, Param))
 			{
-				nodeprintf(conn, "%s  %s %s %s %s\r", ptr->callsign, ptr->first_homebbs, ptr->name, ptr->first_zip, ptr->first_qth);
+				nodeprintf(conn, "%s  %s %s %s %s\r", ptr->callsign, ptr->first_homebbs,
+					ptr->name, ptr->first_zip, ptr->first_qth);
 			}
 		}
 		
@@ -782,4 +802,182 @@ VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *
 	}
 	nodeprintf(conn, "Invalid I command option %c", Type);
 }
+/*
+On 111120 N4ZKF/I @ N4ZKF.#NFL.FL.USA.NOAM zip 32118 Dave 32955
+On 111120 F6IQF/I @ F6IQF.FRPA.FRA.EU zip ? ? f6iqf.dyndns.org
+On 111121 W9JUN/I @ W9JUN.W9JUN.#SEIN.IN.US.NOAM zip 47250 Don NORTH VERNON, IN
+On 111120 KR8ZY/U @ KR8ZY zip ? john ?
+On 111120 N0DEC/G @ N0ARY.#NCA.CA.USA.NOAM zip ? ? ?
+
+From: N0JAL
+To: WP
+Type/Status: B$
+Date/Time: 22-Nov 10:15Z
+Bid: 95F7N0JAL
+Title: WP Update
+
+R:111122/1500Z 35946@KD6PGI.OR.USA.NOAM BPQ1.0.4
+R:111122/1020 16295@K7ZS.OR.USA.NOAM
+R:111122/1015 38391@N0JAL.OR.USA.NOAM
+
+On 111121 N0JAL @ N0JAL.OR.USA.NOAM zip ? Sai Damascus, Oregon CN85sj
+
+*/
+
+VOID UpdateWP()
+{
+	// If 2nd copy of info has been unchanged for 30 days, copy to active fields
+
+	WPRec * ptr = NULL;
+	int i;
+	struct tm *tm;
+	struct MsgInfo * Msg;
+	char * via = NULL;
+	char BID[13];
+	BIDRec * BIDRec;
+	int MsgLen = 0;
+	char MailBuffer[100100];
+	char * Buffptr = MailBuffer;
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int WriteLen=0;
+	char HDest[61] = "WP";
+	char * Vptr;
+	char WPMsgType = 'P';
+	time_t NOW = time(NULL);
+	time_t UpdateLimit = NOW - (86400 * 30);	// 30 days
+	LASTWPSendTime = NOW - (86400 * 5);		// 5 days max
+
+	for (i=1; i <= NumberofWPrecs; i++)
+	{
+		ptr = WPRecPtr[i];
+
+		// DO we have a new field, and if so is it different?
+
+		if ((ptr->secnd_homebbs[0] && _stricmp(ptr->first_homebbs, ptr->secnd_homebbs))
+			|| (ptr->secnd_qth[0] && _stricmp(ptr->first_qth, ptr->secnd_qth))
+			|| (ptr->secnd_zip[0] && _stricmp(ptr->first_zip, ptr->secnd_zip)))
+		{
+			// Have new data
+
+			if (ptr->last_modif < UpdateLimit)
+			{
+				// Stable for 30 days
+
+				if (ptr->secnd_homebbs[0])
+					strcpy(ptr->first_homebbs, ptr->secnd_homebbs);
+				if (ptr->secnd_qth[0])
+					strcpy(ptr->first_qth, ptr->secnd_qth);
+				if (ptr->secnd_zip[0])
+					strcpy(ptr->first_zip, ptr->secnd_zip);
+				
+				ptr->last_modif = NOW;
+		
+			}
+		}
+	}
+}
+
+int CreateWPMessage()
+{
+	// Include all messages with Type of U whach have changed since LASTWPSendTime
+
+	WPRec * ptr = NULL;
+	int i;
+	struct tm *tm;
+	struct MsgInfo * Msg;
+	char * via = NULL;
+	char BID[13];
+	BIDRec * BIDRec;
+	int MsgLen = 0;
+	char MailBuffer[100100];
+	char * Buffptr = MailBuffer;
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int WriteLen=0;
+
+	LASTWPSendTime = time(NULL) - (86400 * 5);		// 5 days max
+
+	for (i=1; i <= NumberofWPrecs; i++)
+	{
+		ptr = WPRecPtr[i];
+
+//		if (ptr->last_modif > LASTWPSendTime && ptr->Type == 'U' && ptr->first_homebbs[0])
+		if (ptr->changed && ptr->last_modif > LASTWPSendTime && ptr->first_homebbs[0])
+		{
+			tm = gmtime(&ptr->last_modif);
+			MsgLen += wsprintf(Buffptr, "On %02d%02d%02d %s/%c @ %s zip %s %s %s\r\n", 
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday,
+				ptr->callsign, ptr->Type, ptr->first_homebbs,
+				(ptr->first_zip[0]) ? ptr->first_zip : "?",
+				(ptr->name[0]) ? ptr->name : "?",
+				(ptr->first_qth[0]) ? ptr->first_qth : "?");
+
+			Buffptr = &MailBuffer[MsgLen];
+
+			ptr->changed = FALSE;
+
+			if (MsgLen > 100000)
+				break;
+		}
+	}
+
+	if (MsgLen == 0)
+		return TRUE;
+
+	Msg = AllocateMsgRecord();
+		
+	// Set number here so they remain in sequence
+		
+	Msg->number = ++LatestMsg;
+	Msg->length = MsgLen;
+	MsgnotoMsg[Msg->number] = Msg;
+
+	strcpy(Msg->from, SYSOPCall);	
+	strcpy(Msg->to, SendWPTO);
+
+	if (strlen(SendWPVIA) > 40)
+		SendWPVIA[40] = 0;
+
+	strcpy(Msg->via, SendWPVIA);
+
+	strcpy(Msg->title, "WP Update");
+
+	Msg->type = (SendWPType) ? 'P' : 'N';
+	Msg->status = 'N';
+				
+	sprintf_s(BID, sizeof(BID), "%d_%s", LatestMsg, BBSName);
+
+	strcpy(Msg->bid, BID);
+
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	BIDRec = AllocateBIDRecord();
+
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+	
+	hFile = CreateFile(MsgFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (hFile != INVALID_HANDLE_VALUE)
+	{
+		WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
+		CloseHandle(hFile);
+	}
+
+	MatchMessagetoBBSList(Msg, 0);
+
+	BuildNNTPList(Msg);				// Build NNTP Groups list
+
+	SaveMessageDatabase();
+	SaveBIDDatabase();
+
+	return TRUE;
+}
+
+
 

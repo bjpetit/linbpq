@@ -11,6 +11,7 @@ BOOL SuppressMaintEmail = FALSE;
 BOOL SaveRegDuringMaint = FALSE;
 BOOL OverrideUnsent = FALSE;
 BOOL SendNonDeliveryMsgs = TRUE;
+VOID UpdateWP();
 
 int PR = 30;
 int PUR = 30;
@@ -28,6 +29,7 @@ struct Override ** LTAT;
 int DeleteLogFiles();
 
 VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Forwarded, int Age);
+int CreateWPMessage();
 
 int LastFWDTime;
 
@@ -166,6 +168,8 @@ VOID DoHouseKeeping(BOOL Manual)
 	int retCode, disp;
 	time_t NOW;
 
+	UpdateWP();
+
 	DeleteLogFiles();
 
 	RemoveKilledMessages();
@@ -202,6 +206,10 @@ VOID DoHouseKeeping(BOOL Manual)
 
 	if (SaveRegDuringMaint)
 		CreateRegBackup();
+
+	if (SendWP)
+		CreateWPMessage();
+
 
 	if (Manual)
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);

@@ -61,6 +61,7 @@
 
 //		Call CloseBPQ32 on exit
 //		Fix ClearOutputWindow
+//		Save MonitorNodes flag
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -455,6 +456,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
 		retCode = RegSetValueEx(hKey,"Split",0,REG_BINARY,(BYTE *)&Split,sizeof(Split));
 		retCode = RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
+		retCode = RegSetValueEx(hKey,"MonitorNODES",0,REG_DWORD,(BYTE *)&MonitorNODES,4);
 
 		wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
 		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
@@ -622,6 +624,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"MONColour",0,			
 			(ULONG *)&Type,(UCHAR *)&MonitorColour,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey,"MonitorNODES",0,			
+			(ULONG *)&Type,(UCHAR *)&MonitorNODES,(ULONG *)&Vallen);
 
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"Bells",0,			

@@ -131,7 +131,6 @@ IPSTATS IPStats = {0};
 UCHAR BPQDirectory[];
 
 char ARPFN[MAX_PATH];
-char CFGFN[MAX_PATH];
 
 HANDLE handle;
 
@@ -167,15 +166,10 @@ Dll BOOL APIENTRY Init_IP()
 
 	if (BPQDirectory[0] == 0)
 	{
-		strcpy(CFGFN,"IPGateway.cfg");
 		strcpy(ARPFN,"BPQARP.dat");
 	}
 	else
 	{
-		strcpy(CFGFN,BPQDirectory);
-		strcat(CFGFN,"\\");
-		strcat(CFGFN,"IPGateway.cfg");
-
 		strcpy(ARPFN,BPQDirectory);
 		strcat(ARPFN,"\\");
 		strcat(ARPFN,"BPQARP.dat");

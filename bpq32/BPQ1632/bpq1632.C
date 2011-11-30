@@ -468,8 +468,13 @@ HOSTNOPORT:
 
 		switch (_ax>>8)
 		{
-			case 0:
 			case 1:
+
+				// ApplMask
+
+				_dx = (_dx & 0xff);		// Mask to 8 Bits
+
+			case 0:
 			case 4:
  			case 5:
 			case 6:

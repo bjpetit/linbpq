@@ -896,6 +896,14 @@ char ** HoldFrom;					// Hold on FROM Call
 char ** HoldTo;						// Hold on TO Call
 char ** HoldAt;						// Hold on AT Call
 
+// Send WP Params
+
+BOOL SendWP;
+char SendWPVIA[81];
+char SendWPTO[11];
+int SendWPType;
+
+
 int ProgramErrors = 0;
 
 // Forward declarations of functions included in this code module:
@@ -2067,6 +2075,9 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 
 			BuildNNTPList(Msg);				// Build NNTP Groups list
 
+			SaveMessageDatabase();
+			SaveBIDDatabase();
+
 			EndDialog(hDlg, LOWORD(wParam));
 
 			return TRUE;
@@ -2794,6 +2805,7 @@ BOOL Initialise()
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
 
+
 	// Calulate time to run Housekeeping
 
 	{
@@ -2926,12 +2938,14 @@ int Connected(Stream)
 			conn->NextMessagetoForward = FirstMessageIndextoForward;
 
 			if (paclen == 0)
+			{
 				paclen = 236;
+	
+				if (conn->SessType & Sess_PACTOR)
+					paclen = 100;
+			}
 
-			if (conn->SessType & Sess_PACTOR)
-				paclen = 100;
-			
-			conn->paclen=paclen;
+			conn->paclen = paclen;
 
 			//	Set SYSOP flag if user is defined as SYSOP and Host Session 
 			
@@ -3007,12 +3021,12 @@ int Connected(Stream)
 
 				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
 
-				nodeprintf(conn, BBSSID, user->flags & F_Temp_B2_BBS ? "WL2K-BPQ." : "BPQ-",
+				nodeprintf(conn, BBSSID, "BPQ-",
 					Ver[0], Ver[1], Ver[2], Ver[3],
 					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "FW": "");
 
-				 if (user->flags & F_Temp_B2_BBS)
-					 nodeprintf(conn,";PQ: 66427529\r");
+//				 if (user->flags & F_Temp_B2_BBS)
+//					 nodeprintf(conn,";PQ: 66427529\r");
 
 	//			nodeprintf(conn,"[WL2K-BPQ.1.0.4.39-B2FWIHJM$]\r");
 			}
@@ -3091,8 +3105,13 @@ int Disconnected (Stream)
 				{
 					len=sprintf_s(Msg, sizeof(Msg), "Chat User %s Disconnected", conn->Callsign);
 					WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
-					__try {logout(conn);} My__except_Routine("logout");
-
+					__try
+					{
+						logout(conn);
+					}
+					#define EXCEPTMSG "logout"
+					#include "StdExcept.c"
+					}
 				}
 				return 0;
 			}
@@ -4083,9 +4102,9 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 	if (user->HomeBBS[0] == 0)
 		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");
 
-	if (user->flags & F_Temp_B2_BBS)
-		nodeprintf(conn, "%s CMS >\r", BBSName);
-	else
+//	if (user->flags & F_Temp_B2_BBS)
+//		nodeprintf(conn, "%s CMS >\r", BBSName);
+//	else
 		nodeprintf(conn, "de %s>\r", BBSName);
 }
 
@@ -4110,14 +4129,23 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			ProcessChatLine(conn, user, Buffer, len);
 		}
-		My__except_RoutineWithDisconnect("ProcessChatLine");
-		
+			#define EXCEPTMSG "ProcessChatLine"
+			#include "StdExcept.c"
+
+			FreeSemaphore(&ChatSemaphore);
+	
+			if (conn->BPQStream <  0)
+				CloseConsole(conn->BPQStream);
+			else
+				Disconnect(conn->BPQStream);	
+
+			return;
+		}
 		FreeSemaphore(&ChatSemaphore);
 		return;
 	}
 
 	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
-
 
 	if (conn->BBSFlags & FBBForwarding)
 	{
@@ -4360,6 +4388,14 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;						
 	}
 
+	if (_stricmp(Cmd, "5") == 0)
+	{
+		DoShowRMSCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+
+
 	if (_memicmp(Cmd, "D", 1) == 0)
 	{
 		DoDeliveredCommand(conn, user, Cmd, Arg1, Context);
@@ -4579,6 +4615,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
 				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
 				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
+				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling lisr\r");
 			}
 		}
 
@@ -4642,6 +4679,12 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	if ((_memicmp(Cmd, "EDITUSER", 5) == 0) || (_memicmp(Cmd, "EU", 2) == 0))
 	{
 		DoEditUserCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_stricmp(Cmd, "SHOWRMS") == 0)
+	{
+		DoShowRMSCmd(conn, user, Arg1, Context);
 		return;
 	}
 
@@ -5119,14 +5162,16 @@ void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 }
 
 
-VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
+VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 {
 	char FullFrom[80];
 	char FullTo[80];
 
-
 	strcpy(FullFrom, Msg->from);
-	strcat(FullFrom, Msg->emailfrom);
+
+	if ((_stricmp(Msg->from, "RMS:") == 0) || (_stricmp(Msg->from, "SMTP:") == 0) || 
+		SendFullFrom || (_stricmp(Msg->emailfrom, "@winlink.org") == 0))
+		strcat(FullFrom, Msg->emailfrom);
 
 	if (_stricmp(Msg->to, "RMS") == 0)
 	{
@@ -5155,16 +5200,17 @@ VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn)
 		else
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
 				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
-
 }
 
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1)
 {
+	BOOL SendFullFrom = Cmd[2];
+	
 	switch (toupper(Cmd[1]))
 	{
 
 	case 0:					// Just L
-	case 'R':			// LR = List Reverse
+	case 'R':				// LR = List Reverse
 
 		if (Arg1)
 		{
@@ -5195,9 +5241,9 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			}
 
 			if (Cmd[1])
-				ListMessagesInRangeForwards(conn, user, user->Call, From, To);
+				ListMessagesInRangeForwards(conn, user, user->Call, From, To, SendFullFrom);
 			else
-				ListMessagesInRange(conn, user, user->Call, From, To);
+				ListMessagesInRange(conn, user, user->Call, From, To, SendFullFrom);
 
 		}
 		else
@@ -5205,9 +5251,9 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			if (LatestMsg == conn->lastmsg)
 				BBSputs(conn, "No New Messages\r");
 			else if (Cmd[1])
-				ListMessagesInRangeForwards(conn, user, user->Call, LatestMsg, conn->lastmsg + 1);
+				ListMessagesInRangeForwards(conn, user, user->Call, LatestMsg, conn->lastmsg + 1, SendFullFrom);
 			else
-				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg + 1);
+				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg + 1, SendFullFrom);
 
 			conn->lastmsg = LatestMsg;
 
@@ -5227,7 +5273,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 				if (m > 0)
 				{
-					ListMessage(MsgHddrPtr[m], conn);
+					ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
 					m--;
 				}
 			}
@@ -5236,14 +5282,14 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 	case 'M':			// LM - List Mine
 
-		if (ListMessagesTo(conn, user, user->Call) == 0)
+		if (ListMessagesTo(conn, user, user->Call, SendFullFrom) == 0)
 			BBSputs(conn, "No Messages found\r");
 		return;
 
 	case '>':			// L> - List to 
 
 		if (Arg1)
-			if (ListMessagesTo(conn, user, Arg1) == 0)
+			if (ListMessagesTo(conn, user, Arg1, SendFullFrom) == 0)
 				BBSputs(conn, "No Messages found\r");
 		
 		
@@ -5252,7 +5298,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	case '<':
 
 		if (Arg1)
-			if (ListMessagesFrom(conn, user, Arg1) == 0)
+			if (ListMessagesFrom(conn, user, Arg1, SendFullFrom) == 0)
 				BBSputs(conn, "No Messages found\r");
 		
 		return;
@@ -5260,7 +5306,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	case '@':
 
 		if (Arg1)
-			if (ListMessagesAT(conn, user, Arg1) == 0)
+			if (ListMessagesAT(conn, user, Arg1, SendFullFrom) == 0)
 				BBSputs(conn, "No Messages found\r");
 		
 		return;
@@ -5280,7 +5326,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 				if (m > 0)
 				{
 					if (MsgHddrPtr[m]->status == toupper(Cmd[1]))
-						ListMessage(MsgHddrPtr[m], conn);
+						ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
 					m--;
 				}
 			}
@@ -5299,7 +5345,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 				if (MsgHddrPtr[i]->status == toupper(Cmd[1]))
 				{
 					Msgs++;
-					ListMessage(MsgHddrPtr[i], conn);
+					ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
 				}
 			}
 
@@ -5323,7 +5369,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 				if (m > 0)
 				{
 					if (MsgHddrPtr[m]->type == toupper(Cmd[1]))
-						ListMessage(MsgHddrPtr[m], conn);
+						ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
 					m--;
 				}
 			}
@@ -5382,7 +5428,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 	}
 }	
-int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
 {
 	int i, Msgs = 0;
 
@@ -5396,14 +5442,14 @@ int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 			_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0 && (user->flags & F_SYSOP_IN_LM)))
 		{
 			Msgs++;
-			ListMessage(MsgHddrPtr[i], conn);
+			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
 		}
 	}
 	
 	return(Msgs);
 }
 
-int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
 {
 	int i, Msgs = 0;
 
@@ -5415,14 +5461,14 @@ int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
 		{
 			Msgs++;
-			ListMessage(MsgHddrPtr[i], conn);
+			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
 		}
 	}
 	
 	return(Msgs);
 }
 
-int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
 {
 	int i, Msgs = 0;
 
@@ -5434,7 +5480,7 @@ int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 		if (_memicmp(MsgHddrPtr[i]->via, Call, strlen(Call)) == 0)
 		{
 			Msgs++;
-			ListMessage(MsgHddrPtr[i], conn);
+			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
 		}
 	}
 	
@@ -5531,7 +5577,7 @@ int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
 }
 
 
-void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End)
+void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End, BOOL SendFullFrom)
 {
 	int m;
 	struct MsgInfo * Msg;
@@ -5541,12 +5587,12 @@ void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * C
 		Msg = MsgnotoMsg[m];
 		
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
-			ListMessage(Msg, conn);
+			ListMessage(Msg, conn, SendFullFrom);
 	}
 }
 
 
-void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int End, int Start)
+void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int End, int Start, BOOL SendFullFrom)
 {
 	int m;
 	struct MsgInfo * Msg;
@@ -5556,7 +5602,7 @@ void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, 
 		Msg = MsgnotoMsg[m];
 		
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
-			ListMessage(Msg, conn);
+			ListMessage(Msg, conn, SendFullFrom);
 	}
 }
 

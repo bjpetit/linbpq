@@ -46,6 +46,8 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 extern UCHAR BPQDirectory[];
 
+extern int COUNT_QUEUED_FRAMES();
+
 extern byte	MCOM;
 extern char	MTX;
 extern ULONG MMASK;
@@ -80,6 +82,7 @@ VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
+int C_Q_COUNT(UINT *Q);
 
 static int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
@@ -109,6 +112,7 @@ int SendtoSocket(SOCKET sock,char * Msg);
 int WriteLog(char * msg);
 VOID WriteCMSLog(char * msg);
 byte * EncodeCall(byte * Call);
+VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen);
 
 BOOL CheckCMS(struct TNCINFO * TNC);
 TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port);
@@ -437,7 +441,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				if (SESS)
 				{
-					n = SESS->L4KILLTIMER;
+					SESS->L4KILLTIMER;
 					if (n < (L4LIMIT - 120))
 						SESS->L4KILLTIMER = L4LIMIT - 120;
 				}
@@ -1028,6 +1032,7 @@ VOID TelnetPoll(int Port)
 	UCHAR * Poll = TNC->TXBuffer;
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	struct STREAMINFO * STREAM;
+	int Msglen;
 
 	int Stream;
 
@@ -1188,6 +1193,8 @@ VOID TelnetPoll(int Port)
 				}
 			}
 
+			sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;	// clear any queued data
+
 			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
 			{
 				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
@@ -1204,6 +1211,7 @@ VOID TelnetPoll(int Port)
 
 	for (Stream = 0; Stream <= TCP->MaxSessions; Stream++)
 	{
+		struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 		STREAM = &TNC->Streams[Stream];
 				
 		if (STREAM->BPQtoPACTOR_Q)
@@ -1212,7 +1220,6 @@ VOID TelnetPoll(int Port)
 			UINT * buffptr;
 			UCHAR * MsgPtr;
 			SOCKET sock;
-			struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 
 			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 			STREAM->FramesQueued--;
@@ -1324,9 +1331,72 @@ VOID TelnetPoll(int Port)
 				return;
 			}
 		}
-	}
 
-	return;
+		Msglen = sockptr->FromHostBuffPutptr - sockptr->FromHostBuffGetptr;
+
+		if (Msglen)
+		{
+			int Paclen = 0;
+			int Queued = 0;
+			struct TRANSPORTENTRY * Sess1 = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+			struct TRANSPORTENTRY * Sess2 = NULL;
+			
+			if (Sess1)
+				Sess2 = Sess1->L4CROSSLINK;
+			
+			// Can't use TXCount - it is Semaphored=
+
+			Queued = C_Q_COUNT(&TNC->Streams[Stream].PACTORtoBPQ_Q);
+			Queued += C_Q_COUNT((UINT *)&TNC->PortRecord->PORTCONTROL.PORTRX_Q);
+
+			if (Sess2)
+			{
+				_asm
+				{
+	
+				pushad
+
+				mov esi, Sess2
+				call COUNT_QUEUED_FRAMES
+
+				movzx ebx,ah
+				movzx eax,al
+				add eax,ebx
+				add	Queued, eax;
+
+				mov esi, Sess1
+				call COUNT_QUEUED_FRAMES
+
+				movzx ebx,ah
+				movzx eax,al
+				add eax,ebx
+				add	Queued, eax;
+
+				popad
+				}
+			}
+
+			if (Queued > 7)
+				continue;
+
+			if (Sess1)
+				Paclen = Sess1->SESSPACLEN;
+
+			if (Paclen == 0)
+				Paclen = 256;
+
+			Debugprintf("%d %d %d %d", Msglen, Paclen, Queued, GetFreeBuffs());
+
+			if (Msglen > Paclen)
+				Msglen = Paclen;
+
+			if (Sess1) Sess1->L4KILLTIMER = 0;
+			if (Sess2) Sess2->L4KILLTIMER = 0;
+
+			SendtoNode(TNC, Stream, &sockptr->FromHostBuffer[sockptr->FromHostBuffGetptr], Msglen);
+			sockptr->FromHostBuffGetptr += Msglen;
+		}
+	}
 }
 
 
@@ -1717,6 +1787,15 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 					send(sock, TCP->LoginMsg, strlen(TCP->LoginMsg), 0);
 				}
 			}
+
+			if (sockptr->FromHostBuffer == 0)
+			{
+				sockptr->FromHostBuffer = malloc(10000);
+				sockptr->FromHostBufferSize = 10000;
+			}
+
+			sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;
+
 			return 0;
 		}
 		
@@ -2372,7 +2451,7 @@ MsgLoop:
 		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream])
 			Paclen = TNC->PortRecord->ATTACHEDSESSIONS[Stream]->SESSPACLEN;
 
-		if (Paclen == 0)
+//		if (Paclen == 0)
 			Paclen = 256;
 
 		if (sockptr->BPQTermMode)
@@ -2399,23 +2478,19 @@ MsgLoop:
 			return 0;
 		}
 
-		// Send to Node
+		// Queue to Node. Data may arrive it large quatities, possibly exceeding node buffer capacity
 
 		STREAM->BytesRXed += InputLen;
 
-		if (InputLen > Paclen)
-		{		
-			SendtoNode(TNC, sockptr->Number, MsgPtr, Paclen);
-			sockptr->InputLen -= Paclen;
-
-			InputLen -= Paclen;
-
-			memmove(MsgPtr,MsgPtr+Paclen,InputLen);
-
-			goto MsgLoop;
+		if (sockptr->FromHostBuffPutptr + InputLen > sockptr->FromHostBufferSize)
+		{
+			sockptr->FromHostBufferSize += 10000;
+			sockptr->FromHostBuffer = realloc(sockptr->FromHostBuffer, sockptr->FromHostBufferSize);
 		}
-			
-		SendtoNode(TNC, sockptr->Number, MsgPtr, InputLen);
+
+		memcpy(&sockptr->FromHostBuffer[sockptr->FromHostBuffPutptr], MsgPtr, InputLen); 
+
+		sockptr->FromHostBuffPutptr += InputLen;
 		sockptr->InputLen = 0;
 
 		return 0;
@@ -2950,6 +3025,14 @@ int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error)
 				TNC->Streams[Stream].Connecting = FALSE;
 				TNC->Streams[Stream].Connected = TRUE;
 				ShowConnections(TNC);
+
+				if (sockptr->FromHostBuffer == 0)
+				{
+					sockptr->FromHostBuffer = malloc(10000);
+					sockptr->FromHostBufferSize = 10000;
+				}
+
+				sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;
 
 				TNC->Streams[Stream].BytesRXed = TNC->Streams[Stream].BytesTXed = 0;
 

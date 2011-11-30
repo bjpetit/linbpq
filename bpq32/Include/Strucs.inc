@@ -233,6 +233,7 @@ MAXHOSTMODESESSIONS DD ?	; Max Host Sessions supported (Used for KAM Pactor + ax
 ATTACHEDSESSIONS	DD	27 DUP (0); Owning Sessions for PACTOR, etc
 PERMITGATEWAY		DD	0		; Set if ax.25 ports can change callsign (ie SCS, not KAM
 SCANCAPABILITIES	DD	0		; Type of scan control Controller supports (None, Simple, Connect Lock)
+UI_Q				DD	0		; Unproto Frames for Session Mode Drivers (TRK, etc)
 
 EXTDATA	ENDS
 

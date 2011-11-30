@@ -4,7 +4,7 @@
 //	Configuration Module
 
 #include "stdafx.h"
-#define C_PAGES 6
+#define C_PAGES 7
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
@@ -14,7 +14,7 @@ int CurrentPage=0;				// Page currently on show in tabbed Dialog
 #define MAINTPARAMS 3
 #define WELCOMEMSGS 4
 #define FILTERS 5
-
+#define WPUPDATE 6
 
 typedef struct tag_dlghdr {
 
@@ -52,6 +52,7 @@ DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName);
 VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
 VOID WINAPI OnTabbedDialogInit(HWND hwndDlg);
+VOID SaveWPConfig(HWND hDlg);
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -315,6 +316,11 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			SaveFilters(hDlg);
 			return TRUE;
 
+		case IDC_WPSAVE:
+
+			SaveWPConfig(hDlg);
+			return TRUE;
+
 		}
 		break;
 
@@ -386,6 +392,9 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	tie.pszText = "Message Filters";
 	TabCtrl_InsertItem(pHdr->hwndTab, 5, &tie);
 
+	tie.pszText = "WP Update";
+	TabCtrl_InsertItem(pHdr->hwndTab, 6, &tie);
+
 	// Lock the resources for the three child dialog boxes.
 
 	pHdr->apRes[0] = DoLockDlgRes("BBS_CONFIG");
@@ -394,6 +403,7 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	pHdr->apRes[3] = DoLockDlgRes("MAINT");
 	pHdr->apRes[4] = DoLockDlgRes("WELCOMEMSG");
 	pHdr->apRes[5] = DoLockDlgRes("FILTERS");
+	pHdr->apRes[6] = DoLockDlgRes("WPUPDATE");
 
 	// Determine the bounding rectangle for all child dialog boxes.
 
@@ -731,6 +741,19 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			}
 		}
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HOLDAT, Text);
+
+
+		break;
+
+	case WPUPDATE:
+
+		SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
+		SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
+		SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_SETCURSEL, SendWPType, 0);
+
+		CheckDlgButton(hwndDisplay, IDC_SENDWP, SendWP);
+		SetDlgItemText(pHdr->hwndDisplay, IDC_WPTO, SendWPTO);
+		SetDlgItemText(pHdr->hwndDisplay, IDC_WPVIA, SendWPVIA);
 
 
 		break;
@@ -1947,6 +1970,30 @@ VOID SaveWelcomeMsgs()
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 }
 
+VOID SaveWPConfig(HWND hDlg)
+{
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
+	HKEY hKey=0;
+	int retCode, disp;
+
+	retCode = RegCreateKeyEx(REGTREE,
+          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	SendWP = IsDlgButtonChecked(hwndDisplay, IDC_SENDWP);
+	retCode = RegSetValueEx(hKey, "SendWP", 0 , REG_DWORD,(BYTE *)&SendWP, 4);
+
+	SendWPType = SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_GETCURSEL, 0, 0);
+	retCode = RegSetValueEx(hKey, "SendWPType", 0 , REG_DWORD,(BYTE *)&SendWPType, 4);
+
+	GetDlgItemText(hwndDisplay, IDC_WPTO, SendWPTO, 10);
+	retCode = RegSetValueEx(hKey,"SendWPTO", 0, REG_SZ,(BYTE *)&SendWPTO, strlen(SendWPTO));
+
+	GetDlgItemText(hwndDisplay, IDC_WPVIA, SendWPVIA, 80);
+	retCode = RegSetValueEx(hKey,"SendWPVIA", 0, REG_SZ,(BYTE *)&SendWPVIA, strlen(SendWPVIA));
+
+}
+
+
 VOID SaveFilters(HWND hDlg)
 {
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
@@ -2366,6 +2413,21 @@ TryAgain:
 		HoldFrom = GetMultiStringValue(hKey,  "HoldFrom");
 		HoldTo = GetMultiStringValue(hKey,  "HoldTo");
 		HoldAt = GetMultiStringValue(hKey,  "HoldAt");
+
+		// Send WP Params
+
+		Vallen=4;
+		RegQueryValueEx(hKey, "SendWP", 0, &Type, (UCHAR *)&SendWP, &Vallen);
+
+		Vallen=10;
+		RegQueryValueEx(hKey,"SendWPTO",0, &Type, &SendWPTO[0],&Vallen);
+
+		Vallen=80;
+		RegQueryValueEx(hKey,"SendWPVIA",0,	&Type,&SendWPVIA[0],&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"SendWPType",0, &Type, (UCHAR *)&SendWPType, &Vallen);
+
 
 		if (RegQueryValueEx(hKey,"Version",0, (ULONG *)&Type, (UCHAR *)&Size, (ULONG *)&Vallen) == 0)
 			sscanf(Size,"%d,%d,%d,%d", &LastVer[0], &LastVer[1], &LastVer[2], &LastVer[3]);

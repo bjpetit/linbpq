@@ -4,7 +4,7 @@
 #define Verstring "5.2.1.4\0"
 #define TextVerstring "V5.2.1.4\0"
 #define Datestring "October 2011"
-#define SPECIALVERSION "Test 2"
+#define SPECIALVERSION "Test 14"
 #define VerComments "G8BPQ Packet Switch V5.2.1.4\0"
 #define VerCopyright "Copyright © 2001-2011 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
@@ -37,7 +37,7 @@
 
 #define Vers 1,0,4,46
 #define Verstring "1.0.4.46\0"
-#define SPECIALVERSION "Test 2"
+#define SPECIALVERSION "Test 7"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2011 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"

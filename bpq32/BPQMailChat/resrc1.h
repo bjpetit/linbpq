@@ -35,6 +35,7 @@
 #define IDC_MAINTNOMAIL                 1018
 #define IDC_EDIT1                       1019
 #define IDC_MSGTO                       1020
+#define IDC_WPVIA                       1020
 #define IDC_MSGTITLE                    1021
 #define IDC_MAINTSAVEREG                1021
 #define IDC_MSGBID                      1022
@@ -84,6 +85,10 @@
 #define IDC_FILTERSAVE                  1080
 #define IDC_OVERRIDEUNSENT              1081
 #define IDC_MAILFOR                     1082
+#define IDC_SENDWP                      1083
+#define IDC_WPTYPE                      1085
+#define IDC_WPTO                        1086
+#define IDC_WPSAVE                      1087
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -150,7 +155,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
 #define _APS_NEXT_COMMAND_VALUE         40022
-#define _APS_NEXT_CONTROL_VALUE         1083
+#define _APS_NEXT_CONTROL_VALUE         1088
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

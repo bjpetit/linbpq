@@ -126,6 +126,53 @@ UDisplay:
 	return;
 }
 
+VOID DoShowRMSCmd(CIRCUIT * conn, struct UserInfo * inuser, char * Arg1, char * Context)
+{
+	int i, s;
+	char FWLine[10000] = "";
+	struct UserInfo * user;
+	char RMSCall[20];
+
+	if (conn->sysop == 0)
+	{
+		nodeprintf(conn, "Command needs SYSOP status\r");
+		SendPrompt(conn, inuser);
+		return;
+	}
+			
+	for (i = 0; i <= NumberofUsers; i++)
+	{
+		user = UserRecPtr[i];
+
+		if (user->flags & F_POLLRMS)
+		{
+			if (user->RMSSSIDBits == 0) user->RMSSSIDBits = 1;
+
+			for (s = 0; s < 16; s++)
+			{
+				if (user->RMSSSIDBits & (1 << s))
+				{
+					strcat(FWLine, " ");
+					if (s)
+					{
+						wsprintf(RMSCall, "%s-%d", user->Call, s);
+						strcat(FWLine, RMSCall);
+					}
+					else
+						strcat(FWLine, user->Call);
+							
+				}
+			}
+		}
+	}
+			
+	strcat(FWLine, "\r");	
+
+	nodeprintf(conn, FWLine);
+}
+
+
+
 VOID DoPollRMSCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {
 	char RMSLine[200];

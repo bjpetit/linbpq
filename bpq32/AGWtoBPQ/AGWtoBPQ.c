@@ -24,6 +24,7 @@
 //	Version 1.2.3 October 2011
 
 //		Call CloseBPQ32 on exit
+//		Handle systems with more than 9 BPQ ports
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -46,8 +47,8 @@ BOOL cfgMinToTray;
 
 int controlStream;
 
-char AGWPorts[500];
-char BPQPorts[500];
+char AGWPorts[1000];
+char BPQPorts[1000];
 
 byte AGWMessage[1000];
 
@@ -1024,8 +1025,10 @@ do {
                 portcount = strlen(BPQPorts) / 35;
      
                 ptr = _itoa(portcount,AGWPorts,10);
+
+				ptr += strlen(ptr);
 				
-				*(++ptr)=';';
+				*(ptr)=';';
 				*(++ptr)=0;
 	
 				ptr2=&BPQPorts[4];

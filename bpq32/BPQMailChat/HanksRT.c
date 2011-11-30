@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+extern struct SEM ChatSemaphore;
+
 char OurNode[10];
 char OurAlias[10];
 
@@ -26,6 +28,8 @@ static void node_dec(NODE *node);
 static KNOWNNODE *knownnode_add(char *call);
 VOID SendChatLinkStatus();
 
+#undef free
+#define   free(p) 
 
 char * strlop(char * buf, char delim)
 {
@@ -188,7 +192,6 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 		conn->LinesSent = 0;
 		return;
 	}
-
 
 	WriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
 
@@ -2149,8 +2152,7 @@ void makelinks(void)
 			return;						// One at a time
 		}
 		else
-			link->delay--;
-		
+			link->delay--;	
 	}
 }
 
@@ -2204,6 +2206,8 @@ VOID ChatTimer()
 	int len;
 	time_t NOW = time(NULL);
 
+	GetSemaphore(&ChatSemaphore);
+
 	ClearDebugWindow();
 
 	if (NeedStatus)
@@ -2212,45 +2216,6 @@ VOID ChatTimer()
 		SendChatLinkStatus();
 	}
 
-	WritetoDebugWindow("Chat Users\r\n", 12);
-
-	i = 0;
-	for (user = user_hd; user; user = user->next)
-	{
-		len = sprintf_s(Msg, sizeof(Msg), "%s Topic %s\r\n", user->call,
-			(user->topic) ? user->topic->name : "** Missing Topic **"); 
-		WritetoDebugWindow(Msg, len);
-		i++;
-
-		if (user->circuit && user->circuit->rtcflags & p_user)	// Local User
-		{
-			if ((NOW - user->lastmsgtime) > 7200)
-			{
-				nprintf(user->circuit, "*** Disconnected - Idle time exceeded\r");
-				Sleep(1000);
-
-				if (user->circuit->BPQStream < 0)
-				{
-					CloseConsole(user->circuit->BPQStream);	
-					break;
-				}
-				else
-				{
-					Disconnect(user->circuit->BPQStream);
-					break;
-				}
-			}
-
-			if (user->rtflags & u_keepalive && (NOW - user->lastsendtime) > 600)
-			{
-				nprintf(user->circuit, "Chat Keepalive\r");
-				user->lastsendtime = NOW;
-			}
-		}
-	}
-
-
-	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
 
 	WritetoDebugWindow("Chat Nodes\r\n", 12);
 
@@ -2304,6 +2269,46 @@ VOID ChatTimer()
 		i++;
 	}
 
+	WritetoDebugWindow("Chat Users\r\n", 12);
+
+	i = 0;
+	for (user = user_hd; user; user = user->next)
+	{
+		len = sprintf_s(Msg, sizeof(Msg), "%s Topic %s\r\n", user->call,
+			(user->topic) ? user->topic->name : "** Missing Topic **"); 
+		WritetoDebugWindow(Msg, len);
+		i++;
+
+		if (user->circuit && user->circuit->rtcflags & p_user)	// Local User
+		{
+			if ((NOW - user->lastmsgtime) > 7200)
+			{
+				nprintf(user->circuit, "*** Disconnected - Idle time exceeded\r");
+				Sleep(1000);
+
+				if (user->circuit->BPQStream < 0)
+				{
+					CloseConsole(user->circuit->BPQStream);	
+					break;
+				}
+				else
+				{
+					Disconnect(user->circuit->BPQStream);
+					break;
+				}
+			}
+
+			if (user->rtflags & u_keepalive && (NOW - user->lastsendtime) > 600)
+			{
+				nprintf(user->circuit, "Chat Keepalive\r");
+				user->lastsendtime = NOW;
+			}
+		}
+	}
+
+	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
+
+
 	ChatTmr++;
 
 	if (user_hd)				// Any Users?
@@ -2314,6 +2319,8 @@ VOID ChatTimer()
 		ChatTmr = 1;
 		node_keepalive();
 	}
+
+	FreeSemaphore(&ChatSemaphore);
 }
 
 VOID FreeChatMemory()

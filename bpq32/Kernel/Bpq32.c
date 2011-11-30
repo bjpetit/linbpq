@@ -406,6 +406,8 @@
 // Include driver for UZ7HO soundcard modem.
 // Accept DRIVER as well as DLLNAME, and COMPORT as well as IOADDR in bpq32.cfg. COMPORT is decimal
 // No longer supports separate config files, or BPQTELNETSERVER.exe
+// Improved flow control for Telnet CMS Sessions
+// Fix handling COnfig file without a newline after last line
 
 #define Kernel
 #include "Versions.h"
@@ -676,7 +678,6 @@ BOOL IPActive = FALSE;
 BOOL IPRequired = FALSE;
 BOOL RigRequired = TRUE;
 BOOL RigActive = FALSE;
-
 BOOL APRSActive = FALSE;
 
 Tell_Sessions();
@@ -701,8 +702,8 @@ loop1:
 	//	try to get semaphore
 	//
 
-	_asm{
-
+	_asm
+	{
 	mov	eax,1
 	xchg Semaphore,eax	// this instruction is locked
 	
@@ -715,18 +716,12 @@ loop1:
 
 	SEMGETS++;
 	SemProcessID=GetCurrentProcessId();
-
-	return;
 }
 void FreeSemaphore()
 {
 	SEMRELEASES++;
-
 	SemHeldByAPI = 0;
-
 	Semaphore=0;
-
-	return; 
 }
 
 
@@ -747,11 +742,8 @@ void LoadToolHelperRoutines()
 	if (ExtDriver == NULL)
 	{
 		err=GetLastError();
-
 		wsprintf(msg,"BPQ32 Error loading kernel32.dll - Error code %d\n", err);
-		
 		OutputDebugString(msg);
-
 		return;
 	}
 
@@ -762,14 +754,10 @@ void LoadToolHelperRoutines()
 	if (CreateToolHelp32SnapShotPtr == 0)
 	{
 		err=GetLastError();
-
 		wsprintf(msg,"BPQ32 Error getting CreateToolhelp32Snapshot entry point - Error code %d\n", err);
-		
 		OutputDebugString(msg);
-
 		return;
 	}
-
 }
 
 BOOL GetProcess(int ProcessID, char * Program)
@@ -882,7 +870,6 @@ VOID MonitorThread(int x)
 	do {
 
 		Sleep(60000);
-
 		CheckforLostProcesses();
 
 	} while (TRUE);
@@ -1218,89 +1205,7 @@ FirstInit()
 
 	return 0;
 }
-/*
-BOOL LoadIPDriver()
-{
-	char msg[128];
-	int err=0;
-	UCHAR Value[MAX_PATH];
-	char DLL[]="BPQIPModule.dll";
-	
-	// If no directory, use current
 
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value, DLL);
-	}
-		else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value, DLL);
-	}
-		
-	hIPModule=LoadLibrary(Value);
-
-	if (hIPModule == NULL)
-	{
-		err=GetLastError();
-
-		wsprintf(msg,"Error loading Driver %s - Error code %d",	DLL,err);
-		
-		WritetoConsole(msg);
-		return FALSE;
-
-	}
-	else
-	{
-		Init_IP = (int (__stdcall *)())GetProcAddress(hIPModule,"_Init_IP@0");
-		Poll_IP = (int (__stdcall *)())GetProcAddress(hIPModule,"_Poll_IP@0");
-	}
-	return TRUE;
-}
-
-BOOL LoadRigDriver()
-{
-	char msg[128];
-	int err=0;
-	UCHAR Value[MAX_PATH];
-	char DLL[]="RigControl.dll";
-	
-	// If no directory, use current
-
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value, DLL);
-	}
-		else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value, DLL);
-	}
-		
-	hRigModule = LoadLibrary(Value);
-
-	if (hRigModule == NULL)
-	{
-		err=GetLastError();
-
-		wsprintf(msg,"Error loading Driver %s - Error code %d",	DLL,err);
-		
-		WritetoConsole(msg);
-		return FALSE;
-
-	}
-	else
-	{
-		Rig_Init = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Init@0");
-		Rig_Poll = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Poll@0");
-		Rig_Command = (int (__stdcall *)())GetProcAddress(hRigModule,"_Rig_Command@8");
-	}
-	return TRUE;
-}
-
-*/
 Check_Timer()
 {
 	// Don't attach timer to Perl or ntvdm Process
@@ -1415,9 +1320,7 @@ Check_Timer()
 	}
 
 	FreeSemaphore();
-
 	return (0);
-
 }
 
 DllExport INT APIENTRY CheckTimer()
@@ -1450,9 +1353,6 @@ Tell_Sessions()
 HANDLE hInstance=0;
 
 char pgm[256];		// Uninitialised so per process
-
-int xx = sizeof(struct ROUTE);
-
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
@@ -1954,7 +1854,6 @@ VOID SetupBPQDirectory()
 		Vallen = 4;
 		retCode = RegQueryValueEx(hKey, "Minimize to Tray", 0, &Type, (UCHAR *)&MinimizetoTray, &Vallen);
 
-//		ExpandEnvironmentStrings("%APPDATA%\\BPQ32", BPQDirectory, MAX_PATH);
 		ExpandEnvironmentStrings(ValfromReg, BPQDirectory, MAX_PATH);
 
 		// Also get "BPQ Program Directory"
@@ -1972,7 +1871,6 @@ VOID SetupBPQDirectory()
 	if (BPQProgramDirectory[0] == 0)
 		strcpy(BPQProgramDirectory, BPQDirectory);
 
-//	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionStringWithBuild, DLLName, pgm);
 	i=sprintf(msg,"BPQ32 Ver %s Loaded from: %s by %s\n", VersionString, DLLName, pgm);
 	WritetoConsole(msg);
 	OutputDebugString(msg);
@@ -1992,7 +1890,8 @@ VOID SetupBPQDirectory()
 	msg[i-1]=0;
 	OutputDebugString(msg);
 
-	// Don't write the Version Key if loaded by regsvr32.exe (Installer is runnin with Admin)
+	// Don't write the Version Key if loaded by regsvr32.exe (Installer is running with Admin rights,
+	//	so will write the wrong tree on )
 
 	if (_stricmp(pgm, "regsvr32.exe") == 0)
 	{
@@ -4923,6 +4822,27 @@ int C_Q_ADD(UINT *Q,UINT *BUFF)
 
 }
 
+int C_Q_COUNT(UINT *Q)
+{
+	UINT * next;
+	int Count = 0;
+	
+	if (Q[0] == 0)						// Empty
+	{
+		return(0);
+	}
+
+	(int)next=Q[0];
+
+	while (next[0]!=0)
+	{
+		Count ++;
+		next=(UINT *)next[0];
+	}
+
+	return Count;;
+
+}
 unsigned short int compute_crc(unsigned char *buf, int txlen);
 
 SOCKADDR_IN reportdest;

@@ -113,16 +113,16 @@ ConfigLine:
 		{
 		}
 		else
-
-
+		if (_memicmp(buf, "UPDATEMAP", 9) == 0)
+			TNC->PktUpdateMap = TRUE;
+		else
 		if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)
 
 			// Packet Channels
 
 			TNC->PacketChannels = atoi(&buf[14]);
 		else
-			
-		strcat (TNC->InitScript, buf);
+			strcat (TNC->InitScript, buf);
 	}
 	return (TRUE);
 

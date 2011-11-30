@@ -47,6 +47,8 @@ VOID SendBeacon(int toPort);
 VOID ProcessAPRSISMsg(char * APRSMsg);
 static VOID SendtoDigiPorts(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
 struct APRSSTATIONRECORD * LookupStation(char * call);
+BOOL OpenGPSPort();
+void PollGPSIn();
 
 
 BOOL ProcessConfig();
@@ -116,6 +118,9 @@ char CrossPortMap[33][33] = {0};
 
 UCHAR BeaconHeader[33][10][7] = {""};	//	Dest, Source and up to 8 digis 
 int BeaconHddrLen[33] = {0};			// Actual Length used
+
+char CFGSYMBOL = '=';
+char CFGSYMSET = '/';
 
 char SYMBOL = '=';
 char SYMSET = '/';
@@ -214,6 +219,11 @@ Dll BOOL APIENTRY Init_APRS()
 		SYMBOL = '.';
 		SYMSET = '\\';				// Undefined Posn Symbol
 	}
+	else
+	{
+		SYMBOL = CFGSYMBOL;
+		SYMSET = CFGSYMSET;
+	}
 
 	// Convert Dest ADDRS to AX.25
 
@@ -239,6 +249,9 @@ Dll BOOL APIENTRY Init_APRS()
 
 	if (ISPort)
 		_beginthread(APRSISThread, 0, (VOID *) TRUE);
+
+	if (GPSPort)
+		OpenGPSPort();
 
 	WritetoConsole("\nAPRS Digi/Gateway Enabled\n");
 	return TRUE;
@@ -270,6 +283,9 @@ Dll VOID APIENTRY Poll_APRS()
 		SecTimer = 10;
 		DoSecTimer();
 	}
+
+	if (GPSPort)
+		PollGPSIn();
 
 	while (APRSMONVEC.HOSTTRACEQ)
 	{
@@ -958,13 +974,13 @@ static ProcessLine(char * buf)
 
 	if (_stricmp(ptr, "SYMBOL") == 0)
 	{
-		SYMBOL = p_value[0];
+		CFGSYMBOL = p_value[0];
 		return TRUE;
 	}
 
 	if (_stricmp(ptr, "SYMSET") == 0)
 	{
-		SYMSET = p_value[0];
+		CFGSYMSET = p_value[0];
 		return TRUE;
 	}
 
@@ -1560,3 +1576,395 @@ char * FormatAPRSMH(struct APRSSTATIONRECORD * MH)
 	return MHLine;
 
  }
+
+// GPS Handling Code
+
+void SelectSource(BOOL Recovering);
+void DecodeRMC(char * msg, int len);
+
+void PollGPSIn();
+
+struct PortInfo
+{ 
+	int Index;
+	int ComPort;
+	char PortType[2];
+	BOOL NewVCOM;				// Using User Mode Virtual COM Driver
+	int ReopenTimer;			// Retry if open failed delay
+	int RTS;
+	int CTS;
+	int DCD;
+	int DTR;
+	int DSR;
+	char Params[20];				// Init Params (eg 9600,n,8)
+	char PortLabel[20];
+	HANDLE hDevice;
+	BOOL Created;
+	BOOL PortEnabled;
+	int LastError;
+	int FLOWCTRL;
+	int gpsinptr;
+	OVERLAPPED Overlapped;
+	OVERLAPPED OverlappedRead;
+	char GPSinMsg[160];
+	int GPSTypeFlag;					// GPS Source flags
+	BOOL RMCOnly;						// Only send RMC msgs to this port
+};
+
+
+
+struct PortInfo InPorts[1] = {0};
+
+UINT GPSType = 0xffff;		// Source of Postion info - 1 = Phillips 2 = AIT1000. ffff = not posn message
+
+int RecoveryTimer;			// Serial Port recovery
+
+double PI = 3.1415926535;
+double P2 = 3.1415926535 / 180;
+
+double Latitude, Longtitude, SOG, COG, LatIncrement, LongIncrement;
+double LastSOG = -1.0;
+
+BOOL Check0183CheckSum(char * msg,int len)
+{
+	BOOL retcode=TRUE;
+	char * ptr;
+	UCHAR sum,xsum1,xsum2;
+
+	sum=0;
+	ptr=++msg;	//	Skip $
+
+loop:
+
+	if (*(ptr)=='*') goto eom;
+	
+	sum ^=*(ptr++);
+
+	len--;
+
+	if (len > 0) goto loop;
+
+	return TRUE;		// No Checksum
+
+eom:
+
+	xsum1=*(++ptr);
+	xsum1-=0x30;
+	if (xsum1 > 9) xsum1-=7;
+
+	xsum2=*(++ptr);
+	xsum2-=0x30;
+	if (xsum2 > 9) xsum2-=7;
+
+	xsum1=xsum1<<4;
+	xsum1+=xsum2;
+
+	return (xsum1==sum);
+}
+
+BOOL OpenGPSPort()
+{
+	char szPort[15];
+	BOOL fRetVal ;
+	COMMTIMEOUTS CommTimeOuts ;
+	struct PortInfo * portptr = &InPorts[0];
+	DCB	dcb;
+	
+	wsprintf(szPort, "//./COM%d", GPSPort) ;
+
+	// open COMM device
+
+	portptr->hDevice =
+      CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, 
+                  NULL );
+				  
+	if (portptr->hDevice == (HANDLE) -1)
+	{
+		portptr->LastError=GetLastError();
+		return FALSE;
+	}
+
+    // setup device buffers
+
+      SetupComm(portptr->hDevice, 4096, 4096 ) ;
+
+      // purge any information in the buffer
+
+      PurgeComm(portptr->hDevice, PURGE_TXABORT | PURGE_RXABORT |
+                                      PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+
+      // set up for overlapped I/O
+	  
+      CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
+      CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
+      CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
+      CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
+      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
+      SetCommTimeouts(portptr->hDevice, &CommTimeOuts ) ;
+
+#define FC_DTRDSR       0x01
+#define FC_RTSCTS       0x02
+	
+	dcb.DCBlength = sizeof(DCB);
+	GetCommState(portptr->hDevice, &dcb);
+
+	 // setup hardware flow control
+
+	dcb.fDtrControl = DTR_CONTROL_ENABLE;
+	dcb.fRtsControl = RTS_CONTROL_ENABLE;
+
+	dcb.BaudRate = GPSSpeed;
+	dcb.ByteSize = 8;
+	dcb.Parity = NOPARITY;
+	dcb.StopBits = ONESTOPBIT;
+
+	dcb.fInX = dcb.fOutX = 0;
+	dcb.XonChar = 0;
+	dcb.XoffChar = 0;
+	dcb.XonLim = 0;
+	dcb.XoffLim = 0;
+
+	// other various settings
+
+	dcb.fBinary = TRUE;
+	dcb.fParity = TRUE;
+
+	fRetVal = SetCommState(portptr->hDevice, &dcb);
+
+//	conn->RTS = 1;
+//	conn->DTR = 1;
+
+	EscapeCommFunction(portptr->hDevice,SETDTR);
+	EscapeCommFunction(portptr->hDevice,SETRTS);
+	
+	return fRetVal;
+}
+
+void PollGPSIn()
+{
+	int len;
+	char GPSMsg[2000];
+	char * ptr;
+	struct PortInfo * portptr;
+	COMSTAT    ComStat ;
+	DWORD      dwErrorFlags;
+	DWORD      dwLength;
+
+	if (RecoveryTimer)
+	{
+		RecoveryTimer--;
+		if (RecoveryTimer == 0)
+		{
+			SelectSource(TRUE);		// Try to re-open ports
+		}
+	}
+
+	portptr = &InPorts[0];
+	
+	if (!portptr->hDevice)
+		return;
+
+	getgpsin:
+
+		// only try to read number of bytes in queue 
+	
+		len=0;
+
+		if (!ClearCommError(portptr->hDevice, &dwErrorFlags, &ComStat))
+		{
+			// Comm Error - probably lost USB Port. Try closing and reopening after a delay
+
+			if (RecoveryTimer == 0)
+			{
+				RecoveryTimer = 100;			// 10 Secs
+				return;
+			}
+		}
+
+		dwLength = min(80, ComStat.cbInQue ) ;
+
+		if (portptr->gpsinptr + dwLength > 160)	// Corrupt data 
+			portptr->gpsinptr = 0;
+
+		if (dwLength > 0)
+		{
+			memset(&portptr->OverlappedRead, 0, sizeof(portptr->OverlappedRead));
+			ReadFile(portptr->hDevice, &portptr->GPSinMsg [portptr->gpsinptr] ,dwLength,&len,&portptr->OverlappedRead);
+		}
+		if (len > 0)
+		{
+			portptr->gpsinptr+=len;
+
+			ptr = memchr(portptr->GPSinMsg, 0x0a, portptr->gpsinptr);
+
+			while (ptr != NULL)
+			{
+				ptr++;									// include lf
+				len=ptr-(char *)&portptr->GPSinMsg;					
+				memcpy(&GPSMsg,portptr->GPSinMsg,len);	
+
+				GPSMsg[len] = 0;
+
+				if (Check0183CheckSum(GPSMsg, len))
+					if (memcmp(&GPSMsg[1], "GPRMC", 5) == 0)
+						DecodeRMC(GPSMsg, len);	
+
+				portptr->gpsinptr-=len;			// bytes left
+
+				if (portptr->gpsinptr > 0)
+				{
+					memmove(portptr->GPSinMsg,ptr, portptr->gpsinptr);
+					ptr = memchr(portptr->GPSinMsg, 0x0a, portptr->gpsinptr);
+				}
+				else
+					ptr=0;
+			}
+			
+			goto getgpsin;
+	}
+	
+	return;
+}
+
+
+void ClosePorts()
+{
+	if (InPorts[0].hDevice)
+	{
+		CloseHandle(InPorts[0].hDevice);
+		InPorts[0].hDevice=0;
+	}
+
+	return;
+}
+
+void SelectSource(BOOL Recovering)
+{
+	struct PortInfo * portptr;
+
+	RecoveryTimer = 0;
+	
+	if (InPorts[0].hDevice)
+	{
+		CloseHandle(InPorts[0].hDevice);
+		InPorts[0].hDevice=0;
+	}
+    portptr = &InPorts[0];
+			
+	if (portptr->PortEnabled)
+	{                
+		if (OpenGPSPort())
+		{
+			portptr->RTS = 0;
+			portptr->DTR = 0;
+			EscapeCommFunction(portptr->hDevice,SETDTR);
+			EscapeCommFunction(portptr->hDevice,SETRTS);
+		}
+		else
+		{
+			if (Recovering)
+			{
+				RecoveryTimer = 100;			// 10 Secs
+			}
+		}       
+	}
+	return;
+}
+
+
+void DecodeRMC(char * msg, int len)
+{
+	char * ptr1;
+	char * ptr2;
+	char TimHH[3], TimMM[3], TimSS[3];
+	char OurSog[5], OurCog[4];
+	char Day[3];
+
+	ptr1 = &msg[7];
+        
+	len-=7;
+	
+	ptr2=(char *)memchr(ptr1,',',15);
+
+	if (ptr2 == 0) return;	// Duff
+
+	*(ptr2++)=0;
+
+	memcpy(TimHH,ptr1,2);
+	memcpy(TimMM,ptr1+2,2);
+	memcpy(TimSS,ptr1+4,2);
+	TimHH[2]=0;
+	TimMM[2]=0;
+	TimSS[2]=0;
+
+	ptr1=ptr2;
+	
+	if (*(ptr1) != 'A') return; // ' Data Not Valid
+        
+	ptr1+=2;
+
+	ptr2=(char *)memchr(ptr1,',',15);
+		
+	if (ptr2 == 0) return;	// Duff
+
+	*(ptr2++)=0;
+
+	memcpy(LAT, ptr1 , 7);
+	
+	if (*(ptr1+7) > '4') if (LAT[6] < '9') LAT[6]++;
+
+	ptr1=ptr2;
+
+	LAT[7] = (*ptr1);
+	
+	ptr1+=2;
+
+	ptr2=(char *)memchr(ptr1,',',15);
+		
+	if (ptr2 == 0) return;	// Duff
+	*(ptr2++)=0;
+
+	memcpy(LON, ptr1, 8);
+
+	if (*(ptr1+8) > '4') if (LON[7] < '9') LON[7]++;
+
+	ptr1=ptr2;
+
+	LON[8] = (*ptr1);
+
+	// Nopw have a valid posn, so stp sending Undefined LOC Sysbol
+	
+	SYMBOL = CFGSYMBOL;
+	SYMSET = CFGSYMSET;
+
+	ptr1+=2;
+
+	ptr2 = (char *)memchr(ptr1,',',15);
+	
+	if (ptr2 == 0) return;	// Duff
+
+	*(ptr2++)=0;
+
+	memcpy(OurSog, ptr1, 4);
+	OurSog[4] = 0;
+
+	ptr1=ptr2;
+
+	ptr2 = (char *)memchr(ptr1,',',15);
+	
+	if (ptr2 == 0) return;	// Duff
+
+	*(ptr2++)=0;
+
+	memcpy(OurCog, ptr1, 3);
+	OurCog[3] = 0;
+
+	memcpy(Day,ptr2,2);
+	Day[2]=0;
+
+}
+

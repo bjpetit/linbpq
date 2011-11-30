@@ -1054,7 +1054,7 @@ NOLOC:
 
 	for (i = 0; i < MHENTRIES; i++)
 	{
-		if (Mode == ' ')			// Packet
+		if (Mode == ' ' || Mode == '*')			// Packet
 		{
 			if ((MH->MHCALL[0] == 0) || ((memcmp(AXCall, MH->MHCALL, 7) == 0) && MH->MHDIGI == Mode)) // Spare or our entry
 				goto DoMove;
@@ -1081,15 +1081,21 @@ DoMove:
 	MHBASE->MHDIGI = Mode;
 	MHBASE->MHTIME = _time32(NULL);
 
-	if (Mode == ' ')					// Packet Data
-	{
-		MHBASE->MHLocator[0] = 0;
-		MHBASE->MHFreq[0] = 0;
-		return;
-	}
-
 	memcpy(MHBASE->MHLocator, LOC, 6);
 	strcpy(MHBASE->MHFreq, ReportFreq);
+
+	// Report to NodeMap
+
+	if (Mode == '*')
+		return;							// Digi'ed Packet
+	
+	if (Mode == ' ') 					// Packet Data
+	{
+		if (TNC->PktUpdateMap == 1)
+			Mode = '!';
+		else	
+			return;
+	}
 			
 	ReportMode[0] = TNC->Hardware + '@';
 	ReportMode[1] = Mode;
@@ -1209,9 +1215,12 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 	Session->SESSPACLEN = TNC->PortRecord->PORTCONTROL.PORTPACLEN;
 	Session->KAMSESSION = Stream;
 
+	Debugprintf("%d", Session->SESSPACLEN);
+
+
 	TNC->Streams[Stream].Connected = TRUE;			// Subsequent data to data channel
 
-	if (HFCTEXTLEN && SENDCTEXT)
+	if (HFCTEXTLEN > 1 && SENDCTEXT)
 	{
 		buffptr = GetBuff();
 		if (buffptr == 0) return TRUE;			// No buffers
@@ -1367,6 +1376,9 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 
 			if (STREAM->BPQtoPACTOR_Q)					// Still data to send?
 				return;									// Will close when all acked
+
+//			if (STREAM->FramesOutstanding && TNC->Hardware == H_UZ7HO)
+//				return;									// Will close when all acked
 			
 			TidyCloseProc(TNC, Stream);					// Send Tidy Disconnect
 

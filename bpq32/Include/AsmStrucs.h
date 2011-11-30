@@ -2,6 +2,7 @@
 
 // Aug 2010 Extend Applmask to 32 bit
 
+#define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 
 #define BPQICON 2
 
@@ -56,7 +57,8 @@ extern int NUMBEROFNODES;
 
 #define ApplOffset 80000			// Applications offset in config buffer
 #define InfoOffset 85000			// Infomsg offset in config buffer
-#define InfoMax	2000				// Max Info 
+#define InfoMax	2000				// Max Info
+#define HFCTextOffset 88000;		// HF modes CTEXT
 
 struct APPLCONFIG
 {
@@ -173,6 +175,31 @@ typedef struct _MESSAGE
 	};
 
 }MESSAGE, *PMESSAGE;
+
+typedef struct HDDRWITHDIGIS
+{
+//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+
+	struct _MESSAGE * CHAIN;
+
+	UCHAR	PORT;
+	USHORT	LENGTH;
+
+	UCHAR	DEST[7];
+	UCHAR	ORIGIN[7];
+	UCHAR	DIGIS[8][7];
+
+	UCHAR	CTL;
+	UCHAR	PID; 
+
+	union 
+	{                   /*  array named screen */
+		UCHAR L2DATA[256];
+		struct _L3MESSAGE L3MSG;
+
+	};
+
+} DIGIMESSAGE, *PDIGIMESSAGE;
 
 
 //
@@ -511,6 +538,8 @@ typedef struct _EXTPORTDATA
 #define SIMPLE 1
 #define CONLOCK 2
 
+	UINT UI_Q;						// Unproto Frames for Session Mode Drivers (TRK, etc)
+
 }	EXTPORTDATA, *PEXTPORTDATA;
 
 typedef struct _HDLCDATA
@@ -613,6 +642,17 @@ typedef struct MHSTRUC
 	char MHFreq[12];
 	char MHLocator[6];
 };
+
+typedef struct APRSSTATIONRECORD
+{
+	UCHAR MHCALL[10];				// Stored with space padding
+	time_t MHTIME;					// Time last heard
+	time_t LASTMSG;					// Time last message sent from this station (via IS)
+	int Port;						// Port last heard on (zero for APRS-IS)
+	BOOL IGate;						// Set if station is an IGate;
+//	BYTE MHDIGI[56];				// Not sure if we need this
+};
+
 
 #pragma pack()
 

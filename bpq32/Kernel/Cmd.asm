@@ -745,14 +745,25 @@ INNERCOMMANDHANDLER:
 	push	edi				; Save message
 	
 	movzx	ecx,MSGLENGTH[EDI]
-	sub	ecx,8
+	sub	ecx,8				; Length of this msg
 	
 	lea	esi,8[edi]			; New Data
 	
 	mov	edi,PARTCMDBUFFER[ebx]	; Old Data
 	
 	movzx	eax,MSGLENGTH[EDI]	; Old Length
+	push	eax
+	add	eax,ecx					; Old + New
+	cmp	eax,200
+	pop	eax
+	jb CLOK
 	
+	; Command far too long - ignore previous
+	
+	mov	eax,0
+	mov MSGLENGTH[EDI], ax
+
+CLOK:
 	add MSGLENGTH[EDI], cx
 	add edi,eax					; to end of old data
 	
@@ -2957,14 +2968,37 @@ NOTWINPAC:
 	MOV	ATTACHEDSESSIONS[ESI][EAX], EBX
 	SHR	EAX, 2
 	MOV KAMSESSION[EBX],AL;			// Session Number on KAM Host Mode TNC
+	
+	MOV	EAX,CONNECTSESSION	; INCOMING CIRCUIT
+	MOVZX EAX,SESSPACLEN[EAX]	; Incoming PACLEN
+	
+	;	Should set paclen to lower of incoming and outgoing
 
-	MOV	AL,PORTPACLEN[ESI]
+	or EAX,EAX
+	jnz @F	
+	mov	EAX, 256				; 0 = 256
+@@:
+	
+	MOVZX EDX,PORTPACLEN[ESI]	; Paclen for Outgoing port
+	or EDX,EDX
+	jnz @F	
+	mov	EDX, 256
+@@:
+
+	cmp	EAX,EDX
+	jb @F
+	
+	mov	eax,edx
+	
+@@:
+
 	MOV	SESSPACLEN[EBX],AL
 	
 	PUSH	ESI
 
 	MOV	ESI,CONNECTSESSION	; INCOMING CIRCUIT
-
+	MOV	SESSPACLEN[ESI],AL
+	
 	MOV	L4CROSSLINK[EBX],ESI	; POINTER FROM NEW TO OLD
 
 	MOV	L4CROSSLINK[ESI],EBX	; POINTER FROM OLD TO NEW
@@ -4507,11 +4541,29 @@ ATTBUSY:
 
 	MOV	ESI,CONNECTSESSION	; INCOMING CIRCUIT
 	
-	MOV AL,ATTPACLEN
+	MOVZX EDX,ATTPACLEN			; Paclen for Outgoing port
+	or EDX,EDX
+	jnz @F	
+	mov	EDX, 256
+@@:
+	MOVZX EAX,SESSPACLEN[ESI]	; Incoming PACLEN
+	
+	;	Should set paclen to lower of incoming and outgoing
+
+	or EAX,EAX
+	jnz @F	
+	mov	EAX, 256				; 0 = 256
+@@:
+	cmp	EAX,EDX
+	jb @F
+	
+	mov	eax,edx	
+@@:
+
 	MOV	SESSPACLEN[ESI],AL 
+	MOV	SESSPACLEN[EBX],AL 
 
 	MOV	L4CROSSLINK[EBX],ESI	; POINTER FROM NEW TO OLD
-
 	MOV	L4CROSSLINK[ESI],EBX	; POINTER FROM OLD TO NEW
  
 	LEA	ESI,L4USER[ESI]

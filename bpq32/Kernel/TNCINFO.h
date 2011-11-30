@@ -173,6 +173,7 @@ typedef struct AGWINFO
 	struct AGWHEADER RXHeader;
 	int MaxSessions;
 	int ConnTimeOut;
+	int PollDelay;
 };
 
 typedef struct TNCINFO
@@ -392,6 +393,8 @@ typedef struct TNCINFO
 	char * CmdSet;					// A series of commands to send to the TNC
 	char * CmdSave;					// Base address for free
 
+	BOOL PktUpdateMap;				// Set if Packet MH data to be sent to NodeMap
+
 	int DefaultMode;
 	int CurrentMode;
 
@@ -423,6 +426,7 @@ typedef struct TNCINFO
 	BOOL XONXOFF;					// Set if hardware is using XON/XOFF
 
 	double LastFreq;				// Used by V4 to see if freq has changed
+
 };
 
 VOID * zalloc(int len);

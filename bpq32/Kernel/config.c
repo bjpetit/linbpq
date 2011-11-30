@@ -369,7 +369,7 @@ static char *keywords[] =
 "APPL5ALIAS", "APPL6ALIAS", "APPL7ALIAS", "APPL8ALIAS",
 "APPL1QUAL", "APPL2QUAL", "APPL3QUAL", "APPL4QUAL",
 "APPL5QUAL", "APPL6QUAL", "APPL7QUAL", "APPL8QUAL",
-"BTEXT:", "IPGATEWAY", "C_IS_CHAT", "MAXRTT", "MAXHOPS"
+"BTEXT:", "ZZZZZZZZZZZZZ", "C_IS_CHAT", "MAXRTT", "MAXHOPS"		// IPGATEWAY= no longer allowed
 };           /* parameter keywords */
 
 static int offset[] =
@@ -575,7 +575,7 @@ DllExport BOOL ProcessConfig()
 
 	GetNextLine(rec);
 
-	while (!feof(fp1))
+	while (rec[0])
 	{
 	   decode_rec(rec);
 
@@ -1628,59 +1628,57 @@ int GetNextLine(char *rec)
 	{
 		ret = fgets(rec,MAXLINE,fp1);
 
+		if (ret == NULL)
+		{
+			rec[0] = 0;
+			return 0;
+		}
+
 		for (i=0; rec[i] != '\0'; i++)
 			if (rec[i] == '\t' || rec[i] == '\n')
 				rec[i] = ' ';
 
-		if (feof(fp1))
-		{
-			j=1;
-		}
+		j = verify(rec,' ');
 
-		if (ret)
+		if (j > 0)
 		{
-			j = verify(rec,' ');
-
-			if (j > 0)
-			{
-				// Remove Leading Spaces
+			// Remove Leading Spaces
 				
-				for (i=0; rec[j] != '\0'; i++, j++)
-					rec[i] = rec[j];
+			for (i=0; rec[j] != '\0'; i++, j++)
+				rec[i] = rec[j];
 
-				rec[i] = '\0';
-			}
+			rec[i] = '\0';
+		}
 			
-			j = index(rec,";");
+		j = index(rec,";");
 
-			if (j != -1)
-				rec[j] = '\0';				// Chop at comment
+		if (j != -1)
+			rec[j] = '\0';				// Chop at comment
 
-			if (strlen(rec) > 1)
-				if (memcmp(rec, "/*",2) == 0)
-					Comment = TRUE;
-				else
-					if (memcmp(rec, "*/",2) == 0)
-					{
-						rec[0] = 32;
-						rec[1] = 0;
-						Comment = FALSE;
-					}
+		if (strlen(rec) > 1)
+			if (memcmp(rec, "/*",2) == 0)
+				Comment = TRUE;
+			else
+				if (memcmp(rec, "*/",2) == 0)
+				{
+					rec[0] = 32;
+					rec[1] = 0;
+					Comment = FALSE;
+				}
 
-			if (Comment)
-			{
-				rec[0] = 32;
-				rec[1] = 0;
-				continue;
-			}
+		if (Comment)
+		{
+			rec[0] = 32;
+			rec[1] = 0;
+			continue;
+		}
 
 //		  j = index(rec,"#");
 
 //	      if (j != -1)
 //		 rec[j] = '\0';
-		}
 
-	} while (verify(rec,' ') == -1 && !feof(fp1));
+	} while (verify(rec,' ') == -1);
 
 	return 0;
 }

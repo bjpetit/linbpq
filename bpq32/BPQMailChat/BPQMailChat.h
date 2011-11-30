@@ -30,7 +30,7 @@ __except(memcpy(&exinfox, GetExceptionInformation(), sizeof(struct _EXCEPTION_PO
 	Dump_Process_State(&exinfox, Message);\
 	CheckProgramErrors();\
 }
-*/
+
 #define My__except_RoutineWithDisconnect(Message) \
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
 {\
@@ -44,7 +44,7 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 	else\
 		Disconnect(conn->BPQStream);\
 }
-
+*/
 #define My_except_RoutineWithDiscBBS(Message) \
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
 {\
@@ -977,7 +977,7 @@ VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user);
 int QueueMsg(	ConnectionInfo * conn, char * msg, int len);
 VOID SendUnbuffered(int stream, char * msg, int len);
 //int GetFileList(char * Dir);
-VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn);
+VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom);
 void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
@@ -988,11 +988,11 @@ int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 void DoUnholdCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 
 VOID FlagAsKilled(struct MsgInfo * Msg);
-int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call);
-int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);
-int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call);
-void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
-void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End);
+int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom);
+int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom);
+int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom );
+void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End, BOOL SendFullFrom );
+void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End, BOOL SendFullFrom );
 int GetUserMsg(int m, char * Call, BOOL SYSOP);
 void Flush(ConnectionInfo * conn);
 VOID ClearQueue(ConnectionInfo * conn);
@@ -1072,6 +1072,7 @@ BOOL wildcardcompare(char * Target, char * Match);
 VOID SendWarningToSYSOP(struct MsgInfo * Msg);
 VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID DoPollRMSCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+VOID DoShowRMSCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo);
 VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
@@ -1253,7 +1254,12 @@ extern char ** HoldFrom;					// Hold on FROM Call
 extern char ** HoldTo;						// Hold on TO Call
 extern char ** HoldAt;						// Hold on AT Call
 
+// Send WP Params
 
+extern BOOL SendWP;
+extern char SendWPVIA[81];
+extern char SendWPTO[11];
+extern int SendWPType;
 
 extern int Ver[4];
 
@@ -1364,6 +1370,7 @@ extern int LogAge;
 extern BOOL DeletetoRecycleBin;
 extern BOOL SuppressMaintEmail;
 extern BOOL SaveRegDuringMaint;
+extern BOOL SendWP;
 extern BOOL OverrideUnsent;
 extern BOOL SendNonDeliveryMsgs;
 

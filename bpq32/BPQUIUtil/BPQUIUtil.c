@@ -1,9 +1,10 @@
 
 //	Program to send ax.25 Beacons from a BPQ32 Switch
 
-// Version 0.1.1.0 Octorber 2011
+// Version 0.1.1.0 October 2011
 
 //		Call CloseBPQ32 on exit
+//		Allow use with Tracker and UZ7HO ports
 
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 
@@ -860,9 +861,6 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			SendBeacon(Port);
 			return TRUE;
 
-
-
-
 		}
 		break;
 
@@ -922,9 +920,14 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 		PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntry(i);
 
 		if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
-			if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
-				continue;
-
+		{
+			if (strstr(PORTVEC->PORT_DLL_NAME, "UZ7") || strstr(PORTVEC->PORT_DLL_NAME, "TRKMULTI") ||
+					strstr(PORTVEC->PORT_DLL_NAME, "TRACKER"))
+				goto OK;
+		}
+		if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
+			continue;
+OK:
 		wsprintf(PortNo, "Port %2d", GetPortNumber(i));
 		PortNum[tab] = GetPortNumber(i);
 

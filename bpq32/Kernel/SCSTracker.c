@@ -125,7 +125,9 @@ ConfigLine:
 		if (_memicmp(buf, "FORCE ROBUST", 12) == 0)
 			TNC->ForceRobust = TNC->RobustDefault = TRUE;
 		else
-
+		if (_memicmp(buf, "UPDATEMAP", 9) == 0)
+			TNC->PktUpdateMap = TRUE;
+		else
 		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
 		else
@@ -1900,7 +1902,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 								wsprintf(Status, "%d SCANSTART 60", TNC->Port);	// Pause scan for 60 secs
 								Rig_Command(-1, Status);
-								TNC->SwitchToPactor = 600;		// Don't change modes for 60 secs
+									if (TNC->RigConfigMsg == NULL && TNC->RobustTime)
+										TNC->SwitchToPactor = 600;		// Don't change modes for 60 secs
 
 								strcpy(STREAM->MyCall, DestCall);
 								STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
@@ -2221,7 +2224,8 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 	TNC->NeedPACTOR = 20;		// Delay a bit for UA to be sent before changing mode and call
 	
-	TNC->SwitchToPactor = TNC->RobustTime;
+	if (TNC->RigConfigMsg == NULL)
+		TNC->SwitchToPactor = TNC->RobustTime;
 
 	wsprintf(Status, "%d SCANSTART 15", TNC->Port);
 	Rig_Command(-1, Status);

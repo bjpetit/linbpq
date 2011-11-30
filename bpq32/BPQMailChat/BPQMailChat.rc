@@ -908,6 +908,22 @@ BEGIN
     LTEXT           "Hold Messages:",IDC_STATIC,166,143,60,9
 END
 
+WPUPDATE DIALOG DISCARDABLE  26, 5, 382, 287
+STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "System"
+BEGIN
+    CONTROL         "Send WP Updates",IDC_SENDWP,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT | WS_TABSTOP,111,44,71,10
+    LTEXT           "Send TO",IDC_STATIC,112,63,59,10
+    LTEXT           "Send VIA",IDC_STATIC,112,75,59,10
+    EDITTEXT        IDC_WPTO,175,63,92,10,ES_AUTOHSCROLL
+    EDITTEXT        IDC_WPVIA,175,75,92,10,ES_AUTOHSCROLL
+    COMBOBOX        IDC_WPTYPE,219,43,19,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
+                    WS_TABSTOP
+    LTEXT           "Type",IDC_STATIC,192,44,21,10
+    DEFPUSHBUTTON   "Save",IDC_WPSAVE,163,104,50,14,BS_CENTER | BS_VCENTER
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
