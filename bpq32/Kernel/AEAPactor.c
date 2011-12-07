@@ -370,7 +370,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
 		return (int)ExtProc;
@@ -392,7 +392,7 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 		{
 			// Report Error
 
-			wsprintf(msg,"Invalid Rig Config %s", SaveRigConfig);
+			wsprintf(msg,"Invalid Rig Config %s\n", SaveRigConfig);
 			WritetoConsole(msg);
 
 		}
@@ -407,16 +407,12 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
 	{
-		Debugprintf("PORTCALL not set - Using NODECALL");
 		memcpy(TNC->NodeCall, GetNodeCall(), 10);
 	}
 	else
 	{
-		Debugprintf("Using PORTCALL");
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 	}
-
-	Debugprintf("Pactor Call set to %s", TNC->NodeCall);
 
 	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
@@ -471,6 +467,8 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+
+	WritetoConsole("\n");
 
 	return ((int)ExtProc);
 }

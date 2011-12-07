@@ -270,8 +270,8 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 			) != 0)
 		{
 
-			n=wsprintf(buf,"\nError sending the packet: \n", pcap_geterrx(PCAPInfo[port].adhandle));		
-			WritetoConsole(buf);
+	//		n=wsprintf(buf,"\nError sending the packet: \n", pcap_geterrx(PCAPInfo[port].adhandle));		
+	//		WritetoConsole(buf);
 			
 			return 3;
 		}
@@ -374,7 +374,7 @@ FARPROCX GetAddress(char * Proc)
 	{
 		err=GetLastError();
 
-		n=wsprintf(buf,"Error finding %s - %d", Proc,err);
+		n=wsprintf(buf,"Error finding %s - %d\n", Proc,err);
 		WritetoConsole(buf);
 	
 		return(0);
@@ -425,7 +425,7 @@ int OpenPCAP(int IOBASE, int port)
 	/* Check the link layer. We support only Ethernet for simplicity. */
 	if(pcap_datalinkx(PCAPInfo[port].adhandle) != DLT_EN10MB)
 	{
-		n=wsprintf(buf,"\nThis program works only on Ethernet networks.\n");
+		n=wsprintf(buf,"This program works only on Ethernet networks.\n");
 		WritetoConsole(buf);
 		
 		/* Free the device list */
@@ -440,7 +440,7 @@ int OpenPCAP(int IOBASE, int port)
 	//compile the filter
 	if (pcap_compilex(PCAPInfo[port].adhandle, &fcode, packet_filter, 1, netmask) <0 )
 	{	
-		n=wsprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
+		n=wsprintf(buf,"Unable to compile the packet filter. Check the syntax.\n");
 		WritetoConsole(buf);
 
 		/* Free the device list */
@@ -451,14 +451,14 @@ int OpenPCAP(int IOBASE, int port)
 
 	if (pcap_setfilterx(PCAPInfo[port].adhandle, &fcode)<0)
 	{
-		n=wsprintf(buf,"\nError setting the filter.\n");
+		n=wsprintf(buf,"Error setting the filter.\n");
 		WritetoConsole(buf);
 
 		/* Free the device list */
 		return -1;
 	}
 	
-	n=wsprintf(buf,"Using %s", Adapter);
+	n=wsprintf(buf,"Using %s\n", Adapter);
 	WritetoConsole(buf);
 
 
@@ -500,12 +500,13 @@ static BOOL ReadConfigFile(int Port)
 			{
 				WritetoConsole("BPQEther - Bad config record ");
 				WritetoConsole(errbuf);
+				WritetoConsole("\n");
 			}
 		}
 		return (TRUE);
 	}
 		
-	n=wsprintf(buf,"No config info found");
+	n=wsprintf(buf,"No config info found in bpq32.cfg\n");
 	WritetoConsole(buf);
 
 	return (FALSE);

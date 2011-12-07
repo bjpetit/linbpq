@@ -595,7 +595,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					
 				if (errorfs.fd_count == 1)
 				{
-					i=wsprintf(ErrMsg, "WINMOR Data Connection lost for BPQ Port %d\r\n", port);
+					i=wsprintf(ErrMsg, "V4 Data Connection lost for BPQ Port %d\n", port);
 					WritetoConsole(ErrMsg);
 					TNC->CONNECTING = FALSE;
 					TNC->CONNECTED = FALSE;
@@ -785,7 +785,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 //			{
 				winerr=WSAGetLastError();
 				
-				i=wsprintf(ErrMsg, "WINMOR Write Failed for port %d - error code = %d\r\n", port, winerr);
+				i=wsprintf(ErrMsg, "V4 Write Failed for port %d - error code = %d\n", port, winerr);
 				WritetoConsole(ErrMsg);
 					
 	
@@ -1053,7 +1053,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(Msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(Msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(Msg);
 
 		return (int) ExtProc;
@@ -1172,7 +1172,7 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 	
 	MoveWindows(TNC);
 
-	i=wsprintf(Msg,"V4 Host %s %d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
+	i=wsprintf(Msg,"V4 Host %s %d\n", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
 	WritetoConsole(Msg);
 
 	SetDlgItemText(TNC->hDlg, IDC_MODE, "ARQ");

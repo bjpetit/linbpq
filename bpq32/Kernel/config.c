@@ -108,6 +108,8 @@
 #include "asmstrucs.h"
 #include <ctype.h>
 #include <conio.h>
+#include <math.h>
+
 
 #define DllExport	__declspec(dllexport)
 
@@ -154,7 +156,7 @@ VOID __cdecl Consoleprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
+	strcat(Mess, "\n");
 	WritetoConsoleLocal(Mess);
 
 	return;
@@ -287,6 +289,7 @@ extern char PWTEXT[];
 extern char HFCTEXT[];
 extern int HFCTEXTLEN;
 extern char LOCATOR[];
+extern char LOC[];
 extern int AXIPPort;
 
 extern int __cdecl main(int argc,char **argv,char **envp);
@@ -330,7 +333,7 @@ extern int __cdecl decode_ded_rec(char *rec);
 extern int __cdecl simple(int i);
 
 BOOL ProcessAPPLDef(char * rec);
-
+BOOL ToLOC(double Lat, double Lon , char * Locator);
 
 //int i;
 //char value[];
@@ -533,24 +536,8 @@ DllExport BOOL ProcessConfig()
 
 	if ((fp1 = fopen(inputname,"r")) == NULL)
 	{
-	   Consoleprintf("Could not open file %s - trying bpqcfg.txt", inputname);
-
-		if (BPQDirectory[0] == 0)
-		{
-			strcpy(inputname, "bpqcfg.txt");
-		}
-			else
-		{
-			strcpy(inputname,BPQDirectory);
-			strcat(inputname,"\\");
-			strcat(inputname, "bpqcfg.txt");
-		}
-
-		if ((fp1 = fopen(inputname,"r")) == NULL)
-		{
-			Consoleprintf("Could not open file %s",inputname);
-			return FALSE;
-		}
+		Consoleprintf("Could not open file %s",inputname);
+		return FALSE;
 	}
 
 	Consoleprintf("Using Configuration file %s",inputname);
@@ -690,6 +677,7 @@ DllExport BOOL ProcessConfig()
 	if (heading == 0)
 	{
 	   Consoleprintf("Conversion (probably) successful");
+	   Consoleprintf("");
 	}
 	else
 	{
@@ -841,6 +829,12 @@ char rec[];
 			{
 				strcat(LOCATOR, ":");
 				strcat(LOCATOR, ptr2);
+				ToLOC(atof(ptr1), atof(ptr2), LOC);
+			}
+			else
+			{
+				if (strlen(ptr1) == 6)
+					strcpy(LOC, ptr1);
 			}
 		}
 		return 0;
@@ -1777,6 +1771,7 @@ char rec[];
 		// Copy all subseuent lines up to ENDPORT to a memory buffer
 
 		char * ptr;
+		int i;
 
 		if (LogicalPortNum > 32)
 		{
@@ -1797,6 +1792,20 @@ char rec[];
 				endport = 1;
 				return 0;
 			}
+
+			i = strlen(rec);
+			i--;
+
+			while(i > 1)
+			{
+				if (rec[i] == ' ')
+					rec[i] = 0;				// Remove trailing spaces
+				else
+					break;
+
+				i--;
+			}
+
 			strcat(ptr, rec);
 			strcat(ptr, "\r\n");
 			
@@ -2567,3 +2576,45 @@ BOOL ProcessAPPLDef(char * buf)
 
 	return TRUE;
 }
+
+ BOOL ToLOC(double Lat, double Lon , char * Locator)
+ {
+	int i;
+	double S1, S2;
+
+	Lon = Lon + 180;
+	Lat = Lat + 90;
+
+	S1 = fmod(Lon, 20);
+
+	#pragma warning(push)
+	#pragma warning(disable : 4244)
+	
+	i = Lon / 20;
+	Locator[0] = 65 + i;
+
+	S2 = fmod(S1, 2);
+
+	i = S1 / 2;
+	Locator[2] = 48 + i;
+
+	i = S2 * 12;
+	Locator[4] = 65 + i;
+
+	S1 = fmod(Lat,10);
+
+	i = Lat / 10;
+	Locator[1] = 65 + i;
+
+	S2 = fmod(S1,1);
+
+	i = S1;
+	Locator[3] = 48 + i;
+
+	i = S2 * 24;
+	Locator[5] = 65 + i;
+
+	#pragma warning(pop)
+
+	return TRUE;
+ }

@@ -182,7 +182,7 @@ BOOL add_arp_entry(struct PORTINFO * PORT, unsigned char * call, UCHAR * ip, int
 		int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort, BOOL IPv6);
 BOOL add_bc_entry(struct PORTINFO * PORT, unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
-BOOL ReadConfigFile(char * filename, int Port);
+BOOL ReadConfigFile(Port);
 int ProcessLine(char * buf, struct PORTINFO * PORT);
 int CheckKeepalives(struct PORTINFO * PORT);
 BOOL CopyScreentoBuffer(char * buff, struct PORTINFO * PORT);
@@ -706,7 +706,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 4:				// reinit
 
 		CloseSockets(PORT);
-		ReadConfigFile("BPQAXIP.CFG", port);
+		ReadConfigFile(port);
 		_beginthread(OpenSockets, 0, NULL );
 		PostMessage(PORT->hResWnd, WM_TIMER,0,0);
 
@@ -787,7 +787,9 @@ UINT WINAPI AXIPExtInit(struct PORTCONTROL *  PortEntry)
 {	
 	WritetoConsole("AXIP ");
 
-	if (!InitAXIP(PortEntry->PORTNUMBER)) return 0;
+	InitAXIP(PortEntry->PORTNUMBER);
+
+	WritetoConsole("\n");
 
 	return ((int) ExtProc);
 }
@@ -800,7 +802,7 @@ InitAXIP(int Port)
 	//	Read config first, to get UDP info if needed
 	//
 
-	if (!ReadConfigFile("BPQAXIP.CFG", Port))
+	if (!ReadConfigFile(Port))
 		return (FALSE);
 
 	PORT = Portlist[Port];
@@ -1165,7 +1167,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			ProcessConfig();
 			FreeConfig();
 
-			ReadConfigFile("BPQAXIP.CFG", Port);
+			ReadConfigFile(Port);
 
 			_beginthread(OpenSockets, 0, PORT );
 			PostMessage(PORT->hResWnd, WM_TIMER,0,0);
@@ -1892,7 +1894,7 @@ crcloop:
 
   }
 
-static BOOL ReadConfigFile(char * fn, int Port)
+static BOOL ReadConfigFile(int Port)
 {
 
 /* Linux Format
@@ -1920,12 +1922,8 @@ broadcast QST-0 NODES-0
 //MAP BPQ7 10.2.77.1 UDP 2222            # UDP port to send to
 //MAP BPQ8 10.2.77.2 UDP 3333            # UDP port to send to
 
-	FILE *file;
 	char buf[256],errbuf[256];
-	int Err;
-
 	HKEY hKey=0;
-	UCHAR Value[100];
 	char * Config;
 	struct PORTINFO * PORT;
 
@@ -1970,63 +1968,23 @@ broadcast QST-0 NODES-0
 	
 			if (!ProcessLine(buf, PORT))
 			{
-				WritetoConsole("BPQAXIP - Bad config record ");
+				WritetoConsole("BPQAXIP - Bad config record");
 				WritetoConsole(errbuf);
+				WritetoConsole("\n");
 			}
 		}
-	}
-	else
-	{
-	
-	wsprintf(errbuf, "BPQAXIP BPQ Directory = %s Filename = %s\n", BPQDirectory, fn);
-	OutputDebugString(errbuf);
 
-	if (BPQDirectory[0] == 0)
-	{
-		strcpy(Value,fn);
-	}
-	else
-	{
-		strcpy(Value,BPQDirectory);
-		strcat(Value,"\\");
-		strcat(Value,fn);
-	}
-
-	wsprintf(errbuf, "BPQAXIP Opening %s\n", Value);
-	OutputDebugString(errbuf);
-
-		
-	if ((file = fopen(Value,"r")) == NULL)
-	{
-		Err = GetLastError();
-		wsprintf(errbuf, "BPQAXIP Open Failed %d\n", Err);
-		OutputDebugString(errbuf);
-
-		n=wsprintf(buf,"Config file %s could not be opened ",Value);
-		WritetoConsole(buf);
-
-		return (FALSE);
-	}
-
-	while(fgets(buf, 255, file) != NULL)
-	{
-		strcpy(errbuf,buf);			// save in case of error
-	
-		if (!ProcessLine(buf, PORT))
+		if (PORT->NumberofUDPPorts > MAXUDPPORTS)
 		{
-			WritetoConsole("BPQAXIP - Bad config record ");
-			WritetoConsole(errbuf);
+			n=wsprintf(buf,"BPQAXIP - Too many UDP= lines - max is %d\n", MAXUDPPORTS);
+			WritetoConsole(buf);
 		}
+		return TRUE;
 	}
-	
-	fclose(file);
-	}
-	if (PORT->NumberofUDPPorts > MAXUDPPORTS)
-	{
-		n=wsprintf(buf,"BPQAXIP - Too many UDP= lines - max is %d\n",MAXUDPPORTS);
-		WritetoConsole(buf);
-	}
-	return (TRUE);
+			
+	WritetoConsole("No Configuration info in bpq32.cfg");
+
+	return FALSE;
 }
 
 static ProcessLine(char * buf, struct PORTINFO * PORT)
@@ -2949,7 +2907,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 
 			if (arp->TCPSock == INVALID_SOCKET)
 			{
-				i=wsprintf(Msg, "Socket Failed for AX/TCP socket - error code = %d\r\n", WSAGetLastError());
+				i=wsprintf(Msg, "Socket Failed for AX/TCP socket - error code = %d\n", WSAGetLastError());
 				WritetoConsole(Msg);
   	 			goto wait; 
 			}
@@ -2973,7 +2931,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 				//	Bind Failed
 				//
 	
-				i=wsprintf(Msg, "Bind Failed for AX/TCP socket - error code = %d\r\n", WSAGetLastError());
+				i=wsprintf(Msg, "Bind Failed for AX/TCP socket - error code = %d\n", WSAGetLastError());
 				WritetoConsole(Msg);
 
   				goto wait; 
@@ -3015,7 +2973,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 					//
 					//	Connect failed
 					//
-    				i=wsprintf(Msg, "Connect Failed for AX/TCP socket - error code = %d\r\n", err);
+    				i=wsprintf(Msg, "Connect Failed for AX/TCP socket - error code = %d\n", err);
 					WritetoConsole(Msg);
 					OutputDebugString(Msg);
 					closesocket(arp->TCPSock);

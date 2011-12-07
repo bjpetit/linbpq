@@ -358,7 +358,7 @@ UINT WINAPI TrackerMExtInit(EXTPORTDATA *  PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
 		return (int) ExtProc;
@@ -428,6 +428,8 @@ UINT WINAPI TrackerMExtInit(EXTPORTDATA *  PortEntry)
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	TNC->InitPtr = TNC->InitScript;
+
+	WritetoConsole("\n");
 
 	return ((int)ExtProc);
 }
@@ -1194,13 +1196,17 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		return;
 	}
 
-
 	// Any valid frame is an ACK
 
 	TNC->Timeout = 0;
-
 	TNC->TNCOK = TRUE;
-	
+
+	if (TNC->InitPtr)					// Response to Init Script
+		return;
+
+	if (TNC->MSGCHANNEL > 26)
+		return;
+
 	Stream = TNC->MSGCHANNEL;
 
 	//	See if Poll Reply or Data
@@ -1209,9 +1215,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	{
 		// Success - Nothing Follows
 
-		if (Stream < 32)
-			if (TNC->Streams[Stream].CmdSet)
-				return;						// Response to Command Set
+		if (TNC->Streams[Stream].CmdSet)
+				return;						// Response to Command Set or Init Script
 
 		if ((TNC->TXBuffer[1] & 1) == 0)	// Data
 			return;
@@ -1275,8 +1280,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 				TNC->Timeout = 1;			// 
 				return;
 			}
-		}	
+		}
 
+		if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+			return;
 
 		buffptr = GetBuff();
 
@@ -1348,9 +1355,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 			// Not Internal Command, so send to user
 
-			if (Stream < 32)
-				if (TNC->Streams[Stream].CmdSet)
-					return;						// Response to Command Set
+			if (TNC->Streams[Stream].CmdSet)
+				return;						// Response to Command Set
 
 			if ((TNC->TXBuffer[1] & 1) == 0)	// Data
 				return;
@@ -1366,7 +1372,6 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		if (TNC->TXBuffer[3] == 'L')	// Shouldnt happen!
 			return;
 
-
 		if (TNC->TXBuffer[3] == 'J')	// JHOST
 		{
 			if (TNC->TXBuffer[8] == '0')	// JHOST0
@@ -1376,6 +1381,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 			}
 		}	
 
+		if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+			return;
 
 		buffptr = GetBuff();
 
@@ -1586,6 +1593,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		}
 
 		// 1, 2, 4, 5 - pass to Appl
+
+		if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+			return;
 
 		buffptr = GetBuff();
 

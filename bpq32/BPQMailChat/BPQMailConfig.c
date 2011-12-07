@@ -2511,7 +2511,7 @@ TryAgain:
 		{
 			Vallen=4;
 			RegQueryValueEx(hKey,"LastHouseKeepingTime",0,			
-			(ULONG *)&Type,(UCHAR *)&LastFWDTime,(ULONG *)&Vallen);
+			(ULONG *)&Type,(UCHAR *)&LastHouseKeepingTime,(ULONG *)&Vallen);
 
 
 			Vallen=4;

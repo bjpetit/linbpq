@@ -33,6 +33,7 @@ extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
+extern char LOC[];
 
 static RECT Rect;
 
@@ -44,6 +45,42 @@ char * strlop(char * buf, char delim);
 char NodeCall[11];		// Nodecall, Null Terminated
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
+
+struct TNCINFO * CreateTTYInfo(int port, int speed);
+BOOL NEAR OpenConnection(int);
+BOOL NEAR SetupConnection(int);
+BOOL CloseConnection(struct TNCINFO * conn);
+BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
+BOOL NEAR DestroyTTYInfo(int port);
+void DEDCheckRX(struct TNCINFO * TNC);
+VOID DEDPoll(int Port);
+VOID StuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len);
+unsigned short int compute_crc(unsigned char *buf,int len);
+int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
+VOID ProcessDEDFrame(struct TNCINFO * TNC);
+VOID ProcessTermModeResponse(struct TNCINFO * TNC);
+VOID ExitHost(struct TNCINFO * TNC);
+VOID DoTNCReinit(struct TNCINFO * TNC);
+VOID DoTermModeTimeout(struct TNCINFO * TNC);
+BOOL OpenVirtualSerialPort(struct TNCINFO * TNC);
+VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type);
+VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len);
+Switchmode(struct TNCINFO * TNC, int Mode);
+VOID SwitchToRPacket(struct TNCINFO * TNC);
+VOID SwitchToNormPacket(struct TNCINFO * TNC);
+VOID SendRPBeacon(struct TNCINFO * TNC);
+BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
+
+extern UCHAR NEXTID;
+extern  struct TRANSPORTENTRY * L4TABLE;
+extern  WORD MAXCIRCUITS;
+extern  UCHAR L4DEFAULTWINDOW;
+extern  WORD L4T1;
+
+VOID * APIENTRY GetBuff();
+UINT ReleaseBuffer(UINT *BUFF);
+UINT * Q_REM(UINT *Q);
+int C_Q_ADD(UINT *Q,UINT *BUFF);
 
 static ProcessLine(char * buf, int Port)
 {
@@ -113,8 +150,13 @@ ConfigLine:
 			// Switch between Normal and Robust Packet 
 
 			double Robust = atof(&buf[12]);
+			#pragma warning(push)
+			#pragma warning(disable : 4244)
 			TNC->RobustTime = Robust * 10;
+			#pragma warning(pop)
 		}
+		if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
+			TNC->RPBEACON = TRUE;
 		else
 		if (_memicmp(buf, "USEAPPLCALLS", 12) == 0)
 			TNC->UseAPPLCalls = TRUE;
@@ -131,57 +173,23 @@ ConfigLine:
 		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
 		else
+		{
 			strcat (TNC->InitScript, buf);
 
-		// If %B param, extract speed
+			// If %B param,and not R300 or R600 extract speed
 
-		if (_memicmp(buf, "%B", 2) == 0)
-		{
-			ptr = strchr(buf, '\r');
-			if (ptr) *ptr = 0;
-			strcpy(TNC->NormSpeed, &buf[3]);
+			if (_memicmp(buf, "%B", 2) == 0)
+			{
+				ptr = strchr(buf, '\r');
+				if (ptr) *ptr = 0;
+				if (strchr(buf, 'R') == 0)
+					strcpy(TNC->NormSpeed, &buf[3]);
+			}
 		}
-
-
 	}
 	return (TRUE);
 
 }
-
-struct TNCINFO * CreateTTYInfo(int port, int speed);
-BOOL NEAR OpenConnection(int);
-BOOL NEAR SetupConnection(int);
-BOOL CloseConnection(struct TNCINFO * conn);
-BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
-BOOL NEAR DestroyTTYInfo(int port);
-void DEDCheckRX(struct TNCINFO * TNC);
-VOID DEDPoll(int Port);
-VOID StuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len);
-unsigned short int compute_crc(unsigned char *buf,int len);
-int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
-VOID ProcessDEDFrame(struct TNCINFO * TNC);
-VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-VOID ExitHost(struct TNCINFO * TNC);
-VOID DoTNCReinit(struct TNCINFO * TNC);
-VOID DoTermModeTimeout(struct TNCINFO * TNC);
-BOOL OpenVirtualSerialPort(struct TNCINFO * TNC);
-VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type);
-VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len);
-Switchmode(struct TNCINFO * TNC, int Mode);
-VOID SwitchToRPacket(struct TNCINFO * TNC);
-VOID SwitchToNormPacket(struct TNCINFO * TNC);
-
-extern UCHAR NEXTID;
-extern  struct TRANSPORTENTRY * L4TABLE;
-extern  WORD MAXCIRCUITS;
-extern  UCHAR L4DEFAULTWINDOW;
-extern  WORD L4T1;
-
-VOID * APIENTRY GetBuff();
-UINT ReleaseBuffer(UINT *BUFF);
-UINT * Q_REM(UINT *Q);
-int C_Q_ADD(UINT *Q,UINT *BUFF);
-
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -199,6 +207,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 	if (TNC->hDevice == (HANDLE) -1)
 	{
+		// Clear anything from UI_Q
+
+		while (TNC->PortRecord->UI_Q)
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
 		// Try to reopen every 30 secs
 
 		TNC->ReopenTimer++;
@@ -415,7 +431,7 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
 		return (int) ExtProc;
@@ -522,6 +538,8 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 	if (TNC->RigConfigMsg == NULL)
 		TNC->SwitchToPactor = TNC->RobustTime;		// Don't alternate Modes if using Rig Control
 
+	WritetoConsole("\n");
+
 	return ((int)ExtProc);
 }
 
@@ -547,6 +565,8 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 		// Device failed. Close and try to reopen
 
 //		CloseHandle(TNC->hDevice);
+
+		Debugprintf("TRK - Read Failed - recovering");
 		
 		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, FALSE);
 
@@ -586,6 +606,16 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 	CURSOR = &TNC->DEDBuffer[TNC->InputLen];
 
+	if ((TNC->HostMode == 0 || TNC->ReinitState == 10) && Length > 80)
+	{
+		// Probably Signon Message
+
+		ptr[Length] = 0;
+		Debugprintf("TRK %s", ptr);
+		TNC->RXLen = 0;
+		return;
+	}
+
 	if (TNC->HostMode == 0)
 	{
 		// If we are just restarting, and TNC is in host mode, we may get "Invalid Channel" Back
@@ -610,6 +640,20 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 			return;
 		}
 	}
+
+	if (TNC->ReinitState == 10)
+	{
+		if (Length == 1 && *(ptr) == '.')		// 01 echoed as .
+		{
+			// TNC is in Term Mode
+
+			TNC->ReinitState = 0;
+			TNC->HostMode = 0;
+
+			return;
+		}
+	}
+
 
 	while (Length--)
 	{
@@ -658,7 +702,15 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 					break;
 				}
 
-				TNC->HOSTSTATE = 2;						// Get Length
+				if (character > 5 && character < 8)
+				{
+					TNC->HOSTSTATE = 2;						// Get Length
+					break;
+				}
+
+				// Invalid
+
+				Debugprintf("TRK - Invalid MsgType %d %x %x %x", character, *(ptr), *(ptr+1), *(ptr+2));
 				break;
 
 			case 2:		//  Get Length
@@ -771,7 +823,7 @@ VOID DEDPoll(int Port)
 			TNC->Streams[Stream].MyCall[calllen] = 0;
 
 			TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
-			wsprintf(TNC->Streams[Stream].CmdSet, "\1\1\1IDSPTNC\0", TNC->Streams[Stream].MyCall);
+			wsprintf(TNC->Streams[Stream].CmdSet, "\1\1\1IDSPTNC");
 
 			if (Stream == 0)
 			{
@@ -781,8 +833,12 @@ VOID DEDPoll(int Port)
 				// Stop Scanner
 		
 				TNC->SwitchToPactor = 0;						// Cancel any RP to Pactor switch
-				wsprintf(Status, "%d SCANSTOP", TNC->Port);
-				Rig_Command(-1, Status);
+
+				if (TNC->RigConfigMsg)
+				{
+					wsprintf(Status, "%d SCANSTOP", TNC->Port);
+					Rig_Command(-1, Status);
+				}
 			}
 		}
 	}
@@ -825,6 +881,16 @@ VOID DEDPoll(int Port)
 				TNC->Streams[Stream].ReportDISC = TRUE;		// Tell Node
 			}
 		}
+
+		// Clear anything from UI_Q
+
+		while (TNC->PortRecord->UI_Q)
+		{
+			UINT * buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+
 	}
 
 
@@ -881,6 +947,7 @@ VOID DEDPoll(int Port)
 		if (*(start) == 0)			// End of Script
 		{
 			TNC->InitPtr = NULL;
+			Debugprintf("TRK - Init Complete");
 		}
 		else
 		{
@@ -933,6 +1000,8 @@ VOID DEDPoll(int Port)
 				end = strchr(start + 3, 0);
 				len = ++end - start -1;	// exclude null
 				TNC->Streams[Stream].CmdSet = end;
+
+				Debugprintf("TRK Cmdset %s", start + 3);
 
 				memcpy(&Poll[0], start, len);
 				Poll[2] = len - 4;
@@ -1122,11 +1191,7 @@ VOID DEDPoll(int Port)
 		Buffer = &buffptr->DEST[0];		// Raw Frame
 		
 		Buffer[datalen] = 0;
-
-		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
 							
-//		wsprintf(TNC->Streams[Stream].CmdSet, "I%s\r%s\r", TNC->Streams[Stream].MyCall, buffptr+2);
-
 		// Buffer has an ax.25 header, which we need to pick out and set as channel 0 Connect address
 		// before sending the beacon
 
@@ -1151,12 +1216,13 @@ VOID DEDPoll(int Port)
 			datalen -= 2;
 
 			Poll[0] = 0;				// UI Channel
-			Poll[1] = 1;				// Data
+			Poll[1] = 1;				// CMD
 			Poll[2] = strlen(CCMD) - 1;
 			strcpy(&Poll[3], CCMD);
 			StuffAndSend(TNC, Poll, Poll[2] + 4);
 
-			wsprintf(TNC->Streams[0].CmdSet, "%c%c%c%s\0", 0, 0, 1, Buffer);
+			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(400);
+			wsprintf(TNC->Streams[0].CmdSet, "%c%c%c%s", 0, 0, 1, Buffer);
 		}
 
 		ReleaseBuffer((UINT *)buffptr);
@@ -1277,6 +1343,8 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 	{
 		// No Response to trying to enter term mode - do error recovery
 
+		Debugprintf("TRK - Starting Resync");
+
 		TNC->ReinitState = 10;
 		TNC->ReinitCount = 256;
 		TNC->HostMode = TRUE;			// Must be in Host Mode if we need recovery
@@ -1306,6 +1374,8 @@ static VOID DoTermModeTimeout(struct TNCINFO * TNC)
 		}
 
 		// Try Again
+
+		Debugprintf("TRK Continuing recovery");
 		
 		TNC->ReinitState = 1;
 		ExitHost(TNC);
@@ -1360,9 +1430,24 @@ static VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 
 		TNC->InitPtr = TNC->InitScript;
 		TNC->ReinitState = 2;
-
-		// Send Restart to make sure PTC is in a known state
 	}
+
+	if (TNC->ReinitState == 1)
+	{
+		// trying to set term mode
+
+		// If already in Term Mode, TNC echos command, with control chars replaced with '.'
+
+		if (memcmp(TNC->RXBuffer, "....%R", 6) == 0)
+		{
+			// In term mode, Need to put into Host Mode
+
+			TNC->ReinitState = 2;
+			DoTNCReinit(TNC);
+			return;
+		}
+	}
+
 	if (TNC->ReinitState == 2)
 	{
 		// Sending Init Commands
@@ -1402,9 +1487,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		TNC->ReinitState = 0;
 		TNC->RXLen = 0;
 		TNC->HOSTSTATE = 0;
+
+		Debugprintf("TRK - Resync Complete");
 		return;
 	}
-
 
 	// Any valid frame is an ACK
 
@@ -1420,6 +1506,12 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
 	}
 
+	if (TNC->InitPtr)					// Response to Init Script
+		return;
+
+	if (TNC->MSGCHANNEL > 26)
+		return;
+
 	Stream = TNC->MSGCHANNEL - 1;
 
 	//	See if Poll Reply or Data
@@ -1430,7 +1522,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 		if (Stream < 32)
 			if (TNC->Streams[Stream].CmdSet)
-				return;						// Response to Command Set
+				return;						// Response to Command Set or Init Script
 
 		if ((TNC->TXBuffer[1] & 1) == 0)	// Data
 			return;
@@ -1454,8 +1546,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 				TNC->Timeout = 1;			// 
 				return;
 			}
-		}	
+		}
 
+		if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+			return;
 
 		buffptr = GetBuff();
 
@@ -1543,14 +1637,14 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 				}
 				return;
 			}
+			
 			// Not Internal Command, so send to user
 
-			if (Stream < 32)
-				if (TNC->Streams[Stream].CmdSet)
-					return;						// Response to Command Set
+			if (TNC->Streams[Stream].CmdSet || TNC->InitPtr)
+				return;						// Response to Command Set or Init Script
 
-			if ((TNC->TXBuffer[1] & 1) == 0)	// Data
-				return;
+		if ((TNC->TXBuffer[1] & 1) == 0)	// Data
+			return;
 
 		// If the response to a Command, then we should convert to a text "Ok" for forward scripts, etc
 
@@ -1563,7 +1657,6 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		if (TNC->TXBuffer[3] == 'L')	// Shouldnt happen!
 			return;
 
-
 		if (TNC->TXBuffer[3] == 'J')	// JHOST
 		{
 			if (TNC->TXBuffer[8] == '0')	// JHOST0
@@ -1571,8 +1664,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 				TNC->Timeout = 1;			// 
 				return;
 			}
-		}	
+		}
 
+		if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+			return;
 
 		buffptr = GetBuff();
 
@@ -1583,7 +1678,6 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
 		return;
-
 
 
 		}
@@ -1618,6 +1712,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
 					}
 
+					if (TNC->RPBEACON)
+						SendRPBeacon(TNC);
+				
 					return;
 				}
 					
@@ -1631,6 +1728,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					STREAM->ReportDISC = TRUE;		// Tell Node
 
 				STREAM->Disconnecting = FALSE;
+
+				if (TNC->RPBEACON)
+					SendRPBeacon(TNC);
+
 				return;
 			}
 
@@ -1922,11 +2023,14 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 		// 1, 2, 4, 5 - pass to Appl
 
+		if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+			return;
+
 		buffptr = GetBuff();
 
 		if (buffptr == NULL) return;			// No buffers, so ignore
 
-		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"Pactor} %s", &Msg[4]);
+		buffptr[1] = wsprintf((UCHAR *)&buffptr[2],"TRK} %s", &Msg[4]);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 
@@ -2224,11 +2328,13 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 	TNC->NeedPACTOR = 20;		// Delay a bit for UA to be sent before changing mode and call
 	
-	if (TNC->RigConfigMsg == NULL)
+	if (TNC->RigConfigMsg)
+	{
+		wsprintf(Status, "%d SCANSTART 15", TNC->Port);
+		Rig_Command(-1, Status);
+	}
+	else
 		TNC->SwitchToPactor = TNC->RobustTime;
-
-	wsprintf(Status, "%d SCANSTART 15", TNC->Port);
-	Rig_Command(-1, Status);
 }
 
 VOID SwitchToRPacket(struct TNCINFO * TNC)
@@ -2249,4 +2355,32 @@ VOID SwitchToNormPacket(struct TNCINFO * TNC)
 	TNC->Robust = FALSE;
 	SetDlgItemText(TNC->hDlg, IDC_MODE, "HF Packet");
 }
+
+VOID SendRPBeacon(struct TNCINFO * TNC)
+{
+	MESSAGE AXMSG;
+	PMESSAGE AXPTR = &AXMSG;
+	char BEACONMSG[80];
+
+	int DataLen = wsprintf(BEACONMSG, "QRA %s %s", TNC->NodeCall, LOC);
+
+	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	ConvToAX25("BEACON", AXPTR->DEST);
+	ConvToAX25(TNC->NodeCall, AXPTR->ORIGIN);
+
+	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+	AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+	AXPTR->CTL = 3;					//UI
+	AXPTR->PID = 0xf0;
+	memcpy(AXPTR->L2DATA, BEACONMSG, DataLen);
+
+	Send_AX(&AXMSG, DataLen + 16, TNC->Port);
+	return;
+
+}
+
+
 

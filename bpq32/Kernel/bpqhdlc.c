@@ -278,7 +278,7 @@ int HDLCINIT(HDLCDATA * PORTVEC)
 {
 	int WinVer, WinMinor;
 
-	WritetoConsole("HDLC ");
+	WritetoConsole("HDLC\n");
 
 #pragma warning(push)
 #pragma warning(disable : 4996)

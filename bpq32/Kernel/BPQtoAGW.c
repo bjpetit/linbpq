@@ -58,6 +58,8 @@ extern char * PortConfig[33];
 
 void ConnecttoAGWThread(int port);
 
+VOID __cdecl Consoleprintf(const char * format, ...);
+
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);
 
@@ -261,7 +263,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 //					if (CONNECTED[port])
 					if (!CONNECTING[port])
 					{
-						i=wsprintf(ErrMsg, "AGW Connection lost for BPQ Port %d\r\n", port);
+						i=wsprintf(ErrMsg, "AGW Connection lost for BPQ Port %d\n", port);
 						WritetoConsole(ErrMsg);
 					}
 
@@ -330,7 +332,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 //			{
 				winerr=WSAGetLastError();
 				
-				i=wsprintf(ErrMsg, "AGW Write Failed for port %d - error code = %d\r\n", port, winerr);
+				i=wsprintf(ErrMsg, "AGW Write Failed for port %d - error code = %d\n", port, winerr);
 				WritetoConsole(ErrMsg);
 					
 	
@@ -431,7 +433,7 @@ UINT WINAPI AGWExtInit(struct PORTCONTROL *  PortEntry)
 
 	}
 
-	i=wsprintf(Msg,"AGW Port %d Host %s %d",AGWChannel[port]+1,AGWHostName[port],htons(destaddr[port].sin_port));
+	i=wsprintf(Msg,"AGW Port %d Host %s %d\n",AGWChannel[port]+1,AGWHostName[port],htons(destaddr[port].sin_port));
 	WritetoConsole(Msg);
 
 	// See if we already have a port for this host
@@ -507,7 +509,7 @@ BOOL ReadConfigFile(int Port)
 			if (!ProcessLine(buf, Port, FALSE))
 			{
 				WritetoConsole("BPQEther - Bad config record ");
-				WritetoConsole(errbuf);
+				Consoleprintf(errbuf);
 			}
 		}
 		return (TRUE);

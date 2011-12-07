@@ -33,7 +33,7 @@ VOID ASYDISP(int port, char Channel)
 {
 	char Msg[20];
 		
-	wsprintf(Msg,"ASYNC COM%d Chan %c", port, Channel);
+	wsprintf(Msg,"ASYNC COM%d Chan %c ", port, Channel);
 
 	WritetoConsoleLocal(Msg);
 	return;
@@ -46,7 +46,7 @@ int	ASYINIT(int port, int speed, int PortVector, int RXVector, char Channel )
 	
 	NPTTYINFO npTTYInfo ;
 	
-	wsprintf(Msg,"ASYNC COM%d Chan %c", port, Channel);
+	wsprintf(Msg,"ASYNC COM%d Chan %c ", port, Channel);
 
 	WritetoConsoleLocal(Msg);
 
@@ -59,6 +59,9 @@ int	ASYINIT(int port, int speed, int PortVector, int RXVector, char Channel )
 	RXVECTOR(npTTYInfo) = RXVector; //	Routine to call for each char
 
 	OpenConnection(port);
+		
+	WritetoConsoleLocal("\n");
+
 	return (0);
 }
 

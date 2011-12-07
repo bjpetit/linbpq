@@ -152,6 +152,8 @@ UINT WINAPI VCOMExtInit(struct PORTCONTROL *  PortEntry)
 	
 	ASYINIT(PortEntry->IOBASE, 9600, PortEntry->PORTNUMBER, TRUE);
 
+	WritetoConsole("\n");
+
 	return ((UINT) ExtProc);
 }
 

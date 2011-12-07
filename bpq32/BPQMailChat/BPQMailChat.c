@@ -703,7 +703,12 @@
 
 
 //  Call CloseBPQ32 on exit
-
+//  Add oiption to flash window instead of sounding bell on Chat Connects
+//  Add ShowRMS SYSOP command
+//	Update WP with I records from R: lines
+//	Send WP Updates
+//  Fix Paclen on Pactor-like sessions
+//	Fix SID and Prompt when RMS Express User is set
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -2568,77 +2573,6 @@ BOOL Initialise()
 		{
 			int ExitCode;
 
-
-/*			STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-			PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
-			char Command[1000];
-
-			// if BaseDir is i
-
-			SInfo.cb=sizeof(SInfo);
-			SInfo.lpReserved=NULL; 
-			SInfo.lpDesktop=NULL; 
-			SInfo.lpTitle=NULL; 
-			SInfo.dwFlags=0; 
-			SInfo.cbReserved2=0; 
-  			SInfo.lpReserved2=NULL; 
-
-			wsprintf(Command, "XCOPY.exe %s %s /s /e /i /y", BaseDir, ProperBaseDir);
-			
-			ret = CreateProcess(NULL , Command, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
-
-			if (ret == 0)
-			{
-				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", GetLastError());
-				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
-				return FALSE;
-			}
-
-			ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
-
-			while(ret && ExitCode == STILL_ACTIVE)
-			{
-				ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
-			}
-
-			if (ret == 0 || ExitCode != 0)
-			{
-				sprintf_s(msg, sizeof(msg), "Copy failed - Error %d", ExitCode);
-				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
-				return FALSE;
-			}
-
-			CloseHandle(PInfo.hProcess);			
-			CloseHandle(PInfo.hThread);
-
-			wsprintf(Command, "cmd.exe /c RMDIR /s /q %s", BaseDir);
-			ret = CreateProcess(NULL , Command, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
-
-			if (ret == 0)
-			{
-				sprintf_s(msg, sizeof(msg), "Delete failed - Error %d", GetLastError());
-				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
-				return FALSE;
-			}
-
-			ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
-
-			while(ret && ExitCode == STILL_ACTIVE)
-			{
-				ret = GetExitCodeProcess(PInfo.hProcess, &ExitCode);
-			}
-					
-			if (ret == 0 || ExitCode != 0)
-			{
-				sprintf_s(msg, sizeof(msg), "Delete failed - Error %d", ExitCode);
-				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
-				return FALSE;
-			}
-
-			CloseHandle(PInfo.hProcess);			
-			CloseHandle(PInfo.hThread);
-*/
-
 			ExitCode = CopyBBSFiles();
 
 			if (ExitCode == 0)
@@ -2825,10 +2759,13 @@ BOOL Initialise()
 		if (MaintClock < now)
 			MaintClock += 86400;
 
-		if (LastFWDTime)
+		if (LastHouseKeepingTime)
 		{
-			if ((MaintClock - LastFWDTime) > 86400)
+			if ((MaintClock - LastHouseKeepingTime) > 86400)
+			{
 				DoHouseKeeping(FALSE);
+				CreateBBSTrafficReport();
+			}
 		}
 	}
 
@@ -2838,7 +2775,8 @@ BOOL Initialise()
 
 	RefreshMainWindow();
 
-	CreateBBSTrafficReport();
+//	CreateWPReport();
+
 
 	return TRUE;
 }
@@ -4388,13 +4326,11 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;						
 	}
 
-	if (_stricmp(Cmd, "5") == 0)
+	if (_memicmp(Cmd, "SHOWRMS", 5) == 0)
 	{
 		DoShowRMSCmd(conn, user, Arg1, Context);
 		return;
 	}
-
-
 
 	if (_memicmp(Cmd, "D", 1) == 0)
 	{
@@ -6895,6 +6831,8 @@ nextline:
 				if (memcmp(ptr3+1, BBSName, ptr4-ptr3-1) == 0)
 					OurCount++;
 			}
+
+			GetWPBBSInfo(ptr1);		// Create WP /I record from R: Line
 			
 			// see if another
 

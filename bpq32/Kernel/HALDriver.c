@@ -512,6 +512,8 @@ UINT WINAPI HALExtInit(EXTPORTDATA *  PortEntry)
 
 	SendCmd(TNC, "\x09" , 1);		// Reset
 
+	WritetoConsole("\n");
+
 	return ((int)ExtProc);
 }
 

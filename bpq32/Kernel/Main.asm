@@ -412,19 +412,20 @@ TXCHECKCODE	DD	OFFSET32 KISSTXCHECK
 		DD	OFFSET32 _HDLCTXCHECK
 ;
 
-HEXMSG		DB	'XXXX XXXXXXXX',CR,LF,0
+HEXMSG		DB	'XXXX XXXXXXXX',LF,0
+
+LOOPMSG		DB	'Loopback',0ah,0
 
 NEEDKISS	DB	0		; SET IF KISS USED
 ;
 _NODESFILENAME	DB  'BPQNODES.DAT',0
 
-NONODESMSG	DB	0DH,0AH,'Route/Node recovery file BPQNODES.dat not found',0DH,0AH
-		DB	'Continuing without it',0dh,0ah,0
+NONODESMSG	DB	0DH,0AH,'Route/Node recovery file BPQNODES.dat not found - Continuing without it',0ah,0
 
 CONFIGHANDLE	DD	0
 
-BADCONFIGMSG	DB	'Configuration file read error',0DH,0AH,0
-BADNODEMSG	DB	0dh,0ah,'Invalid Record in recovery file '
+BADCONFIGMSG	DB	'Configuration file read error',0AH,0
+BADNODEMSG	DB	'Invalid Record in recovery file '
 BADNODETEXT	DB	80 DUP (0)
 
 ROUTEADD	DB	'ROUTE ADD '
@@ -438,7 +439,7 @@ _AUTOSAVE	DB	0		; AUTO SAVE NODES ON EXIT FLAG
 
 L4APPL		DB	1		; Application for BBSCALL/ALIAS connects
 CFLAG		DB	0		; C =HOST Command
-loadedmsg	DB	cr,lf,lf,'Switch loaded and initialised OK',cr,lf,0
+loadedmsg	DB	cr,lf,lf,'Switch loaded and initialised OK',lf,0
 
 	EVEN
 
@@ -454,10 +455,10 @@ HOSTINTERRUPT	DB	0
 
 BPQ			DB	'BPQ32.DLL',0
 
-BUFFERRMSG	DB	'Corrupt buffer pool detected and dump taken',CR,LF,0
+BUFFERRMSG	DB	'Corrupt buffer pool detected and dump taken',LF,0
 
 
-INITMSG		DB	CR,LF,'Initialising Port '
+INITMSG		DB	'Initialising Port '
 INITPORT	DW	'XX'
 		DB	'     ',0
 B10		DB	10
@@ -551,9 +552,6 @@ ROK:
 
 	PUBLIC	_START
 _START:
-
-	MOV	EDX,OFFSET32 _SIGNONMSG
-	CALL	SEND_DOS_MESSAGE
 	
 	MOV	NEXTFREEDATA, OFFSET32 DATAAREA				; For Reinit
 	MOV	FREE_Q,0
@@ -2485,11 +2483,17 @@ CONV3SECS:
 CONV3X:
 	RET
 
-	PUBLIC	LINKINIT
+
 LINKINIT:
 ;
 ;	CANT THINK OF ANYTHING FOR NOW
 ;
+
+	PUSH	EBX
+	MOV	EDX,OFFSET32 LOOPMSG
+	CALL	SEND_DOS_MESSAGE
+	POP	EBX
+
 	RET
 
 	PUBLIC	EXTINIT

@@ -1268,16 +1268,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		wmId    = LOWORD(wParam); // Remember, these are...
 		wmEvent = HIWORD(wParam); // ...different for Win32!
 
-		switch (wmId) { 
-
+		switch (wmId)
+		{ 
 		case  SC_MINIMIZE: 
 
 			if (MinimizetoTray)
 				return ShowWindow(hWnd, SW_HIDE);		
 		
-			default:
+		default:
 		
-				return (DefWindowProc(hWnd, message, wParam, lParam));
+			return (DefWindowProc(hWnd, message, wParam, lParam));
 		}
 
 		case WM_SIZING:

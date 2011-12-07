@@ -138,6 +138,8 @@ pcap_t *adhandle;
 
 char Adapter[256];
 
+int Promiscuous = 1;			// Default to Promiscuous
+
 HINSTANCE PcapDriver=0;
 
 typedef int (FAR *FARPROCX)();
@@ -240,7 +242,8 @@ Dll BOOL APIENTRY Init_IP()
 	if (NeedResolver)
 		_beginthread(IPResolveNames, 0, NULL );
 
-	WritetoConsole("\nIP Support Enabled\n");
+	WritetoConsole("\n");
+	WritetoConsole("IP Support Enabled\n");
 
 	return TRUE;
 }
@@ -1311,7 +1314,7 @@ static BOOL ReadConfigFile()
 			if (!ProcessLine(buf))
 			{
 				WritetoConsole("IP Gateway bad config record ");
-				strcat(errbuf, "\r");
+				strcat(errbuf, "\n");
 				WritetoConsole(errbuf);
 			}
 		}
@@ -1340,6 +1343,13 @@ static ProcessLine(char * buf)
 		strcpy(Adapter,p_value);
 		return (TRUE);
 	}
+
+	if(_stricmp(ptr,"promiscuous") == 0)
+	{
+		Promiscuous = atoi(p_value);
+		return (TRUE);
+	}
+
 
 	if (_stricmp(ptr,"IPAddr") == 0)
 	{
@@ -1521,7 +1531,7 @@ int OpenPCAP()
 	adhandle= pcap_open_livex(Adapter,	// name of the device
 							 65536,			// portion of the packet to capture. 
 											// 65536 grants that the whole packet will be captured on all the MACs.
-							 1,				// promiscuous mode (nonzero means promiscuous)
+							 Promiscuous,	// promiscuous mode (nonzero means promiscuous)
 							 1,				// read timeout
 							 errbuf			// error buffer
 							 );

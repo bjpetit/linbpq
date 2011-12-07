@@ -407,7 +407,12 @@
 // Accept DRIVER as well as DLLNAME, and COMPORT as well as IOADDR in bpq32.cfg. COMPORT is decimal
 // No longer supports separate config files, or BPQTELNETSERVER.exe
 // Improved flow control for Telnet CMS Sessions
-// Fix handling COnfig file without a newline after last line
+// Fix handling Config file without a newline after last line
+// Add non - Promiscuous mode option for BPQETHER 
+// Change Console Window to a Dialog Box.
+// Fix possible corruption and loss of buffers in Tracker drivers
+// Add Beacon After Session option to Tracker and UZ7HO Drivers
+
 
 #define Kernel
 #include "Versions.h"
@@ -418,6 +423,8 @@
 #pragma data_seg("_BPQDATA")
 
 #include "windows.h"
+#include "winerror.h"
+
 
 #include "time.h"
 #include "stdio.h"
@@ -519,11 +526,12 @@ char SESSIONHDDR[80] = "";
 int SESSHDDRLEN = 0;
 
 
-char LOCATOR[80] = "";			// Maidenhead Locator for Reporting
-
+char LOCATOR[80] = "";			// Locator for Reporting - may be Maidenhead or LAT:LON
+char LOC[7] = "";				// Maidenhead Locator for Reporting
 char ReportDest[7];
 
 VOID __cdecl Debugprintf(const char * format, ...);
+VOID __cdecl Consoleprintf(const char * format, ...);
 
 DllExport int APIENTRY CloseBPQ32();
 DllExport int APIENTRY SessionControl(int stream, int command, int param);
@@ -567,6 +575,8 @@ UCHAR BPQProgramDirectory[MAX_PATH]="";
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 
+static char ClassName[] = "BPQMAINWINDOW";
+
 HKEY REGTREE = HKEY_CURRENT_USER;
 char REGTREETEXT[100] = "HKEY_CURRENT_USER";
 
@@ -575,14 +585,17 @@ UINT BPQMsg=0;
 #define MAXLINELEN 120
 #define MAXSCREENLEN 50
 
+#define BGCOLOUR RGB(236,233,216)
 
-int LINELEN=120;
-int SCREENLEN=50;
+HBRUSH bgBrush = NULL;
 
-char Screen[MAXLINELEN*MAXSCREENLEN]={0};
+//int LINELEN=120;
+//int SCREENLEN=50;
 
-int lineno=0;
-int col=0;
+//char Screen[MAXLINELEN*MAXSCREENLEN]={0};
+
+//int lineno=0;
+//int col=0;
 
 #define REPORTINTERVAL 15 * 549;	// Magic Ticks Per Minute for PC's nominal 100 ms timer 
 int ReportTimer = 0;
@@ -606,7 +619,10 @@ BOOL MinimizetoTray=TRUE;
 
 HMENU trayMenu=0;
 
-HWND hWnd;
+HWND hWnd, hWndCons, hWndBG;
+
+BOOL IGateEnabled = FALSE;
+extern int ISDelayTimer;			// Time before trying to reopen APRS-IS link
 
 static RECT Rect;			// Window Position
 
@@ -652,6 +668,9 @@ UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
 
 BOOL	Perl;
 HANDLE Mutex;
+
+BOOL PartLine = FALSE;
+int pindex = 0;
 
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
 
@@ -1049,11 +1068,9 @@ VOID CALLBACK TimerProc
 			struct BPQVECSTRUC * HOSTVEC;
 			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 			WSADATA       WsaData;            // receives data from WSAStartup
+			RECT cRect;
 
 			ReconfigFlag = FALSE;
-
-			lineno=0;
-			memset(Screen, ' ', LINELEN*SCREENLEN);
 
 			SetupBPQDirectory();
 
@@ -1080,6 +1097,9 @@ VOID CALLBACK TimerProc
 
 			WSAStartup(MAKEWORD(2, 0), &WsaData);
 
+			Consoleprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
+			Consoleprintf(VerCopyright);
+	
 			_asm{
 
 			pushad
@@ -1113,8 +1133,18 @@ VOID CALLBACK TimerProc
 			WritetoConsole("\n\nReconfiguration Complete\n");
 
 			if (IPRequired)	IPActive = Init_IP();
+
 			APRSActive = Init_APRS();
-			
+			CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
+
+			GetClientRect(hWnd, &cRect); 
+			MoveWindow(hWndBG, 0, 0, cRect.right, cRect.bottom, TRUE);
+			if (APRSActive)
+				MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
+			else
+				MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
+			InvalidateRect(hWnd, NULL, TRUE);
+
 			RigActive = Rig_Init();
 			
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
@@ -1159,6 +1189,7 @@ FirstInit()
 {
     WSADATA       WsaData;            // receives data from WSAStartup
 	HINSTANCE ExtDriver=0;
+	RECT cRect;
 
 
 	// First Time Ports and Timer init
@@ -1173,12 +1204,12 @@ FirstInit()
 
 	ExtDriver=LoadLibrary("Psapi.dll");
 
+	SetupTrayIcon();
+
 	if (ExtDriver)
 		GetModuleFileNameExPtr = (FARPROCX)GetProcAddress(ExtDriver,"GetModuleFileNameExA");
 	
 	INITIALISEPORTS();
-
-	SetupConsoleWindow();
 
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 	TimerInst=GetCurrentProcessId();
@@ -1191,11 +1222,21 @@ FirstInit()
 		OpenReportingSocket();
 	}
 
- 	WritetoConsole("\n\nPort Initialisation Complete\n");
+ 	WritetoConsole("\n");
+ 	WritetoConsole("Port Initialisation Complete\n");
 
 	if (IPRequired)	IPActive = Init_IP();
 	
 	APRSActive = Init_APRS();
+	CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
+	
+	GetClientRect(hWnd, &cRect); 
+	MoveWindow(hWndBG, 0, 0, cRect.right, cRect.bottom, TRUE);
+	if (APRSActive)
+		MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
+	else
+		MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
+	InvalidateRect(hWnd, NULL, TRUE);
 
 	RigActive = Rig_Init();
 
@@ -1247,7 +1288,6 @@ Check_Timer()
 
 		if (!ProcessConfig())
 		{
-			SetupConsoleWindow();
 			ShowWindow(hWnd, SW_RESTORE);
 			SendMessage(hWnd, WM_PAINT, 0, 0);
 
@@ -1262,11 +1302,9 @@ Check_Timer()
 
 		SetupConsoleWindow();
 
-		lineno=0;
-		memset(Screen, ' ', LINELEN*SCREENLEN);
-
-		WritetoConsole(&SIGNONMSG[0]);
-		WritetoConsole("Reinitialising...\n");
+		Consoleprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
+		Consoleprintf(VerCopyright);
+		Consoleprintf("Reinitialising...");
  
 		SetupBPQDirectory();
 
@@ -1276,7 +1314,9 @@ Check_Timer()
 
 		// Load Psapi.dll if possible
 
-		ExtDriver  =LoadLibrary("Psapi.dll");
+		ExtDriver = LoadLibrary("Psapi.dll");
+
+		SetupTrayIcon();
 
 		if (ExtDriver)
 			GetModuleFileNameExPtr = (FARPROCX)GetProcAddress(ExtDriver,"GetModuleFileNameExA");
@@ -1427,6 +1467,18 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (InitDone == 0)
 		{
+			#pragma warning(push)
+			#pragma warning(disable : 4996)
+
+			if (_winver < 0x0600)
+			#pragma warning(pop)
+			{
+				// Below Vista
+
+				REGTREE = HKEY_LOCAL_MACHINE;
+				strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
+			}
+
 			hInstance=hInst;
 
 			Mutex=OpenMutex(MUTEX_ALL_ACCESS,FALSE,"BPQLOCKMUTEX");
@@ -1445,8 +1497,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			if (Perl == 1)
 				CheckifBPQ32isLoaded();					// Start BPQ32.exe if needed
 
-			memset(Screen, ' ', LINELEN*SCREENLEN);
-
 			GetVersionInfo("bpq32.dll");
 
 			wsprintf (SIGNONMSG, "G8BPQ AX25 Packet Switch System Version %s %s\r\n%s\r\n",
@@ -1454,13 +1504,13 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				 
 			SESSHDDRLEN = wsprintf(SESSIONHDDR, "G8BPQ Network System %s for Win32 (", TextVerstring);
 
+			SetupConsoleWindow();
 			SetupBPQDirectory();
-
+		
 			if (!ProcessConfig())
 			{
 				StartMinimized = FALSE;
 				MinimizetoTray = FALSE;
-				SetupConsoleWindow();
 				ShowWindow(hWnd, SW_RESTORE);
 				SendMessage(hWnd, WM_PAINT, 0, 0);
 
@@ -1469,6 +1519,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				FreeSemaphore();
 				return (0);
 			}
+
+			Consoleprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
+			Consoleprintf(VerCopyright);
 
 			if (START() !=0)
 			{
@@ -3940,31 +3993,37 @@ int SetupConsoleWindow()
 	HKEY hKey=0;
 	char Size[80];
 
+	pindex = 0;
+	PartLine = FALSE;
+
+	bgBrush = CreateSolidBrush(BGCOLOUR);
 
 	// Create Console Window
         
 	wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
 	wc.lpfnWndProc   = (WNDPROC)WndProc;
 	wc.cbClsExtra    = 0;
-	wc.cbWndExtra    = 0;
+	wc.cbWndExtra    = DLGWINDOWEXTRA;
 	wc.hInstance     = hInstance;
 	wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));     
 	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);    
 	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);	
 	wc.lpszMenuName	 = 0;     
-	wc.lpszClassName = AppName;
+	wc.lpszClassName = ClassName; 
 
 	i=RegisterClass(&wc);
-		
+	
 //	GetVersionInfo("bpq32.dll");
 
 	wsprintf (Title, "BPQ32.dll Console Version %s", VersionString);
 
-	hWnd = CreateWindow(AppName, Title, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0, 500,450,
-		NULL, NULL, hInstance, NULL);
+	hWnd=CreateDialog(hInstance, ClassName, 0, NULL);
 
-	i=GetLastError();
+//	hWnd = CreateWindow(AppName, Title, WS_OVERLAPPEDWINDOW,
+//		CW_USEDEFAULT, 0, 500,450,
+//		NULL, NULL, hInstance, NULL);
+
+	i = GetLastError();
 
 	if (!hWnd) {
 		return (FALSE);
@@ -4009,6 +4068,11 @@ int SetupConsoleWindow()
 	
 	SetWindowText(hWnd,Title);
 
+	hWndCons = GetDlgItem(hWnd, BPQCONSOLE); 
+	hWndBG = GetDlgItem(hWnd, IDC_BACKGROUND); 
+
+	SendMessage(hWndCons, LB_SETHORIZONTALEXTENT , 1000, 0);
+
 	retCode = RegOpenKeyEx (REGTREE,
                 "SOFTWARE\\G8BPQ\\BPQ32",    
                               0,
@@ -4024,6 +4088,15 @@ int SetupConsoleWindow()
 
 		if (retCode == ERROR_SUCCESS)
 			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+
+		// Get StartMinimized and MinimizetoTray flags
+
+		Vallen = 4;
+		retCode = RegQueryValueEx(hKey, "Start Minimized", 0, &Type, (UCHAR *)&StartMinimized, &Vallen);
+
+		Vallen = 4;
+		retCode = RegQueryValueEx(hKey, "Minimize to Tray", 0, &Type, (UCHAR *)&MinimizetoTray, &Vallen);
+
 	}
 
 	if (Rect.right < 100 || Rect.bottom < 100)
@@ -4041,8 +4114,6 @@ int SetupConsoleWindow()
 			ShowWindow(hWnd, SW_SHOWMINIMIZED);
 	else
 		ShowWindow(hWnd, SW_RESTORE);
-
-	SetupTrayIcon();
 
 	return 0;
 }
@@ -4160,11 +4231,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	int wmId, wmEvent;
     POINT pos;
 	HWND handle;
-
-	PAINTSTRUCT ps;
-	HDC hdc;
-    HFONT    hOldFont ;
-
+	RECT cRect;
 
 	switch (message) { 
 
@@ -4182,12 +4249,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				TrackPopupMenu(trayMenu, 0, pos.x, pos.y, 0, hWnd, 0);
 				return 0;
 			}
-	
+
+		case WM_CTLCOLORDLG:
+		   return (LONG)bgBrush;
+
 		case WM_COMMAND:
 
 			wmId    = LOWORD(wParam); // Remember, these are...
 			wmEvent = HIWORD(wParam); // ...different for Win32!
-			
+
+			if (wmId == IDC_ENIGATE)
+			{
+				IGateEnabled = IsDlgButtonChecked(hWnd, IDC_ENIGATE); 
+
+				if (IGateEnabled)
+					ISDelayTimer = 60;
+
+				return 0;
+			}		
+
 			if (wmId == BPQSAVENODES)
 			{
 				SaveNodes();
@@ -4277,11 +4357,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	
 		case WM_SYSCOMMAND:
 
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
+			wmId    = LOWORD(wParam); // Remember, these are...
+			wmEvent = HIWORD(wParam); // ...different for Win32!
 
-		switch (wmId) { 
-
+			switch (wmId)
+			{ 
 			case  SC_MINIMIZE: 
 
 				GetWindowRect(hWnd, &Rect);
@@ -4293,12 +4373,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					return (DefWindowProc(hWnd, message, wParam, lParam));
 							
 				break;
-			
+
 			default:
 		
 				return (DefWindowProc(hWnd, message, wParam, lParam));
-		}
+			}
+	
+		case WM_SIZING:
+		case WM_SIZE:
 
+		GetClientRect(hWnd, &cRect); 
+
+		MoveWindow(hWndBG, 0, 0, cRect.right, cRect.bottom, TRUE);
+
+		if (APRSActive)
+			MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
+		else
+			MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
+
+		InvalidateRect(hWnd, NULL, TRUE);
+		return TRUE;
+
+/*
 		case WM_PAINT:
 
 			hdc = BeginPaint (hWnd, &ps);
@@ -4314,7 +4410,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			EndPaint (hWnd, &ps);
 	
 			break;        
-
+*/
 
 		case WM_DESTROY:
 		
@@ -4397,50 +4493,28 @@ DllExport int APIENTRY WritetoConsole(char * buff)
 
 int WritetoConsoleLocal(char * buff)
 {
-	int ptr;
 	int len=strlen(buff);
-	
-	ptr=0;
+	char Temp[2000]= "";
+	char * ptr;
 
-	while (ptr < len) 
+	if (PartLine)
 	{
-		if (buff[ptr] == 13)
-		{
-			col=0;
-			ptr++;
-			continue;
-		}
-
-		if (buff[ptr] == 10)
-		{
-			NewLine();
-			ptr++;
-			continue;
-		}
-
-		Screen[lineno*LINELEN+col] = buff[ptr];
-		col++;
-		if (col == LINELEN)	NewLine();
-		ptr++;
+		SendMessage(hWndCons, LB_GETTEXT, pindex, (LPARAM)(LPCTSTR) Temp);
+		SendMessage(hWndCons, LB_DELETESTRING, pindex, 0);
+		PartLine = FALSE;
+	}
 	
-	}
+	strcat(Temp, buff);
 
-	InvalidateRect(hWnd,NULL,FALSE);
+	ptr = strchr(Temp, '\n');
 
-	return (0);
-}
-int NewLine()
-{
-	col=0;
-	lineno++;
-	if (lineno > (SCREENLEN-1))
-	{
-		memmove(Screen,Screen+LINELEN,LINELEN*(SCREENLEN-1));
-		memset(Screen+LINELEN*(SCREENLEN-1),' ',LINELEN);
-		lineno=SCREENLEN-1;
-	}
+	if (ptr)
+		*ptr = 0;
+	else
+		PartLine = TRUE;
 
-	return (0);
+	pindex=SendMessage(hWndCons, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Temp);
+	return 0;
 }
 
 DllExport VOID APIENTRY  BPQOutputDebugString(char * String)
@@ -4478,7 +4552,7 @@ DllExport int APIENTRY  DumpSystem()
 
 	WriteFile(handle,stack,128,&cnt,NULL);
 
-	WriteFile(handle,Screen,MAXLINELEN*MAXSCREENLEN,&cnt,NULL);
+//	WriteFile(handle,Screen,MAXLINELEN*MAXSCREENLEN,&cnt,NULL);
 
 	WriteFile(handle,&Flag,(&ENDOFDATA - &Flag) * 4,&cnt,NULL);
 

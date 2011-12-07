@@ -363,6 +363,145 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 	return (INT_PTR)FALSE;
 }
 
+VOID GetWPBBSInfo(char * Rline)
+{
+	// Update WP with /I records for each R: Line
+
+	// R:111206/1636Z 29130@N9PMO.#SEWI.WI.USA.NOAM [Racine, WI] FBB7.00i
+
+
+	struct tm rtime;
+	time_t RLineTime;
+	int Age;
+		
+	WPRec * WP;
+	char ATBBS[200];
+	char Call[200];
+	char QTH[200] = "";
+	int RLen;
+
+	char * ptr1; 
+	char * ptr2;
+
+
+	memset(&rtime, 0, sizeof(struct tm));
+
+	if (Rline[10] == '/')
+	{
+		// Dodgy 4 char year
+	
+		sscanf(&Rline[2], "%04d%02d%02d/%02d%02d",
+				&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+				rtime.tm_year -= 1900;
+				rtime.tm_mon--;
+	}
+	else if (Rline[8] == '/')
+	{
+		sscanf(&Rline[2], "%02d%02d%02d/%02d%02d",
+			&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+
+		if (rtime.tm_year < 90)
+			rtime.tm_year += 100;		// Range 1990-2089
+		rtime.tm_mon--;
+	}
+
+	// Otherwise leave date as zero, which should be rejected
+
+	if ((RLineTime = _mkgmtime(&rtime)) != (time_t)-1 )
+	{
+		Age = (time(NULL) - RLineTime)/86400;
+
+		if ( Age < -1)
+			return;			// in the future
+		
+		if (Age > BidLifetime || Age > 30)
+			return;			// Too old
+	}
+
+	ptr1 = strchr(Rline, '@'); 
+	ptr2 = strchr(Rline, '\r');
+
+	if (!ptr1)
+		return;			// Duff
+
+	if (*++ptr1 == ':')
+		ptr1++;			// Format 2
+
+	RLen = ptr2 - ptr1;
+
+	if (RLen > 200)
+		return;
+
+	memcpy(ATBBS, ptr1, RLen);
+	ATBBS[RLen] = 0;
+
+	ptr2 = strchr(ATBBS,  ' ');
+
+	if (ptr2)
+		*ptr2 = 0;
+
+	strcpy(Call, ATBBS);
+	strlop(Call, '.');
+
+	ptr2 = memchr(ptr1, '[', RLen);
+
+	if (ptr2)
+	{
+		ptr1= memchr(ptr2, ']', RLen);
+		if (ptr1)
+			memcpy(QTH, ptr2 + 1, ptr1 - ptr2 - 1);
+	}
+
+	WP = LookupWP(Call);
+
+	if (!WP)
+	{
+		// Not Found
+
+		WP = AllocateWPRecord();
+
+		strcpy(WP->callsign, Call);
+		strcpy(WP->first_homebbs, ATBBS);
+		strcpy(WP->secnd_homebbs, ATBBS);
+
+		if (QTH[0])
+		{
+			strcpy(WP->first_qth, QTH);
+			strcpy(WP->secnd_qth, QTH);
+		}
+
+		WP->last_modif = RLineTime;
+		WP->last_seen = RLineTime;
+
+		WP->Type = 'I';
+		WP->changed = TRUE;
+
+		return;
+	}
+
+	if (WP->last_modif >= RLineTime	|| WP->Type != 'I')
+		return;
+
+	// Update 2nd if changed
+
+	if (strcmp(WP->secnd_homebbs , ATBBS) != 0)
+	{
+		strcpy(WP->secnd_homebbs, ATBBS);
+		WP->last_modif = RLineTime;
+	}
+
+	if (QTH[0] && strcmp(WP->secnd_qth , QTH) != 0)
+	{
+		strcpy(WP->secnd_qth, QTH);
+		WP->last_modif = RLineTime;
+	}
+
+	return;
+}
+
+
+
+
 VOID GetWPInfoFromRLine(char * From, char * FirstRLine, time_t RLineTime)
 {
 	/* The /G suffix denotes that the information in this line has been gathered by examining
@@ -830,19 +969,13 @@ VOID UpdateWP()
 
 	WPRec * ptr = NULL;
 	int i;
-	struct tm *tm;
-	struct MsgInfo * Msg;
 	char * via = NULL;
-	char BID[13];
-	BIDRec * BIDRec;
 	int MsgLen = 0;
 	char MailBuffer[100100];
 	char * Buffptr = MailBuffer;
-	char MsgFile[MAX_PATH];
 	HANDLE hFile = INVALID_HANDLE_VALUE;
 	int WriteLen=0;
 	char HDest[61] = "WP";
-	char * Vptr;
 	char WPMsgType = 'P';
 	time_t NOW = time(NULL);
 	time_t UpdateLimit = NOW - (86400 * 30);	// 30 days
@@ -978,6 +1111,53 @@ int CreateWPMessage()
 
 	return TRUE;
 }
+
+VOID CreateWPReport()
+{
+	int i;
+	char Line[200];
+	int len, written;
+	char File[100];
+	HANDLE hFile;
+	WPRec * WP = NULL;
+
+	sprintf_s(File, sizeof(File), "%s\\WP.txt", BaseDir);
+	
+	hFile = CreateFile(File,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+
+	if (hFile == INVALID_HANDLE_VALUE)
+		return;
+
+//	len = wsprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
+//	WriteFile(hFile, Line, len, &written, NULL);
+//	len = wsprintf(Line, "               In        Out     Rxed        Sent     Rxed       Sent         In         Out\r\n\r\n");
+//	WriteFile(hFile, Line, len, &written, NULL);
+		
+
+	for (i=1; i <= NumberofWPrecs; i++)
+	{
+		WP = WPRecPtr[i];
+
+		len = wsprintf(Line, "%-7s,%c,%s,%s,%s,%s,%s,%s,%s,%d,%s,%s\r\n",
+			WP->callsign, WP->Type, WP->first_homebbs, WP->first_qth, WP->first_zip, 
+			WP->secnd_homebbs, WP->secnd_qth, WP->secnd_zip, WP->name, WP->changed,
+			FormatWPDate(WP->last_modif),
+			FormatWPDate(WP->last_seen));
+		
+		WriteFile(hFile, Line, len, &written, NULL);
+	}
+
+	CloseHandle(hFile);
+}
+
+
+
 
 
 

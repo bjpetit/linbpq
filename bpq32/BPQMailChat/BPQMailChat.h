@@ -1166,12 +1166,14 @@ VOID Renumber_Messages();
 BOOL ExpireBIDs();
 VOID MailHousekeepingResults();
 VOID CreateBBSTrafficReport();
+VOID CreateWPReport();
 
 // WP Routines
 
 VOID ProcessWPMsg(char * MailBuffer, int Size, char * FisrtRLine);
 VOID GetWPInfoFromRLine(char * From, char * FirstRLine, time_t RLineTime);
 VOID UpdateWPWithUserInfo(struct UserInfo * user);
+VOID GetWPBBSInfo(char * Rline);
 
 // UI Routines
 
@@ -1387,7 +1389,7 @@ extern struct Override ** LTFROM;
 extern struct Override ** LTTO;
 extern struct Override ** LTAT;
 
-extern int LastFWDTime;
+extern int LastHouseKeepingTime;
 
 extern char * MyElements[];
 extern char ** AliasText;

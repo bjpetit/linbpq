@@ -1104,7 +1104,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(Msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(Msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(Msg);
 
 		return (int) ExtProc;
@@ -1135,9 +1135,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 		{
 			// Report Error
 
-			i=wsprintf(Msg,"Invalid Rig Config %s", TNC->RigConfigMsg);
-			WritetoConsole(Msg);
-
+			Consoleprintf("Invalid Rig Config %s", TNC->RigConfigMsg);
 		}
 		free(SaveRigConfig);
 	}
@@ -1250,8 +1248,7 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 	
 	MoveWindows(TNC);
 
-	i=wsprintf(Msg,"WINMOR Host %s %d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
-	WritetoConsole(Msg);
+	Consoleprintf("WINMOR Host %s %d", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
 
 	ConnecttoWINMOR(port);
 

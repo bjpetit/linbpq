@@ -17,10 +17,11 @@
 #include "AsmStrucs.h"
 #include "bpq32.h"
 #include <time.h>
+#include "kernelresource.h"
 
-#define MAXAGE 7200		// 2 Hours
-#define MAXCALLS 20		// Max Flood, Trace and Digi
-#define GATETIMELIMIT 1800 // Don't gate to RF if station not heard for this time
+#define MAXAGE 3600 * 12	  // 12 Hours
+#define MAXCALLS 20			  // Max Flood, Trace and Digi
+#define GATETIMELIMIT 40 * 60 // Don't gate to RF if station not heard for this time (40 mins)
 
 static BOOL APIENTRY  GETSENDNETFRAMEADDR();
 static VOID DoSecTimer();
@@ -70,7 +71,7 @@ extern short NUMBEROFPORTS;
 extern byte	MCOM;
 extern char	MTX;
 extern ULONG MMASK;
-
+extern HWND hWnd;
 
 static int SecTimer = 10;
 
@@ -83,6 +84,8 @@ char CallPadded[10] = "         ";
 
 int GPSPort = 0;
 int GPSSpeed = 0;
+
+BOOL GPSOK;
 
 char LAT[] = "0000.00N";	// in standard APRS Format      
 char LON[] = "00000.00W";	//in standard APRS Format
@@ -108,6 +111,8 @@ int DigiLen[MAXCALLS];
 short ISPort = 0;
 char ISHost[256] = "";
 int ISPasscode = 0;
+
+extern BOOL IGateEnabled;
 
 char * StatusMsg = 0;
 int StatusMsgLen = 0;
@@ -241,14 +246,16 @@ Dll BOOL APIENTRY Init_APRS()
 	// Setup Heard Data Area
 
 	HEARDENTRIES = 0;
-	MAXHEARDENTRIES = 50;
+	MAXHEARDENTRIES = 100;
 
 	MHDATA = zalloc(MAXHEARDENTRIES * sizeof(struct APRSSTATIONRECORD));
 
 	APRSMONVEC.HOSTAPPLFLAGS = 0x80;		// Request Monitoring
 
-	if (ISPort)
+	if (ISPort && IGateEnabled)
+	{
 		_beginthread(APRSISThread, 0, (VOID *) TRUE);
+	}
 
 	if (GPSPort)
 		OpenGPSPort();
@@ -1168,7 +1175,7 @@ VOID SendIStatus()
 
 VOID DoSecTimer()
 {
-	if (ISPort && APRSISOpen == 0)
+	if (ISPort && APRSISOpen == 0 && IGateEnabled)
 	{
 		ISDelayTimer++;
 
@@ -1199,6 +1206,13 @@ VOID DoSecTimer()
 			SendIStatus();
 		}
 	}
+
+	if (GPSOK)
+	{
+		GPSOK--;
+		if (GPSOK == 0)
+			SetDlgItemText(hWnd, IDC_GPS, "No GPS");
+	}
 }
 
 char APRSMsg[300];
@@ -1224,6 +1238,7 @@ VOID APRSISThread(BOOL Report)
 	char APRSinMsg[1000];
 
 	Debugprintf("BPQ32 APRS IS Thread");
+	SetDlgItemText(hWnd, IGATESTATE, "IGate State - Connecting");
 
 	wsprintf(Signon, "user %s pass %d vers BPQ32 2011/08/20\r\n",
 			APRSCall, ISPasscode);
@@ -1277,6 +1292,8 @@ VOID APRSISThread(BOOL Report)
 		//	Connect failed
 		//
 
+		SetDlgItemText(hWnd, IGATESTATE, "IGate State - Connect Failed");
+
 		return;
 	}
 
@@ -1308,7 +1325,9 @@ VOID APRSISThread(BOOL Report)
 
 	APRSISOpen = TRUE;
 
-	while (InputLen > 0)
+	SetDlgItemText(hWnd, IGATESTATE, "IGate State - Connected");
+
+	while (InputLen > 0 && IGateEnabled)
 	{
 		InputLen = recv(sock, &APRSinMsg[inptr], 500 - inptr, 0);
 
@@ -1326,7 +1345,7 @@ VOID APRSISThread(BOOL Report)
 
 				APRSMsg[len - 2] = 0;
 
-				Debugprintf(APRSMsg);
+				OutputDebugString(APRSMsg);
 				ProcessAPRSISMsg(APRSMsg);
 
 				inptr -= len;						// bytes left
@@ -1350,6 +1369,11 @@ VOID APRSISThread(BOOL Report)
 	APRSISOpen = FALSE;
 
 	Debugprintf("BPQ32 APRS IS Thread Exited");
+
+	if (IGateEnabled)
+		SetDlgItemText(hWnd, IGATESTATE, "IGate State - Disconnected");
+	else
+		SetDlgItemText(hWnd, IGATESTATE, "IGate State - Disabled");
 
 	ISDelayTimer = 30;		// Retry pretty quickly
 	return;
@@ -1478,7 +1502,7 @@ struct APRSSTATIONRECORD * UpdateHeard(UCHAR * Call, int Port)
 				goto DoMove;
 		}
 
-		if (MH->MHCALL[0] == 0)		// Spare entry
+		if (MH->MHCALL[0] == 0 || MH->MHTIME < OLDEST)		// Spare entry
 			goto DoMove;
 
 		MH++;
@@ -1494,7 +1518,14 @@ DoMove:
 		memmove(MHBASE + 1, MHBASE, i * sizeof(struct APRSSTATIONRECORD));
 
 	if (i >= HEARDENTRIES) 
+	{
+		char Status[80];
+	
 		HEARDENTRIES = i + 1;
+
+		wsprintf(Status, "IGATE Stats - Msgs %d  Local Stns %d", 0 , HEARDENTRIES);
+		SetDlgItemText(hWnd, IGATESTATS, Status);
+	}
 
 	memcpy (MHBASE->MHCALL, Call, 10);
 	MHBASE->Port = Port;
@@ -1903,7 +1934,11 @@ void DecodeRMC(char * msg, int len)
 
 	ptr1=ptr2;
 	
-	if (*(ptr1) != 'A') return; // ' Data Not Valid
+	if (*(ptr1) != 'A') // ' Data Not Valid
+	{
+		SetDlgItemText(hWnd, IDC_GPS, "No GPS Fix");
+		return;
+	}
         
 	ptr1+=2;
 
@@ -1936,10 +1971,16 @@ void DecodeRMC(char * msg, int len)
 
 	LON[8] = (*ptr1);
 
-	// Nopw have a valid posn, so stp sending Undefined LOC Sysbol
+	// Now have a valid posn, so stp sending Undefined LOC Sysbol
 	
 	SYMBOL = CFGSYMBOL;
 	SYMSET = CFGSYMSET;
+
+	if (GPSOK == 0)
+	{
+		GPSOK = 30;
+		SetDlgItemText(hWnd, IDC_GPS, "GPS OK");
+	}
 
 	ptr1+=2;
 

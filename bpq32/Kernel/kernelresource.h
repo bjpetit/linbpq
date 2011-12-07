@@ -9,6 +9,7 @@
 #define RIG_MENU1                       103
 #define IDI_ICON1                       105
 #define IDC_TELNETSERVER                109
+#define BPQCONSOLE                      116
 #define BPQCLEAR                        401
 #define BPQCOPY                         402
 #define BPQREREAD                       403
@@ -54,6 +55,11 @@
 #define IDC_RADIO1                      1023
 #define RIG_LINE                        1024
 #define IDC_LEDS                        1030
+#define IDC_ENIGATE                     1040
+#define IGATESTATE                      1041
+#define IGATESTATS                      1042
+#define IDC_BACKGROUND                  1043
+#define IDC_GPS                         1044
 #define IDC_TNCSTATE                    1203
 #define IDC_COMMSSTATE                  1204
 #define IDC_MODE                        1902
@@ -73,7 +79,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        125
 #define _APS_NEXT_COMMAND_VALUE         40006
-#define _APS_NEXT_CONTROL_VALUE         1040
+#define _APS_NEXT_CONTROL_VALUE         1045
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

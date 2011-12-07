@@ -571,7 +571,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
 		return (int) ExtProc;
@@ -707,6 +707,8 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	if (TNC->VCOMPort)
 		OpenVirtualSerialPort(TNC);
+
+	WritetoConsole("\n");
 
 	return ((int)ExtProc);
 }

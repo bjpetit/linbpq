@@ -31,7 +31,7 @@ int DeleteLogFiles();
 VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Forwarded, int Age);
 int CreateWPMessage();
 
-int LastFWDTime;
+int LastHouseKeepingTime;
 
 DeletetoRecycle(char * FN)
 {
@@ -815,7 +815,3 @@ VOID CreateBBSTrafficReport()
 
 	CloseHandle(hFile);
 }
-
-
-
-

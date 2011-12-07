@@ -373,6 +373,7 @@ typedef struct TNCINFO
 	BOOL RobustDefault;				// Set if SCS Tracker default is Robust Packet mode
 	BOOL ForceRobust;				// Don't allow Normal Packet even if scan requests it.
 	char NormSpeed[8];				// Speed Param for Normal Packet on Tracker
+	BOOL RPBEACON;					// Send Beacon after each session 
 
 	int TimeInRX;					// Time waiting for ISS before sending
 	char TXRXState;					// Current ISS/IRS State

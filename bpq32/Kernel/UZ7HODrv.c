@@ -63,6 +63,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message);
 struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
 static VOID SendData(struct TNCINFO * TNC, char * key, char * Msg, int MsgLen);
 static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCHAR * Msg);
+VOID SendRPBeacon(struct TNCINFO * TNC);
 
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
@@ -758,7 +759,7 @@ UINT WINAPI UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(Msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(Msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(Msg);
 
 		return (int) ExtProc;
@@ -792,7 +793,7 @@ UINT WINAPI UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	
 	PortEntry->MAXHOSTMODESESSIONS = TNC->AGWInfo->MaxSessions;	
 
-	i=wsprintf(Msg,"UZ7HO Host %s Port %d Chan %c",
+	i=wsprintf(Msg,"UZ7HO Host %s Port %d Chan %c\n",
 		TNC->WINMORHostName, TNC->WINMORPort, PortEntry->PORTCONTROL.CHANNELNUM);
 	WritetoConsole(Msg);
 
@@ -954,6 +955,9 @@ static ProcessLine(char * buf, int Port)
 			if (_memicmp(buf, "UPDATEMAP", 9) == 0)
 				TNC->PktUpdateMap = TRUE;
 			else
+			if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
+				TNC->RPBEACON = TRUE;
+			else
 				
 //			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 //				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
@@ -1005,7 +1009,7 @@ static VOID ConnecttoUZ7HOThread(port)
 
 	if (TNC->WINMORSock == INVALID_SOCKET)
 	{
-		i=wsprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\r\n", WSAGetLastError());
+		i=wsprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
 
   	 	return; 
@@ -1030,7 +1034,7 @@ static VOID ConnecttoUZ7HOThread(port)
 		if (TNC->Alerted == FALSE)
 		{
 			err=WSAGetLastError();
-   			i=wsprintf(Msg, "Connect Failed for UZ7HO socket - error code = %d\r\n", err);
+   			i=wsprintf(Msg, "Connect Failed for UZ7HO socket - error code = %d\n", err);
 			WritetoConsole(Msg);
 			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to TNC failed");
 
@@ -1081,7 +1085,7 @@ static int ProcessReceivedData(int port)
 	{
 		//	zero bytes means connection closed
 
-		i=wsprintf(ErrMsg, "UZ7HO Connection closed for BPQ Port %d\r\n", port);
+		i=wsprintf(ErrMsg, "UZ7HO Connection closed for BPQ Port %d\n", port);
 		WritetoConsole(ErrMsg);
 
 		TNC->CONNECTED = FALSE;
@@ -1176,7 +1180,7 @@ VOID ConnecttoMODEMThread(port)
 
 	if (TNC->WINMORSock == INVALID_SOCKET || TNC->WINMORDataSock == INVALID_SOCKET)
 	{
-		i=wsprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\r\n", WSAGetLastError());
+		i=wsprintf(Msg, "Socket Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
 
   	 	return; 
@@ -1194,7 +1198,7 @@ VOID ConnecttoMODEMThread(port)
 		//	Bind Failed
 		//
 	
-		i=wsprintf(Msg, "Bind Failed for UZ7HO socket - error code = %d\r\n", WSAGetLastError());
+		i=wsprintf(Msg, "Bind Failed for UZ7HO socket - error code = %d\n", WSAGetLastError());
 		WritetoConsole(Msg);
 
   	 	return; 
@@ -1216,7 +1220,7 @@ VOID ConnecttoMODEMThread(port)
 		if (TNC->Alerted == FALSE)
 		{
 			err=WSAGetLastError();
-   			i=wsprintf(Msg, "Connect Failed for UZ7HO socket - error code = %d\r\n", err);
+   			i=wsprintf(Msg, "Connect Failed for UZ7HO socket - error code = %d\n", err);
 			WritetoConsole(Msg);
 			SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, "Connection to TNC failed");
 
@@ -1363,6 +1367,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					STREAM->DiscWhenAllSent = 10;
 
+					if (TNC->RPBEACON)
+						SendRPBeacon(TNC);
+			
 					return;
 				}
 
@@ -1378,6 +1385,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 				STREAM->Disconnecting = FALSE;
 				STREAM->DiscWhenAllSent = 10;
 				STREAM->FramesOutstanding = 0;
+
+				if (TNC->RPBEACON)
+					SendRPBeacon(TNC);
 
 				return;
 			}

@@ -158,7 +158,7 @@ BOOL ReadConfigFile(int Port, int ProcLine())
 	}
 	else
 	{
-		wsprintf(buf,"No Configuration info");
+		wsprintf(buf," ** Error - No Configuration info in bpq32.cfg");
 		WritetoConsole(buf);
 	}
 

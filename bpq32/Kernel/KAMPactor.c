@@ -461,7 +461,7 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	{
 		// Not defined in Config file
 
-		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port");
+		wsprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
 		WritetoConsole(msg);
 
 		return (int)KAMExtProc;
@@ -570,6 +570,8 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 	
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+
+	WritetoConsole("\n");
 
 	return ((int)KAMExtProc);
 }
