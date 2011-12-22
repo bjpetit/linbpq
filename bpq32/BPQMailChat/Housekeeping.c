@@ -32,6 +32,7 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Forwarded, int Age);
 int CreateWPMessage();
 
 int LastHouseKeepingTime;
+int LastTrafficTime;
 
 DeletetoRecycle(char * FN)
 {
@@ -777,10 +778,19 @@ VOID CreateBBSTrafficReport()
 	int i;
 	char Line[200];
 	int len, written;
-	char File[100];
+	char File[MAX_PATH];
 	HANDLE hFile;
+	HKEY hKey=0;
+	int retCode, disp;
+	time_t NOW = time(NULL);
 
-	sprintf_s(File, sizeof(File), "%s\\Traffic.txt", BaseDir);
+	struct tm tm;
+	struct tm last;
+
+	memcpy(&tm, gmtime(&NOW), sizeof(tm));	
+	memcpy(&last, gmtime(&LastTrafficTime), sizeof(tm));
+
+	wsprintf(File, "%s\\Traffic_%02d%02d%02d.txt", BaseDir, tm.tm_year-100, tm.tm_mon+1, tm.tm_mday);
 	
 	hFile = CreateFile(File,
 					GENERIC_WRITE,
@@ -791,7 +801,16 @@ VOID CreateBBSTrafficReport()
 					NULL);
 
 	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		Debugprintf("Failed to create traffic.txt");
 		return;
+	}
+
+	len = wsprintf(Line, "    Traffic Report for %s From: %04d/%02d/%02d %02d:%02dz To: %04d/%02d/%02d %02d:%02dz\r\n",
+		BBSName, last.tm_year+1900, last.tm_mon+1, last.tm_mday, last.tm_hour, last.tm_min,
+		tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min);
+
+	WriteFile(hFile, Line, len, &written, NULL);
 
 	len = wsprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
 	WriteFile(hFile, Line, len, &written, NULL);
@@ -810,7 +829,15 @@ VOID CreateBBSTrafficReport()
 			User->MsgsRejectedIn, User->MsgsRejectedOut);
 		
 		WriteFile(hFile, Line, len, &written, NULL);
+	}
+				
+	retCode = RegCreateKeyEx(REGTREE,
+			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
+	if (retCode == ERROR_SUCCESS)
+	{
+		retCode = RegSetValueEx(hKey,"LastTrafficTime",0,REG_DWORD,(BYTE *)&NOW,4);
+		RegCloseKey(hKey);
 	}
 
 	CloseHandle(hFile);

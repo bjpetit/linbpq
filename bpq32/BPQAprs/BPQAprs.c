@@ -3,6 +3,8 @@
 
 #define MARGIN 0
 
+#define Dll	__declspec(dllimport)
+
 // standard includes
 
 #include <stdio.h>
@@ -37,43 +39,17 @@ int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
 int PageCount;
 
-int PortNum[33];				// Tab nunber to port
+char APRSCall[10];
 
-UINT UIPortMask = 0;
-BOOL UIEnabled[33];
-char * UIDigi[33];
-char * UIDigiAX[33];		// ax.25 version of digistring
-int UIDigiLen[33];			// Length of AX string
-
-char UIDEST[33][11];		// Dest for Beacons
-
-char AXDEST[33][7];
-
-char * APRSCall;
-
-int GPSPort;
-int GPSSpeed;
-
-//char * FloodCalls;			// Calls to relay using n-n without tracing
-//char * TraceCalls;			// Calls to relay using n-n with tracing
-//char * DigiCalls;			// Calls for normal relaying
-
-short ISPort = 14580;
-char ISHost[256] = "england.aprs2.net";
-//char Host[] = "aprswest.net";
-
-char ISPasscode[10] = "10122";
 char ISFilter[1000] = "a/61/-10/49/2"; 
 
 char * StatusMsg;
-char * BeaconPath;
-BOOL TraceDigi;				// Add Trace to packets relayed on Digi Calls
 
+int RetryCount = 4;
+int RetryTimer = 45;
+int ExpireTime = 60;
 
-int MaxTraceHops;
-int MaxFloodHops;
-
-RECT Rect;
+RECT Rect, MsgRect, StnRect;
 
 HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
 
@@ -88,7 +64,6 @@ typedef struct tag_dlghdr {
 HWND hwndTab; // tab control
 HWND hwndDisplay; // current child dialog box
 RECT rcDisplay; // display rectangle for the tab control
-
 
 DLGTEMPLATE *apRes[33];
 
@@ -204,6 +179,9 @@ const unsigned char ASCII[][5] = {
 // function prototypes
 
 LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK StnWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
 
 BOOL LoadImageFile(HWND hwnd, PTSTR pstrPathName,
         png_byte **ppbImage, int *pxImgSize, int *pyImgSize, int *piChannels,
@@ -248,7 +226,7 @@ int SetBaseY = 0;
 
 int Zoom = 3;
 
-int MaxZoom = 14;
+int MaxZoom = 16;
 
 static int cxWinSize, cyWinSize;
 static int cxImgSize, cyImgSize;
@@ -270,6 +248,10 @@ int PopupX, PopupY;
 
 HINSTANCE hInst; 
 HWND hWnd, hPopupWnd, hSelWnd, hStatus, hwndDlg, hwndDisplay;
+HWND hMsgsIn, hStnDlg, hStations, hMsgDlg, hMsgsOut, hInput, hToCall, hToLabel, hTextLabel;
+WNDPROC wpOrigInputProc; 
+
+BOOL MsgMinimized;
 
 char szAppName[] = "BPQAPRS";
 char szTitle[80]   = "BPQAPRS" ; // The title bar text
@@ -278,7 +260,16 @@ BOOL APRSISOpen = FALSE;
 
 int StationCount = 0;
 
-struct STATIONRECORD ** StationRecords = NULL;
+int NextSeq = 1;
+
+BOOL ImageChanged;
+BOOL NeedRefresh = FALSE;
+time_t LastRefresh = 0;
+
+
+struct STATIONRECORD * StationRecords = NULL;
+struct APRSMESSAGE * Messages = NULL;
+struct APRSMESSAGE * OutstandingMsgs = NULL;
 
 struct OSMQUEUE OSMQueue = {NULL,0,0,0};
 
@@ -295,13 +286,13 @@ int CopyScreentoBuffer(char * buff);
 VOID SendFrame(UCHAR * buff, int txlen);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	KissDecode(UCHAR * inbuff, int len);
-VOID ResolveThread();
-VOID APRSISThread();
 struct STATIONRECORD * FindStation(char * Call);
-void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, double V_Lon, double V_SOG, double V_COG, int iconRow, int iconCol);
+//void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, double V_Lon, double V_SOG, double V_COG, int iconRow, int iconCol);
 VOID DrawStation(struct STATIONRECORD * ptr);
 VOID FindStationsByPixel(int MouseX, int MouseY);
+void RefreshStation(struct STATIONRECORD * ptr);
 void RefreshStationList();
+void RefreshStationMap();
 void DecodeAPRSISMsg(char * msg);
 BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station);
 VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
@@ -311,9 +302,26 @@ VOID ProcessRFFrame(char * buffer, int len);
 DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName);
 VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
-
+VOID APRSPoll();
 VOID OSMThread();
+VOID ResolveThread();
 VOID RefreshTile(char * FN, int Zoom, int x, int y);
+BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU);
+BOOL CreateStationWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU);
+VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
+LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
+VOID SendAPRSMessage(char * Text, char * ToCall);
+VOID SecTimer();
+int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort);
+double Distance(double laa, double loa);
+double Bearing(double laa, double loa);
+
+Dll VOID APIENTRY APRSConnect(char * Call);
+Dll VOID APIENTRY APRSDisconnect();
+Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port);
+Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
+Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
+Dll BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
 
@@ -321,12 +329,8 @@ SOCKADDR_IN destaddr = {0};
 
 unsigned int ipaddr = 0;
 
-unsigned short port = 10091;
-UCHAR BPQPort = 7;
 
 char Host[] = "tile.openstreetmap.org";
-
-int Stream;
 
 extern short CRCTAB;
 
@@ -334,10 +338,7 @@ LOGFONT LFTTYFONT ;
 
 HFONT hFont ;
 
-SOCKET udpsock;
-
 BOOL MinimizetoTray=FALSE;
-
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
@@ -351,6 +352,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	return;
 }
+
 
 int long2tilex(double lon, int z) 
 { 
@@ -398,33 +400,31 @@ BOOL CentrePosition(double Lat, double Lon)
 	// Positions the centre of the map at the specified location
 
 	int X, Y;
-
-	if (GetLocPixels(Lat, Lon, &X, &Y) == FALSE)
-		return FALSE;							// Off map
-
-	// if ScrollX, Y are zero, the centre of the map corresponds to 1024, 1024
 	
-	ScrollX -= 1024 - X;
-	ScrollY -= 1024 - Y;
+	
+	SetBaseX = long2tilex(Lon, Zoom) - 4;
+	SetBaseY = lat2tiley(Lat, Zoom) - 4;				// Set Location at middle
 
-	if (ScrollX < 0 || ScrollY < 0)
+	GetLocPixels(Lat, Lon, &X, &Y);
+
+	ScrollX = X - cxWinSize/2;
+	ScrollY = Y - cyWinSize/2;
+
+	while(SetBaseX < 0)
 	{
-		// Need to move image
-
-		while(ScrollX < 0)
-		{
-			SetBaseX++;
-			ScrollX += 256;
-		}
-
-		while(ScrollY < 0)
-		{
-			SetBaseY++;
-			ScrollY += 256;
-		}
-
-		ReloadMaps = TRUE;
+		SetBaseX++;
+		ScrollX -= 256;
 	}
+
+	while(SetBaseY < 0)
+	{
+		SetBaseY++;
+		ScrollY -= 256;
+	}
+
+	ReloadMaps = TRUE;
+	InvalidateRect(hWnd, NULL, FALSE);
+
 	return TRUE;
 }
 
@@ -530,9 +530,31 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	{
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
-	}	
+	}
 
 	retCode = RegCreateKeyEx(REGTREE, Key, 0,  0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	if (hMsgDlg)
+	{
+		ShowWindow(hMsgDlg, SW_RESTORE);
+		GetWindowRect(hMsgDlg, &MsgRect);
+		wsprintf(Size,"%d,%d,%d,%d",MsgRect.left,MsgRect.right,MsgRect.top,MsgRect.bottom);
+		retCode = RegSetValueEx(hKey,"MsgSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+		if (MinimizetoTray)
+			DeleteTrayMenuItem(hMsgDlg);
+	}
+
+	if (hStnDlg)
+	{
+		ShowWindow(hStnDlg, SW_RESTORE);
+		GetWindowRect(hStnDlg, &StnRect);
+		wsprintf(Size,"%d,%d,%d,%d",StnRect.left,StnRect.right,StnRect.top,StnRect.bottom);
+		retCode = RegSetValueEx(hKey,"StnSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+		if (MinimizetoTray) 
+			DeleteTrayMenuItem(hStnDlg);
+	}
 
 	if (retCode == ERROR_SUCCESS)
 	{
@@ -545,6 +567,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 		wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
 		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+
 
 		RegCloseKey(hKey);
 	}
@@ -599,7 +623,7 @@ UCHAR * iconImage = NULL;
 UCHAR Icons[100000];
 
 
-char Test[] = "2E0AYY>APU25N,TCPIP*,qAC,AHUBSWE2:=5105.18N/00108.19E-Paul in Folkestone Kent {UIV32N}\r\n";
+//char Test[] = "2E0AYY>APU25N,TCPIP*,qAC,AHUBSWE2:=5105.18N/00108.19E-Paul in Folkestone Kent {UIV32N}\r\n";
 
 CRITICAL_SECTION Crit, OSMCrit;
 
@@ -622,8 +646,6 @@ VOID GetStringVal(HKEY hKey, char * Key, char ** Val)
 	
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-	int i, tempmask=0xffff;
-	char msg[20];
 	int retCode,Type,Vallen;
 	HKEY hKey=0;
 	char Size[80];
@@ -677,9 +699,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if (retCode == ERROR_SUCCESS)
 	{
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"PortMask",0,			
-			(ULONG *)&Type,(UCHAR *)&tempmask,(ULONG *)&Vallen);
 
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"Zoom",0, (ULONG *)&Type,(UCHAR *)&Zoom,(ULONG *)&Vallen);
@@ -706,30 +725,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 		sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
 
-		GetStringVal(hKey, "APRSCall", &APRSCall);
 		GetStringVal(hKey, "StatusMsg", &StatusMsg);
-		GetStringVal(hKey, "BeaconPath", &BeaconPath);
-//		GetStringVal(hKey, "TraceCalls", &TraceCalls);
-//		GetStringVal(hKey, "FloodCalls", &FloodCalls);
-//		GetStringVal(hKey, "DigiCalls", &DigiCalls);
-
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "GPSPort", 0, (ULONG *)&Type, (UCHAR *)&GPSPort, (ULONG *)&Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "GPSSpeed", 0, (ULONG *)&Type, (UCHAR *)&GPSSpeed, (ULONG *)&Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "MaxTraceHops", 0, (ULONG *)&Type, (UCHAR *)&MaxTraceHops, (ULONG *)&Vallen);
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "MaxFloodHops", 0, (ULONG *)&Type, (UCHAR *)&MaxFloodHops, (ULONG *)&Vallen);
-
-		Vallen=255;
-		retCode = RegQueryValueEx(hKey, "ISHost", 0, &Type, ISHost, &Vallen);
-
-		Vallen=9;
-		retCode = RegQueryValueEx(hKey, "ISPasscode", 0, &Type, ISPasscode, &Vallen);
 
 		Vallen=999;
 		retCode = RegQueryValueEx(hKey, "ISFilter", 0, &Type, ISFilter, &Vallen);
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "RetryCount", 0, &Type,(UCHAR *)&RetryCount, &Vallen);
+	
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "RetryTimer", 0, &Type,(UCHAR *)&RetryTimer, &Vallen);
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "ExpireTime", 0, &Type,(UCHAR *)&ExpireTime, &Vallen);
 
 		RegCloseKey(hKey);
 	}
@@ -742,7 +750,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if (iconImage == NULL)
 	{
-		MessageBox(NULL, "Couldn't Icon File Symbols.png", "BPQAPRS", MB_OK);
+		MessageBox(NULL, "Couldn't open Icon File Symbols.png", "BPQAPRS", MB_OK);
 		return (FALSE);
 	}
 	
@@ -774,46 +782,27 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    LFTTYFONT.lfItalic =         0 ;
    LFTTYFONT.lfUnderline =      0 ;
    LFTTYFONT.lfStrikeOut =      0 ;
-   LFTTYFONT.lfCharSet =        OEM_CHARSET ;
+//   LFTTYFONT.lfCharSet =        OEM_CHARSET ;
    LFTTYFONT.lfOutPrecision =   OUT_DEFAULT_PRECIS ;
    LFTTYFONT.lfClipPrecision =  CLIP_DEFAULT_PRECIS ;
    LFTTYFONT.lfQuality =        DEFAULT_QUALITY ;
    LFTTYFONT.lfPitchAndFamily = FIXED_PITCH | FF_MODERN ;
-   lstrcpy( LFTTYFONT.lfFaceName, "Fixedsys" ) ;
+   lstrcpy( LFTTYFONT.lfFaceName, "SYSTEM" ) ;
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
-	
-	SetTimer(hWnd,1,10000,NULL);
 
-	for (Stream = 63; Stream > 0; Stream--)
-	{
-		if (AllocateStream(Stream) == 0)
-			break;
-	}
+	CheckTimer();						// Make sure switch is initialised
 
-	if (Stream == 0)
-	{
-		MessageBox(NULL, "Couldn't find a free stream", "BPQAPRS", MB_OK);
-		return (FALSE);
-	}
+	SetTimer(hWnd, 1, 1000, NULL);		// Slow Timer
+	SetTimer(hWnd, 2, 100, NULL);		// Fast Timer
 
-	//
-	//	Register message for posting by BPQDLL
-	//
-
-	BPQMsg = RegisterWindowMessage(BPQWinMsg);
-
-	BPQSetHandle(Stream, hWnd);
-	
 	SetWindowText(hWnd,szTitle);
 
-	UpdateStation("GM8BPQ", "", "", 58.47583, -6.21151, 0.0, 0.0, ('=' - '!') >> 4, ('=' - '!') & 15);
+//	UpdateStation("GM8BPQ", "", "", 58.47583, -6.21151, 0.0, 0.0, ('=' - '!') >> 4, ('=' - '!') & 15);
 	
-	DecodeAPRSISMsg(Test);
+//	DecodeAPRSISMsg(Test);
 
-//	Top bit of mask controlls monitoring
-
-	SetAppl(Stream,0x80,0);
+	APRSConnect(APRSCall);					// Request frames from switch
 
 ;	hMenu=GetMenu(hWnd);
 	hMenu=CreateMenu();
@@ -823,20 +812,23 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	SetMenu(hWnd,hMenu);
 
 
-	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu1,"Ports");
+//	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu1,"Ports");
 	AppendMenu(hMenu, MF_STRING, IDM_CONFIG, "Basic Setup");
+	AppendMenu(hMenu, MF_STRING, IDM_APRSMSGS, "Messages");
+	AppendMenu(hMenu, MF_STRING, IDM_APRSSTNS, "Stations");
 //	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu2,"Basic Setup");
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu3,"Help");
+	AppendMenu(hPopMenu3, MF_STRING, IDM_ABOUT, "About");
 
-	for (i=1;i <= GetNumberofPorts();i++)
+/*
+for (i=1;i <= GetNumberofPorts();i++)
 	{
 		wsprintf(msg,"Port %d",i);
 		AppendMenu(hPopMenu1,
 			MF_STRING | MF_CHECKED,BPQBASE + i,msg);
 	}
 
-	
-	AppendMenu(hPopMenu3, MF_STRING, IDM_ABOUT, "About");
+*/	
 
 	DrawMenuBar(hWnd);
 
@@ -881,46 +873,16 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
 
 //	OSMThread("/01/1/0.png");
-
-	udpsock = socket(AF_INET,SOCK_DGRAM,0);
-
-	if (udpsock == INVALID_SOCKET)
-	{
-		int err;
-		MessageBox(NULL, (LPSTR) "Failed to create UDP socket",NULL,MB_OK);
-		err = WSAGetLastError();
-  	 	return FALSE; 
-	}
-
-	ioctlsocket (udpsock,FIONBIO,&param);
- 
-	setsockopt (udpsock,SOL_SOCKET,SO_BROADCAST,(const char FAR *)&bcopt,4);
-/*
-	sinx.sin_family = AF_INET;
-	sinx.sin_addr.s_addr = INADDR_ANY;
-	sinx.sin_port = htons(udpport[i]);
-
-	destaddr.sin_family = AF_INET;
-	destaddr.sin_port = htons(0);
-
-	if (bind(udpsock[i], (LPSOCKADDR) &sinx, sizeof(sinx)) != 0 )
-	{
-		//
-		//	Bind Failed
-		//
-		err = WSAGetLastError();
-		wsprintf(Msg, "Bind Failed for UDP socket - error code = %d", err);
-		MessageBox(NULL,Msg,NULL, MB_OK);
-		return;
-	}
-*/
 	
 	destaddr.sin_family = AF_INET;
 	destaddr.sin_port = htons(80);
 
 	_beginthread(ResolveThread,0,0);
-	_beginthread(APRSISThread,0,0);
 	_beginthread(OSMThread,0,0);
+
+	InvalidateRect(hWnd, NULL, FALSE);
+
+//	CreateMessageWindow("APRSMSGS", "APRS Messages", MsgWndProc, NULL);
 
 	return (TRUE);
 }
@@ -981,28 +943,13 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 	{
 	case WM_INITDIALOG:
 
-		if (APRSCall)
-			SetDlgItemText(hDlg, IDC_MYCALL, APRSCall);
 		if (StatusMsg)
 			SetDlgItemText(hDlg, IDC_STATUSTEXT, StatusMsg);
-		if (BeaconPath)
-			SetDlgItemText(hDlg, IDC_PATH, BeaconPath);
-//		if (FloodCalls)
-//			SetDlgItemText(hDlg, IDC_UIFLOOD, FloodCalls);
-//		if (TraceCalls)
-//			SetDlgItemText(hDlg, IDC_UITRACE, TraceCalls);
-//		if (DigiCalls)
-//			SetDlgItemText(hDlg, IDC_UIDIGI, DigiCalls);
 
-		SetDlgItemInt(hDlg, IDC_GPSPORT, GPSPort, FALSE);
-		SetDlgItemInt(hDlg, IDC_GPSBAUD, GPSSpeed, FALSE);
-//		SetDlgItemInt(hDlg, IDC_TRACEMAXN, MaxTraceHops, FALSE);
-//		SetDlgItemInt(hDlg, IDC_FLOODMAXN, MaxFloodHops, FALSE);
-
-		SetDlgItemText(hDlg, IDC_ISHOST, ISHost);
-		SetDlgItemInt(hDlg, IDC_ISPORT, ISPort, FALSE);
-		SetDlgItemText(hDlg, IDC_PASSCODE, ISPasscode);
 		SetDlgItemText(hDlg, IDC_FILTER, ISFilter);
+		SetDlgItemInt(hDlg, IDC_RETRIES, RetryCount, FALSE);
+		SetDlgItemInt(hDlg, IDC_RETRYTIME, RetryTimer, FALSE);
+		SetDlgItemInt(hDlg, IDC_EXPIRE, ExpireTime, FALSE);
 
 		return (INT_PTR)TRUE;
 
@@ -1013,26 +960,20 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			// Save Config
 
 			HKEY hKey;
+			BOOL OK;
 
 			int retCode = RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS", 0, KEY_ALL_ACCESS, &hKey);
 
-			SaveStringValtoReg(hDlg, IDC_MYCALL, hKey, "APRSCall" , &APRSCall);
 			SaveStringValtoReg(hDlg, IDC_STATUSTEXT, hKey, "StatusMsg" , &StatusMsg);
-			SaveStringValtoReg(hDlg, IDC_PATH, hKey, "BeaconPath" , &BeaconPath);
-
-//			SaveStringValtoReg(hDlg, IDC_UIDIGI, hKey, "DigiCalls" , &DigiCalls);
-//			SaveStringValtoReg(hDlg, IDC_UITRACE, hKey, "TraceCalls" , &TraceCalls);
-//			SaveStringValtoReg(hDlg, IDC_UIFLOOD, hKey, "FloodCalls" , &FloodCalls);
-
-			GPSPort = SaveIntValtoReg(hDlg, IDC_GPSPORT, hKey, "GPSPort");
-			GPSSpeed = SaveIntValtoReg(hDlg, IDC_GPSBAUD, hKey, "GPSSpeed");
-			MaxTraceHops = SaveIntValtoReg(hDlg, IDC_TRACEMAXN, hKey, "MaxTraceHops");
-			MaxFloodHops = SaveIntValtoReg(hDlg, IDC_FLOODMAXN, hKey, "MaxFloodHops");
-
-			SaveFixedStringValtoReg(hDlg, IDC_ISHOST, hKey, "ISHost", ISHost, 255);
-			ISPort = SaveIntValtoReg(hDlg, IDC_ISPORT, hKey, "ISPort");
-			SaveFixedStringValtoReg(hDlg, IDC_PASSCODE, hKey, "ISPasscode", ISPasscode, 9);
 			SaveFixedStringValtoReg(hDlg, IDC_FILTER, hKey, "ISFilter", ISFilter, 999);
+
+			RetryCount = GetDlgItemInt(hDlg, IDC_RETRIES, &OK, FALSE);
+			RetryTimer = GetDlgItemInt(hDlg, IDC_RETRYTIME, &OK, FALSE);
+			ExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRE, &OK, FALSE);
+
+			retCode = RegSetValueEx(hKey, "RetryCount", 0, REG_DWORD, (BYTE *)&RetryCount, 4);
+			retCode = RegSetValueEx(hKey, "RetryTimer", 0, REG_DWORD, (BYTE *)&RetryTimer, 4);
+			retCode = RegSetValueEx(hKey, "ExpireTime", 0, REG_DWORD, (BYTE *)&ExpireTime, 4);
 
 			RegCloseKey(hKey);
 		}
@@ -1081,30 +1022,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	int DeltaX, DeltaY;
 	double MouseLat, MouseLon;
 	char MouseLoc[80];
-	int len, count;
-	int stamp;
 	int nScrollCode,nPos;
-	char readbuff[512];
-
-	if (message == BPQMsg)
-	{
-		if (MONCount(Stream) > 0)
-		{
-			do {
-		
-			stamp=GetRaw(Stream, readbuff, &len, &count);
-			
-			if (len > 0)
-			{
-				ProcessBuff(hWnd, (MESSAGE*)readbuff, len, stamp);
-				if (count == 0)
-					InvalidateRect(hWnd,NULL,FALSE);
-			}
-
-			} while (count > 0);
-
-		}
-	}
+	char NS='N', EW='E';
+	char LatString[20], LongString[20];
+	int Degrees;
+	double Minutes;
 
 	switch (message)
 	{
@@ -1126,9 +1048,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case WM_TIMER:
 
-			if (APRSISOpen == FALSE)
-				_beginthread(APRSISThread,0,0);
-
+			if (wParam == 1)	// wParam [in] The timer identifier.
+				SecTimer();	
+	
+			if (wParam == 2)	// wParam [in] The timer identifier.
+				APRSPoll();		// Look for messages from switch
+			
 			break;
 		
 	
@@ -1280,7 +1205,35 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			// Left not down - see if cursor is over a station Icon
 
 			GetMouseLatLon(&MouseLat, &MouseLon);
-			sprintf(MouseLoc, "%1.3f %1.3f", MouseLat, MouseLon);
+
+			if (MouseLat < 0)
+			{
+				NS = 'S';
+				MouseLat=-MouseLat;
+			}
+			if (MouseLon < 0)
+			{
+				EW = 'W';
+				MouseLon=-MouseLon;
+			}
+
+			#pragma warning(push)
+			#pragma warning(disable:4244)
+
+			Degrees = MouseLat;
+			Minutes = MouseLat * 60.0 - (60 * Degrees);
+
+			sprintf(LatString,"%2d°%05.2f'%c",Degrees, Minutes, NS);
+		
+			Degrees = MouseLon;
+
+			#pragma warning(pop)
+
+			Minutes = MouseLon * 60 - 60 * Degrees;
+
+			sprintf(LongString,"%3d°%05.2f'%c",Degrees, Minutes, EW);
+
+			sprintf(MouseLoc, "%s %s", LatString, LongString);
 			SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 0, (LPARAM)MouseLoc);
 
 			FindStationsByPixel(MouseX + ScrollX, MouseY + ScrollY);
@@ -1347,13 +1300,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			if (ReloadMaps)
 			{
-				ReloadMaps = FALSE;
 				LoadImageSet(Zoom, SetBaseX, SetBaseY);
+				RefreshStationMap();
+				ReloadMaps = FALSE;
 			}
 
 			hdc = BeginPaint (hWnd, &ps);
 
-			RefreshStationList();
+	//		RefreshStationMap();
 			
 			DisplayImage (hWnd, &pDib, &pDiData, cxWinSize, cyWinSize,
                 NULL, cxImgSize, cyImgSize, cImgChannels, bStretched);
@@ -1393,7 +1347,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			GetWindowRect(hWnd,	&Rect);	// For save soutine
 
-			DeallocateStream(Stream);
+			APRSDisconnect();			// Disconnect from Switch
 			DestroyMenu(hMenu);
 
 			PostQuitMessage(0);
@@ -1412,8 +1366,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			if (lParam == (LPARAM)hSelWnd)
 			{
-				Debugprintf("%d", wmEvent);
-
 				if (wmEvent == LBN_SELCHANGE)
 				{
 					int Index = SendMessage(hSelWnd, LB_GETCURSEL, 0, 0);
@@ -1422,8 +1374,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					if (Index != -1)
 					{
 						struct STATIONRECORD * Station;
+						char Time[80];
+						struct tm * TM;
 
-				
 						SendMessage(hSelWnd, LB_GETTEXT, Index, (LPARAM)Key); 
 						Station = FindStation(Key);
 								
@@ -1432,10 +1385,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 						hPopupWnd = CreateWindow("LISTBOX", "", WS_CHILD | WS_BORDER | LBS_NOTIFY,
 							PopupX, PopupY, 450, 150, hWnd, NULL, hInst, NULL);
-		
+						
+						TM = gmtime(&Station->TimeLastUpdated);
+						
+						wsprintf(Time, "Last Heard: %.2d:%.2d:%.2d",
+							TM->tm_hour, TM->tm_min, TM->tm_sec);
+
 						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Station->Callsign);
 						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Station->Path);
 						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Station->LastPacket);
+						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Time);
 	
 						ShowWindow(hPopupWnd, SW_SHOWNORMAL);
 
@@ -1457,7 +1416,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 				break;
-			
+		
+			case IDM_APRSMSGS:
+
+				CreateMessageWindow("APRSMSGS", "APRS Messages", MsgWndProc, NULL);
+				break;
+
+			case IDM_APRSSTNS:
+
+				CreateStationWindow("APRSSTNS", "APRS Stations", StnWndProc, NULL);
+				break;
+
 			case IDM_CONFIG:
 
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_BASICSETUP), hWnd, ConfigWndProc);
@@ -1489,6 +1458,353 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 */
 				break;
 			}
+
+			default:
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+	}
+	return (0);
+}
+LRESULT CALLBACK StnWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int wmId, wmEvent;
+//	HGLOBAL	hMem;
+	int nScrollCode,nPos;
+	RECT rcClient;
+	LPNMLISTVIEW  pnm    = (LPNMLISTVIEW)lParam;
+	LPNMLVCUSTOMDRAW lplvcd;
+
+	switch (message)
+	{
+
+	case WM_NOTIFY:
+		
+		switch (pnm->hdr.code)
+		{
+		case LVN_COLUMNCLICK:
+
+			ListView_SortItemsEx(hStations, CompareFunc, (LPARAM) pnm->iSubItem);
+			break;
+
+		case NM_DBLCLK:
+		{
+			LVITEM item = {0};
+			char Item1[260] = "AA";
+			struct STATIONRECORD * Station;
+
+			item.iSubItem = 0;
+			item.mask = LVIF_TEXT;
+			item.iItem = pnm->iItem;
+			item.pszText = Item1;
+			item.cchTextMax = 100;
+
+			ListView_GetItem(hStations, &item);
+
+			Station = FindStation(Item1);
+
+			if (Station)
+				CentrePosition(Station->Lat, Station->Lon);
+		}
+
+			break;//   lpnmitem = (LPNMITEMACTIVATE) lParam;
+
+		case NM_CUSTOMDRAW:
+			
+			lplvcd = (LPNMLVCUSTOMDRAW)lParam;
+
+			switch(lplvcd->nmcd.dwDrawStage)
+			{
+				case CDDS_PREPAINT :
+					return CDRF_NOTIFYITEMDRAW;
+			
+				case CDDS_ITEMPREPAINT:
+        
+					SelectObject(lplvcd->nmcd.hdc, hFont);
+//					lplvcd->clrText = RGB(255,0,0); //GetColorForItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam);
+//					lplvcd->clrTextBk = RGB(0,0,0);//GetBkColorForItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam);
+
+
+					return CDRF_NEWFONT;
+					//  or return CDRF_NOTIFYSUBITEMREDRAW;
+			
+				case CDDS_SUBITEM | CDDS_ITEMPREPAINT:
+
+					SelectObject(lplvcd->nmcd.hdc, hFont);
+
+					lplvcd->clrText = RGB(255,0,0); //GetColorForSubItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam, lplvcd->iSubItem);
+					lplvcd->clrTextBk = RGB(0,255,0);//GetBkColorForSubItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam, lplvcd->iSubItem);
+
+// This notification is received only if you are in report mode and
+//returned CDRF_NOTIFYSUBITEMREDRAW in the previous step. At
+//this point, you can change the background colors for the
+//subitem and return CDRF_NEWFONT.
+       
+					return CDRF_NEWFONT;
+			
+				default:
+					return (DefWindowProc(hWnd, message, wParam, lParam));
+			}	
+
+		default:
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+
+		}
+
+		case WM_VSCROLL:
+		
+			nScrollCode = (int) LOWORD(wParam); // scroll bar value 
+			nPos = (short int) HIWORD(wParam);  // scroll box position 
+
+/*			//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
+
+			if (nScrollCode == 0)
+			{
+				baseline--;
+				if (baseline <0)
+					baseline=0;
+			}
+			if (nScrollCode == 1)
+			{
+
+				baseline++;
+				if (baseline > 216)
+					baseline = 216;
+			}
+
+			SetScrollPos(hWnd,SB_VERT,baseline,TRUE);
+*/
+			InvalidateRect(hWnd,NULL,FALSE);
+			break;
+
+		case WM_CHAR:
+
+			if (wParam == '=')
+				return TRUE;
+
+			break;
+
+		case WM_SIZING:
+
+			GetClientRect (hWnd, &rcClient); 
+	
+			MoveWindow(hStations, 0, 0, rcClient.right, (rcClient.bottom), TRUE);
+
+			break;
+/*		
+		case WM_SIZE:
+        
+			//cxWinSize = LOWORD (lParam);
+			//cyWinSize = HIWORD (lParam);
+
+			MapCentreX = (2048 - cxWinSize) /2;
+			MapCentreY = (2048 - cyWinSize) /2;
+
+			// Auto-resize statusbar (Send WM_SIZE message does just that)
+
+			SendMessage(hStatus, WM_SIZE, 0, 0);
+
+			break;
+*/
+
+				
+		case WM_SYSCOMMAND:
+
+			wmId    = LOWORD(wParam); // Remember, these are...
+			wmEvent = HIWORD(wParam); // ...different for Win32!
+
+			switch (wmId)
+			{ 	
+			case  SC_MINIMIZE: 
+
+				if (MinimizetoTray)
+
+					return ShowWindow(hWnd, SW_HIDE);
+				else
+					return (DefWindowProc(hWnd, message, wParam, lParam));
+					
+				break;
+		
+			default:
+		
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+			}
+
+		case WM_DESTROY:
+
+			GetWindowRect(hWnd,	&StnRect);	// For save soutine
+		
+			if (MinimizetoTray) 
+				DeleteTrayMenuItem(hWnd);
+
+			hStnDlg = hStations = NULL;
+			
+			break;
+
+			default:
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+	}
+	return (0);
+}
+
+
+LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int wmId, wmEvent;
+//	HGLOBAL	hMem;
+	int nScrollCode,nPos;
+	RECT rcClient;
+	LPNMLISTVIEW  pnm    = (LPNMLISTVIEW)lParam;
+	LPNMLVCUSTOMDRAW lplvcd;
+
+	switch (message)
+	{
+	case WM_NOTIFY:
+		
+		switch (pnm->hdr.code)
+		{
+
+		case NM_CUSTOMDRAW:
+			
+			lplvcd = (LPNMLVCUSTOMDRAW)lParam;
+
+			switch(lplvcd->nmcd.dwDrawStage)
+			{
+			case CDDS_PREPAINT :
+				return CDRF_NOTIFYITEMDRAW;
+			
+			case CDDS_ITEMPREPAINT:
+        
+				SelectObject(lplvcd->nmcd.hdc, hFont);
+//				lplvcd->clrText = RGB(255,0,0); //GetColorForItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam);
+//				lplvcd->clrTextBk = RGB(0,0,0);//GetBkColorForItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam);
+
+/* At this point, you can change the background colors for the item
+and any subitems and return CDRF_NEWFONT. If the list-view control
+is in report mode, you can simply return CDRF_NOTIFYSUBITEMREDRAW
+to customize the item's subitems individually */
+
+			     return CDRF_NEWFONT;
+				//  or return CDRF_NOTIFYSUBITEMREDRAW;
+			
+			case CDDS_SUBITEM | CDDS_ITEMPREPAINT:
+/*
+			SelectObject(lplvcd->nmcd.hdc,
+                     GetFontForSubItem(lplvcd->nmcd.dwItemSpec,
+                                       lplvcd->nmcd.lItemlParam,
+                                       lplvcd->iSubItem));
+*/
+
+				lplvcd->clrText = RGB(255,0,0); //GetColorForSubItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam, lplvcd->iSubItem);
+				lplvcd->clrTextBk = RGB(0,255,0);//GetBkColorForSubItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam, lplvcd->iSubItem);
+
+/* This notification is received only if you are in report mode and
+returned CDRF_NOTIFYSUBITEMREDRAW in the previous step. At
+this point, you can change the background colors for the
+subitem and return CDRF_NEWFONT.*/
+       
+        return CDRF_NEWFONT;    
+    }
+
+}
+		
+
+		case WM_VSCROLL:
+		
+			nScrollCode = (int) LOWORD(wParam); // scroll bar value 
+			nPos = (short int) HIWORD(wParam);  // scroll box position 
+
+/*			//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
+
+			if (nScrollCode == 0)
+			{
+				baseline--;
+				if (baseline <0)
+					baseline=0;
+			}
+			if (nScrollCode == 1)
+			{
+
+				baseline++;
+				if (baseline > 216)
+					baseline = 216;
+			}
+
+			SetScrollPos(hWnd,SB_VERT,baseline,TRUE);
+*/
+			InvalidateRect(hWnd,NULL,FALSE);
+			break;
+
+		case WM_CHAR:
+
+			if (wParam == '=')
+				return TRUE;
+
+			break;
+
+		case WM_SIZING:
+
+			GetClientRect (hWnd, &rcClient); 
+	
+			MoveWindow(hMsgsIn, 0, 5, rcClient.right, (rcClient.bottom)/2 - 30, TRUE);
+			MoveWindow(hMsgsOut, 0, (rcClient.bottom)/2 - 20 , rcClient.right, (rcClient.bottom)/2 - 60, TRUE);
+			MoveWindow(hInput, 200, rcClient.bottom - 35 , rcClient.right - 250, 20, TRUE);
+			MoveWindow(hToLabel, 5, rcClient.bottom - 33 , 25, 20, TRUE);
+			MoveWindow(hToCall, 40, rcClient.bottom - 35 , 120, 20, TRUE);
+			MoveWindow(hTextLabel, 165, rcClient.bottom - 33 , 40, 20, TRUE);
+
+			break;
+/*		
+		case WM_SIZE:
+        
+			//cxWinSize = LOWORD (lParam);
+			//cyWinSize = HIWORD (lParam);
+
+			MapCentreX = (2048 - cxWinSize) /2;
+			MapCentreY = (2048 - cyWinSize) /2;
+
+			// Auto-resize statusbar (Send WM_SIZE message does just that)
+
+			SendMessage(hStatus, WM_SIZE, 0, 0);
+
+			break;
+*/
+
+				
+		case WM_SYSCOMMAND:
+
+			wmId    = LOWORD(wParam); // Remember, these are...
+			wmEvent = HIWORD(wParam); // ...different for Win32!
+
+			switch (wmId)
+			{ 	
+			case  SC_MINIMIZE: 
+
+				if (MinimizetoTray)
+
+					return ShowWindow(hWnd, SW_HIDE);
+				else
+					return (DefWindowProc(hWnd, message, wParam, lParam));
+					
+				break;
+		
+			default:
+		
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+			}
+
+		case WM_DESTROY:
+
+			GetWindowRect(hWnd,	&MsgRect);	// For save soutine
+		
+			// Remove the subclass from the edit control. 
+
+            SetWindowLong(hInput, GWL_WNDPROC, (LONG) wpOrigInputProc); 
+
+			if (MinimizetoTray) 
+				DeleteTrayMenuItem(hWnd);
+
+			hMsgDlg = NULL;
+			
+			break;
 
 			default:
 				return (DefWindowProc(hWnd, message, wParam, lParam));
@@ -1529,134 +1845,6 @@ crcloop:
 int line=240;
 int col=0;
 
-VOID CheckDigi(MESSAGE * buff, UCHAR * DigiCall)
-{
-	char Digi[8];
-
-	memcpy(Digi, DigiCall, 7);
-	Digi[6] &= 0x1e;			// Mask non-ssid bits
-}
-
-VOID ProcessBuff(HWND hWnd, MESSAGE * buff, int buflen, int timestamp)
-{
-	int len;
-	unsigned char buffer[1024];
-	int Digis = 0;
-	MESSAGE * AdjBuff = buff;		// Adjusted for digis
-	BOOL FirstUnused = FALSE;
-
-	// See if digipeaters present. 
-
-	len=DecodeFrame((char *)buff,  buffer, timestamp);
-
-	while ((AdjBuff->ORIGIN[6] & 1) == 0 && Digis < 9)
-	{
-		_asm {
-			mov eax, AdjBuff
-			add eax, 7
-			mov AdjBuff, eax
-		}
-		Digis ++;
-
-		if (FirstUnused == FALSE && (AdjBuff->ORIGIN[6] & 0x80) == 0)
-		{
-			// Unused Digi - see if we should digi it
-
-			FirstUnused = TRUE;
-			CheckDigi(buff, AdjBuff->ORIGIN);
-		}
-
-	}
-
-	if (Digis > 8)
-		return;					// Corrupt
-/*
-		MOV	ECX,8			; MAX DIGIS (NOT OUR LIMIT - AX25'S)
-	PUBLIC	L2DIGI00
-L2DIGI00:
-	TEST	MSGORIGIN+6[EDI],1
-	JZ SHORT L2DIGI02		; MORE TO COME
-;
-	JMP	L2DIGI10		; END OF LIST
-
-	PUBLIC	L2DIGI02
-L2DIGI02:
-
-	ADD	EDI,7
-;
-	TEST	MSGORIGIN+6[EDI],80H	; REPEATED BIT
-	JZ SHORT L2DIGI05		; NOT SET
-
-	LOOP	L2DIGI00
-;
-;	MESSAGE CORRUPT - DISCARD IT
-;
-	JMP	L2DISCARD
-
-	PUBLIC	L2DIGI05
-L2DIGI05:
-;
-;	FRAME HAS NOT BEEN REPEATED THROUGH CURRENT DIGI -
-;	   SEE IF WE ARE MEANT TO DIGI IT
-;
-	PUSH	EDI
-	MOV	ESI,OFFSET32 _MYCALL
-	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
- 	CALL	COMPARECALLS
-	POP	EDI
-	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
-;
-	PUSH	EDI
-	MOV	ESI,OFFSET32 MYALIAS
-	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
- 	CALL	COMPARECALLS
-	POP	EDI
-	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
-
-	PUSH	EDI
-	LEA	ESI,PORTALIAS[EBP]
-	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
- 	CALL	COMPARECALLS
-	POP	EDI
-	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
-
-	PUSH	EDI
-	LEA	ESI,PORTALIAS2[EBP]
-	LEA	EDI,MSGORIGIN[EDI]	; TO DIGI CALL
- 	CALL	COMPARECALLS
-	POP	EDI
-	JE SHORT L2DIGIPEAT		; WE MUST REPEAT IT
-
-	PUBLIC	DISCARDIT
-DISCARDIT:
-	
-	JMP	L2DISCARD
-
-	PUBLIC	L2DIGIPEAT
-L2DIGIPEAT:
-
-*/
-
-
-	if (AdjBuff->CTL != 3)				// Only UI
-		return;			
-
-	// See if a NODES
-
-	if (buff->PID == 0xcf && buff->L2DATA[0] == 0xff)
-		return ;
-
-	len=DecodeFrame((char *)buff,  buffer, timestamp);
-
-	if (strstr(buffer, "<UI") == 0)
-		return ;
-
-	ProcessRFFrame(buffer, len);
-								
-	return ;
-}
-
-
 int TogglePort(HWND hWnd, int Item, int mask)
 {
 	portmask = portmask ^ mask;
@@ -1682,27 +1870,21 @@ VOID ResolveThread()
 
 	while (TRUE)
 	{
+		// Resolve Name if needed
 
-	// Resolve Name if needed
-
-	HostEnt = gethostbyname(Host);
+		HostEnt = gethostbyname(Host);
 		 
-	if (!HostEnt)
-	{
-		err = WSAGetLastError();
-
-		Debugprintf("Resolve Failed for %s %d %x", Host, err, err);
+		if (!HostEnt)
+		{
+			err = WSAGetLastError();
+			Debugprintf("Resolve Failed for %s %d %x", Host, err, err);
+		}
+		else
+		{
+			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+		}
+		Sleep(60 * 15 * 1000);
 	}
-	else
-	{
-		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
-	}
-
-
-	Sleep(60 * 15 * 1000);
-	}
-
-	return;
 }
 
 char Header[] = "Accept: */*\r\nHost: tile.openstreetmap.org\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
@@ -1890,6 +2072,8 @@ VOID OSMThread()
 
 								Debugprintf("Tile %s Loaded", FN);
 								RefreshTile(FN, Zoom, x, y);
+								RefreshStationMap();
+
 								InvalidateRect(hWnd, NULL, FALSE);
 
 								break;
@@ -1913,155 +2097,6 @@ VOID OSMThread()
 
 
 char APRSMsg[300];
-
-VOID APRSISThread()
-{
-	// Receive from core server
-
-	char Signon[1000] = "user G8BPQ pass 10122 vers BPQ32 2011/08/20 filter  a/61/-10/49/2\r\n";
-
-	SOCKET sock;
-	SOCKADDR_IN sinx; 
-	SOCKADDR_IN destaddr;
-	int addrlen=sizeof(sinx);
-	struct hostent * HostEnt;
-	int len, err;
-	u_long param=1;
-	BOOL bcopt=TRUE;
-	char Buffer[1000];
-	int InputLen = 1;		// Non-zero
-	char errmsg[40];
-	char * ptr;
-	int inptr = 0;
-	char APRSinMsg[1000];
-
-	Debugprintf("APRS IS Thread");
-
-	wsprintf(Signon, "user %s pass %s vers BPQ32 2011/08/20 filter  %s\r\n",
-			APRSCall, ISPasscode, ISFilter);
-
-
-	// Resolve Name if needed
-
-	destaddr.sin_family = AF_INET; 
-	destaddr.sin_port = htons(ISPort);
-
-	destaddr.sin_addr.s_addr = inet_addr(ISHost);
-
-	if (destaddr.sin_addr.s_addr == INADDR_NONE)
-	{
-	//	Resolve name to address
-
-		HostEnt = gethostbyname (ISHost);
-		 
-		if (!HostEnt)
-		{
-			err = WSAGetLastError();
-
-			wsprintf(errmsg, TEXT("Res Falied %d %x"),err, err);
-//			MessageBox(NULL, errmsg, NULL, MB_OK);
-
-			return;			// Resolve failed
-		}
-		
-		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
-	}
-
-//   Allocate a Socket entry
-
-	sock=socket(AF_INET,SOCK_STREAM,0);
-
-	if (sock == INVALID_SOCKET)
-  	 	return; 
- 
-	setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
-
-	sinx.sin_family = AF_INET;
-	sinx.sin_addr.s_addr = INADDR_ANY;
-	sinx.sin_port = 0;
-
-	if (bind(sock, (LPSOCKADDR) &sinx, addrlen) != 0 )
-	{
-		//
-		//	Bind Failed
-		//
-
-		return; 
-	}
-
-	if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) != 0)
-	{
-		err=WSAGetLastError();
-
-		//
-		//	Connect failed
-		//
-
-		return;
-	}
-
-	InputLen=recv(sock, Buffer, 5500, 0);
-
-	Buffer[InputLen] = 0;
-	Debugprintf(Buffer);
-
-	send(sock, Signon, strlen(Signon), 0);
-
-	InputLen=recv(sock, Buffer, 500, 0);
-
-	Buffer[InputLen] = 0;
-	Debugprintf(Buffer);
- 
-	InputLen=recv(sock, Buffer, 500, 0);
-
-	Buffer[InputLen] = 0;
-	Debugprintf(Buffer);
-
-	APRSISOpen = TRUE;
-
-	while (InputLen > 0)
-	{
-		InputLen = recv(sock, &APRSinMsg[inptr], 500 - inptr, 0);
-
-		if (InputLen > 0)
-		{
-			inptr += InputLen;
-
-			ptr = memchr(APRSinMsg, 0x0a, inptr);
-
-			while (ptr != NULL)
-			{
-				ptr++;									// include lf
-				len = ptr-(char *)APRSinMsg;					
-				memcpy(&APRSMsg, APRSinMsg, len);	
-
-				APRSMsg[len - 2] = 0;
-				DecodeAPRSISMsg(APRSMsg);
-
-				inptr -= len;						// bytes left
-
-				if (inptr > 0)
-				{
-					memmove(APRSinMsg, ptr, inptr);
-					ptr = memchr(APRSinMsg, 0x0a, inptr);
-				}
-				else
-					ptr = 0;
-
-				if (inptr < 0)
-					break;
-			}
-		}
-	}
-
-	closesocket(sock);
-
-	APRSISOpen = FALSE;
-
-	Debugprintf("APRS IS Thread Exited");
-
-	return;
-}
 
 VOID LoadImageSet(int Zoom, int startx, int starty)
 {
@@ -2389,19 +2424,80 @@ Myabort()
 //	if (GetLocPixels(58.47583, -6.21151, &X, &Y))
 
 
+VOID CALLBACK LineDDAProc(int X, int Y, LPARAM lpData)
+{
+	char * nptr;
+	int i, j;
+
+	nptr = &Image[(Y * 2048 * 3) + (X * 3)];
+
+	for (j = 0; j < 2; j++)
+	{
+		for (i = 0; i < 6; i++)
+		{
+			*(nptr++) = 0;
+		}
+		nptr += 6144 - 6;
+	}
+}
+
 VOID DrawStation(struct STATIONRECORD * ptr)
 {
 	int X, Y, Pointer, i, c, index, bit, mask, calllen;
 	UINT j;
 	char Overlay;
+	char * nptr;
+	time_t AgeLimit = time(NULL ) - (ExpireTime * 60);
 
+	if (ptr->Moved == 0)
+		return;				// No need to repaint
 
-//	if (ptr->Lat > 60)
-//		return;
+	if (ptr->TimeLastUpdated < AgeLimit)
+		return;
 
-//	if (GetLocPixels(58.47583, -6.21151, &X, &Y))
 	if (GetLocPixels(ptr->Lat, ptr->Lon, &X, &Y))
 	{
+		if (ptr->LatTrack[0])
+		{
+			// Draw Track
+
+			int Index = ptr->Trackptr;
+			int i, n;
+			int X, Y;
+			int LastX = 0, LastY = 0;
+
+			for (n = 0; n < TRACKPOINTS; n++)
+			{
+				if (ptr->LatTrack[Index])
+				{
+					if (GetLocPixels(ptr->LatTrack[Index], ptr->LonTrack[Index], &X, &Y))
+					{
+						if (LastX)
+						{
+							LineDDA(LastX, LastY, X, Y, LineDDAProc, (LPARAM) 0);
+						}
+
+						LastX = X;
+						LastY = Y;
+								
+						nptr = &Image[(Y * 2048 * 3) + (X * 3)];
+
+						for (j = 0; j < 4; j++)
+						{
+							for (i = 0; i < 12; i++)
+							{
+								*(nptr++) = 0;
+							}
+							nptr += 6144 - 12;
+						}
+					}
+				}
+				Index++;
+				if (Index == TRACKPOINTS)
+					Index = 0;
+			}
+		}
+
 		ptr->DispX = X;
 		ptr->DispY = Y;					// Save for mouse over checks
 
@@ -2412,13 +2508,13 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 		if (Y < 8) Y = 8;
 		if (X < 8) X = 8;
 		
-		Pointer = ((Y -8) * 2048 * 3) + (X * 3) - 24;
+		nptr = &Image[((Y -8) * 2048 * 3) + (X * 3) - 24];
 
 		j = ptr->iconRow * 21 * 337 * 3 + ptr->iconCol * 21 * 3 + 9 + 337 * 9;
 		for (i = 0; i < 16; i++)
 		{
-			memcpy(&Image[Pointer], &iconImage[j], 16 * 3);
-			Pointer += 6144;
+			memcpy(nptr, &iconImage[j], 16 * 3);
+			nptr += 6144;
 			j += 337 * 3;
 		}
 
@@ -2478,7 +2574,6 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 				Image[Pointer++] = 255;
 			}
 			Pointer += 2041 * 3;
-
 		}
 		
 		calllen = strlen(ptr->Callsign) * 6 + 4;
@@ -2582,6 +2677,7 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 		}
 
 	}
+		ImageChanged = TRUE;
 	}
 	else
 	{
@@ -2592,16 +2688,16 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 
 VOID FindStationsByPixel(int MouseX, int MouseY)
 {
-	int i, j=0;
-	struct STATIONRECORD * ptr;
+	int j=0;
+	struct STATIONRECORD * ptr = StationRecords;
 	struct STATIONRECORD * List[1000];
 
-	for (i = 0; i < StationCount; i++)
-	{
-		ptr=StationRecords[i];
-	
+	while(ptr)
+	{	
 		if (abs((ptr->DispX - MouseX)) < 8 && abs((ptr->DispY - MouseY)) < 8)
 			List[j++] = ptr;
+
+		ptr = ptr->Next;
 	}
 
 	if (j == 0)
@@ -2628,6 +2724,13 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 
 	if (j == 1)
 	{
+		char Time[80];
+		struct tm * TM;
+
+		TM = gmtime(&List[0]->TimeLastUpdated);
+
+		wsprintf(Time, "Last Heard: %.2d:%.2d:%.2d",
+			TM->tm_hour, TM->tm_min, TM->tm_sec);
 
 		hPopupWnd = CreateWindow("LISTBOX", "", WS_CHILD | WS_BORDER | LBS_NOTIFY,
 			 MouseX - ScrollX, MouseY - ScrollY, 450, 150, hWnd, NULL, hInst, NULL);
@@ -2635,6 +2738,7 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)List[0]->Callsign);
 		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)List[0]->Path);
 		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)List[0]->LastPacket);
+		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Time);
 	
 		ShowWindow(hPopupWnd, SW_SHOWNORMAL);
 	}
@@ -2654,149 +2758,238 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 	}
 }
 
+void RefreshStation(struct STATIONRECORD * ptr)
+{
+	LV_ITEM Item;
+	LVFINDINFO Finfo;
+	int ret, n;
+	double Lat = ptr->Lat;
+	double Lon = ptr->Lon;
+	char NS='N', EW='E';
+	char LatString[20], LongString[20], DistString[20], BearingString[20];
+	int Degrees;
+	double Minutes;
+	char Time[80];
+	struct tm * TM;
+
+	if (hStations == 0)
+		return;
+
+	TM = gmtime(&ptr->TimeLastUpdated);
+
+	wsprintf(Time, "%.2d:%.2d:%.2d",
+			TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+	Distance(ptr->Lat, ptr->Lon);
+	Bearing(ptr->Lat, ptr->Lon);
+
+
+	Finfo.flags = LVFI_STRING;
+	Finfo.psz = ptr->Callsign;
+	Finfo.vkDirection = VK_DOWN;
+	ret = SendMessage(hStations, LVM_FINDITEM, (WPARAM)-1, (LPARAM) &Finfo);
+
+	if (ret == -1)
+	{
+		n = ListView_GetItemCount(hStations);
+		ptr->Index = n;
+	}
+	else
+		ptr->Index = ret;
+
+	if (Lat < 0)
+	{
+		NS = 'S';
+		Lat=-Lat;
+	}
+	if (Lon < 0)
+	{
+		EW = 'W';
+		Lon=-Lon;
+	}
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+
+	Degrees = Lat;
+	Minutes = Lat * 60.0 - (60 * Degrees);
+
+	sprintf(LatString,"%2d°%05.2f'%c",Degrees, Minutes, NS);
+		
+	Degrees = Lon;
+
+#pragma warning(pop)
+
+	Minutes = Lon * 60 - 60 * Degrees;
+
+	n = sprintf(LongString,"%3d°%05.2f'%c",Degrees, Minutes, EW);
+
+	sprintf(DistString, "%6.1f", Distance(ptr->Lat, ptr->Lon));
+	sprintf(BearingString, "%3.0f", Bearing(ptr->Lat, ptr->Lon));
+	
+	if (n > 12)
+		n++;
+
+	Item.mask=LVIF_TEXT;
+	Item.iItem = ptr->Index;
+	Item.iSubItem = 0;
+	Item.pszText = ptr->Callsign;
+
+	ret = SendMessage(hStations, LVM_SETITEMTEXT, (WPARAM)ptr->Index, (LPARAM) &Item);
+
+	if (ret == 0)
+		ptr->Index = ListView_InsertItem(hStations, &Item);	 
+			
+	OurSetItemText(hStations, ptr->Index, 1, LatString);
+	OurSetItemText(hStations, ptr->Index, 2, LongString);
+	OurSetItemText(hStations, ptr->Index, 3, DistString);
+	OurSetItemText(hStations, ptr->Index, 4, BearingString);
+	OurSetItemText(hStations, ptr->Index, 5, Time);
+
+}
+
 void RefreshStationList()
 {
-	int i, j=0;
-	struct STATIONRECORD * ptr;
-	char Msg[20];
+	struct STATIONRECORD * ptr = StationRecords;
+	struct STATIONRECORD * last = NULL;
+	int i = 0;
+	time_t AgeLimit = time(NULL ) - (ExpireTime * 60);
 
-	// Entered Every 5 secs
-
-/*	if (DecayTimer++ > 11)				// 5 Sec timer to minutes
+	SendMessage(hStations, LVM_DELETEALLITEMS, (WPARAM)0, (LPARAM) 0);
+	 
+	while (ptr)
 	{
-		DecayTimer = 0;
-		CheckAgeofTargets(MaxAge);
-	}
-*/
+		if (ptr->TimeLastUpdated < AgeLimit)
+		{
+			// Too old - remove
 
-	wsprintf(Msg, "%d", StationCount);
-	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 1, (LPARAM)Msg);
-
-	wsprintf(Msg, "%d", OSMQueueCount);
-	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 2, (LPARAM)Msg);
-
-	wsprintf(Msg, "%d", Zoom);
-	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
-
-
-	for (i = 0; i < StationCount; i++)
-	{
-		EnterCriticalSection(&Crit);		// In case list is being realloced
-	
-		ptr=StationRecords[i];
-
-		LeaveCriticalSection(&Crit);
-
-		if (ptr)
-			DrawStation(ptr);
+			EnterCriticalSection(&Crit);
+			if (last)
+			{
+				last->Next = ptr->Next;
+				free(ptr);
+				ptr = last->Next;
+			}
+			else
+			{
+				// First in list
+				
+				StationRecords = ptr->Next;
+				free(ptr);
+				if (StationRecords)
+					ptr = StationRecords->Next; 
+				else
+					ptr = NULL;
+			}
+			LeaveCriticalSection(&Crit);
+		}
 		else
-			Debugprintf("Bad Station rec %d", i);
+		{
+			RefreshStation(ptr);
+			ptr = ptr->Next;
+			i++;
+		}
 	}
+	
+	SendMessage(hStations, LVM_ENSUREVISIBLE, (WPARAM)i, (LPARAM) 0);
+}
+
+void RefreshStationMap()
+{
+	struct STATIONRECORD * ptr = StationRecords;
+	struct STATIONRECORD * last = NULL;
+	time_t AgeLimit = time(NULL ) - (ExpireTime * 60);
+	BOOL RecsDeleted = FALSE;
+	int i = 0;
+
+	while (ptr)
+	{
+		if (ptr->TimeLastUpdated < AgeLimit)
+		{
+			// Too old - remove
+
+			EnterCriticalSection(&Crit);		// In case list is being realloced
+			if (last)
+			{
+				last->Next = ptr->Next;
+				free(ptr);
+				ptr = last->Next;
+			}
+			else
+			{
+				// First in list
+				
+				StationRecords = ptr->Next;
+				free(ptr);
+				if (StationRecords)
+					ptr = StationRecords->Next; 
+				else
+					ptr = NULL;
+			}
+			LeaveCriticalSection(&Crit);
+			RecsDeleted = TRUE;
+		}
+		else
+		{
+			ptr->Moved = TRUE;				// Refreshing, so need to redraw all stations
+			DrawStation(ptr);
+			i++;
+			ptr = ptr->Next;
+		}
+	}
+
+	NeedRefresh = FALSE;
+	LastRefresh = time(NULL);
+
+	if (RecsDeleted)
+		RefreshStationList();
+
+	StationCount = i;
 }
 
 struct STATIONRECORD * FindStation(char * Call)
 {
-	int i;
+	int i = 0;
+	struct STATIONRECORD * find = StationRecords;
 	struct STATIONRECORD * ptr;
+	struct STATIONRECORD * last = NULL;
 
-	for (i = 0; i < StationCount; i++)
-	{
-		ptr = StationRecords[i];
- 
-	    if (strcmp(ptr->Callsign, Call) == 0)
-			return ptr;
+	while(find)
+	{ 
+	    if (strcmp(find->Callsign, Call) == 0)
+			return find;
 
+		last = find;
+		find = find->Next;
+		i++;
 	}
  
 	//   Not found - add on end
 
-	EnterCriticalSection(&Crit);
-
-	if (StationCount == 0)
-
-		StationRecords = malloc(4);
-	else
-		StationRecords=realloc(StationRecords, (StationCount + 1) * 4);
 
 	ptr = malloc(sizeof(struct STATIONRECORD));
 	memset(ptr, 0, sizeof(struct STATIONRECORD));
 
 	if (ptr == NULL) return NULL;
 	
-	StationRecords[StationCount] = ptr;
+	EnterCriticalSection(&Crit);
+
+	if (StationRecords == NULL)
+		StationRecords = ptr;
+	else
+		last->Next = ptr;
 
 	StationCount++;
 
 	LeaveCriticalSection(&Crit);
-        
+       
 	strcpy(ptr->Callsign, Call);
-	ptr->TimeAdded = time(NULL);
-
+	ptr->TimeAdded = ptr->TimeLastUpdated = time(NULL);
+	ptr->Index = i;
 
 	return ptr;
 }
 
-
-void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, double V_Lon, double V_SOG, double V_COG, int iconRow, int iconCol)
-{
-	int i;
-	struct STATIONRECORD * ptr;
-
-	for (i = 0; i < StationCount; i++)
-	{
-		ptr=StationRecords[i];
- 
-	    if (strcmp(ptr->Callsign, Call) == 0)
-		{       
-            ptr->Lat = V_Lat;
-            ptr->Lon = V_Lon;
-            ptr->Course = V_COG;
-            ptr->Speed = V_SOG;
-			ptr->iconRow = iconRow;
-			ptr->iconCol = iconCol;
-			if (Path)
-				strcpy(ptr->Path, Path);
-
-			if (Comment)
-				strcpy(ptr->Comment, Comment);
-
-//            ptr->LatIncr = ptr->speed * cos(radians(ptr->course)) / 216000;
-//            ptr->LongIncr = ptr->speed * sin(radians(ptr->course)) / cos(radians(ptr->lat)) / 216000;
-    
-            ptr->TimeLastUpdated = time(NULL);
-			
-			return;
-		}
-	}
-
-//   Not found - add on end
-
-	EnterCriticalSection(&Crit);
-
-	if (StationCount == 0)
-
-		StationRecords = malloc(4);
-	else
-		StationRecords=realloc(StationRecords, (StationCount + 1) * 4);
-
-	ptr = malloc(sizeof(struct STATIONRECORD));
-	memset(ptr, 0, sizeof(struct STATIONRECORD));
-
-	if (ptr == NULL) return;
-	
-	StationRecords[StationCount] = ptr;
-        
-	strcpy(ptr->Callsign, Call);
-	ptr->TimeAdded = time(NULL);
-
-	StationCount++;
-
-	LeaveCriticalSection(&Crit);
-
-	UpdateStation(Call, "", "", V_Lat, V_Lon, V_SOG, V_COG, iconRow, iconCol);
-
-	return;
-}
 
 VOID ProcessRFFrame(char * Msg, int len)
 {
@@ -2808,9 +3001,6 @@ VOID ProcessRFFrame(char * Msg, int len)
 	struct STATIONRECORD * Station;
 
 	Msg[len - 1] = 0;
-
-
-	Debugprintf("%s", Msg);
 
 	Msg += 10;				// Skip Timestamp
 	
@@ -2855,14 +3045,8 @@ VOID ProcessRFFrame(char * Msg, int len)
 
 	DecodeAPRSPayload(Payload, Station);
 
-//	DrawStation(Station);
-
-//		UpdateStation(Callsign, Path, Comment, Lat, Lon, 0.0, 0.0, Symbol >> 4, Symbol & 15);
-
-
-	// No APRS-like location. Probably a normal beacon
-
-	InvalidateRect(hWnd, NULL, FALSE);
+	DrawStation(Station);
+	RefreshStation(Station);
 
 }
 
@@ -2883,9 +3067,7 @@ void DecodeAPRSISMsg(char * Msg)
 	char * Comment = NULL;
 	char * Callsign;
 	struct STATIONRECORD * Station;
-	
-	Debugprintf("%s", Msg);
-	
+		
 	Payload = strchr(Msg, ':');			// End of Address String
 
 	if (Payload == NULL)
@@ -2920,18 +3102,12 @@ void DecodeAPRSISMsg(char * Msg)
 	
 	strcpy(Station->Path, Path);
 	strcpy(Station->LastPacket, Payload);
+	Station->TimeLastUpdated = time(NULL);
 
 	DecodeAPRSPayload(Payload, Station);
 
-//	DrawStation(Station);
-
-
-//		UpdateStation(Callsign, Path, Comment, Lat, Lon, 0.0, 0.0, Symbol >> 4, Symbol & 15);
-
-
-	// No APRS-like location. Probably a normal beacon
-
-	InvalidateRect(hWnd, NULL, FALSE);
+	DrawStation(Station);
+	RefreshStation(Station);
 
 }
 
@@ -2944,7 +3120,7 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 	char SymSet;
 	char NS;
 	char EW;
-//	double Lat,Lon;
+	double NewLat, NewLon;
 	char LatDeg[3], LonDeg[4];
 
 	// Compressed has first character not a digit (it is symbol table)
@@ -2956,12 +3132,12 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 		SymSet = *Payload;
 		SymChar = Payload[9];
 
-		Station->Lat = 90.0 - ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
+		NewLat = 90.0 - ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
 			(Payload[3] - 33) * 91.0 + (Payload[4] - 33)) / 380926.0;
 
 		Payload += 4;
 				
-		Station->Lon = -180.0 + ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
+		NewLon = -180.0 + ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
 			(Payload[3] - 33) * 91.0 + (Payload[4] - 33)) / 190463.0;
 	}
 	else
@@ -2976,23 +3152,41 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 
 		memcpy(LatDeg, Payload,2);
 		LatDeg[2]=0;
-		Station->Lat=atof(LatDeg) + (atof(Payload+2) / 60);
+		NewLat = atof(LatDeg) + (atof(Payload+2) / 60);
        
 		if (NS == 'S')
-			Station->Lat = -Station->Lat;
+			NewLat = -NewLat;
 		else
 			if (NS != 'N')
 				return FALSE;
 
 		memcpy(LonDeg,Payload + 9, 3);
 		LonDeg[3]=0;
-		Station->Lon = atof(LonDeg) + (atof(Payload+12) / 60);
+		Payload[17] = 0;
+		NewLon = atof(LonDeg) + (atof(Payload+12) / 60);
        
 		if (EW == 'W')
-			Station->Lon = -Station->Lon;
+			NewLon = -NewLon;
 		else
 			if (EW != 'E')
 				return FALSE;
+	}
+
+	if (Station->Lat != NewLat || Station->Lon != NewLon)
+	{
+		// Add to track
+
+		Station->LatTrack[Station->Trackptr] = NewLat;
+		Station->LonTrack[Station->Trackptr] = NewLon;
+
+		Station->Trackptr++;
+		Station->Moved = TRUE;
+
+		if (Station->Trackptr == TRACKPOINTS)
+			Station->Trackptr = 0;
+
+		Station->Lat = NewLat;
+		Station->Lon = NewLon;
 	}
 
 	SymChar -= '!';
@@ -3049,10 +3243,13 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		strcpy(Object->LastPacket, Payload);
 
+		Object->TimeLastUpdated = time(NULL);
+
 		TimeStamp = Payload + 11;
 
 		DecodeLocationString(Payload + 18, Object);
 		DrawStation(Object);
+		RefreshStation(Object);
 
 		return;
 
@@ -3068,7 +3265,12 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		Payload++;
 	
 		DecodeLocationString(Payload, Station);
-		return;			
+		return;	
+
+	case ':':
+
+		ProcessMessage(Payload, Station);
+		break;
 
 	default:
 		return;
@@ -3097,6 +3299,7 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 	char NS = 'S';
 	char EW = 'E';
 	UCHAR SymChar, SymSet;
+	double NewLat, NewLon;
 
 	ptr = &Station->Path[0];
 
@@ -3163,15 +3366,33 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 	memcpy(LatDeg, Lat, 2);
 	LatDeg[2]=0;
 	
-	Station->Lat=atof(LatDeg) + (atof(Lat+2) / 6000.0);
+	NewLat = atof(LatDeg) + (atof(Lat+2) / 6000.0);
        
 	if (NS == 'S')
-		Station->Lat = -Station->Lat;
+		NewLat = -NewLat;
 
-	Station->Lon = LonDeg + LonMin / 60.0 + n / 6000.0;
+	NewLon = LonDeg + LonMin / 60.0 + n / 6000.0;
        
 	if (EW == 'W')				// West
-		Station->Lon = -Station->Lon;
+		NewLon = -NewLon;
+
+	if (Station->Lat != NewLat || Station->Lon != NewLon)
+	{
+		// Add to track
+
+		Station->LatTrack[Station->Trackptr] = NewLat;
+		Station->LonTrack[Station->Trackptr] = NewLon;
+
+		Station->Trackptr++;
+		Station->Moved = TRUE;
+
+		if (Station->Trackptr == TRACKPOINTS)
+			Station->Trackptr = 0;
+
+		Station->Lat = NewLat;
+		Station->Lon = NewLon;
+	}
+
 
 	SymChar = Payload[7];			// Symbol
 	SymSet = Payload[8];			// Symbol
@@ -3196,7 +3417,7 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 
 }
 
-
+/*
 
 INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -3268,10 +3489,10 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 
 			break;
 
-*/
+
 		case IDOK:
 
-/*			GetDlgItemText(hDlg, IDC_UIDEST, &UIDEST[Port][0], 10);
+			GetDlgItemText(hDlg, IDC_UIDEST, &UIDEST[Port][0], 10);
 
 			if (UIDigi[Port])
 			{
@@ -3317,7 +3538,7 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			}
 
 			SetupUI(Port);
-*/
+
 			return (INT_PTR)TRUE;
 
 
@@ -3326,13 +3547,13 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 
-/*		case ID_TEST:
+		case ID_TEST:
 
 			SendBeacon(Port);
 			return TRUE;
 
 
-*/
+
 
 		}
 		break;
@@ -3544,6 +3765,844 @@ VOID WINAPI OnChildDialogInit(HWND hwndDlg)
 
 	SetWindowPos(hwndDlg, HWND_TOP, pHdr->rcDisplay.left, pHdr->rcDisplay.top, 0, 0, SWP_NOSIZE);
 }
+
+
+*/
+VOID APRSPoll()
+{
+	char APRSMsg[300];
+	int Len;
+	int Port;
+
+	CheckTimer();
+
+	while (GetAPRSFrame(APRSMsg, &Len, &Port))
+	{
+		APRSMsg[Len] = 0;
+		
+		if (Port == 0)
+			DecodeAPRSISMsg(APRSMsg);
+		else
+		{
+			if (strstr(APRSMsg, "<UI") == 0)
+				continue;
+		
+			ProcessRFFrame(APRSMsg, Len);
+		}
+	}
+}
+void UpdateTXMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
+{
+	LV_ITEM Item;
+	int ret;
+	char Retries[10];
+
+	wsprintf(Retries, "%d", Message->Retries);
+
+	Item.mask=LVIF_TEXT;
+	Item.iItem=j;
+	Item.iSubItem=0;
+	Item.pszText = Message->ToCall;
+
+	ret = SendMessage(hWnd, LVM_SETITEMTEXT, (WPARAM)j, (LPARAM) &Item);
+
+	if (ret == 0)
+		ret = ListView_InsertItem(hWnd, &Item);	 
+
+	OurSetItemText(hWnd, j, 1, Message->Seq);
+
+	OurSetItemText(hWnd, j, 3, Message->Text);
+
+	SendMessage(hWnd, LVM_ENSUREVISIBLE, (WPARAM)j, (LPARAM) 0);
+
+	if (Message->Acked)
+	{
+		OurSetItemText(hWnd, j, 2, "A");
+		return;
+	}
+
+	if (Message->Retries == 0)
+	{
+		OurSetItemText(hWnd, j, 2, "F");
+		return;
+	}
+
+	OurSetItemText(hWnd, j, 2, Retries);
+}
+
+
+void UpdateMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
+{
+	LV_ITEM Item;
+	int ret;
+
+	Item.mask=LVIF_TEXT;
+	Item.iItem=j;
+	Item.iSubItem=0;
+	Item.pszText = Message->FromCall;
+
+	ret = SendMessage(hWnd, LVM_SETITEMTEXT, (WPARAM)j, (LPARAM) &Item);
+
+	if (ret == 0)
+		ret = ListView_InsertItem(hWnd, &Item);	 
+
+	OurSetItemText(hWnd, j, 1, Message->ToCall);
+	OurSetItemText(hWnd, j, 2, Message->Seq);
+	OurSetItemText(hWnd, j, 3, Message->Text);
+
+	ret = SendMessage(hWnd, LVM_ENSUREVISIBLE, (WPARAM)j, (LPARAM) 0);
+}
+VOID RefreshMessages()
+{
+	struct APRSMESSAGE * ptr = Messages;
+	int n = 0;
+
+	if (ptr)
+	{
+		do
+		{				
+			UpdateMessageLine(hMsgsIn, n, ptr);
+			ptr = ptr->Next;
+			n++;
+
+		} while (ptr);
+	}
+
+	ptr = OutstandingMsgs;
+	n = 0;
+
+	if (ptr == 0)
+		return;
+
+	do
+	{				
+		UpdateTXMessageLine(hMsgsOut, n, ptr);
+		ptr = ptr->Next;
+		n++;
+
+	} while (ptr);
+	
+}
+
+
+HWND CreateStnListView (HWND hwndParent) 
+{
+    INITCOMMONCONTROLSEX icex;           // Structure for control initialization.
+	HWND hList;
+	LV_COLUMN Column;
+	
+	icex.dwICC = ICC_LISTVIEW_CLASSES;
+    InitCommonControlsEx(&icex);
+
+    // Create the list-view window in report view with label editing enabled.
+    
+	hList = CreateWindow(WC_LISTVIEW, 
+                                     "Stations",
+                                     WS_CHILD | LVS_REPORT | LVS_EDITLABELS | LVS_SORTASCENDING,
+                                     0, 0, 100, 100,
+                                     hwndParent,
+                                     (HMENU)NULL,
+                                     hInst,
+                                     NULL); 
+
+	ListView_SetExtendedListViewStyle(hList,LVS_EX_FULLROWSELECT);
+
+	Column.cx=85;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Callsign";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,1,(LPARAM) &Column); 
+
+	Column.cx=95;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Lat";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,2,(LPARAM) &Column); 
+	
+	Column.cx=100;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Lon";
+	SendMessage(hList,LVM_INSERTCOLUMN,3,(LPARAM) &Column); 
+
+	Column.cx=60;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Range";
+	SendMessage(hList,LVM_INSERTCOLUMN,4,(LPARAM) &Column); 
+
+	Column.cx=37;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Bearing";
+	SendMessage(hList,LVM_INSERTCOLUMN,5,(LPARAM) &Column); 
+
+	Column.cx=100;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Last Heard";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,6,(LPARAM) &Column); 
+	ShowWindow(hList, SW_SHOWNORMAL);
+	UpdateWindow(hList);
+
+    return (hList);
+}
+
+
+HWND CreateRXListView (HWND hwndParent) 
+{
+    INITCOMMONCONTROLSEX icex;           // Structure for control initialization.
+	HWND hList;
+	LV_COLUMN Column;
+	
+	icex.dwICC = ICC_LISTVIEW_CLASSES;
+    InitCommonControlsEx(&icex);
+
+    // Create the list-view window in report view with label editing enabled.
+    
+	hList = CreateWindow(WC_LISTVIEW, 
+                                     "Messages",
+                                     WS_CHILD | LVS_REPORT | LVS_EDITLABELS,
+                                     0, 0, 100, 100,
+                                     hwndParent,
+                                     (HMENU)NULL,
+                                     hInst,
+                                     NULL); 
+
+	ListView_SetExtendedListViewStyle(hList,LVS_EX_FULLROWSELECT);
+
+	Column.cx=85;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="  From";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,1,(LPARAM) &Column); 
+
+	Column.cx=85;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="   To";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,2,(LPARAM) &Column); 
+	Column.cx=50;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Seq";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,3,(LPARAM) &Column); 
+
+	Column.cx=500;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="               Received";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,4,(LPARAM) &Column); 
+	ShowWindow(hList, SW_SHOWNORMAL);
+	UpdateWindow(hList);
+
+    return (hList);
+}
+
+
+HWND CreateTXListView (HWND hwndParent) 
+{
+    INITCOMMONCONTROLSEX icex;           // Structure for control initialization.
+	HWND hList;
+	LV_COLUMN Column;
+	
+	icex.dwICC = ICC_LISTVIEW_CLASSES;
+    InitCommonControlsEx(&icex);
+
+    // Create the list-view window in report view with label editing enabled.
+    
+	hList = CreateWindow(WC_LISTVIEW, 
+                                     "Messages",
+                                     WS_CHILD | LVS_REPORT | LVS_EDITLABELS,
+                                     0, 0, 100, 100,
+                                     hwndParent,
+                                     (HMENU)NULL,
+                                     hInst,
+                                     NULL); 
+
+	ListView_SetExtendedListViewStyle(hList,LVS_EX_FULLROWSELECT);
+
+	Column.cx=70;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="   To";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,1,(LPARAM) &Column); 
+	Column.cx=37;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Seq";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,2,(LPARAM) &Column); 
+
+	Column.cx=37;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="State";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,3,(LPARAM) &Column); 
+
+	Column.cx=500;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="               Sent";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,4,(LPARAM) &Column); 
+	ShowWindow(hList, SW_SHOWNORMAL);
+	UpdateWindow(hList);
+
+    return (hList);
+}
+
+BOOL CreateStationWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU)
+{
+    WNDCLASS  wc;
+	int retCode, Type, Vallen;
+	HKEY hKey=0;
+	char Key[80];
+	char Size[80];
+	int Top, Left;
+	HANDLE hDlg;
+	RECT Rect, rcClient;                       // The parent window's client area.
+	
+	if (hStnDlg)
+	{
+		ShowWindow(hStnDlg, SW_SHOWNORMAL);
+		SetForegroundWindow(hStnDlg);
+		return FALSE;							// Already open
+	}
+
+	bgBrush = CreateSolidBrush(BGCOLOUR);
+
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = WndProc;       
+                                        
+    wc.cbClsExtra = 0;                
+    wc.cbWndExtra = DLGWINDOWEXTRA;
+	wc.hInstance = hInst;
+    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = bgBrush; 
+
+	wc.lpszMenuName = MENU;;	
+	wc.lpszClassName = ClassName; 
+
+	RegisterClass(&wc);
+
+	hStnDlg = hDlg = CreateDialog(hInst, ClassName, 0, NULL);
+	
+	GetWindowRect(hDlg,	&Rect);
+	
+	SetWindowText(hDlg, "APRS Stations");
+
+	if (MinimizetoTray)
+		AddTrayMenuItem(hDlg, "APRS Stations");
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS");
+	
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"StnSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &MsgMinimized);
+
+	}
+
+	Top = Rect.top;
+	Left = Rect.left;
+
+
+	if (Rect.right < 100 || Rect.bottom < 100)
+	{
+		GetWindowRect(hDlg,	&Rect);
+	}
+
+//	GetWindowRect(hDlg, &Rect);	// Get the real size
+
+	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+	
+	GetClientRect (hDlg, &rcClient); 
+	
+	hStations = CreateStnListView(hDlg);
+
+	MoveWindow(hStations, 0, 0, rcClient.right, rcClient.bottom, TRUE);
+
+	RefreshStationList();
+
+	if (MsgMinimized)
+		if (MinimizetoTray)
+			ShowWindow(hDlg, SW_HIDE);
+		else
+			ShowWindow(hDlg, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hDlg, SW_RESTORE);
+
+	return TRUE;
+}
+
+
+
+BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU)
+{
+    WNDCLASS  wc;
+	int retCode, Type, Vallen;
+	HKEY hKey=0;
+	char Key[80];
+	char Size[80];
+	int Top, Left;
+	HANDLE hDlg;
+	RECT Rect, rcClient;                       // The parent window's client area.
+	
+	if (hMsgDlg)
+	{
+		ShowWindow(hMsgDlg, SW_SHOWNORMAL);
+		SetForegroundWindow(hMsgDlg);
+		return FALSE;							// Already open
+	}
+
+	bgBrush = CreateSolidBrush(BGCOLOUR);
+
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = WndProc;       
+                                        
+    wc.cbClsExtra = 0;                
+    wc.cbWndExtra = DLGWINDOWEXTRA;
+	wc.hInstance = hInst;
+    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = bgBrush; 
+
+	wc.lpszMenuName = MENU;;	
+	wc.lpszClassName = ClassName; 
+
+	RegisterClass(&wc);
+
+	hMsgDlg = hDlg = CreateDialog(hInst, ClassName, 0, NULL);
+	hInput = GetDlgItem(hDlg, IDC_INPUT);
+	hToCall = GetDlgItem(hDlg, IDC_TOCALL);
+	hToLabel = GetDlgItem(hDlg, IDC_TOLABEL);
+	hTextLabel = GetDlgItem(hDlg, IDC_TEXTLABEL);
+	
+	wpOrigInputProc = (WNDPROC) SetWindowLong(hInput, GWL_WNDPROC, (LONG) InputProc); 
+
+	GetWindowRect(hDlg,	&Rect);
+	
+	SetWindowText(hDlg, "APRS Messages");
+
+	if (MinimizetoTray)
+		AddTrayMenuItem(hDlg, "APRS Messages");
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQAPRS");
+	
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"MsgSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &MsgMinimized);
+
+	}
+
+	Top = Rect.top;
+	Left = Rect.left;
+
+
+	if (Rect.right < 100 || Rect.bottom < 100)
+	{
+		GetWindowRect(hDlg,	&Rect);
+	}
+
+//	GetWindowRect(hDlg, &Rect);	// Get the real size
+
+	MoveWindow(hDlg, Left, Top, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+	
+	hMsgsIn = CreateRXListView(hMsgDlg);
+	hMsgsOut = CreateTXListView(hMsgDlg);
+
+	GetClientRect (hDlg, &rcClient); 
+	
+	MoveWindow(hMsgsIn, 0, 5, rcClient.right, (rcClient.bottom)/2 - 30, TRUE);
+	MoveWindow(hMsgsOut, 0, (rcClient.bottom)/2 - 20 , rcClient.right, (rcClient.bottom)/2 - 60, TRUE);
+	MoveWindow(hInput, 200, rcClient.bottom - 35 , rcClient.right - 250, 20, TRUE);
+	MoveWindow(hToLabel, 5, rcClient.bottom - 33 , 25, 20, TRUE);
+	MoveWindow(hToCall, 40, rcClient.bottom - 35 , 120, 20, TRUE);
+	MoveWindow(hTextLabel, 165, rcClient.bottom - 33 , 40, 20, TRUE);
+
+	RefreshMessages();
+
+	if (MsgMinimized)
+		if (MinimizetoTray)
+			ShowWindow(hDlg, SW_HIDE);
+		else
+			ShowWindow(hDlg, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hDlg, SW_RESTORE);
+
+	return TRUE;
+}
+
+VOID SendAPRSMessage(char * Text, char * ToCall)
+{
+	struct APRSMESSAGE * Message;
+	struct APRSMESSAGE * ptr = OutstandingMsgs;
+	int n = 0;
+	char Msg[255];
+
+	Message = malloc(sizeof(struct APRSMESSAGE));
+	memset(Message, 0, sizeof(struct APRSMESSAGE));
+	strcpy(Message->FromCall, APRSCall);
+	memset(Message->ToCall, ' ', 9);
+	memcpy(Message->ToCall, ToCall, strlen(ToCall));
+	wsprintf(Message->Seq, "%d", NextSeq++);
+	strcpy(Message->Text, Text);
+	Message->Retries = RetryCount;
+	Message->RetryTimer = RetryTimer;
+	if (ptr == NULL)
+	{
+		OutstandingMsgs = Message;
+	}
+	else
+	{
+		n++;
+		while(ptr->Next)
+		{
+			ptr = ptr->Next;
+			n++;
+		}
+		ptr->Next = Message;
+	}
+
+	UpdateTXMessageLine(hMsgsOut, n, Message);
+
+	n = wsprintf(Msg, ":%-9s:%s{%s", ToCall, Text, Message->Seq);
+
+	PutAPRSMessage(Msg, n);
+	return;
+}
+
+
+VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
+{
+	char MsgDest[10];
+	struct APRSMESSAGE * Message;
+	struct APRSMESSAGE * ptr = Messages;
+	char * TextPtr = &Payload[11];
+	char * SeqPtr;
+	int n = 0;
+	char FromCall[10] = "         ";
+
+	memcpy(FromCall, Station->Callsign, strlen(Station->Callsign));
+	memcpy(MsgDest, &Payload[1], 9);
+	MsgDest[9] = 0;
+
+	SeqPtr = strchr(TextPtr, '{');
+
+	if (SeqPtr)
+	{
+		*(SeqPtr++) = 0;
+		if(strlen(SeqPtr) > 6)
+			SeqPtr[7] = 0;		
+	}
+
+	if (_memicmp(TextPtr, "ack", 3) == 0)
+	{
+		// Message Ack. See if for one of our messages
+
+		ptr = OutstandingMsgs;
+
+		if (ptr == 0)
+			return;
+
+		do
+		{
+			if (strcmp(ptr->FromCall, MsgDest) == 0
+				&& strcmp(ptr->ToCall, FromCall) == 0
+				&& strcmp(ptr->Seq, &TextPtr[3]) == 0)
+			{
+				// Message is acked
+
+				ptr->Retries = 0;
+				ptr->Acked = TRUE;
+				if (hMsgsOut)
+					UpdateTXMessageLine(hMsgsOut, n, ptr);
+
+				return;
+			}
+			ptr = ptr->Next;
+			n++;
+
+		} while (ptr);
+	
+		return;
+	}
+
+	Message = malloc(sizeof(struct APRSMESSAGE));
+	memset(Message, 0, sizeof(struct APRSMESSAGE));
+	strcpy(Message->FromCall, Station->Callsign);
+	strcpy(Message->ToCall, MsgDest);
+
+	if (SeqPtr)
+		strcpy(Message->Seq, SeqPtr);
+
+	if (strlen(TextPtr) > 100)
+		TextPtr[100] = 0;
+
+	strcpy(Message->Text, TextPtr);
+
+	if (_stricmp(MsgDest, APRSCall) == 0)
+	{
+		// For us - send an Ack
+
+		char ack[30];
+
+		int n = wsprintf(ack, ":%-9s:ack%s", Message->FromCall, Message->Seq);
+		PutAPRSMessage(ack, n);
+	}
+
+	if (ptr == NULL)
+	{
+		Messages = Message;
+	}
+	else
+	{
+		n++;
+		while(ptr->Next)
+		{
+			ptr = ptr->Next;
+			n++;
+		}
+		ptr->Next = Message;
+	}
+
+	if (hMsgsIn)
+		UpdateMessageLine(hMsgsIn, n, Message);
+
+	if (strcmp(MsgDest, APRSCall) == 0)
+	{
+		CreateMessageWindow("APRSMSGS", "APRS Messages", MsgWndProc, NULL); // Will activate if running
+	}
+}
+
+
+LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
+{ 
+	if (uMsg == WM_CHAR) 
+	{
+		int i = SendMessage(hInput,WM_GETTEXTLENGTH, 0, 0);
+
+		if (wParam == 13)
+		{			
+			char kbbuf[80];
+			char ToCall[11];
+
+			if (i > 78)
+				i = 78;
+
+			SendMessage(hInput, WM_GETTEXT, 79, (LPARAM) (LPCSTR) kbbuf);
+			kbbuf[i] = 0;
+			SendMessage(hToCall, WM_GETTEXT, 10, (LPARAM)(LPCTSTR)&ToCall);
+
+			// If call not in Listboax, add it
+
+			i = SendMessage(hToCall, CB_FINDSTRINGEXACT, -1, (LPARAM)(LPCTSTR)&ToCall);
+
+			if (i == CB_ERR)
+				SendMessage(hToCall, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)&ToCall);
+
+			SendMessage(hInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) "");
+
+			SendAPRSMessage(kbbuf, ToCall);
+
+			return 0; 
+		}
+	}
+ 
+    return CallWindowProc(wpOrigInputProc, hwnd, uMsg, wParam, lParam); 
+} 
+
+VOID SecTimer()
+{
+	// Check Message Retries
+
+	struct APRSMESSAGE * ptr = OutstandingMsgs;
+	int n = 0;
+	char Msg[20];
+	// If any changes to image redraw it
+
+	if (ImageChanged)
+	{
+		// We have drawn a new Icon. As we only redraw if it has moved, 
+		// we need toreload image eveey noa and again to get rid of ghost images
+
+		time_t NOW = time(NULL);
+		
+		if ((NOW - LastRefresh) > 10)
+		{
+			LastRefresh = NOW;
+			ReloadMaps = TRUE;
+		}
+
+		ImageChanged = FALSE;
+		InvalidateRect(hWnd, NULL, FALSE);
+	}
+
+	wsprintf(Msg, "%d", StationCount);
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 1, (LPARAM)Msg);
+
+	wsprintf(Msg, "%d", OSMQueueCount);
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 2, (LPARAM)Msg);
+
+	wsprintf(Msg, "%d", Zoom);
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
+
+
+	if (ptr == 0)
+		return;
+
+	do
+	{				
+		if (ptr->Acked == FALSE)
+		{
+			if (ptr->Retries)
+			{
+				ptr->RetryTimer--;
+				
+				if (ptr->RetryTimer == 0)
+				{
+					ptr->Retries--;
+
+					if (ptr->Retries)
+					{
+						// Send Again
+						
+						char Msg[255];
+						int n = wsprintf(Msg, ":%-9s:%s{%s", ptr->ToCall, ptr->Text, ptr->Seq);
+						PutAPRSMessage(Msg, n);
+						ptr->RetryTimer = RetryTimer;
+					}
+					UpdateTXMessageLine(hMsgsOut, n, ptr);
+				}
+			}
+		}
+
+		ptr = ptr->Next;
+		n++;
+
+	} while (ptr);
+}
+
+double radians(double Degrees)
+{
+    return M_PI * Degrees / 180;
+}
+double degrees(double Radians)
+{
+	return Radians * 180 / M_PI;
+}
+
+
+double Distance(double laa, double loa)
+{
+	double lah, loh;
+
+	GetAPRSLatLon(&lah, &loh);
+
+/*
+
+'Great Circle Calculations.
+
+'dif = longitute home - longitute away
+
+
+'      (this should be within -180 to +180 degrees)
+'      (Hint: This number should be non-zero, programs should check for
+'             this and make dif=0.0001 as a minimum)
+'lah = latitude of home
+'laa = latitude of away
+
+'dis = ArcCOS(Sin(lah) * Sin(laa) + Cos(lah) * Cos(laa) * Cos(dif))
+'distance = dis / 180 * pi * ERAD
+'angle = ArcCOS((Sin(laa) - Sin(lah) * Cos(dis)) / (Cos(lah) * Sin(dis)))
+
+'p1 = 3.1415926535: P2 = p1 / 180: Rem -- PI, Deg =>= Radians
+*/
+
+loh = radians(loh); lah = radians(lah);
+loa = radians(loa); laa = radians(laa);
+
+return 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh)));
+
+}
+
+double Bearing(double lat2, double lon2)
+{
+	double lat1, lon1;
+	double dlat, dlon, TC1;
+
+	GetAPRSLatLon(&lat1, &lon1);
+ 
+	lat1 = radians(lat1);
+	lat2 = radians(lat2);
+	lon1 = radians(lon1);
+	lon2 = radians(lon2);
+
+	dlat = lat2 - lat1;
+	dlon = lon2 - lon1;
+
+	if (dlat == 0 || dlon == 0) return 0;
+	
+	TC1 = atan((sin(lon1 - lon2) * cos(lat2)) / (cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon1 - lon2)));
+	TC1 = degrees(TC1);
+		
+	if (fabs(TC1) > 89.5) if (dlon > 0) return 90; else return 270;
+
+	if (dlat > 0)
+	{
+		if (dlon > 0) return -TC1;
+		if (dlon < 0) return 360 - TC1;
+		return 0;
+	}
+
+	if (dlat < 0)
+	{
+		if (dlon > 0) return TC1 = 180 - TC1;
+		if (dlon < 0) return TC1 = 180 - TC1; // 'ok?
+		return 180;
+	}
+
+	return 0;
+
+}
+
+
+int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
+{
+	LVITEM item = {0};
+	char Item1[260] = "AA";
+	char Item2[260] = "BB";
+
+	item.iSubItem = lParamSort;
+	item.mask = LVIF_TEXT;
+	item.iItem = lParam1;
+	item.pszText = Item1;
+	item.cchTextMax = 100;
+
+	ListView_GetItem(hStations, &item);
+
+	item.iItem = lParam2;
+	item.pszText = Item2;
+
+	ListView_GetItem(hStations, &item);
+
+	return strcmp(Item1, Item2);
+}
+
+
+
 
 #ifdef ZZZZZZZZZ
 
@@ -3956,3 +5015,104 @@ unsigned int hex2i(u_char a,u_char b)
 
 
 #endif
+
+
+
+
+/*
+
+BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
+{
+	TCHAR	szTitle[MAX_LOADSTRING]=L"BPQ AIS";			// The title bar text
+	TCHAR	szWindowClass[MAX_LOADSTRING]=L"BPQAIS";		// The window class name
+	LV_COLUMN Column;
+	RECT rc, rcMenuBar;
+	TCHAR msg[40];
+
+	g_hInst = hInstance;		// Store instance handle in our global variable
+	// Initialize global strings
+
+	//If it is already running, then focus on the window
+	hWnd = FindWindow(szWindowClass, szTitle);	
+	if (hWnd) 
+	{
+		// set focus to foremost child window
+		// The "| 0x01" is used to bring any owned windows to the foreground and
+		// activate them.
+		SetForegroundWindow((HWND)((ULONG) hWnd | 0x00000001));
+		return 0;
+	} 
+
+	MyRegisterClass(hInstance, szWindowClass);
+	
+	hWnd = CreateWindow(szWindowClass, szTitle, WS_VISIBLE,
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, hInstance, NULL);
+	if (!hWnd)
+	{	
+		return FALSE;
+	}
+	//When the main window is created using CW_USEDEFAULT the height of the menubar (if one
+	// is created is not taken into account). So we resize the window after creating it
+	// if a menubar is present
+
+
+	GetWindowRect(hWnd, &rc);
+    GetWindowRect(g_hwndCB, &rcMenuBar);
+	rc.bottom -= (rcMenuBar.bottom - rcMenuBar.top);
+		
+	MoveWindow(hWnd, rc.left, rc.top, rc.right-rc.left, rc.bottom-rc.top, FALSE);
+
+	TextWindow=(rc.bottom-rc.top)-60;
+
+	ShowWindow(hWnd, nCmdShow);
+	UpdateWindow(hWnd);
+
+	hList = CreateWindow(L"SysListView32", L"Test", LVS_REPORT | WS_BORDER | LVS_SINGLESEL 
+                 ,0,0,240,TextWindow, hWnd, NULL, hInstance, NULL);
+
+	LV_COLUMN Column;
+
+	ListView_SetExtendedListViewStyle(hList,LVS_EX_FULLROWSELECT);
+
+	Column.cx=70;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText=L"Name";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,1,(LPARAM) &Column); 
+
+	Column.cx=37;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText=L"Dist";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,2,(LPARAM) &Column); 
+
+	Column.cx=33;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText=L"Brg";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,3,(LPARAM) &Column); 
+
+	Column.cx=37;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText=L"Cpa";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,4,(LPARAM) &Column); 
+
+	Column.cx=33;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText=L"Bca";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,5,(LPARAM) &Column); 
+
+	Column.cx=33;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText=L"Sec";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,6,(LPARAM) &Column); 
+
+	ListView_SetItemCount(hList,20);
+
+	ShowWindow(hList, nCmdShow);
+	UpdateWindow(hList);
+
+*/

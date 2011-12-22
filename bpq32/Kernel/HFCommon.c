@@ -108,7 +108,7 @@ VOID MoveWindows(struct TNCINFO * TNC)
 }
 
 char * Config;
-char * ptr1, * ptr2;
+static char * ptr1, * ptr2;
 
 BOOL ReadConfigFile(int Port, int ProcLine())
 {
@@ -519,7 +519,7 @@ BOOL SendReporttoWL2K(struct TNCINFO * TNC)
 	return 0;
 }
 
-SOCKET sock;
+static SOCKET sock;
 
 VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 {

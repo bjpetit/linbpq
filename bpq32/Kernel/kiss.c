@@ -33,7 +33,7 @@ VOID ASYDISP(int port, char Channel)
 {
 	char Msg[20];
 		
-	wsprintf(Msg,"ASYNC COM%d Chan %c ", port, Channel);
+	wsprintf(Msg,"ASYNC COM%d Chan %c\n", port, Channel);
 
 	WritetoConsoleLocal(Msg);
 	return;

@@ -1052,7 +1052,7 @@ VOID Do_Add_User(HWND hDlg)
 	
 	if (LookupCall(CurrentConfigCall))
 		wsprintf(InfoBoxText, "User %s already exists", CurrentConfigCall);
-	else if	((strlen(CurrentConfigCall) < 3) || (strlen(CurrentConfigCall) > 6))
+	else if	((strlen(CurrentConfigCall) < 3) || (strlen(CurrentConfigCall) > MAXUSERNAMELEN))
 		wsprintf(InfoBoxText, "User %s is invalid", CurrentConfigCall);
 	else
 	{
@@ -2512,6 +2512,10 @@ TryAgain:
 			Vallen=4;
 			RegQueryValueEx(hKey,"LastHouseKeepingTime",0,			
 			(ULONG *)&Type,(UCHAR *)&LastHouseKeepingTime,(ULONG *)&Vallen);
+
+			Vallen=4;
+			RegQueryValueEx(hKey,"LastTrafficTime",0,			
+			(ULONG *)&Type,(UCHAR *)&LastTrafficTime,(ULONG *)&Vallen);
 
 
 			Vallen=4;

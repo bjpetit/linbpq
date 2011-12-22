@@ -1379,7 +1379,7 @@ VOID DoRefresh(struct ConsoleInfo * Cinfo)
 
 	if ((Cinfo->Thumb + Cinfo->ClientHeight) > Cinfo->RTFHeight - 10)		// Don't bother writing to screen if scrolled back
 	{
-		es.pfnCallback = EditStreamCallback;
+		es.pfnCallback = (EDITSTREAMCALLBACK)EditStreamCallback;
 		es.dwCookie = (DWORD_PTR)Cinfo;
 		Cinfo->SendHeader = TRUE;
 		SendMessage(hwndOutput, EM_STREAMIN, SF_RTF, (LPARAM)&es);

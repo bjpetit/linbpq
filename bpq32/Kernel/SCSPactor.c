@@ -1612,6 +1612,10 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 		TNC->InitPtr = end;
 		memcpy(Poll, start, len);
 
+		OpenLogFile(TNC->Port);
+		WriteLogLine(TNC->Port, &Poll[5], len - 5);
+		CloseLogFile(TNC->Port);
+
 		TNC->TXLen = len;
 		WriteCommBlock(TNC);
 

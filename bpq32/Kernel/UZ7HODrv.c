@@ -507,7 +507,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
 			{
-				TNC->Streams[0].ReportDISC = TRUE;		// Tell Node
+				TidyClose(TNC, buff[4]);
+				STREAM->ReportDISC = TRUE;		// Tell Node
 				return 0;
 			}
 	
@@ -516,16 +517,26 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
 			{
 				struct AGWINFO * AGW = TNC->AGWInfo;
+				char ViaList[82] = "";
+				int Digis = 0;
+				char * viaptr;
+				char * ptr;
+				char * context;
 
 				_strupr(&buff[8]);
+				buff[8 + txlen] = 0;
 
 				memset(STREAM->RemoteCall, 0, 10);
-				memcpy(STREAM->RemoteCall, &buff[10], txlen-3);
+
+				// See if any digis - accept V VIA or nothing, seps space or comma
+
+				ptr = strtok_s(&buff[10], " ,\r", &context);
+				strcpy(STREAM->RemoteCall, ptr);
 
 				STREAM->AGWKey[0] = UZ7HOChannel[port] + '1';
 				memset(&STREAM->AGWKey[1], 0, 20);
 				strcpy(&STREAM->AGWKey[11], STREAM->MyCall);
-				strcpy(&STREAM->AGWKey[1], STREAM->RemoteCall);
+				strcpy(&STREAM->AGWKey[1], ptr);
 
 				AGW->TXHeader.Port = UZ7HOChannel[port];
 				AGW->TXHeader.DataKind='C';
@@ -533,7 +544,33 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(AGW->TXHeader.callto, &STREAM->AGWKey[1], 10);
 				AGW->TXHeader.DataLength = 0;
 
+				ptr = strtok_s(NULL, " ,\r", &context);
+
+				if (ptr)
+				{
+					// we have digis
+
+					viaptr = &ViaList[1];
+		
+					if (strcmp(ptr, "V") == 0 || strcmp(ptr, "VIA") == 0)
+						ptr = strtok_s(NULL, " ,\r", &context);
+
+					while (ptr)
+					{
+						strcpy(viaptr, ptr);
+						Digis++;
+						viaptr += 10;
+						ptr = strtok_s(NULL, " ,\r", &context);
+					}
+
+					AGW->TXHeader.DataLength = Digis * 10 + 1;
+					AGW->TXHeader.DataKind='v';
+					ViaList[0] = Digis;
+				}
+
 				send(TNCInfo[MasterPort[port]]->WINMORSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+				if (Digis)
+					send(TNCInfo[MasterPort[port]]->WINMORSock, ViaList, Digis * 10 + 1, 0);
 
 				STREAM->Connecting = TNC->AGWInfo->ConnTimeOut;	// It doesn't report failure
 
@@ -1655,8 +1692,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 		if (TNC == NULL)
 			return;
 
-		Debugprintf("UZ7HO Port %d %d %c %s %s %d", TNC->Port, RXHeader->Port,
-			RXHeader->DataKind, RXHeader->callfrom, RXHeader->callto, Message[0]); 
+//		Debugprintf("UZ7HO Port %d %d %c %s %s %d", TNC->Port, RXHeader->Port,
+//			RXHeader->DataKind, RXHeader->callfrom, RXHeader->callto, Message[0]); 
 
 		Stream = 0;
 
@@ -1779,10 +1816,14 @@ static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCH
 
 	// Only update MH on UI, SABM, UA
 
-	UCHAR * ptr, * starptr, * CPPtr;
+	UCHAR * ptr, * starptr, * CPPtr, * nrptr, * nsptr;
 	char * context;
 	char MHCall[11];
 	int ILen;
+
+	Msg[RXHeader->DataLength] = 0;
+
+	OutputDebugString(Msg);
 
 	Monframe.LENGTH = 23;				// Control Frame
 	Monframe.PORT = BPQPort[RXHeader->Port][TNC->Port];
@@ -1884,20 +1925,31 @@ DigiLoop:
 	}
 	else 
 	if (memcmp(&ptr[1], "RR", 2) == 0)
-		AdjMsg->CTL = 0x1 | (ptr[7] << 5);
+	{
+		nrptr = strchr(&ptr[3], '>');
+		AdjMsg->CTL = 0x1 | (nrptr[-2] << 5);
+	}
 	else 
 	if (memcmp(&ptr[1], "RNR", 3) == 0)
-		AdjMsg->CTL = 0x5 | (ptr[8] << 5);
+	{
+		nrptr = strchr(&ptr[4], '>');
+		AdjMsg->CTL = 0x5 | (nrptr[-2] << 5);
+	}
 	else 
 	if (memcmp(&ptr[1], "REJ", 3) == 0)
-		AdjMsg->CTL = 0x9 | (ptr[8] << 5);
+	{
+		nrptr = strchr(&ptr[4], '>');
+		AdjMsg->CTL = 0x9 | (nrptr[-2] << 5);
+	}
 	else 
 	if (memcmp(&ptr[1], "FRMR", 4) == 0)
 		AdjMsg->CTL = 0x87;
 	else  
 	if (ptr[1] == 'I')
 	{
-		AdjMsg->CTL = (ptr[6] << 5) | (ptr[9] & 7) << 1 ;
+		nsptr = strchr(&ptr[3], 'S');
+
+		AdjMsg->CTL = (nsptr[-2] << 5) | (nsptr[1] & 7) << 1 ;
 	}
 
 	CPPtr = strchr(ptr, ' ');		
@@ -1906,14 +1958,14 @@ DigiLoop:
 	{
 		if (AdjMsg->CTL != 3)
 			AdjMsg->CTL |= 0x10;
-		Monframe.DEST[6] |= 0x80;				// SET COMMAND
+//		Monframe.DEST[6] |= 0x80;				// SET COMMAND
 	}
 
 	if (strchr(&CPPtr[1], 'F'))
 	{
 		if (AdjMsg->CTL != 3)
 			AdjMsg->CTL |= 0x10;
-		Monframe.ORIGIN[6] |= 0x80;				// SET COMMAND
+//		Monframe.ORIGIN[6] |= 0x80;				// SET P/F bit
 	}
 
 	if ((AdjMsg->CTL & 1) == 0 || AdjMsg->CTL == 3)	// I or UI
@@ -1961,5 +2013,35 @@ DigiLoop:
 
 }
 
+/*
+
+1:Fm GM8BPQ To GM8BPQ-2 <RR R1 >[17:36:17]
+ 1:Fm GM8BPQ To GM8BPQ-2 <I R1 S7 pid=F0 Len=56 >[17:36:29]
+BPQ:GM8BPQ-2} G8BPQ Win32 Test Switch, Skigersta, Isle o
+
+ 1:Fm GM8BPQ-2 To GM8BPQ <RR R0 >[17:36:32]
+ 1:Fm GM8BPQ To GM8BPQ-2 <I R1 S0 pid=F0 Len=9 >[17:36:33]
+f Lewis.
+
+ 1:Fm GM8BPQ-2 To GM8BPQ <RR R1 >[17:36:36]
+
+1:Fm GM8BPQ To GM8BPQ-2 <RR F/R R1> [17:36:18R]
+1:Fm GM8BPQ To GM8BPQ-2 <I F/C R1 S7 Pid=F0 Len=56> [17:36:30R]
+BPQ:GM8BPQ-2} G8BPQ Win32 Test Switch, Skigersta, Isle o
+1:Fm GM8BPQ-2 To GM8BPQ <RR F/R R0> [17:36:32T]
+1:Fm GM8BPQ To GM8BPQ-2 <I F/C R1 S0 Pid=F0 Len=9> [17:36:34R]
+f Lewis.
+
+1:Fm GM8BPQ-2 To GM8BPQ <RR F/R R1> [17:36:36T]
 
 
+
+1:Fm GM8BPQ To GM8BPQ-2 <RR F/R R1> [17:36:17T]
+1:Fm GM8BPQ To GM8BPQ-2 <I F/C R1 S7 Pid=F0 Len=56> [17:36:29T]
+BPQ:GM8BPQ-2} G8BPQ Win32 Test Switch, Skigersta, Isle o
+1:Fm GM8BPQ-2 To GM8BPQ <RR F/R R0> [17:36:32R]
+1:Fm GM8BPQ To GM8BPQ-2 <I F/C R1 S0 Pid=F0 Len=9> [17:36:33T]
+f Lewis.
+
+1:Fm GM8BPQ-2 To GM8BPQ <RR F/R R1> [17:36:36R]
+*/

@@ -59,6 +59,8 @@ __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POI
 	CheckProgramErrors();\
 }
 
+#define MAXUSERNAMELEN 6
+
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3
@@ -1390,6 +1392,7 @@ extern struct Override ** LTTO;
 extern struct Override ** LTAT;
 
 extern int LastHouseKeepingTime;
+extern int LastTrafficTime;
 
 extern char * MyElements[];
 extern char ** AliasText;

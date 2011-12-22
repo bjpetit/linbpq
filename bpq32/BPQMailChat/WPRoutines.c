@@ -1076,7 +1076,7 @@ int CreateWPMessage()
 
 	strcpy(Msg->title, "WP Update");
 
-	Msg->type = (SendWPType) ? 'P' : 'N';
+	Msg->type = (SendWPType) ? 'P' : 'B';
 	Msg->status = 'N';
 				
 	sprintf_s(BID, sizeof(BID), "%d_%s", LatestMsg, BBSName);

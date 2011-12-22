@@ -703,13 +703,14 @@
 
 
 //  Call CloseBPQ32 on exit
-//  Add oiption to flash window instead of sounding bell on Chat Connects
+//  Add option to flash window instead of sounding bell on Chat Connects
 //  Add ShowRMS SYSOP command
 //	Update WP with I records from R: lines
 //	Send WP Updates
 //  Fix Paclen on Pactor-like sessions
 //	Fix SID and Prompt when RMS Express User is set
-
+//  Try to stop loop in Program Error/Restarting code
+//  Trap "UNABLE TO CONNECT" response in connect script
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -930,7 +931,9 @@ struct _EXCEPTION_POINTERS exinfox;
 CONTEXT ContextRecord;
 EXCEPTION_RECORD ExceptionRecord;
 
-	DWORD Stack[16];
+DWORD Stack[16];
+
+BOOL Restarting = FALSE;
 
 Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg)
 {
@@ -997,11 +1000,14 @@ VOID CheckProgramErrors()
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 	char ProgName[256];
 
+	if (Restarting)
+		exit(0);				// Make sure can't loop in restarting
+
 	ProgramErrors++;
 
 	if (ProgramErrors > 25)
 	{
-		ProgramErrors = 0;				// Don't want to restart twice if we get anther error.
+		Restarting = TRUE;
 
 		Logprintf(LOG_DEBUG, NULL, '!', "Too Many Program Errors - Closing");
 
@@ -1030,7 +1036,7 @@ VOID CheckProgramErrors()
 
 		Debugprintf("Attempting to Restart %s", ProgName);
 
-		CreateProcess(ProgName ,"MailChat.exe WAIT" , NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+		CreateProcess(ProgName, "MailChat.exe WAIT", NULL, NULL, FALSE, 0, NULL, NULL, &SInfo, &PInfo);
 					
 		exit(0);
 	}
@@ -1085,7 +1091,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	MyRegisterClass(hInstance);
 
 	// Perform application initialization:
-
 
 	if (!InitInstance (hInstance, nCmdShow))
 	{
@@ -1632,17 +1637,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			__try
 			{
+				time_t NOW = time(NULL);
+				struct tm * tm;
 				RefreshMainWindow();
 				CheckTimer();
 				TCPTimer();
 				FWDTimerProc();
 				ChatTimer();
-				if (MaintClock < time(NULL))
+				if (MaintClock < NOW)
 				{				
 					MaintClock += 86400;					
 					Debugprintf("|Enter HouseKeeping");
 					DoHouseKeeping(FALSE);
+				}
+				tm = gmtime(&NOW);	
 
+				if (tm->tm_wday == 0)		// Sunday
+				{
+					if ((LastTrafficTime + 86400) < NOW)
+					{
+						CreateBBSTrafficReport();
+						LastTrafficTime = NOW;
+					}
 				}
 			}
 			My__except_Routine("Slow Timer");
@@ -1771,6 +1787,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDM_HOUSEKEEPING:
 
 			DoHouseKeeping(TRUE);
+
 			break;
 
 		case IDM_CONSOLE:
@@ -2739,9 +2756,7 @@ BOOL Initialise()
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
 
-
 	// Calulate time to run Housekeeping
-
 	{
 		struct tm *tm;
 		time_t now;
@@ -2764,7 +2779,6 @@ BOOL Initialise()
 			if ((MaintClock - LastHouseKeepingTime) > 86400)
 			{
 				DoHouseKeeping(FALSE);
-				CreateBBSTrafficReport();
 			}
 		}
 	}
@@ -2776,7 +2790,6 @@ BOOL Initialise()
 	RefreshMainWindow();
 
 //	CreateWPReport();
-
 
 	return TRUE;
 }
@@ -3587,7 +3600,7 @@ VOID GetMessageDatabase()
 
 	NumberofMessages = 0;
 
-	if (MsgRec.status == 0)		// Used a file format version 0 = original, 1 = Extra email from addr.
+	if (MsgRec.status == 0)		// Used as file format version 0 = original, 1 = Extra email from addr.
 	{
 		Resize = 41;
 		MsgHddrPtr[0]->status = 1;
@@ -4551,7 +4564,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
 				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
 				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
-				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling lisr\r");
+				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling list\r");
 			}
 		}
 
@@ -7663,7 +7676,7 @@ InBand:
 	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
 		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - ") ||
-		strstr(Buffer, "DISCONNECTED"))
+		strstr(Buffer, "UNABLE TO CONNECT") ||  strstr(Buffer, "DISCONNECTED"))
 	{
 		// Connect Failed
 

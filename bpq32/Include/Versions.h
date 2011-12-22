@@ -1,11 +1,10 @@
 #ifdef Kernel
 
-#define Vers 5,2,1,4
-#define Verstring "5.2.1.4\0"
-#define TextVerstring "V5.2.1.4\0"
-#define Datestring "October 2011"
-#define SPECIALVERSION "Test 19"
-#define VerComments "G8BPQ Packet Switch V5.2.1.4\0"
+#define Vers 5,2,2,28
+#define Verstring "5.2.2.28\0"
+#define Datestring "December 2011"
+//#define SPECIALVERSION "Test 19"
+#define VerComments "G8BPQ Packet Switch V5.2.2.28\0"
 #define VerCopyright "Copyright © 2001-2011 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 
@@ -35,9 +34,9 @@
 
 #ifdef MAILCHAT
 
-#define Vers 1,0,4,46
-#define Verstring "1.0.4.46\0"
-#define SPECIALVERSION "Test 7"
+#define Vers 1,4,46,9
+#define Verstring "1.4.46.9\0"
+//#define SPECIALVERSION "Test 8"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2011 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"
@@ -78,10 +77,10 @@
 
 #ifdef APRS
 
-#define Vers 0,0,0,1
-#define Verstring "0.0.0.1\0"
-#define VerComments  "APRS Digipeater and APRS-IS Gateway for G8BPQ Switch\0"
+#define Vers 0,0,0,9
+#define Verstring "0.0.0.9\0"
+#define VerComments  "APRS Client for G8BPQ Switch\0"
 #define VerCopyright "Copyright © 2011 John Wiseman G8BPQ\0"
-#define VerDesc "APRS Digipeater and APRS-IS Gateway for G8BPQ Switch\0"
+#define VerDesc "APRS Client for G8BPQ Switch\0"
 
 #endif

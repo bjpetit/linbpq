@@ -2271,3 +2271,4 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		send(TNC->WINMORSock,"SENDID 0\r\n", 10, 0);
 	}
 }
+

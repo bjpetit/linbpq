@@ -621,8 +621,9 @@ HMENU trayMenu=0;
 
 HWND hWnd, hWndCons, hWndBG;
 
-BOOL IGateEnabled = FALSE;
+BOOL IGateEnabled = TRUE;
 extern int ISDelayTimer;			// Time before trying to reopen APRS-IS link
+extern int ISPort;
 
 static RECT Rect;			// Window Position
 
@@ -1135,6 +1136,10 @@ VOID CALLBACK TimerProc
 			if (IPRequired)	IPActive = Init_IP();
 
 			APRSActive = Init_APRS();
+
+			if (ISPort == 0)
+				IGateEnabled = 0;
+
 			CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
 
 			GetClientRect(hWnd, &cRect); 
@@ -1228,6 +1233,10 @@ FirstInit()
 	if (IPRequired)	IPActive = Init_IP();
 	
 	APRSActive = Init_APRS();
+
+	if (ISPort == 0)
+		IGateEnabled = 0;
+
 	CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
 	
 	GetClientRect(hWnd, &cRect); 
@@ -4013,7 +4022,30 @@ int SetupConsoleWindow()
 
 	i=RegisterClass(&wc);
 	
-//	GetVersionInfo("bpq32.dll");
+	retCode = RegOpenKeyEx (REGTREE,
+                "SOFTWARE\\G8BPQ\\BPQ32",    
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"WindowSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+
+		// Get StartMinimized and MinimizetoTray flags
+
+		Vallen = 4;
+		retCode = RegQueryValueEx(hKey, "Start Minimized", 0, &Type, (UCHAR *)&StartMinimized, &Vallen);
+
+		Vallen = 4;
+		retCode = RegQueryValueEx(hKey, "Minimize to Tray", 0, &Type, (UCHAR *)&MinimizetoTray, &Vallen);
+	}
 
 	wsprintf (Title, "BPQ32.dll Console Version %s", VersionString);
 
@@ -4073,37 +4105,10 @@ int SetupConsoleWindow()
 
 	SendMessage(hWndCons, LB_SETHORIZONTALEXTENT , 1000, 0);
 
-	retCode = RegOpenKeyEx (REGTREE,
-                "SOFTWARE\\G8BPQ\\BPQ32",    
-                              0,
-                              KEY_QUERY_VALUE,
-                              &hKey);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		Vallen=80;
-
-		retCode = RegQueryValueEx(hKey,"WindowSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
-
-		// Get StartMinimized and MinimizetoTray flags
-
-		Vallen = 4;
-		retCode = RegQueryValueEx(hKey, "Start Minimized", 0, &Type, (UCHAR *)&StartMinimized, &Vallen);
-
-		Vallen = 4;
-		retCode = RegQueryValueEx(hKey, "Minimize to Tray", 0, &Type, (UCHAR *)&MinimizetoTray, &Vallen);
-
-	}
-
 	if (Rect.right < 100 || Rect.bottom < 100)
 	{
 		GetWindowRect(hWnd, &Rect);
 	}
-
 
 	MoveWindow(hWnd,Rect.left,Rect.top, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
@@ -4260,10 +4265,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			if (wmId == IDC_ENIGATE)
 			{
+				int retCode, disp;
+				HKEY hKey=0;
+
 				IGateEnabled = IsDlgButtonChecked(hWnd, IDC_ENIGATE); 
 
 				if (IGateEnabled)
 					ISDelayTimer = 60;
+
+				retCode = RegCreateKeyEx(REGTREE,
+                              "SOFTWARE\\G8BPQ\\BPQ32",
+                              0,	// Reserved
+							  0,	// Class
+							  0,	// Options
+                              KEY_ALL_ACCESS,
+							  NULL,	// Security Attrs
+                              &hKey,
+							  &disp);
+
+				if (retCode == ERROR_SUCCESS)
+				{
+					retCode = RegSetValueEx(hKey,"IGateEnabled", 0 , REG_DWORD,(BYTE *)&IGateEnabled, 4);
+					RegCloseKey(hKey);
+				}
 
 				return 0;
 			}		

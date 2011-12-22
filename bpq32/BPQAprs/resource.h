@@ -11,10 +11,14 @@
 #define IDM_CONFIG                      106
 #define ID_TEST                         107
 #define IDD_DIAGLOG1                    108
+#define IDM_APRSMSGS                    109
+#define IDM_APRSSTNS                    110
+#define IDD_APRSMSGS                    120
 #define IDC_FROMFILE                    1022
 #define IDC_EDIT1                       1054
 #define IDC_FILENAME                    1054
 #define IDC_UITRACE                     1054
+#define IDC_INPUT                       1054
 #define IDC_EDIT2                       1055
 #define IDC_MESSAGE                     1055
 #define IDC_UIFLOOD                     1055
@@ -29,14 +33,21 @@
 #define IDC_TAB1                        1059
 #define IDC_UIDIGIS                     1059
 #define IDC_MYCALL                      1059
+#define IDC_RETRIES                     1059
 #define IDC_PORTNAME                    1060
+#define IDC_RETRYTIME                   1060
 #define IDC_TRACEDIGI                   1061
+#define IDC_EXPIRE                      1061
 #define IDC_EDIT5                       1062
 #define IDC_TRACEMAXN                   1063
 #define IDC_FLOODMAXN                   1064
+#define IDC_TXMSGS                      1064
 #define IDC_GPSPORT                     1065
+#define IDC_TOCALL                      1065
 #define IDC_GPSBAUD                     1066
+#define IDC_TOLABEL                     1066
 #define IDC_ISHOST                      1067
+#define IDC_TEXTLABEL                   1067
 #define IDC_ISPORT                      1068
 #define IDC_PASSCODE                    1069
 #define IDC_FILTER                      1070
@@ -45,9 +56,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        120
+#define _APS_NEXT_RESOURCE_VALUE        121
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1063
+#define _APS_NEXT_CONTROL_VALUE         1067
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
