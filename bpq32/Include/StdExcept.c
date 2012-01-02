@@ -4,10 +4,10 @@
 
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)
 {
-	unsigned int SPPtr;
-	unsigned int SPVal;
-	unsigned int eip;
-	unsigned int rev;
+	unsigned __int32 SPPtr;
+	unsigned __int32 SPVal;
+	unsigned __int32 eip;
+	unsigned __int32 rev;
 	int i;
 
 	DWORD Stack[16];

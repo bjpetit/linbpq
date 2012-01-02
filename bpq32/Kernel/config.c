@@ -289,6 +289,7 @@ extern char PWTEXT[];
 extern char HFCTEXT[];
 extern int HFCTEXTLEN;
 extern char LOCATOR[];
+extern char MAPCOMMENT[];
 extern char LOC[];
 extern int AXIPPort;
 
@@ -343,7 +344,7 @@ int FIRSTAPPL=1;
 BOOL Comment = FALSE;
 
 #define PARAMLIM 74
-#define MAXLINE 250
+#define MAXLINE 512
 #define FILEVERSION 22
 
 extern UCHAR BPQDirectory[MAX_PATH];
@@ -510,6 +511,7 @@ DllExport BOOL ProcessConfig()
 	portnum = 1;
 	NextAppl = 0;
 	LOCATOR[0] = 0;
+	MAPCOMMENT[0] = 0;
 
 	for (i = 0; i < 34; i++)
 	{
@@ -837,6 +839,37 @@ char rec[];
 					strcpy(LOC, ptr1);
 			}
 		}
+		return 0;
+	}
+
+	if (_memicmp(rec, "MAPCOMMENT", 10) == 0)
+	{
+		// Additional Info for Node Map
+
+		char * ptr1 = &rec[11];
+		char * ptr2 = MAPCOMMENT;
+
+		while (*ptr1)
+		{
+			if (*ptr1 == ',')
+			{
+				*ptr2++ = '&';
+				*ptr2++ = '#';
+				*ptr2++ = '4';
+				*ptr2++ = '4';
+				*ptr2++ = ';';
+			}
+			else
+				*(ptr2++) = *ptr1;
+
+			ptr1++;
+
+			if ((ptr2 - MAPCOMMENT) > 248)
+				break;
+		}
+
+		*ptr2 = 0;
+
 		return 0;
 	}
 

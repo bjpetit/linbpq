@@ -652,7 +652,6 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 			Debugprintf("Building Freq List");
 
-			Mode = TNC->NARROWMODE;
 			BandWidth = 'N';
 
 			__try {
@@ -674,12 +673,14 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 					Valchar = _fcvt(Freqptr[0]->Freq + 1500, 0, &dec, &sign);
 
+					Mode = 0;
+
 					if (TNC->Hardware == H_TRK)
 					{
-						if (Freqptr[0]->Bandwidth == 'R')
+						if (Freqptr[0]->RPacketMode)
 						{
 							BandWidth = 'W';
-							Mode = TNC->NARROWMODE;
+							Mode = Report_Robust;
 						}
 						else
 						{
@@ -687,24 +688,71 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 							continue;							// Don't Report HF Packet
 						}
 					}
-					if (Freqptr[0]->Bandwidth == 'W')
+					else if (TNC->Hardware == H_SCS)
+					{
+						if (Freqptr[0]->PMaxLevel == '1')
+						{
+							BandWidth = 'N';
+							Mode = Report_P1;
+						}
+						else if (Freqptr[0]->PMaxLevel == '2')
+						{
+							BandWidth = 'N';
+							if (Freqptr[0]->PMinLevel == '1')
+								Mode = Report_P12;
+							else
+								Mode = Report_P2;
+						}
+						else if (Freqptr[0]->PMaxLevel == '3')
+						{
+							BandWidth = 'W';
+							if (Freqptr[0]->PMinLevel == '1')
+								Mode = Report_P123;
+							else if (Freqptr[0]->PMinLevel == '2')
+								Mode = Report_P23;
+							else
+								Mode = Report_P3;
+						}
+						else if (Freqptr[0]->PMaxLevel == '4')
+						{
+							BandWidth = 'W';
+							if (Freqptr[0]->PMinLevel == '1')
+								Mode = Report_P1234;
+							else if (Freqptr[0]->PMinLevel == '2')
+								Mode = Report_P234;
+							else if (Freqptr[0]->PMinLevel == '3')
+								Mode = Report_P34;
+							else
+								Mode = Report_P4;
+						}
+					}
+					else if (TNC->Hardware == H_KAM)
+					{
+						if (Freqptr[0]->Bandwidth == 'W')	// WINMOR Wide
+						{
+							if (TNC->DontReportNarrowOnWideFreqs)
+							{
+								Freqptr++;
+								continue;
+							}
+						}
+						Mode = Report_P1;					// KAM only supports P1
+					}
+					else if (Freqptr[0]->Bandwidth == 'W')		// WINMOR
 					{
 						BandWidth = 'W';
-						Mode = TNC->WIDEMODE;
+						Mode = Report_WINMOR1600;
 					}
 					else if (Freqptr[0]->Bandwidth == 'N')
 					{
 						BandWidth = 'N';
-						Mode = TNC->NARROWMODE;
+						Mode = Report_WINMOR500;
 					}
 
-					if (BandWidth == 'W')
+					if (Mode == 0)
 					{
-						if (TNC->DontReportNarrowOnWideFreqs && TNC->WIDEMODE == TNC->NARROWMODE)
-						{
-							Freqptr++;
-							continue;
-						}
+						Freqptr++;
+						continue;
 					}
 
 					HHStart = TimeBands[1]->Start /3600;
@@ -986,8 +1034,6 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 		}
 		TNC->UpdateWL2K = TRUE;
 		TNC->UpdateWL2KTimer = 3000 + (rand() /100); // Send first after 5 Mins
-		TNC->NARROWMODE = NARROWMODE;
-		TNC->WIDEMODE = WIDEMODE;			// PIII only
 
 		return 0;
 

@@ -219,7 +219,7 @@ static png_infop info_ptr = NULL;
 // Read 8 * 8 files, and copy to a 2048 * 3 * 2048 array. The display scrolls over this area, and
 // it is refreshed when window approaches the edge of the array.
 
-UCHAR Image[2048 * 3 * 2048];
+UCHAR Image[2048 * 3 * 2048 + 100];	// Seems past last byte gets corrupt
 
 int SetBaseX = 0;				// Lowest Tiles in currently loaded set
 int SetBaseY = 0;
@@ -841,7 +841,7 @@ for (i=1;i <= GetNumberofPorts();i++)
 	{
 		//	Set up Tray ICON
 
-		AddTrayMenuItem(hWnd, "BPQAPRS");
+		AddTrayMenuItem(hWnd, "APRS Map");
 	}
 	
 	ShowWindow(hWnd, nCmdShow);
@@ -2457,6 +2457,9 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 
 	if (GetLocPixels(ptr->Lat, ptr->Lon, &X, &Y))
 	{
+		if (X < 8 || Y < 8 || X > 2030 || Y > 2030)
+			return;				// Too close to edges
+
 		if (ptr->LatTrack[0])
 		{
 			// Draw Track
@@ -2465,6 +2468,9 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 			int i, n;
 			int X, Y;
 			int LastX = 0, LastY = 0;
+
+			if (memcmp(ptr->Callsign, "ISS  ", 5) == 0)
+				n = 1;
 
 			for (n = 0; n < TRACKPOINTS; n++)
 			{
@@ -2845,7 +2851,6 @@ void RefreshStation(struct STATIONRECORD * ptr)
 	OurSetItemText(hStations, ptr->Index, 3, DistString);
 	OurSetItemText(hStations, ptr->Index, 4, BearingString);
 	OurSetItemText(hStations, ptr->Index, 5, Time);
-
 }
 
 void RefreshStationList()
@@ -2859,36 +2864,9 @@ void RefreshStationList()
 	 
 	while (ptr)
 	{
-		if (ptr->TimeLastUpdated < AgeLimit)
-		{
-			// Too old - remove
-
-			EnterCriticalSection(&Crit);
-			if (last)
-			{
-				last->Next = ptr->Next;
-				free(ptr);
-				ptr = last->Next;
-			}
-			else
-			{
-				// First in list
-				
-				StationRecords = ptr->Next;
-				free(ptr);
-				if (StationRecords)
-					ptr = StationRecords->Next; 
-				else
-					ptr = NULL;
-			}
-			LeaveCriticalSection(&Crit);
-		}
-		else
-		{
-			RefreshStation(ptr);
-			ptr = ptr->Next;
-			i++;
-		}
+		RefreshStation(ptr);
+		ptr = ptr->Next;
+		i++;
 	}
 	
 	SendMessage(hStations, LVM_ENSUREVISIBLE, (WPARAM)i, (LPARAM) 0);
@@ -3042,6 +3020,7 @@ VOID ProcessRFFrame(char * Msg, int len)
 	
 	strcpy(Station->Path, Path);
 	strcpy(Station->LastPacket, Payload);
+	Station->TimeLastUpdated = time(NULL);
 
 	DecodeAPRSPayload(Payload, Station);
 
@@ -3126,6 +3105,9 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 	// Compressed has first character not a digit (it is symbol table)
 
 	// /YYYYXXXX$csT
+
+	if (Payload[0] == '!')
+		return FALSE;					// Ultimeter 2000 Weather Station
 
 	if (!isdigit(*Payload))
 	{
@@ -4103,7 +4085,7 @@ BOOL CreateStationWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &MsgMinimized);
+			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
 
 	}
 
@@ -4177,6 +4159,8 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 	RegisterClass(&wc);
 
 	hMsgDlg = hDlg = CreateDialog(hInst, ClassName, 0, NULL);
+	retCode = GetLastError();
+
 	hInput = GetDlgItem(hDlg, IDC_INPUT);
 	hToCall = GetDlgItem(hDlg, IDC_TOCALL);
 	hToLabel = GetDlgItem(hDlg, IDC_TOLABEL);
@@ -4203,7 +4187,7 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &MsgMinimized);
+			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
 
 	}
 

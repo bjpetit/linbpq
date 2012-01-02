@@ -829,8 +829,12 @@ VOID CreateBBSTrafficReport()
 			User->MsgsRejectedIn, User->MsgsRejectedOut);
 		
 		WriteFile(hFile, Line, len, &written, NULL);
+
+		User->nbcon = User->ConnectsOut = User->MsgsReceived = User->MsgsSent =  
+				User->BytesForwardedIn = User->BytesForwardedOut = 
+				User->MsgsRejectedIn = User->MsgsRejectedOut = 0;
 	}
-				
+			
 	retCode = RegCreateKeyEx(REGTREE,
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 

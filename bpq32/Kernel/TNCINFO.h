@@ -310,8 +310,8 @@ typedef struct TNCINFO
 	char WL2KModeChar;			// W or N
 	BOOL DontReportNarrowOnWideFreqs;
 
-	char NARROWMODE;
-	char WIDEMODE;				// Mode numbers to report to WL2K
+//	char NARROWMODE;
+//	char WIDEMODE;				// Mode numbers to report to WL2K
 
 	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
 
@@ -359,6 +359,7 @@ typedef struct TNCINFO
 
 	BOOL Dragon;					// Set if P4Dragon
 	BOOL MaxLevel;					// Pactor Level to set for Wide Mode (3 or 4)
+	int MinLevel;					// Mimimum accepted Pactor Level
 	int PacketChannels;
 	int RobustTime;					// For PTC, Spend this part of scan cycle (in 10th secs) in Robust Packet Mode 
 	int SwitchToPactor;				// Countdown to switch
@@ -477,6 +478,7 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 
 static int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
+VOID __cdecl Consoleprintf(const char * format, ...);
 
 extern BOOL MinimizetoTray;
 
@@ -499,10 +501,12 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 #define Report_P1234 17
 #define Report_P234 18
 #define Report_P34 19
-
+#define Report_P4 20
 
 #define Report_WINMOR500 21
-#define Report_WINMOR1600 22  
+#define Report_WINMOR1600 22 
+
+#define Report_Robust 30 
 
 #define IOCTL_SERIAL_IS_COM_OPEN CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x800,METHOD_BUFFERED,FILE_ANY_ACCESS)
 #define IOCTL_SERIAL_GETDATA     CTL_CODE(FILE_DEVICE_SERIAL_PORT,0x801,METHOD_BUFFERED,FILE_ANY_ACCESS)

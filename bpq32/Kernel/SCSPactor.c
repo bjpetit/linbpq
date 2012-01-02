@@ -302,6 +302,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	char Block[100];
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
+	char PLevel;
+	struct ScanEntry * Scan;
 
 
 	if (TNC == NULL)
@@ -494,7 +496,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				TNC->OKToChangeFreq = FALSE;
 				return TRUE;
 			}
-			return 0;		// Don't lock scan if TNC isn't reponding
+			return 0;		// Don't lock scan if TNC isn't responding
 		
 
 		case 2:		// Check  Permission
@@ -505,41 +507,38 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			TNC->WantToChangeFreq = FALSE;
 			TNC->DontWantToChangeFreq = TRUE;
 			return 0;
-		
-		case 4:		// Set Wide Mode
-		
-			if (TNC->Bandwidth != 'W')
+
+		default: // Param is Address of a struct ScanEntry
+
+			Scan = (struct ScanEntry *)buff;
+
+			PLevel = Scan->PMaxLevel;
+
+			if (PLevel == 0 && Scan->HFPacketMode)
 			{
-				TNC->Bandwidth = 'W';
-				Switchmode(TNC, TNC->MaxLevel);
+				// Switch to Packet for this Interval
+				
+				if (TNC->HFPacket == FALSE)
+					SwitchToPacket(TNC);
+
+				return 0;
+			}
+
+			else if (PLevel > '0' && PLevel < '5')		// 1 - 4 
+			{
+				if (TNC->Bandwidth != PLevel)
+				{
+					TNC->Bandwidth = PLevel;
+					TNC->MinLevel = Scan->PMinLevel - '0';
+					Switchmode(TNC, PLevel - '0');
+				}
 			}
 
 			if (TNC->RobustTime)
 				SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
 			
 			return 0;
-		
-
-		case 5:		// Set Narrow Mode
-		
-
-			if (TNC->Bandwidth != 'N')
-			{
-				TNC->Bandwidth = 'N';
-				Switchmode(TNC, 2);
-			}
-
-			if (TNC->RobustTime)
-				SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
-
-			return 0;
-
-		case 6:		// Changing Freq (Called if changing freq but not bandwidth
-
-			if (TNC->RobustTime)
-				SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
 		}
-
 	}
 	return 0;
 }
@@ -1613,7 +1612,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 		memcpy(Poll, start, len);
 
 		OpenLogFile(TNC->Port);
-		WriteLogLine(TNC->Port, &Poll[5], len - 5);
+		WriteLogLine(TNC->Port, Poll, len);
 		CloseLogFile(TNC->Port);
 
 		TNC->TXLen = len;
@@ -1984,6 +1983,12 @@ VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 	if (TNC->ReinitState == 2)
 	{
 		// Sending Init Commands
+
+		if (strstr(TNC->RXBuffer, "SCS P4dragon"))
+		{
+			TNC->Dragon = TRUE;
+			Debugprintf("SCSPactor in P4dragon mode");
+		}
 
 		DoTNCReinit(TNC);		// Send Next Command
 		return;

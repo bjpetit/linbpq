@@ -391,6 +391,10 @@ portok:
 			if (RIG->NumberofBands)
 			{
 				RIG->ScanStopped &= (0xffffffff ^ (1 << Port));
+
+				if (Session != -1)				// Used for internal Stop/Start
+					RIG->ScanStopped &= 0xfffffffe; // Clear Manual Stopped Bit
+
 				if (n > 2)
 					RIG->ScanCounter = atoi(Mode) * 10;  //Start Delay
 				else
@@ -415,6 +419,10 @@ portok:
 		if (_stricmp(FreqString, "SCANSTOP") == 0)
 		{
 			RIG->ScanStopped |= (1 << Port);
+
+			if (Session != -1)				// Used for internal Stop/Start
+				RIG->ScanStopped |= 1;		// Set Manual Stopped Bit
+
 			SetWindowText(RIG->hSCAN, "");
 
 			wsprintf(Command, "Ok\r");
@@ -1280,6 +1288,21 @@ GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 	struct _EXTPORTDATA * PortRecord;
 	int i;
 
+	ptr = RIG->FreqPtr;
+
+	if (ptr == NULL)
+	{
+		Debugprintf("Scan Debug - No freqs - quitting"); 
+		return FALSE;					 // No Freqs
+	}
+
+	if (ptr[0] == (struct ScanEntry *)0) // End of list - reset to start
+	{
+		ptr = CheckTimeBands(RIG);
+	}
+
+	PORT->FreqPtr = ptr[0];				// Save Scan Command Block
+
 	// Get Permission to change
 
 	if (RIG->WaitingForPermission)
@@ -1301,7 +1324,7 @@ GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
 
-			RIG->ScanCounter = RIG->ScanFreq; 
+			RIG->ScanCounter = PORT->FreqPtr->Dwell; 
 			return FALSE;
 		}
 		
@@ -1338,7 +1361,7 @@ DoChange:
 
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
-			RIG->ScanCounter = RIG->ScanFreq; 
+			RIG->ScanCounter = PORT->FreqPtr->Dwell; 
 
 			ReleasePermission(RIG);
 			return FALSE;
@@ -1349,21 +1372,8 @@ DoChange:
 	SetWindowText(RIG->hSCAN, "S");
 	RIG->WaitingForPermission = FALSE;
 
-	RIG->ScanCounter = RIG->ScanFreq; 
-
-	ptr = RIG->FreqPtr;
-
-	if (ptr == NULL)
-	{
-		Debugprintf("Scan Debug - No freqs - quitting"); 
-		return FALSE;					 // No Freqs
-	}
-	if (ptr[0] == (struct ScanEntry *)0) // End of list - reset to start
-	{
-		ptr = CheckTimeBands(RIG);
-	}
-	PORT->FreqPtr = ptr[0];				// Save Scan Command Block
-
+	RIG->ScanCounter = PORT->FreqPtr->Dwell; 
+	
 	// Do Bandwidth and antenna switches (if needed)
 
 	DoBandwidthandAntenna(RIG, ptr[0]);
@@ -1378,7 +1388,7 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 	int i;
 	struct _EXTPORTDATA * PortRecord;
 
-	if (ptr->Bandwidth)
+	if (ptr->Bandwidth || ptr->RPacketMode || ptr->HFPacketMode || ptr->PMaxLevel)
 	{
 		i = 0;
 
@@ -1388,7 +1398,9 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 
 			RIG->CurrentBandWidth = ptr->Bandwidth;
 
-			if (ptr->Bandwidth == 'R')			// Robust Packet
+			PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, ptr);	// Set Robust Packet
+
+/*			if (ptr->Bandwidth == 'R')			// Robust Packet
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 6);	// Set Robust Packet
 			else 
 				
@@ -1396,6 +1408,7 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 4);	// Set Wide Mode
 			else
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 5);	// Set Narrow Mode
+*/
 			i++;
 		}
 	}
@@ -2374,6 +2387,89 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna)
 	}	
 }
 
+BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
+				   char * PMinLevel, char * PMaxLevel, char * PacketMode,
+				   char * RPacketMode, char * Split, char * Data, char * WinmorMode,
+				   char * Antenna, BOOL * Supress, char * Filter)
+{
+	char * Context;
+	char * ptr;
+
+	*Filter = '1';			// Default
+
+	ptr = strtok_s(Param, ",", &Context);
+
+	// "New" format - Dwell, Freq, Params.
+	
+	//	Each param is a 2 char pair, separated by commas
+
+	// An - Antenna
+	// Pn - Pactor
+	// Wn - Winmor
+	// Pn - Packet
+	// Fn - Filter
+	// Sx - Split
+
+	// 7.0770/LSB,F1,A3,WN,P1,R1 
+
+	*Dwell = atof(ptr);
+	
+	ptr = strtok_s(NULL, ",", &Context);
+	*Freq = atof(ptr);
+
+	ptr = strtok_s(NULL, ",", &Context);
+
+	if (strlen(ptr) >  5)
+		return FALSE;
+
+	strcpy(Mode, ptr); 
+
+	ptr = strtok_s(NULL, ",", &Context);
+
+	while (ptr)
+	{
+		if (ptr[0] == 'A')
+			*Antenna = ptr[1];
+		
+		else if (ptr[0] == 'F')
+			*Filter = ptr[1];
+
+		else if (ptr[0] == 'R')
+			*RPacketMode = ptr[1];
+		
+		else if (ptr[0] == 'H')
+			*PacketMode = ptr[1];
+
+		else if (ptr[0] == 'P')
+		{
+			*PMinLevel = ptr[1];
+			*PMaxLevel = ptr[strlen(ptr) - 1];
+		}
+		else if (ptr[0] == 'W')
+		{
+			*WinmorMode = ptr[1];
+			if (*WinmorMode == '1')
+				*WinmorMode = 'N';
+			else if (*WinmorMode == '2')
+				*WinmorMode = 'w';
+		}
+
+		else if (ptr[0] == '+')
+			*Split = '+';
+		else if (ptr[0] == '-')
+			*Split = '-';
+		else if (ptr[0] == 'S')
+			*Split = 'S';
+		else if (ptr[0] == 'D')
+			*Data = 1;
+		else if (ptr[0] == 'X')
+			*Supress = TRUE;
+
+		ptr = strtok_s(NULL, ",", &Context);
+	}
+	return TRUE;
+
+}
 // Called by Port Driver .dll to add/update rig info 
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
@@ -2391,11 +2487,10 @@ DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
 	struct ScanEntry ** FreqPtr;
 	char * CmdPtr;
 	char * Context;
-	char Split, Data;
-	char Bandwidth, Antenna;
 	struct TimeScan * SaveBand;
 	char PTTRigName[] = "PTT";
 	double ScanFreq;
+	double Dwell;
 
 	_strupr(buf);
 
@@ -2406,7 +2501,10 @@ DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
 	if (ptr == NULL) return FALSE;
 
 	if (memcmp(ptr, "DEBUG", 5) == 0)
+	{
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		RIG_DEBUG = TRUE;
+	}
 
 	if (memcmp(ptr, "AUTH", 4) == 0)
 	{
@@ -2452,7 +2550,6 @@ PortFound:
 
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 	if (ptr == NULL) return (FALSE);
-
 
 	if (memcmp(ptr, "PTTCOM", 6) == 0)
 	{
@@ -2590,13 +2687,19 @@ PortFound:
 
 	if (ptr == NULL) return RIG;					// No Scanning, just Interactive control
 	
-	ScanFreq = atof(ptr);
+	if (strchr(ptr, ',') == 0)				// Old Format
+	{
+		ScanFreq = atof(ptr);
 
-	RIG->ScanFreq = ScanFreq * 10;
+		#pragma warning(push)
+		#pragma warning(disable : 4244)
 
-	RIG->FreqText = _strdup(Context);
+		RIG->ScanFreq = ScanFreq * 10;
 
-	ptr = strtok_s(NULL, " \t\n\r", &Context);
+		#pragma warning(push)
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+	}
 
 	// Frequency List
 
@@ -2606,6 +2709,8 @@ PortFound:
 
 	if (ptr != NULL)
 	{
+		// Create Default Timeband
+
 		struct TimeScan * Band = AllocateTimeRec(RIG);
 		SaveBand = Band;
 
@@ -2618,20 +2723,23 @@ PortFound:
 	while(ptr)
 	{
 		int ModeNo;
-		int Supress;
+		BOOL Supress;
 		double Freq = 0.0;
 		char FreqString[80]="";
 		char * Valchar;
-		char * Modeptr;
+		char * Modeptr = NULL;
 		int dec, sign;
+		char Split, Data, PacketMode, RPacketMode, PMinLevel, PMaxLevel, Filter;
+		char Mode[6];
+		char WinmorMode, Antenna;
 
 		if (ptr[0] == ';' || ptr[0] == '#')
 			break;
 
-		Modeptr = strchr(ptr, '/');
-					
-		if (Modeptr)
-			*Modeptr++ = 0;
+		Filter = PMinLevel = PMaxLevel = PacketMode = RPacketMode = Split =
+			Data = WinmorMode = Antenna = ModeNo = Supress = 0;
+
+		Dwell = 0.0;
 
 		if (strchr(ptr, ':'))
 		{
@@ -2652,59 +2760,89 @@ PortFound:
 			FreqPtr = Band->Scanlist = RIG->FreqPtr = malloc(1000);
 			memset(FreqPtr, 0, 1000);
 
-			ptr = strtok_s(NULL, " \t\n\r", &Context);
-											
+			ptr = strtok_s(NULL, " \t\n\r", &Context);										
+		}
+
+		if (strchr(ptr, ','))			// New Format
+		{
+			DecodeModePtr(ptr, &Dwell, &Freq, Mode, &PMinLevel, &PMaxLevel, &PacketMode,
+				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter);
+		}
+		else
+		{
 			Modeptr = strchr(ptr, '/');
 					
 			if (Modeptr)
 				*Modeptr++ = 0;
-		}
 
-		Freq = atof(ptr);
+			Freq = atof(ptr);
 
-		// Mode can include 1/2/3 for Icom Filers. W/N for Winmor/Pactor Bandwidth, and +/-/S for Repeater Shift (S = Simplex) 
-		// First is always Mode
+			if (Modeptr)
+			{
+				// Mode can include 1/2/3 for Icom Filers. W/N for Winmor/Pactor Bandwidth, and +/-/S for Repeater Shift (S = Simplex) 
+				// First is always Mode
+				// First char is Mode (USB, LSB etc)
 
-		Split = Data = Bandwidth = Antenna = ModeNo = Supress = 0;
+				Mode[0] = Modeptr[0];
+				Filter = Modeptr[1];
 
-		if (Modeptr)
-		{
-			if (strchr(&Modeptr[1], '+'))
-				Split = '+';
-			else if (strchr(&Modeptr[1], '-'))
-				Split = '-';
-			else if (strchr(&Modeptr[1], 'S'))
-				Split = 'S';
-			else if (strchr(&Modeptr[1], 'D'))
-				Data = 1;
+				if (strchr(&Modeptr[1], '+'))
+					Split = '+';
+				else if (strchr(&Modeptr[1], '-'))
+					Split = '-';
+				else if (strchr(&Modeptr[1], 'S'))
+					Split = 'S';
+				else if (strchr(&Modeptr[1], 'D'))
+					Data = 1;
 						
-			if (strchr(&Modeptr[1], 'W'))
-				Bandwidth = 'W';
-			else if (strchr(&Modeptr[1], 'N'))
-				Bandwidth = 'N';
-			else if (strchr(&Modeptr[1], 'R'))		// Robust Packet
-				Bandwidth = 'R';
+				if (strchr(&Modeptr[1], 'W'))
+				{
+					WinmorMode = 'W';
+					PMaxLevel = '3';
+					PMinLevel = '1';
+				}
+				else if (strchr(&Modeptr[1], 'N'))
+				{
+					WinmorMode = 'N';
+					PMaxLevel = '2';
+					PMinLevel = '1';
+				}
 
-			if (strchr(&Modeptr[1], 'X'))			// Dont Report
-				Supress = 1;
+				if (strchr(&Modeptr[1], 'R'))		// Robust Packet
+					RPacketMode = '2';				// R600
+				else if (strchr(&Modeptr[1], 'H'))	// HF Packet on Tracker
+					PacketMode = '1';				// 300
 
-			if (strstr(&Modeptr[1], "A1"))
-				Antenna = '1';
-			else if (strstr(&Modeptr[1], "A2"))
-				Antenna = '2';
-			if (strstr(&Modeptr[1], "A3"))
-				Antenna = '3';
-			else if (strstr(&Modeptr[1], "A4"))
-				Antenna = '4';
+				if (strchr(&Modeptr[1], 'X'))		// Dont Report to WL2K
+					Supress = 1;
 
+				if (strstr(&Modeptr[1], "A1"))
+						Antenna = '1';
+				else if (strstr(&Modeptr[1], "A2"))
+					Antenna = '2';
+				if (strstr(&Modeptr[1], "A3"))
+					Antenna = '3';
+				else if (strstr(&Modeptr[1], "A4"))
+					Antenna = '4';
+				}
+			}
+			
 			switch(PORT->PortType)
 			{
 			case ICOM:						
 						
 				for (ModeNo = 0; ModeNo < 8; ModeNo++)
 				{
-					if (Modes[ModeNo][0] == Modeptr[0])
-						break;
+					if (strlen(Mode) == 1)
+					{
+						if (Modes[ModeNo][0] == Mode[0])
+							break;
+					}
+					else
+					{
+						if (_stricmp(Modes[ModeNo], Mode) == 0)
+							break;
+					}
 				}
 				break;
 
@@ -2712,8 +2850,16 @@ PortFound:
 						
 				for (ModeNo = 0; ModeNo < 16; ModeNo++)
 				{
-					if (YaesuModes[ModeNo][0] == Modeptr[0])
-						break;
+					if (strlen(Mode) == 1)
+					{
+						if (YaesuModes[ModeNo][0] == Mode[0])
+							break;
+					}
+					else
+					{
+						if (_stricmp(YaesuModes[ModeNo], Mode) == 0)
+							break;
+					}
 				}
 				break;
 
@@ -2721,37 +2867,65 @@ PortFound:
 						
 				for (ModeNo = 0; ModeNo < 8; ModeNo++)
 				{
-					if (KenwoodModes[ModeNo][0] == Modeptr[0])
-						break;
+					if (strlen(Mode) == 1)
+					{
+						if (KenwoodModes[ModeNo][0] == Mode[0])
+							break;
+					}
+					else
+					{
+						if (_stricmp(KenwoodModes[ModeNo], Mode) == 0)
+							break;
+					}
 				}
 				break;
 
 			case FT2000:
 						
-				if (strstr(Modeptr, "PL"))
-					ModeNo = 8;
-				else if (strstr(Modeptr, "PU"))
-					ModeNo = 12;
-				else
+				if (Modeptr)
 				{
-					for (ModeNo = 0; ModeNo < 13; ModeNo++)
+					if (strstr(Modeptr, "PL"))
 					{
-						if (FT2000Modes[ModeNo][0] == Modeptr[0])
+						ModeNo = 8;
+						break;
+					}
+					if (strstr(Modeptr, "PU"))
+					{
+						ModeNo = 12;
+						break;
+					}
+				}
+				for (ModeNo = 0; ModeNo < 13; ModeNo++)
+				{
+					if (strlen(Mode) == 1)
+					{
+						if (FT2000Modes[ModeNo][0] == Mode[0])
+							break;
+					}
+					else
+					{
+						if (_stricmp(FT2000Modes[ModeNo], Mode) == 0)
 							break;
 					}
 				}
-					break;
+				break;
 
 			case FT100:						
 				
 				for (ModeNo = 0; ModeNo < 8; ModeNo++)
 				{
-					if (FT100Modes[ModeNo][0] == Modeptr[0])
-						break;
+					if (strlen(Mode) == 1)
+					{
+						if (FT100Modes[ModeNo][0] == Mode[0])
+							break;
+					}
+					else
+					{
+						if (_stricmp(FT100Modes[ModeNo], Mode) == 0)
+							break;
+					}
 				}
 				break;
-
-			}
 		}
 
 		Freq = Freq * 1000000.0;
@@ -2776,8 +2950,22 @@ PortFound:
 		FreqPtr[0] = malloc(sizeof(struct ScanEntry));
 		memset(FreqPtr[0], 0, sizeof(struct ScanEntry));
 
+		#pragma warning(push)
+		#pragma warning(disable : 4244)
+
+		if (Dwell == 0.0)
+			FreqPtr[0]->Dwell = ScanFreq * 10;
+		else
+			FreqPtr[0]->Dwell = Dwell * 10;
+
+		#pragma warning(pop) 
+
 		FreqPtr[0]->Freq = Freq;
-		FreqPtr[0]->Bandwidth = Bandwidth;
+		FreqPtr[0]->Bandwidth = WinmorMode;
+		FreqPtr[0]->RPacketMode = RPacketMode;
+		FreqPtr[0]->HFPacketMode = PacketMode;
+		FreqPtr[0]->PMaxLevel = PMaxLevel;
+		FreqPtr[0]->PMinLevel = PMinLevel;
 		FreqPtr[0]->Antenna = Antenna;
 		FreqPtr[0]->Supress = Supress;
 
@@ -2802,7 +2990,7 @@ PortFound:
 
 			*(CmdPtr++) = 0xFD;
 
-			if (Modeptr)
+			if (Filter)
 			{						
 				CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
 				*(CmdPtr++) = 0xFE;
@@ -2811,7 +2999,7 @@ PortFound:
 				*(CmdPtr++) = 0xE0;
 				*(CmdPtr++) = 0x6;		// Set Mode
 				*(CmdPtr++) = ModeNo;
-				*(CmdPtr++) = Modeptr[1] - '0';
+				*(CmdPtr++) = Filter - '0'; //Filter
 				*(CmdPtr++) = 0xFD;
 
 				if (Split)

@@ -767,7 +767,7 @@ struct SEM AllocSemaphore = {0, 0};
 
 struct SEM ConSemaphore = {0, 0};
 
-struct SEM ScriptSEM = {0, 0};
+struct SEM OutputSEM = {0, 0};
 
 struct UserInfo ** UserRecPtr=NULL;
 int NumberofUsers=0;
@@ -4680,6 +4680,8 @@ int QueueMsg(ConnectionInfo * conn, char * msg, int len)
 
 	// Create or extend buffer
 
+	GetSemaphore(&OutputSEM);
+
 	conn->OutputQueue=realloc(conn->OutputQueue, conn->OutputQueueLength + len);
 
 	if (conn->OutputQueue == NULL)
@@ -4687,12 +4689,13 @@ int QueueMsg(ConnectionInfo * conn, char * msg, int len)
 		// relloc failed - should never happen, but clean up
 
 		CriticalErrorHandler("realloc failed to expand output queue");
+		FreeSemaphore(&OutputSEM);
 		return 0;
 	}
 
 	memcpy(&conn->OutputQueue[conn->OutputQueueLength], msg, len);
-
-	conn->OutputQueueLength+=len;
+	conn->OutputQueueLength += len;
+	FreeSemaphore(&OutputSEM);
 
 	return len;
 }
@@ -4770,6 +4773,8 @@ void Flush(CIRCUIT * conn)
 		else
 			len=conn->paclen;
 
+		GetSemaphore(&OutputSEM);
+
 		if (conn->Paging)
 		{
 			// look for CR chars in message to send. Increment LinesSent, and stop if at limit
@@ -4794,7 +4799,7 @@ void Flush(CIRCUIT * conn)
 					conn->OutputGetPointer+=len;
 					tosend-=len;
 					SendUnbuffered(conn->BPQStream, "<A>bort, <CR> Continue..>", 25);
-
+					FreeSemaphore(&OutputSEM);
 					return;
 
 				}
@@ -4806,15 +4811,13 @@ void Flush(CIRCUIT * conn)
 
 		conn->OutputGetPointer+=len;
 
-		tosend-=len;
+		FreeSemaphore(&OutputSEM);
 
-		
-	
+		tosend-=len;	
 		sent++;
 
 		if (sent > 4)
 			return;
-
 	}
 
 	// All Sent. Free buffers and reset pointers
@@ -4829,11 +4832,15 @@ VOID ClearQueue(ConnectionInfo * conn)
 	if (conn->OutputQueue == NULL)
 		return;
 
+	GetSemaphore(&OutputSEM);
+	
 	free(conn->OutputQueue);
 
 	conn->OutputQueue=NULL;
 	conn->OutputGetPointer=0;
 	conn->OutputQueueLength=0;
+
+	FreeSemaphore(&OutputSEM);
 }
 
 
@@ -7111,7 +7118,7 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 	{
 		len = sprintf_s(Mess, sizeof(Mess), "Failed to create Message File\r");
 		QueueMsg(conn, Mess, len);
-		CriticalErrorHandler(Mess);
+		Debugprintf(Mess);
 	}
 	return;
 }
@@ -8115,6 +8122,9 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 }
 int	CriticalErrorHandler(char * error)
 {
+	Debugprintf("Critical Error %s", error);
+	ProgramErrors = 25;
+	CheckProgramErrors();				// Force close
 	return 0;
 }
 

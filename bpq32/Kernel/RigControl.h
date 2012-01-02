@@ -17,8 +17,13 @@ struct ScanEntry
 {
 	//	Holds info for one frequency change. May Need to set Feeq, Mode, Repeater Split, Pactor/Winmor Bandwidth
 
-	double Freq;		// In case nneded to report to WL2K
-	char Bandwidth;
+	double Freq;		// In case needed to report to WL2K
+	int Dwell;			// Dwell Time on this freq
+	char Bandwidth;		// W/N For WINMOR
+	char RPacketMode;	// Robust or Normal for Tracker
+	char HFPacketMode;	// Robust or Normal for Tracker
+	char PMaxLevel;		// Pactor Max Level
+	char PMinLevel;		// Pactor Max Level
 	char Antenna;
 	char Supress;		// Dont report this one to WL2K
 	char * Cmd1;

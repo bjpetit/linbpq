@@ -527,6 +527,7 @@ int SESSHDDRLEN = 0;
 
 
 char LOCATOR[80] = "";			// Locator for Reporting - may be Maidenhead or LAT:LON
+char MAPCOMMENT[250] = "";		// Locator for Reporting - may be Maidenhead or LAT:LON
 char LOC[7] = "";				// Maidenhead Locator for Reporting
 char ReportDest[7];
 
@@ -4963,10 +4964,13 @@ VOID SendLocation()
 {
 	MESSAGE AXMSG;
 	PMESSAGE AXPTR = &AXMSG;
-	char Msg[100];
+	char Msg[512];
 	int Len;
 
-	Len = wsprintf(Msg, "%s %s", LOCATOR, VersionString);
+	Len = wsprintf(Msg, "%s %s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
+
+	if (Len > 256)
+		Len = 256;
 
 	// Block includes the Msg Header (7 bytes), Len Does not!
 

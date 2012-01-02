@@ -1344,14 +1344,16 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			return;
 		}
 
-		} My__except_Routine("Decode B2 Message");
-
+		}
+			#define EXCEPTMSG "Error Decoding B2 Message"
+			#include "StdExcept.c"
+ 
 		BBSputs(conn, "*** Program Error Decoding B2 Message\r");
 		Flush(conn);
 		conn->CloseAfterFlush = 20;			// 2 Secs
 		
 		return;
-
+		}
 	} // end if B2Msg
 
 	CreateMessageFromBuffer(conn);

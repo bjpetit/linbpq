@@ -222,7 +222,27 @@ static ProcessLine(char * buf, int Port)
 			{
 				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
-				TNC->RigConfigMsg = _strdup(buf);
+				if (strlen(buf) > 15)
+					TNC->RigConfigMsg = _strdup(buf);
+				else
+				{
+					// Multiline config, ending in ****
+
+					TNC->RigConfigMsg = zalloc(10000);
+
+					strcpy(TNC->RigConfigMsg, "RIGCONTROL ");
+
+					while(TRUE)
+					{
+						if (GetLine(buf) == 0)
+							break;
+
+						if (memcmp(buf, "***", 3) == 0)
+							break;
+
+						strcat(TNC->RigConfigMsg, buf);
+					}
+				}
 			}
 			else
 				
@@ -350,6 +370,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	HKEY hKey=0;
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
+	struct ScanEntry * Scan;
 
 	if (TNC == NULL)
 		return 0;							// Port not defined
@@ -490,7 +511,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					SendReporttoWL2K(TNC);
 			}
 		}
-
 
 		if (TNC->TimeSinceLast++ > 700)			// Allow 10 secs for Keepalive
 		{
@@ -687,16 +707,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 	
-			if (_memicmp(&buff[8], "XXX\r", 4) == 0)
-			{
-				CheckAppl(TNC, "RMS         "); // Is RMS Available?
-
-				SendReporttoWL2K(TNC);
-
-				return 0;
-			}
-
-
 			if (TNC->FECMode)
 			{
 				char Buffer[300];
@@ -988,13 +998,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		if (Param == 4)		// Set Wide Mode
+		// Param is Address of a struct ScanEntry
+
+		Scan = (struct ScanEntry *)buff;
+
+		if (Scan->Bandwidth == 'W')		// Set Wide Mode
 		{
 			send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
 			return 0;
 		}
 
-		if (Param == 5)		// Set Narrow Mode
+		if (Scan->Bandwidth == 'N')		// Set Wide Mode
 		{
 			send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
 			return 0;

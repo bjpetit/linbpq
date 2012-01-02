@@ -66,8 +66,8 @@ BOOL OpenVirtualSerialPort(struct TNCINFO * TNC);
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type);
 VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 Switchmode(struct TNCINFO * TNC, int Mode);
-VOID SwitchToRPacket(struct TNCINFO * TNC);
-VOID SwitchToNormPacket(struct TNCINFO * TNC);
+VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud);
+VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud);
 VOID SendRPBeacon(struct TNCINFO * TNC);
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 
@@ -191,7 +191,7 @@ ConfigLine:
 
 }
 
-static int ExtProc(int fn, int port,unsigned char * buff)
+static int ExtProc(int fn, int port, unsigned char * buff)
 {
 	int txlen = 0;
 	UINT * buffptr;
@@ -200,6 +200,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 	int TNCOK;
+	struct ScanEntry * Scan;
 
 
 	if (TNC == NULL)
@@ -386,19 +387,33 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			TNC->DontWantToChangeFreq = TRUE;
 			return 0;
 		
-		case 4:		// Set Wide Mode - Not Used
-		
-			return 0;
-		
-		case 5:		// Set Narrow Mode Used for Normal Packet
-		
-			SwitchToNormPacket(TNC);
-			return 0;
 
-		case 6:		// Changing Freq (Called if changing freq but not bandwidth
+		default: // Change Mode. Param is Address of a struct ScanEntry
 
-			SwitchToRPacket(TNC);
-			return 0;
+			Scan = (struct ScanEntry *)buff;
+
+			if (Scan->RPacketMode == '1')
+			{
+				SwitchToRPacket(TNC, "R300");
+				return 0;
+			}
+			if (Scan->RPacketMode == '2')
+			{
+				SwitchToRPacket(TNC, "R600");
+				return 0;
+			}
+
+			if (Scan->HFPacketMode == '1')
+			{
+				SwitchToNormPacket(TNC, "300");
+				return 0;
+			}
+
+			if (Scan->HFPacketMode == '2')
+			{
+				SwitchToNormPacket(TNC, "1200");
+				return 0;
+			}
 		}
 	}
 	return 0;
@@ -834,11 +849,8 @@ VOID DEDPoll(int Port)
 		
 				TNC->SwitchToPactor = 0;						// Cancel any RP to Pactor switch
 
-				if (TNC->RigConfigMsg)
-				{
-					wsprintf(Status, "%d SCANSTOP", TNC->Port);
-					Rig_Command(-1, Status);
-				}
+				wsprintf(Status, "%d SCANSTOP", TNC->Port);
+				Rig_Command(-1, Status);
 			}
 		}
 	}
@@ -889,10 +901,7 @@ VOID DEDPoll(int Port)
 			UINT * buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 			ReleaseBuffer(buffptr);
 		}
-
-
 	}
-
 
 	if (TNC->SwitchToPactor)
 	{
@@ -902,9 +911,9 @@ VOID DEDPoll(int Port)
 		{
 			TNC->SwitchToPactor = TNC->RobustTime;
 			if (TNC->Robust)
-				SwitchToNormPacket(TNC);
+				SwitchToNormPacket(TNC, "");
 			else
-				SwitchToRPacket(TNC);
+				SwitchToRPacket(TNC, "R600");
 		}
 	}
  
@@ -1127,9 +1136,25 @@ VOID DEDPoll(int Port)
 			if ((Stream == 0) && memcmp(Buffer, "HFPACKET", 8) == 0)
 			{
 				if (TNC->ForceRobust)
+				{
 					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "TRK} HF Packet Disabled\r");
-				else
-					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "TRK} OK\r");
+					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+					return;
+				}
+
+				if (strlen(Buffer) > 10)
+				{
+					// Speed follows HFPACKET
+
+					Buffer += 9;
+					
+					Buffer = strtok(Buffer, " \r");
+					
+					if (strlen(Buffer) < 6)
+						strcpy(TNC->NormSpeed, Buffer);
+				}
+
+				buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "TRK} OK\r");
 									
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 				TNC->Robust = FALSE;
@@ -2328,31 +2353,38 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 	TNC->NeedPACTOR = 20;		// Delay a bit for UA to be sent before changing mode and call
 	
-	if (TNC->RigConfigMsg)
-	{
-		wsprintf(Status, "%d SCANSTART 15", TNC->Port);
-		Rig_Command(-1, Status);
-	}
-	else
+	wsprintf(Status, "%d SCANSTART 15", TNC->Port);
+	
+	Rig_Command(-1, Status);
+
+	if (TNC->RIG == &TNC->DummyRig)		// Not using Rig control
 		TNC->SwitchToPactor = TNC->RobustTime;
 }
 
-VOID SwitchToRPacket(struct TNCINFO * TNC)
+VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud)
 {
-	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
-	wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B R600\0");
-	TNC->Robust = TRUE;
-	SetDlgItemText(TNC->hDlg, IDC_MODE, "Robust Packet");
+	if (TNC->Robust == FALSE)
+	{
+		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
+		wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", Baud);
+		TNC->Robust = TRUE;
+		SetDlgItemText(TNC->hDlg, IDC_MODE, "Robust Packet");
+	}
 }
-
-VOID SwitchToNormPacket(struct TNCINFO * TNC)
+VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud)
 {
 	if (TNC->ForceRobust)
 		return;
 	
 	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
-	wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", TNC->NormSpeed);
+		
+	if (Baud[0] == 0)
+		wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", TNC->NormSpeed);
+	else
+		wsprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", Baud);
+			
 	TNC->Robust = FALSE;
+
 	SetDlgItemText(TNC->hDlg, IDC_MODE, "HF Packet");
 }
 

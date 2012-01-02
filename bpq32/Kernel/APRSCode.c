@@ -66,6 +66,7 @@ extern VOID * zalloc(int len);
 extern BOOL StartMinimized;
 extern BOOL MinimizetoTray;
 extern char * PortConfig[];
+extern char TextVerstring[];
 
 extern short NUMBEROFPORTS;
 
@@ -162,6 +163,8 @@ int AXDESTLEN[30] = {0};
 UCHAR axTCPIP[7];
 UCHAR axRFONLY[7];
 UCHAR axNOGATE[7];
+
+int MessageCount;
 
 // Heard Station info
 
@@ -541,7 +544,7 @@ Dll VOID APIENTRY Poll_APRS()
 
 		if (APRSISOpen && CrossPortMap[Port][0])	// No point if not open
 		{
-			len = wsprintf(ISMsg, "%s>%s,qAC,%s:%s", ptr1, ptr4, APRSCall, Payload);
+			len = wsprintf(ISMsg, "%s>%s,qAR,%s:%s", ptr1, ptr4, APRSCall, Payload);
 
 			send(sock, ISMsg, len, 0);
 	
@@ -1004,8 +1007,12 @@ static ProcessLine(char * buf)
 	{
 		BeaconInterval = atoi(p_value);
 
+		if (BeaconInterval < 5)
+			BeaconInterval = 5;
+
 		if (BeaconInterval)
-			BeaconCounter = 60;				// Send first after 30 secs
+			BeaconCounter = 30;				// Send first after 30 secs
+
 		return TRUE;
 	}
 
@@ -1168,7 +1175,11 @@ VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlus
 {
 	if (memcmp(Query, "APRSS", 5) == 0)
 	{
-		SendBeacon(Port);
+		char Message[255];
+	
+		wsprintf(Message, ":%-9s:%s", Origin, StatusMsg);
+		SendAPRSMessage(Message, Port);
+
 		return;
 	}
 
@@ -1255,7 +1266,7 @@ VOID SendBeacon(int toPort)
 				
 		if (buffptr)
 		{
-			buffptr[1] = wsprintf((char *)&buffptr[3], "%s>APRS <UI>:!%s%c%s%c %s\r\n", APRSCall, LAT, SYMSET, LON, SYMBOL, StatusMsg);
+			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>APRS <UI>:\r!%s%c%s%c %s\r\n", APRSCall, LAT, SYMSET, LON, SYMBOL, StatusMsg);
 			buffptr[2] = 255;
 			C_Q_ADD(&APPL_Q, buffptr);
 		}
@@ -1273,7 +1284,7 @@ VOID SendIStatus()
 		Msg.PID = 0xf0;
 		Msg.CTL = 3;
 
-		Len = wsprintf(Msg.L2DATA, "<IGATE,MSG_CNT=%d,LOC_CNT=%d", 0 , CountLocalStations());
+		Len = wsprintf(Msg.L2DATA, "<IGATE,MSG_CNT=%d,LOC_CNT=%d", MessageCount , CountLocalStations());
 
 		for (Port = 1; Port <= NUMBEROFPORTS; Port++)
 		{
@@ -1358,11 +1369,11 @@ VOID APRSISThread(BOOL Report)
 	SetDlgItemText(hWnd, IGATESTATE, "IGate State: Connecting");
 
 	if (ISFilter)
-		wsprintf(Signon, "user %s pass %d vers BPQ32 2011/12/10 filter %s\r\n",
-			APRSCall, ISPasscode, ISFilter);
+		wsprintf(Signon, "user %s pass %d vers BPQ32 %s filter %s\r\n",
+			APRSCall, ISPasscode, TextVerstring, ISFilter);
 	else
-		wsprintf(Signon, "user %s pass %d vers BPQ32 2011/12/10\r\n",
-			APRSCall, ISPasscode);
+		wsprintf(Signon, "user %s pass %d vers BPQ32 %s\r\n",
+			APRSCall, ISPasscode, TextVerstring);
 
 	// Resolve Name if needed
 
@@ -1541,6 +1552,10 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	// Gate call of originating Igate
 
 	ptr = Payload;
+
+	if (Payload == NULL)
+		return;
+
 	*(Payload++) = 0;
 
 	while (ptr[0] != ',')
@@ -1675,7 +1690,7 @@ DoMove:
 	
 		HEARDENTRIES = i + 1;
 
-		wsprintf(Status, "IGATE Stats: Msgs %d  Local Stns %d", 0 , CountLocalStations());
+		wsprintf(Status, "IGATE Stats: Msgs %d  Local Stns %d", MessageCount , CountLocalStations());
 		SetDlgItemText(hWnd, IGATESTATS, Status);
 	}
 
@@ -1733,7 +1748,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 			continue;	
 		}
 
-		if (Len == DupInfo[i].DupLen && memcmp(Call, DupInfo[i].DupUser, 7) == 0 && (memcmp(Msg, DupInfo[i].DupText, DupInfo[i].DupLen) == 0))
+		if ((Len == DupInfo[i].DupLen || (DupInfo[i].DupLen == 99 && Len > 99)) && memcmp(Call, DupInfo[i].DupUser, 7) == 0 && (memcmp(Msg, DupInfo[i].DupText, DupInfo[i].DupLen) == 0))
 		{
 			// Duplicate, so discard
 
@@ -2247,6 +2262,8 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 	// Message has to be queued so it can be sent by Timer Process (IS sock is not valid ib tihs context)
 
 	UINT * buffptr;
+
+	MessageCount++;
 
 	buffptr = GetBuff();
 
