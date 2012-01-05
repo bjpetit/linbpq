@@ -57,7 +57,7 @@
 
 //		Wrap overlong lines
 
-// Version 2.1.2 October 2011
+// Version 2.1.2 Jan 2012
 
 //		Call CloseBPQ32 on exit
 //		Fix ClearOutputWindow

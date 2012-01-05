@@ -15,7 +15,6 @@
 
 // Fix reporting of set errors in scan to the wrong session
 
-#define WIN32_LEAN_AND_MEAN
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -24,11 +23,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "time.h"
+#include <commctrl.h>
 
 //#include <process.h>
 //#include <time.h>
 
-#include "RigControl.h"
+#include "TNCInfo.h"
 #include "ASMStrucs.h"
 
 #include "bpq32.h"
@@ -36,6 +36,8 @@
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
 
+struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+extern char * RigConfigMsg[35];
 
 extern UINT FREE_Q;
 UINT ReleaseBuffer(UINT *BUFF);
@@ -46,11 +48,11 @@ int Row = -20;
 
 BOOL RIG_DEBUG = FALSE;
 
-
 extern struct PORTCONTROL * PORTTABLE;
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
+struct RIGINFO * RigConfig(char * buf, int Port);
 struct RIGPORTINFO * CreateTTYInfo(int port, int speed);
 BOOL NEAR OpenConnection(int);
 BOOL NEAR SetupConnection(int);
@@ -58,7 +60,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT);
 BOOL NEAR RigWriteCommBlock(struct RIGPORTINFO * PORT);
 BOOL NEAR DestroyTTYInfo(int port);
 void CheckRX(struct RIGPORTINFO * PORT);
-static OpenCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed);
+static OpenRigCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed);
 VOID ICOMPoll(struct RIGPORTINFO * PORT);
 VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuff, int len);
 VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len);
@@ -76,6 +78,7 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT);
 VOID SetupPortRIGPointers();
 
 extern  struct TRANSPORTENTRY * L4TABLE;
+HANDLE hInstance;
 
 VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
 BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
@@ -803,9 +806,72 @@ int BittoInt(UINT BitMask)
 DllExport BOOL APIENTRY Rig_Init()
 {
 	struct RIGPORTINFO * PORT;
-	int i, p;
+	int i, p, port;
 	struct RIGINFO * RIG;
 	char szPort[15];
+	struct TNCINFO * TNC;
+	HWND hDlg;
+	int RigRow;
+
+	// Get config info
+
+	for (port = 1; port < 33; port++)
+	{
+		TNC = TNCInfo[port];
+
+		if (TNC == NULL)
+			continue;
+
+		if (RigConfigMsg[port])
+		{
+			char msg[1000];
+			
+			char * SaveRigConfig = _strdup(RigConfigMsg[port]);
+			char * RigConfigMsg1 = _strdup(RigConfigMsg[port]);
+
+			RIG = TNC->RIG = RigConfig(RigConfigMsg1, port);
+			
+			if (TNC->RIG == NULL)
+			{
+				// Report Error
+
+				wsprintf(msg,"Port %d Invalid Rig Config %s", port, SaveRigConfig);
+				WritetoConsole(msg);
+			}
+
+			free(SaveRigConfig);
+			free(RigConfigMsg1);
+
+			hDlg = TNC->hDlg;
+			RigRow = TNC->RigControlRow;
+
+			RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
+				10, RigRow, 80,20, hDlg, NULL, hInstance, NULL);
+	
+			RIG->hCAT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 90, RigRow, 40,20, hDlg, NULL, hInstance, NULL);
+	
+			RIG->hFREQ = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 135, RigRow, 100,20, hDlg, NULL, hInstance, NULL);
+	
+			RIG->hMODE = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 240, RigRow, 60,20, hDlg, NULL, hInstance, NULL);
+	
+			RIG->hSCAN = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 300, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
+
+			RIG->hPTT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
+                 320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
+
+		//if (PORT->PortType == ICOM)
+		//{
+		//	wsprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
+		//	SetWindowText(RIG->hCAT, msg);
+		//}
+			SetWindowText(RIG->hLabel, RIG->RigName);
+		}
+	}
+
    
 	if (NumberofPorts == 0)
 	{
@@ -821,7 +887,7 @@ DllExport BOOL APIENTRY Rig_Init()
 		
 //		CreateDisplay(PORT);
 
-		OpenCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+		OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
 
 		if (PORT->PTTIOBASE)		// Using separare port for PTT?
 		{
@@ -925,7 +991,8 @@ DllExport BOOL APIENTRY Rig_Init()
 DllExport BOOL APIENTRY Rig_Close()
 {
 	struct RIGPORTINFO * PORT;
-	int p;
+	struct TNCINFO * TNC;
+	int n, p;
 
 	for (p = 0; p < NumberofPorts; p++)
 	{
@@ -937,9 +1004,34 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		if (PORT->hPTTDevice != PORT->hDevice)
 			CloseHandle(PORT->hPTTDevice);
+
+		// Free the RIG and Port Records
+
+		for (n = 0; n < PORT->ConfiguredRigs; n++)
+		{
+			free (PORT->Rigs[n].TimeBands[1]->Scanlist);
+		}
+
+		free (PORT);
+		PORTInfo[p] = NULL;
 	}
 
 	NumberofPorts = 0;		// For possible restart
+
+	// And free the TNC config info
+
+	for (p = 1; p < 33; p++)
+	{
+		TNC = TNCInfo[p];
+
+		if (TNC == NULL)
+			continue;
+
+		TNC->RIG = NULL;
+
+		memset(TNC->WL2KInfoList, 0, sizeof(TNC->WL2KInfoList));
+
+	}
 
 	return TRUE;
 }
@@ -1020,7 +1112,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 
 } // end of CloseConnection()
 
-OpenCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed)
+OpenRigCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed)
 {
 	char szPort[15];
 	char buf[80];
@@ -2451,7 +2543,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 			if (*WinmorMode == '1')
 				*WinmorMode = 'N';
 			else if (*WinmorMode == '2')
-				*WinmorMode = 'w';
+				*WinmorMode = 'W';
 		}
 
 		else if (ptr[0] == '+')
@@ -2475,7 +2567,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
 
-DllExport struct RIGINFO * APIENTRY RigConfig(char * buf, int Port)
+struct RIGINFO * RigConfig(char * buf, int Port)
 {
 	int i;
 	char * ptr;

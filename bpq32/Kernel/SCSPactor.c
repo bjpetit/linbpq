@@ -84,6 +84,7 @@ extern char * PortConfig[33];
 static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+extern char * RigConfigMsg[35];
 
 VOID __cdecl Debugprintf(const char * format, ...);
 
@@ -189,21 +190,6 @@ ConfigLine:
 				TNC->ApplCmd=_strdup(_strupr(p_cmd));
 		}
 		else
-
-			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-			{
-				char * vcom = strstr(buf, "VCOM");
-				if (vcom)
-	
-					// SCS Virtual COM Channel
-
-					TNC->VCOMPort = atoi(&vcom[4]);		
-
-				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-				TNC->RigConfigMsg = _strdup(buf);
-			}
-			else
 				
 			if (_memicmp(buf, "PACKETCHANNELS", 14) == 0)	// Packet Channels
 				TNC->PacketChannels = atoi(&buf[14]);
@@ -592,24 +578,6 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	if (TNC->MaxLevel == 0)
 		TNC->MaxLevel = 3;
 
-	if (TNC->RigConfigMsg)
-	{
-		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
-
-		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
-			
-		if (TNC->RIG == NULL)
-		{
-			// Report Error
-
-			wsprintf(msg,"Invalid Rig Config %s", SaveRigConfig);
-			WritetoConsole(msg);
-
-		}
-		free(SaveRigConfig);
-	}
-
-
 	// Set up DED addresses for streams (first stream (Pactor) = DED 31
 	
 	TNC->Streams[0].DEDStream = 31;
@@ -703,6 +671,14 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0);
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+
+	if (RigConfigMsg[TNC->Port])
+	{
+		char * vcom = strstr(RigConfigMsg[TNC->Port], "VCOM");
+		
+		if (vcom)				// SCS Virtual COM Channel
+			TNC->VCOMPort = atoi(&vcom[4]);		
+	}
 
 	if (TNC->VCOMPort)
 		OpenVirtualSerialPort(TNC);
@@ -2652,7 +2628,7 @@ BOOL OpenVirtualSerialPort(struct TNCINFO * TNC)
 	}		  
 	if (TNC->VCOMHandle == (HANDLE) -1 )
 	{
-		wsprintf(buf,"Virtual COM Port %d could not be opened ", TNC->VCOMPort);
+		wsprintf(buf," Virtual COM Port %d could not be opened ", TNC->VCOMPort);
 		WritetoConsole(buf);
 
 		return (FALSE) ;

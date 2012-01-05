@@ -89,6 +89,7 @@
 #define IDC_WPTYPE                      1085
 #define IDC_WPTO                        1086
 #define IDC_WPSAVE                      1087
+#define IDC_PRINTMSG                    1088
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -113,6 +114,7 @@
 #define FILTER_TO                       6007
 #define FILTER_VIA                      6008
 #define IDC_EDITTEXT                    6104
+#define IDC_SAVETOFILE                  6105
 #define IDC_LOGLIFETIME                 9025
 #define IDC_USEB1                       9876
 #define IDC_READDRESSLOCAL              9877
@@ -155,7 +157,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
 #define _APS_NEXT_COMMAND_VALUE         40022
-#define _APS_NEXT_CONTROL_VALUE         1088
+#define _APS_NEXT_CONTROL_VALUE         1089
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

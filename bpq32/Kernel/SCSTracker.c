@@ -38,6 +38,7 @@ extern char LOC[];
 static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
+extern char * RigConfigMsg[35];
 
 VOID __cdecl Debugprintf(const char * format, ...);
 char * strlop(char * buf, char delim);
@@ -127,13 +128,6 @@ ConfigLine:
 
 			if (p_cmd && p_cmd[0] != ';' && p_cmd[0] != '#')
 				TNC->ApplCmd=_strdup(_strupr(p_cmd));
-		}
-		else
-		if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-		{
-				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-			TNC->RigConfigMsg = _strdup(buf);
 		}
 		else
 		
@@ -455,24 +449,6 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 	TNC->Port = port;
 	TNC->Hardware = H_TRK;
 
-	if (TNC->RigConfigMsg)
-	{
-		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
-
-		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
-			
-		if (TNC->RIG == NULL)
-		{
-			// Report Error
-
-			wsprintf(msg,"Invalid Rig Config %s", SaveRigConfig);
-			WritetoConsole(msg);
-
-		}
-		free(SaveRigConfig);
-	}
-
-
 	// Set up DED addresses for streams
 	
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -550,7 +526,7 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->InitPtr = TNC->InitScript;
 
-	if (TNC->RigConfigMsg == NULL)
+	if (RigConfigMsg[port] == NULL)
 		TNC->SwitchToPactor = TNC->RobustTime;		// Don't alternate Modes if using Rig Control
 
 	WritetoConsole("\n");
@@ -2028,8 +2004,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 								wsprintf(Status, "%d SCANSTART 60", TNC->Port);	// Pause scan for 60 secs
 								Rig_Command(-1, Status);
-									if (TNC->RigConfigMsg == NULL && TNC->RobustTime)
-										TNC->SwitchToPactor = 600;		// Don't change modes for 60 secs
+								
+								if (RigConfigMsg[TNC->Port] == NULL && TNC->RobustTime)
+									TNC->SwitchToPactor = 600;		// Don't change modes for 60 secs
 
 								strcpy(STREAM->MyCall, DestCall);
 								STREAM->CmdSet = STREAM->CmdSave = zalloc(100);

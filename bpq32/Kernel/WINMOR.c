@@ -217,34 +217,6 @@ static ProcessLine(char * buf, int Port)
 				*ptr++ = 13;
 				*ptr = 0;
 			}
-
-			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-			{
-				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-				if (strlen(buf) > 15)
-					TNC->RigConfigMsg = _strdup(buf);
-				else
-				{
-					// Multiline config, ending in ****
-
-					TNC->RigConfigMsg = zalloc(10000);
-
-					strcpy(TNC->RigConfigMsg, "RIGCONTROL ");
-
-					while(TRUE)
-					{
-						if (GetLine(buf) == 0)
-							break;
-
-						if (memcmp(buf, "***", 3) == 0)
-							break;
-
-						strcat(TNC->RigConfigMsg, buf);
-					}
-				}
-			}
-			else
 				
 			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
 			{}		// Ignore
@@ -1137,23 +1109,6 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 	if (TNC->BusyHold == 0)
 		TNC->BusyHold = 1;
 
-	if (TNC->RigConfigMsg)
-	{
-		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
-
-		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
-
-		if (TNC->RIG)
-			TNC->RIG->PTTMode = TNC->PTTMode;
-		else
-		{
-			// Report Error
-
-			Consoleprintf("Invalid Rig Config %s", TNC->RigConfigMsg);
-		}
-		free(SaveRigConfig);
-	}
-
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
@@ -1192,7 +1147,6 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 	TNC->InitScript = TempScript;
 
 	// Set MYCALL
-
 
 	strcat(TNC->InitScript,"FECRCV True\r\n");
 	strcat(TNC->InitScript,"AUTOBREAK True\r\n");

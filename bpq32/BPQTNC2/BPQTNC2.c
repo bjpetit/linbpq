@@ -22,7 +22,7 @@
 
 // Use HKEY_CURRENT_USER on Vista+
 
-// Version 1.1.5 Build 1 October 2011
+// Version 1.1.5 Build 1 February 2012
 
 // Call CloseBPQ32 on exit
 

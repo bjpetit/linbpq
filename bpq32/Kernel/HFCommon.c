@@ -402,38 +402,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	else
 		ShowWindow(hDlg, SW_RESTORE);
 
-
-	if (TNC->RIG)
-	{
-		struct RIGINFO * RIG = TNC->RIG;
-		int RigRow = RigControlRow;
-
-		RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
-                 10, RigRow, 80,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hCAT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 90, RigRow, 40,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hFREQ = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 135, RigRow, 100,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hMODE = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 240, RigRow, 60,20, hDlg, NULL, hInstance, NULL);
-	
-		RIG->hSCAN = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 300, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
-
-		RIG->hPTT = CreateWindow(WC_STATIC , "",  WS_CHILD | WS_VISIBLE,
-                 320, RigRow, 20,20, hDlg, NULL, hInstance, NULL);
-
-		//if (PORT->PortType == ICOM)
-		//{
-		//	wsprintf(msg,"%02X", PORT->Rigs[i].RigAddr);
-		//	SetWindowText(RIG->hCAT, msg);
-		//}
-		SetWindowText(RIG->hLabel, RIG->RigName);
-
-	}
+	TNC->RigControlRow = RigControlRow;
 
 	SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Free");
 

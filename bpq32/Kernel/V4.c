@@ -222,12 +222,6 @@ ConfigLine:
 				*ptr++ = 13;
 				*ptr = 0;
 			}
-
-			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-			{
-				TNC->RigConfigMsg = _strdup(buf);
-			}
-			else
 				
 			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
 			{}		// Ignore
@@ -1065,26 +1059,6 @@ UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry)
 		TNC->WeStartedTNC = RestartTNC(TNC);
 
 	TNC->Hardware = H_V4;
-
-
-	if (TNC->RigConfigMsg)
-	{
-		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
-
-		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
-
-		if (TNC->RIG)
-			TNC->RIG->PTTMode = TNC->PTTMode;
-		else
-		{
-			// Report Error
-
-			i=wsprintf(Msg,"Invalid Rig Config %s", TNC->RigConfigMsg);
-			WritetoConsole(Msg);
-
-		}
-		free(SaveRigConfig);
-	}
 
 	TNC->PortRecord = PortEntry;
 

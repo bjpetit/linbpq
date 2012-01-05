@@ -412,7 +412,8 @@
 // Change Console Window to a Dialog Box.
 // Fix possible corruption and loss of buffers in Tracker drivers
 // Add Beacon After Session option to Tracker and UZ7HO Drivers
-
+// Rewrite RigControl and add "Reread Config Command"
+// Support User Mode VCOM Driver for VKISS ports
 
 #define Kernel
 #include "Versions.h"
@@ -651,7 +652,8 @@ int AttachingProcess = 0;
 HINSTANCE hIPModule = 0;
 HINSTANCE hRigModule = 0;
 
-BOOL ReconfigFlag=FALSE;
+BOOL ReconfigFlag = FALSE;
+BOOL RigReconfigFlag = FALSE;
 
 int AttachedPIDList[100] = {0};
 int AttachedPIDType[100] = {0};
@@ -1154,6 +1156,21 @@ VOID CALLBACK TimerProc
 			RigActive = Rig_Init();
 			
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
+		}
+	}
+
+
+	if (RigReconfigFlag)
+	{
+		// Only do it it timer owning process, or we could get in a real mess!
+
+		if(TimerInst == GetCurrentProcessId())
+		{
+			RigReconfigFlag = FALSE;
+			Rig_Close();				
+			RigActive = Rig_Init();
+			
+			WritetoConsole("Rigcontrol Reconfiguration Complete\n");	
 		}
 	}
 
@@ -4073,6 +4090,7 @@ int SetupConsoleWindow()
 	AppendMenu(hPopMenu,MF_STRING,BPQCLEARRECONFIG,"Clear Nodes, Re-read bpq32.cfg and reconfigure node");
 	AppendMenu(hPopMenu,MF_STRING,BPQSAVEREG,"Save Registry Configuration");
 	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
+	AppendMenu(hPopMenu,MF_STRING,SCANRECONFIG,"Re-read Rigcontrol Config");
 
 	AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
 	AppendMenu(hPopMenu,MF_STRING | (MinimizetoTray)? MF_CHECKED:MF_UNCHECKED, BPQMINTOTRAY, "Minimize to Notification Area (System Tray)" );
@@ -4324,6 +4342,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				WritetoConsole("Nodes Saved\n");
 				ReconfigFlag=TRUE;	
 				WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
+				return 0;
+			}
+
+			if (wmId == SCANRECONFIG)
+			{
+				if (!ProcessConfig())
+				{
+					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
+					return (0);
+				}
+
+				RigReconfigFlag=TRUE;	
+				WritetoConsole("Rigcontrol Reconfig requested ... Waiting for Timer Poll\n");
 				return 0;
 			}
 

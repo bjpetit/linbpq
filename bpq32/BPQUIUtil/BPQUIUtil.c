@@ -1,7 +1,7 @@
 
 //	Program to send ax.25 Beacons from a BPQ32 Switch
 
-// Version 0.1.1.0 October 2011
+// Version 0.1.1.0 January 2012
 
 //		Call CloseBPQ32 on exit
 //		Allow use with Tracker and UZ7HO ports

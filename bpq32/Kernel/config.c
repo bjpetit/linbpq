@@ -117,7 +117,8 @@
 
 char * Buffer;
 
-extern char * PortConfig[35];
+char * PortConfig[35];
+char * RigConfigMsg[35];
 
 BOOL PortDefined[35];
 
@@ -519,6 +520,11 @@ DllExport BOOL ProcessConfig()
 		{
 			free(PortConfig[i]);
 			PortConfig[i] = NULL;
+		}
+		if (RigConfigMsg[i])
+		{
+			free(RigConfigMsg[i]);
+			RigConfigMsg[i] = NULL;
 		}
 		PortDefined[i] = FALSE;
 	}
@@ -1839,9 +1845,44 @@ char rec[];
 				i--;
 			}
 
-			strcat(ptr, rec);
-			strcat(ptr, "\r\n");
-			
+			// Pick out RIGCONFIG Records
+
+			if (_memicmp(rec, "RIGCONTROL", 10) == 0)
+			{
+				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
+
+				if (strlen(rec) > 15)
+					RigConfigMsg[LogicalPortNum] = _strdup(rec);
+				else
+				{
+					// Multiline config, ending in ****
+
+					char * rptr;
+					
+					RigConfigMsg[LogicalPortNum] = rptr = zalloc(50000);
+
+					strcpy(rptr, "RIGCONTROL ");
+
+					GetNextLine(rec);
+
+					while(!feof(fp1))
+					{
+						if (memcmp(rec, "***", 3) == 0)
+						{
+							RigConfigMsg[LogicalPortNum] = realloc(RigConfigMsg[LogicalPortNum], (strlen(rptr) + 1));		
+							break;
+						}
+						strcat(rptr, rec);
+						GetNextLine(rec);
+					}
+				}
+			}
+			else
+			{
+				strcat(ptr, rec);
+				strcat(ptr, "\r\n");
+			}
+
 			GetNextLine(rec);
 		}
 

@@ -701,6 +701,7 @@
 //	Fix BaseDir test when BaseDir ends with \ or /
 //  Fix long BaseDir values (>50 chars)
 
+// Version 1.4.47.1 October 2011
 
 //  Call CloseBPQ32 on exit
 //  Add option to flash window instead of sounding bell on Chat Connects
@@ -711,6 +712,7 @@
 //	Fix SID and Prompt when RMS Express User is set
 //  Try to stop loop in Program Error/Restarting code
 //  Trap "UNABLE TO CONNECT" response in connect script
+//  Add facility to proin message or save them to a text file
 
 // Use Windows Sound Events for (Chat "user join" alert)
 

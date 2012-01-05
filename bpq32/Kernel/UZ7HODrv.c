@@ -972,14 +972,6 @@ static ProcessLine(char * buf, int Port)
 				*ptr++ = 13;
 				*ptr = 0;
 			}
-
-			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-			{
-				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-				TNC->RigConfigMsg = _strdup(buf);
-			}
-			else
 			
 			if (_memicmp(buf, "MAXSESSIONS", 11) == 0)
 			{

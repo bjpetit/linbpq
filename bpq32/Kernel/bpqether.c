@@ -166,8 +166,6 @@ DllExport int ExtProc(int fn, int port,unsigned char * buff)
 	char txbuff[500];
 	struct pcap_pkthdr *header;
 	u_char *pkt_data;
-	char buf[256];
-	int n;
 
 	//	char dcall[10],scall[10];
 

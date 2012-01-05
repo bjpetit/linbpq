@@ -220,14 +220,6 @@ ConfigLine:
 				*ptr = 0;
 			}
 
-			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-			{
-			// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-				TNC->RigConfigMsg = _strdup(buf);
-			}
-			else
-
 			if (_memicmp(buf, "OLDMODE", 7) == 0)
 				TNC->OldMode = TRUE;
 			else
@@ -472,23 +464,6 @@ UINT WINAPI KAMExtInit(EXTPORTDATA * PortEntry)
 
 	if (TNC->BusyWait == 0)
 		TNC->BusyWait = 10;
-
-	if (TNC->RigConfigMsg)
-	{
-		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
-
-		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
-			
-		if (TNC->RIG == NULL)
-		{
-			// Report Error
-
-			wsprintf(msg,"Invalid Rig Config %s", SaveRigConfig);
-			WritetoConsole(msg);
-
-		}
-		free(SaveRigConfig);
-	}
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
 

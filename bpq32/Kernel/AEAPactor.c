@@ -194,14 +194,6 @@ ConfigLine:
 				*ptr++ = 13;
 				*ptr = 0;
 			}
-
-			if (_memicmp(buf, "RIGCONTROL", 10) == 0)
-			{
-				// RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-				TNC->RigConfigMsg = _strdup(buf);
-			}
-			else
 			
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 				DecodeWL2KReportLine(TNC, buf, Report_P1, Report_P1);
@@ -381,23 +373,6 @@ UINT WINAPI AEAExtInit(EXTPORTDATA *  PortEntry)
 	TNC->Hardware = H_AEA;
 
 	TNC->TEXTMODE = FALSE;
-
-	if (TNC->RigConfigMsg)
-	{
-		char * SaveRigConfig = _strdup(TNC->RigConfigMsg);
-
-		TNC->RIG = RigConfig(TNC->RigConfigMsg, port);
-			
-		if (TNC->RIG == NULL)
-		{
-			// Report Error
-
-			wsprintf(msg,"Invalid Rig Config %s\n", SaveRigConfig);
-			WritetoConsole(msg);
-
-		}
-		free(SaveRigConfig);
-	}
 
 	PortEntry->MAXHOSTMODESESSIONS = 11;		// Default
 

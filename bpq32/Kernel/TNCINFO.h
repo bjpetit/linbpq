@@ -179,8 +179,9 @@ typedef struct AGWINFO
 typedef struct TNCINFO
 { 
 	HWND hDlg;						// Status Window Handle
+	int RigControlRow;				// Rig Control Line in Dialog
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
-	struct RIGINFO * RIG;			// Pointer to Rig Control RIG record 
+	struct RIGINFO * RIG;		// Pointer to Rig Control RIG record 
 	char * InitScript;			// Initialisation Commands
 	int InitScriptLen;			// Length
 
@@ -263,8 +264,6 @@ typedef struct TNCINFO
 
 	SOCKADDR_IN destaddr;
 	SOCKADDR_IN Datadestaddr;
-
-	char * RigConfigMsg;			// Message to pass to rig control
 
 	int PTTMode;					// PTT Mode Flags
 
@@ -482,13 +481,14 @@ VOID __cdecl Consoleprintf(const char * format, ...);
 
 extern BOOL MinimizetoTray;
 
-BOOL WINAPI Rig_Command();
-struct RIGINFO * WINAPI RigConfig();
-BOOL WINAPI Rig_Poll();
-VOID WINAPI Rig_PTT();
-struct RIGINFO * WINAPI Rig_GETPTTREC();
-struct ScanEntry ** WINAPI CheckTimeBands();
+#define DllExport	__declspec( dllexport )
 
+DllExport BOOL APIENTRY Rig_Command(int Session, char * Command);
+DllExport BOOL WINAPI Rig_Poll();
+
+DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState);
+DllExport struct RIGINFO * WINAPI Rig_GETPTTREC();
+DllExport struct ScanEntry ** APIENTRY CheckTimeBands(struct RIGINFO * RIG);
 LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 #define Report_P1 11

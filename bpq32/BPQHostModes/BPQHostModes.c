@@ -30,6 +30,12 @@
 
 //		Get Registry Tree from BPQ32.dll
 
+// Version 1.1.7 January 2012
+
+//		Call CloseBPQ32 on exit
+//		Support User Mode VCOM Driver
+
+
 #include "stdafx.h"
 #include "bpqhostmodes.h"
 #include "..\include\bpq32.h"

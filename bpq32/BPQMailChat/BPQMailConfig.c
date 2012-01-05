@@ -2805,6 +2805,109 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			Do_Save_Msg(hDlg);
 			return TRUE;
 
+		case IDC_SAVETOFILE:
+		{
+			struct MsgInfo * Msg;
+			char * MailBuffer;
+			char FileName[MAX_PATH] = "";
+			int Files = 0;
+			int BodyLen;
+			char * ptr;
+			HANDLE hFile = INVALID_HANDLE_VALUE;
+			int WriteLen=0;
+			OPENFILENAME Ofn; 
+			char Hddr[1000];
+			char FullTo[100];
+
+			if (CurrentMsgIndex == -1)
+			{
+				wsprintf(InfoBoxText, "Please select a message to Save");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				return TRUE;
+			}
+
+
+			Msg = MsgHddrPtr[CurrentMsgIndex];
+
+			MailBuffer = ReadMessageFile(Msg->number);
+			BodyLen = Msg->length;
+
+			wsprintf(FileName, "MSG%05d.txt", Msg->number); 
+
+			ptr = MailBuffer;
+
+			if (_stricmp(Msg->to, "RMS") == 0)
+				 wsprintf(FullTo, "RMS:%s", Msg->via);
+			else
+			if (Msg->to[0] == 0)
+				wsprintf(FullTo, "smtp:%s", Msg->via);
+			else
+				strcpy(FullTo, Msg->to);
+
+			wsprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
+				Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+
+
+			if (Msg->B2Flags)
+			{
+			// Remove B2 Headers (up to the File: Line)
+			
+				char * bptr;
+				bptr = strstr(ptr, "Body:");
+				if (bptr)
+				{
+					BodyLen = atoi(bptr + 5);
+					bptr = strstr(bptr, "\r\n\r\n");
+
+					if (bptr)
+						ptr = bptr+4;
+				}
+			}
+
+			memset(&Ofn, 0, sizeof(Ofn));
+ 
+			Ofn.lStructSize = sizeof(OPENFILENAME); 
+			Ofn.hInstance = hInst;
+			Ofn.hwndOwner = hDlg; 
+			Ofn.lpstrFilter = NULL; 
+			Ofn.lpstrFile= FileName; 
+			Ofn.nMaxFile = sizeof(FileName)/ sizeof(*FileName); 
+			Ofn.lpstrFileTitle = NULL; 
+			Ofn.nMaxFileTitle = 0; 
+			Ofn.lpstrInitialDir = (LPSTR)NULL; 
+			Ofn.Flags = OFN_SHOWHELP | OFN_OVERWRITEPROMPT; 
+			Ofn.lpstrTitle = NULL;//; 
+
+			if (GetSaveFileName(&Ofn))
+			{
+				hFile = CreateFile(FileName,
+					GENERIC_WRITE, FILE_SHARE_READ, NULL,
+					CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+				if (hFile != INVALID_HANDLE_VALUE)
+				{
+					WriteFile(hFile, Hddr, strlen(Hddr), &WriteLen, NULL);
+					WriteFile(hFile, ptr, BodyLen, &WriteLen, NULL);
+					CloseHandle(hFile);
+				}
+			}
+			return TRUE;
+		}
+
+		
+
+		case IDC_PRINTMSG:
+
+			if (CurrentMsgIndex == -1)
+			{
+				wsprintf(InfoBoxText, "Please select a message to Print");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				return TRUE;
+			}
+
+			PrintMessage(CurrentMsgIndex);
+			return TRUE;
+
 		case FILTER_FROM:
 		case FILTER_TO:
 		case FILTER_VIA:
