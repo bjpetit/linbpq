@@ -839,6 +839,8 @@ DllExport BOOL APIENTRY Rig_Init()
 				WritetoConsole(msg);
 			}
 
+			TNC->RIG->PTTMode = TNC->PTTMode;
+
 			free(SaveRigConfig);
 			free(RigConfigMsg1);
 
@@ -1009,7 +1011,8 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		for (n = 0; n < PORT->ConfiguredRigs; n++)
 		{
-			free (PORT->Rigs[n].TimeBands[1]->Scanlist);
+			if (PORT->Rigs[n].TimeBands)
+				free (PORT->Rigs[n].TimeBands[1]->Scanlist);
 		}
 
 		free (PORT);

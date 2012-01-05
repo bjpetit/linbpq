@@ -1991,6 +1991,10 @@ VOID SaveWPConfig(HWND hDlg)
 	GetDlgItemText(hwndDisplay, IDC_WPVIA, SendWPVIA, 80);
 	retCode = RegSetValueEx(hKey,"SendWPVIA", 0, REG_SZ,(BYTE *)&SendWPVIA, strlen(SendWPVIA));
 
+	wsprintf(InfoBoxText, "Configuration Saved");
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+
+
 }
 
 
