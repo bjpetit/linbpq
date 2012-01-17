@@ -2219,6 +2219,8 @@ CMDL99:
 	PUBLIC	CMDS00
 	
 	EXTERN _SESSIONHDDR:BYTE, _SESSHDDRLEN:DWORD
+	EXTERN _FREE_Q:DWORD
+	
 CMDS00:
 
 	mov	ESI,OFFSET32 _SESSIONHDDR
@@ -2228,6 +2230,15 @@ CMDS00:
 	mov	AX,QCOUNT		; Get number of free buffers
 	CALL	CONV_5DIGITS
 
+	mov	AL,' '
+	stosb
+	
+	push ebx
+	lea	ebx, _FREE_Q
+	call COUNT_Q
+	CALL	CONV_5DIGITS
+	pop ebx
+		
 	mov	AL,')'
 	stosb
 	mov	AL,CR

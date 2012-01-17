@@ -2229,7 +2229,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 				STREAM->Connected = TRUE;			// Subsequent data to data channel
 				STREAM->Connecting = FALSE;
-
+				STREAM->ConnectTime = time(NULL); 
 				STREAM->BytesRXed = STREAM->BytesTXed = 0;
 
 				//	Stop Scanner

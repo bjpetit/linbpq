@@ -148,6 +148,8 @@ int btell(char * ptr)
 	return fp2 - Buffer;
 }
 
+VOID * zalloc(int len);
+
 int WritetoConsoleLocal(char * buff);
 
 VOID __cdecl Consoleprintf(const char * format, ...)
@@ -792,6 +794,9 @@ char rec[];
 			strcat(ptr, "\r\n");
 			GetNextLine(rec);
 		}
+
+		if (_memicmp(rec, "****", 3) == 0)
+			return 0;						// No Newline after ***
 
 		Consoleprintf("Missing **** for APRS Config %d", portnum);
 		heading = 1;
@@ -2489,15 +2494,15 @@ char rec[];
 
 static int defaults [] =
 {
-5,4,120,25,4,120,	/* OBSINIT OBSMIN NODESINT L3TTL L4RETRIES L4TIMEOUT */
+5,4,60,25,4,120,	/* OBSINIT OBSMIN NODESINT L3TTL L4RETRIES L4TIMEOUT */
  
 255,120,1,180,900,0,    /* BUFFERS PACLEN TRANSDELAY T3 IDLETIME BBS */
 
 1,-1,-1,-1,-1,		/* NODE NODEALIAS BBSALIAS NODECALL BBSCALL */
 
--1,-1,-1,-1,-1,10,	/* TNCPORT IDMSG: INFOMSG:  ROUTES: PORT MAXLINKS */
+-1,-1,-1,-1,-1,30,	/* TNCPORT IDMSG: INFOMSG:  ROUTES: PORT MAXLINKS */
 
-50,10,10,15,10,		/* MAXNODES MAXROUTES  MAXCIRCUITS IDINTERVAL MINQUAL */
+50,30,120,15,140,		/* MAXNODES MAXROUTES  MAXCIRCUITS IDINTERVAL MINQUAL */
 
 0,10,4,0,-1,255,	/* HIDENODES L4DELAY L4WINDOW BTINTERVAL UNPROTO BBSQUAL */
 

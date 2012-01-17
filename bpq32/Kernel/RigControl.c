@@ -524,7 +524,7 @@ portok:
 			}
 		}
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = GetBuff();
 
 		if (buffptr == 0)
 		{
@@ -633,7 +633,7 @@ portok:
 			return FALSE;
 		}
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = GetBuff();
 
 		if (buffptr == 0)
 		{
@@ -692,7 +692,7 @@ portok:
 			return FALSE;
 		}
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = GetBuff();
 
 		if (buffptr == 0)
 		{
@@ -758,7 +758,7 @@ portok:
 		}
 
 
-		buffptr = Q_REM(&FREE_Q);
+		buffptr = GetBuff();
 
 		if (buffptr == 0)
 		{
@@ -845,6 +845,16 @@ DllExport BOOL APIENTRY Rig_Init()
 			free(RigConfigMsg1);
 
 			hDlg = TNC->hDlg;
+
+			if (hDlg == 0)
+			{
+				// Running on a port without a window, eg  UZ7HO
+
+				CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 0);
+				hDlg = TNC->hDlg;
+			}
+
+
 			RigRow = TNC->RigControlRow;
 
 			RIG->hLabel = CreateWindow(WC_STATIC , "", WS_CHILD | WS_VISIBLE,
@@ -1592,7 +1602,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 			if	(GetPermissionToChange(PORT, RIG))
 			{
 				if (RIG_DEBUG)
-					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 				RIG->FreqPtr++;
@@ -1623,9 +1633,9 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 
 		if (RIG_DEBUG)
-			Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
-		
+
 		memcpy(Poll, &buffptr[20], 12);
 
 		if (PORT->ScanEntry.Cmd2)

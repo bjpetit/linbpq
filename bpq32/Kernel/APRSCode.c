@@ -1572,6 +1572,10 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	Source = APRSMsg;
 	Dest = strchr(APRSMsg, '>');
+
+	if (Dest == NULL)
+		return;
+
 	*(Dest++) = 0;				// Termainate Source
 	ptr = strchr(Dest, ',');
 	*ptr = 0;

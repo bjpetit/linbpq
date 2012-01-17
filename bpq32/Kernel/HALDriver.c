@@ -1682,6 +1682,7 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	strcat(CallCopy, "          ");			// Some routines expect 10 char calls
 
 	STREAM->BytesRXed = STREAM->BytesTXed = STREAM->BytesAcked = 0;
+	STREAM->ConnectTime = time(NULL); 
 
 	// Stop Scanner
 

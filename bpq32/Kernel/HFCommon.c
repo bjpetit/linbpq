@@ -360,6 +360,8 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	
 	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET || TNC->Hardware == H_V4)
 		wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
+	else if (TNC->Hardware == H_UZ7HO)
+		wsprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);
 	else
 		wsprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);
 
@@ -1181,7 +1183,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 
 	// Stop Scanner
 
-	if (Stream == 0)
+	if (Stream == 0 || TNC->Hardware == H_UZ7HO)
 	{
 		char Msg[80];
 
@@ -1381,6 +1383,9 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 			
 		if (STREAM->Connected || STREAM->Connecting)
 		{
+			char logmsg[120];	
+			time_t Duration;
+
 			// Need to do a tidy close
 
 			STREAM->Disconnecting = TRUE;
@@ -1388,6 +1393,17 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 
 			if (Stream == 0)
 				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, "Disconnecting");
+
+			// Create a traffic record
+
+			Duration = time(NULL) - STREAM->ConnectTime;
+				
+			wsprintf(logmsg,"Port %2d %9s Bytes Sent %d  BPS %d Bytes Received %d BPS %d Time %d Seconds",
+				TNC->Port, STREAM->RemoteCall,
+				STREAM->BytesTXed, STREAM->BytesTXed/Duration,
+				STREAM->BytesRXed, STREAM->BytesRXed/Duration, Duration);
+
+			Debugprintf(logmsg);
 
 			if (STREAM->BPQtoPACTOR_Q)					// Still data to send?
 				return;									// Will close when all acked
@@ -1445,6 +1461,10 @@ VOID SetupPortRIGPointers()
 
 		if (TNC->RIG == NULL)
 			TNC->RIG = Rig_GETPTTREC(port);
+
+		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4)
+			if (TNC->RIG && TNC->PTTMode)
+				TNC->RIG->PTTMode = TNC->PTTMode;
 	
 		if (TNC->RIG == NULL)
 			TNC->RIG = &TNC->DummyRig;		// Not using Rig control, so use Dummy

@@ -393,7 +393,7 @@
 // Improved program error logging
 // WL2K reporting changed to new format agreed with Lee Inman
 
-// 5.2.1.4
+// 5.2.3.1
 
 // Connects from the console to an APPLCALL or APPLALIAS now invoke any Command Alias that has been defined.
 // Fix reporting of Tracker freqs to WL2K.
@@ -414,6 +414,13 @@
 // Add Beacon After Session option to Tracker and UZ7HO Drivers
 // Rewrite RigControl and add "Reread Config Command"
 // Support User Mode VCOM Driver for VKISS ports
+
+
+// Remove CR from Telnet User and Password Prompts
+// Add Rigcontrol to UZ7HO driver
+// Fix corruption of Free Buffer Count by Rigcontol
+// Fix WINMOR and V4 PTT
+// Add MultiPSK Driver
 
 #define Kernel
 #include "Versions.h"
@@ -491,6 +498,7 @@ UINT WINAPI TrackerExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI TrackerMExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI UZ7HOExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI MPSKExtInit(EXTPORTDATA * PortEntry);
 
 extern char * Buffer;	// Config Area
 
@@ -693,7 +701,7 @@ BOOL LoadRigDriver();
 
 VOID CreateRegBackup();
 VOID ResolveUpdateThread();
-VOID OpenReportingSocket();
+VOID OpenReportingSockets();
 VOID CloseAllPrograms();
 DllExport BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
 
@@ -1133,6 +1141,15 @@ VOID CALLBACK TimerProc
 					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
 				}
 			}
+
+			if (LOCATOR[0])
+			{
+				// Enable Node Map Reports
+
+				ReportTimer = 600;
+				OpenReportingSockets();
+			}
+
 			
 			WritetoConsole("\n\nReconfiguration Complete\n");
 
@@ -1150,7 +1167,10 @@ VOID CALLBACK TimerProc
 			if (APRSActive)
 				MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
 			else
+			{
+				ShowWindow(GetDlgItem(hWnd, IDC_GPS), SW_HIDE); 
 				MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
+			}
 			InvalidateRect(hWnd, NULL, TRUE);
 
 			RigActive = Rig_Init();
@@ -1242,7 +1262,7 @@ FirstInit()
 		// Enable Node Map Reports
 
 		ReportTimer = 600;
-		OpenReportingSocket();
+		OpenReportingSockets();
 	}
 
  	WritetoConsole("\n");
@@ -1262,7 +1282,10 @@ FirstInit()
 	if (APRSActive)
 		MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
 	else
+	{
+		ShowWindow(GetDlgItem(hWnd, IDC_GPS), SW_HIDE); 
 		MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
+	}
 	InvalidateRect(hWnd, NULL, TRUE);
 
 	RigActive = Rig_Init();
@@ -1350,6 +1373,14 @@ Check_Timer()
 
 		INITIALISEPORTS();
 
+		if (LOCATOR[0])
+		{
+			// Enable Node Map Reports
+
+			ReportTimer = 600;
+			OpenReportingSockets();
+		}
+
 		WritetoConsole("\n\nPort Reinitialisation Complete\n");
 
 		TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
@@ -1377,7 +1408,7 @@ Check_Timer()
 			// Enable Node Map Reports
 
 			ReportTimer = 600;
-			OpenReportingSocket();
+			OpenReportingSockets();
 		}
 
 		FreeSemaphore();
@@ -3569,6 +3600,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "UZ7HO"))
 		return (UINT) UZ7HOExtInit;
 
+	if (strstr(Value, "MULTIPSK"))
+		return (UINT) MPSKExtInit;
+
 	ExtDriver=LoadLibrary(Value);
 
 	if (ExtDriver == NULL)
@@ -4975,9 +5009,24 @@ int C_Q_COUNT(UINT *Q)
 }
 unsigned short int compute_crc(unsigned char *buf, int txlen);
 
-SOCKADDR_IN reportdest;
+SOCKADDR_IN reportdest = {0};
 
-SOCKET ReportSocket;
+SOCKET ReportSocket = 0;
+
+SOCKADDR_IN Chatreportdest = {0};
+
+DllExport VOID APIENTRY SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen)
+{
+ 	unsigned short int crc = compute_crc(buff, txlen);
+
+	crc ^= 0xffff;
+
+	buff[txlen++] = (crc&0xff);
+	buff[txlen++] = (crc>>8);
+
+	sendto(ChatReportSocket, buff, txlen, 0, (LPSOCKADDR)&Chatreportdest, sizeof(Chatreportdest));
+
+}
 
 VOID SendReportMsg(char * buff, int txlen)
 {
@@ -5169,7 +5218,7 @@ VOID CreateRegBackup()
 
 
 
-VOID OpenReportingSocket()
+VOID OpenReportingSockets()
 {
 	u_long param=1;
 	BOOL bcopt=TRUE;
@@ -5192,33 +5241,43 @@ VOID OpenReportingSocket()
 
 	ConvToAX25("DUMMY-1", ReportDest);
 
+	// Socket must be opened in MailChat Process
+
+	Chatreportdest.sin_family = AF_INET;
+	Chatreportdest.sin_port = htons(10090);
+
 	_beginthread(ResolveUpdateThread,0,(int)0);
 }
 
 VOID ResolveUpdateThread()
 {
-	struct hostent * HostEnt;
-	int err;
+	struct hostent * HostEnt1;
+	struct hostent * HostEnt2;
 
 	while (TRUE)
 	{
 		//	Resolve name to address
 
 		Debugprintf("Resolving %s", "update.g8bpq.net");
-		HostEnt = gethostbyname ("update.g8bpq.net");
+		HostEnt1 = gethostbyname ("update.g8bpq.net");
 		 
-		if (HostEnt)
-		{
-			memcpy(&reportdest.sin_addr.s_addr,HostEnt->h_addr,4);
-			Sleep(1000 * 60 * 30);
-		}
-		else
-		{	
-			err = WSAGetLastError();
+		if (HostEnt1)
+			memcpy(&reportdest.sin_addr.s_addr,HostEnt1->h_addr,4);
 
-			Debugprintf("Resolve Failed for update.g8bpq.net %d %x", err, err);
-			Sleep(1000 * 60 * 5);
+		Debugprintf("Resolving %s", "chatmap.g8bpq.net");
+		HostEnt2 = gethostbyname ("chatmap.g8bpq.net");
+
+		if (HostEnt2)
+			memcpy(&Chatreportdest.sin_addr.s_addr,HostEnt2->h_addr,4);
+
+		if (HostEnt1 && HostEnt2)
+		{
+			Sleep(1000 * 60 * 30);
+			continue;
 		}
+
+		Debugprintf("Resolve Failed for update.g8bpq.net or chatmap.g8bpq.net");
+		Sleep(1000 * 60 * 5);
 	}
 }
 

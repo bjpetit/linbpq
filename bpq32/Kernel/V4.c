@@ -1260,6 +1260,8 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
+		STREAM->ConnectTime = time(NULL); 
+
 		memcpy(Call, &Buffer[10], 10);
 
 		ptr = strchr(Call, ' ');	

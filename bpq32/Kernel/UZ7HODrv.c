@@ -195,7 +195,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && TNC->Streams[Stream].Attached == 0)
 		{
-			
+			char Cmd[80];
+
 			// New Attach
 
 			int calllen;
@@ -204,6 +205,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, STREAM->MyCall);
 			STREAM->MyCall[calllen] = 0;
 			STREAM->FramesOutstanding = 0;
+
+			// Stop Scanning
+
+			wsprintf(Cmd, "%d SCANSTOP", TNC->Port);
+			Rig_Command(-1, Cmd);
+
 		}
 	}
 
@@ -491,9 +498,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 2:				// send
 
 		
-		if (!TNCInfo[MasterPort[port]]->CONNECTED) return 0;		// Don't try if not connected
+		if (!TNCInfo[MasterPort[port]]->CONNECTED) return 0;		// Don't try if not connected to TNC
 
-		STREAM = &TNC->Streams[buff[4]]; 
+		Stream = buff[4];
+		
+		STREAM = &TNC->Streams[Stream]; 
 		AGW = TNC->AGWInfo;
 
 		txlen=(buff[6]<<8) + buff[5] - 8;	
@@ -511,7 +520,54 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				STREAM->ReportDISC = TRUE;		// Tell Node
 				return 0;
 			}
-	
+
+			// See if Local command (eg RADIO)
+
+			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
+			{
+				wsprintf(&buff[8], "%d %s", TNC->Port, &buff[14]);
+
+				if (Rig_Command(TNC->PortRecord->ATTACHEDSESSIONS[0]->L4CROSSLINK->CIRCUITINDEX, &buff[8]))
+				{
+				}
+				else
+				{
+					UINT * buffptr = GetBuff();
+
+					if (buffptr == 0) return 1;			// No buffers, so ignore
+
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], &buff[8]);
+					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+				}
+				return 1;
+			}
+
+			if (_memicmp(&buff[8], "INUSE?", 6) == 0)
+			{
+				// Return Error if in use, OK if not
+
+				UINT * buffptr = GetBuff();
+				int s = 0;
+
+				while(s <= TNC->AGWInfo->MaxSessions)
+				{
+					if (s != Stream)
+					{		
+						if (TNC->PortRecord->ATTACHEDSESSIONS[s])
+						{
+							buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "UZ7HO} Error - In use\r");
+							C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+							return 1;							// Busy
+						}
+					}
+					s++;
+				}
+				buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "UZ7HO} Ok - Not in use\r");
+				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+			
+				return 1;
+			}
+
 			// See if a Connect Command.
 
 			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
@@ -1450,7 +1506,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 				if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
 					goto GotStream;
 
-				Stream--;
+				Stream++;
 			}
 
 			// No free streams - send Disconnect
@@ -1462,7 +1518,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 			STREAM = &TNC->Streams[Stream];
 			memcpy(STREAM->AGWKey, Key, 21);
 			STREAM->Connected = TRUE;
-	
+			STREAM->ConnectTime = time(NULL); 
+			STREAM->BytesRXed = STREAM->BytesTXed = 0;
+
 			UpdateMH(TNC, RXHeader->callfrom, '+', 'I');
 
 			ProcessIncommingConnect(TNC, RXHeader->callfrom, Stream, FALSE);
@@ -1569,6 +1627,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 
 					STREAM->Connected = TRUE;
 					STREAM->Connecting = FALSE;
+					STREAM->ConnectTime = time(NULL); 
+					STREAM->BytesRXed = STREAM->BytesTXed = 0;
 
 					buffptr = GetBuff();
 					if (buffptr == 0) return;			// No buffers, so ignore
@@ -1790,9 +1850,29 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
+	char Status[80];
+	int s;
+
 	// Clear Session Key
 	
 	memset(TNC->Streams[Stream].AGWKey, 0, 21);
+
+	// if all streams are free, start scanner
+
+	s = 0;
+
+	while(s <= TNC->AGWInfo->MaxSessions)
+	{
+		if (s != Stream)
+		{		
+			if (TNC->PortRecord->ATTACHEDSESSIONS[s])
+				return;										// Busy
+		}
+		s++;
+	}
+
+	wsprintf(Status, "%d SCANSTART 15", TNC->Port);
+	Rig_Command(-1, Status);
 }
 
 static MESSAGEY Monframe;		// I frames come in two parts.

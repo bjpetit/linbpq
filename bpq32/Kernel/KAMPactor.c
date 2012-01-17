@@ -1634,6 +1634,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			}
 
 			STREAM->BytesRXed = STREAM->BytesTXed = STREAM->BytesAcked = 0;
+			STREAM->ConnectTime = time(NULL); 
 
 			if (Stream == 0)
 			{

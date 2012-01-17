@@ -1385,6 +1385,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			}
 
 			TNC->Streams[Stream].BytesRXed = TNC->Streams[Stream].BytesTXed = TNC->Streams[Stream].BytesAcked = 0;
+			TNC->Streams[Stream].ConnectTime = time(NULL); 
 
 			if (Stream == 0)
 			{

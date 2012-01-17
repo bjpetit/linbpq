@@ -146,6 +146,7 @@ struct STREAMINFO
 
 	char AGWKey[21];			// Session Key for AGW Session Based Drivers
 
+	time_t ConnectTime;			// Time connection made
 	int BytesTXed;
 	int BytesAcked;
 	int BytesRXed;
@@ -197,6 +198,7 @@ typedef struct TNCINFO
 #define H_TRKM 7
 #define H_V4 8
 #define H_UZ7HO 9
+#define H_MPSK 10
 
 	int Port;					// BPQ Port Number
 

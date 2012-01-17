@@ -2062,6 +2062,12 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 		
 		if (p_call == NULL) return (FALSE);
 
+		if (stricmp(p_call, "DUMMY") == 0)
+		{
+			Consoleprintf("MAP DUMMY is no longer needed - statement ignored");
+			return TRUE;
+		}
+
 		p_ipad = strtok(NULL, " \t\n\r");
 		
 		if (p_ipad == NULL) return (FALSE);

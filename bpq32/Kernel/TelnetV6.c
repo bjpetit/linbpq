@@ -128,6 +128,8 @@ VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst);
 ProcessLine(char * buf, int Port)
 {
 	UCHAR * ptr;
+	UCHAR * ptr1;
+
 	char * p_ipad = 0;
 	char * p_port = 0;
 	unsigned short WINMORport = 0;
@@ -226,10 +228,18 @@ ProcessLine(char * buf, int Port)
 //	    if (strcmp(param,"PASSWORDRESPONSE") == 0) cfgPASSWORDRESPONSE = value;
 
 	    if (_stricmp(param,"LOGINPROMPT") == 0)
+		{
+			ptr1 = strchr(value, 13);
+			if (ptr1) *ptr1 = 0;
 			strcpy(TCP->LoginMsg,value);
+		}
 		else
 	    if (_stricmp(param,"PASSWORDPROMPT") == 0)
+		{
+			ptr1 = strchr(value, 13);
+			if (ptr1) *ptr1 = 0;
 			strcpy(TCP->PasswordMsg, value);
+		}
 		else
 	    if (_stricmp(param,"HOSTPROMPT") == 0)
 			strcpy(TCP->cfgHOSTPROMPT, value);

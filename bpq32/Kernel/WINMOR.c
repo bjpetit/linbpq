@@ -657,6 +657,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			txlen=buffptr[1];
 			memcpy(txbuff,buffptr+2,txlen);
 			bytes = send(TNC->WINMORDataSock,(const char FAR *)&txbuff,txlen,0);
+			STREAM->BytesTXed += bytes;
 			ReleaseBuffer(buffptr);
 		}
 		
@@ -670,7 +671,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		txlen=(buff[6]<<8) + buff[5]-8;	
 		
 		if (TNC->Streams[0].Connected)
+		{
 			bytes=send(TNC->WINMORDataSock,(const char FAR *)&buff[8],txlen,0);
+			STREAM->BytesTXed += bytes;
+		}
 		else
 		{
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
@@ -1476,6 +1480,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
+		STREAM->ConnectTime = time(NULL); 
+		STREAM->BytesRXed = STREAM->BytesTXed = 0;
+
 		memcpy(Call, &Buffer[10], 10);
 
 		ptr = strchr(Call, ' ');	
@@ -1612,6 +1619,24 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
 		// Release Session
+
+		if (TNC->Streams[0].Connected)
+		{
+			// Create a traffic record
+		
+			char logmsg[120];	
+			time_t Duration;
+
+			Duration = time(NULL) - STREAM->ConnectTime;
+				
+			wsprintf(logmsg,"Port %2d %9s Bytes Sent %d  BPS %d Bytes Received %d BPS %d Time %d Seconds",
+				TNC->Port, STREAM->RemoteCall,
+				STREAM->BytesTXed, STREAM->BytesTXed/Duration,
+				STREAM->BytesRXed, STREAM->BytesRXed/Duration, Duration);
+
+			Debugprintf(logmsg);
+		}
+
 
 		TNC->Streams[0].Connecting = FALSE;
 		TNC->Streams[0].Connected = FALSE;		// Back to Command Mode
@@ -1883,6 +1908,8 @@ VOID ProcessDataSocketData(int port)
 	// Info on Data Socket - just packetize and send on
 	
 	struct TNCINFO * TNC = TNCInfo[port];
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+
 	int InputLen, PacLen = 236;
 	UINT * buffptr;
 	char * msg;
@@ -1918,6 +1945,8 @@ loop:
 		ReleaseBuffer(buffptr);
 		return;					
 	}
+
+	STREAM->BytesRXed += InputLen;
 
 	msg = (char *)&buffptr[2];
 	msg[InputLen] = 0;	
