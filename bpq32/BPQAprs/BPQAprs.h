@@ -15,6 +15,7 @@ struct STATIONRECORD
 	char Path[120];
 	char Comment[256];
 	char LastPacket[400];
+	int LastPort;
     double Lat;
     double Lon;
     double Course;

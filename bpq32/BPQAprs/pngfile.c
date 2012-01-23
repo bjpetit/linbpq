@@ -111,9 +111,17 @@ BOOL PngLoadImage (PTSTR pstrFileName, png_byte **ppbImageData,
         return FALSE;
     }
 
-    if (!(pfFile = fopen(pstrFileName, "rb")))
-    {
-        *ppbImageData = pbImageData = NULL;
+	__try 
+	{
+		if (!(pfFile = fopen(pstrFileName, "rb")))
+		{
+			*ppbImageData = pbImageData = NULL;
+				return FALSE;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		*ppbImageData = pbImageData = NULL;
         return FALSE;
     }
 
@@ -256,7 +264,7 @@ BOOL PngLoadImage (PTSTR pstrFileName, png_byte **ppbImageData,
         // read the additional chunks in the PNG file (not really needed)
         
         png_read_end(png_ptr, NULL);
-        
+         
         // and we're done
         
         free (ppbRowPointers);
