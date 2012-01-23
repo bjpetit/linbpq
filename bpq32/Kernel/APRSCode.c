@@ -44,7 +44,8 @@ BOOL CheckforDups(char * Call, char * Msg, int Len);
 VOID ProcessQuery(char * Query);
 VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlusDigis);
 VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int Len);		
-VOID SendBeacon(int toPort);
+Dll VOID APIENTRY SendBeacon(int toPort, char * Msg);
+Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 VOID ProcessAPRSISMsg(char * APRSMsg);
 static VOID SendtoDigiPorts(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
 struct APRSSTATIONRECORD * LookupStation(char * call);
@@ -55,6 +56,11 @@ BOOL SendAPPLAPRSMessage(char * Frame);
 
 BOOL ProcessConfig();
 BOOL FreeConfig();
+
+void GetSemaphore();
+void FreeSemaphore();
+
+extern int SemHeldByAPI;
 
 // All data should be initialised to force into shared segment
 
@@ -85,6 +91,8 @@ UINT APPLTX_Q = 0;				// Queue of frames from APRS Appl
 UINT APRSPortMask = 0;
 
 char APRSCall[10] = "";
+char APRSDest[10] = "APBPQ1";
+
 UCHAR AXCall[7] = "";
 
 char CallPadded[10] = "         ";
@@ -121,11 +129,13 @@ int DigiLen[MAXCALLS];
 int ISPort = 0;
 char ISHost[256] = "";
 int ISPasscode = 0;
-char * ISFilter;
+char NodeFilter[1000] = "";		// Filter when the isn't an application
+char ISFilter[1000] = "";		// Current Filter
+char APPLFilter[1000] = "";		// Filter when an Applcation is running
 
 extern BOOL IGateEnabled;
 
-char * StatusMsg = 0;
+char StatusMsg[256] = "";				// Must be in shared segment
 int StatusMsgLen = 0;
 
 char * BeaconPath[33] = {0};
@@ -221,15 +231,6 @@ Dll BOOL APIENTRY Init_APRS()
 	ConvToAX25("TCPIP", axTCPIP);
 	ConvToAX25("RFONLY", axRFONLY);
 	ConvToAX25("NOGATE", axNOGATE);
-
-	// Clear in case reconfig
-
-	if (FloodCalls)
-		{free(FloodCalls); FloodCalls = NULL;}
-	if (TraceCalls)
-		{free(TraceCalls); TraceCalls = NULL;}
-	if (DigiCalls)
-		{free(TraceCalls); TraceCalls = NULL;}
 
 	memset(&FloodAX[0][0], 0, sizeof(FloodAX));
 	memset(&TraceAX[0][0], 0, sizeof(TraceAX));
@@ -791,7 +792,6 @@ static VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
 //	Block->CTL = 3;		//UI
 
 	Send_AX((PMESSAGE)Block, Len, Port);
-
 	return;
 
 }
@@ -862,7 +862,6 @@ BOOL ConvertCalls(char * DigiCalls, UCHAR * AX, int * Lens)
 static ProcessLine(char * buf)
 {
 	PCHAR ptr, p_value;
-	int i;
 
 	ptr = strtok(buf, "= \t\n\r");
 
@@ -876,7 +875,7 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr, "STATUSMSG") == 0)
 	{
 		p_value = strtok(NULL, ";\t\n\r");
-		StatusMsg = _strdup(p_value);
+		memcpy(StatusMsg, p_value, 255);	// Just in case too long
 		StatusMsgLen = strlen(p_value);
 		return TRUE;
 	}
@@ -884,10 +883,10 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr, "ISFILTER") == 0)
 	{
 		p_value = strtok(NULL, ";\t\n\r");
-		ISFilter = _strdup(p_value);
+		strcpy(ISFilter, p_value);
+		strcpy(NodeFilter, ISFilter);
 		return TRUE;
 	}
-
 
 	if (_stricmp(ptr, "ReplaceDigiCalls") == 0)
 	{
@@ -899,22 +898,6 @@ static ProcessLine(char * buf)
 
 	if (p_value == NULL)
 		return FALSE;
-
-	if (_stricmp(ptr,"APRSPorts") == 0)
-	{
-		char * p_port = strtok(p_value, " ,\t\n\r");
-		
-		while (p_port != NULL)
-		{
-			i=atoi(p_port);
-			if (i == 0) return FALSE;
-			if (i > NUMBEROFPORTS) return FALSE;
-
-			APRSPortMask |= 1 << (i-1);
-			p_port = strtok(NULL, " ,\t\n\r");
-		}
-		return (TRUE);
-	}
 
 	if (_stricmp(ptr, "APRSCALL") == 0)
 	{
@@ -936,7 +919,7 @@ static ProcessLine(char * buf)
 
 		Port = atoi(p_value);
 
-		if (Port < 1 || Port > NUMBEROFPORTS)
+		if (GetPortTableEntryFromPortNum(Port) == NULL)
 			return FALSE;
 
 		APRSPortMask |= 1 << (Port - 1);
@@ -953,7 +936,13 @@ static ProcessLine(char * buf)
 
 		ConvToAX25(APRSCall, &BeaconHeader[Port][1][0]);
 
-		ConvToAX25(ptr, &BeaconHeader[Port][0][0]);			// First is Dest
+		if (_stricmp(ptr, "APRS") == 0)			// First is Dest
+			ConvToAX25(APRSDest, &BeaconHeader[Port][0][0]);
+		else if (_stricmp(ptr, "APRS-0") == 0)
+			ConvToAX25("APRS", &BeaconHeader[Port][0][0]);
+		else
+			ConvToAX25(ptr, &BeaconHeader[Port][0][0]);
+		
 		ptr = strtok_s(NULL, ",\t\n\r", &Context);
 
 		while (ptr)
@@ -977,7 +966,7 @@ static ProcessLine(char * buf)
 
 		Port = atoi(p_value);
 
-		if (Port < 1 || Port > NUMBEROFPORTS)
+		if (GetPortTableEntryFromPortNum(Port) == NULL)
 			return FALSE;
 
 		if (Context == NULL)
@@ -1152,7 +1141,7 @@ VOID SendAPRSMessage(char * Message, int toPort)
 	{
 		char ISMsg[300];
 
-		Len = wsprintf(ISMsg, "%s>APRS,TCPIP*:%s\r\n", APRSCall, Message);
+		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%s\r\n", APRSCall, APRSDest, Message);
 		send(sock, ISMsg, Len, 0);
 		Len = GetLastError();
 		Debugprintf(">%s", ISMsg);
@@ -1212,14 +1201,18 @@ VOID ProcessQuery(char * Query)
 		return;
 	}
 }
-VOID SendBeacon(int toPort)
+Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText)
 {
 	int Port;
 	DIGIMESSAGE Msg;
-	
+	char * StMsg = StatusText;
 	int Len;
 
-	Len = wsprintf(Msg.L2DATA, "!%s%c%s%c %s", LAT, SYMSET, LON, SYMBOL, StatusMsg);
+	if (StMsg == NULL)
+		StMsg = StatusMsg;
+	
+	Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c %s", (ApplConnected) ? '=' : '!',
+		LAT, SYMSET, LON, SYMBOL, StMsg);
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
 
@@ -1235,8 +1228,8 @@ VOID SendBeacon(int toPort)
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
-		
-			Len = wsprintf(Msg.L2DATA, "!%s%c%s%c %s", LAT, SYMSET, LON, SYMBOL, StatusMsg);
+			Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c %s", (ApplConnected) ? '=' : '!',
+					LAT, SYMSET, LON, SYMBOL, StMsg);
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;
 
@@ -1251,7 +1244,8 @@ VOID SendBeacon(int toPort)
 	{
 		char ISMsg[300];
 
-		Len = wsprintf(ISMsg, "%s>APRS,TCPIP*:!%s%c%s%c %s\r\n", APRSCall, LAT, SYMSET, LON, SYMBOL, StatusMsg);
+		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c %s\r\n", APRSCall, APRSDest,
+			(ApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, StMsg);
 		send(sock, ISMsg, Len, 0);
 		Debugprintf(">%s", ISMsg);
 
@@ -1266,7 +1260,8 @@ VOID SendBeacon(int toPort)
 				
 		if (buffptr)
 		{
-			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>APRS <UI>:\r!%s%c%s%c %s\r\n", APRSCall, LAT, SYMSET, LON, SYMBOL, StatusMsg);
+			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r!%s%c%s%c %s\r\n",
+				APRSCall, APRSDest, LAT, SYMSET, LON, SYMBOL, StMsg);
 			buffptr[2] = 255;
 			C_Q_ADD(&APPL_Q, buffptr);
 		}
@@ -1295,7 +1290,7 @@ VOID SendIStatus()
 			}
 		}
 
-		Len = wsprintf(Msg.L2DATA, "%s>APRS,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d\r\n", APRSCall, 0 , CountLocalStations());
+		Len = wsprintf(Msg.L2DATA, "%s>%s,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d\r\n", APRSCall, APRSDest, 0, CountLocalStations());
 		send(sock, Msg.L2DATA, Len, 0);
 		Debugprintf(">%s", Msg.L2DATA);
 	}
@@ -1321,7 +1316,7 @@ VOID DoSecTimer()
 		if (BeaconCounter == 0)
 		{
 			BeaconCounter = BeaconInterval * 60;
-			SendBeacon(0);
+			SendBeacon(0, StatusMsg);
 		}
 	}
 
@@ -1368,7 +1363,7 @@ VOID APRSISThread(BOOL Report)
 	Debugprintf("BPQ32 APRS IS Thread");
 	SetDlgItemText(hWnd, IGATESTATE, "IGate State: Connecting");
 
-	if (ISFilter)
+	if (ISFilter[0])
 		wsprintf(Signon, "user %s pass %d vers BPQ32 %s filter %s\r\n",
 			APRSCall, ISPasscode, TextVerstring, ISFilter);
 	else
@@ -1479,7 +1474,7 @@ VOID APRSISThread(BOOL Report)
 					memcpy(&APRSMsg, APRSinMsg, len);	
 					APRSMsg[len - 2] = 0;
 
-					Debugprintf("<%s", APRSMsg);
+//					Debugprintf("<%s", APRSMsg);
 					ProcessAPRSISMsg(APRSMsg);
 				}
 
@@ -2209,14 +2204,38 @@ void DecodeRMC(char * msg, int len)
 
 	memcpy(Day,ptr2,2);
 	Day[2]=0;
-
 }
 
-Dll VOID APIENTRY APRSConnect(char * Call)
+VOID SendFilterCommand()
+{
+	char Msg[2000];
+	int n;
+
+	n = wsprintf(Msg, ":%-9s:filter %s{1", "SERVER", "m/0");
+
+	if (ISFilter[0])
+		n = wsprintf(Msg, ":%-9s:filter %s{1", "SERVER", ISFilter);
+
+	PutAPRSMessage(Msg, n);
+
+	n = wsprintf(Msg, ":%-9s:filter?{1", "SERVER");
+	PutAPRSMessage(Msg, n);
+}
+
+
+Dll VOID APIENTRY APRSConnect(char * Call, char * Filter)
 {
 	// Request APRS Data from Switch (called by APRS Applications)
 
 	ApplConnected = TRUE;
+
+	strcpy(APPLFilter, Filter);
+
+	if (APPLFilter[0])
+	{
+		strcpy(ISFilter, APPLFilter);
+		SendFilterCommand();
+	}
 	strcpy(Call, CallPadded);
 }
 
@@ -2227,6 +2246,10 @@ Dll VOID APIENTRY APRSDisconnect()
 	UINT * buffptr;
 
 	ApplConnected = FALSE;
+
+	strcpy(ISFilter, NodeFilter);
+
+	SendFilterCommand();
 
 	while (APPL_Q)
 	{
@@ -2241,17 +2264,40 @@ Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port)
 	// Request APRS Data from Switch (called by APRS Applications)
 
 	UINT * buffptr;
+	struct _EXCEPTION_POINTERS exinfo;
 
-	if (APPL_Q)
+	GetSemaphore();
+
+	SemHeldByAPI = 10;
+
+	__try 
 	{
-		buffptr = Q_REM(&APPL_Q);
+		if (APPL_Q)
+		{
+			buffptr = Q_REM(&APPL_Q);
 
-		*Len = buffptr[1];
-		*Port = buffptr[2];
-		memcpy(Frame, &buffptr[3], buffptr[1]);
-		ReleaseBuffer(buffptr);
-		return TRUE;
+			*Len = buffptr[1];
+			*Port = buffptr[2];
+
+			if (buffptr[1] > 400 || buffptr[1] < 0)
+			{
+				Debugprintf ("Corrupt APRS Frame Len = %d",  buffptr[1]);
+				ReleaseBuffer(buffptr);
+				FreeSemaphore();
+				return FALSE;
+			}
+
+			memcpy(Frame, &buffptr[3], buffptr[1]);
+			ReleaseBuffer(buffptr);
+			FreeSemaphore();
+			return TRUE;
+		}
 	}
+
+	#define EXCEPTMSG "GetAPRSFrame"
+	#include "StdExcept.c"
+	}
+	FreeSemaphore();
 
 	return FALSE;
 }
@@ -2263,13 +2309,17 @@ Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port)
 }
 Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 {
-	// Message has to be queued so it can be sent by Timer Process (IS sock is not valid ib tihs context)
+	// Called from BPQAPRS App
+	// Message has to be queued so it can be sent by Timer Process (IS sock is not valid in this context)
 
 	UINT * buffptr;
 
 	MessageCount++;
 
 	buffptr = GetBuff();
+
+	GetSemaphore();
+	SemHeldByAPI = 11;
 
 	if (buffptr)
 	{
@@ -2278,19 +2328,28 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 		C_Q_ADD(&APPLTX_Q, buffptr);
 	}
 
+	FreeSemaphore();
+
 	return TRUE;
 }
 
 BOOL SendAPPLAPRSMessage(char * Frame)
 {
-	// Send an APRS Message from Appl Queue. If call has been heard, send to the port it was heard on,
-	// otherwise send to all ports (including IS
+	// Send an APRS Message from Appl Queue. If call has been heard,
+	// send to the port it was heard on,
+	// otherwise send to all ports (including IS). Messages to SERVER only go to IS
 
 	struct APRSSTATIONRECORD * STN;
 	char ToCall[10] = "";
 	
 	memcpy(ToCall, &Frame[1], 9);
 
+	if (_stricmp(ToCall, "SERVER   ") == 0)
+	{
+		SendAPRSMessage(Frame, 0);			// IS
+		return TRUE;
+	}
+	
 	STN = LookupStation(ToCall);
 
 	if (STN)
@@ -2308,6 +2367,14 @@ Dll BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon)
 {
 	*PLat = Lat;
 	*PLon = Lon;
+
+	return GPSOK;
+}
+
+Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon)
+{
+	strcpy(PLat, LAT);
+	strcpy(PLon, LON);
 
 	return GPSOK;
 }

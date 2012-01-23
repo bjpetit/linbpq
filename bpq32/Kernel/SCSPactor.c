@@ -80,6 +80,7 @@ extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
+extern BOOL RIG_DEBUG;
 
 static RECT Rect;
 
@@ -504,6 +505,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				// Switch to Packet for this Interval
 				
+				if (RIG_DEBUG)
+					Debugprintf("SCS Switching to Packet, %d", TNC->HFPacket);
+
 				if (TNC->HFPacket == FALSE)
 					SwitchToPacket(TNC);
 

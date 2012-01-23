@@ -521,6 +521,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 
+			if (STREAM->Connecting)
+				return 0;
+
 			// See if Local command (eg RADIO)
 
 			if (_memicmp(&buff[8], "RADIO ", 6) == 0)
@@ -578,6 +581,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				char * viaptr;
 				char * ptr;
 				char * context;
+				int S;
+				struct STREAMINFO * TSTREAM;
+				char Key[21];
 
 				_strupr(&buff[8]);
 				buff[8 + txlen] = 0;
@@ -588,11 +594,40 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				ptr = strtok_s(&buff[10], " ,\r", &context);
 				strcpy(STREAM->RemoteCall, ptr);
+	
+				Key[0] = UZ7HOChannel[port] + '1';
+				memset(&Key[1], 0, 20);
+				strcpy(&Key[11], STREAM->MyCall);
+				strcpy(&Key[1], ptr);
 
-				STREAM->AGWKey[0] = UZ7HOChannel[port] + '1';
-				memset(&STREAM->AGWKey[1], 0, 20);
-				strcpy(&STREAM->AGWKey[11], STREAM->MyCall);
-				strcpy(&STREAM->AGWKey[1], ptr);
+				// Make sure we don't already have a session for this station
+
+				S = 0;
+
+				while (S <= AGW->MaxSessions)
+				{
+					TSTREAM = &TNC->Streams[S];
+
+					if (memcmp(TSTREAM->AGWKey, Key, 21) == 0)
+					{
+						// Found it;
+
+						UINT * buffptr = GetBuff();
+						buffptr[1] = wsprintf((UCHAR *)&buffptr[2],
+							"UZ7HO} Sorry - Session between %s and %s already Exists\r",
+							STREAM->MyCall, STREAM->RemoteCall);
+
+						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+						STREAM->DiscWhenAllSent = 10;
+			
+						return 0;
+					}
+					S++;
+				}		
+			
+				// Not Found
+
+				memcpy(&STREAM->AGWKey[0], &Key[0], 21);
 
 				AGW->TXHeader.Port = UZ7HOChannel[port];
 				AGW->TXHeader.DataKind='C';

@@ -951,7 +951,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			{
 				if (BitMask & 1)
 				{
-					PortEntry = (struct _EXTPORTDATA *)GetPortTableEntry(j);		// BPQ32 port record for this port
+					PortEntry = (struct _EXTPORTDATA *)GetPortTableEntryFromPortNum(j);		// BPQ32 port record for this port
 					if (PortEntry)
 						if (PortEntry->SCANCAPABILITIES == CONLOCK)
 							RIG->PortRecord[k++] = PortEntry;
@@ -964,7 +964,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			{
 				if (BitMask & 1)
 				{
-					PortEntry = (struct _EXTPORTDATA *)GetPortTableEntry(j);		// BPQ32 port record for this port
+					PortEntry = (struct _EXTPORTDATA *)GetPortTableEntryFromPortNum(j);		// BPQ32 port record for this port
 					if (PortEntry)
 						if (PortEntry->SCANCAPABILITIES == SIMPLE)
 							RIG->PortRecord[k++] = PortEntry;
@@ -977,7 +977,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			{
 				if (BitMask & 1)
 				{
-					PortEntry = (struct _EXTPORTDATA *)GetPortTableEntry(j);		// BPQ32 port record for this port
+					PortEntry = (struct _EXTPORTDATA *)GetPortTableEntryFromPortNum(j);		// BPQ32 port record for this port
 					if (PortEntry)
 						if (PortEntry->SCANCAPABILITIES == NONE)
 							RIG->PortRecord[k++] = PortEntry;
@@ -1503,7 +1503,7 @@ VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr)
 
 			RIG->CurrentBandWidth = ptr->Bandwidth;
 
-			PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, ptr);	// Set Robust Packet
+			PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, ptr);
 
 /*			if (ptr->Bandwidth == 'R')			// Robust Packet
 				PortRecord->PORT_EXT_ADDR(6, PortRecord->PORTCONTROL.PORTNUMBER, 6);	// Set Robust Packet
@@ -2545,6 +2545,9 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 		else if (ptr[0] == 'H')
 			*PacketMode = ptr[1];
 
+		else if (ptr[0] == 'N')
+			*PacketMode = ptr[1];
+
 		else if (ptr[0] == 'P')
 		{
 			*PMinLevel = ptr[1];
@@ -3213,7 +3216,7 @@ VOID SetupScanInterLockGroups(struct RIGINFO *RIG)
 
 	// See if other ports in same scan/interlock group
 
-	PortRecord = GetPortTableEntry(RIG->PortNum);
+	PortRecord = GetPortTableEntryFromPortNum(RIG->PortNum);
 
 	if (PortRecord->PORTINTERLOCK)		// Port has Interlock defined
 	{

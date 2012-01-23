@@ -127,45 +127,22 @@ static struct timeval timeout;
 
 static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 {
-	char wtext[100];
+	char wtext[200];
 	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
 	UINT ProcessId;
 	char FN[MAX_PATH] = "";
-	HANDLE hProc;
 
 	if (TNC->ProgramPath == NULL)
 		return FALSE;
 
-	GetWindowText(hwnd,wtext,99);
+	GetWindowText(hwnd, wtext, 199);
 
-	if (memcmp(wtext,"Soundmodem", 10) == 0)
+	if (strstr(wtext,"* MULTIPSK"))
 	{
 		GetWindowThreadProcessId(hwnd, &ProcessId);
 
-//		if (TNC->WIMMORPID == ProcessId)
-		{
-			 // Our Process
-
-			hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, ProcessId);
-
-			if (hProc && GetModuleFileNameExPtr)
-			{
-				GetModuleFileNameExPtr(hProc, NULL, FN, MAX_PATH);
-
-				// Make sure this is the right copy
-
-				CloseHandle(hProc);
-
-				if (_stricmp(FN, TNC->ProgramPath))
-					return TRUE;					//Wrong Copy
-			}
-
-			TNC->WIMMORPID = ProcessId;
-
-			wsprintf (wtext, "Soundmodem - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-			SetWindowText(hwnd, wtext);
-			return FALSE;
-		}
+		TNC->WIMMORPID = ProcessId;
+		return FALSE;
 	}
 	
 	return (TRUE);
@@ -748,7 +725,7 @@ static RestartTNC(struct TNCINFO * TNC)
 				break;
 			}
 		}
-		ret = CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,HomeDir, &SInfo, &PInfo);
+		ret = CreateProcess(TNC->ProgramPath, "MultiPSK TCP_IP_ON", NULL, NULL, FALSE,0 ,NULL ,HomeDir, &SInfo, &PInfo);
 
 		if (ret)
 			TNC->WIMMORPID = PInfo.dwProcessId;
@@ -803,7 +780,7 @@ UINT WINAPI MPSKExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
 	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
-	PortEntry->SCANCAPABILITIES = NONE;			// Scan Control - pending connect only
+	PortEntry->SCANCAPABILITIES = NONE;					// Scan Control - None
 
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 64;
@@ -850,7 +827,9 @@ UINT WINAPI MPSKExtInit(EXTPORTDATA * PortEntry)
 	}
 
 	time(&lasttime[port]);			// Get initial time value
-	
+
+//	SendMessage(0x40eaa, WM_COMMAND, 0x03000eaa, 0x40eaa);
+
 	return ((int) ExtProc);
 
 }
@@ -1045,7 +1024,7 @@ static VOID ConnecttoMPSKThread(port)
 static int ProcessReceivedData(int port)
 {
 	unsigned int bytes;
-	int datalen,i;
+	int i;
 	char ErrMsg[255];
 	char Message[500];
 	struct TNCINFO * TNC = TNCInfo[port];
@@ -1091,7 +1070,6 @@ VOID ProcessMSPKData(struct TNCINFO * TNC);
 
 VOID ProcessMPSKPacket(struct TNCINFO * TNC, char * Message, int Len)
 {
-	UINT * buffptr;
 	char * MPTR = Message;
 
 /*
@@ -1336,12 +1314,15 @@ VOID ProcessMSPKData(struct TNCINFO * TNC)
 			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 		}
 
+		TNC->DataLen = 0;
 		return;
 	}
 
 	// Not Connected. We get various status messages, including Connection made,
 	// but they may be split across packets, or have more that one to a packet.
 	// I think they are all CR/LF terminated . No they aren't!
+
+	// Look for [] this seems to be what is important
 
 DataLoop:
 
@@ -1362,19 +1343,29 @@ DataLoop:
 
 	}		
 
-	ptr = strchr(TNC->DataBuffer, '\r');
+	ptr = strchr(TNC->DataBuffer, '[');
 	
 	if (ptr)
 	{
-		// have a whole message
+		// Start of a significant Message
 
-		int LineLen = ptr + 1 - &TNC->DataBuffer[0];
+		char * eptr = strchr(TNC->DataBuffer, ']');
 		char CallFrom[20];
-		char * cptr = strstr(TNC->DataBuffer, "[Connection made with ");
+		char * cptr ;
+
+		if (eptr == 0)
+			return;				// wait for matching []
+
+		cptr = strstr(TNC->DataBuffer, "[Connection made with ");
+
+	//	TNC->DataLen -= LineLen;
+	//	memmove(TNC->DataBuffer, &TNC->DataBuffer[LineLen], 1 + Len - LineLen);  //Copy Null
+	//	Len -= LineLen;
+	//	goto DataLoop;
+
 
 		if (cptr)			// Have a connection
 		{
-			LineLen++;		// Connection Msg has a line feed
 
 			// Connected
 
@@ -1433,20 +1424,19 @@ DataLoop:
 						}
 					}
 				}
-			}
-		
-		if (Len == LineLen)  // Most Likely
-		{
-			TNC->DataLen = 0;
-			return;
 		}
 
-		TNC->DataLen -= LineLen;
-		memmove(TNC->DataBuffer, &TNC->DataBuffer[LineLen], 1 + Len - LineLen);  //Copy Null
-		Len -= LineLen;
-		goto DataLoop;
 	}
+
+	// Doesnt contain [ - just discard
+		
+	TNC->DataLen = 0;
+	Debugprintf(TNC->DataBuffer);
+	return;
+	
 }
+
+
 
 /*
 		buffptr = GetBuff();
@@ -1520,25 +1510,6 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
 	char Status[80];
-	int s;
-
-	// Clear Session Key
-	
-	memset(TNC->Streams[Stream].AGWKey, 0, 21);
-
-	// if all streams are free, start scanner
-
-	s = 0;
-
-	while(s <= TNC->AGWInfo->MaxSessions)
-	{
-		if (s != Stream)
-		{		
-			if (TNC->PortRecord->ATTACHEDSESSIONS[s])
-				return;										// Busy
-		}
-		s++;
-	}
 
 	wsprintf(Status, "%d SCANSTART 15", TNC->Port);
 	Rig_Command(-1, Status);

@@ -421,6 +421,10 @@
 // Fix corruption of Free Buffer Count by Rigcontol
 // Fix WINMOR and V4 PTT
 // Add MultiPSK Driver
+// Add SendBeacon export for BPQAPRS
+// Add SendChatReport function
+// Fix check on length of Port Config ID String with trailing spaces
+// Fix interlock when Port Number <> Port Slot
 
 #define Kernel
 #include "Versions.h"
@@ -1333,6 +1337,7 @@ Check_Timer()
 	{
 	    WSADATA       WsaData;            // receives data from WSAStartup
 		HINSTANCE ExtDriver=0;
+		RECT cRect;
 
 		OutputDebugString("BPQ32 Reinitialising External Ports and Attaching Timer\n");
 
@@ -1396,6 +1401,26 @@ Check_Timer()
 		if (IPRequired)	IPActive = Init_IP();
 
 		RigActive = Rig_Init();
+
+		if (IPRequired)	IPActive = Init_IP();
+	
+		APRSActive = Init_APRS();
+
+		if (ISPort == 0)
+			IGateEnabled = 0;
+
+		CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
+	
+		GetClientRect(hWnd, &cRect); 
+		MoveWindow(hWndBG, 0, 0, cRect.right, cRect.bottom, TRUE);
+		if (APRSActive)
+			MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
+		else
+		{
+			ShowWindow(GetDlgItem(hWnd, IDC_GPS), SW_HIDE); 
+			MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
+		}
+		InvalidateRect(hWnd, NULL, TRUE);
 
 		FreeConfig();
 
@@ -1837,6 +1862,9 @@ DllExport int APIENTRY CloseBPQ32()
 		TimerInst=0xffffffff;
 		Tell_Sessions();
 
+		IPClose();
+		APRSClose();
+		Rig_Close();
 		WSACleanup();
 	}
 	
@@ -2287,7 +2315,8 @@ DllExport UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc)
 	return 0;
 }
 
-DllExport struct PORTCONTROL * APIENTRY GetPortTableEntry(int portslot)
+
+DllExport struct PORTCONTROL * APIENTRY GetPortTableEntry(int portslot)		// Kept for Legacy apps
 {
 	struct PORTCONTROL * PORTVEC=PORTTABLE;
 
@@ -2300,7 +2329,36 @@ DllExport struct PORTCONTROL * APIENTRY GetPortTableEntry(int portslot)
 	return PORTVEC;
 }
 
+// Proc below renamed to avoid confusion with GetPortTableEntryFromPortNum
 
+DllExport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot)
+{
+	struct PORTCONTROL * PORTVEC=PORTTABLE;
+
+	if (portslot>NUMBEROFPORTS)
+		portslot=NUMBEROFPORTS;
+
+	while (--portslot > 0)
+		PORTVEC=PORTVEC->PORTPOINTER;
+
+	return PORTVEC;
+}
+
+DllExport struct PORTCONTROL * APIENTRY GetPortTableEntryFromPortNum(int portnum)
+{
+	struct PORTCONTROL * PORTVEC=PORTTABLE;
+
+	do
+	{
+		if (PORTVEC->PORTNUMBER == portnum)
+			return PORTVEC;
+
+		PORTVEC=PORTVEC->PORTPOINTER;
+	}
+	while (PORTVEC);
+
+	return NULL;
+}
 /*DllExport int APIENTRY SwitchTimer()
 {
 	GetSemaphore();

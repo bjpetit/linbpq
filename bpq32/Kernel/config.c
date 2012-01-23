@@ -2009,9 +2009,25 @@ char rec[];
 {
 	unsigned int j;
 	for (j = 3;( j < strlen(rec)+1); j++)
-	    workstring[j-3] = rec[j];
+	    
+	workstring[j-3] = rec[j];
 
-	if (j > 33)
+	// Remove trailing spaces before checking length
+
+	i = strlen(workstring);
+	i--;
+
+	while(i > 1)
+	{
+		if (workstring[i] == ' ')
+			workstring[i] = 0;				// Remove trailing spaces
+		else
+			break;
+
+		i--;
+	}
+
+	if (i > 29)
 	{
 	   Consoleprintf("Port description too long - Truncated");
 	   Consoleprintf("%s\r\n",rec);
@@ -2020,8 +2036,8 @@ char rec[];
 	workstring[30] = '\0';
 
 	bseek(fp2,(long) fileoffset,SEEK_SET);
-        bputs(workstring,fp2);
-        return(1);
+	bputs(workstring,fp2);
+	return(1);
 }
 
 int dodll(i, value, rec)

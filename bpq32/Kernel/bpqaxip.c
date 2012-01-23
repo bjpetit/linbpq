@@ -198,6 +198,7 @@ int Socket_Connect(int SocketId, int Error);
 int Socket_Data(int sock, int error, int eventcode);
 VOID TCPConnectThread(struct arp_table_entry * arp);
 VOID __cdecl Debugprintf(const char * format, ...);
+VOID __cdecl Consoleprintf(const char * format, ...);
 BOOL OpenListeningSocket(struct PORTINFO * PORT, struct arp_table_entry * arp);
 VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
 
@@ -2062,7 +2063,7 @@ static ProcessLine(char * buf, struct PORTINFO * PORT)
 		
 		if (p_call == NULL) return (FALSE);
 
-		if (stricmp(p_call, "DUMMY") == 0)
+		if (_stricmp(p_call, "DUMMY") == 0)
 		{
 			Consoleprintf("MAP DUMMY is no longer needed - statement ignored");
 			return TRUE;

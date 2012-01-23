@@ -91,7 +91,7 @@ time_t ltime,lasttime;
 
 char ConfigClassName[]="CONFIG";
 
-static HWND hResWnd;
+HWND hIPResWnd = 0;
 
 extern BOOL StartMinimized;
 extern BOOL MinimizetoTray;
@@ -162,6 +162,19 @@ HANDLE hInstance;
 Dll BOOL APIENTRY Init_IP()
 {
 	ARPDATA * ARPptr;
+
+	if (hIPResWnd)
+	{
+		if (MinimizetoTray)
+			DeleteTrayMenuItem(hIPResWnd);
+
+		PostMessage(hIPResWnd, WM_DESTROY,0,0);
+		DestroyWindow(hIPResWnd);
+
+		Debugprintf("IP Init Destroying IP Resolver");
+	}
+	
+	hIPResWnd= NULL;
 
 	NUMBEROFPORTS=GetNumberofPorts();
 	ConvToAX25(GetNodeCall(), MYCALL);
@@ -251,12 +264,12 @@ Dll BOOL APIENTRY Init_IP()
 VOID IPClose()
 {
 	if (MinimizetoTray)
-		DeleteTrayMenuItem(hResWnd);
+		DeleteTrayMenuItem(hIPResWnd);
 
-	PostMessage(hResWnd, WM_DESTROY,0,0);
-	DestroyWindow(hResWnd);
+	PostMessage(hIPResWnd, WM_DESTROY,0,0);
+	DestroyWindow(hIPResWnd);
 
-	hResWnd= NULL;
+	hIPResWnd= NULL;
 }
 
 Dll BOOL APIENTRY Poll_IP()
@@ -1833,7 +1846,7 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			FreeConfig();
 
 			ReadConfigFile();
-			PostMessage(hResWnd, WM_TIMER,0,0);
+			PostMessage(hIPResWnd, WM_TIMER,0,0);
 			InvalidateRect(hWnd,NULL,TRUE);
 
 			return 0;
@@ -2021,7 +2034,7 @@ void IPResolveNames( void *dummy )
 
 	sprintf(WindowTitle,"IP Gateway Resolver");
 
-	hResWnd = CreateWindow("IPAppName",WindowTitle,
+	hIPResWnd = CreateWindow("IPAppName",WindowTitle,
 		WindowParam,
 		CW_USEDEFAULT, 0, 500, Windowlength,
 		NULL, NULL, hInstance, NULL);
@@ -2031,14 +2044,14 @@ void IPResolveNames( void *dummy )
 	
 	hMenu=CreateMenu();
 	hPopMenu=CreatePopupMenu();
-	SetMenu(hResWnd,hMenu);
+	SetMenu(hIPResWnd,hMenu);
 
 	AppendMenu(hMenu,MF_STRING + MF_POPUP,(UINT)hPopMenu,"Update");
 
 	AppendMenu(hPopMenu,MF_STRING,BPQREREAD,"ReRead Config");
 //	AppendMenu(hPopMenu,MF_STRING,BPQADDARP,"Add Entry");
 
-	DrawMenuBar(hResWnd);	
+	DrawMenuBar(hIPResWnd);	
 
 
 	LFTTYFONT.lfHeight =			12;
@@ -2059,25 +2072,25 @@ void IPResolveNames( void *dummy )
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 
   	if (map_table_len > 10 )
-		SetScrollRange(hResWnd,SB_VERT,0,map_table_len-10,TRUE);
+		SetScrollRange(hIPResWnd,SB_VERT,0,map_table_len-10,TRUE);
 
 	if (MinimizetoTray)
 	{
 		//	Set up Tray ICON
-		AddTrayMenuItem(hResWnd, "IP Gateway Resolver");
+		AddTrayMenuItem(hIPResWnd, "IP Gateway Resolver");
 	}
 
 	if (StartMinimized)
 		if (MinimizetoTray)
-			ShowWindow(hResWnd, SW_HIDE);
+			ShowWindow(hIPResWnd, SW_HIDE);
 		else
-			ShowWindow(hResWnd, SW_SHOWMINIMIZED);
+			ShowWindow(hIPResWnd, SW_SHOWMINIMIZED);
 	else
-		ShowWindow(hResWnd, SW_RESTORE);
+		ShowWindow(hIPResWnd, SW_RESTORE);
 
-	SetTimer(hResWnd,1,15*60*1000,0);	
+	SetTimer(hIPResWnd,1,15*60*1000,0);	
 
-	PostMessage(hResWnd, WM_TIMER,0,0);
+	PostMessage(hIPResWnd, WM_TIMER,0,0);
 
 	while (GetMessage(&Msg, NULL, 0, 0)) 
 	{
