@@ -19,7 +19,8 @@ count on BPQ32.dll gets messed up, and the code will not unload cleanly.
 
 // Definitions for Statically Linked DLL
 
-struct PORTCONTROL * APIENTRY GetPortTableEntry(int portslot);
+struct PORTCONTROL * APIENTRY GetPortTableEntryFromPortNum(int portslot);
+struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 
 
 //	Returns number of free buffers
@@ -256,9 +257,12 @@ int APIENTRY SetupTrayIcon();
 
 BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
 
+VOID APIENTRY SendChatReport(UINT_PTR ChatReportSocket, char * buff, int txlen);
+
 #else
 
-struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntry) (int portslot);
+struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntryFromPortNum) (int portnum);
+struct PORTCONTROL * (FAR WINAPI *  GetPortTableEntryFromSlot) (int portslot);
 
 //	API Definitions for Dynamic Load of BPQ32.dll
 
@@ -495,9 +499,8 @@ BOOL GetAPI()
 		return(FALSE);
 	}
 
-	GetPortTableEntry = (struct PORTCONTROL * (__stdcall *)(int PortSlot))GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
-
-
+	GetPortTableEntryFromPortNum = (struct PORTCONTROL * (__stdcall *)(int PortSlot))GetProcAddress(ExtDriver,"_GetPortTableEntryFromPortNum@4");
+	GetPortTableEntryFromSlot = (struct PORTCONTROL * (__stdcall *)(int PortSlot))GetProcAddress(ExtDriver,"_GetPortTableEntryFromSlot@4");
 
 	GETBPQAPI = (ULONG(__stdcall *)())GetProcAddress(ExtDriver,"_GETBPQAPI@0");
 	GETMONDECODE = (ULONG(__stdcall *)())GetProcAddress(ExtDriver,"_GETMONDECODE@0");
