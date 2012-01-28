@@ -10,6 +10,8 @@ int MaxTXSize = 99999;
 struct FBBRestartData ** RestartData = NULL;
 int RestartCount = 0;
 
+extern char ProperBaseDir[];
+
 VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {
 	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
@@ -581,7 +583,23 @@ ok2:
 		else
 		{
 			if (conn->BBSFlags & FBBCompressed)
+	
+			// Create a debug file
+			{
+				char DbgFile[MAX_PATH];
+				sprintf_s(DbgFile, sizeof(DbgFile), "%s\\%d_%s.bin", ProperBaseDir, time(NULL), FBBHeader->BID);
+	
+				conn->DebugHandle = CreateFile(DbgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+			
 				conn->InputMode = 'B';
+			}
+
 			CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID, NULL);
 		}
 
@@ -638,13 +656,19 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 
 VOID SetupNextFBBMessage(CIRCUIT * conn)
 {	
-	struct FBBHeaderLine * FBBHeader;	// The Headers from an FFB forward block
+	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
 
 	memmove(&conn->FBBHeaders[0], &conn->FBBHeaders[1], 4 * sizeof(struct FBBHeaderLine));
 	
 	memset(&conn->FBBHeaders[4], 0, sizeof(struct FBBHeaderLine));
 
 	FBBHeader = &conn->FBBHeaders[0];
+
+	if (conn->DebugHandle)
+	{
+		CloseHandle(conn->DebugHandle);
+		conn->DebugHandle = NULL;
+	}
 
 	if (FBBHeader->MsgType == 0)
 	{
@@ -666,6 +690,20 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 			conn->InputMode = 'B';
 
 		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID, NULL);
+
+		// Create a debug file
+		{
+			char DbgFile[MAX_PATH];
+			sprintf_s(DbgFile, sizeof(DbgFile), "%s\\%d_%s.bin", ProperBaseDir, time(NULL), FBBHeader->BID);
+	
+			conn->DebugHandle = CreateFile(DbgFile,
+					GENERIC_WRITE,
+					FILE_SHARE_READ,
+					NULL,
+					CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL,
+					NULL);
+		}
 	}
 }
 
@@ -965,7 +1003,7 @@ loop:
 	
 	default:
 
-		BBSputs(conn, "*** Protocol Error - Invalid Binary Message Format (Invalid Message Type)\r");
+		BBSputs(conn, "*** Protocol Error - Invalid Binary Message Format (Invalid Block Type)\r");
 		Flush(conn);
 		conn->CloseAfterFlush = 20;			// 2 Secs
 

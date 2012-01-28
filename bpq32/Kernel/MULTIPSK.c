@@ -372,30 +372,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (TNC->PortRecord->UI_Q)
 		{
-			struct AGWINFO * AGW = TNC->AGWInfo;
-	
-			int MsgLen;
 			struct _MESSAGE * buffptr;
-			char * Buffer;
+
 			SOCKET Sock;	
 			(UINT *)buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 
 			Sock = TNCInfo[MasterPort[port]]->WINMORSock;
-		
-			MsgLen = buffptr->LENGTH - 6;	// 7 Header, need extra Null
-			buffptr->LENGTH =0;				// Need a NULL on front	
-			Buffer = &buffptr->DEST[0];		// Raw Frame
-			Buffer--;						// Need to send an extra byte on front
 	
-			AGW->TXHeader.Port = MPSKChannel[port];
-			AGW->TXHeader.DataKind = 'K';
-			memset(AGW->TXHeader.callfrom, 0, 10);
-			memset(AGW->TXHeader.callto, 0, 10);
-			AGW->TXHeader.DataLength = MsgLen;
-
-			send(Sock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
-			send(Sock, Buffer, MsgLen, 0);
-
 			ReleaseBuffer((UINT *)buffptr);
 		}
 			
@@ -418,10 +401,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		if (STREAM->Connected)
 		{
 			SendData(TNC, &buff[8], txlen);
-//			STREAM->FramesOutstanding++;
 		}
 		else
 		{
+			char Command[80];
+			int len;
+
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
 			{
 				TidyClose(TNC, buff[4]);
@@ -480,10 +465,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (toupper(buff[8]) == 'C' && buff[9] == ' ' && txlen > 2)	// Connect
 			{
-				struct AGWINFO * AGW = TNC->AGWInfo;
-				char ViaList[82] = "";
-				int Digis = 0;
-				char * viaptr;
 				char * ptr;
 				char * context;
 
@@ -492,127 +473,34 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				memset(STREAM->RemoteCall, 0, 10);
 
-				// See if any digis - accept V VIA or nothing, seps space or comma
-
 				ptr = strtok_s(&buff[10], " ,\r", &context);
 				strcpy(STREAM->RemoteCall, ptr);
 
-				STREAM->AGWKey[0] = MPSKChannel[port] + '1';
-				memset(&STREAM->AGWKey[1], 0, 20);
-				strcpy(&STREAM->AGWKey[11], STREAM->MyCall);
-				strcpy(&STREAM->AGWKey[1], ptr);
+				len = wsprintf(Command,"%cCALLSIGN_TO_CALL_ARQ_FAE %s%c%cSELECTIVE_CALL_ARQ_FAE\x1b",
+					'\x1a', STREAM->RemoteCall, '\x1b', '\x1a');
 
-				AGW->TXHeader.Port = MPSKChannel[port];
-				AGW->TXHeader.DataKind='C';
-				memcpy(AGW->TXHeader.callfrom, &STREAM->AGWKey[11], 10);
-				memcpy(AGW->TXHeader.callto, &STREAM->AGWKey[1], 10);
-				AGW->TXHeader.DataLength = 0;
-
-				ptr = strtok_s(NULL, " ,\r", &context);
-
-				if (ptr)
-				{
-					// we have digis
-
-					viaptr = &ViaList[1];
+				if (TNC->TX)
+					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Savde till not transmitting
+				else
+					send(TNC->WINMORSock, Command, len, 0);
 		
-					if (strcmp(ptr, "V") == 0 || strcmp(ptr, "VIA") == 0)
-						ptr = strtok_s(NULL, " ,\r", &context);
-
-					while (ptr)
-					{
-						strcpy(viaptr, ptr);
-						Digis++;
-						viaptr += 10;
-						ptr = strtok_s(NULL, " ,\r", &context);
-					}
-
-					AGW->TXHeader.DataLength = Digis * 10 + 1;
-					AGW->TXHeader.DataKind='v';
-					ViaList[0] = Digis;
-				}
-
-				send(TNCInfo[MasterPort[port]]->WINMORSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
-				if (Digis)
-					send(TNCInfo[MasterPort[port]]->WINMORSock, ViaList, Digis * 10 + 1, 0);
-
 				STREAM->Connecting = TNC->AGWInfo->ConnTimeOut;	// It doesn't report failure
 
 //				wsprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 //				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+
+				return 0;
 			}
+
+			// Send any other command to Multipsk
+
+			_strupr(&buff[8]);
+			buff[7 + txlen] = 0;
+			len = wsprintf(Command,"%c%s\x1b", '\x1a', &buff[8]);
+			send(TNC->WINMORSock, Command, len, 0);
+			TNC->InternalCmd = TRUE;
+
 		}
-
-/*
-
-		
-		AGW->TXHeader.Port=MPSKChannel[port];
-		AGW->TXHeader.DataKind='K';				// raw send
-		AGW->TXHeader.DataLength=txlen;
-
-		memcpy(&txbuff, &AGW->TXHeader, AGWHDDRLEN);
-		memcpy(&txbuff[AGWHDDRLEN],&buff[6],txlen);
-
-		txbuff[AGWHDDRLEN] = 0;
-		txlen+=AGWHDDRLEN;
-
-		bytes=send(TNC->WINMORSock,(const char FAR *)&txbuff,txlen,0);
-		
-		if (bytes != txlen)
-		{
-
-			// MPSK doesn't seem to recover from a blocked write. For now just reset
-			
-//			if (bytes == SOCKET_ERROR)
-//			{
-				winerr=WSAGetLastError();
-				
-				i=wsprintf(ErrMsg, "MPSK Write Failed for port %d - error code = %d\r\n", port, winerr);
-				WritetoConsole(ErrMsg);
-					
-	
-//				if (winerr != WSAEWOULDBLOCK)
-//				{
-				
-					closesocket(TNC->WINMORSock);
-					
-					TNC->CONNECTED = FALSE;
-
-					return (0);
-//				}
-//				else
-//				{
-//					bytes=0;		// resent whole packet
-//				}
-
-//			}
-
-			// Partial Send or WSAEWOULDBLOCK. Save data, and send once busy clears
-
-			
-			// Get a buffer
-						
-//			buffptr=GetBuff();
-
-//			if (buffptr == 0)
-//			{
-				// No buffers, so can only break connection and try again
-
-//				closesocket(MPSKSock[MasterPort[port]]);
-					
-//				CONNECTED[MasterPort[port]]=FALSE;
-
-//				return (0);
-//			}
-	
-//			buffptr[1]=txlen-bytes;			// Bytes still to send
-
-//			memcpy(buffptr+2,&txbuff[bytes],txlen-bytes);
-
-//			C_Q_ADD(&BPQtoMPSK_Q[MasterPort[port]],buffptr);
-*/	
-			return (0);
-		
 
 		return (0);
 
@@ -1234,12 +1122,65 @@ VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 {
 	TNC->CmdBuffer[TNC->CmdLen] = 0;
 	Debugprintf("MPSK CMD %s", TNC->CmdBuffer);
+
+	if (strcmp(TNC->CmdBuffer, "SWITCH=TX") == 0)
+		TNC->TX = TRUE;
+	else
+	{
+		if (strcmp(TNC->CmdBuffer, "SWITCH=RX") == 0)
+		{
+			TNC->TX = FALSE;
+			
+			// See if a command was queued while busy
+			
+			if (TNC->CmdSet)
+			{
+				send(TNC->WINMORSock, TNC->CmdSet, strlen(TNC->CmdSet), 0);
+				free (TNC->CmdSet);
+				TNC->CmdSet = NULL;
+			}
+		}
+		else
+		{
+			if (TNC->InternalCmd)
+			{
+				ULONG * buffptr = GetBuff();
+
+				TNC->InternalCmd = FALSE;
+
+				if (buffptr)
+				{
+					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "MPSK} %s\r", TNC->CmdBuffer);
+					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+				}
+			}
+		}
+	}
 }
 
 VOID ProcessMSPKComment(struct TNCINFO * TNC)
 {
 	TNC->CmdBuffer[TNC->CmdLen] = 0;
 	Debugprintf("MPSK Comment %s", TNC->CmdBuffer);
+}
+
+static int UnStuff(UCHAR * inbuff, int len)
+{
+	int i,txptr=0;
+	UCHAR c;
+	UCHAR * outbuff = inbuff;
+
+	for (i = 0; i < len; i++)
+	{
+		c = inbuff[i];
+
+		if (c == 0xc0)
+			c = inbuff[++i] - 0x20;
+
+		outbuff[txptr++]=c;
+	}
+
+	return txptr;
 }
 
 VOID ProcessMSPKData(struct TNCINFO * TNC)
@@ -1303,15 +1244,24 @@ VOID ProcessMSPKData(struct TNCINFO * TNC)
 			return;
 		}
 
-		// Pass to Application
+		// Pass to Application. Remove any transparency (hex 80 used as an escape)
 
 		buffptr = GetBuff();
+
+		if (TNC->DataBuffer[TNC->DataLen - 1] == 0x80)
+			return;			// Last char is an escape, so wait for the escaped char to arrive
+		
 		if (buffptr)
 		{
+			if (memchr(TNC->DataBuffer, 0xc0, TNC->DataLen))
+				TNC->DataLen = UnStuff(TNC->DataBuffer, TNC->DataLen);
+
 			buffptr[1]  = TNC->DataLen;
 			memcpy(&buffptr[2], TNC->DataBuffer, TNC->DataLen);
 
 			C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+
+			STREAM->BytesRXed += TNC->DataLen;
 		}
 
 		TNC->DataLen = 0;
@@ -1469,38 +1419,52 @@ VOID SendData(struct TNCINFO * TNC, char * Msg, int MsgLen)
 {
 	// Preceed each data byte with 25 (decimal)
 
-	char * NewMsg = malloc (MsgLen *2);
+	char * NewMsg = malloc (MsgLen * 4);
 	int n;
+	UCHAR c;
+	int ExtraLen = 0;
 	char * ptr = NewMsg;
 	char * inptr = Msg;
 	SOCKET sock = TNCInfo[MasterPort[TNC->Port]]->WINMORSock;
 
+	TNC->Streams[0].BytesTXed += MsgLen;
+
 	for (n = 0; n < MsgLen; n++)
 	{
 		*(ptr++) = 25;
-		*ptr++ = *inptr++;
+		c = *inptr++;
+
+		if (c < 0x20 || c == 0xc0)
+		{
+			if (c != 0x0d)
+			{
+				*ptr++ = 0x0c0;
+				*(ptr++) = 25;
+				*ptr++ = c + 0x20;
+				ExtraLen += 2;
+				continue;
+			}
+		}
+
+		*ptr++ = c;
 	}
 	
-	send(sock, NewMsg, MsgLen * 2, 0);
+	send(sock, NewMsg, MsgLen * 2 + ExtraLen, 0);
 
 	free(NewMsg);
 }
 
 VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {
-	char * Key = &TNC->Streams[Stream].AGWKey[0];
-	struct AGWINFO * AGW = TNC->AGWInfo;
-	
-	AGW->TXHeader.Port = Key[0] - '1';
-	AGW->TXHeader.DataKind='d';
-	strcpy(AGW->TXHeader.callfrom, &Key[11]);
-	strcpy(AGW->TXHeader.callto, &Key[1]);
-	AGW->TXHeader.DataLength = 0;
+	char Command[80];
+	int len;
 
-//	send(TNCInfo[MasterPort[TNC->Port]]->WINMORSock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
+	len = wsprintf(Command,"%cSTOP_SELECTIVE_CALL_ARQ_FAE\x1b", '\x1a');
+	if (TNC->TX)
+		TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Savde till not transmitting
+	else
+		send(TNC->WINMORSock, Command, len, 0);
 }
-
-
 
 VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 {

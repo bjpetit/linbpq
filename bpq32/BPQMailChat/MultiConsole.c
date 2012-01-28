@@ -240,7 +240,6 @@ BOOL CreateConsole(int Stream)
 	SendMessage(Cinfo->hwndOutput, EM_SETEVENTMASK, (WPARAM)0, (LPARAM)ENM_MOUSEEVENTS | ENM_SCROLLEVENTS | ENM_KEYEVENTS);
 	SendMessage(Cinfo->hwndOutput, EM_EXLIMITTEXT, 0, MAXLINES * LINELEN);
 
-
 	Cinfo->hwndInput = GetDlgItem(hConsole, 118); 
  
 	// Set our own WndProcs for the controls. 
@@ -793,7 +792,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 		case BPQCOPYOUT:
 		
-			CopyToClipboard(Cinfo->hwndOutput);
+			CopyRichTextToClipboard(Cinfo->hwndOutput);
 			break;
 
 
@@ -1247,6 +1246,37 @@ int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item)
 	
     return (0);
 }
+
+void CopyRichTextToClipboard(HWND hWnd)
+{
+	int len=0;
+	HGLOBAL	hMem;
+	char * ptr;
+
+	// Copy Rich Text to Clipboard
+	
+	len = SendMessage(hWnd, WM_GETTEXTLENGTH, 0, 0);
+	
+	hMem = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, len + 1);
+
+	if (hMem != 0)
+	{
+		ptr=GlobalLock(hMem);
+
+		if (OpenClipboard(MainWnd))
+		{
+			len = SendMessage(hWnd, WM_GETTEXT  , len, (LPARAM)ptr);
+
+			GlobalUnlock(hMem);
+			EmptyClipboard();
+			SetClipboardData(CF_TEXT,hMem);
+			CloseClipboard();
+		}
+	}
+	else
+		GlobalFree(hMem);
+}
+
 
 void CopyToClipboard(HWND hWnd)
 {

@@ -93,19 +93,25 @@ BEGIN
     EDITTEXT        IDC_WXPORTS,138,112,81,12,ES_AUTOHSCROLL | WS_DISABLED
 END
 
-APRSMSGS DIALOG DISCARDABLE  100, 100, 505, 275
+APRSMSGS DIALOG DISCARDABLE  100, 100, 467, 275
 STYLE WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Dialog"
 CLASS "APRSMSGS"
 FONT 9, "Fixedsys"
 BEGIN
-    EDITTEXT        IDC_INPUT,90,255,365,12,ES_AUTOHSCROLL
-    COMBOBOX        IDC_TOCALL,13,255,50,50,CBS_DROPDOWN | CBS_SORT | 
+    LTEXT           "To",IDC_TOLABEL,0,216,9,8
+    COMBOBOX        IDC_TOCALL,12,215,45,50,CBS_DROPDOWN | CBS_SORT | 
                     CBS_UPPERCASE | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "To",IDC_TOLABEL,0,257,10,10
-    LTEXT           "Text",IDC_TEXTLABEL,66,257,14,10
+    LTEXT           "Text",IDC_TEXTLABEL,60,216,19,8
+    EDITTEXT        IDC_INPUT,84,215,222,12,ES_AUTOHSCROLL
     CONTROL         "Show only my Messages",IDC_MYMSGS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,3,5,100,9
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT,5,5,96,8
+    CONTROL         "Beep instead of Popup",IDC_MSGBEEP,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT,108,5,97,8
+    CONTROL         "List1",IDC_LIST1,"SysListView32",LVS_REPORT | WS_BORDER,
+                    9,26,367,69
+    CONTROL         "List2",IDC_LIST2,"SysListView32",LVS_REPORT | WS_BORDER,
+                    8,103,373,83
 END
 
 APRSSTNS DIALOG DISCARDABLE  100, 100, 505, 275
@@ -122,25 +128,25 @@ CAPTION "About"
 FONT 8, "System"
 BEGIN
     ICON            107,BPQICON,14,9,20,20
-    LTEXT           "G8BPQ APRS Client/I-Gate",65535,39,15,86,8,
-                    SS_NOPREFIX | NOT WS_GROUP
-    LTEXT           "Version",65535,128,15,28,8,NOT WS_GROUP
+    LTEXT           "G8BPQ APRS Client/I-Gate",-1,39,15,86,8,SS_NOPREFIX | 
+                    NOT WS_GROUP
+    LTEXT           "Version",-1,128,15,28,8,NOT WS_GROUP
     LTEXT           "0.0.0.0",ABOUT_VERSION,156,15,69,8,NOT WS_GROUP
-    CTEXT           "Copyright © 2012 John Wiseman G8BPQ",65535,17,
-                    28,180,8,NOT WS_GROUP
+    CTEXT           "Copyright © 2012 John Wiseman G8BPQ",-1,17,28,180,8,NOT 
+                    WS_GROUP
     DEFPUSHBUTTON   "OK",IDOK,93,159,30,11,BS_CENTER | BS_VCENTER | WS_GROUP
-    LTEXT           "APRS® is a registered trademark of Bob Bruninga.",
-                    65535,27,43,173,13,NOT WS_GROUP
-    LTEXT           "  Includes code from libpng (http://www.libpng.org",
-                    65535,28,58,180,8,NOT WS_GROUP
+    LTEXT           "APRS® is a registered trademark of Bob Bruninga.",-1,27,
+                    43,173,13,NOT WS_GROUP
+    LTEXT           "  Includes code from libpng (http://www.libpng.org",-1,
+                    28,58,180,8,NOT WS_GROUP
     LTEXT           "             libpng version 1.2.8 - December 3, 2004\n    Copyright (c) 1998-2004 Glenn Randers-Pehrson\n    Copyright (c) 1996-1997 Andreas Dilger\n    Copyright (c) 1995-1996 Guy Eric Schalnat, Group 42, Inc.\n",
-                    65535,15,73,200,40,NOT WS_GROUP
+                    -1,15,73,200,40,NOT WS_GROUP
     LTEXT           "Mapping from OpenStreetMap (http://openstreetmap.org)",
-                    65535,25,128,189,10,NOT WS_GROUP
-    LTEXT           "Includes code from zlib (http://zlib.net)",
-                    65535,44,111,135,10,NOT WS_GROUP
-    LTEXT           "Map Tiles Courtesy of MapQuest (www.mapquest.com)",
-                    65535,29,139,181,10,NOT WS_GROUP
+                    -1,25,128,189,10,NOT WS_GROUP
+    LTEXT           "Includes code from zlib (http://zlib.net)",-1,44,111,
+                    135,10,NOT WS_GROUP
+    LTEXT           "Map Tiles Courtesy of MapQuest (www.mapquest.com)",-1,
+                    29,139,181,10,NOT WS_GROUP
 END
 
 

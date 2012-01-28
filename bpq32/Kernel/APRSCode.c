@@ -12,6 +12,8 @@
 #define Dll	__declspec(dllexport)
 #define DllImport __declspec(dllimport)
 
+#include "winsock2.h"
+#include "WS2tcpip.h"
 #include "windows.h"
 #include <stdio.h>
 #include "AsmStrucs.h"
@@ -38,6 +40,7 @@ VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
+int C_Q_COUNT(UINT *Q);
 int TelDecodeFrame(char * msg, char * buffer, int Stamp);		// Unsemaphored DecodeFrame
 struct APRSSTATIONRECORD * UpdateHeard(UCHAR * Call, int Port);
 BOOL CheckforDups(char * Call, char * Msg, int Len);
@@ -174,7 +177,7 @@ UCHAR axTCPIP[7];
 UCHAR axRFONLY[7];
 UCHAR axNOGATE[7];
 
-int MessageCount;
+int MessageCount = 0;
 
 // Heard Station info
 
@@ -462,10 +465,18 @@ Dll VOID APIENTRY Poll_APRS()
 
 		// if APRS Appl is atttached, queue message to it
 
+
 		if (ApplConnected)
 		{
-			UINT * buffptr = GetBuff();
-				
+			// Make sure we don't have too many queued (Appl could have crashed)
+			
+			UINT * buffptr;
+
+			if (C_Q_COUNT(&APPL_Q) > 50)
+				buffptr = Q_REM(&APPL_Q);
+			else
+				buffptr = GetBuff();
+			
 			if (buffptr)
 			{
 				buffptr[1] = len;
@@ -551,7 +562,7 @@ Dll VOID APIENTRY Poll_APRS()
 	
 			ptr1 = strchr(ISMsg, 13);
 			if (ptr1) *ptr1 = 0;
-			Debugprintf(">%s", ISMsg);
+//			Debugprintf(">%s", ISMsg);
 		}	
 	
 	NoIS:
@@ -1144,7 +1155,7 @@ VOID SendAPRSMessage(char * Message, int toPort)
 		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%s\r\n", APRSCall, APRSDest, Message);
 		send(sock, ISMsg, Len, 0);
 		Len = GetLastError();
-		Debugprintf(">%s", ISMsg);
+//		Debugprintf(">%s", ISMsg);
 	}
 
 	if (toPort && BeaconHddrLen[toPort])
@@ -1247,7 +1258,7 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText)
 		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c %s\r\n", APRSCall, APRSDest,
 			(ApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, StMsg);
 		send(sock, ISMsg, Len, 0);
-		Debugprintf(">%s", ISMsg);
+//		Debugprintf(">%s", ISMsg);
 
 		IStatusCounter = 5;
 	}
@@ -1256,7 +1267,14 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText)
 
 	if (ApplConnected)
 	{
-		UINT * buffptr = GetBuff();
+		// Make sure we don't have too many queued (Appl could have crashed)
+			
+		UINT * buffptr;
+
+		if (C_Q_COUNT(&APPL_Q) > 50)
+			buffptr = Q_REM(&APPL_Q);
+		else
+			buffptr = GetBuff();
 				
 		if (buffptr)
 		{
@@ -1292,7 +1310,7 @@ VOID SendIStatus()
 
 		Len = wsprintf(Msg.L2DATA, "%s>%s,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d\r\n", APRSCall, APRSDest, 0, CountLocalStations());
 		send(sock, Msg.L2DATA, Len, 0);
-		Debugprintf(">%s", Msg.L2DATA);
+//		Debugprintf(">%s", Msg.L2DATA);
 	}
 }
 
@@ -1347,9 +1365,8 @@ VOID APRSISThread(BOOL Report)
 	char Signon[500];
 
 	SOCKADDR_IN sinx; 
-	SOCKADDR_IN destaddr;
 	int addrlen=sizeof(sinx);
-	struct hostent * HostEnt;
+	struct addrinfo hints, *res;
 	int len, err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
@@ -1359,6 +1376,7 @@ VOID APRSISThread(BOOL Report)
 	char * ptr;
 	int inptr = 0;
 	char APRSinMsg[1000];
+	char PortString[20];
 
 	Debugprintf("BPQ32 APRS IS Thread");
 	SetDlgItemText(hWnd, IGATESTATE, "IGate State: Connecting");
@@ -1370,48 +1388,32 @@ VOID APRSISThread(BOOL Report)
 		wsprintf(Signon, "user %s pass %d vers BPQ32 %s\r\n",
 			APRSCall, ISPasscode, TextVerstring);
 
-	// Resolve Name if needed
 
-	destaddr.sin_family = AF_INET; 
-	destaddr.sin_port = htons(ISPort);
+	wsprintf(PortString, "%d", ISPort);
 
-	destaddr.sin_addr.s_addr = inet_addr(ISHost);
+	// get host info, make socket, and connect it
 
-	if (destaddr.sin_addr.s_addr == INADDR_NONE)
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+	hints.ai_socktype = SOCK_STREAM;
+	getaddrinfo(ISHost, PortString, &hints, &res);
+
+	if (!res)
 	{
-	//	Resolve name to address
-
-		HostEnt = gethostbyname(ISHost);
-		 
-		if (!HostEnt)
-		{
-			err = WSAGetLastError();
-
-			wsprintf(errmsg, TEXT("APRS IS Resolve %s Failed %d\r\n"), ISHost, err);
-			
-			if (Report)
-				WritetoConsole(errmsg);
-
-			Debugprintf(errmsg);
-
-			ISDelayTimer = -60;	// Delay longer if can't resolve
-
-			return;			// Resolve failed
-		}
-		
-		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+		err = WSAGetLastError();
+		wsprintf(errmsg, "APRS IS Resolve %s Failed %d\r\n", ISHost, err);
+		return;					// Resolve failed
+	
 	}
 
-//   Allocate a Socket entry
-
-	sock=socket(AF_INET,SOCK_STREAM,0);
+	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
 	if (sock == INVALID_SOCKET)
   	 	return; 
  
 	setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
 
-	if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) != 0)
+	if (connect(sock, res->ai_addr, res->ai_addrlen))
 	{
 		err=WSAGetLastError();
 
@@ -1527,7 +1529,17 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	if (ApplConnected)
 	{
-		UINT * buffptr = GetBuff();
+		// Make sure we don't have too many queued (Appl could have crashed)
+			
+		UINT * buffptr;
+
+		GetSemaphore();
+		SemHeldByAPI = 12;
+
+		if (C_Q_COUNT(&APPL_Q) > 50)
+			buffptr = Q_REM(&APPL_Q);
+		else
+			buffptr = GetBuff();
 				
 		if (buffptr)
 		{
@@ -1536,6 +1548,8 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 			memcpy(&buffptr[3], APRSMsg, buffptr[1]);
 			C_Q_ADD(&APPL_Q, buffptr);
 		}
+
+		FreeSemaphore();
 	}
 
 //}WB4APR-14>APRS,RELAY,TCPIP,G9RXG*::G3NRWVVVV:Hi Ian{001
@@ -1600,7 +1614,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		{
 			wsprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
 			SendAPRSMessage(Message, STN->Port);
-
+			MessageCount++;
 			MH->LASTMSG = NOW;
 
 			return;
@@ -1756,7 +1770,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 			if (ptr1)
 				*ptr1 = 0;
 
-			Debugprintf("Duplicate Message supressed %s", Msg);
+//			Debugprintf("Duplicate Message supressed %s", Msg);
 			return TRUE;					// Duplicate
 		}
 	}
@@ -2314,8 +2328,6 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 
 	UINT * buffptr;
 
-	MessageCount++;
-
 	buffptr = GetBuff();
 
 	GetSemaphore();
@@ -2349,7 +2361,9 @@ BOOL SendAPPLAPRSMessage(char * Frame)
 		SendAPRSMessage(Frame, 0);			// IS
 		return TRUE;
 	}
-	
+
+	MessageCount++;							// Don't include SERVER messages in count
+
 	STN = LookupStation(ToCall);
 
 	if (STN)

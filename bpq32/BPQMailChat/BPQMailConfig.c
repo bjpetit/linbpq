@@ -53,6 +53,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
 VOID WINAPI OnTabbedDialogInit(HWND hwndDlg);
 VOID SaveWPConfig(HWND hDlg);
+PrintMessage(int MsgNo);
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -3098,7 +3099,7 @@ int CreateDialogLine(HWND hWnd, int i, int row)
 
 	struct _EXTPORTDATA * PORTVEC;
 
-	PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntry(i);
+	PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntryFromSlot(i);
 
 	if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
 		if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR

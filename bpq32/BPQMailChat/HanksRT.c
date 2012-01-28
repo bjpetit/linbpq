@@ -28,8 +28,8 @@ static void node_dec(NODE *node);
 static KNOWNNODE *knownnode_add(char *call);
 VOID SendChatLinkStatus();
 
-#undef free
-#define   free(p) 
+//#undef free
+//#define   free(p) 
 
 char * strlop(char * buf, char delim)
 {
@@ -2399,14 +2399,32 @@ typedef struct _MESSAGEX
 
 #pragma pack()
 
+SOCKET ChatReportSocket = 0;
+
+
 VOID SetupChat()
 {
+	u_long param=1;
+	BOOL bcopt=TRUE;
+
 	ConvToAX25(OurNode, MYCALL);
 	ConvToAX25(UIDEST, AXDEST);
 
 	wsprintf(Verstring, "%d.%d.%d.%d",  Ver[0], Ver[1], Ver[2], Ver[3]);
 
 	LoadKnown();
+
+	ChatReportSocket = socket(AF_INET,SOCK_DGRAM,0);
+
+	if (ChatReportSocket == INVALID_SOCKET)
+	{
+		Debugprintf("Failed to create Chat Reporting socket");
+		ChatReportSocket = 0;
+  	 	return; 
+	}
+
+	ioctlsocket (ChatReportSocket, FIONBIO, &param);
+	setsockopt (ChatReportSocket, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
 }
 
 
@@ -2421,6 +2439,8 @@ VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len)
 		return;
 	}
 
+//	ConvToAX25("GM4OAS-5", MYCALL);
+
 	// Block includes the Msg Header (7 bytes), Len Does not!
 
 	memcpy(AXPTR->DEST, AXDEST, 7);
@@ -2433,7 +2453,7 @@ VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len)
 	AXPTR->PID = 0xf0;
 	memcpy(AXPTR->DATA, Msg, Len);
 
-	SendRaw(AXIPPort, (char *)&AXMSG.DEST, Len + 16);
+	SendChatReport(ChatReportSocket, (char *)&AXMSG.DEST, Len + 16);
 
 	return;
 

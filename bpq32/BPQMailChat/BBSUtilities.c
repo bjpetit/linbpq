@@ -574,6 +574,6 @@ PrintMessage(int MsgNo)
     if (pdx.hDC != NULL) 
         DeleteDC(pdx.hDC);
 
-	return 0;
 	}
+	return 0;
 }

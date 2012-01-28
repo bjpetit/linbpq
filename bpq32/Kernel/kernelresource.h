@@ -23,6 +23,7 @@
 #define BPQSAVEREG                      411
 #define BPQCLOSEALL                     412
 #define SCANRECONFIG					413
+#define APRSRECONFIG					414
 #define ID_EXIT                         1000
 #define IDC_PROTOSTATE                  1000
 #define IDB_HIDE                        1001

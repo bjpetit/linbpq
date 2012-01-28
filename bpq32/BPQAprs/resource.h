@@ -46,6 +46,7 @@
 #define IDC_MYMSGS                      1068
 #define IDC_PASSCODE                    1069
 #define IDC_SENDWX                      1069
+#define IDC_MSGBEEP                     1069
 #define IDC_FILTER                      1070
 #define IDC_WXFILE                      1071
 #define IDC_WXTEXT                      1072
@@ -53,6 +54,8 @@
 #define IDC_INPUT                       1074
 #define IDC_WXPORTS                     1075
 #define ABOUT_VERSION                   1076
+#define IDC_LIST1                       1080
+#define IDC_LIST2                       1081
 
 // Next default values for new objects
 // 
@@ -60,7 +63,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        122
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1080
+#define _APS_NEXT_CONTROL_VALUE         1082
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

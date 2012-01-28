@@ -886,6 +886,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				else
 				{
 					strcpy(Msg->from, "SMTP:");
+					memcpy(Msg->emailfrom, &ptr1[11], linelen - 11);
 				}
 			}
 			else

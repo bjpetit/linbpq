@@ -425,6 +425,12 @@
 // Add SendChatReport function
 // Fix check on length of Port Config ID String with trailing spaces
 // Fix interlock when Port Number <> Port Slot
+// Add NETROMCALL for L3 Activity
+// Add support for APRS Application
+// Fix Telnet with FBBPORT and no TCPPORT
+// Add Reread APRS Config
+// Fix switching to Pactor after scanning in normal packet mode (PTC)
+
 
 #define Kernel
 #include "Versions.h"
@@ -666,6 +672,7 @@ HINSTANCE hRigModule = 0;
 
 BOOL ReconfigFlag = FALSE;
 BOOL RigReconfigFlag = FALSE;
+BOOL APRSReconfigFlag = FALSE;
 
 int AttachedPIDList[100] = {0};
 int AttachedPIDType[100] = {0};
@@ -1197,6 +1204,22 @@ VOID CALLBACK TimerProc
 			WritetoConsole("Rigcontrol Reconfiguration Complete\n");	
 		}
 	}
+
+	if (APRSReconfigFlag)
+	{
+		// Only do it it timer owning process, or we could get in a real mess!
+
+		if(TimerInst == GetCurrentProcessId())
+		{
+			APRSReconfigFlag = FALSE;
+			APRSClose();				
+			APRSActive = Init_APRS();
+			
+			WritetoConsole("APRS Reconfiguration Complete\n");	
+		}
+	}
+
+
 
 	__try 
 	{
@@ -4183,6 +4206,7 @@ int SetupConsoleWindow()
 	AppendMenu(hPopMenu,MF_STRING,BPQSAVEREG,"Save Registry Configuration");
 	AppendMenu(hPopMenu,MF_STRING,BPQDUMP,"Diagnostic Dump to file BPQDUMP");
 	AppendMenu(hPopMenu,MF_STRING,SCANRECONFIG,"Re-read Rigcontrol Config");
+	AppendMenu(hPopMenu,MF_STRING,APRSRECONFIG,"Re-read APRS Config");
 
 	AppendMenu(hPopMenu,MF_STRING | (StartMinimized)? MF_CHECKED:MF_UNCHECKED, BPQSTARTMIN, "Start Minimized" );
 	AppendMenu(hPopMenu,MF_STRING | (MinimizetoTray)? MF_CHECKED:MF_UNCHECKED, BPQMINTOTRAY, "Minimize to Notification Area (System Tray)" );
@@ -4450,6 +4474,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				return 0;
 			}
 
+			if (wmId == APRSRECONFIG)
+			{
+				if (!ProcessConfig())
+				{
+					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
+					return (0);
+				}
+
+				APRSReconfigFlag=TRUE;	
+				WritetoConsole("APRS Reconfig requested ... Waiting for Timer Poll\n");
+				return 0;
+			}
 			if (wmId == BPQDUMP)
 			{
 				DumpSystem();
@@ -5062,7 +5098,7 @@ int C_Q_COUNT(UINT *Q)
 		next=(UINT *)next[0];
 	}
 
-	return Count;;
+	return Count;
 
 }
 unsigned short int compute_crc(unsigned char *buf, int txlen);

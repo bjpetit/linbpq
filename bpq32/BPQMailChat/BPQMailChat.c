@@ -701,7 +701,7 @@
 //	Fix BaseDir test when BaseDir ends with \ or /
 //  Fix long BaseDir values (>50 chars)
 
-// Version 1.4.47.1 October 2011
+// Version 1.4.47.1 January 2012
 
 //  Call CloseBPQ32 on exit
 //  Add option to flash window instead of sounding bell on Chat Connects
@@ -712,7 +712,18 @@
 //	Fix SID and Prompt when RMS Express User is set
 //  Try to stop loop in Program Error/Restarting code
 //  Trap "UNABLE TO CONNECT" response in connect script
-//  Add facility to proin message or save them to a text file
+//  Add facility to print messages or save them to a text file
+
+// Version 1.4.48.1 January 2012
+
+//	Add Send Message (as well as Send from Clipboard)
+//	Fix Email From: Address when forwaring using B2
+//	Send WP from BBSCALL not SYSOPCALL
+//  Send Chat Map reports via BPQ32.dll
+
+
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -730,12 +741,6 @@ INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-
-UCHAR * (FAR WINAPI * GetVersionStringptr)();
-struct _EXTPORTDATA * (FAR WINAPI * GetPortTableEntryptr)();
-
-//HKEY (FAR WINAPI * GetRegistryKey)();
-//char * (FAR WINAPI * GetRegistryKeyText)();
 
 HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
 char * REGTREETEXT = "HKEY_LOCAL_MACHINE";
@@ -921,6 +926,7 @@ BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK    SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK    ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 unsigned long _beginthread( void( *start_address )(VOID * DParam),
@@ -1357,26 +1363,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	}
 
 
-	GetVersionStringptr = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetVersionString@0");
-	GetPortTableEntryptr = (struct _EXTPORTDATA *(__stdcall *)())GetProcAddress(ExtDriver,"_GetPortTableEntry@4");
-/*
-	GetRegistryKey = (HKEY(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKey@0");
-	GetRegistryKeyText = (UCHAR *(__stdcall *)())GetProcAddress(ExtDriver,"_GetRegistryKeyText@0");
-
-	if (GetRegistryKey && GetRegistryKeyText)
-	{
-		REGTREE = GetRegistryKey();
-		REGTREETEXT = GetRegistryKeyText();
-	}
-	else
-		MessageBox(NULL, "WARNING - You have an old version of BPQ32.DLL. Please upgrade",
-				"BPQMailChat", MB_ICONINFORMATION);
-*/
-
 	REGTREE = GetRegistryKey();
 	REGTREETEXT = GetRegistryKeyText();
 
-	if (GetPortTableEntryptr)
 	{
 		int n;
 		struct _EXTPORTDATA * PORTVEC;
@@ -1385,18 +1374,18 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		
 		for (n=1; n <= GetNumberofPorts(); n++)
 		{
-			PORTVEC = GetPortTableEntryptr(n);
+			PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntryFromSlot(n);
 
 			if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
 			{
-				if (_memicmp(PORTVEC->PORT_DLL_NAME, "TELNET.DLL", 1) == 0)
+				if (_memicmp(PORTVEC->PORT_DLL_NAME, "TELNET", 6) == 0)
 					KISSOnly = FALSE;
 
 				if (PORTVEC->PORTCONTROL.PROTOCOL != 10)	// Pactor/WINMOR
 					KISSOnly = FALSE;
 
 				if (AXIPPort == 0)
-					if (_memicmp(PORTVEC->PORT_DLL_NAME, "BPQAXIP.DLL", 11) == 0)
+					if (_memicmp(PORTVEC->PORT_DLL_NAME, "BPQAXIP", 7) == 0)
 						AXIPPort = PORTVEC->PORTCONTROL.PORTNUMBER;
 			}
 		}
@@ -1857,6 +1846,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_MSGFROMCLIPBOARD), hWnd, ClpMsgDialogProc);
 			break;
 
+		case ID_ACTIONS_SENDMESSAGE:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_MSGFROMCLIPBOARD), hWnd, SendMsgDialogProc);
+			break;
 
 		case ID_ACTIONS_UPDATECHATMAPINFO:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_UPDATECHATMAP), hWnd, ChatMapDialogProc);
@@ -1922,35 +1914,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	return 0;
 }
 
-
-INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	HGLOBAL   hglb; 
-    LPTSTR    lptstr; 
-
 	switch (message)
 	{
 	case WM_INITDIALOG:
-
-       if (!IsClipboardFormatAvailable(CF_TEXT)) 
-            return TRUE; 
-
-        if (!OpenClipboard(hDlg)) 
-            return TRUE; 
- 
-        hglb = GetClipboardData(CF_TEXT); 
-
-        if (hglb != NULL) 
-        { 
-            lptstr = GlobalLock(hglb);
-
-            if (lptstr != NULL) 
-            { 
-				SetDlgItemText(hDlg, IDC_EDIT1, lptstr);
-				GlobalUnlock(hglb); 
-            } 
-        } 
-        CloseClipboard(); 
 
 		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "B");
 		SendDlgItemMessage(hDlg, IDC_MSGTYPE, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "P");
@@ -2119,6 +2087,44 @@ INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 	}
 	return (INT_PTR)FALSE;
 }
+
+INT_PTR CALLBACK ClpMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	HGLOBAL   hglb; 
+    LPTSTR    lptstr; 
+
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+       		SetWindowText(hDlg, "Send Message from Clipboard");
+
+			if (!IsClipboardFormatAvailable(CF_TEXT)) 
+            break; 
+
+        if (!OpenClipboard(hDlg)) 
+            break; 
+ 
+        hglb = GetClipboardData(CF_TEXT); 
+
+        if (hglb != NULL) 
+        { 
+            lptstr = GlobalLock(hglb);
+
+            if (lptstr != NULL) 
+            { 
+				SetDlgItemText(hDlg, IDC_EDIT1, lptstr);
+				GlobalUnlock(hglb); 
+            } 
+        } 
+        CloseClipboard(); 
+	}
+
+	return SendMsgDialogProc(hDlg, message, wParam, lParam);
+
+}
+
+
 
 INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -3111,6 +3117,7 @@ int DoReceivedData(int Stream)
 	struct UserInfo * user;
 	char * ptr, * ptr2;
 	char * Buffer;
+	int Written;
 
 	for (n = 0; n < NumberofStreams; n++)
 	{
@@ -3131,6 +3138,10 @@ int DoReceivedData(int Stream)
 				GetMsg(Stream, &conn->InputBuffer[conn->InputLen], &InputLen, &count);
 
 				if (InputLen == 0) return 0;
+
+				if (conn->DebugHandle)				// Receiving a Compressed Message
+					WriteFile(conn->DebugHandle, &conn->InputBuffer[conn->InputLen],
+						InputLen, &Written, NULL);
 
 				conn->Watchdog = 900;				// 15 Minutes
 
@@ -4561,6 +4572,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
 			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, ST Send NTS,\r");
 			BBSputs(conn, "                   SR Num - Send Reply, SC Num - Send Copy\r");
+			BBSputs(conn, "X - Toggle Expert Mode\r");
 			if (conn->sysop)
 			{
 				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
@@ -4578,10 +4590,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (_memicmp(Cmd, "Ver", CmdLen) == 0)
 	{
-		if (GetVersionStringptr)
-			nodeprintf(conn, "BBS Version %s\rNode Version %s\r", VersionStringWithBuild, GetVersionStringptr());
-		else
-			nodeprintf(conn, "BBS Version %s\r", VersionStringWithBuild);
+		nodeprintf(conn, "BBS Version %s\rNode Version %s\r", VersionStringWithBuild, GetVersionString());
 
 		SendPrompt(conn, user);
 
@@ -4648,6 +4657,20 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	if (_stricmp(Cmd, "FWD") == 0)
 	{
 		DoFwdCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_memicmp(Cmd, "x", 1) == 0)
+	{
+		user->flags ^= F_Expert;
+
+		if (user->flags & F_Expert)
+			BBSputs(conn, "Expert Mode\r");
+		else
+			BBSputs(conn, "Expert Mode off\r");
+
+		SaveUserDatabase();
+		SendPrompt(conn, user);
 		return;
 	}
 

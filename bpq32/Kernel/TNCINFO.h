@@ -430,6 +430,8 @@ typedef struct TNCINFO
 
 	double LastFreq;				// Used by V4 to see if freq has changed
 
+	BOOL TX;						// Set when Multipsk is transmitting
+
 };
 
 VOID * zalloc(int len);

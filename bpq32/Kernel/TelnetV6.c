@@ -719,6 +719,10 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 	if (!TCP->IPV4)
 		return TRUE;
 
+	psin=&local_sin;
+	psin->sin_family = AF_INET;
+	psin->sin_addr.s_addr = INADDR_ANY;
+
 	if (TCP->TCPPort)
 	{
 	TCP->sock = sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -730,10 +734,6 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 		return FALSE;  
 	}
  
-	psin=&local_sin;
-
-	psin->sin_family = AF_INET;
-	psin->sin_addr.s_addr = INADDR_ANY;
     psin->sin_port = htons(TCP->TCPPort);        // Convert to network ordering 
 
  
@@ -873,29 +873,31 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 	if (!TCP->IPV6)
 		return TRUE;
 
+	psin=&local_sin;
+	psin->sin6_family = AF_INET6;
+	psin->sin6_addr = in6addr_any;
+	psin->sin6_flowinfo = 0;
+	psin->sin6_scope_id = 0;
+
 	if (TCP->TCPPort)
 	{
 	TCP->sock6 = sock = socket(AF_INET6, SOCK_STREAM, 0);
 
     if (sock == INVALID_SOCKET)
 	{
-        wsprintf(szBuff, "socket() failed error %d\n", WSAGetLastError());
+        wsprintf(szBuff, "IPV6 socket() failed error %d\n", WSAGetLastError());
 		WritetoConsole(szBuff);
 		return FALSE;  
 	}
 
 	memset(&local_sin, 0, sizeof(local_sin));
  
-	psin=&local_sin;
-
-	psin->sin6_family = AF_INET6;
-	psin->sin6_addr = in6addr_any;
     psin->sin6_port = htons(TCP->TCPPort);        // Convert to network ordering 
 
- 
+
     if (bind(sock, (struct sockaddr FAR *)psin, sizeof(local_sin)) == SOCKET_ERROR)
 	{
-		wsprintf(szBuff, "bind(sock) failed Error %d\n", WSAGetLastError());
+		wsprintf(szBuff, "IPV6 bind(sock) failed Error %d\n", WSAGetLastError());
 		WritetoConsole(szBuff);
         closesocket( sock );
 
@@ -904,7 +906,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 
     if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
 	{
-		wsprintf(szBuff, "listen(sock) failed Error %d\n", WSAGetLastError());
+		wsprintf(szBuff, "IPV6 listen(sock) failed Error %d\n", WSAGetLastError());
 
 		WritetoConsole(szBuff);
 
@@ -931,7 +933,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 
 		if (FBBsock == INVALID_SOCKET)
 		{
-			wsprintf(szBuff, " socket() failed error %d\n", WSAGetLastError());
+			wsprintf(szBuff, "IPV6 socket() failed error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
 			return FALSE;
 		}
@@ -941,7 +943,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 
 		if (bind(FBBsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 		{
-			wsprintf(szBuff, " bind(FBBsock %d) failed Error %d\n", TCP->FBBPort[n-1], WSAGetLastError());
+			wsprintf(szBuff, " bind(IPV6 FBBsock %d) failed Error %d\n", TCP->FBBPort[n-1], WSAGetLastError());
 			WritetoConsole(szBuff);
 			closesocket(FBBsock);
 
@@ -950,7 +952,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 
 		if (listen(FBBsock, MAX_PENDING_CONNECTS ) < 0)
 		{
-			wsprintf(szBuff, " listen(FBBsock) failed Error %d\n", WSAGetLastError());
+			wsprintf(szBuff, " listen(V6 FBBsock) failed Error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
 
 			return FALSE;
@@ -1595,7 +1597,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			n = 0;
 			while (TCP->FBBsock6[n])
-				closesocket(TCP->FBBsock[n++]);
+				closesocket(TCP->FBBsock6[n++]);
 
 			closesocket(TCP->Relaysock);
 			closesocket(TCP->Relaysock6);

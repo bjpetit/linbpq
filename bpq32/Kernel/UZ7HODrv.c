@@ -59,7 +59,7 @@ int ProcessReceivedData(int bpqport);
 static ProcessLine(char * buf, int Port);
 KillTNC(struct TNCINFO * TNC);
 RestartTNC(struct TNCINFO * TNC);
-VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message);
+VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message);
 struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
 static VOID SendData(struct TNCINFO * TNC, char * key, char * Msg, int MsgLen);
 static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCHAR * Msg);
@@ -905,9 +905,9 @@ UINT WINAPI UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
-	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
-	PortEntry->SCANCAPABILITIES = NONE;			// Scan Control - pending connect only
+	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
+	PortEntry->SCANCAPABILITIES = NONE;					// Scan Control - pending connect only
 
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 64;
@@ -1398,8 +1398,9 @@ typedef struct _MESSAGEY
 
 #pragma pack() 
 
+extern VOID PROCESSUZ7HONODEMESSAGE();
 
-VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
+VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 {
 	UINT * buffptr;
 	MESSAGEY Monframe;
@@ -1727,6 +1728,30 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 
 		memcpy(&Monframe.DEST[0], &Message[1], RXHeader->DataLength);
 
+/*		// if NETROM is enabled, and it is a NODES broadcast, process it
+
+		if (TNC->PortRecord->PORTCONTROL.PORTQUALITY)
+		{
+			int i;
+			
+			if (Message[15] == 3 && Message[16] == 0xcf && Message[17] == 255)
+				i = 0;
+
+			_asm
+			{
+				pushad
+
+				mov al, Monframe.PORT
+				lea edi, Monframe
+
+				call PROCESSUZ7HONODEMESSAGE
+
+				popad
+			}
+		}
+*/
+		// Pass to Monitor
+
 		_asm {
 
 		pushad
@@ -1756,6 +1781,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, char * Message)
 		return;
 
 	case 'I':
+		break;
+
+	case 'X':
 		break;
 
 	case 'Y':				// Session Queue
@@ -1930,7 +1958,7 @@ static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCH
 
 	Msg[RXHeader->DataLength] = 0;
 
-	OutputDebugString(Msg);
+//	OutputDebugString(Msg);
 
 	Monframe.LENGTH = 23;				// Control Frame
 	Monframe.PORT = BPQPort[RXHeader->Port][TNC->Port];

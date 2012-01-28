@@ -61,9 +61,10 @@ struct APRSMESSAGE
 	int Retries;
 	int RetryTimer;
 	int Port;
+	char Time[6];
 };
 
-#define BPQBASE                        WM_USER
+#define BPQBASE     WM_USER
 //
 //	Port monitoring flags use BPQBASE -> BPQBASE+16
 

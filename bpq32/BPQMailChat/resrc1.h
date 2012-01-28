@@ -150,13 +150,14 @@
 #define BPQSAVEREG                      40019
 #define RESCANMSGS                      40020
 #define ID_HELP_ONLINEHELP              40021
+#define ID_ACTIONS_SENDMESSAGE          40022
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
-#define _APS_NEXT_COMMAND_VALUE         40022
+#define _APS_NEXT_COMMAND_VALUE         40023
 #define _APS_NEXT_CONTROL_VALUE         1089
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

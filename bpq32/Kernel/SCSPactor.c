@@ -522,6 +522,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					TNC->MinLevel = Scan->PMinLevel - '0';
 					Switchmode(TNC, PLevel - '0');
 				}
+				else
+				{
+					if (TNC->HFPacket)
+					SwitchToPactor(TNC);
+				}
 			}
 
 			if (TNC->RobustTime)

@@ -425,7 +425,7 @@ END
 IDD_MSGEDIT DIALOGEX 20, 20, 381, 266
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit Message"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     RTEXT           "Msg",IDC_STATIC,7,7,19,8
     LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
@@ -768,7 +768,7 @@ END
 
 IDD_MSGFROMCLIPBOARD DIALOGEX 0, 0, 442, 321
 STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
-CAPTION "Message from Clipboard"
+CAPTION "Send Message"
 FONT 8, "System", 0, 0, 0x1
 BEGIN
     PUSHBUTTON      "Send",IDSEND,330,5,50,14
@@ -1044,6 +1044,7 @@ BEGIN
             MENUITEM ".",                           IDM_DISCONNECT
         END
         MENUITEM "Housekeeping",                IDM_HOUSEKEEPING
+        MENUITEM "Send Message",                ID_ACTIONS_SENDMESSAGE
         MENUITEM "Send Msg from Clipboard",     ID_ACTIONS_SENDMSGFROMCLIPBOARD
 
         MENUITEM "Update Chat Map Info",        ID_ACTIONS_UPDATECHATMAPINFO

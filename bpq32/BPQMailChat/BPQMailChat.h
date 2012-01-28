@@ -372,6 +372,7 @@ typedef struct ConnectionInfo_S
 #define Sess_BPQHOST 0x20
 #define Sess_PACTOR	0x40
 
+	HANDLE DebugHandle;					// File Handle for session-based debugging
 
 } ConnectionInfo, CIRCUIT;
 
@@ -1098,6 +1099,7 @@ BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader);
 BOOL CreateConsole(int Stream);
 int WritetoConsoleWindow(int Stream, char * Msg, int len);
 int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item);
+void CopyRichTextToClipboard(HWND hWnd);
 void CopyToClipboard(HWND hWnd);
 VOID CloseConsole(int Stream);
 

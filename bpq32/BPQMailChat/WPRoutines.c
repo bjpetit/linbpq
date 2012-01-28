@@ -1066,7 +1066,7 @@ int CreateWPMessage()
 	Msg->length = MsgLen;
 	MsgnotoMsg[Msg->number] = Msg;
 
-	strcpy(Msg->from, SYSOPCall);	
+	strcpy(Msg->from, BBSName);	
 	strcpy(Msg->to, SendWPTO);
 
 	if (strlen(SendWPVIA) > 40)
