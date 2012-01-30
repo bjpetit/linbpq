@@ -84,154 +84,111 @@ static ProcessLine(char * buf, int Port)
 
 	ptr = strtok(buf, " \t\n\r");
 
-	if(ptr == NULL) return (TRUE);
+	if (ptr == NULL) return (TRUE);
 
-	if(*ptr =='#') return (TRUE);			// comment
+	if (*ptr == '#') return (TRUE);			// comment
 
-	if(*ptr ==';') return (TRUE);			// comment
+	if (*ptr == ';') return (TRUE);			// comment
+
+	if (_stricmp(buf, "ADDR"))
+		return FALSE;						// Must start with ADDR
 
 	ptr = strtok(NULL, " \t\n\r");
 
-	if (_stricmp(buf, "ADDR") == 0)			// Winmor Using BPQ32 COnfig
-	{
-		BPQport = Port;
-		p_ipad = ptr;
-	}
-	else
-	if (_stricmp(buf, "APPL") == 0)			// Using BPQ32 COnfig
-	{
-		BPQport = Port;
-		p_cmd = ptr;
-	}
-	else
-	if (_stricmp(buf, "PORT") != 0)			// Using Old Config
-	{
-		// New config without a PORT or APPL  - this is a Config Command
+	BPQport = Port;
+	p_ipad = ptr;
 
-		strcpy(buf, errbuf);
+	TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
+	memset(TNC, 0, sizeof(struct TNCINFO));
 
-		BPQport = Port;
+	TNC->InitScript = malloc(1000);
+	TNC->InitScript[0] = 0;
 
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
 
-		TNC->InitScript = malloc(1000);
-		TNC->InitScript[0] = 0;
-		goto ConfigLine;
-	}
-	else
-	{
-		// Old Config from file
+	if (p_ipad == NULL)
+		p_ipad = strtok(NULL, " \t\n\r");
 
-		BPQport=0;
-		BPQport = atoi(ptr);
+	if (p_ipad == NULL) return (FALSE);
 	
-		if (Port && Port != BPQport)
-		{
-			// Want a particular port, and this isn't it
-
-			while(TRUE)
-			{
-				if (GetLine(buf) == 0)
-					return TRUE;
-
-				if (memcmp(buf, "****", 4) == 0)
-					return TRUE;
-
-			}
-		}
-	}
-	if(BPQport > 0 && BPQport < 33)
-	{
-		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
-		memset(TNC, 0, sizeof(struct TNCINFO));
-
-		TNC->InitScript = malloc(1000);
-		TNC->InitScript[0] = 0;
-	
-		if (p_ipad == NULL)
-			p_ipad = strtok(NULL, " \t\n\r");
-
-		if (p_ipad == NULL) return (FALSE);
-	
-		p_port = strtok(NULL, " \t\n\r");
+	p_port = strtok(NULL, " \t\n\r");
 			
-		if (p_port == NULL) return (FALSE);
+	if (p_port == NULL) return (FALSE);
 
-		WINMORport = atoi(p_port);
+	WINMORport = atoi(p_port);
 
-		TNC->destaddr.sin_family = AF_INET;
-		TNC->destaddr.sin_port = htons(WINMORport);
-		TNC->Datadestaddr.sin_family = AF_INET;
-		TNC->Datadestaddr.sin_port = htons(WINMORport+1);
+	TNC->destaddr.sin_family = AF_INET;
+	TNC->destaddr.sin_port = htons(WINMORport);
+	TNC->Datadestaddr.sin_family = AF_INET;
+	TNC->Datadestaddr.sin_port = htons(WINMORport+1);
 
-		TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
+	TNC->WINMORHostName = malloc(strlen(p_ipad)+1);
 
-		if (TNC->WINMORHostName == NULL) return TRUE;
+	if (TNC->WINMORHostName == NULL) return TRUE;
 
-		strcpy(TNC->WINMORHostName,p_ipad);
+	strcpy(TNC->WINMORHostName,p_ipad);
 
-		ptr = strtok(NULL, " \t\n\r");
+	ptr = strtok(NULL, " \t\n\r");
 
-		if (ptr)
+	if (ptr)
+	{
+		if (_stricmp(ptr, "PTT") == 0)
 		{
-			if (_stricmp(ptr, "PTT") == 0)
-			{
-				ptr = strtok(NULL, " \t\n\r");
+			ptr = strtok(NULL, " \t\n\r");
 
-				if (ptr)
-				{
-					if (_stricmp(ptr, "CI-V") == 0)
-						TNC->PTTMode = PTTCI_V;
-					else if (_stricmp(ptr, "RTS") == 0)
-						TNC->PTTMode = PTTRTS;
-					else if (_stricmp(ptr, "DTR") == 0)
-						TNC->PTTMode = PTTDTR;
-					else if (_stricmp(ptr, "DTRRTS") == 0)
-						TNC->PTTMode = PTTDTR | PTTRTS;
-
-					ptr = strtok(NULL, " \t\n\r");
-				}
-			}
-		}
-		
-		if (ptr)
-		{
-			if (_memicmp(ptr, "PATH", 4) == 0)
-			{
-				p_cmd = strtok(NULL, "\n\r");
-				if (p_cmd) TNC->ProgramPath = _strdup(_strupr(p_cmd));
-			}
-		}
-
-		// Read Initialisation lines
-
-		while(TRUE)
-		{
-			if (GetLine(buf) == 0)
-				return TRUE;
-ConfigLine:
-			strcpy(errbuf, buf);
-
-			if (memcmp(buf, "****", 4) == 0)
-				return TRUE;
-
-			ptr = strchr(buf, ';');
 			if (ptr)
 			{
-				*ptr++ = 13;
-				*ptr = 0;
-			}
-				
-			if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
-			{}		// Ignore
-			else
-			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-			{}		// Ignore
-			else
+				if (_stricmp(ptr, "CI-V") == 0)
+					TNC->PTTMode = PTTCI_V;
+				else if (_stricmp(ptr, "CAT") == 0)
+					TNC->PTTMode = PTTCI_V;
+				else if (_stricmp(ptr, "RTS") == 0)
+					TNC->PTTMode = PTTRTS;
+				else if (_stricmp(ptr, "DTR") == 0)
+					TNC->PTTMode = PTTDTR;
+				else if (_stricmp(ptr, "DTRRTS") == 0)
+					TNC->PTTMode = PTTDTR | PTTRTS;
 
-			strcat (TNC->InitScript, buf);
+				ptr = strtok(NULL, " \t\n\r");
+			}
 		}
+	}
+		
+	if (ptr)
+	{
+		if (_memicmp(ptr, "PATH", 4) == 0)
+		{
+			p_cmd = strtok(NULL, "\n\r");
+			if (p_cmd) TNC->ProgramPath = _strdup(_strupr(p_cmd));
+		}
+	}
+
+	// Read Initialisation lines
+
+	while(TRUE)
+	{
+		if (GetLine(buf) == 0)
+			return TRUE;
+
+		strcpy(errbuf, buf);
+
+		if (memcmp(buf, "****", 4) == 0)
+			return TRUE;
+
+		ptr = strchr(buf, ';');
+		if (ptr)
+		{
+			*ptr++ = 13;
+			*ptr = 0;
+		}
+				
+		if ((_memicmp(buf, "CAPTURE", 7) == 0) || (_memicmp(buf, "PLAYBACK", 8) == 0))
+		{}		// Ignore
+		else
+		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
+		{}		// Ignore
+		else
+
+		strcat (TNC->InitScript, buf);
 	}
 
 	return (TRUE);	

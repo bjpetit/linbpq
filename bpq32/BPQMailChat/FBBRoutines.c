@@ -582,10 +582,11 @@ ok2:
 		}
 		else
 		{
-			if (conn->BBSFlags & FBBCompressed)
-	
-			// Create a debug file
-			{
+			if (conn->BBSFlags & FBBCompressed)	
+			{	
+/*
+				// Create a debug file
+			
 				char DbgFile[MAX_PATH];
 				sprintf_s(DbgFile, sizeof(DbgFile), "%s\\%d_%s.bin", ProperBaseDir, time(NULL), FBBHeader->BID);
 	
@@ -596,7 +597,7 @@ ok2:
 					CREATE_ALWAYS,
 					FILE_ATTRIBUTE_NORMAL,
 					NULL);
-			
+*/			
 				conn->InputMode = 'B';
 			}
 
@@ -691,6 +692,7 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 
 		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID, NULL);
 
+/*
 		// Create a debug file
 		{
 			char DbgFile[MAX_PATH];
@@ -704,6 +706,7 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 					FILE_ATTRIBUTE_NORMAL,
 					NULL);
 		}
+*/
 	}
 }
 

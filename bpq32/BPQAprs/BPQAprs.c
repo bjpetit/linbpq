@@ -2,6 +2,7 @@
 // APRS Mapping and Messaging App for BPQ32 Switch.
 //
 
+// First Release Jan 2012 Version 1.0.0.0
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
@@ -42,13 +43,13 @@
 
 char APRSCall[10];
 
-char ISFilter[1000] = ""; 
+char ISFilter[1000] = "m/50 u/APBPQ*"; 
 
 char * StatusMsg;
 
 int RetryCount = 4;
 int RetryTimer = 45;
-int ExpireTime = 60;
+int ExpireTime = 120;
 
 char WXFileName[MAX_PATH];
 char WXComment[80];
@@ -5041,7 +5042,7 @@ double Distance(double laa, double loa)
 loh = radians(loh); lah = radians(lah);
 loa = radians(loa); laa = radians(laa);
 
-return 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh)));
+return 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
 
 }
 

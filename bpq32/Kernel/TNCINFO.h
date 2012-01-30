@@ -429,6 +429,7 @@ typedef struct TNCINFO
 	BOOL XONXOFF;					// Set if hardware is using XON/XOFF
 
 	double LastFreq;				// Used by V4 to see if freq has changed
+	int ModemCentre;				// Modem centre frequency
 
 	BOOL TX;						// Set when Multipsk is transmitting
 

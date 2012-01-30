@@ -723,8 +723,6 @@
 
 
 
-
-
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"

@@ -1034,7 +1034,8 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 
 	// Adjust freq to centre
 
-	if (Mode != ' ' && TNC->RIG->Valchar[0])
+//	if (Mode != ' ' && TNC->RIG->Valchar[0])
+	if (TNC->RIG->Valchar[0])
 	{
 		Freq = atof(TNC->RIG->Valchar) + 0.0015;
 		_gcvt(Freq, 9, ReportFreq);

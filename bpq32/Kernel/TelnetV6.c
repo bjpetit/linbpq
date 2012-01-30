@@ -725,48 +725,46 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 
 	if (TCP->TCPPort)
 	{
-	TCP->sock = sock = socket(AF_INET, SOCK_STREAM, 0);
+		TCP->sock = sock = socket(AF_INET, SOCK_STREAM, 0);
 
-    if (sock == INVALID_SOCKET)
-	{
-        wsprintf(szBuff, "socket() failed error %d\n", WSAGetLastError());
-		WritetoConsole(szBuff);
-		return FALSE;  
-	}
+	    if (sock == INVALID_SOCKET)
+		{
+	        wsprintf(szBuff, "socket() failed error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			return FALSE;  
+		}
  
-    psin->sin_port = htons(TCP->TCPPort);        // Convert to network ordering 
+		psin->sin_port = htons(TCP->TCPPort);        // Convert to network ordering 
 
  
-    if (bind( sock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
-	{
-		wsprintf(szBuff, "bind(sock) failed Error %d\n", WSAGetLastError());
-		WritetoConsole(szBuff);
-        closesocket( sock );
+		if (bind( sock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+		{
+			wsprintf(szBuff, "bind(sock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+		    closesocket( sock );
 
-		 return FALSE;
-	}
+			 return FALSE;
+		}
 
-    if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
-	{
-		wsprintf(szBuff, "listen(sock) failed Error %d\n", WSAGetLastError());
+		if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
+		{
+			wsprintf(szBuff, "listen(sock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
 
-		WritetoConsole(szBuff);
-
-		return FALSE;
-	}
+			return FALSE;
+		}
    
-	if ((status = WSAAsyncSelect(sock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
-	{
-		wsprintf(szBuff, "WSAAsyncSelect failed Error %d\n", WSAGetLastError());
+		if ((status = WSAAsyncSelect(sock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
+		{
+			wsprintf(szBuff, "WSAAsyncSelect failed Error %d\n", WSAGetLastError());
 
-		WritetoConsole(szBuff);
-
-		closesocket(sock);
+			WritetoConsole(szBuff);
+			closesocket(sock);
 		
-		return FALSE;
+			return FALSE;
+		}
+	}
 
-	}
-	}
 	n = 0;
 
 	while (TCP->FBBPort[n])
@@ -873,6 +871,8 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 	if (!TCP->IPV6)
 		return TRUE;
 
+	memset(&local_sin, 0, sizeof(local_sin));
+
 	psin=&local_sin;
 	psin->sin6_family = AF_INET6;
 	psin->sin6_addr = in6addr_any;
@@ -881,49 +881,43 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 
 	if (TCP->TCPPort)
 	{
-	TCP->sock6 = sock = socket(AF_INET6, SOCK_STREAM, 0);
+		TCP->sock6 = sock = socket(AF_INET6, SOCK_STREAM, 0);
 
-    if (sock == INVALID_SOCKET)
-	{
-        wsprintf(szBuff, "IPV6 socket() failed error %d\n", WSAGetLastError());
-		WritetoConsole(szBuff);
-		return FALSE;  
-	}
+	    if (sock == INVALID_SOCKET)
+		{
+			wsprintf(szBuff, "IPV6 socket() failed error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			return FALSE;  
+		}
 
-	memset(&local_sin, 0, sizeof(local_sin));
- 
-    psin->sin6_port = htons(TCP->TCPPort);        // Convert to network ordering 
+		psin->sin6_port = htons(TCP->TCPPort);        // Convert to network ordering 
 
+		if (bind(sock, (struct sockaddr FAR *)psin, sizeof(local_sin)) == SOCKET_ERROR)
+		{
+			wsprintf(szBuff, "IPV6 bind(sock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+		    closesocket( sock );
 
-    if (bind(sock, (struct sockaddr FAR *)psin, sizeof(local_sin)) == SOCKET_ERROR)
-	{
-		wsprintf(szBuff, "IPV6 bind(sock) failed Error %d\n", WSAGetLastError());
-		WritetoConsole(szBuff);
-        closesocket( sock );
+			return FALSE;
+		}
 
-		 return FALSE;
-	}
+		if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
+		{
+			wsprintf(szBuff, "IPV6 listen(sock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
 
-    if (listen( sock, MAX_PENDING_CONNECTS ) < 0)
-	{
-		wsprintf(szBuff, "IPV6 listen(sock) failed Error %d\n", WSAGetLastError());
-
-		WritetoConsole(szBuff);
-
-		return FALSE;
-	}
+			return FALSE;
+		}
    
-	if ((status = WSAAsyncSelect(sock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
-	{
-		wsprintf(szBuff, "WSAAsyncSelect failed Error %d\n", WSAGetLastError());
+		if ((status = WSAAsyncSelect(sock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
+		{
+			wsprintf(szBuff, "WSAAsyncSelect failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
 
-		WritetoConsole(szBuff);
-
-		closesocket(sock);
+			closesocket(sock);
 		
-		return FALSE;
-
-	}
+			return FALSE;
+		}
 	}
 	n = 0;
 
@@ -967,6 +961,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 			return FALSE;
 		}
 	}
+
 	if (TCP->RelayPort)
 	{
 		RelayUser.UserName = _strdup("RMSRELAY");
@@ -982,7 +977,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 		psin=&local_sin;
 		psin->sin6_port = htons(TCP->RelayPort);        // Convert to network ordering 
 
-	    if (bind( Relaysock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+	    if (bind(Relaysock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 		{
 			wsprintf(szBuff, "bind(Relaysock) failed Error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
@@ -991,7 +986,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 			return FALSE;
 		}
 
-		if (listen( Relaysock, MAX_PENDING_CONNECTS ) < 0)
+		if (listen(Relaysock, MAX_PENDING_CONNECTS ) < 0)
 		{
 			wsprintf(szBuff, "listen(Relaysock) failed Error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);

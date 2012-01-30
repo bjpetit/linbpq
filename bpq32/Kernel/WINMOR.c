@@ -178,6 +178,8 @@ static ProcessLine(char * buf, int Port)
 				{
 					if (_stricmp(ptr, "CI-V") == 0)
 						TNC->PTTMode = PTTCI_V;
+					else if (_stricmp(ptr, "CAT") == 0)
+						TNC->PTTMode = PTTCI_V;
 					else if (_stricmp(ptr, "RTS") == 0)
 						TNC->PTTMode = PTTRTS;
 					else if (_stricmp(ptr, "DTR") == 0)
@@ -1129,6 +1131,8 @@ UINT WINAPI WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 236;
+
+	TNC->ModemCentre = 1500;				// WINMOR is always 1500 Offset
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate

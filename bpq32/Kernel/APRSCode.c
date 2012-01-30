@@ -148,10 +148,10 @@ char CrossPortMap[33][33] = {0};
 UCHAR BeaconHeader[33][10][7] = {""};	//	Dest, Source and up to 8 digis 
 int BeaconHddrLen[33] = {0};			// Actual Length used
 
-char CFGSYMBOL = '=';
-char CFGSYMSET = '/';
+char CFGSYMBOL = 'a';
+char CFGSYMSET = 'B';
 
-char SYMBOL = '=';
+char SYMBOL = '=';						// Unknown Locaton
 char SYMSET = '/';
 
 BOOL TraceDigi = FALSE;					// Add Trace to packets relayed on Digi Calls
@@ -2183,7 +2183,7 @@ void DecodeRMC(char * msg, int len)
 	LON[8] = (*ptr1);
 	if ((*ptr1) == 'W') Lon=-Lon;
 
-	// Now have a valid posn, so stp sending Undefined LOC Sysbol
+	// Now have a valid posn, so stop sending Undefined LOC Sysbol
 	
 	SYMBOL = CFGSYMBOL;
 	SYMSET = CFGSYMSET;

@@ -435,6 +435,19 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
+			if (STREAM->Connecting && _memicmp(&buff[8], "ABORT", 5) == 0)
+			{
+				len = wsprintf(Command,"%cSTOP_SELECTIVE_CALL_ARQ_FAE\x1b", '\x1a');
+	
+				if (TNC->TX)
+					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
+				else
+					send(TNC->WINMORSock, Command, len, 0);
+
+				TNC->InternalCmd = TRUE;
+				return (0);
+			}
+
 			if (_memicmp(&buff[8], "INUSE?", 6) == 0)
 			{
 				// Return Error if in use, OK if not
@@ -480,7 +493,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					'\x1a', STREAM->RemoteCall, '\x1b', '\x1a');
 
 				if (TNC->TX)
-					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Savde till not transmitting
+					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 				else
 					send(TNC->WINMORSock, Command, len, 0);
 		
@@ -497,7 +510,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			_strupr(&buff[8]);
 			buff[7 + txlen] = 0;
 			len = wsprintf(Command,"%c%s\x1b", '\x1a', &buff[8]);
-			send(TNC->WINMORSock, Command, len, 0);
+		
+			if (TNC->TX)
+				TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
+			else
+				send(TNC->WINMORSock, Command, len, 0);
+
 			TNC->InternalCmd = TRUE;
 
 		}
@@ -811,13 +829,16 @@ static ProcessLine(char * buf, int Port)
 				*ptr++ = 13;
 				*ptr = 0;
 			}
-			
+
+			if (_memicmp(buf, "CONTIMEOUT", 10) == 0)
+				AGW->ConnTimeOut = atoi(&buf[11]) * 10;
+			else
 			if (_memicmp(buf, "UPDATEMAP", 9) == 0)
 				TNC->PktUpdateMap = TRUE;
 			else
-			if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
-				TNC->RPBEACON = TRUE;
-			else
+//			if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
+//				TNC->RPBEACON = TRUE;
+//			else
 				
 			strcat (TNC->InitScript, buf);
 		}
@@ -1153,6 +1174,10 @@ VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 					buffptr[1] = wsprintf((UCHAR *)&buffptr[2], "MPSK} %s\r", TNC->CmdBuffer);
 					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 				}
+
+				if (strstr(TNC->CmdBuffer, "STOP_SELECTIVE_CALL_ARQ_FAE OK"))
+					TNC->Streams[0].Connecting = FALSE;
+
 			}
 		}
 	}
@@ -1221,9 +1246,6 @@ VOID ProcessMSPKData(struct TNCINFO * TNC)
 
 				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				STREAM->DiscWhenAllSent = 10;
-
-				if (TNC->RPBEACON)
-					SendRPBeacon(TNC);
 			
 				return;
 			}
@@ -1237,9 +1259,6 @@ VOID ProcessMSPKData(struct TNCINFO * TNC)
 			STREAM->Disconnecting = FALSE;
 			STREAM->DiscWhenAllSent = 10;
 			STREAM->FramesOutstanding = 0;
-
-			if (TNC->RPBEACON)
-				SendRPBeacon(TNC);
 
 			return;
 		}
