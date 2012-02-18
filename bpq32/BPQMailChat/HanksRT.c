@@ -2229,6 +2229,7 @@ VOID ChatTimer()
 		i++;
 	}
 
+
 	SetDlgItemInt(hWnd, IDC_NODES, i, FALSE);
 
 	WritetoDebugWindow("Chat Links\r\n", 12);
@@ -2469,8 +2470,8 @@ VOID SendChatLinkStatus()
 	if (ChatApplNum == 0)
 		return;
 
-	if (AXIPPort == 0)
-		return;
+//	if (AXIPPort == 0)
+//		return;
 
 	if (MYCALL[0] == 0)
 		return;

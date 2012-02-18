@@ -28,6 +28,7 @@ struct WL2KInfo
 	char Bandwidth;
 	char * TimeList;		// eg 06-10,12-15
 	struct PacketReportInfo * PacketData;
+	BOOL RPonPTC;			// Set if scanning for Robust Packet on a PTC
 };
 
 #pragma pack(1)
@@ -176,6 +177,20 @@ typedef struct AGWINFO
 	int ConnTimeOut;
 	int PollDelay;
 };
+
+typedef struct MPSKINFO
+{
+	// Fields for AGW Session based Ports (eg UZ7HO Modem)
+
+	int ConnTimeOut;
+	BOOL TX;						// Set when Multipsk is transmitting
+	char DefaultMode[20];			// Mode to return to after session
+	BOOL Beacon;					// Use ALE Beacons
+	int MaxSessions;
+};
+
+
+
 
 typedef struct TNCINFO
 { 
@@ -383,8 +398,12 @@ typedef struct TNCINFO
 	BOOL NeedPACTOR;				// Set if need to send PACTOR to put into Standby Mode
 	int CmdStream;					// Stream last command was issued on
 
-	struct TCPINFO * TCPInfo;		// Telnet Server Specific Data
-	struct AGWINFO * AGWInfo;		// AGW Stream Mode Specific Data
+	union
+	{
+		struct TCPINFO * TCPInfo;		// Telnet Server Specific Data
+		struct AGWINFO * AGWInfo;		// AGW Stream Mode Specific Data
+		struct MPSKINFO * MPSKInfo;		// AGW Stream Mode Specific Data
+	};
 
 	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
 	BOOL CommandBusy;				// Waiting for Command ACK
@@ -430,8 +449,6 @@ typedef struct TNCINFO
 
 	double LastFreq;				// Used by V4 to see if freq has changed
 	int ModemCentre;				// Modem centre frequency
-
-	BOOL TX;						// Set when Multipsk is transmitting
 
 };
 

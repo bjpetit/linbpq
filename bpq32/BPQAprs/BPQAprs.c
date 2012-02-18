@@ -4,6 +4,16 @@
 
 // First Release Jan 2012 Version 1.0.0.0
 
+// Jan 2012 Version 1.0.0.1
+
+// Fix WX message comment
+
+//	Jan 2012
+
+// Allow suppression of stations with 0 Lat/Lon
+// Allow suppression of tracks
+// Add option to Select track colour
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
 
@@ -41,7 +51,12 @@
 #include "GetVersion.h"
 #include "BPQAPRS.h"
 
+HBRUSH bgBrush;
+
+#define BGCOLOUR RGB(236,233,216)
+
 char APRSCall[10];
+char LoppedAPRSCall[10];
 
 char ISFilter[1000] = "m/50 u/APBPQ*"; 
 
@@ -50,12 +65,17 @@ char * StatusMsg;
 int RetryCount = 4;
 int RetryTimer = 45;
 int ExpireTime = 120;
+int TrackExpireTime = 1440;
+BOOL SuppressNullPosn = FALSE;
+BOOL DefaultNoTracks = FALSE;
 
 char WXFileName[MAX_PATH];
 char WXComment[80];
 char WXPortList[80];
 BOOL SendWX = FALSE;
 int WXInterval = 30;
+
+struct STATIONRECORD * CurrentPopup;
 
 
 BOOL WXPort[32];				// Ports to send WX to
@@ -185,12 +205,21 @@ const unsigned char ASCII[][5] = {
   ,{0x78, 0x46, 0x41, 0x46, 0x78} // 7f DEL
 };
 
+COLORREF Colours[256] = {0, RGB(0,0,255), RGB(0,128,0), RGB(0,128,192), 
+		RGB(0,192,0), RGB(0,192,255), RGB(0,255,0), RGB(128,0,128),
+		RGB(128,64,0), RGB(128,128,128), RGB(192,0,0), RGB(192,0,255),
+		RGB(192,64,128), RGB(192,128,255), RGB(255,0,0), RGB(255,0,255),				// 81
+		RGB(255,64,0), RGB(255,64,128), RGB(255,64,192), RGB(255,128,0)};
+
+
+
 extern unsigned __int64 IconData[];
 extern int IconDataLen;
 
 // function prototypes
 
 LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK PopupWndProc (HWND, UINT, WPARAM, LPARAM);
 LRESULT CALLBACK StnWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -298,7 +327,7 @@ Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
 Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 Dll BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
 Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
-Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText);
+Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendIstatus, BOOL SendSOGCOG);
 
 BOOL InitApplication(HINSTANCE);
 BOOL InitInstance(HINSTANCE, int);
@@ -340,8 +369,10 @@ VOID SecTimer();
 int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort);
 double Distance(double laa, double loa);
 double Bearing(double laa, double loa);
+VOID CreateStationPopup(struct STATIONRECORD * ptr, int MouseX, int MouseY);
+INT_PTR CALLBACK ColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-VOID SendWeatherBeacon(char * UIVTimeStamp, char * WeatherData, char * Comment);
+VOID SendWeatherBeacon();
 VOID DecodeWXPortList();
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
@@ -509,6 +540,9 @@ BOOL CentrePosition(double Lat, double Lon)
 	ReloadMaps = TRUE;
 	InvalidateRect(hMapWnd, NULL, FALSE);
 
+	Debugprintf("After COS Base %d %d Scroll %d %d", SetBaseX, SetBaseY, ScrollX, ScrollY);
+
+
 	return TRUE;
 }
 
@@ -518,13 +552,24 @@ BOOL CentrePositionToMouse(double Lat, double Lon)
 
 	int X, Y;
 
+	SetBaseX = long2tilex(Lon, Zoom) - 4;
+	SetBaseY = lat2tiley(Lat, Zoom) - 4;				// Set Location at middle
+
 	if (GetLocPixels(Lat, Lon, &X, &Y) == FALSE)
 		return FALSE;							// Off map
 
+	ScrollX = X - cxWinSize/2;
+	ScrollY = Y - cyWinSize/2;
+
+
+//	Map is now centered at loc cursor was at
+
+//  Need to move by distance mouse is from centre
+
 	// if ScrollX, Y are zero, the centre of the map corresponds to 1024, 1024
 	
-	ScrollX -= 1024 - X;				// Posn to centre
-	ScrollY -= 1024 - Y;
+//	ScrollX -= 1024 - X;				// Posn to centre
+//	ScrollY -= 1024 - Y;
 
 	ScrollX += cxWinSize/2 - MouseX;
 	ScrollY += cyWinSize/2 - MouseY;
@@ -535,15 +580,17 @@ BOOL CentrePositionToMouse(double Lat, double Lon)
 
 		while(ScrollX < 0)
 		{
-			SetBaseX++;
+			SetBaseX--;
 			ScrollX += 256;
 		}
 
 		while(ScrollY < 0)
 		{
-			SetBaseY++;
+			SetBaseY--;
 			ScrollY += 256;
 		}
+
+		Debugprintf("After COM Base %d %d Scroll %d %d", SetBaseX, SetBaseY, ScrollX, ScrollY);
 
 		ReloadMaps = TRUE;
 	}
@@ -707,13 +754,46 @@ BOOL InitApplication(HINSTANCE hInstance)
 
 	// Register the window class and return success/failure code.
 
+	RegisterClass(&wc);
+
+	bgBrush = CreateSolidBrush(BGCOLOUR);
+
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = MsgWndProc;                                    
+    wc.cbClsExtra = 0;                
+    wc.cbWndExtra = DLGWINDOWEXTRA;
+	wc.hInstance = hInst;
+    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
+    wc.hbrBackground = bgBrush; 
+
+	wc.lpszMenuName = NULL;	
+	wc.lpszClassName = "APRSMSGS"; 
+
+	RegisterClass(&wc);
+
+	wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = PopupWndProc;                                    
+    wc.cbClsExtra = 0;                
+    wc.cbWndExtra = DLGWINDOWEXTRA;
+	wc.hInstance = hInst;
+    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
+    wc.hbrBackground = bgBrush; 
+
+	wc.lpszMenuName = NULL;	
+	wc.lpszClassName = "STNPOPUP"; 
+
 	return RegisterClass(&wc);
+
 }
 
 //int len,count,i;
 //char msg[20];
 
 HMENU hMenu,hPopMenu1,hPopMenu2,hPopMenu3;		// handle of menu 
+HMENU trayMenu = 0;
+HMENU trayMenu2 = 0;
+
+char CopyItem[260] = "";			// Area for Copy/Paste
 
 UCHAR * iconImage = NULL;
 
@@ -725,9 +805,6 @@ UCHAR Icons[100000];
 CRITICAL_SECTION Crit, OSMCrit, RefreshCrit;
 
 
-HBRUSH bgBrush;
-
-#define BGCOLOUR RGB(236,233,216)
 
 VOID GetStringVal(HKEY hKey, char * Key, char ** Val)
 {
@@ -748,6 +825,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	char Size[80];
 	char FN[MAX_PATH];
 	HWND hWnd;
+	char * ptr;
 
 	BOOL bcopt=TRUE;
 	u_long param=1;
@@ -866,6 +944,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "ExpireTime", 0, &Type,(UCHAR *)&ExpireTime, &Vallen);
 
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "TrackExpireTime", 0, &Type,(UCHAR *)&TrackExpireTime, &Vallen);
+
 		Vallen=250;
 		retCode = RegQueryValueEx(hKey, "WXFile", 0, &Type, WXFileName, &Vallen);
 		Vallen=79;
@@ -877,6 +958,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey, "WXEnabled", 0, &Type,(UCHAR *)&SendWX, &Vallen);
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "WXInterval", 0, &Type,(UCHAR *)&WXInterval, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "SuppressNullPosn", 0, &Type,(UCHAR *)&SuppressNullPosn, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "DefaultNoTracks", 0, &Type,(UCHAR *)&DefaultNoTracks, &Vallen);
 
 		RegCloseKey(hKey);
 	}
@@ -937,7 +1022,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    LFTTYFONT.lfClipPrecision =  CLIP_DEFAULT_PRECIS ;
    LFTTYFONT.lfQuality =        DEFAULT_QUALITY ;
    LFTTYFONT.lfPitchAndFamily = FIXED_PITCH | FF_MODERN ;
-   lstrcpy( LFTTYFONT.lfFaceName, "SYSTEM" ) ;
+   lstrcpy( LFTTYFONT.lfFaceName, "FIXEDSYS" ) ;
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 
@@ -950,6 +1035,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	APRSConnect(APRSCall, ISFilter);					// Request frames from switch
 
+	memcpy(LoppedAPRSCall, APRSCall, 10);
+
+	ptr = strchr(LoppedAPRSCall, ' ');
+	if (ptr) *(ptr) = 0;
+
 	hMenu=CreateMenu();
 	hPopMenu1=CreatePopupMenu();
 	hPopMenu2=CreatePopupMenu();
@@ -961,6 +1051,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	AppendMenu(hMenu, MF_STRING, IDM_APRSMSGS, "Messages");
 	AppendMenu(hMenu, MF_STRING, IDM_APRSSTNS, "Stations");
 	AppendMenu(hMenu, MF_STRING, IDM_SENDBEACON,"Send Beacon");
+	AppendMenu(hMenu, MF_STRING, IDM_ZOOMIN,"Zoom In");
+	AppendMenu(hMenu, MF_STRING, IDM_ZOOMOUT,"Zoom Out");
+	AppendMenu(hMenu, MF_STRING, IDM_HOME,"Home");
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu3,"Help");
 	AppendMenu(hPopMenu3, MF_STRING, IDM_HELP, "Online Help");
 	AppendMenu(hPopMenu3, MF_STRING, IDM_ABOUT, "About");
@@ -1010,13 +1103,20 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	InvalidateRect(hWnd, NULL, FALSE);
 
+	trayMenu = CreatePopupMenu();
+	AppendMenu(trayMenu,MF_STRING,40000,"Copy");
+	AppendMenu(trayMenu,MF_STRING,40001,"Supress Tracks");
+	AppendMenu(trayMenu,MF_STRING,40002,"Set Track Colour");
+
+	trayMenu2 = CreatePopupMenu();
+	AppendMenu(trayMenu2,MF_STRING,40000,"Copy");
+
 	return (TRUE);
 }
 
 
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-
 	switch (message)
 	{
 	case WM_INITDIALOG:
@@ -1079,6 +1179,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		SetDlgItemInt(hDlg, IDC_RETRIES, RetryCount, FALSE);
 		SetDlgItemInt(hDlg, IDC_RETRYTIME, RetryTimer, FALSE);
 		SetDlgItemInt(hDlg, IDC_EXPIRE, ExpireTime, FALSE);
+		SetDlgItemInt(hDlg, IDC_EXPIRETRACKS, TrackExpireTime, FALSE);
 
 		SetDlgItemText(hDlg, IDC_WXFILE, WXFileName);
 		SetDlgItemText(hDlg, IDC_WXTEXT, WXComment);
@@ -1087,6 +1188,8 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		SetDlgItemInt(hDlg, IDC_WXINTERVAL, WXInterval, FALSE);
 
 		CheckDlgButton(hDlg, IDC_SENDWX, SendWX);
+		CheckDlgButton(hDlg, IDC_SUPZERO, SuppressNullPosn);
+		CheckDlgButton(hDlg, IDC_NOTRACKS, DefaultNoTracks);
 					
 		EnableWindow(GetDlgItem(hDlg, IDC_WXFILE), SendWX);
 		EnableWindow(GetDlgItem(hDlg, IDC_WXTEXT), SendWX);
@@ -1098,7 +1201,9 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 
 	case WM_COMMAND:
 
-		if (LOWORD(wParam) == IDC_FILE)
+		switch(LOWORD(wParam))
+		{
+		case IDC_FILE:
 		{
 			memset(&ofn, 0, sizeof (OPENFILENAME));
 			ofn.lStructSize = sizeof (OPENFILENAME);
@@ -1114,7 +1219,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			break;
 		}
 
-		if (LOWORD(wParam) == IDC_SENDWX)
+		case IDC_SENDWX:
 		{
 			SendWX = IsDlgButtonChecked(hDlg, IDC_SENDWX);
 			EnableWindow(GetDlgItem(hDlg, IDC_WXFILE), SendWX);
@@ -1124,7 +1229,18 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			EnableWindow(GetDlgItem(hDlg, IDC_WXPORTS), SendWX);
 		}
 
-		if (LOWORD(wParam) == IDOK)
+		case IDC_SUPZERO:
+	
+			SuppressNullPosn = IsDlgButtonChecked(hDlg, IDC_SUPZERO);
+			break;
+
+
+		case IDC_NOTRACKS:
+
+			DefaultNoTracks = IsDlgButtonChecked(hDlg, IDC_NOTRACKS);
+			break;
+
+		case IDOK:
 		{
 			// Save Config
 
@@ -1142,27 +1258,32 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			RetryCount = GetDlgItemInt(hDlg, IDC_RETRIES, &OK, FALSE);
 			RetryTimer = GetDlgItemInt(hDlg, IDC_RETRYTIME, &OK, FALSE);
 			ExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRE, &OK, FALSE);
+			TrackExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRETRACKS, &OK, FALSE);
 			WXInterval = GetDlgItemInt(hDlg, IDC_WXINTERVAL, &OK, FALSE);
 
 			retCode = RegSetValueEx(hKey, "RetryCount", 0, REG_DWORD, (BYTE *)&RetryCount, 4);
 			retCode = RegSetValueEx(hKey, "RetryTimer", 0, REG_DWORD, (BYTE *)&RetryTimer, 4);
 			retCode = RegSetValueEx(hKey, "ExpireTime", 0, REG_DWORD, (BYTE *)&ExpireTime, 4);
+			retCode = RegSetValueEx(hKey, "TrackExpireTime", 0, REG_DWORD, (BYTE *)&TrackExpireTime, 4);
 			retCode = RegSetValueEx(hKey, "WXInterval", 0, REG_DWORD, (BYTE *)&WXInterval, 4);
 			retCode = RegSetValueEx(hKey, "WXEnabled", 0, REG_DWORD, (BYTE *)&SendWX, 4);
+			retCode = RegSetValueEx(hKey, "SuppressNullPosn", 0, REG_DWORD, (BYTE *)&SuppressNullPosn, 4);
+			retCode = RegSetValueEx(hKey, "DefaultNoTracks", 0, REG_DWORD, (BYTE *)&DefaultNoTracks, 4);
 
 			APRSConnect(APRSCall, ISFilter);			// Will resend Filter
-			
+
 			DecodeWXPortList();
 
 			RegCloseKey(hKey);
 		}
 
-		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		case IDCANCEL:
 		{
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 		}
 		break;
+		}
 	}
 	return (INT_PTR)FALSE;
 }
@@ -1190,6 +1311,214 @@ int DownY;
 
 int Statwidths[] = {150, 200, 250, 300, 350, 800, -1};
 
+LRESULT CALLBACK PopupWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int wmId, wmEvent;
+	LPNMLISTVIEW pnm = (LPNMLISTVIEW)lParam;
+	LPNMLVCUSTOMDRAW lplvcd;
+
+	switch (message)
+	{
+		case WM_NOTIFY:
+		
+		switch (pnm->hdr.code)
+		{
+		case NM_DBLCLK:
+		{
+			LPNMITEMACTIVATE lpnmitem = (LPNMITEMACTIVATE) lParam;
+			LVITEM item = {0};
+			char Selcall[20];
+			int n;
+
+			// Get Text
+			
+			item.iSubItem = 0;
+			item.mask = LVIF_TEXT;
+			item.iItem = pnm->iItem;
+			item.pszText = Selcall;
+			item.cchTextMax = 11;
+
+			ListView_GetItem(pnm->hdr.hwndFrom, &item);
+
+			// Add Call to TO Dropdown list
+
+			// Remove trailing spaces
+
+			n = strlen(Selcall);
+			n--;
+
+			while(n > 1)
+			{
+				if (Selcall[n] == ' ')
+					Selcall[n] = 0;				// Remove trailing spaces
+				else
+					break;
+			n--;
+			}
+
+			CreateMessageWindow("APRSMSGS", "APRS Messages", MsgWndProc, NULL);
+
+			n = SendMessage(hToCall, CB_FINDSTRINGEXACT, -1, (LPARAM)(LPCTSTR)Selcall);
+
+			if (n == CB_ERR)
+				n = SendMessage(hToCall, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)Selcall);
+
+			SendMessage(hToCall, CB_SETCURSEL, n, 0);
+
+			break;
+		}
+
+		case NM_RCLICK:
+		{
+			// Bring up Copy Menu
+
+			LPNMITEMACTIVATE lpnmitem = (LPNMITEMACTIVATE) lParam;
+			POINT pos;
+			LVITEM item = {0};
+
+			// Get Text
+			
+			item.iSubItem = pnm->iSubItem;
+			item.mask = LVIF_TEXT;
+			item.iItem = pnm->iItem;
+			item.pszText = CopyItem;
+			item.cchTextMax = 256;
+
+			ListView_GetItem(pnm->hdr.hwndFrom, &item);
+
+			GetCursorPos(&pos);
+			if (CurrentPopup->NoTracks)
+				CheckMenuItem(trayMenu, 40001, MF_CHECKED);
+			else
+				CheckMenuItem(trayMenu, 40001, MF_UNCHECKED);
+			
+			TrackPopupMenu(trayMenu, 0, pos.x, pos.y, 0, hWnd, 0);
+
+			break;
+		}
+
+		case NM_CUSTOMDRAW:
+			
+			lplvcd = (LPNMLVCUSTOMDRAW)lParam;
+
+			switch(lplvcd->nmcd.dwDrawStage)
+			{
+
+			case CDDS_PREPAINT :
+				return CDRF_NOTIFYITEMDRAW;
+			
+			case CDDS_ITEMPREPAINT:
+        
+				SelectObject(lplvcd->nmcd.hdc, hFont);
+//				lplvcd->clrText = RGB(255,0,0); //GetColorForItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam);
+//				lplvcd->clrTextBk = RGB(0,0,0);//GetBkColorForItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam);
+
+			     return CDRF_NEWFONT;
+				//  or return CDRF_NOTIFYSUBITEMREDRAW;
+			
+			case CDDS_SUBITEM | CDDS_ITEMPREPAINT:
+
+				lplvcd->clrText = RGB(255,0,0); //GetColorForSubItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam, lplvcd->iSubItem);
+				lplvcd->clrTextBk = RGB(0,255,0);//GetBkColorForSubItem(lplvcd->nmcd.dwItemSpec, lplvcd->nmcd.lItemlParam, lplvcd->iSubItem);
+
+		       return CDRF_NEWFONT;  
+			}
+
+
+		}
+
+		break;
+
+			case WM_SYSCOMMAND:
+
+			wmId    = LOWORD(wParam); // Remember, these are...
+			wmEvent = HIWORD(wParam); // ...different for Win32!
+
+			switch (wmId)
+			{ 			
+			default:
+		
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+			}
+
+		case WM_DESTROY:
+
+			break;
+
+		case WM_CHAR:
+
+			if (wParam == '=' || wParam == '+')
+				PostMessage(hMapWnd, WM_CHAR, '=', 0);
+			else
+			if (wParam == '-')
+				PostMessage(hMapWnd, WM_CHAR, '-', 0);
+
+			break;
+
+		case 0x020A:				//WM_MOUSEWHEEL  
+
+			if ((int)wParam > 0)
+				PostMessage(hMapWnd, WM_CHAR, '=', 0);
+			else
+				PostMessage(hMapWnd, WM_CHAR, '-', 0);
+
+			break;
+
+
+
+		case WM_COMMAND:
+
+			wmId    = LOWORD(wParam); // Remember, these are...
+			wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		if (wmId == 40000)
+		{
+			int len=0;
+			HGLOBAL	hMem;
+			char * ptr;
+			int Len = strlen(CopyItem);
+
+			// Copy Rich Text Selection to Clipboard
+		
+			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, Len + 1);
+
+			if (hMem != 0)
+			{
+				ptr=GlobalLock(hMem);
+				strcpy(ptr, CopyItem);
+	
+				if (OpenClipboard(hWnd))
+				{
+					GlobalUnlock(hMem);
+					EmptyClipboard();
+					SetClipboardData(CF_TEXT, hMem);
+					CloseClipboard();
+				}
+			}
+			else
+				GlobalFree(hMem);
+
+		}
+		if (wmId == 40001)
+		{
+			CurrentPopup->NoTracks ^= 1;
+			return TRUE;
+		}
+
+		if (wmId == 40002)
+		{
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_CHATCOLCONFIG), hWnd, ColourDialogProc);
+			break;
+		}
+		
+		default:
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+	}
+	return (0);
+}
+	
+HWND hwndTrack;
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
@@ -1205,9 +1534,100 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	int Degrees;
 	double Minutes;
 	char Msg[80];
+	int NewZoom;
+
+	LPNMMOUSE pnm = (LPNMMOUSE) lParam;
+	struct STATIONRECORD * Station;
+
 
 	switch (message)
 	{
+		case WM_NOTIFY:
+		
+		switch (pnm->hdr.code)
+		{
+		case NM_RELEASEDCAPTURE:
+
+			MouseX = cxWinSize/2;
+			MouseY = cyWinSize/2;
+			GetMouseLatLon(&MouseLat, &MouseLon);
+
+			NewZoom = 18 - SendMessage(hwndTrack, TBM_GETPOS, 0, 0);
+			DestroyWindow(hwndTrack);
+
+			if (NewZoom - Zoom > 8)
+				NewZoom = Zoom + 8;
+
+			while (Zoom < NewZoom)			// Zooming in
+			{
+				MouseX = cxWinSize/2;
+				MouseY = cyWinSize/2;
+				GetMouseLatLon(&MouseLat, &MouseLon);
+				Zoom ++;
+				CentrePositionToMouse(MouseLat, MouseLon);	
+			}
+
+			Zoom = NewZoom;
+
+			CentrePositionToMouse(MouseLat, MouseLon);	
+
+			ReloadMaps = TRUE;
+
+			InvalidateRect(hWnd,NULL,FALSE);
+
+			wsprintf(Msg, "%d", Zoom);
+			SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
+
+			return TRUE;
+
+		case NM_CLICK:
+		case NM_RCLICK:
+			{
+			// Right click in Status Bar. If the zoom menu, bring up a zoom selection box
+
+			if (pnm->dwItemSpec == 3)
+			{
+				hwndTrack = CreateWindowEx( 
+					0,							// no extended styles 
+					 TRACKBAR_CLASS,			// class name 
+					 "",						// title (caption) 
+					WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS | TBS_ENABLESELRANGE | TBS_VERT,              // style 
+					260, cyWinSize - 220,		// position 
+					40, 200,                    // size 
+					hMapWnd,                    // parent window 
+					(HMENU)999,		            // control identifier 
+					hInst,					    // instance 
+					NULL );                     // no WM_CREATE parameter 
+ 
+
+				   SendMessage(hwndTrack, TBM_SETRANGE, 
+						(WPARAM) TRUE,                   // redraw flag 
+						(LPARAM) MAKELONG(2, 16));  // min. & max. positions
+        
+				 SendMessage(hwndTrack, TBM_SETPAGESIZE, 
+					   0, (LPARAM) 4);                  // new page size 
+
+				  SendMessage(hwndTrack, TBM_SETSEL, 
+			     (WPARAM) FALSE,                  // redraw flag 
+				    (LPARAM) MAKELONG(2, 16)); 
+        
+				  SendMessage(hwndTrack, TBM_SETPOS, 
+			      (WPARAM) TRUE,                   // redraw flag 
+				     (LPARAM) 18 - Zoom); 
+
+				  SetFocus(hwndTrack); 
+
+				//  return hwndTrack; 
+
+				return TRUE;
+
+			break;
+		}
+		}
+		}
+
+		break;
+
 		case WM_CREATE:
 	
 			// Initialize common controls
@@ -1256,33 +1676,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			
 			// Centre on Current Cursor
-			
-			SetBaseX = long2tilex(MouseLon, Zoom) - 4;
-			SetBaseY = lat2tiley(MouseLat, Zoom) - 4;
 
-			if (Zoom < 3)
-			{
-				CentrePosition(20.0, 0.0);
-			}
-			else
-			{
-			ScrollX = MapCentreX;
-			ScrollY = MapCentreY;
-			
-			while(SetBaseX < 0)
-			{
-				SetBaseX++;
-				ScrollX -= 256;
-			}
-
-			while(SetBaseY < 0)
-			{
-				SetBaseY++;
-				ScrollY -= 256;
-			}
 			CentrePositionToMouse(MouseLat, MouseLon);	
 
-			}
 			ReloadMaps = TRUE;
 
 			InvalidateRect(hWnd,NULL,FALSE);
@@ -1447,27 +1843,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			nScrollCode = (int) LOWORD(wParam); // scroll bar value 
 			nPos = (short int) HIWORD(wParam);  // scroll box position 
 
-/*			//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
 
-			if (nScrollCode == 0)
-			{
-				baseline--;
-				if (baseline <0)
-					baseline=0;
-			}
-			if (nScrollCode == 1)
-			{
+			return TRUE;
 
-				baseline++;
-				if (baseline > 216)
-					baseline = 216;
-			}
+			//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
 
-			SetScrollPos(hWnd,SB_VERT,baseline,TRUE);
-*/
-			InvalidateRect(hWnd,NULL,FALSE);
-			break;
-		
+				break;
+	
 		case WM_SIZE:
         
 			cxWinSize = LOWORD (lParam);
@@ -1555,56 +1937,48 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			wmId    = LOWORD(wParam); // Remember, these are...
 			wmEvent = HIWORD(wParam); // ...different for Win32!
 
-			if (wmEvent == LBN_DBLCLK)
+		if (wmId == 40000)
+		{
+			int len=0;
+			HGLOBAL	hMem;
+			char * ptr;
+			int Len = strlen(CopyItem);
+
+			// Copy Rich Text Selection to Clipboard
+		
+			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, Len + 1);
+
+			if (hMem != 0)
 			{
-				int n = SendMessage((HWND)lParam, LB_GETTEXTLEN , 0, 0);
-				char * Selcall = malloc(n + 1);
-				SendMessage((HWND)lParam, LB_GETTEXT , 0,(LPARAM)Selcall);
-
-				// Add Call to TO Dropdown list
-
-				// Remove trailing spaces
-
-				n = strlen(Selcall);
-				n--;
-
-				while(n > 1)
-				{
-					if (Selcall[n] == ' ')
-						Selcall[n] = 0;				// Remove trailing spaces
-					else
-						break;
-				n--;
-				}
-
-				CreateMessageWindow("APRSMSGS", "APRS Messages", MsgWndProc, NULL);
-
-				n = SendMessage(hToCall, CB_FINDSTRINGEXACT, -1, (LPARAM)(LPCTSTR)Selcall);
-
-				if (n == CB_ERR)
-					n = SendMessage(hToCall, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)Selcall);
-
-				SendMessage(hToCall, CB_SETCURSEL, n, 0);
-
-				free(Selcall);
+				ptr=GlobalLock(hMem);
+				strcpy(ptr, CopyItem);
 	
-
-				break;
+				if (OpenClipboard(hWnd))
+				{
+					GlobalUnlock(hMem);
+					EmptyClipboard();
+					SetClipboardData(CF_TEXT, hMem);
+					CloseClipboard();
+				}
 			}
-			//Parse the menu selections:
+			else
+				GlobalFree(hMem);
+
+		}
+
+		//Parse the menu selections:
 
 			if (lParam == (LPARAM)hSelWnd)
 			{
 				if (wmEvent == LBN_SELCHANGE)
 				{
 					int Index = SendMessage(hSelWnd, LB_GETCURSEL, 0, 0);
+					int TopIndex = SendMessage(hSelWnd, LB_GETTOPINDEX, 0, 0);
 					char Key[20];
 
 					if (Index != -1)
 					{
 						struct STATIONRECORD * Station;
-						char Time[80];
-						struct tm * TM;
 
 						SendMessage(hSelWnd, LB_GETTEXT, Index, (LPARAM)Key); 
 						Station = FindStation(Key);
@@ -1612,31 +1986,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						DestroyWindow(hSelWnd);
 						hSelWnd = 0;
 
-						hPopupWnd = CreateWindow("LISTBOX", "", WS_CHILD | WS_BORDER | WS_VSCROLL |
-							WS_HSCROLL | LBS_NOTIFY,
-							PopupX, PopupY, 400, 150, hWnd, NULL, hInst, NULL);
-
-						SendMessage(hPopupWnd, LB_SETHORIZONTALEXTENT , 1500, 0);
-		
-						TM = gmtime(&Station->TimeLastUpdated);
-						
-						wsprintf(Time, "Last Heard: %.2d:%.2d:%.2d on Port %d",
-							TM->tm_hour, TM->tm_min, TM->tm_sec, Station->LastPort);
-
-						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Station->Callsign);
-						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Station->Path);
-						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Station->LastPacket);
-						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Time);
-
-						sprintf(Msg, "Distance %6.1f Bearing %3.0f",
-						Distance((LPARAM)Station->Lat, (LPARAM)Station->Lon),
-						Bearing((LPARAM)Station->Lat, (LPARAM)Station->Lon));
-
-						SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Msg);
-
-	
-						ShowWindow(hPopupWnd, SW_SHOWNORMAL);
-
+						CreateStationPopup(Station, PopupX, PopupY + (Index - TopIndex) * 15);
 						return TRUE;
 					}
 				}
@@ -1674,7 +2024,47 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			case IDM_SENDBEACON:
 
-				SendBeacon(0, NULL);
+				SendBeacon(0, NULL, TRUE, FALSE);
+				break;
+
+			case IDM_HOME:
+
+				Station = StationRecords;
+
+				while(Station)
+				{ 
+					if (strcmp(Station->Callsign, LoppedAPRSCall) == 0)
+					{
+						CentrePosition(Station->Lat, Station->Lon);
+						ShowWindow(hMapWnd, SW_SHOWNORMAL);
+						SetForegroundWindow(hMapWnd);
+				
+						return TRUE;
+					}
+		
+					Station = Station->Next;
+				}
+
+				return TRUE;
+
+			case IDM_ZOOMIN:
+
+				// Move logical mouse posn to centre of screen
+
+				MouseX = cxWinSize/2;
+				MouseY = cyWinSize/2;
+
+				PostMessage(hMapWnd, WM_CHAR, '=', 0);
+				break;
+
+			case IDM_ZOOMOUT:
+
+				// Move logical mouse posn to centre of screen
+
+				MouseX = cxWinSize/2;
+				MouseY = cyWinSize/2;
+
+				PostMessage(hMapWnd, WM_CHAR, '-', 0);
 				break;
 	
 			case IDM_CONFIG:
@@ -1905,7 +2295,7 @@ LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 //	HGLOBAL	hMem;
 	int nScrollCode,nPos;
 	RECT rcClient;
-	LPNMLISTVIEW  pnm    = (LPNMLISTVIEW)lParam;
+	LPNMLISTVIEW pnm = (LPNMLISTVIEW)lParam;
 	LPNMLVCUSTOMDRAW lplvcd;
 	int retCode,Type,Vallen, Val;
 	HKEY hKey=0;
@@ -1917,8 +2307,30 @@ LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		
 		switch (pnm->hdr.code)
 		{
+		case NM_RCLICK:
+		{
+			LPNMITEMACTIVATE lpnmitem = (LPNMITEMACTIVATE) lParam;
+			POINT pos;
+			LVITEM item = {0};
+
+			// Get Text
+			
+			item.iSubItem = pnm->iSubItem;
+			item.mask = LVIF_TEXT;
+			item.iItem = pnm->iItem;
+			item.pszText = CopyItem;
+			item.cchTextMax = 256;
+
+			ListView_GetItem(pnm->hdr.hwndFrom, &item);
+
+			GetCursorPos(&pos);
+			TrackPopupMenu(trayMenu2, 0, pos.x, pos.y, 0, hWnd, 0);
+
+			break;
+		}
+	
 		case NM_DBLCLK:
-			{
+		{
 				LVITEM item = {0};
 				char Item1[260] = "AA";
 				int i;
@@ -1955,7 +2367,7 @@ LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 				SendMessage(hToCall, CB_SETCURSEL, i, 0);
 				 
 				break;
-			}
+		}
 
 #ifdef APRS
 
@@ -2035,6 +2447,36 @@ subitem and return CDRF_NEWFONT.*/
 		{
 			BOOL Param;
 			HKEY hKey;
+
+		case 40000:
+		{
+			int len=0;
+			HGLOBAL	hMem;
+			char * ptr;
+			int Len = strlen(CopyItem);
+
+			// Copy Rich Text Selection to Clipboard
+		
+			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, Len + 1);
+
+			if (hMem != 0)
+			{
+				ptr=GlobalLock(hMem);
+				strcpy(ptr, CopyItem);
+	
+				if (OpenClipboard(hWnd))
+				{
+					GlobalUnlock(hMem);
+					EmptyClipboard();
+					SetClipboardData(CF_TEXT, hMem);
+					CloseClipboard();
+				}
+			}
+			else
+				GlobalFree(hMem);
+
+		}
+		break;
 		
 		case IDC_MYMSGS:
 
@@ -2887,14 +3329,17 @@ VOID CALLBACK LineDDAProc(int X, int Y, LPARAM lpData)
 {
 	char * nptr;
 	int i, j;
+	COLORREF rgb = (COLORREF)lpData;
 
 	nptr = &Image[(Y * 2048 * 3) + (X * 3)];
 
 	for (j = 0; j < 2; j++)
 	{
-		for (i = 0; i < 6; i++)
+		for (i = 0; i < 2; i++)
 		{
-			*(nptr++) = 0;
+			*(nptr++) = GetRValue(rgb);
+			*(nptr++) = LOBYTE((rgb >> 8));
+			*(nptr++) = LOBYTE((rgb >> 16));
 		}
 		nptr += 6144 - 6;
 	}
@@ -2906,16 +3351,23 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 	UINT j;
 	char Overlay;
 	char * nptr;
+	time_t AgeLimit = time(NULL ) - (TrackExpireTime * 60);
 
 	if (ptr->Moved == 0)
 		return;				// No need to repaint
+
+	if (SuppressNullPosn && ptr->Lat == 0.0)
+		return;
+
+	if (ptr->ObjState == '_')	// Killed Object
+		return;
 
 	if (GetLocPixels(ptr->Lat, ptr->Lon, &X, &Y))
 	{
 		if (X < 8 || Y < 8 || X > 2030 || Y > 2030)
 			return;				// Too close to edges
 
-		if (ptr->LatTrack[0])
+		if (ptr->LatTrack[0] && ptr->NoTracks == FALSE)
 		{
 			// Draw Track
 
@@ -2929,13 +3381,13 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 
 			for (n = 0; n < TRACKPOINTS; n++)
 			{
-				if (ptr->LatTrack[Index])
+				if (ptr->LatTrack[Index] && ptr->TrackTime[Index] > AgeLimit)
 				{
 					if (GetLocPixels(ptr->LatTrack[Index], ptr->LonTrack[Index], &X, &Y))
 					{
 						if (LastX)
 						{
-							LineDDA(LastX, LastY, X, Y, LineDDAProc, (LPARAM) 0);
+							LineDDA(LastX, LastY, X, Y, LineDDAProc, (LPARAM) Colours[ptr->TrackColour]);
 						}
 
 						LastX = X;
@@ -3147,6 +3599,67 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 	}
 }
 
+VOID CreateStationPopup(struct STATIONRECORD * ptr, int X, int Y)
+{
+	char Msg[80];
+	struct tm * TM;
+	LV_ITEM Item;
+	LV_COLUMN Column;
+	HWND hPopupList;
+	RECT Rect;
+
+	CurrentPopup = ptr;
+		
+	TM = gmtime(&ptr->TimeLastUpdated);
+
+	wsprintf(Msg, "Last Heard: %.2d:%.2d:%.2d on Port %d",
+		TM->tm_hour, TM->tm_min, TM->tm_sec, (LPARAM)ptr->LastPort);
+
+	hPopupWnd = CreateDialog(hInst, "STNPOPUP", hMapWnd, NULL);
+
+	hPopupList = GetDlgItem(hPopupWnd, IDC_LIST1);
+
+//		hPopupWnd = CreateWindow(WC_LISTVIEW, "Messages",
+  //              WS_CHILD | WS_BORDER | LVS_REPORT |  WS_VSCROLL |LVS_NOCOLUMNHEADER,
+    //            X, Y, 400, 150, hMapWnd, NULL, hInst, NULL);
+
+	GetWindowRect(hMapWnd, &Rect);
+
+	MoveWindow(hPopupWnd, Rect.left + X, Rect.top + Y + 40, 400, 130, TRUE);
+
+	Column.cx=1000;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText=" ";
+	SendMessage(hPopupList,LVM_INSERTCOLUMN,1,(LPARAM) &Column); 
+
+	Item.mask=LVIF_TEXT;
+	Item.iItem=0;
+	Item.iSubItem=0;
+	Item.pszText = ptr->Callsign;
+	ListView_InsertItem(hPopupList, &Item);	 
+
+	Item.iItem++;
+	Item.pszText = ptr->Path;
+	ListView_InsertItem(hPopupList, &Item);	 
+
+	Item.iItem++;
+	Item.pszText = ptr->LastPacket;
+	ListView_InsertItem(hPopupList, &Item);	 
+
+	Item.iItem++;
+	Item.pszText = Msg;
+	ListView_InsertItem(hPopupList, &Item);	 
+
+	sprintf(Msg, "Distance %6.1f Bearing %3.0f Course %1.0f Speed %3.1f",
+		Distance(ptr->Lat, ptr->Lon),
+		Bearing(ptr->Lat, ptr->Lon), ptr->Course, ptr->Speed);
+
+	Item.iItem++;
+	ListView_InsertItem(hPopupList, &Item);	 
+
+	ShowWindow(hPopupWnd, SW_SHOWNORMAL);
+}
+
 VOID FindStationsByPixel(int MouseX, int MouseY)
 {
 	int j=0;
@@ -3187,40 +3700,16 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 
 	if (j == 1)
 	{
-		char Msg[80];
-		struct tm * TM;
-		int PopupLeft; 
-
-		ptr = List[0];
-		
-		TM = gmtime(&ptr->TimeLastUpdated);
-
-		wsprintf(Msg, "Last Heard: %.2d:%.2d:%.2d on Port %d",
-			TM->tm_hour, TM->tm_min, TM->tm_sec, (LPARAM)ptr->LastPort);
-
-		PopupLeft = MouseX - ScrollX - 10;
+		int PopupLeft = MouseX - ScrollX - 10;
+		int PopupTop = MouseY - ScrollY - 30;
 
 		if (PopupLeft + 400 > cxWinSize)
 			PopupLeft = cxWinSize - 405;
 
-		hPopupWnd = CreateWindow("LISTBOX", "", WS_CHILD | WS_BORDER | WS_VSCROLL |
-			WS_HSCROLL | LBS_NOTIFY,
-			 PopupLeft, MouseY - ScrollY - 30, 400, 150, hMapWnd, NULL, hInst, NULL);
+		if (PopupTop + 150> cyWinSize)
+			PopupTop= cyWinSize - 165;
 
-		SendMessage(hPopupWnd, LB_SETHORIZONTALEXTENT , 1500, 0);
-
-		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)ptr->Callsign);
-		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)ptr->Path);
-		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)ptr->LastPacket);
-		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Msg);
-	
-		sprintf(Msg, "Distance %6.1f Bearing %3.0f",
-			Distance(ptr->Lat, ptr->Lon),
-			Bearing(ptr->Lat, ptr->Lon));
-
-		SendMessage(hPopupWnd, LB_ADDSTRING, 0, (LPARAM)Msg);
-
-		ShowWindow(hPopupWnd, SW_SHOWNORMAL);
+		CreateStationPopup(List[0], PopupLeft, PopupTop);
 	}
 	else
 	{
@@ -3230,6 +3719,8 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 		if (PopupX + 150 > cxWinSize)
 			PopupX = cxWinSize - 155;
 
+		if (PopupY + 150 > cyWinSize)
+			PopupY = cyWinSize - 155;
 		
 		hSelWnd = CreateWindow("LISTBOX", "", WS_CHILD | WS_BORDER | WS_VSCROLL |
 			WS_HSCROLL | LBS_NOTIFY,
@@ -3265,6 +3756,12 @@ void RefreshStation(struct STATIONRECORD * ptr)
 	struct tm * TM;
 
 	if (hStations == 0)
+		return;
+
+	if (SuppressNullPosn && ptr->Lat == 0.0)
+		return;
+
+	if (ptr->ObjState == '_')	// Killed Object
 		return;
 
 	TM = gmtime(&ptr->TimeLastUpdated);
@@ -3333,6 +3830,7 @@ void RefreshStation(struct STATIONRECORD * ptr)
 	OurSetItemText(hStations, ptr->Index, 3, DistString);
 	OurSetItemText(hStations, ptr->Index, 4, BearingString);
 	OurSetItemText(hStations, ptr->Index, 5, Time);
+	OurSetItemText(hStations, ptr->Index, 6, ptr->LastPacket);
 }
 
 void RefreshStationList()
@@ -3418,6 +3916,7 @@ struct STATIONRECORD * FindStation(char * Call)
 	struct STATIONRECORD * find = StationRecords;
 	struct STATIONRECORD * ptr;
 	struct STATIONRECORD * last = NULL;
+	int sum = 0;
 
 	while(find)
 	{ 
@@ -3453,6 +3952,14 @@ struct STATIONRECORD * FindStation(char * Call)
 	strcpy(ptr->Callsign, Call);
 	ptr->TimeAdded = time(NULL);
 	ptr->Index = i;
+	ptr->NoTracks = DefaultNoTracks;
+
+	for (i = 0; i < 9; i++)
+		sum += Call[i];
+
+	sum %= 20;
+
+	ptr->TrackColour = sum;
 
 	return ptr;
 }
@@ -3609,6 +4116,8 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 
 	if (!isdigit(*Payload))
 	{
+		int C, S;
+		
 		SymSet = *Payload;
 		SymChar = Payload[9];
 
@@ -3619,6 +4128,19 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 				
 		NewLon = -180.0 + ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
 			(Payload[3] - 33) * 91.0 + (Payload[4] - 33)) / 190463.0;
+
+		C = Payload[6] - 33;
+
+		if (C >= 0 && C < 90 )
+		{
+			S = Payload[7] - 33;
+
+			Station->Course = C * 4;
+			Station->Speed = (pow(1.08, S) - 1) * 1.15077945;	// MPH; 
+		}
+
+
+
 	}
 	else
 	{
@@ -3641,6 +4163,13 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 				return FALSE;
 
 		memcpy(LonDeg,Payload + 9, 3);
+
+		if (Payload[22] == '/')
+		{
+			Station->Course = atoi(Payload + 19);
+			Station->Speed = atoi(Payload + 23);
+		}
+
 		LonDeg[3]=0;
 		Payload[17] = 0;
 		NewLon = atof(LonDeg) + (atof(Payload+12) / 60);
@@ -3654,7 +4183,8 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
-		time_t Age = time(NULL) - Station->TimeLastUpdated;
+		time_t NOW = time(NULL);
+		time_t Age = NOW - Station->TimeLastUpdated;
 
 		if (Age > 30)				// Don't update too often
 		{
@@ -3665,6 +4195,7 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 
 			Station->LatTrack[Station->Trackptr] = NewLat;
 			Station->LonTrack[Station->Trackptr] = NewLon;
+			Station->TrackTime[Station->Trackptr] = NOW;
 
 			Station->Trackptr++;
 			Station->Moved = TRUE;
@@ -3701,7 +4232,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 	char * ObjName;
 	char ObjState;
 	struct STATIONRECORD * Object;
-	
+
 	switch(*Payload)
 	{
 	case '`':
@@ -3722,7 +4253,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		Payload[10] = 0;
 		Object = FindStation(ObjName);
-		Payload[10] = ObjState;
+		Object->ObjState = Payload[10] = ObjState;
 
 		strcpy(Object->Path, Station->Callsign);
 		strcat(Object->Path, ">");
@@ -3732,7 +4263,9 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		TimeStamp = Payload + 11;
 
-		DecodeLocationString(Payload + 18, Object);
+		if (ObjState != '_')		// Deleted Objects may have odd positions
+			DecodeLocationString(Payload + 18, Object);
+		
 		Object->TimeLastUpdated = time(NULL);
 		DrawStation(Object);
 		RefreshStation(Object);
@@ -3786,6 +4319,8 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 	char EW = 'E';
 	UCHAR SymChar, SymSet;
 	double NewLat, NewLon;
+	int SP, DC, SE;				// Course/Speed Encoded
+	int Course, Speed;
 
 	// Make sure packet is long enough to have an valid address
 
@@ -3866,6 +4401,29 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
        
 	if (EW == 'W')				// West
 		NewLon = -NewLon;
+
+	SP = Payload[4] - 28;
+	DC = Payload[5] - 28;
+	SE = Payload[6] - 28;		// Course 100 and 10 degs
+
+	Speed = DC / 10;		// Quotient = Speed Units
+	Course = DC - (Speed * 10);	// Remainder = Course Deg/100
+
+	Course = SE + (Course * 100);
+
+	Speed += SP * 10;
+
+	if (Speed >= 800)
+		Speed -= 800;
+
+	if (Course >= 400)
+		Course -= 400;
+
+	Station->Course = Course;
+	Station->Speed = Speed * 1.15077945;	// MPH
+
+//	Debugprintf("MIC-E Course/Speed %s %d %d", Station->Callsign, Course, Speed);
+
 
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
@@ -4272,7 +4830,13 @@ VOID APRSPoll()
 		APRSMsg[Len] = 0;
 		
 		if (Port == 0)
+		{
+			if (memcmp(APRSMsg, "JA0GTA-10", 9) == 0)
+			{
+				Debugprintf(APRSMsg);
+			}
 			DecodeAPRSISMsg(APRSMsg);
+		}
 		else
 		{
 			if (strstr(APRSMsg, "<UI") == 0)
@@ -4327,11 +4891,6 @@ void UpdateMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
 	LV_ITEM Item;
 	int ret;
 
-	BOOL OnlyMine = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGS);
-			
-	if (OnlyMine == 0 ||(strcmp(Message->ToCall, APRSCall) == 0) || (strcmp(Message->FromCall, APRSCall) == 0))
-	{
-
 	Item.mask=LVIF_TEXT;
 	Item.iItem=j;
 	Item.iSubItem=0;
@@ -4348,7 +4907,7 @@ void UpdateMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
 	OurSetItemText(hWnd, j, 4, Message->Text);
 
 	ret = SendMessage(hWnd, LVM_ENSUREVISIBLE, (WPARAM)j, (LPARAM) 0);
-	}
+
 }
 VOID RefreshMessages()
 {
@@ -4443,6 +5002,12 @@ HWND CreateStnListView (HWND hwndParent)
 	Column.pszText="Last Heard";
 
 	SendMessage(hList,LVM_INSERTCOLUMN,6,(LPARAM) &Column); 
+	Column.cx=500;
+	Column.mask=LVCF_WIDTH | LVCF_TEXT;
+	Column.pszText="Last Message";
+
+	SendMessage(hList,LVM_INSERTCOLUMN,7,(LPARAM) &Column); 
+
 	ShowWindow(hList, SW_SHOWNORMAL);
 	UpdateWindow(hList);
 
@@ -4632,7 +5197,6 @@ BOOL CreateStationWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 
 BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, LPCSTR MENU)
 {
-    WNDCLASS  wc;
 	HANDLE hDlg;
 	RECT rcClient;                       // The parent window's client area.
 	
@@ -4642,23 +5206,6 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 		SetForegroundWindow(hMsgDlg);
 		return FALSE;							// Already open
 	}
-
-	bgBrush = CreateSolidBrush(BGCOLOUR);
-
-	wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = WndProc;       
-                                        
-    wc.cbClsExtra = 0;                
-    wc.cbWndExtra = DLGWINDOWEXTRA;
-	wc.hInstance = hInst;
-    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = bgBrush; 
-
-	wc.lpszMenuName = MENU;;	
-	wc.lpszClassName = ClassName; 
-
-	RegisterClass(&wc);
 
 	hMsgDlg = hDlg = CreateDialog(hInst, ClassName, 0, NULL);
 
@@ -4725,6 +5272,7 @@ VOID SendAPRSMessage(char * Text, char * ToCall)
 	strcpy(Message->Text, Text);
 	Message->Retries = RetryCount;
 	Message->RetryTimer = RetryTimer;
+
 	if (ptr == NULL)
 	{
 		OutstandingMsgs = Message;
@@ -4851,11 +5399,7 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 	if (hMsgsIn)
 	{
 		BOOL OnlyMine = IsDlgButtonChecked(hMsgDlg, IDC_MYMSGS);
-
-		if (OnlyMine )
-			RefreshMessages();				// Can't just update one the line
-		else
-			UpdateMessageLine(hMsgsIn, n, Message);
+		RefreshMessages();
 	}
 
 	if (strcmp(MsgDest, APRSCall) == 0)			// to me?
@@ -4933,8 +5477,7 @@ VOID SecTimer()
 	int n = 0;
 	char Msg[20];
 
-	SendWeatherBeacon("Jan 22 2012 14:10", "123/005g011t031r000P000p000h00b10161",
-		"/MITWXN Mitchell IN weather Station N9LYA-3");
+	SendWeatherBeacon();
 
 	// If any changes to image redraw it
 
@@ -4998,9 +5541,6 @@ VOID SecTimer()
 		n++;
 
 	} while (ptr);
-
-	SendWeatherBeacon("Jan 22 2012 14:10", "123/005g011t031r000P000p000h00b10161",
-		"/MITWXN Mitchell IN weather Station N9LYA-3");
 }
 
 double radians(double Degrees)
@@ -5112,7 +5652,7 @@ int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
 
 // Weather Data 
 
-VOID SendWeatherBeacon(char * UIVTimeStamp, char * WeatherData, char * Comment)
+VOID SendWeatherBeacon()
 {
 	char Msg[256];
 	char DD[3]="";
@@ -5188,7 +5728,7 @@ VOID SendWeatherBeacon(char * UIVTimeStamp, char * WeatherData, char * Comment)
 		memcpy(HH, &WXMessage[12], 2);
 		memcpy(MM, &WXMessage[15], 2);
 
-		Len = wsprintf(Msg, "@%s%s%sz%s/%s_%s%s", DD, HH, MM, Lat, Lon, WXptr, Comment);
+		Len = wsprintf(Msg, "@%s%s%sz%s/%s_%s%s", DD, HH, MM, Lat, Lon, WXptr, WXComment);
 
 		Debugprintf(Msg);
 
@@ -5241,4 +5781,100 @@ VOID DecodeWXPortList()
 		ptr = strtok_s(NULL, " ,\t\n\r", &Context);
 	}
 }
+
+INT_PTR CALLBACK ColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    TEXTMETRIC tm; 
+    int y;  
+    LPMEASUREITEMSTRUCT lpmis; 
+    LPDRAWITEMSTRUCT lpdis; 
+
+
+	switch (message)
+	{
+		int Colour;
+		int Sel;
+		char ColourString[100];
+
+	case WM_INITDIALOG:
+	
+		for (Colour = 0; Colour < 20; Colour++)
+		{
+			SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_ADDSTRING, 0, (LPARAM) Colours [Colour]);
+		}
+
+		SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_SETCURSEL, CurrentPopup->TrackColour, 0);
+		return TRUE;
+
+		       
+	case WM_MEASUREITEM: 
+ 
+            lpmis = (LPMEASUREITEMSTRUCT) lParam; 
+ 
+            // Set the height of the list box items. 
+ 
+            lpmis->itemHeight = 15; 
+            return TRUE; 
+ 
+	case WM_DRAWITEM: 
+ 
+            lpdis = (LPDRAWITEMSTRUCT) lParam; 
+ 
+            // If there are no list box items, skip this message. 
+ 
+            if (lpdis->itemID == -1) 
+            { 
+                break; 
+            } 
+ 
+            switch (lpdis->itemAction) 
+            { 
+				case ODA_SELECT: 
+                case ODA_DRAWENTIRE: 
+ 			
+					// if Chat Console, and message has a colour eacape, action it 
+ 
+                    GetTextMetrics(lpdis->hDC, &tm); 
+ 
+                    y = (lpdis->rcItem.bottom + lpdis->rcItem.top - tm.tmHeight) / 2;
+
+						SetTextColor(lpdis->hDC,  Colours[lpdis->itemID]);
+
+//					SetBkColor(lpdis->hDC, 0);
+
+					wsprintf(ColourString, "XXXXXX %06X %d", Colours[lpdis->itemID], lpdis->itemID); 
+
+                    TextOut(lpdis->hDC, 
+                        6, 
+                        y, 
+                        ColourString, 
+                        16); 						
+ 
+ //					SetTextColor(lpdis->hDC, OldColour);
+
+                    break; 
+			}
+
+
+	case WM_COMMAND:
+
+		switch LOWORD(wParam)
+		{
+		case IDOK:
+		{
+			Sel = SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_GETCURSEL, 0, 0);
+			CurrentPopup->TrackColour = Sel; 
+		}
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		
+		}
+	}
+	return FALSE;
+}
+
+
 

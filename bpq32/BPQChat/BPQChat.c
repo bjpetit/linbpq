@@ -572,9 +572,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hTopMenu=GetMenu(MainWnd);
 	hActionMenu=GetSubMenu(hTopMenu,0);
 
-	hFWDMenu=GetSubMenu(hActionMenu,0);
-	hMenu=GetSubMenu(hActionMenu,1);
-	hDisMenu=GetSubMenu(hActionMenu,2);
+//	hFWDMenu=GetSubMenu(hActionMenu,0);
+	hMenu=GetSubMenu(hActionMenu,0);
+	hDisMenu=GetSubMenu(hActionMenu,1);
 
    CheckTimer();
 

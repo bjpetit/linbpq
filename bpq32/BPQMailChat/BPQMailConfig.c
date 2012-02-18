@@ -53,7 +53,8 @@ VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
 VOID WINAPI OnTabbedDialogInit(HWND hwndDlg);
 VOID SaveWPConfig(HWND hDlg);
-PrintMessage(int MsgNo);
+PrintMessage(struct MsgInfo * Msg);
+BOOL ForwardMessagetoFile(struct MsgInfo * Msg, HANDLE Handle);
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -519,6 +520,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDC_SYSOPCALL, SYSOPCall);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_SYSTOSYSOPCALL, SendSYStoSYSOPCall);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_DONTHOLDNEW, DontHoldNewUsers);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_FORWARDTOBBS, ForwardToMe);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDirRaw);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
@@ -1563,6 +1565,7 @@ VOID SaveBBSConfig()
 	MailForInterval = GetDlgItemInt(hwndDisplay, MAILFOR_MINS, &OK1, FALSE);
 	SendSYStoSYSOPCall = IsDlgButtonChecked(hwndDisplay, IDC_SYSTOSYSOPCALL);
 	DontHoldNewUsers = IsDlgButtonChecked(hwndDisplay, IDC_DONTHOLDNEW);
+	ForwardToMe = IsDlgButtonChecked(hwndDisplay, IDC_FORWARDTOBBS);
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
 	POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
@@ -1586,6 +1589,7 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "RefuseBulls",0, REG_DWORD,(BYTE *)&RefuseBulls,4);
 		retCode = RegSetValueEx(hKey, "SendSYStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendSYStoSYSOPCall,4);
 		retCode = RegSetValueEx(hKey, "DontHoldNewUsers",0, REG_DWORD,(BYTE *)&DontHoldNewUsers,4);
+		retCode = RegSetValueEx(hKey, "ForwardToMe",0, REG_DWORD,(BYTE *)&ForwardToMe,4);
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
 		retCode = RegSetValueEx(hKey, "NNTPPort",0,REG_DWORD,(BYTE *)&NNTPInPort,4);
@@ -2208,6 +2212,10 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&DontHoldNewUsers,(ULONG *)&Vallen);
 
 		Vallen=4;
+		RegQueryValueEx(hKey,"ForwardToMe",0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardToMe,(ULONG *)&Vallen);
+
+		Vallen=4;
 		RegQueryValueEx(hKey,"MaxTXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxTXSize,(ULONG *)&Vallen);
 
@@ -2802,13 +2810,105 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 				return TRUE;
 			}
 
+			if (SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0) > 1)
+			{
+				wsprintf(InfoBoxText, "Please select only one message");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				return TRUE;
+			}
+
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_EDITMSGTEXT), hDlg, EditMsgTextDialogProc);
 			return TRUE;
 
 		case IDC_SAVEMSG:
 
+			if (SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0) > 1)
+			{
+				wsprintf(InfoBoxText, "Please select only one message");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				return TRUE;
+			}
+
 			Do_Save_Msg(hDlg);
 			return TRUE;
+
+		case IDC_EXPORT:
+		{
+			struct MsgInfo * Msg;
+			char FileName[MAX_PATH] = "Export.out";
+			OPENFILENAME Ofn; 
+			int Count;
+			int * Indexes;
+			int i;
+			char MsgnoText[10];
+			int Msgno;
+
+			if (CurrentMsgIndex == -1)
+			{
+				wsprintf(InfoBoxText, "Please select a message to Export");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				return TRUE;
+			}
+
+			Count = SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0);
+
+			Indexes = malloc(Count * 4);
+
+			SendDlgItemMessage(hDlg, 0, LB_GETSELITEMS , Count, (LPARAM)&Indexes[0]);
+
+			memset(&Ofn, 0, sizeof(Ofn));
+ 
+			Ofn.lStructSize = sizeof(OPENFILENAME); 
+			Ofn.hInstance = hInst;
+			Ofn.hwndOwner = hDlg; 
+			Ofn.lpstrFilter = NULL; 
+			Ofn.lpstrFile= FileName; 
+			Ofn.nMaxFile = sizeof(FileName)/ sizeof(*FileName); 
+			Ofn.lpstrFileTitle = NULL; 
+			Ofn.nMaxFileTitle = 0; 
+			Ofn.lpstrInitialDir = (LPSTR)NULL; 
+			Ofn.Flags = OFN_SHOWHELP | OFN_OVERWRITEPROMPT; 
+			Ofn.lpstrTitle = NULL;//; 
+
+			if (GetSaveFileName(&Ofn))
+			{
+				HANDLE Handle = CreateFile(FileName, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+				if (Handle == INVALID_HANDLE_VALUE)
+				{
+					wsprintf(InfoBoxText, "Failed to open Export File %s", FileName);
+					DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+					return TRUE;
+				}
+
+//				SetFilePointer(Handle, 0, 0, FILE_END);
+
+				for (i = 0; i < Count; i++)
+				{
+					Msg = MsgHddrPtr[Indexes[i]];
+					SendDlgItemMessage(hDlg, 0, LB_GETTEXT, Indexes[i], (LPARAM)(LPCTSTR)&MsgnoText);
+					Msgno = atoi(MsgnoText);
+
+					for (CurrentMsgIndex = 1; CurrentMsgIndex <= NumberofMessages; CurrentMsgIndex++)
+					{
+						Msg = MsgHddrPtr[CurrentMsgIndex];
+
+						if (Msg->number == Msgno)
+						{
+							ForwardMessagetoFile(Msg, Handle);
+							break;
+						}
+					}
+				}
+
+				SetEndOfFile(Handle);
+				CloseHandle(Handle);
+			}
+
+			free(Indexes);
+
+			return TRUE;
+		}
 
 		case IDC_SAVETOFILE:
 		{
@@ -2827,6 +2927,13 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			if (CurrentMsgIndex == -1)
 			{
 				wsprintf(InfoBoxText, "Please select a message to Save");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+				return TRUE;
+			}
+
+			if (SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0) > 1)
+			{
+				wsprintf(InfoBoxText, "Please select only one message");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
@@ -2851,7 +2958,6 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			wsprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
 				Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
-
 
 			if (Msg->B2Flags)
 			{
@@ -2902,6 +3008,9 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		
 
 		case IDC_PRINTMSG:
+		{
+			int Count;
+			int * Indexes;
 
 			if (CurrentMsgIndex == -1)
 			{
@@ -2910,9 +3019,18 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 				return TRUE;
 			}
 
-			PrintMessage(CurrentMsgIndex);
-			return TRUE;
+			Count = SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0);
 
+			Indexes = malloc(Count * 4);
+
+			SendDlgItemMessage(hDlg, 0, LB_GETSELITEMS , Count, (LPARAM)&Indexes[0]);
+
+			PrintMessages(hDlg, Count, Indexes);
+
+			free(Indexes);
+	
+			return TRUE;
+		}
 		case FILTER_FROM:
 		case FILTER_TO:
 		case FILTER_VIA:

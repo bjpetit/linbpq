@@ -78,6 +78,7 @@
 #define IDC_HOLDFROM                    1074
 #define IDC_DONTHOLDNEW                 1074
 #define IDC_HOLDTO                      1075
+#define IDC_FORWARDTOBBS                1075
 #define IDC_HOLDAT                      1076
 #define IDC_REJFROM                     1077
 #define IDC_REJTO                       1078
@@ -90,6 +91,7 @@
 #define IDC_WPTO                        1086
 #define IDC_WPSAVE                      1087
 #define IDC_PRINTMSG                    1088
+#define IDC_EXPORT                      1089
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101
@@ -151,13 +153,14 @@
 #define RESCANMSGS                      40020
 #define ID_HELP_ONLINEHELP              40021
 #define ID_ACTIONS_SENDMESSAGE          40022
+#define IDM_IMPORT                      40023
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30009
-#define _APS_NEXT_COMMAND_VALUE         40023
+#define _APS_NEXT_COMMAND_VALUE         40024
 #define _APS_NEXT_CONTROL_VALUE         1089
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

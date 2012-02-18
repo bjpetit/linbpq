@@ -47,7 +47,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len);
 VOID ProcessQuery(char * Query);
 VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlusDigis);
 VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int Len);		
-Dll VOID APIENTRY SendBeacon(int toPort, char * Msg);
+Dll VOID APIENTRY SendBeacon(int toPort, char * Msg, BOOL SendISStatus, BOOL SendSOGCOG);
 Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 VOID ProcessAPRSISMsg(char * APRSMsg);
 static VOID SendtoDigiPorts(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
@@ -108,6 +108,8 @@ BOOL GPSOK;
 char LAT[] = "0000.00N";	// in standard APRS Format      
 char LON[] = "00000.00W";	//in standard APRS Format
 
+double SOG, COG;		// From GPS
+
 double Lat = 0.0;
 double Lon = 0.0;
 
@@ -160,6 +162,8 @@ int MaxTraceHops = 2;
 int MaxFloodHops = 2;
 
 int BeaconInterval = 0;
+int MobileBeaconInterval = 0;
+time_t LastMobileBeacon = 0;
 int BeaconCounter = 0;
 int IStatusCounter = 0;					// Used to send ?ISTATUS? Responses
 
@@ -1016,6 +1020,12 @@ static ProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr, "MobileBeaconInterval") == 0)
+	{
+		MobileBeaconInterval = atoi(p_value) * 60;
+		return TRUE;
+	}
+
 	if (_stricmp(ptr, "TRACECALLS") == 0)
 	{
 		TraceCalls = _strdup(_strupr(p_value));
@@ -1173,7 +1183,7 @@ VOID SendAPRSMessage(char * Message, int toPort)
 
 VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlusDigis)
 {
-	if (memcmp(Query, "APRSS", 5) == 0)
+	if (_memicmp(Query, "APRSS", 5) == 0)
 	{
 		char Message[255];
 	
@@ -1212,18 +1222,24 @@ VOID ProcessQuery(char * Query)
 		return;
 	}
 }
-Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText)
+Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendISStatus, BOOL SendSOGCOG)
 {
 	int Port;
 	DIGIMESSAGE Msg;
 	char * StMsg = StatusText;
 	int Len;
+	char SOGCOG[10] = "";
+
+	if (SendSOGCOG | (COG != 0.0))
+		sprintf(SOGCOG, "%03.0f/%03.0f", COG, SOG);
+
+	BeaconCounter = BeaconInterval * 60;
 
 	if (StMsg == NULL)
 		StMsg = StatusMsg;
 	
-	Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c %s", (ApplConnected) ? '=' : '!',
-		LAT, SYMSET, LON, SYMBOL, StMsg);
+	Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (ApplConnected) ? '=' : '!',
+		LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
 
@@ -1239,8 +1255,8 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText)
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
-			Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c %s", (ApplConnected) ? '=' : '!',
-					LAT, SYMSET, LON, SYMBOL, StMsg);
+			Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (ApplConnected) ? '=' : '!',
+					LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;
 
@@ -1255,12 +1271,13 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText)
 	{
 		char ISMsg[300];
 
-		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c %s\r\n", APRSCall, APRSDest,
-			(ApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, StMsg);
+		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s %s\r\n", APRSCall, APRSDest,
+			(ApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
 		send(sock, ISMsg, Len, 0);
 //		Debugprintf(">%s", ISMsg);
 
-		IStatusCounter = 5;
+		if (SendISStatus)
+			IStatusCounter = 5;
 	}
 
 	// and to Application
@@ -1278,8 +1295,8 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText)
 				
 		if (buffptr)
 		{
-			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r!%s%c%s%c %s\r\n",
-				APRSCall, APRSDest, LAT, SYMSET, LON, SYMBOL, StMsg);
+			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r!%s%c%s%c%s %s\r\n",
+				APRSCall, APRSDest, LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
 			buffptr[2] = 255;
 			C_Q_ADD(&APPL_Q, buffptr);
 		}
@@ -1334,7 +1351,7 @@ VOID DoSecTimer()
 		if (BeaconCounter == 0)
 		{
 			BeaconCounter = BeaconInterval * 60;
-			SendBeacon(0, StatusMsg);
+			SendBeacon(0, StatusMsg, TRUE, FALSE);
 		}
 	}
 
@@ -2115,6 +2132,7 @@ void DecodeRMC(char * msg, int len)
 	char TimHH[3], TimMM[3], TimSS[3];
 	char OurSog[5], OurCog[4];
 	char LatDeg[3], LonDeg[4];
+	char NewLat[10] = "", NewLon[10] = "";
 
 	char Day[3];
 
@@ -2151,16 +2169,16 @@ void DecodeRMC(char * msg, int len)
 
 	*(ptr2++)=0;
  
-	memcpy(LAT, ptr1 , 7);
-	memcpy(LatDeg,ptr1,2);
+	memcpy(NewLat, ptr1, 7);
+	memcpy(LatDeg, ptr1, 2);
 	LatDeg[2]=0;
 	Lat=atof(LatDeg) + (atof(ptr1+2)/60);
 	
-	if (*(ptr1+7) > '4') if (LAT[6] < '9') LAT[6]++;
+	if (*(ptr1+7) > '4') if (NewLat[6] < '9') NewLat[6]++;
 
 	ptr1=ptr2;
 
-	LAT[7] = (*ptr1);
+	NewLat[7] = (*ptr1);
 	if ((*ptr1) == 'S') Lat=-Lat;
 	
 	ptr1+=2;
@@ -2170,17 +2188,17 @@ void DecodeRMC(char * msg, int len)
 	if (ptr2 == 0) return;	// Duff
 	*(ptr2++)=0;
 
-	memcpy(LON, ptr1, 8);
+	memcpy(NewLon, ptr1, 8);
 	
 	memcpy(LonDeg,ptr1,3);
 	LonDeg[3]=0;
 	Lon=atof(LonDeg) + (atof(ptr1+3)/60);
        
-	if (*(ptr1+8) > '4') if (LON[7] < '9') LON[7]++;
+	if (*(ptr1+8) > '4') if (NewLon[7] < '9') NewLon[7]++;
 
 	ptr1=ptr2;
 
-	LON[8] = (*ptr1);
+	NewLon[8] = (*ptr1);
 	if ((*ptr1) == 'W') Lon=-Lon;
 
 	// Now have a valid posn, so stop sending Undefined LOC Sysbol
@@ -2218,6 +2236,23 @@ void DecodeRMC(char * msg, int len)
 
 	memcpy(Day,ptr2,2);
 	Day[2]=0;
+
+	SOG = atof(OurSog);
+	COG = atof(OurCog);
+
+	if (MobileBeaconInterval && (strcmp(NewLat, LAT) || strcmp(NewLon, LON)))
+	{
+		time_t NOW = time(NULL);
+
+		if ((NOW - LastMobileBeacon) > MobileBeaconInterval)
+		{
+			LastMobileBeacon = NOW;
+			SendBeacon(0, StatusMsg, FALSE, TRUE);
+		}
+	}
+
+	strcpy(LAT, NewLat);
+	strcpy(LON, NewLon);
 }
 
 VOID SendFilterCommand()

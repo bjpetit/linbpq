@@ -18,6 +18,8 @@ struct ConsoleInfo * ConsHeader[2] = {&BBSConsole, &ChatConsole};
 
 struct ConsoleInfo * InitHeader;
 
+extern struct SEM ChatSemaphore;
+
 
 //CIRCUIT * Console;
 HWND hConsole;
@@ -319,10 +321,15 @@ BOOL CreateConsole(int Stream)
 				return TRUE;
 			}
 
+			GetSemaphore(&ChatSemaphore);
+
 			if (rtloginu (Cinfo->Console, TRUE))
 				Cinfo->Console->Flags |= CHATMODE;
 			else
 				SendPrompt(Cinfo->Console, user);
+
+			FreeSemaphore(&ChatSemaphore);
+
 		}
 		else
 			SendWelcomeMsg(-1, Cinfo->Console, user);

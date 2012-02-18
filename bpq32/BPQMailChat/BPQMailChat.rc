@@ -94,11 +94,11 @@ BEGIN
     LTEXT           "",IDC_UTC,215,3,25,10
     LTEXT           "",IDC_LOCAL,269,3,25,10
     LISTBOX         100,2,16,190,130,WS_VSCROLL
-    LTEXT           "Chat Nodes",IDC_STATIC,197,25,40,10
+    LTEXT           "Chat Nodes",901,197,25,40,10
     LTEXT           "",IDC_NODES,243,25,20,10
-    LTEXT           "Chat Users",IDC_STATIC,197,35,40,10
+    LTEXT           "Chat Users",902,197,35,40,10
     LTEXT           "0",IDC_CHATSEM,274,105,20,10
-    LTEXT           "Chat Links",IDC_STATIC,197,45,40,10
+    LTEXT           "Chat Links",903,197,45,40,10
     LTEXT           "",IDC_LINKS,243,45,20,10
     LTEXT           "Msgs",IDC_STATIC,197,60,40,10
     LTEXT           "",IDC_MSGS,243,60,20,10
@@ -208,6 +208,9 @@ BEGIN
     CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,
                     194,138,12
+    CONTROL         "Forward Messages to BBS Call",IDC_FORWARDTOBBS,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,176,194,119,
+                    12
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -428,8 +431,8 @@ CAPTION "Edit Message"
 FONT 8, "System", 0, 0, 0x1
 BEGIN
     RTEXT           "Msg",IDC_STATIC,7,7,19,8
-    LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | WS_VSCROLL | 
-                    WS_TABSTOP
+    LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | 
+                    WS_VSCROLL | WS_TABSTOP
     COMBOBOX        IDC_MSGTYPE,125,9,25,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
                     WS_TABSTOP
     COMBOBOX        IDC_MSGSTATUS,185,9,25,55,CBS_DROPDOWNLIST | WS_VSCROLL | 
@@ -621,9 +624,9 @@ BEGIN
                     282,224,35,10
     CONTROL         "Sent",107,"Button",BS_3STATE | BS_CENTER | BS_PUSHLIKE,
                     324,224,35,10
-    DEFPUSHBUTTON   "Edit Text",IDC_EDITTEXT,35,220,40,15,BS_CENTER | 
+    DEFPUSHBUTTON   "Edit Text",IDC_EDITTEXT,24,220,38,15,BS_CENTER | 
                     BS_VCENTER
-    DEFPUSHBUTTON   "Print",IDC_PRINTMSG,170,220,35,15,BS_CENTER | 
+    DEFPUSHBUTTON   "Print",IDC_PRINTMSG,150,220,24,15,BS_CENTER | 
                     BS_VCENTER
     RTEXT           "Filter From",IDC_STATIC,105,35,38,8
     EDITTEXT        FILTER_FROM,148,33,62,14,ES_UPPERCASE | ES_AUTOHSCROLL
@@ -632,9 +635,10 @@ BEGIN
                     HFILTER_VIA
     RTEXT           "Filter To",IDC_STATIC,105,52,38,8
     RTEXT           "Filter Via",IDC_STATIC,105,69,38,8
-    DEFPUSHBUTTON   "Save",IDC_SAVEMSG,81,220,30,15,BS_CENTER | BS_VCENTER
-    DEFPUSHBUTTON   "Save to File",IDC_SAVETOFILE,115,220,50,15,BS_CENTER | 
+    DEFPUSHBUTTON   "Save",IDC_SAVEMSG,67,220,24,15,BS_CENTER | BS_VCENTER
+    DEFPUSHBUTTON   "Save to File",IDC_SAVETOFILE,96,220,49,15,BS_CENTER | 
                     BS_VCENTER
+    DEFPUSHBUTTON   "Export",IDC_EXPORT,179,220,32,15,BS_CENTER | BS_VCENTER
 END
 
 WELCOMEMSG DIALOG DISCARDABLE  26, 5, 381, 266
@@ -1050,6 +1054,7 @@ BEGIN
         MENUITEM "Update Chat Map Info",        ID_ACTIONS_UPDATECHATMAPINFO
         MENUITEM "Save Registry Configuration", BPQSAVEREG
         MENUITEM "Rerun Message Routing",       RESCANMSGS
+        MENUITEM "Import Messages",             IDM_IMPORT
     END
     POPUP "&Configuration"
     BEGIN

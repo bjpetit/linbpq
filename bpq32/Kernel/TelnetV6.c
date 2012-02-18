@@ -310,9 +310,11 @@ ProcessLine(char * buf, int Port)
 			USER->Secure = FALSE;
 
 			if (Secure)
+			{
+				strlop(Secure, 13);
 				if (_stricmp(Secure, "SYSOP") == 0)
 					USER->Secure = TRUE;
-
+			}
 			strcpy(USER->UserName, User);
 			strcpy(USER->Password, Pwd);
 			strcpy(USER->Callsign, UserCall);
@@ -1093,7 +1095,7 @@ VOID TelnetPoll(int Port)
 
 		stamp = monbuff[88];
 
-		if ((UCHAR)monbuff[2] & 0x80)		// TX
+		if ((UCHAR)monbuff[4] & 0x80)		// TX
 			buffer[2] = 91;
 		else
 			buffer[2] = 17;

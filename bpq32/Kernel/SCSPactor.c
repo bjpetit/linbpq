@@ -209,8 +209,12 @@ ConfigLine:
 			{
 				// Spend a percentage of scan time in Robust Packet Mode
 
-				double Robust = atof(&buf[19]);
+				double Robust = atof(&buf[20]);
+				#pragma warning(push)
+				#pragma warning(disable : 4244)
 				TNC->RobustTime = Robust * 10;
+				#pragma warning(pop)
+
 			}
 			else
 			if (_memicmp(buf, "USEAPPLCALLS", 12) == 0)
@@ -501,7 +505,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			PLevel = Scan->PMaxLevel;
 
-			if (PLevel == 0 && Scan->HFPacketMode)
+			if (PLevel == 0 && (Scan->HFPacketMode || Scan->RPacketMode))
 			{
 				// Switch to Packet for this Interval
 				
@@ -514,7 +518,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 0;
 			}
 
-			else if (PLevel > '0' && PLevel < '5')		// 1 - 4 
+			if (PLevel > '0' && PLevel < '5')		// 1 - 4 
 			{
 				if (TNC->Bandwidth != PLevel)
 				{
@@ -525,12 +529,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				else
 				{
 					if (TNC->HFPacket)
-					SwitchToPactor(TNC);
+						SwitchToPactor(TNC);
 				}
 			}
 
-			if (TNC->RobustTime)
-				SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
+			if (Scan->RPacketMode)
+				if (TNC->RobustTime)
+					SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
 			
 			return 0;
 		}

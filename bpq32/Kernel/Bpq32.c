@@ -393,7 +393,7 @@
 // Improved program error logging
 // WL2K reporting changed to new format agreed with Lee Inman
 
-// 5.2.3.1
+// 5.2.3.1 January 2012
 
 // Connects from the console to an APPLCALL or APPLALIAS now invoke any Command Alias that has been defined.
 // Fix reporting of Tracker freqs to WL2K.
@@ -415,6 +415,7 @@
 // Rewrite RigControl and add "Reread Config Command"
 // Support User Mode VCOM Driver for VKISS ports
 
+// 5.2.4.1 January 2012
 
 // Remove CR from Telnet User and Password Prompts
 // Add Rigcontrol to UZ7HO driver
@@ -431,6 +432,13 @@
 // Add Reread APRS Config
 // Fix switching to Pactor after scanning in normal packet mode (PTC)
 
+// Stop reading Password file.
+// Add extra MPSK commands 
+// Fix MPSK Transparency
+// Make LOCATOR command compulsory
+// Add MobileBeaconInterval APRS param
+// Send Course and Speed when APRS is using GPS
+// Fix Robust Packet reporting in PTC driver
 
 #define Kernel
 #include "Versions.h"
@@ -1153,15 +1161,8 @@ VOID CALLBACK TimerProc
 				}
 			}
 
-			if (LOCATOR[0])
-			{
-				// Enable Node Map Reports
-
-				ReportTimer = 600;
-				OpenReportingSockets();
-			}
-
-			
+			OpenReportingSockets();
+		
 			WritetoConsole("\n\nReconfiguration Complete\n");
 
 			if (IPRequired)	IPActive = Init_IP();
@@ -1284,13 +1285,7 @@ FirstInit()
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
 	TimerInst=GetCurrentProcessId();
 
-	if (LOCATOR[0])
-	{
-		// Enable Node Map Reports
-
-		ReportTimer = 600;
-		OpenReportingSockets();
-	}
+	OpenReportingSockets();
 
  	WritetoConsole("\n");
  	WritetoConsole("Port Initialisation Complete\n");
@@ -1401,13 +1396,7 @@ Check_Timer()
 
 		INITIALISEPORTS();
 
-		if (LOCATOR[0])
-		{
-			// Enable Node Map Reports
-
-			ReportTimer = 600;
-			OpenReportingSockets();
-		}
+		OpenReportingSockets();
 
 		WritetoConsole("\n\nPort Reinitialisation Complete\n");
 
@@ -1451,13 +1440,7 @@ Check_Timer()
 
 		ReportTimer = 0;
 
-		if (LOCATOR[0])
-		{
-			// Enable Node Map Reports
-
-			ReportTimer = 600;
-			OpenReportingSockets();
-		}
+		OpenReportingSockets();
 
 		FreeSemaphore();
 
@@ -1502,7 +1485,6 @@ char pgm[256];		// Uninitialised so per process
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
-	HANDLE handle;
 	DWORD n;
 	char buf[350];
 	int retCode, disp;
@@ -1665,6 +1647,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				
 //				GetLastError();
 
+/*
 				//
 				//	Read SYSOP password
 				//
@@ -1685,7 +1668,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 						CloseHandle(handle);
 					}
 				}
-			
+*/			
 				for (i=0;PWTEXT[i] > 0x20;i++); //Scan for cr or null 
 				PWLEN=i;
 				
@@ -5317,24 +5300,30 @@ VOID OpenReportingSockets()
 	u_long param=1;
 	BOOL bcopt=TRUE;
 
-	ReportSocket = socket(AF_INET,SOCK_DGRAM,0);
-
-	if (ReportSocket == INVALID_SOCKET)
+	if (LOCATOR[0])
 	{
-		Debugprintf("Failed to create Reporting socket");
-		ReportSocket = 0;
-  	 	return; 
+		// Enable Node Map Reports
+
+		ReportTimer = 600;
+
+		ReportSocket = socket(AF_INET,SOCK_DGRAM,0);
+
+		if (ReportSocket == INVALID_SOCKET)
+		{
+			Debugprintf("Failed to create Reporting socket");
+			ReportSocket = 0;
+  		 	return; 
+		}
+
+		ioctlsocket (ReportSocket, FIONBIO, &param);
+		setsockopt (ReportSocket, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
+
+		reportdest.sin_family = AF_INET;
+		reportdest.sin_port = htons(81);
+		ConvToAX25("DUMMY-1", ReportDest);
 	}
 
-	ioctlsocket (ReportSocket, FIONBIO, &param);
- 
-	setsockopt (ReportSocket, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
-
-	reportdest.sin_family = AF_INET;
-	reportdest.sin_port = htons(81);
-
-	ConvToAX25("DUMMY-1", ReportDest);
-
+	// Set up Chat Report even if no LOCATOR	reportdest.sin_family = AF_INET;
 	// Socket must be opened in MailChat Process
 
 	Chatreportdest.sin_family = AF_INET;

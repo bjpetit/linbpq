@@ -722,6 +722,15 @@
 //  Send Chat Map reports via BPQ32.dll
 
 
+// Version 1.4.49.1 February 2012
+
+
+//	Fix Setting Paclink mode on SNOS connects
+//	Remove creation of debugging file for each message
+//	Add Message Export and Import functions
+//	All printing of more than one message at a time
+//	Add command to toggle "Expert" status
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -887,6 +896,8 @@ BOOL EnableUI = FALSE;
 BOOL RefuseBulls = FALSE;
 BOOL SendSYStoSYSOPCall = FALSE;
 BOOL DontHoldNewUsers = FALSE;
+BOOL ForwardToMe = FALSE;
+
 int MailForInterval = 0;
 
 UCHAR * OtherNodes=NULL;
@@ -1632,7 +1643,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				CheckTimer();
 				TCPTimer();
 				FWDTimerProc();
-				ChatTimer();
+				if (ChatApplNum)
+					ChatTimer();
 				if (MaintClock < NOW)
 				{				
 					MaintClock += 86400;					
@@ -1802,6 +1814,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case RESCANMSGS:
 
 			ReRouteMessages();
+			break;
+
+		case IDM_IMPORT:
+
+			ImportMessages();
 			break;
 
 		case IDM_DEBUG:
@@ -2177,17 +2194,14 @@ INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			Click = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
 			Hover = SendDlgItemMessage(hDlg, IDC_HOVER, BM_GETCHECK, 0 ,0);
 		
-			if (AXIPPort)
-			{
-				if (Click) ClickHover[0] = '1';
-				else 
-					if (Hover) ClickHover[0] = '0';
+			if (Click) ClickHover[0] = '1';
+			else 
+				if (Hover) ClickHover[0] = '0';
 
-				len = wsprintf(Msg, "INFO %s|%s|%s|\r", Position, PopupText, ClickHover);
+			len = wsprintf(Msg, "INFO %s|%s|%s|\r", Position, PopupText, ClickHover);
 
-				if (len < 256)
-					Send_MON_Datagram(Msg, len);
-			}
+			if (len < 256)
+				Send_MON_Datagram(Msg, len);
 			
 		break;
 
@@ -2691,6 +2705,12 @@ BOOL Initialise()
 
 			SetupChat();
 		}
+	}
+	else
+	{
+		ShowWindow(GetDlgItem(MainWnd, 901), SW_HIDE);
+		ShowWindow(GetDlgItem(MainWnd, 902), SW_HIDE);
+		ShowWindow(GetDlgItem(MainWnd, 903), SW_HIDE);
 	}
 
 	// Make backup copies of Databases
@@ -3269,8 +3289,13 @@ int DoMonitorData(int Stream)
 
 	int len,count=0;
 	int stamp;
+	struct _EXCEPTION_POINTERS exinfo;
 
-			do { 
+	__try
+	{
+	
+		do
+		{ 
 
 			stamp=GetRaw(Stream, buff,&len,&count);
 
@@ -3279,11 +3304,13 @@ int DoMonitorData(int Stream)
 			SeeifBBSUIFrame((struct _MESSAGEX *)buff, len);
 			
 		}
-
-
+		
 		while (count > 0);	
- 
-	
+ 		
+	}
+		#define EXCEPTMSG "DoMonitorData"
+		#include "StdExcept.c"
+	}
 
 	return 0;
 
@@ -3303,37 +3330,6 @@ UCHAR * EncodeCall(UCHAR * Call)
 	return &axcall[0];
 
 }
-
-
-int WriteLog(char * msg)
-{
-	FILE *file;
-	char timebuf[128];
-
-	time_t ltime;
-	struct tm today;
- 
-	if ((file = fopen("BPQTelnetServer.log","a")) == NULL)
-		return FALSE;
-
-	time(&ltime);
-
-	_localtime32_s( &today, &ltime );
-
-	strftime( timebuf, 128,
-		"%d/%m/%Y %H:%M:%S ", &today );
-    
-	fputs(timebuf, file);
-
-	fputs(msg, file);
-
-	fclose(file);
-
-	return 0;
-}
-
-
-
 
 struct UserInfo * AllocateUserRecord(char * Call)
 {
@@ -4075,6 +4071,135 @@ VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
 	nodeprintf(conn, "de %s>\r", BBSName);
 }
 
+VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int len)
+{
+	Buffer[len] = 0;
+	Debugprintf(Buffer);
+
+	if (conn->Flags & SENDTITLE)
+	{	
+		// Waiting for Subject: prompt
+
+		struct MsgInfo * Msg = conn->FwdMsg;
+		
+		nodeprintf(conn, "%s\r", Msg->title);
+		
+		conn->Flags &= ~SENDTITLE;
+		conn->Flags |= SENDBODY;
+		return;
+
+	}
+	
+	if (conn->Flags & SENDBODY)
+	{
+		// Waiting for Enter Message Prompt
+
+		struct tm * tm;
+		time_t now;
+		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
+		char * MsgPtr;
+
+		if (MsgBytes == 0)
+		{
+			MsgBytes = _strdup("Message file not found\r\n");
+			conn->FwdMsg->length = strlen(MsgBytes);
+		}
+
+		MsgPtr = MsgBytes;
+
+		// If a B2 Message, remove B2 Header
+
+		if (conn->FwdMsg->B2Flags)
+		{		
+			// Remove all B2 Headers, and all but the first part.
+					
+			MsgPtr = strstr(MsgBytes, "Body:");
+			
+			if (MsgPtr)
+			{
+				conn->FwdMsg->length = atoi(&MsgPtr[5]);
+				MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+				if (MsgPtr)
+					MsgPtr +=4;
+				else
+					MsgPtr = MsgBytes;
+			
+			}
+			else
+				MsgPtr = MsgBytes;
+		}
+
+		now = time(NULL);
+		tm = gmtime(&now);	
+
+		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+				conn->FwdMsg->number, BBSName, HRoute, RlineVer);
+
+		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
+			BBSputs(conn, "\r\n");
+
+		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);
+		nodeprintf(conn, "\r\n/ex\r");
+
+		free(MsgBytes);
+			
+		conn->FBBMsgsSent = TRUE;
+
+		user->MsgsSent++;
+		user->BytesForwardedOut += conn->FwdMsg->length;
+			
+		conn->Flags &= ~SENDBODY;
+		conn->Flags |= WAITPROMPT;
+
+		return;
+	}
+
+	if (conn->Flags & WAITPROMPT)
+	{
+		if (Buffer[len-2] != '>')
+			return;
+
+		conn->Flags &= ~WAITPROMPT;
+
+		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
+		set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
+
+		//  Only mark as forwarded if sent to all BBSs that should have it
+			
+		if (memcmp(conn->FwdMsg->fbbs, zeros, NBMASK) == 0)
+		{
+			conn->FwdMsg->status = 'F';			// Mark as forwarded
+			conn->FwdMsg->datechanged=time(NULL);
+		}
+
+		conn->UserPointer->ForwardingInfo->MsgCount--;
+
+		// See if any more to forward
+
+		if (FindMessagestoForward(conn))
+		{
+			struct MsgInfo * Msg;
+				
+			// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
+
+			conn->Flags |= SENDTITLE;
+			Msg = conn->FwdMsg;
+		
+			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+						(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+						Msg->from, Msg->bid);
+		}
+		else
+		{
+			Disconnect(conn->BPQStream);
+		}
+		return;
+	}
+}
+
+
 VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
 	char * Cmd, * Arg1;
@@ -4117,6 +4242,12 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		}
 		My_except_RoutineWithDiscBBS("ProcessFBBLine");
 
+		return;
+	}
+
+	if (conn->BBSFlags & TEXTFORWARDING)
+	{
+		ProcessTextFwdLine(conn, user, Buffer, len);
 		return;
 	}
 
@@ -4244,11 +4375,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		
 			ptr2 = ptr3;
 		}
-
-		if (!conn->RMSExpress)
-			conn->Paclink = TRUE;
-
-		
+	
 		return;	
 	}
 
@@ -7532,11 +7659,221 @@ VOID FreeList(char ** Hddr)
 		free(Save);
 	}
 }
+BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
+{
+	HANDLE Handle = CreateFile(FN, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (Handle == INVALID_HANDLE_VALUE)
+	{
+		Logprintf(LOG_BBS, conn, '!', "Failed to open Export File %s", FN);
+		return FALSE;
+	}
+
+	SetFilePointer(Handle, 0, 0, FILE_END);
+
+	conn->SendB = conn->SendP = conn->SendT = TRUE;
+	conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
+
+	while (FindMessagestoForward(conn))
+	{
+		struct MsgInfo * Msg;
+		struct tm * tm;
+		time_t now;
+		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
+		char * MsgPtr;
+		char Line[256];
+		int len, written;
+		struct UserInfo * user = conn->UserPointer;
+
+
+		Msg = conn->FwdMsg;
+		
+		if (Msg->via[0])
+			len = sprintf(Line, "S%c %s @ %s < %s $%s\r\n", Msg->type, Msg->to,
+						Msg->via, Msg->from, Msg->bid);
+		else
+			len = sprintf(Line, "S%c %s < %s $%s\r\n", Msg->type, Msg->to, Msg->from, Msg->bid);
+	
+		WriteFile(Handle, Line, len, &written, NULL);
+
+		len = sprintf(Line, "%s\r\n", Msg->title);
+		WriteFile(Handle, Line, len, &written, NULL);
+		
+		if (MsgBytes == 0)
+		{
+			MsgBytes = _strdup("Message file not found\r\n");
+			conn->FwdMsg->length = strlen(MsgBytes);
+		}
+
+		MsgPtr = MsgBytes;
+
+		// If a B2 Message, remove B2 Header
+
+		if (conn->FwdMsg->B2Flags)
+		{		
+			// Remove all B2 Headers, and all but the first part.
+					
+			MsgPtr = strstr(MsgBytes, "Body:");
+			
+			if (MsgPtr)
+			{
+				conn->FwdMsg->length = atoi(&MsgPtr[5]);
+				MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+				if (MsgPtr)
+					MsgPtr +=4;
+				else
+					MsgPtr = MsgBytes;
+			
+			}
+			else
+				MsgPtr = MsgBytes;
+		}
+
+		now = time(NULL);
+		tm = gmtime(&now);	
+
+		len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+				conn->FwdMsg->number, BBSName, HRoute, RlineVer);
+
+		WriteFile(Handle, Line, len, &written, NULL);
+
+
+		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
+			WriteFile(Handle, "\r\n", 2, &written, NULL);
+
+		WriteFile(Handle, MsgPtr, conn->FwdMsg->length, &written, NULL);
+
+		if (MsgPtr[conn->FwdMsg->length - 2] == '\r')
+			WriteFile(Handle, "/EX\r\n", 5, &written, NULL);
+		else
+			WriteFile(Handle, "\r\n/EX\r\n", 7, &written, NULL);
+
+		free(MsgBytes);
+			
+		user->MsgsSent++;
+		user->BytesForwardedOut += conn->FwdMsg->length;
+			
+		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
+		set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
+
+		//  Only mark as forwarded if sent to all BBSs that should have it
+			
+		if (memcmp(conn->FwdMsg->fbbs, zeros, NBMASK) == 0)
+		{
+			conn->FwdMsg->status = 'F';			// Mark as forwarded
+			conn->FwdMsg->datechanged=time(NULL);
+		}
+
+		conn->UserPointer->ForwardingInfo->MsgCount--;
+
+	}
+
+	CloseHandle(Handle);
+
+	return TRUE;
+
+}
+
+BOOL ForwardMessagetoFile(struct MsgInfo * Msg, HANDLE Handle)
+{
+	struct tm * tm;
+	time_t now;
+	char * MsgBytes = ReadMessageFile(Msg->number);
+	char * MsgPtr;
+	char Line[256];
+	int len, written;
+	int MsgLen = Msg->length;
+
+	if (Msg->via[0])
+		len = sprintf(Line, "S%c %s @ %s < %s $%s\r\n", Msg->type, Msg->to,
+			Msg->via, Msg->from, Msg->bid);
+	else
+		len = sprintf(Line, "S%c %s < %s $%s\r\n", Msg->type, Msg->to, Msg->from, Msg->bid);
+	
+	WriteFile(Handle, Line, len, &written, NULL);
+
+	len = sprintf(Line, "%s\r\n", Msg->title);
+	WriteFile(Handle, Line, len, &written, NULL);
+		
+	if (MsgBytes == 0)
+	{
+		MsgBytes = _strdup("Message file not found\r\n");
+		MsgLen = strlen(MsgBytes);
+		}
+
+	MsgPtr = MsgBytes;
+
+	// If a B2 Message, remove B2 Header
+
+	if (Msg->B2Flags)
+	{		
+		// Remove all B2 Headers, and all but the first part.
+					
+		MsgPtr = strstr(MsgBytes, "Body:");
+			
+		if (MsgPtr)
+		{
+			MsgLen = atoi(&MsgPtr[5]);
+			
+			MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+			if (MsgPtr)
+				MsgPtr +=4;
+			else
+				MsgPtr = MsgBytes;
+			
+		}
+		else
+			MsgPtr = MsgBytes;
+	}
+
+	now = time(NULL);
+	tm = gmtime(&now);	
+
+	len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+			Msg->number, BBSName, HRoute, RlineVer);
+
+	WriteFile(Handle, Line, len, &written, NULL);
+
+	if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
+		WriteFile(Handle, "\r\n", 2, &written, NULL);
+
+	WriteFile(Handle, MsgPtr, MsgLen, &written, NULL);
+
+	if (MsgPtr[MsgLen - 2] == '\r')
+		WriteFile(Handle, "/EX\r\n", 5, &written, NULL);
+	else
+		WriteFile(Handle, "\r\n/EX\r\n", 7, &written, NULL);
+
+	free(MsgBytes);
+		
+	return TRUE;
+
+}
 
 BOOL ConnecttoBBS (struct UserInfo * user)
 {
 	int n, p;
 	CIRCUIT * conn;
+	struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
+
+	if (memcmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
+	{
+		// Forward to File
+
+		CIRCUIT conn;
+
+		memset(&conn, 0, sizeof(conn));
+
+		conn.UserPointer = user;
+
+		ForwardMessagestoFile(&conn, &ForwardingInfo->ConnectScript[0][5]);
+
+		return FALSE;
+	}
 
 	for (n = NumberofStreams-1; n >= 0 ; n--)
 	{
@@ -7948,6 +8285,7 @@ CheckForSID:
 		conn->BBSFlags |= MBLFORWARDING;
 	}
 
+
 	if (Buffer[len-2] == '>')
 	{
 		if (conn->SkipPrompt)
@@ -7955,8 +8293,40 @@ CheckForSID:
 			conn->SkipPrompt = FALSE;
 			return TRUE;
 		}
-	
+
+		conn->NextMessagetoForward = FirstMessageIndextoForward;
+		conn->UserPointer->ConnectsOut++;
 		conn->BBSFlags &= ~RunningConnectScript;
+
+		if (memcmp(Buffer, "[AEA PK", 7) == 0)
+		{
+			// PK232. Don't send a SID, and switch to Text Mode
+
+			conn->BBSFlags |= (BBS | TEXTFORWARDING);
+			conn->Flags |= SENDTITLE;
+
+			// Send Message. There is no mechanism for reverse forwarding
+
+			if (FindMessagestoForward(conn))
+			{
+				struct MsgInfo * Msg;
+				
+				// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
+
+				Msg = conn->FwdMsg;
+		
+				nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+						(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+						Msg->from, Msg->bid);
+			}
+			else
+			{
+					Disconnect(conn->BPQStream);
+					return FALSE;
+			}
+			
+			return TRUE;
+		}
 
 		if (strcmp(conn->Callsign, "RMS") == 0)
 		{
@@ -8014,10 +8384,6 @@ CheckForSID:
 
 			nodeprintf(conn, "; MSGTYPES %s\r", conn->MSGTYPES);
 
-		conn->NextMessagetoForward = FirstMessageIndextoForward;
-
-		conn->UserPointer->ConnectsOut++;
-
 		if (conn->BBSFlags & FBBForwarding)
 		{
 			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
@@ -8055,6 +8421,13 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 		conn->RMSExpress = TRUE;
 		conn->Paclink = FALSE;
 	}
+
+	if (strstr(SID, "Paclink"))
+	{
+		conn->RMSExpress = FALSE;
+		conn->Paclink = TRUE;
+	}
+
 
 	// See if BPQ for selective forwarding 
 

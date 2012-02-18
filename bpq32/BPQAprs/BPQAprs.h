@@ -29,6 +29,7 @@ struct STATIONRECORD
     double Bearing;
 	double LatTrack[TRACKPOINTS];	// Cyclic Tracklog
 	double LonTrack[TRACKPOINTS];
+	time_t TrackTime[TRACKPOINTS];
 	int Trackptr;					// Next record in Tracklog
 	BOOL Moved;						// Moved since last drawn
     time_t TimeAdded;
@@ -39,6 +40,9 @@ struct STATIONRECORD
 	int DispX;						// Position in display buffer
 	int DispY;
 	int Index;						// List Box Index
+	BOOL NoTracks;					// Suppress displaying track
+	COLORREF TrackColour;
+	char ObjState;					// Live/Killed flag
 
 } StationRecord;
 

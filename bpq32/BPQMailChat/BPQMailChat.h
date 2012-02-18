@@ -384,6 +384,9 @@ typedef struct ConnectionInfo_S
 #define GETTINGTITLE 8
 #define GETTINGMESSAGE 16
 #define CHATLINK 32					// Link to another Chat Node
+#define SENDTITLE 64
+#define SENDBODY 128
+#define WAITPROMPT 256				// Waiting for prompt after message
 
 // BBSFlags Equates
 
@@ -394,6 +397,7 @@ typedef struct ConnectionInfo_S
 #define FBBB2Mode 16
 #define RunningConnectScript 32
 #define MBLFORWARDING 64				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
+#define TEXTFORWARDING 128				// Plain Text forwardinfg
 
 typedef struct FBBRestartData
 {
@@ -1019,6 +1023,8 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len);
 VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len);
 VOID ProcessFBBLine(ConnectionInfo * conn, struct UserInfo * user, UCHAR * Buffer, int len);
 VOID SetupNextFBBMessage(CIRCUIT * conn);
+BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, char ** ATBBS, char ** BID);
+PrintMessages(HWND hDlg, int Count, int * Indexes);
 int check_fwd_bit(char *mask, int bbsnumber);
 void set_fwd_bit(char *mask, int bbsnumber);
 void clear_fwd_bit (char *mask, int bbsnumber);
@@ -1124,6 +1130,7 @@ VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * form
 
 VOID SortBBSChain();
 VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG);
+VOID ImportMessages();
 
 // TCP Routines
 
@@ -1235,7 +1242,7 @@ extern char RlineVer[50];
 extern BOOL LogBBS;
 extern BOOL LogCHAT;
 extern BOOL LogTCP;
-
+extern BOOL ForwardToMe;
 
 extern int LatestMsg;
 extern char BBSName[];

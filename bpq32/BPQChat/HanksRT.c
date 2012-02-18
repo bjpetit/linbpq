@@ -1816,7 +1816,16 @@ void show_users(CIRCUIT *circuit)
 	char * Alias;
 	char * Topic;
 
-	nputs(circuit, "Stations connected:\r");
+	int i = 0;
+
+	// First count them
+
+	for (user = user_hd; user; user = user->next)
+	{
+		i++;
+	}
+
+	nprintf(circuit, "%d Station(s) connected:\r", i);
 
 	for (user = user_hd; user; user = user->next)
 	{
@@ -1870,21 +1879,19 @@ static void show_circuits(CIRCUIT *conn)
 	NODE    *node;
 	LINK *link;
 	char line[1000];
-
 	int     len;
 	CN	*cn;
 
-/*	nprintf(conn, "Here %-6.6s <- ", OurAlias);
-	len = 0;
+	int i = 0;
 
-	for (node = node_hd; node; node = node->next) if (node->refcnt)
+	// First count them
+
+	for (node = node_hd; node; node = node->next)
 	{
-		len += strlen(node->alias) + 1;
-		if (len > 60) { len = strlen(node->alias) + 1; nputs(conn, xxx); }
-		nputs(conn, node->alias);
-		nputc(conn, ' ');
+		i++;
 	}
-*/
+
+	nprintf(conn, "%d Node(s)\r", i);
 	wsprintf(line, "Here %-6.6s <-", OurAlias);
 
 	for (node = node_hd; node; node = node->next) if (node->refcnt)

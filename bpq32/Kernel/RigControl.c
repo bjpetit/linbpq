@@ -848,7 +848,7 @@ DllExport BOOL APIENTRY Rig_Init()
 
 			if (hDlg == 0)
 			{
-				// Running on a port without a window, eg  UZ7HO
+				// Running on a port without a window, eg  UZ7HO or MultiPSK
 
 				CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 0);
 				hDlg = TNC->hDlg;

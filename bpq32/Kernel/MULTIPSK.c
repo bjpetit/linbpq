@@ -163,13 +163,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	// Look for attach on any call
 
-	for (Stream = 0; Stream <= TNC->AGWInfo->MaxSessions; Stream++)
+	for (Stream = 0; Stream <= TNC->MPSKInfo->MaxSessions; Stream++)
 	{
 		STREAM = &TNC->Streams[Stream];
 	
 		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && TNC->Streams[Stream].Attached == 0)
 		{
 			char Cmd[80];
+			int len;
 
 			// New Attach
 
@@ -184,6 +185,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			wsprintf(Cmd, "%d SCANSTOP", TNC->Port);
 			Rig_Command(-1, Cmd);
+
+			len = wsprintf(Cmd, "%cSTOP_BEACON_ARQ_FAE\x1b", '\x1a');
+	
+			if (TNC->MPSKInfo->TX)
+				TNC->CmdSet = TNC->CmdSave = _strdup(Cmd);		// Savde till not transmitting
+			else
+				send(TNC->WINMORSock, Cmd, len, 0);
 
 		}
 	}
@@ -296,7 +304,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		// See if any frames for this port
 
-		for (Stream = 0; Stream <= TNC->AGWInfo->MaxSessions; Stream++)
+		for (Stream = 0; Stream <= TNC->MPSKInfo->MaxSessions; Stream++)
 		{
 			STREAM = &TNC->Streams[Stream];
 
@@ -407,6 +415,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			char Command[80];
 			int len;
 
+			buff[8 + txlen] = 0;
+			_strupr(&buff[8]);
+
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
 			{
 				TidyClose(TNC, buff[4]);
@@ -439,7 +450,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				len = wsprintf(Command,"%cSTOP_SELECTIVE_CALL_ARQ_FAE\x1b", '\x1a');
 	
-				if (TNC->TX)
+				if (TNC->MPSKInfo->TX)
 					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 				else
 					send(TNC->WINMORSock, Command, len, 0);
@@ -448,6 +459,22 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return (0);
 			}
 
+			if (_memicmp(&buff[8], "MODE", 4) == 0)
+			{
+				buff[7 + txlen] = 0;		// Remove CR
+				
+				len = wsprintf(Command,"%cDIGITAL MODE %s\x1b", '\x1a', &buff[13]);
+	
+				if (TNC->MPSKInfo->TX)
+					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
+				else
+					send(TNC->WINMORSock, Command, len, 0);
+
+				TNC->InternalCmd = TRUE;
+				return (0);
+			}
+
+
 			if (_memicmp(&buff[8], "INUSE?", 6) == 0)
 			{
 				// Return Error if in use, OK if not
@@ -455,7 +482,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				UINT * buffptr = GetBuff();
 				int s = 0;
 
-				while(s <= TNC->AGWInfo->MaxSessions)
+				while(s <= TNC->MPSKInfo->MaxSessions)
 				{
 					if (s != Stream)
 					{		
@@ -492,12 +519,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				len = wsprintf(Command,"%cCALLSIGN_TO_CALL_ARQ_FAE %s%c%cSELECTIVE_CALL_ARQ_FAE\x1b",
 					'\x1a', STREAM->RemoteCall, '\x1b', '\x1a');
 
-				if (TNC->TX)
+				if (TNC->MPSKInfo->TX)
 					TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 				else
 					send(TNC->WINMORSock, Command, len, 0);
 		
-				STREAM->Connecting = TNC->AGWInfo->ConnTimeOut;	// It doesn't report failure
+				STREAM->Connecting = TNC->MPSKInfo->ConnTimeOut;	// It doesn't report failure
 
 //				wsprintf(Status, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 //				SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
@@ -511,7 +538,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			buff[7 + txlen] = 0;
 			len = wsprintf(Command,"%c%s\x1b", '\x1a', &buff[8]);
 		
-			if (TNC->TX)
+			if (TNC->MPSKInfo->TX)
 				TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Save till not transmitting
 			else
 				send(TNC->WINMORSock, Command, len, 0);
@@ -750,7 +777,7 @@ static ProcessLine(char * buf, int Port)
 	int BPQport;
 	int len=510;
 	struct TNCINFO * TNC;
-	struct AGWINFO * AGW;
+	struct MPSKINFO * AGW;
 
 	char errbuf[256];
 
@@ -773,7 +800,7 @@ static ProcessLine(char * buf, int Port)
 	p_ipad = ptr;
 
 	TNC = TNCInfo[BPQport] = zalloc(sizeof(struct TNCINFO));
-	AGW = TNC->AGWInfo = zalloc(sizeof(struct AGWINFO)); // AGW Sream Mode Specific Data
+	AGW = TNC->MPSKInfo = zalloc(sizeof(struct MPSKINFO)); // AGW Sream Mode Specific Data
 
 	AGW->MaxSessions = 10;
 	AGW->ConnTimeOut = CONTIMEOUT;
@@ -836,9 +863,12 @@ static ProcessLine(char * buf, int Port)
 			if (_memicmp(buf, "UPDATEMAP", 9) == 0)
 				TNC->PktUpdateMap = TRUE;
 			else
-//			if (_memicmp(buf, "BEACONAFTERSESSION", 18) == 0) // Send Beacon after each session 
-//				TNC->RPBEACON = TRUE;
-//			else
+			if (_memicmp(buf, "ALEBEACON", 9) == 0) // Send Beacon after each session 
+				TNC->MPSKInfo->Beacon = TRUE;
+			else
+			if (_memicmp(buf, "DEFAULTMODE", 11) == 0) // Send Beacon after each session 
+				strcpy(TNC->MPSKInfo->DefaultMode, &buf[12]);
+			else
 				
 			strcat (TNC->InitScript, buf);
 		}
@@ -1142,15 +1172,14 @@ OuterLoop:;
 VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 {
 	TNC->CmdBuffer[TNC->CmdLen] = 0;
-	Debugprintf("MPSK CMD %s", TNC->CmdBuffer);
 
 	if (strcmp(TNC->CmdBuffer, "SWITCH=TX") == 0)
-		TNC->TX = TRUE;
+		TNC->MPSKInfo->TX = TRUE;
 	else
 	{
 		if (strcmp(TNC->CmdBuffer, "SWITCH=RX") == 0)
 		{
-			TNC->TX = FALSE;
+			TNC->MPSKInfo->TX = FALSE;
 			
 			// See if a command was queued while busy
 			
@@ -1163,9 +1192,15 @@ VOID ProcessMSPKCmd(struct TNCINFO * TNC)
 		}
 		else
 		{
+			Debugprintf("MPSK CMD %s", TNC->CmdBuffer);
+
 			if (TNC->InternalCmd)
 			{
 				ULONG * buffptr = GetBuff();
+				char * ptr = strstr(TNC->CmdBuffer, "OK");
+
+				if (ptr)
+					*(ptr+2) = 0;				// Convert OKn to OK for BBS Connect Script
 
 				TNC->InternalCmd = FALSE;
 
@@ -1263,11 +1298,11 @@ VOID ProcessMSPKData(struct TNCINFO * TNC)
 			return;
 		}
 
-		// Pass to Application. Remove any transparency (hex 80 used as an escape)
+		// Pass to Application. Remove any transparency (hex 0xc0 used as an escape)
 
 		buffptr = GetBuff();
 
-		if (TNC->DataBuffer[TNC->DataLen - 1] == 0x80)
+		if (TNC->DataBuffer[TNC->DataLen - 1] == 0xc0)
 			return;			// Last char is an escape, so wait for the escaped char to arrive
 		
 		if (buffptr)
@@ -1479,7 +1514,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 	int len;
 
 	len = wsprintf(Command,"%cSTOP_SELECTIVE_CALL_ARQ_FAE\x1b", '\x1a');
-	if (TNC->TX)
+	if (TNC->MPSKInfo->TX)
 		TNC->CmdSet = TNC->CmdSave = _strdup(Command);		// Savde till not transmitting
 	else
 		send(TNC->WINMORSock, Command, len, 0);
@@ -1492,9 +1527,28 @@ VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 {
-	char Status[80];
+	char Cmd[80];
+	int Len;
 
-	wsprintf(Status, "%d SCANSTART 15", TNC->Port);
-	Rig_Command(-1, Status);
+	wsprintf(Cmd, "%d SCANSTART 15", TNC->Port);
+	Rig_Command(-1, Cmd);
+
+	Cmd[0] = 0;
+	
+	if (TNC->MPSKInfo->DefaultMode[0])
+		wsprintf(Cmd, "%cDIGITAL MODE %s\x1b", '\x1a', TNC->MPSKInfo->DefaultMode);
+
+	if (TNC->MPSKInfo->Beacon)
+		wsprintf(Cmd, "%s%cBEACON_ARQ_FAE\x1b", Cmd, '\x1a');
+	
+	Len = strlen(Cmd);
+
+	if(Len)
+	{
+		if (TNC->MPSKInfo->TX)
+			TNC->CmdSet = TNC->CmdSave = _strdup(Cmd);		// Savde till not transmitting
+		else
+			send(TNC->WINMORSock, Cmd, Len, 0);
+	}
 }
 

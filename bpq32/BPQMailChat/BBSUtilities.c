@@ -353,17 +353,18 @@ VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo)
 	
 	RegCloseKey(hKey);
 }
+PrintMessage(HDC hDC, struct MsgInfo * Msg);
 
-PrintMessage(int MsgNo)
+PrintMessages(HWND hDlg, int Count, int * Indexes)
 {
-	int Len = MAX_PATH;
+	int i, CurrentMsgIndex;
+	char MsgnoText[10];
+	int Msgno;
 	struct MsgInfo * Msg;
-	char * MsgBytes;
-	char * Save;
+	int Len = MAX_PATH;
 	BOOL hResult;
     PRINTDLG pdx = {0};
 	HDC hDC;
-	int Msglen;
 
 //	CHOOSEFONT cf; 
 	LOGFONT lf; 
@@ -429,8 +430,6 @@ PrintMessage(int MsgNo)
 
     hFont = CreateFontIndirect(&lf); 
 
-
-
     if (hResult)
     {
         // User clicked the Print button, so use the DC and other information returned in the 
@@ -439,18 +438,57 @@ PrintMessage(int MsgNo)
 		DOCINFO pdi;
 
 		pdi.cbSize = sizeof(DOCINFO);
-		pdi.lpszDocName = "Test";
+		pdi.lpszDocName = "BBS Message Print";
 		pdi.lpszOutput = NULL;
 		pdi.lpszDatatype = "RAW";
 		pdi.fwType = 0;
 
 		hDC = pdx.hDC;
 
+		SelectObject(hDC, hFont);
+
 		StartDoc(hDC, &pdi);
 		StartPage(hDC);
 
+		for (i = 0; i < Count; i++)
+		{
+			SendDlgItemMessage(hDlg, 0, LB_GETTEXT, Indexes[i], (LPARAM)(LPCTSTR)&MsgnoText);
+	
+			Msgno = atoi(MsgnoText);
 
-	Msg = MsgHddrPtr[MsgNo];
+			for (CurrentMsgIndex = 1; CurrentMsgIndex <= NumberofMessages; CurrentMsgIndex++)
+			{
+				Msg = MsgHddrPtr[CurrentMsgIndex];
+	
+				if (Msg->number == Msgno)
+				{
+					PrintMessage(hDC, Msg);
+					break;
+				}
+			}
+		}
+		
+		EndDoc(hDC);
+	}
+
+    if (pdx.hDevMode != NULL) 
+        GlobalFree(pdx.hDevMode); 
+    if (pdx.hDevNames != NULL) 
+        GlobalFree(pdx.hDevNames); 
+
+    if (pdx.hDC != NULL) 
+        DeleteDC(pdx.hDC);
+
+}
+
+PrintMessage(HDC hDC, struct MsgInfo * Msg)
+{
+	int Len = MAX_PATH;
+	char * MsgBytes;
+	char * Save;
+  	int Msglen;
+ 
+	StartPage(hDC);
 
 	Save = MsgBytes = ReadMessageFile(Msg->number);
 
@@ -494,8 +532,6 @@ PrintMessage(int MsgNo)
 				MsgBytes = ptr + 4;
 		}
 
-		SelectObject(hDC, hFont);
-
 		HRes = GetDeviceCaps(hDC, HORZRES) - 50;
 		VRes = GetDeviceCaps(hDC, VERTRES) - 50;
 
@@ -504,8 +540,8 @@ PrintMessage(int MsgNo)
 		Rect.right = HRes;
 		Rect.bottom = VRes;
 
-		DrawText(pdx.hDC, Hddr, strlen(Hddr), &Rect, DT_CALCRECT | DT_WORDBREAK);
-		DrawText(pdx.hDC, Hddr, strlen(Hddr), &Rect, DT_WORDBREAK);
+		DrawText(hDC, Hddr, strlen(Hddr), &Rect, DT_CALCRECT | DT_WORDBREAK);
+		DrawText(hDC, Hddr, strlen(Hddr), &Rect, DT_WORDBREAK);
 
 		// process message a line at a time. When page is full, output a page break
 
@@ -529,7 +565,7 @@ PrintMessage(int MsgNo)
 				if (LineLen == 0)		// Blank line
 					Rect.bottom = Rect.top + 40;
 				else
-					DrawText(pdx.hDC, ptr2, ptr1 - ptr2 - 1, &Rect, DT_CALCRECT | DT_WORDBREAK);
+					DrawText(hDC, ptr2, ptr1 - ptr2 - 1, &Rect, DT_CALCRECT | DT_WORDBREAK);
 
 				if (Rect.bottom >= VRes)
 				{
@@ -541,13 +577,13 @@ PrintMessage(int MsgNo)
 					if (LineLen == 0)		// Blank line
 						Rect.bottom = Rect.top + 40;
 					else
-						DrawText(pdx.hDC, ptr2, ptr1 - ptr2 - 1, &Rect, DT_CALCRECT | DT_WORDBREAK);
+						DrawText(hDC, ptr2, ptr1 - ptr2 - 1, &Rect, DT_CALCRECT | DT_WORDBREAK);
 				}
 
 				if (LineLen == 0)		// Blank line
 					Rect.bottom = Rect.top + 40;
 				else
-					DrawText(pdx.hDC, ptr2, ptr1 - ptr2 - 1, &Rect, DT_WORDBREAK);
+					DrawText(hDC, ptr2, ptr1 - ptr2 - 1, &Rect, DT_WORDBREAK);
 
 				if (*(ptr1) == '\n')
 				{
@@ -562,18 +598,173 @@ PrintMessage(int MsgNo)
 		free(Save);
 	
 		EndPage(hDC);
-		EndDoc(hDC);
 
-    }
+		}
+		return 0;
+}
 
-    if (pdx.hDevMode != NULL) 
-        GlobalFree(pdx.hDevMode); 
-    if (pdx.hDevNames != NULL) 
-        GlobalFree(pdx.hDevNames); 
+VOID ImportMessages()
+{
+	char FileName[MAX_PATH] = "Messages.in";
+	int Files = 0;
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int WriteLen=0;
+	OPENFILENAME Ofn; 
+	FILE *in;
+	char Buffer[100000];
+	char *buf = Buffer;
 
-    if (pdx.hDC != NULL) 
-        DeleteDC(pdx.hDC);
+	memset(&Ofn, 0, sizeof(Ofn));
+ 
+	Ofn.lStructSize = sizeof(OPENFILENAME); 
+	Ofn.hInstance = hInst;
+	Ofn.hwndOwner = MainWnd; 
+	Ofn.lpstrFilter = NULL; 
+	Ofn.lpstrFile= FileName; 
+	Ofn.nMaxFile = sizeof(FileName)/ sizeof(*FileName); 
+	Ofn.lpstrFileTitle = NULL; 
+	Ofn.nMaxFileTitle = 0; 
+	Ofn.lpstrInitialDir = BaseDir; 
+	Ofn.Flags = OFN_SHOWHELP | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST; 
+	Ofn.lpstrTitle = NULL;//; 
 
+	if (!GetOpenFileName(&Ofn))
+		return;
+
+	in = fopen(FileName, "r");
+
+	if (!(in))
+	{
+		char msg[500];
+		sprintf_s(msg, sizeof(msg), "Failed to open %s", FileName);
+		MessageBox(NULL, msg, "BPQMailChat", MB_OK);
+		return;
 	}
-	return 0;
+	while(fgets(Buffer, 99999, in))
+	{
+		// First line should start SP/SB ?ST?
+
+		char * From = NULL;
+		char * BID = NULL;
+		char * ATBBS = NULL;
+		char seps[] = " \t\r";
+		struct MsgInfo * Msg;
+		char SMTPTO[100]= "";
+		int msglen;
+		CIRCUIT conn;
+		char * Context;
+		char * Arg1, * Cmd;
+
+		memset(&conn, 0, sizeof(CIRCUIT));
+
+		conn.UserPointer = LookupCall(SYSOPCall);
+		conn.sysop = TRUE;
+		conn.BBSFlags = BBS;
+		strcpy(conn.Callsign, "IMPORT");
+
+NextMessage:
+
+		Sleep(100);
+
+		strlop(Buffer, 10);
+		strlop(Buffer, 13);				// Remove cr and/or lf
+
+		WriteLogLine(&conn, '>', Buffer, strlen(Buffer), LOG_BBS);
+
+		Cmd = strtok_s(Buffer, seps, &Context);
+
+		if (Cmd == NULL)
+		{
+			fclose(in);
+			return;
+		}
+
+		Arg1 = strtok_s(NULL, seps, &Context);
+
+		if (Arg1 == NULL)
+		{
+			Debugprintf("Bad Import Line %s", Buffer);
+			fclose(in);
+			return;
+		}
+
+		if (DecodeSendParams(&conn, Context, &From, &Arg1, &ATBBS, &BID))
+		{
+			if (CreateMessage(&conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID, NULL))
+			{
+				Msg = conn.TempMsg;
+
+				// SP is Ok, read message;
+
+				ClearQueue(&conn);
+
+				fgets(Buffer, 99999, in);
+				strlop(Buffer, 10);
+				strlop(Buffer, 13);				// Remove cr and/or lf
+				strcpy(Msg->title, Buffer);
+
+				// Read the lines
+		
+				conn.Flags |= GETTINGMESSAGE;
+
+				Buffer[0] = 0;
+
+				fgets(Buffer, 99999, in);
+
+				while ((conn.Flags & GETTINGMESSAGE) && Buffer[0])
+				{
+					strlop(Buffer, 10);
+					strlop(Buffer, 13);				// Remove cr and/or lf
+					msglen = strlen(Buffer);
+					Buffer[msglen++] = 13;
+					ProcessMsgLine(&conn, conn.UserPointer,Buffer, msglen);
+	
+					Buffer[0] = 0;
+					fgets(Buffer, 99999, in);
+				}
+
+				// Message completed (or off end of file)
+
+				ClearQueue(&conn);
+
+				if (Buffer[0])
+					goto NextMessage;		// We have read the SP/SB line;
+				else
+				{
+					fclose(in);
+					return;
+				}
+			}
+		}
+
+		// Search for next message 
+
+		Buffer[0] = 0;
+		fgets(Buffer, 99999, in);
+
+		while (Buffer[0])
+		{
+			strlop(Buffer, 10);
+			strlop(Buffer, 13);				// Remove cr and/or lf
+
+			if (_stricmp(Buffer, "/EX") == 0)
+			{
+				// Found end
+
+				Buffer[0] = 0;
+				fgets(Buffer, 99999, in);
+						
+				ClearQueue(&conn);
+
+				if (Buffer[0])
+					goto NextMessage;		// We have read the SP/SB line;
+
+			}
+			
+			Buffer[0] = 0;
+			fgets(Buffer, 99999, in);
+		}
+	}
+
+	fclose(in);
 }

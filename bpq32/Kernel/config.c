@@ -294,7 +294,7 @@ extern int HFCTEXTLEN;
 extern char LOCATOR[];
 extern char MAPCOMMENT[];
 extern char LOC[];
-extern int AXIPPort;
+extern int RFOnly = TRUE;
 
 extern int __cdecl main(int argc,char **argv,char **envp);
 extern int __cdecl decode_rec(char *rec);
@@ -493,6 +493,7 @@ char bbscall[11];
 char bbsalias[11];
 int bbsqual;
 
+BOOL LocSpecified = FALSE;
 
 /************************************************************************/
 /*   MAIN PROGRAM							*/
@@ -684,6 +685,11 @@ DllExport BOOL ProcessConfig()
 
 	fclose(fp1);
 
+	if (LOCATOR[0] == 0 && LocSpecified == 0 && RFOnly == 0)
+	{
+		MessageBox(NULL,"Please enter a LOCATOR statment in your BPQ32.cfg\rIf you really don't want to be on the Node Map you cam enter LOCATOR=NONE","BPQ32",MB_OK);
+	}
+
 	if (heading == 0)
 	{
 	   Consoleprintf("Conversion (probably) successful");
@@ -834,6 +840,11 @@ char rec[];
 		char * Context;		
 		char * ptr1 = strtok_s(&rec[7], " ,=\t\n\r:", &Context);
 		char * ptr2 = strtok_s(NULL, " ,=\t\n\r:", &Context);
+
+		LocSpecified = TRUE;
+
+		if (_memicmp(&rec[8], "NONE", 4) == 0)
+			return 0;
 
 		if (ptr1)
 		{
@@ -2061,6 +2072,9 @@ char rec[];
 	memcpy(PortRec->DLLNAME, workstring, 16);
 	PortRec->TYPE = 16;		// External
 
+	if (strstr(PortRec->DLLNAME, "TELNET") || strstr(PortRec->DLLNAME, "AXIP"))
+		RFOnly = FALSE;
+
 	return(1);
 }
 
@@ -2081,6 +2095,9 @@ int doDriver(int i, char * value, char * rec)
 
 	memcpy(PortRec->DLLNAME, workstring, 16);
 	PortRec->TYPE = 16;				// External
+
+	if (strstr(PortRec->DLLNAME, "TELNET") || strstr(PortRec->DLLNAME, "AXIP"))
+		RFOnly = FALSE;
 
 	return 1;
 }

@@ -362,6 +362,8 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 		wsprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
 	else if (TNC->Hardware == H_UZ7HO)
 		wsprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);
+	else if (TNC->Hardware == H_MPSK)
+		wsprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
 	else
 		wsprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);
 
@@ -510,6 +512,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	int Mode;
 	int Baud;
 	char BandWidth;
+	BOOL RPonPTC;
 
 	struct TimeScan ** TimeBands;	// List of TimeBands/Frequencies
 	char * ptr;
@@ -696,6 +699,15 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 							else
 								Mode = Report_P4;
 						}
+						if (Freqptr[0]->RPacketMode && TNC->RobustTime)
+						{
+							RPonPTC = TRUE;
+							if (Mode == 0)		// Just RP - no Pactor
+								Mode = Report_Robust;	
+						}
+						else
+							RPonPTC = FALSE;
+
 					}
 					else if (TNC->Hardware == H_KAM)
 					{
@@ -737,7 +749,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 					while (WL2KInfoPtr->Bandwidth)
 					{
-						if ((strcmp(WL2KInfoPtr->Freq, Valchar) == 0) && WL2KInfoPtr->Bandwidth == Mode)
+						if ((strcmp(WL2KInfoPtr->Freq, Valchar) == 0) && WL2KInfoPtr->Bandwidth == Mode && WL2KInfoPtr->RPonPTC == RPonPTC)
 						{
 							// Add timeband to freq. First see if contiguous hours
 
@@ -769,6 +781,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 					wsprintf(WL2KInfoPtr->TimeList, "%02d-%02d", HHStart, HHEnd);
 					WL2KInfoPtr->Bandwidth = Mode;
+					WL2KInfoPtr->RPonPTC = RPonPTC;
 			
 				gotfreq:
 
@@ -805,7 +818,7 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 				// Also report RP (Type 30) if scanning for rebust on PTC controllers
 				
-				if (TNC->Hardware == H_SCS && TNC->RobustTime)
+				if ((TNC->Hardware == H_SCS) && WL2KInfoPtr->RPonPTC && (WL2KInfoPtr->Bandwidth != 30))
 				{
 					wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 600, 0, 0, 0, 000, '%s', 1",
 						TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
@@ -826,7 +839,6 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	}
 	else
 	{
-
 		Baud = ModetoBaud[TNC->WL2KMode];
 		
 		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, %d, 100, 25, 0, 000, '%s', 1",
