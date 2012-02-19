@@ -699,11 +699,13 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 							else
 								Mode = Report_P4;
 						}
-						if (Freqptr[0]->RPacketMode && TNC->RobustTime)
+						if (Freqptr[0]->RPacketMode)
 						{
-							RPonPTC = TRUE;
 							if (Mode == 0)		// Just RP - no Pactor
-								Mode = Report_Robust;	
+								Mode = Report_Robust;
+							
+							if (TNC->RobustTime)
+								RPonPTC = TRUE;	// Need to report both Pactor and RP
 						}
 						else
 							RPonPTC = FALSE;

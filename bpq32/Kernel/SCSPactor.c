@@ -1790,6 +1790,7 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 		CRCStuffAndSend(TNC, Poll, 7);
 
 		TNC->HFPacket = FALSE;
+		TNC->Streams[0].DEDStream = 31;		// Pactor Channel
 
 		n = 0;
 		while (CheckRXHost(TNC) == FALSE)
