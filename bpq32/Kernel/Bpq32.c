@@ -432,6 +432,8 @@
 // Add Reread APRS Config
 // Fix switching to Pactor after scanning in normal packet mode (PTC)
 
+// 5.2.5.1 February 2012
+
 // Stop reading Password file.
 // Add extra MPSK commands 
 // Fix MPSK Transparency
@@ -439,6 +441,7 @@
 // Add MobileBeaconInterval APRS param
 // Send Course and Speed when APRS is using GPS
 // Fix Robust Packet reporting in PTC driver
+// FIx corruption of some MIC-E APRS packets
 
 #define Kernel
 #include "Versions.h"
@@ -942,7 +945,7 @@ VOID CheckforLostProcesses()
 			wsprintf(Log,"BPQ32 Process %d Died\n", ProcessID);
 			OutputDebugString(Log);
 
-			// Remove Tray Icom Entry
+			// Remove Tray Icon Entry
 
 			for( i = 0; i < 100; ++i )
 			{
@@ -1730,6 +1733,20 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 				SessionControl(i, 2, 0);
 				DeallocateStream(i);
+			}
+		}
+
+		// Remove any Tray Icon Entries
+
+		for( i = 0; i < 100; ++i )
+		{
+			if (PIDArray[i] == ProcessID)
+			{
+				char Log[80];
+				hWndArray[i] = 0;
+				wsprintf(Log,"BPQ32 Removing Tray Item %s\n", PopupText[i]);
+				OutputDebugString(Log);
+				DeleteMenu(trayMenu,40000+i,MF_BYCOMMAND);
 			}
 		}
 

@@ -2630,7 +2630,7 @@ BOOL ProcessAPPLDef(char * buf)
 
 	Appl = atoi(ptr);
 
-	if (Appl < 1 || Appl > 31) return FALSE;
+	if (Appl < 1 || Appl > 32) return FALSE;
 
 	App = (struct APPLCONFIG *)&Buffer[ApplOffset + (Appl - 1) * sizeof(struct APPLCONFIG) ];
 

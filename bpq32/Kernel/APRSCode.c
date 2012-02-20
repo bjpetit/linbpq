@@ -41,7 +41,7 @@ UINT ReleaseBuffer(UINT *BUFF);
 UINT * Q_REM(UINT *Q);
 int C_Q_ADD(UINT *Q,UINT *BUFF);
 int C_Q_COUNT(UINT *Q);
-int TelDecodeFrame(char * msg, char * buffer, int Stamp);		// Unsemaphored DecodeFrame
+int APRSDecodeFrame(char * msg, char * buffer, int Stamp);		// Unsemaphored DecodeFrame
 struct APRSSTATIONRECORD * UpdateHeard(UCHAR * Call, int Port);
 BOOL CheckforDups(char * Call, char * Msg, int Len);
 VOID ProcessQuery(char * Query);
@@ -64,6 +64,7 @@ void GetSemaphore();
 void FreeSemaphore();
 
 extern int SemHeldByAPI;
+extern int APRSMONDECODE();
 
 // All data should be initialised to force into shared segment
 
@@ -371,7 +372,6 @@ Dll VOID APIENTRY Poll_APRS()
 		char * Payload;
 		char * ptr3;
 		char * ptr4;
-		ULONG SaveMMASK = MMASK; 
 		BOOL ThirdParty = FALSE;
 		BOOL NoGate = FALSE;
 		struct APRSSTATIONRECORD * MH;
@@ -455,9 +455,7 @@ Dll VOID APIENTRY Poll_APRS()
 
 		// Decode Frame to TNC2 Monitor Format
 
-		MMASK = 0xffff;
-		len = TelDecodeFrame((char *)monchars,  buffer, stamp);
-		MMASK = SaveMMASK;
+		len = APRSDecodeFrame((char *)monchars,  buffer, stamp);
 
 		if(len == 0)
 		{
@@ -2428,3 +2426,29 @@ Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon)
 	return GPSOK;
 }
 
+
+int APRSDecodeFrame(char * msg, char * buffer, int Stamp)
+{
+	UINT returnit;
+
+	_asm {
+
+	pushfd
+	cld
+	pushad
+
+	mov	esi,msg
+	mov	eax,Stamp
+	mov	edi,buffer
+
+	call	APRSMONDECODE
+
+	mov	returnit,ecx
+
+	popad
+	popfd
+
+	}				// End of ASM
+
+	return (returnit);
+}
