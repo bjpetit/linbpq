@@ -91,7 +91,10 @@
 #define ID_ACTION_RESETWINDOWSPLIT      30009
 
 #define IDR_MAINFRAME_MENU              191
-#define TERM_MENU 192
+#define TERM_MENU						192
+#define MON_MENU						193
+#define CONS_MENU						194
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

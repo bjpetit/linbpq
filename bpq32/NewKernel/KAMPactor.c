@@ -413,10 +413,7 @@ int KAMExtProc(int fn, int port,unsigned char * buff)
 		EncodeAndSend(TNC, "Q", 1);			// Exit Host Mode
 		Sleep(50);
 
-		CloseHandle(TNCInfo[port]->hDevice);
-
-		SaveWindowPos(port);
-		
+		CloseHandle(TNCInfo[port]->hDevice);		
 		return (0);
 
 	case 6:				// Scan Control

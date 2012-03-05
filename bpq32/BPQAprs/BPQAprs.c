@@ -14,6 +14,10 @@
 // Allow suppression of tracks
 // Add option to Select track colour
 
+// Feb 2012
+
+// Mods to use MapQuest's jpeg tiles
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
 
@@ -68,6 +72,7 @@ int ExpireTime = 120;
 int TrackExpireTime = 1440;
 BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
+BOOL LocalTime = TRUE;
 
 char WXFileName[MAX_PATH];
 char WXComment[80];
@@ -103,7 +108,6 @@ DLGTEMPLATE *apRes[33];
 } DLGHDR;
 
 // Station Name Font
-
 
 const unsigned char ASCII[][5] = {
 //const u08 ASCII[][5]  = {
@@ -216,6 +220,9 @@ COLORREF Colours[256] = {0, RGB(0,0,255), RGB(0,128,0), RGB(0,128,192),
 extern unsigned __int64 IconData[];
 extern int IconDataLen;
 
+extern unsigned __int64 DummyData[];
+extern int DummyDataLen;
+
 // function prototypes
 
 LRESULT CALLBACK WndProc (HWND, UINT, WPARAM, LPARAM);
@@ -250,6 +257,7 @@ char APRSDir[MAX_PATH];
 char OSMDir[MAX_PATH];
 char APRSDir[MAX_PATH];
 char Symbols[MAX_PATH];
+char DF[MAX_PATH];
 
 static png_color bkgColor = {127, 127, 127};
 static BOOL bStretched = FALSE;
@@ -372,6 +380,8 @@ double Bearing(double laa, double loa);
 VOID CreateStationPopup(struct STATIONRECORD * ptr, int MouseX, int MouseY);
 INT_PTR CALLBACK ColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+BYTE * JpegFileToRGB(char * fileName, UINT *width, UINT *height);
+
 VOID SendWeatherBeacon();
 VOID DecodeWXPortList();
 
@@ -406,7 +416,6 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
-
 VOID CreateIconFile()
 {
 	HANDLE Handle;
@@ -418,6 +427,22 @@ VOID CreateIconFile()
 		return;
 		
 	WriteFile(Handle, (UCHAR *)IconData, IconDataLen, &Len, NULL); 
+
+	SetEndOfFile(Handle);
+	CloseHandle(Handle);
+}
+
+VOID CreateDummyTile()
+{
+	HANDLE Handle;
+	int Len;
+
+	Handle = CreateFile(DF, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (Handle == INVALID_HANDLE_VALUE)
+		return;
+		
+	WriteFile(Handle, (UCHAR *)DummyData, DummyDataLen, &Len, NULL); 
 
 	SetEndOfFile(Handle);
 	CloseHandle(Handle);
@@ -439,15 +464,16 @@ VOID CreateIconSource()
 	ReadFile(Handle, (UCHAR *)File, 20000, &Len, NULL); 
 	CloseHandle(Handle);
 
-	Handle = CreateFile("d:ARPSIconData.c", GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+//	Handle = CreateFile("d:ARPSIconData.c", GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	Handle = CreateFile("d:ARPSDummyData.c", GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	
-	n = wsprintf (Line, "int IconDataLen = %d;\r\n", Len);
+	n = wsprintf (Line, "int DummyDataLen = %d;\r\n", Len);
 
 	WriteFile(Handle, Line ,n , &n, NULL);
 
 	Len = (Len + 7) /8;
 
-	n = wsprintf (Line, "unsigned __int64 IconData[%d] = {\r\n", Len);
+	n = wsprintf (Line, "unsigned __int64 DummyData[%d] = {\r\n", Len);
 
 	WriteFile(Handle, Line ,n , &n, NULL);
 
@@ -540,9 +566,6 @@ BOOL CentrePosition(double Lat, double Lon)
 	ReloadMaps = TRUE;
 	InvalidateRect(hMapWnd, NULL, FALSE);
 
-	Debugprintf("After COS Base %d %d Scroll %d %d", SetBaseX, SetBaseY, ScrollX, ScrollY);
-
-
 	return TRUE;
 }
 
@@ -589,8 +612,6 @@ BOOL CentrePositionToMouse(double Lat, double Lon)
 			SetBaseY--;
 			ScrollY += 256;
 		}
-
-		Debugprintf("After COM Base %d %d Scroll %d %d", SetBaseX, SetBaseY, ScrollX, ScrollY);
 
 		ReloadMaps = TRUE;
 	}
@@ -847,6 +868,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	wsprintf(OSMDir, "%s/OSMTiles", APRSDir);
 
 	wsprintf(Symbols, "%s/Symbols.png", APRSDir);
+//	wsprintf(Symbols, "%s/OSMTiles/DummyTile.jpg", APRSDir);
 
 //	CreateIconSource();
 
@@ -875,6 +897,16 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	}
 
 	Zoom = 2;
+
+	wsprintf(DF, "%s/OSMTiles/DummyTile.jpg", APRSDir);
+
+	if (GetFileAttributes(DF) == INVALID_FILE_ATTRIBUTES)
+	{
+		// Create Dummy Tile
+
+		Debugprintf("Creating %s", DF);
+		CreateDummyTile();
+	}
 
 	// Get config from Registry 
 
@@ -958,6 +990,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		retCode = RegQueryValueEx(hKey, "WXEnabled", 0, &Type,(UCHAR *)&SendWX, &Vallen);
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "WXInterval", 0, &Type,(UCHAR *)&WXInterval, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "LocalTime", 0, &Type,(UCHAR *)&LocalTime, &Vallen);
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "SuppressNullPosn", 0, &Type,(UCHAR *)&SuppressNullPosn, &Vallen);
 		Vallen=4;
@@ -1190,6 +1224,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		CheckDlgButton(hDlg, IDC_SENDWX, SendWX);
 		CheckDlgButton(hDlg, IDC_SUPZERO, SuppressNullPosn);
 		CheckDlgButton(hDlg, IDC_NOTRACKS, DefaultNoTracks);
+		CheckDlgButton(hDlg, IDC_LOCALTIME, LocalTime);	
 					
 		EnableWindow(GetDlgItem(hDlg, IDC_WXFILE), SendWX);
 		EnableWindow(GetDlgItem(hDlg, IDC_WXTEXT), SendWX);
@@ -1234,6 +1269,10 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			SuppressNullPosn = IsDlgButtonChecked(hDlg, IDC_SUPZERO);
 			break;
 
+		case IDC_LOCALTIME:
+	
+			LocalTime = IsDlgButtonChecked(hDlg, IDC_LOCALTIME);
+			break;
 
 		case IDC_NOTRACKS:
 
@@ -1269,6 +1308,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			retCode = RegSetValueEx(hKey, "WXEnabled", 0, REG_DWORD, (BYTE *)&SendWX, 4);
 			retCode = RegSetValueEx(hKey, "SuppressNullPosn", 0, REG_DWORD, (BYTE *)&SuppressNullPosn, 4);
 			retCode = RegSetValueEx(hKey, "DefaultNoTracks", 0, REG_DWORD, (BYTE *)&DefaultNoTracks, 4);
+			retCode = RegSetValueEx(hKey, "LocalTime", 0, REG_DWORD, (BYTE *)&LocalTime, 4);
 
 			APRSConnect(APRSCall, ISFilter);			// Will resend Filter
 
@@ -2614,6 +2654,7 @@ VOID ResolveThread()
 }
 
 char Header[] = "Accept: */*\r\nHost: otile1.mqcdn.com\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
+//char Header[] = "Accept: */*\r\nHost: tile.openstreetmap.org\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 
 VOID OSMGet(int x, int y, int zoom)
 {
@@ -2675,9 +2716,9 @@ VOID OSMThread()
 		free(OSMRec);
 
 //		wsprintf(Tile, "/%02d/%d/%d.png", Zoom, x, y);
-		wsprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.png", Zoom, x, y);
+		wsprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
 	
-		wsprintf(FN, "%s/%02d/%d/%d.png", OSMDir, Zoom, x, y);
+		wsprintf(FN, "%s/%02d/%d/%d.jpg", OSMDir, Zoom, x, y);
 
 		if (GetFileAttributes(FN) != INVALID_FILE_ATTRIBUTES)
 		{
@@ -2816,6 +2857,9 @@ VOID OSMThread()
 					}
 				}
 				Debugprintf("OSM GET Bad Response");
+				wsprintf(FN, "%s/DummyTile.jpg", OSMDir);
+				RefreshTile(FN, Zoom, x, y);
+
 			
 				break;
 			}
@@ -2841,6 +2885,7 @@ VOID LoadImageTile(int Zoom, int startx, int starty, int x, int y)
 	char Tile[100];
 	UCHAR * pbImage = NULL;
 	int ImgChannels;
+	BOOL JPG=FALSE;
 
 	int Limit = (int)pow(2, Zoom);
 
@@ -2862,32 +2907,53 @@ VOID LoadImageTile(int Zoom, int startx, int starty, int x, int y)
 	if (y < 0 || y > 8)
 		y = 3;
 	
+	if ((startx + x) >= Limit || (starty + y) >= Limit || startx + x < 0 || starty + y < 0)
+	{
+		if (pbImage)
+			free(pbImage);
+		pbImage = NULL;
+		goto NoFile;
+	}
+
+	// May have png or jpg tiles
+
 	wsprintf(Tile, "/%02d/%d/%d.png", Zoom, startx + x, starty + y);
+	wsprintf(FN, "%s%s", OSMDir, Tile);
 
-			if ((startx + x) >= Limit || (starty + y) >= Limit || startx + x < 0 || starty + y < 0)
+	if (GetFileAttributes(FN) != INVALID_FILE_ATTRIBUTES)
+		goto gotfile;
+
+	// Try jpg
+
+	wsprintf(Tile, "/%02d/%d/%d.jpg", Zoom, startx + x, starty + y);
+	wsprintf(FN, "%s%s", OSMDir, Tile);
+
+	JPG = TRUE;
+
+	if (GetFileAttributes(FN) == INVALID_FILE_ATTRIBUTES)
+	{
+		// Not got it yet
+
+		OSMGet(startx + x, starty + y, Zoom);
+		pbImage = malloc(256 * 3 * 256);
+		memset(pbImage, 0x80, 256 * 3 * 256);
+		ImgChannels = 3;
+
+		goto NoFile;
+	}
+
+gotfile:
+
+		__try
 			{
-				if (pbImage)
-					free(pbImage);
-				pbImage = NULL;
-				goto NoFile;
-			}
-			wsprintf(FN, "%s%s", OSMDir, Tile);
+				if (JPG)
+				{
+					pbImage =  JpegFileToRGB(FN, &cxImgSize, &cyImgSize);
+					ImgChannels = 3;
+				}
+				else
+					LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
 
-			if (GetFileAttributes(FN) == INVALID_FILE_ATTRIBUTES)
-			{
-				// Not got it yet
-
-				OSMGet(startx + x, starty + y, Zoom);
-				pbImage = malloc(256 * 3 * 256);
-				memset(pbImage, 0x80, 256 * 3 * 256);
-				ImgChannels = 3;
-
-				goto NoFile;
-			}
-
-			__try {
-				
-				LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
 			}
 			__except (EXCEPTION_EXECUTE_HANDLER)
 			{
@@ -3059,7 +3125,9 @@ VOID RefreshTile(char * FN, int TileZoom, int Tilex, int Tiley)
 
 	__try
 	{				
-		LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
+//		LoadImageFile (NULL, FN, &pbImage, &cxImgSize, &cyImgSize, &ImgChannels, &bkgColor);
+		pbImage =  JpegFileToRGB(FN, &cxImgSize, &cyImgSize);
+		ImgChannels = 3;
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
@@ -3367,6 +3435,9 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 		if (X < 8 || Y < 8 || X > 2030 || Y > 2030)
 			return;				// Too close to edges
 
+		if (ptr->Trackptr > 40)
+			j = 0;
+
 		if (ptr->LatTrack[0] && ptr->NoTracks == FALSE)
 		{
 			// Draw Track
@@ -3387,7 +3458,8 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 					{
 						if (LastX)
 						{
-							LineDDA(LastX, LastY, X, Y, LineDDAProc, (LPARAM) Colours[ptr->TrackColour]);
+							if (abs(X - LastX) < 600 && abs(Y - LastY) < 600)
+								LineDDA(LastX, LastY, X, Y, LineDDAProc, (LPARAM) Colours[ptr->TrackColour]);
 						}
 
 						LastX = X;
@@ -3610,7 +3682,10 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int X, int Y)
 
 	CurrentPopup = ptr;
 		
-	TM = gmtime(&ptr->TimeLastUpdated);
+	if (LocalTime)
+		TM = localtime(&ptr->TimeLastUpdated);
+	else
+		TM = gmtime(&ptr->TimeLastUpdated);
 
 	wsprintf(Msg, "Last Heard: %.2d:%.2d:%.2d on Port %d",
 		TM->tm_hour, TM->tm_min, TM->tm_sec, (LPARAM)ptr->LastPort);
@@ -3764,10 +3839,18 @@ void RefreshStation(struct STATIONRECORD * ptr)
 	if (ptr->ObjState == '_')	// Killed Object
 		return;
 
-	TM = gmtime(&ptr->TimeLastUpdated);
+	if (LocalTime)
+		TM = localtime(&ptr->TimeLastUpdated);
+	else
+		TM = gmtime(&ptr->TimeLastUpdated);
 
+#ifdef _DEBUG	
+	wsprintf(Time, "%.2d:%.2d:%.2d TP %d",
+			TM->tm_hour, TM->tm_min, TM->tm_sec, ptr->Trackptr);
+#else
 	wsprintf(Time, "%.2d:%.2d:%.2d",
 			TM->tm_hour, TM->tm_min, TM->tm_sec);
+#endif
 
 	Finfo.flags = LVFI_STRING;
 	Finfo.psz = ptr->Callsign;
@@ -4186,7 +4269,7 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 		time_t NOW = time(NULL);
 		time_t Age = NOW - Station->TimeLastUpdated;
 
-		if (Age > 30)				// Don't update too often
+		if (Age > 15)				// Don't update too often
 		{
 			// Add to track
 
@@ -4232,6 +4315,9 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 	char * ObjName;
 	char ObjState;
 	struct STATIONRECORD * Object;
+	BOOL Item = FALSE;
+	char * ptr;
+	
 
 	switch(*Payload)
 	{
@@ -4245,6 +4331,47 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 	case '$':					// NMEA
 		break;
+
+	case ')':					// Item	
+
+		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
+
+		Item = TRUE;
+		ObjName = ptr = Payload + 1;
+
+		while (TRUE)
+		{
+			ObjState = *ptr;
+			if (ObjState == 0)
+				return;					// Corrupt
+
+			if (ObjState == '!' || ObjState == '_')	// Item Terminator
+				break;
+
+			ptr++;
+		}
+
+		*ptr = 0;						// Terminate Name
+
+		Object = FindStation(ObjName);
+		Object->ObjState = *ptr++ = ObjState;
+
+		strcpy(Object->Path, Station->Callsign);
+		strcat(Object->Path, ">");
+		strcat(Object->Path, Station->Path);
+
+		strcpy(Object->LastPacket, Payload);
+
+		if (ObjState != '_')		// Deleted Objects may have odd positions
+			DecodeLocationString(ptr, Object);
+
+		
+		Object->TimeLastUpdated = time(NULL);
+		DrawStation(Object);
+		RefreshStation(Object);
+
+		return;
+
 
 	case ';':					// Object
 
@@ -4286,12 +4413,19 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		DecodeLocationString(Payload, Station);
 		return;	
 
-	case ':':
+	case '>':				// Status
+	case '<':				// Capabilities
+	case '_':				// Weather
+	case 'T':				// Telemetry
 
+		break;
+
+	case ':':
 		ProcessMessage(Payload, Station);
 		break;
 
 	default:
+		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
 		return;
 	}
 }
@@ -4337,6 +4471,9 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 		if (c == '?')			// Illegal
 			return;
 
+		if (c == ' ')
+			c = '0';			// Limited Precision
+		
 		Lat[i] = c;
 
 	}
@@ -4424,19 +4561,28 @@ VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
 
 //	Debugprintf("MIC-E Course/Speed %s %d %d", Station->Callsign, Course, Speed);
 
-
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
-		// Add to track
+		time_t NOW = time(NULL);
+		time_t Age = NOW - Station->TimeLastUpdated;
 
-		Station->LatTrack[Station->Trackptr] = NewLat;
-		Station->LonTrack[Station->Trackptr] = NewLon;
+		if (Age > 15)				// Don't update too often
+		{
+			// Add to track
 
-		Station->Trackptr++;
-		Station->Moved = TRUE;
+//			if (memcmp(Station->Callsign, "ISS ", 4) == 0)
+//				Debugprintf("%s %s %s ",Station->Callsign, Station->Path, Station->LastPacket);
 
-		if (Station->Trackptr == TRACKPOINTS)
-			Station->Trackptr = 0;
+			Station->LatTrack[Station->Trackptr] = NewLat;
+			Station->LonTrack[Station->Trackptr] = NewLon;
+			Station->TrackTime[Station->Trackptr] = NOW;
+
+			Station->Trackptr++;
+			Station->Moved = TRUE;
+
+			if (Station->Trackptr == TRACKPOINTS)
+				Station->Trackptr = 0;
+		}
 
 		Station->Lat = NewLat;
 		Station->Lon = NewLon;
@@ -4831,10 +4977,6 @@ VOID APRSPoll()
 		
 		if (Port == 0)
 		{
-			if (memcmp(APRSMsg, "JA0GTA-10", 9) == 0)
-			{
-				Debugprintf(APRSMsg);
-			}
 			DecodeAPRSISMsg(APRSMsg);
 		}
 		else
@@ -5368,7 +5510,12 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 	strcpy(Message->Text, TextPtr);
 		
 	NOW = time(NULL);
-	TM = gmtime(&NOW);					
+
+	if (LocalTime)
+		TM = localtime(&NOW);
+	else
+		TM = gmtime(&NOW);
+					
 	wsprintf(Message->Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
 
 	if (_stricmp(MsgDest, APRSCall) == 0 && SeqPtr)	// ack it if it has a sequence
@@ -5665,8 +5812,12 @@ VOID SendWeatherBeacon()
 	char * WXptr;
 	char * WXend;
 	struct tm rtime;
-	time_t WXTime;
+	time_t WXTime, TempTime;
 	char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+	FILETIME LastWriteTime;
+	LARGE_INTEGER ft;
+	time_t now = time(NULL);
+	SYSTEMTIME SystemTime;
 
 	WXCounter++;
 
@@ -5675,16 +5826,34 @@ VOID SendWeatherBeacon()
 
 	WXCounter = 0;
 
+	Debugprintf("BPQAPRS - Trying to open WX file %s", WXFileName);
+
 	Handle = CreateFile(WXFileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (Handle == INVALID_HANDLE_VALUE)
+	{
+		Debugprintf("BPQAPRS - Open WX file %s failed %d", WXFileName, GetLastError());
 		return;
-		
+	}
+
+	GetFileTime(Handle, NULL, NULL, &LastWriteTime);
+
+	ft.HighPart = LastWriteTime.dwHighDateTime;
+	ft.LowPart = LastWriteTime.dwLowDateTime;
+
+	ft.QuadPart -=  116444736000000000;
+	ft.QuadPart /= 10000000;
+
+	WXTime = (now - ft.QuadPart) / 60;		// Minutes 
+
 	ReadFile(Handle, WXMessage, 1024, &Len, NULL); 
 	CloseHandle(Handle);
 
 	if (Len < 30)
+	{
+		Debugprintf("BPQAPRS - WX file is too short - %d Chars", Len);
 		return;
+	}
 
 	WXptr = strchr(WXMessage, 10);
 
@@ -5695,38 +5864,67 @@ VOID SendWeatherBeacon()
 			*WXend = 0;
 	}
 
-	memcpy(DD, &WXMessage[4], 2);
-	memcpy(HH, &WXMessage[12], 2);
-	memcpy(MM, &WXMessage[15], 2);
-
-	memset(&rtime, 0, sizeof(struct tm));
-
-	rtime.tm_year = atoi(&WXMessage[7]) - 1900;
-	
-	for (i=0; i < 12; i++)
+	if (WXMessage[0] != '*')
 	{
-		if (memcmp(month[i], WXMessage, 3) == 0)
-		{
-			rtime.tm_mon = i;
-			break;
-		}
-	}
-
-	rtime.tm_mday = atoi(DD);
-	rtime.tm_hour = atoi(HH);
-	rtime.tm_min = atoi(MM);
-
-	if ((WXTime = _mkgmtime(&rtime)) != (time_t)-1 )
-	{
-		WXTime = (time(NULL) - WXTime) / 60;		// Age in Minutes
-		if (WXTime > (3 * WXInterval))
-			return;
-
-		GetAPRSLatLonString(Lat, Lon);
+		// Get Timestamp from file
 
 		memcpy(DD, &WXMessage[4], 2);
 		memcpy(HH, &WXMessage[12], 2);
 		memcpy(MM, &WXMessage[15], 2);
+
+		memset(&rtime, 0, sizeof(struct tm));
+
+		rtime.tm_year = atoi(&WXMessage[7]) - 1900;
+	
+		for (i=0; i < 12; i++)
+		{
+			if (memcmp(month[i], WXMessage, 3) == 0)
+			{
+				rtime.tm_mon = i;
+				break;
+			}
+		}
+
+		rtime.tm_mday = atoi(DD);
+		rtime.tm_hour = atoi(HH);
+		rtime.tm_min = atoi(MM);
+
+		TempTime = _mkgmtime(&rtime);
+
+		if (TempTime != (time_t)-1)
+		{
+			WXTime = (now - TempTime) / 60;		// Age in Minutes
+		}
+
+		if (WXTime > (3 * WXInterval))
+		{
+			Debugprintf("APRS Send WX File too old - %d minutes");
+			return;
+		}
+
+		memcpy(DD, &WXMessage[4], 2);
+		memcpy(HH, &WXMessage[12], 2);
+		memcpy(MM, &WXMessage[15], 2);
+	}
+	else
+	{
+		if (WXTime > (3 * WXInterval))
+		{
+			Debugprintf("APRS Send WX File too old - %d minutes", WXTime );
+			return;
+		}
+
+		// Get DDHHMM from Filetime
+
+		FileTimeToSystemTime(&LastWriteTime, &SystemTime);
+
+		sprintf(DD, "%02d", SystemTime.wDay);
+		sprintf(HH, "%02d", SystemTime.wHour);
+		sprintf(MM, "%02d", SystemTime.wMinute);
+
+	}
+
+		GetAPRSLatLonString(Lat, Lon);
 
 		Len = wsprintf(Msg, "@%s%s%sz%s/%s_%s%s", DD, HH, MM, Lat, Lon, WXptr, WXComment);
 
@@ -5735,7 +5933,7 @@ VOID SendWeatherBeacon()
 		for (index = 0; index < 32; index++)
 			if (WXPort[index])
 				Len = PutAPRSFrame(Msg, Len, index);
-	}
+	
 }
 
 
@@ -5875,6 +6073,303 @@ INT_PTR CALLBACK ColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 	}
 	return FALSE;
 }
+
+#define HAVE_PROTOTYPES
+#define HAVE_UNSIGNED_CHAR
+#define HAVE_UNSIGNED_SHORT
+/* #define void char */
+/* #define const */
+#undef CHAR_IS_UNSIGNED
+#define HAVE_STDDEF_H
+#define HAVE_STDLIB_H
+#undef NEED_BSD_STRINGS
+#undef NEED_SYS_TYPES_H
+#undef NEED_FAR_POINTERS	/* we presume a 32-bit flat memory model */
+#undef NEED_SHORT_EXTERNAL_NAMES
+#undef INCOMPLETE_TYPES_BROKEN
+
+/* Define "boolean" as unsigned char, not int, per Windows custom */
+#ifndef __RPCNDR_H__		/* don't conflict if rpcndr.h already read */
+typedef unsigned char boolean;
+#endif
+#define HAVE_BOOLEAN		/* prevent jmorecfg.h from redefining it */
+
+#ifdef JPEG_INTERNALS
+
+#undef RIGHT_SHIFT_IS_UNSIGNED
+
+#endif /* JPEG_INTERNALS */
+
+#ifdef JPEG_CJPEG_DJPEG
+
+#define BMP_SUPPORTED		/* BMP image file format */
+#define GIF_SUPPORTED		/* GIF image file format */
+#define PPM_SUPPORTED		/* PBMPLUS PPM/PGM image file format */
+#undef RLE_SUPPORTED		/* Utah RLE image file format */
+#define TARGA_SUPPORTED		/* Targa image file format */
+
+#define TWO_FILE_COMMANDLINE	/* optional */
+#define USE_SETMODE		/* Microsoft has setmode() */
+#undef NEED_SIGNAL_CATCHER
+#undef DONT_USE_B_MODE
+#undef PROGRESS_REPORT		/* optional */
+
+#endif /* JPEG_CJPEG_DJPEG */
+
+
+#include "jpeglib.h"
+
+struct my_error_mgr {
+  struct jpeg_error_mgr pub;	/* "public" fields */
+
+  jmp_buf setjmp_buffer;	/* for return to caller */
+};
+
+typedef struct my_error_mgr * my_error_ptr;
+
+void my_error_exit (j_common_ptr cinfo)
+{
+	/* cinfo->err really points to a my_error_mgr struct, so coerce pointer */
+	my_error_ptr myerr = (my_error_ptr) cinfo->err;
+
+	char buffer[JMSG_LENGTH_MAX];
+
+	/* Create the message */
+	(*cinfo->err->format_message) (cinfo, buffer);
+
+	/* Always display the message. */
+	MessageBox(NULL,buffer,"JPEG Fatal Error",MB_ICONSTOP);
+
+
+	/* Return control to the setjmp point */
+	longjmp(myerr->setjmp_buffer, 1);
+}
+
+
+void j_putRGBScanline(BYTE *jpegline, 
+					 int widthPix,
+					 BYTE *outBuf,
+					 int row)
+{
+	int offset = row * widthPix * 3;
+	int count;
+	for (count=0;count<widthPix;count++) 
+	{
+		*(outBuf + offset + count * 3 + 0) = *(jpegline + count * 3 + 0);
+		*(outBuf + offset + count * 3 + 1) = *(jpegline + count * 3 + 1);
+		*(outBuf + offset + count * 3 + 2) = *(jpegline + count * 3 + 2);
+	}
+}
+
+//
+//	stash a gray scanline
+//
+
+void j_putGrayScanlineToRGB(BYTE *jpegline, 
+							 int widthPix,
+							 BYTE *outBuf,
+							 int row)
+{
+	int offset = row * widthPix * 3;
+	int count;
+	for (count=0;count<widthPix;count++) {
+
+		BYTE iGray;
+
+		// get our grayscale value
+		iGray = *(jpegline + count);
+
+		*(outBuf + offset + count * 3 + 0) = iGray;
+		*(outBuf + offset + count * 3 + 1) = iGray;
+		*(outBuf + offset + count * 3 + 2) = iGray;
+	}
+}
+
+
+//
+//	read a JPEG file
+//
+
+BYTE * JpegFileToRGB(char * fileName, UINT *width, UINT *height)
+
+{
+	/* This struct contains the JPEG decompression parameters and pointers to
+	* working space (which is allocated as needed by the JPEG library).
+	*/
+	struct jpeg_decompress_struct cinfo;
+	/* We use our private extension JPEG error handler.
+	* Note that this struct must live as long as the main JPEG parameter
+	* struct, to avoid dangling-pointer problems.
+	*/
+	struct my_error_mgr jerr;
+	/* More stuff */
+	FILE * infile=NULL;		/* source file */
+
+	JSAMPARRAY buffer;		/* Output row buffer */
+	int row_stride;		/* physical row width in output buffer */
+	char buf[250];
+	BYTE *dataBuf;
+
+	// basic code from IJG Jpeg Code v6 example.c
+
+	*width=0;
+	*height=0;
+
+	/* In this example we want to open the input file before doing anything else,
+	* so that the setjmp() error recovery below can assume the file is open.
+	* VERY IMPORTANT: use "b" option to fopen() if you are on a machine that
+	* requires it in order to read binary files.
+	*/
+
+	if ((infile = fopen(fileName, "rb")) == NULL) {
+		sprintf(buf, "JPEG :\nCan't open %s\n", fileName);
+		MessageBox(NULL, buf, "BPQAPRS", MB_ICONSTOP);
+		return NULL;
+	}
+
+	/* Step 1: allocate and initialize JPEG decompression object */
+
+	/* We set up the normal JPEG error routines, then override error_exit. */
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = my_error_exit;
+
+
+	/* Establish the setjmp return context for my_error_exit to use. */
+	if (setjmp(jerr.setjmp_buffer)) {
+		/* If we get here, the JPEG code has signaled an error.
+		 * We need to clean up the JPEG object, close the input file, and return.
+		 */
+
+		jpeg_destroy_decompress(&cinfo);
+
+		if (infile!=NULL)
+			fclose(infile);
+		return NULL;
+	}
+
+	/* Now we can initialize the JPEG decompression object. */
+	jpeg_create_decompress(&cinfo);
+
+	/* Step 2: specify data source (eg, a file) */
+
+	jpeg_stdio_src(&cinfo, infile);
+
+	/* Step 3: read file parameters with jpeg_read_header() */
+
+	(void) jpeg_read_header(&cinfo, TRUE);
+	/* We can ignore the return value from jpeg_read_header since
+	*   (a) suspension is not possible with the stdio data source, and
+	*   (b) we passed TRUE to reject a tables-only JPEG file as an error.
+	* See libjpeg.doc for more info.
+	*/
+
+	/* Step 4: set parameters for decompression */
+
+	/* In this example, we don't need to change any of the defaults set by
+	* jpeg_read_header(), so we do nothing here.
+	*/
+
+	/* Step 5: Start decompressor */
+
+	(void) jpeg_start_decompress(&cinfo);
+	/* We can ignore the return value since suspension is not possible
+	* with the stdio data source.
+	*/
+
+	/* We may need to do some setup of our own at this point before reading
+	* the data.  After jpeg_start_decompress() we have the correct scaled
+	* output image dimensions available, as well as the output colormap
+	* if we asked for color quantization.
+	* In this example, we need to make an output work buffer of the right size.
+	*/ 
+
+	// get our buffer set to hold data
+
+	////////////////////////////////////////////////////////////
+	// alloc and open our new buffer
+	dataBuf = malloc(cinfo.output_width * 3 * cinfo.output_height);
+	if (dataBuf==NULL) {
+
+		MessageBox(NULL, "JpegFile :\nOut of memory", "BPQAPRS", MB_ICONSTOP);
+
+		jpeg_destroy_decompress(&cinfo);
+		
+		fclose(infile);
+
+		return NULL;
+	}
+
+	// how big is this thing gonna be?
+	*width = cinfo.output_width;
+	*height = cinfo.output_height;
+	
+	/* JSAMPLEs per row in output buffer */
+	row_stride = cinfo.output_width * cinfo.output_components;
+
+	/* Make a one-row-high sample array that will go away when done with image */
+	buffer = (*cinfo.mem->alloc_sarray)
+		((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
+
+	/* Step 6: while (scan lines remain to be read) */
+	/*           jpeg_read_scanlines(...); */
+
+	/* Here we use the library's state variable cinfo.output_scanline as the
+	* loop counter, so that we don't have to keep track ourselves.
+	*/
+	while (cinfo.output_scanline < cinfo.output_height) {
+		/* jpeg_read_scanlines expects an array of pointers to scanlines.
+		 * Here the array is only one element long, but you could ask for
+		 * more than one scanline at a time if that's more convenient.
+		 */
+		(void) jpeg_read_scanlines(&cinfo, buffer, 1);
+		/* Assume put_scanline_someplace wants a pointer and sample count. */
+
+		// asuumer all 3-components are RGBs
+		if (cinfo.out_color_components==3) {
+			
+			j_putRGBScanline(buffer[0], 
+								*width,
+								dataBuf,
+								cinfo.output_scanline-1);
+
+		} else if (cinfo.out_color_components==1) {
+
+			// assume all single component images are grayscale
+			j_putGrayScanlineToRGB(buffer[0], 
+								*width,
+								dataBuf,
+								cinfo.output_scanline-1);
+
+		}
+
+	}
+
+	/* Step 7: Finish decompression */
+
+	(void) jpeg_finish_decompress(&cinfo);
+	/* We can ignore the return value since suspension is not possible
+	* with the stdio data source.
+	*/
+
+	/* Step 8: Release JPEG decompression object */
+
+	/* This is an important step since it will release a good deal of memory. */
+	jpeg_destroy_decompress(&cinfo);
+
+	/* After finish_decompress, we can close the input file.
+	* Here we postpone it until after no more JPEG errors are possible,
+	* so as to simplify the setjmp error logic above.  (Actually, I don't
+	* think that jpeg_destroy can do an error exit, but why assume anything...)
+	*/
+	fclose(infile);
+
+	/* At this point you may want to check to see whether any corrupt-data
+	* warnings occurred (test whether jerr.pub.num_warnings is nonzero).
+	*/
+
+	return dataBuf;
+}
+
 
 
 

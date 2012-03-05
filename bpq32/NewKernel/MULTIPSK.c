@@ -577,8 +577,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		closesocket(TNC->WINMORSock);
 		TNC->CONNECTED = FALSE;
 
-		SaveWindowPos(port);
-
 		if (TNC->WIMMORPID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
@@ -593,8 +591,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		Sleep(100);
 
 		closesocket(TNC->WINMORSock);
-
-		SaveWindowPos(port);
 
 		if (TNC->WIMMORPID && TNC->WeStartedTNC)
 		{

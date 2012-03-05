@@ -27,7 +27,7 @@ struct ScanEntry
 	char Antenna;
 	char Supress;		// Dont report this one to WL2K
 	char * Cmd1;
-	int xCmd1Len;
+	int Cmd1Len;
 	char * Cmd2;
 	int xCmd2Len;
 	char * Cmd3;
@@ -92,6 +92,12 @@ struct RIGINFO
 	double RigFreq;
 	char Valchar[15];			// Freq as char string
 	char CurrentBandWidth;
+
+	char PTTOn[10];
+	char PTTOff[10];
+	int PTTOnLen;
+	int PTTOffLen;
+
 };
 
 // PortType Equates
@@ -103,6 +109,8 @@ struct RIGINFO
 #define ANT 5
 #define FT100 6
 #define FT2000 7
+#define FLEX 8
+#define M710 9
 
 struct RIGPORTINFO
 {

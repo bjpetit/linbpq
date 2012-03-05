@@ -400,7 +400,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 5:				// Close
 
 		CloseHandle(TNCInfo[port]->hDevice);
-		SaveWindowPos(port);
 		return (0);
 
 	case 6:				// Scan Control

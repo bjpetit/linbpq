@@ -141,6 +141,11 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 		switch (*++ptr)
 		{
 
+		case 'I': // First name of the connected user.
+			pptr = conn->UserPointer->Name;
+			break;
+
+
 		case 'W': // Inserts a carriage return.
 
 			pptr = CR;

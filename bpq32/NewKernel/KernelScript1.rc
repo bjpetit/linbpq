@@ -1,6 +1,7 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "kernelresource.h"
+#include "bpqtermmdi.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -79,16 +80,18 @@ IDR_MAINFRAME_MENU MENU DISCARDABLE
 BEGIN
     POPUP "Window"
     BEGIN
+	  MENUITEM "New Terminal Window",         ID_NEWWINDOW
       MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
       MENUITEM "Tile",	                    ID_WINDOWS_TILE
 	  MENUITEM "Close all BPQ32 Programs", BPQCLOSEALL
 	END
 END
 
-TERM_MENU MENU DISCARDABLE 
+CONS_MENU MENU DISCARDABLE 
 BEGIN
     POPUP "Window"
     BEGIN
+	    MENUITEM "New Terminal Window",         ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
         MENUITEM "Tile",	                    ID_WINDOWS_TILE
 		MENUITEM "Close all BPQ32 Programs", BPQCLOSEALL
@@ -107,6 +110,66 @@ BEGIN
 	END
 END
 
+TERM_MENU MENU DISCARDABLE 
+BEGIN
+    POPUP "Window"
+    BEGIN
+	    MENUITEM "New Terminal Window",         ID_NEWWINDOW
+        MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
+        MENUITEM "Tile",	                    ID_WINDOWS_TILE
+		MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+    END 
+    POPUP "Action"
+    BEGIN
+        MENUITEM "Connect",                     BPQCONNECT
+        MENUITEM "Disconnect",                  BPQDISCONNECT, GRAYED
+    END
+    POPUP "Config"
+    BEGIN
+        MENUITEM "Font",                        ID_SETUP_FONT
+        MENUITEM "Enable Bells",                BPQBELLS
+        MENUITEM "Strip Linefeeds",             BPQStripLF
+        MENUITEM "Log Output",                  BPQLogOutput
+        MENUITEM "Send Disconnected",           BPQSendDisconnected
+        MENUITEM "Chat Terminal Mode",          CHATTERM
+		MENUITEM "Restore Windows on load",     ID_WINDOWS_RESTORE
+    END
+    POPUP "Edit"
+    BEGIN
+        MENUITEM "Copy Output Window",          BPQCOPYOUT
+        MENUITEM "Clear Output Window",        BPQCLEAROUT
+    END
+    MENUITEM "Help",                        BPQHELP
+END
+
+MON_MENU MENU DISCARDABLE 
+BEGIN
+    POPUP "Window"
+    BEGIN
+        MENUITEM "New Window",                  ID_NEWWINDOW
+        MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
+        MENUITEM "Tile",	                    ID_WINDOWS_TILE
+		MENUITEM "Close all BPQ32 Programs", BPQCLOSEALL
+
+    END 
+    POPUP "Monitor"
+    BEGIN
+        MENUITEM "Monitor TX",                  BPQMTX
+        MENUITEM "Monitor Supervisory",         BPQMCOM
+        MENUITEM "Monitor NODES",               BPQMNODES
+        MENUITEM "Enable Colour",               MONCOLOUR
+		MENUITEM "Log Monitor",                 BPQLogMonitor
+
+    END
+    POPUP "Edit"
+    BEGIN
+        MENUITEM "Copy Monitor Window",         BPQCOPYMON
+        MENUITEM "Clear Monitor Window",        BPQCLEARMON
+    END
+    MENUITEM "Help",                        BPQHELP
+END
+
+IncomingCall WAVE Ring.wav 
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////

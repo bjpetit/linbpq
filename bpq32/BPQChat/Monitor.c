@@ -56,6 +56,7 @@ BOOL CreateMonitor()
 {
     WNDCLASS  wc;
 	HBRUSH bgBrush;
+	char Text[80];
 
 	if (hMonitor)
 	{
@@ -86,6 +87,9 @@ BOOL CreateMonitor()
     if (!hMonitor)
         return (FALSE);
 
+	wsprintf(Text, "Chat %s Monitor", Session);
+	SetWindowText(hMonitor, Text);
+
 	readbuff = zalloc(1000);
 	readbufflen = 1000;
 
@@ -106,7 +110,9 @@ BOOL CreateMonitor()
 	wpOrigOutputProc = (WNDPROC)SetWindowLong(hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(hMonitor, "Chat Monitor");
+	{
+		AddTrayMenuItem(hMonitor, Text);
+	}
 
 	ShowWindow(hMonitor, SW_SHOWNORMAL);
 

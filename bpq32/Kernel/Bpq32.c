@@ -441,7 +441,12 @@
 // Add MobileBeaconInterval APRS param
 // Send Course and Speed when APRS is using GPS
 // Fix Robust Packet reporting in PTC driver
-// FIx corruption of some MIC-E APRS packets
+// Fix corruption of some MIC-E APRS packets
+
+// 5.2.6.1 February 2012
+
+// Send QUIT not EXIT in PTC Init
+
 
 #define Kernel
 #include "Versions.h"

@@ -610,8 +610,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			closesocket(TCP->FBBsock6[n++]);
 
 		closesocket(TCP->Relaysock6);
-		SaveWindowPos(port);
-		
 		return (0);
 
 	case 6:				// Scan Control
@@ -1549,7 +1547,8 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		// call DrawMenuBar after the menu items are set
 		DrawMenuBar(FrameWnd);
 
-		return 0;
+		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
+
 	}
 
 	case WM_SYSCOMMAND:
@@ -1562,17 +1561,16 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		case SC_RESTORE:
 
 			TNC->Minimized = FALSE;
+			SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
 			return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 		case  SC_MINIMIZE: 
 
 			TNC->Minimized = TRUE;
 			return DefMDIChildProc(hWnd, message, wParam, lParam);
-
-		default:
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
-
 		}
+		
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 	case WM_COMMAND:
 		wmId    = LOWORD(wParam);

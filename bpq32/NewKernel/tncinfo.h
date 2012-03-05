@@ -484,6 +484,7 @@ BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE);
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
 VOID SaveWindowPos(int port);
+VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT);
 VOID ShowTraffic(struct TNCINFO * TNC);
 OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet);

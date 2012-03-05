@@ -93,6 +93,8 @@
 #define ID_CHATAPPL                     2001
 #define ID_CHATNODES                    2002
 #define ID_STREAMS                      2004
+#define SAVENODES                       2100
+#define SAVEWELCOME                     2101
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101

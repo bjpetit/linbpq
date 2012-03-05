@@ -598,8 +598,11 @@ void FreeSemaphore(struct SEM * Semaphore);
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...);
 
-VOID SortBBSChain();
 VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG);
+
+extern char ChatWelcomeMsg[];
+
+extern char Session[];
 
 extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;

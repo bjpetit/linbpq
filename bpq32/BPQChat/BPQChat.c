@@ -93,6 +93,8 @@ int MaxStreams=0;
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
+char ChatWelcomeMsg[1000];
+
 char NewUserPrompt[100]="Please enter your Name\r>\r";
 
 char SignoffMsg[100];
@@ -119,6 +121,8 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK ChatColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
 unsigned long _beginthread( void( *start_address )(VOID * DParam),
 				unsigned stack_size, VOID * DParam);
 
@@ -193,7 +197,7 @@ void myInvalidParameterHandler(const wchar_t* expression,
 }
 
 char IniFileName[MAX_PATH];
-char Session[20] = "Session 1";
+char Session[20] = "Server 1";
 
 
 // If program gets too many program errors, it will restart itself  and shut down
@@ -250,28 +254,55 @@ VOID CheckProgramErrors()
 	}
 }
 
+HKEY OpenReg()
+{
+	char Key[100];
+	HKEY hKey = 0;
+	int disp;
+
+	sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\Chat\\%s", Session);
+
+	RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	return hKey;
+}
+
 
 VOID SaveIntValue(char * Key, int Value)
 {
-	char Val[100];
+	HKEY hKey = OpenReg();
 
-	wsprintf(Val, "%d", Value);
-	WritePrivateProfileString(Session, Key, Val, IniFileName);
+	RegSetValueEx(hKey, Key, 0 , REG_DWORD, (UCHAR *)&Value, 4);
+	RegCloseKey(hKey);
 }
 
 VOID SaveStringValue(char * Key, char * Value)
 {
-	WritePrivateProfileString(Session, Key, Value, IniFileName);
+	HKEY hKey = OpenReg();
+
+	RegSetValueEx(hKey, Key, 0, REG_SZ, Value, strlen(Value));
+	RegCloseKey(hKey);
 }
 
 int GetIntValue(char * Key, int Default)
 {
-	return GetPrivateProfileInt(Session, Key, Default, IniFileName);
+	HKEY hKey = OpenReg();
+	int Type, Vallen = 4;
+	int Val = Default;
+
+	RegQueryValueEx(hKey ,Key, 0, &Type, (UCHAR *)&Val, (ULONG *)&Vallen);
+	RegCloseKey(hKey);
+ 
+	return Val;
 }
 
 VOID GetStringValue(char * Key, char * Value, int Len)
 {
-	GetPrivateProfileString(Session, Key, "", Value, Len, IniFileName);
+	HKEY hKey = OpenReg();
+	int Type, Vallen = Len;
+
+	RegQueryValueEx(hKey ,Key, 0, &Type, (UCHAR *)Value, (ULONG *)&Vallen);
+	RegCloseKey(hKey);
 }
 
 int APIENTRY WinMain(HINSTANCE hInstance,
@@ -307,10 +338,12 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		DestroyWindow(hWnd);
 	}
 
-	ptr = strstr(_strupr(lpCmdLine), "SESSION");
+	ptr = strstr(_strupr(lpCmdLine), "SERVER");
 
 	if (ptr)
-		strcpy (Session, ptr);
+		strcpy(Session, ptr);
+
+	_strlwr(&Session[1]);
 
 
 	__try {
@@ -371,6 +404,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			DeallocateStream(BPQStream);
 		}
 	}
+
+	CloseConsole(-2);
 
 	ClearChatLinkStatus();
 	SendChatLinkStatus();
@@ -497,10 +532,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	RECT SessRect;
 	int len;
 	char * ptr1;
-
 	struct _EXCEPTION_POINTERS exinfo;
-
 	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
+
+	REGTREE = GetRegistryKey();
+	REGTREETEXT = GetRegistryKeyText();
 
 	// See if running under WINE
 
@@ -554,7 +590,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"G8BPQ Chat Server Version %s", VersionString);
+	wsprintf(Title,"G8BPQ Chat Server Version %s %s", VersionString, Session);
 
 	SetWindowText(hWnd,Title);
 
@@ -828,6 +864,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDM_CONFIG:
 			DialogBox(hInst, MAKEINTRESOURCE(CHAT_CONFIG), hWnd, ConfigWndProc);
+			break;
+
+			
+		case IDM_EDITCHATCOLOURS:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_CHATCOLCONFIG), hWnd, ChatColourDialogProc);
 			break;
 
 		case ID_ACTIONS_UPDATECHATMAPINFO:
@@ -1195,13 +1236,21 @@ Retry:
 
 	if (cfgMinToTray)
 	{
-		AddTrayMenuItem(MainWnd, "Chat Server");
+		char Text[80];
+		wsprintf(Text, "Chat Server %s ", Session);
+		AddTrayMenuItem(MainWnd, Text);
 	}
 	
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
 
 	CheckMenuItem(hMenu,IDM_LOGCHAT, (LogCHAT) ? MF_CHECKED : MF_UNCHECKED);
+
+	GetStringValue("ChatWelcomeMsg", ChatWelcomeMsg, 999);
+
+	if (ChatWelcomeMsg[0] == 0)
+		strcpy(ChatWelcomeMsg, "G8BPQ Chat Server.$WType /h for command summary.$WBringing up links to other nodes.$W"
+			"This may take a minute or two.$WThe /p command shows what nodes are linked.$W");
 
 	RefreshMainWindow();
 
@@ -2132,6 +2181,26 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		SetDlgItemInt(hDlg, ID_STREAMS, MaxStreams, FALSE);
 		SetDlgItemText(hDlg, ID_CHATNODES, Text);
 
+		// Replace $W in  Welcome Message with cr lf
+
+		ptr2 = ptr1 = _strdup(ChatWelcomeMsg);
+
+	scan:
+
+		ptr1 = strstr(ptr1, "$W");
+    
+		if (ptr1)
+		{    
+			*(ptr1++)=13;			// put in cr
+			*(ptr1++)=10;			// put in lf
+
+			goto scan;
+		} 
+	
+		SetDlgItemText(hDlg, IDM_CHATUSERMSG, ptr2);
+
+		free(ptr2);
+
 		return (INT_PTR)TRUE;
 
 	case WM_CTLCOLORDLG:
@@ -2163,7 +2232,31 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 
-		case IDC_CHATSAVE:
+		case SAVEWELCOME:
+
+			GetDlgItemText(hDlg, IDM_CHATUSERMSG, ChatWelcomeMsg, 999);
+
+			// Replace cr lf in string with $W
+
+			ptr1 = ChatWelcomeMsg;
+
+		scan2:
+
+			ptr1 = strstr(ptr1, "\r\n");
+    
+			if (ptr1)
+			{    
+				*(ptr1++)='$';			// put in cr
+				*(ptr1++)='W';			// put in lf
+
+				goto scan2;
+			} 
+
+			SaveStringValue("ChatWelcomeMsg", ChatWelcomeMsg);
+
+			break;
+
+		case SAVENODES:
 			
 			SaveChatConfig(hDlg);
 			return TRUE;

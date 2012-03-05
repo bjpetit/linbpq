@@ -54,7 +54,7 @@ _ENDOFDATA	DD	0		; For DUMP ROUTINE
 
 	EVEN
 
-	EXTRN	PORTTABLE:DWORD,NUMBEROFPORTS:WORD
+	EXTRN	PORTTABLE:DWORD,NUMBEROFPORTS:WORD, _pgm:BYTE
 
 	IF	BLACKBITS
 	
@@ -1003,6 +1003,15 @@ SETAPPLFLAGS:
 	
 	mov STREAMOWNER[EBX],EAX
 	
+	;	Set Program Name
+
+	pushad
+	lea	esi, _pgm;
+	lea edi, HOSTPGMNAME[EBX];
+	mov	ecx, 31
+	rep movsb
+	popad
+	
 	PUBLIC	BPQRETURN
 BPQRETURN:
 
@@ -1029,6 +1038,7 @@ BPQALLOC:
 	mov STREAMOWNER[EBX],0
 	MOV	HOSTAPPLMASK[EBX],0		; APPL MASK
 	MOV	HOSTAPPLFLAGS[EBX],0	; APPL FLAGS
+	MOV HOSTPGMNAME[EBX], 0;
 
 	JMP SHORT BPQRETURN
 
@@ -1054,6 +1064,15 @@ ALLOC_OK:
 	
 	mov STREAMOWNER[EBX],EAX
 
+;	Set Program Name
+
+	pushad
+	lea	esi, _pgm;
+	lea edi, HOSTPGMNAME[EBX];
+	mov	ecx, 31
+	rep movsb
+	popad
+	
 	pop	eax
 
 	MOV	ECX,0
@@ -1096,9 +1115,18 @@ OK_TO_ALLOC:
 	
 	mov STREAMOWNER[EBX],EAX
 
+;	Set Program Name
+
+	pushad
+	lea	esi, _pgm;
+	lea edi, HOSTPGMNAME[EBX];
+	mov	ecx, 31
+	rep movsb
+	popad
+	
 	pop	eax
 	
-	JMP SHORT BPQRETURN	
+	JMP BPQRETURN	
 
 	PUBLIC	CHECKLOADED
 CHECKLOADED:

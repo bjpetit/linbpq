@@ -468,8 +468,6 @@ ok:
 		if (TNC->VCOMHandle)
 			CloseHandle(TNC->VCOMHandle);
 				
-		SaveWindowPos(port);
-
 		return (0);
 
 	case 6:				// Scan Stop Interface

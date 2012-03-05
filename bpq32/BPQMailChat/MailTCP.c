@@ -726,6 +726,7 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 	while (ptr)
 	{
 		BOOL Base64 = FALSE;
+		BOOL QuotedP = FALSE;
 
 		MallocSave[Files] = ptr;		// For free();
 
@@ -793,6 +794,9 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			{
 				if (strstr(&ptr[26], "base64"))
 					Base64 = TRUE;
+				else
+				if (strstr(&ptr[26], "quoted-printable"))
+					QuotedP = TRUE;
 			}
 
 			ptr = ++ptr2;
@@ -843,6 +847,52 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			if (*(ptr-2) == '=')
 				NewLen--;
 	
+			FileLen[Files] = NewLen;
+		}
+		else if (QuotedP)
+		{
+			int i = 0, Len = FileLen[Files], NewLen;
+			char * ptr2 = ptr;
+			char * End;
+
+			End = ptr + FileLen[Files];
+
+			while (ptr < End)
+			{
+				if ((*ptr) == '=')
+				{
+					char c = *(++ptr);
+					char d;
+
+					c = c - 48;
+					if (c < 0)
+					{
+						// = CRLF as a soft break
+
+						ptr += 2;
+						continue;
+					}
+
+					if (c > 9)
+						c -= 7;
+					d  = *(++ptr);
+					d = d - 48;
+					if (d > 9)
+						d -= 7;
+
+					*(ptr2) = c << 4 | d;
+					ptr2++;	
+					ptr++;
+				}
+				else
+				{
+					*ptr2++ = *ptr++;
+				}
+			}
+			*ptr2 = 0;
+
+			NewLen = ptr2 - FileBody[Files];
+
 			FileLen[Files] = NewLen;
 		}
 		
@@ -1422,6 +1472,10 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 	{
 		via = _strlwr(strlop(To, '/'));
 	}
+	else if (_memicmp(To, "rms.", 4) == 0)
+	{
+		via = _strlwr(strlop(To, '.'));
+	}
 	else if (_memicmp(To, "smtp:", 5) == 0)
 	{
 		via = _strlwr(strlop(To, ':'));
@@ -1831,6 +1885,8 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		int MsgNo=1;
 		char * msgbytes;
 		struct MsgInfo * Msg;
+		char B2From[80];
+		struct UserInfo * FromUser;
 
 		ptr=strlop(Buffer, ' ');			// Get Number
 
@@ -1871,7 +1927,34 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (_stricmp(Msg->from, "rms:") == 0)
 				sprintf_s(Header, sizeof(Header), "From: RMS/%s", Msg->emailfrom);
 			else
-				sprintf_s(Header, sizeof(Header), "From: %s", Msg->from);
+			{
+				// Packet Address. Mail client will need more than just a call to respond to
+	
+				strcpy(B2From, Msg->from);
+
+				if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
+					strcpy(B2From, Msg->emailfrom);
+				else
+				{
+					FromUser = LookupCall(Msg->from);
+
+					if (FromUser)
+					{
+						if (FromUser->HomeBBS[0])
+							wsprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
+						else
+							wsprintf(B2From, "%s@%s", Msg->from, BBSName);
+					}
+					else
+					{
+						WPRecP WP = LookupWP(Msg->from);
+						if (WP)
+							wsprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
+					}
+				}
+			}
+			
+			sprintf_s(Header, sizeof(Header), "From: %s", B2From);
 		
 		SendSock(sockptr, Header);
 		sprintf_s(Header, sizeof(Header), "Subject: %s", Msg->title);

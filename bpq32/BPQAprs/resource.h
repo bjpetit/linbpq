@@ -64,6 +64,7 @@
 #define IDC_LIST2                       1081
 #define IDC_SUPZERO                     1082
 #define IDC_NOTRACKS                    1083
+#define IDC_LOCALTIME                   1084
 #define IDD_CHATCOLCONFIG               30008
 #define IDC_CHATCOLOURS                 30009
 

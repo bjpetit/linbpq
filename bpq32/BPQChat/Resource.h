@@ -24,7 +24,7 @@
 #define IDC_BBSSAVE 1100
 #define IDC_ChatAppl 2001
 #define IDC_ChatNodes 2002
-#define IDC_CHATSAVE 2100
+#define SAVENODES 2100
 #define IDC_ISP_Gateway_Enabled 3000
 #define IDC_MyMailDomain 3001
 #define IDC_ISPSMTPName 3002

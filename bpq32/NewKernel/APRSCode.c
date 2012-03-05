@@ -56,6 +56,7 @@ BOOL OpenGPSPort();
 void PollGPSIn();
 int CountLocalStations();
 BOOL SendAPPLAPRSMessage(char * Frame);
+VOID SendAPRSMessage(char * Message, int toPort);
 
 BOOL ProcessConfig();
 BOOL FreeConfig();
@@ -83,7 +84,7 @@ extern short NUMBEROFPORTS;
 extern byte	MCOM;
 extern char	MTX;
 extern ULONG MMASK;
-extern HWND hWnd;
+extern HWND hConsWnd;
 extern HKEY REGTREE;
 
 static int SecTimer = 10;
@@ -215,6 +216,23 @@ typedef struct DUPINFO
 
 struct DUPINFO DupInfo[MAXDUPS];
 
+struct OBJECT
+{
+	struct OBJECT * Next;
+	UCHAR Path[10][7];		//	Dest, Source and up to 8 digis 
+	int PathLen;			// Actual Length used
+	char Message[80];
+	char PortMap[33];
+	int	Interval;
+	int Timer;
+};
+
+struct OBJECT * ObjectList;		// List of objects to send;
+
+int ObjectCount = 0;
+
+VOID SendObject(struct OBJECT * Object);
+
 Dll BOOL APIENTRY Init_APRS()
 {
 	int i;
@@ -255,6 +273,8 @@ Dll BOOL APIENTRY Init_APRS()
 	}
 
 	PosnSet = 0;
+	ObjectList = NULL;
+	ObjectCount = 0;
 
 	if (ReadConfigFile() == 0)
 		return FALSE;
@@ -297,6 +317,8 @@ Dll BOOL APIENTRY Init_APRS()
 
 		ConvToAX25(DCall, &AXDESTS[i][0]);
 	}
+
+	// Process any Object Definitions
 
 	// Setup Heard Data Area
 
@@ -349,7 +371,11 @@ Dll VOID APIENTRY Poll_APRS()
 	{
 		UINT * buffptr = Q_REM(&APPLTX_Q);
 			
-		SendAPPLAPRSMessage((char *)&buffptr[2]);
+		if (buffptr[2] == -1)
+			SendAPPLAPRSMessage((char *)&buffptr[3]);
+		else
+			SendAPRSMessage((char *)&buffptr[3], buffptr[2]);
+			
 		ReleaseBuffer(buffptr);
 	}
 
@@ -885,6 +911,110 @@ static ProcessLine(char * buf)
 	if(*ptr ==';') return (TRUE);			// comment
 
 
+//	 OBJECT PATH=APRS,WIDE1-1 PORT=1,IS INTERVAL=30 TEXT=;444.80TRF*111111z4807.60N/09610.63Wr%156 R15m
+
+	if (_stricmp(ptr, "OBJECT") == 0)
+	{
+		PCHAR p_Path, p_Port, p_Text;
+		int Interval;
+		struct OBJECT * Object;
+		int Digi = 2;
+		char * Context;
+		int SendTo;
+
+		p_value = strtok(NULL, "=");
+		if (p_value == NULL) return FALSE;
+		if (_stricmp(p_value, "PATH"))
+			return FALSE;
+
+		p_Path = strtok(NULL, "\t\n\r ");
+		if (p_Path == NULL) return FALSE;
+
+		p_value = strtok(NULL, "=");
+		if (p_value == NULL) return FALSE;
+		if (_stricmp(p_value, "PORT"))
+			return FALSE;
+
+		p_Port = strtok(NULL, "\t\n\r ");
+		if (p_Port == NULL) return FALSE;
+
+		p_value = strtok(NULL, "=");
+		if (p_value == NULL) return FALSE;
+		if (_stricmp(p_value, "INTERVAL"))
+			return FALSE;
+
+		p_value = strtok(NULL, " \t");
+		if (p_value == NULL) return FALSE;
+
+		Interval = atoi(p_value);
+
+		if (Interval == 0)
+			return FALSE;
+
+		p_value = strtok(NULL, "=");
+		if (p_value == NULL) return FALSE;
+		if (_stricmp(p_value, "TEXT"))
+			return FALSE;
+
+		p_Text = strtok(NULL, "\n\r");
+		if (p_Text == NULL) return FALSE;
+
+		Object = zalloc(sizeof(struct OBJECT));
+
+		if (Object == NULL)
+			return FALSE;
+
+		Object->Next = ObjectList;
+		ObjectList = Object;
+
+		if (Interval < 10)
+			Interval = 10;
+
+		Object->Interval = Interval;
+		Object->Timer = (ObjectCount++) * 10 + 30;	// Spread them out;
+
+		// Convert Path to AX.25 
+
+		ConvToAX25(APRSCall, &Object->Path[1][0]);
+
+		ptr = strtok_s(p_Path, ",\t\n\r", &Context);
+
+		if (_stricmp(ptr, "APRS") == 0)			// First is Dest
+			ConvToAX25(APRSDest, &Object->Path[0][0]);
+		else if (_stricmp(ptr, "APRS-0") == 0)
+			ConvToAX25("APRS", &Object->Path[0][0]);
+		else
+			ConvToAX25(ptr, &Object->Path[0][0]);
+		
+		ptr = strtok_s(NULL, ",\t\n\r", &Context);
+
+		while (ptr)
+		{
+			ConvToAX25(ptr, &Object->Path[Digi++][0]);
+			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
+		}
+
+		Object->PathLen = Digi * 7;
+
+		// Process Port List
+
+		ptr = strtok_s(p_Port, ",", &Context);
+
+		while (ptr)
+		{
+			SendTo = atoi(ptr);				// this gives zero for IS
+	
+			if (SendTo > NUMBEROFPORTS)
+				return FALSE;
+
+			Object->PortMap[SendTo] = TRUE;	
+			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
+		}
+
+		strcpy(Object->Message, p_Text);
+		return TRUE;
+	}
+
 	if (_stricmp(ptr, "STATUSMSG") == 0)
 	{
 		p_value = strtok(NULL, ";\t\n\r");
@@ -1301,6 +1431,58 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendISStatus, B
 	}
 }
 
+VOID SendObject(struct OBJECT * Object)
+{
+	int Port;
+	DIGIMESSAGE Msg;
+	int Len;
+	
+	for (Port = 1; Port <= NUMBEROFPORTS; Port++)
+	{
+		if (Object->PortMap[Port])
+		{
+			Msg.PID = 0xf0;
+			Msg.CTL = 3;
+			Len = wsprintf(Msg.L2DATA, "%s", Object->Message);
+			memcpy(Msg.DEST, &Object->Path[0][0],  Object->PathLen + 1);
+			Send_AX_Datagram(&Msg, Len + 2, Port);
+		}
+	}
+
+	// Also send to APRS-IS if connected
+
+	if (APRSISOpen && Object->PortMap[0])
+	{
+		Len = strlen(Object->Message);
+		send(sock, Object->Message, Len, 0);
+	}
+
+	// and to Application
+
+	if (ApplConnected)
+	{
+		// Make sure we don't have too many queued (Appl could have crashed)
+			
+		UINT * buffptr;
+
+		if (C_Q_COUNT(&APPL_Q) > 50)
+			buffptr = Q_REM(&APPL_Q);
+		else
+			buffptr = GetBuff();
+				
+		if (buffptr)
+		{
+			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r%s\r\n",
+				APRSCall, APRSDest, Object->Message);
+
+			buffptr[2] = 255;
+			C_Q_ADD(&APPL_Q, buffptr);
+		}
+	}
+}
+
+
+
 VOID SendIStatus()
 {
 	int Port;
@@ -1331,6 +1513,20 @@ VOID SendIStatus()
 
 VOID DoSecTimer()
 {
+	struct OBJECT * Object = ObjectList;
+
+	while (Object)
+	{
+		Object->Timer--;
+
+		if (Object->Timer == 0)
+		{
+			Object->Timer = 60 * Object->Interval;
+			SendObject(Object);
+		}
+		Object = Object->Next;
+	}
+
 	if (ISPort && APRSISOpen == 0 && IGateEnabled)
 	{
 		ISDelayTimer++;
@@ -1367,7 +1563,7 @@ VOID DoSecTimer()
 	{
 		GPSOK--;
 		if (GPSOK == 0)
-			SetDlgItemText(hWnd, IDC_GPS, "No GPS");
+			SetDlgItemText(hConsWnd, IDC_GPS, "No GPS");
 	}
 }
 
@@ -1394,7 +1590,7 @@ VOID APRSISThread(BOOL Report)
 	char PortString[20];
 
 	Debugprintf("BPQ32 APRS IS Thread");
-	SetDlgItemText(hWnd, IGATESTATE, "IGate State: Connecting");
+	SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Connecting");
 
 	if (ISFilter[0])
 		wsprintf(Signon, "user %s pass %d vers BPQ32 %s filter %s\r\n",
@@ -1436,7 +1632,7 @@ VOID APRSISThread(BOOL Report)
 		//	Connect failed
 		//
 
-		SetDlgItemText(hWnd, IGATESTATE, "IGate State: Connect Failed");
+		SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Connect Failed");
 
 		return;
 	}
@@ -1469,7 +1665,7 @@ VOID APRSISThread(BOOL Report)
 
 	APRSISOpen = TRUE;
 
-	SetDlgItemText(hWnd, IGATESTATE, "IGate State: Connected");
+	SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Connected");
 
 	while (InputLen > 0 && IGateEnabled)
 	{
@@ -1518,9 +1714,9 @@ VOID APRSISThread(BOOL Report)
 	Debugprintf("BPQ32 APRS IS Thread Exited");
 
 	if (IGateEnabled)
-		SetDlgItemText(hWnd, IGATESTATE, "IGate State: Disconnected");
+		SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Disconnected");
 	else
-		SetDlgItemText(hWnd, IGATESTATE, "IGate State: Disabled");
+		SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Disabled");
 
 	ISDelayTimer = 30;		// Retry pretty quickly
 	return;
@@ -1719,7 +1915,7 @@ DoMove:
 		HEARDENTRIES = i + 1;
 
 		wsprintf(Status, "IGATE Stats: Msgs %d  Local Stns %d", MessageCount , CountLocalStations());
-		SetDlgItemText(hWnd, IGATESTATS, Status);
+		SetDlgItemText(hConsWnd, IGATESTATS, Status);
 	}
 
 	memcpy (MHBASE->MHCALL, CallPadded, 10);
@@ -2155,7 +2351,7 @@ void DecodeRMC(char * msg, int len)
 	
 	if (*(ptr1) != 'A') // ' Data Not Valid
 	{
-		SetDlgItemText(hWnd, IDC_GPS, "No GPS Fix");
+		SetDlgItemText(hConsWnd, IDC_GPS, "No GPS Fix");
 		return;
 	}
         
@@ -2207,7 +2403,7 @@ void DecodeRMC(char * msg, int len)
 	if (GPSOK == 0)
 	{
 		GPSOK = 30;
-		SetDlgItemText(hWnd, IDC_GPS, "GPS OK");
+		SetDlgItemText(hConsWnd, IDC_GPS, "GPS OK");
 	}
 
 	ptr1+=2;
@@ -2351,9 +2547,30 @@ Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port)
 
 Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port)
 {
-	SendAPRSMessage(Frame, Port);
+	// Called from BPQAPRS App
+	// Message has to be queued so it can be sent by Timer Process (IS sock is not valid in this context)
+
+	UINT * buffptr;
+
+	buffptr = GetBuff();
+
+	GetSemaphore();
+	SemHeldByAPI = 11;
+
+	if (buffptr)
+	{
+		buffptr[1] = ++Len;			// Len doesn't include Null
+		memcpy(&buffptr[3], Frame, Len);
+		C_Q_ADD(&APPLTX_Q, buffptr);
+	}
+
+	buffptr[2] = Port;				// Pass to SendAPRSMessage();
+
+	FreeSemaphore();
+
 	return TRUE;
 }
+
 Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 {
 	// Called from BPQAPRS App
@@ -2368,10 +2585,12 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 
 	if (buffptr)
 	{
-		buffptr[1] = ++Len;					// Len doesn't include Null
-		memcpy(&buffptr[2], Frame, Len);
+		buffptr[1] = ++Len;			// Len doesn't include Null
+		memcpy(&buffptr[3], Frame, Len);
 		C_Q_ADD(&APPLTX_Q, buffptr);
 	}
+
+	buffptr[2] = -1;				// Pass to SendAPPLAPRSMessagee();
 
 	FreeSemaphore();
 

@@ -207,6 +207,9 @@ VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Consoleprintf(const char * format, ...);
 BOOL OpenListeningSocket(struct PORTINFO * PORT, struct arp_table_entry * arp);
 VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
+static void CreateResolverWindow(struct PORTINFO * PORT);
+VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);
+
 
 #pragma pack(1) 
 
@@ -324,7 +327,9 @@ struct PORTINFO
 
 	char buf[MAXGETHOSTSTRUCT];
 
-	int Windowlength;
+	int MaxMHWindowlength;
+	int MaxResWindowlength;
+
 	BOOL ResMinimized;
 	BOOL MHMinimized;
 
@@ -407,75 +412,28 @@ int InitAXIP(int Port);
 RECT ResRect;
 RECT MHRect;
 
+int CurrentMHEntries;
+int CurrentResEntries;
+
 
 static char ConfigClassName[]="CONFIG";
 
 HANDLE hInstance;
 
-
-static VOID SaveWindowPos(int port)
+VOID SaveAXIPWindowPos(int port)
 {
 	struct PORTINFO * PORT;
-	HKEY hKey=0;
-	char Size[80];
 	char Key[80];
-	int retCode, disp;
-	int Minimized;
-	RECT FRect;
-	RECT Rect;
 
 	PORT = Portlist[port];
 		
 	if (PORT == NULL)
 		return;
 
-	GetWindowRect(FrameWnd, &FRect);
+	wsprintf(Key, "PACTOR\\PORT%d", port);
 
-	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", port);
-	
-	retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		if (PORT->hMHWnd)
-		{
-		Minimized = PORT->MHMinimized;
-	
-		ShowWindow(PORT->hMHWnd, SW_RESTORE);
-		GetWindowRect(PORT->hMHWnd, &Rect);
-
-		// Make relative to Frame
-	
-		Rect.top -= FRect.top ;
-		Rect.left -= FRect.left;
-		Rect.bottom -= FRect.top;
-		Rect.right -= FRect.left;
-
-		wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
-		retCode = RegSetValueEx(hKey,"MHSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-		}
-
-		if (PORT->hResWnd)
-		{
-
-		Minimized = PORT->ResMinimized;
-	
-		ShowWindow(PORT->hResWnd, SW_RESTORE);
-		GetWindowRect(PORT->hResWnd, &Rect);
-
-		// Make relative to Frame
-
-		Rect.top -= FRect.top ;
-		Rect.left -= FRect.left;
-		Rect.bottom -= FRect.top;
-		Rect.right -= FRect.left;
-
-		wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
-		retCode = RegSetValueEx(hKey,"ResSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-		}
-
-		RegCloseKey(hKey);
-	}
+	SaveMDIWindowPos(PORT->hMHWnd, Key, "MHSize", PORT->MHMinimized);
+	SaveMDIWindowPos(PORT->hResWnd, Key, "ResSize", PORT->ResMinimized);
 
 	return;
 }
@@ -795,13 +753,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Terminate
 
-		Debugprintf("AXIP Close - Port %d", port);
-		SaveWindowPos(port);
-
 		CloseSockets(PORT);
 		DestroyWindow(PORT->hMHWnd);
 		SendMessage(PORT->hResWnd, WM_DESTROY, 0, 0);
-
 
 		break;
 	}
@@ -898,8 +852,12 @@ InitAXIP(int Port)
     //	Start Resolver Thread if needed
 	//
 
+
 	if (PORT->NeedResolver)
+	{
+		CreateResolverWindow(PORT);
 		_beginthread(ResolveNames, 0, PORT );
+	}
 
 	time(&PORT->lasttime);			// Get initial time value
  
@@ -1196,10 +1154,10 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	case WM_GETMINMAXINFO:
 
 		mmi = (MINMAXINFO *)lParam;
-		mmi->ptMaxSize.x = 500;
-		mmi->ptMaxSize.y = PORT->Windowlength;
-		mmi->ptMaxTrackSize.x = 500;
-		mmi->ptMaxTrackSize.y = PORT->Windowlength;;
+		mmi->ptMaxSize.x = 550;
+		mmi->ptMaxSize.y = PORT->MaxResWindowlength;
+		mmi->ptMaxTrackSize.x = 550;
+		mmi->ptMaxTrackSize.y = PORT->MaxResWindowlength;
 
 		break;
 
@@ -1220,7 +1178,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hMainFrameMenu, (LPARAM) NULL);
 
 		DrawMenuBar(FrameWnd);
-		return 0;
+		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
 	}
 
 	case WM_CHAR:
@@ -1287,13 +1245,17 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			case SC_RESTORE:
 
 				PORT->ResMinimized = FALSE;
+				SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
+
 				break;
 
 			case  SC_MINIMIZE: 
 
 				PORT->ResMinimized = TRUE;
+
 				break;
 		}
+
 		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 
@@ -1375,7 +1337,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
 	case WM_DESTROY:
 
-		PostQuitMessage(0);
+//		PostQuitMessage(0);
 			
 		break;
 
@@ -1526,7 +1488,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 
 }
 
-static void ResolveNames(struct PORTINFO * PORT)
+static void CreateResolverWindow(struct PORTINFO * PORT)
 {
     int WindowParam;
 	WNDCLASS  wc;
@@ -1534,59 +1496,11 @@ static void ResolveNames(struct PORTINFO * PORT)
 	int retCode, Type, Vallen;
 	HKEY hKey=0;
 	char Size[80];
-	struct tagMSG Msg;
+
 	HWND hResWnd;
 	char Key[80];
-	RECT Rect;
-	int Top, Left;
-
-
-	// Fill in window class structure with parameters that describe
-    // the main window.
-
-        wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-        wc.lpfnWndProc   = (WNDPROC)AXResWndProc;
-        wc.cbClsExtra    = 0;
-        wc.cbWndExtra    = 0;
-        wc.hInstance     = hInstance;
-        wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
-        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
-		wc.lpszMenuName =  NULL ;
-        wc.lpszClassName = "AXAppName";
-
-        // Register the window classes
-
-		RegisterClass(&wc);
- 
-	    wc.style = CS_HREDRAW | CS_VREDRAW;                                      
-		wc.cbClsExtra = 0;                
-		wc.cbWndExtra = DLGWINDOWEXTRA;
-		wc.hInstance = hInstance;
-		wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-		wc.lpfnWndProc = ConfigWndProc;       
-  		wc.lpszClassName = ConfigClassName;
-		RegisterClass(&wc);
-
-	if (PORT->arp_table_len > 10 )
-	{
-		PORT->Windowlength=10*14+70;
-		WindowParam=WS_OVERLAPPEDWINDOW | WS_VSCROLL;
-	}
-	else
-	{
-		PORT->Windowlength=(PORT->arp_table_len)*14+70;
-		WindowParam=WS_OVERLAPPEDWINDOW ;
-	}
-
-	sprintf(WindowTitle,"AXIP Port %d Resolver", PORT->Port);
-
-//	PORT->hResWnd = hResWnd = CreateWindow("AXAppName",WindowTitle,
-//		WindowParam, CW_USEDEFAULT, 0, 400, Windowlength, NULL, NULL, hInstance, NULL);
-
-	PORT->hResWnd = hResWnd = CreateMDIWindow("AXAppName", WindowTitle, WindowParam,
-		  CW_USEDEFAULT, 0, 400, PORT->Windowlength, ClientWnd, hInstance, 1234);
-
+	RECT Rect = {0, 0, 300, 300};
+	int Top, Left, Width, Height;
 
 	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", PORT->Port);
 	
@@ -1602,51 +1516,78 @@ static void ResolveNames(struct PORTINFO * PORT)
 		if (retCode == ERROR_SUCCESS)
 			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &PORT->ResMinimized);
 
+		if (Rect.top < - 500 || Rect.left < - 500)
+		{
+			Rect.left = 0;
+			Rect.top = 0;
+			Rect.right = 600;
+			Rect.bottom = 400;
+		}
+
 		RegCloseKey(hKey);
 	}
 
 	Top = Rect.top;
 	Left = Rect.left;
+	Width = Rect.right - Left;
+	Height = Rect.bottom - Top;
 
-	MoveWindow(hResWnd, Left - (OffsetW /2), Top - OffsetH + 4, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+	// Register the window classes
+
+	wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
+	wc.lpfnWndProc   = (WNDPROC)AXResWndProc;
+	wc.cbClsExtra    = 0;
+	wc.cbWndExtra    = 0;
+	wc.hInstance     = hInstance;
+	wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
+	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+	wc.lpszMenuName =  NULL ;
+	wc.lpszClassName = "AXAppName";
+
+	RegisterClass(&wc);
+	
+	wc.style = CS_HREDRAW | CS_VREDRAW;                                      
+	wc.cbWndExtra = DLGWINDOWEXTRA;
+	wc.hInstance = hInstance;
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.lpfnWndProc = ConfigWndProc;       
+	wc.lpszClassName = ConfigClassName;
+	RegisterClass(&wc);
+
+	WindowParam = WS_OVERLAPPEDWINDOW | WS_VSCROLL;
+	
+	sprintf(WindowTitle,"AXIP Port %d Resolver", PORT->Port);
+
+	PORT->hResWnd = hResWnd = CreateMDIWindow("AXAppName", WindowTitle, WindowParam,
+		  Left - (OffsetW /2), Top - OffsetH + 4, Width, Height, ClientWnd, hInstance, 1234);
+
 
 	PORT->hResMenu = CreatePopupMenu();
 	AppendMenu(PORT->hResMenu, MF_STRING, BPQREREAD, "ReRead Config");
 	AppendMenu(PORT->hResMenu, MF_STRING, BPQADDARP, "Add Entry");
-/*
-	LFTTYFONT.lfHeight =			12;
-    LFTTYFONT.lfWidth =          8 ;
-    LFTTYFONT.lfEscapement =     0 ;
-    LFTTYFONT.lfOrientation =    0 ;
-    LFTTYFONT.lfWeight =         0 ;
-    LFTTYFONT.lfItalic =         0 ;
-    LFTTYFONT.lfUnderline =      0 ;
-    LFTTYFONT.lfStrikeOut =      0 ;
-    LFTTYFONT.lfCharSet =        OEM_CHARSET ;
-    LFTTYFONT.lfOutPrecision =   OUT_DEFAULT_PRECIS ;
-    LFTTYFONT.lfClipPrecision =  CLIP_DEFAULT_PRECIS ;
-    LFTTYFONT.lfQuality =        DEFAULT_QUALITY ;
-    LFTTYFONT.lfPitchAndFamily = FIXED_PITCH | FF_MODERN ;
-    lstrcpy( LFTTYFONT.lfFaceName, "Terminal" ) ;
 
-	hFont = CreateFontIndirect(&LFTTYFONT) ;
-*/
-  	if (PORT->arp_table_len > 10 )
-		SetScrollRange(hResWnd,SB_VERT,0,PORT->arp_table_len-10,TRUE);
+	SetScrollRange(hResWnd,SB_VERT, 0, PORT->arp_table_len, TRUE);
 
 	if (PORT->ResMinimized)
 		ShowWindow(hResWnd, SW_SHOWMINIMIZED);
 	else
 		ShowWindow(hResWnd, SW_RESTORE);
 
-	SetTimer(hResWnd,1,15*60*1000,0);	
+}
 
-	PostMessage(hResWnd, WM_TIMER,0,0);
+static void ResolveNames(struct PORTINFO * PORT)
+{
+	struct tagMSG Msg;
 
-	while (GetMessage(&Msg, NULL, 0, 0)) 
+	SetTimer(PORT->hResWnd,1,15*60*1000,0);	
+
+	PostMessage(PORT->hResWnd, WM_TIMER,0,0);
+
+	while (GetMessage(&Msg, PORT->hResWnd, 0, 0)) 
 	{
-			TranslateMessage(&Msg);
-			DispatchMessage(&Msg);
+		TranslateMessage(&Msg);
+		DispatchMessage(&Msg);
 	}		
 
 }
@@ -1687,10 +1628,9 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 
  		mmi = (MINMAXINFO *)lParam;
 		mmi->ptMaxSize.x = 500;
-		mmi->ptMaxSize.y = 500;
+		mmi->ptMaxSize.y = PORT->MaxMHWindowlength;
 		mmi->ptMaxTrackSize.x = 500;
-		mmi->ptMaxTrackSize.y = 500;;
-
+		mmi->ptMaxTrackSize.y = PORT->MaxMHWindowlength;
 		break;
 
 	case WM_MDIACTIVATE:
@@ -1709,9 +1649,10 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hMainFrameMenu, (LPARAM) NULL);
 
 		DrawMenuBar(FrameWnd);
-		return 0;
-	}
 
+		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
+
+	}
 
 	case WM_COMMAND:
 
@@ -1761,6 +1702,7 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 			case SC_RESTORE:
 
 				PORT->MHMinimized = FALSE;
+				SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
 				break;
 
 			case  SC_MINIMIZE: 
@@ -1777,6 +1719,7 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 		hOldFont = SelectObject( hdc, hFont) ;
 			
 		index = 0;
+		CurrentMHEntries = 0;
 
 		while (index < MaxMHEntries)
 		{	
@@ -1798,9 +1741,13 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 				line[i-2]= ' ';			// Clear CR returned by asctime
 
 				TextOut(hdc,0,(index)*14+2,line,i);
+				CurrentMHEntries ++;
 			}
 			index++;
 		}
+
+		if (PORT->MaxMHWindowlength < CurrentMHEntries * 14 + 40)
+			PORT->MaxMHWindowlength = CurrentMHEntries * 14 + 40;
 
 		SelectObject( hdc, hOldFont ) ;
 		EndPaint (hWnd, &ps);
@@ -1817,7 +1764,9 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 			return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 	}
-	return (0);
+			
+	return DefMDIChildProc(hWnd, message, wParam, lParam);
+
 }
 BOOL CopyScreentoBuffer(char * buff, struct PORTINFO * PORT)
 {
@@ -1857,37 +1806,8 @@ void CreateMHWindow(struct PORTINFO * PORT)
 	char Size[80];
 	HWND hMHWnd;
 	char Key[80];
-	RECT Rect;
-	int Top, Left;
-
-
-	// Fill in window class structure with parameters that describe
-    // the main window.
-
-	wc.style         = CS_HREDRAW | CS_VREDRAW ;//| CS_NOCLOSE;
-	wc.lpfnWndProc   = (WNDPROC)MHWndProc;
-	wc.cbClsExtra    = 0;
-	wc.cbWndExtra    = 0;
-	wc.hInstance     = hInstance;
-	wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
-	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
-	wc.lpszMenuName =  NULL ;
-	wc.lpszClassName = "MHAppName";
-
-        // Register the window class and return success/failure code.
-
-	RegisterClass(&wc);
-
-	sprintf(WindowTitle,"AXIP Port %d MHEARD", PORT->Port);
-  
-	//PORT->hMHWnd = hMHWnd =CreateWindow("MHAppName", WindowTitle, WS_OVERLAPPEDWINDOW,
-	//	CW_USEDEFAULT, 0, 400, 150,
-	//	NULL, NULL, hInstance, NULL);
-
-	PORT->hMHWnd = hMHWnd = CreateMDIWindow("MHAppName", WindowTitle, WS_OVERLAPPEDWINDOW,
-		 CW_USEDEFAULT, 0, 400, 150, ClientWnd, hInstance, 1234);
-
+	RECT Rect = {0, 0, 300, 300};
+	int Top, Left, Width, Height;
 
 	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", PORT->Port);
 	
@@ -1901,15 +1821,43 @@ void CreateMHWindow(struct PORTINFO * PORT)
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &PORT->ResMinimized);
+			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &PORT->MHMinimized);
+
+		if (Rect.top < - 500 || Rect.left < - 500)
+		{
+			Rect.left = 0;
+			Rect.top = 0;
+			Rect.right = 600;
+			Rect.bottom = 400;
+		}
 
 		RegCloseKey(hKey);
 	}
 
 	Top = Rect.top;
 	Left = Rect.left;
+	Width = Rect.right - Left;
+	Height = Rect.bottom - Top;
 
-	MoveWindow(hMHWnd, Left - (OffsetW /2), Top - OffsetH + 4, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+	PORT->MaxMHWindowlength = Height;
+
+	wc.style         = CS_HREDRAW | CS_VREDRAW ;//| CS_NOCLOSE;
+	wc.lpfnWndProc   = (WNDPROC)MHWndProc;
+	wc.cbClsExtra    = 0;
+	wc.cbWndExtra    = 0;
+	wc.hInstance     = hInstance;
+	wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
+	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+	wc.lpszMenuName =  NULL ;
+	wc.lpszClassName = "MHAppName";
+
+	RegisterClass(&wc);
+
+	sprintf(WindowTitle,"AXIP Port %d MHEARD", PORT->Port);
+  
+	PORT->hMHWnd = hMHWnd = CreateMDIWindow("MHAppName", WindowTitle, WS_OVERLAPPEDWINDOW,
+		  Left - (OffsetW /2), Top - OffsetH, Width, Height, ClientWnd, hInstance, 1234);
 
 	PORT->hMHMenu = CreatePopupMenu();
 	AppendMenu(PORT->hMHMenu, MF_STRING, BPQCOPY, "Copy");
@@ -2375,6 +2323,9 @@ BOOL add_arp_entry(struct PORTINFO * PORT, UCHAR * call, UCHAR * ip, int len, in
 	arp->AutoAdded = AutoAdded;
 	arp->TCPMode = TCPFlag;
 	PORT->arp_table_len++;
+
+	if (PORT->MaxResWindowlength < (PORT->arp_table_len * 14) + 70)
+		PORT->MaxResWindowlength = (PORT->arp_table_len * 14) + 70;
 
 	PORT->NeedResolver |= TCPFlag;					// Need Resolver window to handle tcp socket messages
 	PORT->NeedTCP |= TCPFlag;

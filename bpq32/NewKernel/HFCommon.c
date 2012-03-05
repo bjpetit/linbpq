@@ -80,7 +80,9 @@ VOID * zalloc(int len)
 	void * ptr;
 
 	ptr=malloc(len);
-	memset(ptr, 0, len);
+
+	if (ptr)
+		memset(ptr, 0, len);
 
 	return ptr;
 }
@@ -281,7 +283,8 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		// call DrawMenuBar after the menu items are set
 		DrawMenuBar(FrameWnd);
 
-		return 0;
+		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
+
 	}
 
 
@@ -337,6 +340,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		}
 
 	case WM_SIZING:
+	case WM_SIZE:
 
 		MoveWindows(TNC);
 			
@@ -359,10 +363,9 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			TNC->Minimized = TRUE;
 			return DefMDIChildProc(hWnd, message, wParam, lParam);
-		
-		default:
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
 		}
+		
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 	case WM_CTLCOLORDLG:
 		return (LONG)bgBrush;
@@ -443,7 +446,17 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
+		{
 			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &TNC->Minimized);
+
+			if (Rect.top < - 500 || Rect.left < - 500)
+			{
+				Rect.left = 0;
+				Rect.top = 0;
+				Rect.right = 600;
+				Rect.bottom = 400;
+			}
+		}
 
 		if (TNC->Hardware == H_WINMOR)	
 			retCode = RegQueryValueEx(hKey,"TNC->RestartAfterFailure",0,			
@@ -457,7 +470,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 //	GetWindowRect(hDlg, &Rect);	// Get the real size
 
-	MoveWindow(hDlg, Left - (OffsetW /2), Top - OffsetH + 4, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
+	MoveWindow(hDlg, Left - (OffsetW /2), Top - OffsetH, Rect.right - Rect.left, Rect.bottom - Rect.top, TRUE);
 	
 	if (TNC->Minimized)
 		ShowWindow(hDlg, SW_SHOWMINIMIZED);
@@ -1201,15 +1214,9 @@ DoMove:
 	return;
 }
 
-VOID SaveWindowPos(int port)
+VOID CloseDriverWindow(int port)
 {
 	struct TNCINFO * TNC;
-	HKEY hKey=0;
-	char Size[80];
-	char Key[80];
-	int retCode, disp;
-	int Minimized;
-	RECT FRect;
 
 	TNC = TNCInfo[port];
 	if (TNC == NULL)
@@ -1218,41 +1225,30 @@ VOID SaveWindowPos(int port)
 	if (TNC->hDlg == NULL)
 		return;
 
-	Minimized = TNC->Minimized;
-	
-	ShowWindow(TNC->hDlg, SW_RESTORE);
-	GetWindowRect(TNC->hDlg, &Rect);
-
-	// Make relative to Frame
-
-	GetWindowRect(FrameWnd, &FRect);
-
-	Rect.top -= FRect.top ;
-	Rect.left -= FRect.left;
-	Rect.bottom -= FRect.top;
-	Rect.right -= FRect.left;
-
-
-	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", port);
-	
-	retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0,
-            KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		wsprintf(Size,"%d,%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom, Minimized);
-		retCode = RegSetValueEx(hKey,"Size",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		retCode = RegSetValueEx(hKey,"TNC->RestartAfterFailure",0,REG_DWORD,(BYTE *)&TNC->RestartAfterFailure, 4);
-
-		RegCloseKey(hKey);
-	}
-
-//	PostMessage(TNC->hDlg, WM_QUIT,0,0);
 	PostMessage(TNC->hDlg, WM_DESTROY,0,0);
 	DestroyWindow(TNC->hDlg);
 
 	TNC->hDlg = NULL;
+
+	return;
+}
+
+VOID SaveWindowPos(int port)
+{
+	struct TNCINFO * TNC;
+	char Key[80];
+
+	TNC = TNCInfo[port];
+
+	if (TNC == NULL)
+		return;
+
+	if (TNC->hDlg == NULL)
+		return;
+	
+	wsprintf(Key, "PACTOR\\PORT%d", port);
+
+	SaveMDIWindowPos(TNC->hDlg, Key, "Size", TNC->Minimized);
 
 	return;
 }

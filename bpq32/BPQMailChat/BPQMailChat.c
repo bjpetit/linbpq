@@ -731,6 +731,11 @@
 //	All printing of more than one message at a time
 //	Add command to toggle "Expert" status
 
+// Version 1.4.50.1 February 2012
+
+// Fix forwarding to RMS Express users
+// Route messages received via B2 to an Internet email address to RMS
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -8718,6 +8723,11 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 	int TotalSize = 0;
 	time_t NOW = time(NULL);
 
+//	Debugprintf("FMTF entered Call %s Type %c Maxlen %d", conn->Callsign, Type, MaxLen);
+
+	if (conn->PacLinkCalls)			// Looking for all messages, so reset 
+		conn->NextMessagetoForward = 1;
+
 	conn->FBBIndex = 0;
 
 	for (m = conn->NextMessagetoForward; m <= NumberofMessages; m++)
@@ -8734,10 +8744,15 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 			while (Call)
 			{
+				if (Msg->type == Type && Msg->status == 'N')
+				{
+//				Debugprintf("Comparing RMS Call %s %s", Msg->to, Call);
 				if (_stricmp(Msg->to, Call) == 0)
 					if (Msg->status == 'N' && Msg->type == Type && Msg->length <= MaxLen) 
-					goto Forwardit;
-				
+						goto Forwardit;
+					else
+						Debugprintf("Call Match but Wrong Type/Len %c %d", Msg->type, Msg->length);
+				}
 				Call = conn->PacLinkCalls[index++];
 			}
 //			continue;
@@ -8749,7 +8764,10 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 			// Message to be sent - do a consistancy check (State, etc)
 
 		Forwardit:
-		
+
+//			Debugprintf("Message Found %d", Msg->number);
+
+
 			if ((Msg->from[0] == 0) || (Msg->to[0] == 0))
 			{
 				int Length=0;
@@ -8803,7 +8821,10 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 						
 						// Corrupt B2 Message
 						
-						Debugprintf("Corrupt B2 Message found - Message will be held");
+						Debugprintf("Corrupt B2 Message found - Message %d will be held", Msg->number);
+						Msg->status = 'H';
+						SaveMessageDatabase();
+
 						conn->FBBIndex--;
 						TotalSize -= Msg->length;
 						memset(&conn->FBBHeaders[conn->FBBIndex], 0, sizeof(struct FBBHeaderLine));
@@ -8812,7 +8833,6 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 						wsprintf(Title, "Message %d Held - %s", Msg->number, "Corrupt B2 Message");
 						SendMessageToSYSOP(Title, MailBuffer, Length);
 			
-						Msg->status = 'H';
 						continue;
 					}
 				}

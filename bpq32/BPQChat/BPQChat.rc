@@ -143,25 +143,32 @@ FONT 8, "System"
 BEGIN
 END
 
-CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 371, 266
+CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 371, 296
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Configuration"
 FONT 8, "System"
 BEGIN
-    LTEXT           "Chat Appl Number",-1,91,85,61,8
-    EDITTEXT        ID_CHATAPPL,159,84,29,14
-    LTEXT           "Nodes to link to",-1,94,107,53,8
-    EDITTEXT        ID_CHATNODES,158,107,87,88,ES_MULTILINE | ES_UPPERCASE | 
-                    ES_AUTOVSCROLL | ES_WANTRETURN
-    DEFPUSHBUTTON   "Save",2100,165,222,50,14,BS_CENTER | BS_VCENTER
+    LTEXT           "Chat Appl Number",IDC_STATIC,91,85,61,8
+    EDITTEXT        ID_CHATAPPL,159,83,29,14
+    LTEXT           "Nodes to link to",IDC_STATIC,159,106,53,8
+    EDITTEXT        ID_CHATNODES,142,119,87,60,ES_MULTILINE | ES_UPPERCASE | 
+                    ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL
+    DEFPUSHBUTTON   "Save Nodes",SAVENODES,160,183,50,14,BS_CENTER | 
+                    BS_VCENTER
     LTEXT           "The Application Number defines which BPQ32 Application gives access to the Chat Server. Note this is the APPLNumber (1-32) not an Application Mask, as uses in many BPQ32 programs.",
-                    -1,10,10,353,18
+                    IDC_STATIC,10,10,353,18
     LTEXT           "The Nodes to link to box defines which other Chat Nodes should be connected to, or from which connections may be accepted. The format is ALIAS:CALL, eg BPQCHT:G8BPQ-4. Note these must be directly connectable - ie in your NODES table.",
-                    -1,10,30,355,25
+                    IDC_STATIC,10,30,355,25
     LTEXT           "The Callsign of the Chat Node is not defined here - It is obtained from the BPQ32 APPLCALL parameter corresponding to the Chat Appl Number.",
-                    -1,10,60,360,25
-    LTEXT           "Streams",-1,199,87,34,8
-    EDITTEXT        ID_STREAMS,236,85,29,14
+                    IDC_STATIC,10,60,360,25
+    LTEXT           "Streams",IDC_STATIC,199,85,34,8
+    EDITTEXT        ID_STREAMS,236,83,29,14
+    LTEXT           "Chat Welcome Message",IDC_STATIC,142,202,82,8
+    EDITTEXT        IDM_CHATUSERMSG,15,214,340,54,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
+                    WS_VSCROLL
+    DEFPUSHBUTTON   "Save Welcome Message",SAVEWELCOME,140,274,91,14,
+                    BS_CENTER | BS_VCENTER
 END
 
 IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68
@@ -201,7 +208,7 @@ CAPTION "Chat Colour Configuration"
 FONT 8, "System"
 BEGIN
     DEFPUSHBUTTON   "Save",IDOK,50,95,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,120,95,50,14
+    PUSHBUTTON      "Close",IDCANCEL,120,95,50,14
     COMBOBOX        IDC_CHATCALLS,10,5,100,60,CBS_DROPDOWNLIST | CBS_SORT | 
                     WS_VSCROLL | WS_TABSTOP
     COMBOBOX        IDC_CHATCOLOURS,115,5,100,60,CBS_DROPDOWNLIST | 
@@ -255,6 +262,11 @@ BEGIN
         BOTTOMMARGIN, 155
     END
 
+    CHAT_CONFIG, DIALOG
+    BEGIN
+        BOTTOMMARGIN, 294
+    END
+
     IDD_USERADDED_BOX, DIALOG
     BEGIN
         BOTTOMMARGIN, 65
@@ -289,6 +301,7 @@ BEGIN
             MENUITEM ".",                           IDM_DISCONNECT
         END
         MENUITEM "Update Chat Map Info",        ID_ACTIONS_UPDATECHATMAPINFO
+        MENUITEM "Edit Chat Console Colours",   IDM_EDITCHATCOLOURS
     END
     MENUITEM "&Configuration",              IDM_CONFIG
     POPUP "Windows"

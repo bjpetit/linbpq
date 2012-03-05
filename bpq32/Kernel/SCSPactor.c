@@ -638,7 +638,7 @@ UINT WINAPI SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	TempScript = malloc(1000);
 
-	strcpy(TempScript, "EXIT\r");				// In case in pac: mode
+	strcpy(TempScript, "QUIT\r");				// In case in pac: mode
 	strcat(TempScript, "TONES 4\r");			// Tones may be changed but I want this as standard
 	strcat(TempScript, "MAXERR 30\r");			// Max retries 
 	strcat(TempScript, "MODE 0\r");				// ASCII mode, no PTC II compression (Forwarding will use FBB Compression)
@@ -1788,6 +1788,9 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 		Poll[4] = 0x1;
 		memcpy(&Poll[5], "PT", 2);
 		CRCStuffAndSend(TNC, Poll, 7);
+		OpenLogFile(TNC->Port);
+		WriteLogLine(TNC->Port, "SwitchModes - Setting Pactor", 28);
+		CloseLogFile(TNC->Port);
 
 		TNC->HFPacket = FALSE;
 		TNC->Streams[0].DEDStream = 31;		// Pactor Channel
@@ -1963,6 +1966,10 @@ VOID ProcessTermModeResponse(struct TNCINFO * TNC)
 		// Send Restart to make sure PTC is in a known state
 
 		strcpy(Poll, "RESTART\r");
+
+		OpenLogFile(TNC->Port);
+		WriteLogLine(TNC->Port, Poll, 7);
+		CloseLogFile(TNC->Port);
 
 		TNC->TXLen = 8;
 		WriteCommBlock(TNC);

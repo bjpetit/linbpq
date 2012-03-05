@@ -318,9 +318,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		Sleep(25);
 
 		CloseHandle(TNCInfo[port]->hDevice);
-				
-		SaveWindowPos(port);
-
 		return (0);
 
 	case 6:

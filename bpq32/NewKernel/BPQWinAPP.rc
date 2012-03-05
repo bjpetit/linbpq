@@ -25,13 +25,13 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 
 #define BPQICON 400
 
-BPQICON                 ICON    DISCARDABLE     "BPQ.ICO"
+BPQICON ICON DISCARDABLE  "..\\bpqicon.ico"
 
 //
 // Version
 //
-#define TEXTVER "1. 0. 3. 1\0"
-#define BINVER 1, 0, 3, 1
+#define TEXTVER "2. 0. 0. 2\0"
+#define BINVER 2, 0, 0, 2
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION BINVER

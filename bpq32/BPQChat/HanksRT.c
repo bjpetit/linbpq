@@ -29,6 +29,9 @@ static KNOWNNODE *knownnode_add(char *call);
 VOID SendChatLinkStatus();
 char * lookupuser(char * call);
 
+extern int AutoColours[];
+extern int AutoColours[];
+
 //#undef free
 //#define   free(p) 
 
@@ -1478,8 +1481,18 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias,
 	_strupr(user->call);
 	user->node = node;
 	rduser(user);
-	if (user->Colour == 0)
-		user->Colour = 11;
+
+	if (user->Colour == 0 || user->Colour == 11)	// None or default
+	{
+		// Allocate Random
+		int sum = 0, i;
+
+		for (i = 0; i < 9; i++)
+		sum += user->call[i];
+		sum %= 20;
+
+		user->Colour = AutoColours[sum] + 10;		// Best 20 colours
+	}
 
 	if (circuit->rtcflags & p_user)
 		circuit->u.user = user;
@@ -1779,7 +1792,7 @@ int rtloginu (CIRCUIT *circuit, BOOL Local)
 	}
 	upduser(user);
 
-//	ExpandAndSendMessage(circuit, ChatWelcomeMsg, LOG_CHAT);
+	ExpandAndSendMessage(circuit, ChatWelcomeMsg, LOG_CHAT);
 	text_tellu_Joined(user);
 	user_tell(user, id_join);
 	show_users(circuit);
@@ -1840,9 +1853,13 @@ void show_users(CIRCUIT *circuit)
 			Topic = user->topic->name;
 
 		__try 
-		{		
-			nprintf(circuit, "%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
-				user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
+		{
+			if (circuit->u.user->rtflags & u_colour)	// Use Colour
+				nprintf(circuit, "\x1b%c%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
+					user->Colour, user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
+			else
+				nprintf(circuit, "%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
+					user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
 		}
 		__except(EXCEPTION_EXECUTE_HANDLER)
 		{

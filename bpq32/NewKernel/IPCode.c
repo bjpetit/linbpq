@@ -43,6 +43,7 @@ extern struct BPQVECSTRUC IPHOSTVECTOR;
 
 BOOL APIENTRY  GETSENDNETFRAMEADDR();
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
+LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 BOOL ProcessConfig();
 BOOL FreeConfig();
@@ -78,6 +79,10 @@ static HMENU hMenu;
 extern HMENU hWndMenu;
 static HMENU hPopMenu;
 
+extern HKEY REGTREE;
+
+extern int OffsetH, OffsetW;
+
 extern HMENU hMainFrameMenu, hBaseMenu;
 extern HWND ClientWnd, FrameWnd;
 
@@ -86,6 +91,8 @@ int map_table_len = 0;
 int ResolveIndex=-1;			// pointer to entry being resolved
 
 struct map_table_entry map_table[MAX_ENTRIES];
+
+int Windowlength, WindowParam;
 
 struct tagMSG Msg;
 
@@ -99,7 +106,7 @@ char ConfigClassName[]="CONFIG";
 
 HWND hIPResWnd = 0;
 
-extern BOOL StartMinimized;
+BOOL IPMinimized;
 
 extern char * PortConfig[];
 
@@ -256,7 +263,79 @@ Dll BOOL APIENTRY Init_IP()
 	ReadARP();
 
 	if (NeedResolver)
+	{
+		WNDCLASS  wc;
+		int i;
+		char WindowTitle[100];
+		int retCode, Type, Vallen;
+		HKEY hKey;
+		char Size[80];
+		RECT Rect = {0,0,0,0};
+
+		retCode = RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32", 0, KEY_QUERY_VALUE, &hKey);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			Vallen=80;
+
+			retCode = RegQueryValueEx(hKey,"IPResSize",0,			
+				(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+			if (retCode == ERROR_SUCCESS)
+				sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &IPMinimized);
+
+			if (Rect.top < - 500 || Rect.left < - 500)
+			{
+				Rect.left = 0;
+				Rect.top = 0;
+				Rect.right = 600;
+				Rect.bottom = 400;
+			}
+
+			RegCloseKey(hKey);
+		}
+
+		// Fill in window class structure with parameters that describe
+		// the main window.
+
+        wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
+        wc.lpfnWndProc   = (WNDPROC)ResWndProc;
+        wc.cbClsExtra    = 0;
+        wc.cbWndExtra    = 0;
+        wc.hInstance     = hInstance;
+        wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
+        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+		wc.lpszMenuName =  NULL ;
+        wc.lpszClassName = "IPAppName";
+
+        // Register the window classes
+
+		RegisterClass(&wc);
+
+		i=GetLastError();
+ 
+		Windowlength=(map_table_len)*14+100;
+		WindowParam=WS_OVERLAPPEDWINDOW | WS_VSCROLL;
+
+		sprintf(WindowTitle,"IP Gateway Resolver");
+
+		hIPResWnd = CreateMDIWindow("IPAppName", WindowTitle, WindowParam,
+			  Rect.left - (OffsetW /2), Rect.top - OffsetH, Rect.right - Rect.left, Rect.bottom - Rect.top,
+			  ClientWnd, hInstance, 1234);
+
+		hPopMenu = CreatePopupMenu();
+		AppendMenu(hPopMenu, MF_STRING, BPQREREAD, "ReRead Config");
+
+		SetScrollRange(hIPResWnd,SB_VERT,0, map_table_len,TRUE);
+
+		if (IPMinimized)
+			ShowWindow(hIPResWnd, SW_SHOWMINIMIZED);
+		else
+			ShowWindow(hIPResWnd, SW_RESTORE);
+
 		_beginthread(IPResolveNames, 0, NULL );
+	}
 
 	WritetoConsole("\n");
 	WritetoConsole("IP Support Enabled\n");
@@ -269,7 +348,7 @@ VOID IPClose()
 	PostMessage(hIPResWnd, WM_DESTROY,0,0);
 	DestroyWindow(hIPResWnd);
 
-	hIPResWnd= NULL;
+	hIPResWnd = NULL;
 }
 
 Dll BOOL APIENTRY Poll_IP()
@@ -1786,9 +1865,6 @@ VOID WriteARPLine(PARPDATA ARPRecord)
 	return;
 }
 
-int Windowlength, WindowParam;
-
-
 LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
@@ -1862,7 +1938,8 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			
 		DrawMenuBar(FrameWnd);
 
-		return 0;
+		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
+
 	}
 
 	case WM_COMMAND:
@@ -1907,18 +1984,23 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 */
 	case WM_SYSCOMMAND:
 
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-		switch (wmId) { 
-
-			case  SC_MINIMIZE: 
-						
-			default:
+		wmId    = LOWORD(wParam);
+		wmEvent = HIWORD(wParam);
 		
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
-		}
+		switch (wmId)
+		{ 
+		case SC_RESTORE:
 
+			IPMinimized = FALSE;
+			SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
+			break;
+
+		case SC_MINIMIZE: 
+
+			IPMinimized = TRUE;
+			break;
+		}
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 	case WM_VSCROLL:
 		
@@ -1993,7 +2075,7 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	case WM_DESTROY:
 		
 
-		PostQuitMessage(0);
+//		PostQuitMessage(0);
 			
 		break;
 
@@ -2016,63 +2098,11 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 void IPResolveNames( void *dummy )
 {
-	WNDCLASS  wc;
-	int i;
-	char WindowTitle[100];
-
-	// Fill in window class structure with parameters that describe
-    // the main window.
-
-        wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-        wc.lpfnWndProc   = (WNDPROC)ResWndProc;
-        wc.cbClsExtra    = 0;
-        wc.cbWndExtra    = 0;
-        wc.hInstance     = hInstance;
-        wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
-        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
-		wc.lpszMenuName =  NULL ;
-        wc.lpszClassName = "IPAppName";
-
-        // Register the window classes
-
-		RegisterClass(&wc);
-
-		i=GetLastError();
- 
-	if (map_table_len > 10 )
-	{
-		Windowlength=10*14+100;
-		WindowParam=WS_OVERLAPPEDWINDOW | WS_VSCROLL;
-	}
-	else
-	{
-		Windowlength=(map_table_len)*14+100;
-		WindowParam=WS_OVERLAPPEDWINDOW ;
-	}
-
-	sprintf(WindowTitle,"IP Gateway Resolver");
-
-
-	hIPResWnd = CreateMDIWindow("IPAppName", WindowTitle, WindowParam,
-		  CW_USEDEFAULT, 0, 400, Windowlength, ClientWnd, hInstance, 1234);
-
-	hPopMenu = CreatePopupMenu();
-	AppendMenu(hPopMenu, MF_STRING, BPQREREAD, "ReRead Config");
-
-  	if (map_table_len > 10 )
-		SetScrollRange(hIPResWnd,SB_VERT,0,map_table_len-10,TRUE);
-
-	if (StartMinimized)
-		ShowWindow(hIPResWnd, SW_SHOWMINIMIZED);
-	else
-		ShowWindow(hIPResWnd, SW_RESTORE);
-
 	SetTimer(hIPResWnd,1,15*60*1000,0);	
 
 	PostMessage(hIPResWnd, WM_TIMER,0,0);
 
-	while (GetMessage(&Msg, NULL, 0, 0)) 
+	while (GetMessage(&Msg, hIPResWnd, 0, 0)) 
 	{
 			TranslateMessage(&Msg);
 			DispatchMessage(&Msg);

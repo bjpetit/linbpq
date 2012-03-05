@@ -38,11 +38,18 @@ LRESULT CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 HWND FrameWnd;
 int TimerHandle = 0;
 
-LOGFONT LFTTYFONT ;
 
-HFONT hFont ;
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[1000];
+	va_list(arglist);int Len;
 
-BOOL MinimizetoTray=FALSE;
+	va_start(arglist, format);
+	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
+	strcat_s(Mess, 999, "\r\n");
+	OutputDebugString(Mess);
+	return;
+}
 
 //
 //  FUNCTION: WinMain(HANDLE, HANDLE, LPSTR, int)
@@ -57,6 +64,9 @@ BOOL MinimizetoTray=FALSE;
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	MSG msg;
+	BOOL bRet;
+
+	Debugprintf("BPQ32.exe %s Entered", lpCmdLine);
 
 	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delay 5 Secs				
 		Sleep(5000);
@@ -68,11 +78,21 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	// Main message loop:
 
-	while (GetMessage(&msg, NULL, 0, 0)) 
-	{
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+	while( (bRet = GetMessage( &msg, NULL, 0, 0 )) != 0)
+	{ 
+		if (bRet == -1)
+		{
+		    Debugprintf("GetMessage Returned -1 %d", GetLastError());
+			break;
+		}
+	    else
+		{
+			TranslateMessage(&msg); 
+	        DispatchMessage(&msg); 
+	    }
 	}
+
+	Debugprintf("BPQ32.exe exiting %d", msg.message);
 
 	KillTimer(NULL,TimerHandle);
 
@@ -102,10 +122,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	hInst = hInstance; // Store instance handle in our global variable
 
-	MinimizetoTray=GetMinimizetoTrayFlag();
-
-	hInst = hInstance; // Store instance handle in our global variable
-
 	wndclassMainFrame.cbSize		= sizeof(WNDCLASSEX);
 	wndclassMainFrame.style			= CS_HREDRAW | CS_VREDRAW;
 	wndclassMainFrame.lpfnWndProc	= FrameWndProc;
@@ -122,6 +138,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if(!RegisterClassEx(&wndclassMainFrame))
 	{
+		Debugprintf("BPQ32.exe RC failed %d", GetLastError());
 		return 0;
 	}
 

@@ -951,17 +951,27 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			B2To = ptr1 - outfile;
 
-			ptr3 = strchr(FullTo, '@');
-
-			if (ptr3)
+			if (conn->BPQBBS && !CheckifPacket(FullTo))  // May be an message for RMS being passed to an intermediate BBS
 			{
-				*ptr3++ = 0;
-				strcpy(Msg->via, ptr3);
+				// Internet address - send via RMS
+
+				strcpy(Msg->via, FullTo);
+				strcpy(FullTo,"RMS");
+				RMSMsgs ++;
 			}
 			else
-				Msg->via[0] = 0;
+			{
+				ptr3 = strchr(FullTo, '@');
 
-			
+				if (ptr3)
+				{
+					*ptr3++ = 0;
+					strcpy(Msg->via, ptr3);
+				}
+				else
+					Msg->via[0] = 0;
+			}
+		
 			if (conn->Paclink)
 			{
 				Msg->B2Flags |= FromPaclink;

@@ -18,10 +18,9 @@ struct ConsoleInfo * ConsHeader[2] = {&BBSConsole, &ChatConsole};
 
 struct ConsoleInfo * InitHeader;
 
-
-//CIRCUIT * Console;
 HWND hConsole;
-//RECT ConsoleRect;
+
+int AutoColours[20] = {0, 4, 9, 11, 13, 16, 17, 42, 45, 50, 61, 64, 66, 72, 81, 84, 85, 86, 87, 89};
 
 COLORREF Colours[256] = {0,
 		RGB(0,0,0), RGB(0,0,128), RGB(0,0,192), RGB(0,0,255),				// 1 - 4
@@ -30,29 +29,29 @@ COLORREF Colours[256] = {0,
 		RGB(0,192,0), RGB(0,192,128), RGB(0,192,192), RGB(0,192,255),		// 13 - 16
 		RGB(0,255,0), RGB(0,255,128), RGB(0,255,192), RGB(0,255,255),		// 17 - 20
 
-		RGB(64,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 17 
+		RGB(64,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 21 
 		RGB(64,64,0), RGB(64,64,128), RGB(64,64,192), RGB(64,64,255),
 		RGB(64,128,0), RGB(64,128,128), RGB(64,128,192), RGB(64,128,255),
 		RGB(64,192,0), RGB(64,192,128), RGB(64,192,192), RGB(64,192,255),
 		RGB(64,255,0), RGB(64,255,128), RGB(64,255,192), RGB(64,255,255),
 
-		RGB(128,0,0), RGB(128,0,128), RGB(128,0,192), RGB(128,0,255),				// 33
+		RGB(128,0,0), RGB(128,0,128), RGB(128,0,192), RGB(128,0,255),				// 41
 		RGB(128,64,0), RGB(128,64,128), RGB(128,64,192), RGB(128,64,255),
 		RGB(128,128,0), RGB(128,128,128), RGB(128,128,192), RGB(128,128,255),
 		RGB(128,192,0), RGB(128,192,128), RGB(128,192,192), RGB(128,192,255),
 		RGB(128,255,0), RGB(128,255,128), RGB(128,255,192), RGB(128,255,255),
 
-		RGB(192,0,0), RGB(192,0,128), RGB(192,0,192), RGB(192,0,255),				// 49
+		RGB(192,0,0), RGB(192,0,128), RGB(192,0,192), RGB(192,0,255),				// 61
 		RGB(192,64,0), RGB(192,64,128), RGB(192,64,192), RGB(192,64,255),
 		RGB(192,128,0), RGB(192,128,128), RGB(192,128,192), RGB(192,128,255),
 		RGB(192,192,0), RGB(192,192,128), RGB(192,192,192), RGB(192,192,255),
-		RGB(192,255,0), RGB(192,255,128), RGB(192,255,192), RGB(192,2552,255),
+		RGB(192,255,0), RGB(192,255,128), RGB(192,255,192), RGB(192,255,255),
 
-		RGB(255,0,0), RGB(255,0,128), RGB(255,0,192), RGB(255,0,255),				// 49
+		RGB(255,0,0), RGB(255,0,128), RGB(255,0,192), RGB(255,0,255),				// 81
 		RGB(255,64,0), RGB(255,64,128), RGB(255,64,192), RGB(255,64,255),
 		RGB(255,128,0), RGB(255,128,128), RGB(255,128,192), RGB(255,128,255),
 		RGB(255,192,0), RGB(255,192,128), RGB(255,192,192), RGB(255,192,255),
-		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,2552,255)
+		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,255,255)		// 100 ?
 };
 
 
@@ -89,6 +88,7 @@ BOOL CreateConsole(int Stream)
 	char RTFColours[3000];
 	struct ConsoleInfo * Cinfo;
 	int i, n;
+	char Text[80];
 	
 	if (Stream == -1) 
 		Cinfo = &BBSConsole;
@@ -114,7 +114,6 @@ BOOL CreateConsole(int Stream)
 
 		Cinfo->Bells = GetIntValue("Bells", 0);
 		Cinfo->FlashOnBell = GetIntValue("FlashOnBell", 0);	
-		Cinfo->Bells = GetIntValue("Bells", 0);	
 		Cinfo->CloseWindowOnBye = GetIntValue("CloseWindowOnBye", 0);	
 		Cinfo->WarnWrap = GetIntValue("WarnWrap", 0);	
 		Cinfo->WrapInput = GetIntValue("WrapInput", 0);	
@@ -144,6 +143,9 @@ BOOL CreateConsole(int Stream)
 	
 	if (!hConsole)
         return (FALSE);
+
+	wsprintf(Text, "Chat %s Console", Session);
+	SetWindowText(hConsole, Text);
 
 	Cinfo->readbuff = zalloc(1000);
 	Cinfo->readbufflen = 1000;
@@ -212,7 +214,11 @@ BOOL CreateConsole(int Stream)
 	Cinfo->wpOrigInputProc = (WNDPROC) SetWindowLong(Cinfo->hwndInput, GWL_WNDPROC, (LONG) InputProc); 
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(hConsole, "Chat Console");
+	{
+		char Text[80];
+		wsprintf(Text, "Chat %s Console", Session);
+		AddTrayMenuItem(hConsole, Text);
+	}
 
 	ShowWindow(hConsole, SW_SHOWNORMAL);
 
@@ -450,7 +456,7 @@ INT_PTR CALLBACK ChatColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LP
 			break;
 
 		case IDOK:
-		{
+
 			Sel = SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETCURSEL, 0, 0);
 			
 			SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&Call);
@@ -464,7 +470,8 @@ INT_PTR CALLBACK ChatColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LP
 				user->Colour = Sel + 10;
 				upduser(user);
 			}
-		}
+			break;
+
 
 		case IDCANCEL:
 

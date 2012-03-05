@@ -95,10 +95,11 @@ char YaesuModes[16][6] = {"LSB",  "USB", "CW", "CWR", "AM", "", "", "", "FM", ""
 char FT100Modes[9][6] = {"LSB",  "USB", "CW", "CWR", "AM", "DIG", "FM", "WFM", "????"};
 
 
-char KenwoodModes[8][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "????"};
+char KenwoodModes[16][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "????"};
 
 char FT2000Modes[16][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "PKT-L", "FSK-R", "PKT-FM", "FM-N", "PKT-U", "????"};
 
+char FLEXModes[16][6] = {"LSB", "USB", "DSB", "CWL", "CWU", "FM", "AM", "DIGU", "SPEC", "DIGL", "SAM", "DRM"};
 
 char AuthPassword[100] = "";
 
@@ -187,35 +188,18 @@ DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 			return;
 
 		case KENWOOD:
-
-			if (PTTState)
-			{
-				strcpy(Poll,"TX0;");
-				PORT->TXLen = 4;
-			}
-			else
-			{
-				strcpy(Poll,"RX;");
-				PORT->TXLen = 3;
-			}
-
-			RigWriteCommBlock(PORT);
-
-			PORT->Retries = 1;
-			PORT->Timeout = 0;
-			return;
-
 		case FT2000:
+		case FLEX:
 
 			if (PTTState)
 			{
-				strcpy(Poll,"TX1;");
-				PORT->TXLen = 4;
+				strcpy(Poll, RIG->PTTOn);
+				PORT->TXLen = RIG->PTTOnLen;
 			}
 			else
 			{
-				strcpy(Poll,"TX0;");
-				PORT->TXLen = 4;
+				strcpy(Poll, RIG->PTTOff);
+				PORT->TXLen = RIG->PTTOffLen;
 			}
 
 			RigWriteCommBlock(PORT);
@@ -738,6 +722,7 @@ portok:
 
 	case KENWOOD:
 	case FT2000:
+	case FLEX:
 			
 		if (n < 3)
 		{
@@ -747,16 +732,23 @@ portok:
 
 		for (ModeNo = 0; ModeNo < 14; ModeNo++)
 		{
-			if (_stricmp(FT2000Modes[ModeNo], Mode) == 0)
+			if (PORT->PortType == FT2000)
+				if (_stricmp(FT2000Modes[ModeNo], Mode) == 0)
+				break;
+
+			if (PORT->PortType == KENWOOD)
+				if (_stricmp(KenwoodModes[ModeNo], Mode) == 0)
+				break;
+			if (PORT->PortType == FLEX)
+				if (_stricmp(FLEXModes[ModeNo], Mode) == 0)
 				break;
 		}
 
-		if (ModeNo == 8)
+		if (ModeNo > 12)
 		{
 			wsprintf(Command, "Sorry -Invalid Mode\r");
 			return FALSE;
 		}
-
 
 		buffptr = GetBuff();
 
@@ -778,6 +770,9 @@ portok:
 
 		if (PORT->PortType == FT2000)
 			buffptr[1] = wsprintf(Poll, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
+		else
+		if (PORT->PortType == FLEX)
+			buffptr[1] = wsprintf(Poll, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", &FreqString[1], ModeNo);
 		else
 			buffptr[1] = wsprintf(Poll, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 		
@@ -1096,6 +1091,7 @@ DllExport BOOL APIENTRY Rig_Poll()
 
 		case KENWOOD:
 		case FT2000:
+		case FLEX:
 			
 			KenwoodPoll(PORT);
 			break;
@@ -1306,7 +1302,8 @@ void CheckRX(struct RIGPORTINFO * PORT)
 
 	case KENWOOD:
 	case FT2000:
-	
+	case FLEX:
+
 		if (Length < 2)				// Minimum Frame Sise
 			return;
 
@@ -2254,9 +2251,17 @@ VOID ProcessKenwoodFrame(struct RIGPORTINFO * PORT, int Length)
 			SendResponse(RIG->Session, "Mode and Frequency Set OK");
 	
 		PORT->AutoPoll = TRUE;
+		return;
 	}
 
+
 Loop:
+
+	if (PORT->PortType == FLEX)
+	{
+		Msg += 2;						// Skip ZZ
+		Length -= 2;
+	}
 
 	ptr = strchr(Msg, ';');
 	CmdLen = ptr - Msg +1;
@@ -2281,7 +2286,7 @@ Loop:
 		for (i = 5; i > 2; i--)
 		{
 			if (FreqDecimal[i] == '0')
-				FreqDecimal[i] =0;
+				FreqDecimal[i] = 0;
 			else
 				break;
 		}
@@ -2304,6 +2309,12 @@ Loop:
 			Mode = Msg[3] - 48;
 			if (Mode > 13) Mode = 13;
 			SetWindowText(RIG->hMODE, FT2000Modes[Mode]);
+		}
+		else if (PORT->PortType == FLEX)
+		{
+			Mode = atoi(&Msg[3]);
+			if (Mode > 12) Mode = 12;
+			SetWindowText(RIG->hMODE, FLEXModes[Mode]);
 		}
 		else
 		{
@@ -2375,13 +2386,10 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 				if (RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
 
-				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 40);
 				RIG->FreqPtr++;
-	
-				if (PORT->PortType == FT2000)
-					PORT->TXLen = 22;
-				else
-					PORT->TXLen = 24;
+				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
+
 				RigWriteCommBlock(PORT);
 				PORT->CmdSent = 1;
 				PORT->Retries = 0;	
@@ -2442,6 +2450,13 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 		
 	// Read Frequency 
 
+	if (PORT->PortType == FLEX)
+	{
+		PORT->TXLen = 10;
+		strcpy(Poll, "ZZFA;ZZMD;");
+	}
+	else
+	{
 	Poll[0] = 'F';
 	Poll[1] = 'A';
 	Poll[2] = ';';
@@ -2450,6 +2465,8 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 	Poll[5] = ';';
 
 	PORT->TXLen = 6;
+	}
+	
 	RigWriteCommBlock(PORT);
 	PORT->Retries = 1;
 	PORT->Timeout = 10;
@@ -2681,6 +2698,9 @@ PortFound:
 	else
 	if (strcmp(ptr, "KENWOOD") == 0)
 		PORT->PortType = KENWOOD;
+	else
+	if (strcmp(ptr, "FLEX") == 0)
+		PORT->PortType = FLEX;
 	else
 	if (strcmp(ptr, "PTTONLY") == 0)
 		PORT->PortType = PTT;
@@ -2989,6 +3009,23 @@ PortFound:
 				}
 				break;
 
+			case FLEX:
+						
+				for (ModeNo = 0; ModeNo < 12; ModeNo++)
+				{
+					if (strlen(Mode) == 1)
+					{
+						if (FLEXModes[ModeNo][0] == Mode[0])
+							break;
+					}
+					else
+					{
+						if (_stricmp(FLEXModes[ModeNo], Mode) == 0)
+							break;
+					}
+				}
+				break;
+
 			case FT2000:
 						
 				if (Modeptr)
@@ -3168,11 +3205,30 @@ PortFound:
 		}
 		else if	(PORT->PortType == KENWOOD)
 		{	
-			CmdPtr += wsprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+			FreqPtr[0]->Cmd1Len = wsprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
+
+			strcpy(RIG->PTTOn, "TX0;");
+			RIG->PTTOnLen = 4;
+			strcpy(RIG->PTTOff, "RX;");
+			RIG->PTTOffLen = 3;
+		}
+		else if	(PORT->PortType == FLEX)
+		{	
+			FreqPtr[0]->Cmd1Len = wsprintf(CmdPtr, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", FreqString, ModeNo);
+
+			strcpy(RIG->PTTOn, "ZZTX1;");
+			RIG->PTTOnLen = 6;
+			strcpy(RIG->PTTOff, "ZZTX0;");
+			RIG->PTTOffLen = 6;
 		}
 		else if	(PORT->PortType == FT2000)
 		{	
-			CmdPtr += wsprintf(CmdPtr, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
+			FreqPtr[0]->Cmd1Len = wsprintf(CmdPtr, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
+			
+			strcpy(RIG->PTTOn, "TX1;");
+			RIG->PTTOnLen = 4;
+			strcpy(RIG->PTTOff, "TX0;");
+			RIG->PTTOffLen = 4;
 		}
 		else if	(PORT->PortType == FT100)
 		{	
@@ -3195,11 +3251,7 @@ PortFound:
 			*(CmdPtr++) = 0;
 			*(CmdPtr++) = 0;
 			*(CmdPtr++) = 16;			// Send Get Status, as FT100 doesn't ack commands
-
 		}
-
-
-		*(CmdPtr) = 0;
 
 		FreqPtr++;
 

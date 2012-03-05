@@ -556,7 +556,20 @@ extern int RELBUFF();
 extern int SENDNETFRAME();
 extern char MYCALL[];			// 7 chars, ax.25 format
 
+extern HWND hIPResWnd;
+extern BOOL IPMinimized;
+
 VOID SaveWindowPos(int port);
+VOID SaveAXIPWindowPos(int port);
+VOID SetupRTFHddr();
+
+int DoReceivedData(int Stream);
+int	DoStateChange(int Stream);
+int DoMonData(int Stream);
+struct ConsoleInfo * CreateChildWindow(int Stream, BOOL DuringInit);
+CloseHostSessions();
+SaveHostSessions();
+VOID SaveBPQ32Windows();
 
 char SIGNONMSG[128] = "";
 char SESSIONHDDR[80] = "";
@@ -645,8 +658,8 @@ VOID SendLocation();
 
 unsigned long _beginthread(void(*start_address)(), unsigned stack_size, int arglist);
 
-#define TRAY_ICON_ID	1		//				ID number for the Notify Icon
-#define MY_TRAY_ICON_MESSAGE	WM_APP	//		the message ID sent to our window
+#define TRAY_ICON_ID	      1		    //		ID number for the Notify Icon
+#define MY_TRAY_ICON_MESSAGE  WM_APP	//		the message ID sent to our window
 
 NOTIFYICONDATA niData; 
 
@@ -655,9 +668,14 @@ int SetupConsoleWindow();
 BOOL StartMinimized=FALSE;
 BOOL MinimizetoTray=TRUE;
 
+BOOL StatusMinimized = FALSE;
+BOOL ConsoleMinimized = FALSE;
+
 HMENU trayMenu=0;
 
-HWND hWnd, hWndCons, hWndBG, ClientWnd, FrameWnd;
+HWND hConsWnd = NULL, hWndCons = NULL, hWndBG = NULL, ClientWnd = NULL,  FrameWnd = NULL, StatusWnd = NULL;
+
+BOOL FrameMaximized = FALSE;
 
 BOOL IGateEnabled = TRUE;
 extern int ISDelayTimer;			// Time before trying to reopen APRS-IS link
@@ -665,11 +683,15 @@ extern int ISPort;
 
 static RECT Rect = {100,100,400,400};	// Console Window Position
 static RECT FRect = {100,100,800,600};	// Frame 
+static RECT StatusRect = {100,100,850,500};	// Status Window
 
 DllExport int APIENTRY DumpSystem();
 DllExport int APIENTRY SaveNodes ();
 DllExport int APIENTRY ClearNodes ();
 DllExport int APIENTRY SetupTrayIcon();
+UINT * Q_REM(UINT *Q);
+UINT ReleaseBuffer(UINT *BUFF);
+
 
 VOID CALLBACK TimerProc(HWND hwnd,UINT uMsg,UINT idEvent,DWORD dwTime );
 
@@ -681,14 +703,22 @@ int FirstEntry = 1;
 BOOL CloseLast = TRUE;			// If the user started BPQ32.exe, don't close it when other programs close
 BOOL Closing = FALSE;			// Set if Close All called - prevents respawning bpq32.exe
 
+BOOL BPQ32_EXE;					// Set if Process is running BPQ32.exe. Not initialised.
+								// Used to Kill surplus BPQ32.exe processes
+
+DWORD Our_PID;					// Our Process ID - local variable
+
 InitDone = 0;
 int FirstInitDone = 0;
 int PerlReinit = 0;
 int TimerHandle = 0;
+int SessHandle = 0;
+
 unsigned int TimerInst = 0xffffffff;
-;
+
+HANDLE hInstance = 0;
+
 int AttachedProcesses = 0;
-int AttachedPerlProcesses = 0;
 int AttachingProcess = 0;
 HINSTANCE hIPModule = 0;
 HINSTANCE hRigModule = 0;
@@ -696,9 +726,9 @@ HINSTANCE hRigModule = 0;
 BOOL ReconfigFlag = FALSE;
 BOOL RigReconfigFlag = FALSE;
 BOOL APRSReconfigFlag = FALSE;
+BOOL CloseAllNeeded = FALSE;
 
 int AttachedPIDList[100] = {0};
-int AttachedPIDType[100] = {0};
 
 HWND hWndArray[100] = {0};
 int PIDArray[100] = {0};
@@ -714,13 +744,17 @@ UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
 
 char pgm[256];		// Uninitialised so per process
 
-BOOL	Perl;
 HANDLE Mutex;
 
 BOOL PartLine = FALSE;
 int pindex = 0;
 
+VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dwTime);
+
+
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
+TIMERPROC lpSetupTermSessions = (TIMERPROC) SetupTermSessions;
+
 
 BOOL ProcessConfig();
 VOID FreeConfig();
@@ -987,7 +1021,9 @@ VOID CheckforLostProcesses()
 			for (i=1;i<65;i++)
 			{
 				if (BPQHOSTVECTOR[i-1].STREAMOWNER == AttachedPIDList[n])
+				{
 					DeallocateStream(i);
+				}
 			}
 				
 			if (TimerInst == ProcessID)
@@ -1000,20 +1036,19 @@ VOID CheckforLostProcesses()
 			
 				if (MinimizetoTray)
 					Shell_NotifyIcon(NIM_DELETE,&niData);
+
+				
 			}
 				
 			//	Remove this entry from PID List
 
-			AttachedPerlProcesses-=AttachedPIDType[n];
-
 			for (i=n; i< AttachedProcesses; i++)
 			{
-				AttachedPIDType[i]=AttachedPIDType[i+1];
 				AttachedPIDList[i]=AttachedPIDList[i+1];
 			}
 			AttachedProcesses--;
 
-			wsprintf(buff,"BPQ32 Lost Process - %d Process(es) Attached %d Perl Proceses\n", AttachedProcesses, AttachedPerlProcesses);
+			wsprintf(buff,"BPQ32 Lost Process - %d Process(es) Attached\n", AttachedProcesses);
 			OutputDebugString(buff);
 		}
 	}
@@ -1026,7 +1061,7 @@ VOID MonitorTimerThread(int x)
 
 		Sleep(60000);
 
-		if (!IsProcess(TimerInst))
+		if (TimerInst != 0xffffffff && !IsProcess(TimerInst))
 		{
 			// Timer owning Process has died - Force a new timer to be created
 			//	New timer thread will detect lost process and tidy up
@@ -1053,7 +1088,7 @@ VOID MonitorTimerThread(int x)
 
 			// Timer can only run in BPQ32.exe
 			
-			if (Closing ==FALSE)
+			if (Closing == FALSE && AttachingProcess == FALSE)
 			{
 				OutputDebugString("BPQ32 Reloading BPQ32.exe\n");
 				StartBPQ32();
@@ -1113,6 +1148,12 @@ VOID CALLBACK TimerProc
 	SemHeldByAPI = 2;
 
 	// See if reconfigure requested
+
+	if (CloseAllNeeded)
+	{
+		CloseAllNeeded = FALSE;
+		CloseAllPrograms();
+	}
 
 	if (ReconfigFlag)
 	{
@@ -1197,18 +1238,18 @@ VOID CALLBACK TimerProc
 			if (ISPort == 0)
 				IGateEnabled = 0;
 
-			CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
+			CheckDlgButton(hConsWnd, IDC_ENIGATE, IGateEnabled);
 
-			GetClientRect(hWnd, &cRect); 
+			GetClientRect(hConsWnd, &cRect); 
 			MoveWindow(hWndBG, 0, 0, cRect.right, 26, TRUE);
 			if (APRSActive)
 				MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
 			else
 			{
-				ShowWindow(GetDlgItem(hWnd, IDC_GPS), SW_HIDE); 
+				ShowWindow(GetDlgItem(hConsWnd, IDC_GPS), SW_HIDE); 
 				MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
 			}
-			InvalidateRect(hWnd, NULL, TRUE);
+			InvalidateRect(hConsWnd, NULL, TRUE);
 
 			RigActive = Rig_Init();
 			
@@ -1317,21 +1358,38 @@ FirstInit()
 	
 	APRSActive = Init_APRS();
 
+	if (APRSActive)
+	{
+		hWndBG = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 0,0,40,546, hConsWnd, NULL, hInstance, NULL);
+
+		CreateWindowEx(0, "BUTTON", "Enable IGate", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,
+			8,1,110,24, hConsWnd, (HMENU)IDC_ENIGATE, hInstance, NULL);
+
+		CreateWindowEx(0, "STATIC", "IGate State - Disconnected",
+			WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, 125, 0, 195, 24, hConsWnd, (HMENU)IGATESTATE, hInstance, NULL);
+
+		CreateWindowEx(0, "STATIC", "IGATE Stats - Msgs 0   Local Stns 0",
+			WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, 320, 0, 240, 24, hConsWnd, (HMENU)IGATESTATS, hInstance, NULL);
+
+		CreateWindowEx(0,  "STATIC", "GPS Off",
+			WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, 560, 0, 80, 24, hConsWnd, (HMENU)IDC_GPS, hInstance, NULL);
+	}
+
 	if (ISPort == 0)
 		IGateEnabled = 0;
 
-	CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
+	CheckDlgButton(hConsWnd, IDC_ENIGATE, IGateEnabled);
 	
-	GetClientRect(hWnd, &cRect); 
+	GetClientRect(hConsWnd, &cRect); 
 	MoveWindow(hWndBG, 0, 0, cRect.right, 26, TRUE);
 	if (APRSActive)
 		MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
 	else
 	{
-		ShowWindow(GetDlgItem(hWnd, IDC_GPS), SW_HIDE); 
+		ShowWindow(GetDlgItem(hConsWnd, IDC_GPS), SW_HIDE); 
 		MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
 	}
-	InvalidateRect(hWnd, NULL, TRUE);
+	InvalidateRect(hConsWnd, NULL, TRUE);
 
 	RigActive = Rig_Init();
 
@@ -1344,6 +1402,9 @@ FirstInit()
 
 Check_Timer()
 {
+	if (Closing)
+		return 0;
+
 	GetSemaphore();
 
 	SemHeldByAPI = 3;
@@ -1354,6 +1415,8 @@ Check_Timer()
 		{
 			FirstInitDone=1;					// Only init in BPQ32.exe
 			FirstInit();
+			FreeSemaphore();
+			return 0;
 		}
 		else
 		{
@@ -1380,15 +1443,14 @@ Check_Timer()
 
 		if (!ProcessConfig())
 		{
-			ShowWindow(hWnd, SW_RESTORE);
-			SendMessage(hWnd, WM_PAINT, 0, 0);
+			ShowWindow(hConsWnd, SW_RESTORE);
+			SendMessage(hConsWnd, WM_PAINT, 0, 0);
 
 			MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
 
 			FreeSemaphore();
 			return (0);
 		}
-
 
 		GetVersionInfo("bpq32.dll");
 
@@ -1440,18 +1502,19 @@ Check_Timer()
 		if (ISPort == 0)
 			IGateEnabled = 0;
 
-		CheckDlgButton(hWnd, IDC_ENIGATE, IGateEnabled);
+		CheckDlgButton(hConsWnd, IDC_ENIGATE, IGateEnabled);
 	
-		GetClientRect(hWnd, &cRect); 
+		GetClientRect(hConsWnd, &cRect); 
 		MoveWindow(hWndBG, 0, 0, cRect.right, 26, TRUE);
+
 		if (APRSActive)
 			MoveWindow(hWndCons, 2, 26, cRect.right-4, cRect.bottom - 32, TRUE);
 		else
 		{
-			ShowWindow(GetDlgItem(hWnd, IDC_GPS), SW_HIDE); 
+			ShowWindow(GetDlgItem(hConsWnd, IDC_GPS), SW_HIDE); 
 			MoveWindow(hWndCons, 2, 2, cRect.right-4, cRect.bottom - 4, TRUE);
 		}
-		InvalidateRect(hWnd, NULL, TRUE);
+		InvalidateRect(hConsWnd, NULL, TRUE);
 
 		FreeConfig();
 
@@ -1505,15 +1568,11 @@ Tell_Sessions()
 	return (0);
 }
 
-HANDLE hInstance=0;
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
 	DWORD n;
 	char buf[350];
-	int retCode, disp;
-	HKEY hKey=0;
-	char Size[80];
 
 	int i;
 	unsigned int ProcessID;
@@ -1562,27 +1621,39 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		LoadToolHelperRoutines();
 
-		GetProcess(GetCurrentProcessId(),pgm);
+		Our_PID = GetCurrentProcessId();
+
+		GetProcess(Our_PID,pgm);
+
+		if (_stricmp(pgm,"BPQ32.exe") == 0)
+			BPQ32_EXE = TRUE;
 
 		if (FirstEntry)				// If loaded by BPQ32.exe, dont close it at end
 		{
 			FirstEntry = 0;
-			if (_stricmp(pgm,"BPQ32.exe") == 0)
+			if (BPQ32_EXE)
 				CloseLast = FALSE;
+		}
+		else
+		{
+			if (BPQ32_EXE && AttachingProcess == 0)
+			{
+				MessageBox(NULL,"BPQ32.exe is already running\r\n\r\nIt should only be run once", "BPQ32", MB_OK);
+				AttachedProcesses++;			// We will get a detach
+				FreeSemaphore();
+				return 0;
+			}
 		}
 
 		if (_stricmp(pgm,"BPQTelnetServer.exe") == 0)
 		{
 			MessageBox(NULL,"BPQTelnetServer is no longer supported\r\n\r\nUse the TelnetServer in BPQ32.dll", "BPQ32", MB_OK);
+			AttachedProcesses++;			// We will get a detach
+			FreeSemaphore();
 			return 0;
 		}
 
 		AuthorisedProgram = TRUE;
-
-//		if (_stricmp(pgm,"perl.exe") == 0 || _stricmp(pgm,"ntvdm.exe") == 0)
-//			Perl=1;
-//		else
-			Perl=0;
 
 		if (InitDone == 0)
 		{
@@ -1613,7 +1684,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				CloseHandle(Mutex);
 			}
 
-			if (Perl == 1 || _stricmp(pgm,"BPQ32.exe") != 0)
+			if (!BPQ32_EXE)
 			{
 				if (CheckifBPQ32isLoaded() == FALSE)		// Start BPQ32.exe if needed
 				{
@@ -1637,8 +1708,8 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			{
 				StartMinimized = FALSE;
 				MinimizetoTray = FALSE;
-				ShowWindow(hWnd, SW_RESTORE);
-				SendMessage(hWnd, WM_PAINT, 0, 0);
+				ShowWindow(hConsWnd, SW_RESTORE);
+				SendMessage(hConsWnd, WM_PAINT, 0, 0);
 
 				MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
 
@@ -1729,14 +1800,12 @@ SkipInit:
 
 		FreeSemaphore();
 
-		AttachedPIDType[AttachedProcesses] = Perl;
 		AttachedPIDList[AttachedProcesses++] = GetCurrentProcessId();
-		AttachedPerlProcesses+=Perl;
 
-		if (_stricmp(pgm,"bpq32.exe") == 0 &&  AttachingProcess == 1) AttachingProcess=0;
+		if (_stricmp(pgm,"bpq32.exe") == 0 &&  AttachingProcess == 1) AttachingProcess = 0;
 
 		GetProcess(GetCurrentProcessId(),pgm);
-		n=wsprintf(buf,"BPQ32 DLL Attach complete - Program %s - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
+		n=wsprintf(buf,"BPQ32 DLL Attach complete - Program %s - %d Process(es) Attached\n",pgm,AttachedProcesses);
 		OutputDebugString(buf);
 
 		// Set up local variables
@@ -1804,31 +1873,16 @@ SkipInit:
 
 		for (; i< AttachedProcesses; i++)
 		{
-			AttachedPIDType[i]=AttachedPIDType[i+1];
 			AttachedPIDList[i]=AttachedPIDList[i+1];
 		}
 
 		AttachedProcesses--;
-		AttachedPerlProcesses-=Perl;
 
 		if (TimerInst == ProcessID)
 		{
 			PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 	
 			OutputDebugString("BPQ32 Process with Timer closing\n");
-
-			ShowWindow(hWnd, SW_RESTORE);
-			GetWindowRect(hWnd, &Rect);
-
-			// Make relative to Frame
-
-			GetWindowRect(FrameWnd, &FRect);
-
-			Rect.top -= FRect.top ;
-			Rect.left -= FRect.left;
-			Rect.bottom -= FRect.top;
-			Rect.right -= FRect.left;
-
 
 			// Call Port Close Routines
 			
@@ -1838,8 +1892,9 @@ SkipInit:
 				{
 					if (PORTVEC->PORT_EXT_ADDR && PORTVEC->DLLhandle == NULL) // Don't call if real .dll - it's not there!
 					{
-						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);	// Close External Ports
 						SaveWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+						SaveAXIPWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);	// Close External Ports
 					}	
 				}
 
@@ -1858,15 +1913,13 @@ SkipInit:
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
 
-			if (hWnd) DestroyWindow(hWnd);
+			if (hConsWnd) DestroyWindow(hConsWnd);
 
 			KillTimer(NULL,TimerHandle);
 			TimerHandle=0;
 			TimerInst=0xffffffff;
 
-			Debugprintf("AttachedProcesses %d ", AttachedProcesses);
-
-			if (AttachedProcesses && Closing == FALSE)		// Other processes 
+			if (AttachedProcesses && Closing == FALSE && AttachingProcess == 0)		// Other processes 
 			{
 				OutputDebugString("BPQ32 Reloading BPQ32.exe\n");
 				StartBPQ32();
@@ -1879,7 +1932,7 @@ SkipInit:
 			if (AttachedProcesses == 1 && CloseLast)		// Only bpq32.exe left
 			{
 				Debugprintf("Only BPQ32.exe running - close it");
-				CloseAllPrograms();
+				CloseAllNeeded = TRUE;
 			}
 		}
 
@@ -1889,27 +1942,6 @@ SkipInit:
 		{
 			KillTimer(NULL,TimerHandle);
 						
-			retCode = RegCreateKeyEx(REGTREE,
-                              "SOFTWARE\\G8BPQ\\BPQ32",
-                              0,	// Reserved
-							  0,	// Class
-							  0,	// Options
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-			if (retCode == ERROR_SUCCESS)
-			{
-				wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
-				retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-				wsprintf(Size,"%d,%d,%d,%d", FRect.left, FRect.right, FRect.top, FRect.bottom);
-				retCode = RegSetValueEx(hKey, "FrameWindowSize", 0, REG_SZ, (BYTE *)&Size, strlen(Size));
-
-				RegCloseKey(hKey);
-			}
-
-			
 			if (MinimizetoTray)
 				Shell_NotifyIcon(NIM_DELETE,&niData);
 
@@ -1929,7 +1961,7 @@ SkipInit:
 		}
 
 		GetProcess(GetCurrentProcessId(),pgm);
-		n=wsprintf(buf,"BPQ32 DLL Detach complete - Program %s - %d Process(es) Attached %d\n",pgm,AttachedProcesses,AttachedPerlProcesses);
+		n=wsprintf(buf,"BPQ32 DLL Detach complete - Program %s - %d Process(es) Attached\n",pgm,AttachedProcesses);
 		OutputDebugString(buf);
 
 		return 1;
@@ -1948,17 +1980,8 @@ DllExport int APIENTRY CloseBPQ32()
 	{	
 		OutputDebugString("BPQ32 Process with Timer called CloseBPQ32\n");
 
-		ShowWindow(hWnd, SW_RESTORE);
-		GetWindowRect(hWnd, &Rect);
-
-		// Make relative to Frame
-
-		GetWindowRect(FrameWnd, &FRect);
-
-		Rect.top -= FRect.top ;
-		Rect.left -= FRect.left;
-		Rect.bottom -= FRect.top;
-		Rect.right -= FRect.left;
+		if (MinimizetoTray)
+			Shell_NotifyIcon(NIM_DELETE,&niData);
 
 		for (i=0;i<NUMBEROFPORTS;i++)
 		{
@@ -1967,7 +1990,6 @@ DllExport int APIENTRY CloseBPQ32()
 				if (PORTVEC->PORT_EXT_ADDR)
 				{
 					PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);
-					SaveWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
 				}
 			}
 			PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
@@ -1982,11 +2004,11 @@ DllExport int APIENTRY CloseBPQ32()
 		Rig_Close();
 		WSACleanup();
 
-		if (hWnd) DestroyWindow(hWnd);
+		if (hConsWnd) DestroyWindow(hConsWnd);
 
 		Debugprintf("AttachedProcesses %d ", AttachedProcesses);
 
-		if (AttachedProcesses > 1 && Closing == FALSE)		// Other processes 
+		if (AttachedProcesses > 1 && Closing == FALSE && AttachingProcess == 0)		// Other processes 
 		{
 			OutputDebugString("BPQ32 Reloading BPQ32.exe\n");
 			StartBPQ32();
@@ -3145,22 +3167,26 @@ DllExport int APIENTRY SetAppl(int stream, int flags, int mask)
 //		whether user gets connected/disconnected messages issued
 //		by the node etc.
 
-	_asm{
-		
-	pushfd
-	cld
-	pushad
 
-	mov	al,byte ptr stream
-	mov	ah,1
-	mov	edx,mask
-	mov	ecx,flags
+	struct BPQVECSTRUC * PORTVEC;
+	stream--;
+
+	if (stream < 0 || stream > 63)
+		return (0);
 	
-	call	BPQHOSTAPI
+	PORTVEC=&BPQHOSTVECTOR[stream];
 
-	popad
-	popfd
-
+	PORTVEC->HOSTAPPLFLAGS = flags;
+	PORTVEC->HOSTAPPLMASK = mask;
+	
+	// If either is non-zero, set allocated and Process. This gets round problem with
+	// stations that don't call allocate stream
+	
+	if (flags || mask)
+	{
+		PORTVEC->STREAMOWNER=GetCurrentProcessId();
+		PORTVEC->HOSTFLAGS = 128; // SET ALLOCATED BIT, clear others
+		memcpy(&PORTVEC->PgmName[0], pgm, 31);
 	}
 	
 	return (0);
@@ -3498,6 +3524,7 @@ OK_TO_ALLOC:
 	{
 		BPQHOSTVECTOR[retcode-1].STREAMOWNER=GetCurrentProcessId();
 		BPQHOSTVECTOR[retcode-1].HOSTFLAGS = 128; // SET ALLOCATED BIT, clear others
+		memcpy(&BPQHOSTVECTOR[retcode-1].PgmName[0], pgm, 31);
 	}
 	FreeSemaphore();
 
@@ -3536,6 +3563,9 @@ DllExport int APIENTRY AllocateStream(int stream)
 	popfd
 
 	}
+
+	memcpy(&BPQHOSTVECTOR[stream - 1].PgmName[0], pgm, 31);
+
 	return(retcode);
 }
 int APIENTRY Rig_Command(int Session, char * Command);
@@ -3548,6 +3578,7 @@ BOOL Rig_CommandInt(int Session, char * Command)
 DllExport int APIENTRY DeallocateStream(int stream)
 {
 	struct BPQVECSTRUC * PORTVEC;
+	UINT * monbuff;
 
 //	Release stream.
 
@@ -3559,10 +3590,24 @@ DllExport int APIENTRY DeallocateStream(int stream)
 	PORTVEC=&BPQHOSTVECTOR[stream];
 	
 	PORTVEC->STREAMOWNER=0;
+	PORTVEC->PgmName[0] = 0;
 	PORTVEC->HOSTAPPLFLAGS=0;
 	PORTVEC->HOSTAPPLMASK=0;
-	PORTVEC->HOSTFLAGS &= 0x60;			// Clear Allocated. Must leave any DISC Pending bits
 	PORTVEC->HOSTHANDLE=0;
+
+	// Clear Trace Queue
+
+	if (PORTVEC->HOSTSESSION)
+		SessionControl(stream + 1, 2, 0);
+
+
+	while (PORTVEC->HOSTTRACEQ)
+	{
+		monbuff = Q_REM((UINT *)&PORTVEC->HOSTTRACEQ);
+		ReleaseBuffer(monbuff);
+	}
+
+	PORTVEC->HOSTFLAGS &= 0x60;			// Clear Allocated. Must leave any DISC Pending bits
 
 	return(0);
 }
@@ -3695,8 +3740,7 @@ DllExport BOOL APIENTRY GetAllocationState(int Stream)
 
 	}
 
-	return ((PORTVEC->HOSTFLAGS & 0x80) && 0x80);
-
+	return ((PORTVEC->HOSTFLAGS & 0x80));
 }
 
 
@@ -4236,28 +4280,84 @@ HMENU hPopMenu, hWndMenu;
 HMENU hMainFrameMenu = NULL;
 HMENU hBaseMenu = NULL;
 HMENU hConsMenu = NULL;
+HMENU hTermMenu = NULL;
+HMENU hMonMenu = NULL;
+HMENU hTermActMenu, hTermCfgMenu, hTermEdtMenu, hTermHlpMenu;
+HMENU hMonActMenu, hMonCfgMenu, hMonEdtMenu, hMonHlpMenu;
 
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK StatusWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
 DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd);
+
+#define BPQMonitorAvail 1
+#define BPQDataAvail 2
+#define BPQStateChange 4
+
 
 LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
+	POINT pos;
+	BOOL ret;
 
 	CLIENTCREATESTRUCT MDIClientCreateStruct; // Structure to be used for MDI client area
 	//HWND m_hwndSystemInformation = 0;
 
+	if (message == BPQMsg)
+	{
+		if (lParam & BPQDataAvail)
+			DoReceivedData(wParam);
+				
+		if (lParam & BPQMonitorAvail)
+			DoMonData(wParam);
+				
+		if (lParam & BPQStateChange)
+			DoStateChange(wParam);
 
-	switch (message) { 
+		return (0);
+	}
+
+	switch (message)
+	{ 
+		case MY_TRAY_ICON_MESSAGE:
+			
+			switch(lParam)
+			{
+			case WM_RBUTTONUP:	
+			case WM_LBUTTONUP:
+
+				GetCursorPos(&pos);
+
+	//			SetForegroundWindow(FrameWnd);
+
+				TrackPopupMenu(trayMenu, 0, pos.x, pos.y, 0, FrameWnd, 0);
+				return 0;
+			}
+
+			break;
 
 		case WM_CTLCOLORDLG:
-	
 			return (LONG)bgBrush;
+			
+		case WM_SIZING:
+		case WM_SIZE:
+
+			SendMessage(ClientWnd, WM_MDIICONARRANGE, 0 ,0);
+			break;
+
+		case WM_NCCREATE:
+
+			Debugprintf("NC Create");
+			ret = DefFrameProc(hWnd, ClientWnd, message, wParam, lParam);
+			Debugprintf("NC Create %d", ret );
+			return TRUE;
 
 		case WM_CREATE:
 
 		// On creation of main frame, create the MDI client area
+
 		MDIClientCreateStruct.hWindowMenu	= NULL;
 		MDIClientCreateStruct.idFirstChild	= IDM_FIRSTCHILD;
 		
@@ -4283,149 +4383,25 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 			wmId    = LOWORD(wParam); // Remember, these are...
 			wmEvent = HIWORD(wParam); // ...different for Win32!
 
-			if (wmId == IDC_ENIGATE)
-			{
-				int retCode, disp;
-				HKEY hKey=0;
-
-				IGateEnabled = IsDlgButtonChecked(hWnd, IDC_ENIGATE); 
-
-				if (IGateEnabled)
-					ISDelayTimer = 60;
-
-				retCode = RegCreateKeyEx(REGTREE,
-                              "SOFTWARE\\G8BPQ\\BPQ32",
-                              0,	// Reserved
-							  0,	// Class
-							  0,	// Options
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-				if (retCode == ERROR_SUCCESS)
-				{
-					retCode = RegSetValueEx(hKey,"IGateEnabled", 0 , REG_DWORD,(BYTE *)&IGateEnabled, 4);
-					RegCloseKey(hKey);
-				}
-
-				return 0;
-			}		
-
-			if (wmId == BPQSAVENODES)
-			{
-				SaveNodes();
-				WritetoConsole("Nodes Saved\n");
-				return 0;
-			}		
-			if (wmId == BPQCLEARRECONFIG)
-			{
-				if (!ProcessConfig())
-				{
-					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
-					return (0);
-				}
-		
-				ClearNodes();
-				WritetoConsole("Nodes file Cleared\n");
-				ReconfigFlag=TRUE;	
-				WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
-				return 0;
-			}
-			if (wmId == BPQRECONFIG)
-			{
-				if (!ProcessConfig())
-				{
-					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
-					return (0);
-				}
-				SaveNodes();
-				WritetoConsole("Nodes Saved\n");
-				ReconfigFlag=TRUE;	
-				WritetoConsole("Reconfig requested ... Waiting for Timer Poll\n");
-				return 0;
-			}
-
-			if (wmId == SCANRECONFIG)
-			{
-				if (!ProcessConfig())
-				{
-					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
-					return (0);
-				}
-
-				RigReconfigFlag=TRUE;	
-				WritetoConsole("Rigcontrol Reconfig requested ... Waiting for Timer Poll\n");
-				return 0;
-			}
-
-			if (wmId == APRSRECONFIG)
-			{
-				if (!ProcessConfig())
-				{
-					MessageBox(NULL,"Configuration File check falled - will continue with old config","BPQ32",MB_OK);
-					return (0);
-				}
-
-				APRSReconfigFlag=TRUE;	
-				WritetoConsole("APRS Reconfig requested ... Waiting for Timer Poll\n");
-				return 0;
-			}
-			if (wmId == BPQDUMP)
-			{
-				DumpSystem();
-				return 0;
-			}
-
-			if (wmId == BPQCLOSEALL)
-			{
-				CloseAllPrograms();
-				return 0;
-			}
-
-			if (wmId == BPQSAVEREG)
-			{
-				CreateRegBackup();
-				return 0;
-			}
-
-			if (wmId == BPQMINTOTRAY)
-			{
-				MinimizetoTray = !MinimizetoTray;
-				
-				if (MinimizetoTray)
-					CheckMenuItem(hPopMenu, BPQMINTOTRAY, MF_CHECKED);
-				else
-					CheckMenuItem(hPopMenu, BPQMINTOTRAY, MF_UNCHECKED);
-
-				SaveConfig();
-				return 0;
-			}
-
-			if (wmId == BPQSTARTMIN)
-			{
-				StartMinimized = !StartMinimized;
-				
-				if (StartMinimized)
-					CheckMenuItem(hPopMenu, BPQSTARTMIN, MF_CHECKED);
-				else
-					CheckMenuItem(hPopMenu, BPQSTARTMIN, MF_UNCHECKED);
-
-				SaveConfig();
-				return 0;
-			}
-
 			if (wmId >= TRAYBASEID && wmId < (TRAYBASEID + 100))
 			{ 
 				handle=hWndArray[wmId-TRAYBASEID];
-				PostMessage(handle, WM_SYSCOMMAND, SC_RESTORE, 0);
-				//ShowWindow(handle, SW_RESTORE);
+
+				if (handle == FrameWnd && FrameMaximized == TRUE)
+					PostMessage(handle, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+				else
+					PostMessage(handle, WM_SYSCOMMAND, SC_RESTORE, 0);
+				
 				SetForegroundWindow(handle);
 				return 0;
 			}
 
 			switch(wmId)
 			{
+			case ID_NEWWINDOW:
+				CreateChildWindow(0, FALSE);
+				break;
+
 			case ID_WINDOWS_CASCADE:
 				SendMessage(ClientWnd, WM_MDICASCADE, 0, 0);
 				return 0;
@@ -4434,6 +4410,12 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 				SendMessage(ClientWnd, WM_MDITILE , MDITILE_HORIZONTAL, 0);
 				return 0;
 
+			case BPQCLOSEALL:
+				CloseAllPrograms();
+	//			SendMessage(ClientWnd, WM_MDIICONARRANGE, 0 ,0);
+
+				return 0;
+		
 			 // Handle MDI Window commands
             
 			default:
@@ -4461,18 +4443,26 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		switch (wmId)
 		{ 
-		case  SC_MINIMIZE: 
+		case SC_MAXIMIZE: 
+
+			FrameMaximized = TRUE;
+			break;
+
+		case SC_RESTORE: 
+
+			FrameMaximized = FALSE;
+			break;
+
+		case SC_MINIMIZE: 
 
 			if (MinimizetoTray)
-				return ShowWindow(hWnd, SW_HIDE);
-			else
-				return (DefFrameProc(hWnd, ClientWnd, message, wParam, lParam));			
-			break;
-		
-		default:
-		
-		return (DefFrameProc(hWnd, ClientWnd, message, wParam, lParam));
+			{
+				ShowWindow(hWnd, SW_HIDE);
+				return TRUE;
+			}
 		}
+
+		return (DefFrameProc(hWnd, ClientWnd, message, wParam, lParam));
 
 		case WM_CLOSE:
 	
@@ -4486,8 +4476,8 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 		default:
 			return (DefFrameProc(hWnd, ClientWnd, message, wParam, lParam));
 
-	}
-	return (0);
+	}	
+	return (DefFrameProc(hWnd, ClientWnd, message, wParam, lParam));
 }
 
 int OffsetH, OffsetW;
@@ -4501,6 +4491,8 @@ int SetupConsoleWindow()
 	char Size[80];
 	WNDCLASSEX wndclassMainFrame;
 	RECT CRect;
+
+	Debugprintf("SetupConsoleWindow");
 
 	retCode = RegOpenKeyEx (REGTREE,
                 "SOFTWARE\\G8BPQ\\BPQ32",    
@@ -4532,7 +4524,7 @@ int SetupConsoleWindow()
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
 		if (retCode == ERROR_SUCCESS)
-			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &ConsoleMinimized);
 
 		if (Rect.top < - 500 || Rect.left < - 500)
 		{
@@ -4542,6 +4534,22 @@ int SetupConsoleWindow()
 			Rect.bottom = 400;
 		}
 
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"StatusWindowSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size, "%d,%d,%d,%d,%d", &StatusRect.left, &StatusRect.right,
+				&StatusRect.top, &StatusRect.bottom, &StatusMinimized);
+
+		if (StatusRect.top < - 500 || StatusRect.left < - 500)
+		{
+			StatusRect.left = 0;
+			StatusRect.top = 0;
+			StatusRect.right = 850;
+			StatusRect.bottom = 500;
+		}
 
 		// Get StartMinimized and MinimizetoTray flags
 
@@ -4551,8 +4559,6 @@ int SetupConsoleWindow()
 		Vallen = 4;
 		retCode = RegQueryValueEx(hKey, "Minimize to Tray", 0, &Type, (UCHAR *)&MinimizetoTray, &Vallen);
 	}
-
-
 
 	wndclassMainFrame.cbSize		= sizeof(WNDCLASSEX);
 	wndclassMainFrame.style			= CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
@@ -4579,22 +4585,27 @@ int SetupConsoleWindow()
 
 //	hMainFrameMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MAINFRAME_MENU));
 
-	hBaseMenu = LoadMenu(hInstance, MAKEINTRESOURCE(TERM_MENU));
+	hBaseMenu = LoadMenu(hInstance, MAKEINTRESOURCE(CONS_MENU));
 	hConsMenu = GetSubMenu(hBaseMenu, 1);
 	hWndMenu = GetSubMenu(hBaseMenu, 0);
 
+	hTermMenu = LoadMenu(hInstance, MAKEINTRESOURCE(TERM_MENU));
+	hTermActMenu = GetSubMenu(hTermMenu, 1);
+	hTermCfgMenu = GetSubMenu(hTermMenu, 2);
+	hTermEdtMenu = GetSubMenu(hTermMenu, 3);
+	hTermHlpMenu = GetSubMenu(hTermMenu, 4);
+
+	hMonMenu = LoadMenu(hInstance, MAKEINTRESOURCE(MON_MENU));
+	hMonCfgMenu = GetSubMenu(hMonMenu, 1);
+	hMonEdtMenu = GetSubMenu(hMonMenu, 2);
+	hMonHlpMenu = GetSubMenu(hMonMenu, 3);
+
 	hMainFrameMenu = CreateMenu();
-
-//	hWndMenu = CreatePopupMenu();
-
-//	AppendMenu(hWndMenu, MF_STRING, ID_WINDOWS_CASCADE, "Cascade");
-//	AppendMenu(hWndMenu, MF_STRING, ID_WINDOWS_TILE, "Tile");
-//	AppendMenu(hWndMenu, MF_STRING, BPQCLOSEALL, "Close all BPQ32 Programs"); 
-
 	AppendMenu(hMainFrameMenu, MF_STRING + MF_POPUP, (UINT)hWndMenu, "Window");
 
-
 	//Create the main MDI frame window
+
+	ClientWnd = NULL;
 
 	FrameWnd = CreateWindow(FrameClassName, 
 								"BPQ32 Console", 
@@ -4612,12 +4623,22 @@ int SetupConsoleWindow()
 
 	// Get Client Params
 
+	if (FrameWnd == 0)
+	{
+		Debugprintf("SetupConsoleWindow Create Frame failed %d", GetLastError());
+		return 0;
+	}
+
+	ShowWindow(FrameWnd, SW_RESTORE);
+
+
 	GetWindowRect(FrameWnd, &FRect);
 	OffsetH = FRect.bottom - FRect.top;
 	OffsetW = FRect.right - FRect.left;
 	GetClientRect(FrameWnd, &CRect);
 	OffsetH -= CRect.bottom;
 	OffsetW -= CRect.right;
+	OffsetH -= 4;
 
 	// Create Console Window
         
@@ -4636,14 +4657,33 @@ int SetupConsoleWindow()
 	
 	wsprintf (Title, "BPQ32.dll Console Version %s", VersionString);
 
-	hWnd =  CreateMDIWindow(ClassName, "Console", 0,
+	hConsWnd =  CreateMDIWindow(ClassName, "Console", 0,
 		  0,0,0,0, ClientWnd, hInstance, 1234);
 
 	i = GetLastError();
 
-	if (!hWnd) {
+	if (!hConsWnd) {
 		return (FALSE);
 	}
+
+	wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
+	wc.lpfnWndProc   = (WNDPROC)StatusWndProc;
+	wc.cbClsExtra    = 0;
+	wc.cbWndExtra    = DLGWINDOWEXTRA;
+	wc.hInstance     = hInstance;
+	wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));     
+	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);    
+	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);	
+	wc.lpszMenuName	 = 0;     
+	wc.lpszClassName = "Status"; 
+
+	i=RegisterClass(&wc);
+
+	StatusWnd =  CreateMDIWindow("Status", "Stream Status", 0,
+		  StatusRect.left,	StatusRect.top, StatusRect.right - StatusRect.left,
+		  StatusRect.bottom - StatusRect.top, ClientWnd, hInstance, 1234);
+
+	SetTimer(StatusWnd, 1, 1000, NULL);
 
 	hPopMenu = GetSubMenu(hBaseMenu, 1) ;
 
@@ -4657,7 +4697,7 @@ int SetupConsoleWindow()
 	else
 		CheckMenuItem(hPopMenu, BPQSTARTMIN, MF_UNCHECKED);
 	
-	DrawMenuBar(hWnd);	
+	DrawMenuBar(hConsWnd);	
 
 	// setup default font information
 
@@ -4678,44 +4718,43 @@ int SetupConsoleWindow()
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 	
-	SetWindowText(hWnd,Title);
+	SetWindowText(hConsWnd,Title);
 
 	if (Rect.right < 100 || Rect.bottom < 100)
 	{
-		GetWindowRect(hWnd, &Rect);
+		GetWindowRect(hConsWnd, &Rect);
 	}
 
-	MoveWindow(hWnd, Rect.left - (OffsetW /2), Rect.top - OffsetH + 4, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
+	MoveWindow(hConsWnd, Rect.left - (OffsetW /2), Rect.top - OffsetH, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
+
+	MoveWindow(StatusWnd, StatusRect.left - (OffsetW /2), StatusRect.top - OffsetH,
+		StatusRect.right-StatusRect.left, StatusRect.bottom-StatusRect.top, TRUE);
 
 	hWndCons = CreateWindowEx(WS_EX_CLIENTEDGE, "LISTBOX", "",
 		WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
                     LBS_DISABLENOSCROLL | LBS_NOSEL | WS_VSCROLL | WS_HSCROLL,
 		Rect.left,	Rect.top, Rect.right - Rect.left, Rect.bottom - Rect.top,
-		hWnd, NULL, hInstance, NULL);
-
-	if (APRSActive)
-	{
-	hWndBG = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 0,0,40,546, hWnd, NULL, hInstance, NULL);
-
-	CreateWindowEx(0, "BUTTON", "Enable IGate", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,
-		8,2,110,24, hWnd, (HMENU)IDC_ENIGATE, hInstance, NULL);
-
-	CreateWindowEx(0, "STATIC", "IGate State - Disconnected",
-		WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, 138, 0, 220, 24, hWnd, (HMENU)IGATESTATE, hInstance, NULL);
-
-	CreateWindowEx(0, "STATIC", "IGATE Stats - Msgs 0   Local Stns 0",
-		WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, 300, 0, 260, 24, hWnd, (HMENU)IGATESTATS, hInstance, NULL);
-
-	CreateWindowEx(0,  "STATIC", "GPS Off",
-		WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, 560, 0, 80, 24, hWnd, (HMENU)IDC_GPS, hInstance, NULL);
-	}
+		hConsWnd, NULL, hInstance, NULL);
 
 //	SendMessage(hWndCons, WM_SETFONT, hFont, 0);
 
 	SendMessage(hWndCons, LB_SETHORIZONTALEXTENT , 1000, 0);
 
+	if (ConsoleMinimized)
+		ShowWindow(hConsWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(hConsWnd, SW_RESTORE);
+
+	if (StatusMinimized)
+		ShowWindow(StatusWnd, SW_SHOWMINIMIZED);
+	else
+		ShowWindow(StatusWnd, SW_RESTORE);
+
 	ShowWindow(FrameWnd, SW_RESTORE);
 
+
+	LoadLibrary("riched20.dll");
+	SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
 	return 0;
 }
 
@@ -4790,7 +4829,7 @@ doneit:
 
 	// set the window you want to receive event messages
 
-	niData.hWnd = hWnd;
+	niData.hWnd = FrameWnd;
 
 	// set the message to send
 	// note: the message value should be in the
@@ -4800,7 +4839,10 @@ doneit:
 
 	//	Call Shell_NotifyIcon. NIM_ADD adds a new tray icon
 
-	Shell_NotifyIcon(NIM_ADD,&niData);
+	if (Shell_NotifyIcon(NIM_ADD,&niData))
+		Debugprintf("BPQ32 Create Tray Icon Ok");
+	else
+		Debugprintf("BPQ32 Create Tray Icon failed %d", GetLastError());
 
 	return 0;
 }
@@ -4837,8 +4879,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	switch (message)
 	{
 	case WM_MDIACTIVATE:
-	{			 
-		// Set the system info menu when getting activated
+				 
+	// Set the system info menu when getting activated
 			 
 		if (lParam == (LPARAM) hWnd)
 		{
@@ -4855,15 +4897,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			 // Deactivate
 	
 			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hMainFrameMenu, (LPARAM) NULL);
-		 }
-			 
-		// call DrawMenuBar after the menu items are set
+		}
+	 
 		DrawMenuBar(FrameWnd);
 
-		return 0;
-	}
+		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
 
-		case MY_TRAY_ICON_MESSAGE:
+	case MY_TRAY_ICON_MESSAGE:
 			
 			switch(lParam)
 			{
@@ -5023,8 +5063,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (wmId >= TRAYBASEID && wmId < (TRAYBASEID + 100))
 			{ 
 				handle=hWndArray[wmId-TRAYBASEID];
-				PostMessage(handle, WM_SYSCOMMAND, SC_RESTORE, 0);
-				//ShowWindow(handle, SW_RESTORE);
+
+				if (handle == FrameWnd && FrameMaximized == TRUE)
+					PostMessage(handle, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+				else
+					PostMessage(handle, WM_SYSCOMMAND, SC_RESTORE, 0);
+
 				SetForegroundWindow(handle);
 				return 0;
 			}		
@@ -5033,20 +5077,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			wmId    = LOWORD(wParam); // Remember, these are...
 			wmEvent = HIWORD(wParam); // ...different for Win32!
-
+	
 			switch (wmId)
 			{ 
 			case  SC_MINIMIZE: 
 
-				GetWindowRect(hWnd, &Rect);
+				ConsoleMinimized = TRUE;
+				break;
 
-				return DefMDIChildProc(hWnd, message, wParam, lParam);
-							
-			default:
-		
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
+			case  SC_RESTORE: 
+
+				ConsoleMinimized = FALSE;
+				SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
+
+				break;
 			}
+
+			return DefMDIChildProc(hWnd, message, wParam, lParam);
 	
+
 		case WM_SIZE:
 
 		GetClientRect(hWnd, &cRect); 
@@ -5272,7 +5321,9 @@ BOOLEAN StartBPQ32()
 
 	STARTUPINFO  StartupInfo;					// pointer to STARTUPINFO 
     PROCESS_INFORMATION  ProcessInformation; 	// pointer to PROCESS_INFORMATION 
-	
+
+	AttachingProcess = 1;
+
 // Get address of BPQ Directory
 
 	Value[0]=0;
@@ -5343,11 +5394,9 @@ BOOLEAN StartBPQ32()
 		strcat(Errbuff," failed ");
 		strcat(Errbuff,buff);
 		OutputDebugString(Errbuff);
-
+		AttachingProcess = 0;
 		return FALSE;		
 	}
-
-	AttachingProcess = 1;
 
 	return TRUE;
 }
@@ -5893,16 +5942,30 @@ BOOL CALLBACK EnumForCloseProc(HWND hwnd, LPARAM  lParam)
 
 VOID CloseAllPrograms()
 {
+//	HANDLE hProc;
+
 	// Close all attached BPQ32 programs
 
+	ShowWindow(FrameWnd, SW_RESTORE);
+
+	GetWindowRect(FrameWnd, &FRect);
+
+	SaveBPQ32Windows();
+	CloseHostSessions();
+
+	if (AttachedProcesses == 1)
+		CloseBPQ32();
+		
 	Closing  = TRUE;
 
 	Debugprintf("BPQ32 Close All Processes %d PIDS %d %d %d %d", AttachedProcesses, AttachedPIDList[0],
 		AttachedPIDList[1], AttachedPIDList[2], AttachedPIDList[3]);
-			
+
+	if (MinimizetoTray)
+		Shell_NotifyIcon(NIM_DELETE,&niData);
+	
 	EnumWindows(EnumForCloseProc, (LPARAM)NULL);
 }
-
 
 #define MAX_KEY_LENGTH 255
 #define MAX_VALUE_NAME 16383
@@ -6228,4 +6291,325 @@ DllExport BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile)
     } 
 	return TRUE;
 }
+
+char Screen[4000];
+char NewScreen[4000];
+
+int DoStatus()
+{
+	int i;
+	char callsign[12] = "";
+	char flag[3];
+	UINT Mask, MaskCopy;
+	int Flags;
+	int AppNumber;
+	int OneBits;
+
+	memset(NewScreen, ' ', 33 * 108); 
+
+	strcpy(NewScreen,"    RX  TX MON App Flg Callsign  Program                  RX  TX MON App Flg Callsign  Program");
+
+	for (i=1;i<65; i++)
+	{		
+		callsign[0]=0;
+		
+		if (GetAllocationState(i))
+
+			strcpy(flag,"*");
+		else
+			strcpy(flag," ");
+
+		GetCallsign(i,callsign);
+
+		Mask = MaskCopy = GetApplMask(i);
+
+		// if only one bit set, convert to number
+
+		AppNumber = 0;
+		OneBits = 0;
+
+		while (MaskCopy)
+		{
+			if (MaskCopy & 1)
+				OneBits++;
+			
+			AppNumber++;
+			MaskCopy = MaskCopy >> 1;
+		}
+
+		Flags=GetApplFlags(i);
+
+		if (OneBits > 1)
+			wsprintf(&NewScreen[(i+1)*54],"%2d%s%3d %3d %3d %03x %3x %10s%-20s",
+			i, flag, RXCount(i), TXCount(i), MONCount(i), Mask, Flags, callsign,
+			BPQHOSTVECTOR[i-1].PgmName, pgm);
+		else
+		wsprintf(&NewScreen[(i+1)*54],"%2d%s%3d %3d %3d %3d %3x %10s%-20s",
+			i, flag, RXCount(i), TXCount(i), MONCount(i), AppNumber, Flags, callsign,
+			BPQHOSTVECTOR[i-1].PgmName, pgm);
+
+	}
+
+	if (memcmp(Screen, NewScreen, 33 * 108) == 0)	// No Change
+		return 0;
+
+	memcpy(Screen, NewScreen, 33 * 108);
+	InvalidateRect(StatusWnd,NULL,FALSE);
+
+	return(0);
+}
+
+LRESULT CALLBACK StatusWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int wmId, wmEvent;
+	PAINTSTRUCT ps;
+	HDC hdc;
+    HFONT    hOldFont ;
+	HGLOBAL	hMem;
+	MINMAXINFO * mmi;
+	int i;
+
+	switch (message)
+	{
+	case WM_TIMER:
+
+		//if (StreamDisplay) 
+		DoStatus();
+	//	else DoIPStatus();
+		break;
+
+	case WM_MDIACTIVATE:
+				 
+		// Set the system info menu when getting activated
+			 
+		if (lParam == (LPARAM) hWnd)
+		{
+			// Activate
+
+			RemoveMenu(hBaseMenu, 1, MF_BYPOSITION);
+			AppendMenu(hBaseMenu, MF_STRING + MF_POPUP, (UINT)hConsMenu, "Actions");
+			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hBaseMenu, (LPARAM) hWndMenu);
+		}
+		else
+		{
+			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hMainFrameMenu, (LPARAM) NULL);
+		}
+	 
+		DrawMenuBar(FrameWnd);
+
+		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
+
+	case WM_GETMINMAXINFO:
+			
+		mmi = (MINMAXINFO *)lParam;
+		mmi->ptMaxSize.x = 850;
+		mmi->ptMaxSize.y = 500;
+		mmi->ptMaxTrackSize.x = 850;
+		mmi->ptMaxTrackSize.y = 500;
+
+
+	case WM_COMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		//Parse the menu selections:
+		
+		switch (wmId)
+		{
+
+/*
+			case BPQSTREAMS:
+	
+				CheckMenuItem(hMenu,BPQSTREAMS,MF_CHECKED);
+				CheckMenuItem(hMenu,BPQIPSTATUS,MF_UNCHECKED);
+
+				StreamDisplay = TRUE;
+
+				break;
+
+			case BPQIPSTATUS:
+	
+				CheckMenuItem(hMenu,BPQSTREAMS,MF_UNCHECKED);
+				CheckMenuItem(hMenu,BPQIPSTATUS,MF_CHECKED);
+
+				StreamDisplay = FALSE;
+				memset(Screen, ' ', 4000); 
+
+
+				break;
+
+*/
+	
+			case BPQCOPY:
+		
+			//
+			//	Copy buffer to clipboard
+			//
+			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, 33*110);
+		
+			if (hMem != 0)
+			{
+				if (OpenClipboard(hWnd))
+				{
+//					CopyScreentoBuffer(GlobalLock(hMem));
+					GlobalUnlock(hMem);
+					EmptyClipboard();
+					SetClipboardData(CF_TEXT,hMem);
+					CloseClipboard();
+				}
+				else
+				{
+					GlobalFree(hMem);
+				}
+
+			}
+
+			break;
+
+		}
+			
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
+
+
+		case WM_SYSCOMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		switch (wmId)
+		{ 
+		case  SC_MAXIMIZE: 
+
+			break;
+
+		case  SC_MINIMIZE: 
+
+			StatusMinimized = TRUE;
+			break;
+
+		case  SC_RESTORE: 
+
+			StatusMinimized = FALSE;
+			SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
+			break;
+		}
+
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
+
+	case WM_PAINT:
+
+			hdc = BeginPaint (hWnd, &ps);
+			
+			hOldFont = SelectObject( hdc, hFont) ;
+			
+			for (i=0; i<33; i++)
+			{
+				TextOut(hdc,0,i*14,&Screen[i*108],108);
+			}
+			
+			SelectObject( hdc, hOldFont ) ;
+			EndPaint (hWnd, &ps);
+	
+			break;        
+
+		case WM_DESTROY:
+		
+//			PostQuitMessage(0);
+			
+			break;
+
+
+		default:
+		
+			return DefMDIChildProc(hWnd, message, wParam, lParam);
+
+	}
+	return (0);
+}
+
+VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized)
+{
+	HKEY hKey=0;
+	char Size[80];
+	char Key[80];
+	int retCode, disp;
+	RECT Rect;
+
+	if (IsWindow(hWnd) == FALSE)
+		return;
+
+	ShowWindow(hWnd, SW_RESTORE);
+
+	if (GetWindowRect(hWnd, &Rect) == FALSE)
+		return;
+
+	// Make relative to Frame
+
+	Rect.top -= FRect.top ;
+	Rect.left -= FRect.left;
+	Rect.bottom -= FRect.top;
+	Rect.right -= FRect.left;
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\%s", RegKey);
+	
+	retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0,
+            KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		wsprintf(Size,"%d,%d,%d,%d,%d", Rect.left, Rect.right, Rect.top ,Rect.bottom, Minimized);
+		retCode = RegSetValueEx(hKey, Value, 0, REG_SZ,(BYTE *)&Size, strlen(Size));
+		RegCloseKey(hKey);
+	}
+}
+
+VOID SaveBPQ32Windows()
+{
+	HKEY hKey=0;
+	char Size[80];
+	int retCode, disp;
+	PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
+	int i;
+
+	retCode = RegCreateKeyEx(REGTREE, "SOFTWARE\\G8BPQ\\BPQ32", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		wsprintf(Size,"%d,%d,%d,%d", FRect.left, FRect.right, FRect.top, FRect.bottom);
+		retCode = RegSetValueEx(hKey, "FrameWindowSize", 0, REG_SZ, (BYTE *)&Size, strlen(Size));
+	
+		RegCloseKey(hKey);
+	}
+	
+	SaveMDIWindowPos(StatusWnd, "", "StatusWindowSize", StatusMinimized);
+	SaveMDIWindowPos(hConsWnd, "", "WindowSize", ConsoleMinimized);
+
+	for (i=0;i<NUMBEROFPORTS;i++)
+	{
+		if (PORTVEC->PORTCONTROL.PORTTYPE == 0x10)			// External
+		{
+			if (PORTVEC->PORT_EXT_ADDR)
+			{
+				SaveWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+				SaveAXIPWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+			}
+		}
+		PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
+	}
+
+	if (hIPResWnd)
+		SaveMDIWindowPos(hIPResWnd, "", "IPResSize", IPMinimized);
+
+	SaveHostSessions();
+}
+
+
+
+
+
+
+
+
+
 

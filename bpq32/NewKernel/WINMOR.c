@@ -935,8 +935,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		closesocket(TNC->WINMORDataSock);
 		closesocket(TNC->WINMORSock);
 
-		SaveWindowPos(port);
-
 		if (TNC->WIMMORPID && TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);

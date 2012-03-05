@@ -351,9 +351,6 @@ ok:
 		Sleep(25);
 
 		CloseHandle(TNC->hDevice);
-				
-		SaveWindowPos(port);
-
 		return (0);
 
 	case 6:				// Scan Stop Interface

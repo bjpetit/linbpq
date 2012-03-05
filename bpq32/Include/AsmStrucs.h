@@ -215,8 +215,11 @@ struct BPQVECSTRUC
 	UCHAR	HOSTSTREAM;		// STREAM NUMBER
 	PMESSAGE	HOSTTRACEQ;
 	HWND	HOSTHANDLE;		// HANDLE FOR POSTING MSGS TO
-	ULONG	HOSTAPPLNUM;		// Application Number
+	ULONG	HOSTAPPLNUM;	// Application Number
 	ULONG	STREAMOWNER;	//	PID of Process owning stream
+	char	PgmName[32];	// Program Name;
+
+
 }  bpqvecstruc;
 
 //

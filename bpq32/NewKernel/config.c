@@ -687,7 +687,7 @@ DllExport BOOL ProcessConfig()
 
 	if (LOCATOR[0] == 0 && LocSpecified == 0 && RFOnly == 0)
 	{
-		MessageBox(NULL,"Please enter a LOCATOR statment in your BPQ32.cfg\rIf you really don't want to be on the Node Map you cam enter LOCATOR=NONE","BPQ32",MB_OK);
+//		MessageBox(NULL,"Please enter a LOCATOR statment in your BPQ32.cfg\rIf you really don't want to be on the Node Map you cam enter LOCATOR=NONE","BPQ32",MB_OK);
 	}
 
 	if (heading == 0)
@@ -786,7 +786,9 @@ char rec[];
 
 		*ptr = 0;
 
-		GetNextLine(rec);
+		// Don't use GetNextLine - we need to keep ; in messages
+		
+		fgets(rec,MAXLINE,fp1);
 
 		while (!feof(fp1))
 		{
@@ -798,7 +800,7 @@ char rec[];
 
 			strcat(ptr, rec);
 			strcat(ptr, "\r\n");
-			GetNextLine(rec);
+			fgets(rec,MAXLINE,fp1);
 		}
 
 		if (_memicmp(rec, "****", 3) == 0)
