@@ -18,6 +18,11 @@
 
 // Mods to use MapQuest's jpeg tiles
 
+
+// Decode Items
+// Allows WX to be turned off.
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
 
@@ -313,7 +318,7 @@ BOOL APRSISOpen = FALSE;
 
 int StationCount = 0;
 
-int NextSeq = 1;
+UCHAR NextSeq = 1;
 
 BOOL ImageChanged;
 BOOL NeedRefresh = FALSE;
@@ -335,7 +340,7 @@ Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
 Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 Dll BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
 Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
-Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendIstatus, BOOL SendSOGCOG);
+Dll VOID APIENTRY APISendBeacon();
 
 BOOL InitApplication(HINSTANCE);
 BOOL InitInstance(HINSTANCE, int);
@@ -534,6 +539,21 @@ void GetMouseLatLon(double * Lat, double * Lon)
 
 	*Lat = tiley2lat(SetBaseY + (Y / 256.0), Zoom);
 	*Lon = tilex2long(SetBaseX + (X / 256.0), Zoom);
+}
+
+void GetCornerLatLon(double * TLLat, double * TLLon, double * BRLat, double * BRLon)
+{
+	int X = ScrollX;
+	int Y = ScrollY;
+
+	*TLLat = tiley2lat(SetBaseY + (Y / 256.0), Zoom);
+	*TLLon = tilex2long(SetBaseX + (X / 256.0), Zoom);
+
+	X = ScrollX + cxWinSize;
+	Y = ScrollY + cyWinSize;
+
+	*BRLat = tiley2lat(SetBaseY + (Y / 256.0), Zoom);
+	*BRLon = tilex2long(SetBaseX + (X / 256.0), Zoom);
 }
 
 BOOL CentrePosition(double Lat, double Lon)
@@ -783,8 +803,8 @@ BOOL InitApplication(HINSTANCE hInstance)
     wc.lpfnWndProc = MsgWndProc;                                    
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
-	wc.hInstance = hInst;
-    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
+	wc.hInstance = hInstance;
+    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(BPQICON));
     wc.hbrBackground = bgBrush; 
 
 	wc.lpszMenuName = NULL;	
@@ -796,8 +816,8 @@ BOOL InitApplication(HINSTANCE hInstance)
     wc.lpfnWndProc = PopupWndProc;                                    
     wc.cbClsExtra = 0;                
     wc.cbWndExtra = DLGWINDOWEXTRA;
-	wc.hInstance = hInst;
-    wc.hIcon = LoadIcon( hInst, MAKEINTRESOURCE(BPQICON) );
+	wc.hInstance = hInstance;
+    wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(BPQICON) );
     wc.hbrBackground = bgBrush; 
 
 	wc.lpszMenuName = NULL;	
@@ -1084,10 +1104,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	AppendMenu(hMenu, MF_STRING, IDM_CONFIG, "Basic Setup");
 	AppendMenu(hMenu, MF_STRING, IDM_APRSMSGS, "Messages");
 	AppendMenu(hMenu, MF_STRING, IDM_APRSSTNS, "Stations");
-	AppendMenu(hMenu, MF_STRING, IDM_SENDBEACON,"Send Beacon");
 	AppendMenu(hMenu, MF_STRING, IDM_ZOOMIN,"Zoom In");
 	AppendMenu(hMenu, MF_STRING, IDM_ZOOMOUT,"Zoom Out");
-	AppendMenu(hMenu, MF_STRING, IDM_HOME,"Home");
+	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu1,"Actions");
+	AppendMenu(hPopMenu1, MF_STRING, IDM_HOME,"Home");
+	AppendMenu(hPopMenu1, MF_STRING, IDM_SENDBEACON,"Send Beacon");
+	AppendMenu(hPopMenu1, MF_STRING, IDM_FILTERTOVIEW, "Set Filter to Current View");
 	AppendMenu(hMenu, MF_STRING + MF_POPUP, (UINT)hPopMenu3,"Help");
 	AppendMenu(hPopMenu3, MF_STRING, IDM_HELP, "Online Help");
 	AppendMenu(hPopMenu3, MF_STRING, IDM_ABOUT, "About");
@@ -2064,8 +2086,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			case IDM_SENDBEACON:
 
-				SendBeacon(0, NULL, TRUE, FALSE);
+				APISendBeacon();
 				break;
+
+			case IDM_FILTERTOVIEW:
+			{
+				double TLLat, TLLon, BRLat, BRLon;
+				char Filter[256];
+
+				GetCornerLatLon(&TLLat, &TLLon, &BRLat, &BRLon);
+				//a/50/-130/20/-70 
+				sprintf(Filter, "%s a/%.3f/%.3f/%.3f/%.3f", ISFilter, TLLat, TLLon, BRLat, BRLon);
+
+				APRSConnect(APRSCall, Filter);			// Will resend Filter
+
+				break;
+			}
 
 			case IDM_HOME:
 
@@ -3435,9 +3471,6 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 		if (X < 8 || Y < 8 || X > 2030 || Y > 2030)
 			return;				// Too close to edges
 
-		if (ptr->Trackptr > 40)
-			j = 0;
-
 		if (ptr->LatTrack[0] && ptr->NoTracks == FALSE)
 		{
 			// Draw Track
@@ -3719,6 +3752,10 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int X, int Y)
 
 	Item.iItem++;
 	Item.pszText = ptr->LastPacket;
+	ListView_InsertItem(hPopupList, &Item);	 
+
+	Item.iItem++;
+	Item.pszText = ptr->Status;
 	ListView_InsertItem(hPopupList, &Item);	 
 
 	Item.iItem++;
@@ -4414,6 +4451,9 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		return;	
 
 	case '>':				// Status
+
+		strcpy(Station->Status, &Payload[1]);
+
 	case '<':				// Capabilities
 	case '_':				// Weather
 	case 'T':				// Telemetry
@@ -4425,7 +4465,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		break;
 
 	default:
-		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
+//		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
 		return;
 	}
 }
@@ -5410,7 +5450,13 @@ VOID SendAPRSMessage(char * Text, char * ToCall)
 	strcpy(Message->FromCall, APRSCall);
 	memset(Message->ToCall, ' ', 9);
 	memcpy(Message->ToCall, ToCall, strlen(ToCall));
-	wsprintf(Message->Seq, "%d", NextSeq++);
+	Message->ToStation = FindStation(ToCall);
+
+	if (Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
+		wsprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
+	else
+		wsprintf(Message->Seq, "%02X}", NextSeq++);
+	
 	strcpy(Message->Text, Text);
 	Message->Retries = RetryCount;
 	Message->RetryTimer = RetryTimer;
@@ -5502,7 +5548,40 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 	strcpy(Message->ToCall, MsgDest);
 
 	if (SeqPtr)
+	{
 		strcpy(Message->Seq, SeqPtr);
+
+		// If a REPLY-ACK Seg, copy to LastRXSeq, and see if it acks a message
+
+		if (SeqPtr[2] == '}')
+		{
+			struct APRSMESSAGE * ptr1;
+			int nn = 0;
+
+			strcpy(Station->LastRXSeq, SeqPtr);
+
+			ptr1 = OutstandingMsgs;
+
+			while (ptr1)
+			{
+				if (strcmp(ptr1->FromCall, MsgDest) == 0
+					&& strcmp(ptr1->ToCall, FromCall) == 0
+					&& memcmp(&ptr1->Seq, &SeqPtr[3], 2) == 0)
+				{
+					// Message is acked
+
+					ptr1->Acked = TRUE;
+					ptr1->Retries = 0;
+					if (hMsgsOut)
+						UpdateTXMessageLine(hMsgsOut, nn, ptr);
+					
+					break;
+				}
+				ptr1 = ptr1->Next;
+				nn++;
+			}
+		}
+	}
 
 	if (strlen(TextPtr) > 100)
 		TextPtr[100] = 0;
@@ -5624,7 +5703,8 @@ VOID SecTimer()
 	int n = 0;
 	char Msg[20];
 
-	SendWeatherBeacon();
+	if (SendWX)
+		SendWeatherBeacon();
 
 	// If any changes to image redraw it
 
@@ -5798,6 +5878,8 @@ int CALLBACK CompareFunc(LPARAM lParam1, LPARAM lParam2, LPARAM lParamSort)
 
 
 // Weather Data 
+	
+char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 VOID SendWeatherBeacon()
 {
@@ -5813,7 +5895,6 @@ VOID SendWeatherBeacon()
 	char * WXend;
 	struct tm rtime;
 	time_t WXTime, TempTime;
-	char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 	FILETIME LastWriteTime;
 	LARGE_INTEGER ft;
 	time_t now = time(NULL);
@@ -5898,7 +5979,7 @@ VOID SendWeatherBeacon()
 
 		if (WXTime > (3 * WXInterval))
 		{
-			Debugprintf("APRS Send WX File too old - %d minutes");
+			Debugprintf("APRS Send WX File too old - %d minutes", WXTime);
 			return;
 		}
 
@@ -5910,7 +5991,7 @@ VOID SendWeatherBeacon()
 	{
 		if (WXTime > (3 * WXInterval))
 		{
-			Debugprintf("APRS Send WX File too old - %d minutes", WXTime );
+			Debugprintf("APRS Send WX File too old - %d minutes", WXTime);
 			return;
 		}
 
@@ -5924,16 +6005,15 @@ VOID SendWeatherBeacon()
 
 	}
 
-		GetAPRSLatLonString(Lat, Lon);
+	GetAPRSLatLonString(Lat, Lon);
 
-		Len = wsprintf(Msg, "@%s%s%sz%s/%s_%s%s", DD, HH, MM, Lat, Lon, WXptr, WXComment);
+	Len = wsprintf(Msg, "@%s%s%sz%s/%s_%s%s", DD, HH, MM, Lat, Lon, WXptr, WXComment);
 
-		Debugprintf(Msg);
+	Debugprintf(Msg);
 
-		for (index = 0; index < 32; index++)
-			if (WXPort[index])
-				Len = PutAPRSFrame(Msg, Len, index);
-	
+	for (index = 0; index < 32; index++)
+		if (WXPort[index])
+			PutAPRSFrame(Msg, Len, index);
 }
 
 

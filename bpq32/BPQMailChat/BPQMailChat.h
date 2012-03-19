@@ -651,7 +651,7 @@ struct BBSForwardingInfo
 	char ** FWDTimes;				// Time bands to forward
 	struct FWDBAND ** FWDBands;
 	int MsgCount;					// Messages for this BBS
-	BOOL ReverseFlag;				// Set if BBS wants a poll for reverse forwarding
+	BOOL ReverseFlag;				// Set if BBS wants to poll for reverse forwarding
 	BOOL Forwarding;				// Forward in progress
 	int MaxFBBBlockSize;
 	BOOL AllowCompressed;			// Allow FBB COmpressed
@@ -660,7 +660,9 @@ struct BBSForwardingInfo
 	BOOL PersonalOnly;				// Only Forward Personals
 	BOOL SendNew;					// Forward new messages immediately
 	int FwdInterval;
+	int RevFwdInterval;
 	int FwdTimer;
+	time_t LastReverseForward;
 	char *BBSHA;					// HA of BBS
 	char ** BBSHAElements;			// elements of HA of BBS
 //	char UserCall[10];				// User we are forwarding on behalf of (Currently only for RMS)

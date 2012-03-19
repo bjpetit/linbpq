@@ -1,4 +1,11 @@
 
+#define MAXSTACK 20
+#define INPUTLEN 512
+
+#define MAXLINES 1000
+#define LINELEN 200
+
+
 #define BPQICON                         2
 #define IDR_MENU1                       101
 #define BPQMENU                         101
@@ -27,6 +34,7 @@
 #define MONCOLOUR                       1178
 #define CHATTERM                        1179
 #define IDM_CLOSEWINDOW					1180
+#define MONITORAPRS						1181
 #define IDC_STATIC                      -1
 
 #define IDR_MAINFRAME_MENU              191
@@ -125,6 +133,7 @@ struct ConsoleInfo
 	BOOL CONNECTED;
 	int SlowTimer;
 	BOOL Minimized;
+	BOOL NeedRefresh;
 
 };
 

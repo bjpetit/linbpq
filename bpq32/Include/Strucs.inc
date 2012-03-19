@@ -369,6 +369,10 @@ Authorised_Session DB 0;	// Set if Host session from BPQTerminal or BPQMailChat
 DUMPPTR		DD	0		; POINTER FOR REMOTE DUMP MODE
 PARTCMDBUFFER DD 0		; Save area for incomplete commmand
 
+Frequency	DD	0		; If known - for CMS Reporting Hz
+RMSCall		DB 10 DUP (0);
+Mode		DB	0		; ditto
+
 TRANSPORTENTRY	ENDS
 ;
 ;	CIRCUITTYPE EQUATES

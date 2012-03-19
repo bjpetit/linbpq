@@ -32,6 +32,8 @@ struct ScanEntry
 	int xCmd2Len;
 	char * Cmd3;
 	int Cmd3Len;
+	char * PollCmd;
+	int PollCmdLen;
 };
 
 struct RIGINFO
@@ -98,6 +100,9 @@ struct RIGINFO
 	int PTTOnLen;
 	int PTTOffLen;
 
+	char Poll[50];
+	int PollLen;
+
 };
 
 // PortType Equates
@@ -111,6 +116,7 @@ struct RIGINFO
 #define FT2000 7
 #define FLEX 8
 #define M710 9
+#define NMEA 10
 
 struct RIGPORTINFO
 {

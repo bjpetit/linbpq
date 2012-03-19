@@ -754,8 +754,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 5:				// Terminate
 
 		CloseSockets(PORT);
-		DestroyWindow(PORT->hMHWnd);
-		SendMessage(PORT->hResWnd, WM_DESTROY, 0, 0);
+		SendMessage(PORT->hMHWnd, WM_CLOSE, 0, 0);
+		SendMessage(PORT->hResWnd, WM_CLOSE, 0, 0);
 
 		break;
 	}
@@ -1245,7 +1245,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 			case SC_RESTORE:
 
 				PORT->ResMinimized = FALSE;
-				SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
+				SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
 
 				break;
 
@@ -1472,9 +1472,9 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 		}
 		break;
 
-	case WM_CLOSE:
+//	case WM_CLOSE:
 	
-		return(DestroyWindow(hWnd));
+//		return(DestroyWindow(hWnd));
 
 	case WM_DESTROY:
 
@@ -1702,7 +1702,7 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 			case SC_RESTORE:
 
 				PORT->MHMinimized = FALSE;
-				SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
+				SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
 				break;
 
 			case  SC_MINIMIZE: 

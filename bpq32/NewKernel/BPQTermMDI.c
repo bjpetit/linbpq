@@ -64,9 +64,10 @@
 //		Save MonitorNodes flag
 
 #define _CRT_SECURE_NO_DEPRECATE
+#define _USE_32BIT_TIME_T
 
 #include <windows.h>
-
+#include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <malloc.h>	
@@ -89,12 +90,6 @@
 #endif
 
 HBRUSH bgBrush;
-
-#define MAXSTACK 20
-#define INPUTLEN 512
-
-#define MAXLINES 1000
-#define LINELEN 200
 
 #include "BpqTermMDI.h"
 
@@ -172,7 +167,7 @@ void CopyListToClipboard(HWND hWnd);
 void CopyRichTextToClipboard(HWND hWnd);
 BOOL OpenMonitorLogfile();
 void WriteMonitorLine(char * Msg, int MsgLen);
-int WritetoOutputWindow(struct ConsoleInfo * Cinfo, char * Msg, int len);
+int WritetoOutputWindow(struct ConsoleInfo * Cinfo, char * Msg, int len, BOOL Refresh);
 VOID DoRefresh(struct ConsoleInfo * Cinfo);
 INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 struct ConsoleInfo * CreateChildWindow(int Stream, BOOL DuringInit);
@@ -291,6 +286,7 @@ BOOL MonitorNODES = TRUE;
 BOOL MonitorColour = TRUE;
 BOOL ChatMode = FALSE;
 BOOL RestoreWindows = TRUE;
+BOOL MonitorAPRS = FALSE;
 
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
@@ -329,13 +325,46 @@ extern ULONG MMASK;
 
 HMENU hPopMenu1;
 
+VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
+{
+	char Line[300];
+	int Len;
+	struct tm * TM;
+	time_t NOW;
+
+	if (MonWindow.hConsole == NULL || MonitorAPRS == 0)
+		return;
+
+	NOW = _time32(NULL);
+	TM = gmtime(&NOW);
+
+	Msg[MsgLen] = 0;
+
+	Len = sprintf_s(Line, 299, "%02d:%02d:%02d%c %s", TM->tm_hour, TM->tm_min, TM->tm_sec, (TX)? 'T': 'R', Msg);
+
+	if (TX)
+		MonWindow.CurrentColour = 0;
+	else
+		MonWindow.CurrentColour = 64;
+
+	WritetoOutputWindow(&MonWindow, Line, Len, FALSE);
+	MonWindow.NeedRefresh = TRUE;
+
+}
+
+
 VOID CALLBACK tTimerProc(HWND  hwnd, UINT  uMsg, UINT  idEvent, DWORD dwTime)
 {
-	// entered every 10 secs
+	// entered every 1 sec
 
-	struct ConsoleInfo * Cinfo ;
+	struct ConsoleInfo * Cinfo = &MonWindow;
 
-	CheckTimer();
+	if (Cinfo->NeedRefresh)
+	{
+		Cinfo->NeedRefresh = FALSE;
+		DoRefresh(Cinfo);
+	}
+
 
 	for (Cinfo = ConsHeader; Cinfo; Cinfo = Cinfo->next)
 	{
@@ -343,7 +372,7 @@ VOID CALLBACK tTimerProc(HWND  hwnd, UINT  uMsg, UINT  idEvent, DWORD dwTime)
 		{
 			Cinfo->SlowTimer++;
 
-			if (Cinfo->SlowTimer > 50)				// About 9 mins
+			if (Cinfo->SlowTimer > 500)				// About 9 mins
 			{
 				Cinfo->SlowTimer = 0;
 				SendMsg(Cinfo->BPQStream, "\0", 1);
@@ -408,6 +437,20 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 
 	KillTimer(NULL,SessHandle);
 
+	tTimerHandle = SetTimer(NULL, 0, 1000, tTimerFunc);
+
+
+	// See if running under WINE
+
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, "SOFTWARE\\Wine",  0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		RegCloseKey(hKey);
+		WINE = TRUE;
+		Debugprintf("Running under WINE");
+	}
+
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 	SetupRTFHddr();
 
@@ -465,6 +508,10 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 			(ULONG *)&Type,(UCHAR *)&MonitorNODES,(ULONG *)&Vallen);
 
 		Vallen=4;
+		retCode = RegQueryValueEx(hKey,"MonitorAPRS",0,			
+			(ULONG *)&Type,(UCHAR *)&MonitorAPRS,(ULONG *)&Vallen);
+
+		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"Bells",0,			
 			(ULONG *)&Type,(UCHAR *)&Bells,(ULONG *)&Vallen);
 	
@@ -503,6 +550,8 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 
 //	hPopMenu1 = GetSubMenu(hMonCfgMenu, 1);
 
+	portmask = tempmask;
+
 	for (n=1; n <= GetNumberofPorts(); n++)
 	{
 		i = GetPortNumber(n);
@@ -510,10 +559,7 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 		wsprintf(msg,"Port %d",i);
 
 		if (tempmask & (1<<(i-1)))
-		{
 			AppendMenu(hMonCfgMenu,MF_STRING | MF_CHECKED,BPQBASE + i,msg);
-			portmask |= (1<<(i-1));
-		}
 		else
 			AppendMenu(hMonCfgMenu,MF_STRING | MF_UNCHECKED,BPQBASE + i,msg);
 	}
@@ -556,7 +602,8 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 
 	CheckMenuItem(hMonCfgMenu,BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
 
-	CheckMenuItem(hMonCfgMenu,MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMonCfgMenu,MONITORAPRS, (MonitorAPRS) ? MF_CHECKED : MF_UNCHECKED);
+
 
 	DrawMenuBar(FrameWnd);	
 
@@ -591,7 +638,7 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 
 		for (i = 1; i <= Sessions; i++)
 		{
-			Cinfo = CreateChildWindow(i+2, TRUE);
+			Cinfo = CreateChildWindow(0, TRUE);
 		}
 	}
 }
@@ -619,6 +666,7 @@ SaveHostSessions()
 	RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
 	RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
 	RegSetValueEx(hKey,"MonitorNODES",0,REG_DWORD,(BYTE *)&MonitorNODES,4);
+	RegSetValueEx(hKey,"MonitorAPRS",0,REG_DWORD,(BYTE *)&MonitorAPRS,4);
 
 	// Close any sessions
 
@@ -1612,6 +1660,11 @@ LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			ToggleParam(hMonCfgMenu, &MonitorNODES, BPQMNODES);
 			break;
 
+		case MONITORAPRS:
+
+			ToggleParam(hMonCfgMenu, &MonitorAPRS, MONITORAPRS);
+			break;
+
 		case MONCOLOUR:
 
 			ToggleParam(hMonCfgMenu, &MonitorColour, MONCOLOUR);
@@ -1657,6 +1710,8 @@ LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			Cinfo->Minimized = FALSE;
 			SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
+			DoRefresh(Cinfo);
+
 			break;
 
 		case SC_MINIMIZE: 
@@ -1975,6 +2030,8 @@ LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 			Cinfo->Minimized = FALSE;
 			SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
+			DoRefresh(Cinfo);
+
 			break;
 
 		case SC_MINIMIZE: 
@@ -2753,8 +2810,9 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			// Echo
 
+			Cinfo->CurrentColour = 64;
+			WritetoOutputWindow(Cinfo, Cinfo->kbbuf, Cinfo->kbptr+1, TRUE);
 			Cinfo->CurrentColour = 1;
-			WritetoOutputWindow(Cinfo, Cinfo->kbbuf, Cinfo->kbptr+1);
 
 			if (Cinfo->Scrolled)
 			{
@@ -2991,6 +3049,8 @@ DoStateChange(int Stream)
 		
 				Cinfo = CreateChildWindow(Stream, FALSE);
 				Cinfo->Incoming = TRUE;
+				SendMessage(ClientWnd, WM_MDIACTIVATE, (WPARAM)Cinfo->hConsole, 0);
+
 			}
 
 			Cinfo->CONNECTED = TRUE;
@@ -3003,10 +3063,9 @@ DoStateChange(int Stream)
 			if (Cinfo->Incoming == TRUE)
 			{
 				len = wsprintf(Msg, "*** Incoming Call from %s\r", callsign);
-				WritetoOutputWindow(Cinfo, Msg, len);
+				WritetoOutputWindow(Cinfo, Msg, len, TRUE);
 
 				PlaySound("IncomingCall", hInstance, SND_RESOURCE | SND_ASYNC);
-				DoRefresh(Cinfo);
 			}
 				
 			wsprintf(Title,"Stream %d - Connected to %s", Stream, callsign);
@@ -3028,8 +3087,7 @@ DoStateChange(int Stream)
 
 			if (SendDisconnected)
 			{
-				WritetoOutputWindow(Cinfo, "*** Disconnected\r", 17);		
-				DoRefresh(Cinfo);
+				WritetoOutputWindow(Cinfo, "*** Disconnected\r", 17, TRUE);		
 			}
 		}
 	}
@@ -3058,9 +3116,8 @@ DoReceivedData(int Stream)
 		do {
 
 			GetMsg(Cinfo->BPQStream, &Msg[0],&len,&count);
-			WritetoOutputWindow(Cinfo, Msg, len);
-			DoRefresh(Cinfo);
-
+			WritetoOutputWindow(Cinfo, Msg, len, FALSE);
+	
 			Cinfo->SlowTimer = 0;
 
 			if (Cinfo->Active == FALSE)
@@ -3068,6 +3125,9 @@ DoReceivedData(int Stream)
 //				Beep(440,250);
 
 		} while (count > 0);
+		
+		DoRefresh(Cinfo);
+
 	}
 	return (0);
 }
@@ -3386,10 +3446,18 @@ VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line)
 
 int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len);
 
-int WritetoOutputWindow(struct ConsoleInfo * Cinfo, char * Msg, int len)
+int WritetoOutputWindow(struct ConsoleInfo * Cinfo, char * Msg, int len, BOOL Refresh)
 {
 	WritetoConsoleWindowSupport(Cinfo, Msg, len);
-	DoRefresh(Cinfo);
+
+	if (Cinfo->Minimized)
+		return 0;
+
+	if (Refresh)
+		DoRefresh(Cinfo);
+	else
+		Cinfo->NeedRefresh = TRUE;
+
 	return 0;
 }
 
@@ -3829,7 +3897,7 @@ DoMonData(int Stream)
 				{
 					ptr2++;
 
-					WritetoOutputWindow(Cinfo, ptr1, ptr2 - ptr1);
+					WritetoOutputWindow(Cinfo, ptr1, ptr2 - ptr1, FALSE);
 
 					len-=(ptr2-ptr1);
 
@@ -3840,6 +3908,8 @@ DoMonData(int Stream)
 			}
 			
 		} while (count > 0);
+
+		Cinfo->NeedRefresh = TRUE;
 	}
 	return (0);
 }
@@ -4422,6 +4492,9 @@ BOOL CreateMonitorWindow(char * MonSize)
 	RECT Rect = {0,0,0,0};
 	
 	memset(Cinfo, 0, sizeof(struct ConsoleInfo));
+
+	Cinfo->WarnLen = Cinfo->WrapLen = Cinfo->maxlinelen = 100; // In case doesn't get set up
+	Cinfo->StripLF = TRUE;
 
 	wndclassMainFrame.cbSize		= sizeof(WNDCLASSEX);
 	wndclassMainFrame.style			= CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;;

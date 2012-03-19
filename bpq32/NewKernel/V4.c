@@ -224,28 +224,12 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 
 static time_t ltime;
 
-//LOGFONT LFTTYFONT ;
-
-//HFONT hFont ;
-
-static char * WINMORSignon[MAXBPQPORTS+1];			// Pointer to message for secure signin
-
-static char * WINMORHostName[MAXBPQPORTS+1];		// WINMOR Host - may be dotted decimal or DNS Name
-
 #pragma pack()
-
-//SOCKET sock;
 
 static SOCKADDR_IN sinx; 
 static SOCKADDR_IN rxaddr;
 
 static int addrlen=sizeof(sinx);
-
-//static short WINMORPort=0;
-
-//HANDLE hInstance;
-
-
 
 static fd_set readfs;
 static fd_set writefs;

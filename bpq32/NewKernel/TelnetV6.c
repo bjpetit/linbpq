@@ -1436,7 +1436,7 @@ VOID TelnetPoll(int Port)
 			if (Paclen == 0)
 				Paclen = 256;
 
-			Debugprintf("%d %d %d %d", Msglen, Paclen, Queued, GetFreeBuffs());
+//			Debugprintf("%d %d %d %d", Msglen, Paclen, Queued, GetFreeBuffs());
 
 			if (Msglen > Paclen)
 				Msglen = Paclen;
@@ -1561,7 +1561,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		case SC_RESTORE:
 
 			TNC->Minimized = FALSE;
-			SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
+			SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
 			return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 		case  SC_MINIMIZE: 
@@ -2664,8 +2664,25 @@ MsgLoop:
 
 		if (strstr(MsgPtr, "Password :")) 
 		{
-			send(sock, "CMSTELNET\r\n", 11,0);
-			sockptr->LoginState = 2; // Data
+			// Send “CMSTelnet” + gateway callsign + frequency + emission type if info is available
+
+			struct TRANSPORTENTRY * Sess1 = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+			struct TRANSPORTENTRY * Sess2 = NULL;
+			char Passline[80] = "CMSTELNET\r";
+			int len = 10;
+
+			if (Sess1)
+			{
+				Sess2 = Sess1->L4CROSSLINK;
+			
+				if (Sess2 && Sess2->RMSCall[0])
+				{
+					len = sprintf(Passline, "CMSTELNET %s %d %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
+				}
+			}
+
+			send(sock, Passline, len, 0);
+			sockptr->LoginState = 2;		// Data
 			sockptr->InputLen=0;
 			return TRUE;
 		}
@@ -3092,7 +3109,7 @@ int Telnet_Connected(struct TNCINFO * TNC, SOCKET sock, int Error)
 		{
 			if (sockptr->socket == sock)
 			{
-				Debugprintf("TCP Connect Complete %d result %d", sock, Error);
+//				Debugprintf("TCP Connect Complete %d result %d", sock, Error);
 
 				buffptr = GetBuff();
 				if (buffptr == 0) return 0;			// No buffers, so ignore

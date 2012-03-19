@@ -282,27 +282,12 @@ extern struct BPQVECSTRUC * BPQHOSTVECPTR;
 
 static time_t ltime;
 
-//LOGFONT LFTTYFONT ;
-
-//HFONT hFont ;
-
-static char * WINMORSignon[MAXBPQPORTS+1];			// Pointer to message for secure signin
-
-static char * WINMORHostName[MAXBPQPORTS+1];		// WINMOR Host - may be dotted decimal or DNS Name
-
 #pragma pack()
-
-//SOCKET sock;
 
 static SOCKADDR_IN sinx; 
 static SOCKADDR_IN rxaddr;
 
 static int addrlen=sizeof(sinx);
-
-//static short WINMORPort=0;
-
-//HANDLE hInstance;
-
 
 
 static fd_set readfs;
@@ -981,12 +966,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		if (Scan->Bandwidth == 'W')		// Set Wide Mode
 		{
 			send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
+			TNC->WL2KMode = 22;
 			return 0;
+
 		}
 
 		if (Scan->Bandwidth == 'N')		// Set Wide Mode
 		{
 			send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
+			TNC->WL2KMode = 21;
 			return 0;
 		}
 
@@ -1270,6 +1258,9 @@ VOID ConnecttoWINMORThread(port)
 
 	Sleep(5000);		// Allow init to complete 
 
+	if (TNC->WINMORHostName == NULL)
+		return;
+
 	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
 	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
 
@@ -1277,7 +1268,7 @@ VOID ConnecttoWINMORThread(port)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname (&TNC->WINMORHostName[port]);
+		HostEnt = gethostbyname (TNC->WINMORHostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
@@ -1515,6 +1506,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		if (TNC->PortRecord->ATTACHEDSESSIONS[0] == 0)
 		{
+			struct TRANSPORTENTRY * SESS;
+			
 			// Incomming Connect
 
 			// Stop other ports in same group
@@ -1523,11 +1516,21 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			ProcessIncommingConnect(TNC, Call, 0, TRUE);
 
-			if (TNC->RIG)
+			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
+			
+			if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
+			{
 				wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
+				SESS->Frequency = atof(TNC->RIG->Valchar) * 1000000.0;
+			}
 			else
+			{
 				wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->TargetCall);
-
+				SESS->Frequency = atoi(TNC->WL2KFreq);
+			}
+			
+			SESS->Mode = TNC->WL2KMode;
+			
 			SetWindowText(TNC->xIDC_TNCSTATE, Status);
 
 			// See which application the connect is for
@@ -1566,6 +1569,11 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 					TNC->SwallowSignon = TRUE;
+
+					// Save Appl Call in case needed for 
+
+					memcpy(SESS->RMSCall, TNC->RMSCall, 10);
+
 				}
 				else
 				{

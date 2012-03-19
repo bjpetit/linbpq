@@ -428,7 +428,7 @@ static char *pkeywords[] =
 "QUALADJUST", "DIGIFLAG", "DIGIPORT", "USERS" ,"UNPROTO", "PORTNUM",
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
-"BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER"
+"BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT"
 };           /* parameter keywords */
 
 static int poffset[] =
@@ -440,7 +440,7 @@ static int poffset[] =
 68, 70, 71 ,74, 128, 0,
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
-226, 72, 124, 36, 210
+226, 72, 124, 36, 210, 512
 };		/* offset for corresponding data in config file */
 
 static int proutine[] = 
@@ -452,11 +452,11 @@ static int proutine[] =
 1, 13, 13, 1, 11, 1,
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
-0, 1, 2, 1, 15
+0, 1, 2, 1, 15, 16
 };		/* routine to process parameter */
 
 
-#define PPARAMLIM 48
+#define PPARAMLIM 49
 
 static int fileoffset = 0;
 static int portoffset = 2560;
@@ -929,7 +929,7 @@ char rec[];
 	   ;
 
 	if (i == PARAMLIM)
-	   Consoleprintf("Source record not recognised - Ignored:\n%s",rec);
+	   Consoleprintf("Source record not recognised - Ignored: %s",rec);
 	else
 	{
 	   fileoffset = offset[i];
@@ -1536,7 +1536,7 @@ int ports(int i)
 	bseek(fp2,(long) portoffset+112,SEEK_SET);
         bputi(kissflags,fp2);
 
-	portoffset = portoffset + 512;
+	portoffset = portoffset + 1024;
 	portnum++;
 	
 	return(1); 
@@ -1996,6 +1996,10 @@ char rec[];
 
         case 15:
             cn = doDriver(i,value,rec);               /* DLL PARMS */
+			break;
+
+        case 16:
+            cn = doDriver(i,value,rec);               /* WL2K */
 			break;
 
 			

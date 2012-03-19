@@ -1110,7 +1110,7 @@ static VOID ConnecttoUZ7HOThread(port)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname (&TNC->WINMORHostName[port]);
+		 HostEnt = gethostbyname (TNC->WINMORHostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
@@ -1252,6 +1252,7 @@ static int ProcessReceivedData(int port)
 	return (0);
 
 }
+/*
 VOID ConnecttoMODEMThread(port);
 
 int ConnecttoMODEM(int port)
@@ -1279,7 +1280,7 @@ VOID ConnecttoMODEMThread(port)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname(&TNC->WINMORHostName[port]);
+		 HostEnt = gethostbyname(TNC->WINMORHostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 
@@ -1351,6 +1352,7 @@ VOID ConnecttoMODEMThread(port)
 
 	return;
 }
+*/
 /*
 UZ7HO C GM8BPQ GM8BPQ-2 *** CONNECTED To Station GM8BPQ-0
 

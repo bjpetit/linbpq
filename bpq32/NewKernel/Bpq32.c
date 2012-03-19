@@ -472,6 +472,7 @@
 #include "SHELLAPI.H"
 #include "kernelresource.h"
 #include <tlhelp32.h>
+#include "BPQTermMDI.h"
 
 #include "GetVersion.h"
 
@@ -562,7 +563,7 @@ extern BOOL IPMinimized;
 VOID SaveWindowPos(int port);
 VOID SaveAXIPWindowPos(int port);
 VOID SetupRTFHddr();
-
+DllExport VOID APIENTRY CreateNewTrayIcon();
 int DoReceivedData(int Stream);
 int	DoStateChange(int Stream);
 int DoMonData(int Stream);
@@ -570,6 +571,7 @@ struct ConsoleInfo * CreateChildWindow(int Stream, BOOL DuringInit);
 CloseHostSessions();
 SaveHostSessions();
 VOID SaveBPQ32Windows();
+VOID CloseDriverWindow(int port);
 
 char SIGNONMSG[128] = "";
 char SESSIONHDDR[80] = "";
@@ -772,7 +774,7 @@ VOID SaveConfig();
 VOID CreateRegBackup();
 VOID ResolveUpdateThread();
 VOID OpenReportingSockets();
-VOID CloseAllPrograms();
+DllExport VOID APIENTRY CloseAllPrograms();
 DllExport BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
 
 BOOL IPActive = FALSE;
@@ -1147,6 +1149,9 @@ VOID CALLBACK TimerProc
 
 	SemHeldByAPI = 2;
 
+	if (trayMenu == NULL)
+		SetupTrayIcon();
+
 	// See if reconfigure requested
 
 	if (CloseAllNeeded)
@@ -1174,14 +1179,21 @@ VOID CALLBACK TimerProc
 			WritetoConsole("Reconfiguring ...\n\n");
 			OutputDebugString("BPQ32 Reconfiguring ...\n");	
 
+			GetWindowRect(FrameWnd, &FRect);
+
 			for (i=0;i<NUMBEROFPORTS;i++)
 			{
 				if (PORTVEC->PORTCONTROL.PORTTYPE == 0x10)			// External
+				{
 					if (PORTVEC->PORT_EXT_ADDR)
+					{
+						SaveWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+						SaveAXIPWindowPos(PORTVEC->PORTCONTROL.PORTNUMBER);
+						CloseDriverWindow(PORTVEC->PORTCONTROL.PORTNUMBER);
 						PORTVEC->PORT_EXT_ADDR(5,PORTVEC->PORTCONTROL.PORTNUMBER, NULL);	// Close External Ports
-				
+					}
+				}
 				PORTVEC->PORTCONTROL.PORTCLOSECODE(PORTVEC->PORTCONTROL.IOBASE);
-
 				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 			}
 
@@ -1611,19 +1623,33 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			MessageBox(NULL,"NODES Table .c and .asm mismatch - fix and rebuild", "BPQ32", MB_OK);
 			return 0;
 		}
+
+		Debugprintf("DLLMAIN Entered Sem = %d", Semaphore);
 	
-		
 		GetSemaphore();
 
 		BPQHOSTVECPTR = &BPQHOSTVECTOR[0];
 
 		SemHeldByAPI = 4;
+		
+		Debugprintf("DLLMAIN Entered Sem = %d", Semaphore);
 
 		LoadToolHelperRoutines();
 
 		Our_PID = GetCurrentProcessId();
 
 		GetProcess(Our_PID,pgm);
+
+		Debugprintf("%s", pgm);
+
+		if (_stricmp(pgm, "regsvr32.exe") == 0 || _stricmp(pgm, "bpqcontrol.exe") == 0)
+		{
+			AttachedProcesses++;			// We will get a detach
+			FreeSemaphore();
+			return 1;
+		}
+
+
 
 		if (_stricmp(pgm,"BPQ32.exe") == 0)
 			BPQ32_EXE = TRUE;
@@ -1638,9 +1664,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		{
 			if (BPQ32_EXE && AttachingProcess == 0)
 			{
-				MessageBox(NULL,"BPQ32.exe is already running\r\n\r\nIt should only be run once", "BPQ32", MB_OK);
 				AttachedProcesses++;			// We will get a detach
 				FreeSemaphore();
+				MessageBox(NULL,"BPQ32.exe is already running\r\n\r\nIt should only be run once", "BPQ32", MB_OK);
 				return 0;
 			}
 		}
@@ -1814,13 +1840,13 @@ SkipInit:
 		MTX=1;
 		MMASK=0xffffffff;
 
-		if (StartMinimized)
-			if (MinimizetoTray)
-				ShowWindow(FrameWnd, SW_HIDE);
-			else
-				ShowWindow(FrameWnd, SW_SHOWMINIMIZED);	
-		else
-			ShowWindow(FrameWnd, SW_RESTORE);
+//		if (StartMinimized)
+//			if (MinimizetoTray)
+//				ShowWindow(FrameWnd, SW_HIDE);
+//			else
+//				ShowWindow(FrameWnd, SW_SHOWMINIMIZED);	
+//		else
+//			ShowWindow(FrameWnd, SW_RESTORE);
 
 		return 1;
    		
@@ -3490,6 +3516,13 @@ DllExport int APIENTRY FindFreeStream()
 //	Returns number of first unused BPQHOST stream. If none available,
 //	returns 255. See API function 13.
 
+	// if init has not yet been run, wait.
+
+	while (InitDone == 0)
+	{
+		Debugprintf("Waiting for init to complete");
+		Sleep(1000);
+	}
 
 	GetSemaphore();
 
@@ -3649,12 +3682,17 @@ DllExport int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall)
 	return (0);
 }
 
+DllExport int APIENTRY ChangeSessionPaclen(int Stream, int Paclen)
+{ 
+	BPQHOSTVECTOR[Stream-1].HOSTSESSION->SESSPACLEN = Paclen;
+	return (0);
+}
+
 
 struct BPQVECSTRUC * PORTVEC ;
 
 DllExport int APIENTRY GetApplMask(int Stream)
-{ 
-
+{
 	_asm {
 
 	MOV	EBX,OFFSET BPQHOSTVECTOR
@@ -4387,6 +4425,9 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 			{ 
 				handle=hWndArray[wmId-TRAYBASEID];
 
+				if (handle == FrameWnd)
+					ShowWindow(handle, SW_NORMAL);
+
 				if (handle == FrameWnd && FrameMaximized == TRUE)
 					PostMessage(handle, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
 				else
@@ -4398,8 +4439,11 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 			switch(wmId)
 			{
+			struct ConsoleInfo * Cinfo = NULL;
+
 			case ID_NEWWINDOW:
-				CreateChildWindow(0, FALSE);
+				Cinfo = CreateChildWindow(0, FALSE);
+				SendMessage(ClientWnd, WM_MDIACTIVATE, (WPARAM)Cinfo->hConsole, 0);
 				break;
 
 			case ID_WINDOWS_CASCADE:
@@ -4755,6 +4799,15 @@ int SetupConsoleWindow()
 
 	LoadLibrary("riched20.dll");
 	SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
+
+	if (StartMinimized)
+		if (MinimizetoTray)
+			ShowWindow(FrameWnd, SW_HIDE);
+		else
+			ShowWindow(FrameWnd, SW_SHOWMINIMIZED);	
+	else
+		ShowWindow(FrameWnd, SW_RESTORE);
+
 	return 0;
 }
 
@@ -5160,6 +5213,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 DllExport BOOL APIENTRY GetMinimizetoTrayFlag()
 {
+	while (InitDone == 0)
+	{
+		Debugprintf("Waiting for init to complete");
+		Sleep(1000);
+	}
+	Debugprintf("Min to Tray %s %d", pgm, MinimizetoTray);
+	
 	return MinimizetoTray;
 }
 
@@ -5179,12 +5239,12 @@ DllExport int APIENTRY AddTrayMenuItem(HWND hWnd, char * Label)
 			hWndArray[i]=hWnd;
 			PIDArray[i] = GetCurrentProcessId();
 			strcpy(PopupText[i],Label);
-			return AppendMenu(trayMenu,MF_STRING,TRAYBASEID+i,Label);
+			AppendMenu(trayMenu,MF_STRING,TRAYBASEID+i,Label);
+			CreateNewTrayIcon();
+			return 0;
 		}
 	}
-
 	return -1;
-
 }
  
 DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd)
@@ -5197,7 +5257,9 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd)
 		{
 			hWndArray[i] = 0;
 			PIDArray[i] = 0;
-			return DeleteMenu(trayMenu,TRAYBASEID+i,MF_BYCOMMAND);
+			DeleteMenu(trayMenu,TRAYBASEID+i,MF_BYCOMMAND);
+			CreateNewTrayIcon();
+			return 0;
 		}
 	}
 	return -1;
@@ -5938,9 +6000,18 @@ BOOL CALLBACK EnumForCloseProc(HWND hwnd, LPARAM  lParam)
 	
 	return (TRUE);
 }
+DllExport BOOL APIENTRY RestoreFrameWindow()
+{
+	return 	ShowWindow(FrameWnd, SW_RESTORE);
+}
 
+DllExport VOID APIENTRY CreateNewTrayIcon()
+{
+	Shell_NotifyIcon(NIM_DELETE,&niData);
+	trayMenu = NULL;
+}
 
-VOID CloseAllPrograms()
+DllExport VOID APIENTRY CloseAllPrograms()
 {
 //	HANDLE hProc;
 

@@ -897,7 +897,7 @@ static VOID ConnecttoMPSKThread(port)
 	{
 		//	Resolve name to address
 
-		 HostEnt = gethostbyname (&TNC->WINMORHostName[port]);
+		 HostEnt = gethostbyname (TNC->WINMORHostName);
 		 
 		 if (!HostEnt) return;			// Resolve failed
 

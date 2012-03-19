@@ -47,7 +47,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len);
 VOID ProcessQuery(char * Query);
 VOID ProcessSpecificQuery(char * Query, int Port, char * Origin, char * DestPlusDigis);
 VOID CheckandDigi(DIGIMESSAGE * Msg, int Port, int FirstUnused, int Digis, int Len);		
-Dll VOID APIENTRY SendBeacon(int toPort, char * Msg, BOOL SendISStatus, BOOL SendSOGCOG);
+VOID SendBeacon(int toPort, char * Msg, BOOL SendISStatus, BOOL SendSOGCOG);
 Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 VOID ProcessAPRSISMsg(char * APRSMsg);
 static VOID SendtoDigiPorts(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
@@ -66,6 +66,8 @@ void FreeSemaphore();
 
 extern int SemHeldByAPI;
 extern int APRSMONDECODE();
+extern struct ConsoleInfo MonWindow;
+extern char VersionString[];
 
 // All data should be initialised to force into shared segment
 
@@ -142,7 +144,7 @@ char APPLFilter[1000] = "";		// Filter when an Applcation is running
 
 extern BOOL IGateEnabled;
 
-char StatusMsg[256] = "";				// Must be in shared segment
+char StatusMsg[256] = "";		// Must be in shared segment
 int StatusMsgLen = 0;
 
 char * BeaconPath[33] = {0};
@@ -168,6 +170,7 @@ int MobileBeaconInterval = 0;
 time_t LastMobileBeacon = 0;
 int BeaconCounter = 0;
 int IStatusCounter = 0;					// Used to send ?ISTATUS? Responses
+int StatusCounter = 0;					// Used to send Status Messages
 
 BOOL APRSISOpen = FALSE;
 int ISDelayTimer = 0;					// Time before trying to reopen APRS-IS link
@@ -233,6 +236,12 @@ int ObjectCount = 0;
 
 VOID SendObject(struct OBJECT * Object);
 
+int ISSend(SOCKET sock, char * Msg, int Len, int flags)
+{
+	MonitorAPRSIS(Msg, Len, TRUE);
+	return send(sock, Msg, Len, flags);
+}
+
 Dll BOOL APIENTRY Init_APRS()
 {
 	int i;
@@ -263,6 +272,8 @@ Dll BOOL APIENTRY Init_APRS()
 	memset(&DigiAX[0][0], 0, sizeof(DigiAX));
 
 	APRSPortMask = 0;
+
+	memset(BeaconPath, sizeof(BeaconPath), 0);
 
 	memset(&CrossPortMap[0][0], 0, sizeof(CrossPortMap));
 
@@ -401,6 +412,7 @@ Dll VOID APIENTRY Poll_APRS()
 		BOOL ThirdParty = FALSE;
 		BOOL NoGate = FALSE;
 		struct APRSSTATIONRECORD * MH;
+		char MsgCopy[500];
 
 		monbuff = Q_REM((UINT *)&APRSMONVEC.HOSTTRACEQ);
 
@@ -491,6 +503,9 @@ Dll VOID APIENTRY Poll_APRS()
 			continue;			
 		}
 
+		memcpy(MsgCopy, buffer, len);
+		MsgCopy[len] = 0;
+
 		// if APRS Appl is atttached, queue message to it
 
 
@@ -548,7 +563,10 @@ Dll VOID APIENTRY Poll_APRS()
 		MH = UpdateHeard(ptr1, Port);
 
 		if (ThirdParty)
-			MH->IGate= TRUE;			// if we've seen msgs to TCPIP, it must be an Igate
+		{
+//			Debugprintf("Setting Igate Flag - %s", MsgCopy);
+			MH->IGate = TRUE;			// if we've seen msgs to TCPIP, it must be an Igate
+		}
 
 		if (NoGate)
 			goto NoIS;
@@ -586,7 +604,7 @@ Dll VOID APIENTRY Poll_APRS()
 		{
 			len = wsprintf(ISMsg, "%s>%s,qAR,%s:%s", ptr1, ptr4, APRSCall, Payload);
 
-			send(sock, ISMsg, len, 0);
+			ISSend(sock, ISMsg, len, 0);
 	
 			ptr1 = strchr(ISMsg, 13);
 			if (ptr1) *ptr1 = 0;
@@ -1291,7 +1309,7 @@ VOID SendAPRSMessage(char * Message, int toPort)
 		char ISMsg[300];
 
 		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%s\r\n", APRSCall, APRSDest, Message);
-		send(sock, ISMsg, Len, 0);
+		ISSend(sock, ISMsg, Len, 0);
 		Len = GetLastError();
 //		Debugprintf(">%s", ISMsg);
 	}
@@ -1350,11 +1368,16 @@ VOID ProcessQuery(char * Query)
 		return;
 	}
 }
-Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendISStatus, BOOL SendSOGCOG)
+Dll VOID APIENTRY APISendBeacon()
+{
+	BeaconCounter = 2;
+}
+
+VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCOG)
 {
 	int Port;
 	DIGIMESSAGE Msg;
-	char * StMsg = StatusText;
+	char * StMsg = BeaconText;
 	int Len;
 	char SOGCOG[10] = "";
 
@@ -1366,8 +1389,8 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendISStatus, B
 	if (StMsg == NULL)
 		StMsg = StatusMsg;
 	
-	Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (ApplConnected) ? '=' : '!',
-		LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
+	Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (ApplConnected) ? '=' : '!',
+		LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
 
@@ -1383,8 +1406,8 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendISStatus, B
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
-			Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s %s", (ApplConnected) ? '=' : '!',
-					LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
+			Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (ApplConnected) ? '=' : '!',
+					LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;
 
@@ -1399,14 +1422,18 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendISStatus, B
 	{
 		char ISMsg[300];
 
-		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s %s\r\n", APRSCall, APRSDest,
-			(ApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
-		send(sock, ISMsg, Len, 0);
+		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s BPQ32 Igate V %s\r\n", APRSCall, APRSDest,
+			(ApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+		ISSend(sock, ISMsg, Len, 0);
 //		Debugprintf(">%s", ISMsg);
 
 		if (SendISStatus)
 			IStatusCounter = 5;
 	}
+
+	if (SendISStatus)
+		StatusCounter = 10;
+
 
 	// and to Application
 
@@ -1423,8 +1450,8 @@ Dll VOID APIENTRY SendBeacon(int toPort, char * StatusText, BOOL SendISStatus, B
 				
 		if (buffptr)
 		{
-			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r!%s%c%s%c%s %s\r\n",
-				APRSCall, APRSDest, LAT, SYMSET, LON, SYMBOL, SOGCOG, StMsg);
+			buffptr[1] = wsprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r!%s%c%s%c%s BPQ32 Igate V %s\r\n",
+				APRSCall, APRSDest, LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 			buffptr[2] = 255;
 			C_Q_ADD(&APPL_Q, buffptr);
 		}
@@ -1453,8 +1480,10 @@ VOID SendObject(struct OBJECT * Object)
 
 	if (APRSISOpen && Object->PortMap[0])
 	{
-		Len = strlen(Object->Message);
-		send(sock, Object->Message, Len, 0);
+		char ISMsg[300];
+		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%s\r\n", APRSCall, APRSDest, Object->Message);
+		ISSend(sock, ISMsg, Len, 0);
+
 	}
 
 	// and to Application
@@ -1483,6 +1512,35 @@ VOID SendObject(struct OBJECT * Object)
 
 
 
+VOID SendStatus(char * StatusText)
+{
+	int Port;
+	DIGIMESSAGE Msg;
+	int Len;
+
+	if (APRSISOpen)
+	{
+		Msg.PID = 0xf0;
+		Msg.CTL = 3;
+
+		Len = wsprintf(Msg.L2DATA, ">%s", StatusText);
+
+		for (Port = 1; Port <= NUMBEROFPORTS; Port++)
+		{
+			if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
+			{
+				memcpy(Msg.DEST, &BeaconHeader[Port][0][0],  BeaconHddrLen[Port] + 1);
+				Send_AX_Datagram(&Msg, Len + 2, Port);
+			}
+		}
+
+		Len = wsprintf(Msg.L2DATA, "%s>%s,TCPIP*:>%s\r\n", APRSCall, APRSDest, StatusText);
+		ISSend(sock, Msg.L2DATA, Len, 0);
+//		Debugprintf(">%s", Msg.L2DATA);
+	}
+}
+
+
 VOID SendIStatus()
 {
 	int Port;
@@ -1505,11 +1563,12 @@ VOID SendIStatus()
 			}
 		}
 
-		Len = wsprintf(Msg.L2DATA, "%s>%s,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d\r\n", APRSCall, APRSDest, 0, CountLocalStations());
-		send(sock, Msg.L2DATA, Len, 0);
+		Len = wsprintf(Msg.L2DATA, "%s>%s,TCPIP*:<IGATE,MSG_CNT=%d,LOC_CNT=%d\r\n", APRSCall, APRSDest, MessageCount, CountLocalStations());
+		ISSend(sock, Msg.L2DATA, Len, 0);
 //		Debugprintf(">%s", Msg.L2DATA);
 	}
 }
+
 
 VOID DoSecTimer()
 {
@@ -1549,6 +1608,15 @@ VOID DoSecTimer()
 		}
 	}
 
+	if (StatusCounter)
+	{
+		StatusCounter--;
+
+		if (StatusCounter == 0)
+		{
+			SendStatus(StatusMsg);
+		}
+	}
 	if (IStatusCounter)
 	{
 		IStatusCounter--;
@@ -1643,9 +1711,10 @@ VOID APRSISThread(BOOL Report)
 	{
 		Buffer[InputLen] = 0;
 		Debugprintf(Buffer);
+		MonitorAPRSIS(Buffer, InputLen, FALSE);
 	}
 
-	send(sock, Signon, strlen(Signon), 0);
+	ISSend(sock, Signon, strlen(Signon), 0);
 
 	InputLen=recv(sock, Buffer, 500, 0);
 
@@ -1653,6 +1722,7 @@ VOID APRSISThread(BOOL Report)
 	{
 		Buffer[InputLen] = 0;
 		Debugprintf(Buffer);
+		MonitorAPRSIS(Buffer, InputLen, FALSE);
 	}
  
 	InputLen=recv(sock, Buffer, 500, 0);
@@ -1661,6 +1731,7 @@ VOID APRSISThread(BOOL Report)
 	{
 		Buffer[InputLen] = 0;
 		Debugprintf(Buffer);
+		MonitorAPRSIS(Buffer, InputLen, FALSE);
 	}
 
 	APRSISOpen = TRUE;
@@ -1685,10 +1756,12 @@ VOID APRSISThread(BOOL Report)
 				if (len < 300)							// Ignore if way too long
 				{
 					memcpy(&APRSMsg, APRSinMsg, len);	
+					MonitorAPRSIS(APRSMsg, len, FALSE);
 					APRSMsg[len - 2] = 0;
 
 //					Debugprintf("<%s", APRSMsg);
 					ProcessAPRSISMsg(APRSMsg);
+
 				}
 
 				inptr -= len;						// bytes left
@@ -1785,11 +1858,15 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	memcpy(IGateCall, ptr, strlen(ptr));
 
-	MH = LookupStation(IGateCall);
-
-	if (MH)
-		MH->IGate = TRUE;						// If we have seen this station on RF, set it as an Igate
-
+	if (strstr(APRSMsg, ",qAS,") == 0)		// Findu generates invalid q construct
+	{
+		MH = LookupStation(IGateCall);
+		if (MH)
+		{
+//			Debugprintf("Setting Igate Flag - %s:%s", APRSMsg, Payload);
+			MH->IGate = TRUE;						// If we have seen this station on RF, set it as an Igate
+		}
+	}
 	Source = APRSMsg;
 	Dest = strchr(APRSMsg, '>');
 
@@ -2002,7 +2079,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 	return FALSE;
 }
 
-char * FormatAPRSMH(struct APRSSTATIONRECORD * MH)
+char * FormatAPRSMH(struct APRSSTATIONRECORD * MH, char * Pattern)
  {
 	 // Called from CMD.ASM
 
@@ -2010,13 +2087,39 @@ char * FormatAPRSMH(struct APRSSTATIONRECORD * MH)
 	static char MHLine[50];
 	time_t szClock = MH->MHTIME;
 
+	if (Pattern[0] == ' ')
+	{
+		// Prepare Pattern
+
+		char * ptr1 = Pattern + 1;
+		char * ptr2 = Pattern;
+		char c;
+		
+		do
+		{
+			c = *ptr1++;
+			*(ptr2++) = c;
+		}
+		while (c != ' ');
+
+		*(--ptr2) = 0;
+	}
+
+
+
 	szClock = (_time32(NULL) - szClock);
 	TM = gmtime(&szClock);
 
 	wsprintf(MHLine, "%-10s %d %.2d:%.2d:%.2d:%.2d %s\r",
-		MH->MHCALL, MH->Port, TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, (MH->IGate) ? "Igate" : "");
+		MH->MHCALL, MH->Port, TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, (MH->IGate) ? "IGATE" : "");
 
-	return MHLine;
+	if (Pattern[0] == 0)
+		return MHLine;
+
+	if (strstr(MHLine, Pattern))
+		return MHLine;
+	else
+		return NULL;
 
  }
 

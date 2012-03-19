@@ -7468,6 +7468,10 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		RegQueryValueEx(hKey,"FWDInterval",0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->FwdInterval,(ULONG *)&Vallen);
 
+		Vallen=4;
+		RegQueryValueEx(hKey,"RevFWDInterval",0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->RevFwdInterval,(ULONG *)&Vallen);
+
 		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->MaxFBBBlockSize,(ULONG *)&Vallen);
 
@@ -7909,7 +7913,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 		}
 	}
 
-	Logprintf(LOG_BBS, conn, '|', "No Free Streams for connect to BBS %s", user->Call);
+	Logprintf(LOG_BBS, NULL, '|', "No Free Streams for connect to BBS %s", user->Call);
 
 	return FALSE;
 	
@@ -8302,6 +8306,7 @@ CheckForSID:
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
 		conn->UserPointer->ConnectsOut++;
 		conn->BBSFlags &= ~RunningConnectScript;
+		ForwardingInfo->LastReverseForward = time(NULL);
 
 		if (memcmp(Buffer, "[AEA PK", 7) == 0)
 		{
@@ -8533,6 +8538,7 @@ VOID FWDTimerProc()
 {
 	struct UserInfo * user;
 	struct	BBSForwardingInfo * ForwardingInfo ;
+	time_t NOW = time(NULL);
 
 	for (user = BBSChain; user; user = user->BBSNext)
 	{
@@ -8568,25 +8574,15 @@ VOID FWDTimerProc()
 
 				if (ForwardingInfo->Enabled)
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (SeeifMessagestoForward(user->BBSNumber, NULL) || ForwardingInfo->ReverseFlag)
-/*
-							if (strcmp(user->Call, "RMS") == 0)
-							{
-								if (ForwardingInfo->UserIndex == 0)
-									FindNextRMSUser(ForwardingInfo);
-								
-								if (ForwardingInfo->UserCall[0] == 0)	// No Users to poll
-									continue;
-								if (ConnecttoBBS(user))
-									ForwardingInfo->Forwarding = TRUE;
-							}
-							else
-*/							{
-								user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+						if (SeeifMessagestoForward(user->BBSNumber, NULL) ||
+							(ForwardingInfo->ReverseFlag && NOW - ForwardingInfo->LastReverseForward) > ForwardingInfo->RevFwdInterval) // Menu Command overrides Reverse
 
-								if (ConnecttoBBS(user))
-									ForwardingInfo->Forwarding = TRUE;
-							}
+						{
+							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+
+							if (ConnecttoBBS(user))
+								ForwardingInfo->Forwarding = TRUE;					
+						}
 		}
 	}
 }
@@ -8595,6 +8591,7 @@ void StartForwarding(int BBSNumber)
 {
 	struct UserInfo * user;
 	struct	BBSForwardingInfo * ForwardingInfo ;
+	time_t NOW = time(NULL);
 
 	for (user = BBSChain; user; user = user->BBSNext)
 	{
@@ -8606,25 +8603,13 @@ void StartForwarding(int BBSNumber)
 			if (ForwardingInfo)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
-						if (SeeifMessagestoForward(user->BBSNumber, NULL) || ForwardingInfo->ReverseFlag || BBSNumber) // Menu Command overrides Reverse
-/*							if (strcmp(user->Call, "RMS") == 0)
-							{
-								if (ForwardingInfo->UserIndex == 0)
-									FindNextRMSUser(ForwardingInfo);
-								
-								if (ForwardingInfo->UserCall[0] == 0)	// No Users to poll
-									continue;
-								if (ConnecttoBBS(user))
-									ForwardingInfo->Forwarding = TRUE;
-							}
-							else
-*/							{
-								user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
-
-								if (ConnecttoBBS(user))
-									ForwardingInfo->Forwarding = TRUE;
-							}
-
+						if (BBSNumber || SeeifMessagestoForward(user->BBSNumber, NULL) ||
+							(ForwardingInfo->ReverseFlag && NOW - ForwardingInfo->LastReverseForward) > ForwardingInfo->RevFwdInterval) // Menu Command overrides Reverse
+						{
+							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+							if (ConnecttoBBS(user))
+								ForwardingInfo->Forwarding = TRUE;
+						}
 	}
 
 	return;

@@ -74,6 +74,8 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna);
 VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr);
 VOID SetupScanInterLockGroups(struct RIGINFO *RIG);
 VOID ProcessFT100Frame(struct RIGPORTINFO * PORT);
+VOID AddNMEAChecksum(char * msg);
+VOID ProcessNMEA(struct RIGPORTINFO * PORT, char * NMEAMsg, int len);
 
 VOID SetupPortRIGPointers();
 
@@ -298,6 +300,7 @@ DllExport int APIENTRY Rig_Command(int Session, char * Command)
 	int Split, DataFlag, Bandwidth, Antenna;
 	struct ScanEntry * FreqPtr;
 	char * CmdPtr;
+	int Len;
 
 	//	Only Allow RADIO from Secure Applications
 
@@ -780,6 +783,46 @@ portok:
 
 		return TRUE;
 
+	case NMEA:
+			
+		if (n < 3)
+		{
+			strcpy(Command, "Sorry - Invalid Format - should be Port Freq Mode\r");
+			return FALSE;
+		}
+		buffptr = GetBuff();
+
+		if (buffptr == 0)
+		{
+			wsprintf(Command, "Sorry - No Buffers available\r");
+			return FALSE;
+		}
+
+		// Build a ScanEntry in the buffer
+
+		FreqPtr = (struct ScanEntry *)&buffptr[2];
+
+		FreqPtr->Freq = Freq;
+		FreqPtr->Bandwidth = Bandwidth;
+		FreqPtr->Antenna = Antenna;
+
+		Poll = (UCHAR *)&buffptr[20];
+
+		i = sprintf(Poll, "$PICOA,90,%02x,RXF,%.6f*xx\r\n", RIG->RigAddr, Freq/1000000.);
+		AddNMEAChecksum(Poll);
+		Len = i;
+		i = sprintf(Poll + Len, "$PICOA,90,%02x,TXF,%.6f*xx\r\n", RIG->RigAddr, Freq/1000000.);
+		AddNMEAChecksum(Poll + Len);
+		Len += i;
+		i = sprintf(Poll + Len, "$PICOA,90,%02x,MODE,%s*xx\r\n", RIG->RigAddr, Mode);
+		AddNMEAChecksum(Poll + Len);
+			
+		buffptr[1] = i + Len;
+		
+		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
+
+		return TRUE;
+
 	}
 	return TRUE;
 }
@@ -1092,6 +1135,7 @@ DllExport BOOL APIENTRY Rig_Poll()
 		case KENWOOD:
 		case FT2000:
 		case FLEX:
+		case NMEA:
 			
 			KenwoodPoll(PORT);
 			break;
@@ -1214,6 +1258,9 @@ void CheckRX(struct RIGPORTINFO * PORT)
 	COMSTAT    ComStat;
 	DWORD      dwErrorFlags;
 	int Length;
+	char NMEAMsg[100];
+	char * ptr;
+	int len;
 
 	if (PORT->hDevice == (HANDLE) -1) 
 		return;
@@ -1320,6 +1367,35 @@ void CheckRX(struct RIGPORTINFO * PORT)
 
 		PORT->RXLen = 0;		// Ready for next frame	
 		return;
+	
+	case NMEA:
+
+		ptr = memchr(PORT->RXBuffer, 0x0a, Length);
+
+		while (ptr != NULL)
+		{
+			ptr++;									// include lf
+			len = ptr-(char *)&PORT->RXBuffer;	
+			
+			memcpy(NMEAMsg, PORT->RXBuffer, len);	
+
+			NMEAMsg[len] = 0;
+
+//			if (Check0183CheckSum(NMEAMsg, len))
+				ProcessNMEA(PORT, NMEAMsg, len);
+
+			Length -= len;							// bytes left
+
+			if (Length > 0)
+			{
+				memmove(PORT->RXBuffer, ptr, Length);
+				ptr = memchr(PORT->RXBuffer, 0x0a, Length);
+			}
+			else
+				ptr=0;
+		}
+
+		PORT->RXLen = Length;
 	}
 }
 
@@ -2212,6 +2288,72 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 	return;
 }
 
+VOID ProcessNMEA(struct RIGPORTINFO * PORT, char * Msg, int Length)
+{
+	UCHAR * Poll = PORT->TXBuffer;
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
+
+	Msg[Length] = 0;
+	
+	if (PORT->PORTOK == FALSE)
+	{
+		// Just come up
+		char Status[80];
+		
+		PORT->PORTOK = TRUE;
+		SetWindowText(PORT->hStatus, Status);
+	}
+
+	RIG->RIGOK = TRUE;
+	PORT->Timeout = 0;
+
+	if (!PORT->AutoPoll)
+	{
+		// Response to a RADIO Command
+
+		if (Msg[0] == '?')
+			SendResponse(RIG->Session, "Sorry - Command Rejected");
+		else
+			SendResponse(RIG->Session, "Mode and Frequency Set OK");
+	
+		PORT->AutoPoll = TRUE;
+	}
+
+	if (memcmp(&Msg[13], "RXF", 3) == 0)
+	{
+		double Freq;
+		char Status[80];
+
+		if (Length < 24)
+			return;
+
+		Freq = atof(&Msg[17]);
+
+		sprintf(Status,"%f", Freq);
+		SetWindowText(RIG->hFREQ, Status);
+		strcpy(RIG->Valchar, Status);
+
+		return;
+	}
+
+	if (memcmp(&Msg[13], "MODE", 3) == 0)
+	{
+		char * ptr;
+
+		if (Length < 24)
+			return;
+
+		ptr = strchr(&Msg[18], '*');
+		if (ptr) *(ptr) = 0;
+
+		SetWindowText(RIG->hMODE, &Msg[18]);
+		return;
+	}
+
+
+}
+
+
 //FA00014103000;MD2;
 
 VOID ProcessKenwoodFrame(struct RIGPORTINFO * PORT, int Length)
@@ -2386,7 +2528,7 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 				if (RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
 
-				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 40);
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 				RIG->FreqPtr++;
 				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
 
@@ -2446,26 +2588,15 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 			return;
 	}
 
+	if (RIG->RIGOK && (RIG->ScanStopped == 0) && RIG->NumberofBands)
+		return;						// no point in reading freq if we are about to change it
+
 	RIG->PollCounter = 10;			// Once Per Sec
 		
 	// Read Frequency 
 
-	if (PORT->PortType == FLEX)
-	{
-		PORT->TXLen = 10;
-		strcpy(Poll, "ZZFA;ZZMD;");
-	}
-	else
-	{
-	Poll[0] = 'F';
-	Poll[1] = 'A';
-	Poll[2] = ';';
-	Poll[3] = 'M';
-	Poll[4] = 'D';
-	Poll[5] = ';';
-
-	PORT->TXLen = 6;
-	}
+	PORT->TXLen = RIG->PollLen;
+	strcpy(Poll, RIG->Poll);
 	
 	RigWriteCommBlock(PORT);
 	PORT->Retries = 1;
@@ -2596,6 +2727,21 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	return TRUE;
 
 }
+
+VOID AddNMEAChecksum(char * msg)
+{
+	UCHAR CRC = 0;
+
+	msg++;					// Skip $
+
+	while (*(msg) != '*')
+	{
+		CRC ^= *(msg++);
+	}
+
+	wsprintf(++msg, "%02X\r\n", CRC);
+}
+
 // Called by Port Driver .dll to add/update rig info 
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
@@ -2702,6 +2848,9 @@ PortFound:
 	if (strcmp(ptr, "FLEX") == 0)
 		PORT->PortType = FLEX;
 	else
+	if (strcmp(ptr, "NMEA") == 0)
+		PORT->PortType = NMEA;
+	else
 	if (strcmp(ptr, "PTTONLY") == 0)
 		PORT->PortType = PTT;
 	else
@@ -2773,7 +2922,7 @@ PortFound:
 
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 
-	if (PORT->PortType == ICOM)
+	if (PORT->PortType == ICOM || PORT->PortType == NMEA)
 	{
 		if (ptr == NULL) return (FALSE);
 		sscanf(ptr, "%x", &RigAddr);
@@ -3116,7 +3265,7 @@ PortFound:
 		FreqPtr[0]->Supress = Supress;
 
 
-		CmdPtr = FreqPtr[0]->Cmd1 = malloc(40);
+		CmdPtr = FreqPtr[0]->Cmd1 = malloc(100);
 
 		if (PORT->PortType == ICOM)
 		{
@@ -3207,6 +3356,9 @@ PortFound:
 		{	
 			FreqPtr[0]->Cmd1Len = wsprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
 
+			RIG->PollLen = 6;
+			strcpy(RIG->Poll, "FA;MD;");
+
 			strcpy(RIG->PTTOn, "TX0;");
 			RIG->PTTOnLen = 4;
 			strcpy(RIG->PTTOff, "RX;");
@@ -3216,6 +3368,9 @@ PortFound:
 		{	
 			FreqPtr[0]->Cmd1Len = wsprintf(CmdPtr, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", FreqString, ModeNo);
 
+			RIG->PollLen = 10;
+			strcpy(RIG->Poll, "ZZFA;ZZMD;");
+
 			strcpy(RIG->PTTOn, "ZZTX1;");
 			RIG->PTTOnLen = 6;
 			strcpy(RIG->PTTOff, "ZZTX0;");
@@ -3224,7 +3379,10 @@ PortFound:
 		else if	(PORT->PortType == FT2000)
 		{	
 			FreqPtr[0]->Cmd1Len = wsprintf(CmdPtr, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
-			
+
+			RIG->PollLen = 6;
+			strcpy(RIG->Poll, "FA;MD;");
+
 			strcpy(RIG->PTTOn, "TX1;");
 			RIG->PTTOnLen = 4;
 			strcpy(RIG->PTTOff, "TX0;");
@@ -3252,6 +3410,34 @@ PortFound:
 			*(CmdPtr++) = 0;
 			*(CmdPtr++) = 16;			// Send Get Status, as FT100 doesn't ack commands
 		}
+		else if	(PORT->PortType == NMEA)
+		{	
+			int Len;
+			
+			i = sprintf(CmdPtr, "$PICOA,90,%02x,RXF,%.6f*xx\r\n", RIG->RigAddr, Freq/1000000.);
+			AddNMEAChecksum(CmdPtr);
+			Len = i;
+			i = sprintf(CmdPtr + Len, "$PICOA,90,%02x,TXF,%.6f*xx\r\n", RIG->RigAddr, Freq/1000000.);
+			AddNMEAChecksum(CmdPtr + Len);
+			Len += i;
+			i = sprintf(CmdPtr + Len, "$PICOA,90,%02x,MODE,%s*xx\r\n", RIG->RigAddr, Mode);
+			AddNMEAChecksum(CmdPtr + Len);
+			FreqPtr[0]->Cmd1Len = Len + i;
+
+			i = sprintf(RIG->Poll, "$PICOA,90,%02x,RXF*xx\r\n", RIG->RigAddr);
+			AddNMEAChecksum(RIG->Poll);
+			Len = i;
+			i = sprintf(RIG->Poll + Len, "$PICOA,90,%02x,MODE*xx\r\n", RIG->RigAddr);
+			AddNMEAChecksum(RIG->Poll + Len);
+			RIG->PollLen = Len + i;
+
+
+//		strcpy(RIG->PTTOn, "ZZTX1;");
+//			RIG->PTTOnLen = 6;
+//			strcpy(RIG->PTTOff, "ZZTX0;");
+//			RIG->PTTOffLen = 6;
+		}
+
 
 		FreqPtr++;
 

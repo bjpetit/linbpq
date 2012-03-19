@@ -20,6 +20,7 @@
 #define IDM_ZOOMIN                      123
 #define IDM_ZOOMOUT                     124
 #define IDM_HOME                        125
+#define IDM_FILTERTOVIEW				126
 #define IDC_FROMFILE                    1022
 #define IDC_FILENAME                    1054
 #define IDC_MESSAGE                     1055

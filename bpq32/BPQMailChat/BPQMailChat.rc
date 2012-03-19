@@ -389,16 +389,15 @@ BEGIN
     EDITTEXT        IDC_HROUTESP,280,141,151,60,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL | WS_HSCROLL
-    LTEXT           "Interval (Seconds)",IDC_STATIC,125,205,65,12
-    EDITTEXT        IDC_FWDINT,190,204,26,12,ES_AUTOHSCROLL
+    LTEXT           "Interval (Secs)",IDC_STATIC,359,207,48,8
+    EDITTEXT        IDC_FWDINT,253,204,22,12,ES_AUTOHSCROLL
     CONTROL         "Enable Forwarding",4000,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_LEFT | WS_TABSTOP,222,205,77,8
-    CONTROL         "Request Reverse Forwarding",4006,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_LEFT | WS_TABSTOP,309,
-                    205,110,8
+                    BS_LEFTTEXT | BS_LEFT | WS_TABSTOP,122,206,72,8
+    CONTROL         "Request Reverse",4006,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT | BS_LEFT | WS_TABSTOP,286,207,67,8
     CONTROL         "Send new messages without waiting for poll timer",
                     IDC_SENDNEW,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
-                    BS_MULTILINE | WS_TABSTOP,125,221,175,8
+                    BS_MULTILINE | WS_TABSTOP,122,221,175,8
     LTEXT           "BBS HA",IDC_STATIC,125,242,30,12
     EDITTEXT        IDC_BBSHA,162,240,143,12,ES_UPPERCASE | ES_AUTOHSCROLL
     LTEXT           "FBB Max Block",IDC_STATIC,323,242,58,12
@@ -415,6 +414,9 @@ BEGIN
     DEFPUSHBUTTON   "? Help",IDC_HRHELP,381,6,33,11,BS_CENTER | BS_VCENTER | 
                     NOT WS_TABSTOP
     DEFPUSHBUTTON   "Save",4100,193,279,57,17,BS_CENTER | BS_VCENTER
+    LTEXT           "Static",IDC_STATIC,347,0,19,8
+    LTEXT           "Interval (Secs)",IDC_STATIC,198,206,48,8
+    EDITTEXT        IDC_REVFWDINT,407,205,23,12,ES_AUTOHSCROLL
 END
 
 IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68

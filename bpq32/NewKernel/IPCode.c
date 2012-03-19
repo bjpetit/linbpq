@@ -178,8 +178,8 @@ Dll BOOL APIENTRY Init_IP()
 
 	if (hIPResWnd)
 	{
-		PostMessage(hIPResWnd, WM_DESTROY,0,0);
-		DestroyWindow(hIPResWnd);
+		PostMessage(hIPResWnd, WM_CLOSE,0,0);
+//		DestroyWindow(hIPResWnd);
 
 		Debugprintf("IP Init Destroying IP Resolver");
 	}
@@ -345,8 +345,8 @@ Dll BOOL APIENTRY Init_IP()
 
 VOID IPClose()
 {
-	PostMessage(hIPResWnd, WM_DESTROY,0,0);
-	DestroyWindow(hIPResWnd);
+	PostMessage(hIPResWnd, WM_CLOSE,0,0);
+//	DestroyWindow(hIPResWnd);
 
 	hIPResWnd = NULL;
 }
@@ -1938,7 +1938,7 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			
 		DrawMenuBar(FrameWnd);
 
-		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 	}
 
@@ -1992,7 +1992,7 @@ LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		case SC_RESTORE:
 
 			IPMinimized = FALSE;
-			SendMessage(ClientWnd, WM_MDIRESTORE, hWnd, 0);
+			SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
 			break;
 
 		case SC_MINIMIZE: 

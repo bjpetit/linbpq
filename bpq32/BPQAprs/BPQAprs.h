@@ -13,7 +13,7 @@ struct STATIONRECORD
 	struct STATIONRECORD * Next;
 	char Callsign[12];
 	char Path[120];
-	char Comment[256];
+	char Status[256];
 	char LastPacket[400];
 	int LastPort;
     double Lat;
@@ -43,6 +43,7 @@ struct STATIONRECORD
 	BOOL NoTracks;					// Suppress displaying track
 	COLORREF TrackColour;
 	char ObjState;					// Live/Killed flag
+	char LastRXSeq[6];				// Seq from last received message (used for Reply-Ack system)
 
 } StationRecord;
 
@@ -57,6 +58,7 @@ struct OSMQUEUE
 struct APRSMESSAGE
 {
 	struct APRSMESSAGE * Next;
+	struct STATIONRECORD * ToStation;	// Set on messages we send
 	char FromCall[12];
 	char ToCall[12];
 	char Text[104];

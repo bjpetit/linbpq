@@ -11,6 +11,7 @@
 #define IDC_MAXBLOCK                    508
 #define IDC_BBSHA                       509
 #define IDC_SMTP                        510
+#define IDC_REVFWDINT                   510
 #define IDC_USERS2                      513
 #define IDC_MSGSEM                      514
 #define IDC_ALLOCSEM                    515

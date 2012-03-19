@@ -4324,26 +4324,32 @@ APRSMHCMD:
 	mov	al, 13
 	stosb
 
-	MOV	ESI,_MHDATA 
+	MOV	EDX,_MHDATA 
 	MOV	ECX,_MAXHEARDENTRIES
 
 AMHLOOP:
 	
-	CMP	DWORD PTR [ESI],0
+	CMP	DWORD PTR [edx],0
 	JE SHORT AMHEND
 
+	push	edx
 	CALL	CHECKBUFFER
+	pop	edx
 	
 	push ecx
+	push edx
 	push esi
 	
 	push edi
-	PUSH ESI
+	push esi
+	PUSH edx
 	call _FormatAPRSMH
 	mov	esi, eax
-	add	esp,4
+	add	esp,8
 	pop	edi
 	
+	or	eax,eax					; Null return - ignore line
+	jz mhskip
 @@:
 	lodsb
 	or	al,al
@@ -4353,11 +4359,13 @@ AMHLOOP:
 	jmp @B
 	
 @@:
+mhskip:
 
-	pop	esi
+	pop esi
+	pop	edx
 	POP	ECX
 
-	ADD	ESI, _MHLEN
+	ADD	edx, _MHLEN
 
 	LOOP	AMHLOOP
 	

@@ -283,8 +283,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		// call DrawMenuBar after the menu items are set
 		DrawMenuBar(FrameWnd);
 
-		return TRUE; //DefMDIChildProc(hWnd, message, wParam, lParam);
-
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
 	}
 
 
@@ -300,7 +299,7 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 					EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
 					EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
 		
-					return TRUE;
+					break;
 				}
 			}
 			EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_GRAYED);
@@ -334,10 +333,8 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			break;
 
-		default:
-
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
 		}
+		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 	case WM_SIZING:
 	case WM_SIZE:
@@ -357,12 +354,12 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		case SC_RESTORE:
 
 			TNC->Minimized = FALSE;
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
+			break;
 
 		case SC_MINIMIZE: 
 
 			TNC->Minimized = TRUE;
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
+			break;
 		}
 		
 		return DefMDIChildProc(hWnd, message, wParam, lParam);
@@ -644,10 +641,10 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 		{
 			PktInfo = WL2KInfoPtr->PacketData;
 
-			wsprintf(Message, "02'%s', '%s', '%s', %s, %d, %d, %d, %d, %d, %03d, '%s', 1",
+			wsprintf(Message, "06'%s', '%s', '%s', %s, %d, %d, %d, %d, %d, %03d, '%s', 1, '%s'",
 				TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
 				PktInfo->mode, PktInfo->baud, PktInfo->power, PktInfo->height, PktInfo->gain, PktInfo->direction,
-				TNC->Comment);
+				TNC->Comment, TNC->ServiceCode);
 
 			Debugprintf("Sending %s", Message);
 
@@ -881,9 +878,9 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 				Baud = ModetoBaud[WL2KInfoPtr->Bandwidth];
 
-				wsprintf(Message, "02'%s', '%s', '%s', %s, %d, %d, 0, 0, 0, 000, '%s', 1",
+				wsprintf(Message, "06'%s', '%s', '%s', %s, %d, %d, 0, 0, 0, 000, '%s', 1, '%s'",
 					TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
-					WL2KInfoPtr->Bandwidth, Baud, WL2KInfoPtr->TimeList);
+					WL2KInfoPtr->Bandwidth, Baud, WL2KInfoPtr->TimeList, TNC->ServiceCode);
 
 				Debugprintf("Sending %s", Message);
 
@@ -893,9 +890,9 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 				
 				if ((TNC->Hardware == H_SCS) && WL2KInfoPtr->RPonPTC && (WL2KInfoPtr->Bandwidth != 30))
 				{
-					wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 600, 0, 0, 0, 000, '%s', 1",
+					wsprintf(Message, "06'%s', '%s', '%s', %s, %d, 600, 0, 0, 0, 000, '%s', 1, '%s'",
 						TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, WL2KInfoPtr->Freq,
-						30, WL2KInfoPtr->TimeList);
+						30, WL2KInfoPtr->TimeList, TNC->ServiceCode);
 
 					Debugprintf("Sending %s", Message);
 
@@ -914,8 +911,8 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 	{
 		Baud = ModetoBaud[TNC->WL2KMode];
 		
-		wsprintf(Message, "02'%s', '%s', '%s', %s, %d, %d, 100, 25, 0, 000, '%s', 1",
-			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, Baud, TNC->Comment);
+		wsprintf(Message, "06'%s', '%s', '%s', %s, %d, %d, 50, 25, 0, 000, '%s', 1, '%s'",
+			TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, TNC->WL2KMode, Baud, TNC->Comment, TNC->ServiceCode);
 
 		Debugprintf("Sending %s", Message);
 		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
@@ -924,8 +921,8 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 		if (TNC->Hardware == H_SCS && TNC->RobustTime)
 		{
-			wsprintf(Message, "02'%s', '%s', '%s', %s, %d, 600, 100, 25, 0, 000, '%s', 1",
-				TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, 30, TNC->Comment);
+			wsprintf(Message, "06'%s', '%s', '%s', %s, %d, 600, 100, 25, 0, 000, '%s', 1, '%s'",
+				TNC->RMSCall, TNC->BaseCall, TNC->GridSquare, TNC->WL2KFreq, 30, TNC->Comment, TNC->ServiceCode);
 
 			Debugprintf("Sending %s", Message);
 			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
@@ -1003,8 +1000,11 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 										if (_stricmp(p_cmd, "DontReportNarrowOnWideFreqs") == 0)
 										{
 											TNC->DontReportNarrowOnWideFreqs = TRUE;
+											p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
 										}
 									}
+									if (p_cmd)
+										strcpy(TNC->ServiceCode, p_cmd);
 								}
 								else if (TNC->Hardware == H_TELNET)
 								{
@@ -1045,6 +1045,9 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 									PktInfo->gain = (param)? atoi(param) : 0;
 									param = strtok_s(NULL, " ,\t\n\r", &Context);
 									PktInfo->direction = (param)? atoi(param) : 0;
+									param = strtok_s(NULL, " ,\t\n\r", &Context);
+									if (param)
+										strcpy(TNC->ServiceCode, param);
 
 									Speed = PktInfo->baud;
 										
@@ -1079,8 +1082,18 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 										{
 											TNC->WL2KMode = WIDEMODE;
 											TNC->WL2KModeChar = 'W';
+											p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
+										}
+										if (p_cmd[0] == 'N')
+										{
+											TNC->WL2KMode = NARROWMODE;
+											TNC->WL2KModeChar = 'N';
+											p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
 										}
 									}
+									if (p_cmd)
+										strcpy(TNC->ServiceCode, p_cmd);
+
 								}
 							}
 						}
@@ -1090,6 +1103,9 @@ DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WID
 		}
 		TNC->UpdateWL2K = TRUE;
 		TNC->UpdateWL2KTimer = 3000 + (rand() /100); // Send first after 5 Mins
+
+		if (TNC->ServiceCode[0] == 0)
+			strcpy(TNC->ServiceCode, "PUBLIC");
 
 		return 0;
 
@@ -1225,8 +1241,8 @@ VOID CloseDriverWindow(int port)
 	if (TNC->hDlg == NULL)
 		return;
 
-	PostMessage(TNC->hDlg, WM_DESTROY,0,0);
-	DestroyWindow(TNC->hDlg);
+	PostMessage(TNC->hDlg, WM_CLOSE,0,0);
+//	DestroyWindow(TNC->hDlg);
 
 	TNC->hDlg = NULL;
 

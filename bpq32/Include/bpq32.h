@@ -198,9 +198,9 @@ BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 char * APIENTRY GetNodeCall();
 
 int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall);
+int APIENTRY ChangeSessionPaclen(int Stream, int Paclen);
 
 int APIENTRY GetApplNum(int Stream);
-
 
 char * APIENTRY GetApplCall(int Appl);
 

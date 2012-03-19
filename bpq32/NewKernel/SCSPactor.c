@@ -1720,6 +1720,10 @@ BOOL CheckRXText(struct TNCINFO * TNC)
 
 	// Complete Char Mode Frame
 
+	OpenLogFile(TNC->Port);
+	WriteLogLine(TNC->Port, TNC->RXBuffer, TNC->RXLen);
+	CloseLogFile(TNC->Port);
+
 	TNC->RXLen = 0;		// Ready for next frame
 
 	return TRUE;
@@ -1832,6 +1836,7 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 			n++;
 			if (n > 100) break;
 		}
+
 	}
 
 	Poll[2] = 31;
@@ -1851,6 +1856,10 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 	}
 
 	wsprintf(Poll, "MYL %d\r", Mode);
+	
+	OpenLogFile(TNC->Port);
+	WriteLogLine(TNC->Port, Poll, 5);
+	CloseLogFile(TNC->Port);
 
 	TNC->TXLen = 6;
 	WriteCommBlock(TNC);

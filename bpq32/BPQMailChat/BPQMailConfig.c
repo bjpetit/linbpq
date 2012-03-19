@@ -905,6 +905,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_PERSONALONLY, ForwardingInfo->PersonalOnly);
 			CheckDlgButton(hDlg, IDC_SENDNEW, ForwardingInfo->SendNew);
 			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
+			SetDlgItemInt(hDlg, IDC_REVFWDINT, ForwardingInfo->RevFwdInterval, FALSE);
 			SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
 			SetDlgItemText(hDlg, IDC_BBSHA, ForwardingInfo->BBSHA);
 
@@ -1784,6 +1785,9 @@ VOID SaveFWDConfig(HWND hDlg)
 
 		Val = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
 		retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&Val,4);
+
+		Val = GetDlgItemInt(hDlg, IDC_REVFWDINT, &OK, FALSE);
+		retCode = RegSetValueEx(hKey,"RevFWDInterval", 0, REG_DWORD, (BYTE *)&Val,4);
 
 		Val = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
 		retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&Val,4);

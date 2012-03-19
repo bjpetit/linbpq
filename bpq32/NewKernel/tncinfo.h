@@ -326,6 +326,8 @@ typedef struct TNCINFO
 	char BaseCall[10];
 	char GridSquare[7];
 	char Comment[80];
+	char ServiceCode[17];
+
 	BOOL UseRigCtrlFreqs;
 	char WL2KFreq[12];
 	char WL2KMode;				// WL2K reporting mode

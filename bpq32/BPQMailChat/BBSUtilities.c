@@ -347,7 +347,7 @@ VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo)
 	RegSetValueEx(hKey, "RequestReverse", 0, REG_DWORD, (BYTE *)&ForwardingInfo->ReverseFlag, 4);
 	
 	RegSetValueEx(hKey, "FWDInterval", 0, REG_DWORD, (BYTE *)&ForwardingInfo->FwdInterval, 4);
-	
+	RegSetValueEx(hKey, "RevFWDInterval", 0, REG_DWORD, (BYTE *)&ForwardingInfo->RevFwdInterval, 4);
 	RegSetValueEx(hKey, "FWD New Immediately", 0, REG_DWORD, (BYTE *)&ForwardingInfo->SendNew, 4);
 
 	

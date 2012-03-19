@@ -159,6 +159,7 @@ BEGIN
         MENUITEM "Monitor NODES",               BPQMNODES
         MENUITEM "Enable Colour",               MONCOLOUR
 		MENUITEM "Log Monitor",                 BPQLogMonitor
+		MENUITEM "Trace APRS-IS",               MONITORAPRS
 
     END
     POPUP "Edit"
