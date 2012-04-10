@@ -445,8 +445,13 @@
 
 // 5.2.6.1 February 2012
 
+// Convert to MDI presentation of BPQ32.dll windows
+// Send APRS Status packets
 // Send QUIT not EXIT in PTC Init
-
+// Implement new WL2K reporting format and include traffic reporting info in CMS signon
+// New WL2KREPORT format
+// Prevent loops when APPL alias refers to itself
+// Add RigControl for Flex radios and ICOM IC-M710 Marine radio
 
 #define Kernel
 #include "Versions.h"
@@ -572,6 +577,7 @@ CloseHostSessions();
 SaveHostSessions();
 VOID SaveBPQ32Windows();
 VOID CloseDriverWindow(int port);
+VOID CheckWL2KReportTimer();
 
 char SIGNONMSG[128] = "";
 char SESSIONHDDR[80] = "";
@@ -1303,6 +1309,7 @@ VOID CALLBACK TimerProc
 		if (IPActive) Poll_IP();
 		if (RigActive) Rig_Poll();
 		if (APRSActive) Poll_APRS();
+		CheckWL2KReportTimer();
 		
 		TIMERINTERRUPT();
 	}
@@ -1419,6 +1426,13 @@ Check_Timer()
 
 	GetSemaphore();
 
+	if (InitDone == -1)
+	{
+		Sleep(7000);
+		FreeSemaphore();
+		exit (0);
+	}
+
 	SemHeldByAPI = 3;
 
 	if (FirstInitDone == 0)
@@ -1458,10 +1472,12 @@ Check_Timer()
 			ShowWindow(hConsWnd, SW_RESTORE);
 			SendMessage(hConsWnd, WM_PAINT, 0, 0);
 
+			InitDone = -1;
+			FreeSemaphore();
+
 			MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
 
-			FreeSemaphore();
-			return (0);
+			exit (0);
 		}
 
 		GetVersionInfo("bpq32.dll");
@@ -1734,12 +1750,15 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			{
 				StartMinimized = FALSE;
 				MinimizetoTray = FALSE;
+				ShowWindow(FrameWnd, SW_RESTORE);
 				ShowWindow(hConsWnd, SW_RESTORE);
 				SendMessage(hConsWnd, WM_PAINT, 0, 0);
 
+				InitDone = -1;
+				FreeSemaphore();
+
 				MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
 
-				FreeSemaphore();
 				return (0);
 			}
 
@@ -3524,6 +3543,9 @@ DllExport int APIENTRY FindFreeStream()
 		Sleep(1000);
 	}
 
+	if (InitDone == -1)			// Init failed
+		exit(0);
+
 	GetSemaphore();
 
 	SemHeldByAPI = 9;
@@ -4443,7 +4465,8 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 			case ID_NEWWINDOW:
 				Cinfo = CreateChildWindow(0, FALSE);
-				SendMessage(ClientWnd, WM_MDIACTIVATE, (WPARAM)Cinfo->hConsole, 0);
+				if (Cinfo)
+					SendMessage(ClientWnd, WM_MDIACTIVATE, (WPARAM)Cinfo->hConsole, 0);
 				break;
 
 			case ID_WINDOWS_CASCADE:
@@ -4479,6 +4502,14 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 			}
   
 			break;
+
+		case WM_INITMENUPOPUP:
+		{
+			HWND hChild = (HWND)SendMessage(ClientWnd, WM_MDIGETACTIVE,0,0);
+
+			if(hChild)
+				SendMessage(hChild, WM_INITMENUPOPUP, wParam, lParam);
+		}
 
 		case WM_SYSCOMMAND:
 
@@ -5218,7 +5249,9 @@ DllExport BOOL APIENTRY GetMinimizetoTrayFlag()
 		Debugprintf("Waiting for init to complete");
 		Sleep(1000);
 	}
-	Debugprintf("Min to Tray %s %d", pgm, MinimizetoTray);
+
+	if (InitDone == -1)			// Init failed
+		exit(0);
 	
 	return MinimizetoTray;
 }

@@ -1081,7 +1081,7 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		TNC->RIG = NULL;
 
-		memset(TNC->WL2KInfoList, 0, sizeof(TNC->WL2KInfoList));
+//		memset(TNC->WL2KInfoList, 0, sizeof(TNC->WL2KInfoList));
 
 	}
 
@@ -2201,7 +2201,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 			if	(GetPermissionToChange(PORT, RIG))
 			{
 				if (RIG_DEBUG)
-					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
 				RIG->FreqPtr++;
@@ -2242,7 +2242,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
 		if (RIG_DEBUG)
-			Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
@@ -2526,7 +2526,7 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 			if (GetPermissionToChange(PORT, RIG))
 			{
 				if (RIG_DEBUG)
-					Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 				RIG->FreqPtr++;
@@ -2563,7 +2563,7 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 		
 		if (RIG_DEBUG)
-			Debugprintf("BPQ32 Change Freq to %g", PORT->FreqPtr->Freq);
+			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 

@@ -17,22 +17,40 @@ extern HANDLE hInstance;
 extern HMENU hMainFrameMenu;
 extern HMENU hWndMenu;
 
-struct PacketReportInfo
+
+struct WL2KInfo
 {
+	struct WL2KInfo * Next;
+
+	char * Host;
+	short WL2KPort;
+
+	char RMSCall[10];
+	char BaseCall[10];
+	char GridSquare[7];
+	char Times[80];
+	char ServiceCode[17];
+
+	BOOL UseRigCtrlFreqs;
+	char WL2KFreq[12];
+	char WL2KMode;				// WL2K reporting mode
+	char WL2KModeChar;			// W or N
+	BOOL DontReportNarrowOnWideFreqs;
+
+//	char NARROWMODE;
+//	char WIDEMODE;				// Mode numbers to report to WL2K
+
+//	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
+
+	int Freq;
+	char Bandwidth;
+//	char * TimeList;		// eg 06-10,12-15
 	int mode;              // see below (an integer)
 	int baud;              // see below (an integer)
 	int power;             // actual power if known, default to 100 for HF, 30 for VHF/UHF (an integer)
 	int height;            // antenna height in feet if known, default to 25
 	int gain;              // antenna gain if known, default to 0
 	int direction;         // primary antenna direction in degrees if known, use 000 for omni (an integer)
-};
-
-struct WL2KInfo
-{
-	char * Freq;
-	char Bandwidth;
-	char * TimeList;		// eg 06-10,12-15
-	struct PacketReportInfo * PacketData;
 	BOOL RPonPTC;			// Set if scanning for Robust Packet on a PTC
 };
 
@@ -305,7 +323,7 @@ typedef struct TNCINFO
 	int Interlock;					// Port Interlock Group
 
 	HWND hMonitor;					// Handle to Monitor control
-	HMENU hPopMenu;					// Actions Menu Handle
+//	HMENU hPopMenu;					// Actions Menu Handle
 
 	int BusyHold;					// Hold Time from SCS reporting channel free till we call 
 	int BusyWait;					// Time to wait for clear channel before connect
@@ -317,6 +335,9 @@ typedef struct TNCINFO
 
 	// Fields for reporting to WL2K Map
 
+	struct WL2KInfo * WL2K;
+
+/*
 	char * Host;
 	short WL2KPort;
 
@@ -330,7 +351,6 @@ typedef struct TNCINFO
 
 	BOOL UseRigCtrlFreqs;
 	char WL2KFreq[12];
-	char WL2KMode;				// WL2K reporting mode
 	char WL2KModeChar;			// W or N
 	BOOL DontReportNarrowOnWideFreqs;
 
@@ -338,6 +358,8 @@ typedef struct TNCINFO
 //	char WIDEMODE;				// Mode numbers to report to WL2K
 
 	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
+*/
+	char WL2KMode;				// WL2K reporting mode
 
 	struct STREAMINFO Streams[27];	// 0 is Pactor 1 - 10 are ax.25.
 	int LastStream;				// Last one polled for status or send
@@ -481,9 +503,9 @@ VOID * zalloc(int len);
 BOOL ReadConfigFile(int Port, int ProcLine());
 GetLine(char * buf);
 BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTitle, int RigControlRow, WNDPROC WndProc, int Width, int Height);
-BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
+char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 BOOL SendReporttoWL2K(struct TNCINFO * TNC);
-DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE);
+struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
 VOID SaveWindowPos(int port);
 VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);

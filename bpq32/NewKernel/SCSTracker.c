@@ -165,7 +165,7 @@ ConfigLine:
 			TNC->PktUpdateMap = TRUE;
 		else
 		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-			DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
+			TNC->WL2K = DecodeWL2KReportLine(buf);
 		else
 		{
 			strcat (TNC->InitScript, buf);
@@ -801,25 +801,6 @@ VOID DEDPoll(int Port)
 	int Stream = 0;
 	int nn;
 	struct STREAMINFO * STREAM;
-
-	if (TNC->UpdateWL2K)
-	{
-		TNC->UpdateWL2KTimer--;
-
-		if (TNC->UpdateWL2KTimer == 0)
-		{
-			TNC->UpdateWL2KTimer = 32910/2;		// Every Half Hour
-		
-			if (TNC->UseAPPLCalls || (TNC->ApplCmd && memcmp(TNC->ApplCmd, "RMS", 3)) == 0)
-			{
-				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
-				{
-				//		memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
-					SendReporttoWL2K(TNC);
-				}
-			}
-		}
-	}
 
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{

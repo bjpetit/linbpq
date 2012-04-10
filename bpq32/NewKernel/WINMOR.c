@@ -76,14 +76,13 @@ RestartTNC(struct TNCINFO * TNC);
 KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
 SendReporttoWL2K(struct TNCINFO * TNC);
-BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
+char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 
 static char ClassName[]="WINMORSTATUS";
 static char WindowTitle[] = "WINMOR";
 static int RigControlRow = 165;
 
 #define WINMOR
-#define WL2K
 #define NARROWMODE 21
 #define WIDEMODE 22
 
@@ -233,7 +232,7 @@ static ProcessLine(char * buf, int Port)
 			else
 */
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
+				TNC->WL2K = DecodeWL2KReportLine(buf);
 			else
 			if (_memicmp(buf, "BUSYHOLD", 8) == 0)		// Hold Time for Busy Detect
 				TNC->BusyHold = atoi(&buf[8]);
@@ -456,18 +455,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					KillTNC(TNC);
 					RestartTNC(TNC);
 				}
-			}
-		}
-
-		if (TNC->UpdateWL2K)
-		{
-			TNC->UpdateWL2KTimer--;
-
-			if (TNC->UpdateWL2KTimer == 0)
-			{
-				TNC->UpdateWL2KTimer = 32910/2;		// Every Hour
-				if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
-					SendReporttoWL2K(TNC);
 			}
 		}
 
@@ -1491,6 +1478,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		char * ApplPtr = &APPLS;
 		int App;
 		char Appl[10];
+		struct WL2KInfo * WL2K = TNC->WL2K;
 
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
@@ -1521,15 +1509,21 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
 			{
 				wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
-				SESS->Frequency = atof(TNC->RIG->Valchar) * 1000000.0;
+				SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+				SESS->Mode = TNC->WL2KMode;
 			}
 			else
 			{
 				wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->TargetCall);
-				SESS->Frequency = atoi(TNC->WL2KFreq);
+				if (WL2K)
+				{
+					SESS->Frequency = WL2K->Freq;
+					SESS->Mode = WL2K->mode;
+				}
 			}
 			
-			SESS->Mode = TNC->WL2KMode;
+			if (WL2K)
+				strcpy(SESS->RMSCall, WL2K->RMSCall);
 			
 			SetWindowText(TNC->xIDC_TNCSTATE, Status);
 
@@ -1571,8 +1565,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					TNC->SwallowSignon = TRUE;
 
 					// Save Appl Call in case needed for 
-
-					memcpy(SESS->RMSCall, TNC->RMSCall, 10);
 
 				}
 				else

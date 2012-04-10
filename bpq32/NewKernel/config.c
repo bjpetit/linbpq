@@ -113,12 +113,17 @@
 
 #define DllExport	__declspec(dllexport)
 
+struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
+
+extern HANDLE hInstance;
+
 // Dummy file routines - write to buffer instead
 
 char * Buffer;
 
 char * PortConfig[35];
 char * RigConfigMsg[35];
+char * WL2KReportLine[35];
 
 BOOL PortDefined[35];
 
@@ -499,6 +504,8 @@ BOOL LocSpecified = FALSE;
 /*   MAIN PROGRAM							*/
 /************************************************************************/
  
+VOID WarnThread();
+
 int heading = 0;
 
 DllExport BOOL ProcessConfig()
@@ -687,7 +694,12 @@ DllExport BOOL ProcessConfig()
 
 	if (LOCATOR[0] == 0 && LocSpecified == 0 && RFOnly == 0)
 	{
-//		MessageBox(NULL,"Please enter a LOCATOR statment in your BPQ32.cfg\rIf you really don't want to be on the Node Map you cam enter LOCATOR=NONE","BPQ32",MB_OK);
+		Consoleprintf("");
+		Consoleprintf("Please enter a LOCATOR statment in your BPQ32.cfg");
+		Consoleprintf("If you really don't want to be on the Node Map you cam enter LOCATOR=NONE");
+		Consoleprintf("");
+
+//		_beginthread(WarnThread, 0, 0);
 	}
 
 	if (heading == 0)
@@ -722,6 +734,35 @@ DllExport BOOL ProcessConfig()
 	}
   */	
 	return TRUE;
+}
+
+static WNDPROC wpOrigWarnProc; 
+
+
+LRESULT APIENTRY WarnProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+
+	// Trap mouse messages, so we cant select stuff in output and mon windows,
+	//	otherwise scrolling doesnt work.
+
+	return DefWindowProc(hwnd, uMsg, wParam, lParam); 
+
+} 
+
+
+VOID WarnThread()
+{
+	HWND hWnd = CreateWindow("STATIC",
+		"Please enter a LOCATOR statment in your BPQ32.cfg\rIf you really don't want to be on the Node Map you can enter LOCATOR=NONE",
+		0, 100, 100, 550, 100, NULL, NULL, hInstance, NULL);
+
+	wpOrigWarnProc = (WNDPROC)SetWindowLong(hWnd, GWL_WNDPROC, (LONG)WarnProc);
+
+	ShowWindow(hWnd, SW_SHOWNORMAL);
+	InvalidateRect(hWnd, NULL, TRUE);
+
+	Sleep(30000);
+	DestroyWindow(hWnd);
 }
 
 
@@ -797,9 +838,26 @@ char rec[];
 				PortConfig[34] = realloc(PortConfig[34], (strlen(ptr) + 1));
 				return 0;
 			}
+			if (strlen(rec) > 1)
+			{
+				if (strstr(rec, "/*"))
+				{
+					Comment = TRUE;
+					goto NextAPRS;
+				}
+				else if (strstr(rec, "*/"))
+				{
+					Comment = FALSE;
+					goto NextAPRS;
+				}
+			}
+			
+			if (Comment)
+				goto NextAPRS;
 
 			strcat(ptr, rec);
 			strcat(ptr, "\r\n");
+NextAPRS:
 			fgets(rec,MAXLINE,fp1);
 		}
 
@@ -1506,9 +1564,6 @@ int ports(int i)
 
 	PortRec = (struct PORTCONFIG *)fp2;
 
-	for (i=0; i<512; i++)
-	   bputc('\0',fp2);
-
 	bseek(fp2,(long) portoffset,SEEK_SET);
         bputi(portnum,fp2);
 
@@ -1814,14 +1869,15 @@ char rec[];
 */
 
 
-decode_port_rec(rec)
-char rec[];
+decode_port_rec(char * rec)
 {
 	int i;
 	int cn = 1;			/* RETURN CODE FROM ROUTINES */
 
 	char key_word[20]="";
 	char value[300]="";
+
+	struct WL2KInfo * WL2K;
 
 	if (_memicmp(rec, "CONFIG", 6) == 0)
 	{
@@ -1936,11 +1992,13 @@ char rec[];
 	else
 	{
 	   fileoffset = poffset[i] + portoffset;
+
 	   switch (proutine[i])
-           {
-             case 0:
-		cn = callsign(i,value,rec);          /* CALLSIGNS */
-         	break;
+	   {
+	   
+	   case 0:
+		   cn = callsign(i,value,rec);          /* CALLSIGNS */
+		   break;
 
              case 1:
 		cn = int_value(i,value,rec);	     /* INTEGER VALUES */
@@ -1999,21 +2057,21 @@ char rec[];
 			break;
 
         case 16:
-            cn = doDriver(i,value,rec);               /* WL2K */
-			break;
 
+			WL2K = DecodeWL2KReportLine(rec);
+			memcpy(&Buffer[fileoffset], &WL2K, 4);
+			break;
+		
+		case 9:
 			
-			
-			case 9:
-              	cn = 1;
-		endport=1;
+			cn = 1;
+			endport=1;
 
 	        bseek(fp2,(long) portoffset+255,SEEK_SET);
 	        bputc('\0',fp2);
 
 		break;
-
-           }
+	   }
 	}
 	if (cn == 0) porterror=1;
 

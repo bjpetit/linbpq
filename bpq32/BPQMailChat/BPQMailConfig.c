@@ -48,6 +48,8 @@ char Filter_FROM[20];
 char Filter_TO[20];
 char Filter_VIA[60];				// Filters for Edit Message Dialog
 
+extern time_t MaintClock;			// Time to run housekeeping
+
 DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName);
 VOID WINAPI OnSelChanged(HWND hwndDlg);
 VOID WINAPI OnChildDialogInit(HWND hwndDlg);
@@ -1928,6 +1930,27 @@ VOID SaveMAINTConfig()
 	RegCloseKey(hKey);
 
 	if (MaxMsgno > 99000) MaxMsgno = 99000;
+
+	// Calulate time to run Housekeeping
+	{
+		struct tm *tm;
+		time_t now;
+
+		now = time(NULL);
+
+		tm = gmtime(&now);
+
+		tm->tm_hour = MaintTime / 100;
+		tm->tm_min = MaintTime % 100;
+		tm->tm_sec = 0;
+
+		MaintClock = _mkgmtime(tm);
+
+		if (MaintClock < now)
+			MaintClock += 86400;
+
+		Debugprintf("Maint Clock %d NOW %d Time to HouseKeeping %d", MaintClock, now, MaintClock - now);
+	}
 
 	wsprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);

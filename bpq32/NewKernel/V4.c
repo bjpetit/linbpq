@@ -36,7 +36,7 @@ RestartTNC(struct TNCINFO * TNC);
 KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
 SendReporttoWL2K(struct TNCINFO * TNC);
-BOOL CheckAppl(struct TNCINFO * TNC, char * Appl);
+char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 static VOID ChangeMYC(struct TNCINFO * TNC, char * Call);
 
 static char ClassName[]="V4STATUS";

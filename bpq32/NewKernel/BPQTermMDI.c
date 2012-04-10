@@ -4408,7 +4408,9 @@ struct ConsoleInfo * CreateChildWindow(int Stream, BOOL DuringInit)
 		if(ERROR_CLASS_ALREADY_EXISTS != dw_LastError)
 		{
 			// return if the error is other than "error class already exists" 
-			return NULL;
+			
+			Debugprintf("Reg Class Failed %d", dw_LastError);
+//			return NULL;
 		}
 	}
 
@@ -4421,6 +4423,8 @@ struct ConsoleInfo * CreateChildWindow(int Stream, BOOL DuringInit)
 
 	if(NULL == ChildWnd)
 	{
+		DWORD dw_LastError = GetLastError();			
+		Debugprintf("Create Child Failed %d", dw_LastError);
 		return NULL;
 	}
 

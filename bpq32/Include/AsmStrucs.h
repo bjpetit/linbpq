@@ -419,7 +419,7 @@ typedef struct ROUTE
 							//  (only sent when we have seen both a request and response)
 
 
-struct PORTCONTROL
+typedef struct PORTCONTROL
 {
 	char PORTCALL[7];
 	char PORTALIAS[7];		//USED FOR UPLINKS ONLY
@@ -528,7 +528,9 @@ struct PORTCONTROL
 	char PORTBCALL[7];		// Source call for Beacon
 	char PortNoKeepAlive;	// Default to no Keepalives
 
-}	portcontrol;
+	struct WL2KInfo * WL2KInfo; // WL2K Report for this Port
+
+}	PORTCONTROLX;
 
 typedef struct _EXTPORTDATA
 {

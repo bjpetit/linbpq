@@ -223,7 +223,7 @@ ConfigLine:
 			
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			{
-				DecodeWL2KReportLine(TNC, buf, Report_P1, Report_P1);
+				TNC->WL2K = DecodeWL2KReportLine(buf);
 				continue;
 			}
 			if (_memicmp(buf, "NEEDXONXOFF", 10) == 0)

@@ -186,6 +186,7 @@ ProcessLine(char * buf, int Port)
 			}
 		}
 	}
+
 	if(BPQport > 0 && BPQport < 33)
 	{
 		TNC = TNCInfo[BPQport] = malloc(sizeof(struct TNCINFO));
@@ -229,7 +230,7 @@ ConfigLine:
 			else
 
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
+				TNC->WL2K = DecodeWL2KReportLine(buf);
 			else
 				strcat (TNC->InitScript, buf);
 		}
@@ -738,32 +739,6 @@ VOID KAMPoll(int Port)
 	if (TNC->PortRecord == 0)
 		Stream = 0;
 
-	if (TNC->UpdateWL2K)
-	{
-		TNC->UpdateWL2KTimer--;
-
-		if (TNC->UpdateWL2KTimer == 0)
-		{
-			TNC->UpdateWL2KTimer = 32910/2;		// Every Hour
-			
-			if (TNC->ApplCmd)
-			{
-				if (memcmp(TNC->ApplCmd, "RMS", 3) == 0)
-				{
-					char Appl[30];
-					
-					strcpy(Appl, TNC->ApplCmd);
-					strcat (Appl, "          ");
-					
-					if (CheckAppl(TNC, Appl)) // Is RMS Available?
-					{
-						memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
-						SendReporttoWL2K(TNC);
-					}
-				}
-			}
-		}
-	}
 
 	// If Pactor Session has just been attached, drop back to cmd mode and set Pactor Call to 
 	// the connecting user's callsign
@@ -1690,18 +1665,39 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 			{
 				// Incoming Connect
 
+				struct TRANSPORTENTRY * SESS;
+
 				if (Msg[1] == '2' && Msg[2] == 'A')
 					TNC->HFPacket = TRUE;
 
 				ProcessIncommingConnect(TNC, Call, Stream, TRUE);
 
+				SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+
 				if (Stream == 0)
 				{
-					if (TNC->RIG)
+					struct WL2KInfo * WL2K = TNC->WL2K;
+	
+					if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
+					{
 						wsprintf(Status, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
+						SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+					}
 					else
+					{
 						wsprintf(Status, "%s Connected to %s Inbound", TNC->Streams[0].RemoteCall, TNC->NodeCall);
+				
+						if (WL2K)
+						{
+							SESS->Frequency = WL2K->Freq;
+						}
+					}
 
+					SESS->Mode = 11;			// P1
+					
+					if (WL2K)
+						strcpy(SESS->RMSCall, WL2K->RMSCall);		
+				
 					SetWindowText(TNC->xIDC_TNCSTATE, Status);
 
 					EncodeAndSend(TNC, "T", 1);			// Changeover to ISS 

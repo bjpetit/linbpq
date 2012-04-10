@@ -198,12 +198,6 @@ ProcessLine(char * buf, int Port)
 		TCP->CMS = atoi(value);
 	else
 
-	if (_stricmp(param, "WL2KREPORT") == 0)
-	{
-		*(ptr) = ' ';
-		DecodeWL2KReportLine(TNC, param, 0, 0);
-	}
-	else
 	if (_stricmp(param,"LOGGING") == 0)
 		LogEnabled = atoi(value);
 	else
@@ -1086,22 +1080,6 @@ VOID TelnetPoll(int Port)
 	int Msglen;
 
 	int Stream;
-
-	if (TNC->UpdateWL2K && TCP->CMS)
-	{
-		TNC->UpdateWL2KTimer--;
-
-		if (TNC->UpdateWL2KTimer == 0)
-		{
-			TNC->UpdateWL2KTimer = 32910/2;		// Every Hour
-			if (CheckAppl(TNC, "RMS         ")) // Is RMS Available?
-			{
-				if (TNC->NodeCall[0])
-					memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Report Port Call if present
-				SendReporttoWL2K(TNC);
-			}
-		}
-	}
 
 	if (TCP->CMS)
 	{
@@ -2674,16 +2652,40 @@ MsgLoop:
 			if (Sess1)
 			{
 				Sess2 = Sess1->L4CROSSLINK;
-			
-				if (Sess2 && Sess2->RMSCall[0])
+
+				if (Sess2)
 				{
-					len = sprintf(Passline, "CMSTELNET %s %d %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
+					// See if L2 session - if so, get info from WL2K report line
+
+					if (Sess2->L4CIRCUITTYPE & L2LINK)
+					{
+						LINKTABLE * LINK = Sess2->L4TARGET;
+						PORTCONTROLX * PORT = GetPortTableEntryFromPortNum(LINK->LINKPORT);
+						
+						if (PORT->WL2KInfo)
+							len = sprintf(Passline, "CMSTELNET %s %d %d\r", PORT->WL2KInfo->RMSCall, PORT->WL2KInfo->Freq, PORT->WL2KInfo->mode);
+
+					}
+					else
+					{
+						if (Sess2->RMSCall[0])
+						{
+							len = sprintf(Passline, "CMSTELNET %s %d %d\r", Sess2->RMSCall, Sess2->Frequency, Sess2->Mode);
+						}
+					}
 				}
 			}
-
 			send(sock, Passline, len, 0);
 			sockptr->LoginState = 2;		// Data
 			sockptr->InputLen=0;
+
+			if (CMSLogEnabled)
+			{
+				char logmsg[120];
+				wsprintf(logmsg,"%d %s\r\n", sockptr->Number, Passline);
+				WriteCMSLog (logmsg);
+			}
+
 			return TRUE;
 		}
 

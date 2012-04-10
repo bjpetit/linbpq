@@ -36,19 +36,19 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	CloseHandle(Mutex);
 	
-	if (_stricmp(lpCmdLine, "NewICON") == 0)				// If AutoRestart then Delay 5 Secs				
+	if (_stricmp(lpCmdLine, "NewICON") == 0)				
 	{
 		CreateNewTrayIcon();
 		return 1;
 	}
 
-	if (_stricmp(lpCmdLine, "Restore") == 0)				// If AutoRestart then Delay 5 Secs				
+	if (_stricmp(lpCmdLine, "Restore") == 0)				
 	{
 		RestoreFrameWindow();
 		return 1;
 	}
 
-	if (_stricmp(lpCmdLine, "CloseAll") == 0)				// If AutoRestart then Delay 5 Secs				
+	if (_stricmp(lpCmdLine, "CloseAll") == 0)			
 	{
 		CloseAllPrograms();
 		return 1;

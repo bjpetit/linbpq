@@ -21,6 +21,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 	char seps[] = " \r";
 	int RestartPtr;
 	char * Respptr;
+	BOOL AllRejected = TRUE;
 
 	if (conn->Flags & GETTINGMESSAGE)
 	{
@@ -196,6 +197,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				char * MsgBytes;
 
 				conn->FBBMsgsSent = TRUE;		// Messages to flag as complete when next command received
+				AllRejected = FALSE;
 
 				if (conn->BBSFlags & FBBCompressed)
 				{
@@ -242,6 +244,13 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		conn->FBBIndex = 0;		// ready for next block;
 		conn->FBBChecksum = 0;
+
+		if (AllRejected && conn->RMSExpress)
+		{
+			// RMS Express doesn't send FF or proposal after rejecting all messages
+
+			BBSputs(conn, "FF\r");
+		}
 
 		return;
 

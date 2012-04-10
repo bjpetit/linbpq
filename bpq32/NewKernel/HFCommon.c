@@ -66,6 +66,10 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 int Winmor_Socket_Data(int sock, int error, int eventcode);
 
+struct WL2KInfo * WL2KReports;
+
+int WL2KTimer = 0;
+
 int ModetoBaud[31] = {0,0,0,0,0,0,0,0,0,0,0,			// 0 = 10
 					  200,600,3200,600,3200,3200,		// 11 - 16
 					  0,0,0,0,0,0,0,0,0,0,0,0,0,600};	// 17 - 30
@@ -204,6 +208,10 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	int i;
 	struct TNCINFO * TNC;
 
+	HKEY hKey;
+	char Key[80];
+	int retCode, disp;
+
 	for (i=1; i<33; i++)
 	{
 		TNC = TNCInfo[i];
@@ -290,20 +298,20 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 	case WM_INITMENUPOPUP:
 
-		if (wParam == (WPARAM)TNC->hPopMenu)
+		if (wParam == (WPARAM)TNC->hMenu)
 		{
 			if (TNC->ProgramPath)
 			{
 				if (strstr(TNC->ProgramPath, " TNC"))
 				{
-					EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
-					EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
+					EnableMenuItem(TNC->hMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_ENABLED);
+					EnableMenuItem(TNC->hMenu, WINMOR_KILL, MF_BYCOMMAND | MF_ENABLED);
 		
 					break;
 				}
 			}
-			EnableMenuItem(TNC->hPopMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_GRAYED);
-			EnableMenuItem(TNC->hPopMenu, WINMOR_KILL, MF_BYCOMMAND | MF_GRAYED);
+			EnableMenuItem(TNC->hMenu, WINMOR_RESTART, MF_BYCOMMAND | MF_GRAYED);
+			EnableMenuItem(TNC->hMenu, WINMOR_KILL, MF_BYCOMMAND | MF_GRAYED);
 		}
 			
 		break;
@@ -329,10 +337,18 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		case WINMOR_RESTARTAFTERFAILURE:
 
 			TNC->RestartAfterFailure = !TNC->RestartAfterFailure;
-			CheckMenuItem(TNC->hPopMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
+			CheckMenuItem(TNC->hMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
 
+			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\PACTOR\\PORT%d", TNC->Port);
+	
+			retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+			if (retCode == ERROR_SUCCESS)
+			{
+				RegSetValueEx(hKey,"TNC->RestartAfterFailure",0,REG_DWORD,(BYTE *)&TNC->RestartAfterFailure, 4);
+				RegCloseKey(hKey);
+			}
 			break;
-
 		}
 		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
@@ -486,13 +502,13 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 static SOCKADDR_IN sinx; 
 
-BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
+char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 {
 	struct APPLCALLS * APPL;
 	struct BPQVECSTRUC * PORTVEC;
 	int Allocated = 0, Available = 0;
 	int App, Stream;
-	// See if there is an RMS Application
+	struct TNCINFO * APPLTNC;
 
 	Debugprintf("Checking if %s is running", Appl);
 
@@ -504,24 +520,22 @@ BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 		{
 			int ApplMask = 1 << App;
 
-			memcpy(TNC->RMSCall, APPL->APPLCALL_TEXT, 9);		// Need Null on end
-
 			// If App has an alias, assume it is running , unless a CMS alias - then check CMS
 
 			if (APPL->APPLHASALIAS)
 			{
 				if (APPL->APPLPORT)
 				{
-					TNC = TNCInfo[APPL->APPLPORT];
+					APPLTNC = TNCInfo[APPL->APPLPORT];
 					{
-						if (TNC)
+						if (APPLTNC)
 						{
-							if (TNC->TCPInfo && !TNC->TCPInfo->CMSOK)
-							return FALSE;
+							if (APPLTNC->TCPInfo && !APPLTNC->TCPInfo->CMSOK)
+							return NULL;
 						}
 					}
 				}
-				return TRUE;
+				return APPL->APPLCALL_TEXT;
 			}
 
 			// See if App is running
@@ -538,7 +552,7 @@ BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 					{
 						// Free and no outstanding report
 						
-						return TRUE;		// Running
+						return APPL->APPLCALL_TEXT;		// Running
 					}
 				}
 				PORTVEC++;
@@ -546,22 +560,138 @@ BOOL CheckAppl(struct TNCINFO * TNC, char * Appl)
 		}
 	}
 
-	return FALSE;			// Not Running
+	return NULL;			// Not Running
 }
 
-VOID SendReporttoWL2KThread(struct TNCINFO * TNC);
+VOID SendReporttoWL2KThread();
 
+VOID CheckWL2KReportTimer()
+{
+	if (WL2KReports == NULL)
+		return;					// Shouldn't happen!
+
+	WL2KTimer--;
+
+	if (WL2KTimer != 0)
+		return;
+
+	WL2KTimer = 32910/2;		// Every Half Hour
+		
+	if (CheckAppl(NULL, "RMS         ") == NULL)
+		return;
+
+	_beginthread(SendReporttoWL2KThread, 0, 0);
+
+	return;
+}
+
+
+VOID SendReporttoWL2KThread()
+{
+	struct WL2KInfo * WL2KReport = WL2KReports;
+	char * LastHost = NULL;
+	char * LastRMSCall = NULL;
+	char Message[256];
+	int LastSocket = 0;
+	SOCKET sock = 0;
+	SOCKADDR_IN destaddr;
+	int addrlen=sizeof(sinx);
+	struct hostent * HostEnt;
+	int err;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+
+	// Send all reports in list
+
+	while (WL2KReport)
+	{
+		// Resolve Name if needed
+
+		if (LastHost && strcmp(LastHost, WL2KReport->Host) == 0)		// Same host?
+			goto SkipResolve;
+	
+		LastHost = WL2KReport->Host;
+	
+		destaddr.sin_family = AF_INET; 
+		destaddr.sin_addr.s_addr = inet_addr(WL2KReport->Host);
+		destaddr.sin_port = htons(WL2KReport->WL2KPort);
+
+		if (destaddr.sin_addr.s_addr == INADDR_NONE)
+		{
+			//	Resolve name to address
+
+			Debugprintf("Resolving %s", WL2KReport->Host);
+			HostEnt = gethostbyname (WL2KReport->Host);
+		 
+			if (!HostEnt)
+			{
+				err = WSAGetLastError();
+
+				Debugprintf("Resolve Failed for %s %d %x", WL2KReport->Host, err, err);
+				return;			// Resolve failed
+			}
+	
+			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+		}
+
+		//   Allocate a Socket entry
+
+		if (sock)
+			closesocket(sock);
+
+		sock = socket(AF_INET,SOCK_DGRAM,0);
+
+		if (sock == INVALID_SOCKET)
+  	 		return; 
+
+		ioctlsocket(sock, FIONBIO, &param);
+ 
+		setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt, 4);
+
+		destaddr.sin_family = AF_INET;
+
+	SkipResolve:
+
+		wsprintf(Message, "06'%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %03d, '%s', 1, '%s'",
+				WL2KReport->RMSCall, WL2KReport->BaseCall, WL2KReport->GridSquare, WL2KReport->Freq,
+				WL2KReport->mode, WL2KReport->baud, WL2KReport->power, WL2KReport->height, WL2KReport->gain,
+				WL2KReport->direction, WL2KReport->Times, WL2KReport->ServiceCode);
+
+		Debugprintf("Sending %s", Message);
+
+		sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+
+		if (LastRMSCall == NULL || strcmp(WL2KReport->RMSCall, LastRMSCall) != 0)
+		{
+			LastRMSCall = WL2KReport->RMSCall;
+		
+			wsprintf(Message, "00,%s,BPQ32,%d.%d.%d.%d",
+				WL2KReport->RMSCall, Ver[0], Ver[1], Ver[2], Ver[3]);
+
+			Debugprintf("Sending %s", Message);
+
+			sendto(sock, Message, strlen(Message),0,(LPSOCKADDR)&destaddr,sizeof(destaddr));
+		}
+
+		WL2KReport = WL2KReport->Next;
+	}
+
+	Sleep(100);
+	closesocket(sock);
+	sock = 0;
+
+}
 BOOL SendReporttoWL2K(struct TNCINFO * TNC)
 {
 	Debugprintf("Starting WL2K Update Thread");
 
-	_beginthread(SendReporttoWL2KThread,0,(int)TNC);
+//	_beginthread(SendReporttoWL2KThread,0,(int)TNC);
 
 	return 0;
 }
 
 static SOCKET sock;
-
+/*
 VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 {
 	char Message[100];
@@ -949,170 +1079,155 @@ VOID SendReporttoWL2KThread(struct TNCINFO * TNC)
 
 	return;
 }
-
-DecodeWL2KReportLine(struct TNCINFO * TNC,char *  buf, char NARROWMODE, char WIDEMODE)
+*/
+struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 {
-	// WL2KREPORT Host, Port, G8BPQ, IO68VL, Testing BPQ, RIGCONTROL
-	// WL2KREPORT Host, Port, G8BPQ, IO68VL, Testing BPQ, Freq, Mode
-	// WL2KREPORT Host, Port, G8BPQ, IO68VL, Testing BPQ, Freq, Baud, Power, Height, Gain, Direction
+	//06'<callsign>', '<base callsign>', '<grid square>', <frequency>, <mode>, <baud>, <power>,
+	// <antenna height>, <antenna gain>, <antenna direction>, '<hours>', <group reference>, '<service code>'
+
+	 // WL2KREPORT  service, www.winlink.org, 8778, GM8BPQ, IO68VL, 00-23, 144800000, PKT1200, 10, 20, 5, 0, BPQTEST
 	
 	char * Context;
 	char * p_cmd;
+	char * param;
 	char errbuf[256];
+	struct WL2KInfo * WL2KReport = zalloc(sizeof(struct WL2KInfo));
 
 	strcpy(errbuf, buf); 
 
 	p_cmd = strtok_s(&buf[10], ", \t\n\r", &Context);
-	if (p_cmd)
+	if (p_cmd == NULL) goto BadLine;
+	
+	strcpy(WL2KReport->ServiceCode, p_cmd);
+
+	p_cmd = strtok_s(NULL, ", \t\n\r", &Context);
+	if (p_cmd == NULL) goto BadLine;
+
+	WL2KReport->Host = _strdup(p_cmd);
+
+	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);			
+	if (p_cmd == NULL) goto BadLine;
+
+	WL2KReport->WL2KPort = atoi(p_cmd);
+	if (WL2KReport->WL2KPort == 0) goto BadLine;
+
+	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
+	if (p_cmd == NULL) goto BadLine;
+
+	strcpy(WL2KReport->RMSCall, p_cmd);
+	strcpy(WL2KReport->BaseCall, p_cmd);
+	strlop(WL2KReport->BaseCall, '-');					// Remove any SSID
+
+	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
+	if (p_cmd == NULL) goto BadLine;
+	if (strlen(p_cmd) != 6) goto BadLine;
+	
+	strcpy(WL2KReport->GridSquare, p_cmd);
+
+	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
+	if (p_cmd == NULL) goto BadLine;
+	if (strlen(p_cmd) > 79) goto BadLine;
+	
+	strcpy(WL2KReport->Times, p_cmd);
+
+	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
+	if (p_cmd == NULL) goto BadLine;
+
+	WL2KReport->Freq = atoi(p_cmd);
+
+	if (WL2KReport->Freq == 0)	// Invalid
+		goto BadLine;					
+
+	param = strtok_s(NULL, " ,\t\n\r", &Context);
+
+	// Mode Designator - one of
+
+	// PKTnnnnnn
+	// WINMOR500
+	// WINMOR1600
+	// ROBUST
+	// P1 P12 P123 P1234 etc
+
+	if (memcmp(param, "PKT", 3) == 0)
 	{
-		TNC->Host = _strdup(p_cmd);
-		p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
-		if (p_cmd)
-		{
-			TNC->WL2KPort = atoi(p_cmd);
-			if (TNC->WL2KPort == 0) goto BadLine;
-			p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
-			if (p_cmd)
-			{
-				if (strlen(p_cmd) > 9) goto BadLine;
-				strcpy(TNC->BaseCall, p_cmd);
-				strlop(TNC->BaseCall, '-');					// Remove any SSID
+		int Speed, Mode;
 
-				p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
-				if (p_cmd)
-				{
-					if (strlen(p_cmd) != 6) goto BadLine;
-						strcpy(TNC->GridSquare, p_cmd);
-						p_cmd = strtok_s(NULL, ",\t\n\r", &Context);
-						if (p_cmd)
-						{
-							if (strlen(p_cmd) > 79) goto BadLine;
-							strcpy(TNC->Comment, p_cmd);
-							p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-							if (p_cmd)
-							{
-								if (_stricmp(p_cmd, "RIGCONTROL") == 0)
-								{
-									TNC->UseRigCtrlFreqs = TRUE;
-									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-									if (p_cmd)
-									{
-										if (_stricmp(p_cmd, "DontReportNarrowOnWideFreqs") == 0)
-										{
-											TNC->DontReportNarrowOnWideFreqs = TRUE;
-											p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-										}
-									}
-									if (p_cmd)
-										strcpy(TNC->ServiceCode, p_cmd);
-								}
-								else if (TNC->Hardware == H_TELNET)
-								{
-									struct PacketReportInfo * PktInfo;
+		Speed = atoi(&param[3]);
 
-									// Packet Report - has power and antenna info
+		 WL2KReport->baud = Speed;
+			
+		 if (Speed < 1200)
+			 Mode = 0;
+		 else if (Speed < 2400)
+			 Mode = 1;					// 1200
+		 else if (Speed < 4800)
+			 Mode = 2;					// 2400
+		 else if (Speed < 9600)
+			 Mode = 3;					// 4800
+		 else if (Speed < 19200)
+			 Mode = 4;					// 9600
+		 else if (Speed < 38400)
+			 Mode = 5;					// 19200
+		 else
+			 Mode = 6;					// 38400 +
 
-									// WL2KREPORT Host, Port, G8BPQ, IO68VL,Testing BPQ,Freq,Baud,Power,Height,Gain,Direction
+		WL2KReport->mode = Mode;
+	}
+	else if (_stricmp(param, "WINMOR500") == 0)
+		WL2KReport->mode = 21;
+	else if (_stricmp(param, "WINMOR1600") == 0)
+		WL2KReport->mode = 22;
+	else if (_stricmp(param, "ROBUST") == 0)
+	{
+		WL2KReport->mode = 30;
+		WL2KReport->baud = 600;
+	}
+	else if (_stricmp(param, "P1") == 0)
+		WL2KReport->mode = 11;
+	else if (_stricmp(param, "P12") == 0)
+		WL2KReport->mode = 12;
+	else if (_stricmp(param, "P123") == 0)
+		WL2KReport->mode = 13;
+	else if (_stricmp(param, "P2") == 0)
+		WL2KReport->mode = 14;
+	else if (_stricmp(param, "P23") == 0)
+		WL2KReport->mode = 15;
+	else if (_stricmp(param, "P3") == 0)
+		WL2KReport->mode = 16;
+	else if (_stricmp(param, "P1234") == 0)
+		WL2KReport->mode = 17;
+	else if (_stricmp(param, "P234") == 0)
+		WL2KReport->mode = 18;
+	else if (_stricmp(param, "P34") == 0)
+		WL2KReport->mode = 19;
+	else if (_stricmp(param, "P4") == 0)
+		WL2KReport->mode = 20;
+	else
+		goto BadLine;
+	
+	param = strtok_s(NULL, " ,\t\n\r", &Context);
 
-									struct WL2KInfo * WL2KInfoPtr;
-									int n = 0;
-									char * Freq;
-									char * param;
-									int Speed, Mode;
+	// Optional Params
 
-									Freq = p_cmd;
-									param = strtok_s(NULL, " ,\t\n\r", &Context);
+	WL2KReport->power = (param)? atoi(param) : 0;
+	param = strtok_s(NULL, " ,\t\n\r", &Context);
+	WL2KReport->height = (param)? atoi(param) : 0;
+	param = strtok_s(NULL, " ,\t\n\r", &Context);
+	WL2KReport->gain = (param)? atoi(param) : 0;
+	param = strtok_s(NULL, " ,\t\n\r", &Context);
+	WL2KReport->direction = (param)? atoi(param) : 0;
 
-									if (atoi(Freq) == 0)	// Invalid
-										goto BadLine;					
+	WL2KTimer = 60;
 
-									WL2KInfoPtr = &TNC->WL2KInfoList[0];
+	WL2KReport->Next = WL2KReports;
+	WL2KReports = WL2KReport;
 
-									while (WL2KInfoPtr->PacketData)			//Find next entry
-									{
-										WL2KInfoPtr = &TNC->WL2KInfoList[++n];
-									}
+	return WL2KReport;
 
-									PktInfo = WL2KInfoPtr->PacketData = zalloc(sizeof(struct PacketReportInfo));
-
-									WL2KInfoPtr->Freq = _strdup(Freq);
-									PktInfo->baud = (param)? atoi(param): 1200;
-									param = strtok_s(NULL, " ,\t\n\r", &Context);
-									PktInfo->power = (param)? atoi(param) : 0;
-									param = strtok_s(NULL, " ,\t\n\r", &Context);
-									PktInfo->height = (param)? atoi(param) : 0;
-									param = strtok_s(NULL, " ,\t\n\r", &Context);
-									PktInfo->gain = (param)? atoi(param) : 0;
-									param = strtok_s(NULL, " ,\t\n\r", &Context);
-									PktInfo->direction = (param)? atoi(param) : 0;
-									param = strtok_s(NULL, " ,\t\n\r", &Context);
-									if (param)
-										strcpy(TNC->ServiceCode, param);
-
-									Speed = PktInfo->baud;
-										
-									if (Speed <= 1200)
-										Mode = 0;
-									else if (Speed <= 2400)
-										Mode = 1;
-									else if (Speed <= 4800)
-										Mode = 2;
-									else if (Speed <= 9600)
-										Mode = 3;
-									else if (Speed <= 19200)
-										Mode = 4;
-									else if (Speed <= 38400)
-										Mode = 5;
-									else
-										Mode = 6;
-
-									PktInfo->mode = Mode;
-								}
-								else
-								{
-									if (strlen(p_cmd) > 11) goto BadLine;
-									strcpy(TNC->WL2KFreq, p_cmd);
-									TNC->WL2KMode = NARROWMODE;
-									TNC->WL2KModeChar = 'N';
-									p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-
-									if (p_cmd)
-									{
-										if (p_cmd[0] == 'W')
-										{
-											TNC->WL2KMode = WIDEMODE;
-											TNC->WL2KModeChar = 'W';
-											p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-										}
-										if (p_cmd[0] == 'N')
-										{
-											TNC->WL2KMode = NARROWMODE;
-											TNC->WL2KModeChar = 'N';
-											p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
-										}
-									}
-									if (p_cmd)
-										strcpy(TNC->ServiceCode, p_cmd);
-
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		TNC->UpdateWL2K = TRUE;
-		TNC->UpdateWL2KTimer = 3000 + (rand() /100); // Send first after 5 Mins
-
-		if (TNC->ServiceCode[0] == 0)
-			strcpy(TNC->ServiceCode, "PUBLIC");
-
-		return 0;
-
-	BadLine:
-		WritetoConsole(" Bad config record ");
-		WritetoConsole(errbuf);
-		WritetoConsole("\r\n");
+BadLine:
+	WritetoConsole(" Bad config record ");
+	WritetoConsole(errbuf);
+	WritetoConsole("\r\n");
 
 	return 0;
 }
@@ -1266,6 +1381,9 @@ VOID SaveWindowPos(int port)
 
 	SaveMDIWindowPos(TNC->hDlg, Key, "Size", TNC->Minimized);
 
+
+
+
 	return;
 }
 
@@ -1303,6 +1421,8 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 
 	if (Index == MAXCIRCUITS)
 		return FALSE;					// Tables Full
+
+	memset(Session, 0, sizeof(struct TRANSPORTENTRY));
 
 	memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign 
 
@@ -1563,7 +1683,7 @@ VOID SetupPortRIGPointers()
 		if (TNC->RIG == NULL)
 			TNC->RIG = &TNC->DummyRig;		// Not using Rig control, so use Dummy
 	
-		if (TNC->WL2KFreq[0])
+/*		if (TNC->WL2KFreq[0])
 		{
 			// put in ValChar for MH reporting
 
@@ -1575,6 +1695,7 @@ VOID SetupPortRIGPointers()
 			_gcvt(Freq, 9, TNC->RIG->Valchar);
 			TNC->RIG->CurrentBandWidth = TNC->WL2KModeChar;
 		}
+*/
 	}
 }
 

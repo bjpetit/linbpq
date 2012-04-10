@@ -231,7 +231,7 @@ ConfigLine:
 			else
 
 			if (_memicmp(buf, "WL2KREPORT", 10) == 0)
-				DecodeWL2KReportLine(TNC, buf, NARROWMODE, WIDEMODE);
+				TNC->WL2K = DecodeWL2KReportLine(buf);
 			else
 				strcat (TNC->InitScript, buf);
 
@@ -283,6 +283,9 @@ char status[8][8] = {"ERROR",  "REQUEST", "TRAFFIC", "IDLE", "OVER", "PHASE", "S
 char ModeText[8][14] = {"STANDBY", "AMTOR-ARQ",  "PACTOR-ARQ", "AMTOR-FEC", "PACTOR-FEC", "RTTY / CW", "LISTEN", "Channel-Busy"};
 
 char PactorLevelText[5][14] = {"Not Connected", "PACTOR-I", "PACTOR-II", "PACTOR-III", "PACTOR-IV"};
+
+char PleveltoMode[5] = {30, 11, 12, 16, 19};	// WL2K Reporting Modes - RP, P1, P2, P3, P4
+
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -966,33 +969,6 @@ VOID SCSPoll(int Port)
 	int nn;
 	struct STREAMINFO * STREAM;
 
-	if (TNC->UpdateWL2K)
-	{
-		TNC->UpdateWL2KTimer--;
-
-		if (TNC->UpdateWL2KTimer == 0)
-		{
-			TNC->UpdateWL2KTimer = 32910/2;		// Every Hour
-		
-			if (TNC->ApplCmd)
-			{
-				if (memcmp(TNC->ApplCmd, "RMS", 3) == 0)
-				{
-					char Appl[30];
-					
-					strcpy(Appl, TNC->ApplCmd);
-					strcat (Appl, "          ");
-					
-					if (CheckAppl(TNC, Appl)) // Is RMS Available?
-					{
-						memcpy(TNC->RMSCall, TNC->NodeCall, 9);	// Should report Port/Node Call
-						SendReporttoWL2K(TNC);
-					}
-				}
-			}
-		}
-	}
-
 	if (TNC->SwitchToPactor)
 	{
 		TNC->SwitchToPactor--;
@@ -1001,8 +977,6 @@ VOID SCSPoll(int Port)
 			SwitchToPactor(TNC);
 	}
 		
-
-
 	for (Stream = 0; Stream <= MaxStreams; Stream++)
 	{
 		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] && TNC->Streams[Stream].Attached == 0)
@@ -1724,10 +1698,14 @@ BOOL CheckRXText(struct TNCINFO * TNC)
 	WriteLogLine(TNC->Port, TNC->RXBuffer, TNC->RXLen);
 	CloseLogFile(TNC->Port);
 
+	TNC->RXBuffer[TNC->RXLen] = 0;
+	
+	if (RIG_DEBUG)
+		Debugprintf(TNC->RXBuffer);
+
 	TNC->RXLen = 0;		// Ready for next frame
 
-	return TRUE;
-					
+	return TRUE;				
 }
 
 BOOL CheckRXHost(struct TNCINFO * TNC)
@@ -1802,6 +1780,8 @@ BOOL CheckRXHost(struct TNCINFO * TNC)
 
 //#include "Mmsystem.h"
 
+int Sleeptime = 250;
+
 Switchmode(struct TNCINFO * TNC, int Mode)
 {
 	int n;
@@ -1837,6 +1817,8 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 			if (n > 100) break;
 		}
 
+//		Debugprintf("Set Pactor ACK received in %d mS, Sleeping for %d", 5 * n, Sleeptime);
+		Sleep(Sleeptime);
 	}
 
 	Poll[2] = 31;
@@ -1852,10 +1834,15 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 	{
 		Sleep(5);
 		n++;
+
 		if (n > 100) break;
 	}
 
+//	Debugprintf("JHOST0 ACK received in %d mS", 5 * n);
+
 	wsprintf(Poll, "MYL %d\r", Mode);
+
+//	Debugprintf("MYL %d", Mode);
 	
 	OpenLogFile(TNC->Port);
 	WriteLogLine(TNC->Port, Poll, 5);
@@ -1872,6 +1859,8 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 		n++;
 		if (n > 100) break;
 	}
+
+//	Debugprintf("MYL ACK received in %d mS", 5 * n);
 
 	memcpy(Poll, "JHOST4\r", 7);
 
@@ -2315,6 +2304,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					int App;
 					char Appl[10];
 					char DestCall[10];
+					struct TRANSPORTENTRY * SESS;
+					struct WL2KInfo * WL2K = TNC->WL2K;
 
 					if (TNC->HFPacket)
 					{
@@ -2325,13 +2316,27 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					}
 					ProcessIncommingConnect(TNC, Call, Stream, TRUE);
 
+					SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+
 					if (Stream == 0 || TNC->HFPacket)
 					{
-						if (TNC->RIG)
+						if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
+						{
 							wsprintf(Status, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
+							SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+						}
 						else
+						{
 							wsprintf(Status, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
-					
+							if (WL2K)
+								SESS->Frequency = WL2K->Freq;
+						}
+
+						if (WL2K)
+							strcpy(SESS->RMSCall, WL2K->RMSCall);
+						
+						SESS->Mode = PleveltoMode[TNC->Streams[Stream].PTCStatus1];
+
 						SetWindowText(TNC->xIDC_TNCSTATE, Status);
 					
 						// If an autoconnect APPL is defined, send it
@@ -2581,7 +2586,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			Status = Msg[5];
 			
 			TNC->Streams[0].PTCStatus0 = Status;
-			TNC->Streams[0].PTCStatus1 = Msg[6] & 3;		// Pactor Level 1-3
+			TNC->Streams[0].PTCStatus1 = Msg[6] & 7;		// Pactor Level 1-4
 			TNC->Streams[0].PTCStatus2 = Msg[7];			// Speed Level
 			Offset = Msg[8];
 

@@ -1343,7 +1343,17 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		{
 			// Single Destination -  Need to put to: line back in message
 
-			__int32 ToLen = strlen(HddrTo[0]);
+			char * ptr = HddrTo[0];
+			__int32 ToLen = strlen(ptr);
+
+			if (_memicmp(&ptr[4], "bull/", 5) == 0)
+			{
+				conn->TempMsg->type = 'B';
+				memmove(&ptr[4], &ptr[9], strlen(&ptr[8]));
+				ToLen = strlen(ptr);
+				strlop(ptr, '@');
+				strcpy(conn->TempMsg->to, _strupr(&ptr[4]));
+			}
 
 			memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
 			memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 

@@ -358,7 +358,7 @@ int Init98(HDLCDATA * PORTVEC)
 	fResult = DeviceIoControl(
 		hDevice,						// device handle
 		'I',							// control code
-		PORTVEC,sizeof portcontrol,		// input parameters
+		PORTVEC, sizeof (struct PORTCONTROL),	// input parameters
 		bOutput, 4, &cb,				// output parameters
         0);
 

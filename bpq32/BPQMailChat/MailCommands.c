@@ -294,6 +294,7 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 	{
 		nodeprintf(conn, "FWD BBSCALL - Display settings\r");
 		nodeprintf(conn, "FWD BBSCALL interval - Set forwarding interval\r");
+		nodeprintf(conn, "FWD BBSCALL REV interval - Set reverse forwarding interval\r");
 		nodeprintf(conn, "FWD BBSCALL +- Flags (Flags are EN(able) RE(verse Poll) SE(Send Immediately)\r");
 		nodeprintf(conn, "FWD BBSCALL NOW - Start a forwarding cycle now\r");
 		nodeprintf(conn, "FWD QUEUE - List BBS's with queued messages\r");
@@ -356,27 +357,36 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 		return;
 	}
 
-	while(Arg1)
+	if (_stricmp(Arg1, "REV") == 0)
 	{
-		_strupr(Arg1);
-
-		if (isdigits(Arg1))
-			ForwardingInfo->FwdInterval = atoi(Arg1);
-		else if (strstr(Arg1, "EN"))
-			if (Arg1[0] == '-') ForwardingInfo->Enabled = FALSE; else ForwardingInfo->Enabled = TRUE;
-		else if (strstr(Arg1, "RE"))
-			if (Arg1[0] == '-') ForwardingInfo->ReverseFlag = FALSE; else ForwardingInfo->ReverseFlag = TRUE;
-		else if (strstr(Arg1, "SE"))
-			if (Arg1[0] == '-') ForwardingInfo->SendNew = FALSE; else ForwardingInfo->SendNew = TRUE;
-
 		Arg1 = strtok_s(NULL, seps, &Context);
+		ForwardingInfo->RevFwdInterval = atoi(Arg1);
+	}
+	else
+	{
+		while(Arg1)
+		{
+			_strupr(Arg1);
+
+			if (isdigits(Arg1))
+				ForwardingInfo->FwdInterval = atoi(Arg1);
+			else if (strstr(Arg1, "EN"))
+				if (Arg1[0] == '-') ForwardingInfo->Enabled = FALSE; else ForwardingInfo->Enabled = TRUE;
+			else if (strstr(Arg1, "RE"))
+				if (Arg1[0] == '-') ForwardingInfo->ReverseFlag = FALSE; else ForwardingInfo->ReverseFlag = TRUE;
+			else if (strstr(Arg1, "SE"))
+				if (Arg1[0] == '-') ForwardingInfo->SendNew = FALSE; else ForwardingInfo->SendNew = TRUE;
+
+			Arg1 = strtok_s(NULL, seps, &Context);
+		}
 	}
 
 	SaveFwdParams(FwdBBS->Call, ForwardingInfo);
 
 FDisplay:
 
-	wsprintf(Line, "%s Fwd Interval %d Fwd %s, Reverse Poll %s, Send Immediately %s\r", FwdBBS->Call, ForwardingInfo->FwdInterval,
+	wsprintf(Line, "%s Fwd Interval %d Rev Interval %d Fwd %s, Reverse Poll %s, Send Immediately %s\r",
+		FwdBBS->Call, ForwardingInfo->FwdInterval, ForwardingInfo->RevFwdInterval,
 		(ForwardingInfo->Enabled)? "Enabled" : "Disabled", (ForwardingInfo->ReverseFlag) ? "Enabled": "Disabled",
 		(ForwardingInfo->SendNew) ? "Enabled": "Disabled");
 

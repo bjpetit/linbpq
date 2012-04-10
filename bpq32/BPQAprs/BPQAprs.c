@@ -21,7 +21,9 @@
 
 // Decode Items
 // Allows WX to be turned off.
-
+// Add Local Time option
+// Add "Set filter to current View" command 
+// Implenent "Reply-Acks"
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
@@ -838,7 +840,7 @@ char CopyItem[260] = "";			// Area for Copy/Paste
 
 UCHAR * iconImage = NULL;
 
-UCHAR Icons[100000];
+//UCHAR Icons[100000];
 
 
 //char Test[] = "2E0AYY>APU25N,TCPIP*,qAC,AHUBSWE2:=5105.18N/00108.19E-Paul in Folkestone Kent {UIV32N}\r\n";
@@ -3673,6 +3675,12 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 					Image[Pointer++] = 255;
 					Image[Pointer++] = 255;
 					Image[Pointer++] = 255;
+				//	Image[Pointer] = Image[Pointer] * 2; //255;
+				//	Pointer++;
+				//	Image[Pointer] = Image[Pointer] * 2; //255;
+				//	Pointer++;
+				//	Image[Pointer] = Image[Pointer] * 2; //255;
+				//	Pointer++;
 				}
 			}
 			mask <<= 1;
@@ -4354,7 +4362,11 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 	struct STATIONRECORD * Object;
 	BOOL Item = FALSE;
 	char * ptr;
-	
+	char * Callsign;
+	char * Path;
+	char * Msg;
+	struct STATIONRECORD * TPStation;
+
 
 	switch(*Payload)
 	{
@@ -4463,6 +4475,43 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 	case ':':
 		ProcessMessage(Payload, Station);
 		break;
+
+	case '}':			// Third Party Header
+			
+		// Process Payload as a new message
+
+		// }GM7HHB-9>APDR12,TCPIP,MM1AVR*:=5556.62N/00303.55W>204/000/A=000213 http://www.dstartv.com
+
+		Callsign = Msg = &Payload[1];
+		Path = strchr(Msg, '>');
+
+		if (Path == NULL)
+			return;
+
+		*Path++ = 0;
+
+		Payload = strchr(Path, ':');
+
+		if (Payload == NULL)
+			return;
+
+		*(Payload++) = 0;
+
+		// Look up station - create a new one if not found
+
+		TPStation = FindStation(Callsign);
+	
+		strcpy(TPStation->Path, Path);
+		strcpy(TPStation->LastPacket, Payload);
+		TPStation->LastPort = 0;					// Heard on RF, but info is from IS
+
+		DecodeAPRSPayload(Payload, TPStation);
+		TPStation->TimeLastUpdated = time(NULL);
+
+		DrawStation(TPStation);
+		RefreshStation(TPStation);
+
+		return;
 
 	default:
 //		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);

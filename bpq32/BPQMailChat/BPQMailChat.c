@@ -733,8 +733,11 @@
 
 // Version 1.4.50.1 February 2012
 
-// Fix forwarding to RMS Express users
-// Route messages received via B2 to an Internet email address to RMS
+//  Fix forwarding to RMS Express users
+//  Route messages received via B2 to an Internet email address to RMS
+//  Add Reverse Poll interval
+//  Add full FROM address to POP3 messages
+//	Include HOMEBBS command in Help
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -2805,6 +2808,8 @@ BOOL Initialise()
 		if (MaintClock < now)
 			MaintClock += 86400;
 
+		Debugprintf("Maint Clock %d NOW %d Time to HouseKeeping %d", MaintClock, now, MaintClock - now);
+
 		if (LastHouseKeepingTime)
 		{
 			if ((MaintClock - LastHouseKeepingTime) > 86400)
@@ -4682,6 +4687,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "A - Abort Output\r");
 			BBSputs(conn, "B - Logoff\r");
 			BBSputs(conn, "D - Flag NTS Message(s) as Delivered - D num\r");
+			BBSputs(conn, "HOMEBBS - Display or get HomeBBS\r");
 			BBSputs(conn, "INFO - Display information about this BBS\r");
 			BBSputs(conn, "I CALL - Lookup CALL in WP Allows *CALL CALL* *CALL* wildcards\r");
 			BBSputs(conn, "I@ PARAM - Lookup @BBS in WP\r");
@@ -8575,7 +8581,7 @@ VOID FWDTimerProc()
 				if (ForwardingInfo->Enabled)
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (SeeifMessagestoForward(user->BBSNumber, NULL) ||
-							(ForwardingInfo->ReverseFlag && NOW - ForwardingInfo->LastReverseForward) > ForwardingInfo->RevFwdInterval) // Menu Command overrides Reverse
+							(ForwardingInfo->ReverseFlag && ((NOW - ForwardingInfo->LastReverseForward) >= ForwardingInfo->RevFwdInterval))) // Menu Command overrides Reverse
 
 						{
 							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
@@ -8604,7 +8610,7 @@ void StartForwarding(int BBSNumber)
 				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
 					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
 						if (BBSNumber || SeeifMessagestoForward(user->BBSNumber, NULL) ||
-							(ForwardingInfo->ReverseFlag && NOW - ForwardingInfo->LastReverseForward) > ForwardingInfo->RevFwdInterval) // Menu Command overrides Reverse
+							(ForwardingInfo->ReverseFlag && ((NOW - ForwardingInfo->LastReverseForward) >= ForwardingInfo->RevFwdInterval))) // Menu Command overrides Reverse
 						{
 							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
 							if (ConnecttoBBS(user))

@@ -188,6 +188,37 @@ UCHAR axNOGATE[7];
 
 int MessageCount = 0;
 
+struct PortInfo
+{ 
+	int Index;
+	int ComPort;
+	char PortType[2];
+	BOOL NewVCOM;				// Using User Mode Virtual COM Driver
+	int ReopenTimer;			// Retry if open failed delay
+	int RTS;
+	int CTS;
+	int DCD;
+	int DTR;
+	int DSR;
+	char Params[20];				// Init Params (eg 9600,n,8)
+	char PortLabel[20];
+	HANDLE hDevice;
+	BOOL Created;
+	BOOL PortEnabled;
+	int LastError;
+	int FLOWCTRL;
+	int gpsinptr;
+	OVERLAPPED Overlapped;
+	OVERLAPPED OverlappedRead;
+	char GPSinMsg[160];
+	int GPSTypeFlag;					// GPS Source flags
+	BOOL RMCOnly;						// Only send RMC msgs to this port
+};
+
+
+
+struct PortInfo InPorts[1] = {0};
+
 // Heard Station info
 
 #define MAXHEARD 1000
@@ -235,6 +266,7 @@ struct OBJECT * ObjectList;		// List of objects to send;
 int ObjectCount = 0;
 
 VOID SendObject(struct OBJECT * Object);
+VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX);
 
 int ISSend(SOCKET sock, char * Msg, int Len, int flags)
 {
@@ -363,6 +395,9 @@ VOID APRSClose()
 
 		closesocket(sock);
 	}
+
+	if (InPorts[0].hDevice)
+		CloseHandle(InPorts[0].hDevice);
 }
 
 Dll VOID APIENTRY Poll_APRS()
@@ -2130,36 +2165,6 @@ void DecodeRMC(char * msg, int len);
 
 void PollGPSIn();
 
-struct PortInfo
-{ 
-	int Index;
-	int ComPort;
-	char PortType[2];
-	BOOL NewVCOM;				// Using User Mode Virtual COM Driver
-	int ReopenTimer;			// Retry if open failed delay
-	int RTS;
-	int CTS;
-	int DCD;
-	int DTR;
-	int DSR;
-	char Params[20];				// Init Params (eg 9600,n,8)
-	char PortLabel[20];
-	HANDLE hDevice;
-	BOOL Created;
-	BOOL PortEnabled;
-	int LastError;
-	int FLOWCTRL;
-	int gpsinptr;
-	OVERLAPPED Overlapped;
-	OVERLAPPED OverlappedRead;
-	char GPSinMsg[160];
-	int GPSTypeFlag;					// GPS Source flags
-	BOOL RMCOnly;						// Only send RMC msgs to this port
-};
-
-
-
-struct PortInfo InPorts[1] = {0};
 
 UINT GPSType = 0xffff;		// Source of Postion info - 1 = Phillips 2 = AIT1000. ffff = not posn message
 
