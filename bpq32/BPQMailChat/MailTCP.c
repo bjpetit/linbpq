@@ -594,6 +594,8 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 	BOOL ALT = FALSE;
 	int Partlen;
 	char * Save;
+	BOOL Base64 = FALSE;
+	BOOL QuotedP = FALSE;
 	
 	char FileName[100][MAX_PATH] = {""};
 	int FileLen[100];
@@ -662,14 +664,117 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 
 		}
 
+		else if (_memicmp(ptr, "Content-Transfer-Encoding:", 26) == 0)
+		{
+			if (strstr(&ptr[26], "base64"))
+				Base64 = TRUE;
+			else
+			if (strstr(&ptr[26], "quoted-printable"))
+				QuotedP = TRUE;
+		}
+
+
 		ptr = ptr2;
 		ptr++;
 
 	}
 
 	if (Multipart == FALSE)
-		return FALSE;
+	{
+		// We only have one part, but it could have an odd encoding
 
+		if (Base64)
+		{
+			int i = 0, Len = *MsgLen, NewLen;
+			char * ptr2;
+			char * End;
+
+			ptr = ptr2 = *Body;
+			End = ptr + Len;
+
+			while (ptr < End)
+			{
+				while (*ptr < 33)
+					{ptr++;}
+
+				*ptr2++ = *ptr++;
+			}
+
+			*ptr2 = 0;
+
+			ptr = *Body;
+			Len = ptr2 - ptr -1;
+
+			ptr2 = ptr;
+
+			while (Len > 0)
+			{
+				decodeblock(ptr, ptr2);
+				ptr += 4;
+				ptr2 += 3;
+				Len -= 4;
+			}
+
+			NewLen = ptr2 - *Body;
+
+			if (*(ptr-1) == '=')
+				NewLen--;
+
+			if (*(ptr-2) == '=')
+				NewLen--;
+
+			*MsgLen = NewLen;
+		}
+		else if (QuotedP)
+		{
+			int i = 0, Len = *MsgLen;
+			char * ptr2;
+			char * End;
+
+			ptr = ptr2 =*Body;
+
+			End = ptr + Len;
+
+			while (ptr < End)
+			{
+				if ((*ptr) == '=')
+				{
+					char c = *(++ptr);
+					char d;
+
+					c = c - 48;
+					if (c < 0)
+					{
+						// = CRLF as a soft break
+
+						ptr += 2;
+						continue;
+					}
+
+					if (c > 9)
+						c -= 7;
+					d  = *(++ptr);
+					d = d - 48;
+					if (d > 9)
+						d -= 7;
+
+					*(ptr2) = c << 4 | d;
+					ptr2++;	
+					ptr++;
+				}
+				else
+				{
+					*ptr2++ = *ptr++;
+				}
+			}
+			*ptr2 = 0;
+
+			*MsgLen = ptr2 - *Body;
+
+		}
+
+		return FALSE;
+	}
 	// FindPart Returns Next Part of Message, Updates Input Pointer
 	// Skip to first Boundary (over the non MIME Alt Part)
 

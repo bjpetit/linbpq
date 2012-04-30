@@ -12,6 +12,11 @@
 #define BPQCONNECT                      102
 #define BPQDISCONNECT                   103
 #define IDD_FONT                        105
+
+#define ID_WARNWRAP		415
+#define ID_WRAP			416
+#define ID_FLASHONBELL	417
+
 #define IDC_FONTWIDTH                   1008
 #define IDC_FONTNAME                    1009
 #define IDC_CODEPAGE                    1010
@@ -35,7 +40,6 @@
 #define CHATTERM                        1179
 #define IDM_CLOSEWINDOW					1180
 #define MONITORAPRS						1181
-#define IDC_STATIC                      -1
 
 #define IDR_MAINFRAME_MENU              191
 #define TERM_MENU						192
@@ -85,14 +89,14 @@ struct ConsoleInfo
 
 	int StackIndex;
 
-	BOOL Bells;
-	BOOL FlashOnBell;		// Flash instead of Beep
+//	BOOL Bells;
+//	BOOL FlashOnBell;		// Flash instead of Beep
 	BOOL StripLF;
 
-	BOOL WarnWrap;
-	BOOL FlashOnConnect;
-	BOOL WrapInput;
-	BOOL CloseWindowOnBye;
+//	BOOL WarnWrap;
+//	BOOL FlashOnConnect;
+//	BOOL WrapInput;
+//	BOOL CloseWindowOnBye;
 
 	unsigned int WrapLen;
 	int WarnLen;

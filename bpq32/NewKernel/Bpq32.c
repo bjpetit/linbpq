@@ -453,6 +453,14 @@
 // Prevent loops when APPL alias refers to itself
 // Add RigControl for Flex radios and ICOM IC-M710 Marine radio
 
+// 5.2.7.1
+
+//	Fix opening more thn one console window on Win98
+//  Add option to create a jpeg of the APRS display.
+//  Change method of configuring multiple timelots on WL2K reporting
+//  Add option to update WK2K Sysop Database
+
+
 #define Kernel
 #include "Versions.h"
 
@@ -583,6 +591,8 @@ char SIGNONMSG[128] = "";
 char SESSIONHDDR[80] = "";
 int SESSHDDRLEN = 0;
 
+char WL2KCall[10];
+char WL2KLoc[7];
 
 char LOCATOR[80] = "";			// Locator for Reporting - may be Maidenhead or LAT:LON
 char MAPCOMMENT[250] = "";		// Locator for Reporting - may be Maidenhead or LAT:LON
@@ -4355,6 +4365,192 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd);
 #define BPQDataAvail 2
 #define BPQStateChange 4
 
+BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * ReplyBuffer);
+BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL);
+
+static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		char ReplyBuffer[1000] = "";
+		char * ptr1, * ptr2;
+		char SQL[1000];
+
+		wsprintf(SQL, "SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, EMail, WEBSite, Phones, AdditionalData FROM SysopRecords WHERE Callsign='%s'",
+			WL2KCall);
+
+		if (GetWL2KSYSOPInfo(WL2KCall, SQL, ReplyBuffer))
+		{
+			int replylen = atoi(&ReplyBuffer[2]);
+
+			if (replylen == 0)
+				return (INT_PTR)TRUE;
+
+			ptr1 = ptr2 = &ReplyBuffer[9];
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, NAME, ptr1);
+
+			// Street 1
+
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+			SetDlgItemText(hDlg, ADDR1, ptr1);
+
+			// Street 2
+
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+			SetDlgItemText(hDlg, ADDR2, ptr1);
+
+			// City
+
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, CITY, ptr1);
+
+			// State
+
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, STATE, ptr1);
+			
+			// State
+
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, COUNTRY, ptr1);
+
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, POSTCODE, ptr1);
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, EMAIL, ptr1);
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, WEBSITE, ptr1);
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, PHONE, ptr1);
+
+			SetDlgItemText(hDlg, ADDITIONALDATA, ptr2);
+
+		}
+	
+		return (INT_PTR)TRUE;
+	}
+	case WM_COMMAND:
+
+		switch(LOWORD(wParam))
+		{
+
+		case ID_SAVE:
+		{
+			char SQL[1000];
+
+			char Name[100];
+			char Addr1[100];
+			char Addr2[100];
+			char City[100];
+			char State[100];
+			char Country[100];
+			char PostCode[100];
+			char Email[100];
+			char Website[100];
+			char Phone[100];
+			char Data[100];
+
+			GetDlgItemText(hDlg, NAME, Name, 99);
+			GetDlgItemText(hDlg, ADDR1, Addr1, 99);
+			GetDlgItemText(hDlg, ADDR2, Addr2, 99);
+			GetDlgItemText(hDlg, CITY, City, 99);
+			GetDlgItemText(hDlg, STATE, State, 99);
+			GetDlgItemText(hDlg, COUNTRY, Country, 99);
+			GetDlgItemText(hDlg, POSTCODE, PostCode, 99);
+			GetDlgItemText(hDlg, EMAIL, Email, 99);
+			GetDlgItemText(hDlg, WEBSITE, Website, 99);
+			GetDlgItemText(hDlg, PHONE, Phone, 99);
+			GetDlgItemText(hDlg, ADDITIONALDATA, Data, 99);
+
+			wsprintf(SQL, "REPLACE INTO SysopRecords SET Callsign='%s', GridSquare='%s', SysopName='%s', StreetAddress1='%s', StreetAddress2='%s', City='%s', State='%s', Country='%s', PostalCode='%s', EMail='%s', WEBSite='%s', Phones='%s', AdditionalData='%s'",
+				WL2KCall, WL2KLoc, Name, Addr1, Addr2, City, State, Country, PostCode, Email, Website, Phone, Data);
+
+			UpdateWL2KSYSOPInfo(WL2KCall, SQL);
+
+		}
+
+		case ID_CANCEL:
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+		}
+	}
+	return (INT_PTR)FALSE;
+}
+
+
 
 LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -4482,6 +4678,18 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 	//			SendMessage(ClientWnd, WM_MDIICONARRANGE, 0 ,0);
 
 				return 0;
+
+			case IDD_WL2KSYSOP:
+
+				if (WL2KCall[0] == 0)
+				{
+					MessageBox(NULL,"WL2K Reporting is not configured","BPQ32", MB_OK);
+					break;
+				}
+					
+				DialogBox(hInstance, MAKEINTRESOURCE(IDD_WL2KSYSOP), hWnd, ConfigWndProc);
+				break;
+
 		
 			 // Handle MDI Window commands
             

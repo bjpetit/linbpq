@@ -100,6 +100,7 @@ struct TCPINFO
 	int TCPPort;
 	int FBBPort[100];
 	int RelayPort;
+	int HTTPPort;
 	BOOL IPV4;					// Allow Connect using IPV4
 	BOOL IPV6;					// Allow Connect using IPV6
 	BOOL CMS;					// Allow Connect to CMS
@@ -131,9 +132,11 @@ struct TCPINFO
 	SOCKET sock;
 	SOCKET FBBsock[100];
 	SOCKET Relaysock;
+	SOCKET HTTPsock;
 	SOCKET sock6;
 	SOCKET FBBsock6[100];
 	SOCKET Relaysock6;
+	SOCKET HTTPsock6;
 	HMENU hActionMenu;
 	HMENU hLogMenu;
 	HMENU hDisMenu;					// Disconnect Menu Handle

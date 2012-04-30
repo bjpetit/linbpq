@@ -1348,17 +1348,46 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			if (_memicmp(&ptr[4], "bull/", 5) == 0)
 			{
+				char * MsgBytes = conn->MailBuffer;
+				char * MsgPtr;
+
 				conn->TempMsg->type = 'B';
 				memmove(&ptr[4], &ptr[9], strlen(&ptr[8]));
 				ToLen = strlen(ptr);
 				strlop(ptr, '@');
 				strcpy(conn->TempMsg->to, _strupr(&ptr[4]));
+				strcat(HddrTo[0], "\r\n"); 
+				ToLen = strlen(HddrTo[0]);
+
+				if (memcmp(conn->TempMsg->title, "//WL2K ", 7) == 0)
+					memmove(conn->TempMsg->title, &conn->TempMsg->title[7], strlen(conn->TempMsg->title) - 6);
+
+				// Remove B2 Headers, and all but the first part.
+					
+				MsgPtr = strstr(MsgBytes, "Body:");
+			
+				if (MsgPtr)
+				{
+					conn->TempMsg->length = atoi(&MsgPtr[5]);
+					MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+					if (MsgPtr)
+						MsgPtr +=4;
+					else
+						MsgPtr = MsgBytes;
+
+					memmove(conn->MailBuffer, MsgPtr, conn->TempMsg->length + 1);
+
+					conn->TempMsg->B2Flags = 0;
+
+				}
 			}
-
-			memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
-			memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 
-
-			conn->TempMsg->length += ToLen;
+			else
+			{
+				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+				memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 
+				conn->TempMsg->length += ToLen;
+			}
 
 			CreateMessageFromBuffer(conn);
 			SetupNextFBBMessage(conn);

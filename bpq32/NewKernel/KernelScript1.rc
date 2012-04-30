@@ -1,7 +1,6 @@
 //Microsoft Developer Studio generated resource script.
 //
 #include "kernelresource.h"
-#include "bpqtermmdi.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -9,6 +8,7 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #include "afxres.h"
+#include "bpqtermmdi.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -26,6 +26,7 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 //
 // Dialog
 //
+
 BPQMAINWINDOW DIALOG DISCARDABLE  17, 25, 382, 300
 STYLE DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | 
     WS_THICKFRAME
@@ -70,55 +71,100 @@ BEGIN
                     BS_LEFT | WS_TABSTOP,68,45,70,14,WS_EX_RIGHT
 END
 
+IDD_WL2KSYSOP DIALOGEX 0, 0, 277, 266
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "WL2K Sysop Record Update"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "Name",3,5,10,28,10,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        NAME,60,9,64,12,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "Address Line 1",6,5,30,50,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        ADDR1,60,29,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "Address Line 2",7,5,50,50,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        ADDR2,60,49,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "City",4,5,70,40,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        CITY,60,69,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "State",8,5,90,40,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        STATE,60,89,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "Country",9,5,110,40,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        COUNTRY,60,109,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    PUSHBUTTON      "Cancel",ID_CANCEL,115,235,47,17,0,WS_EX_NOPARENTNOTIFY
+    PUSHBUTTON      "Apply",ID_SAVE,55,235,47,17,0,WS_EX_NOPARENTNOTIFY
+    LTEXT           "PostCode",10,5,130,40,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        POSTCODE,60,129,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "Email",11,5,150,40,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        EMAIL,60,149,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "Website",12,5,170,40,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        WEBSITE,60,167,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "Phone",13,6,190,40,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        PHONE,60,189,133,14,ES_AUTOHSCROLL | NOT WS_BORDER,
+                    WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+    LTEXT           "Addiitional Data",14,5,210,50,9,0,WS_EX_NOPARENTNOTIFY
+    EDITTEXT        ADDITIONALDATA,60,209,205,14,ES_AUTOHSCROLL | NOT 
+                    WS_BORDER,WS_EX_NOPARENTNOTIFY | WS_EX_CLIENTEDGE
+END
+
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // Menu
 //
 
-
 IDR_MAINFRAME_MENU MENU DISCARDABLE 
 BEGIN
     POPUP "Window"
     BEGIN
-	  MENUITEM "New Terminal Window",         ID_NEWWINDOW
-      MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
-      MENUITEM "Tile",	                    ID_WINDOWS_TILE
-	  MENUITEM "Close all BPQ32 Programs", BPQCLOSEALL
-	END
+        MENUITEM "New Terminal Window",         ID_NEWWINDOW
+        MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
+        MENUITEM "Tile",                        ID_WINDOWS_TILE
+        MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+    END
 END
 
 CONS_MENU MENU DISCARDABLE 
 BEGIN
     POPUP "Window"
     BEGIN
-	    MENUITEM "New Terminal Window",         ID_NEWWINDOW
+        MENUITEM "New Terminal Window",         ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
-        MENUITEM "Tile",	                    ID_WINDOWS_TILE
-		MENUITEM "Close all BPQ32 Programs", BPQCLOSEALL
-    END 
-	POPUP "Actions"
-	BEGIN
-	    MENUITEM "Save Nodes to file BPQNODES.DAT"),BPQSAVENODES
-		MENUITEM "Save Nodes, Re-read bpq32.cfg and reconfigure node"),BPQRECONFIG
-		MENUITEM "Clear Nodes, Re-read bpq32.cfg and reconfigure node"),BPQCLEARRECONFIG
-	    MENUITEM "Save Registry Configuration"),BPQSAVEREG
-		MENUITEM "Diagnostic Dump to file BPQDUMP"),BPQDUMP
-	    MENUITEM "Re-read Rigcontrol Config")SCANRECONFIG
-	    MENUITEM "Re-read APRS Config"),APRSRECONFIG
-		MENUITEM "Start Minimized" ), BPQSTARTMIN
-		MENUITEM "Minimize to Notification Area (System Tray)", BPQMINTOTRAY
-	END
+        MENUITEM "Tile",                        ID_WINDOWS_TILE
+        MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+    END
+    POPUP "Actions"
+    BEGIN
+        MENUITEM "Save Nodes to file BPQNODES.DAT", BPQSAVENODES
+        MENUITEM "Save Nodes, Re-read bpq32.cfg and reconfigure node", 
+                                                BPQRECONFIG
+        MENUITEM "Clear Nodes, Re-read bpq32.cfg and reconfigure node", 
+                                                BPQCLEARRECONFIG
+        MENUITEM "Save Registry Configuration", BPQSAVEREG
+        MENUITEM "Diagnostic Dump to file BPQDUMP", BPQDUMP
+        MENUITEM "Re-read Rigcontrol Config",   SCANRECONFIG
+        MENUITEM "Re-read APRS Config",         APRSRECONFIG
+        MENUITEM "Start Minimized",             BPQSTARTMIN
+        MENUITEM "Minimize to Notification Area (System Tray)", BPQMINTOTRAY
+        MENUITEM "Update WL2K Sysop Record",    IDD_WL2KSYSOP
+    END
 END
 
 TERM_MENU MENU DISCARDABLE 
 BEGIN
     POPUP "Window"
     BEGIN
-	    MENUITEM "New Terminal Window",         ID_NEWWINDOW
+        MENUITEM "New Terminal Window",         ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
-        MENUITEM "Tile",	                    ID_WINDOWS_TILE
-		MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
-    END 
+        MENUITEM "Tile",                        ID_WINDOWS_TILE
+        MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+    END
     POPUP "Action"
     BEGIN
         MENUITEM "Connect",                     BPQCONNECT
@@ -132,12 +178,15 @@ BEGIN
         MENUITEM "Log Output",                  BPQLogOutput
         MENUITEM "Send Disconnected",           BPQSendDisconnected
         MENUITEM "Chat Terminal Mode",          CHATTERM
-		MENUITEM "Restore Windows on load",     ID_WINDOWS_RESTORE
+        MENUITEM "Restore Windows on load",     ID_WINDOWS_RESTORE
+        MENUITEM "Beep if input too long",      ID_WARNWRAP
+        MENUITEM "Wrap Input",                  ID_WRAP
+        MENUITEM "Flash instead of Beep on Bell", ID_FLASHONBELL
     END
     POPUP "Edit"
     BEGIN
         MENUITEM "Copy Output Window",          BPQCOPYOUT
-        MENUITEM "Clear Output Window",        BPQCLEAROUT
+        MENUITEM "Clear Output Window",         BPQCLEAROUT
     END
     MENUITEM "Help",                        BPQHELP
 END
@@ -148,19 +197,17 @@ BEGIN
     BEGIN
         MENUITEM "New Window",                  ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
-        MENUITEM "Tile",	                    ID_WINDOWS_TILE
-		MENUITEM "Close all BPQ32 Programs", BPQCLOSEALL
-
-    END 
+        MENUITEM "Tile",                        ID_WINDOWS_TILE
+        MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+    END
     POPUP "Monitor"
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX
         MENUITEM "Monitor Supervisory",         BPQMCOM
         MENUITEM "Monitor NODES",               BPQMNODES
         MENUITEM "Enable Colour",               MONCOLOUR
-		MENUITEM "Log Monitor",                 BPQLogMonitor
-		MENUITEM "Trace APRS-IS",               MONITORAPRS
-
+        MENUITEM "Log Monitor",                 BPQLogMonitor
+        MENUITEM "Trace APRS-IS",               MONITORAPRS
     END
     POPUP "Edit"
     BEGIN
@@ -170,7 +217,13 @@ BEGIN
     MENUITEM "Help",                        BPQHELP
 END
 
-IncomingCall WAVE Ring.wav 
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// WAVE
+//
+
+INCOMINGCALL            WAVE    MOVEABLE PURE   "Ring.wav"
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -181,11 +234,14 @@ IncomingCall WAVE Ring.wav
 1 TEXTINCLUDE DISCARDABLE 
 BEGIN
     "kernelresource.h\0"
+    """\r\n"
+    "bpqtermmdi.h\0"
 END
 
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
     "#include ""afxres.h""\r\n"
+    "#include ""bpqtermmdi.h""\r\n"
     "\0"
 END
 
@@ -211,6 +267,14 @@ BEGIN
     "BPQMAINWINDOW", DIALOG
     BEGIN
         RIGHTMARGIN, 360
+    END
+
+    IDD_WL2KSYSOP, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 270
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 259
     END
 END
 #endif    // APSTUDIO_INVOKED

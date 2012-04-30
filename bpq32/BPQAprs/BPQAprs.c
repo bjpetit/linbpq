@@ -38,6 +38,8 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include "winsock2.h"
+#include "WS2tcpip.h"
 #include <windows.h>
 #include <commctrl.h> 
 #include "Commdlg.h"
@@ -86,6 +88,11 @@ char WXComment[80];
 char WXPortList[80];
 BOOL SendWX = FALSE;
 int WXInterval = 30;
+
+BOOL CreateJPEG = FALSE;
+int JPEGInterval = 300;
+int JPEGCounter = 0;
+char JPEGFileName[MAX_PATH] = "APRSImage.jpg";
 
 struct STATIONRECORD * CurrentPopup;
 
@@ -239,7 +246,6 @@ LRESULT CALLBACK MsgWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 VOID RefreshMessages();
 
-
 BOOL LoadImageFile(HWND hwnd, PTSTR pstrPathName,
         png_byte **ppbImage, int *pxImgSize, int *pyImgSize, int *piChannels,
         png_color *pBkgColor);
@@ -249,12 +255,10 @@ BOOL DisplayImage (HWND hwnd, BYTE **ppDib,
         BYTE *pbImage, int cxImgSize, int cyImgSize, int cImgChannels,
         BOOL bStretched);
 
-BOOL InitBitmap (
-        BYTE *pDiData, int cxWinSize, int cyWinSize);
-
+BOOL InitBitmap (BYTE *pDiData, int cxWinSize, int cyWinSize);
 BOOL FillBitmap (int x, int y);
-
 VOID LoadImageSet(int Zoom, int startx, int starty);
+BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, BOOL color, int quality);
 
 // a few global variables
 
@@ -363,7 +367,7 @@ void RefreshStation(struct STATIONRECORD * ptr);
 void RefreshStationList();
 void RefreshStationMap();
 void DecodeAPRSISMsg(char * msg);
-BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station);
+BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station);
 VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
 VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station);
 BOOL GetLocPixels(double Lat, double Lon, int * X, int * Y);
@@ -387,10 +391,13 @@ double Bearing(double laa, double loa);
 VOID CreateStationPopup(struct STATIONRECORD * ptr, int MouseX, int MouseY);
 INT_PTR CALLBACK ColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
+BOOL CreatePipeThread();
+
 BYTE * JpegFileToRGB(char * fileName, UINT *width, UINT *height);
 
 VOID SendWeatherBeacon();
 VOID DecodeWXPortList();
+BOOL CreatePopeThresd();
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
 
@@ -400,6 +407,7 @@ unsigned int ipaddr = 0;
 
 //char Host[] = "tile.openstreetmap.org";
 
+//char Host[] = "oatile1.mqcdn.com";		//SAT
 char Host[] = "otile1.mqcdn.com";
 
 extern short CRCTAB;
@@ -1019,6 +1027,20 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "DefaultNoTracks", 0, &Type,(UCHAR *)&DefaultNoTracks, &Vallen);
 
+		Vallen=250;
+		retCode = RegQueryValueEx(hKey, "WXFile", 0, &Type, WXFileName, &Vallen);
+		Vallen=79;
+		retCode = RegQueryValueEx(hKey, "WXText", 0, &Type, WXComment, &Vallen);
+		Vallen=79;
+		retCode = RegQueryValueEx(hKey, "WXPorts", 0, &Type, WXPortList, &Vallen);
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "CreateJPEG", 0, &Type,(UCHAR *)&CreateJPEG, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "JPEGInterval", 0, &Type,(UCHAR *)&JPEGInterval, &Vallen);
+		Vallen=250;
+		retCode = RegQueryValueEx(hKey, "JPEGFile", 0, &Type, JPEGFileName, &Vallen);
+
 		RegCloseKey(hKey);
 	}
 
@@ -1169,6 +1191,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	trayMenu2 = CreatePopupMenu();
 	AppendMenu(trayMenu2,MF_STRING,40000,"Copy");
 
+	CreatePipeThread();		// Open HTTP server pipe if defined
+
 	return (TRUE);
 }
 
@@ -1244,8 +1268,12 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		SetDlgItemText(hDlg, IDC_WXPORTS, WXPortList);
 		
 		SetDlgItemInt(hDlg, IDC_WXINTERVAL, WXInterval, FALSE);
-
 		CheckDlgButton(hDlg, IDC_SENDWX, SendWX);
+
+		CheckDlgButton(hDlg, IDC_CREATEJPEG, CreateJPEG);
+		SetDlgItemText(hDlg, IDC_JPEGFILE, JPEGFileName);
+		SetDlgItemInt(hDlg, IDC_JPEGINTERVAL, JPEGInterval, FALSE);
+
 		CheckDlgButton(hDlg, IDC_SUPZERO, SuppressNullPosn);
 		CheckDlgButton(hDlg, IDC_NOTRACKS, DefaultNoTracks);
 		CheckDlgButton(hDlg, IDC_LOCALTIME, LocalTime);	
@@ -1255,6 +1283,11 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		EnableWindow(GetDlgItem(hDlg, IDC_WXINTERVAL), SendWX);
 		EnableWindow(GetDlgItem(hDlg, IDC_FILE), SendWX);
 		EnableWindow(GetDlgItem(hDlg, IDC_WXPORTS), SendWX);
+
+		EnableWindow(GetDlgItem(hDlg, IDC_JPEGFILE), CreateJPEG);
+		EnableWindow(GetDlgItem(hDlg, IDC_JPEGINTERVAL), CreateJPEG);
+		EnableWindow(GetDlgItem(hDlg, IDC_FILE2), CreateJPEG);
+
 
 		return (INT_PTR)TRUE;
 
@@ -1278,6 +1311,22 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			break;
 		}
 
+		case IDC_FILE2:
+		{
+			memset(&ofn, 0, sizeof (OPENFILENAME));
+			ofn.lStructSize = sizeof (OPENFILENAME);
+			ofn.hwndOwner = hDlg;
+			ofn.lpstrFile = JPEGFileName;
+			ofn.nMaxFile = 250;
+			ofn.lpstrTitle = "JPEG of Screen Image File Name";
+			ofn.lpstrInitialDir = GetBPQDirectory();
+
+			if (GetOpenFileName(&ofn))
+				SetDlgItemText(hDlg, IDC_JPEGFILE, JPEGFileName);
+
+			break;
+		}
+
 		case IDC_SENDWX:
 		{
 			SendWX = IsDlgButtonChecked(hDlg, IDC_SENDWX);
@@ -1286,8 +1335,18 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			EnableWindow(GetDlgItem(hDlg, IDC_WXINTERVAL), SendWX);
 			EnableWindow(GetDlgItem(hDlg, IDC_FILE), SendWX);
 			EnableWindow(GetDlgItem(hDlg, IDC_WXPORTS), SendWX);
+			break;
 		}
 
+		case IDC_CREATEJPEG:
+	
+			CreateJPEG = IsDlgButtonChecked(hDlg, IDC_CREATEJPEG);
+			EnableWindow(GetDlgItem(hDlg, IDC_JPEGFILE), CreateJPEG);
+			EnableWindow(GetDlgItem(hDlg, IDC_JPEGINTERVAL), CreateJPEG);
+			EnableWindow(GetDlgItem(hDlg, IDC_FILE2), CreateJPEG);
+
+			break;
+		
 		case IDC_SUPZERO:
 	
 			SuppressNullPosn = IsDlgButtonChecked(hDlg, IDC_SUPZERO);
@@ -1318,11 +1377,15 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			SaveFixedStringValtoReg(hDlg, IDC_WXTEXT, hKey, "WXText", WXComment, 79);
 			SaveFixedStringValtoReg(hDlg, IDC_WXPORTS, hKey, "WXPorts", WXPortList, 79);
 
+			SaveFixedStringValtoReg(hDlg, IDC_JPEGFILE, hKey, "JPEGFile", JPEGFileName, 240);
+
 			RetryCount = GetDlgItemInt(hDlg, IDC_RETRIES, &OK, FALSE);
 			RetryTimer = GetDlgItemInt(hDlg, IDC_RETRYTIME, &OK, FALSE);
 			ExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRE, &OK, FALSE);
 			TrackExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRETRACKS, &OK, FALSE);
 			WXInterval = GetDlgItemInt(hDlg, IDC_WXINTERVAL, &OK, FALSE);
+
+			JPEGInterval = GetDlgItemInt(hDlg, IDC_JPEGINTERVAL, &OK, FALSE);
 
 			retCode = RegSetValueEx(hKey, "RetryCount", 0, REG_DWORD, (BYTE *)&RetryCount, 4);
 			retCode = RegSetValueEx(hKey, "RetryTimer", 0, REG_DWORD, (BYTE *)&RetryTimer, 4);
@@ -1333,6 +1396,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			retCode = RegSetValueEx(hKey, "SuppressNullPosn", 0, REG_DWORD, (BYTE *)&SuppressNullPosn, 4);
 			retCode = RegSetValueEx(hKey, "DefaultNoTracks", 0, REG_DWORD, (BYTE *)&DefaultNoTracks, 4);
 			retCode = RegSetValueEx(hKey, "LocalTime", 0, REG_DWORD, (BYTE *)&LocalTime, 4);
+			retCode = RegSetValueEx(hKey, "CreateJPEG", 0, REG_DWORD, (BYTE *)&CreateJPEG, 4);
 
 			APRSConnect(APRSCall, ISFilter);			// Will resend Filter
 
@@ -1606,7 +1670,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	switch (message)
 	{
-		case WM_NOTIFY:
+	case WM_NOTIFY:
 		
 		switch (pnm->hdr.code)
 		{
@@ -2691,7 +2755,94 @@ VOID ResolveThread()
 	}
 }
 
-char Header[] = "Accept: */*\r\nHost: otile1.mqcdn.com\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
+VOID DecodeWXReport(struct ConnectionInfo * sockptr, char * WX)
+{
+	UCHAR * ptr = strchr(WX, '_');
+	char Type;
+	int Val;
+
+	if (ptr == 0)
+		return;
+
+	sockptr->WindDirn = atoi(++ptr);
+	ptr += 4;
+	sockptr->WindSpeed = atoi(ptr);
+	ptr += 3;
+WXLoop:
+
+	Type = *(ptr++);
+
+	if (*ptr =='.')	// Missing Value
+	{
+		while (*ptr == '.')
+			ptr++;
+
+		goto WXLoop;
+	}
+
+	Val = atoi(ptr);
+
+	switch (Type)
+	{
+	case 'c': // = wind direction (in degrees).	
+		
+		sockptr->WindDirn = Val;
+		break;
+	
+	case 's': // = sustained one-minute wind speed (in mph).
+	
+		sockptr->WindSpeed = Val;
+		break;
+	
+	case 'g': // = gust (peak wind speed in mph in the last 5 minutes).
+	
+		sockptr->WindGust = Val;
+		break;
+
+	case 't': // = temperature (in degrees Fahrenheit). Temperatures below zero are expressed as -01 to -99.
+	
+		sockptr->Temp = Val;
+		break;
+
+	case 'r': // = rainfall (in hundredths of an inch) in the last hour.
+		
+		sockptr->RainLastHour = Val;
+		break;
+
+	case 'p': // = rainfall (in hundredths of an inch) in the last 24 hours.
+
+		sockptr->RainLastDay = Val;
+		break;
+
+	case 'P': // = rainfall (in hundredths of an inch) since midnight.
+
+		sockptr->RainToday = Val;
+		break;
+
+	case 'h': // = humidity (in %. 00 = 100%).
+	
+		sockptr->Humidity = Val;
+		break;
+
+	case 'b': // = barometric pressure (in tenths of millibars/tenths of hPascal).
+
+		sockptr->Pressure = Val;
+		break;
+
+	default:
+
+		return;
+	}
+	while(isdigit(*ptr))
+	{
+		ptr++;
+	}
+
+	if (*ptr != ' ')
+		goto WXLoop;
+}
+
+char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 //char Header[] = "Accept: */*\r\nHost: tile.openstreetmap.org\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 
 VOID OSMGet(int x, int y, int zoom)
@@ -2728,7 +2879,7 @@ VOID OSMThread()
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	char Request[100];
-
+	char Header[256];
 	UCHAR Buffer[200000];
 	int Len, InputLen = 0;
 	char * ptr;
@@ -2754,7 +2905,9 @@ VOID OSMThread()
 		free(OSMRec);
 
 //		wsprintf(Tile, "/%02d/%d/%d.png", Zoom, x, y);
+//		wsprintf(Tile, "/tiles/1.0.0/sat/%02d/%d/%d.jpg", Zoom, x, y);
 		wsprintf(Tile, "/tiles/1.0.0/osm/%02d/%d/%d.jpg", Zoom, x, y);
+
 	
 		wsprintf(FN, "%s/%02d/%d/%d.jpg", OSMDir, Zoom, x, y);
 
@@ -2813,6 +2966,7 @@ VOID OSMThread()
 		inptr = 0;
 
 		send(sock, Request, Len, 0);
+		wsprintf(Header, HeaderTemplate, Host);
 		send(sock, Header, strlen(Header), 0);
 
 		while (InputLen != -1)
@@ -4226,7 +4380,7 @@ void DecodeAPRSISMsg(char * Msg)
 double Cube91 = 91.0 * 91.0 * 91.0;
 double Square91 = 91.0 * 91.0;
 
-BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
+BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
 {
 	UCHAR SymChar;
 	char SymSet;
@@ -4234,6 +4388,7 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 	char EW;
 	double NewLat, NewLon;
 	char LatDeg[3], LonDeg[4];
+	char save;
 
 	// Compressed has first character not a digit (it is symbol table)
 
@@ -4299,9 +4454,12 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 		}
 
 		LonDeg[3]=0;
+
+		save = Payload[17];
 		Payload[17] = 0;
 		NewLon = atof(LonDeg) + (atof(Payload+12) / 60);
-       
+		Payload[17] = save;
+		
 		if (EW == 'W')
 			NewLon = -NewLon;
 		else
@@ -4335,6 +4493,9 @@ BOOL DecodeLocationString(char * Payload, struct STATIONRECORD * Station)
 		Station->Lat = NewLat;
 		Station->Lon = NewLon;	
 	}
+
+	Station->Symbol = SymChar;
+
 	SymChar -= '!';
 	
 	Station->IconOverlay = 0;
@@ -4460,6 +4621,12 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		Payload++;
 	
 		DecodeLocationString(Payload, Station);
+
+		if (Station->Symbol == '_')		// WX
+		{
+			if (strlen(Payload) > 50)
+				strcpy(Station->LastWXPacket, Payload);
+		}
 		return;	
 
 	case '>':				// Status
@@ -5752,6 +5919,13 @@ VOID SecTimer()
 	int n = 0;
 	char Msg[20];
 
+	JPEGCounter++;
+
+	if (CreateJPEG)
+		if (JPEGCounter > JPEGInterval)
+			if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 100))
+				JPEGCounter = 0;
+
 	if (SendWX)
 		SendWeatherBeacon();
 
@@ -6498,7 +6672,983 @@ BYTE * JpegFileToRGB(char * fileName, UINT *width, UINT *height)
 
 	return dataBuf;
 }
+// store a scanline to our data buffer
+
+void j_putRGBScanline(BYTE *jpegline, 
+						 int widthPix,
+						 BYTE *outBuf,
+						 int row);
+
+void j_putGrayScanlineToRGB(BYTE *jpegline, 
+						 int widthPix,
+						 BYTE *outBuf,
+						 int row);
+
+
+/*
+BYTE RGBFromDWORDAligned(BYTE *inBuf, UINT widthPix, UINT widthBytes, UINT height)
+{
+	BYTE *tmp;
+	UINT row;
+
+	if (inBuf==NULL)
+		return 0;
+
+	tmp= malloc(height * widthPix * 3);
+	
+	if (tmp==NULL)
+		return NULL;
+
+
+	for (row=0;row<height;row++) {
+		memcpy((tmp+row * widthPix * 3), 
+				(inBuf + row * widthBytes), 
+				widthPix * 3);
+	}
+
+	return tmp;
+}
+*/
+//
+//
+//
+
+#include <share.h>
+
+BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, BOOL color, int quality)
+{
+	struct jpeg_compress_struct cinfo;
+	int row_stride;			/* physical row widthPix in image buffer */
+	struct my_error_mgr jerr;
+	FILE * outfile=NULL;			/* target file */
+
+	if (dataBuf==NULL)
+		return FALSE;
+	if (widthPix==0)
+		return FALSE;
+	if (height==0)
+		return FALSE;
+
+	/* More stuff */
+	/* Step 1: allocate and initialize JPEG compression object */
+	
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = my_error_exit;
+
+	/* Establish the setjmp return context for my_error_exit to use. */
+	
+	if (setjmp(jerr.setjmp_buffer))
+	{
+		/* If we get here, the JPEG code has signaled an error.
+		 * We need to clean up the JPEG object, close the input file, and return.
+		 */
+
+		jpeg_destroy_compress(&cinfo);
+
+		if (outfile!=NULL)
+			fclose(outfile);
+
+		return FALSE;
+	}
+
+	/* Now we can initialize the JPEG compression object. */
+
+	jpeg_create_compress(&cinfo);
+
+	/* Step 2: specify data destination (eg, a file) */
+	/* Note: steps 2 and 3 can be done in either order. */
+
+	if ((outfile = _fsopen(fileName, "wb", _SH_DENYWR)) == NULL)
+	{
+//		char buf[250];
+//		sprintf(buf, "JpegFile :\nCan't open %s\n", fileName);
+//		MessageBox(NULL, buf, "", 0);
+		return FALSE;
+	}
+
+	jpeg_stdio_dest(&cinfo, outfile);
+
+	/* Step 3: set parameters for compression */
+												    
+	/* First we supply a description of the input image.
+	* Four fields of the cinfo struct must be filled in:
+	*/
+	cinfo.image_width = widthPix; 	/* image widthPix and height, in pixels */
+	cinfo.image_height = height;
+
+	cinfo.input_components = 3;		/* # of color components per pixel */
+	cinfo.in_color_space = JCS_RGB; 	/* colorspace of input image */
+ 
+/* Now use the library's routine to set default compression parameters.
+   * (You must set at least cinfo.in_color_space before calling this,
+   * since the defaults depend on the source color space.)
+   */
+
+  jpeg_set_defaults(&cinfo);
+  /* Now you can set any non-default parameters you wish to.
+   * Here we just illustrate the use of quality (quantization table) scaling:
+   */
+  jpeg_set_quality(&cinfo, quality, TRUE /* limit to baseline-JPEG values */);
+
+  /* Step 4: Start compressor */
+
+  /* TRUE ensures that we will write a complete interchange-JPEG file.
+   * Pass TRUE unless you are very sure of what you're doing.
+   */
+  jpeg_start_compress(&cinfo, TRUE);
+
+  /* Step 5: while (scan lines remain to be written) */
+  /*           jpeg_write_scanlines(...); */
+
+  /* Here we use the library's state variable cinfo.next_scanline as the
+   * loop counter, so that we don't have to keep track ourselves.
+   * To keep things simple, we pass one scanline per call; you can pass
+   * more if you wish, though.
+   */
+  row_stride = widthPix * 3;	/* JSAMPLEs per row in image_buffer */
+
+  while (cinfo.next_scanline < cinfo.image_height)
+  {
+    /* jpeg_write_scanlines expects an array of pointers to scanlines.
+     * Here the array is only one element long, but you could pass
+     * more than one scanline at a time if that's more convenient.
+     */
+	LPBYTE outRow;
+
+	outRow = dataBuf + ScrollY * 6144 + ScrollX * 3 + (cinfo.next_scanline * 2048 * 3);
+
+//	outRow = dataBuf + (cinfo.next_scanline * widthPix * 3);
+
+    (void) jpeg_write_scanlines(&cinfo, &outRow, 1);
+  }
+
+  /* Step 6: Finish compression */
+
+  jpeg_finish_compress(&cinfo);
+
+  /* After finish_compress, we can close the output file. */
+  fclose(outfile);
+
+  /* Step 7: release JPEG compression object */
+
+  /* This is an important step since it will release a good deal of memory. */
+  jpeg_destroy_compress(&cinfo);
+
+  /* And we're done! */
+
+  return TRUE;
+}
+
+//	Web Server Code
+
+//	The actual HTTP socket code is in bpq32.dll. Any requests for APRS data are passed in 
+//	using a Named Pipe. The request looks exactly like one from a local socket, and the respone is
+//	a fully pormatted HTTP packet
+
+
+#define InputBufferLen 1000
+
+
+#define MaxSessions 100
+
+
+HANDLE PipeHandle;
+
+char * LoginMsg = NULL;
+
+int HTTPPort = 80;
+BOOL IPV6 = TRUE;
+
+#define MAX_PENDING_CONNECTS 5
+
+BOOL OpenSockets6();
+
+char HTDocs[MAX_PATH] = "HTML";
+char SpecialDocs[MAX_PATH] = "Special Pages";
+
+// All Calls (8 per line)
+
+//<td><a href="find.cgi?call=EI7IG-1">EI7IG-1</a></td>
+//<td><a href="find.cgi?call=G7TKK-1">G7TKK-1</a></td>
+//<td><a href="find.cgi?call=GB7GL-B">GB7GL-B</a></td>
+//<td><a href="find.cgi?call=GM1TCN">GM1TCN</a></td>
+//<td><a href="find.cgi?call=GM8BPQ">GM8BPQ</a></td>
+//<td><a href="find.cgi?call=GM8BPQ-14">GM8BPQ-14</a></td>
+//<td><a href="find.cgi?call=LA2VPA-9">LA2VPA-9</a></td>
+//<td><a href="find.cgi?call=LA3FIA-10">LA3FIA-10</a></td></tr><tr>
+//<td><a href="find.cgi?call=LA6JF-2">LA6JF-2</a></td><td><a href="find.cgi?call=LD4ST">LD4ST</a></td><td><a href="find.cgi?call=M0CHK-7">M0CHK-7</a></td><td><a href="find.cgi?call=M0OZH-7">M0OZH-7</a></td><td><a href="find.cgi?call=MB7UFO-1">MB7UFO-1</a></td><td><a href="find.cgi?call=MB7UN">MB7UN</a></td><td><a href="find.cgi?call=MM0DXE-15">MM0DXE-15</a></td><td><a href="find.cgi?call=PA2AYX-9">PA2AYX-9</a></td></tr><tr>
+//<td><a href="find.cgi?call=PA3AQW-5">PA3AQW-5</a></td><td><a href="find.cgi?call=PD1C">PD1C</a></td><td><a href="find.cgi?call=PD5LWD-2">PD5LWD-2</a></td><td><a href="find.cgi?call=PI1ECO">PI1ECO</a></td></tr>
+
+
+char * DoSummaryLine(struct STATIONRECORD * ptr, int n)
+{
+	static char Line2[80];
+
+	wsprintf(Line2, "<td><a href=""find.cgi?call=%s"">%s</a></td>",
+		ptr->Callsign, ptr->Callsign);
+
+	if ((n & 7) == 7)
+		strcat(Line2, "</tr><tr>");
+
+	return Line2;
+}
+
+char * DoDetailLine(struct STATIONRECORD * ptr)
+{
+	static char Line[512];
+	double Lat = ptr->Lat;
+	double Lon = ptr->Lon;
+	char NS='N', EW='E';
+
+	char LatString[20], LongString[20], DistString[20], BearingString[20];
+	int Degrees;
+	double Minutes;
+	char Time[80];
+	struct tm * TM;
+
+	
+//	if (ptr->ObjState == '_')	// Killed Object
+//		return;
+
+	TM = gmtime(&ptr->TimeLastUpdated);
+
+	wsprintf(Time, "%.2d:%.2d:%.2d", TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+	if (ptr->Lat < 0)
+	{
+		NS = 'S';
+		Lat=-Lat;
+	}
+	if (Lon < 0)
+	{
+		EW = 'W';
+		Lon=-Lon;
+	}
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+
+	Degrees = Lat;
+	Minutes = Lat * 60.0 - (60 * Degrees);
+
+	sprintf(LatString,"%2d°%05.2f'%c", Degrees, Minutes, NS);
+		
+	Degrees = Lon;
+
+#pragma warning(pop)
+
+	Minutes = Lon * 60 - 60 * Degrees;
+
+	sprintf(LongString, "%3d°%05.2f'%c",Degrees, Minutes, EW);
+
+	sprintf(DistString, "%6.1f", Distance(ptr->Lat, ptr->Lon));
+	sprintf(BearingString, "%3.0f", Bearing(ptr->Lat, ptr->Lon));
+	
+	wsprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>",
+			ptr->Callsign, ptr->Callsign, "Home", LatString, LongString, DistString, BearingString, Time);
+
+	return Line;
+}
+
+ 
+int CompareFN(const void *a, const void *b) 
+{ 
+	struct STATIONRECORD * x;
+	struct STATIONRECORD * y;
+
+	_asm 
+	{
+		mov eax, a
+		mov eax, [eax]
+		mov	x, eax
+		mov eax, b
+		mov eax, [eax]
+		mov	y, eax
+}
+
+	return strcmp(x->Callsign, y->Callsign);
+	/* strcmp functions works exactly as expected from
+	comparison function */ 
+} 
 
 
 
+char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, int * Count)
+{
+	char Line[100000] = "";	
+	struct STATIONRECORD * ptr = StationRecords;
+	int n = 0, i;
+	struct STATIONRECORD * List[10000];
 
+	// Build list of calls
+
+	while (ptr)
+	{
+		if (ptr->ObjState == 0 && ptr->Lat != 0.0 && ptr->Lon != 0.0)
+		{
+			if ((WX && (ptr->LastWXPacket[0] == 0)) || (RFOnly && (ptr->LastPort == 0)) ||
+				(Mobile && ((ptr->Speed < 0.1) || ptr->LastWXPacket[0] != 0)))
+			{
+				ptr = ptr->Next;
+				continue;
+			}
+
+			List[n++] = ptr;
+
+			if (n > 10000)
+				break;
+
+		}
+		ptr = ptr->Next;		
+	}
+
+	qsort(List, n, 4, CompareFN);
+
+	for (i = 0; i < n; i++)
+	{
+		if (RFOnly)
+			strcat(Line, DoDetailLine(List[i]));
+		else
+			strcat(Line, DoSummaryLine(List[i], i));
+	}	
+		
+	*Count = n;
+
+	return _strdup(Line);
+}
+
+char * LookupKey(struct ConnectionInfo * sockptr, char * Key)
+{
+	struct STATIONRECORD * stn = sockptr->SelCall;
+
+	if (strcmp(Key, "##MY_CALLSIGN##") == 0)
+		return _strdup(LoppedAPRSCall);
+
+	if (strcmp(Key, "##CALLSIGN##") == 0)
+		return _strdup(sockptr->SelCall->Callsign);
+
+	if (strcmp(Key, "##CALLSIGN_NOSSID##") == 0)
+	{
+		char * Call = _strdup(sockptr->SelCall->Callsign);
+		char * ptr = strchr(Call, '-');
+		if (ptr)
+			*ptr = 0;
+		return Call;
+	}
+
+	if (strcmp(Key, "##MY_WX_CALLSIGN##") == 0)
+		return _strdup(LoppedAPRSCall);
+
+	if (strcmp(Key, "##MY_BEACON_COMMENT##") == 0)
+		return _strdup(StatusMsg);
+
+	if (strcmp(Key, "##MY_WX_BEACON_COMMENT##") == 0)
+		return _strdup(WXComment);
+
+	if (strcmp(Key, "##MILES_KM##") == 0)
+		return _strdup("Miles");
+
+	if (strcmp(Key, "##EXPIRE_TIME##") == 0)
+	{
+		char val[80];
+		wsprintf(val, "%d", ExpireTime);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##LOCATION##") == 0)
+	{
+		char val[80];
+		double Lat = sockptr->SelCall->Lat;
+		double Lon = sockptr->SelCall->Lon;
+		char NS='N', EW='E';
+		char LatString[20];
+		int Degrees;
+		double Minutes;
+	
+		if (Lat < 0)
+		{
+			NS = 'S';
+			Lat=-Lat;
+		}
+		if (Lon < 0)
+		{
+			EW = 'W';
+			Lon=-Lon;
+		}
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+
+		Degrees = Lat;
+		Minutes = Lat * 60.0 - (60 * Degrees);
+
+		sprintf(LatString,"%2d°%05.2f'%c",Degrees, Minutes, NS);
+		
+		Degrees = Lon;
+
+#pragma warning(pop)
+
+		Minutes = Lon * 60 - 60 * Degrees;
+
+		sprintf(val,"%s %3d°%05.2f'%c", LatString, Degrees, Minutes, EW);
+
+		return _strdup(val);
+	}
+
+
+	if (strcmp(Key, "##STATUS_TEXT##") == 0)
+		return _strdup(stn->Status);
+
+
+	if (strcmp(Key, "##LAST_HEARD##") == 0)
+	{
+		char Time[80];
+		struct tm * TM;
+		time_t Age = time(NULL) - stn->TimeLastUpdated;
+
+		TM = gmtime(&Age);
+
+		wsprintf(Time, "%.2d:%.2d:%.2d", TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+		return _strdup(Time);
+	}
+
+	if (strcmp(Key, "##FRAME_HEADER##") == 0)
+		return _strdup(stn->Path);
+
+	if (strcmp(Key, "##FRAME_INFO##") == 0)
+		return _strdup(stn->LastWXPacket);
+	
+	if (strcmp(Key, "##BEARING##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%03.0f", Bearing(sockptr->SelCall->Lat, sockptr->SelCall->Lon));
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##COURSE##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%03.0f", stn->Course);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##SPEED_MPH##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.1f", stn->Speed);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##DISTANCE##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.1f", Distance(sockptr->SelCall->Lat, sockptr->SelCall->Lon));
+		return _strdup(val);
+	}
+
+
+
+	if (strcmp(Key, "##WIND_DIRECTION##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%03d", sockptr->WindDirn);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##WIND_SPEED_MPH##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->WindSpeed);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##WIND_GUST_MPH##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->WindGust);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##TEMPERATURE_F##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->Temp);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##HUMIDITY##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->Humidity);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##PRESSURE_HPA##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%05.1f", sockptr->Pressure /10.0);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##RAIN_TODAY_IN##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.2f", sockptr->RainToday /100.0);
+		return _strdup(val);
+	}
+
+
+	if (strcmp(Key, "##RAIN_24_IN##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.2f", sockptr->RainLastDay /100.0);
+		return _strdup(val);
+	}
+
+
+	if (strcmp(Key, "##RAIN_HOUR_IN##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.2f", sockptr->RainLastHour /100.0);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##MAP_LAT_LON##") == 0)
+	{
+		char val[256];
+
+		sprintf(val, "%f,%f", stn->Lat, stn->Lon);
+		return _strdup(val);
+	}
+
+
+/*
+##WIND_SPEED_MS## - wind speed metres/sec
+##WIND_SPEED_KMH## - wind speed km/hour
+##WIND_GUST_MPH## - wind gust miles/hour
+##WIND_GUST_MS## - wind gust metres/sec
+##WIND_GUST_KMH## - wind gust km/hour
+##WIND_CHILL_F## - wind chill F
+##WIND_CHILL_C## - wind chill C
+##TEMPERATURE_C## - temperature C
+##DEWPOINT_F## - dew point temperature F
+##DEWPOINT_C## - dew point temperature C
+##PRESSURE_IN## - pressure inches of mercury
+##PRESSURE_HPA## - pressure hPa (mb)
+##RAIN_HOUR_MM## - rain in last hour mm
+##RAIN_TODAY_MM## - rain today mm
+##RAIN_24_MM## - rain in last 24 hours mm
+##FRAME_HEADER## - frame header of the last posit heard from the station
+##FRAME_INFO## - information field of the last posit heard from the station
+##MAP_LARGE_SCALE##" - URL of a suitable large scale map on www.vicinity.com
+##MEDIUM_LARGE_SCALE##" - URL of a suitable medium scale map on www.vicinity.com
+##MAP_SMALL_SCALE##" - URL of a suitable small scale map on www.vicinity.com
+##MY_LOCATION## - 'Latitude', 'Longitude' in 'Station Setup'
+##MY_STATUS_TEXT## - status text configured in 'Status Text'
+##MY_SYMBOL_DESCRIPTION## - 'Symbol' that would be shown for our station in 'Station List'
+##HIT_COUNTER## - The number of times the page has been accessed
+##DOCUMENT_LAST_CHANGED## - The date/time the page was last edited
+
+##FRAME_HEADER## - frame header of the last posit heard from the station
+##FRAME_INFO## - information field of the last posit heard from the station
+
+*/
+	return NULL;
+}
+
+int ProcessSpecialPage(struct ConnectionInfo * sockptr, char ** Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
+{
+	// replaces ##xxx### constructs with the requested data
+
+	char * NewMessage = malloc(250000);
+	char * ptr1 = *Buffer, * ptr2, * ptr3, * NewPtr = NewMessage;
+	int PrevLen;
+	int BytesLeft = FileSize;
+	int NewFileSize = FileSize;
+
+	if (WX && sockptr->SelCall && sockptr->SelCall->LastWXPacket)
+	{
+		DecodeWXReport(sockptr, sockptr->SelCall->LastWXPacket);
+	}
+
+// Skip Comment Block
+
+	if (strstr(ptr1, "<!--"))
+	{
+		ptr2 = strstr(ptr1, "-->");
+		if (ptr2)
+		{
+			PrevLen = (ptr2 - ptr1);
+			memcpy(NewPtr, ptr1, PrevLen);
+			NewPtr += PrevLen;
+			ptr1 = ptr2;
+		}
+	}
+
+loop:
+	ptr2 = strstr(ptr1, "##");
+
+	if (ptr2)
+	{
+		PrevLen = (ptr2 - ptr1);			// Bytes before special text
+		
+		ptr3 = strstr(ptr2+2, "##");
+
+		if (ptr3)
+		{
+			char Key[80] = "";
+			int KeyLen;
+			char * NewText;
+			int NewTextLen;
+
+			ptr3 += 2;
+			KeyLen = ptr3 - ptr2;
+
+			if (KeyLen < 80)
+				memcpy(Key, ptr2, KeyLen);
+
+			if (strcmp(Key, "##STATION_TABLE##") == 0)
+			{
+				NewText = StationTable;
+			}
+			else
+			{
+				if (strcmp(Key, "##TABLE_COUNT##") == 0)
+				{
+					char val[80];
+					wsprintf(val, "%d", Count);
+					NewText = _strdup(val);
+				}
+				else
+					NewText = LookupKey(sockptr, Key);
+			}
+			
+			if (NewText)
+			{
+				NewTextLen = strlen(NewText);
+				NewFileSize = NewFileSize + NewTextLen - KeyLen;					
+			//	NewMessage = realloc(NewMessage, NewFileSize);
+
+				memcpy(NewPtr, ptr1, PrevLen);
+				NewPtr += PrevLen;
+				memcpy(NewPtr, NewText, NewTextLen);
+				NewPtr += NewTextLen;
+
+				free(NewText);
+				NewText = NULL;
+			}
+			else
+			{
+				// Key not found, so just leave
+
+				memcpy(NewPtr, ptr1, PrevLen + KeyLen);
+				NewPtr += (PrevLen + KeyLen);
+			}
+
+			ptr1 = ptr3;			// Continue scan from here
+			BytesLeft = *Buffer + FileSize - ptr3;
+		}
+		goto loop;
+	}
+
+	// Copy Rest
+
+	memcpy(NewPtr, ptr1, BytesLeft);
+
+	*Buffer = NewMessage;
+	
+	return NewFileSize;
+}
+
+
+int ReadMessageFile(struct ConnectionInfo * sockptr, char * FN, char ** MsgBytes)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	HANDLE hFile = INVALID_HANDLE_VALUE;
+	int ReadLen;
+	BOOL Special = FALSE;
+
+	if (strcmp(FN, "/") == 0)
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s\\index.html", APRSDir, SpecialDocs);
+	else
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s%s", APRSDir, SpecialDocs, FN);
+	
+	hFile = CreateFile(MsgFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		// Try normal pages
+
+		if (strcmp(FN, "/") == 0)
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s\\index.html", APRSDir, HTDocs);
+		else
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s%s", APRSDir, HTDocs, FN);
+	
+		hFile = CreateFile(MsgFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+		if (hFile == INVALID_HANDLE_VALUE)
+			return -1;
+	}
+	else
+		Special = TRUE;
+
+	FileSize = GetFileSize(hFile, NULL);
+
+	*MsgBytes=malloc(FileSize+1);
+
+	ReadFile(hFile, *MsgBytes, FileSize, &ReadLen, NULL); 
+
+	CloseHandle(hFile);
+
+//	if (Special)
+	{
+		// Build Station list, depending on URL
+	
+		int Count = 0;
+		BOOL RFOnly = (BOOL)strstr(FN, "rf");
+		BOOL WX = (BOOL)strstr(FN, "wx");
+		BOOL Mobile = (BOOL)strstr(FN, "mobile");
+		char * StationList = CreateStationList(RFOnly, WX, Mobile, &Count);
+
+		return ProcessSpecialPage(sockptr, MsgBytes, FileSize, StationList, Count, WX); 
+	}
+	return FileSize;
+}
+
+int ssend (SOCKET s, const char * buf)
+{
+	return send(s, buf, strlen(buf), 0);
+}
+
+char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
+
+DWORD WINAPI InstanceThread(LPVOID lpvParam)
+
+// This routine is a thread processing function to read from and reply to a client
+// via the open pipe connection passed from the main loop. Note this allows
+// the main loop to continue executing, potentially creating more threads of
+// of this procedure to run concurrently, depending on the number of incoming
+// client connections.
+{ 
+   DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0; 
+   BOOL fSuccess = FALSE;
+   HANDLE hPipe  = NULL;
+   char Buffer[4096];
+   char OutBuffer[100000];
+   char * ReplyBuffer;
+   char * MsgPtr;
+   int InputLen = 0;
+   int OutputLen = 0;
+	int Bufferlen;
+   	char * URL;
+	char * ptr;
+	struct ConnectionInfo CI;
+	struct ConnectionInfo * sockptr = &CI;
+
+  // Print verbose messages. In production code, this should be for debugging only.
+   Debugprintf("InstanceThread created, receiving and processing messages.");
+
+// The thread's parameter is a handle to a pipe object instance. 
+ 
+   hPipe = (HANDLE) lpvParam; 
+
+// Loop until done reading
+   while (1) 
+   { 
+   // Read client requests from the pipe. This simplistic code only allows messages
+   // up to BUFSIZE characters in length.
+ 
+	   fSuccess = ReadFile( 
+         hPipe,        // handle to pipe 
+         Buffer,    // buffer to receive data 
+         4096, // size of buffer 
+         &InputLen, // number of bytes read 
+         NULL);        // not overlapped I/O 
+
+      if (!fSuccess || InputLen == 0)
+      {   
+          if (GetLastError() == ERROR_BROKEN_PIPE)
+              Debugprintf("InstanceThread: client disconnected.", GetLastError()); 
+          else
+              Debugprintf("InstanceThread ReadFile failed, GLE=%d.", GetLastError()); 
+          break;
+      }
+
+		MsgPtr = &Buffer[0];
+	
+		if (memcmp(MsgPtr, "GET" , 3) != 0)
+		{
+			OutputLen = sprintf(OutBuffer, "HTTP/1.0 501 Not Supported\r\n\r\n");
+			break;
+		}
+
+		URL = &MsgPtr[4];
+
+		ptr = strstr(URL, " HTTP");
+
+		if (ptr)
+			*ptr = 0;
+
+		if (_memicmp(URL, "/find.cgi?call=", 15) == 0)
+		{
+			// return Station details
+
+			char * Call = &URL[15];
+			struct STATIONRECORD * stn = FindStation(Call);
+			char * Referrer = strstr(ptr + 1, "Referer:");
+
+			if (stn == NULL)
+			{
+				OutputLen = sprintf(OutBuffer, "HTTP/1.0 404 Not Found\r\nContent-Length: 11\r\n\r\nNot Found\r\n");
+				break;
+			}
+
+			if (Referrer)
+			{
+				ptr = strchr(Referrer, 13);
+				if (ptr)
+				{
+					BOOL RFOnly, WX, Mobile;
+					*ptr = 0;
+					RFOnly = (BOOL)strstr(Referrer, "rf");
+					WX = (BOOL)strstr(Referrer, "wx");
+					Mobile = (BOOL)strstr(Referrer, "mobile");
+
+					if (WX)
+						strcpy(URL, "/infowx_call.html");
+					else if (Mobile)
+						strcpy(URL, "/infomobile_call.html");
+					else
+						strcpy(URL, "/info_call.html");
+				}
+			}
+
+			sockptr->SelCall = stn;
+		}
+
+		Bufferlen = ReadMessageFile(sockptr, URL, &ReplyBuffer);
+
+		if (Bufferlen == -1)			// Not found
+		{
+			OutputLen = sprintf(OutBuffer, "HTTP/1.0 404 Not Found\r\nContent-Length: 11\r\n\r\nNot Found\r\n");
+			break;
+		}
+
+/*HTTP/1.0 200 Ok
+Server: UI-WebServer V1.51
+Connection: Keep-Alive
+Content-Length: 3800
+Content-Type: text/html*/
+
+		OutputLen = sprintf(OutBuffer, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", Bufferlen);
+		memcpy(&OutBuffer[OutputLen], ReplyBuffer, Bufferlen);
+		OutputLen += Bufferlen; 
+		free(ReplyBuffer);
+		break;
+    }
+ 
+
+// Flush the pipe to allow the client to read the pipe's contents 
+// before disconnecting. Then disconnect the pipe, and close the 
+// handle to this pipe instance. 
+ 
+	fSuccess = WriteFile(hPipe, OutBuffer, OutputLen, &cbWritten, NULL);    //      _tprintf(TEXT("InstanceThread WriteFile failed, GLE=%d.\n"), GetLastError()); 
+
+	FlushFileBuffers(hPipe); 
+	DisconnectNamedPipe(hPipe); 
+	CloseHandle(hPipe); 
+
+	Debugprintf("InstanceThread exitting.");
+	return 1;
+}
+
+
+DWORD WINAPI PipeThreadProc(LPVOID lpvParam)
+{
+	BOOL   fConnected = FALSE; 
+	DWORD  dwThreadId = 0; 
+	HANDLE hPipe = INVALID_HANDLE_VALUE, hThread = NULL; 
+ 
+// The main loop creates an instance of the named pipe and 
+// then waits for a client to connect to it. When the client 
+// connects, a thread is created to handle communications 
+// with that client, and this loop is free to wait for the
+// next client connect request. It is an infinite loop.
+ 
+	for (;;) 
+	{ 
+      hPipe = CreateNamedPipe( 
+          PipeFileName,             // pipe name 
+          PIPE_ACCESS_DUPLEX,       // read/write access 
+          PIPE_TYPE_BYTE |       // message type pipe 
+          PIPE_WAIT,                // blocking mode 
+          PIPE_UNLIMITED_INSTANCES, // max. instances  
+          4096,                  // output buffer size 
+          4096,                  // input buffer size 
+          0,                        // client time-out 
+          NULL);                    // default security attribute 
+
+      if (hPipe == INVALID_HANDLE_VALUE) 
+      {
+          Debugprintf("CreateNamedPipe failed, GLE=%d.\n", GetLastError()); 
+          return -1;
+      }
+ 
+      // Wait for the client to connect; if it succeeds, 
+      // the function returns a nonzero value. If the function
+      // returns zero, GetLastError returns ERROR_PIPE_CONNECTED. 
+ 
+      fConnected = ConnectNamedPipe(hPipe, NULL) ? 
+         TRUE : (GetLastError() == ERROR_PIPE_CONNECTED); 
+ 
+      if (fConnected) 
+	  {
+ 
+         Debugprintf("Client connected, creating a processing thread."); 
+      
+         // Create a thread for this client. 
+   
+		 hThread = CreateThread( 
+            NULL,              // no security attribute 
+            0,                 // default stack size 
+            InstanceThread,    // thread proc
+            (LPVOID) hPipe,    // thread parameter 
+            0,                 // not suspended 
+            &dwThreadId);      // returns thread ID 
+
+         if (hThread == NULL) 
+         {
+            Debugprintf("CreateThread failed, GLE=%d.\n", GetLastError()); 
+            return -1;
+         }
+         else CloseHandle(hThread); 
+       } 
+      else 
+        // The client could not connect, so close the pipe. 
+         CloseHandle(hPipe); 
+   } 
+
+   return 0; 
+} 
+
+BOOL CreatePipeThread()
+{
+	DWORD ThreadId;
+	CreateThread(NULL, 0, PipeThreadProc, 0, 0, &ThreadId);
+	return TRUE;
+}

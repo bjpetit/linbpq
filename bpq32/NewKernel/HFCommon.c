@@ -48,6 +48,8 @@ RestartTNC(struct TNCINFO * TNC);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
+char * GetChallengeResponse(char * Call, char *  ChallengeString);
+
 VOID __cdecl Debugprintf(const char * format, ...);
 
 extern UCHAR BPQDirectory[];
@@ -76,6 +78,10 @@ int ModetoBaud[31] = {0,0,0,0,0,0,0,0,0,0,0,			// 0 = 10
 
 char HFCTEXT[81] = "";
 int HFCTEXTLEN = 0;
+
+
+extern char WL2KCall[10];
+extern char WL2KLoc[7];
 
 VOID * zalloc(int len)
 {
@@ -1092,6 +1098,8 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	char * param;
 	char errbuf[256];
 	struct WL2KInfo * WL2KReport = zalloc(sizeof(struct WL2KInfo));
+	char * ptr;
+
 
 	strcpy(errbuf, buf); 
 
@@ -1117,17 +1125,30 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	strcpy(WL2KReport->RMSCall, p_cmd);
 	strcpy(WL2KReport->BaseCall, p_cmd);
 	strlop(WL2KReport->BaseCall, '-');					// Remove any SSID
+	
+	strcpy(WL2KCall, WL2KReport->BaseCall);				// For SYSOP Update
 
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
 	if (p_cmd == NULL) goto BadLine;
 	if (strlen(p_cmd) != 6) goto BadLine;
 	
 	strcpy(WL2KReport->GridSquare, p_cmd);
+	strcpy(WL2KLoc, p_cmd);
 
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
 	if (p_cmd == NULL) goto BadLine;
 	if (strlen(p_cmd) > 79) goto BadLine;
 	
+	// Convert any : in times to comma
+
+	ptr = strchr(p_cmd, ':');
+
+	while (ptr)
+	{
+		*ptr = ',';
+		ptr = strchr(p_cmd, ':');
+	}
+
 	strcpy(WL2KReport->Times, p_cmd);
 
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);
@@ -1728,4 +1749,205 @@ BOOL InterlockedCheckBusy(struct TNCINFO * ThisTNC)
 
 	}
 	return FALSE;					// None Busy
+}
+
+char ChallengeResponse[13];
+
+char * GetChallengeResponse(char * Call, char *  ChallengeString)
+{
+	// Generates a response to the CMS challenge string...
+
+	__int64 Challenge = _atoi64(ChallengeString);
+	__int64 CallSum = 0;
+	__int64 Mask;
+	__int64 Response;
+	__int64 XX = 1065484730;
+
+	char CallCopy[10];
+	UINT i;
+
+
+	if (Challenge == 0)
+		return "000000000000";
+
+// Calculate Mask from Callsign
+
+	memcpy(CallCopy, Call, 10);
+	strlop(CallCopy, '-');
+	strlop(CallCopy, ' ');
+
+	for (i = 0; i < strlen(CallCopy); i++)
+	{
+		CallSum += CallCopy[i];
+	}
+	
+	Mask = CallSum + CallSum * 4963 + CallSum * 782386;
+
+	Response = (Challenge % 930249781);
+	Response ^= Mask;
+
+	sprintf(ChallengeResponse, "%012d", Response);
+
+	return ChallengeResponse; // 001065484730
+}
+
+BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * ReplyBuffer)
+{
+	SOCKET sock = 0;
+	SOCKADDR_IN destaddr;
+	SOCKADDR_IN sinx; 
+	int len = 100;
+	int addrlen=sizeof(sinx);
+	struct hostent * HostEnt;
+	int err;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	char Buffer[100];
+	char SendBuffer[1000];
+		
+	destaddr.sin_family = AF_INET; 
+	destaddr.sin_addr.s_addr = inet_addr("www.winlink.org");
+	destaddr.sin_port = htons(8775);
+
+	if (destaddr.sin_addr.s_addr == INADDR_NONE)
+	{
+		//	Resolve name to address
+		HostEnt = gethostbyname ("www.winlink.org");
+		 
+		if (!HostEnt)
+		{
+			err = WSAGetLastError();
+
+			Debugprintf("Resolve Failed for %s %d %x", "halifax.winlink.org", err, err);
+			return 0 ;			// Resolve failed
+		}
+	
+		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+	}
+
+	//   Allocate a Socket entry
+
+	sock = socket(AF_INET,SOCK_STREAM,0);
+
+	if (sock == INVALID_SOCKET)
+  	 	return 0; 
+ 
+	setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = 0;
+
+	if (bind(sock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+  	 	return FALSE; 
+
+	if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) != 0)
+	{
+		err=WSAGetLastError();
+		closesocket(sock);
+		return 0;
+	}
+
+	len = recv(sock, &Buffer[0], len, 0);
+
+	len = wsprintf(SendBuffer, "04%07d%-12s%s%s", strlen(SQL), Call, GetChallengeResponse(Call, Buffer), SQL);
+
+	send(sock, SendBuffer, len, 0);
+
+	len = 1000;
+
+	len = recv(sock, ReplyBuffer, len, 0);
+
+	ReplyBuffer[len] = 0;
+	Debugprintf(ReplyBuffer);
+
+	closesocket(sock);
+
+	return TRUE;
+
+}
+
+BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
+{
+
+	SOCKET sock = 0;
+	SOCKADDR_IN destaddr;
+	SOCKADDR_IN sinx; 
+	int len = 100;
+	int addrlen=sizeof(sinx);
+	struct hostent * HostEnt;
+	int err;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	char Buffer[1000];
+//	char SendBuffer[] = "040000176GM8BPQ      ............SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, GridSquare, EMail, WEBSite, Phones, AdditionalData FROM SysopRecords WHERE Callsign='GM8BPQ'";
+//	char SendBuffer[] = "080000008G8BPQ       ............AAAAAAAA";
+//	char SendBuffer[] = "040000053G8BPQ       001010818628SELECT Password FROM Passwords WHERE Callsign='G8BPQ'";
+	char SendBuffer[1000] = "020000366GW8BPQ      000365713154";
+		
+//	char SQL[] = "REPLACE INTO SysopRecords SET Callsign='G8BPQ', GridSquare='IO92KX', EMail='', WEBSite='', SysopName='John', StreetAddress1='', StreetAddress2='', City='Nottingham', State='', Country='', PostalCode='', Phones='', AdditionalData='Developing BPQ32 interface for RMS Packet'";	
+//	char SQL[] = "DELETE FROM SysopRecords WHERE Callsign='GW8BPQ'";
+
+	destaddr.sin_family = AF_INET; 
+	destaddr.sin_addr.s_addr = inet_addr("www.winlink.org");
+	destaddr.sin_port = htons(8775);
+
+	if (destaddr.sin_addr.s_addr == INADDR_NONE)
+	{
+		//	Resolve name to address
+		HostEnt = gethostbyname ("www.winlink.org");
+		 
+		if (!HostEnt)
+		{
+			err = WSAGetLastError();
+
+			Debugprintf("Resolve Failed for %s %d %x", "halifax.winlink.org", err, err);
+			return 0 ;			// Resolve failed
+		}
+	
+		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+	}
+
+	//   Allocate a Socket entry
+
+	sock = socket(AF_INET,SOCK_STREAM,0);
+
+	if (sock == INVALID_SOCKET)
+  	 	return 0; 
+ 
+	setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = 0;
+
+	if (bind(sock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+  	 	return FALSE; 
+
+	if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) != 0)
+	{
+		err=WSAGetLastError();
+		closesocket(sock);
+		return 0;
+	}
+
+//	STRCPY(SQL, "SELECT Password FROM Passwords WHERE Callsign='G8BPQ'");
+
+	len = recv(sock, &Buffer[0], len, 0);
+
+	len = wsprintf(SendBuffer, "02%07d%-12s%s%s", strlen(SQL), Call, GetChallengeResponse(Call, Buffer), SQL);
+
+	send(sock, SendBuffer, len, 0);
+
+	len = 1000;
+
+	len = recv(sock, &Buffer[0], len, 0);
+
+	Buffer[len] = 0;
+	Debugprintf(Buffer);
+
+	closesocket(sock);
+
+	return TRUE;
+
 }

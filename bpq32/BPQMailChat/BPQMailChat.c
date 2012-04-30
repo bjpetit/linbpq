@@ -740,6 +740,14 @@
 //	Include HOMEBBS command in Help
 
 
+
+
+
+
+//  Allow bulls to be sent from RMS Express.
+//  Handle BASE64 and Quoted-printable encoding of single part messages
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"

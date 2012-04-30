@@ -10,6 +10,11 @@
 #define IDI_ICON1                       105
 #define IDC_TELNETSERVER                109
 #define BPQCONSOLE                      116
+#define IDD_WL2KSYSOP                   125
+#define IDR_MAINFRAME_MENU              191
+#define TERM_MENU                       192
+#define MON_MENU                        193
+#define CONS_MENU                       194
 #define BPQCLEAR                        401
 #define BPQCOPY                         402
 #define BPQREREAD                       403
@@ -22,29 +27,40 @@
 #define BPQSTARTMIN                     410
 #define BPQSAVEREG                      411
 #define BPQCLOSEALL                     412
-#define SCANRECONFIG					413
-#define APRSRECONFIG					414
+#define SCANRECONFIG                    413
+#define APRSRECONFIG                    414
 #define ID_EXIT                         1000
 #define IDC_PROTOSTATE                  1000
 #define IDB_HIDE                        1001
 #define IDC_CHANSTATE                   1001
+#define NAME                            1001
 #define IDC_TXRX                        1001
 #define IDC_STATE                       1002
+#define ADDR1                           1002
+#define ADDR2                           1003
+#define CITY                            1004
 #define IDC_BUFFERS                     1004
+#define STATE                           1005
 #define IDC_TRAFFIC                     1005
+#define COUNTRY                         1006
 #define WINMOR_CONFIG                   1006
 #define IDC_RESTARTS                    1006
 #define WINMOR_RESTART                  1007
 #define IDC_RESTARTTIME                 1007
+#define POSTCODE                        1007
 #define ID_SAVE                         1008
 #define IDC_PLAYBACK                    1008
 #define IDC_TEST                        1008
 #define ID_CANCEL                       1009
 #define IDC_CAPTURE                     1009
 #define WINMOR_KILL                     1010
+#define EMAIL                           1010
 #define WINMOR_RESTARTAFTERFAILURE      1011
+#define WEBSITE                         1011
+#define PHONE                           1012
 #define IDC_LIST1                       1013
 #define IDC_WINMORTRACE                 1013
+#define ADDITIONALDATA                  1013
 #define IDC_TIMES                       1014
 #define IDC_RIGTYPE                     1015
 #define IDC_COMPORT                     1016
@@ -67,40 +83,30 @@
 #define IDC_MODE                        1902
 #define IDM_DISCONNECT                  2000
 #define IDM_LOGGING                     2100
-#define RIGCONFIG                       30016
-#define WINMORCONFIG                    30017
-#define TELNET_RECONFIG                 40002
-#define CMSENABLED                      40003
-#define IDM_CMS_LOGGING                 40004
-#define USECACHEDCMS                    40005
-
-// keep below 65565!
-
-#define TRAYBASEID						60000
-#define IDM_FIRSTCHILD					50000 // used in structure when creating mdi client area for the main frame 
-
-
 #define ID_INFORMATION_SYSTEMINFORMATION 30001
 #define ID_HELP_ABOUT                   30002
 #define ID_WINDOWS_CASCADE              30003
 #define ID_FILE_EXIT                    30004
 #define ID_WINDOWS_TILE                 30005
 #define ID_NEWWINDOW                    30006
-#define ID_WINDOWS_RESTORE				30007
+#define ID_WINDOWS_RESTORE              30007
 #define ID_SETUP_FONT                   30008
 #define ID_ACTION_RESETWINDOWSPLIT      30009
-
-#define IDR_MAINFRAME_MENU              191
-#define TERM_MENU						192
-#define MON_MENU						193
-#define CONS_MENU						194
+#define RIGCONFIG                       30016
+#define WINMORCONFIG                    30017
+#define TELNET_RECONFIG                 40002
+#define CMSENABLED                      40003
+#define IDM_CMS_LOGGING                 40004
+#define USECACHEDCMS                    40005
+#define IDM_FIRSTCHILD                  50000
+#define TRAYBASEID                      60000
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        125
+#define _APS_NEXT_RESOURCE_VALUE        126
 #define _APS_NEXT_COMMAND_VALUE         40006
 #define _APS_NEXT_CONTROL_VALUE         1045
 #define _APS_NEXT_SYMED_VALUE           101

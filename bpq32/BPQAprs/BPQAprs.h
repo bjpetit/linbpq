@@ -8,6 +8,13 @@
 
 #define TRACKPOINTS 100
 
+struct SORTLIST
+{
+	char Callsign[12];
+	struct STATIONRECORD * Rec;
+
+} SortList;
+
 struct STATIONRECORD
 {  
 	struct STATIONRECORD * Next;
@@ -15,6 +22,7 @@ struct STATIONRECORD
 	char Path[120];
 	char Status[256];
 	char LastPacket[400];
+	char LastWXPacket[256];
 	int LastPort;
     double Lat;
     double Lon;
@@ -34,6 +42,7 @@ struct STATIONRECORD
 	BOOL Moved;						// Moved since last drawn
     time_t TimeAdded;
     time_t TimeLastUpdated;
+	UCHAR Symbol;
 	int iconRow;
 	int iconCol;					// Symbol Pointer
 	char IconOverlay;
@@ -42,7 +51,7 @@ struct STATIONRECORD
 	int Index;						// List Box Index
 	BOOL NoTracks;					// Suppress displaying track
 	COLORREF TrackColour;
-	char ObjState;					// Live/Killed flag
+	char ObjState;					// Live/Killed flag. If zero, not an object
 	char LastRXSeq[6];				// Seq from last received message (used for Reply-Ack system)
 
 } StationRecord;
@@ -68,6 +77,12 @@ struct APRSMESSAGE
 	int RetryTimer;
 	int Port;
 	char Time[6];
+};
+
+struct ConnectionInfo			// Used for Web Server for thread-specific stuff
+{
+	struct STATIONRECORD * SelCall;	// Station Record for individual statond display
+	int WindDirn, WindSpeed, WindGust, Temp, RainLastHour, RainLastDay, RainToday, Humidity, Pressure; //WX Fields
 };
 
 #define BPQBASE     WM_USER

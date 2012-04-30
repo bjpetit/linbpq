@@ -20,7 +20,7 @@
 #define IDM_ZOOMIN                      123
 #define IDM_ZOOMOUT                     124
 #define IDM_HOME                        125
-#define IDM_FILTERTOVIEW				126
+#define IDM_FILTERTOVIEW                126
 #define IDC_FROMFILE                    1022
 #define IDC_FILENAME                    1054
 #define IDC_MESSAGE                     1055
@@ -43,6 +43,7 @@
 #define IDC_EXPIRETRACKS                1063
 #define IDC_FLOODMAXN                   1064
 #define IDC_TXMSGS                      1064
+#define IDC_JPEGINTERVAL                1064
 #define IDC_GPSPORT                     1065
 #define IDC_TOCALL                      1065
 #define IDC_GPSBAUD                     1066
@@ -59,8 +60,11 @@
 #define IDC_WXTEXT                      1072
 #define IDC_FILE                        1073
 #define IDC_INPUT                       1074
+#define IDC_JPEGFILE                    1074
 #define IDC_WXPORTS                     1075
 #define ABOUT_VERSION                   1076
+#define IDC_CREATEJPEG                  1076
+#define IDC_FILE2                       1077
 #define IDC_LIST1                       1080
 #define IDC_LIST2                       1081
 #define IDC_SUPZERO                     1082

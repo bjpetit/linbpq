@@ -5,6 +5,7 @@
 //
 
 //#define WIN32_LEAN_AND_MEAN
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -115,6 +116,7 @@ static int Socket_Data(struct TNCINFO * TNC, int SocketId,int error, int eventco
 static int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
 int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
 int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
+int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream);
 int DataSocket_Write(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock);
 int DataSocket_Disconnect(struct TNCINFO * TNC, struct ConnectionInfo * sockptr);
 BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len);
@@ -209,6 +211,9 @@ ProcessLine(char * buf, int Port)
 	else
 		if (_stricmp(param,"TCPPORT") == 0)
 			TCP->TCPPort = atoi(value);
+		else
+		if (_stricmp(param,"HTTPPORT") == 0)
+			TCP->HTTPPort = atoi(value);
 		else
 		if (_stricmp(param,"FBBPORT") == 0)
 		{
@@ -747,6 +752,8 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 	SOCKET sock;
 	SOCKET FBBsock;
 	SOCKET Relaysock;
+	SOCKET HTTPsock;
+
 	char szBuff[80];
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	int n;
@@ -842,6 +849,7 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 			return FALSE;
 		}
 	}
+
 	if (TCP->RelayPort)
 	{
 		RelayUser.UserName = _strdup("RMSRELAY");
@@ -852,7 +860,7 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 			wsprintf(szBuff, "socket() failed error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
 			return FALSE;
-	}
+		}
  
 		psin=&local_sin;
 		psin->sin_port = htons(TCP->RelayPort);        // Convert to network ordering 
@@ -884,6 +892,49 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 		}
 	}
 
+	if (TCP->HTTPPort)
+	{
+		TCP->HTTPsock = HTTPsock = socket( AF_INET, SOCK_STREAM, 0);
+
+		if (HTTPsock == INVALID_SOCKET)
+		{
+			wsprintf(szBuff, "socket() failed error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			return FALSE;
+		}
+ 
+		psin=&local_sin;
+		psin->sin_port = htons(TCP->HTTPPort);        // Convert to network ordering 
+
+	    if (bind(HTTPsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+		{
+			wsprintf(szBuff, "bind(Relaysock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			closesocket(HTTPsock);
+
+			return FALSE;
+		}
+
+		if (listen(HTTPsock, MAX_PENDING_CONNECTS ) < 0)
+		{
+			wsprintf(szBuff, "listen(Relaysock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+
+			return FALSE;
+		}
+   
+		if ((status = WSAAsyncSelect(HTTPsock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
+		{
+			wsprintf(szBuff, "WSAAsyncSelect failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			closesocket(HTTPsock);
+		
+			return FALSE;
+		}
+	}
+
+
+
 	CMSUser.UserName = _strdup("CMS");
 
 	return TRUE;
@@ -899,6 +950,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 	SOCKET sock;
 	SOCKET FBBsock;
 	SOCKET Relaysock;
+	SOCKET HTTPsock;
 	char szBuff[80];
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	int n;
@@ -1007,7 +1059,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 			wsprintf(szBuff, "socket() failed error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
 			return FALSE;
-	}
+		}
  
 		psin=&local_sin;
 		psin->sin6_port = htons(TCP->RelayPort);        // Convert to network ordering 
@@ -1034,6 +1086,47 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 			wsprintf(szBuff, "WSAAsyncSelect failed Error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
 			closesocket(Relaysock);
+		
+			return FALSE;
+		}
+	}
+
+	if (TCP->HTTPPort)
+	{
+		TCP->HTTPsock6 = HTTPsock = socket(AF_INET6, SOCK_STREAM, 0);
+
+		if (HTTPsock == INVALID_SOCKET)
+		{
+			wsprintf(szBuff, "socket() failed error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			return FALSE;
+		}
+ 
+		psin=&local_sin;
+		psin->sin6_port = htons(TCP->HTTPPort);        // Convert to network ordering 
+
+	    if (bind(HTTPsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
+		{
+			wsprintf(szBuff, "bind(Relaysock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			closesocket(HTTPsock);
+
+			return FALSE;
+		}
+
+		if (listen(HTTPsock, MAX_PENDING_CONNECTS ) < 0)
+		{
+			wsprintf(szBuff, "listen(Relaysock) failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+
+			return FALSE;
+		}
+   
+		if ((status = WSAAsyncSelect(HTTPsock, TNC->hDlg, WSA_ACCEPT, FD_ACCEPT)) > 0)
+		{
+			wsprintf(szBuff, "WSAAsyncSelect failed Error %d\n", WSAGetLastError());
+			WritetoConsole(szBuff);
+			closesocket(HTTPsock);
 		
 			return FALSE;
 		}
@@ -1472,7 +1565,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		Socket_Accept(TNC, wParam);
 		return 0;
 
-	case WSA_CONNECT: /* Notification if a socket connection is pending. */
+	case WSA_CONNECT: /* Notification if a socket connection has completed. */
 
 		Telnet_Connected(TNC, wParam, WSAGETSELECTERROR(lParam));
 		return 0;
@@ -1842,13 +1935,17 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			TNC->Streams[n].BytesRXed = TNC->Streams[n].BytesTXed = 0;
 			TNC->Streams[n].FramesQueued = 0;
 
+			sockptr->HTTPMode = FALSE;	
 			sockptr->FBBMode = FALSE;	
 			sockptr->RelayMode = FALSE;
 
-			if (SocketId == TCP->Relaysock || SocketId == TCP->Relaysock6)
+			if (SocketId == TCP->HTTPsock || SocketId == TCP->HTTPsock6)
+				sockptr->HTTPMode = TRUE;
+
+			else if (SocketId == TCP->Relaysock || SocketId == TCP->Relaysock6)
 				sockptr->RelayMode = TRUE;
 
-			if (SocketId != TCP->sock && SocketId != TCP->sock6)				// We can have several listening FBB mode sockets
+			else if (SocketId != TCP->sock && SocketId != TCP->sock6)				// We can have several listening FBB mode sockets
 				sockptr->FBBMode = TRUE;
 
 			ModifyMenu(hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, ".");
@@ -1866,6 +1963,10 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 
 				return 0;
 			}
+
+			if (sockptr->HTTPMode)
+				return 0;
+
 			if (sockptr->RelayMode)
 			{
 				send(sock,"\r\rCallsign :\r", 13,0);
@@ -1921,6 +2022,9 @@ int Socket_Data(struct TNCINFO * TNC, int sock, int error, int eventcode)
 
 					if (sockptr->RelayMode)
 						return DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
+
+					if (sockptr->HTTPMode)
+						return DataSocket_ReadHTTP(TNC, sockptr, sock, n);
 					
 					if (sockptr->FBBMode)
 						return DataSocket_ReadFBB(TNC, sockptr, sock, n);
@@ -2862,6 +2966,69 @@ MsgLoop:
 	}
 	return 0;
 }
+
+char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
+
+int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream)
+{
+	int len=0, maxlen, InputLen;
+	char NLMsg[3]={13,10,0};
+	UCHAR * MsgPtr;
+	HANDLE hPipe;
+	char ReplyBuffer[100000];
+
+	ioctlsocket(sock,FIONREAD,&len);
+
+	maxlen = InputBufferLen - sockptr->InputLen;
+	
+	if (len > maxlen) len=maxlen;
+
+	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
+
+	if (len == SOCKET_ERROR || len ==0)
+	{
+		// Failed or closed - clear connection
+
+		return 0;
+	}
+
+	// Make sure request is complete - should end crlfcrlf
+
+
+	MsgPtr = &sockptr->InputBuffer[0];
+	sockptr->InputLen += len;
+	InputLen = sockptr->InputLen;
+
+	if (memcmp(&MsgPtr[len - 4], "\r\n\r\n", 4) != 0)		// not end
+		return 0;											// wait
+
+	MsgPtr[InputLen] = 0;
+
+	// If for APRS, Pass to APRS Server via Named Pipe
+
+	hPipe = CreateFile(PipeFileName, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+
+	if (hPipe == (HANDLE)-1)
+		InputLen = sprintf(ReplyBuffer, "HTTP/1.0 404 Not Found\r\nContent-Length: 28\r\n\r\nAPRS Data is not available\r\n");
+	else
+	{
+		WriteFile(hPipe, MsgPtr, InputLen, &InputLen, NULL);
+		ReadFile(hPipe, ReplyBuffer, 100000, &InputLen, NULL);
+	}
+
+	send(sock, ReplyBuffer, InputLen, 0);
+
+	CloseHandle(hPipe);
+
+	return 0;
+}
+
+
 
 int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr)
 {

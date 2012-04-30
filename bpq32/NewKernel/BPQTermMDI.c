@@ -287,6 +287,12 @@ BOOL MonitorColour = TRUE;
 BOOL ChatMode = FALSE;
 BOOL RestoreWindows = TRUE;
 BOOL MonitorAPRS = FALSE;
+BOOL WarnWrap = TRUE;
+BOOL WrapInput = TRUE;
+BOOL FlashOnBell = FALSE;
+
+
+
 
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
@@ -522,7 +528,21 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "SendDisconnected",0,			
 			(ULONG *)&Type,(UCHAR *)&SendDisconnected,(ULONG *)&Vallen);
-	
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"WarnWrap",0,			
+			(ULONG *)&Type,(UCHAR *)&WarnWrap,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"WrapInput",0,			
+			(ULONG *)&Type,(UCHAR *)&WrapInput,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"FlashOnBell",0,			
+			(ULONG *)&Type,(UCHAR *)&FlashOnBell,(ULONG *)&Vallen);
+
+		
+
 		Vallen=99;
 		retCode = RegQueryValueEx(hKey, "FontName", 0, &Type, FontName, &Vallen);
 
@@ -600,6 +620,11 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 	else
 		CheckMenuItem(hTermCfgMenu,BPQStripLF, MF_UNCHECKED);
 
+	CheckMenuItem(hTermCfgMenu, ID_WARNWRAP, (WarnWrap) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hTermCfgMenu, ID_WRAP, (WrapInput) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hTermCfgMenu, ID_FLASHONBELL, (FlashOnBell) ? MF_CHECKED : MF_UNCHECKED);
+
+
 	CheckMenuItem(hMonCfgMenu,BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
 
 	CheckMenuItem(hMonCfgMenu,MONITORAPRS, (MonitorAPRS) ? MF_CHECKED : MF_UNCHECKED);
@@ -667,6 +692,9 @@ SaveHostSessions()
 	RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
 	RegSetValueEx(hKey,"MonitorNODES",0,REG_DWORD,(BYTE *)&MonitorNODES,4);
 	RegSetValueEx(hKey,"MonitorAPRS",0,REG_DWORD,(BYTE *)&MonitorAPRS,4);
+	RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&WarnWrap,4);
+	RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&WrapInput,4);
+	RegSetValueEx(hKey,"FlashOnBell",0,REG_DWORD,(BYTE *)&FlashOnBell,4);
 
 	// Close any sessions
 
@@ -2015,6 +2043,20 @@ LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 			ToggleParam(hTermCfgMenu, &SendDisconnected, BPQSendDisconnected);
 			break;
 
+		case ID_WARNWRAP:
+
+			ToggleParam(hTermCfgMenu, &WarnWrap, ID_WARNWRAP);
+			break;
+
+		case ID_WRAP:
+
+			ToggleParam(hTermCfgMenu, &WrapInput, ID_WRAP);
+			break;
+
+		case ID_FLASHONBELL:
+
+			ToggleParam(hTermCfgMenu, &FlashOnBell, ID_FLASHONBELL);
+			break;
 		}
 
 		break;
@@ -2763,14 +2805,14 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		if (TextLen > INPUTLEN-10) Beep(220, 150);
 		
-		if(Cinfo->WarnWrap || Cinfo->WrapInput)
+		if(WarnWrap || WrapInput)
 		{
 			TextLen = SendMessage(Cinfo->hwndInput,WM_GETTEXTLENGTH, 0, 0);
 
-			if (Cinfo->WarnWrap)
+			if (WarnWrap)
 				if (TextLen == Cinfo->WarnLen) Beep(220, 150);
 
-			if (Cinfo->WrapInput)
+			if (WrapInput)
 				if ((wParam == 0x20) && (TextLen > Cinfo->WrapLen))
 					wParam = 13;		// Replace space with Enter
 
@@ -3499,7 +3541,7 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 			{
 				*(ptr2)=32;
 
-				if (Cinfo->FlashOnBell)
+				if (FlashOnBell)
 					FlashWindow(Cinfo->hConsole, TRUE);
 				else
 					Beep(440,250);

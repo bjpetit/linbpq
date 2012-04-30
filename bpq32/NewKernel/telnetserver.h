@@ -6,7 +6,7 @@
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3
 
-#define InputBufferLen 500
+#define InputBufferLen 1000
 
 struct ConnectionInfo
 {
@@ -21,7 +21,7 @@ struct ConnectionInfo
     int BPQStream;
     byte Callsign[10];
     BOOL GotHeader;
-    byte InputBuffer[500];
+    byte InputBuffer[1000];
     int InputLen;
 	struct UserRec * UserPointer;
     int Retries;
@@ -30,6 +30,7 @@ struct ConnectionInfo
 	BOOL DoEcho;				// Telnet Echo option accepted
 	BOOL FBBMode;				// Pure TCP for FBB forwarding
 	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
+	BOOL HTTPMode;				// HTML Terminal Emulator
 	BOOL Auth;					// Set if User is flagged as a Secure User
 	BOOL BPQTermMode;			// Set if connected to BPQTermTCP
 	BOOL MonitorNODES;			// Monitor Control Flags
@@ -40,10 +41,12 @@ struct ConnectionInfo
 	int CMSIndex;				// Pointer to CMS used for this connect
 	UCHAR * FromHostBuffer;		// Somewhere to store msg from CMS - it sends the whole message at once
 	int FromHostBufferSize;
-	int FromHostBuffPutptr;	//
-	int FromHostBuffGetptr;	//
+	int FromHostBuffPutptr;
+	int FromHostBuffGetptr;
 
-	time_t ConnectTime;	
+	time_t ConnectTime;
+
+	char * HTTPScreenBuffer;	// Screen Image for HTTP access mode
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)
