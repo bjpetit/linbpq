@@ -82,6 +82,8 @@ struct APRSMESSAGE
 struct ConnectionInfo			// Used for Web Server for thread-specific stuff
 {
 	struct STATIONRECORD * SelCall;	// Station Record for individual statond display
+	HANDLE hPipe;
+	char Callsign[12];
 	int WindDirn, WindSpeed, WindGust, Temp, RainLastHour, RainLastDay, RainToday, Humidity, Pressure; //WX Fields
 };
 

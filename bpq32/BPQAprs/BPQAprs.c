@@ -359,7 +359,7 @@ int CopyScreentoBuffer(char * buff);
 VOID SendFrame(UCHAR * buff, int txlen);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	KissDecode(UCHAR * inbuff, int len);
-struct STATIONRECORD * FindStation(char * Call);
+struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
 //void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, double V_Lon, double V_SOG, double V_COG, int iconRow, int iconCol);
 VOID DrawStation(struct STATIONRECORD * ptr);
 VOID FindStationsByPixel(int MouseX, int MouseY);
@@ -2109,7 +2109,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						struct STATIONRECORD * Station;
 
 						SendMessage(hSelWnd, LB_GETTEXT, Index, (LPARAM)Key); 
-						Station = FindStation(Key);
+						Station = FindStation(Key, TRUE);
 								
 						DestroyWindow(hSelWnd);
 						hSelWnd = 0;
@@ -2281,7 +2281,7 @@ LRESULT CALLBACK StnWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			ListView_GetItem(hStations, &item);
 
-			Station = FindStation(Item1);
+			Station = FindStation(Item1, TRUE);
 
 			if (Station)
 			{
@@ -4192,7 +4192,7 @@ void RefreshStationMap()
 //	Debugprintf("APRS Refresh - Sation Count = %d", StationCount);
 }
 
-struct STATIONRECORD * FindStation(char * Call)
+struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 {
 	int i = 0;
 	struct STATIONRECORD * find = StationRecords;
@@ -4212,40 +4212,43 @@ struct STATIONRECORD * FindStation(char * Call)
  
 	//   Not found - add on end
 
+	if (AddIfNotFount)
+	{
+		ptr = malloc(sizeof(struct STATIONRECORD));
+		memset(ptr, 0, sizeof(struct STATIONRECORD));
 
-	ptr = malloc(sizeof(struct STATIONRECORD));
-	memset(ptr, 0, sizeof(struct STATIONRECORD));
-
-	if (ptr == NULL) return NULL;
+		if (ptr == NULL) return NULL;
 	
-	EnterCriticalSection(&Crit);
+		EnterCriticalSection(&Crit);
 
-	if (StationRecords == NULL)
-		StationRecords = ptr;
-	else
-		last->Next = ptr;
+		if (StationRecords == NULL)
+			StationRecords = ptr;
+		else
+			last->Next = ptr;
 
-	StationCount++;
+		StationCount++;
 
-	LeaveCriticalSection(&Crit);
+		LeaveCriticalSection(&Crit);
 
-//	Debugprintf("APRS Add Stn %s Station Count = %d", Call, StationCount);
+		//	Debugprintf("APRS Add Stn %s Station Count = %d", Call, StationCount);
        
-	strcpy(ptr->Callsign, Call);
-	ptr->TimeAdded = time(NULL);
-	ptr->Index = i;
-	ptr->NoTracks = DefaultNoTracks;
+		strcpy(ptr->Callsign, Call);
+		ptr->TimeAdded = time(NULL);
+		ptr->Index = i;
+		ptr->NoTracks = DefaultNoTracks;
 
-	for (i = 0; i < 9; i++)
-		sum += Call[i];
+		for (i = 0; i < 9; i++)
+			sum += Call[i];
 
-	sum %= 20;
+		sum %= 20;
 
-	ptr->TrackColour = sum;
+		ptr->TrackColour = sum;
 
-	return ptr;
+		return ptr;
+	}
+	else
+		return NULL;
 }
-
 
 VOID ProcessRFFrame(char * Msg, int len)
 {
@@ -4301,7 +4304,7 @@ VOID ProcessRFFrame(char * Msg, int len)
 
 	// Look up station - create a new one if not found
 
-	Station = FindStation(Callsign);
+	Station = FindStation(Callsign, TRUE);
 	
 	strcpy(Station->Path, Path);
 	strcpy(Station->LastPacket, Payload);
@@ -4363,7 +4366,7 @@ void DecodeAPRSISMsg(char * Msg)
 		return;
 	}
 
-	Station = FindStation(Callsign);
+	Station = FindStation(Callsign, TRUE);
 	
 	strcpy(Station->Path, Path);
 	strcpy(Station->LastPacket, Payload);
@@ -4563,7 +4566,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		*ptr = 0;						// Terminate Name
 
-		Object = FindStation(ObjName);
+		Object = FindStation(ObjName, TRUE);
 		Object->ObjState = *ptr++ = ObjState;
 
 		strcpy(Object->Path, Station->Callsign);
@@ -4589,7 +4592,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		ObjState = Payload[10];	// * Live, _Killed
 
 		Payload[10] = 0;
-		Object = FindStation(ObjName);
+		Object = FindStation(ObjName, TRUE);
 		Object->ObjState = Payload[10] = ObjState;
 
 		strcpy(Object->Path, Station->Callsign);
@@ -4666,7 +4669,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		// Look up station - create a new one if not found
 
-		TPStation = FindStation(Callsign);
+		TPStation = FindStation(Callsign, TRUE);
 	
 		strcpy(TPStation->Path, Path);
 		strcpy(TPStation->LastPacket, Payload);
@@ -5666,7 +5669,7 @@ VOID SendAPRSMessage(char * Text, char * ToCall)
 	strcpy(Message->FromCall, APRSCall);
 	memset(Message->ToCall, ' ', 9);
 	memcpy(Message->ToCall, ToCall, strlen(ToCall));
-	Message->ToStation = FindStation(ToCall);
+	Message->ToStation = FindStation(ToCall, TRUE);
 
 	if (Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
 		wsprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
@@ -5922,10 +5925,19 @@ VOID SecTimer()
 	JPEGCounter++;
 
 	if (CreateJPEG)
+	{
 		if (JPEGCounter > JPEGInterval)
+		{
+			LoadImageSet(Zoom, SetBaseX, SetBaseY);
+				
+			EnterCriticalSection(&RefreshCrit);
+			RefreshStationMap();
+			LeaveCriticalSection(&RefreshCrit);
+
 			if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 100))
 				JPEGCounter = 0;
-
+		}
+	}
 	if (SendWX)
 		SendWeatherBeacon();
 
@@ -6866,6 +6878,38 @@ BOOL OpenSockets6();
 char HTDocs[MAX_PATH] = "HTML";
 char SpecialDocs[MAX_PATH] = "Special Pages";
 
+char SymbolText[192][20] = {
+
+"Police Stn", "No Symbol", "Digi", "Phone", "DX Cluster", "HF Gateway", "Plane sm", "Mob Sat Stn",
+"WheelChair", "Snowmobile", "Red Cross", "Boy Scout", "Home", "X", "Red Dot", "Circle (0)", 
+"Circle (1)", "Circle (2)", "Circle (3)", "Circle (4)", "Circle (5)", "Circle (6)", "Circle (7)", "Circle (8)", 
+"Circle (9)", "Fire", "Campground", "Motorcycle", "Rail Eng.", "Car", "File svr", "HC Future", 
+
+"Aid Stn", "BBS", "Canoe", "No Symbol", "Eyeball", "Tractor", "Grid Squ.", "Hotel", 
+"Tcp/ip", "No Symbol", "School", "Usr Log-ON", "MacAPRS", "NTS Stn", "Balloon", "Police", 
+"TBD", "Rec Veh'le", "Shuttle", "SSTV", "Bus", "ATV", "WX Service", "Helo", 
+"Yacht", "WinAPRS", "Jogger", "Triangle", "PBBS", "Plane lrge", "WX Station", "Dish Ant.", 
+
+"Ambulance", "Bike", "ICP", "Fire Station", "Horse", "Fire Truck", "Glider", "Hospital", 
+"IOTA", "Jeep", "Truck", "Laptop", "Mic-E Rptr", "Node", "EOC", "Rover", 
+"Grid squ.", "Antenna", "Power Boat", "Truck Stop", "Truck 18wh", "Van", "Water Stn", "XAPRS", 
+"Yagi", "Shelter", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "", "",
+
+"Emergency", "No Symbol", "No. Digi", "Bank", "No Symbol", "No. Diam'd", "Crash site", "Cloudy", 
+"MEO", "Snow", "Church", "Girl Scout", "Home (HF)", "UnknownPos", "Destination", "No. Circle", 
+"No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", 
+"Petrol Stn", "Hail", "Park", "Gale Fl", "No Symbol", "No. Car", "Info Kiosk", "Hurricane", 
+
+"No. Box", "Snow blwng", "Coast G'rd", "Drizzle", "Smoke", "Fr'ze Rain", "Snow Shwr", "Haze", 
+"Rain Shwr", "Lightning", "Kenwood", "Lighthouse", "No Symbol", "Nav Buoy", "Rocket", "Parking  ", 
+"Quake", "Restaurant", "Sat/Pacsat", "T'storm", "Sunny", "VORTAC", "No. WXS", "Pharmacy", 
+"No Symbol", "No Symbol", "Wall Cloud", "No Symbol", "No Symbol", "No. Plane", "No. WX Stn", "Rain",
+
+"No. Diamond", "Dust blwng", "No. CivDef", "DX Spot", "Sleet", "Funnel Cld", "Gale", "HAM store",
+"No. Blk Box", "WorkZone", "SUV", "Area Locns", "Milepost", "No. Triang", "Circle sm", "Part Cloud",
+"No Symbol", "Restrooms", "No. Boat", "Tornado", "No. Truck", "No. Van", "Flooding", "No Symbol",
+"Sky Warn", "No Symbol", "Fog", "No Symbol", "No Symbol", "No Symbol", "", ""};
+
 // All Calls (8 per line)
 
 //<td><a href="find.cgi?call=EI7IG-1">EI7IG-1</a></td>
@@ -6880,14 +6924,18 @@ char SpecialDocs[MAX_PATH] = "Special Pages";
 //<td><a href="find.cgi?call=PA3AQW-5">PA3AQW-5</a></td><td><a href="find.cgi?call=PD1C">PD1C</a></td><td><a href="find.cgi?call=PD5LWD-2">PD5LWD-2</a></td><td><a href="find.cgi?call=PI1ECO">PI1ECO</a></td></tr>
 
 
-char * DoSummaryLine(struct STATIONRECORD * ptr, int n)
+char * DoSummaryLine(struct STATIONRECORD * ptr, int n, int Width)
 {
 	static char Line2[80];
+	int x;
 
 	wsprintf(Line2, "<td><a href=""find.cgi?call=%s"">%s</a></td>",
 		ptr->Callsign, ptr->Callsign);
 
-	if ((n & 7) == 7)
+	x = ++n/Width;
+	x = x * Width;
+
+	if (x == n)
 		strcat(Line2, "</tr><tr>");
 
 	return Line2;
@@ -6944,8 +6992,9 @@ char * DoDetailLine(struct STATIONRECORD * ptr)
 	sprintf(DistString, "%6.1f", Distance(ptr->Lat, ptr->Lon));
 	sprintf(BearingString, "%3.0f", Bearing(ptr->Lat, ptr->Lon));
 	
-	wsprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>",
-			ptr->Callsign, ptr->Callsign, "Home", LatString, LongString, DistString, BearingString, Time);
+	wsprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>",
+			ptr->Callsign, ptr->Callsign, 
+			(strchr(ptr->Path, '*'))?  "*": "", &SymbolText[ptr->iconRow << 4 | ptr->iconCol][0], LatString, LongString, DistString, BearingString, Time);
 
 	return Line;
 }
@@ -6958,12 +7007,14 @@ int CompareFN(const void *a, const void *b)
 
 	_asm 
 	{
+		push eax
 		mov eax, a
 		mov eax, [eax]
 		mov	x, eax
 		mov eax, b
 		mov eax, [eax]
 		mov	y, eax
+		pop eax
 }
 
 	return strcmp(x->Callsign, y->Callsign);
@@ -6973,18 +7024,31 @@ int CompareFN(const void *a, const void *b)
 
 
 
-char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, int * Count)
+char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * Count, char * Param)
 {
 	char Line[100000] = "";	
 	struct STATIONRECORD * ptr = StationRecords;
 	int n = 0, i;
-	struct STATIONRECORD * List[10000];
+	struct STATIONRECORD * List[1000];
+	int TableWidth = 8;
+
+	if (Param[0])
+	{
+		char * Key, * Value, *Context;
+
+		Key = strtok_s(Param, "=", &Context);
+
+		TableWidth = atoi(Context);
+
+		if (TableWidth == 0)
+			TableWidth = 8;
+	}
 
 	// Build list of calls
 
 	while (ptr)
 	{
-		if (ptr->ObjState == 0 && ptr->Lat != 0.0 && ptr->Lon != 0.0)
+		if (ptr->ObjState == Objects && ptr->Lat != 0.0 && ptr->Lon != 0.0)
 		{
 			if ((WX && (ptr->LastWXPacket[0] == 0)) || (RFOnly && (ptr->LastPort == 0)) ||
 				(Mobile && ((ptr->Speed < 0.1) || ptr->LastWXPacket[0] != 0)))
@@ -6995,21 +7059,22 @@ char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, int * Count)
 
 			List[n++] = ptr;
 
-			if (n > 10000)
+			if (n > 999)
 				break;
 
 		}
 		ptr = ptr->Next;		
 	}
 
-	qsort(List, n, 4, CompareFN);
+	if (n >  1)
+		qsort(List, n, 4, CompareFN);
 
 	for (i = 0; i < n; i++)
 	{
 		if (RFOnly)
 			strcat(Line, DoDetailLine(List[i]));
 		else
-			strcat(Line, DoSummaryLine(List[i], i));
+			strcat(Line, DoSummaryLine(List[i], i, TableWidth));
 	}	
 		
 	*Count = n;
@@ -7025,11 +7090,11 @@ char * LookupKey(struct ConnectionInfo * sockptr, char * Key)
 		return _strdup(LoppedAPRSCall);
 
 	if (strcmp(Key, "##CALLSIGN##") == 0)
-		return _strdup(sockptr->SelCall->Callsign);
+		return _strdup(sockptr->Callsign);
 
 	if (strcmp(Key, "##CALLSIGN_NOSSID##") == 0)
 	{
-		char * Call = _strdup(sockptr->SelCall->Callsign);
+		char * Call = _strdup(sockptr->Callsign);
 		char * ptr = strchr(Call, '-');
 		if (ptr)
 			*ptr = 0;
@@ -7095,9 +7160,55 @@ char * LookupKey(struct ConnectionInfo * sockptr, char * Key)
 		return _strdup(val);
 	}
 
+	if (strcmp(Key, "##LOCDDMMSS##") == 0)
+	{
+		char val[80];
+		double Lat = sockptr->SelCall->Lat;
+		double Lon = sockptr->SelCall->Lon;
+		char NS='N', EW='E';
+		char LatString[20];
+		int Degrees;
+		double Minutes;
 
+		// 48.45.18N, 002.18.37E
+			
+		if (Lat < 0)
+		{
+			NS = 'S';
+			Lat=-Lat;
+		}
+		if (Lon < 0)
+		{
+			EW = 'W';
+			Lon=-Lon;
+		}
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+
+		Degrees = Lat;
+		Minutes = Lat * 60.0 - (60 * Degrees);
+//		IntMins = Minutes;
+//		Seconds = Minutes * 60.0 - (60 * IntMins);
+
+		sprintf(LatString,"%2d.%05.2f%c",Degrees, Minutes, NS);
+		
+		Degrees = Lon;
+		Minutes = Lon * 60.0 - 60 * Degrees;
+//		IntMins = Minutes;
+//		Seconds = Minutes * 60.0 - (60 * IntMins);
+
+#pragma warning(pop)
+
+		sprintf(val,"%s, %03d.%05.2f%c", LatString, Degrees, Minutes, EW);
+
+		return _strdup(val);
+	}
 	if (strcmp(Key, "##STATUS_TEXT##") == 0)
 		return _strdup(stn->Status);
+	
+	if (strcmp(Key, "##LASTPACKET##") == 0)
+		return _strdup(stn->LastPacket);
 
 
 	if (strcmp(Key, "##LAST_HEARD##") == 0)
@@ -7235,6 +7346,9 @@ char * LookupKey(struct ConnectionInfo * sockptr, char * Key)
 		return _strdup(val);
 	}
 
+	if (strcmp(Key, "##SYMBOL_DESCRIPTION##") == 0)
+		return _strdup(&SymbolText[stn->iconRow << 4 | stn->iconCol][0]);
+
 
 /*
 ##WIND_SPEED_MS## - wind speed metres/sec
@@ -7270,34 +7384,50 @@ char * LookupKey(struct ConnectionInfo * sockptr, char * Key)
 	return NULL;
 }
 
-int ProcessSpecialPage(struct ConnectionInfo * sockptr, char ** Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
+VOID ProcessSpecialPage(struct ConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
 {
 	// replaces ##xxx### constructs with the requested data
 
 	char * NewMessage = malloc(250000);
-	char * ptr1 = *Buffer, * ptr2, * ptr3, * NewPtr = NewMessage;
+	char * ptr1 = Buffer, * ptr2, * ptr3, * ptr4, * NewPtr = NewMessage;
 	int PrevLen;
 	int BytesLeft = FileSize;
 	int NewFileSize = FileSize;
+	char * StripPtr = ptr1;
+	int HeaderLen;
+	char Header[256];
+	int cbWritten;
 
 	if (WX && sockptr->SelCall && sockptr->SelCall->LastWXPacket)
 	{
 		DecodeWXReport(sockptr, sockptr->SelCall->LastWXPacket);
 	}
 
-// Skip Comment Block
+	// strip comments blocks
 
-	if (strstr(ptr1, "<!--"))
+	while (ptr4 = strstr(ptr1, "<!--"))
 	{
-		ptr2 = strstr(ptr1, "-->");
+		ptr2 = strstr(ptr4, "-->");
 		if (ptr2)
 		{
-			PrevLen = (ptr2 - ptr1);
-			memcpy(NewPtr, ptr1, PrevLen);
-			NewPtr += PrevLen;
-			ptr1 = ptr2;
+			PrevLen = (ptr4 - ptr1);
+			memcpy(StripPtr, ptr1, PrevLen);
+			StripPtr += PrevLen;
+			ptr1 = ptr2 + 3;
+			BytesLeft = FileSize - (ptr1 - Buffer);
 		}
 	}
+
+
+	memcpy(StripPtr, ptr1, BytesLeft);
+	StripPtr += BytesLeft;
+
+	BytesLeft = StripPtr - Buffer;
+
+	FileSize = BytesLeft;
+	NewFileSize = FileSize;
+	ptr1 = Buffer;
+	ptr1[FileSize] = 0;
 
 loop:
 	ptr2 = strstr(ptr1, "##");
@@ -7323,7 +7453,7 @@ loop:
 
 			if (strcmp(Key, "##STATION_TABLE##") == 0)
 			{
-				NewText = StationTable;
+				NewText = _strdup(StationTable);
 			}
 			else
 			{
@@ -7360,7 +7490,13 @@ loop:
 			}
 
 			ptr1 = ptr3;			// Continue scan from here
-			BytesLeft = *Buffer + FileSize - ptr3;
+			BytesLeft = Buffer + FileSize - ptr3;
+		}
+		else		// Unmatched ##
+		{
+			memcpy(NewPtr, ptr1, PrevLen + 2);
+			NewPtr += (PrevLen + 2);
+			ptr1 = ptr2 + 2;
 		}
 		goto loop;
 	}
@@ -7368,25 +7504,38 @@ loop:
 	// Copy Rest
 
 	memcpy(NewPtr, ptr1, BytesLeft);
-
-	*Buffer = NewMessage;
 	
-	return NewFileSize;
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", NewFileSize);
+	WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
+	WriteFile(sockptr->hPipe, NewMessage, NewFileSize, &cbWritten, NULL); 
+
+	FlushFileBuffers(sockptr->hPipe); 
+
+	free (NewMessage);
+	free(StationTable);
+	
+	return;
 }
 
-
-int ReadMessageFile(struct ConnectionInfo * sockptr, char * FN, char ** MsgBytes)
+VOID SendMessageFile(struct ConnectionInfo * sockptr, char * FN)
 {
 	int FileSize;
+	char * MsgBytes;
 	char MsgFile[MAX_PATH];
 	HANDLE hFile = INVALID_HANDLE_VALUE;
 	int ReadLen;
 	BOOL Special = FALSE;
+	int HeaderLen;
+	char Header[256];
+	int cbWritten;
+	char * Param;
+
+	FN = strtok_s(FN, "?", &Param);
 
 	if (strcmp(FN, "/") == 0)
 		sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s\\index.html", APRSDir, SpecialDocs);
 	else
-		sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s%s", APRSDir, SpecialDocs, FN);
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s%s", APRSDir, SpecialDocs, &FN[5]);
 	
 	hFile = CreateFile(MsgFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -7397,42 +7546,53 @@ int ReadMessageFile(struct ConnectionInfo * sockptr, char * FN, char ** MsgBytes
 		if (strcmp(FN, "/") == 0)
 			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s\\index.html", APRSDir, HTDocs);
 		else
-			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s%s", APRSDir, HTDocs, FN);
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\%s%s", APRSDir, HTDocs, &FN[5]);
 	
 		hFile = CreateFile(MsgFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 		if (hFile == INVALID_HANDLE_VALUE)
-			return -1;
+		{
+			HeaderLen = sprintf(Header, "HTTP/1.0 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+			WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
+			return;
+
+		}
 	}
 	else
 		Special = TRUE;
 
 	FileSize = GetFileSize(hFile, NULL);
 
-	*MsgBytes=malloc(FileSize+1);
+	MsgBytes=malloc(FileSize+1);
 
-	ReadFile(hFile, *MsgBytes, FileSize, &ReadLen, NULL); 
+	ReadFile(hFile, MsgBytes, FileSize, &ReadLen, NULL); 
 
 	CloseHandle(hFile);
 
-//	if (Special)
+	// if HTML file, look for ##...## substitutions
+
+	if ((strstr(FN, "htm" ) || strstr(FN, "HTM")) &&  strstr(MsgBytes, "##" ))
 	{
 		// Build Station list, depending on URL
 	
 		int Count = 0;
-		BOOL RFOnly = (BOOL)strstr(FN, "rf");
+		BOOL RFOnly = (BOOL)strstr(_strlwr(FN), "rf");		// Leaves FN in lower case
 		BOOL WX = (BOOL)strstr(FN, "wx");
 		BOOL Mobile = (BOOL)strstr(FN, "mobile");
-		char * StationList = CreateStationList(RFOnly, WX, Mobile, &Count);
+		char Objects = (strstr(FN, "obj"))? '*' :0;
+		char * StationList = CreateStationList(RFOnly, WX, Mobile, Objects, &Count, Param);
 
-		return ProcessSpecialPage(sockptr, MsgBytes, FileSize, StationList, Count, WX); 
+		ProcessSpecialPage(sockptr, MsgBytes, FileSize, StationList, Count, WX); 
+		free (MsgBytes);
+		return;			// ProcessSpecial has sent the reply
 	}
-	return FileSize;
-}
 
-int ssend (SOCKET s, const char * buf)
-{
-	return send(s, buf, strlen(buf), 0);
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", FileSize);
+	WriteFile(sockptr->hPipe, Header, HeaderLen, &cbWritten, NULL); 
+	WriteFile(sockptr->hPipe, MsgBytes, FileSize, &cbWritten, NULL); 
+
+	FlushFileBuffers(sockptr->hPipe); 
+	free (MsgBytes);
 }
 
 char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
@@ -7450,51 +7610,57 @@ DWORD WINAPI InstanceThread(LPVOID lpvParam)
    HANDLE hPipe  = NULL;
    char Buffer[4096];
    char OutBuffer[100000];
-   char * ReplyBuffer;
    char * MsgPtr;
    int InputLen = 0;
    int OutputLen = 0;
-	int Bufferlen;
    	char * URL;
 	char * ptr;
 	struct ConnectionInfo CI;
 	struct ConnectionInfo * sockptr = &CI;
+	char Key[12];
 
-  // Print verbose messages. In production code, this should be for debugging only.
-   Debugprintf("InstanceThread created, receiving and processing messages.");
+	__try
+	{
+//	Debugprintf("InstanceThread created, receiving and processing messages.");
 
 // The thread's parameter is a handle to a pipe object instance. 
  
-   hPipe = (HANDLE) lpvParam; 
+   sockptr->hPipe = hPipe = (HANDLE) lpvParam; 
 
-// Loop until done reading
-   while (1) 
-   { 
    // Read client requests from the pipe. This simplistic code only allows messages
    // up to BUFSIZE characters in length.
  
-	   fSuccess = ReadFile( 
+   fSuccess = ReadFile( 
          hPipe,        // handle to pipe 
          Buffer,    // buffer to receive data 
          4096, // size of buffer 
          &InputLen, // number of bytes read 
          NULL);        // not overlapped I/O 
 
-      if (!fSuccess || InputLen == 0)
-      {   
-          if (GetLastError() == ERROR_BROKEN_PIPE)
-              Debugprintf("InstanceThread: client disconnected.", GetLastError()); 
-          else
-              Debugprintf("InstanceThread ReadFile failed, GLE=%d.", GetLastError()); 
-          break;
-      }
+	if (!fSuccess || InputLen == 0)
+	{   
+		if (GetLastError() == ERROR_BROKEN_PIPE)
+			Debugprintf("InstanceThread: client disconnected.", GetLastError()); 
+		else
+			Debugprintf("InstanceThread ReadFile failed, GLE=%d.", GetLastError()); 
+	}
+	else
+	{
+		Buffer[InputLen] = 0;
 
 		MsgPtr = &Buffer[0];
-	
+
 		if (memcmp(MsgPtr, "GET" , 3) != 0)
 		{
+			Debugprintf(MsgPtr);
 			OutputLen = sprintf(OutBuffer, "HTTP/1.0 501 Not Supported\r\n\r\n");
-			break;
+			WriteFile(sockptr->hPipe, OutBuffer, OutputLen, &cbWritten, NULL); 
+
+			FlushFileBuffers(sockptr->hPipe); 
+			DisconnectNamedPipe(hPipe); 
+			CloseHandle(hPipe);
+			return 1;
+
 		}
 
 		URL = &MsgPtr[4];
@@ -7504,79 +7670,73 @@ DWORD WINAPI InstanceThread(LPVOID lpvParam)
 		if (ptr)
 			*ptr = 0;
 
-		if (_memicmp(URL, "/find.cgi?call=", 15) == 0)
+//		Debugprintf("Processing %s", URL);
+
+		if (_memicmp(URL, "/aprs/find.cgi?call=", 20) == 0)
 		{
 			// return Station details
 
-			char * Call = &URL[15];
-			struct STATIONRECORD * stn = FindStation(Call);
+			char * Call = &URL[20];
+			BOOL RFOnly, WX, Mobile, Object = FALSE;
+			struct STATIONRECORD * stn;
 			char * Referrer = strstr(ptr + 1, "Referer:");
 
-			if (stn == NULL)
-			{
-				OutputLen = sprintf(OutBuffer, "HTTP/1.0 404 Not Found\r\nContent-Length: 11\r\n\r\nNot Found\r\n");
-				break;
-			}
+			strcpy(Key, Call);
 
 			if (Referrer)
 			{
 				ptr = strchr(Referrer, 13);
 				if (ptr)
 				{
-					BOOL RFOnly, WX, Mobile;
 					*ptr = 0;
 					RFOnly = (BOOL)strstr(Referrer, "rf");
 					WX = (BOOL)strstr(Referrer, "wx");
 					Mobile = (BOOL)strstr(Referrer, "mobile");
+					Object = (BOOL)strstr(Referrer, "obj");
 
 					if (WX)
-						strcpy(URL, "/infowx_call.html");
+						strcpy(URL, "/aprs/infowx_call.html");
 					else if (Mobile)
-						strcpy(URL, "/infomobile_call.html");
+						strcpy(URL, "/aprs/infomobile_call.html");
+					else if (Object)
+						strcpy(URL, "/aprs/infoobj_call.html");
 					else
-						strcpy(URL, "/info_call.html");
+						strcpy(URL, "/aprs/info_call.html");
 				}
 			}
 
-			sockptr->SelCall = stn;
+			if (Object)
+			{
+				// Name is space padded, and could have embedded spaces
+				
+				int Keylen = strlen(Key);
+				
+				if (Keylen < 9)
+					memset(&Key[Keylen], 32, 9 - Keylen);
+			}			
+			
+			stn = FindStation(Key, FALSE);
+
+			if (stn == NULL)
+				strcpy(URL, "/aprs/noinfo.html");
+			else
+				sockptr->SelCall = stn;
 		}
 
-		Bufferlen = ReadMessageFile(sockptr, URL, &ReplyBuffer);
+		strcpy(sockptr->Callsign, Key);
 
-		if (Bufferlen == -1)			// Not found
-		{
-			OutputLen = sprintf(OutBuffer, "HTTP/1.0 404 Not Found\r\nContent-Length: 11\r\n\r\nNot Found\r\n");
-			break;
-		}
+		SendMessageFile(sockptr, URL);
+	}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		Debugprintf("Program Error processing request");
+	}
 
-/*HTTP/1.0 200 Ok
-Server: UI-WebServer V1.51
-Connection: Keep-Alive
-Content-Length: 3800
-Content-Type: text/html*/
-
-		OutputLen = sprintf(OutBuffer, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", Bufferlen);
-		memcpy(&OutBuffer[OutputLen], ReplyBuffer, Bufferlen);
-		OutputLen += Bufferlen; 
-		free(ReplyBuffer);
-		break;
-    }
- 
-
-// Flush the pipe to allow the client to read the pipe's contents 
-// before disconnecting. Then disconnect the pipe, and close the 
-// handle to this pipe instance. 
- 
-	fSuccess = WriteFile(hPipe, OutBuffer, OutputLen, &cbWritten, NULL);    //      _tprintf(TEXT("InstanceThread WriteFile failed, GLE=%d.\n"), GetLastError()); 
-
-	FlushFileBuffers(hPipe); 
 	DisconnectNamedPipe(hPipe); 
 	CloseHandle(hPipe); 
-
-	Debugprintf("InstanceThread exitting.");
 	return 1;
 }
-
 
 DWORD WINAPI PipeThreadProc(LPVOID lpvParam)
 {
@@ -7618,9 +7778,6 @@ DWORD WINAPI PipeThreadProc(LPVOID lpvParam)
  
       if (fConnected) 
 	  {
- 
-         Debugprintf("Client connected, creating a processing thread."); 
-      
          // Create a thread for this client. 
    
 		 hThread = CreateThread( 

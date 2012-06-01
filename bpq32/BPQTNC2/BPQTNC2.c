@@ -26,6 +26,10 @@
 
 // Call CloseBPQ32 on exit
 
+// Version 1.1.6
+
+// Bypass flow contol when running under WINE
+
 #include "stdafx.h"
 #include "bpqtnc2.h"
 #define DYNLOADBPQ
@@ -114,6 +118,7 @@ VOID CALLBACK TimerProc();
 TIMERPROC lpTimerFunc = (TIMERPROC) TimerProc;
 unsigned int TimerHandle = 0;
 
+BOOL WINE;
 
 BOOL cfgMinToTray;
 
@@ -124,11 +129,22 @@ unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, 
 
 int BPQHOSTAPI;
 
-
 UINT MONDECODE;
 
 int Semaphore=0;
 int SEMCLASHES=0;
+
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[1000];
+	va_list(arglist);int Len;
+
+	va_start(arglist, format);
+	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
+	strcat(Mess, "\r\n");
+	OutputDebugString(Mess);
+	return;
+}
 
 void GetSemaphore()
 {
@@ -341,8 +357,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 	switch (message)
 	{
-
-
 	case WM_COMMAND:
 		wmId    = LOWORD(wParam);
 		wmEvent = HIWORD(wParam);
@@ -397,6 +411,18 @@ BOOL Initialise()
 #pragma warning(pop)
 
 	memcpy(NodeCall, GetNodeCall(), 10);
+
+	// See if running under WINE
+
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, "SOFTWARE\\Wine",  0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		RegCloseKey(hKey);
+		WINE = TRUE;
+		Debugprintf("Running under WINE");
+	}
+
 
 	// Get config from Registry 
 
@@ -517,7 +543,8 @@ BOOL Initialise()
 
  				conn->HostPort = conn->BPQPort;
 
-				_beginthread(RealPortThread,0,i);
+				if (WINE == 0)
+					_beginthread(RealPortThread,0,i);
 			}
 			else
 				wsprintf(conn->PortLabel,"Open Failed", conn->ComPort);
@@ -687,6 +714,69 @@ VOID CALLBACK TimerProc()
 				conn->RTS=!conn->RTS;
 				Refresh();
 			}	
+		}
+		if (WINE && conn->TypeFlag[0] == 'R')
+		{
+			int n;
+			char rxbuffer[1000];
+			int retval, more, BytesWritten;
+			char TXMsg[500];
+			int RXCount, Read, resp;
+
+			COMSTAT    ComStat;
+			DWORD      dwErrorFlags;
+
+			// only try to read number of bytes in queue 
+
+			ClearCommError(conn->hDevice, &dwErrorFlags, &ComStat ) ;
+        
+			RXCount = min(1000, ComStat.cbInQue);
+        
+			if (RXCount > 0)
+			{
+				resp = ReadFile(conn->hDevice, rxbuffer, RXCount, &Read, NULL);
+
+				if (!resp)
+				{
+					Read = 0;
+					ClearCommError(conn->hDevice, &dwErrorFlags, &ComStat ) ;
+				}
+
+				Debugprintf("input %d chars", RXCount);
+				
+
+				if (n)
+					Debugprintf("output %d chars", n);
+				
+				
+				GetSemaphore();
+
+				for (n = 0; n < Read; n++)
+					TNC2PutChar(i, rxbuffer[n]);
+
+				FreeSemaphore();
+			}
+       
+			n=0;
+
+			GetSemaphore();
+
+		getloopR:
+
+			TNC2GetChar(i, &retval, &more);
+
+			if (retval != -1)
+				TXMsg[n++] = retval;
+
+			if (more > 0 && n < 500) goto getloopR;
+    
+			FreeSemaphore();
+
+			if (n > 0) 
+			{
+				resp = WriteFile(conn->hDevice, TXMsg, n, &BytesWritten, NULL);
+				Debugprintf("Output %d %d chars", n, BytesWritten);
+			}
 		}
 	}
 	return;

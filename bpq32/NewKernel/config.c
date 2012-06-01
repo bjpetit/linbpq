@@ -276,7 +276,8 @@ struct PORTCONFIG
 	char MINQUAL;			// 122, 
 	char MAXDIGIS;			//  123,
 	char DefaultNoKeepAlives; // 124
-	char Pad[3];				// 127,
+	char UIONLY;			// 125,
+	char Pad[2];			// 126-7,
 	char UNPROTO[72];		//  128, 
 	char PORTALIAS2[10];	//  200,
 	char DLLNAME[16];		//  210,
@@ -433,7 +434,7 @@ static char *pkeywords[] =
 "QUALADJUST", "DIGIFLAG", "DIGIPORT", "USERS" ,"UNPROTO", "PORTNUM",
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
-"BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT"
+"BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY"
 };           /* parameter keywords */
 
 static int poffset[] =
@@ -445,7 +446,7 @@ static int poffset[] =
 68, 70, 71 ,74, 128, 0,
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
-226, 72, 124, 36, 210, 512
+226, 72, 124, 36, 210, 512, 125
 };		/* offset for corresponding data in config file */
 
 static int proutine[] = 
@@ -457,11 +458,11 @@ static int proutine[] =
 1, 13, 13, 1, 11, 1,
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
-0, 1, 2, 1, 15, 16
+0, 1, 2, 1, 15, 16, 2
 };		/* routine to process parameter */
 
 
-#define PPARAMLIM 49
+#define PPARAMLIM 50
 
 static int fileoffset = 0;
 static int portoffset = 2560;

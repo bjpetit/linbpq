@@ -225,7 +225,7 @@ struct BPQVECSTRUC
 //
 //	Session Record
 //
-typedef struct TRANSPORTENTRY
+struct TRANSPORTENTRY
 {
 	UCHAR	L4USER[7];				// CALL OF ORIGINATING USER
 	VOID *	L4TARGET;				// POINTER TO TARGET LINK/DEST
@@ -527,6 +527,7 @@ typedef struct PORTCONTROL
 	char PORTALIAS2[7];		// 2ND ALIAS FOR DIGIPEATING FOR APRS
 	char PORTBCALL[7];		// Source call for Beacon
 	char PortNoKeepAlive;	// Default to no Keepalives
+	char PortUIONLY;		// UI only port - no connects
 
 	struct WL2KInfo * WL2KInfo; // WL2K Report for this Port
 
@@ -550,7 +551,7 @@ typedef struct _EXTPORTDATA
 
 	UINT UI_Q;						// Unproto Frames for Session Mode Drivers (TRK, etc)
 
-}	EXTPORTDATA, *PEXTPORTDATA;
+} EXTPORTDATA, *PEXTPORTDATA;
 
 typedef struct _HDLCDATA
 {
@@ -627,10 +628,11 @@ typedef struct _DATABASE
 	struct DEST_LIST * DESTS;				// NODE LIST
 	short  DEST_LIST_LEN;
 	short  MAXDESTS;			// MAX NODES IN SYSTEM
-/*
-LINKS		DD	0		; L2 LINK TABLE
-MAXLINKS	DW	30		; MAX LEVEL 2 LINKS (UP,DOWN AND INTERNODE)
 
+	struct _LINKTABLE * LINKS;
+	short	LINK_TABLE_LEN; 
+	short	MAXLINKS;
+/*
 L4TABLE		DD	0
 MAXCIRCUITS	DW	50		; NUMBER OF L4 CIRCUITS
 

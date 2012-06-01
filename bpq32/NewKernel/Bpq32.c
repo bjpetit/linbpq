@@ -459,6 +459,8 @@
 //  Add option to create a jpeg of the APRS display.
 //  Change method of configuring multiple timelots on WL2K reporting
 //  Add option to update WK2K Sysop Database
+//	Add Web server
+//	Add UIONLY port option
 
 
 #define Kernel
@@ -611,6 +613,7 @@ BOOL APIENTRY Poll_IP();
 
 BOOL APIENTRY Init_APRS();
 BOOL APIENTRY Poll_APRS();
+VOID HTTPTimer();
 
 BOOL APIENTRY Rig_Init();
 BOOL APIENTRY Rig_Close();
@@ -1331,6 +1334,8 @@ VOID CALLBACK TimerProc
 
 	FreeSemaphore();			// SendLocation needs to get the semaphore
 
+	HTTPTimer();
+
 	if (ReportTimer)
 	{		
 		ReportTimer--;
@@ -1627,7 +1632,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			return 0;
 		}
 			  
-		if (sizeof(LINKTABLE) != LINKTABLELEN)
+		if (sizeof(LINKTABLE) != DataBase->LINK_TABLE_LEN)
 		{
 			// Catastrophic - Refuse to load
 			
@@ -6876,6 +6881,10 @@ VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized)
 	}
 }
 
+extern int GPSPort;
+extern char LAT[];			// in standard APRS Format      
+extern char LON[];			// in standard APRS Format
+
 VOID SaveBPQ32Windows()
 {
 	HKEY hKey=0;
@@ -6890,7 +6899,15 @@ VOID SaveBPQ32Windows()
 	{
 		wsprintf(Size,"%d,%d,%d,%d", FRect.left, FRect.right, FRect.top, FRect.bottom);
 		retCode = RegSetValueEx(hKey, "FrameWindowSize", 0, REG_SZ, (BYTE *)&Size, strlen(Size));
-	
+
+		// Save GPS Position
+
+		if (GPSPort)
+		{
+			sprintf(Size, "%s, %s", LAT, LON);
+			retCode = RegSetValueEx(hKey, "GPS", 0, REG_SZ,(BYTE *)&Size, strlen(Size));
+		}
+
 		RegCloseKey(hKey);
 	}
 	

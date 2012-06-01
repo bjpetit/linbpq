@@ -1164,6 +1164,9 @@ TCP:
 	PUBLIC	NOT_ADDR_UI
 NOT_ADDR_UI:
 ;
+	CMP	PortUIOnly[EBP], 0					; Port is for UI only
+	JNE IGNORESABM
+	
 	CMP	AL,SABM
 	JNE 	NOTSABM
 

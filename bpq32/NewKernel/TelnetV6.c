@@ -40,7 +40,7 @@ static int RigControlRow = 190;
 
 static BOOL OpenSockets(struct TNCINFO * TNC);
 static BOOL OpenSockets6(struct TNCINFO * TNC);
-
+ProcessHTTPMessage(struct ConnectionInfo * conn);
 extern struct APPLCALLS APPLCALLTABLE[];
 extern char APPLS;
 extern struct BPQVECSTRUC * BPQHOSTVECPTR;
@@ -584,6 +584,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			shutdown(TCP->FBBsock[n++], SD_BOTH);
 
 		shutdown(TCP->Relaysock, SD_BOTH);
+		shutdown(TCP->HTTPsock, SD_BOTH);
+		shutdown(TCP->HTTPsock6, SD_BOTH);
 
 		shutdown(TCP->sock6, SD_BOTH);
 
@@ -609,6 +611,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			closesocket(TCP->FBBsock6[n++]);
 
 		closesocket(TCP->Relaysock6);
+		closesocket(TCP->HTTPsock);
+		closesocket(TCP->HTTPsock6);
+
 		return (0);
 
 	case 6:				// Scan Control
@@ -908,7 +913,7 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 
 	    if (bind(HTTPsock, (struct sockaddr FAR *) &local_sin, sizeof(local_sin)) == SOCKET_ERROR)
 		{
-			wsprintf(szBuff, "bind(Relaysock) failed Error %d\n", WSAGetLastError());
+			wsprintf(szBuff, "bind(HTTP) failed Error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
 			closesocket(HTTPsock);
 
@@ -917,7 +922,7 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 
 		if (listen(HTTPsock, MAX_PENDING_CONNECTS ) < 0)
 		{
-			wsprintf(szBuff, "listen(Relaysock) failed Error %d\n", WSAGetLastError());
+			wsprintf(szBuff, "listen(HTTP) failed Error %d\n", WSAGetLastError());
 			WritetoConsole(szBuff);
 
 			return FALSE;
@@ -932,8 +937,6 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 			return FALSE;
 		}
 	}
-
-
 
 	CMSUser.UserName = _strdup("CMS");
 
@@ -1725,14 +1728,16 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			TCP = TNC->TCPInfo;
 
 			shutdown(TCP->sock, SD_BOTH);
+			shutdown(TCP->sock6, SD_BOTH);
 
 			n = 0;
 			while (TCP->FBBsock[n])
 				shutdown(TCP->FBBsock[n++], SD_BOTH);
 
 			shutdown(TCP->Relaysock, SD_BOTH);
+			shutdown(TCP->HTTPsock, SD_BOTH);
+			shutdown(TCP->HTTPsock6, SD_BOTH);
 
-			shutdown(TCP->sock6, SD_BOTH);
 
 			n = 0;
 			while (TCP->FBBsock6[n])
@@ -1755,6 +1760,8 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			closesocket(TCP->Relaysock);
 			closesocket(TCP->Relaysock6);
+			closesocket(TCP->HTTPsock);
+			closesocket(TCP->HTTPsock6);
 
 			// Save info from old TNC record
 			
@@ -2967,21 +2974,23 @@ MsgLoop:
 	return 0;
 }
 
-char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
+extern char MYNODECALL[];	// 10 chars,not null terminated
+
 
 int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Stream)
 {
 	int len=0, maxlen, InputLen;
 	char NLMsg[3]={13,10,0};
 	UCHAR * MsgPtr;
-	HANDLE hPipe;
-	char ReplyBuffer[100000];
+	UCHAR * CRLFCRLF;
+	UCHAR * LenPtr;
+	int BodyLen, ContentLen;
 
 	ioctlsocket(sock,FIONREAD,&len);
 
 	maxlen = InputBufferLen - sockptr->InputLen;
 	
-	if (len > maxlen) len=maxlen;
+	if (len > maxlen) len = maxlen;
 
 	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
 
@@ -2992,43 +3001,36 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 		return 0;
 	}
 
-	// Make sure request is complete - should end crlfcrlf
-
+	// Make sure request is complete - should end crlfcrlf, and if a post have the required input message
 
 	MsgPtr = &sockptr->InputBuffer[0];
 	sockptr->InputLen += len;
 	InputLen = sockptr->InputLen;
 
-	if (memcmp(&MsgPtr[len - 4], "\r\n\r\n", 4) != 0)		// not end
-		return 0;											// wait
-
 	MsgPtr[InputLen] = 0;
 
-	// If for APRS, Pass to APRS Server via Named Pipe
+	CRLFCRLF = strstr(MsgPtr, "\r\n\r\n");
 
-	hPipe = CreateFile(PipeFileName, GENERIC_READ | GENERIC_WRITE,
-                  0,                    // exclusive access
-                  NULL,                 // no security attrs
-                  OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
-                  NULL );
+	if (CRLFCRLF == 0)
+		return 0;
 
-	if (hPipe == (HANDLE)-1)
-		InputLen = sprintf(ReplyBuffer, "HTTP/1.0 404 Not Found\r\nContent-Length: 28\r\n\r\nAPRS Data is not available\r\n");
-	else
+	LenPtr = strstr(MsgPtr, "Content-Length:");
+
+	if (LenPtr)
 	{
-		WriteFile(hPipe, MsgPtr, InputLen, &InputLen, NULL);
-		ReadFile(hPipe, ReplyBuffer, 100000, &InputLen, NULL);
+		ContentLen = atoi(LenPtr + 15);
+		BodyLen = InputLen - (CRLFCRLF + 4 - MsgPtr);
+
+		if (BodyLen < ContentLen)
+			return 0;
 	}
 
-	send(sock, ReplyBuffer, InputLen, 0);
+	sockptr->TCP = TNC->TCPInfo;
 
-	CloseHandle(hPipe);
+	_beginthread(ProcessHTTPMessage, 0, (VOID *) sockptr);
 
 	return 0;
 }
-
-
 
 int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr)
 {
@@ -3043,7 +3045,7 @@ int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr
 		ModifyMenu(TNC->TCPInfo->hDisMenu, n - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + n, ".");
 
 		sockptr->SocketActive = FALSE;
-	
+
 		ShowConnections(TNC);;
 	}
 	return 0;
@@ -3068,7 +3070,12 @@ int ShowConnections(struct TNCINFO * TNC)
 		else
 		{
 			if (sockptr->UserPointer == 0)
-				strcpy(msg,"Logging in");
+			{
+				if (sockptr->HTTPMode)
+					strcpy(msg,"HTTP Session");
+				else
+					strcpy(msg,"Logging in");
+			}
 			else
 			{
 				i=wsprintf(msg,"%-10s %-10s %2d",
@@ -4027,3 +4034,4 @@ static VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 	
 	*ptr++ = '\0';	
 }
+

@@ -91,7 +91,7 @@ extern HKEY REGTREE;
 
 static int SecTimer = 10;
 
-BOOL ApplConnected = FALSE;  
+BOOL APRSApplConnected = FALSE;  
 
 UINT APPL_Q = 0;				// Queue of frames for APRS Appl
 UINT APPLTX_Q = 0;				// Queue of frames from APRS Appl
@@ -281,18 +281,6 @@ Dll BOOL APIENTRY Init_APRS()
 	int retCode, Type, Vallen;
 	HKEY hKey=0;
 
-	retCode = RegOpenKeyEx (REGTREE,
-                "SOFTWARE\\G8BPQ\\BPQ32",    
-                              0,
-                              KEY_QUERY_VALUE,
-                              &hKey);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		Vallen = 4;
-		retCode = RegQueryValueEx(hKey, "IGateEnabled", 0, &Type, (UCHAR *)&IGateEnabled, &Vallen);
-	}
-
 	ConvToAX25(GetNodeCall(), MYCALL);
 
 	ConvToAX25("TCPIP", axTCPIP);
@@ -321,6 +309,36 @@ Dll BOOL APIENTRY Init_APRS()
 
 	if (ReadConfigFile() == 0)
 		return FALSE;
+
+	retCode = RegOpenKeyEx (REGTREE,
+                "SOFTWARE\\G8BPQ\\BPQ32",    
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen = 4;
+		retCode = RegQueryValueEx(hKey, "IGateEnabled", 0, &Type, (UCHAR *)&IGateEnabled, &Vallen);
+
+		// Restore GPS Position if GPS is configured and LAN/LON is not
+
+		if (GPSPort && PosnSet == 0)
+		{
+			char LATLON[20];
+
+			Vallen = 29;
+			retCode = RegQueryValueEx(hKey, "GPS", 0, &Type, LATLON, &Vallen);
+
+			if (retCode == 0)
+			{
+				memcpy(LAT, LATLON, 8);
+				memcpy(LON, &LATLON[10], 9);
+
+				PosnSet = TRUE;
+			}
+		}
+	}
 
 	if (PosnSet == 0)
 	{
@@ -544,7 +562,7 @@ Dll VOID APIENTRY Poll_APRS()
 		// if APRS Appl is atttached, queue message to it
 
 
-		if (ApplConnected)
+		if (APRSApplConnected)
 		{
 			// Make sure we don't have too many queued (Appl could have crashed)
 			
@@ -1424,7 +1442,7 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	if (StMsg == NULL)
 		StMsg = StatusMsg;
 	
-	Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (ApplConnected) ? '=' : '!',
+	Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
 		LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
@@ -1441,7 +1459,7 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
-			Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (ApplConnected) ? '=' : '!',
+			Len = wsprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
 					LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;
@@ -1458,7 +1476,7 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 		char ISMsg[300];
 
 		Len = wsprintf(ISMsg, "%s>%s,TCPIP*:%c%s%c%s%c%s BPQ32 Igate V %s\r\n", APRSCall, APRSDest,
-			(ApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+			(APRSApplConnected) ? '=' : '!', LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 		ISSend(sock, ISMsg, Len, 0);
 //		Debugprintf(">%s", ISMsg);
 
@@ -1472,7 +1490,7 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 
 	// and to Application
 
-	if (ApplConnected)
+	if (APRSApplConnected)
 	{
 		// Make sure we don't have too many queued (Appl could have crashed)
 			
@@ -1523,7 +1541,7 @@ VOID SendObject(struct OBJECT * Object)
 
 	// and to Application
 
-	if (ApplConnected)
+	if (APRSApplConnected)
 	{
 		// Make sure we don't have too many queued (Appl could have crashed)
 			
@@ -1846,7 +1864,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	// if APRS Appl is atttached, queue message to it
 
-	if (ApplConnected)
+	if (APRSApplConnected)
 	{
 		// Make sure we don't have too many queued (Appl could have crashed)
 			
@@ -2578,7 +2596,7 @@ Dll VOID APIENTRY APRSConnect(char * Call, char * Filter)
 {
 	// Request APRS Data from Switch (called by APRS Applications)
 
-	ApplConnected = TRUE;
+	APRSApplConnected = TRUE;
 
 	strcpy(APPLFilter, Filter);
 
@@ -2596,7 +2614,7 @@ Dll VOID APIENTRY APRSDisconnect()
 
 	UINT * buffptr;
 
-	ApplConnected = FALSE;
+	APRSApplConnected = FALSE;
 
 	strcpy(ISFilter, NodeFilter);
 

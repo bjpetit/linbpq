@@ -917,7 +917,7 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	{
 		// Only allow UI on ax.25 ports
 
-		PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntry(i);
+		PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntryFromSlot(i);
 
 		if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
 		{

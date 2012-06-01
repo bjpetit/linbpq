@@ -268,8 +268,7 @@ int ptr=0;
 int Stream, Stream2;
 int len,count;
 
-int state;
-int change;
+
 UINT applmask = 0x80000000;
 int applflags = 2;				// Message to Uset and Application
 int Sessno = 0;
@@ -3064,6 +3063,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 DoStateChange(int Stream)
 {
 	int port, sesstype, paclen, maxframe, l4window, len;
+	int state, change;
 	struct ConsoleInfo * Cinfo = NULL;
 	char callsign[11] = "";
 	char Msg[80];

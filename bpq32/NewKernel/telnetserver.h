@@ -21,7 +21,7 @@ struct ConnectionInfo
     int BPQStream;
     byte Callsign[10];
     BOOL GotHeader;
-    byte InputBuffer[1000];
+    byte InputBuffer[InputBufferLen];
     int InputLen;
 	struct UserRec * UserPointer;
     int Retries;
@@ -44,9 +44,10 @@ struct ConnectionInfo
 	int FromHostBuffPutptr;
 	int FromHostBuffGetptr;
 
+	struct TCPINFO * TCP;		// Used to pass TCP struct to http ocde (for passod list)
+
 	time_t ConnectTime;
 
-	char * HTTPScreenBuffer;	// Screen Image for HTTP access mode
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

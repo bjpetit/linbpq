@@ -217,6 +217,7 @@ PORTMAXDIGIS	DB	0		; DIGIS ALLOWED ON THIS PORT
 PORTALIAS2	DB	7 DUP (0)	; 2ND ALIAS FOR DIGIPEATING FOR APRS
 PORTBCALL	DB	7 DUP (0)	; Source for Beacons
 PortNoKeepAlive DB	0;		; Default to No Keepalives
+PortUIOnly	DB	0;
 
 WL2K		DD	0		; Pointer to WL2K Report Data
 

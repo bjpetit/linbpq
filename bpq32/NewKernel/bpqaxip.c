@@ -2735,6 +2735,13 @@ int DataSocket_Read(struct arp_table_entry * sockptr, SOCKET sock)
 				
 	InputLen=recv(sock, &sockptr->TCPBuffer[sockptr->InputLen], 1000, 0);
 
+	if (InputLen < 0)
+	{
+		sockptr->TCPState = 0;
+		closesocket(sock);
+		return 0;
+	}
+
 	if (InputLen == 0)
 		return 0;					// Does this mean closed?
 
