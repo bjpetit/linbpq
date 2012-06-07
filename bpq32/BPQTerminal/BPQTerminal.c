@@ -63,6 +63,10 @@
 //		Fix ClearOutputWindow
 //		Save MonitorNodes flag
 
+// Version 2.2.1 June 2012
+
+//		Add UIOnly Monitor Option
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -125,6 +129,7 @@ int DoMonData(HWND hWnd);
 int TogglePort(HWND hWnd, int Item, int mask);
 int ToggleMTX(HWND hWnd);
 int ToggleMCOM(HWND hWnd);
+int ToggleMUI(HWND hWnd);
 int ToggleParam(HWND hWnd, BOOL * Param, int Item);
 int ToggleChat(HWND hWnd);
 void MoveWindows();
@@ -256,6 +261,7 @@ char Key[80];
 int portmask=0;
 int mtxparam=1;
 int mcomparam=1;
+int monUI = 0;
 
 char kbbuf[160];
 int kbptr=0;
@@ -454,6 +460,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		retCode = RegSetValueEx(hKey,"ApplMask",0,REG_DWORD,(BYTE *)&applmask,4);
 		retCode = RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
 		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
+		retCode = RegSetValueEx(hKey,"MUIONLY",0,REG_DWORD,(BYTE *)&monUI,4);
 		retCode = RegSetValueEx(hKey,"Split",0,REG_BINARY,(BYTE *)&Split,sizeof(Split));
 		retCode = RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
 		retCode = RegSetValueEx(hKey,"MonitorNODES",0,REG_DWORD,(BYTE *)&MonitorNODES,4);
@@ -608,6 +615,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"MTX",0,			
 			(ULONG *)&Type,(UCHAR *)&mtxparam,(ULONG *)&Vallen);
+		
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey,"MUIONLY",0,			
+			(ULONG *)&Type,(UCHAR *)&monUI,(ULONG *)&Vallen);
 		
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"MCOM",0,			
@@ -799,10 +810,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	else
 		CheckMenuItem(hMenu,BPQMTX,MF_UNCHECKED);
 
-	if (mcomparam & 1)
-		CheckMenuItem(hMenu,BPQMCOM,MF_CHECKED);
-	else
-		CheckMenuItem(hMenu,BPQMCOM,MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQMCOM, (mcomparam) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, MUIONLY, (monUI) ? MF_CHECKED : MF_UNCHECKED);
 	
 	if (AUTOCONNECT)
 		CheckMenuItem(hMenu,BPQAUTOCONNECT,MF_CHECKED);
@@ -834,10 +843,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	SetAppl(Stream, applflags, applmask);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask, mtxparam, mcomparam, monUI);
 	
-
-
 	DragCursor = LoadCursor(hInstance, "IDC_DragSize");
 	Cursor = LoadCursor(NULL, IDC_ARROW);
 
@@ -1091,6 +1098,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQMCOM:
 
 			ToggleMCOM(hWnd);
+			break;
+
+		case MUIONLY:
+
+			ToggleMUI(hWnd);
 			break;
 
 		case BPQCONNECT:
@@ -2182,7 +2194,7 @@ int TogglePort(HWND hWnd, int Item, int mask)
 
 	SetAppl(Stream,applflags,applmask);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask, mtxparam, mcomparam, monUI);
 
     return (0);
   
@@ -2194,12 +2206,10 @@ int ToggleMTX(HWND hWnd)
 	if (mtxparam & 1)
 
 		CheckMenuItem(hMenu,BPQMTX,MF_CHECKED);
-	
 	else
-
 		CheckMenuItem(hMenu,BPQMTX,MF_UNCHECKED);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask, mtxparam, mcomparam, monUI);
 
     return (0);
   
@@ -2208,15 +2218,18 @@ int ToggleMCOM(HWND hWnd)
 {
 	mcomparam = mcomparam ^ 1;
 	
-	if (mcomparam & 1)
+	CheckMenuItem(hMenu, BPQMCOM, (mcomparam) ? MF_CHECKED : MF_UNCHECKED);
+	SetTraceOptionsEx(portmask, mtxparam, mcomparam, monUI);
 
-		CheckMenuItem(hMenu,BPQMCOM,MF_CHECKED);
+    return (0);
+  
+}
+int ToggleMUI(HWND hWnd)
+{
+	monUI = monUI ^ 1;
 	
-	else
-
-		CheckMenuItem(hMenu,BPQMCOM,MF_UNCHECKED);
-
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	CheckMenuItem(hMenu, MUIONLY, (monUI) ? MF_CHECKED : MF_UNCHECKED);
+	SetTraceOptionsEx(portmask, mtxparam, mcomparam, monUI);
 
     return (0);
   

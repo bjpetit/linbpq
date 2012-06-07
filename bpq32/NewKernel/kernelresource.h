@@ -98,6 +98,7 @@
 #define CMSENABLED                      40003
 #define IDM_CMS_LOGGING                 40004
 #define USECACHEDCMS                    40005
+#define MON_UI_ONLY                     40006
 #define IDM_FIRSTCHILD                  50000
 #define TRAYBASEID                      60000
 
@@ -107,7 +108,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        126
-#define _APS_NEXT_COMMAND_VALUE         40006
+#define _APS_NEXT_COMMAND_VALUE         40007
 #define _APS_NEXT_CONTROL_VALUE         1045
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

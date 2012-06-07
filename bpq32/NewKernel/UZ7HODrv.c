@@ -901,6 +901,7 @@ UINT WINAPI UZ7HOExtInit(EXTPORTDATA * PortEntry)
 	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
 	PortEntry->PORTCONTROL.PROTOCOL = 10;
+	PortEntry->PORTCONTROL.UICAPABLE = 1;
 	PortEntry->PORTCONTROL.PORTQUALITY = 0;
 	PortEntry->PERMITGATEWAY = TRUE;					// Can change ax.25 call on each stream
 	PortEntry->SCANCAPABILITIES = NONE;					// Scan Control - pending connect only

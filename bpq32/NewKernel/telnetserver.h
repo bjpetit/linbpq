@@ -38,6 +38,7 @@ struct ConnectionInfo
 	BOOL MCOM;
 	BOOL MonitorColour;
 	BOOL MTX;
+	BOOL MUIOnly;
 	int CMSIndex;				// Pointer to CMS used for this connect
 	UCHAR * FromHostBuffer;		// Somewhere to store msg from CMS - it sends the whole message at once
 	int FromHostBufferSize;

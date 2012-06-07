@@ -280,6 +280,9 @@ struct TRANSPORTENTRY
 	char RMSCall[10];
 	UCHAR Mode;					// ditto
 
+	int UNPROTO;				// Unproto Mode flag - port number if in unproto mode
+	int UAddrLen;				//
+	char UADDRESS[64];			// Unproto Address String - Dest + Digis
 };
 
 //
@@ -528,6 +531,7 @@ typedef struct PORTCONTROL
 	char PORTBCALL[7];		// Source call for Beacon
 	char PortNoKeepAlive;	// Default to no Keepalives
 	char PortUIONLY;		// UI only port - no connects
+	char UICAPABLE;			// Pactor-style port that can do UI
 
 	struct WL2KInfo * WL2KInfo; // WL2K Report for this Port
 

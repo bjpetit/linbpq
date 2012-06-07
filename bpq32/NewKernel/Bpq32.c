@@ -456,7 +456,6 @@
 // 5.2.7.1
 
 //	Fix opening more thn one console window on Win98
-//  Add option to create a jpeg of the APRS display.
 //  Change method of configuring multiple timelots on WL2K reporting
 //  Add option to update WK2K Sysop Database
 //	Add Web server
@@ -760,6 +759,7 @@ char PopupText[30][100] = {""};
 byte	MCOM;
 char	MTX;
 ULONG	MMASK;
+byte	MUIONLY;
 
 UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
 
@@ -3533,6 +3533,36 @@ DllExport int APIENTRY SetTraceOptions(int mask, int mtxparam, int mcomparam)
 	mov	eax,mask	
 	mov	ebx,mtxparam
 	mov	ecx,mcomparam 
+	movzx	edx,MUIONLY		// So it won't be changed accidentally
+
+	call	BPQMONOPTIONS
+
+	popad
+	popfd
+
+	}				// End of ASM
+	return (0);
+}
+
+DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly)
+{
+
+//	Sets the tracing options for DecodeFrame. Mask is a bit
+//	mask of ports to monitor (ie 101 binary will monitor ports
+//	1 and 3). MTX enables monitoring on transmitted frames. MCOM
+//	enables monitoring of protocol control frames (eg SABM, UA, RR),
+//	as well as info frames.
+
+	_asm {
+
+	pushfd
+	cld
+	pushad
+
+	mov	eax,mask	
+	mov	ebx,mtxparam
+	mov	ecx,mcomparam 
+	mov	edx,monUIOnly
 
 	call	BPQMONOPTIONS
 
@@ -6933,12 +6963,23 @@ VOID SaveBPQ32Windows()
 	SaveHostSessions();
 }
 
+VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
 
 
+VOID SendUIModeFrame(struct TRANSPORTENTRY * Sess, PMESSAGE Message, int Port)
+{
+	DIGIMESSAGE Msg;
 
+	memset(&Msg, 0, sizeof(Msg));
 
-
-
+	Msg.PORT = Port;
+	Msg.CTL = 3;			// UI
+	memcpy(Msg.DEST, Sess->UADDRESS, 7);
+	memcpy(Msg.ORIGIN, Sess->L4MYCALL, 7);
+	memcpy(Msg.DIGIS, &Sess->UADDRESS[7], Sess->UAddrLen - 7);
+	memcpy(&Msg.PID, Message->DEST, Message->LENGTH - 7);
+	Send_AX_Datagram(&Msg, Message->LENGTH + Sess->UAddrLen - 14, Port);
+}
 
 
 

@@ -35,7 +35,6 @@ KillTNC(struct TNCINFO * TNC);
 RestartTNC(struct TNCINFO * TNC);
 KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
-SendReporttoWL2K(struct TNCINFO * TNC);
 char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 static VOID ChangeMYC(struct TNCINFO * TNC, char * Call);
 

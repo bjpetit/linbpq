@@ -1,10 +1,10 @@
 #ifdef Kernel
 
-#define Vers 5,2,6,23
-#define Verstring "5.2.6.23\0"
-#define Datestring "May 2012"
+#define Vers 5,2,7,1
+#define Verstring "5.2.7.1\0"
+#define Datestring "June 2012"
 //#define SPECIALVERSION "Test 14"
-#define VerComments "G8BPQ Packet Switch V5.2.6.23\0"
+#define VerComments "G8BPQ Packet Switch V5.2.7.1\0"
 #define VerCopyright "Copyright © 2001-2012 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 
@@ -12,8 +12,8 @@
 
 #ifdef TermTCP
 
-#define Vers 1,0,3,1
-#define Verstring "1.0.3.1\0"
+#define Vers 1,0,4,1
+#define Verstring "1.0.4.1\0"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011-2012 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"
@@ -22,8 +22,8 @@
 
 #ifdef BPQTerm
 
-#define Vers 2,2,0,1
-#define Verstring "2.2.0.1\0"
+#define Vers 2,2,1,1
+#define Verstring "2.2.1.1\0"
 #define VerComments "Simple Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 1999-2012 John Wiseman G8BPQ\0"
 #define VerDesc "Simple Terminal Program for G8BPQ Switch\0"
@@ -42,8 +42,8 @@
 
 #ifdef MAILCHAT
 
-#define Vers 1,4,50,5
-#define Verstring "1.4.50.5\0"
+#define Vers 1,4,51,1
+#define Verstring "1.4.51.1\0"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2012 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"
@@ -84,8 +84,8 @@
 
 #ifdef APRS
 
-#define Vers 1,1,1,11
-#define Verstring "1.1.1.11\0"
+#define Vers 1,1,2,1
+#define Verstring "1.1.2.1\0"
 #define VerComments  "APRS Client for G8BPQ Switch\0"
 #define VerCopyright "Copyright © 2012 John Wiseman G8BPQ\0"
 #define VerDesc "APRS Client for G8BPQ Switch\0"

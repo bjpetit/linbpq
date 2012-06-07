@@ -740,13 +740,11 @@
 //	Include HOMEBBS command in Help
 
 
-
-
-
+// Version 1.4.51.1 June 2012
 
 //  Allow bulls to be sent from RMS Express.
 //  Handle BASE64 and Quoted-printable encoding of single part messages
-
+//	Work round for RMS Express "All proposals rejected" Bug.
 
 // Use Windows Sound Events for (Chat "user join" alert)
 

@@ -29,6 +29,9 @@
 #define BPQMNODES                       1177
 #define MONCOLOUR                       1178
 #define CHATTERM                        1179
+#define IDM_CLOSEWINDOW					1180
+#define MUIONLY							1181
+#define RTFCOPY							40000
 #define BPQAUTOCONNECT                  40001
 #define BPQAPPL1                        40002
 #define BPQAPPL2                        40003
@@ -45,6 +48,22 @@
 #define ID_SETUP_FONT                   40025
 #define ID_ACTION_RESETWINDOWSPLIT      40026
 #define IDC_STATIC                      -1
+
+#define IDR_MAINFRAME_MENU              191
+#define TERM_MENU						192
+#define MON_MENU						193
+#define IDI_SIGMA_MAIN_ICON             104
+#define IDI_SYSTEM_INFO                 106
+
+
+#define IDI_SYSTEM_INFO                 106
+#define ID_INFORMATION_SYSTEMINFORMATION 40001
+#define ID_HELP_ABOUT                   40006
+#define ID_WINDOWS_CASCADE              40007
+#define ID_FILE_EXIT                    40008
+#define ID_WINDOWS_TILE                 40004
+#define ID_NEWWINDOW                    40005
+
 
 // Next default values for new objects
 // 

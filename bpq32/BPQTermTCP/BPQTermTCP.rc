@@ -156,6 +156,7 @@ BEGIN
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX
         MENUITEM "Monitor Supervisory",         BPQMCOM
+        MENUITEM "Only monitor UI frames",      MUIONLY
         MENUITEM "Monitor NODES",               BPQMNODES
         MENUITEM "Enable Colour",               MONCOLOUR
         MENUITEM "Add Port",                    MONITOR_ADDPORT

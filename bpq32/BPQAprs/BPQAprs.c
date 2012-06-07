@@ -18,12 +18,17 @@
 
 // Mods to use MapQuest's jpeg tiles
 
-
 // Decode Items
 // Allows WX to be turned off.
 // Add Local Time option
 // Add "Set filter to current View" command 
 // Implenent "Reply-Acks"
+
+// June 2012 Version 1.1.2.1
+
+// Add option to create a jpeg of the APRS display.
+// Implement Web Server
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
@@ -7034,7 +7039,7 @@ char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * 
 
 	if (Param[0])
 	{
-		char * Key, * Value, *Context;
+		char * Key, *Context;
 
 		Key = strtok_s(Param, "=", &Context);
 

@@ -528,7 +528,7 @@ BOOL Send_ETH(VOID * Block, DWORD len)
 #define SEG_REM         0x7F
 #define SEG_FIRST       0x80
 
-VOID Send_AX_Datagram(PMESSAGE Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
+static VOID Send_AX_Datagram(PMESSAGE Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 {
 	//	Can't use API SENDRAW, as that tries to get the semaphore, which we already have
 

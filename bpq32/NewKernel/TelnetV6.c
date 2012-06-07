@@ -50,6 +50,7 @@ extern UCHAR BPQDirectory[];
 extern int COUNT_QUEUED_FRAMES();
 
 extern byte	MCOM;
+extern byte	MUIONLY;
 extern char	MTX;
 extern ULONG MMASK;
 
@@ -1232,10 +1233,11 @@ VOID TelnetPoll(int Port)
 						ULONG SaveMMASK = MMASK;
 						BOOL SaveMTX = MTX;
 						BOOL SaveMCOM = MCOM;
+						BOOL SaveMUI = MUIONLY;
 
-						SetTraceOptions(sockptr->MMASK, sockptr->MTX, sockptr->MCOM);
+						SetTraceOptionsEx(sockptr->MMASK, sockptr->MTX, sockptr->MCOM, sockptr->MUIOnly);
 						len = TelDecodeFrame((char *)monbuff,&buffer[3],stamp);
-						SetTraceOptions(SaveMMASK, SaveMTX, SaveMCOM);
+						SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
 						if (len)
 						{
@@ -2662,8 +2664,13 @@ MsgLoop:
 			{
 				// Monitor Control
 
-				sscanf(&MsgPtr[4], "%x %x %x %x %x",
-					&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES, &sockptr->MonitorColour);
+				int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x",
+					&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES,
+					&sockptr->MonitorColour, &sockptr->MUIOnly);
+
+				if (n == 5)
+					sockptr->MUIOnly = 0;
+
 				sockptr->InputLen = 0;
 				return 0;
 			}

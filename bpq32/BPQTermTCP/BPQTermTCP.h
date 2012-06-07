@@ -32,6 +32,7 @@
 #define BPQMNODES                       1177
 #define MONCOLOUR                       1178
 #define CHATTERM                        1179
+#define MUIONLY							1180
 #define BPQAUTOCONNECT                  40001
 #define BPQAPPL1                        40002
 #define BPQAPPL2                        40003

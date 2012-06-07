@@ -74,7 +74,7 @@ END
 IDD_WL2KSYSOP DIALOGEX 0, 0, 277, 266
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "WL2K Sysop Record Update"
-FONT 8, "MS Sans Serif"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
 BEGIN
     LTEXT           "Name",3,5,10,28,10,0,WS_EX_NOPARENTNOTIFY
     EDITTEXT        NAME,60,9,64,12,ES_AUTOHSCROLL | NOT WS_BORDER,
@@ -204,6 +204,7 @@ BEGIN
     BEGIN
         MENUITEM "Monitor TX",                  BPQMTX
         MENUITEM "Monitor Supervisory",         BPQMCOM
+        MENUITEM "Monitor UI Only",             MON_UI_ONLY
         MENUITEM "Monitor NODES",               BPQMNODES
         MENUITEM "Enable Colour",               MONCOLOUR
         MENUITEM "Log Monitor",                 BPQLogMonitor

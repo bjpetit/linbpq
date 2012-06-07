@@ -35,6 +35,10 @@
 //		Call CloseBPQ32 on exit
 //		Support User Mode VCOM Driver
 
+// Version 1.1.8 March 2012
+
+//		Fix reading Real COM Port Mode flag
+//		Support RMS Express Tracker Mode in DED
 
 #include "stdafx.h"
 #include "bpqhostmodes.h"
@@ -119,6 +123,8 @@ VOID ProcessSCSPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len);
 BOOL TfPut(struct ConnectionInfo * conn, UCHAR character); 
 BOOL InitDED(struct ConnectionInfo * conn);
 int PUTCHARx(struct ConnectionInfo * conn, UCHAR c);
+VOID PUTSTRING(struct ConnectionInfo * conn, UCHAR * Msg);
+
 int DOCOMMAND(struct ConnectionInfo * conn);
 
 BOOL OpenRealPort(struct ConnectionInfo * conn);
@@ -410,7 +416,7 @@ int CreateDialogLine(int i)
 
 	SendMessage(hMask[i], WM_SETFONT,(WPARAM) hFont, 0);
 
-	col = 240;
+	col = 270;
 
 	hKant[i] = CreateWindow(WC_BUTTON , "Kant", BS_AUTORADIOBUTTON | WS_GROUP | WS_CHILD | WS_VISIBLE ,
                  col, row+5, 50, 14, hWnd, NULL, hInst, NULL);
@@ -422,10 +428,10 @@ int CreateDialogLine(int i)
 
 	SendMessage(hDED[i], WM_SETFONT,(WPARAM) hFont, 0);
 
-	hSCS[i] = CreateWindow(WC_BUTTON , "SCS", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
-            col + 100, row+5,50, 14, hWnd, NULL, hInst, NULL);
+//	hSCS[i] = CreateWindow(WC_BUTTON , "SCS", BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE ,
+//            col + 100, row+5,50, 14, hWnd, NULL, hInst, NULL);
 
-	SendMessage(hSCS[i], WM_SETFONT,(WPARAM) hFont, 0);
+//	SendMessage(hSCS[i], WM_SETFONT,(WPARAM) hFont, 0);
 
 	hRTS[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
                  400,row+5,14,14, hWnd, NULL, hInst, NULL);
@@ -573,7 +579,10 @@ BOOL Initialise()
                               KEY_QUERY_VALUE,
                               &hKey);
 
+	Vallen = 4;
 	RegQueryValueEx(hKey, "COMType", 0, &Type, (UCHAR *)&REAL, &Vallen);
+
+	Debugprintf("Retcode %d REAL %d", retCode, REAL);
 
 	if (REAL)
 	{
@@ -581,6 +590,7 @@ BOOL Initialise()
 		Button_SetCheck(GetDlgItem(hWnd, IDC_REALPORTS), BST_CHECKED);
 	}
 
+	Vallen = 4;
 	RegQueryValueEx(hKey, "CloseDelay", 0, &Type, (UCHAR *)&CloseDelay, &Vallen);
 
 	SetDlgItemInt(hWnd, IDC_CLOSEDELAY, CloseDelay, FALSE);
@@ -750,11 +760,13 @@ BOOL Initialise()
 			// Use Stream zero for defaults
 				
 				conn->Channels[j] = malloc(sizeof (struct StreamInfo));
+				memset(conn->Channels[j], 0, sizeof (struct StreamInfo));
+
 				channel = conn->Channels[j];
-				channel->Chan_TXQ = 0;
-				channel->BPQStream = 0;
-				channel->Connected = FALSE;
-				channel->MYCall[0] = 0;
+	//			channel->Chan_TXQ = 0;
+	//			channel->BPQStream = 0;
+	//			channel->Connected = FALSE;
+	//			channel->MYCall[0] = 0;
 
 				if (i > 0)
 					if (!conn->DEDMode)
@@ -849,7 +861,7 @@ VOID CALLBACK TimerProc()
 		for (j = 1; j <= conn->numChannels; j++)
 		{
 			channel = conn->Channels[j];
-			if (channel->Connected)
+//			if (channel->Connected)
 				if (channel->CloseTimer)
 				{
 					channel->CloseTimer--;
@@ -2692,6 +2704,7 @@ VOID ProcessDEDPacket(struct ConnectionInfo * conn, UCHAR * rxbuffer, int Len)
 	return;
 }
 
+char cxx[] = "C G8BPQ\r";
 
 BOOL TfPut(struct ConnectionInfo * conn, UCHAR character) 
 {
@@ -2841,7 +2854,6 @@ BUFFCOMM:
 
 ICMD:
 
-
 	JMP	SENDHOSTOK
 
 	MOV	ESI,OFFSET ICMDREPLY
@@ -2960,6 +2972,14 @@ NOTDATA:
 	case 'O':
 		goto SENDHOSTOK;
 
+	case 'V':					// Vesrion
+
+		PUTCHARx(conn, MSGCHANNEL);
+		PUTCHARx(conn, 1);
+		PUTSTRING(conn, "DSPTNC Firmware V.1.3a, (C) 2005-2010 SCS GmbH & Co.");
+		PUTCHARx(conn, 0);
+
+		_asm ret
 
 	default:
 		goto SENDHOSTOK;
@@ -3036,7 +3056,7 @@ MONCOM:
 
 CCMD:
 ;
-;	CONNECT REQUEST - WE ONLY ALLOW CONNECT TO SWITCH, BUT DONT CHECK
+;	CONNECT REQUEST
 ;
 	CMP	MSGCHANNEL,0
 	JE	SENDHOSTOK			; SETTING UNPROTO ADDR - JUST ACK IT
@@ -3070,24 +3090,83 @@ NOTCONNECTED:
 
 REALCALL:
 
+;	If to Switch, just connect, else pass c command to Node
+
 	MOV	CX,1			; CONNECT
-	JMP SHORT CDCOMMAND
+	MOV	AL,MSGCHANNEL
+	MOV	AH,6
+	CALL	NODE
+;
+;	CONNECT WILL BE REPORTED VIA NORMAL STATUS CHANGE
+;
+	pushad
+	
+	}	// End ASM
+
+	if (Channel->MYCall[0])
+		ChangeSessionCallsign(Channel->BPQStream, EncodeCall(Channel->MYCall));
+	
+	LINEBUFFERPTR[MSGLENGTH] = 0;
+
+	_strupr(LINEBUFFERPTR);
+
+	if (strstr(LINEBUFFERPTR, "SWITCH") == 0)		// Not switch
+	{
+		char * Call, * Arg1;
+		char * Context;
+		char seps[] = " ,\r";
+
+		Call = strtok_s(LINEBUFFERPTR + 1, seps, &Context);
+		Arg1 = strtok_s(NULL, seps, &Context);
+
+		if (Arg1)
+		{
+			// Have a digi string
+
+			// First digi is used as a port number. Any others are rwal digis or WINMOR/PACTOR
+
+			if (Context[0])
+				MSGLENGTH = wsprintf(LINEBUFFERPTR + 100, "C %s %s v %s", Arg1, Call, Context);
+			else
+				MSGLENGTH = wsprintf(LINEBUFFERPTR + 100, "C %s %s", Arg1, Call);
+
+			strcpy(LINEBUFFERPTR, LINEBUFFERPTR + 100);
+
+		}
+
+		_asm{
+
+		popad
+
+		mov esi, LINEBUFFERPTR
+		mov ecx, MSGLENGTH
+		add esi, ecx
+		mov	[esi], 13
+		sub esi, ecx
+		inc ecx
+		MOV	AH,2			; SEND DATA
+		MOV	AL,MSGCHANNEL
+		CALL	NODE
+		JMP	SENDHOSTOK
+		}
+	}
+		
+	_asm{
+
+		popad
+		JMP	SENDHOSTOK
+
 
 DCMD:
 ;
 ;	DISCONNECT REQUEST
 ;
 	MOV	CX,2			; DISCONNECT
-CDCOMMAND:
 	MOV	AL,MSGCHANNEL
 	MOV	AH,6
 	CALL	NODE
-;
-;	CONNECT/DISCONNECT WILL BE REPORTED VIA NORMAL STATUS CHANGE
-;
+
 	JMP	SENDHOSTOK
-
-
 
 LCMD:
 
@@ -3470,6 +3549,40 @@ SENDHOSTOK:
 	MOV	AL,0
 	CALL	PUTCHAR			; NOTHING DOING
 
+	pushad
+
+	 }
+
+	 {
+			int Len=0;
+			UCHAR Message[1000];
+
+			while (conn->RXCOUNT > 0)
+			{
+				Message[Len++]= *(conn->RXPOINTER++);
+
+				conn->RXCOUNT--;
+
+				if (conn->RXPOINTER == &conn->PCBUFFER[512])
+					conn->RXPOINTER = (PUCHAR)&conn->PCBUFFER;
+
+				if (Len > 900) 
+				{
+					BPQSerialSendData(COMType, conn, Message, Len);
+					Len = 0;
+				}
+			}
+				
+			if (Len > 0) 
+			{
+				BPQSerialSendData(COMType, conn, Message, Len);
+			}
+		}
+	 _asm {
+
+		 popad
+
+
 	RET
 
 PROCESSPOLL:
@@ -3619,13 +3732,29 @@ okf:
 ;
 ;	SEND DATA
 ;
-//	pushad
-//	}
-//	OutputDebugString("RXed Data\n");
-//
-//	_asm{
-//
-//	popad
+	add edi, ecx
+	mov byte ptr [edi],0
+	sub edi, ecx
+	
+	pushad
+	}
+	{			
+		struct StreamInfo * channel = conn->Channels[MSGCHANNEL];
+
+		// If a failure, set a close timer (for Airmail, etc)
+
+		if (strstr(NODEBUFFER, "} Downlink connect needs port number") ||
+			strstr(NODEBUFFER, "} Error - TNC Not Ready") ||
+			strstr(NODEBUFFER, "} Failure with ") ||
+			strstr(NODEBUFFER, "} Sorry, "))
+			channel->CloseTimer = CloseDelay * 10;
+		else
+			channel->CloseTimer = 0;			// Cancel Timer
+	}
+
+	_asm{
+
+	popad
 
 	MOV	AL,MSGCHANNEL
 	CALL	PUTCHAR
@@ -3685,7 +3814,7 @@ STATUSPOLL:
 ;	DISCONNECTED
 ;
 }
-	i = wsprintf(CONMSG, "\x3(%d) DISCONNECTED fm 0:SWITCH", MSGCHANNEL);
+	i = wsprintf(CONMSG, "\x3(%d) DISCONNECTED fm 0:SWITCH\r", MSGCHANNEL);
 	i++;
 
 	_asm{
@@ -3772,12 +3901,10 @@ DONTCHECK:
 */
 }
 
-	i = wsprintf(CONMSG, "\x3(%d) CONNECTED to %s\x0", MSGCHANNEL, CONCALL);
+	i = wsprintf(CONMSG, "\x3(%d) CONNECTED to %s\r\x0", MSGCHANNEL, CONCALL);
 	i++;
 
 	_asm{
-
-
 
 	MOV	ESI,OFFSET CONMSG
 	MOV	ECX,i
@@ -4858,9 +4985,6 @@ int DOCOMMAND(struct ConnectionInfo * conn)
 	wsprintf(Errbuff, "BPQHOST Port %d Normal Mode CMD %s\n",conn->ComPort, conn->LINEBUFFER);  
 	OutputDebugString(Errbuff);
  
-	if (conn->LINEBUFFER[0] != 0x1b)
-		goto NOTCOMMAND;		// DATA IN NORMAL MODE - IGNORE
-
 //	IF ECHO ENABLED, ECHO IT
 
 	if (conn->ECHOFLAG)
@@ -4876,13 +5000,14 @@ int DOCOMMAND(struct ConnectionInfo * conn)
 
 			PUTCHARx(conn, c);
 
-		} while (c != 0x13);
+		} while (c != 13);
 	}
 
-	switch (toupper(conn->LINEBUFFER[1]))
-	{
+	if (conn->LINEBUFFER[0] != 0x1b)
+		goto NOTCOMMAND;		// DATA IN NORMAL MODE - IGNORE
 
-	
+	switch (toupper(conn->LINEBUFFER[1]))
+	{	
 	case 'J':
 
 		if (conn->LINEBUFFER[6] == 0x0d)
@@ -4896,8 +5021,8 @@ int DOCOMMAND(struct ConnectionInfo * conn)
 		{
 			//	send host mode ack
 
-			PUTCHARx(conn, 0);
-			PUTCHARx(conn, 0);
+//			PUTCHARx(conn, 0);
+//			PUTCHARx(conn, 0);
 
 			conn->CURSOR = (PUCHAR)&conn->LINEBUFFER;
 			return 0;
@@ -4911,8 +5036,20 @@ int DOCOMMAND(struct ConnectionInfo * conn)
 		break;
 
 	case 'I':
-		break;;
+	{
+		// Save call 
 
+		char * Call = &conn->LINEBUFFER[2];
+		
+		*(conn->CURSOR - 2) = 0;
+
+		for (i = 0; i <= conn->numChannels; i++)
+		{
+			strcpy(conn->Channels[i]->MYCall, Call);
+		}
+
+		break;;
+	}
 	case 'P':
 
 //	PARAMS COMMAND - RETURN FIXED STRING
@@ -4926,17 +5063,24 @@ int DOCOMMAND(struct ConnectionInfo * conn)
 
 		break;
 
+	case 'S':
+	case 'D':
+
+		// Return Channel Not Connected
+
+		PUTSTRING(conn, "* CHANNEL NOT CONNECTED *\r");
+
 	default:
 
 		break;
 
 	}
 
-	PUTCHARx(conn, 'c');
-	PUTCHARx(conn, 'm');
-	PUTCHARx(conn, 'd');
-	PUTCHARx(conn, ':');
-	PUTCHARx(conn, 13);
+//	PUTCHARx(conn, 'c');
+//	PUTCHARx(conn, 'm');
+//	PUTCHARx(conn, 'd');
+//	PUTCHARx(conn, ':');
+//	PUTCHARx(conn, 13);
 
 NOTCOMMAND:
 
@@ -4944,6 +5088,23 @@ NOTCOMMAND:
 
 	return 0;
 
+}
+
+VOID PUTSTRING(struct ConnectionInfo * conn, UCHAR * Msg)
+{
+	int len = strlen(Msg);
+
+	while (len)
+	{
+		*(conn->PUTPTR++) = *(Msg++);
+
+		if (conn->PUTPTR == &conn->PCBUFFER[512])
+			conn->PUTPTR = (PUCHAR)&conn->PCBUFFER;
+
+		conn->RXCOUNT++;
+
+		len--;
+	}
 }
 
 int PUTCHARx(struct ConnectionInfo * conn, UCHAR c)
@@ -5088,7 +5249,7 @@ BOOL CheckStatusChange(struct ConnectionInfo * conn, int Channel, int BPQStream)
 		
 		SCSReply[2] = Channel;
 		SCSReply[3] = 3;
-		ReplyLen  = wsprintf(&SCSReply[4], "(%d) DISCONNECTED", Channel);
+		ReplyLen  = wsprintf(&SCSReply[4], "(%d) DISCONNECTED fm G8BPQ", Channel);
 		ReplyLen += 5;		// Include Null
 		CRCStuffAndSend(conn, SCSReply, ReplyLen);
 
@@ -5225,35 +5386,12 @@ VOID ProcessSCSHostFrame(struct ConnectionInfo * conn, UCHAR *  Buffer, int Leng
 		if (Length == 0)
 		{
 			// STATUS REQUEST - IF CONNECTED, GET CALL
-/*
-	MOV	EDI,OFFSET CHECKCALL	; FOR ANY RETURNED DATA
-	MOV	BYTE PTR [EDI],0		; FIDDLE FOR CONNECTED CHECK
-
-	MOV	AH,8
-	MOV	AL,MSGCHANNEL		; GET STATUS, AND CALL IF ANY
-	CALL	NODE
-;
-	CMP	CHECKCALL,0
-	JE	NOTCONNECTED
-
-	MOV	ESI,OFFSET SWITCH
-	MOV	ECX,LSWITCH
-
-	JMP SHORT SENDCMDREPLY
-
-NOTCONNECTED:
-
-	MOV	ESI,OFFSET NOTCONMSG
-	MOV	ECX,LNOTCON
-
-	JMP SENDCMDREPLY
-*/
 
 			return;
 		}
 		Buffer[Length - 2] = 0;
 
-		TXLen = wsprintf(TXBuff, "C %s\r", &Buffer[5]);
+		TXLen = wsprintf(TXBuff, "C %s\r", &Buffer[6]);
 		BPQStream = channel->BPQStream;
 		MYCall = (PUCHAR)&channel->MYCall;
 
@@ -5261,11 +5399,12 @@ NOTCONNECTED:
 			MYCall = (char *)&conn->MYCall;
 
 		Connect(BPQStream);
-
 		if (MYCall[0] > 0)
 		{
 			ChangeSessionCallsign(BPQStream, EncodeCall(MYCall));
 		}
+
+		ChangeSessionPaclen(BPQStream, 100);
 
 		SendMsg(BPQStream, TXBuff, TXLen);
 

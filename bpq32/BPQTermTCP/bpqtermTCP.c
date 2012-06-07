@@ -46,6 +46,10 @@
 
 // Add Chat Terminal Mode (sends keepalives)
 
+// Version 1.0.4.1 June 2012
+
+//	Add UIOnly Monitor Option
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "winsock2.h"
@@ -105,6 +109,7 @@ int DoMonData(HWND hWnd);
 int TogglePort(HWND hWnd, int Item, int mask);
 int ToggleMTX(HWND hWnd);
 int ToggleMCOM(HWND hWnd);
+int ToggleMUI(HWND hWnd);
 int ToggleParam(HWND hWnd, BOOL * Param, int Item);
 int ToggleChat(HWND hWnd);
 void MoveWindows();
@@ -244,6 +249,7 @@ char Key[80];
 int portmask=0;
 int mtxparam=1;
 int mcomparam=1;
+int monUI=0;
 
 char kbbuf[160];
 int kbptr=0;
@@ -400,6 +406,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	}
 	SaveIntValue("MTX",mtxparam);
 	SaveIntValue("MCOM", mcomparam);
+	SaveIntValue("MUIONLY", monUI);
 
 #pragma warning(push)
 #pragma warning(disable:4244)
@@ -525,6 +532,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	MonPorts = GetIntValue("MonPorts", 0);
 	mtxparam = GetIntValue("MTX", 0);
 	mcomparam = GetIntValue("MCOM", 0);
+	monUI = GetIntValue("MUIONLY", 0);
 	tempmask = GetIntValue("PortMask", 0);
 	ChatMode = GetIntValue("ChatMode", 0);
 	MonitorColour = GetIntValue("MONColour", 0);
@@ -658,7 +666,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	}
 
 	CheckMenuItem(hMenu, BPQMTX, (mtxparam) ? MF_CHECKED : MF_UNCHECKED);
-	CheckMenuItem(hMenu, BPQMCOM,(mcomparam) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, BPQMCOM, (mcomparam) ? MF_CHECKED : MF_UNCHECKED);
+	CheckMenuItem(hMenu, MUIONLY, (monUI) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, BPQBELLS, (Bells) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, BPQStripLF, (StripLF) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
@@ -1030,6 +1039,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQMCOM:
 
 			ToggleMCOM(hWnd);
+			break;
+
+		case MUIONLY:
+
+			ToggleMUI(hWnd);
 			break;
 
 		case BPQCONNECT1:
@@ -1929,15 +1943,16 @@ int ToggleMTX(HWND hWnd)
 int ToggleMCOM(HWND hWnd)
 {
 	mcomparam = mcomparam ^ 1;
-	
-	if (mcomparam & 1)
+	CheckMenuItem(hMenu, BPQMCOM, (mcomparam) ? MF_CHECKED : MF_UNCHECKED);
+	SendTraceOptions();
 
-		CheckMenuItem(hMenu,BPQMCOM,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,BPQMCOM,MF_UNCHECKED);
-
+    return (0);
+  
+}
+int ToggleMUI(HWND hWnd)
+{
+	monUI = monUI ^ 1;
+	CheckMenuItem(hMenu, MUIONLY, (monUI) ? MF_CHECKED : MF_UNCHECKED);
 	SendTraceOptions();
 
     return (0);
@@ -2433,7 +2448,7 @@ VOID SendTraceOptions()
 {
 	char Buffer[80];
 
-	int Len = wsprintf(Buffer,"\\\\\\\\%x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour);
+	int Len = wsprintf(Buffer,"\\\\\\\\%x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI);
 
 	send(sock, Buffer, Len, 0);
 

@@ -218,7 +218,7 @@ PORTALIAS2	DB	7 DUP (0)	; 2ND ALIAS FOR DIGIPEATING FOR APRS
 PORTBCALL	DB	7 DUP (0)	; Source for Beacons
 PortNoKeepAlive DB	0;		; Default to No Keepalives
 PortUIOnly	DB	0;
-
+UICAPABLE	DB	0;			; Pactor-style port that can do UI
 WL2K		DD	0		; Pointer to WL2K Report Data
 
 HARDWAREDATA	DB	200 DUP (?)	; WORK AREA FOR HARDWARE DRIVERS
@@ -376,6 +376,10 @@ PARTCMDBUFFER DD 0		; Save area for incomplete commmand
 Frequency	DD	0		; If known - for CMS Reporting Hz
 RMSCall		DB 10 DUP (0);
 Mode		DB	0		; ditto
+
+UNPROTO		DD	0		 ; Unproto Mode flag - port number if in unproto mode
+UAddrLen	DD	0		 ;
+UADDRESS	DB 64 DUP (0); Unproto Address String - Dest + Digis
 
 TRANSPORTENTRY	ENDS
 ;

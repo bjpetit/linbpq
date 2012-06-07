@@ -40,6 +40,7 @@
 #define CHATTERM                        1179
 #define IDM_CLOSEWINDOW					1180
 #define MONITORAPRS						1181
+#define MON_UI_ONLY                     40006
 
 #define IDR_MAINFRAME_MENU              191
 #define TERM_MENU						192

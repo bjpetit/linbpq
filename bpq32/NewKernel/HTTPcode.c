@@ -27,6 +27,8 @@ extern  struct TRANSPORTENTRY * L4TABLE;
 extern WORD MAXCIRCUITS;
 extern struct BPQVECSTRUC BPQHOSTVECTOR[];
 extern BOOL APRSApplConnected;  
+extern char VersionString[];
+VOID FormatTime(char * Time, time_t cTime);
 
 extern COLORREF Colours[256];
 
@@ -60,36 +62,45 @@ char Mycall[10];
 char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
 
 char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P align=center>"
-	"<table border=2 cellpadding=2 cellspacing=2>"
-	"<tr><td align=center><a href=Node/NodeMenu.html>Node Pages</a></td>"
-	"<td align=center><a href=aprs/all.html>APRS Pages</a></td></tr></table></body></html>";
+	"<table border=2 cellpadding=2 cellspacing=2 bgcolor=white>"
+	"<tr><td align=center><a href=/Node/NodeMenu.html>Node Pages</a></td>"
+	"<td align=center><a href=/aprs/all.html>APRS Pages</a></td></tr></table></body></html>";
 
-char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=Node/NodeIndex.html\">"
+char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
 	"<html><head></head><body></body></html>";
 
 char NodeMenu[] = "<html><head><title>%s's BPQ32 Web Server</title></head>"
-	"<body><h1 align=center>BPQ32 Node %s</h1><P>"
-	"<P align=center><table border=1 cellpadding=2><tr>"
-	"<td><a href=Routes.html>Routes</a></td>"
-	"<td><a href=Nodes.html>Nodes</a></td>"
-	"<td><a href=Nodes.html?C>N C</a></td>"
-	"<td><a href=Nodes.html?T>N T</a></td>"
-	"<td><a href=Ports.html>Ports</a></td>"
-	"<td><a href=Links.html>Links</a></td>"
-	"<td><a href=Users.html>Users</a></td>"
-	"<td><a href=Stats.html>Stats</a></td>"
-	"<td><a href=Terminal.html>Terminal (Requires user and password)</a></td>%s%s";
+	"<body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
+	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
+	"<td><a href=/Node/Routes.html>Routes</a></td>"
+	"<td><a href=/Node/Nodes.html>Nodes</a></td>"
+	"<td><a href=/Node/Ports.html>Ports</a></td>"
+	"<td><a href=/Node/Links.html>Links</a></td>"
+	"<td><a href=/Node/Users.html>Users</a></td>"
+	"<td><a href=/Node/Stats.html>Stats</a></td>"
+	"<td><a href=/Node/Terminal.html>Terminal (Requires user and password)</a></td>%s%s";
 char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
 char NodeTail[] = "</tr></table>";
 	
 char Tail[] = "</body></html>";
 
-char RouteHddr[] = "<h2 align=center>Routes</h2><table align=center border=2 style=font-family:monospace>"
+char RouteHddr[] = "<h2 align=center>Routes</h2><table align=center border=2 style=font-family:monospace bgcolor=white>"
 	"<tr><th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th><th>Frack</th><th>Last Heard</th><th>Queued</th></tr>";
 
 char RouteLine[] = "<tr><td>%s%d</td><td>%s%c</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td><td>%02d:%02d</td><td>%d</td></tr>";
 
-char NodeHddr[] = "<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2><tr>";
+char xNodeHddr[] = "<align=center><form align=center method=get action=/Node/Nodes.html>"
+	"<table align=center  bgcolor=white>"
+	"<tr><td><input type=submit name=a value=\"Nodes Sorted by Alias\"></td><td>"
+	"<input type=submit name=c value=\"Nodes Sorted by Call\"></td><td>"
+	"<input type=submit name=t value=\"Nodes with traffic\"></td></tr></form></table>"
+	"<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
+
+char NodeHddr[] = "<center><form method=get action=/Node/Nodes.html>"
+	"<input type=submit name=a value=\"Nodes Sorted by Alias\">"
+	"<input type=submit name=c value=\"Nodes Sorted by Call\">"
+	"<input type=submit name=t value=\"Nodes with traffic\"></form></center>"
+	"<h2 align=center>Nodes %s</h2><table style=font-family:monospace align=center border=2 bgcolor=white><tr>";
 
 char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
 
@@ -101,8 +112,6 @@ char SessionPortLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td></tr>";
 
 char StatsHddr[] = "<h2 align=center>Node Stats</h2><table align=center cellpadding=2 bgcolor=white>"
 	"<col width=250 /><col width=80 /><col width=80 /><col width=80 /><col width=80 /><col width=80 />";
-
-
 
 char PortStatsHddr[] = "<h2 align=center>Stats for Port %d</h2><table align=center border=2 cellpadding=2 bgcolor=white>";
 
@@ -117,14 +126,14 @@ char UserHddr[] = "<h2 align=center>Sessions</h2><table align=center border=2 ce
 
 char UserLine[] = "<tr><td>%s</td><td>%s</td><td>%s</td></tr>";
 
-char TermSignon[] = "<html><head><title>BPQ32 Node %s Terminal Access</title></head><body>"
+char TermSignon[] = "<html><head><title>BPQ32 Node %s Terminal Access</title></head><body background=\"/background.jpg\">"
 	"<h2 align=center>BPQ32 Node %s Terminal Access</h2>"
 	"<h3 align=center>Please enter username and password to access the node</h3>"
 	"<form method=post action=TermSignon>"
-	"<table align=center>"
+	"<table align=center  bgcolor=white>"
 	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /></form>";
+	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
 
 char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
 
@@ -145,12 +154,16 @@ char TermOutput[] = "<html><head>"
 	"<meta http-equiv=pragma content=no-cache>"
 	"<meta http-equiv=expires content=0>" 
 	"<meta http-equiv=refresh content=2>"
-	"</head><body >"
+	"<script type=\"text/javascript\">\r\n"
+	"function ScrollOutput()\r\n"
+	"{window.scrollBy(0,document.body.scrollHeight)}</script>"
+	"</head><body id=Text onload=\"ScrollOutput()\">"
 	"<p style=font-family:monospace>";
-
+//<body onLoad="pageScroll()">
 //char TermOutputTail[] = "</p><script>scrollElementToEnd(document.getElementById(\"Text\"));</script>";
 //char TermOutputTail[] = "</p><script>document.getElementById(\"Text\").scrollTo(0,1500)</script>";
-char TermOutputTail[] = "</p><script>window.scrollTo(0,10000);</script></body></html>";
+//char TermOutputTail[] = "</p><script>window.scrollBy(0,500);</script></body></html>";
+char TermOutputTail[] = "</p></script></body></html>";
 
 char InputLine[] = "<html><head></head><body>"
 	"<form name=inputform method=post action=/TermInput?%s>"
@@ -553,6 +566,11 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 		int i;
 		struct UserRec * USER;
 
+		if (strstr(input, "Cancel=Cancel"))
+		{
+			ReplyLen = wsprintf(ReplyBuffer, NodeMenu, Mycall, Mycall, (APRSApplConnected)?APRSBit:"", NodeTail);
+			goto Sendit;
+		}
 		user = strtok_s(&input[9], "&", &Context);
 		password = strtok_s(NULL, "=", &Context);
 		password = Context;
@@ -595,12 +613,16 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 			ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PassError);
 		}
   
-	}  
+	}
+
+Sendit:
 
 	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, ReplyBuffer, ReplyLen, 0);
 	send(sock, Tail, strlen(Tail), 0);
+
+	return 1;
 }
 
 char * LookupKey(char * Key)
@@ -734,6 +756,12 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 	int HeaderLen;
 	char Header[256];
 
+	FILETIME LastWriteTime;
+	LARGE_INTEGER ft;
+	time_t ctime;
+	char TimeString[64];
+	char FileTimeString[64];
+
 	if (strcmp(FN, "/") == 0)
 		if (APRSApplConnected)
 			wsprintf(MsgFile, "%s\\HTML\\index.html", BPQDirectory);
@@ -760,18 +788,40 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 
 	ReadFile(hFile, MsgBytes, FileSize, &ReadLen, NULL); 
 
+	GetFileTime(hFile, NULL, NULL, &LastWriteTime);
+
+	ft.HighPart = LastWriteTime.dwHighDateTime;
+	ft.LowPart = LastWriteTime.dwLowDateTime;
+
 	CloseHandle(hFile);
+
+	ft.QuadPart -=  116444736000000000;
+	ft.QuadPart /= 10000000;
+
+	ctime = ft.LowPart;
+
+	FormatTime(TimeString, ctime);
 
 	// if HTML file, look for ##...## substitutions
 
 	if ((strcmp(FN, "/") == 0 || strstr(FN, "htm" ) || strstr(FN, "HTM")) &&  strstr(MsgBytes, "##" ))
+	{
 		FileSize = ProcessSpecialPage(MsgBytes, FileSize); 
-	
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", FileSize);
+		ctime = time(NULL);
+	}
+
+	FormatTime(FileTimeString, ctime);
+	FormatTime(TimeString, time(NULL));
+
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n"
+		"Content-Type: text/html\r\n"
+		"Date: %s\r\n"
+		"Last-Modified: %s\r\n" 
+		"\r\n", FileSize, TimeString, FileTimeString);
+
 	send(sock, Header, HeaderLen, 0);
 
 	Sent = send(sock, MsgBytes, FileSize, 0);
-	Debugprintf("%d out of %d sent", Sent, FileSize);
 		
 	while (Sent != FileSize && Loops++ < 3000)				// 100 secs max
 	{	
@@ -1028,7 +1078,8 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	int ReplyLen;
 	char Header[256];
 	int HeaderLen;
-												// wait
+	char TimeString[64];
+
 	strcpy(URL, MsgPtr);
 
 	ptr = strstr(URL, " HTTP");
@@ -1109,7 +1160,6 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		if (_stricmp(NodeURL, "/Node/TermSignon") == 0)
 		{
 			ProcessTermSignon(TCP, sock, MsgPtr, MsgLen);
-			return 0;
 		}
 
 		if (_stricmp(NodeURL, "/Node/TermClose") == 0)
@@ -1184,6 +1234,10 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		wsprintf(UPTime, "%.2d:%.2d:%.2d", TM->tm_yday, TM->tm_hour, TM->tm_min);
 
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], StatsHddr);
+
+		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], "<tr><td>%s</td><td align=right>%s</td></tr>",
+			"Version", VersionString);
+
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], "<tr><td>%s</td><td align=right>%s</td></tr>",
 			"Uptime (Days Hours Mins)", UPTime);
 
@@ -1243,7 +1297,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PortStatsLine, "L2 Frames Recieved", Port->PORTCONTROL.L2FRAMESFORUS);
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PortStatsLine, "L2 Frames Sent", Port->PORTCONTROL.L2FRAMESSENT);
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PortStatsLine, "L2 Timeouts", Port->PORTCONTROL.L2TIMEOUTS);
-		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PortStatsLine, "REG Frames Received", Port->PORTCONTROL.L2REJCOUNT);
+		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PortStatsLine, "REJ Frames Received", Port->PORTCONTROL.L2REJCOUNT);
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PortStatsLine, "RX out of Seq", Port->PORTCONTROL.L2OUTOFSEQ);
 //		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], PortStatsLine, "L2 Resequenced", Port->PORTCONTROL.L2RESEQ);
 		if (Protocol == HDLC)
@@ -1417,7 +1471,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen],
 			"<h3 align=center>Info for Node %s:%s</h3><p style=font-family:monospace align=center>", Alias, Context);
 
-		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], "<table border=1><tr><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr>");	
+		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], "<table border=1 bgcolor=white><tr><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr>");	
 
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], "<tr><td align=center>%d</td><td align=center>%d</td><td align=center>%c</td><td align=center>%.0d</td></tr></table>",
 				Dest->DEST_COUNT, Dest->DEST_RTT /16,
@@ -1426,7 +1480,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], "<h3 align=center>Neighbours</h3>");
 
 		ReplyLen += sprintf(&ReplyBuffer[ReplyLen], 
-			"<table border=1 style=font-family:monospace align=center>"
+			"<table border=1 style=font-family:monospace align=center bgcolor=white>"
 			"<tr><td> </td><td> Qual </td><td> Obs </td><td> Port </td><td> Call </td></tr>");	
 
 		NRRoute = &Dest->NRROUTE1;
@@ -1885,7 +1939,10 @@ END_CMDUXX:
 
 SendResp:
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+	FormatTime(TimeString, time(NULL));
+
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+		"Date: %s\r\n\r\n", ReplyLen + strlen(Tail), TimeString);
 	sendandcheck(sock, Header, HeaderLen);
 	sendandcheck(sock, ReplyBuffer, ReplyLen);
 	sendandcheck(sock, Tail, strlen(Tail));
@@ -1893,3 +1950,18 @@ SendResp:
 	return 0;
 }
 
+char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+
+VOID FormatTime(char * Time, time_t cTime)
+{
+	struct tm * TM;
+	TM = gmtime(&cTime);
+
+	wsprintf(Time, "%s, %02d %s %3d %02d:%02d:%02d GMT", dat[TM->tm_wday], TM->tm_mday, month[TM->tm_mon],
+		TM->tm_year + 1900, TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+}
+
+// Sun, 06 Nov 1994 08:49:37 GMT

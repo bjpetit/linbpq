@@ -258,6 +258,7 @@ static char Key[80];
 int portmask=1;
 int mtxparam=1;
 int mcomparam=1;
+int monUI=0;
 
 char kbbuf[160];
 int kbptr=0;
@@ -327,6 +328,7 @@ extern HANDLE hInstance;
 extern byte	MCOM;
 extern char	MTX;
 extern ULONG MMASK;
+extern byte	MUIONLY;
 
 HMENU hPopMenu1;
 
@@ -495,6 +497,10 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"MCOM",0,			
 			(ULONG *)&Type,(UCHAR *)&mcomparam,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey,"MONUIONLY",0,			
+			(ULONG *)&Type,(UCHAR *)&monUI,(ULONG *)&Vallen);
 		
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"PortMask",0,			
@@ -592,6 +598,11 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 		CheckMenuItem(hMonCfgMenu,BPQMCOM,MF_CHECKED);
 	else
 		CheckMenuItem(hMonCfgMenu,BPQMCOM,MF_UNCHECKED);
+
+	if (monUI & 1)
+		CheckMenuItem(hMonCfgMenu,MON_UI_ONLY,MF_CHECKED);
+	else
+		CheckMenuItem(hMonCfgMenu,MON_UI_ONLY,MF_UNCHECKED);
 	
 	if (RestoreWindows)
 	{
@@ -636,6 +647,7 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 	MCOM = mcomparam;
 	MTX = mtxparam;
 	MMASK = portmask;
+	MUIONLY = monUI;
 
 	if (HOSTCMD == '*')		// No Host App
 	{
@@ -688,6 +700,7 @@ SaveHostSessions()
 	RegSetValueEx(hKey,"RestoreWindows",0,REG_DWORD,(BYTE *)&RestoreWindows,4);
 	RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
 	RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
+	RegSetValueEx(hKey,"MONUIONLY",0,REG_DWORD,(BYTE *)&monUI,4);
 	RegSetValueEx(hKey,"MONColour",0,REG_DWORD,(BYTE *)&MonitorColour,4);
 	RegSetValueEx(hKey,"MonitorNODES",0,REG_DWORD,(BYTE *)&MonitorNODES,4);
 	RegSetValueEx(hKey,"MonitorAPRS",0,REG_DWORD,(BYTE *)&MonitorAPRS,4);
@@ -1081,7 +1094,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	SetAppl(Stream, applflags, applmask);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask,mtxparam,mcomparam, monUI);
 
 	if (MinimizetoTray)
 	{
@@ -1459,7 +1472,7 @@ BOOL InitInstancex(HINSTANCE hInstance, int nCmdShow)
 
 	SetAppl(Stream, applflags, applmask);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask,mtxparam,mcomparam, monUI);
 	
 
 
@@ -1680,6 +1693,11 @@ LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 		case BPQMCOM:
 
 			ToggleMCOM(hWnd);
+			break;
+			
+		case MON_UI_ONLY:
+
+			ToggleMON_UI_ONLY(hWnd);
 			break;
 			
 		case BPQMNODES:
@@ -4084,7 +4102,7 @@ int TogglePort(HWND hWnd, int Item, int mask)
 
 	SetAppl(Stream,applflags,applmask);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask,mtxparam,mcomparam, monUI);
 
     return (0);
   
@@ -4101,7 +4119,7 @@ int ToggleMTX(HWND hWnd)
 
 		CheckMenuItem(hMonCfgMenu,BPQMTX,MF_UNCHECKED);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask,mtxparam,mcomparam, monUI);
 
     return (0);
   
@@ -4118,7 +4136,24 @@ int ToggleMCOM(HWND hWnd)
 
 		CheckMenuItem(hMonCfgMenu,BPQMCOM,MF_UNCHECKED);
 
-	SetTraceOptions(portmask,mtxparam,mcomparam);
+	SetTraceOptionsEx(portmask,mtxparam,mcomparam, monUI);
+
+    return (0);
+  
+}
+int ToggleMON_UI_ONLY(HWND hWnd)
+{
+	monUI = monUI ^ 1;
+	
+	if (monUI & 1)
+
+		CheckMenuItem(hMonCfgMenu,MON_UI_ONLY,MF_CHECKED);
+	
+	else
+
+		CheckMenuItem(hMonCfgMenu,MON_UI_ONLY,MF_UNCHECKED);
+
+	SetTraceOptionsEx(portmask,mtxparam,mcomparam, monUI);
 
     return (0);
   

@@ -34,7 +34,7 @@ unsigned long _beginthread( void( *start_address )(BOOL Report), unsigned stack_
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Consoleprintf(const char * format, ...);
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
-static VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
+VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
 char * strlop(char * buf, char delim);
 VOID * APIENTRY GetBuff();
 UINT ReleaseBuffer(UINT *BUFF);
@@ -871,7 +871,7 @@ static VOID SendtoDigiPorts(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
 
 }
 
-static VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
+VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
 {
 	//	Can't use API SENDRAW, as that tries to get the semaphore, which we already have
 
