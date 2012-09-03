@@ -122,6 +122,7 @@ BEGIN
                     9,26,367,69
     CONTROL         "List2",IDC_LIST2,"SysListView32",LVS_REPORT | WS_BORDER,
                     8,103,373,83
+    PUSHBUTTON      "Clear Screen",IDC_CLEARMSGS,223,3,56,10
 END
 
 APRSSTNS DIALOG DISCARDABLE  100, 100, 505, 275

@@ -606,6 +606,7 @@ VOID SendReporttoWL2KThread()
 	int err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
+	int GroupRef;
 
 	// Send all reports in list
 
@@ -658,10 +659,15 @@ VOID SendReporttoWL2KThread()
 
 	SkipResolve:
 
-		wsprintf(Message, "06'%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %03d, '%s', 1, '%s'",
+		if (strstr(WL2KReport->ServiceCode, "MARS"))
+			GroupRef = 3;
+		else
+			GroupRef = 1;
+
+		wsprintf(Message, "06'%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %03d, '%s', %d, '%s'",
 				WL2KReport->RMSCall, WL2KReport->BaseCall, WL2KReport->GridSquare, WL2KReport->Freq,
 				WL2KReport->mode, WL2KReport->baud, WL2KReport->power, WL2KReport->height, WL2KReport->gain,
-				WL2KReport->direction, WL2KReport->Times, WL2KReport->ServiceCode);
+				WL2KReport->direction, WL2KReport->Times, GroupRef, WL2KReport->ServiceCode);
 
 		Debugprintf("Sending %s", Message);
 

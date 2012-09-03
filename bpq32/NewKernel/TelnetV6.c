@@ -2107,6 +2107,7 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 	char logmsg[120];
 	struct UserRec * USER;
 	struct TCPINFO * TCP = TNC->TCPInfo;
+	int SendIndex = 0;
 
 	ioctlsocket(sock,FIONREAD,&len);
 
@@ -2226,7 +2227,7 @@ MsgLoop:
 			// Line could be up to 500 chars if coming from a program rather than an interative user
 			// Limit send to node to 255
 
-			if (InputLen > 255)
+			while (InputLen > 255)
 			{		
 				SendtoNode(TNC, sockptr->Number, MsgPtr, 255);
 				sockptr->InputLen -= 255;
@@ -2252,22 +2253,27 @@ MsgLoop:
 
 	switch (sockptr->LoginState)
 	{
+
 	case 2:
 
 		// Normal Data State
 			
 		STREAM->BytesRXed += MsgLen;
+		SendIndex = 0;
 
 		// Line could be up to 500 chars if coming from a program rather than an interative user
 		// Limit send to node to 255. Should really use PACLEN instead of 255....
 
-		if (MsgLen > 255)
+		while (MsgLen > 255)
 		{		
-			SendtoNode(TNC, sockptr->Number, MsgPtr, 255);
-			SendtoNode(TNC, sockptr->Number, MsgPtr + 255, MsgLen - 255);
+			SendtoNode(TNC, sockptr->Number, MsgPtr + SendIndex, 255);
+			SendIndex += 255;
+			MsgLen -= 255;
 		}
-		else
-			SendtoNode(TNC, sockptr->Number, MsgPtr, MsgLen);
+
+		SendtoNode(TNC, sockptr->Number, MsgPtr + SendIndex, MsgLen);
+		
+		MsgLen += SendIndex;
 
 		// If anything left, copy down buffer, and go back
 

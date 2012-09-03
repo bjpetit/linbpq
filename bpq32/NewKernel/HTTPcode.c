@@ -833,7 +833,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 					
 		Sleep(30);
 		Sent = send(sock, MsgBytes, FileSize, 0);
-		Debugprintf("%d out of %d sent", Sent, FileSize);
+//		Debugprintf("%d out of %d sent", Sent, FileSize);
 	}
 
 	free (MsgBytes);
@@ -849,7 +849,7 @@ VOID sendandcheck(SOCKET sock, const char * Buffer, int Len)
 		
 	while (Sent != Len && Loops++ < 300)					// 10 secs max
 	{	
-		Debugprintf("%d out of %d sent %d Loops", Sent, Len, Loops);
+//		Debugprintf("%d out of %d sent %d Loops", Sent, Len, Loops);
 				
 		if (Copy == NULL)
 		{
@@ -1058,6 +1058,7 @@ int CompareNode(const void *a, const void *b)
 	comparison function */ 
 } 
 
+static char EXCEPTMSG[80] = "";
 
 ProcessHTTPMessage(struct ConnectionInfo * conn)
 {
@@ -1079,6 +1080,11 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	char Header[256];
 	int HeaderLen;
 	char TimeString[64];
+	struct _EXCEPTION_POINTERS exinfo;
+
+	strcpy(EXCEPTMSG, "ProcessHTTPMessage");
+
+	__try {
 
 	strcpy(URL, MsgPtr);
 
@@ -1128,7 +1134,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		
 				while (Sent != InputLen && Loops++ < 3000)					// 100 secs max
 				{	
-					Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
+//					Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
 				
 					if (Sent > 0)					// something sent
 					{
@@ -1948,6 +1954,10 @@ SendResp:
 	sendandcheck(sock, Tail, strlen(Tail));
 	}
 	return 0;
+
+	}
+	#include "StdExcept.c"
+	}
 }
 
 char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};

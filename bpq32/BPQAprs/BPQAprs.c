@@ -29,6 +29,17 @@
 // Add option to create a jpeg of the APRS display.
 // Implement Web Server
 
+// .2
+
+// Handle Stations that treats message seq as a number, not a text field
+// Fix excessive CPU if map is minimized while Create jpeg image is enabled
+
+// .3
+
+//	Add Clear Msgs option
+
+// Auguxt 2012 Version 1.1.3.1	Released
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
@@ -2646,8 +2657,37 @@ subitem and return CDRF_NEWFONT.*/
 
 			break;
 
-		}
+		case IDC_CLEARMSGS:
+		{
+			struct APRSMESSAGE * ptr = Messages;
+			struct APRSMESSAGE * last = Messages;
 
+			while (ptr)
+			{
+				last = ptr;
+				ptr = ptr->Next;
+				free(last);
+			}
+
+			Messages = NULL;
+
+			ptr = OutstandingMsgs;
+
+			while (ptr)
+			{
+				last = ptr;
+				ptr = ptr->Next;
+				free(last);
+			}
+
+			OutstandingMsgs = NULL;
+			SendMessage(hMsgsOut, LVM_DELETEALLITEMS, (WPARAM)0, (LPARAM) 0);
+
+			RefreshMessages();
+			break;
+
+		}
+		}
 		break;
 
 		case WM_VSCROLL:
@@ -5679,8 +5719,12 @@ VOID SendAPRSMessage(char * Text, char * ToCall)
 	if (Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
 		wsprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
 	else
-		wsprintf(Message->Seq, "%02X}", NextSeq++);
-	
+	{
+		if (Message->ToStation->SimpleNumericSeq)
+			wsprintf(Message->Seq, "%d", NextSeq++);
+		else
+			wsprintf(Message->Seq, "%02X}", NextSeq++);	// Don't know, so assume message-ack capable
+	}
 	strcpy(Message->Text, Text);
 	Message->Retries = RetryCount;
 	Message->RetryTimer = RetryTimer;
@@ -5804,6 +5848,12 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 				ptr1 = ptr1->Next;
 				nn++;
 			}
+		}
+		else
+		{
+			// Station is not using reply-ack - set to send simple numeric sequence (workround for bug in APRS Messanges
+		
+			Station->SimpleNumericSeq = TRUE;
 		}
 	}
 
@@ -5933,14 +5983,17 @@ VOID SecTimer()
 	{
 		if (JPEGCounter > JPEGInterval)
 		{
-			LoadImageSet(Zoom, SetBaseX, SetBaseY);
+			if (cxWinSize > 0 && cyWinSize > 0)
+			{
+				LoadImageSet(Zoom, SetBaseX, SetBaseY);
 				
-			EnterCriticalSection(&RefreshCrit);
-			RefreshStationMap();
-			LeaveCriticalSection(&RefreshCrit);
+				EnterCriticalSection(&RefreshCrit);
+				RefreshStationMap();
+				LeaveCriticalSection(&RefreshCrit);
 
-			if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 100))
-				JPEGCounter = 0;
+				if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 100))
+					JPEGCounter = 0;
+			}
 		}
 	}
 	if (SendWX)

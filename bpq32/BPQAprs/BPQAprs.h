@@ -53,6 +53,7 @@ struct STATIONRECORD
 	COLORREF TrackColour;
 	char ObjState;					// Live/Killed flag. If zero, not an object
 	char LastRXSeq[6];				// Seq from last received message (used for Reply-Ack system)
+	BOOL SimpleNumericSeq;			// Station treats seq as a number, not a text field
 
 } StationRecord;
 

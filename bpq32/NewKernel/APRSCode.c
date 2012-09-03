@@ -270,8 +270,29 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX);
 
 int ISSend(SOCKET sock, char * Msg, int Len, int flags)
 {
+	int Loops = 0;
+	int Sent;
+
 	MonitorAPRSIS(Msg, Len, TRUE);
-	return send(sock, Msg, Len, flags);
+
+	Sent = send(sock, Msg, Len, flags);
+
+	while (Sent != Len && Loops++ < 300)					// 10 secs max
+	{					
+		if ((Sent == SOCKET_ERROR) && (WSAGetLastError() != WSAEWOULDBLOCK))
+			return SOCKET_ERROR;
+		
+		if (Sent > 0)					// something sent
+		{
+			Len -= Sent;
+			memmove(Msg, &Msg[Sent], Len);
+		}		
+		
+		Sleep(30);
+		Sent = send(sock, Msg, Len, flags);
+	}
+
+	return Sent;
 }
 
 Dll BOOL APIENTRY Init_APRS()
@@ -306,6 +327,8 @@ Dll BOOL APIENTRY Init_APRS()
 	PosnSet = 0;
 	ObjectList = NULL;
 	ObjectCount = 0;
+
+	ISPort = ISHost[0] = ISPasscode = 0;
 
 	if (ReadConfigFile() == 0)
 		return FALSE;
@@ -1804,7 +1827,20 @@ VOID APRSISThread(BOOL Report)
 			while (ptr != NULL)
 			{
 				ptr++;									// include lf
-				len = ptr-(char *)APRSinMsg;		
+				len = ptr-(char *)APRSinMsg;	
+
+				inptr -= len;						// bytes left
+			
+				// UIView server has a null before crlf
+
+				if (*(ptr - 3) == 0)
+				{
+					*(ptr - 3) = 13;
+					*(ptr - 2) = 10;
+					*(ptr - 1) = 0;
+
+					len --;
+				}
 
 				if (len < 300)							// Ignore if way too long
 				{
@@ -1816,8 +1852,6 @@ VOID APRSISThread(BOOL Report)
 					ProcessAPRSISMsg(APRSMsg);
 
 				}
-
-				inptr -= len;						// bytes left
 
 				if (inptr > 0)
 				{
@@ -1928,7 +1962,9 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	*(Dest++) = 0;				// Termainate Source
 	ptr = strchr(Dest, ',');
-	*ptr = 0;
+
+	if (ptr)
+		*ptr = 0;
 
 	MH = UpdateHeard(Source, 0);
 

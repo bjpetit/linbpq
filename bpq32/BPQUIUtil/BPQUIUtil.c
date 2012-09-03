@@ -6,6 +6,10 @@
 //		Call CloseBPQ32 on exit
 //		Allow use with Tracker and UZ7HO ports
 
+//	Version 0.1.2.1 July 2012
+
+//		Fix test for Tracker and UZ7HO ports
+
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -920,14 +924,10 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 		PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntryFromSlot(i);
 
 		if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
-		{
-			if (strstr(PORTVEC->PORT_DLL_NAME, "UZ7") || strstr(PORTVEC->PORT_DLL_NAME, "TRKMULTI") ||
-					strstr(PORTVEC->PORT_DLL_NAME, "TRACKER"))
-				goto OK;
-		}
-		if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
-			continue;
-OK:
+			if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
+				if (PORTVEC->PORTCONTROL.UICAPABLE == 0)
+					continue;
+
 		wsprintf(PortNo, "Port %2d", GetPortNumber(i));
 		PortNum[tab] = GetPortNumber(i);
 

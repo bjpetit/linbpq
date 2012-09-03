@@ -187,7 +187,9 @@ ADJBUFFER	DD	0		; BASE ADJUSED FOR DIGIS
 
 TEMPFIELD	DB	7 DUP (0)	; ADDRESS WORK FILED
 
+			PUBLIC	_TRACE_Q
 
+_TRACE_Q	LABEL DWORD
 TRACE_Q		DD	0		; TRANSMITTED FRAMES TO BE TRACED
 RANDOM		DB	0		; 'RANDOM' NUMBER FOR PERSISTENCE CALCS
  
@@ -4077,11 +4079,29 @@ EXTTX:
 ;
 ;	PROBABLY USED ONLY FOR L1 INTERFACE - WILL SORT OUT L2 LATER
 ;
+;
+;	RESET TIMER, unless BAYCOM 
+;
+	CMP KISSFLAGS[EBX],255
+	jne	NotBaycom				; Used for BAYCOM 	
+;
+	push	edi					; buffer
+
+	MOVZX	EAX,PORTNUMBER[EBX]
+	push	eax					; Port
+	push	2					; Function
+	
+	CALL	PORT_EXT_ADDR[EBX]
+
+	add		esp,8
+	pop		edi
+	
+	ret					; Baycom driver passes frames to trace once sent
+
+NotBaycom:
 
 	PUSH	EBX
-;
-;	RESET TIMER 
-;
+
 	MOV	EBX,BUFFLEN-4[EDI]
 	OR	EBX,EBX
 	JZ SHORT XNOTIMER

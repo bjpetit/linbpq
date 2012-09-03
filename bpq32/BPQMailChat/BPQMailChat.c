@@ -746,6 +746,13 @@
 //  Handle BASE64 and Quoted-printable encoding of single part messages
 //	Work round for RMS Express "All proposals rejected" Bug.
 
+// Version 1.4.52.1 August 2012
+
+//  Fix size limit on B2 To List when sending to multiple dests
+//  Fix initialisation of DIRMES.SYS control record 
+//	Allow use of Tracker and UZ7HO ports for UI messages
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "stdafx.h"
@@ -3597,6 +3604,7 @@ VOID GetMessageDatabase()
 		MsgHddrPtr=malloc(4);
 		MsgHddrPtr[0]= zalloc(sizeof (MsgRec));
 		NumberofMessages = 0;
+		MsgHddrPtr[0]->status = 1;
 
 		return;
 	}
@@ -3611,6 +3619,7 @@ VOID GetMessageDatabase()
 		// Duff file
 
 		memset(&MsgRec, 0, sizeof (MsgRec));
+		MsgRec.status = 1;
 	}
 
 	// Set up control record
@@ -6742,7 +6751,7 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 
 			if (ToLen)
 			{
-				char B2Hddr[1000];
+				char * B2Hddr = zalloc(ToLen + 1000);
 				int B2HddrLen;
 				char DateString[80];
 				struct tm * tm;
@@ -6774,6 +6783,7 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 
 				CreateMessageFromBuffer(conn);
 
+				free(B2Hddr);
 			}
 
 			free(SaveMsg);

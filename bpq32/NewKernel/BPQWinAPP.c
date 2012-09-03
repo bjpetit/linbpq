@@ -7,6 +7,10 @@
 
 //		Call CloseBPQ32 on exit
 
+// Version 2.0.1.1 July 2002
+
+//		Add try/except round main loop
+
 
 #include <windows.h>
 
@@ -65,6 +69,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 {
 	MSG msg;
 	BOOL bRet;
+	struct _EXCEPTION_POINTERS exinfo;
 
 	Debugprintf("BPQ32.exe %s Entered", lpCmdLine);
 
@@ -78,6 +83,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	// Main message loop:
 
+	__try 
+	{
+
 	while( (bRet = GetMessage( &msg, NULL, 0, 0 )) != 0)
 	{ 
 		if (bRet == -1)
@@ -90,6 +98,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 			TranslateMessage(&msg); 
 	        DispatchMessage(&msg); 
 	    }
+	}
+
+	}
+	
+	#define EXCEPTMSG "BPQ32.exe Main Loop"
+	#include "StdExcept.c"
 	}
 
 	Debugprintf("BPQ32.exe exiting %d", msg.message);

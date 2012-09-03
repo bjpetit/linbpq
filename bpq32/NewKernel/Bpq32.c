@@ -461,8 +461,53 @@
 //	Add Web server
 //	Add UIONLY port option
 
+// 5.2.7.2
+
+//	Fix handling TelnetServer packets over 500 bytes in normal mode
+
+// 5.2.7.3
+
+//	Fix Igate handling packets from UIView
+
+// 5.2.7.4
+
+//	Prototype Baycom driver.
+
+// 5.2.7.5
+
+//  Set WK2K group ref to MARS (3) if using a MARS service code
+
+// 5.2.7.7
+
+//	Check for programs calling CloseBPQ32 when holding semaphore
+//  Try/Except round Status Timer Processing
+
+// 5.2.7.8
+
+//  More Try/Except round Timer Processing
+
+// 5.2.7.9
+
+//	Enable RX in Baycom, and remove test loopback in tx
+
+// 5.2.7.10
+
+//	Try/Except round ProcessHTTPMessage
+
+// 5.2.7.11
+
+//	BAYCOM tweaks
+
+// 5.2.7.13
+
+//	Release semaphore after program error in Timer Processing
+//  Check fro valid dest in REFRESHROUTE
+
+
+//	Add TNC-X KISSOPTION (includes the ACKMODE bytes in the checksum(
 
 #define Kernel
+
 #include "Versions.h"
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -540,6 +585,7 @@ UINT WINAPI TrackerMExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI V4ExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT WINAPI MPSKExtInit(EXTPORTDATA * PortEntry);
+UINT WINAPI BaycomExtInit(EXTPORTDATA * PortEntry);
 
 extern char * Buffer;	// Config Area
 
@@ -587,6 +633,8 @@ SaveHostSessions();
 VOID SaveBPQ32Windows();
 VOID CloseDriverWindow(int port);
 VOID CheckWL2KReportTimer();
+
+char EXCEPTMSG[80] = "";
 
 char SIGNONMSG[128] = "";
 char SESSIONHDDR[80] = "";
@@ -1168,6 +1216,11 @@ VOID CALLBACK TimerProc
 
 	SemHeldByAPI = 2;
 
+	strcpy(EXCEPTMSG, "Timer ReconfigProcessing");
+	
+	__try 
+	{
+
 	if (trayMenu == NULL)
 		SetupTrayIcon();
 
@@ -1317,6 +1370,16 @@ VOID CALLBACK TimerProc
 		}
 	}
 
+	}
+	#include "StdExcept.c"
+
+	if (Semaphore && SemProcessID == GetCurrentProcessId())
+		FreeSemaphore();
+
+	}
+
+	strcpy(EXCEPTMSG, "Timer Processing");
+
 	__try 
 	{
 		if (IPActive) Poll_IP();
@@ -1325,26 +1388,32 @@ VOID CALLBACK TimerProc
 		CheckWL2KReportTimer();
 		
 		TIMERINTERRUPT();
+
+		FreeSemaphore();			// SendLocation needs to get the semaphore
+
+		strcpy(EXCEPTMSG, "HTTP Timer Processing");
+
+		HTTPTimer();
+
+		strcpy(EXCEPTMSG, "WL2K Report Timer Processing");
+
+		if (ReportTimer)
+		{		
+			ReportTimer--;
+	
+			if (ReportTimer == 0)
+			{
+				ReportTimer = REPORTINTERVAL;
+				SendLocation();
+			}
+		}
 	}
 	
-	#define EXCEPTMSG "Timer Processing"
 	#include "StdExcept.c"
 
-	}
+	if (Semaphore && SemProcessID == GetCurrentProcessId())
+		FreeSemaphore();
 
-	FreeSemaphore();			// SendLocation needs to get the semaphore
-
-	HTTPTimer();
-
-	if (ReportTimer)
-	{		
-		ReportTimer--;
-	
-		if (ReportTimer == 0)
-		{
-			ReportTimer = REPORTINTERVAL;
-			SendLocation();
-		}
 	}
 
 	return;
@@ -1396,8 +1465,11 @@ FirstInit()
 	{
 		hWndBG = CreateWindowEx(0, "STATIC", "", WS_CHILD | WS_VISIBLE, 0,0,40,546, hConsWnd, NULL, hInstance, NULL);
 
-		CreateWindowEx(0, "BUTTON", "Enable IGate", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,
-			8,1,110,24, hConsWnd, (HMENU)IDC_ENIGATE, hInstance, NULL);
+		CreateWindowEx(0, "STATIC", "Enable IGate", WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE,
+			8,0,90,24, hConsWnd, (HMENU)-1, hInstance, NULL);
+		
+		CreateWindowEx(0, "BUTTON", "", WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,
+			95,1,18,24, hConsWnd, (HMENU)IDC_ENIGATE, hInstance, NULL);
 
 		CreateWindowEx(0, "STATIC", "IGate State - Disconnected",
 			WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE, 125, 0, 195, 24, hConsWnd, (HMENU)IGATESTATE, hInstance, NULL);
@@ -1654,24 +1726,17 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			MessageBox(NULL,"NODES Table .c and .asm mismatch - fix and rebuild", "BPQ32", MB_OK);
 			return 0;
 		}
-
-		Debugprintf("DLLMAIN Entered Sem = %d", Semaphore);
 	
 		GetSemaphore();
+		SemHeldByAPI = 4;
 
 		BPQHOSTVECPTR = &BPQHOSTVECTOR[0];
-
-		SemHeldByAPI = 4;
 		
-		Debugprintf("DLLMAIN Entered Sem = %d", Semaphore);
-
 		LoadToolHelperRoutines();
 
 		Our_PID = GetCurrentProcessId();
 
-		GetProcess(Our_PID,pgm);
-
-		Debugprintf("%s", pgm);
+		GetProcess(Our_PID, pgm);
 
 		if (_stricmp(pgm, "regsvr32.exe") == 0 || _stricmp(pgm, "bpqcontrol.exe") == 0)
 		{
@@ -1679,8 +1744,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			FreeSemaphore();
 			return 1;
 		}
-
-
 
 		if (_stricmp(pgm,"BPQ32.exe") == 0)
 			BPQ32_EXE = TRUE;
@@ -2035,8 +2098,19 @@ DllExport int APIENTRY CloseBPQ32()
 
 	PEXTPORTDATA PORTVEC=(PEXTPORTDATA)PORTTABLE;
 	int i;
+	int ProcessID = GetCurrentProcessId();
 
-	if (TimerInst == GetCurrentProcessId())
+	if (Semaphore == 1 && ProcessID == SemProcessID)
+	{
+		OutputDebugString("BPQ32 Process holding Semaphore called CloseBPQ32 - attempting recovery\r\n");
+		Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
+			Sem_eax, Sem_ebx, Sem_ecx, Sem_edx, Sem_esi, Sem_edi); 
+
+		Semaphore = 0;
+		SemHeldByAPI = 0;
+	}
+
+	if (TimerInst == ProcessID)
 	{	
 		OutputDebugString("BPQ32 Process with Timer called CloseBPQ32\n");
 
@@ -3940,6 +4014,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "MULTIPSK"))
 		return (UINT) MPSKExtInit;
 
+	if (strstr(Value, "BAYCOM"))
+		return (UINT) BaycomExtInit;
+
 	ExtDriver=LoadLibrary(Value);
 
 	if (ExtDriver == NULL)
@@ -4640,9 +4717,7 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_NCCREATE:
 
-			Debugprintf("NC Create");
 			ret = DefFrameProc(hWnd, ClientWnd, message, wParam, lParam);
-			Debugprintf("NC Create %d", ret );
 			return TRUE;
 
 		case WM_CREATE:
@@ -4809,8 +4884,6 @@ int SetupConsoleWindow()
 	char Size[80];
 	WNDCLASSEX wndclassMainFrame;
 	RECT CRect;
-
-	Debugprintf("SetupConsoleWindow");
 
 	retCode = RegOpenKeyEx (REGTREE,
                 "SOFTWARE\\G8BPQ\\BPQ32",    
@@ -5168,8 +5241,8 @@ doneit:
 
 	if (Shell_NotifyIcon(NIM_ADD,&niData))
 		Debugprintf("BPQ32 Create Tray Icon Ok");
-	else
-		Debugprintf("BPQ32 Create Tray Icon failed %d", GetLastError());
+//	else
+//		Debugprintf("BPQ32 Create Tray Icon failed %d", GetLastError());
 
 	return 0;
 }
@@ -6651,11 +6724,15 @@ int DoStatus()
 	int Flags;
 	int AppNumber;
 	int OneBits;
+	struct _EXCEPTION_POINTERS exinfo;
 
 	memset(NewScreen, ' ', 33 * 108); 
 
 	strcpy(NewScreen,"    RX  TX MON App Flg Callsign  Program                  RX  TX MON App Flg Callsign  Program");
 
+	strcpy(EXCEPTMSG, "Status Timer Processing");
+	__try
+	{
 	for (i=1;i<65; i++)
 	{		
 		callsign[0]=0;
@@ -6696,6 +6773,14 @@ int DoStatus()
 			BPQHOSTVECTOR[i-1].PgmName, pgm);
 
 	}
+	}
+
+	#include "StdExcept.c"
+
+	if (Semaphore && SemProcessID == GetCurrentProcessId())
+		FreeSemaphore();
+
+	}
 
 	if (memcmp(Screen, NewScreen, 33 * 108) == 0)	// No Change
 		return 0;
@@ -6720,9 +6805,7 @@ LRESULT CALLBACK StatusWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	{
 	case WM_TIMER:
 
-		//if (StreamDisplay) 
 		DoStatus();
-	//	else DoIPStatus();
 		break;
 
 	case WM_MDIACTIVATE:

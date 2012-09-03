@@ -525,7 +525,7 @@ DllExport BOOL ProcessConfig()
 	LOCATOR[0] = 0;
 	MAPCOMMENT[0] = 0;
 
-	for (i = 0; i < 34; i++)
+	for (i = 0; i < 35; i++)
 	{
 		if (PortConfig[i])
 		{
@@ -2331,6 +2331,7 @@ char rec[];
 	opt4[1] = '\0';
 	opt5[1] = '\0';
 
+
 	sscanf(value,"%[^,+],%[^,+],%[^,+],%[^,+],%[^,+]",opt1,opt2,opt3,opt4,opt5);
 
 	if (opt1[1] != '\0') {do_kiss(opt1,rec);}
@@ -2488,6 +2489,11 @@ int do_kiss (char * value,char * rec)
 		err=0;
 		kissflags=kissflags | 16;
 	}
+	if (_stricmp(value,"TNCX") == 0)
+	{
+		err=0;
+		kissflags=kissflags | 32;
+	}
 
 	if (_stricmp(value,"ACKMODE") == 0)
 	{
@@ -2503,7 +2509,7 @@ int do_kiss (char * value,char * rec)
 
 	if (err == 255)
 	{
-	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE)");
+	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE TNCX)");
 	   Consoleprintf("%s\r\n",rec);
 	}
 	return (err);

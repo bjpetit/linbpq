@@ -3248,8 +3248,8 @@ int CreateDialogLine(HWND hWnd, int i, int row)
 
 	if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
 		if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
-			return FALSE;
-
+			if (PORTVEC->PORTCONTROL.UICAPABLE == 0)
+				return FALSE;
 
 	GetPortDescription(i, PortDesc);
 	wsprintf(PortNo, "Port %2d %30s", GetPortNumber(i), PortDesc);
