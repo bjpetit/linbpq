@@ -465,13 +465,7 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 
 	if (hMonitor )
 	{
-		if (Flags == LOG_TCP && MonTCP)
-		{	
-			WritetoMonitorWindow((char *)&Flag, 1);
-			WritetoMonitorWindow(Msg, MsgLen);
-			WritetoMonitorWindow(CRLF , 1);
-		}
-		else if (Flags == LOG_CHAT && MonCHAT)
+		if (Flags == LOG_CHAT && MonCHAT)
 		{	
 			WritetoMonitorWindow((char *)&Flag, 1);
 
@@ -488,21 +482,6 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 			if (Msg[MsgLen-1] != '\r')
 				WritetoMonitorWindow(CRLF , 1);
 		}
-		else if (Flags == LOG_BBS  && MonBBS)
-		{	
-			WritetoMonitorWindow((char *)&Flag, 1);
-			if (conn && conn->Callsign[0])
-			{
-				char call[20];
-				wsprintf(call, "%s          ", conn->Callsign);
-				WritetoMonitorWindow(call, 10);
-			}
-			else
-				WritetoMonitorWindow("          ", 10);
-
-			WritetoMonitorWindow(Msg, MsgLen);
-			WritetoMonitorWindow(CRLF , 1);
-		}
 		else if (Flags == LOG_DEBUG)
 		{	
 			WritetoMonitorWindow((char *)&Flag, 1);
@@ -512,10 +491,6 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 
 	}
 
-	if (Flags == LOG_TCP && !LogTCP)
-		return;
-	if (Flags == LOG_BBS && !LogBBS)
-		return;
 	if (Flags == LOG_CHAT && !LogCHAT)
 		return;
 

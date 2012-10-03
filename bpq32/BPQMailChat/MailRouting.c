@@ -704,7 +704,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	struct UserInfo * bbs;
 	struct UserInfo * user;
 	struct BBSForwardingInfo * ForwardingInfo;
-	char ATBBS[41];
+	char ATBBS[41]="";
 	char RouteElements[41];
 	int Count = 0;
 	char * HElements[20] = {NULL};
@@ -1099,6 +1099,41 @@ NOHA:
 			return 1;
 		}
 
+		// Check for wildcarded AT address
+
+		if (ATBBS[0] == 0)
+			return FALSE;			// no AT
+
+		depth = 0;
+		bestmatch = -1;
+		
+		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+		{		
+			ForwardingInfo = bbs->ForwardingInfo;
+
+			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
+				continue;
+
+			depth = CheckBBSATListWildCarded(Msg, bbs, ForwardingInfo, ATBBS);
+
+			if (depth > -1)
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace Wildcarded AT Matches  %s Length %d", bbs->Call, depth);
+		
+				if (depth > bestmatch)
+				{
+					bestmatch = depth;
+					bestbbs = bbs;
+				}
+			}
+		}
+		if (bestbbs)
+		{
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace Wildcarded AT Best Match is %s", bestbbs->Call);
+			CheckAndSend(Msg, conn, bestbbs);
+			return 1;
+		}
+
 		return FALSE;	// No match
 	}
 
@@ -1149,6 +1184,7 @@ NOHA:
 
 			Count++;
 		}
+
 	}
 
 	return Count;
@@ -1355,6 +1391,59 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForw
 	}
 	return bestmatch;
 }
+
+
+
+
+
+
+int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS)
+{
+	char ** Calls;
+	char * Call;
+	char * ptr;
+	int bestmatch = -1;
+	int MatchLen = 0;
+
+	// Look for Matches on AT using Wildcarded Addresses. Only applied after all other checks fail. Intended mainly
+	// for setting a default route, but could have other uses
+	
+	// We forward to the BBS with the most specific match - ie minimum *'s in match
+
+	if (ForwardingInfo->ATCalls)
+	{
+		Calls = ForwardingInfo->ATCalls;
+
+		while(Calls[0])
+		{
+			Call = Calls[0];
+			ptr = strchr(Call, '*');
+
+			// only look if * present - we have already tried routing on the full AT
+			
+			if (ptr)
+			{
+				MatchLen = ptr - Call;
+
+				if (memcmp(ATBBS, Call, MatchLen) == 0)
+				{
+					// Match - de we have a better one?
+
+					if (MatchLen > bestmatch)
+						bestmatch = MatchLen;
+				}
+			}
+
+			Calls++;
+		}
+	}
+	return bestmatch;
+}
+
+
+
+
+
 
 VOID ReRouteMessages()
 {

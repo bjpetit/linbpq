@@ -220,6 +220,7 @@ PortNoKeepAlive DB	0;		; Default to No Keepalives
 PortUIOnly	DB	0;
 UICAPABLE	DB	0;			; Pactor-style port that can do UI
 WL2K		DD	0		; Pointer to WL2K Report Data
+PORTIPADDR	DD	0;
 
 HARDWAREDATA	DB	200 DUP (?)	; WORK AREA FOR HARDWARE DRIVERS
 

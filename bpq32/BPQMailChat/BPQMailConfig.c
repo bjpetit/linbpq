@@ -4,7 +4,7 @@
 //	Configuration Module
 
 #include "stdafx.h"
-#define C_PAGES 7
+#define C_PAGES 8
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
@@ -13,8 +13,9 @@ int CurrentPage=0;				// Page currently on show in tabbed Dialog
 #define CHATPARAMS 2
 #define MAINTPARAMS 3
 #define WELCOMEMSGS 4
-#define FILTERS 5
-#define WPUPDATE 6
+#define PROMPTS 5
+#define FILTERS 6
+#define WPUPDATE 7
 
 typedef struct tag_dlghdr {
 
@@ -315,6 +316,11 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			SaveWelcomeMsgs();
 			return TRUE;
 
+		case IDM_PROMPTSAVE:
+
+			SavePrompts();
+			return TRUE;
+
 		case IDC_FILTERSAVE:
 
 			SaveFilters(hDlg);
@@ -390,14 +396,17 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
  	tie.pszText = "Housekeeping";
 	TabCtrl_InsertItem(pHdr->hwndTab, 3, &tie);
 
-	tie.pszText = "Welcome Messages";
+	tie.pszText = "Welcome Msgs";
 	TabCtrl_InsertItem(pHdr->hwndTab, 4, &tie);
 
-	tie.pszText = "Message Filters";
+	tie.pszText = "Prompts";
 	TabCtrl_InsertItem(pHdr->hwndTab, 5, &tie);
 
-	tie.pszText = "WP Update";
+	tie.pszText = "Msg Filters";
 	TabCtrl_InsertItem(pHdr->hwndTab, 6, &tie);
+
+	tie.pszText = "WP Update";
+	TabCtrl_InsertItem(pHdr->hwndTab, 7, &tie);
 
 	// Lock the resources for the three child dialog boxes.
 
@@ -406,8 +415,9 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	pHdr->apRes[2] = DoLockDlgRes("CHAT_CONFIG");
 	pHdr->apRes[3] = DoLockDlgRes("MAINT");
 	pHdr->apRes[4] = DoLockDlgRes("WELCOMEMSG");
-	pHdr->apRes[5] = DoLockDlgRes("FILTERS");
-	pHdr->apRes[6] = DoLockDlgRes("WPUPDATE");
+	pHdr->apRes[5] = DoLockDlgRes("BBSPROMPTS");
+	pHdr->apRes[6] = DoLockDlgRes("FILTERS");
+	pHdr->apRes[7] = DoLockDlgRes("WPUPDATE");
 
 	// Determine the bounding rectangle for all child dialog boxes.
 
@@ -661,6 +671,13 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		break;
 
+	case PROMPTS:
+
+		SetDlgItemText(pHdr->hwndDisplay, IDM_USERMSG, Prompt);
+		SetDlgItemText(pHdr->hwndDisplay, IDM_NEWUSERMSG, NewPrompt);
+		SetDlgItemText(pHdr->hwndDisplay, IDM_EXPERTUSERMSG, ExpertPrompt);
+
+		break;
 	case FILTERS:
 
 		Text[0] = 0;
@@ -2002,6 +2019,47 @@ VOID SaveWelcomeMsgs()
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 }
 
+
+
+VOID SavePrompts()
+{
+	char Value[10000];
+
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
+	HKEY hKey=0;
+	int retCode, disp;
+
+	retCode = RegCreateKeyEx(REGTREE,
+                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	GetDlgItemText(hwndDisplay, IDM_USERMSG, Value, 10000);
+
+	free(Prompt);
+	Prompt = _strdup(Value);
+	
+	RegSetValueEx(hKey, "Prompt", 0, REG_BINARY, Value, strlen(Value) + 1);
+
+	GetDlgItemText(hwndDisplay, IDM_NEWUSERMSG, Value, 10000);
+
+	free(NewPrompt);
+	NewPrompt = _strdup(Value);
+	
+	RegSetValueEx(hKey, "NewUserPrompt", 0, REG_BINARY, Value, strlen(Value) + 1);
+
+	GetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, Value, 10000);
+
+	free(ExpertPrompt);
+	ExpertPrompt = _strdup(Value);
+	
+	RegSetValueEx(hKey, "ExpertPrompt", 0, REG_BINARY, Value, strlen(Value) + 1);
+
+	RegCloseKey(hKey);
+
+	wsprintf(InfoBoxText, "Configuration Saved");
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+}
+
+
 VOID SaveWPConfig(HWND hDlg)
 {
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
@@ -2442,6 +2500,89 @@ TryAgain:
 		}
 		else
 			ExpertWelcomeMsg = _strdup("");
+
+
+		// Get Prompts
+
+		Vallen=0;
+		
+		RegQueryValueEx(hKey,"Prompt",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			Prompt = malloc(Vallen);
+			RegQueryValueEx(hKey,"Prompt",0, (ULONG *)&Type, Prompt, (ULONG *)&Vallen);
+		}
+		else
+		{
+			Prompt = malloc(20);
+			wsprintf(Prompt, "de %s>\r\n", BBSName);
+		}
+
+		RegQueryValueEx(hKey,"NewUserPrompt",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			NewPrompt = malloc(Vallen);
+			RegQueryValueEx(hKey,"NewUserPrompt",0, (ULONG *)&Type, NewPrompt, (ULONG *)&Vallen);
+		}
+		else
+		{
+			NewPrompt = malloc(20);
+			wsprintf(NewPrompt, "de %s>\r\n", BBSName);
+		}
+
+		RegQueryValueEx(hKey,"ExpertPrompt",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			ExpertPrompt = malloc(Vallen);
+			RegQueryValueEx(hKey,"ExpertPrompt",0, (ULONG *)&Type, ExpertPrompt, (ULONG *)&Vallen);
+		}
+		else
+		{
+			ExpertPrompt = malloc(20);
+			wsprintf(ExpertPrompt, "de %s>\r\n", BBSName);
+		}
+
+
+		RegQueryValueEx(hKey,"NewUserWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			NewWelcomeMsg = malloc(Vallen);
+			RegQueryValueEx(hKey,"NewUserWelcomeMsg",0, (ULONG *)&Type, NewWelcomeMsg, (ULONG *)&Vallen);
+		}
+		else
+			
+			NewWelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
+
+		RegQueryValueEx(hKey,"ChatWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			ChatWelcomeMsg = malloc(Vallen);
+			RegQueryValueEx(hKey,"ChatWelcomeMsg",0, (ULONG *)&Type, ChatWelcomeMsg, (ULONG *)&Vallen);
+		}
+		else
+			
+			ChatWelcomeMsg = _strdup(
+			
+			"G8BPQ Chat Server.\r\nType /h for command summary.\r\nBringing up links to other nodes.\r\n"
+			"This may take a minute or two.\r\nThe /p command shows what nodes are linked.\r\n");
+	
+		Vallen=0;
+		
+		RegQueryValueEx(hKey,"ExpertWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+		if (Vallen)
+		{
+			ExpertWelcomeMsg = malloc(Vallen);
+			RegQueryValueEx(hKey,"ExpertWelcomeMsg",0, (ULONG *)&Type, ExpertWelcomeMsg, (ULONG *)&Vallen);
+		}
+		else
+			ExpertWelcomeMsg = _strdup("");
+
 
 		Vallen=80;
 

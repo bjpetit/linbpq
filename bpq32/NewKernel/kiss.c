@@ -19,155 +19,184 @@
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "kiss.h"
+#include "AsmStrucs.h"
 
 int WritetoConsoleLocal(char * buff);
 
    
-int ASYSEND(int port, char * buffer, int count)
+int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 {
-   WriteCommBlock(port, buffer, count);
-   return (0);
+	NPKISSINFO Port = KISSInfo[PortVector->PORTNUMBER];
+	
+	if (PortVector->PORTIPADDR.S_un.S_addr)		// KISS over UDP
+		sendto(Port->sock, buffer, count, 0, (struct sockaddr *)&Port->destaddr, sizeof(Port->destaddr));
+	else
+		WriteCommBlock(Port, buffer, count);
+	
+	return (0);
 }
 
-VOID ASYDISP(int port, char Channel)
+VOID ASYDISP(struct PORTCONTROL * PortVector)
 {
-	char Msg[20];
-		
-	wsprintf(Msg,"ASYNC COM%d Chan %c\n", port, Channel);
+	char Msg[80];
 
+	if (PortVector->PORTIPADDR.S_un.S_addr)
+
+		// KISS over UDP
+
+		wsprintf(Msg,"UDPKISS IP %s Port %d Chan %c\n", inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, PortVector->CHANNELNUM);
+	else
+		wsprintf(Msg,"ASYNC COM%d Chan %c\n", PortVector->IOBASE, PortVector->CHANNELNUM);
+		
 	WritetoConsoleLocal(Msg);
 	return;
 }
 
 
-int	ASYINIT(int port, int speed, int PortVector, int RXVector, char Channel )
+int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, int RXVector, char Channel )
 {
-	char Msg[20];
-	
-	NPTTYINFO npTTYInfo ;
-	
-	wsprintf(Msg,"ASYNC COM%d Chan %c ", port, Channel);
+	char Msg[80];
+	NPKISSINFO npKISSINFO;
+	int BPQPort = PortVector->PORTNUMBER;
 
-	WritetoConsoleLocal(Msg);
+	if (PortVector->PORTIPADDR.S_un.S_addr)
+	{
+		SOCKET sock;
+		u_long param=1;
+		BOOL bcopt=TRUE;
+		SOCKADDR_IN sinx;
 
-	CreateTTYInfo(port,speed);
+		// KISS over UDP
 
-	if (NULL == (npTTYInfo = KISSInfo[port]))
-		return ( FALSE ) ;
-
-	PORTVECTOR(npTTYInfo) = PortVector; //	BX on entry to char handlers
-	RXVECTOR(npTTYInfo) = RXVector; //	Routine to call for each char
-
-	OpenConnection(port);
+		wsprintf(Msg,"UDPKISS IP %s Port %d Chan %c ", inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, Channel);
+		WritetoConsoleLocal(Msg);
 		
+		npKISSINFO = (NPKISSINFO) LocalAlloc( LPTR, sizeof(KISSINFO));
+
+		memset(npKISSINFO, 0, sizeof(KISSINFO));
+		npKISSINFO->bPort = comport;
+  
+		KISSInfo[PortVector->PORTNUMBER] = npKISSINFO;
+
+		npKISSINFO->sock = sock = socket(AF_INET,SOCK_DGRAM,0);
+
+		ioctlsocket(sock, FIONBIO, &param);
+ 
+		setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
+
+		sinx.sin_family = AF_INET;
+		sinx.sin_addr.s_addr = INADDR_ANY;		
+		sinx.sin_port = htons(PortVector->IOBASE);
+
+		if (bind(sock, (LPSOCKADDR) &sinx, sizeof(sinx)) != 0 )
+		{
+			char Title[20];
+
+			//	Bind Failed
+
+			int err = WSAGetLastError();
+			wsprintf(Msg, "Bind Failed for UDP socket - error code = %d", err);
+			wsprintf(Title, "UDPKISS Port %d", PortVector->PORTNUMBER);
+			MessageBox(NULL, Msg, Title, MB_OK);
+			return 0;
+		}
+
+		npKISSINFO->destaddr.sin_family = AF_INET;
+		npKISSINFO->destaddr.sin_addr.s_addr = PortVector->PORTIPADDR.S_un.S_addr;		
+		npKISSINFO->destaddr.sin_port = htons(PortVector->IOBASE);
+	}
+
+	else
+	{
+		wsprintf(Msg,"ASYNC COM%d Chan %c ", comport, Channel);
+		WritetoConsoleLocal(Msg);
+
+		npKISSINFO = KISSInfo[PortVector->PORTNUMBER] = CreateKISSINFO(comport, speed);
+
+		if (NULL == npKISSINFO)
+			return ( FALSE ) ;
+
+		OpenConnection(npKISSINFO, comport);
+	}
+
+	npKISSINFO->Portvector = PortVector; //	BX on entry to char handlers
+	npKISSINFO->RXvector = RXVector; //	Routine to call for each char
+
 	WritetoConsoleLocal("\n");
 
 	return (0);
 }
 
-VOID KISSCLOSE(int Port)
-{ 
-	DestroyTTYInfo(Port);
+VOID KISSCLOSE(struct PORTCONTROL * PortVector)
+{
+	NPKISSINFO Port = KISSInfo[PortVector->PORTNUMBER];
+
+	if (Port == NULL)
+		return;
+	
+	if (PortVector->PORTIPADDR.S_un.S_addr)
+	{
+		closesocket(Port->sock);
+	}
+	else
+	{
+		SetCommMask(Port->idComDev, 0 ) ;
+
+		// drop DTR
+
+		EscapeCommFunction(Port->idComDev, CLRDTR);
+
+		// purge any outstanding reads/writes and close device handle
+
+		EscapeCommFunction(Port->idComDev, CLRDTR);
+		EscapeCommFunction(Port->idComDev, CLRDTR);
+		PurgeComm(Port->idComDev, PURGE_TXABORT | PURGE_RXABORT |
+                                   PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
+		
+		CloseHandle(Port->idComDev);
+	}
+   
+	LocalFree(Port);
+	KISSInfo[PortVector->PORTNUMBER] = NULL;
+
+	return;
 }
 
-NPTTYINFO CreateTTYInfo( int port,int speed )
+NPKISSINFO CreateKISSINFO( int port,int speed )
 {
-   NPTTYINFO   npTTYInfo ;
+   NPKISSINFO   npKISSINFO ;
 
-   if (NULL == (npTTYInfo =
-                   (NPTTYINFO) LocalAlloc( LPTR, sizeof( TTYINFO ) )))
-      return ( (NPTTYINFO) -1 ) ;
+   if (NULL == (npKISSINFO =
+                   (NPKISSINFO) LocalAlloc( LPTR, sizeof( KISSINFO ) )))
+      return ( (NPKISSINFO) 0 ) ;
 
    // initialize TTY info structure
 
-   COMDEV( npTTYInfo )        = 0 ;
-   CONNECTED( npTTYInfo )     = FALSE ;
-   PORT( npTTYInfo )          = port;
-   BAUDRATE( npTTYInfo )      = speed; //CBR_9600 ;
-   BYTESIZE( npTTYInfo )      = 8 ;
-   FLOWCTRL( npTTYInfo )      = 0; FC_XONXOFF ;
-   PARITY( npTTYInfo )        = NOPARITY ;
-   STOPBITS( npTTYInfo )      = ONESTOPBIT ;
-
-	KISSInfo[port]=npTTYInfo;
+	npKISSINFO->idComDev = 0 ;
+	npKISSINFO->bPort = port;
+	npKISSINFO->dwBaudRate = speed;
 	
-	return (npTTYInfo);
+	return (npKISSINFO);
 }
 
-
-//---------------------------------------------------------------------------
-//  BOOL NEAR DestroyTTYInfo( HWND hWnd )
-//
-//  Description:
-//     Destroys block associated with TTY window handle.
-//
-//  Parameters:
-//     HWND hWnd
-//        handle to TTY window
-//
-//  Win-32 Porting Issues:
-//     - Needed to clean up event objects created during initialization.
-//
-//---------------------------------------------------------------------------
-
-BOOL NEAR DestroyTTYInfo( int port )
-{
-   NPTTYINFO npTTYInfo ;
-
-   if (NULL == (npTTYInfo = KISSInfo[port]))
-      return ( FALSE ) ;
-
-   // force connection closed (if not already closed)
-
-   if (CONNECTED( npTTYInfo ))
-      CloseConnection( port ) ;
-
-   LocalFree( npTTYInfo ) ;
-   KISSInfo[port] = NULL;
-
-   return ( TRUE ) ;
-
-} // end of DestroyTTYInfo()
-
-//  BOOL NEAR OpenConnection( HWND hWnd )
-//
-//  Description:
-//     Opens communication port specified in the TTYINFO struct.
-//     It also sets the CommState and notifies the window via
-//     the fConnected flag in the TTYINFO struct.
-//
-//  Parameters:
-//     HWND hWnd
-//        handle to TTY window
-//
-//  Win-32 Porting Issues:
-//     - OpenComm() is not supported under Win-32.  Use CreateFile()
-//       and setup for OVERLAPPED_IO.
-//     - Win-32 has specific communication timeout parameters.
-//     - Created the secondary thread for event notification.
-//
-//---------------------------------------------------------------------------
-
-BOOL NEAR OpenConnection( int port)
+BOOL NEAR OpenConnection(NPKISSINFO npKISSINFO, int port)
 {            
-	char       szPort[15];
-	BOOL       fRetVal ;
-	NPTTYINFO  npTTYInfo ;
+	char szPort[15];
+	BOOL fRetVal ;
 	COMMTIMEOUTS  CommTimeOuts ;
-	int Err;
-
+	int	Err;
 	char buf[100];
 
-	if (NULL == (npTTYInfo = KISSInfo[port]))
-		return ( FALSE ) ;
+	if (NULL == npKISSINFO)
+		return FALSE;
 
   // load the COM prefix string and append port number
    
-  wsprintf( szPort, "\\\\.\\COM%d", PORT(npTTYInfo));
+  wsprintf( szPort, "\\\\.\\COM%d", port);
 
    // open COMM device
 
-   COMDEV( npTTYInfo ) =
+   npKISSINFO->idComDev =
       CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
                   NULL,                 // no security attrs
@@ -175,9 +204,9 @@ BOOL NEAR OpenConnection( int port)
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
 				  
-	if (COMDEV( npTTYInfo ) == (HANDLE) -1 )
+	if (npKISSINFO->idComDev == (HANDLE) -1 )
 	{
-		wsprintf(buf,"COM%d could not be opened ", PORT( npTTYInfo ));
+		wsprintf(buf,"COM%d could not be opened ", port);
 		WritetoConsoleLocal(buf);
 		strcat(buf, "\r\n");
 		OutputDebugString(buf);
@@ -187,15 +216,15 @@ BOOL NEAR OpenConnection( int port)
 
    else
    {
-	Err = GetFileType(COMDEV( npTTYInfo ));
+	Err = GetFileType(npKISSINFO->idComDev);
 
 	// setup device buffers
 
-      SetupComm( COMDEV( npTTYInfo ), 4096, 4096 ) ;
+      SetupComm(npKISSINFO->idComDev, 4096, 4096 ) ;
 
       // purge any information in the buffer
 
-      PurgeComm( COMDEV( npTTYInfo ), PURGE_TXABORT | PURGE_RXABORT |
+      PurgeComm(npKISSINFO->idComDev, PURGE_TXABORT | PURGE_RXABORT |
                                       PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
 
       // set up for overlapped I/O
@@ -206,31 +235,27 @@ BOOL NEAR OpenConnection( int port)
       CommTimeOuts.WriteTotalTimeoutMultiplier = 0 ;
 //      CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
       CommTimeOuts.WriteTotalTimeoutConstant = 500 ;
-      SetCommTimeouts( COMDEV( npTTYInfo ), &CommTimeOuts ) ;
+      SetCommTimeouts(npKISSINFO->idComDev, &CommTimeOuts ) ;
    }
 	
-	fRetVal = SetupConnection(port);
+	fRetVal = SetupConnection(npKISSINFO);
 
 	if (fRetVal)
 	{
-		CONNECTED(npTTYInfo) = TRUE;
-
 		// assert DTR
 
-		EscapeCommFunction( COMDEV( npTTYInfo ), SETDTR ) ;
-
+		EscapeCommFunction(npKISSINFO->idComDev, SETDTR);
 	}
 	else
 	{
-	   wsprintf(buf,"COM%d Setup Failed %d ", PORT(npTTYInfo), GetLastError());
+	   wsprintf(buf,"COM%d Setup Failed %d ", npKISSINFO->bPort, GetLastError());
 	   WritetoConsoleLocal(buf);
 	   OutputDebugString(buf);
 
-      CONNECTED(npTTYInfo) = FALSE;
-      CloseHandle(COMDEV(npTTYInfo));
-   }
+		CloseHandle(npKISSINFO->idComDev);
+	}
 
-   return fRetVal;
+	return fRetVal;
 
 } // end of OpenConnection()
 
@@ -252,114 +277,49 @@ BOOL NEAR OpenConnection( int port)
 //
 //---------------------------------------------------------------------------
 
-BOOL NEAR SetupConnection( int port )
+BOOL NEAR SetupConnection(NPKISSINFO npKISSINFO)
 {
-   BOOL       fRetVal ;
-   BYTE       bSet ;
-   DCB        dcb ;
-   NPTTYINFO  npTTYInfo ;
-
-
-   
-   if (NULL == (npTTYInfo = KISSInfo[port]))
-      return ( FALSE ) ;
+	BOOL       fRetVal ;
+	DCB        dcb ;
+	
+	if (NULL == npKISSINFO)
+      return FALSE;
 
    dcb.DCBlength = sizeof( DCB ) ;
 
-   GetCommState( COMDEV( npTTYInfo ), &dcb ) ;
+   GetCommState(npKISSINFO->idComDev, &dcb ) ;
 
-   dcb.BaudRate = BAUDRATE( npTTYInfo ) ;
-   dcb.ByteSize = BYTESIZE( npTTYInfo ) ;
-   dcb.Parity = PARITY( npTTYInfo ) ;
-   dcb.StopBits = STOPBITS( npTTYInfo ) ;
+   dcb.BaudRate = npKISSINFO->dwBaudRate;
+   dcb.ByteSize = 8;
+   dcb.Parity = 0;
+   dcb.StopBits = 0;
 
    // setup hardware flow control
 
-   bSet = (BYTE) ((FLOWCTRL( npTTYInfo ) & FC_DTRDSR) != 0) ;
-   dcb.fOutxDsrFlow = bSet ;
-   if (bSet)
-      dcb.fDtrControl = DTR_CONTROL_HANDSHAKE ;
-   else
-      dcb.fDtrControl = DTR_CONTROL_ENABLE ;
+   dcb.fOutxDsrFlow = 0;
+   dcb.fDtrControl = DTR_CONTROL_ENABLE ;
 
-   bSet = (BYTE) ((FLOWCTRL( npTTYInfo ) & FC_RTSCTS) != 0) ;
-	dcb.fOutxCtsFlow = bSet ;
-   if (bSet)
-      dcb.fRtsControl = RTS_CONTROL_HANDSHAKE ;
-   else
-      dcb.fRtsControl = RTS_CONTROL_ENABLE ;
+	dcb.fOutxCtsFlow = 0;
+	dcb.fRtsControl = RTS_CONTROL_ENABLE ;
 
    // setup software flow control
 
-   bSet = (BYTE) ((FLOWCTRL( npTTYInfo ) & FC_XONXOFF) != 0) ;
-
-   dcb.fInX = dcb.fOutX = bSet ;
-   dcb.XonChar = ASCII_XON ;
-   dcb.XoffChar = ASCII_XOFF ;
+   dcb.fInX = dcb.fOutX = 0;
+   dcb.XonChar = 0;
+   dcb.XoffChar = 0;
    dcb.XonLim = 100 ;
    dcb.XoffLim = 100 ;
 
    // other various settings
 
    dcb.fBinary = TRUE ;
-   dcb.fParity = TRUE ;
+   dcb.fParity = FALSE;
 
-   fRetVal = SetCommState( COMDEV( npTTYInfo ), &dcb ) ;
+   fRetVal = SetCommState(npKISSINFO->idComDev, &dcb ) ;
 
    return ( fRetVal ) ;
 
 } // end of SetupConnection()
-
-//---------------------------------------------------------------------------
-//  BOOL NEAR CloseConnection( HWND hWnd )
-//
-//  Description:
-//     Closes the connection to the port.  Resets the connect flag
-//     in the TTYINFO struct.
-//
-//  Parameters:
-//     HWND hWnd
-//        handle to TTY window
-//
-//  Win-32 Porting Issues:
-//     - Needed to stop secondary thread.  SetCommMask() will signal the
-//       WaitCommEvent() event and the thread will halt when the
-//       CONNECTED() flag is clear.
-//     - Use new PurgeComm() API to clear communications driver before
-//       closing device.
-//
-//---------------------------------------------------------------------------
-
-BOOL NEAR CloseConnection( int port )
-{
-   NPTTYINFO  npTTYInfo ;
-
-   if (NULL == (npTTYInfo = KISSInfo[port]))
-      return ( FALSE ) ;
-
-   // set connected flag to FALSE
-
-   CONNECTED( npTTYInfo ) = FALSE ;
-
-   // disable event notification and wait for thread
-   // to halt
-
-   SetCommMask( COMDEV( npTTYInfo ), 0 ) ;
-
-   // drop DTR
-
-   EscapeCommFunction( COMDEV( npTTYInfo ), CLRDTR ) ;
-
-   // purge any outstanding reads/writes and close device handle
-
-   PurgeComm( COMDEV( npTTYInfo ), PURGE_TXABORT | PURGE_RXABORT |
-                                   PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
-   CloseHandle( COMDEV( npTTYInfo ) ) ;
-
- 
-   return ( TRUE ) ;
-
-} // end of CloseConnection()
 
 //---------------------------------------------------------------------------
 //  int NEAR ReadCommBlock( HWND hWnd, LPSTR lpszBlock, int nMaxLength )
@@ -384,31 +344,30 @@ BOOL NEAR CloseConnection( int port )
 //
 //---------------------------------------------------------------------------
 
-int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength )
+int NEAR ReadCommBlock(NPKISSINFO npKISSINFO, LPSTR lpszBlock, int nMaxLength )
 {
 	BOOL       fReadStat ;
 	COMSTAT    ComStat ;
 	DWORD      dwErrorFlags;
 	DWORD      dwLength;
-	NPTTYINFO  npTTYInfo ;
 
-	if (NULL == (npTTYInfo = KISSInfo[port]))
+	if (NULL == npKISSINFO)
 		return ( FALSE ) ;
 
 	// only try to read number of bytes in queue 
 	
-	ClearCommError( COMDEV( npTTYInfo ), &dwErrorFlags, &ComStat ) ;
+	ClearCommError(npKISSINFO->idComDev, &dwErrorFlags, &ComStat ) ;
 
 	dwLength = min( (DWORD) nMaxLength, ComStat.cbInQue ) ;
 
 	if (dwLength > 0)
 	{
-		fReadStat = ReadFile( COMDEV( npTTYInfo ), lpszBlock,
+		fReadStat = ReadFile(npKISSINFO->idComDev, lpszBlock,
 		                    dwLength, &dwLength, NULL) ;
 		if (!fReadStat)
 		{
 		    dwLength = 0 ;
-			ClearCommError( COMDEV( npTTYInfo ), &dwErrorFlags, &ComStat ) ;
+			ClearCommError(npKISSINFO->idComDev, &dwErrorFlags, &ComStat ) ;
 		}
 	}
 
@@ -417,43 +376,57 @@ int NEAR ReadCommBlock( int port, LPSTR lpszBlock, int nMaxLength )
 } // end of ReadCommBlock()
 
 
-BOOL NEAR WriteCommBlock(int port, LPSTR lpByte, DWORD dwBytesToWrite)
+BOOL NEAR WriteCommBlock(NPKISSINFO npKISSINFO, LPSTR lpByte, DWORD dwBytesToWrite)
 {
 	BOOL        fWriteStat;
 	DWORD       dwBytesWritten;
-	NPTTYINFO   npTTYInfo;
 	DWORD       dwErrorFlags;
 	COMSTAT     ComStat;
 
-	if (NULL == (npTTYInfo = KISSInfo[port]))
-		return ( FALSE ) ;
+	if (NULL == npKISSINFO)
+		return FALSE;
 
-	fWriteStat = WriteFile(COMDEV(npTTYInfo), lpByte, dwBytesToWrite,
+	fWriteStat = WriteFile(npKISSINFO->idComDev, lpByte, dwBytesToWrite,
 	                       &dwBytesWritten, NULL );
 
 	if ((!fWriteStat) || (dwBytesToWrite != dwBytesWritten))
 	{
-		ClearCommError( COMDEV( npTTYInfo ), &dwErrorFlags, &ComStat ) ;
+		ClearCommError(npKISSINFO->idComDev, &dwErrorFlags, &ComStat ) ;
 	}
 	return ( TRUE ) ;
 
 } // end of WriteCommBlock()
 
 
-int POLLKISS(int port)
+int POLLKISS(struct PORTCONTROL * PortVector)
 {
-	int i,j,nLength;
+	int i,j,nLength = 0;
     BYTE  abIn[ MAXBLOCK + 1];
-	NPTTYINFO npTTYInfo ;
+	NPKISSINFO npKISSINFO ;
 
-	if (NULL == (npTTYInfo = KISSInfo[port]))
+	if (NULL == (npKISSINFO = KISSInfo[PortVector->PORTNUMBER]))
 		return ( FALSE ) ;
 
-	
-	if (nLength = ReadCommBlock(PORT( npTTYInfo ), (LPSTR) abIn, MAXBLOCK ))
+	if (PortVector->PORTIPADDR.S_un.S_addr)		// KISS over UDP
 	{
-   		i=RXVECTOR(npTTYInfo);
-		j=PORTVECTOR(npTTYInfo);
+		NPKISSINFO Port = KISSInfo[PortVector->PORTNUMBER];
+		SOCKADDR_IN rxaddr;
+		int addrlen = sizeof(SOCKADDR_IN);
+
+		nLength = recvfrom(Port->sock, abIn, MAXBLOCK, 0, (LPSOCKADDR)&rxaddr, &addrlen);
+		if (nLength < 0)
+		{
+			nLength = GetLastError();
+			nLength = 0;
+		}
+	}
+	else
+		nLength = ReadCommBlock(npKISSINFO, (LPSTR) abIn, MAXBLOCK );
+
+	if (nLength)
+	{
+		i = npKISSINFO->RXvector;
+		j = (int)npKISSINFO->Portvector;
 
        	_asm {
 						

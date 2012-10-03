@@ -752,6 +752,10 @@
 //  Fix initialisation of DIRMES.SYS control record 
 //	Allow use of Tracker and UZ7HO ports for UI messages
 
+// Version 1.4.53.1 September 2012
+
+//	Fix crash if R: line with out a CR found.
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -877,6 +881,10 @@ char * NewWelcomeMsg = NULL;
 char * ChatWelcomeMsg = NULL;
 char * NewChatWelcomeMsg = NULL;
 char * ExpertWelcomeMsg = NULL;
+
+char * Prompt = NULL;
+char * NewPrompt = NULL;
+char * ExpertPrompt = NULL;
 
 char BBSName[100];
 char MailForText[100];
@@ -4088,12 +4096,24 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 //	if (user->flags & F_Temp_B2_BBS)
 //		nodeprintf(conn, "%s CMS >\r", BBSName);
 //	else
-		nodeprintf(conn, "de %s>\r", BBSName);
+		SendPrompt(conn, user);
 }
 
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
 {
-	nodeprintf(conn, "de %s>\r", BBSName);
+	if (user->flags & F_Expert)
+		ExpandAndSendMessage(conn, ExpertPrompt, LOG_BBS);
+	else if (conn->NewUser)
+		ExpandAndSendMessage(conn, NewPrompt, LOG_BBS);
+	else
+		ExpandAndSendMessage(conn, Prompt, LOG_BBS);
+
+//	if (user->flags & F_Expert)
+//		nodeprintf(conn, "%s\r", ExpertPrompt);
+//	else if (conn->NewUser)
+//		nodeprintf(conn, "%s\r", NewPrompt);
+//	else
+//		nodeprintf(conn, "%s\r", Prompt);
 }
 
 VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int len)

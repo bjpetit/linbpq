@@ -2,6 +2,8 @@
 
 // Aug 2010 Extend Applmask to 32 bit
 
+#include "winsock.h"
+
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 
 #define BPQICON 2
@@ -419,7 +421,6 @@ typedef struct ROUTE
 #define SentOurRIF 16		// Set when we have sent a rif for our Call and any ApplCalls
 							//  (only sent when we have seen both a request and response)
 
-
 typedef struct PORTCONTROL
 {
 	char PORTCALL[7];
@@ -532,6 +533,7 @@ typedef struct PORTCONTROL
 	char UICAPABLE;			// Pactor-style port that can do UI
 
 	struct WL2KInfo * WL2KInfo; // WL2K Report for this Port
+	struct in_addr PORTIPADDR;		// IP address for "KISS over UDP"
 
 }	PORTCONTROLX;
 

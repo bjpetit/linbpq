@@ -369,8 +369,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	// Main message loop:
 
-	Logprintf(LOG_DEBUG, NULL, '!', "Program Starting");
-	Debugprintf("BPQChat Starting");
+	Logprintf(LOG_CHAT, NULL, '!', "Program Starting");
 
 	} My__except_Routine("Init");
 
@@ -1253,6 +1252,8 @@ Retry:
 			"This may take a minute or two.$WThe /p command shows what nodes are linked.$W");
 
 	RefreshMainWindow();
+
+	DeleteLogFiles();
 
 	return TRUE;
 }

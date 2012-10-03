@@ -256,20 +256,20 @@ struct PORTCONFIG
 	short RETRIES;			// 64, 
 
 	short PACLEN;			// 66,
-	short QUALADJUST;			// 68,
+	short QUALADJUST;		// 68,
 	UCHAR DIGIFLAG;			// 70,
 	UCHAR DIGIPORT;			// 71 
 	short DIGIMASK;			// 72
 	short USERS;			// 74,
 	short TXTAIL;			// 76
-	short ALIAS_IS_BBS;			// 78
+	short ALIAS_IS_BBS;		// 78
 	char CWID[10];			// 80,
-	char PORTCALL[10];			//  90,
-	char PORTALIAS[10];			// 100,
+	char PORTCALL[10];		//  90,
+	char PORTALIAS[10];		// 100,
 	short L3ONLY;			//  110,
 	short KISSOPTIONS;		//"112,
-	short INTERLOCK;			// 114,
-	short NODESPACLEN;			//  116,
+	short INTERLOCK;		// 114,
+	short NODESPACLEN;		//  116,
 	short TXPORT;			// 118,
 	UCHAR MHEARD;			// 120,
 	UCHAR CWIDTYPE;			// 121,
@@ -282,7 +282,8 @@ struct PORTCONFIG
 	char PORTALIAS2[10];	//  200,
 	char DLLNAME[16];		//  210,
 	char BCALL[10];			// 226,
-	char Pad2[20];
+	unsigned long IPADDR;	// 236
+	char Pad2[16];			// 240
 	char VALIDCALLS[256];	//   256,
 };
 
@@ -434,8 +435,8 @@ static char *pkeywords[] =
 "QUALADJUST", "DIGIFLAG", "DIGIPORT", "USERS" ,"UNPROTO", "PORTNUM",
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
-"BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY"
-};           /* parameter keywords */
+"BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY",
+"UDPPORT", "IPADDR"};           /* parameter keywords */
 
 static int poffset[] =
 {
@@ -446,8 +447,8 @@ static int poffset[] =
 68, 70, 71 ,74, 128, 0,
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
-226, 72, 124, 36, 210, 512, 125
-};		/* offset for corresponding data in config file */
+226, 72, 124, 36, 210, 512, 125,
+36, 236};						/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -458,11 +459,10 @@ static int proutine[] =
 1, 13, 13, 1, 11, 1,
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
-0, 1, 2, 1, 15, 16, 2
-};		/* routine to process parameter */
+0, 1, 2, 1, 15, 16, 2,
+1, 17};							/* routine to process parameter */
 
-
-#define PPARAMLIM 50
+#define PPARAMLIM 52
 
 static int fileoffset = 0;
 static int portoffset = 2560;
@@ -1874,6 +1874,8 @@ decode_port_rec(char * rec)
 {
 	int i;
 	int cn = 1;			/* RETURN CODE FROM ROUTINES */
+	unsigned long IPADDR;
+	WSADATA	WsaData;	// receives data from WSAStartupproblem
 
 	char key_word[20]="";
 	char value[300]="";
@@ -2063,6 +2065,17 @@ decode_port_rec(char * rec)
 			memcpy(&Buffer[fileoffset], &WL2K, 4);
 			break;
 		
+		case 17:
+
+			// IP Address for KISS over UDP
+			
+			WSAStartup(MAKEWORD(2, 0), &WsaData);
+			IPADDR = inet_addr(&rec[7]);
+			memcpy(&Buffer[fileoffset], &IPADDR, 4);
+			WSACleanup();
+
+			break;
+
 		case 9:
 			
 			cn = 1;

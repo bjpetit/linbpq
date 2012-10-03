@@ -87,9 +87,7 @@ VOID * _malloc_dbg_trace(int len, int type, char * file, int line);
 
 VOID * _zalloc_dbg(int len, int type, char * file, int line);
 
-#define LOG_BBS 0
 #define LOG_CHAT 1
-#define LOG_TCP 2
 #define LOG_DEBUG 3
 
 typedef struct SEM
@@ -597,7 +595,7 @@ void FreeSemaphore(struct SEM * Semaphore);
 
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...);
-
+int DeleteLogFiles();
 VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG);
 
 extern char ChatWelcomeMsg[];
@@ -674,7 +672,7 @@ extern RECT DebugRect;
 extern HWND hMonitor;
 //extern HWND hConsole;
 //extern RECT ConsoleRect;
-extern int LogAge;
+
 extern BOOL DeletetoRecycleBin;
 extern BOOL SuppressMaintEmail;
 extern BOOL SaveRegDuringMaint;

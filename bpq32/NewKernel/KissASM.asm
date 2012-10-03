@@ -232,16 +232,12 @@ ENDOFCHAIN:
 	CALL	INITCOMMON	
 	
 ;	Display to Console
-
-	MOVZX	EAX,CHANNELNUM[EBX]
-	PUSH	EAX
 	
-	MOVZX	EAX,IOBASE[EBX]
-	PUSH	EAX						; Port No
+	PUSH	EBX					; Port Control Record
 
 	CALL	_ASYDISP
 
-	ADD		ESP,8
+	ADD		ESP,4
 	RET
 	
 	RET				; INT ALREADY HOOKED
@@ -342,7 +338,7 @@ KISSRX:
 	pushad
 
 	MOVZX	EAX,IOBASE[EBX]
-	PUSH	EAX						; Port No
+	PUSH	EBX						; Port Vector
 
 	CALL	_POLLKISS
 
@@ -700,9 +696,8 @@ ENCLOOP:
 	push	ecx	
 	push	edi
 
-	MOVZX	EAX,IOBASE[EBX]
-	PUSH	EAX						; Port No
-
+	PUSH	EBX						; Port Vector
+	
 	CALL	_ASYSEND
 
 	add		esp,12
@@ -977,8 +972,7 @@ KISSXX:
 	push	ecx	
 	push	edi
 
-	MOVZX	EAX,IOBASE[EBX]
-	PUSH	EAX						; Port No
+	PUSH	EBX						; Port Vector
 
 	CALL	_ASYSEND
 
@@ -1021,8 +1015,7 @@ SENDPOLL:
 	push	3					; LEN
 	push	OFFSET ENCBUFF
 
-	MOVZX	EAX,IOBASE[EBX]
-	PUSH	EAX						; Port No
+	PUSH	EBX						; Port Vector
 
 	CALL	_ASYSEND
 

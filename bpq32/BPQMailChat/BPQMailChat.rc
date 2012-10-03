@@ -666,6 +666,27 @@ BEGIN
                     IDC_STATIC,5,238,365,10
 END
 
+BBSPROMPTS DIALOG DISCARDABLE  26, 5, 381, 266
+STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "System"
+BEGIN
+    LTEXT           "Normal User Prompt",IDC_STATIC,5,7,130,8
+    EDITTEXT        IDM_USERMSG,5,20,340,35,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "New User Prompt",IDC_STATIC,5,59,130,8
+    EDITTEXT        IDM_NEWUSERMSG,5,70,340,35,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "Expert User Prompt",IDC_STATIC,5,110,130,8
+    EDITTEXT        IDM_EXPERTUSERMSG,5,120,340,35,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
+    DEFPUSHBUTTON   "Save",IDM_PROMPTSAVE,166,250,50,14,BS_CENTER | 
+                    BS_VCENTER
+    LTEXT           "$U : Callsign of the user      $I : First name of the user      $X Messages for user       $x Unread messages",
+                    IDC_STATIC,2,165,353,8
+    LTEXT           "$L : Number of the latest message    $N : Number of active messages.    $Z : Last message read by user",
+                    IDC_STATIC,3,175,347,10
+END
+
 IDD_MAINTRESULTS DIALOG DISCARDABLE  0, 0, 181, 114
 STYLE DS_FIXEDSYS | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_THICKFRAME
 CAPTION "Maintenance Results"

@@ -93,6 +93,7 @@
 #define IDC_WPSAVE                      1087
 #define IDC_PRINTMSG                    1088
 #define IDC_EXPORT                      1089
+#define IDM_PROMPTSAVE					1090
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101

@@ -5,6 +5,8 @@
 #include "stdafx.h"
 #include "Winspool.h"
 
+int LogAge = 7;
+
 int SEMCLASHES = 0;
 
 VOID __cdecl Debugprintf(const char * format, ...)
@@ -81,7 +83,7 @@ VOID BBSputs(CIRCUIT * conn, char * buf)
 {
 	// Sends to user and logs
 
-	WriteLogLine(conn, '>',buf,  strlen(buf) -1, LOG_BBS);
+	WriteLogLine(conn, '>',buf,  strlen(buf) -1, LOG_CHAT);
 
 	QueueMsg(conn, buf, strlen(buf));
 }
@@ -98,7 +100,7 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 
 	QueueMsg(conn, Mess, len);
 
-	WriteLogLine(conn, '>',Mess, len-1, LOG_BBS);
+	WriteLogLine(conn, '>',Mess, len-1, LOG_CHAT);
 
 	return;
 }
@@ -231,3 +233,64 @@ BOOL wildcardcompare(char * Target, char * Match)
 	// No WildCards - straight strcmp
 	return (strcmp(Target, Pattern) == 0);
 }
+
+int DeleteLogFiles()
+{
+   WIN32_FIND_DATA ffd;
+
+   char szDir[MAX_PATH];
+   char File[MAX_PATH];
+   HANDLE hFind = INVALID_HANDLE_VALUE;
+   DWORD dwError=0;
+   LARGE_INTEGER ft;
+   time_t now = time(NULL);
+   int Age;
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   strcpy(szDir, BaseDir);
+   strcat(szDir, "\\Log_*.txt");
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+   {
+      return dwError;
+   } 
+   
+   // List all the files in the directory with some info about them.
+
+   do
+   {
+      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      {
+         OutputDebugString(ffd.cFileName);
+      }
+      else
+      {
+         ft.HighPart = ffd.ftCreationTime.dwHighDateTime;
+         ft.LowPart = ffd.ftCreationTime.dwLowDateTime;
+
+		 ft.QuadPart -=  116444736000000000;
+		 ft.QuadPart /= 10000000;
+
+		 Age = (now - ft.LowPart) / 86400; 
+
+		 if (Age > LogAge)
+		 {
+			 wsprintf(File, "%s\\%s%c", BaseDir, ffd.cFileName, 0);
+			DeleteFile(File);
+		 }
+      }
+   }
+   while (FindNextFile(hFind, &ffd) != 0);
+ 
+   dwError = GetLastError();
+
+   FindClose(hFind);
+   return dwError;
+}
+

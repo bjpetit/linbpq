@@ -427,6 +427,10 @@ VOID GetWPBBSInfo(char * Rline)
 	if (*++ptr1 == ':')
 		ptr1++;			// Format 2
 
+
+	if (ptr2 == NULL)
+		return;			// No CR on end
+	
 	RLen = ptr2 - ptr1;
 
 	if (RLen > 200)

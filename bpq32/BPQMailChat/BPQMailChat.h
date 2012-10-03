@@ -1059,6 +1059,7 @@ VOID SaveISPConfig();
 VOID SaveFWDConfig();
 VOID SaveMAINTConfig();
 VOID SaveWelcomeMsgs();
+VOID SavePrompts();
 VOID SaveWindowConfig();
 VOID ReinitializeFWDStruct(struct UserInfo * user);
 VOID CopyBIDDatabase();
@@ -1215,6 +1216,8 @@ BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwar
 BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
 BOOL CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
 int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo);
+int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS);
+
 VOID ReRouteMessages();
 
 extern HKEY REGTREE;	
@@ -1258,6 +1261,9 @@ extern char * ChatWelcomeMsg;
 extern char * NewChatWelcomeMsg;
 extern char * ExpertWelcomeMsg;
 
+extern char * Prompt;
+extern char * NewPrompt;
+extern char * ExpertPrompt;
 
 // Filter Params
 
