@@ -756,6 +756,16 @@
 
 //	Fix crash if R: line with out a CR found.
 
+// Version 1.4.54.1 ?? 2012
+
+//	Add configurable prompts
+//	Fix KISS-Only Test
+//	Send EHLO instead of HELO when Authentication is needed on SMTP session
+
+
+
+
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -1423,8 +1433,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 					KISSOnly = FALSE;
 
 				if (AXIPPort == 0)
+				{
 					if (_memicmp(PORTVEC->PORT_DLL_NAME, "BPQAXIP", 7) == 0)
+					{
 						AXIPPort = PORTVEC->PORTCONTROL.PORTNUMBER;
+						KISSOnly = FALSE;
+					}
+				}
 			}
 		}
 	}
@@ -2294,16 +2309,20 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 	return (INT_PTR)FALSE;
 }
 
+SMTPMsgs = 0;
+
 int RefreshMainWindow()
 {
 	char msg[80];
 	CIRCUIT * conn;
-	int i,n, SYSOPMsgs = 0, HeldMsgs = 0, SMTPMsgs = 0;
+	int i,n, SYSOPMsgs = 0, HeldMsgs = 0; 
 	time_t now;
 	struct tm * tm;
 	char tim[20];
 
 	SendDlgItemMessage(MainWnd,100,LB_RESETCONTENT,0,0);
+
+	SMTPMsgs = 0;
 
 	for (n = 0; n < NumberofStreams; n++)
 	{

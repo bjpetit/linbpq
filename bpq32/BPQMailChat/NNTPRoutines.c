@@ -4,6 +4,8 @@
 
 #include "stdafx.h"
 
+VOID __cdecl Debugprintf(const char * format, ...);
+
 struct NNTPRec * FirstNNTPRec = NULL;
 
 //int NumberofNNTPRecs=0;
@@ -33,7 +35,6 @@ struct NNTPRec * LookupNNTP(char * Group)
 
 	return NULL;
 }
-
 
 
 VOID BuildNNTPList(struct MsgInfo * Msg)

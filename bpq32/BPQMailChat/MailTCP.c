@@ -141,9 +141,10 @@ VOID __cdecl sockprintf(SocketConn * sockptr, const char * format, ...)
 	SendSock(sockptr, buff);
 }
 
+extern SMTPMsgs;
+
 VOID TCPTimer()
 {
-
 	POP3Timer+=10;
 
 	if (POP3Timer > ISPPOP3Interval)			// 5 mins
@@ -155,6 +156,9 @@ VOID TCPTimer()
 		
 		if (ISPPOP3Port  && ISP_Gateway_Enabled)
 			POP3Connect(ISPPOP3Name, ISPPOP3Port);
+
+		if (SMTPMsgs && ISPSMTPPort && ISP_Gateway_Enabled)
+			SendtoISP();
 	}
 	else
 	{
@@ -201,7 +205,7 @@ BOOL InitialiseTCP()
 	{
 		// See if using GMail
 
-			char * ptr = strchr(ISPAccountName, '@');
+		char * ptr = strchr(ISPAccountName, '@');
 
 		if (ptr)
 		{
@@ -2351,7 +2355,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "220 ",4) == 0)
 		{
-			sockprintf(sockptr, "HELO %s", BBSName);
+			sockprintf(sockptr, "EHLO %s", BBSName);
 			sockptr->State = WaitingForHELOResponse;
 		}
 		else
@@ -2365,6 +2369,9 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForHELOResponse)
 	{
+		if (memcmp(Buffer, "250-",4) == 0)
+			return;
+
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
 			if (SMTPAuthNeeded)
