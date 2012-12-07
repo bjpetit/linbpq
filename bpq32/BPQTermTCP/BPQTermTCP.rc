@@ -134,6 +134,10 @@ BEGIN
         MENUITEM "Host 2",                      BPQCONNECT2
         MENUITEM "Host 3",                      BPQCONNECT3
         MENUITEM "Host 4",                      BPQCONNECT4
+        MENUITEM "Host 5",                      BPQCONNECT5
+        MENUITEM "Host 6",                      BPQCONNECT6
+        MENUITEM "Host 7",                      BPQCONNECT7
+        MENUITEM "Host 8",                      BPQCONNECT8
     END
     MENUITEM "Disconnect",                  BPQDISCONNECT
     POPUP "Setup"
@@ -144,6 +148,10 @@ BEGIN
             MENUITEM "Host 2",                      IDC_HOST2
             MENUITEM "Host 3",                      IDC_HOST3
             MENUITEM "Host 4",                      IDC_HOST4
+            MENUITEM "Host 5",                      IDC_HOST5
+            MENUITEM "Host 6",                      IDC_HOST6
+            MENUITEM "Host 7",                      IDC_HOST7
+            MENUITEM "Host 8",                      IDC_HOST8
         END
         MENUITEM "Font Setup",                  ID_SETUP_FONT
         MENUITEM "Enable Bells",                BPQBELLS

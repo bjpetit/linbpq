@@ -50,6 +50,10 @@
 
 //	Add UIOnly Monitor Option
 
+// Version 1.0.4.2 November 2012
+
+//	Allow up to 8 hosts
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "winsock2.h"
@@ -191,15 +195,15 @@ int Height, Width, LastY;
 
 int maxlinelen = 80;
 
-char Host[5][100] = {"localhost"};
-int Port[5] = {0};
-char UserName[5][80] = {""};
-char Password[5][80] = {""};
+char Host[9][100] = {"localhost"};
+int Port[9] = {0};
+char UserName[9][80] = {""};
+char Password[9][80] = {""};
 
-char HN[5][6] = {"Host1", "Host2", "Host3", "Host4"};
-char PN[5][6] = {"Port1", "Port2", "Port3", "Port4"};
-char PASSN[5][6] = {"Pass1", "Pass2", "Pass3", "Pass4"};
-char UN[5][6] = {"User1", "User2", "User3", "User4"};
+char HN[9][6] = {"Host1", "Host2", "Host3", "Host4", "Host5", "Host6", "Host7", "Host8"};
+char PN[9][6] = {"Port1", "Port2", "Port3", "Port4", "Port5", "Port6", "Port7", "Port8"};
+char PASSN[9][6] = {"Pass1", "Pass2", "Pass3", "Pass4", "Pass5", "Pass6", "Pass7", "Pass8"};
+char UN[9][6] = {"User1", "User2", "User3", "User4", "User5", "User6", "User7", "User8"};
 
 #define MAXLINES 1000
 #define LINELEN 200
@@ -251,7 +255,7 @@ int mtxparam=1;
 int mcomparam=1;
 int monUI=0;
 
-char kbbuf[160];
+char kbbuf[250];
 int kbptr=0;
 char readbuff[100000];				// for stupid bbs programs
 
@@ -397,7 +401,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	SaveIntValue("Bells", Bells);
 	SaveIntValue("StripLF", StripLF);
 
-	for (n = 0; n < 4; n++)
+	for (n = 0; n < 8; n++)
 	{
 		SaveStringValue(HN[n], Host[n]);
 		SaveStringValue(UN[n], UserName[n]);
@@ -545,7 +549,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	Split /= 100;		// Stored as a %,used as 0 - 1
 
-	for (n = 0; n < 4; n++)
+	for (n = 0; n < 8; n++)
 	{
 		GetStringValue(HN[n], Host[n], 100);
 		GetStringValue(UN[n], UserName[n], 80);
@@ -674,7 +678,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	CheckMenuItem(hMenu, MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, CHATTERM, (ChatMode) ? MF_CHECKED : MF_UNCHECKED);
 
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < 8; i++)
 	{
 		if (Host[i][0])
 		{
@@ -1050,6 +1054,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQCONNECT2:
 		case BPQCONNECT3:
 		case BPQCONNECT4:
+		case BPQCONNECT5:
+		case BPQCONNECT6:
+		case BPQCONNECT7:
+		case BPQCONNECT8:
 
 			CurrentHost = wmId - BPQCONNECT1;
 
@@ -1107,6 +1115,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDC_HOST2:
 		case IDC_HOST3:
 		case IDC_HOST4:
+		case IDC_HOST5:
+		case IDC_HOST6:
+		case IDC_HOST7:
+		case IDC_HOST8:
 
 			CfgNo = wmId - IDC_HOST1;
 
@@ -1246,7 +1258,7 @@ int StackIndex=0;
  
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
-	char DisplayLine[200] = "\x1b\x21";
+	char DisplayLine[250] = "\x1b\x21";
 
 	if (uMsg == WM_CTLCOLOREDIT)
 	{
@@ -1323,7 +1335,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				return 0;
 			}
 
-			kbptr=SendMessage(hwndInput,WM_GETTEXT,159,(LPARAM) (LPCSTR) kbbuf);
+			kbptr=SendMessage(hwndInput,WM_GETTEXT,199,(LPARAM) (LPCSTR) kbbuf);
 
 			// Stack it
 
@@ -1861,6 +1873,10 @@ VOID DisableConnectMenu(HWND hWnd)
 	EnableMenuItem(GetMenu(hWnd), BPQCONNECT2, MF_GRAYED);
 	EnableMenuItem(GetMenu(hWnd), BPQCONNECT3, MF_GRAYED);
 	EnableMenuItem(GetMenu(hWnd), BPQCONNECT4, MF_GRAYED);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT5, MF_GRAYED);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT6, MF_GRAYED);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT7, MF_GRAYED);
+	EnableMenuItem(GetMenu(hWnd), BPQCONNECT8, MF_GRAYED);
 	DrawMenuBar(hWnd);	
 }	
 VOID DisableDisconnectMenu(HWND hWnd)
@@ -1879,6 +1895,10 @@ VOID EnableConnectMenu(HWND hWnd)
 	EnableMenuItem(hMenu,BPQCONNECT2,MF_ENABLED);
 	EnableMenuItem(hMenu,BPQCONNECT3,MF_ENABLED);
 	EnableMenuItem(hMenu,BPQCONNECT4,MF_ENABLED);
+	EnableMenuItem(hMenu,BPQCONNECT5,MF_ENABLED);
+	EnableMenuItem(hMenu,BPQCONNECT6,MF_ENABLED);
+	EnableMenuItem(hMenu,BPQCONNECT7,MF_ENABLED);
+	EnableMenuItem(hMenu,BPQCONNECT8,MF_ENABLED);
 	DrawMenuBar(hWnd);	
 }	
 
