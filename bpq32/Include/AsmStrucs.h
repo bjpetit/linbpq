@@ -12,7 +12,7 @@
 
 #define ApplStringLen 48	// Length of each config entry
 #define NumberofAppls 32	// Max APPLICATIONS= values
-
+#define ALIASLEN 32
 #define MHENTRIES 30		// Entries in MH List
 
 
@@ -31,8 +31,8 @@
 #define L4IACK	6		// INFORMATION ACK
 
 
-extern char MYCALL[7];	// 7 chars, ax.25 format
-extern char MYALIAS[6];	// 6 chars, not null terminated
+extern char MYCALL[];	// 7 chars, ax.25 format
+extern char MYALIAS[];	// 6 chars, not null terminated
 extern char L3RTT[7];	// 7 chars, ax.25 format
 extern char L3KEEP[7];	// 7 chars, ax.25 format
 //extern int SENDNETFRAME();
@@ -618,6 +618,7 @@ typedef struct _HDLCDATA
 
 }HDLCDATA, * PHDLCDATA;
 
+
 typedef struct _DATABASE
 {
 	char FILLER[14];
@@ -648,6 +649,8 @@ NUMBEROFSTREAMS	DW	0
 ENDDESTLIST	DD	0		; NODE LIST+1
 */
 };
+
+
 
 
 typedef struct MHSTRUC
