@@ -227,6 +227,10 @@ typedef struct MPSKINFO
 typedef struct TNCINFO
 { 
 	HWND hDlg;						// Status Window Handle
+	int (FAR * WebWindowProc)(struct TNCINFO * TNC, char * Buff);	// Routine to build web status window
+	int WebWinX;
+	int WebWinY;					// Size of window
+	char * WebBuffer;				// Buffer for logs
 	int RigControlRow;				// Rig Control Line in Dialog
 	struct _EXTPORTDATA * PortRecord; // BPQ32 port record for this port
 	struct RIGINFO * RIG;		// Pointer to Rig Control RIG record 
@@ -372,7 +376,8 @@ typedef struct TNCINFO
 	struct STREAMINFO Streams[27];	// 0 is Pactor 1 - 10 are ax.25.
 	int LastStream;				// Last one polled for status or send
 
-	int BPQtoRadio_Q;			// Frames for Rig Interface
+	void * BPQtoRadio_Q;			// Frames to Rig Interface
+	void * RadiotoBPQ_Q;			// Frames from Rig Interface
 
 	char * InitPtr;				// Next Command
 	int	ReinitState;			// Reinit State Machine
@@ -398,10 +403,6 @@ typedef struct TNCINFO
 	BOOL WantToChangeFreq;			// Request from Scanner to Change
 	int OKToChangeFreq;				// 1 = SCS Says OK to change, -1 = Dont Change zero = still waiting
 	BOOL DontWantToChangeFreq;		// Change done - ok to relaase SCS
-
-
-	int VCOMPort;					// COMM Port for Rig Control Channel
-	HANDLE VCOMHandle;
 
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
@@ -440,7 +441,7 @@ typedef struct TNCINFO
 	{
 		struct TCPINFO * TCPInfo;		// Telnet Server Specific Data
 		struct AGWINFO * AGWInfo;		// AGW Stream Mode Specific Data
-		struct MPSKINFO * MPSKInfo;		// AGW Stream Mode Specific Data
+		struct MPSKINFO * MPSKInfo;		// MPSK Stream Mode Specific Data
 	};
 
 	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
@@ -502,6 +503,21 @@ typedef struct TNCINFO
 	HWND xIDC_RESTARTTIME;
 	HWND xIDC_RESTARTS;
 	HWND xIDC_PACTORLEVEL;
+
+	char * WEB_TNCSTATE; 
+	char * WEB_COMMSSTATE;
+	char * WEB_MODE;
+	char * WEB_LEDS;
+	char * WEB_TRAFFIC;
+	char * WEB_BUFFERS;
+	char * WEB_CHANSTATE;
+	char * WEB_STATE;
+	char * WEB_TXRX;
+	char * WEB_PROTOSTATE;
+	char * WEB_RESTARTTIME;
+	char * WEB_RESTARTS;
+	char * WEB_PACTORLEVEL;
+
 	HMENU hMenu;
 	HMENU hWndMenu;
 } *PTNCINFO;
@@ -536,25 +552,22 @@ extern UINT CRCTAB;
 int BPQTRACE(UINT * Msg, BOOL TOAPRS);
 
 
-extern struct _BPQVECSTRUC * BPQHOSTVECPTR;
-
 static int ProcessLine(char * buf, int Port);
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID __cdecl Consoleprintf(const char * format, ...);
 
 extern BOOL MinimizetoTray;
 
-#ifdef LINBPQ
-#define DllExport
-#else
-#define DllExport	__declspec( dllexport )
-#endif
-DllExport int APIENTRY Rig_Command(int Session, char * Command);
-DllExport BOOL WINAPI Rig_Poll();
 
-DllExport VOID APIENTRY Rig_PTT(struct RIGINFO * RIG, BOOL PTTState);
-DllExport struct RIGINFO * WINAPI Rig_GETPTTREC();
-DllExport struct ScanEntry ** APIENTRY CheckTimeBands(struct RIGINFO * RIG);
+int Rig_Command(int Session, char * Command);
+
+BOOL Rig_Poll();
+
+VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState);
+
+struct RIGINFO * Rig_GETPTTREC(int Port);
+	
+struct ScanEntry ** CheckTimeBands(struct RIGINFO * RIG);
 
 #ifndef LINBPQ
 LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);

@@ -50,8 +50,6 @@ VOID SendAPRSMessage(char * Message, int toPort);
 
 BOOL ProcessConfig();
 
-void GetSemaphore();
-void FreeSemaphore();
 
 extern int SemHeldByAPI;
 extern int APRSMONDECODE();
@@ -135,6 +133,7 @@ int StatusMsgLen = 0;
 char * BeaconPath[33] = {0};
 
 char CrossPortMap[33][33] = {0};
+char BridgeMap[33][33] = {0};
 
 UCHAR BeaconHeader[33][10][7] = {""};	//	Dest, Source and up to 8 digis 
 int BeaconHddrLen[33] = {0};			// Actual Length used
@@ -307,6 +306,7 @@ Dll BOOL APIENTRY Init_APRS()
 	memset(BeaconPath, sizeof(BeaconPath), 0);
 
 	memset(&CrossPortMap[0][0], 0, sizeof(CrossPortMap));
+	memset(&BridgeMap[0][0], 0, sizeof(BridgeMap));
 
 	for (i = 1; i <= NUMBEROFPORTS; i++)
 	{
@@ -483,6 +483,7 @@ Dll VOID APIENTRY Poll_APRS()
 		BOOL NoGate = FALSE;
 		APRSSTATIONRECORD * MH;
 		char MsgCopy[500];
+		int toPort;
 
 		monbuff = Q_REM(&APRSMONVECPTR->HOSTTRACEQ);
 
@@ -558,6 +559,29 @@ Dll VOID APIENTRY Poll_APRS()
 			ReleaseBuffer(monbuff);
 			continue;			
 		}
+
+		// Bridge if requested
+
+		for (toPort = 1; toPort <= NUMBEROFPORTS; toPort++)
+		{
+			if (BridgeMap[Port][toPort])
+			{
+				MESSAGE * Buffer = GetBuff();
+				struct PORTCONTROL * PORT;
+
+				if (Buffer)
+				{
+					memcpy(Buffer, Orig, Orig->LENGTH);
+					Buffer->PORT = toPort;
+					PORT = GetPortTableEntryFromPortNum(toPort);
+					if (PORT)
+						PUT_ON_PORT_Q(PORT, Buffer);
+					else
+						ReleaseBuffer(Buffer);
+				}	
+			}
+		}
+
 
 		// Decode Frame to TNC2 Monitor Format
 
@@ -1217,6 +1241,37 @@ static ProcessLine(char * buf)
 
 		return TRUE;
 	}
+	if (_stricmp(ptr, "BRIDGE") == 0)
+	{
+		int DigiTo;
+		int Port;
+		char * Context;
+
+		p_value = strtok_s(p_value, "=\t\n\r", &Context);
+
+		Port = atoi(p_value);
+
+		if (GetPortTableEntryFromPortNum(Port) == NULL)
+			return FALSE;
+
+		if (Context == NULL)
+			return FALSE;
+	
+		ptr = strtok_s(NULL, ",\t\n\r", &Context);
+
+		while (ptr)
+		{
+			DigiTo = atoi(ptr);				// this gives zero for IS
+	
+			if (DigiTo > NUMBEROFPORTS)
+				return FALSE;
+
+			BridgeMap[Port][DigiTo] = TRUE;	
+			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
+		}
+
+		return TRUE;
+	}
 
 
 	if (_stricmp(ptr, "BeaconInterval") == 0)
@@ -1235,6 +1290,14 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr, "MobileBeaconInterval") == 0)
 	{
 		MobileBeaconInterval = atoi(p_value) * 60;
+		return TRUE;
+	}
+	if (_stricmp(ptr, "MobileBeaconIntervalSecs") == 0)
+	{
+		MobileBeaconInterval = atoi(p_value);
+		if (MobileBeaconInterval < 10)
+			MobileBeaconInterval = 10;
+
 		return TRUE;
 	}
 
@@ -1457,6 +1520,12 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 		LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
+
+	// Add to dup check list, so we wont digi it if we here it back 
+	// Should we drop it if we've sent it recently ??
+
+	if (CheckforDups(APRSCall, Msg.L2DATA, Len - 23))
+		return;
 
 	if (toPort && BeaconHddrLen[toPort])
 	{
@@ -1695,8 +1764,11 @@ VOID DoSecTimer()
 	if (GPSOK)
 	{
 		GPSOK--;
-#ifndef LINBPQ
+
 		if (GPSOK == 0)
+#ifdef LINBPQ
+			Debugprintf("GPS Lost");
+#else
 			SetDlgItemText(hConsWnd, IDC_GPS, "No GPS");
 #endif
 	}
@@ -1712,7 +1784,7 @@ VOID APRSISThread(BOOL Report)
 
 	struct sockaddr_in sinx; 
 	int addrlen=sizeof(sinx);
-	struct addrinfo hints, *res;
+	struct addrinfo hints, *res = 0;
 	int len, err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
@@ -1772,7 +1844,7 @@ VOID APRSISThread(BOOL Report)
 #ifndef LINBPQ
 		SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Connect Failed");
 #else
-		printf("APRS Igate connect failed");
+		printf("APRS Igate connect failed\n");
 #endif
 
 		return;
@@ -1849,7 +1921,6 @@ VOID APRSISThread(BOOL Report)
 
 //					Debugprintf("<%s", APRSMsg);
 					ProcessAPRSISMsg(APRSMsg);
-
 				}
 
 				if (inptr > 0)
@@ -1904,7 +1975,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 			
 		UINT * buffptr;
 
-		GetSemaphore();
+		GetSemaphore(&Semaphore);
 		SemHeldByAPI = 12;
 
 		if (C_Q_COUNT(&APPL_Q) > 50)
@@ -1920,7 +1991,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 			C_Q_ADD(&APPL_Q, buffptr);
 		}
 
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 	}
 
 //}WB4APR-14>APRS,RELAY,TCPIP,G9RXG*::G3NRWVVVV:Hi Ian{001
@@ -1942,6 +2013,9 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		ptr--;
 
 	ptr++;
+
+	if (strlen(ptr) > 9)
+		return;
 
 	memcpy(IGateCall, ptr, strlen(ptr));
 
@@ -2275,9 +2349,9 @@ BOOL OpenGPSPort()
 
 	// open COMM device
 
-	portptr->hDevice = OpenCOMPort(GPSPort, GPSSpeed);
+	portptr->hDevice = OpenCOMPort(GPSPort, GPSSpeed, TRUE, TRUE, FALSE);
 				  
-	if (portptr->hDevice == (HANDLE) -1)
+	if (portptr->hDevice == 0)
 	{
 		return FALSE;
 	}
@@ -2478,10 +2552,13 @@ void DecodeRMC(char * msg, int len)
 	SYMBOL = CFGSYMBOL;
 	SYMSET = CFGSYMSET;
 
+	GPSOK = 30;	
+	
 	if (GPSOK == 0)
 	{
-		GPSOK = 30;
-#ifndef LINBPQ
+#ifdef LINBPQ
+		Debugprintf("GPS OK");
+#else
 		SetDlgItemText(hConsWnd, IDC_GPS, "GPS OK");
 #endif
 	}
@@ -2591,7 +2668,7 @@ Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port)
 	struct _EXCEPTION_POINTERS exinfo;
 #endif
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 	SemHeldByAPI = 10;
 
 	{
@@ -2606,18 +2683,18 @@ Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port)
 			{
 				Debugprintf ("Corrupt APRS Frame Len = %d",  buffptr[1]);
 				ReleaseBuffer(buffptr);
-				FreeSemaphore();
+				FreeSemaphore(&Semaphore);
 				return FALSE;
 			}
 
 			memcpy(Frame, &buffptr[3], buffptr[1]);
 			ReleaseBuffer(buffptr);
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 			return TRUE;
 		}
 	}
 
-	FreeSemaphore();
+	FreeSemaphore(&Semaphore);
 
 	return FALSE;
 }
@@ -2630,7 +2707,7 @@ Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port)
 	UINT * buffptr;
 
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 	SemHeldByAPI = 11;
 
 	buffptr = GetBuff();
@@ -2644,7 +2721,7 @@ Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port)
 
 	buffptr[2] = Port;				// Pass to SendAPRSMessage();
 
-	FreeSemaphore();
+	FreeSemaphore(&Semaphore);
 
 	return TRUE;
 }
@@ -2656,7 +2733,7 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 
 	UINT * buffptr;
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 	SemHeldByAPI = 11;
 
 	buffptr = GetBuff();
@@ -2670,7 +2747,7 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 
 	buffptr[2] = -1;				// Pass to SendAPPLAPRSMessagee();
 
-	FreeSemaphore();
+	FreeSemaphore(&Semaphore);
 
 	return TRUE;
 }

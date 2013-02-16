@@ -36,7 +36,7 @@
 #include "time.h"
 
 #include "CHeaders.h"
-#include "TNCInfo.h"
+#include "tncinfo.h"
 
 #include "bpq32.h"
 
@@ -53,51 +53,6 @@ static RECT Rect;
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
-
-//static HANDLE LogHandle[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
-
-//char * Logs[4];
-//char BaseDir[];
-
-static VOID CloseLogfile(int Flags)
-{
-//	CloseHandle(LogHandle[Flags]);
-//	LogHandle[Flags] = INVALID_HANDLE_VALUE;
-}
-
-VOID OpenLogfile(int Flags)
-{
-/*
-	UCHAR FN[MAX_PATH];
-	time_t T;
-	struct tm * tm;
-
-	T = time(NULL);
-	tm = gmtime(&T);	
-
-	sprintf(FN,"%s\\KAMLog_%02d%02d%02d_%s.bin", BaseDir, tm->tm_mday, tm->tm_hour, tm->tm_min, Logs[Flags]);
-
-	LogHandle[Flags] = CreateFile(FN,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					OPEN_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-
-	SetFilePointer(LogHandle[Flags], 0, 0, FILE_END);
-
-	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
-*/
-}
-
-static void WriteLogLine(int Flags, char * Msg, int MsgLen)
-{
-//	int cnt;
-
-//	WriteFile(LogHandle[Flags] ,Msg , MsgLen, &cnt, NULL);
-}
-
 
 
 
@@ -275,7 +230,7 @@ int KAMExtProc(int fn, int port,unsigned char * buff)
 		return 0;
 	
 	if (fn < 4 || fn > 5)
-		if (TNC->hDevice == (HANDLE) -1)
+		if (TNC->hDevice == 0)
 			return 0;					// Port not open
 
 	switch (fn)
@@ -462,7 +417,7 @@ UINT KAMExtInit(EXTPORTDATA * PortEntry)
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
-		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
@@ -534,6 +489,8 @@ UINT KAMExtInit(EXTPORTDATA * PortEntry)
 	if (PortEntry->MAXHOSTMODESESSIONS > 26)
 		PortEntry->MAXHOSTMODESESSIONS = 26;
 
+#ifndef LINBPQ
+
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 213);
 
  
@@ -562,7 +519,7 @@ UINT KAMExtInit(EXTPORTDATA * PortEntry)
 	TNC->ClientWidth = 500;
 	
 	MoveWindows(TNC);
-
+#endif
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	WritetoConsole("\n");
@@ -592,8 +549,6 @@ void CheckRXKAM(struct TNCINFO * TNC)
 		return;					// Nothing doing
 
 	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
-
-	WriteLogLine(0, &TNC->RXBuffer[TNC->RXLen], Length);
 
 	if (!fReadStat)
 	{
@@ -997,7 +952,6 @@ VOID KAMPoll(int Port)
 					}
 				}
 
-				WriteLogLine(2, MsgPtr, datalen);
 				Next = 0;
 				STREAM->BytesTXed += datalen; 
 
@@ -1419,8 +1373,6 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		STREAM->BytesRXed += Len;
 		memcpy(&buffptr[2], Buffer, Len);
 
-		WriteLogLine(1, (char *)&buffptr[2], Len);
-
 		C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 
 		if (Stream == 0)
@@ -1560,11 +1512,6 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		if (strstr(Buffer, "STANDBY>") || strstr(Buffer, "*** DISCONNECTED"))
 		{
-			CloseLogfile(0);
-			CloseLogfile(1);
-			CloseLogfile(2);
-			CloseLogfile(3);
-
 			if ((STREAM->Connecting | STREAM->Connected) == 0)
 			{
 				// Not connected or Connecting. Probably response to going into Pactor Listen Mode
@@ -1645,13 +1592,6 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				SetWindowText(TNC->xIDC_TRAFFIC, Status);
 			}
 
-				
-			OpenLogfile(0);
-			OpenLogfile(1);
-			OpenLogfile(2);
-			OpenLogfile(3);
-
-
 			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0)
 			{
 				// Incoming Connect
@@ -1729,8 +1669,6 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					EncodeAndSend(TNC, CTBuff, Len + 3);
 					EncodeAndSend(TNC, "E", 1);			// Changeover when all sent
 					TNC->Streams[0].BytesTXed += CTEXTLEN;
-					WriteLogLine(2, CTEXTMSG, CTEXTLEN);
-
 				}
 				return;
 
@@ -1803,9 +1741,6 @@ VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len)
 	// Send A Packet With KISS Encoding
 
 	TNC->TXLen = KissEncode(txbuffer, TNC->TXBuffer, Len);
-
-	WriteLogLine(3, TNC->TXBuffer, TNC->TXLen);
-
 	WriteCommBlock(TNC);
 }
 

@@ -19,7 +19,7 @@
 
 
 #include "CHeaders.h"
-#include "TNCINFO.h"
+#include "tncinfo.h"
 #include "bpq32.h"
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
@@ -978,7 +978,7 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry)
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
-		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
@@ -1041,6 +1041,11 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry)
 
 	}
 
+	TNC->WebBuffer = zalloc(5000);
+
+
+#ifndef LINBPQ
+
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 450, 500);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -1080,7 +1085,7 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry)
 //	CheckMenuItem(TNC->hPopMenu, WINMOR_RESTARTAFTERFAILURE, (TNC->RestartAfterFailure) ? MF_CHECKED : MF_UNCHECKED);
 	
 	MoveWindows(TNC);
-
+#endif
 	i=sprintf(Msg,"V4 Host %s %d\n", TNC->WINMORHostName, htons(TNC->destaddr.sin_port));
 	WritetoConsole(Msg);
 
@@ -1092,6 +1097,7 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry)
 	return ((int) ExtProc);
 }
 
+#ifndef LINBPQ
 
 static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 {
@@ -1122,6 +1128,7 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 	
 	return (TRUE);
 }
+#endif
 
 static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 {
@@ -1444,7 +1451,9 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		// Set Window Title to reflect BPQ Port Description
 
+#ifndef LINBPQ
 		EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC);
+#endif
 	}
 
 	if (_memicmp(Buffer, "PLAYBACKDEVICES", 15) == 0)

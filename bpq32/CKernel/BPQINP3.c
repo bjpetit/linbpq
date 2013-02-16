@@ -17,7 +17,7 @@
 #include <fcntl.h>					 
 //#include "vmm.h"
 
-static VOID xSendNetFrame(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Frame)
+static VOID SendNetFrame(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Frame)
 {
 	// INP3 should only ever send over an active link, so just queue the message
 	
@@ -332,7 +332,7 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 
 	// Update TImestamp on Route
 
-	time(&Stamp);
+	time((time_t *)&Stamp);
 
 	Stamp = Stamp % 86400;			// Secs into day
 	HH = Stamp / 3600;
@@ -656,22 +656,6 @@ VOID UpdateRoute(struct DEST_LIST * Dest, struct DEST_ROUTE_ENTRY * ROUTEPTR, in
 	return;
 }
 
-static VOID SendNetFrame(struct ROUTE * Route, struct _MESSAGE * Frame)
-{
-	// INP3 should only ever send over an active link, so just queue the message
-
-
-	// Messages are built wrong. (with L2 header). Till I fix them all, remove the header here
-
-	Frame->LENGTH -= 14;
-	memmove(&Frame->DEST[0], &Frame->PID, Frame->LENGTH);
-	
-	if (Route->NEIGHBOUR_LINK)
-		C_Q_ADD(&Route->NEIGHBOUR_LINK->TX_Q, Frame);
-	else
-		ReleaseBuffer(Frame);
-}
-
 VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff, int Len, int Port)
 {
 	// See if a reply to our message, or a new request
@@ -687,7 +671,10 @@ VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff, int Len
 		int Dummy;
 		
 		if (Route->INP3Node == 0)
+		{
+			ReleaseBuffer(Buff);
 			return;						// We don't want to use INP3
+		}
 
 		// Extract other end's SRTT
 
@@ -696,7 +683,7 @@ VOID ProcessRTTMsg(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff, int Len
 
 		// Echo Back to sender
 	
-		xSendNetFrame(Route, Buff);
+		SendNetFrame(Route, Buff);
 
 		if ((Route->Status & GotRTTRequest) == 0)
 		{
@@ -752,33 +739,30 @@ VOID SendRTTMsg(struct ROUTE * Route)
 
 	Route->Timeout = RTTTimeout;
 
-	xSendNetFrame(Route, Msg);
+	SendNetFrame(Route, Msg);
 }
 
 VOID SendKeepAlive(struct ROUTE * Route)
 {
-	struct _MESSAGE * Msg = GetBuff();
+	struct _L3MESSAGEBUFFER * Msg = GetBuff();
 
 	if (Msg == 0)
 		return;
 
-	memcpy(Msg->DEST, Route->NEIGHBOUR_CALL, 7);
-	memcpy(Msg->ORIGIN, MYCALL, 7);
-	Msg->PORT = Route->NEIGHBOUR_PORT;
-	Msg->PID = NRPID;
+	Msg->L3PID = NRPID;
 
-	memcpy(Msg->L3MSG.L3DEST, L3KEEP, 7);
-	memcpy(Msg->L3MSG.L3SRCE, MYCALL, 7);
-	Msg->L3MSG.L3TTL = 1;
-	Msg->L3MSG.L4ID = 0;
-	Msg->L3MSG.L4INDEX = 0;
-	Msg->L3MSG.L4RXNO = 0;
-	Msg->L3MSG.L4TXNO = 0;
-	Msg->L3MSG.L4FLAGS = L4INFO;
+	memcpy(Msg->L3DEST, L3KEEP, 7);
+	memcpy(Msg->L3SRCE, MYCALL, 7);
+	Msg->L3TTL = 1;
+	Msg->L4ID = 0;
+	Msg->L4INDEX = 0;
+	Msg->L4RXNO = 0;
+	Msg->L4TXNO = 0;
+	Msg->L4FLAGS = L4INFO;
 
-	Msg->L3MSG.L4DATA[0] = 'K';
+//	Msg->L3MSG.L4DATA[0] = 'K';
 
-	Msg->LENGTH = 20 + 14 + 2 + 7;
+	Msg->LENGTH = 20 + MSGHDDRLEN + 1;
 
 	SendNetFrame(Route, Msg);
 }
@@ -857,7 +841,7 @@ VOID SendOurRIF(struct ROUTE * Route)
 	Msg->L3PID = NRPID;
 	Msg->LENGTH = totLen + 1 + MSGHDDRLEN;
 
-	xSendNetFrame(Route, Msg);
+	SendNetFrame(Route, Msg);
 }
 
 SendRIPTimer()
@@ -1006,7 +990,7 @@ SendRIF(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Msg)
 {
 	Msg->LENGTH += MSGHDDRLEN + 1;		// PID
 
-	xSendNetFrame(Route, Msg);
+	SendNetFrame(Route, Msg);
 
 	free(Msg);
 }

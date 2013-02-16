@@ -445,7 +445,7 @@ VOID SendtoBaycom(struct BAYINFO * Baycom)
 
 	// return transmitted frames to node, after setting FRACK timer
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 
 	while (Baycom->ACK_Q)
 	{
@@ -453,7 +453,7 @@ VOID SendtoBaycom(struct BAYINFO * Baycom)
 		C_Q_ADD(&TRACE_Q, buffptr);
 	}
 
-	FreeSemaphore();
+	FreeSemaphore(&Semaphore);
 }
 
 VOID ProcessSample(struct BAYINFO * Baycom, int Interval)

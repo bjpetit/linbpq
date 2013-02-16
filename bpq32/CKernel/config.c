@@ -110,8 +110,6 @@
 #include <math.h>
 
 
-#define DllExport	__declspec(dllexport)
-
 struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
 
 // Dummy file routines - write to buffer instead
@@ -123,6 +121,9 @@ char * RigConfigMsg[35];
 char * WL2KReportLine[35];
 
 BOOL PortDefined[35];
+
+extern BOOL IncludesMail;
+extern BOOL IncludesChat;
 
 char * fp2;
 
@@ -580,7 +581,7 @@ BOOL ProcessConfig()
 	{
 		Consoleprintf("");
 		Consoleprintf("Please enter a LOCATOR statment in your BPQ32.cfg");
-		Consoleprintf("If you really don't want to be on the Node Map you cam enter LOCATOR=NONE");
+		Consoleprintf("If you really don't want to be on the Node Map you can enter LOCATOR=NONE");
 		Consoleprintf("");
 
 //		_beginthread(WarnThread, 0, 0);
@@ -751,6 +752,26 @@ NextAPRS:
 		return 0;
 	}
 
+#ifdef LINBPQ
+
+	if (_memicmp(rec, "LINMAIL", 7) == 0)
+	{
+		// Enable Mail on Linux Verdion
+
+		IncludesMail = TRUE;
+
+		return 0;
+	}
+
+	if (_memicmp(rec, "LINCHAT", 7) == 0)
+	{
+		// Enable Chat on Linux Verdion
+
+		IncludesChat = TRUE;
+
+		return 0;
+	}
+#endif
 	if (_memicmp(rec, "HFCTEXT", 7) == 0)
 	{
 		// HF only CTEXT (normlly short to reduce traffic)
@@ -1168,7 +1189,7 @@ char rec[];
 	
         bseek(fp2,(long) fileoffset,SEEK_SET);
 
-	num = sscanf(value," %d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,",&j1,&j2,&j3,&j4,&j5,&j6,&j7,&j8,&j9,&j10,&j11,&j12,&j13,&j14,&j15,&j16);
+	num = sscanf(value," %d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",&j1,&j2,&j3,&j4,&j5,&j6,&j7,&j8,&j9,&j10,&j11,&j12,&j13,&j14,&j15,&j16);
 
 	bputc(j1,fp2);
 	bputc(j2,fp2);
@@ -1630,10 +1651,7 @@ int GetNextLine(char *rec)
 			rec[i] = '\0';
 		}
 			
-		j = xindex(rec,";");
-
-		if (j != -1)
-			rec[j] = '\0';				// Chop at comment
+		strlop(rec, ';');
 
 		if (strlen(rec) > 1)
 			if (memcmp(rec, "/*",2) == 0)
@@ -1653,9 +1671,16 @@ int GetNextLine(char *rec)
 			continue;
 		}
 
-		// see if all spaces
+		// remove trailing spaces
+
+		while(strlen(rec) && rec[strlen(rec) - 1] == ' ')
+			rec[strlen(rec) - 1] = 0;
+
+		strcat(rec, " ");
 
 		ptr = strtok_s(rec, " ", &context);
+
+		// Put one back
 
 		if (ptr)
 		{
@@ -1666,6 +1691,7 @@ int GetNextLine(char *rec)
 			rec = ptr;
 			return 0;
 		}
+
 	} 
 
 	return 0;
@@ -2020,6 +2046,8 @@ char value[];
 char rec[];
 {
 	unsigned int j;
+
+	strlop(rec, ' ');
 	for (j = 8;( j < strlen(rec)+1); j++)
 	    workstring[j-8] = rec[j];
 
@@ -2392,7 +2420,17 @@ int do_kiss (char * value,char * rec)
 		err=0;
 		kissflags=kissflags | 32;
 	}
+	if (_stricmp(value,"PITNC") == 0)
+	{
+		err=0;
+		kissflags=kissflags | 64;
+	}
 
+	if (_stricmp(value,"NOPARAMS") == 0)
+	{
+		err=0;
+		kissflags=kissflags | 128;
+	}
 	if (_stricmp(value,"ACKMODE") == 0)
 	{
 		err=0;
@@ -2407,7 +2445,7 @@ int do_kiss (char * value,char * rec)
 
 	if (err == 255)
 	{
-	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE TNCX)");
+	   Consoleprintf("Invalid KISS Options (not POLLED ACKMODE CHECKSUM D700 SLAVE TNCX PITNC NOPARAMS)");
 	   Consoleprintf("%s\r\n",rec);
 	}
 	return (err);
@@ -2586,82 +2624,61 @@ BOOL ProcessAPPLDef(char * buf)
 {
 	// New Style APPL definition
 
-	// APPL n,COMMAND,_CMDALIAS,APPLCALL,APPLALIAS,APPLQUAL
+	// APPL n,COMMAND,CMDALIAS,APPLCALL,APPLALIAS,APPLQUAL,L2ALIAS
 
-	char * ptr;
-	char * Context;
-	int Appl;
+	char * ptr1, * ptr2;
+	int Appl, n = 0;
+	char Param[8][256];
 	struct APPLCONFIG * App;
 	struct CONFIGTABLE * cfg = (struct CONFIGTABLE * )ConfigBuffer;
 
 	_strupr(buf);
 
-	ptr = strtok_s(buf, ", /\n\r", &Context);
+	memset(Param, 0, 2048);
 
-	if (ptr == 0) return FALSE;
+	ptr1 = buf;
 
-	Appl = atoi(ptr);
+	while (ptr1 && *ptr1)
+	{
+		ptr2 = strchr(ptr1, ',');
+		if (ptr2) *ptr2++ = 0;
+
+		strcpy(&Param[n++][0], ptr1);
+		ptr1 = ptr2;
+	}
+
+	Appl = atoi(Param[0]);
 
 	if (Appl < 1 || Appl > 32) return FALSE;
 
 	App = (struct APPLCONFIG *)&ConfigBuffer[ApplOffset + (Appl - 1) * sizeof(struct APPLCONFIG) ];
 
-	ptr = strchr(Context, ',');
-	if (ptr == 0)
-	{
-		ptr = strchr(Context, ' ');				// There is a space on end of command
-		if (ptr == 0)  return FALSE;			// No comma or space meeans no param
-	}
+	if (Param[1][0] == 0)				// No Application
+		return FALSE;
 
-	(*ptr++) = 0;
+	if (strlen(Param[1]) > 12) return FALSE;
 
-	if (strlen(Context) > 12) return FALSE;
-
-	memcpy(App->Command, Context, strlen(Context));
+	memcpy(App->Command, Param[1], strlen(Param[1]));
 
 	cfg->C_BBS = 1;
-
-	Context = ptr;
-
-	ptr = strchr(Context, ',');
-
-	if (ptr == 0)
-	{
-		// No comma, so must be last param - this is ok
 		
-		if (strlen(Context) > 48) return FALSE;
+	if (strlen(Param[2]) > 48) return FALSE;
 
-		memcpy(App->CommandAlias, Context, strlen(Context));
-		return TRUE;
-	}
+	memcpy(App->CommandAlias, Param[2], strlen(Param[2]));
 
-	(*ptr++) = 0;
+	if (strlen(Param[3]) > 10) return FALSE;
 
-	if (strlen(Context) > 48) return FALSE;
+	memcpy(App->ApplCall, Param[3], strlen(Param[3]));
 
-	memcpy(App->CommandAlias, Context, strlen(Context));
+	if (strlen(Param[4]) > 10) return FALSE;
 
-	if (ptr[0] == ',')								// No call, so cant have alias or quality
-		return TRUE;
+	memcpy(App->ApplAlias, Param[4], strlen(Param[4]));
 
-	Context = ptr;
+	App->ApplQual = atoi(Param[5]);
 
-	ptr = strtok_s(NULL, ", /\n\r", &Context);
-	if (ptr == 0) return TRUE;						// Allow Missing Call
-	if (strlen(ptr) > 10) return FALSE;
+	if (strlen(Param[6]) > 10) return FALSE;
 
-	memcpy(App->ApplCall, ptr, strlen(ptr));
-
-	ptr = strtok_s(NULL, ", /\n\r", &Context);
-	if (ptr == 0) return TRUE;						// Allow missing Alias
-	if (strlen(ptr) > 10) return FALSE;
-
-	memcpy(App->ApplAlias, ptr, strlen(ptr));
-
-	ptr = strtok_s(NULL, ", /\n\r", &Context);
-	if (ptr == 0) return TRUE;						// Allow missing Quality
-
-	App->ApplQual = atoi(ptr);
+	memcpy(App->L2Alias, Param[6], strlen(Param[6]));
 
 	return TRUE;
 }

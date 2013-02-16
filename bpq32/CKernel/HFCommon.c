@@ -29,15 +29,14 @@ extern int OffsetH, OffsetW;
 extern HMENU hMainFrameMenu;
 extern HMENU hBaseMenu;
 extern HANDLE hInstance;
-extern HFONT hFont;
 
 extern HKEY REGTREE;
 
 extern int Ver[];
 
 
-KillTNC(struct TNCINFO * TNC);
-RestartTNC(struct TNCINFO * TNC);
+int KillTNC(struct TNCINFO * TNC);
+int RestartTNC(struct TNCINFO * TNC);
 
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
@@ -118,11 +117,6 @@ LRESULT CALLBACK PacWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			return DefMDIChildProc(hWnd, message, wParam, lParam);
 
 	switch (message) { 
-
-	case WSA_DATA:				// Notification on data socket
-
-		Winmor_Socket_Data(wParam, WSAGETSELECTERROR(lParam), WSAGETSELECTEVENT(lParam));
-		return 0;
 
 	case WM_CREATE:
 
@@ -1100,7 +1094,7 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 	char ReportMode[20];
 	char NoLOC[7] = "";
 	double Freq;
-	char ReportFreq[_CVTBUFSIZE] = "";
+	char ReportFreq[350] = "";
 
 	if (MH == 0) return;
 
@@ -1171,7 +1165,7 @@ DoMove:
 
 	memcpy (MHBASE->MHCALL, AXCall, 7);
 	MHBASE->MHDIGI = Mode;
-	MHBASE->MHTIME = _time32(NULL);
+	MHBASE->MHTIME = time(NULL);
 
 	memcpy(MHBASE->MHLocator, LOC, 6);
 	strcpy(MHBASE->MHFreq, ReportFreq);
@@ -1205,6 +1199,8 @@ DoMove:
 
 VOID CloseDriverWindow(int port)
 {
+#ifndef LINBPQ
+
 	struct TNCINFO * TNC;
 
 	TNC = TNCInfo[port];
@@ -1218,12 +1214,14 @@ VOID CloseDriverWindow(int port)
 //	DestroyWindow(TNC->hDlg);
 
 	TNC->hDlg = NULL;
-
+#endif
 	return;
 }
 
 VOID SaveWindowPos(int port)
 {
+#ifndef LINBPQ
+
 	struct TNCINFO * TNC;
 	char Key[80];
 
@@ -1239,9 +1237,7 @@ VOID SaveWindowPos(int port)
 
 	SaveMDIWindowPos(TNC->hDlg, Key, "Size", TNC->Minimized);
 
-
-
-
+#endif
 	return;
 }
 
@@ -1251,141 +1247,9 @@ VOID ShowTraffic(struct TNCINFO * TNC)
 
 	sprintf(Status, "RX %d TX %d ACKED %d ", 
 		TNC->Streams[0].BytesRXed, TNC->Streams[0].BytesTXed, TNC->Streams[0].BytesAcked);
-
+#ifndef LINBPQ
 	SetDlgItemText(TNC->hDlg, IDC_TRAFFIC, Status);
-}
-
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet)
-{
-	char szPort[15];
-	char buf[80];
-	BOOL fRetVal;
-	COMMTIMEOUTS CommTimeOuts;
-
-	DCB	dcb;
-
-	// load the COM prefix string and append port number
-   
-	sprintf( szPort, "//./COM%d", Port) ;
-
-	// open COMM device
-
-	conn->hDevice =
-      CreateFile( szPort, GENERIC_READ | GENERIC_WRITE,
-                  0,                    // exclusive access
-                  NULL,                 // no security attrs
-                  OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
-                  NULL );
-				  
-	if (conn->hDevice == (HANDLE) -1)
-	{
-		sprintf(buf," COM%d Setup Failed %d ", Port, GetLastError());
-		
-		if (!Quiet)
-			WritetoConsole(buf);
-		if (conn->hDlg)
-			SetWindowText(conn->xIDC_COMMSSTATE, buf);
-	
-		return (FALSE);
-	}
-
-	SetupComm(conn->hDevice, 4096, 4096); // setup device buffers
-
-	// purge any information in the buffer
-
-	PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
-
-	// set up for overlapped I/O
-	  
-	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF;
-	CommTimeOuts.ReadTotalTimeoutMultiplier = 0;
-	CommTimeOuts.ReadTotalTimeoutConstant = 0;
-	CommTimeOuts.WriteTotalTimeoutMultiplier = 0;
-	CommTimeOuts.WriteTotalTimeoutConstant = 1000;
-	SetCommTimeouts(conn->hDevice, &CommTimeOuts);
-
-#define FC_DTRDSR       0x01
-#define FC_RTSCTS       0x02
-	
-	dcb.DCBlength = sizeof(DCB);
-	GetCommState(conn->hDevice, &dcb);
-
-	 // setup hardware flow control
-
-	dcb.fDtrControl = DTR_CONTROL_ENABLE;
-//	dcb.fRtsControl = RTS_CONTROL_HANDSHAKE;
-	dcb.fRtsControl = RTS_CONTROL_ENABLE;
-
-	dcb.BaudRate = Speed;
-	dcb.ByteSize = 8;
-	dcb.Parity = NOPARITY;
-	dcb.StopBits = ONESTOPBIT;
-
-	dcb.fInX = dcb.fOutX = 0;
-	dcb.XonChar = 0;
-	dcb.XoffChar = 0;
-	dcb.XonLim = 0;
-	dcb.XoffLim = 0;
-
-	// other various settings
-
-	dcb.fBinary = TRUE;
-	dcb.fParity = TRUE;
-
-	fRetVal = SetCommState(conn->hDevice, &dcb);
-
-//	conn->RTS = 1;
-//	conn->DTR = 1;
-
-	EscapeCommFunction(conn->hDevice,SETDTR);
-	EscapeCommFunction(conn->hDevice,SETRTS);
-
-	sprintf(buf,"COM%d Open", Port);
-	SetWindowText(conn->xIDC_COMMSSTATE, buf);
-
-	
-	return TRUE;
-}
-
-VOID SetupPortRIGPointers()
-{
-	struct TNCINFO * TNC;
-	int port;
-
-// For each Winmor/Pactor port set up the TNC to RIG pointers
-
-	for (port = 1; port < 33; port++)
-	{
-		TNC = TNCInfo[port];
-
-		if (TNC == NULL)
-			continue;
-
-		if (TNC->RIG == NULL)
-			TNC->RIG = Rig_GETPTTREC(port);
-
-		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4)
-			if (TNC->RIG && TNC->PTTMode)
-				TNC->RIG->PTTMode = TNC->PTTMode;
-	
-		if (TNC->RIG == NULL)
-			TNC->RIG = &TNC->DummyRig;		// Not using Rig control, so use Dummy
-	
-/*		if (TNC->WL2KFreq[0])
-		{
-			// put in ValChar for MH reporting
-
-			double Freq;
-
-			Freq = atof(TNC->WL2KFreq) - 1500;
-			Freq = Freq/1000000.;
-
-			_gcvt(Freq, 9, TNC->RIG->Valchar);
-			TNC->RIG->CurrentBandWidth = TNC->WL2KModeChar;
-		}
-*/
-	}
+#endif
 }
 
 BOOL InterlockedCheckBusy(struct TNCINFO * ThisTNC)
@@ -1425,11 +1289,11 @@ char * GetChallengeResponse(char * Call, char *  ChallengeString)
 {
 	// Generates a response to the CMS challenge string...
 
-	__int64 Challenge = _atoi64(ChallengeString);
-	__int64 CallSum = 0;
-	__int64 Mask;
-	__int64 Response;
-	__int64 XX = 1065484730;
+	long long Challenge = _atoi64(ChallengeString);
+	long long CallSum = 0;
+	long long Mask;
+	long long Response;
+	long long XX = 1065484730;
 
 	char CallCopy[10];
 	UINT i;
@@ -1454,7 +1318,7 @@ char * GetChallengeResponse(char * Call, char *  ChallengeString)
 	Response = (Challenge % 930249781);
 	Response ^= Mask;
 
-	sprintf(ChallengeResponse, "%012d", Response);
+	sprintf(ChallengeResponse, "%012lld", Response);
 
 	return ChallengeResponse; // 001065484730
 }

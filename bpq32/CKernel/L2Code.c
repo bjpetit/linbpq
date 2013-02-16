@@ -105,7 +105,7 @@ extern int REALTIMETICKS;
 
 UCHAR NO_CTEXT = 0;
 UCHAR ALIASMSG = 0;
-extern UCHAR APPLMASK;
+extern UINT APPLMASK;
 static UCHAR ISNETROMMSG = 0;
 UCHAR MSGFLAG = 0;
 extern UCHAR * ALIASPTR;
@@ -321,6 +321,9 @@ TRYBBS:
 			ALIASMSG = 1;
 
 			if (CompareAliases(Buffer->DEST, APPL->APPLALIAS))		// only compare 6 bits - allow any ssid
+				goto FORUS;
+
+			if (CompareAliases(Buffer->DEST, APPL->L2ALIAS))		// only compare 6 bits - allow any ssid
 				goto FORUS;
 
 		}
@@ -1097,6 +1100,9 @@ VOID L2SETUPCROSSLINK(PROUTE ROUTE)
 	
 	LINK->LINKPORT = PORT = GetPortTableEntryFromPortNum(ROUTE->NEIGHBOUR_PORT);
 
+	if (PORT == NULL)
+		return;						// maybe port has been deleted
+
 	//	IF ROUTE HAS A FRACK, SET IT
 
 	if (ROUTE->NBOUR_FRACK)
@@ -1509,7 +1515,7 @@ VOID SDIFRM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 		if (LINK->VER1FLAG == 1)
 			LINK->REJTIMER = TENSECS;
 
-			//	SET ACK REQUIRED TIMER - REJ WILL BE SENT WHEN IT EXPIRES
+		//	SET ACK REQUIRED TIMER - REJ WILL BE SENT WHEN IT EXPIRES
 
 		LINK->L2ACKREQ = THREESECS;		// EXTRA LONG RESPTIME, AS SENDING TOO MANY REJ'S IS SERIOUS
 

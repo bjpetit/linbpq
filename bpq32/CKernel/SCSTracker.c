@@ -14,9 +14,9 @@
 #define MaxStreams 1	
 
 #include "CHeaders.h"
-#include "TNCInfo.h"
+#include "tncinfo.h"
 
-#include "bpq32.h"
+//#include "bpq32.h"
 
 static char ClassName[]="TRACKERSTATUS";
 static char WindowTitle[] = "SCS Tracker";
@@ -28,7 +28,6 @@ static int RigControlRow = 140;
 extern UCHAR BPQDirectory[];
 
 extern APPLCALLS APPLCALLTABLE[];
-extern BPQVECSTRUC * BPQHOSTVECPTR;
 extern char * PortConfig[33];
 extern char LOC[];
 
@@ -45,25 +44,24 @@ char NodeCall[11];		// Nodecall, Null Terminated
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
-BOOL NEAR OpenConnection(int);
-BOOL NEAR SetupConnection(int);
+BOOL OpenConnection(int);
+BOOL SetupConnection(int);
 BOOL CloseConnection(struct TNCINFO * conn);
-BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
-BOOL NEAR DestroyTTYInfo(int port);
-void DEDCheckRX(struct TNCINFO * TNC);
-VOID DEDPoll(int Port);
+static BOOL WriteCommBlock(struct TNCINFO * TNC);
+BOOL DestroyTTYInfo(int port);
+static void DEDCheckRX(struct TNCINFO * TNC);
+static VOID DEDPoll(int Port);
 VOID StuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 unsigned short int compute_crc(unsigned char *buf,int len);
 int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
-VOID ProcessDEDFrame(struct TNCINFO * TNC);
-VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-VOID ExitHost(struct TNCINFO * TNC);
-VOID DoTNCReinit(struct TNCINFO * TNC);
-VOID DoTermModeTimeout(struct TNCINFO * TNC);
-BOOL OpenVirtualSerialPort(struct TNCINFO * TNC);
+static VOID ProcessDEDFrame(struct TNCINFO * TNC);
+static VOID ProcessTermModeResponse(struct TNCINFO * TNC);
+static VOID ExitHost(struct TNCINFO * TNC);
+static VOID DoTNCReinit(struct TNCINFO * TNC);
+static VOID DoTermModeTimeout(struct TNCINFO * TNC);
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type);
 VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len);
-Switchmode(struct TNCINFO * TNC, int Mode);
+int Switchmode(struct TNCINFO * TNC, int Mode);
 VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud);
 VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud);
 VOID SendRPBeacon(struct TNCINFO * TNC);
@@ -187,7 +185,7 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 		return 0;
 	
 	
-	if (TNC->hDevice == (HANDLE) -1)
+	if (TNC->hDevice == 0)
 	{
 		// Clear anything from UI_Q
 
@@ -211,7 +209,7 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 		
 		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
-		if (TNC->hDevice == (HANDLE) -1)
+		if (TNC->hDevice == 0)
 			return 0;
 	}
 ok:
@@ -293,12 +291,7 @@ ok:
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 
-		_asm 
-		{
-
-			MOV	EAX,buff
-			mov Stream,eax
-		}
+		Stream = (int)buff;
 
 		TNCOK = (TNC->HostMode == 1 && TNC->ReinitState != 10);
 
@@ -321,7 +314,7 @@ ok:
 
 		ExitHost(TNC);
 		Sleep(50);
-		CloseHandle(TNC->hDevice);
+		CloseCOMPort(TNC->hDevice);
 		TNC->hDevice =(HANDLE) -1;
 		TNC->ReopenTimer = 250;
 		TNC->HostMode = FALSE;
@@ -336,16 +329,12 @@ ok:
 
 		Sleep(25);
 
-		CloseHandle(TNC->hDevice);
+		CloseCOMPort(TNC->hDevice);
 		return (0);
 
 	case 6:				// Scan Stop Interface
 
-		_asm 
-		{
-			MOV	EAX,buff
-			mov Param,eax
-		}
+		Param = (int)buff;
 
 		switch (Param)
 		{
@@ -401,6 +390,25 @@ ok:
 	return 0;
 }
 
+static int WebProc(struct TNCINFO * TNC, char * Buff)
+{
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	"<head><title>SCSTracker Status</title></head><body><h2>SCSTracker Status</h2>");
+
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+
+	Len += sprintf(&Buff[Len], "<tr><td width=90px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
+	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
+	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
+	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td></td></tr>", TNC->WEB_TRAFFIC);
+	Len += sprintf(&Buff[Len], "</table>");
+
+	Len = DoScanLine(TNC, Buff, Len);
+
+	return Len;
+}
+
+
 UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 {
 	char msg[500];
@@ -416,7 +424,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	//
 
 	sprintf(msg,"SCSTRK COM%d", PortEntry->PORTCONTROL.IOBASE);
-	WritetoConsole(msg);
+	WritetoConsoleLocal(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
@@ -429,7 +437,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 		// Not defined in Config file
 
 		sprintf(msg," ** Error - no info in BPQ32.cfg for this port\n");
-		WritetoConsole(msg);
+		WritetoConsoleLocal(msg);
 
 		return (int) ExtProc;
 	}
@@ -454,7 +462,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
-		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 		
@@ -470,7 +478,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	// get NODECALL for RP tests
 
-	memcpy(NodeCall, GetNodeCall(), 10);
+	memcpy(NodeCall, MYNODECALL, 10);
 		
 	ptr=strchr(NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -495,6 +503,17 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	sprintf(msg, "I %s\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
 
+	TNC->WebWindowProc = WebProc;
+	TNC->WebWinX = 500;
+	TNC->WebWinY = 200;
+
+	TNC->WEB_COMMSSTATE = zalloc(100);
+	TNC->WEB_TNCSTATE = zalloc(100);
+	TNC->WEB_MODE = zalloc(20);
+	TNC->WEB_TRAFFIC = zalloc(100);
+
+#ifndef LINBPQ
+
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 200);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,10,120,24, TNC->hDlg, NULL, hInstance, NULL);
@@ -518,11 +537,14 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	MoveWindows(TNC);
 	
+#endif
+
 	if (TNC->RobustDefault)
 	{
 		TNC->Robust = TRUE;
 		strcat(TNC->InitScript, "%B R600\r");
 		SetWindowText(TNC->xIDC_MODE, "Robust Packet");
+		strcpy(TNC->WEB_MODE, "Robust Packet");
 	}
 	else
 	{
@@ -530,6 +552,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 		sprintf(Cmd, "%%B %s\r", TNC->NormSpeed);
 		strcat(TNC->InitScript, Cmd);
 		SetWindowText(TNC->xIDC_MODE, "HF Packet");
+		strcpy(TNC->WEB_MODE, "HF Packet");
 	}
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
@@ -539,65 +562,22 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	if (RigConfigMsg[port] == NULL)
 		TNC->SwitchToPactor = TNC->RobustTime;		// Don't alternate Modes if using Rig Control
 
-	WritetoConsole("\n");
+	WritetoConsoleLocal("\n");
 
 	return ((int)ExtProc);
 }
 
 static void DEDCheckRX(struct TNCINFO * TNC)
 {
-	BOOL       fReadStat;
-	COMSTAT    ComStat;
-	DWORD      dwErrorFlags;
 	int Length, Len;
 	UCHAR  * ptr;
 	UCHAR character;
 	UCHAR * CURSOR;
 
-	ComStat.cbInQue = 0;
+	Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
 
-	// only try to read number of bytes in queue 
-
-	if (TNC->RXLen == 500)
-		TNC->RXLen = 0;
-
-	if (ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat) == 0)
-	{
-		// Device failed. Close and try to reopen
-
-//		CloseHandle(TNC->hDevice);
-
-		Debugprintf("TRK - Read Failed - recovering");
-		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, FALSE);
-
-		if (TNC->hDevice == (HANDLE) -1)
-			return;
-		
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
-	}
-
-	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
-
-	if (Length == 0)
+	if (Len == 0)
 		return;					// Nothing doing
-
-	while (Length > 20)
-	{
-		fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
-		TNC->RXLen += Len;
-		Length -= Len;
-	}
-
-	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
-
-//	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
-	
-	if (!fReadStat)
-	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
-		return;
-	}
 	
 	TNC->RXLen += Len;
 
@@ -761,22 +741,11 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 	TNC->RXLen = 0;
 }
 
-static BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
+static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
-	BOOL        fWriteStat;
-	DWORD       dwBytesWritten;
-	DWORD       dwErrorFlags;
-	COMSTAT     ComStat;
-
-	fWriteStat = WriteFile(TNC->hDevice, TNC->TXBuffer, TNC->TXLen, &dwBytesWritten, NULL);
-
-	if ((!fWriteStat) || (TNC->TXLen != dwBytesWritten))
-	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
-	}
+	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
 
 	TNC->Timeout = 20;				// 2 secs
-
 	return TRUE;
 }
 
@@ -809,8 +778,8 @@ VOID DEDPoll(int Port)
 
 			if (Stream == 0)
 			{
-				sprintf(Status, "In Use by %s", TNC->Streams[0].MyCall);
-				SetWindowText(TNC->xIDC_TNCSTATE, Status);
+				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
+				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				// Stop Scanner
 		
@@ -842,8 +811,8 @@ VOID DEDPoll(int Port)
 		Debugprintf("DEDHOST - Link to TNC Lost");
 		TNC->TNCOK = FALSE;
 
-		sprintf(Status,"COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
-		SetWindowText(TNC->xIDC_COMMSSTATE, Status);
+		sprintf(TNC->WEB_COMMSSTATE, "COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		TNC->HostMode = 0;
 		TNC->ReinitState = 0;
@@ -1084,7 +1053,7 @@ VOID DEDPoll(int Port)
 				}
 				else
 				{
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], &Buffer[40]);
+					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &Buffer[40]);
 					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 				}
 				return;
@@ -1096,6 +1065,7 @@ VOID DEDPoll(int Port)
 				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "TRK} OK\r");
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 				SetWindowText(TNC->xIDC_MODE, "Robust Packet");
+				strcpy(TNC->WEB_MODE, "Robust Packet");
 
 				return;
 			}
@@ -1126,6 +1096,7 @@ VOID DEDPoll(int Port)
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 				TNC->Robust = FALSE;
 				SetWindowText(TNC->xIDC_MODE, "HF Packet");
+				strcpy(TNC->WEB_MODE, "HF Packet");
 				return;
 			}
 
@@ -1144,12 +1115,12 @@ VOID DEDPoll(int Port)
 					TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
 							
 					sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s%c\1\1\1%s\0",
-						(TNC->Robust) ? "R600" : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0,  buffptr+2);
+						(TNC->Robust) ? "R600" : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0,  (char *)buffptr+8);
 
 					ReleaseBuffer(buffptr);
 	
-					sprintf(Status, "%s Connecting to %s", TNC->Streams[Stream].MyCall, TNC->Streams[Stream].RemoteCall);
-					SetWindowText(TNC->xIDC_TNCSTATE, Status);
+					sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[Stream].MyCall, TNC->Streams[Stream].RemoteCall);
+					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					TNC->Streams[0].InternalCmd = FALSE;
 					return;
@@ -1177,7 +1148,7 @@ VOID DEDPoll(int Port)
 		char Call[12] = "           ";	
 		struct _MESSAGE * buffptr;
 			
-		(UINT *)buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+		buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 		
 		datalen = buffptr->LENGTH - 7;
 		Buffer = &buffptr->DEST[0];		// Raw Frame
@@ -1281,12 +1252,10 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 	if (TNC->ReinitState == 0)
 	{
 		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
-
-		char Status[80];
 		
 		TNC->TNCOK = FALSE;
-		sprintf(Status,"COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
-		SetWindowText(TNC->xIDC_COMMSSTATE, Status);
+		sprintf(TNC->WEB_COMMSSTATE, "COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
+		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		memcpy(&TNC->TXBuffer[0], "\x18\x1b\r", 2);
 		TNC->TXLen = 2;
@@ -1491,11 +1460,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	if (TNC->TNCOK == FALSE)
 	{
 		// Just come up
-		char Status[80];
 		
 		TNC->TNCOK = TRUE;
-		sprintf(Status,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
-		SetWindowText(TNC->xIDC_COMMSSTATE, Status);
+		sprintf(TNC->WEB_COMMSSTATE, "COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	}
 
 	if (TNC->InitPtr)					// Response to Init Script
@@ -1558,7 +1526,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	{
 		// Success with message - null terminated
 
-		UCHAR * ptr;
+		char * ptr;
 		int len;
 
 		Buffer = Msg;
@@ -1609,13 +1577,11 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 				}
 
 				if (LastCmd == '%')		// % Commands
-				{
-					char Status[80];
-					
+				{				
 					if (TNC->TXBuffer[4]== 'T')	// TX count Status
 					{
-						sprintf(Status, "RX %d TX %d ACKED %s", TNC->Streams[Stream].BytesRXed, TNC->Streams[Stream].BytesTXed, Buffer);
-						SetWindowText(TNC->xIDC_TRAFFIC, Status);
+						sprintf(TNC->WEB_TRAFFIC, "RX %d TX %d ACKED %s", TNC->Streams[Stream].BytesRXed, TNC->Streams[Stream].BytesTXed, Buffer);
+						SetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 						return;
 					}
 
@@ -1700,8 +1666,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 					if (Stream == 0)
 					{
-						sprintf(Status, "In Use by %s", STREAM->MyCall);
-						SetWindowText(TNC->xIDC_TNCSTATE, Status);
+						sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
+						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 					}
 
 					if (TNC->RPBEACON)
@@ -1785,11 +1751,11 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					if (Stream == 0)
 					{
 						if (TNC->RIG)
-							sprintf(Status, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
+							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
 						else
-							sprintf(Status, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
+							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
 					
-						SetWindowText(TNC->xIDC_TNCSTATE, Status);
+						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 					
 						// If an autoconnect APPL is defined, send it
 						// See which application the connect is for
@@ -1919,11 +1885,11 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					if (Stream == 0)
 					{
 						if (TNC->RIG)
-							sprintf(Status, "%s Connected to %s Outbound Freq %s", STREAM->MyCall, STREAM->RemoteCall, TNC->RIG->Valchar);
+							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound Freq %s", STREAM->MyCall, STREAM->RemoteCall, TNC->RIG->Valchar);
 						else
-							sprintf(Status, "%s Connected to %s Outbound", STREAM->MyCall, STREAM->RemoteCall);
+							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", STREAM->MyCall, STREAM->RemoteCall);
 
-						SetDlgItemText(TNC->hDlg, IDC_TNCSTATE, Status);
+						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 						if (STREAM->DEDStream == 30)	// Robust Mode
 						{
@@ -2084,8 +2050,11 @@ typedef struct _MESSAGEY
 		struct _L3MESSAGE L3MSG;
 
 	};
+		
+	UCHAR Padding[BUFFLEN - sizeof(time_t) - sizeof(VOID *) - 256 - 7 - 16];
 
-	char Padding[100];
+	time_t Timestamp;
+	VOID * Linkptr;		// For ACKMODE processing
 
 }MESSAGEY;
 
@@ -2130,17 +2099,16 @@ VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type)
 		// We have digis
 
 		char Save[100];
+		char * fiddle;
 
 		memcpy(Save, &ptr[4], 60);
 
 		ptr = strtok_s(Save, " ", &context);
 DigiLoop:
-		_asm 
-		{	
-			mov eax,AdjMsg 
-			add eax, 7
-			mov	AdjMsg, eax
-		}
+
+		fiddle = (char *)AdjMsg;
+		fiddle += 7;
+		AdjMsg = (MESSAGEY *)fiddle;
 
 		Monframe.LENGTH += 7;
 
@@ -2227,39 +2195,13 @@ DigiLoop:
 	if (Type == 5)								// More to come
 	{
 		ptr = strstr(ptr, "pid ");	
-		sscanf(&ptr[3], "%x", &AdjMsg->PID);
+		sscanf(&ptr[3], "%x", (UINT *)&AdjMsg->PID);
 		return;	
 	}
 
-	_asm {
+	time(&Monframe.Timestamp);
 
-	pushad
-
-	mov edi, offset Monframe
-
-	push	ecx
-	push	edx
-	
-	push	0
-	call	time
-
-	add	esp,4
-	
-	pop		edx
-	pop		ecx
-
-	MOV	TIMESTAMP[EDI],EAX
-
-	mov eax, BPQTRACE
-	
-	call eax
-
-	popad
-
-	}
-
-// Message in EDI
-
+	BPQTRACE((UINT *)&Monframe, TRUE);
 }
 
 VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
@@ -2269,31 +2211,9 @@ VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	memcpy(AdjMsg->L2DATA, Msg, Len);
 	Monframe.LENGTH += Len;
 
-	_asm {
+	time(&Monframe.Timestamp);
 
-		pushad
-
-		mov edi, offset Monframe
-		
-		push	ecx
-		push	edx
-	
-		push	0
-		call	time
-
-		add	esp,4
-	
-		pop		edx
-		pop		ecx
-
-		MOV	TIMESTAMP[EDI],EAX
-
-		mov eax, BPQTRACE
-		call eax
-
-		popad
-	}
-
+	BPQTRACE((UINT *)&Monframe, TRUE);
 	return;
 }
 
@@ -2337,6 +2257,7 @@ VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud)
 		sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", Baud);
 		TNC->Robust = TRUE;
 		SetWindowText(TNC->xIDC_MODE, "Robust Packet");
+		strcpy(TNC->WEB_MODE, "Robust Packet");
 	}
 }
 VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud)
@@ -2354,6 +2275,8 @@ VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud)
 	TNC->Robust = FALSE;
 
 	SetWindowText(TNC->xIDC_MODE, "HF Packet");
+	strcpy(TNC->WEB_MODE, "HF Packet");
+
 }
 
 VOID SendRPBeacon(struct TNCINFO * TNC)

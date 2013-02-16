@@ -69,9 +69,6 @@ char RESTARTFAILED[] = "Restart failed\r";
 
 
 int STATSTIME = 0;
-int SEMGETS = 0;
-int SEMRELEASES = 0;
-int SEMCLASHES = 0;
 int MAXBUFFS = 0;
 int QCOUNT = 0;
 int MINBUFFCOUNT = 65535;
@@ -430,7 +427,7 @@ TRANSPORTENTRY * SetupSessionFromSession(TRANSPORTENTRY * Session, PBPQVECSTRUC 
 
 				APPLCALLS * APPL = APPLCALLTABLE;
 
-				while (APPLMASK & 1)
+				while ((APPLMASK & 1) == 0)
 				{
 					APPLMASK >>= 1;
 					APPL++;
@@ -484,7 +481,7 @@ BOOL cATTACHTOBBS(TRANSPORTENTRY * Session, UINT Mask, int Paclen, int * AnySess
 
 			ConfigedPorts++;
 
-			if (HOSTSESS->HOSTSESSION  == NULL && (HOSTSESS->HOSTFLAGS & 3) == 0) // Not attached and no report outstanding
+			if (HOSTSESS->HOSTSESSION == NULL && (HOSTSESS->HOSTFLAGS & 3) == 0) // Not attached and no report outstanding
 			{
 				//	WEVE GOT A FREE BPQ HOST PORT - USE IT
 
@@ -766,7 +763,7 @@ VOID CMDSTATS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 		Bufferptr += sprintf(Bufferptr, "%s", uptime);
 
 		Bufferptr += sprintf(Bufferptr, "Semaphore Get-Rel/Clashes   %9d%9d\r", 
-					SEMGETS -SEMRELEASES, SEMCLASHES);
+					Semaphore.Gets - Semaphore.Rels, Semaphore.Clashes);
 
 		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
 
@@ -1413,6 +1410,7 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	int n;
 	char TextCall[10];
 	int TextCallLen;
+	char PortString[10];
 
 #ifdef BLACKBITS
 
@@ -1465,6 +1463,11 @@ ALLOWED:
 		//	IF THERE IS NOTHING FOLLOWING THE NUMBER, ASSUME IT IS A
 		//	NUMERIC ALIAS INSTEAD OF A PORT
 
+		sprintf(PortString, "%d", Port);
+
+		if (strlen(PortString) < strlen(ptr))
+			goto NoPort;
+
 		PORT = GetPortTableEntryFromPortNum(Port);
 
 		if (PORT == NULL)
@@ -1488,6 +1491,8 @@ ALLOWED:
 		CONNECTPORT = Port;
 	
 	}
+
+NoPort:
 
 	ptr[strlen(ptr)] = ' ';				// Put param back together
 
@@ -2332,7 +2337,7 @@ VOID APRSMHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
-Dll int APIENTRY Rig_Command(int Session, char * Command);
+int Rig_Command(int Session, char * Command);
 
 VOID RADIOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD)
 {

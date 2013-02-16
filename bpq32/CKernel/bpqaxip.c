@@ -124,7 +124,11 @@
 #define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
-
+#ifndef WIN32
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
 #include "bpq32.h"
 
 #ifndef LINBPQ
@@ -312,7 +316,7 @@ BOOL add_arp_entry(struct AXIPPORTINFO * PORT, unsigned char * call, UCHAR * ip,
 		int keepalive, BOOL BCFlag, BOOL AutoAdded, int TCPMode, int SourcePort, BOOL IPv6);
 BOOL add_bc_entry(struct AXIPPORTINFO * PORT, unsigned char * call, int len);
 BOOL convtoax25(unsigned char * callsign, unsigned char * ax25call, int * calllen);
-static BOOL ReadConfigFile(Port);
+static BOOL ReadConfigFile(int Port);
 static int ProcessLine(char * buf, struct AXIPPORTINFO * PORT);
 int CheckKeepalives(struct AXIPPORTINFO * PORT);
 BOOL CopyScreentoBuffer(char * buff, struct AXIPPORTINFO * PORT);
@@ -567,7 +571,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		for (i=0;i<PORT->NumberofUDPPorts;i++)
 		{
-		
 			if (PORT->IPv6[i])
 				len = recvfrom(PORT->udpsock[i],rxbuff,500,0,(struct sockaddr *)&RXaddr.rxaddr, &addrlen6);
 			else
@@ -1017,7 +1020,9 @@ OpenListeningSocket(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp)
 	}
 
 //	Debugprintf("TCP Listening Socket Created - socket %d  port %d ", arp->TCPListenSock, arp->port);
-	
+
+	setsockopt (arp->TCPListenSock, SOL_SOCKET, SO_REUSEADDR, (char *)&param,4);
+
 	psin=&local_sin;
 	psin->sin_family = AF_INET;
 	psin->sin_addr.s_addr = htonl(INADDR_ANY);	// Local Host Only
@@ -1521,18 +1526,21 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 {
 	while(TRUE)
 	{
+		Debugprintf("AXIP Resolving names");
+
 		for (PORT->ResolveIndex=0; PORT->ResolveIndex < PORT->arp_table_len; PORT->ResolveIndex++)
 		{	
 			struct arp_table_entry * arp = &PORT->arp_table[PORT->ResolveIndex];
 
 			if (arp->ResolveFlag)
 			{
-				struct addrinfo hints, *res;
+				struct addrinfo hints, *res = 0;
+				int n;
 
 				memset(&hints, 0, sizeof hints);
 				hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 				hints.ai_socktype = SOCK_DGRAM;
-				getaddrinfo(arp->hostname, NULL, &hints, &res);
+				n = getaddrinfo(arp->hostname, NULL, &hints, &res);
 
 				if (res)
 				{
@@ -1562,8 +1570,11 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 #endif
 			}
 		}
+		Debugprintf("AXIP Resolve complete - pausing");
+
 		Sleep(15 * 60 * 1000);
 	}
+	Debugprintf("AXIP Resolve thread exitied");
 }
 
 #ifndef LINBPQ
@@ -2769,8 +2780,6 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 	{		
 		if (arp->TCPState == 0)
 		{
-			closesocket(arp->TCPSock);
-
 			arp->TCPSock=socket(AF_INET,SOCK_STREAM,0);
 
 			if (arp->TCPSock == INVALID_SOCKET)
@@ -2817,12 +2826,12 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 
 				//	Connect failed
 				//
-    			i=sprintf(Msg, "Connect Failed for AX/TCP socket - error code = %d\n", err);
+    			i=sprintf(Msg, "Connect Failed for AX/TCP socket %d  - error code = %d\n", arp->TCPSock, err);
 				WritetoConsole(Msg);
 				OutputDebugString(Msg);
 				closesocket(arp->TCPSock);
-
-				arp->TCPState =0;
+				arp->TCPSock = 0;
+				arp->TCPState = 0;
 			}
 		}
 wait:

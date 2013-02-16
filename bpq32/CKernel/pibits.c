@@ -17,18 +17,6 @@
 
 //int CheckReceivedData() {return 0;}
 //int GetLastError() {return 0;}
-int Sleep(int ms)
-{
-	usleep(ms * 1000);
-	return 0;
-}
-//int WriteFile() {return 0;}
-//int CloseHandle() {return 0;}
-
-VOID OutputDebugString(char * string)
-{
-	syslog(LOG_DEBUG, string);
-}
 
 
 

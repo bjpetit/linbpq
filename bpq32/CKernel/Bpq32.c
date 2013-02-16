@@ -511,6 +511,11 @@
 // Fix using KISS ports with COMn > 16
 // Add "KISS over UDP" driver for PI as a TNC concentrator
 
+
+// Convert to C for linux portability
+
+// Try to speed up kiss polling
+
 #define CKernel
 
 #include "Versions.h"
@@ -588,6 +593,8 @@ UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
+DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
+DllExport int ConvToAX25(unsigned char * incall,unsigned char * outcall);
 
 extern char AUTOSAVE;
 
@@ -624,9 +631,7 @@ extern int MONDECODE();
 extern int BPQMONOPTIONS();
 extern char PWTEXT[];
 extern char PWLEN;
-extern int SEMGETS;
-extern int SEMRELEASES;
-extern int SEMCLASHES;
+
 extern int FINDFREEDESTINATION();
 extern int RAWTX();
 extern int RELBUFF();
@@ -638,6 +643,9 @@ extern BOOL IPMinimized;
 
 
 BOOL Start();
+
+BOOL IncludesMail = FALSE;
+BOOL IncludesChat = FALSE;
 
 VOID SaveWindowPos(int port);
 VOID SaveAXIPWindowPos(int port);
@@ -653,6 +661,7 @@ VOID SaveBPQ32Windows();
 VOID CloseDriverWindow(int port);
 VOID CheckWL2KReportTimer();
 VOID SetApplPorts();
+VOID WriteMiniDump();
 
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 DllExport int APIENTRY GetStreamPID(int Stream);
@@ -696,8 +705,7 @@ VOID HTTPTimer();
 
 BOOL APIENTRY Rig_Init();
 BOOL APIENTRY Rig_Close();
-BOOL APIENTRY Rig_Poll();
-BOOL APIENTRY Rig_Command();
+BOOL Rig_Poll();
 
 VOID IPClose();
 VOID APRSClose();
@@ -706,15 +714,18 @@ int Flag = (int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
 int MINORVERSION=9;
 
-int Semaphore = 0;
-int SemProcessID = 0;
+struct SEM Semaphore = {0, 0, 0, 0};
 int SemHeldByAPI = 0;
+int LastSemGets = 0;
 UINT Sem_eax = 0;
 UINT Sem_ebx = 0;
 UINT Sem_ecx = 0;
 UINT Sem_edx = 0;
 UINT Sem_esi = 0;
 UINT Sem_edi = 0;
+
+void GetSemaphore(struct SEM * Semaphore);
+void FreeSemaphore(struct SEM * Semaphore);
 
 DllExport long  BPQHOSTAPIPTR = (long)&BPQHOSTAPI;
 //DllExport long  MONDECODEPTR = (long)&MONDECODE;
@@ -882,48 +893,6 @@ BOOL APRSActive = FALSE;
 
 Tell_Sessions();
 
-void GetSemaphore()
-{
-	//
-	//	Wait for it to be free
-	//
-	
-	if (Semaphore !=0)
-		SEMCLASHES++;
-
-loop1:
-
-	while (Semaphore != 0)
-	{
-		Sleep(10);
-	}
-
-	//
-	//	try to get semaphore
-	//
-
-	_asm
-	{
-	mov	eax,1
-	xchg Semaphore,eax	// this instruction is locked
-	
-	cmp	eax,0
-	jne loop1			// someone else got it - try again
-;
-;	ok, we've got the semaphore
-;
-	}
-
-	SEMGETS++;
-	SemProcessID=GetCurrentProcessId();
-}
-void FreeSemaphore()
-{
-	SEMRELEASES++;
-	SemHeldByAPI = 0;
-	Semaphore=0;
-}
-
 
 typedef  int (WINAPI FAR *FARPROCX)();
 
@@ -1060,14 +1029,31 @@ BOOL IsProcess(int ProcessID)
   return(FALSE);
 }
 
+#include "DbgHelp.h"
+
 VOID MonitorThread(int x)
 {
-	
 	// Thread to detect killed processes. Runs in process owning timer.
 
 	// Obviously can't detect loss of timer owning thread!
 
-	do {
+	do 
+	{
+		if (Semaphore.Gets == LastSemGets && Semaphore.Flag)
+		{
+			// It is stuck - try to release
+
+				Debugprintf ("Semaphore locked - Process ID = %d, Held By %d",
+					Semaphore.SemProcessID, SemHeldByAPI);
+			
+			// Write a minidump
+
+			WriteMiniDump();
+			
+			Semaphore.Flag = 0;
+		}
+
+		LastSemGets = Semaphore.Gets;
 
 		Sleep(60000);
 		CheckforLostProcesses();
@@ -1107,13 +1093,13 @@ VOID CheckforLostProcesses()
 
 			// If process had the semaphore, release it
 
-			if (Semaphore == 1 && ProcessID == SemProcessID)
+			if (Semaphore.Flag == 1 && ProcessID == Semaphore.SemProcessID)
 			{
 				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\r\n");
 				Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
 					Sem_eax, Sem_ebx, Sem_ecx, Sem_edx, Sem_esi, Sem_edi); 
 
-				Semaphore = 0;
+				Semaphore.Flag = 0;
 				SemHeldByAPI = 0;
 			}
 
@@ -1169,12 +1155,12 @@ VOID MonitorTimerThread(int x)
 
 			// If process was holding the semaphore, release it
 
-			if (Semaphore == 1 && TimerInst == SemProcessID)
+			if (Semaphore.Flag == 1 && TimerInst == Semaphore.SemProcessID)
 			{
 				OutputDebugString("BPQ32 Process was holding Semaphore - attempting recovery\r\n");
 				Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
 					Sem_eax, Sem_ebx, Sem_ecx, Sem_edx, Sem_esi, Sem_edi); 
-				Semaphore = 0;
+				Semaphore.Flag = 0;
 				SemHeldByAPI = 0;
 			}
 
@@ -1213,7 +1199,7 @@ VOID CALLBACK TimerProc
 	//	Get semaphore before proceeeding
 	//
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 
 	SemHeldByAPI = 2;
 
@@ -1369,8 +1355,8 @@ VOID CALLBACK TimerProc
 	}
 	#include "StdExcept.c"
 
-	if (Semaphore && SemProcessID == GetCurrentProcessId())
-		FreeSemaphore();
+	if (Semaphore.Flag && Semaphore.SemProcessID == GetCurrentProcessId())
+		FreeSemaphore(&Semaphore);
 
 	}
 
@@ -1385,7 +1371,7 @@ VOID CALLBACK TimerProc
 		
 		TIMERINTERRUPT();
 
-		FreeSemaphore();			// SendLocation needs to get the semaphore
+		FreeSemaphore(&Semaphore);			// SendLocation needs to get the semaphore
 
 		strcpy(EXCEPTMSG, "HTTP Timer Processing");
 
@@ -1407,8 +1393,8 @@ VOID CALLBACK TimerProc
 	
 	#include "StdExcept.c"
 
-	if (Semaphore && SemProcessID == GetCurrentProcessId())
-		FreeSemaphore();
+	if (Semaphore.Flag && Semaphore.SemProcessID == GetCurrentProcessId())
+		FreeSemaphore(&Semaphore);
 
 	}
 
@@ -1507,12 +1493,12 @@ Check_Timer()
 	if (Closing)
 		return 0;
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 
 	if (InitDone == -1)
 	{
 		Sleep(7000);
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 		exit (0);
 	}
 
@@ -1524,12 +1510,12 @@ Check_Timer()
 		{
 			FirstInitDone=1;					// Only init in BPQ32.exe
 			FirstInit();
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 			return 0;
 		}
 		else
 		{
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 			return 0;
 		}
 	}
@@ -1544,7 +1530,7 @@ Check_Timer()
 
 		if (_stricmp(pgm, "bpq32.exe") != 0)
 		{
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 			return 0;
 		}
 
@@ -1556,7 +1542,7 @@ Check_Timer()
 			SendMessage(hConsWnd, WM_PAINT, 0, 0);
 
 			InitDone = -1;
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 
 			MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
 
@@ -1635,7 +1621,7 @@ Check_Timer()
 
 		OpenReportingSockets();
 
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 	
 		if (StartMinimized)
 			if (MinimizetoTray)
@@ -1649,7 +1635,7 @@ Check_Timer()
 
 	}
 
-	FreeSemaphore();
+	FreeSemaphore(&Semaphore);
 	return (0);
 }
 
@@ -1723,7 +1709,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			return 0;
 		}
 	
-		GetSemaphore();
+		GetSemaphore(&Semaphore);
 		SemHeldByAPI = 4;
 
 		BPQHOSTVECPTR = &BPQHOSTVECTOR[0];
@@ -1737,7 +1723,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		if (_stricmp(pgm, "regsvr32.exe") == 0 || _stricmp(pgm, "bpqcontrol.exe") == 0)
 		{
 			AttachedProcesses++;			// We will get a detach
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 			return 1;
 		}
 
@@ -1755,7 +1741,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			if (BPQ32_EXE && AttachingProcess == 0)
 			{
 				AttachedProcesses++;			// We will get a detach
-				FreeSemaphore();
+				FreeSemaphore(&Semaphore);
 				MessageBox(NULL,"BPQ32.exe is already running\r\n\r\nIt should only be run once", "BPQ32", MB_OK);
 				return 0;
 			}
@@ -1765,7 +1751,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 		{
 			MessageBox(NULL,"BPQTelnetServer is no longer supported\r\n\r\nUse the TelnetServer in BPQ32.dll", "BPQ32", MB_OK);
 			AttachedProcesses++;			// We will get a detach
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 			return 0;
 		}
 
@@ -1793,7 +1779,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			{
 				OutputDebugString("Another BPQ32.dll is loaded\n");
 				i=MessageBox(NULL,"BPQ32 DLL already loaded from another directory\nIf you REALLY want this, hit OK, else hit Cancel","BPQ32",MB_OKCANCEL);
-				FreeSemaphore();
+				FreeSemaphore(&Semaphore);
 
 				if (i != IDOK) return (0);
 
@@ -1829,7 +1815,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				SendMessage(hConsWnd, WM_PAINT, 0, 0);
 
 				InitDone = -1;
-				FreeSemaphore();
+				FreeSemaphore(&Semaphore);
 
 				MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
 
@@ -1842,7 +1828,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			if (Start() !=0)
 			{
 				Sleep(3000);
-				FreeSemaphore();
+				FreeSemaphore(&Semaphore);
 				return (0);
 			}
 			else
@@ -1859,7 +1845,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				{
 					OutputDebugString("Another BPQ32.dll is loaded\n");
 					MessageBox(NULL,"BPQ32 DLL already loaded from another directory","BPQ32",MB_ICONSTOP);
-					FreeSemaphore();
+					FreeSemaphore(&Semaphore);
 					return (0);
 				}
 
@@ -1907,7 +1893,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			if (InitDone != (int) &InitDone)
 			{
 				MessageBox(NULL,"BPQ32 DLL already loaded at another address","BPQ32",MB_ICONSTOP);
-				FreeSemaphore();
+				FreeSemaphore(&Semaphore);
 				return (0);
 			}
 		}
@@ -1917,7 +1903,7 @@ SkipInit:
 
 		_beginthread(MonitorTimerThread,0,0);
 
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 
 		AttachedPIDList[AttachedProcesses++] = GetCurrentProcessId();
 
@@ -2096,13 +2082,13 @@ DllExport int APIENTRY CloseBPQ32()
 	int i;
 	int ProcessID = GetCurrentProcessId();
 
-	if (Semaphore == 1 && ProcessID == SemProcessID)
+	if (Semaphore.Flag == 1 && ProcessID == Semaphore.SemProcessID)
 	{
 		OutputDebugString("BPQ32 Process holding Semaphore called CloseBPQ32 - attempting recovery\r\n");
 		Debugprintf("Last Sem Call %d %x %x %x %x %x %x", SemHeldByAPI,
 			Sem_eax, Sem_ebx, Sem_ecx, Sem_edx, Sem_esi, Sem_edi); 
 
-		Semaphore = 0;
+		Semaphore.Flag = 0;
 		SemHeldByAPI = 0;
 	}
 
@@ -2524,32 +2510,13 @@ DllExport int APIENTRY InitSwitch()
 	return (0);
 }
 
-DllExport int APIENTRY GetNumberofPorts()
-{
-	return (NUMBEROFPORTS);
-}
-
-DllExport int APIENTRY GetPortNumber(int portslot)
-{
-	struct PORTCONTROL * PORTVEC=PORTTABLE;
-
-	if (portslot>NUMBEROFPORTS)
-		portslot=NUMBEROFPORTS;
-
-	while (--portslot > 0)
-		PORTVEC=PORTVEC->PORTPOINTER;
-
-	return PORTVEC->PORTNUMBER;
-
-}
-
 /*DllExport int APIENTRY SwitchTimer()
 {
-	GetSemaphore();
+	GetSemaphore((&Semaphore);
 
 	TIMERINTERRUPT();
 	
-	FreeSemaphore();
+	FreeSemaphore(&Semaphore);
 
 	return (0);
 }
@@ -2589,34 +2556,8 @@ DllExport VOID APIENTRY GetApplCallVB(int Appl, char * ApplCall)
 
 	strncpy(ApplCall,(char *)&APPLCALLTABLE[Appl-1].APPLCALL_TEXT, 10);
 }
-DllExport char * APIENTRY GetApplCall(int Appl)
-{
-	if (Appl < 1 || Appl > NumberofAppls ) return NULL;
 
-	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLCALL_TEXT);
-}
-DllExport char * APIENTRY GetApplAlias(int Appl)
-{
-	if (Appl < 1 || Appl > NumberofAppls ) return NULL;
-
-	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLALIAS_TEXT);
-}
-
-DllExport long APIENTRY GetApplQual(int Appl)
-{
-	if (Appl < 1 || Appl > NumberofAppls ) return 0;
-
-	return (APPLCALLTABLE[Appl-1].APPLQUAL);
-}
-
-DllExport char * APIENTRY GetApplName(int Appl)
-{
-	if (Appl < 1 || Appl > NumberofAppls ) return NULL;
-
-	return (UCHAR *)(&APPLCALLTABLE[Appl-1].APPLCMD);
-}
 BOOL UpdateNodesForApp(int Appl);
-DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 
 DllExport BOOL APIENTRY SetApplCall(int Appl, char * NewCall)
 {
@@ -2697,7 +2638,7 @@ BOOL UpdateNodesForApp(int Appl)
 		if (APPLCALLTABLE[App].APPLCALL[0] < 41) return FALSE;
 
 
-		GetSemaphore();
+		GetSemaphore(&Semaphore);
 
 		SemHeldByAPI = 5;
 	
@@ -2713,7 +2654,7 @@ BOOL UpdateNodesForApp(int Appl)
 		{
 			// no dests
 
-			FreeSemaphore();
+			FreeSemaphore(&Semaphore);
 			return FALSE;
 		}
 
@@ -2727,7 +2668,7 @@ BOOL UpdateNodesForApp(int Appl)
 		DEST->NRROUTE[0].ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
 		DEST->NRROUTE[0].ROUT_OBSCOUNT = 255;
 
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 
 		return TRUE;
 	}
@@ -2736,21 +2677,21 @@ BOOL UpdateNodesForApp(int Appl)
 
 	if (APPLCALLTABLE[App].APPLQUAL == 0)
 	{
-		GetSemaphore();
+		GetSemaphore(&Semaphore);
 
 		SemHeldByAPI = 6;
 		REMOVENODE(DEST);			// Clear buffers, Remove from Sorted Nodes chain, and zap entry
 		
 		APPL->NODEPOINTER=NULL;
 
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 		return FALSE;
 
 	}
 
 	if (APPLCALLTABLE[App].APPLCALL[0] < 41)	return FALSE;
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 
 	SemHeldByAPI = 7;
 
@@ -2761,63 +2702,17 @@ BOOL UpdateNodesForApp(int Appl)
 	DEST->NRROUTE[0].ROUT_QUALITY = (BYTE)APPL->APPLQUAL;
 	DEST->NRROUTE[0].ROUT_OBSCOUNT = 255;
 
-	FreeSemaphore();
+	FreeSemaphore(&Semaphore);
 	return TRUE;
 
 }
 
-DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
-{
-	int i;
-
-	memset(ax25call,0x40,6);		// in case short
-	ax25call[6]=0x60;				// default SSID	
-
-	for (i=0;i<7;i++)
-	{
-		if (callsign[i] == '-')
-		{
-			//
-			//	process ssid and return
-			//
-			i = atoi(&callsign[i+1]);
-
-			if (i < 16)
-			{
-				ax25call[6] |= i<<1;
-				return (TRUE);
-			}
-			return (FALSE);
-		}
-
-		if (callsign[i] == 0 || callsign[i] == 13 || callsign[i] == ' ' || callsign[i] == ',')
-		{
-			//
-			//	End of call - no ssid
-			//
-			return (TRUE);
-		}
-		
-		ax25call[i] = callsign[i] << 1;
-	}
-	
-	//
-	//	Too many chars
-	//
-
-	return (FALSE);
-}
 
 DllExport UCHAR * APIENTRY GetSignOnMsg()
 {
 	return (&SIGNONMSG[0]);
 }
 
-DllExport char * APIENTRY GetVersionString()
-{
-//	return ((char *)&VersionStringWithBuild);
-	return ((char *)&VersionString);
-}
 
 DllExport HKEY APIENTRY GetRegistryKey()
 {
@@ -2860,46 +2755,7 @@ DllExport int APIENTRY GetMsgPerl(int stream, char * msg)
 	return len;
 }
 
-
-DllExport int APIENTRY GetRaw(int stream, char * msg, int * len, int * count )
-{
-	int	stamp;
-
-//	Get Raw (Trace) data (BPQHOST function 11)
-
-	Check_Timer();
-
-	_asm {
-		
-	pushfd
-	cld
-	pushad
-
-	mov	al,byte ptr stream
-	mov	ah,11
-	mov	edi,msg
-
-	call	BPQHOSTAPI
-
-	mov	edi,len
-	mov	[edi],ecx
-
-	mov	edi,count
-	mov	[edi],ebx
-
-	mov	stamp,eax
-
-
-	popad
-	popfd
-
-	}
-	
-	return (stamp);
-}
-
-
-int APIENTRY Rig_Command(int Session, char * Command);
+int Rig_Command(int Session, char * Command);
 
 BOOL Rig_CommandInt(int Session, char * Command)
 {
@@ -3077,40 +2933,6 @@ char Alias[7];
 char line[100];
 
 HANDLE handle;
-
-DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall)
-{
-	int in,out=0;
-	unsigned char chr;
-
-	memset(outcall,0x20,10);
-
-	for (in=0;in<6;in++)
-	{
-		chr=incall[in];
-		if (chr == 0x40)
-			break;
-		chr >>= 1;
-		outcall[out++]=chr;
-	}
-
-	chr=incall[6];				// ssid
-	chr >>= 1;
-	chr	&= 15;
-
-	if (chr > 0)
-	{
-		outcall[out++]='-';
-		if (chr > 9)
-		{
-			chr-=10;
-			outcall[out++]='1';
-		}
-		chr+=48;
-		outcall[out++]=chr;
-	}
-	return (out);
-}
 
 int APIENTRY Restart()
 {
@@ -4575,7 +4397,7 @@ DllExport VOID APIENTRY RelBuff(VOID * Msg)
 {
 	UINT * pointer, * BUFF = Msg;
 
-	if (Semaphore == 0)
+	if (Semaphore.Flag == 0)
 		Debugprintf("ReleaseBuffer called without semaphore");
 	
 	pointer = (UINT *)FREE_Q;
@@ -4595,7 +4417,7 @@ DllExport VOID * APIENTRY GetBuff()
 {
 	UINT * Temp = Q_REM(&FREE_Q);
 
-	if (Semaphore == 0)
+	if (Semaphore.Flag == 0)
 		Debugprintf("GetBuff called without semaphore");
 
 	if (Temp)
@@ -4625,11 +4447,11 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 unsigned short int compute_crc(unsigned char *buf, int txlen);
 
-SOCKADDR_IN reportdest = {0};
+extern SOCKADDR_IN reportdest;
 
-SOCKET ReportSocket = 0;
+extern SOCKET ReportSocket;
 
-SOCKADDR_IN Chatreportdest = {0};
+extern SOCKADDR_IN Chatreportdest;
 
 DllExport VOID APIENTRY SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen)
 {
@@ -4641,78 +4463,6 @@ DllExport VOID APIENTRY SendChatReport(SOCKET ChatReportSocket, char * buff, int
 	buff[txlen++] = (crc>>8);
 
 	sendto(ChatReportSocket, buff, txlen, 0, (LPSOCKADDR)&Chatreportdest, sizeof(Chatreportdest));
-
-}
-
-VOID SendReportMsg(char * buff, int txlen)
-{
- 	unsigned short int crc = compute_crc(buff, txlen);
-
-	crc ^= 0xffff;
-
-	buff[txlen++] = (crc&0xff);
-	buff[txlen++] = (crc>>8);
-
-	sendto(ReportSocket, buff, txlen, 0, (LPSOCKADDR)&reportdest, sizeof(reportdest));
-
-}
-VOID SendLocation()
-{
-	MESSAGE AXMSG;
-	PMESSAGE AXPTR = &AXMSG;
-	char Msg[512];
-	int Len;
-
-	Len = sprintf(Msg, "%s %s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
-
-	if (Len > 256)
-		Len = 256;
-
-	// Block includes the Msg Header (7 bytes), Len Does not!
-
-	memcpy(AXPTR->DEST, ReportDest, 7);
-	memcpy(AXPTR->ORIGIN, MYCALL, 7);
-	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
-	AXPTR->DEST[6] |= 0x80;			// set Command Bit
-
-	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
-	AXPTR->CTL = 3;		//UI
-	AXPTR->PID = 0xf0;
-	memcpy(AXPTR->L2DATA, Msg, Len);
-
-	SendReportMsg((char *)&AXMSG.DEST, Len + 16);
-
-	return;
-
-}
-
-VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode)
-{
-	MESSAGE AXMSG;
-	PMESSAGE AXPTR = &AXMSG;
-	char Msg[100];
-	int Len;
-
-	if (ReportSocket == 0 || LOCATOR[0] == 0)
-		return;
-
-	Len = sprintf(Msg, "MH %s,%s,%s,%s", call, freq, LOC, Mode);
-
-	// Block includes the Msg Header (7 bytes), Len Does not!
-
-	memcpy(AXPTR->DEST, ReportDest, 7);
-	memcpy(AXPTR->ORIGIN, MYCALL, 7);
-	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
-	AXPTR->DEST[6] |= 0x80;			// set Command Bit
-
-	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
-	AXPTR->CTL = 3;		//UI
-	AXPTR->PID = 0xf0;
-	memcpy(AXPTR->L2DATA, Msg, Len);
-
-	SendReportMsg((char *)&AXMSG.DEST, Len + 16) ;
-
-	return;
 
 }
 
@@ -4830,77 +4580,6 @@ VOID CreateRegBackup()
 			
 	return ;
 */
-}
-
-
-
-VOID OpenReportingSockets()
-{
-	u_long param=1;
-	BOOL bcopt=TRUE;
-
-	if (LOCATOR[0])
-	{
-		// Enable Node Map Reports
-
-		ReportTimer = 600;
-
-		ReportSocket = socket(AF_INET,SOCK_DGRAM,0);
-
-		if (ReportSocket == INVALID_SOCKET)
-		{
-			Debugprintf("Failed to create Reporting socket");
-			ReportSocket = 0;
-  		 	return; 
-		}
-
-		ioctlsocket (ReportSocket, FIONBIO, &param);
-		setsockopt (ReportSocket, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
-
-		reportdest.sin_family = AF_INET;
-		reportdest.sin_port = htons(81);
-		ConvToAX25("DUMMY-1", ReportDest);
-	}
-
-	// Set up Chat Report even if no LOCATOR	reportdest.sin_family = AF_INET;
-	// Socket must be opened in MailChat Process
-
-	Chatreportdest.sin_family = AF_INET;
-	Chatreportdest.sin_port = htons(10090);
-
-	_beginthread(ResolveUpdateThread,0,(int)0);
-}
-
-VOID ResolveUpdateThread()
-{
-	struct hostent * HostEnt1;
-	struct hostent * HostEnt2;
-
-	while (TRUE)
-	{
-		//	Resolve name to address
-
-		Debugprintf("Resolving %s", "update.g8bpq.net");
-		HostEnt1 = gethostbyname ("update.g8bpq.net");
-		 
-		if (HostEnt1)
-			memcpy(&reportdest.sin_addr.s_addr,HostEnt1->h_addr,4);
-
-		Debugprintf("Resolving %s", "chatmap.g8bpq.net");
-		HostEnt2 = gethostbyname ("chatmap.g8bpq.net");
-
-		if (HostEnt2)
-			memcpy(&Chatreportdest.sin_addr.s_addr,HostEnt2->h_addr,4);
-
-		if (HostEnt1 && HostEnt2)
-		{
-			Sleep(1000 * 60 * 30);
-			continue;
-		}
-
-		Debugprintf("Resolve Failed for update.g8bpq.net or chatmap.g8bpq.net");
-		Sleep(1000 * 60 * 5);
-	}
 }
 
 BOOL CALLBACK EnumForCloseProc(HWND hwnd, LPARAM  lParam)
@@ -5351,8 +5030,8 @@ int DoStatus()
 
 	#include "StdExcept.c"
 
-	if (Semaphore && SemProcessID == GetCurrentProcessId())
-		FreeSemaphore();
+	if (Semaphore.Flag && Semaphore.SemProcessID == GetCurrentProcessId())
+		FreeSemaphore(&Semaphore);
 
 	}
 

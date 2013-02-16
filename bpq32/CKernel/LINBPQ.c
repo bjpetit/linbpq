@@ -11,6 +11,8 @@
 
 #define CKernel
 
+BOOL IncludesMail = FALSE;
+
 VOID GetSemaphore();
 VOID FreeSemaphore();
 VOID TIMERINTERRUPT();
@@ -24,7 +26,6 @@ VOID HTTPTimer();
 Dll VOID APIENTRY md5 (char *arg, unsigned char * checksum);
 #include "Versions.h"
 
-int Semaphore = 0;
 int SemHeldByAPI = 0;
 BOOL IGateEnabled = TRUE;
 BOOL APRSActive = FALSE;
@@ -33,6 +34,7 @@ BOOL ReconfigFlag;
 int InitDone;
 char pgm[256] = "Dummy";		// Uninitialised so per process
 
+struct SEM Semaphore = {0, 0};
 
 char SESSIONHDDR[80] = "";
 int SESSHDDRLEN = 0;
@@ -139,6 +141,9 @@ int main(int argc, char * argv[])
 	printf("G8BPQ AX25 Packet Switch System Version %s %s\n", TextVerstring, Datestring);
 	printf("%s\n", VerCopyright);
 
+
+
+
 #ifdef WIN32
 	GetCurrentDirectory(256, BPQDirectory);
 #else
@@ -154,11 +159,11 @@ int main(int argc, char * argv[])
 				 
 	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for Linux (", TextVerstring);
 
-	GetSemaphore();
+	GetSemaphore(&Semaphore);
 
 	if (Start() != 0)
 	{
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 		return (0);
 	}
 
@@ -175,7 +180,8 @@ int main(int argc, char * argv[])
 	if (ISPort == 0)
 		IGateEnabled = 0;
 
-	FreeSemaphore();
+	RigActive = Rig_Init();
+	FreeSemaphore(&Semaphore);
 
 	InitDone = TRUE;
 
@@ -221,7 +227,7 @@ int main(int argc, char * argv[])
 		
 		/* Close out the standard file descriptors */
     
-		printf("Entering daemom mode\n");
+		printf("Entering daemon mode\n");
 
 		close(STDIN_FILENO);
         close(STDOUT_FILENO);
@@ -232,7 +238,7 @@ int main(int argc, char * argv[])
 	while (KEEPGOING)
 	{
 		Sleep(100);
-		GetSemaphore();
+		GetSemaphore(&Semaphore);
 		
 		if (ReconfigFlag)
 		{
@@ -266,7 +272,7 @@ int main(int argc, char * argv[])
 
 //			IPClose();
 			APRSClose();
-//			Rig_Close();
+			Rig_Close();
 
 //			Sleep(2000);
 
@@ -309,18 +315,18 @@ int main(int argc, char * argv[])
 			if (ISPort == 0)
 				IGateEnabled = 0;
 
-//			RigActive = Rig_Init();
+			RigActive = Rig_Init();
 			
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
 
 //		if (IPActive) Poll_IP();
-//		if (RigActive) Rig_Poll();
+		if (RigActive) Rig_Poll();
 		if (APRSActive) Poll_APRS();
-//		CheckWL2KReportTimer();
+		CheckWL2KReportTimer();
 
 		TIMERINTERRUPT();
-		FreeSemaphore();
+		FreeSemaphore(&Semaphore);
 
 		HTTPTimer();
 	}
@@ -332,55 +338,13 @@ int main(int argc, char * argv[])
 	return 0;
 }
 
-void GetSemaphore()
+
+struct TCPINFO;
+
+void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, char * input, char * Reply, int * RLen)
 {
-	//
-	//	Wait for it to be free
-	//
-	
-	if (Semaphore !=0)
-		SEMCLASHES++;
-
-#ifdef WIN32
-loop1:
-
-	while (Semaphore != 0)
-	{
-		Sleep(10);
-	}
-
-	//
-	//	try to get semaphore
-	//
-
-	_asm
-	{
-	mov	eax,1
-	xchg Semaphore,eax	// this instruction is locked
-	
-	cmp	eax,0
-	jne loop1			// someone else got it - try again
-
-//	ok, we've got the semaphore
-
-	}
-#else
-
-	while (Semaphore)
-		usleep(10000);
-
-	Semaphore = 1;
-
-#endif
-
-	SEMGETS++;
+	*RLen=0;
 }
-void FreeSemaphore()
-{
-	SEMRELEASES++;
-	Semaphore=0;
-}
-
 
 int APIENTRY WritetoConsole(char * buff)
 {
@@ -389,85 +353,8 @@ int APIENTRY WritetoConsole(char * buff)
 
 int WritetoConsoleLocal(char * buff)
 {
-	return printf(buff);
+	return printf("%s", buff);
 }
-
-int ConvFromAX25(unsigned char * incall,unsigned char * outcall)
-{
-	int in,out=0;
-	unsigned char chr;
-
-	memset(outcall,0x20,10);
-
-	for (in=0;in<6;in++)
-	{
-		chr=incall[in];
-		if (chr == 0x40)
-			break;
-		chr >>= 1;
-		outcall[out++]=chr;
-	}
-
-	chr=incall[6];				// ssid
-	chr >>= 1;
-	chr	&= 15;
-
-	if (chr > 0)
-	{
-		outcall[out++]='-';
-		if (chr > 9)
-		{
-			chr-=10;
-			outcall[out++]='1';
-		}
-		chr+=48;
-		outcall[out++]=chr;
-	}
-	return (out);
-}
-
-BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
-{
-	int i;
-
-	memset(ax25call,0x40,6);		// in case short
-	ax25call[6]=0x60;				// default SSID	
-
-	for (i=0;i<7;i++)
-	{
-		if (callsign[i] == '-')
-		{
-			//
-			//	process ssid and return
-			//
-			i = atoi(&callsign[i+1]);
-
-			if (i < 16)
-			{
-				ax25call[6] |= i<<1;
-				return (TRUE);
-			}
-			return (FALSE);
-		}
-
-		if (callsign[i] == 0 || callsign[i] == 13 || callsign[i] == ' ' || callsign[i] == ',')
-		{
-			//
-			//	End of call - no ssid
-			//
-			return (TRUE);
-		}
-		
-		ax25call[i] = callsign[i] << 1;
-	}
-	
-	//
-	//	Too many chars
-	//
-
-	return (FALSE);
-}
-
 
 VOID Debugprintf(const char * format, ...)
 {
@@ -615,20 +502,7 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 {
 }
 
-int APIENTRY Rig_Command(int Session, char * Command)
-{
-	return 0;
-}
-struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
-{
-	return 0;
-}
-SendRPBeacon() {} 
-
 struct TNCINFO * TNC;
-
-VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction){}
-
 
 #ifndef WIN32
 int GetTickCount()
@@ -644,7 +518,15 @@ int GetTickCount()
 }
 #endif
 
-BOOL WINAPI SetWindowText(HWND hWnd, char * lpString) {return 0;};
+BOOL MySetWindowText(HWND hWnd, char * lpString)
+{
+	return 0;
+};
+
+BOOL MySetDlgItemText(HWND hWnd, char * lpString)
+{
+	return 0;
+};
 
 VOID Check_Timer()
 {
@@ -683,6 +565,4 @@ COLORREF Colours[256] = {0,
 		RGB(255,192,0), RGB(255,192,128), RGB(255,192,192), RGB(255,192,255),
 		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,255,255)
 };
-
-
 

@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#include "TNCINFO.h"
+#include "tncinfo.h"
 
 #include "bpq32.h"
 

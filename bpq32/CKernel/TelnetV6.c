@@ -42,7 +42,7 @@ static int RigControlRow = 190;
 static BOOL OpenSockets(struct TNCINFO * TNC);
 static BOOL OpenSockets6(struct TNCINFO * TNC);
 int ProcessHTTPMessage(struct ConnectionInfo * conn);
-VOID SetupListenSet(struct TNCINFO * TNC);
+static VOID SetupListenSet(struct TNCINFO * TNC);
 int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
@@ -73,10 +73,10 @@ struct UserRec CMSUser;
 struct UserRec HostUser;
 
 
-char AttemptsMsg[] = "Too many attempts - Disconnected\r\n";
-char disMsg[] = "Disconnected by SYSOP\r\n";
+static char AttemptsMsg[] = "Too many attempts - Disconnected\r\n";
+static char disMsg[] = "Disconnected by SYSOP\r\n";
 
-char BlankCall[]="         ";
+static char BlankCall[]="         ";
 
 BOOL LogEnabled = FALSE;
 BOOL CMSLogEnabled = TRUE;
@@ -112,7 +112,7 @@ int Terminate();
 int SendtoSocket(SOCKET TCPSock,char * Msg);
 int WriteLog(char * msg);
 VOID WriteCMSLog(char * msg);
-byte * EncodeCall(byte * Call);
+static byte * EncodeCall(byte * Call);
 VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen);
 
 BOOL CheckCMS(struct TNCINFO * TNC);
@@ -379,6 +379,10 @@ lineloop:
 			ptr2++;
 			LineLen = ptr2 - ptr1;
 			Len -= LineLen;
+
+			if (LineLen > 900)
+				goto Skip;
+
 			memcpy(Line, ptr1, LineLen);
 			memcpy(&Line[LineLen - 1], "<cr>", 4);
 			LineLen += 3;
@@ -462,7 +466,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				{
 					n = SESS->L4KILLTIMER;
 					if (n < (L4LIMIT - 120))
+					{
 						SESS->L4KILLTIMER = L4LIMIT - 120;
+						SESS = SESS->L4CROSSLINK;
+						if (SESS)
+							SESS->L4KILLTIMER = L4LIMIT - 120;
+					}
 				}
 			}
 
@@ -555,9 +564,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	case 4:				// reinit
 	{
 		struct _EXTPORTDATA * PortRecord;
+
+#ifndef LINBPQ
 		HWND SavehDlg, SaveCMS, SaveMonitor;
 		HMENU SaveMenu1, SaveMenu2, SaveMenu3; 
-	
+#endif	
 		int n, i;
 
 		ProcessConfig();
@@ -730,6 +741,64 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 }
 
+
+
+static int WebProc(struct TNCINFO * TNC, char * Buff)
+{
+	int Len;
+	char msg[80];
+	struct ConnectionInfo * sockptr;
+	int i,n;
+
+	char CMSStatus[80] = "";
+
+	if (TNC->TCPInfo->CMS)
+	{
+		if (TNC->TCPInfo->CMSOK)
+			strcpy(CMSStatus, "CMS Ok");
+		else
+			strcpy(CMSStatus, "No CMS");
+	}
+
+	Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	"<head><title>Telnet Status</title></head><body><b>Telnet Status &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;%s</b>", CMSStatus);
+
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 250px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+
+
+	Len += sprintf(&Buff[Len], "<tr><th width=110px>User</th><th>Callsign</th><th>Queue</th></tr>");
+
+	for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
+	{
+		sockptr=TNC->Streams[n].ConnectionInfo;
+
+		if (!sockptr->SocketActive)
+		{
+			strcpy(msg,"<tr><td>Idle</td><td>&nbsp;</td><td>&nbsp;</td></tr>");
+		}
+		else
+		{
+			if (sockptr->UserPointer == 0)
+			{
+				if (sockptr->HTTPMode)
+					strcpy(msg,"<tr><td>HTTP Session</td><td>&nbsp;</td><td>&nbsp;</td></tr>");
+				else
+					strcpy(msg,"<tr><td>Logging in</td><td>&nbsp;</td><td>&nbsp;</td></tr>");
+			}
+			else
+			{
+				i=sprintf(msg,"<tr><td>%s</td><td>%s</td><td>%d</td></tr>",
+					sockptr->UserPointer->UserName, sockptr->Callsign, 
+					sockptr->FromHostBuffPutptr - sockptr->FromHostBuffGetptr);
+			}
+		}
+		Len += sprintf(&Buff[Len], "%s", msg);
+	}
+
+	Len += sprintf(&Buff[Len], "</table>");
+	return Len;
+}
+
 UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 {
 	char msg[500];
@@ -738,7 +807,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 	int port;
 	char * ptr;
 	int i;
-	HWND x;
+	HWND x=0;
 
 
 	sprintf(msg,"Telnet Server ");
@@ -781,6 +850,10 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	TELNETMONVECPTR->HOSTAPPLFLAGS = 0x80;		// Requext Monitoring
 
+	TNC->WebWindowProc = WebProc;
+	TNC->WebWinX = 260;
+	TNC->WebWinY = 325;
+
 #ifndef LINBPQ
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, TelWndProc, 300, 300);
@@ -790,7 +863,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	SendMessage(TCP->hCMSWnd, WM_SETFONT, (WPARAM)hFont, 0);
 
-	x = CreateWindowEx(0, "STATIC", " User      Callsign  Stream", WS_CHILD | WS_VISIBLE,
+	x = CreateWindowEx(0, "STATIC", " User      Callsign  Queue", WS_CHILD | WS_VISIBLE,
 			0,0,240,16, TNC->hDlg, NULL, hInstance, NULL);
 
 	SendMessage(x, WM_SETFONT, (WPARAM)hFont, 0);
@@ -1041,9 +1114,9 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 	return TRUE;
 }
 
-VOID SetupListenSet(struct TNCINFO * TNC)
+static VOID SetupListenSet(struct TNCINFO * TNC)
 {
-	// Set up master set of fs's for checking for incoming calls
+	// Set up master set of fd's for checking for incoming calls
 
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	SOCKET maxsock = 0;
@@ -1163,7 +1236,7 @@ VOID TelnetPoll(int Port)
 		if (retval == -1)
 		{
 			retval = WSAGetLastError();
-			perror("select");
+			perror("listen select");
 		}
 
 		if (retval)
@@ -1174,28 +1247,28 @@ VOID TelnetPoll(int Port)
 		{
 			sock = TCP->FBBsock[n++];
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock);
 		}
 
 		sock = TCP->TCPSock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock);
 		}
 		
 		sock = TCP->Relaysock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock);
 		}
 		
 		sock = TCP->HTTPsock;
 		if (sock)
 		{
 			if (FD_ISSET(sock, &readfd))
-			Socket_Accept(TNC, sock);
+				Socket_Accept(TNC, sock);
 		}
 
 		n = 0;
@@ -1252,8 +1325,10 @@ VOID TelnetPoll(int Port)
 					FD_SET(sockptr->socket, &exceptfd);
 				}
 				else
+				{
 					FD_SET(sockptr->socket, &readfd);
-
+					FD_SET(sockptr->socket, &exceptfd);
+				}
 				Active++;
 				if (sockptr->socket > maxsock)
 					maxsock = sockptr->socket;
@@ -1265,7 +1340,12 @@ VOID TelnetPoll(int Port)
 			retval = select(maxsock + 1, &readfd, &writefd, &exceptfd, &timeout);
 
 			if (retval == -1)
-				perror("select");
+			{				
+				perror("data select");
+				Debugprintf("Select Error %d", WSAGetLastError());
+
+				// 
+			}
 			else
 			{
 				if (retval)
@@ -1279,7 +1359,13 @@ VOID TelnetPoll(int Port)
 						if (sockptr->SocketActive)
 						{
 							sock = sockptr->socket;
-							if (FD_ISSET(sockptr->socket, &readfd))
+
+							if (FD_ISSET(sock, &exceptfd))
+							{
+								DataSocket_Disconnect(TNC, sockptr);
+							}
+
+							if (FD_ISSET(sock, &readfd))
 							{
 								if (sockptr->RelayMode)
 									DataSocket_ReadRelay(TNC, sockptr, sock, &TNC->Streams[n]);
@@ -1290,10 +1376,11 @@ VOID TelnetPoll(int Port)
 								else
 									DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
 							}
-							if (FD_ISSET(sockptr->socket, &writefd))
+
+							if (FD_ISSET(sock, &writefd))
 								Telnet_Connected(TNC, sockptr, sock, 0);
 
-							if (FD_ISSET(sockptr->socket, &exceptfd))
+							if (FD_ISSET(sock, &exceptfd))
 								Telnet_Connected(TNC, sockptr, sock, 1);
 
 						}
@@ -1326,7 +1413,7 @@ nosocks:
 	{
 		int stamp, len;
 		BOOL MonitorNODES = FALSE;
-		UINT * monbuff;
+		MESSAGE * monbuff;
 		UCHAR * monchars;
 
 		unsigned char buffer[1024] = "\xff\x1b\xb";
@@ -1334,9 +1421,9 @@ nosocks:
 		monbuff = Q_REM((UINT *)&TELNETMONVECPTR->HOSTTRACEQ);
 		monchars = (UCHAR *)monbuff;
 
-		stamp = monbuff[88];
+		stamp = monbuff->Timestamp;
 
-		if ((UCHAR)monbuff[4] & 0x80)		// TX
+		if (monbuff->PORT & 0x80)		// TX
 			buffer[2] = 91;
 		else
 			buffer[2] = 17;
@@ -1421,7 +1508,7 @@ nosocks:
 				{
 					char logmsg[120];
 					sprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d Time %d Seconds\r\n",
-						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed, time(NULL) - sockptr->ConnectTime);
+						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed, (int)(time(NULL) - sockptr->ConnectTime));
 
 					WriteCMSLog (logmsg);
 				}
@@ -1634,7 +1721,7 @@ nosocks:
 			if (Paclen == 0)
 				Paclen = 256;
 
-//			Debugprintf("%d %d %d %d", Msglen, Paclen, Queued, GetFreeBuffs());
+			ShowConnections(TNC);
 
 			if (Msglen > Paclen)
 				Msglen = Paclen;
@@ -2024,7 +2111,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 	u_long param=1;
 
 
-//   Find a free Socket
+//   Find a free Session
 
 	for (n = 1; n <= TCP->MaxSessions; n++)
 	{
@@ -2550,7 +2637,6 @@ MsgLoop:
 		{
             send(sock,AttemptsMsg,sizeof(AttemptsMsg),0);
             Sleep (1000);
-            closesocket(sock);
             DataSocket_Disconnect(TNC, sockptr);       //' Tidy up
 		}
 		else
@@ -2619,7 +2705,6 @@ MsgLoop:
 		{
 			send(sock,AttemptsMsg, strlen(AttemptsMsg),0);
             Sleep (1000);
-            closesocket(sock);
             DataSocket_Disconnect (TNC, sockptr);      //' Tidy up
 		}
 		else
@@ -2845,7 +2930,7 @@ int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SO
 
 	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
 
-	if (len == SOCKET_ERROR || len ==0)
+	if (len == SOCKET_ERROR || len == 0)
 	{
 		// Failed or closed - clear connection
 
@@ -3085,7 +3170,6 @@ MsgLoop:
 		{
             send(sock,AttemptsMsg,sizeof(AttemptsMsg),0);
             Sleep (1000);
-            closesocket(sock);
             DataSocket_Disconnect(TNC, sockptr);       //' Tidy up
 		}
 		else
@@ -3203,7 +3287,6 @@ MsgLoop:
 		{
 			send(sock,AttemptsMsg, strlen(AttemptsMsg),0);
             Sleep (1000);
-            closesocket(sock);
             DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
 		}
 		else
@@ -3239,7 +3322,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 
 	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
 
-	if (len == SOCKET_ERROR || len ==0)
+	if (len == SOCKET_ERROR || len == 0)
 	{
 		// Failed or closed - clear connection
 
@@ -3273,7 +3356,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 	}
 
 	sockptr->TCP = TNC->TCPInfo;
-	_beginthread(ProcessHTTPMessage, 0, (VOID *) sockptr);
+	_beginthread((void (*)())ProcessHTTPMessage, 0, (VOID *) sockptr);
 	return 0;
 }
 
@@ -3327,7 +3410,7 @@ int ShowConnections(struct TNCINFO * TNC)
 			else
 			{
 				i=sprintf(msg,"%-10s %-10s %2d",
-					sockptr->UserPointer->UserName,sockptr->Callsign,sockptr->BPQStream);
+					sockptr->UserPointer->UserName, sockptr->Callsign, sockptr->FromHostBuffPutptr - sockptr->FromHostBuffGetptr);
 			}
 		}
 		SendMessage(TNC->hMonitor, LB_ADDSTRING ,0, (LPARAM)msg);
@@ -3335,7 +3418,7 @@ int ShowConnections(struct TNCINFO * TNC)
 #endif
 	return 0;
 }
-byte * EncodeCall(byte * Call)
+static byte * EncodeCall(byte * Call)
 {
 	static char axcall[10];
 
@@ -3443,7 +3526,6 @@ int WriteLog(char * msg)
 	char timebuf[128];
 
 	time_t ltime;
-    struct tm today;
 
 	UCHAR Value[100];
 
@@ -3454,7 +3536,7 @@ int WriteLog(char * msg)
 	else
 	{
 		strcpy(Value, BPQDirectory);
-		strcat(Value, "\\");
+		strcat(Value, "/");
 		strcat(Value, "BPQTelnetServer.log");
 	}
 		
@@ -3470,10 +3552,14 @@ int WriteLog(char * msg)
 			"%d/%m/%Y %H:%M:%S ", tmp );
 	}
 #else
-	_localtime32_s( &today, &ltime );
+	{
+	    struct tm today;
 
-	strftime( timebuf, 128,
-		"%d/%m/%Y %H:%M:%S ", &today );
+		_localtime32_s( &today, &ltime);
+
+		strftime( timebuf, 128,
+			"%d/%m/%Y %H:%M:%S ", &today);
+	}
 #endif    
 	fputs(timebuf, file);
 
@@ -3486,13 +3572,12 @@ int WriteLog(char * msg)
 
 VOID WriteCMSLog(char * msg)
 {
-#ifndef LINBPQ
 	UCHAR Value[MAX_PATH];
 	time_t T;
 	struct tm * tm;
-	HANDLE Handle;
+	FILE * Handle;
 	char LogMsg[256];
-	int MsgLen, cnt;
+	int MsgLen;
 
 	if (CMSLogEnabled == FALSE)
 		 return;
@@ -3507,26 +3592,24 @@ VOID WriteCMSLog(char * msg)
 	else
 	{
 		strcpy(Value, BPQDirectory);
-		strcat(Value, "\\");
+		strcat(Value, "/");
 		strcat(Value, "CMSAccess");
 	}
 
 	sprintf(Value, "%s_%04d%02d%02d.log", Value,
 				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
 
-	Handle = CreateFile(Value, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	Handle = fopen(Value, "ab");
 
-	if (Handle == INVALID_HANDLE_VALUE)
+	if (Handle == NULL)
 		return;
-
-	SetFilePointer(Handle, 0, 0, FILE_END);
 
 	MsgLen = sprintf(LogMsg, "%02d:%02d:%02d %s", tm->tm_hour, tm->tm_min, tm->tm_sec, msg);
 
-	WriteFile(Handle ,LogMsg , MsgLen, &cnt, NULL);
+	fwrite(LogMsg , 1, MsgLen, Handle);
 
-	CloseHandle(Handle);
-#endif
+	fclose(Handle);
+
 	return;
 }
 int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Error)
@@ -3639,7 +3722,7 @@ BOOL CheckCMS(struct TNCINFO * TNC)
 {
 
 	TNC->TCPInfo->CheckCMSTimer = 0;
-	_beginthread(CheckCMSThread, 0, TNC);
+	_beginthread((void (*)())CheckCMSThread, 0, TNC);
 
 	return 0;
 }

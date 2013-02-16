@@ -39,6 +39,18 @@ VOID TNCTimerProc()
 
 			Session = HOSTSESS->HOSTSESSION;
 
+			if (Session == 0)					// Gone??
+			{
+				HOSTSESS->HOSTFLAGS |= 3;		//  STATE CHANGE
+#ifndef LINBPQ
+				if (HOSTSESS->HOSTHANDLE);
+				{
+					PostMessage(HOSTSESS->HOSTHANDLE, BPQMsg, HOSTSESS->HOSTSTREAM, 4);
+				}
+#endif
+				continue;
+			}
+		
 			if (Session->L4CROSSLINK)
 				Session->L4CROSSLINK->STAYFLAG = DISCFLAG;
 

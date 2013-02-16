@@ -14,7 +14,7 @@
 #define MaxStreams 10	
 
 #include "CHeaders.h"
-#include "TNCInfo.h"
+#include "tncinfo.h"
 
 #include "bpq32.h"
 
@@ -124,25 +124,24 @@ ConfigLine:
 }
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
-BOOL NEAR OpenConnection(int);
-BOOL NEAR SetupConnection(int);
+BOOL OpenConnection(int);
+BOOL SetupConnection(int);
 BOOL CloseConnection(struct TNCINFO * conn);
-BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
-BOOL NEAR DestroyTTYInfo(int port);
-void DEDCheckRX(struct TNCINFO * TNC);
-VOID DEDPoll(int Port);
+static BOOL WriteCommBlock(struct TNCINFO * TNC);
+BOOL DestroyTTYInfo(int port);
+static void DEDCheckRX(struct TNCINFO * TNC);
+static VOID DEDPoll(int Port);
 VOID StuffAndSend(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 unsigned short int compute_crc(unsigned char *buf,int len);
 int Unstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len);
-VOID ProcessDEDFrame(struct TNCINFO * TNC);
-VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-VOID ExitHost(struct TNCINFO * TNC);
-VOID DoTNCReinit(struct TNCINFO * TNC);
-VOID DoTermModeTimeout(struct TNCINFO * TNC);
-BOOL OpenVirtualSerialPort(struct TNCINFO * TNC);
+static VOID ProcessDEDFrame(struct TNCINFO * TNC);
+static VOID ProcessTermModeResponse(struct TNCINFO * TNC);
+static VOID ExitHost(struct TNCINFO * TNC);
+static VOID DoTNCReinit(struct TNCINFO * TNC);
+static VOID DoTermModeTimeout(struct TNCINFO * TNC);
 VOID DoMonitorHddr(struct TNCINFO * TNC, UCHAR * Msg, int Len, int Type);
 VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len);
-Switchmode(struct TNCINFO * TNC, int Mode);
+int Switchmode(struct TNCINFO * TNC, int Mode);
 VOID SwitchToRPacket(struct TNCINFO * TNC);
 VOID SwitchToNormPacket(struct TNCINFO * TNC);
 
@@ -160,7 +159,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL)
 		return 0;
 	
-	if (TNC->hDevice == (HANDLE) -1)
+	if (TNC->hDevice == 0)
 	{
 		// Try to reopen every 30 secs
 
@@ -173,7 +172,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
-		if (TNC->hDevice == (HANDLE) -1)
+		if (TNC->hDevice == 0)
 			return 0;
 	}
 	switch (fn)
@@ -265,12 +264,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 
-		_asm 
-		{
-
-			MOV	EAX,buff
-			mov Stream,eax
-		}
+		Stream = (int)buff;
 
 		TNCOK = (TNC->HostMode == 1 && TNC->ReinitState != 10);
 
@@ -301,7 +295,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		Sleep(25);
 
-		CloseHandle(TNCInfo[port]->hDevice);
+		CloseCOMPort(TNCInfo[port]->hDevice);
 		return (0);
 
 	case 6:
@@ -365,7 +359,7 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
-		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 		
@@ -381,7 +375,7 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 
 	// get NODECALL for RP tests
 
-	memcpy(NodeCall, GetNodeCall(), 10);
+	memcpy(NodeCall, MYNODECALL, 10);
 		
 	ptr=strchr(NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -418,56 +412,15 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 
 static void DEDCheckRX(struct TNCINFO * TNC)
 {
-	BOOL       fReadStat;
-	COMSTAT    ComStat;
-	DWORD      dwErrorFlags;
 	int Length, Len;
 	UCHAR  * ptr;
 	UCHAR character;
 	UCHAR * CURSOR;
 
-	ComStat.cbInQue = 0;
+	Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
 
-	// only try to read number of bytes in queue 
-
-	if (TNC->RXLen == 500)
-		TNC->RXLen = 0;
-
-	if (ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat) == 0)
-	{
-		// Device failed. Close and try to reopen
-
-//		CloseHandle(TNC->hDevice);
-		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
-
-		if (TNC->hDevice == (HANDLE) -1)
-			return;
-		
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
-	}
-
-	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
-
-	if (Length == 0)
+	if (Len == 0)
 		return;					// Nothing doing
-
-	while (Length > 20)
-	{
-		fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
-		TNC->RXLen += Len;
-		Length -= Len;
-	}
-
-	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
-
-//	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
-	
-	if (!fReadStat)
-	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
-		return;
-	}
 	
 	TNC->RXLen += Len;
 
@@ -599,22 +552,11 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 	TNC->RXLen = 0;
 }
 
-static BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
+static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
-	BOOL        fWriteStat;
-	DWORD       dwBytesWritten;
-	DWORD       dwErrorFlags;
-	COMSTAT     ComStat;
-
-	fWriteStat = WriteFile(TNC->hDevice, TNC->TXBuffer, TNC->TXLen, &dwBytesWritten, NULL);
-
-	if ((!fWriteStat) || (TNC->TXLen != dwBytesWritten))
-	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
-	}
+	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
 
 	TNC->Timeout = 20;				// 2 secs
-
 	return TRUE;
 }
 
@@ -854,7 +796,7 @@ static VOID DEDPoll(int Port)
 				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
 							
 				sprintf(TNC->Streams[Stream].CmdSet, "%c%c%cI%s%c%c%c%c%s\0", Stream, 1, 1,
-					TNC->Streams[Stream].MyCall, 0, Stream, 1, 1, buffptr+2);
+					TNC->Streams[Stream].MyCall, 0, Stream, 1, 1, (char *)buffptr+8);
 
 				ReleaseBuffer(buffptr);
 	
@@ -883,7 +825,7 @@ static VOID DEDPoll(int Port)
 		char Call[12] = "           ";		
 		struct _MESSAGE * buffptr;
 			
-		(UINT *)buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+		buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 		
 		datalen = buffptr->LENGTH - 7;
 		Buffer = &buffptr->DEST[0];		// Raw Frame
@@ -1005,18 +947,13 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 	{
 		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
 
-		char Status[80];
-		
 		TNC->TNCOK = FALSE;
-		sprintf(Status,"COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
-		SetDlgItemText(TNC->hDlg, IDC_COMMSSTATE, Status);
 
 		memcpy(&TNC->TXBuffer[0], "\x18\x1b\r", 2);
 		TNC->TXLen = 2;
 
 		WriteCommBlock(TNC);
 		return;
-
 	}
 
 	if (TNC->ReinitState == 1)		// Forcing back to Term
@@ -1282,7 +1219,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 	{
 		// Success with message - null terminated
 
-		UCHAR * ptr;
+		char * ptr;
 		int len;
 
 		Buffer = Msg;

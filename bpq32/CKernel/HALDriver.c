@@ -11,7 +11,7 @@
 #include "time.h"
 
 #include "CHeaders.h"
-#include "TNCInfo.h"
+#include "tncinfo.h"
 
 #include "bpq32.h"
 
@@ -296,7 +296,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		return 0;
 	
 	if (fn < 4 || fn > 5)
-		if (TNC->hDevice == (HANDLE) -1)
+		if (TNC->hDevice == 0)
 			return 0;					// Port not open
 
 	STREAM = &TNC->Streams[0];
@@ -453,7 +453,7 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
 	{
-		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	}
 	else
 	{
@@ -483,6 +483,8 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 
 	memcpy(&TNC->InitScript[TNC->InitScriptLen], Msg, len); 
 	TNC->InitScriptLen += len;
+
+#ifndef LINBPQ
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 233);
 
@@ -515,7 +517,8 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 	TNC->ClientWidth = 500;
 	
 	MoveWindows(TNC);
-	
+#endif	
+
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	SendCmd(TNC, "\x09" , 1);		// Reset

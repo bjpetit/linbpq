@@ -6,7 +6,7 @@
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3
 
-#define InputBufferLen 1000
+#define InputBufferLen 4096
 
 struct ConnectionInfo
 {

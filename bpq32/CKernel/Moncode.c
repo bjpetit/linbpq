@@ -622,7 +622,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 		}
 	}
 
-	Output += sprintf(Output, " <????>", Dest);
+	Output += sprintf(Output, " <???\?>");
 	return Output;
 }
 
@@ -702,6 +702,6 @@ char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output)
 	Dest[ConvFromAX25(&ptr[8], Dest)] = 0;
 
 	return Output + sprintf(Output, " < ARP Rreply %d.%d.%d.%d? is at %s",
-			ptr[15], ptr[16], ptr[17], ptr[18]);
+			ptr[15], ptr[16], ptr[17], ptr[18], "??");
 
 }

@@ -1,5 +1,4 @@
 
-#include <winioctl.h>
 #include "Rigresource.h"
 
 #define IDI_ICON2 2
@@ -91,6 +90,13 @@ struct RIGINFO
 	HWND hSCAN;
 	HWND hPTT;
 
+	char * WEB_Label;
+	char * WEB_CAT;
+	char * WEB_FREQ;
+	char * WEB_MODE;
+	char WEB_SCAN;
+	char WEB_PTT;
+
 	double RigFreq;
 	char Valchar[15];			// Freq as char string
 	char CurrentBandWidth;
@@ -136,6 +142,7 @@ struct RIGPORTINFO
 	BOOL PORTOK;				// PORT is reponding
 
 	HANDLE hDevice;					// COM device Handle
+	struct TNCINFO * PTC;			// Set to TNC record address if using an SCS PTC Radio Port
 	HANDLE hPTTDevice;				// May use a different port for PTT
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent

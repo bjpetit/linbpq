@@ -341,7 +341,7 @@ VOID SENDL4MESSAGE(TRANSPORTENTRY * L4, struct DATAMESSAGE * Msg)
 		return;
 	}
 
-	memcpy(Copy, Msg, Msg->LENGTH);
+	memcpy(Copy, L3MSG, L3MSG->LENGTH);
 	
 	// If we have fragmented, we should adjust length, or retry will send too much
 	//	(bug in .asm code)
@@ -367,7 +367,6 @@ VOID SENDL4MESSAGE(TRANSPORTENTRY * L4, struct DATAMESSAGE * Msg)
 	
 		SENDL4MESSAGE(L4, Msg);
 	}
-	ReleaseBuffer(Msg);
 }
 
 
@@ -532,6 +531,10 @@ L4BG()
 
 			// Not busy, so continue
 
+			L4->L4KILLTIMER = 0;		//RESET SESSION TIMEOUTS
+
+			if(L4->L4CROSSLINK)
+				L4->L4CROSSLINK->L4KILLTIMER = 0;
 
 			Msg = Q_REM(&L4->L4TX_Q);
 
@@ -546,7 +549,6 @@ L4BG()
 
 				C_Q_ADD(&PORT->PORTTX_Q, Msg);
 
-				L4->L4KILLTIMER = 0;		//RESET SESSION TIMEOUT
 				continue;
 			}
 			//	non-pactor
@@ -556,16 +558,25 @@ L4BG()
 			if (L4->L4CIRCUITTYPE & SESSION)
 			{
 				SENDL4MESSAGE(L4, Msg);
+				ReleaseBuffer(Msg);
 				break;
 			}
 	
 			LINK = L4->L4TARGET.LINK;
 			C_Q_ADD(&LINK->TX_Q, Msg);
-
-			L4->L4KILLTIMER = 0;		//RESET SESSION TIMEOUT
-
 		}
 
+		// if nothing on TX Queue If there is stuff on hold queue, timer must be running
+
+		if (L4->L4TX_Q == 0 && L4->L4HOLD_Q)
+		{
+			if (L4->L4TIMER == 0)
+			{
+				Debugprintf("TX_Q = 0, HOLD_Q != 0 and L4TIMER = 0");
+				L4->L4TIMER = L4->SESSIONT1;
+			}
+		}
+		
 		// now check for rxed frames
 
 		while(L4->L4RX_Q)
@@ -602,15 +613,17 @@ VOID CLEARSESSIONENTRY(TRANSPORTENTRY * Session)
 	while (Session->L4HOLD_Q)
 		ReleaseBuffer(Q_REM(&Session->L4HOLD_Q));
 
+	if (C_Q_COUNT(&Session->L4RESEQ_Q) > Session->L4WINDOW)
+	{
+		Debugprintf("Corrupt RESEQ_Q Q Len %d Free Buffs %d", C_Q_COUNT(&Session->L4RESEQ_Q), QCOUNT);
+		Session->L4RESEQ_Q = 0;
+	}
+
 	while (Session->L4RESEQ_Q)
 		ReleaseBuffer(Q_REM(&Session->L4RESEQ_Q));
 
 	memset(Session, 0, sizeof(TRANSPORTENTRY));
 }
-
-VOID CLOSECURRENTSESSION(TRANSPORTENTRY * Session);
-
-
 
 VOID CloseSessionPartner(TRANSPORTENTRY * Session)
 {
@@ -631,7 +644,7 @@ VOID CLOSECURRENTSESSION(TRANSPORTENTRY * Session)
 	MESSAGE * Buffer;
 	struct _LINKTABLE * LINK;
 
-//	SHUT DOWN SESSION IN EBX, AND UNLINK IF CROSSLINKED
+//	SHUT DOWN SESSION AND UNLINK IF CROSSLINKED
 
 	if (Session == NULL)
 		return;
@@ -777,6 +790,7 @@ VOID L4TimerProc()
 			if (L4->L4ACKREQ == 0)			// Expired
 				SENDL4IACK(L4);
 		}
+
 		L4->L4KILLTIMER++;
 
 		//	IF BIT 6 OF APPLFLAGS SET, SEND MSG EVERY 11 MINS TO KEEP SESSION OPEN
@@ -795,8 +809,10 @@ VOID L4TimerProc()
 				//	CLOSE THIS SESSION, AND ITS PARTNER (IF ANY)
 
 				L4->STAYFLAG = 0;
+
 				Partner = L4->L4CROSSLINK;
 				CLOSECURRENTSESSION(L4);
+				
 				if (Partner)
 				{
 					Partner->L4KILLTIMER = 0;		//ITS TIMES IS ALSO ABOUT TO EXPIRE
@@ -1453,7 +1469,7 @@ TryAgain:
 		
 		if (WorstDest)
 		{
-			REMOVENODE(DEST);
+			REMOVENODE(WorstDest);
 			if (Maxtries--)
 				goto TryAgain;			// We now have a spare (but protect against loop if something amiss)
 		}
@@ -1513,7 +1529,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 	UCHAR * ptr1;
 	int FramesMissing;
 	L3MESSAGEBUFFER * Saved;
-	L3MESSAGEBUFFER * Prev;
+	L3MESSAGEBUFFER ** Prev;
 
 	L4FRAMESRX++;
 
@@ -1711,6 +1727,8 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 
 			Saved = L4->L4RESEQ_Q;
 
+			Debugprintf("saving seq %d ", L3MSG->L4TXNO);
+
 			while (Saved)
 			{
 				if (Saved->L4TXNO == L3MSG->L4TXNO)
@@ -1762,7 +1780,7 @@ L4INFO_OK:
 		if (L4->L4RESEQ_Q == 0)
 			return;
 
-		Prev = (L3MESSAGEBUFFER *)&L4->L4RESEQ_Q;
+		Prev = &L4->L4RESEQ_Q;
 		Saved = L4->L4RESEQ_Q;
 
 		while (Saved)
@@ -1771,7 +1789,7 @@ L4INFO_OK:
 			{
 				// REMOVE IT FROM QUEUE,AND PROCESS IT
 
-				Prev = Saved->Next;		// CHAIN  NEXT IN CHAINTO PREVIOUS
+				*Prev = Saved->Next;		// CHAIN  NEXT IN CHAIN TO PREVIOUS
 
 				OLDFRAMES++;			// COUNT FOR STATS
 	
@@ -1779,7 +1797,7 @@ L4INFO_OK:
 				goto L4INFO_OK;
 			}
 
-			Prev = Saved;
+			Prev = &Saved;
 			Saved = Saved->Next;
 		}
 
@@ -1813,8 +1831,8 @@ VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR)
 	int RTT;
 
 
-	if (Count > 128)
-		Count -= 256;
+	if (Count < -128)
+		Count += 256;
 
 	if (Count < 0)
 	{
@@ -1866,13 +1884,15 @@ VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR)
 
 		L4->L4TIMER = L4->SESSIONT1;	// RESTART TIMER
 	}
-
-	if ((L4->FLAGS & DISCPENDING) && L4->L4TX_Q == 0)
+	else
 	{
-		// All Acked and DISC Pending, so send it
+		if ((L4->FLAGS & DISCPENDING) && L4->L4TX_Q == 0)
+		{
+			// All Acked and DISC Pending, so send it
 		
-		SENDL4DISC(L4);
-		return;
+			SENDL4DISC(L4);
+			return;
+		}
 	}
 
 	//	SEE IF CHOKE SET
@@ -1908,6 +1928,20 @@ VOID ACKFRAMES(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY * L4, int NR)
 		C_Q_ADD(&DEST->DEST_Q, Copy);
 	}
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 VOID SENDL4IACK(TRANSPORTENTRY * Session)
 {

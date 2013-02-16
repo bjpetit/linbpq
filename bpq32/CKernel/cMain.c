@@ -760,7 +760,7 @@ BOOL Start()
 	FULLPORT = (struct FULLPORTDATA *)PORTTABLE;
 
 	while (PortRec->PORTNUM)
-	{
+	{		
 		//	SET UP NEXT PORT PTR
 
 		PORT = &FULLPORT->PORTCONTROL;
@@ -785,6 +785,10 @@ BOOL Start()
 		PORT->IOBASE = PortRec->IOADDR;
 		PORT->INTLEVEL = (char)PortRec->INTLEVEL;
 		PORT->BAUDRATE = PortRec->SPEED;
+	
+		if (PORT->BAUDRATE == 49664)
+			PORT->BAUDRATE = (int)115200;
+
 		PORT->CHANNELNUM = (char)PortRec->CHANNEL;
 		PORT->BBSBANNED = (UCHAR)PortRec->BBSFLAG;
 		PORT->PORTQUALITY = (UCHAR)PortRec->QUALITY;
@@ -1003,6 +1007,7 @@ BOOL Start()
 		ConvToAX25(APPL->APPLCALL_TEXT, APPL->APPLCALL);
 		memcpy(APPL->APPLALIAS_TEXT, ptr1->ApplAlias, 10);
 		ConvToAX25(APPL->APPLALIAS_TEXT, APPL->APPLALIAS);
+		ConvToAX25(ptr1->L2Alias, APPL->L2ALIAS);
 		memcpy(APPL->APPLCMD, ptr1->Command, 12);	
 	
 		APPL->APPLQUAL = ptr1->ApplQual;
@@ -1133,6 +1138,14 @@ BOOL Start()
 		NEXTFREEDATA = (UCHAR *)X;
 	}
 	BUFFERPOOL = NEXTFREEDATA;
+
+	Consoleprintf("");
+	
+	Consoleprintf("PORTS %x LINKS %x DESTS %x ROUTES %x L4 %x BUFFERS %x",
+		PORTTABLE, LINKS, DESTS, NEIGHBOURS, L4TABLE, BUFFERPOOL);
+
+	Debugprintf("PORTS %x LINKS %x DESTS %x ROUTES %x L4 %x BUFFERS %x ",
+		PORTTABLE, LINKS, DESTS, NEIGHBOURS, L4TABLE, BUFFERPOOL);
 
 	i = NUMBEROFBUFFERS;
 
@@ -1337,7 +1350,7 @@ VOID ReadNodes()
 	else
 	{
 		strcpy(FN,BPQDirectory);
-		strcat(FN,"\\");
+		strcat(FN,"/");
 		strcat(FN,"BPQNODES.dat");
 	}
 
@@ -1366,6 +1379,9 @@ VOID ReadNodes()
 			ptr = strtok_s(NULL, seps, &Context);
 			if (ptr == NULL) continue;
 			Port = atoi(ptr);
+
+			if (GetPortTableEntryFromPortNum(Port) == NULL)
+				continue;				// Port has gone
 
 			if (FindNeighbour(axcall, Port, &ROUTE))
 				continue;
@@ -1569,6 +1585,7 @@ VOID TIMERINTERRUPT()
 		L3TIMERFLAG -= 549;
 
 		L3TimerProc();
+		Debugprintf("BPQ32 Heatbeat Buffers %d", QCOUNT);
 		StatsTimer();
 	}
 
@@ -1608,7 +1625,7 @@ VOID TIMERINTERRUPT()
 		Buffer = Q_REM(&TRACE_Q);
 	}
 
-	//	CHECK FOR MESSAGES RECEIVED FROM COMMS _LINKS
+	//	CHECK FOR MESSAGES RECEIVED FROM COMMS LINKS
 
 	PORT = PORTTABLE;
 

@@ -28,7 +28,7 @@
 //#include <time.h>
 
 #include "CHeaders.h"
-#include "TNCINFO.h"
+#include "tncinfo.h"
 
 #include "bpq32.h"
 
@@ -212,7 +212,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct STREAMINFO * STREAM;
 	int Stream;
 
-	if (TNC == NULL || TNC->hDevice == (HANDLE) -1)
+	if (TNC == NULL || TNC->hDevice == 0)
 		return 0;							// Port not open
 
 	switch (fn)
@@ -379,7 +379,7 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
 	{
-		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	}
 	else
 	{
@@ -436,6 +436,8 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 	sprintf(msg, "MYCALL %s\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
 
+#ifndef LINBPQ
+
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 0, 0);
 
 	CreateWindowEx(0, "STATIC", "Comms State", WS_CHILD | WS_VISIBLE, 10,6,120,20, TNC->hDlg, NULL, hInstance, NULL);
@@ -466,7 +468,8 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 	TNC->hWndMenu = CreatePopupMenu();
 	
 	MoveWindows(TNC);
-	
+#endif
+
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	WritetoConsole("\n");

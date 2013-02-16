@@ -8,8 +8,8 @@
 
 #include "asmstrucs.h"
 
-int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
-BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+Dll int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
+Dll BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
 int WritetoConsoleLocal(char * buff);
 VOID Consoleprintf(const char * format, ...);
 VOID FreeConfig();
@@ -22,8 +22,35 @@ int C_Q_ADD(VOID *Q,VOID *BUFF);
 VOID * GetBuff();
 int C_Q_COUNT(VOID *Q);
 
+DllExport char * APIENTRY GetApplCall(int Appl);
+DllExport char * APIENTRY GetApplAlias(int Appl);
+DllExport int APIENTRY FindFreeStream();
+DllExport int APIENTRY DeallocateStream(int stream);
+DllExport int APIENTRY SessionState(int stream, int * state, int * change);
+DllExport int APIENTRY SetAppl(int stream, int flags, int mask);
+DllExport int APIENTRY GetMsg(int stream, char * msg, int * len, int * count );
+DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
+										 int * port, int * sesstype, int * paclen,
+										 int * maxframe, int * l4window);
+struct config_setting_t;
+
+int GetIntValue(struct config_setting_t * group, char * name);
+BOOL GetStringValue(struct config_setting_t * group, char * name, char * value);
+VOID SaveIntValue(struct config_setting_t * group, char * name, int value);
+VOID SaveStringValue(struct config_setting_t * group, char * name, char * value);
+
+int EncryptPass(char * Pass, char * Encrypt);
+VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
+Dll VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset);
+Dll BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
+
+DllExport int APIENTRY TXCount(int stream);
+DllExport int APIENTRY RXCount(int stream);
+DllExport int APIENTRY MONCount(int stream);
+
 VOID ReadNodes();
 int BPQTRACE(UINT * Msg, BOOL APRS);
+
 VOID CommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer);
 
 VOID PostStateChange(TRANSPORTENTRY * Session);
@@ -85,7 +112,14 @@ int APIENTRY Reboot();
 int APIENTRY Reconfig();
 Dll int APIENTRY SaveNodes ();
 
-HANDLE OpenCOMPort(int port, int speed);
+struct SEM;
+
+void GetSemaphore(struct SEM * Semaphore);
+void FreeSemaphore(struct SEM * Semaphore);
+
+Dll int APIENTRY SessionControl(int stream, int command, int Mask);
+
+HANDLE OpenCOMPort(int port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet);
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
 VOID CloseCOMPort(HANDLE fd);
@@ -284,4 +318,9 @@ extern int L4FRAMESRX;
 extern int L4FRAMESRETRIED;
 extern int OLDFRAMES;
 extern int L3FRAMES;
+
+extern char * PortConfig[];
+extern struct SEM Semaphore;
+extern UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
+
 

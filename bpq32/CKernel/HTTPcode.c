@@ -15,7 +15,7 @@
 #include "bpq32.h"
 #include "telnetserver.h"
 
-extern int MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS, SEMGETS, SEMRELEASES, SEMCLASHES, L3FRAMES;
+extern int MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS, L3FRAMES;
 extern int NUMBEROFNODES, MAXDESTS, L4CONNECTSOUT, L4CONNECTSIN, L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES;
 extern int STATSTIME;
 extern  TRANSPORTENTRY * L4TABLE;
@@ -23,6 +23,7 @@ extern BPQVECSTRUC BPQHOSTVECTOR[];
 extern BOOL APRSApplConnected;  
 extern char VersionString[];
 VOID FormatTime(char * Time, time_t cTime);
+DllExport int APIENTRY Get_APPLMASK(int Stream);
 
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
@@ -38,10 +39,17 @@ extern int	MAXLINKS;
 
 extern COLORREF Colours[256];
 
+extern BOOL IncludesMail;
+extern BOOL IncludesChat;
+
 char * strlop(char * buf, char delim);
 VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
 int CompareNode(const void *a, const void *b);
 int CompareAlias(const void *a, const void *b);
+void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, char * input, char * Reply, int * RLen, SOCKET sock);
+DllImport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
+int SetupNodeMenu(char * Buff);
+int StatusProc(char * Buff);
 
 struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 {
@@ -63,7 +71,7 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	BOOL Connected;
 };
 
-struct HTTPConnectionInfo * SessionList;	// active term mode sessions
+static struct HTTPConnectionInfo * SessionList;	// active term mode sessions
 
 char Mycall[10];
 
@@ -77,7 +85,18 @@ char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P 
 char IndexNoAPRS[] = "<meta http-equiv=\"refresh\" content=\"0;url=/Node/NodeIndex.html\">"
 	"<html><head></head><body></body></html>";
 
-char NodeMenu[] = "<html><head><title>%s's BPQ32 Web Server</title></head>"
+char NodeMenuHeader[] = "<html><head><title>%s's BPQ32 Web Server</title><script>"
+	"function dev_win(URL,x,y){"
+	"var xx = \"width=\" + x;"
+	"var yy = \",height=\" + y;"
+	"var param = \"toolbar=no, location=no, directories=no, status=no, "
+	"menubar=no, scrollbars=no, resizable=no, titlebar=no, toobar=no, \" + xx + yy;"
+	"window.open(URL,\"_blank\",param);"
+	"}"
+	"function open_win(){";
+
+char NodeMenuLine[] = "dev_win(\"/Node/Port?%d\",%d,%d);";
+char NodeMenuRest[] = "}</script></head>"
 	"<body background=\"/background.jpg\"><h1 align=center>BPQ32 Node %s</h1><P>"
 	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
 	"<td><a href=/Node/Routes.html>Routes</a></td>"
@@ -86,8 +105,18 @@ char NodeMenu[] = "<html><head><title>%s's BPQ32 Web Server</title></head>"
 	"<td><a href=/Node/Links.html>Links</a></td>"
 	"<td><a href=/Node/Users.html>Users</a></td>"
 	"<td><a href=/Node/Stats.html>Stats</a></td>"
-	"<td><a href=/Node/Terminal.html>Terminal (Requires user and password)</a></td>%s%s";
+	"<td><a href=/Node/Terminal.html>Terminal</a></td>%s%s%s%s%s";
+	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
+	"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700);>Stream Status</a></td>";
 char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
+#ifdef LINBPQ
+char MailBit[] = "<td><a href=../mail/all.html>Mail Server Pages</a></td>";
+char ChatBit[] = "<td><a href=../mail/Chat.html>Chat Server Pages</a></td>";
+#else
+char MailBit[] = "";
+char ChatBit[] = "";
+#endif
+
 char NodeTail[] = "</tr></table>";
 	
 char Tail[] = "</body></html>";
@@ -96,7 +125,6 @@ char RouteHddr[] = "<h2 align=center>Routes</h2><table align=center border=2 sty
 	"<tr><th>Port</th><th>Call</th><th>Quality</th><th>Node Count</th><th>Frame Count</th><th>Retries</th><th>Percent</th><th>Maxframe</th><th>Frack</th><th>Last Heard</th><th>Queued</th></tr>";
 
 char RouteLine[] = "<tr><td>%s%d</td><td>%s%c</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%d%</td><td>%d</td><td>%d</td><td>%02d:%02d</td><td>%d</td></tr>";
-
 char xNodeHddr[] = "<align=center><form align=center method=get action=/Node/Nodes.html>"
 	"<table align=center  bgcolor=white>"
 	"<tr><td><input type=submit name=a value=\"Nodes Sorted by Alias\"></td><td>"
@@ -538,7 +566,7 @@ ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
-	char _REPLYBUFFER[1024];
+	char _REPLYBUFFER[8192];
 	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, Key);
 	char Header[256];
 	int HeaderLen;
@@ -549,17 +577,17 @@ ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 		Session->KillTimer = 99999;
 	}
 
-	ReplyLen = sprintf(_REPLYBUFFER, NodeMenu, Mycall, Mycall, (APRSApplConnected)?APRSBit:"", NodeTail);
+	ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+
 	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, strlen(Tail), 0);
 }
 
-
 ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 {
-	char _REPLYBUFFER[1024];
+	char _REPLYBUFFER[8192];
 	int ReplyLen;
 	char Header[256];
 	int HeaderLen;
@@ -573,7 +601,7 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 
 		if (strstr(input, "Cancel=Cancel"))
 		{
-			ReplyLen = sprintf(_REPLYBUFFER, NodeMenu, Mycall, Mycall, (APRSApplConnected)?APRSBit:"", NodeTail);
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
 			goto Sendit;
 		}
 		user = strtok_s(&input[9], "&", &Context);
@@ -602,8 +630,9 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 					}
 					else
 					{
-						ReplyLen = sprintf(_REPLYBUFFER, NodeMenu, Mycall, Mycall, (APRSApplConnected)?APRSBit:"", NodeTail);
-						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], BusyError);
+						ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+
+						ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
 					}
 					break;
 				}
@@ -767,11 +796,11 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 
 	if (strcmp(FN, "/") == 0)
 		if (APRSApplConnected)
-			sprintf(MsgFile, "%s\\HTML\\index.html", BPQDirectory);
+			sprintf(MsgFile, "%s/HTML/index.html", BPQDirectory);
 		else
-			sprintf(MsgFile, "%s\\HTML\\indexnoaprs.html", BPQDirectory);
+			sprintf(MsgFile, "%s/HTML/indexnoaprs.html", BPQDirectory);
 	else
-		sprintf(MsgFile, "%s\\HTML%s", BPQDirectory, FN);
+		sprintf(MsgFile, "%s/HTML%s", BPQDirectory, FN);
 
 	if (stat(MsgFile, &STAT) == -1)
 	{
@@ -925,6 +954,33 @@ int RefreshTermWindow(struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
 
 static char EXCEPTMSG[80] = "";
 
+struct TNCINFO * TNCInfo[34];	
+
+int SetupNodeMenu(char * Buff)
+{
+	int Len = 0, i;
+	struct TNCINFO * TNC;
+
+	Len = sprintf(Buff, NodeMenuHeader, Mycall);
+		
+	for (i=1; i<33; i++)
+	{
+		TNC = TNCInfo[i];
+		if (TNC == NULL)
+			continue;
+	
+		if (TNC->WebWindowProc)
+			Len += sprintf(&Buff[Len], NodeMenuLine, i, TNC->WebWinX, TNC->WebWinY);
+	}
+		
+	Len += sprintf(&Buff[Len], NodeMenuRest, Mycall,
+		DriverBit,
+		(APRSApplConnected)?APRSBit:"",
+		(IncludesMail)?MailBit:"", (IncludesChat)?ChatBit:"", NodeTail);
+
+	return Len;
+}
+
 ProcessHTTPMessage(struct ConnectionInfo * conn)
 {
 	struct TCPINFO * TCP = conn->TCP;
@@ -1020,6 +1076,45 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 #endif
 
+#ifdef LINBPQ
+
+	if (_memicmp(Context, "/MAIL/", 6) == 0)
+	{
+		char _REPLYBUFFER[100000];
+		int Sent;
+		int Loops = 0;
+
+		ReplyLen = 0;
+
+		ProcessMailHTTPMessage(TCP, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen, sock);
+
+		HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+		send(sock, Header, HeaderLen, 0);
+		send(sock, _REPLYBUFFER, ReplyLen, 0);
+		send(sock, Tail, strlen(Tail), 0);
+
+		return 0;
+/*
+		Sent = send(sock, _REPLYBUFFER, InputLen, 0);
+		
+		while (Sent != InputLen && Loops++ < 3000)					// 100 secs max
+		{	
+//					Debugprintf("%d out of %d sent %d Loops", Sent, InputLen, Loops);
+		
+			if (Sent > 0)					// something sent
+			{
+				InputLen -= Sent;
+				memmove(_REPLYBUFFER, &_REPLYBUFFER[Sent], InputLen);
+			}
+					
+			Sleep(30);
+			Sent = send(sock, _REPLYBUFFER, InputLen, 0);
+		}
+*/		return 0;
+	}
+
+#endif
+
 	NodeURL = strtok_s(NULL, "?", &Context);
 
 	if (strcmp(Method, "POST") == 0)
@@ -1096,9 +1191,29 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	{
 
 	char _REPLYBUFFER[100000];
-	ReplyLen = sprintf(_REPLYBUFFER, NodeMenu, Mycall, Mycall, (APRSApplConnected)?APRSBit:"", NodeTail);
 
-	if (_stricmp(NodeURL, "/Node/Stats.html") == 0)
+	ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+
+	if (_stricmp(NodeURL, "/Node/Port") == 0)
+	{
+		int port = atoi(Context);
+
+		if (port > 0 && port < 33)
+		{
+			struct TNCINFO * TNC = TNCInfo[port];
+
+			if (TNC && TNC->WebWindowProc)
+				ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER);
+		}
+		
+	}
+
+	else if (_stricmp(NodeURL, "/Node/Streams") == 0)
+	{
+		ReplyLen = StatusProc(_REPLYBUFFER);
+	}
+
+	else if (_stricmp(NodeURL, "/Node/Stats.html") == 0)
 	{
 		struct tm * TM;
 		char UPTime[50];
@@ -1116,8 +1231,8 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%s</td></tr>",
 			"Uptime (Days Hours Mins)", UPTime);
 
-		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td></tr>",
-		"Semaphore: Get/Rel/Clashes", SEMGETS, SEMRELEASES, SEMCLASHES);
+		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td></tr>",
+		"Semaphore: Get-Rel/Clashes", Semaphore.Gets - Semaphore.Rels, Semaphore.Clashes);
 
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td><td align=right>%d</td align=right><td align=right>%d</td></tr>",
 			"Buffers: Max/Cur/Min/Out/Wait", MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS);
@@ -1755,6 +1870,14 @@ END_CMDUXX:
 		ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall);
 	}
 
+	else if (_stricmp(NodeURL, "/Node/Drivers") == 0)
+	{
+		int Bufferlen = SendMessageFile(sock, "/Drivers.htm", TRUE);		// return -1 if not found
+		
+		if (Bufferlen != -1)
+			return 0;											// We've sent it
+	}
+	
 	else if (_stricmp(NodeURL, "/Node/OutputScreen.html") == 0)
 	{
 		struct HTTPConnectionInfo * Session = FindSession(Context);
@@ -1806,8 +1929,8 @@ SendResp:
 //	}
 }
 
-char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+static char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 
 VOID FormatTime(char * Time, time_t cTime)
@@ -1821,3 +1944,72 @@ VOID FormatTime(char * Time, time_t cTime)
 }
 
 // Sun, 06 Nov 1994 08:49:37 GMT
+
+int StatusProc(char * Buff)
+{
+	int i;
+	char callsign[12] = "";
+	char flag[3];
+	UINT Mask, MaskCopy;
+	int Flags;
+	int AppNumber;
+	int OneBits;
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	"<head><title>Stream Status</title></head><body>");
+
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; font-family: monospace; align=center \" border=1 cellpadding=1 cellspacing=0>");
+	Len += sprintf(&Buff[Len], "<tr><th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
+	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
+	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th>");
+	Len += sprintf(&Buff[Len], "<th>&nbsp;&nbsp;&nbsp;</th><th>&nbsp;RX&nbsp;&nbsp;</th><th>&nbsp;TX&nbsp;&nbsp;</th>");
+	Len += sprintf(&Buff[Len], "<th>&nbsp;MON&nbsp;</th><th>&nbsp;App&nbsp;</th><th>&nbsp;Flg&nbsp;</th>");
+	Len += sprintf(&Buff[Len], "<th>Callsign&nbsp;&nbsp;</th><th width=200px>Program</th></tr><tr>");
+		
+	for (i=1;i<65; i++)
+	{		
+		callsign[0]=0;
+		
+		if (GetAllocationState(i))
+
+			strcpy(flag,"*");
+		else
+			strcpy(flag," ");
+
+		GetCallsign(i,callsign);
+
+		Mask = MaskCopy = Get_APPLMASK(i);
+
+		// if only one bit set, convert to number
+
+		AppNumber = 0;
+		OneBits = 0;
+
+		while (MaskCopy)
+		{
+			if (MaskCopy & 1)
+				OneBits++;
+			
+			AppNumber++;
+			MaskCopy = MaskCopy >> 1;
+		}
+
+		Flags=GetApplFlags(i);
+
+		if (OneBits > 1)
+			Len += sprintf(&Buff[Len], "<td>%d%s</td><td>%d</td><td>%d</td><td>%d</td><td>%x</td>"
+			"<td>%x</td><td>%s</td><td>%s</td>", 
+				i, flag, RXCount(i), TXCount(i), MONCount(i), Mask, Flags, callsign, BPQHOSTVECTOR[i-1].PgmName);
+
+		else
+			Len += sprintf(&Buff[Len], "<td>%d%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td>"
+			"<td>%x</td><td>%s</td><td>%s</td>", 
+				i, flag, RXCount(i), TXCount(i), MONCount(i), AppNumber, Flags, callsign, BPQHOSTVECTOR[i-1].PgmName);
+
+		if ((i & 1) == 0)
+			Len += sprintf(&Buff[Len], "</tr><tr>");
+
+	}
+
+	Len += sprintf(&Buff[Len], "</tr></table>");
+	return Len;
+}

@@ -264,6 +264,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						char Appl[10];
 						char * ptr;
 
+						char NodeCall[11];
+
+						memcpy(NodeCall, MYNODECALL, 10);
+						strlop(NodeCall, ' ');
+
 						//	Connect success
 
 						TNC->CONNECTED = TRUE;
@@ -292,7 +297,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						send(TNC->WINMORSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 					
 						memset(AGW->TXHeader.callfrom, 0, 10);
-						strcpy(AGW->TXHeader.callfrom, MYNODECALL);
+						strcpy(AGW->TXHeader.callfrom, NodeCall);
 						send(TNC->WINMORSock,(const char FAR *)&AGW->TXHeader,AGWHDDRLEN,0);
 
 						for (App = 0; App < 32; App++)
@@ -530,7 +535,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 					if (buffptr == 0) return 1;			// No buffers, so ignore
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], &buff[8]);
+					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &buff[8]);
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}
 				return 1;
@@ -736,7 +741,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:	
 
-		Stream = buff;
+		Stream = (int)buff;
 	
 		TNCOK = TNCInfo[MasterPort[port]]->CONNECTED;
 
@@ -1724,6 +1729,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 		if (TNC->PortRecord->PORTCONTROL.PORTQUALITY)
 		{
 			int i;
+			char * fiddle;
 			
 			if (Message[15] == 3 && Message[16] == 0xcf && Message[17] == 255)
 				i = 0;
@@ -2073,7 +2079,7 @@ DigiLoop:
 	if ((AdjMsg->CTL & 1) == 0 || AdjMsg->CTL == 3)	// I or UI
 	{
 		ptr = strstr(ptr, "pid");	
-		sscanf(&ptr[4], "%x", &AdjMsg->PID);
+		sscanf(&ptr[4], "%x", (unsigned int *)&AdjMsg->PID);
 	
 		ptr = strstr(ptr, "Len");	
 		ILen = atoi(&ptr[4]);

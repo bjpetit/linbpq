@@ -219,7 +219,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 	//	GET TIME FROM BIOS DATA AREA OR RTC
 
-	time(&Stamp);
+	time((time_t *)&Stamp);
 
 	Stamp = Stamp % 86400;			// Secs into day
 	HH = Stamp / 3600;
@@ -1034,34 +1034,32 @@ VOID REMOVENODE(dest_list * DEST)
 					Nodename, L4->L4STATE);
 
 				if (Partner)
-				{
-					struct DATAMESSAGE * Msg = GetBuff();
-				
-					if (Msg)
-					{
-						UCHAR * ptr1;
-		
-						Msg->PID = 0xf0;
-						ptr1 = SetupNodeHeader(Msg);
-						ptr1 += sprintf(ptr1, "Error - Node %s has disappeared\r", Nodename);
-
-						Msg->LENGTH = ptr1 - (UCHAR *)Msg;
-						C_Q_ADD(&Partner->L4TX_Q, Msg);
-						PostDataAvailable(Partner);
-					}
-
+				{	
+					// if connnecting, send error message and drop back to command level
 
 					if (L4->L4STATE == 2)
 					{
-						// Connnecting, so drop back to command level
-								
+						struct DATAMESSAGE * Msg = GetBuff();
 						Partner->L4CROSSLINK = 0;		// Back to command lewel
+
+						if (Msg)
+						{
+							UCHAR * ptr1;
+		
+							Msg->PID = 0xf0;
+							ptr1 = SetupNodeHeader(Msg);
+							ptr1 += sprintf(ptr1, "Error - Node %s has disappeared\r", Nodename);
+
+							Msg->LENGTH = ptr1 - (UCHAR *)Msg;
+							C_Q_ADD(&Partner->L4TX_Q, Msg);
+							PostDataAvailable(Partner);
+						}
 					}
 					else
 					{
-						// Failed in session, probably best to disconnect
+						// Failed in session - treat as if a L4DREQ received
 
-						Partner->FLAGS |= DISCPENDING;
+						CLOSECURRENTSESSION(Partner);
 					}
 				}
 				CLEARSESSIONENTRY(L4);

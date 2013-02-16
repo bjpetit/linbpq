@@ -10,6 +10,8 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #include <stdio.h>
 #include <ctype.h>
+#include <syslog.h>
+#include <stdarg.h>
 
 #define BOOL int
 
@@ -66,15 +68,49 @@ char * strupr(char* s)
   return s;
 }
 
-#include <pthread.h>
+char * strlwr(char* s)
+{
+  char* p = s;
+  while (*p = tolower( *p )) p++;
+  return s;
+}
 
+int sprintf_s(char * string, int plen, const char * format, ...)
+{
+	va_list(arglist);
+	int Len;
+
+	va_start(arglist, format);
+	Len = vsprintf(string, format, arglist);
+	va_end(arglist);
+	return Len;
+}
+
+
+
+#include <pthread.h>
 
 unsigned long _beginthread(void( *start_address)(), unsigned stack_size, VOID * arglist)
 {
 	pthread_t thread;
 
-	pthread_create(&thread, NULL, start_address, (void*) arglist);
+	if (pthread_create(&thread, NULL, (void * (*)(void *))start_address, (void*) arglist) != 0)
+		perror("New Thread");
+	else
+		pthread_detach(thread);
+
 	return thread;
+}
+
+int Sleep(int ms)
+{
+	usleep(ms * 1000);
+	return 0;
+}
+
+VOID OutputDebugString(char * string)
+{
+	syslog(LOG_DEBUG, "%s", string);
 }
 
 #endif

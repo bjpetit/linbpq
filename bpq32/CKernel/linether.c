@@ -10,7 +10,7 @@
 #include <linux/if_ether.h>
 #include <linux/if_arp.h>
 
-
+\
 extern char * PortConfig[33];
 
 typedef struct PCAPStruct
@@ -161,7 +161,7 @@ int ExtProc(int fn, int port,unsigned char * buff)
 		// Send down the packet 
 
 		res = sendto(IF->s, txbuff, txlen, 0, 
-	      &IF->socket_address, sizeof(struct sockaddr_ll));
+	      (const struct sockaddr *)&IF->socket_address, sizeof(struct sockaddr_ll));
 
 		if (res < 0)
 		{
