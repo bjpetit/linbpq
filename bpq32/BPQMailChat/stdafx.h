@@ -29,7 +29,7 @@
 
 #define _USE_32BIT_TIME_T
 
-
+/*
 #include <crtdbg.h>
 
 
@@ -52,13 +52,21 @@
 #include <time.h>
 #include <mmsystem.h> 
 #include <Richedit.h>
+*/
+
+#include "compatbits.h"
+
+
+#ifndef LINBPQ
+#include "bpq32.h"
+#endif
+#include "asmstrucs.h"
 
 #include "BPQMailChat.h"
-#include "bpq32.h"
-#include "ASMStrucs.h"
 
 #include "resrc1.h"
 #include "resource.h"
+
 
 #define NEWROUTING
 

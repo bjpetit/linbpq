@@ -30,20 +30,13 @@ WPRec * AllocateWPRecord()
 VOID GetWPDatabase()
 {
 	WPRec WPRec;
-	HANDLE Handle;
+	FILE * Handle;
 	int ReadLen;
 	WPRecP WP;
 
-	Handle = CreateFile(WPDatabasePath,
-					GENERIC_READ,
-					FILE_SHARE_READ,
-					NULL,
-					OPEN_EXISTING,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
+	Handle = fopen(WPDatabasePath, "rb");
 
-
-	if (Handle == INVALID_HANDLE_VALUE)
+	if (Handle == NULL)
 	{
 		// Initialise a new File
 
@@ -58,7 +51,7 @@ VOID GetWPDatabase()
 
 	// Get First Record
 		
-	ReadFile(Handle, &WPRec, sizeof (WPRec), &ReadLen, NULL); 
+	ReadLen = fread(&WPRec, 1, sizeof (WPRec), Handle); 
 
 	if (ReadLen == 0)
 	{
@@ -77,7 +70,7 @@ VOID GetWPDatabase()
 
 Next:
 
-	ReadFile(Handle, &WPRec, sizeof (WPRec), &ReadLen, NULL); 
+	ReadLen = fread(&WPRec, 1, sizeof (WPRec), Handle); 
 
 	if (ReadLen == sizeof (WPRec))
 	{
@@ -93,7 +86,7 @@ Next:
 		goto Next;
 	}
 
-	CloseHandle(Handle);
+	fclose(Handle);
 }
 
 VOID CopyWPDatabase()
@@ -108,26 +101,20 @@ VOID CopyWPDatabase()
 
 VOID SaveWPDatabase()
 {
-	HANDLE Handle;
+	FILE * Handle;
 	int WriteLen;
 	int i;
 
-	Handle = CreateFile(WPDatabasePath,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
+	Handle = fopen(WPDatabasePath, "wb");
 
 //	WPRecPtr[0]-> = NumberofWPrecs;			// First Record has file size
 
 	for (i=0; i <= NumberofWPrecs; i++)
 	{
-		WriteFile(Handle, WPRecPtr[i], sizeof (WPRec), &WriteLen, NULL);
+		WriteLen = fwrite(WPRecPtr[i], 1, sizeof (WPRec), Handle);
 	}
 
-	CloseHandle(Handle);
+	fclose(Handle);
 
 	return;
 }
@@ -161,6 +148,7 @@ char * FormatWPDate(time_t Datim)
 	return Date;
 }
 
+#ifndef LINBPQ
 
 int Do_WP_Sel_Changed(HWND hDlg)
 {
@@ -217,7 +205,7 @@ VOID Do_Save_WPRec(HWND hDlg)
 
 	if (CurrentWPIndex == -1)
 	{
-		wsprintf(InfoBoxText, "Please select a WP Record to save");
+		sprintf(InfoBoxText, "Please select a WP Record to save");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -226,7 +214,7 @@ VOID Do_Save_WPRec(HWND hDlg)
 
 	if (strcmp(CurrentWPCall, WP->callsign) != 0)
 	{
-		wsprintf(InfoBoxText, "Inconsistancy detected - record not saved");
+		sprintf(InfoBoxText, "Inconsistancy detected - record not saved");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -246,7 +234,7 @@ VOID Do_Save_WPRec(HWND hDlg)
 
 	SaveWPDatabase();
 
-	wsprintf(InfoBoxText, "WP information saved");
+	sprintf(InfoBoxText, "WP information saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);				
 }
 
@@ -258,7 +246,7 @@ VOID Do_Delete_WPRec(HWND hDlg)
 
 	if (CurrentWPIndex == -1)
 	{
-		wsprintf(InfoBoxText, "Please select a WP Record to delete");
+		sprintf(InfoBoxText, "Please select a WP Record to delete");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -267,7 +255,7 @@ VOID Do_Delete_WPRec(HWND hDlg)
 
 	if (strcmp(CurrentWPCall, WP->callsign) != 0)
 	{
-		wsprintf(InfoBoxText, "Inconsistancy detected - record not deleted");
+		sprintf(InfoBoxText, "Inconsistancy detected - record not deleted");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -287,7 +275,7 @@ VOID Do_Delete_WPRec(HWND hDlg)
 	} 
 
 
-	wsprintf(InfoBoxText, "WP record for %s deleted", WP->callsign);
+	sprintf(InfoBoxText, "WP record for %s deleted", WP->callsign);
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 	free(WP);
@@ -362,6 +350,7 @@ INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 	
 	return (INT_PTR)FALSE;
 }
+#endif
 
 VOID GetWPBBSInfo(char * Rline)
 {
@@ -407,7 +396,7 @@ VOID GetWPBBSInfo(char * Rline)
 
 	// Otherwise leave date as zero, which should be rejected
 
-	if ((RLineTime = _mkgmtime(&rtime)) != (time_t)-1 )
+	if ((RLineTime = mktime(&rtime)) != (time_t)-1 )
 	{
 		Age = (time(NULL) - RLineTime)/86400;
 
@@ -546,6 +535,9 @@ VOID GetWPInfoFromRLine(char * From, char * FirstRLine, time_t RLineTime)
 	if (ptr2)
 		*ptr2 = 0;
 
+	if (strlen(ATBBS) > 40)
+		ATBBS[40] = 0;
+
 	WP = LookupWP(From);
 
 	if (!WP)
@@ -629,6 +621,14 @@ VOID ProcessWPMsg(char * MailBuffer, int Size, char * FirstRLine)
 			Name = strtok_s(NULL, seps, &Context);
 			QTH = strtok_s(NULL, "\r", &Context);			// QTH may have spaces
 
+			if (strlen(HA) > 40)
+				return;
+			if (strlen(ZIP) > 8)
+				return;
+			if (strlen(Name) > 12)
+				return;
+			if (strlen(QTH) > 30)
+				return;
 
 			if (AT[0] == '@' && (QTH))
 			{
@@ -670,10 +670,14 @@ updated, so the Active or primary record will remain unchanged at this time.
 If a field is changed, a flag giving the update request type is then validated. If the /U flag is already validated,
 it will not be replaced. This flag will be used in case the WP update messages are validated.
 */
-				if ((WPDate = _mkgmtime(&rtime)) != (time_t)-1 )
+				if ((WPDate = mktime(&rtime)) != (time_t)-1 )
 				{
+					WPDate -= timezone;
 					TypeString = strlop(Call, '/');
 					
+					if (strlen(Call) < 3 || strlen(Call) > 9)
+						return;
+
 					if (TypeString)
 						Type = TypeString[0];
 					else
@@ -977,7 +981,6 @@ VOID UpdateWP()
 	int MsgLen = 0;
 	char MailBuffer[100100];
 	char * Buffptr = MailBuffer;
-	HANDLE hFile = INVALID_HANDLE_VALUE;
 	int WriteLen=0;
 	char HDest[61] = "WP";
 	char WPMsgType = 'P';
@@ -1030,7 +1033,7 @@ int CreateWPMessage()
 	char MailBuffer[100100];
 	char * Buffptr = MailBuffer;
 	char MsgFile[MAX_PATH];
-	HANDLE hFile = INVALID_HANDLE_VALUE;
+	FILE * hFile;
 	int WriteLen=0;
 
 	LASTWPSendTime = time(NULL) - (86400 * 5);		// 5 days max
@@ -1043,7 +1046,7 @@ int CreateWPMessage()
 		if (ptr->changed && ptr->last_modif > LASTWPSendTime && ptr->first_homebbs[0])
 		{
 			tm = gmtime(&ptr->last_modif);
-			MsgLen += wsprintf(Buffptr, "On %02d%02d%02d %s/%c @ %s zip %s %s %s\r\n", 
+			MsgLen += sprintf(Buffptr, "On %02d%02d%02d %s/%c @ %s zip %s %s %s\r\n", 
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday,
 				ptr->callsign, ptr->Type, ptr->first_homebbs,
 				(ptr->first_zip[0]) ? ptr->first_zip : "?",
@@ -1096,14 +1099,14 @@ int CreateWPMessage()
 	BIDRec->u.msgno = LOWORD(Msg->number);
 	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
 
-	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
 	
-	hFile = CreateFile(MsgFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-	if (hFile != INVALID_HANDLE_VALUE)
+	hFile = fopen(MsgFile, "wb");
+	
+	if (hFile)
 	{
-		WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
-		CloseHandle(hFile);
+		fwrite(MailBuffer, 1, Msg->length, hFile);
+		fclose(hFile);
 	}
 
 	MatchMessagetoBBSList(Msg, 0);
@@ -1120,27 +1123,21 @@ VOID CreateWPReport()
 {
 	int i;
 	char Line[200];
-	int len, written;
+	int len;
 	char File[100];
-	HANDLE hFile;
+	FILE * hFile;
 	WPRec * WP = NULL;
 
-	sprintf_s(File, sizeof(File), "%s\\WP.txt", BaseDir);
+	sprintf_s(File, sizeof(File), "%s/wp.txt", BaseDir);
 	
-	hFile = CreateFile(File,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
+	hFile = fopen(File, "wb");
 
-	if (hFile == INVALID_HANDLE_VALUE)
+	if (hFile == NULL)
 		return;
 
-//	len = wsprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
+//	len = sprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
 //	WriteFile(hFile, Line, len, &written, NULL);
-//	len = wsprintf(Line, "               In        Out     Rxed        Sent     Rxed       Sent         In         Out\r\n\r\n");
+//	len = sprintf(Line, "               In        Out     Rxed        Sent     Rxed       Sent         In         Out\r\n\r\n");
 //	WriteFile(hFile, Line, len, &written, NULL);
 		
 
@@ -1148,16 +1145,15 @@ VOID CreateWPReport()
 	{
 		WP = WPRecPtr[i];
 
-		len = wsprintf(Line, "%-7s,%c,%s,%s,%s,%s,%s,%s,%s,%d,%s,%s\r\n",
+		len = sprintf(Line, "%-7s,%c,%s,%s,%s,%s,%s,%s,%s,%d,%s,%s\r\n",
 			WP->callsign, WP->Type, WP->first_homebbs, WP->first_qth, WP->first_zip, 
 			WP->secnd_homebbs, WP->secnd_qth, WP->secnd_zip, WP->name, WP->changed,
 			FormatWPDate(WP->last_modif),
 			FormatWPDate(WP->last_seen));
 		
-		WriteFile(hFile, Line, len, &written, NULL);
+		fwrite(Line, 1, len, hFile);
 	}
-
-	CloseHandle(hFile);
+	fclose(hFile);
 }
 
 

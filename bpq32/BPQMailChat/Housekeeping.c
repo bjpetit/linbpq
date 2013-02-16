@@ -36,6 +36,7 @@ int LastTrafficTime;
 
 DeletetoRecycle(char * FN)
 {
+#ifndef LINBPQ
 	SHFILEOPSTRUCT FileOp;
 
 	FileOp.hwnd = NULL;
@@ -45,6 +46,7 @@ DeletetoRecycle(char * FN)
 	FileOp.pTo = NULL;
 
 	return SHFileOperation(&FileOp);
+#endif
 }
 
 VOID FreeOverride(struct Override ** Hddr)
@@ -72,6 +74,54 @@ VOID FreeOverrides()
 	FreeOverride(LTTO);
 	FreeOverride(LTAT);
 }
+
+#ifdef LINBPQ
+
+VOID * GetOverrides(config_setting_t * group, char * ValueName)
+{
+	char * ptr1;
+	char * MultiString = NULL;
+	char * ptr;
+	int Count = 0;
+	struct Override ** Value;
+	char * Val;
+
+	config_setting_t *setting;
+
+	Value = zalloc(4);				// always NULL entry on end even if no values
+	Value[0] = NULL;
+
+	setting = config_setting_get_member (group, ValueName);
+	
+	if (setting)
+	{
+		ptr =  (char *)config_setting_get_string (setting);
+	
+		while (ptr && strlen(ptr))
+		{
+			ptr1 = strchr(ptr, '|');
+			
+			if (ptr1)
+				*(ptr1++) = 0;
+
+			Value = realloc(Value, (Count+2)*4);
+			Value[Count] = zalloc(sizeof(struct Override));
+			Val = strlop(ptr, ',');
+			if (Val == NULL)
+				break;
+
+			Value[Count]->Call = _strupr(_strdup(ptr));
+			Value[Count++]->Days = atoi(Val);
+			ptr = ptr1;
+		}
+	}
+
+	Value[Count] = NULL;
+	return Value;
+}
+
+#else
+
 
 VOID * GetOverrides(HKEY hKey, char * ValueName)
 {
@@ -122,10 +172,14 @@ VOID * GetOverrides(HKEY hKey, char * ValueName)
 
 	return Value;
 }
+
+#endif
+
 int Removed;
 int Killed;
 int BIDSRemoved;
 
+#ifndef LINBPQ
 
 INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -162,6 +216,7 @@ INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 	
 	return 0;
 }
+#endif
 
 VOID DoHouseKeeping(BOOL Manual)
 {
@@ -194,8 +249,9 @@ VOID DoHouseKeeping(BOOL Manual)
 	if (!SuppressMaintEmail)
 		MailHousekeepingResults();
 	
-	NOW = time(NULL);
+	LastHouseKeepingTime = NOW = time(NULL);
 
+#ifndef LINBPQ
 	retCode = RegCreateKeyEx(REGTREE,
           "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
@@ -208,15 +264,15 @@ VOID DoHouseKeeping(BOOL Manual)
 	if (SaveRegDuringMaint)
 		CreateRegBackup();
 
+	if (Manual)
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
+
+#endif
+
 	if (SendWP)
 		CreateWPMessage();
 
-
-	if (Manual)
-		DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
-	
 	return;
-
 }
 
 VOID ExpireMessages()
@@ -430,7 +486,7 @@ BOOL RemoveKilledMessages()
 
 		if (Msg->status == 'K')
 		{
-			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes%c", MailDir, Msg->number, 0);
+			sprintf_s(MsgFile, sizeof(MsgFile), "%sm_%06d.mes%c", MailDir, Msg->number, 0);
 			if (DeletetoRecycleBin)
 				DeletetoRecycle(MsgFile);
 			else
@@ -501,21 +557,29 @@ VOID Renumber_Messages()
 
 		if (Msg->number < i)
 		{
+#ifndef LINBPQ
 			MessageBox(MainWnd, "Invalid message number detected, quitting", "BPQMailChat", MB_OK);
+#else
+			Debugprintf("Invalid message number detected, quitting");
+#endif
 			SaveMessageDatabase();
 			return;
 		}
 
 		if (Msg->number != i)
 		{
-			wsprintf(OldMsgFile, "%s\\m_%06d.mes", MailDir, Msg->number);
-			wsprintf(NewMsgFile, "%s\\m_%06d.mes", MailDir, i);
+			sprintf(OldMsgFile, "%s/m_%06d.mes", MailDir, Msg->number);
+			sprintf(NewMsgFile, "%s/m_%06d.mes", MailDir, i);
 			result = rename(OldMsgFile, NewMsgFile);
 			if (result)
 			{
 				char Errmsg[100];
-				wsprintf(Errmsg, "Could not rename message no %d to %d, quitting", Msg->number, i);
+				sprintf(Errmsg, "Could not rename message no %d to %d, quitting", Msg->number, i);
+#ifndef LINBPQ
 				MessageBox(MainWnd,Errmsg , "BPQMailChat", MB_OK);
+#else
+				Debugprintf(Errmsg);
+#endif
 				SaveMessageDatabase();
 				return;
 			}
@@ -606,16 +670,17 @@ VOID MailHousekeepingResults()
 	int Length=0;
 	char * MailBuffer = malloc(10000);
 
-	Length += wsprintf(&MailBuffer[Length], "Killed Messsages Removed %d\r\n", Removed);
-	Length += wsprintf(&MailBuffer[Length], "Messages Killed          %d\r\n", Killed);
-	Length += wsprintf(&MailBuffer[Length], "Live Messages            %d\r\n", NumberofMessages - Killed);
-	Length += wsprintf(&MailBuffer[Length], "Total Messages           %d\r\n", NumberofMessages);
-	Length += wsprintf(&MailBuffer[Length], "BIDs Removed             %d\r\n", BIDSRemoved);
-	Length += wsprintf(&MailBuffer[Length], "BIDs Left                %d\r\n", NumberofBIDs);
+	Length += sprintf(&MailBuffer[Length], "Killed Messsages Removed %d\r\n", Removed);
+	Length += sprintf(&MailBuffer[Length], "Messages Killed          %d\r\n", Killed);
+	Length += sprintf(&MailBuffer[Length], "Live Messages            %d\r\n", NumberofMessages - Killed);
+	Length += sprintf(&MailBuffer[Length], "Total Messages           %d\r\n", NumberofMessages);
+	Length += sprintf(&MailBuffer[Length], "BIDs Removed             %d\r\n", BIDSRemoved);
+	Length += sprintf(&MailBuffer[Length], "BIDs Left                %d\r\n", NumberofBIDs);
 
 	SendMessageToSYSOP("Housekeeping Results", MailBuffer, Length);
 }
 
+#ifdef WIN32
 
 int DeleteLogFiles()
 {
@@ -664,7 +729,7 @@ int DeleteLogFiles()
 
 		 if (Age > LogAge)
 		 {
-			 wsprintf(File, "%s\\%s%c", BaseDir, ffd.cFileName, 0);
+			 sprintf(File, "%s/%s%c", BaseDir, ffd.cFileName, 0);
 			 if (DeletetoRecycleBin)
 				DeletetoRecycle(File);
 			 else
@@ -680,6 +745,49 @@ int DeleteLogFiles()
    return dwError;
 }
 
+#else
+
+#include <dirent.h>
+
+int Filter(const struct dirent * dir)
+{
+	return memcmp(dir->d_name, "log", 3) == 0 && strstr(dir->d_name, ".txt");
+}
+
+int DeleteLogFiles()
+{
+	struct dirent **namelist;
+    int n;
+	struct stat STAT;
+	time_t now = time(NULL);
+	int Age = 0, res;
+     	
+    n = scandir(".", &namelist, Filter, alphasort);
+
+	if (n < 0) 
+		perror("scandir");
+	else  
+	{ 
+		while(n--)
+		{
+			if (stat(namelist[n]->d_name, &STAT) == 0);
+			{
+				Age = (now - STAT.st_mtime) / 86400;
+				
+				if (Age > LogAge)
+				{
+					printf("Deleting  %s\n",  namelist[n]->d_name);
+					unlink(namelist[n]->d_name);
+				}
+			}
+			free(namelist[n]);
+		}
+		free(namelist);
+    }
+	return;
+}
+#endif
+
 
 VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 {
@@ -687,7 +795,7 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	BIDRec * BIDRec;
 	char MailBuffer[1000];
 	char MsgFile[MAX_PATH];
-	HANDLE hFile = INVALID_HANDLE_VALUE;
+	FILE * hFile;
 	int WriteLen=0;
 	char From[100];
 	char * Via;
@@ -702,16 +810,16 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	if (FromUser)
 	{
 		if (FromUser->HomeBBS[0])
-			wsprintf(From, "%s@%s", OldMsg->from, FromUser->HomeBBS);
+			sprintf(From, "%s@%s", OldMsg->from, FromUser->HomeBBS);
 		else
-			wsprintf(From, "%s@%s", OldMsg->from, BBSName);
+			sprintf(From, "%s@%s", OldMsg->from, BBSName);
 	}
 	else
 	{
 		WPRecP WP = LookupWP(OldMsg->from);
 
 		if (WP)
-			wsprintf(From, "%s@%s", OldMsg->from, WP->first_homebbs);
+			sprintf(From, "%s@%s", OldMsg->from, WP->first_homebbs);
 	}
 
 	GetSemaphore(&MsgNoSemaphore);
@@ -736,9 +844,9 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	strcpy(Msg->title, "Non-delivery Notification");
 	
 	if (Unread)
-		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s has not been read for %d days.\r\nMessage had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->to, Age);
+		Msg->length = sprintf(MailBuffer, "Your Message ID %s Subject %s to %s has not been read for %d days.\r\nMessage had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->to, Age);
 	else
-		Msg->length = wsprintf(MailBuffer, "Your Message ID %s Subject %s to %s could not be delivered in %d days.\r\nMessage had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->to, Age);
+		Msg->length = sprintf(MailBuffer, "Your Message ID %s Subject %s to %s could not be delivered in %d days.\r\nMessage had been deleted.\r\n", OldMsg->bid, OldMsg->title, OldMsg->to, Age);
 
 
 	Msg->type = 'P';
@@ -753,20 +861,14 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	BIDRec->u.msgno = LOWORD(Msg->number);
 	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
 
-	sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
 	
-	hFile = CreateFile(MsgFile,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
+	hFile = fopen(MsgFile, "wb");
 
-	if (hFile != INVALID_HANDLE_VALUE)
+	if (hFile)
 	{
-		WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
-		CloseHandle(hFile);
+		fwrite(MailBuffer, 1, Msg->length, hFile);
+		fclose(hFile);
 	}
 
 	MatchMessagetoBBSList(Msg, NULL);
@@ -777,9 +879,9 @@ VOID CreateBBSTrafficReport()
 	struct UserInfo * User;
 	int i;
 	char Line[200];
-	int len, written;
+	int len;
 	char File[MAX_PATH];
-	HANDLE hFile;
+	FILE * hFile;
 	HKEY hKey=0;
 	int retCode, disp;
 	time_t NOW = time(NULL);
@@ -788,53 +890,48 @@ VOID CreateBBSTrafficReport()
 	struct tm last;
 
 	memcpy(&tm, gmtime(&NOW), sizeof(tm));	
-	memcpy(&last, gmtime(&LastTrafficTime), sizeof(tm));
+	memcpy(&last, gmtime((const time_t *)&LastTrafficTime), sizeof(tm));
 
-	wsprintf(File, "%s\\Traffic_%02d%02d%02d.txt", BaseDir, tm.tm_year-100, tm.tm_mon+1, tm.tm_mday);
+	sprintf(File, "%s/Traffic_%02d%02d%02d.txt", BaseDir, tm.tm_year-100, tm.tm_mon+1, tm.tm_mday);
 	
-	hFile = CreateFile(File,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
+	hFile = fopen(File, "wb");
 
-	if (hFile == INVALID_HANDLE_VALUE)
+	if (hFile == NULL)
 	{
 		Debugprintf("Failed to create traffic.txt");
 		return;
 	}
 
-	len = wsprintf(Line, "    Traffic Report for %s From: %04d/%02d/%02d %02d:%02dz To: %04d/%02d/%02d %02d:%02dz\r\n",
+	len = sprintf(Line, "    Traffic Report for %s From: %04d/%02d/%02d %02d:%02dz To: %04d/%02d/%02d %02d:%02dz\r\n",
 		BBSName, last.tm_year+1900, last.tm_mon+1, last.tm_mday, last.tm_hour, last.tm_min,
 		tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min);
 
-	WriteFile(hFile, Line, len, &written, NULL);
+	fwrite(Line, 1, len, hFile);
 
-	len = wsprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
-	WriteFile(hFile, Line, len, &written, NULL);
-	len = wsprintf(Line, "               In        Out     Rxed        Sent     Rxed       Sent         In         Out\r\n\r\n");
-	WriteFile(hFile, Line, len, &written, NULL);
+	len = sprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
+	fwrite(Line, 1, len, hFile);
+	len = sprintf(Line, "               In        Out     Rxed        Sent     Rxed       Sent         In         Out\r\n\r\n");
+
+	fwrite(Line, 1, len, hFile);
 		
-
 	for (i=1; i <= NumberofUsers; i++)
 	{
 		User = UserRecPtr[i];
 
-		len = wsprintf(Line, "%s %-7s %5d %8d %10d %10d %10d %10d %10d %10d\r\n",
+		len = sprintf(Line, "%s %-7s %5d %8d %10d %10d %10d %10d %10d %10d\r\n",
 			(User->flags & F_BBS)? "(B)": "   ",
 			User->Call, User->nbcon, User->ConnectsOut, User->MsgsReceived, User->MsgsSent, 
 			User->BytesForwardedIn, User->BytesForwardedOut,
 			User->MsgsRejectedIn, User->MsgsRejectedOut);
 		
-		WriteFile(hFile, Line, len, &written, NULL);
+		fwrite(Line, 1, len, hFile);
 
 		User->nbcon = User->ConnectsOut = User->MsgsReceived = User->MsgsSent =  
 				User->BytesForwardedIn = User->BytesForwardedOut = 
 				User->MsgsRejectedIn = User->MsgsRejectedOut = 0;
 	}
-			
+#ifndef LINBPQ
+
 	retCode = RegCreateKeyEx(REGTREE,
 			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
@@ -844,5 +941,7 @@ VOID CreateBBSTrafficReport()
 		RegCloseKey(hKey);
 	}
 
-	CloseHandle(hFile);
+#endif
+
+	fclose(hFile);
 }

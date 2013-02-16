@@ -4,11 +4,12 @@
 
 #include "stdafx.h"
 
+
 char UIDEST[10] = "FBB";
 char UIMAIL[10] = "MAIL";
 char AXDEST[7];
 char AXMAIL[7];
-char MYCALL[7];
+static char MAILMYCALL[7];
 
 #pragma pack(1)
 
@@ -20,26 +21,6 @@ char * UIDigiAX[33];		// ax.25 version of digistring
 int UIDigiLen[33];			// Length of AX string
 
 
-typedef struct _MESSAGEX
-{
-//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
-
-	struct _MESSAGEX * CHAIN;
-
-	UCHAR	PORT;
-	USHORT	LENGTH;
-
-	UCHAR	DEST[7];
-	UCHAR	ORIGIN[7];
-
-//	 MAY BE UP TO 56 BYTES OF DIGIS
-
-	UCHAR	CTL;
-	UCHAR	PID;
-	UCHAR	DATA[256];
-	UCHAR	DIGIS[56];				// Padding in case we have digis
-
-}MESSAGEX, *PMESSAGEX;
 
 #pragma pack()
 
@@ -51,13 +32,17 @@ VOID UnQueueRaw(UINT Param);
 unsigned long _beginthread(void(*start_address),
 				unsigned stack_size, int Param);
 
+static VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue);
+
 
 VOID SetupUIInterface()
 {
 	int i, NumPorts = GetNumberofPorts();
+#ifndef LINBPQ
 	struct _EXCEPTION_POINTERS exinfo;
+#endif
 
-	ConvToAX25(GetApplCall(BBSApplNum), MYCALL);
+	ConvToAX25(GetApplCall(BBSApplNum), MAILMYCALL);
 	ConvToAX25(UIDEST, AXDEST);
 	ConvToAX25(UIMAIL, AXMAIL);
 
@@ -85,15 +70,7 @@ VOID SetupUIInterface()
 
 					if (DigiLeft)
 					{
-						_asm
-						{
-							mov eax,dword ptr [DigiLeft] 
-							push eax
-							lea	eax,[DigiString] 
-							push eax
-							call strcpy
-							add	esp,8
-						}
+						memmove(DigiString, DigiLeft, strlen(DigiLeft) + 1);
 						DigiLeft = strlop(DigiString,',');
 					}
 					else
@@ -106,11 +83,15 @@ VOID SetupUIInterface()
 	_beginthread(UnQueueRaw, 0, 0);
 
 	if (EnableUI)
+#ifdef LINBPQ
+	SendLatestUI(0);
+#else
 	__try
 	{
 		SendLatestUI(0);
 	}
 	My__except_Routine("SendLatestUI");
+#endif
 
 }
 
@@ -172,31 +153,6 @@ VOID QueueRaw(int Port, PMESSAGEX AXMSG, int Len)
 	FreeSemaphore(&DGSemaphore);
 }
 
-
-	
-struct MsgInfo * FindMessageByNumber(int msgno)
- {
-	int m=NumberofMessages;
-
-	struct MsgInfo * Msg;
-
-	do
-	{
-		Msg=MsgHddrPtr[m];
-
-		if (Msg->number == msgno)
-			return Msg;
-
-		if (Msg->number < msgno)
-			return NULL;			// Not found
-
-		m--;
-
-	} while (m > 0);
-
-	return NULL;
-}
-
 VOID SendMsgUI(struct MsgInfo * Msg)
 {
 	char msg[200];
@@ -246,7 +202,7 @@ VOID SendHeaders(int Number, int Port)
 
 			tm = gmtime(&Msg->datecreated);	
 	
-			len += wsprintf(&msg[len], "%-6d %c %6d %-13s %-6s %02d%02d%02d %s\r",
+			len += sprintf(&msg[len], "%-6d %c %6d %-13s %-6s %02d%02d%02d %s\r",
 				Msg->number, Msg->type, Msg->length, Msg->to,
 				Msg->from, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Msg->title);
 		}
@@ -257,7 +213,7 @@ VOID SendHeaders(int Number, int Port)
 				Send_AX_Datagram(msg, len, Port, AXDEST, FALSE);
 				len=0;
 			}
-			len += wsprintf(&msg[len], "%-6d #\r", Number);
+			len += sprintf(&msg[len], "%-6d #\r", Number);
 		}
 
 		Number++;
@@ -308,7 +264,7 @@ VOID SendLatestUI(int Port)
 	}
 }
 
-VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue)
+static VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue)
 {
 	MESSAGEX AXMSG;
 
@@ -317,7 +273,7 @@ VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Q
 	// Block includes the Msg Header (7 bytes), Len Does not!
 
 	memcpy(AXPTR->DEST, HWADDR, 7);
-	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	memcpy(AXPTR->ORIGIN, MAILMYCALL, 7);
 	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
 	AXPTR->DEST[6] |= 0x80;			// set Command Bit
 
@@ -326,14 +282,13 @@ VOID Send_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Q
 		// This port has a digi string
 
 		int DigiLen = UIDigiLen[Port];
+		UCHAR * ptr;
 
 		memcpy(&AXPTR->CTL, UIDigiAX[Port], DigiLen);
 		
-		_asm{					// Adjusting pointers to structs is difficult in C!
-			mov	eax,AXPTR
-			add eax, DigiLen
-			mov AXPTR,EAX
-		}
+		ptr = (UCHAR *)AXPTR;
+		ptr += DigiLen;
+		AXPTR = (PMESSAGEX)ptr;
 
 		Len += DigiLen;
 
@@ -413,6 +368,7 @@ VOID ProcessUItoFBB(char * msg, int len, int Port)
 UCHAR * AdjustForDigis(PMESSAGEX * buff, int * len)
 {
 	PMESSAGEX buff1 = *(buff);
+	UCHAR * ptr, * ptr1;
 
 	if ((buff1->ORIGIN[6] & 1) == 1)
 	{
@@ -421,13 +377,16 @@ UCHAR * AdjustForDigis(PMESSAGEX * buff, int * len)
 		return 0;				// No Digis
 	}
 
-	_asm {
-		mov	eax,buff
-		mov	ebx,[eax]
-		add ebx,7
-		mov	[eax],ebx
+	ptr1 = &buff1->ORIGIN[6];		// End of add 
+	ptr = (UCHAR *)*buff;
+
+	while((*ptr1 & 1) == 0)			// End of address bit
+	{
+		ptr1 += 7;
+		ptr+= 7;
 	}
 
+	*buff = (PMESSAGEX)ptr;
 	return (&buff1->CTL);		// Start of Digi String
 }
 VOID SeeifBBSUIFrame(PMESSAGEX buff, int len)
@@ -460,23 +419,20 @@ VOID SeeifBBSUIFrame(PMESSAGEX buff, int len)
 		}
 	}
 
-
-
-	
 	if (buff->CTL != 3)
 		return;
 
 	if (buff->PID != 0xf0)
 		return;
 
-//	if (memcmp(buff->ORIGIN, MYCALL,6) == 0)		// From me?
-//		if (buff->ORIGIN[6] == (MYCALL[6] | 1))		// Set End of Call
+//	if (memcmp(buff->ORIGIN, MAILMYCALL,6) == 0)		// From me?
+//		if (buff->ORIGIN[6] == (MAILMYCALL[6] | 1))		// Set End of Call
 //			return;
 
 	From[6] &= 0x7e;
 	To[6] &= 0x7e;
 
-	if (memcmp(To, MYCALL, 7) == 0)
+	if (memcmp(To, MAILMYCALL, 7) == 0)
 	{
 		ProcessUItoFBB(buff->DATA, len-23, Port);
 		return;
@@ -493,7 +449,7 @@ VOID SeeifBBSUIFrame(PMESSAGEX buff, int len)
 	return;
 }
 
-//	ConvToAX25(GetNodeCall(), MYCALL);
+//	ConvToAX25(MYNODECALL, MAILMYCALL);
 //				len=ConvFromAX25(Routes->NEIGHBOUR_DIGI1,Portcall);
 //			Portcall[len]=0;
 
@@ -552,12 +508,17 @@ VOID SendMailFor(char * Msg, BOOL HaveCalls)
 	if (!HaveCalls)
 		strcat(Msg, "None ");
 
+	Sleep(1000);
+	
 	for (i=1; i <= NumPorts; i++)
 	{
 		if (Mask & 1)
+		{
 			if (HaveCalls || UINull[i])
+			{
 				Send_AX_Datagram(Msg, strlen(Msg) - 1, i, AXDEST, TRUE);
-		
+			}
+		}
 		Mask>>=1;
 	}
 }

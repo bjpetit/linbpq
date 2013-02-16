@@ -5,6 +5,7 @@
 #include "stdafx.h"
 
 VOID __cdecl Debugprintf(const char * format, ...);
+VOID ReleaseSock(SOCKET sock);
 
 struct NNTPRec * FirstNNTPRec = NULL;
 
@@ -12,7 +13,7 @@ struct NNTPRec * FirstNNTPRec = NULL;
 
 SOCKET nntpsock;
 
-static SocketConn * Sockets=NULL;		// Chain of active sockets
+extern SocketConn * Sockets;		// Chain of active sockets
 
 int NNTPInPort = 119;
 
@@ -48,7 +49,7 @@ VOID BuildNNTPList(struct MsgInfo * Msg)
 	if (Msg->type != 'B' || Msg->status == 'K' || Msg->status == 'H')
 		return;
 
-	wsprintf(FullGroup, "%s.%s", Msg->to, Msg->via);
+	sprintf(FullGroup, "%s.%s", Msg->to, Msg->via);
 
 	REC = LookupNNTP(FullGroup);
 
@@ -169,7 +170,7 @@ VOID InitialiseNNTP()
 
 {
 	if (NNTPInPort)
-		nntpsock = CreateListeningSocket(NNTPInPort, NNTP_ACCEPT);
+		nntpsock = CreateListeningSocket(NNTPInPort);
 }
 
 CreateNNTPMessage(char * From, char * To, char * MsgTitle, time_t Date, char * MsgBody, int MsgLen)
@@ -322,12 +323,12 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 					}
 				}
 		
-				sscanf(Context, "%04d %02d%:%02d:%02d%s",
+				sscanf(Context, "%04d %02d:%02d:%02d%s",
 					&rtime.tm_year, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec, Offset);
 
 				rtime.tm_year -= 1900;
 
-				Date = _mkgmtime(&rtime);
+				Date = mktime(&rtime) - timezone;
 				
 				if (Date == (time_t)-1)
 					Date = 0;
@@ -507,7 +508,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 					if (Msg)
 					{
 						char FullGroup[100];
-						wsprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
+						sprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
 						if (_stricmp(FullGroup, REC->NewsGroup) == 0)
 						{
 							sockprintf(sockptr, "%d", MsgNo);
@@ -564,7 +565,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		rtime.tm_mon--;
 
 		if (_stricmp(Offset, "GMT") == 0)
-			Time = _mkgmtime(&rtime);
+			Time = mktime(&rtime) - timezone;
 		else
 			Time = mktime(&rtime);
 		
@@ -707,7 +708,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		// XHDR subject nnnn-nnnn
 
-		fields = sscanf(&Buffer[5], "%s %d-%d", &Header, &MsgStart, &MsgEnd);
+		fields = sscanf(&Buffer[5], "%s %d-%d", &Header[0], &MsgStart, &MsgEnd);
 
 		if (fields > 1)
 			MsgNo = MsgStart;
@@ -739,7 +740,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (Msg)
 			{
 				char FullGroup[100];
-				wsprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
+				sprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
 				if (_stricmp(FullGroup, REC->NewsGroup) == 0)
 				{
 					if (_stricmp(Header, "subject") == 0)
@@ -805,7 +806,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			if (Msg)
 			{
 				char FullGroup[100];
-				wsprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
+				sprintf(FullGroup, "%s.%s", Msg->to, Msg->via );
 				if (_stricmp(FullGroup, REC->NewsGroup) == 0)
 				{
 					 // subject, author, date, message-id, references, byte count, and line count. 
@@ -897,8 +898,15 @@ int NNTP_Read(SocketConn * sockptr, SOCKET sock)
 				
 	InputLen=recv(sock, &sockptr->TCPBuffer[sockptr->InputLen], 1000, 0);
 
-	if (InputLen == -1)
+	if (InputLen <= 0)
+	{
+		int x = WSAGetLastError();
+
+		closesocket(sock);
+		ReleaseSock(sock);
+
 		return 0;					// Does this mean closed?
+	}
 
 	sockptr->InputLen += InputLen;
 
@@ -944,35 +952,47 @@ int NNTP_Accept(int SocketId)
 {
 	int addrlen;
 	SocketConn * sockptr;
+	u_long param = 1;
+
 	SOCKET sock;
 
-//   Allocate a Socket entry
+	addrlen=sizeof(struct sockaddr);
+
+		//   Allocate a Socket entry
 
 	sockptr=zalloc(sizeof(SocketConn)+100);
 
-	sockptr->Next=Sockets;
+	sockptr->Next = Sockets;
 	Sockets=sockptr;
-
-	addrlen=sizeof(struct sockaddr);
 
 	sock = accept(SocketId, (struct sockaddr *)&sockptr->sin, &addrlen);
 
 	if (sock == INVALID_SOCKET)
 	{
 		Logprintf(LOG_TCP, NULL, '|', "NNTP accept() failed Error %d", WSAGetLastError());
+
+		// get rid of socket record
+
+		Sockets = sockptr->Next;
+		free(sockptr);
+
 		return FALSE;
 	}
 
+
 	sockptr->Type = NNTPServer;
 
-	WSAAsyncSelect(sock, MainWnd, NNTP_DATA,
-			FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
-
+	ioctl(sock, FIONBIO, &param);
 	sockptr->socket = sock;
+
+	sockptr->State = WaitingForGreeting;
+	
+	SendSock(sockptr, "200 BPQMail NNTP Server ready");	
+
 
 	return 0;
 }
-
+/*
 int NNTP_Data(int sock, int error, int eventcode)
 {
 	SocketConn * sockptr;
@@ -1033,7 +1053,7 @@ int NNTP_Data(int sock, int error, int eventcode)
 
 	return 0;
 }
-
+*/
 VOID ReleaseNNTPSock(SOCKET sock)
 {
 	// remove and free the socket record

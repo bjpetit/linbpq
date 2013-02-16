@@ -155,7 +155,7 @@ VOID DoShowRMSCmd(CIRCUIT * conn, struct UserInfo * inuser, char * Arg1, char * 
 					strcat(FWLine, " ");
 					if (s)
 					{
-						wsprintf(RMSCall, "%s-%d", user->Call, s);
+						sprintf(RMSCall, "%s-%d", user->Call, s);
 						strcat(FWLine, RMSCall);
 					}
 					else
@@ -255,7 +255,7 @@ Display:
 					strcat(RMSLine, " ");
 					if (s)
 					{
-						wsprintf(RMSCall, "%s-%d", RMSUser->Call, s);
+						sprintf(RMSCall, "%s-%d", RMSUser->Call, s);
 						strcat(RMSLine, RMSCall);
 					}
 					else
@@ -306,15 +306,15 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 
 	if (_stricmp(Arg1, "QUEUE") == 0)
 	{
-		struct UserInfo * user;
+		struct UserInfo * xuser;
 		int Msgs;
 
-		for (user = BBSChain; user; user = user->BBSNext)
+		for (xuser = BBSChain; xuser; xuser = xuser->BBSNext)
 		{
-			Msgs = CountMessagestoForward(user->BBSNumber);
+			Msgs = CountMessagestoForward(xuser->BBSNumber);
 
 			if (Msgs)
-				nodeprintf(conn, "%s %d Msgs\r", user->Call, Msgs);
+				nodeprintf(conn, "%s %d Msgs\r", xuser->Call, Msgs);
 
 		}
 		SendPrompt(conn, user);
@@ -385,7 +385,7 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 
 FDisplay:
 
-	wsprintf(Line, "%s Fwd Interval %d Rev Interval %d Fwd %s, Reverse Poll %s, Send Immediately %s\r",
+	sprintf(Line, "%s Fwd Interval %d Rev Interval %d Fwd %s, Reverse Poll %s, Send Immediately %s\r",
 		FwdBBS->Call, ForwardingInfo->FwdInterval, ForwardingInfo->RevFwdInterval,
 		(ForwardingInfo->Enabled)? "Enabled" : "Disabled", (ForwardingInfo->ReverseFlag) ? "Enabled": "Disabled",
 		(ForwardingInfo->SendNew) ? "Enabled": "Disabled");

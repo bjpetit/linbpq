@@ -584,7 +584,7 @@ static int DecodePosition(void)
 
 /* compression */
 
-__int32 Encode(char * in, char * out, __int32 inlen, BOOL B1Protocol)  /* compression */
+long Encode(char * in, char * out, long inlen, BOOL B1Protocol)
 {
 		int  i, c, len, r, s, last_match_length;
 		char *ptr;
@@ -664,8 +664,8 @@ __int32 Encode(char * in, char * out, __int32 inlen, BOOL B1Protocol)  /* compre
 
 		if (B1Protocol)
 		{
-			out[0]=LOBYTE(crc);
-			out[1]=HIBYTE(crc);
+			out[0] = crc & 0xff;
+			out[1]= crc >> 8;
 			codesize+=2;
 		}
 
@@ -830,7 +830,7 @@ File: 3556 NOLA.XLS
 File: 5566 NEWBOAT.HOMEPORT.JPG
 
 */
-		char * ptr1, * ptr2, * ptr3;
+		UCHAR * ptr1, * ptr2, * ptr3;
 		__int32 linelen, MsgLen = 0;
 		struct MsgInfo * Msg = conn->TempMsg;
 		time_t Date;
@@ -843,11 +843,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 		__int32 B2To;							// Offset to To: fields in B2 header
 		__int32 Recipients = 0;
-		struct _EXCEPTION_POINTERS exinfo;
 		__int32 RMSMsgs = 0, BBSMsgs = 0;
+#ifndef LINBPQ
+		struct _EXCEPTION_POINTERS exinfo;
 
 		__try {
-
+#endif
 		Msg->B2Flags |= B2Msg;
 				
 		if (_stricmp(conn->Callsign, "RMS") == 0)
@@ -1147,12 +1148,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			// Date: 2009/07/25 10:08
 	
-			sscanf(&ptr1[5], "%04d/%02d%/%02d %02d:%02d",
+			sscanf(&ptr1[5], "%04d/%02d/%02d %02d:%02d",
 					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
 
 			rtime.tm_year -= 1900;
 
-			Date = _mkgmtime(&rtime);
+			Date = mktime(&rtime) - timezone;
 	
 			if (Date == (time_t)-1)
 				Date = time(NULL);
@@ -1178,8 +1179,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			BOOL SentToRMS = FALSE;
 			__int32 ToLen;
 			char * ToString = malloc(Recipients * 100);
-
-			__try{
 
 			SaveMsg = Msg;
 			SaveBody = conn->MailBuffer;
@@ -1329,15 +1328,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			SetupNextFBBMessage(conn);
 			return;
-	
-			} My__except_Routine("Process Multiple Destinations");
-
-			BBSputs(conn, "*** Program Error Processing Multiple Destinations\r");
-			Flush(conn);
-			conn->CloseAfterFlush = 20;			// 2 Secs
-
-			return;
-
 		}
 		else
 		{
@@ -1393,17 +1383,18 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			SetupNextFBBMessage(conn);
 			return;
 		}
-
+#ifndef LINBPQ
 		}
 			#define EXCEPTMSG "Error Decoding B2 Message"
 			#include "StdExcept.c"
- 
+
 		BBSputs(conn, "*** Program Error Decoding B2 Message\r");
 		Flush(conn);
 		conn->CloseAfterFlush = 20;			// 2 Secs
 		
 		return;
 		}
+#endif	
 	} // end if B2Msg
 
 	CreateMessageFromBuffer(conn);

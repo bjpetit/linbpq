@@ -3,9 +3,248 @@
 //	Utility Routines
 
 #include "stdafx.h"
+#ifdef WIN32
 #include "Winspool.h"
+#endif
 
-int SEMCLASHES = 0;
+#define LIBCONFIG_STATIC
+#include "libconfig.h"
+
+int APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
+void GetSemaphore(struct SEM * Semaphore);
+void FreeSemaphore(struct SEM * Semaphore);
+int EncryptPass(char * Pass, char * Encrypt);
+VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
+
+config_t cfg;
+config_setting_t * group;
+
+extern ULONG BBSApplMask;
+
+static int SEMCLASHES = 0;
+
+int	NumberofStreams;
+
+extern char VersionStringWithBuild[50];
+
+#define MaxSockets 64
+
+extern struct SEM OutputSEM;
+
+extern ConnectionInfo Connections[MaxSockets+1];
+
+extern struct UserInfo ** UserRecPtr;
+extern int NumberofUsers;
+
+extern struct UserInfo * BBSChain;					// Chain of users that are BBSes
+
+extern struct MsgInfo ** MsgHddrPtr;
+extern int NumberofMessages;
+
+extern int FirstMessageIndextoForward;					// Lowest Message wirh a forward bit set - limits search
+
+extern char UserDatabaseName[MAX_PATH];
+extern char UserDatabasePath[MAX_PATH];
+
+extern char MsgDatabasePath[MAX_PATH];
+extern char MsgDatabaseName[MAX_PATH];
+
+extern char BIDDatabasePath[MAX_PATH];
+extern char BIDDatabaseName[MAX_PATH];
+
+extern char WPDatabasePath[MAX_PATH];
+extern char WPDatabaseName[MAX_PATH];
+
+extern char BadWordsPath[MAX_PATH];
+extern char BadWordsName[MAX_PATH];
+
+extern char BaseDir[MAX_PATH];
+extern char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
+extern char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
+
+
+extern char MailDir[MAX_PATH];
+
+
+extern BIDRec ** BIDRecPtr;
+extern int NumberofBIDs;
+
+extern BIDRec ** TempBIDRecPtr;
+extern int NumberofTempBIDs;
+
+extern WPRec ** WPRecPtr;
+extern int NumberofWPrecs;
+
+extern char ** BadWords;
+extern int NumberofBadWords;
+extern char * BadFile;
+
+extern int LatestMsg;
+extern struct SEM MsgNoSemaphore;					// For locking updates to LatestMsg
+extern int HighestBBSNumber;
+
+extern int MaxMsgno;
+extern int BidLifetime;
+extern int MaintInterval;
+extern int MaintTime;
+
+extern int ProgramErrors;
+
+extern BOOL MonBBS;
+extern BOOL MonCHAT;
+extern BOOL MonTCP;
+
+extern char ConfigName[250];
+
+FILE * LogHandle[4] = {NULL, NULL, NULL, NULL};
+
+char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
+
+BOOL OpenLogfile(int Flags)
+{
+	UCHAR FN[MAX_PATH];
+	time_t T;
+	struct tm * tm;
+
+	T = time(NULL);
+	tm = gmtime(&T);	
+
+	sprintf(FN,"%s/log_%02d%02d%02d_%s.txt", BaseDir, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
+
+	LogHandle[Flags] = fopen(FN, "ab");
+
+	return (LogHandle[Flags] != NULL);
+}
+
+struct SEM LogSEM = {0, 0};
+
+void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
+{
+	char CRLF[2] = {0x0d,0x0a};
+	struct tm * tm;
+	char Stamp[20];
+	time_t T;
+//	struct _EXCEPTION_POINTERS exinfo;
+
+#ifndef LINBPQ
+	__try
+	{
+#endif
+
+#ifndef LINBPQ
+
+	if (hMonitor)
+	{
+		if (Flags == LOG_TCP && MonTCP)
+		{	
+			WritetoMonitorWindow((char *)&Flag, 1);
+			WritetoMonitorWindow(Msg, MsgLen);
+			WritetoMonitorWindow(CRLF , 1);
+		}
+		else if (Flags == LOG_CHAT && MonCHAT)
+		{	
+			WritetoMonitorWindow((char *)&Flag, 1);
+
+			if (conn && conn->Callsign[0])
+			{
+				char call[20];
+				sprintf(call, "%s          ", conn->Callsign);
+				WritetoMonitorWindow(call, 10);
+			}
+			else
+				WritetoMonitorWindow("          ", 10);
+
+			WritetoMonitorWindow(Msg, MsgLen);
+			if (Msg[MsgLen-1] != '\r')
+				WritetoMonitorWindow(CRLF , 1);
+		}
+		else if (Flags == LOG_BBS  && MonBBS)
+		{	
+			WritetoMonitorWindow((char *)&Flag, 1);
+			if (conn && conn->Callsign[0])
+			{
+				char call[20];
+				sprintf(call, "%s          ", conn->Callsign);
+				WritetoMonitorWindow(call, 10);
+			}
+			else
+				WritetoMonitorWindow("          ", 10);
+
+			WritetoMonitorWindow(Msg, MsgLen);
+			WritetoMonitorWindow(CRLF , 1);
+		}
+		else if (Flags == LOG_DEBUG_X)
+		{	
+			WritetoMonitorWindow((char *)&Flag, 1);
+			WritetoMonitorWindow(Msg, MsgLen);
+			WritetoMonitorWindow(CRLF , 1);
+		}
+
+	}
+#endif
+
+	if (Flags == LOG_TCP && !LogTCP)
+		return;
+	if (Flags == LOG_BBS && !LogBBS)
+		return;
+	if (Flags == LOG_CHAT && !LogCHAT)
+		return;
+
+	GetSemaphore(&LogSEM);
+
+	if (LogHandle[Flags] == NULL) OpenLogfile(Flags);
+
+	if (LogHandle[Flags] == NULL) 
+	{
+		FreeSemaphore(&LogSEM);
+		return;
+	}
+	T = time(NULL);
+	tm = gmtime(&T);	
+	
+	sprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d %c",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, Flag);
+
+	fwrite(Stamp, 1, strlen(Stamp), LogHandle[Flags]);
+
+	if (conn && conn->Callsign[0])
+	{
+		char call[20];
+		sprintf(call, "%s          ", conn->Callsign);
+		fwrite(call, 1, 10, LogHandle[Flags]);
+	}
+	else
+		fwrite("          ", 1, 10, LogHandle[Flags]);
+
+	fwrite(Msg, 1, MsgLen, LogHandle[Flags]);
+
+	if (Flags == LOG_CHAT && Msg[MsgLen-1] == '\r')
+		fwrite(&CRLF[1], 1, 1, LogHandle[Flags]);
+	else
+		fwrite(CRLF, 1, 2, LogHandle[Flags]);
+		
+	if (LogHandle[Flags])
+		fclose(LogHandle[Flags]);
+
+	LogHandle[Flags] = NULL;
+	FreeSemaphore(&LogSEM);
+	
+#ifndef LINBPQ
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER)
+	{
+	}
+#endif
+}
+
+int	CriticalErrorHandler(char * error)
+{
+	Debugprintf("Critical Error %s", error);
+	ProgramErrors = 25;
+	CheckProgramErrors();				// Force close
+	return 0;
+}
+
 
 VOID __cdecl Debugprintf(const char * format, ...)
 {
@@ -13,8 +252,8 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	va_list(arglist);int Len;
 
 	va_start(arglist, format);
-	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
-	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG);
+	Len = vsprintf(Mess, format, arglist);
+	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG_X);
 //	#ifdef _DEBUG 
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
@@ -28,55 +267,870 @@ VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * form
 	va_list(arglist);int Len;
 
 	va_start(arglist, format);
-	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
+	Len = vsprintf(Mess, format, arglist);
 	WriteLogLine(conn, InOut, Mess, Len, LogMode);
 
 	return;
 }
 
-void GetSemaphore(struct SEM * Semaphore)
+
+struct UserInfo * AllocateUserRecord(char * Call)
 {
-	//
-	//	Wait for it to be free
-	//
+	struct UserInfo * User = zalloc(sizeof (struct UserInfo));
+		
+	strcpy(User->Call, Call);
+
+	GetSemaphore(&AllocSemaphore);
+
+	UserRecPtr=realloc(UserRecPtr,(++NumberofUsers+1)*4);
+	UserRecPtr[NumberofUsers]= User;
+
+	FreeSemaphore(&AllocSemaphore);
+
+	return User;
+}
+
+struct MsgInfo * AllocateMsgRecord()
+{
+	struct MsgInfo * Msg = zalloc(sizeof (struct MsgInfo));
+
+	GetSemaphore(&AllocSemaphore);
+
+	MsgHddrPtr=realloc(MsgHddrPtr,(++NumberofMessages+1)*4);
+	MsgHddrPtr[NumberofMessages] = Msg;
+
+	FreeSemaphore(&AllocSemaphore);
+
+	return Msg;
+}
+
+BIDRec * AllocateBIDRecord()
+{
+	BIDRec * BID = zalloc(sizeof (BIDRec));
 	
-	if (Semaphore->Flag != 0)
-	{
-		Semaphore->Clashes++;
-//		Debugprintf("MailChat Semaphore Clash");
-	}
-loop1:
+	GetSemaphore(&AllocSemaphore);
 
-	while (Semaphore->Flag != 0)
-	{
-		Sleep(10);
-	}
+	BIDRecPtr=realloc(BIDRecPtr,(++NumberofBIDs+1)*4);
+	BIDRecPtr[NumberofBIDs] = BID;
 
-	//
-	//	try to get semaphore
-	//
+	FreeSemaphore(&AllocSemaphore);
 
-	_asm{
+	return BID;
+}
 
-	mov	eax,1
-	mov ebx, Semaphore
-	xchg [ebx],eax		// this instruction is locked
+BIDRec * AllocateTempBIDRecord()
+{
+	BIDRec * BID = zalloc(sizeof (BIDRec));
 	
-	cmp	eax,0
-	jne loop1			// someone else got it - try again
-;
-;	ok, we've got the semaphore
-;
+	GetSemaphore(&AllocSemaphore);
+
+	TempBIDRecPtr=realloc(TempBIDRecPtr,(++NumberofTempBIDs+1)*4);
+	TempBIDRecPtr[NumberofTempBIDs] = BID;
+
+	FreeSemaphore(&AllocSemaphore);
+
+	return BID;
+}
+
+struct UserInfo * LookupCall(char * Call)
+{
+	struct UserInfo * ptr = NULL;
+	int i;
+
+	for (i=1; i <= NumberofUsers; i++)
+	{
+		ptr = UserRecPtr[i];
+
+		if (_stricmp(ptr->Call, Call) == 0) return ptr;
+
 	}
+
+	return NULL;
+}
+
+VOID GetUserDatabase()
+{
+	struct UserInfo UserRec;
+	FILE * Handle;
+	int ReadLen;
+	struct UserInfo * user;
+
+	Handle = fopen(UserDatabasePath, "rb");
+
+	if (Handle == NULL)
+	{
+		// Initialise a new File
+
+		UserRecPtr=malloc(4);
+		UserRecPtr[0]= malloc(sizeof (struct UserInfo));
+		memset(UserRecPtr[0], 0, sizeof (struct UserInfo));
+		NumberofUsers = 0;
+
+		return;
+	}
+
+
+	// Get First Record
+		
+	ReadLen = fread(&UserRec, 1, sizeof (UserRec), Handle);
+	
+	if (ReadLen == 0)
+	{
+		// Duff file
+
+		memset(&UserRec, 0, sizeof (struct UserInfo));
+	}
+
+	// Set up control record
+
+	UserRecPtr=malloc(4);
+	UserRecPtr[0]= malloc(sizeof (struct UserInfo));
+	memcpy(UserRecPtr[0], &UserRec,  sizeof (UserRec));
+
+	NumberofUsers = 0;
+
+Next:
+
+	ReadLen = fread(&UserRec, 1, sizeof (UserRec), Handle);
+
+	if (ReadLen > 0)
+	{
+		user = AllocateUserRecord(UserRec.Call);
+		memcpy(user, &UserRec,  sizeof (UserRec));
+		user->Temp = zalloc(sizeof (struct TempUserInfo));
+
+		user->ForwardingInfo = NULL;	// In case left behind on crash
+		user->BBSNext = NULL;
+		user->POP3Locked = FALSE;
+
+
+		if (user->flags & F_BBS)
+		{
+			// Defined as BBS - allocate and initialise forwarding structure
+
+			SetupForwardingStruct(user);
+
+			// Add to BBS Chain;
+
+			user->BBSNext = BBSChain;
+			BBSChain = user;
+
+			// Save Highest BBS Number
+
+			if (user->BBSNumber > HighestBBSNumber) HighestBBSNumber = user->BBSNumber;
+
+		}
+		goto Next;
+	}
+
+	SortBBSChain();
+
+	fclose(Handle);	
+}
+
+VOID CopyUserDatabase()
+{
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
+
+	// Keep 4 Generations
+
+	strcpy(Backup2, UserDatabasePath);
+	strcat(Backup2, ".bak.3");
+
+	strcpy(Backup1, UserDatabasePath);
+	strcat(Backup1, ".bak.2");
+
+	DeleteFile(Backup2);			// Remove old .bak.3
+	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+	strcpy(Backup2, UserDatabasePath);
+	strcat(Backup2, ".bak.1");
+
+	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+	strcpy(Backup1, UserDatabasePath);
+	strcat(Backup1, ".bak");
+
+	MoveFile(Backup1, Backup2);		//Move .bak to .bak.1
+
+	CopyFile(UserDatabasePath, Backup1, FALSE);	 // Copy to .bak
+
+}
+
+VOID CopyConfigFile(char * ConfigName)
+{
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
+
+	// Keep 4 Generations
+
+	strcpy(Backup2, ConfigName);
+	strcat(Backup2, ".bak.3");
+
+	strcpy(Backup1, ConfigName);
+	strcat(Backup1, ".bak.2");
+
+	DeleteFile(Backup2);			// Remove old .bak.3
+	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+	strcpy(Backup2, ConfigName);
+	strcat(Backup2, ".bak.1");
+
+	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+	strcpy(Backup1, ConfigName);
+	strcat(Backup1, ".bak");
+
+	MoveFile(Backup1, Backup2);		// Move .bak to .bak.1
+
+	CopyFile(ConfigName, Backup1, FALSE);	// Copy to .bak
+}
+
+
+VOID SaveUserDatabase()
+{
+	FILE * Handle;
+	int WriteLen;
+	int i;
+
+	Handle = fopen(UserDatabasePath, "wb");
+
+	UserRecPtr[0]->nbcon = NumberofUsers;
+
+	for (i=0; i <= NumberofUsers; i++)
+	{
+		WriteLen = fwrite(UserRecPtr[i], 1, sizeof (struct UserInfo), Handle);
+	}
+
+	fclose(Handle);
 
 	return;
 }
-void FreeSemaphore(struct SEM * Semaphore)
-{
-	Semaphore->Flag=0;
 
-	return; 
+VOID GetMessageDatabase()
+{
+	struct MsgInfo MsgRec;
+	FILE * Handle;
+	int ReadLen;
+	struct MsgInfo * Msg;
+	char * MsgBytes;
+	int Resize = 0;				// Used to resize file if format changes
+
+	Handle = fopen(MsgDatabasePath, "rb");
+
+	if (Handle == NULL)
+	{
+		// Initialise a new File
+
+		MsgHddrPtr=malloc(4);
+		MsgHddrPtr[0]= zalloc(sizeof (MsgRec));
+		NumberofMessages = 0;
+		MsgHddrPtr[0]->status = 1;
+
+		return;
+	}
+
+
+	// Get First Record
+		
+	ReadLen = fread(&MsgRec, 1, sizeof (MsgRec), Handle); 
+
+	if (ReadLen == 0)
+	{
+		// Duff file
+
+		memset(&MsgRec, 0, sizeof (MsgRec));
+		MsgRec.status = 1;
+	}
+
+	// Set up control record
+
+	MsgHddrPtr=malloc(4);
+	MsgHddrPtr[0]= malloc(sizeof (MsgRec));
+	memcpy(MsgHddrPtr[0], &MsgRec,  sizeof (MsgRec));
+
+	LatestMsg=MsgHddrPtr[0]->length;
+
+	NumberofMessages = 0;
+
+//	if (MsgRec.status == 0)		// Used as file format version 0 = original, 1 = Extra email from addr.
+//	{
+//		Resize = 41;
+//		MsgHddrPtr[0]->status = 1;
+//		SetFilePointer (Handle, -41, NULL, FILE_CURRENT);
+//		memset(MsgRec.emailfrom, 0, 41);
+//	}
+
+Next: 
+
+	ReadLen = fread(&MsgRec, 1, sizeof (MsgRec), Handle); 
+
+	if (ReadLen > 0)
+	{
+		// Validate Header
+
+		if (MsgRec.type == 0)
+			goto Next;
+
+		MsgBytes = ReadMessageFile(MsgRec.number);
+
+		if (MsgBytes)
+		{
+			MsgRec.length = strlen(MsgBytes);
+			free(MsgBytes);
+		}
+		else
+			goto Next;
+
+
+		Msg = AllocateMsgRecord();
+		memcpy(Msg, &MsgRec,  sizeof (MsgRec));
+
+		MsgnotoMsg[Msg->number] = Msg;
+
+		// Look for corrupt FROM address (ending in @)
+
+		strlop(Msg->from, '@');
+
+		BuildNNTPList(Msg);				// Build NNTP Groups list
+
+		// If any forward bits are set, increment count on corresponding BBS record.
+
+		if (memcmp(MsgRec.fbbs, zeros, NBMASK) != 0)
+		{
+			if (FirstMessageIndextoForward == 0)
+				FirstMessageIndextoForward = NumberofMessages;			// limit search
+		}
+
+		goto Next;
+	}
+
+	if (FirstMessageIndextoForward == 0)
+		FirstMessageIndextoForward = NumberofMessages;			// limit search
+
+
+	fclose(Handle);
+
 }
+
+VOID CopyMessageDatabase()
+{
+	char Backup1[MAX_PATH];
+	char Backup2[MAX_PATH];
+
+	// Keep 4 Generations
+
+	strcpy(Backup2, MsgDatabasePath);
+	strcat(Backup2, ".bak.3");
+
+	strcpy(Backup1, MsgDatabasePath);
+	strcat(Backup1, ".bak.2");
+
+	DeleteFile(Backup2);			// Remove old .bak.3
+	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
+
+	strcpy(Backup2, MsgDatabasePath);
+	strcat(Backup2, ".bak.1");
+
+	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
+
+	strcpy(Backup1, MsgDatabasePath);
+	strcat(Backup1, ".bak");
+
+	MoveFile(Backup1, Backup2);		//Move .bak to .bak.1
+
+	strcpy(Backup2, MsgDatabasePath);
+	strcat(Backup2, ".bak");
+
+	CopyFile(MsgDatabasePath, Backup2, FALSE);	// Copy to .bak
+
+}
+
+VOID SaveMessageDatabase()
+{
+	FILE * Handle;
+	int WriteLen;
+	int i;
+
+	Handle = fopen(MsgDatabasePath, "wb");
+
+	MsgHddrPtr[0]->number = NumberofMessages;
+	MsgHddrPtr[0]->length = LatestMsg;
+
+	for (i=0; i <= NumberofMessages; i++)
+	{
+		WriteLen = fwrite(MsgHddrPtr[i], 1, sizeof (struct MsgInfo), Handle);
+	}
+
+	fclose(Handle);
+	return;
+}
+
+VOID GetBIDDatabase()
+{
+	BIDRec BIDRec;
+	FILE * Handle;
+	int ReadLen;
+	BIDRecP BID;
+
+	Handle = fopen(BIDDatabasePath, "rb");
+
+	if (Handle == NULL)
+	{
+		// Initialise a new File
+
+		BIDRecPtr=malloc(4);
+		BIDRecPtr[0]= malloc(sizeof (BIDRec));
+		memset(BIDRecPtr[0], 0, sizeof (BIDRec));
+		NumberofBIDs = 0;
+
+		return;
+	}
+
+
+	// Get First Record
+		
+	ReadLen = fread(&BIDRec, 1, sizeof (BIDRec), Handle); 
+
+	if (ReadLen == 0)
+	{
+		// Duff file
+
+		memset(&BIDRec, 0, sizeof (BIDRec));
+	}
+
+	// Set up control record
+
+	BIDRecPtr=malloc(4);
+	BIDRecPtr[0]= malloc(sizeof (BIDRec));
+	memcpy(BIDRecPtr[0], &BIDRec,  sizeof (BIDRec));
+
+	NumberofBIDs = 0;
+
+Next:
+
+	ReadLen = fread(&BIDRec, 1, sizeof (BIDRec), Handle); 
+
+	if (ReadLen > 0)
+	{
+		BID = AllocateBIDRecord();
+		memcpy(BID, &BIDRec,  sizeof (BIDRec));
+
+		if (BID->u.timestamp == 0) 	
+			BID->u.timestamp = LOWORD(time(NULL)/86400);
+
+		goto Next;
+	}
+
+	fclose(Handle);
+}
+
+VOID CopyBIDDatabase()
+{
+	char Backup[MAX_PATH];
+
+	strcpy(Backup, BIDDatabasePath);
+	strcat(Backup, ".bak");
+
+	CopyFile(BIDDatabasePath, Backup, FALSE);
+}
+
+VOID SaveBIDDatabase()
+{
+	FILE * Handle;
+	int WriteLen;
+	int i;
+
+	Handle = fopen(BIDDatabasePath, "wb");
+
+	BIDRecPtr[0]->u.msgno = NumberofBIDs;			// First Record has file size
+
+	for (i=0; i <= NumberofBIDs; i++)
+	{
+		WriteLen = fwrite(BIDRecPtr[i], 1, sizeof (BIDRec), Handle);
+	}
+
+	fclose(Handle);
+
+	return;
+}
+
+BIDRec * LookupBID(char * BID)
+{
+	BIDRec * ptr = NULL;
+	int i;
+
+	for (i=1; i <= NumberofBIDs; i++)
+	{
+		ptr = BIDRecPtr[i];
+
+		if (_stricmp(ptr->BID, BID) == 0)
+			return ptr;
+	}
+
+	return NULL;
+}
+
+BIDRec * LookupTempBID(char * BID)
+{
+	BIDRec * ptr = NULL;
+	int i;
+
+	for (i=1; i <= NumberofTempBIDs; i++)
+	{
+		ptr = TempBIDRecPtr[i];
+
+		if (_stricmp(ptr->BID, BID) == 0) return ptr;
+	}
+
+	return NULL;
+}
+
+VOID RemoveTempBIDS(CIRCUIT * conn)
+{
+	// Remove any Temp BID records for conn. Called when connection closes - Msgs will be complete or failed
+	
+	if (NumberofTempBIDs == 0)
+		return;
+	else
+	{
+		BIDRec * ptr = NULL;
+		BIDRec ** NewTempBIDRecPtr = zalloc((NumberofTempBIDs+1) * 4);
+		int i = 0, n;
+
+		GetSemaphore(&AllocSemaphore);
+
+		for (n = 1; n <= NumberofTempBIDs; n++)
+		{
+			ptr = TempBIDRecPtr[n];
+
+			if (ptr)
+			{
+				if (ptr->u.conn == conn)
+					// Remove this entry 
+					free(ptr);
+				else
+					NewTempBIDRecPtr[++i] = ptr;
+			}
+		}
+
+		NumberofTempBIDs = i;
+
+		free(TempBIDRecPtr);
+
+		TempBIDRecPtr = NewTempBIDRecPtr;
+		FreeSemaphore(&AllocSemaphore);
+	}
+
+}
+
+VOID GetBadWordFile()
+{
+	FILE * Handle;
+	DWORD FileSize;
+	char * ptr1, * ptr2;
+	struct stat STAT;
+
+	if (stat(BadWordsPath, &STAT) == -1)
+		return;
+
+	FileSize = STAT.st_size;
+
+	Handle = fopen(BadWordsPath, "rb");
+
+	if (Handle == NULL)
+		return;
+
+	BadFile = malloc(FileSize+1);
+
+	fread(BadFile, 1, FileSize, Handle); 
+
+	fclose(Handle);
+
+	BadFile[FileSize]=0;
+
+	_strlwr(BadFile);								// Compares are case-insensitive
+
+	ptr1 = BadFile;
+
+	while (ptr1)
+	{
+		if (*ptr1 == '\n') ptr1++;
+
+		ptr2 = strtok_s(NULL, "\r\n", &ptr1);
+		if (ptr2)
+		{
+			if (*ptr2 != '#')
+			{
+				BadWords = realloc(BadWords,(++NumberofBadWords+1)*4);
+				BadWords[NumberofBadWords] = ptr2;
+			}
+		}
+		else
+			break;
+	}
+}
+
+BOOL CheckBadWord(char * Word, char * Msg)
+{
+	char * ptr1 = Msg, * ptr2;
+	int len = strlen(Word);
+
+	while (*ptr1)					// Stop at end
+	{
+		ptr2 = strstr(ptr1, Word);
+
+		if (ptr2 == NULL)
+			return FALSE;				// OK
+
+		// Only bad if it ia not part of a longer word
+
+		if ((ptr2 == Msg) || !(isalpha(*(ptr2 - 1))))	// No alpha before
+			if (!(isalpha(*(ptr2 + len))))			// No alpha after
+				return TRUE;					// Bad word
+	
+		// Keep searching
+
+		ptr1 = ptr2 + len;
+	}
+
+	return FALSE;					// OK
+}
+
+BOOL CheckBadWords(char * Msg)
+{
+	char * dupMsg = _strlwr(_strdup(Msg));
+	int i;
+
+	for (i = 1; i <= NumberofBadWords; i++)
+	{
+		if (CheckBadWord(BadWords[i], dupMsg))
+		{
+			free(dupMsg);
+			return TRUE;			// Bad
+		}
+	}
+
+	free(dupMsg);
+	return FALSE;					// OK
+
+}
+
+VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
+{
+	if (user->flags & F_Expert)
+		ExpandAndSendMessage(conn, ExpertWelcomeMsg, LOG_BBS);
+	else if (conn->NewUser)
+		ExpandAndSendMessage(conn, NewWelcomeMsg, LOG_BBS);
+	else
+		ExpandAndSendMessage(conn, WelcomeMsg, LOG_BBS);
+
+	if (user->HomeBBS[0] == 0)
+		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");
+
+//	if (user->flags & F_Temp_B2_BBS)
+//		nodeprintf(conn, "%s CMS >\r", BBSName);
+//	else
+		SendPrompt(conn, user);
+}
+
+VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
+{
+	if (user->flags & F_Expert)
+		ExpandAndSendMessage(conn, ExpertPrompt, LOG_BBS);
+	else if (conn->NewUser)
+		ExpandAndSendMessage(conn, NewPrompt, LOG_BBS);
+	else
+		ExpandAndSendMessage(conn, Prompt, LOG_BBS);
+
+//	if (user->flags & F_Expert)
+//		nodeprintf(conn, "%s\r", ExpertPrompt);
+//	else if (conn->NewUser)
+//		nodeprintf(conn, "%s\r", NewPrompt);
+//	else
+//		nodeprintf(conn, "%s\r", Prompt);
+}
+
+
+
+VOID * _zalloc(int len)
+{
+	// ?? malloc and clear
+
+	void * ptr;
+
+	ptr=malloc(len);
+	memset(ptr, 0, len);
+
+	return ptr;
+}
+
+
+struct UserInfo * FindRMS()
+{
+	struct UserInfo * bbs;
+	
+	for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+	{		
+		if (strcmp(bbs->Call, "RMS") == 0)
+			return bbs;
+	}
+	
+	return NULL;
+}
+
+int CountConnectionsOnPort(int CheckPort)
+{
+	int n, Count = 0;
+	CIRCUIT * conn;
+	int port, sesstype, paclen, maxframe, l4window;
+	char callsign[11];
+
+	for (n = 0; n < NumberofStreams; n++)
+	{
+		conn = &Connections[n];
+		
+		if (conn->Active)
+		{
+			GetConnectionInfo(conn->BPQStream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+			if (port == CheckPort)
+				Count++;
+		}
+	}
+
+	return Count;
+}
+
+
+BOOL CheckRejFilters(char * From, char * To, char * ATBBS)
+{
+	char ** Calls;
+
+	if (RejFrom && From)
+	{
+		Calls = RejFrom;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], From) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (RejTo && To)
+	{
+		Calls = RejTo;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], To) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (RejAt && ATBBS)
+	{
+		Calls = RejAt;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], ATBBS) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	return FALSE;		// Ok to accept
+}
+
+BOOL CheckHoldFilters(char * From, char * To, char * ATBBS)
+{
+	char ** Calls;
+
+	if (HoldFrom && From)
+	{
+		Calls = HoldFrom;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], From) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (HoldTo && To)
+	{
+		Calls = HoldTo;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], To) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	if (HoldAt && ATBBS)
+	{
+		Calls = HoldAt;
+
+		while(Calls[0])
+		{
+			if (_stricmp(Calls[0], ATBBS) == 0)	
+				return TRUE;
+
+			Calls++;
+		}
+	}
+
+	return FALSE;		// Ok to accept
+}
+
+BOOL CheckifLocalRMSUser(char * FullTo)
+{
+	struct UserInfo * user = LookupCall(FullTo);
+
+	if (user)
+		if (user->flags & F_POLLRMS)
+			return TRUE;
+
+	return FALSE;
+		
+}
+
+
+
+int check_fwd_bit(char *mask, int bbsnumber)
+{
+	if (bbsnumber)
+		return (mask[(bbsnumber - 1) / 8] & (1 << ((bbsnumber - 1) % 8)));
+	else
+		return 0;
+}
+
+
+void set_fwd_bit(char *mask, int bbsnumber)
+{
+	if (bbsnumber)
+		mask[(bbsnumber - 1) / 8] |= (1 << ((bbsnumber - 1) % 8));
+}
+
+
+void clear_fwd_bit (char *mask, int bbsnumber)
+{
+	if (bbsnumber)
+		mask[(bbsnumber - 1) / 8] &= (~(1 << ((bbsnumber - 1) % 8)));
+}
+
 VOID BBSputs(CIRCUIT * conn, char * buf)
 {
 	// Sends to user and logs
@@ -94,7 +1148,7 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 
 	
 	va_start(arglist, format);
-	len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
+	len = vsprintf(Mess, format, arglist);
 
 	QueueMsg(conn, Mess, len);
 
@@ -134,7 +1188,7 @@ VOID SortBBSChain()
 
 int compare(const void *arg1, const void *arg2)
 {
-   // Compare Calls. Fortunately at start of stuct
+   // Compare Calls. Fortunately call is at start of stuct
 
    return _stricmp(*(char**)arg1 , *(char**)arg2);
 }
@@ -210,13 +1264,13 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 
 		case 'L': // Number of the latest message.
 
-			wsprintf(num, "%d", LatestMsg);
+			sprintf(num, "%d", LatestMsg);
 			pptr = num;
 			break;
 
 		case 'N': // Number of active messages.
 
-			wsprintf(num, "%d", NumberofMessages);
+			sprintf(num, "%d", NumberofMessages);
 			pptr = num;
 			break;
 
@@ -233,21 +1287,21 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 
 		case 'Z': // Last message read by the user (L command).
 
-			wsprintf(num, "%d", conn->UserPointer->lastmsg);
+			sprintf(num, "%d", conn->UserPointer->lastmsg);
 			pptr = num;
 			break;
 
 		case 'X': // Number of messages for the user.
 
 			Msgs = CountMessagesTo(conn->UserPointer, &Unread);
-			wsprintf(num, "%d", Msgs);
+			sprintf(num, "%d", Msgs);
 			pptr = num;
 			break;
 
 		case 'x': // Number of new messages for the user.
 
 			Msgs = CountMessagesTo(conn->UserPointer, &Unread);
-			wsprintf(num, "%d", Unread);
+			sprintf(num, "%d", Unread);
 			pptr = num;
 			break;
 
@@ -332,11 +1386,16 @@ BOOL wildcardcompare(char * Target, char * Match)
 	return (strcmp(Target, Pattern) == 0);
 }
 
+
 VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo)
 {
+#ifdef LINBPQ
+}
+#else
+
 	HKEY hKey=0;
 	int disp;
-	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
+	char Key[100] = "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
 
 	strcat(Key, Call);
 
@@ -353,6 +1412,8 @@ VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo)
 	
 	RegCloseKey(hKey);
 }
+
+
 PrintMessage(HDC hDC, struct MsgInfo * Msg);
 
 PrintMessages(HWND hDlg, int Count, int * Indexes)
@@ -479,6 +1540,7 @@ PrintMessages(HWND hDlg, int Count, int * Indexes)
     if (pdx.hDC != NULL) 
         DeleteDC(pdx.hDC);
 
+	return 0;
 }
 
 PrintMessage(HDC hDC, struct MsgInfo * Msg)
@@ -505,15 +1567,15 @@ PrintMessage(HDC hDC, struct MsgInfo * Msg)
 		RECT Rect;
 
 		if (_stricmp(Msg->to, "RMS") == 0)
-			 wsprintf(FullTo, "RMS:%s", Msg->via);
+			 sprintf(FullTo, "RMS:%s", Msg->via);
 		else
 		if (Msg->to[0] == 0)
-			wsprintf(FullTo, "smtp:%s", Msg->via);
+			sprintf(FullTo, "smtp:%s", Msg->via);
 		else
 			strcpy(FullTo, Msg->to);
 
 
-		wsprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
+		sprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
 			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 
@@ -603,6 +1665,7 @@ PrintMessage(HDC hDC, struct MsgInfo * Msg)
 		return 0;
 }
 
+
 VOID ImportMessages()
 {
 	char FileName[MAX_PATH] = "Messages.in";
@@ -631,7 +1694,7 @@ VOID ImportMessages()
 	if (!GetOpenFileName(&Ofn))
 		return;
 
-	in = fopen(FileName, "r");
+	in = fopen(FileName, "rb");
 
 	if (!(in))
 	{
@@ -768,3 +1831,5982 @@ NextMessage:
 
 	fclose(in);
 }
+#endif
+
+
+
+char * ReadMessageFile(int msgno)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	char * MsgBytes;
+	struct stat STAT;
+ 
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, msgno);
+
+	if (stat(MsgFile, &STAT) == -1)
+		return NULL;
+
+	FileSize = STAT.st_size;
+
+	hFile = fopen(MsgFile, "rb");
+
+	if (hFile == NULL)
+		return NULL;
+
+	MsgBytes=malloc(FileSize+1);
+
+	fread(MsgBytes, 1, FileSize, hFile); 
+
+	fclose(hFile);
+
+	MsgBytes[FileSize]=0;
+
+	return MsgBytes;
+}
+
+
+int QueueMsg(ConnectionInfo * conn, char * msg, int len)
+{
+	// Add Message to queue for this connection
+
+	//	UCHAR * OutputQueue;		// Messages to user
+	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
+	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	// Create or extend buffer
+
+	GetSemaphore(&OutputSEM);
+
+	conn->OutputQueue=realloc(conn->OutputQueue, conn->OutputQueueLength + len);
+
+	if (conn->OutputQueue == NULL)
+	{
+		// relloc failed - should never happen, but clean up
+
+		CriticalErrorHandler("realloc failed to expand output queue");
+		FreeSemaphore(&OutputSEM);
+		return 0;
+	}
+
+	memcpy(&conn->OutputQueue[conn->OutputQueueLength], msg, len);
+	conn->OutputQueueLength += len;
+	FreeSemaphore(&OutputSEM);
+
+	return len;
+}
+
+void TrytoSend()
+{
+	// call Flush on any connected streams with queued data
+
+	ConnectionInfo * conn;
+	struct ConsoleInfo * Cons;
+
+	int n;
+
+	for (n = 0; n < NumberofStreams; n++)
+	{
+		conn = &Connections[n];
+		
+		if (conn->Active == TRUE)
+			Flush(conn);
+	}
+#ifndef LINBPQ
+	for (Cons = ConsHeader[0]; Cons; Cons = Cons->next)
+	{
+		if (Cons->Console)
+			Flush(Cons->Console);
+	}
+#endif
+}
+
+
+void Flush(CIRCUIT * conn)
+{
+	int tosend, len, sent;
+	
+	// Try to send data to user. May be stopped by user paging or node flow control
+
+	//	UCHAR * OutputQueue;		// Messages to user
+	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
+	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	//	BOOL Paging;				// Set if user wants paging
+	//	int LinesSent;				// Count when paging
+	//	int PageLen;				// Lines per page
+
+
+	if (conn->OutputQueue == NULL)
+	{
+		// Nothing to send. If Close after Flush is set, disconnect
+
+		if (conn->CloseAfterFlush)
+		{
+			conn->CloseAfterFlush--;
+			
+			if (conn->CloseAfterFlush)
+				return;
+
+			Disconnect(conn->BPQStream);
+		}
+
+		return;						// Nothing to send
+	}
+	tosend = conn->OutputQueueLength - conn->OutputGetPointer;
+
+	sent=0;
+
+	while (tosend > 0)
+	{
+		if (TXCount(conn->BPQStream) > 4)
+			return;						// Busy
+
+		if (conn->Paging && (conn->LinesSent >= conn->PageLen))
+			return;
+
+		if (tosend <= conn->paclen)
+			len=tosend;
+		else
+			len=conn->paclen;
+
+		GetSemaphore(&OutputSEM);
+
+		if (conn->Paging)
+		{
+			// look for CR chars in message to send. Increment LinesSent, and stop if at limit
+
+			UCHAR * ptr1 = &conn->OutputQueue[conn->OutputGetPointer];
+			UCHAR * ptr2;
+			int lenleft = len;
+
+			ptr2 = memchr(ptr1, 0x0d, len);
+
+			while (ptr2)
+			{
+				conn->LinesSent++;
+				ptr2++;
+				lenleft = len - (ptr2 - ptr1);
+
+				if (conn->LinesSent >= conn->PageLen)
+				{
+					len = ptr2 - &conn->OutputQueue[conn->OutputGetPointer];
+					
+					SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
+					conn->OutputGetPointer+=len;
+					tosend-=len;
+					SendUnbuffered(conn->BPQStream, "<A>bort, <CR> Continue..>", 25);
+					FreeSemaphore(&OutputSEM);
+					return;
+
+				}
+				ptr2 = memchr(ptr2, 0x0d, lenleft);
+			}
+		}
+
+		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
+
+		conn->OutputGetPointer+=len;
+
+		FreeSemaphore(&OutputSEM);
+
+		tosend-=len;	
+		sent++;
+
+		if (sent > 4)
+			return;
+	}
+
+	// All Sent. Free buffers and reset pointers
+
+	conn->LinesSent = 0;
+
+	ClearQueue(conn);
+}
+
+VOID ClearQueue(ConnectionInfo * conn)
+{
+	if (conn->OutputQueue == NULL)
+		return;
+
+	GetSemaphore(&OutputSEM);
+	
+	free(conn->OutputQueue);
+
+	conn->OutputQueue=NULL;
+	conn->OutputGetPointer=0;
+	conn->OutputQueueLength=0;
+
+	FreeSemaphore(&OutputSEM);
+}
+
+
+
+VOID FlagAsKilled(struct MsgInfo * Msg)
+{
+	struct UserInfo * user;
+
+	Msg->status='K';
+	Msg->datechanged=time(NULL);
+
+	// Remove any forwarding references
+
+	if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+	{	
+		for (user = BBSChain; user; user = user->BBSNext)
+		{
+			if (check_fwd_bit(Msg->fbbs, user->BBSNumber))
+			{
+				user->ForwardingInfo->MsgCount--;
+				clear_fwd_bit(Msg->fbbs, user->BBSNumber);
+			}
+		}
+	}
+}
+
+void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	int msgno=-1;
+	struct MsgInfo * Msg;
+	
+	while (Arg1)
+	{
+		msgno = atoi(Arg1);
+				
+		if (msgno > 100000)
+		{
+			BBSputs(conn, "Message Number too high\r");
+			return;
+		}
+
+		Msg = MsgnotoMsg[msgno];
+
+		if (Msg == NULL)
+		{
+			nodeprintf(conn, "Message %d not found\r", msgno);
+			goto Next;
+		}
+
+		if (Msg->type != 'T')
+		{
+			nodeprintf(conn, "Message %d not an NTS Message\r", msgno);
+			goto Next;
+		}
+
+		if (Msg->status == 'N')
+		{
+			nodeprintf(conn, "Message %d has not been read\r", msgno);
+			goto Next;
+		}
+
+		Msg->status = 'D';
+		Msg->datechanged=time(NULL);
+
+		nodeprintf(conn, "Message #%d Flagged as Delivered\r", msgno);
+	Next:
+		Arg1 = strtok_s(NULL, " \r", &Context);
+	}
+
+	return;
+}
+
+void DoUnholdCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	int msgno=-1;
+	int i;
+	struct MsgInfo * Msg;
+	
+	// Param is either ALL or a list of numbers
+
+	if (Arg1 == NULL)
+	{
+		nodeprintf(conn, "No message number\r");
+		return;
+	}
+
+	if (_stricmp(Arg1, "ALL") == 0)
+	{
+		for (i=NumberofMessages; i>0; i--)
+		{
+			Msg = MsgHddrPtr[i];
+
+			if (Msg->status == 'H')
+			{
+				if (Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+					Msg->status = '$';				// Has forwarding
+				else
+					Msg->status = 'N';
+				
+				nodeprintf(conn, "Message #%d Unheld\r", Msg->number);
+			}
+		}
+		return;
+	}
+
+	while (Arg1)
+	{
+		msgno = atoi(Arg1);
+		Msg = MsgnotoMsg[msgno];
+		
+		if (Msg)
+		{
+			if (Msg->status == 'H')
+			{
+				if (Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+					Msg->status = '$';				// Has forwarding
+				else
+					Msg->status = 'N';
+
+				nodeprintf(conn, "Message #%d Unheld\r", msgno);
+			}
+			else
+			{
+				nodeprintf(conn, "Message #%d was not held\r", msgno);
+			}
+		}
+		else
+				nodeprintf(conn, "Message #%d not found\r", msgno);
+		
+		Arg1 = strtok_s(NULL, " \r", &Context);
+	}
+
+	return;
+}
+
+void DoKillCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	int msgno=-1;
+	int i;
+	struct MsgInfo * Msg;
+	
+	switch (toupper(Cmd[1]))
+	{
+
+	case 0:					// Just K
+
+		while (Arg1)
+		{
+			msgno = atoi(Arg1);
+			KillMessage(conn, user, msgno);
+
+			Arg1 = strtok_s(NULL, " \r", &Context);
+		}
+
+		return;
+
+	case 'M':					// Kill Mine
+
+		for (i=NumberofMessages; i>0; i--)
+		{
+			Msg = MsgHddrPtr[i];
+
+			if ((_stricmp(Msg->to, user->Call) == 0) || (conn->sysop && _stricmp(Msg->to, "SYSOP") == 0 && user->flags & F_SYSOP_IN_LM))
+			{
+				if (Msg->type == 'P' && Msg->status == 'Y')
+				{
+					FlagAsKilled(Msg);
+					nodeprintf(conn, "Message #%d Killed\r", Msg->number);
+				}
+			}
+		}
+		return;
+
+	case 'H':					// Kill Held
+
+		if (conn->sysop)
+		{
+			for (i=NumberofMessages; i>0; i--)
+			{
+				Msg = MsgHddrPtr[i];
+
+				if (Msg->status == 'H')
+				{
+					FlagAsKilled(Msg);
+					nodeprintf(conn, "Message #%d Killed\r", Msg->number);
+				}
+			}
+		}
+		return;
+
+	case '>':			// K> - Kill to 
+
+		if (conn->sysop)
+		{
+			if (Arg1)
+				if (KillMessagesTo(conn, user, Arg1) == 0)
+				BBSputs(conn, "No Messages found\r");
+		
+			return;
+		}
+
+	case '<':
+
+		if (conn->sysop)
+		{
+			if (Arg1)
+				if (KillMessagesFrom(conn, user, Arg1) == 0);
+					BBSputs(conn, "No Messages found\r");
+
+					return;
+		}
+	}
+
+	nodeprintf(conn, "*** Error: Invalid Kill option %c\r", Cmd[1]);
+
+	return;
+
+}
+
+int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+{
+	int i, Msgs = 0;
+	struct MsgInfo * Msg;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		Msg = MsgHddrPtr[i];
+		if (Msg->status != 'K' && _stricmp(Msg->to, Call) == 0)
+		{
+			Msgs++;
+			KillMessage(conn, user, MsgHddrPtr[i]->number);
+		}
+	}
+	
+	return(Msgs);
+}
+
+int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
+{
+	int i, Msgs = 0;
+	struct MsgInfo * Msg;
+
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		Msg = MsgHddrPtr[i];
+		if (Msg->status != 'K' && _stricmp(Msg->from, Call) == 0)
+		{
+			Msgs++;
+			KillMessage(conn, user, MsgHddrPtr[i]->number);
+		}
+	}
+	
+	return(Msgs);
+}
+
+
+
+void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
+{
+	struct MsgInfo * Msg;
+
+	Msg = FindMessage(user->Call, msgno, conn->sysop);
+
+	if (Msg == NULL)
+	{
+		nodeprintf(conn, "Message %d not found\r", msgno);
+		return;
+	}
+
+	FlagAsKilled(Msg);
+
+	nodeprintf(conn, "Message #%d Killed\r", msgno);
+
+}
+
+
+VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
+{
+	char FullFrom[80];
+	char FullTo[80];
+
+	strcpy(FullFrom, Msg->from);
+
+	if ((_stricmp(Msg->from, "RMS:") == 0) || (_stricmp(Msg->from, "SMTP:") == 0) || 
+		SendFullFrom || (_stricmp(Msg->emailfrom, "@winlink.org") == 0))
+		strcat(FullFrom, Msg->emailfrom);
+
+	if (_stricmp(Msg->to, "RMS") == 0)
+	{
+		sprintf(FullTo, "RMS:%s", Msg->via);
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
+	}
+	else
+
+	if (Msg->to[0] == 0 && Msg->via[0] != 0)
+	{
+		sprintf(FullTo, "smtp:%s", Msg->via);
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, FullTo, FullFrom, Msg->title);
+	}
+
+	else
+		if (Msg->via[0] != 0)
+		{
+			char Via[80];
+			strcpy(Via, Msg->via);
+			strlop(Via, '.');			// Only show first part of via
+			nodeprintf(conn, "%-6d %s %c%c   %5d %-7s@%-6s %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, Via, FullFrom, Msg->title);
+		}
+		else
+		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
+				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
+}
+
+void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1)
+{
+	BOOL SendFullFrom = Cmd[2];
+	
+	switch (toupper(Cmd[1]))
+	{
+
+	case 0:					// Just L
+	case 'R':				// LR = List Reverse
+
+		if (Arg1)
+		{
+			// Range nnn-nnn or single value
+
+			char * Arg2, * Arg3;
+			char * Context;
+			char seps[] = " -\t\r";
+			UINT From=LatestMsg, To=0;
+			char * Range = strchr(Arg1, '-');
+			
+			Arg2 = strtok_s(Arg1, seps, &Context);
+			Arg3 = strtok_s(NULL, seps, &Context);
+
+			if (Arg2)
+				To = From = atoi(Arg2);
+
+			if (Arg3)
+				From = atoi(Arg3);
+			else
+				if (Range)
+					From = LatestMsg;
+
+			if (From > 100000 || To > 100000)
+			{
+				BBSputs(conn, "Message Number too high\r");
+				return;
+			}
+
+			if (Cmd[1])
+				ListMessagesInRangeForwards(conn, user, user->Call, From, To, SendFullFrom);
+			else
+				ListMessagesInRange(conn, user, user->Call, From, To, SendFullFrom);
+
+		}
+		else
+
+			if (LatestMsg == conn->lastmsg)
+				BBSputs(conn, "No New Messages\r");
+			else if (Cmd[1])
+				ListMessagesInRangeForwards(conn, user, user->Call, LatestMsg, conn->lastmsg + 1, SendFullFrom);
+			else
+				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg + 1, SendFullFrom);
+
+			conn->lastmsg = LatestMsg;
+
+		return;
+
+
+	case 'L':				// List Last
+
+		if (Arg1)
+		{
+			int i = atoi(Arg1);
+			int m = NumberofMessages;
+				
+			for (; i>0 && m != 0; i--)
+			{
+				m = GetUserMsg(m, user->Call, conn->sysop);
+
+				if (m > 0)
+				{
+					ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
+					m--;
+				}
+			}
+		}
+		return;
+
+	case 'M':			// LM - List Mine
+
+		if (ListMessagesTo(conn, user, user->Call, SendFullFrom) == 0)
+			BBSputs(conn, "No Messages found\r");
+		return;
+
+	case '>':			// L> - List to 
+
+		if (Arg1)
+			if (ListMessagesTo(conn, user, Arg1, SendFullFrom) == 0)
+				BBSputs(conn, "No Messages found\r");
+		
+		
+		return;
+
+	case '<':
+
+		if (Arg1)
+			if (ListMessagesFrom(conn, user, Arg1, SendFullFrom) == 0)
+				BBSputs(conn, "No Messages found\r");
+		
+		return;
+
+	case '@':
+
+		if (Arg1)
+			if (ListMessagesAT(conn, user, Arg1, SendFullFrom) == 0)
+				BBSputs(conn, "No Messages found\r");
+		
+		return;
+
+	case 'N':
+	case 'Y':
+	case 'F':
+	case '$':
+	case 'D':			// Delivered NTS Traffic can be listed by anyone
+		{
+			int m = NumberofMessages;
+				
+			while (m > 0)
+			{
+				m = GetUserMsg(m, user->Call, conn->sysop);
+
+				if (m > 0)
+				{
+					if (MsgHddrPtr[m]->status == toupper(Cmd[1]))
+						ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
+					m--;
+				}
+			}
+		}
+		return;
+
+	case 'K':
+	case 'H':				// List Status
+
+		if (conn->sysop)
+		{
+			int i, Msgs = 0;
+
+			for (i=NumberofMessages; i>0; i--)
+			{
+				if (MsgHddrPtr[i]->status == toupper(Cmd[1]))
+				{
+					Msgs++;
+					ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+				}
+			}
+
+			if (Msgs == 0)
+				BBSputs(conn, "No Messages found\r");
+		}
+		else
+				BBSputs(conn, "LH or LK can only be used by SYSOP\r");
+
+
+	case 'P':
+	case 'B':
+	case 'T':			// NTS Traffic can be listed by anyone
+		{
+			int m = NumberofMessages;
+				
+			while (m > 0)
+			{
+				m = GetUserMsg(m, user->Call, conn->sysop);
+
+				if (m > 0)
+				{
+					if (MsgHddrPtr[m]->type == toupper(Cmd[1]))
+						ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
+					m--;
+				}
+			}
+
+			return;
+		}
+
+	case 'C':
+	{
+		struct NNTPRec * ptr = FirstNNTPRec;
+		char Cat[100];
+		char NextCat[100];
+		int Line = 0;
+		int Count;
+
+		while (ptr)
+		{
+			// if the next name is the same, combine  counts
+			
+			strcpy(Cat, ptr->NewsGroup);
+			strlop(Cat, '.');
+			Count = ptr->Count;
+		Catloop:
+			if (ptr->Next)
+			{
+				strcpy(NextCat, ptr->Next->NewsGroup);
+				strlop(NextCat, '.');
+				if (strcmp(Cat, NextCat) == 0)
+				{
+					ptr = ptr->Next;
+					Count += ptr->Count;
+					goto Catloop;
+				}
+			}
+
+			nodeprintf(conn, "%-6s %-3d", Cat, Count);
+			Line += 10;
+			if (Line > 80)
+			{
+				Line = 0;
+				nodeprintf(conn, "\r");
+			}
+			
+			ptr = ptr->Next;
+		}
+
+		if (Line)
+			nodeprintf(conn, "\r\r");
+		else
+			nodeprintf(conn, "\r");
+
+		return;
+	}
+	
+	nodeprintf(conn, "*** Error: Invalid List option %c\r", Cmd[1]);
+
+	}
+}	
+int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
+{
+	int i, Msgs = 0;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
+		if ((_stricmp(MsgHddrPtr[i]->to, Call) == 0) ||
+			((conn->sysop) && _stricmp(Call, SYSOPCall) == 0 &&
+			_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0 && (user->flags & F_SYSOP_IN_LM)))
+		{
+			Msgs++;
+			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+		}
+	}
+	
+	return(Msgs);
+}
+
+int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
+{
+	int i, Msgs = 0;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
+		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
+		{
+			Msgs++;
+			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+		}
+	}
+	
+	return(Msgs);
+}
+
+int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
+{
+	int i, Msgs = 0;
+
+	for (i=NumberofMessages; i>0; i--)
+	{
+		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
+		if (_memicmp(MsgHddrPtr[i]->via, Call, strlen(Call)) == 0)
+		{
+			Msgs++;
+			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+		}
+	}
+	
+	return(Msgs);
+}
+int GetUserMsg(int m, char * Call, BOOL SYSOP)
+{
+	struct MsgInfo * Msg;
+	
+	// Get Next (usually backwards) message which should be shown to this user
+	//	ie Not Deleted, and not Private unless to or from Call
+
+	do
+	{
+		Msg=MsgHddrPtr[m];
+
+		if (Msg->status != 'K')
+		{
+			if (SYSOP) return m;			// Sysop can list or read anything
+	
+			if (Msg->status != 'H')
+			{
+				if (Msg->type == 'B' || Msg->type == 'T') return m;
+
+				if (Msg->type == 'P')
+				{
+					if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+						return m;
+				}
+			}
+		}
+
+		m--;
+
+	} while (m> 0);
+
+	return 0;
+
+}
+
+BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
+{
+	// Return TRUE if user is allowed to read message
+	
+	if (SYSOP) return TRUE;			// Sysop can list or read anything
+
+	if ((Msg->status != 'K') && (Msg->status != 'H'))
+	{
+		if (Msg->type == 'B' || Msg->type == 'T') return TRUE;
+
+		if (Msg->type == 'P')
+		{
+			if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+				return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+int GetUserMsgForwards(int m, char * Call, BOOL SYSOP)
+{
+	struct MsgInfo * Msg;
+	
+	// Get Next (usually backwards) message which should be shown to this user
+	//	ie Not Deleted, and not Private unless to or from Call
+
+	do
+	{
+		Msg=MsgHddrPtr[m];
+		
+		if (Msg->status != 'K')
+		{
+			if (SYSOP) return m;			// Sysop can list or read anything
+
+			if (Msg->status != 'H')
+			{
+				if (Msg->type == 'B' || Msg->type == 'T') return m;
+
+				if (Msg->type == 'P')
+				{
+					if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+						return m;
+				}
+			}
+		}
+
+		m++;
+
+	} while (m <= NumberofMessages);
+
+	return 0;
+
+}
+
+
+void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End, BOOL SendFullFrom)
+{
+	int m;
+	struct MsgInfo * Msg;
+
+	for (m = Start; m >= End; m--)
+	{
+		Msg = MsgnotoMsg[m];
+		
+		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
+			ListMessage(Msg, conn, SendFullFrom);
+	}
+}
+
+
+void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int End, int Start, BOOL SendFullFrom)
+{
+	int m;
+	struct MsgInfo * Msg;
+
+	for (m = Start; m <= End; m++)
+	{
+		Msg = MsgnotoMsg[m];
+		
+		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
+			ListMessage(Msg, conn, SendFullFrom);
+	}
+}
+
+
+void DoReadCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	int msgno=-1;
+	int i;
+	struct MsgInfo * Msg;
+
+	
+	switch (toupper(Cmd[1]))
+	{
+	case 0:					// Just R
+
+		while (Arg1)
+		{
+			msgno = atoi(Arg1);
+			if (msgno > 100000)
+			{
+				BBSputs(conn, "Message Number too high\r");
+				return;
+			}
+
+			ReadMessage(conn, user, msgno);
+			Arg1 = strtok_s(NULL, " \r", &Context);
+		}
+
+		return;
+
+	case 'M':					// Read Mine (Unread Messages)
+
+		for (i=NumberofMessages; i>0; i--)
+		{
+			Msg = MsgHddrPtr[i];
+
+			if ((_stricmp(Msg->to, user->Call) == 0) || (conn->sysop && _stricmp(Msg->to, "SYSOP") == 0 && user->flags & F_SYSOP_IN_LM))
+				if (Msg->status == 'N')
+					ReadMessage(conn, user, Msg->number);
+		}
+
+		return;
+	}
+	
+	nodeprintf(conn, "*** Error: Invalid Read option %c\r", Cmd[1]);
+	
+	return;
+}
+
+int RemoveLF(char * Message, int len)
+{
+	// Remove lf chars
+
+	char * ptr1, * ptr2;
+
+	ptr1 = ptr2 = Message;
+
+	while (len-- > 0)
+	{
+		*ptr2 = *ptr1;
+	
+		if (*ptr1 == '\r')
+			if (*(ptr1+1) == '\n')
+			{
+				ptr1++;
+				len--;
+			}
+		ptr1++;
+		ptr2++;
+	}
+
+	return (ptr2 - Message);
+}
+
+void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
+{
+	struct MsgInfo * Msg;
+	char * MsgBytes, * Save;
+	char FullTo[100];
+
+	Msg = MsgnotoMsg[msgno];
+
+	if (Msg == NULL)
+	{
+		nodeprintf(conn, "Message %d not found\r", msgno);
+		return;
+	}
+
+	if (!CheckUserMsg(Msg, user->Call, conn->sysop))
+	{
+		nodeprintf(conn, "Message %d not for you\r", msgno);
+		return;
+	}
+
+	if (_stricmp(Msg->to, "RMS") == 0)
+		 sprintf(FullTo, "RMS:%s", Msg->via);
+	else
+	if (Msg->to[0] == 0)
+		sprintf(FullTo, "smtp:%s", Msg->via);
+	else
+		strcpy(FullTo, Msg->to);
+
+
+	nodeprintf(conn, "From: %s%s\rTo: %s\rType/Status: %c%c\rDate/Time: %s\rBid: %s\rTitle: %s\r\r",
+		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+
+	MsgBytes = Save = ReadMessageFile(msgno);
+
+	if (MsgBytes)
+	{
+		int Length;
+
+		if (Msg->B2Flags)
+		{
+			// Remove B2 Headers (up to the File: Line)
+			
+			char * ptr;
+			ptr = strstr(MsgBytes, "Body:");
+
+			if (ptr)
+				MsgBytes = ptr;
+		}
+
+		// Remove lf chars
+
+		Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+		user->MsgsSent ++;
+		user->BytesForwardedOut += Length;
+
+		QueueMsg(conn, MsgBytes, Length);
+		free(Save);
+
+		nodeprintf(conn, "\r\r[End of Message #%d from %s]\r", msgno, Msg->from);
+
+		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)) || Msg->type == 'T')
+		{
+			if ((Msg->status != 'K') && (Msg->status != 'H'))
+			{
+				Msg->status = 'Y';
+				Msg->datechanged=time(NULL);
+			}
+		}
+	}
+	else
+	{
+		nodeprintf(conn, "File for Message %d not found\r", msgno);
+	}
+
+}
+ struct MsgInfo * FindMessage(char * Call, int msgno, BOOL sysop)
+ {
+	int m=NumberofMessages;
+
+	struct MsgInfo * Msg;
+
+	do
+	{
+		m = GetUserMsg(m, Call, sysop);
+
+		if (m == 0)
+			return NULL;
+
+		Msg=MsgHddrPtr[m];
+
+		if (Msg->number == msgno)
+			return Msg;
+
+		m--;
+
+	} while (m> 0);
+
+	return NULL;
+
+}
+
+
+char * ReadInfoFile(char * File)
+{
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	char * MsgBytes;
+	struct stat STAT;
+	char * ptr1 = 0;
+ 
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s", BaseDir, File);
+
+	if (stat(MsgFile, &STAT) == -1)
+		return NULL;
+
+	FileSize = STAT.st_size;
+
+	hFile = fopen(MsgFile, "rb");
+
+	if (hFile == NULL)
+		return NULL;
+
+	MsgBytes=malloc(FileSize+1);
+
+	fread(MsgBytes, 1, FileSize, hFile); 
+
+	fclose(hFile);
+
+	MsgBytes[FileSize]=0;
+
+#ifndef WIN32
+
+	// Replace LF with CR
+
+	// Remove lf chars
+
+	ptr1 = MsgBytes;
+
+	while (*ptr1)
+	{
+		if (*ptr1 == '\n')
+			*(ptr1) = '\r';
+
+		ptr1++;
+	}
+#endif
+
+	return MsgBytes;
+}
+
+char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
+{
+	struct tm *tm;
+	static char Date[]="xx-xxx hh:mmZ";
+
+	tm = gmtime(&Datim);
+	
+	if (tm)
+		sprintf_s(Date, sizeof(Date), "%02d-%3s %02d:%02dZ",
+					tm->tm_mday, month[tm->tm_mon], tm->tm_hour, tm->tm_min);
+
+	if (DateOnly)
+	{
+		Date[6]=0;
+		return Date;
+	}
+	
+	return Date;
+}
+
+BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, char ** ATBBS, char ** BID);
+
+
+BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
+{
+	// SB WANT @ ALLCAN < N6ZFJ $4567_N0ARY
+	
+	char * From = NULL;
+	char * BID = NULL;
+	char * ATBBS = NULL;
+	char seps[] = " \t\r";
+	struct MsgInfo * OldMsg;
+	char OldTitle[62];
+	char NewTitle[62];
+	char SMTPTO[100]= "";
+	int msgno;
+
+	switch (toupper(Cmd[1]))
+	{
+
+	case 0:					// Just S means SP
+		
+		Cmd[1] = 'P';
+
+	case 'B':
+
+		if (RefuseBulls)
+		{
+			nodeprintf(conn, "*** Error: This system doesn't allow sending Bulls\r");
+			return FALSE;
+		}
+
+	case 'P':
+	case 'T':
+				
+		if (Arg1 == NULL)
+		{
+			nodeprintf(conn, "*** Error: The 'TO' callsign is missing\r");
+			return FALSE;
+		}
+
+		if (!DecodeSendParams(conn, Context, &From, &Arg1, &ATBBS, &BID))
+			return FALSE;
+
+		return CreateMessage(conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID, NULL);	
+
+	case 'R':
+				
+		if (Arg1 == NULL)
+		{
+			nodeprintf(conn, "*** Error: Message Number is missing\r");
+			return FALSE;
+		}
+
+		msgno = atoi(Arg1);
+
+		if (msgno > 100000)
+		{
+			BBSputs(conn, "Message Number too high\r");
+			return FALSE;
+		}
+
+		OldMsg = FindMessage(user->Call, msgno, conn->sysop);
+
+		if (OldMsg == NULL)
+		{
+			nodeprintf(conn, "Message %d not found\r", msgno);
+			return FALSE;
+		}
+
+		Arg1=&OldMsg->from[0];
+
+		if (_stricmp(Arg1, "SMTP:") == 0 || _stricmp(Arg1, "RMS:") == 0 || OldMsg->emailfrom)
+		{
+			// SMTP message. Need to get the real sender from the message
+
+			sprintf(SMTPTO, "%s%s", Arg1, OldMsg->emailfrom);
+
+			Arg1 = SMTPTO;
+		}
+
+		if (!DecodeSendParams(conn, "", &From, &Arg1, &ATBBS, &BID))
+			return FALSE;
+
+		strcpy(OldTitle, OldMsg->title);
+
+		if (strlen(OldTitle) > 57) OldTitle[57] = 0;
+
+		strcpy(NewTitle, "Re:");
+		strcat(NewTitle, OldTitle);
+
+		return CreateMessage(conn, From, Arg1, ATBBS, 'P', BID, NewTitle);	
+
+		return TRUE;
+
+	case 'C':
+				
+		if (Arg1 == NULL)
+		{
+			nodeprintf(conn, "*** Error: Message Number is missing\r");
+			return FALSE;
+		}
+
+		msgno = atoi(Arg1);
+
+		if (msgno > 100000)
+		{
+			BBSputs(conn, "Message Number too high\r");
+			return FALSE;
+		}
+
+		Arg1 = strtok_s(NULL, seps, &Context);
+
+		if (Arg1 == NULL)
+		{
+			nodeprintf(conn, "*** Error: The 'TO' callsign is missing\r");
+			return FALSE;
+		}
+
+		if (!DecodeSendParams(conn, Context, &From, &Arg1, &ATBBS, &BID))
+			return FALSE;
+	
+		OldMsg = FindMessage(user->Call, msgno, conn->sysop);
+
+		if (OldMsg == NULL)
+		{
+			nodeprintf(conn, "Message %d not found\r", msgno);
+			return FALSE;
+		}
+
+		strcpy(OldTitle, OldMsg->title);
+
+		if (strlen(OldTitle) > 56) OldTitle[56] = 0;
+
+		strcpy(NewTitle, "Fwd:");
+		strcat(NewTitle, OldTitle);
+
+		conn->CopyBuffer = ReadMessageFile(msgno);
+
+		return CreateMessage(conn, From, Arg1, ATBBS, 'P', BID, NewTitle);	
+	}
+
+
+	nodeprintf(conn, "*** Error: Invalid Send option %c\r", Cmd[1]);
+
+	return FALSE;
+}
+
+char * CheckToAddress(CIRCUIT * conn, char * Addr)
+{
+	// Check one element of Multiple Address
+
+	if (!(conn->BBSFlags & BBS))
+	{
+		// if a normal user, check that TO and/or AT are known and warn if not.
+
+		if (_stricmp(Addr, "SYSOP") == 0)
+		{
+			return _strdup(Addr);
+		}
+
+		if (strchr(Addr, '@') == 0)
+		{
+			// No routing, if not a user and not known to forwarding or WP warn
+
+			struct UserInfo * ToUser = LookupCall(Addr);
+
+			if (ToUser)
+			{
+				// Local User. If Home BBS is specified, use it
+
+				if (ToUser->HomeBBS[0])
+				{
+					char * NewAddr = malloc(250);
+					nodeprintf(conn, "Address %s - @%s added from HomeBBS\r", Addr, ToUser->HomeBBS);
+					sprintf(NewAddr, "%s@%s", Addr, ToUser->HomeBBS);
+					return NewAddr;
+				}
+			}
+			else
+			{
+				WPRecP WP = LookupWP(Addr);
+
+				if (WP)
+				{
+					char * NewAddr = malloc(250);
+
+					nodeprintf(conn, "Address %s - @%s added from WP\r", Addr, WP->first_homebbs);
+					sprintf(NewAddr, "%s@%s", Addr, WP->first_homebbs);
+					return NewAddr;
+				}
+			}
+		}
+	}
+
+	// Check SMTP and RMS Addresses
+
+	if ((_memicmp(Addr, "rms:", 4) == 0) || (_memicmp(Addr, "rms/", 4) == 0))
+	{
+		Addr[3] = ':';			// Replace RMS/ with RMS:
+			
+		if (!FindRMS())
+		{
+			nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+			return FALSE;
+		}
+	}
+	else if ((_memicmp(Addr, "smtp:", 5) == 0) || (_memicmp(Addr, "smtp/", 5) == 0))
+	{
+		Addr[4] = ':';			// Replace smpt/ with smtp:
+
+		if (ISP_Gateway_Enabled)
+		{
+			if ((conn->UserPointer->flags & F_EMAIL) == 0)
+			{
+				nodeprintf(conn, "*** Error - You need to ask the SYSOP to allow you to use Internet Mail\r");
+				return FALSE;
+			}
+		}
+		else
+		{
+			nodeprintf(conn, "*** Error - Sending mail to smtp addresses is disabled\r");
+			return FALSE;
+		}
+	}
+
+	return _strdup(Addr);
+}
+
+
+BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, char ** ATBBS, char ** BID)
+{
+	char * ptr;
+	char seps[] = " \t\r";
+	WPRecP WP;
+	char * Addr = *To;
+	int Len;
+
+	conn->ToCount = 0;
+
+	// SB WANT @ ALLCAN < N6ZFJ $4567_N0ARY
+
+	if (strchr(Context, ';') || strchr(Addr, ';'))
+	{
+		// Multiple Addresses - put address list back together
+
+		Addr[strlen(Addr)] = ' ';
+		Context = Addr;
+
+		while (strchr(Context, ';'))
+		{
+			// Multiple Addressees
+
+			Addr = strtok_s(NULL, ";", &Context);
+			Len = strlen(Addr);
+			conn->To = realloc(conn->To, (conn->ToCount+1)*4);
+			if (conn->To[conn->ToCount] = CheckToAddress(conn, Addr))
+				conn->ToCount++;
+		}
+
+		Addr = strtok_s(NULL, seps, &Context);
+
+		Len = strlen(Addr);
+		conn->To=realloc(conn->To, (conn->ToCount+1)*4);
+		if (conn->To[conn->ToCount] = CheckToAddress(conn, Addr))
+			conn->ToCount++;
+	}
+	else
+	{
+		// Single Call
+
+		// Accept call@call (without spaces) - but check for smtp addresses
+
+		if (_memicmp(*To, "smtp:", 5) != 0 && _memicmp(*To, "rms:", 4) != 0  && _memicmp(*To, "rms/", 4) != 0)
+		{
+			ptr = strchr(*To, '@');
+
+			if (ptr)
+			{
+				*ATBBS = strlop(*To, '@');
+			}
+		}
+	}
+
+	// Look for Optional fields;
+
+	ptr = strtok_s(NULL, seps, &Context);
+
+	while (ptr)
+	{
+		if (strcmp(ptr, "@") == 0)
+		{
+			*ATBBS = _strupr(strtok_s(NULL, seps, &Context));
+		}
+		else if(strcmp(ptr, "<") == 0)
+		{			
+			*From = strtok_s(NULL, seps, &Context);
+		}
+		else if (ptr[0] == '$')
+			*BID = &ptr[1];
+		else
+		{
+			nodeprintf(conn, "*** Error: Invalid Format\r");
+			return FALSE;
+		}
+		ptr = strtok_s(NULL, seps, &Context);
+	}
+
+	// Only allow < from a BBS
+
+	if (*From)
+	{
+		if (!(conn->BBSFlags & BBS))
+		{
+			nodeprintf(conn, "*** < can only be used by a BBS\r");
+			return FALSE;
+		}
+	}
+
+	if (!*From)
+		*From = conn->UserPointer->Call;
+
+	if (!(conn->BBSFlags & BBS))
+	{
+		// if a normal user, check that TO and/or AT are known and warn if not.
+
+		if (_stricmp(*To, "SYSOP") == 0)
+		{
+			conn->LocalMsg = TRUE;
+			return TRUE;
+		}
+
+		if (!*ATBBS && conn->ToCount == 0)
+		{
+			// No routing, if not a user and not known to forwarding or WP warn
+
+			struct UserInfo * ToUser = LookupCall(*To);
+
+			if (ToUser)
+			{
+				// Local User. If Home BBS is specified, use it
+
+				if (ToUser->HomeBBS[0])
+				{
+					*ATBBS = ToUser->HomeBBS;
+					nodeprintf(conn, "Address @%s added from HomeBBS\r", *ATBBS);
+				}
+				else
+				{
+					conn->LocalMsg = TRUE;
+				}
+			}
+			else
+			{
+				conn->LocalMsg = FALSE;
+				WP = LookupWP(*To);
+
+				if (WP)
+				{
+					*ATBBS = WP->first_homebbs;
+					nodeprintf(conn, "Address @%s added from WP\r", *ATBBS);
+				}
+			}
+		}
+	}
+	return TRUE;
+}
+
+BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID, char * Title)
+{
+	struct MsgInfo * Msg;
+	char * via = NULL;
+	char * FromHA;
+
+	// Create a temp msg header entry
+
+	if (conn->ToCount)
+	{
+	}
+	else
+	{
+		if (CheckRejFilters(From, ToCall, ATBBS))
+		{	
+			if ((conn->BBSFlags & BBS))
+			{
+				nodeprintf(conn, "NO - REJECTED\r");
+				nodeprintf(conn, ">\r");
+			}
+			else
+				nodeprintf(conn, "*** Error - Message Filters prevent sending this message\r");
+
+			return FALSE;
+		}
+	}
+
+	Msg = malloc(sizeof (struct MsgInfo));
+
+	if (Msg == 0)
+	{
+		CriticalErrorHandler("malloc failed for new message header");
+		return FALSE;
+	}
+	
+	memset(Msg, 0, sizeof (struct MsgInfo));
+
+	conn->TempMsg = Msg;
+
+	Msg->type = MsgType;
+	
+	if (conn->UserPointer->flags & F_HOLDMAIL)
+		Msg->status = 'H';
+	else
+		Msg->status = 'N';
+	
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	if (BID)
+	{
+		BIDRec * TempBID;
+		
+		if ((Msg->type == 'B') && LookupBID(BID))			// Only reject Bulls on BID 
+		{
+			// Duplicate bid
+	
+			if ((conn->BBSFlags & BBS))
+			{
+				nodeprintf(conn, "NO - BID\r");
+				nodeprintf(conn, ">\r");
+			}
+			else
+				nodeprintf(conn, "*** Error- Duplicate BID\r");
+
+			return FALSE;
+		}
+
+		if (strlen(BID) > 12) BID[12] = 0;
+		strcpy(Msg->bid, BID);
+
+		// Save BID in temp list in case we are offered it again before completion
+			
+		TempBID = AllocateTempBIDRecord();
+		strcpy(TempBID->BID, BID);
+		TempBID->u.conn = conn;
+
+	}
+
+	if (conn->ToCount)
+	{
+	}
+	else
+	{
+		if (_memicmp(ToCall, "rms:", 4) == 0)
+		{
+			if (!FindRMS())
+			{
+				nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+				return FALSE;
+			}
+
+			via=strlop(ToCall, ':');
+			_strupr(ToCall);
+		}
+		else if (_memicmp(ToCall, "rms/", 4) == 0)
+		{
+			if (!FindRMS())
+			{
+				nodeprintf(conn, "*** Error - Forwarding via RMS is not configured on this BBS\r");
+				return FALSE;
+			}
+
+			via=strlop(ToCall, '/');
+			_strupr(ToCall);
+		}
+		else if (_memicmp(ToCall, "smtp:", 5) == 0)
+		{
+			if (ISP_Gateway_Enabled)
+			{
+				if ((conn->UserPointer->flags & F_EMAIL) == 0)
+				{
+					nodeprintf(conn, "*** Error - You need to ask the SYSOP to allow you to use Internet Mail\r");
+					return FALSE;
+				}
+				via=strlop(ToCall, ':');
+				ToCall[0] = 0;
+			}
+			else
+			{
+				nodeprintf(conn, "*** Error - Sending mail to smtp addresses is disabled\r");
+				return FALSE;
+			}
+		}
+		else
+		{
+			_strupr(ToCall);
+			if (ATBBS)
+				via=_strupr(ATBBS);
+		}
+
+		strlop(ToCall, '-');						// Remove any (illegal) ssid
+		if (strlen(ToCall) > 6) ToCall[6] = 0;
+	
+		strcpy(Msg->to, ToCall);
+
+		if (via)
+		{
+			if (strlen(via) > 40) via[40] = 0;
+
+			strcpy(Msg->via, via);
+		}
+
+	}		// End of Multiple Dests
+
+	// Look for HA in From (even if we shouldn't be getting it!)
+
+	FromHA = strlop(From, '@');
+
+
+	strlop(From, '-');						// Remove any (illegal) ssid
+	if (strlen(From) > 6) From[6] = 0;
+	strcpy(Msg->from, From);
+
+	if (FromHA)
+	{
+		if (strlen(FromHA) > 39) FromHA[39] = 0;
+		Msg->emailfrom[0] = '@';
+		strcpy(&Msg->emailfrom[1], _strupr(FromHA));
+	}
+
+	if (Title)					// Only used by SR and SC
+	{
+		strcpy(Msg->title, Title);
+		conn->Flags |= GETTINGMESSAGE;
+
+		// Create initial buffer of 10K. Expand if needed later
+
+		conn->MailBuffer=malloc(10000);
+		conn->MailBufferSize=10000;
+
+		nodeprintf(conn, "Enter Message Text (end with /ex or ctrl/z)\r");
+		return TRUE;
+	}
+
+	if (!(conn->BBSFlags & FBBCompressed))
+		conn->Flags |= GETTINGTITLE;
+
+	if (!(conn->BBSFlags & BBS))
+		nodeprintf(conn, "Enter Title (only):\r");
+	else
+		if (!(conn->BBSFlags & FBBForwarding))
+			nodeprintf(conn, "OK\r");
+
+	return TRUE;
+}
+
+VOID ProcessMsgTitle(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int msglen)
+{
+		
+	conn->Flags &= ~GETTINGTITLE;
+
+	if (msglen == 1)
+	{
+		nodeprintf(conn, "*** Message Cancelled\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (msglen > 60) msglen = 60;
+
+	Buffer[msglen-1] = 0;
+
+	strcpy(conn->TempMsg->title, Buffer);
+
+	// Create initial buffer of 10K. Expand if needed later
+
+	conn->MailBuffer=malloc(10000);
+	conn->MailBufferSize=10000;
+
+	if (conn->MailBuffer == NULL)
+	{
+		nodeprintf(conn, "Failed to create Message Buffer\r");
+		return;
+	}
+
+	conn->Flags |= GETTINGMESSAGE;
+
+	if (!conn->BBSFlags & BBS)
+		nodeprintf(conn, "Enter Message Text (end with /ex or ctrl/z)\r");
+
+}
+
+VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int msglen)
+{
+	char * ptr2 = NULL;
+
+	if (((msglen < 3) && (Buffer[0] == 0x1a)) || ((msglen == 4) && (_memicmp(Buffer, "/ex", 3) == 0)))
+	{
+		conn->Flags &= ~GETTINGMESSAGE;
+
+		user->MsgsReceived++;
+		user->BytesForwardedIn += conn->TempMsg->length;
+
+		if (conn->ToCount)
+		{
+			// Multiple recipients
+
+			struct MsgInfo * Msg = conn->TempMsg;
+			int i;
+			struct MsgInfo * SaveMsg = Msg;
+			char * SaveBody = conn->MailBuffer;
+			int SaveMsgLen = Msg->length; 
+			BOOL SentToRMS = FALSE;
+			int ToLen = 0;
+			char * ToString = zalloc(conn->ToCount * 100);
+
+			// If no BID provided, allocate one
+			
+			if (Msg->bid[0] == 0)
+				sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg + 1, BBSName);
+
+			for (i = 0; i < conn->ToCount; i++)
+			{
+				char * Addr = conn->To[i];
+				char * Via;
+
+				if (_memicmp (Addr, "SMTP:", 5) == 0)
+				{
+					// For Email
+
+					conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+					memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+					conn->MailBuffer = malloc(SaveMsgLen + 10);
+					memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+					Msg->to[0] = 0;
+					strcpy(Msg->via, &Addr[5]);
+
+					CreateMessageFromBuffer(conn);
+					continue;
+				}
+
+				if (_memicmp (Addr, "RMS:", 4) == 0)
+				{
+					// Add to B2 Message for RMS
+
+					Addr+=4;
+					
+					Via = strlop(Addr, '@');
+				
+					if (Via && _stricmp(Via, "winlink.org") == 0)
+					{
+						if (CheckifLocalRMSUser(Addr))
+						{
+							// Local RMS - Leave Here
+	
+							Via = 0;							// Drop Through
+							goto PktMsg;
+						}
+						else
+						{
+							ToLen = sprintf(ToString, "%sTo: %s\r\n", ToString, Addr);
+							continue;
+						}
+					}
+
+					ToLen = sprintf(ToString, "%sTo: %s@%s\r\n", ToString, Addr, Via);
+					continue;
+				}
+
+				_strupr(Addr);
+				
+				Via = strlop(Addr, '@');
+
+				if (Via && _stricmp(Via, "winlink.org") == 0)
+				{
+					if (CheckifLocalRMSUser(Addr))
+					{
+						// Local RMS - Leave Here
+
+						Via = 0;							// Drop Through
+					}
+					else
+					{
+						ToLen = sprintf(ToString, "%sTo: %s\r\n", ToString, Addr);
+
+						// Add to B2 Message for RMS
+
+						continue;
+					}
+				}
+
+			PktMsg:		
+				
+				conn->LocalMsg = FALSE;
+
+				// Normal BBS Message
+
+				if (_stricmp(Addr, "SYSOP") == 0)
+					conn->LocalMsg = TRUE;
+				else
+				{
+					struct UserInfo * ToUser = LookupCall(Addr);
+
+					if (ToUser)
+						conn->LocalMsg = TRUE;
+				}
+
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 10);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+				strcpy(Msg->to, Addr);
+
+				if (Via)
+				{
+					Msg->bid[0] = 0;					// if we are forwarding it, we must change BID to be safe
+					strcpy(Msg->via, Via);
+				}
+
+				CreateMessageFromBuffer(conn);
+			}
+
+			if (ToLen)
+			{
+				char * B2Hddr = zalloc(ToLen + 1000);
+				int B2HddrLen;
+				char DateString[80];
+				struct tm * tm;
+				time_t Date = time(NULL);
+
+				tm = gmtime(&Date);	
+	
+				sprintf(DateString, "%04d/%02d/%02d %02d:%02d",
+					tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 1000 + ToLen);
+
+				Msg->B2Flags = B2Msg;
+
+				B2HddrLen = sprintf(B2Hddr,
+					"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\n%sSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
+					SaveMsg->bid, DateString, "Private",
+					SaveMsg->from, ToString, SaveMsg->title, BBSName, SaveMsgLen);
+
+				memcpy(conn->MailBuffer, B2Hddr, B2HddrLen);
+				memcpy(&conn->MailBuffer[B2HddrLen], SaveBody, SaveMsgLen);
+
+				Msg->length += B2HddrLen;
+
+				strcpy(Msg->to, "RMS");
+
+				CreateMessageFromBuffer(conn);
+
+				free(B2Hddr);
+			}
+
+			free(SaveMsg);
+			free(SaveBody);
+			conn->MailBuffer = NULL;
+			conn->MailBufferSize=0;
+
+			if (!(conn->BBSFlags & BBS))
+				SendPrompt(conn, conn->UserPointer);
+			else
+				if (!(conn->BBSFlags & FBBForwarding))
+						BBSputs(conn, ">\r");
+
+			/*
+			// From a client - Create one copy with all RMS recipients, and another for each packet recipient	
+
+			// Merge all RMS To: lines 
+
+			ToLen = 0;
+			ToString[0] = 0;
+
+			for (i = 0; i < Recipients; i++)
+			{
+				if (LocalMsg[i])
+					continue;						// For a local RMS user
+				
+				if (_stricmp(Via[i], "WINLINK.ORG") == 0 || _memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+					_stricmp(RecpTo[i], "RMS") == 0)
+				{
+					ToLen += strlen(HddrTo[i]);
+					strcat(ToString, HddrTo[i]);
+				}
+			}
+
+			if (ToLen)
+			{
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 1000);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+
+				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+				memcpy(&conn->MailBuffer[B2To], ToString, ToLen); 
+
+				conn->TempMsg->length += ToLen;
+
+				strcpy(Msg->to, "RMS");
+				strcpy(Msg->via, "winlink.org");
+
+				// Must Change the BID
+
+				Msg->bid[0] = 0;
+
+				CreateMessageFromBuffer(conn);
+			}
+
+			}
+
+			free(ToString);
+
+			for (i = 0; i < Recipients; i++)
+			{
+				// Only Process Non - RMS Dests or local RMS Users
+
+				if (LocalMsg[i] == 0)
+					if (_stricmp (Via[i], "WINLINK.ORG") == 0 ||
+						_memicmp (&HddrTo[i][4], "SMTP:", 5) == 0 ||
+						_stricmp(RecpTo[i], "RMS") == 0)		
+					continue;
+
+				conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
+				memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
+	
+				conn->MailBuffer = malloc(SaveMsgLen + 1000);
+				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
+
+				// Add our To: 
+
+				ToLen = strlen(HddrTo[i]);
+
+				if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
+					memcpy(HddrTo[i], "To", 2);
+
+				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+				memcpy(&conn->MailBuffer[B2To], HddrTo[i], ToLen); 
+
+				conn->TempMsg->length += ToLen;
+
+				strcpy(Msg->to, RecpTo[i]);
+				strcpy(Msg->via, Via[i]);
+				
+				Msg->bid[0] = 0;
+
+				CreateMessageFromBuffer(conn);
+			}
+			}	// End not from RMS
+
+			free(SaveMsg);
+			free(SaveBody);
+			conn->MailBuffer = NULL;
+			conn->MailBufferSize=0;
+
+			SetupNextFBBMessage(conn);
+			return;
+	
+			} My__except_Routine("Process Multiple Destinations");
+
+			BBSputs(conn, "*** Program Error Processing Multiple Destinations\r");
+			Flush(conn);
+			conn->CloseAfterFlush = 20;			// 2 Secs
+
+			return;
+*/
+
+			conn->ToCount = 0;
+
+			return;
+		}
+
+
+		CreateMessageFromBuffer(conn);
+		return;
+
+	}
+
+	Buffer[msglen++] = 0x0a;
+
+	if ((conn->TempMsg->length + msglen) > conn->MailBufferSize)
+	{
+		conn->MailBufferSize += 10000;
+		conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+	
+		if (conn->MailBuffer == NULL)
+		{
+			nodeprintf(conn, "Failed to extend Message Buffer\r");
+
+			conn->Flags &= ~GETTINGMESSAGE;
+			return;
+		}
+	}
+
+	memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, msglen);
+
+	conn->TempMsg->length += msglen;
+}
+
+VOID CreateMessageFromBuffer(CIRCUIT * conn)
+{
+	struct MsgInfo * Msg;
+	BIDRec * BIDRec;
+	char * ptr1, * ptr2 = NULL;
+	char * ptr3, * ptr4;
+	int FWDCount;
+	char OldMess[] = "\r\n\r\nOriginal Message:\r\n\r\n";
+	int Age, OurCount;
+	char * HoldReason = "User has Hold Messages flag set";
+
+#ifndef LINBPQ
+	struct _EXCEPTION_POINTERS exinfo;
+#endif
+
+	// If doing SC, Append Old Message
+
+	if (conn->CopyBuffer)
+	{
+		if ((conn->TempMsg->length + (int) strlen(conn->CopyBuffer) + 80 )> conn->MailBufferSize)
+		{
+			conn->MailBufferSize += strlen(conn->CopyBuffer) + 80;
+			conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+	
+			if (conn->MailBuffer == NULL)
+			{
+				nodeprintf(conn, "Failed to extend Message Buffer\r");
+
+				conn->Flags &= ~GETTINGMESSAGE;
+				return;
+			}
+		}
+
+		memcpy(&conn->MailBuffer[conn->TempMsg->length], OldMess, strlen(OldMess));
+
+		conn->TempMsg->length += strlen(OldMess);
+
+		memcpy(&conn->MailBuffer[conn->TempMsg->length], conn->CopyBuffer, strlen(conn->CopyBuffer));
+
+		conn->TempMsg->length += strlen(conn->CopyBuffer);
+
+		free(conn->CopyBuffer);
+		conn->CopyBuffer = NULL;
+	}
+
+		// Allocate a message Record slot
+
+		Msg = AllocateMsgRecord();
+		memcpy(Msg, conn->TempMsg, sizeof(struct MsgInfo));
+
+		free(conn->TempMsg);
+
+		// Set number here so they remain in sequence
+		
+		GetSemaphore(&MsgNoSemaphore);
+		Msg->number = ++LatestMsg;
+		FreeSemaphore(&MsgNoSemaphore);
+		MsgnotoMsg[Msg->number] = Msg;
+
+		// Create BID if non supplied
+
+		if (Msg->bid[0] == 0)
+			sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+
+		// if message body had R: lines, get date created from last (not very accurate, but best we can do)
+
+		// Also check if we have had message before to detect loops
+
+
+		ptr1 = conn->MailBuffer;
+		OurCount = 0;
+
+		// If it is a B2 Message, Must Skip B2 Header
+
+		if (Msg->B2Flags & B2Msg)
+		{
+			ptr1 = strstr(ptr1, "\r\n\r\n");
+			if (ptr1)
+				ptr1 += 4;
+			else
+				ptr1 = conn->MailBuffer;
+		}
+
+nextline:
+
+		if (memcmp(ptr1, "R:", 2) == 0)
+		{
+			// Is if ours?
+
+			// BPQ RLINE Format R:090920/1041Z 6542@N4JOA.#WPBFL.FL.USA.NOAM BPQ1.0.2
+
+			ptr3 = strchr(ptr1, '@');
+			ptr4 = strchr(ptr1, '.');
+
+			if (ptr3 && ptr4 && (ptr4 > ptr3))
+			{
+				if (memcmp(ptr3+1, BBSName, ptr4-ptr3-1) == 0)
+					OurCount++;
+			}
+
+			GetWPBBSInfo(ptr1);		// Create WP /I record from R: Line
+			
+			// see if another
+
+			ptr2 = ptr1;			// save
+			ptr1 = strchr(ptr1, '\r');
+			if (ptr1 == 0)
+			{
+				Debugprintf("Corrupt Message %s from %s - truncated within R: line", Msg->bid, Msg->from);
+				return;
+			}
+			ptr1++;
+			if (*ptr1 == '\n') ptr1++;
+
+			goto nextline;
+		}
+
+		// ptr2 points to last R: line (if any)
+
+		if (ptr2)
+		{
+			struct tm rtime;
+			time_t result;
+
+			memset(&rtime, 0, sizeof(struct tm));
+
+			if (ptr2[10] == '/')
+			{
+				// Dodgy 4 char year
+			
+				sscanf(&ptr2[2], "%04d%02d%02d/%02d%02d",
+					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+				rtime.tm_year -= 1900;
+				rtime.tm_mon--;
+			}
+			else if (ptr2[8] == '/')
+			{
+				sscanf(&ptr2[2], "%02d%02d%02d/%02d%02d",
+					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min);
+
+				if (rtime.tm_year < 90)
+					rtime.tm_year += 100;		// Range 1990-2089
+				rtime.tm_mon--;
+			}
+
+			// Otherwise leave date as zero, which should be rejected
+
+//			result = _mkgmtime(&rtime);
+
+			if ((result = mktime(&rtime)) != (time_t)-1 )
+			{
+				result -= timezone;
+
+				Msg->datecreated =  result;	
+				Age = (time(NULL) - result)/86400;
+
+				if ( Age < -7)
+				{
+					Msg->status = 'H';
+					HoldReason = "Suspect Date Sent";
+				}
+				else if (Age > BidLifetime || Age > 30)
+				{
+					Msg->status = 'H';
+					HoldReason = "Message too old";
+
+				}
+				else
+					GetWPInfoFromRLine(Msg->from, ptr2, result);
+			}
+			else
+			{
+				// Can't decode R: Datestamp
+
+				Msg->status = 'H';
+				HoldReason = "Corrupt R: Line - can't determine age";
+			}
+
+			if (OurCount > 1)
+			{
+				// Message is looping 
+
+				Msg->status = 'H';
+				HoldReason = "Message may be looping";
+
+			}
+
+			if (Msg->status == 'N' && strcmp(Msg->to, "WP") == 0)
+			{
+				ProcessWPMsg(conn->MailBuffer, Msg->length, ptr2);
+	
+				if (Msg->type == 'P')			// Kill any processed private WP messages.
+					Msg->status = 'K';
+
+			}
+		}
+
+		conn->MailBuffer[Msg->length] = 0;
+
+		if (CheckBadWords(Msg->title) || CheckBadWords(conn->MailBuffer))
+		{
+			Msg->status = 'H';
+			HoldReason = "Bad word in title or body";
+		}
+
+		if (CheckHoldFilters(Msg->from, Msg->to, Msg->via))
+		{
+			Msg->status = 'H';
+			HoldReason = "Matched Hold Filters";
+		}
+
+		CreateMessageFile(conn, Msg);
+
+		BIDRec = AllocateBIDRecord();
+
+		strcpy(BIDRec->BID, Msg->bid);
+		BIDRec->mode = Msg->type;
+		BIDRec->u.msgno = LOWORD(Msg->number);
+		BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+		if (Msg->length > MaxTXSize)
+		{
+			Msg->status = 'H';
+			HoldReason = "Message too long";
+
+			if (!(conn->BBSFlags & BBS))
+				nodeprintf(conn, "*** Warning Message length exceeds sysop-defined maximum of %d - Message will be held\r", MaxTXSize);
+		}
+
+		if (Msg->to[0])
+			FWDCount = MatchMessagetoBBSList(Msg, conn);
+		else
+		{
+			// If addressed @winlink.org, and to a local user, Keep here.
+			
+			char * Call;
+			char * AT;
+
+			Call = _strupr(_strdup(Msg->via));
+			AT = strlop(Call, '@');
+
+			if (_stricmp(AT, "WINLINK.ORG") == 0)
+			{
+				struct UserInfo * user = LookupCall(Call);
+
+				if (user)
+				{
+					if (user->flags & F_POLLRMS)
+					{
+						Logprintf(LOG_BBS, conn, '?', "SMTP Message @ winlink.org, but local RMS user - leave here");
+						strcpy(Msg->to, Call);
+						strcpy(Msg->via, AT);
+						if (user->flags & F_BBS)	// User is a BBS, so set FWD bit so he can get it
+							set_fwd_bit(Msg->fbbs, user->BBSNumber);
+
+					}
+				}
+			}
+			free(Call);
+		}
+
+		// Warn SYSOP if P or T forwarded in, and has nowhere to go
+
+		if ((conn->BBSFlags & BBS) && Msg->type != 'B' && FWDCount == 0 && WarnNoRoute &&
+			strcmp(Msg->to, "SYSOP") && strcmp(Msg->to, "WP"))
+		{
+			if (Msg->via[0])
+			{	
+				if (_stricmp(Msg->via, BBSName))		// Not for our BBS and no forwardimg
+					SendWarningToSYSOP(Msg);
+			}
+			else
+			{
+				// No via - is it for a local user?
+				
+				if (LookupCall(Msg->to) == 0)
+					SendWarningToSYSOP(Msg);
+			}
+		}
+
+		if (!(conn->BBSFlags & BBS))
+		{
+			nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
+
+			if (Msg->via[0])
+			{	
+				if (FWDCount ==  0 &&  Msg->to[0] != 0)		// unless smtp msg
+					nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
+			}
+			else
+			{
+				if (FWDCount ==  0 && conn->LocalMsg == 0 && Msg->type != 'B')
+					// Not Local and no forward route
+					nodeprintf(conn, "Message is not for a local user, and no forwarding info is available - msg may not be delivered\r");
+			}
+			if (conn->ToCount == 0)
+				SendPrompt(conn, conn->UserPointer);
+		}
+		else
+			if (!(conn->BBSFlags & FBBForwarding))
+				if (conn->ToCount == 0)
+					BBSputs(conn, ">\r");
+
+		if(Msg->to[0] == 0)
+			SMTPMsgCreated=TRUE;
+
+		if (Msg->status != 'H' && Msg->type == 'B' && memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+			Msg->status = '$';				// Has forwarding
+
+		if (Msg->status == 'H')
+		{
+			int Length=0;
+			char * MailBuffer = malloc(100);
+			char Title[100];
+
+			Length += sprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+			sprintf(Title, "Message %d Held - %s", Msg->number, HoldReason);
+			SendMessageToSYSOP(Title, MailBuffer, Length);
+		}
+
+		BuildNNTPList(Msg);				// Build NNTP Groups list
+
+		SaveMessageDatabase();
+		SaveBIDDatabase();
+
+		if (EnableUI)
+#ifdef LINBPQ
+			SendMsgUI(Msg);	
+#else
+		__try
+		{
+			SendMsgUI(Msg);
+		}
+		My__except_Routine("SendMsgUI");
+#endif
+		return;
+}
+
+VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
+{
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	int WriteLen=0;
+	char Mess[255];
+	int len;
+
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
+	
+	hFile = fopen(MsgFile, "wb");
+
+	if (hFile)
+	{
+		WriteLen = fwrite(conn->MailBuffer, 1, Msg->length, hFile);
+		fclose(hFile);
+	}
+
+	free(conn->MailBuffer);
+	conn->MailBufferSize=0;
+	conn->MailBuffer=0;
+
+	if (WriteLen != Msg->length)
+	{
+		len = sprintf_s(Mess, sizeof(Mess), "Failed to create Message File\r");
+		QueueMsg(conn, Mess, len);
+		Debugprintf(Mess);
+	}
+	return;
+}
+
+
+
+
+VOID SendUnbuffered(int stream, char * msg, int len)
+{
+#ifndef LINBPQ
+	if (stream < 0)
+		WritetoConsoleWindow(stream, msg, len);
+	else
+#endif
+		SendMsg(stream, msg, len);
+}
+
+BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen);
+
+BOOL FindMessagestoForward (CIRCUIT * conn)
+{
+	struct UserInfo * user = conn->UserPointer;
+
+#ifndef LINBPQ
+
+	struct _EXCEPTION_POINTERS exinfo;
+
+	__try {
+#endif
+
+	if ((user->flags & F_Temp_B2_BBS) || conn->RMSExpress)
+	{
+		if (conn->PacLinkCalls == NULL)
+		{
+			// create a list with just the user call
+
+			char * ptr1;
+
+			conn->PacLinkCalls = zalloc(30);
+
+			ptr1 = (char *)conn->PacLinkCalls;
+			ptr1 += 10;
+			strcpy(ptr1, user->Call);
+
+			conn->PacLinkCalls[0] = ptr1;
+		}
+	}
+
+	if (conn->SendT && FindMessagestoForwardLoop(conn, 'T', conn->MaxTLen))
+	{
+		conn->LastForwardType = 'T';
+		return TRUE;
+	}
+
+	if (conn->LastForwardType == 'T')
+		conn->NextMessagetoForward = FirstMessageIndextoForward;
+
+	if (conn->SendP && FindMessagestoForwardLoop(conn, 'P', conn->MaxPLen))
+	{
+		conn->LastForwardType = 'P';
+		return TRUE;
+	}
+
+	if (conn->LastForwardType == 'P')
+		conn->NextMessagetoForward = FirstMessageIndextoForward;
+
+	if (conn->SendB && FindMessagestoForwardLoop(conn, 'B', conn->MaxBLen))
+	{
+		conn->LastForwardType = 'B';
+		return TRUE;
+	}
+
+	conn->LastForwardType = 0;
+	return FALSE;
+#ifndef LINBPQ
+	} My__except_Routine("FindMessagestoForward");
+#endif
+	return FALSE;
+
+}
+
+
+BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
+{
+	// See if any messages are queued for this BBS
+
+	int m;
+	struct MsgInfo * Msg;
+	struct UserInfo * user = conn->UserPointer;
+	struct FBBHeaderLine * FBBHeader;
+	BOOL Found = FALSE;
+	char RLine[100];
+	int TotalSize = 0;
+	time_t NOW = time(NULL);
+
+//	Debugprintf("FMTF entered Call %s Type %c Maxlen %d", conn->Callsign, Type, MaxLen);
+
+	if (conn->PacLinkCalls)			// Looking for all messages, so reset 
+		conn->NextMessagetoForward = 1;
+
+	conn->FBBIndex = 0;
+
+	for (m = conn->NextMessagetoForward; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		// If forwarding to Paclink or RMS Express, look for any message matching the requested call list with statis 'N'
+
+		if (conn->PacLinkCalls)
+		{
+			int index = 1;
+
+			char * Call = conn->PacLinkCalls[0];
+
+			while (Call)
+			{
+				if (Msg->type == Type && Msg->status == 'N')
+				{
+//				Debugprintf("Comparing RMS Call %s %s", Msg->to, Call);
+				if (_stricmp(Msg->to, Call) == 0)
+					if (Msg->status == 'N' && Msg->type == Type && Msg->length <= MaxLen) 
+						goto Forwardit;
+					else
+						Debugprintf("Call Match but Wrong Type/Len %c %d", Msg->type, Msg->length);
+				}
+				Call = conn->PacLinkCalls[index++];
+			}
+//			continue;
+		}
+
+		if (Msg->type == Type && Msg->length <= MaxLen && (Msg->status != 'H')
+			&& (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
+		{
+			// Message to be sent - do a consistancy check (State, etc)
+
+		Forwardit:
+
+//			Debugprintf("Message Found %d", Msg->number);
+
+
+			if ((Msg->from[0] == 0) || (Msg->to[0] == 0))
+			{
+				int Length=0;
+				char * MailBuffer = malloc(100);
+				char Title[100];
+
+				Length += sprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+				sprintf(Title, "Message %d Held - %s", Msg->number, "Missing From: or To: field");
+				SendMessageToSYSOP(Title, MailBuffer, Length);
+			
+				Msg->status = 'H';
+				continue;
+			}
+
+			conn->NextMessagetoForward = m + 1;			// So we don't offer again if defered
+
+			// if FBB forwarding add to list, eise save pointer
+
+			if (conn->BBSFlags & FBBForwarding)
+			{
+				struct tm *tm;
+
+				FBBHeader = &conn->FBBHeaders[conn->FBBIndex++];
+
+				FBBHeader->FwdMsg = Msg;
+				FBBHeader->MsgType = Msg->type;
+				FBBHeader->Size = Msg->length;
+				TotalSize += Msg->length;
+				strcpy(FBBHeader->From, Msg->from);
+				strcpy(FBBHeader->To, Msg->to);
+				strcpy(FBBHeader->ATBBS, Msg->via);
+				strcpy(FBBHeader->BID, Msg->bid);
+
+				// Set up R:Line, so se can add its length to the sise
+
+				tm = gmtime(&NOW);	
+	
+				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+					Msg->number, BBSName, HRoute, RlineVer);
+
+				// If using B2 forwarding we need the message size and Compressed size for FC proposal
+
+				if (conn->BBSFlags & FBBB2Mode)
+				{
+					if (CreateB2Message(conn, FBBHeader, RLine) == FALSE)
+					{
+						char * MailBuffer = malloc(100);
+						char Title[100];
+						int Length;
+						
+						// Corrupt B2 Message
+						
+						Debugprintf("Corrupt B2 Message found - Message %d will be held", Msg->number);
+						Msg->status = 'H';
+						SaveMessageDatabase();
+
+						conn->FBBIndex--;
+						TotalSize -= Msg->length;
+						memset(&conn->FBBHeaders[conn->FBBIndex], 0, sizeof(struct FBBHeaderLine));
+
+						Length = sprintf(MailBuffer, "Message %d Held\r\n", Msg->number);
+						sprintf(Title, "Message %d Held - %s", Msg->number, "Corrupt B2 Message");
+						SendMessageToSYSOP(Title, MailBuffer, Length);
+			
+						continue;
+					}
+				}
+
+				if (conn->FBBIndex == 5  || TotalSize > user->ForwardingInfo->MaxFBBBlockSize)
+					return TRUE;							// Got max number or too big
+
+				Found = TRUE;								// Remember we have some
+			}
+			else
+			{
+				conn->FwdMsg = Msg;
+				return TRUE;
+			}
+		}
+	}
+
+	return Found;
+}
+
+BOOL SeeifMessagestoForward (int BBSNumber, CIRCUIT * conn)
+{
+	// See if any messages are queued for this BBS
+
+	// Conn is not NULL, also check Msg Type
+
+	int m;
+	struct MsgInfo * Msg;
+
+	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		if ((Msg->status != 'H') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+		{
+			if (conn)
+			{
+				char Type = Msg->type;
+
+				if ((conn->SendB && Type == 'B') || (conn->SendP && Type == 'P') || (conn->SendT && Type == 'T'))
+					return TRUE;
+			}
+			else
+				return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+int CountMessagestoForward (int BBSNumber)
+{
+	// See if any messages are queued for this BBS
+
+	int m, n=0;
+	struct MsgInfo * Msg;
+
+	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		if ((Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+			n++;
+	}
+
+	return n;
+}
+VOID SendWarningToSYSOP(struct MsgInfo * Msg)
+{
+	int Length=0;
+	char * MailBuffer = malloc(100);
+	char Title[100];
+
+	Length += sprintf(MailBuffer, "Warning - Message %d has nowhere to go", Msg->number);
+	sprintf(Title, "Warning - Message %d has nowhere to go", Msg->number);
+	SendMessageToSYSOP(Title, MailBuffer, Length);
+}
+
+
+
+VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
+{
+	struct MsgInfo * Msg = AllocateMsgRecord();
+	BIDRec * BIDRec;
+
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	int WriteLen=0;
+
+	Msg->length = Length;
+
+	GetSemaphore(&MsgNoSemaphore);
+	Msg->number = ++LatestMsg;
+	MsgnotoMsg[Msg->number] = Msg;
+
+	FreeSemaphore(&MsgNoSemaphore);
+ 
+	strcpy(Msg->from, "SYSTEM");
+	if (SendSYStoSYSOPCall)
+		strcpy(Msg->to, SYSOPCall);
+	else
+		strcpy(Msg->to, "SYSOP");
+
+	strcpy(Msg->title, Title);
+
+	Msg->type = 'P';
+	Msg->status = 'N';
+	Msg->datereceived = Msg->datechanged = Msg->datecreated = time(NULL);
+
+	sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+
+	BIDRec = AllocateBIDRecord();
+	strcpy(BIDRec->BID, Msg->bid);
+	BIDRec->mode = Msg->type;
+	BIDRec->u.msgno = LOWORD(Msg->number);
+	BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
+	
+	hFile = fopen(MsgFile, "wb");
+
+	if (hFile)
+	{
+		WriteLen = fwrite(MailBuffer, 1, Msg->length, hFile);
+		fclose(hFile);
+	}
+
+	free(MailBuffer);
+}
+
+int FindFreeBBSNumber()
+{
+	// returns the lowest number not used by any bbs or message.
+
+	struct MsgInfo * Msg;
+	struct UserInfo * user;
+	int i, m;
+
+	for (i = 1; i<= NBBBS; i++)
+	{
+		for (user = BBSChain; user; user = user->BBSNext)
+		{
+			if (user->BBSNumber == i)
+				goto nexti;				// In use
+		}
+
+		// Not used by BBS - check messages
+
+		for (m = 1; m <= NumberofMessages; m++)
+		{
+			Msg=MsgHddrPtr[m];
+
+			if (check_fwd_bit(Msg->fbbs, i))
+				goto nexti;				// In use
+
+			if (check_fwd_bit(Msg->forw, i))
+				goto nexti;				// In use
+		}
+
+		// Not in Use
+
+		return i;
+	
+nexti:;
+
+	}
+
+	return 0;		// All used
+}
+
+BOOL SetupNewBBS(struct UserInfo * user)
+{
+	user->BBSNumber = FindFreeBBSNumber();
+
+	if (user->BBSNumber == 0)
+		return FALSE;
+
+	user->BBSNext = BBSChain;
+	BBSChain = user;
+
+	SortBBSChain();
+
+	ReinitializeFWDStruct(user);
+
+	return TRUE;
+}
+
+VOID DeleteBBS(struct UserInfo * user)
+{
+	struct UserInfo * BBSRec, * PrevBBS = NULL;
+
+#ifndef LINBPQ
+	RemoveMenu(hFWDMenu, IDM_FORWARD_ALL + user->BBSNumber, MF_BYCOMMAND); 
+#endif
+	for (BBSRec = BBSChain; BBSRec; PrevBBS = BBSRec, BBSRec = BBSRec->BBSNext)
+	{
+		if (user == BBSRec)
+		{
+			if (PrevBBS == NULL)		// First in chain;
+			{
+				BBSChain = BBSRec->BBSNext;
+				break;
+			}
+			PrevBBS->BBSNext = BBSRec->BBSNext;
+			break;
+		}
+	}
+}
+
+
+VOID SetupFwdTimes(struct BBSForwardingInfo * ForwardingInfo);
+
+VOID SetupForwardingStruct(struct UserInfo * user)
+{
+	struct	BBSForwardingInfo * ForwardingInfo;
+
+#ifdef LINBPQ
+	char Key[100] =  "BBSForwarding.";
+	char Temp[100];
+#else
+	HKEY hKey=0;
+	int retCode,Type,Vallen;
+	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
+#endif
+	int m;
+	struct MsgInfo * Msg;
+
+	ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+
+#ifdef LINBPQ
+
+	if (isdigit(user->Call[0]))
+		strcat(Key, "*");
+
+	strcat(Key, user->Call);
+
+	group = config_lookup (&cfg, Key);
+
+	if (group)
+	{
+		ForwardingInfo->TOCalls = GetMultiStringValue(group,  "TOCalls");
+		ForwardingInfo->ConnectScript = GetMultiStringValue(group,  "ConnectScript");
+		ForwardingInfo->ATCalls = GetMultiStringValue(group,  "ATCalls");
+		ForwardingInfo->Haddresses = GetMultiStringValue(group,  "HRoutes");
+		ForwardingInfo->HaddressesP = GetMultiStringValue(group,  "HRoutesP");
+		ForwardingInfo->FWDTimes = GetMultiStringValue(group,  "FWDTimes");
+
+		ForwardingInfo->Enabled = GetIntValue(group, "Enabled");
+		ForwardingInfo->ReverseFlag = GetIntValue(group, "RequestReverse");
+		ForwardingInfo->AllowCompressed = GetIntValue(group, "AllowCompressed");
+		ForwardingInfo->AllowB1 = GetIntValue(group, "UseB1Protocol");
+		ForwardingInfo->AllowB2 = GetIntValue(group, "UseB2Protocol");
+
+		if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
+			ForwardingInfo->AllowCompressed = TRUE;
+
+		ForwardingInfo->PersonalOnly = GetIntValue(group, "FWDPersonalsOnly");
+		ForwardingInfo->SendNew = GetIntValue(group, "FWDNewImmediately");
+		ForwardingInfo->FwdInterval = GetIntValue(group, "FwdInterval");
+		ForwardingInfo->RevFwdInterval = GetIntValue(group, "RevFWDInterval");
+		ForwardingInfo->MaxFBBBlockSize = GetIntValue(group, "MaxFBBBlock");
+
+		if (ForwardingInfo->MaxFBBBlockSize == 0)
+			ForwardingInfo->MaxFBBBlockSize = 10000;
+
+		if (ForwardingInfo->FwdInterval == 0)
+				ForwardingInfo->FwdInterval = 3600;
+
+		GetStringValue(group, "BBSHA", Temp);
+		
+		if (Temp[0])
+			ForwardingInfo->BBSHA = _strdup(Temp);
+		else
+			ForwardingInfo->BBSHA = _strdup("");
+
+	}
+
+#else
+	
+	strcat(Key, user->Call);
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		ForwardingInfo->ConnectScript = GetMultiStringValue(hKey,  "Connect Script");
+		ForwardingInfo->TOCalls = GetMultiStringValue(hKey,  "TOCalls");
+		ForwardingInfo->ATCalls = GetMultiStringValue(hKey,  "ATCalls");
+		ForwardingInfo->Haddresses = GetMultiStringValue(hKey,  "HRoutes");
+		ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutesP");
+		ForwardingInfo->FWDTimes = GetMultiStringValue(hKey,  "FWD Times");
+
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "Enabled", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->Enabled,(ULONG *)&Vallen);
+				
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "RequestReverse", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "AllowCompressed", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowCompressed,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "Use B1 Protocol", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB1,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
+
+		if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
+			ForwardingInfo->AllowCompressed = TRUE;
+
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "FWD Personals Only", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->PersonalOnly,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "FWD New Immediately", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->SendNew,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"FWDInterval",0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->FwdInterval,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"RevFWDInterval",0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->RevFwdInterval,(ULONG *)&Vallen);
+
+		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->MaxFBBBlockSize,(ULONG *)&Vallen);
+
+		if (ForwardingInfo->MaxFBBBlockSize == 0)
+			ForwardingInfo->MaxFBBBlockSize = 10000;
+
+		if (ForwardingInfo->FwdInterval == 0)
+				ForwardingInfo->FwdInterval = 3600;
+
+		Vallen=0;
+		retCode = RegQueryValueEx(hKey,"BBSHA",0 , (ULONG *)&Type,NULL, (ULONG *)&Vallen);
+
+		if (retCode != 0)
+		{
+			// No Key - Get from WP??
+				
+			WPRec * ptr = LookupWP(user->Call);
+
+			if (ptr)
+			{
+				if (ptr->first_homebbs)
+				{
+					ForwardingInfo->BBSHA = _strdup(ptr->first_homebbs);
+				}
+			}
+		}
+
+		if (Vallen)
+		{
+			ForwardingInfo->BBSHA = malloc(Vallen);
+			RegQueryValueEx(hKey, "BBSHA", 0, (ULONG *)&Type, ForwardingInfo->BBSHA,(ULONG *)&Vallen);
+		}
+
+		RegCloseKey(hKey);
+	}
+
+#endif
+	
+	// Convert FWD Times and H Addresses
+
+	if (ForwardingInfo->FWDTimes)
+			SetupFwdTimes(ForwardingInfo);
+
+	if (ForwardingInfo->Haddresses)
+			SetupHAddreses(ForwardingInfo);
+
+	if (ForwardingInfo->HaddressesP)
+			SetupHAddresesP(ForwardingInfo);
+
+	if (ForwardingInfo->BBSHA)
+	{
+			if (ForwardingInfo->BBSHA[0])
+				SetupHAElements(ForwardingInfo);
+			else
+			{
+				free(ForwardingInfo->BBSHA);
+				ForwardingInfo->BBSHA = NULL;
+			}
+	}
+
+	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
+	{
+		Msg=MsgHddrPtr[m];
+
+		// If any forward bits are set, increment count on  BBS record.
+
+		if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
+		{
+			if (Msg->type && check_fwd_bit(Msg->fbbs, user->BBSNumber))
+			{
+				user->ForwardingInfo->MsgCount++;
+			}
+		}
+	}
+}
+
+#ifdef LINBPQ
+
+VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
+{
+	char * ptr1;
+	char * MultiString = NULL;
+	const char * ptr;
+	int Count = 0;
+	char ** Value;
+	config_setting_t *setting;
+	char * Save;
+
+	Value = zalloc(4);				// always NULL entry on end even if no values
+	Value[0] = NULL;
+
+	setting = config_setting_get_member (group, ValueName);
+	
+	if (setting)
+	{
+		ptr =  config_setting_get_string (setting);
+
+		Save = _strdup(ptr);			// DOnt want to chage config string
+		ptr = Save;
+	
+		while (ptr && strlen(ptr))
+		{
+			ptr1 = strchr(ptr, '|');
+			
+			if (ptr1)
+				*(ptr1++) = 0;
+
+			Value = realloc(Value, (Count+2)*4);
+			Value[Count++] = _strupr(_strdup(ptr));
+			ptr = ptr1;
+		}
+		free(Save);
+	}
+
+	Value[Count] = NULL;
+	return Value;
+}
+
+
+#else
+
+VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
+{
+	int retCode,Type,Vallen;
+	char * MultiString = NULL;
+	int ptr, len;
+	int Count = 0;
+	char ** Value;
+
+	Value = zalloc(4);				// always NULL entry on end even if no values
+
+	Value[0] = NULL;
+
+	Vallen=0;
+
+
+	retCode = RegQueryValueEx(hKey, ValueName, 0, (ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+	if ((retCode != 0)  || (Vallen < 3))		// Two nulls means empty multistring
+	{
+		free(Value);
+		return FALSE;
+	}
+
+	MultiString = malloc(Vallen);
+
+	retCode = RegQueryValueEx(hKey, ValueName, 0,			
+			(ULONG *)&Type,(UCHAR *)MultiString,(ULONG *)&Vallen);
+
+	ptr=0;
+
+	while (MultiString[ptr])
+	{
+		len=strlen(&MultiString[ptr]);
+
+		Value = realloc(Value, (Count+2)*4);
+		Value[Count++] = _strupr(_strdup(&MultiString[ptr]));
+		ptr+= (len + 1);
+	}
+
+	Value[Count] = NULL;
+
+	free(MultiString);
+
+	return Value;
+}
+
+
+#endif
+
+VOID FreeForwardingStruct(struct UserInfo * user)
+{
+	struct	BBSForwardingInfo * ForwardingInfo;
+	int i;
+
+
+	ForwardingInfo = user->ForwardingInfo;
+
+	FreeList(ForwardingInfo->TOCalls);
+	FreeList(ForwardingInfo->ATCalls);
+	FreeList(ForwardingInfo->Haddresses);
+	FreeList(ForwardingInfo->HaddressesP);
+
+	i=0;
+	if(ForwardingInfo->HADDRS)
+	{
+		while(ForwardingInfo->HADDRS[i])
+		{
+			FreeList(ForwardingInfo->HADDRS[i]);
+			i++;
+		}
+		free(ForwardingInfo->HADDRS);
+		free(ForwardingInfo->HADDROffet);
+	}
+
+	i=0;
+	if(ForwardingInfo->HADDRSP)
+	{
+		while(ForwardingInfo->HADDRSP[i])
+		{
+			FreeList(ForwardingInfo->HADDRSP[i]);
+			i++;
+		}
+		free(ForwardingInfo->HADDRSP);
+	}
+
+	FreeList(ForwardingInfo->ConnectScript);
+	FreeList(ForwardingInfo->FWDTimes);
+	if (ForwardingInfo->FWDBands)
+	{
+		i=0;
+		while(ForwardingInfo->FWDBands[i])
+		{
+			free(ForwardingInfo->FWDBands[i]);
+			i++;
+		}
+		free(ForwardingInfo->FWDBands);
+	}
+	if (ForwardingInfo->BBSHAElements)
+	{
+		i=0;
+		while(ForwardingInfo->BBSHAElements[i])
+		{
+			free(ForwardingInfo->BBSHAElements[i]);
+			i++;
+		}
+		free(ForwardingInfo->BBSHAElements);
+	}
+	free(ForwardingInfo->BBSHA);
+
+}
+
+VOID FreeList(char ** Hddr)
+{
+	VOID ** Save;
+	
+	if (Hddr)
+	{
+		Save = (void **)Hddr;
+		while(Hddr[0])
+		{
+			free(Hddr[0]);
+			Hddr++;
+		}	
+		free(Save);
+	}
+}
+
+
+VOID ReinitializeFWDStruct(struct UserInfo * user)
+{
+	if (user->ForwardingInfo)
+	{
+		FreeForwardingStruct(user);
+		free(user->ForwardingInfo); 
+	}
+
+	SetupForwardingStruct(user);
+
+}
+
+VOID SetupFwdTimes(struct BBSForwardingInfo * ForwardingInfo)
+{
+	char ** Times = ForwardingInfo->FWDTimes;
+	int Start, End;
+	int Count = 0;
+
+	ForwardingInfo->FWDBands = zalloc(sizeof(struct FWDBAND));
+
+	if (Times)
+	{
+		while(Times[0])
+		{
+			ForwardingInfo->FWDBands = realloc(ForwardingInfo->FWDBands, (Count+2)* sizeof(struct FWDBAND));
+			ForwardingInfo->FWDBands[Count] = zalloc(sizeof(struct FWDBAND));
+
+			Start = atoi(Times[0]);
+			End = atoi(&Times[0][5]);
+
+			ForwardingInfo->FWDBands[Count]->FWDStartBand =  (time_t)(Start / 100) * 3600 + (Start % 100) * 60; 
+			ForwardingInfo->FWDBands[Count]->FWDEndBand =  (time_t)(End / 100) * 3600 + (End % 100) * 60 + 59; 
+
+			Count++;
+			Times++;
+		}
+		ForwardingInfo->FWDBands[Count] = NULL;
+	}
+}
+void StartForwarding(int BBSNumber)
+{
+	struct UserInfo * user;
+	struct	BBSForwardingInfo * ForwardingInfo ;
+	time_t NOW = time(NULL);
+
+	for (user = BBSChain; user; user = user->BBSNext)
+	{
+		// See if any messages are queued for this BBS
+
+		ForwardingInfo = user->ForwardingInfo;
+
+		if ((BBSNumber == 0) || (user->BBSNumber == BBSNumber))
+			if (ForwardingInfo)
+				if (ForwardingInfo->Enabled || BBSNumber)		// Menu Command overrides enable
+					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
+						if (BBSNumber || SeeifMessagestoForward(user->BBSNumber, NULL) ||
+							(ForwardingInfo->ReverseFlag && ((NOW - ForwardingInfo->LastReverseForward) >= ForwardingInfo->RevFwdInterval))) // Menu Command overrides Reverse
+						{
+							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+							if (ConnecttoBBS(user))
+								ForwardingInfo->Forwarding = TRUE;
+						}
+	}
+
+	return;
+}
+
+BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
+{
+	FILE * Handle = fopen(FN, "ab");
+
+	if (Handle == NULL)
+	{
+		Logprintf(LOG_BBS, conn, '!', "Failed to open Export File %s", FN);
+		return FALSE;
+	}
+
+	conn->SendB = conn->SendP = conn->SendT = TRUE;
+	conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
+
+	while (FindMessagestoForward(conn))
+	{
+		struct MsgInfo * Msg;
+		struct tm * tm;
+		time_t now;
+		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
+		char * MsgPtr;
+		char Line[256];
+		int len;
+		struct UserInfo * user = conn->UserPointer;
+
+
+		Msg = conn->FwdMsg;
+		
+		if (Msg->via[0])
+			len = sprintf(Line, "S%c %s @ %s < %s $%s\r\n", Msg->type, Msg->to,
+						Msg->via, Msg->from, Msg->bid);
+		else
+			len = sprintf(Line, "S%c %s < %s $%s\r\n", Msg->type, Msg->to, Msg->from, Msg->bid);
+	
+		fwrite(Line, 1, len, Handle);
+
+		len = sprintf(Line, "%s\r\n", Msg->title);
+		fwrite(Line, 1, len, Handle);
+		
+		if (MsgBytes == 0)
+		{
+			MsgBytes = _strdup("Message file not found\r\n");
+			conn->FwdMsg->length = strlen(MsgBytes);
+		}
+
+		MsgPtr = MsgBytes;
+
+		// If a B2 Message, remove B2 Header
+
+		if (conn->FwdMsg->B2Flags)
+		{		
+			// Remove all B2 Headers, and all but the first part.
+					
+			MsgPtr = strstr(MsgBytes, "Body:");
+			
+			if (MsgPtr)
+			{
+				conn->FwdMsg->length = atoi(&MsgPtr[5]);
+				MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+				if (MsgPtr)
+					MsgPtr +=4;
+				else
+					MsgPtr = MsgBytes;
+			
+			}
+			else
+				MsgPtr = MsgBytes;
+		}
+
+		now = time(NULL);
+		tm = gmtime(&now);	
+
+		len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+				conn->FwdMsg->number, BBSName, HRoute, RlineVer);
+
+		fwrite(Line, 1, len, Handle);
+
+		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
+			fwrite("\r\n", 1, 2, Handle);
+
+		fwrite(MsgPtr, 1, conn->FwdMsg->length, Handle);
+
+		if (MsgPtr[conn->FwdMsg->length - 2] == '\r')
+			fwrite("/EX\r\n", 1, 5, Handle);
+		else
+			fwrite("\r\n/EX\r\n", 1, 7, Handle);
+
+		free(MsgBytes);
+			
+		user->MsgsSent++;
+		user->BytesForwardedOut += conn->FwdMsg->length;
+			
+		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
+		set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
+
+		//  Only mark as forwarded if sent to all BBSs that should have it
+			
+		if (memcmp(conn->FwdMsg->fbbs, zeros, NBMASK) == 0)
+		{
+			conn->FwdMsg->status = 'F';			// Mark as forwarded
+			conn->FwdMsg->datechanged=time(NULL);
+		}
+
+		conn->UserPointer->ForwardingInfo->MsgCount--;
+
+	}
+
+	fclose(Handle);
+
+	return TRUE;
+
+}
+
+BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
+{
+	struct tm * tm;
+	time_t now;
+	char * MsgBytes = ReadMessageFile(Msg->number);
+	char * MsgPtr;
+	char Line[256];
+	int len;
+	int MsgLen = Msg->length;
+
+	if (Msg->via[0])
+		len = sprintf(Line, "S%c %s @ %s < %s $%s\r\n", Msg->type, Msg->to,
+			Msg->via, Msg->from, Msg->bid);
+	else
+		len = sprintf(Line, "S%c %s < %s $%s\r\n", Msg->type, Msg->to, Msg->from, Msg->bid);
+	
+	fwrite(Line, 1, len, Handle);
+
+	len = sprintf(Line, "%s\r\n", Msg->title);
+	fwrite(Line, 1, len, Handle);
+		
+	if (MsgBytes == 0)
+	{
+		MsgBytes = _strdup("Message file not found\r\n");
+		MsgLen = strlen(MsgBytes);
+		}
+
+	MsgPtr = MsgBytes;
+
+	// If a B2 Message, remove B2 Header
+
+	if (Msg->B2Flags)
+	{		
+		// Remove all B2 Headers, and all but the first part.
+					
+		MsgPtr = strstr(MsgBytes, "Body:");
+			
+		if (MsgPtr)
+		{
+			MsgLen = atoi(&MsgPtr[5]);
+			
+			MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+			if (MsgPtr)
+				MsgPtr +=4;
+			else
+				MsgPtr = MsgBytes;
+			
+		}
+		else
+			MsgPtr = MsgBytes;
+	}
+
+	now = time(NULL);
+	tm = gmtime(&now);	
+
+	len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+			Msg->number, BBSName, HRoute, RlineVer);
+
+	fwrite(Line, 1, len, Handle);
+
+	if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
+		fwrite("\r\n", 1, 2, Handle);
+
+	fwrite(MsgPtr, 1, Msg->length, Handle);
+
+	if (MsgPtr[MsgLen - 2] == '\r')
+		fwrite("/EX\r\n", 1, 5, Handle);
+	else
+		fwrite("\r\n/EX\r\n", 1, 7, Handle);
+
+	free(MsgBytes);
+		
+	return TRUE;
+
+}
+
+BOOL ConnecttoBBS (struct UserInfo * user)
+{
+	int n, p;
+	CIRCUIT * conn;
+	struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
+
+	if (memcmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
+	{
+		// Forward to File
+
+		CIRCUIT conn;
+
+		memset(&conn, 0, sizeof(conn));
+
+		conn.UserPointer = user;
+
+		ForwardMessagestoFile(&conn, &ForwardingInfo->ConnectScript[0][5]);
+
+		return FALSE;
+	}
+
+	for (n = NumberofStreams-1; n >= 0 ; n--)
+	{
+		conn = &Connections[n];
+		
+		if (conn->Active == FALSE)
+		{
+			p = conn->BPQStream;
+			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
+			conn->BPQStream = p;
+
+			conn->Active = TRUE;
+			strcpy(conn->Callsign, user->Call); 
+			conn->BBSFlags |= RunningConnectScript;
+			conn->UserPointer = user;
+
+			Logprintf(LOG_BBS, conn, '|', "Connecting to BBS %s", user->Call);
+
+			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
+
+			strcpy(conn->Callsign, user->Call);
+
+			//	Connected Event will trigger connect to remote system
+
+			RefreshMainWindow();
+
+			return TRUE;
+		}
+	}
+
+	Logprintf(LOG_BBS, NULL, '|', "No Free Streams for connect to BBS %s", user->Call);
+
+	return FALSE;
+	
+}
+
+struct DelayParam
+{
+	struct UserInfo * User;
+	CIRCUIT * conn;
+	int Delay;
+};
+
+struct DelayParam DParam;		// Not 100% safe, but near enough
+
+VOID ConnectDelayThread(struct DelayParam * DParam)
+{
+	struct UserInfo * User = DParam->User;
+	int Delay = DParam->Delay;
+
+	User->ForwardingInfo->Forwarding = TRUE;		// Minimize window for two connects
+
+	Sleep(Delay);
+
+	User->ForwardingInfo->Forwarding = TRUE;
+	ConnecttoBBS(User);
+	
+	return;
+}
+
+VOID ConnectPauseThread(struct DelayParam * DParam)
+{
+	CIRCUIT * conn = DParam->conn;
+	int Delay = DParam->Delay;
+	char Msg[] = "Pause Ok\r    ";
+
+	Sleep(Delay);
+
+	ProcessBBSConnectScript(conn, Msg, 9);
+	
+	return;
+}
+
+
+/*
+BOOL ProcessBBSConnectScriptInner(CIRCUIT * conn, char * Buffer, int len);
+
+
+BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
+{
+	BOOL Ret;
+	GetSemaphore(&ScriptSEM);
+	Ret = ProcessBBSConnectScriptInner(conn, Buffer, len);
+	FreeSemaphore(&ScriptSEM);
+
+	return Ret;
+}
+*/
+
+BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
+{
+	struct	BBSForwardingInfo * ForwardingInfo = conn->UserPointer->ForwardingInfo;
+	char ** Scripts;
+	char callsign[10];
+	int port, sesstype, paclen, maxframe, l4window;
+	char * ptr, * ptr2;
+	BOOL MoreLines = TRUE;
+
+	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
+
+	Buffer[len]=0;
+	_strupr(Buffer);
+
+	Scripts = ForwardingInfo->ConnectScript;	
+
+	if (ForwardingInfo->ScriptIndex == -1)
+	{
+		// First Entry - if first line is TIMES, check and skip forward if necessary
+	
+		int n = 0;
+		int Start, End;
+		time_t now = time(NULL), StartSecs, EndSecs;
+		char * Line;
+
+		if (Localtime)
+			now -= timezone; 
+
+		now %= 86400;
+		Line = Scripts[n];
+
+		if (memcmp(Line, "TIMES", 5) == 0)
+		{
+		NextBand:
+			Start = atoi(&Line[6]);
+			End = atoi(&Line[11]);
+
+			StartSecs =  (time_t)(Start / 100) * 3600 + (Start % 100) * 60; 
+			EndSecs =  (time_t)(End / 100) * 3600 + (End % 100) * 60 + 59;
+
+			if ((StartSecs <= now) && (EndSecs >= now))
+				goto InBand;	// In band
+
+			// Look for next TIME
+		NextLine:
+			Line = Scripts[++n];
+
+			if (Line == NULL)
+			{
+				// No more lines - Disconnect
+			
+				Disconnect(conn->BPQStream);
+				return FALSE;
+			}
+
+			if (memcmp(Line, "TIMES", 5) != 0)
+				goto NextLine;
+			else
+				goto NextBand;
+InBand:
+			ForwardingInfo->ScriptIndex = n;	
+		}
+
+	}
+	else
+	{
+		// Dont check first time through
+
+		if (strcmp(Buffer, "*** CONNECTED  ") != 0)
+		{
+			if (Scripts[ForwardingInfo->ScriptIndex] == NULL ||
+				memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0	||		// Only Check until script is finished
+				memcmp(Scripts[ForwardingInfo->ScriptIndex], "ELSE", 4) == 0)			// Only Check until script is finished
+			{
+				MoreLines = FALSE;
+			}
+			if (!MoreLines)
+				goto CheckForSID;
+			}
+	}
+
+	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
+		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
+		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - ") ||
+		strstr(Buffer, "UNABLE TO CONNECT") ||  strstr(Buffer, "DISCONNECTED"))
+	{
+		// Connect Failed
+
+		char * Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+		int Delay = 1000;
+	
+		// Look for an alternative connect block (Starting with ELSE)
+
+	ElseLoop:
+
+		if (Cmd == 0 || memcmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
+		{
+			Disconnect(conn->BPQStream);
+			return FALSE;
+		}
+
+		if (memcmp(Cmd, "ELSE", 4) != 0)
+		{
+			Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+			goto ElseLoop;
+		}
+
+		if (memcmp(&Cmd[5], "DELAY", 5) == 0)
+			Delay = atoi(&Cmd[10]) * 1000;
+		else
+			Delay = 1000;
+
+		Disconnect(conn->BPQStream);
+
+		DParam.Delay = Delay;
+		DParam.User = conn->UserPointer;
+
+		_beginthread(ConnectDelayThread, 0, &DParam);
+		
+		return FALSE;
+	}
+
+	// The pointer is only updated when we get the connect, so we can tell when the last line is acked
+	// The first entry is always from Connected event, so don't have to worry about testing entry -1 below
+
+
+	// NETROM to  KA node returns
+
+	//c 1 milsw
+	//WIRAC:N9PMO-2} Connected to MILSW
+	//###CONNECTED TO NODE MILSW(N9ZXS) CHANNEL A
+	//You have reached N9ZXS's KA-Node MILSW
+	//ENTER COMMAND: B,C,J,N, or Help ?
+
+	//C KB9PRF-7
+	//###LINK MADE
+	//###CONNECTED TO NODE KB9PRF-7(KB9PRF-4) CHANNEL A
+
+	// Look for (Space)Connected so we aren't fooled by ###CONNECTED TO NODE, which is not
+	// an indication of a connect.
+
+
+	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") ||
+			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE"))
+	{
+		char * Cmd;
+
+	LoopBack:
+
+		Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+
+		// Only Check until script is finished
+		
+		if (Cmd && (strcmp(Cmd, " ") == 0 || Cmd[0] == ';' || Cmd[0] == '#'))
+			goto LoopBack;			// Blank line 
+
+		if (Cmd && memcmp(Cmd, "TIMES", 5) != 0 && memcmp(Cmd, "ELSE", 4) != 0)			// Only Check until script is finished
+		{
+			if (memcmp(Cmd, "MSGTYPE", 7) == 0)
+			{
+				char * ptr;
+				
+				// Select Types to send. Only send types in param. Only reverse if R in param
+
+				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
+
+				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = FALSE;
+
+				strcpy(conn->MSGTYPES, &Cmd[8]);
+
+				if (strchr(&Cmd[8], 'R')) conn->DoReverse = TRUE;
+
+				ptr = strchr(&Cmd[8], 'B');
+	
+				if (ptr)
+				{
+					conn->SendB = TRUE;
+					conn->MaxBLen = atoi(++ptr);
+					if (conn->MaxBLen == 0) conn->MaxBLen = 99999999;
+				}
+
+				ptr = strchr(&Cmd[8], 'T');
+	
+				if (ptr)
+				{
+					conn->SendT = TRUE;
+					conn->MaxTLen = atoi(++ptr);
+					if (conn->MaxTLen == 0) conn->MaxTLen = 99999999;
+				}
+				ptr = strchr(&Cmd[8], 'P');
+
+				if (ptr)
+				{
+					conn->SendP = TRUE;
+					conn->MaxPLen = atoi(++ptr);
+					if (conn->MaxPLen == 0) conn->MaxPLen = 99999999;
+				}
+
+				// If nothing to do, terminate script
+
+				if (conn->DoReverse || SeeifMessagestoForward(conn->UserPointer->BBSNumber, conn))
+					goto LoopBack;
+
+				Logprintf(LOG_BBS, conn, '?', "Nothing to do - quitting");
+				Disconnect(conn->BPQStream);
+				return FALSE;
+			}
+
+			if (memcmp(Cmd, "INTERLOCK ", 10) == 0)
+			{
+				// Used to limit connects on a port to 1
+
+				int Port;
+				char Option[80];
+
+				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
+
+				sscanf(&Cmd[10], "%d %s", &Port, &Option[0]);
+
+				if (CountConnectionsOnPort(Port))
+				{								
+					Logprintf(LOG_BBS, conn, '?', "Interlocked Port is busy - quitting");
+					Disconnect(conn->BPQStream);
+					return FALSE;
+				}
+
+				goto LoopBack;
+			}
+
+			if (memcmp(Cmd, "RADIO AUTH", 10) == 0)
+			{
+				// Generate a Password to enable RADIO commands on a remote node
+				char AuthCommand[80];
+
+				strcpy(AuthCommand, Cmd);
+
+				CreateOneTimePassword(&AuthCommand[11], &Cmd[11], 0); 
+
+				nodeprintf(conn, "%s\r", AuthCommand);
+				return TRUE;
+			}
+
+			if (memcmp(Cmd, "SKIPPROMPT", 10) == 0)
+			{
+				// Remote Node sends > at end of CTEXT - we need to swallow it
+
+				conn->SkipPrompt = TRUE;
+				return TRUE;
+			}
+
+			if (memcmp(Cmd, "PAUSE", 5) == 0)
+			{
+				// Pause script
+
+				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
+
+				DParam.Delay = atoi(&Cmd[6]) * 1000;
+				DParam.conn = conn;
+
+				_beginthread(ConnectPauseThread, 0, &DParam);
+
+				return TRUE;
+			}
+
+			nodeprintf(conn, "%s\r", Cmd);
+		}
+		return TRUE;
+	}
+
+	ptr = strchr(Buffer, '}');
+
+	if (ptr && MoreLines) // Beware it could be part of ctext
+	{
+		// Could be respsonse to Node Command 
+
+		ptr+=2;
+		
+		ptr2 = strchr(&ptr[0], ' ');
+
+		if (ptr2)
+		{
+			if (memcmp(ptr, Scripts[ForwardingInfo->ScriptIndex], ptr2-ptr) == 0)	// Reply to last sscript command
+			{
+				ForwardingInfo->ScriptIndex++;
+		
+				if (Scripts[ForwardingInfo->ScriptIndex])
+					if (memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) != 0)	
+					nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
+
+				return TRUE;
+			}
+		}
+	}
+
+	// Not Success or Fail. If last line is still outstanding, wait fot Response
+	//		else look for SID or Prompt
+
+	if (MoreLines)
+		return TRUE;
+
+	// No more steps, Look for SID or Prompt
+
+CheckForSID:
+
+	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
+	{
+		// Update PACLEN
+
+		GetConnectionInfo(conn->BPQStream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+
+		if (paclen > 0)
+			conn->paclen = paclen;
+
+		
+		Parse_SID(conn, &Buffer[1], len-4);
+			
+		if (conn->BBSFlags & FBBForwarding)
+		{
+			conn->FBBIndex = 0;		// ready for first block;
+			memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
+			conn->FBBChecksum = 0;
+		}
+
+		return TRUE;
+	}
+
+	if (memcmp(Buffer, "[PAKET ", 7) == 0)
+	{
+		conn->BBSFlags |= BBS;
+		conn->BBSFlags |= MBLFORWARDING;
+	}
+
+
+	if (Buffer[len-2] == '>')
+	{
+		if (conn->SkipPrompt)
+		{
+			conn->SkipPrompt = FALSE;
+			return TRUE;
+		}
+
+		conn->NextMessagetoForward = FirstMessageIndextoForward;
+		conn->UserPointer->ConnectsOut++;
+		conn->BBSFlags &= ~RunningConnectScript;
+		ForwardingInfo->LastReverseForward = time(NULL);
+
+		if (memcmp(Buffer, "[AEA PK", 7) == 0)
+		{
+			// PK232. Don't send a SID, and switch to Text Mode
+
+			conn->BBSFlags |= (BBS | TEXTFORWARDING);
+			conn->Flags |= SENDTITLE;
+
+			// Send Message. There is no mechanism for reverse forwarding
+
+			if (FindMessagestoForward(conn))
+			{
+				struct MsgInfo * Msg;
+				
+				// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
+
+				Msg = conn->FwdMsg;
+		
+				nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+						(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+						Msg->from, Msg->bid);
+			}
+			else
+			{
+					Disconnect(conn->BPQStream);
+					return FALSE;
+			}
+			
+			return TRUE;
+		}
+
+		if (strcmp(conn->Callsign, "RMS") == 0)
+		{
+			// Build a ;FW: line with all calls with PollRMS Set
+
+			int i, s;
+			char FWLine[10000] = ";FW:";
+			struct UserInfo * user;
+			char RMSCall[20];
+			
+			for (i = 0; i <= NumberofUsers; i++)
+			{
+				user = UserRecPtr[i];
+
+				if (user->flags & F_POLLRMS)
+				{
+					if (user->RMSSSIDBits == 0) user->RMSSSIDBits = 1;
+
+					for (s = 0; s < 16; s++)
+					{
+						if (user->RMSSSIDBits & (1 << s))
+						{
+							strcat(FWLine, " ");
+							if (s)
+							{
+								sprintf(RMSCall, "%s-%d", user->Call, s);
+								strcat(FWLine, RMSCall);
+							}
+							else
+								strcat(FWLine, user->Call);
+							
+						}
+					}
+				}
+			}
+			
+			strcat(FWLine, "\r");	
+
+			nodeprintf(conn, FWLine);
+		}
+
+		// Only declare B1 and B2 if other end did, and we are configued for it
+
+		nodeprintf(conn, BBSSID, "BPQ-",
+			Ver[0], Ver[1], Ver[2], Ver[3],
+			(conn->BBSFlags & FBBCompressed) ? "B" : "", 
+			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
+			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
+			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
+
+
+		if (conn->BPQBBS && conn->MSGTYPES[0])
+
+			// Send a ; MSGTYPES to control what he sends us
+
+			nodeprintf(conn, "; MSGTYPES %s\r", conn->MSGTYPES);
+
+		if (conn->BBSFlags & FBBForwarding)
+		{
+			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
+			{
+				if (conn->DoReverse)
+					BBSputs(conn, "FF\r");
+				else
+				{
+					BBSputs(conn, "FQ\r");
+					conn->CloseAfterFlush = 20;			// 2 Secs
+				}
+			}
+
+			return TRUE;
+		}
+
+		return TRUE;
+	}
+
+	return TRUE;
+}
+
+VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
+{
+	// scan backwards for first '-'
+
+	if (strstr(SID, "BPQCHATSERVER"))
+	{
+		Disconnect(conn->BPQStream);
+		return;
+	}
+
+	if (strstr(SID, "RMS Ex"))
+	{
+		conn->RMSExpress = TRUE;
+		conn->Paclink = FALSE;
+	}
+
+	if (strstr(SID, "Paclink"))
+	{
+		conn->RMSExpress = FALSE;
+		conn->Paclink = TRUE;
+	}
+
+
+	// See if BPQ for selective forwarding 
+
+	if (strstr(SID, "BPQ"))
+		conn->BPQBBS = TRUE;
+
+	while (len > 0)
+	{
+		switch (SID[len--])
+		{
+		case '-':
+
+			len=0;
+			break;
+
+		case '$':
+
+			conn->BBSFlags |= BBS | MBLFORWARDING;
+			conn->Paging = FALSE;
+
+			break;
+
+		case 'F':			// FBB Blocked Forwarding
+		
+			if (conn->UserPointer->flags & F_PMS)
+			{
+				// We need to allocate a forwarding structure
+
+					conn->UserPointer->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+					conn->UserPointer->ForwardingInfo->AllowCompressed = TRUE;
+					conn->UserPointer->BBSNumber = 80;
+			}
+
+			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
+			{
+				conn->BBSFlags |= FBBForwarding | BBS;
+				conn->BBSFlags &= ~MBLFORWARDING;
+		
+				conn->Paging = FALSE;
+
+				// Allocate a Header Block
+
+				conn->FBBHeaders = zalloc(5 * sizeof(struct FBBHeaderLine));
+			}
+			break;
+
+		case 'B':
+
+			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
+			{
+				conn->BBSFlags |= FBBCompressed;
+
+//				if (conn->UserPointer->ForwardingInfo->AllowB1) // !!!!! Testing !!!!
+//					conn->BBSFlags |= FBBB1Mode;
+
+				
+				// Look for 1 or 2 or 12 as next 2 chars
+
+				if (SID[len+2] == '1')
+				{
+					if (conn->UserPointer->ForwardingInfo->AllowB1 ||
+						conn->UserPointer->ForwardingInfo->AllowB2)		// B2 implies B1
+						conn->BBSFlags |= FBBB1Mode;
+
+					if (SID[len+3] == '2')
+						if (conn->UserPointer->ForwardingInfo->AllowB2)
+							conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
+
+					break;
+				}
+
+				if (SID[len+2] == '2')
+				{
+					if (conn->UserPointer->ForwardingInfo->AllowB2)
+							conn->BBSFlags |= FBBB1Mode | FBBB2Mode;	// B2 uses B1 mode (crc on front of file)
+	
+					if (conn->UserPointer->ForwardingInfo->AllowB1)
+							conn->BBSFlags |= FBBB1Mode;				// B2 should allow fallback to B1 (but RMS doesnt!)
+
+				}
+				break;
+			}
+
+			break;
+		}
+	}
+	return;
+}
+
+VOID FWDTimerProc()
+{
+	struct UserInfo * user;
+	struct	BBSForwardingInfo * ForwardingInfo ;
+	time_t NOW = time(NULL);
+
+	for (user = BBSChain; user; user = user->BBSNext)
+	{
+		// See if any messages are queued for this BBS
+
+		ForwardingInfo = user->ForwardingInfo;
+		ForwardingInfo->FwdTimer+=10;
+
+		if (ForwardingInfo->FwdTimer >= ForwardingInfo->FwdInterval)
+		{
+			ForwardingInfo->FwdTimer=0;
+
+			if (ForwardingInfo->FWDBands && ForwardingInfo->FWDBands[0])
+			{
+				// Check Timebands
+
+				struct FWDBAND ** Bands = ForwardingInfo->FWDBands;
+				int Count = 0;
+				time_t now = time(NULL);
+						
+				if (Localtime)
+					now -= _timezone; 
+
+				now %= 86400;		// Secs in to day
+
+				while(Bands[Count])
+				{
+					if ((Bands[Count]->FWDStartBand < now) && (Bands[Count]->FWDEndBand >= now))
+						goto FWD;	// In band
+
+				Count++;
+				}
+				continue;				// Out of bands
+			}
+		FWD:	
+
+				if (ForwardingInfo->Enabled)
+					if (ForwardingInfo->ConnectScript  && (ForwardingInfo->Forwarding == 0) && ForwardingInfo->ConnectScript[0])
+						if (SeeifMessagestoForward(user->BBSNumber, NULL) ||
+							(ForwardingInfo->ReverseFlag && ((NOW - ForwardingInfo->LastReverseForward) >= ForwardingInfo->RevFwdInterval))) // Menu Command overrides Reverse
+
+						{
+							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+
+							if (ConnecttoBBS(user))
+								ForwardingInfo->Forwarding = TRUE;					
+						}
+		}
+	}
+}
+
+// R:090209/0128Z 33040@N4JOA.#WPBFL.FL.USA.NOAM [164113] FBB7.01.35 alpha
+
+
+char * DateAndTimeForHLine(time_t Datim)
+{
+	struct tm *newtime;
+    char * Time;
+	static char Date[]="yymmdd/hhmmZ";
+  
+	newtime = gmtime(&Datim);
+	Time = asctime(newtime);
+	Date[0]=Time[22];
+	Date[1]=Time[23];
+	Date[3]=Time[4];
+	Date[4]=Time[5];
+	Date[5]=Time[6];
+	
+	return Date;
+}
+
+
+
+
+VOID * _zalloc_dbg(int len, int type, char * file, int line)
+{
+	// ?? malloc and clear
+
+	void * ptr;
+
+#ifdef WIN32
+	ptr=_malloc_dbg(len, type, file, line);
+#else
+	ptr = malloc(len);
+#endif
+	memset(ptr, 0, len);
+
+	return ptr;
+}
+
+
+struct MsgInfo * FindMessageByNumber(int msgno)
+ {
+	int m=NumberofMessages;
+
+	struct MsgInfo * Msg;
+
+	do
+	{
+		Msg=MsgHddrPtr[m];
+
+		if (Msg->number == msgno)
+			return Msg;
+
+		if (Msg->number < msgno)
+			return NULL;			// Not found
+
+		m--;
+
+	} while (m > 0);
+
+	return NULL;
+}
+
+VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len)
+{
+	char hash[50];
+	char key[100];
+	unsigned int i;
+	char hostname[100]="";
+
+	gethostname(hostname, 100);
+
+	strcpy(key, hostname);
+	strcat(key, ISPPOP3Name);
+
+	md5(key, hash);
+	memcpy(&hash[16], hash, 16);	// in case very long password
+
+	for (i=0; i < len; i++)
+	{
+		Pass[i] =  Encrypt[i] ^ hash[i];
+	}
+
+	return;
+}
+
+int EncryptPass(char * Pass, char * Encrypt)
+{
+	char hash[50];
+	char key[100];
+	unsigned int i;
+	char hostname[100];
+	char extendedpass[100];
+	unsigned int passlen;
+
+	gethostname(hostname, 100);
+
+	strcpy(key, hostname);
+	strcat(key, ISPPOP3Name);
+
+	md5(key, hash);
+	memcpy(&hash[16], hash, 16);	// in case very long password
+
+	// if password is less than 16 chars, extend with zeros
+
+	passlen=strlen(Pass);
+
+	strcpy(extendedpass, Pass);
+
+	if (passlen < 16)
+	{
+		for  (i=passlen+1; i <= 16; i++)
+		{
+			extendedpass[i] = 0;
+		}
+
+		passlen = 16;
+	}
+
+	for (i=0; i < passlen; i++)
+	{
+		Encrypt[i] = extendedpass[i] ^ hash[i];
+	}
+
+	return passlen;
+}
+
+
+
+VOID SaveIntValue(config_setting_t * group, char * name, int value)
+{
+	config_setting_t *setting;
+	
+	setting = config_setting_add(group, name, CONFIG_TYPE_INT);
+	if(setting)
+		config_setting_set_int(setting, value);
+}
+
+VOID SaveStringValue(config_setting_t * group, char * name, char * value)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
+	if (setting)
+		config_setting_set_string(setting, value);
+
+}
+
+VOID SaveOverride(config_setting_t * group, char * name, struct Override ** values)
+{
+	config_setting_t *setting;
+	struct Override ** Calls;
+	char Multi[10000];
+	char * ptr = &Multi[1];
+
+	*ptr = 0;
+
+	if (values)
+	{
+		Calls = values;
+
+		while(Calls[0])
+		{
+			ptr += sprintf(ptr, "%s, %d|", Calls[0]->Call, Calls[0]->Days);
+			Calls++;
+		}
+		*(--ptr) = 0;
+	}
+
+	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
+	if (setting)
+		config_setting_set_string(setting, &Multi[1]);
+
+}
+
+
+VOID SaveMultiStringValue(config_setting_t * group, char * name, char ** values)
+{
+	config_setting_t *setting;
+	char ** Calls;
+	char Multi[10000];
+	char * ptr = &Multi[1];
+
+	*ptr = 0;
+
+	if (values)
+	{
+		Calls = values;
+
+		while(Calls[0])
+		{
+			strcpy(ptr, Calls[0]);
+			ptr += strlen(Calls[0]);
+			*(ptr++) = '|';
+			Calls++;
+		}
+		*(--ptr) = 0;
+	}
+
+	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
+	if (setting)
+		config_setting_set_string(setting, &Multi[1]);
+
+}
+
+
+VOID SaveConfig(char * ConfigName)
+{
+	struct UserInfo * user;
+	struct	BBSForwardingInfo * ForwardingInfo ;
+	config_setting_t *root, *group, *bbs;
+	int i;
+
+	//	Get rid of old config before saving
+	
+	config_init(&cfg);
+
+	root = config_root_setting(&cfg);
+
+	group = config_setting_add(root, "main", CONFIG_TYPE_GROUP);
+
+	SaveIntValue(group, "Streams", MaxStreams);
+	SaveIntValue(group, "BBSApplNum", BBSApplNum);
+	SaveStringValue(group, "BBSName", BBSName);
+	SaveStringValue(group, "SYSOPCall", SYSOPCall);
+	SaveStringValue(group, "H-Route", HRoute);
+	SaveIntValue(group, "EnableUI", EnableUI);
+	SaveIntValue(group, "RefuseBulls", RefuseBulls);
+	SaveIntValue(group, "SendSYStoSYSOPCall", SendSYStoSYSOPCall);
+	SaveIntValue(group, "DontHoldNewUsers", DontHoldNewUsers);
+
+	SaveIntValue(group, "ForwardToMe", ForwardToMe);
+	SaveIntValue(group, "SMTPPort", SMTPInPort);
+	SaveIntValue(group, "POP3Port", POP3InPort);
+	SaveIntValue(group, "NNTPPort", NNTPInPort);
+	SaveIntValue(group, "RemoteEmail", RemoteEmail);
+	SaveIntValue(group, "MailForInterval", MailForInterval);
+	SaveStringValue(group, "MailForText", MailForText);
+
+	EncryptedPassLen = EncryptPass(ISPAccountPass, EncryptedISPAccountPass);
+
+	SaveIntValue(group, "AuthenticateSMTP", SMTPAuthNeeded);
+
+	SaveIntValue(group, "Log_BBS", LogBBS);
+	SaveIntValue(group, "Log_TCP", LogTCP);
+
+	SaveIntValue(group, "SMTPGatewayEnabled", ISP_Gateway_Enabled);
+	SaveIntValue(group, "ISPSMTPPort", ISPSMTPPort);
+	SaveIntValue(group, "ISPPOP3Port", ISPPOP3Port);
+	SaveIntValue(group, "POP3PollingInterval", ISPPOP3Interval);
+
+	SaveStringValue(group, "MyDomain", MyDomain);
+	SaveStringValue(group, "ISPSMTPName", ISPSMTPName);
+	SaveStringValue(group, "ISPPOP3Name", ISPPOP3Name);
+	SaveStringValue(group, "ISPAccountName", ISPAccountName);
+	SaveStringValue(group, "ISPAccountPass", EncryptedISPAccountPass);
+
+	// Save Welcome Messages and prompts
+
+	SaveStringValue(group, "WelcomeMsg", WelcomeMsg);
+	SaveStringValue(group, "NewUserWelcomeMsg", NewWelcomeMsg);
+	SaveStringValue(group, "ExpertWelcomeMsg", ExpertWelcomeMsg);
+	
+	SaveStringValue(group, "Prompt", Prompt);
+	SaveStringValue(group, "NewUserPrompt", NewPrompt);
+	SaveStringValue(group, "ExpertPrompt", ExpertPrompt);
+
+	SaveMultiStringValue(group,  "RejFrom", RejFrom);
+	SaveMultiStringValue(group,  "RejTo", RejTo);
+	SaveMultiStringValue(group,  "RejAt", RejAt);
+
+	SaveMultiStringValue(group,  "HoldFrom", HoldFrom);
+	SaveMultiStringValue(group,  "HoldTo", HoldTo);
+	SaveMultiStringValue(group,  "HoldAt", HoldAt);
+
+	SaveIntValue(group, "SendWP", SendWP);
+
+	SaveStringValue(group, "SendWPTO", SendWPTO);
+	SaveStringValue(group, "SendWPVIA", SendWPVIA);
+	SaveIntValue(group, "SendWPType", SendWPType);
+
+	// Save Forwarding Config
+
+	// Interval and Max Sizes and Aliases are not user specific
+
+	SaveIntValue(group, "MaxTXSize", MaxTXSize);
+	SaveIntValue(group, "MaxRXSize", MaxRXSize);
+	SaveIntValue(group, "ReaddressLocal", ReaddressLocal);
+	SaveIntValue(group, "ReaddressReceived", ReaddressReceived);
+	SaveIntValue(group, "WarnNoRoute", WarnNoRoute);
+	SaveIntValue(group, "Localtime", Localtime);
+	SaveIntValue(group, "WarnNoRoute", WarnNoRoute);
+
+	SaveMultiStringValue(group, "FWDAliases", AliasText);
+
+	bbs = config_setting_add(root, "BBSForwarding", CONFIG_TYPE_GROUP);
+
+	for (user = BBSChain; user; user = user->BBSNext)
+	{
+		// See if any messages are queued for this BBS
+
+		ForwardingInfo = user->ForwardingInfo;
+
+		if (isdigit(user->Call[0]))
+		{
+			char Key[20] = "*";
+			strcat (Key, user->Call); 
+			group = config_setting_add(bbs, Key, CONFIG_TYPE_GROUP);
+		}
+		else
+			group = config_setting_add(bbs, user->Call, CONFIG_TYPE_GROUP);
+
+		SaveMultiStringValue(group, "TOCalls", ForwardingInfo->TOCalls);
+		SaveMultiStringValue(group, "ConnectScript", ForwardingInfo->ConnectScript);
+		SaveMultiStringValue(group, "ATCalls", ForwardingInfo->ATCalls);
+		SaveMultiStringValue(group, "HRoutes", ForwardingInfo->Haddresses);
+		SaveMultiStringValue(group, "HRoutesP", ForwardingInfo->HaddressesP);
+		SaveMultiStringValue(group, "FWDTimes", ForwardingInfo->FWDTimes);
+	
+		SaveIntValue(group, "Enabled", ForwardingInfo->Enabled);
+		SaveIntValue(group, "RequestReverse", ForwardingInfo->ReverseFlag);
+		SaveIntValue(group, "AllowCompressed", ForwardingInfo->AllowCompressed);
+		SaveIntValue(group, "UseB1Protocol", ForwardingInfo->AllowB1);
+		SaveIntValue(group, "UseB2Protocol", ForwardingInfo->AllowB2);
+				
+		SaveIntValue(group, "FWDPersonalsOnly", ForwardingInfo->PersonalOnly);
+		SaveIntValue(group, "FWDNewImmediately", ForwardingInfo->SendNew);
+		SaveIntValue(group, "FwdInterval", ForwardingInfo->FwdInterval);
+		SaveIntValue(group, "RevFWDInterval", ForwardingInfo->RevFwdInterval);
+		SaveIntValue(group, "MaxFBBBlock", ForwardingInfo->MaxFBBBlockSize);
+
+		SaveStringValue(group, "BBSHA", ForwardingInfo->BBSHA);
+	}
+
+
+	// Save Housekeeping config
+
+	group = config_setting_add(root, "Housekeeping", CONFIG_TYPE_GROUP);
+
+	SaveIntValue(group, "LastHouseKeepingTime", LastHouseKeepingTime);
+	SaveIntValue(group, "LastTrafficTime", LastTrafficTime);
+	SaveIntValue(group, "MaxMsgno", MaxMsgno);
+	SaveIntValue(group, "BidLifetime", BidLifetime);
+	SaveIntValue(group, "LogLifetime", LogAge);
+	SaveIntValue(group, "MaintInterval", MaintInterval);
+	SaveIntValue(group, "MaintTime", MaintTime);
+	SaveIntValue(group, "PR", PR);
+	SaveIntValue(group, "PUR", PUR);
+	SaveIntValue(group, "PF", PF);
+	SaveIntValue(group, "PNF", PNF);
+	SaveIntValue(group, "BF", BF);
+	SaveIntValue(group, "BNF", BNF);
+	SaveIntValue(group, "AP", AP);
+	SaveIntValue(group, "AB", AB);
+	SaveIntValue(group, "DeletetoRecycleBin", DeletetoRecycleBin);
+	SaveIntValue(group, "SuppressMaintEmail", SuppressMaintEmail);
+	SaveIntValue(group, "MaintSaveReg", SaveRegDuringMaint);
+	SaveIntValue(group, "OverrideUnsent", OverrideUnsent);
+	SaveIntValue(group, "SendNonDeliveryMsgs", SendNonDeliveryMsgs);
+
+	SaveOverride(group, "LTFROM", LTFROM);
+	SaveOverride(group, "LTTO", LTTO);
+	SaveOverride(group, "LTAT", LTAT);
+
+	// Save UI config
+
+	for (i=1; i<=32; i++)
+	{
+		char Key[100];
+			
+		sprintf(Key, "UIPort%d", i);
+
+		group = config_setting_add(root, Key, CONFIG_TYPE_GROUP);
+
+		if (group)
+		{
+			SaveIntValue(group, "Enabled", UIEnabled[i]);
+			SaveIntValue(group, "SendNull", UINull[i]);
+	
+			if (UIDigi[i])
+				SaveStringValue(group, "Digis", UIDigi[i]);
+		}
+	}
+
+
+	if(! config_write_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "Error while writing file.\n");
+		config_destroy(&cfg);
+		return;
+	}
+	config_destroy(&cfg);
+}
+
+int GetIntValue(config_setting_t * group, char * name)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_get_member (group, name);
+	if (setting)
+		return config_setting_get_int (setting);
+
+	return 0;
+}
+
+BOOL GetStringValue(config_setting_t * group, char * name, char * value)
+{
+	const char * str;
+	config_setting_t *setting;
+
+	setting = config_setting_get_member (group, name);
+	if (setting)
+	{
+		str =  config_setting_get_string (setting);
+		strcpy(value, str);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+#ifdef LINBPQ
+
+BOOL GetConfig(char * ConfigName)
+{
+	int i;
+	char Size[80];
+	config_setting_t *setting;
+	const char * ptr;
+
+	config_init(&cfg);
+
+	/* Read the file. If there is an error, report it and exit. */
+	
+	if(! config_read_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "%d - %s\n",
+			config_error_line(&cfg), config_error_text(&cfg));
+		config_destroy(&cfg);
+		return(EXIT_FAILURE);
+	}
+
+	group = config_lookup (&cfg, "main");
+
+	if (group == NULL)
+		return EXIT_FAILURE;
+
+	SMTPInPort =  GetIntValue(group, "SMTPPort");
+	POP3InPort =  GetIntValue(group, "POP3Port");
+	NNTPInPort =  GetIntValue(group, "NNTPPort");
+	RemoteEmail =  GetIntValue(group, "RemoteEmail");
+	MaxStreams =  GetIntValue(group, "Streams");
+	BBSApplNum =  GetIntValue(group, "BBSApplNum");
+	EnableUI =  GetIntValue(group, "EnableUI");
+	MailForInterval =  GetIntValue(group, "MailForInterval");
+	RefuseBulls =  GetIntValue(group, "RefuseBulls");
+	SendSYStoSYSOPCall =  GetIntValue(group, "SendSYStoSYSOPCall");
+	DontHoldNewUsers =  GetIntValue(group, "DontHoldNewUsers");
+	ForwardToMe =  GetIntValue(group, "ForwardToMe");
+	MaxTXSize =  GetIntValue(group, "MaxTXSize");
+	MaxRXSize =  GetIntValue(group, "MaxRXSize");
+	ReaddressLocal =  GetIntValue(group, "Readdress Local");
+	ReaddressReceived =  GetIntValue(group, "Readdress Received");
+	WarnNoRoute =  GetIntValue(group, "WarnNoRoute");
+	Localtime =  GetIntValue(group, "Localtime");
+	AliasText = GetMultiStringValue(group, "FWDAliases");
+	GetStringValue(group, "BBSName", BBSName);
+	GetStringValue(group, "MailForText", MailForText);
+	GetStringValue(group, "SYSOPCall", SYSOPCall);
+	GetStringValue(group, "H-Route", HRoute);
+	ISP_Gateway_Enabled =  GetIntValue(group, "SMTPGatewayEnabled");
+	ISPPOP3Interval =  GetIntValue(group, "POP3PollingInterval");
+	GetStringValue(group, "MyDomain", MyDomain);
+	GetStringValue(group, "ISPSMTPName", ISPSMTPName);
+	GetStringValue(group, "ISPPOP3Name", ISPPOP3Name);
+	ISPSMTPPort = GetIntValue(group, "ISPSMTPPort");
+	ISPPOP3Port = GetIntValue(group, "ISPPOP3Port");
+	GetStringValue(group, "ISPAccountName", ISPAccountName);
+	GetStringValue(group, "ISPAccountPass", EncryptedISPAccountPass);
+	GetStringValue(group, "ISPAccountName", ISPAccountName);
+
+	DecryptPass(EncryptedISPAccountPass, ISPAccountPass, strlen(EncryptedISPAccountPass));
+
+	SMTPAuthNeeded = GetIntValue(group, "AuthenticateSMTP");
+	LogBBS = GetIntValue(group, "Log_BBS");
+	LogTCP = GetIntValue(group, "Log_TCP");
+
+	/*
+		Vallen=80;
+		RegQueryValueEx(hKey,"MonitorSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		sscanf(Size,"%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom);
+
+		Vallen=80;
+		RegQueryValueEx(hKey,"DebugSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		sscanf(Size,"%d,%d,%d,%d",&DebugRect.left,&DebugRect.right,&DebugRect.top,&DebugRect.bottom);
+		retCode = RegSetValueEx(hKey,"DebugSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+
+		Vallen=80;
+		RegQueryValueEx(hKey,"WindowSize",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+
+*/
+	// Get Welcome Messages
+
+	setting = config_setting_get_member (group, "WelcomeMsg");
+
+	if (setting && setting->value.sval[0])
+	{
+		ptr =  config_setting_get_string (setting);
+		WelcomeMsg = _strdup(ptr);
+	}
+	else
+		WelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
+
+
+	setting = config_setting_get_member (group, "NewUserWelcomeMsg");
+	
+	if (setting && setting->value.sval[0])
+	{
+		ptr =  config_setting_get_string (setting);
+		NewWelcomeMsg = _strdup(ptr);
+	}
+	else
+		NewWelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
+
+
+	setting = config_setting_get_member (group, "ExpertWelcomeMsg");
+	
+	if (setting && setting->value.sval[0])
+	{
+		ptr =  config_setting_get_string (setting);
+		ExpertWelcomeMsg = _strdup(ptr);
+	}
+	else
+		ExpertWelcomeMsg = _strdup("");
+
+	// Get Prompts
+
+	setting = config_setting_get_member (group, "Prompt");
+	
+	if (setting && setting->value.sval[0])
+	{
+		ptr =  config_setting_get_string (setting);
+		Prompt = _strdup(ptr);
+	}
+	else
+	{
+		Prompt = malloc(20);
+		sprintf(Prompt, "de %s>\r\n", BBSName);
+	}
+
+	setting = config_setting_get_member (group, "NewUserPrompt");
+	
+	if (setting && setting->value.sval[0])
+	{
+		ptr =  config_setting_get_string (setting);
+		NewPrompt = _strdup(ptr);
+	}
+	else
+	{
+		NewPrompt = malloc(20);
+		sprintf(NewPrompt, "de %s>\r\n", BBSName);
+	}
+
+	setting = config_setting_get_member (group, "ExpertPrompt");
+	
+	if (setting && setting->value.sval[0])
+	{
+		ptr =  config_setting_get_string (setting);
+		ExpertPrompt = _strdup(ptr);
+	}
+	else
+	{
+		ExpertPrompt = malloc(20);
+		sprintf(ExpertPrompt, "de %s>\r\n", BBSName);
+	}
+
+	RejFrom = GetMultiStringValue(group,  "RejFrom");
+	RejTo = GetMultiStringValue(group,  "RejTo");
+	RejAt = GetMultiStringValue(group,  "RejAt");
+
+	HoldFrom = GetMultiStringValue(group,  "HoldFrom");
+	HoldTo = GetMultiStringValue(group,  "HoldTo");
+	HoldAt = GetMultiStringValue(group,  "HoldAt");
+
+	// Send WP Params
+	
+	SendWP = GetIntValue(group, "SendWP");
+
+	GetStringValue(group, "SendWPTO", SendWPTO);
+	GetStringValue(group, "SendWPVIA", SendWPVIA);
+	SendWPType = GetIntValue(group, "SendWPType");
+
+
+	GetStringValue(group, "Version", Size);
+	sscanf(Size,"%d,%d,%d,%d", &LastVer[0], &LastVer[1], &LastVer[2], &LastVer[3]);
+
+
+	for (i=1; i<=32; i++)
+	{
+		char Key[100];
+			
+		sprintf(Key, "UIPort%d", i);
+
+		group = config_lookup (&cfg, Key);
+
+		if (group)
+		{
+			UIEnabled[i] = GetIntValue(group, "Enabled");
+			UINull[i] = GetIntValue(group, "SendNull");
+			Size[0] = 0;
+			GetStringValue(group, "Digis", Size);
+			if (Size[0])
+				UIDigi[i] = _strdup(Size);
+		}
+	}
+
+	 group = config_lookup (&cfg, "Housekeeping");
+
+	 if (group)
+	 {
+		 LastHouseKeepingTime = GetIntValue(group, "LastHouseKeepingTime");
+		 LastTrafficTime = GetIntValue(group, "LastTrafficTime");
+		 MaxMsgno = GetIntValue(group, "MaxMsgno");
+		 LogAge = GetIntValue(group, "LogLifetime");
+		 BidLifetime = GetIntValue(group, "BidLifetime");
+		 MaintInterval = GetIntValue(group, "MaintInterval");
+		 MaintTime = GetIntValue(group, "MaintTime");
+	
+		 PR = GetIntValue(group, "PR");
+		 PUR = GetIntValue(group, "PUR");
+		 PF = GetIntValue(group, "PF");
+		 PNF = GetIntValue(group, "PNF");
+		 BNF = GetIntValue(group, "BNF");
+		 AP = GetIntValue(group, "AP");
+		 AB = GetIntValue(group, "AB");
+		 DeletetoRecycleBin = GetIntValue(group, "DeletetoRecycleBin");
+		 SuppressMaintEmail = GetIntValue(group, "SuppressMaintEmail");
+		 SaveRegDuringMaint = GetIntValue(group, "MaintSaveReg");
+		 OverrideUnsent = GetIntValue(group, "OverrideUnsent");
+		 SendNonDeliveryMsgs = GetIntValue(group, "SendNonDeliveryMsgs");
+		 OverrideUnsent = GetIntValue(group, "OverrideUnsent");
+	
+		 LTFROM = GetOverrides(group,  "LTFROM");
+		 LTTO = GetOverrides(group,  "LTTO");
+		 LTAT = GetOverrides(group,  "LTAT");
+	}
+	 return EXIT_SUCCESS;
+}
+
+#endif
+
+int Connected(Stream)
+{
+	int n, Mask;
+	CIRCUIT * conn;
+	struct UserInfo * user = NULL;
+	char callsign[10];
+	int port, paclen, maxframe, l4window;
+	char ConnectedMsg[] = "*** CONNECTED    ";
+	char Msg[100];
+	char Title[100];
+
+	for (n = 0; n < NumberofStreams; n++)
+	{
+  		conn = &Connections[n];
+		
+		if (Stream == conn->BPQStream)
+		{
+			if (conn->Active)
+			{
+				// Probably an outgoing connect
+		
+				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
+				conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
+
+				if (conn->BBSFlags & RunningConnectScript)
+				{
+					// BBS Outgoing Connect
+
+					conn->paclen = 236;
+
+					// Run first line of connect script
+
+					ProcessBBSConnectScript(conn, ConnectedMsg, 15);
+					return 0;
+				}
+			}
+	
+			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
+			conn->Active = TRUE;
+			conn->BPQStream = Stream;
+
+			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
+			conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
+
+			conn->Secure_Session = GetConnectionInfo(Stream, callsign,
+				&port, &conn->SessType, &paclen, &maxframe, &l4window);
+
+			strlop(callsign, ' ');		// Remove trailing spaces
+
+			memcpy(conn->Callsign, callsign, 10);
+
+			strlop(callsign, '-');		// Remove any SSID
+
+			user = LookupCall(callsign);
+
+			if (user == NULL)
+			{
+				int Length=0;
+				char * MailBuffer = malloc(100);
+
+				user = AllocateUserRecord(callsign);
+				user->Temp = zalloc(sizeof (struct TempUserInfo));
+
+				Length += sprintf(MailBuffer, "New User %s Connected to Mailbox\r\n", callsign);
+
+				sprintf(Title, "New User %s", callsign);
+
+				SendMessageToSYSOP(Title, MailBuffer, Length);
+
+				if (user == NULL) return 0; //		Cant happen??
+
+				if (!DontHoldNewUsers)
+					user->flags |= F_HOLDMAIL;
+
+				conn->NewUser = TRUE;
+
+			}
+
+			time(&user->TimeLastConnected);
+			user->nbcon++;
+
+			conn->UserPointer = user;
+
+			conn->lastmsg = user->lastmsg;
+
+			conn->NextMessagetoForward = FirstMessageIndextoForward;
+
+			if (paclen == 0)
+			{
+				paclen = 236;
+	
+				if (conn->SessType & Sess_PACTOR)
+					paclen = 100;
+			}
+
+			conn->paclen = paclen;
+
+			//	Set SYSOP flag if user is defined as SYSOP and Host Session 
+			
+			if (((conn->SessType & Sess_BPQHOST) == Sess_BPQHOST) && (user->flags & F_SYSOP))
+				conn->sysop = TRUE;
+
+			if (conn->Secure_Session && (user->flags & F_SYSOP))
+				conn->sysop = TRUE;
+
+			Mask = 1 << (GetApplNum(Stream) - 1);
+
+			if (user->flags & F_Excluded)
+			{
+				n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s Rejected by Exclude Flag", user->Call);
+				WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+				Disconnect(Stream);
+				return 0;
+			}
+
+			n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s", user->Call);
+			
+			// Send SID and Prompt
+
+			{
+				BOOL B1 = FALSE, B2 = FALSE, B = FALSE;
+				struct	BBSForwardingInfo * ForwardingInfo;
+
+				conn->PageLen = user->PageLen;				// No paging for chat
+				conn->Paging = (user->PageLen > 0);
+
+				if ((user->flags & F_PMS) && ((user->flags & F_BBS) == 0))
+				{
+					// If we have already allocated a FWD struct, get rid of it
+
+					if (user->ForwardingInfo)
+					{
+						free(user->ForwardingInfo);
+						user->ForwardingInfo = NULL;
+					}
+				}
+
+				if ((user->flags & F_Temp_B2_BBS) && (user->ForwardingInfo == NULL))
+				{
+					// An RMS Express user that needs a temporary BBS struct
+
+					ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+
+					ForwardingInfo->AllowCompressed = TRUE;
+					B2 = ForwardingInfo->AllowB2 = TRUE;
+					user->BBSNumber = 80;
+				}
+
+				if (conn->NewUser)
+				{
+					B = TRUE;
+					B2 = TRUE;
+				}
+
+				if (user->ForwardingInfo)
+				{
+					B = user->ForwardingInfo->AllowCompressed;
+					B1 = user->ForwardingInfo->AllowB1;
+					B2 = user->ForwardingInfo->AllowB2;
+				}
+
+				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
+
+				nodeprintf(conn, BBSSID, "BPQ-",
+					Ver[0], Ver[1], Ver[2], Ver[3],
+					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "FW": "");
+
+//				 if (user->flags & F_Temp_B2_BBS)
+//					 nodeprintf(conn,";PQ: 66427529\r");
+
+	//			nodeprintf(conn,"[WL2K-BPQ.1.0.4.39-B2FWIHJM$]\r");
+			}
+
+			if (user->Name[0] == 0)
+			{
+				conn->Flags |= GETTINGUSER;
+				BBSputs(conn, NewUserPrompt);
+			}
+			else
+				SendWelcomeMsg(Stream, conn, user);
+
+			RefreshMainWindow();
+			
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
+int Disconnected (Stream)
+{
+	struct UserInfo * user = NULL;
+	CIRCUIT * conn;
+	int n;
+	char Msg[255];
+	int len;
+
+	for (n = 0; n <= NumberofStreams-1; n++)
+	{
+		conn=&Connections[n];
+
+		if (Stream == conn->BPQStream)
+		{
+			if (conn->Active == FALSE)
+			{
+				return 0;
+			}
+
+			ClearQueue(conn);
+
+			if (conn->PacLinkCalls)
+				free(conn->PacLinkCalls);
+
+			if (conn->InputBuffer)
+			{
+				free(conn->InputBuffer);
+				conn->InputBuffer = NULL;
+				conn->InputBufferLen = 0;
+			}
+
+			if (conn->InputMode == 'B')
+			{
+				// Save partly received message for a restart
+						
+				if (conn->BBSFlags & FBBB1Mode)
+					if (conn->Paclink == 0)			// Paclink doesn't do restarts
+						if (strcmp(conn->Callsign, "RMS") != 0)	// Neither does RMS Packet.
+							SaveFBBBinary(conn);		
+			}
+
+			conn->Active = FALSE;
+			RefreshMainWindow();
+
+			RemoveTempBIDS(conn);
+
+			len=sprintf_s(Msg, sizeof(Msg), "%s Disconnected", conn->Callsign);
+			WriteLogLine(conn, '|',Msg, len, LOG_BBS);
+
+			if (conn->FBBHeaders)
+			{
+				free(conn->FBBHeaders);
+				conn->FBBHeaders = NULL;
+			}
+
+			if (conn->UserPointer)
+			{
+				struct	BBSForwardingInfo * FWDInfo = conn->UserPointer->ForwardingInfo;
+
+				if (FWDInfo)
+				{
+					FWDInfo->Forwarding = FALSE;
+
+//					if (FWDInfo->UserCall[0])			// Will be set if RMS
+//					{
+//						FindNextRMSUser(FWDInfo);
+//					}
+//					else
+						FWDInfo->FwdTimer = 0;
+				}
+			}
+			return 0;
+		}
+	}
+	return 0;
+}
+
+int DoReceivedData(int Stream)
+{
+	int count, InputLen;
+	UINT MsgLen;
+	int n;
+	CIRCUIT * conn;
+	struct UserInfo * user;
+	char * ptr, * ptr2;
+	char * Buffer;
+
+	for (n = 0; n < NumberofStreams; n++)
+	{
+		conn = &Connections[n];
+
+		if (Stream == conn->BPQStream)
+		{
+			do
+			{ 
+				// May have several messages per packet, or message split over packets
+
+				if (conn->InputLen + 1000 > conn->InputBufferLen )	// Shouldnt have lines longer  than this in text mode
+				{
+					conn->InputBufferLen += 1000;
+					conn->InputBuffer = realloc(conn->InputBuffer, conn->InputBufferLen);
+				}
+				
+				GetMsg(Stream, &conn->InputBuffer[conn->InputLen], &InputLen, &count);
+
+				if (InputLen == 0) return 0;
+
+				conn->Watchdog = 900;				// 15 Minutes
+
+				conn->InputLen += InputLen;
+
+				if (conn->InputMode == 'B')
+				{
+					UnpackFBBBinary(conn);
+				}
+				else
+				{
+
+			loop:
+
+				if (conn->InputLen == 1 && conn->InputBuffer[0] == 0)		// Single Null
+				{
+					conn->InputLen = 0;
+					return 0;
+				}
+
+				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
+
+				if (ptr)	//  CR in buffer
+				{
+					user = conn->UserPointer;
+				
+					ptr2 = &conn->InputBuffer[conn->InputLen];
+					
+					if (++ptr == ptr2)
+					{
+						// Usual Case - single meg in buffer
+
+						
+							if (conn->BBSFlags & RunningConnectScript)
+								ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
+							else
+								ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
+					
+						conn->InputLen=0;
+					}
+					else
+					{
+						// buffer contains more that 1 message
+
+						MsgLen = conn->InputLen - (ptr2-ptr);
+
+						Buffer = malloc(MsgLen + 100);
+
+						memcpy(Buffer, conn->InputBuffer, MsgLen);
+					
+							if (conn->BBSFlags & RunningConnectScript)
+								ProcessBBSConnectScript(conn, Buffer, MsgLen);
+							else
+								ProcessLine(conn, user, Buffer, MsgLen);
+						
+
+						free(Buffer);
+
+						if (*ptr == 0 || *ptr == '\n')
+						{
+							/// CR LF or CR Null
+
+							ptr++;
+							conn->InputLen--;
+						}
+
+						memmove(conn->InputBuffer, ptr, conn->InputLen-MsgLen);
+
+						conn->InputLen -= MsgLen;
+
+						goto loop;
+
+					}
+				}
+				}
+			} while (count > 0);
+
+			return 0;
+		}
+	}
+
+	// Socket not found
+
+	return 0;
+
+}
+int DoBBSMonitorData(int Stream)
+{
+//	UCHAR Buffer[1000];
+	UCHAR buff[500];
+
+	int len = 0,count=0;
+	int stamp;
+	
+		do
+		{ 
+			stamp=GetRaw(Stream, buff,&len,&count);
+
+			if (len == 0) return 0;
+
+			SeeifBBSUIFrame((struct _MESSAGEX *)buff, len);	
+		}
+		
+		while (count > 0);	
+ 		
+
+	return 0;
+
+}
+
+VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int len)
+{
+	Buffer[len] = 0;
+	Debugprintf(Buffer);
+
+	if (conn->Flags & SENDTITLE)
+	{	
+		// Waiting for Subject: prompt
+
+		struct MsgInfo * Msg = conn->FwdMsg;
+		
+		nodeprintf(conn, "%s\r", Msg->title);
+		
+		conn->Flags &= ~SENDTITLE;
+		conn->Flags |= SENDBODY;
+		return;
+
+	}
+	
+	if (conn->Flags & SENDBODY)
+	{
+		// Waiting for Enter Message Prompt
+
+		struct tm * tm;
+		time_t now;
+		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
+		char * MsgPtr;
+
+		if (MsgBytes == 0)
+		{
+			MsgBytes = _strdup("Message file not found\r\n");
+			conn->FwdMsg->length = strlen(MsgBytes);
+		}
+
+		MsgPtr = MsgBytes;
+
+		// If a B2 Message, remove B2 Header
+
+		if (conn->FwdMsg->B2Flags)
+		{		
+			// Remove all B2 Headers, and all but the first part.
+					
+			MsgPtr = strstr(MsgBytes, "Body:");
+			
+			if (MsgPtr)
+			{
+				conn->FwdMsg->length = atoi(&MsgPtr[5]);
+				MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+	
+				if (MsgPtr)
+					MsgPtr +=4;
+				else
+					MsgPtr = MsgBytes;
+			
+			}
+			else
+				MsgPtr = MsgBytes;
+		}
+
+		now = time(NULL);
+		tm = gmtime(&now);	
+
+		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
+				conn->FwdMsg->number, BBSName, HRoute, RlineVer);
+
+		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
+			BBSputs(conn, "\r\n");
+
+		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);
+		nodeprintf(conn, "\r\n/ex\r");
+
+		free(MsgBytes);
+			
+		conn->FBBMsgsSent = TRUE;
+
+		user->MsgsSent++;
+		user->BytesForwardedOut += conn->FwdMsg->length;
+			
+		conn->Flags &= ~SENDBODY;
+		conn->Flags |= WAITPROMPT;
+
+		return;
+	}
+
+	if (conn->Flags & WAITPROMPT)
+	{
+		if (Buffer[len-2] != '>')
+			return;
+
+		conn->Flags &= ~WAITPROMPT;
+
+		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
+		set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
+
+		//  Only mark as forwarded if sent to all BBSs that should have it
+			
+		if (memcmp(conn->FwdMsg->fbbs, zeros, NBMASK) == 0)
+		{
+			conn->FwdMsg->status = 'F';			// Mark as forwarded
+			conn->FwdMsg->datechanged=time(NULL);
+		}
+
+		conn->UserPointer->ForwardingInfo->MsgCount--;
+
+		// See if any more to forward
+
+		if (FindMessagestoForward(conn))
+		{
+			struct MsgInfo * Msg;
+				
+			// Send S line and wait for response - SB WANT @ USA < W8AAA $1029_N0XYZ 
+
+			conn->Flags |= SENDTITLE;
+			Msg = conn->FwdMsg;
+		
+			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+						(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
+						Msg->from, Msg->bid);
+		}
+		else
+		{
+			Disconnect(conn->BPQStream);
+		}
+		return;
+	}
+}
+
+
+
+VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
+{
+	char * Cmd, * Arg1;
+	char * Context;
+	char seps[] = " \t\r";
+	int CmdLen;
+
+	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
+
+	if (conn->BBSFlags & FBBForwarding)
+	{
+		ProcessFBBLine(conn, user, Buffer, len);
+		return;
+	}
+
+
+	if (conn->BBSFlags & TEXTFORWARDING)
+	{
+		ProcessTextFwdLine(conn, user, Buffer, len);
+		return;
+	}
+
+	if (conn->Flags & GETTINGMESSAGE)
+	{
+		ProcessMsgLine(conn, user, Buffer, len);
+		return;
+	}
+	if (conn->Flags & GETTINGTITLE)
+	{
+		ProcessMsgTitle(conn, user, Buffer, len);
+		return;
+	}
+
+	if (conn->BBSFlags & MBLFORWARDING)
+	{
+			ProcessMBLLine(conn, user, Buffer, len);
+		return;
+	}
+	if (conn->Flags & GETTINGUSER)
+	{
+		conn->Flags &=  ~GETTINGUSER;
+
+		if (memcmp(Buffer, ";FW:", 4) == 0 || Buffer[0] == '[')
+		{
+			struct	BBSForwardingInfo * ForwardingInfo;
+			
+			// New User is a BBS - create a temp struct for it
+
+			if ((user->flags & (F_BBS | F_Temp_B2_BBS)) == 0)			// It could already be a BBS without a user name
+			{
+				// Not defined as BBS - allocate and initialise forwarding structure
+		
+				user->flags |= F_Temp_B2_BBS;
+
+				// An RMS Express user that needs a temporary BBS struct
+
+				ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
+
+				ForwardingInfo->AllowCompressed = TRUE;
+				conn->UserPointer->ForwardingInfo->AllowB2 = TRUE;
+			}
+			SaveUserDatabase();
+		}
+		else
+		{
+			memcpy(user->Name, Buffer, len-1);
+			SendWelcomeMsg(conn->BPQStream, conn, user);
+			SaveUserDatabase();
+			UpdateWPWithUserInfo(user);
+			return;
+		}
+	}
+
+	// Process Command
+
+	if (conn->Paging && (conn->LinesSent >= conn->PageLen))
+	{
+		// Waiting for paging prompt
+
+		if (len > 1)
+		{
+			if (_memicmp(Buffer, "Abort", 1) == 0)
+			{
+				ClearQueue(conn);
+				conn->LinesSent = 0;
+
+				QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+				SendPrompt(conn, user);
+				return;
+			}
+		}
+
+		conn->LinesSent = 0;
+		return;
+	}
+
+	if (len == 1)
+	{
+		SendPrompt(conn, user);
+		return;
+	}
+
+	Buffer[len] = 0;
+
+	if (memcmp(Buffer, ";FW:", 4) == 0)
+	{
+		// Paclink User Select (poll for list)
+		
+		char * ptr1,* ptr2, * ptr3;
+		int index=0;
+
+		// Convert string to Multistring
+
+		Buffer[len-1] = 0;
+
+		conn->PacLinkCalls = zalloc(len*3);
+
+		ptr1 = &Buffer[5];
+		ptr2 = (char *)conn->PacLinkCalls;
+		ptr2 += (len * 2);
+		strcpy(ptr2, ptr1);
+
+		while (ptr2)
+		{
+			ptr3 = strlop(ptr2, ' ');
+
+			if (strlen(ptr2))
+				conn->PacLinkCalls[index++] = ptr2;
+		
+			ptr2 = ptr3;
+		}
+	
+		return;	
+	}
+
+	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
+	{
+		// If a BBS, set BBS Flag
+
+		if (user->flags & ( F_BBS | F_Temp_B2_BBS))
+		{
+			if (user->ForwardingInfo)
+			{
+				if (user->ForwardingInfo->Forwarding)
+				{
+					BBSputs(conn, "Already Connected\r");
+					Flush(conn);
+					Sleep(500);
+					Disconnect(conn->BPQStream);
+					return;
+				}
+			}
+
+			if (user->ForwardingInfo)
+			{
+				user->ForwardingInfo->Forwarding = TRUE;
+				user->ForwardingInfo->FwdTimer = 0;			// So we dont send to immediately
+			}
+		}
+
+		if (user->flags & ( F_BBS | F_PMS | F_Temp_B2_BBS))
+		{
+			Parse_SID(conn, &Buffer[1], len-4);
+			
+			if (conn->BBSFlags & FBBForwarding)
+			{
+				conn->FBBIndex = 0;		// ready for first block;
+				conn->FBBChecksum = 0;
+				memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
+			}
+			else
+				BBSputs(conn, ">\r");
+
+		}
+
+		return;
+	}
+
+	Cmd = strtok_s(Buffer, seps, &Context);
+
+	if (Cmd == NULL)
+	{
+		BBSputs(conn, "Invalid Command\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	Arg1 = strtok_s(NULL, seps, &Context);
+	CmdLen = strlen(Cmd);
+
+	if (_stricmp(Cmd, "AUTH") == 0)
+	{
+		DoAuthCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_memicmp(Cmd, "Abort", 1) == 0)
+	{
+		ClearQueue(conn);
+		conn->LinesSent = 0;
+
+		QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+		SendPrompt(conn, user);
+		return;
+	}
+	if (_memicmp(Cmd, "Bye", CmdLen) == 0)
+	{
+		SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+		user->lastmsg = conn->lastmsg;
+		Sleep(1000);
+
+		if (conn->BPQStream > 0)
+			Disconnect(conn->BPQStream);
+#ifndef LINBPQ
+		else
+			CloseConsole(conn->BPQStream);
+#endif
+		return;
+	}
+
+	if (_memicmp(Cmd, "Node", 4) == 0)
+	{
+		SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+		user->lastmsg = conn->lastmsg;
+		Sleep(1000);
+			
+		if (conn->BPQStream > 0)
+			ReturntoNode(conn->BPQStream);
+#ifndef LINBPQ
+		else
+			CloseConsole(conn->BPQStream);
+#endif
+
+		return;						
+	}
+
+	if (_memicmp(Cmd, "SHOWRMS", 5) == 0)
+	{
+		DoShowRMSCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_memicmp(Cmd, "D", 1) == 0)
+	{
+		DoDeliveredCommand(conn, user, Cmd, Arg1, Context);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (_memicmp(Cmd, "K", 1) == 0)
+	{
+		DoKillCommand(conn, user, Cmd, Arg1, Context);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (_memicmp(Cmd, "L", 1) == 0)
+	{
+		DoListCommand(conn, user, Cmd, Arg1);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (_memicmp(Cmd, "UH", 2) == 0 && conn->sysop)
+	{
+		DoUnholdCommand(conn, user, Cmd, Arg1, Context);
+		SendPrompt(conn, user);
+		return;
+	}
+
+
+	if (_memicmp(Cmd, "I", 1) == 0)
+	{
+		char * Save;
+		char * MsgBytes;
+
+		if (Arg1)
+		{
+			// User WP lookup
+
+			DoWPLookup(conn, user, Cmd[1], Arg1);
+			SendPrompt(conn, user);
+			return;	
+		}
+
+
+		MsgBytes = Save = ReadInfoFile("info.txt");
+		if (MsgBytes)
+		{
+			int Length;
+
+			// Remove lf chars
+
+			Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+			QueueMsg(conn, MsgBytes, Length);
+			free(Save);
+		}
+		else
+			BBSputs(conn, "SYSOP has not created an INFO file\r");
+
+
+		SendPrompt(conn, user);
+		return;	
+	}
+
+
+	if (_memicmp(Cmd, "Name", CmdLen) == 0)
+	{
+		if (Arg1)
+		{
+			if (strlen(Arg1) > 17)
+				Arg1[17] = 0;
+
+			strcpy(user->Name, Arg1);
+			UpdateWPWithUserInfo(user);
+
+		}
+
+		SendWelcomeMsg(conn->BPQStream, conn, user);
+		SaveUserDatabase();
+
+		return;
+	}
+
+	if (_memicmp(Cmd, "OP", 2) == 0)
+	{
+		int Lines;
+		
+		// Paging Control. Param is number of lines per page
+
+		if (Arg1)
+		{
+			Lines = atoi(Arg1);
+			
+			if (Lines)				// Sanity Check
+			{
+				if (Lines < 10)
+				{
+					nodeprintf(conn,"Page Length %d is too short\r", Lines);
+					SendPrompt(conn, user);
+					return;
+				}
+			}
+
+			user->PageLen = Lines;
+			conn->PageLen = Lines;
+			conn->Paging = (Lines > 0);
+			SaveUserDatabase();
+		}
+		
+		nodeprintf(conn,"Page Length is %d\r", user->PageLen);
+		SendPrompt(conn, user);
+
+		return;
+	}
+
+	if (_memicmp(Cmd, "QTH", CmdLen) == 0)
+	{
+		if (Arg1)
+		{
+			// QTH may contain spaces, so put back together, and just split at cr
+			
+			Arg1[strlen(Arg1)] = ' ';
+			strtok_s(Arg1, "\r", &Context);
+
+			if (strlen(Arg1) > 60)
+				Arg1[60] = 0;
+
+			strcpy(user->Address, Arg1);
+			UpdateWPWithUserInfo(user);
+
+		}
+
+		nodeprintf(conn,"QTH is %s\r", user->Address);
+		SendPrompt(conn, user);
+
+		SaveUserDatabase();
+
+		return;
+	}
+
+	if (_memicmp(Cmd, "ZIP", CmdLen) == 0)
+	{
+		if (Arg1)
+		{
+			if (strlen(Arg1) > 8)
+				Arg1[8] = 0;
+
+			strcpy(user->ZIP, _strupr(Arg1));
+			UpdateWPWithUserInfo(user);
+		}
+
+		nodeprintf(conn,"ZIP is %s\r", user->ZIP);
+		SendPrompt(conn, user);
+
+		SaveUserDatabase();
+
+		return;
+	}
+
+	if (_memicmp(Cmd, "R", 1) == 0)
+	{
+		DoReadCommand(conn, user, Cmd, Arg1, Context);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (_memicmp(Cmd, "S", 1) == 0)
+	{
+		if (!DoSendCommand(conn, user, Cmd, Arg1, Context))
+			SendPrompt(conn, user);
+		return;
+	}
+
+	if ((_memicmp(Cmd, "Help", CmdLen) == 0) || (_memicmp(Cmd, "?", 1) == 0))
+	{
+		char * Save;
+		char * MsgBytes = Save = ReadInfoFile("help.txt");
+
+		if (MsgBytes)
+		{
+			int Length;
+
+			// Remove lf chars
+
+			Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+			QueueMsg(conn, MsgBytes, Length);
+			free(Save);
+		}
+		else
+		{
+			BBSputs(conn, "A - Abort Output\r");
+			BBSputs(conn, "B - Logoff\r");
+			BBSputs(conn, "D - Flag NTS Message(s) as Delivered - D num\r");
+			BBSputs(conn, "HOMEBBS - Display or get HomeBBS\r");
+			BBSputs(conn, "INFO - Display information about this BBS\r");
+			BBSputs(conn, "I CALL - Lookup CALL in WP Allows *CALL CALL* *CALL* wildcards\r");
+			BBSputs(conn, "I@ PARAM - Lookup @BBS in WP\r");
+			BBSputs(conn, "IZ PARAM - Lookup Zip Codes in WP\r");
+			BBSputs(conn, "IH PARAM - Lookup HA elements in WP - eg USA EU etc\r");
+
+			BBSputs(conn, "K - Kill Message(s) - K num, KM (Kill my read messages)\r");
+			BBSputs(conn, "L - List Message(s) - L = List New, LR = List New (Oldest first)\r");
+			BBSputs(conn, "                      LM = List Mine L> Call, L< Call = List to or from\r");
+			BBSputs(conn, "                      LL num = List Last, L num-num = List Range\r");
+			BBSputs(conn, "                      LN LY LH LK LF L$ LD - List Message with corresponding Status\r");
+			BBSputs(conn, "                      LB LP LT - List Mesaage with corresponding Type\r");
+			BBSputs(conn, "                      LC List TO fields of all active bulletins\r");
+			BBSputs(conn, "N Name - Set Name\r");
+			BBSputs(conn, "NODE - Return to Node\r");
+			BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
+			BBSputs(conn, "Q QTH - Set QTH\r");
+			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
+			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, ST Send NTS,\r");
+			BBSputs(conn, "                   SR Num - Send Reply, SC Num - Send Copy\r");
+			BBSputs(conn, "X - Toggle Expert Mode\r");
+			if (conn->sysop)
+			{
+				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
+				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
+				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
+				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling list\r");
+			}
+		}
+
+		SendPrompt(conn, user);
+
+		return;
+
+	}
+
+	if (_memicmp(Cmd, "Ver", CmdLen) == 0)
+	{
+		nodeprintf(conn, "BBS Version %s\rNode Version %s\r", VersionStringWithBuild, GetVersionString());
+
+		SendPrompt(conn, user);
+
+		return;
+	}
+
+	if (_memicmp(Cmd, "HOMEBBS", CmdLen) == 0)
+	{
+		if (Arg1)
+		{
+			if (strlen(Arg1) > 40) Arg1[40] = 0;
+
+			strcpy(user->HomeBBS, _strupr(Arg1));
+			UpdateWPWithUserInfo(user);
+	
+			if (!strchr(Arg1, '.'))
+				BBSputs(conn, "Please enter HA with HomeBBS eg g8bpq.gbr.eu - this will help message routing\r");
+		}
+
+		nodeprintf(conn,"HomeBBS is %s\r", user->HomeBBS);
+		SendPrompt(conn, user);
+
+		SaveUserDatabase();
+
+		return;
+	}
+
+	if ((_memicmp(Cmd, "EDITUSER", 5) == 0) || (_memicmp(Cmd, "EU", 2) == 0))
+	{
+		DoEditUserCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_stricmp(Cmd, "SHOWRMS") == 0)
+	{
+		DoShowRMSCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_stricmp(Cmd, "POLLRMS") == 0)
+	{
+		DoPollRMSCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_stricmp(Cmd, "FWD") == 0)
+	{
+		DoFwdCmd(conn, user, Arg1, Context);
+		return;
+	}
+
+	if (_memicmp(Cmd, "X", 1) == 0)
+	{
+		user->flags ^= F_Expert;
+
+		if (user->flags & F_Expert)
+			BBSputs(conn, "Expert Mode\r");
+		else
+			BBSputs(conn, "Expert Mode off\r");
+
+		SaveUserDatabase();
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (conn->Flags == 0)
+	{
+		BBSputs(conn, "Invalid Command\r");
+		SendPrompt(conn, user);
+	}
+
+	//	Send if possible
+
+	Flush(conn);
+}
+
+VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...)
+{
+	// seems to be printf to a socket
+
+	char buff[600];
+	va_list(arglist);
+	
+	va_start(arglist, format);
+	vsprintf(buff, format, arglist);
+
+	BBSputs(conn, buff);
+}
+
+
+
+
+

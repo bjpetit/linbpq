@@ -23,7 +23,7 @@ int MyElementCount;
 BOOL ReaddressLocal;
 BOOL ReaddressReceived;
 BOOL WarnNoRoute = TRUE;
-
+BOOL Localtime = FALSE;		// Use Local Time for Timebands and forward connect scripts
 
 struct Continent
 {

@@ -32,6 +32,7 @@
 #define MAILFOR_MINS                    1014
 #define IDC_SENDNEW                     1015
 #define IDC_UICONFIG                    1016
+#define IDC_USELOCALTIME                1016
 #define IDC_DELETETORECYCLE             1017
 #define IDC_MAINTNOMAIL                 1018
 #define IDC_EDIT1                       1019
@@ -93,7 +94,7 @@
 #define IDC_WPSAVE                      1087
 #define IDC_PRINTMSG                    1088
 #define IDC_EXPORT                      1089
-#define IDM_PROMPTSAVE					1090
+#define IDM_PROMPTSAVE                  1090
 #define ISP_SMTP_AUTH                   3009
 #define IDC_FWDTIMES                    4008
 #define IDC_HRHELP                      4101

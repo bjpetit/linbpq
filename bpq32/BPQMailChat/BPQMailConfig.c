@@ -4,18 +4,17 @@
 //	Configuration Module
 
 #include "stdafx.h"
-#define C_PAGES 8
+#define C_PAGES 7
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
 
 #define BBSPARAMS 0
 #define ISPPARAMS 1
-#define CHATPARAMS 2
-#define MAINTPARAMS 3
-#define WELCOMEMSGS 4
-#define PROMPTS 5
-#define FILTERS 6
-#define WPUPDATE 7
+#define MAINTPARAMS 2
+#define WELCOMEMSGS 3
+#define PROMPTS 4
+#define FILTERS 5
+#define WPUPDATE 6
 
 typedef struct tag_dlghdr {
 
@@ -64,73 +63,6 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 
 // POP3 Password is encrypted by xor'ing it with an MD5 hash of the hostname and pop3 server name
 
-
-int EncryptPass(char * Pass, char * Encrypt)
-{
-	char hash[50];
-	char key[100];
-	unsigned int i;
-	char hostname[100];
-	char extendedpass[100];
-	unsigned int passlen;
-
-	gethostname(hostname, 100);
-
-	strcpy(key, hostname);
-	strcat(key, ISPPOP3Name);
-
-	md5(key, hash);
-	memcpy(&hash[16], hash, 16);	// in case very long password
-
-	// if password is less than 16 chars, extend with zeros
-
-	passlen=strlen(Pass);
-
-	strcpy(extendedpass, Pass);
-
-	if (passlen < 16)
-	{
-		for  (i=passlen+1; i <= 16; i++)
-		{
-			extendedpass[i] = 0;
-		}
-
-		passlen = 16;
-	}
-
-	for (i=0; i < passlen; i++)
-	{
-		Encrypt[i] = extendedpass[i] ^ hash[i];
-	}
-
-	return passlen;
-}
-
-VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len)
-{
-	char hash[50];
-	char key[100];
-	unsigned int i;
-	char hostname[100]="";
-
-	gethostname(hostname, 100);
-
-	i = GetLastError();
-
-
-	strcpy(key, hostname);
-	strcat(key, ISPPOP3Name);
-
-	md5(key, hash);
-	memcpy(&hash[16], hash, 16);	// in case very long password
-
-	for (i=0; i < len; i++)
-	{
-		Pass[i] =  Encrypt[i] ^ hash[i];
-	}
-
-	return;
-}
 
 
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -294,11 +226,6 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 			SaveBBSConfig();
 			return TRUE;
 
-		case IDC_CHATSAVE:
-			
-			SaveChatConfig();
-			return TRUE;
-
 		case IDC_ISPSAVE:
 			
 			SaveISPConfig();
@@ -390,34 +317,30 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 	tie.pszText = "ISP Interface";
 	TabCtrl_InsertItem(pHdr->hwndTab, 1, &tie);
 
-	tie.pszText = "Chat Params";
+ 	tie.pszText = "Housekeeping";
 	TabCtrl_InsertItem(pHdr->hwndTab, 2, &tie);
 
- 	tie.pszText = "Housekeeping";
+	tie.pszText = "Welcome Msgs";
 	TabCtrl_InsertItem(pHdr->hwndTab, 3, &tie);
 
-	tie.pszText = "Welcome Msgs";
+	tie.pszText = "Prompts";
 	TabCtrl_InsertItem(pHdr->hwndTab, 4, &tie);
 
-	tie.pszText = "Prompts";
+	tie.pszText = "Msg Filters";
 	TabCtrl_InsertItem(pHdr->hwndTab, 5, &tie);
 
-	tie.pszText = "Msg Filters";
-	TabCtrl_InsertItem(pHdr->hwndTab, 6, &tie);
-
 	tie.pszText = "WP Update";
-	TabCtrl_InsertItem(pHdr->hwndTab, 7, &tie);
+	TabCtrl_InsertItem(pHdr->hwndTab, 6, &tie);
 
 	// Lock the resources for the three child dialog boxes.
 
 	pHdr->apRes[0] = DoLockDlgRes("BBS_CONFIG");
 	pHdr->apRes[1] = DoLockDlgRes("ISP_CONFIG");
-	pHdr->apRes[2] = DoLockDlgRes("CHAT_CONFIG");
-	pHdr->apRes[3] = DoLockDlgRes("MAINT");
-	pHdr->apRes[4] = DoLockDlgRes("WELCOMEMSG");
-	pHdr->apRes[5] = DoLockDlgRes("BBSPROMPTS");
-	pHdr->apRes[6] = DoLockDlgRes("FILTERS");
-	pHdr->apRes[7] = DoLockDlgRes("WPUPDATE");
+	pHdr->apRes[2] = DoLockDlgRes("MAINT");
+	pHdr->apRes[3] = DoLockDlgRes("WELCOMEMSG");
+	pHdr->apRes[4] = DoLockDlgRes("BBSPROMPTS");
+	pHdr->apRes[5] = DoLockDlgRes("FILTERS");
+	pHdr->apRes[6] = DoLockDlgRes("WPUPDATE");
 
 	// Determine the bounding rectangle for all child dialog boxes.
 
@@ -498,8 +421,6 @@ DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName)
 
 VOID WINAPI OnSelChanged(HWND hwndDlg)
 {
-	int ptr;
-	int len;
 	char Nodes[1000]="";
 	char Text[10000]="";
 	char Line[80];
@@ -568,36 +489,13 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		break;
 
-	case CHATPARAMS:
-
-		SetDlgItemInt(pHdr->hwndDisplay, IDC_ChatAppl, ChatApplNum, FALSE);
-
-			// Set up other nodes list
-	
-		ptr=0;
-
-		if (OtherNodes)
-		{
-			while (OtherNodes[ptr])
-			{
-				len=strlen(&OtherNodes[ptr]);
-				strcat(Nodes, &OtherNodes[ptr]);
-				strcat(Nodes, "\r\n");
-				ptr+= (len + 1);
-			}
-		}
-		SetDlgItemText(pHdr->hwndDisplay, IDC_ChatNodes, Nodes);
-
-		break;
-
-
 	case MAINTPARAMS:
 
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAXMSG, MaxMsgno, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BIDLIFETIME, BidLifetime, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_LOGLIFETIME, LogAge, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAINTINTERVAL, MaintInterval, FALSE);
-		wsprintf(Time, "%04d", MaintTime);
+		sprintf(Time, "%04d", MaintTime);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_MAINTTIME, Time);
 
 		SetDlgItemInt(pHdr->hwndDisplay, IDM_PR, PR, FALSE);
@@ -622,7 +520,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			Call = LTFROM;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s, %d\r\n", Call[0]->Call, Call[0]->Days);
+				sprintf(Line, "%s, %d\r\n", Call[0]->Call, Call[0]->Days);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -636,7 +534,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			Call = LTTO;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s, %d\r\n", Call[0]->Call, Call[0]->Days);
+				sprintf(Line, "%s, %d\r\n", Call[0]->Call, Call[0]->Days);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -650,7 +548,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			Call = LTAT;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s, %d\r\n", Call[0]->Call, Call[0]->Days);
+				sprintf(Line, "%s, %d\r\n", Call[0]->Call, Call[0]->Days);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -687,7 +585,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			char ** Call = RejFrom;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s\r\n", Call[0]);
+				sprintf(Line, "%s\r\n", Call[0]);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -701,7 +599,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			char ** Call = RejTo;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s\r\n", Call[0]);
+				sprintf(Line, "%s\r\n", Call[0]);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -715,7 +613,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			char ** Call = RejAt;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s\r\n", Call[0]);
+				sprintf(Line, "%s\r\n", Call[0]);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -729,7 +627,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			char ** Call = HoldFrom;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s\r\n", Call[0]);
+				sprintf(Line, "%s\r\n", Call[0]);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -743,7 +641,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			char ** Call = HoldTo;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s\r\n", Call[0]);
+				sprintf(Line, "%s\r\n", Call[0]);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -757,7 +655,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 			char ** Call = HoldAt;
 			while(Call[0])
 			{
-				wsprintf(Line, "%s\r\n", Call[0]);
+				sprintf(Line, "%s\r\n", Call[0]);
 				strcat(Text, Line);
 				Call++;
 			}
@@ -928,6 +826,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			SetDlgItemInt(hDlg, IDC_MAXBLOCK, ForwardingInfo->MaxFBBBlockSize, FALSE);
 			SetDlgItemText(hDlg, IDC_BBSHA, ForwardingInfo->BBSHA);
 
+			SetFocus(GetDlgItem(hDlg, IDC_TOCALLS)); 
 			return 0;
 		}
 
@@ -1026,7 +925,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 				if (user->RMSSSIDBits & (1 << s))
 				{
 					if (s)
-						wsprintf(SSID, "%d", s);
+						sprintf(SSID, "%d", s);
 					else
 						SSID[0] = 0;
 
@@ -1074,9 +973,9 @@ VOID Do_Add_User(HWND hDlg)
 	SendDlgItemMessage(hDlg, IDC_USER, WM_GETTEXT, 19, (LPARAM)(LPCTSTR)&CurrentConfigCall);
 	
 	if (LookupCall(CurrentConfigCall))
-		wsprintf(InfoBoxText, "User %s already exists", CurrentConfigCall);
+		sprintf(InfoBoxText, "User %s already exists", CurrentConfigCall);
 	else if	((strlen(CurrentConfigCall) < 3) || (strlen(CurrentConfigCall) > MAXUSERNAMELEN))
-		wsprintf(InfoBoxText, "User %s is invalid", CurrentConfigCall);
+		sprintf(InfoBoxText, "User %s is invalid", CurrentConfigCall);
 	else
 	{
 		user = AllocateUserRecord(CurrentConfigCall);
@@ -1084,7 +983,7 @@ VOID Do_Add_User(HWND hDlg)
 
 		CurrentConfigIndex=NumberofUsers;
 		Do_Save_User(hDlg, FALSE);
-		wsprintf(InfoBoxText, "User %s added and info saved", CurrentConfigCall);
+		sprintf(InfoBoxText, "User %s added and info saved", CurrentConfigCall);
 	}	
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
@@ -1099,65 +998,6 @@ VOID Do_Add_User(HWND hDlg)
 
 }
 
-int FindFreeBBSNumber()
-{
-	// returns the lowest number not used by any bbs or message.
-
-	struct MsgInfo * Msg;
-	struct UserInfo * user;
-	int i, m;
-
-	for (i = 1; i<= NBBBS; i++)
-	{
-		for (user = BBSChain; user; user = user->BBSNext)
-		{
-			if (user->BBSNumber == i)
-				goto nexti;				// In use
-		}
-
-		// Not used by BBS - check messages
-
-		for (m = 1; m <= NumberofMessages; m++)
-		{
-			Msg=MsgHddrPtr[m];
-
-			if (check_fwd_bit(Msg->fbbs, i))
-				goto nexti;				// In use
-
-			if (check_fwd_bit(Msg->forw, i))
-				goto nexti;				// In use
-		}
-
-		// Not in Use
-
-		return i;
-	
-nexti:;
-
-	}
-
-	return 0;		// All used
-}
-		
-
-BOOL SetupNewBBS(struct UserInfo * user)
-{
-	user->BBSNumber = FindFreeBBSNumber();
-
-	if (user->BBSNumber == 0)
-		return FALSE;
-
-	user->BBSNext = BBSChain;
-	BBSChain = user;
-
-	SortBBSChain();
-
-	ReinitializeFWDStruct(user);
-
-	return TRUE;
-}
-
-
 
 VOID Do_Delete_User(HWND hDlg)
 {
@@ -1167,7 +1007,7 @@ VOID Do_Delete_User(HWND hDlg)
 
 	if (CurrentConfigIndex == -1)
 	{
-		wsprintf(InfoBoxText, "Please select a user to delete");
+		sprintf(InfoBoxText, "Please select a user to delete");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -1176,7 +1016,7 @@ VOID Do_Delete_User(HWND hDlg)
 
 	if (_stricmp(CurrentConfigCall, user->Call) != 0)
 	{
-		wsprintf(InfoBoxText, "Inconsistancy detected - user not deleted");
+		sprintf(InfoBoxText, "Inconsistancy detected - user not deleted");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -1195,7 +1035,7 @@ VOID Do_Delete_User(HWND hDlg)
 		SendDlgItemMessage(hDlg, IDC_USER, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR)UserRecPtr[n]->Call);
 	} 
 
-	wsprintf(InfoBoxText, "User %s deleted", user->Call);
+	sprintf(InfoBoxText, "User %s deleted", user->Call);
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 	if (user->flags & F_BBS)	// was a BBS?
@@ -1220,7 +1060,7 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (CurrentConfigIndex == -1)
 	{
-		wsprintf(InfoBoxText, "Please select a user to save");
+		sprintf(InfoBoxText, "Please select a user to save");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -1229,7 +1069,7 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (strcmp(CurrentConfigCall, user->Call) != 0)
 	{
-		wsprintf(InfoBoxText, "Inconsistancy detected - information not saved");
+		sprintf(InfoBoxText, "Inconsistancy detected - information not saved");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -1254,7 +1094,7 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 			{
 				// Failed - too many bbs's defined
 
-				wsprintf(InfoBoxText, "Cannot set user to be a BBS - you already have 80 BBS's defined");
+				sprintf(InfoBoxText, "Cannot set user to be a BBS - you already have 80 BBS's defined");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				user->flags &= ~F_BBS;
 				CheckDlgButton(hDlg, IDC_BBSFLAG, (user->flags & F_BBS));
@@ -1335,30 +1175,9 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (ShowBox)
 	{
-		wsprintf(InfoBoxText, "User information saved");
+		sprintf(InfoBoxText, "User information saved");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 	}				
-}
-
-VOID DeleteBBS(struct UserInfo * user)
-{
-	struct UserInfo * BBSRec, * PrevBBS = NULL;
-
-	RemoveMenu(hFWDMenu, IDM_FORWARD_ALL + user->BBSNumber, MF_BYCOMMAND); 
-
-	for (BBSRec = BBSChain; BBSRec; PrevBBS = BBSRec, BBSRec = BBSRec->BBSNext)
-	{
-		if (user == BBSRec)
-		{
-			if (PrevBBS == NULL)		// First in chain;
-			{
-				BBSChain = BBSRec->BBSNext;
-				break;
-			}
-			PrevBBS->BBSNext = BBSRec->BBSNext;
-			break;
-		}
-	}
 }
 
 int Do_Msg_Sel_Changed(HWND hDlg)
@@ -1391,7 +1210,7 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, 6003, Msg->to);
 			SetDlgItemText(hDlg, 6004, Msg->via);
 			SetDlgItemText(hDlg, 6005, Msg->title);
-			wsprintf(Size, "%d", Msg->length);
+			sprintf(Size, "%d", Msg->length);
 
 			SetDlgItemText(hDlg, 6018, FormatDateAndTime(Msg->datecreated, FALSE));
 			SetDlgItemText(hDlg, 6019, FormatDateAndTime(Msg->datereceived, FALSE));
@@ -1469,7 +1288,7 @@ VOID Do_Save_Msg(HWND hDlg)
 
 	if (CurrentMsgIndex == -1)
 	{
-		wsprintf(InfoBoxText, "Please select a message to save");
+		sprintf(InfoBoxText, "Please select a message to save");
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 		return;
 	}
@@ -1556,7 +1375,7 @@ VOID Do_Save_Msg(HWND hDlg)
 			FlagAsKilled(Msg);					// Clear forwarding bits
 	}
 
-	wsprintf(InfoBoxText, "Message Updated");
+	sprintf(InfoBoxText, "Message Updated");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 	Msg->datechanged=time(NULL);
@@ -1621,7 +1440,7 @@ VOID SaveBBSConfig()
 
 	}
 
-	wsprintf(InfoBoxText, "Warning - Program must be restarted for changes to be effective");
+	sprintf(InfoBoxText, "Warning - Program must be restarted for changes to be effective");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
@@ -1674,91 +1493,11 @@ VOID SaveISPConfig()
 
 		RegCloseKey(hKey);
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
 
-
-VOID SaveChatConfig()
-{
-	BOOL OK1;
-	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
-	HKEY hKey=0;
-	int retCode, disp, Type, Vallen, len;
-	int ptr;
-	int OldChatAppl;
-	char * ptr1;
-
-
-	retCode = RegCreateKeyEx(REGTREE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	OldChatAppl = ChatApplNum;
-	
-	ChatApplNum = GetDlgItemInt(hwndDisplay, IDC_ChatAppl, &OK1, FALSE);
-
-	if (ChatApplNum)	
-	{
-		ptr1=GetApplCall(ChatApplNum);
-
-		if (ptr1 && (*ptr1 < 0x21))
-		{
-				MessageBox(NULL, "WARNING - There is no APPLCALL in BPQCFG matching the confgured ChatApplNum. Chat will not work",
-							"BPQMailChat", MB_ICONINFORMATION);
-		}
-	}
-
-	retCode = RegSetValueEx(hKey, "ChatApplNum",0 , REG_DWORD,(BYTE *)&ChatApplNum, 4);
-
-	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDC_ChatNodes, hKey, "OtherChatNodes");
-
-	// reinitialise other nodes list. rtlink messes with the string so pass copy
-
-	node_close();
-
-	// Show dialog box now - gives time for links to close
-	
-	if (ChatApplNum == OldChatAppl)
-		wsprintf(InfoBoxText, "Configuration Changes Saved and Applied");
-	else
-	{
-		ChatApplNum = OldChatAppl;
-		wsprintf(InfoBoxText, "Warning Program must be restarted to change Chat Appl Num");
-	}
-	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-
-	free(OtherNodes);
-
-	// Get length of Chatnodes String
-				
-	Vallen=0;
-	RegQueryValueEx(hKey,"OtherChatNodes",0,			
-		(ULONG *)&Type,NULL,(ULONG *)&Vallen);
-
-	if (Vallen)
-		OtherNodes=malloc(Vallen);
-
-	RegQueryValueEx(hKey,"OtherChatNodes",0,			
-		(ULONG *)&Type,OtherNodes,(ULONG *)&Vallen);
-
-	RegCloseKey(hKey);
-
-	removelinks();
-	 
-	ptr=0;
-
-	while (OtherNodes[ptr])
-	{
-		len=strlen(&OtherNodes[ptr]);		
-		rtlink(_strdup(&OtherNodes[ptr]));			
-		ptr+= (len + 1);
-	}
-
-	if (user_hd)			// Any Users?
-		makelinks();		// Bring up links
-}
-	
 
 VOID SaveFWDConfig(HWND hDlg)
 {
@@ -1841,6 +1580,11 @@ VOID SaveFWDConfig(HWND hDlg)
 	WarnNoRoute = IsDlgButtonChecked(hDlg, IDC_WARNNOROUTE);
 	retCode = RegSetValueEx(hKey,"Warn No Route", 0, REG_DWORD, (BYTE *)&WarnNoRoute,4);
 
+	Localtime = IsDlgButtonChecked(hDlg, IDC_USELOCALTIME);
+	retCode = RegSetValueEx(hKey, "Localtime", 0, REG_DWORD, (BYTE *)&Localtime,4);
+
+
+
 	// Reinitialise Aliases
 
 	n = 0;
@@ -1864,7 +1608,7 @@ VOID SaveFWDConfig(HWND hDlg)
 
 	RegCloseKey(hKey);
 		
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
@@ -1969,7 +1713,7 @@ VOID SaveMAINTConfig()
 		Debugprintf("Maint Clock %d NOW %d Time to HouseKeeping %d", MaintClock, now, MaintClock - now);
 	}
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
@@ -2015,7 +1759,7 @@ VOID SaveWelcomeMsgs()
 
 	RegCloseKey(hKey);
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 }
 
@@ -2055,7 +1799,7 @@ VOID SavePrompts()
 
 	RegCloseKey(hKey);
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 }
 
@@ -2081,7 +1825,7 @@ VOID SaveWPConfig(HWND hDlg)
 	GetDlgItemText(hwndDisplay, IDC_WPVIA, SendWPVIA, 80);
 	retCode = RegSetValueEx(hKey,"SendWPVIA", 0, REG_SZ,(BYTE *)&SendWPVIA, strlen(SendWPVIA));
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 
@@ -2113,7 +1857,7 @@ VOID SaveFilters(HWND hDlg)
 	HoldTo = GetMultiStringValue(hKey,  "HoldTo");
 	HoldAt = GetMultiStringValue(hKey,  "HoldAt");
 
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 	RegCloseKey(hKey);
@@ -2122,17 +1866,6 @@ VOID SaveFilters(HWND hDlg)
 
 
 
-VOID ReinitializeFWDStruct(struct UserInfo * user)
-{
-	if (user->ForwardingInfo)
-	{
-		FreeForwardingStruct(user);
-		free(user->ForwardingInfo); 
-	}
-
-	SetupForwardingStruct(user);
-
-}
 
 MultiLineDialogToREG_MULTI_SZ(HWND hDialog, int DLGItem, HKEY hKey, char * ValueName)
 {
@@ -2194,25 +1927,25 @@ VOID SaveWindowConfig()
 	{
 		if (ConsHeader[0]->ConsoleRect.right)
 		{
-			wsprintf(Size,"%d,%d,%d,%d",ConsHeader[0]->ConsoleRect.left, ConsHeader[0]->ConsoleRect.right,
+			sprintf(Size,"%d,%d,%d,%d",ConsHeader[0]->ConsoleRect.left, ConsHeader[0]->ConsoleRect.right,
 				ConsHeader[0]->ConsoleRect.top, ConsHeader[0]->ConsoleRect.bottom);
 
 			retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 		}
-		wsprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
+		sprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
 		retCode = RegSetValueEx(hKey,"MonitorSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
-		wsprintf(Size,"%d,%d,%d,%d",DebugRect.left,DebugRect.right,DebugRect.top,DebugRect.bottom);
+		sprintf(Size,"%d,%d,%d,%d",DebugRect.left,DebugRect.right,DebugRect.top,DebugRect.bottom);
 		retCode = RegSetValueEx(hKey,"DebugSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
-		wsprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
+		sprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
 		retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
 
 		retCode = RegSetValueEx(hKey,"Log_BBS",0,REG_DWORD,(BYTE *)&LogBBS,4);
 		retCode = RegSetValueEx(hKey,"Log_TCP",0,REG_DWORD,(BYTE *)&LogTCP,4);
 		retCode = RegSetValueEx(hKey,"Log_CHAT",0,REG_DWORD,(BYTE *)&LogCHAT,4);
 
-		wsprintf(Size,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
+		sprintf(Size,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
 		retCode = RegSetValueEx(hKey, "Version",0, REG_SZ,(BYTE *)&Size, strlen(Size));
 
 		RegCloseKey(hKey);
@@ -2232,7 +1965,7 @@ VOID SaveWindowConfig()
 	{
 		if (ConsHeader[1]->ConsoleRect.right)
 		{
-			wsprintf(Size,"%d,%d,%d,%d",ConsHeader[1]->ConsoleRect.left, ConsHeader[1]->ConsoleRect.right,
+			sprintf(Size,"%d,%d,%d,%d",ConsHeader[1]->ConsoleRect.left, ConsHeader[1]->ConsoleRect.right,
 				ConsHeader[1]->ConsoleRect.top, ConsHeader[1]->ConsoleRect.bottom);
 
 			retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
@@ -2258,7 +1991,7 @@ BOOL GetConfigFromRegistry()
 
 	// Get Config From Registry
 
-	wsprintf(BaseDirRaw, "%s\\BPQMailChat", GetBPQDirectory());
+	sprintf(BaseDirRaw, "%s/BPQMailChat", GetBPQDirectory());
 
 TryAgain:
 
@@ -2271,10 +2004,6 @@ TryAgain:
 		retCode += RegQueryValueEx(hKey,"Streams",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxStreams,(ULONG *)&Vallen);
 		
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey,"ChatApplNum",0,			
-			(ULONG *)&Type,(UCHAR *)&ChatApplNum,(ULONG *)&Vallen);
-
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"BBSApplNum",0,			
 			(ULONG *)&Type,(UCHAR *)&BBSApplNum,(ULONG *)&Vallen);
@@ -2321,7 +2050,11 @@ TryAgain:
 		Vallen=4;
 		RegQueryValueEx(hKey, "Warn No Route",0,			
 			(ULONG *)&Type,(UCHAR *)&WarnNoRoute, &Vallen);
-		
+
+		Vallen=4;
+		RegQueryValueEx(hKey, "Localtime",0,			
+			(ULONG *)&Type,(UCHAR *)&Localtime, &Vallen);
+
 		Vallen=100;
 		retCode += RegQueryValueEx(hKey, "BBSName",0 , &Type, (UCHAR *)&BBSName, &Vallen);
 
@@ -2516,7 +2249,7 @@ TryAgain:
 		else
 		{
 			Prompt = malloc(20);
-			wsprintf(Prompt, "de %s>\r\n", BBSName);
+			sprintf(Prompt, "de %s>\r\n", BBSName);
 		}
 
 		RegQueryValueEx(hKey,"NewUserPrompt",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -2529,7 +2262,7 @@ TryAgain:
 		else
 		{
 			NewPrompt = malloc(20);
-			wsprintf(NewPrompt, "de %s>\r\n", BBSName);
+			sprintf(NewPrompt, "de %s>\r\n", BBSName);
 		}
 
 		RegQueryValueEx(hKey,"ExpertPrompt",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -2542,7 +2275,7 @@ TryAgain:
 		else
 		{
 			ExpertPrompt = malloc(20);
-			wsprintf(ExpertPrompt, "de %s>\r\n", BBSName);
+			sprintf(ExpertPrompt, "de %s>\r\n", BBSName);
 		}
 
 
@@ -2646,7 +2379,7 @@ TryAgain:
 			int retCode;
 			char Key[100];
 			
-			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
+			sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
 
 			retCode = RegOpenKeyEx (REGTREE,
                               Key,
@@ -2797,7 +2530,7 @@ TryAgain:
 		return TRUE;
 	}
 	
-	wsprintf(msg, "Registry Key %s\\SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat could not be opened - Opening Configuration Dialog\r\rNote. All Tabs must be saved, even if no changes are made to the Tab", REGTREETEXT);
+	sprintf(msg, "Registry Key %s\\SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat could not be opened - Opening Configuration Dialog\r\rNote. All Tabs must be saved, even if no changes are made to the Tab", REGTREETEXT);
 
 	retCode = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
 
@@ -2973,14 +2706,14 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (CurrentMsgIndex == -1)
 			{
-				wsprintf(InfoBoxText, "Please select a message to Edit");
+				sprintf(InfoBoxText, "Please select a message to Edit");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
 
 			if (SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0) > 1)
 			{
-				wsprintf(InfoBoxText, "Please select only one message");
+				sprintf(InfoBoxText, "Please select only one message");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
@@ -2992,7 +2725,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0) > 1)
 			{
-				wsprintf(InfoBoxText, "Please select only one message");
+				sprintf(InfoBoxText, "Please select only one message");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
@@ -3013,7 +2746,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (CurrentMsgIndex == -1)
 			{
-				wsprintf(InfoBoxText, "Please select a message to Export");
+				sprintf(InfoBoxText, "Please select a message to Export");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
@@ -3044,7 +2777,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 				if (Handle == INVALID_HANDLE_VALUE)
 				{
-					wsprintf(InfoBoxText, "Failed to open Export File %s", FileName);
+					sprintf(InfoBoxText, "Failed to open Export File %s", FileName);
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 					return TRUE;
 				}
@@ -3094,14 +2827,14 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (CurrentMsgIndex == -1)
 			{
-				wsprintf(InfoBoxText, "Please select a message to Save");
+				sprintf(InfoBoxText, "Please select a message to Save");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
 
 			if (SendDlgItemMessage(hDlg, 0, LB_GETSELCOUNT, 0, 0) > 1)
 			{
-				wsprintf(InfoBoxText, "Please select only one message");
+				sprintf(InfoBoxText, "Please select only one message");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
@@ -3112,19 +2845,19 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			MailBuffer = ReadMessageFile(Msg->number);
 			BodyLen = Msg->length;
 
-			wsprintf(FileName, "MSG%05d.txt", Msg->number); 
+			sprintf(FileName, "MSG%05d.txt", Msg->number); 
 
 			ptr = MailBuffer;
 
 			if (_stricmp(Msg->to, "RMS") == 0)
-				 wsprintf(FullTo, "RMS:%s", Msg->via);
+				 sprintf(FullTo, "RMS:%s", Msg->via);
 			else
 			if (Msg->to[0] == 0)
-				wsprintf(FullTo, "smtp:%s", Msg->via);
+				sprintf(FullTo, "smtp:%s", Msg->via);
 			else
 				strcpy(FullTo, Msg->to);
 
-			wsprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
+			sprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
 				Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
 
 			if (Msg->B2Flags)
@@ -3182,7 +2915,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (CurrentMsgIndex == -1)
 			{
-				wsprintf(InfoBoxText, "Please select a message to Print");
+				sprintf(InfoBoxText, "Please select a message to Print");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 				return TRUE;
 			}
@@ -3316,6 +3049,9 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		CheckDlgButton(hDlg, IDC_READDRESSLOCAL, ReaddressLocal);
 		CheckDlgButton(hDlg, IDC_READDRESSRXED, ReaddressReceived);
 		CheckDlgButton(hDlg, IDC_WARNNOROUTE, WarnNoRoute);
+		CheckDlgButton(hDlg, IDC_USELOCALTIME, Localtime);
+
+		CurrentBBS = NULL;
 
 		return (INT_PTR)TRUE;
 
@@ -3393,7 +3129,7 @@ int CreateDialogLine(HWND hWnd, int i, int row)
 				return FALSE;
 
 	GetPortDescription(i, PortDesc);
-	wsprintf(PortNo, "Port %2d %30s", GetPortNumber(i), PortDesc);
+	sprintf(PortNo, "Port %2d %30s", GetPortNumber(i), PortDesc);
 	
 	hCheck[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
                  10,row+5,14,14, hWnd, NULL, hInst, NULL);
@@ -3450,7 +3186,7 @@ SaveUIConfig()
 		UIDigi[i] = malloc(Len+1);
 		GetWindowText(hUIBox[i], UIDigi[i], Len+1);
 		
-		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
+		sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
 
 		retCode = RegCreateKeyEx(REGTREE,
                          Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
@@ -3465,7 +3201,7 @@ SaveUIConfig()
 		}
 	}
 	
-	wsprintf(InfoBoxText, "Configuration Saved");
+	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 	if (BBSApplNum)
@@ -3713,7 +3449,7 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 			Msg->datechanged = time(NULL);
 			Msg->length = MsgLen;
 
-			sprintf_s(MsgFile, sizeof(MsgFile), "%s\\m_%06d.mes", MailDir, Msg->number);
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
 	
 			hFile = CreateFile(MsgFile,
 					GENERIC_WRITE,
@@ -3761,7 +3497,7 @@ VOID CreateRegBackup()
 
 	Debugprintf("Create Reg Backup");
 
-	wsprintf(RegFileName, "%s\\BPQMailChat.reg", BaseDir);
+	sprintf(RegFileName, "%s/BPQMailChat.reg", BaseDir);
 
 	// Keep 4 Generations
 
@@ -3793,12 +3529,12 @@ VOID CreateRegBackup()
 
 	if (handle == INVALID_HANDLE_VALUE)
 	{
-		wsprintf(Msg, "Failed to open Registry Save File\n");
+		sprintf(Msg, "Failed to open Registry Save File\n");
 		WritetoConsole(Msg);
 		return;
 	}
 
-	len = wsprintf(RegLine, "Windows Registry Editor Version 5.00\r\n\r\n");
+	len = sprintf(RegLine, "Windows Registry Editor Version 5.00\r\n\r\n");
 	WriteFile(handle, RegLine, len, &written, NULL);
 
 	if (SaveReg("Software\\G8BPQ\\BPQ32\\BPQMailChat", handle))

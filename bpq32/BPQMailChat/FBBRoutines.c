@@ -380,7 +380,7 @@ ok:
 		}
 		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
 		{
-			conn->FBBReplyIndex += wsprintf(&conn->FBBReplyChars[conn->FBBReplyIndex], "!%d", RestartPtr);
+			conn->FBBReplyIndex += sprintf(&conn->FBBReplyChars[conn->FBBReplyIndex], "!%d", RestartPtr);
 		}
 		else if (LookupTempBID(FBBHeader->BID))
 		{
@@ -510,7 +510,7 @@ ok2:
 		}
 		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
 		{
-			conn->FBBReplyIndex += wsprintf(&conn->FBBReplyChars[conn->FBBReplyIndex], "!%d", RestartPtr);
+			conn->FBBReplyIndex += sprintf(&conn->FBBReplyChars[conn->FBBReplyIndex], "!%d", RestartPtr);
 		}
 
 		else if (LookupTempBID(FBBHeader->BID))
@@ -593,20 +593,6 @@ ok2:
 		{
 			if (conn->BBSFlags & FBBCompressed)	
 			{	
-#ifdef _DEBUG
-				// Create a debug file
-			
-				char DbgFile[MAX_PATH];
-				sprintf_s(DbgFile, sizeof(DbgFile), "%s\\%d_%s.bin", ProperBaseDir, time(NULL), FBBHeader->BID);
-	
-				conn->DebugHandle = CreateFile(DbgFile,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-#endif
 				conn->InputMode = 'B';
 			}
 
@@ -674,12 +660,6 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 
 	FBBHeader = &conn->FBBHeaders[0];
 
-	if (conn->DebugHandle)
-	{
-		CloseHandle(conn->DebugHandle);
-		conn->DebugHandle = NULL;
-	}
-
 	if (FBBHeader->MsgType == 0)
 	{
 		conn->FBBIndex = 0;		// ready for next block;
@@ -700,23 +680,6 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 			conn->InputMode = 'B';
 
 		CreateMessage(conn, FBBHeader->From, FBBHeader->To, FBBHeader->ATBBS, FBBHeader->MsgType, FBBHeader->BID, NULL);
-
-#ifdef _DEBUG
-
-		// Create a debug file
-		{
-			char DbgFile[MAX_PATH];
-			sprintf_s(DbgFile, sizeof(DbgFile), "%s\\%d_%s.bin", ProperBaseDir, time(NULL), FBBHeader->BID);
-	
-			conn->DebugHandle = CreateFile(DbgFile,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-		}
-#endif
 	}
 }
 
@@ -742,7 +705,7 @@ BOOL FBBDoForward(CIRCUIT * conn)
 					
 					// Add From and To Header for Filters
 
-					proplen = wsprintf(proposal, "FC EM %s %d %d %s %s %s\r", 
+					proplen = sprintf(proposal, "FC EM %s %d %d %s %s %s\r", 
 						FBBHeader->BID,
 						FBBHeader->Size,
 						FBBHeader->CSize,
@@ -754,13 +717,13 @@ BOOL FBBDoForward(CIRCUIT * conn)
 
 					// FC EM A3EDD4P00P55 377 281 0
 
-					proplen = wsprintf(proposal, "FC EM %s %d %d %d\r", 
+					proplen = sprintf(proposal, "FC EM %s %d %d %d\r", 
 						FBBHeader->BID,
 						FBBHeader->Size,
 						FBBHeader->CSize, 0);
 
 			else
-				proplen = wsprintf(proposal, "%s %c %s %s %s %s %d\r", 
+				proplen = sprintf(proposal, "%s %c %s %s %s %s %d\r", 
 					(conn->BBSFlags & FBBCompressed) ? "FA" : "FB",
 					FBBHeader->MsgType,
 					FBBHeader->From,
@@ -985,10 +948,13 @@ loop:
 
 		if (conn->FBBChecksum == 0)
 		{
+#ifndef LINBPQ
 			__try 
 			{
+#endif
 				conn->InputMode = 0;		//  So we won't save Restart data if decode fails
 				Decode(conn);				// Setup Next Message will reset InputMode if needed
+#ifndef LINBPQ
 			}
 			__except(EXCEPTION_EXECUTE_HANDLER)
 			{
@@ -997,6 +963,7 @@ loop:
 				conn->CloseAfterFlush = 20;			// 2 Secs
 				return;
 			}
+#endif
 		}
 
 		else
@@ -1055,7 +1022,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 	*Outputptr++ = strlen(Title) + 8;
 	strcpy(Outputptr, Title);
 	Outputptr += strlen(Title) +1;
-	wsprintf(Outputptr, "%6d", conn->RestartFrom);
+	sprintf(Outputptr, "%6d", conn->RestartFrom);
 	Outputptr += 7;
 
 	DataOffset = Outputptr - Output;	// Used if restarting
@@ -1071,7 +1038,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	tm = gmtime(&FwdMsg->datechanged);	
 	
-	wsprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+	sprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 		FwdMsg->number, BBSName, HRoute, RlineVer);
 
@@ -1203,10 +1170,11 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	int BodyLineToBody;
 	int RlineLen = strlen(Rline) ;
 	char * TypeString;
-
+#ifndef LINBPQ	
 	struct _EXCEPTION_POINTERS exinfo;
 
 	__try {
+#endif
 
 	if (Msg == NULL)
 		Debugprintf("Msg  = NULL");
@@ -1315,7 +1283,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		BodyLen += RlineLen;
 
 		memcpy(UnCompressed, MsgBytes, Index);	// Up to Old Body;
-		BodyLineLen = wsprintf(&UnCompressed[Index], "Body: %d\r\n", BodyLen);
+		BodyLineLen = sprintf(&UnCompressed[Index], "Body: %d\r\n", BodyLen);
 
 		MsgLen += BodyLineLen;		// Length of Body Line may have changed
 		Index += BodyLineLen;
@@ -1337,9 +1305,9 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		FBBHeader->Size = MsgLen;
 
 		Compressed = zalloc(2 * MsgLen + 200);
-
+#ifndef LINBPQ
 		__try {
-
+#endif
 		CompLen = Encode(UnCompressed, Compressed, MsgLen, TRUE);
 
 		FBBHeader->CompressedMsg = Compressed;
@@ -1347,9 +1315,9 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 		free(UnCompressed);
 		return TRUE;
-
+#ifndef LINBPQ
 		} My__except_Routine("Encode B2Message");
-
+#endif
 		return FALSE;
 	}
 
@@ -1371,7 +1339,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 
 	tm = gmtime(&Msg->datechanged);	
 	
-	wsprintf(Date, "%04d%/%02d/%02d %02d:%02d",
+	sprintf(Date, "%04d/%02d/%02d %02d:%02d",
 		tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
 	// We create the B2 Header
@@ -1390,7 +1358,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 		strcpy(B2To, Msg->via);
 	else
 		if (Msg->via[0] && (!conn->Paclink))
-			wsprintf(B2To, "%s@%s", Msg->to, Msg->via);
+			sprintf(B2To, "%s@%s", Msg->to, Msg->via);
 		else
 			strcpy(B2To, Msg->to);
 
@@ -1413,9 +1381,9 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 				Logprintf(LOG_BBS, conn, '?', "B2 From - Local User");
 
 				if (FromUser->HomeBBS[0])
-					wsprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
+					sprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
 				else
-					wsprintf(B2From, "%s@%s", Msg->from, BBSName);
+					sprintf(B2From, "%s@%s", Msg->from, BBSName);
 			}
 			else
 			{
@@ -1424,7 +1392,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 				Logprintf(LOG_BBS, conn, '?', "B2 From - not local User");
 
 				if (WP)
-					wsprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
+					sprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
 			}
 		}
 	}
@@ -1438,7 +1406,7 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	else if (Msg->type == 'T')
 		TypeString = "Traffic";
 
-	B2HddrLen = wsprintf(UnCompressed,
+	B2HddrLen = sprintf(UnCompressed,
 			"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\nBody: %d\r\n\r\n",
 			Msg->bid, Date, TypeString, B2From, B2To, Msg->title, BBSName, MsgLen);
 
@@ -1460,9 +1428,9 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 	free(UnCompressed);
 
 	return TRUE;  
-
+#ifndef LINBPQ
 	} My__except_Routine("CreateB2Message");
-
+#endif
 	return FALSE;
 
 }
@@ -1481,7 +1449,7 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	*Outputptr++ = strlen(FBBHeader->FwdMsg->title) + 8;
 	strcpy(Outputptr, FBBHeader->FwdMsg->title);
 	Outputptr += strlen(FBBHeader->FwdMsg->title) +1;
-	wsprintf(Outputptr, "%06d", conn->RestartFrom);
+	sprintf(Outputptr, "%06d", conn->RestartFrom);
 	Outputptr += 7;
 
 	CompLen = FBBHeader->CSize;

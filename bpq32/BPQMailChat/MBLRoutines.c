@@ -49,7 +49,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (Msg == 0)
 		{
-			ErrLen = wsprintf(&ErrMsg[2], "Msg $%d does not exist!\r>", Number);
+			ErrLen = sprintf(&ErrMsg[2], "Msg $%d does not exist!\r>", Number);
 			ErrMsg[0] = 0x18;
 			ErrMsg[1] = ErrLen;
 
@@ -68,7 +68,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		}
 		else
 		{
-			ErrLen = wsprintf(&ErrMsg[2], "Msg $%d not available to you!\r>", Number);
+			ErrLen = sprintf(&ErrMsg[2], "Msg $%d not available to you!\r>", Number);
 			ErrMsg[0] = 0x18;
 			ErrMsg[1] = ErrLen;
 
@@ -261,7 +261,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			return;
 		}
 
-		nputs(conn, "*** DONE\r");
+		BBSputs(conn, "*** DONE\r");
 		Flush(conn);
 		Sleep(400);
 		Disconnect(conn->BPQStream);
