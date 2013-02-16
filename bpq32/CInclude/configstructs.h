@@ -70,7 +70,7 @@ struct PORTCONFIG
 	short PROTOCOL;			// 34,
 	short IOADDR;			// 36,
 	short INTLEVEL;			// 38,
-	short SPEED;			// 40,
+	unsigned short SPEED;	// 40,
 	short CHANNEL;			// 42,
 	short BBSFLAG;			// 44, 
 	short QUALITY;			// 46, 

@@ -18,8 +18,8 @@ count on BPQ32.dll gets messed up, and the code will not unload cleanly.
 
 // Definitions for Statically Linked DLL
 
-DllImport struct PORTCONTROL * APIENTRY GetPortTableEntryFromPortNum(int portslot);
-DllImport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
+struct PORTCONTROL * APIENTRY GetPortTableEntryFromPortNum(int portslot);
+struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 
 
 //	Returns number of free buffers

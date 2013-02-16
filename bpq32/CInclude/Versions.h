@@ -11,19 +11,20 @@
 
 #ifdef CKernel
 
-#define Vers 6,0,0,34
-#define Verstring "6.0.0.34\0"
-#define Datestring "November 2012"
-#define VerComments "G8BPQ Packet Switch (C Version) V6.0.0.34\0"
-#define VerCopyright "Copyright © 2001-2012 John Wiseman G8BPQ\0"
+#define Vers 6,0,0,77
+#define Verstring "6.0.0.77\0"
+#define Datestring "February 2013"
+#define VerComments "G8BPQ Packet Switch (C Version) V6.0.0.77\0"
+#define VerCopyright "Copyright © 2001-2013 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 
 #endif
 
+
 #ifdef TermTCP
 
-#define Vers 1,0,4,1
-#define Verstring "1.0.4.1\0"
+#define Vers 1,0,4,2
+#define Verstring "1.0.4.2\0"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011-2012 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"
@@ -52,10 +53,10 @@
 
 #ifdef MAILCHAT
 
-#define Vers 1,4,53,4
-#define Verstring "1.4.53.4\0"
+#define Vers 1,4,53,12
+#define Verstring "1.4.53.12\0"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
-#define VerCopyright "Copyright © 2009-2012 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2009-2013 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"
 
 #endif
@@ -74,10 +75,10 @@
 
 #ifdef UIUTIL
 
-#define Vers 0,1,2,1
-#define Verstring "0.1.2.1\0"
+#define Vers 0,1,2,2
+#define Verstring "0.1.2.2\0"
 #define VerComments "Beacon Utility for G8BPQ Packet Switch\0"
-#define VerCopyright "Copyright © 2011-2012 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2011-2013 John Wiseman G8BPQ\0"
 #define VerDesc "Beacon Utility for G8BPQ Switch\0"
 
 #endif
@@ -94,20 +95,20 @@
 
 #ifdef APRS
 
-#define Vers 1,1,3,1
-#define Verstring "1.1.3.1\0"
+#define Vers 1,1,3,3
+#define Verstring "1.1.3.3\0"
 #define VerComments  "APRS Client for G8BPQ Switch\0"
-#define VerCopyright "Copyright © 2012 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2012-2013 John Wiseman G8BPQ\0"
 #define VerDesc "APRS Client for G8BPQ Switch\0"
 
 #endif
 
 #ifdef CHAT
 
-#define Vers 1,0,0,2
-#define Verstring "1.0.0.2\0"
+#define Vers 1,0,0,4
+#define Verstring "1.0.0.4\0"
 #define VerComments "Chat server for G8BPQ Packet Switch\0"
-#define VerCopyright "Copyright © 2009-2012 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2009-2013 John Wiseman G8BPQ\0"
 #define VerDesc "Chat server for G8BPQ's 32 Bit Switch\0"
 
 #endif

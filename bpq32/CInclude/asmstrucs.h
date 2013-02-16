@@ -76,6 +76,7 @@ struct APPLCONFIG
 	char CommandAlias[48];
 	char ApplCall[10];
 	char ApplAlias[10];
+	char L2Alias[10];
 	int ApplQual;
 };
 
@@ -123,10 +124,10 @@ typedef struct _TRANSPORTENTRY
 	struct _TRANSPORTENTRY * L4CROSSLINK; // POINTER TO LINKED L4 SESSION ENTRY
 	UCHAR	L4CIRCUITTYPE;		// BIT SIGNIFICANT - SEE BELOW
 	UCHAR	KAMSESSION;			// Session Number on KAM Host Mode TNC
-	VOID *	L4TX_Q;
-	VOID *	L4RX_Q;	
-	VOID *	L4HOLD_Q;			// FRAMES WAITING TO BE ACKED
-	VOID *	L4RESEQ_Q;			// FRAMES RECEIVED OUT OF SEQUENCE
+	struct DATAMESSAGE * L4TX_Q;
+	struct _L3MESSAGEBUFFER * L4RX_Q;	
+	struct DATAMESSAGE * L4HOLD_Q;				// FRAMES WAITING TO BE ACKED
+	struct _L3MESSAGEBUFFER * L4RESEQ_Q;		// FRAMES RECEIVED OUT OF SEQUENCE
 
 	UCHAR	L4STATE;
 	USHORT	L4TIMER;
@@ -382,6 +383,7 @@ typedef struct _APPLCALLS
 	BOOL APPLHASALIAS;
 	int APPLPORT;					// Port used if APPL has an Alias
 	char * APPLALIASPTR;			// Pointer to Alias if defined
+	char L2ALIAS[7];				// Additional Alias foe L2 connects
 
 } APPLCALLS;
 
@@ -508,7 +510,7 @@ typedef struct PORTCONTROL
 	USHORT IOBASE;		// CONFIG PARAMS FOR HARDWARE DRIVERS 
 
 	char INTLEVEL;		// NEXT 4 SAME FOR ALL H/W TYPES
-	USHORT BAUDRATE;	// SPEED
+	int	BAUDRATE;		// SPEED
 	char CHANNELNUM;	// ON MULTICHANNEL H/W
 	struct PORTCONTROL * INTCHAIN; // POINTER TO NEXT PORT USING THIS LEVEL
 	UCHAR PORTWINDOW;	// L2 WINDOW FOR THIS PORT
@@ -796,4 +798,14 @@ typedef struct _ICMPMSG
 
 
 #pragma pack()
+
+struct SEM
+{
+	int Flag;
+	int Clashes;
+	int	Gets;
+	int Rels;
+	DWORD SemProcessID;
+};
+
 
