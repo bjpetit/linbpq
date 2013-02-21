@@ -29,36 +29,21 @@
 
 #define _USE_32BIT_TIME_T
 
+#include "compatbits.h"
 
-#include <crtdbg.h>
+#ifndef LINBPQ
 
-
-// Windows Header Files:
-#include <windows.h>
-#include <windowsx.h>
-#include <winsock.h>
-#include "commctrl.h"
-
-#include "Commdlg.h"
-
-#include <shellapi.h>
-
-// C RunTime Header Files
-#include <stdlib.h>
-#include <malloc.h>
-#include <memory.h>
-#include <tchar.h>
-#include <stdio.h>
-#include <time.h>
-#include <mmsystem.h> 
-#include <Richedit.h>
-
-#include "BPQChat.h"
+#include "asmstrucs.h"
 #include "bpq32.h"
-#include "ASMStrucs.h"
+#include "BPQChat.h"
+
+#endif
+
 
 #include "resrc1.h"
 #include "resource.h"
 
-#define NEWROUTING
+
+
+
 

@@ -1,154 +1,20 @@
 
 #include "stdafx.h"
 
-typedef struct topic_t
-{
-	struct topic_t *next;
-	char  *name;
-	int  refcnt;
-} TOPIC;
-
-// Nodes.
-
-typedef struct node_t
-{
-	struct node_t *next;
-	char *alias;
-	char *call;
-	char * Version;
-	int refcnt;
-} CHATNODE;
-
-
-
-typedef struct ct_t
-{
-	struct ct_t *next;
-	TOPIC *topic;
-	int  refcnt;
-} CT;
-
-typedef struct link_t
-{
-	struct link_t *next;
-	char *alias;
-	char *call;
-	int  flags; // See circuit flags.
-	int delay;	// Limit connects when failing
-
-} LINK;
-
-typedef struct ChatConnectionInfo_S
-{
-	struct ChatConnectionInfo_S *next;
-	PROC *proc;
-	UCHAR rtcflags;             // p_linked or p_user.
-	int s;                 // Socket.
-//	char buf[ln_ibuf];      // Line of incoming text.
-	union
-	{
-		struct user_t *user;  // Associated user if local.
-		struct link_t *link;  // Associated link if link.
-	} u;
-	int refcnt;               // If link, # of users on that link.
-	struct cn_t *hnode;       // Nodes heard from this link.
-	struct ct_t *topic;       // Out this circuit if from these topics.
-
-	int Number;					// Number of record - for Connections display
-	BOOL Active;
-    int BPQStream;
-	int paclen;
-	UCHAR Callsign[11];			// Station call including SSID
-    BOOL GotHeader;
-
-	char FBBReplyChars[80];		// Version from other end
-
-    UCHAR InputBuffer[10000];
-    int InputLen;				// Data we have already = Offset of end of an incomplete packet;
-
-	struct UserInfo * UserPointer;
-    int Retries;
-	int	LoginState;				// 1 = user ok, 2 = password ok
-	int Flags;
-
-	// Data to the user is kept in a static buffer. This can be appended to,
-	// and data sucked out under both terminal and system flow control. PACLEN is
-	// enfored when sending to node.
-
-	UCHAR OutputQueue[10000];	// Messages to user
-	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
-	int OutputGetPointer;		// Next byte to send. When Getpointer = Queue Length all is sent - free the buffer and start again.
-
-	int CloseAfterFlush;		// Close session when all sent. Set to 100ms intervals to wait.
-	
-	BOOL Paging;				// Set if user wants paging
-	int LinesSent;				// Count when paging
-	int PageLen;				// Lines per page
-
-	BOOL sysop;					// Set if user is authenticated as a sysop
-	BOOL Secure_Session;		// Set if Local Terminal, or Telnet connect with SYSOP status
-
-	BOOL NewUser;						// Set if first time user has accessed BBS
-	int Watchdog;						// Hung Circuit Detect.
-	int SessType;						// BPQ32 sesstype bits
-
-#define Sess_L2LINK 1
-#define Sess_SESSION	2
-#define Sess_UPLINK	4
-#define Sess_DOWNLINK 8
-#define Sess_BPQHOST 0x20
-#define Sess_PACTOR	0x40
-
-	HANDLE DebugHandle;					// File Handle for session-based debugging
-
-} ChatConnectionInfo, ChatCIRCUIT;
-
-typedef struct user_t
-{
-	struct  user_t *next;
-	char    *call;
-	char    *name;
-	char    *qth;
-	CHATNODE    *node;          // Node user logged into.
-	ChatCIRCUIT *circuit;       // Circuit user is on, local or link.
-	TOPIC   *topic;         // Topic user is in.
-	int     rtflags;
-	time_t	lastmsgtime;	// Time of last input from user
-	time_t	lastsendtime;	// Time of last output to user
-	int Colour;				// For Console Display
-} USER;
-
-// Bits for circuit flags and link flags.
-
-#define p_nil     0x00    // Circuit is being shut down.
-#define p_user    0x01    // User connected.
-#define p_linked  0x02    // Active link with another RT.
-#define p_linkini 0x04    // Outgoing link setup with another RT.
-#define p_linkwait 0x08   // Incoming link setup - waiting for *RTL
-
-
-extern char PassError[];
-extern char BusyError[];
 
 extern char NodeTail[];
-extern BOOL APRSApplConnected;
-extern char Mycall[10];
+extern char BBSName[10];
 
 extern char ConfigName[250];
 extern char ChatConfigName[250];
 
 extern char OtherNodesList[1000];
 
-extern USER *user_hd;
-extern LINK *link_hd;	
-
-extern UCHAR BPQDirectory[260];
+static UCHAR BPQDirectory[260];
 
 extern ConnectionInfo Connections[];
 extern int	NumberofStreams;
 
-extern ChatCIRCUIT ChatConnections[];
-extern int	NumberofChatStreams;
 
 extern int SMTPMsgs;
 
@@ -167,140 +33,72 @@ struct UserInfo * BBSLIST[NBBBS + 1];
 
 int MaxBBS = 0;
 
-struct TCPUserRec
+struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 {
-	char * Callsign;
-	char * UserName;
-	char * Password;
-	char * Appl;				// Autoconnect APPL
-	BOOL Secure;				// Authorised User
-};
-
-
-struct TCPINFO
-{
-	int NumberofUsers;
-	struct TCPUserRec ** UserRecPtr;
-	int CurrentConnections;
-
-	struct TCPUserRec RelayUser;
-
-	int CurrentSockets;
-
-	int TCPPort;
-	int FBBPort[100];
-	int RelayPort;
-	int HTTPPort;
-	int CMDPort;
-
-	BOOL IPV4;					// Allow Connect using IPV4
-	BOOL IPV6;					// Allow Connect using IPV6
-	BOOL CMS;					// Allow Connect to CMS
-	BOOL CMSOK;					// Internet link is ok.
-	BOOL UseCachedCMSAddrs;
-	struct in_addr CMSAddr[MaxCMS];
-	BOOL CMSFailed[MaxCMS];		// Set if connect to CMS failed.
-	char * CMSName[MaxCMS];		// Reverse DNS Name of Server
-	int NumberofCMSAddrs;
-	int NextCMSAddr;			// Round Robin Pointer
-	int CheckCMSTimer;			// CMS Poll Timer
-
-	BOOL DisconnectOnClose;
-
-	char PasswordMsg[100];
-
-	char cfgHOSTPROMPT[100];
-
-	char cfgCTEXT[300];
-
-	char cfgLOCALECHO[100];
-
-	int MaxSessions;
-
-	char LoginMsg[100];
-
-	char RelayAPPL[20];
-
-	SOCKET TCPSock;
-	SOCKET FBBsock[100];
-	SOCKET Relaysock;
-	SOCKET HTTPsock;
-	SOCKET sock6;
-	SOCKET FBBsock6[100];
-	SOCKET Relaysock6;
-	SOCKET HTTPsock6;
-
-	fd_set ListenSet;
-	int maxsock;
-
-	HMENU hActionMenu;
-	HMENU hLogMenu;
-	HMENU hDisMenu;					// Disconnect Menu Handle
-	HWND hCMSWnd;
-
-};
-
-
-
-struct MailConnectionInfo		// Used for Web Server for thread-specific stuff
-{
-	struct MailConnectionInfo * Next;
-	struct UserInfo * User;		// Selected User
+	struct HTTPConnectionInfo * Next;
+	struct STATIONRECORD * SelCall;	// Station Record for individual statond display
+	char Callsign[12];
+	int WindDirn, WindSpeed, WindGust, Temp, RainLastHour, RainLastDay, RainToday, Humidity, Pressure; //WX Fields
+	char * ScreenLines[100];	// Screen Image for Teminal access mode - max 100 lines (cyclic buffer)
+	int ScreenLineLen[100];		// Length of each lime
+	int LastLine;				// Pointer to last line of data
+	BOOL PartLine;				// Last line does not have CR on end
+	char HTTPCall[10];			// Call of HTTP user
+	BOOL Changed;				// Changed since last poll. If set, reply immediately, else set timer and wait
+	SOCKET sock;				// Socket for pending send
+	int ResponseTimer;			// Timer for delayed response
+	int KillTimer;				// Clean up timer (no activity timeout)
+	int Stream;					// BPQ Stream Number
 	char Key[20];				// Session Key
+	BOOL Connected;
+	struct UserInfo * User;		// Selected User
 	struct MsgInfo * Msg;		// Selected Message
 	WPRec * WP;					// Selected WP record
-	BOOL Connected;
 };
 
-static struct MailConnectionInfo * SessionList;	// active bbs config sessions
 
-static struct MailConnectionInfo * AllocateSession(char Appl);
 VOID ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int * RLen);
-static struct MailConnectionInfo * FindSession(char * Key);
-VOID ProcessUserUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
-VOID ProcessMsgFwdUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+static struct HTTPConnectionInfo * FindSession(char * Key);
+VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID ProcessMsgFwdUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key);
-VOID ProcessConfUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
-VOID ProcessUIUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID ProcessUIUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 VOID SendUserSelectPage(char * Reply, int * ReplyLen, char * Key);
 VOID SendFWDSelectPage(char * Reply, int * ReplyLen, char * Key);
 int EncryptPass(char * Pass, char * Encrypt);
-VOID ProcessFWDUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID ProcessFWDUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key);
-VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key);
 VOID SendUIPage(char * Reply, int * ReplyLen, char * Key);
 VOID GetParam(char * input, char * key, char * value);
 BOOL GetConfig(char * ConfigName);
-VOID ProcessDisUser(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
-VOID ProcessChatDisUser(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID ProcessDisUser(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 int APIENTRY SessionControl(int stream, int command, int param);
 int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key);
-VOID ProcessMsgUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
-VOID ProcessMsgAction(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID ProcessMsgUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID ProcessMsgAction(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 int APIENTRY GetNumberofPorts();
 int APIENTRY GetPortNumber(int portslot);
 UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc);
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 VOID SendHouseKeeping(char * Reply, int * ReplyLen, char * Key);
 VOID SendWelcomePage(char * Reply, int * ReplyLen, char * Key);
-VOID SaveWelcome(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
+VOID SaveWelcome(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
 VOID GetMallocedParam(char * input, char * key, char ** value);
-VOID SaveMessageText(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
-VOID SaveHousekeeping(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
-VOID SaveWP(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
+VOID SaveMessageText(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
+VOID SaveWP(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
 int SendWPDetails(WPRec * WP, char * Reply, char * Key);
-int SendUserDetails(struct MailConnectionInfo * Session, char * Reply, char * Key);
+int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Key);
 int SetupNodeMenu(char * Buff);
 VOID SendFwdSelectPage(char * Reply, int * ReplyLen, char * Key);
-VOID SendFwdDetails(struct MailConnectionInfo * Session, char * Reply, int * ReplyLen, char * Key);
+VOID SendFwdDetails(struct HTTPConnectionInfo * Session, char * Reply, int * ReplyLen, char * Key);
 VOID SetMultiStringValue(char ** values, char * Multi);
 VOID SendFwdMainPage(char * Reply, int * ReplyLen, char * Key);
-VOID SaveFwdCommon(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
-VOID SaveFwdDetails(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
+VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 char **	SeparateMultiString(char * MultiString);
-VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key);
-VOID SaveChatInfo(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
-int rtlink (char * Call);
+
 
 
 char UNC[] = "";
@@ -311,19 +109,15 @@ char Sent[] = "#98FFA0";
 char ToSend[] = "#FFFF00";
 char NotThisOne[] = "#FFFFFF";
 
+static char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
+
+static char BusyError[] = "<p align=center>Sorry, No sessions available - please try later</p>";
+
+
 char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
 	"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
 	"<h3 align=center>Please enter Callsign and Password to access the BBS</h3>"
 	"<form method=post action=/Mail/Signon?Mail>"
-	"<table align=center  bgcolor=white>"
-	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
-	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
-
-char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title></head><body background=\"/background.jpg\">"
-	"<h3 align=center>BPQ32 Chat Server %s Access</h3>"
-	"<h3 align=center>Please enter Callsign and Password to access the Chat Server</h3>"
-	"<form method=post action=/Mail/Signon?Chat>"
 	"<table align=center  bgcolor=white>"
 	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
@@ -342,15 +136,6 @@ char MailPage[] = "<html><head><title>%s's BBS Web Server</title></head>"
 	"<td><a href=/Mail/WP?%s>WP Update</a></td>"
 	"<td><a href=/>Node Menu</a></td>"
 	"</tr></table>";
-
-char ChatPage[] = "<html><head><title>%s's Chat Server</title></head>"
-	"<body background=\"/background.jpg\"><h3 align=center>BPQ32 Chat Node %s</h3><P>"
-	"<P align=center><table border=1 cellpadding=2 bgcolor=white><tr>"
-	"<td><a href=/Mail/ChatStatus?%s>Status</a></td>"
-	"<td><a href=/Mail/ChatConf?%s>Configuration</a></td>"
-	"<td><a href=/>Node Menu</a></td>"
-	"</tr></table>";
-
 
 char RefreshMainPage[] = "<html><head>"
 	"<meta http-equiv=refresh content=10>"
@@ -552,13 +337,11 @@ static char LostSession[] = "<html><body>"
 char * MsgEditTemplate = NULL;
 char * HousekeepingTemplate = NULL;
 char * ConfigTemplate = NULL;
-char * ChatConfigTemplate = NULL;
 char * WPTemplate = NULL;
 char * UserListTemplate = NULL;
 char * UserDetailTemplate = NULL;
 char * FwdTemplate = NULL;
 char * FwdDetailTemplate = NULL;
-char * ChatStatusTemplate = NULL;
 
 char * GetTemplateFromFile(char * FN)
 {
@@ -570,7 +353,7 @@ char * GetTemplateFromFile(char * FN)
 	BOOL Special = FALSE;
 	struct stat STAT;
 
-	sprintf(MsgFile, "%s/HTML/%s", BPQDirectory, FN);
+	sprintf(MsgFile, "%s/HTML/%s", GetBPQDirectory(), FN);
 
 	if (stat(MsgFile, &STAT) == -1)
 	{
@@ -605,20 +388,14 @@ static int compare(const void *arg1, const void *arg2)
 
 int SendHeader(char * Reply, char * Key)
 {
-	return sprintf(Reply, MailPage, Mycall, Mycall, Key, Key, Key, Key, Key, Key, Key, Key);
-}
-
-int SendChatHeader(char * Reply, char * Key)
-{
-	return sprintf(Reply, ChatPage, Mycall, Mycall, Key, Key);
+	return sprintf(Reply, MailPage, BBSName, BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
 }
 
 
-void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, char * input, char * Reply, int * RLen, SOCKET sock)
+void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen)
 {
-	char * Conxtext = 0, * NodeURL;
+	char * Context = 0, * NodeURL;
 	int ReplyLen;
-	struct MailConnectionInfo * Session;
 	BOOL LOCAL = FALSE;
 	char * Key;
 	char Appl = 'M';
@@ -626,90 +403,22 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 	if (strstr(input, "Host: 127.0.0.1"))
 		LOCAL = TRUE;
 
-	NodeURL = strtok_s(URL, "?", &Conxtext);
-	Key = strtok_s(NULL, "?", &Conxtext);
+	NodeURL = strtok_s(URL, "?", &Context);
 
-	if (_stricmp(NodeURL, "/Mail/Signon") == 0)
-	{
-		ProcessMailSignon(TCP, input, Key, Reply, RLen);
-		return;
-	}
-
-	if (_stricmp(NodeURL, "/Mail/Lost") == 0)
-	{
-		input = strstr(input, "\r\n\r\n");	// End of headers
-
-		if (input && strstr(input, "Cancel=Exit"))
-		{
-			ReplyLen = SetupNodeMenu(Reply);
-			*RLen = ReplyLen;
-			return;
-		}
-		if (Key)
-			Appl = Key[0];
-
-		Key = 0;
-	}
-
-	if (Key == 0 || Key[0] == 0)
-	{
-		// No Session 
-
-		// if not local send a signon screen, else create a user session
-
-		if (LOCAL)
-		{
-			if (strstr(NodeURL, "Chat"))
-				Appl = 'C';
-
-			Session = AllocateSession(Appl);
-
-			if (Session)
-			{
-				if (Appl == 'C')
-					ReplyLen = SendChatHeader(Reply, Session->Key);
-				else
-					ReplyLen = SendHeader(Reply, Session->Key);
-			}
-			else
-			{
-				ReplyLen = SetupNodeMenu(Reply);
-				ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
-			}
-			*RLen = ReplyLen;
-			return;
-		}
-		if (_stricmp(NodeURL, "/Mail/Chat.html") == 0)
-			ReplyLen = sprintf(Reply, ChatSignon, Mycall, Mycall);
-		else
-			ReplyLen = sprintf(Reply, MailSignon, Mycall, Mycall);
-
-		*RLen = ReplyLen;
-		return;
-	}
-
-	Session = FindSession(Key);
-
-	if (Session == NULL)
-	{
-		ReplyLen = sprintf(Reply, LostSession, Key);
-		*RLen = ReplyLen;
-		return;
-	}
+	Key = Session->Key;
 
 	if (strcmp(Method, "POST") == 0)
-	{
+	{	
+		if (_stricmp(NodeURL, "/Mail/Header") == 0)
+		{
+			*RLen = SendHeader(Reply, Session->Key);
+ 			return;
+		}
+
 		if (_stricmp(NodeURL, "/Mail/Config") == 0)
 		{
 			NodeURL[strlen(NodeURL)] = ' ';				// Undo strtok
 			ProcessConfUpdate(Session, input, Reply, RLen, Key);
-			return ;
-		}
-
-		if (_stricmp(NodeURL, "/Mail/ChatConfig") == 0)
-		{
-			NodeURL[strlen(NodeURL)] = ' ';				// Undo strtok
-			SaveChatInfo(Session, input, Reply, RLen, Key);
 			return ;
 		}
 
@@ -728,12 +437,6 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 		if (_stricmp(NodeURL, "/Mail/DisSession") == 0)
 		{
 			ProcessDisUser(Session, input, Reply, RLen, Key);
-			return ;
-		}
-
-		if (_stricmp(NodeURL, "/Mail/ChatDisSession") == 0)
-		{
-			ProcessChatDisUser(Session, input, Reply, RLen, Key);
 			return ;
 		}
 
@@ -907,20 +610,21 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 		// End of POST section
 	}
 
+	if (_stricmp(NodeURL, "/Mail/Header") == 0)
+	{
+		*RLen = SendHeader(Reply, Session->Key);
+ 		return;
+	}
+
+	if (_stricmp(NodeURL, "/Mail/all.html") == 0)
+	{
+		*RLen = SendHeader(Reply, Session->Key);
+ 		return;
+	}
+
 	if (_stricmp(NodeURL, "/Mail/Status") == 0)
 	{
 		SendStatusPage(Reply, RLen, Key);
-		return;
-	}
-
-	if ((_stricmp(NodeURL, "/Mail/ChatStatus") == 0) || (_stricmp(NodeURL, "/Mail/ChatDisSession") == 0))
-	{
-		if (ChatStatusTemplate)
-			free(ChatStatusTemplate);
-	
-		ChatStatusTemplate = GetTemplateFromFile("ChatStatus.txt");
-		SendChatStatusPage(Reply, RLen, Key);
-
 		return;
 	}
 
@@ -932,17 +636,6 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 		ConfigTemplate = GetTemplateFromFile("MainConfig.txt");
 
 		SendConfigPage(Reply, RLen, Key);
-		return;
-	}
-
-	if (_stricmp(NodeURL, "/Mail/ChatConf") == 0)
-	{
-		if (ChatConfigTemplate)
-			free(ChatConfigTemplate);
-
-		ChatConfigTemplate = GetTemplateFromFile("ChatConfig.txt");
-
-		SendChatConfigPage(Reply, RLen, Key);
 		return;
 	}
 
@@ -979,7 +672,7 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 
 		UserDetailTemplate = GetTemplateFromFile("UserDetail.txt");
 
-		*RLen = sprintf(Reply, UserListTemplate, Key, Key, Mycall,
+		*RLen = sprintf(Reply, UserListTemplate, Key, Key, BBSName,
 			Key, Key, Key, Key, Key, Key, Key, Key);
 	
 		return;
@@ -1009,7 +702,7 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 		if (MsgEditTemplate)
 		{
 			int len =sprintf(Reply, MsgEditTemplate, Key, Key, Key, Key, Key, 
-				Mycall, Key, Key, Key, Key, Key, Key, Key, Key);
+				BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
 			*RLen = len;
 			return;
 		}
@@ -1064,7 +757,7 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 		if (WPTemplate)
 		{
 			int len =sprintf(Reply, WPTemplate, Key, Key, Key, Key,
-				Mycall, Key, Key, Key, Key, Key, Key, Key, Key);
+				BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
 			*RLen = len;
 			return;
 		}
@@ -1097,7 +790,7 @@ void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, cha
 	}
 
 
-	ReplyLen = sprintf(Reply, MailSignon, Mycall, Mycall);
+	ReplyLen = sprintf(Reply, MailSignon, BBSName, BBSName);
 	*RLen = ReplyLen;
 
 }
@@ -1122,7 +815,7 @@ int SendWPDetails(WPRec * WP, char * Reply, char * Key)
 	}
 	return(len);	
 }
-VOID SaveWP(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
+VOID SaveWP(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
 {
 	WPRec * WP = Session->WP;
 	char * input, * ptr1, * ptr2;
@@ -1433,7 +1126,7 @@ VOID * GetOverrideFromString(char * input)
 
 
 
-VOID SaveHousekeeping(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
+VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -1503,7 +1196,7 @@ VOID SaveHousekeeping(struct MailConnectionInfo * Session, char * MsgPtr, char *
 
 
 
-VOID SaveWelcome(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
+VOID SaveWelcome(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -1530,107 +1223,7 @@ VOID SaveWelcome(struct MailConnectionInfo * Session, char * MsgPtr, char * Repl
 	return;
 }
 
-VOID SaveChatInfo(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
-{
-	int ReplyLen = 0;
-	char * input;
-	struct UserInfo * USER = NULL;
-	char Temp[80];
-	char Nodes[1000] = "";
-	char * ptr1, * ptr2;
-
-	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-
-	if (input)
-	{
-		if (strstr(input, "Cancel=Cancel"))
-		{
-			*RLen = SendHeader(Reply, Session->Key);
- 			return;
-		}
-
-	
-		GetParam(input, "ApplNum=", Temp);
-		ChatApplNum = atoi(Temp);
-		GetParam(input, "Streams=", Temp);
-		MaxChatStreams = atoi(Temp);
-
-		GetParam(input, "nodes=", Nodes);
-
-		ptr1 = Nodes;
-		ptr2 = OtherNodesList;
-
-		while (*ptr1)
-		{
-			if ((*ptr1) == 13)
-			{
-				*(ptr2++) = ' ';
-				ptr1 += 2;
-			}
-			else
-				*(ptr2++) = *(ptr1++);
-		}
-
-		*ptr2 = 0;
-
-		GetParam(input, "Posn=", Position);
-		GetParam(input, "MapText=", PopupText);
-
-		GetCheckBox(input, "PopType=Click", &PopupMode);
-
-		if (strstr(input, "Restart=Restart+Links"))
-		{
-			char * ptr1, * ptr2, * Context;
-
-			node_close();
-
-			Sleep(2);
-			
-			// Dont call removelinks - they may still be attached to a circuit. Just clear header
-
-			link_hd = NULL;
-	 
-			// Set up other nodes list. rtlink messes with the string so pass copy
-	
-			ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
-
-			while (ptr1)
-			{
-				rtlink(ptr1);			
-				ptr1 = strtok_s(NULL, " ,\r", &Context);
-			}
-
-			free(ptr2);
-
-			if (user_hd)			// Any Users?
-				makelinks();		// Bring up links
-		}
-
-		if (strstr(input, "UpdateMap=Update+Map"))
-		{
-			char Msg[500];
-			int len;
-
-			len = sprintf(Msg, "INFO %s|%s|%d|\r", Position, PopupText, PopupMode);
-
-			if (len < 256)
-					Send_MON_Datagram(Msg, len);
-
-		}
-
-				
-		SaveChatConfig(ChatConfigName);
-		GetChatConfig(ChatConfigName);
-	}
-	
-	SendChatConfigPage(Reply, RLen, Key);
-	return;
-}
-
-
-
-
-VOID ProcessConfUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
+VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -1727,9 +1320,10 @@ VOID ProcessConfUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char 
 		HoldFrom = GetMultiStringInput(input, "Hfrom=");
 		HoldTo = GetMultiStringInput(input, "Hto=");
 		HoldAt = GetMultiStringInput(input, "Hat=");
-
+#ifdef LINBPQ
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
+#endif
 	}
 	
 	SendConfigPage(Reply, RLen, Key);
@@ -1738,7 +1332,7 @@ VOID ProcessConfUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char 
 
 
 
-VOID ProcessUIUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
+VOID ProcessUIUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key)
 {
 	int ReplyLen = 0, i;
 	char * input;
@@ -1780,7 +1374,7 @@ VOID ProcessUIUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * 
 	return;
 }
 
-VOID ProcessDisUser(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID ProcessDisUser(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	char * input;
 	char * ptr;
@@ -1799,30 +1393,9 @@ VOID ProcessDisUser(struct MailConnectionInfo * Session, char * MsgPtr, char * R
 	SendStatusPage(Reply, RLen, Rest);
 }
 
-VOID ProcessChatDisUser(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
-{
-	char * input;
-	char * ptr;
-
-	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-
-	if (input)
-	{
-		ptr = strstr(input, "Stream=");
-		if (ptr)
-		{
-			int Stream = atoi(ptr + 7);
-			Disconnect(Stream);
-		}
-	}	
-	SendChatStatusPage(Reply, RLen, Rest);
-}
 
 
-
-
-
-VOID SaveFwdCommon(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -1859,7 +1432,7 @@ char * GetNextParam(char ** next)
 	return ptr1;
 }
 
-VOID SaveFwdDetails(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -1931,10 +1504,10 @@ VOID SaveFwdDetails(struct MailConnectionInfo * Session, char * MsgPtr, char * R
 		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowB1 = TRUE; else FWDInfo->AllowB1 = FALSE;
 		ptr1 = GetNextParam(&ptr2);		// No Wait
 		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowB2 = TRUE; else FWDInfo->AllowB2 = FALSE;
-
+#ifdef LINBPQ
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
-
+#endif
 		ReinitializeFWDStruct(Session->User);
 	
 		SendFwdDetails(Session, Reply, RLen, Session->Key);
@@ -1943,7 +1516,7 @@ VOID SaveFwdDetails(struct MailConnectionInfo * Session, char * MsgPtr, char * R
 
 
 
-VOID ProcessUserUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -2115,68 +1688,7 @@ VOID ProcessUserUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char 
 	}
 }
 
-
-VOID ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int * RLen)
-{
-	int ReplyLen = 0;
-	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-	char * user, * password, * Key;
-
-	if (input)
-	{
-		int i;
-		struct TCPUserRec * USER;
-
-		if (strstr(input, "Cancel=Cancel"))
-		{
-			ReplyLen = SetupNodeMenu(Reply);
-			*RLen = ReplyLen;
-			return;
-		}
-		user = strtok_s(&input[9], "&", &Key);
-		password = strtok_s(NULL, "=", &Key);
-		password = Key;
-
-		for (i = 0; i < TCP->NumberofUsers; i++)
-		{
-			USER = TCP->UserRecPtr[i];
-
-			if (user && _stricmp(user, USER->UserName) == 0)
-			{
- 				if (strcmp(password, USER->Password) == 0 && USER->Secure)
-				{
-					// ok
-
-					struct MailConnectionInfo * Session = AllocateSession(Appl[0]);
-
-					if (Session)
-					{
-						if (Appl[0] == 'C')
-							ReplyLen = SendChatHeader(Reply, Session->Key);
-						else
-							ReplyLen = SendHeader(Reply, Session->Key);
-					}
-					else
-					{
-						ReplyLen = SetupNodeMenu(Reply);
-						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
-					}
-					*RLen = ReplyLen;
-					return;
-				}
-			}
-		}
-	}	
-	
-	ReplyLen = sprintf(Reply, MailSignon, Mycall, Mycall);
-	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
-		
-	*RLen = ReplyLen;
-  
-	return;
-}
-
-VOID ProcessMsgAction(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID ProcessMsgAction(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -2193,7 +1705,7 @@ VOID ProcessMsgAction(struct MailConnectionInfo * Session, char * MsgPtr, char *
 	}
 }
 
-VOID SaveMessageText(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID SaveMessageText(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	int ReplyLen = 0;
 	struct MsgInfo * Msg = Session->Msg;
@@ -2282,7 +1794,7 @@ VOID SaveMessageText(struct MailConnectionInfo * Session, char * MsgPtr, char * 
 }
 
 
-VOID ProcessMsgUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID ProcessMsgUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -2328,7 +1840,7 @@ VOID ProcessMsgUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char *
 
 
 
-VOID ProcessMsgFwdUpdate(struct MailConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
+VOID ProcessMsgFwdUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
 	int ReplyLen = 0;
 	char * input;
@@ -2407,7 +1919,7 @@ VOID SetMultiStringValue(char ** values, char * Multi)
 
 
 
-VOID SendFwdDetails(struct MailConnectionInfo * Session, char * Reply, int * ReplyLen, char * Key)
+VOID SendFwdDetails(struct HTTPConnectionInfo * Session, char * Reply, int * ReplyLen, char * Key)
 {
 	int Len;
 	struct UserInfo * User = Session->User;
@@ -2426,7 +1938,8 @@ VOID SendFwdDetails(struct MailConnectionInfo * Session, char * Reply, int * Rep
 	SetMultiStringValue(FWDInfo->Haddresses, HRB);
 	SetMultiStringValue(FWDInfo->HaddressesP, HRP);
 		
-	Len = sprintf(Reply, FwdDetailTemplate, User->Call, Key,
+	Len = sprintf(Reply, FwdDetailTemplate, User->Call,
+		CountMessagestoForward (User->BBSNumber), Key,
 		TO, AT, TIMES , FWD, HRB, HRP, 
 		(FWDInfo->BBSHA) ? FWDInfo->BBSHA : "", 
 		(FWDInfo->Enabled) ? CHKD  : UNC,
@@ -2442,65 +1955,6 @@ VOID SendFwdDetails(struct MailConnectionInfo * Session, char * Reply, int * Rep
 
 	*ReplyLen = Len;
 
-}
-
-VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key)
-{
-	int Len;
-	char Nodes[1000];
-	char Text[1000];
-	char * ptr1, * ptr2;
-
-	//	Replace spaces in Node List with CR/LF
-
-	ptr1 = OtherNodesList;
-	ptr2 = Nodes;
-
-	while (*ptr1)
-	{
-		if ((*ptr1) == ' ')
-		{
-			*(ptr2++) = 13;
-			*(ptr2++) = 10;
-			ptr1++ ;
-		}
-		else
-			*(ptr2++) = *(ptr1++);
-	}
-
-	*ptr2 = 0;
-
-	// Replace " in Text with &quot; 
-		
-	ptr1 = PopupText;
-	ptr2 = Text;
-
-	while (*ptr1)
-	{
-		if ((*ptr1) == '"')
-		{
-			*(ptr2++) = '&';
-			*(ptr2++) = 'q';
-			*(ptr2++) = 'u';
-			*(ptr2++) = 'o';
-			*(ptr2++) = 't';
-			*(ptr2++) = ';';
-			ptr1++ ;
-		}
-		else
-			*(ptr2++) = *(ptr1++);
-	}
-
-	*ptr2 = 0;
-
-
-	Len = sprintf(Reply, ChatConfigTemplate,
-		Mycall, Key, Key, Key,
-		ChatApplNum, MaxChatStreams, Nodes, Position,
-		(PopupMode) ? UNC  : CHKD, 
-		(PopupMode) ? CHKD  : UNC,  Text);
-
-	*ReplyLen = Len;
 }
 
 VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
@@ -2523,7 +1977,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 
 		
 	Len = sprintf(Reply, ConfigTemplate,
-		Mycall, Key, Key, Key, Key, Key, Key, Key, Key, Key,
+		BBSName, Key, Key, Key, Key, Key, Key, Key, Key, Key,
 		BBSName, SYSOPCall, HRoute, BBSApplNum, MaxStreams,
 		(SendSYStoSYSOPCall) ? CHKD  : UNC,
 		(RefuseBulls) ? CHKD  : UNC,
@@ -2583,7 +2037,7 @@ VOID SendHouseKeeping(char * Reply, int * ReplyLen, char * Key)
 		}
 
 		*ReplyLen = sprintf(Reply, HousekeepingTemplate, 
-			 Mycall, Key, Key, Key, Key, Key, Key, Key, Key, Key,
+			 BBSName, Key, Key, Key, Key, Key, Key, Key, Key, Key,
 			MaintTime, MaxMsgno, BidLifetime, LogAge,
 			(DeletetoRecycleBin) ? CHKD  : UNC,
 			(SendNonDeliveryMsgs) ? CHKD  : UNC,
@@ -2614,7 +2068,7 @@ VOID SendFwdMainPage(char * Reply, int * RLen, char * Key)
 
 	SetMultiStringValue(AliasText, ALIASES);
 
-	*RLen = sprintf(Reply, FwdTemplate, Key, Key, Mycall,
+	*RLen = sprintf(Reply, FwdTemplate, Key, Key, BBSName,
 		Key, Key, Key, Key, Key, Key, Key, Key,
 		Key, MaxTXSize, MaxRXSize,
 		(WarnNoRoute) ? CHKD  : UNC, 
@@ -2671,101 +2125,6 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 	*ReplyLen = Len;
 }
 
-VOID SendChatStatusPage(char * Reply, int * ReplyLen, char * Key)
-{
-	int Len = 0;
-	USER *user;
-	char * Alias;
-	char * Topic;
-	LINK *link;
-
-	char Streams[8192];
-	char Users[8192];
-	char Links[8192];
-
-	ChatCIRCUIT * conn;
-	int i = 0, n; 
-
-	Users[0] = 0;
-
-	for (user = user_hd; user; user = user->next)
-	{
-		if ((user->node == 0) || (user->node->alias == 0))
-			Alias = "(Corrupt Alias)";
-		else
-			Alias = user->node->alias;
-
-		if ((user->topic == 0) || (user->topic->name == 0))
-			Topic = "(Corrupt Topic)";
-		else
-			Topic = user->topic->name;
-
-		Len += sprintf(&Users[Len], "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>",
-			user->call, Alias, user->name, Topic, time(NULL) - user->lastmsgtime, user->qth);
-	
-	}
-
-	Links[0] = 0;
-
-	Len = 0;
-
-	for (link = link_hd; link; link = link->next)
-	{
-		if (link->flags & p_linked )
-			Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Open</td></tr>", link->call);
-		else if (link->flags & (p_linked | p_linkini))
-			Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Connecting</td></tr>", link->call);
-		else
-			Len += sprintf(&Links[Len], "<tr><td>%s</td><td>Idle</td></tr>", link->call);
-	}
-
-	Len = 0;
-	Streams[0] = 0;
-
-	for (n = 0; n < NumberofChatStreams; n++)
-	{
-		conn=&ChatConnections[n];
-		i = conn->BPQStream;
-		if (!conn->Active)
-		{
-			Len += sprintf(&Streams[Len], "<tr><td onclick= SelectRow(%d) id=cell_%d>Idle</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td><td>&nbsp;&nbsp;</td></tr>", i, i);
-
-		}
-		else
-		{
-			if (conn->Flags & CHATLINK)
-			{
-				Len += sprintf(&Streams[Len], "<tr><td onclick='SelectRow(%d)' id='cell_%d'>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%d</td></tr>",
-					i, i, "Chat Link", conn->u.link->alias, conn->BPQStream,
-					"", conn->OutputQueueLength - conn->OutputGetPointer);
-			}
-			else
-			if ((conn->Flags & CHATMODE) && conn->topic)
-			{
-				Len += sprintf(&Streams[Len],  "<tr><td onclick='SelectRow(%d)' id='cell_%d'>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%d</td></tr>",
-					i, i, conn->u.user->name, conn->u.user->call, conn->BPQStream,
-					conn->topic->topic->name, conn->OutputQueueLength - conn->OutputGetPointer);
-			}
-			else
-			{
-				if (conn->UserPointer == 0)
-					Len += sprintf(&Streams[Len], "Logging in");
-				else
-				{
-					Len += sprintf(&Streams[Len], "<tr><td onclick='SelectRow(%d)' id='cell_%d'>%s</td><td>%s</td><td>%d</td><td>%s</td><td>%d</td></tr>",
-						i, i, conn->UserPointer->Name, conn->UserPointer->Call, conn->BPQStream,
-						"CHAT", conn->OutputQueueLength - conn->OutputGetPointer);
-				}
-			}
-		}
-	}
-
-	Len = sprintf(Reply, ChatStatusTemplate, Mycall, Mycall, Key, Key, Key, Streams, Users, Links);
-	*ReplyLen = Len;
-}
-
-
-
 VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 {
 	int Len;
@@ -2776,7 +2135,7 @@ VOID SendStatusPage(char * Reply, int * ReplyLen, char * Key)
 
 	SMTPMsgs = 0;
 
-	Len = sprintf(Reply, RefreshMainPage, Mycall, Mycall, Key, Key, Key, Key, Key, Key, Key, Key);
+	Len = sprintf(Reply, RefreshMainPage, BBSName, BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
 
 	Len += sprintf(&Reply[Len], StatusPage, Key);
 
@@ -2878,7 +2237,7 @@ VOID SendUserSelectPage(char * Reply, int * ReplyLen, char * Key)
 	*ReplyLen = Len;
 }
 
-int SendUserDetails(struct MailConnectionInfo * Session, char * Reply, char * Key)
+int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Key)
 {
 	char SSID[16][16] = {""};
 	int i, s, Len;
@@ -2925,41 +2284,166 @@ int SendUserDetails(struct MailConnectionInfo * Session, char * Reply, char * Ke
 	return Len;
 }
 
-static struct MailConnectionInfo * AllocateSession(char Appl)
-{
-	int KeyVal;
-	struct MailConnectionInfo * Session = zalloc(sizeof(struct MailConnectionInfo));
+#ifdef WIN32
 
-	if (Session == NULL)
-		return NULL;
+static char PipeFileName[] = "\\\\.\\pipe\\BPQMailWebPipe";
 
-	KeyVal = time(NULL);
+static DWORD WINAPI InstanceThread(LPVOID lpvParam)
 
-	sprintf(Session->Key, "%c%012X", Appl, KeyVal);
+// This routine is a thread processing function to read from and reply to a client
+// via the open pipe connection passed from the main loop. Note this allows
+// the main loop to continue executing, potentially creating more threads of
+// of this procedure to run concurrently, depending on the number of incoming
+// client connections.
+{ 
+   DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0; 
+   BOOL fSuccess = FALSE;
+   HANDLE hPipe  = NULL;
+   char Buffer[4096];
+   char OutBuffer[100000];
+   char * MsgPtr;
+   int InputLen = 0;
+   int OutputLen = 0;
+	struct HTTPConnectionInfo Session;
+	char URL[4096];
+	char * Context, * Method, * NodeURL, * Key;
+	int n;
 
-	if (SessionList)
-		Session->Next = SessionList;
+	char * ptr;
 
-	SessionList = Session;
+//	Debugprintf("InstanceThread created, receiving and processing messages.");
 
-	return Session;
-}
+// The thread's parameter is a handle to a pipe object instance. 
+ 
+   hPipe = (HANDLE) lpvParam; 
 
-static struct MailConnectionInfo * FindSession(char * Key)
-{
-	struct MailConnectionInfo * Session = SessionList;
+   // Read client requests from the pipe. This simplistic code only allows messages
+   // up to BUFSIZE characters in length.
+ 
+   n = ReadFile(hPipe, &Session, sizeof (struct HTTPConnectionInfo), &n, NULL);
+   fSuccess = ReadFile(hPipe, Buffer, 4096, &InputLen, NULL);
 
-	while (Session)
-	{
-		if (strcmp(Session->Key, Key) == 0)
-			return Session;
-
-		Session = Session->Next;
+	if (!fSuccess || InputLen == 0)
+	{   
+		if (GetLastError() == ERROR_BROKEN_PIPE)
+			Debugprintf("InstanceThread: client disconnected.", GetLastError()); 
+		else
+			Debugprintf("InstanceThread ReadFile failed, GLE=%d.", GetLastError()); 
 	}
+	else
+	{
+		Buffer[InputLen] = 0;
 
-	return NULL;
+		MsgPtr = &Buffer[0];
+
+		strcpy(URL, MsgPtr);
+
+		ptr = strstr(URL, " HTTP");
+
+		if (ptr)
+			*ptr = 0;
+
+		Method = strtok_s(URL, " ", &Context);
+
+		ProcessMailHTTPMessage(&Session, Method, Context, MsgPtr, OutBuffer, &OutputLen);
+
+		WriteFile(hPipe, &Session, sizeof (struct HTTPConnectionInfo), &n, NULL);
+		WriteFile(hPipe, OutBuffer, OutputLen, &cbWritten, NULL); 
+
+		FlushFileBuffers(hPipe); 
+		DisconnectNamedPipe(hPipe); 
+		CloseHandle(hPipe);
+		return 1;
+	}
 }
 
+static DWORD WINAPI PipeThreadProc(LPVOID lpvParam)
+{
+	BOOL   fConnected = FALSE; 
+	DWORD  dwThreadId = 0; 
+	HANDLE hPipe = INVALID_HANDLE_VALUE, hThread = NULL; 
+ 
+// The main loop creates an instance of the named pipe and 
+// then waits for a client to connect to it. When the client 
+// connects, a thread is created to handle communications 
+// with that client, and this loop is free to wait for the
+// next client connect request. It is an infinite loop.
+ 
+	for (;;) 
+	{ 
+      hPipe = CreateNamedPipe( 
+          PipeFileName,             // pipe name 
+          PIPE_ACCESS_DUPLEX,       // read/write access 
+          PIPE_TYPE_BYTE |       // message type pipe 
+          PIPE_WAIT,                // blocking mode 
+          PIPE_UNLIMITED_INSTANCES, // max. instances  
+          4096,                  // output buffer size 
+          4096,                  // input buffer size 
+          0,                        // client time-out 
+          NULL);                    // default security attribute 
+
+      if (hPipe == INVALID_HANDLE_VALUE) 
+      {
+          Debugprintf("CreateNamedPipe failed, GLE=%d.\n", GetLastError()); 
+          return -1;
+      }
+ 
+      // Wait for the client to connect; if it succeeds, 
+      // the function returns a nonzero value. If the function
+      // returns zero, GetLastError returns ERROR_PIPE_CONNECTED. 
+ 
+      fConnected = ConnectNamedPipe(hPipe, NULL) ? 
+         TRUE : (GetLastError() == ERROR_PIPE_CONNECTED); 
+ 
+      if (fConnected) 
+	  {
+         // Create a thread for this client. 
+   
+		 hThread = CreateThread( 
+            NULL,              // no security attribute 
+            0,                 // default stack size 
+            InstanceThread,    // thread proc
+            (LPVOID) hPipe,    // thread parameter 
+            0,                 // not suspended 
+            &dwThreadId);      // returns thread ID 
+
+         if (hThread == NULL) 
+         {
+            Debugprintf("CreateThread failed, GLE=%d.\n", GetLastError()); 
+            return -1;
+         }
+         else CloseHandle(hThread); 
+       } 
+      else 
+        // The client could not connect, so close the pipe. 
+         CloseHandle(hPipe); 
+   } 
+
+   return 0; 
+} 
+
+BOOL CreatePipeThread()
+{
+	DWORD ThreadId;
+	CreateThread(NULL, 0, PipeThreadProc, 0, 0, &ThreadId);
+	return TRUE;
+}
+
+static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+static char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+
+static VOID FormatTime(char * Time, time_t cTime)
+{
+	struct tm * TM;
+	TM = gmtime(&cTime);
+
+	sprintf(Time, "%s, %02d %s %3d %02d:%02d:%02d GMT", dat[TM->tm_wday], TM->tm_mday, month[TM->tm_mon],
+		TM->tm_year + 1900, TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+}
+
+#endif
 
 
 

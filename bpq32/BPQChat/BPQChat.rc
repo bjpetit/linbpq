@@ -11,7 +11,7 @@
 #include "windows.h"
 #undef APSTUDIO_HIDDEN_SYMBOLS
 #define CHAT
-#include "..\Include\Versions.h"
+#include "..\CInclude\Versions.h"
 #include "resource.h"
 
 /////////////////////////////////////////////////////////////////////////////
@@ -391,7 +391,7 @@ BEGIN
     "#include ""windows.h""\r\n"
     "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "#define CHAT\r\n"
-    "#include ""..\\Include\\Versions.h""\r\n"
+    "#include ""..\\CInclude\\Versions.h""\r\n"
     "#include ""resource.h""\r\n"
     "\0"
 END

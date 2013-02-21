@@ -40,6 +40,10 @@
 //		Fix reading Real COM Port Mode flag
 //		Support RMS Express Tracker Mode in DED
 
+// Version 1.1.9 November 2012
+
+//		Fix processing C CALL cmd in DED mode.
+
 #include "stdafx.h"
 #include "bpqhostmodes.h"
 #include "..\include\bpq32.h"
@@ -2852,14 +2856,6 @@ BUFFCOMM:
 
 	RET
 
-ICMD:
-
-	JMP	SENDHOSTOK
-
-	MOV	ESI,OFFSET ICMDREPLY
-	MOV	ECX,LICMDREPLY
-
-	JMP	SENDCMDREPLY
 
 PROCESSHOSTPACKET:
 
@@ -2984,7 +2980,21 @@ NOTDATA:
 	default:
 		goto SENDHOSTOK;
 	}
-		
+
+ICMD:
+
+	//	Save callsign
+
+	memcpy(Channel->MYCall, &conn->LINEBUFFER[1], 10);
+
+	Debugprintf("DED Host I chan %d call %s", MSGCHANNEL, Channel->MYCall);
+
+
+	_asm {
+
+	JMP	SENDHOSTOK
+	}
+
 	_asm{
 
 ECMD:
@@ -3128,11 +3138,12 @@ REALCALL:
 			if (Context[0])
 				MSGLENGTH = wsprintf(LINEBUFFERPTR + 100, "C %s %s v %s", Arg1, Call, Context);
 			else
-				MSGLENGTH = wsprintf(LINEBUFFERPTR + 100, "C %s %s", Arg1, Call);
-
-			strcpy(LINEBUFFERPTR, LINEBUFFERPTR + 100);
-
+				MSGLENGTH = wsprintf(LINEBUFFERPTR + 100, "C %s %s", Call, Arg1);
 		}
+		else
+			MSGLENGTH = wsprintf(LINEBUFFERPTR + 100, "C %s", Call);
+
+		strcpy(LINEBUFFERPTR, LINEBUFFERPTR + 100);
 
 		_asm{
 

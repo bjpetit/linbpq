@@ -12,6 +12,7 @@
 
 #include "GetVersion.h"
 
+
 #define MAX_LOADSTRING 100
 
 BOOL WINE = FALSE;
@@ -41,7 +42,7 @@ char szBuff[80];
 
 #define MaxSockets 64
 
-ConnectionInfo Connections[MaxSockets+1];
+extern ChatCIRCUIT ChatConnections[MaxSockets+1];
 
 struct SEM ChatSemaphore = {0, 0};
 
@@ -80,6 +81,8 @@ char LoginMsg[]="user:";
 
 char BlankCall[]="         ";
 
+extern char SYSOPCall[50];
+
 
 ULONG BBSApplMask;
 ULONG ChatApplMask;
@@ -87,13 +90,15 @@ ULONG ChatApplMask;
 int BBSApplNum=0;
 int ChatApplNum=0;
 
+extern int NumberofChatStreams;
+
 //int	StartStream=0;
-int	NumberofStreams=0;
+
 int MaxStreams=0;
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
-char ChatWelcomeMsg[1000];
+extern char ChatWelcomeMsg[1000];
 
 char NewUserPrompt[100]="Please enter your Name\r>\r";
 
@@ -127,7 +132,7 @@ unsigned long _beginthread( void( *start_address )(VOID * DParam),
 				unsigned stack_size, VOID * DParam);
 
 VOID SaveWindowConfig();
-void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
+void WriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 char * lookupuser(char * call);
 
 struct _EXCEPTION_POINTERS exinfox;
@@ -139,7 +144,7 @@ DWORD Stack[16];
 
 BOOL Restarting = FALSE;
 
-Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg)
+int Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg)
 {
 	unsigned int SPPtr;
 	unsigned int SPVal;
@@ -186,13 +191,13 @@ void myInvalidParameterHandler(const wchar_t* expression,
    unsigned int line, 
    uintptr_t pReserved)
 {
-	Logprintf(LOG_DEBUG, NULL, '!', "*** Error **** C Run Time Invalid Parameter Handler Called");
+	Logprintf(LOG_DEBUGx, NULL, '!', "*** Error **** C Run Time Invalid Parameter Handler Called");
 
 	if (expression && function && file)
 	{
-		Logprintf(LOG_DEBUG, NULL, '!', "Expression = %S", expression);
-		Logprintf(LOG_DEBUG, NULL, '!', "Function %S", function);
-		Logprintf(LOG_DEBUG, NULL, '!', "File %S Line %d", file, line);
+		Logprintf(LOG_DEBUGx, NULL, '!', "Expression = %S", expression);
+		Logprintf(LOG_DEBUGx, NULL, '!', "Function %S", function);
+		Logprintf(LOG_DEBUGx, NULL, '!', "File %S Line %d", file, line);
 	}
 }
 
@@ -219,7 +224,7 @@ VOID CheckProgramErrors()
 		
 		Restarting = TRUE;
 
-		Logprintf(LOG_DEBUG, NULL, '!', "Too Many Program Errors - Closing");
+		Logprintf(LOG_DEBUGx, NULL, '!', "Too Many Program Errors - Closing");
 
 		if (cfgMinToTray)
 		{
@@ -392,9 +397,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	__try
 	{
-	for (n = 0; n < NumberofStreams; n++)
+	for (n = 0; n < NumberofChatStreams; n++)
 	{
-		BPQStream=Connections[n].BPQStream;
+		BPQStream=ChatConnections[n].BPQStream;
 		
 		if (BPQStream)
 		{
@@ -457,6 +462,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	SaveWindowConfig();
 
 	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
+
+	SaveNewFormatConfig("chatconfig.cfg");
 
 	return (int) msg.wParam;
 }
@@ -532,7 +539,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int len;
 	char * ptr1;
 	struct _EXCEPTION_POINTERS exinfo;
-	HMODULE ExtDriver=LoadLibrary("bpq32.dll");
 
 	REGTREE = GetRegistryKey();
 	REGTREETEXT = GetRegistryKeyText();
@@ -654,7 +660,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	PAINTSTRUCT ps;
 	HDC hdc;
 	int state,change;
-	ConnectionInfo * conn;
+	ChatCIRCUIT * conn;
 	struct _EXCEPTION_POINTERS exinfo;
 
 
@@ -783,13 +789,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			// Set up Disconnect Menu
 
-			CIRCUIT * conn;
+			ChatCIRCUIT * conn;
 			char MenuLine[30];
 			int n;
 
-			for (n = 0; n <= NumberofStreams-1; n++)
+			for (n = 0; n <= NumberofChatStreams-1; n++)
 			{
-				conn=&Connections[n];
+				conn=&ChatConnections[n];
 
 				RemoveMenu(hDisMenu, IDM_DISCONNECT + n, MF_BYCOMMAND);
 
@@ -817,7 +823,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			// disconnect user
 
-			conn=&Connections[wmId-IDM_DISCONNECT];
+			conn=&ChatConnections[wmId-IDM_DISCONNECT];
 		
 			if (conn->Active)
 			{	
@@ -897,7 +903,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		LPRECT lprc = (LPRECT) lParam;
 		int Height = lprc->bottom-lprc->top;
-		int Width = lprc->right-lprc->left;
 
 		MoveWindow(hWndSess, 0, 30, SessWidth, Height - 100, TRUE);
 			
@@ -1040,7 +1045,7 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 int RefreshMainWindow()
 {
 	char msg[80];
-	CIRCUIT * conn;
+	ChatCIRCUIT * conn;
 	int i,n, SYSOPMsgs = 0, HeldMsgs = 0, SMTPMsgs = 0;
 	time_t now;
 	struct tm * tm;
@@ -1048,9 +1053,9 @@ int RefreshMainWindow()
 
 	SendDlgItemMessage(MainWnd,100,LB_RESETCONTENT,0,0);
 
-	for (n = 0; n < NumberofStreams; n++)
+	for (n = 0; n < NumberofChatStreams; n++)
 	{
-		conn=&Connections[n];
+		conn=&ChatConnections[n];
 
 		if (!conn->Active)
 		{
@@ -1125,9 +1130,7 @@ SOCKET sock;
 BOOL Initialise()
 {
 	int i, len;
-	ConnectionInfo * conn;
-	struct UserInfo * user = NULL;
-	HKEY hKey=0;
+	ChatCIRCUIT * conn;
 	char * ptr1;
 	char ProgramDir[MAX_PATH];
 
@@ -1219,12 +1222,12 @@ Retry:
 
 	for (i=0; i < MaxStreams; i++)
 	{
-		conn = &Connections[i];
+		conn = &ChatConnections[i];
 		conn->BPQStream = FindFreeStream();
 
 		if (conn->BPQStream == 255) break;
 
-		NumberofStreams++;
+		NumberofChatStreams++;
 
 		BPQSetHandle(conn->BPQStream, hWnd);
 
@@ -1255,730 +1258,10 @@ Retry:
 
 	DeleteLogFiles();
 
+	CreateChatPipeThread();
+
 	return TRUE;
 }
-
-int Connected(Stream)
-{
-	int n;
-	CIRCUIT * conn;
-	struct UserInfo * user = NULL;
-	char callsign[10];
-	int port, paclen, maxframe, l4window;
-	char ConnectedMsg[] = "*** CONNECTED    ";
-	char Msg[100];
-	LINK    *link;
-	KNOWNNODE *node;
-
-	for (n = 0; n < NumberofStreams; n++)
-	{
-  		conn = &Connections[n];
-		
-		if (Stream == conn->BPQStream)
-		{
-			if (conn->Active)
-			{
-				// Probably an outgoing connect
-		
-				if (conn->rtcflags == p_linkini)
-				{
-					conn->paclen = 236;
-					nprintf(conn, "c %s\r", conn->u.link->call);
-					return 0;
-				}
-			}
-	
-			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
-			conn->Active = TRUE;
-			conn->BPQStream = Stream;
-
-			conn->Secure_Session = GetConnectionInfo(Stream, callsign,
-				&port, &conn->SessType, &paclen, &maxframe, &l4window);
-
-			conn->paclen = paclen;
-
-			strlop(callsign, ' ');		// Remove trailing spaces
-
-			memcpy(conn->Callsign, callsign, 10);
-
-			strlop(callsign, '-');		// Remove any SSID
-
-			user = zalloc(sizeof(struct UserInfo));
-
-			strcpy(user->Call, callsign);
-
-			conn->UserPointer = user;
-
-			n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s", user->Call);
-			
-			// Send SID and Prompt
-
-			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
-			conn->Flags |= CHATMODE;
-
-			nodeprintf(conn, ChatSID, Ver[0], Ver[1], Ver[2], Ver[3]);
-
-			// See if from a defined node
-				
-			for (link = link_hd; link; link = link->next)
-			{
-				if (matchi(conn->Callsign, link->call))
-				{
-					conn->rtcflags = p_linkwait;
-					return 0;						// Wait for *RTL
-				}
-			}
-
-			// See if from a previously known node
-
-			node = knownnode_find(conn->Callsign);
-
-			if (node)
-			{
-				// A node is trying to link, but we don't have it defined - close
-
-				Logprintf(LOG_CHAT, conn, '!', "Node %s connected, but is not defined as a Node - closing",
-					conn->Callsign);
-
-				nodeprintf(conn, "Node %s does not have %s defined as a node to link to - closing.\r",
-					OurNode, conn->Callsign);
-
-				Flush(conn);
-
-				Sleep(500);
-
-				Disconnect(conn->BPQStream);
-
-				return 0;
-			}
-
-			if (user->Name[0] == 0)
-			{
-				char * Name = lookupuser(user->Call);
-
-				if (Name)
-				{
-					if (strlen(Name) > 17)
-						Name[17] = 0;
-
-					strcpy(user->Name, Name);
-					free(Name);
-				}
-				else
-				{
-					conn->Flags |= GETTINGUSER;
-					BBSputs(conn, NewUserPrompt);
-					return TRUE;
-				}
-			}
-
-			SendWelcomeMsg(Stream, conn, user);
-			RefreshMainWindow();
-			Flush(conn);
-			
-			return 0;
-		}
-	}
-
-	return 0;
-}
-
-int Disconnected (Stream)
-{
-	struct UserInfo * user = NULL;
-	CIRCUIT * conn;
-	int n;
-	char Msg[255];
-	int len;
-	struct _EXCEPTION_POINTERS exinfo;
-
-	for (n = 0; n <= NumberofStreams-1; n++)
-	{
-		conn=&Connections[n];
-
-		if (Stream == conn->BPQStream)
-		{
-			if (conn->Active == FALSE)
-			{
-				return 0;
-			}
-
-			ClearQueue(conn);
-
-			conn->Active = FALSE;
-			RefreshMainWindow();
-
-			if (conn->Flags & CHATMODE)
-			{
-				if (conn->Flags & CHATLINK)
-				{
-					len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Disconnected", conn->u.link->call);
-					WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
-					__try {link_drop(conn);} My__except_Routine("link_drop");
-				}
-				else
-				{
-					len=sprintf_s(Msg, sizeof(Msg), "Chat User %s Disconnected", conn->Callsign);
-					WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
-					__try
-					{
-						logout(conn);
-					}
-					#define EXCEPTMSG "logout"
-					#include "StdExcept.c"
-					}
-				}
-
-				conn->Flags = 0;
-				conn->u.link = NULL;
-				conn->UserPointer = NULL;	
-				return 0;
-			}
-
-			return 0;
-		}
-	}
-	return 0;
-}
-
-int DoReceivedData(int Stream)
-{
-	int count, InputLen;
-	UINT MsgLen;
-	int n;
-	CIRCUIT * conn;
-	struct UserInfo * user;
-	char * ptr, * ptr2;
-	char Buffer[10000];
-	int Written;
-
-	for (n = 0; n < NumberofStreams; n++)
-	{
-		conn = &Connections[n];
-
-		if (Stream == conn->BPQStream)
-		{
-			do
-			{ 
-				// May have several messages per packet, or message split over packets
-
-				if (conn->InputLen + 1000 > 10000)	// Shouldnt have lines longer  than this in text mode
-					conn->InputLen = 0;				// discard	
-				
-				GetMsg(Stream, &conn->InputBuffer[conn->InputLen], &InputLen, &count);
-
-				if (InputLen == 0) return 0;
-
-				if (conn->DebugHandle)				// Receiving a Compressed Message
-					WriteFile(conn->DebugHandle, &conn->InputBuffer[conn->InputLen],
-						InputLen, &Written, NULL);
-
-				conn->Watchdog = 900;				// 15 Minutes
-
-				conn->InputLen += InputLen;
-
-				{
-
-			loop:
-
-				if (conn->InputLen == 1 && conn->InputBuffer[0] == 0)		// Single Null
-				{
-					conn->InputLen = 0;
-					return 0;
-				}
-
-				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
-
-				if (ptr)	//  CR in buffer
-				{
-					user = conn->UserPointer;
-				
-					ptr2 = &conn->InputBuffer[conn->InputLen];
-					
-					if (++ptr == ptr2)
-					{
-						// Usual Case - single meg in buffer
-
-						__try
-						{
-							if (conn->rtcflags == p_linkini)		// Chat Connect
-								ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
-							else
-								ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
-						}
-						__except(EXCEPTION_EXECUTE_HANDLER)
-						{
-							conn->InputBuffer[conn->InputLen] = 0;
-							Debugprintf("CHAT *** Program Error Processing input %s ", conn->InputBuffer);
-							Disconnect(conn->BPQStream);
-							conn->InputLen=0;
-							CheckProgramErrors();
-							return 0;
-						}
-						conn->InputLen=0;
-					}
-					else
-					{
-						// buffer contains more that 1 message
-
-						MsgLen = conn->InputLen - (ptr2-ptr);
-
-						memcpy(Buffer, conn->InputBuffer, MsgLen);
-						__try
-						{
-							if (conn->rtcflags == p_linkini)
-								ProcessConnecting(conn, Buffer, MsgLen);
-							else
-								ProcessLine(conn, user, Buffer, MsgLen);
-						}
-						__except(EXCEPTION_EXECUTE_HANDLER)
-						{
-							Buffer[MsgLen] = 0;
-							Debugprintf("CHAT *** Program Error Processing input %s ", Buffer);
-							Disconnect(conn->BPQStream);
-							conn->InputLen=0;
-							CheckProgramErrors();
-							return 0;
-						}
-
-						if (*ptr == 0 || *ptr == '\n')
-						{
-							/// CR LF or CR Null
-
-							ptr++;
-							conn->InputLen--;
-						}
-
-						memmove(conn->InputBuffer, ptr, conn->InputLen-MsgLen);
-
-						conn->InputLen -= MsgLen;
-
-						goto loop;
-
-					}
-				}
-				}
-			} while (count > 0);
-
-			return 0;
-		}
-	}
-
-	// Socket not found
-
-	return 0;
-
-}
-
-int ConnectState(Stream)
-{
-	int state;
-
-	SessionStateNoAck(Stream, &state);
-	return state;
-}
-UCHAR * EncodeCall(UCHAR * Call)
-{
-	static char axcall[10];
-
-	ConvToAX25(Call, axcall);
-	return &axcall[0];
-
-}
-
-
-VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
-{
-		if (!rtloginu (conn, TRUE))
-		{
-			// Already connected - close
-			
-			Flush(conn);
-			Sleep(1000);
-			Disconnect(conn->BPQStream);
-		}
-		return;
-
-}
-
-VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
-{
-	nodeprintf(conn, "de %s>\r", OurNode);
-}
-
-VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
-{
-	char seps[] = " \t\r";
-	struct _EXCEPTION_POINTERS exinfo;
-
-	if (conn->Flags & GETTINGUSER)
-	{
-		conn->Flags &=  ~GETTINGUSER;
-
-		memcpy(user->Name, Buffer, len-1);
-		SendWelcomeMsg(conn->BPQStream, conn, user);
-
-		return;
-	}
-
-	{
-		GetSemaphore(&ChatSemaphore);
-
-		__try 
-		{
-			ProcessChatLine(conn, user, Buffer, len);
-		}
-			#define EXCEPTMSG "ProcessChatLine"
-			#include "StdExcept.c"
-
-			FreeSemaphore(&ChatSemaphore);
-	
-			if (conn->BPQStream <  0)
-				CloseConsole(conn->BPQStream);
-			else
-				Disconnect(conn->BPQStream);	
-
-			return;
-		}
-		FreeSemaphore(&ChatSemaphore);
-		return;
-	}
-
-	//	Send if possible
-
-	Flush(conn);
-}
-
-
-VOID SendUnbuffered(int stream, char * msg, int len)
-{
-	if (stream < 0)
-		WritetoConsoleWindow(stream, msg, len);
-	else
-		SendMsg(stream, msg, len);
-}
-
-
-int QueueMsg(ConnectionInfo * conn, char * msg, int len)
-{
-	// Add Message to queue for this connection
-
-	//	UCHAR * OutputQueue;		// Messages to user
-	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
-	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
-
-	// Create or extend buffer
-
-	GetSemaphore(&OutputSEM);
-
-	memcpy(&conn->OutputQueue[conn->OutputQueueLength], msg, len);
-	conn->OutputQueueLength += len;
-
-	FreeSemaphore(&OutputSEM);
-
-	return len;
-}
-
-void TrytoSend()
-{
-	// call Flush on any connected streams with queued data
-
-	ConnectionInfo * conn;
-	struct ConsoleInfo * Cons;
-
-	int n;
-
-	for (n = 0; n < NumberofStreams; n++)
-	{
-		conn = &Connections[n];
-		
-		if (conn->Active == TRUE)
-			Flush(conn);
-	}
-
-	for (Cons = ConsHeader[0]; Cons; Cons = Cons->next)
-	{
-		if (Cons->Console)
-			Flush(Cons->Console);
-	}
-}
-
-
-void Flush(CIRCUIT * conn)
-{
-	int tosend, len, sent;
-	
-	// Try to send data to user. May be stopped by user paging or node flow control
-
-	//	UCHAR * OutputQueue;		// Messages to user
-	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
-	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
-
-	//	BOOL Paging;				// Set if user wants paging
-	//	int LinesSent;				// Count when paging
-	//	int PageLen;				// Lines per page
-
-
-	if (conn->OutputQueue == NULL)
-	{
-		// Nothing to send. If Close after Flush is set, disconnect
-
-		if (conn->CloseAfterFlush)
-		{
-			conn->CloseAfterFlush--;
-			
-			if (conn->CloseAfterFlush)
-				return;
-
-			Disconnect(conn->BPQStream);
-		}
-
-		return;						// Nothing to send
-	}
-	tosend = conn->OutputQueueLength - conn->OutputGetPointer;
-
-	sent=0;
-
-	while (tosend > 0)
-	{
-		if (TXCount(conn->BPQStream) > 4)
-			return;						// Busy
-
-		if (conn->Paging && (conn->LinesSent >= conn->PageLen))
-			return;
-
-		if (tosend <= conn->paclen)
-			len=tosend;
-		else
-			len=conn->paclen;
-
-		GetSemaphore(&OutputSEM);
-
-		if (conn->Paging)
-		{
-			// look for CR chars in message to send. Increment LinesSent, and stop if at limit
-
-			char * ptr1 = &conn->OutputQueue[conn->OutputGetPointer];
-			char * ptr2;
-			int lenleft = len;
-
-			ptr2 = memchr(ptr1, 0x0d, len);
-
-			while (ptr2)
-			{
-				conn->LinesSent++;
-				ptr2++;
-				lenleft = len - (ptr2 - ptr1);
-
-				if (conn->LinesSent >= conn->PageLen)
-				{
-					len = ptr2 - &conn->OutputQueue[conn->OutputGetPointer];
-					
-					SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
-					conn->OutputGetPointer+=len;
-					tosend-=len;
-					SendUnbuffered(conn->BPQStream, "<A>bort, <CR> Continue..>", 25);
-					FreeSemaphore(&OutputSEM);
-					return;
-
-				}
-				ptr2 = memchr(ptr2, 0x0d, lenleft);
-			}
-		}
-
-		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
-
-		conn->OutputGetPointer+=len;
-
-		FreeSemaphore(&OutputSEM);
-
-		tosend-=len;	
-		sent++;
-
-		if (sent > 4)
-			return;
-	}
-
-	// All Sent. Free buffers and reset pointers
-
-	conn->LinesSent = 0;
-
-	ClearQueue(conn);
-}
-
-VOID ClearQueue(ConnectionInfo * conn)
-{
-	GetSemaphore(&OutputSEM);
-
-	conn->OutputGetPointer=0;
-	conn->OutputQueueLength=0;
-
-	FreeSemaphore(&OutputSEM);
-}
-
-int RemoveLF(char * Message, int len)
-{
-	// Remove lf chars
-
-	char * ptr1, * ptr2;
-
-	ptr1 = ptr2 = Message;
-
-	while (len-- > 0)
-	{
-		*ptr2 = *ptr1;
-	
-		if (*ptr1 == '\r')
-			if (*(ptr1+1) == '\n')
-			{
-				ptr1++;
-				len--;
-			}
-		ptr1++;
-		ptr2++;
-	}
-
-	return (ptr2 - Message);
-}
-
-/*
-char * FormatDateAndTime(time_t Datim, BOOL DateOnly)
-{
-	struct tm *tm;
-	static char Date[]="xx-xxx hh:mmZ";
-
-	tm = gmtime(&Datim);
-	
-	if (tm)
-		sprintf_s(Date, sizeof(Date), "%02d-%3s %02d:%02dZ",
-					tm->tm_mday, month[tm->tm_mon], tm->tm_hour, tm->tm_min);
-
-	if (DateOnly)
-	{
-		Date[6]=0;
-		return Date;
-	}
-	
-	return Date;
-}
-*/
-void chat_link_out (LINK *link)
-{
-	int n, p;
-	CIRCUIT * conn;
-	char Msg[80];
-
-	for (n = NumberofStreams-1; n >= 0 ; n--)
-	{
-		conn = &Connections[n];
-		
-		if (conn->Active == FALSE)
-		{
-			p = conn->BPQStream;
-			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
-			conn->BPQStream = p;
-
-			conn->Active = TRUE;
-			circuit_new(conn,p_linkini);
-			conn->u.link = link;
-			conn->Flags = CHATMODE | CHATLINK;
-
-			n=sprintf_s(Msg, sizeof(Msg), "Connecting to Chat Node %s", conn->u.link->alias);
-
-			strcpy(conn->Callsign, conn->u.link->alias);
-
-			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
-
-			ConnectUsingAppl(conn->BPQStream, ChatApplMask);
-
-			//	Connected Event will trigger connect to remote system
-
-			return;
-		}
-	}
-
-	return;
-	
-
-}
-
-ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len)
-{
-	WriteLogLine(circuit, '<' ,Buffer, Len-1, LOG_CHAT);
-
-	Buffer = _strupr(Buffer);
-
-	if (memcmp(Buffer, "[BPQCHATSERVER-", 15) == 0)
-	{
-		char * ptr = strchr(Buffer, ']');
-		if (ptr)
-		{
-			*ptr = 0;
-			strcpy(circuit->FBBReplyChars, &Buffer[15]);
-		}
-		else
-			circuit->FBBReplyChars[0] = 0;
-
-		return 0;
-	}
-
-	if (memcmp(Buffer, "OK", 2) == 0)
-	{
-		// Make sure node isn't known. There is a window here that could cause a loop
-
-		if (node_find(circuit->u.link->call))
-		{
-			Logprintf(LOG_CHAT, circuit, '|', "Dropping link with %s to prevent a loop", circuit->Callsign);
-			Disconnect(circuit->BPQStream);
-			return FALSE;
-		}
-
-		circuit->u.link->flags = p_linked;
- 	  	circuit->rtcflags = p_linked;
-		state_tell(circuit, circuit->FBBReplyChars);
-		NeedStatus = TRUE;
-
-		return TRUE;
-	}
-
-	
-	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "LINKED"))
-	{
-		// Connected - Send *RTL 
-		
-		nputs(circuit, "*RTL\r");  // Log in to the remote RT system.
-		nprintf(circuit, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call, Verstring);
-
-		return TRUE;
-
-	}
-
-	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK")|| strstr(Buffer, "SORRY"))
-	{
-		link_drop(circuit);
-		Disconnect(circuit->BPQStream);
-	}
-	
-	return FALSE;
-
-}
-
-VOID FreeList(char ** Hddr)
-{
-	VOID ** Save;
-	
-	if (Hddr)
-	{
-		Save = Hddr;
-		while(Hddr[0])
-		{
-			free(Hddr[0]);
-			Hddr++;
-		}	
-		free(Save);
-	}
-}
-
 
 int	CriticalErrorHandler(char * error)
 {
@@ -2057,7 +1340,7 @@ INT_PTR CALLBACK InfoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM l
 }
 
 
-GetMultiLineDialog(HWND hDialog, int DLGItem)
+int GetMultiLineDialog(HWND hDialog, int DLGItem)
 {
 	char Text[10000];
 	char * ptr1, * ptr2;
@@ -2087,72 +1370,6 @@ GetMultiLineDialog(HWND hDialog, int DLGItem)
 	*ptr2++ = 0;
 
 	return TRUE;
-}
-
-
-
-VOID SaveChatConfig(HWND hDlg)
-{
-	BOOL OK1;
-	HKEY hKey=0;
-	int OldChatAppl;
-	char * ptr1, * ptr2;
-	char * Context;
-
-	OldChatAppl = ChatApplNum;
-	
-	ChatApplNum = GetDlgItemInt(hDlg, ID_CHATAPPL, &OK1, FALSE);
-	MaxStreams = GetDlgItemInt(hDlg, ID_STREAMS, &OK1, FALSE);
-
-	if (ChatApplNum)	
-	{
-		ptr1=GetApplCall(ChatApplNum);
-
-		if (ptr1 && (*ptr1 < 0x21))
-		{
-			MessageBox(NULL, "WARNING - There is no APPLCALL in BPQCFG matching the confgured ChatApplNum. Chat will not work",
-				"BPQMailChat", MB_ICONINFORMATION);
-		}
-	}
-
-	SaveIntValue("ApplNum", ChatApplNum);
-	SaveIntValue("MaxStreams", MaxStreams);
-
-	GetMultiLineDialog(hDlg, IDC_ChatNodes);
-
-	SaveStringValue("OtherChatNodes", OtherNodesList);
-	
-	// Show dialog box now - gives time for links to close
-	
-	// reinitialise other nodes list. rtlink messes with the string so pass copy
-
-	node_close();
-
-	if (ChatApplNum == OldChatAppl)
-		wsprintf(InfoBoxText, "Configuration Changes Saved and Applied");
-	else
-	{
-		ChatApplNum = OldChatAppl;
-		wsprintf(InfoBoxText, "Warning Program must be restarted to change Chat Appl Num");
-	}
-	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-
-	removelinks();
-	 
-	// Set up other nodes list. rtlink messes with the string so pass copy
-	
-	ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
-
-	while (ptr1)
-	{
-		rtlink(ptr1);			
-		ptr1 = strtok_s(NULL, " ,\r", &Context);
-	}
-
-	free(ptr2);
-
-	if (user_hd)			// Any Users?
-		makelinks();		// Bring up links
 }
 
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -2269,6 +1486,31 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 }
 
 
+
+VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...)
+{
+	// seems to be printf to a socket
+
+	char buff[600];
+	va_list(arglist);
+	
+	va_start(arglist, format);
+	vsprintf(buff, format, arglist);
+
+	nputs(conn, buff);
+}
+
+VOID nputs(ChatCIRCUIT * conn, char * buf)
+{
+	// Seems to send buf to socket
+
+	ChatQueueMsg(conn, buf, strlen(buf));
+
+	if (*buf == 0x1b)
+		buf += 2;				// Colour Escape
+	
+	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
+}
 
 
 

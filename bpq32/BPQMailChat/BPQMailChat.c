@@ -2727,6 +2727,8 @@ BOOL Initialise()
 
 //	CreateWPReport();
 
+	CreatePipeThread();
+
 	return TRUE;
 }
 
@@ -3038,7 +3040,6 @@ char * strlop(char * buf, char delim)
 
 	return ptr;
 }
-
 
 
 

@@ -93,6 +93,8 @@ HBRUSH bgBrush;
 
 #include "BpqTermMDI.h"
 
+extern BOOL FrameMaximized;
+
 char RTFHeader[4000];
 
 int RTFHddrLen;
@@ -3128,12 +3130,12 @@ DoStateChange(int Stream)
 
 			if (Cinfo == NULL)
 			{
-				// Incomming connect. Create a window for it
+				// Incoming connect. Create a window for it
 		
 				Cinfo = CreateChildWindow(Stream, FALSE);
 				Cinfo->Incoming = TRUE;
 				SendMessage(ClientWnd, WM_MDIACTIVATE, (WPARAM)Cinfo->hConsole, 0);
-
+			
 			}
 
 			Cinfo->CONNECTED = TRUE;
@@ -3149,6 +3151,14 @@ DoStateChange(int Stream)
 				WritetoOutputWindow(Cinfo, Msg, len, TRUE);
 
 				PlaySound("IncomingCall", hInstance, SND_RESOURCE | SND_ASYNC);
+
+				ShowWindow(FrameWnd, SW_SHOWNA);
+
+				if (FrameMaximized == TRUE)
+					PostMessage(FrameWnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+				else
+					PostMessage(FrameWnd, WM_SYSCOMMAND, SW_SHOWNA, 0);
+
 			}
 				
 			sprintf(Title,"Stream %d - Connected to %s", Stream, callsign);

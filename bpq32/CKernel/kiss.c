@@ -64,7 +64,7 @@
 #define POLLEDKISS	8			// OTHER END IS POLLING US
 #define D700 16					// D700 Mode (Escape "C" chars
 #define TNCX 32					// TNC-X Mode (Checksum of ACKMODE frames includes ACK bytes
-#define PITNC 64				// PITNC Mode - can reset TNC with FEND 15 1 
+#define PITNC 64				// PITNC Mode - can reset TNC with FEND 15 2
 #define NOPARAMS 128			// Don't send SETPARAMS frame
 
 typedef struct KISSINFO

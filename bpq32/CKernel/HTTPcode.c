@@ -46,7 +46,8 @@ char * strlop(char * buf, char delim);
 VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
 int CompareNode(const void *a, const void *b);
 int CompareAlias(const void *a, const void *b);
-void ProcessMailHTTPMessage(struct TCPINFO * TCP, char * Method, char * URL, char * input, char * Reply, int * RLen, SOCKET sock);
+void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
+void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 DllImport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 int SetupNodeMenu(char * Buff);
 int StatusProc(char * Buff);
@@ -69,13 +70,21 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	int Stream;					// BPQ Stream Number
 	char Key[20];				// Session Key
 	BOOL Connected;
+	// Use by Mail Module
+	VOID * User;				// Selected User
+	VOID * Msg;					// Selected Message
+	VOID * WP;					// Selected WP record
+
 };
+
 
 static struct HTTPConnectionInfo * SessionList;	// active term mode sessions
 
 char Mycall[10];
 
-char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
+char APRSPipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
+char MAILPipeFileName[] = "\\\\.\\pipe\\BPQMAILWebPipe";
+char CHATPipeFileName[] = "\\\\.\\pipe\\BPQCHATWebPipe";
 
 char Index[] = "<html><head><title>%s's BPQ32 Web Server</title></head><body><P align=center>"
 	"<table border=2 cellpadding=2 cellspacing=2 bgcolor=white>"
@@ -109,13 +118,10 @@ char NodeMenuRest[] = "}</script></head>"
 	char DriverBit[] = "<td><a href=\"javascript:open_win();\">Driver Windows</a></td>"
 	"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700);>Stream Status</a></td>";
 char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
-#ifdef LINBPQ
+
 char MailBit[] = "<td><a href=../mail/all.html>Mail Server Pages</a></td>";
-char ChatBit[] = "<td><a href=../mail/Chat.html>Chat Server Pages</a></td>";
-#else
-char MailBit[] = "";
-char ChatBit[] = "";
-#endif
+char ChatBit[] = "<td><a href=../chat/Chat.html>Chat Server Pages</a></td>";
+
 
 char NodeTail[] = "</tr></table>";
 	
@@ -206,6 +212,30 @@ char InputLine[] = "<html><head></head><body>"
 	"<input type=text size=105 name=input />"
 	"<script>document.inputform.input.focus();</script></form>";
 
+
+static char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
+	"<h3 align=center>BPQ32 Mail Server %s Access</h3>"
+	"<h3 align=center>Please enter Callsign and Password to access the BBS</h3>"
+	"<form method=post action=/Mail/Signon?Mail>"
+	"<table align=center  bgcolor=white>"
+	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
+	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
+	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+
+static char ChatSignon[] = "<html><head><title>BPQ32 Chat Server Access</title></head><body background=\"/background.jpg\">"
+	"<h3 align=center>BPQ32 Chat Server %s Access</h3>"
+	"<h3 align=center>Please enter Callsign and Password to access the Chat Server</h3>"
+	"<form method=post action=/Chat/Signon?Chat>"
+	"<table align=center  bgcolor=white>"
+	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
+	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
+	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+
+
+static char MailLostSession[] = "<html><body>"
+"<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/Lost?%s>"
+"Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
+"<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
 
 VOID PollSession(struct HTTPConnectionInfo * Session)
 {
@@ -351,6 +381,13 @@ VOID HTTPTimer()
 	{
 		Session->KillTimer++;
 
+		if (Session->Key[0] != 'T')
+		{
+			PreviousSession = Session;
+			Session = Session->Next;
+			continue;
+		}
+
 		if (Session->KillTimer > 3000)		// Around 5 mins
 		{
 			int i;
@@ -422,7 +459,7 @@ VOID HTTPTimer()
 	}
 }
 
-struct HTTPConnectionInfo * AllocateSession(SOCKET sock)
+struct HTTPConnectionInfo * AllocateSession(SOCKET sock, char Mode)
 {
 	int KeyVal;
 	struct HTTPConnectionInfo * Session = zalloc(sizeof(struct HTTPConnectionInfo));
@@ -431,22 +468,27 @@ struct HTTPConnectionInfo * AllocateSession(SOCKET sock)
 	if (Session == NULL)
 		return NULL;
 
-	for (i = 0; i < 20; i++)
-		Session->ScreenLines[i] = _strdup("Scroll to end<br>");
+	if (Mode == 'T')
+	{
+		// Terminal
+
+		for (i = 0; i < 20; i++)
+			Session->ScreenLines[i] = _strdup("Scroll to end<br>");
 		
-	for (i = 20; i < 100; i++)
-		Session->ScreenLines[i] = _strdup("<br>\r\n");
+		for (i = 20; i < 100; i++)
+			Session->ScreenLines[i] = _strdup("<br>\r\n");
 
-	Session->Stream = FindFreeStream();
+		Session->Stream = FindFreeStream();
 
-	if (Session->Stream == 0)
-		return NULL;
+		if (Session->Stream == 0)
+			return NULL;
 
-	SessionControl(Session->Stream, 1, 0);
-
+		SessionControl(Session->Stream, 1, 0);
+	}
+	
 	KeyVal = (int)sock * time(NULL);
 
-	sprintf(Session->Key, "%012X", KeyVal);
+	sprintf(Session->Key, "%c%012X", Mode, KeyVal);
 
 	if (SessionList)
 		Session->Next = SessionList;
@@ -618,7 +660,7 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 				{
 					// ok
 
-					struct HTTPConnectionInfo * Session = AllocateSession(sock);
+					struct HTTPConnectionInfo * Session = AllocateSession(sock, 'T');
 
 					if (Session)
 					{
@@ -992,15 +1034,20 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	int Bufferlen;
 	struct HTTPConnectionInfo CI;
 	struct HTTPConnectionInfo * sockptr = &CI;
+	struct HTTPConnectionInfo * Session = NULL;
+
 
 	HANDLE hPipe;
 	char URL[4096];
 	char * ptr;
-	char * Context, * Method, * NodeURL;
-	int ReplyLen;
+	char * Context, * Method, * NodeURL, * Key;
+	int ReplyLen = 0;
 	char Header[256];
 	int HeaderLen;
 	char TimeString[64];
+	BOOL LOCAL = FALSE;
+	char Reply[100000];
+
 //	struct _EXCEPTION_POINTERS exinfo;
 
 	strcpy(EXCEPTMSG, "ProcessHTTPMessage");
@@ -1027,7 +1074,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		char _REPLYBUFFER[8192];
 
-		hPipe = CreateFile(PipeFileName, GENERIC_READ | GENERIC_WRITE,
+		hPipe = CreateFile(APRSPipeFileName, GENERIC_READ | GENERIC_WRITE,
                   0,                    // exclusive access
                   NULL,                 // no security attrs
                   OPEN_EXISTING,
@@ -1076,6 +1123,182 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 #endif
 
+	// If for Mail or Chat, check for a session, and send login screen if necessary
+
+	// Moved here to simplify operation with both internal and external clients
+
+	if (_memicmp(Context, "/Mail/", 6) == 0)
+	{
+		int RLen = 0;
+		char Appl;
+		char * input;
+		char * IContext;
+	
+
+	if (strstr(MsgPtr, "Host: 127.0.0.1"))
+		LOCAL = TRUE;
+
+	NodeURL = strtok_s(Context, "?", &IContext);
+	Key = strtok_s(NULL, "?", &IContext);
+
+	if (_stricmp(NodeURL, "/Mail/Signon") == 0)
+	{
+		ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session);
+		if (ReplyLen)
+			goto Returnit;
+		
+		strcpy(Context, "/Mail/Header");
+		goto doHeader;
+	}
+
+	if (_stricmp(NodeURL, "/Mail/Lost") == 0)
+	{
+		input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+
+		if (input && strstr(input, "Cancel=Exit"))
+		{
+			ReplyLen = SetupNodeMenu(Reply);
+			RLen = ReplyLen;
+			goto Returnit;
+		}
+		if (Key)
+			Appl = Key[0];
+
+		Key = 0;
+	}
+
+	if (Key == 0 || Key[0] == 0)
+	{
+		// No Session 
+
+		// if not local send a signon screen, else create a user session
+
+		if (LOCAL)
+		{
+			Session = AllocateSession(Appl, 'M');
+
+			if (Session)
+			{
+				strcpy(Context, "/Mail/Header");
+				goto doHeader;
+			}
+			else
+			{
+				ReplyLen = SetupNodeMenu(Reply);
+				ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
+			}
+			RLen = ReplyLen;
+
+			goto Returnit;
+
+		}
+		
+		ReplyLen = sprintf(Reply, MailSignon, Mycall, Mycall);
+
+		RLen = ReplyLen;
+			goto Returnit;
+	}
+
+	Session = FindSession(Key);
+
+	if (Session == NULL)
+	{
+		ReplyLen = sprintf(Reply, MailLostSession, Key);
+		RLen = ReplyLen;
+		goto Returnit;
+	}
+	}
+
+	if (_memicmp(Context, "/Chat/", 6) == 0)
+	{
+		int RLen = 0;
+		char Appl;
+		char * input;
+		char * IContext;
+	
+
+	if (strstr(MsgPtr, "Host: 127.0.0.1"))
+		LOCAL = TRUE;
+
+	NodeURL = strtok_s(Context, "?", &IContext);
+	Key = strtok_s(NULL, "?", &IContext);
+
+	if (_stricmp(NodeURL, "/Chat/Signon") == 0)
+	{
+		ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, &Session);
+		if (ReplyLen)
+			goto Returnit;
+		
+		strcpy(Context, "/Chat/Header");
+		goto doHeader;
+	}
+
+	if (_stricmp(NodeURL, "/Chat/Lost") == 0)
+	{
+		input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+
+		if (input && strstr(input, "Cancel=Exit"))
+		{
+			ReplyLen = SetupNodeMenu(Reply);
+			RLen = ReplyLen;
+			goto Returnit;
+		}
+		if (Key)
+			Appl = Key[0];
+
+		Key = 0;
+	}
+
+	if (Key == 0 || Key[0] == 0)
+	{
+		// No Session 
+
+		// if not local send a signon screen, else create a user session
+
+		if (LOCAL)
+		{
+			Session = AllocateSession(Appl, 'C');
+
+			if (Session)
+			{
+				strcpy(Context, "/CHat/Header");
+				goto doHeader;
+			}
+			else
+			{
+				ReplyLen = SetupNodeMenu(Reply);
+				ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
+			}
+			RLen = ReplyLen;
+
+			goto Returnit;
+
+		}
+		
+		ReplyLen = sprintf(Reply, ChatSignon, Mycall, Mycall);
+
+		RLen = ReplyLen;
+			goto Returnit;
+	}
+
+	Session = FindSession(Key);
+
+	if (Session == NULL)
+	{
+		ReplyLen = sprintf(Reply, MailLostSession, Key);
+		RLen = ReplyLen;
+Returnit:
+		HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+		send(sock, Header, HeaderLen, 0);
+		send(sock, Reply, ReplyLen, 0);
+		send(sock, Tail, strlen(Tail), 0);
+
+		return 0;
+	}
+	}
+
+doHeader:
+
 #ifdef LINBPQ
 
 	if (_memicmp(Context, "/MAIL/", 6) == 0)
@@ -1086,7 +1309,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		ReplyLen = 0;
 
-		ProcessMailHTTPMessage(TCP, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen, sock);
+		ProcessMailHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
 
 		HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 		send(sock, Header, HeaderLen, 0);
@@ -1094,6 +1317,29 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		send(sock, Tail, strlen(Tail), 0);
 
 		return 0;
+
+	}
+
+	if (_memicmp(Context, "/CHAT/", 6) == 0)
+	{
+		char _REPLYBUFFER[100000];
+		int Sent;
+		int Loops = 0;
+
+		ReplyLen = 0;
+
+		ProcessChatHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
+
+		HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+		send(sock, Header, HeaderLen, 0);
+		send(sock, _REPLYBUFFER, ReplyLen, 0);
+		send(sock, Tail, strlen(Tail), 0);
+
+		return 0;
+
+	}
+
+		
 /*
 		Sent = send(sock, _REPLYBUFFER, InputLen, 0);
 		
@@ -1110,7 +1356,85 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 			Sleep(30);
 			Sent = send(sock, _REPLYBUFFER, InputLen, 0);
 		}
-*/		return 0;
+		return 0;
+	}
+*/
+#else
+
+	// Pass to MailChat if active
+
+	if (_memicmp(Context, "/MAIL/", 6) == 0)
+	{
+		// If for Mail, Pass to Mail Server via Named Pipe
+
+		hPipe = CreateFile(MAILPipeFileName, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+
+		if (hPipe == (HANDLE)-1)
+		{
+			InputLen = sprintf(Reply, "HTTP/1.0 404 Not Found\r\nContent-Length: 28\r\n\r\nMail Data is not available\r\n");
+			send(sock, Reply, InputLen, 0);
+		}
+		else
+		{
+			int Sent;
+			int Loops = 0;
+
+			WriteFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
+			WriteFile(hPipe, MsgPtr, MsgLen, &InputLen, NULL);
+
+		
+			ReadFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
+			ReadFile(hPipe, Reply, 100000, &ReplyLen, NULL);
+			if (ReplyLen <= 0)
+			{
+				InputLen = GetLastError();
+			}
+
+			CloseHandle(hPipe);
+			goto Returnit;
+		}
+		return 0;
+	}
+
+	if (_memicmp(Context, "/CHAT/", 6) == 0)
+	{
+		hPipe = CreateFile(CHATPipeFileName, GENERIC_READ | GENERIC_WRITE,
+                  0,                    // exclusive access
+                  NULL,                 // no security attrs
+                  OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, 
+                  NULL );
+
+		if (hPipe == (HANDLE)-1)
+		{
+			InputLen = sprintf(Reply, "HTTP/1.0 404 Not Found\r\nContent-Length: 28\r\n\r\nMail Data is not available\r\n");
+			send(sock, Reply, InputLen, 0);
+		}
+		else
+		{
+			int Sent;
+			int Loops = 0;
+
+			WriteFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
+			WriteFile(hPipe, MsgPtr, MsgLen, &InputLen, NULL);
+
+		
+			ReadFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
+			ReadFile(hPipe, Reply, 100000, &ReplyLen, NULL);
+			if (ReplyLen <= 0)
+			{
+				InputLen = GetLastError();
+			}
+
+			CloseHandle(hPipe);
+			goto Returnit;
+		}
+		return 0;
 	}
 
 #endif
@@ -2012,4 +2336,112 @@ int StatusProc(char * Buff)
 
 	Len += sprintf(&Buff[Len], "</tr></table>");
 	return Len;
+}
+
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session)
+{
+	int ReplyLen = 0;
+	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+	char * user, * password, * Key;
+
+	if (input)
+	{
+		int i;
+		struct UserRec * USER;
+
+		if (strstr(input, "Cancel=Cancel"))
+		{
+			ReplyLen = SetupNodeMenu(Reply);
+			return ReplyLen;
+		}
+		user = strtok_s(&input[9], "&", &Key);
+		password = strtok_s(NULL, "=", &Key);
+		password = Key;
+
+		for (i = 0; i < TCP->NumberofUsers; i++)
+		{
+			USER = TCP->UserRecPtr[i];
+
+			if (user && _stricmp(user, USER->UserName) == 0)
+			{
+ 				if (strcmp(password, USER->Password) == 0 && USER->Secure)
+				{
+					// ok
+
+					*Session = AllocateSession(Appl[0], 'M');
+
+					if (Session)
+					{
+						ReplyLen = 0;
+					}
+					else
+					{
+						ReplyLen =  SetupNodeMenu(Reply);
+						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
+					}
+					return ReplyLen;
+				}
+			}
+		}
+	}	
+	
+	ReplyLen = sprintf(Reply, MailSignon, Mycall, Mycall);
+	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
+
+	return ReplyLen;
+}
+
+
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session)
+{
+	int ReplyLen = 0;
+	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+	char * user, * password, * Key;
+
+	if (input)
+	{
+		int i;
+		struct UserRec * USER;
+
+		if (strstr(input, "Cancel=Cancel"))
+		{
+			ReplyLen = SetupNodeMenu(Reply);
+			return ReplyLen;
+		}
+		user = strtok_s(&input[9], "&", &Key);
+		password = strtok_s(NULL, "=", &Key);
+		password = Key;
+
+		for (i = 0; i < TCP->NumberofUsers; i++)
+		{
+			USER = TCP->UserRecPtr[i];
+
+			if (user && _stricmp(user, USER->UserName) == 0)
+			{
+ 				if (strcmp(password, USER->Password) == 0 && USER->Secure)
+				{
+					// ok
+
+					*Session = AllocateSession(Appl[0], 'C');
+
+					if (Session)
+					{
+						ReplyLen = 0;
+					}
+					else
+					{
+						ReplyLen = SetupNodeMenu(Reply);
+						ReplyLen += sprintf(&Reply[ReplyLen], "%s", BusyError);
+					}
+					return ReplyLen;
+				}
+			}
+		}
+	}	
+	
+	ReplyLen = sprintf(Reply, ChatSignon, Mycall, Mycall);
+	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
+		
+	return ReplyLen;
+
 }

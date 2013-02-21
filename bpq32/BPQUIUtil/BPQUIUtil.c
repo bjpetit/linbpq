@@ -15,6 +15,8 @@
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
+#include "ASMStrucs.h"
+
 #include <windows.h>
 #include <windowsx.h>
 #include <stdio.h>
@@ -23,7 +25,7 @@
 
 
 #include "bpq32.h"
-#include "ASMStrucs.h"
+
 #include "BPQUIUtil.h"
 #define UIUTIL
 #include "GetVersion.h"

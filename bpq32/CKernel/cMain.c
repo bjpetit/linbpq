@@ -644,7 +644,7 @@ BOOL Start()
 		char * ptr2 = BTHDDR.L2DATA;
 		int len = 120;
 
-		BTHDDR.LENGTH = 8;			//  7 HEADER, PID
+		BTHDDR.LENGTH = 1;			// PID
 
 		while ((*ptr1) && len--)
 		{

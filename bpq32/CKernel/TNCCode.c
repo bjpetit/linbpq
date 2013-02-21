@@ -173,6 +173,8 @@ VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg)
 	struct _MESSAGE * Buffer;
 	char * ptr1, * ptr2;
 
+	Msg->LENGTH -= 7;	// Remove Header
+
 	while (PORT)
 	{
 		if (PORT->PROTOCOL == 10 || PORT->PORTUNPROTO == 0)	// Pactor-style or no UNPROTO ADDR?
@@ -186,14 +188,16 @@ VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg)
 		if (Buffer)
 		{
 			memcpy(Buffer->DEST, PORT->PORTUNPROTO, 7);
-			Buffer->DEST[6] |= 0xC0;		// Set COmmand bits
+			Buffer->DEST[6] |= 0xC0;		// Set Command bits
 
 			//	Send from BBSCALL unless PORTBCALL defined
 
-//			if (PORT->PORTBCALL[0] > 31)
-//				memcpy(Buffer->ORIGIN, PORT->PORTBCALL, 7);
-//			else
-//				memcpy(Buffer->ORIGIN, APPLCALLTABLE->APPLCALL, 7);
+			if (PORT->PORTBCALL[0] > 32)
+				memcpy(Buffer->ORIGIN, PORT->PORTBCALL, 7);
+			else if (APPLCALLTABLE->APPLCALL[0] > 32) 
+				memcpy(Buffer->ORIGIN, APPLCALLTABLE->APPLCALL, 7);
+			else
+				memcpy(Buffer->ORIGIN, MYCALL, 7);
 
 			ptr1  = &PORT->PORTUNPROTO[7];		// First Digi
 			ptr2 = &Buffer->CTL;				// Digi field in buffer
@@ -210,7 +214,7 @@ VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg)
 			*(ptr2 - 1) |= 1;					// Set End of Address
 			*(ptr2++) = UI;
 	
-			memcpy(ptr2, &Buffer->PID, Msg->LENGTH);
+			memcpy(ptr2, &Msg->PID, Msg->LENGTH);
 			ptr2 += Msg->LENGTH;
 			Buffer->LENGTH = ptr2 - (char *)Buffer;			
 			Buffer->PORT = PORT->PORTNUMBER;

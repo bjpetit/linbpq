@@ -52,8 +52,8 @@
 
 #ifdef MAILCHAT
 
-#define Vers 1,4,53,5
-#define Verstring "1.4.53.5\0"
+#define Vers 1,4,53,10
+#define Verstring "1.4.53.10"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2012 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"
@@ -94,8 +94,8 @@
 
 #ifdef APRS
 
-#define Vers 1,1,3,1
-#define Verstring "1.1.3.1\0"
+#define Vers 1,1,3,2
+#define Verstring "1.1.3.2\0"
 #define VerComments  "APRS Client for G8BPQ Switch\0"
 #define VerCopyright "Copyright © 2012 John Wiseman G8BPQ\0"
 #define VerDesc "APRS Client for G8BPQ Switch\0"
@@ -104,10 +104,10 @@
 
 #ifdef CHAT
 
-#define Vers 1,0,0,2
-#define Verstring "1.0.0.2\0"
+#define Vers 1,0,0,3
+#define Verstring "1.0.0.3\0"
 #define VerComments "Chat server for G8BPQ Packet Switch\0"
-#define VerCopyright "Copyright © 2009-2012 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2009-2013 John Wiseman G8BPQ\0"
 #define VerDesc "Chat server for G8BPQ's 32 Bit Switch\0"
 
 #endif

@@ -22,7 +22,8 @@ GdkPixbuf *create_pixbuf(const gchar * filename)
 #include "WS2tcpip.h"
 
 #else
-
+#include <gtk/gtkadjustment.h>
+#include <gtk/gtkwidget.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/un.h>
@@ -41,14 +42,19 @@ char Host[5][100];
 char Port[5][10];
 char UserName[5][80];
 char Password[5][80];
+char Path[5][100];
+char Test1[5][100];
+char Test2[5][100];
+char Pass[5][100];
+char path[5][100];
 
 char HN[5][6] = {"Host1", "Host2", "Host3", "Host4"};
 char PN[5][6] = {"Port1", "Port2", "Port3", "Port4"};
 char PASSN[5][6] = {"Pass1", "Pass2", "Pass3", "Pass4"};
 char UN[5][6] = {"User1", "User2", "User3", "User4"};
-
+char pn[5][6] = {"Path"};
 int CurrentHost = 0;
-char VersionString[80] = "0.0.0.2";
+char VersionString[80] = "0.0.1.26";
 
 char DisMsg[] = "*** Disconnected\r";
 
@@ -56,7 +62,7 @@ int PortMask=65535;
 int mtxparam=1;
 int MCOM=1;
 int Split;
-
+//int path;
 int Bells = FALSE;
 int StripLF = FALSE;
 int LogMonitor = FALSE;
@@ -66,8 +72,11 @@ int MonNODES = FALSE;
 int MONColour = TRUE;
 int ChatMode = FALSE;
 int MonPorts = 1;
+int muionly = 1;
 
-int left = 100, right = 600, top = 100, bottom = 600;
+int left = 100, top = 100, right = 500, bottom = 500;
+int size;
+int Size;
 
 int Connecting = FALSE;
 int Disconnecting = FALSE;
@@ -77,6 +86,7 @@ int SocketActive = FALSE;
 char Title[80];
 
 void ReadConfig();
+void SendTraceOptions();
 
 int TCPConnect(char * Host, char * Port);
 void WritetoOutputWindow(const char * Text, int Len);
@@ -140,6 +150,7 @@ GtkWidget *dialog;
 GtkWidget *window;
 GtkWidget *box1;
 GtkWidget *box2;
+GtkWidget *box3;
 GtkWidget *hbox;
 GtkWidget *button;
 GtkWidget *check;
@@ -150,7 +161,9 @@ GtkWidget *vscrollbar2;
 GtkTextBuffer *text;
 GtkTextBuffer *text2;
 GtkWidget *entry;
-
+GtkWidget *vpaned;
+GtkWidget *frame1;
+GtkWidget *frame2;
 GIOChannel *RecvChannel;
 GtkWidget *menubar;
 GtkWidget *view;
@@ -161,15 +174,16 @@ GtkWidget *montx;
 GtkWidget *monsup;
 GtkWidget *monnode;
 GtkWidget *encol;
+GtkWidget *mui;
 GtkWidget *addpor;
 GtkWidget *menubar;
 GtkWidget *conmenu, *conn_item, *Conn[4], *Conn2, *Conn3, *Conn4;
 GtkWidget *discmenu, *dis_item, sid_item;
 GtkWidget *cfgmenu, *tcp_item, *font_item, *strip_item, *logmon_item, *logout_item, *cfg_item, *chat_term, *Cfg[4], *Cfg2, *Cfg3, *Cfg4;
 GtkWidget *monmenu, *mon_item, *mon[32];
-GtkWidget *fontmenu;
 GtkWidget *tcpmenu;
 GtkWidget *enbel, *enbel_item;
+GtkWidget *propmenu,*propitem;
 
 GtkTextTag *rtag, *btag, *tag[256], *tagm[256];
 
@@ -181,6 +195,7 @@ void DisableDisconnectMenu();
 void close_application(GtkWidget *widget, gpointer   data)
 {
        gtk_main_quit ();
+       return 0;
 }
 
 void enter_callback( GtkWidget *widget,
@@ -203,10 +218,9 @@ void enter_callback( GtkWidget *widget,
 	gtk_entry_set_text (GTK_ENTRY (entry), "");
 }
 
-void SendTraceOptions();
-static void Disconnect(GtkWidget *w, gpointer data);
-static void Toggled( GtkWidget *w, int * data )
 
+static void Disconnect(GtkWidget *w, gpointer data);
+static void Toggled(GtkWidget *w, int * data )
 {
       int NewVal = gtk_check_menu_item_get_active((GtkCheckMenuItem *)w);
       *(data) = NewVal;
@@ -214,6 +228,28 @@ static void Toggled( GtkWidget *w, int * data )
       SendTraceOptions();
 
       return;
+}
+static void property(GtkWidget *w, gpointer data)
+{
+    GtkWidget * dialog = gtk_dialog_new_with_buttons("Properties",
+                                                     GTK_WINDOW(window),
+                                                     GTK_DIALOG_MODAL,
+                                                     GTK_STOCK_OK,
+                                                     GTK_STOCK_CANCEL,   2,
+                                                     NULL );
+
+    GtkWidget *path;
+    GtkWidget *label5, *content_area1;
+    GtkWidget *entry5;
+    content_area1 = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
+
+    label5 = gtk_label_new("Path");
+
+    gtk_container_add (GTK_CONTAINER (content_area1), label5);
+
+	entry5 = gtk_entry_new();
+	gtk_entry_set_max_length (GTK_ENTRY (entry5), 100);
+    gtk_widget_show_all (dialog);
 }
 static void Configure(GtkWidget *w, gpointer data)
 {
@@ -308,10 +344,10 @@ static void Configure(GtkWidget *w, gpointer data)
 		sprintf(Key, "Port%d", HostNum + 1);
 		g_key_file_set_string(KF, "Session 1", Key, &Port[HostNum][0]);
 
-		sprintf(Key, "UserName%d", HostNum + 1);
+		sprintf(Key, "User%d", HostNum + 1);
 		g_key_file_set_string(KF, "Session 1", Key, &UserName[HostNum][0]);
 
-		sprintf(Key, "Password%d", HostNum + 1);
+		sprintf(Key, "Pass%d", HostNum + 1);
 		g_key_file_set_string(KF, "Session 1", Key, &Password[HostNum][0]);
 
 
@@ -327,8 +363,8 @@ static void Configure(GtkWidget *w, gpointer data)
     }
 
 	gtk_widget_destroy (dialog);
-
 }
+
 static void Connect( GtkWidget *w, gpointer  data )
 {
 	CurrentHost = (int)data;
@@ -392,6 +428,8 @@ GtkWidget *get_menubar_menu(GtkWidget  *window)
     addpor = gtk_menu_new();
     tcpmenu = gtk_menu_new();
     enbel = gtk_menu_new();
+    mui = gtk_menu_new();
+    propmenu = gtk_menu_new();
 
     /* Create the menu items */
 
@@ -411,7 +449,6 @@ GtkWidget *get_menubar_menu(GtkWidget  *window)
 		g_signal_connect (Conn[i], "activate", G_CALLBACK (Connect), (void *) i);
  		g_signal_connect (Cfg[i], "activate", G_CALLBACK (Configure), (void *) i);
 
-
 	}
 
 	conn_item = gtk_menu_item_new_with_label ("Connect");
@@ -419,7 +456,7 @@ GtkWidget *get_menubar_menu(GtkWidget  *window)
 
     dis_item = gtk_menu_item_new_with_label ("Disconnect");
 	g_signal_connect (dis_item, "activate", G_CALLBACK (Disconnect), 0);
-	gtk_widget_set_sensitive(dis_item, FALSE);
+	gtk_widget_set_sensitive(dis_item, TRUE);
     gtk_menu_item_set_submenu (GTK_MENU_ITEM (dis_item), discmenu);
 
     cfg_item = gtk_menu_item_new_with_label ("Setup");
@@ -435,6 +472,11 @@ GtkWidget *get_menubar_menu(GtkWidget  *window)
         chat_term = gtk_check_menu_item_new_with_label ("Chat Terminal Mode");
         gtk_check_menu_item_set_active((GtkCheckMenuItem *) chat_term, ChatMode);
         g_signal_connect (chat_term, ("toggled"), G_CALLBACK (Toggled), (void *) &ChatMode);
+
+     propitem = gtk_menu_item_new_with_label ("Properties");
+//     g_signal_connect (Prop[i], "activate", G_CALLBACK (property), (void *) i);
+     gtk_menu_item_set_submenu (GTK_MENU_ITEM (propitem), propmenu);
+
 
     tcp_item = gtk_menu_item_new_with_label ("TCP Hosts");
     gtk_menu_item_set_submenu (GTK_MENU_ITEM (tcp_item), tcpmenu);
@@ -454,12 +496,17 @@ GtkWidget *get_menubar_menu(GtkWidget  *window)
       gtk_check_menu_item_set_active((GtkCheckMenuItem *)monnode, MonNODES);
       g_signal_connect (monnode, "toggled", G_CALLBACK (Toggled), (void *) &MonNODES);
 
+      mui = gtk_check_menu_item_new_with_label ("Monitor UI Only");
+      gtk_check_menu_item_set_active((GtkCheckMenuItem *)mui, muionly);
+      g_signal_connect (mui, "toggled", G_CALLBACK (Toggled), (void *) &muionly);
+
       encol = gtk_check_menu_item_new_with_label ("Enable Colour");
       gtk_check_menu_item_set_active((GtkCheckMenuItem *)encol, MONColour);
       g_signal_connect (encol, "toggled", G_CALLBACK (Toggled), (void *) &MONColour);
 
       addpor = gtk_menu_item_new_with_label ("Add Port");
       g_signal_connect (addpor, "activate", G_CALLBACK (AddPortItem), (void *) 0);
+
 
     /* Add them to the menu */
 
@@ -470,9 +517,11 @@ GtkWidget *get_menubar_menu(GtkWidget  *window)
     gtk_menu_shell_append ((GtkMenuShell *)monmenu, montx);
 	gtk_menu_shell_append ((GtkMenuShell *)monmenu, monsup);
 	gtk_menu_shell_append ((GtkMenuShell *)monmenu, monnode);
+	gtk_menu_shell_append ((GtkMenuShell *)monmenu, mui);
 	gtk_menu_shell_append ((GtkMenuShell *)monmenu, encol);
 	gtk_menu_shell_append ((GtkMenuShell *)monmenu, addpor);
     gtk_menu_shell_append ((GtkMenuShell *)cfgmenu, tcp_item);
+    gtk_menu_shell_append ((GtkMenuShell *)cfgmenu, propitem);
     gtk_menu_shell_append ((GtkMenuShell *)cfgmenu, enbel);
     gtk_menu_shell_append ((GtkMenuShell *)cfgmenu, logmon_item);
     gtk_menu_shell_append ((GtkMenuShell *)cfgmenu, logout_item);
@@ -496,6 +545,8 @@ GtkWidget *get_menubar_menu(GtkWidget  *window)
       }
 
  	gtk_widget_show_all (menubar);
+
+    SendTraceOptions();
 
 	return menubar;
 
@@ -606,53 +657,17 @@ gint PollTimer(gpointer data)
 	return TRUE;
 }
 
-
-int main(int argc, char *argv[])
+static GtkWidget *create_monitor ( void )
 {
-	PangoFontDescription *font_desc;
-	int i;
+    GtkWidget *tree_view;
+//    GtkTreeIter *iter;
+//    GtkCellRender *cell;
+//    GtkTreeViewColumn *column;
 
- #ifdef WIN32
-	WSADATA WsaData;            // receives data from WSAStartup
-	WSAStartup(MAKEWORD(2, 0), &WsaData);
-#endif
-	gtk_init (&argc, &argv);
 
-	ReadConfig();
-
-	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-	gtk_window_set_default_size(GTK_WINDOW (window), right - left, bottom - top);
-	gtk_widget_set_uposition(window, left, top);
-//	gtk_window_set_resizable  (GTK_WINDOW (window), TRUE);
-	g_signal_connect (G_OBJECT (window), "destroy", G_CALLBACK (close_application), NULL);
-	gtk_window_set_title (GTK_WINDOW (window), "BPQTermTCP");
-	gtk_container_set_border_width (GTK_CONTAINER (window), 0);
-    gtk_window_set_icon(GTK_WINDOW(window), create_pixbuf("bpqicon.ico"));
-
-	// Create a box for the menu
-
-	box1 = gtk_vbox_new (FALSE, 0);
-	gtk_container_add (GTK_CONTAINER (window), box1);
-
-	menubar = get_menubar_menu (window);
-    gtk_box_pack_start (GTK_BOX (box1), menubar, FALSE, TRUE, 1);
-
-	// Create another box for the text windows
-
-	box2 = gtk_vbox_new (FALSE, 10);
-	gtk_container_set_border_width (GTK_CONTAINER (box2), 10);
-	gtk_box_pack_start (GTK_BOX (box1), box2, TRUE, TRUE, 0);
-
-	// Create a table for the 2 text windows and the input line
-
-	table = gtk_table_new (3, 1, FALSE);
-	gtk_table_set_row_spacing (GTK_TABLE (table), 0, 2);
-	gtk_table_set_col_spacing (GTK_TABLE (table), 0, 2);
-	gtk_box_pack_start (GTK_BOX (box2), table, TRUE, TRUE, 0);
-
-	view = gtk_text_view_new ();
+    view = gtk_text_view_new ();
 	text = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
-	gtk_widget_set_size_request (view, 600, 100);
+    gtk_widget_set_size_request (view, 600, 100);
     gtk_text_view_set_editable (GTK_TEXT_VIEW (view), FALSE);
     gtk_text_view_set_cursor_visible (GTK_TEXT_VIEW (view), FALSE);
 
@@ -661,57 +676,170 @@ int main(int argc, char *argv[])
 	gtk_widget_set_size_request(scrolledwin, 600, 100);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
 	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin), GTK_SHADOW_IN);
-	gtk_widget_show(scrolledwin);
-	gtk_container_add(GTK_CONTAINER(scrolledwin), view);
-
-     gtk_table_attach (GTK_TABLE (table), scrolledwin,0, 1, 0, 1,
+//    gtk_container_add(GTK_CONTAINER(scrolledwin), view);
+    //tree_view = gtk_tree_view_new();
+    gtk_container_add(GTK_CONTAINER (scrolledwin), view);
+    //gtk_tree_view_set_model (GTK_TREE_VIEW (tree_view), GTK_TREE_MODEL (view));
+    //gtk_widget_show(tree_view);
+/*
+    gtk_table_attach (GTK_TABLE (table), scrolledwin,0, 1, 0, 1,
 		    GTK_EXPAND | GTK_SHRINK | GTK_FILL,
 		    GTK_EXPAND | GTK_SHRINK | GTK_FILL, 0, 0);
+*/
+    gtk_widget_show(scrolledwin);
+    return scrolledwin;
 
+}
 
-	// Create output view
-
-	view2 = gtk_text_view_new ();
+static GtkWidget *create_output ( void )
+{
+    view2 = gtk_text_view_new ();
 	text2 = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view2));
     gtk_text_view_set_editable (GTK_TEXT_VIEW(view2), FALSE);
     gtk_text_view_set_cursor_visible (GTK_TEXT_VIEW(view2), FALSE);
  	scrolledwin2 = gtk_scrolled_window_new(NULL,NULL);
-	gtk_container_set_border_width(GTK_CONTAINER(scrolledwin2), 2);
-	gtk_widget_set_size_request(scrolledwin2, 600, 100);
+	gtk_container_set_border_width(GTK_CONTAINER(box2), 2);
+	gtk_widget_set_size_request(scrolledwin2, 100, 100);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin2),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
 	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin2), GTK_SHADOW_IN);
 	gtk_container_add(GTK_CONTAINER(scrolledwin2), view2);
+/*
+	gtk_table_attach (GTK_TABLE (table), scrolledwin2, 0, 1, 1, 2,
+		    GTK_EXPAND | GTK_SHRINK | GTK_FILL,
+    	    GTK_EXPAND | GTK_SHRINK | GTK_FILL, 0, 0);
+
+*/
+    gtk_widget_show(scrolledwin2);
+    return scrolledwin2;
+}
+
+int main(int argc, char *argv[])
+{
+	//PangoFontDescription *font_desc;
+	int i;
+
+	gtk_init (&argc, &argv);
+
+    window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title (GTK_WINDOW (window), "Paned Windows");
+    gtk_signal_connect (GTK_OBJECT (window), "destroy",
+                        GTK_SIGNAL_FUNC (gtk_main_quit), NULL);
+    gtk_container_set_border_width (GTK_CONTAINER (window), 10);
+    gtk_widget_set_usize (GTK_WIDGET(window), 450, 400);
+
+   	ReadConfig();
+
+//	window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_default_size(GTK_WINDOW (window), right - left, bottom - top);
+	gtk_widget_set_uposition(window, left, top);
+	gtk_window_set_resizable  (GTK_WINDOW (window), TRUE);
+	g_signal_connect (G_OBJECT (window), "destroy", G_CALLBACK (close_application), NULL);
+	gtk_window_set_title (GTK_WINDOW (window), "BPQTermTCP");
+	gtk_container_set_border_width (GTK_CONTAINER (window), 0);
+    gtk_window_set_icon(GTK_WINDOW(window), create_pixbuf("bpqicon.png"));
+
+	// Create a box for the menu
+
+
+  	box1 = gtk_vbox_new (FALSE, 0);
+	gtk_container_add (GTK_CONTAINER (window), box1);
+
+	menubar = get_menubar_menu (window);
+    gtk_box_pack_start (GTK_BOX (box1), menubar, FALSE, TRUE, 1);
+
+    gtk_widget_show (window);
+	// Create another box for the text windows
+
+
+//	box2 = gtk_vbox_new (FALSE,0);
+	//gtk_container_set_border_width (GTK_CONTAINER (box2), 10);
+	//gtk_box_pack_start (GTK_BOX (box1),box2, TRUE, TRUE, 0);
+
+/*
+
+    // Create a table for the 2 text windows and the input line
+
+	table = gtk_table_new (3, 1, FALSE);
+	gtk_table_set_row_spacing (GTK_TABLE (table), 0, 2);
+	gtk_table_set_col_spacing (GTK_TABLE (table), 0, 2);
+	gtk_box_pack_start (GTK_BOX (box2), table, TRUE, TRUE, 0);
+
+
+	view = gtk_text_view_new ();
+	text = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
+    gtk_widget_set_size_request (view, 600, 100);
+    gtk_text_view_set_editable (GTK_TEXT_VIEW (view), FALSE);
+    gtk_text_view_set_cursor_visible (GTK_TEXT_VIEW (view), FALSE);
+
+	scrolledwin = gtk_scrolled_window_new(NULL,NULL);
+	gtk_container_set_border_width(GTK_CONTAINER(scrolledwin), 1);
+	gtk_widget_set_size_request(scrolledwin, 600, 100);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin), GTK_SHADOW_IN);
+    gtk_widget_show(scrolledwin);
+	gtk_container_add(GTK_CONTAINER(scrolledwin), view);
+
+    gtk_table_attach (GTK_TABLE (table), scrolledwin,0, 1, 0, 1,
+	    GTK_EXPAND | GTK_SHRINK | GTK_FILL,
+		    GTK_EXPAND | GTK_SHRINK | GTK_FILL, 0, 0);
+
+	// Create output view 3
+
+	view2 = gtk_text_view_new ();
+	text2 = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view2));
+
+ //   gtk_text_view_set_editable (GTK_TEXT_VIEW(view2), FALSE);
+    gtk_text_view_set_cursor_visible (GTK_TEXT_VIEW(view2), FALSE);
+ 	scrolledwin2 = gtk_scrolled_window_new(NULL,NULL);
+	gtk_container_set_border_width(GTK_CONTAINER(box2), 2);
+	//gtk_widget_set_size_request(scrolledwin2, 100, 100);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin2),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin2), GTK_SHADOW_IN);
+    gtk_container_add(GTK_CONTAINER(scrolledwin2), view2);
 
 	gtk_table_attach (GTK_TABLE (table), scrolledwin2, 0, 1, 1, 2,
 		    GTK_EXPAND | GTK_SHRINK | GTK_FILL,
-		    GTK_EXPAND | GTK_SHRINK | GTK_FILL, 0, 0);
+    	    GTK_EXPAND | GTK_SHRINK | GTK_FILL, 0, 0);
+*/
+//     box2 = gtk_vpaned_new();
+     vpaned = gtk_vpaned_new ();
+     gtk_container_add (GTK_CONTAINER (window), vpaned);
+     gtk_widget_show (vpaned);
 
+    /* Now create the contents of the two halves of the window */
+
+    frame1 = create_monitor ();
+    gtk_paned_add1 (GTK_PANED (vpaned), frame1);
+    gtk_widget_show (frame1);
+
+    frame2 = create_output ();
+    gtk_paned_add2 (GTK_PANED (vpaned), frame2);
+    gtk_widget_show (frame2);
+  //  gtk_widget_show(box2);
+
+    /* Separator */
 	separator = gtk_hseparator_new ();
 	gtk_box_pack_start (GTK_BOX (box1), separator, FALSE, TRUE, 0);
 
 	box2 = gtk_vbox_new (FALSE, 10);
-	gtk_container_set_border_width (GTK_CONTAINER (box2), 10);
+	gtk_container_set_border_width (GTK_CONTAINER (box2), 1);
 	gtk_box_pack_start (GTK_BOX (box1), box2, FALSE, FALSE, 0);
 
 	// set up the text entry line
 
 	entry = gtk_entry_new();
-	gtk_entry_set_max_length (GTK_ENTRY (entry), 100);
+	gtk_entry_set_max_length (GTK_ENTRY (entry), 300);
+	gtk_entry_set_activates_default(GTK_ENTRY (entry), TRUE);
 	g_signal_connect (G_OBJECT (entry), "activate", G_CALLBACK (enter_callback), (gpointer) entry);
-    //gtk_text_view_get_editable (entry);
-    //gtk_text_view_set_editable (box2, TRUE);
-
 	gtk_box_pack_start (GTK_BOX (box2), entry, FALSE, FALSE, 0);
 
 	/* Change default font throughout the widget */
 
-	font_desc = pango_font_description_from_string ("monospace 10");
-	gtk_widget_modify_font (entry, font_desc);
-	gtk_widget_modify_font (view, font_desc);
-	gtk_widget_modify_font (view2, font_desc);
-	pango_font_description_free (font_desc);
-
-
+//	font_desc = pango_font_description_from_string ("sans 9");
+//	gtk_widget_modify_font (entry, font_desc);
+//	gtk_widget_modify_font (view, font_desc);
+//	gtk_widget_modify_font (view2, font_desc);
+//	pango_font_description_free (font_desc);
 
 	gtk_widget_show_all (window);
 
@@ -737,7 +865,6 @@ int main(int argc, char *argv[])
 	g_timeout_add (200, PollTimer, 0);
 
 	gtk_main ();
-	{
 		GKeyFile * KF;
 		gchar * Value;
 		GError *error = NULL;
@@ -756,9 +883,12 @@ int main(int argc, char *argv[])
 		g_key_file_set_integer(KF, "Session 1", "MONColour", MONColour);
         g_key_file_set_integer(KF, "Session 1", "MonPorts", MonPorts);
         g_key_file_set_integer(KF, "Session 1", "PortMask", PortMask);
-
-		Value = g_key_file_to_data(KF, &length, &error);
-
+        g_key_file_set_integer(KF, "Session 1", "MUIONLY", muionly);
+//        g_key_file_set_string(KF, "Session 1", "Path", &path);
+//       printf(Size, "%d,%d,%d,%d", left,top,right,bottom);
+        Value = g_key_file_to_data(KF, &length, &error);
+//        sprintf(Value, "%d,%d,%d,%d", &left,&top,&right,&bottom);
+//		g_key_file_set_string(KF, "Session 1", "Size", &Value);
 		outfile = fopen ("BPQTermTCP.ini", "w");
 		fputs(Value, outfile);
 		fclose(outfile);
@@ -766,7 +896,7 @@ int main(int argc, char *argv[])
 		g_free(Value);
 
 		g_key_file_free(KF);
-	}
+
 	return 0;
 }
 
@@ -774,7 +904,7 @@ void SendTraceOptions()
 {
 	char Buffer[80];
 
-	int Len = sprintf(Buffer,"\\\\\\\\%x %x %x %x %x\r", PortMask, mtxparam, MCOM, MonNODES, MONColour);
+	int Len = sprintf(Buffer,"\\\\\\\\%x %x %x %x %x %x\r", PortMask, mtxparam, MCOM, MonNODES, MONColour, muionly);
 
 	send(sock, Buffer, Len, 0);
 
@@ -890,7 +1020,7 @@ void WritetoMonWindow(char * Msg, int len)
 			if (ptr2)
 			{
 				*(ptr2)=32;
-            gdk_window_beep(window);
+            gdk_beep();
 			}
 		} while (ptr2);
 	}
@@ -983,13 +1113,13 @@ int TCPConnect(char * Host, char * Port)
                                   GTK_BUTTONS_OK,
                                   "Resolve HostName Failed");
 
-		gtk_window_set_title (GTK_WINDOW (dialog), "BPQTermTCP");
+		gtk_window_set_title (GTK_WINDOW (dialog), "TermTCP");
 
 		gtk_dialog_run (GTK_DIALOG (dialog));
 		gtk_widget_destroy (dialog);
 
 
-		sprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+		sprintf(Title,"TermTCP Version %s - Disconnected", VersionString);
 
 		gtk_window_set_title (GTK_WINDOW (window), Title);
 
@@ -1353,7 +1483,7 @@ int Telnet_Connected(SOCKET sock, int Error)
                GTK_DIALOG_DESTROY_WITH_PARENT,
                GTK_MESSAGE_WARNING, GTK_BUTTONS_OK, "Connect Failed");
 
-		gtk_window_set_title (GTK_WINDOW (dialog), "BPQTermTCP");
+		gtk_window_set_title (GTK_WINDOW (dialog), "TermTCP");
 		gtk_dialog_run (GTK_DIALOG (dialog));
 		gtk_widget_destroy (dialog);
 
@@ -1361,7 +1491,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 		Connecting = FALSE;
 		SocketActive = FALSE;
 
-		sprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+		sprintf(Title,"TermTCP Version %s - Disconnected", VersionString);
 		gtk_window_set_title (GTK_WINDOW (window), Title);
 		DisableDisconnectMenu();
 		EnableConnectMenu();
@@ -1388,7 +1518,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 
 //	SlowTimer = 0;
 
-	sprintf(Title,"BPQTermTCP Version %s - Connected to %s", VersionString, Host[CurrentHost]);
+	sprintf(Title,"TermTCP Version %s - Connected to %s", VersionString, Host[CurrentHost]);
 	gtk_window_set_title (GTK_WINDOW (window), Title);
 	DisableConnectMenu();
 	EnableDisconnectMenu();
@@ -1405,7 +1535,7 @@ static void Disconnect(GtkWidget *w, gpointer   data)
 			if (SocketActive)
 				closesocket(sock);
 
-			sprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+			sprintf(Title,"TermTCP Version %s - Disconnected", VersionString);
 			gtk_window_set_title (GTK_WINDOW (window), Title);
 
 			DisableDisconnectMenu();
@@ -1450,7 +1580,7 @@ void ReadConfig()
 	KF = g_key_file_new();
 	g_key_file_load_from_file(KF, "BPQTermTCP.ini", 0, NULL);
 
-	Value = g_key_file_get_string (KF, "Session 1", "Size", &error);
+	Value  = g_key_file_get_string (KF, "Session 1", "Size", &error);
 	if (Value)
 		sscanf(Value,"%d,%d,%d,%d",&left,&right,&top,&bottom);
 
@@ -1464,6 +1594,12 @@ void ReadConfig()
 	ChatMode= g_key_file_get_integer(KF, "Session 1", "ChatMode", &error);
 	CurrentHost = g_key_file_get_integer (KF, "Session 1", "CurrentHost", &error);
 	mtxparam = g_key_file_get_integer (KF, "Session 1", "MTX", &error);
+//    fontname = g_key_file_intger (KF, "Session 1", "FontName", &error);
+//   charset = g_key_file_intger (KF, "Session 1", "CharSet", &error);
+//    codepage = g_key_file_intger (KF, "Session 1", "CodePage", &error);
+//    fontsize = g_key_file_intger (KF, "Session 1", "FontSize", &error);
+//    fontwidth = g_key_file_intger (KF, "Session 1", "FontWidth", &error);
+    muionly = g_key_file_get_integer (KF, "Session 1", "MUIONLY", &error);
 
 	g_key_file_free(KF);
 
@@ -1516,4 +1652,6 @@ void ReadConfig()
 			}
 		}
 	}
+//    return 0
 }
+

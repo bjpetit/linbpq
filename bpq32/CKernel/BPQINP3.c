@@ -340,7 +340,7 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	Stamp -= HH * 3600;
 	MM = Stamp  / 60;
 
-	Route->NEIGHBOUR_TIME = Stamp;
+	Route->NEIGHBOUR_TIME = 256 * HH + MM;
 
 	while (msglen > 0)
 	{
@@ -361,8 +361,15 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 			opcode = *(ptr1+1);
 
 			if (opcode == 0)
-				memcpy(alias, ptr1+2, len-2);
-
+			{
+				if (len > 1 && len < 9)
+					memcpy(alias, ptr1+2, len-2);
+				else
+				{
+					Debugprintf("Corrupt INP3 Message");
+					return;
+				}
+			}
 			ptr1+=len;
 			msglen -=len;
 		}

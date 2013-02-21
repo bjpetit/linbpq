@@ -3681,9 +3681,8 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 			int X, Y;
 			int LastX = 0, LastY = 0;
 
-//			if (memcmp(ptr->Callsign, "ISS  ", 5) == 0)
-//				Debugprintf("ISS %d ", ptr->Trackptr);
-
+			__try
+			{
 			for (n = 0; n < TRACKPOINTS; n++)
 			{
 				if (ptr->LatTrack[Index] && ptr->TrackTime[Index] > AgeLimit)
@@ -3714,6 +3713,10 @@ VOID DrawStation(struct STATIONRECORD * ptr)
 				Index++;
 				if (Index == TRACKPOINTS)
 					Index = 0;
+			}
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER)
+			{
 			}
 		}
 

@@ -918,7 +918,7 @@ void Decode(CIRCUIT * conn) ;
 BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rline);
 VOID SaveFBBBinary(CIRCUIT * conn);
 BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
-BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader);
+BOOL DoWeWantIt(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 
 
 // Console Routines

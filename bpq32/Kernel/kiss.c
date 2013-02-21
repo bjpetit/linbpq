@@ -42,7 +42,7 @@ VOID ASYDISP(int port, char Channel)
 
 int	ASYINIT(int port, int speed, int PortVector, int RXVector, char Channel )
 {
-	char Msg[20];
+	char Msg[30];
 	
 	NPTTYINFO npTTYInfo ;
 	

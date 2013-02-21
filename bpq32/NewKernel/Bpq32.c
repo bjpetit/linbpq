@@ -510,6 +510,7 @@
 
 // Fix using KISS ports with COMn > 16
 // Add "KISS over UDP" driver for PI as a TNC concentrator
+// Fix SCSPACTOR Rig control via PTC Rig COntrol Port
 
 #define Kernel
 

@@ -644,9 +644,6 @@ extern BOOL IPMinimized;
 
 BOOL Start();
 
-BOOL IncludesMail = FALSE;
-BOOL IncludesChat = FALSE;
-
 VOID SaveWindowPos(int port);
 VOID SaveAXIPWindowPos(int port);
 VOID SetupRTFHddr();
@@ -680,6 +677,10 @@ char EXCEPTMSG[80] = "";
 char SIGNONMSG[128] = "";
 char SESSIONHDDR[80] = "";
 int SESSHDDRLEN = 0;
+
+BOOL IncludesMail = FALSE;
+BOOL IncludesChat = FALSE;		// Set if pgram is running - used for Web Page Index
+
 
 char WL2KCall[10];
 char WL2KLoc[7];
@@ -852,7 +853,7 @@ UCHAR	MUIONLY;
 
 UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
 
-char pgm[256];		// Uninitialised so per process
+char pgm[256];						// Uninitialised so per process
 
 HANDLE Mutex;
 
@@ -1055,7 +1056,7 @@ VOID MonitorThread(int x)
 
 		LastSemGets = Semaphore.Gets;
 
-		Sleep(60000);
+		Sleep(30000);
 		CheckforLostProcesses();
 
 	} while (TRUE);
@@ -1590,10 +1591,7 @@ Check_Timer()
 
 		if (IPRequired)	IPActive = Init_IP();
 
-		RigActive = Rig_Init();
-
-		if (IPRequired)	IPActive = Init_IP();
-	
+		RigActive = Rig_Init();	
 		APRSActive = Init_APRS();
 
 		if (ISPort == 0)
@@ -1729,6 +1727,12 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (_stricmp(pgm,"BPQ32.exe") == 0)
 			BPQ32_EXE = TRUE;
+
+		if (_stricmp(pgm,"BPQMailChat.exe") == 0)
+			IncludesMail = TRUE;
+
+		if (_stricmp(pgm,"BPQChat.exe") == 0)
+			IncludesChat = TRUE;
 
 		if (FirstEntry)				// If loaded by BPQ32.exe, dont close it at end
 		{
@@ -1939,6 +1943,12 @@ SkipInit:
     
 	case DLL_PROCESS_DETACH:
 		
+		if (_stricmp(pgm,"BPQMailChat.exe") == 0)
+			IncludesMail = FALSE;
+
+		if (_stricmp(pgm,"BPQChat.exe") == 0)
+			IncludesChat = FALSE;
+
 		ProcessID=GetCurrentProcessId();
 		
 		// Release any streams that the app has failed to release

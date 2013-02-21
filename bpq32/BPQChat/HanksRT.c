@@ -1,21 +1,68 @@
+
+#define _CRT_SECURE_NO_DEPRECATE 
+#define _USE_32BIT_TIME_T
+
+#pragma data_seg("_BPQDATA")
+
+#define LIBCONFIG_STATIC
+#include "libconfig.h"
+
+#ifdef LINBPQ
+
+#include "CHeaders.h"
+#include "bpqchat.h"
+
+#else
+
 #include "stdafx.h"
+
+#endif
+
+VOID ChatClearQueue(ChatCIRCUIT * conn);
+VOID ChatFlush(ChatCIRCUIT * conn);
+VOID APIENTRY SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen);
 
 extern struct SEM ChatSemaphore;
 
+extern SOCKADDR_IN Chatreportdest;
+
 char OurNode[10];
 char OurAlias[10];
+
+#define MaxSockets 64
+
+int MaxChatStreams=0;
+ChatCIRCUIT ChatConnections[MaxSockets+1];
+
+ULONG ChatApplMask;
+
+int	NumberofChatStreams=0;
+
+char SignoffMsg[100];
+
+char OtherNodesList[1000];
+char ChatWelcomeMsg[1000];
+
+char Position[81] = "";
+char PopupText[260] = "";
+int PopupMode = 0;
+
 
 char RtKnown[MAX_PATH];
 char RtUsr[MAX_PATH] = "STUsers.txt";
 char RtUsrTemp[MAX_PATH] = "STUsers.tmp";
 
-int AXIPPort =0;
+int AXIPPort = 0;
 
-CIRCUIT *circuit_hd = NULL;			// This is a chain of RT circuits. There may be others
-NODE *node_hd = NULL;
-LINK *link_hd = NULL;
+ChatCIRCUIT *circuit_hd = NULL;			// This is a chain of RT circuits. There may be others
+
+CHATNODE *node_hd = NULL;				// Nodes
+
+LINK *link_hd = NULL;					// Nodes we link to
 TOPIC *topic_hd = NULL;
+
 USER *user_hd = NULL;
+
 KNOWNNODE * known_hd = NULL;
 
 int ChatTmr = 0;
@@ -24,16 +71,23 @@ BOOL NeedStatus = FALSE;
 
 char Verstring[80];
 
-static void node_dec(NODE *node);
+static void node_dec(CHATNODE *node);
 static KNOWNNODE *knownnode_add(char *call);
 VOID SendChatLinkStatus();
 char * lookupuser(char * call);
+VOID ChatSendWelcomeMsg(int Stream, ChatCIRCUIT * conn, struct UserInfo * user);
 
-extern int AutoColours[];
-extern int AutoColours[];
+static int AutoColours[20] = {0, 4, 9, 11, 13, 16, 17, 42, 45, 50, 61, 64, 66, 72, 81, 84, 85, 86, 87, 89};
+
+#define MaxSockets 64
+
+extern struct SEM OutputSEM;
+
 
 //#undef free
 //#define   free(p) 
+
+#ifndef LINBPQ
 
 char * strlop(char * buf, char delim)
 {
@@ -82,28 +136,12 @@ VOID * _zalloc(int len)
 	return ptr;
 }
 
-VOID nputs(CIRCUIT * conn, char * buf)
-{
-	// Seems to send buf to socket
+#endif
 
-	QueueMsg(conn, buf, strlen(buf));
+#ifdef LINBPQ
 
-	if (*buf == 0x1b)
-		buf += 2;				// Colour Escape
-	
-	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
-}
+static VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...)
 
-VOID nputc(CIRCUIT * conn, char chr)
-{
-	// Seems to send chr to socket
-
-	WriteLogLine(conn, '>',&chr,  1, LOG_CHAT);
-	QueueMsg(conn, &chr, 1);
-}
-
-
-VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...)
 {
 	// seems to be printf to a socket
 
@@ -111,17 +149,184 @@ VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...)
 	va_list(arglist);
 	
 	va_start(arglist, format);
-	vsprintf_s(buff, 600, format, arglist);
+	vsprintf(buff, format, arglist);
 
 	nputs(conn, buff);
 }
 
-VOID saywhat(CIRCUIT *circuit)
+#endif
+
+static VOID nputc(ChatCIRCUIT * conn, char chr)
+{
+	// Seems to send chr to socket
+
+	WriteLogLine(conn, '>',&chr,  1, LOG_CHAT);
+	ChatQueueMsg(conn, &chr, 1);
+}
+
+static VOID nputs(ChatCIRCUIT * conn, char * buf)
+{
+	// Seems to send buf to socket
+
+	ChatQueueMsg(conn, buf, strlen(buf));
+
+	if (*buf == 0x1b)
+		buf += 2;				// Colour Escape
+	
+	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
+}
+
+int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len)
+{
+	// Add Message to queue for this connection
+
+	//	UCHAR * OutputQueue;		// Messages to user
+	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
+	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	// Create or extend buffer
+
+	GetSemaphore(&OutputSEM);
+
+	if (conn->OutputQueueLength + len > 9999)
+	{
+		Debugprintf("Corrupt Output Queue Len %d", conn->OutputQueueLength);
+		conn->OutputQueueLength = 0;
+		conn->OutputGetPointer = 0;
+	}
+
+	memcpy(&conn->OutputQueue[conn->OutputQueueLength], msg, len);
+	conn->OutputQueueLength += len;
+
+	FreeSemaphore(&OutputSEM);
+
+	return len;
+}
+
+VOID ChatSendWelcomeMsg(int Stream, ChatCIRCUIT * conn, struct UserInfo * user)
+{
+		if (!rtloginu (conn, TRUE))
+		{
+			// Already connected - close
+			
+			ChatFlush(conn);
+			Sleep(1000);
+			Disconnect(conn->BPQStream);
+		}
+		return;
+
+}
+
+VOID ChatExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG)
+{
+	char NewMessage[10000];
+	char * OldP = Msg;
+	char * NewP = NewMessage;
+	char * ptr, * pptr;
+	int len;
+	char Dollar[] = "$";
+	char CR[] = "\r";
+	int Msgs = 0, Unread = 0;
+
+
+	ptr = strchr(OldP, '$');
+
+	while (ptr)
+	{
+		len = ptr - OldP;		// Chars before $
+		memcpy(NewP, OldP, len);
+		NewP += len;
+
+		switch (*++ptr)
+		{
+		case 'I': // First name of the connected user.
+
+			pptr = conn->UserPointer->Name;
+			break;
+
+
+		case 'U': // Callsign of the connected user.
+
+			pptr = conn->UserPointer->Call;
+			break;
+
+		case 'W': // Inserts a carriage return.
+
+			pptr = CR;
+			break;
+
+			break;
+
+		default:
+
+			pptr = Dollar;		// Just Copy $
+		}
+
+		len = strlen(pptr);
+		memcpy(NewP, pptr, len);
+		NewP += len;
+
+		OldP = ++ptr;
+		ptr = strchr(OldP, '$');
+	}
+
+	strcpy(NewP, OldP);
+
+	len = RemoveLF(NewMessage, strlen(NewMessage));
+
+	WriteLogLine(conn, '>', NewMessage,  len, LOG);
+	ChatQueueMsg(conn, NewMessage, len);
+}
+
+
+
+void chat_link_out (LINK *link)
+{
+	int n, p;
+	ChatCIRCUIT * conn;
+	char Msg[80];
+
+	for (n = NumberofChatStreams-1; n >= 0 ; n--)
+	{
+		conn = &ChatConnections[n];
+		
+		if (conn->Active == FALSE)
+		{
+			p = conn->BPQStream;
+			memset(conn, 0, sizeof(ChatCIRCUIT));		// Clear everything
+			conn->BPQStream = p;
+
+			conn->Active = TRUE;
+			circuit_new(conn,p_linkini);
+			conn->u.link = link;
+			conn->Flags = CHATMODE | CHATLINK;
+
+			n=sprintf_s(Msg, sizeof(Msg), "Connecting to Chat Node %s", conn->u.link->alias);
+
+			strcpy(conn->Callsign, conn->u.link->alias);
+
+			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+
+			ConnectUsingAppl(conn->BPQStream, ChatApplMask);
+
+			//	Connected Event will trigger connect to remote system
+
+			return;
+		}
+	}
+
+	return;
+	
+
+}
+
+
+VOID saywhat(ChatCIRCUIT *circuit)
 {
 	nputs(circuit, "Invalid Command\r");
 }
 
-VOID saydone(CIRCUIT *circuit)
+VOID saydone(ChatCIRCUIT *circuit)
 {
 	nputs(circuit, "Ok\r");
 }
@@ -154,9 +359,9 @@ BOOL matchi(char * p1, char * p2)
 }
 
 
-VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
+VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
-	ConnectionInfo *c;
+	ChatCIRCUIT *c;
 
 	if (conn->Paging && (conn->LinesSent >= conn->PageLen))
 	{
@@ -166,10 +371,10 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 		{
 			if (_memicmp(Buffer, "Abort", 1) == 0)
 			{
-				ClearQueue(conn);
+				ChatClearQueue(conn);
 				conn->LinesSent = 0;
 
-				QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+				ChatQueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
 				SendPrompt(conn, user);
 				return;
 			}
@@ -185,7 +390,7 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 	{
 		memcpy(user->Name, Buffer, len-1);
 		conn->Flags &=  ~GETTINGUSER;
-		SendWelcomeMsg(conn->BPQStream, conn, user);
+		ChatSendWelcomeMsg(conn->BPQStream, conn, user);
 //		SaveUserDatabase();
 		return;
 	}
@@ -222,7 +427,7 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 			return;
 
 		nprintf(conn, "Unexpected Message on Chat Node-Node Link - Disconnecting\r");
-		Flush(conn);
+		ChatFlush(conn);
 		Sleep(500);
 		Disconnect(conn->BPQStream);
 		return;
@@ -230,6 +435,8 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 
 	if (conn->Flags & CHATLINK)
 	{
+#ifndef LINBPQ
+
 		struct _EXCEPTION_POINTERS exinfo;
 
 		__try 
@@ -244,6 +451,9 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 		Disconnect(conn->BPQStream);
 		CheckProgramErrors();
 		}
+#else
+			chkctl(conn, Buffer, len);
+#endif
 		return;
 	}
 
@@ -334,6 +544,30 @@ VOID ProcessChatLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 			conn->u.user->lastsendtime = time(NULL);
 			return;
 		}
+
+		if (_memicmp(&Buffer[1], "Time", 4) == 0)
+		{
+			conn->u.user->rtflags ^= u_showtime;
+			upduser(conn->u.user);
+			nprintf(conn, "Show Time is %s\r",  (conn->u.user->rtflags & u_showtime) ? "Enabled" : "Disabled");
+			conn->u.user->lastsendtime = time(NULL);
+			return;
+		}
+
+		if (_memicmp(&Buffer[1], "colours", 4) == 0)
+		{
+			int i =0;
+
+			while (i < 100)
+			{
+				nprintf(conn, "\x1b%c%02d XXXXX\r", i + 10, i);
+				i++;
+				if (i == 3)
+					i++;
+			}
+			return;
+		}
+
 		rt_cmd(conn, Buffer);
 
 		return;
@@ -418,9 +652,9 @@ char * lookupuser(char * call)
 			strlop(name, ' ');
 			return _strdup(name);
 		}
+		fclose(in);
 	}
 
-	fclose(in);
 	return NULL;
 }
 
@@ -471,12 +705,12 @@ void rduser(USER *user)
 }
 
 
-void ReportBadJoin(ncall, ucall)
+void ReportBadJoin(char * ncall, char *ucall)
 {
 	Logprintf(LOG_CHAT, NULL, '!', "User %s Join from Node %s but already connected", ucall, ncall);
 }
 
-void ReportBadLeave(ncall, ucall)
+void ReportBadLeave(char * ncall, char * ucall)
 {
 	Logprintf(LOG_CHAT, NULL, '!', "Node %s reporting Node %s as a leaving user", ncall, ucall);
 }
@@ -484,7 +718,7 @@ void ReportBadLeave(ncall, ucall)
 
 struct DUPINFO DupInfo[MAXDUPS];
 
-BOOL CheckforDups(CIRCUIT * circuit, char * Call, char * Msg)
+static BOOL CheckforDups(ChatCIRCUIT * circuit, char * Call, char * Msg)
 {
 	// Primitive duplicate suppression - see if same call and text reeived in last few secons
 	
@@ -536,10 +770,10 @@ BOOL CheckforDups(CIRCUIT * circuit, char * Call, char * Msg)
 	return FALSE;
 }
 
-void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
+void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 {
-	NODE    *node, *ln;
-	CIRCUIT *ckt_to;
+	CHATNODE    *node, *ln;
+	ChatCIRCUIT *ckt_to;
 	USER    *user, *su;
 	char    *ncall, *ucall, *f1, *f2, *buf;
 
@@ -659,12 +893,14 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 
 			text_tellu(user, rtleave, NULL, o_all);
 			ckt_from->refcnt--;
-			cn_dec(ckt_from, node);
-			node_dec(node);
 			strnew(&user->name, f1);
 			strnew(&user->qth, f2);
 			upduser(user);
 			user_leave(user);
+
+			cn_dec(ckt_from, node);
+			node_dec(node);
+
 			break;
 
 		// Node ncall lost its link to node ucall, alias f1.
@@ -772,9 +1008,9 @@ void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len)
 // Tell another node about users known by this node.
 // Done at incoming or outgoing link establishment.
 
-void state_tell(CIRCUIT *circuit, char * Version)
+void state_tell(ChatCIRCUIT *circuit, char * Version)
 {
-	NODE *node;
+	CHATNODE *node;
 	USER *user;
 
 	node = cn_inc(circuit, circuit->u.link->call, circuit->u.link->alias, Version);
@@ -797,11 +1033,11 @@ void state_tell(CIRCUIT *circuit, char * Version)
 	}
 }
 
-static void circuit_free(CIRCUIT *circuit)
+static void circuit_free(ChatCIRCUIT *circuit)
 {
-	CIRCUIT *c, *cp;
+	ChatCIRCUIT *c, *cp;
 	CN      *ncn;
-	NODE    *nn;
+	CHATNODE    *nn;
 	TOPIC   *tn;
 
 	cp = NULL;
@@ -848,9 +1084,9 @@ static void circuit_free(CIRCUIT *circuit)
 
 // Find a node in the node list.
 
-NODE *node_find(char *call)
+CHATNODE *node_find(char *call)
 {
-	NODE *node;
+	CHATNODE *node;
 
 	for (node = node_hd; node; node = node->next)
 	{
@@ -864,9 +1100,9 @@ NODE *node_find(char *call)
 
 // Add a reference to a node.
 
-static NODE *node_inc(char *call, char *alias, char * Version)
+static CHATNODE *node_inc(char *call, char *alias, char * Version)
 {
-	NODE *node;
+	CHATNODE *node;
 
 	node = node_find(call);
 
@@ -874,7 +1110,7 @@ static NODE *node_inc(char *call, char *alias, char * Version)
 	{
 		knownnode_add(call);
 
-		node = zalloc(sizeof(NODE));
+		node = zalloc(sizeof(CHATNODE));
 		sl_ins_hd(node, node_hd);
 		node->call  = _strdup(call);
 		node->alias = _strdup(alias);
@@ -890,17 +1126,47 @@ static NODE *node_inc(char *call, char *alias, char * Version)
 
 // Remove a reference to a node.
 
-static void node_dec(NODE *node)
+static void node_dec(CHATNODE *node)
 {
-	NODE *t, *tp;
+	CHATNODE *t, *tp;
+	USER *user;
+
+	ChatCIRCUIT *circuit;
+	CN	*cn;
 
 	if (--node->refcnt) return; // Other references.
 
-// Remove the node from the node list.
+	// Remove the node from the node list.
 
 	tp = NULL;
 
-//	Debugprintf("MAILCHAT: Removing %s From Node List", node->call);
+	// Make sure there aren't any user or circuit records pointing to it
+
+	for (user = user_hd; user; user = user->next)
+	{
+		if (user->node == node)
+		{
+			Debugprintf("Trying to remove node %s that is linked from user %s", node->call, user->call);
+			node->refcnt++;
+		}
+	}
+
+	for (circuit = circuit_hd; circuit; circuit = circuit->next)
+	{
+		if (circuit->rtcflags & p_linked)
+		{
+			for (cn = circuit->hnode; cn; cn = cn->next)
+			{
+				if (cn->node == node)
+				{
+					Debugprintf("Trying to remove node %s that is linked from circuit %s", node->call, circuit->Callsign);
+					node->refcnt++;
+				}
+			}
+		}
+	}
+
+	if (node->refcnt) return; // Now have other references.
 
 	for (t = node_hd; t; tp = t, t = t->next)
 	{
@@ -915,13 +1181,11 @@ static void node_dec(NODE *node)
 			break;
 		}
 	}
-//	Debugprintf("MAILCHAT: Remove Complete");
-
 }
 
 // User joins a topic.
 
-static TOPIC *topic_join(CIRCUIT *circuit, char *s)
+static TOPIC *topic_join(ChatCIRCUIT *circuit, char *s)
 {
 	CT    *ct;
 	TOPIC *topic;
@@ -969,7 +1233,7 @@ static TOPIC *topic_join(CIRCUIT *circuit, char *s)
 
 // User leaves a topic.
 
-static void topic_leave(CIRCUIT *circuit, TOPIC *topic)
+static void topic_leave(ChatCIRCUIT *circuit, TOPIC *topic)
 {
 	CT    *ct, *ctp;
 	TOPIC *t,  *tp;
@@ -1010,7 +1274,7 @@ static void topic_leave(CIRCUIT *circuit, TOPIC *topic)
 
 // Find a circuit/topic association.
 
-int ct_find(CIRCUIT *circuit, TOPIC *topic)
+int ct_find(ChatCIRCUIT *circuit, TOPIC *topic)
 {
 	CT *ct;
 
@@ -1026,7 +1290,7 @@ int ct_find(CIRCUIT *circuit, TOPIC *topic)
 
 // Remove a circuit/node association.
 
-static void cn_dec(CIRCUIT *circuit, NODE *node)
+static void cn_dec(ChatCIRCUIT *circuit, CHATNODE *node)
 {
 	CN *c, *cp;
 
@@ -1048,43 +1312,6 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 				return;			// Still in use
 			}
 
-			/*
-//			Debugprintf("MAILCHAT: Refcount 0 - Removing %s. List Before is:", node->call);
-
-			__try{
-			for (cn = circuit->hnode; cn; cn = cn->next)
-			{
-				if (cn->node && cn->node->alias)
-				{
-					__try
-					{
-						len = wsprintf(line, "%s %s", line, cn->node->alias);
-						if (len > 80)
-						{
-//							Debugprintf("%s", line);
-							len = wsprintf(line, "            ");
-						}
-					}
-					__except(EXCEPTION_EXECUTE_HANDLER)
-					{
-						len = wsprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);
-					}
-				}
-				else
-				{
-					len = wsprintf(line, "%s Corrupt Rec %x %x ", line, cn, cn->node);
-				}
-			}
-			}
-			__except(EXCEPTION_EXECUTE_HANDLER)
-			{len = wsprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
-
-
-//			Debugprintf("%s", line);
-*/
-
-			// CN record no longer needed
-
 			if (cp)
 				cp->next = c->next;
 			else
@@ -1092,34 +1319,6 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 
 			free(c);
 
-			/*
-			Debugprintf("MAILCHAT: Remove c/n Trace After");
-
-			line[0] = 0;
-
-			for (cn = circuit->hnode; cn; cn = cn->next)
-			{
-				if (cn->node && cn->node->alias)
-				{
-					__try
-					{
-						len = wsprintf(line, "%s %s", line, cn->node->alias);
-						if (len > 80)
-						{
-							Debugprintf("%s", line);
-							len = wsprintf(line, "            ");
-						}
-					}
-					__except(EXCEPTION_EXECUTE_HANDLER)
-					{len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
-				}
-				else
-				{
-					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
-				}
-			}
-			Debugprintf("%s", line);
-			*/
 			break;
 		}
 	}
@@ -1140,21 +1339,25 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 		{
 				if (cn->node && cn->node->call)
 				{
+#ifndef LINBPQ
 					__try
 					{
-						len = wsprintf(line, "%s %x %s", line, cn->node, cn->node->alias);
+#endif
+						len = sprintf(line, "%s %p %s", line, cn->node, cn->node->alias);
 						if (len > 80)
 						{
 							Debugprintf("%s", line);
-							len = wsprintf(line, "            ");
+							len = sprintf(line, "            ");
 						}
+#ifndef LINBPQ
 					}
 					__except(EXCEPTION_EXECUTE_HANDLER)
-					{len = wsprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
+					{len = sprintf("%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
+#endif
 				}
 				else
 				{
-					len = wsprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
+					len = sprintf("%s Corrupt Rec %x %x ", line, cn, cn->node);
 				}
 		}
 		Debugprintf("%s", line);
@@ -1166,9 +1369,9 @@ static void cn_dec(CIRCUIT *circuit, NODE *node)
 
 // Add a circuit/node association.
 
-static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias, char * Version)
+static CHATNODE *cn_inc(ChatCIRCUIT *circuit, char *call, char *alias, char * Version)
 {
-	NODE *node;
+	CHATNODE *node;
 	CN *cn;
 
 	node = node_inc(call, alias, Version);
@@ -1198,7 +1401,7 @@ static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias, char * Version)
 
 // Find a circuit/node association.
 
-static int cn_find(CIRCUIT *circuit, NODE *node)
+static int cn_find(ChatCIRCUIT *circuit, CHATNODE *node)
 {
 	CN *cn;
 
@@ -1218,7 +1421,7 @@ static void text_xmit(USER *user, USER *to, char *text)
 		FORMAT, id_send, OurNode, user->call, to->call, text);
 }
 
-void put_text(CIRCUIT * circuit, USER * user, UCHAR * buf)
+void put_text(ChatCIRCUIT * circuit, USER * user, UCHAR * buf)
 {
 	if (circuit->u.user->rtflags & u_colour)	// Use Colour
 	{
@@ -1237,9 +1440,18 @@ void put_text(CIRCUIT * circuit, USER * user, UCHAR * buf)
 
 void text_tellu(USER *user, char *text, char *to, int who)
 {
-	CIRCUIT *circuit;
+	ChatCIRCUIT *circuit;
 	UCHAR Buffer[2048];
 	UCHAR *buf = &Buffer[4];
+	char * Time;
+	struct tm * tm;
+	char Stamp[20];
+	time_t T;
+
+	T = time(NULL);
+	tm = gmtime(&T);	
+
+	sprintf(Stamp,"%02d:%02d ", tm->tm_hour, tm->tm_min);
 
 // Send it to all connected users in the same topic.
 // Echo to originator if requested.
@@ -1250,10 +1462,15 @@ void text_tellu(USER *user, char *text, char *to, int who)
 
 		if ((circuit->u.user == user) && !(user->rtflags & u_echo)) continue;
 
-		if (circuit->u.user->rtflags & u_shownames)
-			sprintf(buf, "%-6.6s %s %c %s\r", user->call, user->name, (who == o_one) ? '>' : ':', text);
+		if (circuit->u.user->rtflags & u_showtime)
+			Time = Stamp;
 		else
-			sprintf(buf, "%-6.6s %c %s\r", user->call, (who == o_one) ? '>' : ':', text);
+			Time = "";
+	
+		if (circuit->u.user->rtflags & u_shownames)
+			sprintf(buf, "%s%-6.6s %s %c %s\r", Time, user->call, user->name, (who == o_one) ? '>' : ':', text);
+		else
+			sprintf(buf, "%s%-6.6s %c %s\r", Time, user->call, (who == o_one) ? '>' : ':', text);
 
 
 		switch(who)
@@ -1280,14 +1497,20 @@ void text_tellu(USER *user, char *text, char *to, int who)
 
 void text_tellu_Joined(USER * user)
 {
-	CIRCUIT *circuit;
+	ChatCIRCUIT *circuit;
 	UCHAR Buffer[200];
 	UCHAR *buf = &Buffer[4];
+	char * Time;
+	struct tm * tm;
+	char Stamp[20];
+	time_t T;
 
-	sprintf(buf, "%-6.6s : %s *** Joined Chat, Topic %s", user->call, user->name, user->topic->name);
+	T = time(NULL);
+	tm = gmtime(&T);	
 
-	if (ConsHeader[1]->FlashOnConnect)
-		FlashWindow(hWnd, TRUE);
+	sprintf(Stamp,"%02d:%02d ", tm->tm_hour, tm->tm_min);
+
+	sprintf(buf, "%s%-6.6s : %s *** Joined Chat, Topic %s", Stamp, user->call, user->name, user->topic->name);
 
 // Send it to all connected users in the same topic.
 // Echo to originator if requested.
@@ -1297,12 +1520,21 @@ void text_tellu_Joined(USER * user)
 		if (!(circuit->rtcflags & p_user)) continue;  // Circuit is a link.
 		if ((circuit->u.user == user) && !(user->rtflags & u_echo)) continue;
 
+		if (circuit->u.user->rtflags & u_showtime)
+			Time = Stamp;
+		else
+			Time = "";
+
+		sprintf(buf, "%s%-6.6s : %s *** Joined Chat, Topic %s", Time, user->call, user->name, user->topic->name);
+
 		put_text(circuit, user, buf);	// Send adding Colour if wanted
 
 		if (circuit->u.user->rtflags & u_bells)
 			if (circuit->BPQStream < 0) // Console
 			{
+#ifndef LINBPQ
 				if (ConsHeader[1]->FlashOnConnect) FlashWindow(ConsHeader[1]->hConsole, TRUE);
+#endif
 				nputc(circuit, 7);
 //				PlaySound ("BPQCHAT_USER_LOGIN", NULL, SND_ALIAS | SND_APPLICATION | SND_ASYNC);
 			}
@@ -1314,7 +1546,7 @@ void text_tellu_Joined(USER * user)
 }
 // Tell one link circuit about a local user change of topic.
 
-static void topic_xmit(USER *user, CIRCUIT *circuit)
+static void topic_xmit(USER *user, ChatCIRCUIT *circuit)
 {
 	nprintf(circuit, "%c%c%s %s %s\r",
 		FORMAT, id_topic, OurNode, user->call, user->topic->name);
@@ -1323,18 +1555,21 @@ static void topic_xmit(USER *user, CIRCUIT *circuit)
 // Tell another node about one known node on a link add or drop
 // if that node is from some other link.
 
-static void node_xmit(NODE *node, char kind, CIRCUIT *circuit)
+static void node_xmit(CHATNODE *node, char kind, ChatCIRCUIT *circuit)
 {
+#ifndef LINBPQ
 	struct _EXCEPTION_POINTERS exinfo;
 
 	__try
 	{
+#endif
 		if (!cn_find(circuit, node))
 			if (node->Version && (kind == id_link))
 				nprintf(circuit, "%c%c%s %s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias, node->Version);
 			else
 				nprintf(circuit, "%c%c%s %s %s\r", FORMAT, kind, OurNode, node->call, node->alias);
 
+#ifndef LINBPQ
 	}
 
 	#define EXCEPTMSG "node_xmit"
@@ -1342,14 +1577,14 @@ static void node_xmit(NODE *node, char kind, CIRCUIT *circuit)
 
 	Debugprintf("Corrupt Rec %x %x %x", node, node->call, node->alias);
 	}
-
+#endif
 }
 
 // Tell all other nodes about one node known by this node.
 
-static void node_tell(NODE *node, char kind)
+static void node_tell(CHATNODE *node, char kind)
 {
-	CIRCUIT *circuit;
+	ChatCIRCUIT *circuit;
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
@@ -1360,9 +1595,9 @@ static void node_tell(NODE *node, char kind)
 
 // Tell another node about a user login/logout at this node.
 
-static void user_xmit(USER *user, char kind, CIRCUIT *circuit)
+static void user_xmit(USER *user, char kind, ChatCIRCUIT *circuit)
 {
-	NODE *node;
+	CHATNODE *node;
 
 	node = user->node;
 
@@ -1374,7 +1609,7 @@ static void user_xmit(USER *user, char kind, CIRCUIT *circuit)
 
 static void user_tell(USER *user, char kind)
 {
-	CIRCUIT *circuit;
+	ChatCIRCUIT *circuit;
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
@@ -1452,9 +1687,9 @@ static BOOL topic_chg(USER *user, char *s)
 
 // Create a user record for this user.
 
-static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias, BOOL Local)
+static USER *user_join(ChatCIRCUIT *circuit, char *ucall, char *ncall, char *nalias, BOOL Local)
 {
-	NODE *node;
+	CHATNODE *node;
 	USER *user;
 
 	if (Local)
@@ -1507,14 +1742,17 @@ static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias,
 // Drop nodes and users connected from this link.
 // Tell other (still connected) links what was dropped.
 
-void link_drop(CIRCUIT *circuit)
+void link_drop(ChatCIRCUIT *circuit)
 {
 	USER *user, *usernext;
 	CN   *cn;
-	struct _EXCEPTION_POINTERS exinfo;
 
 // So we don't try and send anything on this circuit.
 
+	if (circuit->u.link)
+		if (circuit->rtcflags == p_linkini)
+			Debugprintf("Chat link %s Link Setup Failed", circuit->u.link->call);
+	
 	if (circuit->u.link)
 		circuit->u.link->flags = p_nil;
 	
@@ -1522,7 +1760,6 @@ void link_drop(CIRCUIT *circuit)
 
 // Users connected on the dropped link are no longer connected.
 
-	__try {
 
 	for (user = user_hd; user; user = usernext)
 	{
@@ -1530,61 +1767,39 @@ void link_drop(CIRCUIT *circuit)
 
 		if (user->circuit == circuit)
 		{
-			circuit->refcnt--;
-			node_dec(user->node);
+			CHATNODE *node;
+
+			node = user->node;
+
 			text_tellu(user, rtleave, NULL, o_all);
 			user_tell(user, id_leave);
 			user_leave(user);
+
+			circuit->refcnt--;
+			if (node)
+				node_dec(node);
 		}
-	}
-	}
-	#define EXCEPTMSG "link_drop clear users"
-	#include "StdExcept.c"
 	}
 
 // Any node known from the dropped link is no longer known.
 
-	__try
-	{
 	for (cn = circuit->hnode; cn; cn = cn->next)
 	{
-		__try
-		{
-			node_tell(cn->node, id_unlink);
-		}
-		#define EXCEPTMSG "link_drop clear nodes node tell"
-		#include "StdExcept.c"
-		}
-		__try
-		{
-			node_dec(cn->node);
-		}
-		#define EXCEPTMSG "link_drop clear nodes node dec"
-		#include "StdExcept.c"
-		}
-	}
-	}
-	#define EXCEPTMSG "link_drop clear nodes"
-	#include "StdExcept.c"
+		node_tell(cn->node, id_unlink);
+		node_dec(cn->node);
 	}
 
 // The circuit is no longer used.
 
-	__try
-	{
 	circuit_free(circuit);
-	}
-    #define EXCEPTMSG "link_drop clear circuit"
-	#include "StdExcept.c"
-	}
 	NeedStatus = TRUE;
 }
 
 // Handle an incoming control frame from a linked RT system.
 
-static void echo(CIRCUIT *fc, NODE *node, char * Buffer)
+static void echo(ChatCIRCUIT *fc, CHATNODE *node, char * Buffer)
 {
-	CIRCUIT *tc;
+	ChatCIRCUIT *tc;
 
 	for (tc = circuit_hd; tc; tc = tc->next)
 	{
@@ -1598,7 +1813,7 @@ static void echo(CIRCUIT *fc, NODE *node, char * Buffer)
 
 int rtlink (char * Call)
 {
-	LINK *link;
+	LINK *link, *temp;
 	char *c;
 
 	_strupr(Call);
@@ -1607,10 +1822,19 @@ int rtlink (char * Call)
 
 	link = zalloc(sizeof(LINK));
 
-	sl_ins_hd(link, link_hd);
-
 	link->alias = _strdup(Call);
 	link->call  = _strdup(c);
+
+	if (link_hd == NULL)
+		link_hd = link;
+	else
+	{
+		temp = link_hd;
+		while(temp->next)
+			temp = temp->next;
+
+		temp->next = link;
+	}
 
 	return TRUE;
 }
@@ -1640,7 +1864,7 @@ VOID removeknown()
 
 	for (node = known_hd; node; node = nextnode)
 	{
-		fprintf(out, "%s %d\n", node->call, node->LastHeard);
+		fprintf(out, "%s %u\n", node->call, (unsigned int)node->LastHeard);
 
 		nextnode = node->next;
 		free(node->call);
@@ -1679,11 +1903,11 @@ VOID LoadKnown()
 
 // We don't allocate memory for circuit, but we do chain it
 
-CIRCUIT *circuit_new(CIRCUIT *circuit, int flags)
+ChatCIRCUIT *circuit_new(ChatCIRCUIT *circuit, int flags)
 {
 	// Make sure circuit isn't already on list
 	
-	CIRCUIT *c;
+	ChatCIRCUIT *c;
 
 	circuit->rtcflags = flags;
 	circuit->next = NULL;
@@ -1704,7 +1928,7 @@ CIRCUIT *circuit_new(CIRCUIT *circuit, int flags)
 
 // Handle an incoming link. We should only get here if we think the station is a node.
 
-int rtloginl (CIRCUIT *conn, char * call)
+int rtloginl (ChatCIRCUIT *conn, char * call)
 {
 	LINK    *link;
 
@@ -1727,7 +1951,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 		// Already Linked. Used to Disconnect, but that can cause sync errors
 		// Try closing old link and keeping new
 
-		CIRCUIT *c;
+		ChatCIRCUIT *c;
 		int len;
 		char Msg[80];
 
@@ -1765,7 +1989,7 @@ int rtloginl (CIRCUIT *conn, char * call)
 
 // User connected to chat, or did chat command from BBS
 
-int rtloginu (CIRCUIT *circuit, BOOL Local)
+int rtloginu (ChatCIRCUIT *circuit, BOOL Local)
 {
 	USER *user;
 
@@ -1792,7 +2016,7 @@ int rtloginu (CIRCUIT *circuit, BOOL Local)
 	}
 	upduser(user);
 
-	ExpandAndSendMessage(circuit, ChatWelcomeMsg, LOG_CHAT);
+	ChatExpandAndSendMessage(circuit, ChatWelcomeMsg, LOG_CHAT);
 	text_tellu_Joined(user);
 	user_tell(user, id_join);
 	show_users(circuit);
@@ -1802,28 +2026,37 @@ int rtloginu (CIRCUIT *circuit, BOOL Local)
 	return TRUE;
 }
 
-void logout(CIRCUIT *circuit)
+void logout(ChatCIRCUIT *circuit)
 {
 	USER *user;
+	CHATNODE *node;
 
 	circuit->rtcflags = p_nil;
 	user = circuit->u.user;
-//	if (log_rt) tlogp("RT Logout");
+
 	if (user)			// May not have logged in if already conencted
 	{
+		node = user->node;
+
 		user_tell(user, id_leave);
 		text_tellu(user, rtleave, NULL, o_all);
-		cn_dec(circuit, user->node);
-		node_dec(user->node);
-
 		user_leave(user);
+
+		// order changed so node_dec can check if a node that is about the be deleted has eny users
+
+		if (node)
+		{
+			cn_dec(circuit, node);
+			node_dec(node);
+		}
+
 		circuit->u.user = NULL;
 	}
 
 	circuit_free(circuit);
 }
 
-void show_users(CIRCUIT *circuit)
+void show_users(ChatCIRCUIT *circuit)
 {
 	USER *user;
 	char * Alias;
@@ -1852,27 +2085,31 @@ void show_users(CIRCUIT *circuit)
 		else
 			Topic = user->topic->name;
 
+#ifndef LINBPQ
 		__try 
 		{
+#endif
 			if (circuit->u.user->rtflags & u_colour)	// Use Colour
 				nprintf(circuit, "\x1b%c%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
 					user->Colour, user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
 			else
 				nprintf(circuit, "%-6.6s at %-9.9s %s, %s [%s] Idle for %d seconds\r",
 					user->call, Alias, user->name, user->qth, Topic, time(NULL) - user->lastmsgtime);
+#ifndef LINBPQ
 		}
 		__except(EXCEPTION_EXECUTE_HANDLER)
 		{
 			Debugprintf("MAILCHAT *** Program Error in show_users");
 			CheckProgramErrors();
 		}
+#endif
 	}
 }
 
 
-static void show_nodes(CIRCUIT *circuit)
+static void show_nodes(ChatCIRCUIT *circuit)
 {
-	NODE *node;
+	CHATNODE *node;
 
 	nputs(circuit, "Known Nodes:\r");
 
@@ -1890,10 +2127,10 @@ static void show_nodes(CIRCUIT *circuit)
 
 #define xxx "\r        "
 
-static void show_circuits(CIRCUIT *conn)
+static void show_circuits(ChatCIRCUIT *conn)
 {
-	CIRCUIT *circuit;
-	NODE    *node;
+	ChatCIRCUIT *circuit;
+	CHATNODE    *node;
 	LINK *link;
 	char line[1000];
 	int     len;
@@ -1909,15 +2146,15 @@ static void show_circuits(CIRCUIT *conn)
 	}
 
 	nprintf(conn, "%d Node(s)\r", i);
-	wsprintf(line, "Here %-6.6s <-", OurAlias);
+	sprintf(line, "Here %-6.6s <-", OurAlias);
 
 	for (node = node_hd; node; node = node->next) if (node->refcnt)
 	{
-		len = wsprintf(line, "%s %s", line, node->alias);
+		len = sprintf(line, "%s %s", line, node->alias);
 		if (len > 80)
 		{
 			nprintf(conn, "%s\r", line);
-			len = wsprintf(line, "              ");
+			len = sprintf(line, "              ");
 		}
 	}
 
@@ -1927,7 +2164,9 @@ static void show_circuits(CIRCUIT *conn)
 	{
 		if (circuit->rtcflags & p_linked)
 		{
-			len = wsprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
+			len = sprintf(line, "Nodes via %-6.6s(%d) -", circuit->u.link->alias, circuit->refcnt);		
+		
+#ifndef LINBPQ
 			__try{
 				for (cn = circuit->hnode; cn; cn = cn->next)
 				{
@@ -1935,30 +2174,50 @@ static void show_circuits(CIRCUIT *conn)
 					{
 						__try
 						{
-							len = wsprintf(line, "%s %s", line, cn->node->alias);
+							len = sprintf(line, "%s %s", line, cn->node->alias);
 							if (len > 80)
 							{
 								nprintf(conn, "%s\r", line);
-								len = wsprintf(line, "            ");
+								len = sprintf(line, "            ");
 							}
 						}
 						__except(EXCEPTION_EXECUTE_HANDLER)
-							{len = wsprintf(line, "%s *PE* Corrupt Rec %x %x", line, cn, cn->node);}
+							{len = sprintf(line, "%s *PE* Corrupt Rec %x %x", line, cn, cn->node);}
 					}
 					else
-						len = wsprintf(line, "%s Corrupt Rec %x %x ", line, cn, cn->node);
+						len = sprintf(line, "%s Corrupt Rec %x %x ", line, cn, cn->node);
 				}
 			}
 			__except(EXCEPTION_EXECUTE_HANDLER)
-			{len = wsprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
-
+			{len = sprintf(line, "%s *PE* Corrupt Rec %x %x ", line, cn, cn->node);}
+#else
+			for (cn = circuit->hnode; cn; cn = cn->next)
+			{
+				if (cn->node && cn->node->alias)
+				{
+					len = sprintf(line, "%s %s", line, cn->node->alias);
+					if (len > 80)
+					{
+						nprintf(conn, "%s\r", line);
+						len = sprintf(line, "            ");
+					}
+				}
+				else
+					len = sprintf(line, "%s Corrupt Rec %p %p ", line, cn, cn->node);
+			}
+#endif
 			nprintf(conn, "%s\r", line);
 
 		}
 		else if (circuit->rtcflags & p_user)
 			nprintf(conn, "User %-6.6s\r", circuit->u.user->call);
 		else if (circuit->rtcflags & p_linkini)
-			nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
+		{
+			if (circuit->u.link)
+				nprintf(conn, "Link %-6.6s (setup)\r", circuit->u.link->alias);
+			else
+				nprintf(conn, "Link ?? (setup)\r");
+		}
 	}
 
 	nprintf(conn, "Links Defined:\r");
@@ -1976,7 +2235,7 @@ static void show_circuits(CIRCUIT *conn)
 
 // /T Command: List topics and users in them.
 
-static void show_topics(CIRCUIT *conn)
+static void show_topics(ChatCIRCUIT *conn)
 {
 	TOPIC *topic;
 	USER  *user;
@@ -2000,7 +2259,7 @@ static void show_topics(CIRCUIT *conn)
 	}
 }
 
-static void show_users_in_topic(CIRCUIT *conn)
+static void show_users_in_topic(ChatCIRCUIT *conn)
 {
 	TOPIC *topic;
 	USER  *user;
@@ -2023,9 +2282,9 @@ static void show_users_in_topic(CIRCUIT *conn)
 
 // Do a user command.
 
-int rt_cmd(CIRCUIT *circuit, char * Buffer)
+int rt_cmd(ChatCIRCUIT *circuit, char * Buffer)
 {
-	CIRCUIT *c;
+	ChatCIRCUIT *c;
 	USER    *user, *su;
 	char    *f1, *f2;
 
@@ -2062,11 +2321,18 @@ int rt_cmd(CIRCUIT *circuit, char * Buffer)
 			nputs(circuit, "Commands can be in upper or lower case.\r");
 			nputs(circuit, "/U - Show Users.\r/N - Enter your Name.\r/Q - Enter your QTH.\r/T - Show Topics.\r");
 			nputs(circuit, "/T Name - Join Topic or Create new Topic. Topic Names are not case sensitive\r/P - Show Ports and Links.\r");
-			nputs(circuit, "/A - Toggle Alert on user join.\r");
-			nputs(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal.\r");
-			nputs(circuit, "/E - Toggle Echo.\r");
-			nputs(circuit, "/Keepalive - Toggle sending Keepalive messages every 10 minutes.\r");
-			nputs(circuit, "/ShowNames - Toggle displaying name as well as call on each message.\r");
+			nprintf(circuit, "/A - Toggle Alert on user join - %s.\r",
+				(user->rtflags & u_bells) ? "Enabled" : "Disabled");
+			nprintf(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal - %s.\r",
+				(user->rtflags & u_colour) ? "Enabled" : "Disabled");
+			nprintf(circuit, "/E - Toggle Echo - %s .\r",
+				(user->rtflags & u_echo) ? "Enabled" : "Disabled");
+			nprintf(circuit, "/Keepalive - Toggle sending Keepalive messages every 10 minutes - %s.\r",
+				(user->rtflags & u_keepalive) ? "Enabled" : "Disabled");
+			nprintf(circuit, "/ShowNames - Toggle displaying name as well as call on each message - %s\r",
+				(user->rtflags & u_shownames) ? "Enabled" : "Disabled");
+			nprintf(circuit, "/Time - Toggle displaying timestamp on each message - %s.\r",
+				(user->rtflags & u_showtime) ? "Enabled" : "Disabled");
 			nputs(circuit, "/S CALL Text - Send Text to that station only.\r");
 			nputs(circuit, "/F - Force all links to be made.\r/K - Show Known nodes.\r");
 			nputs(circuit, "/B - Leave Chat and return to node.\r/QUIT - Leave Chat and disconnect from node.\r");
@@ -2210,7 +2476,7 @@ VOID node_close()
 {
 	// Close all Node-Node Links
 
-	CIRCUIT *circuit;
+	ChatCIRCUIT *circuit;
 
 	for (circuit = circuit_hd; circuit; circuit = circuit->next)
 	{
@@ -2223,7 +2489,7 @@ VOID node_close()
 
 static void node_keepalive()
 {
-	CIRCUIT *circuit;
+	ChatCIRCUIT *circuit;
 	
 	NeedStatus = TRUE;					// Send Report to Monitor
 
@@ -2231,7 +2497,7 @@ static void node_keepalive()
 	{
 		for (circuit = circuit_hd; circuit; circuit = circuit->next)
 		{
-			if (circuit->rtcflags & p_linked)
+			if (circuit->rtcflags & p_linked &&circuit->u.link)
 				nprintf(circuit, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call, Verstring);
 		}
 	}
@@ -2247,18 +2513,15 @@ VOID ChatTimer()
 {
 	// Entered every 10 seconds
 
-	int i;
-	NODE *node;
-	USER *user;
+	int	i = 0, len;
+	CHATNODE *node;
+	ChatCIRCUIT *c;
 	TOPIC *topic;
-	CIRCUIT *c;
-	char Msg[1000];
-	int len;
+	USER *user;
 	time_t NOW = time(NULL);
+	char Msg[256];
 
 	GetSemaphore(&ChatSemaphore);
-
-	ClearDebugWindow();
 
 	if (NeedStatus)
 	{
@@ -2266,10 +2529,12 @@ VOID ChatTimer()
 		SendChatLinkStatus();
 	}
 
+#ifndef LINBPQ
+
+	ClearDebugWindow();
 
 	WritetoDebugWindow("Chat Nodes\r\n", 12);
 
-	i = 0;
 	for (node = node_hd; node; node = node->next)
 	{
 		len = sprintf_s(Msg, sizeof(Msg), "%s Version %s Count %d\r\n",
@@ -2358,6 +2623,7 @@ VOID ChatTimer()
 
 	SetDlgItemInt(hWnd, IDC_USERS, i, FALSE);
 
+#endif
 
 	ChatTmr++;
 
@@ -2375,15 +2641,8 @@ VOID ChatTimer()
 
 VOID FreeChatMemory()
 {
-	struct _EXCEPTION_POINTERS exinfo;
-
-	__try {
-
-		removelinks();
-		removeknown();
-	}
-	My__except_Routine("FreeChatMemory");
-
+	removelinks();
+	removeknown();
 }
 
 // Find a call in the known node list.
@@ -2422,7 +2681,7 @@ static KNOWNNODE *knownnode_add(char *call)
 
 static char UIDEST[10] = "DUMMY";
 static char AXDEST[7];
-static char MYCALL[7];
+static char ChatMYCALL[7];
 
 #pragma pack(1)
 
@@ -2457,10 +2716,10 @@ VOID SetupChat()
 	u_long param=1;
 	BOOL bcopt=TRUE;
 
-	ConvToAX25(OurNode, MYCALL);
+	ConvToAX25(OurNode, ChatMYCALL);
 	ConvToAX25(UIDEST, AXDEST);
 
-	wsprintf(Verstring, "%d.%d.%d.%d",  Ver[0], Ver[1], Ver[2], Ver[3]);
+	sprintf(Verstring, "%d.%d.%d.%d",  Ver[0], Ver[1], Ver[2], Ver[3]);
 
 	LoadKnown();
 
@@ -2489,12 +2748,12 @@ VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len)
 		return;
 	}
 
-//	ConvToAX25("GM4OAS-5", MYCALL);
+//	ConvToAX25("GM4OAS-5", ChatMYCALL);
 
 	// Block includes the Msg Header (7 bytes), Len Does not!
 
 	memcpy(AXPTR->DEST, AXDEST, 7);
-	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	memcpy(AXPTR->ORIGIN, ChatMYCALL, 7);
 	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
 	AXPTR->DEST[6] |= 0x80;			// set Command Bit
 
@@ -2514,7 +2773,7 @@ VOID SendChatLinkStatus()
 	char Msg[256] = {0};
 	LINK * link;
 	int len = 0;
-	CIRCUIT *circuit;
+	ChatCIRCUIT *circuit;
 
 	if (ChatApplNum == 0)
 		return;
@@ -2522,7 +2781,7 @@ VOID SendChatLinkStatus()
 //	if (AXIPPort == 0)
 //		return;
 
-	if (MYCALL[0] == 0)
+	if (ChatMYCALL[0] == 0)
 		return;
 
 	for (link = link_hd; link; link = link->next)
@@ -2552,14 +2811,14 @@ VOID SendChatLinkStatus()
 			{
 				// No BPQ Session - is the only answer to restart the node?
 
-	//			Logprintf(LOG_DEBUG, NULL, '!', "Stuck Chat Sesion Detected");
-	//			Logprintf(LOG_DEBUG, NULL, '!', "Chat is a mess - forcing a restart");
+	//			Logprintf(LOG_DEBUGx, NULL, '!', "Stuck Chat Sesion Detected");
+	//			Logprintf(LOG_DEBUGx, NULL, '!', "Chat is a mess - forcing a restart");
 	//			ProgramErrors = 26;
 	//			CheckProgramErrors();
 			}
 		}
 
-		len = wsprintf(Msg, "%s%s %c ", Msg, link->call, '0' + link->flags);
+		len = sprintf(Msg, "%s%s %c ", Msg, link->call, '0' + link->flags);
 
 		if (len > 240)
 			break;
@@ -2578,4 +2837,669 @@ VOID ClearChatLinkStatus()
 		link->flags = 0;
 	}
 }
+
+int ProcessConnecting(ChatCIRCUIT * circuit, char * Buffer, int Len)
+{
+	WriteLogLine(circuit, '<' ,Buffer, Len-1, LOG_CHAT);
+
+	Buffer = _strupr(Buffer);
+
+	if (memcmp(Buffer, "[BPQCHATSERVER-", 15) == 0)
+	{
+		char * ptr = strchr(Buffer, ']');
+		if (ptr)
+		{
+			*ptr = 0;
+			strcpy(circuit->FBBReplyChars, &Buffer[15]);
+		}
+		else
+			circuit->FBBReplyChars[0] = 0;
+
+		return 0;
+	}
+
+	if (memcmp(Buffer, "OK", 2) == 0)
+	{
+		// Make sure node isn't known. There is a window here that could cause a loop
+
+		if (node_find(circuit->u.link->call))
+		{
+			Logprintf(LOG_CHAT, circuit, '|', "Dropping link with %s to prevent a loop", circuit->Callsign);
+			Disconnect(circuit->BPQStream);
+			return FALSE;
+		}
+
+		circuit->u.link->flags = p_linked;
+ 	  	circuit->rtcflags = p_linked;
+		state_tell(circuit, circuit->FBBReplyChars);
+		NeedStatus = TRUE;
+
+		return TRUE;
+	}
+
+	
+	if (strstr(Buffer, "CONNECTED") || strstr(Buffer, "LINKED"))
+	{
+		// Connected - Send *RTL 
+		
+		nputs(circuit, "*RTL\r");  // Log in to the remote RT system.
+		nprintf(circuit, "%c%c%s %s %s\r", FORMAT, id_keepalive, OurNode, circuit->u.link->call, Verstring);
+
+		return TRUE;
+
+	}
+
+	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK")|| strstr(Buffer, "SORRY"))
+	{
+		link_drop(circuit);
+		Disconnect(circuit->BPQStream);
+	}
+	
+	return FALSE;
+
+}
+
+
+#ifdef LINBPQ
+
+//	LINCHAT specific code
+
+extern struct SEM OutputSEM;
+
+static config_t cfg;
+static config_setting_t * group;
+
+extern char pgm[256];
+
+char ChatSYSOPCall[50] = "";
+
+VOID ChatSendWelcomeMsg(int Stream, ChatCIRCUIT * conn, struct UserInfo * user);
+
+
+int ChatConnected(Stream)
+{
+	int n;
+	ChatCIRCUIT * conn;
+	struct UserInfo * user = NULL;
+	char callsign[10];
+	int port, paclen, maxframe, l4window;
+	char ConnectedMsg[] = "*** CONNECTED    ";
+	char Msg[100];
+	LINK    *link;
+	KNOWNNODE *node;
+
+	for (n = 0; n < NumberofChatStreams; n++)
+	{
+  		conn = &ChatConnections[n];
+		
+		if (Stream == conn->BPQStream)
+		{
+			if (conn->Active)
+			{
+				// Probably an outgoing connect
+		
+				if (conn->rtcflags == p_linkini)
+				{
+					conn->paclen = 236;
+					nprintf(conn, "c %s\r", conn->u.link->call);
+					return 0;
+				}
+			}
+	
+			memset(conn, 0, sizeof(ChatCIRCUIT));		// Clear everything
+			conn->Active = TRUE;
+			conn->BPQStream = Stream;
+
+			conn->Secure_Session = GetConnectionInfo(Stream, callsign,
+				&port, &conn->SessType, &paclen, &maxframe, &l4window);
+
+			conn->paclen = paclen;
+
+			strlop(callsign, ' ');		// Remove trailing spaces
+
+			memcpy(conn->Callsign, callsign, 10);
+
+			strlop(callsign, '-');		// Remove any SSID
+
+			user = zalloc(sizeof(struct UserInfo));
+
+			strcpy(user->Call, callsign);
+
+			conn->UserPointer = user;
+
+			n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s", user->Call);
+			
+			// Send SID and Prompt
+
+			WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+			conn->Flags |= CHATMODE;
+
+			nprintf(conn, ChatSID, Ver[0], Ver[1], Ver[2], Ver[3]);
+
+			// See if from a defined node
+				
+			for (link = link_hd; link; link = link->next)
+			{
+				if (matchi(conn->Callsign, link->call))
+				{
+					conn->rtcflags = p_linkwait;
+					return 0;						// Wait for *RTL
+				}
+			}
+
+			// See if from a previously known node
+
+			node = knownnode_find(conn->Callsign);
+
+			if (node)
+			{
+				// A node is trying to link, but we don't have it defined - close
+
+				Logprintf(LOG_CHAT, conn, '!', "Node %s connected, but is not defined as a Node - closing",
+					conn->Callsign);
+
+				nprintf(conn, "Node %s does not have %s defined as a node to link to - closing.\r",
+					OurNode, conn->Callsign);
+
+				ChatFlush(conn);
+
+				Sleep(500);
+
+				Disconnect(conn->BPQStream);
+
+				return 0;
+			}
+
+			if (user->Name[0] == 0)
+			{
+				char * Name = lookupuser(user->Call);
+
+				if (Name)
+				{
+					if (strlen(Name) > 17)
+						Name[17] = 0;
+
+					strcpy(user->Name, Name);
+					free(Name);
+				}
+				else
+				{
+					conn->Flags |= GETTINGUSER;
+					nputs(conn, NewUserPrompt);
+					return TRUE;
+				}
+			}
+
+			ChatSendWelcomeMsg(Stream, conn, user);
+			RefreshMainWindow();
+			ChatFlush(conn);
+			
+			return 0;
+		}
+	}
+
+	return 0;
+}
+
+int ChatDisconnected (ChatCIRCUIT * conn)
+{
+	struct UserInfo * user = NULL;
+	int Stream = conn->BPQStream;
+	char Msg[255];
+	int len;
+
+	if (conn->Active == FALSE)
+		return 0;
+
+	ChatClearQueue(conn);
+
+	conn->Active = FALSE;
+	
+	if (conn->Flags & CHATMODE)
+	{
+		if (conn->Flags & CHATLINK && conn->u.link)
+		{
+			len=sprintf_s(Msg, sizeof(Msg), "Chat Node %s Disconnected", conn->u.link->call);
+			WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
+			link_drop(conn);
+		}
+		else
+		{
+			len=sprintf_s(Msg, sizeof(Msg), "Chat User %s Disconnected", conn->Callsign);
+			WriteLogLine(conn, '|',Msg, len, LOG_CHAT);
+
+			logout(conn);
+	
+		}
+
+		conn->Flags = 0;
+		conn->u.link = NULL;
+		conn->UserPointer = NULL;	
+		return 0;
+	}
+
+	return 0;
+}
+
+int ChatDoReceivedData(ChatCIRCUIT * conn)
+{
+	int count, InputLen;
+	UINT MsgLen;
+	int Stream = conn->BPQStream;
+	struct UserInfo * user;
+	char * ptr, * ptr2;
+	char Buffer[10000];
+
+
+	// May have several messages per packet, or message split over packets
+
+	if (conn->InputLen + 1000 > 10000)	// Shouldnt have lines longer  than this in text mode
+		conn->InputLen = 0;				// discard	
+				
+	GetMsg(Stream, &conn->InputBuffer[conn->InputLen], &InputLen, &count);
+
+	if (InputLen == 0) return 0;
+
+	conn->Watchdog = 900;				// 15 Minutes
+	conn->InputLen += InputLen;
+
+loop:
+
+	if (conn->InputLen == 1 && conn->InputBuffer[0] == 0)		// Single Null
+	{
+		conn->InputLen = 0;
+		return 0;
+	}
+
+	ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
+
+	if (ptr)	//  CR in buffer
+	{
+		user = conn->UserPointer;
+				
+		ptr2 = &conn->InputBuffer[conn->InputLen];
+					
+		if (++ptr == ptr2)
+		{
+			// Usual Case - single meg in buffer
+
+				if (conn->rtcflags == p_linkini)		// Chat Connect
+					ProcessConnecting(conn, conn->InputBuffer, conn->InputLen);
+				else
+					ProcessChatLine(conn, user, conn->InputBuffer, conn->InputLen);
+			conn->InputLen=0;
+		}
+		else
+		{
+			// buffer contains more that 1 message
+
+			MsgLen = conn->InputLen - (ptr2-ptr);
+
+			memcpy(Buffer, conn->InputBuffer, MsgLen);
+						
+			if (conn->rtcflags == p_linkini)
+				ProcessConnecting(conn, Buffer, MsgLen);
+			else
+				ProcessChatLine(conn, user, Buffer, MsgLen);
+						
+			if (*ptr == 0 || *ptr == '\n')
+			{
+				/// CR LF or CR Null
+
+				ptr++;
+				conn->InputLen--;
+			}
+
+			memmove(conn->InputBuffer, ptr, conn->InputLen-MsgLen);
+			conn->InputLen -= MsgLen;
+
+			goto loop;
+
+		}
+	}
+	return 0;
+}
+
+
+int ChatPollStreams()
+{
+	int state,change;
+	ChatCIRCUIT * conn;
+	int n;
+	struct UserInfo * user = NULL;
+	char ConnectedMsg[] = "*** CONNECTED    ";
+
+	for (n = 0; n < NumberofChatStreams; n++)
+	{
+  		conn = &ChatConnections[n];
+		
+		ChatDoReceivedData(conn);
+
+		SessionState(conn->BPQStream, &state, &change);
+		
+		if (change == 1)
+		{
+			if (state == 1) // Connected	
+			{
+				GetSemaphore(&ConSemaphore);
+				ChatConnected(conn->BPQStream);
+				FreeSemaphore(&ConSemaphore);
+			}
+			else
+			{
+				GetSemaphore(&ConSemaphore);
+				ChatDisconnected(conn);
+				FreeSemaphore(&ConSemaphore);
+			}
+		}
+	}
+	
+	return 0;
+}
+
+
+BOOL GetChatConfig(char * ConfigName)
+{
+	config_init(&cfg);
+
+	/* Read the file. If there is an error, report it and exit. */
+	
+	if(! config_read_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "%d - %s\n",
+			config_error_line(&cfg), config_error_text(&cfg));
+		config_destroy(&cfg);
+		return(EXIT_FAILURE);
+	}
+
+	group = config_lookup (&cfg, "Chat");
+
+	if (group == NULL)
+		return EXIT_FAILURE;
+
+	ChatApplNum = GetIntValue(group, "ApplNum");
+	MaxChatStreams = GetIntValue(group, "MaxStreams");
+	GetStringValue(group, "OtherChatNodes", OtherNodesList);
+	GetStringValue(group, "ChatWelcomeMsg", ChatWelcomeMsg);
+
+	if (ChatWelcomeMsg[0] == 0)
+		strcpy(ChatWelcomeMsg, "G8BPQ Chat Server.$WType /h for command summary.$WBringing up links to other nodes.$W"
+			"This may take a minute or two.$WThe /p command shows what nodes are linked.$W");
+
+	GetStringValue(group, "MapPosition", Position);
+	GetStringValue(group, "MapPopup", PopupText);
+	PopupMode = GetIntValue(group, "PopupMode");
+
+
+	return EXIT_SUCCESS;
+}
+
+VOID SaveChatConfig(char * ConfigName)
+{
+	config_setting_t *root, *group;
+
+	//	Get rid of old config before saving
+	
+	config_init(&cfg);
+
+	root = config_root_setting(&cfg);
+
+	group = config_setting_add(root, "Chat", CONFIG_TYPE_GROUP);
+
+	SaveIntValue(group, "ApplNum", ChatApplNum);
+	SaveIntValue(group, "MaxStreams", MaxChatStreams);
+	SaveStringValue(group, "OtherChatNodes", OtherNodesList);
+	SaveStringValue(group, "ChatWelcomeMsg", ChatWelcomeMsg);
+
+	SaveStringValue(group, "MapPosition", Position);
+	SaveStringValue(group, "MapPopup", PopupText);
+	SaveIntValue(group, "PopupMode", PopupMode);
+
+	if(! config_write_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "Error while writing file.\n");
+		config_destroy(&cfg);
+		return;
+	}
+	config_destroy(&cfg);
+}
+
+BOOL ChatInit()
+{
+	char * ptr1 = GetApplCall(ChatApplNum);
+	char * ptr2;
+	char * Context;
+	int i;
+	ChatCIRCUIT * conn;
+
+	if (*ptr1 < 0x21)
+	{
+		printf("No APPLCALL for Chat APPL\n");
+		return FALSE;
+	}
+			
+	memcpy(OurNode, ptr1, 10);
+	strlop(OurNode, ' ');
+
+	ptr1 = GetApplAlias(ChatApplNum);
+	memcpy(OurAlias, ptr1,10);
+	strlop(OurAlias, ' ');
+
+	if (ChatSYSOPCall[0] == 0)
+	{
+		strcpy(ChatSYSOPCall, OurNode);
+		strlop(ChatSYSOPCall, '-');
+	}
+
+	sprintf(SignoffMsg, "73 de %s\r", ChatSYSOPCall);
+
+	ChatApplMask = 1<<(ChatApplNum-1);
+		
+	// Set up other nodes list. rtlink messes with the string so pass copy
+	
+	ptr2 = ptr1 = strtok_s(_strdup(OtherNodesList), " ,\r", &Context);
+
+	while (ptr1)
+	{
+		rtlink(ptr1);			
+		ptr1 = strtok_s(NULL, " ,\r", &Context);
+	}
+
+	free(ptr2);
+
+	SetupChat();
+
+	// Allocate Streams
+
+	strcpy(pgm, "CHAT");
+
+	for (i = 0; i < MaxChatStreams; i++)
+	{
+		conn = &ChatConnections[i];
+		conn->BPQStream = FindFreeStream();
+
+		if (conn->BPQStream == 255) break;
+
+		NumberofChatStreams++;
+
+		SetAppl(conn->BPQStream, 2, ChatApplMask);
+		Disconnect(conn->BPQStream);
+	}
+
+	strcpy(pgm, "LINBPQ");
+
+	return TRUE;
+}
+
+
+void ChatFlush(ChatCIRCUIT * conn)
+{
+	int tosend, len, sent;
+	
+	// Try to send data to user. May be stopped by user paging or node flow control
+
+	//	UCHAR * OutputQueue;		// Messages to user
+	//	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
+	//	int OutputGetPointer;		// Next byte to send. When Getpointer = Quele Length all is sent - free the buffer and start again.
+
+	//	BOOL Paging;				// Set if user wants paging
+	//	int LinesSent;				// Count when paging
+	//	int PageLen;				// Lines per page
+
+
+	if (conn->OutputQueue == NULL)
+	{
+		// Nothing to send. If Close after Flush is set, disconnect
+
+		if (conn->CloseAfterFlush)
+		{
+			conn->CloseAfterFlush--;
+			
+			if (conn->CloseAfterFlush)
+				return;
+
+			Disconnect(conn->BPQStream);
+		}
+
+		return;						// Nothing to send
+	}
+	tosend = conn->OutputQueueLength - conn->OutputGetPointer;
+
+	sent=0;
+
+	while (tosend > 0)
+	{
+		if (TXCount(conn->BPQStream) > 4)
+			return;						// Busy
+
+		if (conn->Paging && (conn->LinesSent >= conn->PageLen))
+			return;
+
+		if (tosend <= conn->paclen)
+			len=tosend;
+		else
+			len=conn->paclen;
+
+		GetSemaphore(&OutputSEM);
+
+		if (conn->Paging)
+		{
+			// look for CR chars in message to send. Increment LinesSent, and stop if at limit
+
+			UCHAR * ptr1 = &conn->OutputQueue[conn->OutputGetPointer];
+			UCHAR * ptr2;
+			int lenleft = len;
+
+			ptr2 = memchr(ptr1, 0x0d, len);
+
+			while (ptr2)
+			{
+				conn->LinesSent++;
+				ptr2++;
+				lenleft = len - (ptr2 - ptr1);
+
+				if (conn->LinesSent >= conn->PageLen)
+				{
+					len = ptr2 - &conn->OutputQueue[conn->OutputGetPointer];
+					
+					SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
+					conn->OutputGetPointer+=len;
+					tosend-=len;
+					SendUnbuffered(conn->BPQStream, "<A>bort, <CR> Continue..>", 25);
+					FreeSemaphore(&OutputSEM);
+					return;
+
+				}
+				ptr2 = memchr(ptr2, 0x0d, lenleft);
+			}
+		}
+
+		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
+
+		conn->OutputGetPointer+=len;
+
+		FreeSemaphore(&OutputSEM);
+
+		tosend-=len;	
+		sent++;
+
+		if (sent > 4)
+			return;
+	}
+
+	// All Sent. Free buffers and reset pointers
+
+	conn->LinesSent = 0;
+
+	ChatClearQueue(conn);
+}
+
+VOID ChatClearQueue(ChatCIRCUIT * conn)
+{
+	if (conn->OutputQueue == NULL)
+		return;
+
+	GetSemaphore(&OutputSEM);
+	
+	conn->OutputGetPointer=0;
+	conn->OutputQueueLength=0;
+
+	FreeSemaphore(&OutputSEM);
+}
+
+void ChatTrytoSend()
+{
+	// call Flush on any connected streams with queued data
+
+	ChatCIRCUIT * conn;
+
+	int n;
+
+	for (n = 0; n < NumberofChatStreams; n++)
+	{
+		conn = &ChatConnections[n];
+		
+		if (conn->Active == TRUE)
+			ChatFlush(conn);
+	}
+}
+
+VOID CloseChat()
+{
+	int BPQStream, n;
+		
+	for (n = 0; n < NumberofChatStreams; n++)
+	{
+		BPQStream = ChatConnections[n].BPQStream;
+		
+		if (BPQStream)
+		{
+			SetAppl(BPQStream, 0, 0);
+			Disconnect(BPQStream);
+			DeallocateStream(BPQStream);
+		}
+	}
+
+	ClearChatLinkStatus();
+	SendChatLinkStatus();
+	Sleep(1000);				// A bit of time for links to close
+	SendChatLinkStatus();		// Send again to reduce chance of being missed
+}
+
+VOID SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen)
+{
+ 	unsigned short int crc = compute_crc(buff, txlen);
+
+	crc ^= 0xffff;
+
+	buff[txlen++] = (crc&0xff);
+	buff[txlen++] = (crc>>8);
+
+	sendto(ChatReportSocket, buff, txlen, 0, (LPSOCKADDR)&Chatreportdest, sizeof(Chatreportdest));
+
+}
+
+
+
+#endif
 

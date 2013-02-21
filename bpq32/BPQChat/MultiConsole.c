@@ -65,7 +65,7 @@ VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo);
 VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line);
 VOID DoRefresh(struct ConsoleInfo * Cinfo);
 
-void Flush(CIRCUIT * conn);
+void ChatFlush(ChatCIRCUIT * conn);
 char * lookupuser(char * call);
 
 VOID SaveIntValue(char * Key, int Value);
@@ -235,7 +235,7 @@ BOOL CreateConsole(int Stream)
 
 	MoveWindows(Cinfo);
 
-	Cinfo->Console = zalloc(sizeof(CIRCUIT));
+	Cinfo->Console = zalloc(sizeof(ChatCIRCUIT));
 
 	Cinfo->Console->Active = TRUE;
 	Cinfo->Console->BPQStream = Stream;
@@ -800,7 +800,7 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 			if (Cinfo->Console && Cinfo->Console->Active)
 			{
-				ClearQueue(Cinfo->Console);
+				ChatClearQueue(Cinfo->Console);
 		
 				Cinfo->Console->Active = FALSE;
 				RefreshMainWindow();

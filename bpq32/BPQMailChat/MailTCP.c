@@ -3224,10 +3224,20 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 	{
 		// + separates our address and the target user
 
-		char * GMailto;;
+		char * GMailto;
+
 		GMailto = strlop(To,'+');
+		
 		if (GMailto)
+		{
+			char * GmailVia = NULL;
+		
 			strcpy(To, GMailto);
+			GmailVia = strlop(To, '|');
+
+			if (GmailVia)
+				strcpy(Msg->via, GmailVia);
+		}
 	}
 
 	if (strlen(To) > 6) To[6]=0;

@@ -1948,7 +1948,8 @@ decode_port_rec(char * rec)
 					{
 						if (memcmp(rec, "***", 3) == 0)
 						{
-							RigConfigMsg[LogicalPortNum] = realloc(RigConfigMsg[LogicalPortNum], (strlen(rptr) + 1));		
+							RigConfigMsg[LogicalPortNum] = realloc(RigConfigMsg[LogicalPortNum], (strlen(rptr) + 1));
+							_strupr(RigConfigMsg[LogicalPortNum]);
 							break;
 						}
 						strcat(rptr, rec);
@@ -2755,6 +2756,9 @@ BOOL ProcessAPPLDef(char * buf)
 	if (strlen(Context) > 48) return FALSE;
 
 	memcpy(App->CommandAlias, Context, strlen(Context));
+
+	if (ptr[0] = ',')				// No call, so cant have alias or quality
+		return TRUE;
 
 	Context = ptr;
 

@@ -452,7 +452,7 @@ BOOL OpenLogfile(int Flags)
 	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
 }
 
-void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
+void WriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 {
 	int cnt;
 	char CRLF[2] = {0x0d,0x0a};
@@ -482,7 +482,7 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 			if (Msg[MsgLen-1] != '\r')
 				WritetoMonitorWindow(CRLF , 1);
 		}
-		else if (Flags == LOG_DEBUG)
+		else if (Flags == LOG_DEBUGx)
 		{	
 			WritetoMonitorWindow((char *)&Flag, 1);
 			WritetoMonitorWindow(Msg, MsgLen);

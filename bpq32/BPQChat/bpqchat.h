@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef LINBPQ
+#include "compatbits.h"
+#endif
+
 #include "resource.h"
 
 // Standard __except handler for try/except
@@ -8,10 +12,9 @@ VOID CheckProgramErrors();
 
 extern int ProgramErrors;
 
-extern struct _EXCEPTION_POINTERS exinfox;
+struct _EXCEPTION_POINTERS;
 
-
-Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg);
+int Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg);
 
 #define My__except_Routine(Message) \
 __except(memcpy(&exinfo, GetExceptionInformation(), sizeof(struct _EXCEPTION_POINTERS)), EXCEPTION_EXECUTE_HANDLER)\
@@ -88,20 +91,15 @@ VOID * _malloc_dbg_trace(int len, int type, char * file, int line);
 VOID * _zalloc_dbg(int len, int type, char * file, int line);
 
 #define LOG_CHAT 1
-#define LOG_DEBUG 3
+#define LOG_DEBUGx 3
 
-typedef struct SEM
-{
-	int Flag;
-	int Clashes;
-};
 
 //Chat Duplicate suppression Code
 
 #define MAXDUPS 10			// Number to keep
 #define DUPSECONDS 5		// TIme to Keep
 
-typedef struct DUPINFO
+struct DUPINFO
 {
 	time_t DupTime;
 	char  DupUser[10];
@@ -211,7 +209,7 @@ typedef struct node_t
 	char *call;
 	char * Version;
 	int refcnt;
-} NODE;
+} CHATNODE;
 
 
 // Topics in use at each circuit.
@@ -228,7 +226,7 @@ typedef struct ct_t
 typedef struct cn_t
 {
 	struct cn_t *next;
-	NODE *node;
+	CHATNODE *node;
 	int refcnt;
 } CN;
 
@@ -252,10 +250,18 @@ typedef struct cn_t
 #define u_colour 0x0008		// User wants BPQTerminal colour codes.
 #define u_keepalive 0x0010	// User wants Keepalive Messages.
 #define u_shownames 0x0020	// User wants name as well as call on each message.
+#define u_showtime 0x0040	// User wants time on each message.
 
-typedef struct ConnectionInfo_S
+struct UserInfo{
+
+	char	Call[10];			//	Connected call without SSID	
+	char	Name[18];			/* 18 1st Name */
+
+}; 
+
+typedef struct ChatConnectionInfo_S
 {
-	struct ConnectionInfo_S *next;
+	struct ChatConnectionInfo_S *next;
 	PROC *proc;
 	UCHAR rtcflags;             // p_linked or p_user.
 	int s;                 // Socket.
@@ -316,7 +322,9 @@ typedef struct ConnectionInfo_S
 
 	HANDLE DebugHandle;					// File Handle for session-based debugging
 
-} ConnectionInfo, CIRCUIT;
+} ChatConnectionInfo, ChatCIRCUIT;
+
+
 
 // Flags Equates
 
@@ -334,12 +342,6 @@ struct TempUserInfo
 	int LastAuthCode;				// Protect against playback attack
 };
 
-struct UserInfo{
-
-	char	Call[10];			//	Connected call without SSID	
-	char	Name[18];			/* 18 1st Name */
-
-}; 
 
 // flags equates
 
@@ -370,8 +372,8 @@ typedef struct user_t
 	char    *call;
 	char    *name;
 	char    *qth;
-	NODE    *node;          // Node user logged into.
-	CIRCUIT *circuit;       // Circuit user is on, local or link.
+	CHATNODE    *node;          // Node user logged into.
+	ChatCIRCUIT *circuit;       // Circuit user is on, local or link.
 	TOPIC   *topic;         // Topic user is in.
 	int     rtflags;
 	time_t	lastmsgtime;	// Time of last input from user
@@ -402,7 +404,7 @@ int RTFHddrLen;
 struct ConsoleInfo 
 {
 	struct ConsoleInfo * next;
-	CIRCUIT * Console;
+	ChatCIRCUIT * Console;
 	int BPQStream;
 	WNDPROC wpOrigInputProc; 
 	HWND hConsole;
@@ -477,51 +479,57 @@ extern USER *user_hd;
 static PROC *Rt_Control;
 static int  rtrun = FALSE;
 
-#define rtjoin  "*** Joined"
+//#define rtjoin  "*** Joined"
 #define rtleave "*** Left"
 
 KNOWNNODE *knownnode_find(char *call);
-static void cn_dec(CIRCUIT *circuit, NODE *node);
-static NODE *cn_inc(CIRCUIT *circuit, char *call, char *alias, char * Version);
-NODE *node_find(char *call);
-static NODE *node_inc(char *call, char *alias, char * Version);
-static int cn_find(CIRCUIT *circuit, NODE *node);
+static void cn_dec(ChatCIRCUIT *circuit, CHATNODE *node);
+static CHATNODE *cn_inc(ChatCIRCUIT *circuit, char *call, char *alias, char * Version);
+CHATNODE *node_find(char *call);
+static CHATNODE *node_inc(char *call, char *alias, char * Version);
+static int cn_find(ChatCIRCUIT *circuit, CHATNODE *node);
 static void text_xmit(USER *user, USER *to, char *text);
 void text_tellu(USER *user, char *text, char *to, int who);
 void text_tellu_Joined(USER *user);
-static void topic_xmit(USER *user, CIRCUIT *circuit);
-static void node_xmit(NODE *node, char kind, CIRCUIT *circuit);
-static void node_tell(NODE *node, char kind);
-static void user_xmit(USER *user, char kind, CIRCUIT *circuit);
+static void topic_xmit(USER *user, ChatCIRCUIT *circuit);
+static void node_xmit(CHATNODE *node, char kind, ChatCIRCUIT *circuit);
+static void node_tell(CHATNODE *node, char kind);
+static void user_xmit(USER *user, char kind, ChatCIRCUIT *circuit);
 static void user_tell(USER *user, char kind);
 USER *user_find(char *call, char * node);
 static void user_leave(USER *user);
 static BOOL topic_chg(USER *user, char *s);
-static USER *user_join(CIRCUIT *circuit, char *ucall, char *ncall, char *nalias, BOOL Local);
-void link_drop(CIRCUIT *circuit);
-static void echo(CIRCUIT *fc, NODE *node, char * Buffer);
-void state_tell(CIRCUIT *circuit, char * Version);
-int ct_find(CIRCUIT *circuit, TOPIC *topic);
+static USER *user_join(ChatCIRCUIT *circuit, char *ucall, char *ncall, char *nalias, BOOL Local);
+void link_drop(ChatCIRCUIT *circuit);
+static void echo(ChatCIRCUIT *fc, CHATNODE *node, char * Buffer);
+void state_tell(ChatCIRCUIT *circuit, char * Version);
+int ct_find(ChatCIRCUIT *circuit, TOPIC *topic);
 int rtlink (char * Call);
-int rtloginl (CIRCUIT *conn, char * call);
-void chkctl(CIRCUIT *ckt_from, char * Buffer, int Len);
-int rtloginu (CIRCUIT *circuit, BOOL Local);
-void logout(CIRCUIT *circuit);
-void show_users(CIRCUIT *circuit);
-VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...);
+int rtloginl (ChatCIRCUIT *conn, char * call);
+void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len);
+int rtloginu (ChatCIRCUIT *circuit, BOOL Local);
+void logout(ChatCIRCUIT *circuit);
+void show_users(ChatCIRCUIT *circuit);
+#ifdef LINBPQ
+static VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...);
+static VOID nputs(ChatCIRCUIT * conn, char * buf);
+#else
+VOID __cdecl nprintf(ChatCIRCUIT * conn, const char * format, ...);
+VOID nputs(ChatCIRCUIT * conn, char * buf);
+#endif
 BOOL matchi(char * p1, char * p2);
 char * strlop(char * buf, char delim);
-int rt_cmd(CIRCUIT *circuit, char * Buffer);
-CIRCUIT *circuit_new(CIRCUIT *circuit, int flags);
-VOID BBSputs(CIRCUIT * conn, char * buf);
+int rt_cmd(ChatCIRCUIT *circuit, char * Buffer);
+ChatCIRCUIT *circuit_new(ChatCIRCUIT *circuit, int flags);
 void makelinks(void);
 VOID * _zalloc(int len);
 VOID FreeChatMemory();
 VOID ChatTimer();
-VOID nputs(CIRCUIT * conn, char * buf);
+char * lookupuser(char * call);
 VOID node_close();
 VOID removelinks();
 VOID SetupChat();
+int rtlink (char * Call);
 VOID SendChatLinkStatus();
 VOID ClearChatLinkStatus();
 void rduser(USER *user);
@@ -534,39 +542,41 @@ VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len);
 #define ConnectUsingAppl(stream, appl) SessionControl(stream, 0, appl)
 
 BOOL Initialise();
+#ifndef LINBPQ
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+#endif
 int DisplaySessions();
-int DoStateChange(Stream);
-int DoReceivedData(Stream);
-int DoMonitorData(Stream);
-int Connected(Stream);
-int Disconnected(Stream);
-int DeleteConnection(con);
+int DoStateChange(int Stream);
+int DoReceivedData(int Stream);
+int DoMonitorData(int Stream);
+int Connected(int Stream);
+int Disconnected(int Stream);
+//int DeleteConnection(con);
 //int Socket_Accept(int SocketId);
 //int Socket_Data(int SocketId,int error, int eventcode);
 int RefreshMainWindow();
 int Terminate();
 int WriteLog(char * msg);
-int ConnectState(Stream);
+int ConnectState(int Stream);
 UCHAR * EncodeCall(UCHAR * Call);
 int ParseIniFile(char * fn);
-VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user);
-VOID ProcessLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
-VOID ProcessChatLine(ConnectionInfo * conn, struct UserInfo * user, char* Buffer, int len);
-VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user);
-int QueueMsg(	ConnectionInfo * conn, char * msg, int len);
+VOID SendWelcomeMsg(int Stream, ChatCIRCUIT * conn, struct UserInfo * user);
+VOID ProcessLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, int len);
+VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, int len);
+VOID SendPrompt(ChatCIRCUIT * conn, struct UserInfo * user);
+int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len);
 VOID SendUnbuffered(int stream, char * msg, int len);
-void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
+void WriteLogLine(ChatCIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags);
 
-void Flush(ConnectionInfo * conn);
-VOID ClearQueue(ConnectionInfo * conn);
+void ChatFlush(ChatCIRCUIT * conn);
+VOID ChatClearQueue(ChatCIRCUIT * conn);
 void TrytoSend();
 int	CriticalErrorHandler(char * error);
 void chat_link_out (LINK *link);
-ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len);
+int ProcessConnecting(ChatCIRCUIT * circuit, char * Buffer, int Len);
 BOOL SaveConfig();
 VOID SaveWindowConfig();
-VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...);
+VOID __cdecl nodeprintf(ChatCIRCUIT * conn, const char * format, ...);
 
 // Console Routines
 
@@ -594,18 +604,16 @@ void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
 
 VOID __cdecl Debugprintf(const char * format, ...);
-VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...);
+VOID __cdecl Logprintf(int LogMode, ChatCIRCUIT * conn, int InOut, const char * format, ...);
 int DeleteLogFiles();
-VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG);
-
-extern char ChatWelcomeMsg[];
+VOID ExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG);
 
 extern char Session[];
 
 extern HBRUSH bgBrush;
 extern BOOL cfgMinToTray;
 
-extern CIRCUIT * Console;
+extern ChatCIRCUIT * Console;
 
 extern ULONG ChatApplMask;
 extern char Verstring[];
@@ -629,7 +637,7 @@ extern BOOL LogTCP;
 
 
 extern int LatestMsg;
-extern char SYSOPCall[];
+extern char ChatSYSOPCall[];
 extern char ChatSID[];
 extern char NewUserPrompt[];
 
@@ -649,7 +657,7 @@ extern int AXIPPort;
 extern BOOL NeedStatus;
 
 extern LINK *link_hd;
-extern CIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others
+extern ChatCIRCUIT *circuit_hd ;			// This is a chain of RT circuits. There may be others
 extern char OurNode[];
 extern char OurAlias[];
 extern BOOL SMTPMsgCreated;
@@ -680,4 +688,4 @@ extern BOOL SendWP;
 extern BOOL OverrideUnsent;
 extern BOOL SendNonDeliveryMsgs;
 
-struct ConsoleInfo * ConsHeader[];
+struct ConsoleInfo * ConsHeader[2];

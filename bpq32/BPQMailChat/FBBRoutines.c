@@ -366,13 +366,15 @@ ok:
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+			Logprintf(LOG_BBS, conn, '?', "Message Rejected by Filters");
+
 			user->MsgsRejectedIn++;
 		}
 
 		// If P Message, dont immediately reject on a Duplicate BID. Check if we still have the message
 		//	If we do, reject  it. If not, accept it again. (do we need some loop protection ???)
 
-		else if (DoWeWantIt(FBBHeader) == FALSE)
+		else if (DoWeWantIt(conn, FBBHeader) == FALSE)
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
@@ -490,6 +492,8 @@ ok:
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 				conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
 				user->MsgsRejectedIn++;
+				Logprintf(LOG_BBS, conn, '?', "Message Rejected by Filters");
+
 				return;
 			}
 		}
@@ -503,10 +507,21 @@ badparam2:
 		return;
 
 ok2:
-		if (LookupBID(FBBHeader->BID)  || (FBBHeader->Size > MaxRXSize))
+		if (LookupBID(FBBHeader->BID))
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+			Logprintf(LOG_BBS, conn, '?', "Message Rejected by BID Check");
+			user->MsgsRejectedIn++;
+
+		}
+		if (FBBHeader->Size > MaxRXSize)
+		{
+			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
+			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
+			Logprintf(LOG_BBS, conn, '?', "Message Rejected by Size Limit");
+			user->MsgsRejectedIn++;
+
 		}
 		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
 		{
@@ -1597,24 +1612,32 @@ BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 
 
-BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader)
+BOOL DoWeWantIt(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 {
 	struct MsgInfo * Msg;
 	BIDRec * BID;
 	int m;
 
 	if (RefuseBulls && FBBHeader->MsgType == 'B')
+	{
+		Logprintf(LOG_BBS, conn, '?', "Message Rejected by RefuseBulls");
 		return FALSE;
-
+	}
 	if (FBBHeader->Size > MaxRXSize)
+	{
+		Logprintf(LOG_BBS, conn, '?', "Message Rejected by Size Check");
 		return FALSE;
+	}
 	
 	BID = LookupBID(FBBHeader->BID);
 	
 	if (BID)
 	{
 		if (FBBHeader->MsgType == 'B')
+		{
+			Logprintf(LOG_BBS, conn, '?', "Message Rejected by BID Check");
 			return FALSE;
+		}
 
 		m = NumberofMessages;
 		
@@ -1631,7 +1654,10 @@ BOOL DoWeWantIt(struct FBBHeaderLine * FBBHeader)
 					// We have this message. If we have already forwarded it, we should accept it again
 
 					if ((Msg->status == 'N') || (Msg->status == 'Y')|| (Msg->status == 'H'))
+					{
+						Logprintf(LOG_BBS, conn, '?', "Message Rejected by BID Check");
 						return FALSE;			// Dont want it
+					}
 					else
 						return TRUE;			// Get it again
 				}

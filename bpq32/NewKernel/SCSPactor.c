@@ -2042,6 +2042,22 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		SetWindowText(TNC->xIDC_COMMSSTATE, Status);
 	}
 
+	if (Msg[2] == 253)						// Rig Port Response
+	{
+		int ret;
+
+		// (Win98)
+		//	return DeviceIoControl(
+		//			VCOMInfo[port]->ComDev,(VCOMInfo[port]->Port << 16) | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
+		//else
+
+		DeviceIoControl(
+				TNC->VCOMHandle, IOCTL_SERIAL_SETDATA, &Msg[3], framelen - 5, NULL, 0, &ret, NULL);
+
+//		Debugprintf("SCS - Rig Control Response");
+		return;
+	}
+
 	Stream = Msg[2];
 
 	if (Stream > 29) Stream = 0;				// 31 = Pactor or 30 = Robust Packet
@@ -2625,23 +2641,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			return;
 		}
 		
-		if (Msg[2] == 253)						// Rig Port Response
-		{
-			int ret;
-
-			// (Win98)
-			//	return DeviceIoControl(
-			//			VCOMInfo[port]->ComDev,(VCOMInfo[port]->Port << 16) | W98_SERIAL_SETDATA,Message,MsgLen,NULL,0, &bytesReturned,NULL);
-			//else
-
-			DeviceIoControl(
-					TNC->VCOMHandle, IOCTL_SERIAL_SETDATA, &Msg[5], Msg[4] + 1, NULL, 0, &ret, NULL);
-
-//			Debugprintf("SCS - Rig Control Response");
-
-
-			return;
-		}
 		// Connected Data
 		
 		buffptr = GetBuff();

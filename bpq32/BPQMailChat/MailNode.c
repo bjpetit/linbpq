@@ -399,6 +399,10 @@ extern int ISPort;
 extern char ConfigName[250];
 extern char ChatConfigName[250];
 
+char * GetBPQDirectory()
+{
+	return BPQDirectory;
+}
 
 int main(int argc, char * argv[])
 {
@@ -487,6 +491,7 @@ int main(int argc, char * argv[])
 	signal(SIGHUP, SIG_IGN);
 	signal(SIGINT, sigint_handler);
 	signal(SIGTERM, sigterm_handler);
+	signal(SIGPIPE, SIG_IGN);
 
 #endif
 
@@ -1156,7 +1161,7 @@ COLORREF Colours[256] = {0,
 		RGB(0,192,0), RGB(0,192,128), RGB(0,192,192), RGB(0,192,255),		// 13 - 16
 		RGB(0,255,0), RGB(0,255,128), RGB(0,255,192), RGB(0,255,255),		// 17 - 20
 
-		RGB(64,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 21 
+		RGB(6425,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 21 
 		RGB(64,64,0), RGB(64,64,128), RGB(64,64,192), RGB(64,64,255),
 		RGB(64,128,0), RGB(64,128,128), RGB(64,128,192), RGB(64,128,255),
 		RGB(64,192,0), RGB(64,192,128), RGB(64,192,192), RGB(64,192,255),

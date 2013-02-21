@@ -2245,26 +2245,28 @@ char rec[];
 {
 	int err=255;
 
-	char opt1[12];
-	char opt2[12];
-	char opt3[12];
-	char opt4[12];
-	char opt5[12];
-
-	opt1[1] = '\0';
-	opt2[1] = '\0';
-	opt3[1] = '\0';
-	opt4[1] = '\0';
-	opt5[1] = '\0';
+	char opt1[12] = "";
+	char opt2[12] = "";
+	char opt3[12] = "";
+	char opt4[12] = "";
+	char opt5[12] = "";
+	char opt6[12] = "";
+	char opt7[12] = "";
+	char opt8[12] = "";
 
 
-	sscanf(value,"%[^,+],%[^,+],%[^,+],%[^,+],%[^,+]",opt1,opt2,opt3,opt4,opt5);
 
-	if (opt1[1] != '\0') {do_kiss(opt1,rec);}
-	if (opt2[1] != '\0') {do_kiss(opt2,rec);}
-	if (opt3[1] != '\0') {do_kiss(opt3,rec);}
-	if (opt4[1] != '\0') {do_kiss(opt4,rec);}
-	if (opt5[1] != '\0') {do_kiss(opt5,rec);}
+	sscanf(value,"%[^,+],%[^,+],%[^,+],%[^,+],%[^,+],%[^,+],%[^,+],%[^,+]",
+		opt1,opt2,opt3,opt4,opt5,opt6,opt6,opt8);
+
+	if (opt1[0] != '\0') {do_kiss(opt1,rec);}
+	if (opt2[0] != '\0') {do_kiss(opt2,rec);}
+	if (opt3[0] != '\0') {do_kiss(opt3,rec);}
+	if (opt4[0] != '\0') {do_kiss(opt4,rec);}
+	if (opt5[0] != '\0') {do_kiss(opt5,rec);}
+	if (opt6[0] != '\0') {do_kiss(opt5,rec);}
+	if (opt7[0] != '\0') {do_kiss(opt5,rec);}
+	if (opt8[0] != '\0') {do_kiss(opt5,rec);}
 
 	return(1);
 }

@@ -5,6 +5,10 @@
 #include "stdafx.h"
 #include "Winspool.h"
 
+
+#include "BPQChat.h"
+
+
 int LogAge = 7;
 
 int SEMCLASHES = 0;
@@ -16,7 +20,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
-	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG);
+	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUGx);
 //	#ifdef _DEBUG 
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
@@ -24,7 +28,7 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
-VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * format, ...)
+VOID __cdecl Logprintf(int LogMode, ChatCIRCUIT * conn, int InOut, const char * format, ...)
 {
 	char Mess[1000];
 	va_list(arglist);int Len;
@@ -79,16 +83,8 @@ void FreeSemaphore(struct SEM * Semaphore)
 
 	return; 
 }
-VOID BBSputs(CIRCUIT * conn, char * buf)
-{
-	// Sends to user and logs
 
-	WriteLogLine(conn, '>',buf,  strlen(buf) -1, LOG_CHAT);
-
-	QueueMsg(conn, buf, strlen(buf));
-}
-
-VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
+VOID __cdecl nodeprintf(ChatCIRCUIT * conn, const char * format, ...)
 {
 	char Mess[1000];
 	int len;
@@ -98,7 +94,7 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 	va_start(arglist, format);
 	len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
 
-	QueueMsg(conn, Mess, len);
+	ChatQueueMsg(conn, Mess, len);
 
 	WriteLogLine(conn, '>',Mess, len-1, LOG_CHAT);
 
@@ -121,7 +117,7 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
  %x : Number of new messages for the user.
 */
 
-VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
+VOID ExpandAndSendMessage(ChatCIRCUIT * conn, char * Msg, int LOG)
 {
 	char NewMessage[10000];
 	char * OldP = Msg;
@@ -130,7 +126,6 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 	int len;
 	char Dollar[] = "$";
 	char CR[] = "\r";
-	int Msgs = 0, Unread = 0;
 
 	ptr = strchr(OldP, '$');
 
@@ -171,7 +166,7 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 	len = RemoveLF(NewMessage, strlen(NewMessage));
 
 	WriteLogLine(conn, '>', NewMessage,  len, LOG);
-	QueueMsg(conn, NewMessage, len);
+	ChatQueueMsg(conn, NewMessage, len);
 }
 
 BOOL isdigits(char * string)
@@ -294,3 +289,27 @@ int DeleteLogFiles()
    return dwError;
 }
 
+int RemoveLF(char * Message, int len)
+{
+	// Remove lf chars
+
+	char * ptr1, * ptr2;
+
+	ptr1 = ptr2 = Message;
+
+	while (len-- > 0)
+	{
+		*ptr2 = *ptr1;
+	
+		if (*ptr1 == '\r')
+			if (*(ptr1+1) == '\n')
+			{
+				ptr1++;
+				len--;
+			}
+		ptr1++;
+		ptr2++;
+	}
+
+	return (ptr2 - Message);
+}

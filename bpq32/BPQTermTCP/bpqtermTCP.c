@@ -199,11 +199,13 @@ char Host[9][100] = {"localhost"};
 int Port[9] = {0};
 char UserName[9][80] = {""};
 char Password[9][80] = {""};
+char MonParams[9][80] = {""};
 
 char HN[9][6] = {"Host1", "Host2", "Host3", "Host4", "Host5", "Host6", "Host7", "Host8"};
 char PN[9][6] = {"Port1", "Port2", "Port3", "Port4", "Port5", "Port6", "Port7", "Port8"};
 char PASSN[9][6] = {"Pass1", "Pass2", "Pass3", "Pass4", "Pass5", "Pass6", "Pass7", "Pass8"};
 char UN[9][6] = {"User1", "User2", "User3", "User4", "User5", "User6", "User7", "User8"};
+char MON[9][6] = {"MON1", "MON2", "MON3", "MON4", "MON5", "MON6", "MON7", "MON8"};
 
 #define MAXLINES 1000
 #define LINELEN 200
@@ -407,7 +409,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		SaveStringValue(UN[n], UserName[n]);
 		SaveStringValue(PASSN[n], Password[n]);
 		SaveIntValue(PN[n], Port[n]);
+		SaveStringValue(MON[n], MonParams[n]);
 	}
+
 	SaveIntValue("MTX",mtxparam);
 	SaveIntValue("MCOM", mcomparam);
 	SaveIntValue("MUIONLY", monUI);
@@ -532,11 +536,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	}
 // Get saved config from ini
 
-	MonitorNODES = GetIntValue("MonNODES", 0);
+//	MonitorNODES = GetIntValue("MonNODES", 0);
 	MonPorts = GetIntValue("MonPorts", 0);
-	mtxparam = GetIntValue("MTX", 0);
-	mcomparam = GetIntValue("MCOM", 0);
-	monUI = GetIntValue("MUIONLY", 0);
+//	mtxparam = GetIntValue("MTX", 0);
+//	mcomparam = GetIntValue("MCOM", 0);
+//	monUI = GetIntValue("MUIONLY", 0);
 	tempmask = GetIntValue("PortMask", 0);
 	ChatMode = GetIntValue("ChatMode", 0);
 	MonitorColour = GetIntValue("MONColour", 0);
@@ -555,7 +559,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		GetStringValue(UN[n], UserName[n], 80);
 		GetStringValue(PASSN[n], Password[n], 80);
 		Port[n] = GetIntValue(PN[n], 0);
+		GetStringValue(MON[n], MonParams[n], 80);
 	}
+
+	sscanf(MonParams[CurrentHost], "%x %x %x %x %x %x",
+			&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
+
 
 	GetStringValue("FontName", FontName, 99);
 
@@ -692,8 +701,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	DrawMenuBar(hWnd);	
 
 	if (portmask) applflags |= 0x80;
-
-	SendTraceOptions();
 	
 	DragCursor = LoadCursor(hInstance, "IDC_DragSize");
 	Cursor = LoadCursor(NULL, IDC_ARROW);
@@ -1060,6 +1067,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQCONNECT8:
 
 			CurrentHost = wmId - BPQCONNECT1;
+
+			sscanf(MonParams[CurrentHost], "%x %x %x %x %x %x",
+					&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
+
+			for (i = 1; i <= MonPorts; i++)
+			{
+				if (portmask & (1<<(i-1)))
+					CheckMenuItem(hMenu, BPQBASE + i, MF_CHECKED);
+				else
+					CheckMenuItem(hMenu, BPQBASE + i, MF_UNCHECKED);
+
+			}
 
 			TCPConnect(Host[CurrentHost], Port[CurrentHost]);
 			break;
@@ -1540,8 +1559,8 @@ VOID DoRefresh(struct RTFTerm * OPData)
 		OPData->SendHeader = TRUE;
 		SendMessage(hwndOutput, EM_STREAMIN, SF_RTF, (LPARAM)&es);
 	}
-	else
-		Debugprintf("Pos %d RTFHeight %d - Not refreshing", Pos, OPData->RTFHeight);
+//	else
+//		Debugprintf("Pos %d RTFHeight %d - Not refreshing", Pos, OPData->RTFHeight);
 
 	GetScrollRange(hwndOutput, SB_VERT, &Min, &Max);
 	ScrollInfo.cbSize = sizeof(ScrollInfo);
@@ -1588,7 +1607,7 @@ VOID DoRefresh(struct RTFTerm * OPData)
 		return;
 	}
 
-	Debugprintf("Thumb = %d Point.y = %d - Not Scrolling", OPData->Thumb, Point.y);
+//	Debugprintf("Thumb = %d Point.y = %d - Not Scrolling", OPData->Thumb, Point.y);
 
 	if (!OPData->Scrolled)
 	{
@@ -2469,7 +2488,8 @@ VOID SendTraceOptions()
 	char Buffer[80];
 
 	int Len = wsprintf(Buffer,"\\\\\\\\%x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI);
-
+	memcpy(&MonParams[CurrentHost], &Buffer[4], Len - 4);
+	
 	send(sock, Buffer, Len, 0);
 
 }
