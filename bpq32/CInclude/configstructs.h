@@ -71,7 +71,8 @@ struct PORTCONFIG
 	short IOADDR;			// 36,
 	short INTLEVEL;			// 38,
 	unsigned short SPEED;	// 40,
-	short CHANNEL;			// 42,
+	unsigned char CHANNEL;	// 42,
+	unsigned char pad;
 	short BBSFLAG;			// 44, 
 	short QUALITY;			// 46, 
 	short MAXFRAME;			// 48,
@@ -92,11 +93,13 @@ struct PORTCONFIG
 	short DIGIMASK;			// 72
 	short USERS;			// 74,
 	short TXTAIL;			// 76
-	short ALIAS_IS_BBS;		// 78
+	unsigned char  ALIAS_IS_BBS;		// 78
+	unsigned char pad2;
 	char CWID[10];			// 80,
 	char PORTCALL[10];		//  90,
 	char PORTALIAS[10];		// 100,
-	short L3ONLY;			//  110,
+	char L3ONLY;			//  110,
+	char pad3;
 	short KISSOPTIONS;		//"112,
 	short INTERLOCK;		// 114,
 	short NODESPACLEN;		//  116,
@@ -117,7 +120,8 @@ struct PORTCONFIG
 	char I2CAddr;			// 241	
 	char Pad2[14];			// 242
 	char VALIDCALLS[256];	//   256 - 512
-	char  * WL2K;
-	char filler [508];
+	char  * WL2K;			// 512
+	char SerialPortName[80]; // 516
+	char filler [428];
 };
 

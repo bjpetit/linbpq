@@ -302,10 +302,6 @@ typedef struct ChatConnectionInfo_S
 
 	int CloseAfterFlush;		// Close session when all sent. Set to 100ms intervals to wait.
 	
-	BOOL Paging;				// Set if user wants paging
-	int LinesSent;				// Count when paging
-	int PageLen;				// Lines per page
-
 	BOOL sysop;					// Set if user is authenticated as a sysop
 	BOOL Secure_Session;		// Set if Local Terminal, or Telnet connect with SYSOP status
 
@@ -618,7 +614,6 @@ extern ChatCIRCUIT * Console;
 extern ULONG ChatApplMask;
 extern char Verstring[];
 
-extern char SignoffMsg[];
 extern char AbortedMsg[];
 extern char InfoBoxText[];			// Text to display in Config Info Popup
 

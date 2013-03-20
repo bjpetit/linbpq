@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <gtk/gtk.h>
+/*
 GdkPixbuf *create_pixbuf(const gchar * filename)
 {
    GdkPixbuf *pixbuf;
@@ -16,7 +17,7 @@ GdkPixbuf *create_pixbuf(const gchar * filename)
 
    return pixbuf;
 }
-
+*/
 #ifdef WIN32
 #include "winsock2.h"
 #include "WS2tcpip.h"
@@ -736,7 +737,7 @@ int main(int argc, char *argv[])
 	g_signal_connect (G_OBJECT (window), "destroy", G_CALLBACK (close_application), NULL);
 	gtk_window_set_title (GTK_WINDOW (window), "BPQTermTCP");
 	gtk_container_set_border_width (GTK_CONTAINER (window), 0);
-    gtk_window_set_icon(GTK_WINDOW(window), create_pixbuf("bpqicon.png"));
+ //   gtk_window_set_icon(GTK_WINDOW(window), create_pixbuf("bpqicon.png"));
 
 	// Create a box for the menu
 
@@ -865,6 +866,7 @@ int main(int argc, char *argv[])
 	g_timeout_add (200, PollTimer, 0);
 
 	gtk_main ();
+	/*
 		GKeyFile * KF;
 		gchar * Value;
 		GError *error = NULL;
@@ -896,7 +898,7 @@ int main(int argc, char *argv[])
 		g_free(Value);
 
 		g_key_file_free(KF);
-
+*/
 	return 0;
 }
 

@@ -2,6 +2,9 @@
 
 // Aug 2010 Extend Applmask to 32 bit
 
+#ifndef _ASMSTRUCS_
+#define _ASMSTRUCS_
+
 #ifdef WIN32
 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
@@ -83,6 +86,7 @@ struct APPLCONFIG
 typedef struct _MHSTRUC
 {
 	UCHAR MHCALL[7];
+	UCHAR MHDIGIS[7][8];
 	time_t MHTIME;
 	BYTE MHDIGI;
 	char MHFreq[12];
@@ -159,6 +163,9 @@ typedef struct _TRANSPORTENTRY
 	int UNPROTO;				// Unproto Mode flag - port number if in unproto mode
 	int UAddrLen;				//
 	char UADDRESS[64];			// Unproto Address String - Dest + Digis
+
+	char APPL[16];				// Set if session initiated by an APPL
+
 } TRANSPORTENTRY;
 
 //
@@ -382,7 +389,7 @@ typedef struct _APPLCALLS
 	char APPLCMD[13];				//
 	BOOL APPLHASALIAS;
 	int APPLPORT;					// Port used if APPL has an Alias
-	char * APPLALIASPTR;			// Pointer to Alias if defined
+	char APPLALIASVAL[48];				// Alias if defined
 	char L2ALIAS[7];				// Additional Alias foe L2 connects
 
 } APPLCALLS;
@@ -533,7 +540,7 @@ typedef struct PORTCONTROL
 	char * PERMITTEDCALLS;	// POINTER TO PERMITED CALLS LIST
 	char * PORTUNPROTO;		// POINTER TO UI DEST AND DIGI LIST
 	UCHAR PORTDISABLED;		// PORT TX DISABLE FLAG
-	UCHAR DIGIFLAG;			// ENABLE/DISABLE/UI ONLY
+	char DIGIFLAG;			// ENABLE/DISABLE/UI ONLY
 	UCHAR DIGIPORT;			// CROSSBAND DIGI PORT
 	USHORT DIGIMASK;			// CROSSBAND DIGI MASK
 	UCHAR USERS;			// MAX USERS ON PORT
@@ -553,6 +560,8 @@ typedef struct PORTCONTROL
 
 	struct WL2KInfo * WL2KInfo; // WL2K Report for this Port
 	struct in_addr PORTIPADDR;		// IP address for "KISS over UDP"
+
+	char * SerialPortName;	//	Serial Port Name for Unix
 
 }	PORTCONTROLX, *PPORTCONTROL;
 
@@ -807,5 +816,7 @@ struct SEM
 	int Rels;
 	DWORD SemProcessID;
 };
+
+#endif
 
 

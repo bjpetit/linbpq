@@ -221,6 +221,7 @@ PortUIOnly	DB	0;
 UICAPABLE	DB	0;			; Pactor-style port that can do UI
 WL2K		DD	0		; Pointer to WL2K Report Data
 PORTIPADDR	DD	0;
+SerialPortName DD 0		; Serial Port Name for Unix
 
 HARDWAREDATA	DB	200 DUP (?)	; WORK AREA FOR HARDWARE DRIVERS
 
@@ -383,6 +384,8 @@ Mode		DB	0		; ditto
 UNPROTO		DD	0		 ; Unproto Mode flag - port number if in unproto mode
 UAddrLen	DD	0		 ;
 UADDRESS	DB 64 DUP (0); Unproto Address String - Dest + Digis
+
+APPL		DB 16 DUP (0); Set if session initiated by an APPL
 
 TRANSPORTENTRY	ENDS
 ;

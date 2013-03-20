@@ -38,7 +38,7 @@ ULONG ChatApplMask;
 
 int	NumberofChatStreams=0;
 
-char SignoffMsg[100];
+static char SignoffMsg[100];
 
 char OtherNodesList[1000];
 char ChatWelcomeMsg[1000];
@@ -362,27 +362,6 @@ BOOL matchi(char * p1, char * p2)
 VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 {
 	ChatCIRCUIT *c;
-
-	if (conn->Paging && (conn->LinesSent >= conn->PageLen))
-	{
-		// Waiting for paging prompt
-
-		if (len > 1)
-		{
-			if (_memicmp(Buffer, "Abort", 1) == 0)
-			{
-				ChatClearQueue(conn);
-				conn->LinesSent = 0;
-
-				ChatQueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
-				SendPrompt(conn, user);
-				return;
-			}
-		}
-
-		conn->LinesSent = 0;
-		return;
-	}
 
 	WriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
 
@@ -810,8 +789,12 @@ void chkctl(ChatCIRCUIT *ckt_from, char * Buffer, int Len)
 				break;
 
 			user = user_find(ucall, ncall);
+
+			if (!user)
+				break;
+
 			user->lastmsgtime = time(NULL);
-			if (!user) break;
+
 			text_tellu(user, f1, NULL, o_topic);
 
 			for (ckt_to = circuit_hd; ckt_to; ckt_to = ckt_to->next)
@@ -2953,6 +2936,9 @@ int ChatConnected(Stream)
 			conn->Secure_Session = GetConnectionInfo(Stream, callsign,
 				&port, &conn->SessType, &paclen, &maxframe, &l4window);
 
+			if (paclen == 0)
+				paclen = 256;
+
 			conn->paclen = paclen;
 
 			strlop(callsign, ' ');		// Remove trailing spaces
@@ -3221,11 +3207,6 @@ BOOL GetChatConfig(char * ConfigName)
 	MaxChatStreams = GetIntValue(group, "MaxStreams");
 	GetStringValue(group, "OtherChatNodes", OtherNodesList);
 	GetStringValue(group, "ChatWelcomeMsg", ChatWelcomeMsg);
-
-	if (ChatWelcomeMsg[0] == 0)
-		strcpy(ChatWelcomeMsg, "G8BPQ Chat Server.$WType /h for command summary.$WBringing up links to other nodes.$W"
-			"This may take a minute or two.$WThe /p command shows what nodes are linked.$W");
-
 	GetStringValue(group, "MapPosition", Position);
 	GetStringValue(group, "MapPopup", PopupText);
 	PopupMode = GetIntValue(group, "PopupMode");
@@ -3292,6 +3273,10 @@ BOOL ChatInit()
 	}
 
 	sprintf(SignoffMsg, "73 de %s\r", ChatSYSOPCall);
+
+	if (ChatWelcomeMsg[0] == 0)
+		sprintf(ChatWelcomeMsg, "%s's Chat Server.$WType /h for command summary.$WBringing up links to other nodes.$W"
+			"This may take a minute or two.$WThe /p command shows what nodes are linked.$W", ChatSYSOPCall);
 
 	ChatApplMask = 1<<(ChatApplNum-1);
 		
@@ -3372,9 +3357,6 @@ void ChatFlush(ChatCIRCUIT * conn)
 		if (TXCount(conn->BPQStream) > 4)
 			return;						// Busy
 
-		if (conn->Paging && (conn->LinesSent >= conn->PageLen))
-			return;
-
 		if (tosend <= conn->paclen)
 			len=tosend;
 		else
@@ -3382,37 +3364,6 @@ void ChatFlush(ChatCIRCUIT * conn)
 
 		GetSemaphore(&OutputSEM);
 
-		if (conn->Paging)
-		{
-			// look for CR chars in message to send. Increment LinesSent, and stop if at limit
-
-			UCHAR * ptr1 = &conn->OutputQueue[conn->OutputGetPointer];
-			UCHAR * ptr2;
-			int lenleft = len;
-
-			ptr2 = memchr(ptr1, 0x0d, len);
-
-			while (ptr2)
-			{
-				conn->LinesSent++;
-				ptr2++;
-				lenleft = len - (ptr2 - ptr1);
-
-				if (conn->LinesSent >= conn->PageLen)
-				{
-					len = ptr2 - &conn->OutputQueue[conn->OutputGetPointer];
-					
-					SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
-					conn->OutputGetPointer+=len;
-					tosend-=len;
-					SendUnbuffered(conn->BPQStream, "<A>bort, <CR> Continue..>", 25);
-					FreeSemaphore(&OutputSEM);
-					return;
-
-				}
-				ptr2 = memchr(ptr2, 0x0d, lenleft);
-			}
-		}
 
 		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
 
@@ -3428,8 +3379,6 @@ void ChatFlush(ChatCIRCUIT * conn)
 	}
 
 	// All Sent. Free buffers and reset pointers
-
-	conn->LinesSent = 0;
 
 	ChatClearQueue(conn);
 }
