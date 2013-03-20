@@ -50,7 +50,7 @@
 
 //	Add UIOnly Monitor Option
 
-// Version 1.0.4.2 November 2012
+// Version 1.0.5.1 November 2012
 
 //	Allow up to 8 hosts
 
