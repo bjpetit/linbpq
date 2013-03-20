@@ -4,11 +4,20 @@ static char seps[] = " \t\r";
 
 VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {
-	int AuthInt = atoi(Arg1);
+	int AuthInt = 0;
 	
 	if (!(user->flags & F_SYSOP))
 	{
 		nodeprintf(conn, "AUTH can only be used by SYSOPs\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (Arg1)
+		AuthInt = atoi(Arg1);
+	else
+	{
+		nodeprintf(conn, "AUTH Code missing\r");
 		SendPrompt(conn, user);
 		return;
 	}
@@ -276,6 +285,42 @@ Display:
 	SaveUserDatabase();
 	SendPrompt(conn, user);
 }
+
+VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
+{
+	int count;
+
+	if (conn->sysop == 0)
+	{
+		nodeprintf(conn, "IMPORT command needs SYSOP status\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (Arg1 == 0 || _stricmp(Arg1, "HELP") == 0)
+	{
+		nodeprintf(conn, "IMPORT FILENAME - Import Messages from file FILENAME\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	conn->BBSFlags |= BBS;
+
+	count = ImportMessages(conn, Arg1);
+
+	conn->BBSFlags &= ~BBS;
+	conn->Flags = 0;
+
+	nodeprintf(conn, "%d Messages Processed\r", count);
+	SendPrompt(conn, user);
+
+	return;
+
+}
+
+
+
+
 
 VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {

@@ -34,6 +34,7 @@
 #define IDC_UICONFIG                    1016
 #define IDC_USELOCALTIME                1016
 #define IDC_DELETETORECYCLE             1017
+#define IDC_CTRLZ                       1017
 #define IDC_MAINTNOMAIL                 1018
 #define IDC_EDIT1                       1019
 #define IDC_MSGTO                       1020
@@ -56,6 +57,7 @@
 #define IDM_MSGSAVE                     1037
 #define IDM_EXPERTUSERMSG               1038
 #define IDC_MAPPOSITION                 1039
+#define IDM_SIGNOFF                     1039
 #define IDC_HOVER                       1040
 #define IDC_CLICK                       1041
 #define IDC_MAPHELP                     1042
@@ -82,6 +84,7 @@
 #define IDC_HOLDTO                      1075
 #define IDC_FORWARDTOBBS                1075
 #define IDC_HOLDAT                      1076
+#define IDC_BBSTOSYSOPCALL              1076
 #define IDC_REJFROM                     1077
 #define IDC_REJTO                       1078
 #define IDC_REJAT                       1079

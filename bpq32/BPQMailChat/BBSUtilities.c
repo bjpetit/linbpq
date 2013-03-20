@@ -15,13 +15,15 @@ void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
 int EncryptPass(char * Pass, char * Encrypt);
 VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
+DeletetoRecycle(char * FN);
+VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 
 config_t cfg;
 config_setting_t * group;
 
 extern ULONG BBSApplMask;
 
-static int SEMCLASHES = 0;
+//static int SEMCLASHES = 0;
 
 int	NumberofStreams;
 
@@ -96,7 +98,18 @@ extern BOOL MonTCP;
 
 extern char ConfigName[250];
 
+BOOL SendNewUserMessage = TRUE;
+BOOL AllowAnon = FALSE;
+
+#define BPQHOSTSTREAMS	64
+
+// Although externally streams are numbered 1 to 64, internally offsets are 0 - 63
+
+extern BPQVECSTRUC BPQHOSTVECTOR[BPQHOSTSTREAMS + 4];
+
 FILE * LogHandle[4] = {NULL, NULL, NULL, NULL};
+
+char FilesNames[4][100] = {"", "", "", ""};
 
 char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
 
@@ -112,6 +125,18 @@ BOOL OpenLogfile(int Flags)
 	sprintf(FN,"%s/log_%02d%02d%02d_%s.txt", BaseDir, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
 
 	LogHandle[Flags] = fopen(FN, "ab");
+		
+#ifndef WIN32
+
+	if (strcmp(FN, &FilesNames[Flags][0]))
+	{
+		UCHAR SYMLINK[MAX_PATH];
+	
+		sprintf(SYMLINK,"%s/logLatest_%s.txt", BaseDir, Logs[Flags]);
+		strcpy(&FilesNames[Flags][0], FN);
+	}
+
+#endif
 
 	return (LogHandle[Flags] != NULL);
 }
@@ -395,6 +420,9 @@ Next:
 
 	if (ReadLen > 0)
 	{
+		if (UserRec.Call[0] < '0')
+			goto Next;					// Blank record
+		
 		user = AllocateUserRecord(UserRec.Call);
 		memcpy(user, &UserRec,  sizeof (UserRec));
 		user->Temp = zalloc(sizeof (struct TempUserInfo));
@@ -1665,34 +1693,46 @@ PrintMessage(HDC hDC, struct MsgInfo * Msg)
 		return 0;
 }
 
+#endif
 
-VOID ImportMessages()
+
+int ImportMessages(CIRCUIT * conn, char * FN)
 {
 	char FileName[MAX_PATH] = "Messages.in";
 	int Files = 0;
-	HANDLE hFile = INVALID_HANDLE_VALUE;
 	int WriteLen=0;
-	OPENFILENAME Ofn; 
 	FILE *in;
+	CIRCUIT dummyconn;
+
 	char Buffer[100000];
 	char *buf = Buffer;
 
-	memset(&Ofn, 0, sizeof(Ofn));
- 
-	Ofn.lStructSize = sizeof(OPENFILENAME); 
-	Ofn.hInstance = hInst;
-	Ofn.hwndOwner = MainWnd; 
-	Ofn.lpstrFilter = NULL; 
-	Ofn.lpstrFile= FileName; 
-	Ofn.nMaxFile = sizeof(FileName)/ sizeof(*FileName); 
-	Ofn.lpstrFileTitle = NULL; 
-	Ofn.nMaxFileTitle = 0; 
-	Ofn.lpstrInitialDir = BaseDir; 
-	Ofn.Flags = OFN_SHOWHELP | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST; 
-	Ofn.lpstrTitle = NULL;//; 
+	if (FN[0])			// Name supplled
+		strcpy(FileName, FN);
 
-	if (!GetOpenFileName(&Ofn))
-		return;
+	else
+	{
+#ifndef LINBPQ
+		OPENFILENAME Ofn; 
+
+		memset(&Ofn, 0, sizeof(Ofn));
+ 
+		Ofn.lStructSize = sizeof(OPENFILENAME); 
+		Ofn.hInstance = hInst;
+		Ofn.hwndOwner = MainWnd; 
+		Ofn.lpstrFilter = NULL; 
+		Ofn.lpstrFile= FileName; 
+		Ofn.nMaxFile = sizeof(FileName)/ sizeof(*FileName); 
+		Ofn.lpstrFileTitle = NULL; 
+		Ofn.nMaxFileTitle = 0; 
+		Ofn.lpstrInitialDir = BaseDir; 
+		Ofn.Flags = OFN_SHOWHELP | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST; 
+		Ofn.lpstrTitle = NULL;//; 
+
+		if (!GetOpenFileName(&Ofn))
+			return 0;
+#endif
+	}
 
 	in = fopen(FileName, "rb");
 
@@ -1700,9 +1740,27 @@ VOID ImportMessages()
 	{
 		char msg[500];
 		sprintf_s(msg, sizeof(msg), "Failed to open %s", FileName);
-		MessageBox(NULL, msg, "BPQMailChat", MB_OK);
-		return;
+		if (conn)
+			nodeprintf(conn, "%s\r", msg);
+#ifdef WIN32
+		else
+			MessageBox(NULL, msg, "BPQMailChat", MB_OK);
+#endif
+		return 0;
 	}
+
+	memset(&dummyconn, 0, sizeof(CIRCUIT));
+
+	if (conn == 0)
+	{
+		conn = &dummyconn;
+
+		dummyconn.UserPointer = LookupCall(SYSOPCall);
+		dummyconn.sysop = TRUE;
+		dummyconn.BBSFlags = BBS;
+		strcpy(dummyconn.Callsign, "IMPORT");
+	}
+
 	while(fgets(Buffer, 99999, in))
 	{
 		// First line should start SP/SB ?ST?
@@ -1714,16 +1772,8 @@ VOID ImportMessages()
 		struct MsgInfo * Msg;
 		char SMTPTO[100]= "";
 		int msglen;
-		CIRCUIT conn;
 		char * Context;
 		char * Arg1, * Cmd;
-
-		memset(&conn, 0, sizeof(CIRCUIT));
-
-		conn.UserPointer = LookupCall(SYSOPCall);
-		conn.sysop = TRUE;
-		conn.BBSFlags = BBS;
-		strcpy(conn.Callsign, "IMPORT");
 
 NextMessage:
 
@@ -1732,34 +1782,44 @@ NextMessage:
 		strlop(Buffer, 10);
 		strlop(Buffer, 13);				// Remove cr and/or lf
 
-		WriteLogLine(&conn, '>', Buffer, strlen(Buffer), LOG_BBS);
+		WriteLogLine(conn, '>', Buffer, strlen(Buffer), LOG_BBS);
 
+		if (dummyconn.sysop == 0)
+		{
+			nodeprintf(conn, "%s\r", Buffer);
+			Flush(conn);
+		}
+ 
 		Cmd = strtok_s(Buffer, seps, &Context);
 
 		if (Cmd == NULL)
 		{
 			fclose(in);
-			return;
+			return Files;
 		}
 
 		Arg1 = strtok_s(NULL, seps, &Context);
 
 		if (Arg1 == NULL)
 		{
-			Debugprintf("Bad Import Line %s", Buffer);
+			if (dummyconn.sysop)
+				Debugprintf("Bad Import Line %s", Buffer);
+			else
+				nodeprintf(conn, "Bad Import Line %s\r", Buffer);
+
 			fclose(in);
-			return;
+			return Files;
 		}
 
-		if (DecodeSendParams(&conn, Context, &From, &Arg1, &ATBBS, &BID))
+		if (DecodeSendParams(conn, Context, &From, &Arg1, &ATBBS, &BID))
 		{
-			if (CreateMessage(&conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID, NULL))
+			if (CreateMessage(conn, From, Arg1, ATBBS, toupper(Cmd[1]), BID, NULL))
 			{
-				Msg = conn.TempMsg;
+				Msg = conn->TempMsg;
 
 				// SP is Ok, read message;
 
-				ClearQueue(&conn);
+				ClearQueue(conn);
 
 				fgets(Buffer, 99999, in);
 				strlop(Buffer, 10);
@@ -1768,19 +1828,19 @@ NextMessage:
 
 				// Read the lines
 		
-				conn.Flags |= GETTINGMESSAGE;
+				conn->Flags |= GETTINGMESSAGE;
 
 				Buffer[0] = 0;
 
 				fgets(Buffer, 99999, in);
 
-				while ((conn.Flags & GETTINGMESSAGE) && Buffer[0])
+				while ((conn->Flags & GETTINGMESSAGE) && Buffer[0])
 				{
 					strlop(Buffer, 10);
 					strlop(Buffer, 13);				// Remove cr and/or lf
 					msglen = strlen(Buffer);
 					Buffer[msglen++] = 13;
-					ProcessMsgLine(&conn, conn.UserPointer,Buffer, msglen);
+					ProcessMsgLine(conn, conn->UserPointer,Buffer, msglen);
 	
 					Buffer[0] = 0;
 					fgets(Buffer, 99999, in);
@@ -1788,15 +1848,23 @@ NextMessage:
 
 				// Message completed (or off end of file)
 
-				ClearQueue(&conn);
+				Files ++;
 
+				ClearQueue(conn);
+		
 				if (Buffer[0])
 					goto NextMessage;		// We have read the SP/SB line;
 				else
 				{
 					fclose(in);
-					return;
+					return Files;
 				}
+			}
+			else
+			{
+				// Create failed
+			
+				Flush(conn);
 			}
 		}
 
@@ -1816,12 +1884,14 @@ NextMessage:
 
 				Buffer[0] = 0;
 				fgets(Buffer, 99999, in);
-						
-				ClearQueue(&conn);
+			
+				if (dummyconn.sysop)
+					ClearQueue(conn);
+				else
+					Flush(conn);
 
 				if (Buffer[0])
 					goto NextMessage;		// We have read the SP/SB line;
-
 			}
 			
 			Buffer[0] = 0;
@@ -1830,9 +1900,14 @@ NextMessage:
 	}
 
 	fclose(in);
-}
-#endif
 
+	if (dummyconn.sysop)
+		ClearQueue(conn);
+	else
+		Flush(conn);
+
+	return Files;
+}
 
 
 char * ReadMessageFile(int msgno)
@@ -3164,6 +3239,11 @@ char * CheckToAddress(CIRCUIT * conn, char * Addr)
 			return _strdup(Addr);
 		}
 
+		if (SendBBStoSYSOPCall)
+			if (_stricmp(Addr, BBSName) == 0)
+				return _strdup(SYSOPCall);
+	
+
 		if (strchr(Addr, '@') == 0)
 		{
 			// No routing, if not a user and not known to forwarding or WP warn
@@ -3505,6 +3585,10 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 		if (strlen(ToCall) > 6) ToCall[6] = 0;
 	
 		strcpy(Msg->to, ToCall);
+		
+		if (SendBBStoSYSOPCall)
+			if (_stricmp(ToCall, BBSName) == 0)
+				strcpy(Msg->to, SYSOPCall);
 
 		if (via)
 		{
@@ -4061,7 +4145,7 @@ nextline:
 
 			if ((result = mktime(&rtime)) != (time_t)-1 )
 			{
-				result -= timezone;
+				result -= (time_t)timezone;
 
 				Msg->datecreated =  result;	
 				Age = (time(NULL) - result)/86400;
@@ -4732,6 +4816,7 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		ForwardingInfo->AllowCompressed = GetIntValue(group, "AllowCompressed");
 		ForwardingInfo->AllowB1 = GetIntValue(group, "UseB1Protocol");
 		ForwardingInfo->AllowB2 = GetIntValue(group, "UseB2Protocol");
+		ForwardingInfo->SendCTRLZ = GetIntValue(group, "SendCTRLZ");
 
 		if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
 			ForwardingInfo->AllowCompressed = TRUE;
@@ -4790,6 +4875,10 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
 			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
+
+		Vallen=4;
+		retCode += RegQueryValueEx(hKey, "SendCTRLZ", 0,			
+			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->SendCTRLZ,(ULONG *)&Vallen);
 
 		if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
 			ForwardingInfo->AllowCompressed = TRUE;
@@ -4918,7 +5007,12 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 				*(ptr1++) = 0;
 
 			Value = realloc(Value, (Count+2)*4);
-			Value[Count++] = _strupr(_strdup(ptr));
+			
+			if (_memicmp(ptr, "file ", 5) == 0)
+				Value[Count++] = _strdup(ptr);
+			else
+				Value[Count++] = _strupr(_strdup(ptr));
+			
 			ptr = ptr1;
 		}
 		free(Save);
@@ -5324,7 +5418,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 	CIRCUIT * conn;
 	struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
 
-	if (memcmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
+	if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 	{
 		// Forward to File
 
@@ -5351,12 +5445,22 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 
 			conn->Active = TRUE;
 			strcpy(conn->Callsign, user->Call); 
-			conn->BBSFlags |= RunningConnectScript;
+			conn->BBSFlags |= (RunningConnectScript | OUTWARDCONNECT);
 			conn->UserPointer = user;
 
 			Logprintf(LOG_BBS, conn, '|', "Connecting to BBS %s", user->Call);
 
+			ForwardingInfo->MoreLines = TRUE;
+			
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
+
+#ifdef LINBPQ
+			{
+				BPQVECSTRUC * SESS;	
+				SESS = &BPQHOSTVECTOR[conn->BPQStream - 1];
+				SESS->HOSTSESSION->Secure_Session = 1;
+			}
+#endif
 
 			strcpy(conn->Callsign, user->Call);
 
@@ -5434,7 +5538,6 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	char callsign[10];
 	int port, sesstype, paclen, maxframe, l4window;
 	char * ptr, * ptr2;
-	BOOL MoreLines = TRUE;
 
 	WriteLogLine(conn, '<',Buffer, len-1, LOG_BBS);
 
@@ -5453,7 +5556,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		char * Line;
 
 		if (Localtime)
-			now -= timezone; 
+			now -= (time_t)timezone; 
 
 		now %= 86400;
 		Line = Scripts[n];
@@ -5501,9 +5604,9 @@ InBand:
 				memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0	||		// Only Check until script is finished
 				memcmp(Scripts[ForwardingInfo->ScriptIndex], "ELSE", 4) == 0)			// Only Check until script is finished
 			{
-				MoreLines = FALSE;
+				ForwardingInfo->MoreLines = FALSE;
 			}
-			if (!MoreLines)
+			if (!ForwardingInfo->MoreLines)
 				goto CheckForSID;
 			}
 	}
@@ -5674,6 +5777,27 @@ InBand:
 				// Remote Node sends > at end of CTEXT - we need to swallow it
 
 				conn->SkipPrompt = TRUE;
+
+				if (Scripts[ForwardingInfo->ScriptIndex + 1] == NULL ||
+					memcmp(Scripts[ForwardingInfo->ScriptIndex +1], "TIMES", 5) == 0	||		// Only Check until script is finished
+					memcmp(Scripts[ForwardingInfo->ScriptIndex + 1], "ELSE", 4) == 0)			// Only Check until script is finished
+				{
+					ForwardingInfo->MoreLines = FALSE;
+				}
+				return TRUE;
+			}
+
+			if (memcmp(Cmd, "TEXTFORWARDING", 10) == 0)
+			{
+				// Remote Node sends > at end of CTEXT - we need to swallow it
+
+				conn->BBSFlags |= TEXTFORWARDING;
+
+				if (Scripts[ForwardingInfo->ScriptIndex + 1] == NULL ||
+						memcmp(Scripts[ForwardingInfo->ScriptIndex +1], "TIMES", 5) == 0	||		// Only Check until script is finished
+						memcmp(Scripts[ForwardingInfo->ScriptIndex + 1], "ELSE", 4) == 0)			// Only Check until script is finished
+					ForwardingInfo->MoreLines = FALSE;
+			
 				return TRUE;
 			}
 
@@ -5698,7 +5822,7 @@ InBand:
 
 	ptr = strchr(Buffer, '}');
 
-	if (ptr && MoreLines) // Beware it could be part of ctext
+	if (ptr && ForwardingInfo->MoreLines) // Beware it could be part of ctext
 	{
 		// Could be respsonse to Node Command 
 
@@ -5724,7 +5848,13 @@ InBand:
 	// Not Success or Fail. If last line is still outstanding, wait fot Response
 	//		else look for SID or Prompt
 
-	if (MoreLines)
+	if (conn->SkipPrompt && Buffer[len-2] == '>')
+	{
+		conn->SkipPrompt = FALSE;
+		return TRUE;
+	}
+
+	if (ForwardingInfo->MoreLines)
 		return TRUE;
 
 	// No more steps, Look for SID or Prompt
@@ -5759,7 +5889,6 @@ CheckForSID:
 		conn->BBSFlags |= MBLFORWARDING;
 	}
 
-
 	if (Buffer[len-2] == '>')
 	{
 		if (conn->SkipPrompt)
@@ -5773,7 +5902,7 @@ CheckForSID:
 		conn->BBSFlags &= ~RunningConnectScript;
 		ForwardingInfo->LastReverseForward = time(NULL);
 
-		if (memcmp(Buffer, "[AEA PK", 7) == 0)
+		if (memcmp(Buffer, "[AEA PK", 7) == 0 || (conn->BBSFlags & TEXTFORWARDING))
 		{
 			// PK232. Don't send a SID, and switch to Text Mode
 
@@ -6018,7 +6147,7 @@ VOID FWDTimerProc()
 				time_t now = time(NULL);
 						
 				if (Localtime)
-					now -= _timezone; 
+					now -= (time_t)_timezone; 
 
 				now %= 86400;		// Secs in to day
 
@@ -6082,7 +6211,8 @@ VOID * _zalloc_dbg(int len, int type, char * file, int line)
 #else
 	ptr = malloc(len);
 #endif
-	memset(ptr, 0, len);
+	if (ptr)
+		memset(ptr, 0, len);
 
 	return ptr;
 }
@@ -6277,6 +6407,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "EnableUI", EnableUI);
 	SaveIntValue(group, "RefuseBulls", RefuseBulls);
 	SaveIntValue(group, "SendSYStoSYSOPCall", SendSYStoSYSOPCall);
+	SaveIntValue(group, "SendBBStoSYSOPCall", SendBBStoSYSOPCall);
 	SaveIntValue(group, "DontHoldNewUsers", DontHoldNewUsers);
 
 	SaveIntValue(group, "ForwardToMe", ForwardToMe);
@@ -6314,6 +6445,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveStringValue(group, "Prompt", Prompt);
 	SaveStringValue(group, "NewUserPrompt", NewPrompt);
 	SaveStringValue(group, "ExpertPrompt", ExpertPrompt);
+	SaveStringValue(group, "SignoffMsg", SignoffMsg);
 
 	SaveMultiStringValue(group,  "RejFrom", RejFrom);
 	SaveMultiStringValue(group,  "RejTo", RejTo);
@@ -6372,6 +6504,7 @@ VOID SaveConfig(char * ConfigName)
 		SaveIntValue(group, "AllowCompressed", ForwardingInfo->AllowCompressed);
 		SaveIntValue(group, "UseB1Protocol", ForwardingInfo->AllowB1);
 		SaveIntValue(group, "UseB2Protocol", ForwardingInfo->AllowB2);
+		SaveIntValue(group, "SendCTRLZ", ForwardingInfo->SendCTRLZ);
 				
 		SaveIntValue(group, "FWDPersonalsOnly", ForwardingInfo->PersonalOnly);
 		SaveIntValue(group, "FWDNewImmediately", ForwardingInfo->SendNew);
@@ -6504,6 +6637,7 @@ BOOL GetConfig(char * ConfigName)
 	MailForInterval =  GetIntValue(group, "MailForInterval");
 	RefuseBulls =  GetIntValue(group, "RefuseBulls");
 	SendSYStoSYSOPCall =  GetIntValue(group, "SendSYStoSYSOPCall");
+	SendBBStoSYSOPCall =  GetIntValue(group, "SendBBStoSYSOPCall");
 	DontHoldNewUsers =  GetIntValue(group, "DontHoldNewUsers");
 	ForwardToMe =  GetIntValue(group, "ForwardToMe");
 	MaxTXSize =  GetIntValue(group, "MaxTXSize");
@@ -6527,6 +6661,9 @@ BOOL GetConfig(char * ConfigName)
 	GetStringValue(group, "ISPAccountName", ISPAccountName);
 	GetStringValue(group, "ISPAccountPass", EncryptedISPAccountPass);
 	GetStringValue(group, "ISPAccountName", ISPAccountName);
+
+	sprintf(SignoffMsg, "73 de %s\r", BBSName);					// Default
+	GetStringValue(group, "SignoffMsg", SignoffMsg);
 
 	DecryptPass(EncryptedISPAccountPass, ISPAccountPass, strlen(EncryptedISPAccountPass));
 
@@ -6768,11 +6905,14 @@ int Connected(Stream)
 				user = AllocateUserRecord(callsign);
 				user->Temp = zalloc(sizeof (struct TempUserInfo));
 
-				Length += sprintf(MailBuffer, "New User %s Connected to Mailbox\r\n", callsign);
+				if (SendNewUserMessage)
+				{
+					Length += sprintf(MailBuffer, "New User %s Connected to Mailbox\r\n", callsign);
 
-				sprintf(Title, "New User %s", callsign);
+					sprintf(Title, "New User %s", callsign);
 
-				SendMessageToSYSOP(Title, MailBuffer, Length);
+					SendMessageToSYSOP(Title, MailBuffer, Length);
+				}
 
 				if (user == NULL) return 0; //		Cant happen??
 
@@ -6780,7 +6920,6 @@ int Connected(Stream)
 					user->flags |= F_HOLDMAIL;
 
 				conn->NewUser = TRUE;
-
 			}
 
 			time(&user->TimeLastConnected);
@@ -6877,6 +7016,9 @@ int Connected(Stream)
 
 	//			nodeprintf(conn,"[WL2K-BPQ.1.0.4.39-B2FWIHJM$]\r");
 			}
+
+			if ((user->Name[0] == 0) & AllowAnon)
+				strcpy(user->Name, user->Call);
 
 			if (user->Name[0] == 0)
 			{
@@ -7116,6 +7258,9 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 	Buffer[len] = 0;
 	Debugprintf(Buffer);
 
+	if (len == 1 && Buffer[0] == 13)
+		return;
+
 	if (conn->Flags & SENDTITLE)
 	{	
 		// Waiting for Subject: prompt
@@ -7138,10 +7283,11 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		time_t now;
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		char * MsgPtr;
+		int Length;
 
 		if (MsgBytes == 0)
 		{
-			MsgBytes = _strdup("Message file not found\r\n");
+			MsgBytes = _strdup("Message file not found\r");
 			conn->FwdMsg->length = strlen(MsgBytes);
 		}
 
@@ -7173,15 +7319,21 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		now = time(NULL);
 		tm = gmtime(&now);	
 
-		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 				conn->FwdMsg->number, BBSName, HRoute, RlineVer);
 
 		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
-			BBSputs(conn, "\r\n");
+			BBSputs(conn, "\r");
 
-		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);
-		nodeprintf(conn, "\r\n/ex\r");
+		Length = RemoveLF(MsgPtr, conn->FwdMsg->length);
+
+		QueueMsg(conn, MsgPtr, Length);
+
+		if (user->ForwardingInfo->SendCTRLZ)
+			nodeprintf(conn, "\r\x1a");
+		else
+			nodeprintf(conn, "\r/ex\r");
 
 		free(MsgBytes);
 			
@@ -7384,7 +7536,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			if (user->ForwardingInfo)
 			{
-				if (user->ForwardingInfo->Forwarding)
+				if (user->ForwardingInfo->Forwarding && ((conn->BBSFlags & OUTWARDCONNECT) == 0))
 				{
 					BBSputs(conn, "Already Connected\r");
 					Flush(conn);
@@ -7448,7 +7600,8 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	}
 	if (_memicmp(Cmd, "Bye", CmdLen) == 0)
 	{
-		SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+		ExpandAndSendMessage(conn, SignoffMsg, LOG_BBS);
+		Flush(conn);
 		user->lastmsg = conn->lastmsg;
 		Sleep(1000);
 
@@ -7463,7 +7616,9 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (_memicmp(Cmd, "Node", 4) == 0)
 	{
-		SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+		ExpandAndSendMessage(conn, SignoffMsg, LOG_BBS);
+		Flush(conn);
+
 		user->lastmsg = conn->lastmsg;
 		Sleep(1000);
 			
@@ -7508,6 +7663,12 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	{
 		DoUnholdCommand(conn, user, Cmd, Arg1, Context);
 		SendPrompt(conn, user);
+		return;
+	}
+
+	if (_stricmp(Cmd, "IMPORT") == 0)
+	{
+		DoImportCmd(conn, user, Arg1, Context);
 		return;
 	}
 
@@ -7701,10 +7862,11 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "X - Toggle Expert Mode\r");
 			if (conn->sysop)
 			{
-				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
 				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
 				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
+				BBSputs(conn, "IMPORT - Import messages from file - Type IMPORT for Help\r");
 				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling list\r");
+				BBSputs(conn, "UH - Unhold Message(s) - UH ALL or UH num num num...\r");
 			}
 		}
 
@@ -7805,6 +7967,111 @@ VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...)
 
 	BBSputs(conn, buff);
 }
+
+// Code to delete obsolete files from Mail folder
+
+#ifdef WIN32
+
+int DeleteRedundantMessages()
+{
+   WIN32_FIND_DATA ffd;
+
+   char szDir[MAX_PATH];
+   char File[MAX_PATH];
+   HANDLE hFind = INVALID_HANDLE_VALUE;
+   int Msgno;
+
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   strcpy(szDir, MailDir);
+   strcat(szDir, "\\*.mes");
+
+
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+   {
+      return 0;
+   } 
+   
+   do
+   {
+      if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      {
+         OutputDebugString(ffd.cFileName);
+      }
+      else
+      {
+		 Msgno = atoi(&ffd.cFileName[2]);
+
+		 if (MsgnotoMsg[Msgno] == 0)
+		 {
+			 sprintf(File, "%s/%s%c", MailDir, ffd.cFileName, 0);
+			 printf("Delete %s\n", File);
+
+//			 if (DeletetoRecycleBin)
+				DeletetoRecycle(File);
+//			 else
+//				 DeleteFile(File);
+		 }
+      }
+   }
+   while (FindNextFile(hFind, &ffd) != 0);
+ 
+   FindClose(hFind);
+   return 0;
+}
+
+#else
+
+#include <dirent.h>
+
+int MsgFilter(const struct dirent * dir)
+{
+	return strstr(dir->d_name, ".mes");
+}
+
+int DeleteRedundantMessages()
+{
+	struct dirent **namelist;
+    int n;
+	struct stat STAT;
+	int Msgno = 0, res;
+	char File[100];
+     	
+    n = scandir("Mail", &namelist, MsgFilter, alphasort);
+
+	if (n < 0) 
+		perror("scandir");
+	else  
+	{ 
+		while(n--)
+		{
+			if (stat(namelist[n]->d_name, &STAT) == 0);
+			{
+				Msgno = atoi(&namelist[n]->d_name[2]);
+
+				if (MsgnotoMsg[Msgno] == 0)
+				{
+					sprintf(File, "Mail/%s", namelist[n]->d_name);
+					printf("Deleting %s\n", File);
+					unlink(File);
+				}
+			}
+			free(namelist[n]);
+		}
+		free(namelist);
+    }
+	return;
+}
+#endif
+
+
+
 
 
 

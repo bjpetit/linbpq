@@ -515,7 +515,7 @@ ok2:
 			user->MsgsRejectedIn++;
 
 		}
-		if (FBBHeader->Size > MaxRXSize)
+		else if (FBBHeader->Size > MaxRXSize)
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';

@@ -1322,7 +1322,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime) - timezone;
+				Date = mktime(&rtime) - (time_t)timezone;
 	
 				if (Date == (time_t)-1)
 					Date = 0;
@@ -2495,7 +2495,7 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 	{
 		err=WSAGetLastError();
 
-		if (err == WSAEWOULDBLOCK)
+		if (err == WSAEWOULDBLOCK || err == 115 || err == 36)
 		{
 			//
 			//	Connect in Progress
@@ -2835,7 +2835,7 @@ BOOL POP3Connect(char * Host, int Port)
 	{
 		err=WSAGetLastError();
 
-		if (err == WSAEWOULDBLOCK || err == 115)
+		if (err == WSAEWOULDBLOCK || err == 115 || err == 36)
 		{
 			//
 			//	Connect in Progressing
@@ -2960,7 +2960,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime) - timezone; 
+				Date = mktime(&rtime) - (time_t)timezone; 
 				
 				if (Date == (time_t)-1)
 					Date = 0;
@@ -3239,6 +3239,29 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 				strcpy(Msg->via, GmailVia);
 		}
 	}
+
+	if (Msg->via[0] == 0)
+	{
+		// No via - add one from HomeBBS or WP
+
+		struct UserInfo * ToUser = LookupCall(To);
+
+		if (ToUser)
+		{
+			// Local User. If Home BBS is specified, use it
+
+			if (ToUser->HomeBBS[0])
+				strcpy(Msg->via, ToUser->HomeBBS);
+		}
+		else
+		{
+			WPRec * WP = LookupWP(To);
+
+			if (WP)
+				strcpy(Msg->via, WP->first_homebbs);
+		}
+	}
+
 
 	if (strlen(To) > 6) To[6]=0;
 

@@ -10,7 +10,7 @@ extern char ChatConfigName[250];
 
 extern char OtherNodesList[1000];
 
-static UCHAR BPQDirectory[260];
+//static UCHAR BPQDirectory[260];
 
 extern ConnectionInfo Connections[];
 extern int	NumberofStreams;
@@ -56,6 +56,7 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	WPRec * WP;					// Selected WP record
 };
 
+struct TCPINFO * TCP;
 
 VOID ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, int * RLen);
 static struct HTTPConnectionInfo * FindSession(char * Key);
@@ -296,7 +297,9 @@ char Welcome[] = "<form style=\"font-family: monospace; text-align: center;\""
 "New User Prompt<br>"
 "<textarea cols=80 rows=3 name=NewPrompt>%s</textarea><br>"
 "Expert User Prompt<br>"
-"<textarea cols=80 rows=3 name=ExPrompt>%s</textarea><br><br>"
+"<textarea cols=80 rows=1 name=ExPrompt>%s</textarea><br>"
+"Signoff<br>"
+"<textarea cols=80 rows=1 name=Bye>%s</textarea><br><br>"
 "$U:Callsign of the user&nbsp; $I:First name of the user $X:Messages for user $x:Unread messages<br>"
 "$L:Number of the latest message $N:Number of active messages. $Z:Last message read by user<br><br>"
 "<input name=Save value=Save type=submit> <inputcname=Cancel value=Cancel type=submit></form>";
@@ -342,6 +345,10 @@ char * UserListTemplate = NULL;
 char * UserDetailTemplate = NULL;
 char * FwdTemplate = NULL;
 char * FwdDetailTemplate = NULL;
+
+#ifdef LINBPQ
+UCHAR * GetBPQDirectory();
+#endif
 
 char * GetTemplateFromFile(char * FN)
 {
@@ -539,6 +546,9 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 			char  * FF = "", *FT = "", *FV = "";
 			char * param, * ptr1, *ptr2;
 			struct MsgInfo * Msg;
+			char UCto[80];
+			char UCfrom[80];
+			char UCvia[80];
 
 			// Get filter string
 
@@ -554,13 +564,28 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 				ptr2 = strchr(ptr1, '|');if (ptr2){*(ptr2++) = 0; FV = ptr1;ptr1 = ptr2;}
 			}
 
+			if (FT[0])
+				_strupr(FT);
+			if (FF[0])
+				_strupr(FF);
+			if (FV[0])
+				_strupr(FV);
+
 			for (n = NumberofMessages; n >= 1; n--)
 			{
 				Msg = MsgHddrPtr[n];
-				
-				if ((!FT[0] || strstr(Msg->to, FT)) &&
-					(!FF[0] || strstr(Msg->from, FF)) &&
-					(!FV[0] || strstr(Msg->via, FV)))
+
+				strcpy(UCto, Msg->to);
+				strcpy(UCfrom, Msg->from);
+				strcpy(UCvia, Msg->via);
+
+				_strupr(UCto);
+				_strupr(UCfrom);
+				_strupr(UCvia);
+
+				if ((!FT[0] || strstr(UCto, FT)) &&
+					(!FF[0] || strstr(UCfrom, FF)) &&
+					(!FV[0] || strstr(UCvia, FV)))
 				{
 					len += sprintf(&Reply[len], "%d|", Msg->number);
 				}
@@ -1009,7 +1034,11 @@ char **	SeparateMultiString(char * MultiString)
 			*(ptr1++) = 0;
 
 		Value = realloc(Value, (Count+2)*4);
-		Value[Count++] = _strupr(_strdup(ptr));
+		if (_memicmp(ptr, "file ", 5) == 0)
+			Value[Count++] = _strdup(ptr);
+		else
+			Value[Count++] = _strupr(_strdup(ptr));
+			
 		ptr = ptr1;
 	}
 
@@ -1217,6 +1246,18 @@ VOID SaveWelcome(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Repl
 		GetMallocedParam(input, "NUPrompt=", &Prompt);
 		GetMallocedParam(input, "NewPrompt=", &NewPrompt);
 		GetMallocedParam(input, "ExPrompt=", &ExpertPrompt);
+		GetParam(input, "Bye=", &SignoffMsg);
+		if (SignoffMsg[0])
+		{
+			if (SignoffMsg[strlen(SignoffMsg) - 1] == 10)
+				SignoffMsg[strlen(SignoffMsg) - 1] = 0;
+
+			if (SignoffMsg[strlen(SignoffMsg) - 1] != 13)
+				strcat(SignoffMsg, "\r");
+		}
+
+		if (SignoffMsg[0] == 13)
+			SignoffMsg[0] = 0;
 	}
 	
 	SendWelcomePage(Reply, RLen, Key);
@@ -1260,6 +1301,7 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		MaxStreams = atoi(Temp);
 
 		GetCheckBox(input, "SysToSYSOP=", &SendSYStoSYSOPCall);
+		GetCheckBox(input, "BBSToSYSOP=", &SendBBStoSYSOPCall);
 		GetCheckBox(input, "RefuseBulls=", &RefuseBulls);
 		GetCheckBox(input, "EnUI=", &EnableUI);
 
@@ -1493,17 +1535,19 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		ptr1 = GetNextParam(&ptr2);		// No Wait
 		if (strcmp(ptr1, "true") == 0) FWDInfo->SendNew = TRUE; else FWDInfo->SendNew = FALSE;
 
-		ptr1 = GetNextParam(&ptr2);		// RInterval
+		ptr1 = GetNextParam(&ptr2);		// FBB Block
 		FWDInfo->MaxFBBBlockSize = atoi(ptr1);
 
-		ptr1 = GetNextParam(&ptr2);		// No Wait
+		ptr1 = GetNextParam(&ptr2);		// Personals
 		if (strcmp(ptr1, "true") == 0) FWDInfo->PersonalOnly = TRUE; else FWDInfo->PersonalOnly = FALSE;
-		ptr1 = GetNextParam(&ptr2);		// No Wait
+		ptr1 = GetNextParam(&ptr2);		// Binary
 		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowCompressed = TRUE; else FWDInfo->AllowCompressed = FALSE;
-		ptr1 = GetNextParam(&ptr2);		// No Wait
+		ptr1 = GetNextParam(&ptr2);		// B1
 		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowB1 = TRUE; else FWDInfo->AllowB1 = FALSE;
-		ptr1 = GetNextParam(&ptr2);		// No Wait
+		ptr1 = GetNextParam(&ptr2);		// B2
 		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowB2 = TRUE; else FWDInfo->AllowB2 = FALSE;
+		ptr1 = GetNextParam(&ptr2);		// CTRLZ
+		if (strcmp(ptr1, "true") == 0) FWDInfo->SendCTRLZ = TRUE; else FWDInfo->SendCTRLZ = FALSE;
 #ifdef LINBPQ
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
@@ -1951,7 +1995,8 @@ VOID SendFwdDetails(struct HTTPConnectionInfo * Session, char * Reply, int * Rep
 		(FWDInfo->PersonalOnly) ? CHKD  : UNC,
 		(FWDInfo->AllowCompressed) ? CHKD  : UNC,
 		(FWDInfo->AllowB1) ? CHKD  : UNC,
-		(FWDInfo->AllowB2) ? CHKD  : UNC);
+		(FWDInfo->AllowB2) ? CHKD  : UNC,
+		(FWDInfo->SendCTRLZ) ? CHKD  : UNC);
 
 	*ReplyLen = Len;
 
@@ -1978,7 +2023,9 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		
 	Len = sprintf(Reply, ConfigTemplate,
 		BBSName, Key, Key, Key, Key, Key, Key, Key, Key, Key,
-		BBSName, SYSOPCall, HRoute, BBSApplNum, MaxStreams,
+		BBSName, SYSOPCall, HRoute,
+		(SendBBStoSYSOPCall) ? CHKD  : UNC,
+		BBSApplNum, MaxStreams,
 		(SendSYStoSYSOPCall) ? CHKD  : UNC,
 		(RefuseBulls) ? CHKD  : UNC,
 		(EnableUI) ? CHKD  : UNC,
@@ -2058,7 +2105,7 @@ VOID SendWelcomePage(char * Reply, int * ReplyLen, char * Key)
 	Len = SendHeader(Reply, Key);
 		
 	Len += sprintf(&Reply[Len], Welcome, Key, WelcomeMsg, NewWelcomeMsg, ExpertWelcomeMsg,
-			Prompt, NewPrompt, ExpertPrompt);
+			Prompt, NewPrompt, ExpertPrompt, SignoffMsg);
 	*ReplyLen = Len;
 }
 
@@ -2306,7 +2353,7 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
    int OutputLen = 0;
 	struct HTTPConnectionInfo Session;
 	char URL[4096];
-	char * Context, * Method, * NodeURL, * Key;
+	char * Context, * Method;
 	int n;
 
 	char * ptr;
@@ -2353,8 +2400,8 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
 		FlushFileBuffers(hPipe); 
 		DisconnectNamedPipe(hPipe); 
 		CloseHandle(hPipe);
-		return 1;
 	}
+	return 1;
 }
 
 static DWORD WINAPI PipeThreadProc(LPVOID lpvParam)

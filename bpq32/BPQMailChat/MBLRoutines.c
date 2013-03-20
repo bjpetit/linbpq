@@ -163,16 +163,16 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (!conn->FwdMsg)
 			return;
 
-		nodeprintf(conn, "%s\r\n", conn->FwdMsg->title);
+		nodeprintf(conn, "%s\r", conn->FwdMsg->title);
 
 		MsgBytes = ReadMessageFile(conn->FwdMsg->number);
-		
+
 		if (MsgBytes == 0)
 		{
-			MsgBytes = _strdup("Message file not found\r\n");
+			MsgBytes = _strdup("Message file not found\r");
 			conn->FwdMsg->length = strlen(MsgBytes);
 		}
-
+	
 		MsgPtr = MsgBytes;
 
 		// If a B2 Message, remove B2 Header
@@ -198,20 +198,25 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				MsgPtr = MsgBytes;
 		}
 
+		conn->FwdMsg->length = RemoveLF(MsgPtr, conn->FwdMsg->length);
+
 		now = time(NULL);
 
 		tm = gmtime(&now);	
 	
-		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
+		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r",
 			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 			conn->FwdMsg->number, BBSName, HRoute, RlineVer);
 
 		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message
-			BBSputs(conn, "\r\n");
+			BBSputs(conn, "\r");
 
 		QueueMsg(conn, MsgPtr, conn->FwdMsg->length);
 
-		nodeprintf(conn, "\r\n/ex\r");
+		if (user->ForwardingInfo->SendCTRLZ)
+			nodeprintf(conn, "\rx1a");
+		else
+			nodeprintf(conn, "\r/ex\r");
 
 		free(MsgBytes);
 			
@@ -346,9 +351,5 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		SendPrompt(conn, user);
 		return;
 	}
-
-
-//	
-
 }
 

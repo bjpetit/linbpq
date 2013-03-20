@@ -366,6 +366,8 @@ BOOL IGateEnabled = TRUE;
 BOOL APRSActive = FALSE;
 BOOL ReconfigFlag;
 
+extern struct WL2KInfo * WL2KReports;
+
 int InitDone;
 char pgm[256] = "LINBPQ";
 
@@ -573,7 +575,6 @@ int main(int argc, char * argv[])
 
 		BBSApplMask = 1<<(BBSApplNum-1);
 
-	sprintf(SignoffMsg, "73 de %s\r", BBSName);
 
 	// See if we need to warn of possible problem with BaseDir moved by installer
 
@@ -693,7 +694,7 @@ int main(int argc, char * argv[])
 		tm->tm_min = MaintTime % 100;
 		tm->tm_sec = 0;
 
-		MaintClock = mktime(tm) - timezone;
+		MaintClock = mktime(tm) - (time_t)timezone;
 
 		if (MaintClock < now)
 			MaintClock += 86400;
@@ -707,6 +708,14 @@ int main(int argc, char * argv[])
 				DoHouseKeeping(FALSE);
 			}
 		}
+
+		if ((argc > 1 && _stricmp(argv[1], "tidymail") == 0) ||
+			(argc > 2 && _stricmp(argv[2], "tidymail") == 0) ||
+			(argc > 3 && _stricmp(argv[3], "tidymail") == 0) ||
+			(argc > 4 && _stricmp(argv[4], "tidymail") == 0))
+
+			DeleteRedundantMessages();
+
 	}
 	}
 
@@ -832,6 +841,8 @@ int main(int argc, char * argv[])
 			APRSClose();
 			Rig_Close();
 
+			WL2KReports = NULL;
+
 //			Sleep(2000);
 
 			Consoleprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
@@ -845,7 +856,7 @@ int main(int argc, char * argv[])
 
 			FreeConfig();
 
-			for (i=1;i<66;i++)			// Include IP Vec
+			for (i=1; i<68; i++)			// Include Telnet, APRS, IP Vec
 			{
 				HOSTVEC=&BPQHOSTVECTOR[i-1];
 
@@ -986,19 +997,15 @@ int WritetoConsoleLocal(char * buff)
 
 /*
 UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
-
 UINT AEAExtInit(struct PORTCONTROL *  PortEntry);
-UINT KAMExtInit(struct PORTCONTROL *  PortEntry);
 UINT HALExtInit(struct PORTCONTROL *  PortEntry);
-UINT AGWExtInit(struct PORTCONTROL *  PortEntry);
-
 UINT SoundModemExtInit(EXTPORTDATA * PortEntry);
-UINT TrackerExtInit(EXTPORTDATA * PortEntry);
-UINT TrackerMExtInit(EXTPORTDATA * PortEntry);
 UINT V4ExtInit(EXTPORTDATA * PortEntry);
 UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 */
+UINT AGWExtInit(struct PORTCONTROL *  PortEntry);
+UINT KAMExtInit(struct PORTCONTROL *  PortEntry);
 UINT WinmorExtInit(EXTPORTDATA * PortEntry);
 UINT SCSExtInit(struct PORTCONTROL *  PortEntry);
 UINT TrackerExtInit(EXTPORTDATA * PortEntry);
@@ -1025,23 +1032,18 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "BPQAXIP"))
 		return (UINT) AXIPExtInit;
 
+	if (strstr(Value, "BPQTOAGW"))
+		return (UINT) AGWExtInit;
 /*
 	if (strstr(Value, "BPQVKISS"))
 		return (UINT) VCOMExtInit;
 
-
-	if (strstr(Value, "BPQTOAGW"))
-		return (UINT) AGWExtInit;
 
 	if (strstr(Value, "AEAPACTOR"))
 		return (UINT) AEAExtInit;
 
 	if (strstr(Value, "HALDRIVER"))
 		return (UINT) HALExtInit;
-
-	if (strstr(Value, "KAMPACTOR"))
-		return (UINT) KAMExtInit;
-
 	
 	if (strstr(Value, "V4"))
 		return (UINT) V4ExtInit;
@@ -1055,6 +1057,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
 */
+
+	if (strstr(Value, "KAMPACTOR"))
+		return (UINT) KAMExtInit;
 
 	if (strstr(Value, "WINMOR"))
 		return (UINT) WinmorExtInit;
@@ -1125,16 +1130,48 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 struct TNCINFO * TNC;
 
 #ifndef WIN32
+
+#include <time.h>
+#include <sys/time.h>
+
 int GetTickCount()
 {
-    struct timespec start;
+  //  struct timespec start;
  
-    if (clock_gettime(CLOCK_REALTIME, &start) == -1 ) {
-      perror( "clock gettime" );
-      return 0;
-    }
+//    if (clock_gettime(CLOCK_REALTIME, &start) == -1 ) {
+ //     perror( "clock gettime" );
+  //    return 0;
+   // }
 
-	return (start.tv_sec * 1000 + start.tv_nsec /1000000);
+//	return (start.tv_sec * 1000 + start.tv_nsec /1000000);
+
+
+
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif
+
+
+
+struct timespec ts;
+
+#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
+clock_serv_t cclock;
+mach_timespec_t mts;
+host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+clock_get_time(cclock, &mts);
+mach_port_deallocate(mach_task_self(), cclock);
+ts.tv_sec = mts.tv_sec;
+ts.tv_nsec = mts.tv_nsec;
+
+#else
+clock_gettime(CLOCK_REALTIME, &ts);
+
+#endif
+
+return (ts.tv_sec * 1000 + ts.tv_nsec /1000000);
+
 }
 #endif
 

@@ -934,6 +934,7 @@ BOOL KISSOnly = FALSE;
 BOOL EnableUI = FALSE;
 BOOL RefuseBulls = FALSE;
 BOOL SendSYStoSYSOPCall = FALSE;
+BOOL SendBBStoSYSOPCall = FALSE;
 BOOL DontHoldNewUsers = FALSE;
 BOOL ForwardToMe = FALSE;
 
@@ -981,6 +982,7 @@ unsigned long _beginthread( void( *start_address )(VOID * DParam),
 				unsigned stack_size, VOID * DParam);
 
 VOID SendMailForThread(VOID * Param);
+BOOL CreatePipeThread();
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -1878,7 +1880,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDM_IMPORT:
 
-			ImportMessages();
+			ImportMessages(NULL, "");
 			break;
 
 		case IDM_DEBUG:
@@ -2435,8 +2437,6 @@ BOOL Initialise()
 
 	if (!GetConfigFromRegistry())
 		return FALSE;
-
-	sprintf(SignoffMsg, "73 de %s\r", BBSName);
 
 	// See if we need to warn of possible problem with BaseDir moved by installer
 

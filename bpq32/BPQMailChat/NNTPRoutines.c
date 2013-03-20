@@ -328,7 +328,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime) - timezone;
+				Date = mktime(&rtime) - (time_t)timezone;
 				
 				if (Date == (time_t)-1)
 					Date = 0;
@@ -565,7 +565,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		rtime.tm_mon--;
 
 		if (_stricmp(Offset, "GMT") == 0)
-			Time = mktime(&rtime) - timezone;
+			Time = mktime(&rtime) - (time_t)timezone;
 		else
 			Time = mktime(&rtime);
 		

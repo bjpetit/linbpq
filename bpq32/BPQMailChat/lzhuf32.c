@@ -1111,6 +1111,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			strcpy(Msg->to, FullTo);
 
+			if (SendBBStoSYSOPCall)
+				if (_stricmp(FullTo, BBSName) == 0)
+					strcpy(Msg->to, SYSOPCall);
+
 			RecpTo=realloc(RecpTo, (Recipients+1)*4);
 			RecpTo[Recipients] = zalloc(10);
 
@@ -1153,7 +1157,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			rtime.tm_year -= 1900;
 
-			Date = mktime(&rtime) - timezone;
+			Date = mktime(&rtime) - (time_t)timezone;
 	
 			if (Date == (time_t)-1)
 				Date = time(NULL);

@@ -59,13 +59,17 @@
 
 #ifndef LINBPQ
 #include "bpq32.h"
+#else
+#include "CHeaders.h"
 #endif
+
 #include "asmstrucs.h"
 
 #include "BPQMailChat.h"
 
 #include "resrc1.h"
 #include "resource.h"
+
 
 
 #define NEWROUTING

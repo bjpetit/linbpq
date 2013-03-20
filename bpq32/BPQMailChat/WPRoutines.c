@@ -76,6 +76,12 @@ Next:
 	{
 		if (strlen(WPRec.callsign) > 2)
 		{
+			if (_stricmp(WPRec.callsign, "RMS") == 0)
+				goto Next;
+
+			if (_stricmp(WPRec.callsign, "SYSTEM") == 0)
+				goto Next;
+
 			WP = LookupWP(WPRec.callsign);
 
 			if (WP == NULL)
@@ -445,6 +451,12 @@ VOID GetWPBBSInfo(char * Rline)
 			memcpy(QTH, ptr2 + 1, ptr1 - ptr2 - 1);
 	}
 
+	if (_stricmp(Call, "RMS") == 0)
+		return;
+
+	if (_stricmp(Call, "SYSTEM") == 0)
+		return;
+
 	WP = LookupWP(Call);
 
 	if (!WP)
@@ -621,6 +633,9 @@ VOID ProcessWPMsg(char * MailBuffer, int Size, char * FirstRLine)
 			Name = strtok_s(NULL, seps, &Context);
 			QTH = strtok_s(NULL, "\r", &Context);			// QTH may have spaces
 
+			if (Date == 0 || Call == 0 || AT == 0 || ZIP == 0 || Name == 0 || QTH == 0)
+				return;
+
 			if (strlen(HA) > 40)
 				return;
 			if (strlen(ZIP) > 8)
@@ -672,7 +687,7 @@ it will not be replaced. This flag will be used in case the WP update messages a
 */
 				if ((WPDate = mktime(&rtime)) != (time_t)-1 )
 				{
-					WPDate -= timezone;
+					WPDate -= (time_t)timezone;
 					TypeString = strlop(Call, '/');
 					
 					if (strlen(Call) < 3 || strlen(Call) > 9)
@@ -682,6 +697,12 @@ it will not be replaced. This flag will be used in case the WP update messages a
 						Type = TypeString[0];
 					else
 						Type = 'G';
+
+					if (_stricmp(Call, "RMS") == 0)
+						break;
+
+					if (_stricmp(Call, "SYSTEM") == 0)
+						break;
 
 					WP = LookupWP(Call);
 
@@ -821,6 +842,18 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 {
 	WPRec * WP = LookupWP(user->Call);
 
+	if (_stricmp(user->Call, "RMS") == 0)
+		return;
+
+	if (_stricmp(user->Call, "SYSTEM") == 0)
+		return;
+
+	if (_stricmp(user->Call, "SYSOP") == 0)
+		return;
+
+	if (_stricmp(user->Call, user->Name) == 0)
+		return;
+
 	if (!WP)
 	{
 		WP = AllocateWPRecord();
@@ -947,7 +980,7 @@ VOID DoWPLookup(ConnectionInfo * conn, struct UserInfo * user, char Type, char *
 		}
 		return;
 	}
-	nodeprintf(conn, "Invalid I command option %c", Type);
+	nodeprintf(conn, "Invalid I command option %c\r", Type);
 }
 /*
 On 111120 N4ZKF/I @ N4ZKF.#NFL.FL.USA.NOAM zip 32118 Dave 32955

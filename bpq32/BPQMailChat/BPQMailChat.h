@@ -239,7 +239,9 @@ typedef struct ConnectionInfo_S
 #define FBBB2Mode 16
 #define RunningConnectScript 32
 #define MBLFORWARDING 64				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
-#define TEXTFORWARDING 128				// Plain Text forwardinfg
+#define TEXTFORWARDING 128				// Plain Text forwarding
+#define OUTWARDCONNECT 256				// We connected to them
+
 
 struct FBBRestartData
 {
@@ -489,6 +491,8 @@ struct BBSForwardingInfo
 	BOOL Enabled;					// Forwarding Enabled
 	char ** ConnectScript;			// 
 	int ScriptIndex;				// Next line in script
+	BOOL MoreLines;					// Set until script is finsihed
+
 	char ** TOCalls;				// Calls in to field
 	char ** ATCalls;				// Calls in ATBBS field
 	char ** HaddressesP;			// Heirarchical Addresses for Personals to forward to (as stored)
@@ -505,6 +509,7 @@ struct BBSForwardingInfo
 	BOOL AllowCompressed;			// Allow FBB COmpressed
 	BOOL AllowB1;					// Enable B1
 	BOOL AllowB2;					// Enable B2 
+	BOOL SendCTRLZ;					// Send Ctrl/z instead of /ex
 	BOOL PersonalOnly;				// Only Forward Personals
 	BOOL SendNew;					// Forward new messages immediately
 	int FwdInterval;
@@ -951,7 +956,7 @@ VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * form
 
 VOID SortBBSChain();
 VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG);
-VOID ImportMessages();
+int ImportMessages(CIRCUIT * conn, char * FN);
 
 // TCP Routines
 
@@ -1177,6 +1182,7 @@ extern char zeros[];						// For forward bitmask tests
 extern BOOL EnableUI;
 extern BOOL RefuseBulls;
 extern BOOL SendSYStoSYSOPCall;
+extern BOOL SendBBStoSYSOPCall;
 extern BOOL DontHoldNewUsers;
 extern BOOL UIEnabled[];
 extern BOOL UINull[];

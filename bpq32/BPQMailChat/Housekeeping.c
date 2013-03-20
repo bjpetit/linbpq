@@ -36,7 +36,7 @@ int LastTrafficTime;
 
 DeletetoRecycle(char * FN)
 {
-#ifndef LINBPQ
+#ifdef WIN32
 	SHFILEOPSTRUCT FileOp;
 
 	FileOp.hwnd = NULL;
@@ -486,12 +486,12 @@ BOOL RemoveKilledMessages()
 
 		if (Msg->status == 'K')
 		{
-			sprintf_s(MsgFile, sizeof(MsgFile), "%sm_%06d.mes%c", MailDir, Msg->number, 0);
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes%c", MailDir, Msg->number, 0);
 			if (DeletetoRecycleBin)
 				DeletetoRecycle(MsgFile);
 			else
 				DeleteFile(MsgFile);
-			
+
 			MsgnotoMsg[Msg->number] = NULL;	
 			free(Msg);
 

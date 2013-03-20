@@ -144,6 +144,7 @@ BOOL KISSOnly = FALSE;
 BOOL EnableUI = FALSE;
 BOOL RefuseBulls = FALSE;
 BOOL SendSYStoSYSOPCall = FALSE;
+BOOL SendBBStoSYSOPCall = FALSE;
 BOOL DontHoldNewUsers = FALSE;
 BOOL ForwardToMe = FALSE;
 

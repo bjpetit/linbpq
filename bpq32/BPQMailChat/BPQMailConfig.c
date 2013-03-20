@@ -452,6 +452,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BBSCall, BBSName);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_SYSOPCALL, SYSOPCall);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_SYSTOSYSOPCALL, SendSYStoSYSOPCall);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_BBSTOSYSOPCALL, SendBBStoSYSOPCall);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_DONTHOLDNEW, DontHoldNewUsers);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_FORWARDTOBBS, ForwardToMe);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
@@ -566,6 +567,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemText(pHdr->hwndDisplay, IDM_NEWUSERMSG, NewWelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_CHATUSERMSG, ChatWelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_EXPERTUSERMSG, ExpertWelcomeMsg);
+		SetDlgItemText(pHdr->hwndDisplay, IDM_SIGNOFF, SignoffMsg);
 
 		break;
 
@@ -819,6 +821,7 @@ int Do_BBS_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_ALLOWCOMP, ForwardingInfo->AllowCompressed);
 			CheckDlgButton(hDlg, IDC_USEB1, ForwardingInfo->AllowB1);
 			CheckDlgButton(hDlg, IDC_USEB2, ForwardingInfo->AllowB2);
+			CheckDlgButton(hDlg, IDC_CTRLZ, ForwardingInfo->SendCTRLZ);
 			CheckDlgButton(hDlg, IDC_PERSONALONLY, ForwardingInfo->PersonalOnly);
 			CheckDlgButton(hDlg, IDC_SENDNEW, ForwardingInfo->SendNew);
 			SetDlgItemInt(hDlg, IDC_FWDINT, ForwardingInfo->FwdInterval, FALSE);
@@ -1403,6 +1406,7 @@ VOID SaveBBSConfig()
 	RefuseBulls = IsDlgButtonChecked(hwndDisplay, IDC_REFUSEBULLS);
 	MailForInterval = GetDlgItemInt(hwndDisplay, MAILFOR_MINS, &OK1, FALSE);
 	SendSYStoSYSOPCall = IsDlgButtonChecked(hwndDisplay, IDC_SYSTOSYSOPCALL);
+	SendBBStoSYSOPCall = IsDlgButtonChecked(hwndDisplay, IDC_BBSTOSYSOPCALL);
 	DontHoldNewUsers = IsDlgButtonChecked(hwndDisplay, IDC_DONTHOLDNEW);
 	ForwardToMe = IsDlgButtonChecked(hwndDisplay, IDC_FORWARDTOBBS);
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
@@ -1427,6 +1431,7 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "EnableUI",0, REG_DWORD,(BYTE *)&EnableUI,4);
 		retCode = RegSetValueEx(hKey, "RefuseBulls",0, REG_DWORD,(BYTE *)&RefuseBulls,4);
 		retCode = RegSetValueEx(hKey, "SendSYStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendSYStoSYSOPCall,4);
+		retCode = RegSetValueEx(hKey, "SendBBStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendBBStoSYSOPCall,4);
 		retCode = RegSetValueEx(hKey, "DontHoldNewUsers",0, REG_DWORD,(BYTE *)&DontHoldNewUsers,4);
 		retCode = RegSetValueEx(hKey, "ForwardToMe",0, REG_DWORD,(BYTE *)&ForwardToMe,4);
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
@@ -1537,6 +1542,9 @@ VOID SaveFWDConfig(HWND hDlg)
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_USEB1);
 		retCode = RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
+
+		Rev = IsDlgButtonChecked(hDlg, IDC_CTRLZ);
+		retCode = RegSetValueEx(hKey,"SendCTRLZ", 0, REG_DWORD, (BYTE *)&Rev,4);
 
 		Rev = IsDlgButtonChecked(hDlg, IDC_ALLOWCOMP);
 		retCode = RegSetValueEx(hKey,"AllowCompressed", 0, REG_DWORD, (BYTE *)&Rev,4);
@@ -1756,6 +1764,14 @@ VOID SaveWelcomeMsgs()
 	ExpertWelcomeMsg = _strdup(Value);
 	
 	RegSetValueEx(hKey, "ExpertWelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
+
+	GetDlgItemText(hwndDisplay, IDM_SIGNOFF, SignoffMsg, 99);
+
+	if (SignoffMsg[0])
+		if (SignoffMsg[strlen(SignoffMsg) - 1] != 13)
+			strcat(SignoffMsg, "\r");
+
+	RegSetValueEx(hKey, "SignoffMsg", 0, REG_BINARY, SignoffMsg, strlen(SignoffMsg) + 1);
 
 	RegCloseKey(hKey);
 
@@ -2022,6 +2038,10 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&SendSYStoSYSOPCall,(ULONG *)&Vallen);
 
 		Vallen=4;
+		RegQueryValueEx(hKey,"SendBBStoSYSOPCall",0,			
+			(ULONG *)&Type,(UCHAR *)&SendBBStoSYSOPCall,(ULONG *)&Vallen);
+
+		Vallen=4;
 		RegQueryValueEx(hKey,"DontHoldNewUsers",0,			
 			(ULONG *)&Type,(UCHAR *)&DontHoldNewUsers,(ULONG *)&Vallen);
 
@@ -2057,6 +2077,8 @@ TryAgain:
 
 		Vallen=100;
 		retCode += RegQueryValueEx(hKey, "BBSName",0 , &Type, (UCHAR *)&BBSName, &Vallen);
+
+		sprintf(SignoffMsg, "73 de %s\r", BBSName);	// Default
 
 		Vallen=100;
 		retCode += RegQueryValueEx(hKey, "MailForText",0 , &Type, (UCHAR *)&MailForText, &Vallen);
@@ -2234,6 +2256,8 @@ TryAgain:
 		else
 			ExpertWelcomeMsg = _strdup("");
 
+		Vallen = 99;
+		RegQueryValueEx(hKey,"SignoffMsg",0, (ULONG *)&Type, &SignoffMsg, (ULONG *)&Vallen);
 
 		// Get Prompts
 
