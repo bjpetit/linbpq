@@ -958,7 +958,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
 
 		if (PORT->PTTIOBASE)		// Using separare port for PTT?
-			PORT->hPTTDevice = OpenCOMPort(PORT->PTTIOBASE, PORT->SPEED, FALSE, FALSE, FALSE);
+			PORT->hPTTDevice = OpenCOMPort((VOID *)PORT->PTTIOBASE, PORT->SPEED, FALSE, FALSE, FALSE);
 		else
 			PORT->hPTTDevice = PORT->hDevice;	// Use same port for PTT
 	}
@@ -1156,7 +1156,7 @@ OpenRigCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed)
 {
 	char buf[80];
 
-	PORT->hDevice = OpenCOMPort(Port, Speed, FALSE, FALSE, FALSE);
+	PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE);
 			  
 	if (PORT->hDevice == 0)
 		return (FALSE);

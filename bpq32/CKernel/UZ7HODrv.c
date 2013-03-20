@@ -79,7 +79,6 @@ static int MasterPort[MAXBPQPORTS+1];			// Pointer to first BPQ port for a speci
 
 static char * UZ7HOSignon[MAXBPQPORTS+1];			// Pointer to message for secure signin
 
-#pragma pack()
 
 static unsigned int UZ7HOInst = 0;
 static int AttachedProcesses=0;
@@ -112,7 +111,26 @@ static fd_set writefs;
 static fd_set errorfs;
 static struct timeval timeout;
 
+unsigned int reverse(unsigned int val)
+{
+	char x[4];
+	char y[4];
+
+	memcpy(x, &val,4);
+	y[0] = x[3];
+	y[1] = x[2];
+	y[2] = x[1];
+	y[3] = x[0];
+
+	memcpy(&val, y, 4);
+
+	return val;
+}
+
+
 #ifndef LINBPQ
+
+
 
 static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 {
@@ -171,6 +189,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 	int TNCOK;
+	short * sp;
+
 
 	if (TNC == NULL)
 		return 0;					// Port not defined
@@ -448,9 +468,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				buff[7] = 0xf0;
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
-				buff[5]=(datalen & 0xff);
-				buff[6]=(datalen >> 8);
-		
+
+				sp = (short *)&buff[5];
+				*sp = datalen;
+
+	//			buff[5]=(datalen & 0xff);
+	//			buff[6]=(datalen >> 8);
+				
 				ReleaseBuffer(buffptr);
 	
 				return (1);
@@ -478,8 +502,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			AGW->TXHeader.DataKind = 'K';
 			memset(AGW->TXHeader.callfrom, 0, 10);
 			memset(AGW->TXHeader.callto, 0, 10);
+#ifdef __BIG_ENDIAN__
+			AGW->TXHeader.DataLength = reverse(MsgLen);
+#else
 			AGW->TXHeader.DataLength = MsgLen;
-
+#endif
 			send(Sock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 			send(Sock, Buffer, MsgLen, 0);
 
@@ -492,8 +519,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 
 	case 2:				// send
-
-		
+	
 		if (!TNCInfo[MasterPort[port]]->CONNECTED) return 0;		// Don't try if not connected to TNC
 
 		Stream = buff[4];
@@ -501,7 +527,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		STREAM = &TNC->Streams[Stream]; 
 		AGW = TNC->AGWInfo;
 
-		txlen=(buff[6]<<8) + buff[5] - 8;	
+//		txlen=(buff[6]<<8) + buff[5] - 8;	
+
+		sp = (short *)&buff[5];
+		txlen = *sp - 8;
 			
 		if (STREAM->Connected)
 		{
@@ -650,7 +679,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						ptr = strtok_s(NULL, " ,\r", &context);
 					}
 
+#ifdef __BIG_ENDIAN__
+					AGW->TXHeader.DataLength = reverse(Digis * 10 + 1);
+#else
 					AGW->TXHeader.DataLength = Digis * 10 + 1;
+#endif
+
 					AGW->TXHeader.DataKind='v';
 					ViaList[0] = Digis;
 				}
@@ -1209,6 +1243,9 @@ static int ProcessReceivedData(int port)
 		
 		datalen = AGW->RXHeader.DataLength;
 
+#ifdef __BIG_ENDIAN__
+		datalen = reverse(datalen);
+#endif
 		if (datalen > 0)
 		{
 			// Need data - See if enough there
@@ -1408,7 +1445,9 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 	struct STREAMINFO * STREAM;
 	UCHAR AGWPort;
 
-//	Debugprintf("UZ7HO %c %s %s %s", RXHeader->DataKind, RXHeader->callfrom, RXHeader->callto, Message); 
+#ifdef __BIG_ENDIAN__
+	RXHeader->DataLength = reverse(RXHeader->DataLength);
+#endif
 
 	switch (RXHeader->DataKind)
 	{
@@ -1858,7 +1897,11 @@ VOID SendData(struct TNCINFO * TNC, char * Key, char * Msg, int MsgLen)
 	AGW->TXHeader.DataKind='D';
 	memcpy(AGW->TXHeader.callfrom, &Key[11], 10);
 	memcpy(AGW->TXHeader.callto, &Key[1], 10);
+#ifdef __BIG_ENDIAN__
+	AGW->TXHeader.DataLength = reverse(MsgLen);
+#else
 	AGW->TXHeader.DataLength = MsgLen;
+#endif
 
 	send(sock, (char *)&AGW->TXHeader, AGWHDDRLEN, 0);
 	send(sock, Msg, MsgLen, 0);

@@ -2,7 +2,7 @@
 // Common definitons for Pactor-like Modules
 
 #include "kernelresource.h"
-#include "rigcontrol.h"
+#include "RigControl.h"
 
 #define MAXBLOCK 4096
 
@@ -100,7 +100,7 @@ struct TCPINFO
 	int FBBPort[100];
 	int RelayPort;
 	int HTTPPort;
-	int CMDPort;
+	int CMDPort[33];
 
 	BOOL IPV4;					// Allow Connect using IPV4
 	BOOL IPV6;					// Allow Connect using IPV6
@@ -227,7 +227,7 @@ typedef struct MPSKINFO
 typedef struct TNCINFO
 { 
 	HWND hDlg;						// Status Window Handle
-	int (FAR * WebWindowProc)(struct TNCINFO * TNC, char * Buff);	// Routine to build web status window
+	int (FAR * WebWindowProc)(struct TNCINFO * TNC, char * Buff, BOOL LOCAL);	// Routine to build web status window
 	int WebWinX;
 	int WebWinY;					// Size of window
 	char * WebBuffer;				// Buffer for logs
@@ -517,6 +517,7 @@ typedef struct TNCINFO
 	char * WEB_RESTARTTIME;
 	char * WEB_RESTARTS;
 	char * WEB_PACTORLEVEL;
+	int WEB_CHANGED;				// Used to speed up refresh when active
 
 	HMENU hMenu;
 	HMENU hWndMenu;

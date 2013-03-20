@@ -4,6 +4,8 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 */
 
+#ifndef _COMPATBITS_
+#define _COMPATBITS_
 
 #include <stdio.h>
 #include <ctype.h>
@@ -194,6 +196,8 @@ typedef struct sockaddr *LPSOCKADDR;
 #define __int16 short
 #define __int32 long
 
+
+#endif
 
 #endif
 

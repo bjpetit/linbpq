@@ -16,10 +16,24 @@ VOID FreeConfig();
 
 UINT InitializeExtDriver(PEXTPORTDATA PORTVEC);
 
-UINT ReleaseBuffer(VOID *BUFF);
-VOID * Q_REM(VOID *Q);
-int C_Q_ADD(VOID *Q,VOID *BUFF);
-VOID * GetBuff();
+
+
+
+#define GetBuff() _GetBuff(__FILE__, __LINE__)
+#define ReleaseBuffer(s) _ReleaseBuffer(s, __FILE__, __LINE__)
+
+#define Q_REM(s) _Q_REM(s, __FILE__, __LINE__)
+
+#define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__)
+
+VOID * _Q_REM(VOID *Q, char * File, int Line);
+
+int _C_Q_ADD(VOID *Q, VOID *BUFF, char * File, int Line);
+
+UINT _ReleaseBuffer(VOID *BUFF, char * File, int Line);
+
+VOID * _GetBuff(char * File, int Line);
+
 int C_Q_COUNT(VOID *Q);
 
 DllExport char * APIENTRY GetApplCall(int Appl);
@@ -32,6 +46,8 @@ DllExport int APIENTRY GetMsg(int stream, char * msg, int * len, int * count );
 DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 										 int * port, int * sesstype, int * paclen,
 										 int * maxframe, int * l4window);
+
+
 struct config_setting_t;
 
 int GetIntValue(struct config_setting_t * group, char * name);
@@ -119,7 +135,7 @@ void FreeSemaphore(struct SEM * Semaphore);
 
 Dll int APIENTRY SessionControl(int stream, int command, int Mask);
 
-HANDLE OpenCOMPort(int port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet);
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet);
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
 VOID CloseCOMPort(HANDLE fd);

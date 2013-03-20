@@ -25,6 +25,7 @@ extern char VersionString[];
 VOID FormatTime(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 
+
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
 extern int  MAXNEIGHBOURS;
@@ -41,16 +42,6 @@ extern COLORREF Colours[256];
 
 extern BOOL IncludesMail;
 extern BOOL IncludesChat;
-
-char * strlop(char * buf, char delim);
-VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
-int CompareNode(const void *a, const void *b);
-int CompareAlias(const void *a, const void *b);
-void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
-void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
-DllImport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
-int SetupNodeMenu(char * Buff);
-int StatusProc(char * Buff);
 
 struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 {
@@ -76,6 +67,20 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	VOID * WP;					// Selected WP record
 
 };
+
+
+
+char * strlop(char * buf, char delim);
+VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
+int CompareNode(const void *a, const void *b);
+int CompareAlias(const void *a, const void *b);
+void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
+void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
+DllImport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
+int SetupNodeMenu(char * Buff);
+int StatusProc(char * Buff);
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
+int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
 
 
 static struct HTTPConnectionInfo * SessionList;	// active term mode sessions
@@ -119,9 +124,8 @@ char NodeMenuRest[] = "}</script></head>"
 	"<td><a href=javascript:dev_win(\"/Node/Streams\",820,700);>Stream Status</a></td>";
 char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
 
-char MailBit[] = "<td><a href=../mail/all.html>Mail Server Pages</a></td>";
-char ChatBit[] = "<td><a href=../chat/Chat.html>Chat Server Pages</a></td>";
-
+char MailBit[] = "<td><a href=../Mail/Header>Mail Server Pages</a></td>";
+char ChatBit[] = "<td><a href=../Chat/Header>Chat Server Pages</a></td>";
 
 char NodeTail[] = "</tr></table>";
 	
@@ -338,6 +342,16 @@ VOID PollSession(struct HTTPConnectionInfo * Session)
 				{
 					memcpy(ptr2, "&nbsp;", 6);
 					ptr2 += 6;
+				}
+				else if (c == '>')
+				{
+					memcpy(ptr2, "&gt;", 4);
+					ptr2 += 4;
+				}
+				else if (c == '<')
+				{
+					memcpy(ptr2, "&lt;", 4);
+					ptr2 += 4;
 				}
 				else
 					*(ptr2++) = c;
@@ -669,6 +683,7 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 						strcpy(Session->HTTPCall, USER->Callsign);
 						ConvToAX25(Session->HTTPCall, AXCall);
 						ChangeSessionCallsign(Session->Stream, AXCall);
+						BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = USER->Secure;
 					}
 					else
 					{
@@ -1056,6 +1071,9 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 	strcpy(URL, MsgPtr);
 
+	if (strstr(MsgPtr, "Host: 127.0.0.1"))
+		LOCAL = TRUE;
+
 	ptr = strstr(URL, " HTTP");
 
 	if (ptr)
@@ -1134,20 +1152,23 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		char * input;
 		char * IContext;
 	
-
-	if (strstr(MsgPtr, "Host: 127.0.0.1"))
-		LOCAL = TRUE;
-
 	NodeURL = strtok_s(Context, "?", &IContext);
 	Key = strtok_s(NULL, "?", &IContext);
 
 	if (_stricmp(NodeURL, "/Mail/Signon") == 0)
 	{
 		ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session);
-		if (ReplyLen)
-			goto Returnit;
 		
+		if (ReplyLen)
+		{
+			goto Returnit;
+		}
+	
+#ifdef LINBPQ
 		strcpy(Context, "/Mail/Header");
+#else
+		strcpy(MsgPtr, "POST /Mail/Header");
+#endif
 		goto doHeader;
 	}
 
@@ -1175,7 +1196,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		if (LOCAL)
 		{
-			Session = AllocateSession(Appl, 'M');
+			Session = AllocateSession(sock, 'M');
 
 			if (Session)
 			{
@@ -1226,10 +1247,17 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	if (_stricmp(NodeURL, "/Chat/Signon") == 0)
 	{
 		ReplyLen = ProcessChatSignon(TCP, MsgPtr, Key, Reply, &Session);
+
 		if (ReplyLen)
+		{
 			goto Returnit;
+		}
 		
+#ifdef LINBPQ
 		strcpy(Context, "/Chat/Header");
+#else
+		strcpy(MsgPtr, "POST /Chat/Header");
+#endif
 		goto doHeader;
 	}
 
@@ -1257,7 +1285,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		if (LOCAL)
 		{
-			Session = AllocateSession(Appl, 'C');
+			Session = AllocateSession(sock, 'C');
 
 			if (Session)
 			{
@@ -1304,8 +1332,6 @@ doHeader:
 	if (_memicmp(Context, "/MAIL/", 6) == 0)
 	{
 		char _REPLYBUFFER[100000];
-		int Sent;
-		int Loops = 0;
 
 		ReplyLen = 0;
 
@@ -1323,8 +1349,6 @@ doHeader:
 	if (_memicmp(Context, "/CHAT/", 6) == 0)
 	{
 		char _REPLYBUFFER[100000];
-		int Sent;
-		int Loops = 0;
 
 		ReplyLen = 0;
 
@@ -1527,7 +1551,7 @@ doHeader:
 			struct TNCINFO * TNC = TNCInfo[port];
 
 			if (TNC && TNC->WebWindowProc)
-				ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER);
+				ReplyLen = TNC->WebWindowProc(TNC, _REPLYBUFFER, LOCAL);
 		}
 		
 	}
@@ -1681,14 +1705,19 @@ doHeader:
 		int Width = 5;
 		int x = 0, n = 0;
 		struct DEST_LIST * List[1000];
+		char Param = 0;
 
-		_strupr(Context);
+		if (Context)
+		{
+			_strupr(Context);
+			Param = Context[0];
+		}
 
 		for (count = 0; count < MAXDESTS; count++)
 		{
 			if (Dests->DEST_CALL[0] != 0)
 			{
-				if (Context[0] != 'T' || Dests->DEST_COUNT)
+				if (Param != 'T' || Dests->DEST_COUNT)
 					List[n++] = Dests;
 
 				if (n > 999)
@@ -1700,7 +1729,7 @@ doHeader:
 
 		if (n > 1)
 		{
-			if (Context[0] == 'C') 
+			if (Param == 'C') 
 				qsort(List, n, 4, CompareNode);
 			else
 				qsort(List, n, 4, CompareAlias);
@@ -1708,12 +1737,12 @@ doHeader:
 		
 		Alias[6] = 0; 
 
-		if (Context[0] == 'T')
+		if (Param == 'T')
 		{
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "with traffic");
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<td>Call</td><td>Frames</td><td>RTT</td><td>BPQ?</td><td>Hops</td></tr><tr>");
 		}
-		else if (Context[0] == 'C') 
+		else if (Param == 'C') 
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "sorted by Call");
 		else
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], NodeHddr, "sorted by Alias");
@@ -1726,7 +1755,7 @@ doHeader:
 			memcpy(Alias, List[i]->DEST_ALIAS, 6);
 			strlop(Alias, ' ');
 
-			if (Context[0] == 'T')
+			if (Param == 'T')
 			{
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<td>%s:%s</td><td align=center>%d</td><td align=center>%d</td><td align=center>%c</td><td align=center>%.0d</td></tr><tr>",
 					Normcall, Alias, List[i]->DEST_COUNT, List[i]->DEST_RTT /16,
@@ -2408,9 +2437,11 @@ int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 			ReplyLen = SetupNodeMenu(Reply);
 			return ReplyLen;
 		}
+
 		user = strtok_s(&input[9], "&", &Key);
 		password = strtok_s(NULL, "=", &Key);
 		password = Key;
+
 
 		for (i = 0; i < TCP->NumberofUsers; i++)
 		{

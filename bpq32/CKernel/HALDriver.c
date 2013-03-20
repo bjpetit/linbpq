@@ -396,7 +396,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 5:				// Close
 
-		CloseHandle(TNCInfo[port]->hDevice);
+		CloseCOMPort(TNCInfo[port]->hDevice);		
 		return (0);
 
 	case 6:				// Scan Control
@@ -407,6 +407,29 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	return 0;
 
 }
+
+static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
+{
+	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
+	"<head><title>HAL Status</title></head><body><h3>HAL Status</h3>");
+
+	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
+
+	Len += sprintf(&Buff[Len], "<tr><td width=90px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
+	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
+	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
+	Len += sprintf(&Buff[Len], "<tr><td>Status</td><td>%s</td></tr>", TNC->WEB_STATE);
+	Len += sprintf(&Buff[Len], "<tr><td>TX/RX State</td><td>%s</td></tr>", TNC->WEB_TXRX);
+	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td></td></tr>", TNC->WEB_TRAFFIC);
+	Len += sprintf(&Buff[Len], "<tr><td>LEDS</td><td>STBY CALL LINK ERROR TX RX</td></tr>");
+	Len += sprintf(&Buff[Len], "<tr><td> </td><td>%s</td></tr>", TNC->WEB_LEDS);
+	Len += sprintf(&Buff[Len], "</table>");
+
+	Len = DoScanLine(TNC, Buff, Len);
+
+	return Len;
+}
+
 
 UINT HALExtInit(EXTPORTDATA *  PortEntry)
 {
@@ -484,6 +507,21 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 	memcpy(&TNC->InitScript[TNC->InitScriptLen], Msg, len); 
 	TNC->InitScriptLen += len;
 
+	TNC->WebWindowProc = WebProc;
+	TNC->WebWinX = 510;
+	TNC->WebWinY = 280;
+
+	TNC->WEB_COMMSSTATE = zalloc(100);
+	TNC->WEB_TNCSTATE = zalloc(100);
+	strcpy(TNC->WEB_TNCSTATE, "Free");
+	TNC->WEB_MODE = zalloc(100);
+	TNC->WEB_TRAFFIC = zalloc(100);
+	TNC->WEB_BUFFERS = zalloc(100);
+	TNC->WEB_STATE = zalloc(100);
+	TNC->WEB_TXRX = zalloc(100);
+	TNC->WEB_LEDS = zalloc(100);
+	strcpy(TNC->WEB_LEDS, "  X   X     X    X   X  X");
+
 #ifndef LINBPQ
 
 	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, PacWndProc, 500, 233);
@@ -536,68 +574,35 @@ static VOID KISSCLOSE(int Port)
 
 	SetCommMask(conn->hDevice, 0);
 
-   // drop DTR and RTS
+	// drop DTR and RTS
 
-   EscapeCommFunction(conn->hDevice, CLRDTR);
-   EscapeCommFunction(conn->hDevice, CLRRTS);
+	COMClearDTR(conn->hDevice);
+	COMClearRTS(conn->hDevice);
 
    // purge any outstanding reads/writes and close device handle
 
-   PurgeComm(conn->hDevice, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR);
-   CloseHandle(conn->hDevice);
- 
-   return;
-
+	CloseCOMPort(conn->hDevice);		
+	
+	return;
 }
 
 
 static void CheckRX(struct TNCINFO * TNC)
 {
-	BOOL       fReadStat;
-	COMSTAT    ComStat;
-	DWORD      dwErrorFlags;
-	int Length;
+	int Length, Len;
 	char * Xptr;
 
 	// only try to read number of bytes in queue 
 
-	ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+	if (TNC->RXLen == 500)
+		TNC->RXLen = 0;
 
-	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
+	Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
 
-	if (Length == 0)
-		return;					// Nothing doing
-
-	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], Length, &Length, NULL);
-
-	WriteLogLine(0, &TNC->RXBuffer[TNC->RXLen], Length);
-	
-	if (!fReadStat)
-	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
+	if (Len == 0)
 		return;
-	}
 
-/*
-	if (TNC->RXBuffer[0] == 0x80)
-		TNC->HostMode = TRUE;
-
-	if (TNC->HostMode == 0)
-	{
-		// Initialising
-
-		if (Length == 500)
-			return;
-
-		if (TNC->RXBuffer[Length - 2] == '>')
-		{
-			DoTNCReinit(TNC);
-			return;
-		}
-		return;
-	}
-*/	
-	TNC->RXLen += Length;
+	TNC->RXLen += Len;
 
 	Length = TNC->RXLen;
 
@@ -688,8 +693,8 @@ VOID HALPoll(int Port)
 		TNC->TNCOK = FALSE;
 		TNC->HostMode = 0;
 				
-		sprintf(Status,"COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
-		SetWindowText(TNC->xIDC_COMMSSTATE, Status);
+		sprintf(TNC->WEB_COMMSSTATE,"COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		//for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
@@ -728,8 +733,8 @@ VOID HALPoll(int Port)
 		datalen = sprintf(TXMsg, "%c%s", SetMYCALL, STREAM->MyCall);
 		SendCmd(TNC, TXMsg, datalen + 1);			// Send the NULL
 
-		sprintf(Status, "In Use by %s", STREAM->MyCall);
-		SetWindowText(TNC->xIDC_TNCSTATE, Status);
+		sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
+		SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		// Stop Scanning
 
@@ -805,7 +810,6 @@ VOID HALPoll(int Port)
 			int datalen;
 			UINT * buffptr;
 			UCHAR * MsgPtr;
-			char Status[80];
 			char TXMsg[500];
 			
 			buffptr = (UINT * )STREAM->BPQtoPACTOR_Q;
@@ -884,6 +888,7 @@ VOID HALPoll(int Port)
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 			
 					SetWindowText(TNC->xIDC_MODE, "Clover");
+					strcpy(TNC->WEB_MODE, "Clover");
 
 					SendCmd(TNC, "\x80", 1);		// Clover
 					SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
@@ -926,7 +931,7 @@ VOID HALPoll(int Port)
 
 						datalen = sprintf(TXMsg, "%\x19%s", STREAM->RemoteCall);
 					
-						sprintf(Status, "%s Connecting to %s - PACTOR", STREAM->MyCall, STREAM->RemoteCall);
+						sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s - PACTOR", STREAM->MyCall, STREAM->RemoteCall);
 
 						// DOnt set connecting till we get the 19 response so we can trap listen as a fail
 						break;
@@ -938,12 +943,12 @@ VOID HALPoll(int Port)
 
 						datalen = sprintf(TXMsg, "%\x11%s", STREAM->RemoteCall);
 					
-						sprintf(Status, "%s Connecting to %s - CLOVER", STREAM->MyCall, STREAM->RemoteCall);
+						sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s - CLOVER", STREAM->MyCall, STREAM->RemoteCall);
 
 						break;			
 					}
 					
-					SetWindowText(TNC->xIDC_TNCSTATE, Status);
+					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 					SendCmd(TNC, TXMsg, datalen + 1);	// Include NULL
 
 					ReleaseBuffer(buffptr);
@@ -961,9 +966,9 @@ VOID HALPoll(int Port)
 					datalen = sprintf(TXMsg, "%\x11%s", STREAM->RemoteCall);
 					SendCmd(TNC, TXMsg, datalen + 1);	// Include NULL
 					
-					sprintf(Status, "%s Connecting to %s - CLOVER",
+					sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s - CLOVER",
 					STREAM->MyCall, STREAM->RemoteCall);
-					SetWindowText(TNC->xIDC_TNCSTATE, Status);
+					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 					ReleaseBuffer(buffptr);
 
@@ -1222,10 +1227,15 @@ NotData:
 		ProcessHALCmd(TNC);
 }
 
+VOID mySetWindowText(struct TNCINFO * TNC, char * Msg)
+{
+	SetWindowText(TNC->xIDC_STATE, Msg);
+	strcpy(TNC->WEB_STATE, Msg);
+}
+
 VOID ProcessHALCmd(struct TNCINFO * TNC)
 {
 	char * Call;
-	char Status[80];
 	int Stream = 0;
 	int Opcode;
 	int StatusByte;
@@ -1245,8 +1255,8 @@ CmdLoop:
 	TNC->TNCOK = TRUE;
 	TNC->Timeout = 0;
 
-	sprintf(Status,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
-	SetWindowText(TNC->xIDC_COMMSSTATE, Status);
+	sprintf(TNC->WEB_COMMSSTATE,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+	SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	// We may have more than one response in the buffer, and only each cmd/response decoder knows how many it needs
 
@@ -1284,6 +1294,7 @@ CmdLoop:
 			// Diaplay Linke Status
 
 			SetWindowText(TNC->xIDC_MODE, status[StatusByte]);
+			strcpy(TNC->WEB_MODE, status[StatusByte]);
 
 			break;
 
@@ -1293,6 +1304,7 @@ CmdLoop:
 			// if we were connecting, this means connect failed.
 
 			SetWindowText(TNC->xIDC_MODE, status[StatusByte]);
+			strcpy(TNC->WEB_MODE, status[StatusByte]);
 
 			if (STREAM->Connecting)
 				HALDisconnected(TNC);
@@ -1302,12 +1314,14 @@ CmdLoop:
 			case 0x0E:		// ISS (AMTOR/P-MODE)
 
 				SetWindowText(TNC->xIDC_TXRX,"ISS");
+				strcpy(TNC->WEB_TXRX, "ISS");
 				TNC->TXRXState = 'S';
 				break;
 
 			case 0x0F:		// IRS (AMTOR/P-MODE)
 
 				SetWindowText(TNC->xIDC_TXRX,"IRS");
+				strcpy(TNC->WEB_TXRX, "IRS");
 				TNC->TXRXState = 'R';
 				break;
 
@@ -1319,6 +1333,7 @@ CmdLoop:
 			case 0x05:		//  OVER (AMTOR/P-MODE) (not implemented)
 
 				SetWindowText(TNC->xIDC_STATE, status[StatusByte]);
+				strcpy(TNC->WEB_MODE, status[StatusByte]);
 
 
 
@@ -1339,7 +1354,7 @@ CmdLoop:
 		if (Len < 2) return;		// Wait for more
 	
 		Leds = TNC->CmdBuffer[1];
-		sprintf(Status,"  %c   %c    %c    %c     %c %c ", 
+		sprintf(TNC->WEB_LEDS,"  %c   %c    %c    %c     %c %c ", 
 			(Leds & 0x20)? 'X' : ' ',
 			(Leds & 0x10)? 'X' : ' ',
 			(Leds & 0x08)? 'X' : ' ',
@@ -1348,7 +1363,7 @@ CmdLoop:
 			(Leds & 0x01)? 'X' : ' ');
 
 //		STBY CALL LINK ERROR TX RX
-		SetWindowText(TNC->xIDC_LEDS, Status);
+		SetWindowText(TNC->xIDC_LEDS, TNC->WEB_LEDS);
 
 		Used = 2;
 		break;
@@ -1484,25 +1499,25 @@ CmdLoop:
 
 		switch (StatusByte)
 		{
-		case 0x00:		SetWindowText(TNC->xIDC_STATE, "Channel idle"); break;
-		case 0x01:		SetWindowText(TNC->xIDC_STATE, "Channel occupied with non-Clover signal"); break;
-		case 0x42:		SetWindowText(TNC->xIDC_STATE, "Linked stations monitored"); break;
-		case 0x64:		SetWindowText(TNC->xIDC_STATE, "Attempting normal link"); break;
-		case 0x65:		SetWindowText(TNC->xIDC_STATE, "Attempting robust link"); break;
-		case 0x66:		SetWindowText(TNC->xIDC_STATE, "Calling ARQ CQ"); break;
-		case 0x78:		SetWindowText(TNC->xIDC_STATE, "Clover Control Block (CCB) send retry"); break;
-		case 0x79:		SetWindowText(TNC->xIDC_STATE, "Clover Control Block (CCB) receive retry"); break;
-		case 0x7D:		SetWindowText(TNC->xIDC_STATE, "Clover Control Block (CCB) received successfully"); break;
-		case 0x8A:		SetWindowText(TNC->xIDC_STATE, "TX data block sent"); break;
-		case 0x8B:		SetWindowText(TNC->xIDC_STATE, "RX data block received ok (precedes data block)"); break;
-		case 0x8C:		SetWindowText(TNC->xIDC_STATE, "TX data block re-sent"); break;
-		case 0x8D:		SetWindowText(TNC->xIDC_STATE, "RX data block decode failed (precedes data block)"); break;
-		case 0x8E:		SetWindowText(TNC->xIDC_STATE, "TX idle"); break;
-		case 0x8F:		SetWindowText(TNC->xIDC_STATE, "RX idle"); break;
-		case 0x9C:		SetWindowText(TNC->xIDC_STATE, "Link failed: CCB send retries exceeded"); break;
-		case 0x9D:		SetWindowText(TNC->xIDC_STATE, "Link failed: CCB receive retries exceeded"); break;
-		case 0x9E:		SetWindowText(TNC->xIDC_STATE, "Link failed: protocol error"); break;
-		case 0xA0:		SetWindowText(TNC->xIDC_STATE, "Receiving FEC SYNC sequence"); break;
+		case 0x00:		mySetWindowText(TNC, "Channel idle"); break;
+		case 0x01:		mySetWindowText(TNC, "Channel occupied with non-Clover signal"); break;
+		case 0x42:		mySetWindowText(TNC, "Linked stations monitored"); break;
+		case 0x64:		mySetWindowText(TNC, "Attempting normal link"); break;
+		case 0x65:		mySetWindowText(TNC, "Attempting robust link"); break;
+		case 0x66:		mySetWindowText(TNC, "Calling ARQ CQ"); break;
+		case 0x78:		mySetWindowText(TNC, "Clover Control Block (CCB) send retry"); break;
+		case 0x79:		mySetWindowText(TNC, "Clover Control Block (CCB) receive retry"); break;
+		case 0x7D:		mySetWindowText(TNC, "Clover Control Block (CCB) received successfully"); break;
+		case 0x8A:		mySetWindowText(TNC, "TX data block sent"); break;
+		case 0x8B:		mySetWindowText(TNC, "RX data block received ok (precedes data block)"); break;
+		case 0x8C:		mySetWindowText(TNC, "TX data block re-sent"); break;
+		case 0x8D:		mySetWindowText(TNC, "RX data block decode failed (precedes data block)"); break;
+		case 0x8E:		mySetWindowText(TNC, "TX idle"); break;
+		case 0x8F:		mySetWindowText(TNC, "RX idle"); break;
+		case 0x9C:		mySetWindowText(TNC, "Link failed: CCB send retries exceeded"); break;
+		case 0x9D:		mySetWindowText(TNC, "Link failed: CCB receive retries exceeded"); break;
+		case 0x9E:		mySetWindowText(TNC, "Link failed: protocol error"); break;
+		case 0xA0:		mySetWindowText(TNC, "Receiving FEC SYNC sequence"); break;
 		}
 
 		Used = 2;
@@ -1667,7 +1682,6 @@ VOID HALDisconnected(struct TNCINFO * TNC)
 	if (STREAM->Connecting && STREAM->Disconnecting == FALSE)
 	{
 		UINT * buffptr;
-		char Status[80];
 
 		// Connect Failed - actually I think HAL uses another code for connect failed, but leave here for now
 			
@@ -1684,8 +1698,8 @@ VOID HALDisconnected(struct TNCINFO * TNC)
 		STREAM->Connected = FALSE;				// In case!
 		STREAM->FramesQueued = 0;
 
-		sprintf(Status, "In Use by %s", STREAM->MyCall);
-		SetWindowText(TNC->xIDC_TNCSTATE, Status);
+		sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
+		SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		return;
 	}
@@ -1710,7 +1724,6 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 {
 	char Msg[80];
 	UINT * buffptr;
-	char Status[80];
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 	char CallCopy[80];
 
@@ -1740,8 +1753,8 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 
 		ProcessIncommingConnect(TNC, CallCopy, 0, TRUE);
 					
-		sprintf(Status, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
-		SetWindowText(TNC->xIDC_TNCSTATE, Status);
+		sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
+		SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 		if (TNC->CurrentMode != Clover)
 			SendCmd(TNC, "\x87", 1);		// Changeover to ISS 
@@ -1782,8 +1795,8 @@ BOOL HALConnected(struct TNCINFO * TNC, char * Call)
 	STREAM->Connecting = FALSE;
 	STREAM->Connected = TRUE;			// Subsequent data to data channel
 
-	sprintf(Status, "%s Connected to %s Outbound", TNC->NodeCall, STREAM->RemoteCall);
-	SetWindowText(TNC->xIDC_TNCSTATE, Status);
+	sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", TNC->NodeCall, STREAM->RemoteCall);
+	SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 	UpdateMH(TNC, CallCopy, '+', 'O');
 

@@ -536,7 +536,7 @@ int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len)
 	return Len;
 }
 
-static int WebProc(struct TNCINFO * TNC, char * Buff)
+static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 	"<head><title>SCS Pactor Status</title></head><body><h3>SCS Pactor Status</h3>");
@@ -760,6 +760,9 @@ static void CheckRX(struct TNCINFO * TNC)
 		TNC->RXLen = 0;
 
 	Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
+
+	if (Len == 0)
+		return;
 	
 	TNC->RXLen += Len;
 

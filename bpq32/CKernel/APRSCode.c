@@ -47,6 +47,7 @@ void PollGPSIn();
 int CountLocalStations();
 BOOL SendAPPLAPRSMessage(char * Frame);
 VOID SendAPRSMessage(char * Message, int toPort);
+static VOID TCPConnect();
 
 BOOL ProcessConfig();
 
@@ -90,10 +91,14 @@ char CallPadded[10] = "         ";
 int GPSPort = 0;
 int GPSSpeed = 0;
 
-BOOL GPSOK;
+BOOL GPSOK = 0;
 
 char LAT[] = "0000.00N";	// in standard APRS Format      
 char LON[] = "00000.00W";	//in standard APRS Format
+
+char HostName[80];			// for BlueNMEA
+BOOL BlueNMEAOK = FALSE;
+int BlueNMEATimer = 0;
 
 double SOG, COG;		// From GPS
 
@@ -336,7 +341,9 @@ Dll BOOL APIENTRY Init_APRS()
 		Vallen = 4;
 		retCode = RegQueryValueEx(hKey, "IGateEnabled", 0, &Type, (UCHAR *)&IGateEnabled, &Vallen);
 
+/*
 		// Restore GPS Position if GPS is configured and LAN/LON is not
+
 
 		if (GPSPort && PosnSet == 0)
 		{
@@ -353,7 +360,9 @@ Dll BOOL APIENTRY Init_APRS()
 				PosnSet = TRUE;
 			}
 		}
+*/
 	}
+
 #endif
 
 	if (PosnSet == 0)
@@ -1339,6 +1348,15 @@ static ProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr, "BlueNMEA") == 0)
+	{
+		if (strlen(p_value) > 70)
+			return FALSE;
+
+		strcpy(HostName, p_value);
+		return TRUE;
+	}
+
 	if (_stricmp(ptr, "LAT") == 0)
 	{
 		if (strlen(p_value) != 8)
@@ -1507,6 +1525,9 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	char * StMsg = BeaconText;
 	int Len;
 	char SOGCOG[10] = "";
+
+	if (PosnSet == FALSE)
+		return;
 
 	if (SendSOGCOG | (COG != 0.0))
 		sprintf(SOGCOG, "%03.0f/%03.0f", COG, SOG);
@@ -1730,6 +1751,20 @@ VOID DoSecTimer()
 			_beginthread(APRSISThread, 0, (VOID *) TRUE);
 		}
 	}
+
+	if (HostName[0])
+	{
+		if (BlueNMEAOK == 0)
+		{
+			BlueNMEATimer++;
+			if (BlueNMEATimer > 15)
+			{
+				BlueNMEATimer = 0;
+				_beginthread(TCPConnect,0,0);
+			}
+		}
+	}
+
 
 	if (BeaconCounter)
 	{
@@ -2197,6 +2232,9 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 	int i, saveindex = -1;
 	char * ptr1;
 
+	if (Len < 1)
+		return TRUE;
+
 	for (i = 0; i < MAXDUPS; i++)
 	{
 		if (DupInfo[i].DupTime < DupCheck)
@@ -2328,6 +2366,7 @@ loop:
 	return TRUE;		// No Checksum
 
 eom:
+	_strupr(ptr);
 
 	xsum1=*(++ptr);
 	xsum1-=0x30;
@@ -2349,7 +2388,7 @@ BOOL OpenGPSPort()
 
 	// open COMM device
 
-	portptr->hDevice = OpenCOMPort(GPSPort, GPSSpeed, TRUE, TRUE, FALSE);
+	portptr->hDevice = OpenCOMPort((VOID *)GPSPort, GPSSpeed, TRUE, TRUE, FALSE);
 				  
 	if (portptr->hDevice == 0)
 	{
@@ -2430,44 +2469,6 @@ void ClosePorts()
 
 	return;
 }
-
-void SelectSource(BOOL Recovering)
-{
-	struct PortInfo * portptr;
-
-	RecoveryTimer = 0;
-	
-	if (InPorts[0].hDevice)
-	{
-#ifdef WIN32
-		CloseHandle(InPorts[0].hDevice);
-#endif
-		InPorts[0].hDevice=0;
-	}
-    portptr = &InPorts[0];
-			
-	if (portptr->PortEnabled)
-	{                
-		if (OpenGPSPort())
-		{
-			portptr->RTS = 0;
-			portptr->DTR = 0;
-#ifdef WIN32
-			EscapeCommFunction(portptr->hDevice,SETDTR);
-			EscapeCommFunction(portptr->hDevice,SETRTS);
-#endif
-		}
-		else
-		{
-			if (Recovering)
-			{
-				RecoveryTimer = 100;			// 10 Secs
-			}
-		}       
-	}
-	return;
-}
-
 
 void DecodeRMC(char * msg, int len)
 {
@@ -2552,8 +2553,8 @@ void DecodeRMC(char * msg, int len)
 	SYMBOL = CFGSYMBOL;
 	SYMSET = CFGSYMSET;
 
-	GPSOK = 30;	
-	
+	PosnSet = TRUE;
+
 	if (GPSOK == 0)
 	{
 #ifdef LINBPQ
@@ -2563,9 +2564,11 @@ void DecodeRMC(char * msg, int len)
 #endif
 	}
 
+	GPSOK = 30;	
+
 	ptr1+=2;
 
-	ptr2 = (char *)memchr(ptr1,',',15);
+	ptr2 = (char *)memchr(ptr1,',',30);
 	
 	if (ptr2 == 0) return;	// Duff
 
@@ -2598,7 +2601,10 @@ void DecodeRMC(char * msg, int len)
 		if ((NOW - LastMobileBeacon) > MobileBeaconInterval)
 		{
 			LastMobileBeacon = NOW;
+			GetSemaphore(&Semaphore);
+			SemHeldByAPI = 99;
 			SendBeacon(0, StatusMsg, FALSE, TRUE);
+			FreeSemaphore(&Semaphore);
 		}
 	}
 
@@ -2706,7 +2712,6 @@ Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port)
 
 	UINT * buffptr;
 
-
 	GetSemaphore(&Semaphore);
 	SemHeldByAPI = 11;
 
@@ -2799,4 +2804,183 @@ Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon)
 
 	return GPSOK;
 }
+
+// Code to support getting GPS from Andriod Device running BlueNMEA
+
+
+#define SD_BOTH         0x02
+
+char Buffer[8192];
+int SavedLen = 0;
+
+
+static VOID ProcessReceivedData(SOCKET TCPSock)
+{
+	char UDPMsg[8192];
+
+	int len = recv(TCPSock, &Buffer[SavedLen], 8100 - SavedLen, 0);
+
+	char * ptr;
+	char * Lastptr;
+
+	if (len <= 0)
+	{
+		closesocket(TCPSock);
+		BlueNMEAOK = FALSE;
+		return;
+	}
+
+	len += SavedLen;
+	SavedLen = 0;
+
+	ptr = Lastptr = Buffer;
+
+	Buffer[len] = 0;
+
+	while (len > 0)
+	{
+		ptr = strchr(Lastptr, 10);
+
+		if (ptr)
+		{
+			int Len = ptr - Lastptr;
+		
+			memcpy(UDPMsg, Lastptr, Len);
+			UDPMsg[Len++] = 13;
+			UDPMsg[Len++] = 10;
+			UDPMsg[Len++] = 0;
+
+			if (!Check0183CheckSum(UDPMsg, Len))
+			{
+				Debugprintf("Checksum Error %s", UDPMsg);
+			}
+			else
+			{			
+				if (memcmp(UDPMsg, "$GPRMC", 6) == 0)
+					DecodeRMC(UDPMsg, Len);
+
+			}
+			Lastptr = ptr + 1;
+			len -= Len;
+		}
+		else
+			SavedLen = len;
+	}
+}
+
+static VOID TCPConnect()
+{
+	int err, ret;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	fd_set readfs;
+	fd_set errorfs;
+	struct timeval timeout;
+	SOCKADDR_IN sinx; 
+	struct sockaddr_in destaddr;
+	SOCKET TCPSock;
+	int addrlen=sizeof(sinx);
+
+	if (HostName[0] == 0)
+		return;
+
+	destaddr.sin_addr.s_addr = inet_addr(HostName);
+	destaddr.sin_family = AF_INET;
+	destaddr.sin_port = htons(4352);
+
+	TCPSock = socket(AF_INET,SOCK_STREAM,0);
+
+	if (TCPSock == INVALID_SOCKET)
+	{
+  	 	return; 
+	}
+ 
+	setsockopt (TCPSock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = 0;
+
+	if (bind(TCPSock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+	{
+		//
+		//	Bind Failed
+		//
+	
+		closesocket(TCPSock);
+
+  	 	return; 
+	}
+
+	if (connect(TCPSock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) == 0)
+	{
+		//
+		//	Connected successful
+		//
+	}
+	else
+	{
+		err=WSAGetLastError();
+#ifdef LINBPQ
+   		printf("Connect Failed for BlueNMEA socket - error code = %d\n", err);
+#else
+   		Debugprintf("Connect Failed for BlueNMEA socket - error code = %d", err);
+#endif		
+		closesocket(TCPSock);
+		return;
+	}
+
+	BlueNMEAOK = TRUE;
+
+	while (TRUE)
+	{
+		FD_ZERO(&readfs);	
+		FD_ZERO(&errorfs);
+
+		FD_SET(TCPSock,&readfs);
+		FD_SET(TCPSock,&errorfs);
+
+		timeout.tv_sec = 60;
+		timeout.tv_usec = 0;				// We should get messages more frequently that this
+
+		ret = select(TCPSock + 1, &readfs, NULL, &errorfs, &timeout);
+		
+		if (ret == SOCKET_ERROR)
+		{
+			goto Lost;
+		}
+		if (ret > 0)
+		{
+			//	See what happened
+
+			if (FD_ISSET(TCPSock, &readfs))
+			{
+				ProcessReceivedData(TCPSock);			
+			}
+								
+			if (FD_ISSET(TCPSock, &errorfs))
+			{
+Lost:				
+#ifdef LINBPQ
+				printf("BlueNMEA Connection lost\n");
+#endif			
+				closesocket(TCPSock);
+				BlueNMEAOK = FALSE;;
+				return;
+			}
+		}
+		else
+		{
+			// 60 secs without data. Shouldn't happen
+
+			shutdown(TCPSock, SD_BOTH);
+			Sleep(100);
+			closesocket(TCPSock);
+			BlueNMEAOK = FALSE;
+			return;
+		}
+	}
+}
+
+
 

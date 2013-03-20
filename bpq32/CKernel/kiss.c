@@ -38,7 +38,13 @@
 //#include <netax25/ttyutils.h>
 //#include <netax25/daemon.h>
 
-#include <linux/i2c-dev.h>
+//#include "linux/i2c-dev.h"
+
+#define I2C_TIMEOUT	0x0702	/* set timeout - call with int 		*/
+
+/* this is for i2c-dev.c	*/
+#define I2C_SLAVE	0x0703	/* Change slave address			*/
+				/* Attn.: Slave address is 7 or 10 bits */
 
 
 #endif
@@ -178,7 +184,10 @@ VOID ASYDISP(struct PORTCONTROL * PortVector)
 
 		sprintf(Msg,"UDPKISS IP %s Port %d Chan %c\n", inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, PortVector->CHANNELNUM);
 	else
-		sprintf(Msg,"ASYNC COM%d Chan %c\n", PortVector->IOBASE, PortVector->CHANNELNUM);
+		if (PortVector->SerialPortName)
+			sprintf(Msg,"ASYNC %s Chan %c\n", PortVector->SerialPortName, PortVector->CHANNELNUM);
+		else
+			sprintf(Msg,"ASYNC COM%d Chan %c\n", PortVector->IOBASE, PortVector->CHANNELNUM);
 		
 	WritetoConsoleLocal(Msg);
 	return;
@@ -302,7 +311,11 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 
 	else
 	{
-		sprintf(Msg,"ASYNC COM%d Chan %c ", comport, Channel);
+		if (PortVector->SerialPortName)
+			sprintf(Msg,"ASYNC %s Chan %c", PortVector->SerialPortName, Channel);
+		else
+			sprintf(Msg,"ASYNC COM%d Chan %c", comport, Channel);
+
 		WritetoConsoleLocal(Msg);
 
 		npKISSINFO = KISSInfo[PortVector->PORTNUMBER] = CreateKISSINFO(comport, speed);
@@ -315,7 +328,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		npKISSINFO->RXBPTR=&npKISSINFO->RXBUFFER[0]; 
 		npKISSINFO->RXMPTR=&npKISSINFO->RXMSG[0];
 
-		OpenConnection(npKISSINFO, comport);
+		OpenConnection(PortVector, npKISSINFO, comport);
 	
 		if (PortVector->KISSFLAGS & PITNC)
 		{
@@ -358,9 +371,13 @@ NPASYINFO CreateKISSINFO( int port,int speed )
 
 
 
-BOOL OpenConnection(NPASYINFO npKISSINFO, int port)
+BOOL OpenConnection(struct PORTCONTROL * PortVector, NPASYINFO npKISSINFO, int port)
 {
-	npKISSINFO->idComDev = OpenCOMPort(port, npKISSINFO->dwBaudRate, TRUE, FALSE, FALSE);
+	if (PortVector->SerialPortName)
+		npKISSINFO->idComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, FALSE, FALSE);
+	else
+		npKISSINFO->idComDev = OpenCOMPort((VOID *)port, npKISSINFO->dwBaudRate, TRUE, FALSE, FALSE);
+	
 	return 0;
 }
 int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength )
@@ -625,10 +642,22 @@ struct PORTCONTROL * CHECKIOADDR(struct PORTCONTROL * OURPORT)
 		{
 			PORT = PORT->PORTPOINTER;	// YES, SO IGNORE
 			continue;
-		}					
+		}
 
-		if (PORT->IOBASE == OURPORT->IOBASE)
-			return PORT;			// ANOTHER FOR SAME ADDRESS
+		if (OURPORT->SerialPortName)
+		{
+			// We are using a name
+			
+			if (PORT->SerialPortName && strcmp(PORT->SerialPortName, OURPORT->SerialPortName) == 0)
+				return PORT;
+		}
+		else
+		{
+			// Using numbers not names
+
+			if (PORT->IOBASE == OURPORT->IOBASE)
+				return PORT;			// ANOTHER FOR SAME ADDRESS
+		}
 
 		PORT = PORT->PORTPOINTER;	
 	}
@@ -775,7 +804,7 @@ VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
 		if (ACKWORD)					// Frame Needs ACK
 		{
 			ENCBUFF[1] |= 0x0c;			// ACK OPCODE 
-			ACKWORD -= (UINT)LINKS;				// Con only send 16 bits, so use offset into LINKS
+			ACKWORD -= (UINT)LINKS;		// Con only send 16 bits, so use offset into LINKS
 			ENCBUFF[2] = ACKWORD & 0xff;
 			ENCBUFF[3] = (ACKWORD >> 8) &0xff;
 
@@ -1045,6 +1074,8 @@ int KISSRX(struct KISSINFO * KISS)
 	UCHAR * Buffer;
 	int len;
 	NPASYINFO Port = KISSInfo[PORT->PORTNUMBER];
+	short * sp;
+
 
 	if (Port == NULL)
 		return 0;
@@ -1076,8 +1107,12 @@ SeeifMore:
 		{
 			memcpy(&Buffer[7], &Port->RXMSG[0], len);
 			len += 7;
-			Buffer[5] = (len & 0xff);
-			Buffer[6] = (len >> 8);
+
+			sp = (short *)&Buffer[5];
+			*sp = len;
+
+//			Buffer[5] = (len & 0xff);
+//			Buffer[6] = (len >> 8);
 
 			C_Q_ADD(&PORT->PORTRX_Q, (UINT *)Buffer);
 		}
@@ -1231,8 +1266,12 @@ SeeifMore:
 	{
 		memcpy(&Buffer[7], &Port->RXMSG[1], len);
 		len += 7;
-		Buffer[5] = (len & 0xff);
-		Buffer[6] = (len >> 8);
+
+		sp = (short *)&Buffer[5];
+		*sp = len;
+
+//		Buffer[5] = (len & 0xff);
+//		Buffer[6] = (len >> 8);
 
 		C_Q_ADD(&KISS->PORT.PORTRX_Q, (UINT *)Buffer);
 	}

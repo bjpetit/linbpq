@@ -176,6 +176,9 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 	int n;
 	UCHAR * ptr1, * ptr2, * saveptr;
 	int Qual;
+	APPLCALLS * APPL;
+	int App;
+
 
 	if (PORT->PORTQUALITY == 0)
 		return;						// PORT QUALITY=0, SO IGNORE
@@ -186,8 +189,13 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 	if (CompareCalls(Msg->ORIGIN, NETROMCALL))
 		return;
 	
-	if (CompareCalls(Msg->ORIGIN, APPLCALLTABLE->APPLCALL))
-		return;
+	for (App = 0; App < NumberofAppls; App++)
+	{
+		APPL=&APPLCALLTABLE[App];
+
+		if (APPL->APPLHASALIAS == 0 && CompareCalls(Msg->ORIGIN, APPL->APPLCALL))
+			return;
+	}
 
 	Msg->ORIGIN[6] &= 0x1E;			// MASK OFF LAST ADDR BIT
 
@@ -761,6 +769,7 @@ VOID L3TimerProc()
 			{
 				if (COUNT_AT_L2(LINK) > 50)
 				{
+					Debugprintf("Excessive L3 Queue");
 					L3LINKCLOSED(LINK);			// REPORT TO LEVEL 3
 					CLEAROUTLINK(LINK);
 				}

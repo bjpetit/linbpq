@@ -834,7 +834,7 @@ VOID SendOurRIF(struct ROUTE * Route)
 	RIFLen = BuildRIF(&Msg->L3SRCE[totLen], MYCALL, MYALIASTEXT, 1, 0);
 	totLen += RIFLen;
 
-	for (App = 0; App < 8; App++)
+	for (App = 0; App < NumberofAppls; App++)
 	{
 		APPL=&APPLCALLTABLE[App];
 

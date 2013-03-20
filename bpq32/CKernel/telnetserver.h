@@ -19,7 +19,7 @@ struct ConnectionInfo
 	};
 	BOOL SocketActive;
     int BPQStream;
-    byte Callsign[10];
+    char Callsign[10];
     BOOL GotHeader;
     byte InputBuffer[InputBufferLen];
     int InputLen;

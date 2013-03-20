@@ -40,13 +40,14 @@ VOID WriteMiniDump();
 
 void printStack( void );
 
-VOID * Q_REM(VOID *PQ)
+
+VOID * _Q_REM(VOID *PQ, char * File, int Line)
 {
 	UINT * Q = (UINT *) PQ;
 	UINT  * first,next;
 	
 	if (Semaphore.Flag == 0)
-		Debugprintf("Q_REM called without semaphore");
+		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
 
 	first = (UINT *)Q[0];
 	
@@ -61,13 +62,14 @@ VOID * Q_REM(VOID *PQ)
 
 // Return Buffer to Free Queue
 
-UINT ReleaseBuffer(VOID *pBUFF)
+extern VOID * BUFFERPOOL;
+
+UINT _ReleaseBuffer(VOID *pBUFF, char * File, int Line)
 {
 	UINT * pointer, * BUFF = pBUFF;
 
 	if (Semaphore.Flag == 0)
-		Debugprintf("ReleaseBuffer called without semaphore");
-	
+		Debugprintf("ReleaseBuffer called without semaphore from %s Line %d", File, Line);
 
 	// See if already on free Queue
 
@@ -96,14 +98,14 @@ UINT ReleaseBuffer(VOID *pBUFF)
 	return 0;
 }
 
-int C_Q_ADD(VOID *PQ,VOID *PBUFF)
+int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 {
 	UINT * Q = (UINT *) PQ;
 	UINT * BUFF = (UINT *)PBUFF;
 	UINT * next;
 
 	if (Semaphore.Flag == 0)
-		Debugprintf("C_Q_ADD called without semaphore");
+		Debugprintf("C_Q_ADD called without semaphore from %s Line %d", File, Line);
 
 	BUFF[0]=0;							// Clear chain in new buffer
 
@@ -148,12 +150,12 @@ int C_Q_COUNT(VOID *PQ)
 	return count;
 }
 
-VOID * GetBuff()
+VOID * _GetBuff(char * File, int Line)
 {
 	UINT * Temp = Q_REM(&FREE_Q);
 
 	if (Semaphore.Flag == 0)
-		Debugprintf("GetBuff called without semaphore");
+		Debugprintf("GetBuff called without semaphore from %s Line %d", File, Line);
 
 	if (Temp)
 	{
@@ -883,6 +885,7 @@ DllExport int APIENTRY DeallocateStream(int stream)
 {
 	BPQVECSTRUC * PORTVEC;
 	UINT * monbuff;
+	BOOL GotSem = Semaphore.Flag;
 
 //	Release stream.
 
@@ -904,12 +907,17 @@ DllExport int APIENTRY DeallocateStream(int stream)
 	if (PORTVEC->HOSTSESSION)
 		SessionControl(stream + 1, 2, 0);
 
+	if (GotSem == 0)
+		GetSemaphore(&Semaphore);
 
 	while (PORTVEC->HOSTTRACEQ)
 	{
 		monbuff = Q_REM(&PORTVEC->HOSTTRACEQ);
 		ReleaseBuffer(monbuff);
 	}
+
+	if (GotSem == 0)
+		FreeSemaphore(&Semaphore);
 
 	PORTVEC->HOSTFLAGS &= 0x60;			// Clear Allocated. Must leave any DISC Pending bits
 
@@ -1456,7 +1464,10 @@ DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 	*paclen = 0;
 	*maxframe = 0;
 	*l4window = 0;
-	*paclen = L4->SESSPACLEN;
+	if (L4->SESSPACLEN)
+		*paclen = L4->SESSPACLEN;
+	else
+		*paclen = 256;
 
 	if (Partner)
 	{
@@ -1634,7 +1645,7 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet)
 		conn->WEB_COMMSSTATE = zalloc(100);
 
 
-	conn->hDevice = OpenCOMPort(Port, Speed, TRUE, TRUE, Quiet);
+	conn->hDevice = OpenCOMPort((VOID *)Port, Speed, TRUE, TRUE, Quiet);
 			  
 	if (conn->hDevice == 0)
 	{
@@ -1654,9 +1665,9 @@ OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet)
 
 #ifdef WIN32
 
-HANDLE OpenCOMPort(int port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
 {            
-	char szPort[15];
+	char szPort[80];
 	BOOL fRetVal ;
 	COMMTIMEOUTS  CommTimeOuts ;
 	int	Err;
@@ -1665,8 +1676,11 @@ HANDLE OpenCOMPort(int port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
 	DCB dcb;
 
 	// load the COM prefix string and append port number
-   
-	sprintf( szPort, "\\\\.\\COM%d", port);
+
+	if ((UINT)pPort < 256)
+		sprintf( szPort, "\\\\.\\COM%d", (int)pPort);
+	else
+		strcpy(szPort, pPort);
 
 	// open COMM device
 
@@ -1681,7 +1695,11 @@ HANDLE OpenCOMPort(int port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
 	{
 		if (Quiet == 0)
 		{
-			sprintf(buf,"COM%d could not be opened \r\n ", port);
+			if (pPort < (VOID *)256)
+				sprintf(buf,"COM%d could not be opened \r\n ", (UINT)pPort);
+			else
+				sprintf(buf,"%s could not be opened \r\n ", pPort);
+
 			WritetoConsoleLocal(buf);
 			OutputDebugString(buf);
 		}
@@ -1750,7 +1768,11 @@ HANDLE OpenCOMPort(int port, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
 	}
 	else
 	{
-		sprintf(buf,"COM%d Setup Failed %d ", port, GetLastError());
+		if ((UINT)pPort < 256)
+			sprintf(buf,"COM%d Setup Failed %d ", pPort, GetLastError());
+		else
+			sprintf(buf,"%s Setup Failed %d ", pPort, GetLastError());
+
 		WritetoConsoleLocal(buf);
 		OutputDebugString(buf);
 		CloseHandle(fd);
@@ -1863,7 +1885,7 @@ static struct speed_struct
 };
  
 
-HANDLE OpenCOMPort(int port, int speed, BOOL SETDTR, BOOL SETRTS, BOOL Quiet)
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
 {
 	char Port[256];
 	char buf[100];
@@ -1879,7 +1901,10 @@ HANDLE OpenCOMPort(int port, int speed, BOOL SETDTR, BOOL SETRTS, BOOL Quiet)
 	// As Serial ports under linux can have all sorts of odd names, the code assumes that
 	// they are symlinked to a com1-com255 in the BPQ Directory (normally the one it is started from
 
-	sprintf(Port, "%s/com%d", BPQDirectory, port);
+	if ((UINT)pPort < 256)
+		sprintf(Port, "%s/com%d", BPQDirectory, pPort);
+	else
+		strcpy(Port, pPort);
 
 	if ((fd = open(Port, O_RDWR | O_NDELAY)) == -1)
 	{
@@ -2255,7 +2280,7 @@ char * FormatUptime(int Uptime)
 
 	TM = gmtime(&szClock);
 
-	sprintf(MHTime, "%.2d:%.2d:%.2d:%.2d  %s %s\r",
+	sprintf(MHTime, "%.2d:%.2d:%.2d:%.2d  %s %s",
 		TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, MH->MHFreq, LOC);
 
 	return MHTime;
@@ -2433,7 +2458,11 @@ VOID SendLocation()
 	char Msg[512];
 	int Len;
 
+#ifdef LINBPQ
+	Len = sprintf(Msg, "%s L%s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
+#else
 	Len = sprintf(Msg, "%s %s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
+#endif
 
 	if (Len > 256)
 		Len = 256;
@@ -2728,9 +2757,39 @@ VOID WriteMiniDump()
 		if(!ret) 
 			Debugprintf("MiniDumpWriteDump failed. Error: %u", GetLastError()); 
 		else 
-			Debugprintf("Minidump created."); 
+			Debugprintf("Minidump %s created.", FN); 
 			CloseHandle(hFile);
 	}
 #endif
 }
 
+char *stristr (char *ch1, char *ch2)
+{
+	char	*chN1, *chN2;
+	char	*chNdx;
+	char	*chRet				= NULL;
+
+	chN1 = _strdup (ch1);
+	chN2 = _strdup (ch2);
+	if (chN1 && chN2)
+	{
+		chNdx = chN1;
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower (*chNdx);
+			chNdx ++;
+		}
+		chNdx = chN2;
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower (*chNdx);
+			chNdx ++;
+		}
+		chNdx = strstr (chN1, chN2);
+		if (chNdx)
+			chRet = ch1 + (chNdx - chN1);
+	}
+	free (chN1);
+	free (chN2);
+	return chRet;
+}

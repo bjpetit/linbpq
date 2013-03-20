@@ -36,13 +36,23 @@
 //		Add option to get config from BPQ32.cfg
 
 #define _CRT_SECURE_NO_DEPRECATE
-
-#include <stdio.h>
-#include <time.h>
+#define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
-
+#ifndef WIN32
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
 #include "bpq32.h"
+
+#ifndef LINBPQ
+#include "kernelresource.h"
+#include <process.h>
+#endif
+
+#include <time.h>
+
 
 #define VERSION_MAJOR         2
 #define VERSION_MINOR         0
@@ -106,13 +116,14 @@ static int BPQtoAGW_Q[MAXBPQPORTS+1];			// Frames for AGW. indexed by AGW port. 
 
 static SOCKET AGWSock[MAXBPQPORTS+1];			// Socket, indexed by BPQ Port
 
+BOOL Alerted[MAXBPQPORTS+1];					// Error msg sent
+
 static int MasterPort[MAXBPQPORTS+1];			// Pointer to first BPQ port for a specific AGW host
 
 static char * AGWSignon[MAXBPQPORTS+1];			// Pointer to message for secure signin
 
 static char * AGWHostName[MAXBPQPORTS+1];		// AGW Host - may be dotted decimal or DNS Name
 
-#pragma pack()
 
 static unsigned int AGWInst = 0;
 static int AttachedProcesses=0;
@@ -134,8 +145,8 @@ static int addrlen=sizeof(sinx);
 
 static time_t ltime,lasttime[MAXBPQPORTS+1];
 
-static BOOL CONNECTING[MAXBPQPORTS+1];
 static BOOL CONNECTED[MAXBPQPORTS+1];
+static BOOL CONNECTING[MAXBPQPORTS+1];
 
 //HANDLE hInstance;
 
@@ -162,14 +173,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (MasterPort[port] == port)
 		{
+			SOCKET sock = AGWSock[port];
+
 			// Only on first port using a host
 
-			if (CONNECTED[port]==FALSE && CONNECTING[port]==FALSE)
+			if (CONNECTED[port] == FALSE && CONNECTING[port] == FALSE)
 			{
 				//	See if time to reconnect
 		
 				time( &ltime );
-				if (ltime-lasttime[port] >9 )
+				if (ltime-lasttime[port] > 9 )
 				{
 					ConnecttoAGW(port);
 					lasttime[port]=ltime;
@@ -178,26 +191,21 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 			FD_ZERO(&readfs);
 			
-			if (CONNECTED[port]) FD_SET(AGWSock[port],&readfs);
-
-			
+			if (CONNECTED[port]) FD_SET(sock,&readfs);
+	
 			FD_ZERO(&writefs);
 
-			if (CONNECTING[port]) FD_SET(AGWSock[port],&writefs);	// Need notification of Connect
-
-			if (BPQtoAGW_Q[port]) FD_SET(AGWSock[port],&writefs);	// Need notification of busy clearing
-
-
+			if (BPQtoAGW_Q[port]) FD_SET(sock,&writefs);	// Need notification of busy clearing
 
 			FD_ZERO(&errorfs);
 		
-			if (CONNECTING[port] || CONNECTED[port]) FD_SET(AGWSock[port],&errorfs);
+			if (CONNECTED[port]) FD_SET(sock,&errorfs);
 
-			if (select(3,&readfs,&writefs,&errorfs,&timeout) > 0)
+			if (select(sock+1, &readfs, &writefs, &errorfs, &timeout) > 0)
 			{
 				//	See what happened
 
-				if (readfs.fd_count == 1)
+				if (FD_ISSET(sock, &readfs))
 				{
 			
 					// data available
@@ -206,28 +214,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				
 				}
 
-				if (writefs.fd_count == 1)
+				if (FD_ISSET(sock, &writefs))
 				{
 					if (BPQtoAGW_Q[port] == 0)
 					{
-				
-						//	Connect success
-
-						CONNECTED[port]=TRUE;
-						CONNECTING[port]=FALSE;
-
-						// If required, send signon
-
-						if (AGWSignon[port])
-							send(AGWSock[port],AGWSignon[port],546,0);
-
-						// Request Raw Frames
-
-						AGWHeader.Port=0;
-						AGWHeader.DataKind='k';
-						AGWHeader.DataLength=0;
-
-						send(AGWSock[port],(const char FAR *)&AGWHeader,sizeof(AGWHeader),0);
 					}
 					else
 					{
@@ -242,30 +232,18 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						bytes=send(AGWSock[port],(const char FAR *)&txbuff,txlen,0);
 					
 						ReleaseBuffer(buffptr);
-
 					}
-
 				}
 					
-				if (errorfs.fd_count == 1)
+				if (FD_ISSET(sock, &errorfs))
 				{
+					sprintf(ErrMsg, "AGW Connection lost for BPQ Port %d\n", port);
+					Alerted[port] = FALSE;
+					WritetoConsole(ErrMsg);
 
-					//	if connecting, then failed, if connected then has just disconnected
-
-//					if (CONNECTED[port])
-					if (!CONNECTING[port])
-					{
-						i=sprintf(ErrMsg, "AGW Connection lost for BPQ Port %d\n", port);
-						WritetoConsole(ErrMsg);
-					}
-
-					CONNECTING[port]=FALSE;
 					CONNECTED[port]=FALSE;
-				
 				}
-
 			}
-
 		}
 
 		// See if any frames for this port
@@ -444,6 +422,8 @@ UINT AGWExtInit(struct PORTCONTROL *  PortEntry)
 			break;
 		}
 	}
+
+	Alerted[port] = FALSE;
 
 
 	BPQPort[PortEntry->CHANNELNUM-65][MasterPort[port]]=PortEntry->PORTNUMBER;
@@ -625,8 +605,6 @@ VOID ConnecttoAGWThread(port)
 
 	}
 
-	closesocket(AGWSock[port]);
-
 	AGWSock[port]=socket(AF_INET,SOCK_STREAM,0);
 
 	if (AGWSock[port] == INVALID_SOCKET)
@@ -636,8 +614,6 @@ VOID ConnecttoAGWThread(port)
 
   	 	return; 
 	}
-
-	ioctlsocket (AGWSock[port],FIONBIO,&param);
  
 	setsockopt (AGWSock[port],SOL_SOCKET,SO_REUSEADDR,(const char FAR *)&bcopt,4);
 
@@ -654,17 +630,35 @@ VOID ConnecttoAGWThread(port)
 		i=sprintf(Msg, "Bind Failed for AGW socket - error code = %d\r\n", WSAGetLastError());
 		WritetoConsole(Msg);
 
+		closesocket(AGWSock[port]);
   	 	return; 
 	}
 
-	if (connect(AGWSock[port],(LPSOCKADDR) &destaddr[port],sizeof(destaddr)) == 0)
-	{
+	CONNECTING[port] = TRUE;
 
+	if (connect(AGWSock[port],(LPSOCKADDR) &destaddr[port],sizeof(destaddr[port])) == 0)
+	{
 		//
 		//	Connected successful
 		//
 
-		CONNECTED[port]=TRUE;
+		CONNECTED[port] = TRUE;
+		CONNECTING[port] = FALSE;
+
+		ioctlsocket (AGWSock[port],FIONBIO,&param);
+
+		// If required, send signon
+
+		if (AGWSignon[port])
+			send(AGWSock[port],AGWSignon[port],546,0);
+
+		// Request Raw Frames
+
+		AGWHeader.Port=0;
+		AGWHeader.DataKind='k';
+		AGWHeader.DataLength=0;
+
+		send(AGWSock[port],(const char FAR *)&AGWHeader,sizeof(AGWHeader),0);
 
 		return;
 	}
@@ -672,28 +666,22 @@ VOID ConnecttoAGWThread(port)
 	{
 		err=WSAGetLastError();
 
-		if (err == WSAEWOULDBLOCK)
-		{
-			//
-			//	Connect in Progressing
-			//
+		//
+		//	Connect failed
+		//
 
-			CONNECTING[port]=TRUE;
-			return;
-		}
-		else
+		if (Alerted[port] == FALSE)
 		{
-			//
-			//	Connect failed
-			//
-    		i=sprintf(Msg, "Connect Failed for AGW socket - error code = %d\r\n", err);
-			WritetoConsole(Msg);
-
-			return;
+			sprintf(Msg, "Connect Failed for AGW Port %d - error code = %d\n", port, err);
+		    WritetoConsole(Msg);
+			Alerted[port] = TRUE;
 		}
+
+		closesocket(AGWSock[port]);
+		CONNECTING[port] = FALSE;
+
+		return;
 	}
-	return;		// Not Used
-
 }
 
 int ProcessReceivedData(int port)

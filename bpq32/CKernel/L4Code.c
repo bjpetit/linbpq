@@ -1575,6 +1575,14 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 		return;
 	}
 
+	if ((L4->L4CIRCUITTYPE & SESSION) == 0)
+	{
+		// Not an L4 Session - must be an old connection
+
+		ReleaseBuffer(L3MSG);
+		return;
+	}
+
 	//	HAVE FOUND CORRECT SESSION ENTRY
 
 	switch (Opcode)

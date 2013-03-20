@@ -65,7 +65,8 @@ int Switchmode(struct TNCINFO * TNC, int Mode);
 VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud);
 VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud);
 VOID SendRPBeacon(struct TNCINFO * TNC);
-BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
+BOOL APIENTRY Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
+int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 static ProcessLine(char * buf, int Port)
 {
@@ -390,10 +391,35 @@ ok:
 	return 0;
 }
 
-static int WebProc(struct TNCINFO * TNC, char * Buff)
+static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
-	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-	"<head><title>SCSTracker Status</title></head><body><h2>SCSTracker Status</h2>");
+	int Interval = 15;
+	int Len;
+
+	if (LOCAL)
+	{
+		if (TNC->WEB_CHANGED)
+			Interval = 1;
+		else
+			Interval = 4;
+	}
+	else
+	{
+		if (TNC->WEB_CHANGED)
+			Interval = 4;
+		else
+			Interval = 15;
+	}
+
+	if (TNC->WEB_CHANGED)
+	{
+		TNC->WEB_CHANGED -= Interval;
+		if (TNC->WEB_CHANGED < 0)
+			TNC->WEB_CHANGED = 0;
+	}
+
+	Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=%d>"
+	"<head><title>SCSTracker Status</title></head><body><h2>SCSTracker Status</h2>", Interval);
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -545,6 +571,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 		strcat(TNC->InitScript, "%B R600\r");
 		SetWindowText(TNC->xIDC_MODE, "Robust Packet");
 		strcpy(TNC->WEB_MODE, "Robust Packet");
+		TNC->WEB_CHANGED = TRUE;
 	}
 	else
 	{
@@ -553,6 +580,8 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 		strcat(TNC->InitScript, Cmd);
 		SetWindowText(TNC->xIDC_MODE, "HF Packet");
 		strcpy(TNC->WEB_MODE, "HF Packet");
+		TNC->WEB_CHANGED = TRUE;
+
 	}
 
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
@@ -780,6 +809,7 @@ VOID DEDPoll(int Port)
 			{
 				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
 				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				TNC->WEB_CHANGED = TRUE;
 
 				// Stop Scanner
 		
@@ -813,6 +843,7 @@ VOID DEDPoll(int Port)
 
 		sprintf(TNC->WEB_COMMSSTATE, "COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		TNC->WEB_CHANGED = TRUE;
 
 		TNC->HostMode = 0;
 		TNC->ReinitState = 0;
@@ -1066,6 +1097,7 @@ VOID DEDPoll(int Port)
 				C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
 				SetWindowText(TNC->xIDC_MODE, "Robust Packet");
 				strcpy(TNC->WEB_MODE, "Robust Packet");
+				TNC->WEB_CHANGED = TRUE;
 
 				return;
 			}
@@ -1097,6 +1129,7 @@ VOID DEDPoll(int Port)
 				TNC->Robust = FALSE;
 				SetWindowText(TNC->xIDC_MODE, "HF Packet");
 				strcpy(TNC->WEB_MODE, "HF Packet");
+				TNC->WEB_CHANGED = TRUE;
 				return;
 			}
 
@@ -1121,6 +1154,7 @@ VOID DEDPoll(int Port)
 	
 					sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[Stream].MyCall, TNC->Streams[Stream].RemoteCall);
 					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					TNC->WEB_CHANGED = TRUE;
 
 					TNC->Streams[0].InternalCmd = FALSE;
 					return;
@@ -1256,6 +1290,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 		TNC->TNCOK = FALSE;
 		sprintf(TNC->WEB_COMMSSTATE, "COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		TNC->WEB_CHANGED = TRUE;
 
 		memcpy(&TNC->TXBuffer[0], "\x18\x1b\r", 2);
 		TNC->TXLen = 2;
@@ -1464,6 +1499,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		TNC->TNCOK = TRUE;
 		sprintf(TNC->WEB_COMMSSTATE, "COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		TNC->WEB_CHANGED = TRUE;
 	}
 
 	if (TNC->InitPtr)					// Response to Init Script
@@ -1582,6 +1618,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					{
 						sprintf(TNC->WEB_TRAFFIC, "RX %d TX %d ACKED %s", TNC->Streams[Stream].BytesRXed, TNC->Streams[Stream].BytesTXed, Buffer);
 						SetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
+						TNC->WEB_CHANGED = TRUE;
 						return;
 					}
 
@@ -1668,6 +1705,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					{
 						sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
 						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						TNC->WEB_CHANGED = TRUE;
 					}
 
 					if (TNC->RPBEACON)
@@ -1756,6 +1794,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
 					
 						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						TNC->WEB_CHANGED = TRUE;
 					
 						// If an autoconnect APPL is defined, send it
 						// See which application the connect is for
@@ -1890,6 +1929,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", STREAM->MyCall, STREAM->RemoteCall);
 
 						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						TNC->WEB_CHANGED = TRUE;
 
 						if (STREAM->DEDStream == 30)	// Robust Mode
 						{
@@ -2258,6 +2298,7 @@ VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud)
 		TNC->Robust = TRUE;
 		SetWindowText(TNC->xIDC_MODE, "Robust Packet");
 		strcpy(TNC->WEB_MODE, "Robust Packet");
+		TNC->WEB_CHANGED = TRUE;
 	}
 }
 VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud)
@@ -2276,7 +2317,7 @@ VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud)
 
 	SetWindowText(TNC->xIDC_MODE, "HF Packet");
 	strcpy(TNC->WEB_MODE, "HF Packet");
-
+	TNC->WEB_CHANGED = TRUE;
 }
 
 VOID SendRPBeacon(struct TNCINFO * TNC)

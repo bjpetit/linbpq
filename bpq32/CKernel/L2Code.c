@@ -303,7 +303,6 @@ TRYBBS:
 	//	TRY APPLICATION CALLSIGNS/ALIASES
 
 
-	ALIASMSG = 0;
 	APPLMASK = 1;
 	ALIASPTR = &CMDALIAS[0][0];
 
@@ -315,6 +314,8 @@ TRYBBS:
 	{
 		if (APPL->APPLCALL[0] > 0x40)		// Valid ax.25 addr
 		{
+			ALIASMSG = 0;
+			
 			if (CompareCalls(Buffer->DEST, APPL->APPLCALL))
 				goto FORUS;
 
@@ -455,7 +456,7 @@ DoMove:
 	if (i != 0)				// First
 		memmove(MHBASE + 1, MHBASE, i * sizeof(MHSTRUC));
 
-	memcpy (MHBASE->MHCALL, Buffer->ORIGIN, 7);
+	memcpy (MHBASE->MHCALL, Buffer->ORIGIN, 7 * 9);		// Save Digis
 	MHBASE->MHDIGI = DIGI;
 	MHBASE->MHTIME = time(NULL);
 
@@ -524,6 +525,7 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 	int CTLlessPF = CTL & ~PFBIT;
 	
 	PORT->L2FRAMESFORUS++;
+	NO_CTEXT = 0;
 
 	//	ONLY SABM or UI  ALLOWED IF NO SESSION 
 
@@ -644,7 +646,7 @@ int COUNTLINKS(int Port)
 
 	while (i--)
 	{
-		if (LINK->LINKPORT->PORTNUMBER == Port)
+		if (LINK->LINKPORT && LINK->LINKPORT->PORTNUMBER == Port)
 			n++;
 
 		LINK++;
@@ -1004,7 +1006,7 @@ VOID L2SENDRESP(struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER
 
 	ADJBUFFER->CTL = CTL | PFBIT;
 
- 	Buffer->LENGTH = ADJBUFFER - Buffer + MSGHDDRLEN + 15;	// SET UP BYTE COUNT
+ 	Buffer->LENGTH = (UCHAR *)ADJBUFFER - (UCHAR *)Buffer + MSGHDDRLEN + 15;	// SET UP BYTE COUNT
 
 	L2SWAPADDRESSES(Buffer);			// SWAP ADDRESSES AND SET RESP BITS
 

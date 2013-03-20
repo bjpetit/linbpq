@@ -126,6 +126,7 @@ extern BOOL IncludesMail;
 extern BOOL IncludesChat;
 
 char * fp2;
+short * fp2s;
 
 VOID bputc(int Ch, char * ptr)
 {
@@ -330,7 +331,7 @@ static int poffset[] =
 68, 70, 71 ,74, 128, 0,
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
-226, 72, 124, 36, 210, 512, 125,
+226, 72, 124, 516, 210, 512, 125,
 36, 236, 38, 36};						/* offset for corresponding data in config file */
 
 static int proutine[] = 
@@ -342,7 +343,7 @@ static int proutine[] =
 1, 13, 13, 1, 11, 1,
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
-0, 1, 2, 1, 15, 16, 2,
+0, 1, 2, 18, 15, 16, 2,
 1, 17, 1, 1};							/* routine to process parameter */
 
 #define PPARAMLIM 54
@@ -1063,6 +1064,7 @@ char value[];
 char rec[];
 {
 	int j,k;
+	struct CONFIGTABLE * cfg = (struct CONFIGTABLE * )ConfigBuffer;
 
 	bseek(fp2,(long) fileoffset,SEEK_SET);
 
@@ -1078,7 +1080,7 @@ char rec[];
 	bputi(j,fp2);
 	return(1);
 }
-
+;
 
 /************************************************************************/
 /*   VALIDATE HEX INT VALUES						*/
@@ -1274,7 +1276,8 @@ char rec[];
 int dotext(int i, char * key_word, int max)
 {
 	int len;
-	
+	char * ptr;
+
 	char rec[MAXLINE];
 
         bseek(fp2,(long) fileoffset,SEEK_SET);
@@ -1287,11 +1290,15 @@ int dotext(int i, char * key_word, int max)
 
 	while (xindex(rec,"***") != 0 && !feof(fp1))
 	{
-	   rec[strlen(rec) - 1] = '\r';
-	   bputs(rec,fp2);
+		ptr = strchr(rec, 10);
+		if (ptr) *ptr = 0;
+		ptr = strchr(rec, 13);
+		if (ptr) *ptr = 0;
 
-	   fgets(rec,MAXLINE,fp1);
- 	}
+		strcat(rec, "\r");
+		bputs(rec,fp2);
+		fgets(rec,MAXLINE,fp1);
+	}
 
 	bputc('\0',fp2);
 
@@ -1600,14 +1607,9 @@ char s[], c;
 
 VOID bputi(int i, char * ptr)
 {
-	int high;
-	int low;
-
-	high = i / 256;
-	low = i % 256;
-
-	bputc(low, ptr);
-	bputc(high, ptr);
+	fp2s=(short *)fp2;
+	*fp2s = i;
+	fp2 += 2;
 
 	return;
 }
@@ -1985,6 +1987,11 @@ decode_port_rec(char * rec)
 #endif
 			break;
 
+		case 18:
+            cn = doSerialPortName(i,value,rec);              // COMPORT
+			break;
+
+
 		case 9:
 			
 			cn = 1;
@@ -2055,6 +2062,7 @@ char rec[];
 	{
 	   Consoleprintf("DLL name too long - Truncated");
 	   Consoleprintf("%s\r\n",rec);
+
 	}
 		
 	_strupr(workstring);
@@ -2089,6 +2097,41 @@ int doDriver(int i, char * value, char * rec)
 
 	if (strstr(PortRec->DLLNAME, "TELNET") || strstr(PortRec->DLLNAME, "AXIP"))
 		RFOnly = FALSE;
+
+	return 1;
+}
+int IsNumeric(char *str)
+{
+  while(*str)
+  {
+    if(!isdigit(*str))
+      return 0;
+    str++;
+  }
+
+  return 1;
+}
+
+
+int doSerialPortName(int i, char * value, char * rec)
+{
+	unsigned int j;
+
+	rec += 8;
+
+	if (strlen(rec) > 79)
+	{
+	   Consoleprintf("Serial Port Name too long - Truncated");
+	   Consoleprintf("%s\r\n",rec);
+	   rec[79] = 0;
+	}
+
+	strlop(rec, ' ');
+
+	if (IsNumeric(rec))
+		PortRec->IOADDR = atoi(rec);
+	else
+		strcpy(PortRec->SerialPortName, rec);
 
 	return 1;
 }

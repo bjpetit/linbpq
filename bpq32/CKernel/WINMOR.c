@@ -77,6 +77,7 @@ int KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
 int SendReporttoWL2K(struct TNCINFO * TNC);
 char * CheckAppl(struct TNCINFO * TNC, char * Appl);
+int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 static char ClassName[]="WINMORSTATUS";
 static char WindowTitle[] = "WINMOR";
@@ -265,7 +266,6 @@ VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len);
 
 static time_t ltime;
 
-#pragma pack()
 
 static SOCKADDR_IN sinx; 
 static SOCKADDR_IN rxaddr;
@@ -383,11 +383,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			TNC->HeartBeat = 0;
 
 			if (TNC->CONNECTED)
-
+			{
 				// Probe link
 
 				send(TNC->WINMORSock, "BUFFERS\r\n", 9, 0);
-			
+				send(TNC->WINMORSock, "MODE\r\n", 6, 0);
+			}
 		}
 
 		if (TNC->FECMode)
@@ -1022,7 +1023,7 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
 //			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
 	}
 }
-static int WebProc(struct TNCINFO * TNC, char * Buff)
+static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
 		"<script type=\"text/javascript\">\r\n"
@@ -1541,7 +1542,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	// an Async  Response
 
 	UINT * buffptr;
-	char Status[80];
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 
@@ -2321,6 +2321,10 @@ VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
 	UCHAR * ptr1 = Msg, * ptr2;
 	UCHAR Line[1000];
 	int LineLen, i;
+
+#ifndef LINBPQ
+	index=SendMessage(TNC->hMonitor, LB_SETCURSEL, -1, 0);
+#endif
 
 lineloop:
 

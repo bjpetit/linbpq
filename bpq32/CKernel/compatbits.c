@@ -64,6 +64,10 @@ int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
 char * strupr(char* s)
 {
   char* p = s;
+
+  if (s == 0)
+	  return 0;
+
   while (*p = toupper( *p )) p++;
   return s;
 }

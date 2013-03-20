@@ -462,6 +462,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		struct sockaddr_in6 rxaddr6;
 	} RXaddr;
 	struct AXIPPORTINFO * PORT = Portlist[port];
+	short * sp;
+
 
 	switch (fn)
 	{
@@ -516,8 +518,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 						memcpy(&buff[7],&rxbuff[20],len);
 						len+=7;
-						buff[5]=(len & 0xff);
-						buff[6]=(len >> 8);
+		
+						sp = (short *)&buff[5];
+						*sp = len;				// fix big endian issue
+
+//						buff[5]=(len & 0xff);
+//						buff[6]=(len >> 8);
 		
 						//
 						//	Do MH Proccessing if enabled
@@ -606,8 +612,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 					memcpy(&buff[7],&rxbuff[0],len);
 					len+=7;
-					buff[5]=(len & 0xff);
-					buff[6]=(len >> 8);
+					
+					sp = (short *)&buff[5];
+					*sp = len;				// fix big endian issue
+
+//					buff[5]=(len & 0xff);
+//					buff[6]=(len >> 8);
 
 					//
 					//	Do MH Proccessing if enabled
@@ -674,8 +684,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				memcpy(&buff[7],&rxbuff[0],len);
 				len+=7;
-				buff[5]=(len & 0xff);
-				buff[6]=(len >> 8);
+
+				sp = (short *)&buff[5];
+				*sp = len;				// fix big endian issue
+
+//				buff[5]=(len & 0xff);
+//				buff[6]=(len >> 8);
 
 				return 1;
 			}
@@ -685,7 +699,10 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 	case 2:				// send
 
-		txlen=(buff[6]<<8) + buff[5] - 5;			// Len includes buffer header (7) but we add crc
+//		txlen=(buff[6]<<8) + buff[5] - 5;			// Len includes buffer header (7) but we add crc
+
+		sp = (short *)&buff[5];
+		txlen = *sp - 5;
 
 		crc=compute_crc(&buff[7], txlen - 2);
 		crc ^= 0xffff;
@@ -823,10 +840,18 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 			
 	if (arp_table->error == 0)
 	{
+		int sent;
+		
 		if (arp_table->port == 0) txsock = PORT->sock; else txsock = arp_table->SourceSocket;
 
-		sendto(txsock, buff, txlen, 0, (struct sockaddr *)&arp_table->destaddr6, sizeof(arp_table->destaddr6));
+		if (arp_table->IPv6)
+			sent = sendto(txsock, buff, txlen, 0, (struct sockaddr *)&arp_table->destaddr6, sizeof(arp_table->destaddr6));
+		else
+			sent = sendto(txsock, buff, txlen, 0, (struct sockaddr *)&arp_table->destaddr, sizeof(arp_table->destaddr));
 	
+		if (sent != txlen)
+			perror("Sendto");
+
 		// reset Keepalive Timer
 					
 		arp_table->keepalive=arp_table->keepaliveinit;
@@ -933,6 +958,8 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
 
 	for (i=0;i<PORT->NumberofUDPPorts;i++)
 	{
+		int ret;
+		
 		if (PORT->IPv6[i])
 			PORT->udpsock[i]=socket(AF_INET6,SOCK_DGRAM,0);
 		else
@@ -962,12 +989,17 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
 		
 		sinx.sinx.sin_port = htons(PORT->udpport[i]);
 
-		if (bind(PORT->udpsock[i], (struct sockaddr *) &sinx.sinx, sizeof(sinx)) != 0 )
+		if (PORT->IPv6[i])
+			ret = bind(PORT->udpsock[i], (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx6));
+		else
+			ret = bind(PORT->udpsock[i], (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx));
+
+		if (ret != 0)
 		{
 			//	Bind Failed
 
 			err = WSAGetLastError();
-			sprintf(Msg, "Bind Failed for UDP socket - error code = %d", err);
+			sprintf(Msg, "Bind Failed for UDP socket %d - error code = %d", PORT->udpport[i], err);
 			WritetoConsole(Msg);
 			continue;
 		}

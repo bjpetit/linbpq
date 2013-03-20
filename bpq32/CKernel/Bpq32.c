@@ -564,6 +564,7 @@ extern long PORTENTRYLEN;
 extern long LINKTABLELEN;
 extern struct PORTCONTROL * PORTTABLE;
 extern UINT FREE_Q;
+extern UINT APPL_Q;				// Queue of frames for APRS Appl
 
 extern TRANSPORTENTRY * L4TABLE;
 extern UCHAR NEXTID;
@@ -572,6 +573,8 @@ extern DWORD L4DEFAULTWINDOW;
 extern DWORD L4T1;
 extern APPLCALLS APPLCALLTABLE[];
 extern char * APPLS;
+
+extern struct WL2KInfo * WL2KReports;
 
 UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
 UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
@@ -659,6 +662,7 @@ VOID CloseDriverWindow(int port);
 VOID CheckWL2KReportTimer();
 VOID SetApplPorts();
 VOID WriteMiniDump();
+VOID FindLostBuffers();
 
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 DllExport int APIENTRY GetStreamPID(int Stream);
@@ -799,7 +803,11 @@ DllExport int APIENTRY DumpSystem();
 DllExport int APIENTRY SaveNodes ();
 DllExport int APIENTRY ClearNodes ();
 DllExport int APIENTRY SetupTrayIcon();
-UINT * Q_REM(UINT *Q);
+
+#define Q_REM(s) _Q_REM(s, __FILE__, __LINE__)
+
+VOID * _Q_REM(VOID *Q, char * File, int Line);
+
 UINT ReleaseBuffer(UINT *BUFF);
 
 
@@ -1262,6 +1270,8 @@ VOID CALLBACK TimerProc
 			Rig_Close();
 			WSACleanup();
 
+			WL2KReports = NULL;
+
 			Sleep(2000);
 
 			WSAStartup(MAKEWORD(2, 0), &WsaData);
@@ -1277,11 +1287,11 @@ VOID CALLBACK TimerProc
 
 			FreeConfig();
 
-			for (i=1;i<66;i++)			// Include IP Vec
+			for (i=1; i<68; i++)			// Include Telnet, APRS and IP Vec
 			{
 				HOSTVEC=&BPQHOSTVECTOR[i-1];
 
-				HOSTVEC->HOSTTRACEQ=0;
+				HOSTVEC->HOSTTRACEQ=0;			// Clear header (pool has been reinitialized
 
 				if (HOSTVEC->HOSTSESSION !=0)
 				{
@@ -1293,6 +1303,10 @@ VOID CALLBACK TimerProc
 					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
 				}
 			}
+
+			// Free the APRS Appl Q
+
+			APPL_Q = 0;
 
 			OpenReportingSockets();
 		
@@ -4236,7 +4250,6 @@ char * stack;
 #define DATABYTES 320000
 
 extern UCHAR DATAAREA[];
-FindLostBuffers();
 
 DllExport int APIENTRY  DumpSystem()
 {

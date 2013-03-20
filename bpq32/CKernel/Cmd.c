@@ -532,7 +532,8 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	char * ptr1, *ptr2;
 	int n = 12;
 
-	
+	memcpy(Session->APPL, CMD->String, 12);
+
 	//	SEE IF THERE IS AN ALIAS DEFINDED FOR THIS COMMAND
 
 	if (ALIASPTR[0] > ' ')
@@ -1531,11 +1532,11 @@ NoPort:
 
 					//	SEE IF THERE IS AN ALIAS DEFINDED FOR THIS COMMAND
 
-					if (APPL->APPLHASALIAS && APPL->APPLALIASPTR[0] != 0x20)
+					if (APPL->APPLHASALIAS && APPL->APPLALIASVAL[0] != 0x20)
 					{
 						//	COPY ALIAS TO COMMAND _BUFFER, THEN REENTER COMMAND HANDLER
 
-						memcpy(COMMANDBUFFER, APPL->APPLALIASPTR, ALIASLEN);
+						memcpy(COMMANDBUFFER, APPL->APPLALIASVAL, ALIASLEN);
 
 						ALIASINVOKED = TRUE;			//	 To prevent Alias Loops 	
 					}
@@ -2255,7 +2256,13 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	MHSTRUC * MH;
 	int n = MHENTRIES;
 	char Normcall[11];
+	char From[10];
+	char DigiList[100];
+	char * Output;
 	int len;
+
+	// Note that the MHDIGIS field may contain rubbish. You have to check End of Address bit to find
+	// how many digis there are
 
 	ptr = strtok_s(CmdTail, " ", &Context);
 
@@ -2295,9 +2302,52 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		Normcall[len++] = MH->MHDIGI;
 		Normcall[len++] = 0;
 
+		n = 8;					// Max number of digi-peaters
+
+		ptr = &MH->MHCALL[6];	// End of Address bit
+
+		Output = &DigiList[0];
+
+		if ((*ptr & 1) == 0)
+		{
+			// at least one digi
+
+			strcpy(Output, "via ");
+			Output += 4;
+		
+			while ((*ptr & 1) == 0)
+			{
+				//	MORE TO COME
+	
+				From[ConvFromAX25(ptr + 1, From)] = 0;
+				Output += sprintf(Output, "%s", From);
+	
+				ptr += 7;
+				n--;
+
+				if (n == 0)
+					break;
+
+				// See if digi actioned - put a * on last actioned
+
+				if (*ptr & 0x80)
+				{
+					if (*ptr & 1)						// if last address, must need *
+						*(Output++) = '*';
+					else
+						if ((ptr[7] & 0x80) == 0)		// Repeased by next?
+							*(Output++) = '*';			// No, so need *
+				}
+				*(Output++) = ',';
+			}		
+			*(--Output) = 0;							// remove last comma
+		}
+		else 
+			*(Output) = 0;
+
 		ptr = FormatMH(MH);
 		
-		Bufferptr += sprintf(Bufferptr, "%-10s %s", Normcall, ptr);
+		Bufferptr += sprintf(Bufferptr, "%-10s %s %s\r", Normcall, ptr, DigiList);
 
 		MH++;
 	}
@@ -2800,6 +2850,13 @@ VOID CommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 
 	if (Buffer->LENGTH == 9 && Buffer->L2DATA[0] == 0)
 	{
+		ReleaseBuffer(Buffer);
+		return;
+	}
+
+	if (Buffer->LENGTH > 100)
+	{
+		Debugprintf("BPQ32 command too long %s", Buffer->L2DATA);
 		ReleaseBuffer(Buffer);
 		return;
 	}

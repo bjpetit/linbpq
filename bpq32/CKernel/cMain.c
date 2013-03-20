@@ -20,6 +20,7 @@
 
 VOID L2Routine(struct PORTCONTROL * PORT, UINT * Buffer);
 VOID ProcessIframe(struct _LINKTABLE * LINK, UINT * Buffer);
+VOID FindLostBuffers();
 
 struct WL2KInfo
 {
@@ -145,6 +146,8 @@ int FULL_CTEXT = 1;				// CTEXT ON ALL CONNECTS IF NZ
 //NUMBEROFSTREAMS	DD	0
 
 extern VOID * ENDPOOL;
+extern UINT APPL_Q;				// Queue of frames for APRS Appl
+
 
 #define BPQHOSTSTREAMS	64
 
@@ -783,6 +786,10 @@ BOOL Start()
 
 		PORT->PROTOCOL = (char)PortRec->PROTOCOL;
 		PORT->IOBASE = PortRec->IOADDR;
+
+		if (PortRec->SerialPortName[0])
+			PORT->SerialPortName = _strdup(PortRec->SerialPortName);
+
 		PORT->INTLEVEL = (char)PortRec->INTLEVEL;
 		PORT->BAUDRATE = PortRec->SPEED;
 	
@@ -1015,7 +1022,7 @@ BOOL Start()
 		if (ptr1->CommandAlias[0] != ' ')
 		{
 			APPL->APPLHASALIAS = 1;
-			APPL->APPLALIASPTR = &ptr1->CommandAlias[0];
+			memcpy(APPL->APPLALIASVAL, &ptr1->CommandAlias[0], 48);
 		}
 
 		APPL++;
@@ -1151,13 +1158,8 @@ BOOL Start()
 
 	NUMBEROFBUFFERS = 0;
 
-	n = 0;
-
-
 	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - BUFFLEN))
 	{
-		Bufferlist[n++] = (UINT *)NEXTFREEDATA;
-
 		ReleaseBuffer((UINT *)NEXTFREEDATA);
 		NEXTFREEDATA += BUFFLEN;
 
@@ -1546,6 +1548,8 @@ RouteLoop:
 	return;
 }
 
+int DelayBuffers = 0;
+
 VOID TIMERINTERRUPT()
 {
 	// Main Processing loop - CALLED EVERY 100 MS
@@ -1585,10 +1589,23 @@ VOID TIMERINTERRUPT()
 		L3TIMERFLAG -= 549;
 
 		L3TimerProc();
-		Debugprintf("BPQ32 Heatbeat Buffers %d", QCOUNT);
+		Debugprintf("BPQ32 Heartbeat Buffers %d APRS Queues %d %d", QCOUNT, C_Q_COUNT(&APRSMONVECPTR->HOSTTRACEQ), C_Q_COUNT(&APPL_Q));
 		StatsTimer();
-	}
 
+		if (QCOUNT < 200)
+		{
+			if (DelayBuffers == 0)
+			{
+				FindLostBuffers();
+				DelayBuffers = 10;
+			}
+			else
+			{
+				DelayBuffers--;
+			}
+		}
+	}
+		
 	if (L4TIMERFLAG >= 10)				// 1 PER SEC
 	{
 		L4TIMERFLAG -= 10;
@@ -1902,13 +1919,69 @@ VOID INITIALISEPORTS()
 	}
 }
 
-FindLostBuffers()
+VOID FindLostBuffers()
 {
-	UINT * Buff = (UINT *)FREE_Q;
+	UINT * Buff;
 	int n, i;
 	unsigned int rev;
 
 	UINT CodeDump[16];
+	PBPQVECSTRUC HOSTSESS = BPQHOSTVECTOR;
+	struct _TRANSPORTENTRY * L4;	// Pointer to Session
+	
+	struct DEST_LIST * DEST = DESTS;
+	
+	n = MAXDESTS;
+
+	Debugprintf("Looking for missing Buffers");
+
+	while (n--)
+	{
+		if (DEST->DEST_CALL[0] && DEST->DEST_Q)		// Spare
+		{
+			Debugprintf("DEST Queue %s %d", DEST->DEST_ALIAS, C_Q_COUNT(&DEST->DEST_Q));
+		}
+
+		DEST++;
+	}
+
+	n = 0;
+
+	while (n < BPQHOSTSTREAMS + 4)
+	{
+		// Check Trace Q
+
+		if (HOSTSESS->HOSTTRACEQ)
+		{
+			int Count = C_Q_COUNT(&HOSTSESS->HOSTTRACEQ);
+
+			if (Count > 50)
+				Debugprintf("Excessive Trace Buffers Stream %d Count %d", n, Count);
+
+			L4 = HOSTSESS->HOSTSESSION;
+
+			if (L4 && (L4->L4TX_Q || L4->L4RX_Q || L4->L4HOLD_Q || L4->L4RESEQ_Q))
+				Debugprintf("Stream %d %d %d %d %d", n, C_Q_COUNT(&L4->L4TX_Q),
+					C_Q_COUNT(&L4->L4RX_Q), C_Q_COUNT(&L4->L4HOLD_Q), C_Q_COUNT(&L4->L4RESEQ_Q));
+
+		}
+		n++;
+		HOSTSESS++;
+	}
+	
+/*
+	// Build list of buffers, then mark off all on free Q
+
+	Buff = BUFFERPOOL;
+	n = 0;
+
+	for (i = 0; i < NUMBEROFBUFFERS; i++)
+	{
+		Bufferlist[n++] = Buff;
+		Buff += (BUFFLEN / 4);
+	}
+
+	Buff = (UINT *)FREE_Q;
 
 	while (Buff)
 	{
@@ -1930,7 +2003,6 @@ FindLostBuffers()
 	{
 		if (Bufferlist[n])
 		{
-	
 			memcpy(CodeDump, Bufferlist[n], 64);
 	
 			for (i = 0; i < 16; i++)
@@ -1951,5 +2023,6 @@ FindLostBuffers()
 
 		}
 	}
+	*/
 }
 

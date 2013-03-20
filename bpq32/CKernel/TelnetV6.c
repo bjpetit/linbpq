@@ -46,6 +46,7 @@ static VOID SetupListenSet(struct TNCINFO * TNC);
 int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
+VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr);
 
 extern BPQVECSTRUC * TELNETMONVECPTR;
 
@@ -199,14 +200,21 @@ ProcessLine(char * buf, int Port)
 		if (_stricmp(param,"TCPPORT") == 0)
 			TCP->TCPPort = atoi(value);
 		else
-		if (_stricmp(param,"LINUXPORT") == 0)
-			TCP->CMDPort = atoi(value);
-		else
-		if (_stricmp(param,"CMDPORT") == 0)
-			TCP->CMDPort = atoi(value);
-		else
 		if (_stricmp(param,"HTTPPORT") == 0)
 			TCP->HTTPPort = atoi(value);
+		else
+		if ((_stricmp(param,"CMDPORT") == 0) || (_stricmp(param,"LINUXPORT") == 0))
+		{
+			int n = 0;
+			char * context;
+			char * ptr = strtok_s(value, ", ", &context);
+
+			while (ptr && n < 33)
+			{
+				TCP->CMDPort[n++] = atoi(ptr);
+				ptr = strtok_s(NULL, ", ", &context);
+			}
+		}
 		else
 		if (_stricmp(param,"FBBPORT") == 0)
 		{
@@ -441,6 +449,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct TCPINFO * TCP;
+	short * sp;
 
 	int Stream;
 	struct ConnectionInfo * sockptr;
@@ -516,8 +525,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				buff[7] = 0xf0;
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
-				buff[5]=(datalen & 0xff);
-				buff[6]=(datalen >> 8);
+
+				sp = (short *)&buff[5];
+				*sp = datalen;
+
+	//			buff[5]=(datalen & 0xff);
+	//			buff[6]=(datalen >> 8);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -538,7 +551,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		Stream = buff[4];
 		STREAM = &TNC->Streams[Stream];
 
-		txlen=(buff[6]<<8) + buff[5]-8;	
+//		txlen=(buff[6]<<8) + buff[5]-8;	
+
+		sp = (short *)&buff[5];
+
+		txlen = *sp - 8;
+
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
@@ -743,7 +761,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 
 
-static int WebProc(struct TNCINFO * TNC, char * Buff)
+static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len;
 	char msg[80];
@@ -1496,6 +1514,20 @@ nosocks:
 			STREAM->Attached = FALSE;
 			STREAM->Connected = FALSE;
 
+			sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;	// clear any queued data
+
+			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
+			{
+				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+				TelSendPacket(Stream, &TNC->Streams[Stream], buffptr);
+			}
+
+			while(TNC->Streams[Stream].PACTORtoBPQ_Q)
+			{
+				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
+				ReleaseBuffer(buffptr);
+			}
+
             if (!sockptr->FBBMode)
 			{
 				sprintf(Msg,"*** Disconnected from Stream %d\r\n",Stream);
@@ -1538,20 +1570,6 @@ nosocks:
 					send(sockptr->socket, DisfromNodeMsg, strlen(DisfromNodeMsg),0);
 				}
 			}
-
-			sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;	// clear any queued data
-
-			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				ReleaseBuffer(buffptr);
-			}
-
-			while(TNC->Streams[Stream].PACTORtoBPQ_Q)
-			{
-				buffptr=Q_REM(&TNC->Streams[Stream].PACTORtoBPQ_Q);
-				ReleaseBuffer(buffptr);
-			}
 		}
 	}
 
@@ -1574,49 +1592,7 @@ nosocks:
 
 			if (TNC->Streams[Stream].Connected)
 			{
-				STREAM->BytesTXed += datalen;
-
-				sock = sockptr->socket;
-
-				if (sockptr->UserPointer  == &CMSUser)
-					WritetoTrace(Stream, MsgPtr, datalen);
-
-				if (sockptr->FBBMode)
-				{
-					send(sock, MsgPtr, datalen, 0);
-				}
-				else
-				{
-					// Replace cr with crlf
-
-					char * ptr2, * ptr = &MsgPtr[0];
-					int i;
-					do 
-					{
-						ptr2 = memchr(ptr, 13, datalen);
-
-						if (ptr2 == 0)
-						{
-							//	no cr, so just send as is 
-
-							send(sock, ptr, datalen, 0);
-							i=0;
-							break;
-						}
-
-						i=ptr2+1-ptr;
-
-						send(sock,ptr,i,0);
-						send(sock,"\n",1,0);
-
-						datalen-=i;
-						ptr=ptr2+1;
-					}
-					while (datalen>0);
-				}
-				
-				ReleaseBuffer(buffptr);
-				continue;
+				TelSendPacket(Stream, STREAM, buffptr);
 			}
 			else // Not Connected
 			{
@@ -1637,9 +1613,10 @@ nosocks:
 				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2 && TCP->CMS)	// Connect
 				{
 					char Host[100];
-					int Port;
+					char Via[100];
+					int Port = 0;
 
-					if (sscanf(&MsgPtr[2], "%s %d", (char *)&Host, &Port) != 1)
+					if (sscanf(&MsgPtr[2], "%s %s %d", (char *)&Host, &Via, &Port) < 1 || Port > 32)
 					{
 						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid Connect Command\r");
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -1652,7 +1629,7 @@ nosocks:
 						STREAM->ConnectionInfo->CMSSession = FALSE;
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = FALSE;
-						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort);
+						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port]);
 						ReleaseBuffer(buffptr);
 						return;
 					}
@@ -3617,6 +3594,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	UINT * buffptr;
 	int Stream = sockptr->Number;
+	char Signon[80];
 
 	buffptr = GetBuff();
 	if (buffptr == 0) return 0;			// No buffers, so ignore
@@ -3677,7 +3655,10 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 		sockptr->DoEcho = FALSE;
 		sockptr->ClientSession = TRUE;
 
-		buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** %s Connected to Host\r", TNC->Streams[Stream].MyCall);;
+		buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Connected to %s\r", 
+			TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4CROSSLINK->APPL);;
+
+		send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
 	}
 
 	C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -3799,9 +3780,9 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 			if (dwError != 0)
 			{
 				if (dwError == HOST_NOT_FOUND)
-					printf("Host not found\n");
+					Debugprintf("CMS - Host not found");
 				else if (dwError == NO_DATA)
-					printf("No data record found\n");
+					Debugprintf("CMS No data record found");
 			}
 	   }
 	   else
@@ -3812,7 +3793,7 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 	
 		   for (pAlias = remoteHost->h_aliases; *pAlias != 0; pAlias++)
 		   {
-			   Debugprintf("\tAlternate name #%d: %s", ++i, *pAlias);
+			   Debugprintf("\tAlternate name #%d: %s\n", ++i, *pAlias);
 		   }
 	   }
 		i++;
@@ -4102,7 +4083,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	{
 		err=WSAGetLastError();
 
-		if (err == 10035 || err == 115)		//EWOULDBLOCK
+		if (err == 10035 || err == 115 || err == 36)		//EWOULDBLOCK
 		{
 			//	Connect in Progress
 
@@ -4114,9 +4095,14 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 			//	Connect failed
 
 			closesocket(sockptr->socket);
-			printf("connect failed %d\n", err);
 			ReportError(STREAM, "Connect Failed");
 			CheckCMS(TNC);
+
+			STREAM->Connecting = FALSE;
+			sockptr->SocketActive = FALSE;
+			ShowConnections(TNC);
+			STREAM->NeedDisc = 10;
+
 			return FALSE;
 		}
 	}
@@ -4240,7 +4226,7 @@ TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	{
 		err=WSAGetLastError();
 
-		if (err == 10035 || err == 115)		//EWOULDBLOCK
+		if (err == 10035 || err == 115 || err == 36)		//EWOULDBLOCK
 		{
 			//	Connect in Progress
 
@@ -4253,6 +4239,11 @@ TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 
 			closesocket(sockptr->socket);
 			ReportError(STREAM, "Connect Failed");	
+			STREAM->Connecting = FALSE;
+			sockptr->SocketActive = FALSE;
+			ShowConnections(TNC);
+			STREAM->NeedDisc = 10;
+
 			return FALSE;
 		}
 	}
@@ -4368,5 +4359,59 @@ static VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 		*ptr++ = ':';
 	
 	*ptr++ = '\0';	
+}
+
+VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
+{
+	int datalen;
+	UCHAR * MsgPtr;
+	SOCKET sock;
+	struct ConnectionInfo * sockptr = STREAM->ConnectionInfo;
+
+	datalen = buffptr[1];
+	MsgPtr = (UCHAR *)&buffptr[2];
+
+	STREAM->BytesTXed += datalen;
+
+	sock = sockptr->socket;
+
+	if (sockptr->UserPointer  == &CMSUser)
+		WritetoTrace(Stream, MsgPtr, datalen);
+
+	if (sockptr->FBBMode)
+	{
+		send(sock, MsgPtr, datalen, 0);
+	}
+	else
+	{
+		// Replace cr with crlf
+
+		char * ptr2, * ptr = &MsgPtr[0];
+		int i;
+		do 
+		{
+			ptr2 = memchr(ptr, 13, datalen);
+
+			if (ptr2 == 0)
+			{
+				//	no cr, so just send as is 
+
+				send(sock, ptr, datalen, 0);
+				i=0;
+				break;
+			}
+
+			i=ptr2+1-ptr;
+
+			send(sock,ptr,i,0);
+			send(sock,"\n",1,0);
+
+			datalen-=i;
+			ptr=ptr2+1;
+		}
+		while (datalen>0);
+	}
+				
+	ReleaseBuffer(buffptr);
 }
 
