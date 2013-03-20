@@ -10,6 +10,10 @@
 
 //		Fix test for Tracker and UZ7HO ports
 
+//	Version 0.1.3.1 March 2013
+
+//		Fix test for Tracker and UZ7HO ports (again!)
+
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 
 #define _CRT_SECURE_NO_DEPRECATE 
