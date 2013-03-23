@@ -3332,7 +3332,7 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 			return 0;
 	}
 
-	sockptr->TCP = TNC->TCPInfo;
+	sockptr->TNC = TNC;
 	_beginthread((void (*)())ProcessHTTPMessage, 0, (VOID *) sockptr);
 	return 0;
 }

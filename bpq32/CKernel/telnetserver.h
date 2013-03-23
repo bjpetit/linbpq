@@ -47,7 +47,7 @@ struct ConnectionInfo
 	int FromHostBuffPutptr;
 	int FromHostBuffGetptr;
 
-	struct TCPINFO * TCP;		// Used to pass TCP struct to http ocde (for passod list)
+	struct TNCINFO * TNC;		// Used to pass TCP struct to http code (for passwood list)
 
 	time_t ConnectTime;
 

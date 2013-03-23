@@ -179,7 +179,9 @@ char TermSignon[] = "<html><head><title>BPQ32 Node %s Terminal Access</title></h
 	"<table align=center  bgcolor=white>"
 	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
 	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
-	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
+	"<p align=center><input type=submit value=Submit><input type=submit value=Cancel name=Cancel>"
+	"<input type=hidden name=Appl value=\"%s\"  id=Pass></form>";
+
 
 char PassError[] = "<p align=center>Sorry, User or Password is invalid - please try again</p>";
 
@@ -641,14 +643,16 @@ ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 	send(sock, Tail, strlen(Tail), 0);
 }
 
-ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
+ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen)
 {
 	char _REPLYBUFFER[8192];
 	int ReplyLen;
 	char Header[256];
 	int HeaderLen;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
-	char * user, * password, * Context;
+	char * user, * password, * Context, * Appl;
+	char NoApp[] = "";
+	struct TCPINFO * TCP = TNC->TCPInfo;
 
 	if (input)
 	{
@@ -662,7 +666,12 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 		}
 		user = strtok_s(&input[9], "&", &Context);
 		password = strtok_s(NULL, "=", &Context);
-		password = Context;
+		password = strtok_s(NULL, "&", &Context);
+		Appl = strtok_s(NULL, "=", &Context);
+		Appl = strtok_s(NULL, "&", &Context);
+
+		if (Appl == 0)
+			Appl = NoApp;
 
 		for (i = 0; i < TCP->NumberofUsers; i++)
 		{
@@ -684,6 +693,13 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 						ConvToAX25(Session->HTTPCall, AXCall);
 						ChangeSessionCallsign(Session->Stream, AXCall);
 						BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = USER->Secure;
+
+						if (Appl[0])
+						{
+							strcat(Appl, "\r");
+							SendMsg(Session->Stream, Appl, strlen(Appl));
+						}
+
 					}
 					else
 					{
@@ -700,7 +716,7 @@ ProcessTermSignon(struct TCPINFO * TCP, SOCKET sock, char * MsgPtr, int MsgLen)
 		{
 			//   Not found
 
-			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall);
+			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Appl);
 			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", PassError);
 		}
   
@@ -1040,7 +1056,7 @@ int SetupNodeMenu(char * Buff)
 
 ProcessHTTPMessage(struct ConnectionInfo * conn)
 {
-	struct TCPINFO * TCP = conn->TCP;
+	struct TCPINFO * TCP = conn->TNC->TCPInfo;
 	SOCKET sock = conn->socket;
 	char * MsgPtr = conn->InputBuffer;
 	int MsgLen = conn->InputLen;
@@ -1477,7 +1493,7 @@ doHeader:
 
 		if (_stricmp(NodeURL, "/Node/TermSignon") == 0)
 		{
-			ProcessTermSignon(TCP, sock, MsgPtr, MsgLen);
+			ProcessTermSignon(conn->TNC, sock, MsgPtr, MsgLen);
 		}
 
 		if (_stricmp(NodeURL, "/Node/TermClose") == 0)
@@ -2220,7 +2236,7 @@ END_CMDUXX:
 
 	else if (_stricmp(NodeURL, "/Node/Terminal.html") == 0)
 	{
-		ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall);
+		ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Context);
 	}
 
 	else if (_stricmp(NodeURL, "/Node/Drivers") == 0)
