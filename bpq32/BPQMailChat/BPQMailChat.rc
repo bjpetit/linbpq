@@ -16,7 +16,7 @@
 #include "windows.h"
 #undef APSTUDIO_HIDDEN_SYMBOLS
 #define MAILCHAT
-#include "..\CInclude\Versions.h"
+#include "..\CommonSource\Versions.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -1177,7 +1177,7 @@ BEGIN
     "#include ""windows.h""\r\n"
     "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "#define MAILCHAT\r\n"
-    "#include ""..\\CInclude\\Versions.h""\r\n"
+    "#include ""..\\CommonSource\\Versions.h""\r\n"
     "\0"
 END
 

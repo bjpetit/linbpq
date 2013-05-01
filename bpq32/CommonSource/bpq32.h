@@ -577,7 +577,8 @@ BOOL GetAPI()
 //	Constants and equates for async operation
 //
 
-#ifndef BPQWinMsg
+#ifndef BPQWINMSG
+#define BPQWINMSG
 
 static char BPQWinMsg[] = "BPQWindowMessage";
 UINT BPQMsg;

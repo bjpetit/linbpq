@@ -9,10 +9,11 @@
 
 #include "asmstrucs.h"
 #include "bpq32.h"
+#include "chatrc.h"
 
 #endif
 
-#include "chatrc.h"
+
 
 #define IDC_STATIC -1
 #define IDS_APP_TITLE 103
@@ -670,6 +671,8 @@ VOID ClearDebugWindow();
 int RemoveLF(char * Message, int len);
 
 // Utilities
+
+struct SEM;
 
 BOOL isdigits(char * string);
 void GetSemaphore(struct SEM * Semaphore);

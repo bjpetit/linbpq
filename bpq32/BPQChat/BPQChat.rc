@@ -12,7 +12,7 @@
 #undef APSTUDIO_HIDDEN_SYMBOLS
 #define CHAT
 #define IDC_STATIC -1
-#include "..\CInclude\Versions.h"
+#include "..\CommonSource\Versions.h"
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -391,7 +391,7 @@ BEGIN
     "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "#define CHAT\r\n"
     "#define IDC_STATIC -1\r\n"
-    "#include ""..\\CInclude\\Versions.h""\r\n"
+    "#include ""..\\CommonSource\\Versions.h""\r\n"
     "\r\n"
     "\0"
 END

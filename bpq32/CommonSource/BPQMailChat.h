@@ -24,13 +24,13 @@
 
 #ifndef LINBPQ
 #include "bpq32.h"
+#include "BPQMailrc.h"
 #else
 #include "CHeaders.h"
 #endif
 
 #include "asmstrucs.h"
 
-#include "BPQMailrc.h"
 
 #define NEWROUTING
 

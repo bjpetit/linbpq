@@ -114,7 +114,7 @@ char **	SeparateMultiString(char * MultiString);
 VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key);
 VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
 int rtlink (char * Call);
-char * GetBPQDirectory();
+UCHAR * APIENTRY GetBPQDirectory();
 VOID SaveChatConfig(char * ConfigName);
 BOOL GetChatConfig(char * ConfigName);
 
