@@ -964,7 +964,10 @@ DISPLAY_NETROM:
 	cmp	AL,NODES_SIG		; Check NODES message
 
 	JNE	DISPLAY_NETROM_DATA
-
+	
+	cmp	FRAME_TYPE, 3
+	JNE	DISPLAY_NETROM_DATA	; Not UI, so INP3
+	
 ;----------------------------------------------------------------------------;
 ;       Display NODES broadcast                                              ;
 ;----------------------------------------------------------------------------;

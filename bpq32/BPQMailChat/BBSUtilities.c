@@ -2,7 +2,7 @@
 //
 //	Utility Routines
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 #ifdef WIN32
 #include "Winspool.h"
 #endif
@@ -131,9 +131,11 @@ BOOL OpenLogfile(int Flags)
 	if (strcmp(FN, &FilesNames[Flags][0]))
 	{
 		UCHAR SYMLINK[MAX_PATH];
-	
+
 		sprintf(SYMLINK,"%s/logLatest_%s.txt", BaseDir, Logs[Flags]);
+		unlink(SYMLINK); 
 		strcpy(&FilesNames[Flags][0], FN);
+		symlink(FN, SYMLINK);
 	}
 
 #endif
@@ -379,6 +381,7 @@ VOID GetUserDatabase()
 	FILE * Handle;
 	int ReadLen;
 	struct UserInfo * user;
+	time_t UserLimit = time(NULL) - (UserLifetime * 86400); // Oldest user to keep
 
 	Handle = fopen(UserDatabasePath, "rb");
 
@@ -422,7 +425,13 @@ Next:
 	{
 		if (UserRec.Call[0] < '0')
 			goto Next;					// Blank record
-		
+
+		if ((UserRec.flags & F_BBS) == 0)		// Not BBS - Check Age
+			if (UserLifetime)					// if limit set
+				if (UserRec.TimeLastConnected)	// Dont delete manually added Users that havent yet connected
+					if (UserRec.TimeLastConnected < UserLimit)
+						goto Next;			// Too Old - ignore
+			
 		user = AllocateUserRecord(UserRec.Call);
 		memcpy(user, &UserRec,  sizeof (UserRec));
 		user->Temp = zalloc(sizeof (struct TempUserInfo));
@@ -4145,7 +4154,7 @@ nextline:
 
 			if ((result = mktime(&rtime)) != (time_t)-1 )
 			{
-				result -= (time_t)timezone;
+				result -= (time_t)_MYTIMEZONE;
 
 				Msg->datecreated =  result;	
 				Age = (time(NULL) - result)/86400;
@@ -5556,7 +5565,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		char * Line;
 
 		if (Localtime)
-			now -= (time_t)timezone; 
+			now -= (time_t)_MYTIMEZONE; 
 
 		now %= 86400;
 		Line = Scripts[n];
@@ -6147,7 +6156,7 @@ VOID FWDTimerProc()
 				time_t now = time(NULL);
 						
 				if (Localtime)
-					now -= (time_t)_timezone; 
+					now -= (time_t)_MYTIMEZONE; 
 
 				now %= 86400;		// Secs in to day
 
@@ -6526,6 +6535,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "BidLifetime", BidLifetime);
 	SaveIntValue(group, "LogLifetime", LogAge);
 	SaveIntValue(group, "MaintInterval", MaintInterval);
+	SaveIntValue(group, "UserLifetime", UserLifetime);
 	SaveIntValue(group, "MaintTime", MaintTime);
 	SaveIntValue(group, "PR", PR);
 	SaveIntValue(group, "PUR", PUR);
@@ -6816,6 +6826,7 @@ BOOL GetConfig(char * ConfigName)
 		 MaxMsgno = GetIntValue(group, "MaxMsgno");
 		 LogAge = GetIntValue(group, "LogLifetime");
 		 BidLifetime = GetIntValue(group, "BidLifetime");
+		 UserLifetime = GetIntValue(group, "UserLifetime");
 		 MaintInterval = GetIntValue(group, "MaintInterval");
 		 MaintTime = GetIntValue(group, "MaintTime");
 	

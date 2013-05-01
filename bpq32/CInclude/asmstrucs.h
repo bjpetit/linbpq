@@ -39,8 +39,8 @@
 
 extern char MYCALL[];	// 7 chars, ax.25 format
 extern char MYALIASTEXT[];	// 6 chars, not null terminated
-extern char L3RTT[7];	// 7 chars, ax.25 format
-extern char L3KEEP[7];	// 7 chars, ax.25 format
+extern UCHAR L3RTT[7];	// 7 chars, ax.25 format
+extern UCHAR L3KEEP[7];	// 7 chars, ax.25 format
 //extern int SENDNETFRAME();
 extern struct _DATABASE * DataBase;
 //extern APPLCALLS  APPLCALLTABLE[8];
@@ -303,8 +303,9 @@ typedef struct _MESSAGE
 		struct _L3MESSAGE L3MSG;
 	};
 		
-	UCHAR Padding[BUFFLEN - sizeof(time_t) - sizeof(VOID *) - 256 - MSGHDDRLEN - 16];
+	UCHAR Padding[BUFFLEN - sizeof(time_t) - sizeof(unsigned short) - sizeof(VOID *) - 256 - MSGHDDRLEN - 16];
 
+	unsigned short Process;
 	time_t Timestamp;
 	VOID * Linkptr;		// For ACKMODE processing
 
@@ -390,7 +391,7 @@ typedef struct _APPLCALLS
 	BOOL APPLHASALIAS;
 	int APPLPORT;					// Port used if APPL has an Alias
 	char APPLALIASVAL[48];				// Alias if defined
-	char L2ALIAS[7];				// Additional Alias foe L2 connects
+	UCHAR L2ALIAS[7];				// Additional Alias foe L2 connects
 
 } APPLCALLS;
 
@@ -449,8 +450,8 @@ typedef struct DEST_LIST
 
 typedef struct PORTCONTROL
 {
-	char PORTCALL[7];
-	char PORTALIAS[7];		//USED FOR UPLINKS ONLY
+	UCHAR PORTCALL[7];
+	UCHAR PORTALIAS[7];		//USED FOR UPLINKS ONLY
 	char PORTNUMBER;
 	struct PORTCONTROL * PORTPOINTER; // NEXT IN CHAIN
 
@@ -552,8 +553,8 @@ typedef struct PORTCONTROL
 
 	USHORT PARAMTIMER;		// MOVED FROM HW DATA FOR SYSOPH
 	UCHAR PORTMAXDIGIS;		// DIGIS ALLOWED ON THIS PORT
-	char PORTALIAS2[7];		// 2ND ALIAS FOR DIGIPEATING FOR APRS
-	char PORTBCALL[7];		// Source call for Beacon
+	UCHAR PORTALIAS2[7];		// 2ND ALIAS FOR DIGIPEATING FOR APRS
+	UCHAR PORTBCALL[7];		// Source call for Beacon
 	char PortNoKeepAlive;	// Default to no Keepalives
 	char PortUIONLY;		// UI only port - no connects
 	char UICAPABLE;			// Pactor-style port that can do UI
@@ -817,6 +818,154 @@ struct SEM
 	DWORD SemProcessID;
 };
 
+
+#define TNCBUFFLEN 1024
+#define MAXSTREAMS 32
+
+// DED Emulator Stream Info
+
+struct StreamInfo
+{ 
+	UCHAR * Chan_TXQ;		//	!! Leave at front so ASM Code Finds it
+							// FRAMES QUEUED TO NODE
+    int BPQStream;
+	BOOL Connected;					// Set if connected to Node
+	int CloseTimer;					// Used to close session after connect failure
+	UCHAR MYCall[30];
+};
+
+
+struct TNCDATA
+{
+	struct TNCDATA * Next;
+	unsigned int Mode;				// 0 = TNC2, others may follow
+
+	UCHAR RXBUFFER[TNCBUFFLEN];		// BUFFER TO USER
+	UCHAR TXBUFFER[260];			// BUFFER TO NODE
+
+	char PORTNAME[80];				// for Linux Port Names
+	int ComPort;
+	BOOL VCOM;
+	int RTS;
+	int CTS;
+	int DCD;
+	int DTR;
+	int DSR;
+    int BPQPort;
+	int HostPort;
+	int Speed;
+	char PortLabel[20];
+	char TypeFlag[2];
+	BOOL PortEnabled;
+	HANDLE hDevice;
+	BOOL NewVCOM;			// Setif User Mode VCOM Port
+
+	UCHAR VMSR;						// VIRTUAL MSR
+
+//        BIT 7 - Receive Line Signal Detect (DCD)
+//            6 - Ring Indicator
+//            5 - Data Set Ready
+//            4 - Clear To Send
+//            3 - Delta  RLSD ( ie state has changed since last
+//                                 access)
+//            2 - Trailing Edge Ring Detect
+//            1 - Delta DSR
+//            0 - Delta CTS
+
+
+	BOOL	RTSFLAG;		// BIT 0 SET IF RTS/DTR UP
+	UCHAR	VLSR;			// LAST RECEIVED LSR VALUE
+
+	int RXCOUNT;			// BYTES IN RX BUFFER
+	UCHAR * PUTPTR;			// POINTER FOR LOADING BUFFER
+	UCHAR * GETPTR;			// POINTER FOR UNLOADING BUFFER
+
+	UCHAR * CURSOR;			// POSTION IN KEYBOARD BUFFER
+	struct _TRANSPORTENTRY * KBSESSION;	// POINTER TO L4 SESSION ENTRY FOR CONSOLE
+
+	int	MSGLEN;
+	int TRANSTIMER;			// TRANPARENT MODE SEND TIMOUT
+	BOOL AUTOSENDFLAG;		// SET WHEN TRANSMODE TIME EXPIRES
+
+	int CMDTMR;				// TRANSARENT MODE ESCAPE TIMER
+	int COMCOUNT;			// NUMBER OF COMMAND CHARS RECEIVED
+	int CMDTIME ;			// GUARD TIME FOR TRANS MODE EACAPE
+	int COMCHAR;			// CHAR TO LEAVE CONV MODE 
+
+	char ECHOFLAG;			// ECHO ENABLED
+	BOOL TRACEFLAG;			//  MONITOR ON/OFF
+	BOOL FLOWFLAG;			//  FLOW OFF/ON
+
+	BOOL CONOK;
+	BOOL CBELL;
+	BOOL NOMODE;			//  MODE CHANGE FLAGS
+	BOOL NEWMODE;
+	BOOL CONMODEFLAG;		//  CONNECT MODE - CONV OR TRANS
+	BOOL LFIGNORE;
+	BOOL MCON;				//  TRACE MODE FLAGS 
+	BOOL MCOM;
+	BOOL MALL;
+	BOOL AUTOLF;			//  Add LF after CR
+	BOOL BBSMON;			//  SPECIAL SHORT MONITOR FOR BBS
+	BOOL MTX;				//  MONITOR TRANSMITTED FRAMES
+	BOOL MTXFORCE;			//  MONITOR TRANSMITTED FRAMES EVEN IF M OFF
+	UINT MMASK;				// MONITOR PORT MASK
+	BOOL HEADERLN;			//  PUT MONITORED DATA ON NEW LINE FLAG
+	
+	BOOL MODEFLAG;			//  COMMAND/DATA MODE
+
+	UINT APPLICATION;		// APPLMASK
+	
+	UINT APPLFLAGS;		// FLAGS TO CONTROL APPL SYSTEM
+
+	UINT SENDPAC;			//  SEND PACKET CHAR
+	BOOL CPACTIME;			// USE PACTIME IN CONV MODE
+	BOOL CRFLAG	;			// APPEND SENDPAC FLAG
+
+	int TPACLEN	;			// MAX PACKET SIZE FOR TNC GENERATED PACKETS
+	UCHAR UNPROTO[64];		// UNPROTO DEST AND DIGI STRING
+
+	char MYCALL[10];
+
+	// DED Mode Fields
+
+	struct StreamInfo * Channels[MAXSTREAMS+1];
+	char MODE;				// INITIALLY TERMINAL MODE
+	char HOSTSTATE;			// HOST STATE MACHINE 
+	int MSGCOUNT;			// LENGTH OF MESSAGE EXPECTED
+	int MSGLENGTH;
+	char MSGTYPE;
+	char MSGCHANNEL;
+	char DEDMODE;			// CLUSTER MODE - DONT ALLOW DUP CONNECTS
+	int HOSTSTREAMS;		// Default Streams
+
+	UCHAR DEDTXBUFFER[256];
+	UCHAR * DEDCURSOR;
+
+	unsigned char MONBUFFER[258]; //="\x6";
+	int MONLENGTH;
+	int MONFLAG;
+
+	// Kantronics Fields
+
+	int	RXBPtr;	
+	char nextMode;			// Mode after RESET
+
+	// SCS Fields
+
+	BOOL Term4Mode;			// Used by Airmail
+	BOOL PACMode;			// SCS in Packet Mode
+	BOOL Toggle;				// SCS Sequence Toggle
+
+	char MyCall[10];
+
+};
+
+// Emulatiom mode equates
+
+#define TNC2 0
+#define DED 1
+#define KANTRONICS 2		// For future use
+#define SCS 3
+
 #endif
-
-

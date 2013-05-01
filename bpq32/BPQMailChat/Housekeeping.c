@@ -2,7 +2,7 @@
 //
 //	Housekeeping Module
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 int LogAge = 7;
 

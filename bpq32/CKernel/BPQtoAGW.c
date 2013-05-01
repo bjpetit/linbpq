@@ -163,7 +163,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int datalen;
 	UINT * buffptr;
 	char txbuff[500];
-
+	short * sp;
 	unsigned int bytes,txlen=0;
 	char ErrMsg[255];
 
@@ -252,12 +252,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			buffptr=Q_REM(&AGWtoBPQ_Q[port]);
 
-			datalen=buffptr[1];
+			datalen = buffptr[1];
 
 			memcpy(&buff[6],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 			datalen+=6;
-			buff[5]=(datalen & 0xff);
-			buff[6]=(datalen >> 8);
+
+			sp = (short *)&buff[5];
+			*sp = datalen;
+
+//			buff[5]=(datalen & 0xff);
+//			buff[6]=(datalen >> 8);
 		
 			ReleaseBuffer(buffptr);
 
@@ -279,19 +283,26 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		// AGW has a control byte on front, so only subtract 6 from BPQ length
 
-		txlen=(buff[6]<<8) + buff[5]-6;	
+		sp = (short *)&buff[5];
+		txlen = *sp - 6;
+
+//		txlen=(buff[6]<<8) + buff[5]-6;	
 		
 		AGWHeader.Port=AGWChannel[port];
 		AGWHeader.DataKind='K';				// raw send
-		AGWHeader.DataLength=txlen;
 
+#ifdef __BIG_ENDIAN__
+		AGWHeader.DataLength = reverse(txlen);
+#else
+		AGWHeader.DataLength = txlen;
+#endif
 		memcpy(&txbuff,&AGWHeader,sizeof(AGWHeader));
-		memcpy(&txbuff[sizeof(AGWHeader)],&buff[6],txlen);
+		memcpy(&txbuff[sizeof(AGWHeader)], &buff[6], txlen);
 		txbuff[sizeof(AGWHeader)]=0;
 		
 		txlen+=sizeof(AGWHeader);
 
-		bytes=send(AGWSock[MasterPort[port]],(const char FAR *)&txbuff,txlen,0);
+		bytes=send(AGWSock[MasterPort[port]],(const char FAR *)&txbuff, txlen, 0);
 		
 		if (bytes != txlen)
 		{
@@ -480,7 +491,7 @@ BOOL ReadConfigFile(int Port)
 	
 			if (!ProcessLine(buf, Port, FALSE))
 			{
-				WritetoConsole("BPQEther - Bad config record ");
+				WritetoConsole("BPQtoAGW - Bad config record ");
 				Consoleprintf(errbuf);
 			}
 		}
@@ -726,16 +737,17 @@ int ProcessReceivedData(int port)
 	
 	if (bytes == sizeof(RXHeader))
 	{
-		
 		//	Have a header - see if we have any associated data
 		
 		datalen=RXHeader.DataLength;
 
+		#ifdef __BIG_ENDIAN__
+		datalen = reverse(datalen);
+		#endif
+
 		if (datalen > 0)
 		{
-
 			// Need data - See if enough there
-			
 			
 			bytes = recv(AGWSock[port],(char *)&Message,sizeof(RXHeader)+datalen,MSG_PEEK);
 		}
@@ -755,7 +767,6 @@ int ProcessReceivedData(int port)
 
 			if (RXHeader.DataKind == 'K')				// raw data
 			{
-				
 				//	Make sure it is for a port we want - we may not be using all AGW ports
 
 				if (BPQPort[RXHeader.Port][MasterPort[port]] == 0)
@@ -767,14 +778,11 @@ int ProcessReceivedData(int port)
 				buffptr=GetBuff();
 
 				if (buffptr == 0) return (0);			// No buffers, so ignore
-
-
 	
 				buffptr[1]=datalen;
 				memcpy(buffptr+2,&Message,datalen);
 
 				C_Q_ADD(&AGWtoBPQ_Q[BPQPort[RXHeader.Port][MasterPort[port]]],buffptr);
-
 			}
 
 			return (0);
@@ -783,12 +791,9 @@ int ProcessReceivedData(int port)
 		// Have header, but not sufficient data
 
 		return (0);
-	
 	}
 
 	// Dont have at least header bytes
 	
 	return (0);
-
 }
-

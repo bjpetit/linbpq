@@ -30,6 +30,10 @@
 
 // Bypass flow contol when running under WINE
 
+// Version 1.1.7.1
+
+//	Fix running with BPQ32.dll Version 6
+
 #include "stdafx.h"
 #include "bpqtnc2.h"
 #define DYNLOADBPQ
@@ -304,7 +308,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	GetAPI();
 
 	BPQHOSTAPI= GETBPQAPI();
-	MONDECODE = GETMONDECODE();
+	//MONDECODE = GETMONDECODE();
 
 	REGTREE = GetRegistryKey();
 
@@ -1501,3 +1505,11 @@ BOOL TNC2Timer()
 
 }
 
+#define DllImport	__declspec( dllimport )
+#define DllExport	__declspec( dllexport )
+
+
+int xDecodeFrame(char * msg, char * buffer, int Stamp)
+{
+	return DecodeFrame(msg, buffer, Stamp);
+}

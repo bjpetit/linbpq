@@ -37,7 +37,9 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 //int MaxStreams = 0;
 
+#ifndef LINBPQ
 extern HFONT hFont;
+#endif
 
 static char status[23][50] = {"IDLE", "TFC", "RQ", "ERR", "PHS", "OVER", "FSK TX",
 		"FSK RX", "P-MODE100", "P-MODE200", "HUFMAN ON", "HUFMAN OFF", "P-MODE SBY(LISTEN ON)",
@@ -46,14 +48,14 @@ static char status[23][50] = {"IDLE", "TFC", "RQ", "ERR", "PHS", "OVER", "FSK TX
 		"FREE SIGNAL TX (AMTOR)", "FREE SIGNAL TX TIMED OUT (AMTOR)"};
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
-BOOL NEAR OpenConnection(int);
-BOOL NEAR SetupConnection(int);
-BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
-void CheckRX(struct TNCINFO * TNC);
+BOOL OpenConnection(int);
+BOOL SetupConnection(int);
+static BOOL WriteCommBlock(struct TNCINFO * TNC);
+static void CheckRX(struct TNCINFO * TNC);
 VOID HALPoll(int Port);
 VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
 VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-VOID DoTNCReinit(struct TNCINFO * TNC);
+static VOID DoTNCReinit(struct TNCINFO * TNC);
 VOID DoTermModeTimeout(struct TNCINFO * TNC);
 VOID ProcessHALBuffer(struct TNCINFO * TNC, int Length);
 VOID ProcessHALCmd(struct TNCINFO * TNC);
@@ -66,7 +68,7 @@ VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 BOOL HALConnected(struct TNCINFO * TNC, char * Call);
 VOID HALDisconnected(struct TNCINFO * TNC);
 
-VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
+static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 VOID SendCmd(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
@@ -291,6 +293,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct STREAMINFO * STREAM;
 	int Stream;
+	short * sp;
 
 	if (TNC == NULL)
 		return 0;
@@ -333,8 +336,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				buff[7] = 0xf0;
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
-				buff[5]=(datalen & 0xff);
-				buff[6]=(datalen >> 8);
+
+				sp = (short *)&buff[5];
+				*sp = datalen;
+
+	//			buff[5]=(datalen & 0xff);
+	//			buff[6]=(datalen >> 8);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -366,7 +373,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		txlen=(buff[6]<<8) + buff[5]-8;	
+		sp = (short *)&buff[5];
+		txlen = *sp - 8;
+
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
@@ -379,11 +388,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 		
-		_asm 
-		{
-			MOV	EAX,buff
-			mov Stream,eax
-		}
+		Stream = (int)buff;
 			
 		if (STREAM->FramesQueued  > 4)
 			return (1 | TNC->HostMode << 8);
@@ -572,8 +577,6 @@ static VOID KISSCLOSE(int Port)
 { 
 	struct TNCINFO * conn = TNCInfo[Port];
 
-	SetCommMask(conn->hDevice, 0);
-
 	// drop DTR and RTS
 
 	COMClearDTR(conn->hDevice);
@@ -590,7 +593,7 @@ static VOID KISSCLOSE(int Port)
 static void CheckRX(struct TNCINFO * TNC)
 {
 	int Length, Len;
-	char * Xptr;
+	UCHAR * Xptr;
 
 	// only try to read number of bytes in queue 
 
@@ -640,7 +643,7 @@ static void CheckRX(struct TNCINFO * TNC)
 	
 			// Make sure we have the escaped char as well
 	
-			if ((Xptr - (char *)&TNC->RXBuffer) == Length - 1)		// x91 is last char
+			if ((Xptr - &TNC->RXBuffer[0]) == Length - 1)		// x91 is last char
 				return;
 	}
 
@@ -654,20 +657,9 @@ static void CheckRX(struct TNCINFO * TNC)
 
 
 
-static BOOL NEAR WriteCommBlock(struct TNCINFO * TNC)
+static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
-	BOOL        fWriteStat;
-	DWORD       dwBytesWritten;
-	DWORD       dwErrorFlags;
-	COMSTAT     ComStat;
-
-	fWriteStat = WriteFile(TNC->hDevice, TNC->TXBuffer, TNC->TXLen, &dwBytesWritten, NULL);
-
-	if ((!fWriteStat) || (TNC->TXLen != dwBytesWritten))
-	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
-	}
-
+	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
 	return TRUE;
 }
 
@@ -929,7 +921,7 @@ VOID HALPoll(int Port)
 						SendCmd(TNC, "\x84", 1);		// FSK
 						SendCmd(TNC, "\x83", 1);		// Select P-MODE Standby
 
-						datalen = sprintf(TXMsg, "%\x19%s", STREAM->RemoteCall);
+						datalen = sprintf(TXMsg, "\x19%s", STREAM->RemoteCall);
 					
 						sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s - PACTOR", STREAM->MyCall, STREAM->RemoteCall);
 
@@ -941,7 +933,7 @@ VOID HALPoll(int Port)
 						SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
 						SendCmd(TNC, "\x57", 1);		// Enable TX buffer clear on disconnect
 
-						datalen = sprintf(TXMsg, "%\x11%s", STREAM->RemoteCall);
+						datalen = sprintf(TXMsg, "\x11%s", STREAM->RemoteCall);
 					
 						sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s - CLOVER", STREAM->MyCall, STREAM->RemoteCall);
 
@@ -963,7 +955,7 @@ VOID HALPoll(int Port)
 					SendCmd(TNC, "\x54", 1);		// Enable adaptive Clover format
 					SendCmd(TNC, "\x57", 1);		// Enable TX buffer clear on disconnect
 
-					datalen = sprintf(TXMsg, "%\x11%s", STREAM->RemoteCall);
+					datalen = sprintf(TXMsg, "\x11%s", STREAM->RemoteCall);
 					SendCmd(TNC, TXMsg, datalen + 1);	// Include NULL
 					
 					sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s - CLOVER",

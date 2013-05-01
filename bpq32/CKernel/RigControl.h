@@ -1,5 +1,6 @@
-
+#ifndef LINBPQ
 #include "Rigresource.h"
+#endif
 
 #define IDI_ICON2 2
 

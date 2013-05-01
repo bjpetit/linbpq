@@ -32,11 +32,11 @@ char ReportDest[7];
 UCHAR BPQDirectory[260] = ".";
 UCHAR BPQProgramDirectory[260]="";
 
-char WINMOR[7] = {'W'+'W','I'+'I','N'+'N','M'+'M','O'+'O','R'+'R'};		// WINMOR IN AX25
-char PACTORCALL[7] = {'P'+'P','A'+'A','C'+'C','T'+'T','O'+'O','R'+'R'};	//PACTOR IN AX25
+UCHAR WINMOR[7] = {'W'+'W','I'+'I','N'+'N','M'+'M','O'+'O','R'+'R'};		// WINMOR IN AX25
+UCHAR PACTORCALL[7] = {'P'+'P','A'+'A','C'+'C','T'+'T','O'+'O','R'+'R'};	//PACTOR IN AX25
 
-char L3RTT[7] = {'L'+'L','3'+'3','R'+'R','T'+'T','T'+'T',0x40, 0xe0};		// L3RTT IN AX25
-char L3KEEP[7] = {'K'+'K','E'+'E','E'+'E','P'+'P','L'+'L','I'+'I', 0xe0};	//  KEEPLI IN AX25
+UCHAR L3RTT[7] = {'L'+'L','3'+'3','R'+'R','T'+'T','T'+'T',0x40, 0xe0};		// L3RTT IN AX25
+UCHAR L3KEEP[7] = {'K'+'K','E'+'E','E'+'E','P'+'P','L'+'L','I'+'I', 0xe0};	//  KEEPLI IN AX25
 
 char WL2KCall[10] = "";
 char WL2KLoc[7] = "";

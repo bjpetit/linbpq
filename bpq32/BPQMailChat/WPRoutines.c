@@ -2,7 +2,7 @@
 //
 // White Pages Database Support Routines
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 int CurrentWPIndex;
 char CurrentWPCall[10];
@@ -687,7 +687,7 @@ it will not be replaced. This flag will be used in case the WP update messages a
 */
 				if ((WPDate = mktime(&rtime)) != (time_t)-1 )
 				{
-					WPDate -= (time_t)timezone;
+					WPDate -= (time_t)_MYTIMEZONE;
 					TypeString = strlop(Call, '/');
 					
 					if (strlen(Call) < 3 || strlen(Call) > 9)

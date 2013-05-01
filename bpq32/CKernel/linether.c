@@ -204,6 +204,7 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
 	PCAPINFO * IF;
 	int port = PortEntry->PORTNUMBER;
 	u_long param=1;
+    struct ifreq buffer;
 
 	WritetoConsole("BPQEther ");
 
@@ -233,6 +234,14 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
 
 		if (ioctl(IF->s, SIOCGIFINDEX,&ifr) == -1)
 			perror("Get IF Number");
+
+		// Get MAC Address
+
+		memset(&buffer, 0x00, sizeof(buffer));
+
+		strcpy(buffer.ifr_name, Adapter);
+	    ioctl(IF->s, SIOCGIFHWADDR, &buffer);
+		memcpy(IF->EthSource, buffer.ifr_hwaddr.sa_data, 6);
 	}
 
 	n=sprintf(buf,"Using %s = Interface %d\n", Adapter, ifr.ifr_ifindex);
@@ -451,29 +460,9 @@ static ProcessLine(char * buf, int Port, BOOL CheckPort)
 		return (TRUE);
 	}
 
-	if(_stricmp(ptr,"SOURCE") == 0)
-	{	
-		p_mac = strtok(NULL, " \t\n\r");
-		
-		if (p_mac == NULL) return (FALSE);
-
-		num=sscanf(p_mac,"%x-%x-%x-%x-%x-%x",&a,&b,&c,&d,&e,&f);
-
-		if (num != 6) return FALSE;
-
-
-		PCAPInfo[Port].EthSource[0]=a;
-		PCAPInfo[Port].EthSource[1]=b;
-		PCAPInfo[Port].EthSource[2]=c;
-		PCAPInfo[Port].EthSource[3]=d;
-		PCAPInfo[Port].EthSource[4]=e;
-		PCAPInfo[Port].EthSource[5]=f;
-
-	//	strcpy(Adapter,p_Adapter);
-
+	if(_stricmp(ptr,"SOURCE") == 0)		// not used, but ignore
 		return (TRUE);
 
-	}
 	//
 	//	Bad line
 	//

@@ -179,6 +179,11 @@ int tnctypes(int i, char value[],char rec[]);
 int do_kiss (char value[],char rec[]);
 int dec_byte(int i, char * value, char * rec);
 
+struct TNCDATA * TNC2TABLE = NULL;		// malloc'ed
+int NUMBEROFTNCPORTS = 0;
+
+struct TNCDATA * TNC2ENTRY;
+
 extern char PWTEXT[];
 extern char HFCTEXT[];
 extern int HFCTEXTLEN;
@@ -226,6 +231,9 @@ extern int dec_byte(int i,char *value,char *rec);
 extern int do_kiss(char *value,char *rec);
 extern int decode_ded_rec(char *rec);
 extern int simple(int i);
+
+int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF);
+int doSerialPortName(int i, char * value, char * rec);
 
 BOOL ProcessAPPLDef(char * rec);
 BOOL ToLOC(double Lat, double Lon , char * Locator);
@@ -795,6 +803,9 @@ NextAPRS:
 		LocSpecified = TRUE;
 
 		if (_memicmp(&rec[8], "NONE", 4) == 0)
+			return 0;
+
+		if (_memicmp(&rec[8], "XXnnXX", 6) == 0)
 			return 0;
 
 		if (ptr1)
@@ -1496,18 +1507,15 @@ int ports(int i)
 }
 
 
-int tncports(i)
-int i;
+int tncports(int i)
 {
 	char rec[MAXLINE];
 	endport=0;
 	tncporterror=0;
-/*
-	Set default APPLFLAGS to 6
-*/
 
-	bseek(fp2,(long) tncportoffset+5,SEEK_SET);
-	bputc(6,fp2);
+	TNC2ENTRY = zalloc(sizeof(struct TNCDATA));
+
+	TNC2ENTRY->APPLFLAGS = 6;
 
 	while (endport == 0 && !feof(fp1))
 	{
@@ -1517,8 +1525,14 @@ int i;
 	if (tncporterror != 0)
 	{
 	   Consoleprintf("Error in TNC PORT definition");
-	   return(0);
-	} 
+	   free (TNC2ENTRY);
+		 return(0);
+	}
+
+	C_Q_ADD_NP(&TNC2TABLE, TNC2ENTRY);		// Add to chain
+	
+	NUMBEROFTNCPORTS++;
+
    	tncportoffset = tncportoffset + 8;
 	return(1); 
 
@@ -2115,8 +2129,6 @@ int IsNumeric(char *str)
 
 int doSerialPortName(int i, char * value, char * rec)
 {
-	unsigned int j;
-
 	rec += 8;
 
 	if (strlen(rec) > 79)
@@ -2336,12 +2348,8 @@ static int troutine[] =
 
 #define TPARAMLIM 6
 
-decode_tnc_rec(rec)
-char rec[];
+decode_tnc_rec(char * rec)
 {
-	int i;
-	int cn = 1;			/* RETURN CODE FROM ROUTINES */
-
 	char key_word[20];
 	char value[300];
 
@@ -2350,45 +2358,37 @@ char rec[];
 	else
 	   sscanf(rec,"%s",key_word);
 
-/************************************************************************/
-/*      SEARCH FOR KEYWORD IN TABLE					*/
-/************************************************************************/
-
-	for (i=0; _stricmp(tkeywords[i],key_word) != 0 && i < TPARAMLIM; i++)
-	   ;
-
-	if (i == TPARAMLIM)
-	   Consoleprintf("Source record not recognised - Ignored:%s\r\n",rec);
-	else
+	if (_stricmp(key_word, "ENDPORT") == 0)
 	{
-	   fileoffset = toffset[i] + tncportoffset;
-	   switch (troutine[i])
-           {
-
-             case 1:
-		cn = dec_byte(i,value,rec);	     /* INTEGER VALUES */
-		break;
-
-             case 2:
-              	cn = bin_switch(i,value,rec);        /* 0/1 SWITCHES */
-		break;
-
-             case 3:
-		cn = hex_value(i,value,rec);         /* HEX NUMBERS */
-		break;
-
-             case 5:
-             	cn = tnctypes(i,value,rec);          /* PORT MODES */
-		break;
-
-             case 9:
-              	cn = 1;
 		endport=1;
-
-		break;
-           }
+		return 0;
 	}
-	if (cn == 0) tncporterror=1;
+	else if (_stricmp(key_word, "TYPE") == 0)
+	{
+		if (_stricmp(value, "TNC2") == 0)
+			TNC2ENTRY->Mode = TNC2;
+		else if (_stricmp(value, "DED") == 0)
+			TNC2ENTRY->Mode = DED;
+		else if (_stricmp(value, "KANT") == 0)
+			TNC2ENTRY->Mode = KANTRONICS;
+		else if (_stricmp(value, "SCS") == 0)
+			TNC2ENTRY->Mode = SCS;
+		else
+		{
+			Consoleprintf("Invalid TNC Type");
+			Consoleprintf("%s\r\n",rec);
+		}
+	}
+	else if (_stricmp(key_word, "COMPORT") == 0)
+		strcpy(TNC2ENTRY->PORTNAME, value);
+	else if (_stricmp(key_word, "APPLMASK") == 0)
+		TNC2ENTRY->APPLICATION =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "APPLFLAGS") == 0)
+		TNC2ENTRY->APPLFLAGS =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "CHANNELS") == 0)
+		TNC2ENTRY->HOSTSTREAMS =  strtol(value, 0, 0);
+	else
+	   Consoleprintf("Source record not recognised - Ignored:%s\r\n",rec);
 
 	return 0;
 

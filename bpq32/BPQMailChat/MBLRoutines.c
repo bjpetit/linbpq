@@ -2,7 +2,7 @@
 //
 // MBL-Style Forwarding Routines
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {

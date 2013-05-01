@@ -1,5 +1,5 @@
 
-#include "stdafx.h"
+#include "bpqchat.h"
 
 extern char OurNode[10];
 
@@ -15,137 +15,6 @@ extern char OurNode[10];
 #define SENDBODY 128
 #define WAITPROMPT 256				// Waiting for prompt after message
 
-#ifdef LINBPQ
-
-struct UserInfo{
-
-	char	Call[10];			//	Connected call without SSID	
-	char	Name[18];			/* 18 1st Name */
-
-}; 
-
-typedef struct topic_t
-{
-	struct topic_t *next;
-	char  *name;
-	int  refcnt;
-} TOPIC;
-
-// Nodes.
-
-typedef struct node_t
-{
-	struct node_t *next;
-	char *alias;
-	char *call;
-	char * Version;
-	int refcnt;
-} CHATNODE;
-
-
-
-typedef struct ct_t
-{
-	struct ct_t *next;
-	TOPIC *topic;
-	int  refcnt;
-} CT;
-
-typedef struct link_t
-{
-	struct link_t *next;
-	char *alias;
-	char *call;
-	int  flags; // See circuit flags.
-	int delay;	// Limit connects when failing
-
-} LINK;
-
-typedef struct ChatConnectionInfo_S
-{
-	struct ChatConnectionInfo_S *next;
-	PROC *proc;
-	UCHAR rtcflags;             // p_linked or p_user.
-	int s;                 // Socket.
-//	char buf[ln_ibuf];      // Line of incoming text.
-	union
-	{
-		struct user_t *user;  // Associated user if local.
-		struct link_t *link;  // Associated link if link.
-	} u;
-	int refcnt;               // If link, # of users on that link.
-	struct cn_t *hnode;       // Nodes heard from this link.
-	struct ct_t *topic;       // Out this circuit if from these topics.
-
-	int Number;					// Number of record - for Connections display
-	BOOL Active;
-    int BPQStream;
-	int paclen;
-	UCHAR Callsign[11];			// Station call including SSID
-    BOOL GotHeader;
-
-	char FBBReplyChars[80];		// Version from other end
-
-    UCHAR InputBuffer[10000];
-    int InputLen;				// Data we have already = Offset of end of an incomplete packet;
-
-	struct UserInfo * UserPointer;
-    int Retries;
-	int	LoginState;				// 1 = user ok, 2 = password ok
-	int Flags;
-
-	// Data to the user is kept in a static buffer. This can be appended to,
-	// and data sucked out under both terminal and system flow control. PACLEN is
-	// enfored when sending to node.
-
-	UCHAR OutputQueue[10000];	// Messages to user
-	int OutputQueueLength;		// Total Malloc'ed size. Also Put Pointer for next Message
-	int OutputGetPointer;		// Next byte to send. When Getpointer = Queue Length all is sent - free the buffer and start again.
-
-	int CloseAfterFlush;		// Close session when all sent. Set to 100ms intervals to wait.
-	
-	BOOL sysop;					// Set if user is authenticated as a sysop
-	BOOL Secure_Session;		// Set if Local Terminal, or Telnet connect with SYSOP status
-
-	BOOL NewUser;						// Set if first time user has accessed BBS
-	int Watchdog;						// Hung Circuit Detect.
-	int SessType;						// BPQ32 sesstype bits
-
-#define Sess_L2LINK 1
-#define Sess_SESSION	2
-#define Sess_UPLINK	4
-#define Sess_DOWNLINK 8
-#define Sess_BPQHOST 0x20
-#define Sess_PACTOR	0x40
-
-	HANDLE DebugHandle;					// File Handle for session-based debugging
-
-} ChatConnectionInfo, ChatCIRCUIT;
-
-typedef struct user_t
-{
-	struct  user_t *next;
-	char    *call;
-	char    *name;
-	char    *qth;
-	CHATNODE    *node;          // Node user logged into.
-	ChatCIRCUIT *circuit;       // Circuit user is on, local or link.
-	TOPIC   *topic;         // Topic user is in.
-	int     rtflags;
-	time_t	lastmsgtime;	// Time of last input from user
-	time_t	lastsendtime;	// Time of last output to user
-	int Colour;				// For Console Display
-} USER;
-
-// Bits for circuit flags and link flags.
-
-#define p_nil     0x00    // Circuit is being shut down.
-#define p_user    0x01    // User connected.
-#define p_linked  0x02    // Active link with another RT.
-#define p_linkini 0x04    // Outgoing link setup with another RT.
-#define p_linkwait 0x08   // Incoming link setup - waiting for *RTL
-
-#endif
 
 extern char PassError[];
 extern char BusyError[];
@@ -204,9 +73,6 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 };
 
 
-UCHAR * APIENTRY GetBPQDirectory();
-void * zalloc(int len);
-
 static struct HTTPConnectionInfo * SessionList;	// active bbs config sessions
 
 static struct HTTPConnectionInfo * AllocateSession(char Appl);
@@ -248,7 +114,9 @@ char **	SeparateMultiString(char * MultiString);
 VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key);
 VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Key);
 int rtlink (char * Call);
-
+char * GetBPQDirectory();
+VOID SaveChatConfig(char * ConfigName);
+BOOL GetChatConfig(char * ConfigName);
 
 static char UNC[] = "";
 static char CHKD[] = "checked=checked ";
@@ -795,7 +663,7 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
    int OutputLen = 0;
 	struct HTTPConnectionInfo Session;
 	char URL[4096];
-	char * Context, * Method, * NodeURL, * Key;
+	char * Context, * Method;
 	int n;
 
 	char * ptr;
@@ -842,8 +710,8 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
 		FlushFileBuffers(hPipe); 
 		DisconnectNamedPipe(hPipe); 
 		CloseHandle(hPipe);
-		return 1;
 	}
+	return 1;
 }
 
 static DWORD WINAPI PipeThreadProc(LPVOID lpvParam)

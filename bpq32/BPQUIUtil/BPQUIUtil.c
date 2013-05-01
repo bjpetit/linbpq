@@ -14,6 +14,10 @@
 
 //		Fix test for Tracker and UZ7HO ports (again!)
 
+//	Version 0.1.4.1 April 2013
+
+//		Fix confusion between locical and physical port numkbers
+
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -935,7 +939,7 @@ VOID WINAPI OnTabbedDialogInit(HWND hDlg)
 					continue;
 
 		wsprintf(PortNo, "Port %2d", GetPortNumber(i));
-		PortNum[tab] = GetPortNumber(i);
+		PortNum[tab] = i;
 
 		tie.pszText = PortNo;
 		TabCtrl_InsertItem(pHdr->hwndTab, tab, &tie);

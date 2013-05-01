@@ -1582,6 +1582,9 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 						memcpy(&arp->destaddr.sin_addr.s_addr, &res->ai_addr->sa_data[2], 4);
 						arp->IPv6 = FALSE;
 						arp->destaddr.sin_family = AF_INET;
+						Debugprintf("AXIP %s = %d.%d.%d.%d", arp->hostname, (UCHAR)res->ai_addr->sa_data[2],
+							(UCHAR)res->ai_addr->sa_data[3], (UCHAR)res->ai_addr->sa_data[4], (UCHAR)res->ai_addr->sa_data[5]);
+						
 					}
 					else
 					{

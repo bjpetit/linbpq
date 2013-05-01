@@ -4,14 +4,20 @@
 // Based on MailChat Version 1.4.48.1
 
 
-#include "stdafx.h"
-#include <new.h>
+
+
+
+
+
+// Add Configurable SYSOP Call
+
+
+#include "BPQChat.h"
 
 #define CHAT
 #include "Versions.h"
 
 #include "GetVersion.h"
-
 
 #define MAX_LOADSTRING 100
 
@@ -81,8 +87,7 @@ char LoginMsg[]="user:";
 
 char BlankCall[]="         ";
 
-extern char SYSOPCall[50];
-
+char ChatSYSOPCall[50];
 
 ULONG BBSApplMask;
 ULONG ChatApplMask;
@@ -1186,14 +1191,14 @@ Retry:
 			
 			memcpy(OurNode, ptr1, 10);
 			strlop(OurNode, ' ');
-			strcpy(SYSOPCall, OurNode);
-			strlop(SYSOPCall, '-');
+			strcpy(ChatSYSOPCall, OurNode);
+			strlop(ChatSYSOPCall, '-');
 
 			ptr1=GetApplAlias(ChatApplNum);
 			memcpy(OurAlias, ptr1,10);
 			strlop(OurAlias, ' ');
 
-			wsprintf(SignoffMsg, "73 de %s\r", SYSOPCall);
+			wsprintf(SignoffMsg, "73 de %s\r", ChatSYSOPCall);
 
 			ChatApplMask = 1<<(ChatApplNum-1);
 		

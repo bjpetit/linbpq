@@ -191,7 +191,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int TNCOK;
 	short * sp;
 
-
 	if (TNC == NULL)
 		return 0;					// Port not defined
 
@@ -266,8 +265,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				//	See what happened
 
 				if (FD_ISSET(TNC->WINMORSock,&readfs))
-				{
-			
+				{			
 					// data available
 			
 					ProcessReceivedData(port);
@@ -1201,7 +1199,7 @@ static int ProcessReceivedData(int port)
 	unsigned int bytes;
 	int datalen,i;
 	char ErrMsg[255];
-	char Message[500];
+	char Message[1000];
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct AGWINFO * AGW = TNC->AGWInfo;
 	struct TNCINFO * SaveTNC;

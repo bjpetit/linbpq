@@ -227,7 +227,7 @@ ConfigLine:
 				TNC->Dragon = TRUE;
 			else
 
-			if (_memicmp(buf, "MAXLEVEL", 8) == 0)		// Wait time beofre failing connect if busy
+			if (_memicmp(buf, "MAXLEVEL", 8) == 0)		// Maximum Pactor Level to use.
 				TNC->MaxLevel = atoi(&buf[8]);
 
 			else
@@ -287,7 +287,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct STREAMINFO * STREAM;
 	char PLevel;
 	struct ScanEntry * Scan;
-
+	short * sp;
 
 	if (TNC == NULL)
 		return 0;
@@ -347,9 +347,13 @@ ok:
 				buff[7] = 0xf0;
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
-				buff[5]=(datalen & 0xff);
-				buff[6]=(datalen >> 8);
-		
+
+				sp = (short *)&buff[5];
+				*sp = datalen;
+
+	//			buff[5]=(datalen & 0xff);
+	//			buff[6]=(datalen >> 8);
+				
 				ReleaseBuffer(buffptr);
 	
 				return (1);
@@ -379,7 +383,9 @@ ok:
 			return 0;
 		}
 
-		txlen=(buff[6]<<8) + buff[5]-8;	
+		sp = (short *)&buff[5];
+		txlen = *sp - 8;
+
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
@@ -1840,6 +1846,9 @@ VOID SwitchToPacket(struct TNCINFO * TNC)
 	TNC->Streams[0].DEDStream = 30;		// Packet Channel
 
 	TNC->SwitchToPactor = TNC->RobustTime;
+
+	Debugprintf("BPQ32 Scan - switch to Packet");
+
 }
 
 VOID ExitHost(struct TNCINFO * TNC)
@@ -2801,6 +2810,8 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 	char Status[80];
 	struct STREAMINFO * STREAM = &TNC->Streams[Stream];
 
+	Debugprintf("SCS Pactor Close Complete - Stream = %d", Stream);
+
 	STREAM->CmdSet = STREAM->CmdSave = malloc(100);
 
 	strcpy(STREAM->MyCall, TNC->NodeCall);
@@ -2816,6 +2827,7 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 		{
 			sprintf(STREAM->CmdSet, "I%s\rPR\r", TNC->NodeCall);
 			TNC->Streams[0].DEDStream = 30;		// Packet Channel
+			Debugprintf("BPQ32 Session Closed - switch to Packet");
 		}
 		else
 		{
@@ -2825,9 +2837,14 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 				sprintf(STREAM->CmdSet, "I%s\rPT\r", TNC->NodeCall);
 
 			TNC->Streams[0].DEDStream = 31;		// Pactor Channel
+			Debugprintf("BPQ32 Session Closed - switch to Pactor");
 		}
 	}
 	else
 		sprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);
+
+	Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
+
+
 }
 

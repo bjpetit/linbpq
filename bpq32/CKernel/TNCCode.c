@@ -136,10 +136,12 @@ VOID SENDBTMSG()
 
 			//	Send from BBSCALL unless PORTBCALL defined
 
-			if (PORT->PORTBCALL[0] > 31)
+			if (PORT->PORTBCALL[0] > 32)
 				memcpy(Buffer->ORIGIN, PORT->PORTBCALL, 7);
-			else
+			else if (APPLCALLTABLE->APPLCALL[0] > 32) 
 				memcpy(Buffer->ORIGIN, APPLCALLTABLE->APPLCALL, 7);
+			else
+				memcpy(Buffer->ORIGIN, MYCALL, 7);
 
 			ptr1 = &PORT->PORTUNPROTO[7];		// First Digi
 			ptr2 = &Buffer->CTL;				// Digi field in buffer

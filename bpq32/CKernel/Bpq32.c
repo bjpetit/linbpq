@@ -511,10 +511,25 @@
 // Fix using KISS ports with COMn > 16
 // Add "KISS over UDP" driver for PI as a TNC concentrator
 
+// Version 6.0.1.1
 
 // Convert to C for linux portability
-
 // Try to speed up kiss polling
+
+// Version 6.0.2.1
+
+// Fix operation on Win98
+// Fix callsign error with AGWtoBPQ
+// Fix PTT problem with WINMOR
+// Fix Reread telnet config
+// Add Secure CMS signon
+// Fix error in cashing addresses of CMS servers
+// Fix Port Number when using Send Raw.
+// FIx PE in KISS driver if invalid subchannel received
+// Fix Orignal address of beacons
+// Speed up Telnet port monitoring.
+// Add TNC Emulators
+// Add CountFramesQueuedOnStream API
 
 #define CKernel
 
@@ -575,6 +590,9 @@ extern APPLCALLS APPLCALLTABLE[];
 extern char * APPLS;
 
 extern struct WL2KInfo * WL2KReports;
+
+extern int NUMBEROFTNCPORTS;
+
 
 UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
 UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
@@ -663,6 +681,7 @@ VOID CheckWL2KReportTimer();
 VOID SetApplPorts();
 VOID WriteMiniDump();
 VOID FindLostBuffers();
+BOOL InitializeTNCEmulator();
 
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 DllExport int APIENTRY GetStreamPID(int Stream);
@@ -1057,7 +1076,7 @@ VOID MonitorThread(int x)
 			
 			// Write a minidump
 
-			WriteMiniDump();
+//			WriteMiniDump();
 			
 			Semaphore.Flag = 0;
 		}
@@ -1388,6 +1407,9 @@ VOID CALLBACK TimerProc
 
 		FreeSemaphore(&Semaphore);			// SendLocation needs to get the semaphore
 
+		if (NUMBEROFTNCPORTS)
+			TNC2Poll();
+
 		strcpy(EXCEPTMSG, "HTTP Timer Processing");
 
 		HTTPTimer();
@@ -1526,6 +1548,9 @@ Check_Timer()
 			FirstInitDone=1;					// Only init in BPQ32.exe
 			FirstInit();
 			FreeSemaphore(&Semaphore);
+			if (NUMBEROFTNCPORTS)
+				InitializeTNCEmulator();
+
 			return 0;
 		}
 		else
@@ -1743,6 +1768,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			BPQ32_EXE = TRUE;
 
 		if (_stricmp(pgm,"BPQMailChat.exe") == 0)
+			IncludesMail = TRUE;
+
+		if (_stricmp(pgm,"BPQMail.exe") == 0)
 			IncludesMail = TRUE;
 
 		if (_stricmp(pgm,"BPQChat.exe") == 0)

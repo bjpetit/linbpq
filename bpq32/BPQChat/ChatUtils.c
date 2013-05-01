@@ -7,16 +7,15 @@
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
 
+#include "BPQChat.h"
 
 #ifdef LINBPQ
-
 #include "CHeaders.h"
 #endif
 
-#include "BPQChat.h"
+
 
 #ifndef LINBPQ
-#include "stdafx.h"
 #include <new.h>
 #endif
 

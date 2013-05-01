@@ -10,13 +10,10 @@
 #ifdef LINBPQ
 
 #include "CHeaders.h"
+#endif
+
 #include "bpqchat.h"
 
-#else
-
-#include "stdafx.h"
-
-#endif
 
 VOID ChatClearQueue(ChatCIRCUIT * conn);
 VOID ChatFlush(ChatCIRCUIT * conn);

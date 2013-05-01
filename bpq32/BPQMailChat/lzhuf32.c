@@ -2,7 +2,7 @@
 //
 // lzhuf Routines
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 
 /**************************************************************
@@ -1157,7 +1157,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			rtime.tm_year -= 1900;
 
-			Date = mktime(&rtime) - (time_t)timezone;
+			Date = mktime(&rtime) - (time_t)_MYTIMEZONE;
 	
 			if (Date == (time_t)-1)
 				Date = time(NULL);

@@ -429,8 +429,12 @@ Dll BOOL APIENTRY Init_APRS()
 #define SD_SEND         0x01
 #define SD_BOTH         0x02
 
+BOOL APRSActive;
+
 VOID APRSClose()
 {
+	APRSActive = FALSE;
+
 	if (sock)
 	{		
 		shutdown(sock, SD_BOTH);
@@ -2420,6 +2424,9 @@ void PollGPSIn()
 //				return;
 //			}
 //		}
+
+		if (portptr->gpsinptr == 160)
+			portptr->gpsinptr = 0;
 
 		len = ReadCOMBlock(portptr->hDevice, &portptr->GPSinMsg[portptr->gpsinptr],
 				160 - portptr->gpsinptr);

@@ -1,10 +1,10 @@
 //Microsoft Developer Studio generated resource script.
 //
-#include "resrc1.h"
+#include "BPQMailrc.h"
 
 // Generated Help ID header file
 #define APSTUDIO_HIDDEN_SYMBOLS
-#include "resrc1.hm"
+#include "BPQMailrc.hm"
 #undef APSTUDIO_HIDDEN_SYMBOLS
 
 #define APSTUDIO_READONLY_SYMBOLS
@@ -17,7 +17,6 @@
 #undef APSTUDIO_HIDDEN_SYMBOLS
 #define MAILCHAT
 #include "..\CInclude\Versions.h"
-#include "resource.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -196,7 +195,7 @@ BEGIN
     EDITTEXT        IDC_SMTPPort,210,233,29,14
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
                     WS_TABSTOP,249,232,91,14
-    DEFPUSHBUTTON   "Save",1100,144,258,50,14,BS_CENTER | BS_VCENTER
+    DEFPUSHBUTTON   "Save",1100,159,258,50,14,BS_CENTER | BS_VCENTER
     CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,
                     194,138,12
@@ -407,7 +406,7 @@ BEGIN
                     BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,257,260,67,8
     DEFPUSHBUTTON   "? Help",IDC_HRHELP,381,6,33,11,BS_CENTER | BS_VCENTER | 
                     NOT WS_TABSTOP
-    DEFPUSHBUTTON   "Save",4100,193,279,57,17,BS_CENTER | BS_VCENTER
+    DEFPUSHBUTTON   "Save",4100,192,279,57,17,BS_CENTER | BS_VCENTER
     LTEXT           "Static",IDC_STATIC,347,0,19,8
     LTEXT           "Interval (Secs)",IDC_STATIC,198,206,48,8
     EDITTEXT        IDC_REVFWDINT,407,205,23,12,ES_AUTOHSCROLL
@@ -888,29 +887,32 @@ BEGIN
     LTEXT           "BID Lifetime (Days)",IDC_STATIC,7,65,77,10
     LTEXT           "Maintenance Time (UTC)   Enter as HHMM",IDC_STATIC,7,21,
                     83,25
-    EDITTEXT        IDC_MAXMSG,96,45,25,12,ES_CENTER | ES_NUMBER
-    EDITTEXT        IDC_BIDLIFETIME,96,64,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDC_MAXMSG,102,45,25,12,ES_CENTER | ES_NUMBER
+    EDITTEXT        IDC_BIDLIFETIME,102,64,25,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    EDITTEXT        IDC_MAINTTIME,96,23,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDC_MAINTTIME,102,23,25,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     LTEXT           "Log File Lifetime (Days)",IDC_STATIC,7,85,80,10
-    EDITTEXT        IDC_LOGLIFETIME,96,83,25,12,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDC_LOGLIFETIME,102,83,25,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     CONTROL         "Delete Log and Message Files to Recycle Bin",
                     IDC_DELETETORECYCLE,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,100,115,20
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,121,115,20
     CONTROL         "Supress Mailing of Housekeeping Results",
                     IDC_MAINTNOMAIL,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | 
-                    BS_MULTILINE | WS_TABSTOP,5,140,115,20
+                    BS_MULTILINE | WS_TABSTOP,5,161,115,20
     CONTROL         "Save Registry",IDC_MAINTSAVEREG,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,5,165,115,10
+                    WS_TABSTOP,5,186,115,10
     CONTROL         "Send Non-delivery Notifications for P and T messages",
                     IDC_MAINTNONDELIVERY,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,120,115,20
+                    BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,141,115,20
     CONTROL         "Apply Overrides to Unsent Bulls",IDC_OVERRIDEUNSENT,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
                     WS_TABSTOP,153,231,195,10
+    LTEXT           "Delete Inactive Users (Days)",IDC_STATIC,7,105,93,10
+    EDITTEXT        IDC_USERLIFETIME,102,103,25,12,ES_CENTER | 
+                    ES_AUTOHSCROLL | ES_NUMBER
 END
 
 FILTERS DIALOG DISCARDABLE  26, 5, 382, 287
@@ -927,7 +929,7 @@ BEGIN
     LTEXT           "At",IDC_STATIC,255,155,15,10
     EDITTEXT        IDC_HOLDAT,228,167,64,83,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    DEFPUSHBUTTON   "Save",IDC_FILTERSAVE,160,266,50,14,BS_CENTER | 
+    DEFPUSHBUTTON   "Save",IDC_FILTERSAVE,171,266,50,14,BS_CENTER | 
                     BS_VCENTER
     LTEXT           "From",IDC_STATIC,115,40,28,10
     EDITTEXT        IDC_REJFROM,90,52,64,83,ES_MULTILINE | ES_UPPERCASE | 
@@ -1166,7 +1168,7 @@ END
 
 1 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "resrc1.h\0"
+    "BPQMailrc.h\0"
 END
 
 2 TEXTINCLUDE DISCARDABLE 
@@ -1176,7 +1178,6 @@ BEGIN
     "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "#define MAILCHAT\r\n"
     "#include ""..\\CInclude\\Versions.h""\r\n"
-    "#include ""resource.h""\r\n"
     "\0"
 END
 

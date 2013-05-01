@@ -1,10 +1,86 @@
-#pragma once
+
+#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
+#define _CRT_SECURE_NO_DEPRECATE
+#define _USE_32BIT_TIME_T
+
+#include "compatbits.h"
 
 #ifndef LINBPQ
-#include "compatbits.h"
+
+#include "asmstrucs.h"
+#include "bpq32.h"
+
 #endif
 
-#include "resource.h"
+#include "chatrc.h"
+
+#define IDC_STATIC -1
+#define IDS_APP_TITLE 103
+#define IDR_MAINFRAME 128
+#define IDD_CONFIG 102
+#define IDD_ABOUTBOX 103
+#define IDM_ABOUT 104
+#define IDM_EXIT 105
+#define IDM_CONSOLE 120
+#define IDM_MONITOR 121
+#define IDC_BPQMailChat 109
+#define IDM_DISCONNECT 2000
+#define IDM_LOGGING 2100
+#define IDM_CONFIG 110
+#define IDC_MYICON 2
+#define IDC_BBSCall 1001
+#define IDC_BaseDir 1002
+#define IDC_BBSAppl 1003
+#define IDC_BBSStreams 1004
+#define IDC_POP3Port 1005
+#define IDC_SMTPPort 1006
+#define IDC_HRoute 1007
+#define IDC_SYSOPCALL 1008
+#define IDC_REMOTEEMAIL 1009
+#define IDC_BBSSAVE 1100
+#define IDC_ChatAppl 2001
+#define IDC_ChatNodes 2002
+#define SAVENODES 2100
+
+
+#define BPQBASE 1024
+#define BPQMTX 1040
+#define BPQMCOM 1041
+#define BPQCOPYMON 1042
+#define BPQCOPYOUT 1043
+#define BPQCLEARMON 1044
+#define BPQCLEAROUT 1045
+#define BPQBELLS 1046
+#define BPQCHAT 1047
+#define BPQHELP 1048
+#define BPQStripLF 1049
+#define BPQLogOutput 1050
+#define BPQLogMonitor 1051
+#define BPQSendDisconnected 1052
+#define BPQFLASHONBELL 1053
+
+#define MONBBS 1060
+#define MONCHAT 1061
+#define MONTCP 1062
+
+#define IDC_NODES 501
+#define IDC_USERS 502
+#define IDC_LINKS 503
+#define IDC_SYSOPMSGS 504
+#define IDC_FWDINT 505
+#define IDC_UTC 506
+#define IDC_LOCAL 507
+#define IDC_MSGS 508 
+#define IDC_HELD 509
+
+#define IDD_USEREDIT 200
+#define IDD_FORWARDING 201
+#define IDD_MSGEDIT 202
+
+
+#define IDD_USERADDED_BOX 5051
+#define CHAT_CONFIG 9013
+#define IDC_ChatNodes 2002
 
 // Standard __except handler for try/except
 

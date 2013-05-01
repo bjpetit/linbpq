@@ -2,7 +2,7 @@
 //
 // White Pages Database Support Routines
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID ReleaseSock(SOCKET sock);
@@ -15,7 +15,7 @@ SOCKET nntpsock;
 
 extern SocketConn * Sockets;		// Chain of active sockets
 
-int NNTPInPort = 119;
+int NNTPInPort = 0;
 
 char *day[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
@@ -328,7 +328,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime) - (time_t)timezone;
+				Date = mktime(&rtime) - (time_t)_MYTIMEZONE;
 				
 				if (Date == (time_t)-1)
 					Date = 0;
@@ -565,7 +565,7 @@ VOID ProcessNNTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		rtime.tm_mon--;
 
 		if (_stricmp(Offset, "GMT") == 0)
-			Time = mktime(&rtime) - (time_t)timezone;
+			Time = mktime(&rtime) - (time_t)_MYTIMEZONE;
 		else
 			Time = mktime(&rtime);
 		

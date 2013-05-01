@@ -14,6 +14,7 @@ count on BPQ32.dll gets messed up, and the code will not unload cleanly.
 
 */
 
+
 #ifndef DYNLOADBPQ
 
 // Definitions for Statically Linked DLL
@@ -244,6 +245,7 @@ int APIENTRY GETBPQAPI();
 UINT APIENTRY GETMONDECODE();
 
 VOID APIENTRY RelBuff(VOID * Msg);
+//VOID *APIENTRY GetBuff();
 
 VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
 
@@ -256,6 +258,8 @@ int APIENTRY SetupTrayIcon();
 BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
 
 VOID APIENTRY SendChatReport(UINT_PTR ChatReportSocket, char * buff, int txlen);
+
+int APIENTRY CountFramesQueuedOnStream(int Stream);
 
 #else
 

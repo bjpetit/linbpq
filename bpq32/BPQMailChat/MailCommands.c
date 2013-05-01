@@ -1,4 +1,4 @@
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 static char seps[] = " \t\r";
 

@@ -57,29 +57,29 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 static char status[8][8] = {"STANDBY",  "PHASING", "CHGOVER", "IDLE", "TRAFFIC", "ERROR", "RQ", "XXXX"};
 
 struct TNCINFO * CreateTTYInfo(int port, int speed);
-BOOL NEAR OpenConnection(int);
-BOOL NEAR SetupConnection(int);
+BOOL OpenConnection(int);
+BOOL SetupConnection(int);
 BOOL CloseConnection(struct TNCINFO * conn);
-BOOL NEAR WriteCommBlock(struct TNCINFO * TNC);
-BOOL NEAR DestroyTTYInfo(int port);
-void CheckRX(struct TNCINFO * TNC);
+static BOOL WriteCommBlock(struct TNCINFO * TNC);
+BOOL DestroyTTYInfo(int port);
+static void CheckRX(struct TNCINFO * TNC);
 VOID AEAPoll(int Port);
-VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
-VOID ProcessTermModeResponse(struct TNCINFO * TNC);
-VOID DoTNCReinit(struct TNCINFO * TNC);
-VOID DoTermModeTimeout(struct TNCINFO * TNC);
+static VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * rxbuff, int len);
+static VOID ProcessTermModeResponse(struct TNCINFO * TNC);
+static VOID DoTNCReinit(struct TNCINFO * TNC);
+static VOID DoTermModeTimeout(struct TNCINFO * TNC);
 
 VOID ProcessPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
-VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
+static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKNormCommand(struct TNCINFO * TNC, UCHAR * rxbuffer);
-VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
+static VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 
 //	Note that AEA host Mode uses SOH/ETB delimiters, with DLE stuffing
 
-VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
-int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
-int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
+static VOID EncodeAndSend(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
+static int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
+static int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
 ProcessLine(char * buf, int Port)
 {
@@ -211,6 +211,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct STREAMINFO * STREAM;
 	int Stream;
+	short * sp;
 
 	if (TNC == NULL || TNC->hDevice == 0)
 		return 0;							// Port not open
@@ -247,8 +248,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				buff[7] = 0xf0;
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
-				buff[5]=(datalen & 0xff);
-				buff[6]=(datalen >> 8);
+
+				sp = (short *)&buff[5];
+				*sp = datalen;
+
+	//			buff[5]=(datalen & 0xff);
+	//			buff[6]=(datalen >> 8);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -280,7 +285,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		txlen=(buff[6]<<8) + buff[5]-8;	
+		sp = (short *)&buff[5];
+		txlen = *sp - 8;
+
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
 		
@@ -295,12 +302,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:				// CHECK IF OK TO SEND. Also used to check if TNC is responding
 		
-		_asm 
-		{
-			MOV	EAX,buff
-			mov Stream,eax
-		}
-
+		Stream = (int)buff;
 		STREAM = &TNC->Streams[Stream];
 
 		if (STREAM->FramesQueued  > 4)
@@ -319,7 +321,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		SaveWindowPos(port);
 
-		CloseHandle(TNC->hDevice);
+		CloseCOMPort(TNC->hDevice);
 
 		return (0);
 
@@ -479,40 +481,19 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 
 static void CheckRX(struct TNCINFO * TNC)
 {
-	BOOL       fReadStat;
-	COMSTAT    ComStat;
-	DWORD      dwErrorFlags;
-	int Length;
-	int Len;
+	int Length, Len;
 
 	// only try to read number of bytes in queue 
 
-	if (TNC->RXLen >= 500)
+	if (TNC->RXLen == 500)
 		TNC->RXLen = 0;
 
-	ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
+	Len = ReadCOMBlock(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 500 - TNC->RXLen);
 
-	Length = min(500 - (DWORD)TNC->RXLen, ComStat.cbInQue);
-
-	if (Length == 0)
-		return;					// Nothing doing
-	
-	while (Length > 20)
-	{
-		fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
-		TNC->RXLen += 20;
-		Length -= 20;
-	}
-
-	fReadStat = ReadFile(TNC->hDevice, &TNC->RXBuffer[TNC->RXLen], 20, &Len, NULL);
-
-	if (!fReadStat)
-	{
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);		
+	if (Len == 0)
 		return;
-	}
 	
-	TNC->RXLen += Length;
+	TNC->RXLen += Len;
 
 	Length = TNC->RXLen;
 
@@ -613,27 +594,8 @@ FENDLoop:
 
 static BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
-	BOOL        fWriteStat;
-	DWORD       dwBytesWritten;
-	DWORD       dwErrorFlags;
-	COMSTAT     ComStat;
-	int Offset = 0;
-	int Len = TNC->TXLen;
-
-	while (Len > 20)
-	{
-		WriteFile(TNC->hDevice, &TNC->TXBuffer[Offset], 20, &dwBytesWritten, NULL);
-		Len -= 20;
-		Offset += 20;
-	}
-
-	fWriteStat = WriteFile(TNC->hDevice, &TNC->TXBuffer[Offset], Len, &dwBytesWritten, NULL);
-
-	if ((!fWriteStat) || (Len != dwBytesWritten))
-		ClearCommError(TNC->hDevice, &dwErrorFlags, &ComStat);
-
+	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
 	TNC->Timeout = 50;
-
 	return TRUE;
 }
 
@@ -798,7 +760,7 @@ VOID AEAPoll(int Port)
 		{
 			int datalen;
 			UCHAR TXMsg[1000];
-			INT * buffptr;
+			int * buffptr;
 			UCHAR * MsgPtr;
 			char Status[80];
 			
@@ -907,7 +869,7 @@ VOID AEAPoll(int Port)
 					}
 					else
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], &MsgPtr[40]);
+						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &MsgPtr[40]);
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 					}
 					return;

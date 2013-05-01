@@ -34,18 +34,18 @@
 #include <syslog.h>
 
 
-
 //#include <netax25/ttyutils.h>
 //#include <netax25/daemon.h>
 
-//#include "linux/i2c-dev.h"
+#ifndef MACBPQ
+#include "linux/i2c-dev.h"
+#endif
 
-#define I2C_TIMEOUT	0x0702	/* set timeout - call with int 		*/
+//#define I2C_TIMEOUT	0x0702	/* set timeout - call with int 		*/
 
 /* this is for i2c-dev.c	*/
-#define I2C_SLAVE	0x0703	/* Change slave address			*/
+//#define I2C_SLAVE	0x0703	/* Change slave address			*/
 				/* Attn.: Slave address is 7 or 10 bits */
-
 
 #endif
 
@@ -209,6 +209,13 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 
 		return 0;
 #else
+#ifdef MACBPQ
+
+		sprintf(Msg,"I2C is not supported on MAC systems\n");
+		WritetoConsoleLocal(Msg);
+
+		return 0;
+#else
 		char i2cname[30];
 		int fd;
 		int retval;
@@ -260,6 +267,8 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		sleep(2);
 
 #endif
+#endif
+
 	}
 	else if (PortVector->PORTIPADDR.s_addr)
 	{
@@ -374,19 +383,25 @@ NPASYINFO CreateKISSINFO( int port,int speed )
 BOOL OpenConnection(struct PORTCONTROL * PortVector, NPASYINFO npKISSINFO, int port)
 {
 	if (PortVector->SerialPortName)
-		npKISSINFO->idComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, FALSE, FALSE);
+		npKISSINFO->idComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE);
 	else
-		npKISSINFO->idComDev = OpenCOMPort((VOID *)port, npKISSINFO->dwBaudRate, TRUE, FALSE, FALSE);
+		npKISSINFO->idComDev = OpenCOMPort((VOID *)port, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE);
 	
 	return 0;
 }
 int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength )
 {
+	if (npKISSINFO->idComDev == 0)
+		return 0;
+
 	return ReadCOMBlock(npKISSINFO->idComDev, lpszBlock, nMaxLength);
 }
 
 BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite)
 {
+	if (npKISSINFO->idComDev == 0)
+		return 0;
+
 	return WriteCOMBlock(npKISSINFO->idComDev, lpByte, dwBytesToWrite);
 }
 
@@ -1075,12 +1090,17 @@ int KISSRX(struct KISSINFO * KISS)
 	int len;
 	NPASYINFO Port = KISSInfo[PORT->PORTNUMBER];
 	short * sp;
-
+	struct KISSINFO * SAVEKISS = KISS;		// Save so we can restore at SeeifMode
 
 	if (Port == NULL)
 		return 0;
 
 SeeifMore:
+
+	KISS = SAVEKISS;
+
+	if (KISS == 0)
+		return 0;								// Just in case
 
 	if (!Port->MSGREADY)
 		CheckReceivedData(PORT, Port);		// Look for data in RXBUFFER and COM port
@@ -1287,7 +1307,7 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 	int len;
 	UCHAR * ptr;
 	int fd = npKISSINFO->idComDev;
-	
+
 	retval = i2c_smbus_read_byte(fd);
 	
 	//	Returns POLL (0x0e) if nothing to receive, otherwise the control byte of a frame
@@ -1324,6 +1344,7 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 	{
 		struct KISSINFO * KISS = (struct KISSINFO *)PORT;
 		KISS->TXACTIVE = FALSE;
+
 		return 0;
 	}
 
@@ -1342,6 +1363,7 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 		usleep(1000);
 		
 		retval = i2c_smbus_read_byte(fd);
+		Debugprintf ("%x ", retval);
 			
 		if (retval == -1)	 		// Read failed		
 	  	{
@@ -1353,10 +1375,12 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 		len ++;
 
 		if (len > 500)
+		{
+			Debugprintf ("i2c oversized block\n");
 			return 0;
+		}
 	}
 
-//	Debugprintf ("i2c Block received %d\n", len);
 	return len;
 }
 #endif

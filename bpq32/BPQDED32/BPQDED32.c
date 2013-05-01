@@ -39,9 +39,16 @@
 
 //		Use HKEY_CURRENT_USER on Vista+
 
+// Version 2.0.0.1	April 2013
+
+//		Use BPQ32 API instead of DOS API
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "windows.h"
+
+#define DYNLOADBPQ	// Dynamically Load BPQ32
+#include "bpq32.h"	// BPQ32 API Defines
 
 #define DllImport	__declspec( dllimport )
 #define DllExport	__declspec( dllexport )
@@ -51,13 +58,6 @@ HINSTANCE ExtDriver=0;
 int *BPQAPI=0;
 
 typedef int (FAR *FARPROCX)();
-
-int AllocateStream();
-int DeallocateStream(int stream);
-void SetMask(int stream,int flags,UINT mask);
-
-FARPROCX CheckTimer;
-FARPROCX GETBPQAPI;
 
 int AttachedProcesses=0;
 
@@ -278,6 +278,18 @@ static char AX25CALL[8];	// WORK AREA FOR AX25 <> NORMAL CALL CONVERSION
 static char NORMCALL[11];	// CALLSIGN IN NORMAL FORMAT
 static int NORMLEN;			// LENGTH OF CALL IN NORMCALL	
 
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+	OutputDebugString(Mess);
+
+	return;
+}
 
 BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReserved)
 {
@@ -298,7 +310,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			AttachedProcesses++;
 
 			_itoa(AttachedProcesses,buff,10);
-			strcpy(Errbuff,	"BPQDED32 V 1.1.1.1 Process Attach - total = ");
+			strcpy(Errbuff,	"BPQDED32 V 2.0.0.1 Process Attach - total = ");
 			strcat(Errbuff,buff);
 			OutputDebugString(Errbuff);
 
@@ -499,6 +511,8 @@ BOOLEAN WINAPI TfOpen(HWND hWnd)
 
 	OutputDebugString("BPQDED32 TfOpen Entered");
 
+	GetAPI();
+
 	ExtDriver=LoadLibrary("bpq32.dll");
 
 	if (ExtDriver == NULL)
@@ -507,8 +521,8 @@ BOOLEAN WINAPI TfOpen(HWND hWnd)
 		return FALSE;
 	}
 
-	GETBPQAPI = (FARPROCX)GetProcAddress(ExtDriver,"_GETBPQAPI@0");
-	CheckTimer = (FARPROCX)GetProcAddress(ExtDriver,"_CheckTimer@0");
+//	GETBPQAPI = (FARPROCX)GetProcAddress(ExtDriver,"_GETBPQAPI@0");
+//	CheckTimer = (FARPROCX)GetProcAddress(ExtDriver,"_CheckTimer@0");
 	
 	if (GETBPQAPI == NULL || CheckTimer == NULL)
 	{
@@ -520,22 +534,11 @@ BOOLEAN WINAPI TfOpen(HWND hWnd)
 
 	for (i=1; i <= HOSTSTREAMS; i++)
 	{
-		bpqstream[i]=AllocateStream();
+		bpqstream[i] = FindFreeStream();
 			
-		if (bpqstream[i]) SetMask(bpqstream[i],APPLFLAGS,APPLMASK);
+		if (bpqstream[i]) SetAppl(bpqstream[i],APPLFLAGS,APPLMASK);
 
-		strcpy(Errbuff,	"BPQDED32 init Stream ");
-
-		_itoa(i,buff,10);
-		strcat(Errbuff,buff);
-		strcat(Errbuff," BPQ Stream");
-
-		_itoa(bpqstream[i],buff,10);
-		strcat(Errbuff,buff);
-
-		strcat(Errbuff,"\n");
-
-		OutputDebugString(Errbuff);
+		Debugprintf("BPQDED32 init Stream %d  BPQ Stream %d", i, bpqstream[i]);
 	}
 
 	bpqstream[0]=bpqstream[1];				// For monitoring
@@ -543,29 +546,7 @@ BOOLEAN WINAPI TfOpen(HWND hWnd)
 	return TRUE;
 }
 
-int AllocateStream()
-{
-   int retcode;
-
-	_asm {
-
-		;	AH = 13 Allocate/deallocate stream
-;		If AL=0, return first free stream and allocate
-;		If AL>0, CL=1, Allocate stream. If aleady allocated,
-;		   return CX nonzero, else allocate, and return CX=0
-;		If AL>0, CL=2, Release stream
-;		
-	MOV	AH,13
-	MOV	AL,0
-
-	call BPQAPI
-
-	mov	retcode,eax
-	}
-	return retcode;						// Stream was EAX, but keeps compiler happy
-}
-
-int DeallocateStream(int stream)
+int xDeallocateStream(int stream)
 {
 
 	// Clear applmask, close connection, ack any status change,  then deallocate
@@ -606,23 +587,6 @@ int DeallocateStream(int stream)
 	return 0;
 }
 
-
-void SetMask(int stream, int flags, UINT mask)
-{
-	_asm {
-		
-	mov	eax,stream
-	MOV	AH,1			; SET APPL MASK
-
-	MOV	ecx,flags
-	MOV	edx,mask
-
-	call BPQAPI
-	}
-
-	return;
-}
-
 BOOL  WINAPI TfClose(void) 
 {
    int i,port;
@@ -638,7 +602,7 @@ BOOL  WINAPI TfClose(void)
 			
 		if (port)
 		{
-			DeallocateStream(port);
+			xDeallocateStream(port);
 
 			strcpy(Errbuff,	"BPQDED Close Stream ");
 
@@ -1493,7 +1457,7 @@ YCMD:
 			
 				if (port)
 				{
-					DeallocateStream(port);
+					xDeallocateStream(port);
 
 					strcpy(Errbuff,	"BPQDED32 YCMD Release Stream ");
 
@@ -1516,22 +1480,10 @@ YCMD:
 		{
 			for (i=HOSTSTREAMS+1; i <= NEWVALUE; i++)
 			{
-				bpqstream[i]=AllocateStream();
-			
-				if (bpqstream[i])  SetMask(bpqstream[i],APPLFLAGS,APPLMASK);
+				bpqstream[i] = FindFreeStream();
+				if (bpqstream[i])  SetAppl(bpqstream[i],APPLFLAGS,APPLMASK);
 
-				strcpy(Errbuff,	"BPQDED32 YCMD Stream ");
-
-				_itoa(i,buff,10);
-				strcat(Errbuff,buff);
-				strcat(Errbuff," BPQ Stream ");
-
-				_itoa(bpqstream[i],buff,10);
-				strcat(Errbuff,buff);
-
-				strcat(Errbuff,"\n");
-
-				OutputDebugString(Errbuff);
+				Debugprintf("BPQDED32 init Stream %d  BPQ Stream %d", i, bpqstream[i]);
 			}
 		}
 		HOSTSTREAMS=NEWVALUE;

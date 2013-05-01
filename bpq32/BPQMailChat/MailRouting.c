@@ -10,7 +10,7 @@
 
 // Bulls should not be distributed outside their designated area.
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 char WW[] = "WW";
 

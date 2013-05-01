@@ -26,6 +26,11 @@
 //		Call CloseBPQ32 on exit
 //		Handle systems with more than 9 BPQ ports
 
+//	Version 1.2.4.1 March 2013
+
+//		Prevent crash when receiving INP3 Routing Frame
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "stdafx.h"
@@ -1516,7 +1521,7 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
 	char ToCall[10];
 	char ConnectMsg[20];
 	int con,conport;
-	char AGWYReply[4]={0,0,0,0};
+	int AGWYReply = 0;
 
 	switch (sockptr->AGWRXHeader.DataKind)
 	{
@@ -1586,7 +1591,6 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
    
         //   Send Data
         //
-        
         //   Create Session Key from port and callsign pair
         
 		
@@ -1784,8 +1788,9 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
 			{
 				memcpy(&AGWTXHeader,&sockptr->AGWRXHeader,36);
 
+				AGWYReply = CountFramesQueuedOnStream(Connections[con].BPQStream);
 				AGWTXHeader.DataLength = 4;      // Length
-				SendtoSocket(sockptr->socket, &AGWYReply[0]);
+				SendtoSocket(sockptr->socket, (char *)&AGWYReply);
 
 				return 0;
 			}

@@ -2,7 +2,7 @@
 //
 // FBB Forwarding Routines
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 int MaxRXSize = 99999;
 int MaxTXSize = 99999;

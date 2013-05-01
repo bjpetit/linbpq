@@ -47,6 +47,7 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
 VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr);
+int GetCMSHash(char * Challenge, char * Password);
 
 extern BPQVECSTRUC * TELNETMONVECPTR;
 
@@ -113,7 +114,7 @@ int Terminate();
 int SendtoSocket(SOCKET TCPSock,char * Msg);
 int WriteLog(char * msg);
 VOID WriteCMSLog(char * msg);
-static byte * EncodeCall(byte * Call);
+byte * EncodeCall(byte * Call);
 VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen);
 
 BOOL CheckCMS(struct TNCINFO * TNC);
@@ -187,7 +188,20 @@ ProcessLine(char * buf, int Port)
 	if (_stricmp(param, "CMS") == 0)
 		TCP->CMS = atoi(value);
 	else
-
+	if (_stricmp(param, "CMSPASS") == 0)
+	{
+		strcpy(TCP->SecureCMSPassword, value);
+		strlop(TCP->SecureCMSPassword, 20);
+		_strupr(TCP->SecureCMSPassword);
+	}
+	else
+	if (_stricmp(param, "CMSCALL") == 0)
+	{
+		strcpy(TCP->GatewayCall, value);
+		strlop(TCP->GatewayCall, 13);
+		_strupr(TCP->GatewayCall);
+	}
+	else
 	if (_stricmp(param,"LOGGING") == 0)
 		LogEnabled = atoi(value);
 	else
@@ -195,6 +209,9 @@ ProcessLine(char * buf, int Port)
 		CMSLogEnabled = atoi(value);
 	else
 	if (_stricmp(param,"DisconnectOnClose") == 0)
+		TCP->DisconnectOnClose = atoi(value);
+	else
+	if (_stricmp(param,"CloseOnDisconnect") == 0)
 		TCP->DisconnectOnClose = atoi(value);
 	else
 		if (_stricmp(param,"TCPPORT") == 0)
@@ -868,6 +885,19 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 
 	TELNETMONVECPTR->HOSTAPPLFLAGS = 0x80;		// Requext Monitoring
 
+	if (TCP->LoginMsg[0] == 0)
+		strcpy(TCP->LoginMsg, "user:");
+	if (TCP->PasswordMsg[0] == 0)
+		strcpy(TCP->PasswordMsg, "password:");
+	if (TCP->cfgCTEXT[0] == 0)
+	{
+		char Call[10];
+		memcpy(Call, MYNODECALL, 10);
+		strlop(Call, ' ');
+
+		sprintf(TCP->cfgCTEXT, "Connected to %s's Telnet Server\r\n\r\n", Call);
+	}
+
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 260;
 	TNC->WebWinY = 325;
@@ -1426,8 +1456,7 @@ nosocks:
 		}
 	}
 
-
-	if (TELNETMONVECPTR->HOSTTRACEQ)
+	while (TELNETMONVECPTR->HOSTTRACEQ)
 	{
 		int stamp, len;
 		BOOL MonitorNODES = FALSE;
@@ -1583,7 +1612,6 @@ nosocks:
 			int datalen;
 			UINT * buffptr;
 			UCHAR * MsgPtr;
-			SOCKET sock;
 
 			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 			STREAM->FramesQueued--;
@@ -1616,7 +1644,7 @@ nosocks:
 					char Via[100];
 					int Port = 0;
 
-					if (sscanf(&MsgPtr[2], "%s %s %d", (char *)&Host, &Via, &Port) < 1 || Port > 32)
+					if (sscanf(&MsgPtr[2], "%s %s %d", &Host[0], &Via[0], &Port) < 1 || Port > 32)
 					{
 						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid Connect Command\r");
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -1982,6 +2010,8 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 			for (i = 0; i <= TNC->TCPInfo->MaxSessions; i++)
 			{			
 				TNC->Streams[i].ConnectionInfo = zalloc(sizeof(struct ConnectionInfo));
+				TNC->Streams[i].ConnectionInfo->Number = i;
+
 				TCP->CurrentSockets = i;  //Record max used to save searching all entries
 
 				if (i > 0)
@@ -2708,7 +2738,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 	byte * LFPtr;
 	byte * MsgPtr;
 	char logmsg[120];
-	char RelayMsg[] = "No CMS connection available - using local BPQMailChat\r";
+	char RelayMsg[] = "No CMS connection available - using local BPQMail\r";
 	struct TCPINFO * TCP = TNC->TCPInfo;
 
 	ioctl(sock,FIONREAD,&len);
@@ -2898,6 +2928,8 @@ int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SO
 	struct UserRec * USER;
 	struct TCPINFO * TCP = TNC->TCPInfo;
 	struct STREAMINFO * STREAM = &TNC->Streams[Stream];
+	TRANSPORTENTRY * Sess1 = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
+	TRANSPORTENTRY * Sess2 = NULL;
 	
 	ioctl(sock,FIONREAD,&len);
 
@@ -3025,15 +3057,85 @@ MsgLoop:
 	switch (sockptr->LoginState)
 	{
 	case 3:
+
+		// CMS Signon
 		
+		strlop(MsgPtr, 13);
+
+		sprintf(logmsg,"%d %s\r\n", Stream, MsgPtr);
+		WriteCMSLog (logmsg);
+
 		if (strstr(MsgPtr, "Callsign :")) 
 		{
 			char Msg[80];
 			int Len;
 
-			Len = sprintf(Msg, "%s\r\n", TNC->Streams[sockptr->Number].MyCall);			
-			send(sock, Msg, Len,0);
+
+			if (TCP->SecureCMSPassword[0])
+				Len = sprintf(Msg, "%s %s\r\n", TNC->Streams[sockptr->Number].MyCall, TCP->GatewayCall);			
+			else
+				Len = sprintf(Msg, "%s\r\n", TNC->Streams[sockptr->Number].MyCall);			
+			
+			send(sock, Msg, Len, 0);
+			sprintf(logmsg,"%d %s", Stream, Msg);
+			WriteCMSLog (logmsg);
+
 			sockptr->InputLen=0;
+
+			return TRUE;
+		}
+		if (memcmp(MsgPtr, ";SQ: ", 5) == 0)
+		{
+			// Secure CMS challenge
+
+			char Msg[80];
+			int Len;
+			int Response = GetCMSHash(&MsgPtr[5], TCP->SecureCMSPassword);
+			char RespString[12];
+			int Freq = 0;
+			int Mode = 0;
+
+			if (Sess1)
+			{
+				Sess2 = Sess1->L4CROSSLINK;
+
+				if (Sess2)
+				{
+					// See if L2 session - if so, get info from WL2K report line
+
+					if (Sess2->L4CIRCUITTYPE & L2LINK)
+					{
+						LINKTABLE * LINK = Sess2->L4TARGET.LINK;
+						PORTCONTROLX * PORT = LINK->LINKPORT;
+						
+						if (PORT->WL2KInfo)
+						{
+							Freq = PORT->WL2KInfo->Freq;
+							Mode = PORT->WL2KInfo->mode;
+						}
+
+					}
+					else
+					{
+						if (Sess2->RMSCall[0])
+						{
+							Freq = Sess2->Frequency;
+							Mode = Sess2->Mode;
+						}
+					}
+				}
+			}
+
+
+			sprintf(RespString, "%010d", Response);
+
+			Len = sprintf(Msg, ";SR: %s %d %d\r\n", &RespString[2], Freq, Mode);			
+			
+			send(sock, Msg, Len,0);
+			sprintf(logmsg,"%d %s", Stream, Msg);
+			WriteCMSLog (logmsg);
+			sockptr->InputLen=0;
+			sockptr->LoginState = 2;		// Data
 
 			return TRUE;
 		}
@@ -3395,7 +3497,7 @@ int ShowConnections(struct TNCINFO * TNC)
 #endif
 	return 0;
 }
-static byte * EncodeCall(byte * Call)
+byte * EncodeCall(byte * Call)
 {
 	static char axcall[10];
 
@@ -3439,10 +3541,11 @@ BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len)
  			send(sockptr->socket,WillSupGA,3,0);
 			break;
 
-		}
+		default:
 
-		Wont[2] = TelOption;
-		send(sockptr->socket,Wont,3,0);
+			Wont[2] = TelOption;
+			send(sockptr->socket,Wont,3,0);
+		}
 
 		used=3;
 
@@ -3547,6 +3650,8 @@ int WriteLog(char * msg)
 	return 0;
 }
 
+char LastCMSLog[256];
+
 VOID WriteCMSLog(char * msg)
 {
 	UCHAR Value[MAX_PATH];
@@ -3587,8 +3692,27 @@ VOID WriteCMSLog(char * msg)
 
 	fclose(Handle);
 
+#ifndef WIN32
+
+	if (strcmp(Value, LastCMSLog))
+	{
+		UCHAR SYMLINK[MAX_PATH];
+
+		sprintf(SYMLINK,"%s/CMSAccessLatest.log", BPQDirectory);
+		unlink(SYMLINK); 
+		strcpy(LastCMSLog, Value);
+		symlink(Value, SYMLINK);
+	}
+
+#endif
 	return;
 }
+
+
+
+
+
+
 int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Error)
 {
 	struct TCPINFO * TCP = TNC->TCPInfo;
@@ -3713,36 +3837,57 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 	// Resolve Name and check connectivity to each address
 
 	struct TCPINFO * TCP = TNC->TCPInfo;
-	struct hostent * HostEnt;
+//	struct hostent * HostEnt;
 	struct in_addr addr;
 	struct hostent *remoteHost;
-    char **pAlias;
-	int i = 0;
+    char **pAlias;	int i = 0;
 	BOOL INETOK = FALSE;
+	struct addrinfo hints, *res = 0, *saveres;
+	int n;
 
 	// First make sure we have a functioning DNS
 
 	TCP->UseCachedCMSAddrs = FALSE;
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+	hints.ai_socktype = SOCK_DGRAM;
+
+	n = getaddrinfo("a.root-servers.net", NULL, &hints, &res);
+
+	if (n == 0)
+		goto rootok;
 	
-	HostEnt = gethostbyname("a.root-servers.net");
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+	hints.ai_socktype = SOCK_DGRAM;
+	n = getaddrinfo("b.root-servers.net", NULL, &hints, &res);
 		 
-	if (HostEnt)
-		INETOK = TRUE;			// We have connectivity
-	else
-	{
-		Debugprintf("Resolve root nameserver failed");
+	if (n == 0)
+		goto rootok;
 
-		// Most likely is a local Internet Outage, but we could have Internet, but no name servers
+	Debugprintf("Resolve root nameserver failed");
 
-		// Either way, switch to using cached CMS addresses. CMS Validation will check connectivity
+	// Most likely is a local Internet Outage, but we could have Internet, but no name servers
+	// Either way, switch to using cached CMS addresses. CMS Validation will check connectivity
 
-		TCP->UseCachedCMSAddrs = TRUE;
-		goto CheckServers;
-	}
+	TCP->UseCachedCMSAddrs = TRUE;
+	goto CheckServers;
 
-	HostEnt = gethostbyname("server.winlink.org");
+rootok:
+
+	INETOK = TRUE;			// We have connectivity
+
+	res = 0;
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+	hints.ai_socktype = SOCK_DGRAM;
+	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
+
+
+//	HostEnt = gethostbyname("server.winlink.org");
 		 
-	if (!HostEnt || HostEnt->h_addr_list[1] == 0)	// Resolve Failed, or Returned only one Host
+	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
 	{
 		Debugprintf("Resolve CMS Failed");
 
@@ -3752,14 +3897,28 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 		goto CheckServers;
 	}
 
+	saveres = res;
+
+	while (res)
+	{
+		memcpy(&addr.s_addr, &res->ai_addr->sa_data[2], 4);
+		TCP->CMSAddr[i] = addr;
+		TCP->CMSFailed[i] = FALSE;
+		i++;
+		res = res->ai_next;
+	}
+
+	freeaddrinfo(saveres);
+
+/*
 	while (HostEnt->h_addr_list[i] != 0 && i < MaxCMS)
 	{
 		addr.s_addr = *(u_long *) HostEnt->h_addr_list[i];
 		TCP->CMSAddr[i] = addr;
-		TCP->CMSFailed[i++] = FALSE;
-		Debugprintf("CMS Address #%d: %s", i, inet_ntoa(addr));
+		TCP->CMSFailed[i] = FALSE;
+		i++;
 	}
-
+*/
 	TCP->NumberofCMSAddrs = i;
 
 	i = 0;
@@ -3787,7 +3946,7 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 	   }
 	   else
 	   { 
-		   Debugprintf("Official name #%d: %s",i,  remoteHost->h_name);
+		   Debugprintf("CMS #%d %s Official name : %s",i, inet_ntoa(TCP->CMSAddr[i]), remoteHost->h_name);
 		   
 		   TCP->CMSName[i] = _strdup(remoteHost->h_name);			// Save Host Name
 	
@@ -4125,7 +4284,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 
 	if (retCode == ERROR_SUCCESS)
 	{
-		char work[4];
+		unsigned char work[4];
 		memcpy(work, &TCP->CMSAddr[CMSNo].s_addr, 4);
 		sprintf(Info,"%d %d.%d.%d.%d", time(NULL),
 					work[0], work[1], work[2], work[3]);

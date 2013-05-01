@@ -2,7 +2,7 @@
 //
 // UI Handling Routines
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 
 char UIDEST[10] = "FBB";

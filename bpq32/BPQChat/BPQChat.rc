@@ -1,6 +1,6 @@
 //Microsoft Developer Studio generated resource script.
 //
-#include "resrc1.h"
+#include "chatrc.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -11,8 +11,9 @@
 #include "windows.h"
 #undef APSTUDIO_HIDDEN_SYMBOLS
 #define CHAT
+#define IDC_STATIC -1
 #include "..\CInclude\Versions.h"
-#include "resource.h"
+
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -262,12 +263,12 @@ BEGIN
         BOTTOMMARGIN, 155
     END
 
-    CHAT_CONFIG, DIALOG
+    "CHAT_CONFIG", DIALOG
     BEGIN
         BOTTOMMARGIN, 294
     END
 
-    IDD_USERADDED_BOX, DIALOG
+    "IDD_USERADDED_BOX", DIALOG
     BEGIN
         BOTTOMMARGIN, 65
     END
@@ -341,9 +342,7 @@ MENU_2 MENU DISCARDABLE
 BEGIN
     POPUP "Monitor"
     BEGIN
-        MENUITEM "Monitor BBS",                 MONBBS
         MENUITEM "Monitor CHAT",                MONCHAT
-        MENUITEM "Monitor TCP",                 MONTCP
     END
     POPUP "Edit"
     BEGIN
@@ -382,7 +381,7 @@ END
 
 1 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "resrc1.h\0"
+    "chatrc.h\0"
 END
 
 2 TEXTINCLUDE DISCARDABLE 
@@ -391,8 +390,9 @@ BEGIN
     "#include ""windows.h""\r\n"
     "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "#define CHAT\r\n"
+    "#define IDC_STATIC -1\r\n"
     "#include ""..\\CInclude\\Versions.h""\r\n"
-    "#include ""resource.h""\r\n"
+    "\r\n"
     "\0"
 END
 

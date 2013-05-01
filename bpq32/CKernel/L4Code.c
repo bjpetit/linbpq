@@ -572,7 +572,6 @@ L4BG()
 		{
 			if (L4->L4TIMER == 0)
 			{
-				Debugprintf("TX_Q = 0, HOLD_Q != 0 and L4TIMER = 0");
 				L4->L4TIMER = L4->SESSIONT1;
 			}
 		}
@@ -1758,6 +1757,12 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 
 L4INFO_OK:
 
+		if (L3MSG == 0)
+		{
+			Debugprintf("Trying to Process NULL L3 Message");
+			return;
+		}
+
 		L4->NAKBITS &= ~L4NAK;				// CLEAR MESSAGE LOST STATE
 
 		L4->RXSEQNO++;
@@ -1802,6 +1807,7 @@ L4INFO_OK:
 				OLDFRAMES++;			// COUNT FOR STATS
 	
 				L3MSG = Saved;
+				Debugprintf("Preoccessing Saved Message %d Address %x", L4->RXSEQNO, L3MSG);
 				goto L4INFO_OK;
 			}
 

@@ -1163,8 +1163,8 @@ OpenRigCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed)
 
 	if (PORT->PortType != PTT)
 	{
-		COMSetRTS(PORT->hPTTDevice);
-		COMSetDTR(PORT->hPTTDevice);
+		COMSetRTS(PORT->hDevice);
+		COMSetDTR(PORT->hDevice);
 	}
 
 	sprintf(buf,"COM%d Open", Port);

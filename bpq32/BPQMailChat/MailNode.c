@@ -64,6 +64,8 @@ extern ULONG BBSApplMask;
 extern int BBSApplNum;
 extern int ChatApplNum;
 
+extern int NUMBEROFTNCPORTS;
+
 extern int EnableUI;
 
 
@@ -78,6 +80,8 @@ extern int MaintTime;
 #define LOG_CHAT 1
 #define LOG_TCP 2
 #define LOG_DEBUG_X 3
+
+int _MYTIMEZONE = 0;
 
 #pragma pack(1)
 
@@ -439,8 +443,15 @@ int main(int argc, char * argv[])
 #endif
 
 	printf("G8BPQ AX25 Packet Switch System Version %s %s\n", TextVerstring, Datestring);
+	Debugprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
 	printf("%s\n", VerCopyright);
 
+#ifndef MACBPQ
+	_MYTIMEZONE = timezone;
+#endif
+
+	if (_MYTIMEZONE < -86400 || _MYTIMEZONE > 86400)
+		_MYTIMEZONE = 0;
 
 #ifdef WIN32
 	GetCurrentDirectory(256, BPQDirectory);
@@ -455,7 +466,11 @@ int main(int argc, char * argv[])
 			return (0);
 	}
 				 
+#ifdef MACBPQ
+	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for MAC (", TextVerstring);
+#else
 	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for Linux (", TextVerstring);
+#endif
 
 	GetSemaphore(&Semaphore);
 
@@ -496,7 +511,6 @@ int main(int argc, char * argv[])
 	signal(SIGPIPE, SIG_IGN);
 
 #endif
-
 
 	if (IncludesChat ||
 			(argc > 1 && _stricmp(argv[1], "chat") == 0) ||
@@ -694,7 +708,7 @@ int main(int argc, char * argv[])
 		tm->tm_min = MaintTime % 100;
 		tm->tm_sec = 0;
 
-		MaintClock = mktime(tm) - (time_t)timezone;
+		MaintClock = mktime(tm) - (time_t)_MYTIMEZONE;
 
 		if (MaintClock < now)
 			MaintClock += 86400;
@@ -716,8 +730,13 @@ int main(int argc, char * argv[])
 
 			DeleteRedundantMessages();
 
+		printf("Mail Started\n");
+
 	}
 	}
+
+	if (NUMBEROFTNCPORTS)
+		InitializeTNCEmulator();
 
 #ifndef WIN32
 
@@ -898,6 +917,9 @@ int main(int argc, char * argv[])
 
 		FreeSemaphore(&Semaphore);
 
+		if (NUMBEROFTNCPORTS)
+			TNC2Poll();
+
 		HTTPTimer();
 
 		if (ReportTimer)
@@ -994,16 +1016,16 @@ int WritetoConsoleLocal(char * buff)
 {
 	return printf("%s", buff);
 }
-
 /*
 UINT VCOMExtInit(struct PORTCONTROL *  PortEntry);
-UINT AEAExtInit(struct PORTCONTROL *  PortEntry);
-UINT HALExtInit(struct PORTCONTROL *  PortEntry);
 UINT SoundModemExtInit(EXTPORTDATA * PortEntry);
 UINT V4ExtInit(EXTPORTDATA * PortEntry);
-UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 */
+UINT AEAExtInit(struct PORTCONTROL *  PortEntry);
+UINT MPSKExtInit(EXTPORTDATA * PortEntry);
+UINT HALExtInit(struct PORTCONTROL *  PortEntry);
+
 UINT AGWExtInit(struct PORTCONTROL *  PortEntry);
 UINT KAMExtInit(struct PORTCONTROL *  PortEntry);
 UINT WinmorExtInit(EXTPORTDATA * PortEntry);
@@ -1034,29 +1056,28 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "BPQTOAGW"))
 		return (UINT) AGWExtInit;
-/*
-	if (strstr(Value, "BPQVKISS"))
-		return (UINT) VCOMExtInit;
-
 
 	if (strstr(Value, "AEAPACTOR"))
 		return (UINT) AEAExtInit;
 
 	if (strstr(Value, "HALDRIVER"))
 		return (UINT) HALExtInit;
-	
+/*
+	if (strstr(Value, "BPQVKISS"))
+		return (UINT) VCOMExtInit;
+
+
 	if (strstr(Value, "V4"))
 		return (UINT) V4ExtInit;
 	
 	if (strstr(Value, "SOUNDMODEM"))
 		return (UINT) SoundModemExtInit;
 
-	if (strstr(Value, "MULTIPSK"))
-		return (UINT) MPSKExtInit;
-
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
 */
+	if (strstr(Value, "MULTIPSK"))
+		return (UINT) MPSKExtInit;
 
 	if (strstr(Value, "KAMPACTOR"))
 		return (UINT) KAMExtInit;

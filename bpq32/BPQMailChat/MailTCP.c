@@ -2,7 +2,7 @@
 //
 //	TCP access module - POP and SMTP
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 VOID ReleaseSock(SOCKET sock);
 
@@ -1322,7 +1322,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime) - (time_t)timezone;
+				Date = mktime(&rtime) - (time_t)_MYTIMEZONE;
 	
 				if (Date == (time_t)-1)
 					Date = 0;
@@ -2960,7 +2960,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 				rtime.tm_year -= 1900;
 
-				Date = mktime(&rtime) - (time_t)timezone; 
+				Date = mktime(&rtime) - (time_t)_MYTIMEZONE; 
 				
 				if (Date == (time_t)-1)
 					Date = 0;

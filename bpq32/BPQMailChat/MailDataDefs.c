@@ -1,5 +1,5 @@
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 int LastVer[4] = {0, 0, 0, 0};					// In case we need to do somthing the first time a version is run
 
@@ -56,6 +56,8 @@ int MaxMsgno = 60000;
 int BidLifetime = 60;
 int MaintInterval = 24;
 int MaintTime = 0;
+
+int UserLifetime = 0;
 
 BOOL cfgMinToTray;
 

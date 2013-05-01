@@ -3,7 +3,9 @@
 //
 //	Configuration Module
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
+
+
 #define C_PAGES 7
 
 int CurrentPage=0;				// Page currently on show in tabbed Dialog
@@ -494,6 +496,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAXMSG, MaxMsgno, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BIDLIFETIME, BidLifetime, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDC_USERLIFETIME, UserLifetime, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_LOGLIFETIME, LogAge, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_MAINTINTERVAL, MaintInterval, FALSE);
 		sprintf(Time, "%04d", MaintTime);
@@ -1637,6 +1640,9 @@ VOID SaveMAINTConfig()
 	BidLifetime = GetDlgItemInt(hwndDisplay, IDC_BIDLIFETIME, &OK1, FALSE);
 	retCode = RegSetValueEx(hKey, "BidLifetime",0 , REG_DWORD,(BYTE *)&BidLifetime, 4);
 
+	UserLifetime = GetDlgItemInt(hwndDisplay, IDC_USERLIFETIME, &OK1, FALSE);
+	retCode = RegSetValueEx(hKey, "UserLifetime",0 , REG_DWORD,(BYTE *)&UserLifetime, 4);
+
 	LogAge = GetDlgItemInt(hwndDisplay, IDC_LOGLIFETIME, &OK1, FALSE);
 	retCode = RegSetValueEx(hKey, "LogLifetime",0 , REG_DWORD,(BYTE *)&LogAge, 4);
 
@@ -2257,7 +2263,7 @@ TryAgain:
 			ExpertWelcomeMsg = _strdup("");
 
 		Vallen = 99;
-		RegQueryValueEx(hKey,"SignoffMsg",0, (ULONG *)&Type, &SignoffMsg, (ULONG *)&Vallen);
+		RegQueryValueEx(hKey,"SignoffMsg",0, (ULONG *)&Type, &SignoffMsg[0], (ULONG *)&Vallen);
 
 		// Get Prompts
 
@@ -2469,6 +2475,10 @@ TryAgain:
 			Vallen=4;
 			retCode += RegQueryValueEx(hKey,"BidLifetime",0,			
 			(ULONG *)&Type,(UCHAR *)&BidLifetime,(ULONG *)&Vallen);
+
+			Vallen=4;
+			RegQueryValueEx(hKey,"UserLifetime",0,			
+			(ULONG *)&Type,(UCHAR *)&UserLifetime,(ULONG *)&Vallen);
 
 	
 			Vallen=4;

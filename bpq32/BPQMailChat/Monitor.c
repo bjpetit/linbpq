@@ -2,7 +2,7 @@
 //
 //	Monitor Window(s) Module
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 
 static char ClassName[]="BPQMONWINDOW";
 

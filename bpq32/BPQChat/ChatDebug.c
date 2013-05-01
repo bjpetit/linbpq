@@ -2,11 +2,9 @@
 //
 //	Debug Window(s) Module
 
-#include "BPQMailChat.h"
+#include "BPQChat.h"
 
 static char ClassName[]="BPQDEBUGWINDOW";
-
-char SYSOPCall[50];
 
 
 static WNDPROC wpOrigInputProc; 
@@ -50,6 +48,7 @@ BOOL CreateDebugWindow()
 {
     WNDCLASS  wc;
 	HBRUSH bgBrush;
+	char Text[80];
 
 	if (hDebug)
 	{
@@ -80,6 +79,9 @@ BOOL CreateDebugWindow()
     if (!hDebug)
         return (FALSE);
 
+	wsprintf(Text, "Chat %s Debug", Session);
+	SetWindowText(hDebug, Text);
+
 	hMenu=GetMenu(hDebug);
 
 	if (Bells & 1)
@@ -107,8 +109,9 @@ BOOL CreateDebugWindow()
 	wpOrigOutputProc = (WNDPROC)SetWindowLong(hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(hDebug, "Mail/Chat Debug");
-
+	{
+		AddTrayMenuItem(hDebug, Text);
+	}
 	ShowWindow(hDebug, SW_SHOWNORMAL);
 
 	if (DebugRect.right < 100 || DebugRect.bottom < 100)

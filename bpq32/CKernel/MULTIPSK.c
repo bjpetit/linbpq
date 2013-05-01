@@ -42,16 +42,16 @@ extern char * PortConfig[33];
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
-void ConnecttoMPSKThread(int port);
+static void ConnecttoMPSKThread(int port);
 
 void CreateMHWindow();
 int Update_MH_List(struct in_addr ipad, char * call, char proto);
 
-int ConnecttoMPSK();
-int ProcessReceivedData(int bpqport);
+static int ConnecttoMPSK();
+static int ProcessReceivedData(int bpqport);
 static ProcessLine(char * buf, int Port);
-KillTNC(struct TNCINFO * TNC);
-RestartTNC(struct TNCINFO * TNC);
+int KillTNC(struct TNCINFO * TNC);
+int RestartTNC(struct TNCINFO * TNC);
 VOID ProcessMPSKPacket(struct TNCINFO * TNC, char * Message, int Len);
 struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
 static VOID SendData(struct TNCINFO * TNC, char * Msg, int MsgLen);
@@ -79,8 +79,6 @@ static int MasterPort[MAXBPQPORTS+1];			// Pointer to first BPQ port for a speci
 //	Each port may be on a different machine. We only open one connection to each MPSK instance
 
 static char * MPSKSignon[MAXBPQPORTS+1];			// Pointer to message for secure signin
-
-#pragma pack()
 
 static unsigned int MPSKInst = 0;
 static int AttachedProcesses=0;
@@ -113,6 +111,8 @@ static fd_set writefs;
 static fd_set errorfs;
 static struct timeval timeout;
 
+#ifndef LINBPQ
+
 static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 {
 	char wtext[200];
@@ -136,6 +136,8 @@ static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
 	return (TRUE);
 }
 
+#endif
+
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
 	UINT * buffptr;
@@ -145,6 +147,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 	int TNCOK;
+	short * sp;
 
 	if (TNC == NULL)
 		return 0;					// Port not defined
@@ -225,16 +228,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				//	See what happened
 
-				if (readfs.fd_count == 1)
+				if (FD_ISSET(TNC->WINMORSock,&readfs))
 				{
-			
 					// data available
 			
-					ProcessReceivedData(port);
-				
+					ProcessReceivedData(port);			
 				}
 
-				if (writefs.fd_count == 1)
+				if (FD_ISSET(TNC->WINMORSock,&writefs))
 				{
 					if (BPQtoMPSK_Q[port] == 0)
 					{
@@ -269,7 +270,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 				}
 					
-				if (errorfs.fd_count == 1)
+				if (FD_ISSET(TNC->WINMORSock,&errorfs))
 				{
 
 					//	if connecting, then failed, if connected then has just disconnected
@@ -357,8 +358,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				buff[7] = 0xf0;
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
-				buff[5]=(datalen & 0xff);
-				buff[6]=(datalen >> 8);
+				
+				sp = (short *)&buff[5];
+				*sp = datalen;
+
+	//			buff[5]=(datalen & 0xff);
+	//			buff[6]=(datalen >> 8);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -371,7 +376,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			struct _MESSAGE * buffptr;
 
 			SOCKET Sock;	
-			(UINT *)buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
 
 			Sock = TNCInfo[MasterPort[port]]->WINMORSock;
 	
@@ -392,8 +397,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		STREAM = &TNC->Streams[Stream]; 
 
-		txlen=(buff[6]<<8) + buff[5] - 8;	
-			
+//		txlen=(buff[6]<<8) + buff[5] - 8;	
+
+		sp = (short *)&buff[5];
+		txlen = *sp - 8;
+						
 		if (STREAM->Connected)
 		{
 			SendData(TNC, &buff[8], txlen);
@@ -428,7 +436,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 					if (buffptr == 0) return 1;			// No buffers, so ignore
 
-					buffptr[1] = sprintf((UCHAR *)&buffptr[2], &buff[8]);
+					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &buff[8]);
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 				}
 				return 1;
@@ -539,12 +547,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	case 3:	
 
-		_asm 
-		{
-
-			MOV	EAX,buff
-			mov Stream,eax
-		}
+		Stream = (int)buff;
 
 		TNCOK = TNCInfo[MasterPort[port]]->CONNECTED;
 
@@ -591,6 +594,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	return 0;
 }
 
+#ifndef LINBPQ
+
 static KillTNC(struct TNCINFO * TNC)
 {
 	HANDLE hProc;
@@ -612,7 +617,6 @@ static KillTNC(struct TNCINFO * TNC)
 
 	return 0;
 }
-
 
 static RestartTNC(struct TNCINFO * TNC)
 {
@@ -651,7 +655,7 @@ static RestartTNC(struct TNCINFO * TNC)
 	}
 	return 0;
 }
-
+#endif
 
 UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 {
@@ -688,7 +692,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 	TNC->PortRecord = PortEntry;
 
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
-		memcpy(TNC->NodeCall, GetNodeCall(), 10);
+		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	else
 		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
@@ -734,6 +738,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 
 	BPQPort[PortEntry->PORTCONTROL.CHANNELNUM-65][MasterPort[port]] = port;
 			
+#ifndef LINBPQ
 	if (MasterPort[port] == port)
 	{
 		if (EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC))
@@ -742,7 +747,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry)
 
 		ConnecttoMPSK(port);
 	}
-
+#endif
 	time(&lasttime[port]);			// Get initial time value
 
 //	SendMessage(0x40eaa, WM_COMMAND, 0x03000eaa, 0x40eaa);

@@ -38,7 +38,26 @@ VOID WriteMiniDump();
 
 // Get buffer from Queue
 
-void printStack( void );
+void printStack(void);
+
+BOOL CheckQHeadder(UINT * Q)
+{
+#ifdef WIN32
+	UINT Test;
+
+	__try
+	{
+		Test = *Q;
+	}
+	__except(EXCEPTION_EXECUTE_HANDLER)
+	{
+		Debugprintf("Invalid Q Header %X", Q);
+		printStack();
+		return FALSE;
+	}
+#endif
+	return TRUE;
+}
 
 
 VOID * _Q_REM(VOID *PQ, char * File, int Line)
@@ -49,6 +68,9 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 	if (Semaphore.Flag == 0)
 		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
 
+	if (CheckQHeadder(Q) == 0)
+		return(0);
+
 	first = (UINT *)Q[0];
 	
 	if (first == 0) return (0);			// Empty
@@ -57,19 +79,47 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 	
 	Q[0]=next;
 
+	// Make sure guard zone is zeros
+
+	if (*(first + BUFFLEN/4) != 0)
+	{
+		Debugprintf("Q_REM %X GUARD ZONE CORRUPT %x Called from %s Line %d", first, *(first + BUFFLEN/4), File, Line);
+		printStack();
+	}
+
 	return (first);
 }
 
 // Return Buffer to Free Queue
 
 extern VOID * BUFFERPOOL;
+extern UINT * Bufferlist[1000];
+void printStack(void);
+
 
 UINT _ReleaseBuffer(VOID *pBUFF, char * File, int Line)
 {
 	UINT * pointer, * BUFF = pBUFF;
+	int n = 0;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("ReleaseBuffer called without semaphore from %s Line %d", File, Line);
+
+	// Make sure address is within pool
+
+	while (n <= NUMBEROFBUFFERS)
+	{
+		if (BUFF == Bufferlist[n++])
+			goto BOK1;
+	}
+
+	Debugprintf("ReleaseBuffer %X not in Pool called from %s Line %d", BUFF, File, Line);
+	printStack();
+
+	return 0;
+
+
+BOK1:
 
 	// See if already on free Queue
 
@@ -80,7 +130,7 @@ UINT _ReleaseBuffer(VOID *pBUFF, char * File, int Line)
 		if (pointer == BUFF)
 		{
 			Debugprintf("Trying to free buffer when already on FREE_Q");
-			WriteMiniDump();
+//			WriteMiniDump();
 
 			return 0;
 		}
@@ -103,9 +153,38 @@ int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 	UINT * Q = (UINT *) PQ;
 	UINT * BUFF = (UINT *)PBUFF;
 	UINT * next;
+	int n = 0;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("C_Q_ADD called without semaphore from %s Line %d", File, Line);
+
+	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
+		return(0);
+
+	// Make sure guard zone is zeros
+
+	if (*(BUFF + BUFFLEN/4) != 0)
+	{
+		Debugprintf("C_Q_ADD %X GUARD ZONE CORRUPT %x Called from %s Line %d", BUFF, *(BUFF + BUFFLEN/4), File, Line);
+		printStack();
+
+		return 0;
+	}
+
+	// Make sure address is within pool
+
+	while (n <= NUMBEROFBUFFERS)
+	{
+		if (BUFF == Bufferlist[n++])
+			goto BOK2;
+	}
+
+	Debugprintf("C_Q_ADD %X not in Pool called from %s Line %d", BUFF, File, Line);
+	printStack();
+
+	return 0;
+
+BOK2:
 
 	BUFF[0]=0;							// Clear chain in new buffer
 
@@ -125,16 +204,47 @@ int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 	next[0]=(UINT)BUFF;					// New one on end
 
 	return(0);
-
 }
+
+// Non-pool version
+
+int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
+{
+	UINT * Q = (UINT *) PQ;
+	UINT * BUFF = (UINT *)PBUFF;
+	UINT * next;
+	int n = 0;
+
+	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
+		return(0);
+
+	BUFF[0]=0;							// Clear chain in new buffer
+
+	if (Q[0] == 0)						// Empty
+	{
+		Q[0]=(UINT)BUFF;				// New one on front
+		return(0);
+	}
+	next = (UINT *)Q[0];
+
+	while (next[0]!=0)
+		next=(UINT *)next[0];			// Chain to end of queue
+	
+	next[0]=(UINT)BUFF;					// New one on end
+
+	return(0);
+}
+
 
 int C_Q_COUNT(VOID *PQ)
 {
 	UINT * Q = (UINT *) PQ;
+	int count = 0;
+
+	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
+		return(0);
 
 	//	SEE HOW MANY BUFFERS ATTACHED TO Q HEADER 
-
-	int count = 0;
 
 	while (*Q)
 	{
@@ -153,6 +263,7 @@ int C_Q_COUNT(VOID *PQ)
 VOID * _GetBuff(char * File, int Line)
 {
 	UINT * Temp = Q_REM(&FREE_Q);
+	MESSAGE * Msg;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("GetBuff called without semaphore from %s Line %d", File, Line);
@@ -163,7 +274,12 @@ VOID * _GetBuff(char * File, int Line)
 
 		if (QCOUNT < MINBUFFCOUNT)
 			MINBUFFCOUNT = QCOUNT;
+	
+		Msg = (MESSAGE *)Temp;
+		Msg->Process = GetCurrentProcessId();
 	}
+	else
+		Debugprintf("Warning - Getbuff returned NULL");
 	
 	return Temp;
 }
@@ -400,7 +516,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 	int App, Stream;
 	struct TNCINFO * APPLTNC;
 
-	Debugprintf("Checking if %s is running", Appl);
+//	Debugprintf("Checking if %s is running", Appl);
 
 	for (App = 0; App < 32; App++)
 	{
@@ -693,6 +809,23 @@ int CompareNode(void *a, void *b)
 	comparison function */ 
 } 
 
+DllExport int APIENTRY CountFramesQueuedOnStream(int Stream)
+{
+	BPQVECSTRUC * PORTVEC = &BPQHOSTVECTOR[Stream-1];		// API counts from 1
+	TRANSPORTENTRY * L4 = PORTVEC->HOSTSESSION;
+
+	int Count = 0;
+
+	if (L4)
+	{
+		if (L4->L4CROSSLINK)		// CONNECTED?
+			Count = CountFramesQueuedOnSession(L4->L4CROSSLINK);
+		else
+			Count = CountFramesQueuedOnSession(L4);
+	}
+	return Count;
+}
+
 DllExport int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall)
 { 
 	// Equivalent to "*** linked to" command
@@ -706,7 +839,6 @@ DllExport int APIENTRY ChangeSessionPaclen(int Stream, int Paclen)
 	BPQHOSTVECTOR[Stream-1].HOSTSESSION->SESSPACLEN = Paclen;
 	return (0);
 }
-
 
 DllExport int APIENTRY Get_APPLMASK(int Stream)
 {
@@ -1128,7 +1260,7 @@ DllExport int APIENTRY SendRaw(int port, char * msg, int len)
 		return 0;
 	}
 
-	MSG->PORT = port; 
+	MSG->PORT = PORT->PORTNUMBER; 
 
 	PUT_ON_PORT_Q(PORT, MSG);
 	
@@ -1187,8 +1319,6 @@ DllExport time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count 
 	
 	return Stamp;
 }
-
-
 
 DllExport int APIENTRY GetMsg(int stream, char * msg, int * len, int * count )
 {
@@ -1400,7 +1530,7 @@ DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 
 			//	IF THE HOST IS THE UPLINKING STATION, WE NEED THE TARGET CALL
 
-			if (Partner->L4CIRCUITTYPE & UPLINK)
+			if (L4->L4CIRCUITTYPE & UPLINK)
 			{
 				struct DEST_LIST *DEST = Partner->L4TARGET.DEST;
 
@@ -1567,9 +1697,12 @@ DllExport int APIENTRY SetAppl(int stream, int flags, int mask)
 	
 	if (flags || mask)
 	{
-		PORTVEC->STREAMOWNER=GetCurrentProcessId();
-		PORTVEC->HOSTFLAGS = 128; // SET ALLOCATED BIT, clear others
-		memcpy(&PORTVEC->PgmName[0], pgm, 31);
+		if ((PORTVEC->HOSTFLAGS & 128) == 0)	// Not allocated
+		{
+			PORTVEC->STREAMOWNER=GetCurrentProcessId();
+			memcpy(&PORTVEC->PgmName[0], pgm, 31);
+			PORTVEC->HOSTFLAGS = 128;				 // SET ALLOCATED BIT, clear others
+		}
 	}
 	
 	return (0);
@@ -1739,10 +1872,10 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	// setup hardware flow control
 
 	dcb.fOutxDsrFlow = 0;
-	dcb.fDtrControl = DTR_CONTROL_ENABLE ;
+	dcb.fDtrControl = DTR_CONTROL_DISABLE ;
 
 	dcb.fOutxCtsFlow = 0;
-	dcb.fRtsControl = RTS_CONTROL_ENABLE ;
+	dcb.fRtsControl = RTS_CONTROL_DISABLE ;
 
 	// setup software flow control
 
@@ -1902,7 +2035,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	// they are symlinked to a com1-com255 in the BPQ Directory (normally the one it is started from
 
 	if ((UINT)pPort < 256)
-		sprintf(Port, "%s/com%d", BPQDirectory, pPort);
+		sprintf(Port, "%s/com%d", BPQDirectory, (int)pPort);
 	else
 		strcpy(Port, pPort);
 
@@ -1959,10 +2092,10 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
 
 	if (Length < 0)
 	{
-		if	(errno != 11)					// Would Block
+		if (errno != 11 && errno != 35)					// Would Block
 		{
 			perror("read");
-			printf("%d\n", errno);
+			printf("Handle %d Errno %d\n", fd, errno);
 		}
 		return 0;
 	}
@@ -2458,10 +2591,13 @@ VOID SendLocation()
 	char Msg[512];
 	int Len;
 
+	Len = sprintf(Msg, "%s %s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
+
 #ifdef LINBPQ
 	Len = sprintf(Msg, "%s L%s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
-#else
-	Len = sprintf(Msg, "%s %s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
+#endif
+#ifdef MACBPQ
+	Len = sprintf(Msg, "%s M%s<br>%s", LOCATOR, VersionString, MAPCOMMENT);
 #endif
 
 	if (Len > 256)
@@ -2618,11 +2754,12 @@ loop1:
 
 void FreeSemaphore(struct SEM * Semaphore)
 {
-	Semaphore->Rels++;
+	Semaphore->Rels++;	
 	Semaphore->Flag = 0;
 
 	return; 
 }
+
 #ifdef WIN32
 
 #include "DbgHelp.h"
@@ -2633,9 +2770,13 @@ USHORT WINAPI RtlCaptureStackBackTrace(
   __out      PVOID *BackTrace,
   __out_opt  PULONG BackTraceHash
 );
+#endif
 
 void printStack(void)
 {
+#ifdef WIN32
+#ifdef _DEBUG					// So we can use on 98/2K
+
      unsigned int   i;
      void         * stack[ 100 ];
      unsigned short frames;
@@ -2660,9 +2801,12 @@ void printStack(void)
          Debugprintf( "%i: %s - 0x%0X\n", frames - i - 1, symbol->Name, symbol->Address );
      }
 
-     free( symbol );
-}
+     free(symbol);
+
 #endif
+#endif
+}
+
 
 VOID ResolveUpdateThread()
 {
@@ -2733,7 +2877,7 @@ VOID OpenReportingSockets()
 
 	_beginthread(ResolveUpdateThread,0,(int)0);
 }
-
+/*
 VOID WriteMiniDump()
 {
 #ifdef WIN32
@@ -2762,7 +2906,7 @@ VOID WriteMiniDump()
 	}
 #endif
 }
-
+*/
 char *stristr (char *ch1, char *ch2)
 {
 	char	*chN1, *chN2;

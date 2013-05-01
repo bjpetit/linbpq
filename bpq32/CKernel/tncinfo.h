@@ -114,6 +114,9 @@ struct TCPINFO
 	int NextCMSAddr;			// Round Robin Pointer
 	int CheckCMSTimer;			// CMS Poll Timer
 
+	char SecureCMSPassword[80];	// For Secure CMS Signin
+	char GatewayCall[10];		// Call for CMS access
+
 	BOOL DisconnectOnClose;
 
 	char PasswordMsg[100];

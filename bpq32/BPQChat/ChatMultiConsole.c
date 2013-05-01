@@ -2,13 +2,12 @@
 //
 //	Console Window Module
 
-#include "BPQMailChat.h"
+#include "BPQChat.h"
 
 extern BOOL WINE;
 
 char ClassName[]="CONSOLEWINDOW";
 
-char SYSOPCall[50];
 
 struct UserInfo * user;
 
@@ -18,12 +17,9 @@ struct ConsoleInfo * ConsHeader[2] = {&BBSConsole, &ChatConsole};
 
 struct ConsoleInfo * InitHeader;
 
-extern struct SEM ChatSemaphore;
-
-
-//CIRCUIT * Console;
 HWND hConsole;
-//RECT ConsoleRect;
+
+int AutoColours[20] = {0, 4, 9, 11, 13, 16, 17, 42, 45, 50, 61, 64, 66, 72, 81, 84, 85, 86, 87, 89};
 
 COLORREF Colours[256] = {0,
 		RGB(0,0,0), RGB(0,0,128), RGB(0,0,192), RGB(0,0,255),				// 1 - 4
@@ -32,29 +28,29 @@ COLORREF Colours[256] = {0,
 		RGB(0,192,0), RGB(0,192,128), RGB(0,192,192), RGB(0,192,255),		// 13 - 16
 		RGB(0,255,0), RGB(0,255,128), RGB(0,255,192), RGB(0,255,255),		// 17 - 20
 
-		RGB(64,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 17 
+		RGB(64,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 21 
 		RGB(64,64,0), RGB(64,64,128), RGB(64,64,192), RGB(64,64,255),
 		RGB(64,128,0), RGB(64,128,128), RGB(64,128,192), RGB(64,128,255),
 		RGB(64,192,0), RGB(64,192,128), RGB(64,192,192), RGB(64,192,255),
 		RGB(64,255,0), RGB(64,255,128), RGB(64,255,192), RGB(64,255,255),
 
-		RGB(128,0,0), RGB(128,0,128), RGB(128,0,192), RGB(128,0,255),				// 33
+		RGB(128,0,0), RGB(128,0,128), RGB(128,0,192), RGB(128,0,255),				// 41
 		RGB(128,64,0), RGB(128,64,128), RGB(128,64,192), RGB(128,64,255),
 		RGB(128,128,0), RGB(128,128,128), RGB(128,128,192), RGB(128,128,255),
 		RGB(128,192,0), RGB(128,192,128), RGB(128,192,192), RGB(128,192,255),
 		RGB(128,255,0), RGB(128,255,128), RGB(128,255,192), RGB(128,255,255),
 
-		RGB(192,0,0), RGB(192,0,128), RGB(192,0,192), RGB(192,0,255),				// 49
+		RGB(192,0,0), RGB(192,0,128), RGB(192,0,192), RGB(192,0,255),				// 61
 		RGB(192,64,0), RGB(192,64,128), RGB(192,64,192), RGB(192,64,255),
 		RGB(192,128,0), RGB(192,128,128), RGB(192,128,192), RGB(192,128,255),
 		RGB(192,192,0), RGB(192,192,128), RGB(192,192,192), RGB(192,192,255),
-		RGB(192,255,0), RGB(192,255,128), RGB(192,255,192), RGB(192,2552,255),
+		RGB(192,255,0), RGB(192,255,128), RGB(192,255,192), RGB(192,255,255),
 
-		RGB(255,0,0), RGB(255,0,128), RGB(255,0,192), RGB(255,0,255),				// 49
+		RGB(255,0,0), RGB(255,0,128), RGB(255,0,192), RGB(255,0,255),				// 81
 		RGB(255,64,0), RGB(255,64,128), RGB(255,64,192), RGB(255,64,255),
 		RGB(255,128,0), RGB(255,128,128), RGB(255,128,192), RGB(255,128,255),
 		RGB(255,192,0), RGB(255,192,128), RGB(255,192,192), RGB(255,192,255),
-		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,2552,255)
+		RGB(255,255,0), RGB(255,255,128), RGB(255,255,192), RGB(255,255,255)		// 100 ?
 };
 
 
@@ -68,6 +64,15 @@ VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo);
 VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line);
 VOID DoRefresh(struct ConsoleInfo * Cinfo);
 
+void ChatFlush(ChatCIRCUIT * conn);
+char * lookupuser(char * call);
+
+VOID SaveIntValue(char * Key, int Value);
+VOID SaveStringValue(char * Key, char * Value);
+int GetIntValue(char * Key, int Default);
+VOID GetStringValue(char * Key, char * Value, int Len);
+
+
 #define BGCOLOUR RGB(236,233,216)
 
 
@@ -78,12 +83,11 @@ BOOL CreateConsole(int Stream)
 	WNDCLASS  wc = {0};
 	HBRUSH bgBrush;
 	HMENU hMenu;
-	HKEY hKey=0;
-	int retCode,Type,Vallen;
 	char Size[80] = "";
 	char RTFColours[3000];
 	struct ConsoleInfo * Cinfo;
 	int i, n;
+	char Text[80];
 	
 	if (Stream == -1) 
 		Cinfo = &BBSConsole;
@@ -105,60 +109,17 @@ BOOL CreateConsole(int Stream)
 
 	Cinfo->BPQStream = Stream;
 
-	// Get Config From Registry
+	GetStringValue("ConsoleSize", Size, 80);	
 
-	if (Stream == -1)
-		retCode = RegOpenKeyEx (REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
-	else
-	{
-		retCode = RegOpenKeyEx (REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole", 0, KEY_ALL_ACCESS, &hKey);
-
-		if (retCode != ERROR_SUCCESS)
-			retCode = RegOpenKeyEx (REGTREE,
-				"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
-
-	}
-	if (retCode == ERROR_SUCCESS)
-	{
-		Vallen=80;
-		RegQueryValueEx(hKey,"ConsoleSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"Bells",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->Bells,(ULONG *)&Vallen);
-	
-		Vallen=4;
-		RegQueryValueEx(hKey,"FlashOnBell",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->FlashOnBell,(ULONG *)&Vallen);
-	
-		Vallen=4;
-		RegQueryValueEx(hKey,"StripLF",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->StripLF,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"CloseWindowOnBye",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->CloseWindowOnBye,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"WarnWrap",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->WarnWrap,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"WrapInput",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->WrapInput,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"FlashOnConnect",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->FlashOnConnect,(ULONG *)&Vallen);
-		
-		RegCloseKey(hKey);
+		Cinfo->Bells = GetIntValue("Bells", 0);
+		Cinfo->FlashOnBell = GetIntValue("FlashOnBell", 0);	
+		Cinfo->CloseWindowOnBye = GetIntValue("CloseWindowOnBye", 0);	
+		Cinfo->WarnWrap = GetIntValue("WarnWrap", 0);	
+		Cinfo->WrapInput = GetIntValue("WrapInput", 0);	
+		Cinfo->FlashOnConnect = GetIntValue("FlashOnConnect", 0);	
 
 		sscanf(Size,"%d,%d,%d,%d", &Cinfo->ConsoleRect.left, &Cinfo->ConsoleRect.right,
 			&Cinfo->ConsoleRect.top, &Cinfo->ConsoleRect.bottom);
-	}
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -181,6 +142,9 @@ BOOL CreateConsole(int Stream)
 	
 	if (!hConsole)
         return (FALSE);
+
+	wsprintf(Text, "Chat %s Console", Session);
+	SetWindowText(hConsole, Text);
 
 	Cinfo->readbuff = zalloc(1000);
 	Cinfo->readbufflen = 1000;
@@ -212,7 +176,7 @@ BOOL CreateConsole(int Stream)
 	for (i = 1; i < 100; i++)
 	{
 		COLORREF Colour = Colours[i];
-		n += sprintf(&RTFColours[n], "\\red%d\\green%d\\blue%d;", GetRValue(Colour), GetGValue(Colour),GetBValue(Colour));
+		n += wsprintf(&RTFColours[n], "\\red%d\\green%d\\blue%d;", GetRValue(Colour), GetGValue(Colour),GetBValue(Colour));
 	}
 
 	RTFColours[n++] = '}';
@@ -249,15 +213,11 @@ BOOL CreateConsole(int Stream)
 	Cinfo->wpOrigInputProc = (WNDPROC) SetWindowLong(Cinfo->hwndInput, GWL_WNDPROC, (LONG) InputProc); 
 
 	if (cfgMinToTray)
-		if (Stream == -1)
-			AddTrayMenuItem(hConsole, "BBS Console");
-		else
-			AddTrayMenuItem(hConsole, "Chat Console");
-
-	if (Stream == -1)
-		SetWindowText(hConsole, "BBS Console");
-	else
-		SetWindowText(hConsole, "Chat Console");
+	{
+		char Text[80];
+		wsprintf(Text, "Chat %s Console", Session);
+		AddTrayMenuItem(hConsole, Text);
+	}
 
 	ShowWindow(hConsole, SW_SHOWNORMAL);
 
@@ -274,58 +234,45 @@ BOOL CreateConsole(int Stream)
 
 	MoveWindows(Cinfo);
 
-	Cinfo->Console = zalloc(sizeof(CIRCUIT));
+	Cinfo->Console = zalloc(sizeof(ChatCIRCUIT));
 
 	Cinfo->Console->Active = TRUE;
 	Cinfo->Console->BPQStream = Stream;
 
-	strcpy(Cinfo->Console->Callsign, SYSOPCall);
+	strcpy(Cinfo->Console->Callsign, ChatSYSOPCall);
 
-	user = LookupCall(SYSOPCall);
+	user = zalloc(sizeof(struct UserInfo));
 
-	if (user == NULL)
-	{
-		user = AllocateUserRecord(SYSOPCall);
-
-		if (user == NULL) return 0; //		Cant happen??
-	
-		user->Temp = zalloc(sizeof (struct TempUserInfo));
-	}
-
-	time(&user->TimeLastConnected);
-	user->nbcon++;
+	strcpy(user->Call, ChatSYSOPCall);
 
 	Cinfo->Console->UserPointer = user;
-	Cinfo->Console->lastmsg = user->lastmsg;
 	Cinfo->Console->paclen=236;
 	Cinfo->Console->sysop = TRUE;
 
-	Cinfo->Console->PageLen = user->PageLen;
-	Cinfo->Console->Paging = (user->PageLen > 0);
-
-	nodeprintf(Cinfo->Console, BBSSID, "BPQ-", Ver[0], Ver[1], Ver[2], Ver[3], "B", "", "", "F");
-
 	if (user->Name[0] == 0)
 	{
-		Cinfo->Console->Flags |= GETTINGUSER;
-		SendUnbuffered(-1, NewUserPrompt, strlen(NewUserPrompt));
-	}
-	else
-	{
-		if (Stream == -2)
+		char * Name = lookupuser(user->Call);
+
+		if (Name)
 		{
-			if(ChatApplMask == 0)
-			{
-				BBSputs(Cinfo->Console, "Chat Node is disabled\r");
-				SendPrompt(Cinfo->Console, user);
-				return TRUE;
-			}
+			if (strlen(Name) > 17)
+				Name[17] = 0;
+
+			strcpy(user->Name, Name);
+			free(Name);
 		}
 		else
-			SendWelcomeMsg(-1, Cinfo->Console, user);
+		{
+			Cinfo->Console->Flags |= GETTINGUSER;
+			SendUnbuffered(-2, NewUserPrompt, strlen(NewUserPrompt));
+			return TRUE;
+		}
 	}
-	return TRUE;
+		
+	if (rtloginu (Cinfo->Console, TRUE))
+		Cinfo->Console->Flags |= CHATMODE;
 
+	return TRUE;
 }
 
 
@@ -350,8 +297,19 @@ VOID CloseConsole(int Stream)
 
 VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 {
-	HKEY hKey=0;
-	int retCode, disp;
+	if (Cinfo->Console->Flags & CHATMODE)
+	{
+		__try
+		{
+			logout(Cinfo->Console);
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER)
+		{
+		}
+	
+		Cinfo->Console->Flags = 0;
+	}
+
 
 	if (Cinfo->CloseWindowOnBye)
 	{
@@ -359,26 +317,14 @@ VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 		DestroyWindow(Cinfo->hConsole);
 	}
 
-	if (Cinfo->BPQStream == -1)
-		retCode = RegCreateKeyEx(REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
-	else
-		retCode = RegCreateKeyEx(REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
+	SaveIntValue("Bells",Cinfo->Bells);
+	SaveIntValue("FlashOnBell",Cinfo->FlashOnBell);
+	SaveIntValue("StripLF",Cinfo->StripLF);
+	SaveIntValue("WarnWrap",Cinfo->WarnWrap);
+	SaveIntValue("WrapInput",Cinfo->WrapInput);
+	SaveIntValue("FlashOnConnect",Cinfo->FlashOnConnect);
+	SaveIntValue("CloseWindowOnBye",Cinfo->CloseWindowOnBye);
 
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Cinfo->Bells,4);
-		retCode = RegSetValueEx(hKey,"FlashOnBell",0,REG_DWORD,(BYTE *)&Cinfo->FlashOnBell,4);
-		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&Cinfo->StripLF,4);
-		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&Cinfo->WarnWrap,4);
-		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&Cinfo->WrapInput,4);
-		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&Cinfo->FlashOnConnect,4);
-		retCode = RegSetValueEx(hKey,"CloseWindowOnBye",0,REG_DWORD,(BYTE *)&Cinfo->CloseWindowOnBye,4);
-
-		RegCloseKey(hKey);
-	}
 }
 
 void MoveWindows(struct ConsoleInfo * Cinfo)
@@ -407,6 +353,136 @@ void MoveWindows(struct ConsoleInfo * Cinfo)
 	Cinfo->maxlinelen = Cinfo->WarnLen;
 
 }
+
+
+INT_PTR CALLBACK ChatColourDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    TEXTMETRIC tm; 
+    int y;  
+    LPMEASUREITEMSTRUCT lpmis; 
+    LPDRAWITEMSTRUCT lpdis; 
+
+
+	switch (message)
+	{
+		int Colour;
+		USER *user;
+		char Call[100];
+		int Sel;
+		char ColourString[100];
+
+	case WM_INITDIALOG:
+
+		for (user = user_hd; user; user = user->next)
+		{
+			SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_ADDSTRING, 0, (LPARAM) user->call);
+		}
+	
+		for (Colour = 0; Colour < 100; Colour++)
+		{
+			SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_ADDSTRING, 0, (LPARAM) Colours [Colour]);
+		}
+		return TRUE;
+
+		       
+	case WM_MEASUREITEM: 
+ 
+            lpmis = (LPMEASUREITEMSTRUCT) lParam; 
+ 
+            // Set the height of the list box items. 
+ 
+            lpmis->itemHeight = 15; 
+            return TRUE; 
+ 
+	case WM_DRAWITEM: 
+ 
+            lpdis = (LPDRAWITEMSTRUCT) lParam; 
+ 
+            // If there are no list box items, skip this message. 
+ 
+            if (lpdis->itemID == -1) 
+            { 
+                break; 
+            } 
+ 
+            switch (lpdis->itemAction) 
+            { 
+				case ODA_SELECT: 
+                case ODA_DRAWENTIRE: 
+ 			
+					// if Chat Console, and message has a colour eacape, action it 
+ 
+                    GetTextMetrics(lpdis->hDC, &tm); 
+ 
+                    y = (lpdis->rcItem.bottom + lpdis->rcItem.top - tm.tmHeight) / 2;
+
+						SetTextColor(lpdis->hDC,  Colours[lpdis->itemID]);
+
+//					SetBkColor(lpdis->hDC, 0);
+
+					wsprintf(ColourString, "XXXXXX %06X", Colours[lpdis->itemID]); 
+
+                    TextOut(lpdis->hDC, 
+                        6, 
+                        y, 
+                        ColourString, 
+                        13); 						
+ 
+ //					SetTextColor(lpdis->hDC, OldColour);
+
+                    break; 
+			}
+
+
+	case WM_COMMAND:
+
+		switch LOWORD(wParam)
+		{
+		case IDC_CHATCALLS:
+
+			if (HIWORD(wParam) == CBN_SELCHANGE)
+			{
+				Sel = SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETCURSEL, 0, 0);
+			
+				SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&Call);
+
+				user = user_find(Call, NULL);
+
+				if (user)
+					SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_SETCURSEL, user->Colour - 10, 0);
+			}
+
+			break;
+
+		case IDOK:
+
+			Sel = SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETCURSEL, 0, 0);
+			
+			SendDlgItemMessage(hDlg, IDC_CHATCALLS, CB_GETLBTEXT, Sel, (LPARAM)(LPCTSTR)&Call);
+
+			Sel = SendDlgItemMessage(hDlg, IDC_CHATCOLOURS, CB_GETCURSEL, 0, 0);
+				
+			user = user_find(Call, NULL);
+
+			if (user)
+			{
+				user->Colour = Sel + 10;
+				upduser(user);
+			}
+			break;
+
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		
+		}
+	}
+	return FALSE;
+}
+
+
 
 LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -649,6 +725,12 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			CopyRichTextToClipboard(Cinfo->hwndOutput);
 			break;
 
+
+		case IDM_EDITCHATCOLOURS:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_CHATCOLCONFIG), hWnd, ChatColourDialogProc);
+			break;
+
+
 		//case BPQHELP:
 
 		//	HtmlHelp(hWnd,"BPQTerminal.chm",HH_HELP_FINDER,0);  
@@ -717,15 +799,11 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 			if (Cinfo->Console && Cinfo->Console->Active)
 			{
-				ClearQueue(Cinfo->Console);
+				ChatClearQueue(Cinfo->Console);
 		
 				Cinfo->Console->Active = FALSE;
 				RefreshMainWindow();
-
-				{
-					SendUnbuffered(Cinfo->Console->BPQStream, SignoffMsg, strlen(SignoffMsg));
-					user->lastmsg = Cinfo->Console->lastmsg;
-				}
+				logout(Cinfo->Console);
 			}
 
 			// Free Scrollback
@@ -1219,7 +1297,7 @@ DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LON
 	if (Line <0)
 		Line = Line + MAXLINES;
 
-	sprintf(lpBuff, "\\cf%d ", Cinfo->Colourvalue[Line]);
+	wsprintf(lpBuff, "\\cf%d ", Cinfo->Colourvalue[Line]);
 	strcat(lpBuff, Cinfo->OutputScreen[Line]);
 	strcat(lpBuff, "\\line");
 

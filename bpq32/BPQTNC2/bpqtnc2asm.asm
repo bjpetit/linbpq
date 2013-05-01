@@ -537,6 +537,8 @@ TIM100:
 TIMEXIT:
 
 	RET
+	
+	EXTERN _xDecodeFrame:near
 
 
 DOMONITORING:
@@ -580,10 +582,21 @@ SETAPPLM:
 
 	mov	esi,OFFSET MONITORDATA
 	mov	edi,offset MONBUFFER
+	
+	pushad
+	push eax
+	push edi
+	push esi
+	
+	call _xDecodeFrame
+	
+	mov	MONLEN,EAX
+	
+	add	esp,12
+	popad
+	
+;	call	[_MONDECODE]
 
-	call	[_MONDECODE]
-
-	mov	MONLEN,ECX
 
 	MOV	ECX,NUMBEROFSTREAMS
 	JCXZ	TRACEEND

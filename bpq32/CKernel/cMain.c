@@ -241,12 +241,11 @@ char BTEXTFLD[256] ="\r";
 // Keep at end
 
 	
-#define DATABYTES 320000
+#define DATABYTES 360000		// WAS 320000
 
 UCHAR DATAAREA[DATABYTES] = "";
 
 UINT * Bufferlist[1000] = {0};
-
 
 extern BOOL IPRequired;
 extern int MaxHops;
@@ -255,6 +254,8 @@ extern USHORT CWTABLE[];
 extern struct _TRANSPORTENTRY * L4TABLE;
 extern UCHAR ROUTEQUAL;
 extern UINT BPQMsg;
+
+extern int NUMBEROFTNCPORTS;
 
 extern APPLCALLS APPLCALLTABLE[];
 
@@ -1146,9 +1147,7 @@ BOOL Start()
 	}
 	BUFFERPOOL = NEXTFREEDATA;
 
-	Consoleprintf("");
-	
-	Consoleprintf("PORTS %x LINKS %x DESTS %x ROUTES %x L4 %x BUFFERS %x",
+	Consoleprintf("PORTS %x LINKS %x DESTS %x ROUTES %x L4 %x BUFFERS %x\n",
 		PORTTABLE, LINKS, DESTS, NEIGHBOURS, L4TABLE, BUFFERPOOL);
 
 	Debugprintf("PORTS %x LINKS %x DESTS %x ROUTES %x L4 %x BUFFERS %x ",
@@ -1158,10 +1157,12 @@ BOOL Start()
 
 	NUMBEROFBUFFERS = 0;
 
-	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - BUFFLEN))
+	while (i-- && NEXTFREEDATA < (DATAAREA + DATABYTES - 400))	// was BUFFLEN
 	{
+		Bufferlist[NUMBEROFBUFFERS] = (UINT *)NEXTFREEDATA;
+
 		ReleaseBuffer((UINT *)NEXTFREEDATA);
-		NEXTFREEDATA += BUFFLEN;
+		NEXTFREEDATA += 400;			// was BUFFLEN
 
 		NUMBEROFBUFFERS++;
 		MAXBUFFS++;
@@ -1863,6 +1864,7 @@ ENDOFLIST:
 	L4BG();					// DO LEVEL 4 PROCESSING
 	L3BG();
 	TNCTimerProc();
+
 }
 
 int BPQTRACE(UINT * Msg, BOOL TOAPRS)
@@ -1969,7 +1971,6 @@ VOID FindLostBuffers()
 		HOSTSESS++;
 	}
 	
-/*
 	// Build list of buffers, then mark off all on free Q
 
 	Buff = BUFFERPOOL;
@@ -1978,7 +1979,7 @@ VOID FindLostBuffers()
 	for (i = 0; i < NUMBEROFBUFFERS; i++)
 	{
 		Bufferlist[n++] = Buff;
-		Buff += (BUFFLEN / 4);
+		Buff += 100;		// was (BUFFLEN / 4);
 	}
 
 	Buff = (UINT *)FREE_Q;
@@ -2003,6 +2004,8 @@ VOID FindLostBuffers()
 	{
 		if (Bufferlist[n])
 		{
+			MESSAGE * Msg = (MESSAGE *)Bufferlist[n];
+
 			memcpy(CodeDump, Bufferlist[n], 64);
 	
 			for (i = 0; i < 16; i++)
@@ -2018,11 +2021,20 @@ VOID FindLostBuffers()
 		Debugprintf("%08x %08x %08x %08x %08x %08x %08x %08x %08x ",
 			Bufferlist[n], CodeDump[0], CodeDump[1], CodeDump[2], CodeDump[3], CodeDump[4], CodeDump[5], CodeDump[6], CodeDump[7]);
 
-		Debugprintf("         %08x %08x %08x %08x %08x %08x %08x %08x ",
-			CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15]);
+		Debugprintf("         %08x %08x %08x %08x %08x %08x %08x %08x %d",
+			CodeDump[8], CodeDump[9], CodeDump[10], CodeDump[11], CodeDump[12], CodeDump[13], CodeDump[14], CodeDump[15], Msg->Process);
 
 		}
 	}
-	*/
+
+	// rebuild list for buffer check
+	Buff = BUFFERPOOL;	
+	n = 0;
+
+	for (i = 0; i < NUMBEROFBUFFERS; i++)
+	{
+		Bufferlist[n++] = Buff;
+		Buff += 100;			// was (BUFFLEN / 4);
+	}
 }
 

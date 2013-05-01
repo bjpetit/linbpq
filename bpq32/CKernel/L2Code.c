@@ -468,6 +468,9 @@ int CountFramesQueuedOnSession(TRANSPORTENTRY * Session)
 {
 	//	COUNT NUMBER OF FRAMES QUEUED ON A SESSION (IN ESI)
 
+	if (Session == 0)
+		return 0;
+
 	if (Session->L4CIRCUITTYPE & BPQHOST)
 	{
 		return C_Q_COUNT(&Session->L4TX_Q);

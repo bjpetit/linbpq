@@ -1277,10 +1277,21 @@ VOID WINMORThread(port)
 	fd_set errorfs;
 	struct timeval timeout;
 
-	Sleep(5000);		// Allow init to complete 
-
 	if (TNC->WINMORHostName == NULL)
 		return;
+
+	TNC->CONNECTING = TRUE;
+
+	Sleep(5000);		// Allow init to complete 
+
+//	// If we started the TNC make sure it is still running.
+
+//	if (!IsProcess(TNC->WIMMORPID))
+//	{
+//		RestartTNC(TNC);
+//		Sleep(3000);
+//	}
+
 
 	TNC->destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
 	TNC->Datadestaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
@@ -1291,8 +1302,11 @@ VOID WINMORThread(port)
 
 		HostEnt = gethostbyname (TNC->WINMORHostName);
 		 
-		 if (!HostEnt) return;			// Resolve failed
-
+		 if (!HostEnt)
+		 {
+			 	TNC->CONNECTING = FALSE;
+				return;			// Resolve failed
+		 }
 		 memcpy(&TNC->destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 		 memcpy(&TNC->Datadestaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 
@@ -1308,6 +1322,7 @@ VOID WINMORThread(port)
 		i=sprintf(Msg, "Socket Failed for WINMOR socket - error code = %d\r\n", WSAGetLastError());
 		WritetoConsole(Msg);
 
+	 	TNC->CONNECTING = FALSE;
   	 	return; 
 	}
  
@@ -1327,6 +1342,7 @@ VOID WINMORThread(port)
 		WritetoConsole(Msg);
 			
 		closesocket(TNC->WINMORSock);
+	 	TNC->CONNECTING = FALSE;
 
   	 	return; 
 	}
@@ -1347,12 +1363,11 @@ VOID WINMORThread(port)
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
 			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
-
-
 			TNC->Alerted = TRUE;
 		}
 		
 		closesocket(TNC->WINMORSock);
+	 	TNC->CONNECTING = FALSE;
 		return;
 	}
 
@@ -1369,6 +1384,7 @@ VOID WINMORThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
+	 	TNC->CONNECTING = FALSE;
 
   	 	return; 
 	}
@@ -1384,6 +1400,7 @@ VOID WINMORThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
+	 	TNC->CONNECTING = FALSE;
 
   	 	return; 
 	}
@@ -1392,6 +1409,7 @@ VOID WINMORThread(port)
 	{
 		ioctlsocket (TNC->WINMORDataSock,FIONBIO,&param);		// Set nonblocking
 		TNC->CONNECTED = TRUE;
+	 	TNC->CONNECTING = FALSE;
 
 		// Send INIT script
 
@@ -1413,6 +1431,7 @@ VOID WINMORThread(port)
 
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
+	 	TNC->CONNECTING = FALSE;
 
 		return;
 	}
@@ -1449,7 +1468,7 @@ VOID WINMORThread(port)
 			if (FD_ISSET(TNC->WINMORSock, &errorfs))
 			{
 Lost:				
-				sprintf(Msg, "WINNOR Connection lost for Port %d\r\n", TNC->Port);
+				sprintf(Msg, "WINMOR Connection lost for Port %d\r\n", TNC->Port);
 				WritetoConsole(Msg);
 				
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
@@ -1473,13 +1492,12 @@ Lost:
 		{
 			// 60 secs without data. Shouldn't happen
 
-			sprintf(Msg, "WINNOR Connection Timeout Port %d\r\n", TNC->Port);
+			sprintf(Msg, "WINMOR Connection Timeout Port %d\r\n", TNC->Port);
 			WritetoConsole(Msg);
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
 			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
-
-				
+	
 			TNC->CONNECTED = FALSE;
 			TNC->Alerted = FALSE;
 
@@ -1649,7 +1667,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
 			
-			if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
+			if (TNC->RIG && TNC->RIG != &TNC->DummyRig && strcmp(TNC->RIG->RigName, "PTT"))
 			{
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->TargetCall, TNC->RIG->Valchar);
 				SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq

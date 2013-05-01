@@ -765,10 +765,14 @@
 //	Allow comment lines (; or @) or single space in fwd scripts
 //  Fix loss of forwarding info if SAVE is clicked before selecting a call
 
+// Version 1.4.55.1 ?? 2013
+
+// Add option to remove uers that have not connected for a long time.
+
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
-#include "stdafx.h"
+#include "BPQMailChat.h"
 #define MAILCHAT
 #include "Versions.h"
 
@@ -806,6 +810,8 @@ int SessX, SessY, SessWidth;					// Params for Session Window
 char szBuff[80];
 
 #define MaxSockets 64
+
+int _MYTIMEZONE = 0;
 
 ConnectionInfo Connections[MaxSockets+1];
 
@@ -845,6 +851,8 @@ int MaxMsgno = 60000;
 int BidLifetime = 60;
 int MaintInterval = 24;
 int MaintTime = 0;
+int UserLifetime = 0;
+
 
 BOOL cfgMinToTray;
 
@@ -1003,7 +1011,7 @@ Dump_Process_State(struct _EXCEPTION_POINTERS * exinfo, char * Msg)
 		
 	SPPtr = ContextRecord.Esp;
 
-	Debugprintf("BPQMailChat *** Program Error %x at %x in %s",
+	Debugprintf("BPQMail *** Program Error %x at %x in %s",
 	ExceptionRecord.ExceptionCode, ExceptionRecord.ExceptionAddress, Msg);	
 
 
@@ -1171,7 +1179,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delay 60 Secs
 	{	
-		hWnd = CreateWindow("STATIC", "MailChat Restarting after Failure - Please Wait", 0,
+		hWnd = CreateWindow("STATIC", "Mail Restarting after Failure - Please Wait", 0,
 		CW_USEDEFAULT, 100, 550, 70,
 		NULL, NULL, hInstance, NULL);
 
@@ -1179,7 +1187,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 		while (i-- > 0)
 		{
-			sprintf(Msg, "MailChat Restarting after Failure - Please Wait %d secs.", i);
+			sprintf(Msg, "Mail Restarting after Failure - Please Wait %d secs.", i);
 			SetWindowText(hWnd, Msg);
 			
 			Sleep(1000);
@@ -1212,7 +1220,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	// Main message loop:
 
 	Logprintf(LOG_DEBUG_X, NULL, '!', "Program Starting");
-	Debugprintf("BPQMailChat Starting");
+	Debugprintf("BPQMail Starting");
 
 	} My__except_Routine("Init");
 
@@ -1250,7 +1258,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	SaveConfig(Configfile);
 
-	hWnd = CreateWindow("STATIC", "MailChat Closing - Please Wait", 0,
+	hWnd = CreateWindow("STATIC", "Mail Closing - Please Wait", 0,
 				150, 200, 350, 40, NULL, NULL, hInstance, NULL);
 
 	ShowWindow(hWnd, nCmdShow);
@@ -2046,7 +2054,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (strlen(HDest) == 0)
 			{		
-				MessageBox(NULL, "To: Call Missing!", "BPQMailChat", MB_ICONERROR);
+				MessageBox(NULL, "To: Call Missing!", "BPQMail", MB_ICONERROR);
 				return TRUE;
 			}
 
@@ -2056,7 +2064,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 				{
 					// Duplicate bid
 
-					MessageBox(NULL, "Duplicate BID", "BPQMailChat", MB_ICONERROR);
+					MessageBox(NULL, "Duplicate BID", "BPQMail", MB_ICONERROR);
 					return TRUE;
 				}
 			}
@@ -2431,6 +2439,8 @@ BOOL Initialise()
 	char msg[500];
 	char ProgramDir[MAX_PATH];
 
+	_MYTIMEZONE = timezone;
+
 	//	Register message for posting by BPQDLL
 
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
@@ -2478,8 +2488,8 @@ BOOL Initialise()
 	{
 		if (_stricmp(BaseDir, ProperBaseDir) && _stricmp(BaseDir, ProgramDir))			// Different?
 		{
-			sprintf_s(msg, sizeof(msg), "BPQMailChat files may not be in the correct location\r\nPlease check that they are at %s, and move them if they are not\r\n\r\nPress OK when files are in the correct location, or Cancel to exit", ProperBaseDir);
-			ret = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+			sprintf_s(msg, sizeof(msg), "BPQMail files may not be in the correct location\r\nPlease check that they are at %s, and move them if they are not\r\n\r\nPress OK when files are in the correct location, or Cancel to exit", ProperBaseDir);
+			ret = MessageBox(NULL, msg, "BPQMail", MB_OKCANCEL);
 
 			if (ret == IDCANCEL)
 				return FALSE;
@@ -2512,14 +2522,14 @@ BOOL Initialise()
 		else
 		{
 			sprintf_s(msg, sizeof(msg), "Base Directory %s not found - should it be created?", BaseDir);
-			ret = MessageBox(NULL, msg, "BPQMailChat", MB_YESNO);
+			ret = MessageBox(NULL, msg, "BPQMail", MB_YESNO);
 
 			if (ret == IDYES)
 			{
 				ret = CreateDirectory(BaseDir, NULL);
 				if (ret == 0)
 				{
-					MessageBox(NULL, "Failed to created Base Directory - exiting", "BPQMailChat", MB_ICONSTOP);
+					MessageBox(NULL, "Failed to created Base Directory - exiting", "BPQMail", MB_ICONSTOP);
 					return FALSE;
 				}
 			}
@@ -2535,7 +2545,7 @@ BOOL Initialise()
 		if (!(Attrs & FILE_ATTRIBUTE_DIRECTORY))
 		{
 			sprintf_s(msg, sizeof(msg), "Base Directory %s is a file not a directory - exiting", BaseDir);
-			ret = MessageBox(NULL, msg, "BPQMailChat", MB_ICONSTOP);
+			ret = MessageBox(NULL, msg, "BPQMail", MB_ICONSTOP);
 
 			return FALSE;
 		}
@@ -2545,8 +2555,8 @@ BOOL Initialise()
 
 	if (_stricmp(BaseDir, ProperBaseDir))				// Different?
 	{
-		sprintf_s(msg, sizeof(msg), "Base Directory %s will be changed to %s\r\n\r\nCurrent MailChat files (but not backups) will be copied to the new BaseDir\rOriginal files will be left in case you need to revert. These may be deleted when you are happy with the system\r\rClick OK to continue or Cancel to abort", BaseDir, ProperBaseDir);
-		ret = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+		sprintf_s(msg, sizeof(msg), "Base Directory %s will be changed to %s\r\n\r\nCurrent Mail files (but not backups) will be copied to the new BaseDir\rOriginal files will be left in case you need to revert. These may be deleted when you are happy with the system\r\rClick OK to continue or Cancel to abort", BaseDir, ProperBaseDir);
+		ret = MessageBox(NULL, msg, "BPQMail", MB_OKCANCEL);
 
 		if (ret == IDOK)
 		{
@@ -2574,7 +2584,7 @@ BOOL Initialise()
 			else
 			{
 				sprintf_s(msg, sizeof(msg), "Copy Failed - Error %d", ExitCode);
-				MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+				MessageBox(NULL, msg, "BPQMail", MB_OKCANCEL);
 				return FALSE;
 			}
 		}
@@ -2684,7 +2694,7 @@ BOOL Initialise()
 
 	if (cfgMinToTray)
 	{
-		AddTrayMenuItem(MainWnd, "Mail/Chat Server");
+		AddTrayMenuItem(MainWnd, "Mail Server");
 	}
 	
 	SetTimer(hWnd,1,10000,NULL);	// Slow Timer (10 Secs)
