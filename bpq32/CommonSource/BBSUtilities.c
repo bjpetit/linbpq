@@ -10,6 +10,10 @@
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
 
+unsigned long _beginthread( void( *start_address )(VOID * DParam),
+				unsigned stack_size, VOID * DParam);
+
+
 int APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
 void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
@@ -2715,7 +2719,8 @@ int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, B
 		if (MsgHddrPtr[i]->status == 'K')
 			continue;
 
-		if (_memicmp(MsgHddrPtr[i]->via, Call, strlen(Call)) == 0)
+		if (_memicmp(MsgHddrPtr[i]->via, Call, strlen(Call)) == 0 ||
+			(_stricmp(Call, "SMTP:") == 0 && MsgHddrPtr[i]->to[0] == 0))
 		{
 			Msgs++;
 			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);

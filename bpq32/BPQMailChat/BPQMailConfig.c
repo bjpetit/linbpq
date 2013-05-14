@@ -1214,6 +1214,7 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, 6001, Msg->from);
 			SetDlgItemText(hDlg, 6002, Msg->bid);
 			SetDlgItemText(hDlg, 6003, Msg->to);
+			SetDlgItemText(hDlg, EMAILFROM, Msg->emailfrom);
 			SetDlgItemText(hDlg, 6004, Msg->via);
 			SetDlgItemText(hDlg, 6005, Msg->title);
 			sprintf(Size, "%d", Msg->length);

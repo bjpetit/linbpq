@@ -2217,10 +2217,15 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		SendSock(sockptr, Header);
 
 		if (_stricmp(Msg->from, "smtp:") == 0)
+		{
 			sprintf_s(Header, sizeof(Header), "From: smtp/%s", Msg->emailfrom);
+		}
 		else
+		{
 			if (_stricmp(Msg->from, "rms:") == 0)
+			{
 				sprintf_s(Header, sizeof(Header), "From: RMS/%s", Msg->emailfrom);
+			}
 			else
 			{
 				// Packet Address. Mail client will need more than just a call to respond to
@@ -2246,11 +2251,11 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 						if (WP)
 							sprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
 					}
-				}
+				}	
+				sprintf_s(Header, sizeof(Header), "From: %s", B2From);
 			}
-			
-			sprintf_s(Header, sizeof(Header), "From: %s", B2From);
-		
+		}
+
 		SendSock(sockptr, Header);
 		sprintf_s(Header, sizeof(Header), "Subject: %s", Msg->title);
 		SendSock(sockptr, Header);

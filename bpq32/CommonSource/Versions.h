@@ -11,10 +11,10 @@
 
 #ifdef CKernel
 
-#define Vers 6,0,1,34
-#define Verstring "6.0.1.34\0"
-#define Datestring "April 2013"
-#define VerComments "G8BPQ Packet Switch (C Version) V6.0.1.34\0"
+#define Vers 6,0,1,39
+#define Verstring "6.0.1.39\0"
+#define Datestring "May 2013"
+#define VerComments "G8BPQ Packet Switch (C Version) V6.0.1.38\0"
 #define VerCopyright "Copyright © 2001-2013 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 
@@ -23,8 +23,8 @@
 
 #ifdef TermTCP
 
-#define Vers 1,0,5,1
-#define Verstring "1.0.5.1\0"
+#define Vers 1,0,6,1
+#define Verstring "1.0.6.1\0"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2011-2012 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"
@@ -53,8 +53,8 @@
 
 #ifdef MAILCHAT
 
-#define Vers 1,4,54,2
-#define Verstring "1.4.54.2\0"
+#define Vers 1,4,54,4
+#define Verstring "1.4.54.4\0"
 #define VerComments "Mail and Chat server for G8BPQ Packet Switch\0"
 #define VerCopyright "Copyright © 2009-2013 John Wiseman G8BPQ\0"
 #define VerDesc "Mail and Chat server for G8BPQ's 32 Bit Switch\0"

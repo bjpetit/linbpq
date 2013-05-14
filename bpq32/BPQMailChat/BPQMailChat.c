@@ -768,6 +768,10 @@
 // Version 1.4.55.1 ?? 2013
 
 // Add option to remove uers that have not connected for a long time.
+// Add l@ smtp:
+// Fix From: sent to POP3 Client when meaages is from RMS
+// Display Email From on Manage Messages
+
 
 
 // Use Windows Sound Events for (Chat "user join" alert)

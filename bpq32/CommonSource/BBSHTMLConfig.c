@@ -252,14 +252,14 @@ static char MailDetailPage[] =
 "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
 "<title>MsgEdit</title></head><body><h4>Message %d</h4>"
 "<form style=\"font-family: monospace;\" method=post action=/Mail/Msg?%s name=Msgs>"
-"From&nbsp; <input size=10 name=From value=%s> Sent&nbsp;&nbsp;&nbsp;"
+"From&nbsp; <input style=\"font-family: monospace;\" size=10 name=From value=%s> Sent&nbsp;&nbsp;&nbsp;"
 "&nbsp; &nbsp; &nbsp; <input readonly=readonly size=12 name=Sent value=\"%s\">&nbsp;"
 "Type &nbsp;&nbsp;&nbsp;&nbsp;<select tabindex=1 size=1 name=Type>"
 "<option %s value=B>B</option>"
 "<option %s value=P>P</option>"
 "<option %s value=T>T</option>"
-"</select><br><br>"
-"To&nbsp; &nbsp; <input size=10 name=To value=%s>"
+"</select><br>"
+"To&nbsp; &nbsp; <input style=\"font-family: monospace;\" size=10 name=To value=%s>"
 " Received&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input readonly=readonly size=12 name=RX value=\"%s\">&nbsp;"
 "Status &nbsp;&nbsp;<select tabindex=1 size=1 name=Status>"
 "<option %s value=N>N</option>"
@@ -269,11 +269,12 @@ static char MailDetailPage[] =
 "<option %s value=H>H</option>"
 "<option %s value=D>D</option>"
 "<option %s value=$>$</option>"
-"</select><br><br>"
-"BID&nbsp;&nbsp; <input size=10 name=BID value=\"%s\"> Last Changed <input readonly=readonly size=12 name=LastChange value=\"%s\">&nbsp;"
+"</select><br>"
+"BID&nbsp;&nbsp; <input style=\"width:100px; font-family: monospace; \" name=BID value=\"%s\"> Last Changed <input readonly=readonly size=12 name=LastChange value=\"%s\">&nbsp;"
 "Size&nbsp; <input readonly=readonly size=5 name=Size value=%d><br><br>"
-"VIA&nbsp;&nbsp; <input style=\"width:360px;\" name=VIA value=%s><br><br>"
-"Title <input style=\"width:360px;\" name=Title value=\"%s\"> <br><br>"
+"%s"		// Email from Line
+"&nbsp;VIA&nbsp; <input style=\"width:360px;\" name=VIA value=%s><br>"
+"Title&nbsp; <input style=\"width:360px;\" name=Title value=\"%s\"> <br><br>"
 "<span align = center><input onclick=editmsg(\"EditM?%s?%d\") value=\"Edit Text\" type=button> "
 "<input onclick=save(this.form) value=Save type=button> "
 "<input onclick=doit(\"SavetoFile\") value=\"Save to File\" type=button> "
@@ -706,6 +707,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 	if (_stricmp(NodeURL, "/Mail/Msgs") == 0)
 	{
 		struct UserInfo * USER = NULL;
+		int PageLen;
 
 		if (MsgEditTemplate)
 			free(MsgEditTemplate);
@@ -724,9 +726,11 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 				MaxBBS = n;
 		}
 
+		PageLen = 334 + (MaxBBS / 8) * 24;
+
 		if (MsgEditTemplate)
 		{
-			int len =sprintf(Reply, MsgEditTemplate, Key, Key, Key, Key, Key, 
+			int len =sprintf(Reply, MsgEditTemplate, PageLen, PageLen, PageLen - 97, Key, Key, Key, Key, Key, 
 				BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
 			*RLen = len;
 			return;
@@ -926,9 +930,14 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 	
 	if (Msg)
 	{
+		char EmailFromLine[256] = "";
+
 		strcpy(D1, FormatDateAndTime(Msg->datecreated, FALSE));
 		strcpy(D2, FormatDateAndTime(Msg->datereceived, FALSE));
 		strcpy(D3, FormatDateAndTime(Msg->datechanged, FALSE));
+
+		if (Msg->emailfrom[0])
+			sprintf(EmailFromLine, "Email From <input style=\"width:320px;\" name=EFROM value=%s><br>", Msg->emailfrom);
 
 		len = sprintf(Reply, MailDetailPage, Msg->number, Key,
 			Msg->from, D1, 
@@ -943,7 +952,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			(Msg->status == 'H')?sel:"",
 			(Msg->status == 'D')?sel:"",
 			(Msg->status == '$')?sel:"",
-			Msg->bid, D3, Msg->length, Msg->via, Msg->title,
+			Msg->bid, D3, Msg->length, EmailFromLine, Msg->via, Msg->title,
 					Key, Msg->number);
 
 		for (y = 0; y < 10; y++)
@@ -1248,7 +1257,7 @@ VOID SaveWelcome(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Repl
 		GetMallocedParam(input, "NUPrompt=", &Prompt);
 		GetMallocedParam(input, "NewPrompt=", &NewPrompt);
 		GetMallocedParam(input, "ExPrompt=", &ExpertPrompt);
-		GetParam(input, "Bye=", &SignoffMsg);
+		GetParam(input, "Bye=", &SignoffMsg[0]);
 		if (SignoffMsg[0])
 		{
 			if (SignoffMsg[strlen(SignoffMsg) - 1] == 10)

@@ -276,7 +276,7 @@ VOID * _GetBuff(char * File, int Line)
 			MINBUFFCOUNT = QCOUNT;
 	
 		Msg = (MESSAGE *)Temp;
-		Msg->Process = GetCurrentProcessId();
+		Msg->Process = (short)GetCurrentProcessId();
 	}
 	else
 		Debugprintf("Warning - Getbuff returned NULL");
@@ -1470,7 +1470,7 @@ DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 	TRANSPORTENTRY * L4;
 	TRANSPORTENTRY * Partner;
 	UCHAR  Call[11] = "SWITCH    "; 
-	UCHAR * AXCall;
+	UCHAR * AXCall = NULL;
 	Check_Timer();
 
 	stream--;						// API uses 1 - 64
@@ -1504,7 +1504,8 @@ DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 		{
 			struct _LINKTABLE * LINK = Partner->L4TARGET.LINK;
 
-			AXCall = LINK->LINKCALL;
+			if (LINK)
+				AXCall = LINK->LINKCALL;
 
 			if (Partner->L4CIRCUITTYPE & UPLINK)
 			{
@@ -1519,7 +1520,8 @@ DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 
 			EXTPORTDATA * EXTPORT = Partner->L4TARGET.EXTPORT;
 
-			AXCall = &EXTPORT->ATTACHEDSESSIONS[Partner->KAMSESSION]->L4USER[0];
+			if (EXTPORT)
+				AXCall = &EXTPORT->ATTACHEDSESSIONS[Partner->KAMSESSION]->L4USER[0];
 
 		}
 		else
@@ -1534,12 +1536,14 @@ DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 			{
 				struct DEST_LIST *DEST = Partner->L4TARGET.DEST;
 
-				AXCall = &DEST->DEST_CALL[0];
+				if (DEST)
+					AXCall = &DEST->DEST_CALL[0];
 			}
 			else
 				AXCall = Partner->L4USER;
 		}
-		ConvFromAX25(AXCall, Call);
+		if (AXCall)
+			ConvFromAX25(AXCall, Call);
 	}
 
 	memcpy(callsign, Call, 10);

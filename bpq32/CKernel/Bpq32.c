@@ -1408,7 +1408,7 @@ VOID CALLBACK TimerProc
 		FreeSemaphore(&Semaphore);			// SendLocation needs to get the semaphore
 
 		if (NUMBEROFTNCPORTS)
-			TNC2Poll();
+			TNCTimer();
 
 		strcpy(EXCEPTMSG, "HTTP Timer Processing");
 

@@ -918,7 +918,7 @@ int main(int argc, char * argv[])
 		FreeSemaphore(&Semaphore);
 
 		if (NUMBEROFTNCPORTS)
-			TNC2Poll();
+			TNCTimer();
 
 		HTTPTimer();
 

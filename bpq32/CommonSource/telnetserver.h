@@ -1,7 +1,7 @@
-#pragma once
 
+#ifndef LINBPQ
 #include "resource.h"
-
+#endif
 #define WSA_ACCEPT WM_USER + 1
 #define WSA_CONNECT WM_USER + 2
 #define WSA_DATA WM_USER + 3

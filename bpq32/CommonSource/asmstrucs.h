@@ -841,7 +841,7 @@ struct TNCDATA
 	unsigned int Mode;				// 0 = TNC2, others may follow
 
 	UCHAR RXBUFFER[TNCBUFFLEN];		// BUFFER TO USER
-	UCHAR TXBUFFER[260];			// BUFFER TO NODE
+	UCHAR TXBUFFER[300];			// BUFFER TO NODE
 
 	char PORTNAME[80];				// for Linux Port Names
 	int ComPort;

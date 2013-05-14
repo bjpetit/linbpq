@@ -36,7 +36,7 @@ DllImport int APIENTRY GetCallsign(int stream, char * callsign);
 VOID GETDATA(struct TNCDATA * TNC);
 VOID DOCONMODECHANGE(struct TNCDATA * TNC);
 VOID SEND_CONNECTED(struct TNCDATA * TNC);
-VOID READCHANGE(struct TNCDATA * TNC);
+VOID READCHANGE(int Stream);
 VOID DOMONITORING(int NeedTrace);
 int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, int Stamp);
 time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
@@ -51,6 +51,11 @@ int KANTConnected(struct TNCDATA * conn, struct StreamInfo * channel, int Stream
 int KANTDisconnected(struct TNCDATA * conn, struct StreamInfo * channel, int Stream);
 VOID SendKISSData(struct TNCDATA * conn, UCHAR * txbuffer, int Len);
 VOID ProcessSCSPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Length);
+VOID TNCPoll();
+unsigned long _beginthread( void( *start_address )(), unsigned stack_size, void * arglist);
+VOID DisableAppl(struct TNCDATA * TNC);
+
+
 
 
 #define TNCBUFFLEN 1024
@@ -241,7 +246,7 @@ HANDLE LinuxOpenPTY(char * Name)
 
 #endif
 
-	printf("slave device is: %s. ", slavedevice);
+	printf("slave device: %s. ", slavedevice);
  
 	if (tcgetattr(hDevice, &term) == -1)
 	{
@@ -258,15 +263,17 @@ HANDLE LinuxOpenPTY(char * Name)
 	}
 
 	ioctl(hDevice, FIONBIO, &param);
-		
+
+	chmod(slavedevice, S_IRUSR|S_IRGRP|S_IWUSR|S_IWGRP|S_IROTH|S_IWOTH);
+
 	unlink (Name);
 		
 	ret = symlink (slavedevice, Name);
 		
 	if (ret == 0)
-		printf ("symlink from %s to %s created\n", slavedevice, Name);
+		printf ("symlink to %s created\n", Name);
 	else
-		printf ("symlink from %s to %s failed\n", slavedevice, Name);	
+		printf ("symlink to %s failed\n", Name);	
 	
 	return hDevice;
 }
@@ -330,6 +337,9 @@ HANDLE BPQOpenSerialPort(struct TNCDATA * TNC, DWORD * lasterror)
 	}
 	else
 	{
+//		ULONG bytesReturned;
+		int Delay = 1;
+
 		// Try old style 	
 
 		sprintf(szPort, "\\\\.\\BPQ%d", port ) ;
@@ -341,6 +351,9 @@ HANDLE BPQOpenSerialPort(struct TNCDATA * TNC, DWORD * lasterror)
                   OPEN_EXISTING,
                   FILE_ATTRIBUTE_NORMAL, 
                   NULL );
+
+//	DeviceIoControl(hDevice,IOCTL_BPQ_SET_POLLDELAY,&Delay,4,NULL,0, &bytesReturned,NULL);
+
 	}		  
 	if (hDevice == (HANDLE) -1 )
 	{
@@ -924,7 +937,7 @@ VOID TNCNODE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	TNC->MODEFLAG &= ~(COMMAND+TRANS);
 
 	CONNECTTONODE(TNC);
-	READCHANGE(TNC);		//CLEAR STATUS CHANGE (TO AVOID SUPURIOUS "CONNECTED TO")
+	READCHANGE(TNC->BPQPort);		//CLEAR STATUS CHANGE (TO AVOID SUPURIOUS "CONNECTED TO")
 }
 
 
@@ -972,10 +985,10 @@ VOID TNCDISC(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
 	SENDREPLY(TNC, CMDMSG, 4);
 }
 
-VOID READCHANGE(struct TNCDATA * TNC)
+VOID READCHANGE(int Stream)
 {
 	int dummy;
-	LocalSessionState(TNC->BPQPort, &dummy, &dummy, TRUE);
+	LocalSessionState(Stream, &dummy, &dummy, TRUE);
 }
 
 VOID TNCRELEASE(struct TNCDATA * TNC, char * Tail, CMDX * CMD)
@@ -1152,6 +1165,29 @@ BOOL TNC2GetVMSR(struct TNCDATA * TNC,int * returnedchar)
 	return TRUE;
 }
 
+VOID TNCBGThread()
+{
+	while (TRUE)
+	{
+		TNCPoll();
+		Sleep(10);
+	}
+}
+
+
+VOID AllocateDEDChannel(struct TNCDATA * TNC, int Num)
+{
+	struct StreamInfo * Channel = zalloc(sizeof(struct StreamInfo));
+
+	sprintf(pgm, "DED %s", TNC->PORTNAME);
+
+	TNC->Channels[Num] = Channel;
+	Channel->BPQStream = FindFreeStream();
+	READCHANGE(Channel->BPQStream);					// Prevent Initial *** disconnected
+	Debugprintf("BPQ32 DED Stream %d  BPQ Stream %d", Num, Channel->BPQStream );
+
+	strcpy(pgm, "bpq32.exe");
+}
 
 
 BOOL InitializeTNCEmulator()
@@ -1184,7 +1220,7 @@ BOOL InitializeTNCEmulator()
 				return FALSE;
 			}
 			
-			READCHANGE(TNC);					// Prevent Initial *** disconnected
+			READCHANGE(TNC->BPQPort);					// Prevent Initial *** disconnected
 
 			strcpy(pgm, "bpq32.exe");
 			TNC->MODEFLAG = COMMAND;
@@ -1201,8 +1237,6 @@ BOOL InitializeTNCEmulator()
 
 		case DED:
 
-			TNC->ECHOFLAG = 1;
-
 			if (TNC->HOSTSTREAMS == 0)
 				TNC->HOSTSTREAMS = 4;		// Default
 
@@ -1211,25 +1245,13 @@ BOOL InitializeTNCEmulator()
 			TNC->MMASK = -1;			//  MONITOR MASK FOR PORTS
 			TNC->TPACLEN = PACLEN;		// TNC PACLEN
 
-			sprintf(pgm, "DED %s", TNC->PORTNAME);
-
 			for (i = 1; i <= TNC->HOSTSTREAMS; i++)
 			{
-				struct StreamInfo * Channel = zalloc(sizeof(struct StreamInfo));
-
-				TNC->Channels[i] = Channel;
-
-				Channel->BPQStream = FindFreeStream();
-				READCHANGE(TNC);					// Prevent Initial *** disconnected
-
-				if (Channel->BPQStream) SetAppl(Channel->BPQStream, TNC->APPLFLAGS, TNC->APPLICATION);
-				Debugprintf("BPQ32 DED Init Stream %d  BPQ Stream %d", i, Channel->BPQStream );
+				AllocateDEDChannel(TNC, i);			// Also used by Y command handler
 			}
 
 			TNC->Channels[0] = zalloc(sizeof(struct StreamInfo));
 			memcpy(TNC->Channels[0], TNC->Channels[1], sizeof(struct StreamInfo));		// For monitoring
-
-			strcpy(pgm, "bpq32.exe");
 
 			break;
 
@@ -1252,23 +1274,24 @@ BOOL InitializeTNCEmulator()
 				Channel = TNC->Channels[i];
 
 				Channel->BPQStream = FindFreeStream();
-				READCHANGE(TNC);					// Prevent Initial *** disconnected
+				READCHANGE(Channel->BPQStream);					// Prevent Initial *** disconnected
 
-				if (Channel->BPQStream) SetAppl(Channel->BPQStream, TNC->APPLFLAGS, TNC->APPLICATION);
 				Debugprintf("BPQ32 KANT Init Stream %d  BPQ Stream %d", i, Channel->BPQStream );
 
 	//			channel->Chan_TXQ = 0;
 	//			channel->BPQStream = 0;
 	//			channel->Connected = FALSE;
 	//			channel->MYCall[0] = 0;
-			} 
 
+			} 
+			break;
+	
 		case SCS:
 
 			TNC->ECHOFLAG = 1;
 
 			if (TNC->HOSTSTREAMS == 0)
-				TNC->HOSTSTREAMS = 4;		// Default
+				TNC->HOSTSTREAMS = 1;		// Default
 
 			TNC->MALL = 1;
 			TNC->MCOM = 1;
@@ -1284,9 +1307,8 @@ BOOL InitializeTNCEmulator()
 				TNC->Channels[i] = Channel;
 
 				Channel->BPQStream = FindFreeStream();
-				READCHANGE(TNC);					// Prevent Initial *** disconnected
+				READCHANGE(Channel->BPQStream);					// Prevent Initial *** disconnected
 
-				if (Channel->BPQStream) SetAppl(Channel->BPQStream, TNC->APPLFLAGS, TNC->APPLICATION);
 				Debugprintf("BPQ32 SCS Init Stream %d  BPQ Stream %d", i, Channel->BPQStream );
 			}
 
@@ -1306,11 +1328,29 @@ BOOL InitializeTNCEmulator()
 		{
 			TNC->ComPort = atoi(&TNC->PORTNAME[3]);
 		}
-		else if (_memicmp(TNC->PORTNAME, "VCOM", 4) == 0)
+		else
 		{
-			TNC->ComPort = atoi(&TNC->PORTNAME[4]);
 			TNC->VCOM = TRUE;
-        
+			if (_memicmp(TNC->PORTNAME, "VCOM", 4) == 0)
+				TNC->ComPort = atoi(&TNC->PORTNAME[4]);
+		}
+		if (TNC->VCOM == 0)
+		{
+			// Real port
+
+			if (TNC->ComPort)
+				TNC->hDevice = OpenCOMPort((VOID *)TNC->ComPort, TNC->Speed, TRUE, TRUE, FALSE);
+			else
+				TNC->hDevice = OpenCOMPort(TNC->PORTNAME, TNC->Speed, TRUE, TRUE, FALSE);
+
+			TNC->PortEnabled = 1;   
+
+				TNC->RTS = 1;
+//				TNC->DTR = 1;
+		}
+		else
+		{
+			// VCOM Port			
 #ifdef WIN32
 			TNC->hDevice = BPQOpenSerialPort(TNC, &Errorval);
 #else
@@ -1332,24 +1372,9 @@ BOOL InitializeTNCEmulator()
 			}
 			else
 			{
-				Consoleprintf("TNC2 - Open Failed for Port %s", TNC->PORTNAME);
+				Consoleprintf("TNC - Open Failed for Port %s", TNC->PORTNAME);
 				TNC->hDevice = 0;
 			}
-		}
-
-		if (TNC->VCOM == 0)
-		{
-			// Real port
-
-			if (TNC->ComPort)
-				TNC->hDevice = OpenCOMPort((VOID *)TNC->ComPort, TNC->Speed, TRUE, TRUE, FALSE);
-			else
-				TNC->hDevice = OpenCOMPort(TNC->PORTNAME, TNC->Speed, TRUE, TRUE, FALSE);
-
-			TNC->PortEnabled = 1;   
-
-				TNC->RTS = 1;
-//				TNC->DTR = 1;
 		}
 
 		if (TNC->hDevice)
@@ -1377,6 +1402,7 @@ BOOL InitializeTNCEmulator()
 */
 
 			APPLMASK = TNC->APPLICATION;
+			ApplNum = 1;
 
 			while  (APPLMASK && (APPLMASK & 1) == 0)
 			{
@@ -1388,6 +1414,8 @@ BOOL InitializeTNCEmulator()
 
 			if (TNC->MYCALL[0] < '0')
 				memcpy(TNC->MYCALL, MYNODECALL, 10);
+
+			strlop(TNC->MYCALL, ' ');
 		}
 
 		TNC = TNC->Next;
@@ -1400,10 +1428,13 @@ BOOL InitializeTNCEmulator()
 #endif
 	Consoleprintf("TNC Emulator Init Complete");
 
+	_beginthread(TNCBGThread,0,0);
+
 	return TRUE;
 }
 
-VOID TNC2Timer()
+
+VOID TNCTimer()
 {
 	// 100 Ms Timer
 
@@ -1483,8 +1514,30 @@ NextTNC:
 	DOMONITORING(NeedTrace);
 }
 
+#ifndef WIN32
 
-VOID TNC2Poll()
+int TNCReadCOMBlock(HANDLE fd, char * Block, int MaxLength, int * err)
+{
+	int Length;
+	
+	*err = 0;
+
+	Length = read(fd, Block, MaxLength);
+
+	if (Length < 0)
+	{
+		if (errno != 11 && errno != 35)					// Would Block
+			*err = errno;
+
+		return 0;
+	}
+
+	return Length;
+}
+
+#endif
+
+VOID TNCPoll()
 {
 	unsigned int n;
 	ULONG ConCount, ModemStat;
@@ -1681,13 +1734,35 @@ VOID TNC2Poll()
 			int Read, n;
 			int retval, more;
 			char TXMsg[500];
+#ifndef WIN32
+			int err;
 
+			// We can tell if partner has gone on PTY Pair - read returns 5
+
+			if (TNC->Mode == KANTRONICS || TNC->Mode == SCS)
+				Read = TNCReadCOMBlock(TNC->hDevice, &TNC->RXBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr, &err);
+			else
+				Read = TNCReadCOMBlock(TNC->hDevice, rxbuffer, 1000, &err);
+
+			if (err)
+			{
+				if (TNC->PortEnabled)
+				{
+					TNC->PortEnabled = FALSE;
+					DisableAppl(TNC);
+					Debugprintf("Device %s closed", TNC->PORTNAME);
+				}
+			}
+			else
+				TNC->PortEnabled = TRUE;
+
+#else
 			if (TNC->Mode == KANTRONICS || TNC->Mode == SCS)
 				Read = ReadCOMBlock(TNC->hDevice, &TNC->RXBUFFER[TNC->RXBPtr], 1000 - TNC->RXBPtr);
 			else
 				Read = ReadCOMBlock(TNC->hDevice, rxbuffer, 1000);
+#endif
 
-	
 			if (Read)
 			{		
 				if (TNC->Mode == TNC2)
@@ -1731,9 +1806,7 @@ VOID TNC2Poll()
 		}
 		TNC = TNC->Next;
 	}
-	TNC2Timer();
 }
-
 
 VOID DOMONITORING(int NeedTrace)
 {
@@ -2480,7 +2553,6 @@ unsigned char BUSYMSG[]="BUSY fm SWITCH\x0";
 //unsigned char CONSWITCH[]="\x3" "(1) CONNECTED to           \x0";
 
 unsigned char DEDSWITCH[]="\x1" "0:SWITCH    \x0";
-#define CHECKCALL DEDSWITCH+3
 #define LSWITCH	14
 	
 unsigned char NOTCONMSG[]="\x1" "CHANNEL NOT CONNECTED\x0";
@@ -2534,11 +2606,15 @@ int PUTCHARx(struct TNCDATA * conn, UCHAR c)
 
 VOID DisableAppl(struct TNCDATA * TNC)
 {
-	int i;
+	int i, Stream;
 
 	for (i = 1; i <= TNC->HOSTSTREAMS; i++)
 	{
-		SetAppl(TNC->Channels[i]->BPQStream, TNC->APPLFLAGS, 0);
+		Stream = TNC->Channels[i]->BPQStream;
+		
+		SetAppl(Stream, TNC->APPLFLAGS, 0);
+		Disconnect(Stream);
+		READCHANGE(Stream);					// Prevent Initial *** disconnected
 	}
 }
 
@@ -2861,15 +2937,14 @@ CCMD:
 
 //	STATUS REQUEST - IF CONNECTED, GET CALL
 
-	WorkString[0] = 0;
+	DEDSWITCH[3] = 0;
 
-	GetCallsign(Channel->BPQStream, WorkString);
-	strlop(WorkString, ' ');
+	GetCallsign(Channel->BPQStream, &DEDSWITCH[3]);
 
-	if (WorkString[0] == 0)
+	if (DEDSWITCH[3] == 0)
 		SENDCMDREPLY(TNC, NOTCONMSG, LNOTCON);
 	else
-		SENDCMDREPLY(TNC, SWITCH, LSWITCH);
+		SENDCMDREPLY(TNC, DEDSWITCH, LSWITCH);
 
 	return TRUE;
 
@@ -2884,7 +2959,7 @@ REALCALL:
 	if (Channel->MYCall[0])
 		ChangeSessionCallsign(Channel->BPQStream, EncodeCall(Channel->MYCall));
 	
-	*TNC->CURSOR = 0;
+	*TNC->DEDCURSOR = 0;
 
 	_strupr(TXBUFFERPTR);
 
@@ -2904,12 +2979,12 @@ REALCALL:
 			// First digi is used as a port number. Any others are rwal digis or WINMOR/PACTOR
 
 			if (Context[0])
-				TNC->MSGLEN = sprintf(TXBUFFERPTR + 100, "C %s %s v %s", Arg1, Call, Context);
+				TNC->MSGLEN = sprintf(TXBUFFERPTR + 100, "C %s %s v %s\r", Arg1, Call, Context);
 			else
-				TNC->MSGLEN = sprintf(TXBUFFERPTR + 100, "C %s %s", Call, Arg1);
+				TNC->MSGLEN = sprintf(TXBUFFERPTR + 100, "C %s %s\r", Call, Arg1);
 		}
 		else
-			TNC->MSGLEN = sprintf(TXBUFFERPTR + 100, "C %s", Call);
+			TNC->MSGLEN = sprintf(TXBUFFERPTR + 100, "C %s\r", Call);
 
 		strcpy(TXBUFFERPTR, TXBUFFERPTR + 100);
 
@@ -3056,75 +3131,48 @@ POLL:
 
 YCMD:
 
-	*(TNC->CURSOR++) = ' ';
-	*(TNC->CURSOR++) = ' ';
+	*TNC->DEDCURSOR = 0;
 
-	TNC->TXBUFFER[TNC->MSGLENGTH+2]=0x0;
-	TNC->TXBUFFER[TNC->MSGLENGTH+3]=0x0a;
-	TNC->TXBUFFER[TNC->MSGLENGTH+4]=0x0;
+	Work = atoi(&TXBUFFERPTR[1]);
 
-//	OutputDebugString(TNC->TXBUFFER);
+	if (Work == 0)
+		Work = 1;				// Mustn't release last stream
 
-	Work = atoi(&TNC->TXBUFFER[1]);
-	
-/*
-if (NEWVALUE >= 0 && NEWVALUE <= MAXSTREAMS)
+	if (Work >= 0 && Work <= MAXSTREAMS)
 	{
-		if (NEWVALUE < HOSTSTREAMS)
+		int Stream;
+
+		if (Work < TNC->HOSTSTREAMS)
 		{
 			// Need to get rid of some streams
 
-			for (i=NEWVALUE+1; i<=HOSTSTREAMS; i++)
+			for (i = Work + 1; i <= TNC->HOSTSTREAMS; i++)
 			{
-				port=bpqstream[i];
+				Stream = TNC->Channels[i]->BPQStream;
 			
-				if (port)
+				if (Stream)
 				{
-					DeallocateStream(port);
+					Disconnect(Stream);
+					READCHANGE(Stream);					// Prevent Initial *** disconnected
 
-					strcpy(Errbuff,	"BPQDED32 YCMD Release Stream ");
+					DeallocateStream(Stream);
 
-					_itoa(i,buff,10);
-					strcat(Errbuff,buff);
-					strcat(Errbuff," BPQ Stream ");
-
-					_itoa(port,buff,10);
-					strcat(Errbuff,buff);
-
-					strcat(Errbuff,"\n");
-
-					OutputDebugString(Errbuff);
-
-					bpqstream[i]=0;		// Disable DED stream
+					Debugprintf("DED YCMD Release Stream %d", Stream);
 				}
+
+				free(TNC->Channels[i]);
+				TNC->Channels[i] = 0;
 			}
 		}
 		else
 		{
-			for (i=HOSTSTREAMS+1; i <= NEWVALUE; i++)
+			for (i = TNC->HOSTSTREAMS+1; i <= Work; i++)
 			{
-				bpqstream[i]=FindFreeStream();
-			
-				if (bpqstream[i])  SetAppl(bpqstream[i],APPLFLAGS,APPLMASK);
-
-				strcpy(Errbuff,	"BPQDED32 YCMD Stream ");
-
-				_itoa(i,buff,10);
-				strcat(Errbuff,buff);
-				strcat(Errbuff," BPQ Stream ");
-
-				_itoa(bpqstream[i],buff,10);
-				strcat(Errbuff,buff);
-
-				strcat(Errbuff,"\n");
-
-				OutputDebugString(Errbuff);
+				AllocateDEDChannel(TNC, i);			// Also used by Y command handler
 			}
 		}
-		HOSTSTREAMS=NEWVALUE;
+		TNC->HOSTSTREAMS = Work;
 	}
-*/
-
 
 	/*
 	
@@ -4037,10 +4085,9 @@ int DOCOMMAND(struct TNCDATA * conn)
 			conn->MODE = conn->TXBUFFER[6] & 1;
 
 		if (conn->MODE)
-			DisableAppl(conn);
-		else
 			EnableAppl(conn);
-
+		else
+			DisableAppl(conn);
 
 		if (conn->MODE)
 		{
@@ -4157,17 +4204,13 @@ int STATUSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel)
 	else
 	{
 		//	GET CALLSIGN
-
-		Debugprintf("Com %d", TNC->MSGCHANNEL);
 	
 		GetCallsign(Channel->BPQStream, WorkString);
 		strlop(WorkString, ' ');
-
 		i = sprintf(CONMSG, "\x3(%d) CONNECTED to %s\r", TNC->MSGCHANNEL, WorkString);
 		i++;
 	}
 
-	Debugprintf(CONMSG);
 	SENDCMDREPLY(TNC, CONMSG, i);
 	return 1;
 }
@@ -4433,6 +4476,11 @@ VOID ProcessKNormCommand(struct TNCDATA * conn, UCHAR * rxbuffer)
 			BPQSerialSendData(conn, "cmd:", 4);
 
 		conn->MODE = conn->nextMode;
+
+		if (conn->MODE)
+			EnableAppl(conn);
+		else
+			DisableAppl(conn);
 
 		return;
 	}
@@ -4876,6 +4924,7 @@ int EmUnstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len)
 
 
 UCHAR SCSReply[400];
+
 int ReplyLen;
 
 
@@ -4917,7 +4966,7 @@ BOOL CheckStatusChange(struct TNCDATA * conn, int Channel, int BPQStream)
 
 }
 
-BOOL CheckForData(struct TNCDATA * conn, int Channel, int BPQStream)
+BOOL CheckForData(struct TNCDATA * conn,  struct StreamInfo * Channel, int HostStream, int BPQStream)
 {
 	int Length, Count;
 
@@ -4926,7 +4975,14 @@ BOOL CheckForData(struct TNCDATA * conn, int Channel, int BPQStream)
 	if (Length == 0)
 		return FALSE;
 
-	SCSReply[2] = Channel;
+	if (strstr(&SCSReply[5], "} Downlink connect needs port number") ||
+			strstr(&SCSReply[5], "} Failure with ") ||
+			strstr(&SCSReply[5], "} Sorry, "))
+		Channel->CloseTimer = CloseDelay * 10;
+	else
+		Channel->CloseTimer = 0;			// Cancel Timer
+
+	SCSReply[2] = HostStream;
 	SCSReply[3] = 7;
 	SCSReply[4] = Length - 1;
 
@@ -4946,7 +5002,8 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 	int BPQStream;
 	char * MYCall;
 	UCHAR Stream;
-	int TXLen;
+	int TXLen, i;
+	BPQVECSTRUC * HOST;
 
 	// SCS Channel 31 is the Pactor channel, mapped to the first stream
 
@@ -4973,14 +5030,35 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 
 	if (Channel == 255 &&  Len == 0)
 	{
+		UCHAR * NextChan = &SCSReply[4];
+		
 		// General Poll
+
+		// See if any channels have anything avaiilable
+
+		for (i = 1; i <= conn->HOSTSTREAMS; i++)
+		{
+			channel = conn->Channels[i];
+			HOST = &BPQHOSTVECTOR[channel->BPQStream - 1];		// API counts from 1
+		
+			if ((HOST->HOSTFLAGS & 3))
+			{
+				*(NextChan++) = i + 1;			// Something for this channel
+				continue;
+			}
+		
+			if (RXCount(channel->BPQStream))
+				*(NextChan++) = i + 1;			// Something for this channel
+		}
+
+		*(NextChan++) = 0;
 
 		SCSReply[2] = 255;
 		SCSReply[3] = 1;
-		SCSReply[4] = 0;
 
-		ReplyLen = 5;
-		EmCRCStuffAndSend(conn, SCSReply, 5);
+		ReplyLen = NextChan - &SCSReply[0];
+
+		EmCRCStuffAndSend(conn, SCSReply, ReplyLen);
 		return;
 	}
 
@@ -5016,6 +5094,8 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 	case 'J':				// JHOST
 
 		conn->MODE = FALSE;
+		DisableAppl(conn);
+
 		return;
 
 	case 'G':				// Specific Poll
@@ -5023,7 +5103,7 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 		if (CheckStatusChange(conn, Channel, channel->BPQStream))
 			return;						// It has sent reply
 
-		if (CheckForData(conn, Channel, channel->BPQStream))
+		if (CheckForData(conn, channel, Channel, channel->BPQStream))
 			return;						// It has sent reply
 
 		SCSReply[2] = Channel;
@@ -5047,12 +5127,12 @@ VOID ProcessSCSHostFrame(struct TNCDATA * conn, UCHAR *  Buffer, int Length)
 		}
 		Buffer[Length - 2] = 0;
 
-		TXLen = sprintf(TXBuff, "C %s\r", &Buffer[6]);
+		TXLen = sprintf(TXBuff, "C %s\r", &Buffer[5]);
 		BPQStream = channel->BPQStream;
 		MYCall = &channel->MYCall[0];
 
 		if (MYCall[0] == 0)
-			MYCall = (char *)&conn->MyCall;
+			MYCall = (char *)&conn->MYCALL;
 
 		Connect(BPQStream);
 		if (MYCall[0] > 0)
@@ -5133,6 +5213,8 @@ VOID ProcessSCSTextCommand(struct TNCDATA * conn, char * Command, int Len)
 	{
 		conn->MODE = TRUE;
 		conn->Toggle = 0;
+		EnableAppl(conn);
+
 		return;
 	}
 
@@ -5148,16 +5230,22 @@ VOID ProcessSCSTextCommand(struct TNCDATA * conn, char * Command, int Len)
 	if (_memicmp(Command, "MYC", 3) == 0)
 	{
 		char * ptr = strchr(Command, ' ');
-		if (ptr)
+		char MYResp[80];
+
+		Command[Len-1] = 0;		// Remove CR
+		
+		if (ptr && (strlen(ptr) > 2))
 		{
-			Command[Len-1] = 0;		// Remove CR
-			strcpy(conn->MyCall, ++ptr); 
+			strcpy(conn->MYCALL, ++ptr); 
 		}
+
+		sprintf(MYResp, "\rMycall: >%s<", conn->MYCALL);
+		PUTSTRING(conn, MYResp);
 	}
 
-	if (_memicmp(Command, "SYS SERN", 8) == 0)
+	else if (_memicmp(Command, "SYS SERN", 8) == 0)
 	{
-		char SerialNo[] = "\r\nSerial number: 0000000000000000";
+		char SerialNo[] = "\r\nSerial number: 0100000000000000";
 		PUTSTRING(conn, SerialNo);
 	}
 	else 
@@ -5325,6 +5413,13 @@ Loop:
 		if (conn->RXBPtr)
 		{
 			memmove(rxbuffer, ptr, conn->RXBPtr + 1);
+			if (conn->Mode)
+			{
+				// now in host mode, so pass rest up a level
+				
+				ProcessSCSPacket(conn, conn->RXBUFFER, conn->RXBPtr);
+				return;
+			}
 			goto Loop;
 		}
 		return;
