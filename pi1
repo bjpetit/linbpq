@@ -1,0 +1,324 @@
+/*
+ * 1.00 xx/08/2012 John Wiseman G8BPQ
+*/
+
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <ctype.h>
+#include <syslog.h>
+#include <netax25/ttyutils.h>
+#include <netax25/daemon.h>
+
+#include "config.h"
+
+#include <linux/i2c-dev.h>
+
+
+#define G8BPQ_CRC	1
+
+#define	SIZE		4096
+
+#define FEND		0300	/* Frame End			(0xC0)	*/
+#define FESC		0333	/* Frame Escape			(0xDB)	*/
+#define TFEND		0334	/* Transposed Frame End		(0xDC)	*/
+#define TFESC		0335	/* Transposed Frame Escape	(0xDD)	*/
+
+
+/*
+ * Keep these off the stack.
+ */
+ 
+ 
+static int address;
+static char progname[80];
+
+static unsigned char ibuf[SIZE];	/* buffer for input operations	*/
+static unsigned char obuf[SIZE];	/* buffer for kiss_tx()		*/
+
+
+static char *usage_string	= "usage: pitnc_getparams [-p interval] [-l] [-v] i2bus i2cdevice\n";
+
+static int crcflag = G8BPQ_CRC;			// Always use G8BPQ CRC
+static int pollspeed = 1;				// Need to Poll
+
+static struct iface *tty;
+
+struct iface
+{
+	char	*name;				/* Interface name (/dev/???)	*/
+	int		device;				/* i2c device */
+	int		fd;					/* File descriptor		*/
+	int		escaped;			/* FESC received?		*/
+	unsigned char	crc;		/* Incoming frame crc		*/
+	unsigned char	obuf[SIZE];	/* TX buffer			*/
+	unsigned char	*optr;		/* Next byte to transmit	*/
+};
+
+static int kiss_rx(struct iface *ifp, unsigned char c, int usecrc);
+static int kiss_tx(int fd, int port, unsigned char *s, int len, int usecrc);
+
+static int poll(int fd)
+{
+	unsigned int retval;
+	int len;
+	
+	// Send request for params
+	
+	i2c_smbus_write_byte(tty->fd, FEND);
+	i2c_smbus_write_byte(tty->fd, 8);
+	i2c_smbus_write_byte(tty->fd, FEND);
+
+	retval = i2c_smbus_read_byte(fd);
+	
+	//	Returns POLL (0x0e) if nothing to receive, otherwise the control byte of a frame
+	
+	if (retval == -1)	 		// Read failed		
+  	{
+		perror("i2mkiss: poll failed");	 	
+		exit(0);
+
+	}
+	
+		
+	if (retval == 0x0e)
+		return 0;
+		
+	printf("%x ", retval);
+	
+	
+	// 	Read message up to a FEND
+		
+	while (TRUE)
+	{
+		len = kiss_rx(tty, retval, crcflag);
+		
+		if (len == -1)
+		return 0;		// Bad Packet
+			
+		if (len)
+		{			
+			// We have a complete KISS frame from TNC
+							
+			printf("\n");
+			close(tty->fd);
+			exit(1);
+			return 0;
+		}
+		
+		usleep(1000);
+		
+		retval = i2c_smbus_read_byte(fd);
+
+		printf("%x ", retval);	
+	
+		if (retval == -1)	 		// Read failed		
+	  	{
+			perror("i2mkiss: poll failed in packet loop");		
+			exit(0);
+		}
+	}
+
+}
+
+static int kiss_rx(struct iface *ifp, unsigned char c, int usecrc)
+{
+	int len;
+
+	switch (c)
+	{
+	case FEND:
+	
+		len = ifp->optr - ifp->obuf;
+
+		if (len != 0 && ifp->escaped)
+		{
+		 	/* protocol error...	*/
+			len = 0;		/* ...drop frame	*/
+			syslog(LOG_INFO, "Dropping Frame\n");
+		}
+		
+		if (len != 0)
+		{
+			if (usecrc)
+			{
+				if ((ifp->crc & 0xFF) != 0)
+				{
+					syslog(LOG_INFO, "CRC Error %d\n", ifp->crc);
+					/* checksum failed...	*/
+					/* ...drop frame	*/
+					len = 0;
+				}
+				 else
+				{
+					/* delete checksum byte	*/
+					len--;
+				}				 
+			}
+		}
+		/*
+		 * Clean up.
+		 */
+		ifp->optr = ifp->obuf;
+		ifp->crc = 0;
+		ifp->escaped = FALSE;
+		return len;
+		
+	case FESC:
+		ifp->escaped = TRUE;
+		return 0;
+		
+	case TFESC:
+		if (ifp->escaped) {
+			ifp->escaped = FALSE;
+			c = FESC;
+		}
+		break;
+	case TFEND:
+		if (ifp->escaped) {
+			ifp->escaped = FALSE;
+			c = FEND;
+		}
+		break;
+	default:
+		if (ifp->escaped) {		/* protocol error...	*/
+			ifp->escaped = FALSE;
+		}
+		break;
+	}
+
+	*ifp->optr++ = c;
+
+	if (usecrc)
+		ifp->crc ^= c;
+		
+	len = ifp->optr - ifp->obuf;
+	
+	if (len > SIZE)
+	{
+		ifp->optr--;
+		syslog(LOG_INFO, "Frame too long\n");
+		return -1;
+	}
+		
+	return 0;
+}
+
+static void sigterm_handler(int sig)
+{		
+	exit(0);
+}
+
+
+int main(int argc, char *argv[])
+{
+	unsigned char *icp;
+	int topfd;
+	fd_set readfd;
+	struct timeval timeout, pollinterval;
+	int retval, size, len;
+	
+	//	We must poll. Default is set to 100 ms, and we must use BPQ CRC
+	
+	pollinterval.tv_sec = pollspeed / 10;
+	pollinterval.tv_usec = (pollspeed % 10) * 100000L;
+
+	while ((size = getopt(argc, argv, "p:v")) != -1) {
+		switch (size) {
+	
+		case 'p':
+			pollspeed = atoi(optarg);
+			pollinterval.tv_sec = pollspeed / 10;
+			pollinterval.tv_usec = (pollspeed % 10) * 100000L;
+	        break;
+		case 'v':
+			printf("pitnc_getparams: %s\n", VERSION);
+			return 1;
+		case ':':
+		case '?':
+			fprintf(stderr, usage_string);
+			return 1;
+		}
+	}
+
+	// Allow 2  params 
+	
+	if ((argc - optind) != 2 )
+	{
+		fprintf(stderr, usage_string);
+		return 1;
+	}
+
+	// Open and configure the i2c interface
+	
+	if ((tty = calloc(1, sizeof(struct iface))) == NULL) {
+		perror("i2ckiss: malloc");
+		return 1;
+	}
+
+                              
+	tty->fd = open(argv[optind], O_RDWR);
+	if (tty->fd < 0)
+	{
+		fprintf(stderr, "%s: Cannot find i2c bus %s, no such file or directory.\n", progname, argv[optind]);
+		exit(1);
+	}
+		 
+	address = strtol(argv[optind + 1], 0, 0);
+ 
+ 	retval = ioctl(tty->fd,  I2C_SLAVE, address);
+	
+	if(retval == -1)
+	{
+		fprintf(stderr, "%s: Cannot open i2c device %x\n", progname, address);
+		exit (1);
+	}
+	
+	ioctl(tty->fd, I2C_TIMEOUT, 100);
+ 
+	tty->name = argv[optind];
+	tty->optr = tty->obuf;
+	topfd = tty->fd;
+
+	signal(SIGHUP, SIG_IGN);
+	signal(SIGTERM, sigterm_handler);
+	
+												 
+	/*
+	 * Loop until an error occurs on a read.
+	 */
+
+	while (TRUE) {
+		FD_ZERO(&readfd);
+
+		if (pollspeed)
+			timeout = pollinterval;
+
+		errno = 0;
+		retval = select(topfd + 1, &readfd, NULL, NULL, pollspeed ? &timeout : NULL);
+
+		/*
+		 * Timer expired - let's poll...
+		 */
+		if (retval == 0 && pollspeed) {
+			poll(tty->fd);
+			continue;
+		}
+
+		//	TTY is i1c device - we get messages from it via poll()
+
+	}
+	
+end:
+	
+	close(tty->fd);
+		
+	return 1;
+}

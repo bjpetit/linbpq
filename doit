@@ -1,0 +1,5 @@
+killall kissattach
+./i2ckiss 0 0x10 70 10.1.1.1
+#./i2ckiss /dev/i2c-0 0x11 2 10.1.1.2
+#./i2ckiss /dev/i2c-0 0x20 70 10.1.1.20
+#./i2ckiss /dev/i2c-0 0x21 70_2 10.1.1.21

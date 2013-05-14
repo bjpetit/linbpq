@@ -1,0 +1,3 @@
+gcc pitnc_getparams.c -lax25 -o pitnc_getparams
+gcc pitnc_setparams.c -lax25 -o pitnc_setparams
+
