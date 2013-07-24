@@ -16,8 +16,8 @@ typedef struct tagASYINFO
 	int		RXBCOUNT;				// chars in RXBUFFER
 	UCHAR * RXBPTR;					// get pointer for RXBUFFER (put ptr is RXBCOUNT) 
 	UCHAR * RXMPTR;					// put pointer for RXMSG
-	BOOL	   MSGREADY;				// Complete msg in RXMSG
-	BOOL	   ESCFLAG;					// FESC received
+	BOOL	MSGREADY;				// Complete msg in RXMSG
+	BOOL	ESCFLAG;				// FESC received
  
 } ASYINFO, *NPASYINFO ;
 
@@ -35,7 +35,7 @@ NPASYINFO CreateKISSINFO( int port, int speed );
 BOOL DestroyKISSINFO(NPASYINFO npKISSINFO) ;
 int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength);
 BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite);
-BOOL OpenConnection(struct PORTCONTROL * PortVector, NPASYINFO npKISSINFO, int port);
+BOOL OpenConnection(struct PORTCONTROL * PortVector, int port);
 BOOL SetupConnection(NPASYINFO npKISSINFO);
 BOOL CloseConnection(NPASYINFO npKISSINFO);
 

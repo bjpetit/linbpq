@@ -122,6 +122,8 @@ struct PORTCONFIG
 	char VALIDCALLS[256];	//   256 - 512
 	char  * WL2K;			// 512
 	char SerialPortName[80]; // 516
-	char filler [428];
+	struct XDIGI * XDIGIS;	//  596 Cross port digi setup
+
+	char filler [424];
 };
 

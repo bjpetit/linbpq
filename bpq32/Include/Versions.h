@@ -22,10 +22,10 @@
 
 #ifdef TermTCP
 
-#define Vers 1,0,4,1
-#define Verstring "1.0.4.1\0"
+#define Vers 1,0,6,1
+#define Verstring "1.0.6.1\0"
 #define VerComments "Internet Terminal for G8BPQ Packet Switch\0"
-#define VerCopyright "Copyright © 2011-2012 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2011-2013 John Wiseman G8BPQ\0"
 #define VerDesc "Simple TCP Terminal Program for G8BPQ Switch\0"
 
 #endif
@@ -74,10 +74,10 @@
 
 #ifdef UIUTIL
 
-#define Vers 0,1,2,1
-#define Verstring "0.1.2.1\0"
+#define Vers 0,1,3,1
+#define Verstring "0.1.3.1\0"
 #define VerComments "Beacon Utility for G8BPQ Packet Switch\0"
-#define VerCopyright "Copyright © 2011-2012 John Wiseman G8BPQ\0"
+#define VerCopyright "Copyright © 2011-2013 John Wiseman G8BPQ\0"
 #define VerDesc "Beacon Utility for G8BPQ Switch\0"
 
 #endif

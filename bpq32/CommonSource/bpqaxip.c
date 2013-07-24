@@ -472,11 +472,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		//
 		//	Check Keepalive timers
 		//
-		time( &PORT->ltime );
+		time(&PORT->ltime);
+
 		if (PORT->ltime-PORT->lasttime >9 )
 		{
-			CheckKeepalives(PORT);
 			PORT->lasttime=PORT->ltime;
+			CheckKeepalives(PORT);
 		}
 
 		if (PORT->needip)
@@ -849,8 +850,8 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 		else
 			sent = sendto(txsock, buff, txlen, 0, (struct sockaddr *)&arp_table->destaddr, sizeof(arp_table->destaddr));
 	
-		if (sent != txlen)
-			perror("Sendto");
+//		if (sent != txlen)
+//			perror("Sendto");
 
 		// reset Keepalive Timer
 					
@@ -1133,8 +1134,6 @@ void CloseSockets(struct AXIPPORTINFO * PORT)
 
 static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-
-
 	int wmId, wmEvent;
 	PAINTSTRUCT ps;
 	HDC hdc;
@@ -1582,8 +1581,8 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 						memcpy(&arp->destaddr.sin_addr.s_addr, &res->ai_addr->sa_data[2], 4);
 						arp->IPv6 = FALSE;
 						arp->destaddr.sin_family = AF_INET;
-						Debugprintf("AXIP %s = %d.%d.%d.%d", arp->hostname, (UCHAR)res->ai_addr->sa_data[2],
-							(UCHAR)res->ai_addr->sa_data[3], (UCHAR)res->ai_addr->sa_data[4], (UCHAR)res->ai_addr->sa_data[5]);
+//						Debugprintf("AXIP %s = %d.%d.%d.%d", arp->hostname, (UCHAR)res->ai_addr->sa_data[2],
+//							(UCHAR)res->ai_addr->sa_data[3], (UCHAR)res->ai_addr->sa_data[4], (UCHAR)res->ai_addr->sa_data[5]);
 						
 					}
 					else
@@ -2381,6 +2380,12 @@ int CheckKeepalives(struct AXIPPORTINFO * PORT)
 	int index=0,txsock;
 	struct arp_table_entry * arp;
 
+	if (PORT->arp_table_len >= MAX_ENTRIES)
+	{
+		Debugprintf("arp_table_len corrupt - %d", PORT->arp_table_len);
+		PORT->arp_table_len = MAX_ENTRIES - 1;
+	}
+
 	while (index < PORT->arp_table_len)
 	{
 		if (PORT->arp_table[index].keepalive != 0)
@@ -2809,7 +2814,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 	struct sockaddr_in sinx; 
 //	struct AXIPPORTINFO * PORT;
 
-	Sleep(5000);									// Delay startup a bit
+	Sleep(15000);									// Delay startup a bit
 
 	while(arp->TCPMode == TCPMaster)
 	{		

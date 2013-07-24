@@ -83,7 +83,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT);
 VOID L2LINKACTIVE(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL, UCHAR MSGFLAG);
 BOOL CompareAliases(UCHAR * c1, UCHAR * c2);
 VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffer, MESSAGE * ADJBUFFER, UCHAR CTL, UCHAR MSGFLAG);
-VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall);
+VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall, int toPort, int UIOnly);
 VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg);
 VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 
@@ -180,13 +180,25 @@ VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 			//	FRAME HAS NOT BEEN REPEATED THROUGH CURRENT DIGI -
 			// SEE IF WE ARE MEANT TO DIGI IT
 
+			struct XDIGI * XDigi = PORT->XDIGIS;		// Cross port digi setup
+
 			ptr -= 6;						// To start of Call
 
 			if (CompareCalls(ptr, MYCALL) || CompareAliases(ptr, MYALIAS) ||
 					CompareCalls(ptr, PORT->PORTALIAS) || CompareCalls(ptr, PORT->PORTALIAS2))	
 			{
-				Digipeat(PORT, Buffer, ptr);		// Digi it (if enabled)
+				Digipeat(PORT, Buffer, ptr, 0, 0);		// Digi it (if enabled)
 				return;
+			}
+
+			while (XDigi)
+			{
+				if (CompareCalls(ptr, XDigi->Call))
+				{
+					Digipeat(PORT, Buffer, ptr, XDigi->Port, XDigi->UIOnly);		// Digi it (if enabled)
+					return;
+				}
+				XDigi = XDigi->Next;
 			}
 
 			ReleaseBuffer(Buffer);
@@ -2664,14 +2676,16 @@ TRANSPORTENTRY * SetupSessionForL2(struct _LINKTABLE * LINK)
 }
 
 
-VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall)		// Digi it (if enabled)
+VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall, int toPort, int UIOnly)		// Digi it (if enabled)
 {
 	//	WE MAY HAVE DISABLED DIGIPEAT ALTOGETHER, (DIGIFLAG=0),
 	//	OR ALLOW ALLOW ONLY UI FRAMES TO BE DIGIED (DIGIFLAG=-1)
 
+	// toPort and UIOnly are used for Cross Port digi feature
+
 	int n;
 
-	if (PORT->DIGIFLAG == 0)
+	if (PORT->DIGIFLAG == 0 && toPort == 0)
 	{
 		ReleaseBuffer(Buffer);
 		return;
@@ -2696,13 +2710,50 @@ VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall)		// 
 		}
 	}
 
-	if ((OurCall[0] & ~PFBIT) == 3)
+	if (toPort)			// Cross port digi
+	{
+		if  (((OurCall[7] & ~PFBIT) == 3) || UIOnly == 0)
+		{
+			// UI or Digi all
+
+			Buffer->PORT = toPort;	// update port no in header
+			PORT = GetPortTableEntryFromPortNum(toPort);
+	
+			if (PORT == NULL)
+				ReleaseBuffer(Buffer);
+			else
+				PUT_ON_PORT_Q(PORT, Buffer);
+			return;
+		}
+		else
+		{
+			ReleaseBuffer(Buffer);
+			return;
+		}
+	}
+
+	if ((OurCall[7] & ~PFBIT) == 3)
 	{
 		// UI
 
 		//	UI FRAME. IF DIGIMASK IS NON-ZERO, SEND TO ALL PORTS SET, OTHERWISE SEND TO DIGIPORT
 
 		PORT->L2DIGIED++;
+
+		if (toPort)
+		{
+			// Cross port digi
+
+			PORT = GetPortTableEntryFromPortNum(toPort);
+			Buffer->PORT = PORT->DIGIPORT;	// update port no in header
+
+			if (PORT == NULL)
+				ReleaseBuffer(Buffer);
+			else
+				PUT_ON_PORT_Q(PORT, Buffer);
+
+			return;
+		}
 	
 		if (PORT->DIGIMASK == 0)
 			PUT_ON_PORT_Q(PORT, Buffer);

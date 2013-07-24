@@ -840,6 +840,12 @@ DllExport int APIENTRY ChangeSessionPaclen(int Stream, int Paclen)
 	return (0);
 }
 
+DllExport int APIENTRY ChangeSessionIdletime(int Stream, int idletime)
+{ 
+	BPQHOSTVECTOR[Stream-1].HOSTSESSION->L4LIMIT = idletime;
+	return (0);
+}
+
 DllExport int APIENTRY Get_APPLMASK(int Stream)
 {
 	return	BPQHOSTVECTOR[Stream-1].HOSTAPPLMASK;
@@ -1134,8 +1140,8 @@ DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 
 		//	COPY DATA TO A BUFFER IN OUR SEGMENTS - SIMPLFIES THINGS LATER
 
-		if (QCOUNT < 20)
-			return 0;					// DOnt want to run out
+		if (QCOUNT < 50)
+			return 0;					// Dont want to run out
 
 		GetSemaphore(&Semaphore);
 		SemHeldByAPI = 10;
@@ -1177,6 +1183,20 @@ DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 	{
 		FreeSemaphore(&Semaphore);
 		return 1;
+	}
+
+	// Dont allow massive queues to form
+
+	if (QCOUNT < 100)
+	{
+		int n = CountFramesQueuedOnStream(stream + 1);
+
+		if (n > 100)
+		{
+			Debugprintf("Stream %d QCOUNT %d Q Len %d - discarding", stream, QCOUNT, n);
+			FreeSemaphore(&Semaphore);
+			return 1;
+		}
 	}
 
 	if ((MSG = GetBuff()) == 0)
@@ -1774,15 +1794,21 @@ DllExport UCHAR * APIENTRY GetPortDescription(int portslot, char * Desc)
 
 // Standard serial port handling routines, used by lots of modules.
 
-OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet)
+OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 {
 	char buf[80];
+	int PortNum;
 
 	if (conn->WEB_COMMSSTATE == NULL)
 		conn->WEB_COMMSSTATE = zalloc(100);
 
-
-	conn->hDevice = OpenCOMPort((VOID *)Port, Speed, TRUE, TRUE, Quiet);
+	if (_memicmp(Port, "COM", 3) == 0)
+	{
+		PortNum = atoi(&Port[3]);
+		conn->hDevice = OpenCOMPort((VOID *)PortNum, Speed, TRUE, TRUE, Quiet);
+	}
+	else
+		conn->hDevice = OpenCOMPort((VOID *)Port, Speed, TRUE, TRUE, Quiet);
 			  
 	if (conn->hDevice == 0)
 	{
@@ -1812,10 +1838,17 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	HANDLE fd;	
 	DCB dcb;
 
-	// load the COM prefix string and append port number
+	// if Port Name starts COM, convert to \\.\COM or ports above 10 wont work
 
-	if ((UINT)pPort < 256)
-		sprintf( szPort, "\\\\.\\COM%d", (int)pPort);
+	if ((UINT)pPort < 256)			// just a com port number
+		sprintf( szPort, "\\\\.\\COM%d", pPort);
+	
+	else if (_memicmp(pPort, "COM", 3) == 0)
+	{
+		char * pp = (char *)pPort;
+		int p = atoi(&pp[3]);
+		sprintf( szPort, "\\\\.\\COM%d", p);
+	}
 	else
 		strcpy(szPort, pPort);
 

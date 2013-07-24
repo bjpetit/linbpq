@@ -941,6 +941,7 @@ VOID SendWarningToSYSOP(struct MsgInfo * Msg);
 VOID DoEditUserCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID DoPollRMSCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID DoShowRMSCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+VOID DoSetIdleTime(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo);
 VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);

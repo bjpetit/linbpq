@@ -73,40 +73,6 @@
 #define PITNC 64				// PITNC Mode - can reset TNC with FEND 15 2
 #define NOPARAMS 128			// Don't send SETPARAMS frame
 
-typedef struct KISSINFO
-{
-struct PORTCONTROL  PORT;	
-int LINKSTS;			// CURRENT STATE
-UINT * CURALP;			// CURRENT BUFFER
-UINT * NEXTCHR;			// 	
-UINT ASYNCMSG_Q;		//  RECEIVED MESSAGES
-UINT KISSTX_Q	;		// MESSAGES TO SEND
-//int FRAMELEN;			// LENGTH OF CURRENT MSG
-
-int ESCFLAG	;			// 		; SET IF LAST RX CHAR WAS DLE
-int ESCTXCHAR;			// 	; CHAR TO SEND FOLLOWING DLE IF NZ
-
-struct KISSINFO * FIRSTPORT;			// 		; FIRST PORT DEFINED FOR THIS IO ADDR
-struct KISSINFO * SUBCHAIN;			// 	; NEXT SUBCHANNEL FOR SAME PHYSICAL PORT
-
-int OURCTRL;			// 	; CONTROL BYTE FOR THIS PORT
-
-int XCTRL;			//  CONTROL BYTE TO SEND
-int REALKISSFLAGS;			// 	; KISS FLAGS FOR ACTIVE SUBPORT
-
-USHORT TXCCC;			// 	; NETROM/BPQKISS CHECKSUMS
-USHORT RXCCC;			// 
-
-int TXACTIVE;			// TIMER TO DETECT 'HUNG' SENDS
-
-int POLLFLAG;			// POLL OUTSTANDING FOR MULTIKISS
-
-struct KISSINFO * POLLPOINTER;			// LAST GROUP POLLED
-int POLLED;					// SET WHEN POLL RECEIVED
-
-UCHAR WIN32INFO[16];		//	FOR WINDOWS DRIVER
-} *PKISSINFO;
-
 
 int WritetoConsoleLocal(char * buff);
 VOID INITCOMMON(struct KISSINFO * PORT);
@@ -182,12 +148,12 @@ VOID ASYDISP(struct PORTCONTROL * PortVector)
 
 		// KISS over UDP
 
-		sprintf(Msg,"UDPKISS IP %s Port %d Chan %c\n", inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, PortVector->CHANNELNUM);
+		sprintf(Msg,"UDPKISS IP %s Port %d Chan %c \n", inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, PortVector->CHANNELNUM);
 	else
 		if (PortVector->SerialPortName)
-			sprintf(Msg,"ASYNC %s Chan %c\n", PortVector->SerialPortName, PortVector->CHANNELNUM);
+			sprintf(Msg,"ASYNC %s Chan %c \n", PortVector->SerialPortName, PortVector->CHANNELNUM);
 		else
-			sprintf(Msg,"ASYNC COM%d Chan %c\n", PortVector->IOBASE, PortVector->CHANNELNUM);
+			sprintf(Msg,"ASYNC COM%d Chan %c \n", PortVector->IOBASE, PortVector->CHANNELNUM);
 		
 	WritetoConsoleLocal(Msg);
 	return;
@@ -321,9 +287,9 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 	else
 	{
 		if (PortVector->SerialPortName)
-			sprintf(Msg,"ASYNC %s Chan %c", PortVector->SerialPortName, Channel);
+			sprintf(Msg,"ASYNC %s Chan %c ", PortVector->SerialPortName, Channel);
 		else
-			sprintf(Msg,"ASYNC COM%d Chan %c", comport, Channel);
+			sprintf(Msg,"ASYNC COM%d Chan %c ", comport, Channel);
 
 		WritetoConsoleLocal(Msg);
 
@@ -337,7 +303,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		npKISSINFO->RXBPTR=&npKISSINFO->RXBUFFER[0]; 
 		npKISSINFO->RXMPTR=&npKISSINFO->RXMSG[0];
 
-		OpenConnection(PortVector, npKISSINFO, comport);
+		OpenConnection(PortVector, comport);
 	
 		if (PortVector->KISSFLAGS & PITNC)
 		{
@@ -353,7 +319,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		}
 	}
 
-	npKISSINFO->Portvector = PortVector; //	BX on entry to char handlers
+	npKISSINFO->Portvector = PortVector; 
 
 	WritetoConsoleLocal("\n");
 
@@ -364,9 +330,7 @@ NPASYINFO CreateKISSINFO( int port,int speed )
 {
    NPASYINFO   npKISSINFO ;
 
-   if (NULL == (npKISSINFO =
-                   (NPASYINFO) zalloc(sizeof(ASYINFO))))
-
+   if (NULL == (npKISSINFO = (NPASYINFO) zalloc(sizeof(ASYINFO))))
       return (NPASYINFO)0;
 
    // initialize TTY info structure
@@ -380,14 +344,24 @@ NPASYINFO CreateKISSINFO( int port,int speed )
 
 
 
-BOOL OpenConnection(struct PORTCONTROL * PortVector, NPASYINFO npKISSINFO, int port)
+int OpenConnection(struct PORTCONTROL * PortVector, int port)
 {
+	NPASYINFO npKISSINFO = KISSInfo[PortVector->PORTNUMBER];
+	HANDLE  ComDev ;
+
+
+	if (npKISSINFO == NULL)
+		return 0;
+
 	if (PortVector->SerialPortName)
-		npKISSINFO->idComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE);
+		ComDev = OpenCOMPort(PortVector->SerialPortName, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE);
 	else
-		npKISSINFO->idComDev = OpenCOMPort((VOID *)port, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE);
+		ComDev = OpenCOMPort((VOID *)port, npKISSINFO->dwBaudRate, TRUE, TRUE, FALSE);
 	
-	return 0;
+	if (ComDev)
+		npKISSINFO->idComDev = ComDev;
+
+	return ComDev;
 }
 int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength )
 {
@@ -405,7 +379,6 @@ BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite)
 	return WriteCOMBlock(npKISSINFO->idComDev, lpByte, dwBytesToWrite);
 }
 
-
 VOID KISSCLOSE(struct PORTCONTROL * PortVector)
 {
 	NPASYINFO Port = KISSInfo[PortVector->PORTNUMBER];
@@ -422,6 +395,21 @@ VOID KISSCLOSE(struct PORTCONTROL * PortVector)
 	KISSInfo[PortVector->PORTNUMBER] = NULL;
 
 	return;
+}
+VOID CloseKISSPort(struct PORTCONTROL * PortVector)
+{
+	// Just close he device - leave reast of info intact
+
+	NPASYINFO Port = KISSInfo[PortVector->PORTNUMBER];
+
+	if (Port == NULL)
+		return;
+	
+	if (PortVector->PORTIPADDR.s_addr == 0)
+	{
+		CloseCOMPort(Port->idComDev);
+		Port->idComDev = 0;
+	}
 }
 
 static void CheckReceivedData(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
@@ -538,7 +526,7 @@ static void CheckReceivedData(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 	}
 
 	if (npKISSINFO->RXMPTR - (UCHAR *)&npKISSINFO->RXMSG > 500)
-		npKISSINFO->RXMPTR=(UCHAR *)&npKISSINFO->RXMSG;
+		npKISSINFO->RXMPTR = (UCHAR *)&npKISSINFO->RXMSG;
 	
  	return;
 }
@@ -1116,6 +1104,13 @@ SeeifMore:
 
 	Port->MSGREADY = FALSE;
 	Port->RXMPTR = (UCHAR *)&Port->RXMSG;
+
+	if (len > 329)			// Max ax.25 frame + KISS Ctrl
+	{
+		Debugprintf("BPQ32 overlong KISS frame - len = %d Port %d", len, Port->Portvector->PORTNUMBER);
+		return 0;
+	}
+
 
 //	IF NETROM, CAN PASS ON NOW
 

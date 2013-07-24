@@ -241,6 +241,18 @@ static ProcessLine(char * buf, int Port)
 				TNC->BusyWait = atoi(&buf[8]);
 
 			else
+			if (_memicmp(buf, "STARTINROBUST", 13) == 0)		// Wait time beofre failing connect if busy
+				TNC->StartInRobust = TRUE;
+			
+			else
+			if (_memicmp(buf, "ROBUST", 6) == 0)
+			{
+				if (_memicmp(&buf[7], "TRUE", 4) == 0)
+					TNC->Robust = TRUE;
+				
+				strcat (TNC->InitScript, buf);
+			}
+			else
 
 			strcat (TNC->InitScript, buf);
 		}
@@ -634,6 +646,16 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		if (TNC->Streams[0].Connected)
 		{
+			STREAM->PacketsSent++;
+
+			if (STREAM->PacketsSent == 3)
+			{
+				if (TNC->Robust)
+					send(TNC->WINMORSock, "ROBUST TRUE\r\n", 13, 0);
+				else
+					send(TNC->WINMORSock, "ROBUST FALSE\r\n", 14, 0);
+			}
+
 			bytes=send(TNC->WINMORDataSock,(const char FAR *)&buff[8],txlen,0);
 			STREAM->BytesTXed += bytes;
 		}
@@ -740,6 +762,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (_memicmp(&buff[8], "CODEC TRUE", 9) == 0)
 				TNC->StartSent = TRUE;
+
+			if (_memicmp(&buff[8], "ROBUST", 6) == 0)
+			{
+				if (_memicmp(&buff[15], "TRUE", 4) == 0)
+					TNC->Robust = TRUE;
+				else
+					TNC->Robust = FALSE;
+			}
 
 			if (_memicmp(&buff[8], "D\r", 2) == 0)
 			{
@@ -1644,7 +1674,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
 		STREAM->ConnectTime = time(NULL); 
-		STREAM->BytesRXed = STREAM->BytesTXed = 0;
+		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
+
+		if (TNC->StartInRobust)
+			send(TNC->WINMORSock, "ROBUST TRUE\r\n", 13, 0);
 
 		memcpy(Call, &Buffer[10], 10);
 
@@ -1991,19 +2024,19 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		// Get the File Name in case we want to restart it.
 
-		if (GetModuleFileNameExPtr)
+		if (TNC->ProgramPath == NULL)
 		{
-			hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
-	
-			if (hProc)
+			if (GetModuleFileNameExPtr)
 			{
-				GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
-				CloseHandle(hProc);
+				hProc =  OpenProcess(PROCESS_QUERY_INFORMATION |PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
+	
+				if (hProc)
+				{
+					GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
+					CloseHandle(hProc);
 
-				if (TNC->ProgramPath)
-					free(TNC->ProgramPath);
-
-				TNC->ProgramPath = _strdup(ExeName);
+					TNC->ProgramPath = _strdup(ExeName);
+				}
 			}
 		}
 
@@ -2289,9 +2322,49 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 */
 
 
-KillTNC(struct TNCINFO * TNC)
+int KillTNC(struct TNCINFO * TNC)
 {
+	if (TNC->WIMMORPID == 0)
+		return 0;
+
+	if (TNC->ProgramPath && _memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
+	{
+		// Try to Kill TNC on a remote host
+
+		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
+		struct sockaddr_in destaddr;
+		char Msg[80];
+		int Len;
+
+		if (sock == INVALID_SOCKET)
+			return 0;
+
+		destaddr.sin_family = AF_INET;
+		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_port = htons(8500);
+
+		if (destaddr.sin_addr.s_addr == INADDR_NONE)
+		{
+			//	Resolve name to address
+
+			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+		 
+			if (!HostEnt)
+				return 0;			// Resolve failed
+
+			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+		}
+		Len = sprintf(Msg, "KILL %d", TNC->WIMMORPID);
+		sendto(sock, Msg, Len, 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+		Sleep(100);
+		closesocket(sock);
+
+		TNC->WIMMORPID = 0;			// So we don't try again
+		return 1;				// Cant tell if it worked, but assume ok
+	}
+
 #ifndef LINBPQ
+	{
 	HANDLE hProc;
 
 	if (TNC->PTTMode)
@@ -2306,6 +2379,7 @@ KillTNC(struct TNCINFO * TNC)
 		TerminateProcess(hProc, 0);
 		CloseHandle(hProc);
 	}
+	}
 #endif
 	TNC->WIMMORPID = 0;			// So we don't try again
 
@@ -2314,21 +2388,57 @@ KillTNC(struct TNCINFO * TNC)
 
 RestartTNC(struct TNCINFO * TNC)
 {
+	if (TNC->ProgramPath == NULL)
+		return 0;
+
+	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
+	{
+		// Try to start TNC on a remote host
+
+		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
+		struct sockaddr_in destaddr;
+
+
+		if (sock == INVALID_SOCKET)
+			return 0;
+
+		destaddr.sin_family = AF_INET;
+		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_port = htons(8500);
+
+		if (destaddr.sin_addr.s_addr == INADDR_NONE)
+		{
+			//	Resolve name to address
+
+			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+		 
+			if (!HostEnt)
+				return 0;			// Resolve failed
+
+			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+		}
+
+		sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+		Sleep(100);
+		closesocket(sock);
+
+		return 1;				// Cant tell if it worked, but assume ok
+	}
 #ifndef LINBPQ
+	{
+		STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+	    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 
-	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
-    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
+		SInfo.cb=sizeof(SInfo);
+		SInfo.lpReserved=NULL; 
+		SInfo.lpDesktop=NULL; 
+		SInfo.lpTitle=NULL; 
+		SInfo.dwFlags=0; 
+		SInfo.cbReserved2=0; 
+	  	SInfo.lpReserved2=NULL; 
 
-	SInfo.cb=sizeof(SInfo);
-	SInfo.lpReserved=NULL; 
-	SInfo.lpDesktop=NULL; 
-	SInfo.lpTitle=NULL; 
-	SInfo.dwFlags=0; 
-	SInfo.cbReserved2=0; 
-  	SInfo.lpReserved2=NULL; 
-
-	if (TNC->ProgramPath)
 		return CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+	}
 #endif
 	return 0;
 }

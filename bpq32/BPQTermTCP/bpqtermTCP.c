@@ -54,6 +54,10 @@
 
 //	Allow up to 8 hosts
 
+// Version 1.0.6.1 MY 2013
+
+//	Send Connect Failed prompt after setting terminal status
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "winsock2.h"
@@ -2283,10 +2287,6 @@ int Telnet_Connected(SOCKET sock, int Error)
 				
 	if (Error)
 	{
-		wsprintf(Msg, "Connect Failed - Error %d\r", Error);
-					
-		MessageBox(NULL, Msg, "BPQTermTCP", MB_OK);
-
 		closesocket(sock);
 		Connecting = FALSE;
 		SocketActive = FALSE;
@@ -2296,12 +2296,14 @@ int Telnet_Connected(SOCKET sock, int Error)
 		DisableDisconnectMenu(hWnd);
 		EnableConnectMenu(hWnd);
 
+		wsprintf(Msg, "Connect Failed - Error %d\r", Error);			
+		MessageBox(NULL, Msg, "BPQTermTCP", MB_OK);
+
 		return 0;
 
 	}
 
-	WSAAsyncSelect(sock, hWnd, WSA_DATA,
-					FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
+	WSAAsyncSelect(sock, hWnd, WSA_DATA, FD_READ | FD_WRITE | FD_OOB | FD_ACCEPT | FD_CONNECT | FD_CLOSE);
 	
 	SocketActive = TRUE;
 	Connecting = FALSE;

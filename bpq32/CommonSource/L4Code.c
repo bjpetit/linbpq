@@ -568,7 +568,8 @@ L4BG()
 
 		// if nothing on TX Queue If there is stuff on hold queue, timer must be running
 
-		if (L4->L4TX_Q == 0 && L4->L4HOLD_Q)
+//		if (L4->L4TX_Q == 0 && L4->L4HOLD_Q)
+		if (L4->L4HOLD_Q)
 		{
 			if (L4->L4TIMER == 0)
 			{
@@ -799,9 +800,11 @@ VOID L4TimerProc()
 				if (L4->L4KILLTIMER > 11 * 60)
 					AUTOTIMER(L4);
 
-		if (L4LIMIT)
+		if (L4->L4LIMIT == 0)
+			L4->L4LIMIT = L4LIMIT;
+		else
 		{
-			if (L4->L4KILLTIMER > L4LIMIT)
+			if (L4->L4KILLTIMER > L4->L4LIMIT)
 			{
 				L4->L4KILLTIMER = 0;
 				

@@ -222,6 +222,7 @@ UICAPABLE	DB	0;			; Pactor-style port that can do UI
 WL2K		DD	0		; Pointer to WL2K Report Data
 PORTIPADDR	DD	0;
 SerialPortName DD 0		; Serial Port Name for Unix
+XDIGIS		DD	0;		; Cross Port Digi Definitions
 
 HARDWAREDATA	DB	200 DUP (?)	; WORK AREA FOR HARDWARE DRIVERS
 
@@ -386,6 +387,7 @@ UAddrLen	DD	0		 ;
 UADDRESS	DB 64 DUP (0); Unproto Address String - Dest + Digis
 
 APPL		DB 16 DUP (0); Set if session initiated by an APPL
+L4LIMIT		dd	0		 ; Idle Timout for this session
 
 TRANSPORTENTRY	ENDS
 ;

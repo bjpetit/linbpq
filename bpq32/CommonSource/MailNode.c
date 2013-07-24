@@ -120,6 +120,7 @@ int APIENTRY SessionState(int stream, int * state, int * change);
 int APIENTRY SessionControl(int stream, int command, int Mask);
 BOOL ChatInit();
 VOID CloseChat();
+VOID CloseTNCEmulator();
 
 config_t cfg;
 config_setting_t * group;
@@ -859,6 +860,7 @@ int main(int argc, char * argv[])
 //			IPClose();
 			APRSClose();
 			Rig_Close();
+			CloseTNCEmulator();
 
 			WL2KReports = NULL;
 
@@ -904,6 +906,13 @@ int main(int argc, char * argv[])
 				IGateEnabled = 0;
 
 			RigActive = Rig_Init();
+
+			if (NUMBEROFTNCPORTS)
+			{
+				FreeSemaphore(&Semaphore);
+				InitializeTNCEmulator();
+				GetSemaphore(&Semaphore);
+			}
 			
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
@@ -985,6 +994,8 @@ int main(int argc, char * argv[])
 
 	printf("Closing Ports\n");
 
+	CloseTNCEmulator();
+	
 	// Close Ports
 
 	PORTVEC=(PEXTPORTDATA)PORTTABLE;

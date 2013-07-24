@@ -525,11 +525,33 @@
 // Add Secure CMS signon
 // Fix error in cashing addresses of CMS servers
 // Fix Port Number when using Send Raw.
-// FIx PE in KISS driver if invalid subchannel received
+// Fix PE in KISS driver if invalid subchannel received
 // Fix Orignal address of beacons
 // Speed up Telnet port monitoring.
 // Add TNC Emulators
 // Add CountFramesQueuedOnStream API
+// Limit number of frames that can be queued on a session.
+// Add XDIGI feature
+// Add Winmor Robust Mode switching for compatibility with new Winmor TNC
+// Move most APRS code from BPQAPRS to here
+// Stop corruption caused by overlong KISS frames
+
+// Version 6.0.3.1
+
+// Add starting/killing WINMOR TNC on remote host
+// Fix Program Error when APRS Item or Object name is same as call of reporting station
+// Dont digi a frame that we have already digi'ed
+// Add ChangeSessionIdleTime API
+// Add WK2KSYSOP Command
+// Add IDLETIME Command
+// Fix Errors in RELAYAPPL processing
+// Fix PE cauaed by invalid Rigcontrol Line
+
+// Version 6.0.4.1
+
+// Add frequency dependent autoconnect appls for SCS Pactor
+
+
 
 #define CKernel
 
@@ -682,6 +704,7 @@ VOID SetApplPorts();
 VOID WriteMiniDump();
 VOID FindLostBuffers();
 BOOL InitializeTNCEmulator();
+VOID TNCTimer();
 
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 DllExport int APIENTRY GetStreamPID(int Stream);
@@ -733,6 +756,7 @@ BOOL Rig_Poll();
 
 VOID IPClose();
 VOID APRSClose();
+VOID CloseTNCEmulator();
 
 int Flag = (int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -1287,6 +1311,7 @@ VOID CALLBACK TimerProc
 			IPClose();
 			APRSClose();
 			Rig_Close();
+			CloseTNCEmulator();
 			WSACleanup();
 
 			WL2KReports = NULL;
@@ -1353,6 +1378,13 @@ VOID CALLBACK TimerProc
 
 			RigActive = Rig_Init();
 			
+			if (NUMBEROFTNCPORTS)
+			{
+				FreeSemaphore(&Semaphore);
+				InitializeTNCEmulator();
+				GetSemaphore(&Semaphore);
+			}
+
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
 	}
@@ -1659,7 +1691,10 @@ Check_Timer()
 		OpenReportingSockets();
 
 		FreeSemaphore(&Semaphore);
-	
+
+		if (NUMBEROFTNCPORTS)
+			InitializeTNCEmulator();
+
 		if (StartMinimized)
 			if (MinimizetoTray)
 				ShowWindow(FrameWnd, SW_HIDE);
@@ -2064,6 +2099,7 @@ SkipInit:
 			IPClose();
 			APRSClose();
 			Rig_Close();
+			CloseTNCEmulator();
 			WSACleanup();
 			WSAGetLastError();
 
@@ -2097,6 +2133,7 @@ SkipInit:
 
 		if (AttachedProcesses == 0)
 		{
+			Closing  = TRUE;
 			KillTimer(NULL,TimerHandle);
 						
 			if (MinimizetoTray)
@@ -2170,6 +2207,7 @@ DllExport int APIENTRY CloseBPQ32()
 		IPClose();
 		APRSClose();
 		Rig_Close();
+		CloseTNCEmulator();
 		WSACleanup();
 
 		if (hConsWnd) DestroyWindow(hConsWnd);
@@ -3105,7 +3143,7 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 		char * ptr1, * ptr2;
 		char SQL[1000];
 
-		sprintf(SQL, "SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, EMail, WEBSite, Phones, AdditionalData FROM SysopRecords WHERE Callsign='%s'",
+		sprintf(SQL, "SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, EMail, WEBSite, Phones, AdditionalData, TimeStamp FROM SysopRecords WHERE Callsign='%s'",
 			WL2KCall);
 
 		if (GetWL2KSYSOPInfo(WL2KCall, SQL, _REPLYBUFFER))
@@ -3220,7 +3258,15 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 
 			SetDlgItemText(hDlg, PHONE, ptr1);
 
-			SetDlgItemText(hDlg, ADDITIONALDATA, ptr2);
+			ptr1 = ptr2;
+			ptr2 = strchr(ptr1, 1);
+
+			if (ptr2 == 0)
+				return (INT_PTR)TRUE;
+
+			*(ptr2++) = 0;
+
+			SetDlgItemText(hDlg, ADDITIONALDATA, ptr1);
 
 		}
 	
@@ -3259,7 +3305,7 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 			GetDlgItemText(hDlg, PHONE, Phone, 99);
 			GetDlgItemText(hDlg, ADDITIONALDATA, Data, 99);
 
-			sprintf(SQL, "REPLACE INTO SysopRecords SET Callsign='%s', GridSquare='%s', SysopName='%s', StreetAddress1='%s', StreetAddress2='%s', City='%s', State='%s', Country='%s', PostalCode='%s', EMail='%s', WEBSite='%s', Phones='%s', AdditionalData='%s'",
+			sprintf(SQL, "REPLACE INTO SysopRecords SET TimeStamp=NOW(), Callsign='%s', GridSquare='%s', SysopName='%s', StreetAddress1='%s', StreetAddress2='%s', City='%s', State='%s', Country='%s', PostalCode='%s', EMail='%s', WEBSite='%s', Phones='%s', AdditionalData='%s'",
 				WL2KCall, WL2KLoc, Name, Addr1, Addr2, City, State, Country, PostCode, Email, Website, Phone, Data);
 
 			UpdateWL2KSYSOPInfo(WL2KCall, SQL);
@@ -4670,6 +4716,8 @@ DllExport VOID APIENTRY CloseAllPrograms()
 
 	// Close all attached BPQ32 programs
 
+	Closing  = TRUE;
+
 	ShowWindow(FrameWnd, SW_RESTORE);
 
 	GetWindowRect(FrameWnd, &FRect);
@@ -4680,8 +4728,6 @@ DllExport VOID APIENTRY CloseAllPrograms()
 	if (AttachedProcesses == 1)
 		CloseBPQ32();
 		
-	Closing  = TRUE;
-
 	Debugprintf("BPQ32 Close All Processes %d PIDS %d %d %d %d", AttachedProcesses, AttachedPIDList[0],
 		AttachedPIDList[1], AttachedPIDList[2], AttachedPIDList[3]);
 

@@ -54,6 +54,7 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	struct UserInfo * User;		// Selected User
 	struct MsgInfo * Msg;		// Selected Message
 	WPRec * WP;					// Selected WP record
+	struct UserRec * USER;		// Telnet Server USER record
 };
 
 struct TCPINFO * TCP;
@@ -99,8 +100,7 @@ VOID SendFwdMainPage(char * Reply, int * ReplyLen, char * Key);
 VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 char **	SeparateMultiString(char * MultiString);
-
-
+VOID TidyPrompts();
 
 char UNC[] = "";
 char CHKD[] = "checked=checked ";
@@ -1257,6 +1257,8 @@ VOID SaveWelcome(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Repl
 		GetMallocedParam(input, "NUPrompt=", &Prompt);
 		GetMallocedParam(input, "NewPrompt=", &NewPrompt);
 		GetMallocedParam(input, "ExPrompt=", &ExpertPrompt);
+		TidyPrompts();
+
 		GetParam(input, "Bye=", &SignoffMsg[0]);
 		if (SignoffMsg[0])
 		{

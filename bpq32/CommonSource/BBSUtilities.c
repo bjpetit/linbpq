@@ -7,6 +7,10 @@
 #include "Winspool.h"
 #endif
 
+#define BBSIDLETIME 120
+#define USERIDLETIME 300
+
+
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
 
@@ -19,8 +23,11 @@ void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
 int EncryptPass(char * Pass, char * Encrypt);
 VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
-DeletetoRecycle(char * FN);
+void DeletetoRecycle(char * FN);
 VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+VOID TidyPrompts();
+
+int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 
 config_t cfg;
 config_setting_t * group;
@@ -4249,7 +4256,7 @@ nextline:
 			Call = _strupr(_strdup(Msg->via));
 			AT = strlop(Call, '@');
 
-			if (_stricmp(AT, "WINLINK.ORG") == 0)
+			if (AT && _stricmp(AT, "WINLINK.ORG") == 0)
 			{
 				struct UserInfo * user = LookupCall(Call);
 
@@ -5686,7 +5693,7 @@ InBand:
 	// an indication of a connect.
 
 
-	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") ||
+	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") || strstr(Buffer, "IDLETIME") ||
 			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE"))
 	{
 		char * Cmd;
@@ -5803,8 +5810,6 @@ InBand:
 
 			if (memcmp(Cmd, "TEXTFORWARDING", 10) == 0)
 			{
-				// Remote Node sends > at end of CTEXT - we need to swallow it
-
 				conn->BBSFlags |= TEXTFORWARDING;
 
 				if (Scripts[ForwardingInfo->ScriptIndex + 1] == NULL ||
@@ -6026,6 +6031,8 @@ CheckForSID:
 
 VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 {
+	ChangeSessionIdletime(conn->BPQStream, BBSIDLETIME);		// Default Idletime for BBS Sessions
+
 	// scan backwards for first '-'
 
 	if (strstr(SID, "BPQCHATSERVER"))
@@ -6782,6 +6789,8 @@ BOOL GetConfig(char * ConfigName)
 		sprintf(ExpertPrompt, "de %s>\r\n", BBSName);
 	}
 
+	TidyPrompts();
+
 	RejFrom = GetMultiStringValue(group,  "RejFrom");
 	RejTo = GetMultiStringValue(group,  "RejTo");
 	RejAt = GetMultiStringValue(group,  "RejAt");
@@ -6858,7 +6867,13 @@ BOOL GetConfig(char * ConfigName)
 
 #endif
 
-int Connected(Stream)
+#ifdef LINBPQ
+extern BPQVECSTRUC ** BPQHOSTVECPTR;
+#else
+__declspec(dllimport) BPQVECSTRUC ** BPQHOSTVECPTR;
+#endif
+
+int Connected(int Stream)
 {
 	int n, Mask;
 	CIRCUIT * conn;
@@ -6875,6 +6890,8 @@ int Connected(Stream)
 		
 		if (Stream == conn->BPQStream)
 		{
+			ChangeSessionIdletime(Stream, USERIDLETIME);			// Default Idletime for BBS Sessions
+
 			if (conn->Active)
 			{
 				// Probably an outgoing connect
@@ -6890,6 +6907,7 @@ int Connected(Stream)
 
 					// Run first line of connect script
 
+					ChangeSessionIdletime(Stream, BBSIDLETIME);			// Default Idletime for BBS Sessions
 					ProcessBBSConnectScript(conn, ConnectedMsg, 15);
 					return 0;
 				}
@@ -6923,7 +6941,52 @@ int Connected(Stream)
 
 				if (SendNewUserMessage)
 				{
-					Length += sprintf(MailBuffer, "New User %s Connected to Mailbox\r\n", callsign);
+					// Try to find port, freq, mode, etc
+
+					int Freq = 0;
+					int Mode = 0;
+
+#ifdef LINBPQ
+					BPQVECSTRUC * SESS = &BPQHOSTVECTOR[0];
+#else
+					BPQVECSTRUC * SESS = (BPQVECSTRUC *)BPQHOSTVECPTR;
+#endif
+					TRANSPORTENTRY * Sess1 = NULL, * Sess2;	
+					
+					SESS +=(Stream - 1);
+				
+					if (SESS)
+						Sess1 = SESS->HOSTSESSION;
+
+					if (Sess1)
+					{
+						Sess2 = Sess1->L4CROSSLINK;
+
+						if (Sess2)
+						{
+							// See if L2 session - if so, get info from WL2K report line
+	
+							if (Sess2->L4CIRCUITTYPE & L2LINK)	
+							{
+								LINKTABLE * LINK = Sess2->L4TARGET.LINK;
+								PORTCONTROLX * PORT = LINK->LINKPORT;
+								
+								Freq = PORT->WL2KInfo.Freq;
+								Mode = PORT->WL2KInfo.mode;
+							}
+							else
+							{
+								if (Sess2->RMSCall[0])
+								{
+									Freq = Sess2->Frequency;
+									Mode = Sess2->Mode;
+								}
+							}
+						}
+	
+					}
+
+					Length += sprintf(MailBuffer, "New User %s Connected to Mailbox on Port %d Freq %d Mode %d\r\n", callsign, port, Freq, Mode);
 
 					sprintf(Title, "New User %s", callsign);
 
@@ -7648,9 +7711,9 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;						
 	}
 
-	if (_memicmp(Cmd, "SHOWRMS", 5) == 0)
+	if (_memicmp(Cmd, "IDLETIME", 4) == 0)
 	{
-		DoShowRMSCmd(conn, user, Arg1, Context);
+		DoSetIdleTime(conn, user, Arg1, Context);
 		return;
 	}
 
@@ -8086,8 +8149,35 @@ int DeleteRedundantMessages()
 }
 #endif
 
+VOID TidyPrompt(char ** pPrompt)
+{
+	// Make sure prompt ends > CR LF
 
+	char * Prompt = *pPrompt;
 
+	int i = strlen(Prompt) - 1;
+
+	*pPrompt = realloc(Prompt, i + 5);	// In case we need to expand it
+
+	Prompt = *pPrompt;
+
+	while (Prompt[i] == 10 || Prompt[i] == 13)
+	{
+		Prompt[i--] = 0;
+	}
+
+	if (Prompt[i] != '>')
+		strcat(Prompt, ">");
+
+	strcat(Prompt, "\r\n");
+}
+
+VOID TidyPrompts()
+{
+	TidyPrompt(&Prompt);
+	TidyPrompt(&NewPrompt);
+	TidyPrompt(&ExpertPrompt);
+}
 
 
 

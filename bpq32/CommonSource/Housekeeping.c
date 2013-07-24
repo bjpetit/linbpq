@@ -34,7 +34,7 @@ int CreateWPMessage();
 int LastHouseKeepingTime;
 int LastTrafficTime;
 
-DeletetoRecycle(char * FN)
+void DeletetoRecycle(char * FN)
 {
 #ifdef WIN32
 	SHFILEOPSTRUCT FileOp;
@@ -45,7 +45,7 @@ DeletetoRecycle(char * FN)
 	FileOp.pFrom = FN;
 	FileOp.pTo = NULL;
 
-	return SHFileOperation(&FileOp);
+	SHFileOperation(&FileOp);
 #endif
 }
 
@@ -770,7 +770,7 @@ int DeleteLogFiles()
 	{ 
 		while(n--)
 		{
-			if (stat(namelist[n]->d_name, &STAT) == 0);
+			if (stat(namelist[n]->d_name, &STAT) == 0)
 			{
 				Age = (now - STAT.st_mtime) / 86400;
 				

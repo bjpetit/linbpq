@@ -29,9 +29,7 @@ typedef struct PCAPStruct
 
 PCAPINFO PCAPInfo[32];
 
-UCHAR EthDest[7]={01,'B','P','Q',0,0};
-
-char EtherType[10]="0x08FF";
+// on linux default to broadcast
 
 short udpport=0;
 
@@ -62,7 +60,6 @@ int ExtProc(int fn, int port,unsigned char * buff)
 	case 1:				// poll
 
 		res = recvfrom(IF->s, rxbuff, ETH_FRAME_LEN, 0, NULL, NULL);
-
 
 		if (res == -1)
 		{
@@ -294,6 +291,9 @@ static BOOL ReadConfigFile(int Port)
 	Config = PortConfig[Port];
 
 	PCAPInfo[Port].Promiscuous = 1;				// Default
+	PCAPInfo[Port].EtherType=htons(0x08FF);		// Default
+	memset(PCAPInfo[Port].EthDest, 0xff, 6); 
+
 
 	if (Config)
 	{

@@ -765,14 +765,18 @@
 //	Allow comment lines (; or @) or single space in fwd scripts
 //  Fix loss of forwarding info if SAVE is clicked before selecting a call
 
-// Version 1.4.55.1 ?? 2013
+// Version 1.4.55.1 June 2013
 
-// Add option to remove uers that have not connected for a long time.
+// Add option to remove users that have not connected for a long time.
 // Add l@ smtp:
 // Fix From: sent to POP3 Client when meaages is from RMS
 // Display Email From on Manage Messages
 
+// Version 1.4.56.1 July 2013
 
+// Add timeout
+// Verify prompts
+// Add IDLETIME command
 
 // Use Windows Sound Events for (Chat "user join" alert)
 

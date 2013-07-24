@@ -59,6 +59,7 @@ VOID WINAPI OnTabbedDialogInit(HWND hwndDlg);
 VOID SaveWPConfig(HWND hDlg);
 PrintMessage(struct MsgInfo * Msg);
 BOOL ForwardMessagetoFile(struct MsgInfo * Msg, HANDLE Handle);
+VOID TidyPrompts();
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -1822,6 +1823,15 @@ VOID SavePrompts()
 
 	RegCloseKey(hKey);
 
+	TidyPrompts();
+
+	// redisplay, in case tidy has changed them
+
+	SetDlgItemText(hwndDisplay, IDM_USERMSG, Prompt);
+	SetDlgItemText(hwndDisplay, IDM_NEWUSERMSG, NewPrompt);
+	SetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, ExpertPrompt);
+
+
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 }
@@ -2274,7 +2284,7 @@ TryAgain:
 
 		if (Vallen)
 		{
-			Prompt = malloc(Vallen);
+			Prompt = malloc(Vallen + 3);
 			RegQueryValueEx(hKey,"Prompt",0, (ULONG *)&Type, Prompt, (ULONG *)&Vallen);
 		}
 		else
@@ -2287,7 +2297,7 @@ TryAgain:
 
 		if (Vallen)
 		{
-			NewPrompt = malloc(Vallen);
+			NewPrompt = malloc(Vallen + 3);
 			RegQueryValueEx(hKey,"NewUserPrompt",0, (ULONG *)&Type, NewPrompt, (ULONG *)&Vallen);
 		}
 		else
@@ -2309,6 +2319,7 @@ TryAgain:
 			sprintf(ExpertPrompt, "de %s>\r\n", BBSName);
 		}
 
+		TidyPrompts();
 
 		RegQueryValueEx(hKey,"NewUserWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
 

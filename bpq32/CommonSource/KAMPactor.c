@@ -414,7 +414,7 @@ UINT KAMExtInit(EXTPORTDATA * PortEntry)
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
 
-	sprintf(msg,"KAM Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
+	sprintf(msg,"KAM Pactor %s", PortEntry->PORTCONTROL.SerialPortName);
 	WritetoConsole(msg);
 
 	ReadConfigFile(port, ProcessLine);
@@ -559,7 +559,7 @@ UINT KAMExtInit(EXTPORTDATA * PortEntry)
 	
 	MoveWindows(TNC);
 #endif
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	WritetoConsole("\n");
 
@@ -770,7 +770,7 @@ VOID KAMPoll(int Port)
 		TNC->HostMode = 0;
 		TNC->ReinitState = 0;
 				
-		sprintf(TNC->WEB_COMMSSTATE, "COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE, "%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -1185,7 +1185,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 	{
 		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
 		
-		sprintf(TNC->WEB_COMMSSTATE,"COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE,"%s Initialising TNC", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		Poll[0] = 13;
@@ -1517,7 +1517,7 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					
 			TNC->Timeout = 0;
 
-			sprintf(TNC->WEB_COMMSSTATE,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+			sprintf(TNC->WEB_COMMSSTATE,"%s TNC link OK", TNC->PortRecord->PORTCONTROL.SerialPortName);
 			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 			return;
@@ -1623,11 +1623,16 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 				if (Stream == 0)
 				{
 					struct WL2KInfo * WL2K = TNC->WL2K;
+					char FreqAppl[10] = "";				// Frequecy-specific application
 	
 					if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
 					{
 						sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", TNC->Streams[0].RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
 						SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+						// If Scan Entry has a Appl, save it
+
+						if (TNC->RIG->FreqPtr[0]->APPL[0])
+							strcpy(FreqAppl, TNC->RIG->FreqPtr[0]->APPL[0]);
 					}
 					else
 					{
@@ -1649,6 +1654,17 @@ VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					EncodeAndSend(TNC, "T", 1);			// Changeover to ISS 
 
 					// If an autoconnect APPL is defined, send it	
+
+					if (FreqAppl[0])			// Frequency spcific APPL overrides TNC APPL
+					{
+						buffptr = GetBuff();
+						if (buffptr == 0) return;			// No buffers, so ignore
+
+						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", FreqAppl);
+						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						TNC->SwallowSignon = TRUE;
+						return;
+					}
 
 					if (TNC->ApplCmd)
 					{

@@ -48,7 +48,7 @@ END
 
 3 TEXTINCLUDE DISCARDABLE 
 BEGIN
-    "#include ""..\\CInclude\\Versions.h""\r\n"
+    "#include ""..\\CommonCode\\Versions.h""\r\n"
     "#include ""..\\StdVer.inc""\r\n"
     "\r\n"
     "\0"
@@ -215,7 +215,7 @@ END
 //
 // Generated from the TEXTINCLUDE 3 resource.
 //
-#include "..\CInclude\Versions.h"
+#include "..\CommonSource\Versions.h"
 #include "..\StdVer.inc"
 
 

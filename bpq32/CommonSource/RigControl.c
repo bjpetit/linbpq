@@ -28,6 +28,8 @@
 #include "tncinfo.h"
 #ifndef LINBPQ
 #include <commctrl.h>
+#else
+char *fcvt(double number, int ndigits, int *decpt, int *sign);  
 #endif
 #include "bpq32.h"
 
@@ -50,7 +52,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT);
 BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT);
 BOOL DestroyTTYInfo(int port);
 void CheckRX(struct RIGPORTINFO * PORT);
-static OpenRigCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed);
+static OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed);
 VOID ICOMPoll(struct RIGPORTINFO * PORT);
 VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuff, int len);
 VOID ProcessICOMFrame(struct RIGPORTINFO * PORT, UCHAR * rxbuffer, int Len);
@@ -847,8 +849,9 @@ DllExport BOOL APIENTRY Rig_Init()
 	struct RIGINFO * RIG;
 	struct TNCINFO * TNC;
 	HWND hDlg;
+#ifndef LINBPQ
 	int RigRow;
-
+#endif
 	// Get config info
 
 	for (port = 1; port < 33; port++)
@@ -873,12 +876,12 @@ DllExport BOOL APIENTRY Rig_Init()
 
 				sprintf(msg,"Port %d Invalid Rig Config %s", port, SaveRigConfig);
 				WritetoConsole(msg);
+				free(SaveRigConfig);
+				free(RigConfigMsg1);
+				continue;
 			}
-
+		
 			TNC->RIG->PTTMode = TNC->PTTMode;
-
-			free(SaveRigConfig);
-			free(RigConfigMsg1);
 
 			hDlg = TNC->hDlg;
 
@@ -949,16 +952,16 @@ DllExport BOOL APIENTRY Rig_Init()
 		
 //		CreateDisplay(PORT);
 
-		if (PORT->IOBASE > 256)
-
-			// Rig Port on a PTC
-
-			PORT->PTC = (struct TNCINFO *)PORT->IOBASE;	// Actually address of TNC record
-		else
+		if (PORT->PTC == 0)		// Not using Rig Port on a PTC
 			OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
 
-		if (PORT->PTTIOBASE)		// Using separare port for PTT?
-			PORT->hPTTDevice = OpenCOMPort((VOID *)PORT->PTTIOBASE, PORT->SPEED, FALSE, FALSE, FALSE);
+		if (PORT->PTTIOBASE[0])		// Using separare port for PTT?
+		{
+			if (PORT->PTTIOBASE[3] == '=')
+				PORT->hPTTDevice = OpenCOMPort(&PORT->PTTIOBASE[4], PORT->SPEED, FALSE, FALSE, FALSE);
+			else
+				PORT->hPTTDevice = OpenCOMPort(&PORT->PTTIOBASE[3], PORT->SPEED, FALSE, FALSE, FALSE);
+		}
 		else
 			PORT->hPTTDevice = PORT->hDevice;	// Use same port for PTT
 	}
@@ -1152,10 +1155,8 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 
 } // end of CloseConnection()
 
-OpenRigCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed)
+OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 {
-	char buf[80];
-
 	PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE);
 			  
 	if (PORT->hDevice == 0)
@@ -1166,9 +1167,6 @@ OpenRigCOMMPort(struct RIGPORTINFO * PORT, int Port, int Speed)
 		COMSetRTS(PORT->hDevice);
 		COMSetDTR(PORT->hDevice);
 	}
-
-	sprintf(buf,"COM%d Open", Port);
-	SetWindowText(PORT->hStatus, buf);
 
 	return TRUE;
 }
@@ -1711,12 +1709,8 @@ VOID ProcessFrame(struct RIGPORTINFO * PORT, UCHAR * Msg, int framelen)
 
 		if (PORT->PORTOK == FALSE)
 		{
-			// Just come up
-			char Status[80];
-		
+			// Just come up		
 			PORT->PORTOK = TRUE;
-			sprintf(Status,"COM%d CI-V link OK", PORT->IOBASE);
-			SetWindowText(PORT->hStatus, Status);
 		}
 		return;
 	}
@@ -2213,11 +2207,8 @@ VOID ProcessNMEA(struct RIGPORTINFO * PORT, char * Msg, int Length)
 	
 	if (PORT->PORTOK == FALSE)
 	{
-		// Just come up
-		char Status[80];
-		
+		// Just come up		
 		PORT->PORTOK = TRUE;
-		SetWindowText(PORT->hStatus, Status);
 	}
 
 	RIG->RIGOK = TRUE;
@@ -2284,12 +2275,8 @@ VOID ProcessKenwoodFrame(struct RIGPORTINFO * PORT, int Length)
 	
 	if (PORT->PORTOK == FALSE)
 	{
-		// Just come up
-		char Status[80];
-		
+		// Just come up		
 		PORT->PORTOK = TRUE;
-		sprintf(Status,"COM%d PORT link OK", PORT->IOBASE);
-		SetWindowText(PORT->hStatus, Status);
 	}
 
 	RIG->RIGOK = TRUE;
@@ -2560,7 +2547,7 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna)
 BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				   char * PMinLevel, char * PMaxLevel, char * PacketMode,
 				   char * RPacketMode, char * Split, char * Data, char * WinmorMode,
-				   char * Antenna, BOOL * Supress, char * Filter)
+				   char * Antenna, BOOL * Supress, char * Filter, char * Appl)
 {
 	char * Context;
 	char * ptr;
@@ -2598,7 +2585,11 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 
 	while (ptr)
 	{
-		if (ptr[0] == 'A')
+		if (memcmp(ptr, "APPL=", 5) == 0)
+		{
+			strcpy(Appl, ptr + 5);
+		}
+		else if (ptr[0] == 'A')
 			*Antenna = ptr[1];
 		
 		else if (ptr[0] == 'F')
@@ -2667,7 +2658,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 {
 	int i;
 	char * ptr;
-	int COMPort;
+	char * COMPort = NULL;
 	char * RigName;
 	int RigAddr;
 	struct RIGPORTINFO * PORT;
@@ -2680,21 +2671,19 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	double ScanFreq;
 	double Dwell;
 
-	_strupr(buf);
-
 	Debugprintf("Processing RIG line %s", buf);
 
 	ptr = strtok_s(&buf[10], " \t\n\r", &Context);
 
 	if (ptr == NULL) return FALSE;
 
-	if (memcmp(ptr, "DEBUG", 5) == 0)
+	if (_memicmp(ptr, "DEBUG", 5) == 0)
 	{
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		RIG_DEBUG = TRUE;
 	}
 
-	if (memcmp(ptr, "AUTH", 4) == 0)
+	if (_memicmp(ptr, "AUTH", 4) == 0)
 	{
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		if (ptr == NULL) return FALSE;
@@ -2704,14 +2693,15 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
 	}
 
-	if (memcmp(ptr, "COM", 3) == 0)
-		COMPort = atoi(&ptr[3]);
-	else if ((memcmp(ptr, "VCOM", 4) == 0) && TNC->Hardware == H_SCS)		// Using Radio Port on PTC
-		COMPort = (int)TNC;
-	else if ((memcmp(ptr, "PTCPORT", 7) == 0) && TNC->Hardware == H_SCS)
-		COMPort = (int)TNC;
-	else
+	if (ptr == NULL || ptr[0] == 0)
 		return FALSE;
+
+	if ((_memicmp(ptr, "VCOM", 4) == 0) && TNC->Hardware == H_SCS)		// Using Radio Port on PTC
+		COMPort = 0;
+	else if ((_memicmp(ptr, "PTCPORT", 7) == 0) && TNC->Hardware == H_SCS)
+		COMPort = 0;
+	else
+		COMPort = ptr;
 
 	// See if port is already defined. We may be adding another radio (ICOM only) or updating an existing one
 
@@ -2719,8 +2709,13 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	{
 		PORT = PORTInfo[i];
 
-		if (PORT->IOBASE == COMPort)
-			goto PortFound;
+		if (COMPort)
+			if (strcmp(PORT->IOBASE, COMPort) == 0)
+				goto PortFound;
+	
+		if (COMPort == 0)
+			if (PORT->IOBASE == COMPort)
+				goto PortFound;
 	}
 
 	// Allocate a new one
@@ -2728,9 +2723,14 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct RIGPORTINFO));
 	memset(PORT, 0, sizeof(struct RIGPORTINFO));
 
-	PORT->IOBASE = COMPort;
+	if (COMPort)
+		strcpy(PORT->IOBASE, COMPort);
+	else
+		PORT->PTC = TNC;
 
 PortFound:
+
+	_strupr(Context);
 
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 
@@ -2741,9 +2741,9 @@ PortFound:
 	ptr = strtok_s(NULL, " \t\n\r", &Context);
 	if (ptr == NULL) return (FALSE);
 
-	if (memcmp(ptr, "PTTCOM", 6) == 0)
+	if (memcmp(ptr, "PTTCOM", 6) == 0 || memcmp(ptr, "PTT=", 4) == 0)
 	{
-		PORT->PTTIOBASE = atoi(&ptr[6]);
+		strcpy(PORT->PTTIOBASE, ptr);
 		ptr = strtok_s(NULL, " \t\n\r", &Context);
 		if (ptr == NULL) return (FALSE);
 	}
@@ -2928,12 +2928,15 @@ PortFound:
 		char Split, Data, PacketMode, RPacketMode, PMinLevel, PMaxLevel, Filter;
 		char Mode[6] = "";
 		char WinmorMode, Antenna;
+		char Appl[13];
 
 		if (ptr[0] == ';' || ptr[0] == '#')
 			break;
 
 		Filter = PMinLevel = PMaxLevel = PacketMode = RPacketMode = Split =
 			Data = WinmorMode = Antenna = ModeNo = Supress = 0;
+
+		Appl[0] = 0;
 
 		Dwell = 0.0;
 
@@ -2962,7 +2965,7 @@ PortFound:
 		if (strchr(ptr, ','))			// New Format
 		{
 			DecodeModePtr(ptr, &Dwell, &Freq, Mode, &PMinLevel, &PMaxLevel, &PacketMode,
-				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter);
+				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter, &Appl[0]);
 		}
 		else
 		{
@@ -3181,6 +3184,8 @@ PortFound:
 		FreqPtr[0]->PMinLevel = PMinLevel;
 		FreqPtr[0]->Antenna = Antenna;
 		FreqPtr[0]->Supress = Supress;
+
+		strcpy(FreqPtr[0]->APPL, Appl);
 
 
 		CmdPtr = FreqPtr[0]->Cmd1 = malloc(100);

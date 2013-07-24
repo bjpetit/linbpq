@@ -16,7 +16,7 @@ extern HANDLE hInstance;
 extern HMENU hMainFrameMenu;
 extern HMENU hWndMenu;
 
-
+/*
 struct WL2KInfo
 {
 	struct WL2KInfo * Next;
@@ -53,18 +53,19 @@ struct WL2KInfo
 	BOOL RPonPTC;			// Set if scanning for Robust Packet on a PTC
 };
 
+*/
 #pragma pack(1)
 
 // AGWPE Header Structure
 
 struct AGWHEADER
 {
-	byte Port;
-	byte filler1[3];
+	UCHAR Port;
+	UCHAR filler1[3];
 	char DataKind;
-	byte filler2;
+	UCHAR filler2;
 	unsigned char PID;
-	byte filler3;
+	UCHAR filler3;
 	unsigned char callfrom[10];
 	unsigned char callto[10];
 	int DataLength;
@@ -169,7 +170,7 @@ struct STREAMINFO
 	BOOL Connecting;			// Set when Outward Connect in progress
 	BOOL Disconnecting;			// Set when disconnect in progress
 								// Used when appplication disconnects the bpq session, and
-								// prevents new attaches while a didy disconnect is in progress
+								// prevents new attaches while a dirty disconnect is in progress
 	int DisconnectingTimeout;	// A hard disconnect occurs if this expires before the disconnect complete
 	BOOL ReportDISC;			// Need to report an incoming DISC to kernel
 	BOOL DiscWhenAllSent;		// Close session when all msgs have been sent to node
@@ -186,6 +187,7 @@ struct STREAMINFO
 	int BytesTXed;
 	int BytesAcked;
 	int BytesRXed;
+	int PacketsSent;
 	int BytesOutstanding;		// For Packet Channels
 
 	UCHAR PTCStatus0;			// Status Bytes
@@ -295,6 +297,7 @@ typedef struct TNCINFO
 	BOOL FEC1600;				// Use 1600 Hz FEC Mode
 	int FECIDTimer;				// Time in FEC Mode. Used to trigger ID broadcasts
 	BOOL RestartAfterFailure;
+	BOOL StartInRobust;			// For WINMOR, set to Robust Mode for first few packets
 
 	int Busy;					// Channel Busy Timer/Counter . Non-zero = Busy
 
@@ -428,7 +431,7 @@ typedef struct TNCINFO
 	int Mem2;
 
 	BOOL HFPacket;					// Set if HF port is in Packet mode instead of Pactor Mode
-	BOOL Robust;					// Set if SCS Tracker is in Robust Packet mode
+	BOOL Robust;					// Set if SCS Tracker is in Robust Packet mode or WINMOR TNC is in Robust Mode
 	BOOL RobustDefault;				// Set if SCS Tracker default is Robust Packet mode
 	BOOL ForceRobust;				// Don't allow Normal Packet even if scan requests it.
 	char NormSpeed[8];				// Speed Param for Normal Packet on Tracker
@@ -539,7 +542,7 @@ VOID SaveWindowPos(int port);
 VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT);
 VOID ShowTraffic(struct TNCINFO * TNC);
-int OpenCOMMPort(struct TNCINFO * conn, int Port, int Speed, BOOL Quiet);
+int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet);
 VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode);
 VOID MoveWindows(struct TNCINFO * TNC);
 

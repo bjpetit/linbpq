@@ -16,14 +16,19 @@
 #include <time.h>
 #include "kernelresource.h"
 
+#include "tncinfo.h"
+
+#include "BPQAPRS.h"
+
+
 #define MAXAGE 3600 * 12	  // 12 Hours
 #define MAXCALLS 20			  // Max Flood, Trace and Digi
 #define GATETIMELIMIT 40 * 60 // Don't gate to RF if station not heard for this time (40 mins)
 
 static BOOL APIENTRY  GETSENDNETFRAMEADDR();
 static VOID DoSecTimer();
-static ProcessLine(char * buf);
-static BOOL ReadConfigFile();
+static APRSProcessLine(char * buf);
+static BOOL APRSReadConfigFile();
 VOID APRSISThread(BOOL Report);
 unsigned long _beginthread( void( *start_address )(BOOL Report), unsigned stack_size, void * arglist);
 VOID __cdecl Debugprintf(const char * format, ...);
@@ -48,9 +53,12 @@ int CountLocalStations();
 BOOL SendAPPLAPRSMessage(char * Frame);
 VOID SendAPRSMessage(char * Message, int toPort);
 static VOID TCPConnect();
+struct STATIONRECORD * DecodeAPRSISMsg(char * msg);
+struct STATIONRECORD * ProcessRFFrame(char * buffer, int len);
+VOID APRSSecTimer();
+double Distance(double laa, double loa);
 
 BOOL ProcessConfig();
-
 
 extern int SemHeldByAPI;
 extern int APRSMONDECODE();
@@ -76,6 +84,7 @@ extern HKEY REGTREE;
 static int SecTimer = 10;
 
 BOOL APRSApplConnected = FALSE;  
+BOOL APRSWeb = FALSE;  
 
 UINT APPL_Q = 0;				// Queue of frames for APRS Appl
 UINT APPLTX_Q = 0;				// Queue of frames from APRS Appl
@@ -90,6 +99,20 @@ char CallPadded[10] = "         ";
 
 int GPSPort = 0;
 int GPSSpeed = 0;
+
+BOOL GateLocal = FALSE;
+double GateLocalDistance = 0.0;
+
+char WXFileName[MAX_PATH];
+char WXComment[80];
+BOOL SendWX = FALSE;
+int WXInterval = 30;
+int WXCounter = 29 * 60;
+
+char APRSCall[10];
+char LoppedAPRSCall[10];
+
+BOOL WXPort[32];				// Ports to send WX to
 
 BOOL GPSOK = 0;
 
@@ -127,7 +150,7 @@ int ISPort = 0;
 char ISHost[256] = "";
 int ISPasscode = 0;
 char NodeFilter[1000] = "";		// Filter when the isn't an application
-char ISFilter[1000] = "";		// Current Filter
+char ISFilter[1000] = "m/1";		// Current Filter
 char APPLFilter[1000] = "";		// Filter when an Applcation is running
 
 extern BOOL IGateEnabled;
@@ -293,8 +316,8 @@ Dll BOOL APIENTRY Init_APRS()
 {
 	int i;
 	char * DCall;
-	int retCode, Type, Vallen;
 	HKEY hKey=0;
+	int retCode, Vallen, Type; 
 
 	ConvToAX25(MYNODECALL, MYCALL);
 
@@ -325,10 +348,14 @@ Dll BOOL APIENTRY Init_APRS()
 
 	ISPort = ISHost[0] = ISPasscode = 0;
 
-	if (ReadConfigFile() == 0)
+	if (APRSReadConfigFile() == 0)
 		return FALSE;
 
-#ifndef LINBPQ
+#ifdef LINBPQ
+
+	APRSWeb = TRUE;
+
+#else
 
 	retCode = RegOpenKeyEx (REGTREE,
                 "SOFTWARE\\G8BPQ\\BPQ32",    
@@ -497,7 +524,12 @@ Dll VOID APIENTRY Poll_APRS()
 		APRSSTATIONRECORD * MH;
 		char MsgCopy[500];
 		int toPort;
-
+		struct STATIONRECORD * Station;
+	
+#ifdef WIN32
+		struct _EXCEPTION_POINTERS exinfo;
+		char EXCEPTMSG[80] = "";
+#endif		
 		monbuff = Q_REM(&APRSMONVECPTR->HOSTTRACEQ);
 
 		monchars = (UCHAR *)monbuff;
@@ -532,6 +564,14 @@ Dll VOID APIENTRY Poll_APRS()
 			UCHAR * temp = (UCHAR *)AdjBuff;
 			temp += 7;
 			AdjBuff = (MESSAGE *)temp;
+
+			// If we have already digi'ed it, ignore (Dup Check my fail on slow links)
+
+			if ((AdjBuff->ORIGIN[6] & 0x80) && memcmp(AdjBuff->ORIGIN, AXCall, 6) == 0)
+			{
+				ReleaseBuffer(monbuff);
+				return;
+			}
 	
 			if (memcmp(AdjBuff->ORIGIN, axTCPIP, 6) == 0)
 				ThirdParty = TRUE;
@@ -567,6 +607,7 @@ Dll VOID APIENTRY Poll_APRS()
 			ReleaseBuffer(monbuff);
 			continue;			
 		}
+
 		if (CheckforDups(Orig->ORIGIN, AdjBuff->L2DATA, Orig->LENGTH - Digis * 7 - 23))
 		{	
 			ReleaseBuffer(monbuff);
@@ -612,6 +653,27 @@ Dll VOID APIENTRY Poll_APRS()
 		buffer[len] = 0;
 
 		memcpy(MsgCopy, buffer, len);
+		MsgCopy[len] = 0;
+
+		// Do internal Decode
+
+#ifdef WIN32
+
+		strcpy(EXCEPTMSG, "ProcessRFFrame");
+
+		__try 
+		{
+
+		Station = ProcessRFFrame(MsgCopy, len);
+		}
+		#include "StdExcept.c"
+
+		}
+#else
+		Station = ProcessRFFrame(MsgCopy, len);
+#endif
+
+		memcpy(MsgCopy, buffer, len);			// Process RF Frame may have changed it
 		MsgCopy[len] = 0;
 
 		// if APRS Appl is atttached, queue message to it
@@ -668,6 +730,8 @@ Dll VOID APIENTRY Poll_APRS()
 		*ptr4++ = 0;
 
 		MH = UpdateHeard(ptr1, Port);
+
+		MH->Station = Station;
 
 		if (ThirdParty)
 		{
@@ -956,7 +1020,7 @@ VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port)
 
 }
 
-static BOOL ReadConfigFile()
+static BOOL APRSReadConfigFile()
 {
 	char * Config;
 	char * ptr1, * ptr2;
@@ -981,7 +1045,7 @@ static BOOL ReadConfigFile()
 
 			strcpy(errbuf,buf);			// save in case of error
 	
-			if (!ProcessLine(buf))
+			if (!APRSProcessLine(buf))
 			{
 				WritetoConsole("APRS Bad config record ");
 				strcat(errbuf, "\r\n");
@@ -1019,7 +1083,7 @@ BOOL ConvertCalls(char * DigiCalls, UCHAR * AX, int * Lens)
 
 
 
-static ProcessLine(char * buf)
+static APRSProcessLine(char * buf)
 {
 	char * ptr, * p_value;
 
@@ -1144,6 +1208,25 @@ static ProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr, "WXFileName") == 0)
+	{
+		p_value = strtok(NULL, ";\t\n\r");
+		strcpy(WXFileName, p_value);
+		SendWX = TRUE;
+		return TRUE;
+	}
+	if (_stricmp(ptr, "WXComment") == 0)
+	{
+		p_value = strtok(NULL, ";\t\n\r");
+
+		if (strlen(p_value) > 79)
+			p_value[80] = 0;
+
+		strcpy(WXComment, p_value);
+		return TRUE;
+	}
+
+
 	if (_stricmp(ptr, "ISFILTER") == 0)
 	{
 		p_value = strtok(NULL, ";\t\n\r");
@@ -1166,6 +1249,7 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr, "APRSCALL") == 0)
 	{
 		strcpy(APRSCall, p_value);
+		strcpy(LoppedAPRSCall, p_value);
 		memcpy(CallPadded, APRSCall, strlen(APRSCall));	// Call Padded to 9 chars for APRS Messaging
 
 		// Convert to ax.25
@@ -1422,6 +1506,51 @@ static ProcessLine(char * buf)
 		ISPasscode = atoi(p_value);
 		return TRUE;
 	}
+
+	if (_stricmp(ptr, "GateLocalDistance") == 0)
+	{
+		GateLocalDistance = atoi(p_value);
+		if (GateLocalDistance > 0.0)
+			GateLocal = TRUE;
+
+		return TRUE;
+	}
+
+	if (_stricmp(ptr, "WXInterval") == 0)
+	{
+		WXInterval = atoi(p_value);
+		WXCounter = (WXInterval - 1) * 60;
+		return TRUE;
+	}
+
+	if (_stricmp(ptr, "WXPortList") == 0)
+	{
+		char ParamCopy[80];
+		char * Context;
+		int Port;
+		char * ptr;
+		int index = 0;
+
+		for (index = 0; index < 32; index++)
+			WXPort[index] = FALSE;
+	
+		if (strlen(p_value) > 79)
+			p_value[80] = 0;
+
+		strcpy(ParamCopy, p_value);
+		
+		ptr = strtok_s(ParamCopy, " ,\t\n\r", &Context);
+
+		while (ptr)
+		{
+			Port = atoi(ptr);				// this gives zero for IS
+	
+			WXPort[Port] = TRUE;	
+			
+			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
+		}
+	}
+	return TRUE;
 
 	//
 	//	Bad line
@@ -1811,6 +1940,8 @@ VOID DoSecTimer()
 			SetDlgItemText(hConsWnd, IDC_GPS, "No GPS");
 #endif
 	}
+
+	APRSSecTimer();				// Code from APRS APPL
 }
 
 char APRSMsg[300];
@@ -1857,10 +1988,15 @@ VOID APRSISThread(BOOL Report)
 	hints.ai_socktype = SOCK_STREAM;
 	getaddrinfo(ISHost, PortString, &hints, &res);
 
+	InputLen = sprintf(errmsg, "Connecting to APRS Host %s\r\n", ISHost);
+	MonitorAPRSIS(errmsg, InputLen, FALSE);
+
 	if (!res)
 	{
 		err = WSAGetLastError();
-		sprintf(errmsg, "APRS IS Resolve %s Failed %d\r\n", ISHost, err);
+		InputLen = sprintf(errmsg, "APRS IS Resolve %s Failed Error %d\r\n", ISHost, err);
+		MonitorAPRSIS(errmsg, InputLen, FALSE);
+
 		return;					// Resolve failed
 	
 	}
@@ -1885,6 +2021,9 @@ VOID APRSISThread(BOOL Report)
 #else
 		printf("APRS Igate connect failed\n");
 #endif
+		err=WSAGetLastError();
+		InputLen = sprintf(errmsg, "Connect Failed %s Error %d \r\n", ISHost, err);
+		MonitorAPRSIS(errmsg, InputLen, FALSE);
 
 		return;
 	}
@@ -2002,11 +2141,36 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	char Message[255];
 	PAPRSSTATIONRECORD MH;
 	time_t NOW = time(NULL);
+	char ISCopy[1024];
+	struct STATIONRECORD * Station = NULL;
+#ifdef WIN32
+	struct _EXCEPTION_POINTERS exinfo;
+	char EXCEPTMSG[80] = "";
+#endif		
+
 
 	if (APRSMsg[0] == '#')		// Comment
 		return;
 
 	// if APRS Appl is atttached, queue message to it
+
+	strcpy(ISCopy, APRSMsg);
+
+#ifdef WIN32
+
+	strcpy(EXCEPTMSG, "ProcessAPRSISMsg");
+
+	__try 
+	{
+
+	Station = DecodeAPRSISMsg(ISCopy);
+	}
+	#include "StdExcept.c"
+	Debugprintf(APRSMsg);
+	}
+#else
+	Station = DecodeAPRSISMsg(ISCopy);
+#endif
 
 	if (APRSApplConnected)
 	{
@@ -2039,7 +2203,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	
 	Payload = strchr(APRSMsg, ':');
 
-	// Gate call of originating Igate
+	// Get call of originating Igate
 
 	ptr = Payload;
 
@@ -2081,6 +2245,8 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	MH = UpdateHeard(Source, 0);
 
+	MH->Station = Station;
+
 	// See if we should gate to RF. 
 
 	// Have we heard dest recently? (use the message dest (not ax.25 dest) - does this mean we only gate Messages?
@@ -2103,7 +2269,12 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		if (STN && STN->Port && !STN->IGate && (NOW - STN->MHTIME) < GATETIMELIMIT) 
 		{
 			sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
-			SendAPRSMessage(Message, STN->Port);
+
+			GetSemaphore(&Semaphore);
+			SemHeldByAPI = 12;
+			SendAPRSMessage(Message, STN->Port);	
+			FreeSemaphore(&Semaphore);
+
 			MessageCount++;
 			MH->LASTMSG = NOW;
 
@@ -2116,7 +2287,32 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	if ((NOW - MH->LASTMSG) < 900 && MH->Port)
 	{
 		sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
+	
+		GetSemaphore(&Semaphore);
+		SemHeldByAPI = 12;
 		SendAPRSMessage(Message, -1);		// Send to all APRS Ports
+		FreeSemaphore(&Semaphore);
+
+		return;
+	}
+
+	// If Gate Local to RF is defined, and station is in range, Gate it
+
+	if (GateLocal && Station)
+	{
+		if (Station->Object)
+			Station = Station->Object;		// If Oject Report, base distance on Object, not station
+		
+		if (Station->Lat != 0.0 && Station->Lon != 0.0 && Distance(Station->Lat, Station->Lon) < GateLocalDistance)
+		{
+			sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
+			GetSemaphore(&Semaphore);
+			SemHeldByAPI = 12;
+			SendAPRSMessage(Message, -1);		// Send to all APRS Ports
+			FreeSemaphore(&Semaphore);
+
+			return;
+		}
 	}
 }
 
@@ -2641,6 +2837,7 @@ Dll VOID APIENTRY APRSConnect(char * Call, char * Filter)
 	// Request APRS Data from Switch (called by APRS Applications)
 
 	APRSApplConnected = TRUE;
+	APRSWeb = TRUE;
 
 	strcpy(APPLFilter, Filter);
 
@@ -2659,6 +2856,8 @@ Dll VOID APIENTRY APRSDisconnect()
 	UINT * buffptr;
 
 	APRSApplConnected = FALSE;
+	APRSWeb =FALSE;
+
 
 	strcpy(ISFilter, NodeFilter);
 
@@ -2989,5 +3188,2579 @@ Lost:
 	}
 }
 
+// Code Moved from APRS Application
+
+//
+// APRS Mapping and Messaging App for BPQ32 Switch.
+//
+
+#include <math.h>
+
+#define M_PI       3.14159265358979323846
+
+int RetryCount = 4;
+int RetryTimer = 45;
+int ExpireTime = 120;
+int TrackExpireTime = 1440;
+BOOL SuppressNullPosn = FALSE;
+BOOL DefaultNoTracks = FALSE;
+BOOL LocalTime = TRUE;
+
+RECT Rect, MsgRect, StnRect;
+
+char Key[80];
+
+// function prototypes
+
+VOID RefreshMessages();
+
+// a few global variables
+
+char APRSDir[MAX_PATH] = "BPQAPRS";
+char DF[MAX_PATH];
+
+#define	FEND	0xC0	// KISS CONTROL CODES 
+#define	FESC	0xDB
+#define	TFEND	0xDC
+#define	TFESC	0xDD
+
+int StationCount = 0;
+
+UCHAR NextSeq = 1;
+
+BOOL ImageChanged;
+BOOL NeedRefresh = FALSE;
+time_t LastRefresh = 0;
 
 
+struct STATIONRECORD * StationRecords = NULL;
+struct APRSMESSAGE * Messages = NULL;
+struct APRSMESSAGE * OutstandingMsgs = NULL;
+
+
+VOID APIENTRY APRSConnect(char * Call, char * Filter);
+VOID APIENTRY APRSDisconnect();
+BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port);
+BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
+BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
+BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
+BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
+VOID APIENTRY APISendBeacon();
+
+
+int NewLine(HWND hWnd);
+VOID	ProcessBuff(HWND hWnd, MESSAGE * buff,int len,int stamp);
+int TogglePort(HWND hWnd, int Item, int mask);
+VOID SendFrame(UCHAR * buff, int txlen);
+int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
+int	KissDecode(UCHAR * inbuff, int len);
+struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
+//void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, double V_Lon, double V_SOG, double V_COG, int iconRow, int iconCol);
+VOID FindStationsByPixel(int MouseX, int MouseY);
+void RefreshStation(struct STATIONRECORD * ptr);
+void RefreshStationList();
+void RefreshStationMap();
+BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station);
+VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
+VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station);
+BOOL GetLocPixels(double Lat, double Lon, int * X, int * Y);
+VOID APRSPoll();
+VOID OSMThread();
+VOID ResolveThread();
+VOID RefreshTile(char * FN, int Zoom, int x, int y);
+VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
+VOID APRSSecTimer();
+double Distance(double laa, double loa);
+double Bearing(double laa, double loa);
+
+BOOL CreatePipeThread();
+
+VOID SendWeatherBeacon();
+VOID DecodeWXPortList();
+
+	
+VOID DecodeWXReport(struct ConnectionInfo * sockptr, char * WX)
+{
+	UCHAR * ptr = strchr(WX, '_');
+	char Type;
+	int Val;
+
+	if (ptr == 0)
+		return;
+
+	sockptr->WindDirn = atoi(++ptr);
+	ptr += 4;
+	sockptr->WindSpeed = atoi(ptr);
+	ptr += 3;
+WXLoop:
+
+	Type = *(ptr++);
+
+	if (*ptr =='.')	// Missing Value
+	{
+		while (*ptr == '.')
+			ptr++;
+
+		goto WXLoop;
+	}
+
+	Val = atoi(ptr);
+
+	switch (Type)
+	{
+	case 'c': // = wind direction (in degrees).	
+		
+		sockptr->WindDirn = Val;
+		break;
+	
+	case 's': // = sustained one-minute wind speed (in mph).
+	
+		sockptr->WindSpeed = Val;
+		break;
+	
+	case 'g': // = gust (peak wind speed in mph in the last 5 minutes).
+	
+		sockptr->WindGust = Val;
+		break;
+
+	case 't': // = temperature (in degrees Fahrenheit). Temperatures below zero are expressed as -01 to -99.
+	
+		sockptr->Temp = Val;
+		break;
+
+	case 'r': // = rainfall (in hundredths of an inch) in the last hour.
+		
+		sockptr->RainLastHour = Val;
+		break;
+
+	case 'p': // = rainfall (in hundredths of an inch) in the last 24 hours.
+
+		sockptr->RainLastDay = Val;
+		break;
+
+	case 'P': // = rainfall (in hundredths of an inch) since midnight.
+
+		sockptr->RainToday = Val;
+		break;
+
+	case 'h': // = humidity (in %. 00 = 100%).
+	
+		sockptr->Humidity = Val;
+		break;
+
+	case 'b': // = barometric pressure (in tenths of millibars/tenths of hPascal).
+
+		sockptr->Pressure = Val;
+		break;
+
+	default:
+
+		return;
+	}
+	while(isdigit(*ptr))
+	{
+		ptr++;
+	}
+
+	if (*ptr != ' ')
+		goto WXLoop;
+}
+
+char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
+//char Header[] = "Accept: */*\r\nHost: tile.openstreetmap.org\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
+
+char APRSMsg[300];
+
+struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
+{
+	int i = 0;
+	struct STATIONRECORD * find = StationRecords;
+	struct STATIONRECORD * ptr;
+	struct STATIONRECORD * last = NULL;
+	int sum = 0;
+
+	while(find)
+	{ 
+	    if (strcmp(find->Callsign, Call) == 0)
+			return find;
+
+		last = find;
+		find = find->Next;
+		i++;
+	}
+ 
+	//   Not found - add on end
+
+	if (AddIfNotFount)
+	{
+		ptr = malloc(sizeof(struct STATIONRECORD));
+		memset(ptr, 0, sizeof(struct STATIONRECORD));
+
+		if (ptr == NULL) return NULL;
+	
+//		EnterCriticalSection(&Crit);
+
+		if (StationRecords == NULL)
+			StationRecords = ptr;
+		else
+			last->Next = ptr;
+
+		StationCount++;
+
+//		LeaveCriticalSection(&Crit);
+
+		//	Debugprintf("APRS Add Stn %s Station Count = %d", Call, StationCount);
+       
+		strcpy(ptr->Callsign, Call);
+		ptr->TimeAdded = time(NULL);
+		ptr->Index = i;
+		ptr->NoTracks = DefaultNoTracks;
+
+		for (i = 0; i < 9; i++)
+			sum += Call[i];
+
+		sum %= 20;
+
+		ptr->TrackColour = sum;
+
+		return ptr;
+	}
+	else
+		return NULL;
+}
+
+struct STATIONRECORD * ProcessRFFrame(char * Msg, int len)
+{
+	char * Payload;
+	char * Path = NULL;
+	char * Comment = NULL;
+	char * Callsign;
+	char * ptr;
+	int Port = 0;
+
+	struct STATIONRECORD * Station = NULL;
+
+	Msg[len - 1] = 0;
+
+	Msg += 10;				// Skip Timestamp
+	
+	Payload = strchr(Msg, ':');			// End of Address String
+
+	if (Payload == NULL)
+	{
+		Debugprintf("Invalid Msg %s", Msg);
+		return Station;
+	}
+
+	ptr = strstr(Msg, "Port=");
+
+	if (ptr)
+		Port = atoi(&ptr[5]);
+
+	Payload++;
+
+	if (*Payload != 0x0d)
+		return Station;
+
+	*Payload++ = 0;
+
+	Callsign = Msg;
+
+	Path = strchr(Msg, '>');
+
+	if (Path == NULL)
+	{
+		Debugprintf("Invalid Meader %s", Msg);
+		return Station;
+	}
+
+	*Path++ = 0;
+
+	ptr = strchr(Path, ' ');
+
+	if (ptr)
+		*ptr = 0;
+
+	// Look up station - create a new one if not found
+
+	Station = FindStation(Callsign, TRUE);
+	
+	strcpy(Station->Path, Path);
+	strcpy(Station->LastPacket, Payload);
+	Station->LastPort = Port;
+
+	DecodeAPRSPayload(Payload, Station);
+	Station->TimeLastUpdated = time(NULL);
+
+	return Station;
+}
+
+
+/*
+2E0AYY>APU25N,TCPIP*,qAC,AHUBSWE2:=5105.18N/00108.19E-Paul in Folkestone Kent {UIV32N}
+G0AVP-12>APT310,MB7UC*,WIDE3-2,qAR,G3PWJ:!5047.19N\00108.45Wk074/000/Paul mobile
+G0CJM-12>CQ,TCPIP*,qAC,AHUBSWE2:=/3&R<NDEp/  B>io94sg
+M0HFC>APRS,WIDE2-1,qAR,G0MNI:!5342.83N/00013.79W# Humber Fortress ARC Look us up on QRZ
+G8WVW-3>APTT4,WIDE1-1,WIDE2-1,qAS,G8WVW:T#063,123,036,000,000,000,00000000
+*/
+
+
+struct STATIONRECORD * DecodeAPRSISMsg(char * Msg)
+{
+	char * Payload;
+	char * Path = NULL;
+	char * Comment = NULL;
+	char * Callsign;
+	struct STATIONRECORD * Station = NULL;
+
+//	Debugprintf(Msg);
+		
+	Payload = strchr(Msg, ':');			// End of Address String
+
+	if (Payload == NULL)
+	{
+		Debugprintf("Invalid Msg %s", Msg);
+		return Station;
+	}
+
+	*Payload++ = 0;
+
+	Callsign = Msg;
+
+	Path = strchr(Msg, '>');
+
+	if (Path == NULL)
+	{
+		Debugprintf("Invalid Meader %s", Msg);
+		return Station;
+	}
+
+	*Path++ = 0;
+
+	// Look up station - create a new one if not found
+
+	if (strlen(Callsign) > 11)
+	{
+		Debugprintf("Invalid Meader %s", Msg);
+		return Station;
+	}
+
+	Station = FindStation(Callsign, TRUE);
+	
+	strcpy(Station->Path, Path);
+	strcpy(Station->LastPacket, Payload);
+	Station->LastPort = 0;
+
+	DecodeAPRSPayload(Payload, Station);
+	Station->TimeLastUpdated = time(NULL);
+
+	return Station;
+}
+
+double Cube91 = 91.0 * 91.0 * 91.0;
+double Square91 = 91.0 * 91.0;
+
+BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
+{
+	UCHAR SymChar;
+	char SymSet;
+	char NS;
+	char EW;
+	double NewLat, NewLon;
+	char LatDeg[3], LonDeg[4];
+	char save;
+
+	// Compressed has first character not a digit (it is symbol table)
+
+	// /YYYYXXXX$csT
+
+	if (Payload[0] == '!')
+		return FALSE;					// Ultimeter 2000 Weather Station
+
+	if (!isdigit(*Payload))
+	{
+		int C, S;
+		
+		SymSet = *Payload;
+		SymChar = Payload[9];
+
+		NewLat = 90.0 - ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
+			(Payload[3] - 33) * 91.0 + (Payload[4] - 33)) / 380926.0;
+
+		Payload += 4;
+				
+		NewLon = -180.0 + ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
+			(Payload[3] - 33) * 91.0 + (Payload[4] - 33)) / 190463.0;
+
+		C = Payload[6] - 33;
+
+		if (C >= 0 && C < 90 )
+		{
+			S = Payload[7] - 33;
+
+			Station->Course = C * 4;
+			Station->Speed = (pow(1.08, S) - 1) * 1.15077945;	// MPH; 
+		}
+
+
+
+	}
+	else
+	{
+		// Standard format ddmm.mmN/dddmm.mmE?
+
+		NS = Payload[7] & 0xdf;		// Mask Lower Case Bit
+		EW = Payload[17] & 0xdf;
+
+		SymSet = Payload[8];
+		SymChar = Payload[18];
+
+		memcpy(LatDeg, Payload,2);
+		LatDeg[2]=0;
+		NewLat = atof(LatDeg) + (atof(Payload+2) / 60);
+       
+		if (NS == 'S')
+			NewLat = -NewLat;
+		else
+			if (NS != 'N')
+				return FALSE;
+
+		memcpy(LonDeg,Payload + 9, 3);
+
+		if (Payload[22] == '/')
+		{
+			Station->Course = atoi(Payload + 19);
+			Station->Speed = atoi(Payload + 23);
+		}
+
+		LonDeg[3]=0;
+
+		save = Payload[17];
+		Payload[17] = 0;
+		NewLon = atof(LonDeg) + (atof(Payload+12) / 60);
+		Payload[17] = save;
+		
+		if (EW == 'W')
+			NewLon = -NewLon;
+		else
+			if (EW != 'E')
+				return FALSE;
+	}
+
+	if (Station->Lat != NewLat || Station->Lon != NewLon)
+	{
+		time_t NOW = time(NULL);
+		time_t Age = NOW - Station->TimeLastUpdated;
+
+		if (Age > 15)				// Don't update too often
+		{
+			// Add to track
+
+//			if (memcmp(Station->Callsign, "ISS ", 4) == 0)
+//				Debugprintf("%s %s %s ",Station->Callsign, Station->Path, Station->LastPacket);
+
+			Station->LatTrack[Station->Trackptr] = NewLat;
+			Station->LonTrack[Station->Trackptr] = NewLon;
+			Station->TrackTime[Station->Trackptr] = NOW;
+
+			Station->Trackptr++;
+			Station->Moved = TRUE;
+
+			if (Station->Trackptr == TRACKPOINTS)
+				Station->Trackptr = 0;
+		}
+
+		Station->Lat = NewLat;
+		Station->Lon = NewLon;	
+	}
+
+	Station->Symbol = SymChar;
+
+	SymChar -= '!';
+	
+	Station->IconOverlay = 0;
+
+	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
+	{
+		SymChar += 96;
+		Station->IconOverlay = SymSet;
+	}
+	else
+		if (SymSet == '\\')
+			SymChar += 96;
+
+	Station->iconRow = SymChar >> 4;
+	Station->iconCol = SymChar & 15;
+
+	return TRUE;
+}
+
+VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
+{
+	char * TimeStamp;
+	char * ObjName;
+	char ObjState;
+	struct STATIONRECORD * Object;
+	BOOL Item = FALSE;
+	char * ptr;
+	char * Callsign;
+	char * Path;
+	char * Msg;
+	struct STATIONRECORD * TPStation;
+
+	Station->Object = NULL;
+
+	switch(*Payload)
+	{
+	case '`':
+	case 0x27:					// '
+	case 0x1c:
+	case 0x1d:					// MIC-E
+
+		Decode_MIC_E_Packet(Payload, Station);
+		return;
+
+	case '$':					// NMEA
+		break;
+
+	case ')':					// Item	
+
+//		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
+
+		Item = TRUE;
+		ObjName = ptr = Payload + 1;
+
+		while (TRUE)
+		{
+			ObjState = *ptr;
+			if (ObjState == 0)
+				return;					// Corrupt
+
+			if (ObjState == '!' || ObjState == '_')	// Item Terminator
+				break;
+
+			ptr++;
+		}
+
+		*ptr = 0;						// Terminate Name
+
+		Object = FindStation(ObjName, TRUE);
+		Object->ObjState = *ptr++ = ObjState;
+
+		strcpy(Object->Path, Station->Callsign);
+		strcat(Object->Path, ">");
+		if (Object == Station)
+		{
+			char Temp[256];
+			strcpy(Temp, Station->Path);
+			strcat(Object->Path, Temp);
+			Debugprintf("item is station %s", Payload);
+		}
+		else
+			strcat(Object->Path, Station->Path);
+
+		strcpy(Object->LastPacket, Payload);
+
+		if (ObjState != '_')		// Deleted Objects may have odd positions
+			DecodeLocationString(ptr, Object);
+
+		Object->TimeLastUpdated = time(NULL);
+		Station->Object = Object;
+		return;
+
+
+	case ';':					// Object
+
+		ObjName = Payload + 1;
+		ObjState = Payload[10];	// * Live, _Killed
+
+		Payload[10] = 0;
+		Object = FindStation(ObjName, TRUE);
+		Object->ObjState = Payload[10] = ObjState;
+
+		strcpy(Object->Path, Station->Callsign);
+		strcat(Object->Path, ">");
+		if (Object == Station)
+		{
+			char Temp[256];
+			strcpy(Temp, Station->Path);
+			strcat(Object->Path, Temp);
+			Debugprintf("Object is station %s", Payload);
+		}
+		else
+			strcat(Object->Path, Station->Path);
+
+
+		strcpy(Object->LastPacket, Payload);
+
+		TimeStamp = Payload + 11;
+
+		if (ObjState != '_')		// Deleted Objects may have odd positions
+			DecodeLocationString(Payload + 18, Object);
+		
+		Object->TimeLastUpdated = time(NULL);
+		Station->Object = Object;
+		return;
+
+	case '@':
+	case '/':					// Timestamp, No Messaging
+
+		TimeStamp = ++Payload;
+		Payload += 6;
+
+	case '=':
+	case '!':
+
+		Payload++;
+	
+		DecodeLocationString(Payload, Station);
+
+		if (Station->Symbol == '_')		// WX
+		{
+			if (strlen(Payload) > 50)
+				strcpy(Station->LastWXPacket, Payload);
+		}
+		return;	
+
+	case '>':				// Status
+
+		strcpy(Station->Status, &Payload[1]);
+
+	case '<':				// Capabilities
+	case '_':				// Weather
+	case 'T':				// Telemetry
+
+		break;
+
+	case ':':				// Message
+
+		//for now messages are only processed in BPAPRS if Windows
+
+#ifdef LINBPQ
+		ProcessMessage(Payload, Station);
+#endif
+		break;
+
+	case '}':			// Third Party Header
+			
+		// Process Payload as a new message
+
+		// }GM7HHB-9>APDR12,TCPIP,MM1AVR*:=5556.62N/00303.55W>204/000/A=000213 http://www.dstartv.com
+
+		Callsign = Msg = &Payload[1];
+		Path = strchr(Msg, '>');
+
+		if (Path == NULL)
+			return;
+
+		*Path++ = 0;
+
+		Payload = strchr(Path, ':');
+
+		if (Payload == NULL)
+			return;
+
+		*(Payload++) = 0;
+
+		// Look up station - create a new one if not found
+
+		TPStation = FindStation(Callsign, TRUE);
+	
+		strcpy(TPStation->Path, Path);
+		strcpy(TPStation->LastPacket, Payload);
+		TPStation->LastPort = 0;					// Heard on RF, but info is from IS
+
+		DecodeAPRSPayload(Payload, TPStation);
+		TPStation->TimeLastUpdated = time(NULL);
+
+		return;
+
+	default:
+//		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
+		return;
+	}
+}
+
+// Convert MIC-E Char to Lat Digit (offset by 0x30)
+//				  0123456789      @ABCDEFGHIJKLMNOPQRSTUVWXYZ				
+char MicELat[] = "0123456789???????0123456789  ???0123456789 " ;
+
+char MicECode[]= "0000000000???????111111111110???22222222222" ;
+
+
+VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
+{
+	// Info is encoded in the Dest Addr (in Station->Path) as well as Payload. 
+	// See APRS Spec for full details
+
+	char Lat[10];		// DDMMHH
+	char LatDeg[3];
+	char * ptr;
+	char c;
+	int i, n;
+	int LonDeg, LonMin;
+	BOOL LonOffset = FALSE;
+	char NS = 'S';
+	char EW = 'E';
+	UCHAR SymChar, SymSet;
+	double NewLat, NewLon;
+	int SP, DC, SE;				// Course/Speed Encoded
+	int Course, Speed;
+
+	// Make sure packet is long enough to have an valid address
+
+ 	if (strlen(Payload) < 9)
+		return;
+
+	ptr = &Station->Path[0];
+
+	for (i = 0; i < 6; i++)
+	{
+		n = (*(ptr++)) - 0x30;
+		c = MicELat[n];
+
+		if (c == '?')			// Illegal
+			return;
+
+		if (c == ' ')
+			c = '0';			// Limited Precision
+		
+		Lat[i] = c;
+
+	}
+
+	Lat[6] = 0;
+
+	if (Station->Path[3] > 'O')
+		NS = 'N';
+
+	if (Station->Path[5] > 'O')
+		EW = 'W';
+
+	if (Station->Path[4] > 'O')
+		LonOffset = TRUE;
+
+	n = Payload[1] - 28;			// Lon Degrees S9PU0T,WIDE1-1,WIDE2-2,qAR,WB9TLH-15:`rB0oII>/]"6W}44
+
+	if (LonOffset)
+		n += 100;
+
+	if (n > 179 && n < 190)
+		n -= 80;
+	else
+	if (n > 189 && n < 200)
+		n -= 190;
+
+	LonDeg = n;
+
+/*
+	To decode the longitude degrees value:
+1. subtract 28 from the d+28 value to obtain d.
+2. if the longitude offset is +100 degrees, add 100 to d.
+3. subtract 80 if 180 ˜ d ˜ 189
+(i.e. the longitude is in the range 100–109 degrees).
+4. or, subtract 190 if 190 ˜ d ˜ 199.
+(i.e. the longitude is in the range 0–9 degrees).
+*/
+
+	n = Payload[2] - 28;			// Lon Mins
+
+	if (n > 59)
+		n -= 60;
+
+	LonMin = n;
+
+	n = Payload[3] - 28;			// Lon Mins/100;
+
+//1. subtract 28 from the m+28 value to obtain m.
+//2. subtract 60 if m ™ 60.
+//(i.e. the longitude minutes is in the range 0–9).
+
+
+	memcpy(LatDeg, Lat, 2);
+	LatDeg[2]=0;
+	
+	NewLat = atof(LatDeg) + (atof(Lat+2) / 6000.0);
+       
+	if (NS == 'S')
+		NewLat = -NewLat;
+
+	NewLon = LonDeg + LonMin / 60.0 + n / 6000.0;
+       
+	if (EW == 'W')				// West
+		NewLon = -NewLon;
+
+	SP = Payload[4] - 28;
+	DC = Payload[5] - 28;
+	SE = Payload[6] - 28;		// Course 100 and 10 degs
+
+	Speed = DC / 10;		// Quotient = Speed Units
+	Course = DC - (Speed * 10);	// Remainder = Course Deg/100
+
+	Course = SE + (Course * 100);
+
+	Speed += SP * 10;
+
+	if (Speed >= 800)
+		Speed -= 800;
+
+	if (Course >= 400)
+		Course -= 400;
+
+	Station->Course = Course;
+	Station->Speed = Speed * 1.15077945;	// MPH
+
+//	Debugprintf("MIC-E Course/Speed %s %d %d", Station->Callsign, Course, Speed);
+
+	if (Station->Lat != NewLat || Station->Lon != NewLon)
+	{
+		time_t NOW = time(NULL);
+		time_t Age = NOW - Station->TimeLastUpdated;
+
+		if (Age > 15)				// Don't update too often
+		{
+			// Add to track
+
+//			if (memcmp(Station->Callsign, "ISS ", 4) == 0)
+//				Debugprintf("%s %s %s ",Station->Callsign, Station->Path, Station->LastPacket);
+
+			Station->LatTrack[Station->Trackptr] = NewLat;
+			Station->LonTrack[Station->Trackptr] = NewLon;
+			Station->TrackTime[Station->Trackptr] = NOW;
+
+			Station->Trackptr++;
+			Station->Moved = TRUE;
+
+			if (Station->Trackptr == TRACKPOINTS)
+				Station->Trackptr = 0;
+		}
+
+		Station->Lat = NewLat;
+		Station->Lon = NewLon;
+	}
+
+
+	SymChar = Payload[7];			// Symbol
+	SymSet = Payload[8];			// Symbol
+
+	SymChar -= '!';
+
+	Station->IconOverlay = 0;
+
+	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
+	{
+		SymChar += 96;
+		Station->IconOverlay = SymSet;
+	}
+	else
+		if (SymSet == '\\')
+			SymChar += 96;
+
+	Station->iconRow = SymChar >> 4;
+	Station->iconCol = SymChar & 15;
+
+	return;
+
+}
+
+/*
+
+INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+//	This processes messages from controls on the tab subpages
+	int Command;
+
+//	int retCode, disp;
+//	char Key[80];
+//	HKEY hKey;
+//	BOOL OK;
+//	OPENFILENAME ofn;
+//	char Digis[100];
+
+	int Port = PortNum[CurrentPage];
+
+	switch (message)
+	{
+	case WM_NOTIFY:
+
+        switch (((LPNMHDR)lParam)->code)
+        {
+		case TCN_SELCHANGE:
+			 OnSelChanged(hDlg);
+				 return TRUE;
+         // More cases on WM_NOTIFY switch.
+		case NM_CHAR:
+			return TRUE;
+        }
+
+       break;
+	case WM_INITDIALOG:
+		OnChildDialogInit( hDlg);
+		return (INT_PTR)TRUE;
+
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
+
+	case WM_COMMAND:
+
+		Command = LOWORD(wParam);
+
+		if (Command == 2002)
+			return TRUE;
+
+		switch (Command)
+		{
+/*			case IDC_FILE:
+
+			memset(&ofn, 0, sizeof (OPENFILENAME));
+			ofn.lStructSize = sizeof (OPENFILENAME);
+			ofn.hwndOwner = hDlg;
+			ofn.lpstrFile = &FN[Port][0];
+			ofn.nMaxFile = 250;
+			ofn.lpstrTitle = "File to send as beacon";
+			ofn.lpstrInitialDir = GetBPQDirectory();
+
+			if (GetOpenFileName(&ofn))
+				SetDlgItemText(hDlg, IDC_FILENAME, &FN[Port][0]);
+
+			break;
+
+
+		case IDOK:
+
+			GetDlgItemText(hDlg, IDC_UIDEST, &UIDEST[Port][0], 10);
+
+			if (UIDigi[Port])
+			{
+				free(UIDigi[Port]);
+				UIDigi[Port] = NULL;
+			}
+
+			if (UIDigiAX[Port])
+			{
+				free(UIDigiAX[Port]);
+				UIDigiAX[Port] = NULL;
+			}
+
+			GetDlgItemText(hDlg, IDC_UIDIGIS, Digis, 99); 
+		
+			UIDigi[Port] = _strdup(Digis);
+		
+			GetDlgItemText(hDlg, IDC_FILENAME, &FN[Port][0], 255); 
+			GetDlgItemText(hDlg, IDC_MESSAGE, &Message[Port][0], 1000); 
+	
+			Interval[Port] = GetDlgItemInt(hDlg, IDC_INTERVAL, &OK, FALSE); 
+
+			MinCounter[Port] = Interval[Port];
+
+			SendFromFile[Port] = IsDlgButtonChecked(hDlg, IDC_FROMFILE);
+
+			sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil\\UIPort%d", PortNum[CurrentPage]);
+
+			retCode = RegCreateKeyEx(REGTREE,
+					Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
+			if (retCode == ERROR_SUCCESS)
+			{
+				retCode = RegSetValueEx(hKey, "UIDEST", 0, REG_SZ,(BYTE *)&UIDEST[Port][0], strlen(&UIDEST[Port][0]));
+				retCode = RegSetValueEx(hKey, "FileName", 0, REG_SZ,(BYTE *)&FN[Port][0], strlen(&FN[Port][0]));
+				retCode = RegSetValueEx(hKey, "Message", 0, REG_SZ,(BYTE *)&Message[Port][0], strlen(&Message[Port][0]));
+				retCode = RegSetValueEx(hKey, "Interval", 0, REG_DWORD,(BYTE *)&Interval[Port], 4);
+				retCode = RegSetValueEx(hKey, "SendFromFile", 0, REG_DWORD,(BYTE *)&SendFromFile[Port], 4);
+				retCode = RegSetValueEx(hKey, "Enabled", 0, REG_DWORD,(BYTE *)&UIEnabled[Port], 4);
+				retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ, Digis, strlen(Digis));
+
+				RegCloseKey(hKey);
+			}
+
+			SetupUI(Port);
+
+			return (INT_PTR)TRUE;
+
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+
+		case ID_TEST:
+
+			SendBeacon(Port);
+			return TRUE;
+
+
+
+
+		}
+		break;
+
+	}	
+	return (INT_PTR)FALSE;
+}
+
+
+
+
+VOID WINAPI OnTabbedDialogInit(HWND hDlg)
+{
+	DLGHDR *pHdr = (DLGHDR *) LocalAlloc(LPTR, sizeof(DLGHDR));
+	DWORD dwDlgBase = GetDialogBaseUnits();
+	int cxMargin = LOWORD(dwDlgBase) / 4;
+	int cyMargin = HIWORD(dwDlgBase) / 8;
+
+	TC_ITEM tie;
+	RECT rcTab;
+
+	int i, pos, tab = 0;
+	INITCOMMONCONTROLSEX init;
+
+	char PortNo[60];
+	struct _EXTPORTDATA * PORTVEC;
+
+	hwndDlg = hDlg;			// Save Window Handle
+
+	// Save a pointer to the DLGHDR structure.
+
+	SetWindowLong(hwndDlg, GWL_USERDATA, (LONG) pHdr);
+
+	// Create the tab control.
+
+
+	init.dwICC = ICC_STANDARD_CLASSES;
+	init.dwSize=sizeof(init);
+	i=InitCommonControlsEx(&init);
+
+	pHdr->hwndTab = CreateWindow(WC_TABCONTROL, "", WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE,
+		0, 0, 100, 100, hwndDlg, NULL, hInst, NULL);
+
+	if (pHdr->hwndTab == NULL) {
+
+	// handle error
+
+	}
+
+	// Add a tab for each of the child dialog boxes.
+
+	tie.mask = TCIF_TEXT | TCIF_IMAGE;
+
+	tie.iImage = -1;
+
+	for (i = 1; i <= GetNumberofPorts(); i++)
+	{
+		// Only allow UI on ax.25 ports
+
+		PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntry(i);
+
+		if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
+			if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
+				continue;
+
+		sprintf(PortNo, "Port %2d", GetPortNumber(i));
+		PortNum[tab] = GetPortNumber(i);
+
+		tie.pszText = PortNo;
+		TabCtrl_InsertItem(pHdr->hwndTab, tab, &tie);
+	
+		pHdr->apRes[tab++] = DoLockDlgRes("PORTPAGE");
+
+	}
+
+	PageCount = tab;
+
+	// Determine the bounding rectangle for all child dialog boxes.
+
+	SetRectEmpty(&rcTab);
+
+	for (i = 0; i < PageCount; i++)
+	{
+		if (pHdr->apRes[i]->cx > rcTab.right)
+			rcTab.right = pHdr->apRes[i]->cx;
+
+		if (pHdr->apRes[i]->cy > rcTab.bottom)
+			rcTab.bottom = pHdr->apRes[i]->cy;
+
+	}
+
+	MapDialogRect(hwndDlg, &rcTab);
+
+//	rcTab.right = rcTab.right * LOWORD(dwDlgBase) / 4;
+
+//	rcTab.bottom = rcTab.bottom * HIWORD(dwDlgBase) / 8;
+
+	// Calculate how large to make the tab control, so
+
+	// the display area can accomodate all the child dialog boxes.
+
+	TabCtrl_AdjustRect(pHdr->hwndTab, TRUE, &rcTab);
+
+	OffsetRect(&rcTab, cxMargin - rcTab.left, cyMargin - rcTab.top);
+
+	// Calculate the display rectangle.
+
+	CopyRect(&pHdr->rcDisplay, &rcTab);
+
+	TabCtrl_AdjustRect(pHdr->hwndTab, FALSE, &pHdr->rcDisplay);
+
+	// Set the size and position of the tab control, buttons,
+
+	// and dialog box.
+
+	SetWindowPos(pHdr->hwndTab, NULL, rcTab.left, rcTab.top, rcTab.right - rcTab.left, rcTab.bottom - rcTab.top, SWP_NOZORDER);
+
+	// Move the Buttons to bottom of page
+
+	pos=rcTab.left+cxMargin;
+
+	
+	// Size the dialog box.
+
+	SetWindowPos(hwndDlg, NULL, 0, 0, rcTab.right + cyMargin + 2 * GetSystemMetrics(SM_CXDLGFRAME),
+		rcTab.bottom  + 2 * cyMargin + 2 * GetSystemMetrics(SM_CYDLGFRAME) + GetSystemMetrics(SM_CYCAPTION),
+		SWP_NOMOVE | SWP_NOZORDER);
+
+	// Simulate selection of the first item.
+
+	OnSelChanged(hwndDlg);
+
+}
+
+// DoLockDlgRes - loads and locks a dialog template resource.
+
+// Returns a pointer to the locked resource.
+
+// lpszResName - name of the resource
+
+DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName)
+{
+	HRSRC hrsrc = FindResource(NULL, lpszResName, RT_DIALOG);
+	HGLOBAL hglb = LoadResource(hInst, hrsrc);
+
+	return (DLGTEMPLATE *) LockResource(hglb);
+}
+
+//The following function processes the TCN_SELCHANGE notification message for the main dialog box. The function destroys the dialog box for the outgoing page, if any. Then it uses the CreateDialogIndirect function to create a modeless dialog box for the incoming page.
+
+// OnSelChanged - processes the TCN_SELCHANGE notification.
+
+// hwndDlg - handle of the parent dialog box
+
+VOID WINAPI OnSelChanged(HWND hwndDlg)
+{
+	char PortDesc[40];
+	int Port;
+
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
+
+	CurrentPage = TabCtrl_GetCurSel(pHdr->hwndTab);
+
+	// Destroy the current child dialog box, if any.
+
+	if (pHdr->hwndDisplay != NULL)
+
+		DestroyWindow(pHdr->hwndDisplay);
+
+	// Create the new child dialog box.
+
+	pHdr->hwndDisplay = CreateDialogIndirect(hInst, pHdr->apRes[CurrentPage], hwndDlg, ChildDialogProc);
+
+	hwndDisplay = pHdr->hwndDisplay;		// Save
+
+	Port = PortNum[CurrentPage];
+	// Fill in the controls
+
+	GetPortDescription(PortNum[CurrentPage], PortDesc);
+
+	SetDlgItemText(hwndDisplay, IDC_PORTNAME, PortDesc);
+
+//	CheckDlgButton(hwndDisplay, IDC_FROMFILE, SendFromFile[Port]);
+
+//	SetDlgItemInt(hwndDisplay, IDC_INTERVAL, Interval[Port], FALSE);
+
+	SetDlgItemText(hwndDisplay, IDC_UIDEST, &UIDEST[Port][0]);
+	SetDlgItemText(hwndDisplay, IDC_UIDIGIS, UIDigi[Port]);
+
+
+
+//	SetDlgItemText(hwndDisplay, IDC_FILENAME, &FN[Port][0]);
+//	SetDlgItemText(hwndDisplay, IDC_MESSAGE, &Message[Port][0]);
+
+	ShowWindow(pHdr->hwndDisplay, SW_SHOWNORMAL);
+
+}
+
+//The following function processes the WM_INITDIALOG message for each of the child dialog boxes. You cannot specify the position of a dialog box created using the CreateDialogIndirect function. This function uses the SetWindowPos function to position the child dialog within the tab control's display area.
+
+// OnChildDialogInit - Positions the child dialog box to fall
+
+// within the display area of the tab control.
+
+VOID WINAPI OnChildDialogInit(HWND hwndDlg)
+{
+	HWND hwndParent = GetParent(hwndDlg);
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndParent, GWL_USERDATA);
+
+	SetWindowPos(hwndDlg, HWND_TOP, pHdr->rcDisplay.left, pHdr->rcDisplay.top, 0, 0, SWP_NOSIZE);
+}
+
+
+*/
+
+
+VOID ApplSendAPRSMessage(char * Text, char * ToCall)
+{
+	struct APRSMESSAGE * Message;
+	struct APRSMESSAGE * ptr = OutstandingMsgs;
+	int n = 0;
+	char Msg[255];
+
+	Message = malloc(sizeof(struct APRSMESSAGE));
+	memset(Message, 0, sizeof(struct APRSMESSAGE));
+	strcpy(Message->FromCall, APRSCall);
+	memset(Message->ToCall, ' ', 9);
+	memcpy(Message->ToCall, ToCall, strlen(ToCall));
+	Message->ToStation = FindStation(ToCall, TRUE);
+
+	if (Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
+		sprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
+	else
+	{
+		if (Message->ToStation->SimpleNumericSeq)
+			sprintf(Message->Seq, "%d", NextSeq++);
+		else
+			sprintf(Message->Seq, "%02X}", NextSeq++);	// Don't know, so assume message-ack capable
+	}
+	strcpy(Message->Text, Text);
+	Message->Retries = RetryCount;
+	Message->RetryTimer = RetryTimer;
+
+	if (ptr == NULL)
+	{
+		OutstandingMsgs = Message;
+	}
+	else
+	{
+		n++;
+		while(ptr->Next)
+		{
+			ptr = ptr->Next;
+			n++;
+		}
+		ptr->Next = Message;
+	}
+
+//	UpdateTXMessageLine(n, Message);
+
+	n = sprintf(Msg, ":%-9s:%s{%s", ToCall, Text, Message->Seq);
+
+	PutAPRSMessage(Msg, n);
+	return;
+}
+
+
+VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
+{
+	char MsgDest[10];
+	struct APRSMESSAGE * Message;
+	struct APRSMESSAGE * ptr = Messages;
+	char * TextPtr = &Payload[11];
+	char * SeqPtr;
+	int n = 0;
+	char FromCall[10] = "         ";
+	struct tm * TM;
+	time_t NOW;
+
+	memcpy(FromCall, Station->Callsign, strlen(Station->Callsign));
+	memcpy(MsgDest, &Payload[1], 9);
+	MsgDest[9] = 0;
+
+	SeqPtr = strchr(TextPtr, '{');
+
+	if (SeqPtr)
+	{
+		*(SeqPtr++) = 0;
+		if(strlen(SeqPtr) > 6)
+			SeqPtr[7] = 0;		
+	}
+
+	if (_memicmp(TextPtr, "ack", 3) == 0)
+	{
+		// Message Ack. See if for one of our messages
+
+		ptr = OutstandingMsgs;
+
+		if (ptr == 0)
+			return;
+
+		do
+		{
+			if (strcmp(ptr->FromCall, MsgDest) == 0
+				&& strcmp(ptr->ToCall, FromCall) == 0
+				&& strcmp(ptr->Seq, &TextPtr[3]) == 0)
+			{
+				// Message is acked
+
+				ptr->Retries = 0;
+				ptr->Acked = TRUE;
+//				if (hMsgsOut)
+//					UpdateTXMessageLine(hMsgsOut, n, ptr);
+
+				return;
+			}
+			ptr = ptr->Next;
+			n++;
+
+		} while (ptr);
+	
+		return;
+	}
+
+	Message = malloc(sizeof(struct APRSMESSAGE));
+	memset(Message, 0, sizeof(struct APRSMESSAGE));
+	strcpy(Message->FromCall, Station->Callsign);
+	strcpy(Message->ToCall, MsgDest);
+
+	if (SeqPtr)
+	{
+		strcpy(Message->Seq, SeqPtr);
+
+		// If a REPLY-ACK Seg, copy to LastRXSeq, and see if it acks a message
+
+		if (SeqPtr[2] == '}')
+		{
+			struct APRSMESSAGE * ptr1;
+			int nn = 0;
+
+			strcpy(Station->LastRXSeq, SeqPtr);
+
+			ptr1 = OutstandingMsgs;
+
+			while (ptr1)
+			{
+				if (strcmp(ptr1->FromCall, MsgDest) == 0
+					&& strcmp(ptr1->ToCall, FromCall) == 0
+					&& memcmp(&ptr1->Seq, &SeqPtr[3], 2) == 0)
+				{
+					// Message is acked
+
+					ptr1->Acked = TRUE;
+					ptr1->Retries = 0;
+//					if (hMsgsOut)
+//						UpdateTXMessageLine(hMsgsOut, nn, ptr);
+					
+					break;
+				}
+				ptr1 = ptr1->Next;
+				nn++;
+			}
+		}
+		else
+		{
+			// Station is not using reply-ack - set to send simple numeric sequence (workround for bug in APRS Messanges
+		
+			Station->SimpleNumericSeq = TRUE;
+		}
+	}
+
+	if (strlen(TextPtr) > 100)
+		TextPtr[100] = 0;
+
+	strcpy(Message->Text, TextPtr);
+		
+	NOW = time(NULL);
+
+	if (LocalTime)
+		TM = localtime(&NOW);
+	else
+		TM = gmtime(&NOW);
+					
+	sprintf(Message->Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
+
+	if (_stricmp(MsgDest, APRSCall) == 0 && SeqPtr)	// ack it if it has a sequence
+	{
+		// For us - send an Ack
+
+		char ack[30];
+
+		int n = sprintf(ack, ":%-9s:ack%s", Message->FromCall, Message->Seq);
+		PutAPRSMessage(ack, n);
+	}
+
+	if (ptr == NULL)
+	{
+		Messages = Message;
+	}
+	else
+	{
+		n++;
+		while(ptr->Next)
+		{
+			ptr = ptr->Next;
+			n++;
+		}
+		ptr->Next = Message;
+	}
+
+	if (strcmp(MsgDest, APRSCall) == 0)			// to me?
+	{
+	}
+}
+
+VOID APRSSecTimer()
+{
+	// Check Message Retries
+
+	struct APRSMESSAGE * ptr = OutstandingMsgs;
+	int n = 0;
+
+	if (SendWX)
+		SendWeatherBeacon();
+
+
+	if (ptr == 0)
+		return;
+
+	do
+	{				
+		if (ptr->Acked == FALSE)
+		{
+			if (ptr->Retries)
+			{
+				ptr->RetryTimer--;
+				
+				if (ptr->RetryTimer == 0)
+				{
+					ptr->Retries--;
+
+					if (ptr->Retries)
+					{
+						// Send Again
+						
+						char Msg[255];
+						int n = sprintf(Msg, ":%-9s:%s{%s", ptr->ToCall, ptr->Text, ptr->Seq);
+						PutAPRSMessage(Msg, n);
+						ptr->RetryTimer = RetryTimer;
+					}
+//					UpdateTXMessageLine(hMsgsOut, n, ptr);
+				}
+			}
+		}
+
+		ptr = ptr->Next;
+		n++;
+
+	} while (ptr);
+}
+
+double radians(double Degrees)
+{
+    return M_PI * Degrees / 180;
+}
+double degrees(double Radians)
+{
+	return Radians * 180 / M_PI;
+}
+
+double Distance(double laa, double loa)
+{
+	double lah, loh;
+
+	GetAPRSLatLon(&lah, &loh);
+
+/*
+
+'Great Circle Calculations.
+
+'dif = longitute home - longitute away
+
+
+'      (this should be within -180 to +180 degrees)
+'      (Hint: This number should be non-zero, programs should check for
+'             this and make dif=0.0001 as a minimum)
+'lah = latitude of home
+'laa = latitude of away
+
+'dis = ArcCOS(Sin(lah) * Sin(laa) + Cos(lah) * Cos(laa) * Cos(dif))
+'distance = dis / 180 * pi * ERAD
+'angle = ArcCOS((Sin(laa) - Sin(lah) * Cos(dis)) / (Cos(lah) * Sin(dis)))
+
+'p1 = 3.1415926535: P2 = p1 / 180: Rem -- PI, Deg =>= Radians
+*/
+
+	loh = radians(loh); lah = radians(lah);
+	loa = radians(loa); laa = radians(laa);
+
+	loh = 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
+	return loh;
+}
+
+double Bearing(double lat2, double lon2)
+{
+	double lat1, lon1;
+	double dlat, dlon, TC1;
+
+	GetAPRSLatLon(&lat1, &lon1);
+ 
+	lat1 = radians(lat1);
+	lat2 = radians(lat2);
+	lon1 = radians(lon1);
+	lon2 = radians(lon2);
+
+	dlat = lat2 - lat1;
+	dlon = lon2 - lon1;
+
+	if (dlat == 0 || dlon == 0) return 0;
+	
+	TC1 = atan((sin(lon1 - lon2) * cos(lat2)) / (cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon1 - lon2)));
+	TC1 = degrees(TC1);
+		
+	if (fabs(TC1) > 89.5) if (dlon > 0) return 90; else return 270;
+
+	if (dlat > 0)
+	{
+		if (dlon > 0) return -TC1;
+		if (dlon < 0) return 360 - TC1;
+		return 0;
+	}
+
+	if (dlat < 0)
+	{
+		if (dlon > 0) return TC1 = 180 - TC1;
+		if (dlon < 0) return TC1 = 180 - TC1; // 'ok?
+		return 180;
+	}
+
+	return 0;
+}
+
+// Weather Data 
+	
+static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+VOID SendWeatherBeacon()
+{
+	char Msg[256];
+	char DD[3]="";
+	char HH[3]="";
+	char MM[3]="";
+	char Lat[10], Lon[10];
+	int Len, index;
+	char WXMessage[1024];
+	char * WXptr;
+	char * WXend;
+	time_t WXTime;
+	time_t now = time(NULL);
+	FILE * hFile;
+	struct tm * TM;
+	struct stat STAT;
+ 
+	WXCounter++;
+
+	if (WXCounter < WXInterval * 60)
+		return;
+
+	WXCounter = 0;
+
+//	Debugprintf("BPQAPRS - Trying to open WX file %s", WXFileName);
+
+	if (stat(WXFileName, &STAT))
+	{
+		Debugprintf("APRS WX File %s stat() falied %d", WXFileName, GetLastError());
+		return;
+	}
+
+	WXTime = (now - STAT.st_mtime) /60;			// Minutes
+
+	if (WXTime > (3 * WXInterval))
+	{
+		Debugprintf("APRS Send WX File %s too old - %d minutes", WXFileName, WXTime);
+		return;
+	}
+	
+	hFile = fopen(WXFileName, "rb");
+	
+	if (hFile)
+		Len = fread(WXMessage, 1, 1024, hFile); 
+	else
+	{
+		Debugprintf("APRS WX File %s fread() falied %d", WXFileName, GetLastError());
+		return;
+	}
+
+	
+	if (Len < 30)
+	{
+		Debugprintf("BPQAPRS - WX file %s is too short - %d Chars", WXFileName, Len);
+		return;
+	}
+
+	WXptr = strchr(WXMessage, 10);
+
+	if (WXptr)
+	{
+		WXend = strchr(++WXptr, 13);
+		if (WXend)
+			*WXend = 0;
+	}
+
+	// Get DDHHMM from Filetime
+
+	TM = gmtime(&STAT.st_mtime);
+
+	sprintf(DD, "%02d", TM->tm_mday);
+	sprintf(HH, "%02d", TM->tm_hour);
+	sprintf(MM, "%02d", TM->tm_min);
+
+	GetAPRSLatLonString(Lat, Lon);
+
+	Len = sprintf(Msg, "@%s%s%sz%s/%s_%s%s", DD, HH, MM, Lat, Lon, WXptr, WXComment);
+
+	Debugprintf(Msg);
+
+	for (index = 0; index < 32; index++)
+		if (WXPort[index])
+			SendAPRSMessage(Msg, index);
+
+}
+
+
+/*
+Jan 22 2012 14:10
+123/005g011t031r000P000p000h00b10161
+
+/MITWXN Mitchell IN weather Station N9LYA-3 {UIV32} 
+< previous
+
+@221452z3844.42N/08628.33W_203/006g007t032r000P000p000h00b10171
+Complete Weather Report Format — with Lat/Long position, no Timestamp
+! or = Lat   Sym Table ID   Long   Symbol Code _  Wind Directn/ Speed Weather Data APRS Software   WX Unit uuuu
+ 1      8          1         9          1                 7                 n            1              2-4
+Examples
+!4903.50N/07201.75W_220/004g005t077r000p000P000h50b09900wRSW
+!4903.50N/07201.75W_220/004g005t077r000p000P000h50b.....wRSW
+
+*/
+
+//	Web Server Code
+
+//	The actual HTTP socket code is in bpq32.dll. Any requests for APRS data are passed in 
+//	using a Named Pipe. The request looks exactly like one from a local socket, and the respone is
+//	a fully pormatted HTTP packet
+
+
+#define InputBufferLen 1000
+
+
+#define MaxSessions 100
+
+
+HANDLE PipeHandle;
+
+int HTTPPort = 80;
+BOOL IPV6 = TRUE;
+
+#define MAX_PENDING_CONNECTS 5
+
+BOOL OpenSockets6();
+
+char HTDocs[MAX_PATH] = "HTML";
+char SpecialDocs[MAX_PATH] = "Special Pages";
+
+char SymbolText[192][20] = {
+
+"Police Stn", "No Symbol", "Digi", "Phone", "DX Cluster", "HF Gateway", "Plane sm", "Mob Sat Stn",
+"WheelChair", "Snowmobile", "Red Cross", "Boy Scout", "Home", "X", "Red Dot", "Circle (0)", 
+"Circle (1)", "Circle (2)", "Circle (3)", "Circle (4)", "Circle (5)", "Circle (6)", "Circle (7)", "Circle (8)", 
+"Circle (9)", "Fire", "Campground", "Motorcycle", "Rail Eng.", "Car", "File svr", "HC Future", 
+
+"Aid Stn", "BBS", "Canoe", "No Symbol", "Eyeball", "Tractor", "Grid Squ.", "Hotel", 
+"Tcp/ip", "No Symbol", "School", "Usr Log-ON", "MacAPRS", "NTS Stn", "Balloon", "Police", 
+"TBD", "Rec Veh'le", "Shuttle", "SSTV", "Bus", "ATV", "WX Service", "Helo", 
+"Yacht", "WinAPRS", "Jogger", "Triangle", "PBBS", "Plane lrge", "WX Station", "Dish Ant.", 
+
+"Ambulance", "Bike", "ICP", "Fire Station", "Horse", "Fire Truck", "Glider", "Hospital", 
+"IOTA", "Jeep", "Truck", "Laptop", "Mic-E Rptr", "Node", "EOC", "Rover", 
+"Grid squ.", "Antenna", "Power Boat", "Truck Stop", "Truck 18wh", "Van", "Water Stn", "XAPRS", 
+"Yagi", "Shelter", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "", "",
+
+"Emergency", "No Symbol", "No. Digi", "Bank", "No Symbol", "No. Diam'd", "Crash site", "Cloudy", 
+"MEO", "Snow", "Church", "Girl Scout", "Home (HF)", "UnknownPos", "Destination", "No. Circle", 
+"No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", "No Symbol", 
+"Petrol Stn", "Hail", "Park", "Gale Fl", "No Symbol", "No. Car", "Info Kiosk", "Hurricane", 
+
+"No. Box", "Snow blwng", "Coast G'rd", "Drizzle", "Smoke", "Fr'ze Rain", "Snow Shwr", "Haze", 
+"Rain Shwr", "Lightning", "Kenwood", "Lighthouse", "No Symbol", "Nav Buoy", "Rocket", "Parking  ", 
+"Quake", "Restaurant", "Sat/Pacsat", "T'storm", "Sunny", "VORTAC", "No. WXS", "Pharmacy", 
+"No Symbol", "No Symbol", "Wall Cloud", "No Symbol", "No Symbol", "No. Plane", "No. WX Stn", "Rain",
+
+"No. Diamond", "Dust blwng", "No. CivDef", "DX Spot", "Sleet", "Funnel Cld", "Gale", "HAM store",
+"No. Blk Box", "WorkZone", "SUV", "Area Locns", "Milepost", "No. Triang", "Circle sm", "Part Cloud",
+"No Symbol", "Restrooms", "No. Boat", "Tornado", "No. Truck", "No. Van", "Flooding", "No Symbol",
+"Sky Warn", "No Symbol", "Fog", "No Symbol", "No Symbol", "No Symbol", "", ""};
+
+// All Calls (8 per line)
+
+//<td><a href="find.cgi?call=EI7IG-1">EI7IG-1</a></td>
+//<td><a href="find.cgi?call=G7TKK-1">G7TKK-1</a></td>
+//<td><a href="find.cgi?call=GB7GL-B">GB7GL-B</a></td>
+//<td><a href="find.cgi?call=GM1TCN">GM1TCN</a></td>
+//<td><a href="find.cgi?call=GM8BPQ">GM8BPQ</a></td>
+//<td><a href="find.cgi?call=GM8BPQ-14">GM8BPQ-14</a></td>
+//<td><a href="find.cgi?call=LA2VPA-9">LA2VPA-9</a></td>
+//<td><a href="find.cgi?call=LA3FIA-10">LA3FIA-10</a></td></tr><tr>
+//<td><a href="find.cgi?call=LA6JF-2">LA6JF-2</a></td><td><a href="find.cgi?call=LD4ST">LD4ST</a></td><td><a href="find.cgi?call=M0CHK-7">M0CHK-7</a></td><td><a href="find.cgi?call=M0OZH-7">M0OZH-7</a></td><td><a href="find.cgi?call=MB7UFO-1">MB7UFO-1</a></td><td><a href="find.cgi?call=MB7UN">MB7UN</a></td><td><a href="find.cgi?call=MM0DXE-15">MM0DXE-15</a></td><td><a href="find.cgi?call=PA2AYX-9">PA2AYX-9</a></td></tr><tr>
+//<td><a href="find.cgi?call=PA3AQW-5">PA3AQW-5</a></td><td><a href="find.cgi?call=PD1C">PD1C</a></td><td><a href="find.cgi?call=PD5LWD-2">PD5LWD-2</a></td><td><a href="find.cgi?call=PI1ECO">PI1ECO</a></td></tr>
+
+
+char * DoSummaryLine(struct STATIONRECORD * ptr, int n, int Width)
+{
+	static char Line2[80];
+	int x;
+	char XCall[256];
+	char * ptr1 = ptr->Callsign;
+	char * ptr2 = XCall;
+
+	// Object Names can contain spaces
+
+	while(*ptr1)
+	{
+		if (*ptr1 == ' ')
+		{		
+			memcpy(ptr2, "%20", 3);
+			ptr2 += 3;
+		}
+		else
+			*(ptr2++) = *ptr1;
+
+		ptr1++;
+	}
+
+	*ptr2 = 0;
+
+
+	// Object Names can contain spaces
+	
+
+	sprintf(Line2, "<td><a href=""find.cgi?call=%s"">%s</a></td>",
+		XCall, ptr->Callsign);
+
+	x = ++n/Width;
+	x = x * Width;
+
+	if (x == n)
+		strcat(Line2, "</tr><tr>");
+
+	return Line2;
+}
+
+char * DoDetailLine(struct STATIONRECORD * ptr)
+{
+	static char Line[512];
+	double Lat = ptr->Lat;
+	double Lon = ptr->Lon;
+	char NS='N', EW='E';
+
+	char LatString[20], LongString[20], DistString[20], BearingString[20];
+	int Degrees;
+	double Minutes;
+	char Time[80];
+	struct tm * TM;
+	char XCall[256];
+
+	char * ptr1 = ptr->Callsign;
+	char * ptr2 = XCall;
+
+	// Object Names can contain spaces
+
+	while(*ptr1)
+	{
+		if (*ptr1 == ' ')
+		{		
+			memcpy(ptr2, "%20", 3);
+			ptr2 += 3;
+		}
+		else
+			*(ptr2++) = *ptr1;
+
+		ptr1++;
+	}
+
+	*ptr2 = 0;
+
+	
+//	if (ptr->ObjState == '_')	// Killed Object
+//		return;
+
+	TM = gmtime(&ptr->TimeLastUpdated);
+
+	sprintf(Time, "%.2d:%.2d:%.2d", TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+	if (ptr->Lat < 0)
+	{
+		NS = 'S';
+		Lat=-Lat;
+	}
+	if (Lon < 0)
+	{
+		EW = 'W';
+		Lon=-Lon;
+	}
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+
+	Degrees = Lat;
+	Minutes = Lat * 60.0 - (60 * Degrees);
+
+	sprintf(LatString,"%2d°%05.2f'%c", Degrees, Minutes, NS);
+		
+	Degrees = Lon;
+
+#pragma warning(pop)
+
+	Minutes = Lon * 60 - 60 * Degrees;
+
+	sprintf(LongString, "%3d°%05.2f'%c",Degrees, Minutes, EW);
+
+	sprintf(DistString, "%6.1f", Distance(ptr->Lat, ptr->Lon));
+	sprintf(BearingString, "%3.0f", Bearing(ptr->Lat, ptr->Lon));
+	
+	sprintf(Line, "<tr><td align=""left""><a href=""find.cgi?call=%s"">&nbsp;%s%s</a></td><td align=""left"">%s</td><td align=""center"">%s  %s</td><td align=""right"">%s</td><td align=""right"">%s</td><td align=""left"">%s</td></tr>",
+			XCall, ptr->Callsign, 
+			(strchr(ptr->Path, '*'))?  "*": "", &SymbolText[ptr->iconRow << 4 | ptr->iconCol][0], LatString, LongString, DistString, BearingString, Time);
+
+	return Line;
+}
+
+ 
+int CompareFN(const void *a, const void *b) 
+{
+	const struct STATIONRECORD * x = a;
+	const struct STATIONRECORD * y = b;
+
+	x = x->Next;
+	y = y->Next;
+
+	return strcmp(x->Callsign, y->Callsign);
+
+	/* strcmp functions works exactly as expected from
+	comparison function */ 
+} 
+
+
+
+char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * Count, char * Param)
+{
+	char * Line = malloc(100000);
+	struct STATIONRECORD * ptr = StationRecords;
+	int n = 0, i;
+	struct STATIONRECORD * List[1000];
+	int TableWidth = 8;
+
+	Line[0] = 0;
+	
+	if (Param && Param[0])
+	{
+		char * Key, *Context;
+
+		Key = strtok_s(Param, "=", &Context);
+
+		TableWidth = atoi(Context);
+
+		if (TableWidth == 0)
+			TableWidth = 8;
+	}
+
+	// Build list of calls
+
+	while (ptr)
+	{
+		if (ptr->ObjState == Objects && ptr->Lat != 0.0 && ptr->Lon != 0.0)
+		{
+			if ((WX && (ptr->LastWXPacket[0] == 0)) || (RFOnly && (ptr->LastPort == 0)) ||
+				(Mobile && ((ptr->Speed < 0.1) || ptr->LastWXPacket[0] != 0)))
+			{
+				ptr = ptr->Next;
+				continue;
+			}
+
+			List[n++] = ptr;
+
+			if (n > 999)
+				break;
+
+		}
+		ptr = ptr->Next;		
+	}
+
+	if (n >  1)
+		qsort(List, n, 4, CompareFN);
+
+	for (i = 0; i < n; i++)
+	{
+		if (RFOnly)
+			strcat(Line, DoDetailLine(List[i]));
+		else
+			strcat(Line, DoSummaryLine(List[i], i, TableWidth));
+	}	
+		
+	*Count = n;
+
+	return Line;
+
+}
+
+char * APRSLookupKey(struct ConnectionInfo * sockptr, char * Key)
+{
+	struct STATIONRECORD * stn = sockptr->SelCall;
+
+	if (strcmp(Key, "##MY_CALLSIGN##") == 0)
+		return _strdup(LoppedAPRSCall);
+
+	if (strcmp(Key, "##CALLSIGN##") == 0)
+		return _strdup(sockptr->Callsign);
+
+	if (strcmp(Key, "##CALLSIGN_NOSSID##") == 0)
+	{
+		char * Call = _strdup(sockptr->Callsign);
+		char * ptr = strchr(Call, '-');
+		if (ptr)
+			*ptr = 0;
+		return Call;
+	}
+
+	if (strcmp(Key, "##MY_WX_CALLSIGN##") == 0)
+		return _strdup(LoppedAPRSCall);
+
+	if (strcmp(Key, "##MY_BEACON_COMMENT##") == 0)
+		return _strdup(StatusMsg);
+
+	if (strcmp(Key, "##MY_WX_BEACON_COMMENT##") == 0)
+		return _strdup(WXComment);
+
+	if (strcmp(Key, "##MILES_KM##") == 0)
+		return _strdup("Miles");
+
+	if (strcmp(Key, "##EXPIRE_TIME##") == 0)
+	{
+		char val[80];
+		sprintf(val, "%d", ExpireTime);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##LOCATION##") == 0)
+	{
+		char val[80];
+		double Lat = sockptr->SelCall->Lat;
+		double Lon = sockptr->SelCall->Lon;
+		char NS='N', EW='E';
+		char LatString[20];
+		int Degrees;
+		double Minutes;
+	
+		if (Lat < 0)
+		{
+			NS = 'S';
+			Lat=-Lat;
+		}
+		if (Lon < 0)
+		{
+			EW = 'W';
+			Lon=-Lon;
+		}
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+
+		Degrees = Lat;
+		Minutes = Lat * 60.0 - (60 * Degrees);
+
+		sprintf(LatString,"%2d°%05.2f'%c",Degrees, Minutes, NS);
+		
+		Degrees = Lon;
+
+#pragma warning(pop)
+
+		Minutes = Lon * 60 - 60 * Degrees;
+
+		sprintf(val,"%s %3d°%05.2f'%c", LatString, Degrees, Minutes, EW);
+
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##LOCDDMMSS##") == 0)
+	{
+		char val[80];
+		double Lat = sockptr->SelCall->Lat;
+		double Lon = sockptr->SelCall->Lon;
+		char NS='N', EW='E';
+		char LatString[20];
+		int Degrees;
+		double Minutes;
+
+		// 48.45.18N, 002.18.37E
+			
+		if (Lat < 0)
+		{
+			NS = 'S';
+			Lat=-Lat;
+		}
+		if (Lon < 0)
+		{
+			EW = 'W';
+			Lon=-Lon;
+		}
+
+#pragma warning(push)
+#pragma warning(disable:4244)
+
+		Degrees = Lat;
+		Minutes = Lat * 60.0 - (60 * Degrees);
+//		IntMins = Minutes;
+//		Seconds = Minutes * 60.0 - (60 * IntMins);
+
+		sprintf(LatString,"%2d.%05.2f%c",Degrees, Minutes, NS);
+		
+		Degrees = Lon;
+		Minutes = Lon * 60.0 - 60 * Degrees;
+//		IntMins = Minutes;
+//		Seconds = Minutes * 60.0 - (60 * IntMins);
+
+#pragma warning(pop)
+
+		sprintf(val,"%s, %03d.%05.2f%c", LatString, Degrees, Minutes, EW);
+
+		return _strdup(val);
+	}
+	if (strcmp(Key, "##STATUS_TEXT##") == 0)
+		return _strdup(stn->Status);
+	
+	if (strcmp(Key, "##LASTPACKET##") == 0)
+		return _strdup(stn->LastPacket);
+
+
+	if (strcmp(Key, "##LAST_HEARD##") == 0)
+	{
+		char Time[80];
+		struct tm * TM;
+		time_t Age = time(NULL) - stn->TimeLastUpdated;
+
+		TM = gmtime(&Age);
+
+		sprintf(Time, "%.2d:%.2d:%.2d", TM->tm_hour, TM->tm_min, TM->tm_sec);
+
+		return _strdup(Time);
+	}
+
+	if (strcmp(Key, "##FRAME_HEADER##") == 0)
+		return _strdup(stn->Path);
+
+	if (strcmp(Key, "##FRAME_INFO##") == 0)
+		return _strdup(stn->LastWXPacket);
+	
+	if (strcmp(Key, "##BEARING##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%03.0f", Bearing(sockptr->SelCall->Lat, sockptr->SelCall->Lon));
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##COURSE##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%03.0f", stn->Course);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##SPEED_MPH##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.1f", stn->Speed);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##DISTANCE##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.1f", Distance(sockptr->SelCall->Lat, sockptr->SelCall->Lon));
+		return _strdup(val);
+	}
+
+
+
+	if (strcmp(Key, "##WIND_DIRECTION##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%03d", sockptr->WindDirn);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##WIND_SPEED_MPH##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->WindSpeed);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##WIND_GUST_MPH##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->WindGust);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##TEMPERATURE_F##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->Temp);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##HUMIDITY##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%d", sockptr->Humidity);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##PRESSURE_HPA##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%05.1f", sockptr->Pressure /10.0);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##RAIN_TODAY_IN##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.2f", sockptr->RainToday /100.0);
+		return _strdup(val);
+	}
+
+
+	if (strcmp(Key, "##RAIN_24_IN##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.2f", sockptr->RainLastDay /100.0);
+		return _strdup(val);
+	}
+
+
+	if (strcmp(Key, "##RAIN_HOUR_IN##") == 0)
+	{
+		char val[80];
+
+		sprintf(val, "%5.2f", sockptr->RainLastHour /100.0);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##MAP_LAT_LON##") == 0)
+	{
+		char val[256];
+
+		sprintf(val, "%f,%f", stn->Lat, stn->Lon);
+		return _strdup(val);
+	}
+
+	if (strcmp(Key, "##SYMBOL_DESCRIPTION##") == 0)
+		return _strdup(&SymbolText[stn->iconRow << 4 | stn->iconCol][0]);
+
+
+/*
+##WIND_SPEED_MS## - wind speed metres/sec
+##WIND_SPEED_KMH## - wind speed km/hour
+##WIND_GUST_MPH## - wind gust miles/hour
+##WIND_GUST_MS## - wind gust metres/sec
+##WIND_GUST_KMH## - wind gust km/hour
+##WIND_CHILL_F## - wind chill F
+##WIND_CHILL_C## - wind chill C
+##TEMPERATURE_C## - temperature C
+##DEWPOINT_F## - dew point temperature F
+##DEWPOINT_C## - dew point temperature C
+##PRESSURE_IN## - pressure inches of mercury
+##PRESSURE_HPA## - pressure hPa (mb)
+##RAIN_HOUR_MM## - rain in last hour mm
+##RAIN_TODAY_MM## - rain today mm
+##RAIN_24_MM## - rain in last 24 hours mm
+##FRAME_HEADER## - frame header of the last posit heard from the station
+##FRAME_INFO## - information field of the last posit heard from the station
+##MAP_LARGE_SCALE##" - URL of a suitable large scale map on www.vicinity.com
+##MEDIUM_LARGE_SCALE##" - URL of a suitable medium scale map on www.vicinity.com
+##MAP_SMALL_SCALE##" - URL of a suitable small scale map on www.vicinity.com
+##MY_LOCATION## - 'Latitude', 'Longitude' in 'Station Setup'
+##MY_STATUS_TEXT## - status text configured in 'Status Text'
+##MY_SYMBOL_DESCRIPTION## - 'Symbol' that would be shown for our station in 'Station List'
+##HIT_COUNTER## - The number of times the page has been accessed
+##DOCUMENT_LAST_CHANGED## - The date/time the page was last edited
+
+##FRAME_HEADER## - frame header of the last posit heard from the station
+##FRAME_INFO## - information field of the last posit heard from the station
+
+*/
+	return NULL;
+}
+
+VOID APRSProcessSpecialPage(struct ConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
+{
+	// replaces ##xxx### constructs with the requested data
+
+	char * NewMessage = malloc(250000);
+	char * ptr1 = Buffer, * ptr2, * ptr3, * ptr4, * NewPtr = NewMessage;
+	int PrevLen;
+	int BytesLeft = FileSize;
+	int NewFileSize = FileSize;
+	char * StripPtr = ptr1;
+	int HeaderLen;
+	char Header[256];
+
+	if (WX && sockptr->SelCall && sockptr->SelCall->LastWXPacket)
+	{
+		DecodeWXReport(sockptr, sockptr->SelCall->LastWXPacket);
+	}
+
+	// strip comments blocks
+
+	while (ptr4 = strstr(ptr1, "<!--"))
+	{
+		ptr2 = strstr(ptr4, "-->");
+		if (ptr2)
+		{
+			PrevLen = (ptr4 - ptr1);
+			memcpy(StripPtr, ptr1, PrevLen);
+			StripPtr += PrevLen;
+			ptr1 = ptr2 + 3;
+			BytesLeft = FileSize - (ptr1 - Buffer);
+		}
+	}
+
+
+	memcpy(StripPtr, ptr1, BytesLeft);
+	StripPtr += BytesLeft;
+
+	BytesLeft = StripPtr - Buffer;
+
+	FileSize = BytesLeft;
+	NewFileSize = FileSize;
+	ptr1 = Buffer;
+	ptr1[FileSize] = 0;
+
+loop:
+	ptr2 = strstr(ptr1, "##");
+
+	if (ptr2)
+	{
+		PrevLen = (ptr2 - ptr1);			// Bytes before special text
+		
+		ptr3 = strstr(ptr2+2, "##");
+
+		if (ptr3)
+		{
+			char Key[80] = "";
+			int KeyLen;
+			char * NewText;
+			int NewTextLen;
+
+			ptr3 += 2;
+			KeyLen = ptr3 - ptr2;
+
+			if (KeyLen < 80)
+				memcpy(Key, ptr2, KeyLen);
+
+			if (strcmp(Key, "##STATION_TABLE##") == 0)
+			{
+				NewText = _strdup(StationTable);
+			}
+			else
+			{
+				if (strcmp(Key, "##TABLE_COUNT##") == 0)
+				{
+					char val[80];
+					sprintf(val, "%d", Count);
+					NewText = _strdup(val);
+				}
+				else
+					NewText = APRSLookupKey(sockptr, Key);
+			}
+			
+			if (NewText)
+			{
+				NewTextLen = strlen(NewText);
+				NewFileSize = NewFileSize + NewTextLen - KeyLen;					
+			//	NewMessage = realloc(NewMessage, NewFileSize);
+
+				memcpy(NewPtr, ptr1, PrevLen);
+				NewPtr += PrevLen;
+				memcpy(NewPtr, NewText, NewTextLen);
+				NewPtr += NewTextLen;
+
+				free(NewText);
+				NewText = NULL;
+			}
+			else
+			{
+				// Key not found, so just leave
+
+				memcpy(NewPtr, ptr1, PrevLen + KeyLen);
+				NewPtr += (PrevLen + KeyLen);
+			}
+
+			ptr1 = ptr3;			// Continue scan from here
+			BytesLeft = Buffer + FileSize - ptr3;
+		}
+		else		// Unmatched ##
+		{
+			memcpy(NewPtr, ptr1, PrevLen + 2);
+			NewPtr += (PrevLen + 2);
+			ptr1 = ptr2 + 2;
+		}
+		goto loop;
+	}
+
+	// Copy Rest
+
+	memcpy(NewPtr, ptr1, BytesLeft);
+	
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", NewFileSize);
+	send(sockptr->sock, Header, HeaderLen, 0); 
+	send(sockptr->sock, NewMessage, NewFileSize, 0); 
+
+	free (NewMessage);
+	free(StationTable);
+	
+	return;
+}
+
+VOID APRSSendMessageFile(struct ConnectionInfo * sockptr, char * FN)
+{
+	int FileSize = 0;
+	char * MsgBytes;
+	char * SaveMsgBytes;
+
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	BOOL Special = FALSE;
+	int HeaderLen;
+	char Header[256];
+	char * Param;
+	struct stat STAT;
+	int Sent;
+
+
+	FN = strtok_s(FN, "?", &Param);
+
+	if (strcmp(FN, "/") == 0)
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/index.html", APRSDir, SpecialDocs);
+	else
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s%s", APRSDir, SpecialDocs, &FN[5]);
+	
+	hFile = fopen(MsgFile, "rb");
+
+	if (hFile == NULL)
+	{
+		// Try normal pages
+
+		if (strcmp(FN, "/") == 0)
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/index.html", APRSDir, HTDocs);
+		else
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s%s", APRSDir, HTDocs, &FN[5]);
+	
+		hFile = fopen(MsgFile, "rb");
+
+		if (hFile == NULL)
+		{
+			HeaderLen = sprintf(Header, "HTTP/1.0 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+			send(sockptr->sock, Header, HeaderLen, 0); 
+			return;
+
+		}
+	}
+	else
+		Special = TRUE;
+
+	if (stat(MsgFile, &STAT) == 0)
+		FileSize = STAT.st_size;
+
+	MsgBytes = SaveMsgBytes = malloc(FileSize+1);
+
+	fread(MsgBytes, 1, FileSize, hFile); 
+
+	fclose(hFile);
+
+	// if HTML file, look for ##...## substitutions
+
+	if ((strstr(FN, "htm" ) || strstr(FN, "HTM")) &&  strstr(MsgBytes, "##" ))
+	{
+		// Build Station list, depending on URL
+	
+		int Count = 0;
+		BOOL RFOnly = (BOOL)strstr(_strlwr(FN), "rf");		// Leaves FN in lower case
+		BOOL WX = (BOOL)strstr(FN, "wx");
+		BOOL Mobile = (BOOL)strstr(FN, "mobile");
+		char Objects = (strstr(FN, "obj"))? '*' :0;
+		char * StationList;
+				
+		StationList = CreateStationList(RFOnly, WX, Mobile, Objects, &Count, Param);
+
+		APRSProcessSpecialPage(sockptr, MsgBytes, FileSize, StationList, Count, WX); 
+		free (MsgBytes);
+		return;			// ProcessSpecial has sent the reply
+	}
+
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", FileSize);
+	send(sockptr->sock, Header, HeaderLen, 0); 
+	
+	Sent = send(sockptr->sock, MsgBytes, FileSize, 0);
+//	printf("Send %d %d\n", FileSize, Sent); 
+
+	while (Sent < FileSize)
+	{
+		FileSize -= Sent;
+		MsgBytes += Sent;
+		Sent = send(sockptr->sock, MsgBytes, FileSize, 0);
+//		printf("Send %d %d\n", FileSize, Sent); 
+		if (Sent == -1)
+		{
+			Sleep(10);
+			Sent = 0;
+		}
+	}
+
+	free (SaveMsgBytes);
+}
+
+
+char PipeFileName[] = "\\\\.\\pipe\\BPQAPRSWebPipe";
+
+VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr)
+{
+	int InputLen = 0;
+	int OutputLen = 0;
+   	char * URL;
+	char * ptr;
+	struct ConnectionInfo CI;
+	struct ConnectionInfo * sockptr = &CI;
+	char Key[12] = "";
+
+	memset(&CI, 0, sizeof(CI));
+
+	sockptr->sock = sock;
+
+	if (memcmp(MsgPtr, "GET" , 3) != 0)
+	{
+		Debugprintf(MsgPtr);
+		return;
+	}
+
+	URL = &MsgPtr[4];
+
+	ptr = strstr(URL, " HTTP");
+
+	if (ptr)
+		*ptr = 0;
+
+	if (_memicmp(URL, "/aprs/find.cgi?call=", 20) == 0)
+	{
+		// return Station details
+
+		char * Call = &URL[20];
+		BOOL RFOnly, WX, Mobile, Object = FALSE;
+		struct STATIONRECORD * stn;
+		char * Referrer = strstr(ptr + 1, "Referer:");
+
+		// Undo any % transparency in call
+
+		char * ptr1 = Call;
+		char * ptr2 = Key;
+		char c;
+
+		c = *(ptr1++);
+
+		while (c)
+		{
+			if (c == '%')
+			{
+				int n;
+				int m = *(ptr1++) - '0';
+				if (m > 9) m = m - 7;
+				n = *(ptr1++) - '0';
+				if (n > 9) n = n - 7;
+
+				*(ptr2++) = m * 16 + n;
+			}
+			else if (c == '+')
+				*(ptr2++) = ' ';
+			else
+				*(ptr2++) = c;
+
+			c = *(ptr1++);
+		}
+
+		*(ptr2++) = 0;
+
+		if (Referrer)
+		{
+			ptr = strchr(Referrer, 13);
+			if (ptr)
+			{
+				*ptr = 0;
+				RFOnly = (BOOL)strstr(Referrer, "rf");
+				WX = (BOOL)strstr(Referrer, "wx");
+				Mobile = (BOOL)strstr(Referrer, "mobile");
+				Object = (BOOL)strstr(Referrer, "obj");
+
+				if (WX)
+					strcpy(URL, "/aprs/infowx_call.html");
+				else if (Mobile)
+					strcpy(URL, "/aprs/infomobile_call.html");
+				else if (Object)
+					strcpy(URL, "/aprs/infoobj_call.html");
+				else
+					strcpy(URL, "/aprs/info_call.html");
+			}
+		}
+
+		if (Object)
+		{
+			// Name is space padded, and could have embedded spaces
+				
+			int Keylen = strlen(Key);
+				
+			if (Keylen < 9)
+				memset(&Key[Keylen], 32, 9 - Keylen);
+		}			
+			
+		stn = FindStation(Key, FALSE);
+
+		if (stn == NULL)
+			strcpy(URL, "/aprs/noinfo.html");
+		else
+			sockptr->SelCall = stn;
+	}
+
+	strcpy(sockptr->Callsign, Key);
+
+	APRSSendMessageFile(sockptr, URL);
+
+	return;
+}

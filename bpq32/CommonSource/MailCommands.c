@@ -1,5 +1,7 @@
 #include "BPQMailChat.h"
 
+int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
+
 static char seps[] = " \t\r";
 
 VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
@@ -285,6 +287,41 @@ Display:
 	SaveUserDatabase();
 	SendPrompt(conn, user);
 }
+
+VOID DoSetIdleTime(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
+{
+	int IdleTime;
+
+	if (Arg1)
+		IdleTime = atoi(Arg1);
+	else
+	{
+		nodeprintf(conn, "Format is IDLETIME nnn\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (IdleTime < 60 || IdleTime > 900)
+	{
+		nodeprintf(conn, "Time out of range (60 to 900 seconds)\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (conn->BPQStream >= 0)
+		ChangeSessionIdletime(conn->BPQStream, IdleTime);
+	else
+	{
+		nodeprintf(conn, "Can't set Idle Time on Console)\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	nodeprintf(conn, "Idle Tine set to %d\r", IdleTime);
+	SendPrompt(conn, user);
+	return;
+}
+
 
 VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {

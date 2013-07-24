@@ -179,7 +179,7 @@ int tnctypes(int i, char value[],char rec[]);
 int do_kiss (char value[],char rec[]);
 int dec_byte(int i, char * value, char * rec);
 
-struct TNCDATA * TNC2TABLE = NULL;		// malloc'ed
+struct TNCDATA * TNCCONFIGTABLE = NULL;		// malloc'ed
 int NUMBEROFTNCPORTS = 0;
 
 struct TNCDATA * TNC2ENTRY;
@@ -432,6 +432,8 @@ BOOL ProcessConfig()
 		PortDefined[i] = FALSE;
 	}
 
+	TNCCONFIGTABLE = NULL;
+	NUMBEROFTNCPORTS = 0;
 
 	Consoleprintf("Configuration file Preprocessor.");
 
@@ -1516,6 +1518,7 @@ int tncports(int i)
 	TNC2ENTRY = zalloc(sizeof(struct TNCDATA));
 
 	TNC2ENTRY->APPLFLAGS = 6;
+	TNC2ENTRY->PollDelay = 1;
 
 	while (endport == 0 && !feof(fp1))
 	{
@@ -1529,7 +1532,7 @@ int tncports(int i)
 		 return(0);
 	}
 
-	C_Q_ADD_NP(&TNC2TABLE, TNC2ENTRY);		// Add to chain
+	C_Q_ADD_NP(&TNCCONFIGTABLE, TNC2ENTRY);		// Add to chain
 	
 	NUMBEROFTNCPORTS++;
 
@@ -1904,6 +1907,45 @@ decode_port_rec(char * rec)
 
 		LogicalPortNum = atoi(value);
 	}
+
+	if (_stricmp(key_word, "XDIGI") == 0)
+	{
+		// Cross Port Digi definition
+
+		// XDIGI=CALL,PORT,UI
+
+		struct XDIGI * Digi = zalloc(sizeof(struct XDIGI));	//  Chain
+		char * call, * pport, * Context;
+		
+		call = strtok_s(value, ",", &Context);
+		pport = strtok_s(NULL, ",", &Context);
+
+		if (call && pport && ConvToAX25(call, Digi->Call))
+		{
+			Digi->Port = atoi(pport);
+			if (Digi->Port)
+			{
+				if (Context)
+				{
+					_strupr(Context);
+					if (strstr(Context, "UI"))
+						Digi->UIOnly = TRUE;
+				}
+
+				// Add to chain
+
+				if (PortRec->XDIGIS)
+					Digi->Next = PortRec->XDIGIS;
+		
+				PortRec->XDIGIS = Digi;
+				return 0;
+			}
+		}
+		Consoleprintf("Invalid XDIGI Statement %s", rec);
+		porterror = 1;
+		return 0;
+	}
+
 
 /************************************************************************/
 /*      SEARCH FOR KEYWORD IN TABLE					*/
@@ -2387,11 +2429,14 @@ decode_tnc_rec(char * rec)
 		TNC2ENTRY->APPLFLAGS =  strtol(value, 0, 0);
 	else if (_stricmp(key_word, "CHANNELS") == 0)
 		TNC2ENTRY->HOSTSTREAMS =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "STREAMS") == 0)
+		TNC2ENTRY->HOSTSTREAMS =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "POLLDELAY") == 0)
+		TNC2ENTRY->PollDelay =  strtol(value, 0, 0);
 	else
 	   Consoleprintf("Source record not recognised - Ignored:%s\r\n",rec);
 
 	return 0;
-
 }
 
 int tnctypes(i, value, rec)
@@ -2683,7 +2728,7 @@ BOOL ProcessAPPLDef(char * buf)
 
 	ptr1 = buf;
 
-	while (ptr1 && *ptr1)
+	while (ptr1 && *ptr1 && n < 8)
 	{
 		ptr2 = strchr(ptr1, ',');
 		if (ptr2) *ptr2++ = 0;

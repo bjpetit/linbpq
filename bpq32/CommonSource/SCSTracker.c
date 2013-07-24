@@ -209,7 +209,7 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == 0)
 			return 0;
@@ -456,7 +456,8 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
-	sprintf(msg,"SCSTRK COM%d", PortEntry->PORTCONTROL.IOBASE);
+	sprintf(msg,"SCSTRK %s", PortEntry->PORTCONTROL.SerialPortName);
+	
 	WritetoConsoleLocal(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
@@ -591,7 +592,7 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	}
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+	OpenCOMMPort(TNC,PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	TNC->InitPtr = TNC->InitScript;
 
@@ -848,7 +849,7 @@ VOID DEDPoll(int Port)
 		Debugprintf("DEDHOST - Link to TNC Lost");
 		TNC->TNCOK = FALSE;
 
-		sprintf(TNC->WEB_COMMSSTATE, "COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE, "%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 		TNC->WEB_CHANGED = TRUE;
 
@@ -984,7 +985,7 @@ VOID DEDPoll(int Port)
 				len = ++end - start -1;	// exclude null
 				TNC->Streams[Stream].CmdSet = end;
 
-				Debugprintf("TRK Cmdset %s", start + 3);
+//				Debugprintf("TRK Cmdset %s", start + 3);
 
 				memcpy(&Poll[0], start, len);
 				Poll[2] = len - 4;
@@ -1295,7 +1296,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
 		
 		TNC->TNCOK = FALSE;
-		sprintf(TNC->WEB_COMMSSTATE, "COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE, "%s Initialising TNC", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 		TNC->WEB_CHANGED = TRUE;
 
@@ -1504,7 +1505,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		// Just come up
 		
 		TNC->TNCOK = TRUE;
-		sprintf(TNC->WEB_COMMSSTATE, "COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE, "%s TNC link OK", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 		TNC->WEB_CHANGED = TRUE;
 	}

@@ -348,7 +348,7 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
-	sprintf(msg,"AEA Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
+	sprintf(msg,"AEA Pactor %s", PortEntry->PORTCONTROL.SerialPortName);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
@@ -472,7 +472,7 @@ UINT AEAExtInit(EXTPORTDATA *  PortEntry)
 	MoveWindows(TNC);
 #endif
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	WritetoConsole("\n");
 
@@ -628,7 +628,7 @@ VOID AEAPoll(int Port)
 		TNC->HostMode = 0;
 		TNC->ReinitState = 0;
 				
-		sprintf(Status,"COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(Status,"%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, Status);
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -1010,7 +1010,7 @@ static VOID DoTNCReinit(struct TNCINFO * TNC)
 
 		char Status[80];
 		
-		sprintf(Status,"COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(Status,"%s Initialising TNC", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, Status);
 
 		Poll[0] = 13;
@@ -1141,7 +1141,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 		{
 			// OK Response
 
-			sprintf(Status,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+			sprintf(Status,"%s TNC link OK", TNC->PortRecord->PORTCONTROL.SerialPortName);
 			SetWindowText(TNC->xIDC_COMMSSTATE, Status);
 
 			return;
@@ -1400,6 +1400,17 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 				if (Stream == 0)
 				{
+					struct WL2KInfo * WL2K = TNC->WL2K;
+					char FreqAppl[10] = "";				// Frequecy-specific application
+	
+					if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
+					{
+						// If Scan Entry has a Appl, save it
+
+						if (TNC->RIG->FreqPtr[0]->APPL[0])
+							strcpy(FreqAppl, TNC->RIG->FreqPtr[0]->APPL[0]);
+					}
+
 					// We are going to Send something, so turn link round
 				
 					EncodeAndSend(TNC, "OAG", 3);
@@ -1410,6 +1421,17 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 					SetWindowText(TNC->xIDC_TNCSTATE, Status);
 
 					// If an autoconnect APPL is defined, send it
+
+					if (FreqAppl[0])				// Frequency spcific APPL overrides TNC APPL
+					{
+						buffptr = GetBuff();
+						if (buffptr == 0) return;	// No buffers, so ignore
+
+						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", FreqAppl);
+						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+						TNC->SwallowSignon = TRUE;
+						return;
+					}
 
 					if (TNC->ApplCmd)
 					{

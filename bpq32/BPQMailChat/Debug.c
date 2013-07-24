@@ -107,7 +107,7 @@ BOOL CreateDebugWindow()
 	wpOrigOutputProc = (WNDPROC)SetWindowLong(hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(hDebug, "Mail/Chat Debug");
+		AddTrayMenuItem(hDebug, "Mail Debug");
 
 	ShowWindow(hDebug, SW_SHOWNORMAL);
 

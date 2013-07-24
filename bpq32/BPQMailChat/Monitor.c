@@ -106,7 +106,7 @@ BOOL CreateMonitor()
 	wpOrigOutputProc = (WNDPROC)SetWindowLong(hwndOutput, GWL_WNDPROC, (LONG)OutputProc);
 
 	if (cfgMinToTray)
-		AddTrayMenuItem(hMonitor, "Mail/Chat Monitor");
+		AddTrayMenuItem(hMonitor, "Mail Monitor");
 
 	ShowWindow(hMonitor, SW_SHOWNORMAL);
 

@@ -187,7 +187,7 @@ ConfigLine:
 		
 		if (_memicmp(buf, "APPL", 4) == 0)
 		{
-			p_cmd = strtok(&buf[4], " \t\n\r");
+			p_cmd = strtok(&buf[5], " \t\n\r");
 
 			if (p_cmd && p_cmd[0] != ';' && p_cmd[0] != '#')
 				TNC->ApplCmd=_strdup(_strupr(p_cmd));
@@ -306,7 +306,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == 0)
 			return 0;
@@ -578,7 +578,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
-	sprintf(msg,"SCS Pactor COM%d", PortEntry->PORTCONTROL.IOBASE);
+	sprintf(msg,"SCS Pactor %s", PortEntry->PORTCONTROL.SerialPortName);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
@@ -749,7 +749,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 	
 	MoveWindows(TNC);
 #endif
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	WritetoConsole("\n");
 
@@ -1017,7 +1017,7 @@ VOID SCSPoll(int Port)
 		Debugprintf("PACTOR - Link to TNC Lost");
 		TNC->TNCOK = FALSE;
 
-		sprintf(TNC->WEB_COMMSSTATE,"COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE,"%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		TNC->HostMode = 0;
@@ -1526,7 +1526,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
 		
 		TNC->TNCOK = FALSE;
-		sprintf(TNC->WEB_COMMSSTATE,"COM%d Initialising TNC", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE,"%s Initialising TNC", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		Poll[0] = 13;
@@ -1982,7 +1982,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		// Just come up
 		
 		TNC->TNCOK = TRUE;
-		sprintf(TNC->WEB_COMMSSTATE,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE,"%s TNC link OK", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	}
 
@@ -2246,6 +2246,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					char * ApplPtr = APPLS;
 					int App;
 					char Appl[10];
+					char FreqAppl[10] = "";				// Frequecy-specific application
 					char DestCall[10];
 					TRANSPORTENTRY * SESS;
 					struct WL2KInfo * WL2K = TNC->WL2K;
@@ -2267,6 +2268,11 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						{
 							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
 							SESS->Frequency = (atof(TNC->RIG->Valchar) * 1000000.0) + 1500;		// Convert to Centre Freq
+
+							// If Scan Entry has a Appl, save it
+
+							if (TNC->RIG->FreqPtr[0]->APPL[0])
+								strcpy(FreqAppl, TNC->RIG->FreqPtr[0]->APPL[0]);
 						}
 						else
 						{
@@ -2348,6 +2354,17 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						if (TNC->HFPacket && TNC->UseAPPLCalls)
 							goto DontUseAPPLCmd;
 	
+						if (FreqAppl[0])			// Frequency spcific APPL overrides TNC APPL
+						{
+							buffptr = GetBuff();
+							if (buffptr == 0) return;			// No buffers, so ignore
+
+							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", FreqAppl);
+							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+							TNC->SwallowSignon = TRUE;
+							return;
+						}
+
 						if (TNC->ApplCmd)	
 						{
 							buffptr = GetBuff();

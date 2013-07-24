@@ -140,7 +140,7 @@ ProcessLine(char * buf, int Port)
 	char errbuf[256];
 	char * param;
 	char * value;
-	char * Context, *User, *Pwd, *UserCall, *Secure, * Appl;
+	char *User, *Pwd, *UserCall, *Secure, * Appl;
 	int End = strlen(buf) -1;
 	struct TNCINFO * TNC;
 	struct TCPINFO * TCP;
@@ -311,14 +311,38 @@ ProcessLine(char * buf, int Port)
 		if (_stricmp(param,"USER") == 0)
 		{
 			struct UserRec * USER;
+			char Param[8][256];
+			char * ptr1, * ptr2;
+			int n = 0;
 
-			User = strtok_s(value, ", ", &Context);
-			Pwd = strtok_s(NULL, ", ", &Context);
-			UserCall = strtok_s(NULL, ", ", &Context);
-			Appl = strtok_s(NULL, ", ", &Context);
-			Secure = strtok_s(NULL, ", ", &Context);
+			// USER=user,password,call,appl,SYSOP
 
-			if (User == 0 || Pwd == 0 || UserCall == 0) // invalid record
+			memset(Param, 0, 2048);
+			strlop(value, 13);
+			strlop(value, ';');
+
+			ptr1 = value;
+
+			while (ptr1 && *ptr1 && n < 8)
+			{
+				ptr2 = strchr(ptr1, ',');
+				if (ptr2) *ptr2++ = 0;
+
+				strcpy(&Param[n][0], ptr1);
+				strlop(Param[n++], ' ');
+				ptr1 = ptr2;
+				while(ptr1 && *ptr1 && *ptr1 == ' ')
+					ptr1++;
+			}
+
+
+			User = &Param[0][0];
+			Pwd = &Param[1][0];
+			UserCall = &Param[2][0];
+			Appl = &Param[3][0];
+			Secure = &Param[4][0];
+
+			if (User[0] == 0 || Pwd[0] == 0 || UserCall[0] == 0) // invalid record
 				return 0;
 
 			_strupr(UserCall);
@@ -332,22 +356,16 @@ ProcessLine(char * buf, int Port)
 
 			TCP->UserRecPtr[TCP->NumberofUsers] = USER;
  
-			USER->Callsign=malloc(strlen(UserCall)+1);
-			USER->Password=malloc(strlen(Pwd)+1);
-			USER->UserName=malloc(strlen(User)+1);
+			USER->Callsign = _strdup(UserCall);
+			USER->Password = _strdup(Pwd);
+			USER->UserName = _strdup(User);
 			USER->Appl = zalloc(32);
 			USER->Secure = FALSE;
 
-			if (Secure)
-			{
-				strlop(Secure, 13);
-				if (_stricmp(Secure, "SYSOP") == 0)
-					USER->Secure = TRUE;
-			}
-			strcpy(USER->UserName, User);
-			strcpy(USER->Password, Pwd);
-			strcpy(USER->Callsign, UserCall);
-			if (Appl && strcmp(Appl, "\"\"") != 0)
+			if (_stricmp(Secure, "SYSOP") == 0)
+				USER->Secure = TRUE;
+		
+			if (Appl[0] && strcmp(Appl, "\"\"") != 0)
 			{
 				strcpy(USER->Appl, _strupr(Appl));
 				strcat(USER->Appl, "\r\n");
@@ -491,12 +509,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				if (SESS)
 				{
 					n = SESS->L4KILLTIMER;
-					if (n < (L4LIMIT - 120))
+					if (n < (SESS->L4LIMIT - 120))
 					{
-						SESS->L4KILLTIMER = L4LIMIT - 120;
+						SESS->L4KILLTIMER = SESS->L4LIMIT - 120;
 						SESS = SESS->L4CROSSLINK;
 						if (SESS)
-							SESS->L4KILLTIMER = L4LIMIT - 120;
+							SESS->L4KILLTIMER = SESS->L4LIMIT - 120;
 					}
 				}
 			}
@@ -1531,7 +1549,9 @@ nosocks:
 			continue;
 		}
 
-		if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0 && STREAM->Attached)
+		if (STREAM->Attached)
+		{
+			if (TNC->PortRecord->ATTACHEDSESSIONS[Stream] == 0 && STREAM->Attached)
 		{
 			// Node has disconnected - clear any connection
 
@@ -1600,6 +1620,7 @@ nosocks:
 				}
 			}
 		}
+	}
 	}
 
 	for (Stream = 0; Stream <= TCP->MaxSessions; Stream++)
@@ -2159,8 +2180,10 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			if (SocketId == TCP->HTTPsock || SocketId == TCP->HTTPsock6)
 				sockptr->HTTPMode = TRUE;
 			else if (SocketId == TCP->Relaysock || SocketId == TCP->Relaysock6)
+			{
 				sockptr->RelayMode = TRUE;
-
+				sockptr->FBBMode = TRUE;
+			}
 			else if (SocketId != TCP->TCPSock && SocketId != TCP->sock6)				// We can have several listening FBB mode sockets
 				sockptr->FBBMode = TRUE;
 #ifndef LINBPQ
@@ -2835,12 +2858,10 @@ MsgLoop:
 			WriteLog (logmsg);
 		}
 
-		MsgPtr++;
+		strcpy(sockptr->Callsign, MsgPtr);
 
 		// Save callsign  for *** linked
-               
-		strcpy(sockptr->Callsign, MsgPtr);
-                                
+                                            
 		send(sock, "Password :\r", 11,0);
                 
 		sockptr->Retries = 0;
@@ -2868,8 +2889,6 @@ MsgLoop:
 					sockptr->Number,
 					work[0], work[1], work[2], work[3],
 					MsgPtr);
-
-			WriteLog (logmsg);
 
 			WriteLog (logmsg);
 		}
@@ -3108,12 +3127,9 @@ MsgLoop:
 						LINKTABLE * LINK = Sess2->L4TARGET.LINK;
 						PORTCONTROLX * PORT = LINK->LINKPORT;
 						
-						if (PORT->WL2KInfo)
-						{
-							Freq = PORT->WL2KInfo->Freq;
-							Mode = PORT->WL2KInfo->mode;
-						}
-
+						Freq = PORT->WL2KInfo.Freq;
+						Mode = PORT->WL2KInfo.mode;
+		
 					}
 					else
 					{
@@ -3162,8 +3178,8 @@ MsgLoop:
 						LINKTABLE * LINK = Sess2->L4TARGET.LINK;
 						PORTCONTROLX * PORT = LINK->LINKPORT;
 						
-						if (PORT->WL2KInfo)
-							len = sprintf(Passline, "CMSTELNET %s %d %d\r", PORT->WL2KInfo->RMSCall, PORT->WL2KInfo->Freq, PORT->WL2KInfo->mode);
+						if (PORT->WL2KInfo.Freq)
+							len = sprintf(Passline, "CMSTELNET %s %d %d\r", PORT->WL2KInfo.RMSCall, PORT->WL2KInfo.Freq, PORT->WL2KInfo.mode);
 
 					}
 					else
@@ -4426,13 +4442,13 @@ static VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 
 	if (sockptr->sin.sin_family != AF_INET6)
 	{
-		char work[4];
+		unsigned char work[4];
 		memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
 		sprintf(dst,"%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 		return;
 	}
 
-	src = (char *)&sockptr->sin6.sin6_addr;
+	src = (unsigned char *)&sockptr->sin6.sin6_addr;
 
 	// See if Encapsulated IPV4 addr
 

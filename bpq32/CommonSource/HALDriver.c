@@ -73,6 +73,12 @@ VOID SendCmd(struct TNCINFO * TNC, UCHAR * txbuffer, int Len);
 int	DLEEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	DLEDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 
+VOID COMClearDTR(HANDLE fd);
+VOID COMClearRTS(HANDLE fd);
+int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
+
+
+
 //static HANDLE LogHandle[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
 
 //char * Logs[4] = {"1", "2", "3", "4"};
@@ -451,7 +457,7 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
-	sprintf(msg,"HAL Driver COM%d", PortEntry->PORTCONTROL.IOBASE);
+	sprintf(msg,"HAL Driver %s", PortEntry->PORTCONTROL.SerialPortName);
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
@@ -562,7 +568,7 @@ UINT HALExtInit(EXTPORTDATA *  PortEntry)
 	MoveWindows(TNC);
 #endif	
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	SendCmd(TNC, "\x09" , 1);		// Reset
 
@@ -685,7 +691,7 @@ VOID HALPoll(int Port)
 		TNC->TNCOK = FALSE;
 		TNC->HostMode = 0;
 				
-		sprintf(TNC->WEB_COMMSSTATE,"COM%d Open but TNC not responding", TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(TNC->WEB_COMMSSTATE,"%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 		//for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -802,7 +808,7 @@ VOID HALPoll(int Port)
 			int datalen;
 			UINT * buffptr;
 			UCHAR * MsgPtr;
-			char TXMsg[500];
+			unsigned char TXMsg[500];
 			
 			buffptr = (UINT * )STREAM->BPQtoPACTOR_Q;
 			datalen=buffptr[1];
@@ -867,7 +873,7 @@ VOID HALPoll(int Port)
 					}
 					else
 					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], &MsgPtr[40]);
+						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s", &MsgPtr[40]);
 						C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 					}
 					return;
@@ -982,8 +988,10 @@ VOID HALPoll(int Port)
 				// Other Command ?? Treat as HEX string
 
 				datalen = sscanf(MsgPtr, "%X %X %X %X %X %X %X %X %X %X %X %X %X %X ",
-					&TXMsg[0], &TXMsg[1], &TXMsg[2], &TXMsg[3], &TXMsg[4], &TXMsg[6], &TXMsg[6], &TXMsg[7], 
-					&TXMsg[8], &TXMsg[9], &TXMsg[10], &TXMsg[11], &TXMsg[12], &TXMsg[13], &TXMsg[14], &TXMsg[15]);
+					(UINT *)&TXMsg[0], (UINT *)&TXMsg[1], (UINT *)&TXMsg[2], (UINT *)&TXMsg[3], (UINT *)&TXMsg[4],
+					(UINT *)&TXMsg[6], (UINT *)&TXMsg[6], (UINT *)&TXMsg[7], (UINT *)&TXMsg[8], (UINT *)&TXMsg[9], 
+					(UINT *)&TXMsg[10], (UINT *)&TXMsg[11], (UINT *)&TXMsg[12], (UINT *)&TXMsg[13], 
+					(UINT *)&TXMsg[14], (UINT *)&TXMsg[15]);
 
 //				SendCmd(TNC, TXMsg, datalen);
 				ReleaseBuffer(buffptr);
@@ -1247,7 +1255,7 @@ CmdLoop:
 	TNC->TNCOK = TRUE;
 	TNC->Timeout = 0;
 
-	sprintf(TNC->WEB_COMMSSTATE,"COM%d TNC link OK", TNC->PortRecord->PORTCONTROL.IOBASE);
+	sprintf(TNC->WEB_COMMSSTATE,"%s TNC link OK", TNC->PortRecord->PORTCONTROL.SerialPortName);
 	SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 	// We may have more than one response in the buffer, and only each cmd/response decoder knows how many it needs

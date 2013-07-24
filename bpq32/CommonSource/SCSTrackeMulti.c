@@ -170,7 +170,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		TNC->ReopenTimer = 0;
 		
-		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.IOBASE, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
 
 		if (TNC->hDevice == 0)
 			return 0;
@@ -326,7 +326,8 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 	//	The COM port number is in IOBASE
 	//
 
-	sprintf(msg,"SCSTRK M COM%d", PortEntry->PORTCONTROL.IOBASE);
+	sprintf(msg,"SCSTRK M %s", PortEntry->PORTCONTROL.SerialPortName);
+
 	WritetoConsole(msg);
 
 	port=PortEntry->PORTCONTROL.PORTNUMBER;
@@ -407,7 +408,7 @@ UINT TrackerMExtInit(EXTPORTDATA *  PortEntry)
 	sprintf(msg, "I %s\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
 
-	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.IOBASE, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+	OpenCOMMPort(TNC,PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	TNC->InitPtr = TNC->InitScript;
 

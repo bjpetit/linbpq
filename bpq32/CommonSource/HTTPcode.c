@@ -43,6 +43,8 @@ extern COLORREF Colours[256];
 extern BOOL IncludesMail;
 extern BOOL IncludesChat;
 
+extern BOOL APRSWeb;  
+
 struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 {
 	struct HTTPConnectionInfo * Next;
@@ -65,7 +67,7 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	VOID * User;				// Selected User
 	VOID * Msg;					// Selected Message
 	VOID * WP;					// Selected WP record
-
+	struct UserRec * USER;		// Telnet Server USER record
 };
 
 
@@ -76,12 +78,12 @@ int CompareNode(const void *a, const void *b);
 int CompareAlias(const void *a, const void *b);
 void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
 void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, char * URL, char * input, char * Reply, int * RLen);
-DllImport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
+struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 int SetupNodeMenu(char * Buff);
 int StatusProc(char * Buff);
 int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
 int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
-
+VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr);
 
 static struct HTTPConnectionInfo * SessionList;	// active term mode sessions
 
@@ -608,6 +610,7 @@ ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 			SessionControl(Stream, 1, 0);
 			ConvToAX25(Session->HTTPCall, AXCall);
 			ChangeSessionCallsign(Stream, AXCall);
+			BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = Session->USER->Secure;
 		}
 
 		SendMsg(Stream, input, end - input);
@@ -693,6 +696,7 @@ ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen)
 						ConvToAX25(Session->HTTPCall, AXCall);
 						ChangeSessionCallsign(Session->Stream, AXCall);
 						BPQHOSTVECTOR[Session->Stream -1].HOSTSESSION->Secure_Session = USER->Secure;
+						Session->USER = USER;
 
 						if (Appl[0])
 						{
@@ -1048,7 +1052,7 @@ int SetupNodeMenu(char * Buff)
 		
 	Len += sprintf(&Buff[Len], NodeMenuRest, Mycall,
 		DriverBit,
-		(APRSApplConnected)?APRSBit:"",
+		(APRSWeb)?APRSBit:"",
 		(IncludesMail)?MailBit:"", (IncludesChat)?ChatBit:"", NodeTail);
 
 	return Len;
@@ -1066,7 +1070,6 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	struct HTTPConnectionInfo CI;
 	struct HTTPConnectionInfo * sockptr = &CI;
 	struct HTTPConnectionInfo * Session = NULL;
-
 
 	HANDLE hPipe;
 	char URL[4096];
@@ -1100,7 +1103,19 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	memcpy(Mycall, &MYNODECALL, 10);
 	strlop(Mycall, ' ');
 
-#ifndef LINBPQ
+#ifdef LINBPQ
+
+	// APRS is internal
+
+	if (_memicmp(Context, "/APRS/", 6) == 0)
+	{
+		APRSProcessHTTPMessage(sock, MsgPtr);
+		return 0;
+	}
+
+#else
+
+	// Windows - Pass to BPQAPRS via Pipi
 
 	if (_memicmp(Context, "/APRS/", 6) == 0)
 	{
@@ -1648,7 +1663,7 @@ doHeader:
 
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "L2 Frames Digied", Port->PORTCONTROL.L2DIGIED);
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "L2 Frames Heard", Port->PORTCONTROL.L2FRAMES);
-		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "L2 Frames Recieved", Port->PORTCONTROL.L2FRAMESFORUS);
+		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "L2 Frames Received", Port->PORTCONTROL.L2FRAMESFORUS);
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "L2 Frames Sent", Port->PORTCONTROL.L2FRAMESSENT);
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "L2 Timeouts", Port->PORTCONTROL.L2TIMEOUTS);
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsLine, "REJ Frames Received", Port->PORTCONTROL.L2REJCOUNT);

@@ -104,7 +104,10 @@ CMDX COMMANDS[];
 int CMDXLEN	= sizeof (CMDX);
 
 VOID SENDNODESMSG();
+VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 
+VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
@@ -647,6 +650,28 @@ VOID CMDPAC(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
+VOID CMDIDLE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	//	SET IDLETIME FOR THIS SESSION
+
+	char * ptr, *Context;
+	int newvalue;
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr && ptr[0])
+	{
+		// Get new value
+
+		newvalue = atoi(ptr);
+		if (newvalue > 59 && newvalue < 901)
+			Session->L4LIMIT = newvalue;
+	}
+
+	Bufferptr += sprintf(Bufferptr, "IDLETIME - %d\r", Session->L4LIMIT);
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+
+}
 VOID CMDT00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	//	SET L4 TIMEOUT FOR CONNECTS ON THIS SESSION
@@ -715,6 +740,9 @@ VOID PWDCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	//	SEND PASSWORD PROMPT
 
+	if (PWLEN == 0)
+		PWLEN = 1;
+
 	p1 = rand() % PWLEN;
 	pwsum += PWTEXT[p1++];
 
@@ -744,8 +772,6 @@ VOID CMDSTATS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 	char * uptime;
 	struct PORTCONTROL * PORT = PORTTABLE;
 	struct PORTCONTROL * STARTPORT;
-
-
 
 	*(Bufferptr++) = 13;
 
@@ -1127,10 +1153,8 @@ VOID CMDP00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
-VOID CMDR00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+char *  DisplayRoute(TRANSPORTENTRY * Session, char * Bufferptr, struct ROUTE * Routes, char Verbose)
 {
-	struct ROUTE * Routes = NEIGHBOURS;
-	int MaxRoutes = MAXNEIGHBOURS;
 	char Normcall[10];
 	char locked[] = " ! ";
 	int NodeCount;
@@ -1139,11 +1163,93 @@ VOID CMDR00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	int Iframes, Retries;
 	char Active[10];
 	int Queued;
+
+	int Port = 0;
+
+	int len = ConvFromAX25(Routes->NEIGHBOUR_CALL, Normcall);
+
+	Normcall[9]=0;
+
+	if ((Routes->NEIGHBOUR_FLAG & 1) == 1)
+		strcpy(locked, "!");
+	else
+		strcpy(locked, " ");
+
+	NodeCount = COUNTNODES(Routes);
+				
+	if (Routes->NEIGHBOUR_LINK && Routes->NEIGHBOUR_LINK->L2STATE >= 5)
+		strcpy(Active, ">");
+	else
+		strcpy(Active, " ");
+
+	Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
+
+	if (Verbose)
+	{
+		if (Routes->NEIGHBOUR_LINK)					
+			Queued = COUNT_AT_L2(Routes->NEIGHBOUR_LINK);			// SEE HOW MANY QUEUED
+		else
+			Queued = 0;
+
+		Iframes = Routes->NBOUR_IFRAMES;
+		Retries = Routes->NBOUR_RETRIES;
+
+		if (Iframes)
+		{
+			Percent = (Retries * 100) / Iframes;
+			sprintf(PercentString, "%3d%%", Percent);
+		}
+		else
+			strcpy(PercentString, "    ");
+
+		
+		Bufferptr += sprintf(Bufferptr, "%s%2d %s %3d %3d%s%4d %4d %s %d %d %02d:%02d  %d",
+							Active, Routes->NEIGHBOUR_PORT, Normcall, 
+							Routes->NEIGHBOUR_QUAL,	NodeCount, locked, Iframes, Retries, PercentString, Routes->NBOUR_MAXFRAME, Routes->NBOUR_FRACK,
+							Routes->NEIGHBOUR_TIME >> 8, (Routes->NEIGHBOUR_TIME) & 0xff, Queued);
+
+		//	IF INP3 DISPLAY SRTT
+
+		if (Routes->INP3Node)		// INP3 Enabled?
+		{
+			double srtt = Routes->SRTT/1000.0;
+			double nsrtt = Routes->NeighbourSRTT/1000.0;
+
+			Bufferptr += sprintf(Bufferptr, " %4.2fs %4.2fs", srtt, nsrtt);
+		}
+
+		*(Bufferptr++) = 13;
+	}
+	else
+	{
+		Bufferptr += sprintf(Bufferptr, "%s %d %s %d %d%s\r",
+			Active, Routes->NEIGHBOUR_PORT, Normcall, Routes->NEIGHBOUR_QUAL, NodeCount, locked);
+	}
+
+	return Bufferptr;
+}
+
+
+VOID CMDR00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	struct ROUTE * Routes = NEIGHBOURS;
+	int MaxRoutes = MAXNEIGHBOURS;
+	char locked[] = " ! ";
+	int Percent = 0;
 	char * ptr, * Context;
 	char Verbose = 0;
 	int Port = 0;
+	char AXCALL[7];
+	BOOL Found;
 
 	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr && strlen(ptr) > 1)
+	{
+		// Route Update
+
+		goto ROUTEUPDATE;
+	}
 
 	if (ptr)
 	{
@@ -1158,74 +1264,262 @@ VOID CMDR00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	while (MaxRoutes--)
 	{
 		if (Routes->NEIGHBOUR_CALL[0] != 0)
-		{
 			if (Port == 0 || Port == Routes->NEIGHBOUR_PORT)
-			{
-				int len = ConvFromAX25(Routes->NEIGHBOUR_CALL, Normcall);
-				Normcall[9]=0;
+				Bufferptr = DisplayRoute(Session, Bufferptr, Routes, Verbose);
 
-				if ((Routes->NEIGHBOUR_FLAG & 1) == 1)
-					strcpy(locked, "!");
-				else
-					strcpy(locked, " ");
-
-				NodeCount = COUNTNODES(Routes);
-				
-				if (Routes->NEIGHBOUR_LINK && Routes->NEIGHBOUR_LINK->L2STATE >= 5)
-					strcpy(Active, ">");
-				else
-					strcpy(Active, " ");
-
-				Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
-
-				if (Verbose)
-				{
-					if (Routes->NEIGHBOUR_LINK)					
-						Queued = COUNT_AT_L2(Routes->NEIGHBOUR_LINK);			// SEE HOW MANY QUEUED
-					else
-						Queued = 0;
-
-					Iframes = Routes->NBOUR_IFRAMES;
-					Retries = Routes->NBOUR_RETRIES;
-
-					if (Iframes)
-					{
-						Percent = (Retries * 100) / Iframes;
-						sprintf(PercentString, "%3d%%", Percent);
-					}
-					else
-						strcpy(PercentString, "    ");
-
-		
-					Bufferptr += sprintf(Bufferptr, "%s%2d %s %3d %3d%s%4d %4d %s %d %d %02d:%02d  %d",
-							Active, Routes->NEIGHBOUR_PORT, Normcall, 
-							Routes->NEIGHBOUR_QUAL,	NodeCount, locked, Iframes, Retries, PercentString, Routes->NBOUR_MAXFRAME, Routes->NBOUR_FRACK,
-							Routes->NEIGHBOUR_TIME >> 8, (Routes->NEIGHBOUR_TIME) & 0xff, Queued);
-
-					//	IF INP3 DISPLAY SRTT
-
-					if (Routes->INP3Node)		// INP3 Enabled?
-					{
-						double srtt = Routes->SRTT/1000.0;
-						double nsrtt = Routes->NeighbourSRTT/1000.0;
-
-						Bufferptr += sprintf(Bufferptr, " %4.2fs %4.2fs", srtt, nsrtt);
-					}
-
-					*(Bufferptr++) = 13;
-				}
-				else
-				{
-					Bufferptr += sprintf(Bufferptr, "%s %d %s %d %d%s\r",
-						Active, Routes->NEIGHBOUR_PORT, Normcall, Routes->NEIGHBOUR_QUAL, NodeCount, locked);
-				}
-			}
-		}
 		Routes++;
 	}
+	goto SendReply;
+
+ROUTEUPDATE:
+	
+	if (Session->PASSWORD  != 0xFFFF)
+	{
+		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		goto SendReply;
+	}
+
+	// Line is 
+
+	// ROUTES G8BPQ-2 2 100	  - Set quality to 100
+    // ROUTES G8BPQ-2 2 !         - Toggle 'Locked Route' flag
+    // ROUTES G8BPQ-2 2 100 !     - Set quality and toggle 'locked' flag
+
+
+	ConvToAX25(ptr, AXCALL);
+
+	ptr = strtok_s(NULL, " ", &Context);
+
+	if (ptr)
+		Port = atoi(ptr);
+
+	if (Port == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Port Number Missing \r");
+		goto SendReply;
+	}
+
+	Found = FindNeighbour(AXCALL, Port, &Routes);
+
+	if (Context && Context[0] > 32)
+	{
+		// More Params
+
+		ptr = strtok_s(NULL, " ", &Context);
+
+		if (ptr)
+		{
+			// Adding
+
+			memcpy(Routes->NEIGHBOUR_CALL, AXCALL, 7);	// In case Add
+			Routes->NEIGHBOUR_PORT = Port;
+			Found = TRUE;
+		}
+
+		if (strcmp(ptr, "!") == 0)
+		{
+			// Toggle Lock
+
+			Routes->NEIGHBOUR_FLAG ^= 1;	// FLIP LOCKED BIT
+			goto Displayit;
+		}
+
+		if (strcmp(ptr, "Z") == 0)
+		{
+			// Clear Counts
+
+			Routes->NBOUR_IFRAMES = 0;
+			Routes->NBOUR_RETRIES = 0;
+			goto Displayit;
+		}
+
+		Routes->NEIGHBOUR_QUAL = atoi(ptr);
+
+		if (Context && Context[0] == '!')
+		{
+			// Toggle Lock
+
+			Routes->NEIGHBOUR_FLAG ^= 1;	// FLIP LOCKED BIT
+			goto Displayit;
+		}
+	}
+
+Displayit:
+
+	// Just display
+
+	if (Found)
+		Bufferptr = DisplayRoute(Session, Bufferptr, Routes, 1);
+	else
+		Bufferptr += sprintf(Bufferptr, "Not Found\r");
+
+
+
+/*	MOV	ROUTEDISP,1
+
+	CMP	BYTE PTR [ESI],20H
+	JE SHORT JUSTDISPLAY
+
+	MOV	ZAPFLAG,0
+
+	CMP	BYTE PTR [ESI],'Z'
+	JNE SHORT NOTZAP
+
+	MOV	ZAPFLAG,1
+	JMP SHORT JUSTDISPLAY
+
+	PUBLIC	NOTZAP
+NOTZAP:
+
+	MOV	ROUTEDISP,2		; LOCK UPDATE
+
+	CMP	BYTE PTR [ESI],'!'
+	JE SHORT JUSTDISPLAY
+;
+;	LOOK FOR V FOR ADDING A DIGI
+;
+	CMP	WORD PTR [ESI],' V'	; V [SPACE]
+	JE 	ADDDIGI
+
+	CALL	GETVALUE		; GET NUMBER, UP TO SPACE , CR OR OFFH
+	JC SHORT BADROUTECMD		; INVALID DIGITS
+
+	MOV	NEWROUTEVAL,AL
+
+	MOV	ROUTEDISP,0
+
+	CALL	SCAN			; SEE IF !
+	MOV	AH,[ESI]
+
+
+	PUBLIC	JUSTDISPLAY
+JUSTDISPLAY:
+
+
+	MOV	ESI,OFFSET32 AX25CALL
+	CALL	_FINDNEIGHBOUR
+	JZ SHORT FOUNDROUTE		; IN LIST - OK
+
+	CMP	EBX,0
+	JE SHORT BADROUTECMD		; TABLE FULL??
+
+	MOV	ECX,7
+	MOV	EDI,EBX
+	REP MOVSB			; PUT IN CALL
+
+	MOV	AL,SAVEPORT
+	MOV	NEIGHBOUR_PORT[EBX],AL
+
+	JMP SHORT FOUNDROUTE
+
+
+	PUBLIC	BADROUTECMD
+BADROUTECMD:
+
+	POP	EDI
+
+	JMP	PBADVALUE
+
+	PUBLIC	FOUNDROUTE
+FOUNDROUTE:
+
+	CMP	ZAPFLAG,1
+	JNE SHORT NOTCLEARCOUNTS
+
+	XOR	AX,AX
+	MOV	ES:WORD PTR NBOUR_IFRAMES[EDI],AX
+	MOV	ES:WORD PTR NBOUR_IFRAMES+2[EDI],AX
+	MOV	ES:WORD PTR NBOUR_RETRIES[EDI],AX
+	MOV	ES:WORD PTR NBOUR_RETRIES+2[EDI],AX
+
+	JMP SHORT NOUPDATE
+
+	PUBLIC	NOTCLEARCOUNTS
+NOTCLEARCOUNTS:
+
+	CMP	ROUTEDISP,1
+	JE SHORT NOUPDATE
+
+	CMP	ROUTEDISP,2
+	JE SHORT LOCKUPDATE
+
+	MOV	AL,NEWROUTEVAL
+	MOV	NEIGHBOUR_QUAL[EBX],AL
+
+	CMP	AH,'!'
+	JNE SHORT NOUPDATE
+
+	PUBLIC	LOCKUPDATE
+LOCKUPDATE:
+
+	XOR	NEIGHBOUR_FLAG[EBX],1	; FLIP LOCKED BIT
+
+	PUBLIC	NOUPDATE
+NOUPDATE:
+
+	MOV	ESI,EBX
+	POP	EDI
+
+	POP	EBX
+	CALL	DISPLAYROUTE
+
+	JMP	SENDCOMMANDREPLY
+
+	PUBLIC	ADDDIGI
+ADDDIGI:
+
+	ADD	ESI,2
+	PUSH	ESI			; SAVE INPUT BUFFER
+
+	MOV	ESI,OFFSET32 AX25CALL
+	CALL	_FINDNEIGHBOUR
+
+	POP	ESI
+
+	JZ SHORT ADD_FOUND		; IN LIST - OK
+
+	JMP	BADROUTECMD
+
+	PUBLIC	ADD_FOUND
+ADD_FOUND:
+
+	CALL	CONVTOAX25		; GET DIGI CALLSIGN
+
+	PUSH	ESI
+
+	MOV	ESI,OFFSET32 AX25CALL
+	LEA	EDI,NEIGHBOUR_DIGI[EBX]
+	MOV	ECX,7
+	REP MOVSB
+
+	POP	ESI			; MSG BUFFER
+;
+;	SEE IF ANOTHER DIGI
+;
+	CMP	BYTE PTR [ESI],20H
+	JE SHORT NOMORE
+
+	CALL	CONVTOAX25		; GET DIGI CALLSIGN
+	MOV	ESI,OFFSET32 AX25CALL
+	LEA	EDI,NEIGHBOUR_DIGI+7[EBX]
+	MOV	ECX,7
+	REP MOVSB
+
+	PUBLIC	NOMORE
+NOMORE:
+
+	JMP	NOUPDATE
+
+
+
+*/
+
+SendReply:
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
+
+
 
 
 VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
@@ -2019,9 +2313,22 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	char Param = 0;
 	char * ptr, * Context;
 	char Nodeline[20];
+	char AXCALL[7];
+	char * Call;
+	char * Qualptr;
+	int Qual;
 
 	ptr = strtok_s(CmdTail, " ", &Context);
 
+	if (ptr)
+	{
+		if (strcmp(ptr, "ADD") == 0)
+			goto NODE_ADD;
+	
+		if (strcmp(ptr, "DEL") == 0)
+			goto NODE_DEL;
+	}
+	
 	if (ptr)
 		Param = ptr[0];
 
@@ -2161,6 +2468,167 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	if (x)
 		*(Bufferptr++) =  '\r';
+
+	goto SendReply;
+
+NODE_ADD:
+
+	//	FORMAT IS NODE ADD ALIAS:CALL ROUTE QUAL
+
+
+	if (Session->PASSWORD  != 0xFFFF)
+	{
+		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		goto SendReply;
+	}
+
+	ptr = strtok_s(NULL, " ", &Context);
+
+	if (ptr == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Missing Alias:Call\r");
+		goto SendReply;
+	}
+
+	Call = strlop(ptr, ':');
+
+	ConvToAX25(Call, AXCALL);
+
+	Qualptr = strtok_s(NULL, " ", &Context);
+
+	if (Qualptr == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Quality missing\r");
+		goto SendReply;
+	}
+
+	Qual = atoi(Qualptr);
+
+	if (Qual < MINQUAL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Quality is below MINQUAL\r");
+		goto SendReply;
+	}
+
+	if (FindDestination(AXCALL, &Dest))
+	{
+		Bufferptr += sprintf(Bufferptr, "Node already in Table\r");
+		goto SendReply;
+	}
+
+	if (Dest == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Node Table Full\r");
+		goto SendReply;
+	}
+
+/*
+
+	JZ SHORT PNODE47			; ALREADY THERE
+
+	CMP	EBX,0
+	JNE SHORT PNODE48
+
+PNODE47:
+
+	POP	ESI
+	JMP	PNODE35			; NOROOMFORNODE
+
+PNODE48:
+
+	LEA	EDI,DEST_CALL[EBX]
+	MOV	ECX,7
+	REP MOVSB
+
+	MOV	ECX,6			; ADD ALIAS
+	MOV	ESI,OFFSET32 TEMPFIELD
+	REP MOVSB
+
+	POP	ESI
+;
+;	GET NEIGHBOURS FOR THIS DESTINATION
+;
+	CALL	CONVTOAX25
+	JNZ SHORT BADROUTE
+;
+	CALL	GETVALUE
+	MOV	SAVEPORT,AL		; SET PORT FOR _FINDNEIGHBOUR
+
+	CALL	GETVALUE
+	MOV	ROUTEQUAL,AL
+;
+	MOV	ESI,OFFSET32 AX25CALL
+
+	PUSH	EBX			; SAVE DEST
+	CALL	_FINDNEIGHBOUR
+	MOV	EAX,EBX			; ROUTE TO AX
+	POP	EBX
+
+	JZ SHORT NOTBADROUTE
+
+	JMP SHORT BADROUTE
+
+NOTBADROUTE:
+;
+;	UPDATE ROUTE LIST FOR THIS DEST
+;
+	MOV	ROUT1_NEIGHBOUR[EBX],EAX
+	MOV	AL,ROUTEQUAL
+	MOV	ROUT1_QUALITY[EBX],AL
+	MOV	ROUT1_OBSCOUNT[EBX],255	; LOCKED
+;
+	POP	EDI
+	POP	EBX
+	
+	INC	_NUMBEROFNODES
+
+	JMP	SENDOK
+
+BADROUTE:
+;
+;	KILL IT
+;
+	MOV	ECX,TYPE DEST_LIST
+	MOV	EDI,EBX
+	MOV	AL,0
+	REP STOSB
+
+	JMP	BADROUTECMD	
+
+	*/
+	
+	goto SendReply;
+
+
+NODE_DEL:
+	
+	if (Session->PASSWORD  != 0xFFFF)
+	{
+		Bufferptr += sprintf(Bufferptr, "%s", PASSWORDMSG);
+		goto SendReply;
+	}
+
+	ptr = strtok_s(NULL, " ", &Context);
+
+	if (ptr == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Missing Call\r");
+		goto SendReply;
+	}
+
+	ConvToAX25(ptr, AXCALL);
+
+	if (FindDestination(AXCALL, &Dest) == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Not Found\r");
+		goto SendReply;
+	}
+
+	REMOVENODE(Dest);
+
+	Bufferptr += sprintf(Bufferptr, "Node Deleted\r");
+
+SendReply:
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
@@ -2685,6 +3153,9 @@ CMDX COMMANDS[] =
 	"L3ONLY      ",6,PORTVAL,&DP.PORTCONTROL.PORTL3FLAG,
 	"BBSALIAS    ",4,PORTVAL,&DP.PORTCONTROL.PORTBBSFLAG,
 	"VALIDCALL   ",5,VALNODES,0,
+	"WL2KSYSOP   ",5,WL2KSYSOP,0,
+	"STOPPORT    ",4,STOPPORT,0,
+	"STARTPORT   ",5,STARTPORT,0,
 
 #ifdef BLACKBITS
 
@@ -2756,6 +3227,7 @@ CMDX COMMANDS[] =
 	"L4T1        ",2,CMDT00,0,
 	"PORTS       ",1,CMDP00,0,
 	"PACLEN      ",3,CMDPAC,0,
+	"IDLETIME    ",4,CMDIDLE,0,
 	"ROUTES      ",1,CMDR00,0,
 	"STATS       ",1,CMDSTATS,0,
 	"USERS       ",1,CMDS00,0,
@@ -3555,5 +4027,380 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 		Bufferptr += sprintf(Bufferptr, "%s\r", msg);
 	}
 
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
+extern char WL2KCall[10];
+extern char WL2KLoc[7];
+
+BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * _REPLYBUFFER);
+BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL);
+
+VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char _REPLYBUFFER[1000] = "";
+	char * ptr1, * ptr2;
+	char SQL[1000];
+
+	char LastUpdated[100];
+	char Name[100] = "";
+	char Addr1[100] = "";
+	char Addr2[100] = "";
+	char City[100] = "";
+	char State[100] = "";
+	char Country[100] = "";
+	char PostCode[100] = "";
+	char Email[100] = "";
+	char Website[100] = "";
+	char Phone[100] = "";
+	char Data[100] = "";
+	char LOC[100] = "";
+	int replylen;
+
+	if (WL2KCall[0] < 33)
+	{
+		Bufferptr += sprintf(Bufferptr, "Winlink reporting is not configured\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	sprintf(SQL, "SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, EMail, WEBSite, Phones, AdditionalData, GridSquare, TimeStamp FROM SysopRecords WHERE Callsign='%s'",
+			WL2KCall);
+
+
+	if (GetWL2KSYSOPInfo(WL2KCall, SQL, _REPLYBUFFER) == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Failed to connect to WL2K Database\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+
+	replylen = atoi(&_REPLYBUFFER[2]);
+
+	if (replylen == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Nothing returned from WL2K Database\r");
+		goto CheckParam;
+	}
+
+		ptr1 = ptr2 = &_REPLYBUFFER[9];
+		ptr2 = strchr(ptr1, 1);
+	
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(Name, ptr1);
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+		strcpy(Addr1, ptr1);
+
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+		strcpy(Addr2, ptr1);
+
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(City, ptr1);
+
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(State, ptr1);
+			
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(Country, ptr1);
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(PostCode, ptr1);
+		
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(Email, ptr1);
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(Website, ptr1);
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+
+		strcpy(Phone, ptr1);
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+		strcpy(Data, ptr1);
+
+		ptr1 = ptr2;
+		ptr2 = strchr(ptr1, 1);
+
+		if (ptr2 == 0)
+			goto BadResp;
+
+		*(ptr2++) = 0;
+		strcpy(LOC, ptr1);
+
+		strcpy(LastUpdated, ptr2);
+
+	goto CheckParam;
+
+BadResp:
+
+		Bufferptr += sprintf(Bufferptr, "Bad response from WL2K Database\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+
+
+CheckParam:
+
+	if (_memicmp(CmdTail, "SET ", 4) == 0)
+	{
+		if (replylen)
+		{
+			Bufferptr += sprintf(Bufferptr, "Record already exists in WL2K Database\r");
+			SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+			return;
+		}
+
+	// Set New Values. Any other params are values to set, separated by |
+
+//		ptr1 = strtok_s(&CmdTail[4], ",", &Context);
+
+//		if (ptr1 == NULL)
+//			goto DoReplace;
+
+//		strcpy(Name, ptr1);
+
+//DoReplace:
+		
+		sprintf(SQL, "REPLACE INTO SysopRecords SET TimeStamp=NOW(), Callsign='%s', GridSquare='%s'",
+//			SysopName='%s', StreetAddress1='%s', StreetAddress2='%s', City='%s', State='%s', Country='%s', PostalCode='%s', EMail='%s', WEBSite='%s', Phones='%s', AdditionalData='%s'",
+				WL2KCall, WL2KLoc);
+
+		UpdateWL2KSYSOPInfo(WL2KCall, SQL);	
+
+		Bufferptr += sprintf(Bufferptr, "Database Updated\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	if (replylen)
+	{
+		Bufferptr += sprintf(Bufferptr, "\rWL2K SYSOP Info for %s\r", WL2KCall);
+		Bufferptr += sprintf(Bufferptr, "Grid Square: %s\r", LOC);
+		Bufferptr += sprintf(Bufferptr, "Name: %s\r", Name);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Addr Line 1: %s\r", Addr1);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Addr Line 2: %s\r", Addr2);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "City: %s\r", City);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "State: %s\r", State);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Country: %s\r", Country);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "PostCode: %s\r", PostCode);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Email Address: %s\r", Email);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Website: %s\r", Website);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Phone: %s\r", Phone);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Additional Data: %s\r", Data);
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
+		Bufferptr += sprintf(Bufferptr, "Last Updated: %s\r", LastUpdated);
+	}
+
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+}
+
+VOID CloseKISSPort(struct PORTCONTROL * PortVector);
+int OpenConnection(struct PORTCONTROL * PortVector, int port);
+
+VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char _REPLYBUFFER[1000] = "";
+	char * ptr, * Context;
+
+	int portno;
+	struct PORTCONTROL * PORT = PORTTABLE;
+	int n = NUMBEROFPORTS;
+
+	// Get port number
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+	{
+		portno = atoi (ptr);
+
+		if (portno)
+		{
+			while (n--)
+			{
+				if (PORT->PORTNUMBER == portno)
+				{
+					struct KISSINFO * KISS;
+
+					if (PORT->PORTTYPE != 0)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
+					KISS = (struct KISSINFO *) PORT;
+
+					if (KISS->FIRSTPORT != KISS)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not first port of a Multidrop Set\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
+					CloseKISSPort(PORT); 
+					Bufferptr += sprintf(Bufferptr, "Port Closed\r");
+					SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+
+					return;
+				}
+				PORT = PORT->PORTPOINTER;
+			}
+		}
+	}
+
+	// Bad port
+
+	strcpy(Bufferptr, BADPORT);
+	Bufferptr += strlen(BADPORT);
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+
+	
+	Bufferptr += sprintf(Bufferptr, "Winlink reporting is not configured\r");
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
+VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	char _REPLYBUFFER[1000] = "";
+	char * ptr, * Context;
+
+	int portno;
+	struct PORTCONTROL * PORT = PORTTABLE;
+	int n = NUMBEROFPORTS;
+
+	// Get port number
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+	{
+		portno = atoi (ptr);
+
+		if (portno)
+		{
+			while (n--)
+			{
+				if (PORT->PORTNUMBER == portno)
+				{
+					struct KISSINFO * KISS;
+
+					if (PORT->PORTTYPE != 0)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not a KISS Port\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
+					KISS = (struct KISSINFO *) PORT;
+
+					if (KISS->FIRSTPORT != KISS)
+					{
+						Bufferptr += sprintf(Bufferptr, "Not first port of a Multidrop Set\r");
+						SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+						return;
+					}
+
+					if (OpenConnection(PORT, PORT->IOBASE))
+						Bufferptr += sprintf(Bufferptr, "Port Opened\r");
+					else
+						Bufferptr += sprintf(Bufferptr, "Port Open Failed\r");
+						
+					SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+					return;
+				}
+				PORT = PORT->PORTPOINTER;
+			}
+		}
+	}
+
+	// Bad port
+
+	strcpy(Bufferptr, BADPORT);
+	Bufferptr += strlen(BADPORT);
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+
+	
+	Bufferptr += sprintf(Bufferptr, "Winlink reporting is not configured\r");
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }

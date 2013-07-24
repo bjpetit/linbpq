@@ -17,7 +17,7 @@
 #ifndef LINBPQ
 #include <commctrl.h>
 #endif
-#include <stdlib.h>
+//#include <stdlib.h>
 #include "bpq32.h"
 extern char * PortConfig[33];
 
@@ -328,7 +328,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	else if (TNC->Hardware == H_MPSK)
 		sprintf(Title, "Rigcontrol for MultiPSK Port %d", TNC->Port);
 	else
-		sprintf(Title,"%s Status - COM%d", WindowTitle, TNC->PortRecord->PORTCONTROL.IOBASE);
+		sprintf(Title,"%s Status - %s", WindowTitle, TNC->PortRecord->PORTCONTROL.SerialPortName);
 
 
 	TNC->hDlg = hDlg =  CreateMDIWindow(ClassName, Title, 0,
@@ -925,7 +925,7 @@ char * GetChallengeResponse(char * Call, char *  ChallengeString)
 
 	sprintf(ChallengeResponse, "%012lld", Response);
 
-	return ChallengeResponse; // 001065484730
+	return ChallengeResponse;
 }
 
 BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * _REPLYBUFFER)
@@ -1017,14 +1017,8 @@ BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	char Buffer[1000];
-//	char SendBuffer[] = "040000176GM8BPQ      ............SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, GridSquare, EMail, WEBSite, Phones, AdditionalData FROM SysopRecords WHERE Callsign='GM8BPQ'";
-//	char SendBuffer[] = "080000008G8BPQ       ............AAAAAAAA";
-//	char SendBuffer[] = "040000053G8BPQ       001010818628SELECT Password FROM Passwords WHERE Callsign='G8BPQ'";
-	char SendBuffer[1000] = "020000366GW8BPQ      000365713154";
+	char SendBuffer[1000];
 		
-//	char SQL[] = "REPLACE INTO SysopRecords SET Callsign='G8BPQ', GridSquare='IO92KX', EMail='', WEBSite='', SysopName='John', StreetAddress1='', StreetAddress2='', City='Nottingham', State='', Country='', PostalCode='', Phones='', AdditionalData='Developing BPQ32 interface for RMS Packet'";	
-//	char SQL[] = "DELETE FROM SysopRecords WHERE Callsign='GW8BPQ'";
-
 	destaddr.sin_family = AF_INET; 
 	destaddr.sin_addr.s_addr = inet_addr("www.winlink.org");
 	destaddr.sin_port = htons(8775);
@@ -1067,8 +1061,6 @@ BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
 		closesocket(sock);
 		return 0;
 	}
-
-//	STRCPY(SQL, "SELECT Password FROM Passwords WHERE Callsign='G8BPQ'");
 
 	len = recv(sock, &Buffer[0], len, 0);
 

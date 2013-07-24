@@ -30,6 +30,10 @@
 
 //		Prevent crash when receiving INP3 Routing Frame
 
+//	Version 1.2.5.1 May 2013
+
+//		Include queue count in Y response
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -1527,7 +1531,6 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
 	{
 	case 'C':
 
-    
         //   Connect
         
         //   Create Session Key from port and callsign pair
@@ -1550,12 +1553,6 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
         Connection->Connecting = TRUE;
         
         Connect(Stream);				// Connect
-
-        
-        //LinkedMsg = "*** Linked to " & RTrim$(Sockets(Index).CallSign) & vbCr
-        
-        //Debug.Print LinkedMsg
-        //Debug.Print BPQCtrl1.SendData(Stream, LinkedMsg, Len(LinkedMsg))
         
 		ConvToAX25(sockptr->CallSign, AXCall);
 		ChangeSessionCallsign(Stream, AXCall);
@@ -1592,7 +1589,6 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
         //   Send Data
         //
         //   Create Session Key from port and callsign pair
-        
 		
         GetSessionKey(key, sockptr);
 
@@ -1606,17 +1602,12 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
 		}
 
 		return 0;
-
-
   
 	case 'd':
 
-    
     //   Disconnect
             
-         
         memcpy(AGWTXHeader.callto,sockptr->AGWRXHeader.callfrom,10);
-
         memcpy(AGWTXHeader.callfrom,sockptr->AGWRXHeader.callto,10);
         
         SendDisMsgtoAppl("*** DISCONNECTED RETRYOUT With ", sockptr);
@@ -1628,7 +1619,6 @@ int ProcessAGWCommand(struct SocketConnectionInfo * sockptr)
 			if (memcmp(Connections[con].CallKey,key,21) == 0)
 			{ 
                 Disconnect(Connections[con].BPQStream);
-
 				return 0;
 			}
 		}

@@ -40,6 +40,11 @@
 
 // Auguxt 2012 Version 1.1.3.1	Released
 
+// June 2013
+
+// Fix Loop if Object is Station
+// Fix crash if > 1000 stations at a point
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
@@ -2230,12 +2235,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_BASICSETUP), hWnd, ConfigWndProc);
 				break;
 			
+/*
 			case BPQCOPY:
 		
 				//
 				//	Copy buffer to clipboard
 				//
-/*
+
 				hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE,sizeof(Screen));
 		
 				if (hMem != 0)
@@ -2253,8 +2259,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						GlobalFree(hMem);
 					}
 				}
-*/
+
 				break;
+*/
 			}
 
 			default:
@@ -3988,7 +3995,7 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 	struct STATIONRECORD * ptr = StationRecords;
 	struct STATIONRECORD * List[1000];
 
-	while(ptr)
+	while(ptr && j < 999)
 	{	
 		if (abs((ptr->DispX - MouseX)) < 8 && abs((ptr->DispY - MouseY)) < 8)
 			List[j++] = ptr;
@@ -4595,7 +4602,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 	case ')':					// Item	
 
-		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
+//		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
 
 		Item = TRUE;
 		ObjName = ptr = Payload + 1;
@@ -4619,7 +4626,18 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		strcpy(Object->Path, Station->Callsign);
 		strcat(Object->Path, ">");
-		strcat(Object->Path, Station->Path);
+
+		if (Object == Station)
+		{
+			char Temp[256];
+			strcpy(Temp, Station->Path);
+			strcat(Object->Path, Temp);
+			Debugprintf("Item is station %s", Payload);
+		}
+		else
+			strcat(Object->Path, Station->Path);
+
+//		strcat(Object->Path, Station->Path);
 
 		strcpy(Object->LastPacket, Payload);
 
@@ -4645,7 +4663,18 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		strcpy(Object->Path, Station->Callsign);
 		strcat(Object->Path, ">");
-		strcat(Object->Path, Station->Path);
+
+		if (Object == Station)
+		{
+			char Temp[256];
+			strcpy(Temp, Station->Path);
+			strcat(Object->Path, Temp);
+			Debugprintf("Object is station %s", Payload);
+		}
+		else
+			strcat(Object->Path, Station->Path);
+
+//		strcat(Object->Path, Station->Path);
 
 		strcpy(Object->LastPacket, Payload);
 

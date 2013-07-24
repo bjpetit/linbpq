@@ -52,6 +52,17 @@ int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
     unsigned char c1, c2;
     int  v;
 
+	if (pStr1 == NULL)
+	{
+		if (pStr2)
+			Debugprintf("stricmp called with NULL 1st param - 2nd %s ", pStr2);
+		else
+			Debugprintf("stricmp called with two NULL params");
+
+		return 1;
+	}
+
+
     do {
         c1 = *pStr1++;
         c2 = *pStr2++;

@@ -165,6 +165,7 @@ typedef struct _TRANSPORTENTRY
 	char UADDRESS[64];			// Unproto Address String - Dest + Digis
 
 	char APPL[16];				// Set if session initiated by an APPL
+	int L4LIMIT;				// Idle time for this Session
 
 } TRANSPORTENTRY;
 
@@ -446,6 +447,51 @@ typedef struct DEST_LIST
 
 #define NewNode 1			// Just added to table, so need to pass on
 
+struct XDIGI
+{
+	struct XDIGI * Next;	//  Chain
+
+	UCHAR Call[7];
+	UCHAR Alias[7];
+	int Port;
+	BOOL UIOnly;
+};
+
+struct WL2KInfo
+{
+	struct WL2KInfo * Next;
+
+	char * Host;
+	short WL2KPort;
+
+	char RMSCall[10];
+	char BaseCall[10];
+	char GridSquare[7];
+	char Times[80];
+	char ServiceCode[17];
+
+	BOOL UseRigCtrlFreqs;
+	char WL2KFreq[12];
+	char WL2KMode;				// WL2K reporting mode
+	char WL2KModeChar;			// W or N
+	BOOL DontReportNarrowOnWideFreqs;
+
+//	char NARROWMODE;
+//	char WIDEMODE;				// Mode numbers to report to WL2K
+
+//	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
+
+	int Freq;
+	char Bandwidth;
+//	char * TimeList;		// eg 06-10,12-15
+	int mode;              // see below (an integer)
+	int baud;              // see below (an integer)
+	int power;             // actual power if known, default to 100 for HF, 30 for VHF/UHF (an integer)
+	int height;            // antenna height in feet if known, default to 25
+	int gain;              // antenna gain if known, default to 0
+	int direction;         // primary antenna direction in degrees if known, use 000 for omni (an integer)
+	BOOL RPonPTC;			// Set if scanning for Robust Packet on a PTC
+};
 
 
 typedef struct PORTCONTROL
@@ -559,10 +605,11 @@ typedef struct PORTCONTROL
 	char PortUIONLY;		// UI only port - no connects
 	char UICAPABLE;			// Pactor-style port that can do UI
 
-	struct WL2KInfo * WL2KInfo; // WL2K Report for this Port
+	struct WL2KInfo WL2KInfo; // WL2K Report for this Port
 	struct in_addr PORTIPADDR;		// IP address for "KISS over UDP"
 
 	char * SerialPortName;	//	Serial Port Name for Unix
+	struct XDIGI * XDIGIS;			// Cross port digi setup
 
 }	PORTCONTROLX, *PPORTCONTROL;
 
@@ -571,6 +618,43 @@ typedef struct FULLPORTDATA
 	struct PORTCONTROL PORTCONTROL;	
 	UCHAR HARDWAREDATA[200];			// WORK AREA FOR HARDWARE DRIVERS
 } *PFULLPORTDATA;
+
+// KISS Mapping of HARDWAREDATA
+
+typedef struct KISSINFO
+{
+	struct PORTCONTROL  PORT;	
+
+	int LINKSTS;			// CURRENT STATE
+	UINT * CURALP;			// CURRENT BUFFER
+	UINT * NEXTCHR;			// 	
+	UINT ASYNCMSG_Q;		//  RECEIVED MESSAGES
+	UINT KISSTX_Q	;		// MESSAGES TO SEND
+	int ESCFLAG	;			// 		; SET IF LAST RX CHAR WAS DLE
+	int ESCTXCHAR;			// 	; CHAR TO SEND FOLLOWING DLE IF NZ
+
+	struct KISSINFO * FIRSTPORT;			// 		; FIRST PORT DEFINED FOR THIS IO ADDR
+	struct KISSINFO * SUBCHAIN;			// 	; NEXT SUBCHANNEL FOR SAME PHYSICAL PORT
+
+	int OURCTRL;			// 	; CONTROL BYTE FOR THIS PORT
+
+	int XCTRL;			//  CONTROL BYTE TO SEND
+	int REALKISSFLAGS;			// 	; KISS FLAGS FOR ACTIVE SUBPORT
+
+	USHORT TXCCC;			// 	; NETROM/BPQKISS CHECKSUMS
+	USHORT RXCCC;			// 
+
+	int TXACTIVE;			// TIMER TO DETECT 'HUNG' SENDS
+
+	int POLLFLAG;			// POLL OUTSTANDING FOR MULTIKISS
+
+	struct KISSINFO * POLLPOINTER;			// LAST GROUP POLLED
+	int POLLED;					// SET WHEN POLL RECEIVED
+
+//	UCHAR WIN32INFO[16];		//	FOR WINDOWS DRIVER
+} *PKISSINFO;
+
+// EXT Driver Mapping of HARDWAREDATA
 
 
 typedef struct _EXTPORTDATA
@@ -687,6 +771,8 @@ typedef struct _APRSSTATIONRECORD
 	int Port;						// Port last heard on (zero for APRS-IS)
 	BOOL IGate;						// Set if station is an IGate;
 //	BYTE MHDIGI[56];				// Not sure if we need this
+	struct STATIONRECORD * Station;	// Info previously held by APRS Application
+
 } APRSSTATIONRECORD, *PAPRSSTATIONRECORD;
 
 typedef struct _LINKTABLE
@@ -929,13 +1015,15 @@ struct TNCDATA
 
 	// DED Mode Fields
 
+	int PollDelay;			// Used by VCOM to slow down continuous reads on real port 
+
 	struct StreamInfo * Channels[MAXSTREAMS+1];
 	char MODE;				// INITIALLY TERMINAL MODE
 	char HOSTSTATE;			// HOST STATE MACHINE 
 	int MSGCOUNT;			// LENGTH OF MESSAGE EXPECTED
 	int MSGLENGTH;
 	char MSGTYPE;
-	char MSGCHANNEL;
+	unsigned char MSGCHANNEL;
 	char DEDMODE;			// CLUSTER MODE - DONT ALLOW DUP CONNECTS
 	int HOSTSTREAMS;		// Default Streams
 

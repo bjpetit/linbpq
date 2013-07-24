@@ -22,41 +22,6 @@ VOID L2Routine(struct PORTCONTROL * PORT, UINT * Buffer);
 VOID ProcessIframe(struct _LINKTABLE * LINK, UINT * Buffer);
 VOID FindLostBuffers();
 
-struct WL2KInfo
-{
-	struct WL2KInfo * Next;
-
-	char * Host;
-	short WL2KPort;
-
-	char RMSCall[10];
-	char BaseCall[10];
-	char GridSquare[7];
-	char Times[80];
-	char ServiceCode[17];
-
-	BOOL UseRigCtrlFreqs;
-	char WL2KFreq[12];
-	char WL2KMode;				// WL2K reporting mode
-	char WL2KModeChar;			// W or N
-	BOOL DontReportNarrowOnWideFreqs;
-
-//	char NARROWMODE;
-//	char WIDEMODE;				// Mode numbers to report to WL2K
-
-//	struct WL2KInfo WL2KInfoList[MAXFREQS];		// Freqs for sending to WL2K
-
-	int Freq;
-	char Bandwidth;
-//	char * TimeList;		// eg 06-10,12-15
-	int mode;              // see below (an integer)
-	int baud;              // see below (an integer)
-	int power;             // actual power if known, default to 100 for HF, 30 for VHF/UHF (an integer)
-	int height;            // antenna height in feet if known, default to 25
-	int gain;              // antenna gain if known, default to 0
-	int direction;         // primary antenna direction in degrees if known, use 000 for omni (an integer)
-	BOOL RPonPTC;			// Set if scanning for Robust Packet on a PTC
-};
 
 #include "configstructs.h"
 
@@ -241,7 +206,7 @@ char BTEXTFLD[256] ="\r";
 // Keep at end
 
 	
-#define DATABYTES 360000		// WAS 320000
+#define DATABYTES 400000		// WAS 320000
 
 UCHAR DATAAREA[DATABYTES] = "";
 
@@ -790,6 +755,16 @@ BOOL Start()
 
 		if (PortRec->SerialPortName[0])
 			PORT->SerialPortName = _strdup(PortRec->SerialPortName);
+		else
+		{
+			char Name[80];
+#ifdef LINBPQ
+			sprintf(Name, "com%d", PORT->IOBASE);
+#else
+			sprintf(Name, "COM%d", PORT->IOBASE);
+#endif
+			PORT->SerialPortName = _strdup(Name);
+		}
 
 		PORT->INTLEVEL = (char)PortRec->INTLEVEL;
 		PORT->BAUDRATE = PortRec->SPEED;
@@ -908,10 +883,12 @@ BOOL Start()
 		if (PortRec->BCALL[0])
 			ConvToAX25(PortRec->BCALL, PORT->PORTBCALL);
 
+		PORT->XDIGIS = PortRec->XDIGIS;		// Crossband digi aliases
+
 		memcpy(&PORT->PORTIPADDR, &PortRec->IPADDR, 4);
 
 		if (PortRec->WL2K)
-			PORT->WL2KInfo = (struct WL2KInfo *)PortRec->WL2K;
+			memcpy(&PORT->WL2KInfo, PortRec->WL2K, sizeof(struct WL2KInfo));
 
 		//	SEE IF PERMITTED LINK CALLSIGNS SPECIFIED
 
@@ -1970,7 +1947,25 @@ VOID FindLostBuffers()
 		n++;
 		HOSTSESS++;
 	}
-	
+
+	n = MAXCIRCUITS;
+	L4 = L4TABLE;
+
+	while (n--)
+	{
+		if (L4->L4USER[0] == 0)
+		{
+			L4++;
+			continue;
+		}
+		if (L4->L4TX_Q || L4->L4RX_Q || L4->L4HOLD_Q || L4->L4RESEQ_Q)
+			Debugprintf("L4 %d TX %d RX %d HOLD %d RESEQ %d", MAXCIRCUITS - n, C_Q_COUNT(&L4->L4TX_Q),
+				C_Q_COUNT(&L4->L4RX_Q), C_Q_COUNT(&L4->L4HOLD_Q), C_Q_COUNT(&L4->L4RESEQ_Q));
+		L4++;
+	}
+
+	return;
+
 	// Build list of buffers, then mark off all on free Q
 
 	Buff = BUFFERPOOL;

@@ -34,6 +34,7 @@ struct ScanEntry
 	int Cmd3Len;
 	char * PollCmd;
 	int PollCmdLen;
+	char APPL[13];		// Autoconnect APPL for this Freq
 };
 
 struct RIGINFO
@@ -128,8 +129,8 @@ struct RIGINFO
 struct RIGPORTINFO
 {
 	int PortType;				// ICOM, Yaesu, Etc
-	int IOBASE;
-	int PTTIOBASE;				// Port for Hardware PTT - may be same as control port.
+	char IOBASE[80];
+	char PTTIOBASE[80];			// Port for Hardware PTT - may be same as control port.
 	int SPEED;
 	struct RIGINFO Rigs[10];	// Rigs off a port
 	char * InitPtr;				// Next Command
@@ -149,7 +150,6 @@ struct RIGPORTINFO
 	int TXLen;						// Len of last sent
 	UCHAR RXBuffer[500];			// Message being received - may not arrive all at once
 	int RXLen;						// Data in RXBUffer
-	HWND hStatus;
 	BOOL AutoPoll;					// set if last command was a Timer poll 
 	// Local ScanStruct for Interactive Commands
 	struct ScanEntry * FreqPtr;		// Block we are currently sending.
