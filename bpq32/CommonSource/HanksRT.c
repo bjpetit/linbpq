@@ -1979,7 +1979,24 @@ int rtloginu (ChatCIRCUIT *circuit, BOOL Local)
 	
 	if (user)
 	{
-		nputs(circuit, "*** Already connected at another node.\r");
+		// if connected at this node, kill old connection and allow new login
+
+		if (user->node == node_find(OurNode))
+		{
+			nputs(circuit, "*** Already connected at this node - old session will be closed.\r");
+
+			if (user->circuit->BPQStream < 0)
+			{
+				CloseConsole(user->circuit->BPQStream);	
+			}
+			else
+			{
+				Disconnect(user->circuit->BPQStream);
+			}
+		}
+		else
+			nputs(circuit, "*** Already connected at another node.\r");
+		
 		return FALSE;
 	}
 

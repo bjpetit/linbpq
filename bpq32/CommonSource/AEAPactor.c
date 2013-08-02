@@ -1408,7 +1408,7 @@ static VOID ProcessAEAPacket(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 						// If Scan Entry has a Appl, save it
 
 						if (TNC->RIG->FreqPtr[0]->APPL[0])
-							strcpy(FreqAppl, TNC->RIG->FreqPtr[0]->APPL[0]);
+							strcpy(FreqAppl, &TNC->RIG->FreqPtr[0]->APPL[0]);
 					}
 
 					// We are going to Send something, so turn link round

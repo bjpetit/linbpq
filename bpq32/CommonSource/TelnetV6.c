@@ -3089,7 +3089,6 @@ MsgLoop:
 			char Msg[80];
 			int Len;
 
-
 			if (TCP->SecureCMSPassword[0])
 				Len = sprintf(Msg, "%s %s\r\n", TNC->Streams[sockptr->Number].MyCall, TCP->GatewayCall);			
 			else

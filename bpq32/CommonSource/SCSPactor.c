@@ -2272,7 +2272,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 							// If Scan Entry has a Appl, save it
 
 							if (TNC->RIG->FreqPtr[0]->APPL[0])
-								strcpy(FreqAppl, TNC->RIG->FreqPtr[0]->APPL[0]);
+								strcpy(FreqAppl, &TNC->RIG->FreqPtr[0]->APPL[0]);
 						}
 						else
 						{
@@ -2353,11 +2353,16 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 						if (TNC->HFPacket && TNC->UseAPPLCalls)
 							goto DontUseAPPLCmd;
-	
+
+						Debugprintf("Pactor Call = Freq Specific Appl is %s Freq is %s",
+							FreqAppl, TNC->RIG->Valchar);
+						
 						if (FreqAppl[0])			// Frequency spcific APPL overrides TNC APPL
 						{
 							buffptr = GetBuff();
 							if (buffptr == 0) return;			// No buffers, so ignore
+
+							Debugprintf("Using Freq Specific Appl %s", FreqAppl);
 
 							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", FreqAppl);
 							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -2369,6 +2374,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						{
 							buffptr = GetBuff();
 							if (buffptr == 0) return;			// No buffers, so ignore
+
+							Debugprintf("Using Default Appl %s", TNC->ApplCmd);
 
 							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", TNC->ApplCmd);
 							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);

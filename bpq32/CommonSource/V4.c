@@ -48,6 +48,9 @@ static int RigControlRow = 147;
 
 #include <commctrl.h>
 
+
+extern int SemHeldByAPI;
+
 static RECT Rect;
 
 struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
@@ -1254,14 +1257,25 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				if (CheckAppl(TNC, AppName))
 				{
 					MsgLen = sprintf(Buffer, "%s\r", AppName);
+	
+					GetSemaphore(&Semaphore);			
+					SemHeldByAPI = 50;
+
 					buffptr = GetBuff();
 
-					if (buffptr == 0) return;			// No buffers, so ignore
+					if (buffptr == 0)
+					{
+						FreeSemaphore(&Semaphore);
+						return;			// No buffers, so ignore
+					}
 
 					buffptr[1] = MsgLen;
 					memcpy(buffptr+2, Buffer, MsgLen);
 
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
+					
+					FreeSemaphore(&Semaphore);
+					
 					TNC->SwallowSignon = TRUE;
 				}
 				else

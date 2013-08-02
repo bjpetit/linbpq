@@ -897,7 +897,7 @@ typedef struct _ICMPMSG
 
 struct SEM
 {
-	int Flag;
+	UINT Flag;
 	int Clashes;
 	int	Gets;
 	int Rels;

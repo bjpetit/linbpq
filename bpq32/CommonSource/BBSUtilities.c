@@ -5029,7 +5029,7 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 
 			Value = realloc(Value, (Count+2)*4);
 			
-			if (_memicmp(ptr, "file ", 5) == 0)
+			if (_memicmp((char *)ptr, "file ", 5) == 0)
 				Value[Count++] = _strdup(ptr);
 			else
 				Value[Count++] = _strupr(_strdup(ptr));
@@ -8111,7 +8111,7 @@ int DeleteRedundantMessages()
 
 int MsgFilter(const struct dirent * dir)
 {
-	return strstr(dir->d_name, ".mes");
+	return (int)strstr(dir->d_name, ".mes");
 }
 
 int DeleteRedundantMessages()

@@ -1492,7 +1492,7 @@ VOID WINMORThread(port)
 				if (TNC->Hardware == H_V4)
 					V4ProcessReceivedData(TNC);			
 				else
-					ProcessReceivedData(TNC);			
+					ProcessReceivedData(TNC);
 			}
 								
 			if (FD_ISSET(TNC->WINMORSock, &errorfs))
@@ -1592,12 +1592,12 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	UINT * buffptr;
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
-
 	Buffer[MsgLen - 2] = 0;
-	Debugprintf(Buffer);
 
 	if (_memicmp(Buffer, "FAULT failure to Restart Sound card", 20) == 0)
 	{
+		Debugprintf(Buffer);
+	
 		// Force a restart
 
 			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
@@ -1649,6 +1649,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "TARGET", 6) == 0)
 	{
+		Debugprintf(Buffer);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 		memcpy(TNC->TargetCall, &Buffer[7], 10);
 		return;
@@ -1671,6 +1672,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		char Appl[10];
 		struct WL2KInfo * WL2K = TNC->WL2K;
 
+		Debugprintf(Buffer);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
 
 		STREAM->ConnectTime = time(NULL); 
@@ -1696,8 +1698,12 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			SuspendOtherPorts(TNC);
 
-			ProcessIncommingConnect(TNC, Call, 0, TRUE);
+			GetSemaphore(&Semaphore);
+			SemHeldByAPI = 50;
 
+			ProcessIncommingConnect(TNC, Call, 0, TRUE);
+			FreeSemaphore(&Semaphore);
+				
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
 			
 			if (TNC->RIG && TNC->RIG != &TNC->DummyRig && strcmp(TNC->RIG->RigName, "PTT"))
@@ -1782,7 +1788,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 					STREAM->NeedDisc = 100;	// 10 secs
 				}
 			}
-			FreeSemaphore(&Semaphore);
 			return;
 		}
 		else
@@ -1829,6 +1834,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "DISCONNECTED", 12) == 0)
 	{
+		Debugprintf(Buffer);
+
 		if (TNC->FECMode)
 			return;
 
@@ -1899,6 +1906,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "MONCALL", 7) == 0)
 	{
+		Debugprintf(Buffer);
+
 		// Add to MHEARD
 
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
@@ -1912,6 +1921,48 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		return;
 	}
+
+	if (_memicmp(Buffer, "BUFFERS", 7) == 0)
+	{
+		int inq, inrx, Sent, BPM;
+
+		sscanf(&Buffer[8], "%d%d%d%d%d", &inq, &inrx, &TNC->Streams[0].BytesOutstanding, &Sent, &BPM);
+
+		if (TNC->Streams[0].BytesOutstanding == 0)
+		{
+			// all sent
+			
+			if (TNC->Streams[0].Disconnecting)						// Disconnect when all sent
+			{
+				if (STREAM->NeedDisc == 0)
+					STREAM->NeedDisc = 60;								// 6 secs
+			}
+//			else
+//			if (TNC->TXRXState == 'S')
+//				send(TNC->WINMORSock,"OVER\r\n", 6, 0);
+
+		}
+		else
+		{
+			// Make sure Node Keepalive doesn't kill session.
+
+			TRANSPORTENTRY * SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
+
+			if (SESS)
+			{
+				SESS->L4KILLTIMER = 0;
+				SESS = SESS->L4CROSSLINK;
+				if (SESS)
+					SESS->L4KILLTIMER = 0;
+			}
+		}
+
+		SetWindowText(TNC->xIDC_TRAFFIC, &Buffer[8]);
+		strcpy(TNC->WEB_TRAFFIC, &Buffer[8]);
+		return;
+	}
+
+	Debugprintf(Buffer);
 
 	if (_memicmp(Buffer, "MODE", 4) == 0)
 	{
@@ -1973,45 +2024,6 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	if (_memicmp(Buffer, "BUFFERS", 7) == 0)
-	{
-		int inq, inrx, Sent, BPM;
-
-		sscanf(&Buffer[8], "%d%d%d%d%d", &inq, &inrx, &TNC->Streams[0].BytesOutstanding, &Sent, &BPM);
-
-		if (TNC->Streams[0].BytesOutstanding == 0)
-		{
-			// all sent
-			
-			if (TNC->Streams[0].Disconnecting)						// Disconnect when all sent
-			{
-				if (STREAM->NeedDisc == 0)
-					STREAM->NeedDisc = 60;								// 6 secs
-			}
-//			else
-//			if (TNC->TXRXState == 'S')
-//				send(TNC->WINMORSock,"OVER\r\n", 6, 0);
-
-		}
-		else
-		{
-			// Make sure Node Keepalive doesn't kill session.
-
-			TRANSPORTENTRY * SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
-
-			if (SESS)
-			{
-				SESS->L4KILLTIMER = 0;
-				SESS = SESS->L4CROSSLINK;
-				if (SESS)
-					SESS->L4KILLTIMER = 0;
-			}
-		}
-
-		SetWindowText(TNC->xIDC_TRAFFIC, &Buffer[8]);
-		strcpy(TNC->WEB_TRAFFIC, &Buffer[8]);
-		return;
-	}
 
 	if (_memicmp(Buffer, "PROCESSID", 9) == 0)
 	{

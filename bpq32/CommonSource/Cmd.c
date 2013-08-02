@@ -2923,7 +2923,7 @@ VOID NRRCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * U
 	return;
 }
 
-BOOL CHECKINTERLOCK(struct PORTCONTROL * OURPORT)
+int CHECKINTERLOCK(struct PORTCONTROL * OURPORT)
 {
 	//	See if any Interlocked ports are Busy
 
@@ -2933,7 +2933,7 @@ BOOL CHECKINTERLOCK(struct PORTCONTROL * OURPORT)
 	int n = NUMBEROFPORTS;
 	int ourgroup = OURPORT->PORTINTERLOCK;
 
-	while (n--)
+	while (PORT)
 	{
 		if (PORT != OURPORT)
 		{
@@ -2942,14 +2942,14 @@ BOOL CHECKINTERLOCK(struct PORTCONTROL * OURPORT)
 				// Same Group - is it busy
 
 				EXTPORT = (struct _EXTPORTDATA *)PORT;
-				if (EXTPORT->ATTACHEDSESSIONS)
-					return TRUE;
+				if (EXTPORT->ATTACHEDSESSIONS[0])
+					return PORT->PORTNUMBER;
 			}
 		}
-		PORT++;
+		PORT = PORT->PORTPOINTER;
 	}
 
-	return FALSE;
+	return 0;
 }
 
 VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD)
@@ -3040,9 +3040,13 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	{
 		// Check Interlocked Ports
 
-		if (CHECKINTERLOCK(PORT))
+		int p;
+		
+		p = CHECKINTERLOCK(PORT);
+	
+		if (p)
 		{
-			Bufferptr += sprintf(Bufferptr, "Sorry, an interlocked port is in use\r");
+			Bufferptr += sprintf(Bufferptr, "Sorry, interlocked port %d is in use\r", p);
 			SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 			return;
 		}

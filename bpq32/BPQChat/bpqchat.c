@@ -3,14 +3,9 @@
 //
 // Based on MailChat Version 1.4.48.1
 
-
-
-
-
-
-
 // Add Configurable SYSOP Call
 
+// If user tries to reconnect to same node, disconnect old session
 
 #include "BPQChat.h"
 

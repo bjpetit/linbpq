@@ -1620,6 +1620,9 @@ VOID TNCPoll()
 
 	while (TNC)
 	{
+		if (TNC->hDevice == 0)
+			continue;						// Open failed
+
 		if (TNC->Mode == KANTRONICS)
 		{
 			// Have to poll for Data and State changes
@@ -3510,7 +3513,7 @@ and then the very next poll to channel 0 will get:
 
 		if (pid == 0xcf)
 		{
-			// NETROM - pass th raw data
+			// NETROM - pass the raw data
 	
 			MonLen = Rawdata->LENGTH - (MSGHDDRLEN + 16);	// Data portion of frame	
 			memcpy(&TNC->MONBUFFER[2], &Rawdata->L2DATA[0], MonLen);
@@ -3532,11 +3535,20 @@ and then the very next poll to channel 0 will get:
 		
 				memcpy(&TNC->MONBUFFER[2], iptr, MonLen);
 
-				MONHEADER[0] = 5;					// Data to follow
-				TNC->MONFLAG = 1;					// Data to follow
-				TNC->MONBUFFER[0] = 6;
-				TNC->MONLENGTH = MonLen + 2;
-				TNC->MONBUFFER[1] = (MonLen - 1);
+
+				if (MonLen == 0)				// No data
+				{
+					MONHEADER[0] = 4;			// No Data to follow
+					TNC->MONFLAG = 0;			// No Data to follow
+				}
+				else
+				{
+					MONHEADER[0] = 5;					// Data to follow
+					TNC->MONFLAG = 1;					// Data to follow
+					TNC->MONBUFFER[0] = 6;
+					TNC->MONLENGTH = MonLen + 2;
+					TNC->MONBUFFER[1] = (MonLen - 1);
+				}
 			}
 		}
 		break;
@@ -3584,9 +3596,17 @@ and then the very next poll to channel 0 will get:
 				MonLen = Len - (ptr - Decoded);
 				memcpy(&TNC->MONBUFFER[2], ptr, MonLen);
 			}
-			TNC->MONLENGTH = MonLen + 2;
-			TNC->MONBUFFER[1] = (MonLen - 1);
 
+			if (MonLen == 0)				// No data
+			{
+				MONHEADER[0] = 4;			// No Data to follow
+				TNC->MONFLAG = 0;			// No Data to follow
+			}
+			else
+			{
+				TNC->MONLENGTH = MonLen + 2;
+				TNC->MONBUFFER[1] = (MonLen - 1);
+			}
 			break;
 		}
 

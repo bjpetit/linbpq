@@ -1375,21 +1375,6 @@ GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 	struct _EXTPORTDATA * PortRecord;
 	int i;
 
-	ptr = RIG->FreqPtr;
-
-	if (ptr == NULL)
-	{
-		Debugprintf("Scan Debug - No freqs - quitting"); 
-		return FALSE;					 // No Freqs
-	}
-
-	if (ptr[0] == (struct ScanEntry *)0) // End of list - reset to start
-	{
-		ptr = CheckTimeBands(RIG);
-	}
-
-	PORT->FreqPtr = ptr[0];				// Save Scan Command Block
-
 	// Get Permission to change
 
 	if (RIG->WaitingForPermission)
@@ -1458,13 +1443,33 @@ DoChange:
 		i++;
 	}
 
-	SetWindowText(RIG->hSCAN, "S");
-	RIG->WEB_SCAN = 'S';
 
 	RIG->WaitingForPermission = FALSE;
 
+	// Update pointer to next frequency
+
+	RIG->FreqPtr++;
+
+	ptr = RIG->FreqPtr;
+
+	if (ptr == NULL)
+	{
+		Debugprintf("Scan Debug - No freqs - quitting"); 
+		return FALSE;					 // No Freqs
+	}
+
+	if (ptr[0] == (struct ScanEntry *)0) // End of list - reset to start
+	{
+		ptr = CheckTimeBands(RIG);
+	}
+
+	PORT->FreqPtr = ptr[0];				// Save Scan Command Block
+
 	RIG->ScanCounter = PORT->FreqPtr->Dwell; 
 	
+	SetWindowText(RIG->hSCAN, "S");
+	RIG->WEB_SCAN = 'S';
+
 	// Do Bandwidth and antenna switches (if needed)
 
 	DoBandwidthandAntenna(RIG, ptr[0]);
@@ -1594,7 +1599,6 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
-				RIG->FreqPtr++;
 	
 				PORT->TXLen = 11;
 				RigWriteCommBlock(PORT);
@@ -2114,7 +2118,6 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
-				RIG->FreqPtr++;
 
 				if (PORT->PortType == YAESU)
 				{
@@ -2432,7 +2435,6 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
-				RIG->FreqPtr++;
 				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
 
 				RigWriteCommBlock(PORT);

@@ -1812,13 +1812,13 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 			  
 	if (conn->hDevice == 0)
 	{
-		sprintf(conn->WEB_COMMSSTATE,"COM%d Open failed - Error %d", Port, GetLastError());
+		sprintf(conn->WEB_COMMSSTATE,"%s Open failed - Error %d", Port, GetLastError());
 		SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
 	
 		return (FALSE);
 	}
 
-	sprintf(conn->WEB_COMMSSTATE,"COM%d Open", Port);
+	sprintf(conn->WEB_COMMSSTATE,"COM%s Open", Port);
 	SetWindowText(conn->xIDC_COMMSSTATE, buf);
 
 	return TRUE;
@@ -2747,11 +2747,12 @@ void GetSemaphore(struct SEM * Semaphore)
 	//
 	//	Wait for it to be free
 	//
-#ifdef WIN32
+
 	if (Semaphore->Flag != 0)
 	{
 		Semaphore->Clashes++;
 	}
+
 loop1:
 
 	while (Semaphore->Flag != 0)
@@ -2763,6 +2764,8 @@ loop1:
 	//	try to get semaphore
 	//
 
+#ifdef WIN32
+
 	_asm{
 
 	mov	eax,1
@@ -2771,26 +2774,30 @@ loop1:
 	
 	cmp	eax,0
 	jne loop1			// someone else got it - try again
-;
-;	ok, weve got the semaphore
-;
+
 	}
+
 #else
 
-	while (Semaphore->Flag)
-		usleep(10000);
+	if (__sync_lock_test_and_set(&Semaphore->Flag, 1) != 0)
 
-	Semaphore->Flag = 1;
+		// Failed to get it
+		goto loop1;		// try again;
 
 #endif
 
-	Semaphore->SemProcessID = GetCurrentProcessId();
+	//Ok. got it
+
 	Semaphore->Gets++;
+
 	return;
 }
 
 void FreeSemaphore(struct SEM * Semaphore)
 {
+	if (Semaphore->Flag == 0)
+		Debugprintf("Free Semaphore Called when Sem not held");
+	
 	Semaphore->Rels++;	
 	Semaphore->Flag = 0;
 

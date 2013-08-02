@@ -550,6 +550,7 @@
 // Version 6.0.4.1
 
 // Add frequency dependent autoconnect appls for SCS Pactor
+// Fix DED Monitoring of I and UI with no data
 
 
 
