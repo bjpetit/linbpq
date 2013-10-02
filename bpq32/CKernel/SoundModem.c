@@ -16,6 +16,8 @@
 
 #define DllExport	__declspec(dllexport)
 
+typedef unsigned char byte;
+
 #include "CHeaders.h"
 #include "bpq32.h"
 #include "time.h"

@@ -429,7 +429,7 @@ END
 IDD_MSGEDIT DIALOGEX 20, 20, 381, 266
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit Message"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     RTEXT           "Msg",IDC_STATIC,7,7,19,8
     LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | 
@@ -747,18 +747,19 @@ BEGIN
     PUSHBUTTON      "Save",IDC_SAVEWP,171,216,56,17,BS_CENTER | BS_VCENTER
 END
 
-IDD_UICONFIG DIALOG DISCARDABLE  0, 0, 324, 151
+IDD_UICONFIG DIALOG DISCARDABLE  0, 0, 400, 151
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "UI Configuration"
 FONT 8, "System"
 BEGIN
-    DEFPUSHBUTTON   "Save",IDOK,89,99,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,175,99,50,14
+    DEFPUSHBUTTON   "Save",IDOK,7,98,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,342,98,50,14
     LTEXT           "Mailfor Header",IDC_STATIC,5,5,50,10
-    EDITTEXT        IDC_MAILFOR,60,4,245,10,ES_AUTOHSCROLL
-    LTEXT           "Send Null Mailfor",IDC_STATIC,244,25,60,10
-    LTEXT           "(use \\r to insert newline in message)",IDC_STATIC,60,
-                    15,125,10
+    EDITTEXT        IDC_MAILFOR,61,3,331,12,ES_AUTOHSCROLL
+    LTEXT           "Send: Mail For  Headers  Null Mailfor",IDC_STATIC,242,
+                    25,127,10
+    LTEXT           "(use \\r to insert newline in message)",IDC_STATIC,62,
+                    16,125,10
 END
 
 IDD_CHATCOLCONFIG DIALOG DISCARDABLE  0, 0, 224, 120
@@ -842,49 +843,49 @@ BEGIN
                     WS_DISABLED
 END
 
-MAINT DIALOG DISCARDABLE  26, 5, 381, 266
+MAINT DIALOG DISCARDABLE  26, 5, 382, 298
 STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
     LTEXT           "This sets the parameters for deleting old messages. Specify length of time (in days) for messages to be kept before being deleted",
                     IDC_STATIC,149,13,226,22
     LTEXT           "Read",IDC_STATIC,159,46,46,10
-    EDITTEXT        IDM_PR,224,46,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDM_PR,224,46,20,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     LTEXT           "Unread",IDC_STATIC,159,61,46,10
-    EDITTEXT        IDM_PUR,224,61,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDM_PUR,224,61,20,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     LTEXT           "Forwarded",IDC_STATIC,159,76,46,10
-    EDITTEXT        IDM_PF,224,76,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDM_PF,224,76,20,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     LTEXT           "Not Forwarded",IDC_STATIC,159,91,49,10
-    EDITTEXT        IDM_PNF,224,91,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDM_PNF,224,91,20,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     LTEXT           "Forwarded",IDC_STATIC,264,46,49,10
-    EDITTEXT        IDM_BF,324,46,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDM_BF,324,46,20,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
     LTEXT           "Not Forwarded",IDC_STATIC,264,61,49,10
-    EDITTEXT        IDM_BNF,324,61,20,10,ES_CENTER | ES_AUTOHSCROLL | 
+    EDITTEXT        IDM_BNF,324,61,20,12,ES_CENTER | ES_AUTOHSCROLL | 
                     ES_NUMBER
-    GROUPBOX        "Personals",IDC_STATIC,149,36,108,71
-    GROUPBOX        "Bulletins",IDC_STATIC,259,36,103,71
+    GROUPBOX        "Personals",IDC_STATIC,149,36,108,107
+    GROUPBOX        "Bulletins",IDC_STATIC,259,36,103,44
     LTEXT           "The following boxes allow you to specify different values for different Bulletin origins and destinations. Normally these apply to Sent Messages, to apply to unsent,  check box below",
-                    IDC_STATIC,151,113,214,27
-    LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,151,146,
+                    IDC_STATIC,151,148,214,27
+    LTEXT           "Specify Call, Lifetime, eg ALL, 10",IDC_STATIC,151,176,
                     154,8
-    LTEXT           "From",IDC_STATIC,176,160,28,12
-    EDITTEXT        IDM_LTFROM,151,172,64,55,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "From",IDC_STATIC,176,189,28,9
+    EDITTEXT        IDM_LTFROM,151,202,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "To",IDC_STATIC,247,160,27,12
-    EDITTEXT        IDM_LTTO,221,172,64,55,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "To",IDC_STATIC,247,189,27,10
+    EDITTEXT        IDM_LTTO,221,202,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    LTEXT           "At",IDC_STATIC,316,160,15,12
-    EDITTEXT        IDM_LTAT,289,172,64,55,ES_MULTILINE | ES_UPPERCASE | 
+    LTEXT           "At",IDC_STATIC,316,189,15,8
+    EDITTEXT        IDM_LTAT,289,202,64,55,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_WANTRETURN
-    DEFPUSHBUTTON   "Save",IDM_MAINTSAVE,166,250,50,14,BS_CENTER | 
+    DEFPUSHBUTTON   "Save",IDM_MAINTSAVE,166,279,50,14,BS_CENTER | 
                     BS_VCENTER
-    GROUPBOX        "Lifetimes",IDC_STATIC,144,0,231,244
-    GROUPBOX        "Parameters",IDC_STATIC,3,3,133,241
+    GROUPBOX        "Lifetimes",IDC_STATIC,144,0,231,275
+    GROUPBOX        "Parameters",IDC_STATIC,3,3,133,275
     LTEXT           "Max Message Number",IDC_STATIC,7,46,77,10
     LTEXT           "BID Lifetime (Days)",IDC_STATIC,7,65,77,10
     LTEXT           "Maintenance Time (UTC)   Enter as HHMM",IDC_STATIC,7,21,
@@ -911,10 +912,20 @@ BEGIN
                     BS_LEFTTEXT | BS_MULTILINE | WS_TABSTOP,5,141,115,20
     CONTROL         "Apply Overrides to Unsent Bulls",IDC_OVERRIDEUNSENT,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,153,231,195,10
+                    WS_TABSTOP,153,261,195,10
     LTEXT           "Delete Inactive Users (Days)",IDC_STATIC,7,105,93,10
     EDITTEXT        IDC_USERLIFETIME,102,103,25,12,ES_CENTER | 
                     ES_AUTOHSCROLL | ES_NUMBER
+    GROUPBOX        "NTS",IDC_STATIC,259,80,102,62
+    LTEXT           "Forwarded",IDC_STATIC,264,109,49,10
+    EDITTEXT        IDM_NTSF,324,108,20,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Not Forwarded",IDC_STATIC,264,124,49,10
+    EDITTEXT        IDM_NTSU,324,123,20,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
+    LTEXT           "Delivered",IDC_STATIC,264,94,49,10
+    EDITTEXT        IDM_NTSD,324,94,20,12,ES_CENTER | ES_AUTOHSCROLL | 
+                    ES_NUMBER
 END
 
 FILTERS DIALOG DISCARDABLE  26, 5, 382, 287
@@ -1017,7 +1028,7 @@ BEGIN
     IDD_UICONFIG, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 117
+        RIGHTMARGIN, 392
         TOPMARGIN, 2
         BOTTOMMARGIN, 144
     END
@@ -1044,6 +1055,12 @@ BEGIN
         RIGHTMARGIN, 485
         TOPMARGIN, 7
         BOTTOMMARGIN, 349
+    END
+
+    "MAINT", DIALOG
+    BEGIN
+        RIGHTMARGIN, 381
+        BOTTOMMARGIN, 266
     END
 
     "FILTERS", DIALOG

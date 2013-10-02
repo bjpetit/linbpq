@@ -34,6 +34,8 @@ HWND hwndDisplay;   // Current child dialog box
 
 HWND hCheck[33];
 HWND hNullCheck[33];
+HWND hSendMF[33];
+HWND hSendHDDR[33];
 HWND hLabel[33];
 HWND hUIBox[33];
 HFONT hFont;
@@ -63,6 +65,8 @@ VOID TidyPrompts();
 
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
+VOID SaveMAINTConfigFromDialog();
 
 // POP3 Password is encrypted by xor'ing it with an MD5 hash of the hostname and pop3 server name
 
@@ -237,7 +241,7 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 
 		case IDM_MAINTSAVE:
 
-			SaveMAINTConfig();
+			SaveMAINTConfigFromDialog();
 			return TRUE;
 
 
@@ -511,8 +515,9 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemInt(pHdr->hwndDisplay, IDM_BF, BF, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDM_BNF, BNF, FALSE);
 
-		CheckDlgButton(pHdr->hwndDisplay, IDM_AP, AP);
-		CheckDlgButton(pHdr->hwndDisplay, IDM_AB, AB);
+		SetDlgItemInt(pHdr->hwndDisplay, IDM_NTSD, NTSD, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDM_NTSF, NTSF, FALSE);
+		SetDlgItemInt(pHdr->hwndDisplay, IDM_NTSU, NTSU, FALSE);
 
 		CheckDlgButton(pHdr->hwndDisplay, IDC_DELETETORECYCLE, DeletetoRecycleBin);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_MAINTNOMAIL, SuppressMaintEmail);
@@ -1626,73 +1631,36 @@ VOID SaveFWDConfig(HWND hDlg)
 
 }
 
-VOID SaveMAINTConfig()
+VOID SaveMAINTConfigFromDialog()
 {
 	BOOL OK1;
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
 	HKEY hKey=0;
-	int retCode, disp, val;
+	int retCode, disp;
 
 	retCode = RegCreateKeyEx(REGTREE,
                          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	MaxMsgno = GetDlgItemInt(hwndDisplay, IDC_MAXMSG, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "MaxMsgno",0 , REG_DWORD,(BYTE *)&MaxMsgno, 4);
-
 	BidLifetime = GetDlgItemInt(hwndDisplay, IDC_BIDLIFETIME, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "BidLifetime",0 , REG_DWORD,(BYTE *)&BidLifetime, 4);
-
-	UserLifetime = GetDlgItemInt(hwndDisplay, IDC_USERLIFETIME, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "UserLifetime",0 , REG_DWORD,(BYTE *)&UserLifetime, 4);
-
 	LogAge = GetDlgItemInt(hwndDisplay, IDC_LOGLIFETIME, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "LogLifetime",0 , REG_DWORD,(BYTE *)&LogAge, 4);
-
+	UserLifetime = GetDlgItemInt(hwndDisplay, IDC_USERLIFETIME, &OK1, FALSE);
 	MaintInterval = GetDlgItemInt(hwndDisplay, IDC_MAINTINTERVAL, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "MaintInterval",0 , REG_DWORD,(BYTE *)&MaintInterval, 4);
-
 	MaintTime = GetDlgItemInt(hwndDisplay, IDC_MAINTTIME, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "MaintTime",0 , REG_DWORD,(BYTE *)&MaintTime, 4);
-
 	PR = GetDlgItemInt(hwndDisplay, IDM_PR, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "PR",0 , REG_DWORD,(BYTE *)&PR, 4);
-
 	PUR = GetDlgItemInt(hwndDisplay, IDM_PUR, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "PUR",0 , REG_DWORD,(BYTE *)&PUR, 4);
-
 	PF = GetDlgItemInt(hwndDisplay, IDM_PF, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "PF",0 , REG_DWORD,(BYTE *)&PF, 4);
-
 	PNF = GetDlgItemInt(hwndDisplay, IDM_PNF, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "PNF",0 , REG_DWORD,(BYTE *)&PNF, 4);
-
 	BF = GetDlgItemInt(hwndDisplay, IDM_BF, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "BF",0 , REG_DWORD,(BYTE *)&BF, 4);
-
 	BNF = GetDlgItemInt(hwndDisplay, IDM_BNF, &OK1, FALSE);
-	retCode = RegSetValueEx(hKey, "BNF",0 , REG_DWORD,(BYTE *)&BNF, 4);
-
-	val = IsDlgButtonChecked(hwndDisplay, IDM_AP);
-	retCode = RegSetValueEx(hKey,"AP", 0, REG_DWORD, (BYTE *)&val,4);
-
-	val = IsDlgButtonChecked(hwndDisplay, IDM_AB);
-	retCode = RegSetValueEx(hKey,"AB", 0, REG_DWORD, (BYTE *)&val,4);
-
+	NTSD = GetDlgItemInt(hwndDisplay, IDM_NTSD, &OK1, FALSE);
+	NTSF = GetDlgItemInt(hwndDisplay, IDM_NTSF, &OK1, FALSE);
+	NTSU = GetDlgItemInt(hwndDisplay, IDM_NTSU, &OK1, FALSE);
 	DeletetoRecycleBin = IsDlgButtonChecked(hwndDisplay, IDC_DELETETORECYCLE);
-	retCode = RegSetValueEx(hKey,"DeletetoRecycleBin", 0, REG_DWORD, (BYTE *)&DeletetoRecycleBin,4);
-
 	SuppressMaintEmail = IsDlgButtonChecked(hwndDisplay, IDC_MAINTNOMAIL);
-	retCode = RegSetValueEx(hKey,"SuppressMaintEmail", 0, REG_DWORD, (BYTE *)&SuppressMaintEmail,4);
-
 	SaveRegDuringMaint = IsDlgButtonChecked(hwndDisplay, IDC_MAINTSAVEREG);
-	retCode = RegSetValueEx(hKey,"MaintSaveReg", 0, REG_DWORD, (BYTE *)&SaveRegDuringMaint,4);
-
 	OverrideUnsent = IsDlgButtonChecked(hwndDisplay, IDC_OVERRIDEUNSENT);
-	retCode = RegSetValueEx(hKey,"OverrideUnsent", 0, REG_DWORD, (BYTE *)&OverrideUnsent,4);
-
 	SendNonDeliveryMsgs = IsDlgButtonChecked(hwndDisplay, IDC_MAINTNONDELIVERY);
-	retCode = RegSetValueEx(hKey,"SendNonDeliveryMsgs", 0, REG_DWORD, (BYTE *)&SendNonDeliveryMsgs,4);
-
 
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTFROM, hKey, "LTFROM");
 	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTTO, hKey, "LTTO");
@@ -1706,7 +1674,7 @@ VOID SaveMAINTConfig()
 
 	RegCloseKey(hKey);
 
-	if (MaxMsgno > 99000) MaxMsgno = 99000;
+	SaveMAINTConfig();
 
 	// Calulate time to run Housekeeping
 	{
@@ -1733,6 +1701,78 @@ VOID SaveMAINTConfig()
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
+VOID SaveOverrideToReg(HKEY hKey, char * ValueName, struct Override ** values)
+{
+	struct Override ** Calls;
+	char Multi[10000];
+	char * ptr = &Multi[0];
+	int retCode;
+
+
+	*ptr = 0;
+
+	// Reg value is a multistring - each entry termineted by a null, two nulls on end
+
+	if (values)
+	{
+		Calls = values;
+
+		while(Calls[0])
+		{
+			ptr += sprintf(ptr, "%s, %d", Calls[0]->Call, Calls[0]->Days);
+			*(ptr++) = 0;
+			Calls++;
+		}
+		*(ptr++) = 0;
+	}
+
+	// Write to Registry
+
+	retCode = RegSetValueEx(hKey, ValueName, 0, REG_MULTI_SZ, Multi, ptr - &Multi[0]);
+}
+
+
+
+VOID SaveMAINTConfig()
+{
+	HKEY hKey=0;
+	int retCode, disp;
+
+	if (MaxMsgno > 99000) MaxMsgno = 99000;
+
+	retCode = RegCreateKeyEx(REGTREE,
+                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+	retCode = RegSetValueEx(hKey, "MaxMsgno",0 , REG_DWORD,(BYTE *)&MaxMsgno, 4);
+	retCode = RegSetValueEx(hKey, "BidLifetime",0 , REG_DWORD,(BYTE *)&BidLifetime, 4);
+	retCode = RegSetValueEx(hKey, "UserLifetime",0 , REG_DWORD,(BYTE *)&UserLifetime, 4);
+	retCode = RegSetValueEx(hKey, "LogLifetime",0 , REG_DWORD,(BYTE *)&LogAge, 4);
+	retCode = RegSetValueEx(hKey, "MaintInterval",0 , REG_DWORD,(BYTE *)&MaintInterval, 4);
+	retCode = RegSetValueEx(hKey, "MaintTime",0 , REG_DWORD,(BYTE *)&MaintTime, 4);
+	retCode = RegSetValueEx(hKey, "PR",0 , REG_DWORD,(BYTE *)&PR, 4);
+	retCode = RegSetValueEx(hKey, "PUR",0 , REG_DWORD,(BYTE *)&PUR, 4);
+	retCode = RegSetValueEx(hKey, "PF",0 , REG_DWORD,(BYTE *)&PF, 4);
+	retCode = RegSetValueEx(hKey, "PNF",0 , REG_DWORD,(BYTE *)&PNF, 4);
+	retCode = RegSetValueEx(hKey, "BF",0 , REG_DWORD,(BYTE *)&BF, 4);
+	retCode = RegSetValueEx(hKey, "BNF",0 , REG_DWORD,(BYTE *)&BNF, 4);
+	retCode = RegSetValueEx(hKey, "NTSD",0 , REG_DWORD,(BYTE *)&NTSD, 4);
+	retCode = RegSetValueEx(hKey, "NTSU",0 , REG_DWORD,(BYTE *)&NTSU, 4);
+	retCode = RegSetValueEx(hKey, "NTSF",0 , REG_DWORD,(BYTE *)&NTSF, 4);
+
+	retCode = RegSetValueEx(hKey,"DeletetoRecycleBin", 0, REG_DWORD, (BYTE *)&DeletetoRecycleBin,4);
+	retCode = RegSetValueEx(hKey,"SuppressMaintEmail", 0, REG_DWORD, (BYTE *)&SuppressMaintEmail,4);
+	retCode = RegSetValueEx(hKey,"MaintSaveReg", 0, REG_DWORD, (BYTE *)&SaveRegDuringMaint,4);
+	retCode = RegSetValueEx(hKey,"OverrideUnsent", 0, REG_DWORD, (BYTE *)&OverrideUnsent,4);
+	retCode = RegSetValueEx(hKey,"SendNonDeliveryMsgs", 0, REG_DWORD, (BYTE *)&SendNonDeliveryMsgs,4);
+
+	SaveOverrideToReg(hKey, "LTFROM", LTFROM);
+	SaveOverrideToReg(hKey, "LTTO", LTTO);
+	SaveOverrideToReg(hKey, "LTAT", LTAT);
+
+	RegCloseKey(hKey);
+
+}
+
 
 VOID SaveWelcomeMsgs()
 {
@@ -1895,9 +1935,6 @@ VOID SaveFilters(HWND hDlg)
 
 	RegCloseKey(hKey);
 }
-
-
-
 
 
 MultiLineDialogToREG_MULTI_SZ(HWND hDialog, int DLGItem, HKEY hKey, char * ValueName)
@@ -2434,12 +2471,22 @@ TryAgain:
 				Vallen=4;
 				RegQueryValueEx(hKey,"Enabled",0,			
 					(ULONG *)&Type,(UCHAR *)&UIEnabled[i],(ULONG *)&Vallen);
+
+				UIMF[i] = UIEnabled[i];		// Defaults
+				UIHDDR[i] = UIEnabled[i];
+
+				Vallen=4;
+				RegQueryValueEx(hKey,"SendMF",0,			
+					(ULONG *)&Type,(UCHAR *)&UIMF[i],(ULONG *)&Vallen);
 		
 				Vallen=4;
+				RegQueryValueEx(hKey,"SendHDDR",0,			
+					(ULONG *)&Type,(UCHAR *)&UIHDDR[i],(ULONG *)&Vallen);
 
+				Vallen=4;
 				RegQueryValueEx(hKey,"SendNull",0,			
 					(ULONG *)&Type,(UCHAR *)&UINull[i],(ULONG *)&Vallen);
-		
+
 				Vallen=0;
 				RegQueryValueEx(hKey,"Digis",0,			
 					(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -2525,14 +2572,25 @@ TryAgain:
 			retCode += RegQueryValueEx(hKey,"BNF",0,			
 			(ULONG *)&Type,(UCHAR *)&BNF,(ULONG *)&Vallen);
 
+			Vallen=4;
+			RegQueryValueEx(hKey,"NTSD",0,			
+			(ULONG *)&Type,(UCHAR *)&NTSD,(ULONG *)&Vallen);
 
 			Vallen=4;
-			retCode += RegQueryValueEx(hKey, "AP", 0,			
-				(ULONG *)&Type,(UCHAR *)&AP,(ULONG *)&Vallen);
-				
+			RegQueryValueEx(hKey,"NTSU",0,			
+			(ULONG *)&Type,(UCHAR *)&NTSU,(ULONG *)&Vallen);
+
 			Vallen=4;
-			retCode += RegQueryValueEx(hKey, "AB", 0,			
-				(ULONG *)&Type,(UCHAR *)&AB,(ULONG *)&Vallen);
+			RegQueryValueEx(hKey,"NTSF",0,			
+			(ULONG *)&Type,(UCHAR *)&NTSF,(ULONG *)&Vallen);
+
+//			Vallen=4;
+//			retCode += RegQueryValueEx(hKey, "AP", 0,			
+//				(ULONG *)&Type,(UCHAR *)&AP,(ULONG *)&Vallen);
+				
+//			Vallen=4;
+//			retCode += RegQueryValueEx(hKey, "AB", 0,			
+//				(ULONG *)&Type,(UCHAR *)&AB,(ULONG *)&Vallen);
 
 			Vallen=4;
 			RegQueryValueEx(hKey, "DeletetoRecycleBin", 0,			
@@ -3194,9 +3252,17 @@ int CreateDialogLine(HWND hWnd, int i, int row)
 	SendMessage(hUIBox[i], WM_SETFONT,(WPARAM) hFont, 0);
 	SetWindowText(hUIBox[i], UIDigi[i]);
 
-	hNullCheck[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
+	hSendMF[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
                  550,row+4,14,14, hWnd, NULL, hInst, NULL);
 
+	hSendHDDR[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
+                 610,row+4,14,14, hWnd, NULL, hInst, NULL);
+
+	hNullCheck[i] = CreateWindow(WC_BUTTON , "", BS_AUTOCHECKBOX  | WS_CHILD | WS_VISIBLE,
+                 670,row+4,14,14, hWnd, NULL, hInst, NULL);
+
+	Button_SetCheck(hSendMF[i], UIMF[i]);
+	Button_SetCheck(hSendHDDR[i], UIHDDR[i]);
 	Button_SetCheck(hNullCheck[i], UINull[i]);
 
 	return TRUE;
@@ -3213,12 +3279,11 @@ DoUIBox(int i)
 	return TRUE;
 }
 
-SaveUIConfig()
+GetUIConfig()
 {
 	int Num = GetNumberofPorts();
-	int i, Len, retCode, disp;
+	int i, Len;
 	char Key[80];
-	HKEY hKey;
 
 	Free_UI();
 
@@ -3226,12 +3291,27 @@ SaveUIConfig()
 	{
 		UIEnabled[i] =  Button_GetCheck(hCheck[i]);
 		UINull[i] =  Button_GetCheck(hNullCheck[i]);
+		UIMF[i] =  Button_GetCheck(hSendMF[i]);
+		UIHDDR[i] =  Button_GetCheck(hSendHDDR[i]);
 	
 		Len = GetWindowTextLength(hUIBox[i]);
 	
 		UIDigi[i] = malloc(Len+1);
 		GetWindowText(hUIBox[i], UIDigi[i], Len+1);
-		
+	}
+
+	return TRUE;
+}
+
+SaveUIConfig()
+{
+	int Num = GetNumberofPorts();
+	int i, Len, retCode, disp;
+	char Key[80];
+	HKEY hKey;
+
+	for (i=1; i<=Num; i++)
+	{
 		sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
 
 		retCode = RegCreateKeyEx(REGTREE,
@@ -3240,6 +3320,8 @@ SaveUIConfig()
 		if (retCode == ERROR_SUCCESS)
 		{		
 			retCode = RegSetValueEx(hKey, "Enabled", 0, REG_DWORD,(BYTE *)&UIEnabled[i], 4);
+			retCode = RegSetValueEx(hKey, "SendMF", 0, REG_DWORD,(BYTE *)&UIMF[i], 4);
+			retCode = RegSetValueEx(hKey, "SendHDDR", 0, REG_DWORD,(BYTE *)&UIHDDR[i], 4);
 			retCode = RegSetValueEx(hKey, "SendNull", 0, REG_DWORD,(BYTE *)&UINull[i], 4);
 			retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ,(BYTE *)UIDigi[i], strlen(UIDigi[i]));
 
@@ -3247,9 +3329,6 @@ SaveUIConfig()
 		}
 	}
 	
-	sprintf(InfoBoxText, "Configuration Saved");
-	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-
 	if (BBSApplNum)
 		SetupUIInterface();
 
@@ -3276,9 +3355,9 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 		}
 
 		GetWindowRect(hDlg, &Rect);      
-		SetWindowPos(hDlg, HWND_TOP, Rect.left, Rect.top, 620, Row+100, 0);
-		SetWindowPos(GetDlgItem(hDlg, IDOK), NULL, 180, Row+20, 70, 30, 0);
-		SetWindowPos(GetDlgItem(hDlg, IDCANCEL), NULL, 300, Row+20, 80, 30, 0);
+		SetWindowPos(hDlg, HWND_TOP, Rect.left, Rect.top, 800, Row+100, 0);
+		SetWindowPos(GetDlgItem(hDlg, IDOK), NULL, 300, Row+20, 70, 30, 0);
+		SetWindowPos(GetDlgItem(hDlg, IDCANCEL), NULL, 400, Row+20, 80, 30, 0);
 
 
 		return (INT_PTR)TRUE;
@@ -3311,13 +3390,18 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 					}
 				}
 
+				GetUIConfig();
 				SaveUIConfig();
+	
+				sprintf(InfoBoxText, "Configuration Saved");
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
+
 				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
 
 			case 0:
 
-				for (i=1; i <=16; i++)
+				for (i = 1; i <= 32; i++)
 				{
 					if (lParam == (LPARAM)hCheck[i])
 					{

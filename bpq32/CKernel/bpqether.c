@@ -80,20 +80,35 @@ BOOL GotMsg;
 
 DWORD n;
 
+#ifdef WIN32
+
 static HINSTANCE PcapDriver=0;
 
 typedef int (FAR *FARPROCX)();
 
 int (FAR * pcap_sendpacketx)();
-pcap_t * (FAR * pcap_open_livex)();
 
 FARPROCX pcap_compilex;
 FARPROCX pcap_setfilterx;
 FARPROCX pcap_datalinkx;
 FARPROCX pcap_next_exx;
 FARPROCX pcap_geterrx;
+pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
 
 static char Dllname[6]="wpcap";
+
+FARPROCX GetAddress(char * Proc);
+
+#else
+
+#define pcap_compilex pcap_compile
+#define pcap_open_livex pcap_open_live
+#define pcap_setfilterx pcap_setfilter
+#define pcap_datalinkx pcap_datalink
+#define pcap_next_exx pcap_next_ex
+#define pcap_geterrx pcap_geterr
+#define pcap_sendpacketx pcap_sendpacket
+#endif
 
 int InitPCAP(void);
 static FARPROCX GetAddress(char * Proc);
@@ -268,6 +283,12 @@ InitPCAP()
 
 //	Use LoadLibrary/GetProcADDR to get round link problem
 
+#ifndef WIN32
+
+	return TRUE;
+
+#endif
+
 	if (PcapDriver)
 		return TRUE;						// Already loaded
 
@@ -297,9 +318,9 @@ InitPCAP()
 	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
 	
 	return (TRUE);
-		
 }
 
+#ifdef WIN32
 
 FARPROCX GetAddress(char * Proc)
 {
@@ -323,6 +344,8 @@ FARPROCX GetAddress(char * Proc)
 
 	return ProcAddr;
 }
+#endif
+
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 

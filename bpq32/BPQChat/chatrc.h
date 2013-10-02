@@ -15,7 +15,7 @@
 #define IDS_APP_TITLE 103
 #define IDC_BPQMailChat 109
 
-
+#define CHAT_CONFIG 9013
 
 #define IDC_UTC 506
 #define IDC_LOCAL 507

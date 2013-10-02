@@ -58,6 +58,11 @@
 
 //	Send Connect Failed prompt after setting terminal status
 
+// Version 1.0.7.1 Aug 2013
+
+//	Allow 16 hosts
+//	Save host setup when changed instead of on exit
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "winsock2.h"
@@ -199,17 +204,25 @@ int Height, Width, LastY;
 
 int maxlinelen = 80;
 
-char Host[9][100] = {"localhost"};
-int Port[9] = {0};
-char UserName[9][80] = {""};
-char Password[9][80] = {""};
-char MonParams[9][80] = {""};
+#define MAXHOSTS 16
 
-char HN[9][6] = {"Host1", "Host2", "Host3", "Host4", "Host5", "Host6", "Host7", "Host8"};
-char PN[9][6] = {"Port1", "Port2", "Port3", "Port4", "Port5", "Port6", "Port7", "Port8"};
-char PASSN[9][6] = {"Pass1", "Pass2", "Pass3", "Pass4", "Pass5", "Pass6", "Pass7", "Pass8"};
-char UN[9][6] = {"User1", "User2", "User3", "User4", "User5", "User6", "User7", "User8"};
-char MON[9][6] = {"MON1", "MON2", "MON3", "MON4", "MON5", "MON6", "MON7", "MON8"};
+char Host[MAXHOSTS + 1][100] = {"localhost"};
+int Port[MAXHOSTS + 1] = {0};
+char UserName[MAXHOSTS + 1][80] = {""};
+char Password[MAXHOSTS + 1][80] = {""};
+char MonParams[MAXHOSTS + 1][80] = {""};
+
+char HN[MAXHOSTS + 1][7] = {"Host1", "Host2", "Host3", "Host4", "Host5", "Host6", "Host7", "Host8",
+		"Host9", "Host10", "Host11", "Host12", "Host13", "Host14", "Host15", "Host16"};
+char PN[MAXHOSTS + 1][7] = {"Port1", "Port2", "Port3", "Port4", "Port5", "Port6", "Port7", "Port8",
+		"Port9", "Port10", "Port11", "Port12", "Port13", "Port14", "Port15", "Port16"};
+char UN[MAXHOSTS + 1][7] = {"User1", "User2", "User3", "User4", "User5", "User6", "User7", "User8",
+		"User9", "User10", "User11", "User12", "User13", "User14", "User15", "User16"};
+char MON[MAXHOSTS + 1][7] = {"MON1", "MON2", "MON3", "MON4", "MON5", "MON6", "MON7", "MON8",
+		"MON9", "MON10", "MON11", "MON12", "MON13", "MON14", "MON15", "MON16"};
+char PASSN[MAXHOSTS + 1][7] = {"Pass1", "Pass2", "Pass3", "Pass4", "Pass5", "Pass6", "Pass7", "Pass8",
+		"Pass9", "Pass10", "Pass11", "Pass12", "Pass13", "Pass14", "Pass15", "Pass16"};
+
 
 #define MAXLINES 1000
 #define LINELEN 200
@@ -386,7 +399,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 {
 	MSG msg;
 	char Size[80];
-	int n;
 
 	sscanf(lpCmdLine,"%d %x",&Sessno, &applflags);
 
@@ -406,15 +418,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 	SaveIntValue("PortMask", portmask);
 	SaveIntValue("Bells", Bells);
 	SaveIntValue("StripLF", StripLF);
-
-	for (n = 0; n < 8; n++)
-	{
-		SaveStringValue(HN[n], Host[n]);
-		SaveStringValue(UN[n], UserName[n]);
-		SaveStringValue(PASSN[n], Password[n]);
-		SaveIntValue(PN[n], Port[n]);
-		SaveStringValue(MON[n], MonParams[n]);
-	}
 
 	SaveIntValue("MTX",mtxparam);
 	SaveIntValue("MCOM", mcomparam);
@@ -557,7 +560,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	Split /= 100;		// Stored as a %,used as 0 - 1
 
-	for (n = 0; n < 8; n++)
+	for (n = 0; n < MAXHOSTS; n++)
 	{
 		GetStringValue(HN[n], Host[n], 100);
 		GetStringValue(UN[n], UserName[n], 80);
@@ -691,7 +694,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	CheckMenuItem(hMenu, MONCOLOUR, (MonitorColour) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu, CHATTERM, (ChatMode) ? MF_CHECKED : MF_UNCHECKED);
 
-	for (i = 0; i < 8; i++)
+	for (i = 0; i < MAXHOSTS; i++)
 	{
 		if (Host[i][0])
 		{
@@ -727,6 +730,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	int n;
+
 	switch (message)
 	{
 	case WM_INITDIALOG:
@@ -763,6 +768,15 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 
 			ModifyMenu(hMenu, BPQCONNECT1 + CfgNo, MF_BYCOMMAND, BPQCONNECT1 + CfgNo, Host[CfgNo]);
 			ModifyMenu(hMenu, IDC_HOST1 + CfgNo, MF_BYCOMMAND, IDC_HOST1 + CfgNo, Host[CfgNo]);
+
+			for (n = 0; n < MAXHOSTS; n++)
+			{
+				SaveStringValue(HN[n], Host[n]);
+				SaveStringValue(UN[n], UserName[n]);
+				SaveStringValue(PASSN[n], Password[n]);
+				SaveIntValue(PN[n], Port[n]);
+				SaveStringValue(MON[n], MonParams[n]);
+			}
 
 
 		case IDCANCEL:
@@ -1009,7 +1023,35 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			TogglePort(hWnd,wmId,0x1 << (wmId - (BPQBASE + 1)));
 			break;
 		}
+
+		if (wmId >= BPQCONNECT1 && wmId < BPQCONNECT1 + MAXHOSTS)
+		{
+			CurrentHost = wmId - BPQCONNECT1;
+
+			sscanf(MonParams[CurrentHost], "%x %x %x %x %x %x",
+					&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
+
+			for (i = 1; i <= MonPorts; i++)
+			{
+				if (portmask & (1<<(i-1)))
+					CheckMenuItem(hMenu, BPQBASE + i, MF_CHECKED);
+				else
+					CheckMenuItem(hMenu, BPQBASE + i, MF_UNCHECKED);
+
+			}
+
+			TCPConnect(Host[CurrentHost], Port[CurrentHost]);
+			break;
+		}
 		
+		if (wmId >= IDC_HOST1 && wmId < IDC_HOST1 + MAXHOSTS)
+		{
+			CfgNo = wmId - IDC_HOST1;
+
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
+			break;
+		}
+
 		switch (wmId) {
 
 		case 40000:
@@ -1061,32 +1103,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ToggleMUI(hWnd);
 			break;
 
-		case BPQCONNECT1:
-		case BPQCONNECT2:
-		case BPQCONNECT3:
-		case BPQCONNECT4:
-		case BPQCONNECT5:
-		case BPQCONNECT6:
-		case BPQCONNECT7:
-		case BPQCONNECT8:
-
-			CurrentHost = wmId - BPQCONNECT1;
-
-			sscanf(MonParams[CurrentHost], "%x %x %x %x %x %x",
-					&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
-
-			for (i = 1; i <= MonPorts; i++)
-			{
-				if (portmask & (1<<(i-1)))
-					CheckMenuItem(hMenu, BPQBASE + i, MF_CHECKED);
-				else
-					CheckMenuItem(hMenu, BPQBASE + i, MF_UNCHECKED);
-
-			}
-
-			TCPConnect(Host[CurrentHost], Port[CurrentHost]);
-			break;
-			        
 		case BPQDISCONNECT:
 			
 			if (Disconnecting)
@@ -1134,19 +1150,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			ToggleParam(hWnd, &ChatMode, CHATTERM);
 			break;
 
-		case IDC_HOST1:
-		case IDC_HOST2:
-		case IDC_HOST3:
-		case IDC_HOST4:
-		case IDC_HOST5:
-		case IDC_HOST6:
-		case IDC_HOST7:
-		case IDC_HOST8:
-
-			CfgNo = wmId - IDC_HOST1;
-
-			DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
-			break;
 
 		case ID_SETUP_FONT:
 
@@ -1892,14 +1895,11 @@ lineloop:
 
 VOID DisableConnectMenu(HWND hWnd)
 {
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT1, MF_GRAYED);
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT2, MF_GRAYED);
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT3, MF_GRAYED);
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT4, MF_GRAYED);
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT5, MF_GRAYED);
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT6, MF_GRAYED);
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT7, MF_GRAYED);
-	EnableMenuItem(GetMenu(hWnd), BPQCONNECT8, MF_GRAYED);
+	int n;
+
+	for (n = 0; n < MAXHOSTS; n++)
+		EnableMenuItem(GetMenu(hWnd), BPQCONNECT1 + n, MF_GRAYED);
+
 	DrawMenuBar(hWnd);	
 }	
 VOID DisableDisconnectMenu(HWND hWnd)
@@ -1911,17 +1911,13 @@ VOID DisableDisconnectMenu(HWND hWnd)
 VOID EnableConnectMenu(HWND hWnd)
 {
 	HMENU hMenu;	// handle of menu 
+	int n;
 
 	hMenu=GetMenu(hWnd);
 	 
-	EnableMenuItem(hMenu,BPQCONNECT1,MF_ENABLED);
-	EnableMenuItem(hMenu,BPQCONNECT2,MF_ENABLED);
-	EnableMenuItem(hMenu,BPQCONNECT3,MF_ENABLED);
-	EnableMenuItem(hMenu,BPQCONNECT4,MF_ENABLED);
-	EnableMenuItem(hMenu,BPQCONNECT5,MF_ENABLED);
-	EnableMenuItem(hMenu,BPQCONNECT6,MF_ENABLED);
-	EnableMenuItem(hMenu,BPQCONNECT7,MF_ENABLED);
-	EnableMenuItem(hMenu,BPQCONNECT8,MF_ENABLED);
+	for (n = 0; n < MAXHOSTS; n++)
+		EnableMenuItem(hMenu, BPQCONNECT1 + n, MF_ENABLED);
+
 	DrawMenuBar(hWnd);	
 }	
 

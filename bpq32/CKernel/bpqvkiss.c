@@ -32,6 +32,8 @@
 #define VERSION_MAJOR         1
 #define VERSION_MINOR         0
 
+typedef unsigned char byte;
+
 #include "CHeaders.h"
 #include "bpqvkiss.h"
 

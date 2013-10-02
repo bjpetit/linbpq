@@ -5,7 +5,13 @@
 
 // Add Configurable SYSOP Call
 
+// Sept 2013
+
 // If user tries to reconnect to same node, disconnect old session
+
+// Changed to match changed user rec format in kernel
+
+// Fix initialisation of Signoff Message
 
 #include "BPQChat.h"
 
@@ -102,7 +108,7 @@ extern char ChatWelcomeMsg[1000];
 
 char NewUserPrompt[100]="Please enter your Name\r>\r";
 
-char SignoffMsg[100];
+char ChatSignoffMsg[100];
 
 char AbortedMsg[100]="\rOutput aborted\r";
 
@@ -659,7 +665,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	int wmId, wmEvent;
 	PAINTSTRUCT ps;
 	HDC hdc;
-	int state,change;
+	int state,change, i;
 	ChatCIRCUIT * conn;
 	struct _EXCEPTION_POINTERS exinfo;
 
@@ -868,7 +874,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 
 		case IDM_CONFIG:
-			DialogBox(hInst, MAKEINTRESOURCE(CHAT_CONFIG), hWnd, ConfigWndProc);
+			i = DialogBox(hInst, MAKEINTRESOURCE(CHAT_CONFIG), hWnd, ConfigWndProc);
+			i = WSAGetLastError();
 			break;
 
 			
@@ -1193,8 +1200,6 @@ Retry:
 			memcpy(OurAlias, ptr1,10);
 			strlop(OurAlias, ' ');
 
-			wsprintf(SignoffMsg, "73 de %s\r", ChatSYSOPCall);
-
 			ChatApplMask = 1<<(ChatApplNum-1);
 		
 			// Set up other nodes list. rtlink messes with the string so pass copy
@@ -1247,6 +1252,8 @@ Retry:
 	SetTimer(hWnd,2,100,NULL);		// Send to Node (100 ms)
 
 	CheckMenuItem(hMenu,IDM_LOGCHAT, (LogCHAT) ? MF_CHECKED : MF_UNCHECKED);
+
+	sprintf(ChatSignoffMsg, "73 de %s\r", ChatSYSOPCall);
 
 	GetStringValue("ChatWelcomeMsg", ChatWelcomeMsg, 999);
 
@@ -1374,7 +1381,6 @@ int GetMultiLineDialog(HWND hDialog, int DLGItem)
 
 INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-//	This processes messages from controls on the tab subpages
 	int Command;
 	char Text[10000] = "";
 	char * ptr1, *ptr2, *Context;

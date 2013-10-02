@@ -131,7 +131,6 @@ PORTTIMERCODE	DD	?
 PORTCLOSECODE	DD	?
 PORTTXCHECK		DD	?		; OK to Send Check
 
-
 PORTDESCRIPTION	DB	30 DUP (0)	; TEXT DESCRIPTION OF FREQ/SPEED ETC
 PORTBBSFLAG	DB	?		; NZ MEANS PORT CALL/ALIAS ARE FOR BBS
 PORTL3FLAG	DB	?		; NZ RESTRICTS OUTGOING L2 CONNECTS
@@ -219,7 +218,7 @@ PORTBCALL	DB	7 DUP (0)	; Source for Beacons
 PortNoKeepAlive DB	0;		; Default to No Keepalives
 PortUIOnly	DB	0;
 UICAPABLE	DB	0;			; Pactor-style port that can do UI
-WL2K		DD	0		; Pointer to WL2K Report Data
+WL2K		DB	189 DUP (0)	; WL2K Report Data
 PORTIPADDR	DD	0;
 SerialPortName DD 0		; Serial Port Name for Unix
 XDIGIS		DD	0;		; Cross Port Digi Definitions

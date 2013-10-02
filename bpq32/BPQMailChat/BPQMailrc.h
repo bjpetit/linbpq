@@ -224,12 +224,13 @@
 #define IDM_PNF                         9004
 #define IDM_BF                          9005
 #define IDM_BNF                         9006
-#define IDM_AP                          9007
-#define IDM_AB                          9008
+#define IDM_NTSF                        9007
+#define IDM_NTSU                        9008
 #define IDM_LTFROM                      9009
 #define IDM_LTTO                        9010
 #define IDM_LTAT                        9011
 #define IDM_MAINTSAVE                   9012
+#define IDM_NTSD                        9013
 #define IDC_MAXMSG                      9021
 #define IDC_BIDLIFETIME                 9022
 #define IDC_MAINTINTERVAL               9023

@@ -551,8 +551,15 @@
 
 // Add frequency dependent autoconnect appls for SCS Pactor
 // Fix DED Monitoring of I and UI with no data
-
-
+// Include AGWPE Emulator (from AGWtoBPQ)
+// accept DEL (Hex 7F) as backspace in Telnet
+// Fix re-running resolver on re-read AXIP config
+// Speed up processing, mainly for Telnet Sessions
+// Fix APRS init on restart of bpq32.exe
+// Change to 2 stop bits
+// Fix scrolling of WINMOR trace window
+// Fix Crash when ueing DED TNC Emulator
+// Fix Disconnect when using BPQDED2 Driver with Telnet Sessions
 
 #define CKernel
 
@@ -647,7 +654,7 @@ extern char MYNODECALL;	// 10 chars,not null terminated
 extern QCOUNT; 
 extern BPQVECSTRUC BPQHOSTVECTOR[];
 #define BPQHOSTSTREAMS 64
-#define IPHOSTVECTOR BPQHOSTVECTOR[BPQHOSTSTREAMS + 2]
+#define IPHOSTVECTOR BPQHOSTVECTOR[BPQHOSTSTREAMS + 3]
 
 extern char * CONFIGFILENAME;
 
@@ -684,6 +691,9 @@ extern char MYCALL[];			// 7 chars, ax.25 format
 
 extern HWND hIPResWnd;
 extern BOOL IPMinimized;
+
+extern int	NODESINPROGRESS;
+extern VOID * CURRENTNODE;
 
 
 BOOL Start();
@@ -758,6 +768,10 @@ BOOL Rig_Poll();
 VOID IPClose();
 VOID APRSClose();
 VOID CloseTNCEmulator();
+
+VOID Poll_AGW();
+BOOL AGWAPIInit();
+int AGWAPITerminate();
 
 int Flag = (int) &Flag;			//	 for Dump Analysis
 int MAJORVERSION=4;
@@ -943,6 +957,9 @@ extern BOOL IPRequired;
 BOOL RigRequired = TRUE;
 BOOL RigActive = FALSE;
 BOOL APRSActive = FALSE;
+BOOL AGWActive = FALSE;
+
+extern int AGWPort;
 
 Tell_Sessions();
 
@@ -1313,6 +1330,8 @@ VOID CALLBACK TimerProc
 			APRSClose();
 			Rig_Close();
 			CloseTNCEmulator();
+			if (AGWActive)	
+				AGWAPITerminate();
 			WSACleanup();
 
 			WL2KReports = NULL;
@@ -1386,6 +1405,10 @@ VOID CALLBACK TimerProc
 				GetSemaphore(&Semaphore);
 			}
 
+			FreeSemaphore(&Semaphore);
+			AGWActive = AGWAPIInit();
+			GetSemaphore(&Semaphore);
+		
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
 	}
@@ -1434,6 +1457,7 @@ VOID CALLBACK TimerProc
 		if (IPActive) Poll_IP();
 		if (RigActive) Rig_Poll();
 		if (APRSActive) Poll_APRS();
+
 	 	CheckWL2KReportTimer();
 		
 		TIMERINTERRUPT();
@@ -1442,6 +1466,9 @@ VOID CALLBACK TimerProc
 
 		if (NUMBEROFTNCPORTS)
 			TNCTimer();
+
+		if (AGWActive)
+			Poll_AGW();
 
 		strcpy(EXCEPTMSG, "HTTP Timer Processing");
 
@@ -1567,7 +1594,7 @@ Check_Timer()
 
 	if (InitDone == -1)
 	{
-		Sleep(7000);
+		Sleep(10000);
 		FreeSemaphore(&Semaphore);
 		exit (0);
 	}
@@ -1584,6 +1611,7 @@ Check_Timer()
 			if (NUMBEROFTNCPORTS)
 				InitializeTNCEmulator();
 
+			AGWActive = AGWAPIInit();
 			return 0;
 		}
 		else
@@ -1613,6 +1641,7 @@ Check_Timer()
 		{
 			ShowWindow(hConsWnd, SW_RESTORE);
 			SendMessage(hConsWnd, WM_PAINT, 0, 0);
+			SetForegroundWindow(hConsWnd);
 
 			InitDone = -1;
 			FreeSemaphore(&Semaphore);
@@ -1645,9 +1674,22 @@ Check_Timer()
 		if (ExtDriver)
 			GetModuleFileNameExPtr = (FARPROCX)GetProcAddress(ExtDriver,"GetModuleFileNameExA");
 
+			Start();
+	
 		INITIALISEPORTS();
 
 		OpenReportingSockets();
+
+		NODESINPROGRESS = 0;
+		CURRENTNODE = 0;
+
+
+
+			SetApplPorts();
+
+			FreeConfig();
+
+
 
 		WritetoConsole("\n\nPort Reinitialisation Complete\n");
 
@@ -1696,6 +1738,8 @@ Check_Timer()
 		if (NUMBEROFTNCPORTS)
 			InitializeTNCEmulator();
 
+		AGWActive = AGWAPIInit();
+	
 		if (StartMinimized)
 			if (MinimizetoTray)
 				ShowWindow(FrameWnd, SW_HIDE);
@@ -1747,10 +1791,20 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	int i;
 	unsigned int ProcessID;
 
+	int WL2K = sizeof(struct WL2KInfo); 
+
 	switch( ul_reason_being_called )
 	{
 	case DLL_PROCESS_ATTACH:
 
+		if (WL2K != 189)	// 200 bytes of Hardwaredata
+		{
+			// Catastrophic - Refuse to load
+			
+			MessageBox(NULL,"WL2K Data Size Changed - Edit STRUCS.INC and Recompile","BPQ32", MB_OK);
+			return 0;
+		}
+			  
 		if (sizeof(HDLCDATA) > PORTENTRYLEN + 200)	// 200 bytes of Hardwaredata
 		{
 			// Catastrophic - Refuse to load
@@ -1892,9 +1946,12 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			{
 				StartMinimized = FALSE;
 				MinimizetoTray = FALSE;
-				ShowWindow(FrameWnd, SW_RESTORE);
-				ShowWindow(hConsWnd, SW_RESTORE);
+				ShowWindow(FrameWnd, SW_MAXIMIZE);
+				ShowWindow(hConsWnd, SW_MAXIMIZE);
+				ShowWindow(StatusWnd, SW_HIDE);
+
 				SendMessage(hConsWnd, WM_PAINT, 0, 0);
+				SetForegroundWindow(hConsWnd);
 
 				InitDone = -1;
 				FreeSemaphore(&Semaphore);
@@ -2101,6 +2158,8 @@ SkipInit:
 			APRSClose();
 			Rig_Close();
 			CloseTNCEmulator();
+			if (AGWActive)
+				AGWAPITerminate();
 			WSACleanup();
 			WSAGetLastError();
 
@@ -2208,6 +2267,9 @@ DllExport int APIENTRY CloseBPQ32()
 		IPClose();
 		APRSClose();
 		Rig_Close();
+		if (AGWActive)	
+			AGWAPITerminate();
+
 		CloseTNCEmulator();
 		WSACleanup();
 
@@ -4288,6 +4350,8 @@ int WritetoConsoleLocal(char * buff)
 	int len=strlen(buff);
 	char Temp[2000]= "";
 	char * ptr;
+
+//	Debugprintf(buff);
 
 	if (PartLine)
 	{

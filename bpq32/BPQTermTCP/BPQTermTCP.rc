@@ -131,13 +131,22 @@ BEGIN
     POPUP "Connect"
     BEGIN
         MENUITEM "Host 1",                      BPQCONNECT1
-        MENUITEM "Host 2",                      BPQCONNECT2
-        MENUITEM "Host 3",                      BPQCONNECT3
-        MENUITEM "Host 4",                      BPQCONNECT4
-        MENUITEM "Host 5",                      BPQCONNECT5
-        MENUITEM "Host 6",                      BPQCONNECT6
-        MENUITEM "Host 7",                      BPQCONNECT7
-        MENUITEM "Host 8",                      BPQCONNECT8
+        MENUITEM "Host 2",                      BPQCONNECT1 + 1
+        MENUITEM "Host 3",                      BPQCONNECT1 + 2
+        MENUITEM "Host 4",                      BPQCONNECT1 + 3
+        MENUITEM "Host 5",                      BPQCONNECT1 + 4
+        MENUITEM "Host 6",                      BPQCONNECT1 + 5
+        MENUITEM "Host 7",                      BPQCONNECT1 + 6
+        MENUITEM "Host 8",                      BPQCONNECT1 + 7
+        MENUITEM "Host 9",                      BPQCONNECT1 + 8
+        MENUITEM "Host 10",                      BPQCONNECT1 + 9
+        MENUITEM "Host 11",                      BPQCONNECT1 + 10
+        MENUITEM "Host 12",                      BPQCONNECT1 + 11
+        MENUITEM "Host 13",                      BPQCONNECT1 + 12
+        MENUITEM "Host 14",                      BPQCONNECT1 + 13
+        MENUITEM "Host 15",                      BPQCONNECT1 + 14
+        MENUITEM "Host 16",                      BPQCONNECT1 + 15
+
     END
     MENUITEM "Disconnect",                  BPQDISCONNECT
     POPUP "Setup"
@@ -145,13 +154,21 @@ BEGIN
         POPUP "TCP Hosts"
         BEGIN
             MENUITEM "Host 1",                      IDC_HOST1
-            MENUITEM "Host 2",                      IDC_HOST2
-            MENUITEM "Host 3",                      IDC_HOST3
-            MENUITEM "Host 4",                      IDC_HOST4
-            MENUITEM "Host 5",                      IDC_HOST5
-            MENUITEM "Host 6",                      IDC_HOST6
-            MENUITEM "Host 7",                      IDC_HOST7
-            MENUITEM "Host 8",                      IDC_HOST8
+            MENUITEM "Host 2",                      IDC_HOST1 + 1
+            MENUITEM "Host 3",                      IDC_HOST1 + 2
+            MENUITEM "Host 4",                      IDC_HOST1 + 3
+            MENUITEM "Host 5",                      IDC_HOST1 + 4
+            MENUITEM "Host 6",                      IDC_HOST1 + 5
+            MENUITEM "Host 7",                      IDC_HOST1 + 6
+            MENUITEM "Host 8",                      IDC_HOST1 + 7
+            MENUITEM "Host 9",                      IDC_HOST1 + 8
+            MENUITEM "Host 10",                      IDC_HOST1 + 9
+            MENUITEM "Host 11",                      IDC_HOST1 + 10
+            MENUITEM "Host 12",                      IDC_HOST1 + 11
+            MENUITEM "Host 13",                      IDC_HOST1 + 12
+            MENUITEM "Host 14",                      IDC_HOST1 + 13
+            MENUITEM "Host 15",                      IDC_HOST1 + 14
+            MENUITEM "Host 16",                      IDC_HOST1 + 15
         END
         MENUITEM "Font Setup",                  ID_SETUP_FONT
         MENUITEM "Enable Bells",                BPQBELLS

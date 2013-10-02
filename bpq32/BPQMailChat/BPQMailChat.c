@@ -778,6 +778,26 @@
 // Verify prompts
 // Add IDLETIME command
 
+
+
+// Version 1.4.57.1
+
+//	Change default IDLETIME
+//	Fix display of BBS's in Web "Manage Messages"
+//	Add separate househeeping lifetines for T messages
+//  Don't change flag on forwarded or delivered messages if they sre subsequently read
+//  Speed up processing, mainly to stop RMS Express timing out when connecting via Telnet
+//  Don't append winlink.org to RMS Express or Paclink addresses if RMS is not configured
+//	Fix receiving NTS messages via B2
+//	Add option to send "Mail For", but not FBB Headers
+//	Fix corruption caused with Subject longer than 60 bytes reveived from Winlink systems
+//	Fix Endian bug in FBB Compression code
+
+
+
+
+
+
 // Use Windows Sound Events for (Chat "user join" alert)
 
 #include "BPQMailChat.h"
