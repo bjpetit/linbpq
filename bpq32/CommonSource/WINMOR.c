@@ -2405,11 +2405,14 @@ RestartTNC(struct TNCINFO * TNC)
 
 	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
 	{
+		int n;
+		
 		// Try to start TNC on a remote host
 
 		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
 		struct sockaddr_in destaddr;
 
+		Debugprintf("trying to restart WINMOR TNC %s", TNC->ProgramPath);
 
 		if (sock == INVALID_SOCKET)
 			return 0;
@@ -2430,7 +2433,10 @@ RestartTNC(struct TNCINFO * TNC)
 			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
 		}
 
-		sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+	
+		Debugprintf("Restart WINMOR TNC - sento returned %d", n);
+
 		Sleep(100);
 		closesocket(sock);
 
@@ -2497,7 +2503,7 @@ lineloop:
 
 			for (i = 0; i < LineLen; i++)
 			{
-				if (Line[i] > 127)
+				if (Line[i] > 126 || Line[i] < 32)
 					goto Skip;
 			}
 #ifdef LINBPQ
@@ -2519,23 +2525,26 @@ lineloop:
 
 		for (i = 0; i < Len; i++)
 		{
-			if (ptr1[i] > 127)
+			if (ptr1[i] > 126 || ptr1[i] < 32)
 				break;
 		}
-#ifdef LINBPQ
-#else
 
 		if (i == Len)
+		{
+#ifdef LINBPQ
+#else
 			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) ptr1 );
 #endif
 			strcat(TNC->WebBuffer, ptr1);
 			strcat(TNC->WebBuffer, "\r\n");
 			if (strlen(TNC->WebBuffer) > 4500)
 				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4000);
+		}
 	}
 
 #ifdef LINBPQ
 #else
+
 	if (index > 1200)
 						
 	do{
@@ -2544,7 +2553,8 @@ lineloop:
 			
 	} while (index > 1000);
 
-	index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+	if (index > -1)
+		index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
 #endif
 }
 VOID TidyClose(struct TNCINFO * TNC, int Stream)

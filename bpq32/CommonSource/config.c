@@ -125,6 +125,13 @@ BOOL PortDefined[35];
 extern BOOL IncludesMail;
 extern BOOL IncludesChat;
 
+extern int AGWPort;
+extern int AGWSessions;
+extern int AGWMask;
+
+extern BOOL LoopMonFlag;
+extern BOOL Loopflag;
+
 char * fp2;
 short * fp2s;
 
@@ -856,6 +863,37 @@ NextAPRS:
 
 		*ptr2 = 0;
 
+		return 0;
+	}
+
+	// AGW Emulator Params
+
+	if (_memicmp(rec, "AGWPORT", 7) == 0)
+	{
+		AGWPort = atoi(&rec[8]);
+		return 0;
+	}
+
+	if (_memicmp(rec, "AGWSESSIONS", 11) == 0)
+	{
+		AGWSessions = atoi(&rec[12]);
+		return 0;
+	}
+
+	if (_memicmp(rec, "AGWMASK", 7) == 0)
+	{
+		AGWMask = strtol(&rec[8], 0, 0);
+		return 0;
+	}
+
+	if (_memicmp(rec, "AGWLOOPMON", 10) == 0)
+	{
+		LoopMonFlag = strtol(&rec[10], 0, 0);
+		return 0;
+	}
+	if (_memicmp(rec, "AGWLOOPTX", 9) == 0)
+	{
+		Loopflag = strtol(&rec[9], 0, 0);
 		return 0;
 	}
 

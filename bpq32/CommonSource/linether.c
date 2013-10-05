@@ -1,6 +1,9 @@
 //
 //	DLL to provide BPQEther support for G8BPQ switch in a Linux environment,
 
+// Normally uses a Raw socket, but that can't send to other apps on same machine.
+// so can use a TAP device instead (or maybe as well??)
+
 #include <stdio.h>
 
 #include "CHeaders.h"
@@ -10,8 +13,9 @@
 #include <linux/if_ether.h>
 #include <linux/if_arp.h>
 
-\
 extern char * PortConfig[33];
+
+extern int tap_fd;
 
 typedef struct PCAPStruct
 {
@@ -165,6 +169,9 @@ int ExtProc(int fn, int port,unsigned char * buff)
 			perror("Eth Send");	
 			return 3;
 		}
+
+//		if (tap_fd)
+//			write(tap_fd, txbuff, txlen);
 
 		return (0);
 

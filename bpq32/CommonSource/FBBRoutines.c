@@ -787,9 +787,16 @@ loop:
 		if (conn->InputLen < MsgLen)
 			return;						// Wait for more
 
-		strcpy(conn->TempMsg->title, &ptr[2]);
+		if (strlen(&ptr[2]) > 60)
+		{
+			memcpy(conn->TempMsg->title, &ptr[2], 60);
+			conn->TempMsg->title[60] = 0;
+			Debugprintf("FBB Subject too long - truncated, %s", &ptr[2]); 
+		}
+		else
+			strcpy(conn->TempMsg->title, &ptr[2]);
 
-		offset = atoi(ptr+3+strlen(conn->TempMsg->title));
+		offset = atoi(ptr+3+strlen(&ptr[2]));
 
 		ptr += MsgLen;
 

@@ -560,6 +560,8 @@
 // Fix scrolling of WINMOR trace window
 // Fix Crash when ueing DED TNC Emulator
 // Fix Disconnect when using BPQDED2 Driver with Telnet Sessions
+// Allow HOST applications even when CMS option is disabled
+// Fix processing of APRS DIGIMAP command with no targets (didn't suppress default settings)
 
 #define CKernel
 

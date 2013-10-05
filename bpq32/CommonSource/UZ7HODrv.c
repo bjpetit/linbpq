@@ -492,7 +492,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			Sock = TNCInfo[MasterPort[port]]->WINMORSock;
 		
 			MsgLen = buffptr->LENGTH - 6;	// 7 Header, need extra Null
-			buffptr->LENGTH =0;				// Need a NULL on front	
+			buffptr->LENGTH = 0;				// Need a NULL on front	
 			Buffer = &buffptr->DEST[0];		// Raw Frame
 			Buffer--;						// Need to send an extra byte on front
 	

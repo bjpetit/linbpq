@@ -278,6 +278,51 @@ struct OBJECT * ObjectList;		// List of objects to send;
 
 int ObjectCount = 0;
 
+#include <math.h>
+
+#define M_PI       3.14159265358979323846
+
+int RetryCount = 4;
+int RetryTimer = 45;
+int ExpireTime = 120;
+int TrackExpireTime = 1440;
+BOOL SuppressNullPosn = FALSE;
+BOOL DefaultNoTracks = FALSE;
+BOOL LocalTime = TRUE;
+
+RECT Rect, MsgRect, StnRect;
+
+char Key[80];
+
+// function prototypes
+
+VOID RefreshMessages();
+
+// a few global variables
+
+char APRSDir[MAX_PATH] = "BPQAPRS";
+char DF[MAX_PATH];
+
+#define	FEND	0xC0	// KISS CONTROL CODES 
+#define	FESC	0xDB
+#define	TFEND	0xDC
+#define	TFESC	0xDD
+
+int StationCount = 0;
+
+UCHAR NextSeq = 1;
+
+BOOL ImageChanged;
+BOOL NeedRefresh = FALSE;
+time_t LastRefresh = 0;
+
+
+struct STATIONRECORD * StationRecords = NULL;
+struct APRSMESSAGE * Messages = NULL;
+struct APRSMESSAGE * OutstandingMsgs = NULL;
+
+
+
 VOID SendObject(struct OBJECT * Object);
 VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX);
 
@@ -318,6 +363,18 @@ Dll BOOL APIENTRY Init_APRS()
 	char * DCall;
 	HKEY hKey=0;
 	int retCode, Vallen, Type; 
+
+	// CLear tables in case a restart
+
+	StationRecords = NULL;
+	Messages = NULL;
+	OutstandingMsgs = NULL;
+
+	StationCount = 0;
+	HEARDENTRIES = 0;
+	MAXHEARDENTRIES = 0;
+
+	memset(MHTABLE, 0, sizeof(MHTABLE));
 
 	ConvToAX25(MYNODECALL, MYCALL);
 
@@ -1317,12 +1374,12 @@ static APRSProcessLine(char * buf)
 		if (GetPortTableEntryFromPortNum(Port) == NULL)
 			return FALSE;
 
-		if (Context == NULL)
-			return FALSE;
-
 		CrossPortMap[Port][Port] = FALSE;	// Cancel Default mapping
 		CrossPortMap[Port][0] = FALSE;		// Cancel Default APRSIS
-	
+
+		if (Context == NULL || Context[0] == 0)
+			return FALSE;
+
 		ptr = strtok_s(NULL, ",\t\n\r", &Context);
 
 		while (ptr)
@@ -2096,8 +2153,8 @@ VOID APRSISThread(BOOL Report)
 					memcpy(&APRSMsg, APRSinMsg, len);	
 					MonitorAPRSIS(APRSMsg, len, FALSE);
 					APRSMsg[len - 2] = 0;
+//					Debugprintf("%s", APRSMsg);
 
-//					Debugprintf("<%s", APRSMsg);
 					ProcessAPRSISMsg(APRSMsg);
 				}
 
@@ -2147,7 +2204,6 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	struct _EXCEPTION_POINTERS exinfo;
 	char EXCEPTMSG[80] = "";
 #endif		
-
 
 	if (APRSMsg[0] == '#')		// Comment
 		return;
@@ -3016,7 +3072,7 @@ Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon)
 
 #define SD_BOTH         0x02
 
-char Buffer[8192];
+static char Buffer[8192];
 int SavedLen = 0;
 
 
@@ -3194,49 +3250,6 @@ Lost:
 // APRS Mapping and Messaging App for BPQ32 Switch.
 //
 
-#include <math.h>
-
-#define M_PI       3.14159265358979323846
-
-int RetryCount = 4;
-int RetryTimer = 45;
-int ExpireTime = 120;
-int TrackExpireTime = 1440;
-BOOL SuppressNullPosn = FALSE;
-BOOL DefaultNoTracks = FALSE;
-BOOL LocalTime = TRUE;
-
-RECT Rect, MsgRect, StnRect;
-
-char Key[80];
-
-// function prototypes
-
-VOID RefreshMessages();
-
-// a few global variables
-
-char APRSDir[MAX_PATH] = "BPQAPRS";
-char DF[MAX_PATH];
-
-#define	FEND	0xC0	// KISS CONTROL CODES 
-#define	FESC	0xDB
-#define	TFEND	0xDC
-#define	TFESC	0xDD
-
-int StationCount = 0;
-
-UCHAR NextSeq = 1;
-
-BOOL ImageChanged;
-BOOL NeedRefresh = FALSE;
-time_t LastRefresh = 0;
-
-
-struct STATIONRECORD * StationRecords = NULL;
-struct APRSMESSAGE * Messages = NULL;
-struct APRSMESSAGE * OutstandingMsgs = NULL;
-
 
 VOID APIENTRY APRSConnect(char * Call, char * Filter);
 VOID APIENTRY APRSDisconnect();
@@ -3379,8 +3392,20 @@ struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 	struct STATIONRECORD * last = NULL;
 	int sum = 0;
 
+	if (strlen(Call) > 9)
+	{
+		Debugprintf("APRS Call too long %s", Call);
+		Call[9] = 0;
+	}
+
 	while(find)
-	{ 
+	{
+		if (strlen(find->Callsign) > 9)
+		{
+			Debugprintf("APRS Call in Station List too long %s", find->Callsign);
+			find->Callsign[9] = 0;
+		}
+
 	    if (strcmp(find->Callsign, Call) == 0)
 			return find;
 
@@ -3441,6 +3466,8 @@ struct STATIONRECORD * ProcessRFFrame(char * Msg, int len)
 	struct STATIONRECORD * Station = NULL;
 
 	Msg[len - 1] = 0;
+
+//	Debugprintf("RF Frame %s", Msg);
 
 	Msg += 10;				// Skip Timestamp
 	
@@ -3531,7 +3558,7 @@ struct STATIONRECORD * DecodeAPRSISMsg(char * Msg)
 
 	if (Path == NULL)
 	{
-		Debugprintf("Invalid Meader %s", Msg);
+		Debugprintf("Invalid Msg %s", Msg);
 		return Station;
 	}
 
@@ -3541,7 +3568,7 @@ struct STATIONRECORD * DecodeAPRSISMsg(char * Msg)
 
 	if (strlen(Callsign) > 11)
 	{
-		Debugprintf("Invalid Meader %s", Msg);
+		Debugprintf("Invalid Msg %s", Msg);
 		return Station;
 	}
 
@@ -3834,7 +3861,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 	case ':':				// Message
 
-		//for now messages are only processed in BPAPRS if Windows
+		//for now messages are only processed in BPQAPRS if Windows
 
 #ifdef LINBPQ
 		ProcessMessage(Payload, Station);
@@ -4565,7 +4592,7 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 		}
 		else
 		{
-			// Station is not using reply-ack - set to send simple numeric sequence (workround for bug in APRS Messanges
+			// Station is not using reply-ack - set to send simple numeric sequence (workround for bug in APRS Messanger
 		
 			Station->SimpleNumericSeq = TRUE;
 		}
@@ -4803,14 +4830,85 @@ VOID SendWeatherBeacon()
 		return;
 	}
 
+	// see if wview format
+
+//04-09-13, 2245
+//TempIn 23
+//TempEx 18
+//WindHi 0
+//WindAv 0
+//WindDr 200
+//BarmPs 30167
+//HumdIn 56
+//HumdEx 100
+//RnFall 0.00
+//DailyRnFall 0.00
+
+	if (strstr(WXMessage, "TempIn"))
+	{
+		int Wind  =  0;
+		int Gust = 0;
+		int Temp = 0;
+		int Winddir = 0;
+		int Humidity = 0;
+		int Raintoday = 0;
+		int Rain24hrs = 0;
+		int Pressure = 0;
+
+		char * ptr;
+
+		ptr = strstr(WXMessage, "TempEx");
+		if (ptr)
+			Temp = (atof(ptr + 7) * 1.8) + 32;
+
+		ptr = strstr(WXMessage, "WindHi");
+		if (ptr)
+			Gust = atoi(ptr + 7);
+
+		ptr = strstr(WXMessage, "WindAv");
+		if (ptr)
+			Wind = atoi(ptr + 7);
+
+		ptr = strstr(WXMessage, "WindDr");
+		if (ptr)
+			Winddir = atoi(ptr + 7);
+
+		ptr = strstr(WXMessage, "BarmPs");
+		if (ptr)
+			Pressure = atof(ptr + 7) * 0.338638866667;			// Inches to 1/10 millbars
+
+		ptr = strstr(WXMessage, "HumdEx");
+		if (ptr)
+			Humidity = atoi(ptr + 7);
+
+		ptr = strstr(WXMessage, "RnFall");
+		if (ptr)
+			Rain24hrs = atof(ptr + 7) * 100.0;
+
+		ptr = strstr(WXMessage, "DailyRnFall");
+		if (ptr)
+			Raintoday = atof(ptr + 12) * 100.0;
+
+		if (Humidity > 99)
+			Humidity = 99;
+		
+		sprintf(WXMessage, "%03d/%03dg%03dt%03dr%03dP%03dp%03dh%02db%05d",
+			Winddir, Wind, Gust, Temp, 0, Raintoday, Rain24hrs, Humidity, Pressure);
+
+	}
+
 	WXptr = strchr(WXMessage, 10);
 
 	if (WXptr)
 	{
 		WXend = strchr(++WXptr, 13);
+		if (WXend == 0)
+			WXend = strchr(WXptr, 10);
 		if (WXend)
 			*WXend = 0;
 	}
+	else
+		WXptr = &WXMessage[0];
 
 	// Get DDHHMM from Filetime
 

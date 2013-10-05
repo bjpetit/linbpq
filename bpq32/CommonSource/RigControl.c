@@ -2578,7 +2578,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 
 	ptr = strtok_s(NULL, ",", &Context);
 
-	if (strlen(ptr) >  5)
+	if (strlen(ptr) >  6)
 		return FALSE;
 
 	strcpy(Mode, ptr); 
@@ -2883,7 +2883,7 @@ PortFound:
 	if (PORT->PortType == PTT || PORT->PortType == ANT)
 		return RIG;
 
-	if (ptr == NULL) return RIG;					// No Scanning, just Interactive control
+	if (ptr == NULL) return RIG;			// No Scanning, just Interactive control
 	
 	if (strchr(ptr, ',') == 0)				// Old Format
 	{
@@ -2928,7 +2928,7 @@ PortFound:
 		char * Modeptr = NULL;
 		int dec, sign;
 		char Split, Data, PacketMode, RPacketMode, PMinLevel, PMaxLevel, Filter;
-		char Mode[6] = "";
+		char Mode[10] = "";
 		char WinmorMode, Antenna;
 		char Appl[13];
 

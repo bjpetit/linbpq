@@ -10,6 +10,10 @@ extern char ChatConfigName[250];
 
 extern char OtherNodesList[1000];
 
+extern char LTFROMString[2048];
+extern char LTTOString[2048];
+extern char LTATString[2048];
+
 //static UCHAR BPQDirectory[260];
 
 extern ConnectionInfo Connections[];
@@ -174,10 +178,12 @@ char UIHddr [] = "<form style=\"font-family: monospace;\" align=center method=po
 "&nbsp;&nbsp;&nbsp; (use \\r to insert newline in message)<br><br>"
 "Enable Port&nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp;"
 "&nbsp;&nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; Path&nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp;"
-"&nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; &nbsp;&nbsp; Send Empty Mailfor<br><br>";
+"&nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Send: MailFor Headers Empty Mailfor<br><br>";
 
 char UILine[] = "<input %sname=En%d type=checkbox> %s <input size=40 value=\"%s\" name=Path%d>"
-" <input %sname=SndNull%d type=checkbox><br>";
+" <input %sname=SndMF%d type=checkbox>"
+"&nbsp;&nbsp;&nbsp;&nbsp;<input %sname=SndHDDR%d type=checkbox>"
+"&nbsp; &nbsp; &nbsp; &nbsp; <input %sname=SndNull%d type=checkbox><br>";
 
 char UITail[] = "<br><br><input name=Update value=Update type=submit> "
 "<input name=Cancel value=Cancel type=submit><br></form>";
@@ -189,7 +195,7 @@ char FWDSelectHddr[] =
 	"Warn if no route for P or T <input %sname=WarnNoRoute type=checkbox><br>"
 	"Use Local Time&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
 	"<input %sname=LocalTime type=checkbox><br><br>"
-	"Aliases &nbsp; &nbsp; &nbsp;&nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; Select BBS<br>"
+	"Aliases &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; &nbsp; &nbsp; &nbsp; &nbsp;&nbsp; Select BBS<br>"
 	"<textarea rows=10 cols=20 name=Aliases>%s</textarea> &nbsp<select tabindex=1 size=10 name=call>";
 
 char FWDSelectTail[] =
@@ -978,7 +984,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 				BBSNo++;
 			}
 			len += sprintf(&Reply[len],"</tr>");
-			if (BBSNo++ > MaxBBS)
+			if (BBSNo > MaxBBS)
 				break;
 		}
 		len += sprintf(&Reply[len], "%s", MailDetailTail);
@@ -1169,7 +1175,6 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 	int ReplyLen = 0;
 	char * input;
 	char Temp[80];
-	char Multi[2048];
 
 	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 
@@ -1216,16 +1221,29 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 		GetParam(input, "BUF=", Temp);
 		BNF = atoi(Temp);
 
-		GetParam(input, "From=", Multi);
-		LTFROM = GetOverrideFromString(Multi);
+		GetParam(input, "NTSD=", Temp);
+		NTSD = atoi(Temp);
 
-		GetParam(input, "To=", Multi);
-		LTTO = GetOverrideFromString(Multi);
+		GetParam(input, "NTSF=", Temp);
+		NTSF = atoi(Temp);
 
-		GetParam(input, "At=", Multi);
-		LTAT = GetOverrideFromString(Multi);
+		GetParam(input, "NTSU=", Temp);
+		NTSU = atoi(Temp);
+
+		GetParam(input, "From=", LTFROMString);
+		LTFROM = GetOverrideFromString(LTFROMString);
+
+		GetParam(input, "To=", LTTOString);
+		LTTO = GetOverrideFromString(LTTOString);
+
+		GetParam(input, "At=", LTATString);
+		LTAT = GetOverrideFromString(LTATString);
  	}
-	
+
+#ifndef LINBPQ
+	SaveMAINTConfig();
+#endif
+
 	SendHouseKeeping(Reply, RLen, Key);
 	return;
 }
@@ -1409,11 +1427,15 @@ VOID ProcessUIUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * 
 		{
 			char EnKey[10];
 			char DigiKey[10];
+			char MFKey[12];
+			char HDDRKey[12];
 			char NullKey[12];
 			char Temp[100];
 
 			sprintf(EnKey, "En%d=", i);
 			sprintf(DigiKey, "Path%d=", i);
+			sprintf(MFKey, "SndMF%d=", i);
+			sprintf(HDDRKey, "SndHDDR%d=", i);
 			sprintf(NullKey, "SndNull%d=", i);
 
 			GetCheckBox(input, EnKey, &UIEnabled[i]);
@@ -1421,8 +1443,16 @@ VOID ProcessUIUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * 
 			if (UIDigi[i])
 				free (UIDigi[i]);
 			UIDigi[i] = _strdup(Temp);
+			GetCheckBox(input, MFKey, &UIMF[i]);
+			GetCheckBox(input, HDDRKey, &UIHDDR[i]);
 			GetCheckBox(input, NullKey, &UINull[i]);
 		}
+#ifdef LINBPQ
+		SaveConfig(ConfigName);
+		GetConfig(ConfigName);
+#else
+		SaveUIConfig();
+#endif
 	}
 
 	SendUIPage(Reply, RLen, Key);
@@ -1486,6 +1516,8 @@ char * GetNextParam(char ** next)
 	}
 	return ptr1;
 }
+
+VOID MultiStringValuetoReg(HKEY hKey, char * name, char ** values);
 
 VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
@@ -1564,12 +1596,74 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 #ifdef LINBPQ
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
+#else
+		{
+		HKEY hKey = 0;
+		int retCode, disp;
+		char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
+
+		strcat(Key, Session->User->Call);
+
+		retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+
+		MultiStringValuetoReg(hKey, "ATCalls", FWDInfo->ATCalls);
+		MultiStringValuetoReg(hKey, "TOCalls", FWDInfo->TOCalls);
+		MultiStringValuetoReg(hKey, "FWD Times", FWDInfo->FWDTimes);
+		MultiStringValuetoReg(hKey, "HRoutes", FWDInfo->Haddresses);
+		MultiStringValuetoReg(hKey, "HRoutesP", FWDInfo->HaddressesP);
+		MultiStringValuetoReg(hKey, "Connect Script", FWDInfo->ConnectScript);
+
+		RegSetValueEx(hKey,"Enabled", 0, REG_DWORD, (BYTE *)&FWDInfo->Enabled,4);
+		RegSetValueEx(hKey,"RequestReverse", 0, REG_DWORD, (BYTE *)&FWDInfo->ReverseFlag,4);
+		RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&FWDInfo->AllowB2,4);
+		RegSetValueEx(hKey, "FWD Personals Only", 0, REG_DWORD, (BYTE *)&FWDInfo->PersonalOnly,4);
+		RegSetValueEx(hKey, "FWD New Immediately", 0, REG_DWORD, (BYTE *)&FWDInfo->SendNew,4);
+		RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&FWDInfo->AllowB1,4);
+		RegSetValueEx(hKey,"SendCTRLZ", 0, REG_DWORD, (BYTE *)&FWDInfo->SendCTRLZ,4);
+		RegSetValueEx(hKey,"AllowCompressed", 0, REG_DWORD, (BYTE *)&FWDInfo->AllowCompressed,4);
+		RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&FWDInfo->FwdInterval,4);
+		RegSetValueEx(hKey,"RevFWDInterval", 0, REG_DWORD, (BYTE *)&FWDInfo->RevFwdInterval,4);
+		RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&FWDInfo->MaxFBBBlockSize, 4);
+
+		RegSetValueEx(hKey,"BBSHA", 0, REG_SZ, FWDInfo->BBSHA, strlen(FWDInfo->BBSHA));
+
+		RegCloseKey(hKey);
+		}
 #endif
 		ReinitializeFWDStruct(Session->User);
 	
 		SendFwdDetails(Session, Reply, RLen, Session->Key);
 	}
 }
+
+#ifdef WIN32
+
+VOID MultiStringValuetoReg(HKEY hKey, char * name, char ** values)
+{
+	char ** Calls;
+	char Multi[10000];
+	char * ptr = &Multi[1];
+
+	*ptr = 0;
+
+	if (values)
+	{
+		Calls = values;
+
+		while(Calls[0])
+		{
+			strcpy(ptr, Calls[0]);
+			ptr += strlen(Calls[0]);
+			*(ptr++) = 0;
+			Calls++;
+		}
+		*(ptr++) = 0;
+	}
+
+	RegSetValueEx(hKey, name, 0, REG_MULTI_SZ, &Multi[1], ptr-&Multi[1]);
+}
+
+#endif
 
 
 
@@ -2102,7 +2196,7 @@ VOID SendHouseKeeping(char * Reply, int * ReplyLen, char * Key)
 			(DeletetoRecycleBin) ? CHKD  : UNC,
 			(SendNonDeliveryMsgs) ? CHKD  : UNC,
 			(SuppressMaintEmail) ? CHKD  : UNC,
-			PR, PUR, PF, PNF, BF, BNF,
+			PR, PUR, PF, PNF, BF, BNF, NTSD, NTSF, NTSU,
 			FromList, ToList, AtList,
 			(OverrideUnsent) ? CHKD  : UNC);
 
@@ -2177,7 +2271,9 @@ VOID SendUIPage(char * Reply, int * ReplyLen, char * Key)
 				(UIEnabled[i])?CHKD:UNC, i,
 				 PortNo,
 				 (UIDigi[i])?UIDigi[i]:"", i, 
-				(UINull[i])?CHKD:UNC, i);
+			 	 (UIMF[i])?CHKD:UNC, i,
+				 (UIHDDR[i])?CHKD:UNC, i,
+				 (UINull[i])?CHKD:UNC, i);
 	}
 
 	Len += sprintf(&Reply[Len], UITail, Key);

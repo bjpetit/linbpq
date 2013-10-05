@@ -15,6 +15,8 @@ static char MAILMYCALL[7];
 
 UINT UIPortMask = 0;
 BOOL UIEnabled[33];
+BOOL UIMF[33];
+BOOL UIHDDR[33];
 BOOL UINull[33];
 char * UIDigi[33];
 char * UIDigiAX[33];		// ax.25 version of digistring
@@ -170,7 +172,7 @@ VOID SendMsgUI(struct MsgInfo * Msg)
 
 	for (i=1; i <= NumPorts; i++)
 	{
-		if (Mask & 1)
+		if ((Mask & 1) && UIHDDR[i])
 			Send_AX_Datagram(msg, len, i, AXDEST, TRUE);
 		
 		Mask>>=1;
@@ -257,7 +259,7 @@ VOID SendLatestUI(int Port)
 
 	for (i=1; i <= NumPorts; i++)
 	{
-		if (Mask & 1)
+		if ((Mask & 1) && UIHDDR[i])
 			Send_AX_Datagram(msg, len, i, AXDEST, TRUE);
 		
 		Mask>>=1;
@@ -514,7 +516,7 @@ VOID SendMailFor(char * Msg, BOOL HaveCalls)
 	{
 		if (Mask & 1)
 		{
-			if (HaveCalls || UINull[i])
+			if (UIMF[i] && (HaveCalls || UINull[i]))
 			{
 				Send_AX_Datagram(Msg, strlen(Msg) - 1, i, AXDEST, TRUE);
 			}

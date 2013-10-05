@@ -2,6 +2,8 @@
 
 // Monitor Code - from moncode.asm
 
+// Modified for AGW form monitor
+
 #pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -44,57 +46,13 @@
 char * strlop(char * buf, char delim);
 UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen);
 
-char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen);
-UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen);
-char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output);
+static char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen);
+static UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen);
+static char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output);
 
+UINT Mask = 0xffffffff;
 
-DllExport int APIENTRY SetTraceOptions(int mask, int mtxparam, int mcomparam)
-{
-
-//	Sets the tracing options for DecodeFrame. Mask is a bit
-//	mask of ports to monitor (ie 101 binary will monitor ports
-//	1 and 3). MTX enables monitoring on transmitted frames. MCOM
-//	enables monitoring of protocol control frames (eg SABM, UA, RR),
-//	as well as info frames.
-
-	MMASK = mask;
-	MTX = mtxparam;
-	MCOM = mcomparam;
-
-	return (0);
-}
-
-DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly)
-{
-
-//	Sets the tracing options for DecodeFrame. Mask is a bit
-//	mask of ports to monitor (ie 101 binary will monitor ports
-//	1 and 3). MTX enables monitoring on transmitted frames. MCOM
-//	enables monitoring of protocol control frames (eg SABM, UA, RR),
-//	as well as info frames.
-
-
-	MMASK = mask;
-	MTX = mtxparam;
-	MCOM = mcomparam;
-	MUIONLY = monUIOnly;
-
-	return 0;
-}
-
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS);
-
-int APRSDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask)
-{
-	return IntDecodeFrame(msg, buffer, Stamp, Mask, TRUE);
-}
-DllExport int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, int Stamp)
-{
-	return IntDecodeFrame(msg, buffer, Stamp, MMASK, FALSE);
-}
-
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS)
+int InternalAGWDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, int * FrameType)
 {
 	UCHAR * ptr;
 	int n;
@@ -151,6 +109,8 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 
 	CTL &= ~PFBIT;
 
+	*FrameType = CTL;
+
 	if (MUIONLY)
 		if (CTL != 3)
 			return 0;
@@ -189,12 +149,12 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 
 	SS = Stamp - MM * 60;
 
-	Output += sprintf(Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
+	Output += sprintf(Output, " %d:Fm ", Port);
 
 	From[ConvFromAX25(msg->ORIGIN, From)] = 0;
 	To[ConvFromAX25(msg->DEST, To)] = 0;
 
-	Output += sprintf(Output, "%s>%s", From, To);
+	Output += sprintf(Output, "%s To %s", From, To);
 
 	//	Display any Digi-Peaters   
 
@@ -226,8 +186,8 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 		}
 	}		
 	
-	Output += sprintf(Output, " Port=%d ", Port);
-
+	*(Output++) = ' ';
+	
 	// Set up CR and PF
 
 	CRCHAR[0] = 0;
@@ -278,8 +238,9 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 	else if (CTL == 3)
 	{
 		//	Un-numbered Information Frame 
+		//UI pid=F0 Len=20 >
 
-		Output += sprintf(Output, "<UI%s>", CRCHAR);
+		Output += sprintf(Output, "<UI pid=%02X Len=%d>", ADJBUFFER->PID, MsgLen - 23);
 		Info = 1;
 	}
 	else if (CTL & 2)
@@ -349,8 +310,11 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 
 	}
 
+	Output += sprintf(Output, "[%02d:%02d:%02d]", HH, MM, SS);
+
+
 	if (FRMRFLAG)
-		Output += sprintf(Output, " %02X %02X %02X", ADJBUFFER->PID, ADJBUFFER->L2DATA[0], ADJBUFFER->L2DATA[0]); 
+		Output += sprintf(Output, "%02X %02X %02X", ADJBUFFER->PID, ADJBUFFER->L2DATA[0], ADJBUFFER->L2DATA[0]); 
 
 	if (Info)
 	{
@@ -375,25 +339,20 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 			{
 				C = *(ptr2++);
 
-				if (APRS)
-					*(ptr1++) = C;		// MIC-E needs all chars
-				else
-				{
-					// Convert to printable
+				// Convert to printable
 
-					C &= 0x7F;
+				C &= 0x7F;
 
-					if (C == 13 || C == 10 || C > 31)
-						*(ptr1++) = C;	
-				}
+				if (C == 13 || C == 10 || C > 31)
+					*(ptr1++) = C;	
 			}
 
 			len = ptr1 - Infofield;
 	
-			Output[0] = ':';
-			Output[1] = 13;
-			memcpy(&Output[2], Infofield, len);
-			Output += (len + 2);
+//			Output[0] = ':';
+			Output[0] = 13;
+			memcpy(&Output[1], Infofield, len);
+			Output += (len + 1);
 
 			break;
 		}
@@ -450,7 +409,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 		ptr += 6;
 	
-		Output += sprintf(Output, " NODES broadcast from %s\r", Alias);
+		Output += sprintf(Output, "\rFF %s (NetRom Routing)\r", Alias);
 
 		MsgLen -= 30;					//Header, mnemonic and signature length
 
@@ -641,64 +600,12 @@ L3IP:
 UCHAR * DISPLAYIPDATAGRAM(IPMSG * IP, UCHAR * Output, int MsgLen)
 {
 	UCHAR * ptr;
-	USHORT FRAGWORD;
 		
 	ptr = (UCHAR *)&IP->IPSOURCE;
 	Output += sprintf(Output, "%d.%d.%d.%d>", ptr[0], ptr[1], ptr[2], ptr[3]);
 
 	ptr = (UCHAR *)&IP->IPDEST;
 	Output += sprintf(Output, "%d.%d.%d.%d LEN:%d ", ptr[0], ptr[1], ptr[2], ptr[3], htons(IP->IPLENGTH));
-
-	FRAGWORD = ntohs(IP->FRAGWORD);
-
-	if (FRAGWORD)
-	{
-		// If nonzero, check which bits are set 
-
-		//Bit 0: reserved, must be zero
-		//Bit 1: (DF) 0 = May Fragment,  1 = Don't Fragment.
-		//Bit 2: (MF) 0 = Last Fragment, 1 = More Fragments.
-		//Fragment Offset:  13 bits
-
-		if (FRAGWORD & (1 << 14))
-			Output += sprintf(Output, "DF ");
-
-		if (FRAGWORD & (1 << 13))
-			Output += sprintf(Output, "MF ");
-
-		FRAGWORD &= 0xfff;
-
-		if (FRAGWORD)
-		{
-			Output += sprintf(Output, "Offset %d ", FRAGWORD * 8);
-			return Output;			// Cant display proto fields
-		}
-	}
-
-	if (IP->IPPROTOCOL == 6)
-	{
-		PTCPMSG TCP = (PTCPMSG)&IP->Data;
-
-		Output += sprintf(Output, "TCP Src %d Dest %d ", ntohs(TCP->SOURCEPORT), ntohs(TCP->DESTPORT));
-		return Output;
-	}
-
-	if (IP->IPPROTOCOL == 1)
-	{
-		PICMPMSG ICMPptr = (PICMPMSG)&IP->Data;
-
-		Output += sprintf(Output, "ICMP ");
-
-		if (ICMPptr->ICMPTYPE == 8)
-			Output += sprintf(Output, "Echo Request ");
-		else
-		if (ICMPptr->ICMPTYPE == 0)
-			Output += sprintf(Output, "Echo Reply ");
-		else
-			Output += sprintf(Output, "Code %d", ICMPptr->ICMPTYPE);
-
-		return Output;
-	}
 
 /*
 	MOV	AL,IPPROTOCOL[ESI]
@@ -745,14 +652,14 @@ char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output)
 	char Dest[10];
 	
 	if (ptr[7] == 1)		// Request
-		return Output + sprintf(Output, " ARP Request who has %d.%d.%d.%d? Tell %d.%d.%d.%d",
+		return Output + sprintf(Output, " < ARP Request who has %d.%d.%d.%d? Tell %d.%d.%d.%d",
 			ptr[26], ptr[27], ptr[28], ptr[29], ptr[15], ptr[16], ptr[17], ptr[18]);
 
 	// Response
 
 	Dest[ConvFromAX25(&ptr[8], Dest)] = 0;
 
-	return Output + sprintf(Output, " ARP Reply %d.%d.%d.%d is at %s",
-			ptr[15], ptr[16], ptr[17], ptr[18], Dest);
+	return Output + sprintf(Output, " < ARP Rreply %d.%d.%d.%d? is at %s",
+			ptr[15], ptr[16], ptr[17], ptr[18], "??");
 
 }

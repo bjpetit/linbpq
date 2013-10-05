@@ -1224,6 +1224,8 @@ extern BOOL SendBBStoSYSOPCall;
 extern BOOL DontHoldNewUsers;
 extern BOOL UIEnabled[];
 extern BOOL UINull[];
+extern BOOL UIMF[];
+extern BOOL UIHDDR[];
 extern char * UIDigi[];
 extern int MailForInterval;
 extern char MailForText[];
@@ -1265,6 +1267,9 @@ extern int PF;
 extern int PNF;
 extern int BF;
 extern int BNF;
+extern int NTSD;
+extern int NTSU;
+extern int NTSF;
 extern int AP;
 extern int AB;
 

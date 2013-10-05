@@ -587,7 +587,7 @@ static int DecodePosition(void)
 long Encode(char * in, char * out, long inlen, BOOL B1Protocol)
 {
 		int  i, c, len, r, s, last_match_length;
-		char *ptr;
+		unsigned char *ptr;
 
 		putbuf = 0;
 		putlen = 0;
@@ -608,11 +608,19 @@ long Encode(char * in, char * out, long inlen, BOOL B1Protocol)
 
 		ptr = (char *)&textsize;
 
-		crc_fputc(*(ptr++));
-		crc_fputc(*(ptr++));
-		crc_fputc(*(ptr++));
-		crc_fputc(*(ptr++));
+#ifdef __BIG_ENDIAN__
 		
+		crc_fputc(*(ptr+3));
+		crc_fputc(*(ptr+2));
+		crc_fputc(*(ptr+1));
+		crc_fputc(*(ptr));
+#else
+		crc_fputc(*(ptr++));
+		crc_fputc(*(ptr++));
+		crc_fputc(*(ptr++));
+		crc_fputc(*(ptr++));	
+#endif
+
 		if (textsize == 0)
 			return 0;
 
@@ -714,7 +722,7 @@ BOOL CheckifPacket(char * Via)
 
 void Decode(CIRCUIT * conn)  
 {
-	char *ptr;
+	unsigned char *ptr;
 	char * StartofMsg;
 	short  i, j, k, r;
 	short c;
@@ -761,8 +769,46 @@ void Decode(CIRCUIT * conn)
 	textsize = 0;
 	ptr = (char *)&textsize;
 
+#ifdef __BIG_ENDIAN__
+
+	ptr[3] = (unsigned char)crc_fgetc();
+	ptr[2] = (unsigned char)crc_fgetc();
+	ptr[1] = (unsigned char)crc_fgetc();
+	ptr[0] = (unsigned char)crc_fgetc();
+
+#else
+
 	for (i = 0 ; i < sizeof(textsize) ; i++)
 		ptr[i] = (unsigned char)crc_fgetc();
+
+#endif
+
+	// Temp fix for duff MACBPQ (Message Length send big-endian)
+
+	if (textsize > 5000000)
+	{
+		char x[4];
+		char y[4];
+
+		memcpy(x, &textsize, 4);
+		y[0] = x[3];
+		y[1] = x[2];
+		y[2] = x[1];
+		y[3] = x[0];
+
+		memcpy(&textsize, y, 4);
+
+		if (textsize > 5000000)
+		{
+			nodeprintf(conn, "*** Message Size Invalid %d\r", textsize);
+			Debugprintf("*** Message Size Invalid %d\r", textsize);
+			free(conn->MailBuffer);
+			conn->MailBufferSize=0;
+			conn->MailBuffer=0;
+			conn->CloseAfterFlush = 20;			// 2 Secs
+			return;
+		}
+	}
 
 	Logprintf(LOG_BBS, conn, '|', "Uncompressing Message Comp Len %d Msg Len %d CRC %x", 
 			conn->TempMsg->length, textsize, crc);
@@ -987,7 +1033,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				{
 					// See if Packet or SMTP
 					
-					if (CheckifPacket(Msg->via))
+					if (CheckifPacket(Msg->via) || FindRMS() == NULL)			//  If no RMS, don't check for routing to it)
 					{
 						// Packet Message
 
@@ -1014,13 +1060,20 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 				else
 				{
-					strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
-					RMSMsgs ++;
-					LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
+					if (FindRMS())				// If no RMS, treat as Packet Address
+					{
+						strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
+						RMSMsgs ++;
+						LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
+					}
+					else
+					{
+						BBSMsgs++;
+					}
 				}
 
 			}
-			else if (conn->RMSExpress)
+			else if (conn->RMSExpress && FindRMS())			//  If no RMS, don't check for routing to it
 			{
 				Msg->B2Flags |= FromRMSExpress;
 
@@ -1059,7 +1112,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 			}
 
-			else			// Not Paclink or RMS Express
+			else			// Not Paclink or RMS Express (or no RMS)
 			{
 				if (_memicmp(&ptr1[4], "SMTP:", 5) == 0)
 				{
@@ -1132,7 +1185,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 		else if (_memicmp(ptr1, "Type:", 4) == 0)
 		{
-			Msg->type = ptr1[6];
+			if (ptr1[6] == 'N')
+				Msg->type = 'T';				// NTS
+			else
+				Msg->type = ptr1[6];
 		}
 		else if (_memicmp(ptr1, "Body:", 4) == 0)
 		{

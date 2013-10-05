@@ -683,7 +683,7 @@ int BPQSerialSetDebugMask(HANDLE hDevice, int DebugMask)
 #endif                  
 }
 
-static int LocalSessionState(int stream, int * state, int * change, BOOL ACK)
+int LocalSessionState(int stream, int * state, int * change, BOOL ACK)
 {
 	//	Get current Session State. Any state changed is ACK'ed
 	//	automatically. See BPQHOST functions 4 and 5.
@@ -1621,8 +1621,10 @@ VOID TNCPoll()
 	while (TNC)
 	{
 		if (TNC->hDevice == 0)
+		{
+			TNC = TNC->Next;
 			continue;						// Open failed
-
+		}
 		if (TNC->Mode == KANTRONICS)
 		{
 			// Have to poll for Data and State changes
@@ -1899,10 +1901,10 @@ VOID DOMONITORING(int NeedTrace)
 	if (NeedTrace)
 		Tracebit = 0x80;
 
-	if (TNC->CONOK)
-		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, TNC->APPLICATION);
-	else
-		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, 0);
+//	if (TNC->CONOK)
+//		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, TNC->APPLICATION);
+//	else
+//		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, 0);
 
 	Stamp = GetRaw(TNC->BPQPort, (char *)&MONITORDATA, &len, &count);
 
@@ -3592,6 +3594,13 @@ and then the very next poll to channel 0 will get:
 			else
 			{
 				ptr = strchr(Context, ':');
+
+				if (ptr == 0)
+				{
+					TNC->MONFLAG = 0;
+					return 0;
+				}
+
 				ptr += 2;					// Skip colon and cr
 				MonLen = Len - (ptr - Decoded);
 				memcpy(&TNC->MONBUFFER[2], ptr, MonLen);

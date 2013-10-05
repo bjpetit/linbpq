@@ -458,14 +458,17 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 
 			// Create a traffic record
 
-			Duration = time(NULL) - STREAM->ConnectTime;
+			if (STREAM->Connected)
+			{
+				Duration = time(NULL) - STREAM->ConnectTime;
 				
-			sprintf(logmsg,"Port %2d %9s Bytes Sent %d  BPS %d Bytes Received %d BPS %d Time %d Seconds",
-				TNC->Port, STREAM->RemoteCall,
-				STREAM->BytesTXed, (int)(STREAM->BytesTXed/Duration),
-				STREAM->BytesRXed, (int)(STREAM->BytesRXed/Duration), (int)Duration);
+				sprintf(logmsg,"Port %2d %9s Bytes Sent %d  BPS %d Bytes Received %d BPS %d Time %d Seconds",
+					TNC->Port, STREAM->RemoteCall,
+					STREAM->BytesTXed, (int)(STREAM->BytesTXed/Duration),
+					STREAM->BytesRXed, (int)(STREAM->BytesRXed/Duration), (int)Duration);
 
-			Debugprintf(logmsg);
+				Debugprintf(logmsg);
+			}
 
 			if (STREAM->BPQtoPACTOR_Q)					// Still data to send?
 				return;									// Will close when all acked
@@ -1866,9 +1869,9 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 		if (Quiet == 0)
 		{
 			if (pPort < (VOID *)256)
-				sprintf(buf,"COM%d could not be opened \r\n ", (UINT)pPort);
+				sprintf(buf," COM%d could not be opened \r\n ", (UINT)pPort);
 			else
-				sprintf(buf,"%s could not be opened \r\n ", pPort);
+				sprintf(buf," %s could not be opened \r\n ", pPort);
 
 			WritetoConsoleLocal(buf);
 			OutputDebugString(buf);
@@ -1904,7 +1907,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
    dcb.BaudRate = speed;
    dcb.ByteSize = 8;
    dcb.Parity = 0;
-   dcb.StopBits = 0;
+   dcb.StopBits = TWOSTOPBITS;
 
 	// setup hardware flow control
 
@@ -2081,7 +2084,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 		if (Quiet == 0)
 		{
 			perror("Com Open Failed");
-			sprintf(buf,"%s could not be opened \n", Port);
+			sprintf(buf," %s could not be opened \n", Port);
 			WritetoConsoleLocal(buf);
 			Debugprintf(buf);
 		}
@@ -2742,6 +2745,18 @@ DllExport char * APIENTRY GetVersionString()
 	return ((char *)&VersionString);
 }
 
+#ifdef MACBPQ
+
+//Fiddle till I find a better solution
+
+int __sync_lock_test_and_set(int * ptr, int val)
+{
+	*ptr = val;
+	return 0;
+}
+
+#endif
+
 void GetSemaphore(struct SEM * Semaphore)
 {
 	//
@@ -2789,6 +2804,7 @@ loop1:
 	//Ok. got it
 
 	Semaphore->Gets++;
+	Semaphore->SemProcessID = GetCurrentProcessId();
 
 	return;
 }
@@ -2921,6 +2937,7 @@ VOID OpenReportingSockets()
 
 	_beginthread(ResolveUpdateThread,0,(int)0);
 }
+
 /*
 VOID WriteMiniDump()
 {

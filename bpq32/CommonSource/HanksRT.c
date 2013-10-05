@@ -35,7 +35,7 @@ ULONG ChatApplMask;
 
 int	NumberofChatStreams=0;
 
-static char SignoffMsg[100];
+char ChatSignoffMsg[100];
 
 char OtherNodesList[1000];
 char ChatWelcomeMsg[1000];
@@ -468,7 +468,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, i
 
 		if (_memicmp(&Buffer[1], "Bye", 1) == 0)
 		{
-			SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+			SendUnbuffered(conn->BPQStream, ChatSignoffMsg, strlen(ChatSignoffMsg));
 			
 			if (conn->BPQStream < 0)
 			{
@@ -485,7 +485,7 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, i
 
 		if (_memicmp(&Buffer[1], "Quit", 4) == 0)
 		{
-			SendUnbuffered(conn->BPQStream, SignoffMsg, strlen(SignoffMsg));
+			SendUnbuffered(conn->BPQStream, ChatSignoffMsg, strlen(ChatSignoffMsg));
 
 			if (conn->BPQStream < 0)
 			{
@@ -3286,7 +3286,7 @@ BOOL ChatInit()
 		strlop(ChatSYSOPCall, '-');
 	}
 
-	sprintf(SignoffMsg, "73 de %s\r", ChatSYSOPCall);
+	sprintf(ChatSignoffMsg, "73 de %s\r", ChatSYSOPCall);
 
 	if (ChatWelcomeMsg[0] == 0)
 		sprintf(ChatWelcomeMsg, "%s's Chat Server.$WType /h for command summary.$WBringing up links to other nodes.$W"

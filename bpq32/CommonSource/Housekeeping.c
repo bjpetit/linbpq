@@ -19,8 +19,15 @@ int PF = 30;
 int PNF = 30;
 int BF = 30;
 int BNF = 30;
-int AP;
-int AB;
+//int AP;
+//int AB;
+int NTSD = 30;
+int NTSF = 30;
+int NTSU = 30;
+
+char LTFROMString[2048];
+char LTTOString[2048];
+char LTATString[2048];
 
 struct Override ** LTFROM;
 struct Override ** LTTO;
@@ -286,6 +293,9 @@ VOID ExpireMessages()
 	int BFLimit;
 	int BNFLimit;
 	int BLimit;
+	int NTSDLimit;
+	int NTSULimit;
+	int NTSFLimit;
 
 	struct Override ** Calls;
 
@@ -301,6 +311,18 @@ VOID ExpireMessages()
 	BFLimit = now - BF*86400;
 	BNFLimit = now - BNF*86400;
 
+	if (NTSU == 0)
+	{
+		// Assume all unset
+
+		NTSD = 30;
+		NTSU = 30;
+		NTSF = 30;
+	}
+
+	NTSDLimit = now - NTSD*86400;
+	NTSULimit = now - NTSU*86400;
+	NTSFLimit = now - NTSF*86400;
 
 	for (n = 1; n <= NumberofMessages; n++)
 	{
@@ -317,7 +339,6 @@ VOID ExpireMessages()
 		switch (Msg->type)
 		{
 		case 'P':
-		case 'T':
 
 			switch (Msg->status)
 			{
@@ -355,7 +376,6 @@ VOID ExpireMessages()
 				continue;	
 
 			case 'Y':
-			case 'D':
 
 				if (Msg->datechanged < PRLimit) KillMsg(Msg);
 
@@ -367,6 +387,38 @@ VOID ExpireMessages()
 
 			}			
 			
+		case 'T':
+
+			switch (Msg->status)
+			{	
+			case 'F':
+
+				if (Msg->datechanged < NTSFLimit)
+					KillMsg(Msg);
+
+				continue;	
+
+			case 'D':
+
+				if (Msg->datechanged < NTSDLimit)
+					KillMsg(Msg);
+
+				continue;
+
+			default:
+
+				if (Msg->datecreated < NTSULimit)
+				{
+					if (SendNonDeliveryMsgs) 
+						SendNonDeliveryMessage(Msg, TRUE, PUR);
+
+					KillMsg(Msg);
+				}
+
+				continue;
+
+			}			
+
 		case 'B':
 
 			BLimit = BF;

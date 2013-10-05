@@ -103,6 +103,8 @@ KillTNC(int PID)
 {
 	HANDLE hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, PID);
 
+	Debugprintf("KillTNC Called Pid %d", PID);
+
 	if (hProc)
 	{
 		TerminateProcess(hProc, 0);
@@ -126,12 +128,17 @@ RestartTNC(char * Path)
 	SInfo.cbReserved2=0; 
   	SInfo.lpReserved2=NULL; 
 
+	Debugprintf("RestartTNC Called for %s", Path);
+
 	while (KillOldTNC(Path) && n++ < 100)
 	{
 		Sleep(100);
 	}
 
-	return CreateProcess(Path, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+	if (CreateProcess(Path, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+		Debugprintf("Restart TNC OK");
+	else
+		Debugprintf("Restart TNC Failed %d ", GetLastError());
 }
 
 

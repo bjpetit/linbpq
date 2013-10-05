@@ -1057,3 +1057,8 @@ struct TNCDATA
 #define SCS 3
 
 #endif
+
+
+
+#define Disconnect(stream) SessionControl(stream,2,0)
+#define Connect(stream) SessionControl(stream,1,0)

@@ -167,6 +167,8 @@
 #define MAX_BROADCASTS 8
 #define MAXUDPPORTS 30 
 
+int ResolveDelay = 0;
+
 struct arp_table_entry
 {
 	unsigned char callsign[7];
@@ -777,8 +779,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		ReadConfigFile(port);
 		_beginthread(OpenSockets, 0, PORT );
+		ResolveDelay = 2;
 #ifndef LINBPQ
-		PostMessage(PORT->hResWnd, WM_TIMER,0,0);
 		InvalidateRect(PORT->hResWnd,NULL,TRUE);
 #endif
 		break;
@@ -1220,11 +1222,10 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
 			ReadConfigFile(Port);
 
-			_beginthread(OpenSockets, 0, PORT );
+			_beginthread(OpenSockets, 0, PORT);
 
-			PostMessage(PORT->hResWnd, WM_TIMER,0,0);
+			ResolveDelay = 2;
 			InvalidateRect(hWnd,NULL,TRUE);
-
 
 			return 0;
 		}
@@ -1426,7 +1427,7 @@ int FAR PASCAL ConfigWndProc(HWND hWnd,UINT message,WPARAM wParam,LPARAM lParam)
 				if (convtoax25(call,axcall,&calllen))
 				{
 					add_arp_entry(PORT, axcall,0,calllen,port,host,Interval, BCFlag, FALSE, 0, port, FALSE);
-					PostMessage(PORT->hResWnd, WM_TIMER,0,0);
+					ResolveDelay = 2;
 					return(DestroyWindow(hWnd));
 				}
 			}
@@ -1558,6 +1559,8 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 	while(TRUE)
 	{
 		Debugprintf("AXIP Resolving names");
+		
+		ResolveDelay = 15 * 60;
 
 		for (PORT->ResolveIndex=0; PORT->ResolveIndex < PORT->arp_table_len; PORT->ResolveIndex++)
 		{	
@@ -1606,7 +1609,9 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 		}
 		Debugprintf("AXIP Resolve complete - pausing");
 
-		Sleep(15 * 60 * 1000);
+		while(ResolveDelay-- > 0)
+			Sleep(1000);
+
 	}
 	Debugprintf("AXIP Resolve thread exitied");
 }

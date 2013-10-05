@@ -1,7 +1,7 @@
 
 // Module to provide a basic Gateway between IP over AX.25 and the Internet.
 
-// Uses WinPcap
+// Uses WinPcap on Windows, TAP Driver on Linux
 
 // Basically operates as a mac level bridge, with headers converted between ax.25 and Ethernet.
 // ARP frames are also reformatted, and monitored to build a simple routing table.
@@ -12,6 +12,8 @@
 // Suggested config is to use the Internet Ethernet Adapter, behind a NAT/PAT Router.
 // The ax.25 applications will appear as single addresses on the Ethernet LAN
 
+// The code can also switch packets between ax.25 interfaces
+
 // First Version, July 2008
 
 // Version 1.2.1 January 2009
@@ -19,34 +21,36 @@
 //	Add IP Address Mapping option
 
 /*
-TODo	?Time Out ARP
-		?Multiple Adapters
+TODo	?Multiple Adapters
 */
 
 #pragma data_seg("_BPQDATA")
 
-#define _CRT_SECURE_NO_DEPRECATE 
-
-#define Dll	__declspec( dllexport )
-#define DllImport __declspec(dllimport)
+#define _CRT_SECURE_NO_DEPRECATE
+#define _USE_32BIT_TIME_T
 
 #include <stdio.h>
-#include "AsmStrucs.h"
-#include "bpq32.h"
-#include "IPCode.h"
-#include "pcap.h"
-#include "kernelresource.h"
+#include <time.h>
 
-static char MYCALL[7];	// 7 chars, ax.25 format
+#include "CHeaders.h"
+
+#include "IPCode.h"
+
+#ifdef WIN32
+#include "pcap.h"
+#endif
+
+#ifndef LINBPQ
+#include "kernelresource.h"
+LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+#endif
 
 extern BPQVECSTRUC * IPHOSTVECTORPTR;
 
-BOOL APIENTRY  GETSENDNETFRAMEADDR();
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
-LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-
+VOID SENDSABM(struct _LINKTABLE * LINK);
+BOOL FindLink(UCHAR * LinkCall, UCHAR * OurCall, int Port, struct _LINKTABLE ** REQLINK);
 BOOL ProcessConfig();
-BOOL FreeConfig();
 
 #define ARPTIMEOUT 86400
 
@@ -61,12 +65,17 @@ ETHARP ETHARPREQMSG = {0};
 ARPDATA ** ARPRecords = NULL;				// ARP Table - malloc'ed as needed
 
 int NumberofARPEntries=0;
-short NUMBEROFPORTS;
+
 
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
 ULONG OurIPAddr = 0;
 ULONG OurIPBroadcast = 0;
+ULONG OurNetMask = 0xffffffff;
+
+BOOL WantTAP = FALSE;
+
+int tap_fd = 0;
 
 int FramesForwarded = 0;
 int FramesDropped = 0;
@@ -94,11 +103,6 @@ struct map_table_entry map_table[MAX_ENTRIES];
 
 int Windowlength, WindowParam;
 
-struct tagMSG Msg;
-
-char buf[MAXGETHOSTSTRUCT];
-
-extern HFONT hFont ;
 
 time_t ltime,lasttime;
 
@@ -126,7 +130,7 @@ int ARPFlag = -1;
 
 // Also used to reassemble NOS Fragmented ax.25 packets
 
-UCHAR Buffer[1630] = {0};
+static UCHAR Buffer[1630] = {0};
 
 #define EthOffset 30				// Should be plenty
 
@@ -141,40 +145,61 @@ int IPPortMask = 0;
 
 IPSTATS IPStats = {0};
 
-UCHAR BPQDirectory[];
+UCHAR BPQDirectory[260];
 
 char ARPFN[MAX_PATH];
 
 HANDLE handle;
 
-pcap_t *adhandle;
+#ifdef WIN32
+pcap_t *adhandle = 0;
+pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
+#endif
 
-char Adapter[256];
+static char Adapter[256];
 
 int Promiscuous = 1;			// Default to Promiscuous
+
+#ifdef WIN32
 
 HINSTANCE PcapDriver=0;
 
 typedef int (FAR *FARPROCX)();
 
 int (FAR * pcap_sendpacketx)();
-pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
+
 FARPROCX pcap_compilex;
 FARPROCX pcap_setfilterx;
 FARPROCX pcap_datalinkx;
 FARPROCX pcap_next_exx;
 FARPROCX pcap_geterrx;
 
+
 char Dllname[6]="wpcap";
 
 FARPROCX GetAddress(char * Proc);
+
+#else
+
+#define pcap_compilex pcap_compile
+#define pcap_open_livex pcap_open_live
+#define pcap_setfilterx pcap_setfilter
+#define pcap_datalinkx pcap_datalink
+#define pcap_next_exx pcap_next_ex
+#define pcap_geterrx pcap_geterr
+#define pcap_sendpacketx pcap_sendpacket
+#endif
 VOID __cdecl Debugprintf(const char * format, ...);
 
 HANDLE hInstance;
 
+void OpenTAP();
+
 Dll BOOL APIENTRY Init_IP()
 {
 	ARPDATA * ARPptr;
+
+#ifndef LINBPQ
 
 	if (hIPResWnd)
 	{
@@ -186,8 +211,7 @@ Dll BOOL APIENTRY Init_IP()
 	
 	hIPResWnd= NULL;
 
-	NUMBEROFPORTS=GetNumberofPorts();
-	ConvToAX25(GetNodeCall(), MYCALL);
+#endif
 
 	if (BPQDirectory[0] == 0)
 	{
@@ -196,7 +220,7 @@ Dll BOOL APIENTRY Init_IP()
 	else
 	{
 		strcpy(ARPFN,BPQDirectory);
-		strcat(ARPFN,"\\");
+		strcat(ARPFN,"/");
 		strcat(ARPFN,"BPQARP.dat");
 	}
 	
@@ -205,17 +229,6 @@ Dll BOOL APIENTRY Init_IP()
 	ARPRecords = NULL;				// ARP Table - malloc'ed as needed
 
 	NumberofARPEntries=0;
-
-    //
-    // Open PCAP Driver
- 
-	OpenPCAP();
-
-    if (adhandle == NULL)
-	{
-		WritetoConsole("Failed to open pcap device - IP Support Disabled\n");
-		return FALSE;
-	} 
 
 	// Clear old packets
 
@@ -247,20 +260,52 @@ Dll BOOL APIENTRY Init_IP()
 	ETHARPREQMSG.HWADDRLEN = 6;
 	ETHARPREQMSG.IPADDRLEN = 4;
 
-	// Allocate ARP Entry for Default Gateway, and send ARP for it
+#ifdef WIN32
 
-	ARPptr = AllocARPEntry();
+    //
+    // Open PCAP Driver
 
-	if (ARPptr != NULL)
+	if (Adapter[0])					// Don't have to have ethernet, if used just as ip over ax.25 switch 
 	{
-		ARPptr->ARPINTERFACE = 255;
-		ARPptr->ARPTYPE = 'E';
-		ARPptr->IPADDR = DefaultIPAddr;
+		OpenPCAP();
 
-		SendARPMsg(ARPptr);
+		if (adhandle == NULL)
+		{
+			WritetoConsoleLocal("Failed to open pcap device - IP Support Disabled\n");
+			return FALSE;
+		} 
+
+		// Allocate ARP Entry for Default Gateway, and send ARP for it
+
+		if (DefaultIPAddr)
+		{
+			ARPptr = AllocARPEntry();
+
+			if (ARPptr != NULL)
+			{
+				ARPptr->ARPINTERFACE = 255;
+				ARPptr->ARPTYPE = 'E';
+				ARPptr->IPADDR = DefaultIPAddr;
+
+				SendARPMsg(ARPptr);
+			}
+		}
 	}
 
+#else
+
+	// Linux - if TAP requested, open it
+#ifndef MACBPQ
+
+	if (WantTAP)
+		OpenTAP();
+
+#endif
+#endif
+
 	ReadARP();
+
+#ifndef LINBPQ
 
 	if (NeedResolver)
 	{
@@ -336,26 +381,29 @@ Dll BOOL APIENTRY Init_IP()
 
 		_beginthread(IPResolveNames, 0, NULL );
 	}
-
-	WritetoConsole("\n");
-	WritetoConsole("IP Support Enabled\n");
+#endif
+	WritetoConsoleLocal("\n");
+	WritetoConsoleLocal("IP Support Enabled\n");
 
 	return TRUE;
+
 }
 
 VOID IPClose()
 {
+#ifndef LINBPQ
 	PostMessage(hIPResWnd, WM_CLOSE,0,0);
 //	DestroyWindow(hIPResWnd);
 
 	hIPResWnd = NULL;
+#endif
 }
 
 Dll BOOL APIENTRY Poll_IP()
 {
 	int res;
 	struct pcap_pkthdr *header;
-	u_char *pkt_data;
+	const u_char *pkt_data;
 
 	// Entered every 100 mS
 	
@@ -377,31 +425,131 @@ Dll BOOL APIENTRY Poll_IP()
 
 Pollloop:
 
-	res = pcap_next_exx(adhandle, &header, &pkt_data);
+#ifdef WIN32
 
-	if (res > 0)
+	if (adhandle)
 	{
-		PETHMSG ethptr = (PETHMSG)&Buffer[EthOffset];
+		res = pcap_next_exx(adhandle, &header, &pkt_data);
 
-		memcpy(&Buffer[EthOffset],pkt_data, header->len);
-
-		if (ethptr->ETYPE == 0x0008)
+		if (res > 0)
 		{
-			ProcessEthIPMsg(&Buffer[EthOffset]);
-		//	PIPMSG ipptr = (PIPMSG)&Buffer[EthOffset+14];
-		//	ProcessIPMsg(ipptr, ethptr->SOURCE, 'E', 255);
-			goto Pollloop;
+			PETHMSG ethptr = (PETHMSG)&Buffer[EthOffset];
+
+			memcpy(&Buffer[EthOffset],pkt_data, header->len);
+
+			if (ethptr->ETYPE == 0x0008)
+			{
+				ProcessEthIPMsg((PETHMSG)&Buffer[EthOffset]);
+			//	PIPMSG ipptr = (PIPMSG)&Buffer[EthOffset+14];
+			//	ProcessIPMsg(ipptr, ethptr->SOURCE, 'E', 255);
+				goto Pollloop;
 		}
 
-		if (ethptr->ETYPE == 0x0608)
-		{
-			ProcessEthARPMsg((PETHARP)ethptr);
+			if (ethptr->ETYPE == 0x0608)
+			{
+				ProcessEthARPMsg((PETHARP)ethptr);
+				goto Pollloop;
+			}
+
+			// Ignore anything else
+
 			goto Pollloop;
 		}
+	}
+#endif
 
-		goto Pollloop;
+PollTAPloop:
 
-		// Ignore anything else
+	if (WantTAP && tap_fd)
+	{
+		int nread;
+
+		nread = read(tap_fd, &Buffer[EthOffset], 1600);
+
+		if (nread > 0)
+		{
+			PETHMSG ethptr = (PETHMSG)&Buffer[EthOffset];
+
+			if (ethptr->ETYPE == 0x0008)
+			{
+				ProcessEthIPMsg((PETHMSG)&Buffer[EthOffset]);
+				goto PollTAPloop;
+			}
+
+			if (ethptr->ETYPE == 0x0608)
+			{
+				ProcessEthARPMsg((PETHARP)ethptr);
+				goto PollTAPloop;
+			}
+
+			// if 08FF pass to BPQETHER Driver
+/*
+			if (ethptr->ETYPE == 0xFF08)
+			{
+				PBUFFHEADER axmsg;
+				PBUFFHEADER savemsg;
+				int len;
+			
+				// BPQEther Encap
+
+				len = Buffer[EthOffset + 15]*256 + Buffer[EthOffset + 14];
+
+				axmsg = (PBUFFHEADER)&Buffer[EthOffset + 9];
+				axmsg->LENGTH = len;
+				axmsg->PORT = 99;			// Dummy for IP Gate
+
+				printf("BPQ Eth Len %d PID %d\n", len, axmsg->PID);
+
+				if ((len < 16) || (len > 320))
+					goto PollTAPloop; // Probably RLI Mode Frame
+
+
+				//len-=3;
+		
+			//memcpy(&buff[7],&pkt_data[16],len);
+		
+			//		len+=5;
+
+				savemsg=axmsg;
+
+				// Packet from AX.25
+
+				if (CompareCalls(axmsg->ORIGIN, MYCALL))
+					return 0;				// Echoed packet
+
+				switch (axmsg->PID)
+				{
+				case  0xcc:
+
+				// IP Message
+
+				{
+					PIPMSG ipptr = (PIPMSG)++axmsg;
+					axmsg--;
+					ProcessIPMsg(ipptr, axmsg->ORIGIN, (axmsg->CTL == 3) ? 'D' : 'V', axmsg->PORT);
+					break;
+				}
+
+				case 0xcd:
+		
+				// ARP Message
+
+					ProcessAXARPMsg((PAXARP)axmsg);
+					SaveARP();
+					break;
+
+	//		case 0x08:
+				}
+
+				goto PollTAPloop;
+			}
+*/
+			// Ignore anything else
+
+//			printf("TAP ype %X\n", ntohs(ethptr->ETYPE));
+
+			goto PollTAPloop;
+		}
 	}
 
 	if (IPHOSTVECTORPTR->HOSTTRACEQ != 0)
@@ -416,6 +564,9 @@ Pollloop:
 		savemsg=axmsg;
 
 		// Packet from AX.25
+
+		if (CompareCalls(axmsg->ORIGIN, MYCALL))
+			return 0;				// Echoed packet
 
 		switch (axmsg->PID)
 		{
@@ -469,7 +620,7 @@ Pollloop:
 
 				// Release Buffer
 fragloop:
-				RelBuff(savemsg);
+				ReleaseBuffer(savemsg);
 
 				if (IPHOSTVECTORPTR->HOSTTRACEQ == 0)	goto Pollloop;		// Shouldn't happen
 
@@ -502,26 +653,37 @@ fragloop:
 		}
 		// Release the buffer
 
-		RelBuff(savemsg);
+		ReleaseBuffer(savemsg);
 
 		goto Pollloop;
-
 	}
 	return TRUE;
 }
-  
+
+
 BOOL Send_ETH(VOID * Block, DWORD len)
-{ 
-	if (len < 60) len = 60;
+{
+	if (WantTAP)
+	{
+		if (tap_fd)
+			write(tap_fd, Block, len);
 
-	// Send down the packet 
+		return TRUE;
+	}
 
-	pcap_sendpacketx(adhandle,	// Adapter
+#ifdef WIN32
+	if (adhandle)
+	{
+		if (len < 60) len = 60;
+
+		// Send down the packet 
+
+		pcap_sendpacketx(adhandle,	// Adapter
 			Block,				// buffer with the packet
 			len);				// size
-			
+	}
+#endif			
     return TRUE;
-
 }
 
 #define AX25_P_SEGMENT  0x08
@@ -540,8 +702,35 @@ static VOID Send_AX_Datagram(PMESSAGE Block, DWORD Len, UCHAR Port, UCHAR * HWAD
 	Block->ORIGIN[6] |= 1;						// Set End of Call
 	Block->CTL = 3;		//UI
 
-	Send_AX(Block, Len, Port);
+	if (Port == 99)				// BPQETHER over BPQTUN Port
+	{
+		// Add BPQETHER Header
 
+		int txlen = Block->LENGTH;
+		UCHAR txbuff[1600];
+		
+		if (txlen < 1 || txlen > 400)
+			return;
+
+		// Length field is little-endian
+
+		// BPQEther Header is 14 bytes before the Length 
+
+		txbuff[14]=(txlen & 0xff);
+		txbuff[15]=(txlen >> 8);
+
+
+		memcpy(&txbuff[16],&Block[7],txlen);
+		
+		//memcpy(&txbuff[0],&EthDest[0],6);
+		//memcpy(&txbuff[6],&EthSource[0],6);
+		//memcpy(&txbuff[12],&EtherType,2);
+	
+		write(tap_fd, Block, Len);
+		return;
+	}
+ 
+	Send_AX(Block, Len, Port);	
 	return;
 
 }
@@ -595,28 +784,89 @@ VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 
 	return;
 }
+
+#define MAXDATA BUFFLEN-16
+
+
 static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port)
 {
+//	ATTACH FRAME TO OUTBOUND L3 QUEUES (ONLY USED FOR IP ROUTER)
+
+	MESSAGE * buffptr;
+	struct _LINKTABLE * LINK;
+	struct PORTCONTROL * PORT;
+
 	memcpy(&Block[7],ToCall, 7);
 	memcpy(&Block[14],FromCall, 7);
 
-	_asm {
+if (Len > MAXDATA)
+		return;
+	
+	if (QCOUNT < 100)
+		return;
+	
+	buffptr = GetBuff();
 
-		pushfd
-		cld
-		pushad
+	if (buffptr == 0)
+		return;			// No buffers
 
-		mov	ecx,Len
-		mov	esi,Block
-		add	esi,7
+	Len -= 15;
 
-		mov	dl,Port
-		call	SENDNETFRAME
+	memcpy(&buffptr->DEST, &Block[22], Len);
 
-		popad
-		popfd
+	buffptr->LENGTH = Len;
+
+//	SEE IF L2 OR L3
+
+	if (Port == 0)				// L3
+	{
+		struct DEST_LIST * DEST;
+
+		if (FindDestination(ToCall, &DEST) == 0)
+		{
+			ReleaseBuffer(buffptr);
+			return;
 		}
-		
+
+		C_Q_ADD(&DEST->DEST_Q, buffptr);
+		return;
+	}
+
+//	SEND FRAME TO L2 DEST, CREATING A LINK ENTRY IF NECESSARY
+
+	if (FindLink(ToCall, FromCall, Port, &LINK))
+	{
+		// Have a link
+
+		C_Q_ADD(&LINK->TX_Q, buffptr);		
+		return;
+	}
+
+	if (LINK == NULL)				// No spare space
+	{
+		ReleaseBuffer(buffptr);
+		return;
+	}
+	
+	LINK->LINKPORT = PORT = GetPortTableEntryFromPortNum(Port);
+
+	if (PORT == NULL)
+		return;						// maybe port has been deleted
+
+	LINK->L2TIME = PORT->PORTT1;			// SET TIMER VALUE
+
+	LINK->LINKWINDOW = PORT->PORTWINDOW;
+
+	LINK->L2STATE = 2;
+
+	memcpy(LINK->LINKCALL, ToCall, 7);
+	memcpy(LINK->OURCALL, FromCall, 7);
+
+	LINK->LINKTYPE = 2;						// Dopwnlink
+
+	SENDSABM(LINK);
+
+	C_Q_ADD(&LINK->TX_Q, buffptr);		
 	return;
 }
 
@@ -656,7 +906,7 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 		if (Found)
 				goto AlreadyThere;				// Already there
 
-		if (Arp == NULL) return;					// No point of table full
+		if (Arp == NULL) return;				// No point of table full
 				
 		Arp->IPADDR = arpptr->SENDIPADDR;
 		Arp->ARPTYPE = 'E';
@@ -686,9 +936,11 @@ AlreadyThere:
 
 		}
 
-		// If already resolved, and on Enet, Ignore or we send loads of unnecessary msgs to ax.25
+		// If for our Ethernet Subnet, Ignore or we send loads of unnecessary msgs to ax.25
 
-				
+		if ((arpptr->TARGETIPADDR & OurNetMask) == (OurIPAddr & OurNetMask))
+			return;
+
 		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
 
 		if (Found)
@@ -715,7 +967,7 @@ AlreadyThere:
 	case 0x0200:
 
 		if (memcmp(&arpptr->MSGHDDR.DEST, ourMACAddr,6 ) != 0 ) 
-		return;		// Not for us
+			return;		// Not for us
 
 		// Update ARP Cache
 
@@ -821,7 +1073,7 @@ VOID ProcessAXARPMsg(PAXARP arpptr)
 AlreadyThere:
 
 		if (arpptr->TARGETIPADDR == OurIPAddr)
-		{
+		{	
 			arpptr->ARPOPCODE = 0x0200;
 			memcpy(arpptr->TARGETHWADDR, arpptr->SENDHWADDR, 7);
 			memcpy(arpptr->SENDHWADDR, MYCALL, 7);
@@ -934,7 +1186,7 @@ SendBack:
 	}
 }
 
-VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port)
+VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 {
 	ULONG Dest;
 	PARPDATA Arp;
@@ -1034,7 +1286,26 @@ ForUs:
 	}
 }
 
+unsigned short cksum(unsigned short *ip, int len)
+{
+	long sum = 0;  /* assume 32 bit long, 16 bit short */
 
+	while(len > 1)
+	{
+		sum += *(ip++);
+		if(sum & 0x80000000)   /* if high order bit set, fold */
+		sum = (sum & 0xFFFF) + (sum >> 16);
+		len -= 2;
+	}
+
+	if(len)       /* take care of left over byte */
+		sum += (unsigned short) *(unsigned char *)ip;
+          
+	while(sum>>16)
+		sum = (sum & 0xFFFF) + (sum >> 16);
+
+	return sum;
+}
 
 BOOL CheckIPChecksum(PIPMSG IPptr)
 {
@@ -1043,22 +1314,7 @@ BOOL CheckIPChecksum(PIPMSG IPptr)
 	if (IPptr->IPCHECKSUM == 0)
 		return TRUE; //Not used
 
-	_asm{
-
-	mov ESI, IPptr
-	MOV ECX,10
-	XOR     DX,DX           ; CLEAR CHECKSUM AND CARRY
-CSUMLOOP:
-	LODSW
-	ADC     DX,AX
-
-	LOOP    CSUMLOOP
-
-	ADC     DX,0            ; MAY BE CARRY FLOATING AROUND
-
-	mov	checksum,dx
-
-	}
+	checksum = cksum((unsigned short *)IPptr, 20);
 
 	if (checksum == 0xffff) return TRUE; else return FALSE;
 
@@ -1067,25 +1323,7 @@ BOOL Check_Checksum(VOID * ptr1, int Len)
 {
 	USHORT checksum;
 
-	_asm{
-
-	mov ESI, ptr1
-	MOV ECX, Len
-	inc	ECX
-	SHR	ECX,1				; Round up and convert to words
-
-	XOR     DX,DX           ; CLEAR CHECKSUM AND CARRY
-CSUMLOOP:
-	LODSW
-	ADC     DX,AX
-
-	LOOP    CSUMLOOP
-
-	ADC     DX,0            ; MAY BE CARRY FLOATING AROUND
-
-	mov	checksum,dx
-
-	}
+	checksum = cksum((unsigned short *)ptr1, Len);
 
 	if (checksum == 0xffff) return TRUE; else return FALSE;
 
@@ -1094,26 +1332,9 @@ USHORT Generate_CHECKSUM(VOID * ptr1, int Len)
 {
 	USHORT checksum=0;
 
-	_asm{
+	checksum = cksum((unsigned short *)ptr1, Len);
 
-	mov ESI, ptr1
-	MOV ECX, Len
-	inc	ECX
-	SHR	ECX,1				; Round up and convert to words
-	XOR     DX,DX           ; CLEAR CHECKSUM AND CARRY
-CSUMLOOP:
-	LODSW
-	ADC     DX,AX
-
-	LOOP    CSUMLOOP
-
-	ADC     DX,0            ; MAY BE CARRY FLOATING AROUND
-
-	NOT		DX
-	mov	checksum,dx
-	}
-
-	return checksum ;
+	return ~checksum ;
 }
 
 VOID ProcessICMPMsg(PIPMSG IPptr)
@@ -1321,19 +1542,19 @@ VOID RemoveARP(PARPDATA Arp)
 {
 	int i;
 
+	if (Arp->IPADDR == DefaultIPAddr)
+	{
+		// Dont remove Default Gateway. Set to re-resolve
+
+		Arp->ARPVALID = FALSE;
+		Arp->ARPTIMER = 5;
+		return;
+	}
+
 	for (i=0; i < NumberofARPEntries; i++)
 	{
 		if (Arp == ARPRecords[i])
 		{
-			if (i == 0)
-			{
-				// Dont remove first - it is the Default Gateway. Se to re-resolve
-
-				Arp->ARPVALID = FALSE;
-				Arp->ARPTIMER = 5;
-				return;
-			}
-
 			while (i < NumberofARPEntries)
 			{
 				ARPRecords[i] = ARPRecords[i+1];
@@ -1354,7 +1575,7 @@ Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 	IPStats.ARPEntries = NumberofARPEntries;
 	
 	ARPFlag = index;
-
+#ifndef LINBPQ 
 	_asm {
 		
 		mov esi, ARPRecs
@@ -1363,7 +1584,7 @@ Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
 		mov esi, IPStatsParam
 		mov DWORD PTR[ESI], offset IPStats 
 	}
-
+#endif
 	return ARPFlag;
 }
 
@@ -1405,9 +1626,9 @@ static BOOL ReadConfigFile()
 	
 			if (!ProcessLine(buf))
 			{
-				WritetoConsole("IP Gateway bad config record ");
+				WritetoConsoleLocal("IP Gateway bad config record ");
 				strcat(errbuf, "\n");
-				WritetoConsole(errbuf);
+				WritetoConsoleLocal(errbuf);
 			}
 		}
 	}
@@ -1417,7 +1638,7 @@ static BOOL ReadConfigFile()
 
 static ProcessLine(char * buf)
 {
-	PCHAR ptr, p_value, p_origport, p_host, p_port;
+	char * ptr, * p_value, * p_origport, * p_host, * p_port;
 	int i, port, mappedport, ipad;
 
 	ptr = strtok(buf, " \t\n\r");
@@ -1432,6 +1653,10 @@ static ProcessLine(char * buf)
 
 	if(_stricmp(ptr,"ADAPTER") == 0)
 	{
+#ifndef WIN32
+		WritetoConsoleLocal("IPGating to Ethernet is not supported in this build\n");
+		return TRUE;
+#endif
 		strcpy(Adapter,p_value);
 		return (TRUE);
 	}
@@ -1442,6 +1667,11 @@ static ProcessLine(char * buf)
 		return (TRUE);
 	}
 
+	if(_stricmp(ptr,"USEBPQTAP") == 0)
+	{
+		WantTAP = TRUE;
+		return (TRUE);
+	}
 
 	if (_stricmp(ptr,"IPAddr") == 0)
 	{
@@ -1460,6 +1690,16 @@ static ProcessLine(char * buf)
 
 		return (TRUE);
 	}
+
+	if (_stricmp(ptr,"IPNetMask") == 0)
+	{
+		OurNetMask = inet_addr(p_value);
+
+		if (OurNetMask == INADDR_NONE) return (FALSE);
+
+		return (TRUE);
+	}
+
 
 	if (_stricmp(ptr,"IPGateway") == 0)
 	{
@@ -1488,6 +1728,11 @@ static ProcessLine(char * buf)
 
 	if (_stricmp(ptr,"MAP") == 0)
 	{
+#ifdef LINBPQ
+
+		WritetoConsoleLocal("MAP not supported in LinBPQ IP Gateway\n");
+		return TRUE;
+#endif
 		if (!p_value) return FALSE;
 
 		p_origport = strtok(NULL, " ,\t\n\r");
@@ -1559,6 +1804,7 @@ static ProcessLine(char * buf)
 // PCAP Support Code
 
 
+#ifdef WIN32
 
 FARPROCX GetAddress(char * Proc)
 {
@@ -1575,13 +1821,14 @@ FARPROCX GetAddress(char * Proc)
 		err=GetLastError();
 
 		n=sprintf(buf,"Error finding %s - %d", Proc,err);
-		WritetoConsole(buf);
+		WritetoConsoleLocal(buf);
 	
 		return(0);
 	}
 
 	return ProcAddr;
 }
+
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
@@ -1596,6 +1843,7 @@ int OpenPCAP()
 	struct bpf_program fcode;
 	char buf[256];
 	int n;
+
 
 	PcapDriver=LoadLibrary(Dllname);
 
@@ -1617,7 +1865,8 @@ int OpenPCAP()
 
 	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
 
-	WritetoConsole("IP ");
+
+	WritetoConsoleLocal("IP ");
 
 	/* Open the adapter */
 	adhandle= pcap_open_livex(Adapter,	// name of the device
@@ -1631,7 +1880,7 @@ int OpenPCAP()
 	if (adhandle == NULL)
 	{
 		n=sprintf(buf,"Unable to open %s\n",Adapter);
-		WritetoConsole(buf);
+		WritetoConsoleLocal(buf);
 
 		/* Free the device list */
 		return -1;
@@ -1641,7 +1890,7 @@ int OpenPCAP()
 	if(pcap_datalinkx(adhandle) != DLT_EN10MB)
 	{
 		n=sprintf(buf,"\nThis program works only on Ethernet networks.\n");
-		WritetoConsole(buf);
+		WritetoConsoleLocal(buf);
 		
 		/* Free the device list */
 		return -1;
@@ -1655,7 +1904,7 @@ int OpenPCAP()
 	if (pcap_compilex(adhandle, &fcode, packet_filter, 1, netmask) <0 )
 	{	
 		n=sprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
-		WritetoConsole(buf);
+		WritetoConsoleLocal(buf);
 
 		/* Free the device list */
 		return -1;
@@ -1666,18 +1915,20 @@ int OpenPCAP()
 	if (pcap_setfilterx(adhandle, &fcode)<0)
 	{
 		n=sprintf(buf,"\nError setting the filter.\n");
-		WritetoConsole(buf);
+		WritetoConsoleLocal(buf);
 
 		/* Free the device list */
 		return -1;
 	}
 	
 	n=sprintf(buf,"Using %s", Adapter);
-	WritetoConsole(buf);
+	WritetoConsoleLocal(buf);
 
 	return TRUE;
 
 }
+#endif
+
 VOID ReadARP()
 {
 	FILE *file;
@@ -1691,8 +1942,8 @@ VOID ReadARP()
 	
 		if (!ProcessARPLine(buf))
 		{
-			WritetoConsole("IP Gateway bad ARP record ");
-			WritetoConsole(errbuf);
+			WritetoConsoleLocal("IP Gateway bad ARP record ");
+			WritetoConsoleLocal(errbuf);
 		}
 				
 	}
@@ -1704,7 +1955,7 @@ VOID ReadARP()
 
 BOOL ProcessARPLine(char * buf)
 {
-	PCHAR p_ip, p_mac, p_port, p_type;
+	char * p_ip, * p_mac, * p_port, * p_type;
 	int Port;
 	char Mac[7];
 	char AXCall[7];
@@ -1762,7 +2013,6 @@ BOOL ProcessARPLine(char * buf)
 	{
 		if (!ConvToAX25(p_mac, AXCall)) return FALSE;
 		if ((Port == 0) || (Port > NUMBEROFPORTS)) return FALSE;
-
 	}
 
 	Arp = LookupARP(IPAddr, TRUE, &Found);
@@ -1799,44 +2049,38 @@ VOID SaveARP ()
 {
 	PARPDATA Arp;
 	int i;
+	FILE * file;
 
-	handle = CreateFile(ARPFN,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					CREATE_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
+	if ((file = fopen(ARPFN, "w")) == NULL)
+		return;
 
 	for (i=0; i < NumberofARPEntries; i++)
 	{
 		Arp = ARPRecords[i];
-		if (Arp->ARPVALID) WriteARPLine(Arp);
+		if (Arp->ARPVALID) WriteARPLine(Arp, file);
 	}
 
- 	CloseHandle(handle);
+ 	fclose(file);
 	
 	return ;
 }
 
-VOID WriteARPLine(PARPDATA ARPRecord)
+VOID WriteARPLine(PARPDATA ARPRecord, FILE * file)
 {
-	int SSID, Len, Cnt, j;
+	int SSID, Len, j;
 	char Mac[20];
 	char Call[7];
 	char IP[20];
 	char Line[100];
+	unsigned char work[4];
 
-	struct in_addr Addr;
+	memcpy(work, &ARPRecord->IPADDR, 4);
 
-	Addr.s_addr = ARPRecord->IPADDR;
-
-	sprintf(IP, "%d.%d.%d.%d", 
-		Addr.S_un.S_un_b.s_b1, Addr.S_un.S_un_b.s_b2, Addr.S_un.S_un_b.s_b3, Addr.S_un.S_un_b.s_b4); 
+	sprintf(IP, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
 	if(ARPRecord->ARPINTERFACE == 255)		// Ethernet
 	{
-			sprintf(Mac," %02x:%02x:%02x:%02x:%02x:%02x", 
+		sprintf(Mac," %02x:%02x:%02x:%02x:%02x:%02x", 
 				ARPRecord->HWADDR[0],
 				ARPRecord->HWADDR[1],
 				ARPRecord->HWADDR[2],
@@ -1846,24 +2090,30 @@ VOID WriteARPLine(PARPDATA ARPRecord)
 	}
 	else
 	{
-			for (j=0; j< 6; j++)
-			{
-				Call[j] = ARPRecord->HWADDR[j]/2;
-				if (Call[j] == 32) Call[j] = 0;
-			}
-			Call[6] = 0;
-			SSID = (ARPRecord->HWADDR[6] & 31)/2;
+		for (j=0; j< 6; j++)
+		{
+			Call[j] = ARPRecord->HWADDR[j]/2;
+			if (Call[j] == 32) Call[j] = 0;
+		}
+		Call[6] = 0;
+		SSID = (ARPRecord->HWADDR[6] & 31)/2;
 			
-			sprintf(Mac,"%s-%d", Call, SSID);
+		sprintf(Mac,"%s-%d", Call, SSID);
 	}
 
 	Len = sprintf(Line,"%s %s %d %c\n",
 			IP, Mac, ARPRecord->ARPINTERFACE, ARPRecord->ARPTYPE);
-		
-	WriteFile(handle,Line,Len,&Cnt,NULL);
 
+	fputs(Line, file);
+	
 	return;
 }
+
+#ifndef LINBPQ
+
+extern HFONT hFont;
+struct tagMSG Msg;
+char buf[1024];
 
 LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -2107,8 +2357,10 @@ void IPResolveNames( void *dummy )
 			TranslateMessage(&Msg);
 			DispatchMessage(&Msg);
 	}		
-
 }
+
+#endif
+
 /*
 ;	DO PSEUDO HEADER FIRST
 ;
@@ -2154,39 +2406,17 @@ void IPResolveNames( void *dummy )
 
 int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len)
 {
-	USHORT PHSUM;
+
+	struct _IPMSG PH = {0};
 		
 	IPptr->IPCHECKSUM = 0;
 
+	PH.IPPROTOCOL = 6;
+	PH.IPLENGTH = htons(Len);
+	memcpy(&PH.IPSOURCE, &IPptr->IPSOURCE, 4);
+	memcpy(&PH.IPDEST, &IPptr->IPDEST, 4);
 
-	_asm{
-
-	mov	esi,TCPmsg
-	movzx eax,Len
-	add esi,eax
-	mov byte ptr[esi],0
-
-	mov	esi,IPptr
-
-	MOV	DX,600H			; PROTOCOL (REVERSED)
-	MOV	AX,Len		; TCP LENGTH
-	XCHG	AH,AL
-	ADD	DX,AX
-	MOV	AX,12[esi]
-	ADC	DX,AX
-	MOV	AX,14[esi]
-	ADC	DX,AX
-	MOV	AX,16[esi]
-	ADC	DX,AX
-	MOV	AX,18[esi]
-	ADC	DX,AX
-	ADC	DX,0
-
-	MOV	PHSUM,DX
-
-	}
-
-	TCPmsg->CHECKSUM = PHSUM;
+	TCPmsg->CHECKSUM = ~Generate_CHECKSUM(&PH, 20);
 
 	TCPmsg->CHECKSUM = Generate_CHECKSUM(TCPmsg, Len);
 
@@ -2196,3 +2426,152 @@ int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len)
 	RouteIPMsg(IPptr);
 	return 0;
 }
+
+#ifndef WIN32
+#ifndef MACBPQ
+
+#include <net/if.h>
+#include <linux/if_tun.h>
+
+/* buffer for reading from tun/tap interface, must be >= 1500 */
+
+
+#define BUFSIZE 2000   
+
+/**************************************************************************
+ * tun_alloc: allocates or reconnects to a tun/tap device. The caller     *
+ *            must reserve enough space in *dev.                          *
+ **************************************************************************/
+int tun_alloc(char *dev, int flags) {
+
+  struct ifreq ifr;
+  int fd, err;
+  char *clonedev = "/dev/net/tun";
+
+  if( (fd = open(clonedev , O_RDWR)) < 0 ) {
+    perror("Opening /dev/net/tun");
+    return fd;
+  }
+
+  memset(&ifr, 0, sizeof(ifr));
+
+  ifr.ifr_flags = flags;
+
+  if (*dev) {
+    strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+  }
+
+  if( (err = ioctl(fd, TUNSETIFF, (void *)&ifr)) < 0 ) {
+    perror("ioctl(TUNSETIFF)");
+    close(fd);
+    return err;
+  }
+
+  strcpy(dev, ifr.ifr_name);
+  return fd;
+}
+
+
+void OpenTAP()
+{
+  int flags = IFF_TAP;
+  char if_name[IFNAMSIZ] = "bpqtap";
+
+  uint nread, nwrite, plength;
+  char buffer[BUFSIZE];
+
+  int optval = 1;
+
+  /* initialize tun/tap interface */
+  if ( (tap_fd = tun_alloc(if_name, flags | IFF_NO_PI)) < 0 ) {
+    printf("Error connecting to tun/tap interface %s!\n", if_name);
+    exit(1);
+  }
+  printf("Successfully connected to interface %s\n", if_name);
+
+  ioctl(tap_fd, FIONBIO, &optval);
+
+  return;
+}
+
+#endif
+#endif
+
+extern struct DATAMESSAGE * REPLYBUFFER;
+
+VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	//	DISPLAY IP Gateway ARP status or Clear
+	
+	int i;
+	PARPDATA ARPRecord;
+	int SSID, j;
+	char Mac[20];
+	char Call[7];
+	char IP[20];
+	unsigned char work[4];
+
+	Bufferptr += sprintf(Bufferptr, "\r");
+
+	if (IPRequired == FALSE)
+	{
+		Bufferptr += sprintf(Bufferptr, "IP Gatewayy is not enabled\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	if (memcmp(CmdTail, "CLEAR ", 6) == 0)
+	{
+		for (i=0; i < NumberofARPEntries; i++)
+		{
+			RemoveARP(ARPRecords[i]);
+		}
+		
+		Bufferptr += sprintf(Bufferptr, "OK\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+
+		return;
+	}
+
+	for (i=0; i < NumberofARPEntries; i++)
+	{
+		ARPRecord = ARPRecords[i];
+
+		if (ARPRecord->ARPVALID)
+		{
+			Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
+			memcpy(work, &ARPRecord->IPADDR, 4);
+			sprintf(IP, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+			if(ARPRecord->ARPINTERFACE == 255)		// Ethernet
+			{
+				sprintf(Mac," %02x:%02x:%02x:%02x:%02x:%02x", 
+					ARPRecord->HWADDR[0],
+					ARPRecord->HWADDR[1],
+					ARPRecord->HWADDR[2],
+					ARPRecord->HWADDR[3],
+					ARPRecord->HWADDR[4],
+					ARPRecord->HWADDR[5]);
+			}
+			else
+			{
+				for (j=0; j< 6; j++)
+				{
+					Call[j] = ARPRecord->HWADDR[j]/2;
+					if (Call[j] == 32) Call[j] = 0;
+				}
+				Call[6] = 0;
+				SSID = (ARPRecord->HWADDR[6] & 31)/2;
+			
+				sprintf(Mac,"%s-%d", Call, SSID);
+			}
+
+			Bufferptr += sprintf(Bufferptr, "%s %s %d %c %d\r",
+				IP, Mac, ARPRecord->ARPINTERFACE, ARPRecord->ARPTYPE, (int)ARPRecord->ARPTIMER);
+		}
+	}
+
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
+

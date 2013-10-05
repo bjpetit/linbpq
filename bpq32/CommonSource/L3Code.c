@@ -85,7 +85,7 @@ VOID L3BG()
 					// Node has no routes - get rid of it
 
 					REMOVENODE(DEST);
-					break;
+					return;					// Avoid riskof looking at lod entries
 				}
 			}
 		}
@@ -136,8 +136,7 @@ BOOL ACTIVATE_DEST(struct DEST_LIST * DEST)
 	
 		// SET UP LINK TABLE ENTRY
 
-		L2SETUPCROSSLINK(ROUTE);
-		return TRUE;
+		return L2SETUPCROSSLINK(ROUTE);
 	}
 	
 	// We mst be waiting for link to come up

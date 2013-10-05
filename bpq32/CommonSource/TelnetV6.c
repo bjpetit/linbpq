@@ -607,7 +607,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		
 		STREAM = &TNC->Streams[Stream];
 
-		if (STREAM->FramesQueued  > 4)
+		if (STREAM->FramesQueued  > 40)
 			return (257);						// Busy
 
 		return 256;		// OK
@@ -1597,6 +1597,24 @@ nosocks:
 
 				DataSocket_Disconnect(TNC, sockptr);	
 			}
+
+			if (sockptr->RelayMode)
+			{
+				if (LogEnabled)
+				{
+					char logmsg[120];
+					sprintf(logmsg,"%d Disconnected. Bytes Sent = %d Bytes Received %d\n",
+						sockptr->Number, STREAM->BytesTXed, STREAM->BytesRXed);
+
+					WriteLog (logmsg);
+				}
+
+				// Always Disconnect Relay Socket
+
+				Sleep(100);
+				DataSocket_Disconnect(TNC, sockptr);	
+			}
+
 			else
 			{
 				if (LogEnabled)
@@ -1628,7 +1646,7 @@ nosocks:
 		struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 		STREAM = &TNC->Streams[Stream];
 				
-		if (STREAM->BPQtoPACTOR_Q)
+		while (STREAM->BPQtoPACTOR_Q)
 		{
 			int datalen;
 			UINT * buffptr;
@@ -1659,11 +1677,11 @@ nosocks:
 					return;
 				}
 				
-				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2 && TCP->CMS)	// Connect
+				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2 && (TCP->CMS || TCP->CMDPort[0]))	// Connect
 				{
 					char Host[100];
 					char Via[100];
-					int Port = 0;
+					unsigned int Port = 0;
 
 					if (sscanf(&MsgPtr[2], "%s %s %d", &Host[0], &Via[0], &Port) < 1 || Port > 32)
 					{
@@ -1738,7 +1756,7 @@ nosocks:
 			if (Sess1)
 				Queued += CountFramesQueuedOnSession(Sess1);
 
-			if (Queued > 7)
+			if (Queued > 30)
 				continue;
 
 			if (Sess1)
@@ -2308,7 +2326,8 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 {
 	UINT * buffptr = GetBuff();
 
-	if (buffptr == NULL) return;			// No buffers, so ignore
+	if (buffptr == NULL) 
+		return;			// No buffers, so ignore
 
 	if (TNC->Streams[Stream].Connected == 0)
 	{
@@ -2367,6 +2386,9 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 	// look for backspaces in data just read
 	
 	BSptr = memchr(&sockptr->InputBuffer[sockptr->InputLen], 8, len);
+	
+	if (BSptr == NULL)
+		BSptr = memchr(&sockptr->InputBuffer[sockptr->InputLen], 127, len);
 
     if (BSptr != 0)
 	{
@@ -2390,6 +2412,9 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 		// see if more bs chars
 BSCheck:
 		BSptr = memchr(&sockptr->InputBuffer[0], 8, sockptr->InputLen);
+
+		if (BSptr == NULL)
+			BSptr = memchr(&sockptr->InputBuffer[sockptr->InputLen], 127, len);
 
 		if (BSptr == NULL)
 			goto IACLoop;
@@ -2772,6 +2797,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 	len = recv(sock, &sockptr->InputBuffer[sockptr->InputLen], len, 0);
 
+
 	if (len == SOCKET_ERROR || len ==0)
 	{
 		// Failed or closed - clear connection
@@ -2788,7 +2814,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 	MsgPtr = &sockptr->InputBuffer[0];
 	InputLen = sockptr->InputLen;
 
-MsgLoop:
+	STREAM->BytesRXed += InputLen;
 
 	if (sockptr->LoginState == 2)
 	{
@@ -2796,8 +2822,25 @@ MsgLoop:
 
 		// Send to Node
 
+
+		// Queue to Node. Data may arrive it large quatities, possibly exceeding node buffer capacity
+
 		STREAM->BytesRXed += InputLen;
 
+		if (sockptr->FromHostBuffPutptr + InputLen > sockptr->FromHostBufferSize)
+		{
+			sockptr->FromHostBufferSize += 10000;
+			sockptr->FromHostBuffer = realloc(sockptr->FromHostBuffer, sockptr->FromHostBufferSize);
+		}
+
+		memcpy(&sockptr->FromHostBuffer[sockptr->FromHostBuffPutptr], MsgPtr, InputLen); 
+
+		sockptr->FromHostBuffPutptr += InputLen;
+		sockptr->InputLen = 0;
+
+		return 0;
+	}
+/*	
 		if (InputLen > 256)
 		{		
 			SendtoNode(TNC, sockptr->Number, MsgPtr, 256);
@@ -2815,7 +2858,7 @@ MsgLoop:
 
 		return 0;
 	}
-	
+*/	
 	if (InputLen > 256)
 	{
 		// Long message received when waiting for user or password - just ignore
@@ -2845,6 +2888,9 @@ MsgLoop:
         //
 
 		*(LFPtr)=0;				 // remove cr
+
+		if (*MsgPtr == '.')
+			MsgPtr++;
         
         if (LogEnabled)
 		{

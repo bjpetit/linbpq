@@ -123,13 +123,12 @@ typedef struct _ROUTEENTRY
 */
 typedef struct _ARPDATA
 {
-
 //       KEEP IP ADDR AT FRONT
 
 	ULONG	IPADDR;
 	UCHAR	HWADDR[7];				// ETHERNET/ax.25 ADDR
 	BOOL	ARPVALID;				// NONZERO IF ADDRESS HAS BEEN RESOLVED
-	ULONG	ARPTIMER;				// TIMEOUT AFTER 5 MINS
+	ULONG	ARPTIMER;
 	UCHAR	ARPINTERFACE;			// Port to use. 0= NETROM, 0xff Ethernet
 	UCHAR	ARPTYPE;				// NETROM/VC/DG/ETH
 	struct _MESSAGE * ARP_Q;		// CHAIN OF DATAGRAMS WAITING FOR RESOLUTION
@@ -172,9 +171,9 @@ Dll BOOL APIENTRY Init_IP();
 Dll BOOL APIENTRY Poll_IP();  
 BOOL Send_ETH(VOID * Block, DWORD len);
 VOID ProcessEthARPMsg(PETHARP arpptr);
-VOID ProcessEthIPMsg(PVOID Buffer);
+VOID ProcessEthIPMsg(PETHMSG Buffer);
 VOID ProcessAXARPMsg(PAXARP arpptr);
-VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, CHAR Type, UCHAR Port);
+VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port);
 BOOL CheckIPChecksum(PIPMSG IPptr);
 VOID ProcessICMPMsg(PIPMSG IPptr);
 VOID RouteIPMsg(PIPMSG IPptr);
@@ -183,18 +182,18 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode);
 PARPDATA AllocARPEntry();
 VOID SendARPMsg(PARPDATA ARPptr);
 PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found);
-BOOL ReadConfigFile();
-ProcessLine(char * buf);
+static BOOL ReadConfigFile();
+static int ProcessLine(char * buf);
 VOID DoARPTimer();
 UINT SENDNETFRAME;
-VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
+static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
 VOID ReadARP();
 BOOL ProcessARPLine(char * buf);
 void IPResolveNames(void *dummy);
 int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len);
 
 VOID SaveARP();
-VOID WriteARPLine(PARPDATA ArpRecord);
+VOID WriteARPLine(PARPDATA ArpRecord, FILE * file);
 
 int InitPCAP(void);
 int OpenPCAP(void);

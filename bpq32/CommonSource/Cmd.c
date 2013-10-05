@@ -111,6 +111,8 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 
 VOID SENDNODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
@@ -463,7 +465,7 @@ TRANSPORTENTRY * SetupSessionFromSession(TRANSPORTENTRY * Session, PBPQVECSTRUC 
 	return NULL;
 }
 
-
+extern GETCONNECTIONINFO();
 
 
 BOOL cATTACHTOBBS(TRANSPORTENTRY * Session, UINT Mask, int Paclen, int * AnySessions)
@@ -485,7 +487,7 @@ BOOL cATTACHTOBBS(TRANSPORTENTRY * Session, UINT Mask, int Paclen, int * AnySess
 			ConfigedPorts++;
 
 			if (HOSTSESS->HOSTSESSION == NULL && (HOSTSESS->HOSTFLAGS & 3) == 0) // Not attached and no report outstanding
-			{
+			{				
 				//	WEVE GOT A FREE BPQ HOST PORT - USE IT
 
 				NewSess = SetupSessionFromSession(Session, HOSTSESS, Mask);
@@ -3245,7 +3247,10 @@ CMDX COMMANDS[] =
 	"AXRESOLVER  ",3,AXRESOLVER,0,
 	"AXMHEARD    ",3,AXMHEARD,0,
 	"TELSTATUS   ",3,SHOWTELNET,0,
-	"NRR         ",1,NRRCMD,0
+	"NRR         ",1,NRRCMD,0,
+	"AGWSTATUS   ",3,SHOWAGW,0,
+	"ARP         ",3,SHOWARP,0
+
 };
 
 CMDX * CMD = NULL;

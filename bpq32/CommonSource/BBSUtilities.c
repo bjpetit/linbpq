@@ -7,8 +7,12 @@
 #include "Winspool.h"
 #endif
 
-#define BBSIDLETIME 120
-#define USERIDLETIME 300
+//#define BBSIDLETIME 120
+//#define USERIDLETIME 300
+
+
+#define BBSIDLETIME 900
+#define USERIDLETIME 900
 
 
 #define LIBCONFIG_STATIC
@@ -26,6 +30,7 @@ VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
 void DeletetoRecycle(char * FN);
 VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID TidyPrompts();
+char * ReadMessageFileEx(struct MsgInfo * MsgRec);
 
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 
@@ -116,7 +121,7 @@ BOOL AllowAnon = FALSE;
 
 // Although externally streams are numbered 1 to 64, internally offsets are 0 - 63
 
-extern BPQVECSTRUC BPQHOSTVECTOR[BPQHOSTSTREAMS + 4];
+extern BPQVECSTRUC BPQHOSTVECTOR[BPQHOSTSTREAMS + 5];
 
 FILE * LogHandle[4] = {NULL, NULL, NULL, NULL};
 
@@ -621,11 +626,11 @@ Next:
 		if (MsgRec.type == 0)
 			goto Next;
 
-		MsgBytes = ReadMessageFile(MsgRec.number);
+		MsgBytes = ReadMessageFileEx(&MsgRec);
 
 		if (MsgBytes)
 		{
-			MsgRec.length = strlen(MsgBytes);
+//			MsgRec.length = strlen(MsgBytes);
 			free(MsgBytes);
 		}
 		else
@@ -636,6 +641,11 @@ Next:
 		memcpy(Msg, &MsgRec,  sizeof (MsgRec));
 
 		MsgnotoMsg[Msg->number] = Msg;
+
+		// Fix Corrupted NTS Messages
+
+		if (Msg->type == 'N')
+			Msg->type = 'T';
 
 		// Look for corrupt FROM address (ending in @)
 
@@ -1928,7 +1938,40 @@ NextMessage:
 
 	return Files;
 }
+char * ReadMessageFileEx(struct MsgInfo * MsgRec)
+{
+	// Sets Message Size from File Size
 
+	int msgno = MsgRec->number;
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	char * MsgBytes;
+	struct stat STAT;
+ 
+	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, msgno);
+
+	if (stat(MsgFile, &STAT) == -1)
+		return NULL;
+
+	FileSize = STAT.st_size;
+
+	hFile = fopen(MsgFile, "rb");
+
+	if (hFile == NULL)
+		return NULL;
+
+	MsgBytes=malloc(FileSize+1);
+
+	fread(MsgBytes, 1, FileSize, hFile); 
+
+	fclose(hFile);
+
+	MsgBytes[FileSize]=0;
+	MsgRec->length = FileSize;
+
+	return MsgBytes;
+}
 
 char * ReadMessageFile(int msgno)
 {
@@ -2055,7 +2098,7 @@ void Flush(CIRCUIT * conn)
 
 	while (tosend > 0)
 	{
-		if (TXCount(conn->BPQStream) > 4)
+		if (TXCount(conn->BPQStream) > 15)
 			return;						// Busy
 
 		if (conn->Paging && (conn->LinesSent >= conn->PageLen))
@@ -2109,7 +2152,7 @@ void Flush(CIRCUIT * conn)
 		tosend-=len;	
 		sent++;
 
-		if (sent > 4)
+		if (sent > 15)
 			return;
 	}
 
@@ -2158,6 +2201,7 @@ VOID FlagAsKilled(struct MsgInfo * Msg)
 			}
 		}
 	}
+	SaveMessageDatabase();
 }
 
 void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context)
@@ -2990,10 +3034,13 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)) || Msg->type == 'T')
 		{
-			if ((Msg->status != 'K') && (Msg->status != 'H'))
+			if ((Msg->status != 'K') && (Msg->status != 'H') && (Msg->status != 'F') && (Msg->status != 'D'))
 			{
-				Msg->status = 'Y';
-				Msg->datechanged=time(NULL);
+				if (Msg->status != 'Y')
+				{
+					Msg->status = 'Y';
+					Msg->datechanged=time(NULL);
+				}
 			}
 		}
 	}
@@ -4475,7 +4522,8 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 	int TotalSize = 0;
 	time_t NOW = time(NULL);
 
-//	Debugprintf("FMTF entered Call %s Type %c Maxlen %d", conn->Callsign, Type, MaxLen);
+//	Debugprintf("FMTF entered Call %s Type %c Maxlen %d NextMsg = %d BBSNo = %d",
+//		conn->Callsign, Type, MaxLen, conn->NextMessagetoForward, user->BBSNumber);
 
 	if (conn->PacLinkCalls)			// Looking for all messages, so reset 
 		conn->NextMessagetoForward = 1;
@@ -4625,10 +4673,16 @@ BOOL SeeifMessagestoForward (int BBSNumber, CIRCUIT * conn)
 				char Type = Msg->type;
 
 				if ((conn->SendB && Type == 'B') || (conn->SendP && Type == 'P') || (conn->SendT && Type == 'T'))
+				{
+//					Debugprintf("SeeifMessagestoForward BBSNo %d Msg %d", BBSNumber, Msg->number);
 					return TRUE;
+				}
 			}
 			else
+			{
+//				Debugprintf("SeeifMessagestoForward BBSNo %d Msg %d", BBSNumber, Msg->number);	
 				return TRUE;
+			}
 		}
 	}
 
@@ -5243,7 +5297,16 @@ void StartForwarding(int BBSNumber)
 
 BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 {
-	FILE * Handle = fopen(FN, "ab");
+	BOOL AddCRLF = FALSE;
+	FILE * Handle;
+	char * Context;
+
+	FN = strtok_s(FN, " ,", &Context); 
+
+	if (Context && (_stricmp(Context, "ADDCRLF") == 0))
+		AddCRLF =TRUE;
+
+	Handle = fopen(FN, "ab");
 
 	if (Handle == NULL)
 	{
@@ -5260,6 +5323,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		struct tm * tm;
 		time_t now;
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
+		int MsgLen;
 		char * MsgPtr;
 		char Line[256];
 		int len;
@@ -5286,6 +5350,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		}
 
 		MsgPtr = MsgBytes;
+		MsgLen = conn->FwdMsg->length;
 
 		// If a B2 Message, remove B2 Header
 
@@ -5297,8 +5362,8 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 			
 			if (MsgPtr)
 			{
-				conn->FwdMsg->length = atoi(&MsgPtr[5]);
-				MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
+				MsgLen = atoi(&MsgPtr[5]);
+				MsgPtr = strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
 	
 				if (MsgPtr)
 					MsgPtr +=4;
@@ -5322,17 +5387,20 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
 			fwrite("\r\n", 1, 2, Handle);
 
-		fwrite(MsgPtr, 1, conn->FwdMsg->length, Handle);
+		fwrite(MsgPtr, 1, MsgLen, Handle);
 
-		if (MsgPtr[conn->FwdMsg->length - 2] == '\r')
+		if (MsgPtr[MsgLen - 2] == '\r')
 			fwrite("/EX\r\n", 1, 5, Handle);
 		else
 			fwrite("\r\n/EX\r\n", 1, 7, Handle);
 
+		if (AddCRLF)
+			fwrite("\r\n", 1, 2, Handle);
+
 		free(MsgBytes);
 			
 		user->MsgsSent++;
-		user->BytesForwardedOut += conn->FwdMsg->length;
+		user->BytesForwardedOut += MsgLen;
 			
 		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
 		set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
@@ -5346,13 +5414,11 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		}
 
 		conn->UserPointer->ForwardingInfo->MsgCount--;
-
 	}
 
 	fclose(Handle);
 
 	return TRUE;
-
 }
 
 BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
@@ -5420,7 +5486,7 @@ BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
 	if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
 		fwrite("\r\n", 1, 2, Handle);
 
-	fwrite(MsgPtr, 1, Msg->length, Handle);
+	fwrite(MsgPtr, 1, MsgLen, Handle);
 
 	if (MsgPtr[MsgLen - 2] == '\r')
 		fwrite("/EX\r\n", 1, 5, Handle);
@@ -6347,6 +6413,7 @@ VOID SaveStringValue(config_setting_t * group, char * name, char * value)
 
 }
 
+
 VOID SaveOverride(config_setting_t * group, char * name, struct Override ** values)
 {
 	config_setting_t *setting;
@@ -6555,8 +6622,11 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "PNF", PNF);
 	SaveIntValue(group, "BF", BF);
 	SaveIntValue(group, "BNF", BNF);
-	SaveIntValue(group, "AP", AP);
-	SaveIntValue(group, "AB", AB);
+	SaveIntValue(group, "NTSD", NTSD);
+	SaveIntValue(group, "NTSF", NTSF);
+	SaveIntValue(group, "NTSU", NTSU);
+//	SaveIntValue(group, "AP", AP);
+//	SaveIntValue(group, "AB", AB);
 	SaveIntValue(group, "DeletetoRecycleBin", DeletetoRecycleBin);
 	SaveIntValue(group, "SuppressMaintEmail", SuppressMaintEmail);
 	SaveIntValue(group, "MaintSaveReg", SaveRegDuringMaint);
@@ -6580,6 +6650,8 @@ VOID SaveConfig(char * ConfigName)
 		if (group)
 		{
 			SaveIntValue(group, "Enabled", UIEnabled[i]);
+			SaveIntValue(group, "SendMF", UIMF[i]);
+			SaveIntValue(group, "SendHDDR", UIHDDR[i]);
 			SaveIntValue(group, "SendNull", UINull[i]);
 	
 			if (UIDigi[i])
@@ -6607,6 +6679,18 @@ int GetIntValue(config_setting_t * group, char * name)
 
 	return 0;
 }
+
+int GetIntValueWithDefault(config_setting_t * group, char * name, int Default)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_get_member (group, name);
+	if (setting)
+		return config_setting_get_int (setting);
+
+	return Default;
+}
+
 
 BOOL GetStringValue(config_setting_t * group, char * name, char * value)
 {
@@ -6823,6 +6907,8 @@ BOOL GetConfig(char * ConfigName)
 		if (group)
 		{
 			UIEnabled[i] = GetIntValue(group, "Enabled");
+			UIMF[i] = GetIntValueWithDefault(group, "SendMF", UIEnabled[i]);
+			UIHDDR[i] = GetIntValueWithDefault(group, "SendHDDR", UIEnabled[i]);
 			UINull[i] = GetIntValue(group, "SendNull");
 			Size[0] = 0;
 			GetStringValue(group, "Digis", Size);
@@ -6849,8 +6935,11 @@ BOOL GetConfig(char * ConfigName)
 		 PF = GetIntValue(group, "PF");
 		 PNF = GetIntValue(group, "PNF");
 		 BNF = GetIntValue(group, "BNF");
-		 AP = GetIntValue(group, "AP");
-		 AB = GetIntValue(group, "AB");
+		 NTSD = GetIntValue(group, "NTSD");
+		 NTSU = GetIntValue(group, "NTSU");
+		 NTSF = GetIntValue(group, "NTSF");
+//		 AP = GetIntValue(group, "AP");
+//		 AB = GetIntValue(group, "AB");
 		 DeletetoRecycleBin = GetIntValue(group, "DeletetoRecycleBin");
 		 SuppressMaintEmail = GetIntValue(group, "SuppressMaintEmail");
 		 SaveRegDuringMaint = GetIntValue(group, "MaintSaveReg");
@@ -7213,6 +7302,7 @@ int DoReceivedData(int Stream)
 			{ 
 				// May have several messages per packet, or message split over packets
 
+			OuterLoop:
 				if (conn->InputLen + 1000 > conn->InputBufferLen )	// Shouldnt have lines longer  than this in text mode
 				{
 					conn->InputBufferLen += 1000;
@@ -7230,6 +7320,7 @@ int DoReceivedData(int Stream)
 				if (conn->InputMode == 'B')
 				{
 					UnpackFBBBinary(conn);
+					goto OuterLoop;
 				}
 				else
 				{
@@ -7254,7 +7345,6 @@ int DoReceivedData(int Stream)
 					{
 						// Usual Case - single meg in buffer
 
-						
 							if (conn->BBSFlags & RunningConnectScript)
 								ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
 							else
@@ -7362,7 +7452,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		time_t now;
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		char * MsgPtr;
-		int Length;
+		int MsgLen;
 
 		if (MsgBytes == 0)
 		{
@@ -7371,6 +7461,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		}
 
 		MsgPtr = MsgBytes;
+		MsgLen = conn->FwdMsg->length;
 
 		// If a B2 Message, remove B2 Header
 
@@ -7382,7 +7473,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 			
 			if (MsgPtr)
 			{
-				conn->FwdMsg->length = atoi(&MsgPtr[5]);
+				MsgLen = atoi(&MsgPtr[5]);
 				MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
 	
 				if (MsgPtr)
@@ -7405,9 +7496,9 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
 			BBSputs(conn, "\r");
 
-		Length = RemoveLF(MsgPtr, conn->FwdMsg->length);
+		MsgLen = RemoveLF(MsgPtr, MsgLen);
 
-		QueueMsg(conn, MsgPtr, Length);
+		QueueMsg(conn, MsgPtr, MsgLen);
 
 		if (user->ForwardingInfo->SendCTRLZ)
 			nodeprintf(conn, "\r\x1a");
@@ -7419,7 +7510,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		conn->FBBMsgsSent = TRUE;
 
 		user->MsgsSent++;
-		user->BytesForwardedOut += conn->FwdMsg->length;
+		user->BytesForwardedOut += MsgLen;
 			
 		conn->Flags &= ~SENDBODY;
 		conn->Flags |= WAITPROMPT;

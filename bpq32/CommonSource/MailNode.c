@@ -1,6 +1,4 @@
-// LINMail.cpp : Defines the entry point for the console application.
-//
-
+// Control Routine for LinBPQ
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
@@ -28,6 +26,14 @@ BOOL IncludesChat = FALSE;
 
 BOOL RunMail = FALSE;
 BOOL RunChat = FALSE;
+
+VOID Poll_AGW();
+BOOL AGWAPIInit();
+int AGWAPITerminate();
+
+BOOL AGWActive = FALSE;
+
+extern int AGWPort;
 
 BOOL RigActive = FALSE;
 
@@ -351,6 +357,36 @@ int RefreshMainWindow()
 	return 0;
 }
 
+int LastSemGets = 0;
+
+extern int SemHeldByAPI;
+
+VOID MonitorThread(int x)
+{
+	// Thread to detect stuck semaphore
+
+	do 
+	{
+		if (Semaphore.Gets == LastSemGets && Semaphore.Flag)
+		{
+			// It is stuck - try to release
+
+			Debugprintf ("Semaphore locked - Process ID = %d, Held By %d",
+				Semaphore.SemProcessID, SemHeldByAPI);
+				
+			Semaphore.Flag = 0;
+		}
+
+		LastSemGets = Semaphore.Gets;
+
+		Sleep(30000);
+
+	} while (TRUE);
+}
+
+
+
+
 VOID TIMERINTERRUPT();
 
 BOOL Start();
@@ -370,6 +406,9 @@ int SemHeldByAPI = 0;
 BOOL IGateEnabled = TRUE;
 BOOL APRSActive = FALSE;
 BOOL ReconfigFlag;
+
+BOOL IPActive = FALSE;
+extern BOOL IPRequired;
 
 extern struct WL2KInfo * WL2KReports;
 
@@ -489,6 +528,8 @@ int main(int argc, char * argv[])
 
 	INITIALISEPORTS();
 
+	if (IPRequired)	IPActive = Init_IP();
+
 	APRSActive = Init_APRS();
 
 	if (ISPort == 0)
@@ -501,6 +542,8 @@ int main(int argc, char * argv[])
 	OpenReportingSockets();
 
 	InitDone = TRUE;
+
+	_beginthread(MonitorThread, 0, 0);
 
 
 #ifdef WIN32
@@ -577,6 +620,9 @@ int main(int argc, char * argv[])
 		if (stat(ConfigName, &STAT) == -1)
 		{
 			printf("Config File not found - creating a default config\n");
+			strcpy(BBSName, MYNODECALL);
+			strlop(BBSName, '-');
+			strlop(BBSName, ' ');
 			SaveConfig(ConfigName);
 		}
 
@@ -689,7 +735,7 @@ int main(int argc, char * argv[])
 
 	SetupListenSet();		// Master set of listening sockets
 
-	if (EnableUI)
+	if (EnableUI || MailForInterval)
 		SetupUIInterface();
 	
 	if (MailForInterval)
@@ -738,6 +784,8 @@ int main(int argc, char * argv[])
 
 	if (NUMBEROFTNCPORTS)
 		InitializeTNCEmulator();
+
+	AGWActive = AGWAPIInit();
 
 #ifndef WIN32
 
@@ -857,10 +905,13 @@ int main(int argc, char * argv[])
 				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
 			}
 
-//			IPClose();
+			IPClose();
 			APRSClose();
 			Rig_Close();
 			CloseTNCEmulator();
+
+			if (AGWActive)
+				AGWAPITerminate();
 
 			WL2KReports = NULL;
 
@@ -898,8 +949,8 @@ int main(int argc, char * argv[])
 		
 			WritetoConsoleLocal("\n\nReconfiguration Complete\n");
 
-//			if (IPRequired)	IPActive = Init_IP();
-//
+			if (IPRequired)	IPActive = Init_IP();
+
 			APRSActive = Init_APRS();
 
 			if (ISPort == 0)
@@ -913,11 +964,15 @@ int main(int argc, char * argv[])
 				InitializeTNCEmulator();
 				GetSemaphore(&Semaphore);
 			}
+
+			FreeSemaphore(&Semaphore);
+			AGWActive = AGWAPIInit();
+			GetSemaphore(&Semaphore);
 			
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
 
-//		if (IPActive) Poll_IP();
+		if (IPActive) Poll_IP();
 		if (RigActive) Rig_Poll();
 		if (APRSActive) Poll_APRS();
 		CheckWL2KReportTimer();
@@ -928,6 +983,9 @@ int main(int argc, char * argv[])
 
 		if (NUMBEROFTNCPORTS)
 			TNCTimer();
+
+		if (AGWActive)
+			Poll_AGW();
 
 		HTTPTimer();
 
@@ -995,7 +1053,10 @@ int main(int argc, char * argv[])
 	printf("Closing Ports\n");
 
 	CloseTNCEmulator();
-	
+
+	if (AGWActive)
+		AGWAPITerminate();
+
 	// Close Ports
 
 	PORTVEC=(PEXTPORTDATA)PORTTABLE;

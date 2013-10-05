@@ -70,6 +70,7 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	VOID * User;				// Selected User
 	VOID * Msg;					// Selected Message
 	VOID * WP;					// Selected WP record
+	struct UserRec * USER;		// Telnet Server USER record
 };
 
 
