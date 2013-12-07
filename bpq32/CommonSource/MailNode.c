@@ -5,7 +5,11 @@
 
 #include "CHeaders.h"
 #include "BPQMailChat.h"
-
+#ifdef WIN32
+#include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
+#else
+#include <iconv.h>
+#endif
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
 
@@ -130,7 +134,6 @@ VOID CloseTNCEmulator();
 
 config_t cfg;
 config_setting_t * group;
-
 
 BOOL MonBBS = TRUE;
 BOOL MonCHAT = TRUE;
@@ -457,6 +460,7 @@ int main(int argc, char * argv[])
 	ConnectionInfo * conn;
 	struct stat STAT;
 	PEXTPORTDATA PORTVEC;
+	UCHAR LogDir[260];
 
 #ifdef WIN32
 
@@ -499,6 +503,17 @@ int main(int argc, char * argv[])
 	getcwd(BPQDirectory, 256);
 #endif
 	Consoleprintf("Current Directory is %s\n", BPQDirectory);
+
+	// Make sure logs directory exists
+
+	sprintf(LogDir, "%s/logs", BPQDirectory);
+	
+#ifdef WIN32
+	CreateDirectory(LogDir, NULL);
+#else
+	mkdir(LogDir, S_IRWXU | S_IRWXG | S_IRWXO);
+	chmod(LogDir, S_IRWXU | S_IRWXG | S_IRWXO);
+#endif
 
 	if (!ProcessConfig())
 	{
@@ -701,6 +716,7 @@ int main(int argc, char * argv[])
 		user = AllocateUserRecord(BBSName);
 		user->Temp = zalloc(sizeof (struct TempUserInfo));
 	}
+
 	if ((user->flags & F_BBS) == 0)
 	{
 		// Not Defined as a BBS
@@ -708,6 +724,11 @@ int main(int argc, char * argv[])
 		if(SetupNewBBS(user))
 			user->flags |= F_BBS;
 	}
+
+	// Make sure SYSOPCALL is set
+
+	if (SYSOPCall[0] == 0)
+		strcpy(SYSOPCall, BBSName);
 
 	// Allocate Streams
 

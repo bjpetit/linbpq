@@ -7,6 +7,7 @@
 #define BPQDISCONNECT                   103
 #define IDD_CONFIG                      104
 #define IDD_FONT                        105
+#define MONITOR_ADDPORT                 400
 #define IDC_HOST                        1004
 #define IDC_PORT                        1005
 #define IDC_USER                        1006
@@ -16,6 +17,13 @@
 #define IDC_CODEPAGE                    1010
 #define IDC_CHARSET                     1011
 #define IDC_FONTSIZE                    1012
+#define IDC_AUTO                        1013
+#define IDC_1251                        1014
+#define IDC_1252                        1015
+#define IDC_437                         1016
+#define IDC_UTF8                        1017
+#define IDC_Send1251                    1018
+#define IDC_Send1252                    1019
 #define BPQMTX                          1164
 #define BPQMCOM                         1165
 #define BPQCOPYMON                      1166
@@ -32,7 +40,7 @@
 #define BPQMNODES                       1177
 #define MONCOLOUR                       1178
 #define CHATTERM                        1179
-#define MUIONLY							1180
+#define MUIONLY                         1180
 #define BPQAUTOCONNECT                  40001
 #define BPQAPPL1                        40002
 #define BPQAPPL2                        40003
@@ -46,10 +54,9 @@
 #define BPQFLAGS2                       40011
 #define BPQFLAGS3                       40012
 #define BPQFLAGS4                       40013
-#define IDC_HOST1                       40201
-#define BPQCONNECT1                     40101
-#define MONITOR_ADDPORT                 400
 #define ID_SETUP_FONT                   40025
+#define BPQCONNECT1                     40101
+#define IDC_HOST1                       40201
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -59,7 +66,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        106
 #define _APS_NEXT_COMMAND_VALUE         40026
-#define _APS_NEXT_CONTROL_VALUE         1013
+#define _APS_NEXT_CONTROL_VALUE         1020
 #define _APS_NEXT_SYMED_VALUE           104
 #endif
 #endif

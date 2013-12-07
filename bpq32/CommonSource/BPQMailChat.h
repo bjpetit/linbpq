@@ -293,12 +293,18 @@ struct TempUserInfo
 	int LastAuthCode;				// Protect against playback attack
 };
 
-struct UserInfo{
+#define PMSG 1
+#define BMSG 2
+#define TMSG 3
+
+struct OldUserInfo
+{	
+	// Old format - without message type specific traffic counts 
 
 	char	Call[10];			//	Connected call without SSID	
 //	indicat relai[8];			/* 64 Digis path */
 	int		lastmsg;			/* 4  Last L number */
-	int		nbcon;				/* 4  Number of connexions in*/
+	int		ConnectsIn;				/* 4  Number of connexions in*/
 	time_t	TimeLastConnected;  //Last connexion date */
 //	long	lastyap __a2__  ;	/* 4  Last YN date */
 	ULONG	flags    ;	/* 4  Flags */
@@ -306,20 +312,21 @@ struct UserInfo{
 	UCHAR	PageLen;			// Lines Per Page
 	UCHAR	lang      ;	/* 1  Language */
 
-	int		newbanner;	/* 4  Last Banner date */
-	short 	download  ;	/* 2  download size (KB) = 100 */
+	int		Xnewbanner;	/* 4  Last Banner date */
+	short 	Xdownload  ;	/* 2  download size (KB) = 100 */
 	char	POP3Locked ;		// Nonzero if POP3 server has locked this user (stops other pop3 connections, or BBS user killing messages)
 	char	BBSNumber;			// BBS Bitmap Index Number
 	struct	BBSForwardingInfo * ForwardingInfo;
 	struct  UserInfo * BBSNext;	// links BBS record
 	struct  TempUserInfo * Temp;	// Working Fields - not saved in user file
 	char	xfree[6];			/* 6 Spare */
-	char	theme;				/* 1  Current topic */
+	char	Xtheme;				/* 1  Current topic */
 
 	char	Name[18];			/* 18 1st Name */
 	char	Address[61];		/* 61 Address */
 
 	// Stats. Was City[31];			/* 31 City */
+
 	int MsgsReceived;
 	int MsgsSent;
 	int MsgsRejectedIn;			// Messages we reject
@@ -338,6 +345,56 @@ struct UserInfo{
 	char	ZIP[9];				/* 9  Zipcode */
 	BOOL	spare;
 } ;                /* Total : 360 bytes */
+
+struct MsgStats
+{
+	int	ConnectsIn;				/* 4  Number of connexions in*/
+	int ConnectsOut;			// Forwarding Connects Out
+
+	// Stats saveed by message type
+
+	int MsgsReceived[4];
+	int MsgsSent[4];
+	int MsgsRejectedIn[4];		// Messages we reject
+	int MsgsRejectedOut[4];		// Messages Rejectd by other end
+	int BytesForwardedIn[4];
+	int BytesForwardedOut[4];
+};
+
+struct UserInfo
+{
+	// New Format - with stats maintained by message type and unused fields removed.
+
+	char	Call[10];			//	Connected call without SSID	
+
+	int		Length;				// To make subsequent format changes easier
+
+	int		lastmsg;			/* 4  Last L number */
+	time_t	TimeLastConnected;  //Last connexion date */
+	ULONG	flags    ;	/* 4  Flags */
+
+	UCHAR	PageLen;			// Lines Per Page
+
+	char	POP3Locked ;		// Nonzero if POP3 server has locked this user (stops other pop3 connections, or BBS user killing messages)
+	char	BBSNumber;			// BBS Bitmap Index Number
+	struct	BBSForwardingInfo * ForwardingInfo;
+	struct  UserInfo * BBSNext;	// links BBS record
+	struct  TempUserInfo * Temp;	// Working Fields - not saved in user file
+	char	Name[18];			/* 18 1st Name */
+	char	Address[61];		/* 61 Address */
+
+	USHORT RMSSSIDBits;			// SSID's to poll in RMS
+
+	char	HomeBBS[41];		/* 41 home BBS */
+	char	QRA[7];				/* 7  Qth Locator */
+	char	pass[13];			/* 13 Password */
+	char	ZIP[9];				/* 9  Zipcode */
+
+	struct MsgStats Total;
+	struct MsgStats	Last;
+	
+	char Filler[64];			// So we can add a few fields wirhout another resize
+};
 
 // flags equates
 
@@ -358,6 +415,7 @@ struct UserInfo{
 #define F_POLLRMS	 0x4000
 #define F_SYSOP_IN_LM 0x8000
 #define F_Temp_B2_BBS 0x10000
+#define F_NOWINLINK 0x20000			// Don't add Winlink.org
 
 /* #define F_PWD        0x1000 */
 

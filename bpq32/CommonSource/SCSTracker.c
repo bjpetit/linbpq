@@ -67,6 +67,24 @@ VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud);
 VOID SendRPBeacon(struct TNCINFO * TNC);
 BOOL APIENTRY Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
+VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
+VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
+
+VOID TRKSuspendPort(struct TNCINFO * TNC)
+{
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+
+	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
+	sprintf(STREAM->CmdSet, "\1\1\1IDSPTNC");
+}
+
+VOID TRKReleasePort(struct TNCINFO * TNC)
+{
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+
+	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
+	sprintf(STREAM->CmdSet, "\1\1\1I%s\0", TNC->NodeCall);
+}
 
 static ProcessLine(char * buf, int Port)
 {
@@ -507,6 +525,11 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 100;
 
+	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
+
+	TNC->SuspendPortProc = TRKSuspendPort;
+	TNC->ReleasePortProc = TRKReleasePort;
+
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
@@ -536,6 +559,8 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 	
 	sprintf(msg, "I %s\r", TNC->NodeCall);
 	strcat(TNC->InitScript, msg);
+
+	strcpy(TNC->Streams[0].MyCall, TNC->NodeCall); // For 1st Connected Test 
 
 	TNC->WebWindowProc = WebProc;
 	TNC->WebWinX = 500;
@@ -825,6 +850,8 @@ VOID DEDPoll(int Port)
 
 				sprintf(Status, "%d SCANSTOP", TNC->Port);
 				Rig_Command(-1, Status);
+
+				SuspendOtherPorts(TNC);			// Prevent connects on other ports in same scan gruop
 			}
 		}
 	}
@@ -2295,6 +2322,8 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 	if (TNC->RIG == &TNC->DummyRig)		// Not using Rig control
 		TNC->SwitchToPactor = TNC->RobustTime;
+
+	ReleaseOtherPorts(TNC);
 }
 
 VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud)

@@ -1820,6 +1820,9 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_HOLDMAIL; else USER->flags &= ~F_HOLDMAIL;
 		ptr1 = GetNextParam(&ptr2);		// SYSOP gets LM
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_SYSOP_IN_LM; else USER->flags &= ~F_SYSOP_IN_LM;
+		ptr1 = GetNextParam(&ptr2);		// Dont add winlink.org
+		if (strcmp(ptr1, "true") == 0) USER->flags |= F_NOWINLINK; else USER->flags &= ~F_NOWINLINK;
+
 		ptr1 = GetNextParam(&ptr2);		// Last Listed
 		USER->lastmsg = atoi(ptr1);
 		ptr1 = GetNextParam(&ptr2);		// Name
@@ -2396,11 +2399,43 @@ VOID SendUserSelectPage(char * Reply, int * ReplyLen, char * Key)
 int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Key)
 {
 	char SSID[16][16] = {""};
-	int i, s, Len;
+	int i, n, s, Len;
 	struct UserInfo * User = Session->User;
 	int flags = User->flags;
 	int RMSSSIDBits = Session->User->RMSSSIDBits;
+
+	int	ConnectsIn;
+	int ConnectsOut;
+	int MsgsReceived;
+	int MsgsSent;
+	int MsgsRejectedIn;
+	int MsgsRejectedOut;
+	int BytesForwardedIn;
+	int BytesForwardedOut;
+	char MsgsIn[80];
+	char MsgsOut[80];
+	char BytesIn[80];
+	char BytesOut[80];
+	char RejIn[80];
+	char RejOut[80];
+
 	i = 0;
+
+	ConnectsIn = User->Total.ConnectsIn - User->Last.ConnectsIn;
+	ConnectsOut = User->Total.ConnectsOut - User->Last.ConnectsOut;
+
+	MsgsReceived = MsgsSent = MsgsRejectedIn = MsgsRejectedOut = BytesForwardedIn = BytesForwardedOut = 0;
+
+	for (n = 0; n < 4; n++)
+	{
+		MsgsReceived +=	User->Total.MsgsReceived[n] - User->Last.MsgsReceived[n];	
+		MsgsSent += User->Total.MsgsSent[n] - User->Last.MsgsSent[n];
+		BytesForwardedIn += User->Total.BytesForwardedIn[n] - User->Last.BytesForwardedIn[n];
+		BytesForwardedOut += User->Total.BytesForwardedOut[n] - User->Last.BytesForwardedOut[n];
+		MsgsRejectedIn += User->Total.MsgsRejectedIn[n] - User->Last.MsgsRejectedIn[n];
+		MsgsRejectedOut += User->Total.MsgsRejectedOut[n] - User->Last.MsgsRejectedOut[n];
+	}
+
 	
 	for (s = 0; s < 16; s++)
 	{
@@ -2425,13 +2460,13 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 		(flags & F_Excluded)?CHKD:UNC,
 		(flags & F_HOLDMAIL)?CHKD:UNC,
 		(flags & F_SYSOP_IN_LM)?CHKD:UNC,
+		(flags & F_NOWINLINK)?CHKD:UNC,
 
 
-
-		User->nbcon, User->MsgsReceived, User->MsgsRejectedIn,
-		User->ConnectsOut, User->MsgsSent, User->MsgsRejectedOut,
-		User->BytesForwardedIn, FormatDateAndTime(User->TimeLastConnected, FALSE), 
-		User->BytesForwardedOut, User->lastmsg,
+		ConnectsIn, MsgsReceived, MsgsRejectedIn,
+		ConnectsOut, MsgsSent, MsgsRejectedOut,
+		BytesForwardedIn, FormatDateAndTime(User->TimeLastConnected, FALSE), 
+		BytesForwardedOut, User->lastmsg,
 		User->Name,
 		User->pass,
 		User->Address,
@@ -2585,21 +2620,21 @@ BOOL CreatePipeThread()
 	return TRUE;
 }
 
-static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-static char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+#endif
 
+char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
-static VOID FormatTime(char * Time, time_t cTime)
+VOID FormatTime(char * Time, time_t cTime)
 {
 	struct tm * TM;
 	TM = gmtime(&cTime);
 
 	sprintf(Time, "%s, %02d %s %3d %02d:%02d:%02d GMT", dat[TM->tm_wday], TM->tm_mday, month[TM->tm_mon],
 		TM->tm_year + 1900, TM->tm_hour, TM->tm_min, TM->tm_sec);
-
 }
 
-#endif
+
 
 
 

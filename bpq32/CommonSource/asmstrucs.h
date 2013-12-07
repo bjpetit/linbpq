@@ -59,10 +59,18 @@ extern int NUMBEROFNODES;
 
 #pragma pack(1) 
 
+// Length of config Buffer = 100000
+
 #define ApplOffset 80000			// Applications offset in config buffer
 #define InfoOffset 85000			// Infomsg offset in config buffer
 #define InfoMax	2000				// Max Info
 #define HFCTextOffset 88000;		// HF modes CTEXT
+
+#define C_IDMSG	512 
+#define C_ROUTES 90000				// Allow 2500
+#define C_CTEXT	2048
+#define C_PORTS	2560
+#define C_INFOMSG 85000
 
 typedef struct _CMDX
 {

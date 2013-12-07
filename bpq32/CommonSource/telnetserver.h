@@ -50,7 +50,9 @@ struct ConnectionInfo
 	struct TNCINFO * TNC;		// Used to pass TCP struct to http code (for passwood list)
 
 	time_t ConnectTime;
-
+	BOOL UTF8;					// Set if BPQTerminal in UTF8 Mode
+	BOOL RelaySession;			// Set if connection to RMS Relay
+	BOOL LogonSent;				// To ignore second callsign: prompt
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

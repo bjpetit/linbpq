@@ -61,7 +61,7 @@ static LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 static LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 void MoveWindows(struct ConsoleInfo * Cinfo);
 VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo);
-VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line);
+VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, WCHAR * Line);
 VOID DoRefresh(struct ConsoleInfo * Cinfo);
 
 void ChatFlush(ChatCIRCUIT * conn);
@@ -71,6 +71,7 @@ VOID SaveIntValue(char * Key, int Value);
 VOID SaveStringValue(char * Key, char * Value);
 int GetIntValue(char * Key, int Default);
 VOID GetStringValue(char * Key, char * Value, int Len);
+int ChatIsUTF8(unsigned char *ptr, int len);
 
 
 #define BGCOLOUR RGB(236,233,216)
@@ -146,7 +147,7 @@ BOOL CreateConsole(int Stream)
 	wsprintf(Text, "Chat %s Console", Session);
 	SetWindowText(hConsole, Text);
 
-	Cinfo->readbuff = zalloc(1000);
+	Cinfo->readbuff = zalloc(2000);
 	Cinfo->readbufflen = 1000;
 
 	hMenu=GetMenu(hConsole);
@@ -186,6 +187,12 @@ BOOL CreateConsole(int Stream)
 //	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fcharset204\\fprq1 FixedSys;}}");
 	strcat(RTFHeader, RTFColours);
 	strcat(RTFHeader, "\\viewkind4\\uc1\\pard\\f0");
+
+	sprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1\\cpg%d\\fcharset%d %s;}}", 0, 0, "Courier New");
+	sprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1;}}");
+	strcat(RTFHeader, RTFColours);
+	strcat(RTFHeader, "\\viewkind4\\uc1\\pard\\f0\\fs20\\uc0");
+
 
 	RTFHddrLen = strlen(RTFHeader);
 
@@ -947,13 +954,12 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			if (Cinfo->BPQStream == -2)
 			{
-				char Msg[INPUTLEN+4];
+				UCHAR Msg[INPUTLEN * 2];		// Should be plenty
 				Msg[0] = 0x1b;
 				Msg[1] = 11;
-				memcpy(&Msg[2], Cinfo->kbbuf, Cinfo->kbptr+1);
 
+				memcpy(&Msg[2], Cinfo->kbbuf, Cinfo->kbptr+1); 
 				WritetoConsoleWindow(Cinfo->BPQStream, Msg, Cinfo->kbptr+3);
-
 			}
 			else
 				WritetoConsoleWindow(Cinfo->BPQStream, Cinfo->kbbuf, Cinfo->kbptr+1);
@@ -996,11 +1002,19 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 
 
-int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len);
+int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, WCHAR * Msg, int len);
 
-int WritetoConsoleWindow(int Stream, char * Msg, int len)
+int WritetoConsoleWindow(int Stream, UCHAR * Msg, int len)
 {
 	struct ConsoleInfo * Cinfo;
+	WCHAR BufferW[65536];
+
+	int wlen;
+
+	if (ChatIsUTF8(Msg, len))
+		wlen = MultiByteToWideChar(CP_UTF8, 0, Msg, len, BufferW, 65536); 
+	else
+		wlen = MultiByteToWideChar(CP_ACP, 0, Msg, len, BufferW, 65536); 
 
 	for (Cinfo = ConsHeader[0]; Cinfo; Cinfo = Cinfo->next)
 	{
@@ -1008,7 +1022,7 @@ int WritetoConsoleWindow(int Stream, char * Msg, int len)
 		{
 			if (Cinfo->BPQStream == Stream)
 			{
-				WritetoConsoleWindowSupport(Cinfo, Msg, len);
+				WritetoConsoleWindowSupport(Cinfo, BufferW, wlen);
 				DoRefresh(Cinfo);
 				return 0;
 			}
@@ -1017,14 +1031,14 @@ int WritetoConsoleWindow(int Stream, char * Msg, int len)
 	return 0;
 }
 
-int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
+int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, WCHAR * Msg, int len)
 {
-	char * ptr1, * ptr2;
+	WCHAR * ptr1, * ptr2;
 
 	if (len + Cinfo->PartLinePtr > Cinfo->readbufflen)
 	{
 		Cinfo->readbufflen += len + Cinfo->PartLinePtr;
-		Cinfo->readbuff = realloc(Cinfo->readbuff, Cinfo->readbufflen);
+		Cinfo->readbuff = realloc(Cinfo->readbuff, Cinfo->readbufflen * 2);
 	}
 
 	if (Cinfo->PartLinePtr != 0)
@@ -1038,7 +1052,7 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 		}
 	}
 
-	memcpy(&Cinfo->readbuff[Cinfo->PartLinePtr], Msg, len);
+	memcpy(&Cinfo->readbuff[Cinfo->PartLinePtr], Msg, len * 2);
 		
 	len=len+Cinfo->PartLinePtr;
 
@@ -1049,7 +1063,7 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 	{
 		do {
 
-			ptr2=memchr(ptr1,7,len);
+			ptr2=memchr(ptr1,7 , len * 2);
 			
 			if (ptr2)
 			{
@@ -1070,14 +1084,14 @@ lineloop:
 	{
 		//	copy text to control a line at a time	
 					
-		ptr2=memchr(ptr1,13,len);
+		ptr2=memchr(ptr1, 13, len * 2);
 
 		if (ptr2 == 0)
 		{
 			// no newline. Move data to start of buffer and Save pointer
 
-			Cinfo->PartLinePtr=len;
-			memmove(Cinfo->readbuff,ptr1,len);
+			Cinfo->PartLinePtr = len;
+			memmove(Cinfo->readbuff, ptr1, len * 2);
 			AddLinetoWindow(Cinfo, ptr1);
 //			InvalidateRect(Cinfo->hwndOutput, NULL, FALSE);
 
@@ -1090,11 +1104,11 @@ lineloop:
 
 		if ((ptr2 - ptr1) > Cinfo->maxlinelen)
 		{
-			char * ptr3;
-			char * saveptr1 = ptr1;
+			WCHAR * ptr3;
+			WCHAR * saveptr1 = ptr1;
 			int linelen = ptr2 - ptr1;
 			int foldlen;
-			char save;
+			WCHAR save;
 					
 		foldloop:
 
@@ -1245,12 +1259,32 @@ void CopyToClipboard(HWND hWnd)
 	}
 }
 
+VOID wcstoRTF(char * out, WCHAR * in)
+{
+	WCHAR * ptr1 = in;
+	char * ptr2 = out;
+	int val = *ptr1++;
+
+	while (val)
+	{
+		{
+			if (val > 127 || val < -128 )
+				ptr2 += sprintf(ptr2, "\\u%d ", val);
+			else
+				*(ptr2++) = val;
+		}
+		val = *ptr1++;
+	}
+	*ptr2 = 0;
+}
+
 
 DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LONG cb, PLONG pcb)
 {
 	int ReqLen = cb;
 	int i;
 	int Line;
+	char LineB[4096];
 
 //	if (cb != 4092)
 //		return 0;
@@ -1297,8 +1331,10 @@ DWORD CALLBACK EditStreamCallback(struct ConsoleInfo * Cinfo, LPBYTE lpBuff, LON
 	if (Line <0)
 		Line = Line + MAXLINES;
 
-	wsprintf(lpBuff, "\\cf%d ", Cinfo->Colourvalue[Line]);
-	strcat(lpBuff, Cinfo->OutputScreen[Line]);
+	wcstoRTF(&LineB[0], Cinfo->OutputScreen[Line]);
+
+	sprintf(lpBuff, "\\cf%d ", Cinfo->Colourvalue[Line]);
+	strcat(lpBuff, LineB);
 	strcat(lpBuff, "\\line");
 
 	if (Cinfo->Index == MAXLINES)
@@ -1387,13 +1423,13 @@ VOID DoRefresh(struct ConsoleInfo * Cinfo)
 	}
 }
 
-VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line)
+VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, WCHAR * Line)
 {
-	int Len = strlen(Line);
-	char * ptr1 = Line;
-	char * ptr2;
+	int Len = wcslen(Line);
+	WCHAR * ptr1 = Line;
+	WCHAR * ptr2;
 	int l, Index;
-	char LineCopy[LINELEN * 2];
+	WCHAR LineCopy[LINELEN * 2];
 	
 	if (Line[0] ==  0x1b && Len > 1)
 	{
@@ -1404,70 +1440,70 @@ VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line)
 		Len -= 2;
 	}
 
-	strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], ptr1);
+	wcscpy(Cinfo->OutputScreen[Cinfo->CurrentLine], ptr1);
 
 	// Look for chars we need to escape (\  { })
 
 	ptr1 = Cinfo->OutputScreen[Cinfo->CurrentLine];
 	Index = 0;
-	ptr2 = strchr(ptr1, '\\');				// Look for Backslash first, as we may add some later
+	ptr2 = wcschr(ptr1, L'\\');				// Look for Backslash first, as we may add some later
 
 	if (ptr2)
 	{
 		while (ptr2)
 		{
 			l = ++ptr2 - ptr1;
-			memcpy(&LineCopy[Index], ptr1, l);	// Copy Including found char
+			memcpy(&LineCopy[Index], ptr1, l * 2);	// Copy Including found char
 			Index += l;
 			LineCopy[Index++] = '\\';
 			Len++;
 			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, '\\');
+			ptr2 = wcschr(ptr1, '\\');
 		}
-		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
-		strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
+		wcscpy(&LineCopy[Index], ptr1);			// Copy in rest
+		wcscpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
 	}
 
 	ptr1 = Cinfo->OutputScreen[Cinfo->CurrentLine];
 	Index = 0;
-	ptr2 = strchr(ptr1, '{');
+	ptr2 = wcschr(ptr1, '{');
 
 	if (ptr2)
 	{
 		while (ptr2)
 		{
 			l = ptr2 - ptr1;
-			memcpy(&LineCopy[Index], ptr1, l);
+			memcpy(&LineCopy[Index], ptr1, l * 2);
 			Index += l;
 			LineCopy[Index++] = '\\';
 			LineCopy[Index++] = '{';
 			Len++;
 			ptr1 = ++ptr2;
-			ptr2 = strchr(ptr1, '{');
+			ptr2 = wcschr(ptr1, '{');
 		}
-		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
-		strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
+		wcscpy(&LineCopy[Index], ptr1);			// Copy in rest
+		wcscpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
 	}
 
 	ptr1 = Cinfo->OutputScreen[Cinfo->CurrentLine];
 	Index = 0;
-	ptr2 = strchr(ptr1, '}');				// Look for Backslash first, as we may add some later
+	ptr2 = wcschr(ptr1, '}');				// Look for Backslash first, as we may add some later
 
 	if (ptr2)
 	{
 		while (ptr2)
 		{
 			l = ptr2 - ptr1;
-			memcpy(&LineCopy[Index], ptr1, l);	// Copy 
+			memcpy(&LineCopy[Index], ptr1, l * 2);	// Copy 
 			Index += l;
 			LineCopy[Index++] = '\\';
 			LineCopy[Index++] = '}';
 			Len++;
 			ptr1 = ++ptr2;
-			ptr2 = strchr(ptr1, '}');
+			ptr2 = wcschr(ptr1, '}');
 		}
-		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
-		strcpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
+		wcscpy(&LineCopy[Index], ptr1);			// Copy in rest
+		wcscpy(Cinfo->OutputScreen[Cinfo->CurrentLine], LineCopy);
 	}
 
 

@@ -563,6 +563,18 @@
 // Allow HOST applications even when CMS option is disabled
 // Fix processing of APRS DIGIMAP command with no targets (didn't suppress default settings)
 
+// Version 6.0.5.1
+
+//	Add UTF8 conversion mode to Telnet (converts non-UTF-8 chars to UTF-8)
+//	Add "Clear" option to MH command
+//	Add "Connect to RMS Relay" Option
+//  Revert to one stop bit on serial ports, explictly set two on FT2000 rig control
+//  Fix routing of first call in Robust Packet
+//	Add Options to switch input source on rigs with build in soundcards (sor far only IC7100 and Kenwood 590)
+//  Add RTS>CAT PTT option for Sound Card rigs
+//	Add Clear Nodes Option (NODE DEL ALL)
+//  SCS Pactor can set differeant APPLCALLS when scanning.
+
 #define CKernel
 
 #include "Versions.h"
@@ -1423,7 +1435,8 @@ VOID CALLBACK TimerProc
 		if(TimerInst == GetCurrentProcessId())
 		{
 			RigReconfigFlag = FALSE;
-			Rig_Close();				
+			Rig_Close();
+			Sleep(2000);				// Allow CATPTT threads to close
 			RigActive = Rig_Init();
 			
 			WritetoConsole("Rigcontrol Reconfiguration Complete\n");	
@@ -1502,7 +1515,8 @@ VOID CALLBACK TimerProc
 
 HANDLE NPHandle;
 
-int (WINAPI FAR *GetModuleFileNameExPtr)();
+int (WINAPI FAR *GetModuleFileNameExPtr)() = NULL;
+int (WINAPI FAR *EnumProcessesPtr)() = NULL;
 
 FirstInit()
 {
@@ -1526,8 +1540,10 @@ FirstInit()
 	SetupTrayIcon();
 
 	if (ExtDriver)
+	{
 		GetModuleFileNameExPtr = (FARPROCX)GetProcAddress(ExtDriver,"GetModuleFileNameExA");
-	
+		EnumProcessesPtr = (FARPROCX)GetProcAddress(ExtDriver,"EnumProcesses");
+	}
 	INITIALISEPORTS();
 
 	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
@@ -1674,9 +1690,12 @@ Check_Timer()
 		SetupTrayIcon();
 
 		if (ExtDriver)
+		{
 			GetModuleFileNameExPtr = (FARPROCX)GetProcAddress(ExtDriver,"GetModuleFileNameExA");
-
-			Start();
+			EnumProcessesPtr = (FARPROCX)GetProcAddress(ExtDriver,"EnumProcesses");
+		}
+			
+		Start();
 	
 		INITIALISEPORTS();
 
@@ -2301,6 +2320,7 @@ VOID SetupBPQDirectory()
 	char msg[512];
 	char ValfromReg[MAX_PATH] = "";
 	char DLLName[256]="Not Known";
+	char LogDir[256];
 
 /*
 •NT4 was/is '4' 
@@ -2463,6 +2483,13 @@ VOID SetupBPQDirectory()
 
 		RegCloseKey(hKey);
 	}
+
+	// Make sure Logs Directory exists
+					
+	sprintf(LogDir, "%s/Logs", BPQDirectory);
+	
+	CreateDirectory(LogDir, NULL);
+
 	return;	
 }
 

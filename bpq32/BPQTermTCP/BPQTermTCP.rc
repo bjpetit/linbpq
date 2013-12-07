@@ -101,23 +101,32 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,95,91,50,14
 END
 
-IDD_FONT DIALOG DISCARDABLE  0, 0, 186, 113
+IDD_FONT DIALOG DISCARDABLE  0, 0, 187, 206
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Font Setup"
 FONT 8, "MS Sans Serif"
 BEGIN
-    DEFPUSHBUTTON   "Save",IDOK,39,93,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,92,93,50,14
-    LTEXT           "Name",IDC_STATIC,7,10,24,9
-    LTEXT           "Code Page",IDC_STATIC,6,70,44,9
-    EDITTEXT        IDC_CODEPAGE,53,68,39,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "Font Width",IDC_STATIC,7,40,41,9
-    EDITTEXT        IDC_FONTNAME,53,8,89,12,ES_AUTOHSCROLL
-    LTEXT           "Char Set",IDC_STATIC,7,55,39,9
-    EDITTEXT        IDC_CHARSET,53,53,40,12,ES_AUTOHSCROLL | ES_NUMBER
-    EDITTEXT        IDC_FONTWIDTH,53,38,39,12,ES_AUTOHSCROLL | ES_NUMBER
-    EDITTEXT        IDC_FONTSIZE,53,23,38,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "Font Size",IDC_STATIC,7,25,44,9
+    DEFPUSHBUTTON   "Save",IDOK,39,182,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,92,182,50,14
+    LTEXT           "Font Width",IDC_STATIC,7,166,41,9
+    EDITTEXT        IDC_FONTWIDTH,53,164,39,12,ES_AUTOHSCROLL | ES_NUMBER
+    EDITTEXT        IDC_FONTSIZE,53,149,38,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Font Size",IDC_STATIC,7,151,44,9
+    LTEXT           "Interpret non-UTF8 input as",IDC_STATIC,7,10,96,11
+    CONTROL         "Auto",IDC_AUTO,"Button",BS_AUTORADIOBUTTON,15,25,31,10
+    CONTROL         "CP1251 (Cyrillic)",IDC_1251,"Button",BS_AUTORADIOBUTTON,
+                    15,40,67,10
+    CONTROL         "CP1252 (Western Europe)",IDC_1252,"Button",
+                    BS_AUTORADIOBUTTON,15,55,99,10
+    CONTROL         "CP437 (Windows Line Draw)",IDC_437,"Button",
+                    BS_AUTORADIOBUTTON,15,70,107,10
+    LTEXT           "Send as",IDC_STATIC,7,85,27,8
+    CONTROL         "UTF8",IDC_UTF8,"Button",BS_AUTORADIOBUTTON | WS_GROUP,
+                    15,100,34,10
+    CONTROL         "CP1251",IDC_Send1251,"Button",BS_AUTORADIOBUTTON,15,115,
+                    41,10
+    CONTROL         "CP1252",IDC_Send1252,"Button",BS_AUTORADIOBUTTON,15,130,
+                    41,10
 END
 
 
@@ -131,22 +140,21 @@ BEGIN
     POPUP "Connect"
     BEGIN
         MENUITEM "Host 1",                      BPQCONNECT1
-        MENUITEM "Host 2",                      BPQCONNECT1 + 1
-        MENUITEM "Host 3",                      BPQCONNECT1 + 2
-        MENUITEM "Host 4",                      BPQCONNECT1 + 3
-        MENUITEM "Host 5",                      BPQCONNECT1 + 4
-        MENUITEM "Host 6",                      BPQCONNECT1 + 5
-        MENUITEM "Host 7",                      BPQCONNECT1 + 6
-        MENUITEM "Host 8",                      BPQCONNECT1 + 7
-        MENUITEM "Host 9",                      BPQCONNECT1 + 8
-        MENUITEM "Host 10",                      BPQCONNECT1 + 9
-        MENUITEM "Host 11",                      BPQCONNECT1 + 10
-        MENUITEM "Host 12",                      BPQCONNECT1 + 11
-        MENUITEM "Host 13",                      BPQCONNECT1 + 12
-        MENUITEM "Host 14",                      BPQCONNECT1 + 13
-        MENUITEM "Host 15",                      BPQCONNECT1 + 14
-        MENUITEM "Host 16",                      BPQCONNECT1 + 15
-
+        MENUITEM "Host 2",                      40102
+        MENUITEM "Host 3",                      40103
+        MENUITEM "Host 4",                      40104
+        MENUITEM "Host 5",                      40105
+        MENUITEM "Host 6",                      40106
+        MENUITEM "Host 7",                      40107
+        MENUITEM "Host 8",                      40108
+        MENUITEM "Host 9",                      40109
+        MENUITEM "Host 10",                     40110
+        MENUITEM "Host 11",                     40111
+        MENUITEM "Host 12",                     40112
+        MENUITEM "Host 13",                     40113
+        MENUITEM "Host 14",                     40114
+        MENUITEM "Host 15",                     40115
+        MENUITEM "Host 16",                     40116
     END
     MENUITEM "Disconnect",                  BPQDISCONNECT
     POPUP "Setup"
@@ -154,21 +162,21 @@ BEGIN
         POPUP "TCP Hosts"
         BEGIN
             MENUITEM "Host 1",                      IDC_HOST1
-            MENUITEM "Host 2",                      IDC_HOST1 + 1
-            MENUITEM "Host 3",                      IDC_HOST1 + 2
-            MENUITEM "Host 4",                      IDC_HOST1 + 3
-            MENUITEM "Host 5",                      IDC_HOST1 + 4
-            MENUITEM "Host 6",                      IDC_HOST1 + 5
-            MENUITEM "Host 7",                      IDC_HOST1 + 6
-            MENUITEM "Host 8",                      IDC_HOST1 + 7
-            MENUITEM "Host 9",                      IDC_HOST1 + 8
-            MENUITEM "Host 10",                      IDC_HOST1 + 9
-            MENUITEM "Host 11",                      IDC_HOST1 + 10
-            MENUITEM "Host 12",                      IDC_HOST1 + 11
-            MENUITEM "Host 13",                      IDC_HOST1 + 12
-            MENUITEM "Host 14",                      IDC_HOST1 + 13
-            MENUITEM "Host 15",                      IDC_HOST1 + 14
-            MENUITEM "Host 16",                      IDC_HOST1 + 15
+            MENUITEM "Host 2",                      40202
+            MENUITEM "Host 3",                      40203
+            MENUITEM "Host 4",                      40204
+            MENUITEM "Host 5",                      40205
+            MENUITEM "Host 6",                      40206
+            MENUITEM "Host 7",                      40207
+            MENUITEM "Host 8",                      40208
+            MENUITEM "Host 9",                      40209
+            MENUITEM "Host 10",                     40210
+            MENUITEM "Host 11",                     40211
+            MENUITEM "Host 12",                     40212
+            MENUITEM "Host 13",                     40213
+            MENUITEM "Host 14",                     40214
+            MENUITEM "Host 15",                     40215
+            MENUITEM "Host 16",                     40216
         END
         MENUITEM "Font Setup",                  ID_SETUP_FONT
         MENUITEM "Enable Bells",                BPQBELLS
@@ -215,9 +223,9 @@ BEGIN
     IDD_FONT, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 179
+        RIGHTMARGIN, 180
         TOPMARGIN, 7
-        BOTTOMMARGIN, 106
+        BOTTOMMARGIN, 199
     END
 END
 #endif    // APSTUDIO_INVOKED

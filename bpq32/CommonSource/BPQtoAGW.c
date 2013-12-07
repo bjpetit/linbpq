@@ -57,7 +57,7 @@
 #define VERSION_MAJOR         2
 #define VERSION_MINOR         0
 
-unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
+//unsigned long _beginthread( void( *start_address )( int ), unsigned stack_size, int arglist);
 
 //int ResetExtDriver(int num);
 extern char * PortConfig[33];

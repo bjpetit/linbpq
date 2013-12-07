@@ -39,6 +39,7 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Forwarded, int Age);
 int CreateWPMessage();
 
 int LastHouseKeepingTime;
+
 int LastTrafficTime;
 
 void DeletetoRecycle(char * FN)
@@ -749,8 +750,8 @@ int DeleteLogFiles()
    // Prepare string for use with FindFile functions.  First, copy the
    // string to a buffer, then append '\*' to the directory name.
 
-   strcpy(szDir, BaseDir);
-   strcat(szDir, "\\Log_*.txt");
+   strcpy(szDir, GetBPQDirectory());
+   strcat(szDir, "\\logs\\Log_*.txt");
 
    // Find the first file in the directory.
 
@@ -781,7 +782,7 @@ int DeleteLogFiles()
 
 		 if (Age > LogAge)
 		 {
-			 sprintf(File, "%s/%s%c", BaseDir, ffd.cFileName, 0);
+			 sprintf(File, "%s/logs/%s%c", GetBPQDirectory(), ffd.cFileName, 0);
 			 if (DeletetoRecycleBin)
 				DeletetoRecycle(File);
 			 else
@@ -813,8 +814,9 @@ int DeleteLogFiles()
 	struct stat STAT;
 	time_t now = time(NULL);
 	int Age = 0, res;
+	char FN[256];
      	
-    n = scandir(".", &namelist, Filter, alphasort);
+    n = scandir("logs", &namelist, Filter, alphasort);
 
 	if (n < 0) 
 		perror("scandir");
@@ -822,14 +824,15 @@ int DeleteLogFiles()
 	{ 
 		while(n--)
 		{
-			if (stat(namelist[n]->d_name, &STAT) == 0)
+			sprintf(FN, "logs/%s", namelist[n]->d_name);
+			if (stat(FN, &STAT) == 0)
 			{
 				Age = (now - STAT.st_mtime) / 86400;
 				
 				if (Age > LogAge)
 				{
-					printf("Deleting  %s\n",  namelist[n]->d_name);
-					unlink(namelist[n]->d_name);
+					printf("Deleting  %s\n", FN);
+					unlink(FN);
 				}
 			}
 			free(namelist[n]);
@@ -856,6 +859,9 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 	// Try to create a from Address. ( ? check RMS)
 
 	strcpy(From, OldMsg->from);
+
+	if (strcmp(From, "SYSTEM") == 0)
+		return;							// Don't send non-deliverys SYSTEM messages
 
 	FromUser = LookupCall(OldMsg->from);
 
@@ -893,6 +899,16 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 		strcpy(Msg->to, "RMS");
 		strcpy(Msg->via, OldMsg->emailfrom);
 	}
+
+	if (strcmp(From, "smtp:") == 0)
+	{
+		Msg->to[0] = 0;
+		strcpy(Msg->via, OldMsg->emailfrom);
+	}
+
+	if (Msg->to[0] == 0)
+		return;
+
 	strcpy(Msg->title, "Non-delivery Notification");
 	
 	if (Unread)
@@ -929,7 +945,7 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 VOID CreateBBSTrafficReport()
 {
 	struct UserInfo * User;
-	int i;
+	int i, n;
 	char Line[200];
 	int len;
 	char File[MAX_PATH];
@@ -937,6 +953,27 @@ VOID CreateBBSTrafficReport()
 	HKEY hKey=0;
 	int retCode, disp;
 	time_t NOW = time(NULL);
+
+	int	ConnectsIn;
+	int ConnectsOut;
+//	int MsgsReceived;
+//	int MsgsSent;
+//	int MsgsRejectedIn;
+//	int MsgsRejectedOut;
+//	int BytesForwardedIn;
+//	int BytesForwardedOut;
+	int TotMsgsReceived[4] = {0,0,0,0};
+	int TotMsgsSent[4] = {0,0,0,0};
+
+	int TotBytesForwardedIn[4] = {0,0,0,0};
+	int TotBytesForwardedOut[4] = {0,0,0,0};
+
+	char MsgsIn[80];
+	char MsgsOut[80];
+	char BytesIn[80];
+	char BytesOut[80];
+	char RejIn[80];
+	char RejOut[80];
 
 	struct tm tm;
 	struct tm last;
@@ -960,9 +997,9 @@ VOID CreateBBSTrafficReport()
 
 	fwrite(Line, 1, len, hFile);
 
-	len = sprintf(Line, "    Call    Connects  Connects  Messages   Messages   Bytes      Bytes     Rejected  Rejected\r\n");
+	len = sprintf(Line, "    Call    Connects  Connects    Messages        Messages           Bytes           Bytes        Rejected        Rejected\r\n");
 	fwrite(Line, 1, len, hFile);
-	len = sprintf(Line, "               In        Out     Rxed        Sent     Rxed       Sent         In         Out\r\n\r\n");
+	len = sprintf(Line, "               In        Out      Rxed(P/B/T)       Sent             Rxed            Sent            In              Out\r\n\r\n");
 
 	fwrite(Line, 1, len, hFile);
 		
@@ -970,18 +1007,108 @@ VOID CreateBBSTrafficReport()
 	{
 		User = UserRecPtr[i];
 
+		ConnectsIn = User->Total.ConnectsIn - User->Last.ConnectsIn;
+		ConnectsOut = User->Total.ConnectsOut - User->Last.ConnectsOut;
+
+/*
+		MsgsReceived = MsgsSent = MsgsRejectedIn = MsgsRejectedOut = BytesForwardedIn = BytesForwardedOut = 0;
+
+		for (n = 0; n < 4; n++)
+		{
+			MsgsReceived +=	User->Total.MsgsReceived[n] - User->Last.MsgsReceived[n];	
+			MsgsSent += User->Total.MsgsSent[n] - User->Last.MsgsSent[n];
+			BytesForwardedIn += User->Total.BytesForwardedIn[n] - User->Last.BytesForwardedIn[n];
+			BytesForwardedOut += User->Total.BytesForwardedOut[n] - User->Last.BytesForwardedOut[n];
+			MsgsRejectedIn += User->Total.MsgsRejectedIn[n] - User->Last.MsgsRejectedIn[n];
+			MsgsRejectedOut += User->Total.MsgsRejectedOut[n] - User->Last.MsgsRejectedOut[n];
+		}
+
 		len = sprintf(Line, "%s %-7s %5d %8d %10d %10d %10d %10d %10d %10d\r\n",
 			(User->flags & F_BBS)? "(B)": "   ",
-			User->Call, User->nbcon, User->ConnectsOut, User->MsgsReceived, User->MsgsSent, 
-			User->BytesForwardedIn, User->BytesForwardedOut,
-			User->MsgsRejectedIn, User->MsgsRejectedOut);
-		
-		fwrite(Line, 1, len, hFile);
+			User->Call, ConnectsIn,
+			ConnectsOut,
+			MsgsReceived,
+			MsgsSent, 
+			BytesForwardedIn,
+			BytesForwardedOut,
+			MsgsRejectedIn,
+			MsgsRejectedOut);
+*/
 
-		User->nbcon = User->ConnectsOut = User->MsgsReceived = User->MsgsSent =  
-				User->BytesForwardedIn = User->BytesForwardedOut = 
-				User->MsgsRejectedIn = User->MsgsRejectedOut = 0;
+		for (n = 0; n < 4; n++)
+		{
+			TotMsgsReceived[n] += User->Total.MsgsReceived[n] - User->Last.MsgsReceived[n];
+			TotMsgsSent[n] += User->Total.MsgsSent[n] - User->Last.MsgsSent[n];
+
+			TotBytesForwardedIn[n] += User->Total.BytesForwardedIn[n] - User->Last.BytesForwardedIn[n];
+			TotBytesForwardedOut[n] += User->Total.BytesForwardedOut[n] - User->Last.BytesForwardedOut[n];
+		}
+
+		sprintf(MsgsIn,"%d/%d/%d", User->Total.MsgsReceived[1] - User->Last.MsgsReceived[1],
+			User->Total.MsgsReceived[2] - User->Last.MsgsReceived[2],
+			User->Total.MsgsReceived[3] - User->Last.MsgsReceived[3]);
+
+		sprintf(MsgsOut,"%d/%d/%d", User->Total.MsgsSent[1] - User->Last.MsgsSent[1],
+			User->Total.MsgsSent[2] - User->Last.MsgsSent[2],
+			User->Total.MsgsSent[3] - User->Last.MsgsSent[3]);
+
+		sprintf(BytesIn,"%d/%d/%d", User->Total.BytesForwardedIn[1] - User->Last.BytesForwardedIn[1],
+			User->Total.BytesForwardedIn[2] - User->Last.BytesForwardedIn[2],
+			User->Total.BytesForwardedIn[3] - User->Last.BytesForwardedIn[3]);
+
+		sprintf(BytesOut,"%d/%d/%d", User->Total.BytesForwardedOut[1] - User->Last.BytesForwardedOut[1],
+			User->Total.BytesForwardedOut[2] - User->Last.BytesForwardedOut[2],
+			User->Total.BytesForwardedOut[3] - User->Last.BytesForwardedOut[3]);
+
+		sprintf(RejIn,"%d/%d/%d", User->Total.MsgsRejectedIn[1] - User->Last.MsgsRejectedIn[1],
+			User->Total.MsgsRejectedIn[2] - User->Last.MsgsRejectedIn[2],
+			User->Total.MsgsRejectedIn[3] - User->Last.MsgsRejectedIn[3]);
+
+		sprintf(RejOut,"%d/%d/%d", User->Total.MsgsRejectedOut[1] - User->Last.MsgsRejectedOut[1],
+			User->Total.MsgsRejectedOut[2] - User->Last.MsgsRejectedOut[2],
+			User->Total.MsgsRejectedOut[3] - User->Last.MsgsRejectedOut[3]);
+
+		len = sprintf(Line, "%s %-7s %5d %8d%16s%16s%16s%16s%16s%16s\r\n",
+			(User->flags & F_BBS)? "(B)": "   ",
+			User->Call, ConnectsIn,
+			ConnectsOut,
+			MsgsIn,
+			MsgsOut, 
+			BytesIn,
+			BytesOut,
+			RejIn,
+			RejOut);
+
+		fwrite(Line, 1, len, hFile);
+/*
+		User->Last.ConnectsIn = User->Total.ConnectsIn;
+		User->Last.ConnectsOut = User->Total.ConnectsOut;
+
+		for (n = 0; n < 4; n++)
+		{
+			User->Last.MsgsReceived[n] = User->Total.MsgsReceived[n];	
+			User->Last.MsgsSent[n] = User->Total.MsgsSent[n];
+			User->Last.BytesForwardedIn[n] = User->Total.BytesForwardedIn[n];
+			User->Last.BytesForwardedOut[n] = User->Total.BytesForwardedOut[n];
+			User->Last.MsgsRejectedIn[n] = User->Total.MsgsRejectedIn[n];
+			User->Last.MsgsRejectedOut[n] = User->Total.MsgsRejectedOut[n];
+		}
+*/
 	}
+
+	sprintf(MsgsIn,"%d/%d/%d", TotMsgsReceived[1], TotMsgsReceived[2], TotMsgsReceived[3]);
+
+	sprintf(MsgsOut,"%d/%d/%d", TotMsgsSent[1], TotMsgsSent[2], TotMsgsSent[3]);
+
+	sprintf(BytesIn,"%d/%d/%d", TotBytesForwardedIn[1], TotBytesForwardedIn[2], TotBytesForwardedIn[3]);
+
+	sprintf(BytesOut,"%d/%d/%d", TotBytesForwardedOut[1], TotBytesForwardedOut[2], TotBytesForwardedOut[3]);
+
+	len = sprintf(Line, "\r\n Totals %s Messages In %s Messages Out %s Bytes In %s Bytes Out\r\n",
+			MsgsIn, MsgsOut, BytesIn, BytesOut);
+
+	fwrite(Line, 1, len, hFile);
+
 #ifndef LINBPQ
 
 	retCode = RegCreateKeyEx(REGTREE,

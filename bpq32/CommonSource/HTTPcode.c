@@ -22,7 +22,7 @@ extern  TRANSPORTENTRY * L4TABLE;
 extern BPQVECSTRUC BPQHOSTVECTOR[];
 extern BOOL APRSApplConnected;  
 extern char VersionString[];
-VOID FormatTime(char * Time, time_t cTime);
+static VOID FormatTime(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 
 
@@ -191,7 +191,8 @@ char BusyError[] = "<p align=center>Sorry, No sessions available - please try la
 
 char LostSession[] = "<html><body>Sorry, Session had been lost - refresh page to sign in again";
 
-char TermPage[] = "<html><head><title>BPQ32 Node %s</title></head>"
+char TermPage[] = "<html><meta http-equiv=""Content-Type"" content=""text/html; charset=UTF-8"" />"
+	"<head><title>BPQ32 Node %s</title></head>"
 	"<body><h3 align=center>BPQ32 Node %s</h3>"
 	"<form method=post action=/Node/TermClose?%s>"
 	"<p align=center><input type=submit value=\"Close and return to Node Page\" /></form>"
@@ -1436,7 +1437,7 @@ doHeader:
 		}
 		else
 		{
-			int Sent;
+//			int Sent;
 			int Loops = 0;
 
 			WriteFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
@@ -1472,7 +1473,7 @@ doHeader:
 		}
 		else
 		{
-			int Sent;
+//			int Sent;
 			int Loops = 0;
 
 			WriteFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
@@ -2317,7 +2318,7 @@ static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", 
 static char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 
-VOID FormatTime(char * Time, time_t cTime)
+static VOID FormatTime(char * Time, time_t cTime)
 {
 	struct tm * TM;
 	TM = gmtime(&cTime);

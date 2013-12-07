@@ -53,8 +53,11 @@
 #include <time.h>
 
 #include "CHeaders.h"
+#include <Psapi.h>
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
+int (WINAPI FAR *EnumProcessesPtr)();
+
 
 #define SD_RECEIVE      0x00
 #define SD_SEND         0x01
@@ -103,8 +106,6 @@ static int ProcessLine(char * buf, int Port);
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
-
-
 
 
 static ProcessLine(char * buf, int Port)
@@ -332,6 +333,13 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	{
 	case 1:				// poll
 
+		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+
 		if (TNC->Busy)							//  Count down to clear
 		{
 			if ((TNC->BusyFlags & CDBusy) == 0)	// TNC Has reported not busy
@@ -390,7 +398,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		if (TNC->HeartBeat++ > 300 || (TNC->Streams[0].Connected && TNC->HeartBeat > 50))			// Every Minute unless connected
+		if (TNC->HeartBeat++ > 600 || (TNC->Streams[0].Connected && TNC->HeartBeat > 50))			// Every Minute unless connected
 		{
 			TNC->HeartBeat = 0;
 
@@ -398,8 +406,18 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				// Probe link
 
-				send(TNC->WINMORSock, "BUFFERS\r\n", 9, 0);
-				send(TNC->WINMORSock, "MODE\r\n", 6, 0);
+				if (TNC->Streams[0].Connecting || TNC->Streams[0].Connected)
+					send(TNC->WINMORSock, "MODE\r\n", 6, 0);
+				else
+				{
+					if (time(NULL) - TNC->WinmorRestartCodecTimer > 300)	// 5 mins
+					{
+						send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+						send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+					}
+					else
+						send(TNC->WINMORSock, "STATE\r\n", 7, 0);
+				}
 			}
 		}
 
@@ -455,7 +473,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
-		if (TNC->TimeSinceLast++ > 700)			// Allow 10 secs for Keepalive
+		if (TNC->TimeSinceLast++ > 800)			// Allow 10 secs for Keepalive
 		{
 			// Restart TNC
 		
@@ -746,7 +764,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					return 0;
 				}
 			}
-
 			if ((_memicmp(&buff[8], "BW 500", 6) == 0) || (_memicmp(&buff[8], "BW 1600", 7) == 0))
 			{
 				// Generate a local response
@@ -758,6 +775,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Winmor} OK\r");
 					C_Q_ADD(&TNC->WINMORtoBPQ_Q, buffptr);
 				}
+				TNC->WinmorCurrentMode = 0;			// So scanner will set next value
 			}
 
 			if (_memicmp(&buff[8], "CODEC TRUE", 9) == 0)
@@ -965,7 +983,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Scan->Bandwidth == 'W')		// Set Wide Mode
 		{
-			send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
+			if (TNC->WinmorCurrentMode != 1600)
+			{
+				send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
+				TNC->WinmorCurrentMode = 1600;
+			}
 			TNC->WL2KMode = 22;
 			return 0;
 
@@ -973,7 +995,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Scan->Bandwidth == 'N')		// Set Wide Mode
 		{
-			send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
+			if (TNC->WinmorCurrentMode != 500)
+			{
+				TNC->WinmorCurrentMode = 500;
+				send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
+			}
 			TNC->WL2KMode = 21;
 			return 0;
 		}
@@ -1025,8 +1051,9 @@ VOID SuspendOtherPorts(struct TNCINFO * ThisTNC)
 		if (TNC == ThisTNC)
 			continue;
 
-//		if (Interlock == TNC->Interlock)	// Same Group	
-//			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+		if (Interlock == TNC->Interlock)	// Same Group
+			if (TNC->SuspendPortProc)
+				TNC->SuspendPortProc(TNC);
 	}
 }
 
@@ -1049,10 +1076,24 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
 		if (TNC == ThisTNC)
 			continue;
 
-//		if (Interlock == TNC->Interlock)	// Same Group	
-//			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+		if (Interlock == TNC->Interlock)	// Same Group	
+			if (TNC->ReleasePortProc)
+				TNC->ReleasePortProc(TNC);
+
 	}
 }
+
+VOID WinmorSuspendPort(struct TNCINFO * TNC)
+{
+	send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+}
+
+VOID WinmorReleasePort(struct TNCINFO * TNC)
+{
+	send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+}
+
+
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
@@ -1144,6 +1185,9 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 236;
+
+	TNC->SuspendPortProc = WinmorSuspendPort;
+	TNC->ReleasePortProc = WinmorReleasePort;
 
 	TNC->ModemCentre = 1500;				// WINMOR is always 1500 Offset
 
@@ -1473,7 +1517,7 @@ VOID WINMORThread(port)
 		FD_SET(TNC->WINMORSock,&readfs);
 		FD_SET(TNC->WINMORSock,&errorfs);
 
-		timeout.tv_sec = 60;
+		timeout.tv_sec = 90;
 		timeout.tv_usec = 0;				// We should get messages more frequently that this
 
 		ret = select(TNC->WINMORSock + 1, &readfs, NULL, &errorfs, &timeout);
@@ -1608,6 +1652,21 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		TNC->TimeSinceLast = 0;
 	}
 
+
+	if (_memicmp(Buffer, "STATE ", 6) == 0)
+	{
+		Debugprintf(Buffer);
+	
+		if (_memicmp(&Buffer[6], "OFFLINE", 7) == 0)
+		{
+			// Force a restart
+
+			send(TNC->WINMORSock, "CODEC FALSE\r\n", 13, 0);
+			send(TNC->WINMORSock, "CODEC TRUE\r\n", 12, 0);
+		}
+		return;
+	}
+	
 	Buffer[MsgLen - 2] = 0;			// Remove CRLF
 
 	if (_memicmp(Buffer, "PTT T", 5) == 0)
@@ -1632,6 +1691,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		SetWindowText(TNC->xIDC_CHANSTATE, "Busy");
 		strcpy(TNC->WEB_CHANSTATE, "Busy");
+
+		TNC->WinmorRestartCodecTimer = time(NULL);
 		return;
 	}
 
@@ -1644,6 +1705,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			strcpy(TNC->WEB_CHANSTATE, "Clear");
 
 		SetWindowText(TNC->xIDC_CHANSTATE, TNC->WEB_CHANSTATE);
+		TNC->WinmorRestartCodecTimer = time(NULL);
 		return;
 	}
 
@@ -1984,6 +2046,8 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "NEWSTATE", 8) == 0)
 	{
+		TNC->WinmorRestartCodecTimer = time(NULL);
+
 		SetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[9]);
 
@@ -1997,7 +2061,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			TNC->DiscPending = 600;
 			return;
 		}
-		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)	// Save Pending state for scan control
+		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)
 		{
 			TNC->DiscPending = FALSE;
 			if (TNC->RestartAfterFailure)
@@ -2379,10 +2443,10 @@ int KillTNC(struct TNCINFO * TNC)
 	{
 	HANDLE hProc;
 
+	Debugprintf("KillTNC Called for Pid %d", TNC->WIMMORPID);
+
 	if (TNC->PTTMode)
 		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
-
-	if (TNC->WIMMORPID == 0) return 0;
 
 	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
 
@@ -2398,7 +2462,7 @@ int KillTNC(struct TNCINFO * TNC)
 	return 0;
 }
 
-RestartTNC(struct TNCINFO * TNC)
+BOOL RestartTNC(struct TNCINFO * TNC)
 {
 	if (TNC->ProgramPath == NULL)
 		return 0;
@@ -2444,6 +2508,8 @@ RestartTNC(struct TNCINFO * TNC)
 	}
 #ifndef LINBPQ
 	{
+		int n = 0;
+		
 		STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
 	    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 
@@ -2455,7 +2521,23 @@ RestartTNC(struct TNCINFO * TNC)
 		SInfo.cbReserved2=0; 
 	  	SInfo.lpReserved2=NULL; 
 
-		return CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
+		Debugprintf("RestartTNC Called for %s", TNC->ProgramPath);
+
+		while (KillOldTNC(TNC->ProgramPath) && n++ < 100)
+		{
+			Sleep(100);
+		}
+
+		if (CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+		{
+			Debugprintf("Restart TNC OK");
+			return TRUE;
+		}
+		else
+		{
+			Debugprintf("Restart TNC Failed %d ", GetLastError());
+			return FALSE;
+		}
 	}
 #endif
 	return 0;
@@ -2581,3 +2663,45 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 	}
 }
 
+BOOL KillOldTNC(char * Path)
+{
+	HANDLE hProc;
+	char ExeName[256] = "";
+	DWORD Pid = 0;
+
+    DWORD Processes[1024], Needed, Count;
+    unsigned int i;
+
+	if (EnumProcessesPtr == NULL)
+		return FALSE;
+
+    if (!EnumProcessesPtr(Processes, sizeof(Processes), &Needed))
+        return FALSE;
+    
+    // Calculate how many process identifiers were returned.
+
+    Count = Needed / sizeof(DWORD);
+
+    for (i = 0; i < Count; i++)
+    {
+        if (Processes[i] != 0)
+        {
+			hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, Processes[i]);
+	
+			if (hProc)
+			{
+				GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
+
+				if (_stricmp(ExeName, Path) == 0)
+				{
+					Debugprintf("Killing Pid %d %s", Processes[i], ExeName);
+					TerminateProcess(hProc, 0);
+					CloseHandle(hProc);
+					return TRUE;
+				}
+				CloseHandle(hProc);
+			}
+		}
+	}
+	return FALSE;
+}

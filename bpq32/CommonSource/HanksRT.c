@@ -7,13 +7,18 @@
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
 
-#ifdef LINBPQ
 
+#ifdef LINBPQ
 #include "CHeaders.h"
 #endif
 
 #include "bpqchat.h"
 
+#ifdef LINBPQ
+
+iconv_t link_toUTF8 = NULL;
+
+#endif
 
 VOID ChatClearQueue(ChatCIRCUIT * conn);
 VOID ChatFlush(ChatCIRCUIT * conn);
@@ -83,6 +88,62 @@ extern struct SEM OutputSEM;
 
 //#undef free
 //#define   free(p) 
+
+
+int ChatIsUTF8(unsigned char *ptr, int len)
+{
+	int n; 
+	unsigned char * cpt = ptr;
+
+	// This is simpler than the Term version, as it only handles complete lines of text, so cant get split sequences
+
+	cpt--;
+										
+	for (n = 0; n < len; n++)
+	{
+		cpt++;
+		
+		if (*cpt < 128)
+			continue;
+
+		if ((*cpt & 0xF8) == 0xF0)
+		{ // start of 4-byte sequence
+			if (((*(cpt + 1) & 0xC0) == 0x80)
+		     && ((*(cpt + 2) & 0xC0) == 0x80)
+			 && ((*(cpt + 3) & 0xC0) == 0x80))
+			{
+				cpt += 3;
+				n += 3;
+				continue;
+			}
+			return FALSE;
+	    }
+		else if ((*cpt & 0xF0) == 0xE0)
+		{ // start of 3-byte sequence
+	        if (((*(cpt + 1) & 0xC0) == 0x80)
+		     && ((*(cpt + 2) & 0xC0) == 0x80))
+			{
+				cpt += 2;
+				n += 2;
+				continue;
+			}
+			return FALSE;
+		}
+		else if ((*cpt & 0xE0) == 0xC0)
+		{ // start of 2-byte sequence
+	        if ((*(cpt + 1) & 0xC0) == 0x80)
+			{
+				cpt++;
+				n++;
+				continue;
+			}
+			return FALSE;
+		}
+		return FALSE;
+	}
+
+    return TRUE;
+}
 
 #ifndef LINBPQ
 
@@ -356,10 +417,60 @@ BOOL matchi(char * p1, char * p2)
 }
 
 
-VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
+VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffer, int len)
 {
 	ChatCIRCUIT *c;
+	char * Buffer = OrigBuffer;
+	WCHAR BufferW[65536];
+	UCHAR BufferB[65536];
 
+	// Convert to UTF8 if not already in UTF-8
+
+	if (ChatIsUTF8(OrigBuffer, len) == FALSE)
+	{
+		// With Windows it is simple - convert using current codepage
+		// I think the only reliable way is to convert to unicode and back
+
+#ifndef LINBPQ
+
+		int wlen;
+
+		wlen = MultiByteToWideChar(CP_ACP, 0, Buffer, len, BufferW, 65536); 
+		len = WideCharToMultiByte(CP_UTF8, 0, BufferW, wlen, BufferB, 63336, NULL, NULL); 
+		Buffer = BufferB;
+
+#else
+		int left = 65536;
+		UCHAR * BufferBP = BufferB;
+		struct user_t * icu = conn->u.user;
+
+		if (conn->rtcflags & p_user)
+		{
+			if (icu->iconv_toUTF8 == NULL)
+			{
+				icu->iconv_toUTF8 = iconv_open("UTF-8", icu->Codepage);
+			
+				if (icu->iconv_toUTF8 == (iconv_t)-1)
+					icu->iconv_toUTF8 = iconv_open("UTF-8", "CP1252");
+			}
+
+			iconv(icu->iconv_toUTF8, NULL, NULL, NULL, NULL);		// Reset State Machine
+			iconv(icu->iconv_toUTF8, &Buffer, &len, &BufferBP, &left);
+		}
+		else
+		{
+			if (link_toUTF8 == NULL)
+				link_toUTF8 = iconv_open("UTF-8", "CP1252");
+
+			iconv(link_toUTF8, NULL, NULL, NULL, NULL);		// Reset State Machine
+			iconv(link_toUTF8, &Buffer, &len, &BufferBP, &left);
+		}
+		len = 65536 - left;
+		Buffer = BufferB;
+
+#endif
+
+	}
 	WriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
 
 	if (conn->Flags & GETTINGUSER)
@@ -511,6 +622,97 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, i
 			conn->u.user->lastsendtime = time(NULL);
 			return;
 		}
+		if (_memicmp(&Buffer[1], "AUTOCHARSET", 4) == 0)
+		{
+			conn->u.user->rtflags ^= u_auto;
+			upduser(conn->u.user);
+			nprintf(conn, "Automatic Character set selection is %s\r",  (conn->u.user->rtflags & u_auto) ? "Enabled" : "Disabled");
+			conn->u.user->lastsendtime = time(NULL);
+			return;
+		}
+		if (_memicmp(&Buffer[1], "UTF-8", 3) == 0)
+		{
+			conn->u.user->rtflags ^= u_noUTF8;
+			upduser(conn->u.user);
+			nprintf(conn, "Character set is %s\r",  (conn->u.user->rtflags & u_noUTF8) ? "8 Bit" : "UTF-8");
+			conn->u.user->lastsendtime = time(NULL);
+			return;
+		}
+
+		if ((_memicmp(&Buffer[1], "CodePage", 2) == 0) || (_memicmp(&Buffer[1], "CP", 2) == 0))
+		{
+			char * Context;
+			char * CP = strtok_s(&Buffer[1], " ,\r", &Context);
+#ifdef LINBPQ
+			iconv_t temp = NULL;
+#else 
+			int temp = 0;
+			WCHAR TempW[10];
+#endif
+			CP  = strtok_s(NULL, " ,\r", &Context);
+			
+			if (CP == NULL || CP[0] == 0)
+			{
+#ifdef LINBPQ
+				if (conn->u.user->Codepage[0])
+					nprintf(conn, "Codepage is %s\r", conn->u.user->Codepage);
+#else
+				if (conn->u.user->Codepage)
+					nprintf(conn, "Codepage is %d\r", conn->u.user->Codepage);
+#endif
+				else
+					nprintf(conn, "Codepage is not set\r");
+
+				return;
+			}
+			_strupr(CP);
+
+#ifdef LINBPQ
+
+			// Validate Code Page by trying to open an iconv descriptor
+			
+			temp = iconv_open("UTF-8", CP);
+				
+			if (temp == (iconv_t)-1)
+			{
+				nprintf(conn, "Invalid Codepage %s\r", CP);
+				return;
+			}
+
+			iconv_close(conn->u.user->iconv_toUTF8);
+			iconv_close(conn->u.user->iconv_fromUTF8);
+
+			conn->u.user->iconv_toUTF8 = temp;
+			conn->u.user->iconv_fromUTF8 = iconv_open(CP, "UTF-8");
+
+			strcpy(conn->u.user->Codepage, CP);
+			nprintf(conn, "Codepage set to %s\r", conn->u.user->Codepage);
+#else
+			if (CP[0] == 'C')
+				CP +=2;
+
+			// Validate by trying ot use it
+
+			temp = atoi(CP);
+
+			if (MultiByteToWideChar(temp, 0, "\r", 2, TempW, 10) == 0)
+			{
+				int err = GetLastError();
+
+				if (err == ERROR_INVALID_PARAMETER)
+				{
+					nprintf(conn, "Invalid Codepage %d\r", temp);
+					return;
+				}
+			}
+
+			conn->u.user->Codepage = temp;
+			nprintf(conn, "Codepage set to %d\r", conn->u.user->Codepage);
+#endif
+			upduser(conn->u.user);
+
+			return;
+		}
 
 		if (_memicmp(&Buffer[1], "Shownames", 4) == 0)
 		{
@@ -595,7 +797,11 @@ void upduser(USER *user)
 		}
 	}
 
-	fprintf(out, "%s %d %s %s¬%d\n", user->call, user->rtflags, user->name, user->qth, user->Colour);
+#ifdef LINBPQ
+	fprintf(out, "%s %d %s %s¬%d¬%s\n", user->call, user->rtflags, user->name, user->qth, user->Colour, user->Codepage);
+#else
+	fprintf(out, "%s %d %s %s¬%d¬%d\n", user->call, user->rtflags, user->name, user->qth, user->Colour, user->Codepage);
+#endif
 	fclose(in);
 	fclose(out);
 
@@ -656,27 +862,64 @@ void rduser(USER *user)
 		strlop(buf, '\n');
 
 	    flags = strlop(buf, ' ');
-			if (!matchi(buf, user->call)) continue;
-			if (!flags) break;
+		if (!matchi(buf, user->call)) continue;
+		if (!flags) break;
 
-			name = strlop(flags, ' ');
-			user->rtflags = atoi(flags);
+		name = strlop(flags, ' ');
+		user->rtflags = atoi(flags);
 
-			qth = strlop(name, ' ');
-			strnew(&user->name, name);
+		qth = strlop(name, ' ');
+		strnew(&user->name, name);
 
-			if (!qth) break;
+		if (!qth) break;
+
+		// Colour Code may follow QTH, and Code Page may follow Colour
 			
-			ptr = strchr(qth, '¬');
+		ptr = strchr(qth, '¬');
+		if (ptr)
+		{
+			*ptr++ = 0;
+ 			user->Colour = atoi(ptr);
+
+			ptr = strchr(ptr, '¬');
+
 			if (ptr)
 			{
 				*ptr++ = 0;
- 				user->Colour = atoi(ptr);
+#ifdef LINBPQ
+ 				strcpy(user->Codepage, ptr);
+#else
+ 				user->Codepage = atoi(ptr);
+#endif
 			}
-			strnew(&user->qth,  qth);
-			break;
 		}
-		fclose(in);
+
+		strnew(&user->qth,  qth);
+		break;
+	}
+	fclose(in);
+
+#ifdef LINBPQ
+
+	// Open an iconv decriptor for each conversion
+
+	if (user->Codepage[0])
+		user->iconv_toUTF8 = iconv_open("UTF-8", user->Codepage);
+	else
+		user->iconv_toUTF8 = (iconv_t)-1;
+				
+	if (user->iconv_toUTF8 == (iconv_t)-1)
+		user->iconv_toUTF8 = iconv_open("UTF-8", "CP1252");
+		
+
+	if (user->Codepage[0])
+		user->iconv_fromUTF8 = iconv_open(user->Codepage, "UTF-8");
+	else
+		user->iconv_fromUTF8 = (iconv_t)-1;
+
+	if (user->iconv_fromUTF8 == (iconv_t)-1)
+		user->iconv_fromUTF8 = iconv_open("CP1252", "UTF-8");
+#endif
 	}
 }
 
@@ -1403,6 +1646,53 @@ static void text_xmit(USER *user, USER *to, char *text)
 
 void put_text(ChatCIRCUIT * circuit, USER * user, UCHAR * buf)
 {
+	UCHAR BufferB[4096];
+
+	// Text is UTF-8 internally. If use doen't want UTF-8. convert to Node's locale
+
+	if (circuit->u.user->rtflags & u_noUTF8)
+	{
+#ifndef LINBPQ
+		char * Buffer = buf;
+		WCHAR BufferW[4096];
+		int wlen, blen;
+		BOOL DefaultUsed = FALSE;
+		char Subst = '?';
+
+		wlen = MultiByteToWideChar(CP_UTF8, 0, buf, strlen(buf) + 1, BufferW, 4096); 
+		blen = WideCharToMultiByte(circuit->u.user->Codepage, 0, BufferW, wlen, BufferB + 2, 4096, &Subst, &DefaultUsed); 
+
+		if (blen == 0)				// Probably means invalid code page
+			blen = WideCharToMultiByte(CP_ACP, 0, BufferW, wlen, BufferB + 2, 4096, &Subst, &DefaultUsed); 
+
+		buf = BufferB + 2;
+		BufferB[blen + 2] = 0;
+#else
+
+		int left = 4096;
+		UCHAR * BufferBP = BufferB;
+		int len = strlen(buf) + 1;
+		struct user_t * icu = circuit->u.user;
+
+		if (icu->iconv_fromUTF8 == NULL)
+		{
+			icu->iconv_fromUTF8 = iconv_open(icu->Codepage, "UTF-8");
+		
+			if (icu->iconv_fromUTF8 == (iconv_t)-1)
+				icu->iconv_fromUTF8 = iconv_open("CP1252", "UTF-8");
+		}
+
+		iconv(icu->iconv_fromUTF8, NULL, NULL, NULL, NULL);		// Reset State Machine
+		iconv(icu->iconv_fromUTF8, &buf, &len, &BufferBP, &left);
+
+		len = 4096 - left;
+		buf = BufferB;
+
+#endif
+
+	}
+
+
 	if (circuit->u.user->rtflags & u_colour)	// Use Colour
 	{
 		// Put a colour header on message
@@ -1414,6 +1704,8 @@ void put_text(ChatCIRCUIT * circuit, USER * user, UCHAR * buf)
 	}	
 	else	
 		nputs(circuit, buf);
+
+
 
 	circuit->u.user->lastsendtime = time(NULL);
 }
@@ -1638,6 +1930,12 @@ static void user_leave(USER *user)
 			free(t->name);
 			free(t->call);
 			free(t->qth);
+#ifdef LINBPQ
+			if (t->iconv_fromUTF8)
+				iconv_close(t->iconv_fromUTF8);
+			if (t->iconv_toUTF8)
+				iconv_close(t->iconv_toUTF8);
+#endif
 			free(t);
 			break;
 		}
@@ -2328,6 +2626,12 @@ int rt_cmd(ChatCIRCUIT *circuit, char * Buffer)
 				(user->rtflags & u_keepalive) ? "Enabled" : "Disabled");
 			nprintf(circuit, "/ShowNames - Toggle displaying name as well as call on each message - %s\r",
 				(user->rtflags & u_shownames) ? "Enabled" : "Disabled");
+			nprintf(circuit, "/Auto - Toggle Automatic character set selection - %s.\r",
+				(user->rtflags & u_auto) ? "Enabled" : "Disabled");
+			nprintf(circuit, "/UTF-8 - Character set Selection - %s.\r",
+				(user->rtflags & u_noUTF8) ? "8 Bit" : "UTF-8");
+			nprintf(circuit, "/UTF-8 - Character set Selection - %s.\r",
+				(user->rtflags & u_noUTF8) ? "8 Bit" : "UTF-8");
 			nprintf(circuit, "/Time - Toggle displaying timestamp on each message - %s.\r",
 				(user->rtflags & u_showtime) ? "Enabled" : "Disabled");
 			nputs(circuit, "/S CALL Text - Send Text to that station only.\r");
@@ -2510,14 +2814,16 @@ VOID ChatTimer()
 {
 	// Entered every 10 seconds
 
-	int	i = 0, len;
+	int	i = 0;
+#ifndef LINBPQ
+	int	len;
 	CHATNODE *node;
 	ChatCIRCUIT *c;
 	TOPIC *topic;
 	USER *user;
 	time_t NOW = time(NULL);
 	char Msg[256];
-
+#endif
 	GetSemaphore(&ChatSemaphore);
 
 	if (NeedStatus)
@@ -3461,7 +3767,6 @@ VOID SendChatReport(SOCKET ChatReportSocket, char * buff, int txlen)
 	sendto(ChatReportSocket, buff, txlen, 0, (LPSOCKADDR)&Chatreportdest, sizeof(Chatreportdest));
 
 }
-
 
 
 #endif

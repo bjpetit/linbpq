@@ -873,8 +873,42 @@ int Do_User_Sel_Changed(HWND hDlg)
 			struct tm *tm;
 			char Date[80];
 			char * Dateptr;
-			int i, s;
+			int i, n, s;
 			char SSID[10];
+
+			int	ConnectsIn;
+			int ConnectsOut;
+			int MsgsReceived;
+			int MsgsSent;
+			int MsgsRejectedIn;
+			int MsgsRejectedOut;
+			int BytesForwardedIn;
+			int BytesForwardedOut;
+			char MsgsIn[80];
+			char MsgsOut[80];
+			char BytesIn[80];
+			char BytesOut[80];
+			char RejIn[80];
+			char RejOut[80];
+
+			i = 0;
+
+			ConnectsIn = user->Total.ConnectsIn - user->Last.ConnectsIn;
+			ConnectsOut = user->Total.ConnectsOut - user->Last.ConnectsOut;
+
+			MsgsReceived = MsgsSent = MsgsRejectedIn = MsgsRejectedOut = BytesForwardedIn = BytesForwardedOut = 0;
+
+			for (n = 0; n < 4; n++)
+			{
+				MsgsReceived +=	user->Total.MsgsReceived[n] - user->Last.MsgsReceived[n];	
+				MsgsSent += user->Total.MsgsSent[n] - user->Last.MsgsSent[n];
+				BytesForwardedIn += user->Total.BytesForwardedIn[n] - user->Last.BytesForwardedIn[n];
+				BytesForwardedOut += user->Total.BytesForwardedOut[n] - user->Last.BytesForwardedOut[n];
+				MsgsRejectedIn += user->Total.MsgsRejectedIn[n] - user->Last.MsgsRejectedIn[n];
+				MsgsRejectedOut += user->Total.MsgsRejectedOut[n] - user->Last.MsgsRejectedOut[n];
+			}
+
+
 
 			SetDlgItemText(hDlg, IDC_NAME, user->Name);
 			SetDlgItemText(hDlg, IDC_PASSWORD, user->pass);
@@ -893,17 +927,18 @@ int Do_User_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_POLLRMS, (user->flags & F_POLLRMS));
 			CheckDlgButton(hDlg, IDC_SYSOP_IN_LM, (user->flags & F_SYSOP_IN_LM));
 			CheckDlgButton(hDlg, RMS_EXPRESS_USER, (user->flags & F_Temp_B2_BBS));
+			CheckDlgButton(hDlg, NO_WINLINKdotORG, (user->flags & F_NOWINLINK));
 			
 			EnableWindow(GetDlgItem(hDlg, IDC_SYSOP_IN_LM), user->flags & F_SYSOP);
 
-			SetDlgItemInt(hDlg, CONN_IN, user->nbcon, FALSE);
-			SetDlgItemInt(hDlg, CONN_OUT, user->ConnectsOut, FALSE);
-			SetDlgItemInt(hDlg, MSGS_IN, user->MsgsReceived, FALSE);
-			SetDlgItemInt(hDlg, MSGS_OUT, user->MsgsSent, FALSE);
-			SetDlgItemInt(hDlg, REJECTS_IN, user->MsgsRejectedIn, FALSE);
-			SetDlgItemInt(hDlg, REJECTS_OUT, user->MsgsRejectedOut, FALSE);
-			SetDlgItemInt(hDlg, BYTES_IN, user->BytesForwardedIn, FALSE);
-			SetDlgItemInt(hDlg, BYTES_OUT, user->BytesForwardedOut, FALSE);
+			SetDlgItemInt(hDlg, CONN_IN, ConnectsIn, FALSE);
+			SetDlgItemInt(hDlg, CONN_OUT, ConnectsOut, FALSE);
+			SetDlgItemInt(hDlg, MSGS_IN, MsgsReceived, FALSE);
+			SetDlgItemInt(hDlg, MSGS_OUT, MsgsSent, FALSE);
+			SetDlgItemInt(hDlg, REJECTS_IN, MsgsRejectedIn, FALSE);
+			SetDlgItemInt(hDlg, REJECTS_OUT, MsgsRejectedOut, FALSE);
+			SetDlgItemInt(hDlg, BYTES_IN, BytesForwardedIn, FALSE);
+			SetDlgItemInt(hDlg, BYTES_OUT, BytesForwardedOut, FALSE);
 
 /*
 			for (i = 0; i < 3; i++)
@@ -1150,6 +1185,9 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	if (IsDlgButtonChecked(hDlg, RMS_EXPRESS_USER))
 		user->flags |= F_Temp_B2_BBS; else user->flags &= ~F_Temp_B2_BBS;
+
+	if (IsDlgButtonChecked(hDlg, NO_WINLINKdotORG))
+		user->flags |= F_NOWINLINK; else user->flags &= ~F_NOWINLINK;
 
 //	if (user->flags & F_BBS)
 //		user->flags &= ~F_Temp_B2_BBS;		// Can't be both
@@ -3283,7 +3321,6 @@ GetUIConfig()
 {
 	int Num = GetNumberofPorts();
 	int i, Len;
-	char Key[80];
 
 	Free_UI();
 
@@ -3306,7 +3343,7 @@ GetUIConfig()
 SaveUIConfig()
 {
 	int Num = GetNumberofPorts();
-	int i, Len, retCode, disp;
+	int i, retCode, disp;
 	char Key[80];
 	HKEY hKey;
 

@@ -293,7 +293,7 @@ BOOL CreateConsole(int Stream)
 	}
 
 	time(&user->TimeLastConnected);
-	user->nbcon++;
+	user->Total.ConnectsIn++;
 
 	Cinfo->Console->UserPointer = user;
 	Cinfo->Console->lastmsg = user->lastmsg;

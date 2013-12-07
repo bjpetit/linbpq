@@ -51,8 +51,9 @@ BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
 VOID SENDSABM(struct _LINKTABLE * LINK);
 BOOL FindLink(UCHAR * LinkCall, UCHAR * OurCall, int Port, struct _LINKTABLE ** REQLINK);
 BOOL ProcessConfig();
+VOID RemoveARP(PARPDATA Arp);
 
-#define ARPTIMEOUT 86400
+#define ARPTIMEOUT 3600
 
 //       ARP REQUEST (AX.25)
 
@@ -130,14 +131,19 @@ int ARPFlag = -1;
 
 // Also used to reassemble NOS Fragmented ax.25 packets
 
-static UCHAR Buffer[1630] = {0};
+static UCHAR Buffer[4096] = {0};
 
 #define EthOffset 30				// Should be plenty
 
 DWORD IPLen = 0;
 
 UCHAR QST[7]={'Q'+'Q','S'+'S','T'+'T',0x40,0x40,0x40,0xe0};		//QST IN AX25
+
+#ifdef WIN32
+UCHAR ourMACAddr[6] = {02,'B','P','Q',0,2};
+#else
 UCHAR ourMACAddr[6] = {02,'B','P','Q',0,1};
+#endif
 
 ULONG DefaultIPAddr = 0;
 
@@ -239,9 +245,9 @@ Dll BOOL APIENTRY Init_IP()
 	AXARPREQMSG.HWTYPE=0x0300;				//	AX25
 	memcpy(AXARPREQMSG.MSGHDDR.DEST, QST, 7);
 	memcpy(AXARPREQMSG.MSGHDDR.ORIGIN, MYCALL, 7);
-	AXARPREQMSG.MSGHDDR.ORIGIN[6] |= 1;			// Set End of Call
+	AXARPREQMSG.MSGHDDR.ORIGIN[6] |= 1;		// Set End of Call
 	AXARPREQMSG.MSGHDDR.PID = 0xcd;			// ARP
-	AXARPREQMSG.MSGHDDR.CTL = 03;				// UI
+	AXARPREQMSG.MSGHDDR.CTL = 03;			// UI
 
 	AXARPREQMSG.PID=0xcc00;					// TYPE
 	AXARPREQMSG.HWTYPE=0x0300;	
@@ -435,6 +441,12 @@ Pollloop:
 		{
 			PETHMSG ethptr = (PETHMSG)&Buffer[EthOffset];
 
+			if (header->len > 1514)
+			{
+				Debugprintf("Ether Packet Len = %d", header->len);
+				header->len = 1514;
+			}
+
 			memcpy(&Buffer[EthOffset],pkt_data, header->len);
 
 			if (ethptr->ETYPE == 0x0008)
@@ -566,8 +578,10 @@ PollTAPloop:
 		// Packet from AX.25
 
 		if (CompareCalls(axmsg->ORIGIN, MYCALL))
+		{
+			ReleaseBuffer(axmsg);
 			return 0;				// Echoed packet
-
+		}
 		switch (axmsg->PID)
 		{
 		case  0xcc:
@@ -941,12 +955,27 @@ AlreadyThere:
 		if ((arpptr->TARGETIPADDR & OurNetMask) == (OurIPAddr & OurNetMask))
 			return;
 
+		// Should't we just reply if we know it ?? (Proxy ARP)
+
 		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
 
 		if (Found)
-			if (Arp->ARPVALID && (Arp->ARPTYPE == 'E')) return;
+		{
+			if (Arp->ARPVALID && (Arp->ARPTYPE == 'E'))
+				return;				// On LAN, so should reply direct
 
-		// Send to all other ports enabled for IP, reformatting as necessary
+			ETHARPREQMSG.TARGETIPADDR = arpptr->SENDIPADDR;
+			ETHARPREQMSG.ARPOPCODE = 0x0200;	// Reply
+			ETHARPREQMSG.SENDIPADDR = arpptr->TARGETIPADDR;
+					
+			memcpy(ETHARPREQMSG.SENDHWADDR,ourMACAddr, 6);
+			memcpy(ETHARPREQMSG.MSGHDDR.DEST, arpptr->SENDHWADDR, 6);
+
+			Send_ETH(&ETHARPREQMSG, 42);
+			return;
+		}
+
+		// Not in our cache, so send to all other ports enabled for IP, reformatting as necessary
 
 		AXARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
 		AXARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
@@ -1003,7 +1032,7 @@ SendBack:
 			if (Arp->ARPINTERFACE == 255)
 			{
 				ETHARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
-				ETHARPREQMSG.ARPOPCODE = 0x0200;		//             ; REQUEST
+				ETHARPREQMSG.ARPOPCODE = 0x0200;	// Reply
 				ETHARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
 					
 				memcpy(ETHARPREQMSG.SENDHWADDR,ourMACAddr, 6);
@@ -1015,7 +1044,7 @@ SendBack:
 			else
 			{
 				AXARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
-				AXARPREQMSG.ARPOPCODE = 0x0200;		//             ; REQUEST
+				AXARPREQMSG.ARPOPCODE = 0x0200;		// Reply
 				AXARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
 
 				memcpy(AXARPREQMSG.SENDHWADDR, MYCALL, 7);
@@ -1084,10 +1113,36 @@ AlreadyThere:
 			Send_AX_Datagram((PMESSAGE)arpptr, 46, arpptr->MSGHDDR.PORT, arpptr->MSGHDDR.ORIGIN);
 
 			return;
-
 		}
 
-		// Send to all other ports enabled for IP, reformatting as necessary
+		// Should't we just reply if we know it ?? (Proxy ARP)
+
+		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
+
+		if (Found)
+		{
+			// if Trarget is the station we got the request from, there is a loop
+			// KIll the ARP entry, and ignore
+
+			if (memcmp(Arp->HWADDR, arpptr->SENDHWADDR, 7) == 0)
+			{
+				RemoveARP(Arp);
+				return;
+			}
+
+			AXARPREQMSG.ARPOPCODE = 0x0200;		// Reply
+			AXARPREQMSG.TARGETIPADDR = arpptr->SENDIPADDR;
+			AXARPREQMSG.SENDIPADDR = arpptr->TARGETIPADDR;
+
+			memcpy(AXARPREQMSG.SENDHWADDR, MYCALL, 7);
+			memcpy(AXARPREQMSG.TARGETHWADDR, arpptr->SENDHWADDR, 7);
+
+			Send_AX_Datagram((PMESSAGE)&AXARPREQMSG, 46, arpptr->MSGHDDR.PORT, arpptr->SENDHWADDR);
+
+			return;
+		}
+
+		// Not in our cache, so send to all other ports enabled for IP, reformatting as necessary
 	
 		AXARPREQMSG.ARPOPCODE = 0x0100;
 		AXARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
@@ -1149,7 +1204,7 @@ SendBack:
 		{
 			if (Arp->ARPINTERFACE == 255)
 			{
-				ETHARPREQMSG.ARPOPCODE = 0x0200;		//             ; REQUEST
+				ETHARPREQMSG.ARPOPCODE = 0x0200;	// Reply
 
 				ETHARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
 				ETHARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
@@ -1161,9 +1216,9 @@ SendBack:
 				Send_ETH(&ETHARPREQMSG, 42);
 				return;
 			}
-				else
+			else
 			{
-				AXARPREQMSG.ARPOPCODE = 0x0200;		//             ; Reply
+				AXARPREQMSG.ARPOPCODE = 0x0200;		// Reply
 
 				AXARPREQMSG.TARGETIPADDR = arpptr->TARGETIPADDR;
 				AXARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
@@ -2515,18 +2570,22 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 	if (IPRequired == FALSE)
 	{
-		Bufferptr += sprintf(Bufferptr, "IP Gatewayy is not enabled\r");
+		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
 	}
 
 	if (memcmp(CmdTail, "CLEAR ", 6) == 0)
 	{
-		for (i=0; i < NumberofARPEntries; i++)
+		for (i = NumberofARPEntries -1; i >= 0; i--)
 		{
-			RemoveARP(ARPRecords[i]);
+			free(ARPRecords[i]);
 		}
-		
+
+		free(ARPRecords);
+
+		NumberofARPEntries = 0;
+
 		Bufferptr += sprintf(Bufferptr, "OK\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 

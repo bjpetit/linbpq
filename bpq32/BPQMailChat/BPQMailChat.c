@@ -796,6 +796,13 @@
 
 
 
+//  Change control of appending winlink.org to RMS Express or Paclink addresses to a user flag
+//	Lookup HomeBBS and WP for calls without a via received from RMS Express or Paclink 
+//	Treat call@bpq as request to look up address in Home BBS/WP for messages received from RMS Express or Paclink 
+//	Collect stats by message type
+//	Fix Non-Delivery notifications to SMTP messages
+
+
 
 
 // Use Windows Sound Events for (Chat "user join" alert)
@@ -1187,7 +1194,7 @@ void FreeSemaphore(struct SEM * Semaphore)
 	return; 
 }
 
-
+char * CmdLine;
 
 int APIENTRY WinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
@@ -1204,6 +1211,9 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int i = 60;
 	struct NNTPRec * NNTPREC;
 	struct NNTPRec * SaveNNTPREC;
+
+	CmdLine = _strdup(lpCmdLine);
+	_strlwr(CmdLine);
 
 	if (_stricmp(lpCmdLine, "Wait") == 0)				// If AutoRestart then Delay 60 Secs
 	{	
@@ -2466,8 +2476,13 @@ BOOL Initialise()
 	int Attrs, ret;
 	char msg[500];
 	char ProgramDir[MAX_PATH];
+	TIME_ZONE_INFORMATION TimeZoneInformation;
 
+	GetTimeZoneInformation(&TimeZoneInformation);
+
+	_tzset();
 	_MYTIMEZONE = timezone;
+	_MYTIMEZONE = TimeZoneInformation.Bias * 60;
 
 	//	Register message for posting by BPQDLL
 
@@ -2756,6 +2771,9 @@ BOOL Initialise()
 			}
 		}
 	}
+
+	if (strstr(CmdLine, "tidymail"))
+		DeleteRedundantMessages();
 
 	CheckMenuItem(hMenu,IDM_LOGBBS, (LogBBS) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_LOGTCP, (LogTCP) ? MF_CHECKED : MF_UNCHECKED);

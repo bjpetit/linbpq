@@ -102,6 +102,8 @@ struct TCPINFO
 	int RelayPort;
 	int HTTPPort;
 	int CMDPort[33];
+	char RELAYHOST[64];
+	BOOL FallbacktoRelay;		// Use Relsy if can't connect to CMS
 
 	BOOL IPV4;					// Allow Connect using IPV4
 	BOOL IPV6;					// Allow Connect using IPV6
@@ -527,6 +529,16 @@ typedef struct TNCINFO
 
 	HMENU hMenu;
 	HMENU hWndMenu;
+
+	VOID (FAR * PORTTXROUTINE)();
+
+	VOID (* SuspendPortProc) ();
+	VOID (* ReleasePortProc) ();
+
+	time_t WinmorRestartCodecTimer;
+	int WinmorCurrentMode;
+
+
 } *PTNCINFO;
 
 VOID * zalloc(int len);

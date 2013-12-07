@@ -225,10 +225,10 @@ BEGIN
                     -1,10,60,360,25
 END
 
-IDD_USEREDIT DIALOGEX 20, 20, 249, 261
+IDD_USEREDIT DIALOGEX 20, 20, 308, 261
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit User"
-FONT 8, "System", 0, 0, 0x1
+FONT 8, "System"
 BEGIN
     COMBOBOX        5000,7,7,57,88,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
                     WS_VSCROLL | WS_TABSTOP
@@ -271,24 +271,26 @@ BEGIN
                     BS_VCENTER
     PUSHBUTTON      "Delete user",5101,100,240,42,14,BS_CENTER | BS_VCENTER
     PUSHBUTTON      "Save",5102,145,240,42,14,BS_CENTER | BS_VCENTER
-    LTEXT           "Connects in",IDC_STATIC,10,100,45,10
-    LTEXT           "Connects out",IDC_STATIC,10,111,45,10
-    LTEXT           "0",CONN_IN,57,100,26,10,0,WS_EX_RIGHT
-    LTEXT           "0",CONN_OUT,57,111,26,10,0,WS_EX_RIGHT
-    LTEXT           "Msgs in",IDC_STATIC,87,100,35,10
-    LTEXT           "Msgs out",IDC_STATIC,87,111,35,10
-    LTEXT           "0",MSGS_IN,125,100,26,10,0,WS_EX_RIGHT
-    LTEXT           "0",MSGS_OUT,125,111,26,10,0,WS_EX_RIGHT
-    LTEXT           "Rejects in",IDC_STATIC,159,100,35,10
-    LTEXT           "Rejects out",IDC_STATIC,159,111,40,10
-    LTEXT           "0",REJECTS_IN,201,100,26,10,0,WS_EX_RIGHT
-    LTEXT           "0",REJECTS_OUT,201,111,26,10,0,WS_EX_RIGHT
-    LTEXT           "Bytes out",IDC_STATIC,10,133,35,10
-    LTEXT           "",BYTES_OUT,45,133,38,10,0,WS_EX_RIGHT
-    LTEXT           "Bytes in",IDC_STATIC,10,122,35,10
-    LTEXT           "0",BYTES_IN,45,122,38,10,0,WS_EX_RIGHT
-    LTEXT           "Last Connect",IDC_STATIC,87,122,45,10
-    LTEXT           "Never",LASTCONNECT,134,122,93,10
+    LTEXT           "Connects in",IDC_STATIC,10,107,45,10
+    LTEXT           "Connects out",IDC_STATIC,10,118,45,10
+    LTEXT           "0",CONN_IN,57,107,26,10,0,WS_EX_RIGHT
+    LTEXT           "0",CONN_OUT,57,118,26,10,0,WS_EX_RIGHT
+    LTEXT           "Msgs in",IDC_STATIC,87,107,35,10
+    LTEXT           "Msgs out",IDC_STATIC,87,118,35,10
+    LTEXT           "0",MSGS_IN,125,107,26,10,0,WS_EX_RIGHT
+    LTEXT           "0",MSGS_OUT,125,118,26,10,0,WS_EX_RIGHT
+    LTEXT           "Rejects in",IDC_STATIC,159,107,35,10
+    LTEXT           "Rejects out",IDC_STATIC,159,118,40,10
+    LTEXT           "0",REJECTS_IN,201,107,26,10,0,WS_EX_RIGHT
+    LTEXT           "0",REJECTS_OUT,201,118,26,10,0,WS_EX_RIGHT
+    LTEXT           "Bytes out",IDC_STATIC,10,140,35,10
+    LTEXT           "",BYTES_OUT,45,140,38,10,0,WS_EX_RIGHT
+    LTEXT           "Bytes in",IDC_STATIC,10,129,35,10
+    LTEXT           "0",BYTES_IN,45,129,38,10,0,WS_EX_RIGHT
+    LTEXT           "Last Connect",IDC_STATIC,87,129,45,10
+    LTEXT           "Never",LASTCONNECT,134,129,93,10
+    CONTROL         "Don't add @winlink.org",NO_WINLINKdotORG,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFT | WS_TABSTOP,153,57,100,10
 END
 
 ISP_CONFIG DIALOG DISCARDABLE  26, 5, 381, 266
@@ -995,7 +997,7 @@ BEGIN
 
     IDD_USEREDIT, DIALOG
     BEGIN
-        RIGHTMARGIN, 234
+        RIGHTMARGIN, 293
     END
 
     IDD_FORWARDING, DIALOG

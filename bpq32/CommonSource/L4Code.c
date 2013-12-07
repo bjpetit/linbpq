@@ -1179,11 +1179,9 @@ VOID CONNECTREQUEST(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, UINT Appl
 	int CONERROR;
 	int Index;
 
-	memcpy(BPQPARAMS, &L4T1, 2);		// SET DEFAULT T1 IN CASE NOT FROM ANOTHER THENODE
+	memcpy(BPQPARAMS, &L4T1, 2);	// SET DEFAULT T1 IN CASE NOT FROM ANOTHER BPQ NODE
 
-	BPQPARAMS[2] = 0;			// 'SPY' NOT SET
-	
-		
+	BPQPARAMS[2] = 0;				// 'SPY' NOT SET
 										
 	if (FINDCIRCUIT(L3MSG, &L4, &Index))
 	{
@@ -1344,6 +1342,23 @@ int FINDCIRCUIT(L3MESSAGEBUFFER * L3MSG, TRANSPORTENTRY ** REQL4, int * NewIndex
 		}
 
 		DEST = L4->L4TARGET.DEST;
+
+		if (DEST == NULL)
+		{
+			// L4 entry without a Dest shouldn't happen. (I don't think!)
+
+			char Call1[12], Call2[12];
+
+			Call1[ConvFromAX25(L4->L4USER, Call1)] = 0;
+			Call2[ConvFromAX25(L4->L4MYCALL, Call2)] = 0;
+
+			Debugprintf("L4 entry without Target. Type = %02x Calls %s %s",
+				L4->L4CIRCUITTYPE, Call1, Call2);
+
+			L4++;
+			Index++;
+			continue;
+		}
 		
 		if (CompareCalls(L3MSG->L3SRCE, DEST->DEST_CALL))
 		{
@@ -1532,6 +1547,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 	int FramesMissing;
 	L3MESSAGEBUFFER * Saved;
 	L3MESSAGEBUFFER ** Prev;
+	char Call[10];
 
 	L4FRAMESRX++;
 
@@ -1541,7 +1557,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 	{
 	case 0:
 
-		//	OPCODE 0 is used for a variety of functions, using L4INDEX and L4ID as sualifiers
+		//	OPCODE 0 is used for a variety of functions, using L4INDEX and L4ID as qualifiers
 		//	0c0c is used for IP
 
 		if (L3MSG->L4ID == 0x0C && L3MSG->L4INDEX == 0x0C)
@@ -1711,12 +1727,14 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 		if (FramesMissing > 128)
 			FramesMissing -= 256;
 
-
 		// if NUMBER OF FRAMES MISSING is  -VE, THEN IN FACT IT	INDICATES A REPEAT
 
 		if (FramesMissing < 0)
 		{
 			// FRAME IS A REPEAT
+
+			Call[ConvFromAX25(L3MSG->L3SRCE, Call)] = 0;
+			Debugprintf("Discarding repeated frame seq %d from %s", L3MSG->L4TXNO, Call);
 
 			L4->L4ACKREQ = 1;
 			ReleaseBuffer(L3MSG);
@@ -1734,10 +1752,10 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 	
 			//	SEE IF WE ALREADY HAVE A COPY OF THIS ONE
 
-
 			Saved = L4->L4RESEQ_Q;
 
-			Debugprintf("saving seq %d ", L3MSG->L4TXNO);
+			Call[ConvFromAX25(L3MSG->L3SRCE, Call)] = 0;
+			Debugprintf("saving seq %d from %s", L3MSG->L4TXNO, Call);
 
 			while (Saved)
 			{
@@ -1745,6 +1763,7 @@ VOID FRAMEFORUS(struct _LINKTABLE * LINK, L3MESSAGEBUFFER * L3MSG, int ApplMask)
 				{
 					//	ALREADY HAVE A COPY - DISCARD IT
 			
+					Debugprintf("Already have seq %d - discarding", L3MSG->L4TXNO);
 					ReleaseBuffer(L3MSG);
 					return;
 				}
@@ -1792,7 +1811,6 @@ L4INFO_OK:
 
 		// See if anything on reseq Q to process
 
-
 		if (L4->L4RESEQ_Q == 0)
 			return;
 
@@ -1810,9 +1828,11 @@ L4INFO_OK:
 				OLDFRAMES++;			// COUNT FOR STATS
 	
 				L3MSG = Saved;
-				Debugprintf("Preoccessing Saved Message %d Address %x", L4->RXSEQNO, L3MSG);
+				Debugprintf("Processing Saved Message %d Address %x", L4->RXSEQNO, L3MSG);
 				goto L4INFO_OK;
 			}
+
+			Debugprintf("Message %d %x still on Reseq Queue", Saved->L4TXNO, Saved);
 
 			Prev = &Saved;
 			Saved = Saved->Next;

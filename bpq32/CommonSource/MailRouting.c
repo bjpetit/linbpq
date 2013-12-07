@@ -1101,8 +1101,8 @@ NOHA:
 
 		// Check for wildcarded AT address
 
-		if (ATBBS[0] == 0)
-			return FALSE;			// no AT
+//		if (ATBBS[0] == 0)
+//			return FALSE;			// no AT
 
 		depth = 0;
 		bestmatch = -1;

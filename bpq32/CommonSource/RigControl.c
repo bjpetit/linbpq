@@ -74,6 +74,7 @@ VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
 
 VOID SetupPortRIGPointers();
+VOID PTTCATThread(struct RIGINFO *RIG);
 
 int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length);
 int GetPTCRadioCommand(struct TNCINFO * TNC, char * Block);
@@ -84,8 +85,10 @@ HANDLE hInstance;
 VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset); 
 BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 
+char * GetApplCallFromName(char * App);
 
-char Modes[8][6] = {"LSB",  "USB", "AM", "CW", "RTTY", "FM", "WFM", "????"};
+char Modes[20][6] = {"LSB",  "USB", "AM", "CW", "RTTY", "FM", "WFM", "CW-R", "RTTY-R",
+					"????","????","????","????","????","????","????","????","DV", "????",};
 
 //							0		1	  2		3	   4	5	6	7	8	9		0A  0B    0C    88
 
@@ -105,6 +108,8 @@ char AuthPassword[100] = "";
 char LastPassword[17];
 
 int NumberofPorts = 0;
+
+BOOL EndPTTCATThread = FALSE;
 
 struct RIGPORTINFO * PORTInfo[34] = {NULL};		// Records are Malloc'd
 
@@ -170,43 +175,28 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 		switch (PORT->PortType)
 		{
 		case ICOM:
-
-			*(Poll++) = 0xFE;
-			*(Poll++) = 0xFE;
-			*(Poll++) = RIG->RigAddr;
-			*(Poll++) = 0xE0;
-			*(Poll++) = 0x1C;		// RIG STATE
-			*(Poll++) = 0x00;		// PTT
-			*(Poll++) = PTTState;	// OFF/ON
-
-			*(Poll++) = 0xFD;
-	
-			PORT->TXLen = 8;
-			RigWriteCommBlock(PORT);
-
-			PORT->Retries = 1;
-
-			return;
-
 		case KENWOOD:
 		case FT2000:
 		case FLEX:
 
 			if (PTTState)
 			{
-				strcpy(Poll, RIG->PTTOn);
+				memcpy(Poll, RIG->PTTOn, RIG->PTTOnLen);
 				PORT->TXLen = RIG->PTTOnLen;
 			}
 			else
 			{
-				strcpy(Poll, RIG->PTTOff);
+				memcpy(Poll, RIG->PTTOff, RIG->PTTOffLen);
 				PORT->TXLen = RIG->PTTOffLen;
 			}
 
 			RigWriteCommBlock(PORT);
 
 			PORT->Retries = 1;
-			PORT->Timeout = 0;
+			
+			if (PORT->PortType != ICOM)
+				PORT->Timeout = 0;
+			
 			return;
 
 		case FT100:
@@ -527,6 +517,7 @@ portok:
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
+		FreqPtr->Dwell = 51;
 
 		CmdPtr = FreqPtr->Cmd1 = (UCHAR *)&buffptr[20];
 		FreqPtr->Cmd2 = NULL;
@@ -958,9 +949,9 @@ DllExport BOOL APIENTRY Rig_Init()
 		if (PORT->PTTIOBASE[0])		// Using separare port for PTT?
 		{
 			if (PORT->PTTIOBASE[3] == '=')
-				PORT->hPTTDevice = OpenCOMPort(&PORT->PTTIOBASE[4], PORT->SPEED, FALSE, FALSE, FALSE);
+				PORT->hPTTDevice = OpenCOMPort(&PORT->PTTIOBASE[4], PORT->SPEED, FALSE, FALSE, FALSE, 0);
 			else
-				PORT->hPTTDevice = OpenCOMPort(&PORT->PTTIOBASE[3], PORT->SPEED, FALSE, FALSE, FALSE);
+				PORT->hPTTDevice = OpenCOMPort(&PORT->PTTIOBASE[3], PORT->SPEED, FALSE, FALSE, FALSE, 0);
 		}
 		else
 			PORT->hPTTDevice = PORT->hDevice;	// Use same port for PTT
@@ -1030,6 +1021,11 @@ DllExport BOOL APIENTRY Rig_Init()
 			
 			if (RIG->NumberofBands)
 				CheckTimeBands(RIG);		// Set initial timeband
+
+#ifdef WIN32
+			if (RIG->PTTCATPort[0])			// Serial port RTS to CAT 
+				_beginthread(PTTCATThread,0,RIG);
+#endif
 		}
 	}
 //	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
@@ -1060,9 +1056,18 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		for (n = 0; n < PORT->ConfiguredRigs; n++)
 		{
-			if (PORT->Rigs[n].TimeBands)
-				free (PORT->Rigs[n].TimeBands[1]->Scanlist);
+			struct RIGINFO * RIG = &PORT->Rigs[n];
+			
+			if (RIG->TimeBands)
+				free (RIG->TimeBands[1]->Scanlist);
+
+			if (RIG->PTTCATPort[0])
+			{
+				Rig_PTT(RIG, FALSE);				// Make sure PTT is down
+				EndPTTCATThread = TRUE;
+			}
 		}
+
 
 		free (PORT);
 		PORTInfo[p] = NULL;
@@ -1155,9 +1160,14 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 
 } // end of CloseConnection()
 
+
+
 OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 {
-	PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE);
+	if (PORT->PortType == FT2000)		// FT2000 and similar seem to need two stop bits
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 2);
+	else
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 0);
 			  
 	if (PORT->hDevice == 0)
 		return (FALSE);
@@ -1390,14 +1400,18 @@ GetPermissionToChange(struct RIGPORTINFO * PORT, struct RIGINFO *RIG)
 		{
 			// Permission Refused. Wait Scan Interval and try again
 
-			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval",
-				RIG->PortRecord[0]->PORT_DLL_NAME); 
+			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
+				RIG->PortRecord[0]->PORT_DLL_NAME, PORT->FreqPtr->Dwell ); 
 
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
 			RIG->WEB_SCAN = '=';
 
 			RIG->ScanCounter = PORT->FreqPtr->Dwell; 
+			
+			if (RIG->ScanCounter == 0 || RIG->ScanCounter > 150)		// ? After manual change
+				RIG->ScanCounter = 50;
+
 			return FALSE;
 		}
 		
@@ -1430,12 +1444,16 @@ DoChange:
 		{
 			// 1 means can't change - release all
 
-			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval", PortRecord->PORT_DLL_NAME); 
+			Debugprintf("Scan Debug %s Refused permission - waiting ScanInterval %d",
+				PortRecord->PORT_DLL_NAME, PORT->FreqPtr->Dwell); 
 
 			RIG->WaitingForPermission = FALSE;
 			SetWindowText(RIG->hSCAN, "-");
 			RIG->WEB_SCAN = '-';
-			RIG->ScanCounter = PORT->FreqPtr->Dwell; 
+			RIG->ScanCounter = PORT->FreqPtr->Dwell;
+
+			if (RIG->ScanCounter == 0 || RIG->ScanCounter > 150)		// ? After manual change
+				RIG->ScanCounter = 50; 
 
 			ReleasePermission(RIG);
 			return FALSE;
@@ -1626,7 +1644,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 		PORT->FreqPtr = &PORT->ScanEntry;		// Block we are currently sending.
 
 		if (RIG_DEBUG)
-			Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
+			Debugprintf("BPQ32 Manual Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 
 		memcpy(Poll, &buffptr[20], 12);
@@ -1690,6 +1708,7 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 	Poll[5] = 0xFD;
 
 	PORT->TXLen = 6;
+
 	RigWriteCommBlock(PORT);
 	return;
 }
@@ -1887,9 +1906,13 @@ SetFinished:
 	{
 		// Mode
 
-		unsigned int Mode = Msg[5];
+		unsigned int Mode;
+		
+		Mode = (Msg[5] >> 4);
+		Mode *= 10;
+		Mode += Msg[5] & 0xf;
 
-		if (Mode > 7) Mode = 7;
+		if (Mode > 17) Mode = 17;
 
 		sprintf(RIG->WEB_MODE,"%s/%d", Modes[Mode], Msg[6]);
 		SetWindowText(RIG->hMODE, RIG->WEB_MODE);
@@ -2672,6 +2695,9 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	char PTTRigName[] = "PTT";
 	double ScanFreq;
 	double Dwell;
+	BOOL PTTControlsInputMUX = FALSE;
+	BOOL DataPTT = FALSE;
+	int DataPTTOffMode = 1;				// ACC
 
 	Debugprintf("Processing RIG line %s", buf);
 
@@ -2880,8 +2906,215 @@ PortFound:
 	RIG->PortNum = Port;
 	RIG->BPQPort |=  (1 << Port);
 
+	while (ptr)
+	{
+		if (strcmp(ptr, "PTTMUX") == 0)
+		{
+			// Ports whose RTS/DTR will be converted to CAT commands (for IC7100/IC7200 etc)
+	
+			int PIndex = 0;
+
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+			while (memcmp(ptr, "COM", 3) == 0)
+			{	
+				strcpy(RIG->PTTCATPort[PIndex], &ptr[3]);
+				
+				if (PIndex < 3)
+					PIndex++;
+
+				ptr = strtok_s(NULL, " \t\n\r", &Context);
+		
+				if (ptr == NULL)
+					break;
+			}
+			if (ptr == NULL)
+				break;
+		}
+		if (strcmp(ptr, "PTT_SETS_INPUT") == 0)
+		{
+			// Send Select Soundcard as mod source with PTT commands
+
+			PTTControlsInputMUX = TRUE;
+
+			// See if following param is an PTT Off Mode
+
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+			if (ptr == NULL)
+				break;
+	
+			if (strcmp(ptr, "MIC") == 0)
+				DataPTTOffMode = 0;
+			else if (strcmp(ptr, "AUX") == 0)
+				DataPTTOffMode = 1;
+			else if (strcmp(ptr, "MICAUX") == 0)
+				DataPTTOffMode = 2;
+			else
+				continue;
+
+			ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+			continue;
+
+		}
+		if (strcmp(ptr, "DATAPTT") == 0)
+		{
+			// Send Select Soundcard as mod source with PTT commands
+
+			DataPTT = TRUE;
+		}
+		else if (atoi(ptr))
+			break;					// Not scan freq oe timeband, so see if another param
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+	}
+
 	if (PORT->PortType == PTT || PORT->PortType == ANT)
 		return RIG;
+
+	// Set up PTT and Poll Strings
+
+	if (PORT->PortType == ICOM)
+	{
+		char * Poll;
+		Poll = &RIG->PTTOn[0];
+
+		if (PTTControlsInputMUX)
+		{
+			*(Poll++) = 0xFE;
+			*(Poll++) = 0xFE;
+			*(Poll++) = RIG->RigAddr;
+			*(Poll++) = 0xE0;
+			*(Poll++) = 0x1a;
+
+			if (strcmp(RIG->RigName, "IC7100") == 0)
+			{
+				*(Poll++) = 0x05;
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x91;			// Data Mode Source
+			}
+			else if (strcmp(RIG->RigName, "IC7200") == 0)
+			{
+				*(Poll++) = 0x03;
+				*(Poll++) = 0x24;			// Data Mode Source
+			}
+			
+			*(Poll++) = 0x03;			// USB Soundcard
+			*(Poll++) = 0xFD;
+		}
+
+		*(Poll++) = 0xFE;
+		*(Poll++) = 0xFE;
+		*(Poll++) = RIG->RigAddr;
+		*(Poll++) = 0xE0;
+		*(Poll++) = 0x1C;		// RIG STATE
+		*(Poll++) = 0x00;		// PTT
+		*(Poll++) = 1;			// ON
+		*(Poll++) = 0xFD;
+
+		RIG->PTTOnLen = Poll - &RIG->PTTOn[0];
+
+		Poll = &RIG->PTTOff[0];
+
+		*(Poll++) = 0xFE;
+		*(Poll++) = 0xFE;
+		*(Poll++) = RIG->RigAddr;
+		*(Poll++) = 0xE0;
+		*(Poll++) = 0x1C;		// RIG STATE
+		*(Poll++) = 0x00;		// PTT
+		*(Poll++) = 0;			// OFF
+		*(Poll++) = 0xFD;
+
+		if (PTTControlsInputMUX)
+		{
+			*(Poll++) = 0xFE;
+			*(Poll++) = 0xFE;
+			*(Poll++) = RIG->RigAddr;
+			*(Poll++) = 0xE0;
+			*(Poll++) = 0x1a;
+
+			if (strcmp(RIG->RigName, "IC7100") == 0)
+			{
+				*(Poll++) = 0x05;
+				*(Poll++) = 0x00;
+				*(Poll++) = 0x91;			// Data Mode Source
+			}
+			else if (strcmp(RIG->RigName, "IC7200") == 0)
+			{
+				*(Poll++) = 0x03;
+				*(Poll++) = 0x24;			// Data Mode Source
+			}
+
+			*(Poll++) = DataPTTOffMode;
+			*(Poll++) = 0xFD;
+		}
+
+		RIG->PTTOffLen = Poll - &RIG->PTTOff[0];
+
+	}
+	else if	(PORT->PortType == KENWOOD)
+	{	
+		RIG->PollLen = 6;
+		strcpy(RIG->Poll, "FA;MD;");
+
+		if (PTTControlsInputMUX)
+		{
+			strcpy(RIG->PTTOn, "EX06300001;TX1;");			// Select USB before PTT
+			strcpy(RIG->PTTOff, "RX;EX06300000;");			// Select ACC after dropping PTT
+		}
+		else
+		{
+			strcpy(RIG->PTTOff, "RX;");
+			
+			if (DataPTT)
+				strcpy(RIG->PTTOn, "TX1;");
+			else
+				strcpy(RIG->PTTOn, "TX;");
+		}
+
+		RIG->PTTOnLen = strlen(RIG->PTTOn);
+		RIG->PTTOffLen = strlen(RIG->PTTOff);
+
+	}
+	else if	(PORT->PortType == FLEX)
+	{	
+		RIG->PollLen = 10;
+		strcpy(RIG->Poll, "ZZFA;ZZMD;");
+
+		strcpy(RIG->PTTOn, "ZZTX1;");
+		RIG->PTTOnLen = 6;
+		strcpy(RIG->PTTOff, "ZZTX0;");
+		RIG->PTTOffLen = 6;
+	}
+	else if	(PORT->PortType == FT2000)
+	{	
+		RIG->PollLen = 6;
+		strcpy(RIG->Poll, "FA;MD;");
+
+		strcpy(RIG->PTTOn, "TX1;");
+		RIG->PTTOnLen = 4;
+		strcpy(RIG->PTTOff, "TX0;");
+		RIG->PTTOffLen = 4;
+	}
+	else if	(PORT->PortType == NMEA)
+	{	
+		int Len;
+			
+		i = sprintf(RIG->Poll, "$PICOA,90,%02x,RXF*xx\r\n", RIG->RigAddr);
+		AddNMEAChecksum(RIG->Poll);
+		Len = i;
+		i = sprintf(RIG->Poll + Len, "$PICOA,90,%02x,MODE*xx\r\n", RIG->RigAddr);
+		AddNMEAChecksum(RIG->Poll + Len);
+		RIG->PollLen = Len + i;
+
+
+//		strcpy(RIG->PTTOn, "ZZTX1;");
+//		RIG->PTTOnLen = 6;
+//		strcpy(RIG->PTTOff, "ZZTX0;");
+//		RIG->PTTOffLen = 6;
+	}
+
 
 	if (ptr == NULL) return RIG;			// No Scanning, just Interactive control
 	
@@ -2931,6 +3164,7 @@ PortFound:
 		char Mode[10] = "";
 		char WinmorMode, Antenna;
 		char Appl[13];
+		char * ApplCall;
 
 		if (ptr[0] == ';' || ptr[0] == '#')
 			break;
@@ -3189,6 +3423,13 @@ PortFound:
 
 		strcpy(FreqPtr[0]->APPL, Appl);
 
+		ApplCall = GetApplCallFromName(Appl);
+
+		if (ApplCall && ApplCall[0] > 32)
+		{
+			memcpy(FreqPtr[0]->APPLCALL, ApplCall, 9);
+			strlop(FreqPtr[0]->APPLCALL, ' ');
+		}
 
 		CmdPtr = FreqPtr[0]->Cmd1 = malloc(100);
 
@@ -3280,38 +3521,14 @@ PortFound:
 		else if	(PORT->PortType == KENWOOD)
 		{	
 			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA00%s;MD%d;FA;MD;", FreqString, ModeNo);
-
-			RIG->PollLen = 6;
-			strcpy(RIG->Poll, "FA;MD;");
-
-			strcpy(RIG->PTTOn, "TX0;");
-			RIG->PTTOnLen = 4;
-			strcpy(RIG->PTTOff, "RX;");
-			RIG->PTTOffLen = 3;
 		}
 		else if	(PORT->PortType == FLEX)
 		{	
 			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "ZZFA00%s;ZZMD%02d;ZZFA;ZZMD;", FreqString, ModeNo);
-
-			RIG->PollLen = 10;
-			strcpy(RIG->Poll, "ZZFA;ZZMD;");
-
-			strcpy(RIG->PTTOn, "ZZTX1;");
-			RIG->PTTOnLen = 6;
-			strcpy(RIG->PTTOff, "ZZTX0;");
-			RIG->PTTOffLen = 6;
 		}
 		else if	(PORT->PortType == FT2000)
 		{	
 			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
-
-			RIG->PollLen = 6;
-			strcpy(RIG->Poll, "FA;MD;");
-
-			strcpy(RIG->PTTOn, "TX1;");
-			RIG->PTTOnLen = 4;
-			strcpy(RIG->PTTOff, "TX0;");
-			RIG->PTTOffLen = 4;
 		}
 		else if	(PORT->PortType == FT100)
 		{	
@@ -3356,13 +3573,7 @@ PortFound:
 			AddNMEAChecksum(RIG->Poll + Len);
 			RIG->PollLen = Len + i;
 
-
-//		strcpy(RIG->PTTOn, "ZZTX1;");
-//			RIG->PTTOnLen = 6;
-//			strcpy(RIG->PTTOff, "ZZTX0;");
-//			RIG->PTTOffLen = 6;
 		}
-
 
 		FreqPtr++;
 
@@ -3440,7 +3651,171 @@ VOID SetupPortRIGPointers()
 	}
 }
 
+#ifdef WIN32
 
+VOID PTTCATThread(struct RIGINFO *RIG)
+{
+	DWORD dwLength = 0;
+	int Length, ret, i;
+	UCHAR * ptr1;
+	UCHAR * ptr2;
+	UCHAR c;
+	UCHAR Block[4][80];
+	UCHAR CurrentState[4] = {0};
+#define RTS 2
+#define DTR 4
+	HANDLE Event;
+	HANDLE Handle[4];
+	OVERLAPPED Overlapped[4];
+	char Port[32];
+	int PIndex = 0;
+	int HIndex = 0;
+
+	EndPTTCATThread = FALSE;
+
+	while (PIndex < 4 && RIG->PTTCATPort[PIndex][0])
+	{
+		sprintf(Port, "\\\\.\\pipe\\BPQCOM%s", RIG->PTTCATPort[PIndex]);
+
+		Handle[HIndex] = CreateFile(Port, GENERIC_READ | GENERIC_WRITE,
+                  0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, NULL);
+
+		if (Handle[HIndex] == (HANDLE) -1)
+		{
+			int Err = GetLastError();
+
+			Consoleprintf("PTTMUX port COM%s Open failed code %d", RIG->PTTCATPort[PIndex], Err);
+		}
+		else
+			HIndex++;
+
+		PIndex++;
+
+	}
+
+	if (PIndex == 0)
+		return;				// No ports
+
+	Event = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+	for (i = 0; i < HIndex; i ++)
+	{
+		// Prime a read on each handle
+
+		memset(&Overlapped[i], 0, sizeof(OVERLAPPED));
+		Overlapped[i].hEvent = Event;
+
+		ReadFile(Handle[i], Block[i], 80, &Length, &Overlapped[i]);
+	}
+		
+	while (EndPTTCATThread == FALSE)
+	{
+
+WaitAgain:
+
+		ret = WaitForSingleObject(Event, 1000);
+
+		if (ret == WAIT_TIMEOUT)
+		{
+			if (EndPTTCATThread)
+			{
+				for (i = 0; i < HIndex; i ++)
+				{
+					CancelIo(Handle[i]);
+					CloseHandle(Handle[i]);
+					Handle[i] = INVALID_HANDLE_VALUE;
+				}
+				CloseHandle(Event);
+				return;
+			}
+			goto WaitAgain;
+		}
+
+		ResetEvent(Event);
+
+		// See which request(s) have completed
+
+		for (i = 0; i < HIndex; i ++)
+		{
+			ret =  GetOverlappedResult(Handle[i], &Overlapped[i], &Length, FALSE);
+
+			if (ret)
+			{
+				ptr1 = Block[i];
+				ptr2 = Block[i];
+
+				Debugprintf("%d", Length);
+
+				while (Length > 0)
+				{
+					c = *(ptr1++);
+				
+					Length--;
+
+					if (c == 0xff)
+					{
+						c = *(ptr1++);
+						Length--;
+					
+						if (c == 0xff)			// ff ff means ff
+						{
+							Length--;
+						}
+						else
+						{
+							// This is connection / RTS/DTR statua from other end
+							// Convert to CAT Command
+
+							if (c == CurrentState[i])
+								continue;
+
+							if (c & RTS)
+								Rig_PTT(RIG, TRUE);
+							else
+								Rig_PTT(RIG, FALSE);
+
+							CurrentState[i] = c;
+					
+							Debugprintf("% 02x", c);
+							continue;
+						}
+					}
+				}
+				
+				memset(&Overlapped[i], 0, sizeof(OVERLAPPED));
+				Overlapped[i].hEvent = Event;
+
+				ReadFile(Handle[i], Block[i], 80, &Length, &Overlapped[i]);
+			}
+		}
+	}
+	EndPTTCATThread = FALSE;
+}
+
+/*
+		memset(&Overlapped, 0, sizeof(Overlapped));
+		Overlapped.hEvent = Event;
+		ResetEvent(Event);
+
+		ret = ReadFile(Handle, Block, 80, &Length, &Overlapped);
+		
+		if (ret == 0)
+		{
+			ret = GetLastError();
+
+			if (ret != ERROR_IO_PENDING)
+			{
+				if (ret == ERROR_BROKEN_PIPE || ret == ERROR_INVALID_HANDLE)
+				{
+					CloseHandle(Handle);
+					RIG->PTTCATHandles[0] = INVALID_HANDLE_VALUE;
+					return;
+				}
+			}
+		}
+		
+*/
+#endif
 
 /*
 int CRow;

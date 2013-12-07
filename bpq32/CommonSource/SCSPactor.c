@@ -90,6 +90,12 @@ char NodeCall[11];		// Nodecall, Null Terminated
 unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int arglist);
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
+VOID SuspendOtherPorts(struct TNCINFO * ThisTNC);
+VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
+
+VOID PTCSuspendPort(struct TNCINFO * TNC);
+VOID PTCReleasePort(struct TNCINFO * TNC);
+
 //static HANDLE LogHandle[32] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
 
 //char * Logs[4] = {"1", "2", "3", "4"};
@@ -296,7 +302,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	{
 		// Try to reopen every 30 secs
 
-		if (fn > 3  && fn < 6)
+		if (fn > 3  && fn < 7)
 			goto ok;
 
 		TNC->ReopenTimer++;
@@ -314,6 +320,21 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 ok:
 	switch (fn)
 	{
+	case 7:			
+
+		// 100 mS Timer. May now be needed, as Poll can be called more ferquently in some circumstances
+
+		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+		CheckRX(TNC);
+		SCSPoll(port);
+
+		return 0;
+
 	case 1:				// poll
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -330,9 +351,6 @@ ok:
 		if (EnterExit)
 			return 0;						// Switching to Term mode to change bandwidth
 		
-		CheckRX(TNC);
-		SCSPoll(port);
-
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
 			if (TNC->Streams[Stream].PACTORtoBPQ_Q !=0)
@@ -360,7 +378,6 @@ ok:
 			}
 		}
 	
-			
 		return 0;
 
 	case 2:				// send
@@ -509,6 +526,19 @@ ok:
 					TNC->MinLevel = Scan->PMinLevel - '0';
 					Switchmode(TNC, PLevel - '0');
 				}
+
+				if (TNC->UseAPPLCalls && Scan->APPLCALL[0])
+				{
+					// Switch callsign
+
+					STREAM = &TNC->Streams[0];
+					STREAM->CmdSet = STREAM->CmdSave = malloc(100);
+
+					strcpy(STREAM->MyCall, Scan->APPLCALL);
+					sprintf(STREAM->CmdSet, "I%s\r", STREAM->MyCall);
+					Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
+				}
+
 				else
 				{
 					if (TNC->HFPacket)
@@ -643,6 +673,9 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 100;
+
+	TNC->SuspendPortProc = PTCSuspendPort;
+	TNC->ReleasePortProc = PTCReleasePort;
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -966,19 +999,19 @@ VOID SCSPoll(int Port)
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
 			TNC->Streams[Stream].MyCall[calllen] = 0;
 
-			TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-			sprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->Streams[Stream].MyCall);
 
 			if (Stream == 0)
 			{
+				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
+				sprintf(TNC->Streams[Stream].CmdSet, "I%s\r", "SCSPTC");
+
+				Debugprintf("SCS Pactor CMDSet = %s", TNC->Streams[Stream].CmdSet);
+
+				SuspendOtherPorts(TNC);			// Prevent connects on other ports in same scan gruop
+
 				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
 				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
-				if (TNC->Dragon)
-					sprintf(TNC->Streams[Stream].CmdSet, "I%s\r", TNC->Streams[Stream].MyCall);
-				else
-					sprintf(TNC->Streams[Stream].CmdSet, "I%s\rPT\r", TNC->Streams[Stream].MyCall);
-				
 				// Stop Scanner
 		
 				sprintf(Status, "%d SCANSTOP", TNC->Port);
@@ -1052,6 +1085,8 @@ VOID SCSPoll(int Port)
 
 			sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
+			Debugprintf("SCS Pactor CMDSet = %s", TNC->Streams[0].CmdSet);
 
 			TNC->BusyDelay = 0;
 			return;
@@ -1455,6 +1490,8 @@ VOID SCSPoll(int Port)
 						sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[Stream].MyCall, TNC->Streams[Stream].RemoteCall);
 						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
+						Debugprintf("SCS Pactor CMDSet = %s", TNC->Streams[Stream].CmdSet);
+
 						TNC->Streams[0].InternalCmd = FALSE;
 						return;
 					}
@@ -1524,7 +1561,9 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 	if (TNC->ReinitState == 0)
 	{
 		// Just Starting - Send a TNC Mode Command to see if in Terminal or Host Mode
-		
+
+		Debugprintf("SCS DOTNCReinit entered");
+	
 		TNC->TNCOK = FALSE;
 		sprintf(TNC->WEB_COMMSSTATE,"%s Initialising TNC", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
@@ -1550,6 +1589,8 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 		{
 			// Put into Host Mode
 
+			Debugprintf("DOTNCReinit Complete - Entering Hostmode");
+
 			TNC->TXBuffer[2] = 0;
 			TNC->Toggle = 0;
 
@@ -1564,6 +1605,7 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 			TNC->Retries = 1;
 			TNC->Toggle = 0;
 			TNC->ReinitState = 3;	// Set toggle force bit
+			TNC->OKToChangeFreq = 1;	// In case failed whilst waiting for permission
 
 			return;
 		}
@@ -1824,7 +1866,6 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 	TNC->Timeout = 5;		// 1/2 sec - In case missed
 
 	EnterExit = FALSE;
-
 	return 0;
 }
 
@@ -1848,7 +1889,6 @@ VOID SwitchToPacket(struct TNCINFO * TNC)
 	TNC->SwitchToPactor = TNC->RobustTime;
 
 	Debugprintf("BPQ32 Scan - switch to Packet");
-
 }
 
 VOID ExitHost(struct TNCINFO * TNC)
@@ -1863,7 +1903,6 @@ VOID ExitHost(struct TNCINFO * TNC)
 	memcpy(&TNC->TXBuffer[5], "JHOST0", 6);
 
 	CRCStuffAndSend(TNC, Poll, 11);
-
 	return;
 }
 
@@ -1972,6 +2011,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	UCHAR * Buffer;				// Data portion of frame
 	char Status[80];
 	int Stream = 0;
+
+	if (TNC->HostMode == 0)
+		return;
 
 	// Any valid frame is an ACK
 
@@ -2234,6 +2276,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					sprintf(Status, "%d SCANSTOP", TNC->Port);
 					Rig_Command(-1, Status);
 
+					SuspendOtherPorts(TNC);			// Prevent connects on other ports in same scan gruop
+
 					memcpy(MHCall, Call, 9);
 					MHCall[9] = 0;
 				}
@@ -2292,6 +2336,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						// See which application the connect is for
 
 						strcpy(DestCall, STREAM->MyCall);
+
+						Debugprintf("Pactor Incoming Call - MYCALL = *%s*", DestCall);
 					
 						if (TNC->UseAPPLCalls && strcmp(DestCall, TNC->NodeCall) != 0)		// Not Connect to Node Call
 						{		
@@ -2316,6 +2362,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 								AppName[12] = 0;
 
 								// Make sure app is available
+
+								Debugprintf("Connect is to APPL %s", AppName);
 
 								if (CheckAppl(TNC, AppName))
 								{
@@ -2826,6 +2874,31 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 
 VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 {
+	// Maybe best just to restart the TNC
+
+	if (TNC->PacketChannels == 0)		// Not using packet
+	{
+		Debugprintf("Failed to disconnect TNC - restarting it");
+
+		// Ensure in Pactor
+
+		TNC->TXBuffer[2] = 31;
+		TNC->TXBuffer[3] = 0x1;
+		TNC->TXBuffer[4] = 0x1;
+		memcpy(&TNC->TXBuffer[5], "PT", 2);
+
+		CRCStuffAndSend(TNC, TNC->TXBuffer, 7);
+
+		Sleep(50);
+		ExitHost(TNC);
+		Sleep(50);
+
+		TNC->HostMode = FALSE;
+		TNC->ReinitState = 0;
+
+		return;
+	}
+
 	TidyClose(TNC, Stream);			// I don't think Hostmode has a DD
 }
 
@@ -2869,6 +2942,28 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 	Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
 
-
+	ReleaseOtherPorts(TNC);
 }
+
+VOID PTCSuspendPort(struct TNCINFO * TNC)
+{
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+
+	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
+	sprintf(STREAM->CmdSet, "I%s\r", "SCSPTC");		// Should prevent connects
+
+	Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
+}
+
+VOID PTCReleasePort(struct TNCINFO * TNC)
+{
+	struct STREAMINFO * STREAM = &TNC->Streams[0];
+
+	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
+	sprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);
+
+	Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
+}
+
+
 

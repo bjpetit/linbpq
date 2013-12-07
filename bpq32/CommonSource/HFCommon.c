@@ -409,7 +409,8 @@ VOID CheckWL2KReportTimer()
 	WL2KTimer = 32910/2;		// Every Half Hour
 		
 	if (CheckAppl(NULL, "RMS         ") == NULL)
-		return;
+		if (CheckAppl(NULL, "RELAY       ") == NULL)
+			return;
 
 	_beginthread(SendReporttoWL2KThread, 0, 0);
 

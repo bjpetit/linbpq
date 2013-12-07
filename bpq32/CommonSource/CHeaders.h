@@ -105,7 +105,16 @@ BOOL ProcessConfig();
 VOID PUT_ON_PORT_Q(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 VOID CLEAROUTLINK(struct _LINKTABLE * LINK);
 VOID TellINP3LinkGone(struct ROUTE * Route);
-VOID CLEARACTIVEROUTE(struct ROUTE * ROUTE);
+VOID CLEARACTIVEROUTE(struct ROUTE * ROUTE, int Reason);
+
+// Reason Equates
+
+#define NORMALCLOSE 0
+#define RETRIEDOUT 1
+#define SETUPFAILED 2
+#define LINKLOST 3
+#define LINKSTUCK 4
+
 int COUNT_AT_L2(struct _LINKTABLE * LINK);
 VOID SENDIDMSG();
 VOID SENDBTMSG();
@@ -135,7 +144,7 @@ void FreeSemaphore(struct SEM * Semaphore);
 
 Dll int APIENTRY SessionControl(int stream, int command, int Mask);
 
-HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet);
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite);
 VOID CloseCOMPort(HANDLE fd);

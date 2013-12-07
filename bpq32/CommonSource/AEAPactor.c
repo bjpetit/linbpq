@@ -220,6 +220,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	{
 	case 1:				// poll
 
+		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
 		{
 			if (TNC->Streams[Stream].ReportDISC)

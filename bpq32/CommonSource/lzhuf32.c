@@ -728,6 +728,7 @@ void Decode(CIRCUIT * conn)
 	short c;
 	unsigned long count;
 	unsigned short  crc_read;
+	int Index = 0;
 	struct FBBHeaderLine * FBBHeader= &conn->FBBHeaders[0];	// The Headers from an FFB forward block
 
 	getbuf = 0;
@@ -857,8 +858,15 @@ void Decode(CIRCUIT * conn)
 		
 	conn->TempMsg->length = count;
 
-	conn->UserPointer->MsgsReceived++;
-	conn->UserPointer->BytesForwardedIn += count;
+	if (FBBHeader->MsgType == 'P')
+		Index = PMSG;
+	else if (FBBHeader->MsgType == 'B')
+		Index = BMSG;
+	else if (FBBHeader->MsgType == 'T')
+		Index = TMSG;
+
+	conn->UserPointer->Total.MsgsReceived[Index]++;
+	conn->UserPointer->Total.BytesForwardedIn[Index] += count;
 
 	if (FBBHeader->B2Message)
 	{
@@ -1033,7 +1041,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				{
 					// See if Packet or SMTP
 					
-					if (CheckifPacket(Msg->via) || FindRMS() == NULL)			//  If no RMS, don't check for routing to it)
+					if (CheckifPacket(Msg->via))	//  If no RMS, don't check for routing to it)
 					{
 						// Packet Message
 
@@ -1051,6 +1059,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					{
 						// Internet address - do we send via RMS??
 
+
+						// ??? Need to see if RMS is available
+
 						memcpy(Msg->via, &ptr1[9], linelen);
 						Msg->via[linelen-9] = 0;
 						strcpy(FullTo,"RMS");
@@ -1060,7 +1071,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 				else
 				{
-					if (FindRMS())				// If no RMS, treat as Packet Address
+					if ((conn->UserPointer->flags & F_NOWINLINK) == 0)	// treat as Packet Address?
 					{
 						strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
 						RMSMsgs ++;
@@ -1073,7 +1084,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 
 			}
-			else if (conn->RMSExpress && FindRMS())			//  If no RMS, don't check for routing to it
+//			else if (conn->RMSExpress && FindRMS())			//  If no RMS, don't check for routing to it
+			else if (conn->RMSExpress)	
 			{
 				Msg->B2Flags |= FromRMSExpress;
 
@@ -1106,9 +1118,14 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 				else
 				{
-					strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
-					RMSMsgs ++;
-					LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
+					if ((conn->UserPointer->flags & F_NOWINLINK) == 0)	//  Dont default to winlink.org
+					{
+						strcpy(Msg->via, "winlink.org");		// Message for WL2K - add via
+						RMSMsgs ++;
+						LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
+					}
+					else
+						goto BBSMsg;
 				}
 			}
 
@@ -1157,6 +1174,23 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 			}
 
+			if (memcmp(FullTo, "RMS:", 4) == 0)
+			{
+				// remove RMS and add @winlink.org
+
+				memmove(FullTo, &FullTo[4], strlen(FullTo) - 3);
+				strcpy(Msg->via, "winlink.org");
+				sprintf(HddrTo[Recipients], "To: %s\r\n", FullTo);
+			}
+
+			if (strcmp(Msg->via, "RMS") == 0)
+			{
+				// replace RMS with @winlink.org
+
+				strcpy(Msg->via, "winlink.org");
+				sprintf(HddrTo[Recipients], "To: %s@winlink.org\r\n", FullTo);
+			}
+
 			if (strlen(FullTo) > 6)
 				FullTo[6] = 0;
 
@@ -1167,6 +1201,44 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			if (SendBBStoSYSOPCall)
 				if (_stricmp(FullTo, BBSName) == 0)
 					strcpy(Msg->to, SYSOPCall);
+
+			if ((Msg->via[0] == 0 || strcmp(Msg->via, "BPQ") == 0 || strcmp(Msg->via, "BBS") == 0)
+				&& (conn->Paclink || conn->RMSExpress))
+			{
+				// No routing - check @BBS and WP
+
+				struct UserInfo * ToUser = LookupCall(FullTo);
+
+				Msg->via[0] = 0;				// In case BPQ and not found
+
+				if (ToUser)
+				{
+					// Local User. If Home BBS is specified, use it
+
+					if (ToUser->HomeBBS[0])
+					{
+						strcpy(Msg->via, ToUser->HomeBBS); 
+					}
+				}
+				else
+				{
+					WPRecP WP = LookupWP(FullTo);
+
+					if (WP)
+					{
+						strcpy(Msg->via, WP->first_homebbs);
+			
+					}
+				}
+
+				// Fix To: address in B2 Header
+
+				if (Msg->via[0])
+					sprintf(HddrTo[Recipients], "To: %s@%s\r\n", FullTo, Msg->via);
+				else
+					sprintf(HddrTo[Recipients], "To: %s\r\n", FullTo);
+
+			}
 
 			RecpTo=realloc(RecpTo, (Recipients+1)*4);
 			RecpTo[Recipients] = zalloc(10);

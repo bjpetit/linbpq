@@ -28,6 +28,8 @@ extern char ChatConfigName[250];
 
 extern char OtherNodesList[1000];
 
+extern char ChatWelcomeMsg[1000];
+
 extern USER *user_hd;
 extern LINK *link_hd;	
 
@@ -378,6 +380,23 @@ VOID SaveChatInfo(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Rep
 
 		GetParam(input, "Posn=", Position);
 		GetParam(input, "MapText=", PopupText);
+		GetParam(input, "welcome=", ChatWelcomeMsg);
+
+		// Replace cr lf in string with $W
+
+		ptr1 = ChatWelcomeMsg;
+
+	scan2:
+
+		ptr1 = strstr(ptr1, "\r\n");
+    
+		if (ptr1)
+		{    
+			*(ptr1++)='$';			// put in cr
+			*(ptr1++)='W';			// put in lf
+
+			goto scan2;
+		} 
 
 		GetCheckBox(input, "PopType=Click", &PopupMode);
 
@@ -500,12 +519,29 @@ VOID SendChatConfigPage(char * Reply, int * ReplyLen, char * Key)
 
 	*ptr2 = 0;
 
+	// Replace $W in  Welcome Message with cr lf
 
+	ptr2 = ptr1 = _strdup(ChatWelcomeMsg);
+
+scan:
+
+	ptr1 = strstr(ptr1, "$W");
+    
+	if (ptr1)
+	{    
+		*(ptr1++)=13;			// put in cr
+		*(ptr1++)=10;			// put in lf
+
+		goto scan;
+	} 
+	
 	Len = sprintf(Reply, ChatConfigTemplate,
 		OurNode, Key, Key, Key,
 		ChatApplNum, MaxChatStreams, Nodes, Position,
 		(PopupMode) ? UNC  : CHKD, 
-		(PopupMode) ? CHKD  : UNC,  Text);
+		(PopupMode) ? CHKD  : UNC,  Text, ptr2);
+
+	free(ptr2);
 
 	*ReplyLen = Len;
 }

@@ -29,12 +29,6 @@ VOID FindLostBuffers();
 
 struct PORTCONFIG * PortRec;
 
-#define C_IDMSG	512 
-#define C_ROUTES 1536
-#define C_CTEXT	2048
-#define C_PORTS	2560
-#define C_INFOMSG 85000
-
 #define RNRSET 0x2				// RNR RECEIVED FROM OTHER END
 
 //	STATION INFORMATION
@@ -413,6 +407,8 @@ VOID EXTTIMER(PEXTPORTDATA PORTVEC)
 		PORTVEC->EXTRESTART = 0;		//CLEAR
 		PORTVEC->PORT_EXT_ADDR(4, PORTVEC->PORTCONTROL.PORTNUMBER, 0);
 	}
+
+	PORTVEC->PORT_EXT_ADDR(7, PORTVEC->PORTCONTROL.PORTNUMBER, 0);		// Timer Routine
 }
 
 int EXTTXCHECK(PEXTPORTDATA PORTVEC, int Chan)
@@ -1940,8 +1936,7 @@ VOID FindLostBuffers()
 		{
 			int Count = C_Q_COUNT(&HOSTSESS->HOSTTRACEQ);
 
-			if (Count > 50)
-				Debugprintf("Excessive Trace Buffers Stream %d Count %d", n, Count);
+			Debugprintf("Trace Buffers Stream %d Count %d", n, Count);
 
 			L4 = HOSTSESS->HOSTSESSION;
 
@@ -1969,8 +1964,6 @@ VOID FindLostBuffers()
 				C_Q_COUNT(&L4->L4RX_Q), C_Q_COUNT(&L4->L4HOLD_Q), C_Q_COUNT(&L4->L4RESEQ_Q));
 		L4++;
 	}
-
-	return;
 
 	// Build list of buffers, then mark off all on free Q
 

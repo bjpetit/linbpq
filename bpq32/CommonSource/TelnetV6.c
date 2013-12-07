@@ -48,6 +48,12 @@ DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, 
 int WritetoConsoleLocal(char * buff);
 VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr);
 int GetCMSHash(char * Challenge, char * Password);
+int IsUTF8(unsigned char *cpt, int len);
+int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
+VOID initUTF8();
+int TrytoGuessCode(unsigned char * Char, int Len);
 
 extern BPQVECSTRUC * TELNETMONVECPTR;
 
@@ -232,6 +238,25 @@ ProcessLine(char * buf, int Port)
 				ptr = strtok_s(NULL, ", ", &context);
 			}
 		}
+		if (_stricmp(param,"RELAYHOST") == 0)
+		{
+			int n = 0;
+			char * context;
+			char * ptr = strtok_s(value, ", \r", &context);
+
+			strcpy(TCP->RELAYHOST, ptr);
+		}
+
+		else
+		if (_stricmp(param,"FALLBACKTORELAY") == 0)
+		{
+			int n = 0;
+			char * context;
+			char * ptr = strtok_s(value, ", \r", &context);
+
+			TCP->FallbacktoRelay = atoi(value);
+		}
+
 		else
 		if (_stricmp(param,"FBBPORT") == 0)
 		{
@@ -495,6 +520,36 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 	switch (fn)
 	{
+	case 7:			
+
+		// 100 mS Timer. Now needed, as Poll can be called more ferquently in some circimstances
+
+		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+		TCP = TNC->TCPInfo;
+	
+		if (TCP->CMS)
+		{
+			TCP->CheckCMSTimer++;
+
+			if (TCP->CMSOK)
+			{
+				if (TCP->CheckCMSTimer > 600 * 15)
+					CheckCMS(TNC);
+			}
+			else
+			{
+				if (TCP->CheckCMSTimer > 600 * 2)
+					CheckCMS(TNC);
+			}
+		}
+
+		return 0;
+
 	case 1:				// poll
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -852,6 +907,8 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	return Len;
 }
 
+
+
 UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 {
 	char msg[500];
@@ -862,6 +919,75 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 	int i;
 	HWND x=0;
 
+/*
+	UCHAR NC[257];
+	WCHAR WC[1024];
+	
+	int WLen, NLen;
+
+	UINT UTF[256] = {0};
+	UINT UTFL[256];
+
+	int n, u;
+
+	for (n = 0; n < 256; n++)
+		NC[n] =n ;
+
+	n = MultiByteToWideChar(437, 0, NC, 256, &WC[0], 1024); 
+
+	for (n = 0; n < 256; n++)
+		UTFL[n] = WideCharToMultiByte(CP_UTF8, 0, &WC[n], 1, &UTF[n], 1024 , NULL, NULL);
+
+	// write UTF8 data as source
+
+	{
+	HANDLE Handle;
+	int i, n, Len;
+	char Line [256];
+
+
+	Handle = CreateFile("c:\\UTF8437Data.c", GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	
+	n = wsprintf (Line, "unsigned int CP437toUTF8Data[128] = {\r\n");
+
+	WriteFile(Handle, Line ,n , &n, NULL);
+
+	if (Handle != INVALID_HANDLE_VALUE)
+	{
+		for (i = 128; i < 256; i += 4)
+		{
+			n = wsprintf (Line, "  %d, %d, %d, %d,  \r\n",
+				UTF[i], UTF[i+1], UTF[i+2], UTF[i+3]);
+			WriteFile(Handle, Line ,n , &n, NULL);
+
+		}
+
+		WriteFile(Handle, "};\r\n", 4, &n, NULL); 
+	}
+	n = wsprintf (Line, "unsigned int CP437toUTF8DataLen[128] = {\r\n");
+
+	WriteFile(Handle, Line ,n , &n, NULL);
+
+	if (Handle != INVALID_HANDLE_VALUE)
+	{
+		for (i = 128; i < 256;i += 4)
+		{
+			n = wsprintf (Line, "  %d, %d, %d, %d,  \r\n",
+				UTFL[i], UTFL[i+1], UTFL[i+2], UTFL[i+3]);
+			WriteFile(Handle, Line ,n , &n, NULL);
+
+		}
+
+		WriteFile(Handle, "};\r\n", 4, &n, NULL); 
+
+		SetEndOfFile(Handle);
+	
+		CloseHandle(Handle);
+	}
+	}
+*/
+
+	initUTF8();
 
 	sprintf(msg,"Telnet Server ");
 	WritetoConsoleLocal(msg);
@@ -1458,22 +1584,6 @@ VOID TelnetPoll(int Port)
 
 nosocks:
 
-	if (TCP->CMS)
-	{
-		TCP->CheckCMSTimer++;
-
-		if (TCP->CMSOK)
-		{
-			if (TCP->CheckCMSTimer > 600 * 15)
-				CheckCMS(TNC);
-		}
-		else
-		{
-			if (TCP->CheckCMSTimer > 600 * 2)
-				CheckCMS(TNC);
-		}
-	}
-
 	while (TELNETMONVECPTR->HOSTTRACEQ)
 	{
 		int stamp, len;
@@ -1677,7 +1787,7 @@ nosocks:
 					return;
 				}
 				
-				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2 && (TCP->CMS || TCP->CMDPort[0]))	// Connect
+				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2 && (TCP->CMS || TCP->CMDPort[0] || TCP->RELAYHOST[0]))	// Connect
 				{
 					char Host[100];
 					char Via[100];
@@ -1691,20 +1801,30 @@ nosocks:
 						return;
 					}
 
-					if (strcmp(Host, "HOST") == 0)
+					if (strcmp(Host, "HOST") == 0 && TCP->CMDPort[0])
 					{
-						STREAM->ConnectionInfo->CMSSession = FALSE;
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = FALSE;
 						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port]);
 						ReleaseBuffer(buffptr);
 						return;
 					}
+	
+					if (strcmp(Host, "RELAY") == 0 && TCP->RELAYHOST[0])
+					{
+						STREAM->Connecting = TRUE;
+						STREAM->ConnectionInfo->CMSSession = TRUE;
+						STREAM->ConnectionInfo->RelaySession = TRUE;
+						TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772);
+						ReleaseBuffer(buffptr);
+						return;
+					}
 					
-					if (strcmp(Host, "CMS") != 0)
+					if (strcmp(Host, "CMS") != 0 && TCP->CMS)
 					{
 						STREAM->ConnectionInfo->CMSSession = TRUE;
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Only connects to CMS are allowed\r");
+						STREAM->ConnectionInfo->RelaySession = FALSE;
+						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid Connect Command\r");
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 						STREAM->NeedDisc = 10;
 						return;
@@ -1712,6 +1832,16 @@ nosocks:
 
 					if (!TCP->CMSOK)
 					{
+						if (TCP->RELAYHOST[0] && TCP->FallbacktoRelay)
+						{
+							STREAM->Connecting = TRUE;
+							STREAM->ConnectionInfo->CMSSession = TRUE;
+							STREAM->ConnectionInfo->RelaySession = TRUE;
+							TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772);
+							ReleaseBuffer(buffptr);
+							return;
+						}
+					
 						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - CMS Not Available\r");
 						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 						STREAM->NeedDisc = 10;
@@ -2394,6 +2524,8 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 	{
 		// single char or BS as last is most likely, and worth treating as a special case
 
+		int n;
+		
 		charsAfter = len-(BSptr-&sockptr->InputBuffer[sockptr->InputLen])-1;
 
 		if (charsAfter == 0)
@@ -2406,6 +2538,8 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 		// more than single char. Copy stuff after bs over char before
 
 		memmove(BSptr-1, BSptr+1, charsAfter);
+
+		n = sockptr->InputLen;
 	
 		sockptr->InputLen+=(len-2);		// drop bs and char before
 
@@ -2414,11 +2548,12 @@ BSCheck:
 		BSptr = memchr(&sockptr->InputBuffer[0], 8, sockptr->InputLen);
 
 		if (BSptr == NULL)
-			BSptr = memchr(&sockptr->InputBuffer[sockptr->InputLen], 127, len);
+			BSptr = memchr(&sockptr->InputBuffer[0], 127, sockptr->InputLen);
 
 		if (BSptr == NULL)
 			goto IACLoop;
 
+		n = sockptr->InputLen;
 		charsAfter = sockptr->InputLen-(BSptr-&sockptr->InputBuffer[0])-1;
 
 		if (charsAfter == 0)
@@ -3041,12 +3176,15 @@ MsgLoop:
 			{
 				// Monitor Control
 
-				int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x",
+				int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x",
 					&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES,
-					&sockptr->MonitorColour, &sockptr->MUIOnly);
+					&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8);
 
 				if (n == 5)
-					sockptr->MUIOnly = 0;
+					sockptr->MUIOnly = sockptr->UTF8 = 0;
+
+				if (n == 6)
+					sockptr->UTF8 = 0;
 
 				sockptr->InputLen = 0;
 				return 0;
@@ -3135,10 +3273,18 @@ MsgLoop:
 			char Msg[80];
 			int Len;
 
+			if (sockptr->LogonSent)
+			{
+				sockptr->InputLen=0;
+				return TRUE;
+			}
+
+			sockptr->LogonSent = TRUE;
+
 			if (TCP->SecureCMSPassword[0])
-				Len = sprintf(Msg, "%s %s\r\n", TNC->Streams[sockptr->Number].MyCall, TCP->GatewayCall);			
+				Len = sprintf(Msg, "%s %s\r", TNC->Streams[sockptr->Number].MyCall, TCP->GatewayCall);			
 			else
-				Len = sprintf(Msg, "%s\r\n", TNC->Streams[sockptr->Number].MyCall);			
+				Len = sprintf(Msg, "%s\r", TNC->Streams[sockptr->Number].MyCall);			
 			
 			send(sock, Msg, Len, 0);
 			sprintf(logmsg,"%d %s", Stream, Msg);
@@ -3190,13 +3336,14 @@ MsgLoop:
 
 			sprintf(RespString, "%010d", Response);
 
-			Len = sprintf(Msg, ";SR: %s %d %d\r\n", &RespString[2], Freq, Mode);			
+			Len = sprintf(Msg, ";SR: %s %d %d\r", &RespString[2], Freq, Mode);			
 			
 			send(sock, Msg, Len,0);
 			sprintf(logmsg,"%d %s", Stream, Msg);
 			WriteCMSLog (logmsg);
 			sockptr->InputLen=0;
 			sockptr->LoginState = 2;		// Data
+			sockptr->LogonSent = FALSE;
 
 			return TRUE;
 		}
@@ -3239,6 +3386,7 @@ MsgLoop:
 			send(sock, Passline, len, 0);
 			sockptr->LoginState = 2;		// Data
 			sockptr->InputLen=0;
+			sockptr->LogonSent = FALSE;
 
 			if (CMSLogEnabled)
 			{
@@ -3390,13 +3538,16 @@ MsgLoop:
 						if (memcmp(MsgPtr, "\\\\\\\\", 4) == 0)
 						{
 							// Monitor Control
-		
-							int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x",
+
+							int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x",
 								&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES,
-								&sockptr->MonitorColour, &sockptr->MUIOnly);
+								&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8);
 
 							if (n == 5)
-								sockptr->MUIOnly = 0;
+								sockptr->MUIOnly = sockptr->UTF8 = 0;
+
+							if (n == 6)
+								sockptr->UTF8 = 0;
 
 							sockptr->InputLen = 0;
 							return 0;
@@ -3672,13 +3823,13 @@ int WriteLog(char * msg)
 
 	if (BPQDirectory[0] == 0)
 	{
-		strcpy(Value, "BPQTelnetServer.log");
+		strcpy(Value, "logs/BPQTelnetServer.log");
 	}
 	else
 	{
 		strcpy(Value, BPQDirectory);
 		strcat(Value, "/");
-		strcat(Value, "BPQTelnetServer.log");
+		strcat(Value, "logs/BPQTelnetServer.log");
 	}
 		
 	if ((file = fopen(Value, "a")) == NULL)
@@ -3730,13 +3881,13 @@ VOID WriteCMSLog(char * msg)
 
 	if (BPQDirectory[0] == 0)
 	{
-		strcpy(Value, "CMSAccess");
+		strcpy(Value, "logs/CMSAccess");
 	}
 	else
 	{
 		strcpy(Value, BPQDirectory);
 		strcat(Value, "/");
-		strcat(Value, "CMSAccess");
+		strcat(Value, "logs/CMSAccess");
 	}
 
 	sprintf(Value, "%s_%04d%02d%02d.log", Value,
@@ -3786,7 +3937,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 				
 	if (Error)
 	{
-		if (sockptr->CMSSession)
+		if (sockptr->CMSSession && sockptr->RelaySession == 0)
 		{
 			// Try Next
 
@@ -3797,7 +3948,12 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 		}
 		else
 		{
-			buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failed to Connect - Error %d\r", Error);
+			int err = 0;
+			int errlen = 4;
+
+			getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&err, &errlen);
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2], "*** Failed to Connect\r");
 					
 			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 				
@@ -3810,9 +3966,12 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 		}
 	}
 
+	sockptr->LogonSent = FALSE;
+
 	if (sockptr->CMSSession)
 	{
 		sockptr->LoginState = 3;			// Password State
+
 		sockptr->UserPointer  = &CMSUser;
 		sockptr->DoEcho = FALSE;
 		sockptr->FBBMode = TRUE;
@@ -4405,18 +4564,18 @@ TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 
 		HostEnt = gethostbyname(Host);
 		 
-		 if (!HostEnt)
-		 {
+		if (!HostEnt)
+		{
 			ReportError(STREAM, "Resolve HostName Failed");
 			return FALSE;			// Resolve failed
-		 }
-		 i = 0;
-		 while (HostEnt->h_addr_list[i] != 0)
-		 {
+		}
+		i = 0;
+		while (HostEnt->h_addr_list[i] != 0)
+		{
 			    struct in_addr addr;
 				addr.s_addr = *(u_long *) HostEnt->h_addr_list[i++];
-		 }
-		 memcpy(&destaddr.sin_addr.s_addr, HostEnt->h_addr, 4);
+		}
+		memcpy(&destaddr.sin_addr.s_addr, HostEnt->h_addr, 4);
 	}
 
 	ioctl (sockptr->socket, FIONBIO, &param);
@@ -4598,6 +4757,34 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 	if (sockptr->UserPointer  == &CMSUser)
 		WritetoTrace(Stream, MsgPtr, datalen);
 
+	if (sockptr->UTF8)
+	{
+		// Convert any non-utf8 chars
+
+		if (IsUTF8(MsgPtr, datalen) == FALSE)
+		{
+			unsigned char UTF[1024];
+			int u, code;
+
+			// Try to guess encoding
+
+			code = TrytoGuessCode(MsgPtr, datalen);
+
+			if (code == 437)
+				u = Convert437toUTF8(MsgPtr, datalen, UTF);
+			else if (code == 1251)
+				u = Convert1251toUTF8(MsgPtr, datalen, UTF);
+			else
+				u = Convert1252toUTF8(MsgPtr, datalen, UTF);
+			
+			send(sock, UTF, u, 0);
+			ReleaseBuffer(buffptr);
+
+			return;
+		}
+	}
+
+
 	if (sockptr->FBBMode)
 	{
 		send(sock, MsgPtr, datalen, 0);
@@ -4634,4 +4821,444 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 				
 	ReleaseBuffer(buffptr);
 }
+int IsUTF8(unsigned char *ptr, int len)
+{
+	int n; 
+	unsigned char * cpt = ptr;
 
+	// This has to be a bit loose, as UTF8 sequences may split over packets
+
+	memcpy(&ptr[len], "\x80\x80\x80", 3);		// in case trailing bytes are in next packet
+
+	// Don't check first 3 if could be part of sequence
+	
+	if ((*(cpt) & 0xC0) == 0x80)				// Valid continuation
+	{
+		cpt++;
+		len--;
+		if ((*(cpt) & 0xC0) == 0x80)			// Valid continuation
+		{
+			cpt++;
+			len--;
+			if ((*(cpt) & 0xC0) == 0x80)		// Valid continuation
+			{
+				cpt++;
+				len--;
+			}
+		}
+	}
+
+	cpt--;
+										
+	for (n = 0; n < len; n++)
+	{
+		cpt++;
+		
+		if (*cpt < 128)
+			continue;
+
+		if ((*cpt & 0xF8) == 0xF0)
+		{ // start of 4-byte sequence
+			if (((*(cpt + 1) & 0xC0) == 0x80)
+		     && ((*(cpt + 2) & 0xC0) == 0x80)
+			 && ((*(cpt + 3) & 0xC0) == 0x80))
+			{
+				cpt += 3;
+				n += 3;
+				continue;
+			}
+			return FALSE;
+	    }
+		else if ((*cpt & 0xF0) == 0xE0)
+		{ // start of 3-byte sequence
+	        if (((*(cpt + 1) & 0xC0) == 0x80)
+		     && ((*(cpt + 2) & 0xC0) == 0x80))
+			{
+				cpt += 2;
+				n += 2;
+				continue;
+			}
+			return FALSE;
+		}
+		else if ((*cpt & 0xE0) == 0xC0)
+		{ // start of 2-byte sequence
+	        if ((*(cpt + 1) & 0xC0) == 0x80)
+			{
+				cpt++;
+				n++;
+				continue;
+			}
+			return FALSE;
+		}
+		return FALSE;
+	}
+
+    return TRUE;
+}
+
+unsigned int CP437toUTF8Data[128] = {
+  34755, 48323, 43459, 41667,  
+  42179, 41155, 42435, 42947,  
+  43715, 43971, 43203, 44995,  
+  44739, 44227, 33987, 34243,  
+  35267, 42691, 34499, 46275,  
+  46787, 45763, 48067, 47555,  
+  49091, 38595, 40131, 41666,  
+  41922, 42434, 10978018, 37574,  
+  41411, 44483, 46019, 47811,  
+  45507, 37315, 43714, 47810,  
+  49090, 9473250, 44226, 48578,  
+  48322, 41410, 43970, 48066,  
+  9541346, 9606882, 9672418, 8557794,  
+  10786018, 10589666, 10655202, 9868770,  
+  9803234, 10720738, 9541090, 9934306,  
+  10327522, 10261986, 10196450, 9475298,  
+  9737442, 11834594, 11310306, 10261730,  
+  8426722, 12358882, 10393058, 10458594,  
+  10130914, 9737698, 11113954, 10917346,  
+  10524130, 9475554, 11310562, 10982882,  
+  11048418, 10786274, 10851810, 10065378,  
+  9999842, 9606626, 9672162, 11245026,  
+  11179490, 9999586, 9213154, 8951522,  
+  8689378, 9213666, 9475810, 8427234,  
+  45518, 40899, 37838, 32975,  
+  41934, 33743, 46530, 33999,  
+  42702, 39118, 43470, 46286,  
+  10389730, 34511, 46542, 11110626,  
+  10586594, 45506, 10848738, 10783202,  
+  10521826, 10587362, 47043, 8948194,  
+  45250, 10062050, 47042, 10127586,  
+  12550626, 45762, 10524386, 41154,  
+};
+unsigned int CP437toUTF8DataLen[128] = {
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 3, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 3, 2, 2,  
+  2, 2, 2, 2,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  3, 3, 3, 3,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  3, 2, 2, 3,  
+  3, 2, 3, 3,  
+  3, 3, 2, 3,  
+  2, 3, 2, 3,  
+  3, 2, 3, 2,  
+};
+
+unsigned int CP1251toUTF8Data[128] = {
+  33488, 33744, 10125538, 37841,  
+  10387682, 10911970, 10518754, 10584290,  
+  11305698, 11567330, 35280, 12157154,  
+  35536, 36048, 35792, 36816,  
+  37585, 9994466, 10060002, 10256610,  
+  10322146, 10649826, 9666786, 9732322,  
+  39106, 10650850, 39377, 12222690,  
+  39633, 40145, 39889, 40913,  
+  41154, 36560, 40657, 35024,  
+  42178, 37074, 42690, 42946,  
+  33232, 43458, 34000, 43970,  
+  44226, 44482, 44738, 34768,  
+  45250, 45506, 34512, 38609,  
+  37330, 46530, 46786, 47042,  
+  37329, 9864418, 38097, 48066,  
+  39121, 34256, 38353, 38865,  
+  37072, 37328, 37584, 37840,  
+  38096, 38352, 38608, 38864,  
+  39120, 39376, 39632, 39888,  
+  40144, 40400, 40656, 40912,  
+  41168, 41424, 41680, 41936,  
+  42192, 42448, 42704, 42960,  
+  43216, 43472, 43728, 43984,  
+  44240, 44496, 44752, 45008,  
+  45264, 45520, 45776, 46032,  
+  46288, 46544, 46800, 47056,  
+  47312, 47568, 47824, 48080,  
+  48336, 48592, 48848, 49104,  
+  32977, 33233, 33489, 33745,  
+  34001, 34257, 34513, 34769,  
+  35025, 35281, 35537, 35793,  
+  36049, 36305, 36561, 36817,  
+};
+unsigned int CP1251toUTF8DataLen[128] = {
+  2, 2, 3, 2,  
+  3, 3, 3, 3,  
+  3, 3, 2, 3,  
+  2, 2, 2, 2,  
+  2, 3, 3, 3,  
+  3, 3, 3, 3,  
+  2, 3, 2, 3,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 3, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+};
+
+
+unsigned int CP1252toUTF8Data[128] = {
+  11305698, 33218, 10125538, 37574,  
+  10387682, 10911970, 10518754, 10584290,  
+  34507, 11567330, 41157, 12157154,  
+  37573, 36290, 48581, 36802,  
+  37058, 9994466, 10060002, 10256610,  
+  10322146, 10649826, 9666786, 9732322,  
+  40139, 10650850, 41413, 12222690,  
+  37829, 40386, 48837, 47301,  
+  41154, 41410, 41666, 41922,  
+  42178, 42434, 42690, 42946,  
+  43202, 43458, 43714, 43970,  
+  44226, 44482, 44738, 44994,  
+  45250, 45506, 45762, 46018,  
+  46274, 46530, 46786, 47042,  
+  47298, 47554, 47810, 48066,  
+  48322, 48578, 48834, 49090,  
+  32963, 33219, 33475, 33731,  
+  33987, 34243, 34499, 34755,  
+  35011, 35267, 35523, 35779,  
+  36035, 36291, 36547, 36803,  
+  37059, 37315, 37571, 37827,  
+  38083, 38339, 38595, 38851,  
+  39107, 39363, 39619, 39875,  
+  40131, 40387, 40643, 40899,  
+  41155, 41411, 41667, 41923,  
+  42179, 42435, 42691, 42947,  
+  43203, 43459, 43715, 43971,  
+  44227, 44483, 44739, 44995,  
+  45251, 45507, 45763, 46019,  
+  46275, 46531, 46787, 47043,  
+  47299, 47555, 47811, 48067,  
+  48323, 48579, 48835, 49091,  
+};
+unsigned int CP1252toUTF8DataLen[128] = {
+  3, 2, 3, 2,  
+  3, 3, 3, 3,  
+  2, 3, 2, 3,  
+  2, 2, 2, 2,  
+  2, 3, 3, 3,  
+  3, 3, 3, 3,  
+  2, 3, 2, 3,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+  2, 2, 2, 2,  
+};
+
+#ifdef __BIG_ENDIAN__
+BOOL initUTF8Done = FALSE;
+#else
+BOOL initUTF8Done = TRUE;
+#endif
+
+VOID initUTF8()
+{
+	// Swap bytes of UTF-8 COde on Big-endian systems
+	
+	int n;
+	char temp[4];
+	char rev[4];
+
+	if (initUTF8Done)
+		return;
+	
+	for (n = 0; n <128; n++)
+	{
+		memcpy(temp, &CP437toUTF8Data[n], 4);
+		rev[0] = temp[3];
+		rev[1] = temp[2];
+		rev[2] = temp[1];
+		rev[3] = temp[0];
+
+		memcpy(&CP437toUTF8Data[n], rev, 4);
+
+		memcpy(temp, &CP1251toUTF8Data[n], 4);
+		rev[0] = temp[3];
+		rev[1] = temp[2];
+		rev[2] = temp[1];
+		rev[3] = temp[0];
+
+		memcpy(&CP1251toUTF8Data[n], rev, 4);
+
+		memcpy(temp, &CP1252toUTF8Data[n], 4);
+		rev[0] = temp[3];
+		rev[1] = temp[2];
+		rev[2] = temp[1];
+		rev[3] = temp[0];
+
+		memcpy(&CP1252toUTF8Data[n], rev, 4);
+	}
+
+	initUTF8Done = TRUE;
+}
+
+int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
+{
+	unsigned char * ptr1 = MsgPtr;
+	unsigned char * ptr2 = UTF;
+	int n;
+	unsigned int c;
+
+	for (n = 0; n < len; n++)
+	{
+		c = *(ptr1++);
+
+		if (c < 128)
+		{
+			*(ptr2++) = c;
+			continue;
+		}
+
+		memcpy(ptr2, &CP437toUTF8Data[c - 128], CP437toUTF8DataLen[c - 128]);
+		ptr2 += CP437toUTF8DataLen[c - 128];
+	}
+
+	return ptr2 - UTF;
+}
+
+int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
+{
+	unsigned char * ptr1 = MsgPtr;
+	unsigned char * ptr2 = UTF;
+	int n;
+	unsigned int c;
+
+	for (n = 0; n < len; n++)
+	{
+		c = *(ptr1++);
+
+		if (c < 128)
+		{
+			*(ptr2++) = c;
+			continue;
+		}
+
+		memcpy(ptr2, &CP1251toUTF8Data[c - 128], CP1251toUTF8DataLen[c - 128]);
+		ptr2 += CP1251toUTF8DataLen[c - 128];
+	}
+
+	return ptr2 - UTF;
+}
+
+int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF)
+{
+	unsigned char * ptr1 = MsgPtr;
+	unsigned char * ptr2 = UTF;
+	int n;
+	unsigned int c;
+
+	for (n = 0; n < len; n++)
+	{
+		c = *(ptr1++);
+
+		if (c < 128)
+		{
+			*(ptr2++) = c;
+			continue;
+		}
+
+		memcpy(ptr2, &CP1252toUTF8Data[c - 128], CP1252toUTF8DataLen[c - 128]);
+		ptr2 += CP1252toUTF8DataLen[c - 128];
+	}
+
+	return ptr2 - UTF;
+}
+
+int TrytoGuessCode(unsigned char * Char, int Len)
+{
+	int Above127 = 0;
+	int LineDraw = 0;
+	int NumericAndSpaces = 0;
+	int n;
+
+	for (n = 0; n < Len; n++)
+	{
+		if (Char[n] < 65)
+		{
+			NumericAndSpaces++;
+		}
+		else
+		{
+			if (Char[n] > 127)
+			{
+				Above127++;
+				if (Char[n] > 178 && Char[n] < 219)
+				{
+					LineDraw++;
+				}
+			}
+		}
+	}
+
+	if (Above127 == 0)			// DOesn't really matter!
+		return 1252;
+
+	if (Above127 == LineDraw)
+		return 437;			// If only Line Draw chars, assume line draw
+
+	// If mainly below 128, it is probably Latin if mainly above, probably Cyrillic
+
+	if ((Len - (NumericAndSpaces + Above127)) < Above127) 
+		return 1251;
+	else
+		return 1252;
+}

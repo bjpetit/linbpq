@@ -35,6 +35,7 @@ struct ScanEntry
 	char * PollCmd;
 	int PollCmdLen;
 	char APPL[13];		// Autoconnect APPL for this Freq
+	char APPLCALL[10];	// Callsign for autoconnect application
 };
 
 struct RIGINFO
@@ -103,13 +104,16 @@ struct RIGINFO
 	char Valchar[15];			// Freq as char string
 	char CurrentBandWidth;
 
-	char PTTOn[10];
-	char PTTOff[10];
+	char PTTOn[30];
+	char PTTOff[30];
 	int PTTOnLen;
 	int PTTOffLen;
 
 	char Poll[50];
 	int PollLen;
+
+	char PTTCATPort[4][10];
+	HANDLE PTTCATHandles[4];
 
 };
 

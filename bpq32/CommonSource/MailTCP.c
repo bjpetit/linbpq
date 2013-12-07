@@ -62,8 +62,8 @@ char mycd64[256];
 static const char cb64[]="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 static const char cd64[]="|$$$}rstuvwxyz{$$$$$$$>?@ABCDEFGHIJKLMNOPQRSTUVW$$$$$$XYZ[\\]^_`abcdefghijklmnopq";
 
-char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+//char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+//char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 void decodeblock( unsigned char in[4], unsigned char out[3] );
 
@@ -1032,6 +1032,9 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 			char lcLine[1000] = "";
 
 			ptr2 = strchr(ptr, 10);	// Find CR
+
+			if (ptr2 == 0)
+				return FALSE;
 					
 			while(ptr2[1] == ' ' || ptr2[1] == 9)		// Whitespace - continuation line
 			{
@@ -2182,6 +2185,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		struct MsgInfo * Msg;
 		char B2From[80];
 		struct UserInfo * FromUser;
+		char TimeString[64];
 
 		ptr=strlop(Buffer, ' ');			// Get Number
 
@@ -2209,6 +2213,11 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 //Received: from [69.147.65.148] by n15.bullet.sp1.yahoo.com with NNFMP; 16 May 2009 02:30:47 -0000
 //Received: from [69.147.108.192] by t11.bullet.mail.sp1.yahoo.com with NNFMP; 16 May 2009 02:30:47 -0000
+
+		FormatTime(TimeString, Msg->datecreated);
+
+		sprintf_s(Header, sizeof(Header), "Date: %s", TimeString);
+		SendSock(sockptr, Header);
 
 		sprintf_s(Header, sizeof(Header), "To: %s", Msg->to);
 		SendSock(sockptr, Header);

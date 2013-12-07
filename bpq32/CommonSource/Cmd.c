@@ -27,6 +27,7 @@
 
 BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR *AXCalls);
 VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
+int APIENTRY ClearNodes();
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 
@@ -2618,6 +2619,25 @@ NODE_DEL:
 		goto SendReply;
 	}
 
+	if (strcmp(ptr, "ALL") == 0)
+	{
+		struct DEST_LIST * DEST = DESTS;
+		int n = MAXDESTS;
+
+		while (n--)
+		{
+			if (DEST->DEST_CALL[0] && ((DEST->DEST_STATE & 0x80) == 0))			// Don't delete locked
+					REMOVENODE(DEST);
+
+			DEST++;
+		}
+
+		ClearNodes();
+
+		Bufferptr += sprintf(Bufferptr, "All Nodes Deleted\r");
+		goto SendReply;
+	}
+
 	ConvToAX25(ptr, AXCALL);
 
 	if (FindDestination(AXCALL, &Dest) == 0)
@@ -2626,8 +2646,13 @@ NODE_DEL:
 		goto SendReply;
 	}
 
-	REMOVENODE(Dest);
-
+	if (Dest->DEST_STATE & 0x80)
+		Bufferptr += sprintf(Bufferptr, "APPL Node - Can't delete\r");
+	else
+	{
+		REMOVENODE(Dest);
+		Bufferptr += sprintf(Bufferptr, "Node Deleted\r");
+	}
 	Bufferptr += sprintf(Bufferptr, "Node Deleted\r");
 
 SendReply:
@@ -2758,7 +2783,13 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 		return;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
+	if (strstr(Context, "CLEAR"))
+	{
+		memset(MH, 0, MHENTRIES * sizeof(MHSTRUC));
+		Bufferptr += sprintf(Bufferptr, "Heard List for Port %d Cleared\r", Port);
+	}
+	else
+		Bufferptr += sprintf(Bufferptr, "Heard List for Port %d\r", Port);
 
 	while (n--)
 	{

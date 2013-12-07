@@ -1727,8 +1727,13 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	if (StMsg == NULL)
 		StMsg = StatusMsg;
 	
-	Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
-		LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+	if (ISPort && IGateEnabled)
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+	else
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+	
 	Msg.PID = 0xf0;
 	Msg.CTL = 3;
 
@@ -1750,8 +1755,12 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	{
 		if (BeaconHddrLen[Port])		// Only send to ports with a DEST defined
 		{
-			Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
-					LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+	if (ISPort && IGateEnabled)
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 Igate V %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
+	else
+		Len = sprintf(Msg.L2DATA, "%c%s%c%s%c%s BPQ32 V %s", (APRSApplConnected) ? '=' : '!',
+			LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
 			Msg.PID = 0xf0;
 			Msg.CTL = 3;
 
@@ -2644,7 +2653,7 @@ BOOL OpenGPSPort()
 
 	// open COMM device
 
-	portptr->hDevice = OpenCOMPort((VOID *)GPSPort, GPSSpeed, TRUE, TRUE, FALSE);
+	portptr->hDevice = OpenCOMPort((VOID *)GPSPort, GPSSpeed, TRUE, TRUE, FALSE, 0);
 				  
 	if (portptr->hDevice == 0)
 	{

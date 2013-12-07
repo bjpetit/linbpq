@@ -45,7 +45,7 @@ void SEND_RR_RESP(struct _LINKTABLE * LINK, UCHAR PF);
 VOID L2SENDRESPONSE(struct _LINKTABLE * LINK, int CMD);
 VOID L2SENDCOMMAND(struct _LINKTABLE * LINK, int CMD);
 VOID ACKMSG(struct _LINKTABLE * LINK);
-VOID InformPartner(struct _LINKTABLE * LINK);
+VOID InformPartner(struct _LINKTABLE * LINK, int Reason);
 UINT RR_OR_RNR(struct _LINKTABLE * LINK);
 VOID L2TIMEOUT(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT);
 VOID CLEAROUTLINK(struct _LINKTABLE * LINK);
@@ -351,7 +351,7 @@ NOWTRY_NODES:
 
 	if (CompareCalls(Buffer->DEST, QSTCALL))
 	{
-		Q_IP_MSG( Buffer);				// IP BROADCAST
+		Q_IP_MSG(Buffer);				// IP BROADCAST
 		return;
 	}
 
@@ -708,7 +708,7 @@ VOID L2LINKACTIVE(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 
 	if (CTLlessPF == DISC)
 	{
-		InformPartner(LINK);			// SEND DISC TO OTHER END
+		InformPartner(LINK, NORMALCLOSE);		// SEND DISC TO OTHER END
 		CLEAROUTLINK(LINK);
 
 		L2SENDUA(PORT, Buffer, ADJBUFFER);
@@ -747,7 +747,7 @@ VOID L2LINKACTIVE(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 			return;
 		}
 		
-		InformPartner(LINK);			// SEND DISC TO OTHER END
+		InformPartner(LINK, NORMALCLOSE);	// SEND DISC TO OTHER END
 
 		L2SABM(LINK, PORT, Buffer, ADJBUFFER, MSGFLAG);			// Process the SABM
 		return;
@@ -1289,7 +1289,7 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * B
 
 		if (LINK->L2STATE == 4)				// DISCONNECTING?
 		{
-			InformPartner(LINK);			// SEND DISC TO OTHER END
+			InformPartner(LINK, NORMALCLOSE);	// SEND DISC TO OTHER END
 			CLEAROUTLINK(LINK);
 		}
 
@@ -1312,7 +1312,7 @@ VOID L2_PROCESS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * B
 
 		//	CLEAR OUT TABLE ENTRY - IF INTERNAL TNC, SHOULD SEND *** DISCONNECTED
 
-		InformPartner(LINK);			// SEND DISC TO OTHER END
+		InformPartner(LINK, LINKLOST);		// SEND DISC TO OTHER END
 		CLEAROUTLINK(LINK);
 
 		ReleaseBuffer(Buffer);
@@ -1374,7 +1374,7 @@ VOID SDUFRM(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buffe
 
 		//	SEE IF CROSSLINK ACTIVE
 
-		InformPartner(LINK);			// SEND DISC TO OTHER END
+		InformPartner(LINK, LINKLOST);		// SEND DISC TO OTHER END
 		CLEAROUTLINK(LINK);	
 		break;
 
@@ -2103,7 +2103,7 @@ VOID L2TimerProc()
 
 			//	TELL OTHER LEVELS
 
-			InformPartner(LINK);
+			InformPartner(LINK, NORMALCLOSE);
 		}
 		LINK++;
 	}
@@ -2171,7 +2171,14 @@ VOID ACKMSG(struct _LINKTABLE * LINK)
 		if (LINK->FRAMES[LINK->LINKOWS])
 			ReleaseBuffer(Q_REM(&LINK->FRAMES[LINK->LINKOWS]));
 		else
-			Debugprintf("Missing frame to ack");
+		{
+			char Call1[12], Call2[12];
+
+			Call1[ConvFromAX25(LINK->LINKCALL, Call1)] = 0;
+			Call2[ConvFromAX25(LINK->OURCALL, Call2)] = 0;
+
+			Debugprintf("Missing frame to ack Seq %d Calls %s %s", LINK->LINKOWS, Call1, Call2);
+		}
 
 		LINK->LINKOWS++;			// INCREMENT OLD WINDOW START
 		LINK->LINKOWS &= 7;			// MODULO 8
@@ -2288,7 +2295,7 @@ VOID L2TIMEOUT(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT)
 	{
 		//	RETRIED N TIMES SEND A COUPLE OF DISCS AND THEN CLOSE
 
-		InformPartner(LINK);		// TELL OTHER END ITS GONE
+		InformPartner(LINK, RETRIEDOUT);	// TELL OTHER END ITS GONE
 
 		LINK->L2RETRIES =-2;
 		LINK->L2STATE = 4;			// CLOSING
@@ -2454,15 +2461,15 @@ MESSAGE * SETUPL2MESSAGE(struct _LINKTABLE * LINK, UCHAR CMD)
 }
 
 
-VOID L3LINKCLOSED();
+VOID L3LINKCLOSED(struct _LINKTABLE * LINK, int Reason);
 
-VOID InformPartner(struct _LINKTABLE * LINK)
+VOID InformPartner(struct _LINKTABLE * LINK, int Reason)
 {
 	//	LINK IS DISCONNECTING - IF THERE IS A CROSSLINK, SEND DISC TO IT
 
 	if (LINK->LINKTYPE == 3)
 	{
-		L3LINKCLOSED(LINK);
+		L3LINKCLOSED(LINK, Reason);
 		return;
 	}
 	

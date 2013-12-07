@@ -752,7 +752,7 @@ char * DISPLAYARPDATAGRAM(UCHAR * Datagram, UCHAR * Output)
 
 	Dest[ConvFromAX25(&ptr[8], Dest)] = 0;
 
-	return Output + sprintf(Output, " ARP Reply %d.%d.%d.%d is at %s",
-			ptr[15], ptr[16], ptr[17], ptr[18], Dest);
+	return Output + sprintf(Output, " ARP Reply %d.%d.%d.%d is at %s Tell %d.%d.%d.%d",
+			ptr[15], ptr[16], ptr[17], ptr[18], Dest, ptr[26], ptr[27], ptr[28], ptr[29]);
 
 }

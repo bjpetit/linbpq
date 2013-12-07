@@ -10,10 +10,18 @@
 #include "asmstrucs.h"
 #include "bpq32.h"
 #include "chatrc.h"
+#else
 
+#define WCHAR  wchar_t
 #endif
 
-
+#ifdef LINBPQ
+#ifdef WIN32
+#include "C:\Program Files (X86)\GnuWin32\include\iconv.h"
+#else
+#include <iconv.h>
+#endif
+#endif
 
 #define IDC_STATIC -1
 #define IDS_APP_TITLE 103
@@ -328,6 +336,8 @@ typedef struct cn_t
 #define u_keepalive 0x0010	// User wants Keepalive Messages.
 #define u_shownames 0x0020	// User wants name as well as call on each message.
 #define u_showtime 0x0040	// User wants time on each message.
+#define u_auto 0x0080		// Determine UTF-8 Mode automatically.
+#define u_noUTF8 0x0100		// Terminal is not using UTF-8.
 
 struct UserInfo{
 
@@ -416,29 +426,6 @@ struct TempUserInfo
 };
 
 
-// flags equates
-
-#define F_Excluded   0x0001
-#define F_LOC        0x0002
-#define F_Expert     0x0004
-#define F_SYSOP      0x0008
-#define F_BBS        0x0010
-#define F_PAG        0x0020
-#define F_GST        0x0040
-#define F_MOD        0x0080
-#define F_PRV        0x0100
-#define F_UNP        0x0200
-#define F_NEW        0x0400
-#define F_PMS        0x0800
-#define F_EMAIL      0x1000
-#define F_HOLDMAIL   0x2000
-#define F_POLLRMS	 0x4000
-#define F_SYSOP_IN_LM 0x8000
-#define F_Temp_B2_BBS 0x10000
-
-/* #define F_PWD        0x1000 */
-
-
 typedef struct user_t
 {
 	struct  user_t *next;
@@ -452,6 +439,13 @@ typedef struct user_t
 	time_t	lastmsgtime;	// Time of last input from user
 	time_t	lastsendtime;	// Time of last output to user
 	int Colour;				// For Console Display
+#ifdef LINBPQ
+	char Codepage[80];		// For Converting UTF8 to local char set for non-utf-8 terminals
+	iconv_t iconv_toUTF8;	// per-uswer converison handles
+	iconv_t iconv_fromUTF8;
+#else
+	int Codepage;
+#endif
 } USER;
 
 #pragma pack()
@@ -493,7 +487,7 @@ struct ConsoleInfo
 	char kbbuf[INPUTLEN];
 	int kbptr;
 
-	char * readbuff;		// Malloc'ed
+	WCHAR * readbuff;		// Malloc'ed
 	int readbufflen;		// Current Length
 	char * KbdStack[MAXSTACK];
 
@@ -533,7 +527,7 @@ struct ConsoleInfo
 	BOOL SendHeader;
 	BOOL Finished;
 
-	char OutputScreen[MAXLINES][LINELEN];
+	WCHAR OutputScreen[MAXLINES][LINELEN];
 
 	int Colourvalue[MAXLINES];
 	int LineLen[MAXLINES];
@@ -654,7 +648,7 @@ VOID __cdecl nodeprintf(ChatCIRCUIT * conn, const char * format, ...);
 // Console Routines
 
 BOOL CreateConsole(int Stream);
-int WritetoConsoleWindow(int Stream, char * Msg, int len);
+int WritetoConsoleWindow(int Stream, UCHAR * Msg, int len);
 int ToggleParam(HMENU hMenu, HWND hWnd, BOOL * Param, int Item);
 void CopyRichTextToClipboard(HWND hWnd);
 void CopyToClipboard(HWND hWnd);

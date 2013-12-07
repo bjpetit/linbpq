@@ -290,7 +290,7 @@ static int offset[] =
 40, 42, 44, 46, 48, 50,
 52, 54, 56, 58, 64, 68,
 69, 10, 30, 0, 20,
-384, 512, InfoOffset, 1536, 2560, 72,
+384, 512, InfoOffset, C_ROUTES, 2560, 72,
 74, 76, 78, 96, 100,
 102, 103, 105, 107, 120, 118,
 ApplOffset, 66, 2048, 71, 70, 67,
@@ -567,18 +567,18 @@ BOOL ProcessConfig()
 
 	for (i=0; i < PARAMLIM; i++)
 	{
-	   if (paramok[i] == 0)
-	   {
-	      if (heading == 0)
-	      {
-		 Consoleprintf("\r\nThe following parameters were not correctly specified");
-         	 heading = 1;
-      	      }
-	      Consoleprintf(keywords[i]);
-   	}
+		if (paramok[i] == 0)
+		{
+			if (heading == 0)
+			{
+				Consoleprintf("\r\nThe following parameters were not correctly specified");
+				heading = 1;
+			}
+			Consoleprintf(keywords[i]);
+		}
 	}
 
-        if (portnum == 1)
+	if (portnum == 1)
 	{
 	   Consoleprintf("No valid radio ports defined");
 	   heading = 1;
@@ -618,41 +618,6 @@ BOOL ProcessConfig()
 	}
 	return TRUE;
 }
-
-#ifndef LINBPQ
-
-extern HANDLE hInstance;
-
-static WNDPROC wpOrigWarnProc; 
-
-
-LRESULT APIENTRY WarnProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-
-	// Trap mouse messages, so we cant select stuff in output and mon windows,
-	//	otherwise scrolling doesnt work.
-
-	return DefWindowProc(hwnd, uMsg, wParam, lParam); 
-
-} 
-
-
-VOID WarnThread()
-{
-	HWND hWnd = CreateWindow("STATIC",
-		"Please enter a LOCATOR statment in your BPQ32.cfg\rIf you really don't want to be on the Node Map you can enter LOCATOR=NONE",
-		0, 100, 100, 550, 100, NULL, NULL, hInstance, NULL);
-
-	wpOrigWarnProc = (WNDPROC)SetWindowLong(hWnd, GWL_WNDPROC, (LONG)WarnProc);
-
-	ShowWindow(hWnd, SW_SHOWNORMAL);
-	InvalidateRect(hWnd, NULL, TRUE);
-
-	Sleep(30000);
-	DestroyWindow(hWnd);
-}
-
-#endif
 
 /************************************************************************/
 /*	Decode PARAM=							*/
@@ -728,12 +693,12 @@ char rec[];
 			}
 			if (strlen(rec) > 1)
 			{
-				if (strstr(rec, "/*"))
+				if (memcmp(rec, "/*", 2) == 0)
 				{
 					Comment = TRUE;
 					goto NextAPRS;
 				}
-				else if (strstr(rec, "*/"))
+				else if (memcmp(rec, "*/", 2) == 0)
 				{
 					Comment = FALSE;
 					goto NextAPRS;
@@ -911,7 +876,7 @@ NextAPRS:
 			heading = 1;
 		}
 		else
-				paramok[34]=1;		// Got APPLICATIONS
+			paramok[34]=1;		// Got APPLICATIONS
 
 		return 0;
 	}
@@ -1401,8 +1366,7 @@ int doBText(int i, char key_word[])
 /*     CONVERT PRE-SET ROUTES PARAMETERS TO BINARY			*/
 /************************************************************************/
 
-int routes(i)
-int i;
+int routes(int i)
 {
 	int err_flag = 0;
 	int main_err = 0;
@@ -1474,7 +1438,7 @@ int i;
 
 	bputc('\0',fp2);
 
-	if (btell(fp2) > fileoffset+510)
+	if (btell(fp2) > fileoffset + 2000)			// Approx 120
 	{
 	   Consoleprintf("Route information too long - file may be corrupt");
 	   main_err = 1;
@@ -2745,8 +2709,6 @@ VOID FreeConfig()
 {
 	free(ConfigBuffer);
 }
-
-/* END OF CODE */
 
 BOOL ProcessAPPLDef(char * buf)
 {

@@ -13,7 +13,7 @@
 #include <windows.h>
 #endif
 
-
+char * strlop(char * buf, char delim);
 
 VOID APIENTRY md5 (char *arg, unsigned char * checksum);
 

@@ -533,6 +533,9 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 
 			if (APPL->APPLHASALIAS)
 			{
+				if (_memicmp(APPL->APPLCMD, "RELAY ", 6) == 0)
+					return APPL->APPLCALL_TEXT;			// Assume people using RELAY know what they are doing
+
 				if (APPL->APPLPORT)
 				{
 					APPLTNC = TNCInfo[APPL->APPLPORT];
@@ -1808,10 +1811,10 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 	if (_memicmp(Port, "COM", 3) == 0)
 	{
 		PortNum = atoi(&Port[3]);
-		conn->hDevice = OpenCOMPort((VOID *)PortNum, Speed, TRUE, TRUE, Quiet);
+		conn->hDevice = OpenCOMPort((VOID *)PortNum, Speed, TRUE, TRUE, Quiet, 0);
 	}
 	else
-		conn->hDevice = OpenCOMPort((VOID *)Port, Speed, TRUE, TRUE, Quiet);
+		conn->hDevice = OpenCOMPort((VOID *)Port, Speed, TRUE, TRUE, Quiet, 0);
 			  
 	if (conn->hDevice == 0)
 	{
@@ -1831,7 +1834,7 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 
 #ifdef WIN32
 
-HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
 {            
 	char szPort[80];
 	BOOL fRetVal ;
@@ -1907,7 +1910,8 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
    dcb.BaudRate = speed;
    dcb.ByteSize = 8;
    dcb.Parity = 0;
-   dcb.StopBits = TWOSTOPBITS;
+//   dcb.StopBits = TWOSTOPBITS;
+   dcb.StopBits = Stopbits;
 
 	// setup hardware flow control
 
@@ -2058,7 +2062,7 @@ static struct speed_struct
 };
  
 
-HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet)
+HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
 {
 	char Port[256];
 	char buf[100];
@@ -2712,6 +2716,22 @@ DllExport long APIENTRY GetApplQual(int Appl)
 
 	return (APPLCALLTABLE[Appl-1].APPLQUAL);
 }
+
+char * GetApplCallFromName(char * App)
+{
+	int i;
+	char PaddedAppl[13] = "            ";
+
+	memcpy(PaddedAppl, App, strlen(App));
+
+	for (i = 0; i < NumberofAppls; i++)
+	{
+		if (memcmp(&APPLCALLTABLE[i].APPLCMD, PaddedAppl, 12) == 0)
+			return &APPLCALLTABLE[i].APPLCALL_TEXT;
+	}
+	return NULL;
+}
+
 
 DllExport char * APIENTRY GetApplName(int Appl)
 {

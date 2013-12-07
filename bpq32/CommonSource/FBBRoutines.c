@@ -16,6 +16,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 {
 	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
 	int i;
+	int Index = 0;			// Message Type Index for Stats
 	char * ptr;
 	char * Context;
 	char seps[] = " \r";
@@ -122,6 +123,13 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		{
 			FBBHeader = &conn->FBBHeaders[i];
 
+			if (FBBHeader->MsgType == 'P')
+				Index = PMSG;
+			else if (FBBHeader->MsgType == 'B')
+				Index = BMSG;
+			else if (FBBHeader->MsgType == 'T')
+				Index = TMSG;
+
 			Respptr++;
 
 			if (*Respptr == 'E')
@@ -133,7 +141,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			
 			if ((*Respptr == '-') || (*Respptr == 'N') || (*Respptr == 'R') || (*Respptr == 'E'))				// Not wanted
 			{
-				user->MsgsRejectedOut++;
+				user->Total.MsgsRejectedOut[Index]++;
 				
 				// Zap the entry
 
@@ -232,8 +240,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 					QueueMsg(conn, MsgBytes, FBBHeader->FwdMsg->length);
 					free(MsgBytes);
 
-					user->MsgsSent++;
-					user->BytesForwardedOut += FBBHeader->FwdMsg->length;
+					user->Total.MsgsSent[Index]++;
+					user->Total.BytesForwardedOut[Index] += FBBHeader->FwdMsg->length;
 			
 					nodeprintf(conn, "%c\r\n", 26);
 				}
@@ -309,6 +317,14 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		FBBHeader->MsgType = *ptr;
 
+		if (FBBHeader->MsgType == 'P')
+			Index = PMSG;
+		else if (FBBHeader->MsgType == 'B')
+			Index = BMSG;
+		else if (FBBHeader->MsgType == 'T')
+			Index = TMSG;
+
+
 		ptr = strtok_s(NULL, seps, &Context);
 
 		if (ptr == NULL) goto badparam;
@@ -368,7 +384,7 @@ ok:
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
 			Logprintf(LOG_BBS, conn, '?', "Message Rejected by Filters");
 
-			user->MsgsRejectedIn++;
+			user->Total.MsgsRejectedIn[Index]++;
 		}
 
 		// If P Message, dont immediately reject on a Duplicate BID. Check if we still have the message
@@ -378,7 +394,7 @@ ok:
 		{
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
-			user->MsgsRejectedIn++;
+			user->Total.MsgsRejectedIn[Index]++;
 		}
 		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
 		{
@@ -491,7 +507,7 @@ ok:
 			{
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 				conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
-				user->MsgsRejectedIn++;
+				user->Total.MsgsRejectedIn[Index]++;
 				Logprintf(LOG_BBS, conn, '?', "Message Rejected by Filters");
 
 				return;
@@ -512,7 +528,7 @@ ok2:
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
 			Logprintf(LOG_BBS, conn, '?', "Message Rejected by BID Check");
-			user->MsgsRejectedIn++;
+			user->Total.MsgsRejectedIn[Index]++;
 
 		}
 		else if (FBBHeader->Size > MaxRXSize)
@@ -520,7 +536,7 @@ ok2:
 			memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));		// Clear header
 			conn->FBBReplyChars[conn->FBBReplyIndex++] = '-';
 			Logprintf(LOG_BBS, conn, '?', "Message Rejected by Size Limit");
-			user->MsgsRejectedIn++;
+			user->Total.MsgsRejectedIn[Index]++;
 
 		}
 		else if ((RestartPtr = LookupRestart(conn, FBBHeader)) > 0)
@@ -1024,6 +1040,14 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 	int i, OrigLen, MsgLen, CompLen, DataOffset;
 	char Rline[80];
 	int RLineLen;
+	int Index;
+
+	if (FwdMsg->type == 'P')
+		Index = PMSG;
+	else if (FwdMsg->type == 'B')
+		Index = BMSG;
+	else if (FwdMsg->type == 'T')
+		Index = TMSG;
 
 	MsgBytes = Save = ReadMessageFile(FwdMsg->number);
 
@@ -1054,8 +1078,8 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 		// save time first sent, or checksum will be wrong when we restart
 		
 		FwdMsg->datechanged=time(NULL);
-		conn->UserPointer->MsgsSent++;
-		conn->UserPointer->BytesForwardedOut += OrigLen;
+		conn->UserPointer->Total.MsgsSent[Index]++;
+		conn->UserPointer->Total.BytesForwardedOut[Index] += OrigLen;
 	}
 
 	tm = gmtime(&FwdMsg->datechanged);	
@@ -1462,6 +1486,14 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	UCHAR * Compressed, * Compressedptr;
 	UCHAR * Output, * Outputptr;
 	int i, CompLen;
+	int Index;
+
+	if (FBBHeader->FwdMsg->type == 'P')
+		Index = PMSG;
+	else if (FBBHeader->FwdMsg->type == 'B')
+		Index = BMSG;
+	else if (FBBHeader->FwdMsg->type == 'T')
+		Index = TMSG;
 
 	Compressed = Compressedptr = FBBHeader->CompressedMsg;
 
@@ -1506,8 +1538,8 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 		{
 			conn->FBBChecksum+=Compressed[i];
 		}
-		conn->UserPointer->MsgsSent++;
-		conn->UserPointer->BytesForwardedOut += FBBHeader->FwdMsg->length;
+		conn->UserPointer->Total.MsgsSent[Index]++;
+		conn->UserPointer->Total.BytesForwardedOut[Index] += FBBHeader->FwdMsg->length;
 
 	}
 

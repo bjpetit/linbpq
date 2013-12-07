@@ -330,6 +330,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	int i = 60;
 	char * ptr;
 
+	int nCodePage = GetACP(); 
+
 	if (strstr(lpCmdLine, "WAIT"))				// If AutoRestart then Delay 60 Secs
 	{	
 		hWnd = CreateWindow("STATIC", "Chat Restarting after Failure - Please Wait", 0,
@@ -542,8 +544,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	char Size[80];
 	RECT InitRect;
 	RECT SessRect;
-	int len;
-	char * ptr1;
 	struct _EXCEPTION_POINTERS exinfo;
 
 	REGTREE = GetRegistryKey();
@@ -560,23 +560,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Debugprintf("Running under WINE");
 	}
 
-	// See if we need to warn of possible problem with BaseDir moved by installer
-
-	wsprintf(BaseDir, "%s", GetBPQDirectory());
-	
-	len = strlen(BaseDir);
-	ptr1 = BaseDir;
-
-	while (*ptr1)
-	{
-		if (*(ptr1) == '/') *(ptr1) = '\\';
-		ptr1++;
-	}
-
-	wsprintf(IniFileName, "%s\\BPQChat.ini", BaseDir);
-
 	// Get Window Size  From Registry
-
 
 	GetStringValue("WindowSize", Size, 80);		
 	sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
@@ -1139,21 +1123,27 @@ BOOL Initialise()
 	int i, len;
 	ChatCIRCUIT * conn;
 	char * ptr1;
-	char ProgramDir[MAX_PATH];
 
 	//	Register message for posting by BPQDLL
 
+	CheckTimer();				// Make sure init is complete
+
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
-	wsprintf(ProgramDir, "%s\\BPQMailChat", GetProgramDirectory());
+
+	wsprintf(BaseDir, "%s", GetBPQDirectory());
 	
-	len = strlen(ProgramDir);
-	ptr1 = ProgramDir;
+	len = strlen(BaseDir);
+	ptr1 = BaseDir;
 
 	while (*ptr1)
 	{
 		if (*(ptr1) == '/') *(ptr1) = '\\';
 		ptr1++;
 	}
+
+	wsprintf(IniFileName, "%s\\BPQChat.ini", BaseDir);
+
+	Debugprintf("BaseDir %s", BaseDir);
 
 	len = strlen(BaseDir);
 	ptr1 = BaseDir;
@@ -1174,6 +1164,8 @@ BOOL Initialise()
 
 	strcpy(RtKnown, BaseDir);
 	strcat(RtKnown, "\\RTKnown.txt");
+
+	Debugprintf("Users %s", RtUsr);
 
 Retry:
 

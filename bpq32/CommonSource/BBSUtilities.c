@@ -132,13 +132,13 @@ char * Logs[4] = {"BBS", "CHAT", "TCP", "DEBUG"};
 BOOL OpenLogfile(int Flags)
 {
 	UCHAR FN[MAX_PATH];
-	time_t T;
+	time_t LT;
 	struct tm * tm;
 
-	T = time(NULL);
-	tm = gmtime(&T);	
+	LT = time(NULL);
+	tm = gmtime(&LT);	
 
-	sprintf(FN,"%s/log_%02d%02d%02d_%s.txt", BaseDir, tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
+	sprintf(FN,"%s/logs/log_%02d%02d%02d_%s.txt", GetBPQDirectory(), tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, Logs[Flags]);
 
 	LogHandle[Flags] = fopen(FN, "ab");
 		
@@ -148,7 +148,7 @@ BOOL OpenLogfile(int Flags)
 	{
 		UCHAR SYMLINK[MAX_PATH];
 
-		sprintf(SYMLINK,"%s/logLatest_%s.txt", BaseDir, Logs[Flags]);
+		sprintf(SYMLINK,"%s/logLatest_%s.txt", GetBPQDirectory(), Logs[Flags]);
 		unlink(SYMLINK); 
 		strcpy(&FilesNames[Flags][0], FN);
 		symlink(FN, SYMLINK);
@@ -166,7 +166,7 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 	char CRLF[2] = {0x0d,0x0a};
 	struct tm * tm;
 	char Stamp[20];
-	time_t T;
+	time_t LT;
 //	struct _EXCEPTION_POINTERS exinfo;
 
 #ifndef LINBPQ
@@ -242,8 +242,8 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 		FreeSemaphore(&LogSEM);
 		return;
 	}
-	T = time(NULL);
-	tm = gmtime(&T);	
+	LT = time(NULL);
+	tm = gmtime(&LT);	
 	
 	sprintf(Stamp,"%02d%02d%02d %02d:%02d:%02d %c",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec, Flag);
@@ -296,10 +296,13 @@ VOID __cdecl Debugprintf(const char * format, ...)
 
 	va_start(arglist, format);
 	Len = vsprintf(Mess, format, arglist);
+#ifndef LINBPQ
 	WriteLogLine(NULL, '!',Mess, Len, LOG_DEBUG_X);
-//	#ifdef _DEBUG 
+#endif
+	//	#ifdef _DEBUG 
 	strcat(Mess, "\r\n");
 	OutputDebugString(Mess);
+
 //	#endif
 	return;
 }
@@ -322,6 +325,7 @@ struct UserInfo * AllocateUserRecord(char * Call)
 	struct UserInfo * User = zalloc(sizeof (struct UserInfo));
 		
 	strcpy(User->Call, Call);
+	User->Length = sizeof (struct UserInfo);
 
 	GetSemaphore(&AllocSemaphore);
 
@@ -394,6 +398,7 @@ struct UserInfo * LookupCall(char * Call)
 VOID GetUserDatabase()
 {
 	struct UserInfo UserRec;
+
 	FILE * Handle;
 	int ReadLen;
 	struct UserInfo * user;
@@ -408,6 +413,8 @@ VOID GetUserDatabase()
 		UserRecPtr=malloc(4);
 		UserRecPtr[0]= malloc(sizeof (struct UserInfo));
 		memset(UserRecPtr[0], 0, sizeof (struct UserInfo));
+		UserRecPtr[0]->Length = sizeof (struct UserInfo);
+
 		NumberofUsers = 0;
 
 		return;
@@ -423,13 +430,108 @@ VOID GetUserDatabase()
 		// Duff file
 
 		memset(&UserRec, 0, sizeof (struct UserInfo));
+		UserRec.Length = sizeof (struct UserInfo);
 	}
+	else
+	{
+		// See if format has changed
 
+		if (UserRec.Length == 0)
+		{
+			// Old format without a Length field
+
+			struct OldUserInfo * OldRec = (struct OldUserInfo *)&UserRec;
+			int Users = OldRec->ConnectsIn;		// User Count in control record
+			char Backup1[MAX_PATH];
+
+			//  Create a backup in case reversion is needed and Reposition to first User record
+
+			fclose(Handle);
+
+			strcpy(Backup1, UserDatabasePath);
+			strcat(Backup1, ".oldformat");
+
+			CopyFile(UserDatabasePath, Backup1, FALSE);	 // Copy to .bak
+
+			Handle = fopen(UserDatabasePath, "rb");
+			
+			ReadLen = fread(&UserRec, 1, sizeof (struct OldUserInfo), Handle);	// Skip Control Record
+
+			// Set up control record
+
+			UserRecPtr=malloc(4);
+			UserRecPtr[0]= malloc(sizeof (struct UserInfo));
+			memcpy(UserRecPtr[0], &UserRec,  sizeof (UserRec));
+			UserRecPtr[0]->Length = sizeof (UserRec);
+
+			NumberofUsers = 0;
+		
+		OldNext:
+
+			ReadLen = fread(&UserRec, 1, sizeof (struct OldUserInfo), Handle);
+
+			if (ReadLen > 0)
+			{
+				if (OldRec->Call[0] < '0')
+					goto OldNext;					// Blank record
+			
+				user = AllocateUserRecord(OldRec->Call);
+				user->Temp = zalloc(sizeof (struct TempUserInfo));
+
+				// Copy info from Old record
+
+				user->lastmsg = OldRec->lastmsg;
+				user->Total.ConnectsIn = OldRec->ConnectsIn;
+				user->TimeLastConnected = OldRec->TimeLastConnected;
+				user->flags = OldRec->flags;
+				user->PageLen = OldRec->PageLen;
+				user->BBSNumber = OldRec->BBSNumber;
+				memcpy(user->Name, OldRec->Name, 18);
+				memcpy(user->Address, OldRec->Address, 61);
+				user->Total.MsgsReceived[0] = OldRec->MsgsReceived;
+				user->Total.MsgsSent[0] = OldRec->MsgsSent;
+				user->Total.MsgsRejectedIn[0] = OldRec->MsgsRejectedIn;			// Messages we reject
+				user->Total.MsgsRejectedOut[0] = OldRec->MsgsRejectedOut;		// Messages Rejectd by other end
+				user->Total.BytesForwardedIn[0] = OldRec->BytesForwardedIn;
+				user->Total.BytesForwardedOut[0] = OldRec->BytesForwardedOut;
+				user->Total.ConnectsOut = OldRec->ConnectsOut;			// Forwarding Connects Out
+				user->RMSSSIDBits = OldRec->RMSSSIDBits;			// SSID's to poll in RMS
+				memcpy(user->HomeBBS, OldRec->HomeBBS, 41);
+				memcpy(user->QRA, OldRec->QRA, 7);
+				memcpy(user->pass, OldRec->pass, 13);
+				memcpy(user->ZIP, OldRec->ZIP, 9);
+
+				if (user->flags & F_BBS)
+				{
+					// Defined as BBS - allocate and initialise forwarding structure
+
+					SetupForwardingStruct(user);
+
+					// Add to BBS Chain;
+	
+					user->BBSNext = BBSChain;
+					BBSChain = user;
+
+					// Save Highest BBS Number
+
+					if (user->BBSNumber > HighestBBSNumber) HighestBBSNumber = user->BBSNumber;
+				}
+				goto OldNext;
+			}
+
+			SortBBSChain();
+			fclose(Handle);	
+
+			return;
+		}
+	}
+			
 	// Set up control record
 
 	UserRecPtr=malloc(4);
 	UserRecPtr[0]= malloc(sizeof (struct UserInfo));
 	memcpy(UserRecPtr[0], &UserRec,  sizeof (UserRec));
+	UserRecPtr[0]->Length = sizeof (UserRec);
 
 	NumberofUsers = 0;
 
@@ -549,7 +651,7 @@ VOID SaveUserDatabase()
 
 	Handle = fopen(UserDatabasePath, "wb");
 
-	UserRecPtr[0]->nbcon = NumberofUsers;
+	UserRecPtr[0]->Total.ConnectsIn = NumberofUsers;
 
 	for (i=0; i <= NumberofUsers; i++)
 	{
@@ -1812,6 +1914,9 @@ NextMessage:
 		strlop(Buffer, 10);
 		strlop(Buffer, 13);				// Remove cr and/or lf
 
+		if (Buffer[0] == 0)			//Blank Line
+			continue;
+
 		WriteLogLine(conn, '>', Buffer, strlen(Buffer), LOG_BBS);
 
 		if (dummyconn.sysop == 0)
@@ -2976,6 +3081,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 	struct MsgInfo * Msg;
 	char * MsgBytes, * Save;
 	char FullTo[100];
+	int Index;
 
 	Msg = MsgnotoMsg[msgno];
 
@@ -3005,6 +3111,13 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 	MsgBytes = Save = ReadMessageFile(msgno);
 
+	if (Msg->type == 'P')
+		Index = PMSG;
+	else if (Msg->type == 'B')
+		Index = BMSG;
+	else if (Msg->type == 'T')
+		Index = TMSG;
+
 	if (MsgBytes)
 	{
 		int Length;
@@ -3024,8 +3137,8 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		Length = RemoveLF(MsgBytes, strlen(MsgBytes));
 
-		user->MsgsSent ++;
-		user->BytesForwardedOut += Length;
+		user->Total.MsgsSent[Index] ++;
+		user->Total.BytesForwardedOut[Index] += Length;
 
 		QueueMsg(conn, MsgBytes, Length);
 		free(Save);
@@ -3751,10 +3864,19 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 
 	if (((msglen < 3) && (Buffer[0] == 0x1a)) || ((msglen == 4) && (_memicmp(Buffer, "/ex", 3) == 0)))
 	{
+		int Index = 0;
+			
+		if (conn->TempMsg->type == 'P')
+			Index = PMSG;
+		else if (conn->TempMsg->type == 'B')
+			Index = BMSG;
+		else if (conn->TempMsg->type == 'T')
+			Index = TMSG;
+		
 		conn->Flags &= ~GETTINGMESSAGE;
 
-		user->MsgsReceived++;
-		user->BytesForwardedIn += conn->TempMsg->length;
+		user->Total.MsgsReceived[Index]++;
+		user->Total.BytesForwardedIn[Index] += conn->TempMsg->length;
 
 		if (conn->ToCount)
 		{
@@ -5328,10 +5450,19 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		char Line[256];
 		int len;
 		struct UserInfo * user = conn->UserPointer;
-
+		int Index = 0;
 
 		Msg = conn->FwdMsg;
 		
+
+		if (Msg->type == 'P')
+			Index = PMSG;
+		else if (Msg->type == 'B')
+			Index = BMSG;
+		else if (Msg->type == 'T')
+			Index = TMSG;
+
+
 		if (Msg->via[0])
 			len = sprintf(Line, "S%c %s @ %s < %s $%s\r\n", Msg->type, Msg->to,
 						Msg->via, Msg->from, Msg->bid);
@@ -5399,8 +5530,8 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 
 		free(MsgBytes);
 			
-		user->MsgsSent++;
-		user->BytesForwardedOut += MsgLen;
+		user->Total.MsgsSent[Index]++;
+		user->Total.BytesForwardedOut[Index] += MsgLen;
 			
 		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
 		set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
@@ -5983,7 +6114,7 @@ CheckForSID:
 		}
 
 		conn->NextMessagetoForward = FirstMessageIndextoForward;
-		conn->UserPointer->ConnectsOut++;
+		conn->UserPointer->Total.ConnectsOut++;
 		conn->BBSFlags &= ~RunningConnectScript;
 		ForwardingInfo->LastReverseForward = time(NULL);
 
@@ -7091,7 +7222,7 @@ int Connected(int Stream)
 			}
 
 			time(&user->TimeLastConnected);
-			user->nbcon++;
+			user->Total.ConnectsIn++;
 
 			conn->UserPointer = user;
 
@@ -7132,7 +7263,7 @@ int Connected(int Stream)
 			// Send SID and Prompt
 
 			{
-				BOOL B1 = FALSE, B2 = FALSE, B = FALSE;
+				BOOL B1 = FALSE, B2 = FALSE, BIN = FALSE;
 				struct	BBSForwardingInfo * ForwardingInfo;
 
 				conn->PageLen = user->PageLen;				// No paging for chat
@@ -7162,13 +7293,13 @@ int Connected(int Stream)
 
 				if (conn->NewUser)
 				{
-					B = TRUE;
+					BIN = TRUE;
 					B2 = TRUE;
 				}
 
 				if (user->ForwardingInfo)
 				{
-					B = user->ForwardingInfo->AllowCompressed;
+					BIN = user->ForwardingInfo->AllowCompressed;
 					B1 = user->ForwardingInfo->AllowB1;
 					B2 = user->ForwardingInfo->AllowB2;
 				}
@@ -7177,7 +7308,7 @@ int Connected(int Stream)
 
 				nodeprintf(conn, BBSSID, "BPQ-",
 					Ver[0], Ver[1], Ver[2], Ver[3],
-					B ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", B ? "FW": "");
+					BIN ? "B" : "", B1 ? "1" : "", B2 ? "2" : "", BIN ? "FW": "");
 
 //				 if (user->flags & F_Temp_B2_BBS)
 //					 nodeprintf(conn,";PQ: 66427529\r");
@@ -7453,6 +7584,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		char * MsgPtr;
 		int MsgLen;
+		int Index = 0;
 
 		if (MsgBytes == 0)
 		{
@@ -7509,8 +7641,16 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 			
 		conn->FBBMsgsSent = TRUE;
 
-		user->MsgsSent++;
-		user->BytesForwardedOut += MsgLen;
+		
+		if (conn->FwdMsg->type == 'P')
+			Index = PMSG;
+		else if (conn->FwdMsg->type == 'B')
+			Index = BMSG;
+		else if (conn->FwdMsg->type == 'T')
+			Index = TMSG;
+
+		user->Total.MsgsSent[Index]++;
+		user->Total.BytesForwardedOut[Index] += MsgLen;
 			
 		conn->Flags &= ~SENDBODY;
 		conn->Flags |= WAITPROMPT;
@@ -7696,6 +7836,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		}
 	
 		return;	
+	}
+
+	if (memcmp(Buffer, ";FR:", 4) == 0)
+	{
+		// New Message from TriMode - Just igonre till I know what to do with it
+
+		return;
 	}
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
@@ -8269,6 +8416,7 @@ VOID TidyPrompts()
 	TidyPrompt(&NewPrompt);
 	TidyPrompt(&ExpertPrompt);
 }
+
 
 
 

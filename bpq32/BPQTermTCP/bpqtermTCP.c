@@ -73,6 +73,8 @@
 #include <stdio.h>
 #include <malloc.h>	
 #include <memory.h>
+#include <wchar.h>
+
 //#define _RICHEDIT_VER	0x0100
 #include <Richedit.h> 
 
@@ -94,9 +96,9 @@
 HBRUSH bgBrush;
 
 HINSTANCE hInst; 
-char AppName[] = "BPQTerm 32";
-char ClassName[] = "BPQMAINWINDOW";
-char Title[80];
+TCHAR AppName[] = L"BPQTerm 32";
+TCHAR ClassName[] = L"BPQMAINWINDOW";
+TCHAR Title[80];
 
 BOOL WINE;
 
@@ -129,10 +131,10 @@ void MoveWindows();
 void CopyListToClipboard(HWND hWnd);
 void CopyRichTextToClipboard(HWND hWnd);
 BOOL OpenMonitorLogfile();
-void WriteMonitorLine(char * Msg, int MsgLen);
-VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len);
-int SendMsg(char * msg, int len);
-TCPConnect(char * Host, int Port);
+void WriteMonitorLine(TCHAR * Msg, int MsgLen);
+VOID WritetoOutputWindow(struct RTFTerm * OPData, TCHAR * Msg, int len);
+int SendMsg(TCHAR * msg, int len);
+TCPConnect(TCHAR * Host, int Port);
 int Telnet_Connected(SOCKET sock, int Error);
 VOID DataSocket_Read(SOCKET sock);
 VOID Socket_Data(int sock, int error, int eventcode);
@@ -187,6 +189,14 @@ HWND hwndSplit;
 
 HMENU trayMenu;
 
+#define AUTO -1
+#define CP437 437
+#define CP1251 1251
+#define CP1252 1252
+
+int RXMode = AUTO;
+int TXMode = CP_UTF8;
+
 int xsize,ysize;		// Screen size at startup
 
 double Split=0.5;
@@ -206,22 +216,22 @@ int maxlinelen = 80;
 
 #define MAXHOSTS 16
 
-char Host[MAXHOSTS + 1][100] = {"localhost"};
+TCHAR Host[MAXHOSTS + 1][100] = {L"localhost"};
 int Port[MAXHOSTS + 1] = {0};
-char UserName[MAXHOSTS + 1][80] = {""};
-char Password[MAXHOSTS + 1][80] = {""};
-char MonParams[MAXHOSTS + 1][80] = {""};
+TCHAR UserName[MAXHOSTS + 1][80] = {L""};
+TCHAR Password[MAXHOSTS + 1][80] = {L""};
+TCHAR MonParams[MAXHOSTS + 1][80] = {L""};
 
-char HN[MAXHOSTS + 1][7] = {"Host1", "Host2", "Host3", "Host4", "Host5", "Host6", "Host7", "Host8",
-		"Host9", "Host10", "Host11", "Host12", "Host13", "Host14", "Host15", "Host16"};
-char PN[MAXHOSTS + 1][7] = {"Port1", "Port2", "Port3", "Port4", "Port5", "Port6", "Port7", "Port8",
-		"Port9", "Port10", "Port11", "Port12", "Port13", "Port14", "Port15", "Port16"};
-char UN[MAXHOSTS + 1][7] = {"User1", "User2", "User3", "User4", "User5", "User6", "User7", "User8",
-		"User9", "User10", "User11", "User12", "User13", "User14", "User15", "User16"};
-char MON[MAXHOSTS + 1][7] = {"MON1", "MON2", "MON3", "MON4", "MON5", "MON6", "MON7", "MON8",
-		"MON9", "MON10", "MON11", "MON12", "MON13", "MON14", "MON15", "MON16"};
-char PASSN[MAXHOSTS + 1][7] = {"Pass1", "Pass2", "Pass3", "Pass4", "Pass5", "Pass6", "Pass7", "Pass8",
-		"Pass9", "Pass10", "Pass11", "Pass12", "Pass13", "Pass14", "Pass15", "Pass16"};
+TCHAR HN[MAXHOSTS + 1][7] = {L"Host1", L"Host2", L"Host3", L"Host4", L"Host5", L"Host6", L"Host7", L"Host8",
+		L"Host9", L"Host10", L"Host11", L"Host12", L"Host13", L"Host14", L"Host15", L"Host16"};
+TCHAR PN[MAXHOSTS + 1][7] = {L"Port1", L"Port2", L"Port3", L"Port4", L"Port5", L"Port6", L"Port7", L"Port8",
+		L"Port9", L"Port10", L"Port11", L"Port12", L"Port13", L"Port14", L"Port15", L"Port16"};
+TCHAR UN[MAXHOSTS + 1][7] = {L"User1", L"User2", L"User3", L"User4", L"User5", L"User6", L"User7", L"User8",
+		L"User9", L"User10", L"User11", L"User12", L"User13", L"User14", L"User15", L"User16"};
+TCHAR MON[MAXHOSTS + 1][7] = {L"MON1", L"MON2", L"MON3", L"MON4", L"MON5", L"MON6", L"MON7", L"MON8",
+		L"MON9", L"MON10", L"MON11", L"MON12", L"MON13", L"MON14", L"MON15", L"MON16"};
+TCHAR PASSN[MAXHOSTS + 1][7] = {L"Pass1", L"Pass2", L"Pass3", L"Pass4", L"Pass5", L"Pass6", L"Pass7", L"Pass8",
+		L"Pass9", L"Pass10", L"Pass11", L"Pass12", L"Pass13", L"Pass14", L"Pass15", L"Pass16"};
 
 
 #define MAXLINES 1000
@@ -239,7 +249,7 @@ typedef struct RTFTerm
 	BOOL SendHeader;
 	BOOL Finished;
 
-	char OutputScreen[MAXLINES][LINELEN];
+	TCHAR OutputScreen[MAXLINES][LINELEN];
 
 	int Colourvalue[MAXLINES];
 	int LineLen[MAXLINES];
@@ -252,7 +262,7 @@ typedef struct RTFTerm
 
 };
 
-char FontName[100] = "FixedSys";
+TCHAR FontName[100] = L"Courier New";
 int FontSize = 20;
 int FontWidth = 8;
 int CodePage = 437;
@@ -268,22 +278,22 @@ SOCKET sock;
 
 BOOL MonData = FALSE;
 
-char Key[80];
+TCHAR Key[80];
 int portmask=0;
 int mtxparam=1;
 int mcomparam=1;
 int monUI=0;
 
-char kbbuf[250];
+TCHAR kbbuf[250];
 int kbptr=0;
-char readbuff[100000];				// for stupid bbs programs
+TCHAR readbuff[100000];				// for stupid bbs programs
 
 //int ptr=0;
 
 int Stream;
 int len,count;
 
-char callsign[10];
+TCHAR callsign[10];
 int state;
 int change;
 int applflags = 2;				// Message to Application
@@ -333,32 +343,32 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	va_start(arglist, format);
 	Len = vsprintf_s(Mess, sizeof(Mess), format, arglist);
 	strcat(Mess, "\r\n");
-	OutputDebugString(Mess);
+	OutputDebugStringA(Mess);
 	return;
 }
 
 
-VOID SaveIntValue(char * Key, int Value)
+VOID SaveIntValue(TCHAR * Key, int Value)
 {
-	char Val[100];
+	TCHAR Val[100];
 
-	wsprintf(Val, "%d", Value);
-	WritePrivateProfileString("Session 1", Key, Val, ".\\BPQTermTCP.ini");
+	wsprintf(Val, L"%d", Value);
+	WritePrivateProfileString(L"Session 1", Key, Val, L".\\BPQTermTCP.ini");
 }
 
-VOID SaveStringValue(char * Key, char * Value)
+VOID SaveStringValue(TCHAR * Key, TCHAR * Value)
 {
-	WritePrivateProfileString("Session 1", Key, Value, ".\\BPQTermTCP.ini");
+	WritePrivateProfileString(L"Session 1", Key, Value, L".\\BPQTermTCP.ini");
 }
 
-int GetIntValue(char * Key, int Default)
+int GetIntValue(TCHAR * Key, int Default)
 {
-	return GetPrivateProfileInt("Session 1", Key, Default, ".\\BPQTermTCP.ini");
+	return GetPrivateProfileInt(L"Session 1", Key, Default, L".\\BPQTermTCP.ini");
 }
 
-VOID GetStringValue(char * Key, char * Value, int Len)
+VOID GetStringValue(TCHAR * Key, TCHAR * Value, int Len)
 {
-	GetPrivateProfileString("Session 1", Key, "", Value, Len, ".\\BPQTermTCP.ini");
+	GetPrivateProfileString(L"Session 1", Key, L"", Value, Len, L".\\BPQTermTCP.ini");
 }
 
 VOID CALLBACK TimerProc(
@@ -381,7 +391,7 @@ VOID CALLBACK TimerProc(
 	if (SlowTimer > 50)				// About 9 mins
 	{
 		SlowTimer = 0;
-		SendMsg("\0", 1);
+		SendMsg(L"\0", 1);
 	}
 }
 
@@ -395,12 +405,12 @@ VOID CALLBACK TimerProc(
 //	This function initializes the application and processes the
 //	message loop.
 //
-int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char * lpCmdLine, int nCmdShow)
 {
 	MSG msg;
-	char Size[80];
+	TCHAR Size[80];
 
-	sscanf(lpCmdLine,"%d %x",&Sessno, &applflags);
+	sscanf(lpCmdLine, "%d %x",&Sessno, &applflags);
 
 	if (!InitApplication(hInstance)) 
 			return (FALSE);
@@ -415,33 +425,33 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		DispatchMessage(&msg);
 	}
 
-	SaveIntValue("PortMask", portmask);
-	SaveIntValue("Bells", Bells);
-	SaveIntValue("StripLF", StripLF);
+	SaveIntValue(L"PortMask", portmask);
+	SaveIntValue(L"Bells", Bells);
+	SaveIntValue(L"StripLF", StripLF);
 
-	SaveIntValue("MTX",mtxparam);
-	SaveIntValue("MCOM", mcomparam);
-	SaveIntValue("MUIONLY", monUI);
+	SaveIntValue(L"MTX",mtxparam);
+	SaveIntValue(L"MCOM", mcomparam);
+	SaveIntValue(L"MUIONLY", monUI);
 
 #pragma warning(push)
 #pragma warning(disable:4244)
-		SaveIntValue("Split", Split * 100);
+		SaveIntValue(L"Split", Split * 100);
 #pragma warning(pop)
 
-	SaveIntValue("MONColour", MonitorColour);
-	SaveIntValue("MonNODES", MonitorNODES);
-	SaveIntValue("MonPorts", MonPorts);
-	SaveIntValue("ChatMode", ChatMode);
-	SaveIntValue("CurrentHost", CurrentHost);
+	SaveIntValue(L"MONColour", MonitorColour);
+	SaveIntValue(L"MonNODES", MonitorNODES);
+	SaveIntValue(L"MonPorts", MonPorts);
+	SaveIntValue(L"ChatMode", ChatMode);
+	SaveIntValue(L"CurrentHost", CurrentHost);
 	
-	wsprintf(Size,"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
-	SaveStringValue("Size", Size);
+	wsprintf(Size,L"%d,%d,%d,%d",Rect.left,Rect.right,Rect.top,Rect.bottom);
+	SaveStringValue(L"Size", Size);
 
-	SaveStringValue("FontName", FontName);
-	SaveIntValue("CharSet", CharSet);
-	SaveIntValue("CodePage", CodePage);
-	SaveIntValue("FontSize", FontSize);
-	SaveIntValue("FontWidth", FontWidth);
+	SaveStringValue(L"FontName", FontName);
+	SaveIntValue(L"CharSet", CharSet);
+	SaveIntValue(L"CodePage", CodePage);
+	SaveIntValue(L"FontSize", FontSize);
+	SaveIntValue(L"FontWidth", FontWidth);
 
 	KillTimer(NULL, TimerHandle);
 
@@ -500,27 +510,29 @@ VOID SetupRTFHddr()
 	for (i = 1; i < 100; i++)
 	{
 		COLORREF Colour = Colours[i];
-		n += wsprintf(&RTFColours[n], "\\red%d\\green%d\\blue%d;", GetRValue(Colour), GetGValue(Colour),GetBValue(Colour));
+		n += sprintf(&RTFColours[n], "\\red%d\\green%d\\blue%d;", GetRValue(Colour), GetGValue(Colour),GetBValue(Colour));
 	}
 
 	RTFColours[n++] = '}';
 	RTFColours[n] = 0;
 
-//	strcpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset204 ;}}");
-	wsprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1\\cpg%d\\fcharset%d %s;}}", CodePage,CharSet, FontName);
+//	wcscpy(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1\\fcharset204 ;}}");
+	sprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fprq1\\cpg%d\\fcharset%d %s;}}", CodePage, CharSet, FontName);
+	sprintf(RTFHeader, "{\\rtf1\\deff0{\\fonttbl{\\f0\\fmodern\\fprq1;}}");
 	strcat(RTFHeader, RTFColours);
-	wsprintf(Temp, "\\viewkind4\\uc1\\pard\\f0\\fs%d", FontSize);
+	sprintf(Temp, "\\viewkind4\\uc1\\pard\\f0\\fs%d\\uc0", FontSize);
 	strcat(RTFHeader, Temp);
 
 	RTFHddrLen = strlen(RTFHeader);
 }
 
+TCHAR VersionStringW[100];
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	int i, n, tempmask=0xffff;
-	char msg[20];
-	char Size[80];
+	TCHAR msg[20];
+	TCHAR Size[80];
 	WSADATA WsaData;            // receives data from WSAStartup
 	struct RTFTerm * OPData;
 	int retCode;
@@ -533,7 +545,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	// See if running under WINE
 
-	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, "SOFTWARE\\Wine",  0, KEY_QUERY_VALUE, &hKey);
+	retCode = RegOpenKeyEx (HKEY_LOCAL_MACHINE, L"SOFTWARE\\Wine",  0, KEY_QUERY_VALUE, &hKey);
 
 	if (retCode == ERROR_SUCCESS)
 	{
@@ -544,17 +556,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 // Get saved config from ini
 
 //	MonitorNODES = GetIntValue("MonNODES", 0);
-	MonPorts = GetIntValue("MonPorts", 0);
+	MonPorts = GetIntValue(L"MonPorts", 0);
 //	mtxparam = GetIntValue("MTX", 0);
 //	mcomparam = GetIntValue("MCOM", 0);
 //	monUI = GetIntValue("MUIONLY", 0);
-	tempmask = GetIntValue("PortMask", 0);
-	ChatMode = GetIntValue("ChatMode", 0);
-	MonitorColour = GetIntValue("MONColour", 0);
-	Bells = GetIntValue("Bells", 0);
-	StripLF = GetIntValue("StripLF", 0);
-	CurrentHost = GetIntValue("CurrentHost", 0);
-	Split = GetIntValue("Split", 0);
+	tempmask = GetIntValue(L"PortMask", 0);
+	ChatMode = GetIntValue(L"ChatMode", 0);
+	MonitorColour = GetIntValue(L"MONColour", 0);
+	Bells = GetIntValue(L"Bells", 0);
+	StripLF = GetIntValue(L"StripLF", 0);
+	CurrentHost = GetIntValue(L"CurrentHost", 0);
+	Split = GetIntValue(L"Split", 0);
 	if (Split == 0)
 		Split = 50;
 
@@ -569,19 +581,22 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		GetStringValue(MON[n], MonParams[n], 80);
 	}
 
-	sscanf(MonParams[CurrentHost], "%x %x %x %x %x %x",
+	swscanf(MonParams[CurrentHost], L"%x %x %x %x %x %x",
 			&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
 
 
-	GetStringValue("FontName", FontName, 99);
+//	GetStringValue(L"FontName", FontName, 99);
 
-	if (FontName[0] == 0)
-		strcpy(FontName, "FixedSys");
+//	if (FontName[0] == 0)
+//		wcscpy(FontName, L"Courier New");
 
-	CharSet =  GetIntValue("CharSet", 0);
-	CodePage =  GetIntValue("CodePage", 437);
-	FontSize =  GetIntValue("FontSize", 20);
-	FontWidth = GetIntValue("FontWidth", 8);
+//	CharSet =  GetIntValue(L"CharSet", 0);
+//	CodePage =  GetIntValue(L"CodePage", 437);
+
+	FontSize =  GetIntValue(L"FontSize", 20);
+	FontWidth = GetIntValue(L"FontWidth", 8);
+	RXMode = GetIntValue(L"RXMODE", -1);
+	TXMode = GetIntValue(L"TXMODE", CP_UTF8);
 
 	OutputData.CharWidth = FontWidth;
 
@@ -594,8 +609,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	MainWnd=hWnd;
 
-	GetStringValue("Size", Size, 80);
-	sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+	GetStringValue(L"Size", Size, 80);
+	swscanf(Size,L"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
 	
 	if (Rect.right < 100 || Rect.bottom < 100)
 	{
@@ -620,9 +635,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	OPData->Finished = TRUE;
 	OPData->CurrentColour = 1;
 
-	LoadLibrary("riched20.dll");
+	LoadLibrary(L"riched20.dll");
 
-	hwndOutput = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASS, "",
+	hwndOutput = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASS, L"",
 		WS_CHILD |  WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_NOHIDESEL | WS_VSCROLL | ES_READONLY,
 		6,145,290,130, MainWnd, NULL, hInstance, NULL);
 
@@ -633,7 +648,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	trayMenu = CreatePopupMenu();
 
-	AppendMenu(trayMenu,MF_STRING,40000,"Copy");
+	AppendMenu(trayMenu,MF_STRING,40000,L"Copy");
 
 	// Retrieve the handlse to the edit controls. 
 
@@ -653,7 +668,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	
 	GetVersionInfo(NULL);
 
-	wsprintf(Title,"BPQTermTCP Version %s", VersionString);
+	mbstowcs(VersionStringW, VersionString, 50);
+
+	wsprintf(Title,L"BPQTermTCP Version %s", VersionStringW);
 
 	SetWindowText(hWnd,Title);
 		
@@ -674,15 +691,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	for (i = 1; i <= MonPorts; i++)
 	{
-		wsprintf(msg,"Port %d",i);
+		wsprintf(msg,L"Port %d",i);
 
 		if (tempmask & (1<<(i-1)))
 		{
-			AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i,msg);
+			AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i, &msg[0]);
 			portmask |= (1<<(i-1));
 		}
 		else
-			AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i,msg);
+			AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i, &msg[0]); 
 	}
 
 	CheckMenuItem(hMenu, BPQMTX, (mtxparam) ? MF_CHECKED : MF_UNCHECKED);
@@ -709,7 +726,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if (portmask) applflags |= 0x80;
 	
-	DragCursor = LoadCursor(hInstance, "IDC_DragSize");
+	DragCursor = LoadCursor(hInstance, L"IDC_DragSize");
 	Cursor = LoadCursor(NULL, IDC_ARROW);
 
 	if ((nCmdShow == SW_SHOWMINIMIZED) || (nCmdShow == SW_SHOWMINNOACTIVE))
@@ -799,9 +816,22 @@ INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 	{
 	case WM_INITDIALOG:
 
-		SetDlgItemText(hDlg, IDC_FONTNAME, FontName);
-		SetDlgItemInt(hDlg, IDC_CHARSET, CharSet, FALSE);
-		SetDlgItemInt(hDlg, IDC_CODEPAGE, CodePage, FALSE);
+		if (RXMode == AUTO)
+			 CheckDlgButton(hDlg, IDC_AUTO, BST_CHECKED);
+		else if (RXMode == CP1251)
+			 CheckDlgButton(hDlg, IDC_1251, BST_CHECKED);
+		else if (RXMode == CP1252)
+			 CheckDlgButton(hDlg, IDC_1252, BST_CHECKED);
+		else if (RXMode == CP437)
+			 CheckDlgButton(hDlg, IDC_437, BST_CHECKED);
+	
+		if (TXMode == CP_UTF8)
+			 CheckDlgButton(hDlg, IDC_UTF8, BST_CHECKED);
+		else if (TXMode == CP1251)
+			 CheckDlgButton(hDlg, IDC_Send1251, BST_CHECKED);
+		else if (TXMode == CP1252)
+			 CheckDlgButton(hDlg, IDC_Send1252, BST_CHECKED);
+	
 		SetDlgItemInt(hDlg, IDC_FONTSIZE, FontSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_FONTWIDTH, FontWidth, FALSE);
 
@@ -818,23 +848,41 @@ INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
         return (LONG)bgBrush;
     }
 
-
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
 		{
 		case IDOK:
 
-			GetDlgItemText(hDlg, IDC_FONTNAME, FontName, 99);
-			CharSet = GetDlgItemInt(hDlg, IDC_CHARSET, NULL, FALSE);
-			CodePage = GetDlgItemInt(hDlg, IDC_CODEPAGE, NULL, FALSE);
+//			GetDlgItemText(hDlg, IDC_FONTNAME, FontName, 99);
+//			CharSet = GetDlgItemInt(hDlg, IDC_CHARSET, NULL, FALSE);
+//			CodePage = GetDlgItemInt(hDlg, IDC_CODEPAGE, NULL, FALSE);
+
 			FontSize = GetDlgItemInt(hDlg, IDC_FONTSIZE, NULL, FALSE);
 			FontWidth = GetDlgItemInt(hDlg, IDC_FONTWIDTH, NULL, FALSE);
 
-			SaveStringValue("FontName", FontName);
-			SaveIntValue("CharSet", CharSet);
-			SaveIntValue("CodePage", CodePage);
-			SaveIntValue("FontSize", FontSize);
-			SaveIntValue("FontWidth", FontWidth);
+			if (IsDlgButtonChecked(hDlg, IDC_AUTO))
+				RXMode = AUTO;
+			else if (IsDlgButtonChecked(hDlg, IDC_1251))
+				RXMode = CP1251;
+			else if (IsDlgButtonChecked(hDlg, IDC_1252))
+				RXMode = CP1252;
+			else if (IsDlgButtonChecked(hDlg, IDC_437))
+				RXMode = CP437;
+	
+			if (IsDlgButtonChecked(hDlg, IDC_UTF8))
+				TXMode = CP_UTF8;
+			else if (IsDlgButtonChecked(hDlg, IDC_Send1251))
+				TXMode = CP1251;
+			else if (IsDlgButtonChecked(hDlg, IDC_Send1252))
+				TXMode = CP1252;
+	
+//			SaveStringValue(L"FontName", FontName);
+//			SaveIntValue(L"CharSet", CharSet);
+//			SaveIntValue(L"CodePage", CodePage);
+			SaveIntValue(L"FontSize", FontSize);
+			SaveIntValue(L"FontWidth", FontWidth);
+			SaveIntValue(L"RXMODE", RXMode);
+			SaveIntValue(L"TXMODE", TXMode);
 
 			OutputData.CharWidth = FontWidth;
 
@@ -875,8 +923,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
 	LPRECT lprc;
-	UCHAR Buffer[1000];
-	UCHAR * buf = Buffer;
+	TCHAR Buffer[1000];
+	TCHAR * buf = Buffer;
     TEXTMETRIC tm; 
     int y, i;  
     LPMEASUREITEMSTRUCT lpmis; 
@@ -995,7 +1043,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                         6, 
                         y, 
                         buf, 
-                        strlen(buf)); 						
+                        wcslen(buf)); 						
  
  //					SetTextColor(lpdis->hDC, OldColour);
 
@@ -1028,7 +1076,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			CurrentHost = wmId - BPQCONNECT1;
 
-			sscanf(MonParams[CurrentHost], "%x %x %x %x %x %x",
+			swscanf(MonParams[CurrentHost], L"%x %x %x %x %x %x",
 					&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
 
 			for (i = 1; i <= MonPorts; i++)
@@ -1065,7 +1113,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	
 			SendMessage(hwndOutput, EM_EXGETSEL , 0, (WPARAM)&Range);
 	
-			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, Range.cpMax - Range.cpMin + 1);
+			hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, (Range.cpMax - Range.cpMin + 1) * 2);
 
 			if (hMem != 0)
 			{
@@ -1077,7 +1125,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 					GlobalUnlock(hMem);
 					EmptyClipboard();
-					SetClipboardData(CF_TEXT,hMem);
+					SetClipboardData(CF_UNICODETEXT,hMem);
 					CloseClipboard();
 				}
 			}
@@ -1112,12 +1160,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				if (SocketActive)
 					closesocket(sock);
 
-				wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+				wsprintf(Title, L"BPQTermTCP Version %s - Disconnected", VersionStringW);
 				SetWindowText(hWnd,Title);
 				DisableDisconnectMenu(hWnd);
 				EnableConnectMenu(hWnd);
 
-				WritetoOutputWindow(&OutputData, "*** Disconnected\r", 17);		
+				WritetoOutputWindow(&OutputData , L"*** Disconnected\r", 17);		
 				DoRefresh(&OutputData);
 				SocketActive = FALSE;
 				Connected = FALSE;
@@ -1165,7 +1213,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case MONITOR_ADDPORT:
 
-		wsprintf(Buffer,"Port %d", ++MonPorts);
+		wsprintf(Buffer, L"Port %d", ++MonPorts);
 		
 		AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + MonPorts, Buffer);
 
@@ -1278,13 +1326,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	return (0);
 }
 
-static char * KbdStack[20];
+static TCHAR * KbdStack[20];
 
 int StackIndex=0;
  
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 { 
-	char DisplayLine[250] = "\x1b\x21";
+	TCHAR DisplayLine[250] = L"\x1b\x21";
 
 	if (uMsg == WM_CTLCOLOREDIT)
 	{
@@ -1312,7 +1360,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			SendMessage(hwndInput, WM_SETTEXT,0,(LPARAM)(LPCSTR) KbdStack[StackIndex]);
 			
-			for (i = 0; i < strlen(KbdStack[StackIndex]); i++)
+			for (i = 0; i < wcslen(KbdStack[StackIndex]); i++)
 			{
 				SendMessage(hwndInput, WM_KEYDOWN, VK_RIGHT, 0);
 				SendMessage(hwndInput, WM_KEYUP, VK_RIGHT, 0);
@@ -1338,7 +1386,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			
 			SendMessage(hwndInput,WM_SETTEXT,0,(LPARAM)(LPCSTR) KbdStack[StackIndex]);
 
-			for (i = 0; i < strlen(KbdStack[StackIndex]); i++)
+			for (i = 0; i < wcslen(KbdStack[StackIndex]); i++)
 			{
 				SendMessage(hwndInput, WM_KEYDOWN, VK_RIGHT, 0);
 				SendMessage(hwndInput, WM_KEYUP, VK_RIGHT, 0);
@@ -1375,7 +1423,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				KbdStack[i+1] = KbdStack[i];
 			}
 
-			KbdStack[0] = _strdup(kbbuf);
+			KbdStack[0] = _wcsdup(kbbuf);
 
 			kbbuf[kbptr]=13;
 
@@ -1383,7 +1431,7 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			// Echo, with set Black escape
 
-			memcpy(&DisplayLine[2], kbbuf, kbptr+1);
+			memcpy(&DisplayLine[2], kbbuf, (kbptr+1) * 2);
 
 			if (OutputData.Scrolled)
 			{
@@ -1470,12 +1518,32 @@ LRESULT APIENTRY SplitProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     return CallWindowProc(wpOrigSplitProc, hwnd, uMsg, wParam, lParam); 
 } 
 
-DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, LPBYTE lpBuff, LONG cb, PLONG pcb)
+VOID wcstoRTF(char * out, TCHAR * in)
+{
+	TCHAR * ptr1 = in;
+	char * ptr2 = out;
+	int val = *ptr1++;
+
+	while (val)
+	{
+		{
+			if (val > 127 || val < -128 )
+				ptr2 += sprintf(ptr2, "\\u%d ", val);
+			else
+				*(ptr2++) = val;
+		}
+		val = *ptr1++;
+	}
+	*ptr2 = 0;
+}
+
+DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, char * lpBuff, LONG cb, PLONG pcb)
 {
 	struct RTFTerm * OPData	= (struct RTFTerm *)Cookie;
 	int ReqLen = cb;
 	int i;
 	int Line;
+	char LineB[20000];
 
 //	if (cb != 4092)
 //		return 0;
@@ -1522,8 +1590,10 @@ DWORD CALLBACK EditStreamCallback(DWORD_PTR Cookie, LPBYTE lpBuff, LONG cb, PLON
 	if (Line <0)
 		Line = Line + MAXLINES;
 
-	wsprintf(lpBuff, "\\cf%d ", OPData->Colourvalue[Line]);
-	strcat(lpBuff, OPData->OutputScreen[Line]);
+	wcstoRTF(LineB, OPData->OutputScreen[Line]);
+
+	sprintf(lpBuff, "\\cf%d ", OPData->Colourvalue[Line]);
+	strcat(lpBuff, LineB);
 	strcat(lpBuff, "\\line");
 
 	if (OPData->Index == MAXLINES)
@@ -1623,13 +1693,13 @@ VOID DoRefresh(struct RTFTerm * OPData)
 	}
 }
 
-VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
+VOID AddLinetoWindow(struct RTFTerm * OPData, TCHAR * Line)
 {
-	int Len = strlen(Line);
-	char * ptr1 = Line;
-	char * ptr2;
+	int Len = wcslen(Line);
+	TCHAR * ptr1 = Line;
+	TCHAR * ptr2;
 	int l, Index;
-	char LineCopy[LINELEN * 2];
+	TCHAR LineCopy[LINELEN * 2];
 	
 	if (Line[0] ==  0x1b && Len > 1)
 	{
@@ -1640,70 +1710,71 @@ VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
 		Len -= 2;
 	}
 
-	strcpy(OPData->OutputScreen[OPData->CurrentLine], ptr1);
+	wcscpy(OPData->OutputScreen[OPData->CurrentLine], ptr1);
 
 	// Look for chars we need to escape (\  { })
 
 	ptr1 = OPData->OutputScreen[OPData->CurrentLine];
 	Index = 0;
-	ptr2 = strchr(ptr1, '\\');				// Look for Backslash first, as we may add some later
+	ptr2 = wcschr(ptr1, L'\\');				// Look for Backslash first, as we may add some later
 
 	if (ptr2)
 	{
 		while (ptr2)
 		{
 			l = ++ptr2 - ptr1;
-			memcpy(&LineCopy[Index], ptr1, l);	// Copy Including found char
+			memcpy(&LineCopy[Index], ptr1, l * 2);	// Copy Including found char (\)
 			Index += l;
-			LineCopy[Index++] = '\\';
+			LineCopy[Index++] = L'\\';				// Add second \ 
 			Len++;
 			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, '\\');
+			ptr2 = wcschr(ptr1, L'\\');
 		}
-		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
-		strcpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
+
+		wcscpy(&LineCopy[Index], ptr1);			// Copy in rest
+		wcscpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
 	}
 
 	ptr1 = OPData->OutputScreen[OPData->CurrentLine];
 	Index = 0;
-	ptr2 = strchr(ptr1, '{');
+	ptr2 = wcschr(ptr1, L'{');
 
 	if (ptr2)
 	{
 		while (ptr2)
 		{
 			l = ptr2 - ptr1;
-			memcpy(&LineCopy[Index], ptr1, l);
+			memcpy(&LineCopy[Index], ptr1, l * 2);
 			Index += l;
-			LineCopy[Index++] = '\\';
-			LineCopy[Index++] = '{';
+			LineCopy[Index++] = L'\\';
+			LineCopy[Index++] = L'{';
 			Len++;
 			ptr1 = ++ptr2;
-			ptr2 = strchr(ptr1, '{');
+			ptr2 = wcschr(ptr1, L'{');
 		}
-		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
-		strcpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
+		wcscpy(&LineCopy[Index], ptr1);			// Copy in rest
+		wcscpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
 	}
 
 	ptr1 = OPData->OutputScreen[OPData->CurrentLine];
 	Index = 0;
-	ptr2 = strchr(ptr1, '}');				// Look for Backslash first, as we may add some later
+	ptr2 = wcschr(ptr1, '}');				// Look for Backslash first, as we may add some later
 
 	if (ptr2)
 	{
 		while (ptr2)
 		{
 			l = ptr2 - ptr1;
-			memcpy(&LineCopy[Index], ptr1, l);	// Copy 
+			memcpy(&LineCopy[Index], ptr1, l * 2);	// Copy 
 			Index += l;
-			LineCopy[Index++] = '\\';
-			LineCopy[Index++] = '}';
+			LineCopy[Index++] = L'\\';
+			LineCopy[Index++] = L'}';
 			Len++;
 			ptr1 = ++ptr2;
-			ptr2 = strchr(ptr1, '}');
+			ptr2 = wcschr(ptr1, L'}');
 		}
-		strcpy(&LineCopy[Index], ptr1);			// Copy in rest
-		strcpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
+		wcscpy(&LineCopy[Index], ptr1);			// Copy in rest
+		wcscpy(OPData->OutputScreen[OPData->CurrentLine], LineCopy);
 	}
 
 
@@ -1712,9 +1783,9 @@ VOID AddLinetoWindow(struct RTFTerm * OPData, char * Line)
 	if (OPData->CurrentLine >= MAXLINES) OPData->CurrentLine = 0;
 }
 
-VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len)
+VOID WritetoOutputWindow(struct RTFTerm * OPData, TCHAR * Msg, int len)
 {
-	char * ptr1, * ptr2;
+	TCHAR * ptr1, * ptr2;
 
 	if (PartLinePtr != 0)
 	{
@@ -1727,7 +1798,7 @@ VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len)
 		}
 	}
 	
-	memcpy(&readbuff[PartLinePtr], Msg, len);
+	memcpy(&readbuff[PartLinePtr], Msg, len * 2);
 		
 	len += PartLinePtr;
 
@@ -1737,7 +1808,7 @@ VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len)
 	if (Bells)
 	{
 		do {
-			ptr2=memchr(ptr1,7,len);
+			ptr2 = wmemchr(ptr1,7,len);
 
 			if (ptr2)
 			{
@@ -1753,14 +1824,14 @@ lineloop:
 	{
 		//	copy text to buffer a line at a time	
 	
-		ptr2=memchr(ptr1,13,len);
+		ptr2=wmemchr(ptr1, 13, len);
 
 		if (ptr2 == 0)
 		{
 			// no newline. Move data to start of buffer and Save pointer
 
 			PartLinePtr = len;
-			memmove(readbuff,ptr1,len);
+			memmove(readbuff, ptr1, len * 2);
 			AddLinetoWindow(OPData, ptr1);
 			return;
 		}
@@ -1773,11 +1844,11 @@ lineloop:
 
 		if ((ptr2 - ptr1) > maxlinelen)
 		{
-			char * ptr3;
-			char * saveptr1 = ptr1;
+			TCHAR * ptr3;
+			TCHAR * saveptr1 = ptr1;
 			int linelen = ptr2 - ptr1;
 			int foldlen;
-			char save;
+			TCHAR save;
 					
 		foldloop:
 
@@ -1842,18 +1913,18 @@ lineloop:
 
 
 
-char MonSave[1000];
+TCHAR MonSave[1000];
 int MonSaveLen;
 
-VOID WritetoMonWindow(char * Msg, int len)
+VOID WritetoMonWindow(TCHAR * Msg, int len)
 {
-	char * ptr1 = Msg, * ptr2;
+	TCHAR * ptr1 = Msg, * ptr2;
 	int index;
 
 	if (MonSaveLen)
 	{
 		// Have part line - append to it
-		memcpy(&MonSave[MonSaveLen], Msg, len);
+		memcpy(&MonSave[MonSaveLen], Msg, len * 2);
 		MonSaveLen += len;
 		ptr1 = MonSave;
 		len = MonSaveLen;
@@ -1867,11 +1938,11 @@ lineloop:
 
 	//	copy text to control a line at a time	
 
-	ptr2 = memchr(ptr1,13,len);
+	ptr2 = wmemchr(ptr1,13,len);
 				
 	if (ptr2 == 0)	// No CR
 	{
-		memmove(MonSave, ptr1, len);
+		memmove(MonSave, ptr1, len * 2);
 		MonSaveLen = len;
 		return;
 	}
@@ -2048,7 +2119,7 @@ void CopyRichTextToClipboard(HWND hWnd)
 	
 	len = SendMessage(hwndOutput, WM_GETTEXTLENGTH, 0, 0);
 	
-	hMem = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, len + 1);
+	hMem = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, (len + 1)*2);
 
 	if (hMem != 0)
 	{
@@ -2107,7 +2178,7 @@ void CopyListToClipboard(HWND hWnd)
 
 			GlobalUnlock(hMem);
 			EmptyClipboard();
-			SetClipboardData(CF_TEXT,hMem);
+			SetClipboardData(CF_UNICODETEXT,hMem);
 			CloseClipboard();
 		}
 			else
@@ -2117,9 +2188,9 @@ void CopyListToClipboard(HWND hWnd)
 
 BOOL OpenMonitorLogfile()
 {
-	UCHAR FN[MAX_PATH];
+	TCHAR FN[MAX_PATH];
 
-	wsprintf(FN,"BPQTerm_%d.log", Stream);
+	wsprintf(FN,L"BPQTerm_%d.log", Stream);
 
 	MonHandle = CreateFile(FN,
 					GENERIC_WRITE,
@@ -2134,33 +2205,38 @@ BOOL OpenMonitorLogfile()
 	return (MonHandle != INVALID_HANDLE_VALUE);
 }
 
-void WriteMonitorLine(char * Msg, int MsgLen)
+void WriteMonitorLine(TCHAR * Msg, int MsgLen)
 {
 	int cnt;
 	char CRLF[2] = {0x0d,0x0a};
+	unsigned char MsgB[1000];
 
 	if (MonHandle == INVALID_HANDLE_VALUE) OpenMonitorLogfile();
 
 	if (MonHandle == INVALID_HANDLE_VALUE) return;
 
-	WriteFile(MonHandle ,Msg , MsgLen, &cnt, NULL);
+	MsgLen = WideCharToMultiByte(TXMode, 0, Msg, MsgLen, MsgB, 1000, NULL, NULL);
+
+	WriteFile(MonHandle ,MsgB , MsgLen, &cnt, NULL);
 	WriteFile(MonHandle ,CRLF , 2, &cnt, NULL);
 }
 
 // TCP Interface
 
-TCPConnect(char * Host, int Port)
+TCPConnect(TCHAR * Host, int Port)
 {
 	int err, status;
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	SOCKADDR_IN sinx; 
+
 	int addrlen=sizeof(sinx);
 	char PortString[10];
-
+	char HostB[256];
 	struct addrinfo hints, *res;
 
-	wsprintf(PortString, "%d", Port);
+	wcstombs(HostB, Host, 256);
+	sprintf(PortString, "%d", Port);
 
 
 	// get host info, make socket, and connect it
@@ -2168,12 +2244,12 @@ TCPConnect(char * Host, int Port)
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_STREAM;
-	getaddrinfo(Host, PortString, &hints, &res);
+	getaddrinfo(HostB, PortString, &hints, &res);
 
 	if (!res)
 	{
-		MessageBox(NULL, "Resolve HostName Failed", "BPQTermTCP", MB_OK);
-		wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+		MessageBox(NULL, L"Resolve HostName Failed", L"BPQTermTCP", MB_OK);
+		wsprintf(Title, L"BPQTermTCP Version %s - Disconnected", VersionStringW);
 		SetWindowText(hWnd,Title);
 
 		return FALSE;			// Resolve failed
@@ -2254,7 +2330,7 @@ TCPConnect(char * Host, int Port)
 		{
 			//	Connect in Progress
 
-			wsprintf(Title,"BPQTermTCP Version %s - Connecting to %s", VersionString, Host);
+			wsprintf(Title,L"BPQTermTCP Version %s - Connecting to %s", VersionStringW, Host);
 			SetWindowText(hWnd,Title);
 
 			EnableDisconnectMenu(hWnd);
@@ -2267,7 +2343,7 @@ TCPConnect(char * Host, int Port)
 			//	Connect failed
 
 			closesocket(sock);
-			MessageBox(NULL, "Connect Failed", "BPQTermTCP", MB_OK);
+			MessageBox(NULL, L"Connect Failed", L"BPQTermTCP", MB_OK);
 			return FALSE;
 		}
 	}
@@ -2276,7 +2352,7 @@ TCPConnect(char * Host, int Port)
 
 int Telnet_Connected(SOCKET sock, int Error)
 {
-	char Msg[80];
+	TCHAR Msg[80];
 	int Len;
 
 	// Connect Complete
@@ -2287,13 +2363,13 @@ int Telnet_Connected(SOCKET sock, int Error)
 		Connecting = FALSE;
 		SocketActive = FALSE;
 
-		wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+		wsprintf(Title,L"BPQTermTCP Version %s - Disconnected", VersionStringW);
 		SetWindowText(hWnd,Title);
 		DisableDisconnectMenu(hWnd);
 		EnableConnectMenu(hWnd);
 
-		wsprintf(Msg, "Connect Failed - Error %d\r", Error);			
-		MessageBox(NULL, Msg, "BPQTermTCP", MB_OK);
+		wsprintf(Msg, L"Connect Failed - Error %d\r", Error);			
+		MessageBox(NULL, Msg, L"BPQTermTCP", MB_OK);
 
 		return 0;
 
@@ -2305,7 +2381,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 	Connecting = FALSE;
 	Connected = TRUE;
 
-	Len = wsprintf(Msg, "%s\r%s\rBPQTermTCP\r", UserName[CurrentHost], Password[CurrentHost]);
+	Len = wsprintf(Msg, L"%s\r%s\rBPQTermTCP\r", UserName[CurrentHost], Password[CurrentHost]);
 	
 	SendMsg(Msg, Len);
 
@@ -2313,7 +2389,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 
 	SlowTimer = 0;
 			
-	wsprintf(Title,"BPQTermTCP Version %s - Connected to %s", VersionString, Host[CurrentHost]);
+	wsprintf(Title, L"BPQTermTCP Version %s - Connected to %s", VersionStringW, Host[CurrentHost]);
 	SetWindowText(hWnd,Title);
 	DisableConnectMenu(hWnd);
 	EnableDisconnectMenu(hWnd);
@@ -2323,7 +2399,7 @@ int Telnet_Connected(SOCKET sock, int Error)
 
 VOID Socket_Data(int sock, int error, int eventcode)
 {
-	char Title[100];
+	TCHAR Title[100];
 
 	switch (eventcode)
 	{
@@ -2344,12 +2420,12 @@ VOID Socket_Data(int sock, int error, int eventcode)
 			if (SocketActive)
 				closesocket(sock);
 
-			wsprintf(Title,"BPQTermTCP Version %s - Disconnected", VersionString);
+			wsprintf(Title, L"BPQTermTCP Version %s - Disconnected", VersionStringW);
 			SetWindowText(hWnd,Title);
 			DisableDisconnectMenu(hWnd);
 			EnableConnectMenu(hWnd);
 
-			WritetoOutputWindow(&OutputData, "*** Disconnected\r", 17);		
+			WritetoOutputWindow(&OutputData, L"*** Disconnected\r", 17);		
 			DoRefresh(&OutputData);
 			SocketActive = FALSE;
 			Connected = FALSE;
@@ -2358,18 +2434,58 @@ VOID Socket_Data(int sock, int error, int eventcode)
 	}
 	return ;
 }
+int TrytoGuessCode(unsigned char * Char, int Len)
+{
+	int Above127 = 0;
+	int LineDraw = 0;
+	int NumericAndSpaces = 0;
+	int n;
+
+	for (n = 0; n < Len; n++)
+	{
+		if (Char[n] < 65)
+		{
+			NumericAndSpaces++;
+		}
+		else
+		{
+			if (Char[n] > 127)
+			{
+				Above127++;
+				if (Char[n] > 178 && Char[n] < 219)
+				{
+					LineDraw++;
+				}
+			}
+		}
+	}
+
+	if (Above127 == 0)			// DOesn't really matter!
+		return CP1252;
+
+	if (Above127 == LineDraw)
+		return CP437;			// If only Line Draw chars, assume line draw
+
+	// If mainly below 128, it is probably Latin if mainly above, probably Cyrillic
+
+	if ((Len - (NumericAndSpaces + Above127)) < Above127) 
+		return CP1251;
+	else
+		return CP1252;
+}
 
 VOID DataSocket_Read(SOCKET sock)
 {
-	int len = 0, MonLen;
-	char Buffer[500];
-	char * ptr;
-	char * Buffptr;
-	char * FEptr = 0;
+	int len = 0, MonLen, wlen, err = 0, newlen;
+	unsigned char Buffer[1000];
+	UCHAR * ptr;
+	UCHAR * Buffptr;
+	UCHAR * FEptr = 0;
+	TCHAR BufferW[1000];
 
 	ioctlsocket(sock, FIONREAD, &len);
 
-	if (len > 500) len = 500;
+	if (len > 1000) len = 1000;
 
 	len = recv(sock, Buffer, len, 0);
 
@@ -2379,6 +2495,8 @@ VOID DataSocket_Read(SOCKET sock)
 
 		return;
 	}
+
+//	mbstowcs(Buffer, BufferB, len);
 
 	// Look for MON delimiters (FF/FE)
 
@@ -2394,7 +2512,12 @@ VOID DataSocket_Read(SOCKET sock)
 		{
 			// no FE - so send all to monitor
 			
-			WritetoMonWindow(Buffptr, len);
+			len = MultiByteToWideChar(CP_UTF8, 0, Buffptr, len, BufferW, 1000); 
+
+			if (len == 0)
+				return;
+
+			WritetoMonWindow(BufferW, len);
 			return;
 		}
 
@@ -2402,7 +2525,12 @@ VOID DataSocket_Read(SOCKET sock)
 
 		MonLen = FEptr - Buffptr;		// Mon Data, Excluding the FE
 
-		WritetoMonWindow(Buffptr, MonLen);
+		wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr, MonLen, BufferW, 1000); 
+
+		if (wlen == 0)
+			return;
+
+		WritetoMonWindow(BufferW, wlen);
 
 		Buffptr = ++FEptr;				// Char following FE
 
@@ -2429,7 +2557,29 @@ MonLoop:
 			// Some Normal Data before the FF
 
 			int NormLen = ptr - Buffptr;				// Before the FF
-			WritetoOutputWindow(&OutputData, Buffptr, NormLen);
+	
+			wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, NormLen, BufferW, 1000); 
+
+			err =  GetLastError();
+			
+			if (err == ERROR_NO_UNICODE_TRANSLATION)
+			{
+				// Input isn't UTF 8. if RXMode = AURO, Try to figure out what it is, otherwise convert usong specified mode
+
+				if (RXMode == AUTO)
+				{
+					int Table = TrytoGuessCode(Buffptr, NormLen);
+					
+					wlen = MultiByteToWideChar(Table, 0, Buffptr, NormLen, BufferW, 1000); 
+				}
+				else 
+				{
+					wlen = MultiByteToWideChar(RXMode, 0, Buffptr, NormLen, BufferW, 1000); 
+				}
+			}
+
+			if (wlen)
+				WritetoOutputWindow(&OutputData, BufferW, wlen);
 
 			len -= NormLen;
 			Buffptr = ptr;
@@ -2445,7 +2595,12 @@ MonLoop:
 			MonData = FALSE;
 
 			MonLen = FEptr + 1 - Buffptr;				// MonLen includes FF and FE
-			WritetoMonWindow(Buffptr+1, MonLen - 2);
+
+			wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr + 1, MonLen - 2, BufferW, 1000); 
+
+			if (wlen)
+				WritetoMonWindow(BufferW, wlen);
+
 			DoRefresh(&OutputData);
 
 			len -= MonLen;
@@ -2460,24 +2615,54 @@ MonLoop:
 		else
 		{
 			// No FE, so rest of buffer is MON Data
-			
-			WritetoMonWindow(Buffptr+1, len -1);		// Exclude FF
-//			DoRefresh();
+
+			wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr + 1, MonLen - 1, BufferW, 1000); 		// Exclude FF
+
+			if (wlen == 0)
+				return;
+
+			WritetoMonWindow(BufferW, wlen);
 			return;
 		}
 	}
 
 	// No FF, so must be session data
 
-	WritetoOutputWindow(&OutputData, Buffptr, len);
+	newlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, len, BufferW, 1000); 
+
+	err =  GetLastError();
+			
+	if (err == ERROR_NO_UNICODE_TRANSLATION)
+	{
+		// Input isn't UTF 8. if RXMode = AURO, Try to figure out what it is, otherwise convert usong specified mode
+
+		if (RXMode == AUTO)
+		{
+			int Table = TrytoGuessCode(Buffptr, len);
+
+			newlen = MultiByteToWideChar(Table, 0, Buffptr, len, BufferW, 1000); 
+		}
+		else 
+		{
+			newlen = MultiByteToWideChar(RXMode, 0, Buffptr, len, BufferW, 1000); 
+		}
+	}
+
+	if (newlen)
+		WritetoOutputWindow(&OutputData, BufferW, newlen);
+
 	DoRefresh(&OutputData);
 	SlowTimer = 0;
 	return;
 }
 
-int SendMsg(char * msg, int len)
+int SendMsg(TCHAR * msg, int len)
 {
-	send(sock, msg, len, 0);
+	unsigned char MsgB[1000];
+
+	len = WideCharToMultiByte(TXMode, 0, msg, len, MsgB, 1000, NULL, NULL);
+
+	send(sock, MsgB, len, 0);
 	return 0;
 }
 
@@ -2485,9 +2670,45 @@ VOID SendTraceOptions()
 {
 	char Buffer[80];
 
-	int Len = wsprintf(Buffer,"\\\\\\\\%x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI);
+ 	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI, 1);
 	memcpy(&MonParams[CurrentHost], &Buffer[4], Len - 4);
 	
 	send(sock, Buffer, Len, 0);
 
 }
+
+
+static unsigned int cp1251Map[256] = {
+  0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
+  0x0008, 0x0009, '\n', 0x000B, 0x000C, '\r', 0x000E, 0x000F,
+  0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017,
+  0x0018, 0x0019, 0x001A, 0x001B, 0x001C, 0x001D, 0x001E, 0x001F,
+  0x0020, 0x0021, 0x0022, 0x0023, 0x0024, 0x0025, 0x0026, '\'',
+  0x0028, 0x0029, 0x002A, 0x002B, 0x002C, 0x002D, 0x002E, 0x002F,
+  0x0030, 0x0031, 0x0032, 0x0033, 0x0034, 0x0035, 0x0036, 0x0037,
+  0x0038, 0x0039, 0x003A, 0x003B, 0x003C, 0x003D, 0x003E, 0x003F,
+  0x0040, 0x0041, 0x0042, 0x0043, 0x0044, 0x0045, 0x0046, 0x0047,
+  0x0048, 0x0049, 0x004A, 0x004B, 0x004C, 0x004D, 0x004E, 0x004F,
+  0x0050, 0x0051, 0x0052, 0x0053, 0x0054, 0x0055, 0x0056, 0x0057,
+  0x0058, 0x0059, 0x005A, 0x005B, '\\', 0x005D, 0x005E, 0x005F,
+  0x0060, 0x0061, 0x0062, 0x0063, 0x0064, 0x0065, 0x0066, 0x0067,
+  0x0068, 0x0069, 0x006A, 0x006B, 0x006C, 0x006D, 0x006E, 0x006F,
+  0x0070, 0x0071, 0x0072, 0x0073, 0x0074, 0x0075, 0x0076, 0x0077,
+  0x0078, 0x0079, 0x007A, 0x007B, 0x007C, 0x007D, 0x007E, 0x007F,
+  0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021,
+  0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F,
+  0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+  0xFFFD, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F,
+  0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7,
+  0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407,
+  0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7,
+  0x0451, 0x2116, 0x0454, 0x00BB, 0x0458, 0x0405, 0x0455, 0x0457,
+  0x0410, 0x0411, 0x0412, 0x0413, 0x0414, 0x0415, 0x0416, 0x0417,
+  0x0418, 0x0419, 0x041A, 0x041B, 0x041C, 0x041D, 0x041E, 0x041F,
+  0x0420, 0x0421, 0x0422, 0x0423, 0x0424, 0x0425, 0x0426, 0x0427,
+  0x0428, 0x0429, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F,
+  0x0430, 0x0431, 0x0432, 0x0433, 0x0434, 0x0435, 0x0436, 0x0437,
+  0x0438, 0x0439, 0x043A, 0x043B, 0x043C, 0x043D, 0x043E, 0x043F,
+  0x0440, 0x0441, 0x0442, 0x0443, 0x0444, 0x0445, 0x0446, 0x0447,
+  0x0448, 0x0449, 0x044A, 0x044B, 0x044C, 0x044D, 0x044E, 0x044F
+};
