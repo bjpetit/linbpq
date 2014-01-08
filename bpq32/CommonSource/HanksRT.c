@@ -2620,6 +2620,7 @@ int rt_cmd(ChatCIRCUIT *circuit, char * Buffer)
 				(user->rtflags & u_bells) ? "Enabled" : "Disabled");
 			nprintf(circuit, "/C - Toggle Colour Mode on or off (only works on Console or BPQTerminal - %s.\r",
 				(user->rtflags & u_colour) ? "Enabled" : "Disabled");
+			nputs(circuit, "/Codepage CPnnnn - Set Codepage to use if UTF-9 is disabled.\r");
 			nprintf(circuit, "/E - Toggle Echo - %s .\r",
 				(user->rtflags & u_echo) ? "Enabled" : "Disabled");
 			nprintf(circuit, "/Keepalive - Toggle sending Keepalive messages every 10 minutes - %s.\r",
@@ -2628,8 +2629,6 @@ int rt_cmd(ChatCIRCUIT *circuit, char * Buffer)
 				(user->rtflags & u_shownames) ? "Enabled" : "Disabled");
 			nprintf(circuit, "/Auto - Toggle Automatic character set selection - %s.\r",
 				(user->rtflags & u_auto) ? "Enabled" : "Disabled");
-			nprintf(circuit, "/UTF-8 - Character set Selection - %s.\r",
-				(user->rtflags & u_noUTF8) ? "8 Bit" : "UTF-8");
 			nprintf(circuit, "/UTF-8 - Character set Selection - %s.\r",
 				(user->rtflags & u_noUTF8) ? "8 Bit" : "UTF-8");
 			nprintf(circuit, "/Time - Toggle displaying timestamp on each message - %s.\r",

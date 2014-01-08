@@ -32,6 +32,9 @@ struct ConnectionInfo
 	BOOL FBBMode;				// Pure TCP for FBB forwarding
 	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
 	BOOL HTTPMode;				// HTML Terminal Emulator
+	BOOL TriMode;				// Trimode emulation
+	BOOL TriModeConnected;		// Set when remote session is connected - now send data to DataSock
+	SOCKET TriModeDataSock;		// Data Socket
 	BOOL Auth;					// Set if User is flagged as a Secure User
 	BOOL BPQTermMode;			// Set if connected to BPQTermTCP
 	BOOL ClientSession;			// Set if acting as a client (ie Linux HOST Mode)
@@ -53,6 +56,8 @@ struct ConnectionInfo
 	BOOL UTF8;					// Set if BPQTerminal in UTF8 Mode
 	BOOL RelaySession;			// Set if connection to RMS Relay
 	BOOL LogonSent;				// To ignore second callsign: prompt
+
+	char Signon[100];			// User/Pass/Appl for Outgoing Connects
 };
 
 #define Disconnect(stream) SessionControl(stream,2,0)

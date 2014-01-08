@@ -514,6 +514,8 @@ portok:
 
 		FreqPtr = (struct ScanEntry *)&buffptr[2];
 
+		memset(FreqPtr, 0, sizeof(struct ScanEntry));
+
 		FreqPtr->Freq = Freq;
 		FreqPtr->Bandwidth = Bandwidth;
 		FreqPtr->Antenna = Antenna;
@@ -574,16 +576,37 @@ portok:
 			else if (DataFlag)
 			{
 				CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
-				FreqPtr->Cmd3Len = 8;
+
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = RIG->RigAddr;
 				*(CmdPtr++) = 0xE0;
-				*(CmdPtr++) = 0x1a;		
-				*(CmdPtr++) = 0x6;		// Set Data
-				*(CmdPtr++) = 0x1;		//On		
+				*(CmdPtr++) = 0x1a;	
+
+				if (strcmp(RIG->RigName, "IC7100") == 0)
+				{
+					FreqPtr[0].Cmd3Len = 9;
+					*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
+					*(CmdPtr++) = 0x1;		// Data On
+					*(CmdPtr++) = Filter;	//Filter
+				}
+				else if (strcmp(RIG->RigName, "IC7200") == 0)
+				{
+					FreqPtr[0].Cmd3Len = 9;
+					*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
+					*(CmdPtr++) = 0x1;		// Data On
+					*(CmdPtr++) = Filter;	// Filter
+				}
+				else
+				{
+					FreqPtr[0].Cmd3Len = 8;
+					*(CmdPtr++) = 0x6;		// Set Data
+					*(CmdPtr++) = 0x1;		//On		
+				}
+						
 				*(CmdPtr++) = 0xFD;
 			}
+
 		}
 
 		buffptr[1] = 200;
@@ -845,6 +868,11 @@ DllExport BOOL APIENTRY Rig_Init()
 #endif
 	// Get config info
 
+	NumberofPorts = 0;
+
+	for (port = 0; port < 32; port++)
+		PORTInfo[port] = NULL;
+
 	for (port = 1; port < 33; port++)
 	{
 		TNC = TNCInfo[port];
@@ -873,6 +901,9 @@ DllExport BOOL APIENTRY Rig_Init()
 			}
 		
 			TNC->RIG->PTTMode = TNC->PTTMode;
+
+			if (TNC->RIG->PTTMode == 0)			// Not Set
+				TNC->RIG->PTTMode = PTTRTS;		// For PTTMUX
 
 			hDlg = TNC->hDlg;
 
@@ -1031,6 +1062,8 @@ DllExport BOOL APIENTRY Rig_Init()
 //	MoveWindow(hDlg, Rect.left, Rect.top, Rect.right - Rect.left, Row + 100, TRUE);
 
 	SetupPortRIGPointers();
+
+	Debugprintf("PORTTYPE %d", PORTInfo[0]->PortType);
 
 	WritetoConsole("\nRig Control Enabled\n");
 
@@ -1937,7 +1970,9 @@ SendResponse(int Session, char * Msg)
 	C_Q_ADD(&L4->L4TX_Q, (UINT *)Buffer);
 
 #ifndef LINBPQ
-	PostMessage(VEC->HOSTHANDLE, BPQMsg, VEC->HOSTSTREAM, 2);  
+
+	if (VEC)
+		PostMessage(VEC->HOSTHANDLE, BPQMsg, VEC->HOSTSTREAM, 2);  
 #endif
 	return 0;
 }
@@ -2578,6 +2613,7 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	char * ptr;
 
 	*Filter = '1';			// Default
+	*PMinLevel = 1;
 
 	ptr = strtok_s(Param, ",", &Context);
 
@@ -2637,7 +2673,9 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 		else if (ptr[0] == 'W')
 		{
 			*WinmorMode = ptr[1];
-			if (*WinmorMode == '1')
+			if (*WinmorMode == '0')
+				*WinmorMode = 'X';
+			else if (*WinmorMode == '1')
 				*WinmorMode = 'N';
 			else if (*WinmorMode == '2')
 				*WinmorMode = 'W';
@@ -2748,8 +2786,7 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 	// Allocate a new one
 
-	PORT = PORTInfo[NumberofPorts++] = malloc(sizeof(struct RIGPORTINFO));
-	memset(PORT, 0, sizeof(struct RIGPORTINFO));
+	PORT = PORTInfo[NumberofPorts++] = zalloc(sizeof(struct RIGPORTINFO));
 
 	if (COMPort)
 		strcpy(PORT->IOBASE, COMPort);
@@ -2861,7 +2898,7 @@ PortFound:
 		RIG->PortNum = Port;
 		RIG->BPQPort |=  (1 << Port);
 
-		return RIG;
+//		return RIG;
 	}
 
 	// If ICOM, we may be adding a new Rig
@@ -3419,7 +3456,7 @@ PortFound:
 		FreqPtr[0]->PMaxLevel = PMaxLevel;
 		FreqPtr[0]->PMinLevel = PMinLevel;
 		FreqPtr[0]->Antenna = Antenna;
-		FreqPtr[0]->Supress = Supress;
+//		FreqPtr[0]->Supress = Supress;
 
 		strcpy(FreqPtr[0]->APPL, Appl);
 
@@ -3488,14 +3525,34 @@ PortFound:
 					if (Data)
 					{
 						CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-						FreqPtr[0]->Cmd3Len = 8;
+
 						*(CmdPtr++) = 0xFE;
 						*(CmdPtr++) = 0xFE;
 						*(CmdPtr++) = RIG->RigAddr;
 						*(CmdPtr++) = 0xE0;
-						*(CmdPtr++) = 0x1a;		
-						*(CmdPtr++) = 0x6;		// Set Data
-						*(CmdPtr++) = 0x1;		//On		
+						*(CmdPtr++) = 0x1a;	
+
+						if (strcmp(RIG->RigName, "IC7100") == 0)
+						{
+							FreqPtr[0]->Cmd3Len = 9;
+							*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
+							*(CmdPtr++) = 0x1;		// Data On
+							*(CmdPtr++) = Filter - '0'; //Filter
+						}
+						else if (strcmp(RIG->RigName, "IC7200") == 0)
+						{
+							FreqPtr[0]->Cmd3Len = 9;
+							*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
+							*(CmdPtr++) = 0x1;		// Data On
+							*(CmdPtr++) = Filter - '0'; //Filter
+						}
+						else
+						{
+							FreqPtr[0]->Cmd3Len = 8;
+							*(CmdPtr++) = 0x6;		// Set Data
+							*(CmdPtr++) = 0x1;		//On		
+						}
+						
 						*(CmdPtr++) = 0xFD;
 					}
 				}
@@ -3744,8 +3801,6 @@ WaitAgain:
 				ptr1 = Block[i];
 				ptr2 = Block[i];
 
-				Debugprintf("%d", Length);
-
 				while (Length > 0)
 				{
 					c = *(ptr1++);
@@ -3775,8 +3830,6 @@ WaitAgain:
 								Rig_PTT(RIG, FALSE);
 
 							CurrentState[i] = c;
-					
-							Debugprintf("% 02x", c);
 							continue;
 						}
 					}

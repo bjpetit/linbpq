@@ -322,6 +322,65 @@ VOID DoSetIdleTime(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * C
 	return;
 }
 
+VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
+{
+	int msgno;
+	char * FN;
+	FILE * Handle = NULL;
+	struct MsgInfo * Msg;
+
+
+	if (conn->sysop == 0)
+	{
+		nodeprintf(conn, "EXPORT command needs SYSOP status\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (Arg1 == 0 || _stricmp(Arg1, "HELP") == 0)
+	{
+		nodeprintf(conn, "EXPORT nnn FILENAME - Export Message nnn to file FILENAME\r");
+		SendPrompt(conn, user);
+		return;
+	}
+
+	msgno = atoi(Arg1);
+	
+	FN = strtok_s(NULL, " \r", &Context);
+
+	Msg = MsgnotoMsg[msgno];
+
+	if (Msg == NULL)
+	{
+		nodeprintf(conn, "Message %d not found\r", msgno);		
+		SendPrompt(conn, user);
+		return;
+	}
+
+	conn->BBSFlags |= BBS;
+
+	Handle = fopen(FN, "ab");
+
+	if (Handle == NULL)
+	{
+		nodeprintf(conn, "Fime %s could not be opened\r", FN);		
+		SendPrompt(conn, user);
+		return;
+	}
+
+//	SetFilePointer(Handle, 0, 0, FILE_END);
+
+	ForwardMessagetoFile(Msg, Handle);
+
+	fclose(Handle);
+
+	nodeprintf(conn, "%Message %d Exported\r", msgno);
+	SendPrompt(conn, user);
+
+	return;
+
+}
+
 
 VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context)
 {

@@ -794,13 +794,26 @@
 //	Fix Endian bug in FBB Compression code
 
 
-
+// Version 1.4.58.1
 
 //  Change control of appending winlink.org to RMS Express or Paclink addresses to a user flag
 //	Lookup HomeBBS and WP for calls without a via received from RMS Express or Paclink 
 //	Treat call@bpq as request to look up address in Home BBS/WP for messages received from RMS Express or Paclink 
 //	Collect stats by message type
 //	Fix Non-Delivery notifications to SMTP messages
+//	Add Message Type Stats to BBS Trafic Report
+//	Add "Batch forward to email"
+//	Add EXPORT command
+//	Allow more BBS records
+//	Allow lower case connect scripts
+//  Fix POP3 LIST command
+//	Fix MIME Multipart Alternate with first part Base64 or Quoted Printable encoding
+
+
+
+
+
+
 
 
 
@@ -965,7 +978,6 @@ char BaseDir[MAX_PATH];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
 char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
 
-
 char MailDir[MAX_PATH];
 
 char Configfile[MAX_PATH];
@@ -1026,6 +1038,7 @@ unsigned long _beginthread( void( *start_address )(VOID * DParam),
 
 VOID SendMailForThread(VOID * Param);
 BOOL CreatePipeThread();
+int DeleteRedundantMessages();
 
 struct _EXCEPTION_POINTERS exinfox;
 	

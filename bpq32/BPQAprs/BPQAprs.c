@@ -45,6 +45,9 @@
 // Fix Loop if Object is Station
 // Fix crash if > 1000 stations at a point
 
+// Jan 2014
+// Add WX decode to station popup
+
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _WIN32_WINNT 0x0501	
@@ -380,7 +383,7 @@ int CopyScreentoBuffer(char * buff);
 VOID SendFrame(UCHAR * buff, int txlen);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	KissDecode(UCHAR * inbuff, int len);
-struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
+struct STATIONRECORD * FindStation(char * ReportingCall, char * Call, BOOL AddIfNotFound);
 //void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, double V_Lon, double V_SOG, double V_COG, int iconRow, int iconCol);
 VOID DrawStation(struct STATIONRECORD * ptr);
 VOID FindStationsByPixel(int MouseX, int MouseY);
@@ -2130,7 +2133,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 						struct STATIONRECORD * Station;
 
 						SendMessage(hSelWnd, LB_GETTEXT, Index, (LPARAM)Key); 
-						Station = FindStation(Key, TRUE);
+						Station = FindStation(Key, Key, TRUE);
 								
 						DestroyWindow(hSelWnd);
 						hSelWnd = 0;
@@ -2304,7 +2307,7 @@ LRESULT CALLBACK StnWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			ListView_GetItem(hStations, &item);
 
-			Station = FindStation(Item1, TRUE);
+			Station = FindStation(Item1, Item1, TRUE);
 
 			if (Station)
 			{
@@ -2807,7 +2810,7 @@ VOID ResolveThread()
 	}
 }
 
-VOID DecodeWXReport(struct ConnectionInfo * sockptr, char * WX)
+VOID DecodeWXReport(struct APRSConnectionInfo * sockptr, char * WX)
 {
 	UCHAR * ptr = strchr(WX, '_');
 	char Type;
@@ -3929,6 +3932,7 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int X, int Y)
 	LV_COLUMN Column;
 	HWND hPopupList;
 	RECT Rect;
+	int Len = 130;
 
 	CurrentPopup = ptr;
 		
@@ -3949,8 +3953,6 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int X, int Y)
     //            X, Y, 400, 150, hMapWnd, NULL, hInst, NULL);
 
 	GetWindowRect(hMapWnd, &Rect);
-
-	MoveWindow(hPopupWnd, Rect.left + X, Rect.top + Y + 40, 400, 130, TRUE);
 
 	Column.cx=1000;
 	Column.mask=LVCF_WIDTH | LVCF_TEXT;
@@ -3984,7 +3986,56 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int X, int Y)
 		Bearing(ptr->Lat, ptr->Lon), ptr->Course, ptr->Speed);
 
 	Item.iItem++;
-	ListView_InsertItem(hPopupList, &Item);	 
+	ListView_InsertItem(hPopupList, &Item);	
+
+	if (ptr->LastWXPacket[0])
+	{
+		//display wx info
+
+		struct APRSConnectionInfo temp;
+
+		memset(&temp, 0, sizeof(temp));
+
+		DecodeWXReport(&temp, ptr->LastWXPacket);
+
+		sprintf(Msg, "Wind Speed %d MPH", temp.WindSpeed);
+		Item.iItem++;
+		ListView_InsertItem(hPopupList, &Item);	
+
+		sprintf(Msg, "Wind Gust %d MPH", temp.WindGust);
+		Item.iItem++;
+		ListView_InsertItem(hPopupList, &Item);	
+
+		sprintf(Msg, "Wind Direction %d°", temp.WindDirn);
+		Item.iItem++;
+		ListView_InsertItem(hPopupList, &Item);	
+
+		sprintf(Msg, "Temperature %d°F", temp.Temp);
+		Item.iItem++;
+		ListView_InsertItem(hPopupList, &Item);	
+
+		sprintf(Msg, "Pressure %05.1f", temp.Pressure /10.0);
+		Item.iItem++;
+		ListView_InsertItem(hPopupList, &Item);	
+
+		sprintf(Msg, "Humidity %d%%", temp.Humidity);
+		Item.iItem++;
+		ListView_InsertItem(hPopupList, &Item);	
+
+		Len +=100;
+
+	}
+
+	MoveWindow(hPopupWnd, Rect.left + X, Rect.top + Y + 40, 400, Len, TRUE);
+	MoveWindow(hPopupList, 0, 0, 400, Len, TRUE);
+	
+
+/*
+<td>Rain last hour</td><td>##RAIN_HOUR_IN##"</td></tr>
+<tr><td>Rain today</td><td>##RAIN_TODAY_IN##"</td></tr>
+<tr><td>Rain last 24 hours</td><td>##RAIN_24_IN##"</td></tr>
+</table>
+*/
 
 	ShowWindow(hPopupWnd, SW_SHOWNORMAL);
 }
@@ -4247,7 +4298,7 @@ void RefreshStationMap()
 //	Debugprintf("APRS Refresh - Sation Count = %d", StationCount);
 }
 
-struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
+struct STATIONRECORD * FindStation(char * ReportingCall, char * Call, BOOL AddIfNotFount)
 {
 	int i = 0;
 	struct STATIONRECORD * find = StationRecords;
@@ -4359,7 +4410,7 @@ VOID ProcessRFFrame(char * Msg, int len)
 
 	// Look up station - create a new one if not found
 
-	Station = FindStation(Callsign, TRUE);
+	Station = FindStation(Callsign, Callsign, TRUE);
 	
 	strcpy(Station->Path, Path);
 	strcpy(Station->LastPacket, Payload);
@@ -4421,7 +4472,7 @@ void DecodeAPRSISMsg(char * Msg)
 		return;
 	}
 
-	Station = FindStation(Callsign, TRUE);
+	Station = FindStation(Callsign, Callsign, TRUE);
 	
 	strcpy(Station->Path, Path);
 	strcpy(Station->LastPacket, Payload);
@@ -4621,7 +4672,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		*ptr = 0;						// Terminate Name
 
-		Object = FindStation(ObjName, TRUE);
+		Object = FindStation(Station->Callsign, ObjName, TRUE);
 		Object->ObjState = *ptr++ = ObjState;
 
 		strcpy(Object->Path, Station->Callsign);
@@ -4658,7 +4709,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		ObjState = Payload[10];	// * Live, _Killed
 
 		Payload[10] = 0;
-		Object = FindStation(ObjName, TRUE);
+		Object = FindStation(Station->Callsign, ObjName, TRUE);
 		Object->ObjState = Payload[10] = ObjState;
 
 		strcpy(Object->Path, Station->Callsign);
@@ -4746,7 +4797,7 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 		// Look up station - create a new one if not found
 
-		TPStation = FindStation(Callsign, TRUE);
+		TPStation = FindStation(Callsign, Callsign, TRUE);
 	
 		strcpy(TPStation->Path, Path);
 		strcpy(TPStation->LastPacket, Payload);
@@ -5746,7 +5797,7 @@ VOID SendAPRSMessage(char * Text, char * ToCall)
 	strcpy(Message->FromCall, APRSCall);
 	memset(Message->ToCall, ' ', 9);
 	memcpy(Message->ToCall, ToCall, strlen(ToCall));
-	Message->ToStation = FindStation(ToCall, TRUE);
+	Message->ToStation = FindStation(ToCall, ToCall, TRUE);
 
 	if (Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
 		wsprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
@@ -7172,7 +7223,7 @@ char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * 
 	return _strdup(Line);
 }
 
-char * LookupKey(struct ConnectionInfo * sockptr, char * Key)
+char * LookupKey(struct APRSConnectionInfo * sockptr, char * Key)
 {
 	struct STATIONRECORD * stn = sockptr->SelCall;
 
@@ -7474,7 +7525,7 @@ char * LookupKey(struct ConnectionInfo * sockptr, char * Key)
 	return NULL;
 }
 
-VOID ProcessSpecialPage(struct ConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
+VOID ProcessSpecialPage(struct APRSConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
 {
 	// replaces ##xxx### constructs with the requested data
 
@@ -7607,7 +7658,7 @@ loop:
 	return;
 }
 
-VOID SendMessageFile(struct ConnectionInfo * sockptr, char * FN)
+VOID SendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 {
 	int FileSize;
 	char * MsgBytes;
@@ -7705,8 +7756,8 @@ DWORD WINAPI InstanceThread(LPVOID lpvParam)
    int OutputLen = 0;
    	char * URL;
 	char * ptr;
-	struct ConnectionInfo CI;
-	struct ConnectionInfo * sockptr = &CI;
+	struct APRSConnectionInfo CI;
+	struct APRSConnectionInfo * sockptr = &CI;
 	char Key[12];
 
 	__try
@@ -7805,7 +7856,7 @@ DWORD WINAPI InstanceThread(LPVOID lpvParam)
 					memset(&Key[Keylen], 32, 9 - Keylen);
 			}			
 			
-			stn = FindStation(Key, FALSE);
+			stn = FindStation(Key, Key, FALSE);
 
 			if (stn == NULL)
 				strcpy(URL, "/aprs/noinfo.html");

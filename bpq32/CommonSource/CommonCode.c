@@ -4,7 +4,7 @@
 
 #pragma data_seg("_BPQDATA")
 
-#define _CRT_SECURE_NO_DEPRECATE 
+#define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
 #include <stdlib.h>
@@ -12,7 +12,7 @@
 #include <time.h>
 
 #pragma data_seg("_BPQDATA")
-				
+
 
 #include "CHeaders.h"
 #include "tncinfo.h"
@@ -64,7 +64,7 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 {
 	UINT * Q = (UINT *) PQ;
 	UINT  * first,next;
-	
+
 	if (Semaphore.Flag == 0)
 		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
 
@@ -72,11 +72,11 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 		return(0);
 
 	first = (UINT *)Q[0];
-	
+
 	if (first == 0) return (0);			// Empty
-	
+
 	next=first[0];						// Address of next buffer
-	
+
 	Q[0]=next;
 
 	// Make sure guard zone is zeros
@@ -229,7 +229,7 @@ int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
 
 	while (next[0]!=0)
 		next=(UINT *)next[0];			// Chain to end of queue
-	
+
 	next[0]=(UINT)BUFF;					// New one on end
 
 	return(0);
@@ -244,7 +244,7 @@ int C_Q_COUNT(VOID *PQ)
 	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
 		return(0);
 
-	//	SEE HOW MANY BUFFERS ATTACHED TO Q HEADER 
+	//	SEE HOW MANY BUFFERS ATTACHED TO Q HEADER
 
 	while (*Q)
 	{
@@ -256,7 +256,7 @@ int C_Q_COUNT(VOID *PQ)
 		}
 		Q = (UINT *)*Q;
 	}
-	
+
 	return count;
 }
 
@@ -274,13 +274,13 @@ VOID * _GetBuff(char * File, int Line)
 
 		if (QCOUNT < MINBUFFCOUNT)
 			MINBUFFCOUNT = QCOUNT;
-	
+
 		Msg = (MESSAGE *)Temp;
 		Msg->Process = (short)GetCurrentProcessId();
 	}
 	else
 		Debugprintf("Warning - Getbuff returned NULL");
-	
+
 	return Temp;
 }
 
@@ -330,7 +330,7 @@ VOID DISPLAYCIRCUIT(TRANSPORTENTRY * L4, char * Buffer)
 	case PACTOR+UPLINK:
 
 		PORT = L4->L4TARGET.PORT;
-		
+
 		ConvFromAX25(L4->L4USER, Normcall);
 		strlop(Normcall, ' ');
 
@@ -338,12 +338,12 @@ VOID DISPLAYCIRCUIT(TRANSPORTENTRY * L4, char * Buffer)
 			sprintf(Buffer, "%s %d/%d(%s)", "TNC Uplink Port", PORT->PORTNUMBER, L4->KAMSESSION, Normcall);
 
 		return;
-	
-		
+
+
 	case PACTOR+DOWNLINK:
 
 		PORT = L4->L4TARGET.PORT;
-	
+
 		if (PORT)
 			sprintf(Buffer, "%s %d/%d", "Attached to Port", PORT->PORTNUMBER, L4->KAMSESSION);
 		return;
@@ -358,13 +358,13 @@ VOID DISPLAYCIRCUIT(TRANSPORTENTRY * L4, char * Buffer)
 
 		if (LINK)
 			sprintf(Buffer, "%s %d(%s)", "Uplink", LINK->LINKPORT->PORTNUMBER, Normcall);
-		
+
 		return;
 
 	case L2LINK+DOWNLINK:
 
 		LINK = L4->L4TARGET.LINK;
-			
+
 		if (LINK == NULL)
 			return;
 
@@ -393,7 +393,7 @@ VOID DISPLAYCIRCUIT(TRANSPORTENTRY * L4, char * Buffer)
 
 	case SESSION + DOWNLINK:
 	case SESSION + UPLINK:
-	
+
 		ConvFromAX25(L4->L4USER, Normcall);
 		strlop(Normcall, ' ');
 
@@ -428,7 +428,7 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 			// Already detected the detach, and have started to close
 
 			STREAM->DisconnectingTimeout--;
-			
+
 			if (STREAM->DisconnectingTimeout)
 				return;							// Give it a bit longer
 
@@ -442,10 +442,10 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 		// New Disconnect
 
 		Debugprintf("New Disconnect Port %d Q %x", TNC->Port, STREAM->BPQtoPACTOR_Q);
-			
+
 		if (STREAM->Connected || STREAM->Connecting)
 		{
-			char logmsg[120];	
+			char logmsg[120];
 			time_t Duration;
 
 			// Need to do a tidy close
@@ -461,7 +461,7 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 			if (STREAM->Connected)
 			{
 				Duration = time(NULL) - STREAM->ConnectTime;
-				
+
 				sprintf(logmsg,"Port %2d %9s Bytes Sent %d  BPS %d Bytes Received %d BPS %d Time %d Seconds",
 					TNC->Port, STREAM->RemoteCall,
 					STREAM->BytesTXed, (int)(STREAM->BytesTXed/Duration),
@@ -475,13 +475,13 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 
 //			if (STREAM->FramesOutstanding && TNC->Hardware == H_UZ7HO)
 //				return;									// Will close when all acked
-			
+
 			TidyCloseProc(TNC, Stream);					// Send Tidy Disconnect
 
 			return;
 		}
 
-		// Not connected 
+		// Not connected
 NotConnected:
 
 		STREAM->Disconnecting = FALSE;
@@ -555,7 +555,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 			PORTVEC = &BPQHOSTVECTOR[0];
 
 			for (Stream = 0; Stream < 64; Stream++)
-			{	
+			{
 				if (PORTVEC->HOSTAPPLMASK & _APPLMASK)
 				{
 					Allocated++;
@@ -563,7 +563,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 					if (PORTVEC->HOSTSESSION == 0 && (PORTVEC->HOSTFLAGS & 3) == 0)
 					{
 						// Free and no outstanding report
-						
+
 						return APPL->APPLCALL_TEXT;		// Running
 					}
 				}
@@ -620,11 +620,11 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 		char Msg[80];
 
 		sprintf(Msg, "%d SCANSTOP", TNC->Port);
-		
+
 		Rig_Command(-1, Msg);
 		UpdateMH(TNC, Call, '+', 'I');
 	}
-	
+
 	Session=L4TABLE;
 
 	// Find a free Circuit Entry
@@ -643,7 +643,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 
 	memset(Session, 0, sizeof(TRANSPORTENTRY));
 
-	memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign 
+	memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign
 
 	ConvToAX25(Call, Session->L4USER);
 	ConvToAX25(MYNODECALL, Session->L4MYCALL);
@@ -657,7 +657,7 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 	TNC->Streams[Stream].Attached = TRUE;
 
 	Session->L4TARGET.EXTPORT = TNC->PortRecord;
-	
+
 	Session->L4CIRCUITTYPE = UPLINK+PACTOR;
 	Session->L4WINDOW = L4DEFAULTWINDOW;
 	Session->L4STATE = 5;
@@ -671,12 +671,12 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 	{
 		buffptr = GetBuff();
 		if (buffptr == 0) return TRUE;			// No buffers
-					
+
 		buffptr[1] = HFCTEXTLEN;
 		memcpy(&buffptr[2], HFCTEXT, HFCTEXTLEN);
 		C_Q_ADD(&TNC->Streams[Stream].BPQtoPACTOR_Q, buffptr);
 	}
-	return TRUE;	
+	return TRUE;
 }
 
 char * Config;
@@ -688,7 +688,7 @@ BOOL ReadConfigFile(int Port, int ProcLine())
 
 	if (TNCInfo[Port])					// If restarting, free old config
 		free(TNCInfo[Port]);
-	
+
 	TNCInfo[Port] = NULL;
 
 	Config = PortConfig[Port];
@@ -705,7 +705,7 @@ BOOL ReadConfigFile(int Port, int ProcLine())
 
 			TNC->InitScript = malloc(2);
 			TNC->InitScript[0] = 0;
-		
+
 			return TRUE;
 		}
 
@@ -720,7 +720,7 @@ BOOL ReadConfigFile(int Port, int ProcLine())
 			ptr2 = strchr(ptr1, 13);
 
 			strcpy(errbuf,buf);			// save in case of error
-	
+
 			if (!ProcLine(buf, Port))
 			{
 				WritetoConsoleLocal("Bad config record ");
@@ -740,14 +740,14 @@ int GetLine(char * buf)
 {
 loop:
 
-	if (ptr2 == NULL) 
+	if (ptr2 == NULL)
 		return 0;
 
 	memcpy(buf, ptr1, ptr2 - ptr1 + 2);
 	buf[ptr2 - ptr1 + 2] = 0;
 	ptr1 = ptr2 + 2;
 	ptr2 = strchr(ptr1, 13);
-	
+
 	if (buf[0] < 0x20) goto loop;
 	if (buf[0] == '#') goto loop;
 	if (buf[0] == ';') goto loop;
@@ -776,8 +776,8 @@ VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg)
 	}
 }
 
-int CompareAlias( void *a, void *b) 
-{ 
+int CompareAlias( void *a, void *b)
+{
 	struct DEST_LIST * x;
 	struct DEST_LIST * y;
 	UINT * c;
@@ -792,12 +792,12 @@ int CompareAlias( void *a, void *b)
 
 	return memcmp(x->DEST_ALIAS, y->DEST_ALIAS, 6);
 	/* strcmp functions works exactly as expected from
-	comparison function */ 
-} 
+	comparison function */
+}
 
 
-int CompareNode(void *a, void *b) 
-{ 
+int CompareNode(void *a, void *b)
+{
 	struct DEST_LIST * x;
 	struct DEST_LIST * y;
 	UINT * c;
@@ -812,8 +812,8 @@ int CompareNode(void *a, void *b)
 
 	return memcmp(x->DEST_CALL, y->DEST_CALL, 7);
 	/* strcmp functions works exactly as expected from
-	comparison function */ 
-} 
+	comparison function */
+}
 
 DllExport int APIENTRY CountFramesQueuedOnStream(int Stream)
 {
@@ -833,7 +833,7 @@ DllExport int APIENTRY CountFramesQueuedOnStream(int Stream)
 }
 
 DllExport int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall)
-{ 
+{
 	// Equivalent to "*** linked to" command
 
 	memcpy(BPQHOSTVECTOR[Stream-1].HOSTSESSION->L4USER, AXCall, 7);
@@ -841,13 +841,13 @@ DllExport int APIENTRY ChangeSessionCallsign(int Stream, unsigned char * AXCall)
 }
 
 DllExport int APIENTRY ChangeSessionPaclen(int Stream, int Paclen)
-{ 
+{
 	BPQHOSTVECTOR[Stream-1].HOSTSESSION->SESSPACLEN = Paclen;
 	return (0);
 }
 
 DllExport int APIENTRY ChangeSessionIdletime(int Stream, int idletime)
-{ 
+{
 	BPQHOSTVECTOR[Stream-1].HOSTSESSION->L4LIMIT = idletime;
 	return (0);
 }
@@ -857,22 +857,27 @@ DllExport int APIENTRY Get_APPLMASK(int Stream)
 	return	BPQHOSTVECTOR[Stream-1].HOSTAPPLMASK;
 }
 DllExport int APIENTRY GetStreamPID(int Stream)
-{ 
+{
 	return	BPQHOSTVECTOR[Stream-1].STREAMOWNER;
 }
 
 DllExport int APIENTRY GetApplFlags(int Stream)
-{ 
+{
 	return	BPQHOSTVECTOR[Stream-1].HOSTAPPLFLAGS;
 }
 
 DllExport int APIENTRY GetApplNum(int Stream)
-{ 
+{
 	return	BPQHOSTVECTOR[Stream-1].HOSTAPPLNUM;
 }
 
+DllExport int APIENTRY GetApplMask(int Stream)
+{
+	return	BPQHOSTVECTOR[Stream-1].HOSTAPPLMASK;
+}
+
 DllExport BOOL APIENTRY GetAllocationState(int Stream)
-{ 
+{
 	return	BPQHOSTVECTOR[Stream-1].HOSTFLAGS & 0x80;
 }
 
@@ -887,7 +892,7 @@ extern int BPQHOSTAPI();
 VOID POSTSTATECHANGE(BPQVECSTRUC * SESS)
 {
 	//	Post a message if requested
-#ifndef LINBPQ	
+#ifndef LINBPQ
 	if (SESS->HOSTHANDLE)
 		PostMessage(SESS->HOSTHANDLE, BPQMsg, SESS->HOSTSTREAM, 4);
 #endif
@@ -904,7 +909,7 @@ DllExport int APIENTRY SessionControl(int stream, int command, int Mask)
 
 	if (stream < 0 || stream > 63)
 		return (0);
-	
+
 	SESS = &BPQHOSTVECTOR[stream];
 
 	//	Send Session Control command (BPQHOST function 6)
@@ -921,7 +926,7 @@ DllExport int APIENTRY SessionControl(int stream, int command, int Mask)
 			POSTSTATECHANGE(SESS);
 			return 0;					// NOT CONNECTED
 		}
-			
+
 		if (command == 3)
 			SESS->HOSTFLAGS |= 0x20;	// Set Stay
 
@@ -952,7 +957,7 @@ DllExport int APIENTRY SessionControl(int stream, int command, int Mask)
 	{
 		SESS->HOSTFLAGS |= 3;			// State Change
 		POSTSTATECHANGE(SESS);
-		return 0;	
+		return 0;
 	}
 
 	SESS->HOSTSESSION = L4;
@@ -1000,7 +1005,7 @@ DllExport int APIENTRY FindFreeStream()
 			FreeSemaphore(&Semaphore);
 			return stream;
 		}
-	}		
+	}
 	FreeSemaphore(&Semaphore);
 	return 255;
 }
@@ -1008,8 +1013,8 @@ DllExport int APIENTRY FindFreeStream()
 DllExport int APIENTRY AllocateStream(int stream)
 {
 //	Allocate stream. If stream is already allocated, return nonzero.
-//	Otherwise allocate stream, and return zero.	
-	
+//	Otherwise allocate stream, and return zero.
+
 	BPQVECSTRUC * PORTVEC = &BPQHOSTVECTOR[stream -1];		// API counts from 1
 
 	if ((PORTVEC->HOSTFLAGS & 0x80) == 0)
@@ -1020,7 +1025,7 @@ DllExport int APIENTRY AllocateStream(int stream)
 		FreeSemaphore(&Semaphore);
 		return 0;
 	}
-	
+
 	return 1;				// Already allocated
 }
 
@@ -1037,9 +1042,9 @@ DllExport int APIENTRY DeallocateStream(int stream)
 
 	if (stream < 0 || stream > 63)
 		return (0);
-	
+
 	PORTVEC=&BPQHOSTVECTOR[stream];
-	
+
 	PORTVEC->STREAMOWNER=0;
 	PORTVEC->PgmName[0] = 0;
 	PORTVEC->HOSTAPPLFLAGS=0;
@@ -1090,7 +1095,7 @@ DllExport int APIENTRY SessionState(int stream, int * state, int * change)
 	//		  Bit 20 = Stay Flag
 	//		  Bit 02 and 01 State Change Bits
 
-	if ((HOST->HOSTFLAGS & 3) == 0)		
+	if ((HOST->HOSTFLAGS & 3) == 0)
 		// No Chaange
 		*change = 0;
 	else
@@ -1101,8 +1106,8 @@ DllExport int APIENTRY SessionState(int stream, int * state, int * change)
 		*state = 1;
 	else
 		*state = 0;
-	
-	HOST->HOSTFLAGS &= 0xFC;		// Clear Change Bitd		
+
+	HOST->HOSTFLAGS &= 0xFC;		// Clear Change Bitd
 
 	FreeSemaphore(&Semaphore);
 	return 0;
@@ -1116,7 +1121,7 @@ DllExport int APIENTRY SessionStateNoAck(int stream, int * state)
 	BPQVECSTRUC * HOST = &BPQHOSTVECTOR[stream -1];		// API counts from 1
 
 	Check_Timer();				// In case Appl doesnt call it often ehough
-	
+
 	if (HOST->HOSTSESSION)			// LOCAL SESSION
 		// Connected
 		*state = 1;
@@ -1151,7 +1156,7 @@ DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 
 		GetSemaphore(&Semaphore);
 		SemHeldByAPI = 10;
-		
+
 		if ((MSG = GetBuff()) == 0)
 		{
 			FreeSemaphore(&Semaphore);
@@ -1226,14 +1231,14 @@ DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 	if (Partner && Partner->L4STATE > 4)	// Partner and link up
 	{
 		//	Connected
-	
+
 		Partner->L4KILLTIMER = 0;		// RESET SESSION TIMEOUT
 		C_Q_ADD(&Partner->L4TX_Q, MSG);
 		PostDataAvailable(Partner);
 	}
 	else
 		C_Q_ADD(&L4->L4RX_Q, MSG);
-	
+
 	FreeSemaphore(&Semaphore);
 	return 0;
 }
@@ -1251,7 +1256,7 @@ DllExport int APIENTRY SendRaw(int port, char * msg, int len)
 
 	if (QCOUNT < 50)
 		return 1;
-	
+
 	//	GET A BUFFER
 
 	PORT = GetPortTableEntryFromSlot(port);
@@ -1263,7 +1268,7 @@ DllExport int APIENTRY SendRaw(int port, char * msg, int len)
 	SemHeldByAPI = 24;
 
 	MSG = GetBuff();
-	
+
 	if (MSG == 0)
 	{
 		FreeSemaphore(&Semaphore);
@@ -1286,10 +1291,10 @@ DllExport int APIENTRY SendRaw(int port, char * msg, int len)
 		return 0;
 	}
 
-	MSG->PORT = PORT->PORTNUMBER; 
+	MSG->PORT = PORT->PORTNUMBER;
 
 	PUT_ON_PORT_Q(PORT, MSG);
-	
+
 	FreeSemaphore(&Semaphore);
 	return 0;
 }
@@ -1342,7 +1347,7 @@ DllExport time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count 
 
 	*count = C_Q_COUNT(&SESS->HOSTTRACEQ);
 	FreeSemaphore(&Semaphore);
-	
+
 	return Stamp;
 }
 
@@ -1385,7 +1390,7 @@ DllExport int APIENTRY GetMsg(int stream, char * msg, int * len, int * count )
 	}
 
 	L4->L4KILLTIMER = 0;		// RESET SESSION TIMEOUT
-	
+
 	if(L4->L4CROSSLINK)
 		L4->L4CROSSLINK->L4KILLTIMER = 0;
 
@@ -1410,7 +1415,7 @@ DllExport int APIENTRY GetMsg(int stream, char * msg, int * len, int * count )
 
 	*count = C_Q_COUNT(&L4->L4TX_Q);
 	FreeSemaphore(&Semaphore);
-	
+
 	return 0;
 }
 
@@ -1464,7 +1469,7 @@ DllExport int APIENTRY TXCount(int stream)
 
 	if (L4 == 0)
 		return 0;			// NOTHING ro Q on
-	
+
 	return (CountFramesQueuedOnSession(L4));
 }
 
@@ -1472,7 +1477,7 @@ DllExport int APIENTRY MONCount(int stream)
 {
 //	Returns number of monitor frames available
 //	 (BPQHOST function 7 (part)).
-	
+
 	BPQVECSTRUC * SESS;
 
 	Check_Timer();
@@ -1491,11 +1496,11 @@ DllExport int APIENTRY MONCount(int stream)
 DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 {
 	//	Returns call connected on stream (BPQHOST function 8 (part)).
-	
+
 	BPQVECSTRUC * SESS;
 	TRANSPORTENTRY * L4;
 	TRANSPORTENTRY * Partner;
-	UCHAR  Call[11] = "SWITCH    "; 
+	UCHAR  Call[11] = "SWITCH    ";
 	UCHAR * AXCall = NULL;
 	Check_Timer();
 
@@ -1536,7 +1541,7 @@ DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 			if (Partner->L4CIRCUITTYPE & UPLINK)
 			{
 				// IF UPLINK, SHOULD USE SESSION CALL, IN CASE *** LINKED HAS BEEN USED
-			
+
 				AXCall = &Partner->L4USER[0];
 			}
 		}
@@ -1587,7 +1592,7 @@ DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 	BPQVECSTRUC * SESS;
 	TRANSPORTENTRY * L4;
 	TRANSPORTENTRY * Partner;
-	UCHAR  Call[11] = "SWITCH    "; 
+	UCHAR  Call[11] = "SWITCH    ";
 	UCHAR * AXCall;
 	Check_Timer();
 
@@ -1655,7 +1660,7 @@ DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 			if (Partner->L4CIRCUITTYPE & UPLINK)
 			{
 				// IF UPLINK, SHOULD USE SESSION CALL, IN CASE *** LINKED HAS BEEN USED
-			
+
 				AXCall = &Partner->L4USER[0];
 			}
 		}
@@ -1695,7 +1700,7 @@ DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 
 	if (Partner)
 		return Partner->Secure_Session;
-	
+
 	return 0;
 }
 
@@ -1716,15 +1721,15 @@ DllExport int APIENTRY SetAppl(int stream, int flags, int mask)
 
 	if (stream < 0 || stream > 63)
 		return (0);
-	
+
 	PORTVEC=&BPQHOSTVECTOR[stream];
 
 	PORTVEC->HOSTAPPLFLAGS = flags;
 	PORTVEC->HOSTAPPLMASK = mask;
-	
+
 	// If either is non-zero, set allocated and Process. This gets round problem with
 	// stations that don't call allocate stream
-	
+
 	if (flags || mask)
 	{
 		if ((PORTVEC->HOSTFLAGS & 128) == 0)	// Not allocated
@@ -1734,9 +1739,9 @@ DllExport int APIENTRY SetAppl(int stream, int flags, int mask)
 			PORTVEC->HOSTFLAGS = 128;				 // SET ALLOCATED BIT, clear others
 		}
 	}
-	
+
 	return (0);
-} 
+}
 
 DllExport struct PORTCONTROL * APIENTRY GetPortTableEntry(int portslot)		// Kept for Legacy apps
 {
@@ -1815,12 +1820,12 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 	}
 	else
 		conn->hDevice = OpenCOMPort((VOID *)Port, Speed, TRUE, TRUE, Quiet, 0);
-			  
+
 	if (conn->hDevice == 0)
 	{
 		sprintf(conn->WEB_COMMSSTATE,"%s Open failed - Error %d", Port, GetLastError());
 		SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
-	
+
 		return (FALSE);
 	}
 
@@ -1835,20 +1840,20 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 #ifdef WIN32
 
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
-{            
+{
 	char szPort[80];
 	BOOL fRetVal ;
 	COMMTIMEOUTS  CommTimeOuts ;
 	int	Err;
 	char buf[100];
-	HANDLE fd;	
+	HANDLE fd;
 	DCB dcb;
 
 	// if Port Name starts COM, convert to \\.\COM or ports above 10 wont work
 
 	if ((UINT)pPort < 256)			// just a com port number
 		sprintf( szPort, "\\\\.\\COM%d", pPort);
-	
+
 	else if (_memicmp(pPort, "COM", 3) == 0)
 	{
 		char * pp = (char *)pPort;
@@ -1864,9 +1869,9 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
                   0,                    // exclusive access
                   NULL,                 // no security attrs
                   OPEN_EXISTING,
-                  FILE_ATTRIBUTE_NORMAL, 
+                  FILE_ATTRIBUTE_NORMAL,
                   NULL );
-				  
+
 	if (fd == (HANDLE) -1)
 	{
 		if (Quiet == 0)
@@ -1881,7 +1886,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 		}
 		return (FALSE);
 	}
-	
+
 	Err = GetFileType(fd);
 
 	// setup device buffers
@@ -1894,7 +1899,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
                                       PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
 
 	// set up for overlapped I/O
-	  
+
 	CommTimeOuts.ReadIntervalTimeout = 0xFFFFFFFF ;
 	CommTimeOuts.ReadTotalTimeoutMultiplier = 0 ;
 	CommTimeOuts.ReadTotalTimeoutConstant = 0 ;
@@ -1902,7 +1907,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 //     CommTimeOuts.WriteTotalTimeoutConstant = 0 ;
 	CommTimeOuts.WriteTotalTimeoutConstant = 500 ;
 	SetCommTimeouts(fd, &CommTimeOuts ) ;
-	
+
    dcb.DCBlength = sizeof( DCB ) ;
 
    GetCommState(fd, &dcb ) ;
@@ -1967,8 +1972,8 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength )
 	DWORD      dwErrorFlags;
 	DWORD      dwLength;
 
-	// only try to read number of bytes in queue 
-	
+	// only try to read number of bytes in queue
+
 	ClearCommError(fd, &dwErrorFlags, &ComStat);
 
 	dwLength = min((DWORD) MaxLength, ComStat.cbInQue);
@@ -2000,7 +2005,7 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 
 	if ((!fWriteStat) || (BytesToWrite != BytesWritten))
 		ClearCommError(fd, &ErrorFlags, &ComStat);
-	
+
 	return TRUE;
 }
 
@@ -2015,7 +2020,7 @@ VOID CloseCOMPort(HANDLE fd)
 	// purge any outstanding reads/writes and close device handle
 
 	PurgeComm(fd, PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR ) ;
-	
+
 	CloseHandle(fd);
 }
 
@@ -2060,7 +2065,7 @@ static struct speed_struct
 	{115200,      B115200},
 	{-1,          B0}
 };
- 
+
 
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits)
 {
@@ -2097,7 +2102,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	// Validate Speed Param
 
-	for (s = speed_table; s->user_speed != -1; s++)      
+	for (s = speed_table; s->user_speed != -1; s++)
 		if (s->user_speed == speed)
 			break;
 
@@ -2106,7 +2111,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 	   fprintf(stderr, "tty_speed: invalid speed %d\n", speed);
 	   return FALSE;
    }
-   
+
    if (tcgetattr(fd, &term) == -1)
    {
 	   perror("tty_speed: tcgetattr");
@@ -2131,7 +2136,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
 {
 	int Length;
-	
+
 	Length = read(fd, Block, MaxLength);
 
 	if (Length < 0)
@@ -2221,7 +2226,7 @@ int DoRoutes()
 			Normcall[len]=0;
 
 			if ((Routes->NEIGHBOUR_FLAG & 1) == 1)
-	
+
 				strcpy(locked," !");
 			else
 				strcpy(locked," ");
@@ -2254,11 +2259,11 @@ int DoRoutes()
 					Routes->NBOUR_MAXFRAME,
 					Routes->NBOUR_FRACK,
 					Routes->NBOUR_PACLEN,
-					Routes->INP3Node | (Routes->NoKeepAlive << 1));	
+					Routes->INP3Node | (Routes->NoKeepAlive << 1));
 
 					fputs(line, file);
 		}
-		
+
 		Routes+=1;
 	}
 
@@ -2277,7 +2282,7 @@ int DoNodes()
 	for (count=0; count<MaxNodes; count++)
 	{
 		Dests+=1;
-		
+
 		if (Dests->NRROUTE[0].ROUT_NEIGHBOUR == 0)
 			continue;
 
@@ -2286,7 +2291,7 @@ int DoNodes()
 			Normcall[len]=0;
 
 			memcpy(Alias,Dests->DEST_ALIAS,6);
-		
+
 			Alias[6]=0;
 
 			for (i=0;i<6;i++)
@@ -2296,7 +2301,7 @@ int DoNodes()
 			}
 
 			cursor=sprintf(line,"NODE ADD %s:%s ", Alias,Normcall);
-				
+
 			if (Dests->NRROUTE[0].ROUT_NEIGHBOUR != 0 && Dests->NRROUTE[0].ROUT_NEIGHBOUR->INP3Node == 0)
 			{
 				len=ConvFromAX25(
@@ -2307,7 +2312,7 @@ int DoNodes()
 					Portcall,
 					Dests->NRROUTE[0].ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
 					Dests->NRROUTE[0].ROUT_QUALITY);
-	
+
 				cursor+=len;
 
 				if (Dests->NRROUTE[0].ROUT_OBSCOUNT > 127)
@@ -2327,7 +2332,7 @@ int DoNodes()
 					Portcall,
 					Dests->NRROUTE[1].ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
 					Dests->NRROUTE[1].ROUT_QUALITY);
-	
+
 				cursor+=len;
 
 				if (Dests->NRROUTE[1].ROUT_OBSCOUNT > 127)
@@ -2347,7 +2352,7 @@ int DoNodes()
 				Portcall,
 				Dests->NRROUTE[2].ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
 				Dests->NRROUTE[2].ROUT_QUALITY);
-	
+
 			cursor+=len;
 
 			if (Dests->NRROUTE[2].ROUT_OBSCOUNT > 127)
@@ -2393,7 +2398,7 @@ int APIENTRY SaveNodes ()
 		strcat(FN,"/");
 		strcat(FN,"BPQNODES.dat");
 	}
-		
+
 	if ((file = fopen(FN, "w")) == NULL)
 		return FALSE;
 
@@ -2401,7 +2406,7 @@ int APIENTRY SaveNodes ()
 	DoNodes();
 
 	fclose(file);
-	
+
 	return (0);
 }
 
@@ -2449,7 +2454,7 @@ char * FormatUptime(int Uptime)
 	static char MHTime[50];
 	time_t szClock;
 	char LOC[7];
-	
+
 	memcpy(LOC, MH->MHLocator, 6);
 	LOC[6] = 0;
 
@@ -2484,8 +2489,8 @@ Dll VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int T
 	{
 		chr = (Hash[i] & 31);
 		if (chr > 9) chr += 7;
-		
-		Password[i] = chr + 48; 
+
+		Password[i] = chr + 48;
 	}
 
 	Password[16] = 0;
@@ -2507,7 +2512,7 @@ Dll BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase)
 
 		if (strlen(Password) < 16)
 		{
-			// Using a numeric extract 
+			// Using a numeric extract
 
 			long long Val;
 
@@ -2531,7 +2536,7 @@ DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 	int i;
 
 	memset(ax25call,0x40,6);		// in case short
-	ax25call[6]=0x60;				// default SSID	
+	ax25call[6]=0x60;				// default SSID
 
 	for (i=0;i<7;i++)
 	{
@@ -2557,10 +2562,10 @@ DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 			//
 			return (TRUE);
 		}
-		
+
 		ax25call[i] = callsign[i] << 1;
 	}
-	
+
 	//
 	//	Too many chars
 	//
@@ -2769,13 +2774,14 @@ DllExport char * APIENTRY GetVersionString()
 
 //Fiddle till I find a better solution
 
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1060
 int __sync_lock_test_and_set(int * ptr, int val)
 {
 	*ptr = val;
 	return 0;
 }
-
-#endif
+#endif // __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__
+#endif // MACBPQ
 
 void GetSemaphore(struct SEM * Semaphore)
 {
@@ -2806,7 +2812,7 @@ loop1:
 	mov	eax,1
 	mov ebx, Semaphore
 	xchg [ebx],eax		// this instruction is locked
-	
+
 	cmp	eax,0
 	jne loop1			// someone else got it - try again
 
@@ -2833,11 +2839,11 @@ void FreeSemaphore(struct SEM * Semaphore)
 {
 	if (Semaphore->Flag == 0)
 		Debugprintf("Free Semaphore Called when Sem not held");
-	
-	Semaphore->Rels++;	
+
+	Semaphore->Rels++;
 	Semaphore->Flag = 0;
 
-	return; 
+	return;
 }
 
 #ifdef WIN32
@@ -2899,7 +2905,7 @@ VOID ResolveUpdateThread()
 
 		Debugprintf("Resolving %s", "update.g8bpq.net");
 		HostEnt1 = gethostbyname ("update.g8bpq.net");
-		 
+
 		if (HostEnt1)
 			memcpy(&reportdest.sin_addr.s_addr,HostEnt1->h_addr,4);
 
@@ -2938,7 +2944,7 @@ VOID OpenReportingSockets()
 		{
 			Debugprintf("Failed to create Reporting socket");
 			ReportSocket = 0;
-  		 	return; 
+  		 	return;
 		}
 
 		ioctlsocket (ReportSocket, FIONBIO, &param);
@@ -2969,20 +2975,20 @@ VOID WriteMiniDump()
 
 	sprintf(FN, "MiniDump%d.dmp", (time(NULL) & 0xffff));
 
-	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE, 
-		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL); 
+	hFile = CreateFile(FN, GENERIC_READ | GENERIC_WRITE,
+		0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE))
 	{
-		// Create the minidump 
+		// Create the minidump
 
-		ret = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), 
-			hFile, MiniDumpNormal, 0, 0, 0 ); 
+		ret = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
+			hFile, MiniDumpNormal, 0, 0, 0 );
 
-		if(!ret) 
-			Debugprintf("MiniDumpWriteDump failed. Error: %u", GetLastError()); 
-		else 
-			Debugprintf("Minidump %s created.", FN); 
+		if(!ret)
+			Debugprintf("MiniDumpWriteDump failed. Error: %u", GetLastError());
+		else
+			Debugprintf("Minidump %s created.", FN);
 			CloseHandle(hFile);
 	}
 #endif

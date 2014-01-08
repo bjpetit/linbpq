@@ -530,13 +530,27 @@ BOOL cATTACHTOBBS(TRANSPORTENTRY * Session, UINT Mask, int Paclen, int * AnySess
 	return FALSE;
 }
 
+
+VOID CMDSTAY(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	Session->STAYFLAG = TRUE;
+	Bufferptr += sprintf(Bufferptr, "Ok\r");
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
 VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
-{	
+{		
 	BOOL CONFAILED = 0;
 	UINT CONERROR ;
 	char APPName[13];
 	char * ptr1, *ptr2;
 	int n = 12;
+	BOOL Stay = FALSE;
+
+	if (CmdTail[0] == 'S')
+		Stay = TRUE;
+	
+	Session->STAYFLAG = Stay;
 
 	memcpy(Session->APPL, CMD->String, 12);
 
@@ -594,6 +608,9 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		}
 	}
 
+	if (Stay)
+		Session->L4CROSSLINK->L4TARGET.HOST->HOSTFLAGS |= 0x20;
+
 	//	IF MSG_TO_USER SET, SEND 'CONNECTED' MESSAGE TO USER
 
 	Session->SESS_APPLFLAGS = Session->L4CROSSLINK->SESS_APPLFLAGS;
@@ -604,6 +621,7 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
 	}
+
 
 	//	DONT NEED BUFFER ANY MORE
 
@@ -1802,12 +1820,11 @@ NoPort:
 		return;
 	}
 
+	Session->STAYFLAG = Stay;
+
 	TextCallLen = ConvFromAX25(axcalls, TextCall);
 
-
 	//	SEE IF CALL TO ANY OF OUR HOST SESSIONS - UNLESS DIGIS SPECIFIED
-
-	Session->STAYFLAG = Stay;
 
 	if (axcalls[7] == 0)
 	{
@@ -3015,6 +3032,84 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		return;
 	}
 
+	// If attach on telnet port, find a free stream
+
+	EXTPORT = (struct _EXTPORTDATA *)PORT;
+
+	if (strstr(EXTPORT->PORT_DLL_NAME, "TELNET"))
+	{
+		int count = EXTPORT->MAXHOSTMODESESSIONS;
+		count--;								// First is Pactor Stream, count is now last ax.25 session
+	
+		while (count)
+		{
+			if (EXTPORT->ATTACHEDSESSIONS[count] == 0)
+			{
+				int Paclen, PortPaclen;
+				struct DATAMESSAGE Message = {0};
+				
+				//	Found a free one - use it
+
+				//	See if TNC is OK
+
+				Message.PORT = count;
+
+				ret = PORT->PORTTXCHECKCODE(PORT, Message.PORT);
+			
+				if ((ret & 0xff00) == 0)
+				{
+					Bufferptr += sprintf(Bufferptr, "Error - TNC Not Ready\r");
+					SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+					return;
+				}
+
+				//	GET CIRCUIT TABLE ENTRY FOR OTHER END OF LINK
+	
+				NewSess = SetupNewSession(Session, Bufferptr);
+				if (NewSess == NULL)
+					return;
+
+				EXTPORT->ATTACHEDSESSIONS[count] = NewSess;
+
+				NewSess->KAMSESSION = count;
+				
+				//	Set paclen to lower of incoming and outgoing
+
+				Paclen = Session->SESSPACLEN;	// Incoming PACLEN
+
+				if (Paclen == 0)
+					Paclen = 256;				// 0 = 256
+
+				PortPaclen = PORT->PORTPACLEN;
+
+				if (PortPaclen == 0)
+					PortPaclen = 256;				// 0 = 256
+
+				if (PortPaclen < Paclen)
+					Paclen = PortPaclen;
+
+				NewSess->SESSPACLEN = Paclen;
+				Session->SESSPACLEN = Paclen;
+
+				NewSess->L4STATE = 5;
+				NewSess->L4CIRCUITTYPE = DOWNLINK + PACTOR;
+				NewSess->L4TARGET.PORT = PORT;
+
+				memcpy(Bufferptr, OKMSG, 3);
+				Bufferptr += 3;
+				SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+
+				return;
+			}
+			count--;
+		}
+
+		Bufferptr += sprintf(Bufferptr, "Error - No free streams on this port\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+
 	Message.PORT = 0;
 
 	ret = PORT->PORTTXCHECKCODE(PORT, Message.PORT);
@@ -3025,8 +3120,6 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
 	}
-
-	EXTPORT = (struct _EXTPORTDATA *)PORT;
 
 	// See if "Attach and Call" (for VHF ports)
 
@@ -3209,7 +3302,7 @@ CMDX COMMANDS[] =
 	"L4RETRIES   ",5,SWITCHVAL,&L4N2,
 	"L4TIMEOUT   ",5,SWITCHVALW,&L4T1,
 	"T3          ",2,SWITCHVALW,&T3,
-	"IDLETIME    ",8,SWITCHVALW,&L4LIMIT,
+	"NODEIDLETIME",8,SWITCHVALW,&L4LIMIT,
 	"LINKEDFLAG  ",10,SWITCHVAL,&LINKEDFLAG,
 	"IDINTERVAL  ",5,SWITCHVAL,&IDINTERVAL,
 	"MINQUAL     ",7,SWITCHVAL,&MINQUAL,
@@ -3267,6 +3360,7 @@ CMDX COMMANDS[] =
 	"IDLETIME    ",4,CMDIDLE,0,
 	"ROUTES      ",1,CMDR00,0,
 	"STATS       ",1,CMDSTATS,0,
+	"STAY        ",4,CMDSTAY,0,
 	"USERS       ",1,CMDS00,0,
 	"UNPROTO     ",2,UNPROTOCMD,0,
 	"?           ",1,CMDQUERY,0,

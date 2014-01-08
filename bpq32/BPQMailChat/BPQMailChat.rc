@@ -228,7 +228,7 @@ END
 IDD_USEREDIT DIALOGEX 20, 20, 308, 261
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit User"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     COMBOBOX        5000,7,7,57,88,CBS_SIMPLE | CBS_SORT | CBS_UPPERCASE | 
                     WS_VSCROLL | WS_TABSTOP
@@ -371,9 +371,8 @@ BEGIN
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL
     LTEXT           "Connect Script",IDC_STATIC,348,46,57,13
-    EDITTEXT        IDC_CALL,343,59,92,60,ES_MULTILINE | ES_UPPERCASE | 
-                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
-                    WS_VSCROLL
+    EDITTEXT        IDC_CALL,343,59,92,60,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN | WS_VSCROLL
     LTEXT           "Hierarchical Routes (Flood Bulls)",IDC_STATIC,141,126,
                     114,12
     EDITTEXT        IDC_HROUTES,122,140,148,60,ES_MULTILINE | ES_UPPERCASE | 
@@ -428,10 +427,10 @@ BEGIN
     LTEXT           "Label0",5050,5,10,117,32
 END
 
-IDD_MSGEDIT DIALOGEX 20, 20, 381, 266
+IDD_MSGEDIT DIALOGEX 20, 20, 421, 298
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit Message"
-FONT 8, "System", 0, 0, 0x1
+FONT 8, "System"
 BEGIN
     RTEXT           "Msg",IDC_STATIC,7,7,19,8
     LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | 
@@ -501,135 +500,135 @@ BEGIN
     CONTROL         "",44,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
                     WS_TABSTOP,221,197,35,10
     CONTROL         "",45,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,7,35,10
+                    WS_TABSTOP,221,208,35,10
     CONTROL         "",46,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,17,35,10
+                    WS_TABSTOP,221,218,35,10
     CONTROL         "",47,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,27,35,10
+                    WS_TABSTOP,221,228,35,10
     CONTROL         "",48,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,37,35,10
+                    WS_TABSTOP,221,238,35,10
     CONTROL         "",49,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,47,35,10
+                    WS_TABSTOP,221,248,35,10
     CONTROL         "",50,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,57,35,10
+                    WS_TABSTOP,260,7,35,10
     CONTROL         "",51,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,67,35,10
+                    WS_TABSTOP,260,17,35,10
     CONTROL         "",52,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,77,35,10
+                    WS_TABSTOP,260,27,35,10
     CONTROL         "",53,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,87,35,10
+                    WS_TABSTOP,260,37,35,10
     CONTROL         "",54,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,97,35,10
+                    WS_TABSTOP,260,47,35,10
     CONTROL         "",55,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,107,35,10
+                    WS_TABSTOP,260,57,35,10
     CONTROL         "",56,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,117,35,10
+                    WS_TABSTOP,260,67,35,10
     CONTROL         "",57,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,127,35,10
+                    WS_TABSTOP,260,77,35,10
     CONTROL         "",58,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,137,35,10
+                    WS_TABSTOP,260,87,35,10
     CONTROL         "",59,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,147,35,10
+                    WS_TABSTOP,260,97,35,10
     CONTROL         "",60,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,157,35,10
+                    WS_TABSTOP,260,107,35,10
     CONTROL         "",61,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,167,35,10
+                    WS_TABSTOP,260,117,35,10
     CONTROL         "",62,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,177,35,10
+                    WS_TABSTOP,260,127,35,10
     CONTROL         "",63,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,187,35,10
+                    WS_TABSTOP,260,137,35,10
     CONTROL         "",64,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,260,197,35,10
+                    WS_TABSTOP,260,147,35,10
     CONTROL         "",65,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,7,35,10
+                    WS_TABSTOP,260,157,35,10
     CONTROL         "",66,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,17,35,10
+                    WS_TABSTOP,260,167,35,10
     CONTROL         "",67,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,27,35,10
+                    WS_TABSTOP,260,177,35,10
     CONTROL         "",68,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,37,35,10
+                    WS_TABSTOP,260,187,35,10
     CONTROL         "",69,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,47,35,10
+                    WS_TABSTOP,260,197,35,10
     CONTROL         "",70,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,57,35,10
+                    WS_TABSTOP,260,207,35,10
     CONTROL         "",71,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,67,35,10
+                    WS_TABSTOP,260,217,35,10
     CONTROL         "",72,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,77,35,10
+                    WS_TABSTOP,260,227,35,10
     CONTROL         "",73,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,87,35,10
+                    WS_TABSTOP,260,237,35,10
     CONTROL         "",74,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,97,35,10
+                    WS_TABSTOP,260,247,35,10
     CONTROL         "",75,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,107,35,10
+                    WS_TABSTOP,299,7,35,10
     CONTROL         "",76,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,117,35,10
+                    WS_TABSTOP,299,17,35,10
     CONTROL         "",77,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,127,35,10
+                    WS_TABSTOP,299,27,35,10
     CONTROL         "",78,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,137,35,10
+                    WS_TABSTOP,299,37,35,10
     CONTROL         "",79,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,147,35,10
+                    WS_TABSTOP,299,47,35,10
     CONTROL         "",80,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,157,35,10
+                    WS_TABSTOP,299,57,35,10
     CONTROL         "",81,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,167,35,10
+                    WS_TABSTOP,299,67,35,10
     CONTROL         "",82,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,177,35,10
+                    WS_TABSTOP,299,77,35,10
     CONTROL         "",83,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,187,35,10
+                    WS_TABSTOP,299,87,35,10
     CONTROL         "",84,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,299,197,35,10
+                    WS_TABSTOP,299,97,35,10
     CONTROL         "",85,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,7,35,10
+                    WS_TABSTOP,299,107,35,10
     CONTROL         "",86,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,17,35,10
+                    WS_TABSTOP,299,117,35,10
     CONTROL         "",87,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,27,35,10
+                    WS_TABSTOP,299,127,35,10
     CONTROL         "",88,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,37,35,10
+                    WS_TABSTOP,299,137,35,10
     CONTROL         "",89,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,47,35,10
+                    WS_TABSTOP,299,147,35,10
     CONTROL         "",90,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,57,35,10
+                    WS_TABSTOP,299,157,35,10
     CONTROL         "",91,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,67,35,10
+                    WS_TABSTOP,299,167,35,10
     CONTROL         "",92,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,77,35,10
+                    WS_TABSTOP,299,177,35,10
     CONTROL         "",93,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,87,35,10
+                    WS_TABSTOP,299,187,35,10
     CONTROL         "",94,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,97,35,10
+                    WS_TABSTOP,299,197,35,10
     CONTROL         "",95,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,107,35,10
+                    WS_TABSTOP,299,207,35,10
     CONTROL         "",96,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,117,35,10
+                    WS_TABSTOP,299,217,35,10
     CONTROL         "",97,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,127,35,10
+                    WS_TABSTOP,299,227,35,10
     CONTROL         "",98,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,137,35,10
+                    WS_TABSTOP,299,237,35,10
     CONTROL         "",99,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,147,35,10
+                    WS_TABSTOP,299,247,35,10
     CONTROL         "",100,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,157,35,10
+                    WS_TABSTOP,337,7,35,10
     CONTROL         "",101,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,167,35,10
+                    WS_TABSTOP,337,18,35,10
     CONTROL         "",102,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,177,35,10
+                    WS_TABSTOP,337,27,35,10
     CONTROL         "",103,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,187,35,10
+                    WS_TABSTOP,337,37,35,10
     CONTROL         "",104,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
-                    WS_TABSTOP,339,197,35,10
-    LTEXT           "Key",IDC_STATIC,288,226,35,9
-    CONTROL         "Dont Send",105,"Button",BS_3STATE | BS_CENTER | 
-                    BS_PUSHLIKE,233,240,43,10
-    CONTROL         "Send",106,"Button",BS_3STATE | BS_CENTER | BS_PUSHLIKE,
-                    282,239,35,10
-    CONTROL         "Sent",107,"Button",BS_3STATE | BS_CENTER | BS_PUSHLIKE,
-                    324,239,35,10
-    DEFPUSHBUTTON   "Edit Text",IDC_EDITTEXT,24,235,38,15,BS_CENTER | 
+                    WS_TABSTOP,337,47,35,10
+    LTEXT           "Key",IDC_STATIC,317,267,35,9
+    CONTROL         "Dont Send",205,"Button",BS_3STATE | BS_CENTER | 
+                    BS_PUSHLIKE,262,281,43,10
+    CONTROL         "Send",206,"Button",BS_3STATE | BS_CENTER | BS_PUSHLIKE,
+                    311,280,35,10
+    CONTROL         "Sent",207,"Button",BS_3STATE | BS_CENTER | BS_PUSHLIKE,
+                    353,280,35,10
+    DEFPUSHBUTTON   "Edit Text",IDC_EDITTEXT,24,275,38,15,BS_CENTER | 
                     BS_VCENTER
-    DEFPUSHBUTTON   "Print",IDC_PRINTMSG,150,235,24,15,BS_CENTER | 
+    DEFPUSHBUTTON   "Print",IDC_PRINTMSG,150,275,24,15,BS_CENTER | 
                     BS_VCENTER
     RTEXT           "Filter From",IDC_STATIC,105,35,38,8
     EDITTEXT        FILTER_FROM,148,33,62,14,ES_UPPERCASE | ES_AUTOHSCROLL
@@ -638,12 +637,102 @@ BEGIN
                     HFILTER_VIA
     RTEXT           "Filter To",IDC_STATIC,105,52,38,8
     RTEXT           "Filter Via",IDC_STATIC,105,69,38,8
-    DEFPUSHBUTTON   "Save",IDC_SAVEMSG,67,235,24,15,BS_CENTER | BS_VCENTER
-    DEFPUSHBUTTON   "Save to File",IDC_SAVETOFILE,96,235,49,15,BS_CENTER | 
+    DEFPUSHBUTTON   "Save",IDC_SAVEMSG,67,275,24,15,BS_CENTER | BS_VCENTER
+    DEFPUSHBUTTON   "Save to File",IDC_SAVETOFILE,96,275,49,15,BS_CENTER | 
                     BS_VCENTER
-    DEFPUSHBUTTON   "Export",IDC_EXPORT,179,235,32,15,BS_CENTER | BS_VCENTER
+    DEFPUSHBUTTON   "Export",IDC_EXPORT,179,275,32,15,BS_CENTER | BS_VCENTER
     EDITTEXT        EMAILFROM,33,169,177,14,ES_UPPERCASE | ES_AUTOHSCROLL
     RTEXT           "Email From",IDC_STATIC,4,168,25,17
+    CONTROL         "",105,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,57,35,10
+    CONTROL         "",106,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,67,35,10
+    CONTROL         "",107,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,77,35,10
+    CONTROL         "",108,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,87,35,10
+    CONTROL         "",109,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,97,35,10
+    CONTROL         "",110,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,107,35,10
+    CONTROL         "",111,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,118,35,10
+    CONTROL         "",112,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,127,35,10
+    CONTROL         "",113,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,137,35,10
+    CONTROL         "",114,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,147,35,10
+    CONTROL         "",115,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,157,35,10
+    CONTROL         "",116,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,167,35,10
+    CONTROL         "",117,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,177,35,10
+    CONTROL         "",118,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,187,35,10
+    CONTROL         "",119,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,197,35,10
+    CONTROL         "",120,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,207,35,10
+    CONTROL         "",121,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,217,35,10
+    CONTROL         "",122,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,227,35,10
+    CONTROL         "",123,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,237,35,10
+    CONTROL         "",124,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,337,247,35,10
+    CONTROL         "",148,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,237,35,10
+    CONTROL         "",125,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,8,35,10
+    CONTROL         "",126,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,17,35,10
+    CONTROL         "",127,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,27,35,10
+    CONTROL         "",128,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,37,35,10
+    CONTROL         "",129,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,47,35,10
+    CONTROL         "",130,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,57,35,10
+    CONTROL         "",131,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,67,35,10
+    CONTROL         "",132,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,77,35,10
+    CONTROL         "",133,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,87,35,10
+    CONTROL         "",134,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,97,35,10
+    CONTROL         "",135,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,108,35,10
+    CONTROL         "",136,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,117,35,10
+    CONTROL         "",137,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,127,35,10
+    CONTROL         "",138,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,137,35,10
+    CONTROL         "",139,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,147,35,10
+    CONTROL         "",140,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,157,35,10
+    CONTROL         "",141,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,167,35,10
+    CONTROL         "",150,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,247,35,10
+    CONTROL         "",142,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,177,35,10
+    CONTROL         "",143,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,187,35,10
+    CONTROL         "",144,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,197,35,10
+    CONTROL         "",145,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,207,35,10
+    CONTROL         "",146,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,217,35,10
+    CONTROL         "",147,"Button",BS_AUTO3STATE | BS_LEFT | BS_PUSHLIKE | 
+                    WS_TABSTOP,377,227,35,10
 END
 
 WELCOMEMSG DIALOG DISCARDABLE  26, 5, 381, 266
@@ -1009,6 +1098,12 @@ BEGIN
     IDD_USERADDED_BOX, DIALOG
     BEGIN
         BOTTOMMARGIN, 65
+    END
+
+    IDD_MSGEDIT, DIALOG
+    BEGIN
+        RIGHTMARGIN, 415
+        BOTTOMMARGIN, 266
     END
 
     IDD_MAINTRESULTS, DIALOG

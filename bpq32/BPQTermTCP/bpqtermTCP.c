@@ -63,6 +63,11 @@
 //	Allow 16 hosts
 //	Save host setup when changed instead of on exit
 
+
+// Version 1.0.8.1 ...
+
+//	Operates in UTF-8
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "winsock2.h"

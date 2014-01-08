@@ -199,12 +199,11 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 	int TNCOK;
 	struct ScanEntry * Scan;
 	short * sp;
-
+	int NewMode;
 
 	if (TNC == NULL)
 		return 0;
-	
-	
+		
 	if (TNC->hDevice == 0)
 	{
 		// Clear anything from UI_Q
@@ -358,7 +357,7 @@ ok:
 		CloseCOMPort(TNC->hDevice);
 		return (0);
 
-	case 6:				// Scan Stop Interface
+	case 6:				// Scan Interface
 
 		Param = (int)buff;
 
@@ -389,6 +388,15 @@ ok:
 
 			Scan = (struct ScanEntry *)buff;
 
+			// If no change, just return
+
+			NewMode = Scan->RPacketMode | (Scan->HFPacketMode << 8);
+
+			if (TNC->CurrentMode == NewMode)
+				return 0;
+
+			TNC->CurrentMode = NewMode;
+
 			if (Scan->RPacketMode == '1')
 			{
 				SwitchToRPacket(TNC, "R300");
@@ -409,6 +417,11 @@ ok:
 			if (Scan->HFPacketMode == '2')
 			{
 				SwitchToNormPacket(TNC, "1200");
+				return 0;
+			}
+			if (Scan->HFPacketMode == '3')
+			{
+				SwitchToNormPacket(TNC, "9600");
 				return 0;
 			}
 		}
@@ -826,14 +839,17 @@ VOID DEDPoll(int Port)
 		{
 			// New Attach
 
-			// Set call to null to stop inbound connects (We only support one stream)
-
 			int calllen=0;
+
+			TNC->CurrentMode = 0;				// Mode may be changed manually
+
 
 			TNC->Streams[Stream].Attached = TRUE;
 
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
 			TNC->Streams[Stream].MyCall[calllen] = 0;
+
+			// Set call to null to stop inbound connects (We only support one stream)
 
 			TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
 			sprintf(TNC->Streams[Stream].CmdSet, "\1\1\1IDSPTNC");

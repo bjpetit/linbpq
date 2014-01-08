@@ -24,8 +24,10 @@ VOID ETHERExtInit()
 {
 }
 
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 1060
 char *gcvt(double number, size_t ndigit, char *buf)
 {
 	sprintf(buf,"%f.6", number);
 	return buf;
 }
+#endif

@@ -2804,9 +2804,9 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			CheckDlgButton(hDlg, user->BBSNumber + 24, BST_INDETERMINATE);
 		}
 
-		CheckDlgButton(hDlg,105, BST_INDETERMINATE);
-		CheckDlgButton(hDlg,106, BST_UNCHECKED);
-		CheckDlgButton(hDlg,107, BST_CHECKED);
+		CheckDlgButton(hDlg,205, BST_INDETERMINATE);
+		CheckDlgButton(hDlg,206, BST_UNCHECKED);
+		CheckDlgButton(hDlg,207, BST_CHECKED);
 
 		return (INT_PTR)TRUE;
 

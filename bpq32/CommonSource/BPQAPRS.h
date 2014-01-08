@@ -81,7 +81,7 @@ struct APRSMESSAGE
 	char Time[6];
 };
 
-struct ConnectionInfo			// Used for Web Server for thread-specific stuff
+struct APRSConnectionInfo			// Used for Web Server for thread-specific stuff
 {
 	struct STATIONRECORD * SelCall;	// Station Record for individual statond display
 	HANDLE hPipe;

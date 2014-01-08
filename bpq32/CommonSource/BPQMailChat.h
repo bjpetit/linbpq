@@ -458,12 +458,12 @@ typedef struct _MESSAGEX
 
 // Message Database Entry. Designed to be compatible with FBB
 
-#define NBBBS 80			// Max BBSes we can forward to. Must be Multiple of 8, and must be 80 for FBB compatibliliy
+#define NBBBS 160			// Max BBSes we can forward to. Must be Multiple of 8, and must be 80 for FBB compatibliliy
 #define NBMASK NBBBS/8		// Number of bytes in Forward bitlists.
 
 #pragma pack(1)
 
-struct MsgInfo
+struct OldMsgInfo
 {
 	char	type ;
 	char	status ;
@@ -492,9 +492,41 @@ struct MsgInfo
 	int		theme  ;
 	time_t	datecreated ;
 	time_t	datechanged ;
+	char	fbbs[10] ;
+	char	forw[10] ;
+	char	emailfrom[41];
+} ;
+
+
+struct MsgInfo
+{
+	char	type ;
+	char	status ;
+	int		number ;
+	int		length ;
+	int		datereceived;
+	char	bbsfrom[7] ;			// ? BBS we got it from ?
+	char	via[41] ;
+	char	from[7] ;
+	char	to[7] ;
+	char	bid[13] ;
+	char	title[61] ;
+	int		nntpnum;			// Number within topic (ie Bull TO Addr) - used for nntp
+
+	UCHAR	B2Flags;
+
+	#define B2Msg 1				// Set if Message File is a formatted B2 message
+	#define Attachments 2		// Set if B2 message has attachments
+	#define FromPaclink 4
+	#define FromRMS 8
+	#define FromRMSExpress 16 
+
+	time_t	datecreated ;
+	time_t	datechanged ;
 	char	fbbs[NBMASK] ;
 	char	forw[NBMASK] ;
 	char	emailfrom[41];
+	char	Spare[64];			// For future use
 } ;
 
 #define MSGTYPE_B 0

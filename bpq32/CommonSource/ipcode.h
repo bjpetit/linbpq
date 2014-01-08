@@ -131,6 +131,7 @@ typedef struct _ARPDATA
 	ULONG	ARPTIMER;
 	UCHAR	ARPINTERFACE;			// Port to use. 0= NETROM, 0xff Ethernet
 	UCHAR	ARPTYPE;				// NETROM/VC/DG/ETH
+	BOOL	LOCKED;					// Locked entry from config file
 	struct _MESSAGE * ARP_Q;		// CHAIN OF DATAGRAMS WAITING FOR RESOLUTION
 
 } ARPDATA, *PARPDATA;
@@ -188,7 +189,7 @@ VOID DoARPTimer();
 UINT SENDNETFRAME;
 static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
 VOID ReadARP();
-BOOL ProcessARPLine(char * buf);
+BOOL ProcessARPLine(char * buf, BOOL Locked);
 void IPResolveNames(void *dummy);
 int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len);
 

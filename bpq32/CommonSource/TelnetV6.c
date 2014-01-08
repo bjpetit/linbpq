@@ -79,6 +79,8 @@ extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 struct UserRec RelayUser;
 struct UserRec CMSUser;
 struct UserRec HostUser;
+struct UserRec TriModeUser;
+
 
 
 static char AttemptsMsg[] = "Too many attempts - Disconnected\r\n";
@@ -123,6 +125,7 @@ VOID WriteCMSLog(char * msg);
 byte * EncodeCall(byte * Call);
 VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen);
 
+
 BOOL CheckCMS(struct TNCINFO * TNC);
 int TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port);
 int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM,  int Stream);
@@ -133,6 +136,9 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo);
 VOID GetCMSCachedInfo(struct TNCINFO * TNC);
 BOOL CMSCheck(struct TNCINFO * TNC, struct TCPINFO * TCP);
 static VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst);
+VOID ProcessTrimodeCommand(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, char * MsgPtr);
+VOID ProcessTrimodeResponse(struct TNCINFO * TNC, struct STREAMINFO * STREAM, unsigned char * MsgPtr, int Msglen);
+VOID ProcessTriModeDataMessage(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
 
 ProcessLine(char * buf, int Port)
 {
@@ -222,6 +228,9 @@ ProcessLine(char * buf, int Port)
 	else
 		if (_stricmp(param,"TCPPORT") == 0)
 			TCP->TCPPort = atoi(value);
+		else
+		if (_stricmp(param,"TRIMODEPORT") == 0)
+			TCP->TriModePort = atoi(value);
 		else
 		if (_stricmp(param,"HTTPPORT") == 0)
 			TCP->HTTPPort = atoi(value);
@@ -1126,7 +1135,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 	return ((int)ExtProc);
 }
 
-SOCKET OpenSocket4(struct TNCINFO * TNC, int port)
+SOCKET OpenSocket4(struct TNCINFO * xTNC, int port)
 {
 	struct sockaddr_in  local_sin;  /* Local socket - internet style */
 	struct sockaddr_in * psin;
@@ -1204,11 +1213,20 @@ BOOL OpenSockets(struct TNCINFO * TNC)
 	if (TCP->RelayPort)
 		TCP->Relaysock = OpenSocket4(TNC, TCP->RelayPort);
 
+	if (TCP->TriModePort)
+	{
+		TCP->TriModeSock = OpenSocket4(TNC, TCP->TriModePort);
+		TCP->TriModeDataSock = OpenSocket4(TNC, TCP->TriModePort + 1);
+	}
 
 	if (TCP->HTTPPort)
 		TCP->HTTPsock = OpenSocket4(TNC, TCP->HTTPPort);
 
 	CMSUser.UserName = _strdup("CMS");
+
+	TriModeUser.Secure = TRUE;
+	TriModeUser.UserName = _strdup("TRIMODE");
+	TriModeUser.Callsign = zalloc(10);
 
 	return TRUE;
 }
@@ -1354,6 +1372,21 @@ static VOID SetupListenSet(struct TNCINFO * TNC)
 			maxsock = sock;
 	}
 		
+	sock = TCP->TriModeSock;
+	if (sock)
+	{
+		FD_SET(sock, readfd);
+		if (sock > maxsock)
+			maxsock = sock;
+	}
+
+	sock = TCP->TriModeDataSock;
+	if (sock)
+	{
+		FD_SET(sock, readfd);
+		if (sock > maxsock)
+			maxsock = sock;
+	}
 	n = 0;
 	while (n < 100)
 	{
@@ -1449,6 +1482,19 @@ VOID TelnetPoll(int Port)
 				Socket_Accept(TNC, sock);
 		}
 		
+		sock = TCP->TriModeSock;
+		if (sock)
+		{
+			if (FD_ISSET(sock, &readfd))
+				Socket_Accept(TNC, sock);
+		}
+		sock = TCP->TriModeDataSock;
+		if (sock)
+		{
+			if (FD_ISSET(sock, &readfd))
+				Socket_Accept(TNC, sock);
+		}
+	
 		sock = TCP->Relaysock;
 		if (sock)
 		{
@@ -1503,7 +1549,7 @@ VOID TelnetPoll(int Port)
 		FD_ZERO(&writefd);
 		FD_ZERO(&exceptfd);
 
-		for (n = 1; n <= TCP->MaxSessions; n++)
+		for (n = 0; n <= TCP->MaxSessions; n++)
 		{
 			sockptr = TNC->Streams[n].ConnectionInfo;
 		
@@ -1524,6 +1570,15 @@ VOID TelnetPoll(int Port)
 				Active++;
 				if (sockptr->socket > maxsock)
 					maxsock = sockptr->socket;
+
+				if (sockptr->TriModeDataSock)
+				{
+					FD_SET(sockptr->TriModeDataSock, &readfd);
+					FD_SET(sockptr->TriModeDataSock, &exceptfd);
+			
+					if (sockptr->TriModeDataSock > maxsock)
+						maxsock = sockptr->TriModeDataSock;
+				}
 			}
 		}
 
@@ -1544,7 +1599,7 @@ VOID TelnetPoll(int Port)
 				{
 					// see who has data
 
-					for (n = 1; n <= TCP->MaxSessions; n++)
+					for (n = 0; n <= TCP->MaxSessions; n++)
 					{
 						sockptr = TNC->Streams[n].ConnectionInfo;
 		
@@ -1552,6 +1607,13 @@ VOID TelnetPoll(int Port)
 						{
 							sock = sockptr->socket;
 
+							if (sockptr->TriModeDataSock)
+							{
+								if (FD_ISSET(sockptr->TriModeDataSock, &readfd))
+								{
+									ProcessTriModeDataMessage(TNC, sockptr, sockptr->TriModeDataSock, &TNC->Streams[n]);
+								}
+							}
 							if (FD_ISSET(sock, &exceptfd))
 							{
 								DataSocket_Disconnect(TNC, sockptr);
@@ -1693,6 +1755,14 @@ nosocks:
 				send(sock, Msg, strlen(Msg),0);
 			}
 
+			if (sockptr->UserPointer == &TriModeUser)
+			{
+				// Always Disconnect
+
+				send(sockptr->socket, "DISCONNECTED\r\n", 14, 0);
+				return;
+			}
+
 			if (sockptr->UserPointer == &CMSUser)
 			{
 				if (CMSLogEnabled)
@@ -1727,6 +1797,13 @@ nosocks:
 
 			else
 			{
+				if (sockptr->Signon[0])			// Outward Connect
+				{
+					Sleep(1000);
+					DataSocket_Disconnect(TNC, sockptr);
+					return;
+				}
+
 				if (LogEnabled)
 				{
 					char logmsg[120];
@@ -1767,6 +1844,14 @@ nosocks:
 			datalen=buffptr[1];
 			MsgPtr = (UCHAR *)&buffptr[2];
 
+			if (STREAM->ConnectionInfo->TriMode)
+			{
+				ProcessTrimodeResponse(TNC, STREAM, MsgPtr, datalen);
+				ReleaseBuffer(buffptr);
+				return;
+			}
+
+
 			if (TNC->Streams[Stream].Connected)
 			{
 				TelSendPacket(Stream, STREAM, buffptr);
@@ -1778,7 +1863,6 @@ nosocks:
 
 				datalen--;				// Exclude CR
 				MsgPtr[datalen] = 0;	// Null Terminate
-				_strupr(MsgPtr);
 
 				if (_memicmp(MsgPtr, "D", 1) == 0)
 				{
@@ -1787,30 +1871,44 @@ nosocks:
 					return;
 				}
 				
-				if (MsgPtr[0] == 'C' && MsgPtr[1] == ' ' && datalen > 2 && (TCP->CMS || TCP->CMDPort[0] || TCP->RELAYHOST[0]))	// Connect
+				if ((_memicmp(MsgPtr, "C", 1) == 0) && MsgPtr[1] == ' ' && datalen > 2)	// Connect
 				{
-					char Host[100];
-					char Via[100];
+					char Host[100] = "";
+					char P2[100] = "";
+					char P3[100] = "";
+					char P4[100] = "";
+					char P5[100] = "";
+					char P6[100] = "";
+					char P7[100] = "";
 					unsigned int Port = 0;
+					int n;
 
-					if (sscanf(&MsgPtr[2], "%s %s %d", &Host[0], &Via[0], &Port) < 1 || Port > 32)
-					{
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid Connect Command\r");
-						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
-						STREAM->NeedDisc = 10;
-						return;
-					}
+					n = sscanf(&MsgPtr[2], "%s %s %s %s %s %s",
+							&Host[0], &P2[0], &P3[0], &P4[0], &P5[0], &P6[0], &P7[0]);
+	
+					STREAM->ConnectionInfo->Signon[0] = 0;		// Not outgoing;
 
-					if (strcmp(Host, "HOST") == 0 && TCP->CMDPort[0])
+					if (_stricmp(Host, "HOST") == 0)
 					{
+						Port = atoi(P3);
+
+						if (Port > 33 || TCP->CMDPort[Port] == 0)
+						{
+							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid HOST Port\r");
+							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+							STREAM->NeedDisc = 10;
+							return;
+						}
+
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = FALSE;
+						STREAM->ConnectionInfo->FBBMode = FALSE;
 						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port]);
 						ReleaseBuffer(buffptr);
 						return;
 					}
-	
-					if (strcmp(Host, "RELAY") == 0 && TCP->RELAYHOST[0])
+
+					if (_stricmp(Host, "RELAY") == 0 && TCP->RELAYHOST[0])
 					{
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = TRUE;
@@ -1819,43 +1917,57 @@ nosocks:
 						ReleaseBuffer(buffptr);
 						return;
 					}
-					
-					if (strcmp(Host, "CMS") != 0 && TCP->CMS)
+							
+					if (_stricmp(Host, "CMS") == 0)
 					{
-						STREAM->ConnectionInfo->CMSSession = TRUE;
-						STREAM->ConnectionInfo->RelaySession = FALSE;
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid Connect Command\r");
-						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
-						STREAM->NeedDisc = 10;
-						return;
-					}
-
-					if (!TCP->CMSOK)
-					{
-						if (TCP->RELAYHOST[0] && TCP->FallbacktoRelay)
+						if (!TCP->CMSOK)
 						{
-							STREAM->Connecting = TRUE;
-							STREAM->ConnectionInfo->CMSSession = TRUE;
-							STREAM->ConnectionInfo->RelaySession = TRUE;
-							TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772);
-							ReleaseBuffer(buffptr);
+							if (TCP->RELAYHOST[0] && TCP->FallbacktoRelay)
+							{
+								STREAM->Connecting = TRUE;
+								STREAM->ConnectionInfo->CMSSession = TRUE;
+								STREAM->ConnectionInfo->RelaySession = TRUE;
+								TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772);
+								ReleaseBuffer(buffptr);
+								return;
+							}
+					
+							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - CMS Not Available\r");
+							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+							STREAM->NeedDisc = 10;
 							return;
 						}
-					
-						buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - CMS Not Available\r");
-						C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
-						STREAM->NeedDisc = 10;
+
+						STREAM->Connecting = TRUE;
+						STREAM->ConnectionInfo->CMSSession = TRUE;
+						CMSConnect(TNC, TCP, STREAM, Stream);
+						ReleaseBuffer(buffptr);
+
 						return;
 					}
 
-					STREAM->Connecting = TRUE;
-					STREAM->ConnectionInfo->CMSSession = TRUE;
-					CMSConnect(TNC, TCP, STREAM, Stream);
-					ReleaseBuffer(buffptr);
+					// Outward Connect. 
+						
+					Port = atoi(P2);
 
-					return;
+					if (Port)
+					{
+						STREAM->Connecting = TRUE;
+						STREAM->ConnectionInfo->CMSSession = FALSE;
+						STREAM->ConnectionInfo->RelaySession = FALSE;
+						STREAM->ConnectionInfo->FBBMode = TRUE;
+						
+						if (P5[0])
+							sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r%s\r", P3, P4, P5);
+						else
+							sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r", P3, P4);
+
+						TCPConnect(TNC, TCP, STREAM, Host, Port);
+						ReleaseBuffer(buffptr);
+						return;
+					}
 				}
-
+	
 				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - Invalid Command\r");
 				C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 				STREAM->NeedDisc = 10;
@@ -2277,7 +2389,7 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 {
-	int n,addrlen;
+	int n, addrlen = sizeof(struct sockaddr_in6);
 	struct ConnectionInfo * sockptr;
 	SOCKET sock;
 	char Negotiate[6]={IAC,WILL,suppressgoahead,IAC,WILL,echo};
@@ -2286,6 +2398,19 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 	HMENU hDisMenu = TCP->hDisMenu;
 	u_long param=1;
 
+	// if for TriModeData Session, use the TriMode Control connection entry 
+
+	Debugprintf("Tel Accept %d %d", SocketId, TCP->TriModeDataSock);
+
+	if (SocketId == TCP->TriModeDataSock)
+	{
+		sockptr = TNC->TCPInfo->TriModeControlSession;
+		sock = accept(SocketId, (struct sockaddr *)&sockptr->sin, &addrlen);
+		sockptr->TriModeDataSock = sock;
+		ioctl(sock, FIONBIO, &param);
+
+		return 0;
+	}
 
 //   Find a free Session
 
@@ -2295,8 +2420,6 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 		
 		if (sockptr->SocketActive == FALSE)
 		{
-			addrlen=sizeof(struct sockaddr_in6);
-
 			sock = accept(SocketId, (struct sockaddr *)&sockptr->sin, &addrlen);
 
 			if (sock == INVALID_SOCKET)
@@ -2332,6 +2455,14 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 				sockptr->RelayMode = TRUE;
 				sockptr->FBBMode = TRUE;
 			}
+			else if (SocketId == TCP->TriModeSock)
+			{
+				sockptr->TriMode = TRUE;
+				sockptr->FBBMode = TRUE;
+				TNC->TCPInfo->TriModeControlSession = sockptr;
+				sockptr->TriModeConnected = FALSE;
+				sockptr->TriModeDataSock = 0;
+			}
 			else if (SocketId != TCP->TCPSock && SocketId != TCP->sock6)				// We can have several listening FBB mode sockets
 				sockptr->FBBMode = TRUE;
 #ifndef LINBPQ
@@ -2359,12 +2490,21 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 				send(sock,"\r\rCallsign :\r", 13,0);
 			}
 			else
+			if (sockptr->TriMode)
 			{
-				if (sockptr->FBBMode == FALSE)
-				{
-					send(sock, Negotiate, 6, 0);
-					send(sock, TCP->LoginMsg, strlen(TCP->LoginMsg), 0);
-				}
+				// Trimode emulator Control Connection.
+
+				sockptr->UserPointer  = &TriModeUser;
+
+
+				send(sock,"CMD\r\n", 5,0);
+				sockptr->LoginState = 5;
+			}
+			else
+			if (sockptr->FBBMode == FALSE)
+			{
+				send(sock, Negotiate, 6, 0);
+				send(sock, TCP->LoginMsg, strlen(TCP->LoginMsg), 0);
 			}
 
 			if (sockptr->FromHostBuffer == 0)
@@ -2466,7 +2606,8 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen)
 		struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 
 		ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE);
-		TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
+		if (sockptr->UserPointer)
+			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
 	}
 			
 	buffptr[1] = MsgLen;				// Length
@@ -3234,6 +3375,7 @@ MsgLoop:
 		// Remove the LF
 
 		InputLen--;
+		sockptr->InputLen--;
 
 		memmove(MsgPtr, MsgPtr+1, InputLen);
 	}
@@ -3253,12 +3395,32 @@ MsgLoop:
 	{
 		MsgPtr++;							// Skip it
 		InputLen--;
+		sockptr->InputLen--;
 		goto MsgLoop;
 	}
 
 
 	switch (sockptr->LoginState)
 	{
+	case 5:
+
+		// Trimode Emulator Command
+
+		*CRPtr = 0;
+
+		ProcessTrimodeCommand(TNC, sockptr, MsgPtr);
+
+		MsgLen++;
+
+		InputLen -= MsgLen;
+		
+		memmove(MsgPtr, MsgPtr+MsgLen, InputLen);
+		sockptr->InputLen = InputLen ;
+		MsgPtr[InputLen] = 0;
+
+
+		goto MsgLoop;
+
 	case 3:
 
 		// CMS Signon
@@ -3681,7 +3843,7 @@ int ShowConnections(struct TNCINFO * TNC)
 
 	SendMessage(TNC->hMonitor,LB_RESETCONTENT,0,0);
 
-	for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
+	for (n = 0; n <= TNC->TCPInfo->CurrentSockets; n++)
 	{
 		sockptr=TNC->Streams[n].ConnectionInfo;
 
@@ -3993,16 +4155,24 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	}
 	else
 	{
-		sockptr->FBBMode = FALSE;
 		sockptr->LoginState = 2;			// Data State
 		sockptr->UserPointer  = &HostUser;
 		sockptr->DoEcho = FALSE;
 		sockptr->ClientSession = TRUE;
 
-		buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Connected to %s\r", 
-			TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4CROSSLINK->APPL);;
 
-		send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
+		if (sockptr->Signon[0])
+		{
+			buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Connected to Server\r");
+			send(sockptr->socket, sockptr->Signon, strlen(sockptr->Signon), 0);
+		}
+		else
+		{
+			buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Connected to %s\r", 
+				TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4CROSSLINK->APPL);
+			
+			send(sockptr->socket, Signon, sprintf(Signon, "%s\r\n", TNC->Streams[Stream].MyCall), 0);
+		}
 	}
 
 	C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
@@ -4787,7 +4957,39 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 
 	if (sockptr->FBBMode)
 	{
-		send(sock, MsgPtr, datalen, 0);
+		// if Outward Connect to FBB,  Replace ff with ffff
+
+		if (0)
+		{
+			char * ptr2, * ptr = &MsgPtr[0];
+			int i;
+			do 
+			{
+				ptr2 = memchr(ptr, 255, datalen);
+
+				if (ptr2 == 0)
+				{
+					//	no ff, so just send as is 
+
+					send(sock, ptr, datalen, 0);
+					i=0;
+					break;
+				}
+
+				i=ptr2+1-ptr;
+
+				send(sock,ptr,i,0);
+				send(sock,"\xff",1,0);
+
+				datalen-=i;
+				ptr=ptr2+1;
+			}
+			while (datalen>0);
+		}
+		else
+		{
+			send(sock, MsgPtr, datalen, 0);
+		}
 	}
 	else
 	{
@@ -4821,6 +5023,154 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 				
 	ReleaseBuffer(buffptr);
 }
+
+VOID ProcessTrimodeCommand(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, char * MsgPtr)
+{
+	struct STREAMINFO * STREAM = &TNC->Streams[sockptr->Number];
+	int Port = 4;
+
+	Debugprintf(MsgPtr);
+	
+	if (strcmp(MsgPtr, "CLOSE") == 0)
+	{
+		if (STREAM->Connected)
+		{
+			STREAM->ReportDISC = TRUE;
+		}
+	}
+
+// MYCALLSIGN XE2BNC
+	else
+	if (memcmp(MsgPtr, "MYCALLSIGN", 10) == 0)
+	{
+		char * call = &MsgPtr[11];
+		
+		if (strlen(call) > 9)
+			call[9] = 0;
+
+		memcpy(STREAM->MyCall, call, 10);
+
+		ConvToAX25(call, &TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->L4USER[0]);
+
+		strcpy(&TNCInfo[Port]->Streams[0].MyCall[0], call);
+	}
+
+
+// TARGETCALLSIGN KE7XO
+	else
+	if (memcmp(MsgPtr, "TARGETCALLSIGN", 14) == 0)
+	{
+		char * call = &MsgPtr[15];
+		
+		if (strlen(call) > 9)
+			call[9] = 0;
+
+		memcpy(STREAM->RemoteCall, call, 10);
+	}
+// INITIATECALL 50
+	else
+	if (memcmp(MsgPtr, "INITIATECALL", 12) == 0)
+	{
+		char Cmd[80];
+		int n;
+		
+		n = sprintf(Cmd,"C %s\r", STREAM->RemoteCall);
+
+		SendtoNode(TNC, sockptr->Number, Cmd, n);
+	}
+
+
+// CHANNEL 3586500,None,None
+	else
+	if (memcmp(MsgPtr, "CHANNEL", 7) == 0)
+	{
+		double Freq = atof(&MsgPtr[8]);
+		char Radiocmd[80];
+		int n;
+
+		strcpy(sockptr->Callsign, "G8BPQ");
+		
+		n = sprintf(Radiocmd,"RADIO %f %s\r", Freq/1000000, "USB");
+
+		SendtoNode(TNC, sockptr->Number, Radiocmd, n);
+	}
+
+	else
+	if (memcmp(MsgPtr, "PROTOCOL", 8) == 0)
+	{
+		// Attach the relevant port
+
+		SendtoNode(TNC, sockptr->Number, "ATTACH 4\r", 9);
+	}
+
+	else
+	if (strcmp(MsgPtr, "BUSY") == 0)
+		send(sockptr->socket, "BUSY False\r\n", 12,0);
+
+
+	send(sockptr->socket, "CMD\r\n", 5,0);
+
+//	SendtoNode(TNC, sockptr->Number, NodeLine, len);
+}
+
+
+VOID ProcessTrimodeResponse(struct TNCINFO * TNC, struct STREAMINFO * STREAM, unsigned char * MsgPtr, int Msglen)
+{
+	MsgPtr[Msglen] = 0;
+
+	if (STREAM->ConnectionInfo->TriModeConnected)
+	{
+		// Send over the Data Socket
+
+		send(STREAM->ConnectionInfo->TriModeDataSock, MsgPtr, Msglen, 0);
+
+		return;
+	}
+
+	strlop(MsgPtr, 13);
+	Debugprintf(MsgPtr);
+
+	if (memcmp(MsgPtr, "*** Connected to ", 17) == 0)
+	{
+		char Cmd[80];
+		int n;
+		
+		n = sprintf(Cmd,"CONNECTED %s\r", &MsgPtr[17]);
+
+		STREAM->ConnectionInfo->TriModeConnected = TRUE;
+
+		send(STREAM->ConnectionInfo->socket, Cmd, n, 0);
+	}
+}
+
+VOID ProcessTriModeDataMessage(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM)
+{
+	int len=0;
+	char NLMsg[3]={13,10,0};
+	char RelayMsg[] = "No CMS connection available - using local BPQMail\r";
+	struct TCPINFO * TCP = TNC->TCPInfo;
+	unsigned char Buffer[256];
+
+	ioctl(sock,FIONREAD,&len);
+	
+	if (len > 256) len = 256;
+
+	len = recv(sock, Buffer, len, 0);
+
+	if (len == SOCKET_ERROR || len ==0)
+	{
+		// Failed or closed - clear connection
+
+		closesocket(sock);
+		return;
+	}
+
+	SendtoNode(TNC, sockptr->Number, Buffer, len);
+}
+
+
+
+
 int IsUTF8(unsigned char *ptr, int len)
 {
 	int n; 

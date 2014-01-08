@@ -25,7 +25,7 @@ struct ScanEntry
 	char PMaxLevel;		// Pactor Max Level
 	char PMinLevel;		// Pactor Max Level
 	char Antenna;
-	char Supress;		// Dont report this one to WL2K
+//	char Supress;		// Dont report this one to WL2K
 	char * Cmd1;
 	int Cmd1Len;
 	char * Cmd2;

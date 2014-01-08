@@ -13,6 +13,10 @@
 
 // Fix initialisation of Signoff Message
 
+// Jan 2014 
+
+// Add UTF-8 support
+
 #include "BPQChat.h"
 
 #define CHAT

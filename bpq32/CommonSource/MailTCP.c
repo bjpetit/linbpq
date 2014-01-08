@@ -985,6 +985,15 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 	
 		while(*ptr != 13)
 		{
+			if (_memicmp(ptr, "Content-Transfer-Encoding:", 26) == 0)
+			{
+				if (strstr(&ptr[26], "base64"))
+					Base64 = TRUE;
+				else
+				if (strstr(&ptr[26], "quoted-printable"))
+					QuotedP = TRUE;
+			}
+
 			ptr2 = strchr(ptr, 10);	// Find CR
 					
 			while(ptr2[1] == ' ' || ptr2[1] == 9)		// Whitespace - continuation line
@@ -999,9 +1008,103 @@ BOOL CheckforMIME(SocketConn * sockptr, char * Msg, char ** Body, int * MsgLen)	
 
 		// Should now have a plain text body to return;
 
-		strcpy(*Body, ptr);
-		*MsgLen = strlen(ptr);
+		// But could be an odd encoding
 
+		if (Base64)
+		{
+			int i = 0, Len = strlen(ptr), NewLen;
+			char * ptr2;
+			char * End;
+			char * Save = ptr;
+
+			ptr2 = ptr;
+			End = ptr + Len;
+
+			while (ptr < End)
+			{
+				while (*ptr < 33)
+					{ptr++;}
+
+				*ptr2++ = *ptr++;
+			}
+
+			*ptr2 = 0;
+
+			ptr = Save;
+			Len = ptr2 - ptr -1;
+
+			ptr2 = *Body;
+
+			while (Len > 0)
+			{
+				decodeblock(ptr, ptr2);
+				ptr += 4;
+				ptr2 += 3;
+				Len -= 4;
+			}
+
+			NewLen = ptr2 - *Body;
+
+			if (*(ptr-1) == '=')
+				NewLen--;
+
+			if (*(ptr-2) == '=')
+				NewLen--;
+
+			*MsgLen = NewLen;
+		}
+		else if (QuotedP)
+		{
+			int i = 0, Len = strlen(ptr);
+			char * ptr2;
+			char * End;
+			char * Save = ptr;
+
+			ptr2 = *Body;
+
+			End = ptr + Len;
+
+			while (ptr < End)
+			{
+				if ((*ptr) == '=')
+				{
+					char c = *(++ptr);
+					char d;
+
+					c = c - 48;
+					if (c < 0)
+					{
+						// = CRLF as a soft break
+
+						ptr += 2;
+						continue;
+					}
+
+					if (c > 9)
+						c -= 7;
+					d  = *(++ptr);
+					d = d - 48;
+					if (d > 9)
+						d -= 7;
+
+					*(ptr2) = c << 4 | d;
+					ptr2++;	
+					ptr++;
+				}
+				else
+				{
+					*ptr2++ = *ptr++;
+				}
+			}
+			*ptr2 = 0;
+
+			*MsgLen = ptr2 - *Body;
+		}
+		else
+		{
+			strcpy(*Body, ptr);
+			*MsgLen = strlen(ptr);
+		}
 		free(Save);
 	
 		return FALSE;
@@ -2161,7 +2264,15 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		char reply[40];
 		int i, count=0, size=0;
-		int MsgNo=1;
+		int MsgNo = atoi(&Buffer[4]);
+
+		if (MsgNo)
+		{
+			sprintf(reply, "+OK %d %d", MsgNo, sockptr->POP3Msgs[MsgNo - 1]->length);
+			SendSock(sockptr, reply);
+			return;
+		}
+
 
 		SendSock(sockptr, "+OK ");
 
@@ -3360,7 +3471,7 @@ VOID base64_encode(char *str, char * result, int len)
 	return;
 }
 
-Base64EncodeAndSend(SocketConn * sockptr, UCHAR * Msg, int Len)
+void Base64EncodeAndSend(SocketConn * sockptr, UCHAR * Msg, int Len)
 {
 	char Base64Line[80];
 	int i = Len;

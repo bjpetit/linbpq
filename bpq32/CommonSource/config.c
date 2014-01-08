@@ -616,6 +616,20 @@ BOOL ProcessConfig()
    	   Consoleprintf("Conversion failed");
    	   return FALSE;
 	}
+
+/*
+	// Dump to file for debugging
+	
+	sprintf_s(inputname, sizeof(inputname), "CFG%d", time(NULL));
+	
+	fp1 = fopen(inputname, "wb");
+
+	if (fp1)
+	{
+		fwrite(ConfigBuffer, 1, 100000, fp1);
+		fclose(fp1);
+	}
+*/
 	return TRUE;
 }
 
@@ -2623,39 +2637,14 @@ char rec[];
 	return 0;
 }
 
-/* default values for all params - used by 'simple' config mode */
-
-
-static int defaults [] =
-{
-5,4,60,25,4,120,	/* OBSINIT OBSMIN NODESINT L3TTL L4RETRIES L4TIMEOUT */
- 
-255,120,1,180,900,0,    /* BUFFERS PACLEN TRANSDELAY T3 IDLETIME BBS */
-
-1,-1,-1,-1,-1,		/* NODE NODEALIAS BBSALIAS NODECALL BBSCALL */
-
--1,-1,-1,-1,-1,30,	/* TNCPORT IDMSG: INFOMSG:  ROUTES: PORT MAXLINKS */
-
-50,30,120,15,140,		/* MAXNODES MAXROUTES  MAXCIRCUITS IDINTERVAL MINQUAL */
-
-0,10,4,0,-1,255,	/* HIDENODES L4DELAY L4WINDOW BTINTERVAL UNPROTO BBSQUAL */
-
--1,0,-1,1,127,0,	/* APPLS EMS CTEXT: DESQVIEW HOSTINTERRUPT ENABLE_LINKED */
-
--1,0,-1			/* DEDHOST FULL_CTEXT SIMPLE */
-
-};
-
-
 
 int simple(int i)
 {
-
 	// Set up the basic config header
 
 	struct CONFIGTABLE Cfg;
 
-	memset(&Cfg, 0, 256);
+	memset(&Cfg, 0, sizeof(Cfg));
 
 	Cfg.C_AUTOSAVE = 1;
 	Cfg.C_BBS = 1;
@@ -2700,7 +2689,9 @@ int simple(int i)
 
 	memcpy(ConfigBuffer, &Cfg, sizeof(Cfg));
 
-	paramok[15]=0;		/* Must have callsign */
+	paramok[15] = 0;		// Must have callsign 
+	paramok[45] = 0;		// Dont Have Appl1Call
+	paramok[53] = 0;		// or APPL1ALIAS
 
 	return(1);
 }

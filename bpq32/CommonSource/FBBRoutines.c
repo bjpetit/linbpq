@@ -1678,6 +1678,14 @@ BOOL DoWeWantIt(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 			return FALSE;
 		}
 
+		// Treat P messages to SYSOP@WW as Bulls
+
+		if (strcmp(FBBHeader->To, "SYSOP") == 0 && strcmp(FBBHeader->ATBBS, "WW") == 0)
+		{
+			Logprintf(LOG_BBS, conn, '?', "Message Rejected by BID Check");
+			return FALSE;
+		}
+
 		m = NumberofMessages;
 		
 		while (m > 0)

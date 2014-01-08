@@ -163,7 +163,7 @@
 #pragma pack(1) 
 
 #define MAX_ENTRIES 128
-#define MaxMHEntries 40
+#define MaxMHEntries 50
 #define MAX_BROADCASTS 8
 #define MAXUDPPORTS 30 
 
@@ -1692,7 +1692,7 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 
 			case BPQCOPY:
 
-				hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE,2000);
+				hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, MaxMHEntries * 100);
 		
 				if (hMem != 0)
 				{

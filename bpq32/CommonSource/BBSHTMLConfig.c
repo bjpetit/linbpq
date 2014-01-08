@@ -103,7 +103,7 @@ VOID SetMultiStringValue(char ** values, char * Multi);
 VOID SendFwdMainPage(char * Reply, int * ReplyLen, char * Key);
 VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
-char **	SeparateMultiString(char * MultiString);
+char **	SeparateMultiString(char * MultiString, BOOL NoToUpper);
 VOID TidyPrompts();
 
 char UNC[] = "";
@@ -961,7 +961,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			Msg->bid, D3, Msg->length, EmailFromLine, Msg->via, Msg->title,
 					Key, Msg->number);
 
-		for (y = 0; y < 10; y++)
+		for (y = 0; y < NBBBS/8; y++)
 		{
 			len += sprintf(&Reply[len],"<tr>");
 			for (x= 0; x < 8; x++)
@@ -1001,10 +1001,10 @@ char ** GetMultiStringInput(char * input, char * key)
 	if (MultiString[0] == 0)
 		return NULL;
 
-	return SeparateMultiString(MultiString);
+	return SeparateMultiString(MultiString, TRUE);
 }
 
-char **	SeparateMultiString(char * MultiString)
+char **	SeparateMultiString(char * MultiString, BOOL NoToUpper)
 {
 	char * ptr1 = MultiString;
 	char * ptr2 = NULL;
@@ -1049,7 +1049,7 @@ char **	SeparateMultiString(char * MultiString)
 			*(ptr1++) = 0;
 
 		Value = realloc(Value, (Count+2)*4);
-		if (_memicmp(ptr, "file ", 5) == 0)
+		if (_memicmp(ptr, "file ", 5) == 0 || NoToUpper)
 			Value[Count++] = _strdup(ptr);
 		else
 			Value[Count++] = _strupr(_strdup(ptr));
@@ -1542,22 +1542,22 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 
 		ptr2 = input + 4;
 		ptr1 = GetNextParam(&ptr2);		// TO
-		FWDInfo->TOCalls = SeparateMultiString(ptr1);
+		FWDInfo->TOCalls = SeparateMultiString(ptr1, FALSE);
 
 		ptr1 = GetNextParam(&ptr2);		// AT
-		FWDInfo->ATCalls = SeparateMultiString(ptr1);
+		FWDInfo->ATCalls = SeparateMultiString(ptr1, FALSE);
 
 		ptr1 = GetNextParam(&ptr2);		// TIMES
-		FWDInfo->FWDTimes = SeparateMultiString(ptr1);
+		FWDInfo->FWDTimes = SeparateMultiString(ptr1, FALSE);
 
 		ptr1 = GetNextParam(&ptr2);		// FWD SCRIPT
-		FWDInfo->ConnectScript = SeparateMultiString(ptr1);
+		FWDInfo->ConnectScript = SeparateMultiString(ptr1, TRUE);
 
 		ptr1 = GetNextParam(&ptr2);		// HRB
-		FWDInfo->Haddresses = SeparateMultiString(ptr1);
+		FWDInfo->Haddresses = SeparateMultiString(ptr1, FALSE);
 
 		ptr1 = GetNextParam(&ptr2);		// HRP
-		FWDInfo->HaddressesP = SeparateMultiString(ptr1);
+		FWDInfo->HaddressesP = SeparateMultiString(ptr1, FALSE);
 
 		ptr1 = GetNextParam(&ptr2);		// BBSHA
 		if (FWDInfo->BBSHA)

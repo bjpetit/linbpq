@@ -29,8 +29,10 @@ int EncryptPass(char * Pass, char * Encrypt);
 VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
 void DeletetoRecycle(char * FN);
 VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
+VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID TidyPrompts();
 char * ReadMessageFileEx(struct MsgInfo * MsgRec);
+UCHAR * APIENTRY GetBPQDirectory();
 
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 
@@ -670,7 +672,8 @@ VOID GetMessageDatabase()
 	int ReadLen;
 	struct MsgInfo * Msg;
 	char * MsgBytes;
-	int Resize = 0;				// Used to resize file if format changes
+	int FileRecsize = sizeof(struct MsgInfo);	// May be changed if reformating
+	BOOL Reformatting = FALSE;
 
 	Handle = fopen(MsgDatabasePath, "rb");
 
@@ -686,10 +689,9 @@ VOID GetMessageDatabase()
 		return;
 	}
 
-
 	// Get First Record
 		
-	ReadLen = fread(&MsgRec, 1, sizeof (MsgRec), Handle); 
+	ReadLen = fread(&MsgRec, 1, FileRecsize, Handle); 
 
 	if (ReadLen == 0)
 	{
@@ -709,38 +711,87 @@ VOID GetMessageDatabase()
 
 	NumberofMessages = 0;
 
-//	if (MsgRec.status == 0)		// Used as file format version 0 = original, 1 = Extra email from addr.
-//	{
-//		Resize = 41;
-//		MsgHddrPtr[0]->status = 1;
-//		SetFilePointer (Handle, -41, NULL, FILE_CURRENT);
-//		memset(MsgRec.emailfrom, 0, 41);
-//	}
+	if (MsgRec.status == 1)		// Used as file format version
+								// 0 = original, 1 = Extra email from addr, 2 = More BBS's.
+	{
+		char Backup1[MAX_PATH];
+
+			//  Create a backup in case reversion is needed and Reposition to first User record
+
+			fclose(Handle);
+
+			strcpy(Backup1, MsgDatabasePath);
+			strcat(Backup1, ".oldformat");
+
+			CopyFile(MsgDatabasePath, Backup1, FALSE);	 // Copy to .oldformat
+
+			Handle = fopen(MsgDatabasePath, "rb");
+
+			FileRecsize = sizeof(struct OldMsgInfo);
+			
+			ReadLen = fread(&MsgRec, 1, FileRecsize, Handle); 
+
+			MsgHddrPtr[0]->status = 2;
+	}
 
 Next: 
 
-	ReadLen = fread(&MsgRec, 1, sizeof (MsgRec), Handle); 
+	ReadLen = fread(&MsgRec, 1, FileRecsize, Handle); 
 
 	if (ReadLen > 0)
 	{
 		// Validate Header
 
-		if (MsgRec.type == 0)
-			goto Next;
-
-		MsgBytes = ReadMessageFileEx(&MsgRec);
-
-		if (MsgBytes)
+		if (FileRecsize == sizeof(struct MsgInfo))
 		{
-//			MsgRec.length = strlen(MsgBytes);
-			free(MsgBytes);
+			if (MsgRec.type == 0)
+				goto Next;
+
+			MsgBytes = ReadMessageFileEx(&MsgRec);
+
+			if (MsgBytes)
+			{
+	//			MsgRec.length = strlen(MsgBytes);
+				free(MsgBytes);
+			}
+			else
+				goto Next;
+
+			Msg = AllocateMsgRecord();
+
+			memcpy(Msg, &MsgRec, +sizeof (MsgRec));
 		}
 		else
-			goto Next;
+		{
+			// Resizing - record from file is an OldRecInfo
+			
+			struct OldMsgInfo * OldMessage = (struct OldMsgInfo *) &MsgRec;
+
+			if (OldMessage->type == 0)
+				goto Next;
+
+			Msg = AllocateMsgRecord();
 
 
-		Msg = AllocateMsgRecord();
-		memcpy(Msg, &MsgRec,  sizeof (MsgRec));
+			Msg->B2Flags = OldMessage->B2Flags;
+			memcpy(Msg->bbsfrom, OldMessage->bbsfrom, 7);
+			memcpy(Msg->bid, OldMessage->bid, 13);
+			Msg->datechanged = OldMessage->datechanged;
+			Msg->datecreated = OldMessage->datecreated;
+			Msg->datereceived = OldMessage->datereceived;
+			memcpy(Msg->emailfrom, OldMessage->emailfrom, 41);
+			memcpy(Msg->fbbs , OldMessage->fbbs, 10);
+			memcpy(Msg->forw , OldMessage->forw, 10);
+			memcpy(Msg->from, OldMessage->from, 7);
+			Msg->length = OldMessage->length;
+			Msg->nntpnum = OldMessage->nntpnum;
+			Msg->number = OldMessage->number;
+			Msg->status = OldMessage->status;
+			memcpy(Msg->title, OldMessage->title, 61);
+			memcpy(Msg->to, OldMessage->to, 7);
+			Msg->type = OldMessage->type;
+			memcpy(Msg->via, OldMessage->via, 41);
+		}
 
 		MsgnotoMsg[Msg->number] = Msg;
 
@@ -757,7 +808,7 @@ Next:
 
 		// If any forward bits are set, increment count on corresponding BBS record.
 
-		if (memcmp(MsgRec.fbbs, zeros, NBMASK) != 0)
+		if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
 		{
 			if (FirstMessageIndextoForward == 0)
 				FirstMessageIndextoForward = NumberofMessages;			// limit search
@@ -769,9 +820,7 @@ Next:
 	if (FirstMessageIndextoForward == 0)
 		FirstMessageIndextoForward = NumberofMessages;			// limit search
 
-
 	fclose(Handle);
-
 }
 
 VOID CopyMessageDatabase()
@@ -5205,10 +5254,10 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 
 			Value = realloc(Value, (Count+2)*4);
 			
-			if (_memicmp((char *)ptr, "file ", 5) == 0)
+//			if (_memicmp((char *)ptr, "file ", 5) == 0)
 				Value[Count++] = _strdup(ptr);
-			else
-				Value[Count++] = _strupr(_strdup(ptr));
+//			else
+//				Value[Count++] = _strupr(_strdup(ptr));
 			
 			ptr = ptr1;
 		}
@@ -5257,7 +5306,7 @@ VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
 		len=strlen(&MultiString[ptr]);
 
 		Value = realloc(Value, (Count+2)*4);
-		Value[Count++] = _strupr(_strdup(&MultiString[ptr]));
+		Value[Count++] = _strdup(&MultiString[ptr]);
 		ptr+= (len + 1);
 	}
 
@@ -5417,33 +5466,59 @@ void StartForwarding(int BBSNumber)
 	return;
 }
 
+size_t fwritex(CIRCUIT * conn, void * _Str, size_t _Size, size_t _Count, FILE * _File)
+{
+	if (_File)
+		return fwrite(_Str, _Size, _Count, _File);
+
+	// Appending to MailBuffer
+
+	memcpy(&conn->MailBuffer[conn->InputLen], _Str, _Count);
+	conn->InputLen += _Count;
+
+	return _Count;
+}
+
+
 BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 {
 	BOOL AddCRLF = FALSE;
-	FILE * Handle;
+	FILE * Handle = NULL;
 	char * Context;
+	BOOL Email = FALSE;
+	time_t now = time(NULL);
+
 
 	FN = strtok_s(FN, " ,", &Context); 
 
 	if (Context && (_stricmp(Context, "ADDCRLF") == 0))
 		AddCRLF =TRUE;
 
-	Handle = fopen(FN, "ab");
-
-	if (Handle == NULL)
+	// If FN ios an email address is specified, write to a temp file, and send via rms or emali gateway
+	
+	if (strchr(FN, '@') || _memicmp(FN, "RMS:", 4) == 0)
 	{
-		Logprintf(LOG_BBS, conn, '!', "Failed to open Export File %s", FN);
-		return FALSE;
+		Email = TRUE;
+		AddCRLF =TRUE;
+		conn->MailBuffer=malloc(100000);
+		conn->MailBufferSize=100000;
+		conn->InputLen = 0;
 	}
+	else
+	{
+		Handle = fopen(FN, "ab");
 
-	conn->SendB = conn->SendP = conn->SendT = TRUE;
-	conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
+		if (Handle == NULL)
+		{
+			Logprintf(LOG_BBS, conn, '!', "Failed to open Export File %s", FN);
+			return FALSE;
+		}
+	}
 
 	while (FindMessagestoForward(conn))
 	{
 		struct MsgInfo * Msg;
 		struct tm * tm;
-		time_t now;
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		int MsgLen;
 		char * MsgPtr;
@@ -5453,7 +5528,10 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		int Index = 0;
 
 		Msg = conn->FwdMsg;
-		
+
+		if (Email)
+			if (conn->InputLen + Msg->length + 500 > conn->MailBufferSize)
+				break;
 
 		if (Msg->type == 'P')
 			Index = PMSG;
@@ -5469,10 +5547,10 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		else
 			len = sprintf(Line, "S%c %s < %s $%s\r\n", Msg->type, Msg->to, Msg->from, Msg->bid);
 	
-		fwrite(Line, 1, len, Handle);
+		fwritex(conn, Line, 1, len, Handle);
 
 		len = sprintf(Line, "%s\r\n", Msg->title);
-		fwrite(Line, 1, len, Handle);
+		fwritex(conn, Line, 1, len, Handle);
 		
 		if (MsgBytes == 0)
 		{
@@ -5506,32 +5584,33 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 				MsgPtr = MsgBytes;
 		}
 
-		now = time(NULL);
 		tm = gmtime(&now);	
 
 		len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
 				conn->FwdMsg->number, BBSName, HRoute, RlineVer);
 
-		fwrite(Line, 1, len, Handle);
+		fwritex(conn, Line, 1, len, Handle);
 
 		if (memcmp(MsgPtr, "R:", 2) != 0)    // No R line, so must be our message - put blank line after header
-			fwrite("\r\n", 1, 2, Handle);
+			fwritex(conn, "\r\n", 1, 2, Handle);
 
-		fwrite(MsgPtr, 1, MsgLen, Handle);
+		fwritex(conn, MsgPtr, 1, MsgLen, Handle);
 
 		if (MsgPtr[MsgLen - 2] == '\r')
-			fwrite("/EX\r\n", 1, 5, Handle);
+			fwritex(conn, "/EX\r\n", 1, 5, Handle);
 		else
-			fwrite("\r\n/EX\r\n", 1, 7, Handle);
+			fwritex(conn, "\r\n/EX\r\n", 1, 7, Handle);
 
 		if (AddCRLF)
-			fwrite("\r\n", 1, 2, Handle);
+			fwritex(conn, "\r\n", 1, 2, Handle);
 
 		free(MsgBytes);
 			
 		user->Total.MsgsSent[Index]++;
 		user->Total.BytesForwardedOut[Index] += MsgLen;
+
+		Msg->datechanged = now;
 			
 		clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
 		set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
@@ -5547,7 +5626,72 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 		conn->UserPointer->ForwardingInfo->MsgCount--;
 	}
 
-	fclose(Handle);
+	if (Email)
+	{
+		struct MsgInfo * Msg;
+		BIDRec * BIDRec;
+
+		if (conn->InputLen == 0)
+		{
+			free(conn->MailBuffer);
+			conn->MailBufferSize=0;
+			conn->MailBuffer=0;
+
+			return TRUE;
+		}
+
+		// Allocate a message Record slot
+
+		Msg = AllocateMsgRecord();
+
+		// Set number here so they remain in sequence
+		
+		GetSemaphore(&MsgNoSemaphore);
+		Msg->number = ++LatestMsg;
+		FreeSemaphore(&MsgNoSemaphore);
+		MsgnotoMsg[Msg->number] = Msg;
+
+		Msg->type = 'P';
+		Msg->status = 'N';
+		Msg->datecreated = Msg->datechanged = now;
+
+		strcpy(Msg->from, BBSName);
+		Msg->datechanged = Msg->datecreated = time(NULL);
+
+		sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
+		sprintf(Msg->title, "Batch messages from BBS %s",  BBSName);
+
+		Msg->length = conn->InputLen;
+		CreateMessageFile(conn, Msg);
+
+		BIDRec = AllocateBIDRecord();
+
+		strcpy(BIDRec->BID, Msg->bid);
+		BIDRec->mode = Msg->type;
+		BIDRec->u.msgno = LOWORD(Msg->number);
+		BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
+
+		if (_memicmp(FN, "SMTP:", 5) == 0)
+		{
+			strcpy(Msg->via, &FN[5]);
+			SMTPMsgCreated=TRUE;
+		}
+		else
+		{
+			strcpy(Msg->to, "RMS");
+			if (_memicmp(FN, "RMS:", 4) == 0)
+				strcpy(Msg->via, &FN[4]);
+			else
+				strcpy(Msg->via, FN);
+		}
+
+		MatchMessagetoBBSList(Msg, conn);
+
+		SaveMessageDatabase();
+		SaveBIDDatabase();
+	}
+	else
+		fclose(Handle);
 
 	return TRUE;
 }
@@ -5636,7 +5780,8 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 	CIRCUIT * conn;
 	struct	BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
 
-	if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
+/*
+if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 	{
 		// Forward to File
 
@@ -5650,7 +5795,7 @@ BOOL ConnecttoBBS (struct UserInfo * user)
 
 		return FALSE;
 	}
-
+*/
 	for (n = NumberofStreams-1; n >= 0 ; n--)
 	{
 		conn = &Connections[n];
@@ -5779,7 +5924,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 		now %= 86400;
 		Line = Scripts[n];
 
-		if (memcmp(Line, "TIMES", 5) == 0)
+		if (_memicmp(Line, "TIMES", 5) == 0)
 		{
 		NextBand:
 			Start = atoi(&Line[6]);
@@ -5803,7 +5948,7 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 				return FALSE;
 			}
 
-			if (memcmp(Line, "TIMES", 5) != 0)
+			if (_memicmp(Line, "TIMES", 5) != 0)
 				goto NextLine;
 			else
 				goto NextBand;
@@ -5819,8 +5964,8 @@ InBand:
 		if (strcmp(Buffer, "*** CONNECTED  ") != 0)
 		{
 			if (Scripts[ForwardingInfo->ScriptIndex] == NULL ||
-				memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0	||		// Only Check until script is finished
-				memcmp(Scripts[ForwardingInfo->ScriptIndex], "ELSE", 4) == 0)			// Only Check until script is finished
+				_memicmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) == 0	||		// Only Check until script is finished
+				_memicmp(Scripts[ForwardingInfo->ScriptIndex], "ELSE", 4) == 0)			// Only Check until script is finished
 			{
 				ForwardingInfo->MoreLines = FALSE;
 			}
@@ -5843,19 +5988,19 @@ InBand:
 
 	ElseLoop:
 
-		if (Cmd == 0 || memcmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
+		if (Cmd == 0 || _memicmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
 		{
 			Disconnect(conn->BPQStream);
 			return FALSE;
 		}
 
-		if (memcmp(Cmd, "ELSE", 4) != 0)
+		if (_memicmp(Cmd, "ELSE", 4) != 0)
 		{
 			Cmd = Scripts[++ForwardingInfo->ScriptIndex];
 			goto ElseLoop;
 		}
 
-		if (memcmp(&Cmd[5], "DELAY", 5) == 0)
+		if (_memicmp(&Cmd[5], "DELAY", 5) == 0)
 			Delay = atoi(&Cmd[10]) * 1000;
 		else
 			Delay = 1000;
@@ -5904,14 +6049,16 @@ InBand:
 		if (Cmd && (strcmp(Cmd, " ") == 0 || Cmd[0] == ';' || Cmd[0] == '#'))
 			goto LoopBack;			// Blank line 
 
-		if (Cmd && memcmp(Cmd, "TIMES", 5) != 0 && memcmp(Cmd, "ELSE", 4) != 0)			// Only Check until script is finished
+		if (Cmd && _memicmp(Cmd, "TIMES", 5) != 0 && _memicmp(Cmd, "ELSE", 4) != 0)			// Only Check until script is finished
 		{
-			if (memcmp(Cmd, "MSGTYPE", 7) == 0)
+			if (_memicmp(Cmd, "MSGTYPE", 7) == 0)
 			{
 				char * ptr;
 				
 				// Select Types to send. Only send types in param. Only reverse if R in param
 
+				_strupr(Cmd);
+				
 				Logprintf(LOG_BBS, conn, '?', "Script %s", Cmd);
 
 				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = FALSE;
@@ -5956,7 +6103,7 @@ InBand:
 				return FALSE;
 			}
 
-			if (memcmp(Cmd, "INTERLOCK ", 10) == 0)
+			if (_memicmp(Cmd, "INTERLOCK ", 10) == 0)
 			{
 				// Used to limit connects on a port to 1
 
@@ -5977,11 +6124,12 @@ InBand:
 				goto LoopBack;
 			}
 
-			if (memcmp(Cmd, "RADIO AUTH", 10) == 0)
+			if (_memicmp(Cmd, "RADIO AUTH", 10) == 0)
 			{
 				// Generate a Password to enable RADIO commands on a remote node
 				char AuthCommand[80];
 
+				_strupr(Cmd);
 				strcpy(AuthCommand, Cmd);
 
 				CreateOneTimePassword(&AuthCommand[11], &Cmd[11], 0); 
@@ -5990,22 +6138,22 @@ InBand:
 				return TRUE;
 			}
 
-			if (memcmp(Cmd, "SKIPPROMPT", 10) == 0)
+			if (_memicmp(Cmd, "SKIPPROMPT", 10) == 0)
 			{
 				// Remote Node sends > at end of CTEXT - we need to swallow it
 
 				conn->SkipPrompt = TRUE;
 
 				if (Scripts[ForwardingInfo->ScriptIndex + 1] == NULL ||
-					memcmp(Scripts[ForwardingInfo->ScriptIndex +1], "TIMES", 5) == 0	||		// Only Check until script is finished
-					memcmp(Scripts[ForwardingInfo->ScriptIndex + 1], "ELSE", 4) == 0)			// Only Check until script is finished
+					_memicmp(Scripts[ForwardingInfo->ScriptIndex +1], "TIMES", 5) == 0	||		// Only Check until script is finished
+					_memicmp(Scripts[ForwardingInfo->ScriptIndex + 1], "ELSE", 4) == 0)			// Only Check until script is finished
 				{
 					ForwardingInfo->MoreLines = FALSE;
 				}
 				return TRUE;
 			}
 
-			if (memcmp(Cmd, "TEXTFORWARDING", 10) == 0)
+			if (_memicmp(Cmd, "TEXTFORWARDING", 10) == 0)
 			{
 				conn->BBSFlags |= TEXTFORWARDING;
 
@@ -6031,6 +6179,23 @@ InBand:
 				return TRUE;
 			}
 
+			if (_memicmp(Cmd, "FILE", 4) == 0)
+			{
+				ForwardMessagestoFile(conn, &Cmd[5]);
+
+//				Cmd = Scripts[++ForwardingInfo->ScriptIndex];
+//				Delay = 1000;
+	
+//		// Look for an alternative connect block (Starting with ELSE)
+
+//	ElseLoop:
+
+//		if (Cmd == 0 || memcmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
+//		{
+				Disconnect(conn->BPQStream);
+				return FALSE;
+			}
+
 			nodeprintf(conn, "%s\r", Cmd);
 		}
 		return TRUE;
@@ -6048,12 +6213,12 @@ InBand:
 
 		if (ptr2)
 		{
-			if (memcmp(ptr, Scripts[ForwardingInfo->ScriptIndex], ptr2-ptr) == 0)	// Reply to last sscript command
+			if (_memicmp(ptr, Scripts[ForwardingInfo->ScriptIndex], ptr2-ptr) == 0)	// Reply to last sscript command
 			{
 				ForwardingInfo->ScriptIndex++;
 		
 				if (Scripts[ForwardingInfo->ScriptIndex])
-					if (memcmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) != 0)	
+					if (_memicmp(Scripts[ForwardingInfo->ScriptIndex], "TIMES", 5) != 0)	
 					nodeprintf(conn, "%s\r", Scripts[ForwardingInfo->ScriptIndex]);
 
 				return TRUE;
@@ -6280,7 +6445,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 
 					conn->UserPointer->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 					conn->UserPointer->ForwardingInfo->AllowCompressed = TRUE;
-					conn->UserPointer->BBSNumber = 80;
+					conn->UserPointer->BBSNumber = NBBBS;
 			}
 
 			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
@@ -7288,7 +7453,7 @@ int Connected(int Stream)
 
 					ForwardingInfo->AllowCompressed = TRUE;
 					B2 = ForwardingInfo->AllowB2 = TRUE;
-					user->BBSNumber = 80;
+					user->BBSNumber = NBBBS;
 				}
 
 				if (conn->NewUser)
@@ -7989,6 +8154,12 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (_stricmp(Cmd, "EXPORT") == 0)
+	{
+		DoExportCmd(conn, user, Arg1, Context);
+		return;
+	}
+
 
 	if (_memicmp(Cmd, "I", 1) == 0)
 	{
@@ -8180,6 +8351,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			if (conn->sysop)
 			{
 				BBSputs(conn, "EU - Edit User Flags - Type EU for Help\r");
+				BBSputs(conn, "EXPORT - Export messages to file - Type EXPORT for Help\r");
 				BBSputs(conn, "FWD - Control Forwarding - Type FWD for Help\r");
 				BBSputs(conn, "IMPORT - Import messages from file - Type IMPORT for Help\r");
 				BBSputs(conn, "SHOWRMSPOLL - Displays your RMS polling list\r");
@@ -8383,7 +8555,7 @@ int DeleteRedundantMessages()
 		}
 		free(namelist);
     }
-	return;
+	return 0;
 }
 #endif
 

@@ -574,6 +574,21 @@
 //  Add RTS>CAT PTT option for Sound Card rigs
 //	Add Clear Nodes Option (NODE DEL ALL)
 //  SCS Pactor can set differeant APPLCALLS when scanning.
+//	Fix possible Scan hangup after a manual requency change with SCS Pactor
+//	Accept Scan entry of W0 to disable WINMOR on that frequency
+//  Fix corruption of NETROMCALL by SIMPLE config command
+//	Enforce Pactor Levels
+//	Add Telnet outward connect
+//	Add Relay/Trimode Emulation
+//	Fix V4 Driver
+//	Add PTT Mux
+//  Add Locked ARP Entries (via bpq32.cfg)
+//	Fix IDLETIME node command
+//	Fix STAY param on connect
+//	Add STAY option to Application Commands
+//	Add STAY command
+//	Fix crash on copying a large AXIP MH Window
+//	Fix possible crash when bpq32.exe dies
 
 #define CKernel
 
@@ -1704,13 +1719,7 @@ Check_Timer()
 		NODESINPROGRESS = 0;
 		CURRENTNODE = 0;
 
-
-
-			SetApplPorts();
-
-			FreeConfig();
-
-
+		SetApplPorts();
 
 		WritetoConsole("\n\nPort Reinitialisation Complete\n");
 

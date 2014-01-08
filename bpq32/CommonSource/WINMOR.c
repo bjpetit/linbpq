@@ -53,7 +53,10 @@
 #include <time.h>
 
 #include "CHeaders.h"
+
+#ifdef WIN32
 #include <Psapi.h>
+#endif
 
 int (WINAPI FAR *GetModuleFileNameExPtr)();
 int (WINAPI FAR *EnumProcessesPtr)();
@@ -242,7 +245,7 @@ static ProcessLine(char * buf, int Port)
 				TNC->BusyWait = atoi(&buf[8]);
 
 			else
-			if (_memicmp(buf, "STARTINROBUST", 13) == 0)		// Wait time beofre failing connect if busy
+			if (_memicmp(buf, "STARTINROBUST", 13) == 0)
 				TNC->StartInRobust = TRUE;
 			
 			else
@@ -493,9 +496,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
 					SetWindowText(TNC->xIDC_RESTARTTIME, Time);
+					strcpy(TNC->WEB_RESTARTTIME, Time);
+
 					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
 					SetWindowText(TNC->xIDC_RESTARTS, Time);
-
+					strcpy(TNC->WEB_RESTARTS, Time);
+	
 					KillTNC(TNC);
 					RestartTNC(TNC);
 
@@ -650,6 +656,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			memcpy(txbuff,buffptr+2,txlen);
 			bytes = send(TNC->WINMORDataSock,(const char FAR *)&txbuff,txlen,0);
 			STREAM->BytesTXed += bytes;
+			WritetoTrace(TNC, txbuff, txlen);
 			ReleaseBuffer(buffptr);
 		}
 		
@@ -676,6 +683,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			bytes=send(TNC->WINMORDataSock,(const char FAR *)&buff[8],txlen,0);
 			STREAM->BytesTXed += bytes;
+			WritetoTrace(TNC, &buff[8], txlen);
+
 		}
 		else
 		{
@@ -821,6 +830,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				Connect[txlen] = 0;
 
 				_strupr(Connect);
+
+				ChangeMYC(TNC, TNC->Streams[0].MyCall);
 
 				// See if Busy
 				
@@ -985,22 +996,40 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			if (TNC->WinmorCurrentMode != 1600)
 			{
+				if (TNC->WinmorCurrentMode == 0)
+					send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+
 				send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
 				TNC->WinmorCurrentMode = 1600;
 			}
 			TNC->WL2KMode = 22;
 			return 0;
-
 		}
+
 
 		if (Scan->Bandwidth == 'N')		// Set Wide Mode
 		{
 			if (TNC->WinmorCurrentMode != 500)
 			{
+				if (TNC->WinmorCurrentMode == 0)
+					send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+
 				TNC->WinmorCurrentMode = 500;
 				send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
 			}
 			TNC->WL2KMode = 21;
+			return 0;
+		}
+
+		if (Scan->Bandwidth == 'X')		// Dont Allow Connects
+		{
+			if (TNC->WinmorCurrentMode != 0)
+			{
+				send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+				TNC->WinmorCurrentMode = 0;
+			}
+
+			TNC->WL2KMode = 0;
 			return 0;
 		}
 
@@ -1174,7 +1203,7 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 	if (PortEntry->PORTCONTROL.PORTCALL[0] == 0)
 		memcpy(TNC->NodeCall, MYNODECALL, 10);
 	else
-		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], MYNODECALL);
+		ConvFromAX25(&PortEntry->PORTCONTROL.PORTCALL[0], TNC->NodeCall);
 
 	TNC->Interlock = PortEntry->PORTCONTROL.PORTINTERLOCK;
 
@@ -1271,6 +1300,8 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 	TNC->WEB_CHANSTATE = zalloc(100);
 	TNC->WEB_BUFFERS = zalloc(100);
 	TNC->WEB_PROTOSTATE = zalloc(100);
+	TNC->WEB_RESTARTTIME = zalloc(100);
+	TNC->WEB_RESTARTS = zalloc(100);
 
 	TNC->WEB_MODE = zalloc(20);
 	TNC->WEB_TRAFFIC = zalloc(100);
@@ -1299,9 +1330,9 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 	TNC->xIDC_TRAFFIC = CreateWindowEx(0, "STATIC", "0 0 0 0", WS_CHILD | WS_VISIBLE,116,116,374,20 , TNC->hDlg, NULL, hInstance, NULL);
 
 	CreateWindowEx(0, "STATIC", "TNC Restarts", WS_CHILD | WS_VISIBLE,10,138,100,20, TNC->hDlg, NULL, hInstance, NULL);
-	CreateWindowEx(0, "STATIC", "0", WS_CHILD | WS_VISIBLE,116,138,40,20 , TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_RESTARTS = CreateWindowEx(0, "STATIC", "0", WS_CHILD | WS_VISIBLE,116,138,40,20 , TNC->hDlg, NULL, hInstance, NULL);
 	CreateWindowEx(0, "STATIC", "Last Restart", WS_CHILD | WS_VISIBLE,140,138,100,20, TNC->hDlg, NULL, hInstance, NULL);
-	CreateWindowEx(0, "STATIC", "Never", WS_CHILD | WS_VISIBLE,250,138,200,20, TNC->hDlg, NULL, hInstance, NULL);
+	TNC->xIDC_RESTARTTIME = CreateWindowEx(0, "STATIC", "Never", WS_CHILD | WS_VISIBLE,250,138,200,20, TNC->hDlg, NULL, hInstance, NULL);
 
 	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD |  WS_VISIBLE  | LBS_NOINTEGRALHEIGHT | 
             LBS_DISABLENOSCROLL | WS_HSCROLL | WS_VSCROLL,
@@ -2665,6 +2696,7 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 
 BOOL KillOldTNC(char * Path)
 {
+#ifdef WIN32
 	HANDLE hProc;
 	char ExeName[256] = "";
 	DWORD Pid = 0;
@@ -2703,5 +2735,6 @@ BOOL KillOldTNC(char * Path)
 			}
 		}
 	}
+#endif
 	return FALSE;
 }

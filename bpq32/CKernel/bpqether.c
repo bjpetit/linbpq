@@ -346,6 +346,9 @@ FARPROCX GetAddress(char * Proc)
 }
 #endif
 
+#include <iphlpapi.h>
+
+#pragma comment(lib, "IPHLPAPI.lib")
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
@@ -442,7 +445,9 @@ static BOOL ReadConfigFile(int Port)
 
 	Config = PortConfig[Port];
 
-	PCAPInfo[Port].Promiscuous = 1;				// Default
+	PCAPInfo[Port].Promiscuous = 1;				// Defaults
+	PCAPInfo[Port].EtherType=htons(0x08FF);
+	memset(PCAPInfo[Port].EthDest, 0xff, 6); 
 
 	if (Config)
 	{
@@ -509,9 +514,30 @@ static ProcessLine(char * buf, int Port, BOOL CheckPort)
 
 	if(_stricmp(ptr,"ADAPTER") == 0)
 	{
+		IP_ADAPTER_INFO AdapterInfo[16];       // Allocate information for up to 16 NICs
+		DWORD dwBufLen = sizeof(AdapterInfo);  // Save memory size of buffer
+		DWORD dwStatus = GetAdaptersInfo(AdapterInfo, &dwBufLen);
+ 
+		PIP_ADAPTER_INFO pAdapterInfo = AdapterInfo;
+
 		p_Adapter = strtok(NULL, " \t\n\r");
 		
 		strcpy(Adapter,p_Adapter);
+
+		// Look for MAC Address
+		
+		do
+		{
+			if (strcmp(pAdapterInfo->AdapterName, &Adapter[12]) == 0)
+			{
+				memcpy(&PCAPInfo[Port].EthSource[0], pAdapterInfo->Address, 6);
+				break;
+			}
+
+			pAdapterInfo = pAdapterInfo->Next;    // Progress through linked list
+
+		} while(pAdapterInfo);                    // Terminate if last adapter
+
 		return (TRUE);
 	}
 

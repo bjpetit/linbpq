@@ -101,6 +101,7 @@ struct TCPINFO
 	int FBBPort[100];
 	int RelayPort;
 	int HTTPPort;
+	int TriModePort;
 	int CMDPort[33];
 	char RELAYHOST[64];
 	BOOL FallbacktoRelay;		// Use Relsy if can't connect to CMS
@@ -140,6 +141,9 @@ struct TCPINFO
 	SOCKET FBBsock[100];
 	SOCKET Relaysock;
 	SOCKET HTTPsock;
+	SOCKET TriModeSock;
+	SOCKET TriModeDataSock;
+	struct ConnectionInfo * TriModeControlSession;
 	SOCKET sock6;
 	SOCKET FBBsock6[100];
 	SOCKET Relaysock6;
@@ -352,6 +356,7 @@ typedef struct TNCINFO
 	int BusyDelay;					// Timer for busy timeout
 	char * ConnectCmd;				// Saved command if waiting for busy to clear
 	BOOL UseAPPLCalls;				// Robust Packet to use Applcalls
+	BOOL UseAPPLCallsforPactor;		// Pactor to use Applcalls
 
 	// Fields for reporting to WL2K Map
 
@@ -410,7 +415,8 @@ typedef struct TNCINFO
 	int Buffers;					// Free buffers in TNC
 	BOOL WantToChangeFreq;			// Request from Scanner to Change
 	int OKToChangeFreq;				// 1 = SCS Says OK to change, -1 = Dont Change zero = still waiting
-	BOOL DontWantToChangeFreq;		// Change done - ok to relaase SCS
+	BOOL DontWantToChangeFreq;		// Change done - ok to  SCS
+	BOOL DontReleasePermission;		// Hold Permission to prevent calls on this frequency
 
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
@@ -423,6 +429,7 @@ typedef struct TNCINFO
 	BOOL Dragon;					// Set if P4Dragon
 	BOOL MaxLevel;					// Pactor Level to set for Wide Mode (3 or 4)
 	int MinLevel;					// Mimimum accepted Pactor Level
+	int MinLevelTimer;				// Time left to achieve Min Level
 	int PacketChannels;
 	int RobustTime;					// For PTC, Spend this part of scan cycle (in 10th secs) in Robust Packet Mode 
 	int SwitchToPactor;				// Countdown to switch
@@ -465,7 +472,7 @@ typedef struct TNCINFO
 	BOOL PktUpdateMap;				// Set if Packet MH data to be sent to NodeMap
 
 	int DefaultMode;
-	int CurrentMode;
+	int CurrentMode;				// Used on HAL
 
 	// Mode Equates
 

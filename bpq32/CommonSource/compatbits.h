@@ -11,7 +11,9 @@ Stuff to make compiling on WINDOWS and LINUX easier
 #include <ctype.h>
 #include <string.h>
 #include <time.h>
+#ifndef MACBPQ
 #include <malloc.h>
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>

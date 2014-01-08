@@ -3301,7 +3301,7 @@ VOID SendWeatherBeacon();
 VOID DecodeWXPortList();
 
 	
-VOID DecodeWXReport(struct ConnectionInfo * sockptr, char * WX)
+VOID DecodeWXReport(struct APRSConnectionInfo * sockptr, char * WX)
 {
 	UCHAR * ptr = strchr(WX, '_');
 	char Type;
@@ -5226,7 +5226,7 @@ char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * 
 
 }
 
-char * APRSLookupKey(struct ConnectionInfo * sockptr, char * Key)
+char * APRSLookupKey(struct APRSConnectionInfo * sockptr, char * Key)
 {
 	struct STATIONRECORD * stn = sockptr->SelCall;
 
@@ -5528,7 +5528,7 @@ char * APRSLookupKey(struct ConnectionInfo * sockptr, char * Key)
 	return NULL;
 }
 
-VOID APRSProcessSpecialPage(struct ConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
+VOID APRSProcessSpecialPage(struct APRSConnectionInfo * sockptr, char * Buffer, int FileSize, char * StationTable, int Count, BOOL WX)
 {
 	// replaces ##xxx### constructs with the requested data
 
@@ -5658,7 +5658,7 @@ loop:
 	return;
 }
 
-VOID APRSSendMessageFile(struct ConnectionInfo * sockptr, char * FN)
+VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 {
 	int FileSize = 0;
 	char * MsgBytes;
@@ -5765,8 +5765,8 @@ VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr)
 	int OutputLen = 0;
    	char * URL;
 	char * ptr;
-	struct ConnectionInfo CI;
-	struct ConnectionInfo * sockptr = &CI;
+	struct APRSConnectionInfo CI;
+	struct APRSConnectionInfo * sockptr = &CI;
 	char Key[12] = "";
 
 	memset(&CI, 0, sizeof(CI));

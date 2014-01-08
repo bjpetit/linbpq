@@ -839,7 +839,7 @@ int DeleteLogFiles()
 		}
 		free(namelist);
     }
-	return;
+	return 0;
 }
 #endif
 
@@ -1104,8 +1104,8 @@ VOID CreateBBSTrafficReport()
 
 	sprintf(BytesOut,"%d/%d/%d", TotBytesForwardedOut[1], TotBytesForwardedOut[2], TotBytesForwardedOut[3]);
 
-	len = sprintf(Line, "\r\n Totals %s Messages In %s Messages Out %s Bytes In %s Bytes Out\r\n",
-			MsgsIn, MsgsOut, BytesIn, BytesOut);
+	len = sprintf(Line, "\r\n Totals    %s Messages In        %s Messages Out       %s"
+						" Bytes In        %s Bytes Out\r\n", MsgsIn, MsgsOut, BytesIn, BytesOut);
 
 	fwrite(Line, 1, len, hFile);
 

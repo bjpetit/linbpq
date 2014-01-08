@@ -532,7 +532,7 @@ struct HTTPConnectionInfo * FindSession(char * Key)
 	return NULL;
 }
 
-ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
+void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
 	char _REPLYBUFFER[1024];
 	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, Key);
@@ -626,7 +626,7 @@ ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 }
 
 
-ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
+void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 {
 	char _REPLYBUFFER[8192];
 	int ReplyLen = sprintf(_REPLYBUFFER, InputLine, Key, Key);

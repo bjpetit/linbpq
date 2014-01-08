@@ -230,12 +230,11 @@ Dll BOOL APIENTRY Init_IP()
 		strcat(ARPFN,"BPQARP.dat");
 	}
 	
-	ReadConfigFile();
-	
 	ARPRecords = NULL;				// ARP Table - malloc'ed as needed
-
 	NumberofARPEntries=0;
 
+	ReadConfigFile();
+	
 	// Clear old packets
 
 	IPHOSTVECTORPTR->HOSTAPPLFLAGS = 0x80;			// Request IP frams from Node
@@ -292,6 +291,7 @@ Dll BOOL APIENTRY Init_IP()
 				ARPptr->ARPINTERFACE = 255;
 				ARPptr->ARPTYPE = 'E';
 				ARPptr->IPADDR = DefaultIPAddr;
+				ARPptr->LOCKED = TRUE;
 
 				SendARPMsg(ARPptr);
 			}
@@ -1781,6 +1781,16 @@ static ProcessLine(char * buf)
 		return (TRUE);
 	}
 
+
+// ARP 44.131.4.18 GM8BPQ-7 1 D
+
+	if (_stricmp(ptr,"ARP") == 0)
+	{
+		p_value[strlen(p_value)] = ' ';		// put back together
+		ProcessARPLine(p_value, TRUE);
+		return TRUE;
+	}
+
 	if (_stricmp(ptr,"MAP") == 0)
 	{
 #ifdef LINBPQ
@@ -1846,12 +1856,15 @@ static ProcessLine(char * buf)
 
 		// Time out active entries
 
-		Arp->ARPTIMER--;
-			
-		if (Arp->ARPTIMER == 0)
+		if (Arp->LOCKED == 0)
 		{
-			// Remove Entry
-				RemoveARP(Arp);
+			Arp->ARPTIMER--;
+			
+			if (Arp->ARPTIMER == 0)
+			{
+				// Remove Entry
+					RemoveARP(Arp);
+			}
 		}
 	}
 }
@@ -1995,7 +2008,7 @@ VOID ReadARP()
 	{
 		strcpy(errbuf,buf);			// save in case of error
 	
-		if (!ProcessARPLine(buf))
+		if (!ProcessARPLine(buf, FALSE))
 		{
 			WritetoConsoleLocal("IP Gateway bad ARP record ");
 			WritetoConsoleLocal(errbuf);
@@ -2008,7 +2021,7 @@ VOID ReadARP()
 	return;
 }
 
-BOOL ProcessARPLine(char * buf)
+BOOL ProcessARPLine(char * buf, BOOL Locked)
 {
 	char * p_ip, * p_mac, * p_port, * p_type;
 	int Port;
@@ -2093,6 +2106,7 @@ BOOL ProcessARPLine(char * buf)
 			Arp->ARPINTERFACE = Port;
 			Arp->ARPVALID = TRUE;
 			Arp->ARPTIMER =  (Arp->ARPTYPE == 'E')? 300 : ARPTIMEOUT;
+			Arp->LOCKED = Locked;
 		}
 	}
 	return TRUE;
@@ -2112,7 +2126,8 @@ VOID SaveARP ()
 	for (i=0; i < NumberofARPEntries; i++)
 	{
 		Arp = ARPRecords[i];
-		if (Arp->ARPVALID) WriteARPLine(Arp, file);
+		if (Arp->ARPVALID && !Arp->LOCKED) 
+			WriteARPLine(Arp, file);
 	}
 
  	fclose(file);
@@ -2559,7 +2574,7 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	//	DISPLAY IP Gateway ARP status or Clear
 	
 	int i;
-	PARPDATA ARPRecord;
+	PARPDATA ARPRecord, Arp;
 	int SSID, j;
 	char Mac[20];
 	char Call[7];
@@ -2577,17 +2592,21 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 	if (memcmp(CmdTail, "CLEAR ", 6) == 0)
 	{
-		for (i = NumberofARPEntries -1; i >= 0; i--)
+		int n = NumberofARPEntries;
+		int rec = 0;
+
+		for (i=0; i < n; i++)
 		{
-			free(ARPRecords[i]);
+			Arp = ARPRecords[rec];
+			if (Arp->LOCKED)
+				rec++;
+			else
+				RemoveARP(Arp);
 		}
-
-		free(ARPRecords);
-
-		NumberofARPEntries = 0;
 
 		Bufferptr += sprintf(Bufferptr, "OK\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SaveARP();
 
 		return;
 	}
@@ -2625,8 +2644,9 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 				sprintf(Mac,"%s-%d", Call, SSID);
 			}
 
-			Bufferptr += sprintf(Bufferptr, "%s %s %d %c %d\r",
-				IP, Mac, ARPRecord->ARPINTERFACE, ARPRecord->ARPTYPE, (int)ARPRecord->ARPTIMER);
+			Bufferptr += sprintf(Bufferptr, "%s %s %d %c %d %s\r",
+				IP, Mac, ARPRecord->ARPINTERFACE, ARPRecord->ARPTYPE,
+				(int)ARPRecord->ARPTIMER, ARPRecord->LOCKED?"Locked":"");
 		}
 	}
 

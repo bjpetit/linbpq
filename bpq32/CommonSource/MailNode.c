@@ -1,6 +1,6 @@
 // Control Routine for LinBPQ
 
-#define _CRT_SECURE_NO_DEPRECATE 
+#define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
@@ -192,7 +192,7 @@ BOOL CLOSING = FALSE;
 int ProgramErrors;
 int Slowtimer = 0;
 
-#define REPORTINTERVAL 15 * 549;	// Magic Ticks Per Minute for PC's nominal 100 ms timer 
+#define REPORTINTERVAL 15 * 549;	// Magic Ticks Per Minute for PC's nominal 100 ms timer
 int ReportTimer = 0;
 
 
@@ -211,19 +211,19 @@ VOID CheckProgramErrors()
 
 /*
 		SInfo.cb=sizeof(SInfo);
-		SInfo.lpReserved=NULL; 
-		SInfo.lpDesktop=NULL; 
-		SInfo.lpTitle=NULL; 
-		SInfo.dwFlags=0; 
-		SInfo.cbReserved2=0; 
-  		SInfo.lpReserved2=NULL; 
+		SInfo.lpReserved=NULL;
+		SInfo.lpDesktop=NULL;
+		SInfo.lpTitle=NULL;
+		SInfo.dwFlags=0;
+		SInfo.cbReserved2=0;
+  		SInfo.lpReserved2=NULL;
 
 		GetModuleFileName(NULL, ProgName, 256);
 
 		Debugprintf("Attempting to Restart %s", ProgName);
 
 		CreateProcess(ProgName, "MailChat.exe WAIT", NULL, NULL, FALSE, 0, NULL, NULL, &SInfo, &PInfo);
-*/					
+*/
 		exit(0);
 	}
 }
@@ -237,50 +237,50 @@ GetConsoleWindow(
     VOID
     );
 
-BOOL CtrlHandler(DWORD fdwCtrlType) 
-{ 
-  switch( fdwCtrlType ) 
-  { 
-    // Handle the CTRL-C signal. 
-    case CTRL_C_EVENT: 
+BOOL CtrlHandler(DWORD fdwCtrlType)
+{
+  switch( fdwCtrlType )
+  {
+    // Handle the CTRL-C signal.
+    case CTRL_C_EVENT:
       printf( "Ctrl-C event\n\n" );
 	  CLOSING = TRUE;
-      Beep( 750, 300 ); 
+      Beep( 750, 300 );
       return( TRUE );
- 
-    // CTRL-CLOSE: confirm that the user wants to exit. 
+
+    // CTRL-CLOSE: confirm that the user wants to exit.
     case CTRL_CLOSE_EVENT:
 
 	  CLOSING = TRUE;
      printf( "Ctrl-Close event\n\n" );
 	 Sleep(20000);
-       Beep( 750, 300 ); 
-	   return( TRUE ); 
- 
-    // Pass other signals to the next handler. 
-    case CTRL_BREAK_EVENT: 
-      Beep( 900, 200 ); 
+       Beep( 750, 300 );
+	   return( TRUE );
+
+    // Pass other signals to the next handler.
+    case CTRL_BREAK_EVENT:
+      Beep( 900, 200 );
       printf( "Ctrl-Break event\n\n" );
 	  CLOSING = TRUE;
-      Beep( 750, 300 ); 
-     return FALSE; 
- 
-    case CTRL_LOGOFF_EVENT: 
-      Beep( 1000, 200 ); 
+      Beep( 750, 300 );
+     return FALSE;
+
+    case CTRL_LOGOFF_EVENT:
+      Beep( 1000, 200 );
       printf( "Ctrl-Logoff event\n\n" );
-      return FALSE; 
- 
-    case CTRL_SHUTDOWN_EVENT: 
-      Beep( 750, 500 ); 
+      return FALSE;
+
+    case CTRL_SHUTDOWN_EVENT:
+      Beep( 750, 500 );
       printf( "Ctrl-Shutdown event\n\n" );
 	  CLOSING = TRUE;
-      Beep( 750, 300 ); 
-    return FALSE; 
- 
-    default: 
-      return FALSE; 
-  } 
-} 
+      Beep( 750, 300 );
+    return FALSE;
+
+    default:
+      return FALSE;
+  }
+}
 
 #else
 
@@ -328,7 +328,7 @@ BOOL CopyFile(char * In, char * Out, BOOL Failifexists)
 
 	Buffer = malloc(FileSize+1);
 
-	FileSize = fread(Buffer, 1, STAT.st_size, Handle); 
+	FileSize = fread(Buffer, 1, STAT.st_size, Handle);
 
 	fclose(Handle);
 
@@ -346,11 +346,11 @@ BOOL CopyFile(char * In, char * Out, BOOL Failifexists)
 		return FALSE;
 	}
 
-	FileSize = fwrite(Buffer, 1, STAT.st_size, Handle); 
+	FileSize = fwrite(Buffer, 1, STAT.st_size, Handle);
 
 	fclose(Handle);
 	free(Buffer);
-	
+
 	return TRUE;
 }
 #endif
@@ -368,7 +368,7 @@ VOID MonitorThread(int x)
 {
 	// Thread to detect stuck semaphore
 
-	do 
+	do
 	{
 		if (Semaphore.Gets == LastSemGets && Semaphore.Flag)
 		{
@@ -376,7 +376,7 @@ VOID MonitorThread(int x)
 
 			Debugprintf ("Semaphore locked - Process ID = %d, Held By %d",
 				Semaphore.SemProcessID, SemHeldByAPI);
-				
+
 			Semaphore.Flag = 0;
 		}
 
@@ -465,10 +465,10 @@ int main(int argc, char * argv[])
 #ifdef WIN32
 
 	WSADATA       WsaData;            // receives data from WSAStartup
-	HWND hWnd = GetForegroundWindow();	
-	
+	HWND hWnd = GetForegroundWindow();
+
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
-	SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE); 
+	SetConsoleCtrlHandler((PHANDLER_ROUTINE)CtrlHandler, TRUE);
 
 	// disable the [x] button.
 
@@ -507,7 +507,7 @@ int main(int argc, char * argv[])
 	// Make sure logs directory exists
 
 	sprintf(LogDir, "%s/logs", BPQDirectory);
-	
+
 #ifdef WIN32
 	CreateDirectory(LogDir, NULL);
 #else
@@ -520,7 +520,7 @@ int main(int argc, char * argv[])
 			WritetoConsoleLocal("Configuration File Error\n");
 			return (0);
 	}
-				 
+
 #ifdef MACBPQ
 	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for MAC (", TextVerstring);
 #else
@@ -535,7 +535,7 @@ int main(int argc, char * argv[])
 		return (0);
 	}
 
-	for (i=0;PWTEXT[i] > 0x20;i++); //Scan for cr or null 
+	for (i=0;PWTEXT[i] > 0x20;i++); //Scan for cr or null
 
 	PWLEN=i;
 
@@ -655,9 +655,9 @@ int main(int argc, char * argv[])
 	// See if we need to warn of possible problem with BaseDir moved by installer
 
 	sprintf(BaseDir, "%s", BPQDirectory);
-	
+
 	// Set up file and directory names
-		
+
 	strcpy(UserDatabasePath, BaseDir);
 	strcat(UserDatabasePath, "/");
 	strcat(UserDatabasePath, UserDatabaseName);
@@ -692,7 +692,7 @@ int main(int argc, char * argv[])
 	// Make backup copies of Databases
 
 	CopyConfigFile(ConfigName);
-	
+
 	CopyBIDDatabase();
 	CopyMessageDatabase();
 	CopyUserDatabase();
@@ -710,7 +710,7 @@ int main(int argc, char * argv[])
 	// Make sure there is a user record for the BBS, with BBS bit set.
 
 	user = LookupCall(BBSName);
-		
+
 	if (user == NULL)
 	{
 		user = AllocateUserRecord(BBSName);
@@ -758,7 +758,7 @@ int main(int argc, char * argv[])
 
 	if (EnableUI || MailForInterval)
 		SetupUIInterface();
-	
+
 	if (MailForInterval)
 		_beginthread(SendMailForThread, 0, 0);
 
@@ -815,36 +815,36 @@ int main(int argc, char * argv[])
 		(argc > 3 && stricmp(argv[3], "daemon") == 0))
 	{
 		// Convert to daemon
-		
+
 		pid_t pid, sid;
-        
+
 	    /* Fork off the parent process */
 		pid = fork();
-	   
+
 		if (pid < 0)
 	        exit(EXIT_FAILURE);
-        
+
 		if (pid > 0)
 			exit(EXIT_SUCCESS);
 
 		/* Change the file mode mask */
-        
-		umask(0);       
-        
+
+		umask(0);
+
 		/* Create a new SID for the child process */
-        
+
 		sid = setsid();
-        
+
 		if (sid < 0)
 			exit(EXIT_FAILURE);
-	    
+
 	    /* Change the current working directory */
-        
-		if ((chdir("/")) < 0)          
+
+		if ((chdir("/")) < 0)
 			exit(EXIT_FAILURE);
-		
+
 		/* Close out the standard file descriptors */
-    
+
 		printf("Entering daemon mode\n");
 
 		close(STDIN_FILENO);
@@ -865,17 +865,17 @@ int main(int argc, char * argv[])
 				CloseChat();
 				RunChat = FALSE;
 			}
-	
+
 			if (RunMail)
 			{
 				int BPQStream, n;
 
 				RunMail = FALSE;
-		
+
 				for (n = 0; n < NumberofStreams; n++)
 				{
 					BPQStream = Connections[n].BPQStream;
-		
+
 					if (BPQStream)
 					{
 						SetAppl(BPQStream, 0, 0);
@@ -890,7 +890,7 @@ int main(int argc, char * argv[])
 
 				SaveConfig(ConfigName);
 			}
-	
+
 			KEEPGOING--;					// Give time for links to close
 			setbuf(stdout, NULL);
 			printf("Closing... %d  \r", KEEPGOING);
@@ -907,7 +907,7 @@ int main(int argc, char * argv[])
 //			SetupBPQDirectory();
 
 			WritetoConsoleLocal("Reconfiguring ...\n\n");
-			OutputDebugString("BPQ32 Reconfiguring ...\n");	
+			OutputDebugString("BPQ32 Reconfiguring ...\n");
 
 
 			for (i=0;i<NUMBEROFPORTS;i++)
@@ -923,7 +923,7 @@ int main(int argc, char * argv[])
 					}
 				}
 				PORTVEC->PORTCONTROL.PORTCLOSECODE(&PORTVEC->PORTCONTROL);
-				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
+				PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
 			}
 
 			IPClose();
@@ -944,7 +944,7 @@ int main(int argc, char * argv[])
 			Start();
 
 			INITIALISEPORTS();
-	
+
 			SetApplPorts();
 
 			FreeConfig();
@@ -958,16 +958,16 @@ int main(int argc, char * argv[])
 				if (HOSTVEC->HOSTSESSION !=0)
 				{
 					// Had a connection
-					
+
 					HOSTVEC->HOSTSESSION=0;
 					HOSTVEC->HOSTFLAGS |=3;	// Disconnected
-					
+
 //					PostMessage(HOSTVEC->HOSTHANDLE, BPQMsg, i, 4);
 				}
 			}
 
 			OpenReportingSockets();
-		
+
 			WritetoConsoleLocal("\n\nReconfiguration Complete\n");
 
 			if (IPRequired)	IPActive = Init_IP();
@@ -989,15 +989,15 @@ int main(int argc, char * argv[])
 			FreeSemaphore(&Semaphore);
 			AGWActive = AGWAPIInit();
 			GetSemaphore(&Semaphore);
-			
-			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
+
+			OutputDebugString("BPQ32 Reconfiguration Complete\n");
 		}
 
 		if (IPActive) Poll_IP();
 		if (RigActive) Rig_Poll();
 		if (APRSActive) Poll_APRS();
 		CheckWL2KReportTimer();
-		
+
 		TIMERINTERRUPT();
 
 		FreeSemaphore(&Semaphore);
@@ -1011,9 +1011,9 @@ int main(int argc, char * argv[])
 		HTTPTimer();
 
 		if (ReportTimer)
-		{		
+		{
 			ReportTimer--;
-	
+
 			if (ReportTimer == 0)
 			{
 				ReportTimer = REPORTINTERVAL;
@@ -1022,12 +1022,12 @@ int main(int argc, char * argv[])
 		}
 
 		Slowtimer++;
-	
+
 		if (RunChat)
 		{
 			ChatPollStreams();
 			ChatTrytoSend();
-	
+
 			if (Slowtimer > 100)		// 10 secs
 			{
 				ChatTimer();
@@ -1045,14 +1045,14 @@ int main(int argc, char * argv[])
 
 				TCPTimer();
 				FWDTimerProc();
-			
+
 				if (MaintClock < NOW)
-				{				
-					MaintClock += 86400;					
+				{
+					MaintClock += 86400;
 					Debugprintf("|Enter HouseKeeping");
 					DoHouseKeeping(FALSE);
 				}
-				tm = gmtime(&NOW);	
+				tm = gmtime(&NOW);
 
 				if (tm->tm_wday == 0)		// Sunday
 				{
@@ -1091,7 +1091,7 @@ int main(int argc, char * argv[])
 				PORTVEC->PORT_EXT_ADDR(5, PORTVEC->PORTCONTROL.PORTNUMBER, NULL);
 			}
 		}
-		PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;		
+		PORTVEC=(PEXTPORTDATA)PORTVEC->PORTCONTROL.PORTPOINTER;
 	}
 
 	if (AUTOSAVE)
@@ -1136,7 +1136,7 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	// Only works with built in drivers
 
 	UCHAR Value[20];
-	
+
 	strcpy(Value,PORTVEC->PORT_DLL_NAME);
 
 	_strupr(Value);
@@ -1162,7 +1162,7 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "V4"))
 		return (UINT) V4ExtInit;
-	
+
 	if (strstr(Value, "SOUNDMODEM"))
 		return (UINT) SoundModemExtInit;
 
@@ -1212,12 +1212,12 @@ int APIENTRY Reboot()
 
 
 	SInfo.cb=sizeof(SInfo);
-	SInfo.lpReserved=NULL; 
-	SInfo.lpDesktop=NULL; 
-	SInfo.lpTitle=NULL; 
-	SInfo.dwFlags=0; 
-	SInfo.cbReserved2=0; 
-  	SInfo.lpReserved2=NULL; 
+	SInfo.lpReserved=NULL;
+	SInfo.lpDesktop=NULL;
+	SInfo.lpTitle=NULL;
+	SInfo.dwFlags=0;
+	SInfo.cbReserved2=0;
+  	SInfo.lpReserved2=NULL;
 
 	return CreateProcess(NULL, Cmd, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo);
 #endif
@@ -1232,7 +1232,7 @@ int APIENTRY Reconfig()
 	}
 	SaveNodes();
 	WritetoConsoleLocal("Nodes Saved\n");
-	ReconfigFlag=TRUE;	
+	ReconfigFlag=TRUE;
 	WritetoConsoleLocal("Reconfig requested ... Waiting for Timer Poll\n");
 	return 1;
 }
@@ -1248,46 +1248,34 @@ struct TNCINFO * TNC;
 #include <time.h>
 #include <sys/time.h>
 
-int GetTickCount()
-{
-  //  struct timespec start;
- 
-//    if (clock_gettime(CLOCK_REALTIME, &start) == -1 ) {
- //     perror( "clock gettime" );
-  //    return 0;
-   // }
-
-//	return (start.tv_sec * 1000 + start.tv_nsec /1000000);
-
-
-
 #ifdef __MACH__
-#include <mach/clock.h>
-#include <mach/mach.h>
-#endif
 
+#include <mach/mach_time.h>
 
+#define CLOCK_REALTIME 0
+#define CLOCK_MONOTONIC 0
 
-struct timespec ts;
-
-#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
-clock_serv_t cclock;
-mach_timespec_t mts;
-host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-clock_get_time(cclock, &mts);
-mach_port_deallocate(mach_task_self(), cclock);
-ts.tv_sec = mts.tv_sec;
-ts.tv_nsec = mts.tv_nsec;
-
-#else
-clock_gettime(CLOCK_REALTIME, &ts);
-
-#endif
-
-return (ts.tv_sec * 1000 + ts.tv_nsec /1000000);
-
+int clock_gettime(int clk_id, struct timespec *t){
+    mach_timebase_info_data_t timebase;
+    mach_timebase_info(&timebase);
+    uint64_t time;
+    time = mach_absolute_time();
+    double nseconds = ((double)time * (double)timebase.numer)/((double)timebase.denom);
+    double seconds = ((double)time * (double)timebase.numer)/((double)timebase.denom * 1e9);
+    t->tv_sec = seconds;
+    t->tv_nsec = nseconds;
+    return 0;
 }
 #endif
+
+int GetTickCount()
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+#endif
+
 
 BOOL MySetWindowText(HWND hWnd, char * lpString)
 {
@@ -1312,7 +1300,7 @@ COLORREF Colours[256] = {0,
 		RGB(0,192,0), RGB(0,192,128), RGB(0,192,192), RGB(0,192,255),		// 13 - 16
 		RGB(0,255,0), RGB(0,255,128), RGB(0,255,192), RGB(0,255,255),		// 17 - 20
 
-		RGB(6425,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 21 
+		RGB(6425,0,0), RGB(64,0,128), RGB(64,0,192), RGB(0,0,255),				// 21
 		RGB(64,64,0), RGB(64,64,128), RGB(64,64,192), RGB(64,64,255),
 		RGB(64,128,0), RGB(64,128,128), RGB(64,128,192), RGB(64,128,255),
 		RGB(64,192,0), RGB(64,192,128), RGB(64,192,192), RGB(64,192,255),
@@ -1353,15 +1341,15 @@ int PollStreams()
 	for (n = 0; n < NumberofStreams; n++)
 	{
   		conn = &Connections[n];
-		
+
 		DoReceivedData(conn->BPQStream);
 		DoBBSMonitorData(conn->BPQStream);
 
 		SessionState(conn->BPQStream, &state, &change);
-		
+
 		if (change == 1)
 		{
-			if (state == 1) // Connected	
+			if (state == 1) // Connected
 			{
 				GetSemaphore(&ConSemaphore);
 				Connected(conn->BPQStream);
@@ -1375,7 +1363,7 @@ int PollStreams()
 			}
 		}
 	}
-	
+
 	return 0;
 }
 
