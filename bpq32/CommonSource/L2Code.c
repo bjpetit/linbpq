@@ -2764,7 +2764,21 @@ VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall, int 
 		}
 	
 		if (PORT->DIGIMASK == 0)
+		{
+			if (PORT->DIGIPORT)					// Cross Band Digi?
+			{
+				Buffer->PORT = PORT->DIGIPORT;	// update port no in header
+
+				PORT = GetPortTableEntryFromPortNum(PORT->DIGIPORT);
+
+				if (PORT == NULL)
+				{
+					ReleaseBuffer(Buffer);
+					return;
+				}
+			}
 			PUT_ON_PORT_Q(PORT, Buffer);
+		}
 		else
 		{
 			DigiToMultiplePorts(PORT, Buffer);

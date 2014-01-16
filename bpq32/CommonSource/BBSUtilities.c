@@ -1135,7 +1135,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 	else
 		ExpandAndSendMessage(conn, WelcomeMsg, LOG_BBS);
 
-	if (user->HomeBBS[0] == 0)
+	if (user->HomeBBS[0] == 0 && NeedHomeBBS)
 		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");
 
 //	if (user->flags & F_Temp_B2_BBS)
@@ -7630,9 +7630,14 @@ int DoReceivedData(int Stream)
 				}
 
 				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
+				
+				if (ptr == NULL)
+					ptr = memchr(conn->InputBuffer, '\n', conn->InputLen);	// Also accept LF
 
 				if (ptr)	//  CR in buffer
 				{
+					*(ptr) = '\r';		// In case was LF
+
 					user = conn->UserPointer;
 				
 					ptr2 = &conn->InputBuffer[conn->InputLen];

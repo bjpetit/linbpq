@@ -585,10 +585,12 @@
 //  Add Locked ARP Entries (via bpq32.cfg)
 //	Fix IDLETIME node command
 //	Fix STAY param on connect
-//	Add STAY option to Application Commands
-//	Add STAY command
+//	Add STAY option to Attach and Application Commands
 //	Fix crash on copying a large AXIP MH Window
 //	Fix possible crash when bpq32.exe dies
+//	Fix DIGIPORT for UI frames
+
+// FLDigi Interface
 
 #define CKernel
 
@@ -669,6 +671,7 @@ UINT TrackerMExtInit(EXTPORTDATA * PortEntry);
 UINT V4ExtInit(EXTPORTDATA * PortEntry);
 UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT MPSKExtInit(EXTPORTDATA * PortEntry);
+UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
@@ -3035,6 +3038,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "MULTIPSK"))
 		return (UINT) MPSKExtInit;
+
+	if (strstr(Value, "FLDIGI"))
+		return (UINT) FLDigiExtInit;
 
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;

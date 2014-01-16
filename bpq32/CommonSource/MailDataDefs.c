@@ -150,6 +150,8 @@ BOOL SendBBStoSYSOPCall = FALSE;
 BOOL DontHoldNewUsers = FALSE;
 BOOL ForwardToMe = FALSE;
 
+BOOL NeedHomeBBS = TRUE;
+
 // Send WP Params
 
 BOOL SendWP;

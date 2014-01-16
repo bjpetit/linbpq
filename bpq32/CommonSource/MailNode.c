@@ -578,7 +578,7 @@ int main(int argc, char * argv[])
 	{
 		RunChat = IncludesChat = TRUE;
 
-		printf("Starting Chat\n", BPQDirectory);
+		printf("Starting Chat\n");
 
 		sprintf (ChatConfigName, "%s/chatconfig.cfg", BPQDirectory);
 		printf("Config File is %s\n", ChatConfigName);
@@ -791,12 +791,14 @@ int main(int argc, char * argv[])
 			}
 		}
 
-		if ((argc > 1 && _stricmp(argv[1], "tidymail") == 0) ||
-			(argc > 2 && _stricmp(argv[2], "tidymail") == 0) ||
-			(argc > 3 && _stricmp(argv[3], "tidymail") == 0) ||
-			(argc > 4 && _stricmp(argv[4], "tidymail") == 0))
+		for (i = 1; i < argc; i++)
+		{
+			if (_stricmp(argv[i], "tidymail") == 0)
+				DeleteRedundantMessages();
 
-			DeleteRedundantMessages();
+			if (_stricmp(argv[i], "nohomebbs") == 0)
+				NeedHomeBBS = FALSE;
+		}
 
 		printf("Mail Started\n");
 

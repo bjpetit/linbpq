@@ -1380,3 +1380,5 @@ extern BOOL WarnNoRoute;
 extern BOOL Localtime;
 
 struct ConsoleInfo * ConsHeader[2];
+
+extern BOOL NeedHomeBBS;

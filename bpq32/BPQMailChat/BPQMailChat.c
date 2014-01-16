@@ -808,10 +808,9 @@
 //	Allow lower case connect scripts
 //  Fix POP3 LIST command
 //	Fix MIME Multipart Alternate with first part Base64 or Quoted Printable encoding
-
-
-
-
+//	Fix duplicates of SP SYSOP@WW Messages
+//	Add command line option (tidymail) to delete redundant Mail files
+//	Add command line option (nohomebbs) to suppress HomeBBS prompt
 
 
 
@@ -946,6 +945,8 @@ char * ExpertWelcomeMsg = NULL;
 char * Prompt = NULL;
 char * NewPrompt = NULL;
 char * ExpertPrompt = NULL;
+
+BOOL NeedHomeBBS = TRUE;
 
 char BBSName[100];
 char MailForText[100];
@@ -2787,6 +2788,9 @@ BOOL Initialise()
 
 	if (strstr(CmdLine, "tidymail"))
 		DeleteRedundantMessages();
+
+	if (strstr(CmdLine, "nohomebbs"))
+		NeedHomeBBS = FALSE;
 
 	CheckMenuItem(hMenu,IDM_LOGBBS, (LogBBS) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_LOGTCP, (LogTCP) ? MF_CHECKED : MF_UNCHECKED);

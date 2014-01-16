@@ -221,9 +221,55 @@ typedef struct AGWINFO
 	int PollDelay;
 } *PAGWINFO;
 
+typedef struct ARQINFO
+{
+	// Fields for FLDIGI/FLARQ Ports
+
+	// Max window is 64, though often will use less
+
+	UINT * TXHOLDQ[64];			// Frames waiting ACK
+	UINT * RXHOLDQ[64];			// Frames waiting missing frames.
+
+	int TXWindow;
+	int RXWindow;
+
+	int	TXSeq;
+	int TXLastACK;				// Last frame ACK'ed
+
+	int RXHighest;
+	int RXNext;
+	int RXNoGaps;
+
+	int Retries;
+	int ARQTimer;
+	int ARQState;
+
+#define ARQ_CONNECTING 1
+#define ARQ_CONNECTED 2
+#define ARQ_DISC 3
+#define ARQ_WAITACK 4
+#define ARQ_WAITDATA 5			// Waiting for more data before polling
+
+	char LastMsg[80];			// Last message sent that expects an ack
+	int LastLen;
+
+} *ARQINFO;
+
+typedef struct FLINFO
+{
+	// Fields for MPSK  Session Ports )
+
+	BOOL TX;						// Set when FLDigi is transmitting
+	char DefaultMode[20];			// Mode to return to after session
+	BOOL Beacon;					// Use ALE Beacons
+	char LastXML[32];				// Last XML Request Sent
+	int XMLControl;					// Controlls polling FLDigi by XML
+
+} *FLINFO;
+
 typedef struct MPSKINFO
 {
-	// Fields for AGW Session based Ports (eg UZ7HO Modem)
+	// Fields for MPSK  Session Ports )
 
 	int ConnTimeOut;
 	BOOL TX;						// Set when Multipsk is transmitting
@@ -261,6 +307,8 @@ typedef struct TNCINFO
 #define H_V4 8
 #define H_UZ7HO 9
 #define H_MPSK 10
+#define H_FLDIGI 11
+
 
 	int Port;					// BPQ Port Number
 
@@ -457,7 +505,10 @@ typedef struct TNCINFO
 		struct TCPINFO * TCPInfo;		// Telnet Server Specific Data
 		struct AGWINFO * AGWInfo;		// AGW Stream Mode Specific Data
 		struct MPSKINFO * MPSKInfo;		// MPSK Stream Mode Specific Data
+		struct FLINFO * FLInfo;			// FLDIGI Stream Mode Specific Data
 	};
+
+	struct ARQINFO * ARQInfo;	// FLDIGI/FLARQ Stream Mode Specific Data
 
 	BOOL DataBusy;					// Waiting for Data Ack - Don't send any more data
 	BOOL CommandBusy;				// Waiting for Command ACK
@@ -487,6 +538,7 @@ typedef struct TNCINFO
 	BOOL CmdEsc;						// Set if last char rxed was 0x80
 	BOOL DataEsc;					// Set if last char rxed was 0x81
 	int PollDelay;					// Don't poll too often;
+	int InPacket;					// FLDigi - SOH received.
 
 	int DataMode;					// How to treat data 
 
@@ -544,6 +596,8 @@ typedef struct TNCINFO
 
 	time_t WinmorRestartCodecTimer;
 	int WinmorCurrentMode;
+
+	int SlowTimer;
 
 
 } *PTNCINFO;

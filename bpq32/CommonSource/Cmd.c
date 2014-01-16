@@ -530,14 +530,6 @@ BOOL cATTACHTOBBS(TRANSPORTENTRY * Session, UINT Mask, int Paclen, int * AnySess
 	return FALSE;
 }
 
-
-VOID CMDSTAY(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
-{
-	Session->STAYFLAG = TRUE;
-	Bufferptr += sprintf(Bufferptr, "Ok\r");
-	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
-}
-
 VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {		
 	BOOL CONFAILED = 0;
@@ -3125,6 +3117,12 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 	ptr = strtok_s(NULL, " ", &Context);
 
+	if (ptr && strcmp(ptr, "S") == 0)
+	{
+		Session->STAYFLAG = TRUE;
+		ptr = strtok_s(NULL, " ", &Context);
+	}
+
 	if (ptr)
 	{
 		// we have another param
@@ -3152,6 +3150,12 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 			}
 
 			ptr = strtok_s(NULL, " ", &Context);
+
+			if (ptr && strcmp(ptr, "S") == 0)
+			{
+				Session->STAYFLAG = TRUE;
+				ptr = strtok_s(NULL, " ", &Context);
+			}
 		}
 	}
 
@@ -3236,7 +3240,13 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 		while (ptr)				// if any other params (such as digis) copy them
 		{
-		len += sprintf(&Callstring[len], " %s", ptr);
+			if (strcmp(ptr, "S") == 0)
+			{
+				Session->STAYFLAG = TRUE;
+			}
+			else
+				len += sprintf(&Callstring[len], " %s", ptr);
+			
 			ptr = strtok_s(NULL, " ", &Context);
 		}
 	
@@ -3360,7 +3370,6 @@ CMDX COMMANDS[] =
 	"IDLETIME    ",4,CMDIDLE,0,
 	"ROUTES      ",1,CMDR00,0,
 	"STATS       ",1,CMDSTATS,0,
-	"STAY        ",4,CMDSTAY,0,
 	"USERS       ",1,CMDS00,0,
 	"UNPROTO     ",2,UNPROTOCMD,0,
 	"?           ",1,CMDQUERY,0,
@@ -3462,7 +3471,7 @@ VOID CommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 
 	if (Buffer->LENGTH > 100)
 	{
-		Debugprintf("BPQ32 command too long %s", Buffer->L2DATA);
+//		Debugprintf("BPQ32 command too long %s", Buffer->L2DATA);
 		ReleaseBuffer(Buffer);
 		return;
 	}
