@@ -9,6 +9,7 @@
 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 #include "winsock2.h"
+#include "ws2tcpip.h"
 
 #endif
 
@@ -507,6 +508,10 @@ typedef struct PORTCONTROL
 	UCHAR PORTCALL[7];
 	UCHAR PORTALIAS[7];		//USED FOR UPLINKS ONLY
 	char PORTNUMBER;
+	char PROTOCOL;	// PORT PROTOCOL
+					// 0 = KISS, 2 = NETROM, 4 = BPQKISS
+					//; 6 = HDLC, 8 = L2
+
 	struct PORTCONTROL * PORTPOINTER; // NEXT IN CHAIN
 
 	UCHAR PORTQUALITY;		// 'STANDARD' QUALITY FOR THIS PORT
@@ -565,9 +570,6 @@ typedef struct PORTCONTROL
 					// 6 = TOSH, 8 = QUAD, 10 = RLC100
 					// 12 = RLC400 14 = INTERNAL 16 = EXTERNAL
 
-	char PROTOCOL;	// PORT PROTOCOL
-					// 0 = KISS, 2 = NETROM, 4 = BPQKISS
-					//; 6 = HDLC, 8 = L2
 
 	USHORT IOBASE;		// CONFIG PARAMS FOR HARDWARE DRIVERS 
 
@@ -599,7 +601,7 @@ typedef struct PORTCONTROL
 	UCHAR DIGIPORT;			// CROSSBAND DIGI PORT
 	USHORT DIGIMASK;			// CROSSBAND DIGI MASK
 	UCHAR USERS;			// MAX USERS ON PORT
-	UCHAR KISSFLAGS;		// KISS SPECIAL MODE BITS
+	USHORT KISSFLAGS;		// KISS SPECIAL MODE BITS
 	UCHAR PORTINTERLOCK;	// TO DEFINE PORTS WHICH CANT TX AT SAME TIME
 	UCHAR NODESPACLEN;		// MAX LENGTH OF 'NODES' MSG 
 	UCHAR TXPORT;			// PORT FOR SHARED TX OPERATION
@@ -614,7 +616,8 @@ typedef struct PORTCONTROL
 	char UICAPABLE;			// Pactor-style port that can do UI
 
 	struct WL2KInfo WL2KInfo; // WL2K Report for this Port
-	struct in_addr PORTIPADDR;		// IP address for "KISS over UDP"
+	struct in_addr PORTIPADDR;	// IP address for "KISS over UDP"
+	int	ListenPort;				// For KISS over UDP, if Different TX and RX Ports needed
 
 	char * SerialPortName;	//	Serial Port Name for Unix
 	struct XDIGI * XDIGIS;			// Cross port digi setup
@@ -682,6 +685,7 @@ typedef struct _EXTPORTDATA
 #define CONLOCK 2
 
 	UINT UI_Q;						// Unproto Frames for Session Mode Drivers (TRK, etc)
+	int	FramesQueued;				// TX Frames queued in Driver
 
 } EXTPORTDATA, *PEXTPORTDATA;
 
@@ -880,6 +884,20 @@ typedef struct _TCPMSG
 
 } TCPMSG, *PTCPMSG;
 
+typedef struct _UDPMSG
+{
+
+//	FORMAT OF UDP HEADER WITHIN AN IP DATAGRAM
+
+//	NOTE THESE FIELDS ARE STORED HI ORDER BYTE FIRST (NOT NORMAL 8086 FORMAT)
+
+	USHORT	SOURCEPORT;
+	USHORT	DESTPORT;
+	USHORT	LENGTH;
+	USHORT	CHECKSUM;
+	UCHAR	UDPData[0];
+
+} UDPMSG, *PUDPMSG;
 
 //		ICMP MESSAGE STRUCTURE
 
@@ -1064,9 +1082,144 @@ struct TNCDATA
 #define KANTRONICS 2		// For future use
 #define SCS 3
 
+#pragma pack(1) 
+
+#define MAX_ENTRIES 128
+#define MaxMHEntries 50
+#define MAX_BROADCASTS 8
+#define MAXUDPPORTS 30 
+
+#ifndef MAXGETHOSTSTRUCT
+#define MAXGETHOSTSTRUCT        1024
+#endif
+
+
+struct arp_table_entry
+{
+	unsigned char callsign[7];
+	unsigned char len;			// bytes to compare (6 or 7)
+	BOOL IPv6;
+
+//	union
+//	{
+//		struct in_addr in_addr;
+//		unsigned int ipaddr;
+//		struct in6_addr in6_addr;
+//	};
+
+	unsigned short port;
+	unsigned char hostname[64];
+	unsigned int error;
+	BOOL ResolveFlag;			// True if need to resolve name
+	unsigned int keepalive;
+	unsigned int keepaliveinit;
+	BOOL BCFlag;				// True if we want broadcasts to got to this call
+	BOOL AutoAdded;				// Set if Entry created as a result of AUTOADDMAP
+	SOCKET TCPListenSock;			// Listening socket if slave
+	SOCKET TCPSock;
+	int  TCPMode;				// TCPMaster ot TCPSlave
+	UCHAR * TCPBuffer;			// Area for building TCP message from byte stream
+	int InputLen;				// Bytes in TCPBuffer
+
+	union
+	{
+		struct sockaddr_in6 destaddr6;  
+		struct sockaddr_in destaddr;
+	};
+
+	BOOL TCPState;
+	UINT TCPThreadID;			// Thread ID if TCP Master
+	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
+	int SourceSocket;			// The socket to use (sets the from Address
+	struct AXIPPORTINFO * PORT;
+};
+
+
+struct broadcast_table_entry
+{
+	unsigned char callsign[7];
+	unsigned char len;			// bytes to compare (6 or 7)
+};
+
+
+struct MHTableEntry
+{
+	unsigned char callsign[7];
+	char proto;
+	short port;
+	union
+	{
+		struct in_addr ipaddr;
+		struct in6_addr ipaddr6;
+	};
+	time_t	LastHeard;		// Time last packet received
+	int Keepalive;
+	BOOL IPv6;
+};
+
+
+struct AXIPPORTINFO
+{
+	int Port;
+
+	struct MHTableEntry MHTable[MaxMHEntries];
+	struct broadcast_table_entry BroadcastAddresses[MAX_BROADCASTS];
+
+	int NumberofBroadcastAddreses;
+	BOOL Checkifcanreply;
+	
+	int arp_table_len;
+	int ResolveIndex;			// pointer to entry being resolved
+
+	struct arp_table_entry arp_table[MAX_ENTRIES];
+
+	struct arp_table_entry default_arp;
+
+	BOOL MHEnabled;
+	BOOL MHAvailable;			// Enabled with config file directive
+
+	BOOL AutoAddARP;
+
+	unsigned char  hostaddr[64];
+
+	HWND hResWnd, hMHWnd, ConfigWnd;
+
+	BOOL GotMsg;
+
+	int udpport[MAXUDPPORTS+2];
+	BOOL IPv6[MAXUDPPORTS+2];
+
+	int NumberofUDPPorts;
+
+	BOOL needip;
+	BOOL NeedResolver;
+	BOOL NeedTCP;
+
+	SOCKET sock;						// IP 93 Sock
+	SOCKET udpsock[MAXUDPPORTS+2];
+
+	time_t ltime,lasttime;
+	int baseline;
+
+	char buf[MAXGETHOSTSTRUCT];
+
+	int MaxMHWindowlength;
+	int MaxResWindowlength;
+
+	BOOL ResMinimized;
+	BOOL MHMinimized;
+
+	HMENU hResMenu;
+	HMENU hMHMenu;
+
+};
+
+#pragma pack()
+
+#define Disconnect(stream) SessionControl(stream,2,0)
+#define Connect(stream) SessionControl(stream,1,0)
+
 #endif
 
 
 
-#define Disconnect(stream) SessionControl(stream,2,0)
-#define Connect(stream) SessionControl(stream,1,0)

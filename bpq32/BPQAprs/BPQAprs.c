@@ -48,8 +48,14 @@
 // Jan 2014
 // Add WX decode to station popup
 
+// Feb 2014
+// Most processing is now in bpq32.dll (Decode, Station storage and Web interface)
+// Only GUI and messaging are handled here.
 
+ 
 #define _CRT_SECURE_NO_DEPRECATE 
+#define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
+
 #define _WIN32_WINNT 0x0501	
 
 #define MARGIN 0
@@ -336,7 +342,7 @@ int PopupX, PopupY;
 
 HINSTANCE hInst; 
 HWND hMapWnd, hPopupWnd, hSelWnd, hStatus, hwndDlg, hwndDisplay;
-HWND hMsgsIn, hStnDlg, hStations, hMsgDlg, hMsgsOut, hInput, hToCall, hToLabel, hTextLabel;
+HWND hMsgsIn, hStnDlg, hStations, hMsgDlg, hMsgsOut, hInput, hToCall, hToLabel, hTextLabel, hPathLabel, hPath;
 WNDPROC wpOrigInputProc; 
 
 BOOL MsgMinimized;
@@ -354,8 +360,9 @@ BOOL ImageChanged;
 BOOL NeedRefresh = FALSE;
 time_t LastRefresh = 0;
 
+HANDLE hMapFile;
 
-struct STATIONRECORD * StationRecords = NULL;
+struct STATIONRECORD ** StationRecords = NULL;
 struct APRSMESSAGE * Messages = NULL;
 struct APRSMESSAGE * OutstandingMsgs = NULL;
 
@@ -365,7 +372,7 @@ int OSMQueueCount;
 
 Dll VOID APIENTRY APRSConnect(char * Call, char * Filter);
 Dll VOID APIENTRY APRSDisconnect();
-Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port);
+Dll BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call);
 Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
 Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 Dll BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
@@ -807,6 +814,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
 
+	CloseHandle(hMapFile);
+
 	return (Msg.wParam);
 }
 
@@ -892,6 +901,8 @@ VOID GetStringVal(HKEY hKey, char * Key, char ** Val)
 		retCode = RegQueryValueEx(hKey, Key, 0, &Type, *Val, &Vallen);
 	}
 }
+
+int MaxStations = 5000;
 	
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -901,6 +912,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	char FN[MAX_PATH];
 	HWND hWnd;
 	char * ptr;
+	char Error[80];
 
 	BOOL bcopt=TRUE;
 	u_long param=1;
@@ -908,6 +920,43 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	int ImgSizeX, ImgSizeY, ImgChannels;
 	png_color bgColor;
 	UCHAR * BPQDirectory = GetBPQDirectory();
+
+	UCHAR * APRSStationMemory;
+
+	//	Get pointer to Station Table in BPQ32.dll
+
+	hMapFile = CreateFileMapping(
+                 INVALID_HANDLE_VALUE,    // use paging file
+                 NULL,                    // default security
+                 PAGE_READWRITE,          // read/write access
+                 0,                       // maximum object size (high-order DWORD)
+                 sizeof(struct STATIONRECORD) * (MaxStations + 1), // maximum object size (low-order DWORD)
+                 "BPQAPRSStationsMappingObject");                 // name of mapping object
+
+	if (hMapFile == NULL)
+	{
+		sprintf(Error, "Could not create file mapping object (%d).\n", GetLastError());
+		MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
+
+		return FALSE;
+	
+	}
+	APRSStationMemory = (LPTSTR) MapViewOfFileEx(hMapFile,   // handle to map object
+                        FILE_MAP_ALL_ACCESS, // read/write permission
+                        0,
+                        0,
+                        0,//sizeof(struct STATIONRECORD) * MaxStations,
+						(LPVOID)0x43000000);
+
+	if (APRSStationMemory == NULL)
+	{
+		sprintf(Error, "Could not map view of file (%d).\n", GetLastError());
+		MessageBox(NULL, "Error", "BPQAPRS", MB_ICONERROR);
+		CloseHandle(hMapFile);
+		return FALSE;
+	}
+
+	StationRecords = (struct STATIONRECORD**)APRSStationMemory;
 
 	REGTREE = GetRegistryKey();
 	MinimizetoTray = GetMinimizetoTrayFlag();
@@ -1030,8 +1079,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "ExpireTime", 0, &Type,(UCHAR *)&ExpireTime, &Vallen);
 
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "TrackExpireTime", 0, &Type,(UCHAR *)&TrackExpireTime, &Vallen);
+//		Vallen=4;
+//		retCode = RegQueryValueEx(hKey, "TrackExpireTime", 0, &Type,(UCHAR *)&TrackExpireTime, &Vallen);
 
 		Vallen=250;
 		retCode = RegQueryValueEx(hKey, "WXFile", 0, &Type, WXFileName, &Vallen);
@@ -1134,6 +1183,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	SetTimer(hWnd, 2, 100, NULL);		// Fast Timer
 
 	SetWindowText(hWnd,szTitle);
+
+	Sleep(3000);
 
 	APRSConnect(APRSCall, ISFilter);					// Request frames from switch
 
@@ -1406,7 +1457,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			RetryCount = GetDlgItemInt(hDlg, IDC_RETRIES, &OK, FALSE);
 			RetryTimer = GetDlgItemInt(hDlg, IDC_RETRYTIME, &OK, FALSE);
 			ExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRE, &OK, FALSE);
-			TrackExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRETRACKS, &OK, FALSE);
+//			TrackExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRETRACKS, &OK, FALSE);
 			WXInterval = GetDlgItemInt(hDlg, IDC_WXINTERVAL, &OK, FALSE);
 
 			JPEGInterval = GetDlgItemInt(hDlg, IDC_JPEGINTERVAL, &OK, FALSE);
@@ -2023,9 +2074,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			{
 				LoadImageSet(Zoom, SetBaseX, SetBaseY);
 				
-				EnterCriticalSection(&RefreshCrit);
+//				EnterCriticalSection(&RefreshCrit);
 				RefreshStationMap();
-				LeaveCriticalSection(&RefreshCrit);
+//				LeaveCriticalSection(&RefreshCrit);
 
 				ReloadMaps = FALSE;
 			}
@@ -2134,7 +2185,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 						SendMessage(hSelWnd, LB_GETTEXT, Index, (LPARAM)Key); 
 						Station = FindStation(Key, Key, TRUE);
-								
+
+						if (Station == NULL)
+							return TRUE;
+
 						DestroyWindow(hSelWnd);
 						hSelWnd = 0;
 
@@ -2195,7 +2249,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			case IDM_HOME:
 
-				Station = StationRecords;
+				Station = *StationRecords;
 
 				while(Station)
 				{ 
@@ -2714,10 +2768,12 @@ subitem and return CDRF_NEWFONT.*/
 	
 			MoveWindow(hMsgsIn, 0, 30, rcClient.right, (rcClient.bottom)/2 - 40, TRUE);
 			MoveWindow(hMsgsOut, 0, (rcClient.bottom)/2, rcClient.right, (rcClient.bottom)/2 - 60, TRUE);
-			MoveWindow(hInput, 200, rcClient.bottom - 35 , 550, 20, TRUE);
+			MoveWindow(hInput, 200, rcClient.bottom - 35 , 500, 20, TRUE);
 			MoveWindow(hToLabel, 9, rcClient.bottom - 33 , 23, 18, TRUE);
 			MoveWindow(hToCall, 40, rcClient.bottom - 35 , 120, 20, TRUE);
 			MoveWindow(hTextLabel, 163, rcClient.bottom - 33 , 33, 18, TRUE);
+			MoveWindow(hPathLabel, 710, rcClient.bottom - 33 , 33, 18, TRUE);
+			MoveWindow(hPath, 750, rcClient.bottom - 33 , 150, 18, TRUE);
 
 			break;
 				
@@ -4043,7 +4099,7 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int X, int Y)
 VOID FindStationsByPixel(int MouseX, int MouseY)
 {
 	int j=0;
-	struct STATIONRECORD * ptr = StationRecords;
+	struct STATIONRECORD * ptr = *StationRecords;
 	struct STATIONRECORD * List[1000];
 
 	while(ptr && j < 999)
@@ -4223,7 +4279,7 @@ void RefreshStation(struct STATIONRECORD * ptr)
 
 void RefreshStationList()
 {
-	struct STATIONRECORD * ptr = StationRecords;
+	struct STATIONRECORD * ptr = *StationRecords;
 	struct STATIONRECORD * last = NULL;
 	int i = 0;
 
@@ -4241,56 +4297,22 @@ void RefreshStationList()
 
 void RefreshStationMap()
 {
-	struct STATIONRECORD * ptr = StationRecords;
-	struct STATIONRECORD * last = NULL;
-	time_t AgeLimit = time(NULL ) - (ExpireTime * 60);
-	BOOL RecsDeleted = FALSE;
+	struct STATIONRECORD * ptr = *StationRecords;
+	
 	int i = 0;
 
 	while (ptr)
 	{
-		if (ptr->TimeLastUpdated < AgeLimit)
-		{
-			// Too old - remove
-
-//			Debugprintf("APRS Delete Stn %s", ptr->Callsign);
-
-
-			EnterCriticalSection(&Crit);		// In case list is being realloced
-			if (last)
-			{
-				last->Next = ptr->Next;
-				free(ptr);
-				ptr = last->Next;
-			}
-			else
-			{
-				// First in list
-				
-				StationRecords = ptr->Next;
-				free(ptr);
-				if (StationRecords)
-					ptr = StationRecords->Next; 
-				else
-					ptr = NULL;
-			}
-			LeaveCriticalSection(&Crit);
-			RecsDeleted = TRUE;
-		}
-		else
-		{
-			ptr->Moved = TRUE;				// Refreshing, so need to redraw all stations
-			DrawStation(ptr);
-			i++;
-			last = ptr;
-			ptr = ptr->Next;
-		}
+		ptr->Moved = TRUE;				// Refreshing, so need to redraw all stations
+		DrawStation(ptr);
+		i++;
+		ptr = ptr->Next;
 	}
 
 	NeedRefresh = FALSE;
 	LastRefresh = time(NULL);
 
-	if (RecsDeleted)
+//	if (RecsDeleted)
 		RefreshStationList();
 
 	StationCount = i;
@@ -4301,7 +4323,7 @@ void RefreshStationMap()
 struct STATIONRECORD * FindStation(char * ReportingCall, char * Call, BOOL AddIfNotFount)
 {
 	int i = 0;
-	struct STATIONRECORD * find = StationRecords;
+	struct STATIONRECORD * find = *StationRecords;
 	struct STATIONRECORD * ptr;
 	struct STATIONRECORD * last = NULL;
 	int sum = 0;
@@ -4318,6 +4340,10 @@ struct STATIONRECORD * FindStation(char * ReportingCall, char * Call, BOOL AddIf
  
 	//   Not found - add on end
 
+	//	Cant add, as table is in BPQ32.dll
+
+	return NULL;
+
 	if (AddIfNotFount)
 	{
 		ptr = malloc(sizeof(struct STATIONRECORD));
@@ -4327,8 +4353,8 @@ struct STATIONRECORD * FindStation(char * ReportingCall, char * Call, BOOL AddIf
 	
 		EnterCriticalSection(&Crit);
 
-		if (StationRecords == NULL)
-			StationRecords = ptr;
+		if (*StationRecords == NULL)
+			*StationRecords = ptr;
 		else
 			last->Next = ptr;
 
@@ -4354,649 +4380,6 @@ struct STATIONRECORD * FindStation(char * ReportingCall, char * Call, BOOL AddIf
 	}
 	else
 		return NULL;
-}
-
-VOID ProcessRFFrame(char * Msg, int len)
-{
-	char * Payload;
-	char * Path = NULL;
-	char * Comment = NULL;
-	char * Callsign;
-	char * ptr;
-	int Port = 0;
-
-	struct STATIONRECORD * Station;
-
-	Msg[len - 1] = 0;
-
-	Msg += 10;				// Skip Timestamp
-	
-	Payload = strchr(Msg, ':');			// End of Address String
-
-	if (Payload == NULL)
-	{
-		Debugprintf("Invalid Msg %s", Msg);
-		return;
-	}
-
-	ptr = strstr(Msg, "Port=");
-
-	if (ptr)
-		Port = atoi(&ptr[5]);
-
-	Payload++;
-
-	if (*Payload != 0x0d)
-		return;
-
-	*Payload++ = 0;
-
-	Callsign = Msg;
-
-	Path = strchr(Msg, '>');
-
-	if (Path == NULL)
-	{
-		Debugprintf("Invalid Meader %s", Msg);
-		return;
-	}
-
-	*Path++ = 0;
-
-	ptr = strchr(Path, ' ');
-
-	if (ptr)
-		*ptr = 0;
-
-	// Look up station - create a new one if not found
-
-	Station = FindStation(Callsign, Callsign, TRUE);
-	
-	strcpy(Station->Path, Path);
-	strcpy(Station->LastPacket, Payload);
-	Station->LastPort = Port;
-
-	DecodeAPRSPayload(Payload, Station);
-	Station->TimeLastUpdated = time(NULL);
-
-	DrawStation(Station);
-	RefreshStation(Station);
-
-}
-
-
-/*
-2E0AYY>APU25N,TCPIP*,qAC,AHUBSWE2:=5105.18N/00108.19E-Paul in Folkestone Kent {UIV32N}
-G0AVP-12>APT310,MB7UC*,WIDE3-2,qAR,G3PWJ:!5047.19N\00108.45Wk074/000/Paul mobile
-G0CJM-12>CQ,TCPIP*,qAC,AHUBSWE2:=/3&R<NDEp/  B>io94sg
-M0HFC>APRS,WIDE2-1,qAR,G0MNI:!5342.83N/00013.79W# Humber Fortress ARC Look us up on QRZ
-G8WVW-3>APTT4,WIDE1-1,WIDE2-1,qAS,G8WVW:T#063,123,036,000,000,000,00000000
-*/
-
-
-void DecodeAPRSISMsg(char * Msg)
-{
-	char * Payload;
-	char * Path = NULL;
-	char * Comment = NULL;
-	char * Callsign;
-	struct STATIONRECORD * Station;
-		
-	Payload = strchr(Msg, ':');			// End of Address String
-
-	if (Payload == NULL)
-	{
-		Debugprintf("Invalid Msg %s", Msg);
-		return;
-	}
-
-	*Payload++ = 0;
-
-	Callsign = Msg;
-
-	Path = strchr(Msg, '>');
-
-	if (Path == NULL)
-	{
-		Debugprintf("Invalid Meader %s", Msg);
-		return;
-	}
-
-	*Path++ = 0;
-
-	// Look up station - create a new one if not found
-
-	if (strlen(Callsign) > 11)
-	{
-		Debugprintf("Invalid Meader %s", Msg);
-		return;
-	}
-
-	Station = FindStation(Callsign, Callsign, TRUE);
-	
-	strcpy(Station->Path, Path);
-	strcpy(Station->LastPacket, Payload);
-	Station->LastPort = 0;
-
-	DecodeAPRSPayload(Payload, Station);
-	Station->TimeLastUpdated = time(NULL);
-
-	DrawStation(Station);
-	RefreshStation(Station);
-
-}
-
-double Cube91 = 91.0 * 91.0 * 91.0;
-double Square91 = 91.0 * 91.0;
-
-BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
-{
-	UCHAR SymChar;
-	char SymSet;
-	char NS;
-	char EW;
-	double NewLat, NewLon;
-	char LatDeg[3], LonDeg[4];
-	char save;
-
-	// Compressed has first character not a digit (it is symbol table)
-
-	// /YYYYXXXX$csT
-
-	if (Payload[0] == '!')
-		return FALSE;					// Ultimeter 2000 Weather Station
-
-	if (!isdigit(*Payload))
-	{
-		int C, S;
-		
-		SymSet = *Payload;
-		SymChar = Payload[9];
-
-		NewLat = 90.0 - ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
-			(Payload[3] - 33) * 91.0 + (Payload[4] - 33)) / 380926.0;
-
-		Payload += 4;
-				
-		NewLon = -180.0 + ((Payload[1] - 33) * Cube91 + (Payload[2] - 33) * Square91 +
-			(Payload[3] - 33) * 91.0 + (Payload[4] - 33)) / 190463.0;
-
-		C = Payload[6] - 33;
-
-		if (C >= 0 && C < 90 )
-		{
-			S = Payload[7] - 33;
-
-			Station->Course = C * 4;
-			Station->Speed = (pow(1.08, S) - 1) * 1.15077945;	// MPH; 
-		}
-
-
-
-	}
-	else
-	{
-		// Standard format ddmm.mmN/dddmm.mmE?
-
-		NS = Payload[7] & 0xdf;		// Mask Lower Case Bit
-		EW = Payload[17] & 0xdf;
-
-		SymSet = Payload[8];
-		SymChar = Payload[18];
-
-		memcpy(LatDeg, Payload,2);
-		LatDeg[2]=0;
-		NewLat = atof(LatDeg) + (atof(Payload+2) / 60);
-       
-		if (NS == 'S')
-			NewLat = -NewLat;
-		else
-			if (NS != 'N')
-				return FALSE;
-
-		memcpy(LonDeg,Payload + 9, 3);
-
-		if (Payload[22] == '/')
-		{
-			Station->Course = atoi(Payload + 19);
-			Station->Speed = atoi(Payload + 23);
-		}
-
-		LonDeg[3]=0;
-
-		save = Payload[17];
-		Payload[17] = 0;
-		NewLon = atof(LonDeg) + (atof(Payload+12) / 60);
-		Payload[17] = save;
-		
-		if (EW == 'W')
-			NewLon = -NewLon;
-		else
-			if (EW != 'E')
-				return FALSE;
-	}
-
-	if (Station->Lat != NewLat || Station->Lon != NewLon)
-	{
-		time_t NOW = time(NULL);
-		time_t Age = NOW - Station->TimeLastUpdated;
-
-		if (Age > 15)				// Don't update too often
-		{
-			// Add to track
-
-//			if (memcmp(Station->Callsign, "ISS ", 4) == 0)
-//				Debugprintf("%s %s %s ",Station->Callsign, Station->Path, Station->LastPacket);
-
-			Station->LatTrack[Station->Trackptr] = NewLat;
-			Station->LonTrack[Station->Trackptr] = NewLon;
-			Station->TrackTime[Station->Trackptr] = NOW;
-
-			Station->Trackptr++;
-			Station->Moved = TRUE;
-
-			if (Station->Trackptr == TRACKPOINTS)
-				Station->Trackptr = 0;
-		}
-
-		Station->Lat = NewLat;
-		Station->Lon = NewLon;	
-	}
-
-	Station->Symbol = SymChar;
-
-	SymChar -= '!';
-	
-	Station->IconOverlay = 0;
-
-	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
-	{
-		SymChar += 96;
-		Station->IconOverlay = SymSet;
-	}
-	else
-		if (SymSet == '\\')
-			SymChar += 96;
-
-	Station->iconRow = SymChar >> 4;
-	Station->iconCol = SymChar & 15;
-
-	return TRUE;
-}
-
-VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
-{
-	char * TimeStamp;
-	char * ObjName;
-	char ObjState;
-	struct STATIONRECORD * Object;
-	BOOL Item = FALSE;
-	char * ptr;
-	char * Callsign;
-	char * Path;
-	char * Msg;
-	struct STATIONRECORD * TPStation;
-
-
-	switch(*Payload)
-	{
-	case '`':
-	case 0x27:					// '
-	case 0x1c:
-	case 0x1d:					// MIC-E
-
-		Decode_MIC_E_Packet(Payload, Station);
-		return;
-
-	case '$':					// NMEA
-		break;
-
-	case ')':					// Item	
-
-//		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
-
-		Item = TRUE;
-		ObjName = ptr = Payload + 1;
-
-		while (TRUE)
-		{
-			ObjState = *ptr;
-			if (ObjState == 0)
-				return;					// Corrupt
-
-			if (ObjState == '!' || ObjState == '_')	// Item Terminator
-				break;
-
-			ptr++;
-		}
-
-		*ptr = 0;						// Terminate Name
-
-		Object = FindStation(Station->Callsign, ObjName, TRUE);
-		Object->ObjState = *ptr++ = ObjState;
-
-		strcpy(Object->Path, Station->Callsign);
-		strcat(Object->Path, ">");
-
-		if (Object == Station)
-		{
-			char Temp[256];
-			strcpy(Temp, Station->Path);
-			strcat(Object->Path, Temp);
-			Debugprintf("Item is station %s", Payload);
-		}
-		else
-			strcat(Object->Path, Station->Path);
-
-//		strcat(Object->Path, Station->Path);
-
-		strcpy(Object->LastPacket, Payload);
-
-		if (ObjState != '_')		// Deleted Objects may have odd positions
-			DecodeLocationString(ptr, Object);
-
-		
-		Object->TimeLastUpdated = time(NULL);
-		DrawStation(Object);
-		RefreshStation(Object);
-
-		return;
-
-
-	case ';':					// Object
-
-		ObjName = Payload + 1;
-		ObjState = Payload[10];	// * Live, _Killed
-
-		Payload[10] = 0;
-		Object = FindStation(Station->Callsign, ObjName, TRUE);
-		Object->ObjState = Payload[10] = ObjState;
-
-		strcpy(Object->Path, Station->Callsign);
-		strcat(Object->Path, ">");
-
-		if (Object == Station)
-		{
-			char Temp[256];
-			strcpy(Temp, Station->Path);
-			strcat(Object->Path, Temp);
-			Debugprintf("Object is station %s", Payload);
-		}
-		else
-			strcat(Object->Path, Station->Path);
-
-//		strcat(Object->Path, Station->Path);
-
-		strcpy(Object->LastPacket, Payload);
-
-		TimeStamp = Payload + 11;
-
-		if (ObjState != '_')		// Deleted Objects may have odd positions
-			DecodeLocationString(Payload + 18, Object);
-		
-		Object->TimeLastUpdated = time(NULL);
-		DrawStation(Object);
-		RefreshStation(Object);
-
-		return;
-
-	case '@':
-	case '/':					// Timestamp, No Messaging
-
-		TimeStamp = ++Payload;
-		Payload += 6;
-
-	case '=':
-	case '!':
-
-		Payload++;
-	
-		DecodeLocationString(Payload, Station);
-
-		if (Station->Symbol == '_')		// WX
-		{
-			if (strlen(Payload) > 50)
-				strcpy(Station->LastWXPacket, Payload);
-		}
-		return;	
-
-	case '>':				// Status
-
-		strcpy(Station->Status, &Payload[1]);
-
-	case '<':				// Capabilities
-	case '_':				// Weather
-	case 'T':				// Telemetry
-
-		break;
-
-	case ':':
-		ProcessMessage(Payload, Station);
-		break;
-
-	case '}':			// Third Party Header
-			
-		// Process Payload as a new message
-
-		// }GM7HHB-9>APDR12,TCPIP,MM1AVR*:=5556.62N/00303.55W>204/000/A=000213 http://www.dstartv.com
-
-		Callsign = Msg = &Payload[1];
-		Path = strchr(Msg, '>');
-
-		if (Path == NULL)
-			return;
-
-		*Path++ = 0;
-
-		Payload = strchr(Path, ':');
-
-		if (Payload == NULL)
-			return;
-
-		*(Payload++) = 0;
-
-		// Look up station - create a new one if not found
-
-		TPStation = FindStation(Callsign, Callsign, TRUE);
-	
-		strcpy(TPStation->Path, Path);
-		strcpy(TPStation->LastPacket, Payload);
-		TPStation->LastPort = 0;					// Heard on RF, but info is from IS
-
-		DecodeAPRSPayload(Payload, TPStation);
-		TPStation->TimeLastUpdated = time(NULL);
-
-		DrawStation(TPStation);
-		RefreshStation(TPStation);
-
-		return;
-
-	default:
-//		Debugprintf("%s %s %s", Station->Callsign, Station->Path, Payload);
-		return;
-	}
-}
-
-// Convert MIC-E Char to Lat Digit (offset by 0x30)
-//				  0123456789      @ABCDEFGHIJKLMNOPQRSTUVWXYZ				
-char MicELat[] = "0123456789???????0123456789  ???0123456789 " ;
-
-char MicECode[]= "0000000000???????111111111110???22222222222" ;
-
-
-VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station)
-{
-	// Info is encoded in the Dest Addr (in Station->Path) as well as Payload. 
-	// See APRS Spec for full details
-
-	char Lat[10];		// DDMMHH
-	char LatDeg[3];
-	char * ptr;
-	char c;
-	int i, n;
-	int LonDeg, LonMin;
-	BOOL LonOffset = FALSE;
-	char NS = 'S';
-	char EW = 'E';
-	UCHAR SymChar, SymSet;
-	double NewLat, NewLon;
-	int SP, DC, SE;				// Course/Speed Encoded
-	int Course, Speed;
-
-	// Make sure packet is long enough to have an valid address
-
- 	if (strlen(Payload) < 9)
-		return;
-
-	ptr = &Station->Path[0];
-
-	for (i = 0; i < 6; i++)
-	{
-		n = (*(ptr++)) - 0x30;
-		c = MicELat[n];
-
-		if (c == '?')			// Illegal
-			return;
-
-		if (c == ' ')
-			c = '0';			// Limited Precision
-		
-		Lat[i] = c;
-
-	}
-
-	Lat[6] = 0;
-
-	if (Station->Path[3] > 'O')
-		NS = 'N';
-
-	if (Station->Path[5] > 'O')
-		EW = 'W';
-
-	if (Station->Path[4] > 'O')
-		LonOffset = TRUE;
-
-	n = Payload[1] - 28;			// Lon Degrees S9PU0T,WIDE1-1,WIDE2-2,qAR,WB9TLH-15:`rB0oII>/]"6W}44
-
-	if (LonOffset)
-		n += 100;
-
-	if (n > 179 && n < 190)
-		n -= 80;
-	else
-	if (n > 189 && n < 200)
-		n -= 190;
-
-	LonDeg = n;
-
-/*
-	To decode the longitude degrees value:
-1. subtract 28 from the d+28 value to obtain d.
-2. if the longitude offset is +100 degrees, add 100 to d.
-3. subtract 80 if 180 ˜ d ˜ 189
-(i.e. the longitude is in the range 100–109 degrees).
-4. or, subtract 190 if 190 ˜ d ˜ 199.
-(i.e. the longitude is in the range 0–9 degrees).
-*/
-
-	n = Payload[2] - 28;			// Lon Mins
-
-	if (n > 59)
-		n -= 60;
-
-	LonMin = n;
-
-	n = Payload[3] - 28;			// Lon Mins/100;
-
-//1. subtract 28 from the m+28 value to obtain m.
-//2. subtract 60 if m ™ 60.
-//(i.e. the longitude minutes is in the range 0–9).
-
-
-	memcpy(LatDeg, Lat, 2);
-	LatDeg[2]=0;
-	
-	NewLat = atof(LatDeg) + (atof(Lat+2) / 6000.0);
-       
-	if (NS == 'S')
-		NewLat = -NewLat;
-
-	NewLon = LonDeg + LonMin / 60.0 + n / 6000.0;
-       
-	if (EW == 'W')				// West
-		NewLon = -NewLon;
-
-	SP = Payload[4] - 28;
-	DC = Payload[5] - 28;
-	SE = Payload[6] - 28;		// Course 100 and 10 degs
-
-	Speed = DC / 10;		// Quotient = Speed Units
-	Course = DC - (Speed * 10);	// Remainder = Course Deg/100
-
-	Course = SE + (Course * 100);
-
-	Speed += SP * 10;
-
-	if (Speed >= 800)
-		Speed -= 800;
-
-	if (Course >= 400)
-		Course -= 400;
-
-	Station->Course = Course;
-	Station->Speed = Speed * 1.15077945;	// MPH
-
-//	Debugprintf("MIC-E Course/Speed %s %d %d", Station->Callsign, Course, Speed);
-
-	if (Station->Lat != NewLat || Station->Lon != NewLon)
-	{
-		time_t NOW = time(NULL);
-		time_t Age = NOW - Station->TimeLastUpdated;
-
-		if (Age > 15)				// Don't update too often
-		{
-			// Add to track
-
-//			if (memcmp(Station->Callsign, "ISS ", 4) == 0)
-//				Debugprintf("%s %s %s ",Station->Callsign, Station->Path, Station->LastPacket);
-
-			Station->LatTrack[Station->Trackptr] = NewLat;
-			Station->LonTrack[Station->Trackptr] = NewLon;
-			Station->TrackTime[Station->Trackptr] = NOW;
-
-			Station->Trackptr++;
-			Station->Moved = TRUE;
-
-			if (Station->Trackptr == TRACKPOINTS)
-				Station->Trackptr = 0;
-		}
-
-		Station->Lat = NewLat;
-		Station->Lon = NewLon;
-	}
-
-
-	SymChar = Payload[7];			// Symbol
-	SymSet = Payload[8];			// Symbol
-
-	SymChar -= '!';
-
-	Station->IconOverlay = 0;
-
-	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
-	{
-		SymChar += 96;
-		Station->IconOverlay = SymSet;
-	}
-	else
-		if (SymSet == '\\')
-			SymChar += 96;
-
-	Station->iconRow = SymChar >> 4;
-	Station->iconCol = SymChar & 15;
-
-	return;
-
 }
 
 /*
@@ -5353,27 +4736,20 @@ VOID WINAPI OnChildDialogInit(HWND hwndDlg)
 VOID APRSPoll()
 {
 	char APRSMsg[400];
-	int Len;
-	int Port;
+	char Call[12];
+	struct STATIONRECORD * Station;
 
 	CheckTimer();
 
-	while (GetAPRSFrame(APRSMsg, &Len, &Port))
+	while (GetAPRSFrame(APRSMsg, Call))
 	{
-		APRSMsg[Len] = 0;
+		Station = FindStation(Call, Call, FALSE);
+
+		if (Station)
+			ProcessMessage(APRSMsg, Station);
 		
-		if (Port == 0)
-		{
-			DecodeAPRSISMsg(APRSMsg);
-		}
-		else
-		{
-			if (strstr(APRSMsg, "<UI") == 0)
-				continue;
-		
-			ProcessRFFrame(APRSMsg, Len);
-		}
 	}
+
 }
 void UpdateTXMessageLine(HWND hWnd, int j, struct APRSMESSAGE * Message)
 {
@@ -5742,6 +5118,8 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 	hToCall = GetDlgItem(hDlg, IDC_TOCALL);
 	hToLabel = GetDlgItem(hDlg, IDC_TOLABEL);
 	hTextLabel = GetDlgItem(hDlg, IDC_TEXTLABEL);
+	hPathLabel = GetDlgItem(hDlg, IDC_TEXTLABEL2);
+	hPath = GetDlgItem(hDlg, IDC_PATH);
 	
 	wpOrigInputProc = (WNDPROC) SetWindowLong(hInput, GWL_WNDPROC, (LONG) InputProc); 
 
@@ -5767,10 +5145,12 @@ BOOL CreateMessageWindow(char * ClassName, char * WindowTitle, WNDPROC WndProc, 
 
 	MoveWindow(hMsgsIn, 0, 30, rcClient.right, (rcClient.bottom)/2 - 40, TRUE);
 	MoveWindow(hMsgsOut, 0, (rcClient.bottom)/2, rcClient.right, (rcClient.bottom)/2 - 60, TRUE);
-	MoveWindow(hInput, 200, rcClient.bottom - 35 , 550, 22, TRUE);
+	MoveWindow(hInput, 200, rcClient.bottom - 35 , 500, 20, TRUE);
 	MoveWindow(hToLabel, 9, rcClient.bottom - 33 , 23, 18, TRUE);
 	MoveWindow(hToCall, 40, rcClient.bottom - 35 , 120, 20, TRUE);
-	MoveWindow(hTextLabel, 165, rcClient.bottom - 33 , 33, 18, TRUE);
+	MoveWindow(hTextLabel, 163, rcClient.bottom - 33 , 33, 18, TRUE);
+	MoveWindow(hPathLabel, 710, rcClient.bottom - 33 , 33, 18, TRUE);
+	MoveWindow(hPath, 750, rcClient.bottom - 33 , 150, 18, TRUE);
 
 	RefreshMessages();
 
@@ -5798,6 +5178,9 @@ VOID SendAPRSMessage(char * Text, char * ToCall)
 	memset(Message->ToCall, ' ', 9);
 	memcpy(Message->ToCall, ToCall, strlen(ToCall));
 	Message->ToStation = FindStation(ToCall, ToCall, TRUE);
+
+	if (Message->ToStation == NULL)
+		return;
 
 	if (Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
 		wsprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
@@ -6054,11 +5437,23 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 VOID SecTimer()
 {
-	// Check Message Retries
-
+	struct STATIONRECORD * sptr = *StationRecords;
 	struct APRSMESSAGE * ptr = OutstandingMsgs;
 	int n = 0;
 	char Msg[20];
+
+	// See if changed flag set on any stations
+
+	while (sptr)
+	{
+		if (sptr->Moved)
+			DrawStation(sptr);
+	
+		sptr = sptr->Next;
+	}
+
+	// Check Message Retries
+
 
 	JPEGCounter++;
 
@@ -6270,10 +5665,10 @@ VOID SendWeatherBeacon()
 	char * WXptr;
 	char * WXend;
 	struct tm rtime;
-	time_t WXTime, TempTime;
+	__time64_t WXTime, TempTime;
 	FILETIME LastWriteTime;
 	LARGE_INTEGER ft;
-	time_t now = time(NULL);
+	__time64_t now = _time64(NULL);
 	SYSTEMTIME SystemTime;
 
 	WXCounter++;
@@ -6303,6 +5698,14 @@ VOID SendWeatherBeacon()
 
 	WXTime = (now - ft.QuadPart) / 60;		// Minutes 
 
+	// Get DDHHMM from Filetime
+
+	FileTimeToSystemTime(&LastWriteTime, &SystemTime);
+
+	sprintf(DD, "%02d", SystemTime.wDay);
+	sprintf(HH, "%02d", SystemTime.wHour);
+	sprintf(MM, "%02d", SystemTime.wMinute);
+
 	ReadFile(Handle, WXMessage, 1024, &Len, NULL); 
 	CloseHandle(Handle);
 
@@ -6323,12 +5726,8 @@ VOID SendWeatherBeacon()
 
 	if (WXMessage[0] != '*')
 	{
-		// Get Timestamp from file
-
-		memcpy(DD, &WXMessage[4], 2);
-		memcpy(HH, &WXMessage[12], 2);
-		memcpy(MM, &WXMessage[15], 2);
-
+		// Try to get time from message
+		
 		memset(&rtime, 0, sizeof(struct tm));
 
 		rtime.tm_year = atoi(&WXMessage[7]) - 1900;
@@ -6346,39 +5745,24 @@ VOID SendWeatherBeacon()
 		rtime.tm_hour = atoi(HH);
 		rtime.tm_min = atoi(MM);
 
-		TempTime = _mkgmtime(&rtime);
+		TempTime = _mkgmtime64(&rtime);
 
-		if (TempTime != (time_t)-1)
+		if (TempTime != (__time64_t)-1)
 		{
 			WXTime = (now - TempTime) / 60;		// Age in Minutes
-		}
 
-		if (WXTime > (3 * WXInterval))
-		{
-			Debugprintf("APRS Send WX File too old - %d minutes", WXTime);
-			return;
-		}
+			// Get DDHHMM from file
 
-		memcpy(DD, &WXMessage[4], 2);
-		memcpy(HH, &WXMessage[12], 2);
-		memcpy(MM, &WXMessage[15], 2);
+			memcpy(DD, &WXMessage[4], 2);
+			memcpy(HH, &WXMessage[12], 2);
+			memcpy(MM, &WXMessage[15], 2);
+		}
 	}
-	else
+
+	if (WXTime > (3 * WXInterval))
 	{
-		if (WXTime > (3 * WXInterval))
-		{
-			Debugprintf("APRS Send WX File too old - %d minutes", WXTime);
-			return;
-		}
-
-		// Get DDHHMM from Filetime
-
-		FileTimeToSystemTime(&LastWriteTime, &SystemTime);
-
-		sprintf(DD, "%02d", SystemTime.wDay);
-		sprintf(HH, "%02d", SystemTime.wHour);
-		sprintf(MM, "%02d", SystemTime.wMinute);
-
+		Debugprintf("APRS Send WX File too old - %d minutes", WXTime);
+		return;
 	}
 
 	GetAPRSLatLonString(Lat, Lon);
@@ -7168,7 +6552,7 @@ int CompareFN(const void *a, const void *b)
 char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * Count, char * Param)
 {
 	char Line[100000] = "";	
-	struct STATIONRECORD * ptr = StationRecords;
+	struct STATIONRECORD * ptr = *StationRecords;
 	int n = 0, i;
 	struct STATIONRECORD * List[1000];
 	int TableWidth = 8;

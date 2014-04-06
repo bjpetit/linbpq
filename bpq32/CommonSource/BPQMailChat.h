@@ -250,6 +250,9 @@ typedef struct ConnectionInfo_S
 
 	HANDLE DebugHandle;					// File Handle for session-based debugging
 
+	char ARQFilename[256];				// Filename from ARQ:FILE:: Header
+	int ARQClearCount;					// To make sure queues are flushed when sending
+
 } ConnectionInfo, CIRCUIT;
 
 // Flags Equates
@@ -275,7 +278,10 @@ typedef struct ConnectionInfo_S
 #define MBLFORWARDING 64				// MBL Style Frwarding- waiting for OK/NO or Prompt following message
 #define TEXTFORWARDING 128				// Plain Text forwarding
 #define OUTWARDCONNECT 256				// We connected to them
-
+#define FLARQMODE 512					// Message from FLARQ
+#define FLARQMAIL 1024					// Sending FLARQ Format Message
+#define ARQMAILACK 2048					// Waiting for all data to be acked
+#define	NEEDLF 4096						// Add LF to forward script commands (fro Telnet
 
 struct FBBRestartData
 {
@@ -1203,6 +1209,9 @@ extern BOOL LogBBS;
 extern BOOL LogCHAT;
 extern BOOL LogTCP;
 extern BOOL ForwardToMe;
+
+extern BOOL AllowAnon;
+extern BOOL DontNeedHomeBBS;
 
 extern int LatestMsg;
 extern char BBSName[];

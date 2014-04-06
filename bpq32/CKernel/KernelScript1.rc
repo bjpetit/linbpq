@@ -115,6 +115,38 @@ BEGIN
 END
 
 
+UIMAINWINDOW DIALOG DISCARDABLE  100, 100, 323, 304
+STYLE WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "BPQ32 UI Utility"
+CLASS "UIMAINWINDOW"
+FONT 8, "FixedSys"
+BEGIN
+END
+
+PORTPAGE DIALOG DISCARDABLE  26, 5, 366, 186
+STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "FixedSys"
+BEGIN
+    LTEXT           "Send Beacon Every",IDC_STATIC,17,25,68,14,
+                    SS_CENTERIMAGE
+    EDITTEXT        IDC_INTERVAL,90,26,20,12,ES_AUTOHSCROLL
+    LTEXT           "Minutes to ",IDC_STATIC,117,25,55,14,SS_CENTERIMAGE
+    EDITTEXT        IDC_UIDEST,175,26,59,12,ES_UPPERCASE | ES_AUTOHSCROLL
+    CONTROL         "Send From File",IDC_FROMFILE,"Button",BS_AUTOCHECKBOX | 
+                    BS_VCENTER | WS_TABSTOP,17,59,68,13
+    EDITTEXT        IDC_FILENAME,89,58,223,12,ES_AUTOHSCROLL
+    PUSHBUTTON      "Find File",IDC_FILE,316,58,40,12
+    DEFPUSHBUTTON   "Save",IDOK,122,142,40,12
+    DEFPUSHBUTTON   "Test",ID_TEST,205,142,40,12
+    EDITTEXT        IDC_MESSAGE,20,84,294,52,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "",IDC_PORTNAME,12,9,139,14,SS_CENTERIMAGE
+    LTEXT           "Path",IDC_STATIC,17,42,57,14,SS_CENTERIMAGE
+    EDITTEXT        IDC_UIDIGIS,90,42,223,12,ES_UPPERCASE | ES_AUTOHSCROLL
+END
+
+
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // Menu
@@ -127,6 +159,7 @@ BEGIN
         MENUITEM "New Terminal Window",         ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
         MENUITEM "Tile",                        ID_WINDOWS_TILE
+        MENUITEM "Beacon Config",    BPQUICONFIG
         MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
     END
 END
@@ -138,7 +171,8 @@ BEGIN
         MENUITEM "New Terminal Window",         ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
         MENUITEM "Tile",                        ID_WINDOWS_TILE
-        MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+        MENUITEM "Beacon Config",    BPQUICONFIG
+		MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
     END
     POPUP "Actions"
     BEGIN
@@ -164,7 +198,8 @@ BEGIN
         MENUITEM "New Terminal Window",         ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
         MENUITEM "Tile",                        ID_WINDOWS_TILE
-        MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+         MENUITEM "Beacon Config",    BPQUICONFIG
+       MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
     END
     POPUP "Action"
     BEGIN
@@ -199,7 +234,8 @@ BEGIN
         MENUITEM "New Window",                  ID_NEWWINDOW
         MENUITEM "Cascade",                     ID_WINDOWS_CASCADE
         MENUITEM "Tile",                        ID_WINDOWS_TILE
-        MENUITEM "Close all BPQ32 Programs",    BPQCLOSEALL
+        MENUITEM "Beacon Config",			   BPQUICONFIG
+        MENUITEM "Close all BPQ32 Programs",	BPQCLOSEALL
     END
     POPUP "Monitor"
     BEGIN
@@ -298,4 +334,20 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    "PORTPAGE", DIALOG
+    BEGIN
+        BOTTOMMARGIN, 139
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
 

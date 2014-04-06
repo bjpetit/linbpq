@@ -87,7 +87,7 @@ VOID SENDIDMSG()
 
 	while (PORT)
 	{
-		if (PORT->PROTOCOL != 10)			// Not Pactor-style
+		if (PORT->PROTOCOL < 10)			// Not Pactor-style
 		{
 			Buffer = GetBuff();
 		
@@ -121,7 +121,7 @@ VOID SENDBTMSG()
 
 	while (PORT)
 	{
-		if (PORT->PROTOCOL == 10 || PORT->PORTUNPROTO == 0)	// Pactor-style or no UNPROTO ADDR?
+		if (PORT->PROTOCOL >= 10 || PORT->PORTUNPROTO == 0)	// Pactor-style or no UNPROTO ADDR?
 		{
 			PORT = PORT->PORTPOINTER;
 			continue;
@@ -179,7 +179,7 @@ VOID SENDUIMESSAGE(struct DATAMESSAGE * Msg)
 
 	while (PORT)
 	{
-		if (PORT->PROTOCOL == 10 || PORT->PORTUNPROTO == 0)	// Pactor-style or no UNPROTO ADDR?
+		if (PORT->PROTOCOL >= 10 || PORT->PORTUNPROTO == 0)	// Pactor-style or no UNPROTO ADDR?
 		{
 			PORT = PORT->PORTPOINTER;
 			continue;

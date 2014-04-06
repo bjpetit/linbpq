@@ -29,6 +29,7 @@
 #define BPQCLOSEALL                     412
 #define SCANRECONFIG                    413
 #define APRSRECONFIG                    414
+#define BPQUICONFIG	420
 #define ID_EXIT                         1000
 #define IDC_PROTOSTATE                  1000
 #define IDB_HIDE                        1001
@@ -102,6 +103,22 @@
 #define StopALLMon                      40007
 #define IDM_FIRSTCHILD                  50000
 #define TRAYBASEID                      60000
+
+#define ID_TEST                         102
+#define IDD_DIAGLOG1                    103
+#define IDC_FROMFILE                    1022
+#define IDC_EDIT1                       1054
+#define IDC_FILENAME                    1054
+#define IDC_EDIT2                       1055
+#define IDC_MESSAGE                     1055
+#define IDC_EDIT3                       1056
+#define IDC_INTERVAL                    1056
+#define IDC_EDIT4                       1057
+#define IDC_UIDEST                      1057
+#define IDC_FILE                        1058
+#define IDC_TAB1                        1059
+#define IDC_UIDIGIS                     1059
+#define IDC_PORTNAME                    1060
 
 // Next default values for new objects
 // 

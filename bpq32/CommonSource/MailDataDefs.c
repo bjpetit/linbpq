@@ -129,6 +129,9 @@ char WPDatabaseName[MAX_PATH] = "WP.SYS";
 char BadWordsPath[MAX_PATH];
 char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
 
+char NTSAliasesPath[MAX_PATH];
+char NTSAliasesName[MAX_PATH] = "NTSALIASES.TXT";
+
 char ConfigName[250];
 char ChatConfigName[250];
 
@@ -150,7 +153,7 @@ BOOL SendBBStoSYSOPCall = FALSE;
 BOOL DontHoldNewUsers = FALSE;
 BOOL ForwardToMe = FALSE;
 
-BOOL NeedHomeBBS = TRUE;
+BOOL DontNeedHomeBBS = FALSE;
 
 // Send WP Params
 

@@ -349,3 +349,7 @@ extern struct SEM Semaphore;
 extern UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
 
 
+// SNMP Variables
+
+int InOctets[32];
+int OutOctets[32];

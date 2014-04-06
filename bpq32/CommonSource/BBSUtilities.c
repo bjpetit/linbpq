@@ -33,8 +33,15 @@ VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Con
 VOID TidyPrompts();
 char * ReadMessageFileEx(struct MsgInfo * MsgRec);
 UCHAR * APIENTRY GetBPQDirectory();
-
+BOOL SendARQMail(CIRCUIT * conn);
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
+int APIENTRY GetApplNum(int Stream);
+VOID FormatTime(char * Time, time_t cTime);
+BOOL CheckifPacket(char * Via);
+UCHAR * APIENTRY GetVersionString();
+void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename);
+void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename);
+
 
 config_t cfg;
 config_setting_t * group;
@@ -1135,7 +1142,7 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 	else
 		ExpandAndSendMessage(conn, WelcomeMsg, LOG_BBS);
 
-	if (user->HomeBBS[0] == 0 && NeedHomeBBS)
+	if (user->HomeBBS[0] == 0 && !DontNeedHomeBBS)
 		BBSputs(conn, "Please enter your Home BBS using the Home command.\rYou may also enter your QTH and ZIP/Postcode using qth and zip commands.\r");
 
 //	if (user->flags & F_Temp_B2_BBS)
@@ -1371,7 +1378,7 @@ int compare( const void *arg1, const void *arg2 );
 VOID SortBBSChain()
 {
 	struct UserInfo * user;
-	struct UserInfo * users[100]; 
+	struct UserInfo * users[125]; 
 	int i = 0, n;
 
 	// Get array of addresses
@@ -1379,14 +1386,14 @@ VOID SortBBSChain()
 	for (user = BBSChain; user; user = user->BBSNext)
 	{
 		users[i++] = user;
-		if (i > 99) break;
+		if (i > 124) break;
 	}
 
 	qsort((void *)users, i, 4, compare );
 
 	BBSChain = NULL;
 
-	// Rechain (backwards, as entries ate puton front of chain)
+	// Rechain (backwards, as entries ate put on front of chain)
 
 	for (n = i-1; n >= 0; n--)
 	{
@@ -2203,7 +2210,48 @@ void TrytoSend()
 		conn = &Connections[n];
 		
 		if (conn->Active == TRUE)
+		{
 			Flush(conn);
+
+			// if an FLARQ mail has been sent see if queues have cleared
+
+			if (conn->OutputQueue == NULL && (conn->BBSFlags & ARQMAILACK))
+			{
+				int n = TXCount(conn->BPQStream);		// All Sent and Acked?
+	
+				if (n == 0)
+				{
+					struct MsgInfo * Msg = conn->FwdMsg;
+
+					conn->ARQClearCount--;
+
+					if (conn->ARQClearCount <= 0)
+					{
+						Logprintf(LOG_BBS, conn, '>', "ARQ Send Complete");
+
+						// Mark mail as sent, and look for more
+	
+						clear_fwd_bit(Msg->fbbs, conn->UserPointer->BBSNumber);
+						set_fwd_bit(Msg->forw, conn->UserPointer->BBSNumber);
+
+						//  Only mark as forwarded if sent to all BBSs that should have it
+			
+						if (memcmp(Msg->fbbs, zeros, NBMASK) == 0)
+						{
+							Msg->status = 'F';			// Mark as forwarded
+							Msg->datechanged=time(NULL);
+						}
+	
+						conn->BBSFlags &= ~ARQMAILACK;
+						conn->UserPointer->ForwardingInfo->MsgCount--;
+
+						SendARQMail(conn);				// See if any more - close if not
+					}
+				}
+				else
+					conn->ARQClearCount = 10;
+			}
+		}
 	}
 #ifndef LINBPQ
 	for (Cons = ConsHeader[0]; Cons; Cons = Cons->next)
@@ -3859,6 +3907,9 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 		return TRUE;
 	}
 
+	if (conn->BBSFlags & FLARQMODE)
+		return TRUE;
+
 	if (!(conn->BBSFlags & FBBCompressed))
 		conn->Flags |= GETTINGTITLE;
 
@@ -4300,7 +4351,6 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 		// if message body had R: lines, get date created from last (not very accurate, but best we can do)
 
 		// Also check if we have had message before to detect loops
-
 
 		ptr1 = conn->MailBuffer;
 		OurCount = 0;
@@ -6036,7 +6086,7 @@ InBand:
 
 
 	if (strstr(Buffer, " CONNECTED") || strstr(Buffer, "PACLEN") || strstr(Buffer, "IDLETIME") ||
-			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE"))
+			strstr(Buffer, "OK") || strstr(Buffer, "###LINK MADE") || strstr(Buffer, "VIRTUAL CIRCUIT ESTABLISHED"))
 	{
 		char * Cmd;
 
@@ -6143,29 +6193,34 @@ InBand:
 				// Remote Node sends > at end of CTEXT - we need to swallow it
 
 				conn->SkipPrompt = TRUE;
-
-				if (Scripts[ForwardingInfo->ScriptIndex + 1] == NULL ||
-					_memicmp(Scripts[ForwardingInfo->ScriptIndex +1], "TIMES", 5) == 0	||		// Only Check until script is finished
-					_memicmp(Scripts[ForwardingInfo->ScriptIndex + 1], "ELSE", 4) == 0)			// Only Check until script is finished
-				{
-					ForwardingInfo->MoreLines = FALSE;
-				}
-				return TRUE;
+				goto CheckForEnd;
 			}
 
 			if (_memicmp(Cmd, "TEXTFORWARDING", 10) == 0)
 			{
-				conn->BBSFlags |= TEXTFORWARDING;
+				conn->BBSFlags |= TEXTFORWARDING;			
+				goto CheckForEnd;
+			}
 
+			if (_memicmp(Cmd, "NEEDLF", 6) == 0)
+			{
+				conn->BBSFlags |= NEEDLF;			
+				goto CheckForEnd;
+			}
+
+			if (_memicmp(Cmd, "FLARQ", 5) == 0)
+			{
+				conn->BBSFlags |= FLARQMAIL;
+
+		CheckForEnd:
 				if (Scripts[ForwardingInfo->ScriptIndex + 1] == NULL ||
 						memcmp(Scripts[ForwardingInfo->ScriptIndex +1], "TIMES", 5) == 0	||		// Only Check until script is finished
 						memcmp(Scripts[ForwardingInfo->ScriptIndex + 1], "ELSE", 4) == 0)			// Only Check until script is finished
 					ForwardingInfo->MoreLines = FALSE;
 			
-				return TRUE;
+				goto LoopBack;
 			}
-
-			if (memcmp(Cmd, "PAUSE", 5) == 0)
+			if (_memicmp(Cmd, "PAUSE", 5) == 0)
 			{
 				// Pause script
 
@@ -6196,8 +6251,35 @@ InBand:
 				return FALSE;
 			}
 
-			nodeprintf(conn, "%s\r", Cmd);
+			if (conn->BBSFlags & NEEDLF)
+				nodeprintf(conn, "%s\r\n", Cmd);
+			else
+				nodeprintf(conn, "%s\r", Cmd);
+			return TRUE;
 		}
+
+		// End of script.
+
+		if (conn->BBSFlags & FLARQMAIL)
+		{
+			// FLARQ doesnt send a prompt - Just send message(es)
+
+			conn->UserPointer->Total.ConnectsOut++;
+			conn->BBSFlags &= ~RunningConnectScript;
+			ForwardingInfo->LastReverseForward = time(NULL);
+
+			//	Update Paclen
+					
+			GetConnectionInfo(conn->BPQStream, callsign, &port, &sesstype, &paclen, &maxframe, &l4window);
+		
+			if (paclen > 0)
+				conn->paclen = paclen;
+
+			SendARQMail(conn);
+			return TRUE;
+		}
+
+
 		return TRUE;
 	}
 
@@ -6241,6 +6323,12 @@ InBand:
 	// No more steps, Look for SID or Prompt
 
 CheckForSID:
+
+	if (strstr(Buffer, "SORRY, NO"))			// URONODE
+	{
+		Disconnect(conn->BPQStream);
+		return FALSE;
+	}
 
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
@@ -6407,6 +6495,11 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 	{
 		conn->RMSExpress = TRUE;
 		conn->Paclink = FALSE;
+
+		// Set new RMS Users as RMS User
+
+		if (conn->NewUser)
+			conn->UserPointer->flags |= F_Temp_B2_BBS;
 	}
 
 	if (strstr(SID, "Paclink"))
@@ -6793,6 +6886,8 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "SendSYStoSYSOPCall", SendSYStoSYSOPCall);
 	SaveIntValue(group, "SendBBStoSYSOPCall", SendBBStoSYSOPCall);
 	SaveIntValue(group, "DontHoldNewUsers", DontHoldNewUsers);
+	SaveIntValue(group, "AllowAnon", AllowAnon);
+	SaveIntValue(group, "DontNeedHomeBBS", DontNeedHomeBBS);
 
 	SaveIntValue(group, "ForwardToMe", ForwardToMe);
 	SaveIntValue(group, "SMTPPort", SMTPInPort);
@@ -7042,6 +7137,8 @@ BOOL GetConfig(char * ConfigName)
 	SendBBStoSYSOPCall =  GetIntValue(group, "SendBBStoSYSOPCall");
 	DontHoldNewUsers =  GetIntValue(group, "DontHoldNewUsers");
 	ForwardToMe =  GetIntValue(group, "ForwardToMe");
+	AllowAnon =  GetIntValue(group, "AllowAnon");
+	DontNeedHomeBBS =  GetIntValue(group, "DontNeedHomeBBS");
 	MaxTXSize =  GetIntValue(group, "MaxTXSize");
 	MaxRXSize =  GetIntValue(group, "MaxRXSize");
 	ReaddressLocal =  GetIntValue(group, "Readdress Local");
@@ -7434,11 +7531,11 @@ int Connected(int Stream)
 				conn->PageLen = user->PageLen;				// No paging for chat
 				conn->Paging = (user->PageLen > 0);
 
-				if ((user->flags & F_PMS) && ((user->flags & F_BBS) == 0))
-				{
-					// If we have already allocated a FWD struct, get rid of it
+				// Get rid of any Temp forwatding structure (allocated for WinPack PMS or RMS EX User)
 
-					if (user->ForwardingInfo)
+				if ((user->flags & F_BBS) == 0)			// Not a BBS
+				{
+					if (user->ForwardingInfo)			// Got a forwarding structure
 					{
 						free(user->ForwardingInfo);
 						user->ForwardingInfo = NULL;
@@ -7572,6 +7669,9 @@ int Disconnected (Stream)
 						FWDInfo->FwdTimer = 0;
 				}
 			}
+			
+			conn->BBSFlags = 0;				// Clear ARQ Mode
+
 			return 0;
 		}
 	}
@@ -7630,11 +7730,12 @@ int DoReceivedData(int Stream)
 				}
 
 				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
+				ptr2 = memchr(conn->InputBuffer, '\n', conn->InputLen);
 				
-				if (ptr == NULL)
-					ptr = memchr(conn->InputBuffer, '\n', conn->InputLen);	// Also accept LF
+				if ((ptr2 && ptr2 < ptr) || ptr == 0)		// LF before CR, or no CR
+					ptr = ptr2;								// Use LF
 
-				if (ptr)	//  CR in buffer
+				if (ptr)				// CR ot LF in buffer
 				{
 					*(ptr) = '\r';		// In case was LF
 
@@ -7723,10 +7824,364 @@ int DoBBSMonitorData(int Stream)
 
 }
 
+VOID ProcessFLARQLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int MsgLen)
+{
+	Buffer[MsgLen] = 0;
+
+	if (MsgLen == 1 && Buffer[0] == 13)
+		return;
+
+	if (strcmp(Buffer, "ARQ::ETX\r") == 0)
+	{
+		// Decode it. 
+
+		UCHAR * ptr1, * ptr2, * ptr3;
+		int len, linelen;
+		struct MsgInfo * Msg = conn->TempMsg;
+		time_t Date;
+		char FullTo[100];
+		char FullFrom[100];
+		char ** RecpTo = NULL;				// May be several Recipients
+		char ** HddrTo = NULL;				// May be several Recipients
+		char ** Via = NULL;					// May be several Recipients
+		int LocalMsg[1000]	;				// Set if Recipient is a local wl2k address
+
+		int B2To;							// Offset to To: fields in B2 header
+		int Recipients = 0;
+		int RMSMsgs = 0, BBSMsgs = 0;
+
+//		Msg->B2Flags |= B2Msg;
+				
+
+		ptr1 = conn->MailBuffer;
+		len = Msg->length;
+		ptr1[len] = 0;
+
+		if (strstr(ptr1, "ARQ:ENCODING::"))
+		{
+			// a file, not a message. If is called  "BBSPOLL" do a reverse forward else Ignore for now
+
+			_strupr(conn->MailBuffer);
+			if (strstr(conn->MailBuffer, "BBSPOLL"))
+			{
+				SendARQMail(conn);
+			}
+
+			free(conn->MailBuffer);
+			conn->MailBuffer = NULL;
+			conn->MailBufferSize = 0;
+
+			return;
+		}
+	Loop:
+		ptr2 = strchr(ptr1, '\r');
+
+		linelen = ptr2 - ptr1;
+
+		if (_memicmp(ptr1, "From:", 5) == 0 && linelen > 6)			// Can have empty From:
+		{
+			char SaveFrom[100];
+			char * FromHA;
+
+			memcpy(FullFrom, ptr1, linelen);
+			FullFrom[linelen] = 0;
+
+			// B2 From may now contain an @BBS 
+
+			strcpy(SaveFrom, FullFrom);
+				
+			FromHA = strlop(SaveFrom, '@');
+
+			if (strlen(SaveFrom) > 12) SaveFrom[12] = 0;
+			
+			strcpy(Msg->from, &SaveFrom[6]);
+
+			if (FromHA)
+			{
+				if (strlen(FromHA) > 39) FromHA[39] = 0;
+				Msg->emailfrom[0] = '@';
+				strcpy(&Msg->emailfrom[1], _strupr(FromHA));
+			}
+
+			// Remove any SSID
+
+			ptr3 = strchr(Msg->from, '-');
+				if (ptr3) *ptr3 = 0;
+		
+		}
+		else if (_memicmp(ptr1, "To:", 3) == 0 || _memicmp(ptr1, "cc:", 3) == 0)
+		{
+			HddrTo=realloc(HddrTo, (Recipients+1)*4);
+			HddrTo[Recipients] = zalloc(100);
+
+			memset(FullTo, 0, 99);
+			memcpy(FullTo, &ptr1[4], linelen-4);
+			memcpy(HddrTo[Recipients], ptr1, linelen+2);
+			LocalMsg[Recipients] = FALSE;
+
+			_strupr(FullTo);
+
+			B2To = ptr1 - conn->MailBuffer;
+
+			if (_memicmp(FullTo, "RMS:", 4) == 0)
+			{
+				// remove RMS and add @winlink.org
+
+				strcpy(FullTo, "RMS");
+				strcpy(Msg->via, &FullTo[4]);
+			}
+			else
+			{
+				ptr3 = strchr(FullTo, '@');
+
+				if (ptr3)
+				{
+					*ptr3++ = 0;
+					strcpy(Msg->via, ptr3);
+				}
+				else
+					Msg->via[0] = 0;
+			}
+		
+			if (_memicmp(&ptr1[4], "SMTP:", 5) == 0)
+			{
+				// Airmail Sends MARS messages as SMTP
+					
+				if (CheckifPacket(Msg->via))
+				{
+					// Packet Message
+
+					memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
+					_strupr(FullTo);
+					_strupr(Msg->via);
+						
+					// Update the saved to: line (remove the smtp:)
+
+					strcpy(&HddrTo[Recipients][4], &HddrTo[Recipients][9]);
+					BBSMsgs++;
+					goto BBSMsg;
+				}
+
+				// If a winlink.org address we need to convert to call
+
+				if (_stricmp(Msg->via, "winlink.org") == 0)
+				{
+					memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);
+					_strupr(FullTo);
+					LocalMsg[Recipients] = CheckifLocalRMSUser(FullTo);
+				}
+				else
+				{
+					memcpy(Msg->via, &ptr1[9], linelen);
+					Msg->via[linelen - 9] = 0;
+					strcpy(FullTo,"RMS");
+				}
+//					FullTo[0] = 0;
+
+		BBSMsg:		
+				_strupr(FullTo);
+				_strupr(Msg->via);
+			}
+
+			if (memcmp(FullTo, "RMS:", 4) == 0)
+			{
+				// remove RMS and add @winlink.org
+
+				memmove(FullTo, &FullTo[4], strlen(FullTo) - 3);
+				strcpy(Msg->via, "winlink.org");
+				sprintf(HddrTo[Recipients], "To: %s\r\n", FullTo);
+			}
+
+			if (strcmp(Msg->via, "RMS") == 0)
+			{
+				// replace RMS with @winlink.org
+
+				strcpy(Msg->via, "winlink.org");
+				sprintf(HddrTo[Recipients], "To: %s@winlink.org\r\n", FullTo);
+			}
+
+			if (strlen(FullTo) > 6)
+				FullTo[6] = 0;
+
+			strlop(FullTo, '-');
+
+			strcpy(Msg->to, FullTo);
+
+			if (SendBBStoSYSOPCall)
+				if (_stricmp(FullTo, BBSName) == 0)
+					strcpy(Msg->to, SYSOPCall);
+
+			if ((Msg->via[0] == 0 || strcmp(Msg->via, "BPQ") == 0 || strcmp(Msg->via, "BBS") == 0))
+			{
+				// No routing - check @BBS and WP
+
+				struct UserInfo * ToUser = LookupCall(FullTo);
+
+				Msg->via[0] = 0;				// In case BPQ and not found
+
+				if (ToUser)
+				{
+					// Local User. If Home BBS is specified, use it
+
+					if (ToUser->HomeBBS[0])
+					{
+						strcpy(Msg->via, ToUser->HomeBBS); 
+					}
+				}
+				else
+				{
+					WPRecP WP = LookupWP(FullTo);
+
+					if (WP)
+					{
+						strcpy(Msg->via, WP->first_homebbs);
+			
+					}
+				}
+
+				// Fix To: address in B2 Header
+
+				if (Msg->via[0])
+					sprintf(HddrTo[Recipients], "To: %s@%s\r\n", FullTo, Msg->via);
+				else
+					sprintf(HddrTo[Recipients], "To: %s\r\n", FullTo);
+
+			}
+
+			RecpTo=realloc(RecpTo, (Recipients+1)*4);
+			RecpTo[Recipients] = zalloc(10);
+
+			Via=realloc(Via, (Recipients+1)*4);
+			Via[Recipients] = zalloc(50);
+
+			strcpy(Via[Recipients], Msg->via);
+			strcpy(RecpTo[Recipients++], FullTo);
+
+			// Remove the To: Line from the buffer
+			
+		}
+		else if (_memicmp(ptr1, "Type:", 4) == 0)
+		{
+			if (ptr1[6] == 'N')
+				Msg->type = 'T';				// NTS
+			else
+				Msg->type = ptr1[6];
+		}
+		else if (_memicmp(ptr1, "Subject:", 8) == 0)
+		{
+			int Subjlen = ptr2 - &ptr1[9];
+			if (Subjlen > 60) Subjlen = 60;
+			memcpy(Msg->title, &ptr1[9], Subjlen);
+
+			goto ProcessBody;
+		}
+//		else if (_memicmp(ptr1, "Body:", 4) == 0)
+//		{
+//			MsgLen = atoi(&ptr1[5]);
+//			StartofMsg = ptr1;
+//		}
+		else if (_memicmp(ptr1, "File:", 5) == 0)
+		{
+			Msg->B2Flags |= Attachments;
+		}
+		else if (_memicmp(ptr1, "Date:", 5) == 0)
+		{
+			struct tm rtime;
+			char seps[] = " ,\t\r";
+
+			memset(&rtime, 0, sizeof(struct tm));
+
+			// Date: 2009/07/25 10:08
+	
+			sscanf(&ptr1[5], "%04d/%02d/%02d %02d:%02d:%02d",
+					&rtime.tm_year, &rtime.tm_mon, &rtime.tm_mday, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec);
+
+			sscanf(&ptr1[5], "%02d/%02d/%04d %02d:%02d:%02d",
+					&rtime.tm_mday, &rtime.tm_mon, &rtime.tm_year, &rtime.tm_hour, &rtime.tm_min, &rtime.tm_sec);
+
+			rtime.tm_year -= 1900;
+
+			Date = mktime(&rtime) - (time_t)_MYTIMEZONE;
+	
+			if (Date == (time_t)-1)
+				Date = time(NULL);
+
+			Msg->datecreated = Date;
+
+		}
+
+		if (linelen)			// Not Null line
+		{
+			ptr1 = ptr2 + 2;		// Skip cr
+			goto Loop;
+		}
+	
+		
+		// Processed all headers
+ProcessBody:
+
+		ptr2 +=2;					// skip crlf
+
+		Msg->length = &conn->MailBuffer[Msg->length] - ptr2;
+
+		memmove(conn->MailBuffer, ptr2, Msg->length);
+
+		CreateMessageFromBuffer(conn);
+
+		conn->BBSFlags = 0;				// Clear ARQ Mode
+		return;
+	}
+
+	// File away the data
+
+	Buffer[MsgLen++] = 0x0a;			// BBS Msgs stored with crlf
+
+	if ((conn->TempMsg->length + MsgLen) > conn->MailBufferSize)
+	{
+		conn->MailBufferSize += 10000;
+		conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+	
+		if (conn->MailBuffer == NULL)
+		{
+			BBSputs(conn, "*** Failed to extend Message Buffer\r");
+			conn->CloseAfterFlush = 20;			// 2 Secs
+
+			return;
+		}
+	}
+
+	memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, MsgLen);
+
+	conn->TempMsg->length += MsgLen;
+
+	return;
+
+	// Not sure what to do yet with files, but will process emails (using text style forwarding
+
+/*
+ARQ:FILE::flarqmail-1.eml
+ARQ:EMAIL::
+ARQ:SIZE::96
+ARQ::STX
+//FLARQ COMPOSER
+Date: 16/01/2014 22:26:06
+To: g8bpq
+From: 
+Subject: test message
+
+Hello
+Hello
+
+ARQ::ETX
+*/
+
+	return;
+}
+
 VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int len)
 {
 	Buffer[len] = 0;
-	Debugprintf(Buffer);
+//	Debugprintf(Buffer);
 
 	if (len == 1 && Buffer[0] == 13)
 		return;
@@ -7888,6 +8343,11 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (conn->BBSFlags & FLARQMODE)
+	{
+		ProcessFLARQLine(conn, user, Buffer, len);
+		return;
+	}
 
 	if (conn->BBSFlags & TEXTFORWARDING)
 	{
@@ -7976,6 +8436,40 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	}
 
 	Buffer[len] = 0;
+
+	if (strstr(Buffer, "ARQ:FILE:"))
+	{
+		// Message from FLARQ
+
+		conn->BBSFlags |= FLARQMODE;
+		strcpy(conn->ARQFilename, &Buffer[10]);			// Will need name when we decide what to do with files
+
+		// Create a Temp Messge Stucture
+
+		CreateMessage(conn, conn->Callsign, "", "", 'P', NULL, NULL);
+
+		Buffer[len++] = 0x0a;			// BBS Msgs stored with crlf
+
+		if ((conn->TempMsg->length + len) > conn->MailBufferSize)
+		{
+			conn->MailBufferSize += 10000;
+			conn->MailBuffer = realloc(conn->MailBuffer, conn->MailBufferSize);
+	
+			if (conn->MailBuffer == NULL)
+			{
+				BBSputs(conn, "*** Failed to extend Message Buffer\r");
+				conn->CloseAfterFlush = 20;			// 2 Secs
+
+				return;
+			}
+		}
+
+		memcpy(&conn->MailBuffer[conn->TempMsg->length], Buffer, len);
+
+		conn->TempMsg->length += len;
+
+		return;
+	}
 
 	if (memcmp(Buffer, ";FW:", 4) == 0)
 	{
@@ -8070,6 +8564,12 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	Arg1 = strtok_s(NULL, seps, &Context);
 	CmdLen = strlen(Cmd);
 
+	if (_stricmp(Cmd, "SHOWRMSPOLL") == 0)
+	{
+		DoShowRMSCmd(conn, user, Arg1, Context);
+		return;
+	}
+
 	if (_stricmp(Cmd, "AUTH") == 0)
 	{
 		DoAuthCmd(conn, user, Arg1, Context);
@@ -8135,6 +8635,21 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	if (_memicmp(Cmd, "K", 1) == 0)
 	{
 		DoKillCommand(conn, user, Cmd, Arg1, Context);
+		SendPrompt(conn, user);
+		return;
+	}
+
+
+	if (_memicmp(Cmd, "LISTFILES", 5) == 0 || _memicmp(Cmd, "FILES", 5) == 0)
+	{
+		ListFiles(conn, user, Arg1);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (_memicmp(Cmd, "READFILE", 4) == 0)
+	{
+		ReadBBSFile(conn, user, Arg1);
 		SendPrompt(conn, user);
 		return;
 	}
@@ -8345,11 +8860,16 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "                      LN LY LH LK LF L$ LD - List Message with corresponding Status\r");
 			BBSputs(conn, "                      LB LP LT - List Mesaage with corresponding Type\r");
 			BBSputs(conn, "                      LC List TO fields of all active bulletins\r");
+			BBSputs(conn, "LISTFILES or FILES - List files available for download\r");
+
 			BBSputs(conn, "N Name - Set Name\r");
 			BBSputs(conn, "NODE - Return to Node\r");
 			BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
+			BBSputs(conn, "POLLRMS - Manage Polling for messages from RMS \r");
 			BBSputs(conn, "Q QTH - Set QTH\r");
 			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");
+			BBSputs(conn, "READ Name - Read File\r");
+
 			BBSputs(conn, "S - Send Message - S or SP Send Personal, SB Send Bull, ST Send NTS,\r");
 			BBSputs(conn, "                   SR Num - Send Reply, SC Num - Send Copy\r");
 			BBSputs(conn, "X - Toggle Expert Mode\r");
@@ -8403,12 +8923,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	if ((_memicmp(Cmd, "EDITUSER", 5) == 0) || (_memicmp(Cmd, "EU", 2) == 0))
 	{
 		DoEditUserCmd(conn, user, Arg1, Context);
-		return;
-	}
-
-	if (_stricmp(Cmd, "SHOWRMS") == 0)
-	{
-		DoShowRMSCmd(conn, user, Arg1, Context);
 		return;
 	}
 
@@ -8594,7 +9108,235 @@ VOID TidyPrompts()
 	TidyPrompt(&ExpertPrompt);
 }
 
+BOOL SendARQMail(CIRCUIT * conn)
+{
+	conn->NextMessagetoForward = FirstMessageIndextoForward;
 
+	// Send Message. There is no mechanism for reverse forwarding
+
+	if (FindMessagestoForward(conn))
+	{
+		struct MsgInfo * Msg;
+		char MsgHddr[512];
+		int HddrLen;
+		char TimeString[64];
+		char * WholeMessage;
+
+		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
+		int MsgLen;
+		
+		if (MsgBytes == 0)
+		{
+			MsgBytes = _strdup("Message file not found\r");
+			conn->FwdMsg->length = strlen(MsgBytes);
+		}
+
+		Msg = conn->FwdMsg;
+		WholeMessage = malloc(Msg->length + 512);
+
+		FormatTime(TimeString, Msg->datecreated);
+
+/*
+ARQ:FILE::flarqmail-1.eml
+ARQ:EMAIL::
+ARQ:SIZE::96
+ARQ::STX
+//FLARQ COMPOSER
+Date: 16/01/2014 22:26:06
+To: g8bpq
+From: 
+Subject: test message
+
+Hello
+Hello
+
+ARQ::ETX		
+*/
+		Logprintf(LOG_BBS, conn, '>', "ARQ Send Msg %d From %s To %s", Msg->number, Msg->from, Msg->to);
+
+		HddrLen = sprintf(MsgHddr, "Date: %s\nTo: %s\nFrom: %s\nSubject %s\n\n",
+			TimeString, Msg->to, Msg->from, Msg->title);
+				
+		MsgLen = sprintf(WholeMessage, "ARQ:FILE::Msg%s_%d\nARQ:EMAIL::\nARQ:SIZE::%d\nARQ::STX\n%s%s\nARQ::ETX\n",
+			BBSName, Msg->number, HddrLen + strlen(MsgBytes), MsgHddr, MsgBytes);
+
+		WholeMessage[MsgLen] = 0;
+		QueueMsg(conn,WholeMessage, MsgLen);
+
+		free(WholeMessage);
+		free(MsgBytes);
+
+		// FLARQ doesn't ACK the message, so set flag to look for all acked
+				
+		conn->BBSFlags |= ARQMAILACK;
+		conn->ARQClearCount = 10;		// To make sure clear isn't reported too soon
+
+		return TRUE;
+	}
+
+	// Nothing to send - close
+
+	Logprintf(LOG_BBS, conn, '>', "ARQ Send -  Nothing to Send - Closing");
+
+	conn->CloseAfterFlush = 20;
+	return FALSE;
+}
+
+char *stristr (char *ch1, char *ch2)
+{
+	char	*chN1, *chN2;
+	char	*chNdx;
+	char	*chRet				= NULL;
+
+	chN1 = _strdup (ch1);
+	chN2 = _strdup (ch2);
+	if (chN1 && chN2)
+	{
+		chNdx = chN1;
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower (*chNdx);
+			chNdx ++;
+		}
+		chNdx = chN2;
+		while (*chNdx)
+		{
+			*chNdx = (char) tolower (*chNdx);
+			chNdx ++;
+		}
+		chNdx = strstr (chN1, chN2);
+		if (chNdx)
+			chRet = ch1 + (chNdx - chN1);
+	}
+	free (chN1);
+	free (chN2);
+	return chRet;
+}
+
+#ifdef WIN32
+
+void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename)
+{
+
+   WIN32_FIND_DATA ffd;
+
+   char szDir[MAX_PATH];
+   HANDLE hFind = INVALID_HANDLE_VALUE;
+ 
+   // Prepare string for use with FindFile functions.  First, copy the
+   // string to a buffer, then append '\*' to the directory name.
+
+   strcpy(szDir, GetBPQDirectory());
+   strcat(szDir, "\\BPQMailChat\\Files\\*.*");
+
+   // Find the first file in the directory.
+
+   hFind = FindFirstFile(szDir, &ffd);
+
+   if (INVALID_HANDLE_VALUE == hFind) 
+   {
+      nodeprintf(conn, "No Files\r");
+	  return;
+   } 
+   
+   // List all the files in the directory with some info about them.
+
+	do
+	{
+		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{}
+		else
+		{
+			if (filename == NULL || stristr(ffd.cFileName, filename))
+				nodeprintf(conn, "%s %d\r", ffd.cFileName, ffd.nFileSizeLow);
+		}
+	}
+	while (FindNextFile(hFind, &ffd) != 0);
+	
+	FindClose(hFind);
+}
+
+#else
+
+#include <dirent.h>
+
+void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename)
+{
+	struct dirent **namelist;
+    int n, i;
+	struct stat STAT;
+	time_t now = time(NULL);
+	int Age = 0, res;
+	char FN[256];
+     	
+    n = scandir("Files", &namelist, NULL, alphasort);
+
+	if (n < 0) 
+		perror("scandir");
+	else  
+	{ 
+		for (i = 0; i < n; i++)
+		{
+			sprintf(FN, "Files/%s", namelist[i]->d_name);
+
+			if (filename == NULL || stristr(namelist[i]->d_name, filename))
+				if (FN[6] != '.' && stat(FN, &STAT) == 0)
+					nodeprintf(conn, "%s %d\r", namelist[i]->d_name, STAT.st_size);
+			
+			free(namelist[i]);
+		}
+		free(namelist);
+    }
+	return;
+}
+#endif
+
+void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename)
+{
+	char * MsgBytes, * Save;
+	char FullTo[100];
+	int Index;
+	
+	int FileSize;
+	char MsgFile[MAX_PATH];
+	FILE * hFile;
+	struct stat STAT;
+		 
+	if (BaseDir[0])
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/Files/%s", BaseDir, filename);
+	else
+		sprintf_s(MsgFile, sizeof(MsgFile), "Files/%s", filename);
+
+	if (stat(MsgFile, &STAT) != -1)
+	{
+		FileSize = STAT.st_size;
+
+		hFile = fopen(MsgFile, "rb");
+
+		if (hFile)
+		{
+			int Length;
+	
+			MsgBytes=malloc(FileSize+1);
+			fread(MsgBytes, 1, FileSize, hFile); 
+			fclose(hFile);
+
+			MsgBytes[FileSize]=0;
+
+			// Remove lf chars
+
+			Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+			QueueMsg(conn, MsgBytes, Length);
+			free(MsgBytes);
+
+			nodeprintf(conn, "\r\r[End of File %s]\r", filename);
+			return;
+		}
+	}
+
+	nodeprintf(conn, "File %s not found\r", filename);
+}
 
 
 

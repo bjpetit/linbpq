@@ -71,8 +71,6 @@ typedef struct _AXARP
 } AXARP, *PAXARP;
 
 
-
-
 typedef struct _ETHARP
 {
 	struct _ETHMSG MSGHDDR;
@@ -94,15 +92,13 @@ typedef struct _ETHARP
 } ETHARP, *PETHARP;
 
 
-/*
 typedef struct _ROUTEENTRY
 {
-
-//       INITIALLY A STATIC STRUCTURE, BUILT FROM THE CONFIGURATION FILE
-
 	ULONG	NETWORK;	// NETWORK 
 	ULONG	SUBNET;		// SUBNET MASK
 	ULONG	GATEWAY;	// GATEWAY IP ADDRESS
+	ULONG	Encap;		// Encap if a Tunnelled 44 address
+	int		FRAMECOUNT; // FRAMES SENT TO THIS NETWORK
 	UCHAR	PORT;		// POINTER TO PORT ENTRY
 	UCHAR	RTYPE;		// TYPE (NETROM/VC/DG/ETH)
 	UCHAR	METRIC;		// FOR RIP 
@@ -110,17 +106,16 @@ typedef struct _ROUTEENTRY
 	UCHAR	ROUTECHANGED;// CHANGED RECENTLY FLAG
 	UCHAR	RIPTIMOUT;  // FOR REMOVING ACTIVE ENTRIES
 	UCHAR	GARTIMOUT;  // FOR REMOVING DEAD ENTRIES
-	int		FRAMECOUNT; // FRAMES SENT TO THIS NETWORK
 	UCHAR	Target[7];	// MAC Address - either enet or ax.25 (may use arp later)
 
-
 } ROUTEENTRY, *PROUTEENTRY;
-*/
-/*
-;       ARP DATA
-;
-;       USED TO TRANSLATE IP ADDRESSES TO MAC (Ether or ax.25) ADDDRESSES
-*/
+
+#pragma pack()
+
+//       ARP DATA
+
+//       USED TO TRANSLATE IP ADDRESSES TO MAC (Ether or ax.25) ADDDRESSES
+
 typedef struct _ARPDATA
 {
 //       KEEP IP ADDR AT FRONT
@@ -161,9 +156,6 @@ struct map_table_entry
 
 
 
-
-#pragma pack()
-
 HANDLE hInstance;
 
 //unsigned long _beginthread( void( *start_address )( void *), unsigned stack_size, char * arglist);
@@ -177,6 +169,7 @@ VOID ProcessAXARPMsg(PAXARP arpptr);
 VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port);
 BOOL CheckIPChecksum(PIPMSG IPptr);
 VOID ProcessICMPMsg(PIPMSG IPptr);
+VOID ProcessSNMPMessage(PIPMSG IPptr);
 VOID RouteIPMsg(PIPMSG IPptr);
 VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR);
 VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode);
@@ -192,7 +185,7 @@ VOID ReadARP();
 BOOL ProcessARPLine(char * buf, BOOL Locked);
 void IPResolveNames(void *dummy);
 int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len);
-
+int CheckSumAndSendUDP(PIPMSG IPptr, PUDPMSG UDPmsg, USHORT Len);
 VOID SaveARP();
 VOID WriteARPLine(PARPDATA ArpRecord, FILE * file);
 

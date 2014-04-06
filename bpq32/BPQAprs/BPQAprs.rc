@@ -66,9 +66,6 @@ BEGIN
                     SS_CENTERIMAGE
     EDITTEXT        IDC_RETRIES,67,9,20,12,ES_AUTOHSCROLL | ES_NUMBER
     EDITTEXT        IDC_RETRYTIME,163,9,20,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "Expire Time (Mins)",IDC_STATIC,2,27,60,12,
-                    SS_CENTERIMAGE
-    EDITTEXT        IDC_EXPIRE,67,27,20,12,ES_AUTOHSCROLL | ES_NUMBER
     LTEXT           "IS Filter",IDC_STATIC,2,45,60,12,SS_CENTERIMAGE
     EDITTEXT        IDC_FILTER,67,45,262,12,ES_AUTOHSCROLL
     LTEXT           "Filename",IDC_STATIC,29,113,33,12,SS_CENTERIMAGE
@@ -85,11 +82,6 @@ BEGIN
     EDITTEXT        IDC_WXPORTS,138,142,81,12,ES_AUTOHSCROLL | WS_DISABLED
     CONTROL         "Suppress stations with zero Lat/Lon",IDC_SUPZERO,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,65,130,10
-    CONTROL         "Default to no tracks",IDC_NOTRACKS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,203,28,75,10
-    LTEXT           "Track Expire Time",IDC_STATIC,94,27,59,12,
-                    SS_CENTERIMAGE
-    EDITTEXT        IDC_EXPIRETRACKS,163,27,20,12,ES_AUTOHSCROLL | ES_NUMBER
     CONTROL         "Use Local Time",IDC_LOCALTIME,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,146,65,75,10
     LTEXT           "Filename",IDC_STATIC,8,187,33,12,SS_CENTERIMAGE
@@ -101,6 +93,13 @@ BEGIN
     PUSHBUTTON      "Browse",IDC_FILE2,275,187,33,12
     CONTROL         "Create JPEG of display",IDC_CREATEJPEG,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,2,170,84,10
+    LTEXT           "Send ACKS and Replies using received path",IDC_STATIC,2,
+                    25,150,12,SS_CENTERIMAGE | NOT WS_VISIBLE
+    CONTROL         "",IDC_CHECK1,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,163,
+                    27,16,8
+    CONTROL         "Use Decay Retry Algorithm",IDC_CHECK2,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | NOT WS_VISIBLE | 
+                    WS_TABSTOP,195,11,101,10
 END
 
 APRSMSGS DIALOG DISCARDABLE  100, 100, 467, 275
@@ -113,16 +112,18 @@ BEGIN
     COMBOBOX        IDC_TOCALL,12,215,45,50,CBS_DROPDOWN | CBS_SORT | 
                     CBS_UPPERCASE | WS_VSCROLL | WS_TABSTOP
     LTEXT           "Text",IDC_TEXTLABEL,60,216,19,8
-    EDITTEXT        IDC_INPUT,84,215,222,12,ES_AUTOHSCROLL
+    EDITTEXT        IDC_INPUT,80,215,222,12,ES_AUTOHSCROLL
     CONTROL         "Show only my Messages",IDC_MYMSGS,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT,5,5,96,8
     CONTROL         "Beep instead of Popup",IDC_MSGBEEP,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT,108,5,97,8
     CONTROL         "List1",IDC_LIST1,"SysListView32",LVS_REPORT | WS_BORDER,
-                    9,26,367,69
+                    9,26,396,69
     CONTROL         "List2",IDC_LIST2,"SysListView32",LVS_REPORT | WS_BORDER,
-                    8,103,373,83
+                    8,103,396,83
     PUSHBUTTON      "Clear Screen",IDC_CLEARMSGS,223,3,56,10
+    LTEXT           "Path",IDC_TEXTLABEL2,307,216,19,8,NOT WS_VISIBLE
+    EDITTEXT        IDC_PATH,329,215,76,12,ES_AUTOHSCROLL | NOT WS_VISIBLE
 END
 
 APRSSTNS DIALOG DISCARDABLE  100, 100, 505, 275

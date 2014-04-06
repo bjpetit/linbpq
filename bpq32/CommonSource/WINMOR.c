@@ -84,6 +84,7 @@ VOID MoveWindows(struct TNCINFO * TNC);
 int SendReporttoWL2K(struct TNCINFO * TNC);
 char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
+BOOL KillOldTNC(char * Path);
 
 static char ClassName[]="WINMORSTATUS";
 static char WindowTitle[] = "WINMOR";

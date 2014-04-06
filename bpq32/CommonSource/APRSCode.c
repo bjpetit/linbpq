@@ -9,7 +9,6 @@
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 
-
 #include <stdio.h>
 #include "CHeaders.h"
 #include "bpq32.h"
@@ -27,6 +26,7 @@
 
 static BOOL APIENTRY  GETSENDNETFRAMEADDR();
 static VOID DoSecTimer();
+static VOID DoMinTimer();
 static APRSProcessLine(char * buf);
 static BOOL APRSReadConfigFile();
 VOID APRSISThread(BOOL Report);
@@ -57,6 +57,9 @@ struct STATIONRECORD * DecodeAPRSISMsg(char * msg);
 struct STATIONRECORD * ProcessRFFrame(char * buffer, int len);
 VOID APRSSecTimer();
 double Distance(double laa, double loa);
+struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
+VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
+
 
 BOOL ProcessConfig();
 
@@ -82,6 +85,7 @@ extern HWND hConsWnd;
 extern HKEY REGTREE;
 
 static int SecTimer = 10;
+static int MinTimer = 60;
 
 BOOL APRSApplConnected = FALSE;  
 BOOL APRSWeb = FALSE;  
@@ -149,13 +153,13 @@ int DigiLen[MAXCALLS];
 int ISPort = 0;
 char ISHost[256] = "";
 int ISPasscode = 0;
-char NodeFilter[1000] = "";		// Filter when the isn't an application
-char ISFilter[1000] = "m/1";		// Current Filter
-char APPLFilter[1000] = "";		// Filter when an Applcation is running
+char NodeFilter[1000] = "m/50";		// Filter when the isn't an application
+char ISFilter[1000] = "m/50";		// Current Filter
+char APPLFilter[1000] = "";			// Filter when an Applcation is running
 
 extern BOOL IGateEnabled;
 
-char StatusMsg[256] = "";		// Must be in shared segment
+char StatusMsg[256] = "";			// Must be in shared segment
 int StatusMsgLen = 0;
 
 char * BeaconPath[33] = {0};
@@ -290,6 +294,8 @@ BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
 BOOL LocalTime = TRUE;
 
+int MaxStations = 500;
+
 RECT Rect, MsgRect, StnRect;
 
 char Key[80];
@@ -317,10 +323,17 @@ BOOL NeedRefresh = FALSE;
 time_t LastRefresh = 0;
 
 
-struct STATIONRECORD * StationRecords = NULL;
+
+//	Stationrecords are stored in a shared memory segment. based at APRSStationMemory (normally 0x43000000)
+
+//	A pointer to the first is placed at the start of this
+
+
+struct STATIONRECORD ** StationRecords = NULL;
+struct STATIONRECORD * StationRecordPool = NULL;
+
 struct APRSMESSAGE * Messages = NULL;
 struct APRSMESSAGE * OutstandingMsgs = NULL;
-
 
 
 VOID SendObject(struct OBJECT * Object);
@@ -329,6 +342,10 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX);
 #ifndef WIN32
 #define WSAEWOULDBLOCK 11
 #endif
+
+HANDLE hMapFile;
+UCHAR * APRSStationMemory = NULL;
+
 
 int ISSend(SOCKET sock, char * Msg, int Len, int flags)
 {
@@ -361,8 +378,13 @@ Dll BOOL APIENTRY Init_APRS()
 {
 	int i;
 	char * DCall;
+
+#ifndef LINBPQ
 	HKEY hKey=0;
 	int retCode, Vallen, Type; 
+	char Error[80];
+#endif
+	struct STATIONRECORD * Stn1, * Stn2;
 
 	// CLear tables in case a restart
 
@@ -410,7 +432,7 @@ Dll BOOL APIENTRY Init_APRS()
 
 #ifdef LINBPQ
 
-	APRSWeb = TRUE;
+	APRSStationMemory = malloc(sizeof(struct STATIONRECORD) * (MaxStations + 1));
 
 #else
 
@@ -447,7 +469,63 @@ Dll BOOL APIENTRY Init_APRS()
 */
 	}
 
+	// Create Memory Mapping for Station List
+
+   hMapFile = CreateFileMapping(
+                 INVALID_HANDLE_VALUE,    // use paging file
+                 NULL,                    // default security
+                 PAGE_READWRITE,          // read/write access
+                 0,                       // maximum object size (high-order DWORD)
+                 sizeof(struct STATIONRECORD) * (MaxStations + 1), // maximum object size (low-order DWORD)
+                 "BPQAPRSStationsMappingObject");                 // name of mapping object
+
+   if (hMapFile == NULL)
+   {
+      Consoleprintf("Could not create file mapping object (%d).\n", GetLastError());
+      return 0;
+   }
+
+   UnmapViewOfFile(0x43000000);
+
+
+   APRSStationMemory = (LPTSTR) MapViewOfFileEx(hMapFile,   // handle to map object
+                        FILE_MAP_ALL_ACCESS, // read/write permission
+                        0,
+                        0,
+                        sizeof(struct STATIONRECORD) * (MaxStations + 1),
+						(void *)0x43000000);
+
+   if (APRSStationMemory == NULL)
+   {
+	   Consoleprintf("Could not map view of file (%d).\n", GetLastError());
+	   CloseHandle(hMapFile);
+	   return 0;
+   }
+
 #endif
+
+   // First record has pointer to table
+
+   memset(APRSStationMemory, 0, sizeof(struct STATIONRECORD) * (MaxStations + 1));
+
+   Stn1  = (struct STATIONRECORD *)APRSStationMemory;
+
+   StationRecords = (struct STATIONRECORD **)Stn1;
+   
+   Stn1++;
+   
+   StationRecordPool = Stn1;
+
+   for (i = 1; i < MaxStations; i++)		// Already have first
+   {	   
+		Stn2 = Stn1;
+		Stn2++;
+		Stn1->Next = Stn2;
+
+		Stn1 = Stn2;
+   }
+
+
 
 	if (PosnSet == 0)
 	{
@@ -506,6 +584,9 @@ Dll BOOL APIENTRY Init_APRS()
 		OpenGPSPort();
 
 	WritetoConsole("APRS Digi/Gateway Enabled\n");
+
+	APRSWeb = TRUE;
+
 	return TRUE;
 }
 
@@ -540,6 +621,14 @@ Dll VOID APIENTRY Poll_APRS()
 	{
 		SecTimer = 10;
 		DoSecTimer();
+
+		MinTimer--;
+
+		if (MinTimer == 0)
+		{
+			MinTimer = 10;
+			DoMinTimer();
+		}
 	}
 
 	if (GPSPort)
@@ -595,6 +684,12 @@ Dll VOID APIENTRY Poll_APRS()
 		Port = Orig->PORT;
 		
 		if (Port & 0x80)		// TX
+		{
+			ReleaseBuffer(monbuff);
+			continue;
+		}
+
+		if (CompareCalls(Orig->ORIGIN, AXCall))	// Our Packet
 		{
 			ReleaseBuffer(monbuff);
 			continue;
@@ -732,28 +827,6 @@ Dll VOID APIENTRY Poll_APRS()
 
 		memcpy(MsgCopy, buffer, len);			// Process RF Frame may have changed it
 		MsgCopy[len] = 0;
-
-		// if APRS Appl is atttached, queue message to it
-
-		if (APRSApplConnected)
-		{
-			// Make sure we don't have too many queued (Appl could have crashed)
-			
-			UINT * buffptr;
-
-			if (C_Q_COUNT(&APPL_Q) > 50)
-				buffptr = Q_REM(&APPL_Q);
-			else
-				buffptr = GetBuff();
-			
-			if (buffptr)
-			{
-				buffptr[1] = len;
-				buffptr[2] = Port;
-				memcpy(&buffptr[3], buffer, len);
-				C_Q_ADD(&APPL_Q, buffptr);
-			}
-		}
 
 		buffer[len++] = 10;
 		buffer[len] = 0;
@@ -1481,6 +1554,18 @@ static APRSProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr, "MaxStations") == 0)
+	{
+		MaxStations = atoi(p_value);
+		return TRUE;
+	}
+
+	if (_stricmp(ptr, "MaxAge") == 0)
+	{
+		ExpireTime = atoi(p_value);
+		return TRUE;
+	}
+
 	if (_stricmp(ptr, "GPSPort") == 0)
 	{
 		GPSPort = atoi(p_value);
@@ -1715,7 +1800,8 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	char * StMsg = BeaconText;
 	int Len;
 	char SOGCOG[10] = "";
-
+	struct STATIONRECORD * Station;
+	
 	if (PosnSet == FALSE)
 		return;
 
@@ -1742,6 +1828,19 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 
 	if (CheckforDups(APRSCall, Msg.L2DATA, Len - 23))
 		return;
+
+	// Add to our station list
+
+	Station = FindStation(APRSCall, TRUE);
+		
+	strcpy(Station->Path, "APBPQ1");
+	strcpy(Station->LastPacket, Msg.L2DATA);
+//	Station->LastPort = Port;
+
+	DecodeAPRSPayload(Msg.L2DATA, Station);
+	Station->TimeLastUpdated = time(NULL);
+
+
 
 	if (toPort && BeaconHddrLen[toPort])
 	{
@@ -1788,28 +1887,6 @@ VOID SendBeacon(int toPort, char * BeaconText, BOOL SendISStatus, BOOL SendSOGCO
 	if (SendISStatus)
 		StatusCounter = 10;
 
-
-	// and to Application
-
-	if (APRSApplConnected)
-	{
-		// Make sure we don't have too many queued (Appl could have crashed)
-			
-		UINT * buffptr;
-
-		if (C_Q_COUNT(&APPL_Q) > 50)
-			buffptr = Q_REM(&APPL_Q);
-		else
-			buffptr = GetBuff();
-				
-		if (buffptr)
-		{
-			buffptr[1] = sprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r!%s%c%s%c%s BPQ32 Igate V %s\r\n",
-				APRSCall, APRSDest, LAT, SYMSET, LON, SYMBOL, SOGCOG, VersionString);
-			buffptr[2] = 255;
-			C_Q_ADD(&APPL_Q, buffptr);
-		}
-	}
 }
 
 VOID SendObject(struct OBJECT * Object)
@@ -1818,6 +1895,10 @@ VOID SendObject(struct OBJECT * Object)
 	DIGIMESSAGE Msg;
 	int Len;
 	
+	//	Add to dup list in case we get it back
+
+	CheckforDups(APRSCall, Object->Message, strlen(Object->Message));
+
 	for (Port = 1; Port <= NUMBEROFPORTS; Port++)
 	{
 		if (Object->PortMap[Port])
@@ -1838,29 +1919,6 @@ VOID SendObject(struct OBJECT * Object)
 		Len = sprintf(ISMsg, "%s>%s,TCPIP*:%s\r\n", APRSCall, APRSDest, Object->Message);
 		ISSend(sock, ISMsg, Len, 0);
 
-	}
-
-	// and to Application
-
-	if (APRSApplConnected)
-	{
-		// Make sure we don't have too many queued (Appl could have crashed)
-			
-		UINT * buffptr;
-
-		if (C_Q_COUNT(&APPL_Q) > 50)
-			buffptr = Q_REM(&APPL_Q);
-		else
-			buffptr = GetBuff();
-				
-		if (buffptr)
-		{
-			buffptr[1] = sprintf((char *)&buffptr[3], "xx xx xx  %s>%s <UI>:\r%s\r\n",
-				APRSCall, APRSDest, Object->Message);
-
-			buffptr[2] = 255;
-			C_Q_ADD(&APPL_Q, buffptr);
-		}
 	}
 }
 
@@ -2010,6 +2068,75 @@ VOID DoSecTimer()
 	APRSSecTimer();				// Code from APRS APPL
 }
 
+int CountPool()
+{
+	struct STATIONRECORD * ptr = StationRecordPool;
+	int n = 0;
+
+	while (ptr)
+	{
+		n++;
+		ptr = ptr->Next;
+	}
+	return n;
+}
+
+static VOID DoMinTimer()
+{
+	struct STATIONRECORD * ptr = *StationRecords;
+	struct STATIONRECORD * last = NULL;
+	time_t AgeLimit = time(NULL ) - (ExpireTime * 60);
+	int i = 0;
+
+	// Remove old records
+
+	while (ptr)
+	{
+		if (ptr->TimeLastUpdated < AgeLimit)
+		{
+			StationCount--;
+
+			if (last)
+			{
+				last->Next = ptr->Next;
+			
+				// Put on front of free chain
+
+				ptr->Next = StationRecordPool;
+				StationRecordPool = ptr;
+
+				ptr = last->Next;
+			}
+			else
+			{
+				// First in list
+				
+				*StationRecords = ptr->Next;
+			
+				// Put on front of free chain
+
+				ptr->Next = StationRecordPool;
+				StationRecordPool = ptr;
+
+				if (*StationRecords)
+				{
+					ptr = *StationRecords;
+				}
+				else
+				{
+					ptr = NULL;
+					CountPool();
+				}
+			}
+		}
+		else
+		{
+			last = ptr;
+			ptr = ptr->Next;
+		}
+	}
+}
+
 char APRSMsg[300];
 
 VOID APRSISThread(BOOL Report)
@@ -2091,9 +2218,12 @@ VOID APRSISThread(BOOL Report)
 		InputLen = sprintf(errmsg, "Connect Failed %s Error %d \r\n", ISHost, err);
 		MonitorAPRSIS(errmsg, InputLen, FALSE);
 
+		freeaddrinfo(res);
 		return;
 	}
 
+	freeaddrinfo(res);
+	
 	InputLen=recv(sock, Buffer, 5500, 0);
 
 	if (InputLen > 0)
@@ -2236,31 +2366,6 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 #else
 	Station = DecodeAPRSISMsg(ISCopy);
 #endif
-
-	if (APRSApplConnected)
-	{
-		// Make sure we don't have too many queued (Appl could have crashed)
-			
-		UINT * buffptr;
-
-		GetSemaphore(&Semaphore);
-		SemHeldByAPI = 12;
-
-		if (C_Q_COUNT(&APPL_Q) > 50)
-			buffptr = Q_REM(&APPL_Q);
-		else
-			buffptr = GetBuff();
-				
-		if (buffptr)
-		{
-			buffptr[1] = strlen(APRSMsg);
-			buffptr[2] = 0;
-			memcpy(&buffptr[3], APRSMsg, buffptr[1]);
-			C_Q_ADD(&APPL_Q, buffptr);
-		}
-
-		FreeSemaphore(&Semaphore);
-	}
 
 //}WB4APR-14>APRS,RELAY,TCPIP,G9RXG*::G3NRWVVVV:Hi Ian{001
 //KE7XO-2>hg,TCPIP*,qAC,T2USASW::G8BPQ-14 :Path - G8BPQ-14>APU25N
@@ -2936,7 +3041,7 @@ Dll VOID APIENTRY APRSDisconnect()
 
 }
 
-Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port)
+Dll BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call)
 {
 	// Request APRS Data from Switch (called by APRS Applications)
 
@@ -2953,18 +3058,9 @@ Dll BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port)
 		{
 			buffptr = Q_REM(&APPL_Q);
 
-			*Len = buffptr[1];
-			*Port = buffptr[2];
+			memcpy(Call, (char *)&buffptr[2], 12);
+			strcpy(Frame, (char *)&buffptr[5]);
 
-			if (buffptr[1] > 400 || buffptr[1] < 0)
-			{
-				Debugprintf ("Corrupt APRS Frame Len = %d",  buffptr[1]);
-				ReleaseBuffer(buffptr);
-				FreeSemaphore(&Semaphore);
-				return FALSE;
-			}
-
-			memcpy(Frame, &buffptr[3], buffptr[1]);
 			ReleaseBuffer(buffptr);
 			FreeSemaphore(&Semaphore);
 			return TRUE;
@@ -3262,7 +3358,7 @@ Lost:
 
 VOID APIENTRY APRSConnect(char * Call, char * Filter);
 VOID APIENTRY APRSDisconnect();
-BOOL APIENTRY GetAPRSFrame(char * Frame, int * Len, int * Port);
+BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call);
 BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
 BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
@@ -3276,14 +3372,12 @@ int TogglePort(HWND hWnd, int Item, int mask);
 VOID SendFrame(UCHAR * buff, int txlen);
 int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 int	KissDecode(UCHAR * inbuff, int len);
-struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFound);
 //void UpdateStation(char * Call, char * Path, char * Comment, double V_Lat, double V_Lon, double V_SOG, double V_COG, int iconRow, int iconCol);
 VOID FindStationsByPixel(int MouseX, int MouseY);
 void RefreshStation(struct STATIONRECORD * ptr);
 void RefreshStationList();
 void RefreshStationMap();
 BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station);
-VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station);
 VOID Decode_MIC_E_Packet(char * Payload, struct STATIONRECORD * Station);
 BOOL GetLocPixels(double Lat, double Lon, int * X, int * Y);
 VOID APRSPoll();
@@ -3393,10 +3487,24 @@ char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent
 
 char APRSMsg[300];
 
+Dll struct STATIONRECORD *  APIENTRY APPLFindStation(char * Call, BOOL AddIfNotFount)
+{
+	//	Called from APRS Appl
+
+	struct STATIONRECORD * Stn;
+
+	GetSemaphore(&Semaphore);
+	SemHeldByAPI = 12;
+	Stn = FindStation(Call, AddIfNotFount)	;		
+	FreeSemaphore(&Semaphore);
+
+	return Stn;
+}
+
 struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 {
 	int i = 0;
-	struct STATIONRECORD * find = StationRecords;
+	struct STATIONRECORD * find = *StationRecords;
 	struct STATIONRECORD * ptr;
 	struct STATIONRECORD * last = NULL;
 	int sum = 0;
@@ -3427,19 +3535,34 @@ struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 
 	if (AddIfNotFount)
 	{
-		ptr = malloc(sizeof(struct STATIONRECORD));
-		memset(ptr, 0, sizeof(struct STATIONRECORD));
+		// Get first from station record pool
+		
+		ptr = StationRecordPool;
+		
+		if (ptr)
+		{
+			StationRecordPool = ptr->Next;	// Unchain
+			StationCount++;
+		}
+		else
+		{
+			//	Get First from Stations
+
+			ptr = *StationRecords;
+			if (ptr)
+				*StationRecords = ptr->Next;
+		}
 
 		if (ptr == NULL) return NULL;
+
+		memset(ptr, 0, sizeof(struct STATIONRECORD));
 	
 //		EnterCriticalSection(&Crit);
 
-		if (StationRecords == NULL)
-			StationRecords = ptr;
+		if (*StationRecords == NULL)
+			*StationRecords = ptr;
 		else
 			last->Next = ptr;
-
-		StationCount++;
 
 //		LeaveCriticalSection(&Crit);
 
@@ -3873,7 +3996,32 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 		//for now messages are only processed in BPQAPRS if Windows
 
 #ifdef LINBPQ
-		ProcessMessage(Payload, Station);
+		ProcessMessage(Payload, Station);		// if APRS Appl is atttached, queue message to it
+#else
+		if (APRSApplConnected)
+		{
+			// Make sure we don't have too many queued (Appl could have crashed)
+			
+			UINT * buffptr;
+
+			GetSemaphore(&Semaphore);
+			SemHeldByAPI = 12;
+
+			if (C_Q_COUNT(&APPL_Q) > 50)
+				buffptr = Q_REM(&APPL_Q);
+			else
+				buffptr = GetBuff();
+			
+			if (buffptr)
+			{
+				buffptr[1] = 0;
+				memcpy(&buffptr[2], Station->Callsign, 12);
+				strcpy(&buffptr[5], Payload);
+				C_Q_ADD(&APPL_Q, buffptr);
+			}
+			FreeSemaphore(&Semaphore);
+		}
+
 #endif
 		break;
 
@@ -3897,6 +4045,11 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 			return;
 
 		*(Payload++) = 0;
+
+		// Check Dup Filter
+
+		if (CheckforDups(Callsign, Payload, strlen(Payload)))
+			return;
 
 		// Look up station - create a new one if not found
 
@@ -4653,6 +4806,7 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 
 VOID APRSSecTimer()
 {
+
 	// Check Message Retries
 
 	struct APRSMESSAGE * ptr = OutstandingMsgs;
@@ -5168,7 +5322,7 @@ int CompareFN(const void *a, const void *b)
 char * CreateStationList(BOOL RFOnly, BOOL WX, BOOL Mobile, char Objects, int * Count, char * Param)
 {
 	char * Line = malloc(100000);
-	struct STATIONRECORD * ptr = StationRecords;
+	struct STATIONRECORD * ptr = *StationRecords;
 	int n = 0, i;
 	struct STATIONRECORD * List[1000];
 	int TableWidth = 8;
@@ -5677,9 +5831,9 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 	FN = strtok_s(FN, "?", &Param);
 
 	if (strcmp(FN, "/") == 0)
-		sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/index.html", APRSDir, SpecialDocs);
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/%s/index.html", BPQDirectory, APRSDir, SpecialDocs);
 	else
-		sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s%s", APRSDir, SpecialDocs, &FN[5]);
+		sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/%s%s", BPQDirectory, APRSDir, SpecialDocs, &FN[5]);
 	
 	hFile = fopen(MsgFile, "rb");
 
@@ -5688,9 +5842,9 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 		// Try normal pages
 
 		if (strcmp(FN, "/") == 0)
-			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/index.html", APRSDir, HTDocs);
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/%s/index.html", BPQDirectory, APRSDir, HTDocs);
 		else
-			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s%s", APRSDir, HTDocs, &FN[5]);
+			sprintf_s(MsgFile, sizeof(MsgFile), "%s/%s/%s%s", BPQDirectory,APRSDir, HTDocs, &FN[5]);
 	
 		hFile = fopen(MsgFile, "rb");
 

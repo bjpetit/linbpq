@@ -46,6 +46,8 @@ int CurrentConfigIndex;			// Index of current user record
 int CurrentMsgIndex;			// Index of current Msg record
 struct UserInfo * CurrentBBS;	// User Record of selected BBS iin Forwarding Config;
 
+struct UserInfo * MsgBBSList[NBBBS+2] = {0}; // Sorted BBS List
+
 char InfoBoxText[100];			// Text to display in Config Info Popup
 
 char Filter_FROM[20];
@@ -462,6 +464,9 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		CheckDlgButton(pHdr->hwndDisplay, IDC_BBSTOSYSOPCALL, SendBBStoSYSOPCall);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_DONTHOLDNEW, DontHoldNewUsers);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_FORWARDTOBBS, ForwardToMe);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_NONAME, AllowAnon);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_NOHOMEBBS, DontNeedHomeBBS);
+
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
 		SetDlgItemText(pHdr->hwndDisplay, IDC_BaseDir, BaseDirRaw);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_BBSAppl, BBSApplNum, FALSE);
@@ -1230,6 +1235,8 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 	}				
 }
 
+int compare(const void *arg1, const void *arg2);
+
 int Do_Msg_Sel_Changed(HWND hDlg)
 {
 	
@@ -1255,6 +1262,10 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 
 		if (Msg->number == Msgno)
 		{
+			struct UserInfo * USER;
+			int i = 0, n;
+			UINT State;
+
 			SetDlgItemText(hDlg, 6001, Msg->from);
 			SetDlgItemText(hDlg, 6002, Msg->bid);
 			SetDlgItemText(hDlg, 6003, Msg->to);
@@ -1286,37 +1297,41 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 			case '$': Sel = MSGSTATUS_$; break;
 			}
 
+			// Get a sorted list of BBS records
+
+			for (n = 1; n <= NumberofUsers; n++)
+			{
+				USER = UserRecPtr[n];
+
+				if ((USER->flags & F_BBS) && USER->BBSNumber)
+					MsgBBSList[i++] = USER;
+			}
+
+			qsort((void *)MsgBBSList, i, 4, compare );
+
 			SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_SETCURSEL, Sel, 0);
 
-			for (BBSNo = 1; BBSNo <= NBBBS; BBSNo++ )
+			for (n = 0; n <= NBBBS; n++)
 			{
-				CheckDlgButton(hDlg, BBSNo + 24, BST_INDETERMINATE);
-			}
+				State = BST_INDETERMINATE;
 
-			// Look for forward bits
-			
-			if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)
-			{	
-				for (user = BBSChain; user; user = user->BBSNext)
+				USER = MsgBBSList[n];
+				
+				if (USER)
 				{
-					if (check_fwd_bit(Msg->fbbs, user->BBSNumber))
-					{
-						SetDlgItemText(hDlg, user->BBSNumber+ 24, user->Call);
-						CheckDlgButton(hDlg, user->BBSNumber+ 24, BST_UNCHECKED);
-					}
-				} 
-			}
-
-			if (memcmp(Msg->forw, zeros, NBMASK) != 0)
-			{	
-				for (user = BBSChain; user; user = user->BBSNext)
-				{
-					if (check_fwd_bit(Msg->forw, user->BBSNumber))
-					{
-						SetDlgItemText(hDlg, user->BBSNumber+ 24, user->Call);
-						CheckDlgButton(hDlg, user->BBSNumber+ 24, BST_CHECKED);
-					}
+					if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)	
+						if (check_fwd_bit(Msg->fbbs, USER->BBSNumber))
+							State = BST_UNCHECKED;
+					if (memcmp(Msg->forw, zeros, NBMASK) != 0)	
+						if (check_fwd_bit(Msg->forw, USER->BBSNumber))
+							State = BST_CHECKED;
+				
+					SetDlgItemText(hDlg, n + 25, USER->Call);
 				}
+				else
+					SetDlgItemText(hDlg, n + 25, "");
+
+				CheckDlgButton(hDlg, n + 25, State);	
 			}
 
 			return 0;
@@ -1334,7 +1349,7 @@ VOID Do_Save_Msg(HWND hDlg)
 	struct UserInfo * user;
 
 	char status[2];
-	int n, BBSNumber;
+	int i, n, BBSNumber;
 	BOOL toforward, forwarded;
 
 	if (CurrentMsgIndex == -1)
@@ -1355,62 +1370,67 @@ VOID Do_Save_Msg(HWND hDlg)
 	GetDlgItemText(hDlg, IDC_MSGTYPE, status, 2);
 	Msg->type = status[0];
 
-	for (user = BBSChain; user; user = user->BBSNext)
+	// Check each BBS to for Farwardind State
+
+	for (i = 0; i < NBBBS; i++)
 	{
-		n = IsDlgButtonChecked(hDlg, user->BBSNumber + 24);
+		n = IsDlgButtonChecked(hDlg, i + 25);
 
-		BBSNumber = user->BBSNumber;
+		user = MsgBBSList[i];
 
-		toforward = check_fwd_bit(Msg->fbbs, BBSNumber);
-		forwarded = check_fwd_bit(Msg->forw, BBSNumber);
-
-		if (n == BST_INDETERMINATE)
+		if (user)
 		{
-			if ((!toforward) && (!forwarded))
+			BBSNumber = user->BBSNumber;	
+
+			toforward = check_fwd_bit(Msg->fbbs, BBSNumber);
+			forwarded = check_fwd_bit(Msg->forw, BBSNumber);
+
+			if (n == BST_INDETERMINATE)
 			{
-				// No Change
-				continue;
+				if ((!toforward) && (!forwarded))
+				{
+					// No Change
+					continue;
+				}
+				else
+				{
+					clear_fwd_bit(Msg->fbbs, BBSNumber);
+					if (toforward)
+						user->ForwardingInfo->MsgCount--;
+
+					clear_fwd_bit(Msg->forw, BBSNumber);
+				}
 			}
-			else
+			else if (n == BST_UNCHECKED)
 			{
-				clear_fwd_bit(Msg->fbbs, BBSNumber);
 				if (toforward)
-					user->ForwardingInfo->MsgCount--;
-
-				clear_fwd_bit(Msg->forw, BBSNumber);
+				{
+					// No Change
+					continue;
+				}
+				else
+				{
+					set_fwd_bit(Msg->fbbs, BBSNumber);
+					user->ForwardingInfo->MsgCount++;
+					clear_fwd_bit(Msg->forw, BBSNumber);
+					if (FirstMessageIndextoForward > CurrentMsgIndex)
+						FirstMessageIndextoForward = CurrentMsgIndex;
+				}
 			}
-		}
-		else if (n == BST_UNCHECKED)
-		{
-			if (toforward)
+			else if (n == BST_CHECKED)
 			{
-				// No Change
-				continue;
-			}
-			else
-			{
-				set_fwd_bit(Msg->fbbs, BBSNumber);
-				user->ForwardingInfo->MsgCount++;
-				clear_fwd_bit(Msg->forw, BBSNumber);
-				if (FirstMessageIndextoForward > CurrentMsgIndex)
-					FirstMessageIndextoForward = CurrentMsgIndex;
-			}
-		}
-		else if (n == BST_CHECKED)
-		{
-			if (forwarded)
-			{
-				// No Change
-				continue;
-			}
-			else
-			{
-				set_fwd_bit(Msg->forw, BBSNumber);
-
-				clear_fwd_bit(Msg->fbbs, BBSNumber);
-				if (toforward)
-					user->ForwardingInfo->MsgCount--;
-
+				if (forwarded)
+				{
+					// No Change
+					continue;
+				}
+				else
+				{
+					set_fwd_bit(Msg->forw, BBSNumber);
+					clear_fwd_bit(Msg->fbbs, BBSNumber);
+					if (toforward)
+						user->ForwardingInfo->MsgCount--;
+				}
 			}
 		}
 	}
@@ -1457,6 +1477,9 @@ VOID SaveBBSConfig()
 	SendBBStoSYSOPCall = IsDlgButtonChecked(hwndDisplay, IDC_BBSTOSYSOPCALL);
 	DontHoldNewUsers = IsDlgButtonChecked(hwndDisplay, IDC_DONTHOLDNEW);
 	ForwardToMe = IsDlgButtonChecked(hwndDisplay, IDC_FORWARDTOBBS);
+	DontNeedHomeBBS = IsDlgButtonChecked(hwndDisplay, IDC_NOHOMEBBS);
+	AllowAnon = IsDlgButtonChecked(hwndDisplay, IDC_NONAME);
+
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);
 	POP3InPort = GetDlgItemInt(hwndDisplay, IDC_POP3Port, &OK3, FALSE);
@@ -1482,6 +1505,9 @@ VOID SaveBBSConfig()
 		retCode = RegSetValueEx(hKey, "SendBBStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendBBStoSYSOPCall,4);
 		retCode = RegSetValueEx(hKey, "DontHoldNewUsers",0, REG_DWORD,(BYTE *)&DontHoldNewUsers,4);
 		retCode = RegSetValueEx(hKey, "ForwardToMe",0, REG_DWORD,(BYTE *)&ForwardToMe,4);
+		retCode = RegSetValueEx(hKey, "AllowAnon",0, REG_DWORD,(BYTE *)&AllowAnon,4);
+		retCode = RegSetValueEx(hKey, "DontNeedHomeBBS",0, REG_DWORD,(BYTE *)&DontNeedHomeBBS,4);
+
 		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
 		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
 		retCode = RegSetValueEx(hKey, "NNTPPort",0,REG_DWORD,(BYTE *)&NNTPInPort,4);
@@ -2142,6 +2168,14 @@ TryAgain:
 			(ULONG *)&Type,(UCHAR *)&ForwardToMe,(ULONG *)&Vallen);
 
 		Vallen=4;
+		RegQueryValueEx(hKey,"AllowAnon",0,			
+			(ULONG *)&Type,(UCHAR *)&AllowAnon,(ULONG *)&Vallen);
+
+		Vallen=4;
+		RegQueryValueEx(hKey,"DontNeedHomeBBS",0,			
+			(ULONG *)&Type,(UCHAR *)&DontNeedHomeBBS,(ULONG *)&Vallen);
+
+		Vallen=4;
 		RegQueryValueEx(hKey,"MaxTXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxTXSize,(ULONG *)&Vallen);
 
@@ -2792,17 +2826,6 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "H");
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "D");
 		SendDlgItemMessage(hDlg, IDC_MSGSTATUS, CB_ADDSTRING, 0, (LPARAM)(LPCTSTR) "$");
-
-		for (n = 1; n <= NBBBS; n++ )
-		{
-			CheckDlgButton(hDlg, n + 24, BST_INDETERMINATE);
-		}
-
-		for (user = BBSChain; user; user = user->BBSNext)
-		{
-			SetDlgItemText(hDlg, user->BBSNumber + 24, user->Call);
-			CheckDlgButton(hDlg, user->BBSNumber + 24, BST_INDETERMINATE);
-		}
 
 		CheckDlgButton(hDlg,205, BST_INDETERMINATE);
 		CheckDlgButton(hDlg,206, BST_UNCHECKED);

@@ -914,9 +914,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 		linelen = ptr2 - ptr1;
 
-		memcpy(FullFrom, ptr1, linelen);
-		FullFrom[linelen] = 0;
-
 		if (_memicmp(ptr1, "From:", 5) == 0)
 		{
 			memcpy(FullFrom, ptr1, linelen);

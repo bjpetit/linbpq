@@ -1711,7 +1711,7 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	UCHAR axcalls[64];
 	UCHAR ourcall[7];					// Call we are using (may have SSID bits inverted
 	int ret;
-	struct PORTCONTROL * PORT;
+	struct PORTCONTROL * PORT = PORTTABLE;
 	struct _LINKTABLE * LINK;
 	int CQFLAG = 0;			// NOT CQ CALL
 	BOOL Stay, Spy;
@@ -1913,7 +1913,7 @@ NoPort:
 
 	//	ENSURE PORT IS AVAILABLE FOR L2 USE
 
-	if (PORT->PROTOCOL == 10)			// Pactor=-style port?
+	if (PORT->PROTOCOL >= 10)			// Pactor=-style port?
 	{
 		struct _EXTPORTDATA * EXTPORT = (struct _EXTPORTDATA *)PORT;
 		int count;
@@ -3017,7 +3017,7 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	if (Port)
 		PORT = GetPortTableEntryFromPortNum(Port);
 
-	if (PORT == NULL || PORT->PROTOCOL != 10)
+	if (PORT == NULL || PORT->PROTOCOL < 10)
 	{
 		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
@@ -3540,7 +3540,7 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 			// Command far too long - ignore previous
 	
 			OldBuffer->LENGTH = 0;
-			oldlen = 0;
+			oldlen = 8;
 		}
 
 		OldBuffer->LENGTH += len;
@@ -3821,134 +3821,6 @@ VOID StatsTimer()
 	}
 }
 
-#define MAX_ENTRIES 128
-#define MaxMHEntries 40
-#define MAX_BROADCASTS 8
-#define MAXUDPPORTS 30 
-
-#ifndef MAXGETHOSTSTRUCT
-#define MAXGETHOSTSTRUCT        1024
-#endif
-
-struct arp_table_entry
-{
-	unsigned char callsign[7];
-	unsigned char len;			// bytes to compare (6 or 7)
-	BOOL IPv6;
-
-//	union
-//	{
-//		struct in_addr in_addr;
-//		unsigned int ipaddr;
-//		struct in6_addr in6_addr;
-//	};
-
-	unsigned short port;
-	unsigned char hostname[64];
-	unsigned int error;
-	BOOL ResolveFlag;			// True if need to resolve name
-	unsigned int keepalive;
-	unsigned int keepaliveinit;
-	BOOL BCFlag;				// True if we want broadcasts to got to this call
-	BOOL AutoAdded;				// Set if Entry created as a result of AUTOADDMAP
-	SOCKET TCPListenSock;			// Listening socket if slave
-	SOCKET TCPSock;
-	int  TCPMode;				// TCPMaster ot TCPSlave
-	UCHAR * TCPBuffer;			// Area for building TCP message from byte stream
-	int InputLen;				// Bytes in TCPBuffer
-
-	union
-	{
-		struct sockaddr_in6 destaddr6;  
-		struct sockaddr_in destaddr;
-	};
-
-	BOOL TCPState;
-	UINT TCPThreadID;			// Thread ID if TCP Master
-	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
-	int SourceSocket;			// The socket to use (sets the from Address
-	struct AXIPPORTINFO * PORT;
-};
-
-
-
-struct broadcast_table_entry
-{
-	unsigned char callsign[7];
-	unsigned char len;			// bytes to compare (6 or 7)
-};
-
-struct MHTableEntry
-{
-	unsigned char callsign[7];
-	char proto;
-	short port;
-	union
-	{
-		struct in_addr ipaddr;
-		struct in6_addr ipaddr6;
-	};
-	time_t	LastHeard;		// Time last packet received
-	int Keepalive;
-	BOOL IPv6;
-};
-
-
-struct AXIPPORTINFO
-{
-	int Port;
-
-	struct MHTableEntry MHTable[MaxMHEntries];
-	struct broadcast_table_entry BroadcastAddresses[MAX_BROADCASTS];
-
-	int NumberofBroadcastAddreses;
-	BOOL Checkifcanreply;
-	
-	int arp_table_len;
-	int ResolveIndex;			// pointer to entry being resolved
-
-	struct arp_table_entry arp_table[MAX_ENTRIES];
-
-	struct arp_table_entry default_arp;
-
-	BOOL MHEnabled;
-	BOOL MHAvailable;			// Enabled with config file directive
-
-	BOOL AutoAddARP;
-
-	unsigned char  hostaddr[64];
-
-	HWND hResWnd, hMHWnd, ConfigWnd;
-
-	BOOL GotMsg;
-
-	int udpport[MAXUDPPORTS+2];
-	BOOL IPv6[MAXUDPPORTS+2];
-
-	int NumberofUDPPorts;
-
-	BOOL needip;
-	BOOL NeedResolver;
-	BOOL NeedTCP;
-
-	SOCKET sock;						// IP 93 Sock
-	SOCKET udpsock[MAXUDPPORTS+2];
-
-	time_t ltime,lasttime;
-	int baseline;
-
-	char buf[MAXGETHOSTSTRUCT];
-
-	int MaxMHWindowlength;
-	int MaxResWindowlength;
-
-	BOOL ResMinimized;
-	BOOL MHMinimized;
-
-	HMENU hResMenu;
-	HMENU hMHMenu;
-
-};
 
 
 extern struct AXIPPORTINFO * Portlist[];
@@ -3964,7 +3836,6 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 	char * ptr, *Context;
 	struct PORTCONTROL * PORT = NULL;
 	struct AXIPPORTINFO * AXPORT;
-	int n = MHENTRIES;
 	char Normcall[11];
 
 	ptr = strtok_s(CmdTail, " ", &Context);
@@ -3992,7 +3863,7 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 	}
 
 	Bufferptr += sprintf(Bufferptr, "AXIP Resolver info for Port %d\r", Port);
-	
+
 	while (index < AXPORT->arp_table_len)
 	{
 		Bufferptr = CHECKBUFFER(Session, Bufferptr);

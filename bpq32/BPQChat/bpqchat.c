@@ -17,6 +17,11 @@
 
 // Add UTF-8 support
 
+// ????
+
+// Get command from node, and allow topic to be selected on command line
+// Validate HTML Pages
+
 #include "BPQChat.h"
 
 #define CHAT
@@ -104,7 +109,7 @@ extern int NumberofChatStreams;
 
 //int	StartStream=0;
 
-int MaxStreams=0;
+extern int MaxChatStreams;
 
 char ChatSID[]="[BPQChatServer-%d.%d.%d.%d]\r";
 
@@ -125,6 +130,7 @@ BOOL KISSOnly = FALSE;
 UCHAR * OtherNodes=NULL;
 char OtherNodesList[1000];
 
+char BPQDirectory[260];
 
 int ProgramErrors = 0;
 
@@ -362,6 +368,7 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 
 	_strlwr(&Session[1]);
 
+	strcpy(BPQDirectory, GetBPQDirectory());
 
 	__try {
 
@@ -1174,7 +1181,7 @@ BOOL Initialise()
 Retry:
 
 	ChatApplNum = GetIntValue("ApplNum", 0);
-	MaxStreams = GetIntValue("MaxStreams", 0);
+	MaxChatStreams = GetIntValue("MaxStreams", 0);
 
 	GetStringValue("OtherChatNodes", OtherNodesList, 999);
 
@@ -1221,7 +1228,7 @@ Retry:
 
 	// Allocate Streams
 
-	for (i=0; i < MaxStreams; i++)
+	for (i=0; i < MaxChatStreams; i++)
 	{
 		conn = &ChatConnections[i];
 		conn->BPQStream = FindFreeStream();
@@ -1232,7 +1239,7 @@ Retry:
 
 		BPQSetHandle(conn->BPQStream, hWnd);
 
-		SetAppl(conn->BPQStream, 2, ChatApplMask);
+		SetAppl(conn->BPQStream, 3, ChatApplMask);
 		Disconnect(conn->BPQStream);
 	}
 
@@ -1398,7 +1405,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 		free(ptr2);
 
 		SetDlgItemInt(hDlg, ID_CHATAPPL, ChatApplNum, FALSE);
-		SetDlgItemInt(hDlg, ID_STREAMS, MaxStreams, FALSE);
+		SetDlgItemInt(hDlg, ID_STREAMS, MaxChatStreams, FALSE);
 		SetDlgItemText(hDlg, ID_CHATNODES, Text);
 
 		// Replace $W in  Welcome Message with cr lf
@@ -1513,7 +1520,5 @@ VOID nputs(ChatCIRCUIT * conn, char * buf)
 	
 	WriteLogLine(conn, '>',buf,  strlen(buf), LOG_CHAT);
 }
-
-
 
 

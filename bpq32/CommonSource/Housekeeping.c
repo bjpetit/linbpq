@@ -1080,7 +1080,7 @@ VOID CreateBBSTrafficReport()
 			RejOut);
 
 		fwrite(Line, 1, len, hFile);
-/*
+
 		User->Last.ConnectsIn = User->Total.ConnectsIn;
 		User->Last.ConnectsOut = User->Total.ConnectsOut;
 
@@ -1093,7 +1093,7 @@ VOID CreateBBSTrafficReport()
 			User->Last.MsgsRejectedIn[n] = User->Total.MsgsRejectedIn[n];
 			User->Last.MsgsRejectedOut[n] = User->Total.MsgsRejectedOut[n];
 		}
-*/
+
 	}
 
 	sprintf(MsgsIn,"%d/%d/%d", TotMsgsReceived[1], TotMsgsReceived[2], TotMsgsReceived[3]);

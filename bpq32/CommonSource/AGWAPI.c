@@ -943,7 +943,7 @@ int AGWSocket_Accept(int SocketId)
 
 			if (sock == INVALID_SOCKET)
 			{
-				sprintf(szBuff, " accept() failed Error %d\r", WSAGetLastError());
+				sprintf(szBuff, "AGW accept() failed Error %d\r", WSAGetLastError());
 				WritetoConsole(szBuff);
 				return FALSE;
 			}

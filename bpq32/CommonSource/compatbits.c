@@ -6,6 +6,13 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #ifdef WIN32
 
+#define pthread_t unsigned long
+
+int pthread_equal(pthread_t T1, pthread_t T2)
+{
+	return (T1 == T2);
+}
+
 #else
 
 #include <stdio.h>

@@ -503,8 +503,15 @@ int CountFramesQueuedOnSession(TRANSPORTENTRY * Session)
 		//	PACTOR Type - Frames are queued on the Port Entry
 
 		struct PORTCONTROL * PORT = Session->L4TARGET.PORT;
+		EXTPORTDATA * EXT = (EXTPORTDATA *)PORT;
 
-		return C_Q_COUNT(&PORT->PORTTX_Q);
+		int ret = EXT->FramesQueued;
+
+		// Check L4 Queue as messages can stay there briefly
+
+		ret += C_Q_COUNT(&Session->L4RX_Q);
+					
+		return ret + C_Q_COUNT(&PORT->PORTTX_Q);
 	}
 
 	//	L2 CIRCUIT
@@ -540,6 +547,8 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 	int CTLlessPF = CTL & ~PFBIT;
 	
 	PORT->L2FRAMESFORUS++;
+	InOctets[PORT->PORTNUMBER] += Buffer->LENGTH - 7;
+
 	NO_CTEXT = 0;
 
 	//	ONLY SABM or UI  ALLOWED IF NO SESSION 
@@ -678,6 +687,7 @@ VOID L2LINKACTIVE(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 	int CTLlessPF = CTL & ~PFBIT;
 	
 	PORT->L2FRAMESFORUS++;
+	InOctets[PORT->PORTNUMBER] += Buffer->LENGTH - 7;
 
 	//	ONLY SABM or UI  ALLOWED IF NO SESSION 
 

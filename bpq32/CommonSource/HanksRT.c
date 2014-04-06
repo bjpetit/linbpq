@@ -426,6 +426,50 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 
 	// Convert to UTF8 if not already in UTF-8
 
+	if (len == 73 && memcmp(&OrigBuffer[40], "                    ", 20) == 0)
+	{
+		// Chat Signon Message. If Topic is present, switch to it
+
+		char * Context;
+		char * Appl;
+		char * topic;
+
+		Appl = strtok_s(OrigBuffer, " ,\r", &Context);
+		topic = strtok_s(NULL, " ,\r", &Context);
+
+		if (topic == NULL)
+			return;					// Just Chat
+		
+		// Have a Topic
+
+		if (conn->Flags & GETTINGUSER)
+		{
+			// Need to log in before switching topic, so Give a dummy name here
+				
+			conn->Flags &=  ~GETTINGUSER;
+			strcpy(user->Name, "?_name");
+			ChatSendWelcomeMsg(conn->BPQStream, conn, user);
+		}
+
+		OrigBuffer[40] = 0;
+		sprintf(&OrigBuffer[40],"/t %s\r", topic);
+		strcpy(OrigBuffer, &OrigBuffer[40]);
+		len = strlen(OrigBuffer);
+	}
+	else
+	{ 
+		// Normal input
+
+		if (conn->Flags & GETTINGUSER)
+		{
+			conn->Flags &=  ~GETTINGUSER;
+			memcpy(user->Name, Buffer, len-1);
+			ChatSendWelcomeMsg(conn->BPQStream, conn, user);
+
+			return;
+		}
+	}
+
 	if (ChatIsUTF8(OrigBuffer, len) == FALSE)
 	{
 		// With Windows it is simple - convert using current codepage
@@ -473,14 +517,6 @@ VOID ProcessChatLine(ChatCIRCUIT * conn, struct UserInfo * user, char* OrigBuffe
 	}
 	WriteLogLine(conn, '<',Buffer, len, LOG_CHAT);
 
-	if (conn->Flags & GETTINGUSER)
-	{
-		memcpy(user->Name, Buffer, len-1);
-		conn->Flags &=  ~GETTINGUSER;
-		ChatSendWelcomeMsg(conn->BPQStream, conn, user);
-//		SaveUserDatabase();
-		return;
-	}
 
 	Buffer[len] = 0;
 
@@ -3478,8 +3514,6 @@ int ChatPollStreams()
 	{
   		conn = &ChatConnections[n];
 		
-		ChatDoReceivedData(conn);
-
 		SessionState(conn->BPQStream, &state, &change);
 		
 		if (change == 1)
@@ -3497,6 +3531,8 @@ int ChatPollStreams()
 				FreeSemaphore(&ConSemaphore);
 			}
 		}
+
+		ChatDoReceivedData(conn);
 	}
 	
 	return 0;
@@ -3626,7 +3662,7 @@ BOOL ChatInit()
 
 		NumberofChatStreams++;
 
-		SetAppl(conn->BPQStream, 2, ChatApplMask);
+		SetAppl(conn->BPQStream, 3, ChatApplMask);
 		Disconnect(conn->BPQStream);
 	}
 

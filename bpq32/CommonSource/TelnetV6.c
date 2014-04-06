@@ -127,7 +127,7 @@ VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen);
 
 
 BOOL CheckCMS(struct TNCINFO * TNC);
-int TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port);
+int TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port, BOOL FBB);
 int CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM,  int Stream);
 int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, int Error);
 BOOL ProcessConfig();
@@ -1631,11 +1631,11 @@ VOID TelnetPoll(int Port)
 									DataSocket_Read(TNC, sockptr, sock, &TNC->Streams[n]);
 							}
 
-							if (FD_ISSET(sock, &writefd))
-								Telnet_Connected(TNC, sockptr, sock, 0);
-
 							if (FD_ISSET(sock, &exceptfd))
 								Telnet_Connected(TNC, sockptr, sock, 1);
+
+							if (FD_ISSET(sock, &writefd))
+								Telnet_Connected(TNC, sockptr, sock, 0);
 
 						}
 					}
@@ -1903,7 +1903,7 @@ nosocks:
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = FALSE;
 						STREAM->ConnectionInfo->FBBMode = FALSE;
-						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port]);
+						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port], FALSE);
 						ReleaseBuffer(buffptr);
 						return;
 					}
@@ -1913,7 +1913,7 @@ nosocks:
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = TRUE;
 						STREAM->ConnectionInfo->RelaySession = TRUE;
-						TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772);
+						TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772, TRUE);
 						ReleaseBuffer(buffptr);
 						return;
 					}
@@ -1927,7 +1927,7 @@ nosocks:
 								STREAM->Connecting = TRUE;
 								STREAM->ConnectionInfo->CMSSession = TRUE;
 								STREAM->ConnectionInfo->RelaySession = TRUE;
-								TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772);
+								TCPConnect(TNC, TCP, STREAM, TCP->RELAYHOST, 8772, TRUE);
 								ReleaseBuffer(buffptr);
 								return;
 							}
@@ -1956,13 +1956,31 @@ nosocks:
 						STREAM->ConnectionInfo->CMSSession = FALSE;
 						STREAM->ConnectionInfo->RelaySession = FALSE;
 						STREAM->ConnectionInfo->FBBMode = TRUE;
-						
-						if (P5[0])
-							sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r%s\r", P3, P4, P5);
-						else
-							sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r", P3, P4);
 
-						TCPConnect(TNC, TCP, STREAM, Host, Port);
+						if (_stricmp(P3, "NEEDLF") == 0)
+						{
+							// Send LF after each param
+						
+							if (P6[0])
+								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n%s\r\n", P4, P5, P6);
+							else
+							if (P5[0])
+								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n", P4, P5);
+							else
+								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n", P4);
+						}
+						else
+						{
+							if (P5[0])
+								sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r%s\r", P3, P4, P5);
+							else
+							if (P4[0])
+								sprintf(STREAM->ConnectionInfo->Signon, "%s\r%s\r", P3, P4);
+							else
+								sprintf(STREAM->ConnectionInfo->Signon, "%s\r", P3);
+						}
+
+						TCPConnect(TNC, TCP, STREAM, Host, Port, TRUE);
 						ReleaseBuffer(buffptr);
 						return;
 					}
@@ -2399,8 +2417,6 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 	u_long param=1;
 
 	// if for TriModeData Session, use the TriMode Control connection entry 
-
-	Debugprintf("Tel Accept %d %d", SocketId, TCP->TriModeDataSock);
 
 	if (SocketId == TCP->TriModeDataSock)
 	{
@@ -4093,10 +4109,18 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	UINT * buffptr;
 	int Stream = sockptr->Number;
 	char Signon[80];
+	int errlen = 4;
 
 	buffptr = GetBuff();
 	if (buffptr == 0) return 0;			// No buffers, so ignore
 				
+#ifndef WIN32
+
+	if (Error == 0)
+		getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&Error, &errlen);
+
+#endif
+
 	if (Error)
 	{
 		if (sockptr->CMSSession && sockptr->RelaySession == 0)
@@ -4163,7 +4187,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 
 		if (sockptr->Signon[0])
 		{
-			buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Connected to Server\r");
+			buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to Server\r");
 			send(sockptr->socket, sockptr->Signon, strlen(sockptr->Signon), 0);
 		}
 		else
@@ -4206,7 +4230,19 @@ VOID ReportError(struct STREAMINFO * STREAM, char * Msg)
 	buffptr = GetBuff();
 	if (buffptr == 0) return;			// No buffers, so ignore
 				
-	buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Error %s\r", Msg);
+	buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "Error - %s\r", Msg);
+					
+	C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+}
+
+VOID Report(struct STREAMINFO * STREAM, char * Msg)
+{
+	UINT * buffptr;
+
+	buffptr = GetBuff();
+	if (buffptr == 0) return;			// No buffers, so ignore
+				
+	buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "%s\r", Msg);
 					
 	C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 }
@@ -4266,6 +4302,8 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 
 rootok:
 
+	freeaddrinfo(res);
+
 	INETOK = TRUE;			// We have connectivity
 
 	res = 0;
@@ -4273,17 +4311,21 @@ rootok:
 	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_DGRAM;
 	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
-
-
-//	HostEnt = gethostbyname("server.winlink.org");
 		 
 	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
 	{
-		Debugprintf("Resolve CMS Failed");
-
 		// Switch to Cached Servers
 		
 		TCP->UseCachedCMSAddrs = TRUE;
+
+		if (res)
+		{
+			Debugprintf("Resolve CMS returned only on e host");
+			freeaddrinfo(res);
+		}
+		else
+			Debugprintf("Resolve CMS Failed");
+
 		goto CheckServers;
 	}
 
@@ -4300,15 +4342,6 @@ rootok:
 
 	freeaddrinfo(saveres);
 
-/*
-	while (HostEnt->h_addr_list[i] != 0 && i < MaxCMS)
-	{
-		addr.s_addr = *(u_long *) HostEnt->h_addr_list[i];
-		TCP->CMSAddr[i] = addr;
-		TCP->CMSFailed[i] = FALSE;
-		i++;
-	}
-*/
 	TCP->NumberofCMSAddrs = i;
 
 	i = 0;
@@ -4388,11 +4421,48 @@ CheckServers:
 
 VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 {
+	struct TCPINFO * TCP = TNC->TCPInfo;
+	ULONG IPAD;
+
 #ifdef LINBPQ
-	struct TCPINFO * TCP = TNC->TCPInfo;
+	
+	FILE *in;
+	char Buffer[2048];
+	char *buf = Buffer;
+	char *ptr1, *ptr2, *context;
+	int i = 0;
+
 	TCP->NumberofCMSAddrs = 0;
+
+	in = fopen("CMSInfo.txt", "r");
+
+	if (!(in)) return;
+
+	while(fgets(buf, 128, in))
+	{
+		ptr1 =  strtok_s(buf, ", ", &context);
+		ptr2 =  strtok_s(NULL, ", ", &context);		// Skip Time
+		ptr2 =  strtok_s(NULL, ", ", &context);
+			
+		IPAD = inet_addr(ptr2);
+
+		memcpy(&TCP->CMSAddr[i], &IPAD, 4);
+
+		TCP->CMSFailed[i] = FALSE;
+		
+		if (TCP->CMSName[i])
+			free(TCP->CMSName[i]);
+		   		
+		TCP->CMSName[i] = _strdup(ptr1);			// Save Host Name
+		i++;
+	}
+
+	fclose(in);
+
+	TCP->NumberofCMSAddrs = i;
+
 #else
-	struct TCPINFO * TCP = TNC->TCPInfo;
+
     TCHAR    achClass[MAX_PATH] = TEXT("");  // buffer for class name 
     DWORD    cchClassName = MAX_PATH;  // size of class string 
     DWORD    cSubKeys=0;               // number of subkeys 
@@ -4463,7 +4533,6 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 		if (retCode == ERROR_SUCCESS) 
 		{
 			char Time[80], IPADDR[80];
-			ULONG IPAD;
 			
 			Debugprintf("%s = %s", achValue, Value); 
 			sscanf(Value, "%s %s", &Time, &IPADDR);
@@ -4483,6 +4552,7 @@ VOID GetCMSCachedInfo(struct TNCINFO * TNC)
 	RegCloseKey(hKey);
 
 	TCP->NumberofCMSAddrs = i;
+
 #endif
 	return;
 }
@@ -4546,6 +4616,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	struct sockaddr_in destaddr;
 	int addrlen=sizeof(sinx);
 	int n;
+	char Msg[80];
 
 	sockptr = STREAM->ConnectionInfo;
 		
@@ -4596,6 +4667,9 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	}
 
 	sockptr->CMSIndex = TCP->NextCMSAddr;
+
+	sprintf(Msg, "Trying %s", TCP->CMSName[TCP->NextCMSAddr]);
+
 	memcpy(&destaddr.sin_addr.s_addr, &TCP->CMSAddr[TCP->NextCMSAddr++], 4);
 
 	if (TCP->NextCMSAddr >= TCP->NumberofCMSAddrs)
@@ -4618,6 +4692,8 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 #ifndef LINBPQ
 	ModifyMenu(TCP->hDisMenu, Stream - 1, MF_BYPOSITION | MF_STRING, IDM_DISCONNECT + Stream, "CMS");
 #endif
+
+	Report(STREAM, Msg);	
 
 	if (connect(sockptr->socket,(struct sockaddr *) &destaddr, sizeof(destaddr)) == 0)
 	{
@@ -4661,9 +4737,57 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 
 VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 {
-#ifndef LINBPQ
-	HKEY hKey=0;
 	char Info[80];
+#ifdef LINBPQ
+	unsigned char work[4];
+	FILE *in, *out;
+	char *c;
+	char Buffer[2048];
+	char *buf = Buffer;
+
+	memcpy(work, &TCP->CMSAddr[CMSNo].s_addr, 4);
+
+	sprintf(Info,"%s %d %d.%d.%d.%d\n", TCP->CMSName[CMSNo], time(NULL),
+					work[0], work[1], work[2], work[3]);
+
+
+	in = fopen("CMSInfo.txt", "r");
+
+	if (!(in))
+	{
+		in = fopen("CMSInfo.txt", "w");
+		fclose(in);
+		in = fopen("CMSInfo.txt", "r");
+	}
+
+	out = fopen("CMSInfo.tmp", "w");
+
+	if (!(in) || !(out)) return;
+
+	while(fgets(buf, 128, in))
+	{
+		c = strchr(buf, ' ');
+		if (c) *c = '\0';
+			
+		if (strcmp(buf, TCP->CMSName[CMSNo]) != 0)
+		{
+			if (c) *c = ' ';
+				
+			fputs(buf, out);
+		}
+	}
+
+	fputs(Info, out);
+
+	fclose(in);
+	fclose(out);
+
+	remove("CMSInfo.txt");
+	rename("CMSInfo.tmp", "CMSInfo.txt");
+
+#else
+
+	HKEY hKey=0;
 	char Key[80];
 	int retCode, disp;
 
@@ -4689,7 +4813,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 
 //Keep this in case we ever do general outgoing TCP
 
-TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port)
+TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port, BOOL FBB)
 {
 	int err;
 	u_long param=1;
@@ -4717,7 +4841,7 @@ TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	sockptr->UserPointer = 0;
 	sockptr->DoEcho = FALSE;
 
-	sockptr->FBBMode = TRUE;		// Raw Data
+	sockptr->FBBMode = FBB;		// Raw Data
 	
 	// Resolve Name if needed
 

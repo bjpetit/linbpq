@@ -105,6 +105,7 @@ VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Re
 VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest);
 char **	SeparateMultiString(char * MultiString, BOOL NoToUpper);
 VOID TidyPrompts();
+char * GetTemplateFromFile(int Version, char * FN);
 
 char UNC[] = "";
 char CHKD[] = "checked=checked ";
@@ -356,41 +357,6 @@ char * FwdDetailTemplate = NULL;
 #ifdef LINBPQ
 UCHAR * GetBPQDirectory();
 #endif
-
-char * GetTemplateFromFile(char * FN)
-{
-	int FileSize;
-	char * MsgBytes;
-	char MsgFile[265];
-	FILE * hFile;
-	int ReadLen;
-	BOOL Special = FALSE;
-	struct stat STAT;
-
-	sprintf(MsgFile, "%s/HTML/%s", GetBPQDirectory(), FN);
-
-	if (stat(MsgFile, &STAT) == -1)
-	{
-		MsgBytes = _strdup("File is missing");
-		return MsgBytes;
-	}
-
-	hFile = fopen(MsgFile, "rb");
-	
-	if (hFile == 0)
-	{
-		MsgBytes = _strdup("File is missing");
-		return MsgBytes;
-	}
-
-	
-	FileSize = STAT.st_size;
-	MsgBytes = malloc(FileSize + 1);
-	ReadLen = fread(MsgBytes, 1, FileSize, hFile); 
-	MsgBytes[FileSize] = 0;
-	fclose(hFile);
-	return MsgBytes;
-}
 
 
 static int compare(const void *arg1, const void *arg2)
@@ -665,7 +631,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (ConfigTemplate)
 			free(ConfigTemplate);
 
-		ConfigTemplate = GetTemplateFromFile("MainConfig.txt");
+		ConfigTemplate = GetTemplateFromFile(2, "MainConfig.txt");
 
 		SendConfigPage(Reply, RLen, Key);
 		return;
@@ -676,12 +642,12 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (FwdTemplate)
 			free(FwdTemplate);
 
-		FwdTemplate = GetTemplateFromFile("FwdPage.txt");
+		FwdTemplate = GetTemplateFromFile(1, "FwdPage.txt");
 
 		if (FwdDetailTemplate)
 			free(FwdDetailTemplate);
 
-		FwdDetailTemplate = GetTemplateFromFile("FwdDetail.txt");
+		FwdDetailTemplate = GetTemplateFromFile(1, "FwdDetail.txt");
 
 		SendFwdMainPage(Reply, RLen, Key);
 		return;
@@ -697,12 +663,12 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (UserListTemplate)
 			free(UserListTemplate);
 
-		UserListTemplate = GetTemplateFromFile("UserPage.txt");
+		UserListTemplate = GetTemplateFromFile(1, "UserPage.txt");
 
 		if (UserDetailTemplate)
 			free(UserDetailTemplate);
 
-		UserDetailTemplate = GetTemplateFromFile("UserDetail.txt");
+		UserDetailTemplate = GetTemplateFromFile(1, "UserDetail.txt");
 
 		*RLen = sprintf(Reply, UserListTemplate, Key, Key, BBSName,
 			Key, Key, Key, Key, Key, Key, Key, Key);
@@ -718,7 +684,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (MsgEditTemplate)
 			free(MsgEditTemplate);
 
-		MsgEditTemplate = GetTemplateFromFile("MsgPage.txt");
+		MsgEditTemplate = GetTemplateFromFile(1, "MsgPage.txt");
 
 		// Refresh BBS No to BBS list
 
@@ -776,7 +742,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (HousekeepingTemplate)
 			free(HousekeepingTemplate);
 
-		HousekeepingTemplate = GetTemplateFromFile("Housekeeping.txt");
+		HousekeepingTemplate = GetTemplateFromFile(1, "Housekeeping.txt");
 
 		SendHouseKeeping(Reply, RLen, Key);
 		return;
@@ -787,7 +753,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (WPTemplate)
 			free(WPTemplate);
 
-		WPTemplate = GetTemplateFromFile("WP.txt");
+		WPTemplate = GetTemplateFromFile(1, "WP.txt");
 
 		if (WPTemplate)
 		{
@@ -933,7 +899,10 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 {	
 	int BBSNo = 1, x, y, len = 0;
 	char D1[80], D2[80], D3[80];
-	
+	struct UserInfo * USER;
+	int i = 0, n;
+	struct UserInfo * bbs[NBBBS+2] = {0}; 
+
 	if (Msg)
 	{
 		char EmailFromLine[256] = "";
@@ -961,6 +930,20 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			Msg->bid, D3, Msg->length, EmailFromLine, Msg->via, Msg->title,
 					Key, Msg->number);
 
+		// Get a sorted list of BBS records
+
+		for (n = 1; n <= NumberofUsers; n++)
+		{
+			USER = UserRecPtr[n];
+
+			if ((USER->flags & F_BBS) && USER->BBSNumber)
+				bbs[i++] = USER;
+		}
+
+		qsort((void *)bbs, i, 4, compare );
+
+		n = 0;
+		
 		for (y = 0; y < NBBBS/8; y++)
 		{
 			len += sprintf(&Reply[len],"<tr>");
@@ -968,23 +951,25 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			{
 				char * Colour  = NotThisOne;	
 
-				if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)	
-					if (check_fwd_bit(Msg->fbbs, BBSNo))
-							Colour = ToSend;
-				if (memcmp(Msg->forw, zeros, NBMASK) != 0)	
-					if (check_fwd_bit(Msg->forw, BBSNo))
-							Colour = Sent;
+				if (bbs[n])
+				{
+					if (memcmp(Msg->fbbs, zeros, NBMASK) != 0)	
+						if (check_fwd_bit(Msg->fbbs, bbs[n]->BBSNumber))
+								Colour = ToSend;
+					if (memcmp(Msg->forw, zeros, NBMASK) != 0)	
+						if (check_fwd_bit(Msg->forw, bbs[n]->BBSNumber))
+								Colour = Sent;
 				
-				if (BBSLIST[BBSNo])
 					len += sprintf(&Reply[len],"<td style=\"background-color: %s;\"onclick=ck(\"%d\")>%s</td>",
-						Colour, BBSNo, BBSLIST[BBSNo]->Call);
+						Colour, bbs[n]->BBSNumber, bbs[n]->Call);
+				}
 				else
 					len += sprintf(&Reply[len], "<td>&nbsp;</td>");
 
-				BBSNo++;
+				n++;
 			}
 			len += sprintf(&Reply[len],"</tr>");
-			if (BBSNo > MaxBBS)
+			if (n > i)
 				break;
 		}
 		len += sprintf(&Reply[len], "%s", MailDetailTail);
@@ -1340,6 +1325,9 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		MailForInterval = atoi(Temp);
 
 		GetCheckBox(input, "DontHold=", &DontHoldNewUsers);
+		GetCheckBox(input, "DontNeedName=", &AllowAnon);
+		GetCheckBox(input, "DontNeedHomeBBS=", &DontNeedHomeBBS);
+
 		GetCheckBox(input, "FWDtoMe=", &ForwardToMe);
 
 		GetParam(input, "POP3Port=", Temp);
@@ -2130,7 +2118,7 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 	SetMultiStringValue(HoldTo, HT);
 	SetMultiStringValue(HoldAt, HA);
 
-		
+	
 	Len = sprintf(Reply, ConfigTemplate,
 		BBSName, Key, Key, Key, Key, Key, Key, Key, Key, Key,
 		BBSName, SYSOPCall, HRoute,
@@ -2141,6 +2129,8 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		(EnableUI) ? CHKD  : UNC,
 		MailForInterval,
 		(DontHoldNewUsers) ? CHKD  : UNC, 
+		(AllowAnon) ? CHKD  : UNC, 
+		(DontNeedHomeBBS) ? CHKD  : UNC, 
 		(ForwardToMe) ? CHKD  : UNC,
 		POP3InPort, SMTPInPort, NNTPInPort,
 		(RemoteEmail) ? CHKD  : UNC,

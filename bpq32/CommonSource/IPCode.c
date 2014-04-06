@@ -65,8 +65,11 @@ ETHARP ETHARPREQMSG = {0};
 
 ARPDATA ** ARPRecords = NULL;				// ARP Table - malloc'ed as needed
 
-int NumberofARPEntries=0;
+int NumberofARPEntries = 0;
 
+ROUTEENTRY ** RouteRecords = NULL;
+
+int NumberofRoutes = 0;
 
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
@@ -443,8 +446,8 @@ Pollloop:
 
 			if (header->len > 1514)
 			{
-				Debugprintf("Ether Packet Len = %d", header->len);
-				header->len = 1514;
+//				Debugprintf("Ether Packet Len = %d", header->len);
+				goto Pollloop;
 			}
 
 			memcpy(&Buffer[EthOffset],pkt_data, header->len);
@@ -888,10 +891,10 @@ VOID ProcessEthIPMsg(PETHMSG Buffer)
 {
 	PIPMSG ipptr = (PIPMSG)&Buffer[1];
 
-	if (memcmp(Buffer, ourMACAddr,6 ) !=0 ) 
+	if (memcmp(Buffer, ourMACAddr,6 ) != 0) 
 		return;		// Not for us
 
-	if (memcmp(&Buffer[6], ourMACAddr,6 ) ==0 ) 
+	if (memcmp(&Buffer[6], ourMACAddr,6 ) == 0) 
 		return;		// Discard our sends
 
 	ProcessIPMsg(ipptr, Buffer->SOURCE, 'E', 255);
@@ -1248,6 +1251,8 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 	BOOL Found;
 	int index, Len;
 	PTCPMSG TCPptr;
+	PUDPMSG UDPptr;
+
 
 	if (IPptr->VERLEN != 0x45) return;  // Only support Type = 4, Len = 20
 
@@ -1302,6 +1307,19 @@ ForUs:
 	{
 		ProcessICMPMsg(IPptr);
 		return;
+	}
+
+	// Support UDP for SNMPfudp
+
+	if (IPptr->IPPROTOCOL == 17)		// UDP
+	{
+		UDPptr = (PUDPMSG)&IPptr->Data;
+
+		if (UDPptr->DESTPORT == htons(161))
+		{
+			ProcessSNMPMessage(IPptr);
+			return;
+		}
 	}
 
 	// See if for a mapped Address
@@ -1502,6 +1520,26 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 
 	Send_AX_Connected((PMESSAGE)Msgptr, Len, Port, HWADDR);
 }
+
+PROUTEENTRY AllocRouteEntry()
+{
+	PROUTEENTRY Routeptr;
+
+	if (NumberofRoutes == 0)
+
+		RouteRecords=malloc(4);
+	else
+		RouteRecords=realloc(RouteRecords,(NumberofRoutes + 1) * 4);
+
+	Routeptr=zalloc(sizeof(ROUTEENTRY));
+
+	if (Routeptr == NULL) return NULL;
+	
+	RouteRecords[NumberofRoutes++] = Routeptr;
+ 
+	return Routeptr;
+}
+
 
 PARPDATA AllocARPEntry()
 {
@@ -2497,6 +2535,27 @@ int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len)
 	return 0;
 }
 
+int CheckSumAndSendUDP(PIPMSG IPptr, PUDPMSG UDPmsg, USHORT Len)
+{
+	struct _IPMSG PH = {0};
+		
+	IPptr->IPCHECKSUM = 0;
+
+	PH.IPPROTOCOL = 17;
+	PH.IPLENGTH = htons(Len);
+	memcpy(&PH.IPSOURCE, &IPptr->IPSOURCE, 4);
+	memcpy(&PH.IPDEST, &IPptr->IPDEST, 4);
+
+	UDPmsg->CHECKSUM = ~Generate_CHECKSUM(&PH, 20);
+
+	UDPmsg->CHECKSUM = Generate_CHECKSUM(UDPmsg, Len);
+
+	// CHECKSUM IT
+
+	IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
+	RouteIPMsg(IPptr);
+	return 0;
+}
 #ifndef WIN32
 #ifndef MACBPQ
 
@@ -2553,14 +2612,17 @@ void OpenTAP()
   int optval = 1;
 
   /* initialize tun/tap interface */
-  if ( (tap_fd = tun_alloc(if_name, flags | IFF_NO_PI)) < 0 ) {
+
+  if ((tap_fd = tun_alloc(if_name, flags | IFF_NO_PI)) < 0 )
+  {
     printf("Error connecting to tun/tap interface %s!\n", if_name);
-    exit(1);
+	tap_fd = 0;
+    return;
   }
+
   printf("Successfully connected to interface %s\n", if_name);
 
   ioctl(tap_fd, FIONBIO, &optval);
-
   return;
 }
 
@@ -2652,5 +2714,419 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
+
+// SNMP Support Code. Pretty limited - basically just for MRTG
+
+/*
+Primitive ASN.1 Types	Identifier in hex
+INTEGER	02
+BIT STRING	03
+OCTET STRING	04
+NULL	05
+OBJECT IDENTIFIER	06
+
+Constructed ASN.1 type	Identifier in hex
+SEQUENCE	30
+
+Primitive SNMP application types	Identifier in hex
+IpAddress	40
+Opaque	44
+NsapAddress	45
+Counter64 (available only in SNMPv2)	46
+Uinteger32 (available only in SNMPv2)	47
+
+Context-specific types within an SNMP Message	Identifier in hex
+GetRequest-PDU	A0
+GetNextRequestPUD	A1
+GetResponse-PDU (Response-PDU in SNMPv 2)	A2
+SetRequest-PDU	A3
+Trap-PDU (obsolete in SNMPv 2)	A4
+GetBulkRequest-PDU (added in SNMPv 2)	A5
+InformRequest-PDU (added in SNMPv 2)	A6
+SNMPv2-Trap-PDU (added in SNMPv 2)	A7
+
+*/
+
+#define Counter32 0x41
+#define Gauge32 0x42
+#define TimeTicks	0x43
+
+
+
+UCHAR ifInOctets[] = {'+',6,1,2,1,2,2,1,10};
+UCHAR ifOutOctets[] = {'+',6,1,2,1,2,2,1,16};
+
+int ifInOctetsLen = 9;		// Not Inc  Port
+int ifOutOctetsLen = 9;		// Not Inc  Port
+
+UCHAR sysUpTime[] = {'+', 6,1,2,1,1,3,0};
+int sysUpTimeLen = 8;
+
+UCHAR sysName[] = {'+', 6,1,2,1,1,5,0};
+int sysNameLen = 8;
+
+extern time_t TimeLoaded;
+
+int InOctets[32] = {0};
+int OutOctets[32] = {0};
+
+//	ASN PDUs have to be constructed backwards, as each header included a length
+
+//	This code assumes we have enough space in front of the buffer.
+
+int ASNGetInt(UCHAR * Msg, int Len)
+{
+	int Val = 0;
+
+	while(Len)
+	{
+		Val = (Val << 8) + *(Msg++);
+		Len --;
+	}
+
+	return Val;
+}
+
+
+int ASNPutInt(UCHAR * Buffer, int Offset, unsigned int Val, int Type)
+{
+	int Len = 0;
+	
+	// Encode in minimum space. But servers seem to sign-extend top byte, so if top bit set add another zero;
+
+	while(Val)
+	{
+		Buffer[--Offset] = Val & 255;	// Value
+		Val = Val >> 8;
+		Len++;
+	}
+
+	if (Len < 4 && (Buffer[Offset] & 0x80))	// Negative
+	{
+		Buffer[--Offset] = 0;
+		Len ++;
+	}
+
+	Buffer[--Offset] = Len;				// Len
+	Buffer[--Offset] = Type;
+
+	return Len + 2;
+}
+
+
+int AddHeader(UCHAR * Buffer, int Offset, UCHAR Type, int Length)
+{
+	Buffer[Offset - 2] = Type;
+	Buffer[Offset - 1] = Length;
+
+	return 2;
+}
+
+int BuildReply(UCHAR * Buffer, int Offset, UCHAR * OID, int OIDLen, UCHAR * Value, int ReqID)
+{
+	int IDLen;
+	int ValLen = Value[1] + 2;
+
+	// Value is pre-encoded = type, len, data
+
+	// Contruct the Varbindings. Sequence OID Value
+
+	Offset -= ValLen;
+	memcpy(&Buffer[Offset], Value, ValLen);
+	Offset -= OIDLen;
+	memcpy(&Buffer[Offset], OID, OIDLen);
+	Buffer[--Offset] = OIDLen;
+	Buffer[--Offset] = 6;				// OID Type
+
+	Buffer[--Offset] = OIDLen + ValLen + 2;
+	Buffer[--Offset] = 48;				// Sequence
+
+	Buffer[--Offset] = OIDLen + ValLen + 4;
+	Buffer[--Offset] = 48;				// Sequence
+
+
+	// Add the error fields (two zero ints
+
+	Buffer[--Offset] = 0;				// Value
+	Buffer[--Offset] = 1;				// Len
+	Buffer[--Offset] = 2;				// Int
+
+	Buffer[--Offset] = 0;				// Value
+	Buffer[--Offset] = 1;				// Len
+	Buffer[--Offset] = 2;				// Int
+
+	// ID
+
+	IDLen = ASNPutInt(Buffer, Offset, ReqID, 2);
+	Offset -= IDLen;
+
+	// PDU Type
+
+	Buffer[--Offset] = OIDLen + ValLen + 12 + IDLen;
+	Buffer[--Offset] = 0xA2;				// Len
+
+	return OIDLen + ValLen + 14 + IDLen;
+}
+
+
+
+//   snmpget -v1 -c jnos [ve4klm.ampr.org | www.langelaar.net] 1.3.6.1.2.1.2.2.1.16.5
+
+
+VOID ProcessSNMPMessage(PIPMSG IPptr)
+{
+	int Len;
+	PUDPMSG UDPptr = (PUDPMSG)&IPptr->Data;
+	char Community[256];
+	UCHAR OID[256];
+	int OIDLen;
+	UCHAR * Msg;
+	int Type;
+	int Length, ComLen;
+	int  IntVal;
+	int ReqID;
+	int RequestType;
+
+	Len = ntohs(IPptr->IPLENGTH);
+	Len-=20;
+
+	Check_Checksum(UDPptr, Len);
+
+	// 4 bytes version
+	// Null Terminated Community
+
+	Msg = (char *) UDPptr;
+
+	Msg += 8;				// Over UDP Header
+	Len -= 8;
+
+	// ASN 1 Encoding - Type, Len, Data
+
+	while (Len > 0)
+	{
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		// First should be a Sequence
+
+		if (Type != 0x30)
+			return;
+
+		Len -= 2;
+
+		Type = *(Msg++);
+		Length = *(Msg++);
+		IntVal =  *(Msg++);
+
+		// Should be Integer - SNMP Version - We support V1, identified by zero
+
+		if (Type != 2 || Length != 1 || IntVal != 0)
+			return;
+
+		Len -= 3;
+
+		Type = *(Msg++);
+		ComLen = *(Msg++);
+
+		// Should  Be String (community)
+
+		if (Type != 4)
+			return;
+
+		memcpy(Community, Msg, ComLen);
+		Community[ComLen] = 0;
+
+		Len -=2;				// Header
+		Len -= ComLen;
+
+		Msg += (ComLen);
+
+		// A Complex Data Types - GetRequest PDU etc
+
+		RequestType = *(Msg);
+		*(Msg++) = 0xA2;
+		Length = *(Msg++);
+
+		Len -= 2; 
+
+		// A 2 byte value requestid
+
+		// Next is integer requestid
+
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		if (Type != 2)
+			return;
+
+		ReqID = ASNGetInt(Msg, Length);
+ 
+		Len -= (2 + Length);
+		Msg += Length;
+
+		// Two more Integers - error status, error index
+	
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		if (Type != 2)
+			return;
+
+		ASNGetInt(Msg, Length);
+ 
+		Len -= (2 + Length);
+		Msg += Length;
+
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		if (Type != 2)
+			return;
+
+		ASNGetInt(Msg, Length);
+ 
+		Len -= (2 + Length);
+		Msg += Length;
+
+		// Two Variable-bindings structs - another Sequence
+
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		Len -= 2;
+
+		if (Type != 0x30)
+			return;
+
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		Len -= 2;
+
+		if (Type != 0x30)
+			return;
+
+		// Next is OID 
+
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		if (Type != 6)				// Object ID
+			return;
+
+		memcpy(OID, Msg, Length);
+		OID[Length] = 0;
+
+		OIDLen = Length;
+
+		Len -=2;				// Header
+		Len -= Length;
+	
+		Msg += Length;
+
+		// Should Just have a null value left
+		
+		Type = *(Msg++);
+		Length = *(Msg++);
+
+		if (Type != 5 || Length != 0)
+			return;
+
+		Len -=2;				// Header
+
+		// Should be nothing left
+	}
+
+	if (RequestType = 160)
+	{
+		UCHAR Reply[256];
+		int Offset = 255;
+		int PDULen, SendLen;
+		char Value[256];
+		int ValLen;
+		
+		//	Only Support Get
+
+		if (memcmp(OID, sysName, sysNameLen) == 0)
+		{
+			ValLen = strlen(MYNODECALL);;
+			Value[0] = 4;		// String
+			Value[1] = ValLen;
+			memcpy(&Value[2], MYNODECALL, ValLen);  
+			
+			PDULen = BuildReply(Reply, Offset, sysName, sysNameLen, Value, ReqID);
+		}
+		else if (memcmp(OID, sysUpTime, sysUpTimeLen) == 0)
+		{
+			int ValOffset = 10;
+			ValLen = ASNPutInt(Value, ValOffset, (time(NULL) - TimeLoaded) * 100, TimeTicks);
+			ValOffset -= ValLen;
+
+			PDULen = BuildReply(Reply, Offset, sysUpTime, sysUpTimeLen, &Value[ValOffset], ReqID);
+		}
+		else if (memcmp(OID, ifOutOctets, ifOutOctetsLen) == 0)
+		{
+			int Port = OID[9];
+			int ValOffset = 10;
+			ValLen = ASNPutInt(Value, ValOffset, OutOctets[Port], Counter32);
+			ValOffset -= ValLen;
+			PDULen = BuildReply(Reply, Offset, OID, OIDLen, &Value[ValOffset], ReqID);
+
+		}
+		else if (memcmp(OID, ifInOctets, ifInOctetsLen) == 0)
+		{
+			int Port = OID[9];
+			int ValOffset = 10;
+			ValLen = ASNPutInt(Value, ValOffset, InOctets[Port], Counter32);
+			ValOffset -= ValLen;
+			PDULen = BuildReply(Reply, Offset, OID, OIDLen, &Value[ValOffset], ReqID);
+
+		}
+		else
+
+
+			return;
+
+		Offset -= PDULen;
+
+		Offset -= ComLen;
+
+		memcpy(&Reply[Offset], Community, ComLen);
+		Reply[--Offset] = ComLen;
+		Reply[--Offset] = 4;
+
+		// Version
+
+		Reply[--Offset] = 0;
+		Reply[--Offset] = 1;
+		Reply[--Offset] = 2;
+
+
+		Reply[--Offset] = PDULen + ComLen + 5;
+		Reply[--Offset] = 48;
+
+		SendLen = PDULen + ComLen + 7;
+
+		memcpy(UDPptr->UDPData, &Reply[Offset], SendLen);
+
+		// Swap Dest to Origin
+
+		IPptr->IPDEST = IPptr->IPSOURCE;
+
+		IPptr->IPSOURCE = OurIPAddr;
+
+		UDPptr->DESTPORT = UDPptr->SOURCEPORT;
+		UDPptr->SOURCEPORT = htons(161);
+		SendLen += 8;			// UDP Header
+		UDPptr->LENGTH = htons(SendLen);
+		IPptr->IPLENGTH = htons(SendLen + 20);
+
+		CheckSumAndSendUDP(IPptr, UDPptr, SendLen);
+	}
+
+	// Ingnore others
+}
+
+
 
 

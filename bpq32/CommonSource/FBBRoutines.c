@@ -106,6 +106,9 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			// LinFBB needs a Disconnect Here
 
+			if (conn->BPQBBS)
+				return;							// BPQ will close when it sees FQ. Close collisions aren't good!
+
 			if ((conn->SessType & Sess_PACTOR) == 0)
 				conn->CloseAfterFlush = 20;			// 2 Secs
 			else
@@ -1580,6 +1583,9 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 	char Msg[120];
 	int len;
 	struct FBBRestartData * RestartRec = zalloc(sizeof (struct FBBRestartData));
+
+	if (conn->TempMsg == NULL)
+		return;
 	
 	if (conn->TempMsg->length < 256)
 		return;							// Not worth it.

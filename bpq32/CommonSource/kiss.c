@@ -18,6 +18,11 @@
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 
+#ifdef MACBPQ
+#define NOI2C
+#endif
+
+
 #ifndef WIN32
 
 #include <stdio.h>
@@ -37,7 +42,7 @@
 //#include <netax25/ttyutils.h>
 //#include <netax25/daemon.h>
 
-#ifndef MACBPQ
+#ifndef NOI2C
 #include "linux/i2c-dev.h"
 #endif
 
@@ -72,6 +77,7 @@
 #define TNCX 32					// TNC-X Mode (Checksum of ACKMODE frames includes ACK bytes
 #define PITNC 64				// PITNC Mode - can reset TNC with FEND 15 2
 #define NOPARAMS 128			// Don't send SETPARAMS frame
+#define FLDIGI 256				// Support FLDIGI COmmand Frames
 
 
 int WritetoConsoleLocal(char * buff);
@@ -94,7 +100,6 @@ char lastblock[500];
 int lastcount;
 
 UCHAR ENCBUFF[600];
-UCHAR KISSPARAMS[24];
 
 int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 {
@@ -140,6 +145,22 @@ int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 	return 0;
 }
 
+VOID EnableFLDIGIReports(struct PORTCONTROL * PORT)
+{
+	struct KISSINFO * KISS = (struct KISSINFO *)PORT;
+	UCHAR Buffer[256];
+	UCHAR * ptr = Buffer;;
+
+	*(ptr++) = FEND;
+	*(ptr++) = KISS->OURCTRL | 6;
+	ptr += sprintf(ptr, "%s", "TNC: MODEM: RSIDBCAST:ON TRXSBCAST:ON TXBEBCAST:ON");
+//	ptr += sprintf(ptr, "%s", "TNC");
+	*(ptr++) = FEND;
+	
+	ASYSEND(PORT, Buffer, ptr - &Buffer[0]);
+}
+
+
 VOID ASYDISP(struct PORTCONTROL * PortVector)
 {
 	char Msg[80];
@@ -175,7 +196,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 
 		return 0;
 #else
-#ifdef MACBPQ
+#ifdef NOI2C
 
 		sprintf(Msg,"I2C is not supported on MAC systems\n");
 		WritetoConsoleLocal(Msg);
@@ -245,7 +266,11 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 
 		// KISS over UDP
 
-		sprintf(Msg,"UDPKISS IP %s Port %d Chan %c ", inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, Channel);
+		if (PortVector->ListenPort == 0)
+			PortVector->ListenPort = PortVector->IOBASE;
+
+		sprintf(Msg,"UDPKISS IP %s Port %d/%d Chan %c ",
+			inet_ntoa(PortVector->PORTIPADDR), PortVector->ListenPort, PortVector->IOBASE, Channel);
 		WritetoConsoleLocal(Msg);
 		
 		npKISSINFO = (NPASYINFO) zalloc(sizeof(ASYINFO));
@@ -263,20 +288,14 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 
 		sinx.sin_family = AF_INET;
 		sinx.sin_addr.s_addr = INADDR_ANY;		
-		sinx.sin_port = htons(PortVector->IOBASE);
+		sinx.sin_port = htons(PortVector->ListenPort);
 
 		if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
 		{
-#ifndef LINBPQ
-			char Title[20];
-
 			//	Bind Failed
 
 			int err = WSAGetLastError();
-			sprintf(Msg, "Bind Failed for UDP socket - error code = %d", err);
-			sprintf(Title, "UDPKISS Port %d", PortVector->PORTNUMBER);
-			MessageBox(NULL, Msg, Title, MB_OK);
-#endif
+			Consoleprintf("Bind Failed for UDP port %d - error code = %d", PortVector->ListenPort, err);
 		}
 
 		npKISSINFO->destaddr.sin_family = AF_INET;
@@ -534,7 +553,6 @@ static void CheckReceivedData(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 // Code moved from KISSASM
 	
 unsigned short CRCTAB[256] = {
- 
 	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
 	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
 	0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e, 
@@ -625,6 +643,9 @@ VOID INITCOM(struct KISSINFO * KISS)
 	//	ATTACH WIN32 ASYNC DRIVER
 
 	ASYINIT(PORT->IOBASE, PORT->BAUDRATE, PORT, PORT->CHANNELNUM);
+
+	if (PORT->KISSFLAGS & FLDIGI)
+		EnableFLDIGIReports(PORT);
 
 	return;
 }
@@ -1109,7 +1130,8 @@ SeeifMore:
 
 	if (len > 329)			// Max ax.25 frame + KISS Ctrl
 	{
-		Debugprintf("BPQ32 overlong KISS frame - len = %d Port %d", len, Port->Portvector->PORTNUMBER);
+		if (Port->Portvector)
+			Debugprintf("BPQ32 overlong KISS frame - len = %d Port %d", len, Port->Portvector->PORTNUMBER);
 		return 0;
 	}
 
@@ -1230,8 +1252,17 @@ SeeifMore:
 		return 0;
 	}
 
-	if (Port->RXMSG[0] & 0x0f)		// Not Dats Frame
+	if (Port->RXMSG[0] & 0x0f)		// Not Dats 
+	{
+		Port->RXMSG[len] = 0;
+/*
+RSIDN:1504,PSK250C6,1499,PSK250C6,ACTIVE
+TXBE:Q:PSK250C6.78.Kiss
+RSIDN:1504,PSK250C6,1504,PSK250C6,ACTIVE
+*/
+		Debugprintf(Port->RXMSG);
 		return 0;
+	}
 
 	//	checksum if necessary
 

@@ -194,6 +194,7 @@ struct STREAMINFO
 	int BytesAcked;
 	int BytesRXed;
 	int PacketsSent;
+	int BytesResent;
 	int BytesOutstanding;		// For Packet Channels
 
 	UCHAR PTCStatus0;			// Status Bytes
@@ -227,11 +228,15 @@ typedef struct ARQINFO
 
 	// Max window is 64, though often will use less
 
+	char OurStream;
+	char FarStream;
+
 	UINT * TXHOLDQ[64];			// Frames waiting ACK
 	UINT * RXHOLDQ[64];			// Frames waiting missing frames.
 
 	int TXWindow;
 	int RXWindow;
+	int MaxBlock;				// Max sending block size
 
 	int	TXSeq;
 	int TXLastACK;				// Last frame ACK'ed
@@ -241,17 +246,26 @@ typedef struct ARQINFO
 	int RXNoGaps;
 
 	int Retries;
+	int NoAckRetries;			// Status received but no data acked
 	int ARQTimer;
 	int ARQState;
 
+#define ARQ_ACTIVE 1				// Have a session of some type
+
+	int ARQTimerState;
+
 #define ARQ_CONNECTING 1
-#define ARQ_CONNECTED 2
+#define ARQ_CONNECTACK 2
 #define ARQ_DISC 3
 #define ARQ_WAITACK 4
 #define ARQ_WAITDATA 5			// Waiting for more data before polling
 
 	char LastMsg[80];			// Last message sent that expects an ack
 	int LastLen;
+	char TXMsg[80];				// Message to aend after TXDELAY
+	int TXLen;
+	int TurnroundTimer;			// RX to TX delay.
+	int TXDelay;
 
 } *ARQINFO;
 
@@ -260,10 +274,20 @@ typedef struct FLINFO
 	// Fields for MPSK  Session Ports )
 
 	BOOL TX;						// Set when FLDigi is transmitting
-	char DefaultMode[20];			// Mode to return to after session
+	char DefaultMode[64];			// Mode to return to after session
+	int DefaultFreq;				// Freq to return to after session
 	BOOL Beacon;					// Use ALE Beacons
-	char LastXML[32];				// Last XML Request Sent
+	char LastXML[128];				// Last XML Request Sent
 	int XMLControl;					// Controlls polling FLDigi by XML
+	int CmdControl;					// Controlls polling FLDigi by KISS Command
+	BOOL FLARQ;						// Connection from FLARQ
+	BOOL Busy;
+	BOOL CONOK;						// Allow incoming connects
+	BOOL KISSMODE;					// Using KISS instead of socket interface
+	BOOL RAW;						// Raw (ARQ Socket or KISS RAW, depening on above)
+	int CenterFreq;
+	char CurrentMode[20];			// Mode to return to after session
+	int	Responding;					// If FLDigi is responding to conmands
 
 } *FLINFO;
 
@@ -455,6 +479,7 @@ typedef struct TNCINFO
 //	BOOL CRCMode;					// Set if using SCS Extended DED Mode (JHOST4)
 	int Timeout;					// Timeout response counter
 	int Retries;
+	int Window;						// Window Size for ARQ
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry
 	int TXLen;						// Len of last sent
 	UCHAR RXBuffer[520];			// Message being received - may not arrive all at once

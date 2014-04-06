@@ -563,7 +563,7 @@
 // Allow HOST applications even when CMS option is disabled
 // Fix processing of APRS DIGIMAP command with no targets (didn't suppress default settings)
 
-// Version 6.0.5.1
+// Version 6.0.5.1 January 2014
 
 //	Add UTF8 conversion mode to Telnet (converts non-UTF-8 chars to UTF-8)
 //	Add "Clear" option to MH command
@@ -590,7 +590,27 @@
 //	Fix possible crash when bpq32.exe dies
 //	Fix DIGIPORT for UI frames
 
-// FLDigi Interface
+//  Version 6.0.6.1 April 2014
+
+//  FLDigi Interface
+//  Fix "All CMS Servers are inaccessible" message so Mail Forwarding ELSE works.
+//	Validate INP3 messages to try to prevent crash
+//  Fix possible crash if an overlarge KISS frame is received
+//	Fix error in AXR command
+//	Add LF to Telnet Outward Connect signin if NEEDLF added to connect line
+//	Add CBELL to TNC21 emulator
+//	Add sent objects and third party messages to APRS Dup List
+//  Incorporate UIUtil
+//	Use Memory Mapped file to pass APRS info to BPQAPRS, and process APRS HTTP in BPQ32
+//	Improvements to FLDIGI interlocking
+//	Fix TNC State Display for Tracker
+//	Cache CMS Addresses on LinBPQ
+//	Fix count error on DED Driver when handling 256 byte packets
+//	Add basic SNMP interface for MRTG
+//	Fix memory loss from getaddrinfo
+//	Process "BUSY" response from Tracker
+//	Handle serial port writes that don't accept all the data
+//	Trap Error 10038 and try to reopen socket
 
 #define CKernel
 
@@ -610,6 +630,7 @@
 
 #include "SHELLAPI.H"
 #include "kernelresource.h"
+
 #include <tlhelp32.h>
 #include "BPQTermMDI.h"
 
@@ -673,11 +694,18 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
+UINT DSTARExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
 DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
 DllExport int ConvToAX25(unsigned char * incall,unsigned char * outcall);
+VOID GetUIConfig();
+
+
+char UIClassName[]="UIMAINWINDOW";					// the main window class name
+
+HWND UIhWnd;
 
 extern char AUTOSAVE;
 
@@ -1924,6 +1952,21 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			return 0;
 		}
 
+		if (_stricmp(pgm,"BPQUIUtil.exe") == 0)
+		{
+			MessageBox(NULL,"BPQUIUtil is now part of BPQ32.dll\r\nBPQUIUtil.exe cannot be run\r\n", "BPQ32", MB_OK);
+			AttachedProcesses++;			// We will get a detach
+			FreeSemaphore(&Semaphore);
+			return 0;
+		}
+
+		if (_stricmp(pgm,"BPQMailChat.exe") == 0)
+		{
+			MessageBox(NULL,"BPQMailChat is obsolete. Run BPQMail.exe and/or BPQChat.exe instead", "BPQ32", MB_OK);
+			AttachedProcesses++;			// We will get a detach
+			FreeSemaphore(&Semaphore);
+			return 0;
+		}
 		AuthorisedProgram = TRUE;
 
 		if (InitDone == 0)
@@ -2006,6 +2049,9 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			else
 			{
 				SetApplPorts();
+
+				GetUIConfig();
+
 				InitDone=(int) &InitDone;
 				BPQMsg = RegisterWindowMessage(BPQWinMsg);
 //				TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
@@ -3045,6 +3091,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
 
+	if (strstr(Value, "DSTAR"))
+		return (UINT) DSTARExtInit;
+
 	ExtDriver=LoadLibrary(Value);
 
 	if (ExtDriver == NULL)
@@ -3432,6 +3481,9 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 
 
 
+LRESULT CALLBACK UIWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+VOID WINAPI OnTabbedDialogInit(HWND hDlg);
+
 LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
@@ -3556,6 +3608,45 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 	//			SendMessage(ClientWnd, WM_MDIICONARRANGE, 0 ,0);
 
 				return 0;
+
+			case BPQUICONFIG:
+			{
+				int err, i=0;
+				char Title[80];
+				WNDCLASS  wc;
+	
+				wc.style = CS_HREDRAW | CS_VREDRAW;
+				wc.lpfnWndProc = UIWndProc;       
+				wc.cbClsExtra = 0;                
+				wc.cbWndExtra = DLGWINDOWEXTRA;
+				wc.hInstance = hInstance;
+				wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(BPQICON) );
+				wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+				wc.hbrBackground = bgBrush; 
+
+				wc.lpszMenuName = NULL;	
+				wc.lpszClassName = UIClassName; 
+
+				RegisterClass(&wc);
+
+				UIhWnd = CreateDialog(hInstance, UIClassName, 0, NULL);
+
+				if (!UIhWnd)
+				{	
+					err=GetLastError();
+					return FALSE;
+				}
+
+				wsprintf(Title,"BPQ32 Beacon Configuration");
+				SetWindowText(UIhWnd, Title);
+				ShowWindow(UIhWnd, SW_NORMAL);
+	
+				OnTabbedDialogInit(UIhWnd);			// Set up pages
+
+	//			UpdateWindow(UIhWnd);
+				return 0;
+			}
+
 
 			case IDD_WL2KSYSOP:
 
@@ -4193,6 +4284,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (wmId == BPQCLOSEALL)
 			{
 				CloseAllPrograms();
+				return 0;
+			}
+
+			if (wmId == BPQUICONFIG)
+			{
+				int err, i=0;
+				char Title[80];
+				WNDCLASS  wc;
+	
+				wc.style = CS_HREDRAW | CS_VREDRAW;
+				wc.lpfnWndProc = UIWndProc;       
+				wc.cbClsExtra = 0;                
+				wc.cbWndExtra = DLGWINDOWEXTRA;
+				wc.hInstance = hInstance;
+				wc.hIcon = LoadIcon( hInstance, MAKEINTRESOURCE(BPQICON) );
+				wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+				wc.hbrBackground = bgBrush; 
+
+				wc.lpszMenuName = NULL;	
+				wc.lpszClassName = UIClassName; 
+
+				RegisterClass(&wc);
+
+				UIhWnd = CreateDialog(hInstance, UIClassName,0,NULL);
+
+				if (!UIhWnd)
+				{	
+					err=GetLastError();
+					return FALSE;
+				}
+
+				wsprintf(Title,"BPQ32 Beacon Utility Version");
+				SetWindowText(UIhWnd, Title);
 				return 0;
 			}
 
@@ -5517,6 +5641,53 @@ DllExport BOOL APIENTRY CheckIfOwner()
 		return (TRUE);
 	else
 		return (FALSE);	
+}
+
+VOID GetParam(char * input, char * key, char * value)
+{
+	char * ptr = strstr(input, key);
+	char Param[2048];
+	char * ptr1, * ptr2;
+	char c;
+
+	if (ptr)
+	{
+		ptr2 = strchr(ptr, '&');
+		if (ptr2) *ptr2 = 0;
+		strcpy(Param, ptr + strlen(key));
+		if (ptr2) *ptr2 = '&';					// Restore string
+
+		// Undo any % transparency
+
+		ptr1 = Param;
+		ptr2 = Param;
+
+		c = *(ptr1++);
+
+		while (c)
+		{
+			if (c == '%')
+			{
+				int n;
+				int m = *(ptr1++) - '0';
+				if (m > 9) m = m - 7;
+				n = *(ptr1++) - '0';
+				if (n > 9) n = n - 7;
+
+				*(ptr2++) = m * 16 + n;
+			}
+			else if (c == '+')
+				*(ptr2++) = ' ';
+			else
+				*(ptr2++) = c;
+
+			c = *(ptr1++);
+		}
+
+		*(ptr2++) = 0;
+
+		strcpy(value, Param);
+	}
 }
 
 

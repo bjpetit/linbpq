@@ -630,6 +630,9 @@ UINT TrackerExtInit(EXTPORTDATA *  PortEntry)
 
 	}
 
+	strcpy(TNC->WEB_TNCSTATE, "Idle");
+	SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
 	OpenCOMMPort(TNC,PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 	TNC->InitPtr = TNC->InitScript;
@@ -771,7 +774,9 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 			case 2:		//  Get Length
 
-				TNC->MSGCOUNT = TNC->MSGLENGTH = ++character;
+				TNC->MSGCOUNT = character;
+				TNC->MSGCOUNT++;						// Param is len - 1
+				TNC->MSGLENGTH = TNC->MSGCOUNT;
 				CURSOR = &TNC->DEDBuffer[0];
 				TNC->HOSTSTATE = 3;						// Get Data
 
@@ -1689,50 +1694,51 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 			if (TNC->Streams[Stream].CmdSet || TNC->InitPtr)
 				return;						// Response to Command Set or Init Script
 
-		if ((TNC->TXBuffer[1] & 1) == 0)	// Data
-			return;
-
-		// If the response to a Command, then we should convert to a text "Ok" for forward scripts, etc
-
-		if (TNC->TXBuffer[3] == 'G')	// Poll
-			return;
-
-		if (TNC->TXBuffer[3] == 'C')	// Connect - reply we need is async
-			return;
-
-		if (TNC->TXBuffer[3] == 'L')	// Shouldnt happen!
-			return;
-
-		if (TNC->TXBuffer[3] == 'J')	// JHOST
-		{
-			if (TNC->TXBuffer[8] == '0')	// JHOST0
+			if ((TNC->TXBuffer[1] & 1) == 0)	// Data
 			{
-				TNC->Timeout = 1;			// 
+				// Should we look for "CHANNEL NOT CONNECTED" here (or somewhere!)
 				return;
 			}
-		}
 
-		if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+			// If the response to a Command, then we should convert to a text "Ok" for forward scripts, etc
+
+			if (TNC->TXBuffer[3] == 'G')	// Poll
+				return;
+
+			if (TNC->TXBuffer[3] == 'C')	// Connect - reply we need is async
+				return;
+
+			if (TNC->TXBuffer[3] == 'L')	// Shouldnt happen!
+				return;
+
+			if (TNC->TXBuffer[3] == 'J')	// JHOST
+			{	
+				if (TNC->TXBuffer[8] == '0')	// JHOST0
+				{
+					TNC->Timeout = 1;			// 
+					return;
+				}
+			}
+
+			if (TNC->MSGCHANNEL == 0)			// Unproto Channel
+				return;
+
+			buffptr = GetBuff();
+
+			if (buffptr == NULL) return;			// No buffers, so ignore
+
+			buffptr[1] = sprintf((UCHAR *)&buffptr[2],"TRK} %s", Buffer);
+
+			C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+
 			return;
-
-		buffptr = GetBuff();
-
-		if (buffptr == NULL) return;			// No buffers, so ignore
-
-		buffptr[1] = sprintf((UCHAR *)&buffptr[2],"TRK} %s", Buffer);
-
-		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
-
-		return;
-
-
 		}
 
 		if (TNC->MSGTYPE == 3)					// Status
 		{			
 			struct STREAMINFO * STREAM = &TNC->Streams[Stream];
 
-			if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "LINK FAILURE"))
+			if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "LINK FAILURE")  || strstr(Buffer, "BUSY"))
 			{
 				if ((STREAM->Connecting | STREAM->Connected) == 0)
 					return;
@@ -1744,7 +1750,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					buffptr = GetBuff();
 					if (buffptr == 0) return;			// No buffers, so ignore
 
-					buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
+					if (strstr(Buffer, "BUSY"))
+						buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Busy from %s\r", TNC->Streams[Stream].RemoteCall);
+					else
+						buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
 
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 	
@@ -1840,9 +1849,9 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					if (Stream == 0)
 					{
 						if (TNC->RIG)
-							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
+							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, STREAM->MyCall, TNC->RIG->Valchar);
 						else
-							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", STREAM->RemoteCall, TNC->NodeCall);
+							sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound", STREAM->RemoteCall, STREAM->MyCall);
 					
 						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 						TNC->WEB_CHANGED = TRUE;
@@ -2333,6 +2342,11 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 	TNC->NeedPACTOR = 20;		// Delay a bit for UA to be sent before changing mode and call
 	
 	sprintf(Status, "%d SCANSTART 15", TNC->Port);
+
+	strcpy(TNC->WEB_TNCSTATE, "Idle");
+	SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+	TNC->WEB_CHANGED = TRUE;
+
 	
 	Rig_Command(-1, Status);
 

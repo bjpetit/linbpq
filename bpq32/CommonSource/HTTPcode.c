@@ -24,6 +24,7 @@ extern BOOL APRSApplConnected;
 extern char VersionString[];
 static VOID FormatTime(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
+VOID SaveUIConfig();
 
 
 extern struct ROUTE * NEIGHBOURS;
@@ -44,6 +45,20 @@ extern BOOL IncludesMail;
 extern BOOL IncludesChat;
 
 extern BOOL APRSWeb;  
+
+extern char * UIUIDigi[33];
+extern char UIUIDEST[33][11];		// Dest for Beacons
+extern UCHAR FN[33][256];			// Filename
+extern int Interval[33];			// Beacon Interval (Mins)
+extern char Message[33][1000];		// Beacon Text
+
+extern int MinCounter[33];			// Interval Countdown
+extern BOOL SendFromFile[33];
+
+extern HKEY REGTREE;
+
+extern BOOL APRSActive;
+
 
 struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 {
@@ -129,7 +144,8 @@ char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
 char MailBit[] = "<td><a href=../Mail/Header>Mail Server Pages</a></td>";
 char ChatBit[] = "<td><a href=../Chat/Header>Chat Server Pages</a></td>";
 
-char NodeTail[] = "</tr></table>";
+char NodeTail[] = 	"<td><a href=/Node/Signon.html>SYSOP Signin</a></td>"
+	"</tr></table>";
 	
 char Tail[] = "</body></html>";
 
@@ -153,10 +169,12 @@ char NodeHddr[] = "<center><form method=get action=/Node/Nodes.html>"
 char NodeLine[] = "<td><a href=NodeDetail?%s>%s:%s</td>";
 
 char PortsHddr[] = "<h2 align=center>Ports</h2><table align=center border=2 bgcolor=white>"
-	"<tr><th>Port</th><th>Driver</th><th>ID</th></tr>";
+	"<tr><th>Port</th><th>Driver</th><th>ID</th><th>Beacons</th></tr>";
 
 char PortLine[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td></tr>";
-char SessionPortLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td></tr>";
+char PortLineWithBeacon[] = "<tr><td>%d</td><td><a href=PortStats?%d&%s>&nbsp;%s</a></td><td>%s</td><td><a href=PortBeacons?%d>&nbsp;Beacons</a></td></tr>";
+
+char SessionPortLine[] = "<tr><td>%d</td><td>%s</td><td>%s</td><td> </td></tr>";
 
 char StatsHddr[] = "<h2 align=center>Node Stats</h2><table align=center cellpadding=2 bgcolor=white>"
 	"<col width=250 /><col width=80 /><col width=80 /><col width=80 /><col width=80 /><col width=80 />";
@@ -164,6 +182,22 @@ char StatsHddr[] = "<h2 align=center>Node Stats</h2><table align=center cellpadd
 char PortStatsHddr[] = "<h2 align=center>Stats for Port %d</h2><table align=center border=2 cellpadding=2 bgcolor=white>";
 
 char PortStatsLine[] = "<tr><td> %s </td><td> %d </td></tr>";
+
+
+char Beacons[] = "<h2 align=center>Beacon Configuration for Port %d</h2><h3 align=center>You need to be signed in to save changes</h3><table align=center border=2 cellpadding=2 bgcolor=white>"
+	"<form method=post action=BeaconAction>"
+	"<table align=center  bgcolor=white>"
+	"<tr><td>Send Interval (Minutes)</td><td><input type=text name=Every tabindex=1 size=5 value=%d></td></tr>" 
+	"<tr><td>To</td><td><input name=Dest tabindex=2 size=5 value=%s></td></tr>"  
+	"<tr><td>Path</td><td><input type=text name=Path size=50 maxlength=50 value=%s></td></tr>"
+	"<tr><td>Send From File</td><td><input type=text name=File size=50 maxlength=50  value=%s></td></tr>"
+	"<tr><td>Text</td><td><textarea name=\"Text\" cols=40 rows=5>%s</textarea></td></tr>"
+	"</table>" 
+	"<input type=hidden name=Port value=%d>"
+
+	"<p align=center><input type=submit value=Save><input type=submit value=Test name=Test>"
+	"</form>";
+
 
 char LinkHddr[] = "<h2 align=center>Links</h2><table align=center border=2 bgcolor=white>"
 	"<tr><th>Far Call</th><th>Our Call</th><th>Port</th><th>ax.25 state</th><th>Link Type</th><th>ax.25 Version</th></tr>";
@@ -220,6 +254,16 @@ char InputLine[] = "<html><head></head><body>"
 	"<form name=inputform method=post action=/TermInput?%s>"
 	"<input type=text size=105 name=input />"
 	"<script>document.inputform.input.focus();</script></form>";
+
+static char NodeSignon[] = "<html><head><title>BPQ32 Node SYSOP Access</title></head><body background=\"/background.jpg\">"
+	"<h3 align=center>BPQ32 Node %s SYSOP Access</h3>"
+	"<h3 align=center>This page sets Cookies. Don't continue if you object to this</h3>"
+	"<h3 align=center>Please enter Callsign and Password to access the Node</h3>"
+	"<form method=post action=/Node/Signon?Node>"
+	"<table align=center  bgcolor=white>"
+	"<tr><td>User</td><td><input type=text name=user tabindex=1 size=20 maxlength=50 /></td></tr>" 
+	"<tr><td>Password</td><td><input type=password name=password tabindex=2 size=20 maxlength=50 /></td></tr></table>"  
+	"<p align=center><input type=submit value=Submit /><input type=submit value=Cancel name=Cancel /></form>";
 
 
 static char MailSignon[] = "<html><head><title>BPQ32 Mail Server Access</title></head><body background=\"/background.jpg\">"
@@ -641,7 +685,8 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 	ReplyLen = SetupNodeMenu(_REPLYBUFFER);
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+		"\r\n", ReplyLen + strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, strlen(Tail), 0);
@@ -873,7 +918,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 	struct stat STAT;
 
 	if (strcmp(FN, "/") == 0)
-		if (APRSApplConnected)
+		if (APRSActive)
 			sprintf(MsgFile, "%s/HTML/index.html", BPQDirectory);
 		else
 			sprintf(MsgFile, "%s/HTML/indexnoaprs.html", BPQDirectory);
@@ -1081,6 +1126,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	int HeaderLen;
 	char TimeString[64];
 	BOOL LOCAL = FALSE;
+	BOOL COOKIE = FALSE;
 	char Reply[100000];
 
 //	struct _EXCEPTION_POINTERS exinfo;
@@ -1094,6 +1140,31 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	if (strstr(MsgPtr, "Host: 127.0.0.1"))
 		LOCAL = TRUE;
 
+	ptr = strstr(MsgPtr, "BPQSessionCookie=N");
+
+	if (ptr)
+	{
+		COOKIE = TRUE;
+		Key = ptr + 17;
+		ptr = strchr(Key, ',');
+		if (ptr)
+		{
+			*ptr = 0;
+			Session = FindSession(Key);
+			*ptr = ',';
+		}
+		else
+		{
+			ptr = strchr(Key, 13);
+			if (ptr)
+			{
+				*ptr = 0;
+				Session = FindSession(Key);
+				*ptr = 13;
+			}
+		}
+	}
+
 	ptr = strstr(URL, " HTTP");
 
 	if (ptr)
@@ -1104,8 +1175,6 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	memcpy(Mycall, &MYNODECALL, 10);
 	strlop(Mycall, ' ');
 
-#ifdef LINBPQ
-
 	// APRS is internal
 
 	if (_memicmp(Context, "/APRS/", 6) == 0)
@@ -1114,7 +1183,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		return 0;
 	}
 
-#else
+/*
 
 	// Windows - Pass to BPQAPRS via Pipi
 
@@ -1171,7 +1240,21 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		return 0;
 	}
 
-#endif
+*/
+	
+
+	if (_stricmp(Context, "/Node/Signon?Node") == 0)
+	{
+		char * IContext;
+
+		NodeURL = strtok_s(Context, "?", &IContext);
+		Key = strtok_s(NULL, "?", &IContext);
+		
+		ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session);
+		return 0;
+		
+	}
+
 
 	// If for Mail or Chat, check for a session, and send login screen if necessary
 
@@ -1226,7 +1309,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		// if not local send a signon screen, else create a user session
 
-		if (LOCAL)
+		if (LOCAL || COOKIE)
 		{
 			Session = AllocateSession(sock, 'M');
 
@@ -1315,7 +1398,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		// if not local send a signon screen, else create a user session
 
-		if (LOCAL)
+		if (LOCAL || COOKIE)
 		{
 			Session = AllocateSession(sock, 'C');
 
@@ -1512,11 +1595,120 @@ doHeader:
 			ProcessTermSignon(conn->TNC, sock, MsgPtr, MsgLen);
 		}
 
+		if (_stricmp(NodeURL, "/Node/Signon") == 0)
+		{
+			ProcessNodeSignon(sock, TCP, MsgPtr, Key, Reply, &Session);
+			return 0;
+		}
+
 		if (_stricmp(NodeURL, "/Node/TermClose") == 0)
 		{
 			ProcessTermClose(sock, MsgPtr, MsgLen, Context);
 			return 0;
 		}
+
+		if (_stricmp(NodeURL, "/Node/BeaconAction") == 0)
+		{
+			char _REPLYBUFFER[8192];
+			int ReplyLen;
+			char Header[256];
+			int HeaderLen;
+			char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+			int Port;
+			char Param[100];
+			int retCode, disp;
+			char Key[80];
+			HKEY hKey;
+
+
+			if (LOCAL == FALSE && COOKIE == FALSE)
+			{
+				//	Send Not Authorized
+
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
+				HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+				send(sock, Header, HeaderLen, 0);
+				send(sock, _REPLYBUFFER, ReplyLen, 0);
+				send(sock, Tail, strlen(Tail), 0);
+
+				return 1;
+			}
+
+
+
+			if (strstr(input, "Cancel=Cancel"))
+			{
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+				HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+				send(sock, Header, HeaderLen, 0);
+				send(sock, _REPLYBUFFER, ReplyLen, 0);
+				send(sock, Tail, strlen(Tail), 0);
+
+				return 1;
+			}
+
+			GetParam(input, "Port", &Param);
+			Port = atoi(&Param[1]);
+			GetParam(input, "Every", &Param);
+			Interval[Port] = atoi(&Param[1]);
+
+
+//extern char * UIUIDigi[33];
+//extern char UIUIDEST[33][11];		// Dest for Beacons
+//extern UCHAR FN[33][256];			// Filename
+//extern int [33];			// Beacon Interval (Mins)
+//extern char Message[33][1000];		// Beacon Text
+
+
+			GetParam(input, "Dest", &Param);
+			strcpy(UIUIDEST[Port], &Param[1]);
+
+			GetParam(input, "Path", &Param);
+			if (UIUIDigi[Port])
+				free(UIUIDigi[Port]);
+			UIUIDigi[Port] = _strdup(&Param[1]);
+
+			GetParam(input, "File", &Param);
+			strcpy(FN[Port], &Param[1]);
+			GetParam(input, "Text", &Param);
+			strcpy(Message[Port], &Param[1]);
+		
+			MinCounter[Port] = Interval[Port];
+
+			SendFromFile[Port] = 0;
+			
+			if (FN[Port][0])
+				SendFromFile[Port] = 1;
+
+			SetupUI(Port);
+
+#ifdef LINBPQ
+			SaveUIConfig();
+#else
+			
+			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil\\UIPort%d", Port);
+
+			retCode = RegCreateKeyEx(REGTREE,
+					Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
+			if (retCode == ERROR_SUCCESS)
+			{
+				retCode = RegSetValueEx(hKey, "UIDEST", 0, REG_SZ,(BYTE *)&UIUIDEST[Port][0], strlen(&UIUIDEST[Port][0]));
+				retCode = RegSetValueEx(hKey, "FileName", 0, REG_SZ,(BYTE *)&FN[Port][0], strlen(&FN[Port][0]));
+				retCode = RegSetValueEx(hKey, "Message", 0, REG_SZ,(BYTE *)&Message[Port][0], strlen(&Message[Port][0]));
+				retCode = RegSetValueEx(hKey, "Interval", 0, REG_DWORD,(BYTE *)&Interval[Port], 4);
+				retCode = RegSetValueEx(hKey, "SendFromFile", 0, REG_DWORD,(BYTE *)&SendFromFile[Port], 4);
+				retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ, UIUIDigi[Port], strlen(UIUIDigi[Port]));
+
+				RegCloseKey(hKey);
+			}
+#endif
+
+			if (strstr(input, "Test=Test"))
+				SendUIBeacon(Port);
+		}
+	
 
 		send(sock, _REPLYBUFFER, InputLen, 0);
 		return 0;
@@ -1630,6 +1822,18 @@ doHeader:
 		"L3 Frames Relayed", L3FRAMES);
 
 	}
+
+	if (_stricmp(NodeURL, "/Node/PortBeacons") == 0)
+	{
+		char * PortChar = strtok_s(NULL, "&", &Context);
+		int PortNo = atoi(PortChar);
+
+		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], Beacons, PortNo,
+			Interval[PortNo], &UIUIDEST[PortNo][0], &UIUIDigi[PortNo][0], &FN[PortNo][0], &Message[PortNo][0], PortNo);
+	}
+
+
+
 	if (_stricmp(NodeURL, "/Node/PortStats") == 0)
 	{
 		struct _EXTPORTDATA * Port;
@@ -1720,11 +1924,13 @@ doHeader:
 			else if (Port->PORTTYPE > 0 && Port->PORTTYPE < 14)
 				strcpy(DLL, "HDLC");
 
-			if (Port->PROTOCOL == 10)		// Pactor-Like driver
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], SessionPortLine, Port->PORTNUMBER, DLL, Port->PORTDESCRIPTION);
-			else
-				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLine, Port->PORTNUMBER, Port->PORTNUMBER,
-					DLL, DLL, Port->PORTDESCRIPTION);
+
+
+		if (Port->PORTTYPE == 16 && Port->PROTOCOL == 10 && Port->UICAPABLE == 0)		// EXTERNAL, Pactor/WINMO
+			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], SessionPortLine, Port->PORTNUMBER, DLL, Port->PORTDESCRIPTION);
+		else
+			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortLineWithBeacon, Port->PORTNUMBER, Port->PORTNUMBER,
+					DLL, DLL, Port->PORTDESCRIPTION, Port->PORTNUMBER);
 		}
 	}
 
@@ -2252,7 +2458,44 @@ END_CMDUXX:
 
 	else if (_stricmp(NodeURL, "/Node/Terminal.html") == 0)
 	{
-		ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Context);
+		if (COOKIE && Session)
+		{
+			// Already signed in as sysop
+			
+			struct UserRec * USER = Session->USER;
+
+			struct HTTPConnectionInfo * NewSession = AllocateSession(sock, 'T');
+
+			if (NewSession)
+			{
+				char AXCall[10];
+				ReplyLen = sprintf(_REPLYBUFFER, TermPage, Mycall, Mycall, NewSession->Key, NewSession->Key, NewSession->Key);
+				strcpy(NewSession->HTTPCall, USER->Callsign);
+				ConvToAX25(NewSession->HTTPCall, AXCall);
+				ChangeSessionCallsign(NewSession->Stream, AXCall);
+				BPQHOSTVECTOR[NewSession->Stream -1].HOSTSESSION->Secure_Session = USER->Secure;
+				Session->USER = USER;
+
+	//			if (Appl[0])
+	//			{
+	//				strcat(Appl, "\r");
+	//				SendMsg(Session->Stream, Appl, strlen(Appl));
+	//			}
+
+			}
+			else
+			{
+				ReplyLen = SetupNodeMenu(_REPLYBUFFER);
+				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", BusyError);
+			}
+		}
+		else
+			ReplyLen = sprintf(_REPLYBUFFER, TermSignon, Mycall, Mycall, Context);
+	}
+
+	else if (_stricmp(NodeURL, "/Node/Signon.html") == 0)
+	{
+		ReplyLen = sprintf(_REPLYBUFFER, NodeSignon, Mycall, Mycall, Context);
 	}
 
 	else if (_stricmp(NodeURL, "/Node/Drivers") == 0)
@@ -2398,6 +2641,74 @@ int StatusProc(char * Buff)
 	Len += sprintf(&Buff[Len], "</tr></table>");
 	return Len;
 }
+
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session)
+{
+	int ReplyLen = 0;
+	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+	char * user, * password, * Key;
+	char Header[256];
+	int HeaderLen;
+	struct HTTPConnectionInfo *Sess;
+
+
+	if (input)
+	{
+		int i;
+		struct UserRec * USER;
+
+		if (strstr(input, "Cancel=Cancel"))
+		{
+			ReplyLen = SetupNodeMenu(Reply);
+			return ReplyLen;
+		}
+		user = strtok_s(&input[9], "&", &Key);
+		password = strtok_s(NULL, "=", &Key);
+		password = Key;
+
+		for (i = 0; i < TCP->NumberofUsers; i++)
+		{
+			USER = TCP->UserRecPtr[i];
+
+			if (user && _stricmp(user, USER->UserName) == 0)
+			{
+ 				if (strcmp(password, USER->Password) == 0 && USER->Secure)
+				{
+					// ok
+
+					Sess = *Session = AllocateSession(sock, 'N');
+					Sess->USER = USER;
+
+					ReplyLen =  SetupNodeMenu(Reply);
+
+					HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+						"Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", ReplyLen + strlen(Tail), Sess->Key);	
+					send(sock, Header, HeaderLen, 0);
+					send(sock, Reply, ReplyLen, 0);
+					send(sock, Tail, strlen(Tail), 0);
+
+					return ReplyLen;
+				}
+			}
+		}
+	}	
+	
+	ReplyLen = sprintf(Reply, NodeSignon, Mycall, Mycall);
+	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
+
+	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+	send(sock, Header, HeaderLen, 0);
+	send(sock, Reply, ReplyLen, 0);
+	send(sock, Tail, strlen(Tail), 0);
+
+		return 0;
+
+
+	return ReplyLen;
+}
+
+
+
 
 int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session)
 {

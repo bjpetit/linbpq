@@ -154,42 +154,6 @@ static char LostSession[] = "<html><body>"
 char * ChatConfigTemplate = NULL;
 char * ChatStatusTemplate = NULL;
 
-static char * GetTemplateFromFile(char * FN)
-{
-	int FileSize;
-	char * MsgBytes;
-	char MsgFile[265];
-	FILE * hFile;
-	int ReadLen;
-	BOOL Special = FALSE;
-	struct stat STAT;
-
-	sprintf(MsgFile, "%s/HTML/%s", GetBPQDirectory(), FN);
-
-	if (stat(MsgFile, &STAT) == -1)
-	{
-		MsgBytes = _strdup("File is missing");
-		return MsgBytes;
-	}
-
-	hFile = fopen(MsgFile, "rb");
-	
-	if (hFile == 0)
-	{
-		MsgBytes = _strdup("File is missing");
-		return MsgBytes;
-	}
-
-	
-	FileSize = STAT.st_size;
-	MsgBytes = malloc(FileSize + 1);
-	ReadLen = fread(MsgBytes, 1, FileSize, hFile); 
-	MsgBytes[FileSize] = 0;
-	fclose(hFile);
-	return MsgBytes;
-}
-
-
 static int compare(const void *arg1, const void *arg2)
 {
    // Compare Calls. Fortunately call is at start of stuct
@@ -227,7 +191,7 @@ void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 			if (ChatConfigTemplate)
 				free(ChatConfigTemplate);
 
-			ChatConfigTemplate = GetTemplateFromFile("ChatConfig.txt");
+			ChatConfigTemplate = GetTemplateFromFile(1, "ChatConfig.txt");
 			
 			NodeURL[strlen(NodeURL)] = ' ';				// Undo strtok
 			SaveChatInfo(Session, input, Reply, RLen, Key);
@@ -255,7 +219,7 @@ void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (ChatStatusTemplate)
 			free(ChatStatusTemplate);
 	
-		ChatStatusTemplate = GetTemplateFromFile("ChatStatus.txt");
+		ChatStatusTemplate = GetTemplateFromFile(1, "ChatStatus.txt");
 		SendChatStatusPage(Reply, RLen, Key);
 
 		return;
@@ -266,7 +230,7 @@ void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (ChatConfigTemplate)
 			free(ChatConfigTemplate);
 
-		ChatConfigTemplate = GetTemplateFromFile("ChatConfig.txt");
+		ChatConfigTemplate = GetTemplateFromFile(1, "ChatConfig.txt");
 
 		SendChatConfigPage(Reply, RLen, Key);
 		return;

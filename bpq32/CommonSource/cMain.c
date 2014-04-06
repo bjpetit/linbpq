@@ -64,6 +64,8 @@ UCHAR	MYNETROMCALL[10] = "";				// NETROM CALLSIGN (ASCII)
 
 UINT	FREE_Q = 0;
 
+time_t TimeLoaded = 0;
+
 struct PORTCONTROL * PORTTABLE = NULL;
 int	NUMBEROFPORTS = 0;
 int PORTENTRYLEN = sizeof(struct PORTCONTROL);
@@ -554,6 +556,8 @@ BOOL Start()
 	CURRENTNODE = 0;
 	L3TIMER = 1;						// SEND NODES
 
+	TimeLoaded = time(NULL);
+
 	AUTOSAVE = cfg->C_AUTOSAVE;
 	
 	if (cfg->C_L4APPL)
@@ -821,7 +825,7 @@ BOOL Start()
 
 		PORT->PORTBBSFLAG = (char)PortRec->ALIAS_IS_BBS;
 		PORT->PORTL3FLAG = (char)PortRec->L3ONLY;
-		PORT->KISSFLAGS = (UCHAR)PortRec->KISSOPTIONS;
+		PORT->KISSFLAGS = PortRec->KISSOPTIONS;
 		PORT->PORTINTERLOCK = (UCHAR)PortRec->INTERLOCK;
 		PORT->NODESPACLEN = (UCHAR)PortRec->NODESPACLEN;
 		PORT->TXPORT = (UCHAR)PortRec->TXPORT;
@@ -887,6 +891,7 @@ BOOL Start()
 		PORT->XDIGIS = PortRec->XDIGIS;		// Crossband digi aliases
 
 		memcpy(&PORT->PORTIPADDR, &PortRec->IPADDR, 4);
+		PORT->ListenPort = PortRec->ListenPort;
 
 		if (PortRec->WL2K)
 			memcpy(&PORT->WL2KInfo, PortRec->WL2K, sizeof(struct WL2KInfo));
@@ -1644,7 +1649,10 @@ VOID TIMERINTERRUPT()
 				PEXTPORTDATA PORTVEC = (PEXTPORTDATA)PORT;
 				TRANSPORTENTRY * Session;
 				TRANSPORTENTRY * Partner;
-		
+
+				InOctets[PORT->PORTNUMBER] += Message->LENGTH - 8;
+				PORT->L2FRAMESFORUS++;
+
 				Session = PORTVEC->ATTACHEDSESSIONS[Sessno];
 
 				if (Session == NULL)
@@ -1725,7 +1733,7 @@ VOID TIMERINTERRUPT()
 
 			if (ret == 0)		// Not busy
 			{
-				Buffer = Q_REM(&PORT->PORTTX_Q);
+				MESSAGE * Buffer = Q_REM(&PORT->PORTTX_Q);
 
 				if (Buffer == 0)
 					break;						// WOT!!
@@ -1737,6 +1745,8 @@ VOID TIMERINTERRUPT()
 				}
 
 				PORT->L2FRAMESSENT++;
+				OutOctets[PORT->PORTNUMBER] += Buffer->LENGTH - 7;
+
 				PORT->PORTTXROUTINE(PORT, Buffer);
 
 				continue;
@@ -1780,6 +1790,8 @@ PACTORLOOP:
 			}
 
 			PORT->L2FRAMESSENT++;
+			OutOctets[PORT->PORTNUMBER] += Message->LENGTH;
+
 			PORT->PORTTXROUTINE(PORT, Buffer);
 	
 			goto PACTORLOOP;			// SEE IF MORE

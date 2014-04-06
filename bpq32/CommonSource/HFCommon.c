@@ -499,7 +499,7 @@ VOID SendReporttoWL2KThread()
 		Debugprintf("Sending %s", Message);
 
 		sendto(sock, Message, strlen(Message),0,(struct sockaddr *)&destaddr,sizeof(destaddr));
-
+				
 		if (LastRMSCall == NULL || strcmp(WL2KReport->RMSCall, LastRMSCall) != 0)
 		{
 			LastRMSCall = WL2KReport->RMSCall;

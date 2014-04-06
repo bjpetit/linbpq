@@ -77,14 +77,16 @@ int RTTTimeout = 6;				// 1 Min (Horizon is 1 min)
 
 VOID InitialiseRTT()
 {
+	UCHAR temp[sizeof(RTTMsg.FLAGS) + 4];
+
+	memset(&RTTMsg, ' ', sizeof(struct _RTTMSG));
 	memcpy(RTTMsg.ID, "L3RTT: ", 7);
 	memcpy(RTTMsg.VERSION, "LEVEL3_V2.1 ", 12);
 	memcpy(RTTMsg.SWVERSION, "BPQ32001 ", 9);
-	sprintf(RTTMsg.FLAGS, "$M%d $N   ", MAXRTT);
+	_snprintf(temp, sizeof(temp), "$M%d $N      ", MAXRTT); // trailing spaces extend to ensure padding if the length of characters for MAXRTT changes.
+	memcpy(RTTMsg.FLAGS, temp, 10);                 // But still limit the actual characters copied.
 	memcpy(RTTMsg.ALIAS, &MYALIASTEXT, 6);
 	RTTMsg.ALIAS[6] = ' ';
-	memcpy(RTTMsg.ID, "L3RTT: ", 7);
-	memset(RTTMsg.PADDING, ' ', sizeof(RTTMsg.PADDING));
 }
 
 VOID TellINP3LinkGone(struct ROUTE * Route)
@@ -312,7 +314,7 @@ VOID ProcessRTTReply(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Buff)
 
 VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 {
-	char axcall[7];
+	unsigned char axcall[7];
 	int hops;
 	unsigned short rtt;
 	int len;
@@ -347,6 +349,9 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 		memset(alias, ' ', 6);	
 		memcpy(axcall, ptr1, 7);
 
+		if (axcall[0] < 0x60 || (axcall[0] & 1))		// Not valid ax25 callsign
+			return;					// Corrupt RIF
+	
 		ptr1+=7;
 
 		hops = *ptr1++;
@@ -355,10 +360,13 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 
 		msglen -= 10;
 
-		while (*ptr1)
+		while (*ptr1 && msglen > 0)
 		{
 			len = *ptr1;
 			opcode = *(ptr1+1);
+
+			if (len < 2 || len > msglen)
+				return;				// Duff RIF
 
 			if (opcode == 0)
 			{
@@ -993,7 +1001,7 @@ struct _L3MESSAGEBUFFER * CreateRIFHeader(struct ROUTE * Route)
 
 }
 
-SendRIF(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Msg)
+VOID SendRIF(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Msg)
 {
 	Msg->LENGTH += MSGHDDRLEN + 1;		// PID
 
@@ -1002,7 +1010,7 @@ SendRIF(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Msg)
 	free(Msg);
 }
 
-SendRIPToOtherNeighbours(UCHAR * axcall, UCHAR * alias, struct DEST_ROUTE_ENTRY * Entry)
+VOID SendRIPToOtherNeighbours(UCHAR * axcall, UCHAR * alias, struct DEST_ROUTE_ENTRY * Entry)
 {
 	struct ROUTE * Routes = NEIGHBOURS;
 	struct _L3MESSAGEBUFFER * Msg;
@@ -1077,7 +1085,7 @@ VOID SendRIPToNeighbour(struct ROUTE * Route)
 	}
 }
 
-FlushRIFs()
+VOID FlushRIFs()
 {
 	struct ROUTE * Routes = NEIGHBOURS;
 	int count, MaxRoutes = MAXNEIGHBOURS;
@@ -1252,47 +1260,75 @@ VOID INP3TIMER()
 }
 
 
-UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, int msglen)
+UCHAR * DisplayINP3RIF(UCHAR * ptr1, UCHAR * ptr2, unsigned int msglen)
 {
 	char call[10];
 	int calllen;
 	int hops;
 	unsigned short rtt;
 	unsigned int len;
-	int opcode;
+	unsigned int opcode;
 	char alias[10] = "";
+	UCHAR IP[6];
+	int i;
 
-	ptr2+=sprintf(ptr2, " INP3 RIF:\r  Call Alias Hops RTT\r");
+	ptr2+=sprintf(ptr2, " INP3 RIF:\r Alias  Call  Hops  RTT\r");
 
 	while (msglen > 0)
 	{
 		calllen = ConvFromAX25(ptr1, call);
 		call[calllen] = 0;
 
+		// Validate the call
+
+		for (i = 0; i < calllen; i++)
+		{
+			if (!isupper(call[i]) && !isdigit(call[i]) && call[i] != '-')
+			{
+				ptr2+=sprintf(ptr2, " Corrupt RIF\r");
+				return ptr2;
+			}
+		}
+				
 		ptr1+=7;
 
 		hops = *ptr1++;
 		rtt = (*ptr1++ << 8);
 		rtt += *ptr1++;
 
+		IP[0] = 0;
+		strcpy(alias, "      ");
+
 		msglen -= 10;
 
-		while (*ptr1)
+		while (*ptr1 && msglen > 0)
 		{
 			len = *ptr1;
 			opcode = *(ptr1+1);
 
+			if (len < 2 || len > msglen)
+			{
+				ptr2+=sprintf(ptr2, " Corrupt RIF\r");
+				return ptr2;
+			}
 			if (opcode == 0 && len < 9)
 			{
-				memcpy(alias, ptr1+2, len-2);
-				alias[len-2] = 0;
+				memcpy(&alias[6 - (len - 2)], ptr1+2, len-2);		// Right Justiify
 			}
+			else
+			if (opcode == 1 && len < 8)
+			{
+				memcpy(IP, ptr1+2, len-2);
+			}
+
 			ptr1+=len;
 			msglen -=len;
 		}
 
-		ptr2+=sprintf(ptr2, "  %s:%s %d %4.2d\r", alias, call, hops, rtt);
-		alias[0] = 0;
+		if (IP[0])
+			ptr2+=sprintf(ptr2, " %s:%s %d %4.2d %d.%d.%d.%d\r", alias, call, hops, rtt, IP[0], IP[1], IP[2], IP[3]);
+		else
+			ptr2+=sprintf(ptr2, " %s:%s %d %4.2d\r", alias, call, hops, rtt);
 
 		ptr1++;
 		msglen--;		// EOP

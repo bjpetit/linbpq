@@ -9,6 +9,9 @@
 #include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
 #else
 #include <iconv.h>
+#ifndef MACBPQ
+#include <sys/prctl.h>
+#endif
 #endif
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
@@ -172,10 +175,12 @@ extern char WPDatabaseName[MAX_PATH];
 extern char BadWordsPath[MAX_PATH];
 extern char BadWordsName[MAX_PATH];
 
+extern char NTSAliasesPath[MAX_PATH];
+extern char NTSAliasesName[MAX_PATH];
+
 extern char BaseDir[MAX_PATH];
 extern char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
 extern char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
-
 
 extern char MailDir[MAX_PATH];
 
@@ -484,6 +489,9 @@ int main(int argc, char * argv[])
 
 #else
 	openlog("LINBPQ", LOG_PID, LOG_DAEMON);
+#ifndef MACBPQ
+	prctl(PR_SET_DUMPABLE, 1);					// Enable Core Dumps even with setcap
+#endif
 #endif
 
 	printf("G8BPQ AX25 Packet Switch System Version %s %s\n", TextVerstring, Datestring);
@@ -540,6 +548,8 @@ int main(int argc, char * argv[])
 	PWLEN=i;
 
 	SetApplPorts();
+
+	GetUIConfig();
 
 	INITIALISEPORTS();
 
@@ -678,6 +688,10 @@ int main(int argc, char * argv[])
 	strcat(BadWordsPath, "/");
 	strcat(BadWordsPath, BadWordsName);
 
+	strcpy(NTSAliasesPath, BaseDir);
+	strcat(NTSAliasesPath, "/");
+	strcat(NTSAliasesPath, NTSAliasesName);
+
 	strcpy(MailDir, BaseDir);
 	strcat(MailDir, "/");
 	strcat(MailDir, "Mail");
@@ -700,6 +714,7 @@ int main(int argc, char * argv[])
 
 	SetupMyHA();
 	SetupFwdAliases();
+	SetupNTSAliases(NTSAliasesPath);
 
 	GetWPDatabase();
 	GetMessageDatabase();
@@ -797,7 +812,7 @@ int main(int argc, char * argv[])
 				DeleteRedundantMessages();
 
 			if (_stricmp(argv[i], "nohomebbs") == 0)
-				NeedHomeBBS = FALSE;
+				DontNeedHomeBBS = TRUE;
 		}
 
 		printf("Mail Started\n");
@@ -948,6 +963,8 @@ int main(int argc, char * argv[])
 			INITIALISEPORTS();
 
 			SetApplPorts();
+
+			GetUIConfig();
 
 			FreeConfig();
 
@@ -1130,6 +1147,7 @@ UINT TrackerMExtInit(EXTPORTDATA * PortEntry);
 
 UINT TelnetExtInit(EXTPORTDATA * PortEntry);
 UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
+UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
 
@@ -1191,6 +1209,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "UZ7HO"))
 		return (UINT) UZ7HOExtInit;
+
+	if (strstr(Value, "FLDIGI"))
+		return (UINT) FLDigiExtInit;
 
 	if (strstr(Value, "TELNET"))
 		return (UINT) TelnetExtInit;

@@ -24,7 +24,6 @@
 
 extern ChatCIRCUIT ChatConnections[MaxSockets+1];
 extern int	NumberofChatStreams;
-extern int MaxStreams;
 
 extern struct SEM ChatSemaphore;
 extern struct SEM AllocSemaphore;
@@ -32,6 +31,7 @@ extern struct SEM ConSemaphore;
 extern struct SEM OutputSEM;
 
 extern char OtherNodesList[1000];
+extern int MaxChatStreams;
 
 INT_PTR CALLBACK InfoDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -388,16 +388,6 @@ VOID ProcessLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 	char seps[] = " \t\r";
 	struct _EXCEPTION_POINTERS exinfo;
 
-	if (conn->Flags & GETTINGUSER)
-	{
-		conn->Flags &=  ~GETTINGUSER;
-
-		memcpy(user->Name, Buffer, len-1);
-		SendWelcomeMsg(conn->BPQStream, conn, user);
-
-		return;
-	}
-
 	{
 		GetSemaphore(&ChatSemaphore);
 
@@ -626,7 +616,7 @@ VOID SaveNewFormatConfig(char * ConfigName)
 	group = config_setting_add(root, "Chat", CONFIG_TYPE_GROUP);
 
 	xSaveIntValue(group, "ApplNum", ChatApplNum);
-	xSaveIntValue(group, "MaxStreams", MaxStreams);
+	xSaveIntValue(group, "MaxStreams", MaxChatStreams);
 	xSaveStringValue(group, "OtherChatNodes", OtherNodesList);
 	xSaveStringValue(group, "ChatWelcomeMsg", ChatWelcomeMsg);
 
@@ -660,7 +650,7 @@ VOID SaveChatConfig(HWND hDlg)
 	OldChatAppl = ChatApplNum;
 	
 	ChatApplNum = GetDlgItemInt(hDlg, ID_CHATAPPL, &OK1, FALSE);
-	MaxStreams = GetDlgItemInt(hDlg, ID_STREAMS, &OK1, FALSE);
+	MaxChatStreams = GetDlgItemInt(hDlg, ID_STREAMS, &OK1, FALSE);
 
 	if (ChatApplNum)	
 	{
@@ -674,7 +664,7 @@ VOID SaveChatConfig(HWND hDlg)
 	}
 
 	SaveIntValue("ApplNum", ChatApplNum);
-	SaveIntValue("MaxStreams", MaxStreams);
+	SaveIntValue("MaxStreams", MaxChatStreams);
 
 	GetMultiLineDialog(hDlg, IDC_ChatNodes);
 

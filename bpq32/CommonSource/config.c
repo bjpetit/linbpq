@@ -335,7 +335,7 @@ static char *pkeywords[] =
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
 "BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY",
-"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE"};           /* parameter keywords */
+"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT"};           /* parameter keywords */
 
 static int poffset[] =
 {
@@ -347,7 +347,7 @@ static int poffset[] =
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
 226, 72, 124, 516, 210, 512, 125,
-36, 236, 38, 36};						/* offset for corresponding data in config file */
+36, 236, 38, 36, 36, 126};						/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -359,9 +359,9 @@ static int proutine[] =
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
 0, 1, 2, 18, 15, 16, 2,
-1, 17, 1, 1};							/* routine to process parameter */
+1, 17, 1, 1, 1, 1};							/* routine to process parameter */
 
-#define PPARAMLIM 54
+#define PPARAMLIM 56
 
 static int fileoffset = 0;
 static int portoffset = 2560;
@@ -492,6 +492,7 @@ BOOL ProcessConfig()
 
 	paramok[8]=1;          /* dont need TRANSDELAY */
 	paramok[17]=1;          /* dont need TNCPORTS */
+	paramok[20]=1;         // Or ROUTES
 
 	paramok[32]=1;          /* dont need UNPROTO */
 
@@ -2230,8 +2231,24 @@ char rec[];
 	   hw = 10;
 	if (_stricmp(value,"RLC400") == 0)
 	   hw = 12;
-	if (_stricmp(value,"INTERNAL") == 0)
-	   hw = 14;
+	if (_stricmp(value,"INTERNAL") == 0 || _stricmp(value,"LOOPBACK") == 0)
+	{
+		// Set Sensible defaults
+
+		UCHAR * ptr = ConfigBuffer + portoffset;
+
+		struct PORTCONFIG * PORT = (struct PORTCONFIG *)ptr;
+
+		memset(PORT->ID, ' ', 30);
+		memcpy(PORT->ID, "Loopback", 8);
+		PORT->CHANNEL = 'A';
+		PORT->FRACK = 5000;
+		PORT->RESPTIME = 1000;
+		PORT->MAXFRAME = 4;
+		PORT->RETRIES = 5;
+		PORT->DIGIFLAG = 1;
+		hw = 14;
+	}
 	if (_stricmp(value,"EXTERNAL") == 0)
 	   hw = 16;
 	if (_stricmp(value,"BAYCOM") == 0)
@@ -2276,13 +2293,14 @@ char rec[];
 	   hw = 10;
 	if (_stricmp(value,"WINMOR") == 0)
 	   hw = 10;
-
+	if (_stricmp(value,"ARQ") == 0)
+	   hw = 12;
 
 	bseek(fp2,(long) fileoffset,SEEK_SET);
 
 	if (hw == 255)
 	{
-	   Consoleprintf("Invalid Protocol (not KISS NETROM COMBIOS HDLC)");
+	   Consoleprintf("Invalid Protocol (not KISS NETROM PACTOR WINMOR ARQ HDLC )");
 	   Consoleprintf("%s\r\n",rec);
 	   return (0);
 	}
@@ -2377,9 +2395,9 @@ char rec[];
 	if (opt3[0] != '\0') {do_kiss(opt3,rec);}
 	if (opt4[0] != '\0') {do_kiss(opt4,rec);}
 	if (opt5[0] != '\0') {do_kiss(opt5,rec);}
-	if (opt6[0] != '\0') {do_kiss(opt5,rec);}
-	if (opt7[0] != '\0') {do_kiss(opt5,rec);}
-	if (opt8[0] != '\0') {do_kiss(opt5,rec);}
+	if (opt6[0] != '\0') {do_kiss(opt6,rec);}
+	if (opt7[0] != '\0') {do_kiss(opt7,rec);}
+	if (opt8[0] != '\0') {do_kiss(opt8,rec);}
 
 	return(1);
 }
@@ -2441,6 +2459,8 @@ decode_tnc_rec(char * rec)
 		strcpy(TNC2ENTRY->PORTNAME, value);
 	else if (_stricmp(key_word, "APPLMASK") == 0)
 		TNC2ENTRY->APPLICATION =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "APPLNUM") == 0)
+		TNC2ENTRY->APPLICATION =  1 << (strtol(value, 0, 0) - 1);
 	else if (_stricmp(key_word, "APPLFLAGS") == 0)
 		TNC2ENTRY->APPLFLAGS =  strtol(value, 0, 0);
 	else if (_stricmp(key_word, "CHANNELS") == 0)
@@ -2449,6 +2469,13 @@ decode_tnc_rec(char * rec)
 		TNC2ENTRY->HOSTSTREAMS =  strtol(value, 0, 0);
 	else if (_stricmp(key_word, "POLLDELAY") == 0)
 		TNC2ENTRY->PollDelay =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "CONOK") == 0)
+		TNC2ENTRY->CONOK =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "AUTOLF") == 0)
+		TNC2ENTRY->AUTOLF =  strtol(value, 0, 0);
+	else if (_stricmp(key_word, "ECHO") == 0)
+		TNC2ENTRY->ECHOFLAG =  strtol(value, 0, 0);
+
 	else
 	   Consoleprintf("Source record not recognised - Ignored:%s\r\n",rec);
 
@@ -2547,6 +2574,12 @@ int do_kiss (char * value,char * rec)
 	{
 		err=0;
 		kissflags=kissflags | 8;
+	}
+
+	if (_stricmp(value,"FLDIGI") == 0)
+	{
+		err=0;
+		kissflags |= 256;
 	}
 
 	if (err == 255)

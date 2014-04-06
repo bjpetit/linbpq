@@ -37,6 +37,7 @@ KillPopups(struct TNCINFO * TNC);
 VOID MoveWindows(struct TNCINFO * TNC);
 char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 static VOID ChangeMYC(struct TNCINFO * TNC, char * Call);
+int DoScanLine(struct TNCINFO * TNC, char * Buff, int Len);
 
 static char ClassName[]="V4STATUS";
 static char WindowTitle[] = "V4TNC";

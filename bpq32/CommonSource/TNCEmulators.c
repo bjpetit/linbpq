@@ -1358,14 +1358,16 @@ BOOL InitializeTNCEmulator()
 
 		if (Baud)
 			TNC->Speed = atoi(Baud);
+		else
+			TNC->VCOM = TRUE;
 			
 		if (_memicmp(TNC->PORTNAME, "COM", 3) == 0)
 		{
 			TNC->ComPort = atoi(&TNC->PORTNAME[3]);
+			TNC->VCOM = FALSE;
 		}
 		else
 		{
-			TNC->VCOM = TRUE;
 			if (_memicmp(TNC->PORTNAME, "VCOM", 4) == 0)
 				TNC->ComPort = atoi(&TNC->PORTNAME[4]);
 		}
@@ -1901,17 +1903,17 @@ VOID DOMONITORING(int NeedTrace)
 	if (NeedTrace)
 		Tracebit = 0x80;
 
-//	if (TNC->CONOK)
-//		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, TNC->APPLICATION);
-//	else
-//		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, 0);
+	if (TNC->CONOK)
+		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, TNC->APPLICATION);
+	else
+		SetAppl(TNC->BPQPort, TNC->APPLFLAGS | Tracebit, 0);
 
 	Stamp = GetRaw(TNC->BPQPort, (char *)&MONITORDATA, &len, &count);
 
 	if (len == 0)
 		return;
 
-//	len = DecodeFrame(&MONITORDATA, MONBUFFER, (int)Stamp);
+	len = DecodeFrame(&MONITORDATA, MONBUFFER, (int)Stamp);
 	
 	while (TNC)
 	{
@@ -2458,7 +2460,10 @@ VOID SEND_CONNECTED(struct TNCDATA * TNC)
 
 	strlop(Call, ' ');
 
-	len = sprintf(Response, "%s%s\r", CONMSG, Call);
+	if (TNC->CBELL)
+		len = sprintf(Response, "%s%s%c\r", CONMSG, Call, 7);		// Add BELL char
+	else
+		len = sprintf(Response, "%s%s\r", CONMSG, Call);
 
 	SENDREPLY(TNC, Response, len);
 }
@@ -4541,7 +4546,7 @@ VOID SendKISSData(struct TNCDATA * conn, UCHAR * txbuffer, int Len);
 static int	KissDecode(UCHAR * inbuff, UCHAR * outbuff, int len);
 static int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 static int DoReceivedData(struct TNCDATA * conn, struct StreamInfo * channel);
-static int DoMonitorData(int Stream);
+
 
 
 VOID ProcessPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
@@ -5086,21 +5091,6 @@ int KANTDisconnected (struct TNCDATA * conn, struct StreamInfo * channel, int St
 
 	channel->Connected = FALSE;
 	channel->CloseTimer = 0;
-
-	return 0;
-}
-static int DoMonitorData(int Stream)
-{
-	byte Buffer[500];
-	int RawLen,Count;
-	int Stamp;
-
-	do
-	{
-		Stamp=GetRaw(Stream, Buffer, &RawLen, &Count );
-	}
-
-	while (Count > 0);
 
 	return 0;
 }

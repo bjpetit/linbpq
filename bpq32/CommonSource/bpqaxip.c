@@ -160,134 +160,8 @@
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
-#pragma pack(1) 
-
-#define MAX_ENTRIES 128
-#define MaxMHEntries 50
-#define MAX_BROADCASTS 8
-#define MAXUDPPORTS 30 
-
 int ResolveDelay = 0;
 
-struct arp_table_entry
-{
-	unsigned char callsign[7];
-	unsigned char len;			// bytes to compare (6 or 7)
-	BOOL IPv6;
-
-//	union
-//	{
-//		struct in_addr in_addr;
-//		unsigned int ipaddr;
-//		struct in6_addr in6_addr;
-//	};
-
-	unsigned short port;
-	unsigned char hostname[64];
-	unsigned int error;
-	BOOL ResolveFlag;			// True if need to resolve name
-	unsigned int keepalive;
-	unsigned int keepaliveinit;
-	BOOL BCFlag;				// True if we want broadcasts to got to this call
-	BOOL AutoAdded;				// Set if Entry created as a result of AUTOADDMAP
-	SOCKET TCPListenSock;			// Listening socket if slave
-	SOCKET TCPSock;
-	int  TCPMode;				// TCPMaster ot TCPSlave
-	UCHAR * TCPBuffer;			// Area for building TCP message from byte stream
-	int InputLen;				// Bytes in TCPBuffer
-
-	union
-	{
-		struct sockaddr_in6 destaddr6;  
-		struct sockaddr_in destaddr;
-	};
-
-	BOOL TCPState;
-	UINT TCPThreadID;			// Thread ID if TCP Master
-	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
-	int SourceSocket;			// The socket to use (sets the from Address
-	struct AXIPPORTINFO * PORT;
-};
-
-
-struct broadcast_table_entry
-{
-	unsigned char callsign[7];
-	unsigned char len;			// bytes to compare (6 or 7)
-};
-
-
-struct MHTableEntry
-{
-	unsigned char callsign[7];
-	char proto;
-	short port;
-	union
-	{
-		struct in_addr ipaddr;
-		struct in6_addr ipaddr6;
-	};
-	time_t	LastHeard;		// Time last packet received
-	int Keepalive;
-	BOOL IPv6;
-};
-
-
-struct AXIPPORTINFO
-{
-	int Port;
-
-	struct MHTableEntry MHTable[MaxMHEntries];
-	struct broadcast_table_entry BroadcastAddresses[MAX_BROADCASTS];
-
-	int NumberofBroadcastAddreses;
-	BOOL Checkifcanreply;
-	
-	int arp_table_len;
-	int ResolveIndex;			// pointer to entry being resolved
-
-	struct arp_table_entry arp_table[MAX_ENTRIES];
-
-	struct arp_table_entry default_arp;
-
-	BOOL MHEnabled;
-	BOOL MHAvailable;			// Enabled with config file directive
-
-	BOOL AutoAddARP;
-
-	unsigned char  hostaddr[64];
-
-	HWND hResWnd, hMHWnd, ConfigWnd;
-
-	BOOL GotMsg;
-
-	int udpport[MAXUDPPORTS+2];
-	BOOL IPv6[MAXUDPPORTS+2];
-
-	int NumberofUDPPorts;
-
-	BOOL needip;
-	BOOL NeedResolver;
-	BOOL NeedTCP;
-
-	SOCKET sock;						// IP 93 Sock
-	SOCKET udpsock[MAXUDPPORTS+2];
-
-	time_t ltime,lasttime;
-	int baseline;
-
-	char buf[MAXGETHOSTSTRUCT];
-
-	int MaxMHWindowlength;
-	int MaxResWindowlength;
-
-	BOOL ResMinimized;
-	BOOL MHMinimized;
-
-	HMENU hResMenu;
-	HMENU hMHMenu;
-
-};
 
 extern BOOL StartMinimized;
 
@@ -407,8 +281,6 @@ extern HBRUSH bgBrush;
 
 //char buf[MAXGETHOSTSTRUCT];
 
-#pragma pack()
-
 int addrlen6 = sizeof(struct sockaddr_in6);
 int addrlen = sizeof(struct sockaddr_in);
 
@@ -465,7 +337,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	} RXaddr;
 	struct AXIPPORTINFO * PORT = Portlist[port];
 	short * sp;
-
 
 	switch (fn)
 	{
@@ -860,9 +731,19 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 		arp_table->keepalive=arp_table->keepaliveinit;
 	}
 }
-		
+
+unsigned short int compute_crc_ccitt(unsigned char *buf, int len);
+unsigned short CCCITTChecksum(unsigned char* data, unsigned int length);	
+
 UINT AXIPExtInit(struct PORTCONTROL *  PortEntry)
-{	
+{
+//	char Msg[10] = {0xD0, 01, 00, 0x11, 00, 0x0B};
+//	unsigned short crc;
+
+//	crc = CCCITTChecksum(Msg, 4);
+
+//	crc = CalcCRC(Msg, 4);
+
 	WritetoConsole("AXIP ");
 
 	InitAXIP(PortEntry->PORTNUMBER);
@@ -1554,12 +1435,14 @@ static void CreateResolverWindow(struct AXIPPORTINFO * PORT)
 }
 extern HWND hWndPopup;
 
+pthread_t ResolveNamesThreadId = 0;
+
 static void ResolveNames(struct AXIPPORTINFO * PORT)
 {
+	ResolveNamesThreadId = pthread_self();		// Detect if another started
+	
 	while(TRUE)
 	{
-		Debugprintf("AXIP Resolving names");
-		
 		ResolveDelay = 15 * 60;
 
 		for (PORT->ResolveIndex=0; PORT->ResolveIndex < PORT->arp_table_len; PORT->ResolveIndex++)
@@ -1607,11 +1490,15 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 #endif
 			}
 		}
-		Debugprintf("AXIP Resolve complete - pausing");
-
 		while(ResolveDelay-- > 0)
+		{
+			if (pthread_equal(ResolveNamesThreadId, pthread_self()) == FALSE)
+			{
+				Debugprintf("AXIP Resolve thread %x redundant - closing", pthread_self());
+				return;
+			}
 			Sleep(1000);
-
+		}
 	}
 	Debugprintf("AXIP Resolve thread exitied");
 }
@@ -1908,6 +1795,74 @@ unsigned short int compute_crc(unsigned char *buf,int len)
 
 	return fcs;
 }
+
+/*
+
+static const unsigned short ccittTab[] = {
+	0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,
+	0x8108, 0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF,
+	0x1231, 0x0210, 0x3273, 0x2252, 0x52B5, 0x4294, 0x72F7, 0x62D6,
+	0x9339, 0x8318, 0xB37B, 0xA35A, 0xD3BD, 0xC39C, 0xF3FF, 0xE3DE,
+	0x2462, 0x3443, 0x0420, 0x1401, 0x64E6, 0x74C7, 0x44A4, 0x5485,
+	0xA56A, 0xB54B, 0x8528, 0x9509, 0xE5EE, 0xF5CF, 0xC5AC, 0xD58D,
+	0x3653, 0x2672, 0x1611, 0x0630, 0x76D7, 0x66F6, 0x5695, 0x46B4,
+	0xB75B, 0xA77A, 0x9719, 0x8738, 0xF7DF, 0xE7FE, 0xD79D, 0xC7BC,
+	0x48C4, 0x58E5, 0x6886, 0x78A7, 0x0840, 0x1861, 0x2802, 0x3823,
+	0xC9CC, 0xD9ED, 0xE98E, 0xF9AF, 0x8948, 0x9969, 0xA90A, 0xB92B,
+	0x5AF5, 0x4AD4, 0x7AB7, 0x6A96, 0x1A71, 0x0A50, 0x3A33, 0x2A12,
+	0xDBFD, 0xCBDC, 0xFBBF, 0xEB9E, 0x9B79, 0x8B58, 0xBB3B, 0xAB1A,
+	0x6CA6, 0x7C87, 0x4CE4, 0x5CC5, 0x2C22, 0x3C03, 0x0C60, 0x1C41,
+	0xEDAE, 0xFD8F, 0xCDEC, 0xDDCD, 0xAD2A, 0xBD0B, 0x8D68, 0x9D49,
+	0x7E97, 0x6EB6, 0x5ED5, 0x4EF4, 0x3E13, 0x2E32, 0x1E51, 0x0E70,
+	0xFF9F, 0xEFBE, 0xDFDD, 0xCFFC, 0xBF1B, 0xAF3A, 0x9F59, 0x8F78,
+	0x9188, 0x81A9, 0xB1CA, 0xA1EB, 0xD10C, 0xC12D, 0xF14E, 0xE16F,
+	0x1080, 0x00A1, 0x30C2, 0x20E3, 0x5004, 0x4025, 0x7046, 0x6067,
+	0x83B9, 0x9398, 0xA3FB, 0xB3DA, 0xC33D, 0xD31C, 0xE37F, 0xF35E,
+	0x02B1, 0x1290, 0x22F3, 0x32D2, 0x4235, 0x5214, 0x6277, 0x7256,
+	0xB5EA, 0xA5CB, 0x95A8, 0x8589, 0xF56E, 0xE54F, 0xD52C, 0xC50D,
+	0x34E2, 0x24C3, 0x14A0, 0x0481, 0x7466, 0x6447, 0x5424, 0x4405,
+	0xA7DB, 0xB7FA, 0x8799, 0x97B8, 0xE75F, 0xF77E, 0xC71D, 0xD73C,
+	0x26D3, 0x36F2, 0x0691, 0x16B0, 0x6657, 0x7676, 0x4615, 0x5634,
+	0xD94C, 0xC96D, 0xF90E, 0xE92F, 0x99C8, 0x89E9, 0xB98A, 0xA9AB,
+	0x5844, 0x4865, 0x7806, 0x6827, 0x18C0, 0x08E1, 0x3882, 0x28A3,
+	0xCB7D, 0xDB5C, 0xEB3F, 0xFB1E, 0x8BF9, 0x9BD8, 0xABBB, 0xBB9A,
+	0x4A75, 0x5A54, 0x6A37, 0x7A16, 0x0AF1, 0x1AD0, 0x2AB3, 0x3A92,
+	0xFD2E, 0xED0F, 0xDD6C, 0xCD4D, 0xBDAA, 0xAD8B, 0x9DE8, 0x8DC9,
+	0x7C26, 0x6C07, 0x5C64, 0x4C45, 0x3CA2, 0x2C83, 0x1CE0, 0x0CC1,
+	0xEF1F, 0xFF3E, 0xCF5D, 0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8,
+	0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0};
+
+unsigned short int compute_crc_ccitt(unsigned char *buf, int len)
+{
+	int i;
+	unsigned short fcs = 0; 
+
+	for(i = 0; i < len; i++) 
+		fcs = (fcs >>8 ) ^ ccittTab[(fcs ^ buf[i]) & 0xff]; 
+
+	return fcs;
+}
+
+
+	union {
+		unsigned short m_crc16;
+		unsigned char  m_crc8[2U];
+	} fcs;
+
+
+unsigned short CCCITTChecksum(unsigned char* data, unsigned int length)
+{
+	int i;
+
+	fcs.m_crc16 = 0; 
+
+	for (i = 0U; i < length; i++)
+		fcs.m_crc16 = (fcs.m_crc8[0U] << 8) ^ ccittTab[fcs.m_crc8[1U] ^ data[i]];
+
+	return fcs.m_crc16;
+}
+
+*/
 
 static BOOL ReadConfigFile(int Port)
 {
@@ -2606,7 +2561,18 @@ int GetMessageFromBuffer(struct AXIPPORTINFO * PORT, char * Buffer)
 					if (err == 10035 || err == 11)
 						continue;
 
-					Debugprintf("accept() failed Error %d", err);
+					if (err == 10038 || err == 9)
+					{
+						// Not a socket
+	
+						closesocket(sockptr->TCPListenSock);
+						OpenListeningSocket(PORT, sockptr);
+
+						continue;
+					}
+					
+
+					Debugprintf("AXIP accept() failed Error %d", err);
 					continue;
 				}
 

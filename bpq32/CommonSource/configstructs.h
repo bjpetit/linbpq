@@ -110,7 +110,7 @@ struct PORTCONFIG
 	char MAXDIGIS;			//  123,
 	char DefaultNoKeepAlives; // 124
 	char UIONLY;			// 125,
-	char Pad[2];			// 126-7,
+	unsigned short ListenPort;	// 126
 	char UNPROTO[72];		//  128, 
 	char PORTALIAS2[10];	//  200,
 	char DLLNAME[16];		//  210,

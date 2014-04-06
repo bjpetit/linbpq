@@ -13,7 +13,7 @@
 // Generated from the TEXTINCLUDE 2 resource.
 //
 #define APSTUDIO_HIDDEN_SYMBOLS
-#include "windows.h"
+#include "AFXRES.h"
 #undef APSTUDIO_HIDDEN_SYMBOLS
 #define MAILCHAT
 #include "..\CommonSource\Versions.h"
@@ -168,8 +168,8 @@ BEGIN
     LTEXT           "SYSOP Call",IDC_STATIC,138,105,42,12
     EDITTEXT        IDC_SYSOPCALL,184,103,42,14,ES_UPPERCASE
     CONTROL         "Send SYSTEM Msgs to SYSOP call",IDC_SYSTOSYSOPCALL,
-                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,236,
-                    104,128,12
+                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
+                    191,137,12
     LTEXT           "H Route",IDC_STATIC,7,122,37,12
     EDITTEXT        IDC_HRoute,83,120,119,13,ES_UPPERCASE
     LTEXT           "Base Directory",IDC_STATIC,7,137,66,12
@@ -186,25 +186,29 @@ BEGIN
     EDITTEXT        MAILFOR_MINS,205,174,22,12,ES_UPPERCASE
     LTEXT           "Minutes",IDC_STATIC,232,175,30,12
     PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,267,173,91,13
-    LTEXT           "eMail Server Params:",IDC_STATIC,7,215,135,10
-    LTEXT           "NNTP Port",IDC_STATIC,7,235,39,12
-    EDITTEXT        IDC_NNTPPort,47,233,29,14
-    LTEXT           "POP3 Port",IDC_STATIC,90,235,37,12
-    EDITTEXT        IDC_POP3Port,130,233,29,14
-    LTEXT           "SMTP Port",IDC_STATIC,170,235,37,12
-    EDITTEXT        IDC_SMTPPort,210,233,29,14
+    LTEXT           "eMail Server Params:",IDC_STATIC,7,224,135,10
+    LTEXT           "NNTP Port",IDC_STATIC,7,240,39,12
+    EDITTEXT        IDC_NNTPPort,47,238,29,14
+    LTEXT           "POP3 Port",IDC_STATIC,90,240,37,12
+    EDITTEXT        IDC_POP3Port,130,238,29,14
+    LTEXT           "SMTP Port",IDC_STATIC,170,240,37,12
+    EDITTEXT        IDC_SMTPPort,210,238,29,14
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,249,232,91,14
+                    WS_TABSTOP,249,237,91,14
     DEFPUSHBUTTON   "Save",1100,159,258,50,14,BS_CENTER | BS_VCENTER
     CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
-                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,
-                    194,138,12
+                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
+                    208,136,12
     CONTROL         "Forward Messages to BBS Call",IDC_FORWARDTOBBS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,176,194,119,
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,153,192,114,
                     12
     CONTROL         "Redirect msgs to BBS Call to SYSOP Call",
                     IDC_BBSTOSYSOPCALL,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,218,120,146,12
+    CONTROL         "Don't Request Home BBS",IDC_NOHOMEBBS,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,154,208,93,12
+    CONTROL         "Don't Request Name",IDC_NONAME,"Button",BS_AUTOCHECKBOX | 
+                    BS_LEFTTEXT | WS_TABSTOP,259,208,79,12
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -430,7 +434,7 @@ END
 IDD_MSGEDIT DIALOGEX 20, 20, 421, 298
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit Message"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     RTEXT           "Msg",IDC_STATIC,7,7,19,8
     LISTBOX         0,33,7,65,81,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | 
@@ -1290,7 +1294,7 @@ END
 2 TEXTINCLUDE DISCARDABLE 
 BEGIN
     "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
-    "#include ""windows.h""\r\n"
+    "#include ""AFXRES.h""\r\n"
     "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "#define MAILCHAT\r\n"
     "#include ""..\\CommonSource\\Versions.h""\r\n"

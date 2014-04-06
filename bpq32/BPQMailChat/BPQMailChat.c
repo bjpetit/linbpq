@@ -812,10 +812,18 @@
 //	Add command line option (tidymail) to delete redundant Mail files
 //	Add command line option (nohomebbs) to suppress HomeBBS prompt
 
+// 59
 
-
-
-
+//	Add FLARQ Mail Mode
+//	Fix possible crash saving restart data
+//	Add script command ADDLF for connect scripts over Telnet
+//	Add recogniton of URONODE connected message
+//	Add option to stop Name prompt
+//	Add new RMS Express users with "RMS Express User" flag set
+//	Validate HTML Pages
+//	Add NTS swap file
+//	Add basic File list and read functions
+//	Fix Traffic report
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -946,7 +954,7 @@ char * Prompt = NULL;
 char * NewPrompt = NULL;
 char * ExpertPrompt = NULL;
 
-BOOL NeedHomeBBS = TRUE;
+BOOL DontNeedHomeBBS = FALSE;
 
 char BBSName[100];
 char MailForText[100];
@@ -974,6 +982,9 @@ char ChatConfigName[250];
 
 char BadWordsPath[MAX_PATH];
 char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
+
+char NTSAliasesPath[MAX_PATH];
+char NTSAliasesName[MAX_PATH] = "NTSAliases.txt";
 
 char BaseDir[MAX_PATH];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
@@ -2373,6 +2384,8 @@ PSOCKADDR_IN psin;
 
 SOCKET sock;
 
+UCHAR BPQDirectory[260];
+
 VOID SetProperBaseDir(char * ProperBaseDir)
 {	
 	HKEY hKey=0;
@@ -2507,7 +2520,9 @@ BOOL Initialise()
 
 	// See if we need to warn of possible problem with BaseDir moved by installer
 
-	sprintf(ProperBaseDir, "%s/BPQMailChat", GetBPQDirectory());
+	strcpy(BPQDirectory, GetBPQDirectory());
+
+	sprintf(ProperBaseDir, "%s/BPQMailChat", BPQDirectory);
 	
 	len = strlen(ProperBaseDir);
 	ptr1 = ProperBaseDir;
@@ -2669,6 +2684,10 @@ BOOL Initialise()
 	strcat(BadWordsPath, "\\");
 	strcat(BadWordsPath, BadWordsName);
 
+	strcpy(NTSAliasesPath, BaseDir);
+	strcat(NTSAliasesPath, "/");
+	strcat(NTSAliasesPath, NTSAliasesName);
+
 	strcpy(MailDir, BaseDir);
 	strcat(MailDir, "\\");
 	strcat(MailDir, "Mail");
@@ -2695,6 +2714,7 @@ BOOL Initialise()
 
 	SetupMyHA();
 	SetupFwdAliases();
+	SetupNTSAliases(NTSAliasesPath);
 
 	GetWPDatabase();
 	GetMessageDatabase();
@@ -2790,7 +2810,7 @@ BOOL Initialise()
 		DeleteRedundantMessages();
 
 	if (strstr(CmdLine, "nohomebbs"))
-		NeedHomeBBS = FALSE;
+		DontNeedHomeBBS = TRUE;
 
 	CheckMenuItem(hMenu,IDM_LOGBBS, (LogBBS) ? MF_CHECKED : MF_UNCHECKED);
 	CheckMenuItem(hMenu,IDM_LOGTCP, (LogTCP) ? MF_CHECKED : MF_UNCHECKED);
@@ -3113,7 +3133,3 @@ char * strlop(char * buf, char delim)
 
 	return ptr;
 }
-
-
-
-

@@ -303,6 +303,14 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	
 	if (TNC->hDevice == 0)
 	{
+		// Clear anything from UI_Q
+
+		while (TNC->PortRecord->UI_Q)
+		{
+			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
 		// Try to reopen every 30 secs
 
 		if (fn > 3  && fn < 7)
@@ -325,13 +333,7 @@ ok:
 	{
 	case 7:			
 
-		// 100 mS Timer. May now be needed, as Poll can be called more ferquently in some circumstances
-
-		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
-		{
-			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
-			ReleaseBuffer(buffptr);
-		}
+		// 100 mS Timer. May now be needed, as Poll can be called more frequently in some circumstances
 
 		CheckRX(TNC);
 		SCSPoll(port);
@@ -561,7 +563,7 @@ ok:
 				if (TNC->RobustTime)
 					SwitchToPacket(TNC);			// Always start in packet, switch to pactor after RobustTime ticks
 			
-			if (PLevel = '0')
+			if (PLevel == '0')
 				TNC->DontReleasePermission = TRUE;	// Dont allow connects in this interval
 			else
 				TNC->DontReleasePermission = FALSE;
@@ -692,6 +694,8 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->SuspendPortProc = PTCSuspendPort;
 	TNC->ReleasePortProc = PTCReleasePort;
+
+	PortEntry->PORTCONTROL.UICAPABLE = TRUE;
 
 	ptr=strchr(TNC->NodeCall, ' ');
 	if (ptr) *(ptr) = 0;					// Null Terminate
@@ -1110,6 +1114,15 @@ VOID SCSPoll(int Port)
 		sprintf(TNC->WEB_COMMSSTATE,"%s Open but TNC not responding", TNC->PortRecord->PORTCONTROL.SerialPortName);
 		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
+		// Clear anything from UI_Q
+
+		while (TNC->PortRecord->UI_Q)
+		{
+			UINT * buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+			ReleaseBuffer(buffptr);
+		}
+
+
 		TNC->HostMode = 0;
 		TNC->ReinitState = 0;
 		
@@ -1221,6 +1234,25 @@ VOID SCSPoll(int Port)
 			}
 			else
 			{
+				if (*(start) == 1)
+				{
+					// This is UI data, not a command. Send it to channel 0
+
+					int uilen = strlen(&start[1]);
+
+					Poll[2] = 0;				// UI Channel
+					Poll[3] = 0;				// Data
+					Poll[4] = uilen - 1;
+					memcpy(&Poll[5], &start[1], uilen);
+		
+					CRCStuffAndSend(TNC, Poll, uilen + 5);
+
+					free(TNC->Streams[Stream].CmdSave);
+					TNC->Streams[Stream].CmdSet = NULL;
+	
+					return;
+				}
+
 				end = strchr(start, 13);
 				len = ++end - start -1;	// exclude cr
 				TNC->Streams[Stream].CmdSet = end;
@@ -1306,6 +1338,59 @@ VOID SCSPoll(int Port)
 
 		return;
 	}
+
+	if (TNC->TNCOK && TNC->PortRecord->UI_Q)
+	{
+		int datalen;
+		char * Buffer;
+		char CCMD[80] = "C";
+		char Call[12] = "           ";	
+		struct _MESSAGE * buffptr;
+			
+		buffptr = Q_REM(&TNC->PortRecord->UI_Q);
+		
+		datalen = buffptr->LENGTH - 7;
+		Buffer = &buffptr->DEST[0];		// Raw Frame
+		
+		Buffer[datalen] = 0;
+							
+		// Buffer has an ax.25 header, which we need to pick out and set as channel 0 Connect address
+		// before sending the beacon
+
+		ConvFromAX25(Buffer, &Call[1]);			// Dest
+		strlop(&Call[1], ' ');
+		strcat(CCMD, Call);
+		Buffer += 14;							// Skip Origin
+		datalen -= 7;
+
+		while ((Buffer[-1] & 1) == 0)
+		{
+			ConvFromAX25(Buffer, &Call[1]);
+			strlop(&Call[1], ' ');
+			strcat(CCMD, Call);
+			Buffer += 7;	// End of addr
+			datalen -= 7;
+		}
+
+		if (Buffer[0] == 3)				// UI
+		{
+			Buffer += 2;
+			datalen -= 2;
+
+			Poll[2] = 0;				// UI Channel
+			Poll[3] = 1;				// CMD
+			Poll[4] = strlen(CCMD) - 1;
+			strcpy(&Poll[5], CCMD);
+			CRCStuffAndSend(TNC, Poll, Poll[4] + 6);	// Set Dest and Path
+
+			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(400);
+			sprintf(TNC->Streams[0].CmdSet, "%c%s", 1, Buffer);		// Flag CmdSet as Data
+		}
+
+		ReleaseBuffer((UINT *)buffptr);
+		return;
+	}
+
 
 		// Check status Periodically
 		
@@ -2872,92 +2957,127 @@ static MESSAGEY Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
+MESSAGEY * AdjMsg;				// Adjusted fir digis
+
+
 static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
 	// Convert to ax.25 form and pass to monitor
 
-	UCHAR * ptr;
+	UCHAR * ptr, * starptr;
+	char * context;
 
 	if (Msg[0] == 6)		// Second part of I or UI
 	{
 		int len = Msg[1] +1;
 
-		memcpy(Monframe.L2DATA, &Msg[2], len);
+		memcpy(AdjMsg->L2DATA, &Msg[2], len);
 		Monframe.LENGTH += len;
 
 		time(&Monframe.Timestamp);
 
 		BPQTRACE((UINT *)&Monframe, TRUE);
-
 		return;
 	}
 
 	Monframe.LENGTH = 23;				// Control Frame
 	Monframe.PORT = TNC->Port;
-
-
+	
+	AdjMsg = &Monframe;					// Adjusted fir digis
 	ptr = strstr(Msg, "fm ");
 
 	ConvToAX25(&ptr[3], Monframe.ORIGIN);
-
-	UpdateMH(TNC, &ptr[3], ' ', 0);
 
 	ptr = strstr(ptr, "to ");
 
 	ConvToAX25(&ptr[3], Monframe.DEST);
 
-	Monframe.ORIGIN[6] |= 1;				// Set end of address
+	ptr = strstr(ptr, "via ");
 
-	ptr = strstr(ptr, "ctl ");
+	if (ptr)
+	{
+		// We have digis
+
+		char Save[100];
+		char * fiddle;
+
+		memcpy(Save, &ptr[4], 60);
+
+		ptr = strtok_s(Save, " ", &context);
+DigiLoop:
+		fiddle = (char *)AdjMsg;
+		fiddle += 7;
+		AdjMsg = (MESSAGEY *)fiddle;
+
+		Monframe.LENGTH += 7;
+
+		starptr = strchr(ptr, '*');
+		if (starptr)
+			*(starptr) = 0;
+
+		ConvToAX25(ptr, AdjMsg->ORIGIN);
+
+		if (starptr)
+			AdjMsg->ORIGIN[6] |= 0x80;				// Set end of address
+
+		ptr = strtok_s(NULL, " ", &context);
+
+		if (memcmp(ptr, "ctl", 3))
+			goto DigiLoop;
+	}
+
+	AdjMsg->ORIGIN[6] |= 1;				// Set end of address
+
+	ptr = strstr(Msg, "ctl ");
 
 	if (memcmp(&ptr[4], "SABM", 4) == 0)
-		Monframe.CTL = 0x2f;
+		AdjMsg->CTL = 0x2f;
 	else  
 	if (memcmp(&ptr[4], "DISC", 4) == 0)
-		Monframe.CTL = 0x43;
+		AdjMsg->CTL = 0x43;
 	else 
 	if (memcmp(&ptr[4], "UA", 2) == 0)
-		Monframe.CTL = 0x63;
+		AdjMsg->CTL = 0x63;
 	else  
 	if (memcmp(&ptr[4], "DM", 2) == 0)
-		Monframe.CTL = 0x0f;
+		AdjMsg->CTL = 0x0f;
 	else 
 	if (memcmp(&ptr[4], "UI", 2) == 0)
-		Monframe.CTL = 0x03;
+		AdjMsg->CTL = 0x03;
 	else 
 	if (memcmp(&ptr[4], "RR", 2) == 0)
-		Monframe.CTL = 0x1 | (ptr[6] << 5);
+		AdjMsg->CTL = 0x1 | (ptr[6] << 5);
 	else 
 	if (memcmp(&ptr[4], "RNR", 3) == 0)
-		Monframe.CTL = 0x5 | (ptr[7] << 5);
+		AdjMsg->CTL = 0x5 | (ptr[7] << 5);
 	else 
 	if (memcmp(&ptr[4], "REJ", 3) == 0)
-		Monframe.CTL = 0x9 | (ptr[7] << 5);
+		AdjMsg->CTL = 0x9 | (ptr[7] << 5);
 	else 
 	if (memcmp(&ptr[4], "FRMR", 4) == 0)
-		Monframe.CTL = 0x87;
+		AdjMsg->CTL = 0x87;
 	else  
 	if (ptr[4] == 'I')
 	{
-		Monframe.CTL = (ptr[5] << 5) | (ptr[6] & 7) << 1 ;
+		AdjMsg->CTL = (ptr[5] << 5) | (ptr[6] & 7) << 1 ;
 	}
 
 	if (strchr(&ptr[4], '+'))
 	{
-		Monframe.CTL |= 0x10;
+		AdjMsg->CTL |= 0x10;
 		Monframe.DEST[6] |= 0x80;				// SET COMMAND
 	}
 
 	if (strchr(&ptr[4], '-'))	
 	{
-		Monframe.CTL |= 0x10;
+		AdjMsg->CTL |= 0x10;
 		Monframe.ORIGIN[6] |= 0x80;				// SET COMMAND
 	}
 
 	if (Msg[0] == 5)							// More to come
 	{
 		ptr = strstr(ptr, "pid ");	
-		sscanf(&ptr[3], "%x", (int *)&Monframe.PID);
+		sscanf(&ptr[3], "%x", (int *)&AdjMsg->PID);
 		return;	
 	}
 

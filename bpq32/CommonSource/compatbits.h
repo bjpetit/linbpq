@@ -41,6 +41,12 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #define ioctl ioctlsocket
 
+#define pthread_t DWORD
+
+#define pthread_self GetCurrentThreadId
+
+int pthread_equal(pthread_t T1, pthread_t T2);
+
 #else
 
 #define ioctlsocket ioctl
@@ -64,7 +70,7 @@ Stuff to make compiling on WINDOWS and LINUX easier
 #include <termios.h>
 #include <fcntl.h>
 #include <syslog.h>
-
+#include <pthread.h>
 
 #define BOOL int
 #define VOID void
@@ -116,6 +122,8 @@ typedef DWORD   COLORREF;
 #define _strdup strdup
 #define _strupr strupr
 #define _strlwr strlwr
+
+#define _snprintf snprintf
 
 #define _gcvt gcvt
 #define _fcvt fcvt

@@ -514,7 +514,10 @@ static void DEDCheckRX(struct TNCINFO * TNC)
 
 			case 2:		//  Get Length
 
-				TNC->MSGCOUNT = TNC->MSGLENGTH = ++character;
+				TNC->MSGCOUNT = character;
+				TNC->MSGCOUNT++;						// Param is len - 1
+				TNC->MSGLENGTH = TNC->MSGCOUNT;
+
 				CURSOR = &TNC->DEDBuffer[0];
 				TNC->HOSTSTATE = 3;						// Get Data
 
@@ -1326,7 +1329,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 		{			
 			struct STREAMINFO * STREAM = &TNC->Streams[Stream];
 
-			if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "LINK FAILURE"))
+			if (strstr(Buffer, "DISCONNECTED") || strstr(Buffer, "LINK FAILURE") || strstr(Buffer, "BUSY"))
 			{
 				if ((STREAM->Connecting | STREAM->Connected) == 0)
 					return;
@@ -1338,7 +1341,10 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 					buffptr = GetBuff();
 					if (buffptr == 0) return;			// No buffers, so ignore
 
-					buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
+					if (strstr(Buffer, "BUSY"))
+						buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Busy from %s\r", TNC->Streams[Stream].RemoteCall);
+					else
+						buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Failure with %s\r", TNC->Streams[Stream].RemoteCall);
 
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
 	

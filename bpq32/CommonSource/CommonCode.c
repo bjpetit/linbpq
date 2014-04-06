@@ -13,9 +13,22 @@
 
 #pragma data_seg("_BPQDATA")
 
-
 #include "CHeaders.h"
 #include "tncinfo.h"
+
+
+#define LIBCONFIG_STATIC
+#include "libconfig.h"
+
+
+#ifndef LINBPQ
+
+#define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
+
+#include "commctrl.h"
+#include "Commdlg.h"
+
+#endif
 
 #define MAXDATA BUFFLEN-16
 
@@ -461,6 +474,9 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 			if (STREAM->Connected)
 			{
 				Duration = time(NULL) - STREAM->ConnectTime;
+
+				if (Duration == 0)
+					Duration = 1;				// Or will get divide by zero error 
 
 				sprintf(logmsg,"Port %2d %9s Bytes Sent %d  BPS %d Bytes Received %d BPS %d Time %d Seconds",
 					TNC->Port, STREAM->RemoteCall,
@@ -2154,7 +2170,31 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength)
 
 BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 {
-	return write(fd, Block, BytesToWrite);
+	//	Some systems seem to have a very small max write size
+	
+	int ToSend = BytesToWrite;
+	int Sent = 0, ret;
+
+	while (ToSend)
+	{
+		ret = write(fd, &Block[Sent], ToSend);
+
+		if (ret >= ToSend)
+			return TRUE;
+
+		if (ret == -1)
+		{
+			if (errno != 11 && errno != 35)					// Would Block
+				return FALSE;
+	
+			usleep(10000);
+			ret = 0;
+		}
+						
+		Sent += ret;
+		ToSend -= ret;
+	}
+	return TRUE;
 }
 
 VOID CloseCOMPort(HANDLE fd)
@@ -2732,7 +2772,7 @@ char * GetApplCallFromName(char * App)
 	for (i = 0; i < NumberofAppls; i++)
 	{
 		if (memcmp(&APPLCALLTABLE[i].APPLCMD, PaddedAppl, 12) == 0)
-			return &APPLCALLTABLE[i].APPLCALL_TEXT;
+			return &APPLCALLTABLE[i].APPLCALL_TEXT[0];
 	}
 	return NULL;
 }
@@ -2893,14 +2933,23 @@ void printStack(void)
 #endif
 }
 
+pthread_t ResolveUpdateThreadId = 0;
 
 VOID ResolveUpdateThread()
 {
 	struct hostent * HostEnt1;
 	struct hostent * HostEnt2;
 
+	ResolveUpdateThreadId = pthread_self();
+
 	while (TRUE)
 	{
+		if (pthread_equal(ResolveUpdateThreadId, pthread_self()) == FALSE)
+		{
+			Debugprintf("Resolve Update thread %x redundant - closing", pthread_self());
+			return;
+		}
+
 		//	Resolve name to address
 
 		Debugprintf("Resolving %s", "update.g8bpq.net");
@@ -2994,33 +3043,924 @@ VOID WriteMiniDump()
 #endif
 }
 */
-char *stristr (char *ch1, char *ch2)
-{
-	char	*chN1, *chN2;
-	char	*chNdx;
-	char	*chRet				= NULL;
 
-	chN1 = _strdup (ch1);
-	chN2 = _strdup (ch2);
-	if (chN1 && chN2)
+// UI Util Code
+
+#pragma pack(1)
+
+typedef struct _MESSAGEX
+{
+//	BASIC LINK LEVEL MESSAGE BUFFER LAYOUT
+
+	struct _MESSAGEX * CHAIN;
+
+	UCHAR	PORT;
+	USHORT	LENGTH;
+
+	UCHAR	DEST[7];
+	UCHAR	ORIGIN[7];
+
+//	 MAY BE UP TO 56 BYTES OF DIGIS
+
+	UCHAR	CTL;
+	UCHAR	PID;
+	UCHAR	DATA[256];
+	UCHAR	PADDING[56];			// In case he have Digis
+
+}MESSAGEX, *PMESSAGEX;
+
+#pragma pack()
+
+
+int PortNum[33] = {0};				// Tab nunber to port
+
+char * UIUIDigi[33]= {0};
+char * UIUIDigiAX[33] = {0};		// ax.25 version of digistring
+int UIUIDigiLen[33] = {0};			// Length of AX string
+
+char UIUIDEST[33][11] = {0};		// Dest for Beacons
+
+char UIAXDEST[33][7] = {0};
+
+
+UCHAR FN[33][256];			// Filename
+int Interval[33];			// Beacon Interval (Mins)
+int MinCounter[33];			// Interval Countdown
+
+BOOL SendFromFile[33];
+char Message[33][1000];		// Beacon Text
+
+VOID SendUIBeacon(int Port);
+
+BOOL RunUI = TRUE;
+
+VOID UIThread()
+{
+	int Port, MaxPorts = GetNumberofPorts();
+
+	while (RunUI)
 	{
-		chNdx = chN1;
-		while (*chNdx)
+		Sleep(60000);
+		for (Port = 1; Port <= MaxPorts; Port++)
 		{
-			*chNdx = (char) tolower (*chNdx);
-			chNdx ++;
+			if (MinCounter[Port])
+			{
+				MinCounter[Port] --;
+
+				if (MinCounter[Port] == 0)
+				{
+					MinCounter[Port] = Interval[Port];
+					SendUIBeacon(Port);
+				}
+			}
 		}
-		chNdx = chN2;
-		while (*chNdx)
-		{
-			*chNdx = (char) tolower (*chNdx);
-			chNdx ++;
-		}
-		chNdx = strstr (chN1, chN2);
-		if (chNdx)
-			chRet = ch1 + (chNdx - chN1);
 	}
-	free (chN1);
-	free (chN2);
-	return chRet;
 }
+
+int UIRemoveLF(char * Message, int len)
+{
+	// Remove lf chars
+
+	char * ptr1, * ptr2;
+
+	ptr1 = ptr2 = Message;
+
+	while (len-- > 0)
+	{
+		*ptr2 = *ptr1;
+	
+		if (*ptr1 == '\r')
+			if (*(ptr1+1) == '\n')
+			{
+				ptr1++;
+				len--;
+			}
+		ptr1++;
+		ptr2++;
+	}
+
+	return (ptr2 - Message);
+}
+
+
+
+
+VOID UISend_AX_Datagram(UCHAR * Msg, DWORD Len, UCHAR Port, UCHAR * HWADDR, BOOL Queue)
+{
+	MESSAGEX AXMSG;
+	PMESSAGEX AXPTR = &AXMSG;
+	int DataLen = Len;
+
+	// Block includes the Msg Header (7 bytes), Len Does not!
+
+	memcpy(AXPTR->DEST, HWADDR, 7);
+	memcpy(AXPTR->ORIGIN, MYCALL, 7);
+	AXPTR->DEST[6] &= 0x7e;			// Clear End of Call
+	AXPTR->DEST[6] |= 0x80;			// set Command Bit
+
+	if (UIUIDigi[Port])
+	{
+		// This port has a digi string
+
+		int DigiLen = UIUIDigiLen[Port];
+		UCHAR * ptr;
+
+		memcpy(&AXPTR->CTL, UIUIDigiAX[Port], DigiLen);
+		
+		ptr = (UCHAR *)AXPTR;
+		ptr += DigiLen;
+		AXPTR = (PMESSAGEX)ptr;
+
+		Len += DigiLen;
+	}
+
+	AXPTR->ORIGIN[6] |= 1;			// Set End of Call
+	AXPTR->CTL = 3;		//UI
+	AXPTR->PID = 0xf0;
+	memcpy(AXPTR->DATA, Msg, DataLen);
+
+//	if (Queue)
+//		QueueRaw(Port, &AXMSG, Len + 16);
+//	else
+		SendRaw(Port, (char *)&AXMSG.DEST, Len + 16);
+
+	return;
+
+}
+
+
+
+VOID SendUIBeacon(int Port)
+{
+	char UIMessage[1024];
+	int Len = strlen(Message[Port]);
+	int Index = 0;
+
+	if (SendFromFile[Port])
+	{
+		FILE * hFile;
+
+		hFile = fopen(FN[Port], "rb");
+	
+		if (hFile == 0)
+			return;
+
+		Len = fread(UIMessage, 1, 1024, hFile); 
+		
+		fclose(hFile);
+
+	}
+	else
+		strcpy(UIMessage, Message[Port]);
+
+	Len =  UIRemoveLF(UIMessage, Len);
+
+	while (Len > 256)
+	{
+		UISend_AX_Datagram(&UIMessage[Index], 256, Port, UIAXDEST[Port], TRUE);
+		Index += 256;
+		Len -= 256;
+		Sleep(2000);
+	}
+	UISend_AX_Datagram(&UIMessage[Index], Len, Port, UIAXDEST[Port], TRUE);
+}
+
+#ifndef LINBPQ
+
+typedef struct tag_dlghdr
+{
+	HWND hwndTab; // tab control
+	HWND hwndDisplay; // current child dialog box
+	RECT rcDisplay; // display rectangle for the tab control
+
+	DLGTEMPLATE *apRes[33];
+
+} DLGHDR;
+
+DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName);
+
+#endif
+
+HWND hwndDlg;
+int PageCount;
+int CurrentPage=0;				// Page currently on show in tabbed Dialog
+
+
+VOID WINAPI OnSelChanged(HWND hwndDlg);
+VOID WINAPI OnChildDialogInit(HWND hwndDlg);
+
+#define ICC_STANDARD_CLASSES   0x00004000
+
+HWND hwndDisplay;
+
+#define ID_TEST                         102
+#define IDD_DIAGLOG1                    103
+#define IDC_FROMFILE                    1022
+#define IDC_EDIT1                       1054
+#define IDC_FILENAME                    1054
+#define IDC_EDIT2                       1055
+#define IDC_MESSAGE                     1055
+#define IDC_EDIT3                       1056
+#define IDC_INTERVAL                    1056
+#define IDC_EDIT4                       1057
+#define IDC_UIDEST                      1057
+#define IDC_FILE                        1058
+#define IDC_TAB1                        1059
+#define IDC_UIDIGIS                     1059
+#define IDC_PORTNAME                    1060
+
+extern HKEY REGTREE;
+HBRUSH bgBrush; 
+
+VOID SetupUI(int Port)
+{
+	char DigiString[100], * DigiLeft;
+
+	ConvToAX25(UIUIDEST[Port], &UIAXDEST[Port][0]);
+
+	UIUIDigiLen[Port] = 0;
+
+	if (UIUIDigi[Port])
+	{
+		UIUIDigiAX[Port] = zalloc(100);
+		strcpy(DigiString, UIUIDigi[Port]);
+		DigiLeft = strlop(DigiString,',');
+
+		while(DigiString[0])
+		{
+			ConvToAX25(DigiString, &UIUIDigiAX[Port][UIUIDigiLen[Port]]);
+			UIUIDigiLen[Port] += 7;
+
+			if (DigiLeft)
+			{
+				memmove(DigiString, DigiLeft, strlen(DigiLeft) + 1);
+				DigiLeft = strlop(DigiString,',');
+			}
+			else
+				DigiString[0] = 0;
+		}
+	}
+}
+
+/*
+
+VOID SaveIntValue(config_setting_t * group, char * name, int value)
+{
+	config_setting_t *setting;
+	
+	setting = config_setting_add(group, name, CONFIG_TYPE_INT);
+	if(setting)
+		config_setting_set_int(setting, value);
+}
+
+VOID SaveStringValue(config_setting_t * group, char * name, char * value)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
+	if (setting)
+		config_setting_set_string(setting, value);
+
+}
+*/
+
+#ifdef LINBPQ
+
+config_t cfg;
+
+VOID SaveUIConfig()
+{
+	config_setting_t *root, *group, *UIGroup;
+	int Port, MaxPort = GetNumberofPorts();
+	char ConfigName[256];
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(ConfigName,"UIUtil.cfg");
+	}
+	else
+	{
+		strcpy(ConfigName,BPQDirectory);
+		strcat(ConfigName,"/");
+		strcat(ConfigName,"UIUtil.cfg");
+	}
+
+	//	Get rid of old config before saving
+	
+	config_init(&cfg);
+
+	root = config_root_setting(&cfg);
+
+	group = config_setting_add(root, "main", CONFIG_TYPE_GROUP);
+
+	UIGroup = config_setting_add(group, "UIUtil", CONFIG_TYPE_GROUP);
+
+	for (Port = 1; Port <= MaxPort; Port++)
+	{
+		char Key[20];
+		
+		sprintf(Key, "Port%d", Port); 
+		group = config_setting_add(UIGroup, Key, CONFIG_TYPE_GROUP);
+
+		SaveStringValue(group, "UIDEST", &UIUIDEST[Port][0]);
+		SaveStringValue(group, "FileName", &FN[Port][0]);
+		SaveStringValue(group, "Message", &Message[Port][0]);
+		SaveStringValue(group, "Digis", UIUIDigi[Port]);
+	
+		SaveIntValue(group, "Interval", Interval[Port]);
+		SaveIntValue(group, "SendFromFile", SendFromFile[Port]);
+
+	}
+
+	if(!config_write_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "Error while writing file.\n");
+		config_destroy(&cfg);
+		return;
+	}
+
+	config_destroy(&cfg);
+}
+#endif
+
+VOID GetUIConfig()
+{
+#ifdef LINBPQ
+
+	char Key[100];
+	char CfgFN[256];
+	char Digis[100];
+
+	config_t cfg;
+	config_setting_t *root, *group;
+	int Port, MaxPort = GetNumberofPorts();
+
+	config_init(&cfg);
+
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(CfgFN,"UIUtil.cfg");
+	}
+	else
+	{
+		strcpy(CfgFN,BPQDirectory);
+		strcat(CfgFN,"/");
+		strcat(CfgFN,"UIUtil.cfg");
+	}
+
+	if(!config_read_file(&cfg, CfgFN))
+	{
+		if (config_error_line(&cfg))		// Display if not "File Not Found"
+			fprintf(stderr, "%d - %s\n", config_error_line(&cfg), config_error_text(&cfg));
+
+		config_destroy(&cfg);
+		return;
+	}
+
+	group = config_lookup(&cfg, "main");
+
+	if (group)
+	{
+		for (Port = 1; Port <= MaxPort; Port++)
+		{	
+			sprintf(Key, "main.UIUtil.Port%d", Port); 
+
+			group = config_lookup (&cfg, Key);
+
+			if (group)
+			{
+				GetStringValue(group, "UIDEST", &UIUIDEST[Port][0]);
+				GetStringValue(group, "FileName", &FN[Port][0]);
+				GetStringValue(group, "Message", &Message[Port][0]);
+				GetStringValue(group, "Digis", Digis);
+				UIUIDigi[Port] = _strdup(Digis);
+	
+				Interval[Port] = GetIntValue(group, "Interval");
+				MinCounter[Port] = Interval[Port];
+
+				SendFromFile[Port] = GetIntValue(group, "SendFromFile");
+
+				SetupUI(Port);
+			}
+		}
+	}
+
+#else
+	
+	int retCode, Vallen, Type, i;
+	char Key[80];
+	char Size[80];
+	HKEY hKey;
+	RECT Rect;
+
+	wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil");
+	
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	if (retCode == ERROR_SUCCESS)
+	{
+		Vallen=80;
+
+		retCode = RegQueryValueEx(hKey,"Size",0,			
+			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+
+		if (retCode == ERROR_SUCCESS)
+			sscanf(Size,"%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom);
+
+		RegCloseKey(hKey);
+	}
+
+	for (i=1; i<=32; i++)
+	{
+		wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil\\UIPort%d", i);
+
+		retCode = RegOpenKeyEx (REGTREE,
+                              Key,
+                              0,
+                              KEY_QUERY_VALUE,
+                              &hKey);
+
+		if (retCode == ERROR_SUCCESS)
+		{	
+			Vallen=0;
+			RegQueryValueEx(hKey,"Digis",0,			
+				(ULONG *)&Type, NULL, (ULONG *)&Vallen);
+
+			if (Vallen)
+			{
+				UIUIDigi[i] = malloc(Vallen);
+				RegQueryValueEx(hKey,"Digis",0,			
+					(ULONG *)&Type, UIUIDigi[i], (ULONG *)&Vallen);
+			}
+
+			Vallen=4;
+			retCode = RegQueryValueEx(hKey, "Interval", 0,			
+				(ULONG *)&Type, (UCHAR *)&Interval[i], (ULONG *)&Vallen);
+
+			MinCounter[i] = Interval[i];
+
+			Vallen=4;
+			retCode = RegQueryValueEx(hKey, "SendFromFile", 0,			
+				(ULONG *)&Type, (UCHAR *)&SendFromFile[i], (ULONG *)&Vallen);
+
+
+			Vallen=10;
+			retCode = RegQueryValueEx(hKey, "UIDEST", 0, &Type, &UIUIDEST[i][0], &Vallen);
+
+			Vallen=255;
+			retCode = RegQueryValueEx(hKey, "FileName", 0, &Type, &FN[i][0], &Vallen);
+
+			Vallen=999;
+			retCode = RegQueryValueEx(hKey, "Message", 0, &Type, &Message[i][0], &Vallen);
+
+			SetupUI(i);
+
+			RegCloseKey(hKey);
+		}
+	}
+#endif
+
+	_beginthread(UIThread,0,(int)0);
+
+}
+
+#ifndef LINBPQ
+
+INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+//	This processes messages from controls on the tab subpages
+	int Command;
+
+	int retCode, disp;
+	char Key[80];
+	HKEY hKey;
+	BOOL OK;
+	OPENFILENAME ofn;
+	char Digis[100];
+
+	int Port = PortNum[CurrentPage];
+
+
+	switch (message)
+	{
+	case WM_NOTIFY:
+
+        switch (((LPNMHDR)lParam)->code)
+        {
+		case TCN_SELCHANGE:
+			 OnSelChanged(hDlg);
+				 return TRUE;
+         // More cases on WM_NOTIFY switch.
+		case NM_CHAR:
+			return TRUE;
+        }
+
+       break;
+	case WM_INITDIALOG:
+		OnChildDialogInit( hDlg);
+		return (INT_PTR)TRUE;
+
+	case WM_CTLCOLORDLG:
+
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
+
+	case WM_COMMAND:
+
+		Command = LOWORD(wParam);
+
+		if (Command == 2002)
+			return TRUE;
+
+		switch (Command)
+		{
+			case IDC_FILE:
+
+			memset(&ofn, 0, sizeof (OPENFILENAME));
+			ofn.lStructSize = sizeof (OPENFILENAME);
+			ofn.hwndOwner = hDlg;
+			ofn.lpstrFile = &FN[Port][0];
+			ofn.nMaxFile = 250;
+			ofn.lpstrTitle = "File to send as beacon";
+			ofn.lpstrInitialDir = BPQDirectory;
+
+			if (GetOpenFileName(&ofn))
+				SetDlgItemText(hDlg, IDC_FILENAME, &FN[Port][0]);
+
+			break;
+
+
+		case IDOK:
+
+			GetDlgItemText(hDlg, IDC_UIDEST, &UIUIDEST[Port][0], 10);
+
+			if (UIUIDigi[Port])
+			{
+				free(UIUIDigi[Port]);
+				UIUIDigi[Port] = NULL;
+			}
+
+			if (UIUIDigiAX[Port])
+			{
+				free(UIUIDigiAX[Port]);
+				UIUIDigiAX[Port] = NULL;
+			}
+
+			GetDlgItemText(hDlg, IDC_UIDIGIS, Digis, 99); 
+		
+			UIUIDigi[Port] = _strdup(Digis);
+		
+			GetDlgItemText(hDlg, IDC_FILENAME, &FN[Port][0], 255); 
+			GetDlgItemText(hDlg, IDC_MESSAGE, &Message[Port][0], 1000); 
+	
+			Interval[Port] = GetDlgItemInt(hDlg, IDC_INTERVAL, &OK, FALSE); 
+
+			MinCounter[Port] = Interval[Port];
+
+			SendFromFile[Port] = IsDlgButtonChecked(hDlg, IDC_FROMFILE);
+
+			wsprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil\\UIPort%d", PortNum[CurrentPage]);
+
+			retCode = RegCreateKeyEx(REGTREE,
+					Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	
+			if (retCode == ERROR_SUCCESS)
+			{
+				retCode = RegSetValueEx(hKey, "UIDEST", 0, REG_SZ,(BYTE *)&UIUIDEST[Port][0], strlen(&UIUIDEST[Port][0]));
+				retCode = RegSetValueEx(hKey, "FileName", 0, REG_SZ,(BYTE *)&FN[Port][0], strlen(&FN[Port][0]));
+				retCode = RegSetValueEx(hKey, "Message", 0, REG_SZ,(BYTE *)&Message[Port][0], strlen(&Message[Port][0]));
+				retCode = RegSetValueEx(hKey, "Interval", 0, REG_DWORD,(BYTE *)&Interval[Port], 4);
+				retCode = RegSetValueEx(hKey, "SendFromFile", 0, REG_DWORD,(BYTE *)&SendFromFile[Port], 4);
+				retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ, Digis, strlen(Digis));
+
+				RegCloseKey(hKey);
+			}
+
+			SetupUI(Port);
+
+			return (INT_PTR)TRUE;
+
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+
+		case ID_TEST:
+
+			SendUIBeacon(Port);
+			return TRUE;
+
+		}
+		break;
+
+	}	
+	return (INT_PTR)FALSE;
+}
+
+
+
+VOID WINAPI OnTabbedDialogInit(HWND hDlg)
+{
+	DLGHDR *pHdr = (DLGHDR *) LocalAlloc(LPTR, sizeof(DLGHDR));
+	DWORD dwDlgBase = GetDialogBaseUnits();
+	int cxMargin = LOWORD(dwDlgBase) / 4;
+	int cyMargin = HIWORD(dwDlgBase) / 8;
+
+	TC_ITEM tie;
+	RECT rcTab;
+
+	int i, pos, tab = 0;
+	INITCOMMONCONTROLSEX init;
+
+	char PortNo[60];
+	struct _EXTPORTDATA * PORTVEC;
+
+	hwndDlg = hDlg;			// Save Window Handle
+
+	// Save a pointer to the DLGHDR structure.
+
+	SetWindowLong(hwndDlg, GWL_USERDATA, (LONG) pHdr);
+
+	// Create the tab control.
+
+
+	init.dwICC = ICC_STANDARD_CLASSES;
+	init.dwSize=sizeof(init);
+	i=InitCommonControlsEx(&init);
+
+	pHdr->hwndTab = CreateWindow(WC_TABCONTROL, "", WS_CHILD | WS_CLIPSIBLINGS | WS_VISIBLE,
+		0, 0, 100, 100, hwndDlg, NULL, hInstance, NULL);
+
+	if (pHdr->hwndTab == NULL) {
+
+	// handle error
+
+	}
+
+	// Add a tab for each of the child dialog boxes.
+
+	tie.mask = TCIF_TEXT | TCIF_IMAGE;
+
+	tie.iImage = -1;
+
+	for (i = 1; i <= NUMBEROFPORTS; i++)
+	{
+		// Only allow UI on ax.25 ports
+
+		PORTVEC = (struct _EXTPORTDATA * )GetPortTableEntryFromSlot(i);
+
+		if (PORTVEC->PORTCONTROL.PORTTYPE == 16)		// EXTERNAL
+			if (PORTVEC->PORTCONTROL.PROTOCOL == 10)	// Pactor/WINMOR
+				if (PORTVEC->PORTCONTROL.UICAPABLE == 0)
+					continue;
+
+		wsprintf(PortNo, "Port %2d", GetPortNumber(i));
+		PortNum[tab] = i;
+
+		tie.pszText = PortNo;
+		TabCtrl_InsertItem(pHdr->hwndTab, tab, &tie);
+	
+		pHdr->apRes[tab++] = DoLockDlgRes("PORTPAGE");
+	}
+
+	PageCount = tab;
+
+	// Determine the bounding rectangle for all child dialog boxes.
+
+	SetRectEmpty(&rcTab);
+
+	for (i = 0; i < PageCount; i++)
+	{
+		if (pHdr->apRes[i]->cx > rcTab.right)
+			rcTab.right = pHdr->apRes[i]->cx;
+
+		if (pHdr->apRes[i]->cy > rcTab.bottom)
+			rcTab.bottom = pHdr->apRes[i]->cy;
+
+	}
+
+	MapDialogRect(hwndDlg, &rcTab);
+
+//	rcTab.right = rcTab.right * LOWORD(dwDlgBase) / 4;
+
+//	rcTab.bottom = rcTab.bottom * HIWORD(dwDlgBase) / 8;
+
+	// Calculate how large to make the tab control, so
+
+	// the display area can accomodate all the child dialog boxes.
+
+	TabCtrl_AdjustRect(pHdr->hwndTab, TRUE, &rcTab);
+
+	OffsetRect(&rcTab, cxMargin - rcTab.left, cyMargin - rcTab.top);
+
+	// Calculate the display rectangle.
+
+	CopyRect(&pHdr->rcDisplay, &rcTab);
+
+	TabCtrl_AdjustRect(pHdr->hwndTab, FALSE, &pHdr->rcDisplay);
+
+	// Set the size and position of the tab control, buttons,
+
+	// and dialog box.
+
+	SetWindowPos(pHdr->hwndTab, NULL, rcTab.left, rcTab.top, rcTab.right - rcTab.left, rcTab.bottom - rcTab.top, SWP_NOZORDER);
+
+	// Move the Buttons to bottom of page
+
+	pos=rcTab.left+cxMargin;
+
+	
+	// Size the dialog box.
+
+	SetWindowPos(hwndDlg, NULL, 0, 0, rcTab.right + cyMargin + 2 * GetSystemMetrics(SM_CXDLGFRAME),
+		rcTab.bottom  + 2 * cyMargin + 2 * GetSystemMetrics(SM_CYDLGFRAME) + GetSystemMetrics(SM_CYCAPTION),
+		SWP_NOMOVE | SWP_NOZORDER);
+
+	// Simulate selection of the first item.
+
+	OnSelChanged(hwndDlg);
+
+}
+
+// DoLockDlgRes - loads and locks a dialog template resource.
+
+// Returns a pointer to the locked resource.
+
+// lpszResName - name of the resource
+
+DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName)
+{
+	HRSRC hrsrc = FindResource(hInstance, lpszResName, RT_DIALOG);
+	HGLOBAL hglb = LoadResource(hInstance, hrsrc);
+
+	return (DLGTEMPLATE *) LockResource(hglb);
+}
+
+//The following function processes the TCN_SELCHANGE notification message for the main dialog box. The function destroys the dialog box for the outgoing page, if any. Then it uses the CreateDialogIndirect function to create a modeless dialog box for the incoming page.
+
+// OnSelChanged - processes the TCN_SELCHANGE notification.
+
+// hwndDlg - handle of the parent dialog box
+
+VOID WINAPI OnSelChanged(HWND hwndDlg)
+{
+	char PortDesc[40];
+	int Port;
+
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
+
+	CurrentPage = TabCtrl_GetCurSel(pHdr->hwndTab);
+
+	// Destroy the current child dialog box, if any.
+
+	if (pHdr->hwndDisplay != NULL)
+
+		DestroyWindow(pHdr->hwndDisplay);
+
+	// Create the new child dialog box.
+
+	pHdr->hwndDisplay = CreateDialogIndirect(hInstance, pHdr->apRes[CurrentPage], hwndDlg, ChildDialogProc);
+
+	hwndDisplay = pHdr->hwndDisplay;		// Save
+
+	Port = PortNum[CurrentPage];
+	// Fill in the controls
+
+	GetPortDescription(PortNum[CurrentPage], PortDesc);
+
+	SetDlgItemText(hwndDisplay, IDC_PORTNAME, PortDesc);
+
+	CheckDlgButton(hwndDisplay, IDC_FROMFILE, SendFromFile[Port]);
+
+	SetDlgItemInt(hwndDisplay, IDC_INTERVAL, Interval[Port], FALSE);
+
+	SetDlgItemText(hwndDisplay, IDC_UIDEST, &UIUIDEST[Port][0]);
+	SetDlgItemText(hwndDisplay, IDC_UIDIGIS, UIUIDigi[Port]);
+
+
+
+	SetDlgItemText(hwndDisplay, IDC_FILENAME, &FN[Port][0]);
+	SetDlgItemText(hwndDisplay, IDC_MESSAGE, &Message[Port][0]);
+
+	ShowWindow(pHdr->hwndDisplay, SW_SHOWNORMAL);
+
+}
+
+
+//The following function processes the WM_INITDIALOG message for each of the child dialog boxes. You cannot specify the position of a dialog box created using the CreateDialogIndirect function. This function uses the SetWindowPos function to position the child dialog within the tab control's display area.
+
+// OnChildDialogInit - Positions the child dialog box to fall
+
+// within the display area of the tab control.
+
+VOID WINAPI OnChildDialogInit(HWND hwndDlg)
+{
+	HWND hwndParent = GetParent(hwndDlg);
+	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndParent, GWL_USERDATA);
+
+	SetWindowPos(hwndDlg, HWND_TOP, pHdr->rcDisplay.left, pHdr->rcDisplay.top, 0, 0, SWP_NOSIZE);
+}
+
+
+
+LRESULT CALLBACK UIWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	int wmId, wmEvent;
+	HKEY hKey=0;
+
+	switch (message) { 
+
+	case WM_INITDIALOG:
+		OnTabbedDialogInit(hWnd);
+		return (INT_PTR)TRUE;
+
+	case WM_NOTIFY:
+
+        switch (((LPNMHDR)lParam)->code)
+        {
+		case TCN_SELCHANGE:
+			 OnSelChanged(hWnd);
+				 return TRUE;
+         // More cases on WM_NOTIFY switch.
+		case NM_CHAR:
+			return TRUE;
+        }
+
+       break;
+
+
+		case WM_CTLCOLORDLG:
+			return (LONG)bgBrush;
+
+		case WM_CTLCOLORSTATIC:
+		{
+			HDC hdcStatic = (HDC)wParam;
+			SetTextColor(hdcStatic, RGB(0, 0, 0));
+			SetBkMode(hdcStatic, TRANSPARENT);
+
+			return (LONG)bgBrush;
+		}
+
+		case WM_COMMAND:
+
+		wmId    = LOWORD(wParam);
+		wmEvent = HIWORD(wParam);
+
+		switch (wmId) {
+
+		case IDOK:
+
+			return TRUE;
+
+		default:
+
+			return 0;
+		}
+
+
+		case WM_SYSCOMMAND:
+
+		wmId    = LOWORD(wParam); // Remember, these are...
+		wmEvent = HIWORD(wParam); // ...different for Win32!
+
+		switch (wmId)
+		{
+		case SC_RESTORE:
+
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+
+		case  SC_MINIMIZE: 
+			
+			if (MinimizetoTray)
+				return ShowWindow(hWnd, SW_HIDE);
+			else
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+						
+			break;
+		
+		default:
+				return (DefWindowProc(hWnd, message, wParam, lParam));
+		}
+
+		case WM_CLOSE:
+			return(DestroyWindow(hWnd));
+
+		default:
+			return (DefWindowProc(hWnd, message, wParam, lParam));
+
+	}
+
+	return (0);
+}
+
+#endif
+

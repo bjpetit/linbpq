@@ -137,7 +137,9 @@
 #define IDC_HOLDAT                      1076
 #define IDC_BBSTOSYSOPCALL              1076
 #define IDC_REJFROM                     1077
+#define IDC_NOHOMEBBS                   1077
 #define IDC_REJTO                       1078
+#define IDC_NONAME                      1078
 #define IDC_REJAT                       1079
 #define IDC_FILTERSAVE                  1080
 #define IDC_OVERRIDEUNSENT              1081
@@ -274,7 +276,6 @@
 #define ID_HELP_ONLINEHELP              40021
 #define ID_ACTIONS_SENDMESSAGE          40022
 #define IDM_IMPORT                      40023
-#define IDC_STATIC                      -1
 
 // Next default values for new objects
 // 

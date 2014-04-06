@@ -592,7 +592,7 @@ int ConnecttoAGW(int port)
 	return 0;
 }
 
-VOID ConnecttoAGWThread(port)
+VOID ConnecttoAGWThread(int port)
 {
 	char Msg[255];
 	int err,i;
