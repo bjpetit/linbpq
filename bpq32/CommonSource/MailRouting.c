@@ -25,7 +25,7 @@ BOOL ReaddressReceived;
 BOOL WarnNoRoute = TRUE;
 BOOL Localtime = FALSE;		// Use Local Time for Timebands and forward connect scripts
 
-struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg);
+struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg, char * FirstDestElement);
 
 struct Continent
 {
@@ -425,7 +425,7 @@ VOID SetupNTSAliases(char * FN)
 	char Buffer[2048];
 	char *buf = Buffer;
 	int Count = 0;
-	char seps[] = " ,:/";
+	char seps[] = " ,:/\t";
 	char * Dest, * Alias, * Context;
 
 	NTSAliases = zalloc(sizeof(struct ALIAS));
@@ -447,6 +447,9 @@ VOID SetupNTSAliases(char * FN)
 
 			Alias = strtok_s(NULL, seps, &Context);
 			if (Alias == NULL)
+				continue;
+
+			if (strlen(Dest) < 3 && (strchr(Dest, '*') == 0))
 				continue;
 
 			NTSAliases = realloc(NTSAliases, (Count+2)* sizeof(struct ALIAS));
@@ -770,6 +773,24 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 	Logprintf(LOG_BBS, conn, '?', "Msg %d Routing Trace To %s Via %s", Msg->number, Msg->to, RouteElements);
 
+	//	"NTS" Alias substitution is now done on P and T before any other processing
+
+	strlop(RouteElements, '.');
+
+	Alias = CheckForNTSAlias(Msg, RouteElements);
+
+	if (Alias)
+	{
+		// Replace the AT in the message with the Alias
+
+		Logprintf(LOG_BBS, conn, '?', "Routing Trace @%s taken from Alias File", Alias->Alias);
+		strcpy(Msg->via, Alias->Alias);
+		SaveMessageDatabase();
+	}
+
+	strcpy(RouteElements, Msg->via);		// May have changed
+
+
 //	See if sending @ winlink.org
 
 	if (_stricmp(Msg->to, "RMS") == 0)
@@ -1004,25 +1025,12 @@ NOHA:
 		int depth = 0;
 		int bestmatch = -1;
 		struct UserInfo * bestbbs = NULL;
-		struct ALIAS * Alias;
 
 		//	if NTS Traffic. Route on Wildcarded TO (best match).
 
 		//  If no match, route on AT (Should be NTSxx)
 
 		//  If no match, send to any BBS with routing to state XX and NTS flag set (no we dont!)
-
-		//	First look to see if an alias is specified
-
-		Alias = CheckForNTSAlias(Msg);
-
-		if (Alias)
-		{
-			// Replace the TO in the message with the Alias
-
-			Logprintf(LOG_BBS, conn, '?', "Routing Trace @%s taken from Alias File", Alias->Alias);
-			strcpy(ATBBS, Alias->Alias);
-		}
 
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
@@ -1494,17 +1502,17 @@ int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct UserInfo * bbs, struct
 	return bestmatch;
 }
 
-struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg)
+struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg, char * ATFirstElement)
 {
 	struct ALIAS ** Alias = NTSAliases;
-	struct ALIAS * BestAlias = NULL;
-
 	char * Call;
 	char * ptr;
-	int bestmatch = -1;
 	int MatchLen = 0;
 
 	//	We have a list of wildcarded TO (ie Zip Codes) and corresponding replacement NTSXX
+
+	//	It seems the NTS people want to match on either TO or DEST, and replace the AT
+	//	and to use only the first matching
 
 	while(Alias[0])
 	{
@@ -1520,40 +1528,33 @@ struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg)
 			MatchLen = ptr - Call;
 
 			if (memcmp(Msg->to, Call, MatchLen) == 0)
-			{
-				// Match - de we have a better one?
-
-				if (MatchLen > bestmatch)
-				{
-					bestmatch = MatchLen;
-					BestAlias = Alias[0];
-				}
-			}
+				return(Alias[0]);
 		}
 		else
 		{
 			//no star - just do a normal compare
 				
 			if (strcmp(Msg->to, Call) == 0)
-			{
-				MatchLen = strlen(Call);
-				if (MatchLen > bestmatch)
-				{
-					bestmatch = MatchLen;
-					BestAlias = Alias[0];
-				}
-			}
+				return(Alias[0]);
+		}
+
+		// Try AT
+
+		if (ATFirstElement && ATFirstElement[0])
+		{
+			if (ptr)
+				if (memcmp(ATFirstElement, Call, MatchLen) == 0)
+					return(Alias[0]);
+			else
+				if (strcmp(ATFirstElement, Call) == 0)
+					return(Alias[0]);
 		}
 
 		Alias++;
 	}
 
-	return BestAlias;
+	return NULL;
 }
-
-
-
-
 
 
 VOID ReRouteMessages()

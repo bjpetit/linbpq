@@ -130,7 +130,7 @@ char BadWordsPath[MAX_PATH];
 char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
 
 char NTSAliasesPath[MAX_PATH];
-char NTSAliasesName[MAX_PATH] = "NTSALIASES.TXT";
+char NTSAliasesName[MAX_PATH] = "INTRCPT.APS";
 
 char ConfigName[250];
 char ChatConfigName[250];

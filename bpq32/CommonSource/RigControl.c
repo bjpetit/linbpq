@@ -2164,7 +2164,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 	// Send Data if avail, else send poll
 
-	if (RIG->ScanStopped == 0)
+	if (RIG->NumberofBands && (RIG->ScanStopped == 0))
 	{
 		if (RIG->ScanCounter <= 0)
 		{
@@ -2481,7 +2481,7 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 	// Send Data if avail, else send poll
 
-	if (RIG->RIGOK && RIG->ScanStopped == 0)
+	if (RIG->NumberofBands && RIG->RIGOK && (RIG->ScanStopped == 0))
 	{
 		if (RIG->ScanCounter <= 0)
 		{

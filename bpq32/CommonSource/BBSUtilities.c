@@ -9301,7 +9301,13 @@ void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 	char MsgFile[MAX_PATH];
 	FILE * hFile;
 	struct stat STAT;
-		 
+
+	if (strstr(filename, "..") || strchr(filename, '/') || strchr(filename, '\\'))
+	{
+		nodeprintf(conn, "Invalid filename\r");
+		return;
+	}
+
 	if (BaseDir[0])
 		sprintf_s(MsgFile, sizeof(MsgFile), "%s/Files/%s", BaseDir, filename);
 	else

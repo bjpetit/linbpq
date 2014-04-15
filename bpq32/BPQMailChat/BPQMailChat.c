@@ -812,7 +812,7 @@
 //	Add command line option (tidymail) to delete redundant Mail files
 //	Add command line option (nohomebbs) to suppress HomeBBS prompt
 
-// 59
+// 59 April 2014
 
 //	Add FLARQ Mail Mode
 //	Fix possible crash saving restart data
@@ -824,6 +824,10 @@
 //	Add NTS swap file
 //	Add basic File list and read functions
 //	Fix Traffic report
+
+// 60
+
+//	Fix security hole in readfile
 
 // Use Windows Sound Events for (Chat "user join" alert)
 
@@ -841,6 +845,8 @@ INT_PTR CALLBACK UserEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK WPEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+
+VOID SetupNTSAliases(char * FN);
 
 HKEY REGTREE = HKEY_LOCAL_MACHINE;		// Default
 char * REGTREETEXT = "HKEY_LOCAL_MACHINE";
@@ -984,7 +990,7 @@ char BadWordsPath[MAX_PATH];
 char BadWordsName[MAX_PATH] = "BADWORDS.SYS";
 
 char NTSAliasesPath[MAX_PATH];
-char NTSAliasesName[MAX_PATH] = "NTSAliases.txt";
+char NTSAliasesName[MAX_PATH] = "INTRCPT.APS";
 
 char BaseDir[MAX_PATH];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%

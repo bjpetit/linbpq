@@ -611,6 +611,12 @@
 //	Process "BUSY" response from Tracker
 //	Handle serial port writes that don't accept all the data
 //	Trap Error 10038 and try to reopen socket
+//	Fix crash if overlong command line received
+
+//  Version 6.0.7.1 ????????
+
+//	Fix RigContol with no frequencies for Kenwood and Yaesu
+//	Add busy check to FLDIGI connects
 
 #define CKernel
 
@@ -1971,17 +1977,17 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 
 		if (InitDone == 0)
 		{
-			#pragma warning(push)
-			#pragma warning(disable : 4996)
+//			#pragma warning(push)
+//			#pragma warning(disable : 4996)
 
-			if (_winver < 0x0600)
-			#pragma warning(pop)
-			{
-				// Below Vista
-
-				REGTREE = HKEY_LOCAL_MACHINE;
-				strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
-			}
+//			if (_winver < 0x0600)
+//			#pragma warning(pop)
+//			{
+//				// Below Vista
+//
+//				REGTREE = HKEY_LOCAL_MACHINE;
+//				strcpy(REGTREETEXT, "HKEY_LOCAL_MACHINE");
+//			}
 
 			hInstance=hInst;
 
@@ -2395,10 +2401,11 @@ VOID SetupBPQDirectory()
 	i = _winmajor;
 	i = _winminor;
 */
+/*
 #pragma warning(push)
 #pragma warning(disable : 4996)
 
-	if (_winver < 0x0600)
+if (_winver < 0x0600)
 #pragma warning(pop)
 	{
 		// Below Vista
@@ -2408,6 +2415,7 @@ VOID SetupBPQDirectory()
 		ValfromReg[0] = 0;
 	}
 	else
+*/
 	{
 		if (_stricmp(pgm, "regsvr32.exe") == 0)
 		{

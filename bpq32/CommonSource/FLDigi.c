@@ -225,6 +225,70 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		// 100 mS Timer. 
 
+		//	See if waiting for busy to clear before sending a connect
+
+		if (TNC->BusyDelay)
+		{
+			// Still Busy?
+
+			if (InterlockedCheckBusy(TNC) == FALSE)
+			{
+				// No, so send connect
+
+				struct ARQINFO * ARQ = TNC->ARQInfo;
+				int SendLen;
+				char Reply[80];
+
+				SendLen = sprintf(Reply, "c%s:42 %s:24 %c 7 T60R5W10",
+				STREAM->MyCall, STREAM->RemoteCall, ARQ->OurStream); 
+
+				strcpy(TNC->WEB_PROTOSTATE, "Connecting");
+				SetWindowText(TNC->xIDC_PROTOSTATE, TNC->WEB_PROTOSTATE);
+
+				ARQ->ARQState = ARQ_ACTIVE;
+
+				ARQ->ARQTimerState = ARQ_CONNECTING;
+				SaveAndSend(TNC, ARQ, TNC->WINMORDataSock, Reply, SendLen);
+
+				STREAM->Connecting = TRUE;	
+
+				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", STREAM->MyCall, STREAM->RemoteCall);
+				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
+				strcpy(TNC->WEB_PROTOSTATE, "Connecting");
+				SetWindowText(TNC->xIDC_PROTOSTATE, TNC->WEB_PROTOSTATE);
+
+				TNC->BusyDelay = 0;
+			}
+			else
+			{
+				// Wait Longer
+
+				TNC->BusyDelay--;
+
+				if (TNC->BusyDelay == 0)
+				{
+					// Timed out - Send Error Response
+
+					UINT * buffptr = GetBuff();
+
+					if (buffptr == 0) return (0);			// No buffers, so ignore
+
+					buffptr[1]=39;
+					memcpy(buffptr+2,"Sorry, Can't Connect - Channel is busy\r", 39);
+
+					C_Q_ADD(&TNC->Streams[0].PACTORtoBPQ_Q, buffptr);
+					free(TNC->ConnectCmd);
+
+					sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
+					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
+				}
+			}
+		}
+
+
+
 		if (STREAM->NeedDisc)
 		{
 			STREAM->NeedDisc--;
@@ -661,6 +725,26 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				ptr = strtok_s(&buff[10], " ,\r", &context);
 				strcpy(STREAM->RemoteCall, ptr);
 
+				// See if Busy
+				
+				if (InterlockedCheckBusy(TNC))
+				{
+					// Channel Busy. Unless override set, wait
+
+					if (TNC->OverrideBusy == 0)
+					{
+						// Save Command, and wait up to 10 secs
+						
+						sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
+						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+
+						TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
+						return 0;
+					}
+				}
+
+				TNC->OverrideBusy = FALSE;
+
 //<SOH>00cG8BPQ:1025 G8BPQ:24 0 7 T60R5W10FA36<EOT>
 
 				SendLen = sprintf(Reply, "c%s:42 %s:24 %c 7 T60R5W10",
@@ -830,6 +914,9 @@ static RestartTNC(struct TNCINFO * TNC)
 				break;
 			}
 		}
+
+//		system("cmd /C start C:\\Users\\johnw_000\\Desktop\\FLDigi.exe");
+
 		ret = CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL , NULL, &SInfo, &PInfo);
 
 		if (ret)
@@ -952,6 +1039,9 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 	if (ptr) *(ptr) = 0;					// Null Terminate
 
 	TNC->Hardware = H_FLDIGI;
+
+	if (TNC->BusyWait == 0)
+		TNC->BusyWait = 10;
 
 	MPSKChannel[port] = PortEntry->PORTCONTROL.CHANNELNUM-65;
 	
@@ -1524,14 +1614,14 @@ static int ProcessReceivedData(int port)
 
 					if (Message[7] == 'T' && FL->Busy == FALSE)
 					{
-						FL->Busy = TRUE;
+						TNC->Busy = FL->Busy = TRUE;
 						Changed = TRUE;
 					}
 					else
 					{
 						if (Message[7] == 'F' && FL->Busy == TRUE)
 						{
-							FL->Busy = FALSE;
+							TNC->Busy = FL->Busy = FALSE;
 							Changed = TRUE;
 						}
 					}

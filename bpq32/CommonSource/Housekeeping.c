@@ -1122,5 +1122,6 @@ VOID CreateBBSTrafficReport()
 
 #endif
 
+	SaveUserDatabase();
 	fclose(hFile);
 }
