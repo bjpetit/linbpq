@@ -10,7 +10,7 @@
 #define APSTUDIO_HIDDEN_SYMBOLS
 #include "windows.h"
 #undef APSTUDIO_HIDDEN_SYMBOLS
-#include "..\CInclude\Versions.h"
+#include "s:\dev\source\BPQ32\CommonSource\Versions.h"
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
@@ -85,7 +85,7 @@ BEGIN
     "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "#include ""windows.h""\r\n"
     "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
-    "#include ""Versions.h""\r\n"
+    "#include ""s:\dev\source\BPQ32\CommonSource\Versions.h""r\n"
     "\0"
 END
 

@@ -18,10 +18,17 @@
 
 //		Fix confusion between locical and physical port numkbers
 
+//	Version 0.1.5.1 April 2013
+
+//		Move beaconong code to BPQ32, just leaving GUI here (for LinBPQ compatibility)		
+
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T
+
+#define LIBCONFIG_STATIC
+#include "libconfig.h"
 
 #include "ASMStrucs.h"
 
@@ -30,7 +37,6 @@
 #include <stdio.h>
 #include "commctrl.h"
 #include "Commdlg.h"
-
 
 #include "bpq32.h"
 
@@ -86,9 +92,6 @@ HINSTANCE hInst;
 HWND hwndDlg;		// Config Dialog
 HWND hwndDisplay;   // Current child dialog box
 
-
-UINT UIMask = 0;
-
 #define MAXFLEN 400     /* Maximale Laenge eines Frames */
                         /* maximum length of a frame */
 typedef signed short    i16;
@@ -98,7 +101,6 @@ typedef unsigned long   u32;
 int PortNum[33];		// Tab nunber to port
 
 UINT UIPortMask = 0;
-BOOL UIEnabled[33];
 char * UIDigi[33];
 char * UIDigiAX[33];		// ax.25 version of digistring
 int UIDigiLen[33];			// Length of AX string
@@ -196,11 +198,12 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	return;
 }
 
+VOID SaveConfig(char * ConfigName);
+
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 	MSG msg;
 	HKEY hKey=0;
-	int retCode, disp;
 
 	if (!InitInstance(hInstance, nCmdShow))
 		return (FALSE);
@@ -215,10 +218,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
 	KillTimer(NULL,TimerHandle);
 	
-	retCode = RegCreateKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\G8BPQ\\BPQ32\\UIUtil", 0, 0, 0,
-				KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	RegSetValueEx(hKey,"PortMask",0,REG_DWORD,(BYTE *)&UIMask,4);
+	SaveConfig("c:\\devprogs\\bpq32\\UIUtil.cfg");
 
 	if (MinimizetoTray)
 		DeleteTrayMenuItem(hWnd);
@@ -294,10 +294,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		if (retCode == ERROR_SUCCESS)
 			sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &Minimized);
 
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey, "PortMask", 0,			
-			(ULONG *)&Type, (UCHAR *)&UIMask, (ULONG *)&Vallen);
-
 		RegCloseKey(hKey);
 	}
 
@@ -312,11 +308,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
                               &hKey);
 
 		if (retCode == ERROR_SUCCESS)
-		{
-			Vallen=4;
-			RegQueryValueEx(hKey,"Enabled",0,			
-					(ULONG *)&Type,(UCHAR *)&UIEnabled[i],(ULONG *)&Vallen);
-	
+		{	
 			Vallen=0;
 			RegQueryValueEx(hKey,"Digis",0,			
 				(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -854,7 +846,6 @@ INT_PTR CALLBACK ChildDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM 
 				retCode = RegSetValueEx(hKey, "Message", 0, REG_SZ,(BYTE *)&Message[Port][0], strlen(&Message[Port][0]));
 				retCode = RegSetValueEx(hKey, "Interval", 0, REG_DWORD,(BYTE *)&Interval[Port], 4);
 				retCode = RegSetValueEx(hKey, "SendFromFile", 0, REG_DWORD,(BYTE *)&SendFromFile[Port], 4);
-				retCode = RegSetValueEx(hKey, "Enabled", 0, REG_DWORD,(BYTE *)&UIEnabled[Port], 4);
 				retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ, Digis, strlen(Digis));
 
 				RegCloseKey(hKey);
@@ -1083,4 +1074,70 @@ VOID WINAPI OnChildDialogInit(HWND hwndDlg)
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndParent, GWL_USERDATA);
 
 	SetWindowPos(hwndDlg, HWND_TOP, pHdr->rcDisplay.left, pHdr->rcDisplay.top, 0, 0, SWP_NOSIZE);
+}
+
+config_t cfg;
+config_setting_t * group;
+
+
+VOID SaveIntValue(config_setting_t * group, char * name, int value)
+{
+	config_setting_t *setting;
+	
+	setting = config_setting_add(group, name, CONFIG_TYPE_INT);
+	if(setting)
+		config_setting_set_int(setting, value);
+}
+
+VOID SaveStringValue(config_setting_t * group, char * name, char * value)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
+	if (setting)
+		config_setting_set_string(setting, value);
+
+}
+
+
+
+VOID SaveConfig(char * ConfigName)
+{
+	config_setting_t *root, *group, *UI;
+	int Port, MaxPort = GetNumberofPorts();
+
+	//	Get rid of old config before saving
+	
+	config_init(&cfg);
+
+	root = config_root_setting(&cfg);
+
+	group = config_setting_add(root, "main", CONFIG_TYPE_GROUP);
+
+	UI = config_setting_add(group, "UIUtil", CONFIG_TYPE_GROUP);
+
+	for (Port = 1; Port <= MaxPort; Port++)
+	{
+		char Key[20];
+		
+		sprintf(Key, "Port%d", Port); 
+		group = config_setting_add(UI, Key, CONFIG_TYPE_GROUP);
+
+		SaveStringValue(group, "UIDEST", &UIDEST[Port][0]);
+		SaveStringValue(group, "FileName", &FN[Port][0]);
+		SaveStringValue(group, "Message", &Message[Port][0]);
+		SaveStringValue(group, "Digis", UIDigi[Port]);
+	
+		SaveIntValue(group, "Interval", Interval[Port]);
+		SaveIntValue(group, "SendFromFile", SendFromFile[Port]);
+
+	}
+
+	if(! config_write_file(&cfg, ConfigName))
+	{
+		fprintf(stderr, "Error while writing file.\n");
+		config_destroy(&cfg);
+		return;
+	}
+	config_destroy(&cfg);
 }
