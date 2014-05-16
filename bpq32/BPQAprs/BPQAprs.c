@@ -48,11 +48,13 @@
 // Jan 2014
 // Add WX decode to station popup
 
-// Feb 2014
+// Feb 2014 1.1.7.1
 // Most processing is now in bpq32.dll (Decode, Station storage and Web interface)
 // Only GUI and messaging are handled here.
 
- 
+// April 2014
+//	Fix sending messages to unknown callsigns
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 
@@ -378,7 +380,7 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
 Dll BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
 Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
 Dll VOID APIENTRY APISendBeacon();
-
+Dll struct STATIONRECORD *  APIENTRY APPLFindStation(char * Call, BOOL AddIfNotFount);
 BOOL InitApplication(HINSTANCE);
 BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -5177,7 +5179,7 @@ VOID SendAPRSMessage(char * Text, char * ToCall)
 	strcpy(Message->FromCall, APRSCall);
 	memset(Message->ToCall, ' ', 9);
 	memcpy(Message->ToCall, ToCall, strlen(ToCall));
-	Message->ToStation = FindStation(ToCall, ToCall, TRUE);
+	Message->ToStation = APPLFindStation(ToCall, TRUE);
 
 	if (Message->ToStation == NULL)
 		return;

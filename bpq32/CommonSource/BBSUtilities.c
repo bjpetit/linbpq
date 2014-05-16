@@ -92,7 +92,6 @@ extern char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
 
 extern char MailDir[MAX_PATH];
 
-
 extern BIDRec ** BIDRecPtr;
 extern int NumberofBIDs;
 
@@ -1153,6 +1152,9 @@ VOID SendWelcomeMsg(int Stream, ConnectionInfo * conn, struct UserInfo * user)
 
 VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user)
 {
+	if (user->Temp->ListSuspended)
+		return;						// Dont send prompt if pausing a liting
+		
 	if (user->flags & F_Expert)
 		ExpandAndSendMessage(conn, ExpertPrompt, LOG_BBS);
 	else if (conn->NewUser)
@@ -2657,10 +2659,11 @@ void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 }
 
 
-VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
+BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 {
 	char FullFrom[80];
 	char FullTo[80];
+	struct TempUserInfo * Temp = conn->UserPointer->Temp;
 
 	strcpy(FullFrom, Msg->from);
 
@@ -2695,11 +2698,52 @@ VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 		else
 		nodeprintf(conn, "%-6d %s %c%c   %5d %-7s        %-6s %-s\r",
 				Msg->number, FormatDateAndTime(Msg->datecreated, TRUE), Msg->type, Msg->status, Msg->length, Msg->to, FullFrom, Msg->title);
+	
+	//	if paging, stop two before page lengh. This lets us send the continue prompt, save status
+	//	and exit without triggering the system paging code. We can then read a message then resume listing
+
+	if (Temp->ListActive && conn->Paging)
+	{
+		Temp->LinesSent++;
+
+		if ((Temp->LinesSent + 1) >= conn->PageLen)
+		{
+			nodeprintf(conn, "<A>bort, <R Msg(s)>, <CR> = Continue..>");
+			Temp->LastListedInPagedMode = Msg->number;
+			Temp->ListSuspended = TRUE;
+			return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1)
 {
 	BOOL SendFullFrom = Cmd[2];
+	int Start = 0;
+	struct  TempUserInfo * Temp = user->Temp;
+
+	if (conn->Paging)
+	{
+		if (Temp->ListSuspended)
+		{
+			// We have reentered list command after a pause. The next message to list is in Temp->LastListedInPagedMode
+
+			Start = Temp->LastListedInPagedMode;
+			Temp->ListSuspended = FALSE;
+		}
+
+
+		user->Temp->ListActive = TRUE;
+		memcpy(user->Temp->LastListCommand, Cmd, 79);
+		if (Arg1)
+			memcpy(user->Temp->LastListParams, Arg1, 79);
+		else
+			user->Temp->LastListParams[0] = 0;
+		
+		user->Temp->LinesSent = 0;
+	}
 	
 	switch (toupper(Cmd[1]))
 	{
@@ -2736,10 +2780,19 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 			}
 
 			if (Cmd[1])
-				ListMessagesInRangeForwards(conn, user, user->Call, From, To, SendFullFrom);
-			else
-				ListMessagesInRange(conn, user, user->Call, From, To, SendFullFrom);
+			{
+				if (Start)
+					To = Start + 1;
 
+				ListMessagesInRangeForwards(conn, user, user->Call, From, To, SendFullFrom);
+			}
+			else
+			{
+				if (Start)
+					From = Start - 1;
+
+				ListMessagesInRange(conn, user, user->Call, From, To, SendFullFrom);
+			}
 		}
 		else
 
@@ -2768,7 +2821,15 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 				if (m > 0)
 				{
-					ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
+					if (Start && MsgHddrPtr[m]->number >= Start)
+					{
+						m--;
+						i++;
+						continue;
+					}
+
+					if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
+						return;			// Hit page limit
 					m--;
 				}
 			}
@@ -2777,14 +2838,14 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 	case 'M':			// LM - List Mine
 
-		if (ListMessagesTo(conn, user, user->Call, SendFullFrom) == 0)
+		if (ListMessagesTo(conn, user, user->Call, SendFullFrom, Start) == 0)
 			BBSputs(conn, "No Messages found\r");
 		return;
 
 	case '>':			// L> - List to 
 
 		if (Arg1)
-			if (ListMessagesTo(conn, user, Arg1, SendFullFrom) == 0)
+			if (ListMessagesTo(conn, user, Arg1, SendFullFrom, Start) == 0)
 				BBSputs(conn, "No Messages found\r");
 		
 		
@@ -2793,7 +2854,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	case '<':
 
 		if (Arg1)
-			if (ListMessagesFrom(conn, user, Arg1, SendFullFrom) == 0)
+			if (ListMessagesFrom(conn, user, Arg1, SendFullFrom, Start) == 0)
 				BBSputs(conn, "No Messages found\r");
 		
 		return;
@@ -2801,7 +2862,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	case '@':
 
 		if (Arg1)
-			if (ListMessagesAT(conn, user, Arg1, SendFullFrom) == 0)
+			if (ListMessagesAT(conn, user, Arg1, SendFullFrom, Start) == 0)
 				BBSputs(conn, "No Messages found\r");
 		
 		return;
@@ -2820,8 +2881,16 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 				if (m > 0)
 				{
+					if (Start && MsgHddrPtr[m]->number >= Start)
+					{
+						m--;
+						continue;
+					}
+			
 					if (MsgHddrPtr[m]->status == toupper(Cmd[1]))
-						ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
+						if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
+							return;			// Hit page limit
+
 					m--;
 				}
 			}
@@ -2833,14 +2902,19 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 		if (conn->sysop)
 		{
-			int i, Msgs = 0;
+			int i, Msgs = Start;
 
 			for (i=NumberofMessages; i>0; i--)
 			{
+				if (Start && MsgHddrPtr[i]->number >= Start)
+					continue;
+
 				if (MsgHddrPtr[i]->status == toupper(Cmd[1]))
 				{
 					Msgs++;
-					ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+					if (ListMessage(MsgHddrPtr[i], conn, SendFullFrom))
+						return;			// Hit page limit
+
 				}
 			}
 
@@ -2856,15 +2930,22 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	case 'T':			// NTS Traffic can be listed by anyone
 		{
 			int m = NumberofMessages;
-				
+							
 			while (m > 0)
 			{
 				m = GetUserMsg(m, user->Call, conn->sysop);
 
 				if (m > 0)
 				{
+					if (Start && MsgHddrPtr[m]->number >= Start)
+					{
+						m--;
+						continue;
+					}
+
 					if (MsgHddrPtr[m]->type == toupper(Cmd[1]))
-						ListMessage(MsgHddrPtr[m], conn, SendFullFrom);
+						if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
+							return;			// Hit page limit
 					m--;
 				}
 			}
@@ -2923,13 +3004,16 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 	}
 }	
-int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
+int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start)
 {
-	int i, Msgs = 0;
+	int i, Msgs = Start;
 
 	for (i=NumberofMessages; i>0; i--)
 	{
 		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
+		if (Start && MsgHddrPtr[i]->number >= Start)
 			continue;
 
 		if ((_stricmp(MsgHddrPtr[i]->to, Call) == 0) ||
@@ -2937,14 +3021,15 @@ int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, B
 			_stricmp(MsgHddrPtr[i]->to, "SYSOP") == 0 && (user->flags & F_SYSOP_IN_LM)))
 		{
 			Msgs++;
-			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+			if (ListMessage(MsgHddrPtr[i], conn, SendFullFrom))
+				break;			// Hit page limit
 		}
 	}
 	
 	return(Msgs);
 }
 
-int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
+int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start)
 {
 	int i, Msgs = 0;
 
@@ -2953,30 +3038,39 @@ int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call,
 		if (MsgHddrPtr[i]->status == 'K')
 			continue;
 
+		if (MsgHddrPtr[i]->number <= Start)
+			continue;
+
 		if (_stricmp(MsgHddrPtr[i]->from, Call) == 0)
 		{
 			Msgs++;
-			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+			if (ListMessage(MsgHddrPtr[i], conn, SendFullFrom))
+				return Msgs;			// Hit page limit
+
 		}
 	}
 	
 	return(Msgs);
 }
 
-int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom)
+int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom,int Start)
 {
 	int i, Msgs = 0;
 
 	for (i=NumberofMessages; i>0; i--)
 	{
 		if (MsgHddrPtr[i]->status == 'K')
+			continue;
+
+		if (MsgHddrPtr[i]->number <= Start)
 			continue;
 
 		if (_memicmp(MsgHddrPtr[i]->via, Call, strlen(Call)) == 0 ||
 			(_stricmp(Call, "SMTP:") == 0 && MsgHddrPtr[i]->to[0] == 0))
 		{
 			Msgs++;
-			ListMessage(MsgHddrPtr[i], conn, SendFullFrom);
+			if (ListMessage(MsgHddrPtr[i], conn, SendFullFrom))
+				break;			// Hit page limit
 		}
 	}
 	
@@ -3083,7 +3177,9 @@ void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * C
 		Msg = MsgnotoMsg[m];
 		
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
-			ListMessage(Msg, conn, SendFullFrom);
+			if (ListMessage(Msg, conn, SendFullFrom))
+				return;			// Hit page limit
+
 	}
 }
 
@@ -3098,7 +3194,8 @@ void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, 
 		Msg = MsgnotoMsg[m];
 		
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
-			ListMessage(Msg, conn, SendFullFrom);
+			if (ListMessage(Msg, conn, SendFullFrom))
+				return;			// Hit page limit
 	}
 }
 
@@ -6024,7 +6121,8 @@ InBand:
 			}
 	}
 
-	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") || strstr(Buffer, "DOWNLINK") ||
+	if (strstr(Buffer, "BUSY") || strstr(Buffer, "FAILURE") ||
+		(strstr(Buffer, "DOWNLINK") && strstr(Buffer, "ATTEMPTING") == 0) ||
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
 		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - ") ||
 		strstr(Buffer, "UNABLE TO CONNECT") ||  strstr(Buffer, "DISCONNECTED"))
@@ -6596,6 +6694,34 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 	}
 	return;
 }
+
+VOID BBSSlowTimer()
+{
+	ConnectionInfo * conn;
+	int n;
+
+	for (n = 0; n < NumberofStreams; n++)
+	{
+		conn = &Connections[n];
+		
+		if (conn->Active == TRUE)
+		{
+			//	Check SIDTImers - used to detect failure to compete SID Handshake
+
+			if (conn->SIDResponseTimer)
+			{
+				conn->SIDResponseTimer--;
+				if (conn->SIDResponseTimer == 0)
+				{
+					// Disconnect Session
+
+					Disconnect(conn->BPQStream);
+				}
+			}
+		}
+	}
+}
+
 
 VOID FWDTimerProc()
 {
@@ -7524,6 +7650,8 @@ int Connected(int Stream)
 			
 			// Send SID and Prompt
 
+			conn->SIDResponseTimer =  12;				// Allow a couple of minutes for response to SID
+
 			{
 				BOOL B1 = FALSE, B2 = FALSE, BIN = FALSE;
 				struct	BBSForwardingInfo * ForwardingInfo;
@@ -7694,6 +7822,8 @@ int DoReceivedData(int Stream)
 
 		if (Stream == conn->BPQStream)
 		{
+			conn->SIDResponseTimer = 0;		// Got a message, so cancel timeout.
+
 			do
 			{ 
 				// May have several messages per packet, or message split over packets
@@ -8419,7 +8549,11 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				ClearQueue(conn);
 				conn->LinesSent = 0;
 
-				QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+				nodeprintf(conn, AbortedMsg);
+
+				if (conn->UserPointer->Temp->ListSuspended)
+					nodeprintf(conn, "<A>bort, <R Msg(s)>, <CR> = Continue..>");
+
 				SendPrompt(conn, user);
 				return;
 			}
@@ -8429,6 +8563,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
+	if (user->Temp->ListSuspended)
+	{
+		// Paging limit hit when listing. User may about, continue, or read one or more messages
+
+		ProcessSuspendedListCommand(conn, user, Buffer, len);
+		return;
+	}
 	if (len == 1)
 	{
 		SendPrompt(conn, user);
@@ -8581,7 +8722,11 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		ClearQueue(conn);
 		conn->LinesSent = 0;
 
-		QueueMsg(conn, AbortedMsg, strlen(AbortedMsg));
+		nodeprintf(conn, AbortedMsg);
+
+		if (conn->UserPointer->Temp->ListSuspended)
+			nodeprintf(conn, "<A>bort, <R Msg(s)>, <CR> = Continue..>");
+
 		SendPrompt(conn, user);
 		return;
 	}
@@ -9293,9 +9438,7 @@ void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 
 void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 {
-	char * MsgBytes, * Save;
-	char FullTo[100];
-	int Index;
+	char * MsgBytes;
 	
 	int FileSize;
 	char MsgFile[MAX_PATH];
@@ -9344,6 +9487,54 @@ void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename)
 	nodeprintf(conn, "File %s not found\r", filename);
 }
 
+VOID ProcessSuspendedListCommand(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
+{
+	struct  TempUserInfo * Temp = user->Temp;
 
+	Buffer[len] = 0;
 
+	//	Command entered during listing pause. May be A R or C (or <CR>)
 
+	if (Buffer[0] == 'A' || Buffer[0] == 'a')
+	{
+		// Abort
+
+		Temp->ListActive = Temp->ListSuspended = FALSE;
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (_memicmp(Buffer, "R ", 2) == 0)
+	{
+		// Read Message(es)
+
+		int msgno;
+		char * ptr;
+		char * Context;
+
+		ptr = strtok_s(&Buffer[2], " ", &Context);
+
+		while (ptr)
+		{
+			msgno = atoi(ptr);
+			ReadMessage(conn, user, msgno);
+
+			ptr = strtok_s(NULL, " ", &Context);
+		}
+
+		nodeprintf(conn, "<A>bort, <R Msg(s)>, <CR> = Continue..>");
+		return;
+	}
+
+	if (Buffer[0] == 'C' || Buffer[0] == 'c' || Buffer[0] == '\r' )
+	{
+		//	Resume Listing from where we left off
+
+		DoListCommand(conn, user, Temp->LastListCommand, Temp->LastListParams);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	nodeprintf(conn, "<A>bort, <R Message>, <CR> = Continue..>");
+
+}

@@ -613,10 +613,15 @@
 //	Trap Error 10038 and try to reopen socket
 //	Fix crash if overlong command line received
 
-//  Version 6.0.7.1 ????????
-
+//  Version 6.0.7.1 Aptil 2014
 //	Fix RigContol with no frequencies for Kenwood and Yaesu
 //	Add busy check to FLDIGI connects
+
+//  Version 6.0.8.1
+
+//	Fix APRS semaphoring issues - GPS and Messaging
+//	Fix crash when APRS symbol is a space.
+//	Fixes for FT847 CAT
 
 #define CKernel
 

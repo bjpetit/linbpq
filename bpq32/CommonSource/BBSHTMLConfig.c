@@ -8,8 +8,6 @@ extern char BBSName[10];
 extern char ConfigName[250];
 extern char ChatConfigName[250];
 
-extern char OtherNodesList[1000];
-
 extern char LTFROMString[2048];
 extern char LTTOString[2048];
 extern char LTATString[2048];
@@ -2402,12 +2400,12 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 	int MsgsRejectedOut;
 	int BytesForwardedIn;
 	int BytesForwardedOut;
-	char MsgsIn[80];
-	char MsgsOut[80];
-	char BytesIn[80];
-	char BytesOut[80];
-	char RejIn[80];
-	char RejOut[80];
+//	char MsgsIn[80];
+//	char MsgsOut[80];
+//	char BytesIn[80];
+//	char BytesOut[80];
+//	char RejIn[80];
+//	char RejOut[80];
 
 	i = 0;
 

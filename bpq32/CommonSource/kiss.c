@@ -123,16 +123,15 @@ int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 		
 		while (i--)
 		{
-			ret = i2c_smbus_write_byte(Port->idComDev, *(ptr++));
+			ret = i2c_smbus_write_byte(Port->idComDev, *(ptr));
 			if (ret == -1)
 			{
 				Debugprintf ("i2c Write Error\r");
 				usleep(1000);
-				ret = i2c_smbus_write_byte(Port->idComDev, *(ptr++));
+				ret = i2c_smbus_write_byte(Port->idComDev, *(ptr));
 			}		
+			ptr++;
 		}
-
-//		Debugprintf ("i2c Block sent %d\n", count);
 
 #endif
 		return 0;
@@ -198,7 +197,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 #else
 #ifdef NOI2C
 
-		sprintf(Msg,"I2C is not supported on MAC systems\n");
+		sprintf(Msg,"I2C is not supported on this systems\n");
 		WritetoConsoleLocal(Msg);
 
 		return 0;
@@ -1384,14 +1383,12 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 
 	*(ptr++) = retval;				// Put first char in buffer
 	len = 1;
-//	retval = i2c_smbus_read_byte(fd);
 
 	while (retval != FEND || len < 2)
 	{
 		usleep(1000);
 		
 		retval = i2c_smbus_read_byte(fd);
-		Debugprintf ("%x ", retval);
 			
 		if (retval == -1)	 		// Read failed		
 	  	{

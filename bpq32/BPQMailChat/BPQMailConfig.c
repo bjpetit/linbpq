@@ -579,7 +579,6 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 
 		SetDlgItemText(pHdr->hwndDisplay, IDM_USERMSG, WelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_NEWUSERMSG, NewWelcomeMsg);
-		SetDlgItemText(pHdr->hwndDisplay, IDM_CHATUSERMSG, ChatWelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_EXPERTUSERMSG, ExpertWelcomeMsg);
 		SetDlgItemText(pHdr->hwndDisplay, IDM_SIGNOFF, SignoffMsg);
 
@@ -1865,11 +1864,6 @@ VOID SaveWelcomeMsgs()
 
 	GetDlgItemText(hwndDisplay, IDM_CHATUSERMSG, Value, 10000);
 
-	free(ChatWelcomeMsg);
-	ChatWelcomeMsg = _strdup(Value);
-
-	RegSetValueEx(hKey, "ChatWelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
-
 	GetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, Value, 10000);
 
 	free(ExpertWelcomeMsg);
@@ -2229,16 +2223,6 @@ TryAgain:
 		ExpandEnvironmentStrings(BaseDirRaw, BaseDir, MAX_PATH);
 		// Get length of Chatnodes String
 				
-		Vallen=0;
-		RegQueryValueEx(hKey,"OtherChatNodes",0,			
-			(ULONG *)&Type,NULL,(ULONG *)&Vallen);
-
-		if (Vallen)
-			OtherNodes=malloc(Vallen);
-
-		retCode += RegQueryValueEx(hKey,"OtherChatNodes",0,			
-			(ULONG *)&Type,OtherNodes,(ULONG *)&Vallen);
-
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"SMTPPort",0,			
 			(ULONG *)&Type,(UCHAR *)&SMTPInPort,(ULONG *)&Vallen);
@@ -2356,20 +2340,6 @@ TryAgain:
 			
 			NewWelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
 
-		RegQueryValueEx(hKey,"ChatWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
-
-		if (Vallen)
-		{
-			ChatWelcomeMsg = malloc(Vallen);
-			RegQueryValueEx(hKey,"ChatWelcomeMsg",0, (ULONG *)&Type, ChatWelcomeMsg, (ULONG *)&Vallen);
-		}
-		else
-			
-			ChatWelcomeMsg = _strdup(
-			
-			"G8BPQ Chat Server.\r\nType /h for command summary.\r\nBringing up links to other nodes.\r\n"
-			"This may take a minute or two.\r\nThe /p command shows what nodes are linked.\r\n");
-	
 		Vallen=0;
 		
 		RegQueryValueEx(hKey,"ExpertWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -2441,20 +2411,6 @@ TryAgain:
 			
 			NewWelcomeMsg = _strdup("Hello $I. Latest Message is $L, Last listed is $Z\r\n");
 
-		RegQueryValueEx(hKey,"ChatWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
-
-		if (Vallen)
-		{
-			ChatWelcomeMsg = malloc(Vallen);
-			RegQueryValueEx(hKey,"ChatWelcomeMsg",0, (ULONG *)&Type, ChatWelcomeMsg, (ULONG *)&Vallen);
-		}
-		else
-			
-			ChatWelcomeMsg = _strdup(
-			
-			"G8BPQ Chat Server.\r\nType /h for command summary.\r\nBringing up links to other nodes.\r\n"
-			"This may take a minute or two.\r\nThe /p command shows what nodes are linked.\r\n");
-	
 		Vallen=0;
 		
 		RegQueryValueEx(hKey,"ExpertWelcomeMsg",0,	(ULONG *)&Type, NULL, (ULONG *)&Vallen);
@@ -2466,7 +2422,6 @@ TryAgain:
 		}
 		else
 			ExpertWelcomeMsg = _strdup("");
-
 
 		Vallen=80;
 

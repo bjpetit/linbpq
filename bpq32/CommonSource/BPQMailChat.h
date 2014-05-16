@@ -253,6 +253,8 @@ typedef struct ConnectionInfo_S
 	char ARQFilename[256];				// Filename from ARQ:FILE:: Header
 	int ARQClearCount;					// To make sure queues are flushed when sending
 
+	int SIDResponseTimer;				// Used to detect incomplete handshake
+
 } ConnectionInfo, CIRCUIT;
 
 // Flags Equates
@@ -297,6 +299,16 @@ struct FBBRestartData
 struct TempUserInfo
 {
 	int LastAuthCode;				// Protect against playback attack
+
+	// Fields used to allow interrupting and resuming a paged listing
+
+	BOOL ListActive;				// Doing a list
+	BOOL ListSuspended;				// Paused doing a list
+	int LastListedInPagedMode;
+	char LastListCommand[80];
+	char LastListParams[80];
+	int LinesSent;
+
 };
 
 #define PMSG 1
@@ -932,7 +944,7 @@ VOID SendPrompt(ConnectionInfo * conn, struct UserInfo * user);
 int QueueMsg(	ConnectionInfo * conn, char * msg, int len);
 VOID SendUnbuffered(int stream, char * msg, int len);
 //int GetFileList(char * Dir);
-VOID ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom);
+BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom);
 void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
@@ -943,9 +955,9 @@ int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 void DoUnholdCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 
 VOID FlagAsKilled(struct MsgInfo * Msg);
-int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom);
-int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom);
-int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom );
+int ListMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start);
+int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start);
+int ListMessagesAT(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start);
 void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End, BOOL SendFullFrom );
 void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, char * Call, int Start, int End, BOOL SendFullFrom );
 int GetUserMsg(int m, char * Call, BOOL SYSOP);
@@ -1041,7 +1053,7 @@ VOID DoSetIdleTime(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * C
 VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo);
 VOID DoAuthCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
-
+VOID ProcessSuspendedListCommand(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len);
 
 // FBB Routines
 
@@ -1055,7 +1067,6 @@ BOOL CreateB2Message(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader, char * Rl
 VOID SaveFBBBinary(CIRCUIT * conn);
 BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
 BOOL DoWeWantIt(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader);
-
 
 // Console Routines
 

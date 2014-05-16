@@ -495,8 +495,12 @@ int main(int argc, char * argv[])
 #endif
 
 	printf("G8BPQ AX25 Packet Switch System Version %s %s\n", TextVerstring, Datestring);
-	Debugprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
 	printf("%s\n", VerCopyright);
+
+	if (argc > 1 && _stricmp(argv[1], "-v") == 0)
+		return;
+
+	Debugprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
 
 #ifndef MACBPQ
 	_MYTIMEZONE = timezone;
@@ -1064,6 +1068,7 @@ int main(int argc, char * argv[])
 
 				TCPTimer();
 				FWDTimerProc();
+				BBSSlowTimer();
 
 				if (MaintClock < NOW)
 				{

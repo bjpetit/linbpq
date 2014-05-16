@@ -636,6 +636,23 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
+			if (_memicmp(&buff[8], "KPSATT ", 7) == 0)
+			{
+				_strupr(&buff[8]);
+				buff[7 + txlen] = 0;
+
+				// If in KISS mode, send as a KISS command Frame
+
+				if (TNC->FLInfo->KISSMODE)
+				{
+					sprintf(txbuff, "KPSATT:%s KPSATT:", &buff[15]);
+					SendKISSCommand(TNC, txbuff);
+					TNC->InternalCmd = TRUE;
+				}
+
+				return 1;
+			}
+
 			if (STREAM->Connecting && _memicmp(&buff[8], "ABORT", 5) == 0)
 			{
 //				len = sprintf(Command,"%cSTOP_SELECTIVE_CALL_ARQ_FAE\x1b", '\x1a');

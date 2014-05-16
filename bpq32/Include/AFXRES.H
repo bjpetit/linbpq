@@ -11,6 +11,10 @@
 #ifndef __AFXRES_H__
 #define __AFXRES_H__
 
+#ifndef IDC_STATIC
+#define IDC_STATIC -1
+#endif
+
 #ifdef REZ  // Mac resource compiler (mrc) defines REZ
 #define RC_INVOKED
 #endif

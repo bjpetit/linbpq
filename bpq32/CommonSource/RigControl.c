@@ -668,6 +668,17 @@ portok:
 		*(Poll++) = 1;		// Set Freq
 					
 		buffptr[1] = 10;
+
+		if (strcmp(PORT->Rigs[0].RigName, "FT847") == 0)
+		{
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = 3;		// Status Poll
+	
+			buffptr[1] = 15;
+		}
 		
 		C_Q_ADD(&RIG->BPQtoRADIO_Q, buffptr);
 
@@ -1197,7 +1208,7 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 
 OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 {
-	if (PORT->PortType == FT2000)		// FT2000 and similar seem to need two stop bits
+	if (PORT->PortType == FT2000 || strcmp(PORT->Rigs[0].RigName, "FT847") == 0)		// FT2000 and similar seem to need two stop bits
 		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 2);
 	else
 		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 0);
@@ -1209,6 +1220,15 @@ OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 	{
 		COMSetRTS(PORT->hDevice);
 		COMSetDTR(PORT->hDevice);
+	}
+
+	if (strcmp(PORT->Rigs[0].RigName, "FT847") == 0)
+	{
+		// Looks like FT847 Needa a "Cat On" Command
+
+		UCHAR CATON[6] = {0,0,0,0,0};
+
+		WriteCOMBlock(PORT->hDevice, CATON, 5);
 	}
 
 	return TRUE;
@@ -1266,7 +1286,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 
 		// Possible responses are a single byte ACK/NAK or a 5 byte info frame
 
-		if (Length == 1 && PORT->CmdSent)
+		if (Length == 1 && PORT->CmdSent > 0)
 		{
 			ProcessYaesuCmdAck(PORT);
 			return;
@@ -2029,6 +2049,7 @@ VOID ProcessYaesuCmdAck(struct RIGPORTINFO * PORT)
 	if (PORT->CmdSent == 1)				// Set Freq
 	{
 		ReleasePermission(RIG);			// Release Perrmission
+
 		if (Msg[0])
 		{
 			// I think nonzero is a Reject
@@ -2102,28 +2123,39 @@ VOID ProcessYaesuFrame(struct RIGPORTINFO * PORT)
 	PORT->Timeout = 0;
 
 	for (j = 0; j < 4; j++)
-		{
-			n = Msg[j];
-			decdigit = (n >> 4);
-			decdigit *= 10;
-			decdigit += n & 0xf;
-			Freq = (Freq *100 ) + decdigit;
-		}
+	{
+		n = Msg[j];
+		decdigit = (n >> 4);
+		decdigit *= 10;
+		decdigit += n & 0xf;
+		Freq = (Freq *100 ) + decdigit;
+	}
 
-		FreqF = Freq / 100000.0;
+	FreqF = Freq / 100000.0;
 
 //		Valchar = _fcvt(FreqF, 6, &dec, &sign);
-		_gcvt(FreqF, 9, RIG->Valchar);
+	_gcvt(FreqF, 9, RIG->Valchar);
 
-		sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
-		SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+	sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
+	SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
 
-		Mode = Msg[4];
+	Mode = Msg[4];
 
-		if (Mode > 15) Mode = 15;
+	if (Mode > 15) Mode = 15;
 
-		sprintf(RIG->WEB_MODE,"%s", YaesuModes[Mode]);
-		SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+	sprintf(RIG->WEB_MODE,"%s", YaesuModes[Mode]);
+	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+
+	//	FT847 Manual Freq Change response ends up here
+	
+	if (strcmp(RIG->RigName, "FT847") == 0)
+	{
+		if (!PORT->AutoPoll)
+			SendResponse(RIG->Session, "Mode and Frequency Set OK");
+			
+		if (PORT->CmdSent == -1)
+			ReleasePermission(RIG);			// Release Perrmission to change
+	}
 }
 
 VOID YaesuPoll(struct RIGPORTINFO * PORT)
@@ -2179,9 +2211,17 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 
 				if (PORT->PortType == YAESU)
 				{
-					PORT->TXLen = 5;
+					if (strcmp(PORT->Rigs[0].RigName, "FT847") == 0)
+					{
+						PORT->TXLen = 15; // No Cmd ACK, so send Mode, Freq and Poll
+						PORT->CmdSent = -1;
+					}
+					else
+					{
+						PORT->TXLen = 5;
+						PORT->CmdSent = Poll[4];
+					}
 					RigWriteCommBlock(PORT);
-					PORT->CmdSent = Poll[4];
 					PORT->Retries = 2;
 					PORT->AutoPoll = TRUE;
 					return;
@@ -2220,12 +2260,22 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 		memcpy(Poll, &buffptr[20], datalen);
 
 		if (PORT->PortType == YAESU)
-			PORT->TXLen = 5;					// First send the set Freq
+		{
+			if (strcmp(PORT->Rigs[0].RigName, "FT847") == 0)
+			{
+				PORT->TXLen = 15;					// Send all
+				PORT->CmdSent = -1;
+			}
+			else
+			{
+				PORT->TXLen = 5;					// First send the set Freq
+				PORT->CmdSent = Poll[4];
+			}
+		}
 		else
-			PORT->TXLen = 15;					// First send the set Freq
+			PORT->TXLen = 15;					// Send all
 
 		RigWriteCommBlock(PORT);
-		PORT->CmdSent = Poll[4];
 		PORT->Retries = 2;
 
 		ReleaseBuffer(buffptr);
@@ -3419,6 +3469,7 @@ PortFound:
 
 		Freq = Freq * 1000000.0;
 
+
 		Valchar = _fcvt(Freq, 0, &dec, &sign);
 
 		if (dec == 9)	// 10-100
@@ -3573,6 +3624,15 @@ PortFound:
 			*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
 			*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
 			*(CmdPtr++) = 1;
+
+			// FT847 Nees a Poll Here. Set up anyway, but only send if 847
+
+			*(CmdPtr++) = 0;
+			*(CmdPtr++) = 0;
+			*(CmdPtr++) = 0;
+			*(CmdPtr++) = 0;
+			*(CmdPtr++) = 3;
+
 
 		}
 		else if	(PORT->PortType == KENWOOD)

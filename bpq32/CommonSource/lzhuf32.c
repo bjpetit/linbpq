@@ -730,6 +730,7 @@ void Decode(CIRCUIT * conn)
 	unsigned short  crc_read;
 	int Index = 0;
 	struct FBBHeaderLine * FBBHeader= &conn->FBBHeaders[0];	// The Headers from an FFB forward block
+	BOOL NTS = FALSE;
 
 	getbuf = 0;
 	getlen = 0;
@@ -1180,6 +1181,24 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				sprintf(HddrTo[Recipients], "To: %s\r\n", FullTo);
 			}
 
+			if (memcmp(FullTo, "NTS:", 4) == 0)
+			{
+				// remove NTS and set type 'T'
+
+				char * tptr;
+
+				memmove(FullTo, &FullTo[4], strlen(FullTo) - 3);
+				Msg->type = 'T';				// NTS
+
+				// Replace Type: Private with Type: Traffic
+
+				tptr = strstr(outfile, "Type: Private");
+				if (tptr)
+					memcpy(tptr + 6, "Traffic", 7);
+
+				NTS = TRUE;
+			}
+
 			if (strcmp(Msg->via, "RMS") == 0)
 			{
 				// replace RMS with @winlink.org
@@ -1431,7 +1450,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				// Add our To: 
 
-				ToLen = strlen(HddrTo[i]);
+				ptr = HddrTo[i];
+
+				if (_memicmp(&ptr[4], "nts:", 4) == 0)
+					memmove(ptr + 4, ptr + 8, strlen(ptr + 7));
+
+				ToLen = strlen(ptr);
 
 				if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
 					memcpy(HddrTo[i], "To", 2);
@@ -1463,7 +1487,12 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			// Single Destination -  Need to put to: line back in message
 
 			char * ptr = HddrTo[0];
-			__int32 ToLen = strlen(ptr);
+			__int32 ToLen;
+
+			if (_memicmp(&ptr[4], "nts:", 4) == 0)
+				memmove(ptr + 4, ptr + 8, strlen(ptr + 7));
+
+			ToLen = strlen(ptr);
 
 			if (_memicmp(&ptr[4], "bull/", 5) == 0)
 			{

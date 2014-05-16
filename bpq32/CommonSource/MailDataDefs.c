@@ -166,8 +166,6 @@ int SMTPMsgs;
 
 int MailForInterval = 0;
 
-UCHAR * OtherNodes=NULL;
-
 char zeros[NBMASK];						// For forward bitmask tests
 
 time_t MaintClock;						// Time to run housekeeping

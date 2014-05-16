@@ -580,22 +580,31 @@ BOOL RemoveKilledMessages()
 
 }
 
+#define MESSAGE_NUMBER_MAX 65536
+
 VOID Renumber_Messages()
 {
-	int NewNumber[65536] = {0};
+	int * NewNumber = (int *)0;
 	struct MsgInfo * Msg;
 	struct UserInfo * user = NULL;
 	char OldMsgFile[MAX_PATH];
 	char NewMsgFile[MAX_PATH];
 	int j, lastmsg, result;
 
-	int i, n;
+	int i, n, s;
+
+	s = sizeof(int)* MESSAGE_NUMBER_MAX;
+
+	NewNumber = malloc(s);
+
+	if (!NewNumber) return;
+
+    memset(NewNumber, 0, s);
 
 	for (i = 0; i < 100000; i++)
 	{
 		MsgnotoMsg[i] = NULL;
 	}
-
 
 	i = 0;		// New Message Number
 
@@ -616,6 +625,8 @@ VOID Renumber_Messages()
 			Debugprintf("Invalid message number detected, quitting");
 #endif
 			SaveMessageDatabase();
+			if (NewNumber) free(NewNumber);
+
 			return;
 		}
 
@@ -634,6 +645,8 @@ VOID Renumber_Messages()
 				Debugprintf(Errmsg);
 #endif
 				SaveMessageDatabase();
+				if (NewNumber) free(NewNumber);
+
 				return;
 			}
 			Msg->number = i;
@@ -675,6 +688,8 @@ VOID Renumber_Messages()
 
 	SaveMessageDatabase();
 	SaveUserDatabase();
+
+	if (NewNumber) free(NewNumber);
 
 	return;
 

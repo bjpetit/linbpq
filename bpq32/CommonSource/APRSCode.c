@@ -689,11 +689,11 @@ Dll VOID APIENTRY Poll_APRS()
 			continue;
 		}
 
-		if (CompareCalls(Orig->ORIGIN, AXCall))	// Our Packet
-		{
-			ReleaseBuffer(monbuff);
-			continue;
-		}
+//		if (CompareCalls(Orig->ORIGIN, AXCall))	// Our Packet
+//		{
+//			ReleaseBuffer(monbuff);
+//			continue;
+//		}
 
 		if ((APRSPortMask & (1 << (Port - 1))) == 0)// Port in use for APRS?
 		{
@@ -1609,7 +1609,9 @@ static APRSProcessLine(char * buf)
 
 	if (_stricmp(ptr, "SYMBOL") == 0)
 	{
-		CFGSYMBOL = p_value[0];
+		if (p_value[0] > ' ' && p_value[0] < 0x7f)
+			CFGSYMBOL = p_value[0];
+
 		return TRUE;
 	}
 
@@ -2771,7 +2773,7 @@ BOOL OpenGPSPort()
 void PollGPSIn()
 {
 	int len;
-	char GPSMsg[2000];
+	char GPSMsg[2000] = "$GPRMC,061213.000,A,5151.5021,N,00056.8388,E,0.15,324.11,190414,,,A*6F";
 	char * ptr;
 	struct PortInfo * portptr;
 
@@ -2974,10 +2976,7 @@ void DecodeRMC(char * msg, int len)
 		if ((NOW - LastMobileBeacon) > MobileBeaconInterval)
 		{
 			LastMobileBeacon = NOW;
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 99;
 			SendBeacon(0, StatusMsg, FALSE, TRUE);
-			FreeSemaphore(&Semaphore);
 		}
 	}
 
@@ -3835,8 +3834,11 @@ BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
 
 	Station->Symbol = SymChar;
 
-	SymChar -= '!';
-	
+	if (SymChar > ' ' && SymChar < 0x7f)
+		SymChar -= '!';
+	else
+		SymChar = 0;
+
 	Station->IconOverlay = 0;
 
 	if ((SymSet >= '0' && SymSet <= '9') || (SymSet >= 'A' && SymSet <= 'Z'))
@@ -4004,9 +4006,6 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 			
 			UINT * buffptr;
 
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 12;
-
 			if (C_Q_COUNT(&APPL_Q) > 50)
 				buffptr = Q_REM(&APPL_Q);
 			else
@@ -4019,7 +4018,6 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 				strcpy(&buffptr[5], Payload);
 				C_Q_ADD(&APPL_Q, buffptr);
 			}
-			FreeSemaphore(&Semaphore);
 		}
 
 #endif

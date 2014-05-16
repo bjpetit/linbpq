@@ -548,7 +548,10 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	p_cmd = strtok_s(NULL, ", \t\n\r", &Context);
 	if (p_cmd == NULL) goto BadLine;
 
-	WL2KReport->Host = _strdup(p_cmd);
+	if (_stricmp(p_cmd, "winlink.org") == 0)
+		WL2KReport->Host = _strdup("statusreport.winlink.org");
+	else
+		WL2KReport->Host = _strdup(p_cmd);
 
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);			
 	if (p_cmd == NULL) goto BadLine;
@@ -945,7 +948,7 @@ BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * _REPLYBUFFER)
 	char SendBuffer[1000];
 		
 	destaddr.sin_family = AF_INET; 
-	destaddr.sin_addr.s_addr = inet_addr("www.winlink.org");
+	destaddr.sin_addr.s_addr = inet_addr("statusreport.winlink.org");
 	destaddr.sin_port = htons(8775);
 
 	if (destaddr.sin_addr.s_addr == INADDR_NONE)
@@ -1022,7 +1025,7 @@ BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)
 	char SendBuffer[1000];
 		
 	destaddr.sin_family = AF_INET; 
-	destaddr.sin_addr.s_addr = inet_addr("www.winlink.org");
+	destaddr.sin_addr.s_addr = inet_addr("statusreport.winlink.org");
 	destaddr.sin_port = htons(8775);
 
 	if (destaddr.sin_addr.s_addr == INADDR_NONE)
