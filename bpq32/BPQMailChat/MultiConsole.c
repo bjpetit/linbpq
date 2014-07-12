@@ -20,6 +20,17 @@ struct ConsoleInfo * InitHeader;
 
 extern struct SEM ChatSemaphore;
 
+BOOL Bells;
+BOOL FlashOnBell;		// Flash instead of Beep
+BOOL StripLF;
+
+BOOL WarnWrap;
+BOOL FlashOnConnect;
+BOOL WrapInput;
+BOOL CloseWindowOnBye;
+
+RECT ConsoleRect;
+	
 
 //CIRCUIT * Console;
 HWND hConsole;
@@ -78,18 +89,12 @@ BOOL CreateConsole(int Stream)
 	WNDCLASS  wc = {0};
 	HBRUSH bgBrush;
 	HMENU hMenu;
-	HKEY hKey=0;
-	int retCode,Type,Vallen;
-	char Size[80] = "";
 	char RTFColours[3000];
 	struct ConsoleInfo * Cinfo;
 	int i, n;
 	
-	if (Stream == -1) 
-		Cinfo = &BBSConsole;
-	else
-		Cinfo = &ChatConsole;
-
+	Cinfo = &BBSConsole;
+	
 	InitHeader = Cinfo;
 
 	if (Cinfo->hConsole)
@@ -101,64 +106,7 @@ BOOL CreateConsole(int Stream)
 
 	memset(Cinfo, 0, sizeof(struct ConsoleInfo));
 
-	if (BBSConsole.next == NULL) BBSConsole.next = &ChatConsole;
-
 	Cinfo->BPQStream = Stream;
-
-	// Get Config From Registry
-
-	if (Stream == -1)
-		retCode = RegOpenKeyEx (REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
-	else
-	{
-		retCode = RegOpenKeyEx (REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole", 0, KEY_ALL_ACCESS, &hKey);
-
-		if (retCode != ERROR_SUCCESS)
-			retCode = RegOpenKeyEx (REGTREE,
-				"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
-
-	}
-	if (retCode == ERROR_SUCCESS)
-	{
-		Vallen=80;
-		RegQueryValueEx(hKey,"ConsoleSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"Bells",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->Bells,(ULONG *)&Vallen);
-	
-		Vallen=4;
-		RegQueryValueEx(hKey,"FlashOnBell",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->FlashOnBell,(ULONG *)&Vallen);
-	
-		Vallen=4;
-		RegQueryValueEx(hKey,"StripLF",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->StripLF,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"CloseWindowOnBye",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->CloseWindowOnBye,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"WarnWrap",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->WarnWrap,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"WrapInput",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->WrapInput,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"FlashOnConnect",0,			
-			(ULONG *)&Type,(UCHAR *)&Cinfo->FlashOnConnect,(ULONG *)&Vallen);
-		
-		RegCloseKey(hKey);
-
-		sscanf(Size,"%d,%d,%d,%d", &Cinfo->ConsoleRect.left, &Cinfo->ConsoleRect.right,
-			&Cinfo->ConsoleRect.top, &Cinfo->ConsoleRect.bottom);
-	}
 
 	bgBrush = CreateSolidBrush(BGCOLOUR);
 
@@ -181,6 +129,16 @@ BOOL CreateConsole(int Stream)
 	
 	if (!hConsole)
         return (FALSE);
+		
+	Cinfo->Bells = Bells;		
+	Cinfo->FlashOnBell = FlashOnBell;
+	Cinfo->StripLF = StripLF;
+	Cinfo->CloseWindowOnBye = CloseWindowOnBye;
+	Cinfo->WarnWrap = WarnWrap;
+	Cinfo->WrapInput= WrapInput;
+	Cinfo->FlashOnConnect = FlashOnConnect;
+	
+	Cinfo->ConsoleRect = ConsoleRect;
 
 	Cinfo->readbuff = zalloc(1000);
 	Cinfo->readbufflen = 1000;
@@ -350,34 +308,12 @@ VOID CloseConsole(int Stream)
 
 VOID CloseConsoleSupport(struct ConsoleInfo * Cinfo)
 {
-	HKEY hKey=0;
-	int retCode, disp;
-
+	GetWindowRect(Cinfo->hConsole,	&ConsoleRect);	
+	
 	if (Cinfo->CloseWindowOnBye)
 	{
 //		PostMessage(hConsole, WM_DESTROY, 0, 0);
 		DestroyWindow(Cinfo->hConsole);
-	}
-
-	if (Cinfo->BPQStream == -1)
-		retCode = RegCreateKeyEx(REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
-	else
-		retCode = RegCreateKeyEx(REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey,  &disp);
-
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Cinfo->Bells,4);
-		retCode = RegSetValueEx(hKey,"FlashOnBell",0,REG_DWORD,(BYTE *)&Cinfo->FlashOnBell,4);
-		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&Cinfo->StripLF,4);
-		retCode = RegSetValueEx(hKey,"WarnWrap",0,REG_DWORD,(BYTE *)&Cinfo->WarnWrap,4);
-		retCode = RegSetValueEx(hKey,"WrapInput",0,REG_DWORD,(BYTE *)&Cinfo->WrapInput,4);
-		retCode = RegSetValueEx(hKey,"FlashOnConnect",0,REG_DWORD,(BYTE *)&Cinfo->FlashOnConnect,4);
-		retCode = RegSetValueEx(hKey,"CloseWindowOnBye",0,REG_DWORD,(BYTE *)&Cinfo->CloseWindowOnBye,4);
-
-		RegCloseKey(hKey);
 	}
 }
 
@@ -596,37 +532,44 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		case BPQBELLS:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->Bells, BPQBELLS);
+			Bells = Cinfo->Bells;
 			break;
 
 		case BPQFLASHONBELL:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->FlashOnBell, BPQFLASHONBELL);
+			FlashOnBell = Cinfo->FlashOnBell;
 			break;
 
 		case BPQStripLF:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->StripLF, BPQStripLF);
+			StripLF = Cinfo->StripLF;
 			break;
 
 		case IDM_WARNINPUT:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->WarnWrap, IDM_WARNINPUT);
+			WarnWrap = Cinfo->WarnWrap;
 			break;
 
 
 		case IDM_WRAPTEXT:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->WrapInput, IDM_WRAPTEXT);
+			Cinfo->WrapInput = WrapInput;
 			break;
 
 		case IDM_Flash:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->FlashOnConnect, IDM_Flash);
+			FlashOnConnect = Cinfo->FlashOnConnect;
 			break;
 
 		case IDM_CLOSEWINDOW:
 
 			ToggleParam(Cinfo->hMenu, hWnd, &Cinfo->CloseWindowOnBye, IDM_CLOSEWINDOW);
+			CloseWindowOnBye = Cinfo->CloseWindowOnBye;
 			break;
 
 		case BPQCLEAROUT:
@@ -705,15 +648,13 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		
 		// Remove the subclass from the edit control. 
 
-			GetWindowRect(hWnd,	&Cinfo->ConsoleRect);	// For save soutine
-
+			GetWindowRect(hWnd,	&ConsoleRect);	// For save soutine
+	
             SetWindowLong(Cinfo->hwndInput, GWL_WNDPROC, 
                 (LONG) Cinfo->wpOrigInputProc); 
          
-
 			if (cfgMinToTray) 
 				DeleteTrayMenuItem(hWnd);
-
 
 			if (Cinfo->Console && Cinfo->Console->Active)
 			{

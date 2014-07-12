@@ -617,11 +617,15 @@
 //	Fix RigContol with no frequencies for Kenwood and Yaesu
 //	Add busy check to FLDIGI connects
 
-//  Version 6.0.8.1
+//  Version 6.0.8.1 July 2014
 
-//	Fix APRS semaphoring issues - GPS and Messaging
+//	Use HKEY_CURRENT_USER on all OS versions
 //	Fix crash when APRS symbol is a space.
 //	Fixes for FT847 CAT
+//	Fix display of 3rd byte of FRMR
+//	Add "DEFAULT ROBUST" and "FORCE ROBUST" commands to SCSPactor Driver
+//	Fix possible memory corruption in WINMOR driver
+
 
 #define CKernel
 

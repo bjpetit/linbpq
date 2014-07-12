@@ -2,7 +2,7 @@
 //
 //
 
-// Version 1.0.0.17
+// Version 1.0.0.17re
 
 //	Split Messasge, User and BBS Editing from Main Config.
 //	Add word wrap to Console input and output
@@ -835,7 +835,9 @@
 //	Add option to read messages during a list
 //	Fix crash during message renumber on MAC
 //	Timeout response to SID to try to avoid hang on an incomplete connection.
-
+//	Save config in file instead of registry
+//	Fix Manage Messages "EXPORT" option and check filename on EXPORT command
+//	Fix reverse forward prompt in MBL mode.
 
 #include "BPQMailChat.h"
 #define MAILCHAT
@@ -985,8 +987,6 @@ extern char BIDDatabaseName[MAX_PATH];
 extern char WPDatabasePath[MAX_PATH];
 extern char WPDatabaseName[MAX_PATH];
 
-extern char ConfigName[250];
-
 extern char BadWordsPath[MAX_PATH];
 extern char BadWordsName[MAX_PATH];
 
@@ -995,15 +995,14 @@ extern char NTSAliasesName[MAX_PATH];
 
 char BaseDir[MAX_PATH];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%
-char ProperBaseDir[MAX_PATH];		// BPQ Directory/BPQMailChat
 
 char MailDir[MAX_PATH];
-
-char Configfile[MAX_PATH];
 
 char RlineVer[50];
 
 extern BOOL KISSOnly;
+
+extern struct ALIAS ** NTSAliases;
 
 extern int EnableUI;
 extern int RefuseBulls;
@@ -1152,8 +1151,6 @@ VOID CheckProgramErrors()
 				DeleteTrayMenuItem(ConsHeader[1]->hConsole);
 			if (hMonitor)
 				DeleteTrayMenuItem(hMonitor);
-			if (hDebug)
-				DeleteTrayMenuItem(hDebug);
 		}
 
 		SInfo.cb=sizeof(SInfo);
@@ -1325,8 +1322,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	}
 
 
-	SaveConfig(Configfile);
-
 	hWnd = CreateWindow("STATIC", "Mail Closing - Please Wait", 0,
 				150, 200, 350, 40, NULL, NULL, hInstance, NULL);
 
@@ -1342,8 +1337,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		DestroyWindow(ConsHeader[1]->hConsole);
 	if (hMonitor)
 		DestroyWindow(hMonitor);
-	if (hDebug)
-		DestroyWindow(hDebug);
+
+	SaveConfig(ConfigName);
 
 	SaveUserDatabase();
 	SaveMessageDatabase();
@@ -1358,8 +1353,6 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			DeleteTrayMenuItem(ConsHeader[1]->hConsole);
 		if (hMonitor)
 			DeleteTrayMenuItem(hMonitor);
-		if (hDebug)
-			DeleteTrayMenuItem(hDebug);
 	}
 
 	// Free all allocated memory
@@ -1373,6 +1366,8 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 			FreeForwardingStruct(user);
 			free(user->ForwardingInfo); 
 		}
+
+		free(user->Temp);
 
 		free(user);
 	}
@@ -1424,6 +1419,20 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 		FreeList(AliasText);
 	}
 
+	n = 0;
+	
+	if (NTSAliases)
+	{
+		while(NTSAliases[n])
+		{
+			free(NTSAliases[n]->Dest);
+			free(NTSAliases[n]);
+			n++;
+		}
+
+		free(NTSAliases);
+	}
+
 	FreeOverrides();
 
 	Free_UI();
@@ -1437,12 +1446,14 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	free(NewWelcomeMsg);
 	free(ExpertWelcomeMsg);
 
+	free(Prompt);
+	free(NewPrompt);
+	free(ExpertPrompt);
+
 	_CrtDumpMemoryLeaks();
 
 	}
 	My__except_Routine("Close Processing");
-
-	SaveWindowConfig();
 
 	CloseBPQ32();				// Close Ext Drivers if last bpq32 process
 
@@ -1515,8 +1526,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	WSADATA WsaData;
 	HMENU hTopMenu;		// handle of menu 
 	HKEY hKey=0;
-	int retCode,Type,Vallen;
-	char Size[80];
+	int retCode;
 	RECT InitRect;
 	RECT SessRect;
 	struct _EXCEPTION_POINTERS exinfo;
@@ -1537,6 +1547,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	REGTREE = GetRegistryKey();
 	REGTREETEXT = GetRegistryKeyText();
+
+	Sleep(1000);
 
 	{
 		int n;
@@ -1568,24 +1580,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		}
 	}
 
-	// Get Window Size  From Registry
-
-	retCode = RegOpenKeyEx (REGTREE,
-                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
-                              0,
-                              KEY_QUERY_VALUE,
-                              &hKey);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		Vallen=80;
-		RegQueryValueEx(hKey,"WindowSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
-		RegCloseKey(hKey);
-	}
-
 	hInst = hInstance;
 
 	hWnd=CreateDialog(hInst,szWindowClass,0,NULL);
@@ -1595,14 +1589,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
-	MainWnd=hWnd;
-
-	if (MainRect.right < 100 || MainRect.bottom < 100)
-	{
-		GetWindowRect(hWnd,	&MainRect);
-	}
-
-	MoveWindow(hWnd,MainRect.left,MainRect.top, MainRect.right-MainRect.left, MainRect.bottom-MainRect.top, TRUE);
+	MainWnd = hWnd;
 
 	GetVersionInfo(NULL);
 
@@ -1752,10 +1739,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case VK_F4:
 			CreateMonitor();
-			return 0;
-
-		case VK_F5:
-			CreateDebugWindow();
 			return 0;
 
 		case VK_TAB:
@@ -1943,11 +1926,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			CreateMonitor();
 			break;
 
-		case BPQSAVEREG:
-
-			CreateRegBackup();
-			break;
-
 		case RESCANMSGS:
 
 			ReRouteMessages();
@@ -1956,10 +1934,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case IDM_IMPORT:
 
 			ImportMessages(NULL, "");
-			break;
-
-		case IDM_DEBUG:
-			CreateDebugWindow();
 			break;
 
 		case IDM_ABOUT:
@@ -2048,8 +2022,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			GetWindowRect(ConsHeader[1]->hConsole, &ConsHeader[1]->ConsoleRect);	// For save soutine
 		if (hMonitor)
 			GetWindowRect(hMonitor,	&MonitorRect);	// For save soutine
-		if (hDebug)
-			GetWindowRect(hDebug,	&DebugRect);	// For save soutine
 
 		KillTimer(hWnd,1);
 		KillTimer(hWnd,2);
@@ -2389,113 +2361,6 @@ SOCKET sock;
 
 UCHAR BPQDirectory[260];
 
-VOID SetProperBaseDir(char * ProperBaseDir)
-{	
-	HKEY hKey=0;
-	int retCode,disp;
-				
-	strcpy(BaseDir, ProperBaseDir);
-	strcpy(BaseDirRaw, ProperBaseDir);
-
-	retCode = RegCreateKeyEx(REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-	
-	if (retCode == ERROR_SUCCESS)
-	{		
-		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDirRaw, strlen(BaseDirRaw));
-		RegCloseKey(hKey);
-	}
-}
-
-BOOL MyMoveFile(char * FN)
-{
-	char From[MAX_PATH];
-	char To[MAX_PATH];
-
-	DWORD dwError = 0;
-
-	sprintf(From, "%s/%s", BaseDir, FN);
-	sprintf(To, "%s/%s", ProperBaseDir, FN);
-
-	dwError = CopyFile(From, To, 0);
-	if (dwError == 0)
-		return (GetLastError());
-	else
-		return 0;
-}
-
-
-
-// Copy all files needed to run the BBS. Backups are not copied. Used when BaseDir is not BPQMailChat
-
-BOOL CopyBBSFiles()
-{
-	WIN32_FIND_DATA ffd;
-	char szDir[MAX_PATH];
-	char From[MAX_PATH];
-	char To[MAX_PATH];
-
-	HANDLE hFind = INVALID_HANDLE_VALUE;
-	DWORD dwError=0;
-
-	// Copy all mail messages from BaseDir/Mail to ProperBaseDir/Mail
-
-	CreateDirectory(ProperBaseDir, NULL);		// Just in case
-
-	strcpy(szDir, ProperBaseDir);
-	strcat(szDir, "\\");
-	strcat(szDir, "Mail");
-
-	CreateDirectory(szDir, NULL);
-
-	strcpy(szDir, BaseDir);
-	strcat(szDir, "\\Mail\\m_*.mes");
-
-	// Find the first file in the directory.
-
-	hFind = FindFirstFile(szDir, &ffd);
-
-	if (INVALID_HANDLE_VALUE == hFind) 
-	{
-		dwError = GetLastError();
-		if (dwError == 2)				// No Files
-			goto CopyFiles;
-
-		return (dwError);
-	}
-	do
-	{
-		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-			OutputDebugString(ffd.cFileName);
-		else
-		{
-			sprintf(From, "%s/Mail/%s", BaseDir, ffd.cFileName);
-			sprintf(To, "%s/Mail/%s", ProperBaseDir, ffd.cFileName);
-
-			dwError = CopyFile(From, To, 0);
-			if (dwError == 0)
-				return (GetLastError());
-		}
-	}
-	while (FindNextFile(hFind, &ffd) != 0);
-
-
-
-	FindClose(hFind);
-CopyFiles:
-	MyMoveFile("Info.txt");
-	MyMoveFile("Help.txt");
-	MyMoveFile("BPQBBSUsers.dat");
-	MyMoveFile("DIRMES.SYS");
-	MyMoveFile("WFBID.SYS");
-	MyMoveFile("WP.SYS");
-	MyMoveFile("BADWORDS.SYS");
-	MyMoveFile("RTKnown.txt");
-	MyMoveFile("ChatUsers.txt");
-
-	return 0;
-}
-
 BOOL Initialise()
 {
 	int i, len;
@@ -2505,8 +2370,8 @@ BOOL Initialise()
 	char * ptr1;
 	int Attrs, ret;
 	char msg[500];
-	char ProgramDir[MAX_PATH];
 	TIME_ZONE_INFORMATION TimeZoneInformation;
+	struct stat STAT;
 
 	GetTimeZoneInformation(&TimeZoneInformation);
 
@@ -2518,35 +2383,12 @@ BOOL Initialise()
 
 	BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
-	if (!GetConfigFromRegistry())
-		return FALSE;
-
 	// See if we need to warn of possible problem with BaseDir moved by installer
 
 	strcpy(BPQDirectory, GetBPQDirectory());
 
-	sprintf(ProperBaseDir, "%s/BPQMailChat", BPQDirectory);
+	sprintf(BaseDir, "%s/BPQMailChat", BPQDirectory);
 	
-	len = strlen(ProperBaseDir);
-	ptr1 = ProperBaseDir;
-
-	while (*ptr1)
-	{
-		if (*(ptr1) == '/') *(ptr1) = '\\';
-		ptr1++;
-	}
-
-	sprintf(ProgramDir, "%s/BPQMailChat", GetProgramDirectory());
-	
-	len = strlen(ProgramDir);
-	ptr1 = ProgramDir;
-
-	while (*ptr1)
-	{
-		if (*(ptr1) == '/') *(ptr1) = '\\';
-		ptr1++;
-	}
-
 	len = strlen(BaseDir);
 	ptr1 = BaseDir;
 
@@ -2556,63 +2398,28 @@ BOOL Initialise()
 		ptr1++;
 	}
 
-	// If  BPQ Directory is not the same as BPQ Program Directory, and BaseDir is not the same as 
-	// either, warn user and exit.
-
-	if (_stricmp(ProgramDir, ProperBaseDir))			// Different?
-	{
-		if (_stricmp(BaseDir, ProperBaseDir) && _stricmp(BaseDir, ProgramDir))			// Different?
-		{
-			sprintf_s(msg, sizeof(msg), "BPQMail files may not be in the correct location\r\nPlease check that they are at %s, and move them if they are not\r\n\r\nPress OK when files are in the correct location, or Cancel to exit", ProperBaseDir);
-			ret = MessageBox(NULL, msg, "BPQMail", MB_OKCANCEL);
-
-			if (ret == IDCANCEL)
-				return FALSE;
-
-			// User says they are ok - set BaseDir to ProperBaseDir
-			
-			SetProperBaseDir(ProperBaseDir);
-		}
-
-		// If BaseDir is same as ProgramDir (but not ProperBaseDir), It is likely the installer has just moved it
-
-		if (_stricmp(BaseDir, ProgramDir) == 0)			// Different?
-		{
-			SetProperBaseDir(ProperBaseDir);
-		}
-	}
-
 	// Make Sure BASEDIR Exists
 
 	Attrs = GetFileAttributes(BaseDir);
 
 	if (Attrs == -1)
 	{
-		Attrs = GetFileAttributes(ProperBaseDir);		// May have been moved by install
+		sprintf_s(msg, sizeof(msg), "Base Directory %s not found - should it be created?", BaseDir);
+		ret = MessageBox(NULL, msg, "BPQMail", MB_YESNO);
 
-		if (Attrs != -1)
-		{			
-			SetProperBaseDir(ProperBaseDir);
+		if (ret == IDYES)
+		{
+			ret = CreateDirectory(BaseDir, NULL);
+			if (ret == 0)
+			{
+				MessageBox(NULL, "Failed to created Base Directory - exiting", "BPQMail", MB_ICONSTOP);
+				return FALSE;
+			}
 		}
 		else
 		{
-			sprintf_s(msg, sizeof(msg), "Base Directory %s not found - should it be created?", BaseDir);
-			ret = MessageBox(NULL, msg, "BPQMail", MB_YESNO);
-
-			if (ret == IDYES)
-			{
-				ret = CreateDirectory(BaseDir, NULL);
-				if (ret == 0)
-				{
-					MessageBox(NULL, "Failed to created Base Directory - exiting", "BPQMail", MB_ICONSTOP);
-					return FALSE;
-				}
-			}
-			else
-			{
-				MessageBox(NULL, "Can't Continue without a Base Directory - exiting", "BPQMailChat", MB_ICONSTOP);
-				return FALSE;
-			}
+			MessageBox(NULL, "Can't Continue without a Base Directory - exiting", "BPQMailChat", MB_ICONSTOP);
+			return FALSE;
 		}
 	}
 	else
@@ -2623,45 +2430,6 @@ BOOL Initialise()
 			ret = MessageBox(NULL, msg, "BPQMail", MB_ICONSTOP);
 
 			return FALSE;
-		}
-	}
-
-	// If BaseDir is not the same as BPQ Directory/BPQMailChat move the files.
-
-	if (_stricmp(BaseDir, ProperBaseDir))				// Different?
-	{
-		sprintf_s(msg, sizeof(msg), "Base Directory %s will be changed to %s\r\n\r\nCurrent Mail files (but not backups) will be copied to the new BaseDir\rOriginal files will be left in case you need to revert. These may be deleted when you are happy with the system\r\rClick OK to continue or Cancel to abort", BaseDir, ProperBaseDir);
-		ret = MessageBox(NULL, msg, "BPQMail", MB_OKCANCEL);
-
-		if (ret == IDOK)
-		{
-			int ExitCode;
-
-			ExitCode = CopyBBSFiles();
-
-			if (ExitCode == 0)
-			{
-				HKEY hKey=0;
-				int retCode,disp;
-				
-				strcpy(BaseDir, ProperBaseDir);
-				strcpy(BaseDirRaw, ProperBaseDir);
-
-				retCode = RegCreateKeyEx(REGTREE,
-					"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-	
-				if (retCode == ERROR_SUCCESS)
-				{		
-					retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDirRaw, strlen(BaseDirRaw));
-					RegCloseKey(hKey);
-				}
-			}
-			else
-			{
-				sprintf_s(msg, sizeof(msg), "Copy Failed - Error %d", ExitCode);
-				MessageBox(NULL, msg, "BPQMail", MB_OKCANCEL);
-				return FALSE;
-			}
 		}
 	}
 
@@ -2697,9 +2465,60 @@ BOOL Initialise()
 
 	CreateDirectory(MailDir, NULL);		// Just in case
 
-	strcpy(Configfile, BaseDir);
-	strcat(Configfile, "\\");
-	strcat(Configfile, "linmail.cfg");
+	strcpy(ConfigName, BaseDir);
+	strcat(ConfigName, "\\");
+	strcat(ConfigName, "BPQMail.cfg");
+
+	UsingingRegConfig = FALSE;
+
+	//	if config file exists use it else try to get from Registry
+
+	if (stat(ConfigName, &STAT) == -1)
+	{
+		UsingingRegConfig = TRUE;
+	
+		if (GetConfigFromRegistry())
+		{
+			SaveConfig(ConfigName);
+		}
+		else
+		{
+			int retCode;
+
+			strcpy(BBSName, GetNodeCall());
+			strlop(BBSName, '-');
+			strlop(BBSName, ' ');
+
+			sprintf(msg, "No configuration found - Dummy Config created");
+
+			retCode = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
+
+			if (retCode == IDCANCEL)
+				return FALSE;
+
+			SaveConfig(ConfigName);
+		}
+	}
+	else
+	{
+		// Got a Config Fi;e
+
+		CopyConfigFile(ConfigName);
+	}
+
+	if (GetConfig(ConfigName) == EXIT_FAILURE)
+	{
+		printf("BBS Config File seems corrupt - check before continuing\n");
+		return FALSE;
+	}
+
+	
+	if (MainRect.right < 100 || MainRect.bottom < 100)
+	{
+		GetWindowRect(MainWnd,	&MainRect);
+	}
+
+	MoveWindow(MainWnd, MainRect.left, MainRect.top, MainRect.right-MainRect.left, MainRect.bottom-MainRect.top, TRUE);
 
 
 	BBSApplMask = 1<<(BBSApplNum-1);
@@ -2725,6 +2544,8 @@ BOOL Initialise()
 	GetBIDDatabase();
 	GetBadWordFile();
 
+	UsingingRegConfig = FALSE;
+
 	// Make sure there is a user record for the BBS, with BBS bit set.
 
 	user = LookupCall(BBSName);
@@ -2734,11 +2555,12 @@ BOOL Initialise()
 		user = AllocateUserRecord(BBSName);
 		user->Temp = zalloc(sizeof (struct TempUserInfo));
 	}
+
 	if ((user->flags & F_BBS) == 0)
 	{
 		// Not Defined as a BBS
 
-		if(SetupNewBBS(user))
+		if (SetupNewBBS(user))
 			user->flags |= F_BBS;
 	}
 

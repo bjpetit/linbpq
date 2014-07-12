@@ -79,11 +79,11 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 // Dialog
 //
 
-BPQMAILCHAT DIALOG DISCARDABLE  120, 50, 294, 165
+BPQMAIL DIALOG DISCARDABLE  120, 50, 294, 165
 STYLE DS_3DLOOK | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | 
     WS_THICKFRAME
 CAPTION "G8BPQ Mail and Chat Server 1.0.0.10 Beta July 2009"
-CLASS "BPQMailChat"
+CLASS "BPQMail"
 FONT 8, "FixedSys"
 BEGIN
     LTEXT           " User      Callsign Stream Conf      Queue",101,3,4,184,
@@ -744,15 +744,12 @@ STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
     LTEXT           "Normal User Welcome Message",IDC_STATIC,5,7,130,8
-    EDITTEXT        IDM_USERMSG,5,20,340,35,ES_MULTILINE | ES_AUTOVSCROLL | 
+    EDITTEXT        IDM_USERMSG,5,20,340,50,ES_MULTILINE | ES_AUTOVSCROLL | 
                     ES_AUTOHSCROLL | ES_WANTRETURN
-    LTEXT           "Chat Welcome Message",IDC_STATIC,5,56,130,8
-    EDITTEXT        IDM_CHATUSERMSG,5,68,340,36,ES_MULTILINE | 
-                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
-    LTEXT           "New User Welcome Message",IDC_STATIC,5,109,130,8
-    EDITTEXT        IDM_NEWUSERMSG,5,122,340,34,ES_MULTILINE | 
-                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
-    LTEXT           "Expert User Welcome Message",IDC_STATIC,5,161,130,8
+    LTEXT           "New User Welcome Message",IDC_STATIC,5,75,130,8
+    EDITTEXT        IDM_NEWUSERMSG,5,89,340,65,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "Expert User Welcome Message",IDC_STATIC,5,159,130,8
     EDITTEXT        IDM_EXPERTUSERMSG,5,172,340,12,ES_MULTILINE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
     DEFPUSHBUTTON   "Save",IDM_MSGSAVE,166,250,50,14,BS_CENTER | BS_VCENTER
@@ -1077,11 +1074,6 @@ END
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO DISCARDABLE 
 BEGIN
-    "BPQMAILCHAT", DIALOG
-    BEGIN
-        BOTTOMMARGIN, 155
-    END
-
     "BBS_CONFIG", DIALOG
     BEGIN
         BOTTOMMARGIN, 266
@@ -1197,8 +1189,6 @@ BEGIN
         MENUITEM "Housekeeping",                IDM_HOUSEKEEPING
         MENUITEM "Send Message",                ID_ACTIONS_SENDMESSAGE
         MENUITEM "Send Msg from Clipboard",     ID_ACTIONS_SENDMSGFROMCLIPBOARD
-
-        MENUITEM "Save Registry Configuration", BPQSAVEREG
         MENUITEM "Rerun Message Routing",       RESCANMSGS
         MENUITEM "Import Messages",             IDM_IMPORT
     END
@@ -1214,7 +1204,6 @@ BEGIN
     BEGIN
         MENUITEM "BBS Console (F2)",            IDM_CONSOLE
         MENUITEM "Monitor (F4)",                IDM_MONITOR
-        MENUITEM "Debug Chat (F5)",             IDM_DEBUG
     END
     POPUP "&Help"
     BEGIN
@@ -1232,14 +1221,12 @@ BEGIN
         MENUITEM "Strip Linefeeds",             BPQStripLF
         MENUITEM "Wrap Input  ",                IDM_WRAPTEXT
         MENUITEM "Beep if Input too long",      IDM_WARNINPUT
-        MENUITEM "Flash on Chat User Connect",  IDM_Flash
         MENUITEM "Close Window on exit",        IDM_CLOSEWINDOW
     END
     POPUP "Edit"
     BEGIN
         MENUITEM "Copy Output Window",          BPQCOPYOUT
         MENUITEM "Clear Output Window",         BPQCLEAROUT
-        MENUITEM "Edit Chat Console Colours",   IDM_EDITCHATCOLOURS
     END
 END
 
@@ -1248,7 +1235,6 @@ BEGIN
     POPUP "Monitor"
     BEGIN
         MENUITEM "Monitor BBS",                 MONBBS
-        MENUITEM "Monitor CHAT",                MONCHAT
         MENUITEM "Monitor TCP",                 MONTCP
     END
     POPUP "Edit"
@@ -1329,8 +1315,8 @@ END
 
 STRINGTABLE DISCARDABLE 
 BEGIN
-    IDS_APP_TITLE           "BPQMailChat"
-    IDC_BPQMailChat         "BPQMailChat"
+    IDS_APP_TITLE           "BPQMail"
+    IDC_BPQMailChat         "BPQMail"
 END
 
 #endif    // English (U.K.) resources

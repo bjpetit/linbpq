@@ -888,12 +888,12 @@ int Do_User_Sel_Changed(HWND hDlg)
 			int MsgsRejectedOut;
 			int BytesForwardedIn;
 			int BytesForwardedOut;
-			char MsgsIn[80];
-			char MsgsOut[80];
-			char BytesIn[80];
-			char BytesOut[80];
-			char RejIn[80];
-			char RejOut[80];
+//			char MsgsIn[80];
+//			char MsgsOut[80];
+//			char BytesIn[80];
+//			char BytesOut[80];
+//			char RejIn[80];
+//			char RejOut[80];
 
 			i = 0;
 
@@ -1238,13 +1238,11 @@ int compare(const void *arg1, const void *arg2);
 
 int Do_Msg_Sel_Changed(HWND hDlg)
 {
-	
 	// Update Msg display with newly selected Msg
 
 	struct MsgInfo * Msg;
 	char MsgnoText[10];
-	int Msgno, BBSNo;
-	struct UserInfo * user;
+	int Msgno;
 	int Sel = SendDlgItemMessage(hDlg, 0, LB_GETCURSEL, 0, 0);
 	char Size[10];
 
@@ -1254,7 +1252,6 @@ int Do_Msg_Sel_Changed(HWND hDlg)
 		Msgno = atoi(MsgnoText);
 	}
 	
-
 	for (CurrentMsgIndex = 1; CurrentMsgIndex <= NumberofMessages; CurrentMsgIndex++)
 	{
 		Msg = MsgHddrPtr[CurrentMsgIndex];
@@ -1460,10 +1457,6 @@ VOID SaveBBSConfig()
 	BOOL OK1,OK2,OK3,OK4;
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
 	HKEY hKey=0;
-	int retCode,disp;
-
-	retCode = RegCreateKeyEx(REGTREE,
-		"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 	
 	GetDlgItemText(hwndDisplay, IDC_BBSCall, BBSName, 50);
 	GetDlgItemText(hwndDisplay, IDC_SYSOPCALL, SYSOPCall, 50);
@@ -1490,33 +1483,7 @@ VOID SaveBBSConfig()
 	strlop(BBSName, '-');
 	strlop(SYSOPCall, '-');
 
-	if (retCode == ERROR_SUCCESS)
-	{		
-		retCode = RegSetValueEx(hKey, "Streams", 0, REG_DWORD,(BYTE *)&MaxStreams, 4);
-		retCode = RegSetValueEx(hKey, "BBSApplNum", 0, REG_DWORD,(BYTE *)&BBSApplNum, 4);
-		retCode = RegSetValueEx(hKey, "BBSName", 0, REG_SZ,(BYTE *)&BBSName, strlen(BBSName));
-		retCode = RegSetValueEx(hKey, "SYSOPCall", 0, REG_SZ,(BYTE *)&SYSOPCall, strlen(SYSOPCall));
-		retCode = RegSetValueEx(hKey, "H-Route", 0, REG_SZ,(BYTE *)&HRoute, strlen(HRoute));
-		retCode = RegSetValueEx(hKey, "BaseDir", 0, REG_SZ,(BYTE *)&BaseDirRaw, strlen(BaseDirRaw));
-		retCode = RegSetValueEx(hKey, "EnableUI",0, REG_DWORD,(BYTE *)&EnableUI,4);
-		retCode = RegSetValueEx(hKey, "RefuseBulls",0, REG_DWORD,(BYTE *)&RefuseBulls,4);
-		retCode = RegSetValueEx(hKey, "SendSYStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendSYStoSYSOPCall,4);
-		retCode = RegSetValueEx(hKey, "SendBBStoSYSOPCall",0, REG_DWORD,(BYTE *)&SendBBStoSYSOPCall,4);
-		retCode = RegSetValueEx(hKey, "DontHoldNewUsers",0, REG_DWORD,(BYTE *)&DontHoldNewUsers,4);
-		retCode = RegSetValueEx(hKey, "ForwardToMe",0, REG_DWORD,(BYTE *)&ForwardToMe,4);
-		retCode = RegSetValueEx(hKey, "AllowAnon",0, REG_DWORD,(BYTE *)&AllowAnon,4);
-		retCode = RegSetValueEx(hKey, "DontNeedHomeBBS",0, REG_DWORD,(BYTE *)&DontNeedHomeBBS,4);
-
-		retCode = RegSetValueEx(hKey, "SMTPPort",0,REG_DWORD,(BYTE *)&SMTPInPort,4);
-		retCode = RegSetValueEx(hKey, "POP3Port",0,REG_DWORD,(BYTE *)&POP3InPort,4);
-		retCode = RegSetValueEx(hKey, "NNTPPort",0,REG_DWORD,(BYTE *)&NNTPInPort,4);
-		retCode = RegSetValueEx(hKey, "RemoteEmail",0,REG_DWORD,(BYTE *)&RemoteEmail,4);
-		retCode = RegSetValueEx(hKey, "MailForInterval", 0, REG_DWORD,(BYTE *)&MailForInterval, 4);
-		retCode = RegSetValueEx(hKey, "MailForText", 0, REG_SZ,(BYTE *)&MailForText, strlen(MailForText));
-
-		RegCloseKey(hKey);
-
-	}
+	SaveConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Warning - Program must be restarted for changes to be effective");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -1528,144 +1495,45 @@ VOID SaveISPConfig()
 {
 	BOOL OK1,OK2,OK3;
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
-	HKEY hKey=0;
-	int retCode,disp;
-
-	retCode = RegCreateKeyEx(REGTREE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
 		
-		ISP_Gateway_Enabled = IsDlgButtonChecked(hwndDisplay, IDC_ISP_Gateway_Enabled);
+	ISP_Gateway_Enabled = IsDlgButtonChecked(hwndDisplay, IDC_ISP_Gateway_Enabled);
 
-		SMTPAuthNeeded = IsDlgButtonChecked(hwndDisplay, ISP_SMTP_AUTH);
+	SMTPAuthNeeded = IsDlgButtonChecked(hwndDisplay, ISP_SMTP_AUTH);
 
-		ISPPOP3Interval = GetDlgItemInt(hwndDisplay, IDC_POP3Timer, &OK1, FALSE);
+	ISPPOP3Interval = GetDlgItemInt(hwndDisplay, IDC_POP3Timer, &OK1, FALSE);
 
-		GetDlgItemText(hwndDisplay, IDC_MyMailDomain, MyDomain, 50);
+	GetDlgItemText(hwndDisplay, IDC_MyMailDomain, MyDomain, 50);
 
-		GetDlgItemText(hwndDisplay, IDC_ISPSMTPName, ISPSMTPName, 50);
-		ISPSMTPPort = GetDlgItemInt(hwndDisplay, IDC_ISPSMTPPort, &OK2, FALSE);
+	GetDlgItemText(hwndDisplay, IDC_ISPSMTPName, ISPSMTPName, 50);
+	ISPSMTPPort = GetDlgItemInt(hwndDisplay, IDC_ISPSMTPPort, &OK2, FALSE);
 
-		GetDlgItemText(hwndDisplay, IDC_ISPPOP3Name, ISPPOP3Name, 50);
-		ISPPOP3Port = GetDlgItemInt(hwndDisplay, IDC_ISPPOP3Port, &OK3, FALSE);
+	GetDlgItemText(hwndDisplay, IDC_ISPPOP3Name, ISPPOP3Name, 50);
+	ISPPOP3Port = GetDlgItemInt(hwndDisplay, IDC_ISPPOP3Port, &OK3, FALSE);
 
-		GetDlgItemText(hwndDisplay, IDC_ISPAccountName, ISPAccountName, 50);
-		GetDlgItemText(hwndDisplay, IDC_ISPAccountPass, ISPAccountPass, 50);
+	GetDlgItemText(hwndDisplay, IDC_ISPAccountName, ISPAccountName, 50);
+	GetDlgItemText(hwndDisplay, IDC_ISPAccountPass, ISPAccountPass, 50);
 
-		EncryptedPassLen = EncryptPass(ISPAccountPass, EncryptedISPAccountPass);
+	EncryptedPassLen = EncryptPass(ISPAccountPass, EncryptedISPAccountPass);
 
-		retCode = RegSetValueEx(hKey,"SMTPGatewayEnabled",0,REG_DWORD,(BYTE *)&ISP_Gateway_Enabled, 4);
-		retCode = RegSetValueEx(hKey,"AuthenticateSMTP",0,REG_DWORD,(BYTE *)&SMTPAuthNeeded, 4);
-
-		retCode = RegSetValueEx(hKey,"ISPSMTPPort",0,REG_DWORD,(BYTE *)&ISPSMTPPort,4);
-		retCode = RegSetValueEx(hKey,"ISPPOP3Port",0,REG_DWORD,(BYTE *)&ISPPOP3Port,4);
-
-		retCode = RegSetValueEx(hKey,"SMTPGatewayEnabled",0,REG_DWORD,(BYTE *)&ISP_Gateway_Enabled,4);
-		retCode = RegSetValueEx(hKey,"POP3 Polling Interval",0,REG_DWORD,(BYTE *)&ISPPOP3Interval,4);
-
-		retCode = RegSetValueEx(hKey,"MyDomain",0,REG_SZ,(BYTE *)&MyDomain, strlen(MyDomain));
-		retCode = RegSetValueEx(hKey,"ISPSMTPName",0,REG_SZ,(BYTE *)&ISPSMTPName, strlen(ISPSMTPName));
-		retCode = RegSetValueEx(hKey,"ISPPOP3Name",0,REG_SZ,(BYTE *)&ISPPOP3Name, strlen(ISPPOP3Name));
-		retCode = RegSetValueEx(hKey,"ISPAccountName",0,REG_SZ,(BYTE *)&ISPAccountName, strlen(ISPAccountName));
-		retCode = RegSetValueEx(hKey,"ISPAccountPass",0,REG_BINARY,(BYTE *)&EncryptedISPAccountPass, EncryptedPassLen);
-
-		RegCloseKey(hKey);
+	SaveConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
 
-
 VOID SaveFWDConfig(HWND hDlg)
 {
-	HKEY hKey=0;
-	int retCode,disp, OK, Val, n;
-	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
-	int Rev;
+	int OK, n;
 	char BBSHA[50];
 
-	if (CurrentBBS)
-	{
-		strcat(Key, CurrentConfigCall);
-
-		retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_ATCALLS, hKey, "ATCalls");
-		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_TOCALLS, hKey, "ToCalls");
-		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HROUTES, hKey, "HRoutes");
-		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HROUTESP, hKey, "HRoutesP");
-		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_CALL, hKey, "Connect Script");
-		MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_FWDTIMES, hKey, "FWD Times");
-
-		Rev = IsDlgButtonChecked(hDlg, IDC_FWDENABLE);
-		retCode = RegSetValueEx(hKey,"Enabled", 0, REG_DWORD, (BYTE *)&Rev,4);
-
-		Rev = IsDlgButtonChecked(hDlg, IDC_REVERSE);
-		retCode = RegSetValueEx(hKey,"RequestReverse", 0, REG_DWORD, (BYTE *)&Rev,4);
-	
-		Rev = IsDlgButtonChecked(hDlg, IDC_USEB2);
-		retCode = RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
-
-		Rev = IsDlgButtonChecked(hDlg, IDC_PERSONALONLY);
-		retCode = RegSetValueEx(hKey, "FWD Personals Only", 0, REG_DWORD, (BYTE *)&Rev,4);
-
-		Rev = IsDlgButtonChecked(hDlg, IDC_SENDNEW);
-		retCode = RegSetValueEx(hKey, "FWD New Immediately", 0, REG_DWORD, (BYTE *)&Rev,4);
-
-		Rev = IsDlgButtonChecked(hDlg, IDC_USEB1);
-		retCode = RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&Rev,4);
-
-		Rev = IsDlgButtonChecked(hDlg, IDC_CTRLZ);
-		retCode = RegSetValueEx(hKey,"SendCTRLZ", 0, REG_DWORD, (BYTE *)&Rev,4);
-
-		Rev = IsDlgButtonChecked(hDlg, IDC_ALLOWCOMP);
-		retCode = RegSetValueEx(hKey,"AllowCompressed", 0, REG_DWORD, (BYTE *)&Rev,4);
-
-		Val = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
-		retCode = RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&Val,4);
-
-		Val = GetDlgItemInt(hDlg, IDC_REVFWDINT, &OK, FALSE);
-		retCode = RegSetValueEx(hKey,"RevFWDInterval", 0, REG_DWORD, (BYTE *)&Val,4);
-
-		Val = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
-		retCode = RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&Val,4);
-
-		GetDlgItemText(hDlg, IDC_BBSHA, BBSHA, 50);
-		RegSetValueEx(hKey,"BBSHA", 0, REG_SZ, BBSHA, strlen(BBSHA));
-
-		RegCloseKey(hKey);
-
-		ReinitializeFWDStruct(CurrentBBS);
-	}
-		
-	// Interval and Max Sizes and Aliases are not user specific
-
-	retCode = RegCreateKeyEx(REGTREE, 
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	MaxTXSize = GetDlgItemInt(hDlg, IDC_MAXSEND, &OK, FALSE);
-	retCode = RegSetValueEx(hKey,"MaxTXSize", 0, REG_DWORD, (BYTE *)&MaxTXSize,4);
-
-	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
-	retCode = RegSetValueEx(hKey,"MaxRXSize", 0, REG_DWORD, (BYTE *)&MaxRXSize,4);
-
-	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_ALIAS, hKey, "FWD Aliases");
-
 	ReaddressLocal = IsDlgButtonChecked(hDlg, IDC_READDRESSLOCAL);
-	retCode = RegSetValueEx(hKey,"Readdress Local", 0, REG_DWORD, (BYTE *)&ReaddressLocal,4);
-
 	ReaddressReceived = IsDlgButtonChecked(hDlg, IDC_READDRESSRXED);
-	retCode = RegSetValueEx(hKey,"Readdress Received", 0, REG_DWORD, (BYTE *)&ReaddressReceived,4);
-
 	WarnNoRoute = IsDlgButtonChecked(hDlg, IDC_WARNNOROUTE);
-	retCode = RegSetValueEx(hKey,"Warn No Route", 0, REG_DWORD, (BYTE *)&WarnNoRoute,4);
-
 	Localtime = IsDlgButtonChecked(hDlg, IDC_USELOCALTIME);
-	retCode = RegSetValueEx(hKey, "Localtime", 0, REG_DWORD, (BYTE *)&Localtime,4);
-
-
-
+	MaxTXSize = GetDlgItemInt(hDlg, IDC_MAXSEND, &OK, FALSE);
+	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
+	
 	// Reinitialise Aliases
 
 	n = 0;
@@ -1684,12 +1552,46 @@ VOID SaveFWDConfig(HWND hDlg)
 		FreeList(AliasText);
 	}
 
-	AliasText = GetMultiStringValue(hKey,  "FWD Aliases");
+	AliasText = GetMultiLineDialogParam(hDlg, IDC_ALIAS);
 	SetupFwdAliases();
 
-	RegCloseKey(hKey);
-		
-	sprintf(InfoBoxText, "Configuration Saved");
+	if (CurrentBBS)
+	{
+		struct	BBSForwardingInfo * ForwardingInfo = CurrentBBS->ForwardingInfo;
+
+		ForwardingInfo->ATCalls = GetMultiLineDialogParam(hDlg, IDC_ATCALLS);
+		ForwardingInfo->TOCalls = GetMultiLineDialogParam(hDlg, IDC_TOCALLS);
+		ForwardingInfo->Haddresses = GetMultiLineDialogParam(hDlg, IDC_HROUTES);
+		ForwardingInfo->HaddressesP = GetMultiLineDialogParam(hDlg, IDC_HROUTESP);
+		ForwardingInfo->ConnectScript = GetMultiLineDialogParam(hDlg, IDC_CALL);
+		ForwardingInfo->FWDTimes = GetMultiLineDialogParam(hDlg, IDC_FWDTIMES);
+
+
+		ForwardingInfo->Enabled = IsDlgButtonChecked(hDlg, IDC_FWDENABLE);
+		ForwardingInfo->ReverseFlag = IsDlgButtonChecked(hDlg, IDC_REVERSE);
+		ForwardingInfo->AllowB2 = IsDlgButtonChecked(hDlg, IDC_USEB2);
+		ForwardingInfo->PersonalOnly = IsDlgButtonChecked(hDlg, IDC_PERSONALONLY);
+		ForwardingInfo->SendNew = IsDlgButtonChecked(hDlg, IDC_SENDNEW);
+		ForwardingInfo->AllowB1 = IsDlgButtonChecked(hDlg, IDC_USEB1);
+		ForwardingInfo->SendCTRLZ = IsDlgButtonChecked(hDlg, IDC_CTRLZ);
+		ForwardingInfo->AllowCompressed = IsDlgButtonChecked(hDlg, IDC_ALLOWCOMP);
+		ForwardingInfo->FwdInterval = GetDlgItemInt(hDlg, IDC_FWDINT, &OK, FALSE);
+		ForwardingInfo->RevFwdInterval = GetDlgItemInt(hDlg, IDC_REVFWDINT, &OK, FALSE);
+		ForwardingInfo->MaxFBBBlockSize = GetDlgItemInt(hDlg, IDC_MAXBLOCK, &OK, FALSE);
+
+		GetDlgItemText(hDlg, IDC_BBSHA, BBSHA, 50);
+		if (ForwardingInfo->BBSHA)
+			free(ForwardingInfo->BBSHA);
+		ForwardingInfo->BBSHA = _strdup(BBSHA);
+	}
+
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
+
+	if (CurrentBBS)
+		ReinitializeFWDStruct(CurrentBBS);	
+
+	sprintf(InfoBoxText, "Forwarding information saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
@@ -1698,13 +1600,11 @@ VOID SaveMAINTConfigFromDialog()
 {
 	BOOL OK1;
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
-	HKEY hKey=0;
-	int retCode, disp;
-
-	retCode = RegCreateKeyEx(REGTREE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	MaxMsgno = GetDlgItemInt(hwndDisplay, IDC_MAXMSG, &OK1, FALSE);
+
+	if (MaxMsgno > 99000) MaxMsgno = 99000;
+
 	BidLifetime = GetDlgItemInt(hwndDisplay, IDC_BIDLIFETIME, &OK1, FALSE);
 	LogAge = GetDlgItemInt(hwndDisplay, IDC_LOGLIFETIME, &OK1, FALSE);
 	UserLifetime = GetDlgItemInt(hwndDisplay, IDC_USERLIFETIME, &OK1, FALSE);
@@ -1725,19 +1625,9 @@ VOID SaveMAINTConfigFromDialog()
 	OverrideUnsent = IsDlgButtonChecked(hwndDisplay, IDC_OVERRIDEUNSENT);
 	SendNonDeliveryMsgs = IsDlgButtonChecked(hwndDisplay, IDC_MAINTNONDELIVERY);
 
-	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTFROM, hKey, "LTFROM");
-	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTTO, hKey, "LTTO");
-	MultiLineDialogToREG_MULTI_SZ(hwndDisplay, IDM_LTAT, hKey, "LTAT");
-
-	// Refresh local copy
-
-	LTFROM = GetOverrides(hKey, "LTFROM");
-	LTTO = GetOverrides(hKey, "LTTO");
-	LTAT = GetOverrides(hKey, "LTAT");
-
-	RegCloseKey(hKey);
-
-	SaveMAINTConfig();
+	LTFROM = GetMultiLineDialogParam(hwndDisplay, IDM_LTFROM);
+	LTTO = GetMultiLineDialogParam(hwndDisplay, IDM_LTTO);
+	LTAT = GetMultiLineDialogParam(hwndDisplay, IDM_LTAT);
 
 	// Calulate time to run Housekeeping
 	{
@@ -1759,168 +1649,70 @@ VOID SaveMAINTConfigFromDialog()
 
 		Debugprintf("Maint Clock %d NOW %d Time to HouseKeeping %d", MaintClock, now, MaintClock - now);
 	}
+	
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
 }
-VOID SaveOverrideToReg(HKEY hKey, char * ValueName, struct Override ** values)
-{
-	struct Override ** Calls;
-	char Multi[10000];
-	char * ptr = &Multi[0];
-	int retCode;
-
-
-	*ptr = 0;
-
-	// Reg value is a multistring - each entry termineted by a null, two nulls on end
-
-	if (values)
-	{
-		Calls = values;
-
-		while(Calls[0])
-		{
-			ptr += sprintf(ptr, "%s, %d", Calls[0]->Call, Calls[0]->Days);
-			*(ptr++) = 0;
-			Calls++;
-		}
-		*(ptr++) = 0;
-	}
-
-	// Write to Registry
-
-	retCode = RegSetValueEx(hKey, ValueName, 0, REG_MULTI_SZ, Multi, ptr - &Multi[0]);
-}
-
-
-
-VOID SaveMAINTConfig()
-{
-	HKEY hKey=0;
-	int retCode, disp;
-
-	if (MaxMsgno > 99000) MaxMsgno = 99000;
-
-	retCode = RegCreateKeyEx(REGTREE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\Housekeeping", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	retCode = RegSetValueEx(hKey, "MaxMsgno",0 , REG_DWORD,(BYTE *)&MaxMsgno, 4);
-	retCode = RegSetValueEx(hKey, "BidLifetime",0 , REG_DWORD,(BYTE *)&BidLifetime, 4);
-	retCode = RegSetValueEx(hKey, "UserLifetime",0 , REG_DWORD,(BYTE *)&UserLifetime, 4);
-	retCode = RegSetValueEx(hKey, "LogLifetime",0 , REG_DWORD,(BYTE *)&LogAge, 4);
-	retCode = RegSetValueEx(hKey, "MaintInterval",0 , REG_DWORD,(BYTE *)&MaintInterval, 4);
-	retCode = RegSetValueEx(hKey, "MaintTime",0 , REG_DWORD,(BYTE *)&MaintTime, 4);
-	retCode = RegSetValueEx(hKey, "PR",0 , REG_DWORD,(BYTE *)&PR, 4);
-	retCode = RegSetValueEx(hKey, "PUR",0 , REG_DWORD,(BYTE *)&PUR, 4);
-	retCode = RegSetValueEx(hKey, "PF",0 , REG_DWORD,(BYTE *)&PF, 4);
-	retCode = RegSetValueEx(hKey, "PNF",0 , REG_DWORD,(BYTE *)&PNF, 4);
-	retCode = RegSetValueEx(hKey, "BF",0 , REG_DWORD,(BYTE *)&BF, 4);
-	retCode = RegSetValueEx(hKey, "BNF",0 , REG_DWORD,(BYTE *)&BNF, 4);
-	retCode = RegSetValueEx(hKey, "NTSD",0 , REG_DWORD,(BYTE *)&NTSD, 4);
-	retCode = RegSetValueEx(hKey, "NTSU",0 , REG_DWORD,(BYTE *)&NTSU, 4);
-	retCode = RegSetValueEx(hKey, "NTSF",0 , REG_DWORD,(BYTE *)&NTSF, 4);
-
-	retCode = RegSetValueEx(hKey,"DeletetoRecycleBin", 0, REG_DWORD, (BYTE *)&DeletetoRecycleBin,4);
-	retCode = RegSetValueEx(hKey,"SuppressMaintEmail", 0, REG_DWORD, (BYTE *)&SuppressMaintEmail,4);
-	retCode = RegSetValueEx(hKey,"MaintSaveReg", 0, REG_DWORD, (BYTE *)&SaveRegDuringMaint,4);
-	retCode = RegSetValueEx(hKey,"OverrideUnsent", 0, REG_DWORD, (BYTE *)&OverrideUnsent,4);
-	retCode = RegSetValueEx(hKey,"SendNonDeliveryMsgs", 0, REG_DWORD, (BYTE *)&SendNonDeliveryMsgs,4);
-
-	SaveOverrideToReg(hKey, "LTFROM", LTFROM);
-	SaveOverrideToReg(hKey, "LTTO", LTTO);
-	SaveOverrideToReg(hKey, "LTAT", LTAT);
-
-	RegCloseKey(hKey);
-
-}
-
 
 VOID SaveWelcomeMsgs()
 {
 	char Value[10000];
 
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
-	HKEY hKey=0;
-	int retCode, disp;
-
-	retCode = RegCreateKeyEx(REGTREE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	GetDlgItemText(hwndDisplay, IDM_USERMSG, Value, 10000);
 
 	free(WelcomeMsg);
 	WelcomeMsg = _strdup(Value);
 	
-	RegSetValueEx(hKey, "WelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
-
 	GetDlgItemText(hwndDisplay, IDM_NEWUSERMSG, Value, 10000);
 
 	free(NewWelcomeMsg);
 	NewWelcomeMsg = _strdup(Value);
 	
-	RegSetValueEx(hKey, "NewUserWelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
-
-	GetDlgItemText(hwndDisplay, IDM_CHATUSERMSG, Value, 10000);
-
 	GetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, Value, 10000);
 
 	free(ExpertWelcomeMsg);
 	ExpertWelcomeMsg = _strdup(Value);
 	
-	RegSetValueEx(hKey, "ExpertWelcomeMsg", 0, REG_BINARY, Value, strlen(Value) + 1);
-
 	GetDlgItemText(hwndDisplay, IDM_SIGNOFF, SignoffMsg, 99);
 
 	if (SignoffMsg[0])
 		if (SignoffMsg[strlen(SignoffMsg) - 1] != 13)
 			strcat(SignoffMsg, "\r");
 
-	RegSetValueEx(hKey, "SignoffMsg", 0, REG_BINARY, SignoffMsg, strlen(SignoffMsg) + 1);
-
-	RegCloseKey(hKey);
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 }
-
-
 
 VOID SavePrompts()
 {
 	char Value[10000];
 
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
-	HKEY hKey=0;
-	int retCode, disp;
-
-	retCode = RegCreateKeyEx(REGTREE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	GetDlgItemText(hwndDisplay, IDM_USERMSG, Value, 10000);
 
 	free(Prompt);
 	Prompt = _strdup(Value);
 	
-	RegSetValueEx(hKey, "Prompt", 0, REG_BINARY, Value, strlen(Value) + 1);
-
 	GetDlgItemText(hwndDisplay, IDM_NEWUSERMSG, Value, 10000);
 
 	free(NewPrompt);
 	NewPrompt = _strdup(Value);
 	
-	RegSetValueEx(hKey, "NewUserPrompt", 0, REG_BINARY, Value, strlen(Value) + 1);
-
 	GetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, Value, 10000);
 
 	free(ExpertPrompt);
 	ExpertPrompt = _strdup(Value);
 	
-	RegSetValueEx(hKey, "ExpertPrompt", 0, REG_BINARY, Value, strlen(Value) + 1);
-
-	RegCloseKey(hKey);
-
 	TidyPrompts();
 
 	// redisplay, in case tidy has changed them
@@ -1929,6 +1721,8 @@ VOID SavePrompts()
 	SetDlgItemText(hwndDisplay, IDM_NEWUSERMSG, NewPrompt);
 	SetDlgItemText(hwndDisplay, IDM_EXPERTUSERMSG, ExpertPrompt);
 
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -1938,80 +1732,61 @@ VOID SavePrompts()
 VOID SaveWPConfig(HWND hDlg)
 {
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
-	HKEY hKey=0;
-	int retCode, disp;
-
-	retCode = RegCreateKeyEx(REGTREE,
-          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
 
 	SendWP = IsDlgButtonChecked(hwndDisplay, IDC_SENDWP);
-	retCode = RegSetValueEx(hKey, "SendWP", 0 , REG_DWORD,(BYTE *)&SendWP, 4);
-
 	SendWPType = SendDlgItemMessage(hwndDisplay, IDC_WPTYPE, CB_GETCURSEL, 0, 0);
-	retCode = RegSetValueEx(hKey, "SendWPType", 0 , REG_DWORD,(BYTE *)&SendWPType, 4);
 
 	GetDlgItemText(hwndDisplay, IDC_WPTO, SendWPTO, 10);
-	retCode = RegSetValueEx(hKey,"SendWPTO", 0, REG_SZ,(BYTE *)&SendWPTO, strlen(SendWPTO));
-
 	GetDlgItemText(hwndDisplay, IDC_WPVIA, SendWPVIA, 80);
-	retCode = RegSetValueEx(hKey,"SendWPVIA", 0, REG_SZ,(BYTE *)&SendWPVIA, strlen(SendWPVIA));
+
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
-
-
 }
 
 
 VOID SaveFilters(HWND hDlg)
 {
 	DLGHDR *pHdr = (DLGHDR *) GetWindowLong(hwndDlg, GWL_USERDATA);
-	HKEY hKey=0;
-	int retCode, disp;
 
-	retCode = RegCreateKeyEx(REGTREE,
-                         "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
+	RejFrom = GetMultiLineDialogParam(hDlg, IDC_REJFROM);
+	RejTo = GetMultiLineDialogParam(hDlg, IDC_REJTO);
+	RejAt = GetMultiLineDialogParam(hDlg, IDC_REJAT);
 
-	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_REJFROM, hKey, "RejFrom");
-	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_REJTO, hKey, "RejTo");
-	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_REJAT, hKey, "RejAt");
+	HoldFrom = GetMultiLineDialogParam(hDlg, IDC_HOLDFROM);
+	HoldTo = GetMultiLineDialogParam(hDlg, IDC_HOLDTO);
+	HoldAt = GetMultiLineDialogParam(hDlg, IDC_HOLDAT);
 
-	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HOLDFROM, hKey, "HoldFrom");
-	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HOLDTO, hKey, "HoldTo");
-	MultiLineDialogToREG_MULTI_SZ(hDlg, IDC_HOLDAT, hKey, "HoldAt");
-
-	RejFrom = GetMultiStringValue(hKey,  "RejFrom");
-	RejTo = GetMultiStringValue(hKey,  "RejTo");
-	RejAt = GetMultiStringValue(hKey,  "RejAt");
-
-	HoldFrom = GetMultiStringValue(hKey,  "HoldFrom");
-	HoldTo = GetMultiStringValue(hKey,  "HoldTo");
-	HoldAt = GetMultiStringValue(hKey,  "HoldAt");
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 	sprintf(InfoBoxText, "Configuration Saved");
 	DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
 
-	RegCloseKey(hKey);
 }
 
 
-MultiLineDialogToREG_MULTI_SZ(HWND hDialog, int DLGItem, HKEY hKey, char * ValueName)
+VOID * GetMultiLineDialogParam(HWND hDialog, int DLGItem)
 {
 	char Text[10000];
-	char Value[10000];
-	int retCode;
+	char Val[10000];
 	char * ptr1, * ptr2;
-
+	char * MultiString = NULL;
+	const char * ptr;
+	int Count = 0;
+	char ** Value;
 
 	GetDlgItemText(hDialog, DLGItem, Text, 10000);
 
-	// replace crlf with single null
+	// replace crlf with '|'
 
 	if (Text[strlen(Text)-1] != '\n')			// no terminating crlf?
 		strcat(Text, "\r\n");
 
 	ptr1 = Text;
-	ptr2 = Value;
+	ptr2 = Val;
 		
 	while (*ptr1)
 	{
@@ -2020,113 +1795,55 @@ MultiLineDialogToREG_MULTI_SZ(HWND hDialog, int DLGItem, HKEY hKey, char * Value
 			while (*(ptr1+2) == '\r')			// Blank line
 				ptr1+=2;
 
-			*++ptr1 = 0;
+			*++ptr1 = '|';
 		}
-		*ptr2++=*ptr1++;
+		*ptr2++= *ptr1++;
 	}
 
 	*ptr2++ = 0;
 
-	// Write to Registry
+	Value = zalloc(4);				// always NULL entry on end even if no values
+	Value[0] = NULL;
 
-	retCode = RegSetValueEx(hKey, ValueName, 0, REG_MULTI_SZ, Value, ptr2-&Value[0]);
-
-	return TRUE;
-
-}
-
-VOID SaveWindowConfig()
-{
-	HKEY hKey=0;
-	int retCode, disp;
-	char Size[80];
-
-	retCode = RegCreateKeyEx(REGTREE,
-                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat",
-                              0,	// Reserved
-							  0,	// Class
-							  0,	// Options
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-	if (retCode == ERROR_SUCCESS)
+	ptr = Val;
+	
+	while (ptr && strlen(ptr))
 	{
-		if (ConsHeader[0]->ConsoleRect.right)
-		{
-			sprintf(Size,"%d,%d,%d,%d",ConsHeader[0]->ConsoleRect.left, ConsHeader[0]->ConsoleRect.right,
-				ConsHeader[0]->ConsoleRect.top, ConsHeader[0]->ConsoleRect.bottom);
+		ptr1 = strchr(ptr, '|');
+			
+		if (ptr1)
+			*(ptr1++) = 0;
 
-			retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-		}
-		sprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
-		retCode = RegSetValueEx(hKey,"MonitorSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+		if (ptr[0] == 0)		// Just had a | (empty string)
+			break;
 
-		sprintf(Size,"%d,%d,%d,%d",DebugRect.left,DebugRect.right,DebugRect.top,DebugRect.bottom);
-		retCode = RegSetValueEx(hKey,"DebugSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		sprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
-		retCode = RegSetValueEx(hKey,"WindowSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		retCode = RegSetValueEx(hKey,"Log_BBS",0,REG_DWORD,(BYTE *)&LogBBS,4);
-		retCode = RegSetValueEx(hKey,"Log_TCP",0,REG_DWORD,(BYTE *)&LogTCP,4);
-		retCode = RegSetValueEx(hKey,"Log_CHAT",0,REG_DWORD,(BYTE *)&LogCHAT,4);
-
-		sprintf(Size,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
-		retCode = RegSetValueEx(hKey, "Version",0, REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		RegCloseKey(hKey);
+		Value = realloc(Value, (Count+2)*4);
+			
+		Value[Count++] = _strdup(ptr);
+		ptr = ptr1;
 	}
 
-	retCode = RegCreateKeyEx(REGTREE,
-                              "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\ChatConsole",
-                              0,	// Reserved
-							  0,	// Class
-							  0,	// Options
-                              KEY_ALL_ACCESS,
-							  NULL,	// Security Attrs
-                              &hKey,
-							  &disp);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		if (ConsHeader[1]->ConsoleRect.right)
-		{
-			sprintf(Size,"%d,%d,%d,%d",ConsHeader[1]->ConsoleRect.left, ConsHeader[1]->ConsoleRect.right,
-				ConsHeader[1]->ConsoleRect.top, ConsHeader[1]->ConsoleRect.bottom);
-
-			retCode = RegSetValueEx(hKey,"ConsoleSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-		}
-		
-		RegCloseKey(hKey);
-	}
-
-	return;
+	Value[Count] = NULL;
+	return Value;
 }
-
-
-
-
 
 BOOL GetConfigFromRegistry()
 {
 	HKEY hKey=0;
 	int retCode,Type,Vallen, i;
 	char Size[80];
-	char msg[255];
 	char * ptr;
 
 	// Get Config From Registry
 
 	sprintf(BaseDirRaw, "%s/BPQMailChat", GetBPQDirectory());
 
-TryAgain:
-
 	retCode = RegOpenKeyEx (REGTREE,
                  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, KEY_ALL_ACCESS, &hKey);
 
-	if (retCode == ERROR_SUCCESS)
+	if (retCode != ERROR_SUCCESS)
+		return FALSE;
+
 	{
 		Vallen=4;
 		retCode += RegQueryValueEx(hKey,"Streams",0,			
@@ -2177,7 +1894,7 @@ TryAgain:
 		RegQueryValueEx(hKey,"MaxRXSize",0,			
 			(ULONG *)&Type,(UCHAR *)&MaxRXSize,(ULONG *)&Vallen);
 
-		AliasText = GetMultiStringValue(hKey,  "FWD Aliases");
+		AliasText = RegGetMultiStringValue(hKey,  "FWD Aliases");
 
 		Vallen=4;
 		RegQueryValueEx(hKey, "Readdress Local",0,			
@@ -2303,13 +2020,6 @@ TryAgain:
 		sscanf(Size,"%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom);
 
 		Vallen=80;
-		RegQueryValueEx(hKey,"DebugSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-		sscanf(Size,"%d,%d,%d,%d",&DebugRect.left,&DebugRect.right,&DebugRect.top,&DebugRect.bottom);
-		retCode = RegSetValueEx(hKey,"DebugSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
-
-		Vallen=80;
 		RegQueryValueEx(hKey,"WindowSize",0,			
 			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
 
@@ -2426,13 +2136,13 @@ TryAgain:
 		Vallen=80;
 
 
-		RejFrom = GetMultiStringValue(hKey,  "RejFrom");
-		RejTo = GetMultiStringValue(hKey,  "RejTo");
-		RejAt = GetMultiStringValue(hKey,  "RejAt");
+		RejFrom = RegGetMultiStringValue(hKey,  "RejFrom");
+		RejTo = RegGetMultiStringValue(hKey,  "RejTo");
+		RejAt = RegGetMultiStringValue(hKey,  "RejAt");
 
-		HoldFrom = GetMultiStringValue(hKey,  "HoldFrom");
-		HoldTo = GetMultiStringValue(hKey,  "HoldTo");
-		HoldAt = GetMultiStringValue(hKey,  "HoldAt");
+		HoldFrom = RegGetMultiStringValue(hKey,  "HoldFrom");
+		HoldTo = RegGetMultiStringValue(hKey,  "HoldTo");
+		HoldAt = RegGetMultiStringValue(hKey,  "HoldAt");
 
 		// Send WP Params
 
@@ -2639,40 +2349,13 @@ TryAgain:
 			RegQueryValueEx(hKey, "SendNonDeliveryMsgs", 0,			
 				(ULONG *)&Type,(UCHAR *)&SendNonDeliveryMsgs,(ULONG *)&Vallen);
 
-			LTFROM = GetOverrides(hKey, "LTFROM");
-			LTTO = GetOverrides(hKey, "LTTO");
-			LTAT = GetOverrides(hKey, "LTAT");
-
-		}
-
-		if (retCode)
-		{
-				retCode = MessageBox(NULL, "Some Config Params Missing - Opening Configuration Dialog\r\rNote. All Tabs must be saved, even if no changes are made to the Tab",
-						"BPQMailChat", MB_OKCANCEL);
-					
-				if (retCode ==IDCANCEL)
-					return FALSE;
-
-				DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
-				goto TryAgain;
-
+			LTFROM = RegGetOverrides(hKey, "LTFROM");
+			LTTO = RegGetOverrides(hKey, "LTTO");
+			LTAT = RegGetOverrides(hKey, "LTAT");
 		}
 
 		return TRUE;
 	}
-	
-	sprintf(msg, "Registry Key %s\\SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat could not be opened - Opening Configuration Dialog\r\rNote. All Tabs must be saved, even if no changes are made to the Tab", REGTREETEXT);
-
-	retCode = MessageBox(NULL, msg, "BPQMailChat", MB_OKCANCEL);
-
-	if (retCode ==IDCANCEL)
-		return FALSE;
-
-	DialogBox(hInst, MAKEINTRESOURCE(IDD_CONFIG), hWnd, ConfigWndProc);
-	goto TryAgain;
-
-	return TRUE;
-
 }
 
 
@@ -2755,7 +2438,6 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 {
 	int Command, n;
 	char msgno[20];
-	struct UserInfo * user;
 	struct MsgInfo * Msg;
 
 	UNREFERENCED_PARAMETER(lParam);
@@ -2893,9 +2575,9 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (GetSaveFileName(&Ofn))
 			{
-				HANDLE Handle = CreateFile(FileName, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+				FILE * Handle = fopen(FileName, "ab");
 
-				if (Handle == INVALID_HANDLE_VALUE)
+				if (Handle == NULL) 
 				{
 					sprintf(InfoBoxText, "Failed to open Export File %s", FileName);
 					DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -2921,9 +2603,7 @@ INT_PTR CALLBACK MsgEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 						}
 					}
 				}
-
-				SetEndOfFile(Handle);
-				CloseHandle(Handle);
+				fclose(Handle);
 			}
 
 			free(Indexes);
@@ -3318,38 +2998,6 @@ GetUIConfig()
 	return TRUE;
 }
 
-SaveUIConfig()
-{
-	int Num = GetNumberofPorts();
-	int i, retCode, disp;
-	char Key[80];
-	HKEY hKey;
-
-	for (i=1; i<=Num; i++)
-	{
-		sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\UIPort%d", i);
-
-		retCode = RegCreateKeyEx(REGTREE,
-                         Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-		if (retCode == ERROR_SUCCESS)
-		{		
-			retCode = RegSetValueEx(hKey, "Enabled", 0, REG_DWORD,(BYTE *)&UIEnabled[i], 4);
-			retCode = RegSetValueEx(hKey, "SendMF", 0, REG_DWORD,(BYTE *)&UIMF[i], 4);
-			retCode = RegSetValueEx(hKey, "SendHDDR", 0, REG_DWORD,(BYTE *)&UIHDDR[i], 4);
-			retCode = RegSetValueEx(hKey, "SendNull", 0, REG_DWORD,(BYTE *)&UINull[i], 4);
-			retCode = RegSetValueEx(hKey, "Digis",0, REG_SZ,(BYTE *)UIDigi[i], strlen(UIDigi[i]));
-
-			RegCloseKey(hKey);
-		}
-	}
-	
-	if (BBSApplNum)
-		SetupUIInterface();
-
-	return TRUE;
-}
-
 INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int Command, i;
@@ -3391,22 +3039,9 @@ INT_PTR CALLBACK UIDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 			case IDOK:
 
 				GetDlgItemText(hDlg, IDC_MAILFOR, MailForText, 99); 
-				{
-					HKEY hKey=0;
-					int retCode,disp;
-
-					retCode = RegCreateKeyEx(REGTREE,
-						"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat", 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-	
-					if (retCode == ERROR_SUCCESS)
-					{
-						retCode = RegSetValueEx(hKey, "MailForText", 0, REG_SZ,(BYTE *)&MailForText, strlen(MailForText));
-						RegCloseKey(hKey);
-					}
-				}
-
 				GetUIConfig();
-				SaveUIConfig();
+
+				SaveConfig(ConfigName);
 	
 				sprintf(InfoBoxText, "Configuration Saved");
 				DialogBox(hInst, MAKEINTRESOURCE(IDD_USERADDED_BOX), hWnd, InfoDialogProc);
@@ -3629,67 +3264,3 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 	}
 	return (INT_PTR)FALSE;
 }
-
-VOID CreateRegBackup()
-{
-	char Backup1[MAX_PATH];
-	char Backup2[MAX_PATH];
-	char RegFileName[MAX_PATH];
-	HANDLE handle;
-	char Msg[256];
-	char RegLine[256];
-	int len, written;
-
-	Debugprintf("Create Reg Backup");
-
-	sprintf(RegFileName, "%s/BPQMailChat.reg", BaseDir);
-
-	// Keep 4 Generations
-
-	strcpy(Backup2, RegFileName);
-	strcat(Backup2, ".bak.3");
-
-	strcpy(Backup1, RegFileName);
-	strcat(Backup1, ".bak.2");
-
-	DeleteFile(Backup2);			// Remove old .bak.3
-	MoveFile(Backup1, Backup2);		// Move .bak.2 to .bak.3
-
-	strcpy(Backup2, RegFileName);
-	strcat(Backup2, ".bak.1");
-
-	MoveFile(Backup2, Backup1);		// Move .bak.1 to .bak.2
-
-	strcpy(Backup1, RegFileName);
-	strcat(Backup1, ".bak");
-
-	MoveFile(Backup1, Backup2);		//Move .bak to .bak.1
-
-	strcpy(Backup2, RegFileName);
-	strcat(Backup2, ".bak");
-
-	CopyFile(RegFileName, Backup2, FALSE);	// Copy to .bak
-
-	handle = CreateFile(RegFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-	if (handle == INVALID_HANDLE_VALUE)
-	{
-		sprintf(Msg, "Failed to open Registry Save File\n");
-		WritetoConsole(Msg);
-		return;
-	}
-
-	len = sprintf(RegLine, "Windows Registry Editor Version 5.00\r\n\r\n");
-	WriteFile(handle, RegLine, len, &written, NULL);
-
-	if (SaveReg("Software\\G8BPQ\\BPQ32\\BPQMailChat", handle))
-		WritetoConsole("Registry Save complete\n");
-	else
-		WritetoConsole("Registry Save failed\n");
-
-	CloseHandle(handle);			
-
-	return;
-}
-
-

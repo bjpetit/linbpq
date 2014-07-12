@@ -68,6 +68,11 @@
 
 //	Operates in UTF-8
 
+
+
+//	Add "alert on text" option
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include "winsock2.h"
@@ -106,6 +111,11 @@ TCHAR ClassName[] = L"BPQMAINWINDOW";
 TCHAR Title[80];
 
 BOOL WINE;
+
+char KeyWordsName[] = "Keywords.sys";
+
+char ** KeyWords = NULL;
+int NumberofKeyWords = 0;
 
 // Foward declarations of functions included in this code module:
 
@@ -400,6 +410,104 @@ VOID CALLBACK TimerProc(
 	}
 }
 
+VOID GetKeyWordFile()
+{
+	FILE * Handle;
+	DWORD FileSize;
+	char * ptr1, * ptr2;
+	struct stat STAT;
+	char * KeyWordFile;
+
+	if (stat(KeyWordsName, &STAT) == -1)
+		return;
+
+	FileSize = STAT.st_size;
+
+	Handle = fopen(KeyWordsName, "rb");
+
+	if (Handle == NULL)
+		return;
+
+	KeyWordFile = malloc(FileSize+1);
+
+	fread(KeyWordFile, 1, FileSize, Handle); 
+
+	fclose(Handle);
+
+	KeyWordFile[FileSize]=0;
+
+	_strlwr(KeyWordFile);								// Compares are case-insensitive
+
+	ptr1 = KeyWordFile;
+
+	while (ptr1)
+	{
+		if (*ptr1 == '\n') ptr1++;
+
+		ptr2 = strtok_s(NULL, "\r\n", &ptr1);
+		if (ptr2)
+		{
+			if (*ptr2 != '#')
+			{
+				KeyWords = realloc(KeyWords,(++NumberofKeyWords+1)*4);
+				KeyWords[NumberofKeyWords] = ptr2;
+			}
+		}
+		else
+			break;
+	}
+}
+
+BOOL CheckKeyWord(char * Word, char * Msg)
+{
+	char * ptr1 = Msg, * ptr2;
+	int len = strlen(Word);
+
+	while (*ptr1)					// Stop at end
+	{
+		ptr2 = strstr(ptr1, Word);
+
+		if (ptr2 == NULL)
+			return FALSE;				// OK
+
+		// Only bad if it ia not part of a longer word
+
+		if ((ptr2 == Msg) || !(isalpha(*(ptr2 - 1))))	// No alpha before
+			if (!(isalpha(*(ptr2 + len))))			// No alpha after
+				return TRUE;					// Bad word
+	
+		// Keep searching
+
+		ptr1 = ptr2 + len;
+	}
+
+	return FALSE;					// OK
+}
+
+BOOL CheckKeyWords(char * Msg, int len)
+{
+	char dupMsg[1000];
+	int i;
+
+	memcpy(dupMsg, Msg, len);
+	dupMsg[len] = 0;
+	_strlwr(dupMsg);
+
+	for (i = 1; i <= NumberofKeyWords; i++)
+	{
+		if (CheckKeyWord(KeyWords[i], dupMsg))
+		{
+			Beep(660,250);
+			return TRUE;			// Bad
+		}
+	}
+
+	return FALSE;					// OK
+
+}
+
+
+
 //
 //  FUNCTION: WinMain(HANDLE, HANDLE, LPSTR, int)
 //
@@ -542,7 +650,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	struct RTFTerm * OPData;
 	int retCode;
 	HKEY hKey=0;
-
 
 	hInst = hInstance; // Store instance handle in our global variable
 
@@ -743,6 +850,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		ShowWindow(hWnd, nCmdShow);
 
 	UpdateWindow(hWnd);
+
+	GetKeyWordFile();				// Words/Phrases to alert on
 
 	TimerHandle = SetTimer(NULL, 0, 10000, lpTimerFunc);
 
@@ -2562,6 +2671,8 @@ MonLoop:
 			// Some Normal Data before the FF
 
 			int NormLen = ptr - Buffptr;				// Before the FF
+
+			CheckKeyWords(Buffptr, NormLen);
 	
 			wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, NormLen, BufferW, 1000); 
 
@@ -2632,6 +2743,9 @@ MonLoop:
 	}
 
 	// No FF, so must be session data
+
+
+	CheckKeyWords(Buffptr, len);
 
 	newlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, len, BufferW, 1000); 
 
