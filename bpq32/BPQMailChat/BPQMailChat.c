@@ -838,6 +838,9 @@
 //	Save config in file instead of registry
 //	Fix Manage Messages "EXPORT" option and check filename on EXPORT command
 //	Fix reverse forward prompt in MBL mode.
+//	Fix From address in POP3 messages where path is @winlink.org
+//	Fix possible program error in T message procesing
+//	Add MaxAge param (for incoming Bulls)
 
 #include "BPQMailChat.h"
 #define MAILCHAT

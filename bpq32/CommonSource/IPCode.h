@@ -9,16 +9,6 @@
 
 unsigned long _beginthread( void *, unsigned stack_size, void * arglist);
 
-#define IOCTL_NETVMINI_READ_DATA \
-    CTL_CODE (FILE_DEVICE_UNKNOWN, 0, METHOD_BUFFERED, FILE_READ_ACCESS)
-
-#define IOCTL_NETVMINI_WRITE_DATA \
-    CTL_CODE (FILE_DEVICE_UNKNOWN, 1, METHOD_BUFFERED, FILE_WRITE_ACCESS)
-
-#define IOCTL_NETVMINI_GETMACADDR \
-    CTL_CODE (FILE_DEVICE_UNKNOWN, 2, METHOD_BUFFERED, FILE_READ_ACCESS)
-
-
 #pragma pack(1) 
 
 typedef struct _ETHMSG
@@ -100,15 +90,37 @@ typedef struct _ROUTEENTRY
 	ULONG	Encap;		// Encap if a Tunnelled 44 address
 	int		FRAMECOUNT; // FRAMES SENT TO THIS NETWORK
 	UCHAR	PORT;		// POINTER TO PORT ENTRY
-	UCHAR	RTYPE;		// TYPE (NETROM/VC/DG/ETH)
+	UCHAR	TYPE;		// TYPE (NETROM/VC/DG/ETH)
 	UCHAR	METRIC;		// FOR RIP 
-	UCHAR	ROUTEINFO;  // TYPE (LEARNED, SYSOP, ETC)
+	UCHAR	ROUTEINFO;  // TYPE (RIP44, LEARNED, SYSOP Config, ETC)
 	UCHAR	ROUTECHANGED;// CHANGED RECENTLY FLAG
 	UCHAR	RIPTIMOUT;  // FOR REMOVING ACTIVE ENTRIES
 	UCHAR	GARTIMOUT;  // FOR REMOVING DEAD ENTRIES
 	UCHAR	Target[7];	// MAC Address - either enet or ax.25 (may use arp later)
+	BOOL	LOCKED;
 
 } ROUTEENTRY, *PROUTEENTRY;
+
+typedef struct _RIP2HDDR
+{
+	UCHAR	Command;
+	UCHAR	Version;
+	USHORT	Padding;
+} RIP2HDDR, *PRIP2HDDR;
+
+typedef struct _RIP2ENTRY
+{
+	USHORT	AddrFamily;
+	USHORT	RouteTAG;
+	ULONG	IPAddress;
+	ULONG	Mask;
+	ULONG	NextHop;
+	// Metric Defined as 32 bits, but sent in network order and limited to 16, so just use last byte
+	UCHAR	Pad1;
+	UCHAR	Pad2;
+	UCHAR	Pad3;
+	UCHAR	Metric;
+} RIP2ENTRY, *PRIP2ENTRY;
 
 #pragma pack()
 

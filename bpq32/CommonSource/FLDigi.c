@@ -6,6 +6,11 @@
 #define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
+
+int (WINAPI FAR *GetModuleFileNameExPtr)();
+int (WINAPI FAR *EnumProcessesPtr)();
+
+
 #include <stdio.h>
 #include <time.h>
 
@@ -137,32 +142,6 @@ static struct timeval timeout;
 
 int Blocksizes[10] = {0,2,4,8,16,32,64,128,256,512};
 
-#ifndef LINBPQ
-
-static BOOL CALLBACK EnumTNCWindowsProc(HWND hwnd, LPARAM  lParam)
-{
-	char wtext[200];
-	struct TNCINFO * TNC = (struct TNCINFO *)lParam; 
-	UINT ProcessId;
-	char FN[MAX_PATH] = "";
-
-	if (TNC->ProgramPath == NULL)
-		return FALSE;
-
-	GetWindowText(hwnd, wtext, 199);
-
-	if (strstr(wtext,"fldigi - "))
-	{
-		GetWindowThreadProcessId(hwnd, &ProcessId);
-
-		TNC->WIMMORPID = ProcessId;
-		return FALSE;
-	}
-	
-	return (TRUE);
-}
-
-#endif
 
 static int ExtProc(int fn, int port,unsigned char * buff)
 {
@@ -851,7 +830,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		closesocket(TNC->WINMORDataSock);
 		TNC->CONNECTED = FALSE;
 
-		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		if (TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 			RestartTNC(TNC);
@@ -868,7 +847,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		closesocket(TNC->WINMORSock);
 		closesocket(TNC->WINMORDataSock);
 
-		if (TNC->WIMMORPID && TNC->WeStartedTNC)
+		if (TNC->WeStartedTNC)
 		{
 			KillTNC(TNC);
 		}
@@ -881,12 +860,62 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 #ifndef LINBPQ
 
+int FindFLDIGI(char * Path)
+{
+	HANDLE hProc;
+	char ExeName[256] = "";
+	char FLDIGIName[256];
+	DWORD Pid = 0;
+	DWORD Processes[1024], Needed, Count;
+    unsigned int i;
+
+	if (EnumProcessesPtr == NULL)
+		return 0;			// Cant get PID
+
+	if (!EnumProcessesPtr(Processes, sizeof(Processes), &Needed))
+		return TRUE;
+
+	//	Path is to .bat, so need to strip extension of both names
+
+	strcpy(FLDIGIName, Path);
+	strlop(FLDIGIName, '.');
+
+	// Calculate how many process identifiers were returned.
+
+	Count = Needed / sizeof(DWORD);
+
+	for (i = 0; i < Count; i++)
+	{
+		if (Processes[i] != 0)
+		{
+			hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, Processes[i]);
+	
+			if (hProc)
+			{
+				GetModuleFileNameExPtr(hProc, 0,  ExeName, 255);
+				CloseHandle(hProc);
+
+				strlop(ExeName, '.');
+						
+				if (_stricmp(ExeName, FLDIGIName) == 0)
+					return Processes[i];
+						
+			}
+		}
+	}
+	return 0;
+}
+
+
 static KillTNC(struct TNCINFO * TNC)
 {
 	HANDLE hProc;
 
 	if (TNC->PTTMode)
 		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
+
+	if (TNC->ProgramPath)
+		TNC->WIMMORPID = FindFLDIGI(TNC->ProgramPath);
 
 	if (TNC->WIMMORPID == 0) return 0;
 
@@ -898,7 +927,7 @@ static KillTNC(struct TNCINFO * TNC)
 		CloseHandle(hProc);
 	}
 
-	TNC->WIMMORPID = 0;			// So we don't try again
+	TNC->WeStartedTNC = 0;			// So we don't try again
 
 	return 0;
 }
@@ -908,6 +937,7 @@ static RestartTNC(struct TNCINFO * TNC)
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 	char HomeDir[MAX_PATH];
+	char Cmd[MAX_PATH];
 	int i, ret;
 
 	SInfo.cb=sizeof(SInfo);
@@ -932,17 +962,19 @@ static RestartTNC(struct TNCINFO * TNC)
 			}
 		}
 
-//		system("cmd /C start C:\\Users\\johnw_000\\Desktop\\FLDigi.exe");
+//	To run a batch file, you must start the command interpreter; set lpApplicationName to
+//	cmd.exe and set lpCommandLine to the following arguments:
+//  /c plus the name of the batch file.
 
-		ret = CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL , NULL, &SInfo, &PInfo);
 
-		if (ret)
-			TNC->WIMMORPID = PInfo.dwProcessId;
+		sprintf(Cmd, "/C %s", TNC->ProgramPath);
 
+		ret = CreateProcess("C:\\Windows\\System32\\cmd.exe", Cmd, NULL, NULL, FALSE,0 ,NULL , NULL, &SInfo, &PInfo);
 		return ret;
 	}
 	return 0;
 }
+
 #endif
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
@@ -1071,9 +1103,11 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	if (EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC))
-		if (TNC->ProgramPath)
-			TNC->WeStartedTNC = RestartTNC(TNC);
+	if (TNC->ProgramPath)
+		TNC->WIMMORPID = FindFLDIGI(TNC->ProgramPath);
+
+	if (TNC->WIMMORPID == 0)	// Not running
+		TNC->WeStartedTNC = RestartTNC(TNC);
 
 #endif
 
@@ -1118,7 +1152,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 			//	Bind Failed
 
 			int err = WSAGetLastError();
-			Consoleprintf("Bind Failed for UDP port %d - error code = %d", htons(TNC->WINMORPort), err);
+			Consoleprintf("Bind Failed for UDP port %d - error code = %d", TNC->WINMORPort, err);
 		}
 
 		TNC->Datadestaddr.sin_family = AF_INET;	

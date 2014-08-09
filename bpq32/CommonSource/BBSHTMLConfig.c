@@ -5,9 +5,6 @@
 extern char NodeTail[];
 extern char BBSName[10];
 
-extern char ConfigName[250];
-extern char ChatConfigName[250];
-
 extern char LTFROMString[2048];
 extern char LTTOString[2048];
 extern char LTATString[2048];
@@ -640,7 +637,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (FwdTemplate)
 			free(FwdTemplate);
 
-		FwdTemplate = GetTemplateFromFile(1, "FwdPage.txt");
+		FwdTemplate = GetTemplateFromFile(2, "FwdPage.txt");
 
 		if (FwdDetailTemplate)
 			free(FwdDetailTemplate);
@@ -1181,6 +1178,8 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 		MaxMsgno = atoi(Temp);
 		GetParam(input, "BIDLife=", Temp);
 		BidLifetime= atoi(Temp);
+		GetParam(input, "MaxAge=", Temp);
+		MaxAge = atoi(Temp);
 		GetParam(input, "LogLife=", Temp);
 		LogAge = atoi(Temp);
 		GetParam(input, "UserLife=", Temp);
@@ -1221,12 +1220,10 @@ VOID SaveHousekeeping(struct HTTPConnectionInfo * Session, char * MsgPtr, char *
 
 		GetParam(input, "At=", LTATString);
 		LTAT = GetOverrideFromString(LTATString);
- 	}
-
-#ifndef LINBPQ
-	SaveMAINTConfig();
-#endif
-
+ 
+		SaveConfig(ConfigName);
+		GetConfig(ConfigName);
+	}
 	SendHouseKeeping(Reply, RLen, Key);
 	return;
 }
@@ -1379,10 +1376,9 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		HoldFrom = GetMultiStringInput(input, "Hfrom=");
 		HoldTo = GetMultiStringInput(input, "Hto=");
 		HoldAt = GetMultiStringInput(input, "Hat=");
-#ifdef LINBPQ
+
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
-#endif
 	}
 	
 	SendConfigPage(Reply, RLen, Key);
@@ -1433,12 +1429,9 @@ VOID ProcessUIUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char * 
 			GetCheckBox(input, HDDRKey, &UIHDDR[i]);
 			GetCheckBox(input, NullKey, &UINull[i]);
 		}
-#ifdef LINBPQ
+
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
-#else
-		SaveUIConfig();
-#endif
 	}
 
 	SendUIPage(Reply, RLen, Key);
@@ -1484,6 +1477,8 @@ VOID SaveFwdCommon(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Re
 		MaxTXSize = atoi(Temp);
 		GetParam(input, "MaxRX=", Temp);
 		MaxRXSize = atoi(Temp);
+		GetParam(input, "MaxAge=", Temp);
+		MaxAge = atoi(Temp);
 		GetCheckBox(input, "WarnNoRoute=", &WarnNoRoute);
 		GetCheckBox(input, "LocalTime=", &Localtime);
 		AliasText = GetMultiStringInput(input, "Aliases=");
@@ -1502,8 +1497,6 @@ char * GetNextParam(char ** next)
 	}
 	return ptr1;
 }
-
-VOID MultiStringValuetoReg(HKEY hKey, char * name, char ** values);
 
 VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * Reply, int * RLen, char * Rest)
 {
@@ -1579,77 +1572,15 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		if (strcmp(ptr1, "true") == 0) FWDInfo->AllowB2 = TRUE; else FWDInfo->AllowB2 = FALSE;
 		ptr1 = GetNextParam(&ptr2);		// CTRLZ
 		if (strcmp(ptr1, "true") == 0) FWDInfo->SendCTRLZ = TRUE; else FWDInfo->SendCTRLZ = FALSE;
-#ifdef LINBPQ
+
 		SaveConfig(ConfigName);
 		GetConfig(ConfigName);
-#else
-		{
-		HKEY hKey = 0;
-		int retCode, disp;
-		char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
 
-		strcat(Key, Session->User->Call);
-
-		retCode = RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-		MultiStringValuetoReg(hKey, "ATCalls", FWDInfo->ATCalls);
-		MultiStringValuetoReg(hKey, "TOCalls", FWDInfo->TOCalls);
-		MultiStringValuetoReg(hKey, "FWD Times", FWDInfo->FWDTimes);
-		MultiStringValuetoReg(hKey, "HRoutes", FWDInfo->Haddresses);
-		MultiStringValuetoReg(hKey, "HRoutesP", FWDInfo->HaddressesP);
-		MultiStringValuetoReg(hKey, "Connect Script", FWDInfo->ConnectScript);
-
-		RegSetValueEx(hKey,"Enabled", 0, REG_DWORD, (BYTE *)&FWDInfo->Enabled,4);
-		RegSetValueEx(hKey,"RequestReverse", 0, REG_DWORD, (BYTE *)&FWDInfo->ReverseFlag,4);
-		RegSetValueEx(hKey,"Use B2 Protocol", 0, REG_DWORD, (BYTE *)&FWDInfo->AllowB2,4);
-		RegSetValueEx(hKey, "FWD Personals Only", 0, REG_DWORD, (BYTE *)&FWDInfo->PersonalOnly,4);
-		RegSetValueEx(hKey, "FWD New Immediately", 0, REG_DWORD, (BYTE *)&FWDInfo->SendNew,4);
-		RegSetValueEx(hKey,"Use B1 Protocol", 0, REG_DWORD, (BYTE *)&FWDInfo->AllowB1,4);
-		RegSetValueEx(hKey,"SendCTRLZ", 0, REG_DWORD, (BYTE *)&FWDInfo->SendCTRLZ,4);
-		RegSetValueEx(hKey,"AllowCompressed", 0, REG_DWORD, (BYTE *)&FWDInfo->AllowCompressed,4);
-		RegSetValueEx(hKey,"FWDInterval", 0, REG_DWORD, (BYTE *)&FWDInfo->FwdInterval,4);
-		RegSetValueEx(hKey,"RevFWDInterval", 0, REG_DWORD, (BYTE *)&FWDInfo->RevFwdInterval,4);
-		RegSetValueEx(hKey,"MaxFBBBlock", 0, REG_DWORD, (BYTE *)&FWDInfo->MaxFBBBlockSize, 4);
-
-		RegSetValueEx(hKey,"BBSHA", 0, REG_SZ, FWDInfo->BBSHA, strlen(FWDInfo->BBSHA));
-
-		RegCloseKey(hKey);
-		}
-#endif
 		ReinitializeFWDStruct(Session->User);
 	
 		SendFwdDetails(Session, Reply, RLen, Session->Key);
 	}
 }
-
-#ifdef WIN32
-
-VOID MultiStringValuetoReg(HKEY hKey, char * name, char ** values)
-{
-	char ** Calls;
-	char Multi[10000];
-	char * ptr = &Multi[1];
-
-	*ptr = 0;
-
-	if (values)
-	{
-		Calls = values;
-
-		while(Calls[0])
-		{
-			strcpy(ptr, Calls[0]);
-			ptr += strlen(Calls[0]);
-			*(ptr++) = 0;
-			Calls++;
-		}
-		*(ptr++) = 0;
-	}
-
-	RegSetValueEx(hKey, name, 0, REG_MULTI_SZ, &Multi[1], ptr-&Multi[1]);
-}
-
-#endif
 
 
 
@@ -2215,7 +2146,7 @@ VOID SendFwdMainPage(char * Reply, int * RLen, char * Key)
 
 	*RLen = sprintf(Reply, FwdTemplate, Key, Key, BBSName,
 		Key, Key, Key, Key, Key, Key, Key, Key,
-		Key, MaxTXSize, MaxRXSize,
+		Key, MaxTXSize, MaxRXSize, MaxAge,
 		(WarnNoRoute) ? CHKD  : UNC, 
 		(Localtime) ? CHKD  : UNC, ALIASES);
 }

@@ -4276,7 +4276,7 @@ BOOL CheckCMSThread(struct TNCINFO * TNC)
 	TCP->UseCachedCMSAddrs = FALSE;
 
 	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+	hints.ai_family = AF_INET6;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_DGRAM;
 
 	n = getaddrinfo("a.root-servers.net", NULL, &hints, &res);

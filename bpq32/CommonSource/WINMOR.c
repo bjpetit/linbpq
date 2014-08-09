@@ -2629,7 +2629,7 @@ lineloop:
 			strcat(TNC->WebBuffer, Line);
 			strcat(TNC->WebBuffer, "\r\n");
 			if (strlen(TNC->WebBuffer) > 4500)
-				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4000);
+				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4490);	// Make sure null is moved
 		Skip:
 			ptr1 = ptr2;
 
@@ -2652,7 +2652,7 @@ lineloop:
 			strcat(TNC->WebBuffer, ptr1);
 			strcat(TNC->WebBuffer, "\r\n");
 			if (strlen(TNC->WebBuffer) > 4500)
-				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4000);
+				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4490);	// Make sure null is moved
 		}
 	}
 

@@ -769,6 +769,9 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	struct ALIAS * Alias;
 	struct UserInfo * RMS;
 
+	if (Msg->status == 'K')
+		return 1;				// No point,  but don'r want no route warning
+
 	strcpy(RouteElements, Msg->via);
 
 	Logprintf(LOG_BBS, conn, '?', "Msg %d Routing Trace To %s Via %s", Msg->number, Msg->to, RouteElements);
@@ -882,6 +885,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 			return 1;
 		}
+		Logprintf(LOG_BBS, conn, '?', "Routing Trace - @ winlink.org but no BBS RMS");
 		return 0;
 	}
 
@@ -1073,9 +1077,8 @@ NOHA:
 				return 1;
 			}
 		}
-		return FALSE;	// No match
+		goto CheckWildCardedAT;
 	}
-
 
 
 	if (Msg->type == 'P' || Flood == 0)
@@ -1170,9 +1173,12 @@ NOHA:
 //		if (ATBBS[0] == 0)
 //			return FALSE;			// no AT
 
+CheckWildCardedAT:
+
 		depth = 0;
 		bestmatch = -1;
-		
+		bestbbs = NULL;
+
 		for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
@@ -1200,6 +1206,7 @@ NOHA:
 			return 1;
 		}
 
+		Logprintf(LOG_BBS, conn, '?', "Routing Trace - No Match");
 		return FALSE;	// No match
 	}
 
@@ -1252,6 +1259,9 @@ NOHA:
 		}
 
 	}
+
+	if (Count == 0)		
+		Logprintf(LOG_BBS, conn, '?', "Routing Trace - No Match");
 
 	return Count;
 }

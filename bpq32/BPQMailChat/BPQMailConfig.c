@@ -1533,6 +1533,7 @@ VOID SaveFWDConfig(HWND hDlg)
 	Localtime = IsDlgButtonChecked(hDlg, IDC_USELOCALTIME);
 	MaxTXSize = GetDlgItemInt(hDlg, IDC_MAXSEND, &OK, FALSE);
 	MaxRXSize = GetDlgItemInt(hDlg, IDC_MAXRECV, &OK, FALSE);
+	MaxAge = GetDlgItemInt(hDlg, IDC_MAXAGE, &OK, FALSE);
 	
 	// Reinitialise Aliases
 
@@ -2828,6 +2829,7 @@ INT_PTR CALLBACK FwdEditDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 		SetDlgItemInt(hDlg, IDC_MAXSEND, MaxTXSize, FALSE);
 		SetDlgItemInt(hDlg, IDC_MAXRECV, MaxRXSize, FALSE);
+		SetDlgItemInt(hDlg, IDC_MAXAGE, MaxAge, FALSE);
 
 		if (Aliases)
 		{

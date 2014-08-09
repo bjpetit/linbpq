@@ -19,6 +19,8 @@
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
+#define LIBCONFIG_STATIC
+#include "libconfig.h"
 
 #include "compatbits.h"
 
@@ -294,6 +296,18 @@ struct FBBRestartData
 	int Count;						// Give up if too many restarts
 };
 
+//	We need to keep the B2Message file for B2 messages we are sending until the messages is acked, so
+//	we can restart it. Otherwise the file may change, resulting in a checksum error
+
+
+struct B2RestartData
+{
+	int CSize;						// Compresses Size (B2 proto)
+	UCHAR * CompressedMsg;			// Compressed Body fo B2
+	struct MsgInfo * FwdMsg;
+	struct UserInfo * UserPointer;
+	int Count;						// Give up if too many restarts
+};
 #pragma pack(1)
 
 struct TempUserInfo
@@ -791,7 +805,6 @@ VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len);
 int EncryptPass(char * Pass, char * Encrypt);
 VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
 
-
 // TCP Connections. FOr the moment SMTP or POP3
 
 typedef struct SocketConnectionInfo
@@ -977,6 +990,9 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int le
 VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg);
 int ProcessConnecting(CIRCUIT * circuit, char * Buffer, int Len);
 VOID SaveConfig(char * ConfigName);
+BOOL GetConfig(char * ConfigName);
+int GetIntValue(config_setting_t * group, char * name);
+BOOL GetStringValue(config_setting_t * group, char * name, char * value);
 BOOL GetConfigFromRegistry();
 VOID Parse_SID(CIRCUIT * conn, char * SID, int len);
 VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len);
@@ -996,13 +1012,14 @@ BOOL FBBDoForward(CIRCUIT * conn);
 BOOL FindMessagestoForward(CIRCUIT * conn);
 BOOL SeeifMessagestoForward(int BBSNumber, CIRCUIT * Conn);
 int CountMessagestoForward(int BBSNumber);
-#ifdef LINBPQ
+
+VOID * GetMultiLineDialogParam(HWND hDialog, int DLGItem);
+
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
 VOID * GetMultiStringValue(config_setting_t * hKey, char * ValueName);
-#else
-VOID * GetMultiStringValue(HKEY hKey, char * ValueName);
-#endif
+VOID * RegGetMultiStringValue(HKEY hKey, char * ValueName);
+
 int MultiLineDialogToREG_MULTI_SZ(HWND hWnd, int DLGItem, HKEY hKey, char * ValueName);
 int Do_BBS_Sel_Changed(HWND hDlg);
 VOID FreeForwardingStruct(struct UserInfo * user);
@@ -1024,7 +1041,6 @@ VOID SaveFWDConfig();
 VOID SaveMAINTConfig();
 VOID SaveWelcomeMsgs();
 VOID SavePrompts();
-VOID SaveWindowConfig();
 VOID ReinitializeFWDStruct(struct UserInfo * user);
 VOID CopyBIDDatabase();
 VOID CopyMessageDatabase();
@@ -1137,11 +1153,10 @@ VOID InitialiseNNTP();
 VOID BuildNNTPList(struct MsgInfo * Msg);
 int NNTP_Data(int sock, int error, int eventcode);
 int NNTP_Accept(int SocketId);
-#ifdef LINBPQ
+
 VOID * GetOverrides(config_setting_t * group, char * ValueName);
-#else
-VOID * GetOverrides(HKEY hKey, char * ValueName);
-#endif
+VOID * RegGetOverrides(HKEY hKey, char * ValueName);
+
 VOID DoHouseKeeping(BOOL Mainual);
 VOID ExpireMessages();
 VOID KillMsg(struct MsgInfo * Msg);
@@ -1294,6 +1309,7 @@ extern BOOL SMTPAuthNeeded;
 
 extern int MaxMsgno;
 extern int BidLifetime;
+extern int MaxAge;
 extern int MaintInterval;
 extern int MaintTime;
 extern int UserLifetime;
@@ -1402,3 +1418,5 @@ extern BOOL Localtime;
 struct ConsoleInfo * ConsHeader[2];
 
 extern BOOL NeedHomeBBS;
+extern char ConfigName[250];
+extern BOOL UsingingRegConfig;

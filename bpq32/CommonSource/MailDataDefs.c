@@ -54,6 +54,7 @@ int HighestBBSNumber = 0;
 
 int MaxMsgno = 60000;
 int BidLifetime = 60;
+int MaxAge = 30;
 int MaintInterval = 24;
 int MaintTime = 0;
 
@@ -134,6 +135,9 @@ char NTSAliasesName[MAX_PATH] = "INTRCPT.APS";
 
 char ConfigName[250];
 char ChatConfigName[250];
+
+BOOL UsingingRegConfig = FALSE;
+
 
 char BaseDir[MAX_PATH];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%

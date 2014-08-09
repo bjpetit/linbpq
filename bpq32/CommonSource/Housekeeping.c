@@ -83,8 +83,6 @@ VOID FreeOverrides()
 	FreeOverride(LTAT);
 }
 
-#ifdef LINBPQ
-
 VOID * GetOverrides(config_setting_t * group, char * ValueName)
 {
 	char * ptr1;
@@ -128,11 +126,11 @@ VOID * GetOverrides(config_setting_t * group, char * ValueName)
 	return Value;
 }
 
-#else
-
-
-VOID * GetOverrides(HKEY hKey, char * ValueName)
+VOID * RegGetOverrides(HKEY hKey, char * ValueName)
 {
+#ifdef LINBPQ
+	return NULL;
+#else
 	int retCode,Type,Vallen;
 	char * MultiString;
 	int ptr, len;
@@ -179,9 +177,8 @@ VOID * GetOverrides(HKEY hKey, char * ValueName)
 	free(MultiString);
 
 	return Value;
-}
-
 #endif
+}
 
 int Removed;
 int Killed;
@@ -228,8 +225,6 @@ INT_PTR CALLBACK HKDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 
 VOID DoHouseKeeping(BOOL Manual)
 {
-	HKEY hKey=0;
-	int retCode, disp;
 	time_t NOW;
 
 	UpdateWP();
@@ -260,17 +255,6 @@ VOID DoHouseKeeping(BOOL Manual)
 	LastHouseKeepingTime = NOW = time(NULL);
 
 #ifndef LINBPQ
-	retCode = RegCreateKeyEx(REGTREE,
-          "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		retCode = RegSetValueEx(hKey,"LastHouseKeepingTime",0,REG_DWORD,(BYTE *)&NOW,4);
-		RegCloseKey(hKey);
-	}
-
-	if (SaveRegDuringMaint)
-		CreateRegBackup();
 
 	if (Manual)
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_MAINTRESULTS), hWnd, HKDialogProc);
@@ -965,8 +949,6 @@ VOID CreateBBSTrafficReport()
 	int len;
 	char File[MAX_PATH];
 	FILE * hFile;
-	HKEY hKey=0;
-	int retCode, disp;
 	time_t NOW = time(NULL);
 
 	int	ConnectsIn;
@@ -1124,18 +1106,8 @@ VOID CreateBBSTrafficReport()
 
 	fwrite(Line, 1, len, hFile);
 
-#ifndef LINBPQ
-
-	retCode = RegCreateKeyEx(REGTREE,
-			"SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\HouseKeeping",0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		retCode = RegSetValueEx(hKey,"LastTrafficTime",0,REG_DWORD,(BYTE *)&NOW,4);
-		RegCloseKey(hKey);
-	}
-
-#endif
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 	SaveUserDatabase();
 	fclose(hFile);

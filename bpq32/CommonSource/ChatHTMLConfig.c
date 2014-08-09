@@ -22,8 +22,6 @@ extern char BusyError[];
 extern char NodeTail[];
 extern BOOL APRSApplConnected;
 
-
-extern char ConfigName[250];
 extern char ChatConfigName[250];
 
 extern char OtherNodesList[1000];

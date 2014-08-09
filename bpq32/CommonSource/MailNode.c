@@ -13,8 +13,6 @@
 #include <sys/prctl.h>
 #endif
 #endif
-#define LIBCONFIG_STATIC
-#include "libconfig.h"
 
 #define Connect(stream) SessionControl(stream,1,0)
 #define Disconnect(stream) SessionControl(stream,2,0)
@@ -450,7 +448,6 @@ extern UCHAR PWLEN;
 extern char PWTEXT[];
 extern int ISPort;
 
-extern char ConfigName[250];
 extern char ChatConfigName[250];
 
 char * GetBPQDirectory()
@@ -1082,8 +1079,8 @@ int main(int argc, char * argv[])
 				{
 					if ((LastTrafficTime + 86400) < NOW)
 					{
-						CreateBBSTrafficReport();
 						LastTrafficTime = NOW;
+						CreateBBSTrafficReport();
 					}
 				}
 			}

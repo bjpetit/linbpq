@@ -396,6 +396,7 @@ static SOCKADDR_IN sinx;
 
 
 VOID SendReporttoWL2KThread();
+VOID SendHTTPReporttoWL2KThread();
 
 VOID CheckWL2KReportTimer()
 {
@@ -407,20 +408,116 @@ VOID CheckWL2KReportTimer()
 	if (WL2KTimer != 0)
 		return;
 
-	WL2KTimer = 32910/2;		// Every Half Hour
+	WL2KTimer = 32910;			// Every Hour
 		
 	if (CheckAppl(NULL, "RMS         ") == NULL)
 		if (CheckAppl(NULL, "RELAY       ") == NULL)
 			return;
 
-	_beginthread(SendReporttoWL2KThread, 0, 0);
+	_beginthread(SendHTTPReporttoWL2KThread, 0, 0);
+
+	return;
+}
+
+static char HeaderTemplate[] = "POST %s HTTP/1.1\r\n"
+	"Accept: application/json\r\n"
+//	"Accept-Encoding: gzip,deflate,gzip, deflate\r\n"
+	"Content-Type: application/json\r\n"
+	"Host: %s:%d\r\n"
+	"Content-Length: %d\r\n"
+	//r\nUser-Agent: BPQ32(G8BPQ)\r\n"
+//	"Expect: 100-continue\r\n"
+	"\r\n{%s}";
+
+char Missing[] = "** Missing **";
+
+VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value)
+{
+	char * ptr1, * ptr2;
+
+	strcpy(Value, Missing);
+
+	ptr1 = strstr(_REPLYBUFFER, Name);
+
+	if (ptr1 == 0)
+		return;
+
+	ptr1 += (strlen(Name) + 1);
+
+	ptr2 = strchr(ptr1, '"');
+			
+	if (ptr2)
+	{
+		int ValLen = ptr2 - ptr1;
+		memcpy(Value, ptr1, ValLen);
+		Value[ValLen] = 0;
+	}
 
 	return;
 }
 
 
-VOID SendReporttoWL2KThread()
+VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return)
 {
+	int InputLen = 0;
+	int inptr = 0;
+	char Buffer[2048];
+	char Header[2048];
+	char * ptr, * ptr1;
+
+	sprintf(Header, HeaderTemplate, Request, Host, Port, Len + 2, Params);
+	send(sock, Header, strlen(Header), 0);
+
+	while (InputLen != -1)
+	{
+		InputLen = recv(sock, &Buffer[inptr], 2048 - inptr, 0);
+
+		//	As we are using a persistant connection, can't look for close. Check
+		//	for complete message
+
+		inptr += InputLen;
+		
+		ptr = strstr(Buffer, "\r\n\r\n");
+
+		if (ptr)
+		{
+			// got header
+
+			int Hddrlen = ptr - Buffer;
+					
+			ptr1 = strstr(Buffer, "Content-Length:");
+
+			if (ptr1)
+			{
+				// Have content length
+
+				int ContentLen = atoi(ptr1 + 16);
+
+				if (ContentLen + Hddrlen + 4 == inptr)
+				{
+					// got whole response
+
+					if (strstr(Buffer, " 200 OK"))
+					{
+						if (Return)
+						{
+							memcpy(Return, ptr + 4, ContentLen); 
+							Return[ContentLen] = 0;
+						}
+						else
+							Debugprintf("WL2K Database update ok");
+					}
+					return;
+				}
+			}
+		}
+	}
+}
+
+VOID SendHTTPReporttoWL2KThread()
+{
+	// Uses HTTP/JSON Interface
+
 	struct WL2KInfo * WL2KReport = WL2KReports;
 	char * LastHost = NULL;
 	char * LastRMSCall = NULL;
@@ -433,7 +530,7 @@ VOID SendReporttoWL2KThread()
 	int err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
-	int GroupRef;
+	int Len;
 
 	// Send all reports in list
 
@@ -442,7 +539,9 @@ VOID SendReporttoWL2KThread()
 		// Resolve Name if needed
 
 		if (LastHost && strcmp(LastHost, WL2KReport->Host) == 0)		// Same host?
-			goto SkipResolve;
+			goto SameHost;
+
+		// New Host - Connect to it
 	
 		LastHost = WL2KReport->Host;
 	
@@ -473,43 +572,87 @@ VOID SendReporttoWL2KThread()
 		if (sock)
 			closesocket(sock);
 
-		sock = socket(AF_INET,SOCK_DGRAM,0);
+		sock = socket(AF_INET, SOCK_STREAM, 0);
 
 		if (sock == INVALID_SOCKET)
   	 		return; 
 
-		ioctlsocket(sock, FIONBIO, &param);
+//		ioctlsocket(sock, FIONBIO, &param);
  
 		setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt, 4);
 
 		destaddr.sin_family = AF_INET;
 
-	SkipResolve:
+		if (sock == INVALID_SOCKET)
+		{
+			sock = 0;
+			return; 
+		}
 
-		if (strstr(WL2KReport->ServiceCode, "MARS"))
-			GroupRef = 3;
-		else
-			GroupRef = 1;
+		setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
 
-		sprintf(Message, "06'%s', '%s', '%s', %d, %d, %d, %d, %d, %d, %03d, '%s', %d, '%s'",
-				WL2KReport->RMSCall, WL2KReport->BaseCall, WL2KReport->GridSquare, WL2KReport->Freq,
-				WL2KReport->mode, WL2KReport->baud, WL2KReport->power, WL2KReport->height, WL2KReport->gain,
-				WL2KReport->direction, WL2KReport->Times, GroupRef, WL2KReport->ServiceCode);
+		// Connect to Host
+
+		if (connect(sock,(LPSOCKADDR) &destaddr, sizeof(destaddr)) != 0)
+		{
+			err=WSAGetLastError();
+
+			//
+			//	Connect failed
+			//
+
+			Debugprintf("Connect Failed");
+			closesocket(sock);
+			sock = 0;
+			break;
+		}
+
+	SameHost:
+
+		Len = sprintf(Message,
+				"\"Callsign\":\"%s\","
+				"\"BaseCallsign\":\"%s\","
+				"\"GridSquare\":\"%s\","
+				"\"Frequency\":%d,"
+				"\"Mode\":%d,"
+				"\"Baud\":%d,"
+				"\"Power\":%d,"
+				"\"Height\":%d,"
+				"\"Gain\":%d,"
+				"\"Direction\":%d,"
+				"\"Hours\":\"%s\","
+				"\"ServiceCode\":\"%s\"",
+
+				WL2KReport->RMSCall, WL2KReport->BaseCall, WL2KReport->GridSquare,
+				WL2KReport->Freq, WL2KReport->mode, WL2KReport->baud, WL2KReport->power,
+				WL2KReport->height, WL2KReport->gain, WL2KReport->direction,
+				WL2KReport->Times, WL2KReport->ServiceCode);
 
 		Debugprintf("Sending %s", Message);
 
-		sendto(sock, Message, strlen(Message),0,(struct sockaddr *)&destaddr,sizeof(destaddr));
-				
+		SendHTTPRequest(sock, WL2KReport->Host, WL2KReport->WL2KPort, 
+				"/channel/add", Message, Len, NULL);
+	
+		
+		//	Send Version Message
+
+
 		if (LastRMSCall == NULL || strcmp(WL2KReport->RMSCall, LastRMSCall) != 0)
 		{
+			int Len;
+			
 			LastRMSCall = WL2KReport->RMSCall;
+
+	//	"Callsign":"String","Program":"String","Version":"String","Comments":"String"
 		
-			sprintf(Message, "00,%s,BPQ32,%d.%d.%d.%d",
+			Len = sprintf(Message, "\"Callsign\":\"%s\",\"Program\":\"BPQ32\","
+				"\"Version\":\"%d.%d.%d.%d\",\"Comments\":\"Test Comment\"",
 				WL2KReport->RMSCall, Ver[0], Ver[1], Ver[2], Ver[3]);
 
 			Debugprintf("Sending %s", Message);
 
-			sendto(sock, Message, strlen(Message),0,(struct sockaddr *)&destaddr,sizeof(destaddr));
+			SendHTTPRequest(sock, WL2KReport->Host, WL2KReport->WL2KPort, 
+				"/version/add", Message, Len, NULL);
 		}
 
 		WL2KReport = WL2KReport->Next;
@@ -520,8 +663,6 @@ VOID SendReporttoWL2KThread()
 	sock = 0;
 
 }
-
-static SOCKET sock;
 
 struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 {
@@ -548,8 +689,10 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	p_cmd = strtok_s(NULL, ", \t\n\r", &Context);
 	if (p_cmd == NULL) goto BadLine;
 
-	if (_stricmp(p_cmd, "winlink.org") == 0)
-		WL2KReport->Host = _strdup("statusreport.winlink.org");
+	_strlwr(p_cmd);
+
+	if (strstr(p_cmd, "winlink.org"))
+		WL2KReport->Host = _strdup("server.winlink.org");
 	else
 		WL2KReport->Host = _strdup(p_cmd);
 
@@ -557,6 +700,10 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 	if (p_cmd == NULL) goto BadLine;
 
 	WL2KReport->WL2KPort = atoi(p_cmd);
+
+	if (WL2KReport->WL2KPort == 8778)
+		WL2KReport->WL2KPort = 8085;			// HTTP Interface
+
 	if (WL2KReport->WL2KPort == 0) goto BadLine;
 
 	p_cmd = strtok_s(NULL, " ,\t\n\r", &Context);		
@@ -617,20 +764,20 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 
 		 WL2KReport->baud = Speed;
 			
-		 if (Speed < 1200)
-			 Mode = 0;
-		 else if (Speed < 2400)
-			 Mode = 1;					// 1200
-		 else if (Speed < 4800)
-			 Mode = 2;					// 2400
-		 else if (Speed < 9600)
-			 Mode = 3;					// 4800
-		 else if (Speed < 19200)
-			 Mode = 4;					// 9600
-		 else if (Speed < 38400)
-			 Mode = 5;					// 19200
+		 if (Speed <= 1200)
+			 Mode = 0;					// 1200
+		 else if (Speed <= 2400)
+			 Mode = 1;					// 2400
+		 else if (Speed <= 4800)
+			 Mode = 2;					// 4800
+		 else if (Speed <= 9600)
+			 Mode = 3;					// 9600
+		 else if (Speed <= 19200)
+			 Mode = 4;					// 19200
+		 else if (Speed <= 38400)
+			 Mode = 5;					// 38400
 		 else
-			 Mode = 6;					// 38400 +
+			 Mode = 6;					// >38400
 
 		WL2KReport->mode = Mode;
 	}
@@ -933,40 +1080,34 @@ char * GetChallengeResponse(char * Call, char *  ChallengeString)
 	return ChallengeResponse;
 }
 
-BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * _REPLYBUFFER)
+SOCKET OpenWL2KHTTPSock()
 {
 	SOCKET sock = 0;
 	struct sockaddr_in destaddr;
 	struct sockaddr_in sinx; 
-	int len = 100;
 	int addrlen=sizeof(sinx);
 	struct hostent * HostEnt;
 	int err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
-	char Buffer[100];
-	char SendBuffer[1000];
 		
 	destaddr.sin_family = AF_INET; 
-	destaddr.sin_addr.s_addr = inet_addr("statusreport.winlink.org");
-	destaddr.sin_port = htons(8775);
+	destaddr.sin_port = htons(8085);
 
-	if (destaddr.sin_addr.s_addr == INADDR_NONE)
-	{
-		//	Resolve name to address
-		HostEnt = gethostbyname ("www.winlink.org");
+	//	Resolve name to address
+
+	HostEnt = gethostbyname ("server.winlink.org");
 		 
-		if (!HostEnt)
-		{
-			err = WSAGetLastError();
+	if (!HostEnt)
+	{
+		err = WSAGetLastError();
 
-			Debugprintf("Resolve Failed for %s %d %x", "halifax.winlink.org", err, err);
-			return 0 ;			// Resolve failed
-		}
-	
-		memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+		Debugprintf("Resolve Failed for %s %d %x", "server.winlink.org", err, err);
+		return 0 ;			// Resolve failed
 	}
-
+	
+	memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);	
+	
 	//   Allocate a Socket entry
 
 	sock = socket(AF_INET,SOCK_STREAM,0);
@@ -990,23 +1131,30 @@ BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * _REPLYBUFFER)
 		return 0;
 	}
 
-	len = recv(sock, &Buffer[0], len, 0);
+	return sock;
+}
 
-	len = sprintf(SendBuffer, "04%07d%-12s%s%s", strlen(SQL), Call, GetChallengeResponse(Call, Buffer), SQL);
+BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER)
+{
+	SOCKET sock = 0;
+	int Len;
+	char Message[1000];
+		
+	sock = OpenWL2KHTTPSock();
 
-	send(sock, SendBuffer, len, 0);
-
-	len = 1000;
-
-	len = recv(sock, _REPLYBUFFER, len, 0);
-
-	_REPLYBUFFER[len] = 0;
-	Debugprintf(_REPLYBUFFER);
+	if (sock == 0)
+		return 0;
+	
+	// {"Callsign":"String"}
+			
+	Len = sprintf(Message, "\"Callsign\":\"%s\"", Call);
+		
+	SendHTTPRequest(sock, "server.winlink.org", 8085, 
+				"/sysop/get", Message, Len, _REPLYBUFFER);
 
 	closesocket(sock);
 
-	return TRUE;
-
+	return _REPLYBUFFER[0];
 }
 
 BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL)

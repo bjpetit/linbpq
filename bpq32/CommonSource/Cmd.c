@@ -4047,14 +4047,12 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 extern char WL2KCall[10];
 extern char WL2KLoc[7];
 
-BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * _REPLYBUFFER);
+BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER);
 BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL);
 
 VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	char _REPLYBUFFER[1000] = "";
-	char * ptr1, * ptr2;
-	char SQL[1000];
 
 	char LastUpdated[100];
 	char Name[100] = "";
@@ -4069,7 +4067,14 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	char Phone[100] = "";
 	char Data[100] = "";
 	char LOC[100] = "";
-	int replylen;
+	BOOL Exists = TRUE;
+	time_t LastUpdateSecs = 0;
+	char * ptr1, * ptr2;
+
+	SOCKET sock;
+			
+	int Len;
+	char Message[2048];
 
 	if (WL2KCall[0] < 33)
 	{
@@ -4078,153 +4083,49 @@ VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		return;
 	}
 
-	sprintf(SQL, "SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, EMail, WEBSite, Phones, AdditionalData, GridSquare, TimeStamp FROM SysopRecords WHERE Callsign='%s'",
-			WL2KCall);
 
-
-	if (GetWL2KSYSOPInfo(WL2KCall, SQL, _REPLYBUFFER) == 0)
+	if (GetWL2KSYSOPInfo(WL2KCall, _REPLYBUFFER) == 0)
 	{
 		Bufferptr += sprintf(Bufferptr, "Failed to connect to WL2K Database\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
 	}
 
+	if (strstr(_REPLYBUFFER, "\"ErrorMessage\":"))
+		Exists = FALSE;
 
-	replylen = atoi(&_REPLYBUFFER[2]);
+	GetJSONValue(_REPLYBUFFER, "\"SysopName\":", Name);	
+	GetJSONValue(_REPLYBUFFER, "\"StreetAddress1\":", Addr1);	
+	GetJSONValue(_REPLYBUFFER, "\"StreetAddress2\":", Addr2);	
+	GetJSONValue(_REPLYBUFFER, "\"City\":", City);	
+	GetJSONValue(_REPLYBUFFER, "\"State\":", State);	
+	GetJSONValue(_REPLYBUFFER, "\"Country\":", Country);	
+	GetJSONValue(_REPLYBUFFER, "\"PostalCode\":", PostCode);	
+	GetJSONValue(_REPLYBUFFER, "\"Email\":", Email);	
+	GetJSONValue(_REPLYBUFFER, "\"Website\":", Website);	
+	GetJSONValue(_REPLYBUFFER, "\"Phones\":", Phone);	
+	GetJSONValue(_REPLYBUFFER, "\"Comments\":", Data);	
+	GetJSONValue(_REPLYBUFFER, "\"GridSquare\":", LOC);	
+	GetJSONValue(_REPLYBUFFER, "\"Timestamp\":", LastUpdated);	
 
-	if (replylen == 0)
+	ptr1 = strchr(LastUpdated, '(');
+
+	if (ptr1)
 	{
-		Bufferptr += sprintf(Bufferptr, "Nothing returned from WL2K Database\r");
-		goto CheckParam;
+		ptr2 = strchr(++ptr1, ')');
+
+		if (ptr2)
+		{
+			*(ptr2 - 3) = 0; // remove millisecs
+			LastUpdateSecs = atoi(ptr1);
+
+			FormatTime2(LastUpdated, LastUpdateSecs);
+		}
 	}
-
-		ptr1 = ptr2 = &_REPLYBUFFER[9];
-		ptr2 = strchr(ptr1, 1);
-	
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(Name, ptr1);
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-		strcpy(Addr1, ptr1);
-
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-		strcpy(Addr2, ptr1);
-
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(City, ptr1);
-
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(State, ptr1);
-			
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(Country, ptr1);
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(PostCode, ptr1);
-		
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(Email, ptr1);
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(Website, ptr1);
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-
-		strcpy(Phone, ptr1);
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-		strcpy(Data, ptr1);
-
-		ptr1 = ptr2;
-		ptr2 = strchr(ptr1, 1);
-
-		if (ptr2 == 0)
-			goto BadResp;
-
-		*(ptr2++) = 0;
-		strcpy(LOC, ptr1);
-
-		strcpy(LastUpdated, ptr2);
-
-	goto CheckParam;
-
-BadResp:
-
-		Bufferptr += sprintf(Bufferptr, "Bad response from WL2K Database\r");
-		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
-		return;
-
-
-CheckParam:
 
 	if (_memicmp(CmdTail, "SET ", 4) == 0)
 	{
-		if (replylen)
+		if (Exists)
 		{
 			Bufferptr += sprintf(Bufferptr, "Record already exists in WL2K Database\r");
 			SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
@@ -4241,19 +4142,40 @@ CheckParam:
 //		strcpy(Name, ptr1);
 
 //DoReplace:
-		
-		sprintf(SQL, "REPLACE INTO SysopRecords SET TimeStamp=NOW(), Callsign='%s', GridSquare='%s'",
-//			SysopName='%s', StreetAddress1='%s', StreetAddress2='%s', City='%s', State='%s', Country='%s', PostalCode='%s', EMail='%s', WEBSite='%s', Phones='%s', AdditionalData='%s'",
-				WL2KCall, WL2KLoc);
 
-		UpdateWL2KSYSOPInfo(WL2KCall, SQL);	
+		Len = sprintf(Message,
+				"\"Callsign\":\"%s\","
+				"\"GridSquare\":\"%s\","
+				"\"SysopName\":\"%s\","
+				"\"StreetAddress1\":\"%s\","
+				"\"StreetAddress2\":\"%s\","
+				"\"City\":\"%s\","
+				"\"State\":\"%s\","
+				"\"Country\":\"%s\","
+				"\"PostalCode\":\"%s\","
+				"\"Email\":\"%s\","
+				"\"Phones\":\"%s\","
+				"\"Website\":\"%s\","
+				"\"Comments\":\"%s\",",
+
+			WL2KCall, WL2KLoc, Name, Addr1, Addr2, City, State, Country, PostCode, Email, Phone, Website, Data);
+		
+		Debugprintf("Sending %s", Message);
+
+		sock = OpenWL2KHTTPSock();
+
+		if (sock)
+			SendHTTPRequest(sock, "server.winlink.org", 8085, 
+				"/sysop/add", Message, Len, NULL);
+	
+		closesocket(sock);
 
 		Bufferptr += sprintf(Bufferptr, "Database Updated\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
 	}
 
-	if (replylen)
+	if (Exists)
 	{
 		Bufferptr += sprintf(Bufferptr, "\rWL2K SYSOP Info for %s\r", WL2KCall);
 		Bufferptr += sprintf(Bufferptr, "Grid Square: %s\r", LOC);
@@ -4281,6 +4203,9 @@ CheckParam:
 		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM
 		Bufferptr += sprintf(Bufferptr, "Last Updated: %s\r", LastUpdated);
 	}
+	else
+		Bufferptr += sprintf(Bufferptr, "No SYSOP record for %s\r", WL2KCall);
+
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 	return;

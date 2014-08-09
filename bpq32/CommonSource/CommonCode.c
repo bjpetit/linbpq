@@ -16,10 +16,8 @@
 #include "CHeaders.h"
 #include "tncinfo.h"
 
-
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
-
 
 #ifndef LINBPQ
 

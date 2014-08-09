@@ -700,7 +700,6 @@ extern char WPDatabasePath[];
 extern char RlineVer[50];
 
 extern BOOL LogBBS;
-extern BOOL LogCHAT;
 extern BOOL LogTCP;
 
 

@@ -20,6 +20,10 @@
 
 //	Add IP Address Mapping option
 
+//	June 2014. Convert to Router instead of MAC Bridge, and include a RIP44 decoder
+//	so packets can be routed from RF to/from encapsulated 44 net subnets.
+//	Routes may also be learned from received RF packets, or added from config file
+
 /*
 TODo	?Multiple Adapters
 */
@@ -53,6 +57,11 @@ BOOL FindLink(UCHAR * LinkCall, UCHAR * OurCall, int Port, struct _LINKTABLE ** 
 BOOL ProcessConfig();
 VOID RemoveARP(PARPDATA Arp);
 
+VOID ProcessTunnelMsg(PIPMSG IPptr);
+VOID ProcessRIP44Message(PIPMSG IPptr);
+PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found);
+BOOL ProcessROUTELine(char * buf, BOOL Locked);
+
 #define ARPTIMEOUT 3600
 
 //       ARP REQUEST (AX.25)
@@ -74,6 +83,8 @@ int NumberofRoutes = 0;
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
 ULONG OurIPAddr = 0;
+ULONG EncapAddr = 0;
+
 ULONG OurIPBroadcast = 0;
 ULONG OurNetMask = 0xffffffff;
 
@@ -1293,15 +1304,20 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 
 	Dest = IPptr->IPDEST;
 
-	if (Dest == OurIPAddr || Dest == 0xffffffff || Dest == OurIPBroadcast)
+	if (Dest == OurIPAddr || Dest == 0xffffffff || Dest == EncapAddr || Dest == OurIPBroadcast)
 		goto ForUs;
-
 
 	RouteIPMsg(IPptr);
 
 	return;
 
 ForUs:
+
+	if (IPptr->IPPROTOCOL == 4)		// AMPRNET Tunnelled Packet
+	{
+		ProcessTunnelMsg(IPptr);
+		return;
+	}
 
 	if (IPptr->IPPROTOCOL == 1)		// ICMP
 	{
@@ -1409,6 +1425,253 @@ USHORT Generate_CHECKSUM(VOID * ptr1, int Len)
 
 	return ~checksum ;
 }
+
+VOID ProcessTunnelMsg(PIPMSG IPptr)
+{
+	UCHAR * ptr;
+
+	//	Make sure it is from UCSD Encap ??How??
+
+	ptr = (UCHAR *)IPptr;
+	ptr += 20;						// Skip IPIP Header
+	IPptr = (PIPMSG) ptr;
+
+	// First check for RIP44 Messages
+
+	if (IPptr->IPPROTOCOL == 17)		// UDP
+	{
+		PUDPMSG UDPptr = (PUDPMSG)&IPptr->Data;
+
+		if (UDPptr->DESTPORT == htons(520))
+		{
+			ProcessRIP44Message(IPptr);
+			return;
+		}
+	}
+
+	// I think anything else is just paaded to the router
+
+
+
+
+		
+}
+
+VOID ProcessRIP44Message(PIPMSG IPptr)
+{
+	int Len;
+	PUDPMSG UDPptr = (PUDPMSG)&IPptr->Data;
+	PRIP2HDDR HDDR = (PRIP2HDDR)&UDPptr->UDPData;
+	PRIP2ENTRY RIP2;
+
+	Len = ntohs(IPptr->IPLENGTH);
+	Len -= 20;
+
+	if (Check_Checksum(UDPptr, Len) == FALSE)
+		return;
+
+	if	(HDDR->Command != 2 || HDDR->Version != 2)
+		return;
+
+	RIP2 = (PRIP2ENTRY) ++HDDR;
+
+	Len -= 12;				// UDP and RIP Headers
+
+	if (RIP2->AddrFamily == 0xFFFF)
+	{
+		//	Authentication Entry
+
+		Len -= 20;
+		RIP2++;
+	}
+
+	while (Len > 20)		// Entry LengtH
+	{
+		// See if already in table
+
+		PROUTEENTRY Route;
+		BOOL Found;
+
+		// if for our subnet, ignore
+
+		/*
+
+		;
+PUTINLIST:
+
+	PUSH	SI
+;
+;	IF ENTRY IS A SUBNET ROUTE TO OUR SUBNET, IGNORE IT
+;
+	PUSH	SI
+
+	MOV	SI,OFFSET TEMPENTRY
+	MOV     AX,WORD PTR MYIPADDR+2
+	AND	AX,WORD PTR SUBNET+2[SI]
+	CMP     AX,WORD PTR NETWORK+2[SI]
+	JNE	NOTOURNET1
+;
+	MOV     AX,WORD PTR MYIPADDR
+	AND	AX,WORD PTR SUBNET[SI]
+	CMP     AX,WORD PTR NETWORK[SI]
+	JNE	NOTOURNET1
+
+	POP	SI
+	JMP	SKIPADD
+;
+*/
+
+		Route = LookupRoute(RIP2->IPAddress, RIP2->Mask, TRUE, &Found);
+
+		if (!Found)
+		{
+			// Add if possible
+
+			if (Route != NULL && RIP2->Metric < 16)
+			{
+				Route->NETWORK = RIP2->IPAddress;
+				Route->SUBNET = RIP2->Mask;
+				Route->METRIC = RIP2->Metric;
+				Route->Encap = RIP2->NextHop;
+				Route->TYPE = 'T';
+				Route->RIPTIMOUT = 600;			// 10 Mins for now
+			}
+		}
+		else
+		{
+			//	Already in table
+
+			//	Should we replace an RF route with an ENCAP route??
+			//	For now, no. May make an option later
+
+			if (Route->TYPE == 'T')
+			{
+				//	See if same Encap, and if not, is this better metric?
+
+				//	Is this possible with RIP44??
+
+				if (Route->Encap != RIP2->NextHop)
+				{
+					if (Route->METRIC > RIP2->Metric)
+					{
+						Route->METRIC = RIP2->Metric;			// Better, so change it
+						Route->Encap = RIP2->NextHop;
+					}
+				}
+
+				Route->METRIC = RIP2->Metric;
+
+				if (RIP2->Metric >= 15)
+				{
+
+					//	HE IS TELLING US ITS UNREACHABLE - START DELETE TIMER
+	
+					Route->RIPTIMOUT = 0;
+					if (Route->GARTIMOUT == 0)
+						Route ->GARTIMOUT = 4;
+				}
+	else
+				Route->RIPTIMOUT = 600;			// 10 Mins for now
+	Route->GARTIMOUT = 0;		// In case started to delete
+
+			}
+		}
+
+		Len -= 20;
+		RIP2++;
+	}
+
+/*
+	CALL	TIDY_LIST		; TRY TO MERGE ENTRIES 
+;
+;	SEE IF ANYTHING HAS CHANGED (DONE HERE SO ENTRIES REMOVED BY
+;	TIDY AREN'T INCLUDED
+;
+	MOV     DI,OFFSET ROUTETAB
+	MOV     CX,NUMBEROFROUTES
+	MOV	AL,0
+
+RIPTESTLOOP:
+
+	OR	AL,ROUTECHANGED[DI]
+	MOV	ROUTECHANGED[DI],0
+
+	ADD     DI,TYPE ROUTEENTRY
+;
+	LOOP    RIPTESTLOOP
+;
+	OR	AL,AL
+	JZ	NOCHANGE
+
+	MOV	RIPTIM,2		; DO ANOTHER BROADCAST
+
+NOCHANGE:
+
+	MOV	AL,RIPTIM
+	CALL	BYTE_TO_HEX
+
+	RET
+*/
+}
+
+/*
+UPDATE_ENTRY:
+
+	MOV4    GATEWAY[DI],UDPSOURCE   ; WHERE THIS MSG CAME FROM
+
+	CMP	AX25_CTRL,0FFH
+	JE	RIP_U_NET			; VIA NETROM
+;
+;	VIRTUAL CIRCUIT MODE
+;
+	MOV	AL,PORT_NO
+	MOV     PORT[DI],AL
+
+	MOV	RTYPE[DI],'V'
+	JMP SHORT RIP_U_GOT_TYPE
+
+RIP_U_NET:
+;
+	MOV	RTYPE[DI],'N'
+	MOV	PORT[DI],0
+;
+RIP_U_GOT_TYPE:
+
+	MOV	ROUTEINFO[DI],LEARNED
+	MOV     ROUTECHANGED[DI],1
+
+REFRESH_RIP:
+
+	MOV     AL,RIPMETRIC		; INCOMING METRIC
+	INC     AL
+	CMP     AL,16
+	JBE     U_MET_OK
+;
+;       HE IS TELLING US ITS UNREACHABLE - START DELETE TIMER
+;
+	MOV     METRIC[DI],16
+	MOV     RIPTIMOUT[DI],0
+;
+	CMP     GARTIMOUT[DI],0
+	JNE     NEXTRIPENTRY            ; TIMER ALREADY RUNNING
+;
+	MOV     GARTIMOUT[DI],4         ; SET WAITING TO DELETE
+;
+	JMP	NEXTRIPENTRY
+
+U_MET_OK:
+
+	MOV     METRIC[DI],AL
+
+	MOV     RIPTIMOUT[DI],MAXRIP
+	MOV     GARTIMOUT[DI],0         ; IN CASE WAITING TO DELETE
+;
+	JMP	NEXTRIPENTRY
+
+*/
+
+
+
 
 VOID ProcessICMPMsg(PIPMSG IPptr)
 {
@@ -1527,11 +1790,11 @@ PROUTEENTRY AllocRouteEntry()
 
 	if (NumberofRoutes == 0)
 
-		RouteRecords=malloc(4);
+		RouteRecords = malloc(4);
 	else
-		RouteRecords=realloc(RouteRecords,(NumberofRoutes + 1) * 4);
+		RouteRecords = realloc(RouteRecords,(NumberofRoutes + 1) * 4);
 
-	Routeptr=zalloc(sizeof(ROUTEENTRY));
+	Routeptr = zalloc(sizeof(ROUTEENTRY));
 
 	if (Routeptr == NULL) return NULL;
 	
@@ -1547,17 +1810,17 @@ PARPDATA AllocARPEntry()
 
 	if (NumberofARPEntries == 0)
 
-		ARPRecords=malloc(4);
+		ARPRecords = malloc(4);
 	else
-		ARPRecords=realloc(ARPRecords,(NumberofARPEntries+1)*4);
+		ARPRecords = realloc(ARPRecords, (NumberofARPEntries+1)*4);
 
-	ARPptr=malloc(sizeof(ARPDATA));
+	ARPptr = malloc(sizeof(ARPDATA));
 
 	if (ARPptr == NULL) return NULL;
 
 	memset(ARPptr, 0, sizeof(ARPDATA));
 	
-	ARPRecords[NumberofARPEntries++]=ARPptr;
+	ARPRecords[NumberofARPEntries++] = ARPptr;
  
 	return ARPptr;
 }
@@ -1601,6 +1864,35 @@ PARPDATA AllocARPEntry()
 
 	}
  }
+
+PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found)
+{
+	PROUTEENTRY Route = NULL;
+	int i;
+
+	for (i = 0; i < NumberofRoutes; i++)
+	{
+		Route = RouteRecords[i];
+
+		if (Route->NETWORK == IPADDR && Route->SUBNET == Mask)
+		{
+			*Found = TRUE;
+			return Route;
+		}
+	}
+
+	// Not Found
+
+	*Found = FALSE;
+
+	if (Add)
+	{
+		Route = AllocRouteEntry();
+		return Route;
+	}
+	else
+		return NULL;
+}
 
 PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found)
 {
@@ -1766,6 +2058,15 @@ static ProcessLine(char * buf)
 		return (TRUE);
 	}
 
+	if (_stricmp(ptr,"EncapAddr") == 0)			// For tunnelled packets - may be same as IPAddr
+	{
+		EncapAddr = inet_addr(p_value);
+
+		if (EncapAddr == INADDR_NONE) return (FALSE);
+
+		return (TRUE);
+	}
+
 	if (_stricmp(ptr,"IPAddr") == 0)
 	{
 		OurIPAddr = inet_addr(p_value);
@@ -1774,7 +2075,6 @@ static ProcessLine(char * buf)
 
 		return (TRUE);
 	}
-
 	if (_stricmp(ptr,"IPBroadcast") == 0)
 	{
 		OurIPBroadcast = inet_addr(p_value);
@@ -1826,6 +2126,13 @@ static ProcessLine(char * buf)
 	{
 		p_value[strlen(p_value)] = ' ';		// put back together
 		ProcessARPLine(p_value, TRUE);
+		return TRUE;
+	}
+
+	if (_stricmp(ptr,"ROUTE") == 0)
+	{
+		p_value[strlen(p_value)] = ' ';		// put back together
+		ProcessROUTELine(p_value, TRUE);
 		return TRUE;
 	}
 
@@ -2150,6 +2457,119 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	return TRUE;
 }
 
+
+// ROUTE 44.131.4.18/32 D GM8BPQ-7 1		// Datagram?netrom/VC via Call
+// ROUTE 44.131.4.18/32 T n.n.n.n			// Vis Tunnel Endpoint n.n.n.n
+// ROUTE 44.131.4.18/32 E n.n.n.n			// Via IP address over Ethernet
+
+
+BOOL ProcessROUTELine(char * buf, BOOL Locked)
+{
+	char * p_ip, * p_target, * p_port, * p_type, * p_mask;
+	int Port;
+	char Mac[7];
+	char AXCall[7];
+	ULONG IPAddr, IPMask;
+	int a,b,c,d,e,f,num;
+	
+	PROUTEENTRY Route;
+	BOOL Found;
+
+//	192.168.0.131 GM8BPQ-13 1 D
+
+	p_ip = strtok(buf, " \t\n\r");
+	p_type = strtok(NULL, " \t\n\r");
+	p_target = strtok(NULL, " \t\n\r");
+	p_port = strtok(NULL, " \t\n\r");
+
+	if(p_ip == NULL) return (TRUE);
+
+	if(*p_ip =='#') return (TRUE);			// comment
+
+	if(*p_ip ==';') return (TRUE);			// comment
+
+	if (p_target == NULL) return FALSE;
+
+	if (p_port == NULL) return FALSE;
+
+	if (p_type == NULL) return FALSE;
+
+	p_mask = strchr(p_ip, '/');
+
+	if (p_mask)
+	{
+		int Bits = atoi(p_mask + 1);
+
+		if (Bits > 32)
+			Bits = 32;
+
+		IPMask = (0xFFFFFFFF) << (32 - Bits);
+	}
+	else
+		IPMask = 0;
+
+	IPAddr = inet_addr(p_ip);
+
+	if (IPAddr == INADDR_NONE) return FALSE;
+
+	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V') || (*p_type =='T'))) return FALSE;
+
+	Port=atoi(p_port);
+
+	if (*p_type == 'T')
+	{
+		num=sscanf(p_target,"%x.%x.%x.%x",&a,&b,&c,&d);
+
+		if (num != 4) return FALSE;
+	}
+	else if (*p_type == 'E')
+	{
+		num=sscanf(p_target,"%x:%x:%x:%x:%x:%x",&a,&b,&c,&d,&e,&f);
+
+		if (num != 6) return FALSE;
+
+		Mac[0]=a;
+		Mac[1]=b;
+		Mac[2]=c;
+		Mac[3]=d;
+		Mac[4]=e;
+		Mac[5]=f;
+
+		if (Port != 255) return FALSE;
+	}
+	else
+	{
+		if (!ConvToAX25(p_target, AXCall)) return FALSE;
+		if ((Port == 0) || (Port > NUMBEROFPORTS)) return FALSE;
+	}
+
+	Route = LookupRoute(IPAddr, IPMask, TRUE, &Found);
+
+	if (!Found)
+	{
+		// Add if possible
+
+		if (Route != NULL)
+		{
+			Route->NETWORK = IPAddr;
+			Route->SUBNET = IPMask;
+
+			if (*p_type == 'E')
+			{
+				memcpy(Route->Target, Mac, 6);
+			}
+			else
+			{
+				memcpy(Route->Target, AXCall, 7);
+				Route->Target[6] &= 0x7e;
+			}
+			Route->TYPE = *p_type;
+			Route->PORT = Port;
+			Route->LOCKED = Locked;
+		}
+	}
+	return TRUE;
+}
 
 
 VOID SaveARP ()

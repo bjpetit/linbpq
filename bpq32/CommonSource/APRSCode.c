@@ -2141,15 +2141,18 @@ static VOID DoMinTimer()
 
 char APRSMsg[300];
 
+int ISHostIndex = 0;
+
 VOID APRSISThread(BOOL Report)
 {
 	// Receive from core server
 
 	char Signon[500];
+	unsigned char work[4];
 
 	struct sockaddr_in sinx; 
 	int addrlen=sizeof(sinx);
-	struct addrinfo hints, *res = 0;
+	struct addrinfo hints, *res = 0, *saveres;
 	int len, err;
 	u_long param=1;
 	BOOL bcopt=TRUE;
@@ -2160,6 +2163,8 @@ VOID APRSISThread(BOOL Report)
 	int inptr = 0;
 	char APRSinMsg[1000];
 	char PortString[20];
+	char host[256];
+	char serv[256];
 
 	Debugprintf("BPQ32 APRS IS Thread");
 #ifndef LINBPQ
@@ -2196,6 +2201,34 @@ VOID APRSISThread(BOOL Report)
 	
 	}
 
+	// Step thorough the list of hosts
+
+	saveres = res;				// Save for free
+
+	if (res->ai_next)			// More than one
+	{
+		int n = ISHostIndex;
+
+		while (n && res->ai_next)
+		{
+			res = res->ai_next;
+			n--;
+		}
+
+		if (n)
+		{
+			// We have run off the end of the list
+
+			ISHostIndex = 0;	// Back to start
+			res = saveres;
+		}
+		else
+			ISHostIndex++;
+
+	}
+
+	getnameinfo(res->ai_addr, res->ai_addrlen, host, 256, serv, 256, 0);
+
 	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
 	if (sock == INVALID_SOCKET)
@@ -2203,6 +2236,10 @@ VOID APRSISThread(BOOL Report)
  
 	setsockopt (sock, SOL_SOCKET, SO_REUSEADDR, (const char FAR *)&bcopt,4);
 
+	memcpy(work, res->ai_addr->sa_data, 4);
+
+	Debugprintf("Trying  APRSIS Host %d.%d.%d.%d (%d) %s", work[0], work[1], work[2], work[3], ISHostIndex, host);
+	
 	if (connect(sock, res->ai_addr, res->ai_addrlen))
 	{
 		err=WSAGetLastError();
@@ -2217,14 +2254,14 @@ VOID APRSISThread(BOOL Report)
 		printf("APRS Igate connect failed\n");
 #endif
 		err=WSAGetLastError();
-		InputLen = sprintf(errmsg, "Connect Failed %s Error %d \r\n", ISHost, err);
+		InputLen = sprintf(errmsg, "Connect Failed %s af %d Error %d \r\n", host, res->ai_family, err);
 		MonitorAPRSIS(errmsg, InputLen, FALSE);
 
 		freeaddrinfo(res);
 		return;
 	}
 
-	freeaddrinfo(res);
+	freeaddrinfo(saveres);
 	
 	InputLen=recv(sock, Buffer, 5500, 0);
 
@@ -3481,7 +3518,7 @@ WXLoop:
 		goto WXLoop;
 }
 
-char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
+static char HeaderTemplate[] = "Accept: */*\r\nHost: %s\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 //char Header[] = "Accept: */*\r\nHost: tile.openstreetmap.org\r\nConnection: close\r\nContent-Length: 0\r\nUser-Agent: BPQ32(G8BPQ)\r\n\r\n";
 
 char APRSMsg[300];

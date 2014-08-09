@@ -1,6 +1,7 @@
 #include "BPQMailChat.h"
 
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
+struct MsgInfo * GetMsgFromNumber(int msgno);
 
 static char seps[] = " \t\r";
 
@@ -348,7 +349,15 @@ VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Con
 	
 	FN = strtok_s(NULL, " \r", &Context);
 
-	Msg = MsgnotoMsg[msgno];
+	if (FN == NULL)
+	{
+		nodeprintf(conn, "Missong Filename");
+		SendPrompt(conn, user);
+		return;
+	}
+
+
+	Msg = GetMsgFromNumber(msgno);
 
 	if (Msg == NULL)
 	{
@@ -363,7 +372,7 @@ VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Con
 
 	if (Handle == NULL)
 	{
-		nodeprintf(conn, "Fime %s could not be opened\r", FN);		
+		nodeprintf(conn, "File %s could not be opened\r", FN);		
 		SendPrompt(conn, user);
 		return;
 	}
@@ -522,7 +531,8 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 		}
 	}
 
-	SaveFwdParams(FwdBBS->Call, ForwardingInfo);
+	SaveConfig(ConfigName);
+	GetConfig(ConfigName);
 
 FDisplay:
 

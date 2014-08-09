@@ -2828,7 +2828,7 @@ VOID TCPConnectThread(struct arp_table_entry * arp)
 				//
 
 				arp->TCPState = TCPConnected;
-				OutputDebugString("TCP Connected\r\n");
+				OutputDebugString("AXTCP Connected\r\n");
 				ioctl (arp->TCPSock, FIONBIO, &param);
 			}
 			else

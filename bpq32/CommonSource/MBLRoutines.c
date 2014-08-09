@@ -98,7 +98,10 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (RefuseBulls && Cmd[1] == 'B')
 		{
 			nodeprintf(conn, "NO - BULLS NOT ACCEPTED\r");
-			nodeprintf(conn, ">\r");
+			if (conn->BBSFlags & OUTWARDCONNECT)
+				nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+			else
+				nodeprintf(conn, ">\r");
 			return;
 		}
 
@@ -274,8 +277,6 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		Disconnect(conn->BPQStream);
 		return;
 	}
-
-
 
 	if (Buffer[len-2] == '>')
 	{

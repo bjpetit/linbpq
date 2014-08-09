@@ -22,7 +22,7 @@ extern  TRANSPORTENTRY * L4TABLE;
 extern BPQVECSTRUC BPQHOSTVECTOR[];
 extern BOOL APRSApplConnected;  
 extern char VersionString[];
-static VOID FormatTime(char * Time, time_t cTime);
+VOID FormatTime2(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 VOID SaveUIConfig();
 
@@ -960,7 +960,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 
 //	ctime = ft.LowPart;
 
-	FormatTime(TimeString, STAT.st_ctime);
+	FormatTime2(TimeString, STAT.st_ctime);
 
 	// if HTML file, look for ##...## substitutions
 
@@ -970,8 +970,8 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 		ctime = time(NULL);
 	}
 
-	FormatTime(FileTimeString, STAT.st_ctime);
-	FormatTime(TimeString, time(NULL));
+	FormatTime2(FileTimeString, STAT.st_ctime);
+	FormatTime2(TimeString, time(NULL));
 
 	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n"
 		"Content-Type: text/html\r\n"
@@ -2542,7 +2542,7 @@ END_CMDUXX:
 
 SendResp:
 
-	FormatTime(TimeString, time(NULL));
+	FormatTime2(TimeString, time(NULL));
 
 	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 		"Date: %s\r\n\r\n", ReplyLen + strlen(Tail), TimeString);
@@ -2561,7 +2561,7 @@ static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", 
 static char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 
-static VOID FormatTime(char * Time, time_t cTime)
+VOID FormatTime2(char * Time, time_t cTime)
 {
 	struct tm * TM;
 	TM = gmtime(&cTime);

@@ -82,6 +82,12 @@ Next:
 			if (_stricmp(WPRec.callsign, "SYSTEM") == 0)
 				goto Next;
 
+			if (_stricmp(WPRec.callsign, "SYSOP") == 0)
+				goto Next;
+
+			if (_stricmp(WPRec.callsign, "SMTP") == 0)
+				goto Next;
+
 			WP = LookupWP(WPRec.callsign);
 
 			if (WP == NULL)
@@ -409,7 +415,7 @@ VOID GetWPBBSInfo(char * Rline)
 		if ( Age < -1)
 			return;			// in the future
 		
-		if (Age > BidLifetime || Age > 30)
+		if (Age > BidLifetime || Age > MaxAge)
 			return;			// Too old
 	}
 
@@ -455,6 +461,12 @@ VOID GetWPBBSInfo(char * Rline)
 		return;
 
 	if (_stricmp(Call, "SYSTEM") == 0)
+		return;
+
+	if (_stricmp(Call, "SYSOP") == 0)
+		return;
+
+	if (_stricmp(Call, "SMTP") == 0)
 		return;
 
 	WP = LookupWP(Call);
@@ -704,6 +716,12 @@ it will not be replaced. This flag will be used in case the WP update messages a
 					if (_stricmp(Call, "SYSTEM") == 0)
 						break;
 
+					if (_stricmp(Call, "SYSOP") == 0)
+						break;
+
+					if (_stricmp(Call, "SMTP") == 0)
+						break;
+
 					WP = LookupWP(Call);
 
 					if (WP)
@@ -849,6 +867,9 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 		return;
 
 	if (_stricmp(user->Call, "SYSOP") == 0)
+		return;
+
+	if (_stricmp(user->Call, "SMTP") == 0)
 		return;
 
 	if (_stricmp(user->Call, user->Name) == 0)

@@ -1863,6 +1863,13 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 		memmove(To, &To[5], strlen(&To[4]));
 	}
 
+	if ((_memicmp(To, "nts/", 4) == 0) ||(_memicmp(To, "nts:", 4) == 0) ||
+		(_memicmp(To, "nts.", 4) == 0))
+	{
+		Msg->type = 'T';
+		memmove(To, &To[4], strlen(&To[3]));
+	}
+
 	if (_memicmp(To, "rms:", 4) == 0)
 	{
 		via = _strlwr(strlop(To, ':'));
@@ -2059,6 +2066,20 @@ TidyString(char * Address)
 		len = strlen(ptr1);
 		memmove(Address, ptr1, len);
 		Address[len] = 0;
+
+		// Could have surrounding "" ""
+	
+		if (Address[0] == '"')
+		{
+			int len = strlen(Address) - 1;
+		
+			if (Address[len] == '"')
+			{
+				Address[len] = 0;
+				memmove(Address, &Address[1], len);
+			}
+		}
+
 		return 0;
 	}
 
@@ -2348,34 +2369,43 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			}
 			else
 			{
-				// Packet Address. Mail client will need more than just a call to respond to
-	
-				strcpy(B2From, Msg->from);
+				// If there is an adddress in Msg->emailfrom use it
 
-				if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
-					strcpy(B2From, Msg->emailfrom);
+				if (Msg->emailfrom[0] == '@')
+				{
+					strcpy(B2From, Msg->from);
+					strcat(B2From, Msg->emailfrom);
+				}
 				else
 				{
-					FromUser = LookupCall(Msg->from);
+					// Packet Address. Mail client will need more than just a call to respond to
+	
+					strcpy(B2From, Msg->from);
 
-					if (FromUser)
-					{
-						if (FromUser->HomeBBS[0])
-							sprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
-						else
-							sprintf(B2From, "%s@%s", Msg->from, BBSName);
-					}
+					if (strcmp(Msg->from, "SMTP:") == 0)		// Address is in via
+						strcpy(B2From, Msg->emailfrom);
 					else
 					{
-						WPRecP WP = LookupWP(Msg->from);
-						if (WP)
-							sprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
-					}
-				}	
-				sprintf_s(Header, sizeof(Header), "From: %s", B2From);
-			}
-		}
+						FromUser = LookupCall(Msg->from);
 
+						if (FromUser)
+						{
+							if (FromUser->HomeBBS[0])
+								sprintf(B2From, "%s@%s", Msg->from, FromUser->HomeBBS);
+							else
+								sprintf(B2From, "%s@%s", Msg->from, BBSName);
+						}
+						else
+						{
+							WPRecP WP = LookupWP(Msg->from);
+							if (WP)
+								sprintf(B2From, "%s@%s", Msg->from, WP->first_homebbs);
+						}
+					}	
+				}
+				sprintf_s(Header, sizeof(Header), "From: %s", B2From);	
+			}
+		}	
 		SendSock(sockptr, Header);
 		sprintf_s(Header, sizeof(Header), "Subject: %s", Msg->title);
 		SendSock(sockptr, Header);
@@ -3003,7 +3033,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 			char * ptr1, * ptr2;
 			int linelen, MsgLen;
-			char MsgFrom[62], MsgTo[62], Msgtitle[62];
+			char MsgFrom[62], MsgTo[100], Msgtitle[62];
 
 			// Scan headers for From: To: and Subject: Line (Headers end at blank line)
 
@@ -3033,7 +3063,7 @@ VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 			else
 			if (_memicmp(ptr1, "To:", 3) == 0)
 			{
-				if (linelen > 63) linelen = 63;
+				if (linelen > 99) linelen = 99;
 				memcpy(MsgTo, &ptr1[4], linelen-4);
 				MsgTo[linelen-4]=0;
 			}
@@ -3345,6 +3375,19 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 	TidyString(To);
 	strlop(To, '@');
 
+	// Could have surrounding "" ""
+
+	if (To[0] == '"')
+	{
+		int len = strlen(To) - 1;
+		
+		if (To[len] == '"')
+		{
+			To[len] = 0;
+			memmove(To, &To[1], len);
+		}
+	}
+
 	if (GMailMode)
 	{
 		// + separates our address and the target user
@@ -3365,7 +3408,21 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 		}
 	}
 
-	if (Msg->via[0] == 0)
+	if ((_memicmp(To, "bull/", 5) == 0) || (_memicmp(To, "bull.", 5) == 0)
+		|| (_memicmp(To, "bull:", 5) == 0))
+	{
+		Msg->type = 'B';
+		memmove(To, &To[5], strlen(&To[4]));
+	}
+
+	if ((_memicmp(To, "nts/", 4) == 0) || (_memicmp(To, "nts.", 4) == 0)
+		|| (_memicmp(To, "nts:", 4) == 0))
+	{
+		Msg->type = 'T';
+		memmove(To, &To[4], strlen(&To[3]));
+	}
+
+	if (Msg->type == 'P' && Msg->via[0] == 0)
 	{
 		// No via - add one from HomeBBS or WP
 
@@ -3386,6 +3443,20 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 				strcpy(Msg->via, WP->first_homebbs);
 		}
 	}
+
+/*	if (_memicmp(To, "rms:", 4) == 0)
+	{
+		via = _strlwr(strlop(To, ':'));
+	}
+	else if (_memicmp(To, "rms/", 4) == 0)
+	{
+		via = _strlwr(strlop(To, '/'));
+	}
+	else if (_memicmp(To, "rms.", 4) == 0)
+	{
+		via = _strlwr(strlop(To, '.'));
+	}
+*/	
 
 
 	if (strlen(To) > 6) To[6]=0;

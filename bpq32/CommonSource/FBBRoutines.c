@@ -10,6 +10,9 @@ int MaxTXSize = 99999;
 struct FBBRestartData ** RestartData = NULL;
 int RestartCount = 0;
 
+struct B2RestartData ** B2RestartRecs = NULL;
+int B2RestartCount = 0;
+
 extern char ProperBaseDir[];
 
 VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)

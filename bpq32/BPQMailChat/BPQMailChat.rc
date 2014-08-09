@@ -343,13 +343,13 @@ BEGIN
     GROUPBOX        "Global Params",IDC_STATIC,2,33,107,242
     LTEXT           "Max Size to Send",IDC_STATIC,5,50,58,12
     EDITTEXT        IDC_MAXSEND,66,49,26,12,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "Max Size to Recv",IDC_STATIC,5,70,58,12
-    EDITTEXT        IDC_MAXRECV,66,68,26,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "Max Size to Recv",IDC_STATIC,5,69,58,12
+    EDITTEXT        IDC_MAXRECV,66,67,26,12,ES_AUTOHSCROLL | ES_NUMBER
     CONTROL         "Warn if no route for P or T",IDC_WARNNOROUTE,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,5,88,97,8
-    LTEXT           "Aliases",IDC_STATIC,5,121,57,13
-    EDITTEXT        IDC_ALIAS,4,134,99,109,ES_MULTILINE | ES_UPPERCASE | 
+                    WS_TABSTOP,5,104,97,8
+    LTEXT           "Aliases",IDC_STATIC,5,132,57,13
+    EDITTEXT        IDC_ALIAS,4,146,99,97,ES_MULTILINE | ES_UPPERCASE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN | 
                     WS_VSCROLL
     CONTROL         "Readdress Locally Input",IDC_READDRESSLOCAL,"Button",
@@ -417,10 +417,12 @@ BEGIN
     EDITTEXT        IDC_REVFWDINT,407,205,23,12,ES_AUTOHSCROLL
     CONTROL         "Use Local Time ",IDC_USELOCALTIME,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
-                    WS_TABSTOP,5,104,97,8
+                    WS_TABSTOP,5,120,97,8
     CONTROL         "Send ctrl/Z instead of /ex",IDC_CTRLZ,"Button",
                     BS_AUTOCHECKBOX | BS_LEFTTEXT | BS_MULTILINE | 
                     WS_TABSTOP,333,260,100,8
+    LTEXT           "Max Bull Age",IDC_STATIC,5,88,58,12
+    EDITTEXT        IDC_MAXAGE,66,86,26,12,ES_AUTOHSCROLL | ES_NUMBER
 END
 
 IDD_USERADDED_BOX DIALOG DISCARDABLE  176, 132, 129, 68
@@ -1189,6 +1191,7 @@ BEGIN
         MENUITEM "Housekeeping",                IDM_HOUSEKEEPING
         MENUITEM "Send Message",                ID_ACTIONS_SENDMESSAGE
         MENUITEM "Send Msg from Clipboard",     ID_ACTIONS_SENDMSGFROMCLIPBOARD
+
         MENUITEM "Rerun Message Routing",       RESCANMSGS
         MENUITEM "Import Messages",             IDM_IMPORT
     END

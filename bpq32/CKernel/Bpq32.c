@@ -617,7 +617,7 @@
 //	Fix RigContol with no frequencies for Kenwood and Yaesu
 //	Add busy check to FLDIGI connects
 
-//  Version 6.0.8.1 July 2014
+//  Version 6.0.8.1 August 2014
 
 //	Use HKEY_CURRENT_USER on all OS versions
 //	Fix crash when APRS symbol is a space.
@@ -625,6 +625,11 @@
 //	Fix display of 3rd byte of FRMR
 //	Add "DEFAULT ROBUST" and "FORCE ROBUST" commands to SCSPactor Driver
 //	Fix possible memory corruption in WINMOR driver
+//	Fix FT2000 Modes
+//	Use new WL2K reporting system (Web Based)
+//	APRS Server now cycles through hosts if DNS returns more than one
+//	BPQ32 can now start and stop FLDIGI
+
 
 
 #define CKernel
@@ -3303,7 +3308,7 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd);
 #define BPQDataAvail 2
 #define BPQStateChange 4
 
-BOOL GetWL2KSYSOPInfo(char * Call, char * SQL, char * _REPLYBUFFER);
+BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER);
 BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL);
 
 static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -3313,133 +3318,44 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 	case WM_INITDIALOG:
 	{
 		char _REPLYBUFFER[1000] = "";
-		char * ptr1, * ptr2;
-		char SQL[1000];
+		char Value[1000];
 
-		sprintf(SQL, "SELECT SysopName, StreetAddress1, StreetAddress2, City, State, Country, PostalCode, EMail, WEBSite, Phones, AdditionalData, TimeStamp FROM SysopRecords WHERE Callsign='%s'",
-			WL2KCall);
-
-		if (GetWL2KSYSOPInfo(WL2KCall, SQL, _REPLYBUFFER))
+		if (GetWL2KSYSOPInfo(WL2KCall, _REPLYBUFFER))
 		{
-			int replylen = atoi(&_REPLYBUFFER[2]);
+//			if (strstr(_REPLYBUFFER, "\"ErrorMessage\":") == 0)
 
-			if (replylen == 0)
-				return (INT_PTR)TRUE;
+			GetJSONValue(_REPLYBUFFER, "\"SysopName\":", Value);	
+			SetDlgItemText(hDlg, NAME, Value);
 
-			ptr1 = ptr2 = &_REPLYBUFFER[9];
-			ptr2 = strchr(ptr1, 1);
+			GetJSONValue(_REPLYBUFFER, "\"StreetAddress1\":", Value);	
+			SetDlgItemText(hDlg, ADDR1, Value);
 
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
+			GetJSONValue(_REPLYBUFFER, "\"StreetAddress2\":", Value);	
+			SetDlgItemText(hDlg, ADDR2, Value);
 
-			*(ptr2++) = 0;
+			GetJSONValue(_REPLYBUFFER, "\"City\":", Value);	
+			SetDlgItemText(hDlg, CITY, Value);
 
-			SetDlgItemText(hDlg, NAME, ptr1);
-
-			// Street 1
-
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-			SetDlgItemText(hDlg, ADDR1, ptr1);
-
-			// Street 2
-
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-			SetDlgItemText(hDlg, ADDR2, ptr1);
-
-			// City
-
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-
-			SetDlgItemText(hDlg, CITY, ptr1);
-
-			// State
-
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-
-			SetDlgItemText(hDlg, STATE, ptr1);
+			GetJSONValue(_REPLYBUFFER, "\"State\":", Value);	
+			SetDlgItemText(hDlg, STATE, Value);
 			
-			// State
+			GetJSONValue(_REPLYBUFFER, "\"Country\":", Value);	
+			SetDlgItemText(hDlg, COUNTRY, Value);
 
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
+			GetJSONValue(_REPLYBUFFER, "\"PostalCode\":", Value);	
+			SetDlgItemText(hDlg, POSTCODE, Value);
 
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
+			GetJSONValue(_REPLYBUFFER, "\"Email\":", Value);	
+			SetDlgItemText(hDlg, EMAIL, Value);
 
-			*(ptr2++) = 0;
+			GetJSONValue(_REPLYBUFFER, "\"Website\":", Value);	
+			SetDlgItemText(hDlg, WEBSITE, Value);
 
-			SetDlgItemText(hDlg, COUNTRY, ptr1);
+			GetJSONValue(_REPLYBUFFER, "\"Phones\":", Value);	
+			SetDlgItemText(hDlg, PHONE, Value);
 
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-
-			SetDlgItemText(hDlg, POSTCODE, ptr1);
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-
-			SetDlgItemText(hDlg, EMAIL, ptr1);
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-
-			SetDlgItemText(hDlg, WEBSITE, ptr1);
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-
-			SetDlgItemText(hDlg, PHONE, ptr1);
-
-			ptr1 = ptr2;
-			ptr2 = strchr(ptr1, 1);
-
-			if (ptr2 == 0)
-				return (INT_PTR)TRUE;
-
-			*(ptr2++) = 0;
-
-			SetDlgItemText(hDlg, ADDITIONALDATA, ptr1);
+			GetJSONValue(_REPLYBUFFER, "\"Comments\":", Value);	
+			SetDlgItemText(hDlg, ADDITIONALDATA, Value);
 
 		}
 	
@@ -3452,8 +3368,6 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 
 		case ID_SAVE:
 		{
-			char SQL[1000];
-
 			char Name[100];
 			char Addr1[100];
 			char Addr2[100];
@@ -3465,6 +3379,11 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 			char Website[100];
 			char Phone[100];
 			char Data[100];
+
+			SOCKET sock;
+			
+			int Len;
+			char Message[2048];
 
 			GetDlgItemText(hDlg, NAME, Name, 99);
 			GetDlgItemText(hDlg, ADDR1, Addr1, 99);
@@ -3478,11 +3397,38 @@ static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LP
 			GetDlgItemText(hDlg, PHONE, Phone, 99);
 			GetDlgItemText(hDlg, ADDITIONALDATA, Data, 99);
 
-			sprintf(SQL, "REPLACE INTO SysopRecords SET TimeStamp=NOW(), Callsign='%s', GridSquare='%s', SysopName='%s', StreetAddress1='%s', StreetAddress2='%s', City='%s', State='%s', Country='%s', PostalCode='%s', EMail='%s', WEBSite='%s', Phones='%s', AdditionalData='%s'",
-				WL2KCall, WL2KLoc, Name, Addr1, Addr2, City, State, Country, PostCode, Email, Website, Phone, Data);
 
-			UpdateWL2KSYSOPInfo(WL2KCall, SQL);
+//{"Callsign":"String","GridSquare":"String","SysopName":"String",
+//"StreetAddress1":"String","StreetAddress2":"String","City":"String",
+//"State":"String","Country":"String","PostalCode":"String","Email":"String",
+//"Phones":"String","Website":"String","Comments":"String"}
 
+			Len = sprintf(Message,
+				"\"Callsign\":\"%s\","
+				"\"GridSquare\":\"%s\","
+				"\"SysopName\":\"%s\","
+				"\"StreetAddress1\":\"%s\","
+				"\"StreetAddress2\":\"%s\","
+				"\"City\":\"%s\","
+				"\"State\":\"%s\","
+				"\"Country\":\"%s\","
+				"\"PostalCode\":\"%s\","
+				"\"Email\":\"%s\","
+				"\"Phones\":\"%s\","
+				"\"Website\":\"%s\","
+				"\"Comments\":\"%s\",",
+
+				WL2KCall, WL2KLoc, Name, Addr1, Addr2, City, State, Country, PostCode, Email, Phone, Website, Data);
+		
+				Debugprintf("Sending %s", Message);
+
+				sock = OpenWL2KHTTPSock();
+
+				if (sock)
+					SendHTTPRequest(sock, "server.winlink.org", 8085, 
+						"/sysop/add", Message, Len, NULL);
+
+				closesocket(sock);
 		}
 
 		case ID_CANCEL:

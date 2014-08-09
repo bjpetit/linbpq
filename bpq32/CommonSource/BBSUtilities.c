@@ -7,16 +7,23 @@
 #include "Winspool.h"
 #endif
 
+BOOL Bells;
+BOOL FlashOnBell;		// Flash instead of Beep
+BOOL StripLF;
+
+BOOL WarnWrap;
+BOOL FlashOnConnect;
+BOOL WrapInput;
+BOOL CloseWindowOnBye;
+
+RECT ConsoleRect;
+
 //#define BBSIDLETIME 120
 //#define USERIDLETIME 300
 
 
 #define BBSIDLETIME 900
 #define USERIDLETIME 900
-
-
-#define LIBCONFIG_STATIC
-#include "libconfig.h"
 
 unsigned long _beginthread( void( *start_address )(VOID * DParam),
 				unsigned stack_size, VOID * DParam);
@@ -111,6 +118,7 @@ extern int HighestBBSNumber;
 
 extern int MaxMsgno;
 extern int BidLifetime;
+extern int MaxAge;
 extern int MaintInterval;
 extern int MaintTime;
 
@@ -119,8 +127,6 @@ extern int ProgramErrors;
 extern BOOL MonBBS;
 extern BOOL MonCHAT;
 extern BOOL MonTCP;
-
-extern char ConfigName[250];
 
 BOOL SendNewUserMessage = TRUE;
 BOOL AllowAnon = FALSE;
@@ -327,7 +333,14 @@ VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * form
 	return;
 }
 
-
+struct MsgInfo * GetMsgFromNumber(int msgno)
+{
+	if (msgno < 1 || msgno > 999999)
+		return NULL;
+	
+	return MsgnotoMsg[msgno];
+}
+		
 struct UserInfo * AllocateUserRecord(char * Call)
 {
 	struct UserInfo * User = zalloc(sizeof (struct UserInfo));
@@ -1604,33 +1617,7 @@ BOOL wildcardcompare(char * Target, char * Match)
 	return (strcmp(Target, Pattern) == 0);
 }
 
-
-VOID SaveFwdParams(char * Call, struct BBSForwardingInfo * ForwardingInfo)
-{
-#ifdef LINBPQ
-}
-#else
-
-	HKEY hKey=0;
-	int disp;
-	char Key[100] = "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
-
-	strcat(Key, Call);
-
-	RegCreateKeyEx(REGTREE, Key, 0, 0, 0, KEY_ALL_ACCESS, NULL, &hKey, &disp);
-
-	RegSetValueEx(hKey, "Enabled", 0, REG_DWORD, (BYTE *)&ForwardingInfo->Enabled, 4);
-
-	RegSetValueEx(hKey, "RequestReverse", 0, REG_DWORD, (BYTE *)&ForwardingInfo->ReverseFlag, 4);
-	
-	RegSetValueEx(hKey, "FWDInterval", 0, REG_DWORD, (BYTE *)&ForwardingInfo->FwdInterval, 4);
-	RegSetValueEx(hKey, "RevFWDInterval", 0, REG_DWORD, (BYTE *)&ForwardingInfo->RevFwdInterval, 4);
-	RegSetValueEx(hKey, "FWD New Immediately", 0, REG_DWORD, (BYTE *)&ForwardingInfo->SendNew, 4);
-
-	
-	RegCloseKey(hKey);
-}
-
+#ifndef LINBPQ
 
 PrintMessage(HDC hDC, struct MsgInfo * Msg);
 
@@ -2423,7 +2410,7 @@ void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char
 			return;
 		}
 
-		Msg = MsgnotoMsg[msgno];
+		Msg = GetMsgFromNumber(msgno);
 
 		if (Msg == NULL)
 		{
@@ -2490,7 +2477,7 @@ void DoUnholdCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * 
 	while (Arg1)
 	{
 		msgno = atoi(Arg1);
-		Msg = MsgnotoMsg[msgno];
+		Msg = GetMsgFromNumber(msgno);
 		
 		if (Msg)
 		{
@@ -2638,24 +2625,36 @@ int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 	return(Msgs);
 }
 
+BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg)
+{	
+	if (SYSOP) return TRUE;			// Sysop can list or read anything
+	
+	if (Msg->type == 'P')
+		if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+			return TRUE;
 
+	return FALSE;
+}
 
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 {
 	struct MsgInfo * Msg;
 
-	Msg = FindMessage(user->Call, msgno, conn->sysop);
+	Msg = GetMsgFromNumber(msgno);
 
-	if (Msg == NULL)
+	if (Msg == NULL || Msg->status == 'K')
 	{
 		nodeprintf(conn, "Message %d not found\r", msgno);
 		return;
 	}
 
-	FlagAsKilled(Msg);
-
-	nodeprintf(conn, "Message #%d Killed\r", msgno);
-
+	if (OkToKillMessage(conn->sysop, user->Call, Msg))
+	{
+		FlagAsKilled(Msg);
+		nodeprintf(conn, "Message #%d Killed\r", msgno);
+	}
+	else
+		nodeprintf(conn, "Not your message\r");
 }
 
 
@@ -3174,7 +3173,7 @@ void ListMessagesInRange(ConnectionInfo * conn, struct UserInfo * user, char * C
 
 	for (m = Start; m >= End; m--)
 	{
-		Msg = MsgnotoMsg[m];
+		Msg = GetMsgFromNumber(m);
 		
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
 			if (ListMessage(Msg, conn, SendFullFrom))
@@ -3191,7 +3190,7 @@ void ListMessagesInRangeForwards(ConnectionInfo * conn, struct UserInfo * user, 
 
 	for (m = Start; m <= End; m++)
 	{
-		Msg = MsgnotoMsg[m];
+		Msg = GetMsgFromNumber(m);
 		
 		if (Msg && CheckUserMsg(Msg, user->Call, conn->sysop))
 			if (ListMessage(Msg, conn, SendFullFrom))
@@ -3277,7 +3276,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 	char FullTo[100];
 	int Index;
 
-	Msg = MsgnotoMsg[msgno];
+	Msg = GetMsgFromNumber(msgno);
 
 	if (Msg == NULL)
 	{
@@ -3828,7 +3827,7 @@ BOOL DecodeSendParams(CIRCUIT * conn, char * Context, char ** From, char ** To, 
 
 BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, char MsgType, char * BID, char * Title)
 {
-	struct MsgInfo * Msg;
+	struct MsgInfo * Msg, * TestMsg;
 	char * via = NULL;
 	char * FromHA;
 
@@ -3844,7 +3843,10 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 			if ((conn->BBSFlags & BBS))
 			{
 				nodeprintf(conn, "NO - REJECTED\r");
-				nodeprintf(conn, ">\r");
+				if (conn->BBSFlags & OUTWARDCONNECT)
+					nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+				else
+					nodeprintf(conn, ">\r");
 			}
 			else
 				nodeprintf(conn, "*** Error - Message Filters prevent sending this message\r");
@@ -3877,22 +3879,60 @@ BOOL CreateMessage(CIRCUIT * conn, char * From, char * ToCall, char * ATBBS, cha
 	if (BID)
 	{
 		BIDRec * TempBID;
-		
-		if ((Msg->type == 'B') && LookupBID(BID))			// Only reject Bulls on BID 
-		{
-			// Duplicate bid
+
+		// If P Message, dont immediately reject on a Duplicate BID. Check if we still have the message
+		//	If we do, reject  it. If not, accept it again. (do we need some loop protection ???)
+
+		TempBID = LookupBID(BID);
 	
-			if ((conn->BBSFlags & BBS))
+		if (TempBID)
+		{
+			if (MsgType == 'B')
 			{
-				nodeprintf(conn, "NO - BID\r");
-				nodeprintf(conn, ">\r");
+				// Duplicate bid
+	
+				if ((conn->BBSFlags & BBS))
+				{
+					nodeprintf(conn, "NO - BID\r");
+					if (conn->BBSFlags & OUTWARDCONNECT)
+						nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+					else
+						nodeprintf(conn, ">\r");
+				}
+				else
+					nodeprintf(conn, "*** Error- Duplicate BID\r");
+
+				return FALSE;
 			}
-			else
-				nodeprintf(conn, "*** Error- Duplicate BID\r");
 
-			return FALSE;
+			TestMsg = GetMsgFromNumber(TempBID->u.msgno);
+ 
+			// if the same TO we will assume the same message
+
+			if (TestMsg && strcmp(TestMsg->to, ToCall) == 0)
+			{
+				// We have this message. If we have already forwarded it, we should accept it again
+
+				if ((TestMsg->status == 'N') || (TestMsg->status == 'Y')|| (TestMsg->status == 'H'))
+				{
+					// Duplicate bid
+	
+					if ((conn->BBSFlags & BBS))
+					{
+						nodeprintf(conn, "NO - BID\r");
+						if (conn->BBSFlags & OUTWARDCONNECT)
+							nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+						else
+							nodeprintf(conn, ">\r");
+					}
+					else
+						nodeprintf(conn, "*** Error- Duplicate BID\r");
+
+					return FALSE;
+				}
+			}
 		}
-
+		
 		if (strlen(BID) > 12) BID[12] = 0;
 		strcpy(Msg->bid, BID);
 
@@ -4244,7 +4284,12 @@ VOID ProcessMsgLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int ms
 				SendPrompt(conn, conn->UserPointer);
 			else
 				if (!(conn->BBSFlags & FBBForwarding))
+				{
+					if (conn->BBSFlags & OUTWARDCONNECT)
+						BBSputs(conn, "F>\r");				// if Outward connect must be reverse forward
+					else
 						BBSputs(conn, ">\r");
+				}
 
 			/*
 			// From a client - Create one copy with all RMS recipients, and another for each packet recipient	
@@ -4391,6 +4436,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 	char OldMess[] = "\r\n\r\nOriginal Message:\r\n\r\n";
 	int Age, OurCount;
 	char * HoldReason = "User has Hold Messages flag set";
+
 
 #ifndef LINBPQ
 	struct _EXCEPTION_POINTERS exinfo;
@@ -4541,7 +4587,7 @@ nextline:
 					Msg->status = 'H';
 					HoldReason = "Suspect Date Sent";
 				}
-				else if (Age > BidLifetime || Age > 30)
+				else if (Age > BidLifetime || Age > MaxAge)
 				{
 					Msg->status = 'H';
 					HoldReason = "Message too old";
@@ -4679,10 +4725,16 @@ nextline:
 				SendPrompt(conn, conn->UserPointer);
 		}
 		else
+		{
 			if (!(conn->BBSFlags & FBBForwarding))
+			{
 				if (conn->ToCount == 0)
-					BBSputs(conn, ">\r");
-
+					if (conn->BBSFlags & OUTWARDCONNECT)
+						nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+					else
+						nodeprintf(conn, ">\r");
+			}					
+		}
 		if(Msg->to[0] == 0)
 			SMTPMsgCreated=TRUE;
 
@@ -4725,9 +4777,45 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 	int WriteLen=0;
 	char Mess[255];
 	int len;
+	BOOL AutoImport = FALSE;
 
 	sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
 	
+	//	If title is "Batched messages for AutoImport from BBS xxxxxx and first line is S? and it is
+	//  for this BBS, Import file and set message as Killed. May need to strip B2 Header and R: lines
+
+	if (strcmp(Msg->to, BBSName) == 0 && strstr(Msg->title, "Batched messages for AutoImport from BBS "))
+	{
+		UCHAR * ptr = conn->MailBuffer;
+
+		// If it is a B2 Message, Must Skip B2 Header
+
+		if (Msg->B2Flags & B2Msg)
+		{
+			ptr = strstr(ptr, "\r\n\r\n");
+			if (ptr)
+				ptr += 4;
+			else
+				ptr = conn->MailBuffer;
+		}
+
+		if (memcmp(ptr, "R:", 2) == 0)
+		{
+			ptr = strstr(ptr, "\r\n\r\n");		//And remove R: Lines
+			if (ptr)
+				ptr += 4;
+		}
+
+		if (*(ptr) == 'S' && ptr[2] == ' ')
+		{
+			int HeaderLen = ptr - conn->MailBuffer;
+			Msg->length -= HeaderLen;
+			memmove(conn->MailBuffer, ptr, Msg->length);
+			Msg->status = 'K';
+			AutoImport = TRUE;
+		}
+	}
+
 	hFile = fopen(MsgFile, "wb");
 
 	if (hFile)
@@ -4735,6 +4823,9 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 		WriteLen = fwrite(conn->MailBuffer, 1, Msg->length, hFile);
 		fclose(hFile);
 	}
+
+	if (AutoImport)
+		ImportMessages(NULL, MsgFile);
 
 	free(conn->MailBuffer);
 	conn->MailBufferSize=0;
@@ -5173,163 +5264,165 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 {
 	struct	BBSForwardingInfo * ForwardingInfo;
 
-#ifdef LINBPQ
 	char Key[100] =  "BBSForwarding.";
 	char Temp[100];
-#else
+
 	HKEY hKey=0;
 	int retCode,Type,Vallen;
-	char Key[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
-#endif
+	char RegKey[100] =  "SOFTWARE\\G8BPQ\\BPQ32\\BPQMailChat\\BBSForwarding\\";
+
 	int m;
 	struct MsgInfo * Msg;
 
 	ForwardingInfo = user->ForwardingInfo = zalloc(sizeof(struct BBSForwardingInfo));
 
-#ifdef LINBPQ
-
-	if (isdigit(user->Call[0]))
-		strcat(Key, "*");
-
-	strcat(Key, user->Call);
-
-	group = config_lookup (&cfg, Key);
-
-	if (group)
+	if (UsingingRegConfig == 0)
 	{
-		ForwardingInfo->TOCalls = GetMultiStringValue(group,  "TOCalls");
-		ForwardingInfo->ConnectScript = GetMultiStringValue(group,  "ConnectScript");
-		ForwardingInfo->ATCalls = GetMultiStringValue(group,  "ATCalls");
-		ForwardingInfo->Haddresses = GetMultiStringValue(group,  "HRoutes");
-		ForwardingInfo->HaddressesP = GetMultiStringValue(group,  "HRoutesP");
-		ForwardingInfo->FWDTimes = GetMultiStringValue(group,  "FWDTimes");
+		//	Config from file
 
-		ForwardingInfo->Enabled = GetIntValue(group, "Enabled");
-		ForwardingInfo->ReverseFlag = GetIntValue(group, "RequestReverse");
-		ForwardingInfo->AllowCompressed = GetIntValue(group, "AllowCompressed");
-		ForwardingInfo->AllowB1 = GetIntValue(group, "UseB1Protocol");
-		ForwardingInfo->AllowB2 = GetIntValue(group, "UseB2Protocol");
-		ForwardingInfo->SendCTRLZ = GetIntValue(group, "SendCTRLZ");
+		if (isdigit(user->Call[0]))
+			strcat(Key, "*");
 
-		if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
-			ForwardingInfo->AllowCompressed = TRUE;
+		strcat(Key, user->Call);
 
-		ForwardingInfo->PersonalOnly = GetIntValue(group, "FWDPersonalsOnly");
-		ForwardingInfo->SendNew = GetIntValue(group, "FWDNewImmediately");
-		ForwardingInfo->FwdInterval = GetIntValue(group, "FwdInterval");
-		ForwardingInfo->RevFwdInterval = GetIntValue(group, "RevFWDInterval");
-		ForwardingInfo->MaxFBBBlockSize = GetIntValue(group, "MaxFBBBlock");
+		group = config_lookup (&cfg, Key);
 
-		if (ForwardingInfo->MaxFBBBlockSize == 0)
-			ForwardingInfo->MaxFBBBlockSize = 10000;
-
-		if (ForwardingInfo->FwdInterval == 0)
-				ForwardingInfo->FwdInterval = 3600;
-
-		GetStringValue(group, "BBSHA", Temp);
-		
-		if (Temp[0])
-			ForwardingInfo->BBSHA = _strdup(Temp);
-		else
-			ForwardingInfo->BBSHA = _strdup("");
-
-	}
-
-#else
-	
-	strcat(Key, user->Call);
-	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
-
-	if (retCode == ERROR_SUCCESS)
-	{
-		ForwardingInfo->ConnectScript = GetMultiStringValue(hKey,  "Connect Script");
-		ForwardingInfo->TOCalls = GetMultiStringValue(hKey,  "TOCalls");
-		ForwardingInfo->ATCalls = GetMultiStringValue(hKey,  "ATCalls");
-		ForwardingInfo->Haddresses = GetMultiStringValue(hKey,  "HRoutes");
-		ForwardingInfo->HaddressesP = GetMultiStringValue(hKey,  "HRoutesP");
-		ForwardingInfo->FWDTimes = GetMultiStringValue(hKey,  "FWD Times");
-
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "Enabled", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->Enabled,(ULONG *)&Vallen);
-				
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "RequestReverse", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
-
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "AllowCompressed", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowCompressed,(ULONG *)&Vallen);
-
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "Use B1 Protocol", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB1,(ULONG *)&Vallen);
-
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
-
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "SendCTRLZ", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->SendCTRLZ,(ULONG *)&Vallen);
-
-		if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
-			ForwardingInfo->AllowCompressed = TRUE;
-
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "FWD Personals Only", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->PersonalOnly,(ULONG *)&Vallen);
-
-		Vallen=4;
-		retCode += RegQueryValueEx(hKey, "FWD New Immediately", 0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->SendNew,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"FWDInterval",0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->FwdInterval,(ULONG *)&Vallen);
-
-		Vallen=4;
-		RegQueryValueEx(hKey,"RevFWDInterval",0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->RevFwdInterval,(ULONG *)&Vallen);
-
-		RegQueryValueEx(hKey,"MaxFBBBlock",0,			
-			(ULONG *)&Type,(UCHAR *)&ForwardingInfo->MaxFBBBlockSize,(ULONG *)&Vallen);
-
-		if (ForwardingInfo->MaxFBBBlockSize == 0)
-			ForwardingInfo->MaxFBBBlockSize = 10000;
-
-		if (ForwardingInfo->FwdInterval == 0)
-				ForwardingInfo->FwdInterval = 3600;
-
-		Vallen=0;
-		retCode = RegQueryValueEx(hKey,"BBSHA",0 , (ULONG *)&Type,NULL, (ULONG *)&Vallen);
-
-		if (retCode != 0)
+		if (group)
 		{
-			// No Key - Get from WP??
-				
-			WPRec * ptr = LookupWP(user->Call);
+			ForwardingInfo->TOCalls = GetMultiStringValue(group,  "TOCalls");
+			ForwardingInfo->ConnectScript = GetMultiStringValue(group,  "ConnectScript");
+			ForwardingInfo->ATCalls = GetMultiStringValue(group,  "ATCalls");
+			ForwardingInfo->Haddresses = GetMultiStringValue(group,  "HRoutes");
+			ForwardingInfo->HaddressesP = GetMultiStringValue(group,  "HRoutesP");
+			ForwardingInfo->FWDTimes = GetMultiStringValue(group,  "FWDTimes");
 
-			if (ptr)
+			ForwardingInfo->Enabled = GetIntValue(group, "Enabled");
+			ForwardingInfo->ReverseFlag = GetIntValue(group, "RequestReverse");
+			ForwardingInfo->AllowCompressed = GetIntValue(group, "AllowCompressed");
+			ForwardingInfo->AllowB1 = GetIntValue(group, "UseB1Protocol");
+			ForwardingInfo->AllowB2 = GetIntValue(group, "UseB2Protocol");
+			ForwardingInfo->SendCTRLZ = GetIntValue(group, "SendCTRLZ");
+
+			if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
+				ForwardingInfo->AllowCompressed = TRUE;
+
+			ForwardingInfo->PersonalOnly = GetIntValue(group, "FWDPersonalsOnly");
+			ForwardingInfo->SendNew = GetIntValue(group, "FWDNewImmediately");
+			ForwardingInfo->FwdInterval = GetIntValue(group, "FwdInterval");
+			ForwardingInfo->RevFwdInterval = GetIntValue(group, "RevFWDInterval");
+			ForwardingInfo->MaxFBBBlockSize = GetIntValue(group, "MaxFBBBlock");
+
+			if (ForwardingInfo->MaxFBBBlockSize == 0)
+				ForwardingInfo->MaxFBBBlockSize = 10000;
+
+			if (ForwardingInfo->FwdInterval == 0)
+				ForwardingInfo->FwdInterval = 3600;
+
+			GetStringValue(group, "BBSHA", Temp);
+		
+			if (Temp[0])
+				ForwardingInfo->BBSHA = _strdup(Temp);
+			else
+				ForwardingInfo->BBSHA = _strdup("");
+
+		}
+	}
+	else
+	{
+#ifndef	LINBPQ
+		strcat(RegKey, user->Call);
+		retCode = RegOpenKeyEx (REGTREE, RegKey, 0, KEY_QUERY_VALUE, &hKey);
+
+		if (retCode == ERROR_SUCCESS)
+		{
+			ForwardingInfo->ConnectScript = RegGetMultiStringValue(hKey,  "Connect Script");
+			ForwardingInfo->TOCalls = RegGetMultiStringValue(hKey,  "TOCalls");
+			ForwardingInfo->ATCalls = RegGetMultiStringValue(hKey,  "ATCalls");
+			ForwardingInfo->Haddresses = RegGetMultiStringValue(hKey,  "HRoutes");
+			ForwardingInfo->HaddressesP = RegGetMultiStringValue(hKey,  "HRoutesP");
+			ForwardingInfo->FWDTimes = RegGetMultiStringValue(hKey,  "FWD Times");
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "Enabled", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->Enabled,(ULONG *)&Vallen);
+				
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "RequestReverse", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->ReverseFlag,(ULONG *)&Vallen);
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "AllowCompressed", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowCompressed,(ULONG *)&Vallen);
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "Use B1 Protocol", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB1,(ULONG *)&Vallen);
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "Use B2 Protocol", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->AllowB2,(ULONG *)&Vallen);
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "SendCTRLZ", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->SendCTRLZ,(ULONG *)&Vallen);
+
+			if (ForwardingInfo->AllowB1 || ForwardingInfo->AllowB2)
+				ForwardingInfo->AllowCompressed = TRUE;
+	
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "FWD Personals Only", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->PersonalOnly,(ULONG *)&Vallen);
+
+			Vallen=4;
+			retCode += RegQueryValueEx(hKey, "FWD New Immediately", 0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->SendNew,(ULONG *)&Vallen);
+
+			Vallen=4;
+			RegQueryValueEx(hKey,"FWDInterval",0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->FwdInterval,(ULONG *)&Vallen);
+
+			Vallen=4;
+			RegQueryValueEx(hKey,"RevFWDInterval",0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->RevFwdInterval,(ULONG *)&Vallen);
+
+			RegQueryValueEx(hKey,"MaxFBBBlock",0,			
+				(ULONG *)&Type,(UCHAR *)&ForwardingInfo->MaxFBBBlockSize,(ULONG *)&Vallen);
+
+			if (ForwardingInfo->MaxFBBBlockSize == 0)
+				ForwardingInfo->MaxFBBBlockSize = 10000;
+
+			if (ForwardingInfo->FwdInterval == 0)
+				ForwardingInfo->FwdInterval = 3600;
+
+			Vallen=0;
+			retCode = RegQueryValueEx(hKey,"BBSHA",0 , (ULONG *)&Type,NULL, (ULONG *)&Vallen);
+
+			if (retCode != 0)
 			{
-				if (ptr->first_homebbs)
+				// No Key - Get from WP??
+				
+				WPRec * ptr = LookupWP(user->Call);
+
+				if (ptr)
 				{
-					ForwardingInfo->BBSHA = _strdup(ptr->first_homebbs);
+					if (ptr->first_homebbs)
+					{
+						ForwardingInfo->BBSHA = _strdup(ptr->first_homebbs);
+					}
 				}
 			}
-		}
 
-		if (Vallen)
-		{
-			ForwardingInfo->BBSHA = malloc(Vallen);
-			RegQueryValueEx(hKey, "BBSHA", 0, (ULONG *)&Type, ForwardingInfo->BBSHA,(ULONG *)&Vallen);
-		}
+			if (Vallen)
+			{
+				ForwardingInfo->BBSHA = malloc(Vallen);
+				RegQueryValueEx(hKey, "BBSHA", 0, (ULONG *)&Type, ForwardingInfo->BBSHA,(ULONG *)&Vallen);
+			}
 
-		RegCloseKey(hKey);
+			RegCloseKey(hKey);
+		}
+#endif
 	}
 
-#endif
-	
 	// Convert FWD Times and H Addresses
 
 	if (ForwardingInfo->FWDTimes)
@@ -5368,8 +5461,6 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 	}
 }
 
-#ifdef LINBPQ
-
 VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 {
 	char * ptr1;
@@ -5389,7 +5480,7 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 	{
 		ptr =  config_setting_get_string (setting);
 
-		Save = _strdup(ptr);			// DOnt want to chage config string
+		Save = _strdup(ptr);			// DOnt want to change config string
 		ptr = Save;
 	
 		while (ptr && strlen(ptr))
@@ -5401,10 +5492,7 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 
 			Value = realloc(Value, (Count+2)*4);
 			
-//			if (_memicmp((char *)ptr, "file ", 5) == 0)
-				Value[Count++] = _strdup(ptr);
-//			else
-//				Value[Count++] = _strupr(_strdup(ptr));
+			Value[Count++] = _strdup(ptr);
 			
 			ptr = ptr1;
 		}
@@ -5416,10 +5504,11 @@ VOID * GetMultiStringValue(config_setting_t * group, char * ValueName)
 }
 
 
-#else
-
-VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
+VOID * RegGetMultiStringValue(HKEY hKey, char * ValueName)
 {
+#ifdef LINBPQ
+	return NULL;
+#else
 	int retCode,Type,Vallen;
 	char * MultiString = NULL;
 	int ptr, len;
@@ -5462,10 +5551,8 @@ VOID * GetMultiStringValue(HKEY hKey, char * ValueName)
 	free(MultiString);
 
 	return Value;
-}
-
-
 #endif
+}
 
 VOID FreeForwardingStruct(struct UserInfo * user)
 {
@@ -5630,18 +5717,38 @@ size_t fwritex(CIRCUIT * conn, void * _Str, size_t _Size, size_t _Count, FILE * 
 BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 {
 	BOOL AddCRLF = FALSE;
+	BOOL AutoImport = FALSE;
 	FILE * Handle = NULL;
 	char * Context;
 	BOOL Email = FALSE;
 	time_t now = time(NULL);
-
+	char * param;
 
 	FN = strtok_s(FN, " ,", &Context); 
 
-	if (Context && (_stricmp(Context, "ADDCRLF") == 0))
-		AddCRLF =TRUE;
+	param = strtok_s(NULL, " ,", &Context); 
 
-	// If FN ios an email address is specified, write to a temp file, and send via rms or emali gateway
+	if (param)
+	{
+		if (_stricmp(param, "ADDCRLF") == 0)
+			AddCRLF = TRUE;
+
+		if (_stricmp(param, "AutoImport") == 0)
+			AutoImport = TRUE;
+
+		param = strtok_s(NULL, " ,", &Context); 
+
+		if (param)
+		{
+			if (_stricmp(param, "ADDCRLF") == 0)
+				AddCRLF = TRUE;
+
+			if (_stricmp(param, "AutoImport") == 0)
+				AutoImport = TRUE;
+
+		}
+	}
+	// If FN is an email address, write to a temp file, and send via rms or emali gateway
 	
 	if (strchr(FN, '@') || _memicmp(FN, "RMS:", 4) == 0)
 	{
@@ -5800,15 +5907,18 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 
 		Msg->type = 'P';
 		Msg->status = 'N';
-		Msg->datecreated = Msg->datechanged = now;
+		Msg->datecreated = Msg->datechanged = Msg->datereceived = now;
 
 		strcpy(Msg->from, BBSName);
-		Msg->datechanged = Msg->datecreated = time(NULL);
 
 		sprintf_s(Msg->bid, sizeof(Msg->bid), "%d_%s", LatestMsg, BBSName);
-		sprintf(Msg->title, "Batch messages from BBS %s",  BBSName);
 
-		Msg->length = conn->InputLen;
+		if (AutoImport)
+			sprintf(Msg->title, "Batched messages for AutoImport from BBS %s",  BBSName);
+		else
+			sprintf(Msg->title, "Batched messages from BBS %s",  BBSName);
+
+		Msg->length = conn->InputLen; 
 		CreateMessageFile(conn, Msg);
 
 		BIDRec = AllocateBIDRecord();
@@ -6993,6 +7103,7 @@ VOID SaveConfig(char * ConfigName)
 	struct	BBSForwardingInfo * ForwardingInfo ;
 	config_setting_t *root, *group, *bbs;
 	int i;
+	char Size[80];
 
 	//	Get rid of old config before saving
 	
@@ -7040,6 +7151,41 @@ VOID SaveConfig(char * ConfigName)
 	SaveStringValue(group, "ISPPOP3Name", ISPPOP3Name);
 	SaveStringValue(group, "ISPAccountName", ISPAccountName);
 	SaveStringValue(group, "ISPAccountPass", EncryptedISPAccountPass);
+
+
+	//	Save Window Sizes
+	
+#ifndef LINBPQ
+
+	if (ConsoleRect.right)
+	{
+		sprintf(Size,"%d,%d,%d,%d",ConsoleRect.left, ConsoleRect.right,
+			ConsoleRect.top, ConsoleRect.bottom);
+
+		SaveStringValue(group, "ConsoleSize", Size);
+	}
+	
+	sprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
+	SaveStringValue(group, "MonitorSize", Size);
+
+	sprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
+	SaveStringValue(group, "WindowSize", Size);
+
+	SaveIntValue(group, "Bells", Bells);
+	SaveIntValue(group, "FlashOnBell", FlashOnBell);
+	SaveIntValue(group, "StripLF", StripLF);
+	SaveIntValue(group, "WarnWrap", WarnWrap);
+	SaveIntValue(group, "WrapInput", WrapInput);
+	SaveIntValue(group, "FlashOnConnect", FlashOnConnect);
+	SaveIntValue(group, "CloseWindowOnBye", CloseWindowOnBye);
+
+#endif
+
+	SaveIntValue(group, "Log_BBS", LogBBS);
+	SaveIntValue(group, "Log_TCP", LogTCP);
+
+	sprintf(Size,"%d,%d,%d,%d", Ver[0], Ver[1], Ver[2], Ver[3]);
+	SaveStringValue(group, "Version", Size);
 
 	// Save Welcome Messages and prompts
 
@@ -7129,6 +7275,8 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "LastTrafficTime", LastTrafficTime);
 	SaveIntValue(group, "MaxMsgno", MaxMsgno);
 	SaveIntValue(group, "BidLifetime", BidLifetime);
+	SaveIntValue(group, "MaxAge", MaxAge);
+	SaveIntValue(group, "LogLifetime", LogAge);
 	SaveIntValue(group, "LogLifetime", LogAge);
 	SaveIntValue(group, "MaintInterval", MaintInterval);
 	SaveIntValue(group, "UserLifetime", UserLifetime);
@@ -7176,7 +7324,6 @@ VOID SaveConfig(char * ConfigName)
 		}
 	}
 
-
 	if(! config_write_file(&cfg, ConfigName))
 	{
 		fprintf(stderr, "Error while writing file.\n");
@@ -7184,6 +7331,25 @@ VOID SaveConfig(char * ConfigName)
 		return;
 	}
 	config_destroy(&cfg);
+
+#ifndef LINBPQ
+
+	//	Save a copy with current Date/Time Stamp for debugging
+
+	{
+		char Backup[MAX_PATH];
+		time_t LT;
+		struct tm * tm;
+
+		LT = time(NULL);
+		tm = gmtime(&LT);	
+
+		sprintf(Backup,"%s.%02d%02d%02d%02d%02d.save", ConfigName, tm->tm_year-100, tm->tm_mon+1,
+			tm->tm_mday, tm->tm_hour, tm->tm_min);
+
+		CopyFile(ConfigName, Backup, FALSE);	// Copy to .bak
+	}
+#endif
 }
 
 int GetIntValue(config_setting_t * group, char * name)
@@ -7223,8 +7389,6 @@ BOOL GetStringValue(config_setting_t * group, char * name, char * value)
 	}
 	return FALSE;
 }
-
-#ifdef LINBPQ
 
 BOOL GetConfig(char * ConfigName)
 {
@@ -7267,8 +7431,8 @@ BOOL GetConfig(char * ConfigName)
 	DontNeedHomeBBS =  GetIntValue(group, "DontNeedHomeBBS");
 	MaxTXSize =  GetIntValue(group, "MaxTXSize");
 	MaxRXSize =  GetIntValue(group, "MaxRXSize");
-	ReaddressLocal =  GetIntValue(group, "Readdress Local");
-	ReaddressReceived =  GetIntValue(group, "Readdress Received");
+	ReaddressLocal =  GetIntValue(group, "ReaddressLocal");
+	ReaddressReceived =  GetIntValue(group, "ReaddressReceived");
 	WarnNoRoute =  GetIntValue(group, "WarnNoRoute");
 	Localtime =  GetIntValue(group, "Localtime");
 	AliasText = GetMultiStringValue(group, "FWDAliases");
@@ -7296,27 +7460,30 @@ BOOL GetConfig(char * ConfigName)
 	LogBBS = GetIntValue(group, "Log_BBS");
 	LogTCP = GetIntValue(group, "Log_TCP");
 
-	/*
-		Vallen=80;
-		RegQueryValueEx(hKey,"MonitorSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+#ifndef LINBPQ
 
-		sscanf(Size,"%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom);
+	GetStringValue(group, "MonitorSize", Size);
+	sscanf(Size,"%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom);
+	
+	GetStringValue(group, "WindowSize", Size);
+	sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
 
-		Vallen=80;
-		RegQueryValueEx(hKey,"DebugSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+	Bells = GetIntValue(group, "Bells");
 
-		sscanf(Size,"%d,%d,%d,%d",&DebugRect.left,&DebugRect.right,&DebugRect.top,&DebugRect.bottom);
-		retCode = RegSetValueEx(hKey,"DebugSize",0,REG_SZ,(BYTE *)&Size, strlen(Size));
+	FlashOnBell = GetIntValue(group, "FlashOnBell");			
 
-		Vallen=80;
-		RegQueryValueEx(hKey,"WindowSize",0,			
-			(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
+	StripLF	 = GetIntValue(group, "StripLF");	
+	CloseWindowOnBye = GetIntValue(group, "CloseWindowOnBye");			
+	WarnWrap = GetIntValue(group, "WarnWrap");
+	WrapInput = GetIntValue(group, "WrapInput");			
+	FlashOnConnect = GetIntValue(group, "FlashOnConnect");			
+	
+	GetStringValue(group, "ConsoleSize", Size);
+	sscanf(Size,"%d,%d,%d,%d", &ConsoleRect.left, &ConsoleRect.right,
+			&ConsoleRect.top, &ConsoleRect.bottom);
 
-		sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
+#endif
 
-*/
 	// Get Welcome Messages
 
 	setting = config_setting_get_member (group, "WelcomeMsg");
@@ -7445,6 +7612,9 @@ BOOL GetConfig(char * ConfigName)
 		 MaxMsgno = GetIntValue(group, "MaxMsgno");
 		 LogAge = GetIntValue(group, "LogLifetime");
 		 BidLifetime = GetIntValue(group, "BidLifetime");
+		 MaxAge = GetIntValue(group, "MaxAge");
+		 if (MaxAge == 0)
+			 MaxAge = 30;
 		 UserLifetime = GetIntValue(group, "UserLifetime");
 		 MaintInterval = GetIntValue(group, "MaintInterval");
 		 MaintTime = GetIntValue(group, "MaintTime");
@@ -7472,8 +7642,6 @@ BOOL GetConfig(char * ConfigName)
 	}
 	 return EXIT_SUCCESS;
 }
-
-#endif
 
 #ifdef LINBPQ
 extern BPQVECSTRUC ** BPQHOSTVECPTR;
@@ -8824,7 +8992,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		DoExportCmd(conn, user, Arg1, Context);
 		return;
 	}
-
 
 	if (_memicmp(Cmd, "I", 1) == 0)
 	{

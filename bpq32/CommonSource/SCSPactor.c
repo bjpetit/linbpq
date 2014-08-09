@@ -235,7 +235,12 @@ ConfigLine:
 			if (_memicmp(buf, "DRAGON", 6) == 0)
 				TNC->Dragon = TRUE;
 			else
-
+			if (_memicmp(buf, "DEFAULT ROBUST", 14) == 0)
+				TNC->RobustDefault = TRUE;
+			else
+			if (_memicmp(buf, "FORCE ROBUST", 12) == 0)
+				TNC->ForceRobust = TNC->RobustDefault = TRUE;
+			else
 			if (_memicmp(buf, "MAXLEVEL", 8) == 0)		// Maximum Pactor Level to use.
 				TNC->MaxLevel = atoi(&buf[8]);
 
@@ -245,7 +250,6 @@ ConfigLine:
 				TNC->WL2K = DecodeWL2KReportLine(buf);
 			else
 				strcat (TNC->InitScript, buf);
-
 		}
 	
 
@@ -803,6 +807,9 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 	MoveWindows(TNC);
 #endif
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+
+	if (TNC->RobustDefault)
+		SwitchToPacket(TNC);
 
 	WritetoConsole("\n");
 
@@ -2026,6 +2033,9 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 
 VOID SwitchToPactor(struct TNCINFO * TNC)
 {
+	if (TNC->ForceRobust)
+		return;
+
 	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = malloc(100);
 	sprintf(TNC->Streams[0].CmdSet, "PT\r");
 

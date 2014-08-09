@@ -52,7 +52,7 @@
 // Most processing is now in bpq32.dll (Decode, Station storage and Web interface)
 // Only GUI and messaging are handled here.
 
-// April 2014
+//  July 2014 1.1.8.1
 //	Fix sending messages to unknown callsigns
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -3151,7 +3151,7 @@ VOID OSMThread()
 								Debugprintf("Tile %s Loaded", FN);
 								RefreshTile(FN, Zoom, x, y);
 								EnterCriticalSection(&RefreshCrit);
-								RefreshStationMap();
+//								RefreshStationMap();
 								LeaveCriticalSection(&RefreshCrit);
 
 								InvalidateRect(hMapWnd, NULL, FALSE);
@@ -3170,6 +3170,7 @@ VOID OSMThread()
 			}
 		}
 		closesocket(sock);
+		ImageChanged = TRUE;			// DOnt refresh too often		
 	}
 
 	// Queue is empty
