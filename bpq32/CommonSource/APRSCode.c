@@ -4043,6 +4043,9 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 			
 			UINT * buffptr;
 
+			GetSemaphore(&Semaphore);
+			SemHeldByAPI = 12;
+
 			if (C_Q_COUNT(&APPL_Q) > 50)
 				buffptr = Q_REM(&APPL_Q);
 			else
@@ -4055,6 +4058,8 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 				strcpy(&buffptr[5], Payload);
 				C_Q_ADD(&APPL_Q, buffptr);
 			}
+
+			FreeSemaphore(&Semaphore);
 		}
 
 #endif

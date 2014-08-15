@@ -1212,6 +1212,8 @@ struct AXIPPORTINFO
 	HMENU hResMenu;
 	HMENU hMHMenu;
 
+	pthread_t ResolveNamesThreadId;
+
 };
 
 #pragma pack()

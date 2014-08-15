@@ -626,9 +626,10 @@
 //	Add "DEFAULT ROBUST" and "FORCE ROBUST" commands to SCSPactor Driver
 //	Fix possible memory corruption in WINMOR driver
 //	Fix FT2000 Modes
-//	Use new WL2K reporting system (Web Based)
+//	Use new WL2K reporting system (Web API Based)
 //	APRS Server now cycles through hosts if DNS returns more than one
 //	BPQ32 can now start and stop FLDIGI
+//	Fix loss of AXIP Resolver when running more than one AXIP port
 
 
 
@@ -644,7 +645,9 @@
 
 #include "time.h"
 #include "stdio.h"
-#include <fcntl.h>					 
+#include <fcntl.h>		
+
+#include "compatbits.h"
 
 #include "AsmStrucs.h"
 
@@ -657,7 +660,6 @@
 #include "GetVersion.h"
 
 #define DllImport	__declspec( dllimport )
-#define DllExport	__declspec( dllexport )
 
 #define	CHECKLOADED		  0
 #define	SETAPPLFLAGS	  1
@@ -3308,8 +3310,13 @@ DllExport int APIENTRY DeleteTrayMenuItem(HWND hWnd);
 #define BPQDataAvail 2
 #define BPQStateChange 4
 
+VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value);
+SOCKET OpenWL2KHTTPSock();
+VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return);
+
 BOOL GetWL2KSYSOPInfo(char * Call, char * _REPLYBUFFER);
 BOOL UpdateWL2KSYSOPInfo(char * Call, char * SQL);
+
 
 static INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {

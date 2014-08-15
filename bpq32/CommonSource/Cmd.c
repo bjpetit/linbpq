@@ -114,6 +114,7 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 
 VOID SENDNODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
@@ -3383,7 +3384,8 @@ CMDX COMMANDS[] =
 	"TELSTATUS   ",3,SHOWTELNET,0,
 	"NRR         ",1,NRRCMD,0,
 	"AGWSTATUS   ",3,SHOWAGW,0,
-	"ARP         ",3,SHOWARP,0
+	"ARP         ",3,SHOWARP,0,
+	"IPROUTE     ",3,SHOWIPROUTE,0
 
 };
 

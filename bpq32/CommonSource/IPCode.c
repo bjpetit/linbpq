@@ -946,14 +946,16 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 	
 AlreadyThere:
 
-		if (arpptr->TARGETIPADDR == OurIPAddr)
+		if (arpptr->TARGETIPADDR == OurIPAddr || arpptr->TARGETIPADDR == EncapAddr)
 		{
+			ULONG Save = arpptr->TARGETIPADDR;
+ 
 			arpptr->ARPOPCODE = 0x0200;
 			memcpy(arpptr->TARGETHWADDR, arpptr->SENDHWADDR ,6);
 			memcpy(arpptr->SENDHWADDR, ourMACAddr ,6);
 
 			arpptr->TARGETIPADDR = arpptr->SENDIPADDR;
-			arpptr->SENDIPADDR = OurIPAddr;
+			arpptr->SENDIPADDR = Save;
 
 			memcpy(arpptr->MSGHDDR.DEST, arpptr->MSGHDDR.SOURCE ,6); 
 			memcpy(arpptr->MSGHDDR.SOURCE, ourMACAddr ,6); 
@@ -1467,8 +1469,9 @@ VOID ProcessRIP44Message(PIPMSG IPptr)
 	Len = ntohs(IPptr->IPLENGTH);
 	Len -= 20;
 
-	if (Check_Checksum(UDPptr, Len) == FALSE)
-		return;
+	if (UDPptr->CHECKSUM)
+		if (Check_Checksum(UDPptr, Len) == FALSE)
+			return;
 
 	if	(HDDR->Command != 2 || HDDR->Version != 2)
 		return;
@@ -1572,7 +1575,7 @@ PUTINLIST:
 				}
 	else
 				Route->RIPTIMOUT = 600;			// 10 Mins for now
-	Route->GARTIMOUT = 0;		// In case started to delete
+				Route->GARTIMOUT = 0;		// In case started to delete
 
 			}
 		}
@@ -3129,6 +3132,77 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 			Bufferptr += sprintf(Bufferptr, "%s %s %d %c %d %s\r",
 				IP, Mac, ARPRecord->ARPINTERFACE, ARPRecord->ARPTYPE,
 				(int)ARPRecord->ARPTIMER, ARPRecord->LOCKED?"Locked":"");
+		}
+	}
+
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
+VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	//	DISPLAY IP Gateway ARP status or Clear
+
+	int i;
+	PROUTEENTRY RouteRecord, Route;
+	int SSID, j;
+	char Mac[20];
+	char Call[7];
+	char Net[20];
+	char Mask[20];
+	char Nexthop[20];
+
+	unsigned char work[4];
+
+	Bufferptr += sprintf(Bufferptr, "\r");
+
+	if (IPRequired == FALSE)
+	{
+		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+/*
+	if (memcmp(CmdTail, "CLEAR ", 6) == 0)
+	{
+		int n = NumberofARPEntries;
+		int rec = 0;
+
+		for (i=0; i < n; i++)
+		{
+			Arp = ARPRecords[rec];
+			if (Arp->LOCKED)
+				rec++;
+			else
+				RemoveARP(Arp);
+		}
+
+		Bufferptr += sprintf(Bufferptr, "OK\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		SaveARP();
+
+		return;
+	}
+*/
+	for (i=0; i < NumberofRoutes; i++)
+	{
+		RouteRecord = RouteRecords[i];
+
+//		if (RouteRecord->ARPVALID)
+		{
+			Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
+			memcpy(work, &RouteRecord->NETWORK, 4);
+			sprintf(Net, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+			memcpy(work, &RouteRecord->SUBNET, 4);
+			sprintf(Mask, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+			memcpy(work, &RouteRecord->Encap, 4);
+			sprintf(Nexthop, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+			Bufferptr += sprintf(Bufferptr, "%s %s %s %c %d %d\r",
+				Net, Mask, Nexthop, RouteRecord->TYPE,
+				RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
 		}
 	}
 

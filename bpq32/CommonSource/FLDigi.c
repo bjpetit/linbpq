@@ -937,7 +937,6 @@ static RestartTNC(struct TNCINFO * TNC)
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 	char HomeDir[MAX_PATH];
-	char Cmd[MAX_PATH];
 	int i, ret;
 
 	SInfo.cb=sizeof(SInfo);
@@ -962,14 +961,11 @@ static RestartTNC(struct TNCINFO * TNC)
 			}
 		}
 
-//	To run a batch file, you must start the command interpreter; set lpApplicationName to
-//	cmd.exe and set lpCommandLine to the following arguments:
-//  /c plus the name of the batch file.
+		//	for some reason the program name must be lower case
 
+		_strlwr(TNC->ProgramPath);
 
-		sprintf(Cmd, "/C %s", TNC->ProgramPath);
-
-		ret = CreateProcess("C:\\Windows\\System32\\cmd.exe", Cmd, NULL, NULL, FALSE,0 ,NULL , NULL, &SInfo, &PInfo);
+		ret = CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL , NULL, &SInfo, &PInfo);
 		return ret;
 	}
 	return 0;

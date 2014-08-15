@@ -1435,11 +1435,10 @@ static void CreateResolverWindow(struct AXIPPORTINFO * PORT)
 }
 extern HWND hWndPopup;
 
-pthread_t ResolveNamesThreadId = 0;
 
 static void ResolveNames(struct AXIPPORTINFO * PORT)
 {
-	ResolveNamesThreadId = pthread_self();		// Detect if another started
+	PORT->ResolveNamesThreadId = pthread_self();		// Detect if another started
 	
 	while(TRUE)
 	{
@@ -1492,7 +1491,7 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 		}
 		while(ResolveDelay-- > 0)
 		{
-			if (pthread_equal(ResolveNamesThreadId, pthread_self()) == FALSE)
+			if (pthread_equal(PORT->ResolveNamesThreadId, pthread_self()) == FALSE)
 			{
 				Debugprintf("AXIP Resolve thread %x redundant - closing", pthread_self());
 				return;
