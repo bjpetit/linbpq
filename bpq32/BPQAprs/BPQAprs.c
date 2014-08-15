@@ -52,7 +52,7 @@
 // Most processing is now in bpq32.dll (Decode, Station storage and Web interface)
 // Only GUI and messaging are handled here.
 
-//  July 2014 1.1.8.1
+//  Aug 2014 1.1.8.1
 //	Fix sending messages to unknown callsigns
 
 #define _CRT_SECURE_NO_DEPRECATE 
@@ -62,7 +62,7 @@
 
 #define MARGIN 0
 
-#define Dll	__declspec(dllimport)
+#define DllImport	__declspec(dllimport)
 
 // standard includes
 
@@ -90,6 +90,7 @@
 #include "resource.h"
 
 #include "bpq32.h"
+#include "compatbits.h"
 #include "ASMStrucs.h"
 #define APRS
 #include "Versions.h"
@@ -372,15 +373,15 @@ struct OSMQUEUE OSMQueue = {NULL,0,0,0};
 
 int OSMQueueCount;
 
-Dll VOID APIENTRY APRSConnect(char * Call, char * Filter);
-Dll VOID APIENTRY APRSDisconnect();
-Dll BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call);
-Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
-Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
-Dll BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
-Dll BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
-Dll VOID APIENTRY APISendBeacon();
-Dll struct STATIONRECORD *  APIENTRY APPLFindStation(char * Call, BOOL AddIfNotFount);
+DllImport VOID APIENTRY APRSConnect(char * Call, char * Filter);
+DllImport VOID APIENTRY APRSDisconnect();
+DllImport BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call);
+DllImport BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port);
+DllImport BOOL APIENTRY PutAPRSMessage(char * Frame, int Len);
+DllImport BOOL APIENTRY GetAPRSLatLon(double * PLat,  double * PLon);
+DllImport BOOL APIENTRY GetAPRSLatLonString(char * PLat,  char * PLon);
+DllImport VOID APIENTRY APISendBeacon();
+DllImport struct STATIONRECORD *  APIENTRY APPLFindStation(char * Call, BOOL AddIfNotFount);
 BOOL InitApplication(HINSTANCE);
 BOOL InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
