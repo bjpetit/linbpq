@@ -68,7 +68,7 @@
 
 //	Operates in UTF-8
 
-
+// Version 1.0.9.1 Aug 2014
 
 //	Add "alert on text" option
 
@@ -486,7 +486,7 @@ BOOL CheckKeyWord(char * Word, char * Msg)
 
 BOOL CheckKeyWords(char * Msg, int len)
 {
-	char dupMsg[1000];
+	char dupMsg[1024];
 	int i;
 
 	memcpy(dupMsg, Msg, len);
