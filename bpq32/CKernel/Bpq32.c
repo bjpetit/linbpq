@@ -632,6 +632,9 @@
 //	Fix loss of AXIP Resolver when running more than one AXIP port
 
 
+//  Version 6.0.9.1
+
+//	Fix setting NOKEEPALIVE flag on route created from imcoming L3 message
 
 #define CKernel
 
@@ -716,7 +719,6 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
-UINT DSTARExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -3114,9 +3116,6 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
-
-	if (strstr(Value, "DSTAR"))
-		return (UINT) DSTARExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

@@ -127,6 +127,7 @@
 #define IDC_CHATCOLOURS                 1065
 #define RMS_EXPRESS_USER                1066
 #define NO_WINLINKdotORG                1067
+#define ALLOW_BULLS                     1068
 #define RMS_SSID1                       1070
 #define RMS_SSID2                       1071
 #define RMS_SSID3                       1072
@@ -187,6 +188,7 @@
 #define IDC_PASSWORD                    5002
 #define IDC_QTH1                        5003
 #define IDC_ZIP                         5003
+#define IDC_QTH                         5003
 #define IDC_HOMEBBS1                    5004
 #define IDC_HOMEBBS                     5004
 #define IDC_HOMEBBS2                    5005
@@ -206,6 +208,9 @@
 #define IDC_SEEN                        5012
 #define IDC_POLLRMS                     5012
 #define IDC_SYSOP_IN_LM                 5013
+#define IDC_NTSMPS                      5060
+#define IDC_UZIP                        5014
+#define IDC_SYSOP_IN_LMx                5015
 #define IDD_USERADDED_BOX               5051
 #define IDD_UserEditInfo                5051
 #define IDC_ADDUSER                     5100

@@ -1130,7 +1130,7 @@ struct arp_table_entry
 	BOOL TCPState;
 	UINT TCPThreadID;			// Thread ID if TCP Master
 	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
-	int SourceSocket;			// The socket to use (sets the from Address
+	int SourcePort;				// Used to select socket, hence from port.
 	struct AXIPPORTINFO * PORT;
 };
 

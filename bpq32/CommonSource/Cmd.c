@@ -3885,13 +3885,24 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 				
 		ConvFromAX25(AXPORT->arp_table[index].callsign, Normcall);
 								
-		Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d = %-.30s %c %c\r",
+		if (AXPORT->arp_table[index].port == AXPORT->arp_table[index].SourcePort)
+			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d = %-.30s %c %c\r",
 				Normcall,
 				AXPORT->arp_table[index].hostname,
 				AXPORT->arp_table[index].port,
 				AXPORT->hostaddr,
 				AXPORT->arp_table[index].BCFlag ? 'B' : ' ',
 				(AXPORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
+		else
+			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d<%d = %-.30s %c %c\r",
+				Normcall,
+				AXPORT->arp_table[index].hostname,
+				AXPORT->arp_table[index].port,
+				AXPORT->arp_table[index].SourcePort,
+				AXPORT->hostaddr,
+				AXPORT->arp_table[index].BCFlag ? 'B' : ' ',
+				(AXPORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
+
 
 		index++;
 	}

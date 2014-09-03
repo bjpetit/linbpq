@@ -2627,10 +2627,14 @@ int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 
 BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg)
 {	
-	if (SYSOP) return TRUE;			// Sysop can list or read anything
+	if (SYSOP || Msg->type == 'T') return TRUE;
 	
 	if (Msg->type == 'P')
 		if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
+			return TRUE;
+
+	if (Msg->type == 'B')
+		if (_stricmp(Msg->from, Call) == 0)
 			return TRUE;
 
 	return FALSE;
@@ -3483,6 +3487,13 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 			nodeprintf(conn, "*** Error: This system doesn't allow sending Bulls\r");
 			return FALSE;
 		}
+
+		if (user->flags & F_NOBULLS)
+		{
+			nodeprintf(conn, "*** Error: You are not allowed to send Bulls\r");
+			return FALSE;
+		}
+		
 
 	case 'P':
 	case 'T':
@@ -4942,6 +4953,29 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 	for (m = conn->NextMessagetoForward; m <= NumberofMessages; m++)
 	{
 		Msg=MsgHddrPtr[m];
+
+		//	If an NTS MPS, see if anything matches
+
+		if (Type == 'T' && (conn->UserPointer->flags & F_NTSMPS))
+		{
+			// Look for any T message of State 'N' matching on TOCALLS or ATCALLS
+
+			struct BBSForwardingInfo * ForwardingInfo = conn->UserPointer->ForwardingInfo;
+			int depth;
+				
+			if (Msg->type == 'T' && Msg->status == 'N' && Msg->length <= MaxLen && ForwardingInfo)
+			{
+				depth = CheckBBSToForNTS(Msg, ForwardingInfo);
+
+				if (depth > -1)
+					goto Forwardit;
+						
+				depth = CheckBBSATListWildCarded(Msg, ForwardingInfo, Msg->via);
+
+				if (depth > -1)
+					goto Forwardit;
+			}
+		}
 
 		// If forwarding to Paclink or RMS Express, look for any message matching the requested call list with statis 'N'
 
@@ -7107,6 +7141,8 @@ VOID SaveConfig(char * ConfigName)
 
 	//	Get rid of old config before saving
 	
+	memset((void *)&cfg, 0, sizeof(config_t));
+
 	config_init(&cfg);
 
 	root = config_root_setting(&cfg);
@@ -8873,6 +8909,21 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	Arg1 = strtok_s(NULL, seps, &Context);
 	CmdLen = strlen(Cmd);
 
+	// Check List first. If any other, save last listed to user record.
+
+	if (_memicmp(Cmd, "L", 1) == 0)
+	{
+		DoListCommand(conn, user, Cmd, Arg1);
+		SendPrompt(conn, user);
+		return;
+	}
+
+	if (conn->lastmsg > user->lastmsg)
+	{
+		user->lastmsg = conn->lastmsg;
+		SaveUserDatabase();
+	}
+
 	if (_stricmp(Cmd, "SHOWRMSPOLL") == 0)
 	{
 		DoShowRMSCmd(conn, user, Arg1, Context);
@@ -8902,7 +8953,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	{
 		ExpandAndSendMessage(conn, SignoffMsg, LOG_BBS);
 		Flush(conn);
-		user->lastmsg = conn->lastmsg;
 		Sleep(1000);
 
 		if (conn->BPQStream > 0)
@@ -8918,8 +8968,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	{
 		ExpandAndSendMessage(conn, SignoffMsg, LOG_BBS);
 		Flush(conn);
-
-		user->lastmsg = conn->lastmsg;
 		Sleep(1000);
 			
 		if (conn->BPQStream > 0)
@@ -8963,13 +9011,6 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	if (_memicmp(Cmd, "READFILE", 4) == 0)
 	{
 		ReadBBSFile(conn, user, Arg1);
-		SendPrompt(conn, user);
-		return;
-	}
-
-	if (_memicmp(Cmd, "L", 1) == 0)
-	{
-		DoListCommand(conn, user, Cmd, Arg1);
 		SendPrompt(conn, user);
 		return;
 	}

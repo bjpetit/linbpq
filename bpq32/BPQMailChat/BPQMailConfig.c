@@ -54,6 +54,11 @@ char Filter_FROM[20];
 char Filter_TO[20];
 char Filter_VIA[60];				// Filters for Edit Message Dialog
 
+extern char LTFROMString[2048];
+extern char LTTOString[2048];
+extern char LTATString[2048];
+VOID * GetOverrideFromString(char * input);
+
 extern time_t MaintClock;			// Time to run housekeeping
 
 DLGTEMPLATE * WINAPI DoLockDlgRes(LPCSTR lpszResName);
@@ -916,7 +921,8 @@ int Do_User_Sel_Changed(HWND hDlg)
 
 			SetDlgItemText(hDlg, IDC_NAME, user->Name);
 			SetDlgItemText(hDlg, IDC_PASSWORD, user->pass);
-			SetDlgItemText(hDlg, IDC_ZIP, user->Address);
+			SetDlgItemText(hDlg, IDC_QTH, user->Address);
+			SetDlgItemText(hDlg, IDC_UZIP, user->ZIP);
 			SetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS);
 
 			SetDlgItemInt(hDlg, IDC_LASTLISTED, user->lastmsg, FALSE);
@@ -928,6 +934,8 @@ int Do_User_Sel_Changed(HWND hDlg)
 			CheckDlgButton(hDlg, IDC_EXCLUDED, (user->flags & F_Excluded));
 			CheckDlgButton(hDlg, IDC_EMAIL, (user->flags & F_EMAIL));
 			CheckDlgButton(hDlg, IDC_HOLDMAIL, (user->flags & F_HOLDMAIL));
+			CheckDlgButton(hDlg, ALLOW_BULLS, (user->flags & F_NOBULLS) == 0);	// Node inverted flag
+			CheckDlgButton(hDlg, IDC_NTSMPS, (user->flags & F_NTSMPS));
 			CheckDlgButton(hDlg, IDC_POLLRMS, (user->flags & F_POLLRMS));
 			CheckDlgButton(hDlg, IDC_SYSOP_IN_LM, (user->flags & F_SYSOP_IN_LM));
 			CheckDlgButton(hDlg, RMS_EXPRESS_USER, (user->flags & F_Temp_B2_BBS));
@@ -1003,7 +1011,8 @@ int Do_User_Sel_Changed(HWND hDlg)
 
 	SetDlgItemText(hDlg, IDC_NAME, "");
 	SetDlgItemText(hDlg, IDC_PASSWORD, "");
-	SetDlgItemText(hDlg, IDC_ZIP, "");
+	SetDlgItemText(hDlg, IDC_QTH, "");
+	SetDlgItemText(hDlg, IDC_UZIP, "");
 	SetDlgItemText(hDlg, IDC_HOMEBBS, "");
 	SetDlgItemInt(hDlg, IDC_LASTLISTED, LatestMsg, FALSE);
 
@@ -1127,7 +1136,8 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 
 	GetDlgItemText(hDlg, IDC_NAME, user->Name, 17);
 	GetDlgItemText(hDlg, IDC_PASSWORD, user->pass, 12);
-	GetDlgItemText(hDlg, IDC_ZIP, user->Address, 60);
+	GetDlgItemText(hDlg, IDC_QTH, user->Address, 60);
+	GetDlgItemText(hDlg, IDC_UZIP, user->ZIP, 8);
 	GetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS, 40);
 	user->lastmsg = GetDlgItemInt(hDlg, IDC_LASTLISTED, &OK, FALSE);
 
@@ -1181,6 +1191,12 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 	if (IsDlgButtonChecked(hDlg, IDC_HOLDMAIL))
 		user->flags |= F_HOLDMAIL; else user->flags &= ~F_HOLDMAIL;
 
+	if (IsDlgButtonChecked(hDlg, ALLOW_BULLS) == 0)
+		user->flags |= F_NOBULLS; else user->flags &= ~F_NOBULLS;		// Note flag inverted
+
+	if (IsDlgButtonChecked(hDlg, IDC_NTSMPS))
+		user->flags |= F_NTSMPS; else user->flags &= ~F_NTSMPS;
+	
 	if (IsDlgButtonChecked(hDlg, IDC_POLLRMS))
 		user->flags |= F_POLLRMS; else user->flags &= ~F_POLLRMS;
 
@@ -1626,10 +1642,15 @@ VOID SaveMAINTConfigFromDialog()
 	OverrideUnsent = IsDlgButtonChecked(hwndDisplay, IDC_OVERRIDEUNSENT);
 	SendNonDeliveryMsgs = IsDlgButtonChecked(hwndDisplay, IDC_MAINTNONDELIVERY);
 
-	LTFROM = GetMultiLineDialogParam(hwndDisplay, IDM_LTFROM);
-	LTTO = GetMultiLineDialogParam(hwndDisplay, IDM_LTTO);
-	LTAT = GetMultiLineDialogParam(hwndDisplay, IDM_LTAT);
+	GetDlgItemText(hwndDisplay, IDM_LTFROM, LTFROMString, 2048);
+	LTFROM = GetOverrideFromString(LTFROMString);
 
+	GetDlgItemText(hwndDisplay, IDM_LTTO, LTTOString, 2048);
+	LTTO = GetOverrideFromString(LTTOString);
+
+	GetDlgItemText(hwndDisplay, IDM_LTAT, LTATString, 2048);
+	LTAT = GetOverrideFromString(LTATString);
+ 
 	// Calulate time to run Housekeeping
 	{
 		struct tm *tm;

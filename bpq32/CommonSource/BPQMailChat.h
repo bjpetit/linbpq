@@ -447,7 +447,9 @@ struct UserInfo
 #define F_POLLRMS	 0x4000
 #define F_SYSOP_IN_LM 0x8000
 #define F_Temp_B2_BBS 0x10000
-#define F_NOWINLINK 0x20000			// Don't add Winlink.org
+#define F_NOWINLINK	 0x20000			// Don't add Winlink.org
+#define F_NOBULLS	 0x40000	
+#define F_NTSMPS	 0x80000	
 
 /* #define F_PWD        0x1000 */
 
@@ -1196,12 +1198,12 @@ struct Continent * FindContinent(char * Name);
 int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn);
 BOOL CheckABBS(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo);
-BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS);
+BOOL CheckBBSAtList(struct MsgInfo * Msg, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS);
 BOOL CheckBBSHList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char * HRoute);
 BOOL CheckBBSHElements(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
 BOOL CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS, char ** HElements);
-int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo);
-int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS);
+int CheckBBSToForNTS(struct MsgInfo * Msg, struct BBSForwardingInfo * ForwardingInfo);
+int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS);
 
 VOID ReRouteMessages();
 

@@ -670,7 +670,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, UCHAR * buff, int txlen)
 {				
-	int txsock, i;
+	int txsock, i, SourceSocket;
 
 	if (arp_table->TCPMode)
 	{
@@ -686,10 +686,7 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 		return;
 	}
 
-	// Set up source port if not already done
-
-	if (arp_table->SourceSocket == 0)
-	{
+	// Seelcte source port by choosing right socket
 
 	// First Set Default for Protocol
 
@@ -697,26 +694,25 @@ VOID SendFrame(struct AXIPPORTINFO * PORT, struct arp_table_entry * arp_table, U
 	{
 		if (PORT->IPv6[i] == arp_table->IPv6)
 		{
-			arp_table->SourceSocket = PORT->udpsock[i];	// Use as source socket, therefore source port
+			SourceSocket = PORT->udpsock[i];	// Use as source socket, therefore source port
 			break;
 		}
 	}
 
 	for (i = 0; i < PORT->NumberofUDPPorts; i++)
 	{
-		if (PORT->udpport[i] == arp_table->port && PORT->IPv6[i] == arp_table->IPv6)
+		if (PORT->udpport[i] == arp_table->SourcePort && PORT->IPv6[i] == arp_table->IPv6)
 		{
-			arp_table->SourceSocket = PORT->udpsock[i];	// Use as source socket, therefore source port
+			SourceSocket = PORT->udpsock[i];	// Use as source socket, therefore source port
 			break;
 		}
 	}
-	}
-			
+		
 	if (arp_table->error == 0)
 	{
 		int sent;
 		
-		if (arp_table->port == 0) txsock = PORT->sock; else txsock = arp_table->SourceSocket;
+		if (arp_table->port == 0) txsock = PORT->sock; else txsock = SourceSocket;
 
 		if (arp_table->IPv6)
 			sent = sendto(txsock, buff, txlen, 0, (struct sockaddr *)&arp_table->destaddr6, sizeof(arp_table->destaddr6));
@@ -860,6 +856,14 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
  
 		setsockopt (PORT->udpsock[i],SOL_SOCKET,SO_BROADCAST,(const char FAR *)&bcopt,4);
 
+#ifndef WIN32
+
+		if (PORT->IPv6[i])
+			if (setsockopt(PORT->udpsock[i], IPPROTO_IPV6, IPV6_V6ONLY, &param, sizeof(param)) < 0)
+				perror("setting option IPV6_V6ONLY");
+  
+#endif
+	
 		if (PORT->IPv6[i])
 		{
 			sinx.sinx.sin_family = AF_INET6;
@@ -1213,14 +1217,24 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 				
 			CONVFROMAX25(PORT->arp_table[index].callsign,outcall);
 								
-			i=sprintf(line,"%.10s = %.64s %d = %-.30s %c %c",
-				outcall,
-				PORT->arp_table[index].hostname,
-				PORT->arp_table[index].port,
-				PORT->hostaddr,
-				PORT->arp_table[index].BCFlag ? 'B' : ' ',
-				(PORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
-
+			if (PORT->arp_table[index].port == PORT->arp_table[index].SourcePort)
+				i=sprintf(line,"%.10s = %.64s %d = %-.30s %c %c",
+					outcall,
+					PORT->arp_table[index].hostname,
+					PORT->arp_table[index].port,
+					PORT->hostaddr,
+					PORT->arp_table[index].BCFlag ? 'B' : ' ',
+					(PORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
+			else
+				i=sprintf(line,"%.10s = %.64s %d<%d = %-.30s %c %c",
+					outcall,
+					PORT->arp_table[index].hostname,
+					PORT->arp_table[index].port,
+					PORT->arp_table[index].SourcePort,
+					PORT->hostaddr,
+					PORT->arp_table[index].BCFlag ? 'B' : ' ',
+					(PORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
+		
 			TextOut(hdc,0,(displayline++)*14+2,line,i);
 
 			index++;
@@ -2264,7 +2278,10 @@ BOOL add_arp_entry(struct AXIPPORTINFO * PORT, UCHAR * call, UCHAR * ip, int len
 
 	arp = &PORT->arp_table[PORT->arp_table_len];
 
-	arp->SourceSocket = 0;
+	if (SourcePort)
+		arp->SourcePort = SourcePort;
+	else
+		arp->SourcePort = port;
 
 	arp->PORT = PORT;
 

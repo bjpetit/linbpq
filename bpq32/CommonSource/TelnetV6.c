@@ -1248,6 +1248,15 @@ BOOL OpenSocket6(struct TNCINFO * TNC, int port)
 	psin->sin6_scope_id = 0;
 
 	sock = socket(AF_INET6, SOCK_STREAM, 0);
+	
+#ifndef WIN32
+
+	if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &param, sizeof(param)) < 0)
+	{
+      perror("setting option IPV6_V6ONLY");
+    }
+
+#endif
 
 	if (sock == INVALID_SOCKET)
 	{

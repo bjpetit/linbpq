@@ -1040,7 +1040,7 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
-			depth = CheckBBSToForNTS(Msg, bbs, ForwardingInfo);
+			depth = CheckBBSToForNTS(Msg, ForwardingInfo);
 
 			if (depth > -1)
 			{
@@ -1055,10 +1055,13 @@ NOHA:
 		}
 		if (bestbbs)
 		{
-			Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS Best Match is %s", bestbbs->Call);
-
-			CheckAndSend(Msg, conn, bestbbs);
-		
+			if (bestbbs->flags  & F_NTSMPS) 
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS Best Match is %s, but NTS MPS Set so not queued", bestbbs->Call);
+			else
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS Best Match is %s", bestbbs->Call);
+				CheckAndSend(Msg, conn, bestbbs);
+			}
 			return 1;
 		}
 
@@ -1068,12 +1071,15 @@ NOHA:
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 
-			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+			if (CheckBBSAtList(Msg, ForwardingInfo, ATBBS))
 			{
-				Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS %s Matches AT %s", ATBBS, bbs->Call);
-
-				CheckAndSend(Msg, conn, bbs);
-
+				if (bbs->flags  & F_NTSMPS) 
+					Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS %s Matches AT %s, but NTS MPS Set so not queued", ATBBS, bbs->Call);
+				else
+				{
+					Logprintf(LOG_BBS, conn, '?', "Routing Trace NTS %s Matches AT %s", ATBBS, bbs->Call);
+					CheckAndSend(Msg, conn, bbs);
+				}
 				return 1;
 			}
 		}
@@ -1127,7 +1133,7 @@ NOHA:
 
 			// Check AT 
 
-			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+			if (CheckBBSAtList(Msg, ForwardingInfo, ATBBS))
 			{
 				Logprintf(LOG_BBS, conn, '?', "Routing Trace %s Matches AT %s", ATBBS, bbs->Call);
 
@@ -1186,7 +1192,7 @@ CheckWildCardedAT:
 			if (ForwardingInfo->PersonalOnly && (Msg->type != 'P'))
 				continue;
 
-			depth = CheckBBSATListWildCarded(Msg, bbs, ForwardingInfo, ATBBS);
+			depth = CheckBBSATListWildCarded(Msg, ForwardingInfo, ATBBS);
 
 			if (depth > -1)
 			{
@@ -1201,8 +1207,13 @@ CheckWildCardedAT:
 		}
 		if (bestbbs)
 		{
-			Logprintf(LOG_BBS, conn, '?', "Routing Trace Wildcarded AT Best Match is %s", bestbbs->Call);
-			CheckAndSend(Msg, conn, bestbbs);
+			if (Msg->type == 'T' && (bestbbs->flags  & F_NTSMPS)) 
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace Wildcarded AT Best Match is %s, but NTS Msg and MPS Set so not queued", bestbbs->Call);
+			else
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace Wildcarded AT Best Match is %s", bestbbs->Call);
+				CheckAndSend(Msg, conn, bestbbs);
+			}
 			return 1;
 		}
 
@@ -1237,7 +1248,7 @@ CheckWildCardedAT:
 		}
 
 		if ((strcmp(ATBBS, bbs->Call) == 0) ||			// @BBS = BBS		
-			CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+			CheckBBSAtList(Msg, ForwardingInfo, ATBBS))
 		{
 			Logprintf(LOG_BBS, conn, '?', "Routing Trace AT %s Matches BBS %s", Msg->to, bbs->Call);
 			CheckAndSend(Msg, conn, bbs);
@@ -1287,7 +1298,7 @@ BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwa
 	return FALSE;
 }
 
-BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS)
+BOOL CheckBBSAtList(struct MsgInfo * Msg, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS)
 {
 	char ** Calls;
 
@@ -1418,7 +1429,7 @@ int CheckBBSHElementsFlood(struct MsgInfo * Msg, struct UserInfo * bbs, struct B
 }
 
 
-int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo)
+int CheckBBSToForNTS(struct MsgInfo * Msg, struct BBSForwardingInfo * ForwardingInfo)
 {
 	char ** Calls;
 	char * Call;
@@ -1469,7 +1480,7 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForw
 }
 
 
-int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct UserInfo * bbs, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS)
+int CheckBBSATListWildCarded(struct MsgInfo * Msg, struct BBSForwardingInfo * ForwardingInfo, char * ATBBS)
 {
 	char ** Calls;
 	char * Call;

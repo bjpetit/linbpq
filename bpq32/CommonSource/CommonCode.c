@@ -2251,7 +2251,7 @@ FILE *file;
 int DoRoutes()
 {
 	char digis[30] = "";
-	char locked[3];
+	char locked[3]; 
 	int count, len;
 	char Normcall[10], Portcall[10];
 	char line[80];
@@ -2290,14 +2290,14 @@ int DoRoutes()
 				digis[0] = 0;
 
 			len=sprintf(line,
-					"ROUTE ADD %s %d %d%s%s %d %d %d %d \r\n",
+					"ROUTE ADD %s %d %d%s%s %d %d %d %d \n",
 					Normcall,
 					Routes->NEIGHBOUR_PORT,
 					Routes->NEIGHBOUR_QUAL,	locked, digis,
 					Routes->NBOUR_MAXFRAME,
 					Routes->NBOUR_FRACK,
 					Routes->NBOUR_PACLEN,
-					Routes->INP3Node | (Routes->NoKeepAlive << 1));
+					Routes->INP3Node | (Routes->NoKeepAlive << 2));
 
 					fputs(line, file);
 		}
@@ -2402,7 +2402,6 @@ int DoNodes()
 
 		if (cursor > 30)
 		{
-			line[cursor++]='\r';
 			line[cursor++]='\n';
 			line[cursor++]=0;
 			fputs(line, file);
@@ -3388,10 +3387,13 @@ VOID GetUIConfig()
 	char Key[100];
 	char CfgFN[256];
 	char Digis[100];
+	struct stat STAT;
 
 	config_t cfg;
 	config_setting_t *root, *group;
 	int Port, MaxPort = GetNumberofPorts();
+
+	memset((void *)&cfg, 0, sizeof(config_t));
 
 	config_init(&cfg);
 
@@ -3406,10 +3408,15 @@ VOID GetUIConfig()
 		strcat(CfgFN,"UIUtil.cfg");
 	}
 
+	if (stat(CfgFN, &STAT) == -1)
+	{
+		Debugprintf("UIUtil Config File not found\n");
+		return;
+	}
+
 	if(!config_read_file(&cfg, CfgFN))
 	{
-		if (config_error_line(&cfg))		// Display if not "File Not Found"
-			fprintf(stderr, "%d - %s\n", config_error_line(&cfg), config_error_text(&cfg));
+		fprintf(stderr, "UI Util Config Error Line %d - %s\n", config_error_line(&cfg), config_error_text(&cfg));
 
 		config_destroy(&cfg);
 		return;

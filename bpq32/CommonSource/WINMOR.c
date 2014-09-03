@@ -1477,6 +1477,8 @@ VOID WINMORThread(port)
 		return;
 	}
 
+	Sleep(1000);
+
 	TNC->LastFreq = 0;			//	so V4 display will be updated
 
 	TNC->WINMORDataSock=socket(AF_INET,SOCK_STREAM,0);

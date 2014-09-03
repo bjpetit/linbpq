@@ -665,7 +665,11 @@ LRESULT CALLBACK ConsWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 				{
 					SendUnbuffered(Cinfo->Console->BPQStream, SignoffMsg, strlen(SignoffMsg));
-					user->lastmsg = Cinfo->Console->lastmsg;
+					if (Cinfo->Console->lastmsg > user->lastmsg)
+					{
+						user->lastmsg = Cinfo->Console->lastmsg;
+						SaveUserDatabase();
+					}
 				}
 			}
 

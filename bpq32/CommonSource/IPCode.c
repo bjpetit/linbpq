@@ -61,6 +61,7 @@ VOID ProcessTunnelMsg(PIPMSG IPptr);
 VOID ProcessRIP44Message(PIPMSG IPptr);
 PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found);
 BOOL ProcessROUTELine(char * buf, BOOL Locked);
+VOID DoRouteTimer();
 
 #define ARPTIMEOUT 3600
 
@@ -441,6 +442,7 @@ Dll BOOL APIENTRY Poll_IP()
 	{
 		SecTimer = 10;
 		DoARPTimer();
+		DoRouteTimer();
 	}
 
 Pollloop:
@@ -1537,7 +1539,7 @@ PUTINLIST:
 				Route->METRIC = RIP2->Metric;
 				Route->Encap = RIP2->NextHop;
 				Route->TYPE = 'T';
-				Route->RIPTIMOUT = 600;			// 10 Mins for now
+				Route->RIPTIMOUT = 900;			// 15 Mins for now
 			}
 		}
 		else
@@ -1555,9 +1557,11 @@ PUTINLIST:
 
 				if (Route->Encap != RIP2->NextHop)
 				{
-					if (Route->METRIC > RIP2->Metric)
+					if (Route->METRIC >= RIP2->Metric)
 					{
-						Route->METRIC = RIP2->Metric;			// Better, so change it
+						// Should also change if equal, as dynamic address could have changed
+				
+						Route->METRIC = RIP2->Metric;
 						Route->Encap = RIP2->NextHop;
 					}
 				}
@@ -1573,10 +1577,11 @@ PUTINLIST:
 					if (Route->GARTIMOUT == 0)
 						Route ->GARTIMOUT = 4;
 				}
-	else
-				Route->RIPTIMOUT = 600;			// 10 Mins for now
-				Route->GARTIMOUT = 0;		// In case started to delete
-
+				else
+				{
+					Route->RIPTIMOUT = 900;		// 15 Mins for now
+					Route->GARTIMOUT = 0;		// In case started to delete
+				}
 			}
 		}
 
@@ -2180,7 +2185,9 @@ static ProcessLine(char * buf)
 	//
 	return (FALSE);
 	
-}VOID DoARPTimer()
+}
+
+VOID DoARPTimer()
 {
 	PARPDATA Arp = NULL;
 	int i;
@@ -2216,6 +2223,20 @@ static ProcessLine(char * buf)
 		}
 	}
 }
+
+VOID DoRouteTimer()
+{
+	int i;
+	PROUTEENTRY Route;
+
+	for (i=0; i < NumberofRoutes; i++)
+	{
+		Route = RouteRecords[i];
+		if (Route->RIPTIMOUT)
+			Route->RIPTIMOUT--;
+	}
+}
+
 
 // PCAP Support Code
 
@@ -3138,29 +3159,58 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
+int CompareRoutes (const DWORD * a, const DWORD * b)
+{
+	unsigned long * x;
+	unsigned long * y;
+
+	x = *a;
+	y = *b;
+
+	x = *x;
+	y = *y;
+
+	x = htonl(x);
+	y = htonl(y);
+
+
+
+  if (x < y ) return -1;
+  if (x == y ) return 0;
+  return 1;
+}
+
+int CountBits(unsigned long in)
+{
+	int n = 0;
+	while (in)
+	{
+		if (in & 1) n ++;
+		in >>=1;
+	}
+	return n;
+}
+
 VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	//	DISPLAY IP Gateway ARP status or Clear
 
 	int i;
-	PROUTEENTRY RouteRecord, Route;
-	int SSID, j;
-	char Mac[20];
-	char Call[7];
+	PROUTEENTRY RouteRecord;
 	char Net[20];
-	char Mask[20];
 	char Nexthop[20];
 
 	unsigned char work[4];
 
-	Bufferptr += sprintf(Bufferptr, "\r");
-
 	if (IPRequired == FALSE)
 	{
-		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
+		Bufferptr += sprintf(Bufferptr, "\rIP Gateway is not enabled\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
 	}
+
+	Bufferptr += sprintf(Bufferptr, "%d Entries\r", NumberofRoutes);
+
 
 /*
 	if (memcmp(CmdTail, "CLEAR ", 6) == 0)
@@ -3184,6 +3234,10 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 		return;
 	}
 */
+
+	if (NumberofRoutes)
+		qsort(RouteRecords, NumberofRoutes, 4, CompareRoutes);
+
 	for (i=0; i < NumberofRoutes; i++)
 	{
 		RouteRecord = RouteRecords[i];
@@ -3194,14 +3248,11 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 			memcpy(work, &RouteRecord->NETWORK, 4);
 			sprintf(Net, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-			memcpy(work, &RouteRecord->SUBNET, 4);
-			sprintf(Mask, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
-
 			memcpy(work, &RouteRecord->Encap, 4);
 			sprintf(Nexthop, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-			Bufferptr += sprintf(Bufferptr, "%s %s %s %c %d %d\r",
-				Net, Mask, Nexthop, RouteRecord->TYPE,
+			Bufferptr += sprintf(Bufferptr, "%s/%d %s %c %d %d\r",
+				Net, CountBits(RouteRecord->SUBNET), Nexthop, RouteRecord->TYPE,
 				RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
 		}
 	}

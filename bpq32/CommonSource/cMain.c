@@ -1043,10 +1043,14 @@ BOOL Start()
 		ROUTE->NEIGHBOUR_QUAL = ptr2[10];
 		ROUTE->NEIGHBOUR_PORT = ptr2[11];
 
+		
+		PORT = GetPortTableEntryFromPortNum(ROUTE->NEIGHBOUR_PORT);
+
 		if (ptr2[12] & 0x40)
-		{
 			ROUTE->NoKeepAlive = 1;
-		}
+		else
+			if (PORT != NULL)
+				ROUTE->NoKeepAlive = PORT->PortNoKeepAlive;
 
 		if (ptr2[12] & 0x80)
 		{
@@ -1326,6 +1330,7 @@ VOID ReadNodes()
 	char * Context;
 	char seps[] = " \r";
 	int Port, Qual;
+	struct PORTCONTROL * PORT;
 
 	// Set up pointer to BPQNODES file
 
@@ -1366,11 +1371,13 @@ VOID ReadNodes()
 			if (ptr == NULL) continue;
 			Port = atoi(ptr);
 
-			if (GetPortTableEntryFromPortNum(Port) == NULL)
+			PORT = GetPortTableEntryFromPortNum(Port);
+
+			if (PORT == NULL)
 				continue;				// Port has gone
 
 			if (FindNeighbour(axcall, Port, &ROUTE))
-				continue;
+				continue;				// Already added from ROUTES:
 
 			if (ROUTE == NULL)
 				continue;				// Tsble Full
@@ -1440,7 +1447,12 @@ VOID ReadNodes()
 			if (ptr == NULL) continue;
 			Qual = atoi(ptr);
 
-			if (Qual & 2)
+			//	We now take Nokeepalives from the PORT, unless specifically
+			//	Requested
+
+			ROUTE->NoKeepAlive = PORT->PortNoKeepAlive;
+
+			if (Qual & 4)
 				ROUTE->NoKeepAlive = TRUE;
 
 			if (Qual & 1)

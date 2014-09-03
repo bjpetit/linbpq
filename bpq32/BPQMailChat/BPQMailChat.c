@@ -829,7 +829,7 @@
 
 //	Fix security hole in readfile
 
-// 61
+// 61 August 2014
 //	Set Messages to NTS:nnnnn@NTSXX to type 'T' and remove NTS
 //	Dont treat "Attempting downlink" as a failure
 //	Add option to read messages during a list
@@ -841,6 +841,12 @@
 //	Fix From address in POP3 messages where path is @winlink.org
 //	Fix possible program error in T message procesing
 //	Add MaxAge param (for incoming Bulls)
+
+
+//62
+//	Add ZIP and Permit Bulls flag to Manage Users 
+//	Allow users to kill their own B and anyone to kill T messages
+//	Improve saving of "Last Listed"
 
 #include "BPQMailChat.h"
 #define MAILCHAT
@@ -2749,7 +2755,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		{		
 			ForwardingInfo = bbs->ForwardingInfo;
 			
-			if (CheckBBSAtList(Msg, bbs, ForwardingInfo, ATBBS))
+			if (CheckBBSAtList(Msg, ForwardingInfo, ATBBS))
 			{
 				if (_stricmp(bbs->Call, BBSName) != 0)			// Dont forward to ourself - already here!
 				{
@@ -2893,7 +2899,7 @@ BOOL CheckBBSToList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwa
 	return FALSE;
 }
 
-BOOL CheckBBSAtList(struct MsgInfo * Msg, struct UserInfo * bbs, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS)
+BOOL CheckBBSAtList(struct MsgInfo * Msg, struct	BBSForwardingInfo * ForwardingInfo, char * ATBBS)
 {
 	char ** Calls;
 

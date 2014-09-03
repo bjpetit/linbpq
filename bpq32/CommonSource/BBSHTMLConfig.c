@@ -658,12 +658,12 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (UserListTemplate)
 			free(UserListTemplate);
 
-		UserListTemplate = GetTemplateFromFile(1, "UserPage.txt");
+		UserListTemplate = GetTemplateFromFile(3, "UserPage.txt");
 
 		if (UserDetailTemplate)
 			free(UserDetailTemplate);
 
-		UserDetailTemplate = GetTemplateFromFile(1, "UserDetail.txt");
+		UserDetailTemplate = GetTemplateFromFile(3, "UserDetail.txt");
 
 		*RLen = sprintf(Reply, UserListTemplate, Key, Key, BBSName,
 			Key, Key, Key, Key, Key, Key, Key, Key);
@@ -1739,6 +1739,10 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_SYSOP_IN_LM; else USER->flags &= ~F_SYSOP_IN_LM;
 		ptr1 = GetNextParam(&ptr2);		// Dont add winlink.org
 		if (strcmp(ptr1, "true") == 0) USER->flags |= F_NOWINLINK; else USER->flags &= ~F_NOWINLINK;
+		ptr1 = GetNextParam(&ptr2);		// Allow Bulls
+		if (strcmp(ptr1, "true") == 0) USER->flags &= ~F_NOBULLS; else USER->flags |= F_NOBULLS;	// Inverted flag
+		ptr1 = GetNextParam(&ptr2);		// NTS Message Pickup Station
+		if (strcmp(ptr1, "true") == 0) USER->flags |= F_NTSMPS; else USER->flags &= ~F_NTSMPS;
 
 		ptr1 = GetNextParam(&ptr2);		// Last Listed
 		USER->lastmsg = atoi(ptr1);
@@ -1746,6 +1750,8 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		strcpy(USER->Name, ptr1);
 		ptr1 = GetNextParam(&ptr2);		// Pass
 		strcpy(USER->pass, ptr1);		
+		ptr1 = GetNextParam(&ptr2);		// ZIP
+		strcpy(USER->ZIP, ptr1);
 		ptr1 = GetNextParam(&ptr2);		// QTH
 		strcpy(USER->Address, ptr1);
 		ptr1 = GetNextParam(&ptr2);		// HomeBBS
@@ -2380,7 +2386,8 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 		(flags & F_HOLDMAIL)?CHKD:UNC,
 		(flags & F_SYSOP_IN_LM)?CHKD:UNC,
 		(flags & F_NOWINLINK)?CHKD:UNC,
-
+		(flags & F_NOBULLS)?UNC:CHKD,		// Inverted flag
+		(flags & F_NTSMPS)?CHKD:UNC,
 
 		ConnectsIn, MsgsReceived, MsgsRejectedIn,
 		ConnectsOut, MsgsSent, MsgsRejectedOut,
@@ -2388,6 +2395,7 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 		BytesForwardedOut, User->lastmsg,
 		User->Name,
 		User->pass,
+		User->ZIP,
 		User->Address,
 		User->HomeBBS);
 
