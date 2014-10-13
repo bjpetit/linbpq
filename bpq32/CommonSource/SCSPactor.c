@@ -1341,6 +1341,14 @@ VOID SCSPoll(int Port)
 		
 		CRCStuffAndSend(TNC, Poll, datalen + 5);
 
+		if (RIG_DEBUG)
+		{
+			Debugprintf("SCS Rig Command Queued, Len = %d", datalen );
+			Debugprintf("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+				Poll[5], Poll[6], Poll[7], Poll[8], Poll[9], Poll[10], Poll[11], Poll[12],
+				Poll[13], Poll[14], Poll[15], Poll[16], Poll[17], Poll[18], Poll[19], Poll[20]);
+		}
+
 //		Debugprintf("SCS Sending Rig Command");
 
 		return;
@@ -2864,6 +2872,14 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				buffptr[1] = datalen;
 				memcpy(buffptr + 2, &Msg[5], datalen);
 				C_Q_ADD(&TNC->RadiotoBPQ_Q, buffptr);
+				if (RIG_DEBUG)
+				{
+					Debugprintf("SCS RIG frame received, len %d", datalen);
+					Debugprintf("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+						Msg[5], Msg[6], Msg[7], Msg[8], Msg[9], Msg[10], Msg[11], Msg[12],
+						Msg[13], Msg[14], Msg[15], Msg[16], Msg[17], Msg[18], Msg[19], Msg[20]);
+		
+				}
 			}
 			return;
 		}
@@ -2922,8 +2938,6 @@ int SendPTCRadioCommand(struct TNCINFO * TNC, char * Block, int Length)
 	memcpy(buffptr+2, Block, Length);
 		
 	C_Q_ADD(&TNC->BPQtoRadio_Q, buffptr);
-
-//	Debugprintf("SCS Rig Command Queued");
 
    return 0;
 

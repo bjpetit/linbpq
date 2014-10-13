@@ -556,7 +556,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 					{
 						if (APPLTNC)
 						{
-							if (APPLTNC->TCPInfo && !APPLTNC->TCPInfo->CMSOK)
+							if (APPLTNC->TCPInfo && !APPLTNC->TCPInfo->CMSOK && !APPLTNC->TCPInfo->FallbacktoRelay)
 							return NULL;
 						}
 					}
@@ -737,6 +737,7 @@ BOOL ReadConfigFile(int Port, int ProcLine())
 
 			if (!ProcLine(buf, Port))
 			{
+				WritetoConsoleLocal("\n");
 				WritetoConsoleLocal("Bad config record ");
 				WritetoConsoleLocal(errbuf);
 			}

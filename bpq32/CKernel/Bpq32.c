@@ -635,6 +635,11 @@
 //  Version 6.0.9.1
 
 //	Fix setting NOKEEPALIVE flag on route created from imcoming L3 message
+//	Ignore NODES from locked route with quality 0
+//	Fix seting source port in AXIP
+//	Fix Dual Stack (IPV6/V6) on Linux.
+//	Fix RELAYSOCK if IPv6 is enabled.
+//	Add support for FT1000
 
 #define CKernel
 

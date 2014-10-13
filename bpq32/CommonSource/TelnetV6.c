@@ -247,6 +247,7 @@ ProcessLine(char * buf, int Port)
 				ptr = strtok_s(NULL, ", ", &context);
 			}
 		}
+		else
 		if (_stricmp(param,"RELAYHOST") == 0)
 		{
 			int n = 0;
@@ -406,6 +407,8 @@ ProcessLine(char * buf, int Port)
 			}
 			TCP->NumberofUsers += 1;
 		}
+		else
+			return FALSE;
 
 	return TRUE;
 }
@@ -1322,7 +1325,7 @@ BOOL OpenSockets6(struct TNCINFO * TNC)
 	}
 
 	if (TCP->RelayPort)
-		TCP->Relaysock = OpenSocket6(TNC, TCP->RelayPort);
+		TCP->Relaysock6 = OpenSocket6(TNC, TCP->RelayPort);
 
 
 	if (TCP->HTTPPort)
@@ -1867,11 +1870,18 @@ nosocks:
 			}
 			else // Not Connected
 			{
-
 				// Command. Do some sanity checking and look for things to process locally
 
 				datalen--;				// Exclude CR
 				MsgPtr[datalen] = 0;	// Null Terminate
+
+				if (_stricmp(MsgPtr, "NoFallback") == 0)
+				{
+					TNC->Streams[Stream].NoCMSFallback = TRUE;
+					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Ok\r");
+					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+					return;
+				}
 
 				if (_memicmp(MsgPtr, "D", 1) == 0)
 				{
@@ -1931,7 +1941,7 @@ nosocks:
 					{
 						if (!TCP->CMSOK)
 						{
-							if (TCP->RELAYHOST[0] && TCP->FallbacktoRelay)
+							if (TCP->RELAYHOST[0] && TCP->FallbacktoRelay && STREAM->NoCMSFallback == 0)
 							{
 								STREAM->Connecting = TRUE;
 								STREAM->ConnectionInfo->CMSSession = TRUE;

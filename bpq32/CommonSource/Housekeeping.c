@@ -661,8 +661,12 @@ VOID Renumber_Messages()
 						user->lastmsg = NewNumber[lastmsg];
 						break;
 					}
-				}	
+				}
 
+				// Not found, so use latest
+
+				user->lastmsg = i;
+				break;
 			}
 			user->lastmsg = NewNumber[lastmsg];
 		}

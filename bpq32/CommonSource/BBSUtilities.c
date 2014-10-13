@@ -579,6 +579,8 @@ Next:
 		user->BBSNext = NULL;
 		user->POP3Locked = FALSE;
 
+		if (user->lastmsg < 0 || user->lastmsg > LatestMsg)
+			user->lastmsg = LatestMsg;
 
 		if (user->flags & F_BBS)
 		{
@@ -594,7 +596,6 @@ Next:
 			// Save Highest BBS Number
 
 			if (user->BBSNumber > HighestBBSNumber) HighestBBSNumber = user->BBSNumber;
-
 		}
 		goto Next;
 	}
@@ -824,6 +825,8 @@ Next:
 		strlop(Msg->from, '@');
 
 		BuildNNTPList(Msg);				// Build NNTP Groups list
+
+		Msg->Locked = 0;				// In case left locked
 
 		// If any forward bits are set, increment count on corresponding BBS record.
 
@@ -2721,7 +2724,7 @@ BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom)
 	return FALSE;
 }
 
-void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1)
+void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming)
 {
 	BOOL SendFullFrom = Cmd[2];
 	int Start = 0;
@@ -2817,6 +2820,11 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		{
 			int i = atoi(Arg1);
 			int m = NumberofMessages;
+
+			if (Resuming)
+				i = Temp->LLCount;
+			else
+				Temp->LLCount = i;
 				
 			for (; i>0 && m != 0; i--)
 			{
@@ -2831,6 +2839,8 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 						continue;
 					}
 
+					Temp->LLCount--;
+					
 					if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
 						return;			// Hit page limit
 					m--;
@@ -3090,9 +3100,10 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 	{
 		Msg=MsgHddrPtr[m];
 
+		if (SYSOP) return m;			// Sysop can list or read anything
+		
 		if (Msg->status != 'K')
 		{
-			if (SYSOP) return m;			// Sysop can list or read anything
 	
 			if (Msg->status != 'H')
 			{
@@ -3111,7 +3122,6 @@ int GetUserMsg(int m, char * Call, BOOL SYSOP)
 	} while (m> 0);
 
 	return 0;
-
 }
 
 BOOL CheckUserMsg(struct MsgInfo * Msg, char * Call, BOOL SYSOP)
@@ -4958,8 +4968,6 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 		if (Type == 'T' && (conn->UserPointer->flags & F_NTSMPS))
 		{
-			// Look for any T message of State 'N' matching on TOCALLS or ATCALLS
-
 			struct BBSForwardingInfo * ForwardingInfo = conn->UserPointer->ForwardingInfo;
 			int depth;
 				
@@ -4967,12 +4975,17 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 			{
 				depth = CheckBBSToForNTS(Msg, ForwardingInfo);
 
-				if (depth > -1)
+				if (depth > -1 && Msg->Locked == 0)
 					goto Forwardit;
 						
+				depth = CheckBBSAtList(Msg, ForwardingInfo, Msg->via);
+
+				if (depth && Msg->Locked == 0)
+					goto Forwardit;
+
 				depth = CheckBBSATListWildCarded(Msg, ForwardingInfo, Msg->via);
 
-				if (depth > -1)
+				if (depth > -1 && Msg->Locked == 0)
 					goto Forwardit;
 			}
 		}
@@ -5027,6 +5040,8 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 			conn->NextMessagetoForward = m + 1;			// So we don't offer again if defered
 
+			Msg->Locked = 1;				// So other MPS can't pick it up
+
 			// if FBB forwarding add to list, eise save pointer
 
 			if (conn->BBSFlags & FBBForwarding)
@@ -5046,7 +5061,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 				// Set up R:Line, so se can add its length to the sise
 
-				tm = gmtime(&NOW);	
+				tm = gmtime(&Msg->datereceived);	
 	
 				FBBHeader->Size += sprintf_s(RLine, sizeof(RLine),"R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 					tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -5872,7 +5887,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 				MsgPtr = MsgBytes;
 		}
 
-		tm = gmtime(&now);	
+		tm = gmtime(&Msg->datereceived);	
 
 		len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -5990,7 +6005,6 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
 {
 	struct tm * tm;
-	time_t now;
 	char * MsgBytes = ReadMessageFile(Msg->number);
 	char * MsgPtr;
 	char Line[256];
@@ -6040,8 +6054,7 @@ BOOL ForwardMessagetoFile(struct MsgInfo * Msg, FILE * Handle)
 			MsgPtr = MsgBytes;
 	}
 
-	now = time(NULL);
-	tm = gmtime(&now);	
+	tm = gmtime(&Msg->datereceived);	
 
 	len = sprintf(Line, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 			tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -7972,6 +7985,10 @@ int Disconnected (Stream)
 			}
 
 			conn->Active = FALSE;
+
+			if (conn->FwdMsg)
+				conn->FwdMsg->Locked = 0;	// Unlock
+
 			RefreshMainWindow();
 
 			RemoveTempBIDS(conn);
@@ -7981,6 +7998,18 @@ int Disconnected (Stream)
 
 			if (conn->FBBHeaders)
 			{
+				struct FBBHeaderLine * FBBHeader;
+				int n;
+
+				for (n = 0; n < 5; n++)
+				{
+					FBBHeader = &conn->FBBHeaders[n];
+					
+					if (FBBHeader->FwdMsg)
+						FBBHeader->FwdMsg->Locked = 0;	// Unlock
+
+				}
+
 				free(conn->FBBHeaders);
 				conn->FBBHeaders = NULL;
 			}
@@ -8539,7 +8568,6 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 		// Waiting for Enter Message Prompt
 
 		struct tm * tm;
-		time_t now;
 		char * MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 		char * MsgPtr;
 		int MsgLen;
@@ -8577,8 +8605,7 @@ VOID ProcessTextFwdLine(ConnectionInfo * conn, struct UserInfo * user, char * Bu
 				MsgPtr = MsgBytes;
 		}
 
-		now = time(NULL);
-		tm = gmtime(&now);	
+		tm = gmtime(&conn->FwdMsg->datereceived);	
 
 		nodeprintf(conn, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r",
 				tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,
@@ -8913,7 +8940,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	if (_memicmp(Cmd, "L", 1) == 0)
 	{
-		DoListCommand(conn, user, Cmd, Arg1);
+		DoListCommand(conn, user, Cmd, Arg1, FALSE);
 		SendPrompt(conn, user);
 		return;
 	}
@@ -9738,7 +9765,7 @@ VOID ProcessSuspendedListCommand(CIRCUIT * conn, struct UserInfo * user, char* B
 	{
 		//	Resume Listing from where we left off
 
-		DoListCommand(conn, user, Temp->LastListCommand, Temp->LastListParams);
+		DoListCommand(conn, user, Temp->LastListCommand, Temp->LastListParams, TRUE);
 		SendPrompt(conn, user);
 		return;
 	}

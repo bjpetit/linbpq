@@ -209,6 +209,8 @@ struct STREAMINFO
 
 	int TimeInRX;				// Too long in send mode timer
 	int NeedDisc;				// Timer to send DISC if appl not available
+
+	BOOL NoCMSFallback;			// Dont use relay if CMS not available
 };
 
 typedef struct AGWINFO

@@ -151,6 +151,9 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			clear_fwd_bit(conn->FwdMsg->fbbs, user->BBSNumber);
 			set_fwd_bit(conn->FwdMsg->forw, user->BBSNumber);
 			conn->UserPointer->ForwardingInfo->MsgCount--;
+
+			conn->FwdMsg->Locked = 0;	// Unlock
+
 		}
 
 		return;
@@ -249,6 +252,8 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				conn->FwdMsg->status = 'F';			// Mark as forwarded
 				conn->FwdMsg->datechanged=time(NULL);
 			}
+
+			conn->FwdMsg->Locked = 0;	// Unlock
 
 			conn->UserPointer->ForwardingInfo->MsgCount--;
 		}

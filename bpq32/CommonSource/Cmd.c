@@ -3839,6 +3839,8 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 	struct PORTCONTROL * PORT = NULL;
 	struct AXIPPORTINFO * AXPORT;
 	char Normcall[11];
+	char Flags[10];
+	struct arp_table_entry * arp;
 
 	ptr = strtok_s(CmdTail, " ", &Context);
 
@@ -3868,41 +3870,52 @@ VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 
 	while (index < AXPORT->arp_table_len)
 	{
+		arp = &AXPORT->arp_table[index];
+
 		Bufferptr = CHECKBUFFER(Session, Bufferptr);
 
-		if (AXPORT->arp_table[index].ResolveFlag && AXPORT->arp_table[index].error != 0)
+		if (arp->ResolveFlag && arp->error != 0)
 		{
 				// resolver error - Display Error Code
-			sprintf(AXPORT->hostaddr, "Error %d", AXPORT->arp_table[index].error);
+			sprintf(AXPORT->hostaddr, "Error %d", arp->error);
 		}
 		else
 		{
-			if (AXPORT->arp_table[index].IPv6)	
-				Format_Addr((unsigned char *)&AXPORT->arp_table[index].destaddr6.sin6_addr, AXPORT->hostaddr, AXPORT->arp_table[index].IPv6);
+			if (arp->IPv6)	
+				Format_Addr((unsigned char *)&arp->destaddr6.sin6_addr, AXPORT->hostaddr, TRUE);
 			else
-				Format_Addr((unsigned char *)&AXPORT->arp_table[index].destaddr.sin_addr, AXPORT->hostaddr, AXPORT->arp_table[index].IPv6);
+				Format_Addr((unsigned char *)&arp->destaddr.sin_addr, AXPORT->hostaddr, FALSE);
 		}
 				
-		ConvFromAX25(AXPORT->arp_table[index].callsign, Normcall);
-								
-		if (AXPORT->arp_table[index].port == AXPORT->arp_table[index].SourcePort)
-			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d = %-.30s %c %c\r",
-				Normcall,
-				AXPORT->arp_table[index].hostname,
-				AXPORT->arp_table[index].port,
-				AXPORT->hostaddr,
-				AXPORT->arp_table[index].BCFlag ? 'B' : ' ',
-				(AXPORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
-		else
-			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d<%d = %-.30s %c %c\r",
-				Normcall,
-				AXPORT->arp_table[index].hostname,
-				AXPORT->arp_table[index].port,
-				AXPORT->arp_table[index].SourcePort,
-				AXPORT->hostaddr,
-				AXPORT->arp_table[index].BCFlag ? 'B' : ' ',
-				(AXPORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
+		ConvFromAX25(arp->callsign, Normcall);
 
+		Flags[0] = 0;
+		
+		if (arp->BCFlag)
+			strcat(Flags, "B ");
+
+		if (arp->TCPState == TCPConnected)
+			strcat(Flags, "C ");
+
+		if (arp->AutoAdded)
+			strcat(Flags, "A");
+								
+		if (arp->port == arp->SourcePort)
+			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d = %-.30s %s\r",
+				Normcall,
+				arp->hostname,
+				arp->port,
+				AXPORT->hostaddr,
+				Flags);
+
+		else
+			Bufferptr += sprintf(Bufferptr,"%.10s = %.64s %d<%d = %-.30s %s\r",
+				Normcall,
+				arp->hostname,
+				arp->port,
+				arp->SourcePort,
+				AXPORT->hostaddr,
+				Flags);
 
 		index++;
 	}

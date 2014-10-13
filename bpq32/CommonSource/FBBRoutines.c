@@ -162,6 +162,8 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				clear_fwd_bit(FBBHeader->FwdMsg->fbbs, user->BBSNumber);
 				set_fwd_bit(FBBHeader->FwdMsg->forw, user->BBSNumber);
 
+				FBBHeader->FwdMsg->Locked = 0;	// Unlock
+
 				if (memcmp(FBBHeader->FwdMsg->fbbs, zeros, NBMASK) == 0)
 				{
 					FBBHeader->FwdMsg->status = 'F';			// Mark as forwarded
@@ -679,6 +681,8 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 				FBBHeader->FwdMsg->datechanged=time(NULL);
 			}
 
+			FBBHeader->FwdMsg->Locked = 0;	// Unlock
+
 			conn->UserPointer->ForwardingInfo->MsgCount--;
 		}
 	}
@@ -1079,16 +1083,7 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 
 	DataOffset = Outputptr - Output;	// Used if restarting
 
-	if (conn->RestartFrom == 0)
-	{
-		// save time first sent, or checksum will be wrong when we restart
-		
-		FwdMsg->datechanged=time(NULL);
-		conn->UserPointer->Total.MsgsSent[Index]++;
-		conn->UserPointer->Total.BytesForwardedOut[Index] += OrigLen;
-	}
-
-	tm = gmtime(&FwdMsg->datechanged);	
+	tm = gmtime(&FwdMsg->datereceived);	
 	
 	sprintf(Rline, "R:%02d%02d%02d/%02d%02dZ %d@%s.%s %s\r\n",
 		tm->tm_year-100, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min,

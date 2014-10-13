@@ -322,6 +322,7 @@ struct TempUserInfo
 	char LastListCommand[80];
 	char LastListParams[80];
 	int LinesSent;
+	int LLCount;					// Number still to send in List Last N
 
 };
 
@@ -560,7 +561,8 @@ struct MsgInfo
 	char	fbbs[NBMASK] ;
 	char	forw[NBMASK] ;
 	char	emailfrom[41];
-	char	Spare[64];			// For future use
+	char	Locked;				//	Set if selected for sending (NTS Pickup)
+	char	Spare[63];			// For future use
 } ;
 
 #define MSGTYPE_B 0
@@ -962,7 +964,7 @@ VOID SendUnbuffered(int stream, char * msg, int len);
 BOOL ListMessage(struct MsgInfo * Msg, ConnectionInfo * conn, BOOL SendFullFrom);
 void DoDeliveredCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void DoKillCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
-void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1);
+void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, BOOL Resuming);
 void DoReadCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, char * Arg1, char * Context);
 void KillMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno);
 int KillMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call);

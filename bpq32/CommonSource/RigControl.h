@@ -129,6 +129,7 @@ struct RIGINFO
 #define FLEX 8
 #define M710 9
 #define NMEA 10
+#define FT1000 11
 
 struct RIGPORTINFO
 {

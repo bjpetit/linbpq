@@ -219,9 +219,15 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 		ROUTE->NoKeepAlive = PORT->PortNoKeepAlive;
 	}
 
+	// if locked route with quality zero ignore
+
+	if ((ROUTE->NEIGHBOUR_FLAG & 1))	 // LOCKED ROUTE
+		if (ROUTE->NEIGHBOUR_QUAL == 0)
+			return;
+
 	// if not locked, update route quality from port quality (may have changed config and not cleared SAVENODES
 
-	if ((ROUTE->NEIGHBOUR_FLAG & 1) == 0)	 // LOCKED ROUTE
+	if ((ROUTE->NEIGHBOUR_FLAG & 1) == 0)	 // Not LOCKED ROUTE
 		ROUTE->NEIGHBOUR_QUAL = PORT->PORTQUALITY;
 
 	//	GET TIME FROM BIOS DATA AREA OR RTC

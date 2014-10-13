@@ -925,7 +925,7 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, IDC_UZIP, user->ZIP);
 			SetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS);
 
-			SetDlgItemInt(hDlg, IDC_LASTLISTED, user->lastmsg, FALSE);
+			SetDlgItemInt(hDlg, IDC_LASTLISTED, user->lastmsg, TRUE);
 
 			CheckDlgButton(hDlg, IDC_SYSOP, (user->flags & F_SYSOP));
 			CheckDlgButton(hDlg, IDC_BBSFLAG, (user->flags & F_BBS));

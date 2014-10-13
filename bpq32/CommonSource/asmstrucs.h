@@ -1085,7 +1085,7 @@ struct TNCDATA
 #pragma pack(1) 
 
 #define MAX_ENTRIES 128
-#define MaxMHEntries 50
+#define MaxMHEntries 100
 #define MAX_BROADCASTS 8
 #define MAXUDPPORTS 30 
 
@@ -1131,6 +1131,7 @@ struct arp_table_entry
 	UINT TCPThreadID;			// Thread ID if TCP Master
 	UINT TCPOK; 				// Cleared when Message RXed . Incremented by timer
 	int SourcePort;				// Used to select socket, hence from port.
+//	SOCKET SourceSocket;
 	struct AXIPPORTINFO * PORT;
 };
 
@@ -1200,6 +1201,8 @@ struct AXIPPORTINFO
 
 	time_t ltime,lasttime;
 	int baseline;
+	int mhbaseline;
+	int CurrentMHEntries;
 
 	char buf[MAXGETHOSTSTRUCT];
 

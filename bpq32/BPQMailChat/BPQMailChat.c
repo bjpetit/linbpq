@@ -847,6 +847,9 @@
 //	Add ZIP and Permit Bulls flag to Manage Users 
 //	Allow users to kill their own B and anyone to kill T messages
 //	Improve saving of "Last Listed"
+//	Fix LL when paging
+//	Send Date received in R: Line (should fix B2 message restarts)
+//
 
 #include "BPQMailChat.h"
 #define MAILCHAT

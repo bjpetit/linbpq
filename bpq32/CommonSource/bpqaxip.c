@@ -293,10 +293,7 @@ struct AXIPPORTINFO * Portlist[33];
 
 int InitAXIP(int Port);
 
-
-int CurrentMHEntries;
 int CurrentResEntries;
-
 
 static char ConfigClassName[]="CONFIG";
 
@@ -1032,6 +1029,8 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	MINMAXINFO * mmi;	
 	int nScrollCode,nPos;
 	int i, Port;
+	char Flags[10];
+	struct arp_table_entry * arp;
 
 	// Find our PORT Entry
 
@@ -1202,38 +1201,49 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 
 		while (index < PORT->arp_table_len)
 		{
-			if (PORT->arp_table[index].ResolveFlag && PORT->arp_table[index].error != 0)
+			arp = &PORT->arp_table[index];
+
+			Flags[0] = 0;
+		
+			if (arp->BCFlag)
+				strcat(Flags, "B ");
+
+			if (arp->TCPState == TCPConnected)
+				strcat(Flags, "C ");
+
+			if (arp->AutoAdded)
+				strcat(Flags, "A");
+
+			if (arp->ResolveFlag && arp->error != 0)
 			{
 					// resolver error - Display Error Code
-				sprintf(PORT->hostaddr,"Error %d",PORT->arp_table[index].error);
+				sprintf(PORT->hostaddr,"Error %d",arp->error);
 			}
 			else
 			{
-				if (PORT->arp_table[index].IPv6)	
-					Format_Addr((unsigned char *)&PORT->arp_table[index].destaddr6.sin6_addr, PORT->hostaddr, PORT->arp_table[index].IPv6);
+				if (arp->IPv6)	
+					Format_Addr((unsigned char *)&arp->destaddr6.sin6_addr, PORT->hostaddr, TRUE);
 				else
-					Format_Addr((unsigned char *)&PORT->arp_table[index].destaddr.sin_addr, PORT->hostaddr, PORT->arp_table[index].IPv6);
+					Format_Addr((unsigned char *)&arp->destaddr.sin_addr, PORT->hostaddr, FALSE);
 			}
 				
-			CONVFROMAX25(PORT->arp_table[index].callsign,outcall);
+			CONVFROMAX25(arp->callsign,outcall);
 								
-			if (PORT->arp_table[index].port == PORT->arp_table[index].SourcePort)
-				i=sprintf(line,"%.10s = %.64s %d = %-.30s %c %c",
+			if (arp->port == arp->SourcePort)
+				i=sprintf(line,"%.10s = %.64s %d = %-.30s %s   ",
 					outcall,
-					PORT->arp_table[index].hostname,
-					PORT->arp_table[index].port,
+					arp->hostname,
+					arp->port,
 					PORT->hostaddr,
-					PORT->arp_table[index].BCFlag ? 'B' : ' ',
-					(PORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
+					Flags);
 			else
-				i=sprintf(line,"%.10s = %.64s %d<%d = %-.30s %c %c",
+				i=sprintf(line,"%.10s = %.64s %d<%d = %-.30s %s   ",
 					outcall,
-					PORT->arp_table[index].hostname,
-					PORT->arp_table[index].port,
-					PORT->arp_table[index].SourcePort,
+					arp->hostname,
+					arp->port,
+					arp->SourcePort,
 					PORT->hostaddr,
-					PORT->arp_table[index].BCFlag ? 'B' : ' ',
-					(PORT->arp_table[index].TCPState == TCPConnected)? 'C' : ' ');
+					Flags);
 		
 			TextOut(hdc,0,(displayline++)*14+2,line,i);
 
@@ -1528,8 +1538,10 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 	char outcall[10];
 	HGLOBAL	hMem;
 	struct AXIPPORTINFO * PORT;
-	int index;
+	int index,displayline;
 	MINMAXINFO * mmi;	
+	int nScrollCode,nPos;
+
 
 	int i;
 
@@ -1551,9 +1563,9 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 	case WM_GETMINMAXINFO:
 
  		mmi = (MINMAXINFO *)lParam;
-		mmi->ptMaxSize.x = 500;
+		mmi->ptMaxSize.x = 520;
 		mmi->ptMaxSize.y = PORT->MaxMHWindowlength;
-		mmi->ptMaxTrackSize.x = 500;
+		mmi->ptMaxTrackSize.x = 520;
 		mmi->ptMaxTrackSize.y = PORT->MaxMHWindowlength;
 		break;
 
@@ -1637,13 +1649,48 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 
 		return DefMDIChildProc(hWnd, message, wParam, lParam);
 
+	case WM_VSCROLL:
+		
+		nScrollCode = (int) LOWORD(wParam); // scroll bar value 
+		nPos = (short int) HIWORD(wParam);  // scroll box position 
+
+		//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
+
+		if (nScrollCode == SB_LINEUP || nScrollCode == SB_PAGEUP)
+		{
+			PORT->mhbaseline--;
+			if (PORT->mhbaseline <0)
+				PORT->mhbaseline=0;
+		}
+
+		if (nScrollCode == SB_LINEDOWN || nScrollCode == SB_PAGEDOWN)
+		{
+			PORT->mhbaseline++;
+			if (PORT->mhbaseline > PORT->CurrentMHEntries)
+				PORT->mhbaseline = PORT->CurrentMHEntries;
+		}
+
+		if (nScrollCode == SB_THUMBTRACK)
+		{
+			PORT->mhbaseline=nPos;
+		}
+
+		SetScrollPos(hWnd,SB_VERT,PORT->mhbaseline,TRUE);
+
+		InvalidateRect(hWnd,NULL,TRUE);
+		break;
+
+
+
 	case WM_PAINT:
 
 		hdc = BeginPaint (hWnd, &ps);
 		hOldFont = SelectObject( hdc, hFont) ;
 			
-		index = 0;
-		CurrentMHEntries = 0;
+		index = PORT->mhbaseline;
+		displayline=0;
+
+		PORT->CurrentMHEntries = 0;
 
 		while (index < MaxMHEntries)
 		{	
@@ -1664,14 +1711,14 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 
 				line[i-2]= ' ';			// Clear CR returned by asctime
 
-				TextOut(hdc,0,(index)*14+2,line,i);
-				CurrentMHEntries ++;
+				TextOut(hdc,0,(displayline++)*14+2,line,i);
+				PORT->CurrentMHEntries ++;
 			}
 			index++;
 		}
 
-		if (PORT->MaxMHWindowlength < CurrentMHEntries * 14 + 40)
-			PORT->MaxMHWindowlength = CurrentMHEntries * 14 + 40;
+		if (PORT->MaxMHWindowlength < PORT->CurrentMHEntries * 14 + 40)
+			PORT->MaxMHWindowlength = PORT->CurrentMHEntries * 14 + 40;
 
 		SelectObject( hdc, hOldFont ) ;
 		EndPaint (hWnd, &ps);
@@ -1784,9 +1831,10 @@ void CreateMHWindow(struct AXIPPORTINFO * PORT)
 
 	sprintf(WindowTitle,"AXIP Port %d MHEARD", PORT->Port);
   
-	PORT->hMHWnd = hMHWnd = CreateMDIWindow("MHAppName", WindowTitle, WS_OVERLAPPEDWINDOW,
-		  Left - (OffsetW /2), Top - OffsetH, Width, Height, ClientWnd, hInstance, 1234);
-
+	PORT->hMHWnd = hMHWnd = CreateMDIWindow("MHAppName", WindowTitle,
+			WS_OVERLAPPEDWINDOW | WS_VSCROLL,
+			Left - (OffsetW /2), Top - OffsetH, Width, Height, ClientWnd, hInstance, 1234);
+ 
 	PORT->hMHMenu = CreatePopupMenu();
 	AppendMenu(PORT->hMHMenu, MF_STRING, BPQCOPY, "Copy");
 	AppendMenu(PORT->hMHMenu, MF_STRING, BPQCLEAR, "Clear");
@@ -2276,7 +2324,33 @@ BOOL add_arp_entry(struct AXIPPORTINFO * PORT, UCHAR * call, UCHAR * ip, int len
 		//
 		return (FALSE); 
 
-	arp = &PORT->arp_table[PORT->arp_table_len];
+	arp = &PORT->arp_table[0];			// First
+
+	if (PORT->arp_table_len)
+	{
+		// Aleady some, so add in callsign order
+
+		int n = 0;
+
+		while (n < MAX_ENTRIES)
+		{
+			if (arp->callsign[0] == 0)	// off end of table, so add here
+				break;
+
+			if (memcmp(call, arp->callsign, 7) > 0)	// lower
+			{
+				arp++;
+				n++;
+				continue;
+			}
+
+			// Move follwoing extries down one and add here
+
+			memmove(arp + 1, arp, (PORT->arp_table_len - n) * sizeof(struct arp_table_entry));
+			memset(arp, 0, sizeof(struct arp_table_entry));
+			break;
+		}
+	}
 
 	if (SourcePort)
 		arp->SourcePort = SourcePort;
@@ -2328,6 +2402,8 @@ BOOL add_arp_entry(struct AXIPPORTINFO * PORT, UCHAR * call, UCHAR * ip, int len
 		}
 		arp->destaddr.sin_port = htons(arp->port);
 #ifndef LINBPQ
+			
+		SetScrollRange(PORT->hResWnd,SB_VERT, 0, PORT->arp_table_len, TRUE);
 		InvalidateRect(PORT->hResWnd, NULL, FALSE);
 #endif
 	}
@@ -2452,10 +2528,14 @@ int Update_MH_List(struct AXIPPORTINFO * PORT, UCHAR * ipad, char * call, char p
 		MH = &PORT->MHTable[index];
 		
 		if (MH->callsign[0] == 0) 
-
+		{
 			//	empty entry, so call not present. Move all down, and add to front
 
+#ifdef WIN32
+			SetScrollRange(PORT->hMHWnd, SB_VERT, 0, index + 1, TRUE);
+#endif
 			goto MoveEntries;
+		}
 
 		if (memcmp(MH->callsign,callsign,7) == 0 &&
 			memcmp(&MH->ipaddr, ipad, (MH->IPv6) ? 16 : 4) == 0 &&
