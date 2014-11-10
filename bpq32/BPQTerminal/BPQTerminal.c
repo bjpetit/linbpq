@@ -67,6 +67,10 @@
 
 //		Add UIOnly Monitor Option
 
+//	Version 2.2.2.1 June 2012
+//		Fix possible crash on processing part line
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #include <windows.h>
@@ -1862,6 +1866,8 @@ VOID WritetoOutputWindow(struct RTFTerm * OPData, char * Msg, int len)
 	if (PartLinePtr != 0)
 	{
 		OPData->CurrentLine--;				// Overwrite part line in buffer
+		if (OPData->CurrentLine < 0)
+			OPData->CurrentLine = MAXLINES - 1;
 		
 		if (Msg[0] == 0x1b && len > 1) 
 		{

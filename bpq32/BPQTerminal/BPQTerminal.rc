@@ -46,7 +46,7 @@ END
 
 3 TEXTINCLUDE MOVEABLE PURE 
 BEGIN
-    "#include ""..\\Include\\Versions.h""\r\n"
+    "#include ""..\\CommonSource\\Versions.h""\r\n"
     "#include ""..\\StdVer.inc""\r\n"
     "\r\n"
     "\0"
@@ -183,7 +183,7 @@ IDC_DRAGSIZE            CURSOR  DISCARDABLE     "DragSize.cur"
 //
 // Generated from the TEXTINCLUDE 3 resource.
 //
-#include "..\Include\Versions.h"
+#include "..\CommonSource\Versions.h"
 #include "..\StdVer.inc"
 
 
