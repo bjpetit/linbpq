@@ -85,8 +85,8 @@ struct ConsoleInfo
 	char kbbuf[INPUTLEN];
 	int kbptr;
 
-	char * readbuff;		// Malloc'ed
 	int readbufflen;		// Current Length
+	char * readbuff;		// Malloc'ed
 	char * KbdStack[MAXSTACK];
 
 	int StackIndex;

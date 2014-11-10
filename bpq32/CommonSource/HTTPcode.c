@@ -26,7 +26,6 @@ VOID FormatTime2(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 VOID SaveUIConfig();
 
-
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
 extern int  MAXNEIGHBOURS;

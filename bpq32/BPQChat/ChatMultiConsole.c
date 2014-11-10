@@ -1044,6 +1044,8 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, WCHAR * Msg, int len
 	if (Cinfo->PartLinePtr != 0)
 	{
 		Cinfo->CurrentLine--;				// Overwrite part line in buffer
+		if (Cinfo->CurrentLine < 0)
+			Cinfo->CurrentLine = MAXLINES - 1;
 
 		if (Msg[0] == 0x1b && len > 1) 
 		{

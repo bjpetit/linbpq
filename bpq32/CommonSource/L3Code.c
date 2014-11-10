@@ -304,9 +304,24 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 		// SEE IF OUR and of our CALLs - DONT WANT TO PUT IT IN LIST!
 
-		if (CompareCalls(ptr1, MYCALL))
-			continue;
+		if (ROUTE->FirstTimeFlag == 0 && CompareCalls(ptr1, MYCALL))
+		{
+			// But use it to get route quality setting from other end
 
+			// As we now get qual ftom highest, only use this after a reload in
+			// case other end has changed.
+
+			// Check if route is via our node
+
+			if (memcmp(ptr1, &ptr1[13], 7) == 0)
+			{
+				if (ROUTE->OtherendLocked == 0)	// Dont update locked quality
+					ROUTE->OtherendsRouteQual = ptr1[20];
+
+				ROUTE->FirstTimeFlag = 1;		// Only do it first time after load
+			}
+			continue;
+		}
 		for (n = 0; n < 32; n++)
 		{
 			if (CompareCalls(ptr1, APPLCALLTABLE[n].APPLCALL))
@@ -336,9 +351,44 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 		// CALCULATE ROUTE QUALITY
 
+		// Experimantal Code to adjuct received route qualities based on deduced quality
+		// settings at other end of link.
 
-		Qual = (((ROUTEQUAL * ptr1[20]) + 128)) / 256;
-		
+		// Don't mess with Application Qualities. There are almost always 255, and
+		// if not there is probably a good reason for the value chosen.
+
+		if (CompareCalls(Msg->ORIGIN, &ptr1[13]))
+		{
+			// Application Node - Just do normal update
+
+			Qual = (((ROUTEQUAL * ptr1[20]) + 128)) / 256;
+		}
+		else
+		{
+			// Try using the highest reported indirect route as remote qual
+
+			if (ROUTE->OtherendLocked == 0)			// Not locked
+			{
+				if (ptr1[20] > ROUTE->OtherendsRouteQual)
+					ROUTE->OtherendsRouteQual = ptr1[20];
+			}
+
+			// Treat 255 as 254, so 255 routes doen't get included with minquals 
+			//	designed to only include applcalls
+
+			if (ptr1[20] == 255)
+				ptr1[20] = 254;	
+
+			Qual = (((ROUTEQUAL * ptr1[20]) + 128)) / 256;
+
+			if (ROUTE->OtherendsRouteQual && PORT->NormalizeQuality)
+			{
+				Qual = (Qual * ROUTEQUAL) / ROUTE->OtherendsRouteQual;
+				if (Qual > ROUTEQUAL)
+					Qual = ROUTEQUAL;
+			}
+		}
+
 		//	SEE IF BELOW MIN QUAL FOR AUTO UPDATES
 
 		if (Qual < MINQUAL)

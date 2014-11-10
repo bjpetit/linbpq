@@ -56,7 +56,7 @@ struct CONFIGTABLE
 	UCHAR C_WASUNPROTO;
 	UCHAR C_BTEXT[120];			// 121
 	char C_VERSTRING[10];		// 241 Version String from Config File
-	char Spare4[4];				// 251
+	UCHAR Spare4[4];			// 251 - 4
 	UCHAR C_VERSION;			// CONFIG PROG VERSION
 //	Reuse C_APPLICATIONS - no longer used
 	char C_NETROMCALL[10]; 
@@ -123,7 +123,8 @@ struct PORTCONFIG
 	char  * WL2K;			// 512
 	char SerialPortName[80]; // 516
 	struct XDIGI * XDIGIS;	//  596 Cross port digi setup
+	char NoNormalize;		// 600 Normalise Nodes Qualities
 
-	char filler [424];
+	char filler [423];
 };
 

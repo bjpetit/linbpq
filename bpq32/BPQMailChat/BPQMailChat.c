@@ -849,7 +849,10 @@
 //	Improve saving of "Last Listed"
 //	Fix LL when paging
 //	Send Date received in R: Line (should fix B2 message restarts)
-//
+//	Fix occasional crash in terminal part line processing
+//	Add "SKIPCON" forwarding command to handle nodes that include "Connected" in their CTEXT
+//	Fix possible retry loop when message is deferred (FBB '=' response);
+//	Don't remove Attachments from received bulls.
 
 #include "BPQMailChat.h"
 #define MAILCHAT

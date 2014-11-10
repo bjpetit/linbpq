@@ -432,7 +432,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 	//	Display normal NET/ROM transmissions 
 
-	Output += sprintf(Output, " NET/ROM\r  ", Alias);
+	Output += sprintf(Output, " NET/ROM\r  ");
 
 	Dest[ConvFromAX25(ptr, Dest)] = 0;
 	ptr +=7;

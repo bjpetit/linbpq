@@ -60,7 +60,7 @@ static int ConnecttoFLDigi();
 static int ProcessReceivedData(int bpqport);
 static ProcessLine(char * buf, int Port);
 int KillTNC(struct TNCINFO * TNC);
-int RestartTNC(struct TNCINFO * TNC);
+static int RestartTNC(struct TNCINFO * TNC);
 VOID ProcessFLDigiPacket(struct TNCINFO * TNC, char * Message, int Len);
 VOID ProcessFLDigiKISSPacket(struct TNCINFO * TNC, char * Message, int Len);
 struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
@@ -480,7 +480,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			if (UILen < 129 && TNC->Streams[0].Attached == FALSE)			// Be sensible!
 			{
-				SendLen = sprintf(Reply, "u:72 %s", UIMsg);
+				// >00uG8BPQ:72 TestA
+				SendLen = sprintf(Reply, "u%s:72 %s", TNC->NodeCall, UIMsg);
 				SendPacket(TNC, Reply, SendLen);
 			}
 			ReleaseBuffer(buffptr);
@@ -932,8 +933,56 @@ static KillTNC(struct TNCINFO * TNC)
 	return 0;
 }
 
+#endif
+
 static RestartTNC(struct TNCINFO * TNC)
 {
+	if (TNC->ProgramPath == NULL)
+		return 0;
+
+	_strlwr(TNC->ProgramPath);
+
+	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
+	{
+		int n;
+		
+		// Try to start TNC on a remote host
+
+		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
+		struct sockaddr_in destaddr;
+
+		Debugprintf("trying to restart FLDIGI %s", TNC->ProgramPath);
+
+		if (sock == INVALID_SOCKET)
+			return 0;
+
+		destaddr.sin_family = AF_INET;
+		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_port = htons(8500);
+
+		if (destaddr.sin_addr.s_addr == INADDR_NONE)
+		{
+			//	Resolve name to address
+
+			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+		 
+			if (!HostEnt)
+				return 0;			// Resolve failed
+
+			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+		}
+
+		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+	
+		Debugprintf("Restart FLDIGI - sento returned %d", n);
+
+		Sleep(100);
+		closesocket(sock);
+
+		return 1;				// Cant tell if it worked, but assume ok
+	}
+#ifndef LINBPQ
+	{
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 	char HomeDir[MAX_PATH];
@@ -968,10 +1017,11 @@ static RestartTNC(struct TNCINFO * TNC)
 		ret = CreateProcess(TNC->ProgramPath, NULL, NULL, NULL, FALSE,0 ,NULL , NULL, &SInfo, &PInfo);
 		return ret;
 	}
+	}
+#endif
 	return 0;
 }
 
-#endif
 
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
@@ -1103,9 +1153,8 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry)
 		TNC->WIMMORPID = FindFLDIGI(TNC->ProgramPath);
 
 	if (TNC->WIMMORPID == 0)	// Not running
-		TNC->WeStartedTNC = RestartTNC(TNC);
-
 #endif
+		TNC->WeStartedTNC = RestartTNC(TNC);		// Always try if Linux
 
 	if (TNC->FLInfo->KISSMODE)
 	{

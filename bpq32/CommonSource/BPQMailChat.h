@@ -240,6 +240,7 @@ typedef struct ConnectionInfo_S
 	BOOL RMSExpress;					// Set if receiving messages from RMS Express
 	char ** PacLinkCalls;				// Calls we are getting messages for
 	BOOL SkipPrompt;					// Set if a remote node sends a > at the end of his CTEXT
+	BOOL SkipConn;						// Node sends "connected" in its CTEXT
 	int Watchdog;						// Hung Circuit Detect.
 	int SessType;						// BPQ32 sesstype bits
 
@@ -539,7 +540,7 @@ struct MsgInfo
 	char	status ;
 	int		number ;
 	int		length ;
-	int		datereceived;
+	time_t	datereceived;
 	char	bbsfrom[7] ;			// ? BBS we got it from ?
 	char	via[41] ;
 	char	from[7] ;
@@ -562,7 +563,8 @@ struct MsgInfo
 	char	forw[NBMASK] ;
 	char	emailfrom[41];
 	char	Locked;				//	Set if selected for sending (NTS Pickup)
-	char	Spare[63];			// For future use
+	char	Defered;			//	FBB response '=' received
+	char	Spare[62];			// For future use
 } ;
 
 #define MSGTYPE_B 0

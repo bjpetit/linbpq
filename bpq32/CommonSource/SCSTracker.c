@@ -83,7 +83,7 @@ VOID TRKReleasePort(struct TNCINFO * TNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
-	sprintf(STREAM->CmdSet, "\1\1\1I%s\0", TNC->NodeCall);
+	sprintf(STREAM->CmdSet, "\1\1\1I%s", TNC->NodeCall);
 }
 
 static ProcessLine(char * buf, int Port)
@@ -234,6 +234,26 @@ static int ExtProc(int fn, int port, unsigned char * buff)
 ok:
 	switch (fn)
 	{
+	case 7:			
+
+		// 100 mS Timer. 
+
+		//	See if waiting for connect after changing MYCALL
+
+		if (TNC->SlowTimer)
+		{
+			TNC->SlowTimer--;
+			if (TNC->SlowTimer == 0)
+			{
+				// Not connected in 45 secs, set back to Port Call
+
+				Debugprintf("RP No response after changing call - setting MYCALL back to %s", TNC->NodeCall);
+				TRKReleasePort(TNC);
+			}
+		}				
+
+		return 0;
+
 	case 1:				// poll
 
 		for (Stream = 0; Stream <= MaxStreams; Stream++)
@@ -464,7 +484,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td width=90px>Comms State</td><td>%s</td></tr>", TNC->WEB_COMMSSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TNC State</td><td>%s</td></tr>", TNC->WEB_TNCSTATE);
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
-	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td></td></tr>", TNC->WEB_TRAFFIC);
+	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 	Len += sprintf(&Buff[Len], "</table>");
 
 	Len = DoScanLine(TNC, Buff, Len);
@@ -1007,7 +1027,7 @@ VOID DEDPoll(int Port)
 		if (TNC->NeedPACTOR == 0)
 		{
 			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
-			sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s\0", (TNC->RobustDefault) ? "R600" : TNC->NormSpeed, 0, TNC->NodeCall);
+			sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s", (TNC->RobustDefault) ? "R600" : TNC->NormSpeed, 0, TNC->NodeCall);
 			
 			strcpy(TNC->Streams[0].MyCall, TNC->NodeCall);
 		}
@@ -1203,7 +1223,7 @@ VOID DEDPoll(int Port)
 
 					TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
 							
-					sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s%c\1\1\1%s\0",
+					sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s%c\1\1\1I%s%c\1\1\1%s",
 						(TNC->Robust) ? "R600" : TNC->NormSpeed, 0, TNC->Streams[0].MyCall,0,  (char *)buffptr+8);
 
 					ReleaseBuffer(buffptr);
@@ -1813,6 +1833,11 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 				STREAM->ConnectTime = time(NULL); 
 				STREAM->BytesRXed = STREAM->BytesTXed = 0;
 
+				if (TNC->SlowTimer)
+					Debugprintf("RP Incoming call to APPLCALL completed");
+
+				TNC->SlowTimer = 0;					// Cancel Reset MYCALL timer
+
 				//	Stop Scanner
 
 				if (Stream == 0)
@@ -2033,7 +2058,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 				Debugprintf("RP SABM Received for %s" , DestCall);
 
-				if (strcmp(TNC->NodeCall, DestCall) != 0)
+				if (strcmp(TNC->NodeCall, DestCall) != 0 && TNC->SlowTimer == 0)
 				{
 					// Not Calling NodeCall/Portcall
 
@@ -2057,6 +2082,8 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 							if (strcmp(Appl, DestCall) == 0)
 							{
 						SetThisCall:
+
+								TNC->SlowTimer = 450;	// Allow 45 seconds for connect to complete
 								Debugprintf("RP SABM is for NODECALL or one of our APPLCalls - setting MYCALL to %s and pausing scan", DestCall);
 
 								sprintf(Status, "%d SCANSTART 60", TNC->Port);	// Pause scan for 60 secs
@@ -2067,7 +2094,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 
 								strcpy(STREAM->MyCall, DestCall);
 								STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
-								sprintf(STREAM->CmdSet, "\1\1\1I%s\0", DestCall);
+								sprintf(STREAM->CmdSet, "\1\1\1I%s", DestCall);
 								break;
 							}
 						}
@@ -2301,7 +2328,7 @@ DigiLoop:
 
 	time(&Monframe.Timestamp);
 
-	BPQTRACE((UINT *)&Monframe, TRUE);
+	BPQTRACE((MESSAGE *)&Monframe, TRUE);
 }
 
 VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
@@ -2313,7 +2340,7 @@ VOID DoMonitorData(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 	time(&Monframe.Timestamp);
 
-	BPQTRACE((UINT *)&Monframe, TRUE);
+	BPQTRACE((MESSAGE *)&Monframe, TRUE);
 	return;
 }
 
@@ -2326,7 +2353,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 	// Queue it as we may have just sent data
 
 	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
-	sprintf(TNC->Streams[Stream].CmdSet, "\1\1\1D\0");
+	sprintf(TNC->Streams[Stream].CmdSet, "\1\1\1D");
 }
 
 
@@ -2361,7 +2388,7 @@ VOID SwitchToRPacket(struct TNCINFO * TNC, char * Baud)
 	if (TNC->Robust == FALSE)
 	{
 		TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
-		sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", Baud);
+		sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s", Baud);
 		TNC->Robust = TRUE;
 		SetWindowText(TNC->xIDC_MODE, "Robust Packet");
 		strcpy(TNC->WEB_MODE, "Robust Packet");
@@ -2376,9 +2403,9 @@ VOID SwitchToNormPacket(struct TNCINFO * TNC, char * Baud)
 	TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(100);
 		
 	if (Baud[0] == 0)
-		sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", TNC->NormSpeed);
+		sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s", TNC->NormSpeed);
 	else
-		sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s\0", Baud);
+		sprintf(TNC->Streams[0].CmdSet, "\1\1\1%%B %s", Baud);
 			
 	TNC->Robust = FALSE;
 

@@ -594,7 +594,7 @@ static VOID DEDPoll(int Port)
 			if (Stream)			//Leave Stream 0 call alone
 			{
 				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
-				sprintf(TNC->Streams[Stream].CmdSet, "%c%c%cI%s\0", Stream, 1, 1, TNC->Streams[Stream].MyCall);
+				sprintf(TNC->Streams[Stream].CmdSet, "%c%c%cI%s", Stream, 1, 1, TNC->Streams[Stream].MyCall);
 			}
 		}
 	}
@@ -805,7 +805,7 @@ static VOID DEDPoll(int Port)
 
 				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
 							
-				sprintf(TNC->Streams[Stream].CmdSet, "%c%c%cI%s%c%c%c%c%s\0", Stream, 1, 1,
+				sprintf(TNC->Streams[Stream].CmdSet, "%c%c%cI%s%c%c%c%c%s", Stream, 1, 1,
 					TNC->Streams[Stream].MyCall, 0, Stream, 1, 1, (char *)buffptr+8);
 
 				ReleaseBuffer(buffptr);
@@ -874,7 +874,7 @@ static VOID DEDPoll(int Port)
 			strcpy(&Poll[3], CCMD);
 			StuffAndSend(TNC, Poll, Poll[2] + 4);
 
-			sprintf(TNC->Streams[0].CmdSet, "%c%c%c%s\0", 0, 0, 1, Buffer);
+			sprintf(TNC->Streams[0].CmdSet, "%c%c%c%s", 0, 0, 1, Buffer);
 		}
 
 		ReleaseBuffer((UINT *)buffptr);
@@ -1573,7 +1573,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 	// Queue it as we may have just sent data
 
 	TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = zalloc(100);
-	sprintf(TNC->Streams[Stream].CmdSet, "%c%c%cD\0", Stream, 1, 1);
+	sprintf(TNC->Streams[Stream].CmdSet, "%c%c%cD", Stream, 1, 1);
 }
 
 

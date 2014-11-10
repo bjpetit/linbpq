@@ -638,7 +638,7 @@ int main(int argc, char * argv[])
 	{
 		RunMail = IncludesMail = TRUE;
 
-		printf("Starting Mail\n", BPQDirectory);
+		printf("Starting Mail\n");
 
 		sprintf (ConfigName, "%s/linmail.cfg", BPQDirectory);
 		printf("Config File is %s\n", ConfigName);

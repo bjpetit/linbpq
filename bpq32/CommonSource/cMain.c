@@ -221,6 +221,8 @@ extern int NUMBEROFTNCPORTS;
 
 extern APPLCALLS APPLCALLTABLE[];
 
+int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MINI);
+DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 
 //	LOOPBACK PORT ROUTINES
 
@@ -534,7 +536,7 @@ BOOL Start()
 	struct DEST_LIST * DEST;
 	CMDX * CMD;
 
-	char * ptr2, * ptr3, * ptr4;
+	unsigned char * ptr2, * ptr3, * ptr4;
 	USHORT * CWPTR;
 	int i, n;
 
@@ -631,7 +633,6 @@ BOOL Start()
 	OBSINIT = cfg->C_OBSINIT;
 	OBSMIN = cfg->C_OBSMIN;
 	L3INTERVAL = cfg->C_NODESINTERVAL;
-
 	IDINTERVAL = cfg->C_IDINTERVAL;
 	if (IDINTERVAL)
 		IDTIMER = 2;
@@ -654,6 +655,8 @@ BOOL Start()
 	PACLEN = cfg->C_PACLEN;
 	T3 = cfg->C_T3 * 3;
 	L4LIMIT = cfg->C_IDLETIME;
+	if (L4LIMIT && L4LIMIT < 120)
+		L4LIMIT = 120;					// Don't allow stupidly low
 	L2KILLTIME = L4LIMIT * 3;
 	L4DELAY = cfg->C_L4DELAY;
 	BBS = cfg->C_BBS;
@@ -780,6 +783,8 @@ BOOL Start()
 		PORT->CHANNELNUM = (char)PortRec->CHANNEL;
 		PORT->BBSBANNED = (UCHAR)PortRec->BBSFLAG;
 		PORT->PORTQUALITY = (UCHAR)PortRec->QUALITY;
+		PORT->NormalizeQuality = !PortRec->NoNormalize;
+
 		PORT->PORTWINDOW = (UCHAR)PortRec->MAXFRAME;
 
 		if (PortRec->PROTOCOL == 0 || PORT->PORTTYPE == 22)		// KISS or I2C
@@ -1065,9 +1070,11 @@ BOOL Start()
 
 		ROUTE->NBOUR_PACLEN = ptr2[15];
 
+		ROUTE->OtherendsRouteQual = ROUTE->OtherendLocked = ptr2[16];
+
 		ROUTE->NEIGHBOUR_FLAG = 1;			// Locked
 		
-		ptr2 += 16;
+		ptr2 += 17;
 		ROUTE++;
 	}
 
@@ -1083,7 +1090,7 @@ BOOL Start()
 		*(ptr3++) = *(ptr2++);
 	}
 
-	INFOLEN = ptr3 - (char *)INFOMSG;
+	INFOLEN = ptr3 - (unsigned char *)INFOMSG;
 
 	NEXTFREEDATA = ptr3;
 
@@ -1099,7 +1106,7 @@ BOOL Start()
 		*(ptr3++) = *(ptr2++);
 	}
 
-	CTEXTLEN = ptr3 - (char *)CTEXTMSG;
+	CTEXTLEN = ptr3 - (unsigned char *)CTEXTMSG;
 
 	NEXTFREEDATA = ptr3;
 
@@ -1124,7 +1131,7 @@ BOOL Start()
 		*(ptr3++) = *(ptr2++);
 	}
 
-	IDHDDR.LENGTH = ptr3 - (char *)&IDHDDR;
+	IDHDDR.LENGTH = ptr3 - (unsigned char *)&IDHDDR;
 
 
 	{
@@ -1394,12 +1401,14 @@ VOID ReadNodes()
 			ptr = strtok_s(NULL, seps, &Context);	// MAXFRAME
 			if (ptr == NULL) continue;
 
-			if (ptr[0] == '!')
-			{
-				ROUTE->NEIGHBOUR_FLAG = 1;			// LOCKED ROUTE
-				ptr = strtok_s(NULL, seps, &Context);
-				if (ptr == NULL) continue;
-			}
+			// I don't thinlk we should load locked flag from save file - only from config
+
+//			if (ptr[0] == '!')
+//			{
+//				ROUTE->NEIGHBOUR_FLAG = 1;			// LOCKED ROUTE
+//				ptr = strtok_s(NULL, seps, &Context);
+//				if (ptr == NULL) continue;
+//			}
 
 			//	SEE IF ANY DIGIS
 
@@ -1460,6 +1469,13 @@ VOID ReadNodes()
 				ROUTE->NoKeepAlive = FALSE;
 				ROUTE->INP3Node = TRUE;
 			}
+
+			ptr = strtok_s(NULL, seps, &Context);	// INP3
+			if (ptr == NULL) continue;
+
+			if (ROUTE->NEIGHBOUR_FLAG == 0 || ROUTE->OtherendLocked == 0);		// Not LOCKED ROUTE
+				ROUTE->OtherendsRouteQual = atoi(ptr);
+
 			continue;
 		}
 
@@ -1632,7 +1648,7 @@ VOID TIMERINTERRUPT()
 		Message = (struct _MESSAGE *)Buffer;
 		Message->PORT |= 0x80;			// Set TX Bit
 	
-		BPQTRACE(Buffer, FALSE);		// Dont send TX'ed frames to APRS
+		BPQTRACE(Message, FALSE);		// Dont send TX'ed frames to APRS
 		ReleaseBuffer(Buffer);
 
 		Buffer = Q_REM(&TRACE_Q);
@@ -1867,13 +1883,62 @@ ENDOFLIST:
 	L4BG();					// DO LEVEL 4 PROCESSING
 	L3BG();
 	TNCTimerProc();
-
 }
 
-int BPQTRACE(UINT * Msg, BOOL TOAPRS)
+VOID DoListenMonitor(TRANSPORTENTRY * L4, MESSAGE * Msg)
+{
+	ULONG SaveMMASK = MMASK;
+	BOOL SaveMTX = MTX;
+	BOOL SaveMCOM = MCOM;
+	BOOL SaveMUI = MUIONLY;
+	PDATAMESSAGE Buffer;
+	char MonBuffer[1024];
+	int len;
+
+	UCHAR * monchars = (UCHAR *)Msg;
+
+	if (CountFramesQueuedOnSession(L4) > 10)
+		return;
+
+	if (monchars[21] == 3 && monchars[22] == 0xcf && monchars[23] == 0xff) // Netrom Nodes
+		return;
+
+	SetTraceOptionsEx(0x7fffffff, 1, 0, 0);
+	
+	len = IntDecodeFrame(Msg, MonBuffer, Msg->Timestamp, -1, FALSE, TRUE);
+	
+	SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
+
+	if (len == 0)
+		return;
+
+	if (len > 256)
+		len = 256;
+
+	Buffer = GetBuff();
+
+	if (Buffer)
+	{
+		char * ptr = &Buffer->L2DATA[0];
+		Buffer->PID = 0xf0;
+
+		memcpy(ptr, MonBuffer, len);
+
+		Buffer->LENGTH = len + 8;
+
+		C_Q_ADD(&L4->L4TX_Q, (UINT *)Buffer);
+
+		PostDataAvailable(L4);
+	}
+}
+
+
+int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 {
 	//	ATTACH A COPY OF FRAME TO ANY BPQ HOST PORTS WITH MONITORING ENABLED
 	
+	TRANSPORTENTRY * L4 = L4TABLE;
+
 	UINT * Buffer;
 	int i = BPQHOSTSTREAMS + 2;		// Include Telnet and AGW Stream
 
@@ -1892,7 +1957,7 @@ int BPQTRACE(UINT * Msg, BOOL TOAPRS)
 			Buffer = (UINT *)GetBuff();
 			if (Buffer)
 			{
-				memcpy(&Buffer[1], &Msg[1], BUFFLEN - 8);	// Dont copy chain word
+				memcpy(&Buffer[1], &Msg->PORT, BUFFLEN - 8);	// Dont copy chain word
 				C_Q_ADD(&BPQHOSTVECTOR[i].HOSTTRACEQ, Buffer);
 
 #ifndef LINBPQ
@@ -1903,6 +1968,22 @@ int BPQTRACE(UINT * Msg, BOOL TOAPRS)
 		}
 
 	}
+
+	// Also pass to any users LISTENING on this port
+
+	i = MAXCIRCUITS;
+
+	if (QCOUNT < 300)
+		return FALSE;	// Until I add by session flow control		
+
+	while (i--)
+	{
+		if ((Msg->PORT & 0x7f) == L4->LISTEN)
+			DoListenMonitor(L4, Msg);
+
+		L4++;
+	}
+
 	return TRUE;
 }
 

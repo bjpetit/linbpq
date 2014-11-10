@@ -437,7 +437,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_MODE);
 	Len += sprintf(&Buff[Len], "<tr><td>Status</td><td>%s</td></tr>", TNC->WEB_STATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TX/RX State</td><td>%s</td></tr>", TNC->WEB_TXRX);
-	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td></td></tr>", TNC->WEB_TRAFFIC);
+	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 	Len += sprintf(&Buff[Len], "<tr><td>LEDS</td><td>STBY CALL LINK ERROR TX RX</td></tr>");
 	Len += sprintf(&Buff[Len], "<tr><td> </td><td>%s</td></tr>", TNC->WEB_LEDS);
 	Len += sprintf(&Buff[Len], "</table>");
@@ -993,9 +993,9 @@ VOID HALPoll(int Port)
 	
 				// Other Command ?? Treat as HEX string
 
-				datalen = sscanf(MsgPtr, "%X %X %X %X %X %X %X %X %X %X %X %X %X %X ",
+				datalen = sscanf(MsgPtr, "%X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X",
 					(UINT *)&TXMsg[0], (UINT *)&TXMsg[1], (UINT *)&TXMsg[2], (UINT *)&TXMsg[3], (UINT *)&TXMsg[4],
-					(UINT *)&TXMsg[6], (UINT *)&TXMsg[6], (UINT *)&TXMsg[7], (UINT *)&TXMsg[8], (UINT *)&TXMsg[9], 
+					(UINT *)&TXMsg[5], (UINT *)&TXMsg[6], (UINT *)&TXMsg[7], (UINT *)&TXMsg[8], (UINT *)&TXMsg[9], 
 					(UINT *)&TXMsg[10], (UINT *)&TXMsg[11], (UINT *)&TXMsg[12], (UINT *)&TXMsg[13], 
 					(UINT *)&TXMsg[14], (UINT *)&TXMsg[15]);
 

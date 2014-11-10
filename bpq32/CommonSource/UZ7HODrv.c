@@ -1787,7 +1787,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 		// Pass to Monitor
 
 		time(&Monframe.Timestamp);
-		BPQTRACE((UINT *)&Monframe, TRUE);
+		BPQTRACE((MESSAGE *)&Monframe, TRUE);
 
 		return;
 
@@ -2132,7 +2132,7 @@ DigiLoop:
 	}
 	
 	time(&Monframe.Timestamp);
-	BPQTRACE((UINT *)&Monframe, TRUE);
+	BPQTRACE((MESSAGE *)&Monframe, TRUE);
 
 }
 

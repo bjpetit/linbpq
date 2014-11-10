@@ -62,6 +62,7 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT);
 VOID ProcessYaesuCmdAck(struct RIGPORTINFO * PORT);
 VOID ProcessKenwoodFrame(struct RIGPORTINFO * PORT, int Length);
 VOID KenwoodPoll(struct RIGPORTINFO * PORT);
+VOID DummyPoll(struct RIGPORTINFO * PORT);
 VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna);
 VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr);
 VOID SetupScanInterLockGroups(struct RIGINFO *RIG);
@@ -1173,6 +1174,12 @@ BOOL Rig_Poll()
 	for (p = 0; p < NumberofPorts; p++)
 	{
 		PORT = PORTInfo[p];
+
+		if (PORT->PortType == DUMMY)
+		{
+			DummyPoll(PORT);
+			return TRUE;
+		}
 
 		if (PORT == NULL || (PORT->hDevice == 0 && PORT->PTC == 0))
 			continue;
@@ -2674,6 +2681,48 @@ VOID KenwoodPoll(struct RIGPORTINFO * PORT)
 
 	return;
 }
+
+VOID DummyPoll(struct RIGPORTINFO * PORT)
+{
+	UCHAR * Poll = PORT->TXBuffer;
+	struct RIGINFO * RIG = &PORT->Rigs[0];
+
+	if (RIG->ScanStopped == 0)
+		if (RIG->ScanCounter)
+			RIG->ScanCounter--;
+	
+	if (RIG->NumberofBands && RIG->RIGOK && (RIG->ScanStopped == 0))
+	{
+		if (RIG->ScanCounter <= 0)
+		{
+			//	Send Next Freq
+
+			if (GetPermissionToChange(PORT, RIG))
+			{
+				if (RIG_DEBUG)
+					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq);
+
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
+				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
+
+				RigWriteCommBlock(PORT);
+				PORT->CmdSent = 1;
+				PORT->Retries = 0;	
+				PORT->Timeout = 0;
+				PORT->AutoPoll = TRUE;
+
+				// There isn't a response to a set command, so clear Scan Lock here
+			
+				ReleasePermission(RIG);			// Release Perrmission
+
+			return;
+			}
+		}
+	}
+	
+	return;
+}
+
 VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna)
 {
 	struct RIGPORTINFO * PORT;
@@ -2865,6 +2914,23 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 
 	if (ptr == NULL || ptr[0] == 0)
 		return FALSE;
+
+	if (_memicmp(ptr, "DUMMY", 5) == 0)
+	{
+		// Dummy to allow PTC application scanning
+
+		PORT = PORTInfo[NumberofPorts++] = zalloc(sizeof(struct RIGPORTINFO));
+		PORT->PortType = DUMMY;
+		PORT->ConfiguredRigs = 1;
+		RIG = &PORT->Rigs[0];
+		RIG->PortNum = Port;
+		RIG->BPQPort |=  (1 << Port);
+		RIG->RIGOK = TRUE;
+
+		ptr = strtok_s(NULL, " \t\n\r", &Context);
+
+		goto CheckScan;
+	}
 
 	if ((_memicmp(ptr, "VCOM", 4) == 0) && TNC->Hardware == H_SCS)		// Using Radio Port on PTC
 		COMPort = 0;
@@ -3282,6 +3348,8 @@ PortFound:
 
 	// Frequency List
 
+CheckScan:
+
 	if (ptr)
 		if (ptr[0] == ';' || ptr[0] == '#')
 			ptr = NULL;
@@ -3591,10 +3659,18 @@ PortFound:
 
 		ApplCall = GetApplCallFromName(Appl);
 
-		if (ApplCall && ApplCall[0] > 32)
+		if (strcmp(Appl, "NODE") == 0)
 		{
-			memcpy(FreqPtr[0]->APPLCALL, ApplCall, 9);
+			memcpy(FreqPtr[0]->APPLCALL, TNC->NodeCall, 9);
 			strlop(FreqPtr[0]->APPLCALL, ' ');
+		}
+		else
+		{
+			if (ApplCall && ApplCall[0] > 32)
+			{
+				memcpy(FreqPtr[0]->APPLCALL, ApplCall, 9);
+				strlop(FreqPtr[0]->APPLCALL, ' ');
+			}
 		}
 
 		CmdPtr = FreqPtr[0]->Cmd1 = malloc(100);

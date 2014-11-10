@@ -3561,12 +3561,15 @@ int WritetoConsoleWindowSupport(struct ConsoleInfo * Cinfo, char * Msg, int len)
 	if (len + Cinfo->PartLinePtr > Cinfo->readbufflen)
 	{
 		Cinfo->readbufflen += len + Cinfo->PartLinePtr;
-		Cinfo->readbuff = realloc(Cinfo->readbuff, Cinfo->readbufflen + 10);
+		Cinfo->readbuff = realloc(Cinfo->readbuff, Cinfo->readbufflen + 100);
 	}
 
 	if (Cinfo->PartLinePtr != 0)
 	{
 		Cinfo->CurrentLine--;				// Overwrite part line in buffer
+		if (Cinfo->CurrentLine < 0)
+			Cinfo->CurrentLine = MAXLINES - 1;
+		
 
 		if (Msg[0] == 0x1b && len > 1) 
 		{

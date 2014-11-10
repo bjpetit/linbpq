@@ -492,7 +492,8 @@ typedef struct TNCINFO
 	int OKToChangeFreq;				// 1 = SCS Says OK to change, -1 = Dont Change zero = still waiting
 	BOOL DontWantToChangeFreq;		// Change done - ok to  SCS
 	BOOL DontReleasePermission;		// Hold Permission to prevent calls on this frequency
-
+	int TimeEnteredSYNCMode;			// To detect scan lock when using applcalls on PTC
+	int PTCStatus;					// Sync, Idle, Traffic, etc
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
 	int StreamtoPoll;
@@ -656,7 +657,7 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 BOOL InterlockedCheckBusy(struct TNCINFO * ThisTNC);
 
 extern UINT CRCTAB;
-int BPQTRACE(UINT * Msg, BOOL TOAPRS);
+int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS);
 
 
 static int ProcessLine(char * buf, int Port);

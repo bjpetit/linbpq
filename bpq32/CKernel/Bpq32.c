@@ -634,12 +634,23 @@
 
 //  Version 6.0.9.1
 
-//	Fix setting NOKEEPALIVE flag on route created from imcoming L3 message
+//	Fix setting NOKEEPALIVE flag on route created from incoming L3 message
 //	Ignore NODES from locked route with quality 0
 //	Fix seting source port in AXIP
-//	Fix Dual Stack (IPV6/V6) on Linux.
+//	Fix Dual Stack (IPV4/V6) on Linux.
 //	Fix RELAYSOCK if IPv6 is enabled.
 //	Add support for FT1000
+//	Fix hang when APRS Messaging packet received on RF
+//	Attempt to normalize Node qualies when stations use widely differing Route qualities
+//	Add NODES VIA command to display nodes reachable via a specified neighbour
+//	Fix applying "DisconnectOnClose" setting on HOST API connects (Telnet Server)
+//	Fix buffering large messages in Telnet Host API
+//	Fix occasional crash in terminal part line processing
+//	Add "NoFallback" command to Telnet server to disable "fallback to Relay"
+//	Improved support for APPLCALL scanning with Pactor
+//	MAXBUFFS config statement is no longer needed.
+//	Fix USEAPPLCALLS with Tracker when connect to APPLCALL fails
+//	Implement LISTEN and CQ commands
 
 #define CKernel
 

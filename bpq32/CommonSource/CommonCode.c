@@ -2145,6 +2145,8 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 
 	ioctl(fd, FIONBIO, &param);
 
+	Debugprintf("LinBPQ Port %s fd %d", Port, fd);
+
 	return fd;
 }
 
@@ -2291,14 +2293,15 @@ int DoRoutes()
 				digis[0] = 0;
 
 			len=sprintf(line,
-					"ROUTE ADD %s %d %d%s%s %d %d %d %d \n",
+					"ROUTE ADD %s %d %d%s%s %d %d %d %d %d\n",
 					Normcall,
 					Routes->NEIGHBOUR_PORT,
 					Routes->NEIGHBOUR_QUAL,	locked, digis,
 					Routes->NBOUR_MAXFRAME,
 					Routes->NBOUR_FRACK,
 					Routes->NBOUR_PACLEN,
-					Routes->INP3Node | (Routes->NoKeepAlive << 2));
+					Routes->INP3Node | (Routes->NoKeepAlive << 2),
+					Routes->OtherendsRouteQual);
 
 					fputs(line, file);
 		}

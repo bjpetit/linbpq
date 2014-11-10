@@ -28,6 +28,12 @@
 TODo	?Multiple Adapters
 */
 
+
+// ip tuntap add dev bpqtap mode tap
+// ifconfig bpqtap 44.131.4.19 mtu 256 up
+
+
+
 #pragma data_seg("_BPQDATA")
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -1453,12 +1459,9 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 		}
 	}
 
-	// I think anything else is just paaded to the router
+	// I think anything else is just passed to the router
 
-
-
-
-		
+	RouteIPMsg(IPptr);		
 }
 
 VOID ProcessRIP44Message(PIPMSG IPptr)
@@ -1731,6 +1734,10 @@ VOID RouteIPMsg(PIPMSG IPptr)
 	// Look up ARP
 
 	Arp = LookupARP(IPptr->IPDEST, FALSE, &Found);
+
+	// If enabled, look in Net44 Encap Routes
+
+
 
 	if (!Found)
 		Arp = LookupARP(DefaultIPAddr, FALSE, &Found);
@@ -2396,10 +2403,11 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	int Port;
 	char Mac[7];
 	char AXCall[7];
-	ULONG IPAddr;
+	ULONG IPAddr, IPMask;
 	int a,b,c,d,e,f,num;
 	
 	PARPDATA Arp;
+	PROUTEENTRY Route;
 	BOOL Found;
 
 //	192.168.0.131 GM8BPQ-13 1 D
@@ -2449,7 +2457,8 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	else
 	{
 		if (!ConvToAX25(p_mac, AXCall)) return FALSE;
-		if ((Port == 0) || (Port > NUMBEROFPORTS)) return FALSE;
+		if ((Port == 0) || (Port > NUMBEROFPORTS))
+			return FALSE;
 	}
 
 	Arp = LookupARP(IPAddr, TRUE, &Found);
@@ -2478,33 +2487,52 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 			Arp->LOCKED = Locked;
 		}
 	}
+
+	// Also add to Routes
+
+	IPMask = 0xffffffff;		// All ARP rerived routes are Host Routes
+
+	Route = LookupRoute(IPAddr, IPMask, TRUE, &Found);
+
+	if (!Found)
+	{
+		// Add if possible
+
+		if (Route != NULL)
+		{
+			Route->NETWORK = IPAddr;
+			Route->SUBNET = IPMask;
+			Route->GATEWAY = IPAddr;		// Host Route
+			Route->ARP = Arp;
+			Route->TYPE = *p_type;
+			Route->LOCKED = Locked;
+		}
+	}
+
 	return TRUE;
 }
 
+// ROUTE 44.131.4.18/32 D GM8BPQ-7 1// Datagram?netrom/VC via Call	!!!! No - this sohuld be an ARP entry
 
-// ROUTE 44.131.4.18/32 D GM8BPQ-7 1		// Datagram?netrom/VC via Call
 // ROUTE 44.131.4.18/32 T n.n.n.n			// Vis Tunnel Endpoint n.n.n.n
 // ROUTE 44.131.4.18/32 E n.n.n.n			// Via IP address over Ethernet
 
 
 BOOL ProcessROUTELine(char * buf, BOOL Locked)
 {
-	char * p_ip, * p_target, * p_port, * p_type, * p_mask;
-	int Port;
-	char Mac[7];
-	char AXCall[7];
-	ULONG IPAddr, IPMask;
-	int a,b,c,d,e,f,num;
+	char * p_ip, * p_target, * p_type, * p_mask, * p_gateway;
+	ULONG IPAddr, IPMask, IPGateway, Encap;
 	
 	PROUTEENTRY Route;
 	BOOL Found;
 
-//	192.168.0.131 GM8BPQ-13 1 D
+//	 ROUTE 44.131.4.18/31 44.131.4.1 T 1.2.3.4
+
 
 	p_ip = strtok(buf, " \t\n\r");
+	p_gateway = strtok(NULL, " \t\n\r");
 	p_type = strtok(NULL, " \t\n\r");
 	p_target = strtok(NULL, " \t\n\r");
-	p_port = strtok(NULL, " \t\n\r");
 
 	if(p_ip == NULL) return (TRUE);
 
@@ -2512,9 +2540,7 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 
 	if(*p_ip ==';') return (TRUE);			// comment
 
-	if (p_target == NULL) return FALSE;
-
-	if (p_port == NULL) return FALSE;
+	if (p_gateway == NULL) return FALSE;
 
 	if (p_type == NULL) return FALSE;
 
@@ -2528,6 +2554,7 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 			Bits = 32;
 
 		IPMask = (0xFFFFFFFF) << (32 - Bits);
+		*p_mask = 0;
 	}
 	else
 		IPMask = 0;
@@ -2536,35 +2563,17 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 
 	if (IPAddr == INADDR_NONE) return FALSE;
 
-	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V') || (*p_type =='T'))) return FALSE;
+	IPGateway = inet_addr(p_gateway);
 
-	Port=atoi(p_port);
+	if (IPGateway == INADDR_NONE) return FALSE;
+
+	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V') || (*p_type =='T'))) return FALSE;
 
 	if (*p_type == 'T')
 	{
-		num=sscanf(p_target,"%x.%x.%x.%x",&a,&b,&c,&d);
+		Encap = inet_addr(p_target);
 
-		if (num != 4) return FALSE;
-	}
-	else if (*p_type == 'E')
-	{
-		num=sscanf(p_target,"%x:%x:%x:%x:%x:%x",&a,&b,&c,&d,&e,&f);
-
-		if (num != 6) return FALSE;
-
-		Mac[0]=a;
-		Mac[1]=b;
-		Mac[2]=c;
-		Mac[3]=d;
-		Mac[4]=e;
-		Mac[5]=f;
-
-		if (Port != 255) return FALSE;
-	}
-	else
-	{
-		if (!ConvToAX25(p_target, AXCall)) return FALSE;
-		if ((Port == 0) || (Port > NUMBEROFPORTS)) return FALSE;
+		if (Encap == INADDR_NONE) return FALSE;
 	}
 
 	Route = LookupRoute(IPAddr, IPMask, TRUE, &Found);
@@ -2577,18 +2586,12 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 		{
 			Route->NETWORK = IPAddr;
 			Route->SUBNET = IPMask;
+			Route->GATEWAY = IPGateway;
 
-			if (*p_type == 'E')
-			{
-				memcpy(Route->Target, Mac, 6);
-			}
-			else
-			{
-				memcpy(Route->Target, AXCall, 7);
-				Route->Target[6] &= 0x7e;
-			}
+			if (*p_type == 'T')
+				Route->Encap = Encap;
+
 			Route->TYPE = *p_type;
-			Route->PORT = Port;
 			Route->LOCKED = Locked;
 		}
 	}
@@ -3159,26 +3162,49 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
-int CompareRoutes (const DWORD * a, const DWORD * b)
+int CompareRoutes (const VOID * a, const VOID * b)
 {
-	unsigned long * x;
-	unsigned long * y;
+	PROUTEENTRY x;
+	PROUTEENTRY y;
 
-	x = *a;
-	y = *b;
+	unsigned long r1, r2;
 
-	x = *x;
-	y = *y;
+	x = * (PROUTEENTRY const *) a;
+	y = * (PROUTEENTRY const *) b;
 
-	x = htonl(x);
-	y = htonl(y);
+	r1 = x->NETWORK;
+	r2 = y->NETWORK;
 
+	r1 = htonl(r1);
+	r2 = htonl(r2);
 
-
-  if (x < y ) return -1;
-  if (x == y ) return 0;
-  return 1;
+	if (r1 < r2 ) return -1;
+	if (r1 == r2 ) return 0;
+	return 1;
 }
+
+
+int CompareMasks (const VOID * a, const VOID * b)
+{
+	PROUTEENTRY x;
+	PROUTEENTRY y;
+
+	unsigned long m1, m2;
+
+	x = * (PROUTEENTRY const *) a;
+	y = * (PROUTEENTRY const *) b;
+
+	m1 = x->SUBNET;
+	m2 = y->SUBNET;
+
+	m1 = htonl(m1);
+	m2 = htonl(m2);
+
+	if (m1 > m2) return -1;
+	if (m1 == m2) return 0;
+	return 1;
+}
+
 
 int CountBits(unsigned long in)
 {
@@ -3199,6 +3225,7 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 	PROUTEENTRY RouteRecord;
 	char Net[20];
 	char Nexthop[20];
+	char Encap[20];
 
 	unsigned char work[4];
 
@@ -3248,16 +3275,28 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 			memcpy(work, &RouteRecord->NETWORK, 4);
 			sprintf(Net, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-			memcpy(work, &RouteRecord->Encap, 4);
+			memcpy(work, &RouteRecord->GATEWAY, 4);
 			sprintf(Nexthop, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-			Bufferptr += sprintf(Bufferptr, "%s/%d %s %c %d %d\r",
-				Net, CountBits(RouteRecord->SUBNET), Nexthop, RouteRecord->TYPE,
-				RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
+			memcpy(work, &RouteRecord->Encap, 4);
+			sprintf(Encap, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+			if (RouteRecord->TYPE == 'T')
+				Bufferptr += sprintf(Bufferptr, "%s/%d %s %c %d %d encap %s\r",
+					Net, CountBits(RouteRecord->SUBNET), Nexthop, RouteRecord->TYPE,
+					RouteRecord->METRIC, RouteRecord->RIPTIMOUT, Encap);
+			else
+				Bufferptr += sprintf(Bufferptr, "%s/%d %s %c %d %d\r",
+					Net, CountBits(RouteRecord->SUBNET), Nexthop, RouteRecord->TYPE,
+					RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
 		}
 	}
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+
+	if (NumberofRoutes)
+		qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);		// Back to Maks order
+
 }
 
 // SNMP Support Code. Pretty limited - basically just for MRTG

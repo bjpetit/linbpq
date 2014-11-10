@@ -180,6 +180,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			{
 				// Remove entry from forwarding block
 
+				FBBHeader->FwdMsg->Defered = 4;		// Don't retry for the next few forward cycles 
 				memset(FBBHeader, 0, sizeof(struct FBBHeaderLine));
 				continue;
 			}

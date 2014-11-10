@@ -83,18 +83,18 @@ DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, 
 	return 0;
 }
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 
 int APRSDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask)
 {
-	return IntDecodeFrame(msg, buffer, Stamp, Mask, TRUE);
+	return IntDecodeFrame(msg, buffer, Stamp, Mask, TRUE, FALSE);
 }
 DllExport int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, int Stamp)
 {
-	return IntDecodeFrame(msg, buffer, Stamp, MMASK, FALSE);
+	return IntDecodeFrame(msg, buffer, Stamp, MMASK, FALSE, FALSE);
 }
 
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS)
+int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MINI)
 {
 	UCHAR * ptr;
 	int n;
@@ -113,6 +113,18 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 	BOOL Info = 0;
 	BOOL FRMRFLAG = 0;
 	int MsgLen = msg->LENGTH;
+
+	// MINI mode is for Node Listen (remote monitor) Mode. Keep info to minimum
+/*
+KO6IZ*>K7TMG-1:
+/ex
+KO6IZ*>K7TMG-1:
+b
+KO6IZ*>K7TMG-1 (UA)
+W0TX*>KC6OAR>KB9KC>ID:
+W0TX/R DRC/D W0TX-2/G W0TX-1/B W0TX-7/N
+KC6OAR*>ID:
+*/
 
 	//	GET THE CONTROL BYTE, TO SEE IF THIS FRAME IS TO BE DISPLAYED
 
@@ -160,8 +172,9 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 	}
 	else
 	{
-		if (MCOM == 0)
-			return 0;						// Dont do control
+		if (((CTL & 2) && MINI) == 0)		// Want Control (but not super unless MCOM
+			if (MCOM == 0)
+				return 0;						// Dont do control
 	}
 
 
@@ -189,7 +202,8 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 
 	SS = Stamp - MM * 60;
 
-	Output += sprintf(Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
+	if (MINI == 0)
+		Output += sprintf(Output, "%02d:%02d:%02d%c ", HH, MM, SS, TR);
 
 	From[ConvFromAX25(msg->ORIGIN, From)] = 0;
 	To[ConvFromAX25(msg->DEST, To)] = 0;
@@ -226,7 +240,8 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 		}
 	}		
 	
-	Output += sprintf(Output, " Port=%d ", Port);
+	if (MINI == 0)
+		Output += sprintf(Output, " Port=%d ", Port);
 
 	// Set up CR and PF
 
@@ -273,7 +288,8 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 
 		Info = 1;
 
-		Output += sprintf(Output, "<I%s%s S%d R%d>", CRCHAR, PFCHAR, NS, NR);
+		if (MINI == 0)
+			Output += sprintf(Output, "<I%s%s S%d R%d>", CRCHAR, PFCHAR, NS, NR);
 	}
 	else if (CTL == 3)
 	{
@@ -318,7 +334,10 @@ int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS
 			break;
 		}
 
-		Output += sprintf(Output, "<%s%s%s>", SUP, CRCHAR, PFCHAR);
+		if (MINI)
+			Output += sprintf(Output, "<%s>", SUP);
+		else
+			Output += sprintf(Output, "<%s%s%s>", SUP, CRCHAR, PFCHAR);
 	}
 	else
 	{
@@ -473,7 +492,7 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 	//	Display normal NET/ROM transmissions 
 
-	Output += sprintf(Output, " NET/ROM\r  ", Alias);
+	Output += sprintf(Output, " NET/ROM\r  ");
 
 	Dest[ConvFromAX25(ptr, Dest)] = 0;
 	ptr +=7;

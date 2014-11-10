@@ -827,6 +827,7 @@ Next:
 		BuildNNTPList(Msg);				// Build NNTP Groups list
 
 		Msg->Locked = 0;				// In case left locked
+		Msg->Defered = 0;				// In case left set.
 
 		// If any forward bits are set, increment count on corresponding BBS record.
 
@@ -3483,13 +3484,10 @@ BOOL DoSendCommand(CIRCUIT * conn, struct UserInfo * user, char * Cmd, char * Ar
 	char SMTPTO[100]= "";
 	int msgno;
 
+	if (Cmd[1] == 0) Cmd[1] ='P'; // Just S means SP
+
 	switch (toupper(Cmd[1]))
 	{
-
-	case 0:					// Just S means SP
-		
-		Cmd[1] = 'P';
-
 	case 'B':
 
 		if (RefuseBulls)
@@ -5021,8 +5019,12 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 
 		Forwardit:
 
-//			Debugprintf("Message Found %d", Msg->number);
-
+			if (Msg->Defered)			// = response received
+			{
+				Msg->Defered--;
+				Debugprintf("Message %d defered", Msg->number);
+				continue;
+			}
 
 			if ((Msg->from[0] == 0) || (Msg->to[0] == 0))
 			{
@@ -6345,6 +6347,12 @@ InBand:
 	{
 		char * Cmd;
 
+		if (conn->SkipConn)
+		{
+			conn->SkipConn = FALSE;
+			return TRUE;
+		}
+
 	LoopBack:
 
 		Cmd = Scripts[++ForwardingInfo->ScriptIndex];
@@ -6441,6 +6449,14 @@ InBand:
 
 				nodeprintf(conn, "%s\r", AuthCommand);
 				return TRUE;
+			}
+
+			if (_memicmp(Cmd, "SKIPCON", 7) == 0)
+			{
+				// Remote Node sends Connected in CTEXT - we need to swallow it
+
+				conn->SkipConn = TRUE;
+				goto CheckForEnd;
 			}
 
 			if (_memicmp(Cmd, "SKIPPROMPT", 10) == 0)

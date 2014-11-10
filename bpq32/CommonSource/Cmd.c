@@ -28,8 +28,13 @@
 BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR *AXCalls);
 VOID Send_AX_Datagram(PDIGIMESSAGE Block, DWORD Len, UCHAR Port);
 int APIENTRY ClearNodes();
+VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value);
+VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return);
+SOCKET OpenWL2KHTTPSock();
+VOID FormatTime2(char * Time, time_t cTime);
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
+char OrigCmdBuffer[81] = "";		// Command Hander input buffer
 
 struct DATAMESSAGE * REPLYBUFFER = NULL;
 UINT APPLMASK = 0;
@@ -115,6 +120,7 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD);
 
 VOID SENDNODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
@@ -1217,10 +1223,10 @@ char *  DisplayRoute(TRANSPORTENTRY * Session, char * Bufferptr, struct ROUTE * 
 			strcpy(PercentString, "    ");
 
 		
-		Bufferptr += sprintf(Bufferptr, "%s%2d %s %3d %3d%s%4d %4d %s %d %d %02d:%02d  %d",
+		Bufferptr += sprintf(Bufferptr, "%s%2d %s %3d %3d%s%4d %4d %s %d %d %02d:%02d  %d %d",
 							Active, Routes->NEIGHBOUR_PORT, Normcall, 
 							Routes->NEIGHBOUR_QUAL,	NodeCount, locked, Iframes, Retries, PercentString, Routes->NBOUR_MAXFRAME, Routes->NBOUR_FRACK,
-							Routes->NEIGHBOUR_TIME >> 8, (Routes->NEIGHBOUR_TIME) & 0xff, Queued);
+							Routes->NEIGHBOUR_TIME >> 8, (Routes->NEIGHBOUR_TIME) & 0xff, Queued, Routes->OtherendsRouteQual);
 
 		//	IF INP3 DISPLAY SRTT
 
@@ -1534,6 +1540,75 @@ SendReply:
 }
 
 
+VOID LISTENCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	// PROCESS LISTEN COMMAND
+
+	// for monitoring a remote ax.25 port
+
+	int Port = 0, index =0;
+	char * ptr, *Context;
+	struct PORTCONTROL * PORT = NULL;
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+		Port = atoi(ptr);
+
+	if (ptr == 0 || memcmp(ptr, "OFF", 3) == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Listening disabled\r");
+		Session->LISTEN = 0;
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	if (Port == 0 && NUMBEROFPORTS == 1)
+		Port = 1;
+	else
+		ptr = strtok_s(NULL, " ", &Context);		// Get Unproto String
+
+	if (Port)
+		PORT = GetPortTableEntryFromPortNum(Port);
+
+	if (PORT == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	if (PORT->PROTOCOL == 10) // && PORT->UICAPABLE == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Sorry, port is not an ax.25 port\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	if (PORT->PORTL3FLAG)
+	{
+		Bufferptr += sprintf(Bufferptr, "Sorry, port is for internode traffic only\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+	
+	if (Session->L4CIRCUITTYPE == L2LINK + UPLINK)
+	{
+		if (Session->L4TARGET.LINK->LINKPORT->PORTNUMBER == Port)
+		{
+			Bufferptr += sprintf(Bufferptr, "You can't Listen to the port you are connected on\r");
+			SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+			return;
+		}
+	}
+
+	//	Copy Address Info to Session Record
+
+	Session->LISTEN = Port;
+
+	Bufferptr += sprintf(Bufferptr, "Listening on port %d. Use CQ to send a beacon, LIS to disable\r", Port);
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+}
 
 
 VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
@@ -1599,8 +1674,46 @@ VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 	return;
 }
 
-VOID CQCMD()
-{}
+
+
+
+VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	// Send a CQ Beacon on a radio port. Must be in LISTEN state
+
+	DIGIMESSAGE Msg;
+	int Port = Session->LISTEN;
+	int Len;
+	UCHAR CQCALL[7];
+	
+	if (Port == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "You must enter LISTEN before calling CQ\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	Len = strlen(OrigCmdBuffer) - 3;
+
+	memset(&Msg, 0, sizeof(Msg));
+
+	Msg.PORT = Port;
+	Msg.CTL = 3;			// UI
+
+	ConvToAX25("CQ", CQCALL);
+	memcpy(Msg.DEST, CQCALL, 7);
+	memcpy(Msg.ORIGIN, Session->L4MYCALL, 7);
+	Msg.ORIGIN[6] ^= 0x1e;					// Flip SSID
+	Msg.PID = 0xf0;							// Data PID
+	memcpy(&Msg.L2DATA, &OrigCmdBuffer[3], Len);
+	
+	Send_AX_Datagram(&Msg, Len + 2, Port);		// Len is Payload ie CTL, PID and Data
+
+	Bufferptr += sprintf(Bufferptr, "CQ sent\r");
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+
+}
 
 
 TRANSPORTENTRY * SetupNewSession(TRANSPORTENTRY * Session, char * Bufferptr)
@@ -1740,6 +1853,13 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 ALLOWED:
 
 #endif
+
+	if (Session->LISTEN)
+	{
+		Bufferptr += sprintf(Bufferptr, "Can't connect while listening\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
 
 	CONNECTPORT = 0;			// NO PORT SPECIFIED
 
@@ -2314,6 +2434,62 @@ char * DoOneNode(TRANSPORTENTRY * Session, char * Bufferptr, struct DEST_LIST * 
 	return Bufferptr;
 }
 
+
+int DoViaEntry(struct DEST_LIST * Dest, int n, char * line, int cursor)
+{
+	char Portcall[10];
+	int len;
+
+	if (Dest->NRROUTE[n].ROUT_NEIGHBOUR != 0 && Dest->NRROUTE[n].ROUT_NEIGHBOUR->INP3Node == 0)
+	{
+		len=ConvFromAX25(Dest->NRROUTE[n].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, Portcall);
+		Portcall[len]=0;
+
+		len=sprintf(&line[cursor],"%s %d %d ",
+			Portcall,
+			Dest->NRROUTE[n].ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+			Dest->NRROUTE[n].ROUT_QUALITY);
+
+		cursor+=len;
+
+		if (Dest->NRROUTE[n].ROUT_OBSCOUNT > 127)
+		{
+			len=sprintf(&line[cursor],"! ");
+			cursor+=len;
+		}
+	}
+	return cursor;
+}
+
+int DoINP3ViaEntry(struct DEST_LIST * Dest, int n, char * line, int cursor)
+{
+	char Portcall[10];
+	int len;
+	double srtt;
+
+	if (Dest->ROUTE[n].ROUT_NEIGHBOUR != 0)
+	{
+		srtt = Dest->ROUTE[n].SRTT/1000.0;
+
+		len=ConvFromAX25(Dest->ROUTE[n].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, Portcall);
+		Portcall[len]=0;
+
+		len=sprintf(&line[cursor],"%s %d %d %4.2fs ",
+			Portcall,
+			Dest->ROUTE[n].ROUT_NEIGHBOUR->NEIGHBOUR_PORT,
+			Dest->ROUTE[n].Hops, srtt);
+
+		cursor+=len;
+
+		if (Dest->NRROUTE[n].ROUT_OBSCOUNT > 127)
+		{
+			len=sprintf(&line[cursor],"! ");
+			cursor+=len;
+		}
+	}
+	return cursor;
+}
+
 VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	struct DEST_LIST * Dest = DESTS;
@@ -2330,6 +2506,8 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	char * Call;
 	char * Qualptr;
 	int Qual;
+	char line[160];
+	int cursor, len;
 
 	ptr = strtok_s(CmdTail, " ", &Context);
 
@@ -2340,6 +2518,9 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	
 		if (strcmp(ptr, "DEL") == 0)
 			goto NODE_DEL;
+
+		if (strcmp(ptr, "VIA") == 0)
+			goto NODE_VIA;
 	}
 	
 	if (ptr)
@@ -2484,9 +2665,81 @@ VOID CMDN00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 
 	goto SendReply;
 
+
+NODE_VIA:
+
+	// List Nodes reachable via a neighbour
+
+	ptr = strtok_s(NULL, " ", &Context);
+
+	if (ptr == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Missing Call\r");
+		goto SendReply;
+	}
+
+	Bufferptr += sprintf(Bufferptr, "\r");
+
+	ConvToAX25(ptr, AXCALL);
+
+	Dest = DESTS;
+
+	Dest-=1;
+
+	for (count=0; count<MAXDESTS; count++)
+	{
+		Dest+=1;
+
+		if (Dest->NRROUTE[0].ROUT_NEIGHBOUR == 0 && Dest->ROUTE[0].ROUT_NEIGHBOUR == 0)
+			continue;
+
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);		// ENSURE ROOM	
+
+		if (
+			   (Dest->NRROUTE[0].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[0].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
+			|| (Dest->NRROUTE[1].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[1].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
+			|| (Dest->NRROUTE[2].ROUT_NEIGHBOUR && CompareCalls(Dest->NRROUTE[2].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
+
+			|| (Dest->ROUTE[0].ROUT_NEIGHBOUR && CompareCalls(Dest->ROUTE[0].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
+			|| (Dest->ROUTE[1].ROUT_NEIGHBOUR && CompareCalls(Dest->ROUTE[1].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL))
+			|| (Dest->ROUTE[2].ROUT_NEIGHBOUR && CompareCalls(Dest->ROUTE[2].ROUT_NEIGHBOUR->NEIGHBOUR_CALL, AXCALL)))
+		{
+			len=ConvFromAX25(Dest->DEST_CALL,Normcall);
+
+			Normcall[len]=0;
+
+			memcpy(Alias,Dest->DEST_ALIAS,6);
+
+			Alias[6]=0;
+
+			for (i=0;i<6;i++)
+			{
+				if (Alias[i] == ' ')
+					Alias[i] = 0;
+			}
+
+			cursor=sprintf(line,"%s:%s ", Alias,Normcall);
+
+			cursor = DoViaEntry(Dest, 0, line, cursor);
+			cursor = DoViaEntry(Dest, 1, line, cursor);
+			cursor = DoViaEntry(Dest, 2, line, cursor);
+			cursor = DoINP3ViaEntry(Dest, 0, line, cursor);
+			cursor = DoINP3ViaEntry(Dest, 1, line, cursor);
+			cursor = DoINP3ViaEntry(Dest, 2, line, cursor);
+
+			line[cursor++]='\r';
+			line[cursor++]=0;
+
+			Bufferptr += sprintf(Bufferptr, "%s", line);
+		}
+		}
+
+
+	goto SendReply;
+
 NODE_ADD:
 
-	//	FORMAT IS NODE ADD ALIAS:CALL ROUTE QUAL
+	//	FORMAT IS NODE ADD ALIAS:CALL QUAL ROUTE PORT
 
 
 	if (Session->PASSWORD  != 0xFFFF)
@@ -2535,30 +2788,46 @@ NODE_ADD:
 		goto SendReply;
 	}
 
+	memcpy(Dest->DEST_CALL, AXCALL, 7);		
+	memcpy(Dest->DEST_ALIAS, ptr, 6);
+
+	NUMBEROFNODES++;
 /*
+	ptr = strtok_s(NULL, seps, &Context);
+	
+	if (ptr == NULL || ptr[0] == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Neighbour missing\r");
+		goto SendReply;
+	}
 
-	JZ SHORT PNODE47			; ALREADY THERE
+	if (ConvToAX25(ptr, axcall) == 0)
+	{
+			ptr = strtok_s(NULL, seps, &Context);
+			if (ptr == NULL) continue;
+			Port = atoi(ptr);
 
-	CMP	EBX,0
-	JNE SHORT PNODE48
+			ptr = strtok_s(NULL, seps, &Context);
+			if (ptr == NULL) continue;
+			Qual = atoi(ptr);
 
-PNODE47:
+			if (Context[0] == '!')
+			{
+				OBSINIT = 255;			//; SPECIAL FOR LOCKED
+			}
+		
+			if (FindNeighbour(axcall, Port, &ROUTE))
+			{
+				PROCROUTES(DEST, ROUTE, Qual);
+			}
 
-	POP	ESI
-	JMP	PNODE35			; NOROOMFORNODE
+			OBSINIT = SavedOBSINIT;
 
+			goto RouteLoop;
+	
 PNODE48:
 
-	LEA	EDI,DEST_CALL[EBX]
-	MOV	ECX,7
-	REP MOVSB
 
-	MOV	ECX,6			; ADD ALIAS
-	MOV	ESI,OFFSET32 TEMPFIELD
-	REP MOVSB
-
-	POP	ESI
-;
 ;	GET NEIGHBOURS FOR THIS DESTINATION
 ;
 	CALL	CONVTOAX25
@@ -2608,7 +2877,7 @@ BADROUTE:
 
 	JMP	BADROUTECMD	
 
-	*/
+*/
 	
 	goto SendReply;
 
@@ -2669,9 +2938,6 @@ SendReply:
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
-
-
-
 char * CHECKBUFFER(TRANSPORTENTRY * Session, char * Bufferptr)
 {
 	//	MAKE SURE THERE IS ROOM IN CURRENT _BUFFER
@@ -3357,7 +3623,7 @@ CMDX COMMANDS[] =
 	"************", 12, APPLCMD, 0,	
 	"************", 12, APPLCMD, 0,			// Apppl 32 is internal Terminal
 	"*** LINKED  ",10,LINKCMD,0,
-///	"CQ          ",2,CQCMD,0,
+	"CQ          ",2,CQCMD,0,
 	"CONNECT     ",1,CMDC00,0,
 	"BYE         ",1,BYECMD,0,
 	"QUIT        ",1,BYECMD,0,
@@ -3365,6 +3631,7 @@ CMDX COMMANDS[] =
 	"VERSION     ",1,CMDV00,0,
 	"NODES       ",1,CMDN00,0,
 	"LINKS       ",1,CMDL00,0,
+	"LISTEN      ",3,LISTENCMD,0,
 	"L4T1        ",2,CMDT00,0,
 	"PORTS       ",1,CMDP00,0,
 	"PACLEN      ",3,CMDPAC,0,
@@ -3385,8 +3652,8 @@ CMDX COMMANDS[] =
 	"NRR         ",1,NRRCMD,0,
 	"AGWSTATUS   ",3,SHOWAGW,0,
 	"ARP         ",3,SHOWARP,0,
-	"IPROUTE     ",3,SHOWIPROUTE,0
-
+	"IPROUTE     ",3,SHOWIPROUTE,0,
+	"..FLMSG     ",7,FLMSG,0
 };
 
 CMDX * CMD = NULL;
@@ -3510,7 +3777,7 @@ InnerLoop:
 
 VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 {
-	char * ptr1, * ptr2;
+	char * ptr1, * ptr2, *ptr3;
 	int len, oldlen, newlen, rest, n;
 	struct DATAMESSAGE * OldBuffer;
 	struct DATAMESSAGE * SaveBuffer;
@@ -3657,7 +3924,7 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 	
 	ptr1 = &Buffer->L2DATA[0];
 	ptr2 = &COMMANDBUFFER[0];
-
+	ptr3 = &OrigCmdBuffer[0];
 	n = 80;
 	
 	while (n--)
@@ -3666,9 +3933,10 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 		
 		if (c == 13)
 			break;						// CR
-		
-		c = toupper(c);
 	
+		*(ptr3++) = c;					// Original Case	
+	
+		c = toupper(c);
 		*(ptr2++) = c;
 	}
 	
@@ -4368,4 +4636,11 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	
 	Bufferptr += sprintf(Bufferptr, "Winlink reporting is not configured\r");
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
+VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD)
+{
+	// Telnet Connection from FLMSG
+	CLOSECURRENTSESSION(Session);		// Kills any crosslink, plus local link
+	ReleaseBuffer((UINT *)REPLYBUFFER);
 }

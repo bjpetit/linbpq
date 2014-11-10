@@ -382,7 +382,6 @@ Dll BOOL APIENTRY Init_APRS()
 #ifndef LINBPQ
 	HKEY hKey=0;
 	int retCode, Vallen, Type; 
-	char Error[80];
 #endif
 	struct STATIONRECORD * Stn1, * Stn2;
 
@@ -485,7 +484,7 @@ Dll BOOL APIENTRY Init_APRS()
       return 0;
    }
 
-   UnmapViewOfFile(0x43000000);
+   UnmapViewOfFile((void *)0x43000000);
 
 
    APRSStationMemory = (LPTSTR) MapViewOfFileEx(hMapFile,   // handle to map object
@@ -2390,6 +2389,9 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	strcpy(ISCopy, APRSMsg);
 
+	GetSemaphore(&Semaphore);
+	SemHeldByAPI = 12;
+
 #ifdef WIN32
 
 	strcpy(EXCEPTMSG, "ProcessAPRSISMsg");
@@ -2398,6 +2400,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	{
 
 	Station = DecodeAPRSISMsg(ISCopy);
+
 	}
 	#include "StdExcept.c"
 	Debugprintf(APRSMsg);
@@ -2405,6 +2408,8 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 #else
 	Station = DecodeAPRSISMsg(ISCopy);
 #endif
+
+	FreeSemaphore(&Semaphore);
 
 //}WB4APR-14>APRS,RELAY,TCPIP,G9RXG*::G3NRWVVVV:Hi Ian{001
 //KE7XO-2>hg,TCPIP*,qAC,T2USASW::G8BPQ-14 :Path - G8BPQ-14>APU25N
@@ -2475,6 +2480,11 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 		STN = LookupStation(MsgDest);
 
+		// Shouldn't we check DUP list, in case we have digi'ed this message directly?
+
+		if (CheckforDups(Source, Payload, strlen(Payload)))
+			return;
+
 		if (STN && STN->Port && !STN->IGate && (NOW - STN->MHTIME) < GATETIMELIMIT) 
 		{
 			sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
@@ -2510,7 +2520,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	if (GateLocal && Station)
 	{
 		if (Station->Object)
-			Station = Station->Object;		// If Oject Report, base distance on Object, not station
+			Station = Station->Object;		// If Object Report, base distance on Object, not station
 		
 		if (Station->Lat != 0.0 && Station->Lon != 0.0 && Distance(Station->Lat, Station->Lon) < GateLocalDistance)
 		{
@@ -4043,9 +4053,6 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 			
 			UINT * buffptr;
 
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 12;
-
 			if (C_Q_COUNT(&APPL_Q) > 50)
 				buffptr = Q_REM(&APPL_Q);
 			else
@@ -4055,11 +4062,9 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 			{
 				buffptr[1] = 0;
 				memcpy(&buffptr[2], Station->Callsign, 12);
-				strcpy(&buffptr[5], Payload);
+				strcpy((char *)&buffptr[5], Payload);
 				C_Q_ADD(&APPL_Q, buffptr);
 			}
-
-			FreeSemaphore(&Semaphore);
 		}
 
 #endif

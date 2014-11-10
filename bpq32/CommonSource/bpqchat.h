@@ -756,3 +756,5 @@ extern BOOL OverrideUnsent;
 extern BOOL SendNonDeliveryMsgs;
 
 struct ConsoleInfo * ConsHeader[2];
+
+extern BOOL LogCHAT;

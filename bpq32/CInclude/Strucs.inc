@@ -223,6 +223,8 @@ PORTIPADDR	DD	0;
 SerialPortName DD 0		; Serial Port Name for Unix
 XDIGIS		DD	0;		; Cross Port Digi Definitions
 
+NormalizeQuality DD	0	; Normalise Node Qualities
+
 HARDWAREDATA	DB	200 DUP (?)	; WORK AREA FOR HARDWARE DRIVERS
 
 PORTCONTROL	ENDS
@@ -385,6 +387,8 @@ UNPROTO		DD	0		 ; Unproto Mode flag - port number if in unproto mode
 UAddrLen	DD	0		 ;
 UADDRESS	DB 64 DUP (0); Unproto Address String - Dest + Digis
 
+LISTEN		DD	0		 ; Listen Mode flag - port number of Listen Mode
+
 APPL		DB 16 DUP (0); Set if session initiated by an APPL
 L4LIMIT		dd	0		 ; Idle Timout for this session
 
@@ -463,42 +467,6 @@ DEST_COUNT	DD	?		; FRAMES SENT
 
 DEST_LIST	ENDS
 
-
-NEIGHBOUR_LIST	STRUC
-
-NEIGHBOUR_CALL	DB	7 DUP (?)	; AX25 CALLSIGN	
-NEIGHBOUR_DIGI	DB	14 DUP (?)	; DIGIS EN ROUTE (MAX 2 - ?? REMOVE)
-
-NEIGHBOUR_PORT	DB	?
-NEIGHBOUR_QUAL	DB	?
-NEIGHBOUR_FLAG	DB	?		; SET IF 'LOCKED' ROUTE
-
-NEIGHBOUR_LINK	DD	?		; POINTER TO LINK FOR THIS NEIGHBOUR  (**26)
-
-NEIGHBOUR_TIME	DW	?		; TIME LAST HEARD (HH MM)
-
-NBOUR_IFRAMES	DD	?		; FRAMES SENT/RECEIVED
-NBOUR_RETRIES	DD	?		; RETRASMISSIONS						(**+35)
-
-NBOUR_MAXFRAME	DB	?		; FOR OPTIMISATION CODE
-NBOUR_FRACK		DB	?
-NBOUR_PACLEN	DB	?
-
-INP3Node		DD	?
-NoKeepAlive		DD	?		; Suppress Keepalive Processing
-
-Status			DD	?		;
-LastRTT			DD	?		; Last Value Reported
-RTT				DD	?		; Current	
-SRTT			DD	?		; Smoothed RTT
-NeighbourSRTT	DD	?		; Other End SRTT
-BCTimer			DD	?		; Time to next L3RTT Broadcast
-Timeout			DD	?		; Lost Response Timer
-Retries			DD	?
-Msg				DD	?		; RIF being built
-
-
-NEIGHBOUR_LIST	ENDS
 
 ;
 ;	MODEFLAG DEFINITIONS

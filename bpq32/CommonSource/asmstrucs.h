@@ -173,6 +173,8 @@ typedef struct _TRANSPORTENTRY
 	int UAddrLen;				//
 	char UADDRESS[64];			// Unproto Address String - Dest + Digis
 
+	int LISTEN;					// Port if in Listen Mode
+
 	char APPL[16];				// Set if session initiated by an APPL
 	int L4LIMIT;				// Idle time for this Session
 
@@ -226,6 +228,11 @@ typedef struct ROUTE
 	int Timeout;			// Lost Response Timer
 	int Retries;			// Lost Response Count
 	struct _L3MESSAGEBUFFER * Msg;	// RIF being built
+
+	int	OtherendsRouteQual;	//	Route quality used by other end.
+	int	OtherendLocked;		//	Route quality locked by ROUTES entry.
+	int	FirstTimeFlag;		//	Set once quality has been set by direct receive
+
 } *PROUTE;
 
 // Status Equates
@@ -415,7 +422,7 @@ typedef struct NR_DEST_ROUTE_ENTRY
 	struct ROUTE * ROUT_NEIGHBOUR;	// POINTER TO NEXT NODE IN PATH
 	UCHAR ROUT_QUALITY;		// QUALITY
 	UCHAR ROUT_OBSCOUNT;
-	UCHAR Padding[5];		// SO Entries are the same lenght
+	UCHAR Padding[5];		// SO Entries are the same length
 } *PNR_DEST_ROUTE_ENTRY;
 
 typedef struct DEST_ROUTE_ENTRY
@@ -621,6 +628,9 @@ typedef struct PORTCONTROL
 
 	char * SerialPortName;	//	Serial Port Name for Unix
 	struct XDIGI * XDIGIS;			// Cross port digi setup
+
+	BOOL NormalizeQuality;			// Normalise Node Qualities
+
 
 }	PORTCONTROLX, *PPORTCONTROL;
 

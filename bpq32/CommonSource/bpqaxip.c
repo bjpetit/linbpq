@@ -1972,6 +1972,7 @@ broadcast QST-0 NODES-0
 		PORT->NumberofUDPPorts = 0;
 		PORT->NeedResolver = FALSE;
 		PORT->arp_table_len = 0;
+		memset(PORT->arp_table, 0, sizeof(struct arp_table_entry) *  MAX_ENTRIES);
 		PORT->AutoAddARP = FALSE;
 	}
 	else

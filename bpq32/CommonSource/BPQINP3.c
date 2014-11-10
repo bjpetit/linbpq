@@ -332,7 +332,7 @@ VOID ProcessINP3RIF(struct ROUTE * Route, UCHAR * ptr1, int msglen, int Port)
 	if (Route->INP3Node == 0)
 		return;						// We don't want to use INP3
 
-	// Update TImestamp on Route
+	// Update Timestamp on Route
 
 	time((time_t *)&Stamp);
 
@@ -1006,8 +1006,6 @@ VOID SendRIF(struct ROUTE * Route, struct _L3MESSAGEBUFFER * Msg)
 	Msg->LENGTH += MSGHDDRLEN + 1;		// PID
 
 	SendNetFrame(Route, Msg);
-
-	free(Msg);
 }
 
 VOID SendRIPToOtherNeighbours(UCHAR * axcall, UCHAR * alias, struct DEST_ROUTE_ENTRY * Entry)

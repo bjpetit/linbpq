@@ -86,7 +86,7 @@ VOID L2FORUS(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE * Buff
 VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall, int toPort, int UIOnly);
 VOID DigiToMultiplePorts(struct PORTCONTROL * PORTVEC, PMESSAGE Msg);
 VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
-
+BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg);
 
 extern int REALTIMETICKS;
 
@@ -158,7 +158,7 @@ VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 	}
 
 
-	BPQTRACE((UINT *)Buffer, TRUE);				// TRACE - RX frames to APRS
+	BPQTRACE(Buffer, TRUE);				// TRACE - RX frames to APRS
 
 	if (PORT->PORTMHEARD)
 		MHPROC(PORT, Buffer);
@@ -373,63 +373,10 @@ NOTFORUS:
 //
 //	MAY JUST BE A REPLY TO A 'PRIMED' CQ CALL
 //
-/*
-	MOV	AL,_SDCBYTE
-	AND	AL,NOT 10H		; MASK P/F
-	CMP	AL,SABM
-	JNE SHORT L2DISCARD		; NOT LINK SETUP
-;
-;	LOOK FOR A CQ ENTRY IN OUR TABLES MATCHING TARGET CALL
-;
-	MOV	EDI,_BUFFER
-	LEA	ESI,MSGDEST[EDI]
+	if ((CTL & ~PFBIT) == SABM)
+		if (CheckForListeningSession(PORT, Buffer))
+			return;		// Used buffer to send UA
 
-	MOV	EDI,OFFSET32 COMPAREFIELD
-	MOV	ECX,7
-	REP MOVSB
-
-	MOV	ESI,OFFSET32 CQ		; AX25 CQ
-	MOV	ECX,7
-	REP 	MOVSB
-;
-	MOV	EDI,OFFSET32 COMPAREFIELD
-	CALL	FINDLINKXX		; GET LINK FOR THIS ADDRESS PAIR (IN BX)
-;
-	JNZ SHORT L2DISCARD
-;
-;	MATCHING CIRCUIT FOUND - UPDATE CALLS, SET LINK ACTIVE, AND
-;	   SEND CONNECTED MSG TO REMOTE STATION
-;
-; !!	CALL	SETUPNEWSESSION
-	
-	CMP	L2STATE[EBX],5		; SESSION SETUP SUCCESSFUL?
-	JE SHORT CQSETUPOK
-
-	JMP	L2SENDDM		; FAILED - ? TOO MANY DIGIS, ETC
-
-	PUBLIC	CQSETUPOK
-CQSETUPOK:
-
-	MOV	LINKTYPE[EBX],2		; DOWNLINK
-	PUSH	EBX
-	CALL	L2SENDUA
-	POP	EBX
-;
-;	TELL PARTNER CONNECTION IS ESTABLISHED
-;
-	CALL	GETBUFF			; WILL USE CQ MSG _BUFFER EVENTUALLY
-	JZ SHORT CQEXIT			; NO BUFFERS!
-
-	MOV	ESI,OFFSET32 CONNECTEDMSG
-	MOV	ECX,LCONNECTEDMSG
-
-	CALL	SENDCONNECTREPLY
-	PUBLIC	CQEXIT
-CQEXIT:
-	RET
-*/
-
-	
 	ReleaseBuffer(Buffer);
 	return;
 
@@ -478,7 +425,7 @@ DoMove:
 
 int CountFramesQueuedOnSession(TRANSPORTENTRY * Session)
 {
-	//	COUNT NUMBER OF FRAMES QUEUED ON A SESSION (IN ESI)
+	//	COUNT NUMBER OF FRAMES QUEUED ON A SESSION
 
 	if (Session == 0)
 		return 0;
@@ -2820,4 +2767,138 @@ VOID Digipeat(struct PORTCONTROL * PORT, MESSAGE * Buffer, UCHAR * OurCall, int 
 		}
 	}
 	PUT_ON_PORT_Q(PORT, Buffer);
+}
+
+BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg)
+{
+	TRANSPORTENTRY * L4 = L4TABLE;
+	struct DATAMESSAGE * Buffer;
+	int i = MAXCIRCUITS;
+	UCHAR * ptr;
+
+	while (i--)
+	{
+		if ((Msg->PORT & 0x7f) == L4->LISTEN)
+		{
+			// See if he is calling our call
+
+			UCHAR ourcall[7];				// Call we are using (may have SSID bits inverted
+			memcpy(ourcall, L4->L4MYCALL, 7);
+			ourcall[6] ^= 0x1e;				// Flip SSID
+
+			if (CompareCalls(Msg->DEST, ourcall))
+			{
+				// Get Session Entry for Downlink
+					
+				TRANSPORTENTRY * NewSess = L4TABLE;
+				struct _LINKTABLE * LINK;
+				char Normcall[10];
+				
+				int Index = 0;
+	
+				while (Index < MAXCIRCUITS)
+				{
+					if (NewSess->L4USER[0] == 0)
+					{
+						// Got One
+
+						L4->L4CROSSLINK = NewSess;
+						NewSess->L4CROSSLINK = L4;
+
+						memcpy(NewSess->L4USER, L4->L4USER, 7);
+						memcpy(NewSess->L4MYCALL, L4->L4MYCALL, 7);
+	
+						NewSess->CIRCUITINDEX = Index;				//OUR INDEX
+						NewSess->CIRCUITID = NEXTID;
+						NewSess->L4STATE = 5;
+						NewSess->L4CIRCUITTYPE = L2LINK+UPLINK;
+
+						NEXTID++;
+						if (NEXTID == 0)
+							NEXTID++;								// kEEP nON-ZERO
+
+						NewSess->SESSIONT1 = L4->SESSIONT1;
+						NewSess->L4WINDOW = (UCHAR)L4DEFAULTWINDOW;
+	
+						//	SET UP NEW SESSION (OR RESET EXISTING ONE)
+
+						FindLink(Msg->ORIGIN, ourcall, L4->LISTEN, &LINK);
+	
+						if (LINK == NULL)
+							return FALSE;
+
+						memcpy(LINK->LINKCALL, Msg->ORIGIN, 7);
+						memcpy(LINK->OURCALL, ourcall, 7);
+
+						LINK->LINKPORT = PORT;
+
+						LINK->L2TIME = PORT->PORTT1;
+/*	
+						// Copy Digis
+
+						n = 7;
+						ptr = &LINK->DIGIS[0];
+
+						while (axcalls[n])
+						{
+							memcpy(ptr, &axcalls[n], 7);
+							n += 7;
+							ptr += 7;
+
+							LINK->L2TIME += 2 * PORT->PORTT1;	// ADJUST TIMER VALUE FOR 1 DIGI
+						}
+*/
+						LINK->LINKTYPE = 2;						// DOWNLINK
+						LINK->LINKWINDOW = PORT->PORTWINDOW;
+
+						RESET2(LINK);						// RESET ALL FLAGS
+
+						LINK->L2STATE = 5;					// CONNECTED
+
+						LINK->CIRCUITPOINTER = NewSess;
+
+						NewSess->L4TARGET.LINK = LINK;
+
+						if (PORT->PORTPACLEN)
+							NewSess->SESSPACLEN = L4->SESSPACLEN = PORT->PORTPACLEN;
+
+						L2SENDUA(PORT, Msg, Msg);		// RESET OF DOWN/CROSSLINK
+
+						L4->LISTEN = FALSE;		// Take out of listen mode
+
+						// Tell User
+
+						Buffer = GetBuff();
+
+						if (Buffer == NULL)
+							return TRUE;
+
+						// SET UP HEADER
+
+						Buffer->PID = 0xf0;
+	
+						ptr = &Buffer->L2DATA[0];
+
+						Normcall[ConvFromAX25(LINK->LINKCALL, Normcall)] = 0;
+
+						ptr += sprintf(ptr, "Incoming call from %s\r", Normcall);
+
+						Buffer->LENGTH = ptr - (UCHAR *)Buffer;
+
+						C_Q_ADD(&L4->L4TX_Q, Buffer);
+						PostDataAvailable(L4);
+		
+						return TRUE;
+
+					}
+					Index++;
+					NewSess++;
+				}
+				return FALSE;
+			}
+		}
+		L4++;
+	}
+
+	return FALSE;
 }

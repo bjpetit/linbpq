@@ -65,7 +65,7 @@ DllExport int APIENTRY RXCount(int stream);
 DllExport int APIENTRY MONCount(int stream);
 
 VOID ReadNodes();
-int BPQTRACE(UINT * Msg, BOOL APRS);
+int BPQTRACE(MESSAGE * Msg, BOOL APRS);
 
 VOID CommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer);
 
@@ -347,7 +347,6 @@ extern int L3FRAMES;
 extern char * PortConfig[];
 extern struct SEM Semaphore;
 extern UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
-
 
 // SNMP Variables
 

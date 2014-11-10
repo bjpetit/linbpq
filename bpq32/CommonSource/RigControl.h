@@ -130,6 +130,7 @@ struct RIGINFO
 #define M710 9
 #define NMEA 10
 #define FT1000 11
+#define DUMMY 12
 
 struct RIGPORTINFO
 {

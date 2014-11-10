@@ -394,7 +394,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td>Status</td><td>%s</td></tr>", TNC->WEB_STATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TX/RX State</td><td>%s</td></tr>", TNC->WEB_TXRX);
 	Len += sprintf(&Buff[Len], "<tr><td>Free Space</td><td>%s</td></tr>", TNC->WEB_BUFFERS);
-	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td></td></tr>", TNC->WEB_TRAFFIC);
+	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 	Len += sprintf(&Buff[Len], "</table>");
 
 	Len = DoScanLine(TNC, Buff, Len);

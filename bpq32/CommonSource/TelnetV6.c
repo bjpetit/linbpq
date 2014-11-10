@@ -43,7 +43,7 @@ static BOOL OpenSockets(struct TNCINFO * TNC);
 static BOOL OpenSockets6(struct TNCINFO * TNC);
 int ProcessHTTPMessage(struct ConnectionInfo * conn);
 static VOID SetupListenSet(struct TNCINFO * TNC);
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
 VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr);
@@ -72,13 +72,15 @@ extern HANDLE hInstance;
 static RECT Rect;
 #endif
 
+extern int REALTIMETICKS;
+
 extern struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 #define MaxSockets 26
 
 struct UserRec RelayUser;
 struct UserRec CMSUser;
-struct UserRec HostUser;
+struct UserRec HostUser= {"","Host"};
 struct UserRec TriModeUser;
 
 
@@ -139,6 +141,25 @@ static VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst);
 VOID ProcessTrimodeCommand(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, char * MsgPtr);
 VOID ProcessTrimodeResponse(struct TNCINFO * TNC, struct STREAMINFO * STREAM, unsigned char * MsgPtr, int Msglen);
 VOID ProcessTriModeDataMessage(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
+
+void BuffertoNode(struct ConnectionInfo * sockptr, char * MsgPtr, int InputLen)
+{
+	// Queue to Node. Data may arrive it large quatities, possibly exceeding node buffer capacity
+
+	if (sockptr->FromHostBuffPutptr + InputLen > sockptr->FromHostBufferSize)
+	{
+		sockptr->FromHostBufferSize += 10000;
+		sockptr->FromHostBuffer = realloc(sockptr->FromHostBuffer, sockptr->FromHostBufferSize);
+	}
+
+	memcpy(&sockptr->FromHostBuffer[sockptr->FromHostBuffPutptr], MsgPtr, InputLen); 
+
+	sockptr->FromHostBuffPutptr += InputLen;
+	sockptr->InputLen = 0;
+
+	return;
+	}
+
 
 ProcessLine(char * buf, int Port)
 {
@@ -413,7 +434,7 @@ ProcessLine(char * buf, int Port)
 	return TRUE;
 }
 
-int BPQTRACE(UINT * Msg, BOOL TOAPRS);
+int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS);
 
 static int MaxStreams = 26;
 
@@ -1699,7 +1720,7 @@ nosocks:
 						BOOL SaveMUI = MUIONLY;
 
 						SetTraceOptionsEx(sockptr->MMASK, sockptr->MTX, sockptr->MCOM, sockptr->MUIOnly);
-						len = IntDecodeFrame((MESSAGE *)monbuff, &buffer[3], stamp, sockptr->MMASK, FALSE);
+						len = IntDecodeFrame((MESSAGE *)monbuff, &buffer[3], stamp, sockptr->MMASK, FALSE, FALSE);
 						SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
 						if (len)
@@ -1809,7 +1830,7 @@ nosocks:
 
 			else
 			{
-				if (sockptr->Signon[0])			// Outward Connect
+				if (sockptr->Signon[0] || sockptr->ClientSession)		// Outward Connect
 				{
 					Sleep(1000);
 					DataSocket_Disconnect(TNC, sockptr);
@@ -1844,6 +1865,21 @@ nosocks:
 	{
 		struct ConnectionInfo * sockptr = TNC->Streams[Stream].ConnectionInfo;
 		STREAM = &TNC->Streams[Stream];
+
+		if (sockptr->SocketActive && sockptr->Keepalive && L4LIMIT)
+		{
+#ifdef WIN32
+			if ((REALTIMETICKS - sockptr->LastSendTime) > (L4LIMIT - 60) * 9)	// PC Ticks are about 10% slow
+#else
+			if ((REALTIMETICKS - sockptr->LastSendTime) > (L4LIMIT - 60) * 10)
+#endif
+			{
+				// Send Keepalive
+
+				sockptr->LastSendTime = REALTIMETICKS;
+				BuffertoNode(sockptr, "Keepalive\r", 10);
+			}
+		}
 				
 		while (STREAM->BPQtoPACTOR_Q)
 		{
@@ -1902,10 +1938,11 @@ nosocks:
 					unsigned int Port = 0;
 					int n;
 
-					n = sscanf(&MsgPtr[2], "%s %s %s %s %s %s",
+					n = sscanf(&MsgPtr[2], "%s %s %s %s %s %s %s",
 							&Host[0], &P2[0], &P3[0], &P4[0], &P5[0], &P6[0], &P7[0]);
 	
-					STREAM->ConnectionInfo->Signon[0] = 0;		// Not outgoing;
+					sockptr->Signon[0] = 0;		// Not outgoing;
+					sockptr->Keepalive = FALSE;	// No Keepalives
 
 					if (_stricmp(Host, "HOST") == 0)
 					{
@@ -1920,8 +1957,13 @@ nosocks:
 						}
 
 						STREAM->Connecting = TRUE;
-						STREAM->ConnectionInfo->CMSSession = FALSE;
-						STREAM->ConnectionInfo->FBBMode = FALSE;
+						sockptr->CMSSession = FALSE;
+						sockptr->FBBMode = FALSE;
+						if (P4[0] == 'K' || P5[0] == 'K')
+						{
+							sockptr->Keepalive = TRUE;
+							sockptr->LastSendTime = REALTIMETICKS;
+						}
 						TCPConnect(TNC, TCP, STREAM, "127.0.0.1", TCP->CMDPort[Port], FALSE);
 						ReleaseBuffer(buffptr);
 						return;
@@ -1954,6 +1996,8 @@ nosocks:
 							buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Error - CMS Not Available\r");
 							C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 							STREAM->NeedDisc = 10;
+							CheckCMS(TNC);
+
 							return;
 						}
 
@@ -2035,7 +2079,7 @@ nosocks:
 			if (Sess1)
 				Queued += CountFramesQueuedOnSession(Sess1);
 
-			if (Queued > 30)
+			if (Queued > 15)
 				continue;
 
 			if (Sess1)
@@ -2054,6 +2098,7 @@ nosocks:
 
 			SendtoNode(TNC, Stream, &sockptr->FromHostBuffer[sockptr->FromHostBuffGetptr], Msglen);
 			sockptr->FromHostBuffGetptr += Msglen;
+			sockptr->LastSendTime = REALTIMETICKS;
 		}
 	}
 }
@@ -2474,6 +2519,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->DoEcho = FALSE;
 			sockptr->BPQTermMode = FALSE;
 			sockptr->ConnectTime = time(NULL);
+			sockptr->Keepalive = FALSE;
 
 			TNC->Streams[n].BytesRXed = TNC->Streams[n].BytesTXed = 0;
 			TNC->Streams[n].FramesQueued = 0;
@@ -2482,6 +2528,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->FBBMode = FALSE;	
 			sockptr->RelayMode = FALSE;
 			sockptr->ClientSession = FALSE;
+
 
 			if (SocketId == TCP->HTTPsock || SocketId == TCP->HTTPsock6)
 				sockptr->HTTPMode = TRUE;
@@ -2827,7 +2874,7 @@ MsgLoop:
 
 				if (len >= PACLEN)
 				{
-					SendtoNode(TNC, sockptr->Number, NodeLine, len); 
+					BuffertoNode(sockptr, NodeLine, len); 
 					optr = NodeLine;
 					len = 0;
 				}
@@ -2837,9 +2884,11 @@ MsgLoop:
 		// All scanned - send anything outstanding
 
 		if (len)
-			SendtoNode(TNC, sockptr->Number, NodeLine, len);
+			BuffertoNode(sockptr, NodeLine, len);
 
 		sockptr->InputLen = 0;
+		ShowConnections(TNC);;
+
 		return 0;
 	}
 
@@ -3332,6 +3381,20 @@ int DataSocket_ReadFBB(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SO
 	InputLen = sockptr->InputLen;
 	MsgPtr[InputLen] = 0;
 
+	if (sockptr->LoginState == 0)
+	{
+		// Look for FLMSG Header
+
+		if (InputLen > 10 && memcmp(MsgPtr, "... start\n", 10) == 0)
+		{
+			MsgPtr[9] = 13;				// Convert to CR
+			sockptr->LoginState = 2;		// Set Logged in
+
+			SendtoNode(TNC, Stream, "..FLMSG\r", 8);	// Dummy command to command handler
+
+		}
+	}
+
 MsgLoop:
 
 	if (sockptr->LoginState == 2)
@@ -3381,16 +3444,7 @@ MsgLoop:
 		// Queue to Node. Data may arrive it large quatities, possibly exceeding node buffer capacity
 
 		STREAM->BytesRXed += InputLen;
-
-		if (sockptr->FromHostBuffPutptr + InputLen > sockptr->FromHostBufferSize)
-		{
-			sockptr->FromHostBufferSize += 10000;
-			sockptr->FromHostBuffer = realloc(sockptr->FromHostBuffer, sockptr->FromHostBufferSize);
-		}
-
-		memcpy(&sockptr->FromHostBuffer[sockptr->FromHostBuffPutptr], MsgPtr, InputLen); 
-
-		sockptr->FromHostBuffPutptr += InputLen;
+		BuffertoNode(sockptr, MsgPtr, InputLen); 
 		sockptr->InputLen = 0;
 
 		return 0;
@@ -4178,6 +4232,8 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 		sockptr->LoginState = 3;			// Password State
 
 		sockptr->UserPointer  = &CMSUser;
+		strcpy(sockptr->Callsign, TNC->Streams[Stream].MyCall);
+
 		sockptr->DoEcho = FALSE;
 		sockptr->FBBMode = TRUE;
 		sockptr->RelayMode = FALSE;
@@ -4200,6 +4256,7 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	{
 		sockptr->LoginState = 2;			// Data State
 		sockptr->UserPointer  = &HostUser;
+		strcpy(sockptr->Callsign, TNC->Streams[Stream].MyCall);
 		sockptr->DoEcho = FALSE;
 		sockptr->ClientSession = TRUE;
 
@@ -4323,7 +4380,7 @@ rootok:
 
 	freeaddrinfo(res);
 
-	INETOK = TRUE;			// We have connectivity
+//	INETOK = TRUE;			// We have connectivity
 
 	res = 0;
 	memset(&hints, 0, sizeof hints);
@@ -4739,6 +4796,17 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 			//	Connect failed
 
 			closesocket(sockptr->socket);
+
+			if (sockptr->CMSSession && sockptr->RelaySession == 0)
+			{
+				// Try Next
+
+				TCP->CMSFailed[sockptr->CMSIndex] = TRUE;
+
+				CMSConnect(TNC, TNC->TCPInfo, &TNC->Streams[Stream], Stream);
+				return 0;
+			}
+
 			ReportError(STREAM, "Connect Failed");
 			CheckCMS(TNC);
 
@@ -4766,7 +4834,7 @@ VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo)
 
 	memcpy(work, &TCP->CMSAddr[CMSNo].s_addr, 4);
 
-	sprintf(Info,"%s %d %d.%d.%d.%d\n", TCP->CMSName[CMSNo], time(NULL),
+	sprintf(Info,"%s %d %d.%d.%d.%d\n", TCP->CMSName[CMSNo], (int)time(NULL),
 					work[0], work[1], work[2], work[3]);
 
 

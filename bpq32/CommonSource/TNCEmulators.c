@@ -41,7 +41,7 @@ VOID DOMONITORING(int NeedTrace);
 int APIENTRY DecodeFrame(MESSAGE * msg, char * buffer, int Stamp);
 time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
 BOOL TfPut(struct TNCDATA * TNC, UCHAR character);
-int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS);
+int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 int DATAPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 int STATUSPOLL(struct TNCDATA * TNC, struct StreamInfo * Channel);
 int PROCESSHOSTPACKET(struct StreamInfo * Channel, struct TNCDATA * TNC);
@@ -1920,7 +1920,7 @@ VOID DOMONITORING(int NeedTrace)
 		if (TNC->Mode == TNC2 && TNC->TRACEFLAG)
 		{
 			SetTraceOptionsEx(TNC->MMASK, TNC->MTX, TNC->MCOM, 0);
-			len = IntDecodeFrame(&MONITORDATA, MONBUFFER, (UINT)Stamp, TNC->MMASK, FALSE);
+			len = IntDecodeFrame(&MONITORDATA, MONBUFFER, (UINT)Stamp, TNC->MMASK, FALSE, FALSE);
 //			printf("%d %d %d %d %d\n", len, MMASK, MTX, MCOM, MUIONLY);
 			SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
@@ -4472,7 +4472,7 @@ NOMONITOR:
 			unsigned char Decoded[1000];
 
 			SetTraceOptionsEx(TNC->MMASK, TNC->MTX, TNC->MCOM, 0);
-			Len = IntDecodeFrame(&MONITORDATA, Decoded, (UINT)stamp, TNC->MMASK, FALSE);
+			Len = IntDecodeFrame(&MONITORDATA, Decoded, (UINT)stamp, TNC->MMASK, FALSE, FALSE);
 			SetTraceOptionsEx(SaveMMASK, SaveMTX, SaveMCOM, SaveMUI);
 
 			if (Len)	
@@ -5141,7 +5141,7 @@ BOOL CheckStatusChange(struct TNCDATA * conn, int Channel, int BPQStream)
 
 			SCSReply[2] = Channel;
 			SCSReply[3] = 3;
-			ReplyLen  = sprintf(&SCSReply[4], "(%d) CONNECTED to %s\x0", Channel, CONCALL);
+			ReplyLen  = sprintf(&SCSReply[4], "(%d) CONNECTED to %s", Channel, CONCALL);
 			ReplyLen += 5;
 			EmCRCStuffAndSend(conn, SCSReply, ReplyLen);
 

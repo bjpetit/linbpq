@@ -22,6 +22,11 @@
 // Get command from node, and allow topic to be selected on command line
 // Validate HTML Pages
 
+
+//	Oct 2014 1.0.5.1
+//	Fix occasional crash in terminal part line processing
+
+
 #include "BPQChat.h"
 
 #define CHAT

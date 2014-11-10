@@ -323,6 +323,8 @@ static int routine[] =
 15, 0, 2, 9, 9
 } ;			// Routine to process param
 
+int NUMBEROFKEYWORDS = sizeof(routine)/sizeof(int);
+
 static char eof_message[] = "Unexpected end of file on input\n";
 
 static char *pkeywords[] = 
@@ -335,7 +337,7 @@ static char *pkeywords[] =
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
 "BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY",
-"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT"};           /* parameter keywords */
+"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE"};           /* parameter keywords */
 
 static int poffset[] =
 {
@@ -347,7 +349,7 @@ static int poffset[] =
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
 226, 72, 124, 516, 210, 512, 125,
-36, 236, 38, 36, 36, 126};						/* offset for corresponding data in config file */
+36, 236, 38, 36, 36, 126, 600};						/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -359,9 +361,9 @@ static int proutine[] =
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
 0, 1, 2, 18, 15, 16, 2,
-1, 17, 1, 1, 1, 1};							/* routine to process parameter */
+1, 17, 1, 1, 1, 1, 2};							/* routine to process parameter */
 
-#define PPARAMLIM 56
+#define PPARAMLIM 57
 
 static int fileoffset = 0;
 static int portoffset = 2560;
@@ -490,6 +492,7 @@ BOOL ProcessConfig()
 	   GetNextLine(rec);
 	}
 
+	paramok[6]=1;          /* dont need BUFFERS */
 	paramok[8]=1;          /* dont need TRANSDELAY */
 	paramok[17]=1;          /* dont need TNCPORTS */
 	paramok[20]=1;         // Or ROUTES
@@ -1388,13 +1391,9 @@ int routes(int i)
 
 	char rec[MAXLINE];
 
-	char callsign[30];
-	int quality;
-	int port;
-	int pwind;
-	int pfrack;
-	int ppacl;	
-	int inp3;	
+	int quality, port;
+	int pwind, pfrack, ppacl;	
+	int inp3, farQual;
 
 	bseek(fp2,(long) fileoffset,SEEK_SET);
 
@@ -1402,14 +1401,53 @@ int routes(int i)
 
 	while (xindex(rec,"***") != 0 && !feof(fp1))
 	{
-	   pwind=0;
-	   pfrack=0;
-	   ppacl=0;
-	   inp3 = 0;
+		char Param[8][256];
+		char * ptr1, * ptr2;
+		int n = 0;
 
-	   sscanf(rec,"%[^,],%d,%d,%d,%d,%d,%d",callsign,&quality,&port,&pwind,&pfrack,&ppacl, &inp3);
+		pwind=0;
+		pfrack=0;
+		ppacl=0;
+		inp3 = 0;
+		farQual = 0;
 
- 	   err_flag = call_check(callsign);
+		// strtok and sscanf can't handle successive commas
+
+		memset(Param, 0, 2048);
+		strlop(rec, 13);
+		strlop(rec, ';');
+
+		ptr1 = rec;
+
+		while (ptr1 && *ptr1 && n < 8)
+		{
+			ptr2 = strchr(ptr1, ',');
+			if (ptr2) *ptr2++ = 0;
+
+			strcpy(&Param[n][0], ptr1);
+			strlop(Param[n++], ' ');
+			ptr1 = ptr2;
+			while(ptr1 && *ptr1 && *ptr1 == ' ')
+				ptr1++;
+		}
+
+		err_flag = call_check(&Param[0][0]);		// Writes 10 bytes
+
+		quality = atoi(Param[1]);
+		port = atoi(Param[2]);
+		pwind = atoi(Param[3]);
+		pfrack = atoi(Param[4]);
+		ppacl = atoi(Param[5]);
+		inp3 = atoi(Param[6]);
+		farQual = atoi(Param[7]);
+
+	   if (farQual < 0 || farQual > 255)
+	   {
+	      Consoleprintf("Remote Quality must be between 0 and 255");
+		  Consoleprintf("%s\r\n",rec);
+
+	      err_flag = 1;
+	   }
 
 	   if (quality < 0 || quality > 255)
 	   {
@@ -1448,10 +1486,11 @@ int routes(int i)
 	      err_flag = 0;
 	   }
 
-	   GetNextLine(rec);
+		bputc(farQual,fp2);
+		GetNextLine(rec);
 	}
 
-	bputc('\0',fp2);
+	bputc(0, fp2);
 
 	if (btell(fp2) > fileoffset + 2000)			// Approx 120
 	{

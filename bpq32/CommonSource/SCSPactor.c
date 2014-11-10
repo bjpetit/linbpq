@@ -65,6 +65,11 @@
 
 #include "bpq32.h"
 
+#ifdef LINBPQ
+#include <sys/ioctl.h>
+#include <linux/serial.h>
+#endif
+
 static char ClassName[]="PACTORSTATUS";
 static char WindowTitle[] = "SCS Pactor";
 static int RigControlRow = 185;
@@ -331,6 +336,35 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (TNC->hDevice == 0)
 			return 0;
+
+		#ifdef LINBPQ
+
+		if (TNC->Dragon)
+		{
+			struct serial_struct sstruct;
+
+			// Need to set custom baud rate
+
+			if (ioctl(TNC->hDevice, TIOCGSERIAL, &sstruct) < 0)
+			{
+				Debugprintf("Error: Dragon could not get comm ioctl\n");
+			}
+			else
+			{
+				// set custom divisor to get 829440 baud
+	
+				sstruct.custom_divisor = 29;
+				sstruct.flags |= ASYNC_SPD_CUST;
+
+				// set serial_struct
+		
+				if (ioctl(TNC->hDevice, TIOCSSERIAL, &sstruct) < 0)
+					Debugprintf("Error: Dragon could not set custom comm baud divisor\n");
+				else
+					Debugprintf("Dragon custom baud rate set\n");
+			}
+		}
+#endif
 	}
 ok:
 	switch (fn)
@@ -492,6 +526,18 @@ ok:
 
 			if (TNC->TNCOK)
 			{
+				// If been in Sync a long time, just let it change
+
+				if (TNC->UseAPPLCallsforPactor && TNC->PTCStatus == 6)	// Sync
+				{
+					int insync = time(NULL) - TNC->TimeEnteredSYNCMode;
+					if (insync > 4)
+					{
+						Debugprintf("SCS Scan - in SYNC for %d Secs - allow change regardless", insync);
+						return 0;
+					}
+				}
+
 				TNC->WantToChangeFreq = TRUE;
 				TNC->OKToChangeFreq = FALSE;
 				return TRUE;
@@ -551,7 +597,8 @@ ok:
 					STREAM->CmdSet = STREAM->CmdSave = malloc(100);
 
 					strcpy(STREAM->MyCall, Scan->APPLCALL);
-					sprintf(STREAM->CmdSet, "I%s\r", STREAM->MyCall);
+
+					sprintf(STREAM->CmdSet, "I%s\rI\r", STREAM->MyCall);
 					if (RIG_DEBUG)
 						Debugprintf("SCS Pactor APPLCALL Set to  %s", STREAM->MyCall);
 				}
@@ -607,7 +654,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<tr><td>Status</td><td>%s</td></tr>", TNC->WEB_STATE);
 	Len += sprintf(&Buff[Len], "<tr><td>TX/RX State</td><td>%s</td></tr>", TNC->WEB_TXRX);
 	Len += sprintf(&Buff[Len], "<tr><td>Buffers</td><td>%s</td></tr>", TNC->WEB_BUFFERS);
-	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td></td></tr>", TNC->WEB_TRAFFIC);
+	Len += sprintf(&Buff[Len], "<tr><td>Traffic</td><td>%s</td></tr>", TNC->WEB_TRAFFIC);
 	Len += sprintf(&Buff[Len], "<tr><td>Mode</td><td>%s</td></tr>", TNC->WEB_PACTORLEVEL);
 	Len += sprintf(&Buff[Len], "</table>");
 
@@ -807,6 +854,35 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 	MoveWindows(TNC);
 #endif
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
+
+#ifdef LINBPQ
+
+	if (TNC->Dragon)
+	{
+		struct serial_struct sstruct;
+
+		// Need to set custom baud rate
+
+		if (ioctl(TNC->hDevice, TIOCGSERIAL, &sstruct) < 0)
+		{
+			printf("Error: Dragon could not get comm ioctl\n");
+		}
+		else
+		{
+			// set custom divisor to get 829440 baud
+	
+			sstruct.custom_divisor = 29;
+			sstruct.flags |= ASYNC_SPD_CUST;
+
+			// set serial_struct
+		
+			if (ioctl(TNC->hDevice, TIOCSSERIAL, &sstruct) < 0)
+				Debugprintf("Error: Dragon could not set custom comm baud divisor\n");
+			else
+				Debugprintf("Dragon custom baud rate set\n");
+		}
+	}
+#endif
 
 	if (TNC->RobustDefault)
 		SwitchToPacket(TNC);
@@ -2323,13 +2399,20 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 		if (Msg[3] < 3)						// 1 or 2 - Success or Fail
 		{
+			char LastCmd = TNC->TXBuffer[5];
+			
 			// See if a response to internal command
+
+			// *** TEST **** display response to I cmd
+
+			if (RIG_DEBUG)
+				if (LastCmd == 'I')
+					Debugprintf("SCS I Cmd Response %s", Buffer);
 
 			if (TNC->InternalCmd)
 			{
 				// Process it
 
-				char LastCmd = TNC->TXBuffer[5];
 
 				if (LastCmd == 'L')		// Status
 				{
@@ -2823,6 +2906,29 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			ISS = Status & 8;
 			Status &= 7;
 
+			if (TNC->PTCStatus != Status)		// Changed
+			{
+				if (Status == 6)		// SYNCH
+				{
+					// New Sync
+
+					if (RIG_DEBUG)
+						Debugprintf("SCS New SYNC Detected");
+	
+					TNC->TimeEnteredSYNCMode = time(NULL);
+				}
+				else
+				{
+					if (TNC->PTCStatus == 6)
+					{
+						if (RIG_DEBUG)
+							Debugprintf("SCS left SYNC, now %s", status[Status]);
+	
+						TNC->TimeEnteredSYNCMode = 0;
+					}
+				}
+				TNC->PTCStatus = Status;
+			}
 			sprintf(StatusMsg, "%x %x %x %x", TNC->Streams[0].PTCStatus0,
 				TNC->Streams[0].PTCStatus1, TNC->Streams[0].PTCStatus2, TNC->Streams[0].PTCStatus3);
 			
@@ -3000,7 +3106,7 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 
 		time(&Monframe.Timestamp);
 
-		BPQTRACE((UINT *)&Monframe, TRUE);
+		BPQTRACE((MESSAGE *)&Monframe, TRUE);
 		return;
 	}
 
@@ -3107,7 +3213,7 @@ DigiLoop:
 
 	time(&Monframe.Timestamp);
 
-	BPQTRACE((UINT *)&Monframe, TRUE);
+	BPQTRACE((MESSAGE *)&Monframe, TRUE);
 
 }
 //1:fm G8BPQ to KD6PGI-1 ctl I11^ pid F0
@@ -3295,7 +3401,11 @@ VOID PTCReleasePort(struct TNCINFO * TNC)
 	struct STREAMINFO * STREAM = &TNC->Streams[0];
 
 	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
-	sprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);
+
+	if (TNC->UseAPPLCallsforPactor && TNC->RIG && TNC->RIG != &TNC->DummyRig)
+		sprintf(STREAM->CmdSet, "I%s\r", TNC->RIG->FreqPtr[0]->APPLCALL);
+	else
+		sprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);
 
 	Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
 }

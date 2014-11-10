@@ -1496,8 +1496,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			if (_memicmp(&ptr[4], "bull/", 5) == 0)
 			{
-				char * MsgBytes = conn->MailBuffer;
-				char * MsgPtr;
+//				char * MsgBytes = conn->MailBuffer;
+//				char * MsgPtr;
 
 				conn->TempMsg->type = 'B';
 				memmove(&ptr[4], &ptr[9], strlen(&ptr[8]));
@@ -1511,7 +1511,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					memmove(conn->TempMsg->title, &conn->TempMsg->title[7], strlen(conn->TempMsg->title) - 6);
 
 				// Remove B2 Headers, and all but the first part.
-					
+
+				// ?? Why - try not doing it
+/*
 				MsgPtr = strstr(MsgBytes, "Body:");
 			
 				if (MsgPtr)
@@ -1525,10 +1527,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 						MsgPtr = MsgBytes;
 
 					memmove(conn->MailBuffer, MsgPtr, conn->TempMsg->length + 1);
-
 					conn->TempMsg->B2Flags = 0;
-
 				}
+*/
 			}
 			else
 			{
