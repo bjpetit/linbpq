@@ -11,10 +11,10 @@
 
 #ifdef CKernel
 
-#define Vers 6,0,8,36
-#define Verstring "6.0.8.36\0"
+#define Vers 6,0,8,39
+#define Verstring "6.0.8.39\0"
 #define Datestring "November 2014"
-#define VerComments "G8BPQ Packet Switch (C Version) V6.0.8.36\0"
+#define VerComments "G8BPQ Packet Switch (C Version) V6.0.8.39\0"
 #define VerCopyright "Copyright © 2001-2014 John Wiseman G8BPQ\0"
 #define VerDesc "BPQ32 Switch\0"
 #define VerProduct "BPQ32"

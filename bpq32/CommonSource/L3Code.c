@@ -304,21 +304,23 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 
 		// SEE IF OUR and of our CALLs - DONT WANT TO PUT IT IN LIST!
 
-		if (ROUTE->FirstTimeFlag == 0 && CompareCalls(ptr1, MYCALL))
+		if (CompareCalls(ptr1, MYCALL))
 		{
 			// But use it to get route quality setting from other end
-
+			
 			// As we now get qual ftom highest, only use this after a reload in
 			// case other end has changed.
-
-			// Check if route is via our node
-
-			if (memcmp(ptr1, &ptr1[13], 7) == 0)
+			if (ROUTE->FirstTimeFlag == 0)
 			{
-				if (ROUTE->OtherendLocked == 0)	// Dont update locked quality
-					ROUTE->OtherendsRouteQual = ptr1[20];
+				// Check if route is via our node
 
-				ROUTE->FirstTimeFlag = 1;		// Only do it first time after load
+				if (memcmp(ptr1, &ptr1[13], 7) == 0)
+				{
+					if (ROUTE->OtherendLocked == 0)	// Dont update locked quality
+						ROUTE->OtherendsRouteQual = ptr1[20];
+
+					ROUTE->FirstTimeFlag = 1;		// Only do it first time after load
+				}
 			}
 			continue;
 		}

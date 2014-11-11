@@ -546,6 +546,24 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	int n = 12;
 	BOOL Stay = FALSE;
 
+	//	Copy Appl and Null Terminate
+
+	ptr1 = &CMD->String[0];
+	ptr2 = APPName;
+
+	while (*(ptr1) != ' ' && n--)
+		*(ptr2++) = *(ptr1++);
+
+	*(ptr2) = 0;
+	
+	if (Session->LISTEN)
+	{
+		Bufferptr += sprintf(Bufferptr, "Can't use %s while listening\r", APPName);
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+
 	if (CmdTail[0] == 'S')
 		Stay = TRUE;
 	
@@ -566,14 +584,6 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	
 		return;
 	}
-
-	ptr1 = &CMD->String[0];
-	ptr2 = APPName;
-
-	while (*(ptr1) != ' ' && n--)
-		*(ptr2++) = *(ptr1++);
-
-	*(ptr2) = 0;
 
 	if (cATTACHTOBBS(Session, APPLMASK, CMDPACLEN, &CONERROR) == 0)
 	{
@@ -1694,6 +1704,9 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	}
 
 	Len = strlen(OrigCmdBuffer) - 3;
+
+	if (Len < 0)
+		Len = 0;
 
 	memset(&Msg, 0, sizeof(Msg));
 
@@ -3925,6 +3938,8 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 	ptr1 = &Buffer->L2DATA[0];
 	ptr2 = &COMMANDBUFFER[0];
 	ptr3 = &OrigCmdBuffer[0];
+
+	memset(OrigCmdBuffer, 0, 80);
 	n = 80;
 	
 	while (n--)
@@ -3939,6 +3954,7 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 		c = toupper(c);
 		*(ptr2++) = c;
 	}
+
 	
 	//	USE INPUT MESSAGE _BUFFER FOR REPLY
 

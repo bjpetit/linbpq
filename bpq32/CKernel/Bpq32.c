@@ -651,6 +651,7 @@
 //	MAXBUFFS config statement is no longer needed.
 //	Fix USEAPPLCALLS with Tracker when connect to APPLCALL fails
 //	Implement LISTEN and CQ commands
+//	FLDIGI driver can now start FLDIG on a remote system.
 
 #define CKernel
 

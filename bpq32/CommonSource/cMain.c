@@ -1508,7 +1508,10 @@ VOID ReadNodes()
 			ptr = strtok_s(NULL, seps, &Context);
 
 			if (ConvToAX25(ptr, axcall) == FALSE)
-				continue;				// DUff
+				continue;				// Duff
+
+			if (CompareCalls(axcall, MYCALL))
+				continue;				// Shoiuldn't happen, but to be safe!
 
 			if (FindDestination(axcall, &DEST))
 				continue;
