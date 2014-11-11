@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="8.00"
-	Name="CBPQ32"
-	ProjectGUID="{8EFA1E59-8654-4A23-8102-AA77A074D57C}"
-	RootNamespace="CBPQ32"
+	Name="LinBPQ"
+	ProjectGUID="{3766AA10-C777-4ED8-A83D-F1452DE9B666}"
+	RootNamespace="MailNode"
 	Keyword="Win32Proj"
 	>
 	<Platforms>
@@ -13,16 +13,13 @@
 		/>
 	</Platforms>
 	<ToolFiles>
-		<DefaultToolFile
-			FileName="masm.rules"
-		/>
 	</ToolFiles>
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
-			ConfigurationType="2"
+			IntermediateDirectory="$(ConfigurationName)"
+			ConfigurationType="1"
 			CharacterSet="0"
 			>
 			<Tool
@@ -30,12 +27,6 @@
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="MASM"
-				PreserveIdentifierCase="3"
-				IncludePaths="S:\DEV\Source\BPQ32\CInclude"
-				EnableMASM51Compatibility="true"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -49,15 +40,12 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\CKernel"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL"
+				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CKernel;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\CInclude"
+				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE;LINBPQ"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
-				AssemblerOutput="2"
-				AssemblerListingLocation="c:\devprogs\bpq32\listings\debug\"
-				BrowseInformation="1"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
@@ -73,20 +61,14 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib  winmm.lib DbgHelp.lib comctl32.lib"
-				OutputFile="c:\DevProgs\BPQ32\bpq32.dll"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\Dev\MSDev2005\Projects\BPQ32\lib\libconfigd.lib DbgHelp.lib shell32.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot;"
+				OutputFile="c:\LINBPQ\$(ProjectName).exe"
 				LinkIncremental="2"
-				ModuleDefinitionFile="S:\Dev\Source\bpq32\CKernel\bpq32.def"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
-				MapFileName="c:\DevProgs\BPQ32\bpqdev.map"
-				MapExports="true"
-				SubSystem="2"
-				EnableCOMDATFolding="1"
-				EntryPointSymbol=""
-				BaseAddress="0x42000000"
-				ImportLibrary="S:\DEV\Source\BPQ32\lib\bpq32.lib"
+				MapFileName="c:\linbpq\linmail.map"
+				SubSystem="1"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -100,7 +82,6 @@
 			/>
 			<Tool
 				Name="VCBscMakeTool"
-				OutputFile="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)\$(ProjectName).bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -113,32 +94,21 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="c:\windows\SysWOW64\Myxcopy /Y  c:\DevProgs\BPQ32\bpq32.dll c:\windows\SysWOW64\bpq32.dll &amp;&amp; &quot;C:\Program Files\7-Zip\7z.exe&quot; a  C:\DevProgs\BPQ32\bpq32.zip C:\DevProgs\BPQ32\bpq32.dll &amp;&amp; del C:\DevProgs\BPQ32\bpq32.dll "
 			/>
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)"
-			ConfigurationType="2"
+			IntermediateDirectory="$(ConfigurationName)"
+			ConfigurationType="1"
 			CharacterSet="0"
-			WholeProgramOptimization="0"
+			WholeProgramOptimization="1"
 			>
 			<Tool
 				Name="VCPreBuildEventTool"
 			/>
 			<Tool
 				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="MASM"
-				PreserveIdentifierCase="3"
-				AssembledCodeListingFile="$(IntDir)\$(InputName)"
-				IncludePaths="S:\DEV\Source\BPQ32\CInclude"
-				ListAllAvailableInformation="true"
-				EnableAssemblyGeneratedCodeListing="true"
-				EnableFalseConditionalsInListing="true"
-				EnableMASM51Compatibility="true"
 			/>
 			<Tool
 				Name="VCXMLDataGeneratorTool"
@@ -151,18 +121,13 @@
 			/>
 			<Tool
 				Name="VCCLCompilerTool"
-				AdditionalOptions="/D &quot;MDIKERNEL&quot;"
-				Optimization="0"
-				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\CKernel"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL"
+				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CKernel;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\CInclude"
+				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE;LINBPQ"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
-				AssemblerOutput="2"
-				AssemblerListingLocation="c:\devprogs\bpq32\listings\"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
-				DebugInformationFormat="0"
+				DebugInformationFormat="3"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -175,21 +140,13 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalOptions=" /section:_BPQDATA,srw"
-				AdditionalDependencies="WS2_32.Lib  winmm.lib DbgHelp.lib comctl32.lib"
-				OutputFile="C:\DevProgs\BPQ32\bpq32.dll"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\Dev\MSDev2005\Projects\BPQ32\lib\libconfig.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot;"
+				OutputFile="c:\linbpq\LinBPQ.exe"
 				LinkIncremental="1"
-				ModuleDefinitionFile="S:\Dev\Source\bpq32\CKernel\bpq32.def"
-				GenerateDebugInformation="false"
-				GenerateMapFile="true"
-				MapFileName="c:\DevProgs\BPQ32\bpqpdn.map"
-				MapExports="true"
-				SubSystem="2"
+				GenerateDebugInformation="true"
+				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
-				LinkTimeCodeGeneration="0"
-				BaseAddress="0x42000000"
-				ImportLibrary="C:\Dev\Msdev2005\Projects\BPQ32\lib\bpq32.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -203,7 +160,6 @@
 			/>
 			<Tool
 				Name="VCBscMakeTool"
-				OutputFile="C:\Dev\Msdev2005\Intermed\$(SolutionName)\$(ConfigurationName)\$(ProjectName).bsc"
 			/>
 			<Tool
 				Name="VCFxCopTool"
@@ -216,7 +172,6 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="c:\windows\SysWOW64\Myxcopy /Y  c:\DevProgs\BPQ32\bpq32.dll c:\windows\SysWOW64\bpq32.dll &amp;&amp; &quot;C:\Program Files\7-Zip\7z.exe&quot; a  C:\DevProgs\BPQ32\bpq32.zip C:\DevProgs\BPQ32\bpq32.dll &amp;&amp; del C:\DevProgs\BPQ32\bpq32.dll "
 			/>
 		</Configuration>
 	</Configurations>
@@ -245,32 +200,19 @@
 				>
 			</File>
 			<File
-				RelativePath="s:\DEV\Source\BPQ32\CKernel\aTnccode.asm"
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BBSHTMLConfig.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\Baycom.c"
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BBSUtilities.c"
 				>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\Bpq32.c"
-				>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ExpandAttributedSource="true"
-						AssemblerOutput="2"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\bpqaxip.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\bpqether.c"
+				RelativePath="S:\DEV\Source\BPQ32\CKernel\bpqether.c"
 				>
 			</File>
 			<File
@@ -286,15 +228,11 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\BPQTermMDI.c"
-				>
-			</File>
-			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BPQtoAGW.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\bpqvkiss.c"
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\ChatHTMLConfig.c"
 				>
 			</File>
 			<File
@@ -326,6 +264,10 @@
 				>
 			</File>
 			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\FBBRoutines.c"
+				>
+			</File>
+			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\FLDigi.c"
 				>
 			</File>
@@ -334,7 +276,19 @@
 				>
 			</File>
 			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\HanksRT.c"
+				>
+			</File>
+			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\HFCommon.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\Housekeeping.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\HTMLCommonCode.c"
 				>
 			</File>
 			<File
@@ -366,6 +320,34 @@
 				>
 			</File>
 			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\LinBPQ.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\lzhuf32.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailCommands.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailDataDefs.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailRouting.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailTCP.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MBLRoutines.c"
+				>
+			</File>
+			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\md5.c"
 				>
 			</File>
@@ -374,11 +356,15 @@
 				>
 			</File>
 			<File
-				RelativePath="C:\Users\johnw_000\Desktop\MSG00022.txt"
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MULTIPSK.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MULTIPSK.c"
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\NNTPRoutines.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\pibits.c"
 				>
 			</File>
 			<File
@@ -398,10 +384,6 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\SoundModem.c"
-				>
-			</File>
-			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\TelnetV6.c"
 				>
 			</File>
@@ -411,6 +393,10 @@
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\TNCEmulators.c"
+				>
+			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\UIRoutines.c"
 				>
 			</File>
 			<File
@@ -425,60 +411,22 @@
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\WINMOR.c"
 				>
 			</File>
+			<File
+				RelativePath="S:\DEV\Source\BPQ32\CommonSource\WPRoutines.c"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
-			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\bpq32.def"
-				>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\BPQ32\CInclude\Environ.inc"
-				>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\kernelresource.h"
-				>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\BPQ32\CInclude\Strucs.inc"
-				>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\tncinfo.h"
-				>
-			</File>
 		</Filter>
 		<Filter
 			Name="Resource Files"
 			Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav"
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
-			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\KernelScript1.rc"
-				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="VCResourceCompilerTool"
-						PreprocessorDefinitions="CKernel"
-						AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCResourceCompilerTool"
-						PreprocessorDefinitions="CKernel"
-						AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource"
-					/>
-				</FileConfiguration>
-			</File>
 		</Filter>
 	</Files>
 	<Globals>
