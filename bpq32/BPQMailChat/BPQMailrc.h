@@ -1,9 +1,10 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Developer Studio generated include file.
-// Used by BPQMailChat.rc
+// Used by BPQMail.rc
 //
 #define IDC_MYICON                      2
 #define IDSENDTOMAP                     3
+#define IDSelectFiles                   3
 #define IDI_ICON1                       101
 #define IDD_CONFIG                      102
 #define IDS_APP_TITLE                   103
@@ -79,6 +80,7 @@
 #define IDSEND                          1023
 #define IDCANCELMSG                     1024
 #define BPQBASE                         1024
+#define IDC_ATTACHMENTS                 1024
 #define IDC_ALIAS                       1025
 #define IDC_HRTEXT                      1027
 #define IDC_HROUTESP                    1029
@@ -208,11 +210,11 @@
 #define IDC_SEEN                        5012
 #define IDC_POLLRMS                     5012
 #define IDC_SYSOP_IN_LM                 5013
-#define IDC_NTSMPS                      5060
 #define IDC_UZIP                        5014
 #define IDC_SYSOP_IN_LMx                5015
 #define IDD_USERADDED_BOX               5051
 #define IDD_UserEditInfo                5051
+#define IDC_NTSMPS                      5060
 #define IDC_ADDUSER                     5100
 #define IDC_DELETEUSER                  5101
 #define IDC_SAVEUSER                    5102

@@ -3225,7 +3225,7 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 				}
 
 				ptr += FileLen[i];
-				ptr +=2;				// Over separator
+				ptr +=2;				// Over separator - I don't think there should be one
 			}
 		}
 				
@@ -3240,6 +3240,13 @@ INT_PTR CALLBACK EditMsgTextDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 			int WriteLen=0;
 
 			Msg = MsgHddrPtr[CurrentMsgIndex];
+
+			if (Msg->B2Flags & Attachments)
+			{
+				MessageBox(NULL, "It isn't safe to save messages with attachments", "BPQMail", MB_ICONERROR);
+				return TRUE;
+			}
+
 
 			MsgLen = SendDlgItemMessage(hDlg, IDC_MESSAGE, WM_GETTEXTLENGTH, 0 ,0);
 

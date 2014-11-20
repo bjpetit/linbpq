@@ -1071,6 +1071,7 @@ VOID SendMailForThread(VOID * Param);
 BOOL CreatePipeThread();
 int DeleteRedundantMessages();
 VOID BBSSlowTimer();
+VOID CopyConfigFile(char * ConfigName);
 
 struct _EXCEPTION_POINTERS exinfox;
 	
@@ -2084,6 +2085,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			struct MsgInfo * Msg;
 			char * via = NULL;
 			char BID[13];
+			char FileList[32768];
 			BIDRec * BIDRec;
 			int MsgLen;
 			char * MailBuffer;
@@ -2092,19 +2094,80 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			int WriteLen=0;
 			char HDest[61];
 			char * Vptr;
-
-
-			MsgLen = SendDlgItemMessage(hDlg, IDC_EDIT1, WM_GETTEXTLENGTH, 0 ,0);
-
-			if (MsgLen)
-			{
-				MailBuffer = malloc(MsgLen+1);
-				GetDlgItemText(hDlg, IDC_EDIT1, MailBuffer, MsgLen+1);
-			}
+			char * FileName[100];
+			int FileLen[100];
+			char * FileBody[100];
+			int n, Files = 0;
+			int TotalFileSize = 0;
+			char * NewMsg;
 
 			GetDlgItemText(hDlg, IDC_MSGTO, HDest, 60);
 
 			GetDlgItemText(hDlg, IDC_MSGBID, BID, 13);
+	
+			GetDlgItemText(hDlg, IDC_ATTACHMENTS, FileList, 32767);
+
+			// if there are attachments, check that they can be opened ane read
+
+			n = 0;
+		
+			if (FileList[0])
+			{
+				FILE * Handle;
+				struct stat STAT;
+				char * ptr1 = FileList, * ptr2;
+
+				while(ptr1 && ptr1[0])
+				{
+					ptr2 = strchr(ptr1, ';');
+
+					if (ptr2)
+						*(ptr2++) = 0;
+
+					FileName[n++] = ptr1;
+ 
+					ptr1 = ptr2;
+				}
+
+				FileName[n] = 0;
+				
+				// read the files
+
+				Files = n;
+				n = 0;
+				
+				while (FileName[n])
+				{
+					if (stat(FileName[n], &STAT) == -1)
+					{
+						char ErrorMessage[512];
+						sprintf(ErrorMessage,"Can't find file %s", FileName[n]);
+						MessageBox(NULL, ErrorMessage, "BPQMail", MB_ICONERROR);
+						return TRUE;
+					}
+
+					FileLen[n] = STAT.st_size;
+
+					Handle = fopen(FileName[n], "rb");
+
+					if (Handle == NULL)
+					{
+						char ErrorMessage[512];
+						sprintf(ErrorMessage,"Can't open file %s", FileName[n]);
+						MessageBox(NULL, ErrorMessage, "BPQMail", MB_ICONERROR);
+						return TRUE;
+					}
+
+					FileBody[n] = malloc(FileLen[n]+1);
+
+					fread(FileBody[n], 1, FileLen[n], Handle); 
+
+					fclose(Handle);
+
+					TotalFileSize += FileLen[n];
+					n++;
+				}
+			}
 
 			if (strlen(HDest) == 0)
 			{		
@@ -2128,7 +2191,6 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			// Set number here so they remain in sequence
 		
 			Msg->number = ++LatestMsg;
-			Msg->length = MsgLen;
 			MsgnotoMsg[Msg->number] = Msg;
 
 			strcpy(Msg->from, SYSOPCall);
@@ -2180,6 +2242,77 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			BIDRec->u.msgno = LOWORD(Msg->number);
 			BIDRec->u.timestamp = LOWORD(time(NULL)/86400);
 
+			MsgLen = SendDlgItemMessage(hDlg, IDC_EDIT1, WM_GETTEXTLENGTH, 0 ,0);
+
+			MailBuffer = malloc(MsgLen + TotalFileSize + 2000);		// Allow for a B2 Header if attachments
+
+			if (Files)
+			{
+				char DateString[80];
+				struct tm * tm;
+
+				// Create a B2 Message
+
+				// B2 Header
+
+				NewMsg = MailBuffer + 1000;
+
+				tm = gmtime(&Msg->datecreated);	
+	
+				sprintf(DateString, "%04d/%02d/%02d %02d:%02d",
+					tm->tm_year+1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
+		
+				NewMsg += sprintf(NewMsg,
+					"MID: %s\r\nDate: %s\r\nType: %s\r\nFrom: %s\r\nTo: %s\r\nSubject: %s\r\nMbo: %s\r\n",
+						Msg->bid, DateString, "Private", Msg->from, Msg->to, Msg->title, BBSName);
+				
+
+				NewMsg += sprintf(NewMsg, "Body: %d\r\n", MsgLen);
+
+				for (n = 0; n < Files; n++)
+				{
+					char * p = FileName[n], * q;
+
+					// Remove any path
+
+					q = strchr(p, '\\');
+					
+					while (q)
+					{
+						if (q)
+							*q++ = 0;
+						p = q;
+						q = strchr(p, '\\');
+					}
+
+					NewMsg += sprintf(NewMsg, "File: %d %s\r\n", FileLen[n], p);
+				}
+
+				NewMsg += sprintf(NewMsg, "\r\n");
+				GetDlgItemText(hDlg, IDC_EDIT1, NewMsg, MsgLen+1); 
+				NewMsg += MsgLen;
+				NewMsg += sprintf(NewMsg, "\r\n");
+
+				for (n = 0; n < Files; n++)
+				{
+					memcpy(NewMsg, FileBody[n], FileLen[n]);
+					NewMsg += FileLen[n];
+					free(FileBody[n]);
+					NewMsg += sprintf(NewMsg, "\r\n");
+				}
+
+				Msg->length = NewMsg - (MailBuffer + 1000);
+				NewMsg = MailBuffer + 1000;
+				Msg->B2Flags = B2Msg | Attachments;
+			}
+
+			else
+			{
+				GetDlgItemText(hDlg, IDC_EDIT1, MailBuffer, MsgLen+1);
+				Msg->length = MsgLen;
+				NewMsg = MailBuffer;
+			}
+
 			sprintf_s(MsgFile, sizeof(MsgFile), "%s/m_%06d.mes", MailDir, Msg->number);
 	
 			hFile = CreateFile(MsgFile,
@@ -2192,7 +2325,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			if (hFile != INVALID_HANDLE_VALUE)
 			{
-				WriteFile(hFile, MailBuffer, Msg->length, &WriteLen, NULL);
+				WriteFile(hFile, NewMsg, Msg->length, &WriteLen, NULL);
 				CloseHandle(hFile);
 			}
 
@@ -2209,6 +2342,79 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 			return TRUE;
 		}
+
+
+		if (LOWORD(wParam) == IDSelectFiles)
+		{
+			char FileNames[2048];
+			char FullFileNames[32768];
+			OPENFILENAME Ofn; 		
+			int err;
+
+			FileNames[0] = 0;
+
+			memset(&Ofn, 0, sizeof(Ofn));
+ 
+			Ofn.lStructSize = sizeof(OPENFILENAME); 
+			Ofn.hInstance = hInst;
+			Ofn.hwndOwner = hDlg; 
+			Ofn.lpstrFilter = NULL; 
+			Ofn.lpstrFile= FileNames; 
+			Ofn.nMaxFile = 2048; 
+			Ofn.lpstrFileTitle = NULL; 
+			Ofn.nMaxFileTitle = 0; 
+			Ofn.lpstrInitialDir = (LPSTR)NULL; 
+			Ofn.Flags = OFN_SHOWHELP | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT |  OFN_EXPLORER; 
+			Ofn.lpstrTitle = NULL;//; 
+
+			if (GetOpenFileName(&Ofn))
+			{
+				// if one is selected, a single string is returned, if more than one, a single
+				// path, followed by all the strings, duuble null terminated.
+
+				char * Names[101];			// Allow up to 100 names
+				int n = 0;
+				char * ptr = FileNames;
+
+				while (*ptr)
+				{
+					Names[n++] = ptr;
+					ptr += strlen(ptr);
+					ptr++;
+				}
+
+				GetDlgItemText(hDlg, IDC_ATTACHMENTS, FullFileNames, 32768);
+
+				if (strlen(FullFileNames))
+						strcat(FullFileNames, ";");
+
+				if (n == 1)
+				{
+					// Single Select
+
+					strcat(FullFileNames, FileNames);
+				}
+				else
+				{
+					int i = 1;
+
+					while(i < n)
+					{
+						strcat(FullFileNames, Names[0]);
+						strcat(FullFileNames, "\\");
+						strcat(FullFileNames, Names[i]);
+						i++;
+						if (i < n)
+							strcat(FullFileNames, ";");
+					}
+				}
+				SetDlgItemText(hDlg, IDC_ATTACHMENTS, FullFileNames);
+			}
+			else
+				err = GetLastError();
+			return (INT_PTR)TRUE;
+		}
+
 
 		if (LOWORD(wParam) == IDCANCEL)
 		{

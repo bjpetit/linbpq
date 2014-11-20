@@ -1263,7 +1263,14 @@ VOID AddLinetoWindow(struct ConsoleInfo * Cinfo, char * Line)
 	char * ptr2;
 	int l, Index;
 	char LineCopy[LINELEN * 2];
-	
+
+	if (Len > 199)			// Console can't handle long lines
+	{
+		Line[198] = 13;
+		Line[199] = 0;
+		Len = 199;
+	}
+
 	if (Line[0] ==  0x1b && Len > 1)
 	{
 		// Save Colour Char
