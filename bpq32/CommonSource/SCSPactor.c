@@ -65,7 +65,7 @@
 
 #include "bpq32.h"
 
-#ifdef LINBPQ
+#ifndef WIN32
 #include <sys/ioctl.h>
 #include <linux/serial.h>
 #endif
@@ -337,7 +337,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		if (TNC->hDevice == 0)
 			return 0;
 
-		#ifdef LINBPQ
+#ifndef WIN32
 
 		if (TNC->Dragon)
 		{
@@ -855,7 +855,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 #endif
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
-#ifdef LINBPQ
+#ifndef WIN32
 
 	if (TNC->Dragon)
 	{

@@ -2783,7 +2783,7 @@ BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg)
 			// See if he is calling our call
 
 			UCHAR ourcall[7];				// Call we are using (may have SSID bits inverted
-			memcpy(ourcall, L4->L4MYCALL, 7);
+			memcpy(ourcall, L4->L4USER, 7);
 			ourcall[6] ^= 0x1e;				// Flip SSID
 
 			if (CompareCalls(Msg->DEST, ourcall))
@@ -2806,7 +2806,7 @@ BOOL CheckForListeningSession(struct PORTCONTROL * PORT, MESSAGE * Msg)
 						NewSess->L4CROSSLINK = L4;
 
 						memcpy(NewSess->L4USER, L4->L4USER, 7);
-						memcpy(NewSess->L4MYCALL, L4->L4MYCALL, 7);
+						memcpy(NewSess->L4MYCALL, L4->L4USER, 7);
 	
 						NewSess->CIRCUITINDEX = Index;				//OUR INDEX
 						NewSess->CIRCUITID = NEXTID;

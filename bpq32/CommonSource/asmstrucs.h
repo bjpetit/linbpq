@@ -850,6 +850,13 @@ typedef struct _LINKTABLE
 
 } LINKTABLE;
 
+struct myin_addr {
+        union {
+                struct { u_char s_b1,s_b2,s_b3,s_b4; } S_un_b;
+                struct { u_short s_w1,s_w2; } S_un_w;
+                u_long S_addr;
+        } S_un;
+};
 typedef struct _IPMSG
 {
 //       FORMAT OF IP HEADER
@@ -864,8 +871,8 @@ typedef struct _IPMSG
 	UCHAR	IPTTL;
 	UCHAR	IPPROTOCOL;      // HIGHER LEVEL PROTOCOL
 	USHORT	IPCHECKSUM;      // HEADER CHECKSUM
-	ULONG	IPSOURCE;
-	ULONG	IPDEST;
+	struct myin_addr IPSOURCE;
+	struct myin_addr IPDEST;
 
 	UCHAR	Data;
 

@@ -15,6 +15,21 @@ int B2RestartCount = 0;
 
 extern char ProperBaseDir[];
 
+VOID FBBputs(CIRCUIT * conn, char * buf)
+{
+	// Sends to user and logs
+
+	int len = strlen(buf);
+	
+	WriteLogLine(conn, '>', buf, len -1, LOG_BBS);
+
+	QueueMsg(conn, buf, len);
+
+	if (conn->BBSFlags & NEEDLF)
+		QueueMsg(conn, "\n", 1);
+}
+
+
 VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {
 	struct FBBHeaderLine * FBBHeader;	// The Headers from an FBB forward block
@@ -105,7 +120,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		
 		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
 		{
-			BBSputs(conn, "FQ\r");
+			FBBputs(conn, "FQ\r");
 
 			// LinFBB needs a Disconnect Here
 
@@ -266,7 +281,7 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		{
 			// RMS Express doesn't send FF or proposal after rejecting all messages
 
-			BBSputs(conn, "FF\r");
+			FBBputs(conn, "FF\r");
 		}
 
 		return;
@@ -604,7 +619,7 @@ ok2:
 		conn->FBBReplyChars[conn->FBBReplyIndex] = 0;
 		conn->FBBReplyIndex = 0;
 
-		nodeprintf(conn, "FS %s\r", conn->FBBReplyChars);
+		nodeprintfEx(conn, "FS %s\r", conn->FBBReplyChars);
 
 		// if all rejected, send proposals or prompt, else set up for first message
 
@@ -621,10 +636,10 @@ ok2:
 				conn->InputMode = 0;
 				
 				if (conn->DoReverse)
-					BBSputs(conn, "FF\r");
+					FBBputs(conn, "FF\r");
 				else
 				{
-					BBSputs(conn, "FQ\r");
+					FBBputs(conn, "FQ\r");
 					conn->CloseAfterFlush = 20;			// 2 Secs
 				}
 			}
@@ -713,7 +728,7 @@ VOID SetupNextFBBMessage(CIRCUIT * conn)
 		if (!FBBDoForward(conn))				// Send proposal if anthing to forward
 		{
 			conn->InputMode = 0;
-			BBSputs(conn, "FF\r");
+			FBBputs(conn, "FF\r");
 		}
 	}
 	else
@@ -781,12 +796,13 @@ BOOL FBBDoForward(CIRCUIT * conn)
 				conn->FBBChecksum+=proposal[--proplen];
 			}
 
-			BBSputs(conn, proposal);
+			FBBputs(conn, proposal);
 		}
 
 		conn->FBBChecksum = - conn->FBBChecksum;
 
-		nodeprintf(conn, "F> %02X\r", conn->FBBChecksum);
+		nodeprintfEx(conn, "F> %02X\r", conn->FBBChecksum);
+	
 		return TRUE;
 	}
 

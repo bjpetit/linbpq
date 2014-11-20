@@ -66,7 +66,7 @@ static const char cd64[]="|$$$}rstuvwxyz{$$$$$$$>?@ABCDEFGHIJKLMNOPQRSTUVW$$$$$$
 //char *dat[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
 void decodeblock( unsigned char in[4], unsigned char out[3] );
-
+VOID FormatTime(char * Time, time_t cTime);
 
 int SendSock(SocketConn * sockptr, char * msg)
 {

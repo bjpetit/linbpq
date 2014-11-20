@@ -2,6 +2,7 @@
 
 int APIENTRY ChangeSessionIdletime(int Stream, int idletime);
 struct MsgInfo * GetMsgFromNumber(int msgno);
+BOOL ForwardMessagetoFile(struct MsgInfo * Msg, HANDLE Handle);
 
 static char seps[] = " \t\r";
 

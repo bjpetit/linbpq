@@ -55,6 +55,8 @@ TODo	?Multiple Adapters
 LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 #endif
 
+#define s_addr  S_un.S_addr
+
 extern BPQVECSTRUC * IPHOSTVECTORPTR;
 
 BOOL APIENTRY  Send_AX(PMESSAGE Block, DWORD Len, UCHAR Port);
@@ -62,12 +64,15 @@ VOID SENDSABM(struct _LINKTABLE * LINK);
 BOOL FindLink(UCHAR * LinkCall, UCHAR * OurCall, int Port, struct _LINKTABLE ** REQLINK);
 BOOL ProcessConfig();
 VOID RemoveARP(PARPDATA Arp);
+VOID AddToRoutes(PARPDATA Arp, UINT IPAddr, char Type);
 
 VOID ProcessTunnelMsg(PIPMSG IPptr);
 VOID ProcessRIP44Message(PIPMSG IPptr);
 PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found);
 BOOL ProcessROUTELine(char * buf, BOOL Locked);
 VOID DoRouteTimer();
+PROUTEENTRY FindRoute(ULONG IPADDR);
+VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap);
 
 #define ARPTIMEOUT 3600
 
@@ -90,12 +95,19 @@ int NumberofRoutes = 0;
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
 ULONG OurIPAddr = 0;
-ULONG EncapAddr = 0;
 
 ULONG OurIPBroadcast = 0;
 ULONG OurNetMask = 0xffffffff;
 
 BOOL WantTAP = FALSE;
+BOOL WantEncap = 0;			// Run RIP44 and Net44 Encap
+
+SOCKET EncapSock = 0;
+
+BOOL UDPEncap = FALSE;
+
+BOOL IPv6 = FALSE;
+int UDPPort = 4473;			// RX Port, Send on +1
 
 int tap_fd = 0;
 
@@ -139,6 +151,8 @@ extern char * PortConfig[];
 int baseline=0;
 
 unsigned char  hostaddr[64];
+
+ULONG UCSD44;		// 44.0.0.1
 
 
 // Following two fields used by stats to get round shared memmory problem
@@ -219,6 +233,62 @@ FARPROCX GetAddress(char * Proc);
 VOID __cdecl Debugprintf(const char * format, ...);
 
 HANDLE hInstance;
+
+int CompareRoutes (const VOID * a, const VOID * b)
+{
+	PROUTEENTRY x;
+	PROUTEENTRY y;
+
+	unsigned long r1, r2;
+
+	x = * (PROUTEENTRY const *) a;
+	y = * (PROUTEENTRY const *) b;
+
+	r1 = x->NETWORK;
+	r2 = y->NETWORK;
+
+	r1 = htonl(r1);
+	r2 = htonl(r2);
+
+	if (r1 < r2 ) return -1;
+	if (r1 == r2 ) return 0;
+	return 1;
+}
+
+
+int CompareMasks (const VOID * a, const VOID * b)
+{
+	PROUTEENTRY x;
+	PROUTEENTRY y;
+
+	unsigned long m1, m2;
+	unsigned long r1, r2;
+
+	x = * (PROUTEENTRY const *) a;
+	y = * (PROUTEENTRY const *) b;
+
+	r1 = x->NETWORK;
+	r2 = y->NETWORK;
+
+	m1 = x->SUBNET;
+	m2 = y->SUBNET;
+
+	m1 = htonl(m1);
+	m2 = htonl(m2);
+
+	r1 = htonl(r1);
+	r2 = htonl(r2);
+
+	if (m1 > m2) return -1;
+	if (m1 == m2)
+	{
+		if (r1 < r2) return -1;
+		if (r1 == r2 ) return 0;
+	}
+	return 1;
+}
+
+
 
 void OpenTAP();
 
@@ -409,7 +479,79 @@ Dll BOOL APIENTRY Init_IP()
 		_beginthread(IPResolveNames, 0, NULL );
 	}
 #endif
-	WritetoConsoleLocal("\n");
+
+	// if we are running as Net44 encap, open a socket for IPIP
+
+	if (WantEncap)
+	{
+		union
+		{
+			struct sockaddr_in sinx; 
+			struct sockaddr_in6 sinx6; 
+		} sinx = {0};
+		u_long param = 1;
+		int err, ret;
+		char Msg[80];
+				
+		if (UDPEncap)
+		{
+			// Open UDP Socket
+
+			if (IPv6)
+				EncapSock = socket(AF_INET6,SOCK_DGRAM,0);
+			else
+				EncapSock = socket(AF_INET,SOCK_DGRAM,0);
+
+			sinx.sinx.sin_port = htons(UDPPort);
+		}
+		else
+		{
+			// Open Raw Socket
+
+			EncapSock = socket(AF_INET, SOCK_RAW, 4);
+			sinx.sinx.sin_port = 0;
+		}
+
+		if (EncapSock == INVALID_SOCKET)
+		{
+			err = WSAGetLastError();
+			printf(Msg, "Failed to create socket for IPIP Encap - error code = %d\n", err);
+			WritetoConsoleLocal(Msg);
+		}
+		else
+		{
+			
+			ioctl (EncapSock,FIONBIO,&param);
+
+			if (IPv6)
+			{
+				sinx.sinx.sin_family = AF_INET6;
+				memset (&sinx.sinx6.sin6_addr, 0, 16);
+				ret = bind(EncapSock, (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx6));
+			}
+			else
+			{
+				sinx.sinx.sin_family = AF_INET;
+				sinx.sinx.sin_addr.s_addr = INADDR_ANY;
+				ret = bind(EncapSock, (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx));
+			}
+	
+			if (ret)
+			{
+				//	Bind Failed
+
+				err = WSAGetLastError();
+				sprintf(Msg, "Bind Failed  for IPIP Encap socket - error code = %d\n", err);
+				WritetoConsoleLocal(Msg);
+			}
+			else
+			{
+				UCSD44 = inet_addr("44.0.0.1");
+				WritetoConsoleLocal("Net44 Tunnel opened\n");
+			}
+		}
+	}
+
 	WritetoConsoleLocal("IP Support Enabled\n");
 
 	return TRUE;
@@ -425,6 +567,13 @@ VOID IPClose()
 	hIPResWnd = NULL;
 #endif
 }
+
+union
+{
+	struct sockaddr_in rxaddr;
+	struct sockaddr_in6 rxaddr6;
+} RXaddr;
+
 
 Dll BOOL APIENTRY Poll_IP()
 {
@@ -585,6 +734,31 @@ PollTAPloop:
 			goto PollTAPloop;
 		}
 	}
+
+PollEncaploop:
+
+	if (EncapSock)
+	{
+		int nread;
+		int addrlen = sizeof(struct sockaddr_in);
+
+		nread = recvfrom(EncapSock, &Buffer[EthOffset], 1600, 0, (struct sockaddr *)&RXaddr.rxaddr,&addrlen);
+
+		if (nread > 0)
+		{
+			PIPMSG IPptr = (PIPMSG)&Buffer[EthOffset];
+
+			if (IPptr->IPPROTOCOL == 4)		// AMPRNET Tunnelled Packet
+			{
+				ProcessTunnelMsg(IPptr);
+			}
+
+			goto PollEncaploop;
+		}
+		else
+			res = GetLastError();
+	}
+
 
 	if (IPHOSTVECTORPTR->HOSTTRACEQ != 0)
 	{
@@ -932,15 +1106,20 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 	{
 	case 0x0100:
 
+		// We sould only acces requests from our subnet - we might have more than one not on iterface
+
+		if ((arpptr->SENDIPADDR & OurNetMask) != (OurIPAddr & OurNetMask))
+			return;
+
 		if (arpptr->TARGETIPADDR == 0)		// Request for 0.0.0.0
 			return;
 	
 		// Add to our table, as we will almost certainly want to send back to it
-
+		
 		Arp = LookupARP(arpptr->SENDIPADDR, TRUE, &Found);
 
 		if (Found)
-				goto AlreadyThere;				// Already there
+			goto AlreadyThere;				// Already there
 
 		if (Arp == NULL) return;				// No point of table full
 				
@@ -950,11 +1129,16 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 		memcpy(Arp->HWADDR, arpptr->SENDHWADDR ,6);
 		Arp->ARPVALID = TRUE;
 		Arp->ARPTIMER =  ARPTIMEOUT;
+
+		// Also add to routes
+
+		AddToRoutes(Arp,arpptr->SENDIPADDR, 'E');
+
 		SaveARP();
 	
 AlreadyThere:
 
-		if (arpptr->TARGETIPADDR == OurIPAddr || arpptr->TARGETIPADDR == EncapAddr)
+		if (arpptr->TARGETIPADDR == OurIPAddr)
 		{
 			ULONG Save = arpptr->TARGETIPADDR;
  
@@ -976,10 +1160,12 @@ AlreadyThere:
 
 		// If for our Ethernet Subnet, Ignore or we send loads of unnecessary msgs to ax.25
 
-		if ((arpptr->TARGETIPADDR & OurNetMask) == (OurIPAddr & OurNetMask))
-			return;
+//		if ((arpptr->TARGETIPADDR & OurNetMask) == (OurIPAddr & OurNetMask))
+//			return;
 
 		// Should't we just reply if we know it ?? (Proxy ARP)
+
+		//	Maybe, but that may mean dowstream nodes dont learnit
 
 		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
 
@@ -1032,6 +1218,9 @@ AlreadyThere:
 		if (Arp == NULL)
 			goto SendBack;
 
+		// Also add to routes
+
+		AddToRoutes(Arp, arpptr->SENDIPADDR, 'E');
 Update:
 		Arp->IPADDR = arpptr->SENDIPADDR;
 
@@ -1104,6 +1293,9 @@ VOID ProcessAXARPMsg(PAXARP arpptr)
 	{
 		// Add to our table, as we will almost certainly want to send back to it
 
+		if (arpptr->TARGETIPADDR == 0)
+			return;							// Ignore 0.0.0.0
+
 		Arp = LookupARP(arpptr->SENDIPADDR, TRUE, &Found);
 
 		if (Found)
@@ -1111,7 +1303,7 @@ VOID ProcessAXARPMsg(PAXARP arpptr)
 				
 		if (Arp != NULL)
 		{
-			//       ENTRY NOT FOUND - IF ANY SPARE ENTRIES, USE ONE
+			//   ENTRY NOT FOUND - IF ANY SPARE ENTRIES, USE ONE
 
 			Arp->IPADDR = arpptr->SENDIPADDR;
 
@@ -1121,6 +1313,10 @@ VOID ProcessAXARPMsg(PAXARP arpptr)
 			Arp->ARPINTERFACE = arpptr->MSGHDDR.PORT;
 			Arp->ARPVALID = TRUE;
 			Arp->ARPTIMER =  ARPTIMEOUT;
+
+			// Also add to routes
+
+			AddToRoutes(Arp, arpptr->SENDIPADDR, 'D');
 		}
 
 AlreadyThere:
@@ -1206,6 +1402,9 @@ AlreadyThere:
 		if (Arp == NULL)
 			goto SendBack;
 
+		// Also add to routes
+
+		AddToRoutes(Arp, arpptr->SENDIPADDR, 'D');
 Update:
 		Arp->IPADDR = arpptr->SENDIPADDR;
 
@@ -1281,7 +1480,7 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 
 	// Make sure origin ia in ARP Table
 
-	Arp = LookupARP(IPptr->IPSOURCE, TRUE, &Found);
+	Arp = LookupARP(IPptr->IPSOURCE.s_addr, TRUE, &Found);
 
 	if (!Found)
 	{
@@ -1289,7 +1488,7 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 
 		if (Arp != NULL)
 		{
-			Arp->IPADDR = IPptr->IPSOURCE;
+			Arp->IPADDR = IPptr->IPSOURCE.s_addr;
 
 			if (Type == 'E')
 			{
@@ -1304,6 +1503,11 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 			Arp->ARPINTERFACE = Port;
 			Arp->ARPVALID = TRUE;
 			Arp->ARPTIMER =  ARPTIMEOUT;
+
+			// Also add to routes
+
+			AddToRoutes(Arp, IPptr->IPSOURCE.s_addr, Type);
+
 			SaveARP();
 		}
 	}
@@ -1312,9 +1516,9 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 
 	// See if for us - if not pass to router
 
-	Dest = IPptr->IPDEST;
+	Dest = IPptr->IPDEST.s_addr;
 
-	if (Dest == OurIPAddr || Dest == 0xffffffff || Dest == EncapAddr || Dest == OurIPBroadcast)
+	if (Dest == OurIPAddr || Dest == 0xffffffff || Dest == OurIPBroadcast)
 		goto ForUs;
 
 	RouteIPMsg(IPptr);
@@ -1323,11 +1527,11 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 
 ForUs:
 
-	if (IPptr->IPPROTOCOL == 4)		// AMPRNET Tunnelled Packet
-	{
-		ProcessTunnelMsg(IPptr);
-		return;
-	}
+//	if (IPptr->IPPROTOCOL == 4)		// AMPRNET Tunnelled Packet
+//	{
+//		ProcessTunnelMsg(IPptr);
+//		return;
+//	}
 
 	if (IPptr->IPPROTOCOL == 1)		// ICMP
 	{
@@ -1335,7 +1539,7 @@ ForUs:
 		return;
 	}
 
-	// Support UDP for SNMPfudp
+	// Support UDP for SNMP
 
 	if (IPptr->IPPROTOCOL == 17)		// UDP
 	{
@@ -1360,24 +1564,24 @@ ForUs:
 	for (index=0; index < map_table_len; index++)
 	{
 		if ((map_table[index].sourceport == TCPptr->DESTPORT) &&
-			map_table[index].sourceipaddr == IPptr->IPSOURCE)
+			map_table[index].sourceipaddr == IPptr->IPSOURCE.s_addr)
 		{
 			//	Outgoing Message - replace Dest IP address and Port. Source Port remains unchanged
 
-			IPptr->IPSOURCE = OurIPAddr;
-			IPptr->IPDEST = map_table[index].mappedipaddr;
+			IPptr->IPSOURCE.s_addr = OurIPAddr;
+			IPptr->IPDEST.s_addr = map_table[index].mappedipaddr;
 			TCPptr->DESTPORT = map_table[index].mappedport;
 			CheckSumAndSend(IPptr, TCPptr, Len);
 			return;
 		}
 
 		if ((map_table[index].mappedport == TCPptr->SOURCEPORT) &&
-			map_table[index].mappedipaddr == IPptr->IPSOURCE)
+			map_table[index].mappedipaddr == IPptr->IPSOURCE.s_addr)
 		{
 			//	Incomming Message - replace Dest IP address and Source Port
 
-			IPptr->IPSOURCE = OurIPAddr;
-			IPptr->IPDEST = map_table[index].sourceipaddr;
+			IPptr->IPSOURCE.s_addr = OurIPAddr;
+			IPptr->IPDEST.s_addr = map_table[index].sourceipaddr;
 			TCPptr->SOURCEPORT = map_table[index].sourceport;
 			CheckSumAndSend(IPptr, TCPptr, Len);
 			return;
@@ -1439,24 +1643,96 @@ USHORT Generate_CHECKSUM(VOID * ptr1, int Len)
 VOID ProcessTunnelMsg(PIPMSG IPptr)
 {
 	UCHAR * ptr;
+	PIPMSG Outer = IPptr;			// Save tunnel header
+	int Origlen;
+//	int InnerLen;
 
 	//	Make sure it is from UCSD Encap ??How??
+
+	// Check header length - for now drop any message with options
+
+	if (IPptr->VERLEN != 0x45)
+		return;
+
+	Origlen = htons(Outer->IPLENGTH);
 
 	ptr = (UCHAR *)IPptr;
 	ptr += 20;						// Skip IPIP Header
 	IPptr = (PIPMSG) ptr;
 
+	//	If we are relaying it from a DMZ host there will be antoher header
+
+	if (IPptr->IPPROTOCOL == 4)		// IPIP
+	{
+		Outer = IPptr;	
+		ptr = (UCHAR *)IPptr;
+		ptr += 20;						// Skip IPIP Header
+		IPptr = (PIPMSG) ptr;
+		Origlen -= 20;
+	}
+		
 	// First check for RIP44 Messages
 
 	if (IPptr->IPPROTOCOL == 17)		// UDP
 	{
 		PUDPMSG UDPptr = (PUDPMSG)&IPptr->Data;
 
-		if (UDPptr->DESTPORT == htons(520))
+		if (IPptr->IPSOURCE.s_addr == UCSD44 && UDPptr->DESTPORT == htons(520))
 		{
 			ProcessRIP44Message(IPptr);
 			return;
 		}
+	}
+
+	// for now drop anything not from a 44 address. 
+
+	if (IPptr->IPSOURCE.S_un.S_un_b.s_b1 != 44)
+	{
+		// Reply to a ping - pretty safe!
+
+		if (IPptr->IPPROTOCOL == 1)
+		{
+			int Len;
+
+			int addrlen = sizeof(struct sockaddr_in);
+
+			PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
+
+			Len = ntohs(IPptr->IPLENGTH);
+			Len-=20;
+
+			Check_Checksum(ICMPptr, Len);
+
+			if (ICMPptr->ICMPTYPE == 8)
+			{
+				//	ICMP_ECHO
+
+				ULONG Temp;
+				
+				ICMPptr->ICMPTYPE = 0;		// Convert to Reply
+
+				ICMPptr->ICMPCHECKSUM = 0;
+
+				// CHECKSUM IT
+	
+				ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, Len);
+
+				// Swap Dest to Origin
+
+				Temp = IPptr->IPDEST.s_addr;
+				IPptr->IPDEST = IPptr->IPSOURCE;
+				IPptr->IPSOURCE.s_addr = Temp;
+
+				IPptr->IPCHECKSUM = 0;
+				IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
+
+				SendIPtoEncap(IPptr, Outer->IPSOURCE.s_addr);
+
+			}
+			return;
+		}
+
+		return;
 	}
 
 	// I think anything else is just passed to the router
@@ -1573,7 +1849,6 @@ PUTINLIST:
 
 				if (RIP2->Metric >= 15)
 				{
-
 					//	HE IS TELLING US ITS UNREACHABLE - START DELETE TIMER
 	
 					Route->RIPTIMOUT = 0;
@@ -1591,97 +1866,8 @@ PUTINLIST:
 		Len -= 20;
 		RIP2++;
 	}
-
-/*
-	CALL	TIDY_LIST		; TRY TO MERGE ENTRIES 
-;
-;	SEE IF ANYTHING HAS CHANGED (DONE HERE SO ENTRIES REMOVED BY
-;	TIDY AREN'T INCLUDED
-;
-	MOV     DI,OFFSET ROUTETAB
-	MOV     CX,NUMBEROFROUTES
-	MOV	AL,0
-
-RIPTESTLOOP:
-
-	OR	AL,ROUTECHANGED[DI]
-	MOV	ROUTECHANGED[DI],0
-
-	ADD     DI,TYPE ROUTEENTRY
-;
-	LOOP    RIPTESTLOOP
-;
-	OR	AL,AL
-	JZ	NOCHANGE
-
-	MOV	RIPTIM,2		; DO ANOTHER BROADCAST
-
-NOCHANGE:
-
-	MOV	AL,RIPTIM
-	CALL	BYTE_TO_HEX
-
-	RET
-*/
+	qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);
 }
-
-/*
-UPDATE_ENTRY:
-
-	MOV4    GATEWAY[DI],UDPSOURCE   ; WHERE THIS MSG CAME FROM
-
-	CMP	AX25_CTRL,0FFH
-	JE	RIP_U_NET			; VIA NETROM
-;
-;	VIRTUAL CIRCUIT MODE
-;
-	MOV	AL,PORT_NO
-	MOV     PORT[DI],AL
-
-	MOV	RTYPE[DI],'V'
-	JMP SHORT RIP_U_GOT_TYPE
-
-RIP_U_NET:
-;
-	MOV	RTYPE[DI],'N'
-	MOV	PORT[DI],0
-;
-RIP_U_GOT_TYPE:
-
-	MOV	ROUTEINFO[DI],LEARNED
-	MOV     ROUTECHANGED[DI],1
-
-REFRESH_RIP:
-
-	MOV     AL,RIPMETRIC		; INCOMING METRIC
-	INC     AL
-	CMP     AL,16
-	JBE     U_MET_OK
-;
-;       HE IS TELLING US ITS UNREACHABLE - START DELETE TIMER
-;
-	MOV     METRIC[DI],16
-	MOV     RIPTIMOUT[DI],0
-;
-	CMP     GARTIMOUT[DI],0
-	JNE     NEXTRIPENTRY            ; TIMER ALREADY RUNNING
-;
-	MOV     GARTIMOUT[DI],4         ; SET WAITING TO DELETE
-;
-	JMP	NEXTRIPENTRY
-
-U_MET_OK:
-
-	MOV     METRIC[DI],AL
-
-	MOV     RIPTIMOUT[DI],MAXRIP
-	MOV     GARTIMOUT[DI],0         ; IN CASE WAITING TO DELETE
-;
-	JMP	NEXTRIPENTRY
-
-*/
-
-
 
 
 VOID ProcessICMPMsg(PIPMSG IPptr)
@@ -1710,8 +1896,10 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 
 		IPptr->IPDEST = IPptr->IPSOURCE;
 
-		IPptr->IPSOURCE = OurIPAddr;
+		IPptr->IPSOURCE.s_addr = OurIPAddr;
 
+		IPptr->IPCHECKSUM = 0;
+		IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
 		RouteIPMsg(IPptr);			// Send Back
 	}
 
@@ -1723,34 +1911,103 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 	// Ingnore others
 }
 
+VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
+{
+	union
+	{
+		struct sockaddr_in txaddr;
+		struct sockaddr_in6 txaddr6;
+	} TXaddr = {0};
+
+	int sent;
+	int addrlen = sizeof(struct sockaddr_in);
+	int Origlen;
+
+	TXaddr.txaddr.sin_family = AF_INET;
+	Origlen = htons(IPptr->IPLENGTH);
+
+	if (UDPEncap)
+	{
+		UCHAR * ptr;
+	
+		TXaddr.txaddr.sin_port = htons(UDPPort + 1);
+		memcpy(&TXaddr.txaddr.sin_addr, &RXaddr.rxaddr.sin_addr, 4);
+
+		// UDP Processor Needs the Encap Address, bgut we don't need the IPIP hearer
+		//	as that is added by the raw send later. Just stick it on the end.
+
+
+		ptr = (UCHAR *)IPptr;
+		memcpy(ptr + Origlen, &Encap, 4);
+		Origlen += 4;
+	}
+	else
+		memcpy(&TXaddr.txaddr.sin_addr, &Encap, 4);
+	
+
+	sent = sendto(EncapSock, (char *)IPptr, Origlen, 0, (struct sockaddr *)&TXaddr, addrlen);
+	sent = GetLastError();
+
+}
+
+
 VOID RouteIPMsg(PIPMSG IPptr)
 {
 	PARPDATA Arp;
-	BOOL Found;
+	PROUTEENTRY Route;
 
 	// We rely on the ARP messages generated by either end to route frames.
 	//	If address is not in ARP cache (say call originated by MSYS), send to our default route
 
-	// Look up ARP
+	//	Decremnent TTL and Recalculate header checksum
 
-	Arp = LookupARP(IPptr->IPDEST, FALSE, &Found);
+	IPptr->IPTTL--;
+
+	if (IPptr->IPTTL == 0)
+		return;					// Should we send time exceeded????
+
+	IPptr->IPCHECKSUM = 0;
+	IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
+
+/*	// Look up ARP
+
+	Arp = LookupARP(IPptr->IPDEST.s_addr, FALSE, &Found);
 
 	// If enabled, look in Net44 Encap Routes
 
-
-
-	if (!Found)
+	if (!Found && DefaultIPAddr)
 		Arp = LookupARP(DefaultIPAddr, FALSE, &Found);
 
 	if (!Found)
 		return;				// No route or default
 		
+*/
+	// Everything is in the routes table, even arp-derived routes. so just look there
+
+	Route = FindRoute(IPptr->IPDEST.s_addr);
+
+	if (Route == NULL)
+		return;				// ?? Dest unreachable ??
+
+	Arp = Route->ARP;
+
+	if (Arp == NULL)
+	{
+		if (Route->TYPE == 'T')
+			SendIPtoEncap(IPptr, Route->Encap);
+
+		return;				// ?? Dest unreachable ??
+	}
+
 	if (Arp->ARPVALID)
 	{
-		if (Arp->ARPTYPE == 'E')
-			SendIPtoBPQDEV(IPptr, Arp->HWADDR);
+		if (Arp->ARPTYPE == 'T')
+			SendIPtoEncap(IPptr, Route->Encap);
 		else
-			SendIPtoAX25(IPptr, Arp->HWADDR, Arp->ARPINTERFACE, Arp->ARPTYPE);
+			if (Arp->ARPTYPE == 'E')
+				SendIPtoBPQDEV(IPptr, Arp->HWADDR);
+			else
+				SendIPtoAX25(IPptr, Arp->HWADDR, Arp->ARPINTERFACE, Arp->ARPTYPE);
 	}
 	
 	return;	
@@ -1782,13 +2039,71 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 {
 	PBUFFHEADER Msgptr = (PBUFFHEADER)IPptr;
 	int Len;
+	USHORT FRAGWORD = ntohs(IPptr->FRAGWORD);
+	int PACLEN = 256;
 
 	(UCHAR *)Msgptr--;
+	Msgptr->PID = 0xcc;		//IP
 
 	Len = ntohs(IPptr->IPLENGTH);
 
+	while (Len > PACLEN)
+	{
+		// Need to Frgament
+		
+		USHORT Fraglen;				// Max Fragment Size (PACLEN rouded woen to 8 boundary))
+		USHORT Datalen;				// Data Content))
+
+		UCHAR * ptr1 = &IPptr->Data;
+
+		//Bit 0: reserved, must be zero
+		//Bit 1: (DF) 0 = May Fragment,  1 = Don't Fragment.
+		//Bit 2: (MF) 0 = Last Fragment, 1 = More Fragments.
+		//Fragment Offset:  13 bits
+
+
+		if (FRAGWORD & (1 << 14))
+			return;							// Can't fragmet (?? Send ICMP ??)
+
+		FRAGWORD |= (1 << 13);				// Set More Fragments bit
+		IPptr->FRAGWORD = htons(FRAGWORD);
+
+		Datalen = (PACLEN - 20) & 0xFFF8;	// Must be multiple of 8 bytes
+		Fraglen = Datalen + 20;
+
+		IPptr->IPLENGTH = htons(Fraglen);
+
+		IPptr->IPCHECKSUM = 0;
+		IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
+
+		// Send First Fragment
+
+			if (Mode == 'D')		// Datagram
+				Send_AX_Datagram((PMESSAGE)Msgptr, Fraglen + 16, Port, HWADDR);
+			else
+				Send_AX_Connected((PMESSAGE)Msgptr, Fraglen + 16, Port, HWADDR);
+
+		// Update Header
+
+		FRAGWORD += Datalen / 8;
+
+		// Move Data Down the buffer
+
+		Len -= Datalen;	
+		memmove(ptr1, ptr1 + (Datalen), Len);
+	}
+
+	//	Reset Header in case we've messaed with it
+
+	IPptr->IPLENGTH = htons(Len);
+		
+	FRAGWORD &= 0x5fff;		// Clear More Fragments bit
+	IPptr->FRAGWORD = htons(FRAGWORD);
+
+	IPptr->IPCHECKSUM = 0;
+	IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
+
 	Len+=16;
-	Msgptr->PID = 0xcc;		//IP
 
 	if (Mode == 'D')		// Datagram
 	{
@@ -1880,6 +2195,23 @@ PARPDATA AllocARPEntry()
 	}
  }
 
+PROUTEENTRY FindRoute(ULONG IPADDR)
+{
+	PROUTEENTRY Route = NULL;
+	int i;
+
+	for (i = 0; i < NumberofRoutes; i++)
+	{
+		Route = RouteRecords[i];
+
+		if ((IPADDR & Route->SUBNET) == Route->NETWORK)
+			return Route;
+	}
+	return NULL;
+}
+
+
+
 PROUTEENTRY LookupRoute(ULONG IPADDR, ULONG Mask, BOOL Add, BOOL * Found)
 {
 	PROUTEENTRY Route = NULL;
@@ -1937,6 +2269,36 @@ PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found)
 	else
 		return NULL;
 }
+VOID RemoveARP(PARPDATA Arp);
+
+VOID RemoveRoute(PROUTEENTRY Route)
+{
+	int i;
+
+	for (i=0; i < NumberofRoutes; i++)
+	{
+		if (Route == RouteRecords[i])
+		{
+			while (i < NumberofRoutes)
+			{
+				RouteRecords[i] = RouteRecords[i+1];
+				i++;
+			}
+			
+			if (Route->ARP)
+			{
+				PARPDATA Arp = Route->ARP;
+				Route->ARP->ARPROUTE = NULL;			// Avoid recursion
+				RemoveARP(Arp);
+			}
+
+			free(Route);
+			NumberofRoutes--;
+			return;
+		}
+	}
+}
+
 
 VOID RemoveARP(PARPDATA Arp)
 {
@@ -1960,14 +2322,22 @@ VOID RemoveARP(PARPDATA Arp)
 				ARPRecords[i] = ARPRecords[i+1];
 				i++;
 			}
+
+			// Remove linked route
+
+			if (Arp->ARPROUTE)
+			{
+				PROUTEENTRY Route = Arp->ARPROUTE;
+				Arp->ARPROUTE->ARP = NULL;		// Avoid recursion
+				RemoveRoute(Route);
+			}
+
 			free(Arp);
 			NumberofARPEntries--;
 			return;
 		}
 	}
 }
-
-
 
 	
 Dll int APIENTRY GetIPInfo(VOID * ARPRecs, VOID * IPStatsParam, int index)
@@ -2073,14 +2443,15 @@ static ProcessLine(char * buf)
 		return (TRUE);
 	}
 
-	if (_stricmp(ptr,"EncapAddr") == 0)			// For tunnelled packets - may be same as IPAddr
+	if (_stricmp(ptr,"44Encap") == 0)			// Enable Net44 IPIP Tunnel
 	{
-		EncapAddr = inet_addr(p_value);
-
-		if (EncapAddr == INADDR_NONE) return (FALSE);
+		WantEncap = TRUE;
+		if (p_value && _stricmp(p_value, "UDP") == 0)
+			UDPEncap = TRUE;
 
 		return (TRUE);
 	}
+
 
 	if (_stricmp(ptr,"IPAddr") == 0)
 	{
@@ -2225,7 +2596,9 @@ VOID DoARPTimer()
 			if (Arp->ARPTIMER == 0)
 			{
 				// Remove Entry
-					RemoveARP(Arp);
+				
+				RemoveARP(Arp);
+				SaveARP();
 			}
 		}
 	}
@@ -2365,7 +2738,7 @@ int OpenPCAP()
 		return -1;
 	}
 	
-	n=sprintf(buf,"Using %s", Adapter);
+	n=sprintf(buf,"Using %s\n", Adapter);
 	WritetoConsoleLocal(buf);
 
 	return TRUE;
@@ -2403,11 +2776,10 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	int Port;
 	char Mac[7];
 	char AXCall[7];
-	ULONG IPAddr, IPMask;
+	ULONG IPAddr;
 	int a,b,c,d,e,f,num;
 	
 	PARPDATA Arp;
-	PROUTEENTRY Route;
 	BOOL Found;
 
 //	192.168.0.131 GM8BPQ-13 1 D
@@ -2485,14 +2857,26 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 			Arp->ARPVALID = TRUE;
 			Arp->ARPTIMER =  (Arp->ARPTYPE == 'E')? 300 : ARPTIMEOUT;
 			Arp->LOCKED = Locked;
+
+			// Also add to Routes
+
+			AddToRoutes(Arp, IPAddr, *p_type);
+			Arp->ARPROUTE->LOCKED = Locked;
+
 		}
 	}
 
-	// Also add to Routes
+	return TRUE;
+}
 
-	IPMask = 0xffffffff;		// All ARP rerived routes are Host Routes
+VOID AddToRoutes(PARPDATA Arp, UINT IPAddr, char Type)
+{
 
-	Route = LookupRoute(IPAddr, IPMask, TRUE, &Found);
+	PROUTEENTRY Route;
+	BOOL Found;
+	UINT IPMask = 0xffffffff;		// All ARP rerived routes are Host Routes
+
+	Route = LookupRoute(Arp->IPADDR, IPMask, TRUE, &Found);
 
 	if (!Found)
 	{
@@ -2503,13 +2887,15 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 			Route->NETWORK = IPAddr;
 			Route->SUBNET = IPMask;
 			Route->GATEWAY = IPAddr;		// Host Route
-			Route->ARP = Arp;
-			Route->TYPE = *p_type;
-			Route->LOCKED = Locked;
+			Route->ARP = Arp;				// Crosslink Arp<>Routee
+			Arp->ARPROUTE = Route;
+			Route->TYPE = Type;
 		}
 	}
 
-	return TRUE;
+	//	Sort into reverse mask order
+
+	qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);
 }
 
 // ROUTE 44.131.4.18/32 D GM8BPQ-7 1// Datagram?netrom/VC via Call	!!!! No - this sohuld be an ARP entry
@@ -3162,50 +3548,6 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
-int CompareRoutes (const VOID * a, const VOID * b)
-{
-	PROUTEENTRY x;
-	PROUTEENTRY y;
-
-	unsigned long r1, r2;
-
-	x = * (PROUTEENTRY const *) a;
-	y = * (PROUTEENTRY const *) b;
-
-	r1 = x->NETWORK;
-	r2 = y->NETWORK;
-
-	r1 = htonl(r1);
-	r2 = htonl(r2);
-
-	if (r1 < r2 ) return -1;
-	if (r1 == r2 ) return 0;
-	return 1;
-}
-
-
-int CompareMasks (const VOID * a, const VOID * b)
-{
-	PROUTEENTRY x;
-	PROUTEENTRY y;
-
-	unsigned long m1, m2;
-
-	x = * (PROUTEENTRY const *) a;
-	y = * (PROUTEENTRY const *) b;
-
-	m1 = x->SUBNET;
-	m2 = y->SUBNET;
-
-	m1 = htonl(m1);
-	m2 = htonl(m2);
-
-	if (m1 > m2) return -1;
-	if (m1 == m2) return 0;
-	return 1;
-}
-
-
 int CountBits(unsigned long in)
 {
 	int n = 0;
@@ -3263,7 +3605,10 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 */
 
 	if (NumberofRoutes)
-		qsort(RouteRecords, NumberofRoutes, 4, CompareRoutes);
+		if (CmdTail[0] == 'M')
+			qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);		// Maks order
+		else
+			qsort(RouteRecords, NumberofRoutes, 4, CompareRoutes);
 
 	for (i=0; i < NumberofRoutes; i++)
 	{
@@ -3295,7 +3640,8 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 
 	if (NumberofRoutes)
-		qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);		// Back to Maks order
+		if (CmdTail[0] != 'M')
+			qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);		// Back to Maks order
 
 }
 
@@ -3697,7 +4043,7 @@ VOID ProcessSNMPMessage(PIPMSG IPptr)
 
 		IPptr->IPDEST = IPptr->IPSOURCE;
 
-		IPptr->IPSOURCE = OurIPAddr;
+		IPptr->IPSOURCE.s_addr = OurIPAddr;
 
 		UDPptr->DESTPORT = UDPptr->SOURCEPORT;
 		UDPptr->SOURCEPORT = htons(161);

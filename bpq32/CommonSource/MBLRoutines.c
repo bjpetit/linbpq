@@ -23,7 +23,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
 			}
 			else
-				BBSputs(conn, ">\r");
+				FBBputs(conn, ">\r");
 		}
 
 		return;
@@ -54,7 +54,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			ErrMsg[1] = ErrLen;
 
 			BBSputs(conn, ErrMsg);
-			BBSputs(conn, ">\r");
+			FBBputs(conn, ">\r");
 			return;
 		}
 		
@@ -63,7 +63,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (Msg)
 		{
 			SendCompressed(conn, Msg);
-			BBSputs(conn, ">\r");
+			FBBputs(conn, ">\r");
 			Msg->status = 'Y';					// Mark as read
 		}
 		else
@@ -73,11 +73,10 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 			ErrMsg[1] = ErrLen;
 
 			BBSputs(conn, ErrMsg);
-			BBSputs(conn, ">\r");
+			FBBputs(conn, ">\r");
 		}
 		return;
 	}
-
 
 	if (Buffer[0] == 'S')				//Send
 	{
@@ -97,11 +96,12 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (RefuseBulls && Cmd[1] == 'B')
 		{
-			nodeprintf(conn, "NO - BULLS NOT ACCEPTED\r");
+			nodeprintfEx(conn, "NO - BULLS NOT ACCEPTED\r");
 			if (conn->BBSFlags & OUTWARDCONNECT)
-				nodeprintf(conn, "F>\r");				// if Outward connect must be reverse forward
+				nodeprintfEx(conn, "F>\r");				// if Outward connect must be reverse forward
 			else
-				nodeprintf(conn, ">\r");
+				nodeprintfEx(conn, ">\r");
+
 			return;
 		}
 
@@ -123,7 +123,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				BID = &ptr[1];
 			else
 			{
-				nodeprintf(conn, "*** Error: Invalid Format\r");
+				nodeprintfEx(conn, "*** Error: Invalid Format\r");				
 				return;
 			}
 
@@ -132,7 +132,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 		if (!From)
 		{
-			nodeprintf(conn, "*** Error: Invalid Format\r");
+			nodeprintfEx(conn, "*** Error: Invalid Format\r");
 			return;
 		}
 
@@ -170,7 +170,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 		if (!conn->FwdMsg)
 			return;
 
-		nodeprintf(conn, "%s\r", conn->FwdMsg->title);
+		nodeprintfEx(conn, "%s\r", conn->FwdMsg->title);
 
 		MsgBytes = ReadMessageFile(conn->FwdMsg->number);
 
@@ -268,7 +268,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			Msg = conn->FwdMsg;
 		
-			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+			nodeprintfEx(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
 					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
 					Msg->from, Msg->bid);
 
@@ -315,15 +315,16 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 
 			Msg = conn->FwdMsg;
 		
-			nodeprintf(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
+			nodeprintfEx(conn, "S%c %s @ %s < %s $%s\r", Msg->type, Msg->to,
 					(Msg->via[0]) ? Msg->via : conn->UserPointer->Call, 
 					Msg->from, Msg->bid);
+			
 			return;
 
 		}
 		else
 		{
-			BBSputs(conn, "F>\r");
+			FBBputs(conn, "F>\r");
 			return;
 		}
 	}
@@ -351,7 +352,7 @@ VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				if (Msg->type == 'P' && Msg->status == 'Y')
 				{
 					FlagAsKilled(Msg);
-					nodeprintf(conn, "Message #%d Killed\r", Msg->number);
+					nodeprintfEx(conn, "Message #%d Killed\r", Msg->number);
 				}
 			}
 		}

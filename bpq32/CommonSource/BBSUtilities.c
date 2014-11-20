@@ -1392,6 +1392,29 @@ VOID __cdecl nodeprintf(ConnectionInfo * conn, const char * format, ...)
 	return;
 }
 
+// nodeprintfEx add a LF if NEEFLF is set
+
+VOID __cdecl nodeprintfEx(ConnectionInfo * conn, const char * format, ...)
+{
+	char Mess[1000];
+	int len;
+	va_list(arglist);
+
+	
+	va_start(arglist, format);
+	len = vsprintf(Mess, format, arglist);
+
+	QueueMsg(conn, Mess, len);
+
+	WriteLogLine(conn, '>',Mess, len-1, LOG_BBS);
+
+	if (conn->BBSFlags & NEEDLF)
+		QueueMsg(conn, "\r", 1);
+
+	return;
+}
+
+
 int compare( const void *arg1, const void *arg2 );
 
 VOID SortBBSChain()
@@ -3332,9 +3355,109 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		if (Msg->B2Flags)
 		{
+			char * ptr;
+	
+			// if message has attachments, display them if plain text
+
+			if (Msg->B2Flags & Attachments)
+			{
+				char * FileName[100];
+				int FileLen[100];
+				int Files = 0;
+				int BodyLen, NewLen;
+				int i;
+				char *ptr2;		
+				char Msg[512];					int Len;
+		
+				ptr = MsgBytes;
+	
+				Len = sprintf(Msg, "Message has Attachments\r\r");
+				QueueMsg(conn, Msg, Len);
+
+				while(*ptr != 13)
+				{
+					ptr2 = strchr(ptr, 10);	// Find CR
+
+					if (memcmp(ptr, "Body: ", 6) == 0)
+					{
+						BodyLen = atoi(&ptr[6]);
+					}
+
+					if (memcmp(ptr, "File: ", 6) == 0)
+					{
+						char * ptr1 = strchr(&ptr[6], ' ');	// Find Space
+
+						FileLen[Files] = atoi(&ptr[6]);
+
+						FileName[Files++] = &ptr1[1];
+						*(ptr2 - 1) = 0;
+					}
+				
+					ptr = ptr2;
+					ptr++;
+				}
+
+				ptr += 2;			// Over Blank Line and Separator 
+
+				NewLen = RemoveLF(ptr, BodyLen);
+
+				QueueMsg(conn, ptr, NewLen);		// Display Body
+
+				ptr += BodyLen + 2;		// to first file
+
+				for (i = 0; i < Files; i++)
+				{
+					char Msg[512];
+					int Len, n;
+					char * p = ptr;
+					char c;
+
+					// Check if message is probably binary
+
+					int BinCount = 0;
+
+					NewLen = RemoveLF(ptr, FileLen[i]);		// Removes LF agter CR but not on its own
+
+					for (n = 0; n < NewLen; n++)
+					{
+						c = *p;
+						
+						if (c == 10)
+							*p = 13;
+
+						if (c==0 || (c & 128))
+							BinCount++;
+
+						p++;
+
+					}
+
+					if (BinCount > NewLen/10)
+					{
+						// File is probably Binary
+
+						Len = sprintf(Msg, "\rAttachment %s is a binary file\r", FileName[i]);
+						QueueMsg(conn, Msg, Len);
+					}
+					else
+					{
+						Len = sprintf(Msg, "\rAttachment %s\r\r", FileName[i]);
+						QueueMsg(conn, Msg, Len);
+
+						user->Total.MsgsSent[Index] ++;
+						user->Total.BytesForwardedOut[Index] += NewLen;
+
+						QueueMsg(conn, ptr, NewLen);
+					}
+				
+					ptr += FileLen[i];
+					ptr +=2;				// Over separator
+				}
+				return;
+			}
+			
 			// Remove B2 Headers (up to the File: Line)
 			
-			char * ptr;
 			ptr = strstr(MsgBytes, "Body:");
 
 			if (ptr)
@@ -5022,7 +5145,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 			if (Msg->Defered)			// = response received
 			{
 				Msg->Defered--;
-				Debugprintf("Message %d defered", Msg->number);
+				Debugprintf("Message %d deferred", Msg->number);
 				continue;
 			}
 
@@ -6463,7 +6586,7 @@ InBand:
 			{
 				// Remote Node sends > at end of CTEXT - we need to swallow it
 
-				conn->SkipPrompt = TRUE;
+				conn->SkipPrompt++;
 				goto CheckForEnd;
 			}
 
@@ -6522,10 +6645,7 @@ InBand:
 				return FALSE;
 			}
 
-			if (conn->BBSFlags & NEEDLF)
-				nodeprintf(conn, "%s\r\n", Cmd);
-			else
-				nodeprintf(conn, "%s\r", Cmd);
+			nodeprintfEx(conn, "%s\r", Cmd);
 			return TRUE;
 		}
 
@@ -6584,7 +6704,7 @@ InBand:
 
 	if (conn->SkipPrompt && Buffer[len-2] == '>')
 	{
-		conn->SkipPrompt = FALSE;
+		conn->SkipPrompt--;
 		return TRUE;
 	}
 
@@ -6633,7 +6753,7 @@ CheckForSID:
 	{
 		if (conn->SkipPrompt)
 		{
-			conn->SkipPrompt = FALSE;
+			conn->SkipPrompt--;
 			return TRUE;
 		}
 
@@ -6714,13 +6834,12 @@ CheckForSID:
 
 		// Only declare B1 and B2 if other end did, and we are configued for it
 
-		nodeprintf(conn, BBSSID, "BPQ-",
+		nodeprintfEx(conn, BBSSID, "BPQ-",
 			Ver[0], Ver[1], Ver[2], Ver[3],
 			(conn->BBSFlags & FBBCompressed) ? "B" : "", 
 			(conn->BBSFlags & FBBB1Mode && !(conn->BBSFlags & FBBB2Mode)) ? "1" : "",
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
 			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
-
 
 		if (conn->BPQBBS && conn->MSGTYPES[0])
 
@@ -6733,10 +6852,10 @@ CheckForSID:
 			if (!FBBDoForward(conn))				// Send proposal if anthing to forward
 			{
 				if (conn->DoReverse)
-					BBSputs(conn, "FF\r");
+					FBBputs(conn, "FF\r");
 				else
 				{
-					BBSputs(conn, "FQ\r");
+					FBBputs(conn, "FQ\r");
 					conn->CloseAfterFlush = 20;			// 2 Secs
 				}
 			}
@@ -8933,7 +9052,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 				memset(&conn->FBBHeaders[0], 0, 5 * sizeof(struct FBBHeaderLine));
 			}
 			else
-				BBSputs(conn, ">\r");
+				FBBputs(conn, ">\r");
 
 		}
 
@@ -9789,3 +9908,66 @@ VOID ProcessSuspendedListCommand(CIRCUIT * conn, struct UserInfo * user, char* B
 	nodeprintf(conn, "<A>bort, <R Message>, <CR> = Continue..>");
 
 }
+/*
+CreateMessageWithAttachments()
+{
+	int i;
+	char * ptr, * ptr2, * ptr3, * ptr4;
+	char Boundary[1000];
+	BOOL Multipart = FALSE;
+	BOOL ALT = FALSE;
+	int Partlen;
+	char * Save;
+	BOOL Base64 = FALSE;
+	BOOL QuotedP = FALSE;
+	
+	char FileName[100][250] = {""};
+	int FileLen[100];
+	char * FileBody[100];
+	char * MallocSave[100];
+	UCHAR * NewMsg;
+
+	int Files = 0;
+
+	ptr = Msg;
+
+	if ((sockptr->MailSize + 2000) > sockptr->MailBufferSize)
+	{
+		sockptr->MailBufferSize += 2000;
+		sockptr->MailBuffer = realloc(sockptr->MailBuffer, sockptr->MailBufferSize);
+	
+		if (sockptr->MailBuffer == NULL)
+		{
+			CriticalErrorHandler("Failed to extend Message Buffer");
+			shutdown(sockptr->socket, 0);
+			return FALSE;
+		}
+	}
+
+
+	NewMsg = sockptr->MailBuffer + 1000;
+
+	NewMsg += sprintf(NewMsg, "Body: %d\r\n", FileLen[0]);
+
+	for (i = 1; i < Files; i++)
+	{
+		NewMsg += sprintf(NewMsg, "File: %d %s\r\n", FileLen[i], FileName[i]);
+	}
+
+	NewMsg += sprintf(NewMsg, "\r\n");
+
+	for (i = 0; i < Files; i++)
+	{
+		memcpy(NewMsg, FileBody[i], FileLen[i]);
+		NewMsg += FileLen[i];
+		free(MallocSave[i]);
+		NewMsg += sprintf(NewMsg, "\r\n");
+	}
+
+	*MsgLen = NewMsg - (sockptr->MailBuffer + 1000);
+	*Body = sockptr->MailBuffer + 1000;
+
+	return TRUE;		// B2 Message
+}
+
+*/

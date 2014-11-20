@@ -101,6 +101,7 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 char **	SeparateMultiString(char * MultiString, BOOL NoToUpper);
 VOID TidyPrompts();
 char * GetTemplateFromFile(int Version, char * FN);
+VOID FormatTime(char * Time, time_t cTime);
 
 char UNC[] = "";
 char CHKD[] = "checked=checked ";

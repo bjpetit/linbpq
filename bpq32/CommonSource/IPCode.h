@@ -120,6 +120,7 @@ typedef struct _ARPDATA
 	UCHAR	ARPTYPE;				// NETROM/VC/DG/ETH
 	BOOL	LOCKED;					// Locked entry from config file
 	struct _MESSAGE * ARP_Q;		// CHAIN OF DATAGRAMS WAITING FOR RESOLUTION
+	struct _ROUTEENTRY * ARPROUTE;	//	ROute Entry for this ARP entry
 
 } ARPDATA, *PARPDATA;
 
@@ -165,7 +166,18 @@ struct map_table_entry
 	BOOL ResolveFlag;			// True if need to resolve name
 };
 
-
+struct ipv6_header
+{
+    unsigned int
+        version : 4,
+        traffic_class : 8,
+        flow_label : 20;
+    unsigned short length;
+    unsigned char  next_header;
+    unsigned char  hop_limit;
+    struct in6_addr src;
+    struct in6_addr dst;
+};
 
 HANDLE hInstance;
 

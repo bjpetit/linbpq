@@ -422,8 +422,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, 0, inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, 0, FALSE);
 
 								else
-
+								{
+									char From[10];
+									From[ConvFromAX25(call, From)] = 0;
+									Debugprintf("AXIP Packet from %s dropped - can't reply", From);
 									return 0;
+								}
 						}
 						else
 							return(1);
@@ -523,7 +527,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 								else
 									return add_arp_entry(PORT, call, (UCHAR *)&RXaddr.rxaddr.sin_addr.s_addr, 7, htons(RXaddr.rxaddr.sin_port), inet_ntoa(RXaddr.rxaddr.sin_addr), 0, TRUE, TRUE, 0, PORT->udpport[i], FALSE);		
 							else
+							{
+								char From[10];
+								From[ConvFromAX25(call, From)] = 0;
+								Debugprintf("AXUDP Packet from %s dropped - can't reply", From);
 								return 0;
+							}
 						}
 					}
 					else
@@ -808,7 +817,7 @@ void OpenSockets(struct AXIPPORTINFO * PORT)
 
 		if (PORT->sock == INVALID_SOCKET)
 		{
-			WritetoConsole("Failed to create RAW socket\r");
+			WritetoConsole("AXIP Failed to create RAW socket\n");
 			err = WSAGetLastError();
   	 		return; 
 		}

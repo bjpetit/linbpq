@@ -289,6 +289,8 @@ static char MailLostSession[] = "<html><body>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
 "<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
 
+static char EXCEPTMSG[80] = "";
+
 VOID PollSession(struct HTTPConnectionInfo * Session)
 {
 	int state, change;
@@ -916,6 +918,15 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 	char FileTimeString[64];
 	struct stat STAT;
 
+#ifdef WIN32
+
+	struct _EXCEPTION_POINTERS exinfo;
+	strcpy(EXCEPTMSG, "SendMessageFile");
+
+	__try {
+#endif
+
+
 	if (strcmp(FN, "/") == 0)
 		if (APRSActive)
 			sprintf(MsgFile, "%s/HTML/index.html", BPQDirectory);
@@ -997,6 +1008,13 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 
 	free (MsgBytes);
 
+#ifdef WIN32
+	}
+	#include "StdExcept.c"
+	Debugprintf("Sending FIle %s", FN);
+	}
+#endif
+
 	return 0;
 }
 
@@ -1074,8 +1092,6 @@ int RefreshTermWindow(struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
 }
 
 
-static char EXCEPTMSG[80] = "";
-
 struct TNCINFO * TNCInfo[34];	
 
 int SetupNodeMenu(char * Buff)
@@ -1128,12 +1144,13 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	BOOL COOKIE = FALSE;
 	char Reply[100000];
 
-//	struct _EXCEPTION_POINTERS exinfo;
+#ifdef WIN32
 
+	struct _EXCEPTION_POINTERS exinfo;
 	strcpy(EXCEPTMSG, "ProcessHTTPMessage");
 
-//	__try {
-
+	__try {
+#endif
 	strcpy(URL, MsgPtr);
 
 	if (strstr(MsgPtr, "Host: 127.0.0.1"))
@@ -2551,9 +2568,11 @@ SendResp:
 	}
 	return 0;
 
-//	}
-//	#include "StdExcept.c"
-//	}
+#ifdef WIN32
+	}
+	#include "StdExcept.c"
+	}
+#endif
 }
 
 static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};

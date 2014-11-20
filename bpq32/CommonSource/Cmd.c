@@ -1715,7 +1715,7 @@ VOID CQCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 	ConvToAX25("CQ", CQCALL);
 	memcpy(Msg.DEST, CQCALL, 7);
-	memcpy(Msg.ORIGIN, Session->L4MYCALL, 7);
+	memcpy(Msg.ORIGIN, Session->L4USER, 7);
 	Msg.ORIGIN[6] ^= 0x1e;					// Flip SSID
 	Msg.PID = 0xf0;							// Data PID
 	memcpy(&Msg.L2DATA, &OrigCmdBuffer[3], Len);
