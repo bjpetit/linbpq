@@ -98,9 +98,9 @@ struct PORTCONFIG
 	char CWID[10];			// 80,
 	char PORTCALL[10];		//  90,
 	char PORTALIAS[10];		// 100,
-	char L3ONLY;			//  110,
-	char pad3;
-	short KISSOPTIONS;		//"112,
+	char L3ONLY;			// 110,
+	char IGNOREUNLOCKED;	// 111
+	short KISSOPTIONS;		// 112,
 	short INTERLOCK;		// 114,
 	short NODESPACLEN;		//  116,
 	short TXPORT;			// 118,

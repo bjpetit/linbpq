@@ -154,7 +154,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 	int TNCOK;
-	short * sp;
 
 	if (TNC == NULL)
 		return 0;
@@ -220,8 +219,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
-				sp = (short *)&buff[5];
-				*sp = datalen;
+				PutLengthinBuffer(buff, datalen);		// Neded for arm5 portability
 
 	//			buff[5]=(datalen & 0xff);
 	//			buff[6]=(datalen >> 8);
@@ -255,8 +253,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		sp = (short *)&buff[5];
-		txlen = *sp - 8;
+		txlen = GetLengthfromBuffer(buff) - 8;
 
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);

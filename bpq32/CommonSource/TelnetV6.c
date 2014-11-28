@@ -542,7 +542,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	UINT * buffptr;
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct TCPINFO * TCP;
-	short * sp;
 
 	int Stream;
 	struct ConnectionInfo * sockptr;
@@ -649,12 +648,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
-				sp = (short *)&buff[5];
-				*sp = datalen;
+				PutLengthinBuffer(buff, datalen);
 
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
-		
 				ReleaseBuffer(buffptr);
 	
 				return (1);
@@ -674,11 +669,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		Stream = buff[4];
 		STREAM = &TNC->Streams[Stream];
 
-//		txlen=(buff[6]<<8) + buff[5]-8;	
-
-		sp = (short *)&buff[5];
-
-		txlen = *sp - 8;
+		txlen = GetLengthfromBuffer(buff) - 8;	
 
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
@@ -2472,6 +2463,8 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 {
 	int n, addrlen = sizeof(struct sockaddr_in6);
+	struct sockaddr_in6 sin6;  
+
 	struct ConnectionInfo * sockptr;
 	SOCKET sock;
 	char Negotiate[6]={IAC,WILL,suppressgoahead,IAC,WILL,echo};
@@ -2553,17 +2546,6 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 #endif
 			ShowConnections(TNC);
 
-			if (n > TCP->MaxSessions)
-			{
-				//	More than we want
-
-				send(sock,"No Free Sessions\r\n", 18,0);
-				Sleep (1000);
-				closesocket(sock);
-
-				return 0;
-			}
-
 			if (sockptr->HTTPMode)
 				return 0;
 
@@ -2598,14 +2580,17 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->FromHostBuffPutptr = sockptr->FromHostBuffGetptr = 0;
 
 			return 0;
-		}
-		
-	//	Can only happen if MaxSessions > maxSockets, which is a config error
-
-		
+		}	
 	}
 
-	return 0;
+	//	No free sessions. Must accept() then close
+
+	sock = accept(SocketId, (struct sockaddr *)&sin6, &addrlen);
+
+	send(sock,"No Free Sessions\r\n", 18,0);
+	Sleep (1000);
+	closesocket(sock);
+
 	return 0;
 }
 

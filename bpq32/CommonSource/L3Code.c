@@ -225,6 +225,13 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 		if (ROUTE->NEIGHBOUR_QUAL == 0)
 			return;
 
+	//	If Ignoreunlocked set, ignore it not locked
+
+	if ((ROUTE->NEIGHBOUR_FLAG & 1) == 0)	 // LOCKED ROUTE
+		if (PORT->IgnoreUnlocked)
+			return;
+	
+
 	// if not locked, update route quality from port quality (may have changed config and not cleared SAVENODES
 
 	if ((ROUTE->NEIGHBOUR_FLAG & 1) == 0)	 // Not LOCKED ROUTE

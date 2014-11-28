@@ -55,6 +55,10 @@
 //  Aug 2014 1.1.8.1
 //	Fix sending messages to unknown callsigns
 
+//	Nov 2014 1.1.9.1
+//	Add Track Expire Time to config
+
+
 #define _CRT_SECURE_NO_DEPRECATE 
 #define _USE_32BIT_TIME_T	// Until the ASM code switches to 64 bit time
 
@@ -1082,8 +1086,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey, "ExpireTime", 0, &Type,(UCHAR *)&ExpireTime, &Vallen);
 
-//		Vallen=4;
-//		retCode = RegQueryValueEx(hKey, "TrackExpireTime", 0, &Type,(UCHAR *)&TrackExpireTime, &Vallen);
+		Vallen=4;
+		retCode = RegQueryValueEx(hKey, "TrackExpireTime", 0, &Type,(UCHAR *)&TrackExpireTime, &Vallen);
 
 		Vallen=250;
 		retCode = RegQueryValueEx(hKey, "WXFile", 0, &Type, WXFileName, &Vallen);
@@ -1460,7 +1464,7 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 			RetryCount = GetDlgItemInt(hDlg, IDC_RETRIES, &OK, FALSE);
 			RetryTimer = GetDlgItemInt(hDlg, IDC_RETRYTIME, &OK, FALSE);
 			ExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRE, &OK, FALSE);
-//			TrackExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRETRACKS, &OK, FALSE);
+			TrackExpireTime = GetDlgItemInt(hDlg, IDC_EXPIRETRACKS, &OK, FALSE);
 			WXInterval = GetDlgItemInt(hDlg, IDC_WXINTERVAL, &OK, FALSE);
 
 			JPEGInterval = GetDlgItemInt(hDlg, IDC_JPEGINTERVAL, &OK, FALSE);

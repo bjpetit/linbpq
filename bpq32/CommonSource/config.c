@@ -252,7 +252,6 @@ BOOL ToLOC(double Lat, double Lon , char * Locator);
 int FIRSTAPPL=1;
 BOOL Comment = FALSE;
 
-#define PARAMLIM 74
 #define MAXLINE 512
 #define FILEVERSION 22
 
@@ -323,7 +322,11 @@ static int routine[] =
 15, 0, 2, 9, 9
 } ;			// Routine to process param
 
-int NUMBEROFKEYWORDS = sizeof(routine)/sizeof(int);
+int PARAMLIM = sizeof(routine)/sizeof(int);
+//int NUMBEROFKEYWORDS = sizeof(routine)/sizeof(int);
+
+//#define PARAMLIM 74
+
 
 static char eof_message[] = "Unexpected end of file on input\n";
 
@@ -337,7 +340,7 @@ static char *pkeywords[] =
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
 "BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY",
-"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE"};           /* parameter keywords */
+"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE", "IGNOREUNLOCKEDROUTES"};           /* parameter keywords */
 
 static int poffset[] =
 {
@@ -349,7 +352,7 @@ static int poffset[] =
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
 226, 72, 124, 516, 210, 512, 125,
-36, 236, 38, 36, 36, 126, 600};						/* offset for corresponding data in config file */
+36, 236, 38, 36, 36, 126, 600, 111};					/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -361,9 +364,9 @@ static int proutine[] =
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
 0, 1, 2, 18, 15, 16, 2,
-1, 17, 1, 1, 1, 1, 2};							/* routine to process parameter */
+1, 17, 1, 1, 1, 1, 2, 2};							/* routine to process parameter */
 
-#define PPARAMLIM 57
+int PPARAMLIM = sizeof(proutine)/sizeof(int);
 
 static int fileoffset = 0;
 static int portoffset = 2560;
@@ -381,7 +384,7 @@ static int NextAppl = 0;
 /* Global variables							*/
 /************************************************************************/
 
-int paramok[PARAMLIM];		/* PARAMETER OK FLAG  */
+int paramok[100];		/* PARAMETER OK FLAG  */
 
 FILE *fp1;			/* TEXT INPUT FILE    */
 
@@ -1858,7 +1861,7 @@ decode_port_rec(char * rec)
 #ifdef WIN32
 	WSADATA	WsaData;	// receives data from WSAStartupproblem
 #endif
-	char key_word[20]="";
+	char key_word[30]="";
 	char value[300]="";
 
 	struct WL2KInfo * WL2K;

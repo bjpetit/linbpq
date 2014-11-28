@@ -245,7 +245,6 @@ typedef struct ROUTE
 							//  (only sent when we have seen both a request and response)
 
 
-
 typedef struct _L3MESSAGEBUFFER
 {
 //
@@ -509,7 +508,6 @@ struct WL2KInfo
 	BOOL RPonPTC;			// Set if scanning for Robust Packet on a PTC
 };
 
-
 typedef struct PORTCONTROL
 {
 	UCHAR PORTCALL[7];
@@ -630,7 +628,7 @@ typedef struct PORTCONTROL
 	struct XDIGI * XDIGIS;			// Cross port digi setup
 
 	BOOL NormalizeQuality;			// Normalise Node Qualities
-
+	BOOL IgnoreUnlocked;			// Ignore Unlocked routes
 
 }	PORTCONTROLX, *PPORTCONTROL;
 
@@ -854,9 +852,10 @@ struct myin_addr {
         union {
                 struct { u_char s_b1,s_b2,s_b3,s_b4; } S_un_b;
                 struct { u_short s_w1,s_w2; } S_un_w;
-                u_long S_addr;
-        } S_un;
+                u_long addr;
+        };
 };
+
 typedef struct _IPMSG
 {
 //       FORMAT OF IP HEADER
@@ -877,6 +876,16 @@ typedef struct _IPMSG
 	UCHAR	Data;
 
 } IPMSG, *PIPMSG;
+
+typedef struct _PSEUDOHEADER
+{
+	struct myin_addr IPSOURCE;
+	struct myin_addr IPDEST;
+	UCHAR	Reserved;
+	UCHAR	IPPROTOCOL;      // HIGHER LEVEL PROTUDP/TCP Length
+	USHORT	LENGTH;        // DATAGRAM LENGTH
+
+} PHEADER;
 
 typedef struct _TCPMSG
 {
@@ -920,10 +929,9 @@ typedef struct _UDPMSG
 
 typedef struct _ICMPMSG
 {
+	//	FORMAT OF ICMP HEADER WITHIN AN IP DATAGRAM
 
-//       FORMAT OF ICMP HEADER WITHIN AN IP DATAGRAM
-
-//       NOTE THESE FIELDS ARE STORED HI ORDER BYTE FIRST (NOT NORMAL 8086 FORMAT)
+	//	NOTE THESE FIELDS ARE STORED HI ORDER BYTE FIRST (NOT NORMAL 8086 FORMAT)
 
 	UCHAR	ICMPTYPE;
 	UCHAR	ICMPCODE;

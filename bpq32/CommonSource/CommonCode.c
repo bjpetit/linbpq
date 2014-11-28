@@ -46,10 +46,35 @@ VOID COMSetRTS(HANDLE fd);
 VOID COMClearRTS(HANDLE fd);
 
 VOID WriteMiniDump();
-
-// Get buffer from Queue
-
 void printStack(void);
+
+//	Read/Write lenght field in a buffer header
+
+//	Needed for Big/LittleEndian and ARM5 (unaligned operation problem) portability
+
+
+VOID PutLengthinBuffer(UCHAR * buff, int datalen)		// Neded for arm5 portability
+{
+#ifdef __BIG_ENDIAN__
+	short * sp;					// MAC POWERPC etc
+	sp = (short *)&buff[5];
+	*sp = datalen;
+#else
+	buff[5]=(datalen & 0xff);	// 
+	buff[6]=(datalen >> 8);
+#endif
+}
+
+int GetLengthfromBuffer(UCHAR * buff)				// Neded for arm5 portability
+{
+#ifdef __BIG_ENDIAN__
+	short * sp;					// MAC POWERPC etc
+	return sp = (short *)&buff[5];
+#else
+	return (buff[6]<<8) + buff[5];	
+#endif
+}
+
 
 BOOL CheckQHeadder(UINT * Q)
 {
@@ -70,11 +95,19 @@ BOOL CheckQHeadder(UINT * Q)
 	return TRUE;
 }
 
+// Get buffer from Queue
+
 
 VOID * _Q_REM(VOID *PQ, char * File, int Line)
 {
-	UINT * Q = (UINT *) PQ;
-	UINT  * first,next;
+	UINT * Q;
+	UINT * first;
+	UINT next;
+
+	//	PQ may not be word aligned, so copy as bytes (for ARM5)
+
+//	Q = (UINT *) PQ;
+	memcpy(&Q, &PQ, 4);
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
@@ -86,9 +119,10 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 
 	if (first == 0) return (0);			// Empty
 
-	next=first[0];						// Address of next buffer
+	next= first[0];						// Address of next buffer
 
-	Q[0]=next;
+//	Q[0] = next;
+	memcpy(PQ, &next, 4);
 
 	// Make sure guard zone is zeros
 
@@ -161,10 +195,15 @@ BOK1:
 
 int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 {
-	UINT * Q = (UINT *) PQ;
+	UINT * Q;
 	UINT * BUFF = (UINT *)PBUFF;
 	UINT * next;
 	int n = 0;
+
+//	PQ may not be word aligned, so copy as bytes (for ARM5)
+
+//	Q = (UINT *) PQ;
+	memcpy(&Q, &PQ, 4);
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("C_Q_ADD called without semaphore from %s Line %d", File, Line);
@@ -201,8 +240,8 @@ BOK2:
 
 	if (Q[0] == 0)						// Empty
 	{
-		Q[0]=(UINT)BUFF;				// New one on front
-
+//		Q[0]=(UINT)BUFF;				// New one on front
+		memcpy(PQ, &BUFF, 4);
 		return(0);
 	}
 
@@ -221,10 +260,15 @@ BOK2:
 
 int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
 {
-	UINT * Q = (UINT *) PQ;
+	UINT * Q;
 	UINT * BUFF = (UINT *)PBUFF;
 	UINT * next;
 	int n = 0;
+
+//	PQ may not be word aligned, so copy as bytes (for ARM5)
+
+//	Q = (UINT *) PQ;
+	memcpy(&Q, &PQ, 4);
 
 	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
 		return(0);
@@ -233,8 +277,9 @@ int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
 
 	if (Q[0] == 0)						// Empty
 	{
-		Q[0]=(UINT)BUFF;				// New one on front
-		return(0);
+//		Q[0]=(UINT)BUFF;				// New one on front
+		memcpy(PQ, &BUFF, 4);
+		return 0;
 	}
 	next = (UINT *)Q[0];
 
@@ -249,8 +294,13 @@ int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
 
 int C_Q_COUNT(VOID *PQ)
 {
-	UINT * Q = (UINT *) PQ;
+	UINT * Q;
 	int count = 0;
+
+//	PQ may not be word aligned, so copy as bytes (for ARM5)
+
+//	Q = (UINT *) PQ;
+	memcpy(&Q, &PQ, 4);
 
 	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
 		return(0);

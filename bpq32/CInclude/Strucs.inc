@@ -224,6 +224,7 @@ SerialPortName DD 0		; Serial Port Name for Unix
 XDIGIS		DD	0;		; Cross Port Digi Definitions
 
 NormalizeQuality DD	0	; Normalise Node Qualities
+IgnoreUnlocked DD 0		; Ignore Unlocked Routes
 
 HARDWAREDATA	DB	200 DUP (?)	; WORK AREA FOR HARDWARE DRIVERS
 

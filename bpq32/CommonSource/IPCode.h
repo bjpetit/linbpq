@@ -19,6 +19,7 @@ typedef struct _ETHMSG
 
 } ETHMSG, *PETHMSG;
 
+#define ICMP 1
 
 typedef struct _BUFFHEADER
 {

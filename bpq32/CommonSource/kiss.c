@@ -1099,7 +1099,6 @@ int KISSRX(struct KISSINFO * KISS)
 	UCHAR * Buffer;
 	int len;
 	NPASYINFO Port = KISSInfo[PORT->PORTNUMBER];
-	short * sp;
 	struct KISSINFO * SAVEKISS = KISS;		// Save so we can restore at SeeifMode
 
 	if (Port == NULL)
@@ -1146,9 +1145,7 @@ SeeifMore:
 			memcpy(&Buffer[7], &Port->RXMSG[0], len);
 			len += 7;
 
-			sp = (short *)&Buffer[5];
-			*sp = len;
-
+			PutLengthinBuffer(Buffer, len);
 //			Buffer[5] = (len & 0xff);
 //			Buffer[6] = (len >> 8);
 
@@ -1314,8 +1311,7 @@ SeeifMore:
 		memcpy(&Buffer[7], &Port->RXMSG[1], len);
 		len += 7;
 
-		sp = (short *)&Buffer[5];
-		*sp = len;
+		PutLengthinBuffer(Buffer, len);		// Neded for arm5 portability
 
 //		Buffer[5] = (len & 0xff);
 //		Buffer[6] = (len >> 8);

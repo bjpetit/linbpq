@@ -333,7 +333,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		struct sockaddr_in6 rxaddr6;
 	} RXaddr;
 	struct AXIPPORTINFO * PORT = Portlist[port];
-	short * sp;
 
 	switch (fn)
 	{
@@ -390,8 +389,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						memcpy(&buff[7],&rxbuff[20],len);
 						len+=7;
 		
-						sp = (short *)&buff[5];
-						*sp = len;				// fix big endian issue
+						PutLengthinBuffer(buff, len);		// Neded for arm5 portability
 
 //						buff[5]=(len & 0xff);
 //						buff[6]=(len >> 8);
@@ -488,11 +486,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					memcpy(&buff[7],&rxbuff[0],len);
 					len+=7;
 					
-					sp = (short *)&buff[5];
-					*sp = len;				// fix big endian issue
-
-//					buff[5]=(len & 0xff);
-//					buff[6]=(len >> 8);
+					PutLengthinBuffer(buff, len);
 
 					//
 					//	Do MH Proccessing if enabled
@@ -565,8 +559,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&buff[7],&rxbuff[0],len);
 				len+=7;
 
-				sp = (short *)&buff[5];
-				*sp = len;				// fix big endian issue
+				PutLengthinBuffer(buff, len);		// fix big endian issue
 
 //				buff[5]=(len & 0xff);
 //				buff[6]=(len >> 8);
@@ -581,8 +574,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 //		txlen=(buff[6]<<8) + buff[5] - 5;			// Len includes buffer header (7) but we add crc
 
-		sp = (short *)&buff[5];
-		txlen = *sp - 5;
+		txlen = GetLengthfromBuffer(buff) - 5;
 
 		crc=compute_crc(&buff[7], txlen - 2);
 		crc ^= 0xffff;

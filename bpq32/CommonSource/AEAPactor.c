@@ -211,7 +211,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct TNCINFO * TNC = TNCInfo[port];
 	struct STREAMINFO * STREAM;
 	int Stream;
-	short * sp;
 
 	if (TNC == NULL || TNC->hDevice == 0)
 		return 0;							// Port not open
@@ -255,11 +254,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
-				sp = (short *)&buff[5];
-				*sp = datalen;
-
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
+				PutLengthinBuffer(buff, datalen);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -291,8 +286,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		sp = (short *)&buff[5];
-		txlen = *sp - 8;
+		txlen = GetLengthfromBuffer(buff) - 8;
 
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);

@@ -152,7 +152,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	int Stream = 0;
 	struct STREAMINFO * STREAM;
 	int TNCOK;
-	short * sp;
 
 	if (TNC == NULL)
 		return 0;					// Port not defined
@@ -450,11 +449,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 				
-				sp = (short *)&buff[5];
-				*sp = datalen;
-
-	//			buff[5]=(datalen & 0xff);
-	//			buff[6]=(datalen >> 8);
+				PutLengthinBuffer(buff, datalen);
 		
 				ReleaseBuffer(buffptr);
 	
@@ -500,8 +495,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 //		txlen=(buff[6]<<8) + buff[5] - 8;	
 
-		sp = (short *)&buff[5];
-		txlen = *sp - 8;
+		txlen = GetLengthfromBuffer(buff) - 8;
 				
 		if (STREAM->Connected)
 		{

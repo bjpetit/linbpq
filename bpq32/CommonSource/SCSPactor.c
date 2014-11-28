@@ -305,7 +305,6 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	struct STREAMINFO * STREAM;
 	char PLevel;
 	struct ScanEntry * Scan;
-	short * sp;
 
 	if (TNC == NULL)
 		return 0;
@@ -409,8 +408,7 @@ ok:
 				memcpy(&buff[8],buffptr+2,datalen);		// Data goes to +7, but we have an extra byte
 				datalen+=8;
 
-				sp = (short *)&buff[5];
-				*sp = datalen;
+				PutLengthinBuffer(buff, datalen);
 
 	//			buff[5]=(datalen & 0xff);
 	//			buff[6]=(datalen >> 8);
@@ -443,8 +441,7 @@ ok:
 			return 0;
 		}
 
-		sp = (short *)&buff[5];
-		txlen = *sp - 8;
+		txlen = GetLengthfromBuffer(buff) - 8;
 
 		buffptr[1] = txlen;
 		memcpy(buffptr+2, &buff[8], txlen);
@@ -2551,7 +2548,34 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					char DestCall[10];
 					TRANSPORTENTRY * SESS;
 					struct WL2KInfo * WL2K = TNC->WL2K;
+					BOOL Exclude = FALSE;
 
+					// Check for Blacklist
+
+					// As a test use premittedcalls
+
+					if (TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS)
+					{
+						UCHAR * ptr = TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS;
+						UCHAR AXCALL[7];
+						
+						ConvToAX25(MHCall, AXCALL);			//Permitted calls are stored in ax.25 format
+
+						while (*ptr)
+						{
+							if (memcmp(AXCALL, ptr, 6) == 0)	// Ignore SSID
+							{
+								TidyClose(TNC, Stream);
+								sprintf(Status, "%d SCANSTART 15", TNC->Port);
+								Rig_Command(-1, Status);
+								Debugprintf("SCS Call from %s rejected", MHCall);
+								return;
+							}
+							ptr += 7;
+						}
+					}
+
+		
 					// Check that we think we are in the right mode
 
 					if (Stream == 0)

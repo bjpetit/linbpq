@@ -3550,10 +3550,13 @@ Dll struct STATIONRECORD *  APIENTRY APPLFindStation(char * Call, BOOL AddIfNotF
 struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 {
 	int i = 0;
-	struct STATIONRECORD * find = *StationRecords;
+	struct STATIONRECORD * find;
 	struct STATIONRECORD * ptr;
 	struct STATIONRECORD * last = NULL;
 	int sum = 0;
+
+	if (APRSActive == 0 || StationRecords == 0)
+		return FALSE;
 
 	if (strlen(Call) > 9)
 	{
@@ -3561,6 +3564,7 @@ struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 		Call[9] = 0;
 	}
 
+	find = *StationRecords;
 	while(find)
 	{
 		if (strlen(find->Callsign) > 9)

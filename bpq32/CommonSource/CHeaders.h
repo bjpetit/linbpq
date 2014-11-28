@@ -16,7 +16,8 @@ VOID FreeConfig();
 
 UINT InitializeExtDriver(PEXTPORTDATA PORTVEC);
 
-
+VOID PutLengthinBuffer(UCHAR * buff, int datalen);			// Neded for arm5 portability
+int GetLengthfromBuffer(UCHAR * buff);	
 
 
 #define GetBuff() _GetBuff(__FILE__, __LINE__)

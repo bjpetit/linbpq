@@ -25,7 +25,7 @@ VOID FindLostBuffers();
 
 #include "configstructs.h"
 
-#pragma pack (1)
+//#pragma pack (1)
 
 struct PORTCONFIG * PortRec;
 
@@ -538,7 +538,7 @@ BOOL Start()
 
 	unsigned char * ptr2, * ptr3, * ptr4;
 	USHORT * CWPTR;
-	int i, n;
+	int i, n, int3;
 
 	NEXTFREEDATA = &DATAAREA[0];			// For Reinit
 	
@@ -784,6 +784,7 @@ BOOL Start()
 		PORT->BBSBANNED = (UCHAR)PortRec->BBSFLAG;
 		PORT->PORTQUALITY = (UCHAR)PortRec->QUALITY;
 		PORT->NormalizeQuality = !PortRec->NoNormalize;
+		PORT->IgnoreUnlocked = PortRec->IGNOREUNLOCKED;
 
 		PORT->PORTWINDOW = (UCHAR)PortRec->MAXFRAME;
 
@@ -925,6 +926,14 @@ BOOL Start()
 			}
 
 			ptr3 ++;							// Terminating NULL
+
+			//	Round to word boundsaty (for ARM5 etc)
+
+			int3 = (int)ptr3;
+			int3 += 3;
+			int3 &= 0xfffffffc;
+			ptr3 = (UCHAR *)int3;
+
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
 
@@ -934,7 +943,7 @@ BOOL Start()
 
 		if (*(ptr2))
 		{
-			ptr3 = (char *)PORT->PORTPOINTER;				// Permitted Calls follows Port Info 
+			ptr3 = (char *)PORT->PORTPOINTER;				// Unproto follows port info  
 			PORT->PORTUNPROTO = ptr3;
 
 			while (*(ptr2) > 32)
@@ -952,6 +961,14 @@ BOOL Start()
 			}
 
 			ptr3 ++;							// Terminating NULL
+
+			//	Round to word boundsaty (for ARM5 etc)
+
+			int3 = (int)ptr3;
+			int3 += 3;
+			int3 &= 0xfffffffc;
+			ptr3 = (UCHAR *)int3;
+ 
 			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
 
@@ -965,8 +982,15 @@ BOOL Start()
 			PORT->PORTMHEARD = (PMHSTRUC)ptr3;
 
 			ptr3 += MHENTRIES * sizeof(MHSTRUC);
-			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
+	
+			//	Round to word boundsaty (for ARM5 etc)
 
+			int3 = (int)ptr3;
+			int3 += 3;
+			int3 &= 0xfffffffc;
+			ptr3 = (UCHAR *)int3;
+
+			PORT->PORTPOINTER = (struct PORTCONTROL *)ptr3;
 		}
 
 		PortRec++;
@@ -977,7 +1001,6 @@ BOOL Start()
 	PORT->PORTPOINTER = NULL;		// End of list
 
 	NEXTFREEDATA = (UCHAR *)FULLPORT;
-
 
 	//	SET UP APPLICATION CALLS AND ALIASES
 

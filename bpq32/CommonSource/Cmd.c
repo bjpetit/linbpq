@@ -1763,7 +1763,7 @@ TRANSPORTENTRY * SetupNewSession(TRANSPORTENTRY * Session, char * Bufferptr)
 		NewSess++;
 	}
 
-	Bufferptr += sprintf(Bufferptr, "Sorry - System Tables Full!r");
+	Bufferptr += sprintf(Bufferptr, "Sorry - System Tables Full\r");
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 	return NULL;
 	}
