@@ -1055,9 +1055,9 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 	case WM_GETMINMAXINFO:
 
 		mmi = (MINMAXINFO *)lParam;
-		mmi->ptMaxSize.x = 550;
+		mmi->ptMaxSize.x = 600;
 		mmi->ptMaxSize.y = PORT->MaxResWindowlength;
-		mmi->ptMaxTrackSize.x = 550;
+		mmi->ptMaxTrackSize.x = 55600;
 		mmi->ptMaxTrackSize.y = PORT->MaxResWindowlength;
 
 		break;
@@ -1246,7 +1246,7 @@ static LRESULT CALLBACK AXResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPA
 					PORT->hostaddr,
 					Flags);
 		
-			TextOut(hdc,0,(displayline++)*14+2,line,i);
+			TextOut(hdc, 0, (displayline++)*14+2, line, i);
 
 			index++;
 		}
@@ -1510,7 +1510,7 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 					PORT->arp_table[PORT->ResolveIndex].error = WSAGetLastError();
 				
 #ifndef LINBPQ
-				InvalidateRect(PORT->hResWnd,NULL,FALSE);
+				InvalidateRect(PORT->hResWnd,NULL,TRUE);
 #endif
 			}
 		}
@@ -1564,9 +1564,9 @@ LRESULT CALLBACK MHWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam
 	case WM_GETMINMAXINFO:
 
  		mmi = (MINMAXINFO *)lParam;
-		mmi->ptMaxSize.x = 520;
+		mmi->ptMaxSize.x = 600;
 		mmi->ptMaxSize.y = PORT->MaxMHWindowlength;
-		mmi->ptMaxTrackSize.x = 520;
+		mmi->ptMaxTrackSize.x = 600;
 		mmi->ptMaxTrackSize.y = PORT->MaxMHWindowlength;
 		break;
 
@@ -2406,7 +2406,7 @@ BOOL add_arp_entry(struct AXIPPORTINFO * PORT, UCHAR * call, UCHAR * ip, int len
 #ifndef LINBPQ
 			
 		SetScrollRange(PORT->hResWnd,SB_VERT, 0, PORT->arp_table_len, TRUE);
-		InvalidateRect(PORT->hResWnd, NULL, FALSE);
+		InvalidateRect(PORT->hResWnd, NULL, TRUE);
 #endif
 	}
 
@@ -2575,7 +2575,7 @@ MoveEntries:
 	MH->Keepalive = SaveKeepalive;
 	MH->IPv6 = IPv6;
 #ifndef LINBPQ
-	InvalidateRect(PORT->hMHWnd,NULL,FALSE);
+	InvalidateRect(PORT->hMHWnd,NULL,TRUE);
 #endif
 	return 0;
 

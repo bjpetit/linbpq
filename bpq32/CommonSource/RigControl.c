@@ -15,6 +15,12 @@
 
 // Fix reporting of set errors in scan to the wrong session
 
+
+// Yaesu List
+
+// FT990 define as FT100
+
+
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -67,6 +73,8 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna);
 VOID DoBandwidthandAntenna(struct RIGINFO *RIG, struct ScanEntry * ptr);
 VOID SetupScanInterLockGroups(struct RIGINFO *RIG);
 VOID ProcessFT100Frame(struct RIGPORTINFO * PORT);
+VOID ProcessFT990Frame(struct RIGPORTINFO * PORT);
+VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT);
 VOID AddNMEAChecksum(char * msg);
 VOID ProcessNMEA(struct RIGPORTINFO * PORT, char * NMEAMsg, int len);
 VOID COMSetDTR(HANDLE fd);
@@ -97,8 +105,11 @@ char YaesuModes[16][6] = {"LSB",  "USB", "CW", "CWR", "AM", "", "", "", "FM", ""
 
 char FT100Modes[9][6] = {"LSB",  "USB", "CW", "CWR", "AM", "DIG", "FM", "WFM", "????"};
 
+char FT990Modes[13][6] = {"LSB",  "USB", "CW2k4", "CW500", "AM6k", "AM2k4", "FM", "FM", "RTTYL", "RTTYU", "PKTL", "PKTFM", "????"};
+
 char FT1000Modes[13][6] = {"LSB",  "USB", "CW", "CWR", "AM", "AMS", "FM", "WFM", "RTTYL", "RTTYU", "PKTL", "PKTF", "????"};
 
+char FTRXModes[8][6] = {"LSB", "USB", "CW", "AM", "FM", "RTTY", "PKT", ""};
 
 char KenwoodModes[16][6] = {"????", "LSB",  "USB", "CW", "FM", "AM", "FSK", "????"};
 
@@ -204,6 +215,7 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 			return;
 
 		case FT100:
+		case FT990:
 		case FT1000:
 
 			*(Poll++) = 0;
@@ -691,6 +703,7 @@ portok:
 
 
 	case FT100:
+	case FT990:
 	case FT1000:
 			
 		if (n < 3)
@@ -708,6 +721,20 @@ portok:
 			}
 
 			if (ModeNo == 8)
+			{
+				sprintf(Command, "Sorry -Invalid Mode\r");
+				return FALSE;
+			}
+		}
+		else if (PORT->PortType == FT990)
+		{
+			for (ModeNo = 0; ModeNo < 12; ModeNo++)	
+			{
+				if (_stricmp(FT990Modes[ModeNo], Mode) == 0)
+					break;
+			}
+
+			if (ModeNo == 12)
 			{
 				sprintf(Command, "Sorry -Invalid Mode\r");
 				return FALSE;
@@ -760,14 +787,14 @@ portok:
 		*(Poll++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
 		*(Poll++) = 10;		// Set Freq
 
-		if (PORT->PortType == FT100)
-			*(Poll++) = 0;
+		*(Poll++) = 0;
+		*(Poll++) = 0;
+		*(Poll++) = 0;
+		if (PORT->PortType == FT990 || PORT->YaesuVariant == FT1000D)
+			*(Poll++) = 3;
 		else
-			*(Poll++) = 2;
-	
-		*(Poll++) = 0;
-		*(Poll++) = 0;
-		*(Poll++) = 0;
+			*(Poll++) = 2;		// 100 or 1000MP
+
 		*(Poll++) = 16;		// Status Poll
 	
 		buffptr[1] = 15;
@@ -1209,6 +1236,7 @@ BOOL Rig_Poll()
 
 		case YAESU:
 		case FT100:
+		case FT990:
 		case FT1000:
 			
 			YaesuPoll(PORT);
@@ -1245,7 +1273,7 @@ OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 	if (PORT->PortType == FT2000 || strcmp(PORT->Rigs[0].RigName, "FT847") == 0)		// FT2000 and similar seem to need two stop bits
 		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 2);
 	else
-		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 0);
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 2);
 			  
 	if (PORT->hDevice == 0)
 		return (FALSE);
@@ -1272,7 +1300,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 {
 	int Length;
 	char NMEAMsg[100];
-	char * ptr;
+	unsigned char * ptr;
 	int len;
 
 	if (PORT->PTC)
@@ -1342,8 +1370,11 @@ void CheckRX(struct RIGPORTINFO * PORT)
 
 	case FT100:
 
-		// Only responseshould be a 16 byte info frame
-	
+		// Only response should be a 16 byte info frame
+
+		if (RIG_DEBUG)
+			Debugprintf("FT100 Received %d", Length);
+
 		if (Length < 32)		// Frame Sise  why???????
 			return;
 
@@ -1358,12 +1389,35 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		PORT->RXLen = 0;		// Ready for next frame	
 		return;
 
+	case FT990:
+
+		// Only response should be a 32 byte info frame
+	
+		if (Length < 32)			// Frame Sise
+			return;
+
+		if (Length > 32)			// Frame Sise
+		{
+			PORT->RXLen = 0;		// Corruption - reset and wait for retry	
+			return;
+		}
+
+		ProcessFT990Frame(PORT);
+		PORT->RXLen = 0;		// Ready for next frame	
+		return;
+
 
 	case FT1000:
 
-		// Only responseshould be a 16 byte info frame
+		// Only response should be a 16 byte info frame
 	
-		if (Length < 16)		// Frame Sise
+		ptr = PORT->RXBuffer;
+
+		if (RIG_DEBUG)
+			Debugprintf("FT1000 Received %d %02x %02x %02x %02x" ,
+			Length, ptr[1], ptr[2], ptr[3], ptr[4]);
+
+		if (Length < 16)			// Frame Sise
 			return;
 
 		if (Length > 16)			// Frame Sise
@@ -1372,7 +1426,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 			return;
 		}
 
-		ProcessFT100Frame(PORT);
+		ProcessFT1000Frame(PORT);
 
 		PORT->RXLen = 0;		// Ready for next frame	
 		return;
@@ -1405,7 +1459,7 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		while (ptr != NULL)
 		{
 			ptr++;									// include lf
-			len = ptr-(char *)&PORT->RXBuffer;	
+			len = ptr - &PORT->RXBuffer[0];	
 			
 			memcpy(NMEAMsg, PORT->RXBuffer, len);	
 
@@ -2072,6 +2126,9 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 	
 	FreqF = (Freq * 1.25) / 1000000;
 
+	if (PORT->YaesuVariant == FT1000MP)
+		FreqF = FreqF / 2;				// No idea why!
+
 	_gcvt(FreqF, 9, RIG->Valchar);
 
 	sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
@@ -2085,9 +2142,8 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 	}
 	else	// FT1000
 	{
-		Mode = Msg[7] & 15;
-		if (Mode > 12) Mode = 12;
-		sprintf(RIG->WEB_MODE,"%s", FT1000Modes[Mode]);
+		Mode = Msg[7] & 7;
+		sprintf(RIG->WEB_MODE,"%s", FTRXModes[Mode]);
 	}
 
 	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
@@ -2096,6 +2152,103 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 		SendResponse(RIG->Session, "Mode and Frequency Set OK");
 
 }
+
+
+
+VOID ProcessFT990Frame(struct RIGPORTINFO * PORT)
+{
+	// Only one we should see is a Status Message
+
+	UCHAR * Poll = PORT->TXBuffer;
+	UCHAR * Msg = PORT->RXBuffer;
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
+	int Freq;
+	double FreqF;
+	unsigned int Mode;
+	
+	RIG->RIGOK = TRUE;
+	PORT->Timeout = 0;
+
+	// Bytes 0 is Band
+	// 1 - 4 is Freq in units of 10Hz (I think!)
+	// Byte 5 is Mode
+
+	Freq =  (Msg[1] << 16) + (Msg[2] << 8) + Msg[3];
+	
+	FreqF = (Freq * 10.0) / 1000000;
+
+	_gcvt(FreqF, 9, RIG->Valchar);
+
+	sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
+	SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+
+	Mode = Msg[7] & 7;
+	sprintf(RIG->WEB_MODE,"%s", FTRXModes[Mode]);
+
+	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+
+	if (!PORT->AutoPoll)
+		SendResponse(RIG->Session, "Mode and Frequency Set OK");
+}
+
+VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT)
+{
+	// Only one we should see is a Status Message
+
+	UCHAR * Poll = PORT->TXBuffer;
+	UCHAR * Msg = PORT->RXBuffer;
+	struct RIGINFO * RIG = &PORT->Rigs[0];		// Only one on Yaseu
+	int Freq;
+	double FreqF;
+	unsigned int Mode;
+	
+	RIG->RIGOK = TRUE;
+	PORT->Timeout = 0;
+
+	// I think the FT1000/1000D is same as 990
+	//	FT1000MP is similar to FT100, but steps on .625 Hz (despite manual)
+	// Bytes 0 is Band
+	// 1 - 4 is Freq in binary in units of 1.25 HZ (!)
+	// Byte 5 is Mode
+
+	if (PORT->YaesuVariant == FT1000MP)
+	{
+		Freq =  (Msg[1] << 24) + (Msg[2] << 16) + (Msg[3] << 8) + Msg[4];	
+		FreqF = (Freq * 1.25) / 1000000;
+		FreqF = FreqF / 2;				// No idea why!
+	}
+	else
+	{
+		Freq =  (Msg[1] << 16) + (Msg[2] << 8) + Msg[3];
+		FreqF = (Freq * 10.0) / 1000000;
+	}
+
+	_gcvt(FreqF, 9, RIG->Valchar);
+
+	sprintf(RIG->WEB_FREQ,"%s", RIG->Valchar);
+	SetWindowText(RIG->hFREQ, RIG->WEB_FREQ);
+
+	if (PORT->PortType == FT100)
+	{
+		Mode = Msg[5] & 15;
+		if (Mode > 8) Mode = 8;
+		sprintf(RIG->WEB_MODE,"%s", FT100Modes[Mode]);
+	}
+	else	// FT1000
+	{
+		Mode = Msg[7] & 7;
+		sprintf(RIG->WEB_MODE,"%s", FTRXModes[Mode]);
+	}
+
+	SetWindowText(RIG->hMODE, RIG->WEB_MODE);
+
+	if (!PORT->AutoPoll)
+		SendResponse(RIG->Session, "Mode and Frequency Set OK");
+
+}
+
+
+
 
 
 VOID ProcessYaesuCmdAck(struct RIGPORTINFO * PORT)
@@ -2353,12 +2506,16 @@ VOID YaesuPoll(struct RIGPORTINFO * PORT)
 	Poll[0] = 0;
 	Poll[1] = 0;
 	Poll[2] = 0;
-	Poll[3] = 0;
+
+	if (PORT->PortType == FT990 || PORT->PortType == YAESU || PORT->YaesuVariant == FT1000D)
+		Poll[3] = 3;
+	else
+		Poll[3] = 2;
 	
 	if (PORT->PortType == YAESU)
 		Poll[4] = 0x3;		// Get frequency amd mode command
 	else
-		Poll[4] = 16;		// FT100 Get frequency amd mode command
+		Poll[4] = 16;		// FT100/990/1000 Get frequency amd mode command
 
 	PORT->TXLen = 5;
 	RigWriteCommBlock(PORT);
@@ -3037,11 +3194,25 @@ PortFound:
 		PORT->PortType = FT100;
 	}
 
+	// FT100 seems to be different to most other YAESU types
+
+	if (strcmp(RigName, "FT990") == 0 && PORT->PortType == YAESU)
+	{
+		PORT->PortType = FT990;
+	}
+
 	// FT1000 seems to be different to most other YAESU types
 
 	if (strstr(RigName, "FT1000") && PORT->PortType == YAESU)
 	{
 		PORT->PortType = FT1000;
+
+		// Subtypes need different code. D and no suffix are same
+
+		if (strstr(RigName, "FT1000MP"))
+			PORT->YaesuVariant = FT1000MP;
+		else
+			PORT->YaesuVariant = FT1000D;
 	}
 
 	// FT2000 seems to be different to most other YAESU types
@@ -3595,6 +3766,23 @@ CheckScan:
 				}
 				break;
 
+			case FT990:	
+
+				for (ModeNo = 0; ModeNo < 12; ModeNo++)
+				{
+					if (strlen(Mode) == 1)
+					{
+						if (FT990Modes[ModeNo][0] == Mode[0])
+							break;
+					}
+					else
+					{
+						if (_stricmp(FT990Modes[ModeNo], Mode) == 0)
+							break;
+					}
+				}
+				break;
+
 			case FT1000:						
 				
 				for (ModeNo = 0; ModeNo < 12; ModeNo++)
@@ -3779,7 +3967,7 @@ CheckScan:
 			*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
 			*(CmdPtr++) = 1;
 
-			// FT847 Nees a Poll Here. Set up anyway, but only send if 847
+			// FT847 Needs a Poll Here. Set up anyway, but only send if 847
 
 			*(CmdPtr++) = 0;
 			*(CmdPtr++) = 0;
@@ -3801,7 +3989,8 @@ CheckScan:
 		{	
 			FreqPtr[0]->Cmd1Len = sprintf(CmdPtr, "FA%s;MD0%X;FA;MD;", &FreqString[1], ModeNo);
 		}
-		else if	(PORT->PortType == FT100 || PORT->PortType == FT1000)
+		else if	(PORT->PortType == FT100 || PORT->PortType == FT990
+			|| PORT->PortType == FT1000)
 		{	
 			//Send Mode first - changing mode can change freq
 
@@ -3817,14 +4006,17 @@ CheckScan:
 			*(CmdPtr++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
 			*(CmdPtr++) = 10;
 
-			if (PORT->PortType == FT100)
-				*(CmdPtr++) = 0;
-			else
-				*(CmdPtr++) = 2;
+			// Send Get Status, as these types doesn't ack commands
+
+			*(CmdPtr++) = 0;
+			*(CmdPtr++) = 0;
+			*(CmdPtr++) = 0;
 			
-			*(CmdPtr++) = 0;
-			*(CmdPtr++) = 0;
-			*(CmdPtr++) = 0;
+			if (PORT->PortType == FT990 || PORT->YaesuVariant == FT1000D)
+				*(CmdPtr++) = 3;
+			else
+				*(CmdPtr++) = 2;		// F100 oe FT1000MP
+			
 			*(CmdPtr++) = 16;			// Send Get Status, as FT100 doesn't ack commands
 		}
 		else if	(PORT->PortType == NMEA)

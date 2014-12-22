@@ -867,7 +867,7 @@ VOID DEDPoll(int Port)
 
 
 			TNC->Streams[Stream].Attached = TRUE;
-
+			TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER[6] |= 0x60; // Ensure P or T aren't used on ax.25
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
 			TNC->Streams[Stream].MyCall[calllen] = 0;
 

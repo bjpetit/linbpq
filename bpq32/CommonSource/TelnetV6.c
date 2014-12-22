@@ -137,7 +137,7 @@ VOID FreeConfig();
 VOID SaveCMSHostInfo(int port, struct TCPINFO * TCP, int CMSNo);
 VOID GetCMSCachedInfo(struct TNCINFO * TNC);
 BOOL CMSCheck(struct TNCINFO * TNC, struct TCPINFO * TCP);
-static VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst);
+VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst);
 VOID ProcessTrimodeCommand(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, char * MsgPtr);
 VOID ProcessTrimodeResponse(struct TNCINFO * TNC, struct STREAMINFO * STREAM, unsigned char * MsgPtr, int Msglen);
 VOID ProcessTriModeDataMessage(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKET sock, struct STREAMINFO * STREAM);
@@ -580,6 +580,25 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			}
 		}
 
+		// We now use persistent HTTP sessions, so need to close after a reasonable time
+		
+		for (n = 0; n <= TCP->MaxSessions; n++)
+		{
+			sockptr = TNC->Streams[n].ConnectionInfo;
+
+			if (sockptr->SocketActive && sockptr->HTTPMode && sockptr->LastSendTime)
+			{
+				if ((REALTIMETICKS -sockptr->LastSendTime) > 1500)	// ~ 2.5 mins
+				{
+					closesocket(sockptr->socket);
+					sockptr->SocketActive = FALSE;
+					ShowConnections(TNC);
+				}
+			}
+		}
+
+
+
 		return 0;
 
 	case 1:				// poll
@@ -878,7 +897,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len;
-	char msg[80];
+	char msg[256];
 	struct ConnectionInfo * sockptr;
 	int i,n;
 
@@ -898,7 +917,7 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 250px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
 
-	Len += sprintf(&Buff[Len], "<tr><th width=110px>User</th><th>Callsign</th><th>Queue</th></tr>");
+	Len += sprintf(&Buff[Len], "<tr><th>User</th><th>Callsign</th><th>Queue</th></tr>");
 
 	for (n = 1; n <= TNC->TCPInfo->CurrentSockets; n++)
 	{
@@ -913,7 +932,11 @@ static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 			if (sockptr->UserPointer == 0)
 			{
 				if (sockptr->HTTPMode)
-					strcpy(msg,"<tr><td>HTTP Session</td><td>&nbsp;</td><td>&nbsp;</td></tr>");
+				{
+					char Addr[100];
+					Tel_Format_Addr(sockptr, Addr);
+					sprintf(msg,"<tr><td>HTTP<%s</td><td>&nbsp;</td><td>&nbsp;</td></tr>", Addr);
+				}
 				else
 					strcpy(msg,"<tr><td>Logging in</td><td>&nbsp;</td><td>&nbsp;</td></tr>");
 			}
@@ -1072,7 +1095,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 
 #ifndef LINBPQ
 
-	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, TelWndProc, 300, 300);
+	CreatePactorWindow(TNC, ClassName, WindowTitle, RigControlRow, TelWndProc, 400, 300);
 
 	TCP->hCMSWnd = CreateWindowEx(0, "STATIC", "CMS OK ", WS_CHILD | WS_VISIBLE,
 			240,0,50,16, TNC->hDlg, NULL, hInstance, NULL);
@@ -1086,7 +1109,7 @@ UINT TelnetExtInit(EXTPORTDATA * PortEntry)
 
 
 	TNC->hMonitor= CreateWindowEx(0, "LISTBOX", "", WS_CHILD | WS_VISIBLE  | WS_VSCROLL,
-			0,20,290,2800, TNC->hDlg, NULL, hInstance, NULL);
+			0,20,400,2800, TNC->hDlg, NULL, hInstance, NULL);
 
 	SendMessage(TNC->hMonitor, WM_SETFONT, (WPARAM)hFont, 0);
 
@@ -2147,10 +2170,10 @@ LRESULT CALLBACK TelWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 	case WM_GETMINMAXINFO:
 
  		mmi = (MINMAXINFO *)lParam;
-		mmi->ptMaxSize.x = 300;
-		mmi->ptMaxSize.y = 400;
-		mmi->ptMaxTrackSize.x = 300;
-		mmi->ptMaxTrackSize.y = 400;
+		mmi->ptMaxSize.x = 400;
+		mmi->ptMaxSize.y = 500;
+		mmi->ptMaxTrackSize.x = 400;
+		mmi->ptMaxTrackSize.y = 500;
 		break;
 
 
@@ -2999,7 +3022,7 @@ MsgLoop:
 		{
 			char Addr[100];
 			
-			Format_Addr(sockptr, Addr);
+			Tel_Format_Addr(sockptr, Addr);
 			sprintf(logmsg,"%d %s User=%s\n", sockptr->Number, Addr, MsgPtr);
 			WriteLog (logmsg);
 		}
@@ -3058,7 +3081,7 @@ MsgLoop:
 		{
 			char Addr[100];
 			
-			Format_Addr(sockptr, Addr);
+			Tel_Format_Addr(sockptr, Addr);
 			sprintf(logmsg,"%d %s Password=%s\n", sockptr->Number, Addr, MsgPtr);
 			WriteLog (logmsg);
 		}
@@ -3084,7 +3107,7 @@ MsgLoop:
 			{
 				char Addr[100];
 			
-				Format_Addr(sockptr, Addr);
+				Tel_Format_Addr(sockptr, Addr);
 				sprintf(logmsg,"%d %s Call Accepted Callsign=%s\n", sockptr->Number, Addr, sockptr->Callsign);
 				WriteLog (logmsg);
 			}
@@ -3840,7 +3863,8 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 	UCHAR * CRLFCRLF;
 	UCHAR * LenPtr;
 	int BodyLen, ContentLen;
-
+	struct ConnectionInfo * sockcopy;
+	
 	ioctl(sock,FIONREAD,&len);
 
 	maxlen = InputBufferLen - sockptr->InputLen;
@@ -3882,8 +3906,15 @@ int DataSocket_ReadHTTP(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, S
 			return 0;
 	}
 
+	sockcopy = malloc(sizeof(struct ConnectionInfo));
 	sockptr->TNC = TNC;
-	_beginthread((void (*)())ProcessHTTPMessage, 0, (VOID *) sockptr);
+	sockptr->LastSendTime = REALTIMETICKS;
+
+	memcpy(sockcopy, sockptr, sizeof(struct ConnectionInfo));
+
+	_beginthread((void (*)())ProcessHTTPMessage, 0, (VOID *)sockcopy);
+
+	sockptr->InputLen = 0;
 	return 0;
 }
 
@@ -3930,7 +3961,11 @@ int ShowConnections(struct TNCINFO * TNC)
 			if (sockptr->UserPointer == 0)
 			{
 				if (sockptr->HTTPMode)
-					strcpy(msg,"HTTP Session");
+				{
+					char Addr[100];
+					Tel_Format_Addr(sockptr, Addr);
+					sprintf(msg, "HTTP From %s", Addr);
+				}
 				else
 					strcpy(msg,"Logging in");
 			}
@@ -4998,7 +5033,7 @@ TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 }
 
 
-static VOID Format_Addr(struct ConnectionInfo * sockptr, char * dst)
+VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 {
 	unsigned char * src;
 	char zeros[12] = "";

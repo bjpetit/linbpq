@@ -25,8 +25,6 @@ VOID FindLostBuffers();
 
 #include "configstructs.h"
 
-//#pragma pack (1)
-
 struct PORTCONFIG * PortRec;
 
 #define RNRSET 0x2				// RNR RECEIVED FROM OTHER END
@@ -785,6 +783,7 @@ BOOL Start()
 		PORT->PORTQUALITY = (UCHAR)PortRec->QUALITY;
 		PORT->NormalizeQuality = !PortRec->NoNormalize;
 		PORT->IgnoreUnlocked = PortRec->IGNOREUNLOCKED;
+		PORT->INP3ONLY = PortRec->INP3ONLY;
 
 		PORT->PORTWINDOW = (UCHAR)PortRec->MAXFRAME;
 
@@ -1080,7 +1079,7 @@ BOOL Start()
 			if (PORT != NULL)
 				ROUTE->NoKeepAlive = PORT->PortNoKeepAlive;
 
-		if (ptr2[12] & 0x80)
+		if (ptr2[12] & 0x80 || PORT->INP3ONLY)
 		{
 			ROUTE->INP3Node = 1;
 			ROUTE->NoKeepAlive = 0;			// Cant have INP3 and NOKEEPALIVES
@@ -1487,7 +1486,7 @@ VOID ReadNodes()
 			if (Qual & 4)
 				ROUTE->NoKeepAlive = TRUE;
 
-			if (Qual & 1)
+			if ((Qual & 1) || PORT->INP3ONLY)
 			{
 				ROUTE->NoKeepAlive = FALSE;
 				ROUTE->INP3Node = TRUE;
@@ -1630,6 +1629,7 @@ VOID TIMERINTERRUPT()
 		Debugprintf("BPQ32 Heartbeat Buffers %d APRS Queues %d %d", QCOUNT, C_Q_COUNT(&APRSMONVECPTR->HOSTTRACEQ), C_Q_COUNT(&APPL_Q));
 		StatsTimer();
 
+/*
 		if (QCOUNT < 200)
 		{
 			if (DelayBuffers == 0)
@@ -1642,8 +1642,9 @@ VOID TIMERINTERRUPT()
 				DelayBuffers--;
 			}
 		}
+*/
 	}
-		
+	
 	if (L4TIMERFLAG >= 10)				// 1 PER SEC
 	{
 		L4TIMERFLAG -= 10;

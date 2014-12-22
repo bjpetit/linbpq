@@ -1797,7 +1797,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			GetSemaphore(&Semaphore);
 			SemHeldByAPI = 50;
 
-			ProcessIncommingConnect(TNC, Call, 0, TRUE);
+			ProcessIncommingConnectEx(TNC, Call, 0, TRUE, TRUE);
 			FreeSemaphore(&Semaphore);
 				
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];

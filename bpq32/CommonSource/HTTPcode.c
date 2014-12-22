@@ -15,6 +15,36 @@
 #include "bpq32.h"
 #include "telnetserver.h"
 
+
+struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
+{
+	struct HTTPConnectionInfo * Next;
+	struct STATIONRECORD * SelCall;	// Station Record for individual statond display
+	char Callsign[12];
+	int WindDirn, WindSpeed, WindGust, Temp, RainLastHour, RainLastDay, RainToday, Humidity, Pressure; //WX Fields
+	char * ScreenLines[100];	// Screen Image for Teminal access mode - max 100 lines (cyclic buffer)
+	int ScreenLineLen[100];		// Length of each lime
+	int LastLine;				// Pointer to last line of data
+	BOOL PartLine;				// Last line does not have CR on end
+	char HTTPCall[10];			// Call of HTTP user
+	BOOL Changed;				// Changed since last poll. If set, reply immediately, else set timer and wait
+	SOCKET sock;				// Socket for pending send
+	int ResponseTimer;			// Timer for delayed response
+	int KillTimer;				// Clean up timer (no activity timeout)
+	int Stream;					// BPQ Stream Number
+	char Key[20];				// Session Key
+	BOOL Connected;
+	// Use by Mail Module
+	VOID * User;				// Selected User
+	VOID * Msg;					// Selected Message
+	VOID * WP;					// Selected WP record
+	struct UserRec * USER;		// Telnet Server USER record
+};
+
+
+
+
+
 extern int MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS, L3FRAMES;
 extern int NUMBEROFNODES, MAXDESTS, L4CONNECTSOUT, L4CONNECTSIN, L4FRAMESTX, L4FRAMESRX, L4FRAMESRETRIED, OLDFRAMES;
 extern int STATSTIME;
@@ -25,6 +55,10 @@ extern char VersionString[];
 VOID FormatTime2(char * Time, time_t cTime);
 DllExport int APIENTRY Get_APPLMASK(int Stream);
 VOID SaveUIConfig();
+int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
+VOID SetupUI(int Port);
+VOID SendUIBeacon(int Port);
+
 
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
@@ -58,34 +92,6 @@ extern HKEY REGTREE;
 
 extern BOOL APRSActive;
 
-
-struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
-{
-	struct HTTPConnectionInfo * Next;
-	struct STATIONRECORD * SelCall;	// Station Record for individual statond display
-	char Callsign[12];
-	int WindDirn, WindSpeed, WindGust, Temp, RainLastHour, RainLastDay, RainToday, Humidity, Pressure; //WX Fields
-	char * ScreenLines[100];	// Screen Image for Teminal access mode - max 100 lines (cyclic buffer)
-	int ScreenLineLen[100];		// Length of each lime
-	int LastLine;				// Pointer to last line of data
-	BOOL PartLine;				// Last line does not have CR on end
-	char HTTPCall[10];			// Call of HTTP user
-	BOOL Changed;				// Changed since last poll. If set, reply immediately, else set timer and wait
-	SOCKET sock;				// Socket for pending send
-	int ResponseTimer;			// Timer for delayed response
-	int KillTimer;				// Clean up timer (no activity timeout)
-	int Stream;					// BPQ Stream Number
-	char Key[20];				// Session Key
-	BOOL Connected;
-	// Use by Mail Module
-	VOID * User;				// Selected User
-	VOID * Msg;					// Selected Message
-	VOID * WP;					// Selected WP record
-	struct UserRec * USER;		// Telnet Server USER record
-};
-
-
-
 char * strlop(char * buf, char delim);
 VOID sendandcheck(SOCKET sock, const char * Buffer, int Len);
 int CompareNode(const void *a, const void *b);
@@ -98,6 +104,7 @@ int StatusProc(char * Buff);
 int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
 int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
 VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr);
+
 
 static struct HTTPConnectionInfo * SessionList;	// active term mode sessions
 
@@ -511,7 +518,7 @@ VOID HTTPTimer()
 				ReplyLen = strlen(_REPLYBUFFER);
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", TermOutputTail);
 		
-				HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
 				sendandcheck(sock, Header, HeaderLen);
 				sendandcheck(sock, _REPLYBUFFER, ReplyLen);
 
@@ -664,7 +671,7 @@ void ProcessTermInput(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 		Session->KillTimer = 0;
 	}
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, strlen(Tail), 0);
@@ -686,7 +693,7 @@ void ProcessTermClose(SOCKET sock, char * MsgPtr, int MsgLen, char * Key)
 
 	ReplyLen = SetupNodeMenu(_REPLYBUFFER);
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 		"\r\n", ReplyLen + strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
@@ -775,7 +782,7 @@ ProcessTermSignon(struct TNCINFO * TNC, SOCKET sock, char * MsgPtr, int MsgLen)
 
 Sendit:
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 	send(sock, Header, HeaderLen, 0);
 	send(sock, _REPLYBUFFER, ReplyLen, 0);
 	send(sock, Tail, strlen(Tail), 0);
@@ -906,7 +913,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 {
 	int FileSize, Sent, Loops = 0;
 	char * MsgBytes;
-	char MsgFile[265];
+	char MsgFile[512];
 	FILE * hFile;
 	int ReadLen;
 	BOOL Special = FALSE;
@@ -926,6 +933,11 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 	__try {
 #endif
 
+	if (strlen(FN) > 256)
+	{
+		FN[256] = 0;
+		Debugprintf("HTTP Finle Name too long %s", FN);
+	}
 
 	if (strcmp(FN, "/") == 0)
 		if (APRSActive)
@@ -940,7 +952,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 		if (OnlyifExists)					// Set if we dont want an error response if missing
 			return -1;
 		
-		Len = sprintf(Header, "HTTP/1.0 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+		Len = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
 		send(sock, Header, Len, 0);
 		return 0;
 	}
@@ -952,7 +964,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 		if (OnlyifExists)					// Set if we dont want an error response if missing
 			return -1;
 		
-		Len = sprintf(Header, "HTTP/1.0 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+		Len = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
 		send(sock, Header, Len, 0);
 		return 0;
 	}
@@ -983,7 +995,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 	FormatTime2(FileTimeString, STAT.st_ctime);
 	FormatTime2(TimeString, time(NULL));
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n"
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
 		"Content-Type: text/html\r\n"
 		"Date: %s\r\n"
 		"Last-Modified: %s\r\n" 
@@ -1081,7 +1093,7 @@ int RefreshTermWindow(struct HTTPConnectionInfo * Session, char * _REPLYBUFFER)
 				ReplyLen = strlen(_REPLYBUFFER);
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "%s", TermOutputTail);
 
-				HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen);
 				sendandcheck(Session->sock, Header, HeaderLen);
 				sendandcheck(Session->sock, _REPLYBUFFER, ReplyLen);
 
@@ -1119,7 +1131,8 @@ int SetupNodeMenu(char * Buff)
 	return Len;
 }
 
-ProcessHTTPMessage(struct ConnectionInfo * conn)
+
+int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 {
 	struct TCPINFO * TCP = conn->TNC->TCPInfo;
 	SOCKET sock = conn->socket;
@@ -1143,6 +1156,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 	BOOL LOCAL = FALSE;
 	BOOL COOKIE = FALSE;
 	char Reply[100000];
+	int Len;
 
 #ifdef WIN32
 
@@ -1151,6 +1165,11 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 	__try {
 #endif
+
+	Len = strlen(MsgPtr);
+	if (Len > 4096)
+		return 0; 
+
 	strcpy(URL, MsgPtr);
 
 	if (strstr(MsgPtr, "Host: 127.0.0.1"))
@@ -1218,7 +1237,7 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 
 		if (hPipe == (HANDLE)-1)
 		{
-			InputLen = sprintf(_REPLYBUFFER, "HTTP/1.0 404 Not Found\r\nContent-Length: 28\r\n\r\nAPRS Data is not available\r\n");
+			InputLen = sprintf(_REPLYBUFFER, "HTTP/1.1 404 Not Found\r\nContent-Length: 28\r\n\r\nAPRS Data is not available\r\n");
 			send(sock, _REPLYBUFFER, InputLen, 0);
 		}
 		else
@@ -1447,7 +1466,15 @@ ProcessHTTPMessage(struct ConnectionInfo * conn)
 		ReplyLen = sprintf(Reply, MailLostSession, Key);
 		RLen = ReplyLen;
 Returnit:
-		HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+		if (memcmp(Reply, "HTTP", 4) == 0)
+		{
+			// Full Header provided by appl - just send it
+			
+			send(sock, Reply, ReplyLen, 0);
+			return 0;
+		}
+		
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 		send(sock, Header, HeaderLen, 0);
 		send(sock, Reply, ReplyLen, 0);
 		send(sock, Tail, strlen(Tail), 0);
@@ -1468,7 +1495,7 @@ doHeader:
 
 		ProcessMailHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
 
-		HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 		send(sock, Header, HeaderLen, 0);
 		send(sock, _REPLYBUFFER, ReplyLen, 0);
 		send(sock, Tail, strlen(Tail), 0);
@@ -1485,7 +1512,7 @@ doHeader:
 
 		ProcessChatHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
 
-		HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 		send(sock, Header, HeaderLen, 0);
 		send(sock, _REPLYBUFFER, ReplyLen, 0);
 		send(sock, Tail, strlen(Tail), 0);
@@ -1531,7 +1558,7 @@ doHeader:
 
 		if (hPipe == (HANDLE)-1)
 		{
-			InputLen = sprintf(Reply, "HTTP/1.0 404 Not Found\r\nContent-Length: 28\r\n\r\nMail Data is not available\r\n");
+			InputLen = sprintf(Reply, "HTTP/1.1 404 Not Found\r\nContent-Length: 28\r\n\r\nMail Data is not available\r\n");
 			send(sock, Reply, InputLen, 0);
 		}
 		else
@@ -1567,7 +1594,7 @@ doHeader:
 
 		if (hPipe == (HANDLE)-1)
 		{
-			InputLen = sprintf(Reply, "HTTP/1.0 404 Not Found\r\nContent-Length: 28\r\n\r\nMail Data is not available\r\n");
+			InputLen = sprintf(Reply, "HTTP/1.1 404 Not Found\r\nContent-Length: 28\r\n\r\nMail Data is not available\r\n");
 			send(sock, Reply, InputLen, 0);
 		}
 		else
@@ -1643,7 +1670,7 @@ doHeader:
 
 				ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
 				ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
-				HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
 				send(sock, Tail, strlen(Tail), 0);
@@ -1656,7 +1683,7 @@ doHeader:
 			if (strstr(input, "Cancel=Cancel"))
 			{
 				ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
-				HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+				HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 				send(sock, Header, HeaderLen, 0);
 				send(sock, _REPLYBUFFER, ReplyLen, 0);
 				send(sock, Tail, strlen(Tail), 0);
@@ -1747,7 +1774,7 @@ doHeader:
 			else
 				ReplyLen = sprintf(_REPLYBUFFER, IndexNoAPRS, Mycall, Mycall);
 
-			HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 			send(sock, Header, HeaderLen, 0);
 			send(sock, _REPLYBUFFER, ReplyLen, 0);
 			send(sock, Tail, strlen(Tail), 0);
@@ -2560,7 +2587,7 @@ SendResp:
 
 	FormatTime2(TimeString, time(NULL));
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 		"Date: %s\r\n\r\n", ReplyLen + strlen(Tail), TimeString);
 	sendandcheck(sock, Header, HeaderLen);
 	sendandcheck(sock, _REPLYBUFFER, ReplyLen);
@@ -2573,6 +2600,15 @@ SendResp:
 	#include "StdExcept.c"
 	}
 #endif
+}
+
+int ProcessHTTPMessage(struct ConnectionInfo * conn)
+{
+	// conn is a malloc'ed copy to handle reused connections, so need to free it
+
+	int ret = InnerProcessHTTPMessage(conn);
+	free(conn);
+	return ret;
 }
 
 static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -2699,7 +2735,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 					ReplyLen =  SetupNodeMenu(Reply);
 
-					HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
+					HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n"
 						"Set-Cookie: BPQSessionCookie=%s; Path = /\r\n\r\n", ReplyLen + strlen(Tail), Sess->Key);	
 					send(sock, Header, HeaderLen, 0);
 					send(sock, Reply, ReplyLen, 0);
@@ -2714,7 +2750,7 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 	ReplyLen = sprintf(Reply, NodeSignon, Mycall, Mycall);
 	ReplyLen += sprintf(&Reply[ReplyLen], "%s", PassError);
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 	send(sock, Header, HeaderLen, 0);
 	send(sock, Reply, ReplyLen, 0);
 	send(sock, Tail, strlen(Tail), 0);

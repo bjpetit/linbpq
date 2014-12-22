@@ -42,10 +42,10 @@ struct CONFIGTABLE
 	short C_FULLCTEXT;			// 98    ; SPARE (WAS DIGIFLAG)
 	short C_MINQUAL;			// 100
 	UCHAR C_HIDENODES;			// 102
-	short C_L4DELAY;			// 103
-	short C_L4WINDOW;			// 105
-	short C_BTINTERVAL;			// 107
-	UCHAR C_AUTOSAVE;			// 109
+	UCHAR C_AUTOSAVE;			// 103
+	short C_L4DELAY;			// 104
+	short C_L4WINDOW;			// 106
+	short C_BTINTERVAL;			// 108
 	UCHAR C_L4APPL;				// 110
 	UCHAR C_C;					//  111 "C" = HOST Command Enabled
 	UCHAR C_IP;					//  112 IP Enabled
@@ -102,7 +102,7 @@ struct PORTCONFIG
 	char IGNOREUNLOCKED;	// 111
 	short KISSOPTIONS;		// 112,
 	short INTERLOCK;		// 114,
-	short NODESPACLEN;		//  116,
+	short NODESPACLEN;		// 116,
 	short TXPORT;			// 118,
 	UCHAR MHEARD;			// 120,
 	UCHAR CWIDTYPE;			// 121,
@@ -117,8 +117,9 @@ struct PORTCONFIG
 	char BCALL[10];			// 226,
 	unsigned long IPADDR;	// 236
 	char I2CMode;			// 240
-	char I2CAddr;			// 241	
-	char Pad2[14];			// 242
+	char I2CAddr;			// 241
+	char INP3ONLY;			// 242
+	char Pad2[13];			// 243
 	char VALIDCALLS[256];	//   256 - 512
 	char  * WL2K;			// 512
 	char SerialPortName[80]; // 516

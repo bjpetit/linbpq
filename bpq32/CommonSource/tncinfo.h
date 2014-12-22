@@ -492,7 +492,8 @@ typedef struct TNCINFO
 	int OKToChangeFreq;				// 1 = SCS Says OK to change, -1 = Dont Change zero = still waiting
 	BOOL DontWantToChangeFreq;		// Change done - ok to  SCS
 	BOOL DontReleasePermission;		// Hold Permission to prevent calls on this frequency
-	int TimeEnteredSYNCMode;			// To detect scan lock when using applcalls on PTC
+	int TimeEnteredSYNCMode;		// To detect scan lock when using applcalls on PTC
+	int TimeScanLocked;				// ditto for TNCs that don't report SYNC
 	int PTCStatus;					// Sync, Idle, Traffic, etc
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly
@@ -642,6 +643,7 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
 VOID SaveWindowPos(int port);
 VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT);
+BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT, BOOL AllowTR);
 VOID ShowTraffic(struct TNCINFO * TNC);
 int OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet);
 VOID SendMH(int Hardware, char * call, char * freq, char * LOC, char * Mode);

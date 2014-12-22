@@ -32,6 +32,8 @@ VOID GetJSONValue(char * _REPLYBUFFER, char * Name, char * Value);
 VOID SendHTTPRequest(SOCKET sock, char * Host, int Port, char * Request, char * Params, int Len, char * Return);
 SOCKET OpenWL2KHTTPSock();
 VOID FormatTime2(char * Time, time_t cTime);
+VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
+VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst);
 
 char COMMANDBUFFER[81] = "";		// Command Hander input buffer
 char OrigCmdBuffer[81] = "";		// Command Hander input buffer
@@ -1650,6 +1652,12 @@ VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 		return;
 	}
 
+	if (ptr == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Destination missing\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
 	ptr[strlen(ptr)] = ' ';				// Put param back together
 
 	if (DecodeCallString(ptr, &Stay, &Spy, &axcalls[0]) == 0)
@@ -2202,10 +2210,18 @@ NoPort:
 		Bufferptr += sprintf(Bufferptr, "Sorry, port is for UI traffic only\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		return;
-
+	}
+	
+	if (Session->L4USER[6] == 0x42 || Session->L4USER[6] == 0x44)
+	{	
+		Bufferptr += sprintf(Bufferptr, "Sorry - Can't make ax.25 calls with SSID of T or R\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
 	}
 
+
 	// Get Session Entry for Downlink
+
 
 	NewSess = SetupNewSession(Session, Bufferptr);
 	if (NewSess == NULL)
@@ -2226,7 +2242,7 @@ NoPort:
 	
 	if (LINK == NULL)
 	{
-		Bufferptr += sprintf(Bufferptr, "Sorry - System Tables Full!r");
+		Bufferptr += sprintf(Bufferptr, "Sorry - System Tables Full\r");
 		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 		
 		// Should release NewSess
@@ -2351,7 +2367,7 @@ VOID LINKCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		
 		if (ptr)
 		{
-			ret = ConvToAX25(ptr, axcall);
+			ret = ConvToAX25Ex(ptr, axcall);
 
 			if (ret)
 			{
@@ -4110,7 +4126,7 @@ VOID StatsTimer()
 
 
 extern struct AXIPPORTINFO * Portlist[];
-VOID Format_Addr(unsigned char * Addr, char * Output, BOOL IPV6);
+
 #define TCPConnected 4
 
 
@@ -4338,7 +4354,11 @@ VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 			if (sockptr->UserPointer == 0)
 			{
 				if (sockptr->HTTPMode)
-					strcpy(msg,"HTTP Session");
+				{
+					char Addr[100];
+					Tel_Format_Addr(sockptr, Addr);
+					sprintf(msg, "HTTP From %s", Addr);
+				}
 				else
 					strcpy(msg,"Logging in");
 			}

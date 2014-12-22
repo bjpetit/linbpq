@@ -19,6 +19,12 @@
 
 #include "BPQAPRS.h"
 
+#ifndef WIN32
+
+#include <unistd.h>
+#include <sys/mman.h>
+
+#endif
 
 #define MAXAGE 3600 * 12	  // 12 Hours
 #define MAXCALLS 20			  // Max Flood, Trace and Digi
@@ -382,6 +388,8 @@ Dll BOOL APIENTRY Init_APRS()
 #ifndef LINBPQ
 	HKEY hKey=0;
 	int retCode, Vallen, Type; 
+#else
+	int fd;
 #endif
 	struct STATIONRECORD * Stn1, * Stn2;
 
@@ -431,7 +439,45 @@ Dll BOOL APIENTRY Init_APRS()
 
 #ifdef LINBPQ
 
-	APRSStationMemory = malloc(sizeof(struct STATIONRECORD) * (MaxStations + 1));
+	// Create a Shared Memory Object
+
+	APRSStationMemory = NULL;
+
+#ifndef WIN32
+
+	fd = shm_open("/BPQAPRSSharedMem", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+	if (fd == -1)
+	{
+		printf("Create APRS Shared Memory Failed\n");
+	}
+	else
+	{
+		if (ftruncate(fd, sizeof(struct STATIONRECORD) * (MaxStations + 1)) == -1)
+		{
+			printf("Extend APRS Shared Memory Failed\n");
+		}
+		else
+		{
+			// Map shared memory object
+
+			APRSStationMemory = mmap((void *)0x43000000, sizeof(struct STATIONRECORD) * (MaxStations + 1),
+			     PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
+
+			if (APRSStationMemory == MAP_FAILED)
+			{
+				printf("Extend APRS Shared Memory Failed\n");
+				APRSStationMemory = NULL;
+			}
+		}
+	}
+
+#endif
+
+	if (APRSStationMemory == NULL)
+	{
+		printf("APRS not using shared memory");
+		APRSStationMemory = malloc(sizeof(struct STATIONRECORD) * (MaxStations + 1));
+	}
 
 #else
 
@@ -3629,6 +3675,7 @@ struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
 		sum %= 20;
 
 		ptr->TrackColour = sum;
+		ptr->Moved = TRUE;
 
 		return ptr;
 	}
@@ -5851,7 +5898,7 @@ loop:
 
 	memcpy(NewPtr, ptr1, BytesLeft);
 	
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", NewFileSize);
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", NewFileSize);
 	send(sockptr->sock, Header, HeaderLen, 0); 
 	send(sockptr->sock, NewMessage, NewFileSize, 0); 
 
@@ -5899,7 +5946,7 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 
 		if (hFile == NULL)
 		{
-			HeaderLen = sprintf(Header, "HTTP/1.0 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
+			HeaderLen = sprintf(Header, "HTTP/1.1 404 Not Found\r\nContent-Length: 16\r\n\r\nPage not found\r\n");
 			send(sockptr->sock, Header, HeaderLen, 0); 
 			return;
 
@@ -5937,7 +5984,7 @@ VOID APRSSendMessageFile(struct APRSConnectionInfo * sockptr, char * FN)
 		return;			// ProcessSpecial has sent the reply
 	}
 
-	HeaderLen = sprintf(Header, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", FileSize);
+	HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", FileSize);
 	send(sockptr->sock, Header, HeaderLen, 0); 
 	
 	Sent = send(sockptr->sock, MsgBytes, FileSize, 0);

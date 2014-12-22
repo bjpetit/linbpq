@@ -106,8 +106,7 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 
 	//	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-//	Q = (UINT *) PQ;
-	memcpy(&Q, &PQ, 4);
+	Q = (UINT *) PQ;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("Q_REM called without semaphore from %s Line %d", File, Line);
@@ -121,8 +120,7 @@ VOID * _Q_REM(VOID *PQ, char * File, int Line)
 
 	next= first[0];						// Address of next buffer
 
-//	Q[0] = next;
-	memcpy(PQ, &next, 4);
+	Q[0] = next;
 
 	// Make sure guard zone is zeros
 
@@ -202,8 +200,7 @@ int _C_Q_ADD(VOID *PQ, VOID *PBUFF, char * File, int Line)
 
 //	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-//	Q = (UINT *) PQ;
-	memcpy(&Q, &PQ, 4);
+	Q = (UINT *) PQ;
 
 	if (Semaphore.Flag == 0)
 		Debugprintf("C_Q_ADD called without semaphore from %s Line %d", File, Line);
@@ -240,8 +237,7 @@ BOK2:
 
 	if (Q[0] == 0)						// Empty
 	{
-//		Q[0]=(UINT)BUFF;				// New one on front
-		memcpy(PQ, &BUFF, 4);
+		Q[0]=(UINT)BUFF;				// New one on front
 		return(0);
 	}
 
@@ -267,8 +263,7 @@ int C_Q_ADD_NP(VOID *PQ, VOID *PBUFF)
 
 //	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-//	Q = (UINT *) PQ;
-	memcpy(&Q, &PQ, 4);
+	Q = (UINT *) PQ;
 
 	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
 		return(0);
@@ -299,8 +294,7 @@ int C_Q_COUNT(VOID *PQ)
 
 //	PQ may not be word aligned, so copy as bytes (for ARM5)
 
-//	Q = (UINT *) PQ;
-	memcpy(&Q, &PQ, 4);
+	Q = (UINT *) PQ;
 
 	if (CheckQHeadder(Q) == 0)			// Make sure Q header is readable
 		return(0);
@@ -673,6 +667,11 @@ struct TNCINFO * TNCInfo[34];		// Records are Malloc'd
 
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT)
 {
+	return ProcessIncommingConnectEx(TNC, Call, Stream, SENDCTEXT, FALSE);
+}
+
+BOOL ProcessIncommingConnectEx(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT, BOOL AllowTR)
+{
 	TRANSPORTENTRY * Session;
 	int Index = 0;
 	UINT * buffptr;
@@ -709,9 +708,11 @@ BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL
 
 	memcpy(TNC->Streams[Stream].RemoteCall, Call, 9);	// Save Text Callsign
 
-	ConvToAX25(Call, Session->L4USER);
+	if (AllowTR)
+		ConvToAX25Ex(Call, Session->L4USER);				// Allow -T and -R SSID's for MPS
+	else
+		ConvToAX25(Call, Session->L4USER);
 	ConvToAX25(MYNODECALL, Session->L4MYCALL);
-
 	Session->CIRCUITINDEX = Index;
 	Session->CIRCUITID = NEXTID;
 	NEXTID++;
@@ -913,7 +914,8 @@ DllExport int APIENTRY ChangeSessionPaclen(int Stream, int Paclen)
 
 DllExport int APIENTRY ChangeSessionIdletime(int Stream, int idletime)
 {
-	BPQHOSTVECTOR[Stream-1].HOSTSESSION->L4LIMIT = idletime;
+	if (BPQHOSTVECTOR[Stream-1].HOSTSESSION)
+		BPQHOSTVECTOR[Stream-1].HOSTSESSION->L4LIMIT = idletime;
 	return (0);
 }
 
@@ -1364,7 +1366,7 @@ DllExport int APIENTRY SendRaw(int port, char * msg, int len)
 	return 0;
 }
 
-DllExport time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count )
+DllExport time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count)
 {
 	time_t Stamp;
 	BPQVECSTRUC * SESS;
@@ -2622,6 +2624,63 @@ Dll BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase)
 }
 
 
+DllExport BOOL ConvToAX25Ex(unsigned char * callsign, unsigned char * ax25call)
+{
+	// Allows SSID's of 'T and 'R'
+	
+	int i;
+
+	memset(ax25call,0x40,6);		// in case short
+	ax25call[6]=0x60;				// default SSID
+
+	for (i=0;i<7;i++)
+	{
+		if (callsign[i] == '-')
+		{
+			//
+			//	process ssid and return
+			//
+			
+			if (callsign[i+1] == 'T')
+			{
+				ax25call[6]=0x42;
+				return TRUE;
+			}
+
+			if (callsign[i+1] == 'R')
+			{
+				ax25call[6]=0x44;
+				return TRUE;
+			}
+			i = atoi(&callsign[i+1]);
+
+			if (i < 16)
+			{
+				ax25call[6] |= i<<1;
+				return (TRUE);
+			}
+			return (FALSE);
+		}
+
+		if (callsign[i] == 0 || callsign[i] == 13 || callsign[i] == ' ' || callsign[i] == ',')
+		{
+			//
+			//	End of call - no ssid
+			//
+			return (TRUE);
+		}
+
+		ax25call[i] = callsign[i] << 1;
+	}
+
+	//
+	//	Too many chars
+	//
+
+	return (FALSE);
+}
+
+
 DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 {
 	int i;
@@ -2664,6 +2723,7 @@ DllExport BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call)
 	return (FALSE);
 }
 
+
 DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall)
 {
 	int in,out=0;
@@ -2681,6 +2741,21 @@ DllExport int ConvFromAX25(unsigned char * incall,unsigned char * outcall)
 	}
 
 	chr=incall[6];				// ssid
+
+	if (chr == 0x42)
+	{
+		outcall[out++]='-';
+		outcall[out++]='T';
+		return out;
+	}
+
+	if (chr == 0x44)
+	{
+		outcall[out++]='-';
+		outcall[out++]='R';
+		return out;
+	}
+
 	chr >>= 1;
 	chr	&= 15;
 

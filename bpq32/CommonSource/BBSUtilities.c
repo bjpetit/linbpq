@@ -7850,12 +7850,12 @@ int Connected(int Stream)
 		
 		if (Stream == conn->BPQStream)
 		{
-			ChangeSessionIdletime(Stream, USERIDLETIME);			// Default Idletime for BBS Sessions
 
 			if (conn->Active)
 			{
 				// Probably an outgoing connect
 		
+				ChangeSessionIdletime(Stream, USERIDLETIME);		// Default Idletime for BBS Sessions
 				conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 				conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
 
@@ -7867,7 +7867,7 @@ int Connected(int Stream)
 
 					// Run first line of connect script
 
-					ChangeSessionIdletime(Stream, BBSIDLETIME);			// Default Idletime for BBS Sessions
+					ChangeSessionIdletime(Stream, BBSIDLETIME);		// Default Idletime for BBS Sessions
 					ProcessBBSConnectScript(conn, ConnectedMsg, 15);
 					return 0;
 				}
@@ -7876,6 +7876,7 @@ int Connected(int Stream)
 			memset(conn, 0, sizeof(ConnectionInfo));		// Clear everything
 			conn->Active = TRUE;
 			conn->BPQStream = Stream;
+			ChangeSessionIdletime(Stream, USERIDLETIME);			// Default Idletime for BBS Sessions
 
 			conn->SendB = conn->SendP = conn->SendT = conn->DoReverse = TRUE;
 			conn->MaxBLen = conn->MaxPLen = conn->MaxTLen = 99999999;
@@ -8867,14 +8868,14 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			ProcessMBLLine(conn, user, Buffer, len);
 		return;
 	}
-	if (conn->Flags & GETTINGUSER)
+	if (conn->Flags & GETTINGUSER || conn->NewUser)		// Could be new user but dont nned name
 	{
-		conn->Flags &=  ~GETTINGUSER;
-
 		if (memcmp(Buffer, ";FW:", 4) == 0 || Buffer[0] == '[')
 		{
 			struct	BBSForwardingInfo * ForwardingInfo;
 			
+			conn->Flags &= ~GETTINGUSER;
+
 			// New User is a BBS - create a temp struct for it
 
 			if ((user->flags & (F_BBS | F_Temp_B2_BBS)) == 0)			// It could already be a BBS without a user name
@@ -8894,11 +8895,15 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		}
 		else
 		{
-			memcpy(user->Name, Buffer, len-1);
-			SendWelcomeMsg(conn->BPQStream, conn, user);
-			SaveUserDatabase();
-			UpdateWPWithUserInfo(user);
-			return;
+			if (conn->Flags & GETTINGUSER)
+			{
+				conn->Flags &= ~GETTINGUSER;
+				memcpy(user->Name, Buffer, len-1);
+				SendWelcomeMsg(conn->BPQStream, conn, user);
+				SaveUserDatabase();
+				UpdateWPWithUserInfo(user);
+				return;
+			}
 		}
 	}
 

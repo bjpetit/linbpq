@@ -10,6 +10,7 @@
 
 Dll int ConvFromAX25(unsigned char * incall,unsigned char * outcall);
 Dll BOOL ConvToAX25(unsigned char * callsign, unsigned char * ax25call);
+DllExport BOOL ConvToAX25Ex(unsigned char * callsign, unsigned char * ax25call);
 int WritetoConsoleLocal(char * buff);
 VOID Consoleprintf(const char * format, ...);
 VOID FreeConfig();
@@ -183,7 +184,6 @@ extern UCHAR NEXTID;
 extern struct ROUTE * NEIGHBOURS;
 extern int  MAXNEIGHBOURS;
 
-
 extern struct ROUTE * NEIGHBOURS;
 extern int  ROUTE_LEN;
 extern int  MAXNEIGHBOURS;
@@ -348,6 +348,8 @@ extern int L3FRAMES;
 extern char * PortConfig[];
 extern struct SEM Semaphore;
 extern UCHAR AuthorisedProgram;			// Local Variable. Set if Program is on secure list
+
+extern int REALTIMETICKS;
 
 // SNMP Variables
 

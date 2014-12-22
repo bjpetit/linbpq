@@ -291,9 +291,9 @@ static int offset[] =
 69, 10, 30, 0, 20,
 384, 512, InfoOffset, C_ROUTES, 2560, 72,
 74, 76, 78, 96, 100,
-102, 103, 105, 107, 120, 118,
+102, 104, 106, 108, 120, 118,
 ApplOffset, 66, 2048, 71, 70, 67,
-3000, 98, 0, 109, 110,
+3000, 98, 0, 103, 110,
 0,10,20,30,
 40,50,60,70,
 80,90,100,110,
@@ -340,7 +340,8 @@ static char *pkeywords[] =
 "TXTAIL", "ALIAS_IS_BBS", "L3ONLY", "KISSOPTIONS", "INTERLOCK", "NODESPACLEN",
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
 "BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY",
-"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE", "IGNOREUNLOCKEDROUTES"};           /* parameter keywords */
+"UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE",
+"IGNOREUNLOCKEDROUTES", "INP3ONLY"};           /* parameter keywords */
 
 static int poffset[] =
 {
@@ -352,7 +353,8 @@ static int poffset[] =
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
 226, 72, 124, 516, 210, 512, 125,
-36, 236, 38, 36, 36, 126, 600, 111};					/* offset for corresponding data in config file */
+36, 236, 38, 36, 36, 126, 600,
+111, 242};					/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -364,7 +366,7 @@ static int proutine[] =
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
 0, 1, 2, 18, 15, 16, 2,
-1, 17, 1, 1, 1, 1, 2, 2};							/* routine to process parameter */
+1, 17, 1, 1, 1, 1, 2, 2, 2};							/* routine to process parameter */
 
 int PPARAMLIM = sizeof(proutine)/sizeof(int);
 

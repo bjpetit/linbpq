@@ -309,6 +309,7 @@ struct B2RestartData
 	struct UserInfo * UserPointer;
 	int Count;						// Give up if too many restarts
 };
+
 #pragma pack(1)
 
 struct TempUserInfo

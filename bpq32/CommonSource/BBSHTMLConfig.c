@@ -280,7 +280,8 @@ static char MailDetailPage[] =
 "Title&nbsp; <input style=\"width:360px;\" name=Title value=\"%s\"> <br><br>"
 "<span align = center><input onclick=editmsg(\"EditM?%s?%d\") value=\"Edit Text\" type=button> "
 "<input onclick=save(this.form) value=Save type=button> "
-"<input onclick=doit(\"SavetoFile\") value=\"Save to File\" type=button> "
+"<td><a href=/Mail/SaveMessage?%s><button type = button>Save Message</button></a></td>"
+//"<input onclick=doit(\"SavetoFile\") value=\"Save to File\" type=button> "
 "<input onclick=doit(\"Print\") value=Print type=button> "
 "<input onclick=doit(\"Export\") value=Export type=button></span><br><br>"
 "Green = Sent, Yellow = Queued"
@@ -672,6 +673,63 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		return;
 	}
 
+	if (_stricmp(NodeURL, "/Mail/SaveMessage") == 0)
+	{
+		struct MsgInfo * Msg = Session->Msg;
+		char * MailBuffer;
+
+		int Files = 0;
+		int BodyLen;
+		char * ptr;
+		int WriteLen=0;
+		char Hddr[1000];
+		char FullTo[100];
+
+		MailBuffer = ReadMessageFile(Msg->number);
+		BodyLen = Msg->length;
+
+		ptr = MailBuffer;
+
+		if (_stricmp(Msg->to, "RMS") == 0)
+			 sprintf(FullTo, "RMS:%s", Msg->via);
+		else
+		if (Msg->to[0] == 0)
+			sprintf(FullTo, "smtp:%s", Msg->via);
+		else
+			strcpy(FullTo, Msg->to);
+
+		sprintf(Hddr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
+			Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+
+		if (Msg->B2Flags)
+		{
+			// Remove B2 Headers (up to the File: Line)
+			
+			char * bptr;
+			bptr = strstr(ptr, "Body:");
+			if (bptr)
+			{
+				BodyLen = atoi(bptr + 5);
+				bptr = strstr(bptr, "\r\n\r\n");
+
+				if (bptr)
+					ptr = bptr+4;
+			}
+		}
+
+		ptr[BodyLen] = 0;
+
+		sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Disposition: attachment; filename=\"SavedMsg%05d.txt\" \r\n\r\n",
+			strlen(Hddr) + strlen(ptr), Msg->number);	
+		strcat(Reply, Hddr);
+		strcat(Reply, ptr);
+
+		*RLen = strlen(Reply);
+
+		return;
+
+	}
+
 	if (_stricmp(NodeURL, "/Mail/Msgs") == 0)
 	{
 		struct UserInfo * USER = NULL;
@@ -924,7 +982,7 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			(Msg->status == 'D')?sel:"",
 			(Msg->status == '$')?sel:"",
 			Msg->bid, D3, Msg->length, EmailFromLine, Msg->via, Msg->title,
-					Key, Msg->number);
+				Key, Msg->number, Key);
 
 		// Get a sorted list of BBS records
 

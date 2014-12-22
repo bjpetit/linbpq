@@ -94,8 +94,6 @@ extern int MaintTime;
 
 int _MYTIMEZONE = 0;
 
-#pragma pack(1)
-
 // flags equates
 
 #define F_Excluded   0x0001
@@ -495,7 +493,7 @@ int main(int argc, char * argv[])
 	printf("%s\n", VerCopyright);
 
 	if (argc > 1 && _stricmp(argv[1], "-v") == 0)
-		return;
+		return 0;
 
 	Debugprintf("G8BPQ AX25 Packet Switch System Version %s %s", TextVerstring, Datestring);
 

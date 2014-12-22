@@ -74,11 +74,11 @@ int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 		}
 
-		if (rxbuff[13] != 0xff)
+		if (res == 0)
+			/* Timeout elapsed */
 			return 0;
 
-		if(res == 0)
-			/* Timeout elapsed */
+		if (rxbuff[13] != 0xff)
 			return 0;
 
 		if (IF->RLIRX)
@@ -223,7 +223,7 @@ UINT ETHERExtInit(struct PORTCONTROL *  PortEntry)
 
 	IF = &PCAPInfo[port];
 
-	IF->s = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	IF->s = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_BPQ));
 
 	if (IF->s == -1)
 	{

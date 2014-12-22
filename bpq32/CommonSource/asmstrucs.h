@@ -58,8 +58,6 @@ extern int ENDOFDATA;
 extern int L3LIVES;
 extern int NUMBEROFNODES;
 
-#pragma pack(1) 
-
 // Length of config Buffer = 100000
 
 #define ApplOffset 80000			// Applications offset in config buffer
@@ -105,6 +103,7 @@ typedef struct _MHSTRUC
 //
 //	Session Record
 //
+
 typedef struct _TRANSPORTENTRY
 {
 	UCHAR	L4USER[7];				// CALL OF ORIGINATING USER
@@ -191,7 +190,6 @@ typedef struct _TRANSPORTENTRY
 #define BPQHOST		32
 #define PACTOR		64
 
-
 typedef struct ROUTE
 {
 	// Adjacent Nodes
@@ -216,7 +214,8 @@ typedef struct ROUTE
 	UCHAR NBOUR_PACLEN;
 
 	BOOL INP3Node;
-	BOOL NoKeepAlive;		// Suppress Keepalive Processing
+	BOOL NoKeepAlive;			// Suppress Keepalive Processing
+	int	LastConnectAttempt;		// To stop us trying too often
 
 	int Status;			// 
 	int LastRTT;			// Last Value Reported
@@ -244,6 +243,7 @@ typedef struct ROUTE
 #define SentOurRIF 16		// Set when we have sent a rif for our Call and any ApplCalls
 							//  (only sent when we have seen both a request and response)
 
+#pragma pack(1)
 
 typedef struct _L3MESSAGEBUFFER
 {
@@ -372,6 +372,8 @@ typedef struct DATAMESSAGE
 //
 //	BPQHOST MODE VECTOR STRUC
 //
+
+#pragma pack()
 
 typedef struct _BPQVECSTRUC
 {
@@ -508,6 +510,7 @@ struct WL2KInfo
 	BOOL RPonPTC;			// Set if scanning for Robust Packet on a PTC
 };
 
+
 typedef struct PORTCONTROL
 {
 	UCHAR PORTCALL[7];
@@ -620,15 +623,16 @@ typedef struct PORTCONTROL
 	char PortUIONLY;		// UI only port - no connects
 	char UICAPABLE;			// Pactor-style port that can do UI
 
-	struct WL2KInfo WL2KInfo; // WL2K Report for this Port
+	struct WL2KInfo WL2KInfo;	// WL2K Report for this Port
 	struct in_addr PORTIPADDR;	// IP address for "KISS over UDP"
 	int	ListenPort;				// For KISS over UDP, if Different TX and RX Ports needed
 
-	char * SerialPortName;	//	Serial Port Name for Unix
-	struct XDIGI * XDIGIS;			// Cross port digi setup
+	char * SerialPortName;		//	Serial Port Name for Unix
+	struct XDIGI * XDIGIS;		// Cross port digi setup
 
-	BOOL NormalizeQuality;			// Normalise Node Qualities
-	BOOL IgnoreUnlocked;			// Ignore Unlocked routes
+	BOOL NormalizeQuality;		// Normalise Node Qualities
+	BOOL IgnoreUnlocked;		// Ignore Unlocked routes
+	BOOL INP3ONLY;				// Default to INP3 and disallow NODES
 
 }	PORTCONTROLX, *PPORTCONTROL;
 
@@ -848,6 +852,8 @@ typedef struct _LINKTABLE
 
 } LINKTABLE;
 
+#pragma pack(1)
+
 struct myin_addr {
         union {
                 struct { u_char s_b1,s_b2,s_b3,s_b4; } S_un_b;
@@ -941,8 +947,6 @@ typedef struct _ICMPMSG
 	USHORT	ICMPSEQUENCE;
 
 } ICMPMSG, *PICMPMSG;
-
-
 
 #pragma pack()
 
@@ -1107,7 +1111,6 @@ struct TNCDATA
 #define KANTRONICS 2		// For future use
 #define SCS 3
 
-#pragma pack(1) 
 
 #define MAX_ENTRIES 128
 #define MaxMHEntries 100
@@ -1244,7 +1247,6 @@ struct AXIPPORTINFO
 
 };
 
-#pragma pack()
 
 #define Disconnect(stream) SessionControl(stream,2,0)
 #define Connect(stream) SessionControl(stream,1,0)

@@ -131,10 +131,18 @@ struct RIGINFO
 #define NMEA 10
 #define FT1000 11
 #define DUMMY 12
+#define FT990 13
+
+// Yease seem to have lots of variants of the same model
+
+#define FT1000D	1
+#define FT1000MP 2 
+
 
 struct RIGPORTINFO
 {
 	int PortType;				// ICOM, Yaesu, Etc
+	int YaesuVariant;			// Yaesu seems to have lots of incompatible subtypes
 	char IOBASE[80];
 	char PTTIOBASE[80];			// Port for Hardware PTT - may be same as control port.
 	int SPEED;

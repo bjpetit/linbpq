@@ -905,7 +905,19 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		__try {
 #endif
 		Msg->B2Flags |= B2Msg;
-				
+
+		// Display the whole header for debugging
+
+/*
+		ptr1 = strstr(outfile, "\r\n\r\n");
+
+		if (ptr1)
+		{
+			*ptr1 = 0;
+			Debugprintf("B2 Header = %s", outfile);
+			*ptr1 = '\r';
+		}
+*/
 		if (_stricmp(conn->Callsign, "RMS") == 0)
 			Msg->B2Flags |= FromRMS;
 
@@ -984,7 +996,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				// Also set Emailfrom, in case read on BBS (eg by outpost)
 				
 				strcpy(Msg->emailfrom, "@winlink.org");
-
 			}
 
 		}
@@ -1488,6 +1499,17 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			char * ptr = HddrTo[0];
 			__int32 ToLen;
+			char toCopy[80];
+			
+			if (Recipients == 0 || HddrTo == NULL)
+			{
+				Debugprintf("B2 Message with no recipients from %s", conn->Callsign);	
+				Logprintf(LOG_BBS, conn, '!', "B2 Message with no recipients from %s", conn->Callsign);
+				SetupNextFBBMessage(conn);
+				return;
+			}
+			
+			ptr = HddrTo[0];
 
 			if (_memicmp(&ptr[4], "nts:", 4) == 0)
 				memmove(ptr + 4, ptr + 8, strlen(ptr + 7));
@@ -1502,9 +1524,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				conn->TempMsg->type = 'B';
 				memmove(&ptr[4], &ptr[9], strlen(&ptr[8]));
 				ToLen = strlen(ptr);
-				strlop(ptr, '@');
-				strcpy(conn->TempMsg->to, _strupr(&ptr[4]));
-				strcat(HddrTo[0], "\r\n"); 
+				strcpy(toCopy, _strupr(&ptr[4]));
+				strlop(toCopy, '@');
+				strcpy(conn->TempMsg->to, toCopy);
 				ToLen = strlen(HddrTo[0]);
 
 				if (memcmp(conn->TempMsg->title, "//WL2K ", 7) == 0)
@@ -1531,13 +1553,11 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				}
 */
 			}
-			else
-			{
-				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
-				memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 
-				conn->TempMsg->length += ToLen;
-			}
 
+			memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
+			memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 
+			conn->TempMsg->length += ToLen;
+	
 			CreateMessageFromBuffer(conn);
 			SetupNextFBBMessage(conn);
 			return;

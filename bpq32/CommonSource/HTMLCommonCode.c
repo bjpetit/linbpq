@@ -54,7 +54,8 @@ char * GetTemplateFromFile(int Version, char * FN)
 		if (Version != PageVersion)
 		{
 			free(MsgBytes);
-			MsgBytes = _strdup("Wrong Version of HTML Pages - please update");
+			MsgBytes = malloc(256);
+			sprintf(MsgBytes, "Wrong Version of HTML Pages - is %d should be %d. Please update", PageVersion, Version);
 		}
 	}
 	

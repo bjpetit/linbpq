@@ -198,6 +198,8 @@ HANDLE handle;
 #ifdef WIN32
 pcap_t *adhandle = 0;
 pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
+
+int pcap_reopen_delay;
 #endif
 
 static char Adapter[256];
@@ -366,7 +368,14 @@ Dll BOOL APIENTRY Init_IP()
 
 	if (Adapter[0])					// Don't have to have ethernet, if used just as ip over ax.25 switch 
 	{
-		OpenPCAP();
+		char buf[80];
+
+		if (OpenPCAP())
+			sprintf(buf,"IP Using %s\n", Adapter);
+		else
+			sprintf(buf," IP Unable to open %s\n", Adapter);
+	
+		WritetoConsoleLocal(buf);
 
 		if (adhandle == NULL)
 		{
@@ -629,7 +638,7 @@ Pollloop:
 			//	PIPMSG ipptr = (PIPMSG)&Buffer[EthOffset+14];
 			//	ProcessIPMsg(ipptr, ethptr->SOURCE, 'E', 255);
 				goto Pollloop;
-		}
+			}
 
 			if (ethptr->ETYPE == 0x0608)
 			{
@@ -641,7 +650,33 @@ Pollloop:
 
 			goto Pollloop;
 		}
+		else
+		{
+			if (res < 0)
+			{
+				char * error  = pcap_geterrx(adhandle) ;
+				Debugprintf(error);
+				if (OpenPCAP() == FALSE)
+					pcap_reopen_delay = 300;
+			}
+		}
 	}
+	else
+	{
+		// No handle. 
+		
+		if (Adapter[0])					// Don't have to have ethernet, if used just as ip over ax.25 switch 
+		{
+			// Try reopening periodically
+			
+			pcap_reopen_delay --;
+			
+			if (pcap_reopen_delay < 0)
+				if (OpenPCAP() == FALSE)
+					pcap_reopen_delay = 300;	// Retry every 30 seconds
+		}
+	}
+
 #endif
 
 PollTAPloop:
@@ -1189,8 +1224,8 @@ AlreadyThere:
 
 		// If for our Ethernet Subnet, Ignore or we send loads of unnecessary msgs to ax.25
 
-//		if ((arpptr->TARGETIPADDR & OurNetMask) == (OurIPAddr & OurNetMask))
-//			return;
+		if ((arpptr->TARGETIPADDR & OurNetMask) == (OurIPAddr & OurNetMask))
+			return;
 
 		// Should't we just reply if we know it ?? (Proxy ARP)
 
@@ -2557,7 +2592,24 @@ static ProcessLine(char * buf)
 	{
 		WantEncap = TRUE;
 		if (p_value && _stricmp(p_value, "UDP") == 0)
+		{
 			UDPEncap = TRUE;
+
+			// look for options PORT and/or IPv6
+
+			p_value = strtok(NULL, " \t\n\r");
+
+			while (p_value)
+			{
+				if (_stricmp(p_value, "IPv6") == 0)
+					IPv6 = TRUE;
+				else
+					if (_memicmp(p_value, "PORT=", 5) == 0)
+						UDPPort = atoi(&p_value[5]);
+			
+				p_value = strtok(NULL, " \t\n\r");
+			}
+		}
 
 		return (TRUE);
 	}
@@ -2791,9 +2843,6 @@ int OpenPCAP()
 
 	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
 
-
-	WritetoConsoleLocal("IP ");
-
 	/* Open the adapter */
 	adhandle= pcap_open_livex(Adapter,	// name of the device
 							 65536,			// portion of the packet to capture. 
@@ -2804,13 +2853,7 @@ int OpenPCAP()
 							 );
 	
 	if (adhandle == NULL)
-	{
-		n=sprintf(buf,"Unable to open %s\n",Adapter);
-		WritetoConsoleLocal(buf);
-
-		/* Free the device list */
-		return -1;
-	}
+		return FALSE;
 	
 	/* Check the link layer. We support only Ethernet for simplicity. */
 	if(pcap_datalinkx(adhandle) != DLT_EN10MB)
@@ -2819,7 +2862,7 @@ int OpenPCAP()
 		WritetoConsoleLocal(buf);
 		
 		/* Free the device list */
-		return -1;
+		return FALSE;
 	}
 
 	netmask=0xffffff; 
@@ -2833,7 +2876,7 @@ int OpenPCAP()
 		WritetoConsoleLocal(buf);
 
 		/* Free the device list */
-		return -1;
+		return FALSE;
 	}
 	
 	//set the filter
@@ -2844,12 +2887,9 @@ int OpenPCAP()
 		WritetoConsoleLocal(buf);
 
 		/* Free the device list */
-		return -1;
+		return FALSE;
 	}
 	
-	n=sprintf(buf,"Using %s\n", Adapter);
-	WritetoConsoleLocal(buf);
-
 	return TRUE;
 
 }
@@ -3048,11 +3088,17 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 		if (Bits > 32)
 			Bits = 32;
 
-		IPMask = (0xFFFFFFFF) << (32 - Bits);
+		if (Bits == 0)
+			IPMask = 0;
+		else
+			IPMask = (0xFFFFFFFF) << (32 - Bits);
+		
 		*p_mask = 0;
 	}
 	else
 		IPMask = 0;
+
+	IPMask = htonl(IPMask);			// Needs to be Network order
 
 	IPAddr = inet_addr(p_ip);
 
@@ -3062,7 +3108,8 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 
 	if (IPGateway == INADDR_NONE) return FALSE;
 
-	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V') || (*p_type =='T'))) return FALSE;
+	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V') || (*p_type =='T')))
+		return FALSE;
 
 	if (*p_type == 'T')
 	{

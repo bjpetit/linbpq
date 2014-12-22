@@ -56,6 +56,7 @@ VOID AddHere(struct DEST_ROUTE_ENTRY * ROUTEPTR,struct ROUTE * Route , int  hops
 VOID SendRIPToNeighbour(struct ROUTE * Route);
 VOID DecayNETROMRoutes(struct ROUTE * Route);
 VOID DeleteINP3Routes(struct ROUTE * Route);
+BOOL L2SETUPCROSSLINKEX(PROUTE ROUTE, int Retries);
 
 //#define NOINP3
 
@@ -864,6 +865,7 @@ SendRIPTimer()
 	int count, nodes;
 	struct ROUTE * Route = NEIGHBOURS;
 	int MaxRoutes = MAXNEIGHBOURS;
+	int INP3Delay;
 
 	for (count=0; count<MaxRoutes; count++)
 	{
@@ -896,9 +898,25 @@ SendRIPTimer()
 					}
 				}
 
+				// Delay more if Locked - they could be retrying for a long time
+
+				if ((Route->NEIGHBOUR_FLAG & 1))	 // LOCKED ROUTE
+					INP3Delay = 1200;
+				else
+					INP3Delay = 600;
+ 
+				if (Route->LastConnectAttempt &&
+					(REALTIMETICKS - Route->LastConnectAttempt) < INP3Delay) 
+				{
+					Route++;
+					continue;						// No room for link
+				}
+
 				// Try to activate link
 
-				L2SETUPCROSSLINK(Route);
+				L2SETUPCROSSLINKEX(Route, 2);		// Only try SABM twice
+
+				Route->LastConnectAttempt = REALTIMETICKS;
 				
 				if (Route->NEIGHBOUR_LINK == 0)
 				{

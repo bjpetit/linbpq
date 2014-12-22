@@ -210,6 +210,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			int calllen;
 			STREAM->Attached = TRUE;
 
+			TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER[6] |= 0x60; // Ensure P or T aren't used on ax.25
 			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, STREAM->MyCall);
 			STREAM->MyCall[calllen] = 0;
 			STREAM->FramesOutstanding = 0;

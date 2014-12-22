@@ -523,15 +523,29 @@ ok:
 
 			if (TNC->TNCOK)
 			{
-				// If been in Sync a long time, just let it change
-
-				if (TNC->UseAPPLCallsforPactor && TNC->PTCStatus == 6)	// Sync
+				// If been in Sync a long time, or if using applcalls and
+				// Scan had been locked too longjust let it change
+				
+				if (TNC->UseAPPLCallsforPactor)
 				{
-					int insync = time(NULL) - TNC->TimeEnteredSYNCMode;
-					if (insync > 4)
+					if (TNC->PTCStatus == 6)	// Sync
 					{
-						Debugprintf("SCS Scan - in SYNC for %d Secs - allow change regardless", insync);
-						return 0;
+						int insync = time(NULL) - TNC->TimeEnteredSYNCMode;
+						if (insync > 4)
+						{
+							Debugprintf("SCS Scan - in SYNC for %d Secs - allow change regardless", insync);
+							return 0;
+						}
+					}
+					else if (TNC->TimeScanLocked)
+					{
+						int timeLocked = time(NULL) - TNC->TimeScanLocked;
+						if (timeLocked > 4)
+						{
+							Debugprintf("SCS Scan - Scan Locked for %d Secs - allow change regardless", timeLocked);
+							TNC->TimeScanLocked = 0;
+							return 0;
+						}
 					}
 				}
 
@@ -552,6 +566,7 @@ ok:
 			if (TNC->DontReleasePermission)			// Disable connects during this interval?
 			{
 				TNC->DontReleasePermission = FALSE;
+				TNC->TimeScanLocked = time(NULL) + 100;	// Make sure doesnt time out
 				return 0;
 			}
 
@@ -2344,9 +2359,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			UCHAR * Poll = TNC->TXBuffer;
 			UCHAR Chan = Msg[4] - 1;
 
-			if (Chan == 255)
-				return;				// Nothing doing
-
+			if (Chan == 255)			// Nothing doing
+				return;	
+		
 			if (Msg[5] != 0)
 			{
 				// More than one to poll - save the list of channels to poll
@@ -2444,9 +2459,16 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					if (TNC->TXBuffer[6] == 'W')	// Scan Control
 					{
 						if (Msg[4] == '1')			// Ok to Change
+						{
 							TNC->OKToChangeFreq = 1;
+							TNC->TimeScanLocked = 0;
+						}
 						else
+						{
 							TNC->OKToChangeFreq = -1;
+							if (TNC->TimeScanLocked == 0)	
+								TNC->TimeScanLocked = time(NULL);
+						}
 					}
 				}
 				return;
@@ -2602,7 +2624,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						UpdateMH(TNC, MHCall, '+', 'I');
 						TNC->RIG->CurrentBandWidth = Save;
 					}
-					ProcessIncommingConnect(TNC, Call, Stream, TRUE);
+					ProcessIncommingConnectEx(TNC, Call, Stream, TRUE, TRUE);
 
 					SESS = TNC->PortRecord->ATTACHEDSESSIONS[Stream];
 
@@ -2932,6 +2954,8 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 			if (TNC->PTCStatus != Status)		// Changed
 			{
+				Debugprintf("SCS status changed, now %s", status[Status]);
+
 				if (Status == 6)		// SYNCH
 				{
 					// New Sync

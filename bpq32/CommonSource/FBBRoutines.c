@@ -675,7 +675,9 @@ VOID FlagSentMessages(CIRCUIT * conn, struct UserInfo * user)
 				
 		if (FBBHeader && FBBHeader->MsgType)				// Not a zapped entry
 		{
-			if (conn->Paclink || conn->RMSExpress)
+			if ((conn->Paclink || conn->RMSExpress) &&
+//				((conn->UserPointer->flags & F_NTSMPS) == 0) &&
+				(FBBHeader->FwdMsg->type == 'P'))
 			{
 				// Kill Messages sent to paclink/RMS Express unless BBS FWD bit set
 
