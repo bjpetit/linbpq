@@ -631,8 +631,7 @@
 //	BPQ32 can now start and stop FLDIGI
 //	Fix loss of AXIP Resolver when running more than one AXIP port
 
-
-//  Version 6.0.9.1
+//  Version 6.0.9.1 November 2014
 
 //	Fix setting NOKEEPALIVE flag on route created from incoming L3 message
 //	Ignore NODES from locked route with quality 0
@@ -654,6 +653,17 @@
 //	FLDIGI driver can now start FLDIGI on a remote system.
 //	Add IGNOREUNLOCKEDROUTES parameter
 //	Fix error if too many Telnet server connections
+
+//  Version 6.0.10.1
+
+//	Fix crash if corrupt HTML request received.
+//	Allow SSID's of 'R' and 'T' on non-ax.25 ports for WL2K Radio Only network.
+//	Make HTTP server HTTP Version 1.1 complient - use persistent conections and close after 2.5 mins
+//	Add	INP3ONLY flag.
+//	Fix program error if enter UNPROTO without a destination path
+//	Show client IP address on HTTP sessions in Telnet Server
+//	Reduce frequency and number ot attempts to connect to routes when Keepalives or INP3 is set
+//	Add FT990 RigControl support
 
 #define CKernel
 
@@ -881,6 +891,7 @@ int MAJORVERSION=4;
 int MINORVERSION=9;
 
 struct SEM Semaphore = {0, 0, 0, 0};
+struct SEM APISemaphore = {0, 0, 0, 0};
 int SemHeldByAPI = 0;
 int LastSemGets = 0;
 UINT Sem_eax = 0;
@@ -1900,14 +1911,6 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 	switch( ul_reason_being_called )
 	{
 	case DLL_PROCESS_ATTACH:
-
-		if (WL2K != 189)	// 200 bytes of Hardwaredata
-		{
-			// Catastrophic - Refuse to load
-			
-			MessageBox(NULL,"WL2K Data Size Changed - Edit STRUCS.INC and Recompile","BPQ32", MB_OK);
-			return 0;
-		}
 			  
 		if (sizeof(HDLCDATA) > PORTENTRYLEN + 200)	// 200 bytes of Hardwaredata
 		{
@@ -4515,6 +4518,9 @@ int WritetoConsoleLocal(char * buff)
 		SendMessage(hWndCons, LB_DELETESTRING, pindex, 0);
 		PartLine = FALSE;
 	}
+
+	if ((strlen(Temp) + strlen(buff)) > 1990)
+		Temp[0] = 0;			// Should never have anything this long
 	
 	strcat(Temp, buff);
 

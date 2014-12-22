@@ -103,6 +103,7 @@ typedef struct _IPMSG
 
 } IPMSG, *PIPMSG;
 
+char Encaphost[80] = "2001:5c0:1500:cd00:77:ac84:9fa7:6833"; //acer.g8bpq.net";
 
 SOCKET EncapSock = 0;
 SOCKET UDPSock = 0;
@@ -113,13 +114,25 @@ int UDPPort = 4473;
 unsigned long UCSD44;		// 44.0.0.1
 unsigned long NewAddr;		// Address to relay to 
 
+
+// UDP packets from here to BPQ32
 union
 {
 	struct sockaddr_in txaddr;
 	struct sockaddr_in6 txaddr6;
 } TXaddr;
 
-struct sockaddr_in EncapDest;
+int TXaddrLen;
+
+
+// IPIP packets from BPQ to remote Encap
+union
+{
+	struct sockaddr_in txaddr;
+	struct sockaddr_in6 txaddr6;
+} EncapDest;
+
+
 
 unsigned short cksum(unsigned short *ip, int len)
 {
@@ -197,26 +210,29 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 
 	// Send as UDP
 
-//	if (IPv6)
-//		sent = sendto(UDPSock, Origlen, txlen, 0, (struct sockaddr *)destaddr6, sizeof(destaddr6));
-//	else
-		sent = sendto(UDPSock, IPptr, Origlen, 0, (struct sockaddr *)&TXaddr, sizeof(struct sockaddr_in));
-	
+	sent = sendto(UDPSock, IPptr, Origlen, 0, (struct sockaddr *)&TXaddr, TXaddrLen);
 	
 //	memcpy(&in, &IPptr->IPSOURCE, 4);
 //	printf("%s\n", inet_ntoa(in));
+
+	if (sent != Origlen)
+	{
+		int err = GetLastError();
+	}
 }
 
 VOID ProcessUDPMsg(PIPMSG IPptr, int nread)
 {
 	// Encap Address is after the message
 
+	// Could by an IPv4 or an IPv6 address
+
 	UCHAR * ptr;
 	int sent;
 
 	ptr = (UCHAR *)IPptr;
 	nread -= 4;
-	memcpy(&EncapDest.sin_addr.s_addr, ptr + nread, 4);
+	memcpy(&EncapDest.txaddr.sin_addr.s_addr, ptr + nread, 4);
 
 	sent = sendto(EncapSock, (char *)IPptr, nread, 0, (struct sockaddr *)&EncapDest, sizeof(struct sockaddr_in));
 	sent = GetLastError();
@@ -250,8 +266,9 @@ int main(int argc, char* argv[])
 	int n;
 	int Active = 0;
 	SOCKET maxsock;
-
-
+	struct addrinfo hints, *res = 0, *saveres;
+	char host[256];
+	char serv[256];
 
 #ifdef WIN32
 
@@ -271,10 +288,6 @@ int main(int argc, char* argv[])
 
 	ioctl(EncapSock, FIONBIO, &param);
 
-	sinx.sinx.sin_family = AF_INET;
-
-	sinx.sinx.sin_port = 0;
-
 	if (bind(EncapSock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
 	{
 		//	Bind Failed
@@ -285,17 +298,29 @@ int main(int argc, char* argv[])
 
 	UCSD44 = inet_addr("44.0.0.1");
 
-	EncapDest.sin_family = AF_INET;
-	EncapDest.sin_port = 0;
+	EncapDest.txaddr.sin_family = AF_INET;
+	EncapDest.txaddr.sin_port = 0;
 
-	printf("Net44 Tunnel opened\n");
+	printf("Net44 IPIP Port opened\n");
 
 	// Open UDP Socket
 
-	if (IPv6)
-		UDPSock = socket(AF_INET6,SOCK_DGRAM,0);
-	else
-		UDPSock= socket(AF_INET,SOCK_DGRAM,0);
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+	hints.ai_socktype = SOCK_DGRAM;
+	getaddrinfo(Encaphost, "0", &hints, &res);
+
+	if (!res)
+	{
+		err = WSAGetLastError();
+		printf("Resolve %s Failed Error %d\r\n", Encaphost, err);
+		return;					// Resolve failed
+	
+	}
+
+	getnameinfo(res->ai_addr, res->ai_addrlen, host, 256, serv, 256, 0);
+
+	UDPSock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
 	if (UDPSock == INVALID_SOCKET)
 	{
@@ -308,6 +333,13 @@ int main(int argc, char* argv[])
 		maxsock = UDPSock;
 
 	ioctl(UDPSock, FIONBIO, &param);
+
+	sinx.sinx.sin_family = res->ai_family;
+	sinx.sinx.sin_port = 0;
+
+	if (res->ai_family == AF_INET6)
+		IPv6 = TRUE;
+
  
 #ifndef WIN32
 
@@ -318,15 +350,9 @@ int main(int argc, char* argv[])
 #endif
 	
 	if (IPv6)
-	{
-		sinx.sinx.sin_family = AF_INET6;
 		memset (&sinx.sinx6.sin6_addr, 0, 16);
-	}
 	else
-	{
-		sinx.sinx.sin_family = AF_INET;
 		sinx.sinx.sin_addr.s_addr = INADDR_ANY;
-	}
 		
 	sinx.sinx.sin_port = htons(UDPPort + 1);	// Need different Send and Receive ports
 
@@ -344,10 +370,19 @@ int main(int argc, char* argv[])
 		return;
 	}
 
-	NewAddr = inet_addr("192.168.1.64");
-	TXaddr.txaddr.sin_addr.s_addr = NewAddr;
-	TXaddr.txaddr.sin_family = AF_INET;
+	if (IPv6)
+	{
+		struct sockaddr_in6 * sa6 = (struct sockaddr_in6 *)res->ai_addr;
+		memcpy(&TXaddr.txaddr6.sin6_addr, &sa6->sin6_addr, 16);
+	}
+	else
+		memcpy(&TXaddr.txaddr.sin_addr.s_addr, &res->ai_addr->sa_data[2], 4);
+
+	TXaddr.txaddr.sin_family = res->ai_family;
 	TXaddr.txaddr.sin_port = htons(UDPPort);
+	TXaddrLen = res->ai_addrlen;
+
+	printf("UDP relay port opened\n");
 
 	while (TRUE)
 	{

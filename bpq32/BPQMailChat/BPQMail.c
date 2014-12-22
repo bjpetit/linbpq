@@ -843,7 +843,7 @@
 //	Add MaxAge param (for incoming Bulls)
 
 
-//62
+//62 November 2014
 //	Add ZIP and Permit Bulls flag to Manage Users 
 //	Allow users to kill their own B and anyone to kill T messages
 //	Improve saving of "Last Listed"
@@ -854,8 +854,16 @@
 //	Fix possible retry loop when message is deferred (FBB '=' response);
 //	Don't remove Attachments from received bulls.
 
+//63
+//	Fix creating Bulls from RMS Express messages.
+//	Fix PE if message with no To: received.
+//	Fix setting "RMS Express User" flag on new connects from RMS Express 
+//	Fix deleting 'T' messages downloaded by RMS Express
+
+
+
 #include "BPQMailChat.h"
-#define MAILCHAT
+#define MAIL
 #include "Versions.h"
 
 #include "GetVersion.h"
@@ -1959,7 +1967,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case ID_HELP_ONLINEHELP:
 
 			ShellExecute(hWnd,"open",
-				"http://www.cantab.net/users/john.wiseman/Documents/BPQ%20Mail%20and%20Chat%20Server.htm",
+				"http://www.cantab.net/users/john.wiseman/Documents/MailServer.html",
 				"", NULL, SW_SHOWNORMAL); 
 		
 			break;
