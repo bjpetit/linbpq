@@ -10,7 +10,7 @@
 
 #include "compatbits.h"
 
-#include "CommonSource/bpqaprs.h"
+#include "bpqaprs.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,13 +20,17 @@
 
 #include <X11/Xlib.h>
 #include <X11/X.h>
+#define XK_MISCELLANY
+#include <X11/keysymdef.h>
 
 #include <setjmp.h>
 #include </usr/include/jpeglib.h>
 
-
 #include <unistd.h>
 #include <sys/mman.h>
+
+#define LIBCONFIG_STATIC
+#include "libconfig.h"
 
 #define VOID void
 #define UCHAR unsigned char
@@ -77,7 +81,7 @@ BOOL LocalTime = TRUE;
 Display * display;
 Window root, win;
 GC gc;
-XImage * image;
+XImage * image, * popupimage;
 
 int SetBaseX = 0;				// Lowest Tiles in currently loaded set
 int SetBaseY = 0;
@@ -93,6 +97,7 @@ int MapCentreX = 256;
 int MapCentreY = 256;
 
 int MouseX, MouseY;
+int PopupX, PopupY;
 
 double MouseLat, MouseLon;
 
@@ -102,9 +107,17 @@ int NeedRedraw = 0;
 int ScrollX = 128;
 int ScrollY = 128;
 
+int WindowX = 100, WindowY = 100;			// Position of window on screen
+int WindowWidth = 788;
+int WindowHeight = 788;
+
+BOOL popupActive = FALSE;
+BOOL selActive = FALSE;
+
 char OSMDir[256] = "BPQAPRS/OSMTiles";
 
 struct STATIONRECORD ** StationRecords = NULL;
+struct STATIONRECORD * ControlRecord;
 
 int MaxStations = 5000;
 int StationCount;
@@ -114,14 +127,15 @@ int StationCount;
 // Read 8 * 8 files, and copy to a 2048 * 3 * 2048 array. The display scrolls over this area, and
 // it is refreshed when window approaches the edge of the array.
 
-#define WIDTH 1024
-#define HEIGHT 1024
+int WIDTH;
+int HEIGHT;
 
-#define WIDTHTILES 4
-#define HEIGHTTILES 4
+int WIDTHTILES = 4;
+int HEIGHTTILES = 4;
 
 UCHAR * Image = NULL;
 UCHAR * iconImage = NULL;
+UCHAR * PopupImage = NULL;
 
 BOOL ImageChanged = 0;
 
@@ -565,6 +579,8 @@ VOID OSMThread()
 						if (ptr)
 						{
 							ptr += 4;
+							char Dir[256];
+
 							if (FileLen == inptr - (ptr - Buffer))
 							{
 								// File is OK
@@ -577,42 +593,43 @@ VOID OSMThread()
 								{
 									fwrite(ptr, 1, FileLen, Handle);
 									fclose(Handle);
+									printf("Tile %s Loaded\n", FN);
+									RefreshTile(FN, Zoom, x, y);
+									break;
 								}
-								else
+
+								if (errno != 2)			// Bad Path
 								{
-									char Dir[256];
+									printf("Create %s failed %d\n", FN, errno);
+									perror("fopen");
+									break;
+								}
+	
+								sprintf(Dir, "%s/%02d/%d", OSMDir, Zoom, x);		
 									
-									printf("Open %s falled\n", FN);
+								if (mkdir(Dir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0)
+								{
+									printf("Error Creating %s\n", FN);
+									perror("mkdir");
+									break;
+								}
+								
+								// Retry Create
 
-									// Assume Invalid Path
+								Handle = fopen(FN, "wb");
 
-									sprintf(Dir, "%s/%02d", OSMDir, Zoom);		
-									mkdir(Dir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-									printf("Creating %s \n", Dir);
+								if (Handle)
+								{
+									fwrite(ptr, 1, FileLen, Handle);
+									fclose(Handle);
 
-									sprintf(Dir, "%s/%02d/%d", OSMDir, Zoom, x);		
-									mkdir(Dir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-									printf("Creating %s \n", Dir);
-
-									sprintf(Dir, "%s/%02d/%d/%d", OSMDir, Zoom, x, y);		
-									mkdir(Dir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-									printf("Creating %s \n", Dir);
-
-									Handle = fopen(FN, "wb");
-
-									if (Handle)
-									{
-										fwrite(ptr, 1, FileLen, Handle);
-										fclose(Handle);
-									}
-									else
-										printf("Open %s falled again\n", FN);
-
+									printf("Tile %s Loaded\n", FN);
+									RefreshTile(FN, Zoom, x, y);
+									break;
 								}
 
-								printf("Tile %s Loaded\n", FN);
-								RefreshTile(FN, Zoom, x, y);
-
+								printf("Create %s falled\n", FN);
+								perror("fopen");
 								break;
 							}
 						}
@@ -633,6 +650,353 @@ VOID OSMThread()
 	sleep(1);
 }
 }
+
+double radians(double Degrees)
+{
+    return M_PI * Degrees / 180;
+}
+double degrees(double Radians)
+{
+	return Radians * 180 / M_PI;
+}
+
+
+
+double Distance(double laa, double loa)
+{
+	double lah = ControlRecord->Lat;
+	double loh = ControlRecord->Lon;
+
+/*
+
+'Great Circle Calculations.
+
+'dif = longitute home - longitute away
+
+
+'      (this should be within -180 to +180 degrees)
+'      (Hint: This number should be non-zero, programs should check for
+'             this and make dif=0.0001 as a minimum)
+'lah = latitude of home
+'laa = latitude of away
+
+'dis = ArcCOS(Sin(lah) * Sin(laa) + Cos(lah) * Cos(laa) * Cos(dif))
+'distance = dis / 180 * pi * ERAD
+'angle = ArcCOS((Sin(laa) - Sin(lah) * Cos(dis)) / (Cos(lah) * Sin(dis)))
+
+'p1 = 3.1415926535: P2 = p1 / 180: Rem -- PI, Deg =>= Radians
+*/
+
+loh = radians(loh); lah = radians(lah);
+loa = radians(loa); laa = radians(laa);
+
+return 60*degrees(acos(sin(lah) * sin(laa) + cos(lah) * cos(laa) * cos(loa-loh))) * 1.15077945;
+
+}
+
+double Bearing(double lat2, double lon2)
+{
+	double lat1 = ControlRecord->Lat;
+	double lon1 = ControlRecord->Lon;
+	double dlat, dlon, TC1;
+
+	lat1 = radians(lat1);
+	lat2 = radians(lat2);
+	lon1 = radians(lon1);
+	lon2 = radians(lon2);
+
+	dlat = lat2 - lat1;
+	dlon = lon2 - lon1;
+
+	if (dlat == 0 || dlon == 0) return 0;
+	
+	TC1 = atan((sin(lon1 - lon2) * cos(lat2)) / (cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon1 - lon2)));
+	TC1 = degrees(TC1);
+		
+	if (fabs(TC1) > 89.5) if (dlon > 0) return 90; else return 270;
+
+	if (dlat > 0)
+	{
+		if (dlon > 0) return -TC1;
+		if (dlon < 0) return 360 - TC1;
+		return 0;
+	}
+
+	if (dlat < 0)
+	{
+		if (dlon > 0) return TC1 = 180 - TC1;
+		if (dlon < 0) return TC1 = 180 - TC1; // 'ok?
+		return 180;
+	}
+
+	return 0;
+
+}
+
+
+
+VOID DecodeWXReport(struct APRSConnectionInfo * sockptr, char * WX)
+{
+	UCHAR * ptr = strchr(WX, '_');
+	char Type;
+	int Val;
+
+	if (ptr == 0)
+		return;
+
+	sockptr->WindDirn = atoi(++ptr);
+	ptr += 4;
+	sockptr->WindSpeed = atoi(ptr);
+	ptr += 3;
+WXLoop:
+
+	Type = *(ptr++);
+
+	if (*ptr =='.')	// Missing Value
+	{
+		while (*ptr == '.')
+			ptr++;
+
+		goto WXLoop;
+	}
+
+	Val = atoi(ptr);
+
+	switch (Type)
+	{
+	case 'c': // = wind direction (in degrees).	
+		
+		sockptr->WindDirn = Val;
+		break;
+	
+	case 's': // = sustained one-minute wind speed (in mph).
+	
+		sockptr->WindSpeed = Val;
+		break;
+	
+	case 'g': // = gust (peak wind speed in mph in the last 5 minutes).
+	
+		sockptr->WindGust = Val;
+		break;
+
+	case 't': // = temperature (in degrees Fahrenheit). Temperatures below zero are expressed as -01 to -99.
+	
+		sockptr->Temp = Val;
+		break;
+
+	case 'r': // = rainfall (in hundredths of an inch) in the last hour.
+		
+		sockptr->RainLastHour = Val;
+		break;
+
+	case 'p': // = rainfall (in hundredths of an inch) in the last 24 hours.
+
+		sockptr->RainLastDay = Val;
+		break;
+
+	case 'P': // = rainfall (in hundredths of an inch) since midnight.
+
+		sockptr->RainToday = Val;
+		break;
+
+	case 'h': // = humidity (in %. 00 = 100%).
+	
+		sockptr->Humidity = Val;
+		break;
+
+	case 'b': // = barometric pressure (in tenths of millibars/tenths of hPascal).
+
+		sockptr->Pressure = Val;
+		break;
+
+	default:
+
+		return;
+	}
+	while(isdigit(*ptr))
+	{
+		ptr++;
+	}
+
+	if (*ptr != ' ')
+		goto WXLoop;
+}
+
+
+VOID CreateStationPopup(struct STATIONRECORD * ptr, int x, int y)
+{
+	char Msg[80];
+	int Len = 130;
+	int Line = 12;
+	struct tm * TM;
+
+
+//	CurrentPopup = ptr;
+		
+	if (LocalTime)
+		TM = localtime(&ptr->TimeLastUpdated);
+	else
+		TM = gmtime(&ptr->TimeLastUpdated);
+
+	Len = sprintf(Msg, "Last Heard: %.2d:%.2d:%.2d on Port %d",
+		TM->tm_hour, TM->tm_min, TM->tm_sec, ptr->LastPort);
+
+	XDrawImageString(display, win, gc, x + 2, y + Line, ptr->Callsign, strlen(ptr->Callsign));
+	Line += 12;
+
+	XDrawImageString(display, win, gc, x + 2, y + Line, ptr->Path, strlen(ptr->Path));
+	Line += 12;
+
+//	XDrawImageString(display, win, gc, x + 2, y + Line, ptr->Status, 40);
+//	Line += 12;
+
+	XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+	Line += 12;
+
+
+//	Item.pszText = ptr->LastPacket;
+
+	Len = sprintf(Msg, "Distance %6.1f Bearing %3.0f Course %1.0f Speed %3.1f",
+		Distance(ptr->Lat, ptr->Lon),
+		Bearing(ptr->Lat, ptr->Lon), ptr->Course, ptr->Speed);
+
+	XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+	Line += 12;
+
+
+	if (ptr->LastWXPacket[0])
+	{
+		//display wx info
+
+		struct APRSConnectionInfo temp;
+
+		memset(&temp, 0, sizeof(temp));
+
+		DecodeWXReport(&temp, ptr->LastWXPacket);
+
+		Len = sprintf(Msg, "Wind Speed %d MPH", temp.WindSpeed);
+		XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+		Line += 12;
+
+		Len = sprintf(Msg, "Wind Gust %d MPH", temp.WindGust);
+		XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+		Line += 12;
+
+		Len = sprintf(Msg, "Wind Direction %d°", temp.WindDirn);
+		XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+		Line += 12;
+
+		Len = sprintf(Msg, "Temperature %d°F", temp.Temp);
+		XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+		Line += 12;
+
+		Len = sprintf(Msg, "Pressure %05.1f", temp.Pressure /10.0);
+		XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+		Line += 12;
+
+		Len = sprintf(Msg, "Humidity %d%%", temp.Humidity);
+		XDrawImageString(display, win, gc, x + 2, y + Line, Msg, Len);
+		Line += 12;
+	}
+
+/*
+<td>Rain last hour</td><td>##RAIN_HOUR_IN##"</td></tr>
+<tr><td>Rain today</td><td>##RAIN_TODAY_IN##"</td></tr>
+<tr><td>Rain last 24 hours</td><td>##RAIN_24_IN##"</td></tr>
+</table>
+*/
+
+}
+
+
+VOID FindStationsByPixel(int MouseX, int MouseY)
+{
+	int j=0;
+
+	struct STATIONRECORD * ptr = *StationRecords;
+	struct STATIONRECORD * List[1000];
+
+	while(ptr && j < 999)
+	{	
+		if (abs((ptr->DispX - MouseX)) < 4 && abs((ptr->DispY - MouseY)) < 4)
+			List[j++] = ptr;
+
+		ptr = ptr->Next;
+	}
+
+	if (j == 0)
+	{
+		if (popupActive)
+		{
+//			DestroyWindow(popupActive);
+			XPutImage (display, win, gc, image, ScrollX, ScrollY, 10, 10, cxImgSize, cyImgSize);
+			DrawTracks(TRUE);
+
+			popupActive = 0;
+		}
+
+		if (selActive)
+		{
+//			DestroyWindow(selActive);
+			selActive = 0;
+		}		
+		return;
+	}
+
+	//	If only one, display info popup, else display selection popup 
+
+	if (popupActive || selActive)
+		return;						// Already on display
+
+
+//	if (j == 1)
+	{
+		int PopupLeft = MouseX - ScrollX - 10;
+		int PopupTop = MouseY - ScrollY - 30;
+
+		if (PopupLeft + 400 > cxWinSize)
+			PopupLeft = cxWinSize - 405;
+
+		if (PopupTop + 150> cyWinSize)
+			PopupTop= cyWinSize - 165;
+
+		popupActive = TRUE;
+
+		XClearArea(display, win, PopupLeft, PopupTop, 350, 200, FALSE);
+		XDrawRectangle(display, win, gc, PopupLeft, PopupTop, 350, 200);
+ 		CreateStationPopup(List[0], PopupLeft, PopupTop);
+	}
+/*
+	else
+	{
+		PopupX = MouseX - ScrollX - 10;
+		PopupY = MouseY - ScrollY - 30;
+
+		if (PopupX + 150 > cxWinSize)
+			PopupX = cxWinSize - 155;
+
+		if (PopupY + 150 > cyWinSize)
+			PopupY = cyWinSize - 155;
+		
+		selActive = CreateWindow("LISTBOX", "", WS_CHILD | WS_BORDER | WS_VSCROLL |
+			WS_HSCROLL | LBS_NOTIFY,
+			PopupX, PopupY, 150, 150, hMapWnd, NULL, hInst, NULL);
+
+		for (; j > 0; j--)
+		{	
+			SendMessage(selActive, LB_ADDSTRING, 0, (LPARAM)List[j-1]->Callsign);
+		}
+		ShowWindow(selActive, SW_SHOWNORMAL);
+
+		PopupX = MouseX - ScrollX - 10;
+
+		if (PopupX + 400 > cxWinSize)
+			PopupX = cxWinSize - 405;
+	}
+*/
+
+}
+
 
 int DrawTrack(struct STATIONRECORD * ptr, BOOL AllStations)
 {
@@ -1049,12 +1413,12 @@ void j_putRGBScanline(BYTE *jpegline,
 {
 	// Offsets are in tiles, not pixels
 	
-	int offset = row * 1024 * Bytesperpixel;	//widthPix
+	int offset = row * WIDTH * Bytesperpixel;	//widthPix
 	int count;
 	unsigned int val;
 	
 	offset += XOffset * 256 * Bytesperpixel;
-	offset += YOffset * 256 * 1024 * Bytesperpixel;
+	offset += YOffset * 256 * WIDTH * Bytesperpixel;
 	
 	for (count = 0; count < 256; count++) 
 	{
@@ -1369,7 +1733,7 @@ VOID LoadImageTile(int Zoom, int startx, int starty, int x, int y)
 */
 	if ((startx) >= Limit || (starty) >= Limit || startx< 0 || starty < 0)
 	{
-		printf("Not Loading %d %d %d\n",Limit, startx, startx );
+//		printf("Not Loading %d %d %d\n",Limit, startx, startx );
 		return; //goto NoFile;
 	}
 
@@ -1406,9 +1770,9 @@ VOID LoadImageSet(int Zoom, int TileX, int TileY)
 		memset(Image, 0, WIDTH * Bytesperpixel * HEIGHT);
 		XClearWindow(display, win);
 
-		for (y = 0; y < 4; y++)
+		for (y = 0; y < HEIGHTTILES; y++)
 		{
-			for (x = 0; x < 4; x++)
+			for (x = 0; x < WIDTHTILES; x++)
 			{
 				LoadImageTile(Zoom, TileX + x, TileY + y, x, y);
 			}
@@ -1552,6 +1916,29 @@ ZoomOut()
 	}
 }
 
+config_t cfg;
+config_setting_t *croot, *group;
+
+int GetIntValue(config_setting_t * group, char * name, int defaultval)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_get_member (group, name);
+	if (setting)
+		return config_setting_get_int (setting);
+
+	return defaultval;
+}
+
+VOID SaveIntValue(config_setting_t * group, char * name, int value)
+{
+	config_setting_t *setting;
+	
+	setting = config_setting_add(group, name, CONFIG_TYPE_INT);
+	if(setting)
+		config_setting_set_int(setting, value);
+}
+
 
 int main(void)
 {
@@ -1559,15 +1946,15 @@ int main(void)
  	char FN[256];
 	int fd;
 	int x, y;
+	BOOL Running = TRUE;
 
     double vals[10];	
 	int screen_number, depth, bitmap_pad, status;
 	unsigned long white;
 	unsigned long black;
 	Visual * visual;
-	unsigned int  * image_data;
-	unsigned int image_width, image_height, image_byte_size, i, j;
-	Pixmap pixmap;
+	unsigned int i, j;
+	Pixmap pixmap, popuppixmap;
 
 	int x11_fd;
 	fd_set in_fds;
@@ -1582,20 +1969,53 @@ int main(void)
 	int LastX, LastY;			// Saved mouse position when button down
 	int MovedX, MovedY;
 
-	image_width = 1024;
-	image_height = 1024;
-
 	double sx, sy;
 	UCHAR * APRSStationMemory;
 	int SlowTimer = 0;
+	Atom wmDeleteMessage;
 
-
-	printf("G8BPQ APRS Client for Linux Version 0.0.0.1\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.0.3\n");
   	printf("Copyright © 2014 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
 	printf("Map Tiles Courtesy of MapQuest (www.mapquest.com)\n\n");
 
+	config_init(&cfg);
+
+	/* Read the file. If there is an error, report it and exit. */
+	
+	if(!config_read_file(&cfg, "BPQAPRS.cfg"))
+	{
+		fprintf(stderr, "%d - %s\n",
+			config_error_line(&cfg), config_error_text(&cfg));
+		config_destroy(&cfg);
+	}
+	else
+	{
+		group = config_lookup (&cfg, "APRS");
+
+		if (group)
+		{
+			Zoom = GetIntValue(group, "Zoom", 2);
+			TileX = GetIntValue(group, "SetBaseX", 0);
+			TileY = GetIntValue(group, "SetBaseY", 0);
+			ScrollX = GetIntValue(group, "ScrollX", 0);
+			ScrollY = GetIntValue(group, "ScrollY", 0);
+			WindowX = GetIntValue(group, "WindowX", 100);
+			WindowY = GetIntValue(group, "WindowY", 100);
+			WindowWidth = GetIntValue(group, "WindowWidth", 788);
+			WindowHeight = GetIntValue(group, "WindowHeight", 788);
+			HEIGHTTILES = GetIntValue(group, "HEIGHTTILES", 4);
+			WIDTHTILES = GetIntValue(group, "WIDTHTILES", 4);
+		}
+	}
+
+	if (Zoom == 0)
+		Zoom = 2;
+
+	HEIGHT = HEIGHTTILES * 256;
+	WIDTH = WIDTHTILES * 256;
+		
 	printf("DISPLAY is set to %s\n", getenv("DISPLAY"));
 	
 	if (strstr(getenv("DISPLAY"), "localhost:1"))
@@ -1613,17 +2033,38 @@ int main(void)
 	{
 		// Map shared memory object
 
-		APRSStationMemory = mmap((void *)0x43000000, sizeof(struct STATIONRECORD) * (MaxStations + 1),
+		APRSStationMemory = mmap((void *)0x43000000, sizeof(struct STATIONRECORD) * 2,
 		     PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
 
 		if (APRSStationMemory == MAP_FAILED)
 		{
 			printf("Extend APRS Shared Memory Failed\n");
 			APRSStationMemory = NULL;
+			return;
 		}
 	}
 
 	StationRecords = (struct STATIONRECORD**)APRSStationMemory;
+	ControlRecord = (struct STATIONRECORD*)APRSStationMemory;
+
+	MaxStations = ControlRecord->LastPort;
+	printf("LinBPQ Configured with MaxStations %d\n", MaxStations);
+
+	if (MaxStations == 0)
+		MaxStations = 1500;			// for old LinBPQ
+
+	//	Remap with Server's view of MaxStations
+	
+	munmap(APRSStationMemory, sizeof(struct STATIONRECORD) * 2);
+
+	APRSStationMemory = mmap((void *)0x43000000, sizeof(struct STATIONRECORD) * (MaxStations + 1),
+		PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, 0);
+
+	if (APRSStationMemory == MAP_FAILED)
+	{
+		printf("Extend APRS Shared Memory Failed\n");
+		APRSStationMemory = NULL;
+	}
 
 	ResolveThread();
 	_beginthread(OSMThread, 0, NULL);
@@ -1650,10 +2091,30 @@ int main(void)
 
 	Image = malloc(WIDTH * Bytesperpixel * HEIGHT + 100);	// Seems past last byte gets corrupt
 
+	if (mkdir(OSMDir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0)
+	{
+		if (errno != 17)			// File exists
+		{
+			printf("Error Creating %s\n", OSMDir);
+			perror("mkdir");
+		}
+	}
+
+	for (i = 0; i < 20; i++)
+	{
+		sprintf(FN, "%s/%02d", OSMDir, i);
+		if (mkdir(FN, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0)
+		{
+			if (errno != 17)			// FIle exists
+			{
+				printf("Error Creating %s\n", FN);
+				perror("mkdir");
+			}
+		}
+	}
+	
 	// Read Icons
 
-	mkdir(OSMDir, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-	
 	iconImage = ReadIcons("BPQAPRS/Symbols.jpg", &x, &y);
 
 	if (x == 0)
@@ -1663,24 +2124,27 @@ int main(void)
 	win = XCreateWindow (display, root, 50, 50, 788, 788, 0, depth, CopyFromParent, CopyFromParent, 0, 0);
 	XStoreName(display, win, "BPQAPRS Map");
 	
+	wmDeleteMessage = XInternAtom(display, "WM_DELETE_WINDOW", False);
+	XSetWMProtocols(display, win, &wmDeleteMessage, 1);
+
 //	XSelectInput(display, win, KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
 
-	XSelectInput(display, win, ExposureMask | KeyPressMask |
+	XSelectInput(display, win, ExposureMask | KeyPressMask | PointerMotionMask |
 		ButtonPressMask | ButtonReleaseMask | StructureNotifyMask);
 	
-	XSetWindowBackground(display, win, 0x808080);
+	XSetWindowBackground(display, win, 0xffffff);
 	XClearWindow(display, win);
-
 	XMapWindow (display, win);
-	image = XCreateImage (display, visual, depth, ZPixmap, 0, NULL, 1024, 1024, bitmap_pad, 0);
+
+	XMoveResizeWindow(display, win, WindowX, WindowY, WindowWidth, WindowHeight);
+
+	image = XCreateImage (display, visual, depth, ZPixmap, 0, NULL, WIDTH, HEIGHT, bitmap_pad, 0);
 
 	printf("depth : %d\nbitmap_pad : %d\nimage bpp : %d\n", depth, bitmap_pad, image->bits_per_pixel);
 
-	image_byte_size = image_width * image_height * image->bits_per_pixel / 8;
-	image_data = malloc (image_byte_size);
 	image->data = Image;
 
-	pixmap = XCreatePixmap (display, root, image_width, image_height, depth);
+	pixmap = XCreatePixmap (display, root, WIDTH, HEIGHT, depth);
 
 	XSetLineAttributes(display, gc, 2, LineSolid, CapNotLast, JoinMiter);
 
@@ -1693,7 +2157,7 @@ int main(void)
 
     // Main loop
 
-   while(1)
+   while(Running)
    {
 	   FD_ZERO(&in_fds);
 	   FD_SET(x11_fd, &in_fds);
@@ -1707,6 +2171,7 @@ int main(void)
 	   
 	   if (select(x11_fd+1, &in_fds, 0, 0, &tv))
 	   {
+		   // X event, but pick up later
 	   }
 	   else
 	   {
@@ -1716,11 +2181,12 @@ int main(void)
 
 			// Do a full redraw at least evey 2 mins if anything has changed
 
-//			SlowTimer++;
-//			if (SlowTimer > 40)				// 2 Mins
-//				if (NeedRedraw)
-//					NeedRefresh = TRUE;
+			SlowTimer++;
+			if (SlowTimer > 40)				// 2 Mins
+				if (NeedRedraw)
+					NeedRefresh = TRUE;
 	   }
+
         // Handle XEvents and flush the input 
 
         while(XPending(display))
@@ -1734,16 +2200,58 @@ int main(void)
 		
 		switch (event.type)
 		{
+			  
+		case ClientMessage:
+          
+			if (event.xclient.data.l[0] == wmDeleteMessage)
+                Running = FALSE;
+            break;
+
 		case KeyPress:
 
 			xkeyev = event.xkey;
 
 			XLookupString(&event.xkey, text, 255, &key, 0);
 
-			if (text[0] == '-')
+			printf("Key %c Hex %x Code %d %x\n", text[0], text[0], key, key);
+
+			switch(key)
+			{
+			case XK_Left:
+
+				WindowX -= 8;
+				XMoveWindow(display, win, WindowX, WindowY);
+				break;
+
+			case XK_Up:
+
+				WindowY -= 8;
+				XMoveWindow(display, win, WindowX, WindowY);
+				break;
+
+			case XK_Right:
+
+				WindowX += 8;
+				XMoveWindow(display, win, WindowX, WindowY);
+				break;
+
+			case XK_Down:
+
+				WindowY += 8;
+				XMoveWindow(display, win, WindowX, WindowY);
+				break;
+
+			case '-':
+
 				ZoomOut();
-			else if (text[0] == '=' || text[0] == '+')
+				break;
+
+			case '=':
+			case '+':
+
 				ZoomIn();
+				break;
+			}
 
 			break;
 
@@ -1760,9 +2268,12 @@ int main(void)
             // This event type is generated for a variety of
             //  happenings, so check whether the window has been
             //   resized. 
+				
+			WindowX = xce.x;
+			WindowY = xce.y;
+			WindowWidth = xce.width;
+			WindowHeight = xce.height;
 
-			printf("Config Event %d %d %d %d\n", xce.width, xce.height, xce.x, xce.y);
-			
 			if (xce.width != cxWinSize || xce.height != cyWinSize)
 			{
                 cxWinSize = xce.width;
@@ -1776,12 +2287,18 @@ int main(void)
 			}
 
 			break;
+
+		case MotionNotify:
+
+			FindStationsByPixel(MouseX + ScrollX, MouseY + ScrollY);
+			break;
+
 			
 		case ButtonPress:
 			
 			switch (event.xbutton.button)
 			{
-			case 1:				// Left Button
+			case 1:					// Left Button
 				
 				LastX = MouseX;
 				LastY = MouseY;
@@ -1797,6 +2314,9 @@ int main(void)
 				ZoomOut();			
 				break;
 			}
+
+			break;
+
 		case ButtonRelease:
 
 			switch (event.xbutton.button)
@@ -1845,8 +2365,10 @@ int main(void)
 				NeedRefresh = TRUE;
 				break;
 			}
+			break;
 		} 
-		}
+		}	// end of while xpending
+
 		if (NeedRefresh)
 		{
 			SetBaseX = -1;
@@ -1861,6 +2383,34 @@ int main(void)
 			DrawTracks(TRUE);
 		}
 	}
+
+	memset((void *)&cfg, 0, sizeof(config_t));
+
+	config_init(&cfg);
+
+	croot = config_root_setting(&cfg);
+
+	group = config_setting_add(croot, "APRS", CONFIG_TYPE_GROUP);
+
+	SaveIntValue(group, "Zoom", Zoom);
+	SaveIntValue(group, "SetBaseX", SetBaseX);
+	SaveIntValue(group, "SetBaseY", SetBaseY);
+	SaveIntValue(group, "ScrollX", ScrollX);
+	SaveIntValue(group, "ScrollY", ScrollY);
+	SaveIntValue(group, "WindowX", WindowX);
+	SaveIntValue(group, "WindowY", WindowY);
+	SaveIntValue(group, "WindowWidth", WindowWidth);
+	SaveIntValue(group, "WindowHeight", WindowHeight);
+	SaveIntValue(group, "WIDTHTILES", WIDTHTILES);
+	SaveIntValue(group, "HEIGHTTILES", HEIGHTTILES);
+
+	if(! config_write_file(&cfg, "BPQAPRS.cfg"))
+		printf("Error while writing config file.\n");
+	else
+		printf("Config Saved\n");
+
+	config_destroy(&cfg);
+
 	status = XDestroyImage (image);
 	return 0;
 }
