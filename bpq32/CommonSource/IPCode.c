@@ -527,7 +527,7 @@ Dll BOOL APIENTRY Init_IP()
 		if (EncapSock == INVALID_SOCKET)
 		{
 			err = WSAGetLastError();
-			printf(Msg, "Failed to create socket for IPIP Encap - error code = %d\n", err);
+			sprintf(Msg, "Failed to create socket for IPIP Encap - error code = %d\n", err);
 			WritetoConsoleLocal(Msg);
 		}
 		else

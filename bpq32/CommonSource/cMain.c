@@ -427,7 +427,7 @@ VOID PostDataAvailable(TRANSPORTENTRY * Session)
 
 		if (HostSess)
 		{
-			if (HostSess->HOSTHANDLE);
+			if (HostSess->HOSTHANDLE)
 			{
 				PostMessage(HostSess->HOSTHANDLE, BPQMsg, HostSess->HOSTSTREAM, 2);
 			}
@@ -1069,7 +1069,6 @@ BOOL Start()
 		ConvToAX25(ptr2, ROUTE->NEIGHBOUR_CALL);
 		ROUTE->NEIGHBOUR_QUAL = ptr2[10];
 		ROUTE->NEIGHBOUR_PORT = ptr2[11];
-
 		
 		PORT = GetPortTableEntryFromPortNum(ROUTE->NEIGHBOUR_PORT);
 
@@ -1079,7 +1078,7 @@ BOOL Start()
 			if (PORT != NULL)
 				ROUTE->NoKeepAlive = PORT->PortNoKeepAlive;
 
-		if (ptr2[12] & 0x80 || PORT->INP3ONLY)
+		if (ptr2[12] & 0x80 || (PORT && PORT->INP3ONLY))
 		{
 			ROUTE->INP3Node = 1;
 			ROUTE->NoKeepAlive = 0;			// Cant have INP3 and NOKEEPALIVES

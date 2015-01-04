@@ -1907,7 +1907,7 @@ static VOID ProcessDEDFrame(struct TNCINFO * TNC)
 							{
 								char AppName[13];
 
-								memcpy(AppName, &ApplPtr[App * 21], 12);
+								memcpy(AppName, &ApplPtr[App * sizeof(CMDX)], 12);
 								AppName[12] = 0;
 
 								// Make sure app is available

@@ -66,8 +66,10 @@
 #include "bpq32.h"
 
 #ifndef WIN32
+#ifndef MACBPQ
 #include <sys/ioctl.h>
 #include <linux/serial.h>
+#endif
 #endif
 
 static char ClassName[]="PACTORSTATUS";
@@ -337,6 +339,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			return 0;
 
 #ifndef WIN32
+#ifndef MACBPQ
 
 		if (TNC->Dragon)
 		{
@@ -363,6 +366,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					Debugprintf("Dragon custom baud rate set\n");
 			}
 		}
+#endif
 #endif
 	}
 ok:
@@ -524,7 +528,7 @@ ok:
 			if (TNC->TNCOK)
 			{
 				// If been in Sync a long time, or if using applcalls and
-				// Scan had been locked too longjust let it change
+				// Scan had been locked too long just let it change
 				
 				if (TNC->UseAPPLCallsforPactor)
 				{
@@ -537,7 +541,7 @@ ok:
 							return 0;
 						}
 					}
-					else if (TNC->TimeScanLocked)
+/*					else if (TNC->TimeScanLocked)
 					{
 						int timeLocked = time(NULL) - TNC->TimeScanLocked;
 						if (timeLocked > 4)
@@ -547,6 +551,7 @@ ok:
 							return 0;
 						}
 					}
+*/
 				}
 
 				TNC->WantToChangeFreq = TRUE;
@@ -566,7 +571,7 @@ ok:
 			if (TNC->DontReleasePermission)			// Disable connects during this interval?
 			{
 				TNC->DontReleasePermission = FALSE;
-				TNC->TimeScanLocked = time(NULL) + 100;	// Make sure doesnt time out
+//				TNC->TimeScanLocked = time(NULL) + 100;	// Make sure doesnt time out
 				return 0;
 			}
 
@@ -868,6 +873,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 	OpenCOMMPort(TNC, PortEntry->PORTCONTROL.SerialPortName, PortEntry->PORTCONTROL.BAUDRATE, FALSE);
 
 #ifndef WIN32
+#ifndef MACBPQ
 
 	if (TNC->Dragon)
 	{
@@ -894,6 +900,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 				Debugprintf("Dragon custom baud rate set\n");
 		}
 	}
+#endif
 #endif
 
 	if (TNC->RobustDefault)
@@ -2461,13 +2468,13 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						if (Msg[4] == '1')			// Ok to Change
 						{
 							TNC->OKToChangeFreq = 1;
-							TNC->TimeScanLocked = 0;
+//							TNC->TimeScanLocked = 0;
 						}
 						else
 						{
 							TNC->OKToChangeFreq = -1;
-							if (TNC->TimeScanLocked == 0)	
-								TNC->TimeScanLocked = time(NULL);
+//							if (TNC->TimeScanLocked == 0)	
+//								TNC->TimeScanLocked = time(NULL);
 						}
 					}
 				}
@@ -2683,7 +2690,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 							{
 								char AppName[13];
 
-								memcpy(AppName, &ApplPtr[App * 21], 12);
+								memcpy(AppName, &ApplPtr[App * sizeof(CMDX)], 12);
 								AppName[12] = 0;
 
 								// Make sure app is available

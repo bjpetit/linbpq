@@ -68,8 +68,9 @@ VOID PutLengthinBuffer(UCHAR * buff, int datalen)		// Neded for arm5 portability
 int GetLengthfromBuffer(UCHAR * buff)				// Neded for arm5 portability
 {
 #ifdef __BIG_ENDIAN__
-	short * sp;					// MAC POWERPC etc
-	return sp = (short *)&buff[5];
+//	short * sp;					// MAC POWERPC etc
+//	return sp = (short *)&buff[5];
+	return (buff[5]<<8) + buff[6];	
 #else
 	return (buff[6]<<8) + buff[5];	
 #endif

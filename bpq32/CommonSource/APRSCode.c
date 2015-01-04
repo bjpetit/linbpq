@@ -23,6 +23,12 @@
 
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/un.h>
+
+int sfd;
+struct sockaddr_un my_addr, peer_addr;
+socklen_t peer_addr_size;
+
 
 #endif
 
@@ -328,8 +334,6 @@ BOOL ImageChanged;
 BOOL NeedRefresh = FALSE;
 time_t LastRefresh = 0;
 
-
-
 //	Stationrecords are stored in a shared memory segment. based at APRSStationMemory (normally 0x43000000)
 
 //	A pointer to the first is placed at the start of this
@@ -340,7 +344,6 @@ struct STATIONRECORD * StationRecordPool = NULL;
 
 struct APRSMESSAGE * Messages = NULL;
 struct APRSMESSAGE * OutstandingMsgs = NULL;
-
 
 VOID SendObject(struct OBJECT * Object);
 VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX);
@@ -389,7 +392,11 @@ Dll BOOL APIENTRY Init_APRS()
 	HKEY hKey=0;
 	int retCode, Vallen, Type; 
 #else
+#ifndef WIN32
 	int fd;
+	char RX_SOCK_PATH[] = "BPQAPRSrxsock";
+	char TX_SOCK_PATH[] = "BPQAPRStxsock";
+#endif
 #endif
 	struct STATIONRECORD * Stn1, * Stn2;
 
@@ -570,8 +577,6 @@ Dll BOOL APIENTRY Init_APRS()
 		Stn1 = Stn2;
    }
 
-
-
 	if (PosnSet == 0)
 	{
 		SYMBOL = '.';
@@ -597,6 +602,44 @@ Dll BOOL APIENTRY Init_APRS()
 		SYMBOL = CFGSYMBOL;
 		SYMSET = CFGSYMSET;
 	}
+
+	//	First record has control info for APRS Mapping App
+
+	Stn1  = (struct STATIONRECORD *)APRSStationMemory;
+	memcpy(Stn1->Callsign, APRSCall, 10);
+	Stn1->Lat = Lat;
+	Stn1->Lon = Lon;
+	Stn1->LastPort = MaxStations;
+
+#ifndef WIN32
+
+	// Open unix socket for messaging app
+
+	sfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+
+	if (sfd == -1)
+	{
+		perror("Socket");
+	}
+	else
+	{
+		u_long param=1;
+		ioctl(sfd, FIONBIO, &param);			// Set non-blocking
+
+		memset(&my_addr, 0, sizeof(struct sockaddr_un));
+		my_addr.sun_family = AF_UNIX;
+		strncpy(my_addr.sun_path, TX_SOCK_PATH, sizeof(my_addr.sun_path) - 1);
+	
+		memset(&peer_addr, 0, sizeof(struct sockaddr_un));
+		peer_addr.sun_family = AF_UNIX;
+		strncpy(peer_addr.sun_path, RX_SOCK_PATH, sizeof(peer_addr.sun_path) - 1);
+
+		unlink(TX_SOCK_PATH);
+
+		if (bind(sfd, (struct sockaddr *) &my_addr, sizeof(struct sockaddr_un)) == -1)
+            perror("bind");
+	}
+#endif
 
 	// Convert Dest ADDRS to AX.25
 
@@ -660,6 +703,9 @@ VOID APRSClose()
 
 Dll VOID APIENTRY Poll_APRS()
 {
+	char Msg[256];
+	int numBytes;
+
 	SecTimer--;
 
 	if (SecTimer == 0)
@@ -675,6 +721,32 @@ Dll VOID APIENTRY Poll_APRS()
 			DoMinTimer();
 		}
 	}
+
+#ifdef LINBPQ
+#ifndef WIN32
+
+	// Look for messages from App
+
+	numBytes = recvfrom(sfd, Msg, 256, 0, NULL, NULL);
+
+	if (numBytes > 0)
+	{
+		char To[10];
+		struct STATIONRECORD * Station;
+
+		memcpy(To, &Msg[1], 9);
+		Station = FindStation(To, TRUE);
+
+		if (Station)
+		{
+			Msg[numBytes] = 0;
+			SendAPPLAPRSMessage(Msg);
+		}
+		else
+			printf("Cant Send APRS Message - Station Table is full\n");
+	}
+#endif
+#endif
 
 	if (GPSPort)
 		PollGPSIn();
@@ -2946,6 +3018,7 @@ void DecodeRMC(char * msg, int len)
 	char OurSog[5], OurCog[4];
 	char LatDeg[3], LonDeg[4];
 	char NewLat[10] = "", NewLon[10] = "";
+	struct STATIONRECORD * Stn1, * Stn2;
 
 	char Day[3];
 
@@ -3022,6 +3095,10 @@ void DecodeRMC(char * msg, int len)
 	SYMSET = CFGSYMSET;
 
 	PosnSet = TRUE;
+
+	Stn1  = (struct STATIONRECORD *)APRSStationMemory;		// Pass to App
+	Stn1->Lat = Lat;
+	Stn1->Lon = Lon;
 
 	if (GPSOK == 0)
 	{
@@ -3966,6 +4043,8 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 	char * Path;
 	char * Msg;
 	struct STATIONRECORD * TPStation;
+	int msgLen;
+	unsigned char APIMsg[512];
 
 	Station->Object = NULL;
 
@@ -4093,10 +4172,18 @@ VOID DecodeAPRSPayload(char * Payload, struct STATIONRECORD * Station)
 
 	case ':':				// Message
 
-		//for now messages are only processed in BPQAPRS if Windows
+		
 
 #ifdef LINBPQ
-		ProcessMessage(Payload, Station);		// if APRS Appl is atttached, queue message to it
+#ifndef WIN32
+		
+		// if Liunx, Pass to Messaging APP - station pointer, then Message
+
+		memcpy(APIMsg, &Station, 4);
+		strcpy(&APIMsg[4], Payload);
+		msgLen = strlen(Payload) + 5;
+		sendto(sfd, APIMsg, msgLen, 0, (struct sockaddr *) &peer_addr, sizeof(struct sockaddr_un));
+#endif
 #else
 		if (APRSApplConnected)
 		{

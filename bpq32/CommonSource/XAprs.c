@@ -16,8 +16,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+
 #include <math.h>
 
+#include <sys/socket.h>
+#include <sys/un.h>
+  
 #include <X11/Xlib.h>
 #include <X11/X.h>
 #define XK_MISCELLANY
@@ -32,6 +37,11 @@
 #define LIBCONFIG_STATIC
 #include "libconfig.h"
 
+#include <gtk/gtk.h>
+#include <gtk/gtkadjustment.h>
+#include <gtk/gtkwidget.h>
+
+
 #define VOID void
 #define UCHAR unsigned char
 #define BOOL int
@@ -39,6 +49,115 @@
 #define UINT unsigned int
 #define TRUE 1
 #define FALSE 0
+
+
+GtkWidget *dialog;
+GtkWidget *window;
+GtkWidget *dialog;
+GtkWidget *window;
+GtkWidget *box1;
+GtkWidget *box2;
+GtkWidget *box3;
+GtkWidget *hbox;
+GtkWidget *button;
+GtkWidget *checklabel;
+GtkWidget *check1;
+GtkWidget *check2;
+GtkWidget *check3;
+GtkWidget *checkhbox;
+GtkWidget *separator;
+GtkWidget *table;
+GtkWidget *vscrollbar;
+GtkWidget *vscrollbar2;
+GtkTextBuffer *text;
+GtkTextBuffer *text2;
+GtkWidget *entry;
+GtkWidget *vpaned;
+GtkWidget *frame1;
+GtkWidget *frame2;
+GtkWidget *view;
+GtkWidget* scrolledwin;
+GtkWidget *view2;
+GtkWidget* scrolledwin2;
+GtkWidget *box10;
+GtkWidget *menubar;
+GtkWidget *combo;
+GtkWidget *label1, *label2;
+GtkListStore *receiveditems;
+GtkListStore *sentitems;
+
+GtkTreeModel *model;
+
+char MyFont[50] = "Monospace 10";
+
+gchar *fontname;
+gint vhandle;
+
+char RX_SOCK_PATH[] = "BPQAPRSrxsock";
+char TX_SOCK_PATH[] = "BPQAPRStxsock";
+
+int sfd;
+struct sockaddr_un my_addr, peer_addr;
+socklen_t peer_addr_size;
+int maxfd;
+
+VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
+void UpdateTXMessageLine(int n, struct APRSMESSAGE * Message);
+VOID SecTimer();
+
+struct SEM
+{
+	UINT Flag;
+	int Clashes;
+	int	Gets;
+	int Rels;
+};
+
+
+struct SEM Semaphore = {0, 0, 0, 0};
+
+void GetSemaphore(struct SEM * Semaphore)
+{
+	//
+	//	Wait for it to be free
+	//
+
+	if (Semaphore->Flag != 0)
+	{
+		Semaphore->Clashes++;
+	}
+
+loop1:
+
+	while (Semaphore->Flag != 0)
+	{
+		Sleep(10);
+	}
+
+	//	try to get semaphore
+
+	if (__sync_lock_test_and_set(&Semaphore->Flag, 1) != 0)
+
+		// Failed to get it
+		goto loop1;		// try again;
+
+	//Ok. got it
+
+	Semaphore->Gets++;
+
+	return;
+}
+
+void FreeSemaphore(struct SEM * Semaphore)
+{
+	if (Semaphore->Flag == 0)
+		printf("Free Semaphore Called when Sem not held\n");
+
+	Semaphore->Rels++;
+	Semaphore->Flag = 0;
+
+	return;
+}
 
 unsigned long _beginthread(void(*start_address)(), unsigned stack_size, VOID * arglist)
 {
@@ -64,7 +183,8 @@ int OSMQueueCount = 0;
 
 static int cxWinSize = 788, cyWinSize = 788;
 static int cxImgSize = 768, cyImgSize = 768;
-static int xBorder = 10, yBorder = 10;
+static int topBorder = 30, bottomBorder = 0;
+static int leftBorder = 2, rightBorder = 2;
 
 static int cImgChannels = 3;
 static int ImgChannels;
@@ -122,6 +242,14 @@ struct STATIONRECORD * ControlRecord;
 int MaxStations = 5000;
 int StationCount;
 
+struct APRSMESSAGE * Messages = NULL;
+struct APRSMESSAGE * OutstandingMsgs = NULL;
+
+UCHAR NextSeq = 1;
+
+char APRSCall[10];
+char LoppedAPRSCall[10];
+
 // Image chunks are 256 rows of 3 * 256 bytes
 
 // Read 8 * 8 files, and copy to a 2048 * 3 * 2048 array. The display scrolls over this area, and
@@ -138,6 +266,9 @@ UCHAR * iconImage = NULL;
 UCHAR * PopupImage = NULL;
 
 BOOL ImageChanged = 0;
+
+int RetryCount = 7;
+int RetryIntervals[] = {0, 512, 256, 128, 64, 32, 16, 8};
 
 // Station Name Font
 
@@ -268,6 +399,51 @@ void my_error_exit (j_common_ptr cinfo)
 	/* Return control to the setjmp point */
 	longjmp(myerr->setjmp_buffer, 1);
 }
+
+int memicmp(unsigned char *a, unsigned char *b, int n)
+{
+	if (n)
+	{
+		while (n && toupper(*a) == toupper(*b))
+			n--, a++, b++;
+
+		if (n)
+			return toupper(*a) - toupper(*b);
+   }
+   return 0;
+}
+int stricmp(const unsigned char * pStr1, const unsigned char *pStr2)
+{
+    unsigned char c1, c2;
+    int  v;
+
+	if (pStr1 == NULL)
+	{
+		return 1;
+	}
+
+
+    do {
+        c1 = *pStr1++;
+        c2 = *pStr2++;
+        /* The casts are necessary when pStr1 is shorter & char is signed */
+        v = tolower(c1) - tolower(c2);
+    } while ((v == 0) && (c1 != '\0') && (c2 != '\0') );
+
+    return v;
+}
+
+char * strupr(char* s)
+{
+  char* p = s;
+
+  if (s == 0)
+	  return 0;
+
+  while (*p = toupper( *p )) p++;
+  return s;
+}
+
 
 // Return coorinates in tiles.
 
@@ -454,6 +630,8 @@ VOID OSMGet(int x, int y, int zoom)
 {
 	struct OSMQUEUE * OSMRec = malloc(sizeof(struct OSMQUEUE));
 	
+	GetSemaphore(&Semaphore);
+
 	OSMQueueCount++;
 
 	OSMRec->Next = OSMQueue.Next;
@@ -461,6 +639,8 @@ VOID OSMGet(int x, int y, int zoom)
 	OSMRec->x = x;
 	OSMRec->y = y;
 	OSMRec->Zoom = zoom;
+
+	FreeSemaphore(&Semaphore);
 }
 
 VOID RefreshTile(char * FN, int TileZoom, int Tilex, int Tiley);
@@ -496,10 +676,14 @@ VOID OSMThread()
 	{
 	while (OSMQueue.Next)
 	{
+		GetSemaphore(&Semaphore);
+
 		OSMRec = OSMQueue.Next;
 		OSMQueue.Next = OSMRec->Next;
 
 		OSMQueueCount--;
+
+		FreeSemaphore(&Semaphore);
 
 		x = OSMRec->x;
 		y = OSMRec->y;
@@ -822,16 +1006,125 @@ WXLoop:
 		goto WXLoop;
 }
 
+struct STATIONRECORD * FindStation(char * Call, BOOL AddIfNotFount)
+{
+	int i = 0;
+	struct STATIONRECORD * find;
+	struct STATIONRECORD * ptr;
+	struct STATIONRECORD * last = NULL;
+	int sum = 0;
 
-VOID CreateStationPopup(struct STATIONRECORD * ptr, int x, int y)
+	if (StationRecords == 0)
+		return FALSE;
+
+	if (strlen(Call) > 9)
+		Call[9] = 0;
+
+	find = *StationRecords;
+	while(find)
+	{
+		if (strlen(find->Callsign) > 9)
+			find->Callsign[9] = 0;
+
+	    if (strcmp(find->Callsign, Call) == 0)
+			return find;
+
+		last = find;
+		find = find->Next;
+		i++;
+	}
+ 
+	//   Not found - add on end
+
+/*
+	if (AddIfNotFount)
+	{
+		// Get first from station record pool
+		
+		ptr = StationRecordPool;
+		
+		if (ptr)
+		{
+			StationRecordPool = ptr->Next;	// Unchain
+			StationCount++;
+		}
+		else
+		{
+			//	Get First from Stations
+
+			ptr = *StationRecords;
+			if (ptr)
+				*StationRecords = ptr->Next;
+		}
+
+		if (ptr == NULL) return NULL;
+
+		memset(ptr, 0, sizeof(struct STATIONRECORD));
+	
+//		EnterCriticalSection(&Crit);
+
+		if (*StationRecords == NULL)
+			*StationRecords = ptr;
+		else
+			last->Next = ptr;
+
+//		LeaveCriticalSection(&Crit);
+
+		//	Debugprintf("APRS Add Stn %s Station Count = %d", Call, StationCount);
+       
+		strcpy(ptr->Callsign, Call);
+		ptr->TimeAdded = time(NULL);
+		ptr->Index = i;
+		ptr->NoTracks = DefaultNoTracks;
+
+		for (i = 0; i < 9; i++)
+			sum += Call[i];
+
+		sum %= 20;
+
+		ptr->TrackColour = sum;
+		ptr->Moved = TRUE;
+
+		return ptr;
+	}
+	else
+	*/
+		return NULL;
+}
+
+int PopupHeight;
+int PopupWidth;
+int PopupLeft;
+int PopupTop;
+struct STATIONRECORD * List[1000] = {0};
+
+
+VOID CreateStationPopup(struct STATIONRECORD * ptr, int RelX, int RelY)
 {
 	char Msg[80];
 	int Len = 130;
 	int Line = 12;
 	struct tm * TM;
+	int x, y;
 
+	PopupLeft = RelX - 10;
+	PopupTop = RelY - 30;
 
-//	CurrentPopup = ptr;
+	if (PopupLeft + 400 > cxWinSize)
+		PopupLeft = cxWinSize - 405;
+
+	if (PopupTop + 150> cyWinSize)
+		PopupTop= cyWinSize - 165;
+
+	popupActive = TRUE;
+	PopupHeight = 200;
+	PopupWidth = 350;
+
+	XClearArea(display, win, PopupLeft, PopupTop, 350, 200, FALSE);
+	XDrawRectangle(display, win, gc, PopupLeft, PopupTop, 350, 200);
+	 
+	x = PopupLeft;
+	y = PopupTop;
 		
 	if (LocalTime)
 		TM = localtime(&ptr->TimeLastUpdated);
@@ -905,16 +1198,37 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int x, int y)
 <tr><td>Rain last 24 hours</td><td>##RAIN_24_IN##"</td></tr>
 </table>
 */
-
 }
 
+VOID GetStationFromList(int MouseX, int MouseY)
+{
+	int RelX = MouseX + leftBorder;
+	int RelY = MouseY + topBorder;
+
+	int index = (RelY - PopupTop) /12;
+
+	if (List[index])
+	{
+		selActive = FALSE;
+		CreateStationPopup(List[index], RelX, RelY);
+	}
+}
 
 VOID FindStationsByPixel(int MouseX, int MouseY)
 {
 	int j=0;
-
 	struct STATIONRECORD * ptr = *StationRecords;
-	struct STATIONRECORD * List[1000];
+	int RelX = MouseX - ScrollX + leftBorder;
+	int RelY = MouseY - ScrollY + topBorder;
+
+	if (popupActive || selActive)
+	{
+		// if mouse within popup, leave alone
+
+		if (RelX > PopupLeft && RelX < (PopupLeft + PopupWidth) && 
+			RelY > PopupTop && RelY < (PopupTop + PopupHeight))
+			return;
+	}
 
 	while(ptr && j < 999)
 	{	
@@ -928,16 +1242,15 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 	{
 		if (popupActive)
 		{
-//			DestroyWindow(popupActive);
-			XPutImage (display, win, gc, image, ScrollX, ScrollY, 10, 10, cxImgSize, cyImgSize);
+			XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
 			DrawTracks(TRUE);
-
 			popupActive = 0;
 		}
 
 		if (selActive)
 		{
-//			DestroyWindow(selActive);
+			XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
+			DrawTracks(TRUE);
 			selActive = 0;
 		}		
 		return;
@@ -948,53 +1261,44 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 	if (popupActive || selActive)
 		return;						// Already on display
 
-
-//	if (j == 1)
+	if (j == 1)
 	{
-		int PopupLeft = MouseX - ScrollX - 10;
-		int PopupTop = MouseY - ScrollY - 30;
-
-		if (PopupLeft + 400 > cxWinSize)
-			PopupLeft = cxWinSize - 405;
-
-		if (PopupTop + 150> cyWinSize)
-			PopupTop= cyWinSize - 165;
-
-		popupActive = TRUE;
-
-		XClearArea(display, win, PopupLeft, PopupTop, 350, 200, FALSE);
-		XDrawRectangle(display, win, gc, PopupLeft, PopupTop, 350, 200);
- 		CreateStationPopup(List[0], PopupLeft, PopupTop);
+ 		CreateStationPopup(List[0], RelX, RelY);
 	}
-/*
 	else
 	{
-		PopupX = MouseX - ScrollX - 10;
-		PopupY = MouseY - ScrollY - 30;
-
-		if (PopupX + 150 > cxWinSize)
-			PopupX = cxWinSize - 155;
-
-		if (PopupY + 150 > cyWinSize)
-			PopupY = cyWinSize - 155;
+		char Msg[80];
+		int Line = 12;
+		int i;
 		
-		selActive = CreateWindow("LISTBOX", "", WS_CHILD | WS_BORDER | WS_VSCROLL |
-			WS_HSCROLL | LBS_NOTIFY,
-			PopupX, PopupY, 150, 150, hMapWnd, NULL, hInst, NULL);
+		PopupLeft = RelX - 10;
+		PopupTop = RelY - 30;
 
-		for (; j > 0; j--)
-		{	
-			SendMessage(selActive, LB_ADDSTRING, 0, (LPARAM)List[j-1]->Callsign);
+		if (j > 20)
+			j = 20;
+
+		PopupHeight = j * 12 + 4;
+		PopupWidth = 80;
+
+		if (PopupLeft + 80 > cxWinSize)
+			PopupLeft = cxWinSize - 85;
+
+		 if (PopupTop + PopupHeight > cyWinSize)
+			PopupTop = cyWinSize - PopupHeight;
+
+		selActive = TRUE;
+
+		XClearArea(display, win, PopupLeft, PopupTop, 80, PopupHeight, FALSE);
+		XDrawRectangle(display, win, gc, PopupLeft, PopupTop, 80, PopupHeight);
+
+		for (i = 0; i < j; i++)
+		{
+			memset(Msg, ' ', 12);
+			memcpy(Msg, List[i]->Callsign, strlen(List[i]->Callsign));
+			XDrawImageString(display, win, gc, PopupLeft + 2, PopupTop + Line, Msg, 11);
+			Line += 12;
 		}
-		ShowWindow(selActive, SW_SHOWNORMAL);
-
-		PopupX = MouseX - ScrollX - 10;
-
-		if (PopupX + 400 > cxWinSize)
-			PopupX = cxWinSize - 405;
 	}
-*/
-
 }
 
 
@@ -1040,8 +1344,8 @@ int DrawTrack(struct STATIONRECORD * ptr, BOOL AllStations)
 					{
 						X -= ScrollX;
 						Y -= ScrollY;
-						X += 10;
-						Y += 10;
+						X += leftBorder;
+						Y += topBorder;
 						
 						if (LastX)
 						{
@@ -1353,12 +1657,12 @@ int DrawStation(struct STATIONRECORD * ptr, BOOL AllStations)
 
 int DrawTracks(BOOL AllStations)
 {
+	char msg[80];
 	struct STATIONRECORD * ptr = *StationRecords;
 	int blackColor = BlackPixel(display, DefaultScreen(display));
 	int whiteColor = WhitePixel(display, DefaultScreen(display));
 	int Changed = 0;
-
-	int i = 0;
+	int i = 0, len;
 
 	while (ptr)
 	{
@@ -1372,6 +1676,9 @@ int DrawTracks(BOOL AllStations)
 
 //	if (RecsDeleted)
 //		RefreshStationList();
+
+	len = sprintf(msg, "%d Stations Zoom = %d", i, Zoom);
+	XDrawImageString(display, win, gc, 20, 20, msg, len);
 	return Changed;
 }
 
@@ -1690,7 +1997,7 @@ VOID RefreshTile(char * FN, int TileZoom, int Tilex, int Tiley)
 	LoadImageTile (Zoom, Tilex, Tiley, x, y);
 	NeedRedraw = 1;
 
-//	XPutImage (display, win, gc, image, ScrollX, ScrollY, 10, 10, cxImgSize, cyImgSize);
+//	XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
 }
 
 
@@ -1779,7 +2086,7 @@ VOID LoadImageSet(int Zoom, int TileX, int TileY)
 		}
 		RefreshStationMap(TRUE);
 	}
-	XPutImage (display, win, gc, image, ScrollX, ScrollY, 10, 10, cxImgSize, cyImgSize);
+	XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
 	DrawTracks(TRUE);
 
 }
@@ -1939,14 +2246,339 @@ VOID SaveIntValue(config_setting_t * group, char * name, int value)
 		config_setting_set_int(setting, value);
 }
 
+enum
+{
+  COL_FROM = 0,
+  COL_TO,
+  COL_SEQ,
+  COL_TIME,
+  COL_RECEIVED,
+  NUM_COLS
+} ;
 
-int main(void)
+
+static GtkWidget *create_sent_window( void )
+{
+	GtkCellRenderer *renderer;
+	GtkTreeModel *model;
+	GtkTreeIter iter;
+
+	view = gtk_tree_view_new();
+
+	renderer = gtk_cell_renderer_text_new();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW (view), -1, "To", renderer, "text", 0, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW (view), -1, "Seq", renderer, "text", 1, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW (view), -1, "State", renderer, "text", 2, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW (view), -1, "Time", renderer, "text", 3, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW (view), -1, "Sent", renderer, "text", 4, NULL);
+
+	sentitems = gtk_list_store_new(5, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+
+	model = GTK_TREE_MODEL(sentitems);
+
+	gtk_tree_view_set_model((GtkTreeView *)view, model);
+
+  /* The tree view has acquired its own reference to the
+   *  model, so we can drop ours. That way the model will
+   *  be freed automatically when the tree view is destroyed */
+
+	g_object_unref (model);
+
+//	gtk_container_add (GTK_CONTAINER (window), view2);
+
+	scrolledwin = gtk_scrolled_window_new(NULL,NULL);
+	gtk_container_set_border_width(GTK_CONTAINER(scrolledwin), 1);
+	gtk_widget_set_size_request(scrolledwin, 600, 300);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin), GTK_SHADOW_IN);
+//    gtk_container_add(GTK_CONTAINER(scrolledwin), view);
+    //tree_view = gtk_tree_view_new();
+    gtk_container_add(GTK_CONTAINER (scrolledwin), view);
+    //gtk_tree_view_set_model (GTK_TREE_VIEW (tree_view), GTK_TREE_MODEL (view));
+    //gtk_widget_show(tree_view);
+/*
+    gtk_table_attach (GTK_TABLE (table), scrolledwin,0, 1, 0, 1,
+		    GTK_EXPAND | GTK_SHRINK | GTK_FILL,
+		    GTK_EXPAND | GTK_SHRINK | GTK_FILL, 0, 0);
+*/
+    gtk_widget_show(scrolledwin);
+    return scrolledwin;
+
+}
+
+GdkPixbuf *create_pixbuf(const gchar * filename)
+{
+   GdkPixbuf *pixbuf;
+   GError *error = NULL;
+   pixbuf = gdk_pixbuf_new_from_file(filename, &error);
+   if(!pixbuf) {
+      fprintf(stderr, "%s\n", error->message);
+      g_error_free(error);
+   }
+   return pixbuf;
+}
+
+
+static GtkWidget *create_received_window(void)
+{
+	GtkCellRenderer *renderer;
+
+	view2 = gtk_tree_view_new();
+
+//	gtk_tree_view_set_fixed_height_mode(view2, TRUE);
+
+	renderer = gtk_cell_renderer_text_new();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view2), -1, "From", renderer, "text", COL_FROM, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view2), -1, "To", renderer, "text", COL_TO, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view2), -1, "Seq", renderer, "text", COL_SEQ, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view2), -1, "Time", renderer, "text", COL_TIME, NULL);
+
+	renderer = gtk_cell_renderer_text_new ();
+	renderer->ypad = 0;
+	gtk_tree_view_insert_column_with_attributes (GTK_TREE_VIEW (view2), -1, "Received", renderer, "text", COL_RECEIVED, NULL);
+
+	receiveditems = gtk_list_store_new (NUM_COLS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+
+	gtk_tree_view_set_model((GtkTreeView *)view2, (GtkTreeModel *)receiveditems);
+
+  /* The tree view has acquired its own reference to the
+   *  model, so we can drop ours. That way the model will
+   *  be freed automatically when the tree view is destroyed */
+
+	g_object_unref (receiveditems);
+
+ 	scrolledwin2 = gtk_scrolled_window_new(NULL,NULL);
+	gtk_container_set_border_width(GTK_CONTAINER(scrolledwin2), 2);
+	gtk_widget_set_size_request(scrolledwin2, 600, 300);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin2),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
+	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin2), GTK_SHADOW_IN);
+	gtk_container_add(GTK_CONTAINER(scrolledwin2), view2);
+
+    gtk_widget_show(scrolledwin2);
+
+    return scrolledwin2;
+
+}
+
+char ToCalls[1024] = "";
+
+VOID SendAPRSMessage(const char * Text, char * ToCall);
+
+void enter_callback( GtkWidget *widget,
+                     GtkWidget *entry )
+{
+	const gchar *entry_text;
+	entry_text = gtk_entry_get_text (GTK_ENTRY (entry));
+	gchar * tocall = strupr(gtk_combo_box_text_get_active_text((GtkComboBoxText *)combo));
+	char Key[32];
+
+	if (strlen(tocall) > 9)
+		tocall[9] = 0;
+
+	sprintf(Key, "|%s|", tocall);
+
+	if (tocall)
+	{
+		SendAPRSMessage(entry_text, tocall);
+	
+		// if new call add to combo box
+
+		if (strstr(ToCalls, Key) == 0)
+		{
+			if (strlen(ToCalls) < 1000)
+				strcat(ToCalls, Key);		
+
+			gtk_combo_box_text_prepend_text ((GtkComboBoxText *)combo, tocall);
+		}
+
+		g_free(tocall);
+		gtk_entry_set_text (GTK_ENTRY (entry), "");
+	}
+}
+
+VOID GTKThread()
+{
+	gtk_main();
+}
+
+int msgWinWidth = 300;
+int msgWinHeight = 300;
+int msgWinX = 100;
+int msgWinY = 100;
+
+void frame_callback(GtkWindow *window, GdkEvent *event, gpointer data)
+{
+   int x, y;
+   char buf[10];
+
+   msgWinX = event->configure.x;
+   msgWinY = event->configure.y;
+   msgWinWidth = event->configure.width;
+   msgWinHeight = event->configure.height;
+
+   gtk_widget_set_size_request(entry, msgWinWidth - 210 , 20);	//gtk_entry_new_with_buffer(text);
+
+ //  gtk_window_set_title(window, buf);
+ //  gtk_window_set_title (GTK_WINDOW (window), "BPQAPRS Messaging");
+}
+
+BOOL OnlyMine = FALSE;
+BOOL OnlySeq = FALSE;
+BOOL ShowBulls = FALSE;
+
+void check_callback(GtkButton *button, gpointer user_data)
+{
+	GtkTreeIter iter;
+	struct APRSMESSAGE * ptr = Messages;
+	int n = 0;
+
+	OnlyMine = gtk_toggle_button_get_active((GtkToggleButton *)check1);
+	OnlySeq = gtk_toggle_button_get_active((GtkToggleButton *)check2);
+	ShowBulls = gtk_toggle_button_get_active((GtkToggleButton *)check3);
+
+	// rewite the Message display with new filter
+
+    if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(receiveditems), &iter, NULL, 0))
+	{
+		while (gtk_list_store_remove(receiveditems, &iter))
+		{}
+	}
+	while (ptr)
+	{
+		if (memcmp(ptr->ToCall, "BLN", 3)== 0)
+			if (ShowBulls == TRUE)
+				goto wantit;
+
+		if (strcmp(ptr->ToCall, APRSCall) != 0)			// not to me?
+		{
+			if (OnlyMine == TRUE)
+			{
+				ptr = ptr->Next;
+				continue;
+			}
+		}
+
+		if (OnlySeq && ptr->Seq[0] == 0)
+		{
+			ptr = ptr->Next;
+			continue;
+		}
+
+	wantit:
+
+		gtk_list_store_insert_with_values(
+			receiveditems, &iter, -1,
+			COL_FROM, ptr->FromCall,
+			COL_TO, ptr->ToCall,
+			COL_SEQ, ptr->Seq,
+			COL_TIME, ptr->Time,
+			COL_RECEIVED, ptr->Text, -1);
+
+		ptr = ptr->Next;
+		n++;
+	}
+
+
+	if (n)
+		gtk_tree_view_scroll_to_cell((GtkTreeView *)view2,
+			gtk_tree_model_get_path (GTK_TREE_MODEL(receiveditems), &iter), NULL, FALSE, 0, 0);
+                              
+
+}
+
+static gboolean delete_event (GtkWidget *widget, GdkEvent *event, gpointer data)
+{
+	// Don't allow window to be closed
+	
+	return TRUE;
+}
+
+void SaveConfig()
+{
+	memset((void *)&cfg, 0, sizeof(config_t));
+
+	config_init(&cfg);
+
+	croot = config_root_setting(&cfg);
+
+	group = config_setting_add(croot, "APRS", CONFIG_TYPE_GROUP);
+
+	SaveIntValue(group, "Zoom", Zoom);
+	SaveIntValue(group, "SetBaseX", SetBaseX);
+	SaveIntValue(group, "SetBaseY", SetBaseY);
+	SaveIntValue(group, "ScrollX", ScrollX);
+	SaveIntValue(group, "ScrollY", ScrollY);
+	SaveIntValue(group, "WindowX", WindowX);
+	SaveIntValue(group, "WindowY", WindowY);
+	SaveIntValue(group, "WindowWidth", WindowWidth);
+	SaveIntValue(group, "WindowHeight", WindowHeight);
+	SaveIntValue(group, "WIDTHTILES", WIDTHTILES);
+	SaveIntValue(group, "HEIGHTTILES", HEIGHTTILES);
+	SaveIntValue(group, "msgWinWidth", msgWinWidth);
+	SaveIntValue(group, "msgWinHeight", msgWinHeight);
+	SaveIntValue(group, "msgWinX", msgWinX);
+	SaveIntValue(group, "msgWinY", msgWinY);
+
+	SaveIntValue(group, "OnlyMine", OnlyMine);
+	SaveIntValue(group, "OnlySeq", OnlySeq);
+	SaveIntValue(group, "ShowBulls", ShowBulls);
+
+	if(!config_write_file(&cfg, "BPQAPRS.cfg"))
+		printf("Error while writing config file.\n");
+	else
+		printf("Config Saved\n");
+
+	config_destroy(&cfg);
+}
+
+// Linux Signal Handlers
+
+BOOL Running = TRUE;
+
+static void sigterm_handler(int sig)
+{
+	 printf("sigterm\n");
+	 Running = FALSE;
+}
+
+static void sigint_handler(int sig)
+{
+	 SaveConfig();
+	 Running = FALSE;
+	 exit(0);
+}
+
+int main(int argc, char *argv[])
 {
     UCHAR * pbImage = NULL;
  	char FN[256];
 	int fd;
 	int x, y;
-	BOOL Running = TRUE;
+	time_t TimeLoaded = time(NULL);
+	struct stat STAT;
 
     double vals[10];	
 	int screen_number, depth, bitmap_pad, status;
@@ -1973,9 +2605,18 @@ int main(void)
 	UCHAR * APRSStationMemory;
 	int SlowTimer = 0;
 	Atom wmDeleteMessage;
+    PangoFontDescription *font_desc;
+	GtkTreeIter iter;
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.0.3\n");
-  	printf("Copyright © 2014 John Wiseman G8BPQ\n");
+#ifndef WIN32
+	signal(SIGHUP, SIG_IGN);
+	signal(SIGINT, sigint_handler);
+	signal(SIGTERM, sigterm_handler);
+	signal(SIGPIPE, SIG_IGN);
+#endif
+
+	printf("G8BPQ APRS Client for Linux Version 0.0.0.6\n");
+  	printf("Copyright © 2004-2015 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
 	printf("Map Tiles Courtesy of MapQuest (www.mapquest.com)\n\n");
@@ -2007,6 +2648,15 @@ int main(void)
 			WindowHeight = GetIntValue(group, "WindowHeight", 788);
 			HEIGHTTILES = GetIntValue(group, "HEIGHTTILES", 4);
 			WIDTHTILES = GetIntValue(group, "WIDTHTILES", 4);
+
+			msgWinWidth = GetIntValue(group, "msgWinWidth", 300);
+			msgWinHeight = GetIntValue(group, "msgWinHeight", 300);
+			msgWinX = GetIntValue(group, "msgWinX", 100);
+			msgWinY = GetIntValue(group, "msgWinY", 100);
+
+			OnlyMine = GetIntValue(group, "OnlyMine", 0);
+			OnlySeq = GetIntValue(group, "OnlySeq", 1);
+			ShowBulls = GetIntValue(group, "ShowBulls", 0);
 		}
 	}
 
@@ -2048,7 +2698,10 @@ int main(void)
 	ControlRecord = (struct STATIONRECORD*)APRSStationMemory;
 
 	MaxStations = ControlRecord->LastPort;
-	printf("LinBPQ Configured with MaxStations %d\n", MaxStations);
+	memset(APRSCall, 0x20, 9);
+	memcpy(APRSCall, ControlRecord->Callsign, strlen(ControlRecord->Callsign));
+
+	printf("LinBPQ Configured with MaxStations %d APRSCall %s\n", MaxStations, APRSCall);
 
 	if (MaxStations == 0)
 		MaxStations = 1500;			// for old LinBPQ
@@ -2066,8 +2719,33 @@ int main(void)
 		APRSStationMemory = NULL;
 	}
 
+	maxfd = sfd = socket(AF_UNIX, SOCK_DGRAM, 0);
+
+	if (sfd == -1)
+	{
+		perror("Socket");
+	}
+	else
+	{
+		memset(&my_addr, 0, sizeof(struct sockaddr_un));
+		my_addr.sun_family = AF_UNIX;
+		strncpy(my_addr.sun_path, RX_SOCK_PATH, sizeof(my_addr.sun_path) - 1);
+
+		memset(&peer_addr, 0, sizeof(struct sockaddr_un));
+		peer_addr.sun_family = AF_UNIX;
+		strncpy(peer_addr.sun_path, TX_SOCK_PATH, sizeof(peer_addr.sun_path) - 1);
+
+		unlink(RX_SOCK_PATH);
+
+		if (bind(sfd, (struct sockaddr *) &my_addr, sizeof(struct sockaddr_un)) == -1)
+            perror("bind");
+	}
+
+	XInitThreads();
+
 	ResolveThread();
 	_beginthread(OSMThread, 0, NULL);
+
 
 	display = XOpenDisplay(NULL);
 
@@ -2105,7 +2783,7 @@ int main(void)
 		sprintf(FN, "%s/%02d", OSMDir, i);
 		if (mkdir(FN, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0)
 		{
-			if (errno != 17)			// FIle exists
+			if (errno != 17)			// File exists
 			{
 				printf("Error Creating %s\n", FN);
 				perror("mkdir");
@@ -2155,46 +2833,181 @@ int main(void)
 		
 	x11_fd = ConnectionNumber(display);
 
+	if (x11_fd > maxfd)
+		maxfd = x11_fd;
+
+	gtk_init (&argc, &argv);
+
+    window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+	gtk_window_set_default_size(GTK_WINDOW (window), msgWinWidth, msgWinHeight);
+	gtk_widget_set_uposition(GTK_WIDGET(window),msgWinX, msgWinY);
+
+    gtk_signal_connect (GTK_OBJECT (window), "destroy",
+                        GTK_SIGNAL_FUNC (gtk_main_quit), NULL);
+    gtk_container_set_border_width (GTK_CONTAINER (window), 10);
+
+	gtk_window_set_resizable(GTK_WINDOW (window), TRUE);
+//	g_signal_connect (G_OBJECT (window), "destroy", G_CALLBACK (close_application), NULL);
+	gtk_window_set_title (GTK_WINDOW (window), "BPQAPRS Messaging");
+	gtk_container_set_border_width(GTK_CONTAINER (window), 0);
+
+	// Load bpqicon if present
+
+	if (stat("bpqicon.png", &STAT) == 0)
+		gtk_window_set_icon(GTK_WINDOW(window), create_pixbuf("bpqicon.png"));
+
+    //gtk_window_get_frame_dimensions(GTK_WINDOW(window),&left,&top,&right,&bottom);
+
+
+	gtk_signal_connect(GTK_OBJECT(window), "delete_event", GTK_SIGNAL_FUNC(delete_event), NULL);
+
+	g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(frame_callback), NULL);
+
+	// Create a box for the menu
+
+	box1 = gtk_vbox_new (FALSE, 0);
+	gtk_container_add (GTK_CONTAINER (window), box1);
+
+	checklabel = gtk_label_new("    ");
+
+	check1 = gtk_check_button_new_with_label ("Show only My Msgs   ");
+	check2 = gtk_check_button_new_with_label ("Show only Sequenced Msgs   ");
+	check3 = gtk_check_button_new_with_label ("Show Bulletins");
+
+	gtk_toggle_button_set_active((GtkToggleButton *)check1, OnlyMine);
+	gtk_toggle_button_set_active((GtkToggleButton *)check2, OnlySeq);
+	gtk_toggle_button_set_active((GtkToggleButton *)check3, ShowBulls);
+
+	g_signal_connect(G_OBJECT(check1), "clicked", G_CALLBACK(check_callback), "1");
+	g_signal_connect(G_OBJECT(check2), "clicked", G_CALLBACK(check_callback), "2");
+	g_signal_connect(G_OBJECT(check3), "clicked", G_CALLBACK(check_callback), "3");
+
+	// hBox for Check boxes
+
+	checkhbox = gtk_hbox_new (FALSE, 0);
+	gtk_box_pack_start (GTK_BOX (checkhbox), checklabel, FALSE, FALSE, 0);
+	gtk_container_add (GTK_CONTAINER (checkhbox), check1);
+	gtk_container_add (GTK_CONTAINER (checkhbox), check2);
+	gtk_container_add (GTK_CONTAINER (checkhbox), check3);
+
+	gtk_box_pack_start (GTK_BOX (box1), checkhbox, FALSE, FALSE, 0);
+
+	box10 = gtk_vbox_new (FALSE, 0);
+
+//	menubar = get_menubar_menu (window);
+
+//    gtk_box_pack_start (GTK_BOX (box1), menubar, FALSE, TRUE, 1);
+	gtk_container_add (GTK_CONTAINER (box1), box10);
+	gtk_widget_show (window);
+
+	vpaned = gtk_vpaned_new ();
+	gtk_container_add (GTK_CONTAINER (box10), vpaned);
+	gtk_paned_set_position(GTK_PANED(vpaned), vhandle);
+	gtk_widget_show (vpaned);
+
+    /* Now create the contents of the two halves of the window */
+
+	frame1 = create_received_window();
+	gtk_paned_add1 (GTK_PANED (vpaned), frame1);
+	gtk_widget_show (frame1);
+
+	frame2 = create_sent_window();
+	gtk_paned_add2 (GTK_PANED (vpaned), frame2);
+	gtk_widget_show (frame2);
+
+	separator = gtk_hseparator_new ();
+	gtk_box_pack_start(GTK_BOX (box1), separator, FALSE, TRUE, 0);
+
+	box2 = gtk_hbox_new(FALSE, 10);
+	gtk_container_set_border_width(GTK_CONTAINER (box2), 1);
+	gtk_box_pack_start(GTK_BOX (box10), box2, FALSE, FALSE, 0);
+
+	// set up the text entry line
+
+	label1 = gtk_label_new("To");
+	label2 = gtk_label_new("Message");
+    combo = gtk_combo_box_text_new_with_entry();
+	gtk_widget_set_size_request(combo, 100, 10);
+
+	entry = gtk_entry_new();
+	gtk_widget_set_size_request(entry, 400, 20);	//gtk_entry_new_with_buffer(text);
+	gtk_entry_set_max_length(GTK_ENTRY(entry), 100);
+	gtk_entry_set_activates_default(GTK_ENTRY (entry), TRUE);
+	g_signal_connect (G_OBJECT (entry), "activate", G_CALLBACK(enter_callback), (gpointer)entry);
+	gtk_box_pack_start(GTK_BOX(box2), label1, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(box2), combo, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(box2), label2, FALSE, FALSE, 0);
+	gtk_box_pack_start(GTK_BOX(box2), entry, FALSE, FALSE, 0);
+    gtk_widget_grab_focus(entry);
+
+    font_desc=pango_font_description_from_string(MyFont);
+	gtk_widget_modify_font (entry, font_desc);
+	gtk_widget_modify_font (combo, font_desc);
+	gtk_widget_modify_font (view, font_desc);
+	gtk_widget_modify_font (view2, font_desc);
+
+	gtk_widget_show_all (window);
+	gtk_widget_show (window);
+
     // Main loop
 
-   while(Running)
-   {
-	   FD_ZERO(&in_fds);
-	   FD_SET(x11_fd, &in_fds);
+	_beginthread(GTKThread, 0, NULL);
+	_beginthread(SecTimer, 0, NULL);
+
+	while(Running)
+	{
+		unsigned char Msg[256];
+		int numBytes;
+		struct STATIONRECORD * Station;
+	   
+		FD_ZERO(&in_fds);
+		FD_SET(x11_fd, &in_fds);
+		FD_SET(sfd, &in_fds);
 
 	   // Set our timer.  One second sounds good.
 
 	   tv.tv_usec = 0;
 	   tv.tv_sec = 3;
 
-	   // Wait for X Event or a Timer
+	   // Wait for X Event, Message from LinBPQ or a Timer
 	   
-	   if (select(x11_fd+1, &in_fds, 0, 0, &tv))
+	   if (select(maxfd+1, &in_fds, 0, 0, &tv))
 	   {
-		   // X event, but pick up later
+		   if (FD_ISSET(sfd, &in_fds))
+		   {
+				numBytes = recvfrom(sfd, Msg, 256, 0, NULL, NULL);
+
+				if (numBytes > 0)
+				{
+					memcpy(&Station, Msg, 4);
+					ProcessMessage(&Msg[4], Station);
+				}
+		   }
+
+		   // may be X event, but pick up later
 	   }
 	   else
 	   {
 			// Handle timer here
-			
-			NeedRedraw += RefreshStationMap(FALSE);			// Draw new or moved stations
+
+	//		NeedRedraw += RefreshStationMap(FALSE);			// Draw new or moved stations
 
 			// Do a full redraw at least evey 2 mins if anything has changed
 
-			SlowTimer++;
-			if (SlowTimer > 40)				// 2 Mins
-				if (NeedRedraw)
-					NeedRefresh = TRUE;
+//			SlowTimer++;
+//			if (SlowTimer > 40)				// 2 Mins
+//				if (NeedRedraw)
+//					NeedRefresh = TRUE;
 	   }
 
         // Handle XEvents and flush the input 
 
-        while(XPending(display))
+        while(Running && XPending(display))
 		{
 		XNextEvent(display, &event);
 		
-		MouseX = event.xbutton.x - 10;
-		MouseY = event.xbutton.y - 10;
+		MouseX = event.xbutton.x - leftBorder;
+		MouseY = event.xbutton.y - topBorder;
 
 		GetMouseLatLon(&MouseLat, &MouseLon);
 		
@@ -2257,7 +3070,7 @@ int main(void)
 
 		case Expose:
 
-			XPutImage (display, win, gc, image, ScrollX, ScrollY, 10, 10, cxImgSize, cyImgSize);
+			XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
 			DrawTracks(TRUE);
 			break;
 
@@ -2278,11 +3091,11 @@ int main(void)
 			{
                 cxWinSize = xce.width;
                 cyWinSize = xce.height;
-				cxImgSize = cxWinSize - xBorder * 2;
-				cyImgSize = cyWinSize - yBorder * 2;
+				cxImgSize = cxWinSize - (leftBorder + rightBorder);
+				cyImgSize = cyWinSize - (topBorder + bottomBorder);
 
 				XClearWindow(display, win);
-				XPutImage (display, win, gc, image, ScrollX, ScrollY, 10, 10, cxImgSize, cyImgSize);
+				XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
 				DrawTracks(TRUE);
 			}
 
@@ -2322,7 +3135,15 @@ int main(void)
 			switch (event.xbutton.button)
 			{
 			case 1:				// Left Button
-				
+
+				// if a Popup is on display, then select station, else scroll map
+
+				if (selActive)
+				{
+					GetStationFromList(MouseX, MouseY);
+					break;
+				}
+
 				MovedX = MouseX - LastX;
 				MovedY = MouseY - LastY;
 
@@ -2369,50 +3190,430 @@ int main(void)
 		} 
 		}	// end of while xpending
 
-		if (NeedRefresh)
+		if (popupActive || selActive)
 		{
-			SetBaseX = -1;
-			LoadImageSet(Zoom, TileX, TileY);
-		 	NeedRefresh = FALSE;
-			SlowTimer = 0;
 		}
-		if (NeedRedraw)
+		else
 		{
-			NeedRedraw = 0;
-			XPutImage (display, win, gc, image, ScrollX, ScrollY, 10, 10, cxImgSize, cyImgSize);
-			DrawTracks(TRUE);
+			if (NeedRefresh)
+			{
+				SetBaseX = -1;
+				LoadImageSet(Zoom, TileX, TileY);
+			 	NeedRefresh = FALSE;
+				SlowTimer = 0;
+			}
+			if (NeedRedraw)
+			{
+				NeedRedraw = 0;
+				XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
+				DrawTracks(TRUE);
+			}
 		}
 	}
 
-	memset((void *)&cfg, 0, sizeof(config_t));
-
-	config_init(&cfg);
-
-	croot = config_root_setting(&cfg);
-
-	group = config_setting_add(croot, "APRS", CONFIG_TYPE_GROUP);
-
-	SaveIntValue(group, "Zoom", Zoom);
-	SaveIntValue(group, "SetBaseX", SetBaseX);
-	SaveIntValue(group, "SetBaseY", SetBaseY);
-	SaveIntValue(group, "ScrollX", ScrollX);
-	SaveIntValue(group, "ScrollY", ScrollY);
-	SaveIntValue(group, "WindowX", WindowX);
-	SaveIntValue(group, "WindowY", WindowY);
-	SaveIntValue(group, "WindowWidth", WindowWidth);
-	SaveIntValue(group, "WindowHeight", WindowHeight);
-	SaveIntValue(group, "WIDTHTILES", WIDTHTILES);
-	SaveIntValue(group, "HEIGHTTILES", HEIGHTTILES);
-
-	if(! config_write_file(&cfg, "BPQAPRS.cfg"))
-		printf("Error while writing config file.\n");
-	else
-		printf("Config Saved\n");
-
-	config_destroy(&cfg);
+	SaveConfig();
 
 	status = XDestroyImage (image);
 	return 0;
+}
+
+void PutAPRSMessage(char * Frame, int Len)
+{
+	if (sendto(sfd, Frame, Len, 0, (struct sockaddr *) &peer_addr, sizeof(struct sockaddr_un)) != Len)
+		perror("sendto");
+}
+
+
+VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
+{
+	char MsgDest[10];
+	struct APRSMESSAGE * Message;
+	struct APRSMESSAGE * ptr = Messages;
+	char * TextPtr = &Payload[11];
+	char * SeqPtr;
+	int n = 0;
+	char FromCall[10] = "         ";
+	struct tm * TM;
+	time_t NOW;
+	GtkTreeIter iter;
+
+	memcpy(FromCall, Station->Callsign, strlen(Station->Callsign));
+	memcpy(MsgDest, &Payload[1], 9);
+	MsgDest[9] = 0;
+
+	SeqPtr = strchr(TextPtr, '{');
+
+	if (SeqPtr)
+	{
+		*(SeqPtr++) = 0;
+		if(strlen(SeqPtr) > 6)
+			SeqPtr[7] = 0;	
+	}
+
+	if (_memicmp(TextPtr, "ack", 3) == 0)
+	{
+		// Message Ack. See if for one of our messages
+
+		ptr = OutstandingMsgs;
+
+		if (ptr == 0)
+			return;
+
+		do
+		{
+			if (strcmp(ptr->FromCall, MsgDest) == 0
+				&& strcmp(ptr->ToCall, FromCall) == 0
+				&& strcmp(ptr->Seq, &TextPtr[3]) == 0)
+			{
+				// Message is acked
+
+				ptr->Retries = 0;
+				ptr->Acked = TRUE;
+//				if (hMsgsOut)
+				UpdateTXMessageLine(n, ptr);
+
+				return;
+			}
+			ptr = ptr->Next;
+			n++;
+
+		} while (ptr);
+	
+		return;
+	}
+
+	Message = malloc(sizeof(struct APRSMESSAGE));
+	memset(Message, 0, sizeof(struct APRSMESSAGE));
+	strcpy(Message->FromCall, Station->Callsign);
+	strcpy(Message->ToCall, MsgDest);
+
+	if (SeqPtr)
+	{
+		strcpy(Message->Seq, SeqPtr);
+
+		// If a REPLY-ACK Seg, copy to LastRXSeq, and see if it acks a message
+
+		if (SeqPtr[2] == '}')
+		{
+			struct APRSMESSAGE * ptr1;
+			int nn = 0;
+
+			strcpy(Station->LastRXSeq, SeqPtr);
+
+			ptr1 = OutstandingMsgs;
+
+			while (ptr1)
+			{
+				if (strcmp(ptr1->FromCall, MsgDest) == 0
+					&& strcmp(ptr1->ToCall, FromCall) == 0
+					&& memcmp(&ptr1->Seq, &SeqPtr[3], 2) == 0)
+				{
+					// Message is acked
+
+					ptr1->Acked = TRUE;
+					ptr1->Retries = 0;
+//					if (hMsgsOut)
+						UpdateTXMessageLine(nn, ptr1);
+					
+					break;
+				}
+				ptr1 = ptr1->Next;
+				nn++;
+			}
+		}
+		else
+		{
+			// Station is not using reply-ack - set to send simple numeric sequence (workround for bug in APRS Messanges
+		
+			Station->SimpleNumericSeq = TRUE;
+		}
+	}
+
+	if (strlen(TextPtr) > 100)
+		TextPtr[100] = 0;
+
+	strcpy(Message->Text, TextPtr);
+		
+	NOW = time(NULL);
+
+	if (LocalTime)
+		TM = localtime(&NOW);
+	else
+		TM = gmtime(&NOW);
+					
+	sprintf(Message->Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
+
+	if (_stricmp(MsgDest, APRSCall) == 0 && SeqPtr)	// ack it if it has a sequence
+	{
+		// For us - send an Ack
+
+		char ack[30];
+		int n = sprintf(ack, ":%-9s:ack%s", Message->FromCall, Message->Seq);
+		PutAPRSMessage(ack, n);
+	}
+
+	if (ptr == NULL)
+	{
+		Messages = Message;
+	}
+	else
+	{
+		n++;
+		while(ptr->Next)
+		{
+			ptr = ptr->Next;
+			n++;
+		}
+		ptr->Next = Message;
+	}
+
+	// Add to Window
+
+	if (memcmp(MsgDest, "BLN", 3) == 0)
+		if (ShowBulls == TRUE)
+			goto wantit;
+
+
+	if (strcmp(MsgDest, APRSCall) == 0)			// to me?
+		gtk_window_present((GtkWindow *)window);
+	else
+		if (OnlyMine == TRUE)
+			return;
+
+	if (OnlySeq && Message->Seq[0] == 0)
+		return;
+
+wantit:
+
+	gtk_list_store_insert_with_values(
+			receiveditems, &iter, -1,
+			COL_FROM, Message->FromCall,
+			COL_TO, Message->ToCall,
+			COL_SEQ, Message->Seq,
+			COL_TIME, Message->Time,
+			COL_RECEIVED, Message->Text, -1);
+
+	gtk_tree_view_scroll_to_cell ((GtkTreeView *)view2,
+                              gtk_tree_model_get_path (GTK_TREE_MODEL(receiveditems), &iter),
+                              NULL,
+                              FALSE, 0, 0);
+                              
+
+}
+
+void UpdateTXMessageLine(int n, struct APRSMESSAGE * Message)
+{
+	GtkTreeIter iter;
+	char status[10];
+
+	if (Message->Acked)
+		strcpy(status, "A");
+	else
+	if (Message->Retries == 0)
+		strcpy(status, "F");
+	else
+		sprintf(status, "%d", Message->Retries);
+
+    if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(sentitems), &iter, NULL, n))
+    {
+			gtk_list_store_set (sentitems, &iter, 2, status, -1);
+    }
+	else
+	{
+		 gtk_list_store_insert_with_values(
+			sentitems, &iter, -1,
+			0, Message->ToCall,
+			1, Message->Seq,
+			2, status,
+			3, Message->Time,
+			4, Message->Text, -1);
+	}
+	gtk_tree_view_scroll_to_cell ((GtkTreeView *)view,
+		gtk_tree_model_get_path (GTK_TREE_MODEL(sentitems), &iter), NULL, FALSE, 0, 0);
+}
+
+VOID SendAPRSMessage(const char * Text, char * ToCall)
+{
+	struct APRSMESSAGE * Message;
+	struct APRSMESSAGE * ptr = OutstandingMsgs;
+	int n = 0;
+	char Msg[255];
+	struct tm * TM;
+	time_t NOW;
+
+	Message = malloc(sizeof(struct APRSMESSAGE));
+	memset(Message, 0, sizeof(struct APRSMESSAGE));
+	strcpy(Message->FromCall, APRSCall);
+	memset(Message->ToCall, ' ', 9);
+	memcpy(Message->ToCall, ToCall, strlen(ToCall));
+
+	Message->ToStation = FindStation(ToCall, FALSE);
+
+	// Tostation may not yet exist - will be created by linbpq
+
+	if (Message->ToStation && Message->ToStation->LastRXSeq[0])		// Have we received a Reply-Ack message from him?
+		sprintf(Message->Seq, "%02X}%c%c", NextSeq++, Message->ToStation->LastRXSeq[0], Message->ToStation->LastRXSeq[1]);
+	else
+	{
+		if (Message->ToStation && Message->ToStation->SimpleNumericSeq)
+			sprintf(Message->Seq, "%d", NextSeq++);
+		else
+			sprintf(Message->Seq, "%02X}", NextSeq++);	// Don't know, so assume message-ack capable
+	}
+	strcpy(Message->Text, Text);
+	Message->Retries = RetryCount;
+	Message->RetryTimer = RetryIntervals[RetryCount];
+
+	NOW = time(NULL);
+
+	if (LocalTime)
+		TM = localtime(&NOW);
+	else
+		TM = gmtime(&NOW);
+					
+	sprintf(Message->Time, "%.2d:%.2d", TM->tm_hour, TM->tm_min);
+
+	if (ptr == NULL)
+	{
+		OutstandingMsgs = Message;
+	}
+	else
+	{
+		n++;
+		while(ptr->Next)
+		{
+			ptr = ptr->Next;
+			n++;
+		}
+		ptr->Next = Message;
+	}
+
+	UpdateTXMessageLine(n, Message);
+
+	n = sprintf(Msg, ":%-9s:%s{%s", ToCall, Text, Message->Seq);
+	PutAPRSMessage(Msg, n);
+
+	return;
+}
+
+VOID SecTimer()
+{
+	int SlowTimer = 0;
+
+	while (TRUE)
+	{
+	struct STATIONRECORD * sptr = *StationRecords;
+	struct APRSMESSAGE * ptr = OutstandingMsgs;
+	int n = 0;
+	char Msg[20];
+
+	// See if changed flag set on any stations
+
+	NeedRedraw += RefreshStationMap(FALSE);			// Draw new or moved stations
+
+	// Do a full redraw at least evey 2 mins if anything has changed
+
+	SlowTimer++;
+	if (SlowTimer > 120)				// 2 Mins
+		if (NeedRedraw)
+			NeedRefresh = TRUE;
+
+/*
+	while (sptr)
+	{
+		if (sptr->Moved)
+			DrawStation(sptr, FALSE);
+	
+		sptr = sptr->Next;
+	}
+*/
+/*	JPEGCounter++;
+
+	if (CreateJPEG)
+	{
+		if (JPEGCounter > JPEGInterval)
+		{
+			if (cxWinSize > 0 && cyWinSize > 0)
+			{
+				LoadImageSet(Zoom, SetBaseX, SetBaseY);
+				
+				EnterCriticalSection(&RefreshCrit);
+				RefreshStationMap();
+				LeaveCriticalSection(&RefreshCrit);
+
+				if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 100))
+					JPEGCounter = 0;
+			}
+		}
+	}
+	if (SendWX)
+		SendWeatherBeacon();
+
+	// If any changes to image redraw it
+
+	if (ImageChanged)
+	{
+		// We have drawn a new Icon. As we only redraw if it has moved, 
+		// we need to reload image every now and again to get rid of ghost images
+
+		time_t NOW = time(NULL);
+		
+		if ((NOW - LastRefresh) > 10)
+		{
+			LastRefresh = NOW;
+			ReloadMaps = TRUE;
+		}
+
+		ImageChanged = FALSE;
+		InvalidateRect(hMapWnd, NULL, FALSE);
+	}
+
+	wsprintf(Msg, "%d", StationCount);
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 1, (LPARAM)Msg);
+
+	wsprintf(Msg, "%d", OSMQueueCount);
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 2, (LPARAM)Msg);
+
+	wsprintf(Msg, "%d", Zoom);
+	SendMessage(hStatus, SB_SETTEXT, (WPARAM)(INT) 0 | 3, (LPARAM)Msg);
+*/
+
+	// Check Message Retries
+
+	while (ptr)
+	{				
+		if (ptr->Acked == FALSE)
+		{
+			if (ptr->Retries)
+			{
+				ptr->RetryTimer--;
+				
+				if (ptr->RetryTimer == 0)
+				{
+					ptr->Retries--;
+
+					if (ptr->Retries)
+					{
+						// Send Again
+						
+						char Msg[255];
+						int l = sprintf(Msg, ":%-9s:%s{%s", ptr->ToCall, ptr->Text, ptr->Seq);
+						PutAPRSMessage(Msg, l);
+						ptr->RetryTimer = RetryIntervals[ptr->Retries];
+					}
+
+					UpdateTXMessageLine(n, ptr);
+				}
+			}
+		}
+
+		ptr = ptr->Next;
+		n++;
+
+	};
+
+	Sleep(1000);
+	}
 }
 
 
