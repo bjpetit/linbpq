@@ -104,6 +104,7 @@ int maxfd;
 VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
 void UpdateTXMessageLine(int n, struct APRSMESSAGE * Message);
 VOID SecTimer();
+void plotLine(int x0, int y0, int x1, int y1, COLORREF rgb);
 
 struct SEM
 {
@@ -197,6 +198,10 @@ BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
 BOOL LocalTime = TRUE;
 
+BOOL CreateJPEG = TRUE;
+int JPEGInterval = 300;
+int JPEGCounter = 0;
+char JPEGFileName[MAX_PATH] = "BPQAPRS/HTML/APRSImage.jpg";
 
 Display * display;
 Window root, win;
@@ -371,6 +376,12 @@ const unsigned char ASCII[][5] = {
   ,{0x10, 0x08, 0x08, 0x10, 0x08} // 7e ~
   ,{0x78, 0x46, 0x41, 0x46, 0x78} // 7f DEL
 };
+
+COLORREF Colours[256] = {0, RGB(0,0,255), RGB(0,128,0), RGB(0,128,192), 
+		RGB(0,192,0), RGB(0,192,255), RGB(0,255,0), RGB(128,0,128),
+		RGB(128,64,0), RGB(128,128,128), RGB(192,0,0), RGB(192,0,255),
+		RGB(192,64,128), RGB(192,128,255), RGB(255,0,0), RGB(255,0,255),				// 81
+		RGB(255,64,0), RGB(255,64,128), RGB(255,64,192), RGB(255,128,0)};
 
 
 
@@ -1243,14 +1254,12 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 		if (popupActive)
 		{
 			XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
-			DrawTracks(TRUE);
 			popupActive = 0;
 		}
 
 		if (selActive)
 		{
 			XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
-			DrawTracks(TRUE);
 			selActive = 0;
 		}		
 		return;
@@ -1301,74 +1310,6 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 	}
 }
 
-
-int DrawTrack(struct STATIONRECORD * ptr, BOOL AllStations)
-{
-	int X, Y, Pointer, i, c, index, bit, mask, calllen;
-	UINT j;
-	char Overlay;
-	char * nptr;
-	time_t AgeLimit = time(NULL ) - (TrackExpireTime * 60);
-	int SavePointer;
-
-//	if (ptr->Moved == 0 && AllStations == 0)
-//		return 0;				// No need to repaint
-
-	if (SuppressNullPosn && ptr->Lat == 0.0)
-		return 0;
-
-	if (ptr->ObjState == '_')	// Killed Object
-		return 0;
-
-	if (GetLocPixels(ptr->Lat, ptr->Lon, &X, &Y))
-	{
-		if (X < 12 || Y < 12 || X > (WIDTH - 36) || Y > (HEIGHT - 36))
-			return 0;				// Too close to edges
-
-		ptr->Moved = 0;
-
-		if (ptr->LatTrack[0] && ptr->NoTracks == FALSE)
-		{
-			// Draw Track
-
-			int Index = ptr->Trackptr;
-			int i, n;
-			int X, Y;
-			int LastX = 0, LastY = 0;
-
-			for (n = 0; n < TRACKPOINTS; n++)
-			{
-				if (ptr->LatTrack[Index] && ptr->TrackTime[Index] > AgeLimit)
-				{
-					if (GetLocPixels(ptr->LatTrack[Index], ptr->LonTrack[Index], &X, &Y))
-					{
-						X -= ScrollX;
-						Y -= ScrollY;
-						X += leftBorder;
-						Y += topBorder;
-						
-						if (LastX)
-						{
-							if (abs(X - LastX) < 600 && abs(Y - LastY) < 600)
-								XDrawLine(display, win, gc, LastX, LastY, X, Y);
-						}
-
-						LastX = X;
-						LastY = Y;
-					}
-				}
-				Index++;
-				if (Index == TRACKPOINTS)
-					Index = 0;
-		
-			}
-			XFlush(display);
-		}
-		return 1;
-	}
-	return 0;
-}
-
 int DrawStation(struct STATIONRECORD * ptr, BOOL AllStations)
 {
 	int X, Y, Pointer, i, c, index, bit, mask, calllen, calllenpixels;
@@ -1391,6 +1332,40 @@ int DrawStation(struct STATIONRECORD * ptr, BOOL AllStations)
 	{
 		if (X < 12 || Y < 12 || X > (WIDTH - 36) || Y > (HEIGHT - 36))
 			return 0;				// Too close to edges
+
+		if (ptr->LatTrack[0] && ptr->NoTracks == FALSE)
+		{
+			// Draw Track
+
+			int Index = ptr->Trackptr;
+			int i, n;
+			int X, Y;
+			int LastX = 0, LastY = 0;
+
+			for (n = 0; n < TRACKPOINTS; n++)
+			{
+				if (ptr->LatTrack[Index] && ptr->TrackTime[Index] > AgeLimit)
+				{
+					if (GetLocPixels(ptr->LatTrack[Index], ptr->LonTrack[Index], &X, &Y))
+					{					
+						if (LastX)
+						{
+							if (abs(X - LastX) < 600 && abs(Y - LastY) < 600)
+								if (X > 0 && Y > 0 && X < (WIDTH - 5) && Y < (HEIGHT - 5))
+									plotLine(LastX, LastY, X, Y, Colours[ptr->TrackColour]);	
+
+						}
+
+						LastX = X;
+						LastY = Y;
+					}
+				}
+				Index++;
+				if (Index == TRACKPOINTS)
+					Index = 0;
+		
+			}
+		}
 
 		ptr->Moved = 0;
 
@@ -1655,44 +1630,14 @@ int DrawStation(struct STATIONRECORD * ptr, BOOL AllStations)
 }
 
 
-int DrawTracks(BOOL AllStations)
-{
-	char msg[80];
-	struct STATIONRECORD * ptr = *StationRecords;
-	int blackColor = BlackPixel(display, DefaultScreen(display));
-	int whiteColor = WhitePixel(display, DefaultScreen(display));
-	int Changed = 0;
-	int i = 0, len;
-
-	while (ptr)
-	{
-		Changed += DrawTrack(ptr, AllStations);
-		i++;
-		ptr = ptr->Next;
-	}
-
-//	NeedRefresh = FALSE;
-//	LastRefresh = time(NULL);
-
-//	if (RecsDeleted)
-//		RefreshStationList();
-
-	len = sprintf(msg, "%d Stations Zoom = %d", i, Zoom);
-	XDrawImageString(display, win, gc, 20, 20, msg, len);
-	return Changed;
-}
-
-
-
-
 int RefreshStationMap(BOOL AllStations)
 {
 	struct STATIONRECORD * ptr = *StationRecords;
 	int blackColor = BlackPixel(display, DefaultScreen(display));
 	int whiteColor = WhitePixel(display, DefaultScreen(display));
 	int Changed = 0;
-
-	int i = 0;
+	char msg[80];
+	int i = 0, len;
 
 	while (ptr)
 	{
@@ -1706,6 +1651,9 @@ int RefreshStationMap(BOOL AllStations)
 
 //	if (RecsDeleted)
 //		RefreshStationList();
+
+	len = sprintf(msg, "%d Stations Zoom = %d", i, Zoom);
+	XDrawImageString(display, win, gc, 20, 20, msg, len);
 
 	StationCount = i;
 	return Changed;
@@ -2087,8 +2035,6 @@ VOID LoadImageSet(int Zoom, int TileX, int TileY)
 		RefreshStationMap(TRUE);
 	}
 	XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
-	DrawTracks(TRUE);
-
 }
 
 BYTE * ReadIcons(char * fileName, UINT *width, UINT *height)
@@ -2245,6 +2191,34 @@ VOID SaveIntValue(config_setting_t * group, char * name, int value)
 	if(setting)
 		config_setting_set_int(setting, value);
 }
+
+BOOL GetStringValue(config_setting_t * group, char * name, char * value)
+{
+	const char * str;
+	config_setting_t *setting;
+
+	setting = config_setting_get_member (group, name);
+
+	if (setting)
+	{
+		str =  config_setting_get_string (setting);
+		strcpy(value, str);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+VOID SaveStringValue(config_setting_t * group, char * name, char * value)
+{
+	config_setting_t *setting;
+
+	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
+	if (setting)
+		config_setting_set_string(setting, value);
+
+}
+
+
 
 enum
 {
@@ -2546,6 +2520,10 @@ void SaveConfig()
 	SaveIntValue(group, "OnlySeq", OnlySeq);
 	SaveIntValue(group, "ShowBulls", ShowBulls);
 
+	SaveIntValue(group, "CreateJPEG", CreateJPEG);
+	SaveIntValue(group, "JPEGInterval", JPEGInterval);
+	SaveStringValue(group, "JPEGFileName", JPEGFileName);
+
 	if(!config_write_file(&cfg, "BPQAPRS.cfg"))
 		printf("Error while writing config file.\n");
 	else
@@ -2615,7 +2593,7 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.0.6\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.0.7\n");
   	printf("Copyright © 2004-2015 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
@@ -2657,6 +2635,10 @@ int main(int argc, char *argv[])
 			OnlyMine = GetIntValue(group, "OnlyMine", 0);
 			OnlySeq = GetIntValue(group, "OnlySeq", 1);
 			ShowBulls = GetIntValue(group, "ShowBulls", 0);
+
+			CreateJPEG = GetIntValue(group, "CreateJPEG", 1);
+			JPEGInterval = GetIntValue(group, "JPEGInterval", 300);
+			GetStringValue(group, "JPEGFileName", JPEGFileName);
 		}
 	}
 
@@ -3071,7 +3053,6 @@ int main(int argc, char *argv[])
 		case Expose:
 
 			XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
-			DrawTracks(TRUE);
 			break;
 
 		case ConfigureNotify:
@@ -3096,7 +3077,6 @@ int main(int argc, char *argv[])
 
 				XClearWindow(display, win);
 				XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
-				DrawTracks(TRUE);
 			}
 
 			break;
@@ -3166,7 +3146,10 @@ int main(int argc, char *argv[])
 				}
 
 				if (TileX < 0)
+				{
 					TileX = 0;
+					ScrollX = 0;
+				}
 
 				while (ScrollY < 0)
 				{
@@ -3181,8 +3164,11 @@ int main(int argc, char *argv[])
 				}
 
 				if (TileY < 0)
+				{
 					TileY = 0;
-	
+					ScrollY = 0;
+				}
+
 				NeedRefresh = TRUE;
 				break;
 			}
@@ -3206,7 +3192,6 @@ int main(int argc, char *argv[])
 			{
 				NeedRedraw = 0;
 				XPutImage (display, win, gc, image, ScrollX, ScrollY, leftBorder, topBorder, cxImgSize, cyImgSize);
-				DrawTracks(TRUE);
 			}
 		}
 	}
@@ -3527,25 +3512,18 @@ VOID SecTimer()
 		sptr = sptr->Next;
 	}
 */
-/*	JPEGCounter++;
+	JPEGCounter++;
 
 	if (CreateJPEG)
 	{
 		if (JPEGCounter > JPEGInterval)
 		{
-			if (cxWinSize > 0 && cyWinSize > 0)
-			{
-				LoadImageSet(Zoom, SetBaseX, SetBaseY);
-				
-				EnterCriticalSection(&RefreshCrit);
-				RefreshStationMap();
-				LeaveCriticalSection(&RefreshCrit);
-
-				if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 100))
-					JPEGCounter = 0;
-			}
+			if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 50))
+				JPEGCounter = 0;
 		}
 	}
+
+/*
 	if (SendWX)
 		SendWeatherBeacon();
 
@@ -3616,4 +3594,341 @@ VOID SecTimer()
 	}
 }
 
+BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, BOOL color, int quality)
+{
+	struct jpeg_compress_struct cinfo;
+	struct my_error_mgr jerr;
+	FILE * outfile=NULL;
+	unsigned char * RGBBuff = malloc(widthPix * 3);
+	unsigned char * ptr1, * ptr2;
+	int n;
+	unsigned int val, r, g, b;
 
+	if (dataBuf==NULL)
+		return FALSE;
+	if (widthPix==0)
+		return FALSE;
+	if (height==0)
+		return FALSE;
+
+	/* More stuff */
+	/* Step 1: allocate and initialize JPEG compression object */
+	
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = my_error_exit;
+
+	/* Establish the setjmp return context for my_error_exit to use. */
+	
+	if (setjmp(jerr.setjmp_buffer))
+	{
+		/* If we get here, the JPEG code has signaled an error.
+		 * We need to clean up the JPEG object, close the input file, and return.
+		 */
+
+		jpeg_destroy_compress(&cinfo);
+
+		if (outfile!=NULL)
+			fclose(outfile);
+
+		return FALSE;
+	}
+
+	/* Now we can initialize the JPEG compression object. */
+
+	jpeg_create_compress(&cinfo);
+
+	/* Step 2: specify data destination (eg, a file) */
+	/* Note: steps 2 and 3 can be done in either order. */
+
+	if ((outfile = fopen(fileName, "wb")) == NULL)
+	{
+//		char buf[250];
+//		sprintf(buf, "JpegFile :\nCan't open %s\n", fileName);
+//		MessageBox(NULL, buf, "", 0);
+		return FALSE;
+	}
+
+	jpeg_stdio_dest(&cinfo, outfile);
+
+	/* Step 3: set parameters for compression */
+												    
+	/* First we supply a description of the input image.
+	* Four fields of the cinfo struct must be filled in:
+	*/
+	cinfo.image_width = widthPix; 	/* image widthPix and height, in pixels */
+	cinfo.image_height = height;
+
+	cinfo.input_components = 3;		/* # of color components per pixel */
+	cinfo.in_color_space = JCS_RGB; 	/* colorspace of input image */
+ 
+/* Now use the library's routine to set default compression parameters.
+   * (You must set at least cinfo.in_color_space before calling this,
+   * since the defaults depend on the source color space.)
+   */
+
+  jpeg_set_defaults(&cinfo);
+  /* Now you can set any non-default parameters you wish to.
+   * Here we just illustrate the use of quality (quantization table) scaling:
+   */
+  jpeg_set_quality(&cinfo, quality, TRUE /* limit to baseline-JPEG values */);
+
+  /* Step 4: Start compressor */
+
+  /* TRUE ensures that we will write a complete interchange-JPEG file.
+   * Pass TRUE unless you are very sure of what you're doing.
+   */
+  jpeg_start_compress(&cinfo, TRUE);
+
+  /* Step 5: while (scan lines remain to be written) */
+  /*           jpeg_write_scanlines(...); */
+
+  /* Here we use the library's state variable cinfo.next_scanline as the
+   * loop counter, so that we don't have to keep track ourselves.
+   * To keep things simple, we pass one scanline per call; you can pass
+   * more if you wish, though.
+   */
+
+  while (cinfo.next_scanline < cinfo.image_height)
+  {
+    /* jpeg_write_scanlines expects an array of pointers to scanlines.
+     * Here the array is only one element long, but you could pass
+     * more than one scanline at a time if that's more convenient.
+     */
+
+	unsigned char * outRow;
+
+	outRow = RGBBuff;
+
+	// We have to convert form 2 or 4 bytes to pixel to 3 byte rgb
+
+	ptr1 = dataBuf + ((ScrollY * WIDTH) + ScrollX + (cinfo.next_scanline * WIDTH)) * Bytesperpixel;
+
+	ptr2 = RGBBuff;
+
+	for (n = 0; n < widthPix; n++)
+	{
+		if (Bytesperpixel == 2)
+		{
+			val = (*(ptr1++));
+			val |= (*(ptr1++)) << 8;
+
+			b = val << 3;
+			g = (val >> 5) << 2;
+			r =	(val >> 11) << 3;
+
+			*(ptr2++) = r;
+			*(ptr2++) = g;
+			*(ptr2++) = b;
+		}
+		else
+		{
+			*(ptr2++) = *(ptr1+2);
+			*(ptr2++) = *(ptr1+1);
+			*(ptr2++) = *(ptr1);
+			ptr1 += 4;;
+		}
+	}	
+    (void) jpeg_write_scanlines(&cinfo, &outRow, 1);
+  }
+
+  /* Step 6: Finish compression */
+
+  jpeg_finish_compress(&cinfo);
+
+  /* After finish_compress, we can close the output file. */
+  fclose(outfile);
+
+  /* Step 7: release JPEG compression object */
+
+  /* This is an important step since it will release a good deal of memory. */
+  jpeg_destroy_compress(&cinfo);
+
+  /* And we're done! */
+
+  return TRUE;
+}
+
+VOID plot(int X, int Y, COLORREF rgb)
+{
+	char * nptr;
+	int i, j;
+
+	if ((X > (WIDTH - 3)) || (Y > (HEIGHT - 3)))
+		return;
+
+	nptr = &Image[(Y * WIDTH * Bytesperpixel) + (X * Bytesperpixel)];
+
+	for (j = 0; j < 2; j++)
+	{
+		for (i = 0; i < 2; i++)
+		{
+			*(nptr++) = GetRValue(rgb);
+			*(nptr++) = (rgb >> 8) & 0xff;
+			*(nptr++) = (rgb >> 16) & 0xff;
+			nptr++;
+		}
+		nptr += (WIDTH - 2) * Bytesperpixel;
+	}
+}
+
+// Algorithm assumes y increases slower than x. If not, swap x and y in plotline and plotpoint
+
+void plotLineTB(int x0, int y0, int x1, int y1, COLORREF rgb);
+void plotLineLR(int x0, int y0, int x1, int y1, COLORREF rgb);
+
+void plotLine(int x0, int y0, int x1, int y1, COLORREF rgb)
+{
+	if (abs(x1 - x0) > abs(y1 - y0))
+		plotLineLR(x0, y0, x1, y1, rgb);
+	else
+		plotLineTB(y0, x0, y1, x1, rgb);
+}
+
+void plotLineLR(int x0, int y0, int x1, int y1, COLORREF rgb)
+{
+	int dx;
+	int dy;
+	int D, x, y;
+
+	// Must draw with increacing x and y, but can draw either way round, so if x is decreasing,
+	//	just swap ends, so we always draw left to right
+
+	if (x0 > x1)
+	{
+		x = x0;
+		x0 = x1;
+		x1 = x;
+
+		y = y0;
+		y0 = y1;
+		y1 = y;
+	}
+
+	// if y is now decreasing, we must reverse algorithm
+
+	if (y1 > y0)
+	{
+		dx = x1 - x0;
+		dy = y1 - y0;
+		D = 2 * dy - dx;
+
+		plot (x0, y0, 0);
+
+		y = y0;
+
+		for (x = x0+1; x < x1; x++)
+		{
+			if (D < 0)
+			{
+				D = D + (2*dy);
+			}
+			else
+			{
+				y = y+1;
+				D = D + (2*dy-2*dx);
+			
+			}
+			plot(x, y, rgb);
+		}
+	}
+	else
+	{
+		dx = x1 - x0;
+		dy = y0 - y1;
+		D = 2 * dy - dx;
+
+		plot (x0, y0, rgb);
+
+		y = y0;
+
+		for (x = x0+1; x <= x1; x++)
+		{
+			if (D > 0)
+			{
+				y = y-1;
+				plot(x, y, rgb);
+				D = D + (2*dy-2*dx);
+			}
+			else
+			{
+				plot(x, y, rgb);
+				D = D + (2*dy);
+			}
+		}
+	}
+
+}
+
+void plotLineTB(int x0, int y0, int x1, int y1, COLORREF rgb)
+{
+	int dx;
+	int dy;
+	int D, x, y;
+
+	// Must draw with increacing x and y, but can draw either way round, so if x is decreasing,
+	//	just swap ends, so we always draw left to right
+
+	if (x0 > x1)
+	{
+		x = x0;
+		x0 = x1;
+		x1 = x;
+
+		y = y0;
+		y0 = y1;
+		y1 = y;
+	}
+
+	// if y is now decreasing, we must reverse algorithm
+
+	if (y1 > y0)
+	{
+		dx = x1 - x0;
+		dy = y1 - y0;
+		D = 2 * dy - dx;
+
+		plot (y0, x0, 0);
+
+		y = y0;
+
+		for (x = x0+1; x < x1; x++)
+		{
+			if (D < 0)
+			{
+				D = D + (2*dy);
+			}
+			else
+			{
+				y = y+1;
+				D = D + (2*dy-2*dx);
+			
+			}
+			plot(y, x, rgb);
+		}
+	}
+	else
+	{
+		dx = x1 - x0;
+		dy = y0 - y1;
+		D = 2 * dy - dx;
+
+		plot (y0, x0, 0);
+
+		y = y0;
+
+		for (x = x0+1; x <= x1; x++)
+		{
+			if (D > 0)
+			{
+				y = y-1;
+				D = D + (2*dy-2*dx);
+			}
+			else
+			{
+				D = D + (2*dy);
+			}
+			plot(y, x, rgb);
+
+		}
+	}
+}
