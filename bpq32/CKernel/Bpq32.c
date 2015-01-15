@@ -662,8 +662,12 @@
 //	Add	INP3ONLY flag.
 //	Fix program error if enter UNPROTO without a destination path
 //	Show client IP address on HTTP sessions in Telnet Server
-//	Reduce frequency and number ot attempts to connect to routes when Keepalives or INP3 is set
-//	Add FT990 RigControl support
+//	Reduce frequency and number of attempts to connect to routes when Keepalives or INP3 is set
+//	Add FT990 RigControl support, fix FT1000MP support.
+//	Support ARMV5 processors
+//  Changes to support LinBPQ APRS Client
+//	Add IC7410 to supported Soundcard rigs
+//	Add CAT PTT to NMEA type (for ICOM Marine Radios_
 
 #define CKernel
 

@@ -115,6 +115,7 @@ char CallPadded[10] = "         ";
 
 int GPSPort = 0;
 int GPSSpeed = 0;
+char GPSRelay[80] = "";
 
 BOOL GateLocal = FALSE;
 double GateLocalDistance = 0.0;
@@ -1695,6 +1696,15 @@ static APRSProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr, "GPSRelay") == 0)
+	{
+		if (strlen(p_value) > 79)
+			return FALSE;
+
+		strcpy(GPSRelay, p_value);
+		return TRUE;
+	}
+
 	if (_stricmp(ptr, "BlueNMEA") == 0)
 	{
 		if (strlen(p_value) > 70)
@@ -1703,7 +1713,6 @@ static APRSProcessLine(char * buf)
 		strcpy(HostName, p_value);
 		return TRUE;
 	}
-
 	if (_stricmp(ptr, "LAT") == 0)
 	{
 		if (strlen(p_value) != 8)

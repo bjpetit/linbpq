@@ -1563,6 +1563,13 @@ VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG)
 			pptr = num;
 			break;
 
+		case 'F': // Number of new messages to forward to this BBS.
+
+			Msgs = CountMessagestoForward(conn->UserPointer);
+			sprintf(num, "%d", Msgs);
+			pptr = num;
+			break;
+
 		default:
 
 			pptr = Dollar;		// Just Copy $
@@ -1907,7 +1914,8 @@ int ImportMessages(CIRCUIT * conn, char * FN)
 	int WriteLen=0;
 	FILE *in;
 	CIRCUIT dummyconn;
-
+	int Index = 0;
+			
 	char Buffer[100000];
 	char *buf = Buffer;
 
@@ -5272,12 +5280,13 @@ BOOL SeeifMessagestoForward (int BBSNumber, CIRCUIT * conn)
 	return FALSE;
 }
 
-int CountMessagestoForward (int BBSNumber)
+int CountMessagestoForward (struct UserInfo * user)
 {
 	// See if any messages are queued for this BBS
 
 	int m, n=0;
 	struct MsgInfo * Msg;
+	int BBSNumber = user->BBSNumber;
 
 	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
 	{
@@ -5285,6 +5294,40 @@ int CountMessagestoForward (int BBSNumber)
 
 		if ((Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
 			n++;
+
+		// if an NTS MPS, also check ofr any matches
+
+		if (Msg->type == 'T' && (user->flags & F_NTSMPS))
+		{
+			struct BBSForwardingInfo * ForwardingInfo = user->ForwardingInfo;
+			int depth;
+				
+			if (Msg->status == 'N' && ForwardingInfo)
+			{
+				depth = CheckBBSToForNTS(Msg, ForwardingInfo);
+
+				if (depth > -1 && Msg->Locked == 0)
+				{
+					n++;
+					continue;
+				}						
+				depth = CheckBBSAtList(Msg, ForwardingInfo, Msg->via);
+
+				if (depth && Msg->Locked == 0)
+				{
+					n++;
+					continue;
+				}						
+
+				depth = CheckBBSATListWildCarded(Msg, ForwardingInfo, Msg->via);
+
+				if (depth > -1 && Msg->Locked == 0)
+				{
+					n++;
+					continue;
+				}
+			}
+		}
 	}
 
 	return n;

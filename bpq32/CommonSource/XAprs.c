@@ -91,7 +91,6 @@ GtkTreeModel *model;
 char MyFont[50] = "Monospace 10";
 
 gchar *fontname;
-gint vhandle;
 
 char RX_SOCK_PATH[] = "BPQAPRSrxsock";
 char TX_SOCK_PATH[] = "BPQAPRStxsock";
@@ -198,10 +197,15 @@ BOOL SuppressNullPosn = FALSE;
 BOOL DefaultNoTracks = FALSE;
 BOOL LocalTime = TRUE;
 
+int SlowTimer = 0;
+
 BOOL CreateJPEG = TRUE;
 int JPEGInterval = 300;
 int JPEGCounter = 0;
 char JPEGFileName[MAX_PATH] = "BPQAPRS/HTML/APRSImage.jpg";
+
+char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
 
 Display * display;
 Window root, win;
@@ -1107,6 +1111,7 @@ int PopupHeight;
 int PopupWidth;
 int PopupLeft;
 int PopupTop;
+struct STATIONRECORD * popupStn;
 struct STATIONRECORD * List[1000] = {0};
 
 
@@ -1128,6 +1133,7 @@ VOID CreateStationPopup(struct STATIONRECORD * ptr, int RelX, int RelY)
 		PopupTop= cyWinSize - 165;
 
 	popupActive = TRUE;
+	popupStn = ptr;
 	PopupHeight = 200;
 	PopupWidth = 350;
 
@@ -1307,6 +1313,93 @@ VOID FindStationsByPixel(int MouseX, int MouseY)
 			XDrawImageString(display, win, gc, PopupLeft + 2, PopupTop + Line, Msg, 11);
 			Line += 12;
 		}
+	}
+}
+
+VOID DrawCharacter(int X, int Y, int j, unsigned char chr)
+{
+	// Font is 5 bits wide x 8 high. Each byte of font contains one column, so 5 bytes per char
+
+	int Pointer, i, c, index, bit, mask;
+
+	Pointer = ((Y - 5) * WIDTH * Bytesperpixel) + ((X + 11) * Bytesperpixel) + (j * 6 * Bytesperpixel);
+
+	mask = 1;
+
+	for (i = 0; i < 2; i++)
+	{
+		for (index = 0 ; index < 6 ; index++)
+		{
+			Image[Pointer++] = 255;				// Blank lines above chars 
+			Image[Pointer++] = 255;
+			if (Bytesperpixel == 4)
+			{
+				Image[Pointer++] = 255;
+				Pointer++;
+			}
+		}
+
+		Pointer += (WIDTH - 6) * Bytesperpixel;
+	}
+
+	//	Pointer = ((Y - 3) * 2048 * 3) + (X * 3) + 36 + (j * 18);
+
+	for (i = 0; i < 7; i++)
+	{
+		Image[Pointer++] = 255;				// Blank col between chars
+		Image[Pointer++] = 255;
+		if (Bytesperpixel == 4)
+		{
+			Image[Pointer++] = 255;
+			Pointer++;
+		}
+		for (index = 0 ; index < 5 ; index++)
+		{
+			c = ASCII[chr - 0x20][index];	// Font data
+			bit = c & mask;
+
+			if (bit)
+			{
+				Image[Pointer++] = 0;
+				Image[Pointer++] = 0;
+				if (Bytesperpixel == 4)
+				{
+					Image[Pointer++] = 0;
+					Pointer++;
+				}
+			}
+			else
+			{
+				Image[Pointer++] = 255;
+				Image[Pointer++] = 255;
+				if (Bytesperpixel == 4)
+				{
+					Image[Pointer++] = 255;
+					Pointer++;
+				}
+			}
+		}
+		mask <<= 1;
+		Pointer += (WIDTH - 6) * Bytesperpixel;
+	}
+		
+	//	Pointer = ((Y - 3) * 2048 * 3) + (X * 3) + 36 + (j * 18);
+
+	mask = 1;
+
+	for (i = 0; i < 2; i++)
+	{
+		for (index = 0 ; index < 6 ; index++)
+		{
+			Image[Pointer++] = 255;				// Blank lines below chars between chars
+			Image[Pointer++] = 255;
+			if (Bytesperpixel == 4)
+			{
+				Image[Pointer++] = 255;
+				Pointer++;
+			}
+		}
+		Pointer += (WIDTH - 6) * Bytesperpixel;
 	}
 }
 
@@ -1533,91 +1626,10 @@ int DrawStation(struct STATIONRECORD * ptr, BOOL AllStations)
 
 		// Draw Callsign. 
 
-		// Font is 5 bits wide x 8 high. Each byte of font contains one column, so 5 bytes per char
-
 		for (j = 0; j < calllen; j++)
 		{
-
-		Pointer = ((Y - 5) * WIDTH * Bytesperpixel) + ((X + 11) * Bytesperpixel) + (j * 6 * Bytesperpixel);
-
-		mask = 1;
-
-		for (i = 0; i < 2; i++)
-		{
-			for (index = 0 ; index < 6 ; index++)
-			{
-				Image[Pointer++] = 255;				// Blank lines above chars 
-				Image[Pointer++] = 255;
-				if (Bytesperpixel == 4)
-				{
-					Image[Pointer++] = 255;
-					Pointer++;
-				}
-			}
-
-			Pointer += (WIDTH - 6) * Bytesperpixel;
+			DrawCharacter(X, Y,j, ptr->Callsign[j]);
 		}
-
-	//	Pointer = ((Y - 3) * 2048 * 3) + (X * 3) + 36 + (j * 18);
-
-		for (i = 0; i < 7; i++)
-		{
-			Image[Pointer++] = 255;				// Blank col between chars
-			Image[Pointer++] = 255;
-			if (Bytesperpixel == 4)
-			{
-				Image[Pointer++] = 255;
-				Pointer++;
-			}
-			for (index = 0 ; index < 5 ; index++)
-			{
-				c = ASCII[ptr->Callsign[j] - 0x20][index];	// Font data
-				bit = c & mask;
-
-				if (bit)
-				{
-					Image[Pointer++] = 0;
-					Image[Pointer++] = 0;
-					if (Bytesperpixel == 4)
-					{
-						Image[Pointer++] = 0;
-						Pointer++;
-					}
-				}
-				else
-				{
-					Image[Pointer++] = 255;
-					Image[Pointer++] = 255;
-					if (Bytesperpixel == 4)
-					{
-						Image[Pointer++] = 255;
-						Pointer++;
-					}
-				}
-			}
-			mask <<= 1;
-			Pointer += (WIDTH - 6) * Bytesperpixel;
-		}
-		
-	//	Pointer = ((Y - 3) * 2048 * 3) + (X * 3) + 36 + (j * 18);
-
-		mask = 1;
-
-		for (i = 0; i < 2; i++)
-		{
-			for (index = 0 ; index < 6 ; index++)
-			{
-				Image[Pointer++] = 255;				// Blank lines below chars between chars
-				Image[Pointer++] = 255;
-				if (Bytesperpixel == 4)
-				{
-					Image[Pointer++] = 255;
-					Pointer++;
-				}
-			}
-			Pointer += (WIDTH - 6) * Bytesperpixel;
-		}
-	}
 		ImageChanged = TRUE;
 		return 1;
 	}
@@ -1650,7 +1662,7 @@ int RefreshStationMap(BOOL AllStations)
 //	LastRefresh = time(NULL);
 
 //	if (RecsDeleted)
-//		RefreshStationList();
+//		RefreshStationList();]
 
 	len = sprintf(msg, "%d Stations Zoom = %d", i, Zoom);
 	XDrawImageString(display, win, gc, 20, 20, msg, len);
@@ -2275,7 +2287,7 @@ static GtkWidget *create_sent_window( void )
 
 	scrolledwin = gtk_scrolled_window_new(NULL,NULL);
 	gtk_container_set_border_width(GTK_CONTAINER(scrolledwin), 1);
-	gtk_widget_set_size_request(scrolledwin, 600, 300);
+//	gtk_widget_set_size_request(scrolledwin, 300, 80);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
 	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin), GTK_SHADOW_IN);
 //    gtk_container_add(GTK_CONTAINER(scrolledwin), view);
@@ -2346,7 +2358,7 @@ static GtkWidget *create_received_window(void)
 
  	scrolledwin2 = gtk_scrolled_window_new(NULL,NULL);
 	gtk_container_set_border_width(GTK_CONTAINER(scrolledwin2), 2);
-	gtk_widget_set_size_request(scrolledwin2, 600, 300);
+//	gtk_widget_set_size_request(scrolledwin2, 300, 80);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolledwin2),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
 	gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolledwin2), GTK_SHADOW_IN);
 	gtk_container_add(GTK_CONTAINER(scrolledwin2), view2);
@@ -2402,6 +2414,8 @@ int msgWinWidth = 300;
 int msgWinHeight = 300;
 int msgWinX = 100;
 int msgWinY = 100;
+int Split = 100;				// Rx/Tx Window split
+
 
 void frame_callback(GtkWindow *window, GdkEvent *event, gpointer data)
 {
@@ -2413,7 +2427,7 @@ void frame_callback(GtkWindow *window, GdkEvent *event, gpointer data)
    msgWinWidth = event->configure.width;
    msgWinHeight = event->configure.height;
 
-   gtk_widget_set_size_request(entry, msgWinWidth - 210 , 20);	//gtk_entry_new_with_buffer(text);
+ //  gtk_widget_set_size_request(entry, msgWinWidth - 210 , 20);	//gtk_entry_new_with_buffer(text);
 
  //  gtk_window_set_title(window, buf);
  //  gtk_window_set_title (GTK_WINDOW (window), "BPQAPRS Messaging");
@@ -2483,6 +2497,39 @@ void check_callback(GtkButton *button, gpointer user_data)
 
 }
 
+
+void button_callback(GtkButton *button, gpointer user_data)
+{
+	// Clear Messages
+
+	struct APRSMESSAGE * ptr = Messages;
+	struct APRSMESSAGE * last = Messages;
+
+	while (ptr)
+	{
+		last = ptr;
+		ptr = ptr->Next;
+		free(last);
+	}
+
+	Messages = NULL;
+
+/*
+	while (ptr)
+	{
+		last = ptr;
+		ptr = ptr->Next;
+		free(last);
+	}
+
+	OutstandingMsgs = NULL;
+*/
+	// Use Checkbox event to rewrite display
+
+	check_callback((GtkButton *)check1, "1");
+}
+
+
 static gboolean delete_event (GtkWidget *widget, GdkEvent *event, gpointer data)
 {
 	// Don't allow window to be closed
@@ -2491,12 +2538,16 @@ static gboolean delete_event (GtkWidget *widget, GdkEvent *event, gpointer data)
 }
 
 void SaveConfig()
-{
+{	
 	memset((void *)&cfg, 0, sizeof(config_t));
 
 	config_init(&cfg);
 
 	croot = config_root_setting(&cfg);
+
+	gtk_window_get_size(GTK_WINDOW(window), &msgWinWidth, &msgWinHeight);
+	gtk_window_get_position(GTK_WINDOW(window), &msgWinX, &msgWinY);
+	Split = gtk_paned_get_position((GtkPaned *)vpaned);
 
 	group = config_setting_add(croot, "APRS", CONFIG_TYPE_GROUP);
 
@@ -2515,6 +2566,7 @@ void SaveConfig()
 	SaveIntValue(group, "msgWinHeight", msgWinHeight);
 	SaveIntValue(group, "msgWinX", msgWinX);
 	SaveIntValue(group, "msgWinY", msgWinY);
+	SaveIntValue(group, "Split", Split);
 
 	SaveIntValue(group, "OnlyMine", OnlyMine);
 	SaveIntValue(group, "OnlySeq", OnlySeq);
@@ -2530,6 +2582,8 @@ void SaveConfig()
 		printf("Config Saved\n");
 
 	config_destroy(&cfg);
+
+	printf("%s\n", ToCalls);
 }
 
 // Linux Signal Handlers
@@ -2573,6 +2627,8 @@ int main(int argc, char *argv[])
 	XEvent event;
 	XConfigureEvent xce;
 	XKeyEvent xkeyev;
+	Time lastupevent;
+
 	char text[256];
 	int key;
 
@@ -2581,7 +2637,6 @@ int main(int argc, char *argv[])
 
 	double sx, sy;
 	UCHAR * APRSStationMemory;
-	int SlowTimer = 0;
 	Atom wmDeleteMessage;
     PangoFontDescription *font_desc;
 	GtkTreeIter iter;
@@ -2593,9 +2648,10 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.0.7\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.0.8\n");
   	printf("Copyright © 2004-2015 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
+	printf("This software is based in part on the work of the Independent JPEG Group.\n");
 	printf("Mapping from OpenStreetMap (http://openstreetmap.org)\n");
 	printf("Map Tiles Courtesy of MapQuest (www.mapquest.com)\n\n");
 
@@ -2631,6 +2687,7 @@ int main(int argc, char *argv[])
 			msgWinHeight = GetIntValue(group, "msgWinHeight", 300);
 			msgWinX = GetIntValue(group, "msgWinX", 100);
 			msgWinY = GetIntValue(group, "msgWinY", 100);
+			Split = GetIntValue(group, "Split", 100);
 
 			OnlyMine = GetIntValue(group, "OnlyMine", 0);
 			OnlySeq = GetIntValue(group, "OnlySeq", 1);
@@ -2843,18 +2900,20 @@ int main(int argc, char *argv[])
 
 	gtk_signal_connect(GTK_OBJECT(window), "delete_event", GTK_SIGNAL_FUNC(delete_event), NULL);
 
-	g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(frame_callback), NULL);
+//	g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(frame_callback), NULL);
 
 	// Create a box for the menu
 
 	box1 = gtk_vbox_new (FALSE, 0);
 	gtk_container_add (GTK_CONTAINER (window), box1);
 
-	checklabel = gtk_label_new("    ");
+	checklabel = gtk_label_new(" ");
 
-	check1 = gtk_check_button_new_with_label ("Show only My Msgs   ");
-	check2 = gtk_check_button_new_with_label ("Show only Sequenced Msgs   ");
-	check3 = gtk_check_button_new_with_label ("Show Bulletins");
+	check1 = gtk_check_button_new_with_label ("Show only My Msgs  ");
+	check2 = gtk_check_button_new_with_label ("Show only Sequenced Msgs  ");
+	check3 = gtk_check_button_new_with_label ("Show Bulls  ");
+
+	button = gtk_button_new_with_label("Clear RX"); 
 
 	gtk_toggle_button_set_active((GtkToggleButton *)check1, OnlyMine);
 	gtk_toggle_button_set_active((GtkToggleButton *)check2, OnlySeq);
@@ -2863,6 +2922,7 @@ int main(int argc, char *argv[])
 	g_signal_connect(G_OBJECT(check1), "clicked", G_CALLBACK(check_callback), "1");
 	g_signal_connect(G_OBJECT(check2), "clicked", G_CALLBACK(check_callback), "2");
 	g_signal_connect(G_OBJECT(check3), "clicked", G_CALLBACK(check_callback), "3");
+	g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(button_callback), "1");
 
 	// hBox for Check boxes
 
@@ -2871,6 +2931,9 @@ int main(int argc, char *argv[])
 	gtk_container_add (GTK_CONTAINER (checkhbox), check1);
 	gtk_container_add (GTK_CONTAINER (checkhbox), check2);
 	gtk_container_add (GTK_CONTAINER (checkhbox), check3);
+	gtk_container_add (GTK_CONTAINER (checkhbox), button);
+	checklabel = gtk_label_new(" ");
+	gtk_container_add (GTK_CONTAINER (checkhbox), checklabel);
 
 	gtk_box_pack_start (GTK_BOX (box1), checkhbox, FALSE, FALSE, 0);
 
@@ -2884,7 +2947,7 @@ int main(int argc, char *argv[])
 
 	vpaned = gtk_vpaned_new ();
 	gtk_container_add (GTK_CONTAINER (box10), vpaned);
-	gtk_paned_set_position(GTK_PANED(vpaned), vhandle);
+	gtk_paned_set_position(GTK_PANED(vpaned), Split);
 	gtk_widget_show (vpaned);
 
     /* Now create the contents of the two halves of the window */
@@ -2897,8 +2960,8 @@ int main(int argc, char *argv[])
 	gtk_paned_add2 (GTK_PANED (vpaned), frame2);
 	gtk_widget_show (frame2);
 
-	separator = gtk_hseparator_new ();
-	gtk_box_pack_start(GTK_BOX (box1), separator, FALSE, TRUE, 0);
+//	separator = gtk_hseparator_new ();
+//	gtk_box_pack_start(GTK_BOX (box1), separator, FALSE, TRUE, 0);
 
 	box2 = gtk_hbox_new(FALSE, 10);
 	gtk_container_set_border_width(GTK_CONTAINER (box2), 1);
@@ -2906,21 +2969,24 @@ int main(int argc, char *argv[])
 
 	// set up the text entry line
 
-	label1 = gtk_label_new("To");
+	label1 = gtk_label_new("  To");
 	label2 = gtk_label_new("Message");
     combo = gtk_combo_box_text_new_with_entry();
 	gtk_widget_set_size_request(combo, 100, 10);
 
 	entry = gtk_entry_new();
-	gtk_widget_set_size_request(entry, 400, 20);	//gtk_entry_new_with_buffer(text);
+//	gtk_widget_set_size_request(entry, 100, 20);	//gtk_entry_new_with_buffer(text);
 	gtk_entry_set_max_length(GTK_ENTRY(entry), 100);
 	gtk_entry_set_activates_default(GTK_ENTRY (entry), TRUE);
 	g_signal_connect (G_OBJECT (entry), "activate", G_CALLBACK(enter_callback), (gpointer)entry);
 	gtk_box_pack_start(GTK_BOX(box2), label1, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(box2), combo, FALSE, FALSE, 0);
 	gtk_box_pack_start(GTK_BOX(box2), label2, FALSE, FALSE, 0);
-	gtk_box_pack_start(GTK_BOX(box2), entry, FALSE, FALSE, 0);
+	gtk_container_add(GTK_CONTAINER(box2), entry);
     gtk_widget_grab_focus(entry);
+
+
+
 
     font_desc=pango_font_description_from_string(MyFont);
 	gtk_widget_modify_font (entry, font_desc);
@@ -3111,6 +3177,39 @@ int main(int argc, char *argv[])
 			break;
 
 		case ButtonRelease:
+
+			if (popupActive && (event.xbutton.time - lastupevent) < 300)
+			{
+				// Double Click on Station
+				
+				char Key[32];
+				char LoppedCall[10];
+				int n = 8;
+
+				memcpy(LoppedCall, popupStn->Callsign, 9);
+		
+				while (n && LoppedCall[n] == ' ')
+				{
+					n--;
+				}
+	
+				if (n)
+					LoppedCall[n + 1] = 0;
+
+				sprintf(Key, "|%s|", LoppedCall);
+
+				// if new call add to combo box
+
+				if (strstr(ToCalls, Key) == 0)
+				{
+					if (strlen(ToCalls) < 1000)
+						strcat(ToCalls, Key);		
+
+					gtk_combo_box_text_prepend_text ((GtkComboBoxText *)combo, LoppedCall);
+				}
+			}
+
+			lastupevent = event.xbutton.time;
 
 			switch (event.xbutton.button)
 			{
@@ -3358,9 +3457,36 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 		if (ShowBulls == TRUE)
 			goto wantit;
 
-
 	if (strcmp(MsgDest, APRSCall) == 0)			// to me?
+	{		
+		char Key[32];
+		char LoppedCall[10];
+		int n = 8;
+
 		gtk_window_present((GtkWindow *)window);
+
+		memcpy(LoppedCall, Message->FromCall, 9);
+		
+		while (n && LoppedCall[n] == ' ')
+		{
+			n--;
+		}
+	
+		if (n)
+			LoppedCall[n + 1] = 0;
+
+		sprintf(Key, "|%s|", LoppedCall);
+	
+		// if new call add to combo box
+
+		if (strstr(ToCalls, Key) == 0)
+		{
+			if (strlen(ToCalls) < 1000)
+				strcat(ToCalls, Key);		
+
+			gtk_combo_box_text_prepend_text ((GtkComboBoxText *)combo, LoppedCall);
+		}
+	}
 	else
 		if (OnlyMine == TRUE)
 			return;
@@ -3483,8 +3609,6 @@ VOID SendAPRSMessage(const char * Text, char * ToCall)
 
 VOID SecTimer()
 {
-	int SlowTimer = 0;
-
 	while (TRUE)
 	{
 	struct STATIONRECORD * sptr = *StationRecords;
@@ -3518,7 +3642,7 @@ VOID SecTimer()
 	{
 		if (JPEGCounter > JPEGInterval)
 		{
-			if (RGBToJpegFile(JPEGFileName, Image, cxWinSize, cyWinSize, TRUE, 50))
+			if (RGBToJpegFile(JPEGFileName, Image, cxImgSize, cyImgSize, TRUE, 50))
 				JPEGCounter = 0;
 		}
 	}
@@ -3599,10 +3723,14 @@ BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, B
 	struct jpeg_compress_struct cinfo;
 	struct my_error_mgr jerr;
 	FILE * outfile=NULL;
-	unsigned char * RGBBuff = malloc(widthPix * 3);
+	unsigned char * RGBBuff = malloc(widthPix * 3);	// no idea why
 	unsigned char * ptr1, * ptr2;
 	int n;
 	unsigned int val, r, g, b;
+	char Message[32];
+	int X, Y, j, Len;
+	struct tm * TM;
+	time_t NOW = time(NULL);
 
 	if (dataBuf==NULL)
 		return FALSE;
@@ -3610,6 +3738,27 @@ BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, B
 		return FALSE;
 	if (height==0)
 		return FALSE;
+
+	// Write a Date/Time stamp to top left
+
+	if (LocalTime)
+		TM = localtime(&NOW);
+	else
+		TM = gmtime(&NOW);
+
+	Len = sprintf(Message, "%02d:%02d:%02d %02d %s %04d",
+		TM->tm_hour, TM->tm_min, TM->tm_sec, 
+		TM->tm_mday, month[TM->tm_mon], TM->tm_year + 1900);
+
+	X = ScrollX;
+	Y = ScrollY + 8;
+
+	for (j = 0; j < Len; j++)
+	{
+		DrawCharacter(X, Y, j, Message[j]);
+	}
+
+
 
 	/* More stuff */
 	/* Step 1: allocate and initialize JPEG compression object */
@@ -3699,7 +3848,7 @@ BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, B
 
 	outRow = RGBBuff;
 
-	// We have to convert form 2 or 4 bytes to pixel to 3 byte rgb
+	// We have to convert from 2 or 4 bytes to pixel to 3 byte rgb
 
 	ptr1 = dataBuf + ((ScrollY * WIDTH) + ScrollX + (cinfo.next_scanline * WIDTH)) * Bytesperpixel;
 
@@ -3725,7 +3874,7 @@ BOOL RGBToJpegFile(char * fileName, BYTE *dataBuf, UINT widthPix, UINT height, B
 			*(ptr2++) = *(ptr1+2);
 			*(ptr2++) = *(ptr1+1);
 			*(ptr2++) = *(ptr1);
-			ptr1 += 4;;
+			ptr1 += 4;
 		}
 	}	
     (void) jpeg_write_scanlines(&cinfo, &outRow, 1);
@@ -3752,6 +3901,7 @@ VOID plot(int X, int Y, COLORREF rgb)
 {
 	char * nptr;
 	int i, j;
+	unsigned int val;
 
 	if ((X > (WIDTH - 3)) || (Y > (HEIGHT - 3)))
 		return;
@@ -3762,10 +3912,22 @@ VOID plot(int X, int Y, COLORREF rgb)
 	{
 		for (i = 0; i < 2; i++)
 		{
-			*(nptr++) = GetRValue(rgb);
-			*(nptr++) = (rgb >> 8) & 0xff;
-			*(nptr++) = (rgb >> 16) & 0xff;
-			nptr++;
+			if (Bytesperpixel == 4)
+			{
+				*(nptr++) = (rgb >> 16) & 0xff;
+				*(nptr++) = (rgb >> 8) & 0xff;
+				*(nptr++) = GetRValue(rgb);
+				nptr++;
+			}
+			else
+			{ 
+				val = ((rgb & 0xff) >> 3) << 11;		// Red
+				val |= (GetGValue(rgb) >> 2) << 5;
+				val |= (rgb >> 19);			// Blue
+				*(nptr++) = (val & 0xff);
+				*(nptr++) = (unsigned char)(val >> 8);
+			}
+
 		}
 		nptr += (WIDTH - 2) * Bytesperpixel;
 	}

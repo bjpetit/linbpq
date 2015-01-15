@@ -82,6 +82,7 @@
 #include "winsock2.h"
 #include "WS2tcpip.h"
 #include <windows.h>
+#include <time.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -91,7 +92,7 @@
 
 //#define _RICHEDIT_VER	0x0100
 #include <Richedit.h> 
-
+#define IDC_STATIC -1
 #include "bpqtermTCP.h"
 #define TermTCP
 #include "Versions.h"
@@ -331,6 +332,13 @@ BOOL MonitorColour = TRUE;
 BOOL ChatMode = FALSE;
 int MonPorts = 1;
 
+time_t LastWrite = 0xffffffff;
+int AlertInterval = 300;
+BOOL AlertBeep = TRUE;
+int AlertFreq = 600;
+int AlertDuration = 250;
+TCHAR AlertFileName[MAX_PATH] = {0};
+
 HANDLE 	MonHandle=INVALID_HANDLE_VALUE;
 
 HCURSOR DragCursor;
@@ -397,6 +405,7 @@ VOID CALLBACK TimerProc(
     UINT  idEvent,	// timer identifier
     DWORD  dwTime) 	// current system time	
 {
+
 	// entered every 10 secs
 
 	if (!Connected)
@@ -569,6 +578,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char * lpCmdL
 	SaveIntValue(L"CodePage", CodePage);
 	SaveIntValue(L"FontSize", FontSize);
 	SaveIntValue(L"FontWidth", FontWidth);
+	SaveIntValue(L"AlertInterval", AlertInterval);
 
 	KillTimer(NULL, TimerHandle);
 
@@ -713,6 +723,13 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	FontWidth = GetIntValue(L"FontWidth", 8);
 	RXMode = GetIntValue(L"RXMODE", -1);
 	TXMode = GetIntValue(L"TXMODE", CP_UTF8);
+
+	AlertInterval = GetIntValue(L"AlertInterval", 3600);
+	AlertBeep = GetIntValue(L"AlertBeep", 1);
+	AlertFreq = GetIntValue(L"AlertFreq", 600);
+	AlertDuration = GetIntValue(L"AlertDuration", 250);
+
+	GetStringValue(L"AlertFileName", AlertFileName, MAX_PATH - 1);
 
 	OutputData.CharWidth = FontWidth;
 
@@ -924,6 +941,66 @@ INT_PTR CALLBACK ConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lP
 	return FALSE;
 
 }
+
+INT_PTR CALLBACK AlertConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	
+		SetDlgItemInt(hDlg, IDC_ALERTINTERVAL, AlertInterval, FALSE);
+		if (AlertBeep)
+			CheckDlgButton(hDlg, IDC_RADIO1, TRUE); 
+		else
+			CheckDlgButton(hDlg, IDC_RADIO2, TRUE); 
+		SetDlgItemInt(hDlg, IDC_FREQ, AlertFreq, FALSE);
+		SetDlgItemInt(hDlg, IDC_DURATION, AlertDuration, FALSE);		
+		SetDlgItemText(hDlg, IDC_ALERTFILENAME, &AlertFileName[0]);
+
+		return (INT_PTR)TRUE;
+
+	case WM_CTLCOLORDLG:
+        return (LONG)bgBrush;
+
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdcStatic = (HDC)wParam;
+		SetTextColor(hdcStatic, RGB(0, 0, 0));
+        SetBkMode(hdcStatic, TRANSPARENT);
+        return (LONG)bgBrush;
+    }
+
+	case WM_COMMAND:
+		switch (LOWORD(wParam))
+		{
+		case IDOK:
+
+			AlertInterval = GetDlgItemInt(hDlg, IDC_ALERTINTERVAL, NULL, FALSE);
+			AlertBeep = IsDlgButtonChecked(hDlg,IDC_RADIO1); 
+			AlertFreq = GetDlgItemInt(hDlg, IDC_FREQ, NULL, FALSE);
+			AlertDuration = GetDlgItemInt(hDlg, IDC_DURATION, NULL, FALSE);
+			GetDlgItemText(hDlg, IDC_ALERTFILENAME, &AlertFileName[0], MAX_PATH-1 );
+
+			SaveIntValue(L"AlertInterval", AlertInterval);
+			SaveIntValue(L"AlertBeep", AlertBeep);
+			SaveIntValue(L"AlertFreq", AlertFreq);
+			SaveIntValue(L"AlertDuration", AlertDuration);
+			SaveStringValue(L"AlertFileName", AlertFileName);
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+
+		case IDCANCEL:
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+
+}
+
+
 
 INT_PTR CALLBACK FontConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1322,6 +1399,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_FONT), hWnd, FontConfigWndProc);
 			break;
 
+		case ID_SETUP_ALERTSETUP:
+
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_ALERTDLG), hWnd, AlertConfigWndProc);
+			break;
+	
 		case BPQMNODES:
 
 			ToggleParam(hWnd, &MonitorNODES, BPQMNODES);
@@ -1560,6 +1642,8 @@ LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				SendMessage(hwndOutput, EM_SETSCROLLPOS, 0, (LPARAM) &Point);
 				OutputData.Scrolled = FALSE;
 			}
+	
+			LastWrite = time(NULL);
 
 			WritetoOutputWindow(&OutputData, DisplayLine, kbptr+3);
 			DoRefresh(&OutputData);
@@ -1903,7 +1987,19 @@ VOID AddLinetoWindow(struct RTFTerm * OPData, TCHAR * Line)
 
 VOID WritetoOutputWindow(struct RTFTerm * OPData, TCHAR * Msg, int len)
 {
+	time_t NOW = time(NULL);	
 	TCHAR * ptr1, * ptr2;
+
+	if (AlertInterval && (NOW - LastWrite) > AlertInterval)
+	{
+		if (AlertBeep)
+			Beep(AlertFreq, AlertDuration);
+		else
+			PlaySound(AlertFileName, NULL, SND_FILENAME | SND_ASYNC);
+	}
+
+
+	LastWrite = NOW;
 
 	if (PartLinePtr != 0)
 	{

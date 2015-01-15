@@ -462,7 +462,7 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 
 		for (xuser = BBSChain; xuser; xuser = xuser->BBSNext)
 		{
-			Msgs = CountMessagestoForward(xuser->BBSNumber);
+			Msgs = CountMessagestoForward(xuser);
 
 			if (Msgs)
 				nodeprintf(conn, "%s %d Msgs\r", xuser->Call, Msgs);

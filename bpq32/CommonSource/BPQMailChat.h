@@ -1014,12 +1014,12 @@ void clear_fwd_bit (char *mask, int bbsnumber);
 VOID SetupForwardingStruct(struct UserInfo * user);
 BOOL Forward_Message(struct UserInfo * user, struct MsgInfo * Msg);
 VOID StartForwarding (int BBSNumber);
-BOOL Reverse_Forward(struct UserInfo * user);
+BOOL Reverse_Forward();
 int ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 BOOL FBBDoForward(CIRCUIT * conn);
 BOOL FindMessagestoForward(CIRCUIT * conn);
 BOOL SeeifMessagestoForward(int BBSNumber, CIRCUIT * Conn);
-int CountMessagestoForward(int BBSNumber);
+int CountMessagestoForward(struct UserInfo * user);
 
 VOID * GetMultiLineDialogParam(HWND hDialog, int DLGItem);
 

@@ -15,7 +15,7 @@
 #define APSTUDIO_HIDDEN_SYMBOLS
 #include "AFXRES.h"
 #undef APSTUDIO_HIDDEN_SYMBOLS
-#define MAIL
+#define MAILCHAT
 #include "..\CommonSource\Versions.h"
 
 /////////////////////////////////////////////////////////////////////////////
@@ -747,7 +747,7 @@ BEGIN
                     WS_TABSTOP,377,227,35,10
 END
 
-WELCOMEMSG DIALOG DISCARDABLE  26, 5, 381, 266
+WELCOMEMSG DIALOG DISCARDABLE  26, 5, 365, 281
 STYLE WS_CHILD | WS_VISIBLE
 FONT 8, "System"
 BEGIN
@@ -760,14 +760,16 @@ BEGIN
     LTEXT           "Expert User Welcome Message",IDC_STATIC,5,159,130,8
     EDITTEXT        IDM_EXPERTUSERMSG,5,172,340,12,ES_MULTILINE | 
                     ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_WANTRETURN
-    DEFPUSHBUTTON   "Save",IDM_MSGSAVE,166,250,50,14,BS_CENTER | BS_VCENTER
+    DEFPUSHBUTTON   "Save",IDM_MSGSAVE,166,264,50,14,BS_CENTER | BS_VCENTER
     LTEXT           "$U : Callsign of the user      $I : First name of the user      $X Messages for user       $x Unread messages",
-                    IDC_STATIC,5,228,369,8
+                    IDC_STATIC,0,222,365,8
     LTEXT           "$L : Number of the latest message    $N : Number of active messages.    $Z : Last message read by user",
-                    IDC_STATIC,5,238,365,10
+                    IDC_STATIC,0,234,365,10
     LTEXT           "Signoff Message",IDC_STATIC,5,190,130,8
     EDITTEXT        IDM_SIGNOFF,5,202,340,12,ES_MULTILINE | ES_AUTOVSCROLL | 
                     ES_AUTOHSCROLL | ES_WANTRETURN
+    LTEXT           "$F : Number of mesages to be forwarded to user (if a BBS)",
+                    IDC_STATIC,0,246,365,10
 END
 
 BBSPROMPTS DIALOG DISCARDABLE  26, 5, 381, 266
@@ -901,7 +903,7 @@ END
 IDD_MSGFROMCLIPBOARD DIALOGEX 0, 0, 442, 306
 STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "Send Message"
-FONT 8, "System"
+FONT 8, "System", 0, 0, 0x1
 BEGIN
     PUSHBUTTON      "Send",IDSEND,333,5,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,333,25,50,14

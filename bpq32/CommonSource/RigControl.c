@@ -193,6 +193,7 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 		case KENWOOD:
 		case FT2000:
 		case FLEX:
+		case NMEA:
 
 			if (PTTState)
 			{
@@ -978,10 +979,10 @@ DllExport BOOL APIENTRY Rig_Init()
 			{
 				// Running on a port without a window, eg  UZ7HO or MultiPSK
 
-				CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 300, 60);
+				CreatePactorWindow(TNC, "RIGCONTROL", "RigControl", 10, PacWndProc, 350, 80);
 				hDlg = TNC->hDlg;
-				TNC->ClientHeight = 60;
-				TNC->ClientWidth = 300;
+				TNC->ClientHeight = 80;
+				TNC->ClientWidth = 350;
 			}
 
 			RigRow = TNC->RigControlRow;
@@ -2150,7 +2151,8 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 
 	if (!PORT->AutoPoll)
 		SendResponse(RIG->Session, "Mode and Frequency Set OK");
-
+	else
+		ReleasePermission(RIG);		// Release Perrmission to change
 }
 
 
@@ -2189,6 +2191,8 @@ VOID ProcessFT990Frame(struct RIGPORTINFO * PORT)
 
 	if (!PORT->AutoPoll)
 		SendResponse(RIG->Session, "Mode and Frequency Set OK");
+	else
+		ReleasePermission(RIG);		// Release Perrmission to change
 }
 
 VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT)
@@ -2244,7 +2248,8 @@ VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT)
 
 	if (!PORT->AutoPoll)
 		SendResponse(RIG->Session, "Mode and Frequency Set OK");
-
+	else
+		ReleasePermission(RIG);		// Release Perrmission to change
 }
 
 
@@ -3384,7 +3389,13 @@ PortFound:
 				*(Poll++) = 0x03;
 				*(Poll++) = 0x24;			// Data Mode Source
 			}
-			
+
+			else if (strcmp(RIG->RigName, "IC7410") == 0)
+			{
+				*(Poll++) = 0x03;
+				*(Poll++) = 0x39;			// Data Mode Source
+			}
+
 			*(Poll++) = 0x03;			// USB Soundcard
 			*(Poll++) = 0xFD;
 		}
@@ -3429,6 +3440,11 @@ PortFound:
 			{
 				*(Poll++) = 0x03;
 				*(Poll++) = 0x24;			// Data Mode Source
+			}
+			else if (strcmp(RIG->RigName, "IC7410") == 0)
+			{
+				*(Poll++) = 0x03;
+				*(Poll++) = 0x39;			// Data Mode Source
 			}
 
 			*(Poll++) = DataPTTOffMode;
@@ -3493,11 +3509,19 @@ PortFound:
 		AddNMEAChecksum(RIG->Poll + Len);
 		RIG->PollLen = Len + i;
 
+		i = sprintf(RIG->PTTOn, "$PICOA,90,%02x,REMOTE,ON*xx\r\n", RIG->RigAddr);
+		AddNMEAChecksum(RIG->PTTOn);
+		Len = i;
+		i = sprintf(RIG->PTTOn + Len, "$PICOA,90,%02x,TRX,TX*xx\r\n", RIG->RigAddr);
+		AddNMEAChecksum(RIG->PTTOn + Len);
+		RIG->PTTOnLen = Len + i;
 
-//		strcpy(RIG->PTTOn, "ZZTX1;");
-//		RIG->PTTOnLen = 6;
-//		strcpy(RIG->PTTOff, "ZZTX0;");
-//		RIG->PTTOffLen = 6;
+		i = sprintf(RIG->PTTOff, "$PICOA,90,%02x,TRX,RX*xx\r\n", RIG->RigAddr);
+		AddNMEAChecksum(RIG->PTTOff);
+		Len = i;
+		i = sprintf(RIG->PTTOff + Len, "$PICOA,90,%02x,REMOTE,OFF\r\n", RIG->RigAddr);
+		AddNMEAChecksum(RIG->Poll + Len);
+		RIG->PTTOffLen = Len + i;
 	}
 
 
@@ -3925,7 +3949,7 @@ CheckScan:
 						*(CmdPtr++) = 0xE0;
 						*(CmdPtr++) = 0x1a;	
 
-						if (strcmp(RIG->RigName, "IC7100") == 0)
+						if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))
 						{
 							FreqPtr[0]->Cmd3Len = 9;
 							*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
@@ -4015,7 +4039,7 @@ CheckScan:
 			if (PORT->PortType == FT990 || PORT->YaesuVariant == FT1000D)
 				*(CmdPtr++) = 3;
 			else
-				*(CmdPtr++) = 2;		// F100 oe FT1000MP
+				*(CmdPtr++) = 2;		// F100 or FT1000MP
 			
 			*(CmdPtr++) = 16;			// Send Get Status, as FT100 doesn't ack commands
 		}

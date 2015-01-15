@@ -104,8 +104,8 @@ struct RIGINFO
 	char Valchar[15];			// Freq as char string
 	char CurrentBandWidth;
 
-	char PTTOn[30];
-	char PTTOff[30];
+	char PTTOn[60];
+	char PTTOff[60];
 	int PTTOnLen;
 	int PTTOffLen;
 

@@ -859,6 +859,8 @@
 //	Fix PE if message with no To: received.
 //	Fix setting "RMS Express User" flag on new connects from RMS Express 
 //	Fix deleting 'T' messages downloaded by RMS Express
+//	Include MPS messages in count of messages to forward.
+//	Add new Welcome Message variable $F for messages to forward
 
 
 
@@ -1850,7 +1852,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			for (user = BBSChain; user; user = user->BBSNext)
 			{
-				sprintf(MenuLine, "%s %d Msgs", user->Call, CountMessagestoForward(user->BBSNumber));
+				sprintf(MenuLine, "%s %d Msgs", user->Call, CountMessagestoForward(user));
 
 				if (ModifyMenu(hFWDMenu, IDM_FORWARD_ALL + user->BBSNumber, 
 					MF_BYCOMMAND | MF_STRING, IDM_FORWARD_ALL + user->BBSNumber, MenuLine) == 0)

@@ -2075,7 +2075,7 @@ VOID SendFwdDetails(struct HTTPConnectionInfo * Session, char * Reply, int * Rep
 	SetMultiStringValue(FWDInfo->HaddressesP, HRP);
 		
 	Len = sprintf(Reply, FwdDetailTemplate, User->Call,
-		CountMessagestoForward (User->BBSNumber), Key,
+		CountMessagestoForward (User), Key,
 		TO, AT, TIMES , FWD, HRB, HRP, 
 		(FWDInfo->BBSHA) ? FWDInfo->BBSHA : "", 
 		(FWDInfo->Enabled) ? CHKD  : UNC,

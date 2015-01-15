@@ -7342,3 +7342,4 @@ BOOL CreatePipeThread()
 	CreateThread(NULL, 0, PipeThreadProc, 0, 0, &ThreadId);
 	return TRUE;
 }
+
