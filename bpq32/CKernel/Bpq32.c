@@ -1,3 +1,21 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
 //
 //	409l	Oct 2001 Fix l3timeout for KISS
 //
@@ -668,6 +686,7 @@
 //  Changes to support LinBPQ APRS Client
 //	Add IC7410 to supported Soundcard rigs
 //	Add CAT PTT to NMEA type (for ICOM Marine Radios_
+//	Fix ACKMODE
 
 #define CKernel
 
@@ -751,6 +770,7 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry);
 UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
+UINT KISSARQExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
@@ -1716,7 +1736,7 @@ Check_Timer()
 
 	if (InitDone == -1)
 	{
-		Sleep(10000);
+		Sleep(15000);
 		FreeSemaphore(&Semaphore);
 		exit (0);
 	}
@@ -2082,7 +2102,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 				InitDone = -1;
 				FreeSemaphore(&Semaphore);
 
-				MessageBox(NULL,"Configuration File Error","BPQ32",MB_ICONSTOP);
+				MessageBox(NULL,"Configuration File Error\r\nProgram will close in 15 seconds","BPQ32",MB_ICONSTOP);
 
 				return (0);
 			}
@@ -3139,6 +3159,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "FLDIGI"))
 		return (UINT) FLDigiExtInit;
+
+	if (strstr(Value, "KISSARQ"))
+		return (UINT) KISSARQExtInit;
 
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
