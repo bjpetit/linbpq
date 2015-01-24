@@ -31,6 +31,8 @@
 #define IDC_ALERTFILENAME               1023
 #define IDC_FREQ                        1024
 #define IDC_DURATION                    1025
+#define IDC_USEKEYWORDS                 1026
+#define IDC_ALERTKEYNAME                1027
 #define BPQMTX                          1164
 #define BPQMCOM                         1165
 #define BPQCOPYMON                      1166
@@ -73,7 +75,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        107
 #define _APS_NEXT_COMMAND_VALUE         40027
-#define _APS_NEXT_CONTROL_VALUE         1024
+#define _APS_NEXT_CONTROL_VALUE         1027
 #define _APS_NEXT_SYMED_VALUE           104
 #endif
 #endif

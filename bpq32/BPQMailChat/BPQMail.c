@@ -861,7 +861,7 @@
 //	Fix deleting 'T' messages downloaded by RMS Express
 //	Include MPS messages in count of messages to forward.
 //	Add new Welcome Message variable $F for messages to forward
-
+//	Fix setting Type in B2 header when usong NTS: or BULL: 
 
 
 #include "BPQMailChat.h"

@@ -75,7 +75,7 @@
 //	Version 1.0.10.1 Nov 2014
 //	Fix possible crash on processing part line
 
-
+#define _USE_32BIT_TIME_T
 
 #define _CRT_SECURE_NO_DEPRECATE
 
@@ -117,8 +117,9 @@ TCHAR Title[80];
 
 BOOL WINE;
 
-char KeyWordsName[] = "Keywords.sys";
+BOOL UseKeywords = TRUE;
 
+TCHAR KeyWordsName[MAX_PATH] = L"Keywords.sys";
 char ** KeyWords = NULL;
 int NumberofKeyWords = 0;
 
@@ -428,15 +429,15 @@ VOID GetKeyWordFile()
 	FILE * Handle;
 	DWORD FileSize;
 	char * ptr1, * ptr2;
-	struct stat STAT;
+	struct _stat32 STAT;
 	char * KeyWordFile;
 
-	if (stat(KeyWordsName, &STAT) == -1)
+	if (_wstat(KeyWordsName, &STAT) == -1)
 		return;
 
 	FileSize = STAT.st_size;
 
-	Handle = fopen(KeyWordsName, "rb");
+	Handle = _wfopen(KeyWordsName, L"rb");
 
 	if (Handle == NULL)
 		return;
@@ -502,6 +503,9 @@ BOOL CheckKeyWords(char * Msg, int len)
 	char dupMsg[1024];
 	int i;
 
+	if (UseKeywords == 0)
+		return FALSE;
+
 	memcpy(dupMsg, Msg, len);
 	dupMsg[len] = 0;
 	_strlwr(dupMsg);
@@ -511,7 +515,7 @@ BOOL CheckKeyWords(char * Msg, int len)
 		if (CheckKeyWord(KeyWords[i], dupMsg))
 		{
 			Beep(660,250);
-			return TRUE;			// Bad
+			return TRUE;			// Alert
 		}
 	}
 
@@ -730,6 +734,12 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	AlertDuration = GetIntValue(L"AlertDuration", 250);
 
 	GetStringValue(L"AlertFileName", AlertFileName, MAX_PATH - 1);
+
+	UseKeywords = GetIntValue(L"UseKeywords", 1);
+	GetStringValue(L"AlertKeyFile", KeyWordsName, MAX_PATH - 1);
+
+	if (UseKeywords && KeyWordsName[0] == 0)
+		wcscpy(&KeyWordsName[0], L"Keywords.sys");
 
 	OutputData.CharWidth = FontWidth;
 
@@ -952,10 +962,14 @@ INT_PTR CALLBACK AlertConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 		if (AlertBeep)
 			CheckDlgButton(hDlg, IDC_RADIO1, TRUE); 
 		else
-			CheckDlgButton(hDlg, IDC_RADIO2, TRUE); 
+			CheckDlgButton(hDlg, IDC_RADIO2, TRUE);
+
 		SetDlgItemInt(hDlg, IDC_FREQ, AlertFreq, FALSE);
 		SetDlgItemInt(hDlg, IDC_DURATION, AlertDuration, FALSE);		
-		SetDlgItemText(hDlg, IDC_ALERTFILENAME, &AlertFileName[0]);
+		SetDlgItemText(hDlg, IDC_ALERTFILENAME, &KeyWordsName[0]);
+
+		CheckDlgButton(hDlg, IDC_USEKEYWORDS, UseKeywords);		
+		SetDlgItemText(hDlg, IDC_ALERTKEYNAME, &AlertFileName[0]);
 
 		return (INT_PTR)TRUE;
 
@@ -979,12 +993,19 @@ INT_PTR CALLBACK AlertConfigWndProc(HWND hDlg, UINT message, WPARAM wParam, LPAR
 			AlertBeep = IsDlgButtonChecked(hDlg,IDC_RADIO1); 
 			AlertFreq = GetDlgItemInt(hDlg, IDC_FREQ, NULL, FALSE);
 			AlertDuration = GetDlgItemInt(hDlg, IDC_DURATION, NULL, FALSE);
+			UseKeywords = IsDlgButtonChecked(hDlg, IDC_USEKEYWORDS);
+
 			GetDlgItemText(hDlg, IDC_ALERTFILENAME, &AlertFileName[0], MAX_PATH-1 );
+			GetDlgItemText(hDlg, IDC_ALERTKEYNAME, &KeyWordsName[0], MAX_PATH-1 );
 
 			SaveIntValue(L"AlertInterval", AlertInterval);
 			SaveIntValue(L"AlertBeep", AlertBeep);
 			SaveIntValue(L"AlertFreq", AlertFreq);
 			SaveIntValue(L"AlertDuration", AlertDuration);
+
+			SaveIntValue(L"UseKeywords", UseKeywords);
+			SaveStringValue(L"AlertKeyFile", KeyWordsName);
+
 			SaveStringValue(L"AlertFileName", AlertFileName);
 			EndDialog(hDlg, LOWORD(wParam));
 			return TRUE;
@@ -2372,7 +2393,7 @@ void CopyListToClipboard(HWND hWnd)
 		len+=SendMessage(hWnd, LB_GETTEXTLEN, i, 0);
 	}
 
-	hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, len+n+n+1);
+	hMem=GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, (len+n+n+1)*2);
 	
 
 	if (hMem != 0)
@@ -2387,7 +2408,9 @@ void CopyListToClipboard(HWND hWnd)
 			{
 				ptr+=SendMessage(hWnd, LB_GETTEXT, i, (LPARAM) ptr);
 				*(ptr++)=13;
+				*(ptr++)=0;
 				*(ptr++)=10;
+				*(ptr++)=0;
 			}
 
 			*(ptr)=0;					// end of data
