@@ -211,6 +211,16 @@ struct STREAMINFO
 	int NeedDisc;				// Timer to send DISC if appl not available
 
 	BOOL NoCMSFallback;			// Dont use relay if CMS not available
+	struct ARQINFO * ARQInfo;	// FLDIGI/FLARQ Stream Mode Specific Data
+
+	HWND xIDC_MYCALL; 
+	HWND xIDC_DESTCALL;
+	HWND xIDC_STATUS; 
+	HWND xIDC_SEND;
+	HWND xIDC_RXED; 
+	HWND xIDC_RESENT;
+	HWND xIDC_ACKED;
+	HWND xIDC_DIRN;
 };
 
 typedef struct AGWINFO
@@ -334,6 +344,7 @@ typedef struct TNCINFO
 #define H_UZ7HO 9
 #define H_MPSK 10
 #define H_FLDIGI 11
+#define H_KISSARQ 12
 
 
 	int Port;					// BPQ Port Number
@@ -627,6 +638,8 @@ typedef struct TNCINFO
 	int WinmorCurrentMode;
 
 	int SlowTimer;
+
+	int ARQPorts[32];				// For ARQ over KISS
 
 
 } *PTNCINFO;

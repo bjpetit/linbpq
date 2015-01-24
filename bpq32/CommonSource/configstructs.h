@@ -1,6 +1,8 @@
 
 #pragma pack(1) 
 
+// MAKE SURE SHORTS ARE CORRECTLY ALLIGNED FOR ARMV5
+
 struct CONFIGTABLE
 {
 //	CONFIGURATION DATA STRUCTURE
@@ -119,13 +121,14 @@ struct PORTCONFIG
 	char I2CMode;			// 240
 	char I2CAddr;			// 241
 	char INP3ONLY;			// 242
-	char Pad2[13];			// 243
+	char NoNormalize;		// 243 Normalise Nodes Qualities
+	unsigned short TCPPORT;	// 244
+	char Pad2[10];			// 246
 	char VALIDCALLS[256];	//   256 - 512
 	char  * WL2K;			// 512
 	char SerialPortName[80]; // 516
 	struct XDIGI * XDIGIS;	//  596 Cross port digi setup
-	char NoNormalize;		// 600 Normalise Nodes Qualities
 
-	char filler [423];
+	char filler [424];		// 600 - 1023
 };
 

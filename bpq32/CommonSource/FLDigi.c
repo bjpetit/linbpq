@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 //
 //	FLARQ Emulator/FLDIGI Interface for BPQ32
 //
@@ -2991,10 +3010,10 @@ VOID SaveAndSend(struct TNCINFO * TNC, struct ARQINFO * ARQ, SOCKET sock, char *
 	memcpy(ARQ->LastMsg, Msg, MsgLen + 1);	// Include Null
 	ARQ->LastLen = MsgLen;
 
-	// Delay the send for a shot while to allow for link turnround. Just use the timeout code
+	// Delay the send for a short while Just use the timeout code
 
 //	SendPacket(sock, Msg, MsgLen, 0);
-	ARQ->ARQTimer = 15;					// Try 500 ms
+	ARQ->ARQTimer = 1;					// Try 500 ms
 	ARQ->Retries = TNC->Retries + 1;	// First timout is rthe real send
 
 	return;

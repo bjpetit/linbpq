@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 
 // Module to implement APRS "New Paradigm" Digipeater and APRS-IS Gateway
 
@@ -119,6 +138,8 @@ char GPSRelay[80] = "";
 
 BOOL GateLocal = FALSE;
 double GateLocalDistance = 0.0;
+
+MaxDigisforIS = 7;			// Dont send to IS if more digis uued to reach us
 
 char WXFileName[MAX_PATH];
 char WXComment[80];
@@ -774,6 +795,7 @@ Dll VOID APIENTRY Poll_APRS()
 		int Digis = 0;
 		MESSAGE * AdjBuff;		// Adjusted for digis
 		BOOL FirstUnused = FALSE;
+		int DigisUsed = 0;		// Digis used to reach us
 		DIGIMESSAGE Msg = {0};
 		int Port, i;
 		char * DEST;
@@ -837,10 +859,16 @@ Dll VOID APIENTRY Poll_APRS()
 
 			// If we have already digi'ed it, ignore (Dup Check my fail on slow links)
 
-			if ((AdjBuff->ORIGIN[6] & 0x80) && memcmp(AdjBuff->ORIGIN, AXCall, 6) == 0)
+			if (AdjBuff->ORIGIN[6] & 0x80)
 			{
-				ReleaseBuffer(monbuff);
-				return;
+				// Used Digi
+
+				if (memcmp(AdjBuff->ORIGIN, AXCall, 6) == 0)
+				{
+					ReleaseBuffer(monbuff);
+					return;
+				}
+				DigisUsed++;
 			}
 	
 			if (memcmp(AdjBuff->ORIGIN, axTCPIP, 6) == 0)
@@ -866,20 +894,16 @@ Dll VOID APIENTRY Poll_APRS()
 
 		if (Digis)
 		{
-			if (memcmp(AdjBuff->ORIGIN, axNOGATE, 6) == 0 || memcmp(AdjBuff->ORIGIN, axRFONLY, 6) == 0)
+			if (memcmp(AdjBuff->ORIGIN, axNOGATE, 6) == 0 
+				|| memcmp(AdjBuff->ORIGIN, axRFONLY, 6) == 0
+				|| DigisUsed > MaxDigisforIS)
 
-				// Last digis is NOGATE or RFONLY - dont send to IS
+				// TOo many digis or Last digis is NOGATE or RFONLY - dont send to IS
 
 				NoGate = TRUE;
 		}
 		if (AdjBuff->CTL != 3 || AdjBuff->PID != 0xf0)				// Only UI
 		{
-			ReleaseBuffer(monbuff);
-			continue;			
-		}
-
-		if (CheckforDups(Orig->ORIGIN, AdjBuff->L2DATA, Orig->LENGTH - Digis * 7 - 23))
-		{	
 			ReleaseBuffer(monbuff);
 			continue;			
 		}
@@ -906,6 +930,11 @@ Dll VOID APIENTRY Poll_APRS()
 			}
 		}
 
+		if (CheckforDups(Orig->ORIGIN, AdjBuff->L2DATA, Orig->LENGTH - Digis * 7 - 23))
+		{	
+			ReleaseBuffer(monbuff);
+			continue;			
+		}
 
 		// Decode Frame to TNC2 Monitor Format
 
@@ -1774,6 +1803,12 @@ static APRSProcessLine(char * buf)
 	if (_stricmp(ptr, "ISPASSCODE") == 0)
 	{
 		ISPasscode = atoi(p_value);
+		return TRUE;
+	}
+
+	if (_stricmp(ptr, "MaxDigisforIS") == 0)
+	{
+		MaxDigisforIS = atoi(p_value);
 		return TRUE;
 	}
 

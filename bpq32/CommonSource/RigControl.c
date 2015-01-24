@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 //
 //	Rig Control Module
 //
@@ -969,7 +988,7 @@ DllExport BOOL APIENTRY Rig_Init()
 			TNC->RIG->PTTMode = TNC->PTTMode;
 
 			if (TNC->RIG->PTTMode == 0)			// Not Set
-				TNC->RIG->PTTMode = PTTRTS;		// For PTTMUX
+				TNC->RIG->PTTMode = PTTCI_V;	// For PTTMUX
 
 			hDlg = TNC->hDlg;
 
@@ -1145,7 +1164,21 @@ DllExport BOOL APIENTRY Rig_Close()
 	for (p = 0; p < NumberofPorts; p++)
 	{
 		PORT = PORTInfo[p];
-		
+
+		if (PORT->PortType == NMEA)
+		{
+			// Send Remote OFF
+
+			int i;
+			char REMOFF[80];
+
+			i = sprintf(REMOFF, "$PICOA,90,%02x,REMOTE,OFF*xx\r\n", PORT->Rigs[0].RigAddr);
+			AddNMEAChecksum(REMOFF);
+	
+			WriteCOMBlock(PORT->hDevice, REMOFF, i);
+			Sleep(200);
+		}
+
 		CloseCOMPort(PORT->hDevice);
 
 		if (PORT->hPTTDevice != PORT->hDevice)
@@ -1267,15 +1300,21 @@ BOOL RigCloseConnection(struct RIGPORTINFO * PORT)
 
 } // end of CloseConnection()
 
-
+#ifndef WIN32
+#define ONESTOPBIT          0
+#define ONE5STOPBITS        1
+#define TWOSTOPBITS         2
+#endif
 
 OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 {
 	if (PORT->PortType == FT2000 || strcmp(PORT->Rigs[0].RigName, "FT847") == 0)		// FT2000 and similar seem to need two stop bits
-		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 2);
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, TWOSTOPBITS);
+	else if (PORT->PortType == NMEA)
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, ONESTOPBIT);
 	else
-		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, 2);
-			  
+		PORT->hDevice = OpenCOMPort((VOID *)Port, Speed, FALSE, FALSE, FALSE, TWOSTOPBITS);
+
 	if (PORT->hDevice == 0)
 		return (FALSE);
 
@@ -1293,6 +1332,20 @@ OpenRigCOMMPort(struct RIGPORTINFO * PORT, VOID * Port, int Speed)
 
 		WriteCOMBlock(PORT->hDevice, CATON, 5);
 	}
+
+	if (PORT->PortType == NMEA)
+	{
+		// Looks like NMEA Needs Remote ON
+
+		int i;
+		char REMON[80];
+
+		i = sprintf(REMON, "$PICOA,90,%02x,REMOTE,ON*xx\r\n", PORT->Rigs[0].RigAddr);
+		AddNMEAChecksum(REMON);
+
+		WriteCOMBlock(PORT->hDevice, REMON, i);
+	}
+
 
 	return TRUE;
 }
@@ -3509,19 +3562,13 @@ PortFound:
 		AddNMEAChecksum(RIG->Poll + Len);
 		RIG->PollLen = Len + i;
 
-		i = sprintf(RIG->PTTOn, "$PICOA,90,%02x,REMOTE,ON*xx\r\n", RIG->RigAddr);
+		i = sprintf(RIG->PTTOn, "$PICOA,90,%02x,TRX,TX*xx\r\n", RIG->RigAddr);
 		AddNMEAChecksum(RIG->PTTOn);
-		Len = i;
-		i = sprintf(RIG->PTTOn + Len, "$PICOA,90,%02x,TRX,TX*xx\r\n", RIG->RigAddr);
-		AddNMEAChecksum(RIG->PTTOn + Len);
-		RIG->PTTOnLen = Len + i;
+		RIG->PTTOnLen = i;
 
 		i = sprintf(RIG->PTTOff, "$PICOA,90,%02x,TRX,RX*xx\r\n", RIG->RigAddr);
 		AddNMEAChecksum(RIG->PTTOff);
-		Len = i;
-		i = sprintf(RIG->PTTOff + Len, "$PICOA,90,%02x,REMOTE,OFF\r\n", RIG->RigAddr);
-		AddNMEAChecksum(RIG->Poll + Len);
-		RIG->PTTOffLen = Len + i;
+		RIG->PTTOffLen = i;
 	}
 
 

@@ -1,13 +1,21 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
 
-/******************************************************************************\
-*       This is a part of the Microsoft Source Code Samples. 
-*       Copyright (C) 1993-1995 Microsoft Corporation.
-*       All rights reserved. 
-*       This source code is only intended as a supplement to 
-*       Microsoft Development Tools and/or WinHelp documentation.
-*       See these sources for detailed information regarding the 
-*       Microsoft samples programs.
-\******************************************************************************/
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
 
 //	Version 409p March 2005 Allow Multidigit COM Ports
 
@@ -85,7 +93,8 @@ VOID INITCOMMON(struct KISSINFO * PORT);
 struct PORTCONTROL * CHECKIOADDR(struct PORTCONTROL * OURPORT);
 VOID INITCOM(struct KISSINFO * PORTVEC);
 VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer);
-
+int ConnecttoUZ7HOTCP(NPASYINFO ASY);
+int KISSGetTCPMessage(NPASYINFO ASY);
 
 extern struct PORTCONTROL * PORTTABLE;
 extern int	NUMBEROFPORTS;
@@ -136,8 +145,11 @@ int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 #endif
 		return 0;
 	}
-	else if (PortVector->PORTIPADDR.s_addr)		// KISS over UDP
-		sendto(Port->sock, buffer, count, 0, (struct sockaddr *)&Port->destaddr, sizeof(Port->destaddr));
+	else if (PortVector->PORTIPADDR.s_addr)		// KISS over UDP/TCP
+		if (PortVector->KISSTCP)
+			send(Port->sock, buffer, count, 0);
+		else
+			sendto(Port->sock, buffer, count, 0, (struct sockaddr *)&Port->destaddr, sizeof(Port->destaddr));
 	else
 		WriteCommBlock(Port, buffer, count);
 	
@@ -168,7 +180,16 @@ VOID ASYDISP(struct PORTCONTROL * PortVector)
 
 		// KISS over UDP
 
-		sprintf(Msg,"UDPKISS IP %s Port %d Chan %c \n", inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, PortVector->CHANNELNUM);
+		if (PortVector->KISSTCP)
+			sprintf(Msg,"TCPKISS IP %s Port %d Chan %c \n",
+				inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, PortVector->CHANNELNUM);
+		else
+			sprintf(Msg,"UDPKISS IP %s Port %d/%d Chan %c \n",
+				inet_ntoa(PortVector->PORTIPADDR), PortVector->ListenPort, PortVector->IOBASE, PortVector->CHANNELNUM);
+		
+
+
+
 	else
 		if (PortVector->SerialPortName)
 			sprintf(Msg,"ASYNC %s Chan %c \n", PortVector->SerialPortName, PortVector->CHANNELNUM);
@@ -263,13 +284,18 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		BOOL bcopt=TRUE;
 		struct sockaddr_in sinx;
 
-		// KISS over UDP
+		// KISS over UDP or TCP
 
 		if (PortVector->ListenPort == 0)
 			PortVector->ListenPort = PortVector->IOBASE;
 
-		sprintf(Msg,"UDPKISS IP %s Port %d/%d Chan %c ",
-			inet_ntoa(PortVector->PORTIPADDR), PortVector->ListenPort, PortVector->IOBASE, Channel);
+		if (PortVector->KISSTCP)
+			sprintf(Msg,"TCPKISS IP %s Port %d Chan %c ",
+				inet_ntoa(PortVector->PORTIPADDR), PortVector->IOBASE, Channel);
+		else
+			sprintf(Msg,"UDPKISS IP %s Port %d/%d Chan %c ",
+				inet_ntoa(PortVector->PORTIPADDR), PortVector->ListenPort, PortVector->IOBASE, Channel);
+		
 		WritetoConsoleLocal(Msg);
 		
 		npKISSINFO = (NPASYINFO) zalloc(sizeof(ASYINFO));
@@ -279,27 +305,36 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
   
 		KISSInfo[PortVector->PORTNUMBER] = npKISSINFO;
 
-		npKISSINFO->sock = sock = socket(AF_INET,SOCK_DGRAM,0);
-
-		ioctl(sock, FIONBIO, &param);
-
-		setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
-
-		sinx.sin_family = AF_INET;
-		sinx.sin_addr.s_addr = INADDR_ANY;		
-		sinx.sin_port = htons(PortVector->ListenPort);
-
-		if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
-		{
-			//	Bind Failed
-
-			int err = WSAGetLastError();
-			Consoleprintf("Bind Failed for UDP port %d - error code = %d", PortVector->ListenPort, err);
-		}
+		npKISSINFO->RXBCOUNT=0;
+		npKISSINFO->MSGREADY=FALSE;
+		npKISSINFO->RXBPTR=&npKISSINFO->RXBUFFER[0]; 
+		npKISSINFO->RXMPTR=&npKISSINFO->RXMSG[0];
 
 		npKISSINFO->destaddr.sin_family = AF_INET;
 		npKISSINFO->destaddr.sin_addr.s_addr = PortVector->PORTIPADDR.s_addr;		
 		npKISSINFO->destaddr.sin_port = htons(PortVector->IOBASE);
+
+		if (PortVector->KISSTCP)
+			ConnecttoUZ7HOTCP(npKISSINFO);
+		else
+		{
+			npKISSINFO->sock = sock = socket(AF_INET,SOCK_DGRAM,0);
+			ioctl(sock, FIONBIO, &param);
+
+			setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char FAR *)&bcopt,4);
+
+			sinx.sin_family = AF_INET;
+			sinx.sin_addr.s_addr = INADDR_ANY;		
+			sinx.sin_port = htons(PortVector->ListenPort);
+
+			if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
+			{
+				//	Bind Failed
+
+				int err = WSAGetLastError();
+				Consoleprintf("Bind Failed for UDP port %d - error code = %d", PortVector->ListenPort, err);
+			}
+		}
 	}
 
 	else
@@ -451,24 +486,30 @@ static void CheckReceivedData(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 		}
 		else if (PORT->PORTIPADDR.s_addr)		// KISS over UDP
 		{
-			struct sockaddr_in rxaddr;
-			int addrlen = sizeof(struct sockaddr_in);
-
-			nLength = recvfrom(npKISSINFO->sock, &npKISSINFO->RXBUFFER[0], MAXBLOCK - 1, 0, (struct sockaddr *)&rxaddr, &addrlen);
-	
-			if (nLength < 0)
+			if (PORT->KISSTCP)
 			{
-				int err = WSAGetLastError();
-	//			if (err != 11)
-	//				printf("KISS Error %d %d\n", nLength, err);
-				nLength = 0;
+				nLength = KISSGetTCPMessage(npKISSINFO);
+			}
+			else
+			{
+				struct sockaddr_in rxaddr;
+				int addrlen = sizeof(struct sockaddr_in);
+
+				nLength = recvfrom(npKISSINFO->sock, &npKISSINFO->RXBUFFER[0], MAXBLOCK - 1, 0, (struct sockaddr *)&rxaddr, &addrlen);
+	
+				if (nLength < 0)
+				{
+					int err = WSAGetLastError();
+		//			if (err != 11)
+		//				printf("KISS Error %d %d\n", nLength, err);
+					nLength = 0;
+				}
 			}
 		}
 		else
 			nLength = ReadCommBlock(npKISSINFO, (char *) &npKISSINFO->RXBUFFER, MAXBLOCK - 1);;
 	
 		npKISSINFO->RXBCOUNT = nLength;
-
 		npKISSINFO->RXBPTR = (UCHAR *)&npKISSINFO->RXBUFFER; 
 	}
 
@@ -594,6 +635,9 @@ VOID KISSINIT(struct KISSINFO * KISS)
 	struct KISSINFO * FIRSTCHAN = NULL;
 
 	PORT->PORTINTERLOCK = 0;	// CANT USE INTERLOCK ON KISS
+
+	if (PORT->CHANNELNUM == 0)
+		PORT->CHANNELNUM = 'A';
 
 	FIRSTCHAN = (struct KISSINFO *)CHECKIOADDR(PORT);	// IF ANOTHER ENTRY FOR THIS ADDR
 								// MAY BE CHANGED IN ANOTHER CHANNEL USED
@@ -832,6 +876,10 @@ VOID SENDFRAME(struct KISSINFO * KISS, UINT * Buffer)
 			ACKWORD -= (UINT)LINKS;		// Con only send 16 bits, so use offset into LINKS
 			ENCBUFF[2] = ACKWORD & 0xff;
 			ENCBUFF[3] = (ACKWORD >> 8) &0xff;
+
+			// have to reset flag so trace doesnt clear it
+
+			Buffer[(BUFFLEN-4)/4] = 0;
 
 			if (PORT->KISSFLAGS & TNCX)
 			{
@@ -1405,3 +1453,149 @@ int i2cPoll(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 	return len;
 }
 #endif
+
+// UZ7HO KISS Over TCP Routines
+
+VOID ConnecttoUZ7HOTCPThread(NPASYINFO ASY);
+
+int ConnecttoUZ7HOTCP(NPASYINFO ASY)
+{
+	_beginthread(ConnecttoUZ7HOTCPThread, 0, ASY);
+
+	return 0;
+}
+
+VOID ConnecttoUZ7HOTCPThread(NPASYINFO ASY)
+{
+	char Msg[255];
+	int err,i;
+	u_long param=1;
+	BOOL bcopt=TRUE;
+	SOCKET sock;
+	struct hostent * HostEnt;
+	SOCKADDR_IN sinx; 
+	int addrlen=sizeof(sinx);
+
+	sinx.sin_family = AF_INET;
+	sinx.sin_addr.s_addr = INADDR_ANY;
+	sinx.sin_port = 0;
+
+	//	Only called for the first BPQ port for a particular host/port combination
+
+	Sleep(10000);		// Delay a bit
+
+	while(1)
+	{
+		if (ASY->Connected == FALSE && ASY->Connecting == FALSE)
+		{
+//			if (ASY->destaddr.s_addr == INADDR_NONE)
+//			{
+				//	Resolve name to address
+
+//				 HostEnt = gethostbyname (AGWHostName[port]);
+		 
+//				 if (!HostEnt) return;			// Resolve failed
+
+//				 memcpy(&destaddr[port].sin_addr.s_addr,HostEnt->h_addr,4);
+
+//			}
+
+			sock = ASY->sock = socket(AF_INET, SOCK_STREAM, 0);
+
+			if (sock == INVALID_SOCKET)
+			{
+				i=sprintf(Msg, "Socket Failed for KISSTCP socket - error code = %d\r\n", WSAGetLastError());
+				WritetoConsoleLocal(Msg);
+		 	 	return; 
+			}
+ 
+			setsockopt (sock, SOL_SOCKET,SO_REUSEADDR, (const char FAR *)&bcopt, 4);
+
+			if (bind(sock, (LPSOCKADDR) &sinx, addrlen) != 0 )
+			{
+				//	Bind Failed
+	
+				i=sprintf(Msg, "Bind Failed for KISSTCP socket - error code = %d\r\n", WSAGetLastError());
+				WritetoConsoleLocal(Msg);
+
+				closesocket(sock);
+		 	 	return; 
+			}
+
+			ASY->Connecting = TRUE;
+
+			if (connect(sock,(LPSOCKADDR) &ASY->destaddr, sizeof(ASY->destaddr)) == 0)
+			{
+				//	Connected successful
+
+				ASY->Connected = TRUE;
+				ASY->Connecting = FALSE;
+
+				ioctlsocket (sock, FIONBIO, &param);
+				continue;
+			}
+				else
+			{
+				err=WSAGetLastError();
+
+				//	Connect failed
+
+				if (ASY->Alerted == FALSE)
+				{
+					sprintf(Msg, "Connect Failed for KISSTCP Port %d - error code = %d\n",
+						ASY->Portvector->PORTNUMBER, err);
+				    WritetoConsoleLocal(Msg);
+					ASY->Alerted = TRUE;
+				}
+
+				closesocket(sock);
+				ASY->Connecting = FALSE;
+				Sleep (57000);				// 1 Mins
+				continue;
+			}
+		}
+		Sleep (57000);						// 1 Mins
+	}
+}
+
+int KISSGetTCPMessage(NPASYINFO ASY)
+{
+	int index=0;
+	ULONG param = 1;
+
+	if (ASY->Connected)
+	{
+		int InputLen;
+
+		//	Poll TCP COnnection for data
+
+		// May have several messages per packet, or message split over packets
+
+		InputLen = recv(ASY->sock, ASY->RXBUFFER, MAXBLOCK - 1, 0);
+
+		if (InputLen < 0)
+		{
+			int err = WSAGetLastError();
+
+			if (err == 10035 || err == 11)
+				InputLen = 0;
+				return 0;
+
+			ASY->Connected = 0;
+			closesocket(ASY->sock);
+			return 0;
+		}
+
+		if (InputLen > 0)
+			return InputLen;
+		else
+		{
+			Debugprintf("KISSTCP Close received for socket %d", ASY->sock);
+
+			ASY->Connected = 0;
+			closesocket(ASY->sock);
+			return 0;
+		}
+	}
+	return 0;
+}

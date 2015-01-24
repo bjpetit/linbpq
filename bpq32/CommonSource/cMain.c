@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 //
 //	C replacement for Main.asm
 //
@@ -50,6 +69,8 @@ int	MAXLINKS = 30;
 
 char	MYCALL[7] = ""; //		DB	7 DUP (0)	; NODE CALLSIGN (BIT SHIFTED)
 char	MYALIASTEXT[6] = ""; //	DB	'      '	; NODE ALIAS (KEEP TOGETHER)
+
+char MYALIASLOPPED[10];
 
 UCHAR	MYCALLWITHALIAS[13] = "";
 
@@ -579,12 +600,17 @@ BOOL Start()
 
 		memcpy(MYNODECALL, cfg->C_BBSCALL, 10);
 		memcpy(MYALIASTEXT, cfg->C_BBSALIAS, 6);
+		memcpy(MYALIASLOPPED, cfg->C_BBSALIAS, 10);
 	}
 	else
 	{
 		memcpy(MYNODECALL, cfg->C_NODECALL, 10);
 		memcpy(MYALIASTEXT, cfg->C_NODEALIAS, 6);
+		memcpy(MYALIASLOPPED, cfg->C_NODEALIAS, 10);
 	}
+
+	strlop(MYALIASLOPPED, ' ');
+
 
 	//	IF NO BBS, SET BOTH TO _NODE CALLSIGN
 
@@ -897,6 +923,12 @@ BOOL Start()
 
 		memcpy(&PORT->PORTIPADDR, &PortRec->IPADDR, 4);
 		PORT->ListenPort = PortRec->ListenPort;
+
+		if (PortRec->TCPPORT)
+		{
+			PORT->KISSTCP = TRUE;
+			PORT->IOBASE = PortRec->TCPPORT;
+		}
 
 		if (PortRec->WL2K)
 			memcpy(&PORT->WL2KInfo, PortRec->WL2K, sizeof(struct WL2KInfo));
@@ -2005,7 +2037,10 @@ int BPQTRACE(MESSAGE * Msg, BOOL TOAPRS)
 	while (i--)
 	{
 		if ((Msg->PORT & 0x7f) == L4->LISTEN)
-			DoListenMonitor(L4, Msg);
+			if (L4->LISTEN)
+				DoListenMonitor(L4, Msg);
+			else
+				return FALSE;		// Zero Port???
 
 		L4++;
 	}

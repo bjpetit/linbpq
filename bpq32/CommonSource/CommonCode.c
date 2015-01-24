@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 
 
 // General C Routines common to bpq32 and linbpq.mainly moved from BPQ32.c
@@ -1983,7 +2002,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
    dcb.BaudRate = speed;
    dcb.ByteSize = 8;
    dcb.Parity = 0;
-//   dcb.StopBits = TWOSTOPBITS;
+   dcb.StopBits = TWOSTOPBITS;
    dcb.StopBits = Stopbits;
 
 	// setup hardware flow control

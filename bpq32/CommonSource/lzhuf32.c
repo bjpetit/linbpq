@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 // Mail and Chat Server for BPQ32 Packet Switch
 //
 // lzhuf Routines
@@ -894,9 +913,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		char ** RecpTo = NULL;				// May be several Recipients
 		char ** HddrTo = NULL;				// May be several Recipients
 		char ** Via = NULL;					// May be several Recipients
-		__int32 LocalMsg[1000]	;				// Set if Recipient is a local wl2k address
-
-		__int32 B2To;							// Offset to To: fields in B2 header
+		__int32 LocalMsg[1000];				// Set if Recipient is a local wl2k address
+		char Type[1000];					// Message Type for each dest
+		__int32 B2To;						// Offset to To: fields in B2 header
 		__int32 Recipients = 0;
 		__int32 RMSMsgs = 0, BBSMsgs = 0;
 #ifndef LINBPQ
@@ -1008,6 +1027,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			memcpy(FullTo, &ptr1[4], linelen-4);
 			memcpy(HddrTo[Recipients], ptr1, linelen+2);
 			LocalMsg[Recipients] = FALSE;
+			Type[Recipients] = Msg->type;	// Default to Type from Header
 
 			Logprintf(LOG_BBS, conn, '?', "B2 Msg To: %s", FullTo);
 
@@ -1192,22 +1212,28 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				sprintf(HddrTo[Recipients], "To: %s\r\n", FullTo);
 			}
 
-			if (memcmp(FullTo, "NTS:", 4) == 0)
+			else if (memcmp(FullTo, "NTS:", 4) == 0)
 			{
 				// remove NTS and set type 'T'
 
-				char * tptr;
-
-				memmove(FullTo, &FullTo[4], strlen(FullTo) - 3);
-				Msg->type = 'T';				// NTS
+				memmove(FullTo, &FullTo[4], strlen(FullTo) - 3);		
+				Type[Recipients] = 'T';		// NTS
+				memmove(HddrTo[Recipients] + 4, HddrTo[Recipients] + 8, 91);
 
 				// Replace Type: Private with Type: Traffic
 
-				tptr = strstr(outfile, "Type: Private");
-				if (tptr)
-					memcpy(tptr + 6, "Traffic", 7);
+			}
+			else if ((_memicmp(FullTo, "bull/", 5) == 0) || (_memicmp(FullTo, "bull:", 5) == 0))
+			{
+				// remove bull/ and set type 'T'
 
-				NTS = TRUE;
+				memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);		
+				Type[Recipients] = 'B';		// NTS
+				memmove(HddrTo[Recipients] + 4, HddrTo[Recipients] + 9, 90);
+
+				// Replace Type: Private with Type: Bulletin
+				// Have to move rest of header down to make space
+
 			}
 
 			if (strcmp(Msg->via, "RMS") == 0)
@@ -1329,7 +1355,14 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 		// If multiple recipents, create one copy for each BBS address, and one for all others (via RMS)
 	
-		if (Recipients > 1)
+		if (Recipients == 0 || HddrTo == NULL)
+		{
+			Debugprintf("B2 Message with no recipients from %s", conn->Callsign);	
+			Logprintf(LOG_BBS, conn, '!', "B2 Message with no recipients from %s", conn->Callsign);
+			SetupNextFBBMessage(conn);
+			return;
+		}
+		else
 		{
 			__int32 i;
 			struct MsgInfo * SaveMsg;
@@ -1386,6 +1419,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 					strcpy(Msg->to, RecpTo[i]);
 					strcpy(Msg->via, Via[i]);
+					Msg->type = Type[i];
 				
 					Msg->bid[0] = 0;
 
@@ -1425,6 +1459,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				conn->MailBuffer = malloc(SaveMsgLen + 1000);
 				memcpy(conn->MailBuffer, SaveBody, SaveMsgLen);
 
+				// Add all the To: lines back to message
 
 				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
 				memcpy(&conn->MailBuffer[B2To], ToString, ToLen); 
@@ -1433,7 +1468,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				strcpy(Msg->to, "RMS");
 				strcpy(Msg->via, "winlink.org");
-
+				Msg->type = Type[i];
+	
 				// Must Change the BID
 
 				Msg->bid[0] = 0;
@@ -1463,18 +1499,55 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				ptr = HddrTo[i];
 
-				if (_memicmp(&ptr[4], "nts:", 4) == 0)
-					memmove(ptr + 4, ptr + 8, strlen(ptr + 7));
+				// We removed any nts: or bull: earlier on, 
+				// and saved type. We need to set type here, as
+				// may be sending to more than one type
+				// If message contains Type: Private and not 'P',
+				// need to changes to Traffic or Bulletin
 
 				ToLen = strlen(ptr);
 
-				if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
+	//			if (_memicmp(HddrTo[i], "CC", 2) == 0)	// Replace CC: with TO:
 					memcpy(HddrTo[i], "To", 2);
 
 				memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
 				memcpy(&conn->MailBuffer[B2To], HddrTo[i], ToLen); 
 
 				conn->TempMsg->length += ToLen;
+
+				Msg->type = Type[i];
+
+				ptr = strstr(conn->MailBuffer, "Type: ");
+
+				if (ptr)
+				{
+					ptr += 6;
+					if (_memicmp(ptr, "Private", 7) == 0 && Msg->type != 'P')
+					{
+						if (Msg->type == 'T')
+							memcpy(ptr, "Traffic", 7);
+						else
+						if (Msg->type == 'B')
+						{
+							// have to make space
+
+							memmove(ptr + 1, ptr, count);
+							conn->TempMsg->length++;
+							memcpy(ptr, "Bulletin", 8);
+						}
+
+						// remove //wl2k from subject
+
+						ptr = strstr(conn->MailBuffer, "Subject: ");
+
+						if (ptr && _memicmp(ptr + 9, "//WL2K ", 7) == 0)
+						{
+							memmove(ptr + 9, ptr + 16, count);
+							conn->TempMsg->length -= 7;
+							memmove(conn->TempMsg->title, &conn->TempMsg->title[7], strlen(conn->TempMsg->title) - 6);
+						}
+					}
+				}
 
 				strcpy(Msg->to, RecpTo[i]);
 				strcpy(Msg->via, Via[i]);
@@ -1493,6 +1566,7 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			SetupNextFBBMessage(conn);
 			return;
 		}
+/*
 		else
 		{
 			// Single Destination -  Need to put to: line back in message
@@ -1501,13 +1575,6 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			__int32 ToLen;
 			char toCopy[80];
 			
-			if (Recipients == 0 || HddrTo == NULL)
-			{
-				Debugprintf("B2 Message with no recipients from %s", conn->Callsign);	
-				Logprintf(LOG_BBS, conn, '!', "B2 Message with no recipients from %s", conn->Callsign);
-				SetupNextFBBMessage(conn);
-				return;
-			}
 			
 			ptr = HddrTo[0];
 
@@ -1516,52 +1583,16 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 			ToLen = strlen(ptr);
 
-			if (_memicmp(&ptr[4], "bull/", 5) == 0)
-			{
-//				char * MsgBytes = conn->MailBuffer;
-//				char * MsgPtr;
-
-				conn->TempMsg->type = 'B';
-				memmove(&ptr[4], &ptr[9], strlen(&ptr[8]));
-				ToLen = strlen(ptr);
-				strcpy(toCopy, _strupr(&ptr[4]));
-				strlop(toCopy, '@');
-				strcpy(conn->TempMsg->to, toCopy);
-				ToLen = strlen(HddrTo[0]);
-
-				if (memcmp(conn->TempMsg->title, "//WL2K ", 7) == 0)
-					memmove(conn->TempMsg->title, &conn->TempMsg->title[7], strlen(conn->TempMsg->title) - 6);
-
-				// Remove B2 Headers, and all but the first part.
-
-				// ?? Why - try not doing it
-/*
-				MsgPtr = strstr(MsgBytes, "Body:");
-			
-				if (MsgPtr)
-				{
-					conn->TempMsg->length = atoi(&MsgPtr[5]);
-					MsgPtr= strstr(MsgBytes, "\r\n\r\n");		// Blank Line after headers
-	
-					if (MsgPtr)
-						MsgPtr +=4;
-					else
-						MsgPtr = MsgBytes;
-
-					memmove(conn->MailBuffer, MsgPtr, conn->TempMsg->length + 1);
-					conn->TempMsg->B2Flags = 0;
-				}
-*/
-			}
-
 			memmove(&conn->MailBuffer[B2To + ToLen], &conn->MailBuffer[B2To], count);
 			memcpy(&conn->MailBuffer[B2To], HddrTo[0], ToLen); 
 			conn->TempMsg->length += ToLen;
+			Msg->type = Type[i];
 	
 			CreateMessageFromBuffer(conn);
 			SetupNextFBBMessage(conn);
 			return;
 		}
+*/
 #ifndef LINBPQ
 		}
 			#define EXCEPTMSG "Error Decoding B2 Message"

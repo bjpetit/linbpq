@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 
 //	July 2010
 
@@ -341,7 +360,7 @@ static char *pkeywords[] =
 "TXPORT", "MHEARD", "CWIDTYPE", "MINQUAL", "MAXDIGIS", "PORTALIAS2", "DLLNAME",
 "BCALL", "DIGIMASK", "NOKEEPALIVES", "COMPORT", "DRIVER", "WL2KREPORT", "UIONLY",
 "UDPPORT", "IPADDR", "I2CBUS", "I2CDEVICE", "UDPTXPORT", "UDPRXPORT", "NONORMALIZE",
-"IGNOREUNLOCKEDROUTES", "INP3ONLY"};           /* parameter keywords */
+"IGNOREUNLOCKEDROUTES", "INP3ONLY", "TCPPORT"};           /* parameter keywords */
 
 static int poffset[] =
 {
@@ -353,8 +372,8 @@ static int poffset[] =
 76, 78, 110, 112, 114, 116,
 118, 120, 121, 122, 123, 200, 210,
 226, 72, 124, 516, 210, 512, 125,
-36, 236, 38, 36, 36, 126, 600,
-111, 242};					/* offset for corresponding data in config file */
+36, 236, 38, 36, 36, 126, 243,
+111, 242, 244};					/* offset for corresponding data in config file */
 
 static int proutine[] = 
 {
@@ -366,7 +385,8 @@ static int proutine[] =
 1, 2, 2, 12, 1, 1,
 1, 7, 7, 13, 13, 0, 14,
 0, 1, 2, 18, 15, 16, 2,
-1, 17, 1, 1, 1, 1, 2, 2, 2};							/* routine to process parameter */
+1, 17, 1, 1, 1, 1, 2,
+2, 2, 1};							/* routine to process parameter */
 
 int PPARAMLIM = sizeof(proutine)/sizeof(int);
 
@@ -412,6 +432,8 @@ BOOL LocSpecified = FALSE;
 /************************************************************************/
  
 VOID WarnThread();
+
+int LineNo = 0;
 
 int heading = 0;
 
@@ -580,7 +602,8 @@ BOOL ProcessConfig()
 		{
 			if (heading == 0)
 			{
-				Consoleprintf("\r\nThe following parameters were not correctly specified");
+				Consoleprintf(" ");
+				Consoleprintf("The following parameters were not correctly specified");
 				heading = 1;
 			}
 			Consoleprintf(keywords[i]);
@@ -706,6 +729,7 @@ char rec[];
 		// Don't use GetNextLine - we need to keep ; in messages
 		
 		fgets(rec,MAXLINE,fp1);
+		LineNo++;
 
 		while (!feof(fp1))
 		{
@@ -735,6 +759,7 @@ char rec[];
 			strcat(ptr, "\r\n");
 NextAPRS:
 			fgets(rec,MAXLINE,fp1);
+			LineNo++;
 		}
 
 		if (_memicmp(rec, "****", 3) == 0)
@@ -917,7 +942,7 @@ NextAPRS:
 	   ;
 
 	if (i == PARAMLIM)
-	   Consoleprintf("Source record not recognised - Ignored: %s",rec);
+	   Consoleprintf("Source record no %d not recognised - Ignored: %s" ,LineNo, rec);
 	else
 	{
 	   fileoffset = offset[i];
@@ -1337,6 +1362,7 @@ int dotext(int i, char * key_word, int max)
 		strcat(rec, "\r");
 		bputs(rec,fp2);
 		fgets(rec,MAXLINE,fp1);
+		LineNo++;
 	}
 
 	bputc('\0',fp2);
@@ -1365,9 +1391,10 @@ int doBText(int i, char key_word[])
 
 	while (xindex(rec,"***") != 0 && !feof(fp1))
 	{
-	   rec[strlen(rec) - 1] = '\r';
-	   bputs(rec,fp2);
-	   fgets(rec,MAXLINE,fp1);
+		rec[strlen(rec) - 1] = '\r';
+		bputs(rec,fp2);
+		fgets(rec,MAXLINE,fp1);
+		LineNo++;
  	}
 
 	bputc('\0',fp2);
@@ -1706,6 +1733,7 @@ int GetNextLine(char *rec)
 	while (TRUE)
 	{
 		ret = fgets(rec,MAXLINE,fp1);
+		LineNo++;
 
 		if (ret == NULL)
 		{

@@ -22,7 +22,7 @@
 #define ALIASLEN 32
 #define MHENTRIES 30		// Entries in MH List
 
-
+typedef int (FAR *FARPROCY)();
 
 #define NRPID 0xcf			// NETROM PID
 
@@ -626,6 +626,7 @@ typedef struct PORTCONTROL
 	struct WL2KInfo WL2KInfo;	// WL2K Report for this Port
 	struct in_addr PORTIPADDR;	// IP address for "KISS over UDP"
 	int	ListenPort;				// For KISS over UDP, if Different TX and RX Ports needed
+	BOOL	KISSTCP;				// TCP instead of UDP for KISS
 
 	char * SerialPortName;		//	Serial Port Name for Unix
 	struct XDIGI * XDIGIS;		// Cross port digi setup
@@ -633,6 +634,9 @@ typedef struct PORTCONTROL
 	BOOL NormalizeQuality;		// Normalise Node Qualities
 	BOOL IgnoreUnlocked;		// Ignore Unlocked routes
 	BOOL INP3ONLY;				// Default to INP3 and disallow NODES
+
+	FARPROCY UIHook;			// Used for KISSARQ
+	struct PORTCONTROL * HookPort;
 
 }	PORTCONTROLX, *PPORTCONTROL;
 

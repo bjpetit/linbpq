@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 //
 //	DLL to inteface HAL Communications Corp Clover/Pacor controllers to BPQ32 switch 
 //
@@ -251,13 +270,16 @@ ConfigLine:
 						tone2 = atoi(ptr);
 						ptr = &TNC->InitScript[TNC->InitScriptLen];
 
+						// Try putting into FSK mode first
+
+						*(ptr++) = 0x84;
 						*(ptr++) = SetTones;		// Set Tones (Mark, Space HI byte first)
 						*(ptr++) = tone1 >> 8;
 						*(ptr++) = tone1 & 0xff;
 						*(ptr++) = tone2 >> 8;
 						*(ptr++) = tone2 & 0xff;
 
-						TNC->InitScriptLen += 5;	
+						TNC->InitScriptLen += 6;	
 
 						continue;
 					}

@@ -8,7 +8,11 @@ typedef struct tagASYINFO
 	HANDLE  idComDev ;
 	BYTE    bPort;
 	DWORD   dwBaudRate ;
-	SOCKET	sock;			// for KISS over UDP
+	SOCKET	sock;			// for KISS over UDP/TCP
+	BOOL	Connecting;		// Kiss over TCP
+	BOOL	Connected;		// Kiss over TCP
+	BOOL	Alerted;		// Connect Fail Reported
+
 	struct sockaddr_in destaddr;
 	struct PORTCONTROL * Portvector;
 	UCHAR	RXMSG[512];				// Msg being built

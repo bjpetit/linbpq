@@ -1,3 +1,22 @@
+/*
+Copyright 2001-2015 John Wiseman G8BPQ
+
+This file is part of LinBPQ/BPQ32.
+
+LinBPQ/BPQ32 is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+LinBPQ/BPQ32 is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
+*/	
+
 //
 //	C replacement for L2Code.asm
 //
@@ -381,6 +400,11 @@ NOTFORUS:
 	return;
 
 FORUS:
+
+	// if a UI frame and UIHook Specified, call it
+
+	if (PORT->UIHook && CTL == 3)
+		PORT->UIHook(LINK, PORT, Buffer, ADJBUFFER, CTL, MSGFLAG);
 
 	L2FORUS(LINK, PORT, Buffer, ADJBUFFER, CTL, MSGFLAG);
 }
@@ -1907,12 +1931,17 @@ VOID SDETX(struct _LINKTABLE * LINK)
 			if (Outstanding < 0)
 				Outstanding += 8;		// allow for wrap
 
-			// if at limit, or no more to send, set P)		// LIMIT
+			// if at limit, or no more to send, set P)
 	
 			if (Outstanding >= LINK->LINKWINDOW || LINK->FRAMES[LINK->LINKNS] == NULL)
 			{
 				CTL |= PFBIT;
 				LINK->L2FLAGS |= POLLSENT;
+				LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
+
+				// FLAG BUFFER TO CAUSE TIMER TO BE RESET AFTER SEND (or ACK if ACKMODE)
+
+				Buffer->Linkptr = LINK;
 			}
 		}
 	
@@ -1933,18 +1962,17 @@ VOID SDETX(struct _LINKTABLE * LINK)
 
 		LINK->L2TIMER = ONEMINUTE;	// (RE)SET TIMER
 
-		// FLAG BUFFER TO CAUSE TIMER TO BE RESET AFTER SEND
-
-		Buffer->Linkptr = LINK;
-
 		PORT = LINK->LINKPORT;
-		Buffer->PORT = PORT->PORTNUMBER;
 
+		if (PORT)
 		{
-			if (PORT)
-				PUT_ON_PORT_Q(PORT, Buffer);
-			else
-				ReleaseBuffer(Buffer);
+			Buffer->PORT = PORT->PORTNUMBER;
+			PUT_ON_PORT_Q(PORT, Buffer);
+		}
+		else
+		{
+			Buffer->Linkptr = 0;
+			ReleaseBuffer(Buffer);
 		}
 	}
 }
@@ -2367,14 +2395,17 @@ VOID L2SENDCOMMAND(struct _LINKTABLE * LINK, int CMD)
 	}
 
 	PORT = LINK->LINKPORT;
-	Buffer->PORT = PORT->PORTNUMBER;
-
 
 	if (PORT)
+	{
+		Buffer->PORT = PORT->PORTNUMBER;
 		PUT_ON_PORT_Q(PORT, Buffer);
+	}
 	else
+	{
+		Buffer->Linkptr = 0;
 		ReleaseBuffer(Buffer);
-
+	}
 }
 
 VOID L2SENDRESPONSE(struct _LINKTABLE * LINK, int CMD)
