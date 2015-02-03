@@ -560,7 +560,7 @@ ok:
 							return 0;
 						}
 					}
-/*					else if (TNC->TimeScanLocked)
+					else if (TNC->TimeScanLocked)
 					{
 						int timeLocked = time(NULL) - TNC->TimeScanLocked;
 						if (timeLocked > 4)
@@ -570,7 +570,6 @@ ok:
 							return 0;
 						}
 					}
-*/
 				}
 
 				TNC->WantToChangeFreq = TRUE;
@@ -590,7 +589,8 @@ ok:
 			if (TNC->DontReleasePermission)			// Disable connects during this interval?
 			{
 				TNC->DontReleasePermission = FALSE;
-//				TNC->TimeScanLocked = time(NULL) + 100;	// Make sure doesnt time out
+				if (TNC->SyncSupported == FALSE)
+					TNC->TimeScanLocked = time(NULL) + 100;	// Make sure doesnt time out
 				return 0;
 			}
 
@@ -2487,13 +2487,13 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						if (Msg[4] == '1')			// Ok to Change
 						{
 							TNC->OKToChangeFreq = 1;
-//							TNC->TimeScanLocked = 0;
+							TNC->TimeScanLocked = 0;
 						}
 						else
 						{
 							TNC->OKToChangeFreq = -1;
-//							if (TNC->TimeScanLocked == 0)	
-//								TNC->TimeScanLocked = time(NULL);
+							if (TNC->SyncSupported == FALSE && TNC->UseAPPLCallsforPactor && TNC->TimeScanLocked == 0)	
+								TNC->TimeScanLocked = time(NULL);
 						}
 					}
 				}
@@ -2990,6 +2990,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 						Debugprintf("SCS New SYNC Detected");
 	
 					TNC->TimeEnteredSYNCMode = time(NULL);
+					TNC->SyncSupported = TRUE;
 				}
 				else
 				{

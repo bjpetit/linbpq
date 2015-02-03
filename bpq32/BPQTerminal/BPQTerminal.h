@@ -20,7 +20,6 @@
 #define BPQCLEARMON                     1168
 #define BPQCLEAROUT                     1169
 #define BPQBELLS                        1170
-#define BPQCHAT                         1171
 #define BPQHELP                         1172
 #define BPQStripLF                      1173
 #define BPQLogOutput                    1174

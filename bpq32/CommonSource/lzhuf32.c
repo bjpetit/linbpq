@@ -1421,7 +1421,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 					strcpy(Msg->via, Via[i]);
 					Msg->type = Type[i];
 				
-					Msg->bid[0] = 0;
+					if (Recipients > 1)
+						Msg->bid[0] = 0;
 
 					CreateMessageFromBuffer(conn);
 				}
@@ -1470,9 +1471,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				strcpy(Msg->via, "winlink.org");
 				Msg->type = Type[i];
 	
-				// Must Change the BID
-
-				Msg->bid[0] = 0;
+				if (Recipients > 1)			// Must Change the BID
+					Msg->bid[0] = 0;
 
 				CreateMessageFromBuffer(conn);
 			}
@@ -1552,7 +1552,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 				strcpy(Msg->to, RecpTo[i]);
 				strcpy(Msg->via, Via[i]);
 				
-				Msg->bid[0] = 0;
+				if (i > 0 && Msg->type != 'B')			// Must Change the BID
+					Msg->bid[0] = 0;
 
 				CreateMessageFromBuffer(conn);
 			}

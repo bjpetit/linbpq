@@ -687,6 +687,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add IC7410 to supported Soundcard rigs
 //	Add CAT PTT to NMEA type (for ICOM Marine Radios_
 //	Fix ACKMODE
+//	Add KISS over TCP
+//	Support ACKMode on VKISS
+//	Improved reporting of configuration file format errors
 
 #define CKernel
 

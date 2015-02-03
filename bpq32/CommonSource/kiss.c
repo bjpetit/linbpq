@@ -707,7 +707,7 @@ struct PORTCONTROL * CHECKIOADDR(struct PORTCONTROL * OURPORT)
 		if (PORT == OURPORT)		// NONE BEFORE OURS
 			return NULL;		// None before us
 	
-		if (PORT->PORTTYPE == 0x10)	// EXTERNAL?
+		if (PORT->PORTTYPE > 12)		// INTERNAL or EXTERNAL?
 		{
 			PORT = PORT->PORTPOINTER;	// YES, SO IGNORE
 			continue;

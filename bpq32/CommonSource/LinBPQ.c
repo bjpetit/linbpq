@@ -892,6 +892,7 @@ int main(int argc, char * argv[])
 	{
 		Sleep(100);
 		GetSemaphore(&Semaphore);
+		SemHeldByAPI = 2;
 
 		if (CLOSING)
 		{

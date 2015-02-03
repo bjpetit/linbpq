@@ -121,7 +121,6 @@ BEGIN
         MENUITEM "Font",                        ID_SETUP_FONT
         MENUITEM "AutoConnect",                 BPQAUTOCONNECT, CHECKED
         MENUITEM "Enable Bells",                BPQBELLS
-        MENUITEM "Enable Chat",                 BPQCHAT
         MENUITEM "Strip Linefeeds",             BPQStripLF
         MENUITEM "Log Monitor",                 BPQLogMonitor
         MENUITEM "Log Output",                  BPQLogOutput
@@ -136,34 +135,6 @@ BEGIN
         MENUITEM "Clear Output Window",         BPQCLEAROUT
     END
     MENUITEM "Help",                        BPQHELP
-END
-
-BPQMENU MENU DISCARDABLE 
-BEGIN
-    POPUP "Control"
-    BEGIN
-        MENUITEM "AutoConnect",                 BPQAUTOCONNECT, CHECKED
-        MENUITEM "Connect",                     BPQCONNECT
-        MENUITEM "Disconnect",                  BPQDISCONNECT, GRAYED
-    END
-    POPUP "Appl"
-    BEGIN
-        MENUITEM "BBS",                         BPQAPPL1
-        MENUITEM "Host",                        BPQAPPL2
-        MENUITEM "Appl 3",                      BPQAPPL3
-        MENUITEM "Appl 4",                      BPQAPPL4
-        MENUITEM "Appl 5",                      BPQAPPL5
-        MENUITEM "Appl 6",                      BPQAPPL6
-        MENUITEM "Appl 7",                      BPQAPPL7
-        MENUITEM "Appl 8",                      BPQAPPL8
-    END
-    POPUP "Flags"
-    BEGIN
-        MENUITEM "Cmd to Appl",                 BPQFLAGS1
-        MENUITEM "Connected to user",           BPQFLAGS2
-        MENUITEM "Connected to Appl",           BPQFLAGS3
-        MENUITEM "KeepAlive",                   BPQFLAGS4
-    END
 END
 
 

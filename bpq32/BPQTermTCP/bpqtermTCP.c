@@ -75,6 +75,9 @@
 //	Version 1.0.10.1 Nov 2014
 //	Fix possible crash on processing part line
 
+//	Version 1.0.11.1 Feb 2015
+//	Add "Alert after interval" feature
+
 #define _USE_32BIT_TIME_T
 
 #define _CRT_SECURE_NO_DEPRECATE

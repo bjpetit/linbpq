@@ -67,8 +67,11 @@
 
 //		Add UIOnly Monitor Option
 
-//	Version 2.2.2.1 June 2012
+//	Version 2.2.2.1 Nov 2014
 //		Fix possible crash on processing part line
+
+//	Dev 2014
+//		Remove "Enable Chat" option
 
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -124,10 +127,8 @@ int EnableDisconnectMenu(HWND hWnd);
 int	DisableConnectMenu(HWND hWnd);
 int DisableDisconnectMenu(HWND hWnd);
 int	ToggleAutoConnect(HWND hWnd);
-int ToggleAppl(HWND hWnd, int Item, int mask);
 int DoReceivedData(HWND hWnd);
 int	DoStateChange(HWND hWnd);
-int ToggleFlags(HWND hWnd, int Item, int mask);
 int CopyScreentoBuffer(char * buff);
 int DoMonData(HWND hWnd);
 int TogglePort(HWND hWnd, int Item, int mask);
@@ -461,7 +462,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 		retCode = RegSetValueEx(hKey,"Bells",0,REG_DWORD,(BYTE *)&Bells,4);
 		retCode = RegSetValueEx(hKey,"StripLF",0,REG_DWORD,(BYTE *)&StripLF,4);
 		retCode = RegSetValueEx(hKey,"SendDisconnected",0,REG_DWORD,(BYTE *)&SendDisconnected,4);
-		retCode = RegSetValueEx(hKey,"ApplMask",0,REG_DWORD,(BYTE *)&applmask,4);
 		retCode = RegSetValueEx(hKey,"MTX",0,REG_DWORD,(BYTE *)&mtxparam,4);
 		retCode = RegSetValueEx(hKey,"MCOM",0,REG_DWORD,(BYTE *)&mcomparam,4);
 		retCode = RegSetValueEx(hKey,"MUIONLY",0,REG_DWORD,(BYTE *)&monUI,4);
@@ -612,10 +612,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	if (retCode == ERROR_SUCCESS)
 	{
-		Vallen=4;
-		retCode = RegQueryValueEx(hKey,"ApplMask",0,			
-			(ULONG *)&Type,(UCHAR *)&applmask,(ULONG *)&Vallen);
-		
 		Vallen=4;
 		retCode = RegQueryValueEx(hKey,"MTX",0,			
 			(ULONG *)&Type,(UCHAR *)&mtxparam,(ULONG *)&Vallen);
@@ -773,7 +769,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hMenu=GetMenu(hWnd);
 
 //	if (applmask & 0x01)	CheckMenuItem(hMenu,BPQAPPL1,MF_CHECKED);
-	if (applmask & 0x02)	CheckMenuItem(hMenu,BPQCHAT,MF_CHECKED);
+//	if (applmask & 0x02)	CheckMenuItem(hMenu,BPQCHAT,MF_CHECKED);
 //	if (applmask & 0x04)	CheckMenuItem(hMenu,BPQAPPL3,MF_CHECKED);
 //	if (applmask & 0x08)	CheckMenuItem(hMenu,BPQAPPL4,MF_CHECKED);
 //	if (applmask & 0x10)	CheckMenuItem(hMenu,BPQAPPL5,MF_CHECKED);
@@ -1132,66 +1128,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			ToggleAutoConnect(hWnd);
 			break;
-			
-		case BPQAPPL1:
-
-			ToggleAppl(hWnd,BPQAPPL1,0x1);
-			break;
-
-		case BPQAPPL2:
-
-			ToggleAppl(hWnd,BPQAPPL2,0x2);
-			break;
-
-		case BPQAPPL3:
-
-			ToggleAppl(hWnd,BPQAPPL3,0x4);
-			break;
-
-		case BPQAPPL4:
-
-			ToggleAppl(hWnd,BPQAPPL4,0x8);
-			break;
-
-		case BPQAPPL5:
-
-			ToggleAppl(hWnd,BPQAPPL5,0x10);
-			break;
-
-		case BPQAPPL6:
-
-			ToggleAppl(hWnd,BPQAPPL6,0x20);
-			break;
-
-		case BPQAPPL7:
-
-			ToggleAppl(hWnd,BPQAPPL7,0x40);
-			break;
-
-		case BPQAPPL8:
-
-			ToggleAppl(hWnd,BPQAPPL8,0x80);
-			break;
-
-		case BPQFLAGS1:
-
-			ToggleFlags(hWnd,BPQFLAGS1,0x01);
-			break;
-
-		case BPQFLAGS2:
-
-			ToggleFlags(hWnd,BPQFLAGS2,0x02);
-			break;
-
-		case BPQFLAGS3:
-
-			ToggleFlags(hWnd,BPQFLAGS3,0x04);
-			break;
-
-		case BPQFLAGS4:
-
-			ToggleFlags(hWnd,BPQFLAGS4,0x40);
-			break;
 
 		case BPQBELLS:
 
@@ -1232,11 +1168,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		case BPQLogMonitor:
 
 			ToggleParam(hWnd, &LogMonitor, BPQLogMonitor);
-			break;
-
-		case BPQCHAT:
-
-			ToggleChat(hWnd);
 			break;
 
 		case BPQCLEARMON:
@@ -2136,48 +2067,6 @@ int ToggleAutoConnect(HWND hWnd)
   
 }
 
-int ToggleAppl(HWND hWnd, int Item, int mask)
-{
-	HMENU hMenu;	// handle of menu 
-
-	hMenu=GetMenu(hWnd);
-	
-	applmask = applmask ^ mask;
-	
-	if (applmask & mask)
-
-		CheckMenuItem(hMenu,Item,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,Item,MF_UNCHECKED);
-
-	SetAppl(Stream,applflags,applmask);
-
-    return (0);
-  
-}
-
-int ToggleFlags(HWND hWnd, int Item, int mask)
-{
-	HMENU hMenu;	// handle of menu 
-
-	hMenu=GetMenu(hWnd);
-	
-	applflags ^= mask;
-	
-	if (applflags & mask)
-
-		CheckMenuItem(hMenu,Item,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,Item,MF_UNCHECKED);
-
-    return (0);
-  
-}
-
 CopyScreentoBuffer(char * buff)
 {
 
@@ -2249,23 +2138,6 @@ int ToggleParam(HWND hWnd, BOOL * Param, int Item)
     return (0);
 }
 
-int ToggleChat(HWND hWnd)
-{	
-	applmask = applmask ^ 02;
-	
-	if (applmask & 02)
-
-		CheckMenuItem(hMenu,BPQCHAT,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,BPQCHAT,MF_UNCHECKED);
-
-	SetAppl(Stream,applflags,applmask);
-
-    return (0);
-  
-}
 void MoveWindows()
 {
 	RECT rcMain, rcClient;

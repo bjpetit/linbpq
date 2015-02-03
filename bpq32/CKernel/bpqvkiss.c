@@ -279,7 +279,7 @@ static int GetRXMessage(int port,UCHAR * buff)
 	{
 		len=pVCOMInfo->RXMPTR-&pVCOMInfo->RXMSG[1];		// Don't need KISS Control Byte
 		
- 		if (pVCOMInfo->RXMSG[0] != 0)
+  		if (pVCOMInfo->RXMSG[0] != 0 && pVCOMInfo->RXMSG[0] != 12)
 		{
 			pVCOMInfo->MSGREADY=FALSE;
 			pVCOMInfo->RXMPTR=(UCHAR *)&pVCOMInfo->RXMSG;
@@ -290,7 +290,24 @@ static int GetRXMessage(int port,UCHAR * buff)
 		//	Remove KISS control byte
 		//
 
-		memcpy(&buff[7],&pVCOMInfo->RXMSG[1],len);
+		if (pVCOMInfo->RXMSG[0] == 12)
+		{
+			//	AckMode Frame. Return the next 2 bytes, but don't pass them to Host
+
+			UCHAR AckResp[8];
+
+			AckResp[0] = FEND;
+			memcpy(&AckResp[1], &pVCOMInfo->RXMSG[0], 3);	//Copy Opcode and Ack Bytes
+			AckResp[4] = FEND;
+			WriteCommBlock(port, AckResp, 5);
+
+			len -= 2;
+			memcpy(&buff[7],&pVCOMInfo->RXMSG[3],len);
+//			Debugprintf("VKISS Ackmode Frame");
+		}
+		else
+	
+			memcpy(&buff[7],&pVCOMInfo->RXMSG[1],len);
 
 		len+=7;
 		buff[5]=(len & 0xff);

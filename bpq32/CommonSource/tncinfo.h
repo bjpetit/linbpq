@@ -504,7 +504,8 @@ typedef struct TNCINFO
 	BOOL DontWantToChangeFreq;		// Change done - ok to  SCS
 	BOOL DontReleasePermission;		// Hold Permission to prevent calls on this frequency
 	int TimeEnteredSYNCMode;		// To detect scan lock when using applcalls on PTC
-//	int TimeScanLocked;				// ditto for TNCs that don't report SYNC
+	BOOL SyncSupported;				// TNC reports sync
+	int TimeScanLocked;				// ditto for TNCs that don't report SYNC
 	int PTCStatus;					// Sync, Idle, Traffic, etc
 	UCHAR NexttoPoll[20];			// Streams with data outstanding (from General Poll)
 	BOOL PollSent;					// Toggle to ensure we issue a general poll regularly

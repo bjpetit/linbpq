@@ -789,15 +789,17 @@ BOOL Start()
 			PORT->SerialPortName = _strdup(PortRec->SerialPortName);
 		else
 		{
-			char Name[80];
+			if (PORT->IOBASE > 0 && PORT->IOBASE < 256)
+			{
+				char Name[80];
 #ifdef LINBPQ
-			sprintf(Name, "com%d", PORT->IOBASE);
+				sprintf(Name, "com%d", PORT->IOBASE);
 #else
-			sprintf(Name, "COM%d", PORT->IOBASE);
-#endif
-			PORT->SerialPortName = _strdup(Name);
+				sprintf(Name, "COM%d", PORT->IOBASE);
+#endif	
+				PORT->SerialPortName = _strdup(Name);
+			}
 		}
-
 		PORT->INTLEVEL = (char)PortRec->INTLEVEL;
 		PORT->BAUDRATE = PortRec->SPEED;
 	
