@@ -245,7 +245,7 @@
 				>
 			</File>
 			<File
-				RelativePath="s:\DEV\Source\BPQ32\CKernel\aTnccode.asm"
+				RelativePath="..\CKernel\asmDOSAPI.asm"
 				>
 			</File>
 			<File
@@ -326,6 +326,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CKernel\DOSAPI.c"
+				>
+			</File>
+			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\FLDigi.c"
 				>
 			</File>
@@ -374,10 +378,6 @@
 				>
 			</File>
 			<File
-				RelativePath="C:\Users\johnw_000\Desktop\MSG00022.txt"
-				>
-			</File>
-			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MULTIPSK.c"
 				>
 			</File>
@@ -411,6 +411,10 @@
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\TNCEmulators.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\UIARQ.c"
 				>
 			</File>
 			<File

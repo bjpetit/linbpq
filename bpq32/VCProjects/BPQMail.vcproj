@@ -246,7 +246,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\BPQMailChat\BPQMail.c"
+				RelativePath="..\BPQMailChat\BPQMail.c"
 				>
 			</File>
 			<File
@@ -317,6 +317,8 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
+						AssemblerOutput="2"
+						AssemblerListingLocation="$(IntDir)\BBSListings\"
 						ObjectFile="$(IntDir)\$(InputName)1.obj"
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
@@ -517,6 +519,22 @@
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\BPQMailChat\BPQMail.rc"
 				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions="MAIL"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCResourceCompilerTool"
+						PreprocessorDefinitions="MAIL"
+					/>
+				</FileConfiguration>
 			</File>
 		</Filter>
 	</Files>
