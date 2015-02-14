@@ -690,6 +690,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add KISS over TCP
 //	Support ACKMode on VKISS
 //	Improved reporting of configuration file format errors
+//	Experimental driver to support ARQ sessions using UI frames
 
 #define CKernel
 
@@ -773,7 +774,7 @@ UINT V4ExtInit(EXTPORTDATA * PortEntry);
 UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
-UINT KISSARQExtInit(EXTPORTDATA * PortEntry);
+UINT UIARQExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
@@ -3163,8 +3164,8 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 	if (strstr(Value, "FLDIGI"))
 		return (UINT) FLDigiExtInit;
 
-	if (strstr(Value, "KISSARQ"))
-		return (UINT) KISSARQExtInit;
+	if (strstr(Value, "UIARQ"))
+		return (UINT) UIARQExtInit;
 
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;

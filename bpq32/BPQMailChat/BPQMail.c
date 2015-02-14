@@ -862,7 +862,8 @@
 //	Include MPS messages in count of messages to forward.
 //	Add new Welcome Message variable $F for messages to forward
 //	Fix setting Type in B2 header when usong NTS: or BULL: 
-
+//	Remove trailing spaces from BID when Creating Message from Clipboard.
+//	Improved handling of FBB B1/B2 Restarts.
 
 #include "BPQMailChat.h"
 #define MAIL
@@ -2114,6 +2115,7 @@ INT_PTR CALLBACK SendMsgDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			GetDlgItemText(hDlg, IDC_MSGTO, HDest, 60);
 
 			GetDlgItemText(hDlg, IDC_MSGBID, BID, 13);
+			strlop(BID, ' ');
 	
 			GetDlgItemText(hDlg, IDC_ATTACHMENTS, FileList, 32767);
 

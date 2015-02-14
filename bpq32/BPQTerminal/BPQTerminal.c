@@ -70,7 +70,8 @@
 //	Version 2.2.2.1 Nov 2014
 //		Fix possible crash on processing part line
 
-//	Dev 2014
+
+//	Version 2.2.3.1	Dec 2014
 //		Remove "Enable Chat" option
 
 

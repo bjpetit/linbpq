@@ -125,7 +125,6 @@ BEGIN
         MENUITEM "Log Monitor",                 BPQLogMonitor
         MENUITEM "Log Output",                  BPQLogOutput
         MENUITEM "Send Disconnected",           BPQSendDisconnected
-        MENUITEM "Chat Terminal Mode",          CHATTERM
     END
     POPUP "Edit"
     BEGIN

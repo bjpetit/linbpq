@@ -77,6 +77,7 @@
 
 //	Version 1.0.11.1 Feb 2015
 //	Add "Alert after interval" feature
+//	Fix "Copy to Clipboard"
 
 #define _USE_32BIT_TIME_T
 
@@ -2371,7 +2372,7 @@ void CopyRichTextToClipboard(HWND hWnd)
 
 			GlobalUnlock(hMem);
 			EmptyClipboard();
-			SetClipboardData(CF_TEXT,hMem);
+			SetClipboardData(CF_UNICODETEXT,hMem);
 			CloseClipboard();
 		}
 	}
@@ -2409,7 +2410,9 @@ void CopyListToClipboard(HWND hWnd)
 			
 			for (i=0; i<n; i++)
 			{
-				ptr+=SendMessage(hWnd, LB_GETTEXT, i, (LPARAM) ptr);
+				len=SendMessage(hWnd, LB_GETTEXT, i, (LPARAM) ptr);
+				ptr += len;
+				ptr += len;		// 2 bytes per char
 				*(ptr++)=13;
 				*(ptr++)=0;
 				*(ptr++)=10;
