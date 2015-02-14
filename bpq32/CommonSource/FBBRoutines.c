@@ -1057,6 +1057,10 @@ loop:
 			BBSputs(conn, "*** Message Checksum Error\r");
 			Flush(conn);
 			conn->CloseAfterFlush = 20;			// 2 Secs
+	
+			//	Don't allow restart, as saved data is probably duff
+
+			conn->DontSaveRestartData = TRUE;
 			return;
 		}
 		ptr += 2;
@@ -1073,6 +1077,9 @@ loop:
 		Flush(conn);
 		conn->CloseAfterFlush = 20;			// 2 Secs
 
+		//	Don't allow restart, as saved data is probably duff
+
+		conn->DontSaveRestartData = TRUE;
 		return;
 	}
 }
@@ -1617,8 +1624,8 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 	// Disconnected during binary transfer
 
 	char Msg[120];
-	int len;
-	struct FBBRestartData * RestartRec = zalloc(sizeof (struct FBBRestartData));
+	int i, len;
+	struct FBBRestartData * RestartRec = NULL;
 
 	if (conn->TempMsg == NULL)
 		return;
@@ -1630,13 +1637,38 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 
 //	if (conn->InputLen < 2)
 //		return;							//  All formats need at least two bytes
-	
-	GetSemaphore(&AllocSemaphore);
 
-	RestartData=realloc(RestartData,(++RestartCount+1)*4);
-	RestartData[RestartCount] = RestartRec;
+	// If we already have a restart record, reuse it
 
-	FreeSemaphore(&AllocSemaphore);
+	for (i = 1; i <= RestartCount; i++)
+	{
+		RestartRec = RestartData[i];
+		
+		if ((RestartRec->UserPointer == conn->UserPointer)
+			&& (strcmp(RestartRec->TempMsg->bid, conn->TempMsg->bid) == 0))
+		{
+			// Fund it, so seuse
+
+			//	If we have more data, reset retry count
+
+			if (RestartRec->TempMsg->length < conn->TempMsg->length)
+				RestartRec->Count = 0;;
+
+			break;
+		}
+	}
+
+	if (RestartRec == NULL)
+	{
+		RestartRec = zalloc(sizeof (struct FBBRestartData));
+
+		GetSemaphore(&AllocSemaphore);
+
+		RestartData=realloc(RestartData,(++RestartCount+1)*4);
+		RestartData[RestartCount] = RestartRec;
+
+		FreeSemaphore(&AllocSemaphore);
+	}
 
 	RestartRec->UserPointer = conn->UserPointer;
 	RestartRec->TempMsg = conn->TempMsg;
@@ -1670,7 +1702,7 @@ BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 
 			RestartRec->Count++;
 
-			if (RestartRec->Count > 1)
+			if (RestartRec->Count > 3)
 			{
 				len = sprintf_s(Msg, sizeof(Msg), "Too many restarts for %s - Requesting restart from beginning",
 					FBBHeader->BID);

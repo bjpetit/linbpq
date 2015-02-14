@@ -7011,6 +7011,7 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 			if (conn->UserPointer->ForwardingInfo->AllowCompressed)
 			{
 				conn->BBSFlags |= FBBCompressed;
+				conn->DontSaveRestartData = FALSE;		// Alow restarts
 
 //				if (conn->UserPointer->ForwardingInfo->AllowB1) // !!!!! Testing !!!!
 //					conn->BBSFlags |= FBBB1Mode;
@@ -8179,7 +8180,8 @@ int Disconnected (Stream)
 				if (conn->BBSFlags & FBBB1Mode)
 					if (conn->Paclink == 0)			// Paclink doesn't do restarts
 						if (strcmp(conn->Callsign, "RMS") != 0)	// Neither does RMS Packet.
-							SaveFBBBinary(conn);		
+							if (conn->DontSaveRestartData == FALSE)
+								SaveFBBBinary(conn);		
 			}
 
 			conn->Active = FALSE;

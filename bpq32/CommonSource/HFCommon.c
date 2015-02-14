@@ -341,7 +341,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 	RegisterClass(&wc);
 
 	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||
-			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_KISSARQ)
+			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ)
 		sprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
 	else if (TNC->Hardware == H_UZ7HO)
 		sprintf(Title, "Rigcontrol for UZ7HO Port %d", TNC->Port);

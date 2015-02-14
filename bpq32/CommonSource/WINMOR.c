@@ -1291,8 +1291,11 @@ UINT WinmorExtInit(EXTPORTDATA * PortEntry)
 	strcat(TNC->InitScript, Aux);
 	strcat(TNC->InitScript,"\r\nMYAUX\r\n");
 
-
 	strcpy(TNC->CurrentMYC, TNC->NodeCall);
+
+	if (TNC->WL2K == NULL)
+		if (PortEntry->PORTCONTROL.WL2KInfo.RMSCall[0])			// Alrerady decoded
+			TNC->WL2K = &PortEntry->PORTCONTROL.WL2KInfo;
 
 	if (TNC->destaddr.sin_family == 0)
 	{

@@ -232,6 +232,7 @@ typedef struct ConnectionInfo_S
 	int FBBIndex;						// current propopsal number
 	int RestartFrom;					// Restart position
 	BOOL NeedRestartHeader;				// Set if waiting for 6 byte restart header
+	BOOL DontSaveRestartData;			// Set if corrupt data received
 	BOOL FBBMsgsSent;					// Messages need to be maked as complete when next command received
 	UCHAR FBBChecksum;					// Header Checksum
 	BOOL LocalMsg;						// Set if current Send command is for a local user
