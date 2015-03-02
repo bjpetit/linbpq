@@ -797,21 +797,27 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 
 	//	"NTS" Alias substitution is now done on P and T before any other processing
 
-	strlop(RouteElements, '.');
+	//	No, Not a good idea to use same aliss file for NTS and other messages
+	//	(What about OT 2*?)
+	//	If we need to alias other types, add a new file
 
-	Alias = CheckForNTSAlias(Msg, RouteElements);
-
-	if (Alias)
+	if (Msg->type == 'T')
 	{
-		// Replace the AT in the message with the Alias
+		strlop(RouteElements, '.');
 
-		Logprintf(LOG_BBS, conn, '?', "Routing Trace @%s taken from Alias File", Alias->Alias);
-		strcpy(Msg->via, Alias->Alias);
-		SaveMessageDatabase();
+		Alias = CheckForNTSAlias(Msg, RouteElements);
+
+		if (Alias)
+		{
+			// Replace the AT in the message with the Alias
+
+			Logprintf(LOG_BBS, conn, '?', "Routing Trace @%s taken from Alias File", Alias->Alias);
+			strcpy(Msg->via, Alias->Alias);
+			SaveMessageDatabase();
+		}
+
+		strcpy(RouteElements, Msg->via);		// May have changed
 	}
-
-	strcpy(RouteElements, Msg->via);		// May have changed
-
 
 //	See if sending @ winlink.org
 

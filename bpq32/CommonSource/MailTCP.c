@@ -63,7 +63,7 @@ int ISPPOP3Port;
 
 char ISPAccountName[50];
 char ISPAccountPass[50];
-char EncryptedISPAccountPass[50];
+char EncryptedISPAccountPass[100];
 int EncryptedPassLen;
 
 BOOL SMTPAuthNeeded;

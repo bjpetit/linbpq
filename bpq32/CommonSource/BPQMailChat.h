@@ -812,7 +812,7 @@ VOID Send_MON_Datagram(UCHAR * Msg, DWORD Len);
 #define ConnectUsingAppl(stream, appl) SessionControl(stream, 0, appl)
 
 int EncryptPass(char * Pass, char * Encrypt);
-VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
+VOID DecryptPass(char * Encrypt, unsigned char * Pass, unsigned int len);
 
 // TCP Connections. FOr the moment SMTP or POP3
 

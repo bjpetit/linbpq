@@ -140,6 +140,7 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD);
 
@@ -3698,6 +3699,7 @@ CMDX COMMANDS[] =
 	"AXMHEARD    ",3,AXMHEARD,0,
 	"TELSTATUS   ",3,SHOWTELNET,0,
 	"NRR         ",1,NRRCMD,0,
+	"PING        ",2,PING,0,
 	"AGWSTATUS   ",3,SHOWAGW,0,
 	"ARP         ",3,SHOWARP,0,
 	"IPROUTE     ",3,SHOWIPROUTE,0,

@@ -135,11 +135,11 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
 
 char * ConfigBuffer;
 
-char * PortConfig[35];
-char * RigConfigMsg[35];
-char * WL2KReportLine[35];
+char * PortConfig[36];
+char * RigConfigMsg[36];
+char * WL2KReportLine[36];
 
-BOOL PortDefined[35];
+BOOL PortDefined[36];
 
 extern BOOL IncludesMail;
 extern BOOL IncludesChat;
@@ -708,6 +708,41 @@ char rec[];
 		}
 
 		Consoleprintf("Missing **** for IPGateway Config %d", portnum);
+		heading = 1;
+
+		return 0;
+	}
+
+	if (_memicmp(rec, "PORTMAPPER", 10) == 0)	
+	{
+		// Create Embedded ortmapper Config
+
+		// Copy all subsequent lines up to **** to a memory buffer
+
+		char * ptr;
+		struct CONFIGTABLE * cfg = (struct CONFIGTABLE *)ConfigBuffer;
+		
+		PortConfig[35] = ptr = malloc(50000);
+
+		*ptr = 0;
+
+		GetNextLine(rec);
+
+		while (!feof(fp1))
+		{
+			if (_memicmp(rec, "****", 3) == 0)
+			{
+				PortConfig[34] = realloc(PortConfig[34], (strlen(ptr) + 1));
+				cfg->C_PM = 1;
+				return 0;
+			}
+
+			strcat(ptr, rec);
+			strcat(ptr, "\r\n");
+			GetNextLine(rec);
+		}
+
+		Consoleprintf("Missing **** for Portmapper Config %d", portnum);
 		heading = 1;
 
 		return 0;
@@ -2764,6 +2799,7 @@ int simple(int i)
 	Cfg.C_IDINTERVAL = 10;
 	Cfg.C_IDLETIME = 900;
 	Cfg.C_IP = 0;
+	Cfg.C_PM = 0;
 	Cfg.C_L3TIMETOLIVE = 25;
 	Cfg.C_L4DELAY = 10;
 	Cfg.C_L4RETRIES = 3;

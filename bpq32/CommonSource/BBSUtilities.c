@@ -37,6 +37,9 @@ BOOL CloseWindowOnBye;
 
 RECT ConsoleRect;
 
+BOOL OpenConsole;
+BOOL OpenMon;
+
 //#define BBSIDLETIME 120
 //#define USERIDLETIME 300
 
@@ -52,7 +55,7 @@ int APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
 void GetSemaphore(struct SEM * Semaphore);
 void FreeSemaphore(struct SEM * Semaphore);
 int EncryptPass(char * Pass, char * Encrypt);
-VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
+VOID DecryptPass(char * Encrypt, unsigned char * Pass, unsigned int len);
 void DeletetoRecycle(char * FN);
 VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
 VOID DoExportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Context);
@@ -7198,12 +7201,12 @@ struct MsgInfo * FindMessageByNumber(int msgno)
 	return NULL;
 }
 
-VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len)
+VOID DecryptPass(char * Encrypt, unsigned char * Pass, unsigned int len)
 {
-	char hash[50];
-	char key[100];
-	unsigned int i;
-	char hostname[100]="";
+	unsigned char hash[50];
+	unsigned char key[100];
+	unsigned int i, j = 0, val1, val2;
+	unsigned char hostname[100]="";
 
 	gethostname(hostname, 100);
 
@@ -7212,6 +7215,37 @@ VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len)
 
 	md5(key, hash);
 	memcpy(&hash[16], hash, 16);	// in case very long password
+
+	// String is now encoded as hex pairs, but still need to decode old format
+
+	for (i=0; i < len; i++)
+	{
+		if (Encrypt[i] < '0' || Encrypt[i] > 'F')
+			goto OldFormat;
+	}
+
+	// Only '0' to 'F'
+
+	for (i=0; i < len; i++)
+	{
+		val1 = Encrypt[i++];
+		val1 -= '0';
+		if (val1 > 9)
+			val1 -= 7;
+
+		val2 = Encrypt[i];
+		val2 -= '0';
+		if (val2 > 9)
+			val2 -= 7;
+
+		Pass[j] =  (val1 << 4) | val2;
+		Pass[j] ^= hash[j];
+		j++;
+	}
+
+	return;
+
+OldFormat:
 
 	for (i=0; i < len; i++)
 	{
@@ -7223,12 +7257,13 @@ VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len)
 
 int EncryptPass(char * Pass, char * Encrypt)
 {
-	char hash[50];
-	char key[100];
-	unsigned int i;
-	char hostname[100];
-	char extendedpass[100];
+	unsigned char hash[50];
+	unsigned char key[100];
+	unsigned int i, val;
+	unsigned char hostname[100];
+	unsigned char extendedpass[100];
 	unsigned int passlen;
+	unsigned char * ptr;
 
 	gethostname(hostname, 100);
 
@@ -7254,12 +7289,16 @@ int EncryptPass(char * Pass, char * Encrypt)
 		passlen = 16;
 	}
 
+	ptr = Encrypt;
+	Encrypt[0] = 0;
+
 	for (i=0; i < passlen; i++)
 	{
-		Encrypt[i] = extendedpass[i] ^ hash[i];
+		val = extendedpass[i] ^ hash[i];
+		ptr += sprintf(ptr, "%02X", val);
 	}
 
-	return passlen;
+	return passlen * 2;
 }
 
 
@@ -7412,7 +7451,7 @@ VOID SaveConfig(char * ConfigName)
 		SaveStringValue(group, "ConsoleSize", Size);
 	}
 	
-	sprintf(Size,"%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom);
+	sprintf(Size,"%d,%d,%d,%d,%d",MonitorRect.left,MonitorRect.right,MonitorRect.top,MonitorRect.bottom, hMonitor ? 1 : 0);
 	SaveStringValue(group, "MonitorSize", Size);
 
 	sprintf(Size,"%d,%d,%d,%d",MainRect.left,MainRect.right,MainRect.top,MainRect.bottom);
@@ -7710,7 +7749,7 @@ BOOL GetConfig(char * ConfigName)
 #ifndef LINBPQ
 
 	GetStringValue(group, "MonitorSize", Size);
-	sscanf(Size,"%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom);
+	sscanf(Size,"%d,%d,%d,%d,%d",&MonitorRect.left,&MonitorRect.right,&MonitorRect.top,&MonitorRect.bottom,&OpenMon);
 	
 	GetStringValue(group, "WindowSize", Size);
 	sscanf(Size,"%d,%d,%d,%d",&MainRect.left,&MainRect.right,&MainRect.top,&MainRect.bottom);
@@ -7727,7 +7766,7 @@ BOOL GetConfig(char * ConfigName)
 	
 	GetStringValue(group, "ConsoleSize", Size);
 	sscanf(Size,"%d,%d,%d,%d", &ConsoleRect.left, &ConsoleRect.right,
-			&ConsoleRect.top, &ConsoleRect.bottom);
+			&ConsoleRect.top, &ConsoleRect.bottom,&OpenConsole);
 
 #endif
 

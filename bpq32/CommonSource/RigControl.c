@@ -1426,9 +1426,6 @@ void CheckRX(struct RIGPORTINFO * PORT)
 
 		// Only response should be a 16 byte info frame
 
-		if (RIG_DEBUG)
-			Debugprintf("FT100 Received %d", Length);
-
 		if (Length < 32)		// Frame Sise  why???????
 			return;
 
@@ -1466,10 +1463,6 @@ void CheckRX(struct RIGPORTINFO * PORT)
 		// Only response should be a 16 byte info frame
 	
 		ptr = PORT->RXBuffer;
-
-		if (RIG_DEBUG)
-			Debugprintf("FT1000 Received %d %02x %02x %02x %02x" ,
-			Length, ptr[1], ptr[2], ptr[3], ptr[4]);
 
 		if (Length < 16)			// Frame Sise
 			return;
@@ -2205,7 +2198,8 @@ VOID ProcessFT100Frame(struct RIGPORTINFO * PORT)
 	if (!PORT->AutoPoll)
 		SendResponse(RIG->Session, "Mode and Frequency Set OK");
 	else
-		ReleasePermission(RIG);		// Release Perrmission to change
+		if (PORT->TXLen > 5)		// Poll is 5 Change is more
+			ReleasePermission(RIG);		// Release Perrmission to change
 }
 
 
@@ -2245,7 +2239,8 @@ VOID ProcessFT990Frame(struct RIGPORTINFO * PORT)
 	if (!PORT->AutoPoll)
 		SendResponse(RIG->Session, "Mode and Frequency Set OK");
 	else
-		ReleasePermission(RIG);		// Release Perrmission to change
+		if (PORT->TXLen > 5)		// Poll is 5 change is more
+			ReleasePermission(RIG);		// Release Perrmission to change
 }
 
 VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT)
@@ -2302,7 +2297,8 @@ VOID ProcessFT1000Frame(struct RIGPORTINFO * PORT)
 	if (!PORT->AutoPoll)
 		SendResponse(RIG->Session, "Mode and Frequency Set OK");
 	else
-		ReleasePermission(RIG);		// Release Perrmission to change
+		if (PORT->TXLen > 5)		// Poll is 5 change is more
+			ReleasePermission(RIG);		// Release Perrmission to change
 }
 
 

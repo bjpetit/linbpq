@@ -58,7 +58,7 @@ VOID SaveIntValue(struct config_setting_t * group, char * name, int value);
 VOID SaveStringValue(struct config_setting_t * group, char * name, char * value);
 
 int EncryptPass(char * Pass, char * Encrypt);
-VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
+VOID DecryptPass(char * Encrypt, unsigned char * Pass, unsigned int len);
 Dll VOID APIENTRY CreateOneTimePassword(char * Password, char * KeyPhrase, int TimeOffset);
 Dll BOOL APIENTRY CheckOneTimePassword(char * Password, char * KeyPhrase);
 

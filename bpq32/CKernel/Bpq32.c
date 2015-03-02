@@ -672,7 +672,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add IGNOREUNLOCKEDROUTES parameter
 //	Fix error if too many Telnet server connections
 
-//  Version 6.0.10.1
+//  Version 6.0.10.1 Feb 2015
 
 //	Fix crash if corrupt HTML request received.
 //	Allow SSID's of 'R' and 'T' on non-ax.25 ports for WL2K Radio Only network.
@@ -691,6 +691,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Support ACKMode on VKISS
 //	Improved reporting of configuration file format errors
 //	Experimental driver to support ARQ sessions using UI frames
+
+//  Version 6.0.11.1
+
+//	Fixes for IPGateway configuration and Virtual Circuit Mode
+//	Separate Portmapper from IPGateway
+//	Add PING Command
 
 #define CKernel
 
@@ -898,6 +904,9 @@ DllExport int APIENTRY SessionControl(int stream, int command, int param);
 BOOL APIENTRY Init_IP();
 BOOL APIENTRY Poll_IP();
 
+BOOL APIENTRY Init_PM();
+BOOL APIENTRY Poll_PM();
+
 BOOL APIENTRY Init_APRS();
 BOOL APIENTRY Poll_APRS();
 VOID HTTPTimer();
@@ -1096,6 +1105,8 @@ DllExport BOOL APIENTRY SaveReg(char * KeyIn, HANDLE hFile);
 
 BOOL IPActive = FALSE;
 extern BOOL IPRequired;
+BOOL PMActive = FALSE;
+extern BOOL PMRequired;
 BOOL RigRequired = TRUE;
 BOOL RigActive = FALSE;
 BOOL APRSActive = FALSE;
@@ -1469,6 +1480,7 @@ VOID CALLBACK TimerProc
 			}
 
 			IPClose();
+			PMClose();
 			APRSClose();
 			Rig_Close();
 			CloseTNCEmulator();
@@ -1519,6 +1531,7 @@ VOID CALLBACK TimerProc
 			WritetoConsole("\n\nReconfiguration Complete\n");
 
 			if (IPRequired)	IPActive = Init_IP();
+			if (PMRequired)	PMActive = Init_PM();
 
 			APRSActive = Init_APRS();
 
@@ -1598,6 +1611,7 @@ VOID CALLBACK TimerProc
 	__try 
 	{
 		if (IPActive) Poll_IP();
+		if (PMActive) Poll_PM();
 		if (RigActive) Rig_Poll();
 		if (APRSActive) Poll_APRS();
 
@@ -1683,7 +1697,8 @@ FirstInit()
  	WritetoConsole("Port Initialisation Complete\n");
 
 	if (IPRequired)	IPActive = Init_IP();
-	
+	if (PMRequired)	PMActive = Init_PM();
+
 	APRSActive = Init_APRS();
 
 	if (APRSActive)
@@ -1847,6 +1862,7 @@ Check_Timer()
 //					PIPE_ACCESS_DUPLEX,0,64,4096,4096,1000,NULL);
 
 		if (IPRequired)	IPActive = Init_IP();
+		if (PMRequired)	PMActive = Init_PM();
 
 		RigActive = Rig_Init();	
 		APRSActive = Init_APRS();
@@ -2308,6 +2324,7 @@ SkipInit:
 
 
 			IPClose();
+			PMClose();
 			APRSClose();
 			Rig_Close();
 			CloseTNCEmulator();
@@ -2418,6 +2435,7 @@ DllExport int APIENTRY CloseBPQ32()
 		TimerInst=0xffffffff;
 
 		IPClose();
+		PMClose();
 		APRSClose();
 		Rig_Close();
 		if (AGWActive)	
@@ -3823,6 +3841,14 @@ int SetupConsoleWindow()
 			StatusRect.bottom = 500;
 		}
 
+		if (StatusRect.top < OffsetH)			// Make sure not off top of MDI frame
+		{
+			int Error = OffsetH - StatusRect.top;
+			StatusRect.top += Error;
+			StatusRect.bottom += Error;
+		}
+
+
 		// Get StartMinimized and MinimizetoTray flags
 
 		Vallen = 4;
@@ -3997,6 +4023,14 @@ int SetupConsoleWindow()
 		GetWindowRect(hConsWnd, &Rect);
 	}
 
+	if (Rect.top < OffsetH)			// Make sure not off top of MDI frame
+	{
+		int Error = OffsetH - Rect.top;
+		Rect.top += Error;
+		Rect.bottom += Error;
+	}
+
+
 	MoveWindow(hConsWnd, Rect.left - (OffsetW /2), Rect.top - OffsetH, Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
 	MoveWindow(StatusWnd, StatusRect.left - (OffsetW /2), StatusRect.top - OffsetH,
@@ -4035,6 +4069,8 @@ int SetupConsoleWindow()
 			ShowWindow(FrameWnd, SW_SHOWMINIMIZED);	
 	else
 		ShowWindow(FrameWnd, SW_RESTORE);
+	
+	CreateMonitorWindow(Size);
 
 	return 0;
 }
@@ -4949,7 +4985,7 @@ BOOL CALLBACK EnumForCloseProc(HWND hwnd, LPARAM  lParam)
 		if (AttachedPIDList[i] == ProcessId)
 		{
 			Debugprintf("BPQ32 Close All Closing PID %d", ProcessId);
-			PostMessage(hwnd, WM_CLOSE, 0, 0);
+			PostMessage(hwnd, WM_CLOSE, 1, 1);
 	//		AttachedPIDList[i] = 0;				// So we don't do it again
 			break;
 		}

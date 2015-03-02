@@ -677,7 +677,7 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 		SetAppl(Stream2, 2, APPLMASK);
 	}
 
-	CreateMonitorWindow(Size);
+//	CreateMonitorWindow(Size);
 
 	if (RestoreWindows)
 	{
@@ -4584,6 +4584,12 @@ struct ConsoleInfo * CreateChildWindow(int Stream, BOOL DuringInit)
 		Rect.bottom = 400;
 	}
 
+	if (Rect.top < OffsetH)			// Make sure not off top of MDI frame
+	{
+		int Error = OffsetH - Rect.top;
+		Rect.top += Error;
+		Rect.bottom += Error;
+	}
 
 	MoveWindow(Cinfo->hConsole, Rect.left - (OffsetW /2), Rect.top - OffsetH,
 		Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);

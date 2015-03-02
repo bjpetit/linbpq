@@ -146,13 +146,19 @@ static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARA
 	int wmId, wmEvent;
 	LPRECT lprc;
 	
-	switch (message) { 
+	switch (message)
+	{ 
+	
+	case WM_ACTIVATE:
 
-		case WM_ACTIVATE:
+		SetFocus(hwndInput);
+		break;
 
-			SetFocus(hwndInput);
-			break;
-
+	case WM_CLOSE:
+		if (wParam)				// Used by Close All Programs.
+			return 0;
+			
+		return (DefWindowProc(hWnd, message, wParam, lParam));
 
 	case WM_COMMAND:
 

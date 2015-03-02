@@ -39,6 +39,7 @@ int MaxHops = 4;
 int RTTInterval = 24;			// 4 Minutes
 
 BOOL IPRequired = FALSE;
+BOOL PMRequired = FALSE;
 
 char HFCTEXT[81] = "";
 int HFCTEXTLEN = 0;

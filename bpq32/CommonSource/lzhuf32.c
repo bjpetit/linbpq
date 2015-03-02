@@ -1467,13 +1467,17 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				conn->TempMsg->length += ToLen;
 
-				strcpy(Msg->to, "RMS");
-				strcpy(Msg->via, "winlink.org");
-				Msg->type = Type[i];
-	
-				if (Recipients > 1)			// Must Change the BID
-					Msg->bid[0] = 0;
 
+				if (Recipients > 1)
+				{
+					strcpy(Msg->via, "winlink.org");
+					strcpy(Msg->to, "RMS");
+					Msg->bid[0] = 0;		// Must Change the BID
+				}
+				
+				// Don't change type, as we don't change the B2 Header for messages to RMS
+				//Msg->type = Type[0];
+	
 				CreateMessageFromBuffer(conn);
 			}
 

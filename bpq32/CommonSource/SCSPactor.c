@@ -884,7 +884,7 @@ UINT SCSExtInit(EXTPORTDATA *  PortEntry)
 
 	TNC->xIDC_PACTORLEVEL = CreateWindowEx(0, "STATIC", "Mode", WS_CHILD | WS_VISIBLE,10,160,430,20, TNC->hDlg, NULL, hInstance, NULL);
 
-	TNC->ClientHeight = 235;
+	TNC->ClientHeight = 240;
 	TNC->ClientWidth = 500;
 	
 	MoveWindows(TNC);

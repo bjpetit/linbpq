@@ -53,7 +53,8 @@ struct CONFIGTABLE
 	UCHAR C_IP;					//  112 IP Enabled
 	UCHAR C_MAXRTT;				// 113
 	UCHAR C_MAXHOPS;			// 114
-	UCHAR Spare[3];				// 115 NOW SPARE
+	UCHAR C_PM;					// 115 Poermapper Enabled
+	UCHAR Spare[2];				// 116 NOW SPARE
 	short C_BBSQUAL;			// 118
 	UCHAR C_WASUNPROTO;
 	UCHAR C_BTEXT[120];			// 121

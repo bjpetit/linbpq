@@ -632,7 +632,9 @@ char * DISPLAY_NETROM(MESSAGE * ADJBUFFER, UCHAR * Output, int MsgLen)
 
 		if (Index == 0x0c && ID == 0x0c)	// IP	
 		{
-//			Output =  L3IP(Output);
+			*(Output++) = 13;
+			*(Output++) = ' ';
+			Output = DISPLAYIPDATAGRAM((IPMSG *)ptr, Output, MsgLen);
 			return Output;
 		}
 	

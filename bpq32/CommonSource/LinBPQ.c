@@ -139,7 +139,7 @@ int _MYTIMEZONE = 0;
 UCHAR BPQDirectory[260];
 
 BOOL GetConfig(char * ConfigName);
-VOID DecryptPass(char * Encrypt, char * Pass, unsigned int len);
+VOID DecryptPass(char * Encrypt, unsigned char * Pass, unsigned int len);
 int EncryptPass(char * Pass, char * Encrypt);
 int APIENTRY FindFreeStream();
 int PollStreams();

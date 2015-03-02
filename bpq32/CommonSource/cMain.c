@@ -229,6 +229,7 @@ UCHAR DATAAREA[DATABYTES] = "";
 UINT * Bufferlist[1000] = {0};
 
 extern BOOL IPRequired;
+extern BOOL PMRequired;
 extern int MaxHops;
 extern int MAXRTT;
 extern USHORT CWTABLE[];
@@ -587,6 +588,7 @@ BOOL Start()
 	CFLAG = cfg->C_C;
 
 	IPRequired = cfg->C_IP;
+	PMRequired = cfg->C_PM;
 	
 	if (cfg->C_MAXHOPS)
 		MaxHops = cfg->C_MAXHOPS;

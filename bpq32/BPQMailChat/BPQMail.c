@@ -854,7 +854,8 @@
 //	Fix possible retry loop when message is deferred (FBB '=' response);
 //	Don't remove Attachments from received bulls.
 
-//63
+//63 Feb 2015
+
 //	Fix creating Bulls from RMS Express messages.
 //	Fix PE if message with no To: received.
 //	Fix setting "RMS Express User" flag on new connects from RMS Express 
@@ -864,6 +865,15 @@
 //	Fix setting Type in B2 header when usong NTS: or BULL: 
 //	Remove trailing spaces from BID when Creating Message from Clipboard.
 //	Improved handling of FBB B1/B2 Restarts.
+
+//64
+
+//	Fix Message Type in msgs from RMS Express to Internet
+//	Reopen Monitor window if open when program list closed
+//	Only apply NTS alias file to NTS Messages
+//	Fix failure to store some encrypted ISP passwords
+//	Allow EDITUSER to change "RMS Express User" flag
+
 
 #include "BPQMailChat.h"
 #define MAIL
@@ -1027,6 +1037,8 @@ char MailDir[MAX_PATH];
 char RlineVer[50];
 
 extern BOOL KISSOnly;
+
+extern BOOL OpenMon;
 
 extern struct ALIAS ** NTSAliases;
 
@@ -1363,7 +1375,10 @@ int APIENTRY WinMain(HINSTANCE hInstance,
 	if (ConsHeader[1]->hConsole)
 		DestroyWindow(ConsHeader[1]->hConsole);
 	if (hMonitor)
+	{
 		DestroyWindow(hMonitor);
+		hMonitor = (HWND)1;					// For status Save
+	}
 
 	SaveConfig(ConfigName);
 
@@ -2753,6 +2768,8 @@ BOOL Initialise()
 
 	MoveWindow(MainWnd, MainRect.left, MainRect.top, MainRect.right-MainRect.left, MainRect.bottom-MainRect.top, TRUE);
 
+	if (OpenMon)
+		CreateMonitor();
 
 	BBSApplMask = 1<<(BBSApplNum-1);
 

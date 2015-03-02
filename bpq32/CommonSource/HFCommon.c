@@ -379,6 +379,13 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 				Rect.right = 600;
 				Rect.bottom = 400;
 			}
+
+			if (Rect.top < OffsetH)
+			{
+				int Error = OffsetH - Rect.top;
+				Rect.top += Error;
+				Rect.bottom += Error;
+			}
 		}
 
 		if (TNC->Hardware == H_WINMOR)	

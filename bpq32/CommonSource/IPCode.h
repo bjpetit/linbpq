@@ -121,7 +121,7 @@ typedef struct _ARPDATA
 	UCHAR	ARPTYPE;				// NETROM/VC/DG/ETH
 	BOOL	LOCKED;					// Locked entry from config file
 	struct _MESSAGE * ARP_Q;		// CHAIN OF DATAGRAMS WAITING FOR RESOLUTION
-	struct _ROUTEENTRY * ARPROUTE;	//	ROute Entry for this ARP entry
+	struct _ROUTEENTRY * ARPROUTE;	// Route Entry for this ARP entry
 
 } ARPDATA, *PARPDATA;
 
@@ -180,7 +180,7 @@ struct ipv6_header
     struct in6_addr dst;
 };
 
-HANDLE hInstance;
+static HANDLE hInstance;
 
 //unsigned long _beginthread( void( *start_address )( void *), unsigned stack_size, char * arglist);
 
@@ -194,7 +194,7 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port);
 BOOL CheckIPChecksum(PIPMSG IPptr);
 VOID ProcessICMPMsg(PIPMSG IPptr);
 VOID ProcessSNMPMessage(PIPMSG IPptr);
-VOID RouteIPMsg(PIPMSG IPptr);
+BOOL RouteIPMsg(PIPMSG IPptr);
 VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR);
 VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode);
 PARPDATA AllocARPEntry();

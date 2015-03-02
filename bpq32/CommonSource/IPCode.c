@@ -138,36 +138,6 @@ int FramesDropped = 0;
 int ARPTimeouts = 0;
 int SecTimer = 10;
 
-BOOL NeedResolver = FALSE;
-
-static HMENU hMenu;
-extern HMENU hWndMenu;
-static HMENU hPopMenu;
-
-extern HKEY REGTREE;
-
-extern int OffsetH, OffsetW;
-
-extern HMENU hMainFrameMenu, hBaseMenu;
-extern HWND ClientWnd, FrameWnd;
-
-int map_table_len = 0;
-//int index=0;					// pointer for table search
-int ResolveIndex=-1;			// pointer to entry being resolved
-
-struct map_table_entry map_table[MAX_ENTRIES];
-
-int Windowlength, WindowParam;
-
-
-time_t ltime,lasttime;
-
-char ConfigClassName[]="CONFIG";
-
-HWND hIPResWnd = 0;
-
-BOOL IPMinimized;
-
 extern char * PortConfig[];
 
 int baseline=0;
@@ -256,8 +226,6 @@ FARPROCX GetAddress(char * Proc);
 #endif
 VOID __cdecl Debugprintf(const char * format, ...);
 
-HANDLE hInstance;
-
 int CompareRoutes (const VOID * a, const VOID * b)
 {
 	PROUTEENTRY x;
@@ -319,20 +287,6 @@ void OpenTAP();
 Dll BOOL APIENTRY Init_IP()
 {
 	ARPDATA * ARPptr;
-
-#ifndef LINBPQ
-
-	if (hIPResWnd)
-	{
-		PostMessage(hIPResWnd, WM_CLOSE,0,0);
-//		DestroyWindow(hIPResWnd);
-
-		Debugprintf("IP Init Destroying IP Resolver");
-	}
-	
-	hIPResWnd= NULL;
-
-#endif
 
 	if (BPQDirectory[0] == 0)
 	{
@@ -433,84 +387,6 @@ Dll BOOL APIENTRY Init_IP()
 
 	ReadARP();
 
-#ifndef LINBPQ
-
-	if (NeedResolver)
-	{
-		WNDCLASS  wc;
-		int i;
-		char WindowTitle[100];
-		int retCode, Type, Vallen;
-		HKEY hKey;
-		char Size[80];
-		RECT Rect = {0,0,0,0};
-
-		retCode = RegOpenKeyEx (REGTREE, "SOFTWARE\\G8BPQ\\BPQ32", 0, KEY_QUERY_VALUE, &hKey);
-
-		if (retCode == ERROR_SUCCESS)
-		{
-			Vallen=80;
-
-			retCode = RegQueryValueEx(hKey,"IPResSize",0,			
-				(ULONG *)&Type,(UCHAR *)&Size,(ULONG *)&Vallen);
-
-			if (retCode == ERROR_SUCCESS)
-				sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left,&Rect.right,&Rect.top,&Rect.bottom, &IPMinimized);
-
-			if (Rect.top < - 500 || Rect.left < - 500)
-			{
-				Rect.left = 0;
-				Rect.top = 0;
-				Rect.right = 600;
-				Rect.bottom = 400;
-			}
-
-			RegCloseKey(hKey);
-		}
-
-		// Fill in window class structure with parameters that describe
-		// the main window.
-
-        wc.style         = CS_HREDRAW | CS_VREDRAW | CS_NOCLOSE;
-        wc.lpfnWndProc   = (WNDPROC)ResWndProc;
-        wc.cbClsExtra    = 0;
-        wc.cbWndExtra    = 0;
-        wc.hInstance     = hInstance;
-        wc.hIcon         = LoadIcon (hInstance, MAKEINTRESOURCE(BPQICON));
-        wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
-        wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
-		wc.lpszMenuName =  NULL ;
-        wc.lpszClassName = "IPAppName";
-
-        // Register the window classes
-
-		RegisterClass(&wc);
-
-		i=GetLastError();
- 
-		Windowlength=(map_table_len)*14+100;
-		WindowParam=WS_OVERLAPPEDWINDOW | WS_VSCROLL;
-
-		sprintf(WindowTitle,"IP Gateway Resolver");
-
-		hIPResWnd = CreateMDIWindow("IPAppName", WindowTitle, WindowParam,
-			  Rect.left - (OffsetW /2), Rect.top - OffsetH, Rect.right - Rect.left, Rect.bottom - Rect.top,
-			  ClientWnd, hInstance, 1234);
-
-		hPopMenu = CreatePopupMenu();
-		AppendMenu(hPopMenu, MF_STRING, BPQREREAD, "ReRead Config");
-
-		SetScrollRange(hIPResWnd,SB_VERT,0, map_table_len,TRUE);
-
-		if (IPMinimized)
-			ShowWindow(hIPResWnd, SW_SHOWMINIMIZED);
-		else
-			ShowWindow(hIPResWnd, SW_RESTORE);
-
-		_beginthread(IPResolveNames, 0, NULL );
-	}
-#endif
-
 	// if we are running as Net44 encap, open a socket for IPIP
 
 	if (WantEncap)
@@ -591,12 +467,6 @@ Dll BOOL APIENTRY Init_IP()
 
 VOID IPClose()
 {
-#ifndef LINBPQ
-	PostMessage(hIPResWnd, WM_CLOSE,0,0);
-//	DestroyWindow(hIPResWnd);
-
-	hIPResWnd = NULL;
-#endif
 }
 
 union
@@ -830,11 +700,27 @@ PollEncaploop:
 
 		// Packet from AX.25
 
+		if (axmsg->DEST[0] == 0xCF)		// Netrom
+		{
+			// Have to move message down buffer
+
+			UCHAR TEMP[7];
+
+			memmove(TEMP, &axmsg->DEST[1], 7);
+			memmove(axmsg->DEST, &axmsg->ORIGIN[1], 7);
+			memmove(axmsg->ORIGIN, TEMP, 7);
+			axmsg->PID = 0xCC;
+
+			memmove(&axmsg->PID + 1, &axmsg->PID + 6, axmsg->LENGTH);
+			axmsg->PORT = 0;
+		}
+
 		if (CompareCalls(axmsg->ORIGIN, MYCALL))
 		{
 			ReleaseBuffer(axmsg);
 			return 0;				// Echoed packet
 		}
+
 		switch (axmsg->PID)
 		{
 		case  0xcc:
@@ -941,7 +827,7 @@ BOOL Send_ETH(VOID * Block, DWORD len)
 #ifdef WIN32
 	if (adhandle)
 	{
-		if (len < 60) len = 60;
+//		if (len < 60) len = 60;
 
 		// Send down the packet 
 
@@ -1004,23 +890,27 @@ static VOID Send_AX_Datagram(PMESSAGE Block, DWORD Len, UCHAR Port, UCHAR * HWAD
 VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 {
 	DWORD PACLEN=255;
-	int fragno;
 	int first=1;
-	UCHAR * p;
-	int txlen;
+
+	// We have already fragmented it, so just send
+
+	SendNetFrame(HWADDR, MYCALL, Block, Len, Port);
+
+	// May revist ithis as ax25 frag would be better than ip frag
+
+/*
 
 	// if Len - 16 is grater than PACLEN, then fragment (only possible on Virtual Circuits,
 	//	as fragmentation relies upon reliable delivery
 	
 	if ((Len - 16) <= PACLEN)
 	{
-		SendNetFrame(HWADDR, MYCALL, Block, Len, Port);
 		return;
 	}
 
 	Len=Len-15;
 
-	PACLEN-=2;               /* Allow for fragment control info */
+	PACLEN-=2;               // Allow for fragment control info/
 
 	fragno = Len / PACLEN;
 
@@ -1048,7 +938,7 @@ VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 	p+=(txlen-1);
 	Len-=txlen;
 	}
-
+*/
 	return;
 }
 
@@ -1059,19 +949,19 @@ static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD 
 {
 //	ATTACH FRAME TO OUTBOUND L3 QUEUES (ONLY USED FOR IP ROUTER)
 
-	MESSAGE * buffptr;
+	struct DATAMESSAGE * buffptr;
 	struct _LINKTABLE * LINK;
 	struct PORTCONTROL * PORT;
 
-	memcpy(&Block[7],ToCall, 7);
-	memcpy(&Block[14],FromCall, 7);
-
-if (Len > MAXDATA)
+	if (Len > MAXDATA)
 		return;
 	
 	if (QCOUNT < 100)
 		return;
-	
+
+	memcpy(&Block[7],ToCall, 7);
+	memcpy(&Block[14],FromCall, 7);
+
 	buffptr = GetBuff();
 
 	if (buffptr == 0)
@@ -1079,15 +969,14 @@ if (Len > MAXDATA)
 
 	Len -= 15;
 
-	memcpy(&buffptr->DEST, &Block[22], Len);
-
-	buffptr->LENGTH = Len;
+	buffptr->LENGTH = Len + MSGHDDRLEN;
 
 //	SEE IF L2 OR L3
 
 	if (Port == 0)				// L3
 	{
 		struct DEST_LIST * DEST;
+		L3MESSAGE * L3Header;
 
 		if (FindDestination(ToCall, &DEST) == 0)
 		{
@@ -1095,11 +984,31 @@ if (Len > MAXDATA)
 			return;
 		}
 
+		// We have to build the Netrom Header
+
+		L3Header = (L3MESSAGE *)&buffptr->L2DATA[0];
+
+		buffptr->PID = 0xCF;			// NETROM
+
+		memcpy(L3Header->L3SRCE, FromCall, 7);
+		memcpy(L3Header->L3DEST, ToCall, 7);
+		L3Header->L3TTL = L3LIVES;
+		L3Header->L4FLAGS = 0;			// Opcode
+		L3Header->L4ID = 0x0C;			// IP
+		L3Header->L4INDEX = 0x0C;
+
+		memcpy(L3Header->L4DATA, &Block[23], Len);	// Dond Send PID - implied by OCOC above
+
+		buffptr->LENGTH += 20;			// Netrom Header
+
 		C_Q_ADD(&DEST->DEST_Q, buffptr);
 		return;
 	}
 
 //	SEND FRAME TO L2 DEST, CREATING A LINK ENTRY IF NECESSARY
+
+	
+	memcpy(&buffptr->PID, &Block[22], Len);
 
 	if (FindLink(ToCall, FromCall, Port, &LINK))
 	{
@@ -1329,7 +1238,20 @@ SendBack:
 		//  Send Back to Originator of ARP Request
 
 		if (arpptr->TARGETIPADDR == OurIPAddr)		// Reply to our request?
+		{
+			struct DATAMESSAGE * buffptr;
+			PIPMSG IPptr = Q_REM(Arp->ARP_Q);
+
+			while (Arp->ARP_Q)
+			{
+				buffptr = Q_REM(&Arp->ARP_Q);
+				IPptr = &buffptr->L2DATA[30];
+				RouteIPMsg(IPptr);
+				ReleaseBuffer(buffptr);
+			}
+
 			break;
+		}
 
 		Arp = LookupARP(arpptr->TARGETIPADDR, FALSE, &Found);
 				
@@ -1578,51 +1500,55 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 {
 	ULONG Dest;
 	PARPDATA Arp;
+	PROUTEENTRY Route;
 	BOOL Found;
-	int index, Len;
-	PTCPMSG TCPptr;
 	PUDPMSG UDPptr;
-
 
 	if (IPptr->VERLEN != 0x45) return;  // Only support Type = 4, Len = 20
 
 	if (!CheckIPChecksum(IPptr)) return;
 
-	// Make sure origin ia in ARP Table
+	// Make sure origin ia routable. If not, add to ARP
 
-	Arp = LookupARP(IPptr->IPSOURCE.addr, TRUE, &Found);
+	Route = FindRoute(IPptr->IPSOURCE.addr);
 
-	if (!Found)
+	if (Route == NULL)
 	{
-		// Add if possible
+		Arp = LookupARP(IPptr->IPSOURCE.addr, TRUE, &Found);
 
-		if (Arp != NULL)
+		if (!Found)
 		{
-			Arp->IPADDR = IPptr->IPSOURCE.addr;
-
-			if (Type == 'E')
+			// Add if possible
+	
+			if (Arp != NULL)
 			{
-				memcpy(Arp->HWADDR, MACADDR, 6);
+				Arp->IPADDR = IPptr->IPSOURCE.addr;
+	
+				if (Type == 'E')
+				{
+					memcpy(Arp->HWADDR, MACADDR, 6);
+				}
+				else
+				{
+					memcpy(Arp->HWADDR, MACADDR, 7);
+					Arp->HWADDR[6] &= 0x7e;
+				}
+				Arp->ARPTYPE = Type;
+				Arp->ARPINTERFACE = Port;
+				Arp->ARPVALID = TRUE;
+				Arp->ARPTIMER =  ARPTIMEOUT;
+
+				// Also add to routes
+
+				AddToRoutes(Arp, IPptr->IPSOURCE.addr, Type);
+
+				SaveARP();
 			}
-			else
-			{
-				memcpy(Arp->HWADDR, MACADDR, 7);
-				Arp->HWADDR[6] &= 0x7e;
-			}
-			Arp->ARPTYPE = Type;
-			Arp->ARPINTERFACE = Port;
-			Arp->ARPVALID = TRUE;
-			Arp->ARPTIMER =  ARPTIMEOUT;
-
-			// Also add to routes
-
-			AddToRoutes(Arp, IPptr->IPSOURCE.addr, Type);
-
-			SaveARP();
 		}
 	}
-	else
-		Arp->ARPTIMER =  ARPTIMEOUT;				// Refresh
+
+	if (Route && Route->ARP)
+		Route->ARP->ARPTIMER =  ARPTIMEOUT;				// Refresh
 
 	// See if for us - if not pass to router
 
@@ -1658,42 +1584,6 @@ ForUs:
 		if (UDPptr->DESTPORT == htons(161))
 		{
 			ProcessSNMPMessage(IPptr);
-			return;
-		}
-	}
-
-	// See if for a mapped Address
-
-	if (IPptr->IPPROTOCOL != 6) return; // Only TCP
-
-	TCPptr = (PTCPMSG)&IPptr->Data;
-
-	Len = ntohs(IPptr->IPLENGTH);
-	Len-=20;
-
-	for (index=0; index < map_table_len; index++)
-	{
-		if ((map_table[index].sourceport == TCPptr->DESTPORT) &&
-			map_table[index].sourceipaddr == IPptr->IPSOURCE.addr)
-		{
-			//	Outgoing Message - replace Dest IP address and Port. Source Port remains unchanged
-
-			IPptr->IPSOURCE.addr = OurIPAddr;
-			IPptr->IPDEST.addr = map_table[index].mappedipaddr;
-			TCPptr->DESTPORT = map_table[index].mappedport;
-			CheckSumAndSend(IPptr, TCPptr, Len);
-			return;
-		}
-
-		if ((map_table[index].mappedport == TCPptr->SOURCEPORT) &&
-			map_table[index].mappedipaddr == IPptr->IPSOURCE.addr)
-		{
-			//	Incomming Message - replace Dest IP address and Source Port
-
-			IPptr->IPSOURCE.addr = OurIPAddr;
-			IPptr->IPDEST.addr = map_table[index].sourceipaddr;
-			TCPptr->SOURCEPORT = map_table[index].sourceport;
-			CheckSumAndSend(IPptr, TCPptr, Len);
 			return;
 		}
 	}
@@ -2012,14 +1902,48 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 //		IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);		// RouteIPMsg redoes checksum
 
 		RouteIPMsg(IPptr);			// Send Back
+		return;
 	}
 
-	if (ICMPptr->ICMPTYPE == 8)
+	if (ICMPptr->ICMPTYPE == 0)
 	{
 		//	ICMP_REPLY:
-	}
 
-	// Ingnore others
+		UCHAR * BUFFER = GetBuff();
+		UCHAR * ptr1;
+		struct _MESSAGE * Msg;
+		TRANSPORTENTRY * Session = L4TABLE;
+		char IP[20];
+		unsigned char work[4];
+
+		Session += ICMPptr->ICMPID;
+
+		if (BUFFER == NULL)
+			return;
+
+		ptr1 = &BUFFER[7];
+
+		memcpy(work, &IPptr->IPSOURCE, 4);
+		sprintf(IP, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+		*ptr1++ = 0xf0;			// PID
+
+		ptr1 += sprintf(ptr1, "Ping Response from %s", IP);
+
+		*ptr1++ = 0x0d;			// CR
+
+		Len = ptr1 - BUFFER;
+
+		Msg = (struct _MESSAGE *)BUFFER;
+		Msg->LENGTH = Len;
+		Msg->CHAIN = NULL;
+
+		C_Q_ADD(&Session->L4TX_Q, (UINT *)BUFFER);
+
+		PostDataAvailable(Session);
+
+		return;
+	}
 }
 
 
@@ -2086,7 +2010,7 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
 		TXaddr.txaddr.sin_port = htons(UDPPort + 1);
 		memcpy(&TXaddr.txaddr.sin_addr, &RXaddr.rxaddr.sin_addr, 4);
 
-		// UDP Processor Needs the Encap Address, bgut we don't need the IPIP hearer
+		// UDP Processor Needs the Encap Address, but we don't need the IPIP hearer
 		//	as that is added by the raw send later. Just stick it on the end.
 
 
@@ -2104,14 +2028,11 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
 }
 
 
-VOID RouteIPMsg(PIPMSG IPptr)
+BOOL RouteIPMsg(PIPMSG IPptr)
 {
-	PARPDATA Arp;
+	PARPDATA Arp, ARPptr;
 	PROUTEENTRY Route;
 	BOOL Found;
-
-	// We rely on the ARP messages generated by either end to route frames.
-	//	If address is not in ARP cache (say call originated by MSYS), send to our default route
 
 	//	Decremnent TTL and Recalculate header checksum
 
@@ -2120,46 +2041,72 @@ VOID RouteIPMsg(PIPMSG IPptr)
 	if (IPptr->IPTTL == 0)
 	{
 		SendICMPTimeExceeded(IPptr);
-		return;					// Should we send time exceeded????
+		return FALSE;	
 	}
 
 	IPptr->IPCHECKSUM = 0;
 	IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
 
-/*	// Look up ARP
-
-	Arp = LookupARP(IPptr->IPDEST.s_addr, FALSE, &Found);
-
-	// If enabled, look in Net44 Encap Routes
-
-	if (!Found && DefaultIPAddr)
-		Arp = LookupARP(DefaultIPAddr, FALSE, &Found);
-
-	if (!Found)
-		return;				// No route or default
-		
-*/
 	// Everything is in the routes table, even arp-derived routes. so just look there
 
 	Route = FindRoute(IPptr->IPDEST.addr);
 
 	if (Route == NULL)
-		return;				// ?? Dest unreachable ??
+		return FALSE;				// ?? Dest unreachable ??
+
+	Route->FRAMECOUNT++;
 
 	Arp = Route->ARP;
 
 	if (Arp == NULL)
 	{
 		if (Route->TYPE == 'T')
+		{
 			SendIPtoEncap(IPptr, Route->Encap);
+			return TRUE;
+		}
 
 		// Look up target address in ARP 
 
-		Arp = LookupARP(Route->GATEWAY, FALSE, &Found);
+		if (Route->GATEWAY)
+			Arp = LookupARP(Route->GATEWAY, FALSE, &Found);
+		else
+			Arp = LookupARP(IPptr->IPDEST.addr, FALSE, &Found);
 
 		if (!Found)
-			return;				// Should we try to ARP it?
-	} 
+		{
+			if (Route->GATEWAY == 0)	// Interace Route
+			{	
+				ARPptr = AllocARPEntry();
+
+				if (ARPptr != NULL)
+				{
+					struct DATAMESSAGE * buffptr;
+//					Route->ARP = ARPptr;
+//					ARPptr->ARPROUTE = Route;
+					ARPptr->ARPINTERFACE = 255;
+					ARPptr->ARPTIMER = 5;
+					ARPptr->ARPTYPE = 'E';
+					ARPptr->IPADDR = IPptr->IPDEST.addr;
+
+					// Save a copy to send on if ARP reply received
+					
+					buffptr = GetBuff();
+					
+					if (buffptr)
+					{
+						memcpy(&buffptr->L2DATA[30], IPptr, ntohs(IPptr->IPLENGTH));
+						C_Q_ADD(&ARPptr->ARP_Q, buffptr);
+					}
+
+					SendARPMsg(ARPptr);
+
+					return TRUE;
+				}
+			}
+			return FALSE;
+		}
+	}
 
 	if (Arp->ARPVALID)
 	{
@@ -2170,9 +2117,10 @@ VOID RouteIPMsg(PIPMSG IPptr)
 				SendIPtoBPQDEV(IPptr, Arp->HWADDR);
 			else
 				SendIPtoAX25(IPptr, Arp->HWADDR, Arp->ARPINTERFACE, Arp->ARPTYPE);
+
+		return TRUE;
 	}
-	
-	return;	
+	return FALSE;	
 }
 
 VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR)
@@ -2202,10 +2150,14 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 	PBUFFHEADER Msgptr = (PBUFFHEADER)IPptr;
 	int Len;
 	USHORT FRAGWORD = ntohs(IPptr->FRAGWORD);
+	USHORT OrigFragWord = FRAGWORD;
 	int PACLEN = 256;
 
 	(UCHAR *)Msgptr--;
 	Msgptr->PID = 0xcc;		//IP
+
+	if (Port == 0)			// NETROM
+		PACLEN = 235;
 
 	Len = ntohs(IPptr->IPLENGTH);
 
@@ -2228,7 +2180,7 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 		{
 			SendICMPMessage(IPptr, 3, 4, PACLEN);  // type 3 (dest unreachable), code 4 (frag needed but don't-fragment bit set))
 			return;	
-}
+		}
 		FRAGWORD |= (1 << 13);				// Set More Fragments bit
 		IPptr->FRAGWORD = htons(FRAGWORD);
 
@@ -2242,10 +2194,10 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 
 		// Send First Fragment
 
-			if (Mode == 'D')		// Datagram
-				Send_AX_Datagram((PMESSAGE)Msgptr, Fraglen + 16, Port, HWADDR);
-			else
-				Send_AX_Connected((PMESSAGE)Msgptr, Fraglen + 16, Port, HWADDR);
+		if (Mode == 'D')		// Datagram
+			Send_AX_Datagram((PMESSAGE)Msgptr, Fraglen + 16, Port, HWADDR);
+		else
+			Send_AX_Connected((PMESSAGE)Msgptr, Fraglen + 16, Port, HWADDR);
 
 		// Update Header
 
@@ -2260,8 +2212,13 @@ VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode)
 	//	Reset Header in case we've messaed with it
 
 	IPptr->IPLENGTH = htons(Len);
-		
-	FRAGWORD &= 0x5fff;		// Clear More Fragments bit
+
+	// if this started out as a frament before we split it more,
+	// we need to leave the MF bit set
+
+	if ((OrigFragWord & 0x2000) == 0)
+		FRAGWORD &= 0x5fff;		// Clear More Fragments bit
+
 	IPptr->FRAGWORD = htons(FRAGWORD);
 
 	IPptr->IPCHECKSUM = 0;
@@ -2453,7 +2410,8 @@ VOID RemoveRoute(PROUTEENTRY Route)
 			{
 				PARPDATA Arp = Route->ARP;
 				Route->ARP->ARPROUTE = NULL;			// Avoid recursion
-				RemoveARP(Arp);
+				if (Arp->LOCKED == 0)
+					RemoveARP(Arp);
 			}
 
 			free(Route);
@@ -2467,6 +2425,9 @@ VOID RemoveRoute(PROUTEENTRY Route)
 VOID RemoveARP(PARPDATA Arp)
 {
 	int i;
+
+	while (Arp->ARP_Q)
+		ReleaseBuffer(Q_REM(&Arp->ARP_Q));
 
 	if (Arp->IPADDR == DefaultIPAddr)
 	{
@@ -2493,7 +2454,9 @@ VOID RemoveARP(PARPDATA Arp)
 			{
 				PROUTEENTRY Route = Arp->ARPROUTE;
 				Arp->ARPROUTE->ARP = NULL;		// Avoid recursion
-				RemoveRoute(Route);
+			
+				if (Route->LOCKED == 0)
+					RemoveRoute(Route);
 			}
 
 			free(Arp);
@@ -2535,10 +2498,9 @@ static BOOL ReadConfigFile()
 
 	char * Config;
 	char * ptr1, * ptr2;
-
+	PROUTEENTRY Route;
+	BOOL Found;
 	char buf[256],errbuf[256];
-
-	map_table_len = 0;				// For reread
 
 	Config = PortConfig[33];		// Config fnom bpq32.cfg
 
@@ -2565,15 +2527,32 @@ static BOOL ReadConfigFile()
 				WritetoConsoleLocal(errbuf);
 			}
 		}
+
+		// Add an Inerface Route to our LAN
+
+		Route = LookupRoute(OurIPAddr & OurNetMask, OurNetMask, TRUE, &Found);
+
+		if (!Found)
+		{
+			// Add if possible
+
+			if (Route != NULL)
+			{
+				Route->NETWORK = OurIPAddr & OurNetMask;
+				Route->SUBNET = OurNetMask;
+			 	Route->GATEWAY = 0;
+				Route->LOCKED = 1;
+			}
+		}
 	}
-	return (TRUE);
+	return TRUE;
 }
 
 
 static ProcessLine(char * buf)
 {
-	char * ptr, * p_value, * p_origport, * p_host, * p_port;
-	int i, port, mappedport, ipad;
+	char * ptr, * p_value, * p_port;
+	int i;
 
 	ptr = strtok(buf, " \t\n\r");
 	p_value = strtok(NULL, " \t\n\r");
@@ -2691,8 +2670,7 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr,"ARP") == 0)
 	{
 		p_value[strlen(p_value)] = ' ';		// put back together
-		ProcessARPLine(p_value, TRUE);
-		return TRUE;
+		return ProcessARPLine(p_value, TRUE);
 	}
 
 	if (_stricmp(ptr,"ROUTE") == 0)
@@ -2702,41 +2680,6 @@ static ProcessLine(char * buf)
 		return TRUE;
 	}
 
-	if (_stricmp(ptr,"MAP") == 0)
-	{
-#ifdef LINBPQ
-
-		WritetoConsoleLocal("MAP not supported in LinBPQ IP Gateway\n");
-		return TRUE;
-#endif
-		if (!p_value) return FALSE;
-
-		p_origport = strtok(NULL, " ,\t\n\r");
-		if (!p_origport) return FALSE;
-
-		p_host = strtok(NULL, " ,\t\n\r");
-		if (!p_host) return FALSE;
-
-		p_port = strtok(NULL, " ,\t\n\r");
-		if (!p_port) return FALSE;
-
-		port=atoi(p_origport);
-		if (port == 0) return FALSE;
-
-		mappedport=atoi(p_port);
-		if (mappedport == 0) return FALSE;
-
-		ipad = inet_addr(p_value);
-
-		map_table[map_table_len].sourceipaddr = ipad;
-		strcpy(map_table[map_table_len].hostname, p_host);
-		map_table[map_table_len].sourceport = ntohs(port);
-		map_table[map_table_len++].mappedport = ntohs(mappedport);
-	
-		NeedResolver = TRUE;
-
-		return (TRUE);
-	}
 	
 	//
 	//	Bad line
@@ -2762,7 +2705,8 @@ VOID DoARPTimer()
 			{
 				// Retry Request
 
-				SendARPMsg(Arp);
+//				SendARPMsg(Arp);
+				RemoveARP(Arp);
 			}
 			continue;
 		}
@@ -2945,7 +2889,8 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	char Mac[7];
 	char AXCall[7];
 	ULONG IPAddr;
-	int a,b,c,d,e,f,num;
+	int a,b,c,d,e,f,num;		
+	struct PORTCONTROL * PORT;
 	
 	PARPDATA Arp;
 	BOOL Found;
@@ -2973,6 +2918,8 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 
 	if (IPAddr == INADDR_NONE) return FALSE;
 
+	_strupr(p_type);
+
 	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V'))) return FALSE;
 
 	Port=atoi(p_port);
@@ -2997,8 +2944,17 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	else
 	{
 		if (!ConvToAX25(p_mac, AXCall)) return FALSE;
-		if ((Port == 0) || (Port > NUMBEROFPORTS))
+
+		if (Port == 0 && *p_type !='V')		// Port 0 for NETROM
 			return FALSE;
+	
+		if (Port)
+		{
+			PORT = GetPortTableEntryFromPortNum(Port);
+	
+			if (PORT == NULL)
+				return FALSE;
+		}
 	}
 
 	Arp = LookupARP(IPAddr, TRUE, &Found);
@@ -3039,7 +2995,6 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 
 VOID AddToRoutes(PARPDATA Arp, UINT IPAddr, char Type)
 {
-
 	PROUTEENTRY Route;
 	BOOL Found;
 	UINT IPMask = 0xffffffff;		// All ARP rerived routes are Host Routes
@@ -3072,21 +3027,45 @@ VOID AddToRoutes(PARPDATA Arp, UINT IPAddr, char Type)
 // ROUTE 44.131.4.18/32 E n.n.n.n			// Via IP address over Ethernet
 
 
+int CountDots(char * Addr)
+{
+	int Dots = 0;
+
+	while(*Addr)
+		if (*(Addr++) == '.')
+			Dots++;
+
+	return Dots;
+}
+
+
 BOOL ProcessROUTELine(char * buf, BOOL Locked)
 {
-	char * p_ip, * p_target, * p_type, * p_mask, * p_gateway;
-	ULONG IPAddr, IPMask, IPGateway, Encap;
-	
+	char * p_ip, * p_type, * p_mask, * p_gateway;
+	ULONG IPAddr, IPMask, IPGateway;
+	char Type =  ' ';
+	int n;	
 	PROUTEENTRY Route;
 	BOOL Found;
 
-//	 ROUTE 44.131.4.18/31 44.131.4.1 T 1.2.3.4
+//	 ROUTE 44.131.4.18/31 44.131.4.1	// Normal Route
+//	 ROUTE 44.131.4.18/31 1.2.3.4 T		// Tunnel via 1.2.3.4
 
 
 	p_ip = strtok(buf, " \t\n\r");
 	p_gateway = strtok(NULL, " \t\n\r");
 	p_type = strtok(NULL, " \t\n\r");
-	p_target = strtok(NULL, " \t\n\r");
+
+	if (_stricmp(p_ip, "addprivate") == 0)
+	{
+		// From Encap.txt file
+	
+		p_ip = p_gateway;
+		
+		p_gateway = strtok(NULL, " \t\n\r");
+		Type = 'T';
+		p_type = NULL;
+	}
 
 	if(p_ip == NULL) return (TRUE);
 
@@ -3096,7 +3075,11 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 
 	if (p_gateway == NULL) return FALSE;
 
-	if (p_type == NULL) return FALSE;
+	if (p_type)
+	{
+		Type = *p_type;
+		if (Type == 't') Type = 'T';
+	}
 
 	p_mask = strchr(p_ip, '/');
 
@@ -3115,27 +3098,29 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 		*p_mask = 0;
 	}
 	else
-		IPMask = 0;
+		IPMask = 32;			// No mask means Host route
 
 	IPMask = htonl(IPMask);			// Needs to be Network order
-
-	IPAddr = inet_addr(p_ip);
-
-	if (IPAddr == INADDR_NONE) return FALSE;
 
 	IPGateway = inet_addr(p_gateway);
 
 	if (IPGateway == INADDR_NONE) return FALSE;
 
-	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V') || (*p_type =='T')))
-		return FALSE;
+	// The encap.txt format omits trailing zeros.
+		
+	n = CountDots(p_ip);
+		
+	if (n == 2)
+		strcat(p_ip, ".0");
+	else if (n == 1)
+		strcat(p_ip, ".0.0");
+	else if (n == 0)
+		strcat(p_ip, ".0.0.0");
 
-	if (*p_type == 'T')
-	{
-		Encap = inet_addr(p_target);
+	IPAddr = inet_addr(p_ip);
 
-		if (Encap == INADDR_NONE) return FALSE;
-	}
+	if (IPAddr == INADDR_NONE) return FALSE;
+
 
 	Route = LookupRoute(IPAddr, IPMask, TRUE, &Found);
 
@@ -3147,13 +3132,18 @@ BOOL ProcessROUTELine(char * buf, BOOL Locked)
 		{
 			Route->NETWORK = IPAddr;
 			Route->SUBNET = IPMask;
-			Route->GATEWAY = IPGateway;
 
-			if (*p_type == 'T')
-				Route->Encap = Encap;
+			if (Type == 'T')
+				Route->Encap = IPGateway;
+			else
+			 	Route->GATEWAY = IPGateway;
 
-			Route->TYPE = *p_type;
+			Route->TYPE = Type;
 			Route->LOCKED = Locked;
+
+			// Link to ARP
+
+			Route->ARP = LookupARP(Route->GATEWAY, FALSE, &Found);
 		}
 	}
 	return TRUE;
@@ -3225,257 +3215,7 @@ VOID WriteARPLine(PARPDATA ARPRecord, FILE * file)
 	return;
 }
 
-#ifndef LINBPQ
 
-extern HFONT hFont;
-struct tagMSG Msg;
-char buf[1024];
-
-LRESULT CALLBACK ResWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	int wmId, wmEvent;
-	PAINTSTRUCT ps;
-	HDC hdc;
-	HFONT    hOldFont ;
-	struct hostent * hostptr;
-	struct in_addr ipad;
-	char line[100];
-	int index,displayline;
-	MINMAXINFO * mmi;
-
-	int i=1;
-
-	int nScrollCode,nPos;
-
-	switch (message)
-	{
-	case WM_GETMINMAXINFO:
-
- 		mmi = (MINMAXINFO *)lParam;
-		mmi->ptMaxSize.x = 400;
-		mmi->ptMaxSize.y = Windowlength;
-		mmi->ptMaxTrackSize.x = 400;
-		mmi->ptMaxTrackSize.y = Windowlength;
-		break;
-
-	case WM_USER+199:
-
-		i=WSAGETASYNCERROR(lParam);
-
-		map_table[ResolveIndex].error=i;
-
-		if (i ==0)
-		{
-			// resolved ok
-
-			hostptr=(struct hostent *)&buf;
-			memcpy(&map_table[ResolveIndex].mappedipaddr,hostptr->h_addr,4);
-		}
-
-  		InvalidateRect(hWnd,NULL,FALSE);
-
-		while (ResolveIndex < map_table_len)
-		{
-			ResolveIndex++;
-			
-			WSAAsyncGetHostByName (hWnd,WM_USER+199,
-						map_table[ResolveIndex].hostname,
-						buf,MAXGETHOSTSTRUCT);	
-			
-			break;
-		}
-		break;
-
-	case WM_MDIACTIVATE:
-	{ 
-		// Set the system info menu when getting activated
-			 
-		if (lParam == (LPARAM) hWnd)
-		{
-			// Activate
-
-			RemoveMenu(hBaseMenu, 1, MF_BYPOSITION);
-			AppendMenu(hBaseMenu, MF_STRING + MF_POPUP, (WPARAM)hPopMenu, "Actions");
-
-			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM) hBaseMenu, (LPARAM)hWndMenu);
-		}
-		else
-			SendMessage(ClientWnd, WM_MDISETMENU, (WPARAM)hMainFrameMenu, (LPARAM)NULL);
-			
-		DrawMenuBar(FrameWnd);
-
-		return DefMDIChildProc(hWnd, message, wParam, lParam);
-
-	}
-
-	case WM_COMMAND:
-
-		wmId    = LOWORD(wParam); // Remember, these are...
-		wmEvent = HIWORD(wParam); // ...different for Win32!
-
-
-
-		if (wmId == BPQREREAD)
-		{
-			ProcessConfig();
-			FreeConfig();
-
-			ReadConfigFile();
-			PostMessage(hIPResWnd, WM_TIMER,0,0);
-			InvalidateRect(hWnd,NULL,TRUE);
-
-			return 0;
-		}
-/*
-		if (wmId == BPQADDARP)
-		{
-			if (ConfigWnd == 0)
-			{		
-				ConfigWnd=CreateDialog(hInstance,ConfigClassName,0,NULL);
-    
-				if (!ConfigWnd)
-				{
-					i=GetLastError();
-					return (FALSE);
-				}
-				ShowWindow(ConfigWnd, SW_SHOW);  
-				UpdateWindow(ConfigWnd); 
-  			}
-
-			SetForegroundWindow(ConfigWnd);
-
-			return(0);
-		}
-		return 0;
-*/
-	case WM_SYSCOMMAND:
-
-		wmId    = LOWORD(wParam);
-		wmEvent = HIWORD(wParam);
-		
-		switch (wmId)
-		{ 
-		case SC_RESTORE:
-
-			IPMinimized = FALSE;
-			SendMessage(ClientWnd, WM_MDIRESTORE, (WPARAM)hWnd, 0);
-			break;
-
-		case SC_MINIMIZE: 
-
-			IPMinimized = TRUE;
-			break;
-		}
-		return DefMDIChildProc(hWnd, message, wParam, lParam);
-
-	case WM_VSCROLL:
-		
-		nScrollCode = (int) LOWORD(wParam); // scroll bar value 
-		nPos = (short int) HIWORD(wParam);  // scroll box position 
-
-		//hwndScrollBar = (HWND) lParam;      // handle of scroll bar 
-
-		if (nScrollCode == SB_LINEUP || nScrollCode == SB_PAGEUP)
-		{
-			baseline--;
-			if (baseline <0)
-				baseline=0;
-		}
-
-		if (nScrollCode == SB_LINEDOWN || nScrollCode == SB_PAGEDOWN)
-		{
-			baseline++;
-			if (baseline > map_table_len)
-				baseline = map_table_len;
-		}
-
-		if (nScrollCode == SB_THUMBTRACK)
-		{
-			baseline=nPos;
-		}
-
-		SetScrollPos(hWnd,SB_VERT,baseline,TRUE);
-
-		InvalidateRect(hWnd,NULL,TRUE);
-		break;
-
-
-	case WM_PAINT:
-
-		hdc = BeginPaint (hWnd, &ps);
-		
-		hOldFont = SelectObject( hdc, hFont) ;
-			
-		index = baseline;
-		displayline=0;
-
-		while (index < map_table_len)
-		{
-			if (map_table[index].ResolveFlag && map_table[index].error != 0)
-			{
-					// resolver error - Display Error Code
-				sprintf(hostaddr,"Error %d",map_table[index].error);
-			}
-			else
-			{
-				memcpy(&ipad,&map_table[index].mappedipaddr,4);
-				strncpy(hostaddr,inet_ntoa(ipad),16);
-			}
-				
-			memcpy(&ipad,&map_table[index].mappedipaddr,4);
-								
-			i=sprintf(line,"%.64s = %-.30s",
-				map_table[index].hostname,
-				hostaddr);
-
-			TextOut(hdc,0,(displayline++)*14+2,line,i);
-
-			index++;
-		}
-
-		SelectObject( hdc, hOldFont ) ;
-		EndPaint (hWnd, &ps);
-	
-		break;        
-
-	case WM_DESTROY:
-		
-
-//		PostQuitMessage(0);
-			
-		break;
-
-
-	case WM_TIMER:
-			
-		for (ResolveIndex=0; ResolveIndex < map_table_len; ResolveIndex++)
-		{	
-			WSAAsyncGetHostByName (hWnd,WM_USER+199,
-						map_table[ResolveIndex].hostname,
-						buf,MAXGETHOSTSTRUCT);
-			break;	
-		}
-
-	default:
-		break;
-	}
-			return DefMDIChildProc(hWnd, message, wParam, lParam);
-}
-
-void IPResolveNames( void *dummy )
-{
-	SetTimer(hIPResWnd,1,15*60*1000,0);	
-
-	PostMessage(hIPResWnd, WM_TIMER,0,0);
-
-	while (GetMessage(&Msg, hIPResWnd, 0, 0)) 
-	{
-			TranslateMessage(&Msg);
-			DispatchMessage(&Msg);
-	}		
-}
-
-#endif
 
 /*
 ;	DO PSEUDO HEADER FIRST
@@ -3642,6 +3382,55 @@ void OpenTAP()
 
 extern struct DATAMESSAGE * REPLYBUFFER;
 
+VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	// Send ICMP Echo Request
+
+	ULONG PingAddr;
+	UCHAR Msg[120] = "";
+	PIPMSG IPptr = (PIPMSG)&Msg[40];		// Sapce of frmae header (not used)
+	PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
+
+	Bufferptr += sprintf(Bufferptr, "\r");
+
+	if (IPRequired == FALSE)
+	{
+		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	PingAddr = inet_addr(CmdTail);
+
+	if (PingAddr == INADDR_NONE)
+	{
+		Bufferptr += sprintf(Bufferptr, "Invalid Address\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	IPptr->VERLEN = 0x45;
+	IPptr->IPDEST.addr = PingAddr;		
+	IPptr->IPSOURCE.addr = OurIPAddr;
+	IPptr->IPPROTOCOL = ICMP;
+	IPptr->IPTTL = IPTTL;
+	IPptr->FRAGWORD = 0;
+	IPptr->IPLENGTH = htons(60);			// IP Header ICMP Header IP Header 8 Data
+
+	ICMPptr->ICMPTYPE = 8;
+	ICMPptr->ICMPID = Session->CIRCUITINDEX;
+	ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, 36);
+
+	if (RouteIPMsg(IPptr))	
+		Bufferptr += sprintf(Bufferptr, "OK\r");
+	else
+		Bufferptr += sprintf(Bufferptr, "No Route to Host\r");
+
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	
+	return;
+}
+
 VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
 	//	DISPLAY IP Gateway ARP status or Clear
@@ -3688,7 +3477,7 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	{
 		ARPRecord = ARPRecords[i];
 
-		if (ARPRecord->ARPVALID)
+//		if (ARPRecord->ARPVALID)
 		{
 			Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
 			memcpy(work, &ARPRecord->IPADDR, 4);
@@ -3805,12 +3594,14 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 			sprintf(Encap, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
 			if (RouteRecord->TYPE == 'T')
-				Bufferptr += sprintf(Bufferptr, "%s/%d %s %c %d %d encap %s\r",
-					Net, CountBits(RouteRecord->SUBNET), Nexthop, RouteRecord->TYPE,
+				Bufferptr += sprintf(Bufferptr, "%s/%d %d %s %c %d %d encap %s\r",
+					Net, CountBits(RouteRecord->SUBNET),
+					RouteRecord->FRAMECOUNT, Nexthop, RouteRecord->TYPE,
 					RouteRecord->METRIC, RouteRecord->RIPTIMOUT, Encap);
 			else
-				Bufferptr += sprintf(Bufferptr, "%s/%d %s %c %d %d\r",
-					Net, CountBits(RouteRecord->SUBNET), Nexthop, RouteRecord->TYPE,
+				Bufferptr += sprintf(Bufferptr, "%s/%d %d %s %c %d %d\r",
+					Net, CountBits(RouteRecord->SUBNET),
+					RouteRecord->FRAMECOUNT, Nexthop, RouteRecord->TYPE,
 					RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
 		}
 	}

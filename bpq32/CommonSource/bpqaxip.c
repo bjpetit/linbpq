@@ -1426,6 +1426,13 @@ static void CreateResolverWindow(struct AXIPPORTINFO * PORT)
 			Rect.bottom = 400;
 		}
 
+		if (Rect.top < OffsetH)			// Make sure not off top of MDI frame
+		{
+			int Error = OffsetH - Rect.top;
+			Rect.top += Error;
+			Rect.bottom += Error;
+		}
+
 		RegCloseKey(hKey);
 	}
 
@@ -1825,6 +1832,14 @@ void CreateMHWindow(struct AXIPPORTINFO * PORT)
 			Rect.right = 600;
 			Rect.bottom = 400;
 		}
+
+		if (Rect.top < OffsetH)			// Make sure not off top of MDI frame
+		{
+			int Error = OffsetH - Rect.top;
+			Rect.top += Error;
+			Rect.bottom += Error;
+		}
+
 
 		RegCloseKey(hKey);
 	}
