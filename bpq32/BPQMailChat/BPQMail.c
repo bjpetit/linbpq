@@ -873,7 +873,7 @@
 //	Only apply NTS alias file to NTS Messages
 //	Fix failure to store some encrypted ISP passwords
 //	Allow EDITUSER to change "RMS Express User" flag
-
+//	Fix reporting of Config File errors
 
 #include "BPQMailChat.h"
 #define MAIL
@@ -2756,7 +2756,8 @@ BOOL Initialise()
 
 	if (GetConfig(ConfigName) == EXIT_FAILURE)
 	{
-		printf("BBS Config File seems corrupt - check before continuing\n");
+		ret = MessageBox(NULL,
+			"BBS Config File seems corrupt - check before continuing", "BPQMail", MB_ICONSTOP);
 		return FALSE;
 	}
 
