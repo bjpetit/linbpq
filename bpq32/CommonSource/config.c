@@ -437,6 +437,8 @@ int LineNo = 0;
 
 int heading = 0;
 
+struct CONFIGTABLE * xxcfg;
+
 BOOL ProcessConfig()
 {
 	int i;
@@ -495,6 +497,8 @@ BOOL ProcessConfig()
 	ConfigBuffer = malloc(100000);
 
 	memset(ConfigBuffer, 0, 100000);
+
+	xxcfg = (struct CONFIGTABLE * )ConfigBuffer;
 
 	App = (struct APPLCONFIG *)&ConfigBuffer[ApplOffset];
 
@@ -1478,7 +1482,7 @@ int routes(int i)
 		inp3 = 0;
 		farQual = 0;
 
-		// strtok and sscanf can't handle successive commas
+		// strtok and sscanf can't handle successive commas, so split up usig strchr
 
 		memset(Param, 0, 2048);
 		strlop(rec, 13);

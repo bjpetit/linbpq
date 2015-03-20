@@ -340,7 +340,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 	RegisterClass(&wc);
 
-	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||
+	if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_TELNET ||TNC->Hardware == H_ARDOP ||
 			TNC->Hardware == H_V4 || TNC->Hardware == H_FLDIGI || TNC->Hardware == H_UIARQ)
 		sprintf(Title, "%s Status - Port %d", WindowTitle, TNC->Port);
 	else if (TNC->Hardware == H_UZ7HO)
@@ -388,7 +388,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 			}
 		}
 
-		if (TNC->Hardware == H_WINMOR)	
+		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_ARDOP)	
 			retCode = RegQueryValueEx(hKey,"TNC->RestartAfterFailure",0,			
 				(ULONG *)&Type,(UCHAR *)&TNC->RestartAfterFailure,(ULONG *)&Vallen);
 

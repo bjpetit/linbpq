@@ -2163,6 +2163,9 @@ VOID SwitchToPactor(struct TNCINFO * TNC)
 
 	TNC->HFPacket = FALSE;
 	TNC->Streams[0].DEDStream = 31;		// Pactor Channel
+
+	if (RIG_DEBUG)
+		Debugprintf("BPQ32 Scan - switch to Pactor");
 }
 
 VOID SwitchToPacket(struct TNCINFO * TNC)

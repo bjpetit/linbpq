@@ -345,6 +345,7 @@ typedef struct TNCINFO
 #define H_MPSK 10
 #define H_FLDIGI 11
 #define H_UIARQ 12
+#define H_ARDOP 13
 
 
 	int Port;					// BPQ Port Number

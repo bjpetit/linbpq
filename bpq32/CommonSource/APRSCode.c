@@ -477,12 +477,14 @@ Dll BOOL APIENTRY Init_APRS()
 	fd = shm_open("/BPQAPRSSharedMem", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 	if (fd == -1)
 	{
+		perror("Create Shared Memory");
 		printf("Create APRS Shared Memory Failed\n");
 	}
 	else
 	{
 		if (ftruncate(fd, sizeof(struct STATIONRECORD) * (MaxStations + 1)) == -1)
 		{
+			perror("Extend Shared Memory");
 			printf("Extend APRS Shared Memory Failed\n");
 		}
 		else
@@ -494,7 +496,8 @@ Dll BOOL APIENTRY Init_APRS()
 
 			if (APRSStationMemory == MAP_FAILED)
 			{
-				printf("Extend APRS Shared Memory Failed\n");
+				perror("Map Shared Memory");
+				printf("Map APRS Shared Memory Failed\n");
 				APRSStationMemory = NULL;
 			}
 		}
@@ -504,7 +507,7 @@ Dll BOOL APIENTRY Init_APRS()
 
 	if (APRSStationMemory == NULL)
 	{
-		printf("APRS not using shared memory");
+		printf("APRS not using shared memory\n");
 		APRSStationMemory = malloc(sizeof(struct STATIONRECORD) * (MaxStations + 1));
 	}
 

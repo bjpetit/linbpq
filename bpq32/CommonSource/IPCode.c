@@ -172,8 +172,6 @@ UCHAR ourMACAddr[6] = {02,'B','P','Q',0,2};
 UCHAR ourMACAddr[6] = {02,'B','P','Q',0,1};
 #endif
 
-ULONG DefaultIPAddr = 0;
-
 int IPPortMask = 0;
 
 IPSTATS IPStats = {0};
@@ -355,23 +353,6 @@ Dll BOOL APIENTRY Init_IP()
 			WritetoConsoleLocal("Failed to open pcap device - IP Support Disabled\n");
 			return FALSE;
 		} 
-
-		// Allocate ARP Entry for Default Gateway, and send ARP for it
-
-		if (DefaultIPAddr)
-		{
-			ARPptr = AllocARPEntry();
-
-			if (ARPptr != NULL)
-			{
-				ARPptr->ARPINTERFACE = 255;
-				ARPptr->ARPTYPE = 'E';
-				ARPptr->IPADDR = DefaultIPAddr;
-				ARPptr->LOCKED = TRUE;
-
-				SendARPMsg(ARPptr);
-			}
-		}
 	}
 
 #else
@@ -667,7 +648,7 @@ PollEncaploop:
 	if (EncapSock)
 	{
 		int nread;
-		int addrlen = sizeof(struct sockaddr_in);
+		int addrlen = sizeof(struct sockaddr_in6);
 
 		nread = recvfrom(EncapSock, &Buffer[EthOffset], 1600, 0, (struct sockaddr *)&RXaddr.rxaddr,&addrlen);
 
@@ -1727,13 +1708,39 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 				IPptr->IPCHECKSUM = 0;
 				IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
 
-				SendIPtoEncap(IPptr, Outer->IPSOURCE.addr);
+	//			SendIPtoEncap(IPptr, Outer->IPSOURCE.addr);
 
 			}
 			return;
 		}
 
 		return;
+	}
+
+	//	See if for us
+
+	if (IPptr->IPDEST.addr == OurIPAddr)
+	{
+		if (IPptr->IPPROTOCOL == 1)		// ICMP
+		{
+			ProcessICMPMsg(IPptr);
+			return;
+		}
+
+		// Support UDP for SNMP
+
+		if (IPptr->IPPROTOCOL == 17)		// UDP
+		{
+			PUDPMSG UDPptr = (PUDPMSG)&IPptr->Data;
+
+			if (UDPptr->DESTPORT == htons(161))
+			{
+				ProcessSNMPMessage(IPptr);
+				return;
+			}
+		}
+
+		return;				// Igonre others
 	}
 
 	// I think anything else is just passed to the router
@@ -1997,7 +2004,7 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
 	} TXaddr = {0};
 
 	int sent;
-	int addrlen = sizeof(struct sockaddr_in);
+	int addrlen = sizeof(struct sockaddr_in6);
 	int Origlen;
 
 	TXaddr.txaddr.sin_family = AF_INET;
@@ -2007,8 +2014,8 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
 	{
 		UCHAR * ptr;
 	
-		TXaddr.txaddr.sin_port = htons(UDPPort + 1);
-		memcpy(&TXaddr.txaddr.sin_addr, &RXaddr.rxaddr.sin_addr, 4);
+		memcpy(&TXaddr, &RXaddr, sizeof(struct sockaddr_in6));
+		TXaddr.txaddr.sin_port = htons(UDPPort);
 
 		// UDP Processor Needs the Encap Address, but we don't need the IPIP hearer
 		//	as that is added by the raw send later. Just stick it on the end.
@@ -2429,15 +2436,6 @@ VOID RemoveARP(PARPDATA Arp)
 	while (Arp->ARP_Q)
 		ReleaseBuffer(Q_REM(&Arp->ARP_Q));
 
-	if (Arp->IPADDR == DefaultIPAddr)
-	{
-		// Dont remove Default Gateway. Set to re-resolve
-
-		Arp->ARPVALID = FALSE;
-		Arp->ARPTIMER = 5;
-		return;
-	}
-
 	for (i=0; i < NumberofARPEntries; i++)
 	{
 		if (Arp == ARPRecords[i])
@@ -2634,16 +2632,6 @@ static ProcessLine(char * buf)
 		OurNetMask = inet_addr(p_value);
 
 		if (OurNetMask == INADDR_NONE) return (FALSE);
-
-		return (TRUE);
-	}
-
-
-	if (_stricmp(ptr,"IPGateway") == 0)
-	{
-		DefaultIPAddr = inet_addr(p_value);
-
-		if (DefaultIPAddr == INADDR_NONE) return (FALSE);
 
 		return (TRUE);
 	}

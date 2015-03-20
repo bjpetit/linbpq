@@ -697,6 +697,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fixes for IPGateway configuration and Virtual Circuit Mode
 //	Separate Portmapper from IPGateway
 //	Add PING Command
+//	Add ARDOP Driver
 
 #define CKernel
 
@@ -782,6 +783,7 @@ UINT MPSKExtInit(EXTPORTDATA * PortEntry);
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT UIARQExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
+UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -3187,6 +3189,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "BAYCOM"))
 		return (UINT) BaycomExtInit;
+
+	if (strstr(Value, "ARDOP"))
+		return (UINT) ARDOPExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

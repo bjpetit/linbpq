@@ -60,7 +60,7 @@ unsigned char seed [] = {77, 197, 101, 206, 190, 249,
 int GetCMSHash(char * Challenge, char * Password)
 {
 	unsigned char Hash[16];
-	unsigned char Phrase[100];
+	unsigned char Phrase[256];
 
 	strlop(Challenge, 13);
 	strlop(Password, 13);

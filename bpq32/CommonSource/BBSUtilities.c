@@ -7618,6 +7618,8 @@ VOID SaveConfig(char * ConfigName)
 	}
 	config_destroy(&cfg);
 
+/*
+
 #ifndef LINBPQ
 
 	//	Save a copy with current Date/Time Stamp for debugging
@@ -7636,6 +7638,7 @@ VOID SaveConfig(char * ConfigName)
 		CopyFile(ConfigName, Backup, FALSE);	// Copy to .bak
 	}
 #endif
+*/
 }
 
 int GetIntValue(config_setting_t * group, char * name)
@@ -7689,8 +7692,14 @@ BOOL GetConfig(char * ConfigName)
 	
 	if(! config_read_file(&cfg, ConfigName))
 	{
-		fprintf(stderr, "%d - %s\n",
+		char Msg[256];
+		sprintf(Msg, "Config FIle Line %d - %s\n",
 			config_error_line(&cfg), config_error_text(&cfg));
+#ifdef WIN32
+		MessageBox(NULL, Msg, "BPQMail", MB_ICONSTOP);
+#else
+		printf(Msg);
+#endif
 		config_destroy(&cfg);
 		return(EXIT_FAILURE);
 	}
@@ -9181,7 +9190,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 	// Check List first. If any other, save last listed to user record.
 
-	if (_memicmp(Cmd, "L", 1) == 0)
+	if (_memicmp(Cmd, "L", 1) == 0 && _memicmp(Cmd, "LISTFILES", 3) != 0)
 	{
 		DoListCommand(conn, user, Cmd, Arg1, FALSE);
 		SendPrompt(conn, user);
@@ -9271,7 +9280,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 	}
 
 
-	if (_memicmp(Cmd, "LISTFILES", 5) == 0 || _memicmp(Cmd, "FILES", 5) == 0)
+	if (_memicmp(Cmd, "LISTFILES", 3) == 0 || _memicmp(Cmd, "FILES", 5) == 0)
 	{
 		ListFiles(conn, user, Arg1);
 		SendPrompt(conn, user);

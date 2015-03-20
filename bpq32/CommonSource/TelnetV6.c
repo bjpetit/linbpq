@@ -242,13 +242,18 @@ ProcessLine(char * buf, int Port)
 	else
 	if (_stricmp(param, "CMSPASS") == 0)
 	{
+		if (strlen(value) > 79)
+			value[79] = 0;
 		strcpy(TCP->SecureCMSPassword, value);
-		strlop(TCP->SecureCMSPassword, 20);
+		strlop(TCP->SecureCMSPassword, 32);
+		strlop(TCP->SecureCMSPassword, 13);
 		_strupr(TCP->SecureCMSPassword);
 	}
 	else
 	if (_stricmp(param, "CMSCALL") == 0)
 	{
+		if (strlen(value) > 9)
+			value[9] = 0;
 		strcpy(TCP->GatewayCall, value);
 		strlop(TCP->GatewayCall, 13);
 		_strupr(TCP->GatewayCall);

@@ -103,7 +103,7 @@ typedef struct _IPMSG
 
 } IPMSG, *PIPMSG;
 
-char Encaphost[80] = "2001:5c0:1500:cd00:77:ac84:9fa7:6833"; //acer.g8bpq.net";
+char Encaphost[80] = "2001:5c0:1500:cd00:5c22:9f69:3b8f:3c7e"; //notpc.g8bpq.net";
 
 SOCKET EncapSock = 0;
 SOCKET UDPSock = 0;
@@ -218,6 +218,7 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 	if (sent != Origlen)
 	{
 		int err = GetLastError();
+		printf("Send Error %d %d %d\n", Origlen, sent, err);
 	}
 }
 
@@ -277,6 +278,12 @@ int main(int argc, char* argv[])
 
 #endif
 
+	if (argc < 2)
+	{
+		printf("Need a host name\n");
+		return 0;
+	}
+
 	maxsock = EncapSock = socket(AF_INET, SOCK_RAW, 4);
 
 	if (EncapSock == INVALID_SOCKET)
@@ -308,7 +315,7 @@ int main(int argc, char* argv[])
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_DGRAM;
-	getaddrinfo(Encaphost, "0", &hints, &res);
+	getaddrinfo(argv[1], "0", &hints, &res);
 
 	if (!res)
 	{
@@ -319,6 +326,8 @@ int main(int argc, char* argv[])
 	}
 
 	getnameinfo(res->ai_addr, res->ai_addrlen, host, 256, serv, 256, 0);
+
+	printf("Host is %s, AF is %d\n", host, res->ai_family);
 
 	UDPSock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 
@@ -354,7 +363,7 @@ int main(int argc, char* argv[])
 	else
 		sinx.sinx.sin_addr.s_addr = INADDR_ANY;
 		
-	sinx.sinx.sin_port = htons(UDPPort + 1);	// Need different Send and Receive ports
+	sinx.sinx.sin_port = htons(UDPPort);
 
 	if (IPv6)
 		ret = bind(UDPSock, (struct sockaddr *) &sinx.sinx, sizeof(sinx.sinx6));
