@@ -114,7 +114,11 @@ VOID ProcessFBBLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int l
 				conn->MaxPLen = atoi(++ptr);
 				if (conn->MaxPLen == 0) conn->MaxPLen = 99999999;
 			}
+			return;
 		}
+
+		// Other ; Line - Ignore
+
 		return;
 	}
 
@@ -1662,7 +1666,7 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 	{
 		RestartRec = zalloc(sizeof (struct FBBRestartData));
 
-		GetSemaphore(&AllocSemaphore);
+		GetSemaphore(&AllocSemaphore, 0);
 
 		RestartData=realloc(RestartData,(++RestartCount+1)*4);
 		RestartData[RestartCount] = RestartRec;

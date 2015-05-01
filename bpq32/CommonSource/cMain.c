@@ -932,6 +932,8 @@ BOOL Start()
 		{
 			PORT->KISSTCP = TRUE;
 			PORT->IOBASE = PortRec->TCPPORT;
+			if (PortRec->IPADDR == 0)
+				PORT->KISSSLAVE = TRUE;
 		}
 
 		if (PortRec->WL2K)

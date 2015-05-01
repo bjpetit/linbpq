@@ -188,6 +188,12 @@ ConfigLine:
 			if (_memicmp(buf, "OLDMODE", 7) == 0)
 				TNC->OldMode = TRUE;
 			else
+			if (_memicmp(buf, "VERYOLDMODE", 7) == 0)
+			{
+				TNC->OldMode = TRUE;
+				TNC->VeryOldMode = TRUE;
+			}
+			else
 		
 			if (_memicmp(buf, "BUSYWAIT", 8) == 0)		// Wait time beofre failing connect if busy
 				TNC->BusyWait = atoi(&buf[8]);
@@ -751,7 +757,10 @@ VOID KAMPoll(int Port)
 				TNC->Streams[0].MyCall[calllen] = 0;
 		
 					EncodeAndSend(TNC, "X", 1);			// ??Return to packet mode??
-					datalen = sprintf(TXMsg, "C20MYPTCALL %s", TNC->Streams[0].MyCall);
+					if (TNC->VeryOldMode)
+						datalen = sprintf(TXMsg, "C20MYCALL %s", TNC->Streams[0].MyCall);
+					else
+						datalen = sprintf(TXMsg, "C20MYPTCALL %s", TNC->Streams[0].MyCall);
 					EncodeAndSend(TNC, TXMsg, datalen);
 					TNC->InternalCmd = 'M';
 		
@@ -897,7 +906,10 @@ VOID KAMPoll(int Port)
 			int datalen;
 			UCHAR TXMsg[80] = "D20";
 
-			datalen = sprintf(TXMsg, "C20MYPTCALL %s", TNC->NodeCall);
+			if (TNC->VeryOldMode)
+				datalen = sprintf(TXMsg, "C20MYCALL %s", TNC->NodeCall);
+			else
+				datalen = sprintf(TXMsg, "C20MYPTCALL %s", TNC->NodeCall);
 			EncodeAndSend(TNC, TXMsg, datalen);
 
 			if (TNC->OldMode)
@@ -1182,9 +1194,12 @@ Poll:
 
 		if (TNC->IntCmdDelay <=0)
 		{
-			EncodeAndSend(TNC, "?", 1);
-			TNC->InternalCmd = '?';
-			TNC->Timeout = 50;
+			if (TNC->VeryOldMode == FALSE)
+			{
+				EncodeAndSend(TNC, "?", 1);
+				TNC->InternalCmd = '?';
+				TNC->Timeout = 50;
+			}
 			TNC->IntCmdDelay = 100;	// Every 30
 			return;
 		}

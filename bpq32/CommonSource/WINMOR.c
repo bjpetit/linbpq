@@ -1816,8 +1816,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			SuspendOtherPorts(TNC);
 
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 50;
+			GetSemaphore(&Semaphore, 50);
 
 			ProcessIncommingConnectEx(TNC, Call, 0, TRUE, TRUE);
 			FreeSemaphore(&Semaphore);
@@ -1873,8 +1872,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				{
 					MsgLen = sprintf(Buffer, "%s\r", AppName);
 
-					GetSemaphore(&Semaphore);
-					SemHeldByAPI = 50;
+					GetSemaphore(&Semaphore, 50);
 
 					buffptr = GetBuff();
 
@@ -1915,8 +1913,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			char Reply[80];
 			int ReplyLen;
 
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 50;
+			GetSemaphore(&Semaphore, 50);
 			
 			buffptr = GetBuff();
 
@@ -1969,8 +1966,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			TNC->Streams[0].Connecting = FALSE;
 
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 50;
+			GetSemaphore(&Semaphore, 50);
 
 			buffptr = GetBuff();
 
@@ -2210,8 +2206,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 50;
+	GetSemaphore(&Semaphore, 50);
 
 	buffptr = GetBuff();
 

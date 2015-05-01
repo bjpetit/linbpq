@@ -52,7 +52,7 @@ unsigned long _beginthread( void( *start_address )(VOID * DParam),
 
 
 int APIENTRY GetRaw(int stream, char * msg, int * len, int * count);
-void GetSemaphore(struct SEM * Semaphore);
+void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 int EncryptPass(char * Pass, char * Encrypt);
 VOID DecryptPass(char * Encrypt, unsigned char * Pass, unsigned int len);
@@ -70,7 +70,7 @@ BOOL CheckifPacket(char * Via);
 UCHAR * APIENTRY GetVersionString();
 void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename);
-
+int GetCMSHash(char * Challenge, char * Password);
 
 config_t cfg;
 config_setting_t * group;
@@ -78,6 +78,8 @@ config_setting_t * group;
 extern ULONG BBSApplMask;
 
 //static int SEMCLASHES = 0;
+
+char SecureMsg[80] = "";			// CMS Secure Signon Response
 
 int	NumberofStreams;
 
@@ -269,7 +271,7 @@ void WriteLogLine(CIRCUIT * conn, int Flag, char * Msg, int MsgLen, int Flags)
 	if (Flags == LOG_CHAT && !LogCHAT)
 		return;
 
-	GetSemaphore(&LogSEM);
+	GetSemaphore(&LogSEM, 0);
 
 	if (LogHandle[Flags] == NULL) OpenLogfile(Flags);
 
@@ -370,7 +372,7 @@ struct UserInfo * AllocateUserRecord(char * Call)
 	strcpy(User->Call, Call);
 	User->Length = sizeof (struct UserInfo);
 
-	GetSemaphore(&AllocSemaphore);
+	GetSemaphore(&AllocSemaphore, 0);
 
 	UserRecPtr=realloc(UserRecPtr,(++NumberofUsers+1)*4);
 	UserRecPtr[NumberofUsers]= User;
@@ -384,7 +386,7 @@ struct MsgInfo * AllocateMsgRecord()
 {
 	struct MsgInfo * Msg = zalloc(sizeof (struct MsgInfo));
 
-	GetSemaphore(&AllocSemaphore);
+	GetSemaphore(&AllocSemaphore, 0);
 
 	MsgHddrPtr=realloc(MsgHddrPtr,(++NumberofMessages+1)*4);
 	MsgHddrPtr[NumberofMessages] = Msg;
@@ -398,7 +400,7 @@ BIDRec * AllocateBIDRecord()
 {
 	BIDRec * BID = zalloc(sizeof (BIDRec));
 	
-	GetSemaphore(&AllocSemaphore);
+	GetSemaphore(&AllocSemaphore, 0);
 
 	BIDRecPtr=realloc(BIDRecPtr,(++NumberofBIDs+1)*4);
 	BIDRecPtr[NumberofBIDs] = BID;
@@ -412,7 +414,7 @@ BIDRec * AllocateTempBIDRecord()
 {
 	BIDRec * BID = zalloc(sizeof (BIDRec));
 	
-	GetSemaphore(&AllocSemaphore);
+	GetSemaphore(&AllocSemaphore, 0);
 
 	TempBIDRecPtr=realloc(TempBIDRecPtr,(++NumberofTempBIDs+1)*4);
 	TempBIDRecPtr[NumberofTempBIDs] = BID;
@@ -1053,7 +1055,7 @@ VOID RemoveTempBIDS(CIRCUIT * conn)
 		BIDRec ** NewTempBIDRecPtr = zalloc((NumberofTempBIDs+1) * 4);
 		int i = 0, n;
 
-		GetSemaphore(&AllocSemaphore);
+		GetSemaphore(&AllocSemaphore, 0);
 
 		for (n = 1; n <= NumberofTempBIDs; n++)
 		{
@@ -2222,7 +2224,7 @@ int QueueMsg(ConnectionInfo * conn, char * msg, int len)
 
 	// Create or extend buffer
 
-	GetSemaphore(&OutputSEM);
+	GetSemaphore(&OutputSEM, 0);
 
 	conn->OutputQueue=realloc(conn->OutputQueue, conn->OutputQueueLength + len);
 
@@ -2357,7 +2359,7 @@ void Flush(CIRCUIT * conn)
 		else
 			len=conn->paclen;
 
-		GetSemaphore(&OutputSEM);
+		GetSemaphore(&OutputSEM, 0);
 
 		if (conn->Paging)
 		{
@@ -2416,7 +2418,7 @@ VOID ClearQueue(ConnectionInfo * conn)
 	if (conn->OutputQueue == NULL)
 		return;
 
-	GetSemaphore(&OutputSEM);
+	GetSemaphore(&OutputSEM, 0);
 	
 	free(conn->OutputQueue);
 
@@ -4653,7 +4655,7 @@ VOID CreateMessageFromBuffer(CIRCUIT * conn)
 
 		// Set number here so they remain in sequence
 		
-		GetSemaphore(&MsgNoSemaphore);
+		GetSemaphore(&MsgNoSemaphore, 0);
 		Msg->number = ++LatestMsg;
 		FreeSemaphore(&MsgNoSemaphore);
 		MsgnotoMsg[Msg->number] = Msg;
@@ -5106,7 +5108,7 @@ BOOL FindMessagestoForwardLoop(CIRCUIT * conn, char Type, int MaxLen)
 //	Debugprintf("FMTF entered Call %s Type %c Maxlen %d NextMsg = %d BBSNo = %d",
 //		conn->Callsign, Type, MaxLen, conn->NextMessagetoForward, user->BBSNumber);
 
-	if (conn->PacLinkCalls)			// Looking for all messages, so reset 
+	if (conn->PacLinkCalls || (conn->UserPointer->flags & F_NTSMPS))	// Looking for all messages, so reset 
 		conn->NextMessagetoForward = 1;
 
 	conn->FBBIndex = 0;
@@ -5309,15 +5311,22 @@ int CountMessagestoForward (struct UserInfo * user)
 	int m, n=0;
 	struct MsgInfo * Msg;
 	int BBSNumber = user->BBSNumber;
+	int FirstMessage = FirstMessageIndextoForward;
 
-	for (m = FirstMessageIndextoForward; m <= NumberofMessages; m++)
+	if ((user->flags & F_NTSMPS))
+		FirstMessage = 1;
+
+	for (m = FirstMessage; m <= NumberofMessages; m++)
 	{
 		Msg=MsgHddrPtr[m];
 
 		if ((Msg->status != 'H') && (Msg->status != 'D') && Msg->type && check_fwd_bit(Msg->fbbs, BBSNumber))
+		{
 			n++;
+			continue;			// So we dont count twice in Flag set and NTS MPS
+		}
 
-		// if an NTS MPS, also check ofr any matches
+		// if an NTS MPS, also check for any matches
 
 		if (Msg->type == 'T' && (user->flags & F_NTSMPS))
 		{
@@ -5378,7 +5387,7 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
 
 	Msg->length = Length;
 
-	GetSemaphore(&MsgNoSemaphore);
+	GetSemaphore(&MsgNoSemaphore, 0);
 	Msg->number = ++LatestMsg;
 	MsgnotoMsg[Msg->number] = Msg;
 
@@ -6139,7 +6148,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 
 		// Set number here so they remain in sequence
 		
-		GetSemaphore(&MsgNoSemaphore);
+		GetSemaphore(&MsgNoSemaphore, 0);
 		Msg->number = ++LatestMsg;
 		FreeSemaphore(&MsgNoSemaphore);
 		MsgnotoMsg[Msg->number] = Msg;
@@ -6315,6 +6324,13 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 			{
 				BPQVECSTRUC * SESS;	
 				SESS = &BPQHOSTVECTOR[conn->BPQStream - 1];
+
+				if (SESS == NULL)
+				{
+					Logprintf(LOG_BBS, NULL, '|', "No L4 Sessions for connect to BBS %s", user->Call);
+					return FALSE;
+				}
+
 				SESS->HOSTSESSION->Secure_Session = 1;
 			}
 #endif
@@ -6786,6 +6802,21 @@ CheckForSID:
 		return FALSE;
 	}
 
+		if (memcmp(Buffer, ";PQ: ", 5) == 0)
+		{
+			// Secure CMS challenge
+
+			int Len;
+			int Response = GetCMSHash(&Buffer[5], conn->UserPointer->pass);
+			char RespString[12];
+
+			sprintf(RespString, "%010d", Response);
+
+			Len = sprintf(conn->SecureMsg, ";PR: %s\r", &RespString[2]);
+			return FALSE;
+		}
+
+
 	if (Buffer[0] == '[' && Buffer[len-2] == ']')		// SID
 	{
 		// Update PACLEN
@@ -6906,6 +6937,12 @@ CheckForSID:
 			(conn->BBSFlags & FBBB2Mode) ? "2" : "",
 			(conn->BBSFlags & FBBForwarding) ? "F" : ""); 
 
+		if (conn->SecureMsg[0])
+		{
+			BBSputs(conn, conn->SecureMsg);
+			conn->SecureMsg[0] = 0;
+		}
+					
 		if (conn->BPQBBS && conn->MSGTYPES[0])
 
 			// Send a ; MSGTYPES to control what he sends us

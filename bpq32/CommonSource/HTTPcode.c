@@ -169,8 +169,9 @@ char APRSBit[] = "<td><a href=../aprs/all.html>APRS Pages</a></td>";
 char MailBit[] = "<td><a href=../Mail/Header>Mail Server Pages</a></td>";
 char ChatBit[] = "<td><a href=../Chat/Header>Chat Server Pages</a></td>";
 
-char NodeTail[] = 	"<td><a href=/Node/Signon.html>SYSOP Signin</a></td>"
-	"</tr></table>";
+char NodeTail[] = "<td><a href=/Node/Signon.html>SYSOP Signin</a></td>" 
+ 				  "<td><a href=/Node/EditCfg.html>Edit Config</a></td>"
+				  "</tr></table>";
 	
 char Tail[] = "</body></html>";
 
@@ -314,6 +315,13 @@ static char MailLostSession[] = "<html><body>"
 "<form style=\"font-family: monospace; text-align: center;\" method=post action=/Mail/Lost?%s>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
 "<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
+
+
+static char ConfigEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
+"<title></title></head><body>"
+"<form style=\"font-family: monospace;  text-align: center;\"method=post action=CFGSave?%s>"
+"<textarea cols=100 rows=25 name=Msg>%s</textarea><br><br>"
+"<input name=Save value=Save type=submit><input name=Cancel value=Cancel type=submit><br></form>";
 
 static char EXCEPTMSG[80] = "";
 
@@ -1150,6 +1158,112 @@ int SetupNodeMenu(char * Buff)
 	return Len;
 }
 
+VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
+{
+	int ReplyLen = 0;
+	char * ptr, * ptr1, * ptr2, *input;
+	char c;
+	int MsgLen, WriteLen;
+	char inputname[250]="bpqcfg.txt";
+	FILE *fp1;
+	char Header[256];
+	int HeaderLen;
+	char Reply[4096];
+
+	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
+
+	if (input)
+	{
+		if (strstr(input, "Cancel=Cancel"))
+		{
+			ReplyLen = SetupNodeMenu(Reply);
+//			ReplyLen = sprintf(Reply, "%s", "<html><script>window.close();</script></html>");
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+			send(sock, Header, HeaderLen, 0);
+			send(sock, Reply, ReplyLen, 0);
+			send(sock, Tail, strlen(Tail), 0);
+			return;
+		}
+
+		ptr = strstr(input, "&Save=");
+
+		if (ptr)
+		{
+			*ptr = 0;
+		
+			// Undo any % transparency
+
+			ptr1 = ptr2 = input + 8;
+
+			c = *(ptr1++);
+
+			while (c)
+			{
+				if (c == '%')
+				{
+					int n;
+					int m = *(ptr1++) - '0';
+					if (m > 9) m = m - 7;
+					n = *(ptr1++) - '0';
+					if (n > 9) n = n - 7;
+
+					c  = m * 16 + n;
+				}
+				else if (c == '+')
+					c = ' ';
+
+#ifndef WIN32
+				if (c != 13)				// Strip CR if Linux
+#endif
+					*(ptr2++) = c;
+
+				c = *(ptr1++);
+		
+			}
+
+			*(ptr2++) = 0;
+
+			MsgLen = strlen(input + 8);
+	
+			if (BPQDirectory[0] == 0)
+			{
+				strcpy(inputname, "bpq32.cfg");
+			}
+				else
+			{
+				strcpy(inputname,BPQDirectory);
+				strcat(inputname,"/");
+				strcat(inputname, "bpq32.cfg");
+			}
+
+			fp1 = fopen(inputname, "wb");
+	
+			if (fp1)
+			{
+				WriteLen = fwrite(input + 8, 1, MsgLen, fp1); 
+				fclose(fp1);
+			}
+
+			if (WriteLen != MsgLen)
+			{
+				char Mess[80];
+				sprintf_s(Mess, sizeof(Mess), "Failed to create Config File\r");
+				return;
+			}
+		}
+	
+		ReplyLen = sprintf(Reply, "%s", "<html><script>alert(\"Configuration Saved\");window.close();</script></html>");
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+		send(sock, Header, HeaderLen, 0);
+		send(sock, Reply, ReplyLen, 0);
+		send(sock, Tail, strlen(Tail), 0);
+	}
+	return;
+}
+
+
+
+
 
 int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 {
@@ -1165,7 +1279,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 	struct HTTPConnectionInfo * Session = NULL;
 
 	HANDLE hPipe;
-	char URL[4096];
+	char URL[100000];
 	char * ptr;
 	char * Context, * Method, * NodeURL, * Key;
 	int ReplyLen = 0;
@@ -1186,7 +1300,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 #endif
 
 	Len = strlen(MsgPtr);
-	if (Len > 4096)
+	if (Len > 100000)
 		return 0; 
 
 	strcpy(URL, MsgPtr);
@@ -1514,6 +1628,16 @@ doHeader:
 
 		ProcessMailHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
 
+		if (memcmp(_REPLYBUFFER, "HTTP", 4) == 0)
+		{
+			// Full Header provided by appl - just send it
+			
+			send(sock, _REPLYBUFFER, ReplyLen, 0);
+			return 0;
+		}
+		
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
+
 		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));	
 		send(sock, Header, HeaderLen, 0);
 		send(sock, _REPLYBUFFER, ReplyLen, 0);
@@ -1770,8 +1894,15 @@ doHeader:
 			if (strstr(input, "Test=Test"))
 				SendUIBeacon(Port);
 		}
-	
 
+		if (_stricmp(NodeURL, "/Node/CfgSave") == 0)
+		{
+			//	Save Config File
+
+			SaveConfigFile(sock, MsgPtr, Key);
+			return 0;
+		}
+	
 		send(sock, _REPLYBUFFER, InputLen, 0);
 		return 0;
 	}
@@ -1883,6 +2014,84 @@ doHeader:
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<tr><td>%s</td><td align=right>%d</td></tr>",
 		"L3 Frames Relayed", L3FRAMES);
 
+	}
+	else if (_stricmp(NodeURL, "/Node/EditCfg.html") == 0)
+	{
+		char * _REPLYBUFFER;
+		int ReplyLen;
+		char Header[256];
+		int HeaderLen;
+		char * CfgBytes;
+		int CfgLen;
+		char inputname[250]="bpqcfg.txt";
+		FILE *fp1;
+		struct stat STAT;
+		char DummyKey[] = "DummyKey";
+
+		if (LOCAL == FALSE && COOKIE == FALSE)
+		{
+			//	Send Not Authorized
+
+			char _REPLYBUFFER[1000];	
+			ReplyLen = SetupNodeMenu(_REPLYBUFFER);	
+			ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], "<br><B>Not authorized - please sign in</B>");
+			HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+			send(sock, Header, HeaderLen, 0);
+			send(sock, _REPLYBUFFER, ReplyLen, 0);
+			send(sock, Tail, strlen(Tail), 0);
+			return 1;
+		}
+
+		if (COOKIE ==FALSE)
+			Key = DummyKey;
+
+		if (BPQDirectory[0] == 0)
+		{
+			strcpy(inputname, "bpq32.cfg");
+		}
+			else
+		{
+			strcpy(inputname,BPQDirectory);
+			strcat(inputname,"/");
+			strcat(inputname, "bpq32.cfg");
+		}
+
+		
+		if (stat(inputname, &STAT) == -1)
+		{
+			CfgBytes = _strdup("Config File not found");
+		}
+		else
+		{
+			fp1 = fopen(inputname, "rb");
+	
+			if (fp1 == 0)
+			{
+				CfgBytes = _strdup("Config File not found");
+			}
+			else
+			{	
+				CfgLen = STAT.st_size;
+
+				CfgBytes = malloc(CfgLen + 1);
+
+				CfgLen = fread(CfgBytes, 1, CfgLen, fp1); 
+				CfgBytes[CfgLen] = 0;
+			}		
+		}
+
+		_REPLYBUFFER = malloc(CfgLen + 1000);
+
+		ReplyLen = sprintf(_REPLYBUFFER, ConfigEditPage, Key, CfgBytes);
+		free (CfgBytes);
+
+		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
+		send(sock, Header, HeaderLen, 0);
+		send(sock, _REPLYBUFFER, ReplyLen, 0);
+		send(sock, Tail, strlen(Tail), 0);
+		free (_REPLYBUFFER);
+
+		return 1;
 	}
 
 	if (_stricmp(NodeURL, "/Node/PortBeacons") == 0)

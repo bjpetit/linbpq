@@ -1075,8 +1075,7 @@ DllExport int APIENTRY FindFreeStream()
 	if (InitDone == -1)			// Init failed
 		exit(0);
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 9;
+	GetSemaphore(&Semaphore, 9);
 
 	stream = 0;
 	n = 64;
@@ -1144,7 +1143,7 @@ DllExport int APIENTRY DeallocateStream(int stream)
 		SessionControl(stream + 1, 2, 0);
 
 	if (GotSem == 0)
-		GetSemaphore(&Semaphore);
+		GetSemaphore(&Semaphore, 0);
 
 	while (PORTVEC->HOSTTRACEQ)
 	{
@@ -1168,9 +1167,7 @@ DllExport int APIENTRY SessionState(int stream, int * state, int * change)
 
 	Check_Timer();				// In case Appl doesnt call it often ehough
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 20;
-
+	GetSemaphore(&Semaphore, 20);
 
 	//	CX = 0 if stream disconnected or CX = 1 if stream connected
 	//	DX = 0 if no change of state since last read, or DX = 1 if
@@ -1241,8 +1238,7 @@ DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 		if (QCOUNT < 50)
 			return 0;					// Dont want to run out
 
-		GetSemaphore(&Semaphore);
-		SemHeldByAPI = 10;
+		GetSemaphore(&Semaphore, 10);
 
 		if ((MSG = GetBuff()) == 0)
 		{
@@ -1272,8 +1268,7 @@ DllExport int APIENTRY SendMsg(int stream, char * msg, int len)
 	if (L4 == 0)
 		return 0;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 22;
+	GetSemaphore(&Semaphore, 22);
 
 	SESS->HOSTFLAGS |= 0x80;		// SET ALLOCATED BIT
 
@@ -1351,8 +1346,7 @@ DllExport int APIENTRY SendRaw(int port, char * msg, int len)
 	if (PORT == 0)
 		return 0;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 24;
+	GetSemaphore(&Semaphore, 24);
 
 	MSG = GetBuff();
 
@@ -1405,8 +1399,7 @@ DllExport time_t APIENTRY GetRaw(int stream, char * msg, int * len, int * count)
 
 	SESS = &BPQHOSTVECTOR[stream];
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 26;
+	GetSemaphore(&Semaphore, 26);
 
 	if (SESS->HOSTTRACEQ == 0)
 	{
@@ -1467,8 +1460,7 @@ DllExport int APIENTRY GetMsg(int stream, char * msg, int * len, int * count )
 	SESS = &BPQHOSTVECTOR[stream];
 	L4 = SESS->HOSTSESSION;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 25;
+	GetSemaphore(&Semaphore, 25);
 
 	if (L4 == 0 || L4->L4TX_Q == 0)
 	{
@@ -1599,8 +1591,7 @@ DllExport int APIENTRY GetCallsign(int stream, char * callsign)
 	SESS = &BPQHOSTVECTOR[stream];
 	L4 = SESS->HOSTSESSION;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 26;
+	GetSemaphore(&Semaphore, 26);
 
 	if (L4 == 0)
 	{
@@ -1691,8 +1682,7 @@ DllExport int APIENTRY GetConnectionInfo(int stream, char * callsign,
 	SESS = &BPQHOSTVECTOR[stream];
 	L4 = SESS->HOSTSESSION;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 27;
+	GetSemaphore(&Semaphore, 27);
 
 	if (L4 == 0)
 	{
@@ -2969,7 +2959,7 @@ int __sync_lock_test_and_set(int * ptr, int val)
 #endif // __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__
 #endif // MACBPQ
 
-void GetSemaphore(struct SEM * Semaphore)
+void GetSemaphore(struct SEM * Semaphore, int ID)
 {
 	//
 	//	Wait for it to be free
@@ -3017,6 +3007,7 @@ loop1:
 
 	Semaphore->Gets++;
 	Semaphore->SemProcessID = GetCurrentProcessId();
+	SemHeldByAPI = ID;
 
 	return;
 }

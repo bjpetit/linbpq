@@ -40,7 +40,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 BOOL APIENTRY Rig_Init();
 
-void GetSemaphore(struct SEM * Semaphore);
+void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 VOID CopyConfigFile(char * ConfigName);
 VOID SendMailForThread(VOID * Param);
@@ -553,7 +553,7 @@ int main(int argc, char * argv[])
 	SESSHDDRLEN = sprintf(SESSIONHDDR, "G8BPQ Network System %s for Linux (", TextVerstring);
 #endif
 
-	GetSemaphore(&Semaphore);
+	GetSemaphore(&Semaphore, 0);
 
 	if (Start() != 0)
 	{
@@ -891,8 +891,7 @@ int main(int argc, char * argv[])
 	while (KEEPGOING)
 	{
 		Sleep(100);
-		GetSemaphore(&Semaphore);
-		SemHeldByAPI = 2;
+		GetSemaphore(&Semaphore, 2);
 
 		if (CLOSING)
 		{
@@ -1021,12 +1020,12 @@ int main(int argc, char * argv[])
 			{
 				FreeSemaphore(&Semaphore);
 				InitializeTNCEmulator();
-				GetSemaphore(&Semaphore);
+				GetSemaphore(&Semaphore, 2);
 			}
 
 			FreeSemaphore(&Semaphore);
 			AGWActive = AGWAPIInit();
-			GetSemaphore(&Semaphore);
+			GetSemaphore(&Semaphore, 2);
 
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");
 		}
@@ -1170,6 +1169,8 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry);
 UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT ETHERExtInit(struct PORTCONTROL *  PortEntry);
 UINT AXIPExtInit(struct PORTCONTROL *  PortEntry);
+UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
+UINT DragonExtInit(EXTPORTDATA * PortEntry);
 
 UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 {
@@ -1235,6 +1236,12 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "TELNET"))
 		return (UINT) TelnetExtInit;
+
+	if (strstr(Value, "ARDOP"))
+		return (UINT) ARDOPExtInit;
+
+	if (strstr(Value, "DRAGON"))
+		return (UINT) DragonExtInit;
 
 	return(0);
 }
@@ -1394,13 +1401,13 @@ int PollStreams()
 		{
 			if (state == 1) // Connected
 			{
-				GetSemaphore(&ConSemaphore);
+				GetSemaphore(&ConSemaphore, 0);
 				Connected(conn->BPQStream);
 				FreeSemaphore(&ConSemaphore);
 			}
 			else
 			{
-				GetSemaphore(&ConSemaphore);
+				GetSemaphore(&ConSemaphore, 0);
 				Disconnected(conn->BPQStream);
 				FreeSemaphore(&ConSemaphore);
 			}

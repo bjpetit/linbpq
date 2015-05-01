@@ -300,6 +300,7 @@ static char MailDetailPage[] =
 "<span align = center><input onclick=editmsg(\"EditM?%s?%d\") value=\"Edit Text\" type=button> "
 "<input onclick=save(this.form) value=Save type=button> "
 "<td><a href=/Mail/SaveMessage?%s><button type = button>Save Message</button></a></td>"
+"<td><a href=/Mail/SaveAttachment?%s><button type = button %s>Save Attachment</button></a></td>"
 //"<input onclick=doit(\"SavetoFile\") value=\"Save to File\" type=button> "
 "<input onclick=doit(\"Print\") value=Print type=button> "
 "<input onclick=doit(\"Export\") value=Export type=button></span><br><br>"
@@ -745,9 +746,96 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 		*RLen = strlen(Reply);
 
+		free(MailBuffer);
 		return;
-
 	}
+
+	if (_stricmp(NodeURL, "/Mail/SaveAttachment") == 0)
+	{
+		struct MsgInfo * Msg = Session->Msg;
+		char * MailBuffer;
+
+		int Files = 0, i;
+		int BodyLen;
+		char * ptr;
+		int WriteLen=0;
+		char FileName[100][MAX_PATH] = {""};
+		int FileLen[100];
+		char Noatt[] = "Message has no attachments";
+
+
+		MailBuffer = ReadMessageFile(Msg->number);
+		BodyLen = Msg->length;
+
+		if ((Msg->B2Flags & Attachments) == 0)
+		{
+			sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s",
+				strlen(Noatt), Noatt);
+			*RLen = strlen(Reply);
+
+			free(MailBuffer);
+			return;
+		}
+		
+		ptr = MailBuffer;
+
+		while(ptr && *ptr != 13)
+		{
+			char * ptr2 = strchr(ptr, 10);	// Find CR
+
+			if (memcmp(ptr, "Body: ", 6) == 0)
+			{
+				BodyLen = atoi(&ptr[6]);
+			}
+
+			if (memcmp(ptr, "File: ", 6) == 0)
+			{
+				char * ptr1 = strchr(&ptr[6], ' ');	// Find Space
+
+				FileLen[Files] = atoi(&ptr[6]);
+
+				memcpy(FileName[Files++], &ptr1[1], (ptr2-ptr1 - 2));
+			}
+				
+			ptr = ptr2;
+			ptr++;
+		}
+
+		ptr += 4;			// Over Blank Line and Separator
+		ptr += BodyLen;		// to first file
+
+		if (Files == 0)
+		{
+			sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n%s",
+				strlen(Noatt), Noatt);
+			*RLen = strlen(Reply);
+			free(MailBuffer);
+			return;
+		}
+
+		*RLen = 0;
+
+		//	For now only handle first
+
+		i = 0;
+
+//		for (i = 0; i < Files; i++)
+		{
+			int Len = sprintf(&Reply[*RLen], "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Disposition: attachment; filename=\"%s\" \r\n\r\n",
+				FileLen[i], FileName[i]);
+
+			memcpy(&Reply[Len + *RLen], ptr, FileLen[i]);
+	
+			*RLen += (Len + FileLen[i]);
+
+			ptr += FileLen[i];
+			ptr +=2;				// Over separator - I don't think there should be one
+		}
+
+		free(MailBuffer);
+		return;
+	}
+
 
 	if (_stricmp(NodeURL, "/Mail/Msgs") == 0)
 	{
@@ -1001,7 +1089,8 @@ int SendMessageDetails(struct MsgInfo * Msg, char * Reply, char * Key)
 			(Msg->status == 'D')?sel:"",
 			(Msg->status == '$')?sel:"",
 			Msg->bid, D3, Msg->length, EmailFromLine, Msg->via, Msg->title,
-				Key, Msg->number, Key);
+			Key, Msg->number, Key, Key,
+			(Msg->B2Flags & Attachments)?"":"disabled");
 
 		// Get a sorted list of BBS records
 

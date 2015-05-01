@@ -626,7 +626,8 @@ typedef struct PORTCONTROL
 	struct WL2KInfo WL2KInfo;	// WL2K Report for this Port
 	struct in_addr PORTIPADDR;	// IP address for "KISS over UDP"
 	int	ListenPort;				// For KISS over UDP, if Different TX and RX Ports needed
-	BOOL	KISSTCP;				// TCP instead of UDP for KISS
+	BOOL KISSTCP;				// TCP instead of UDP for KISS
+	BOOL KISSSLAVE;				// TCP KISS is Salve
 
 	char * SerialPortName;		//	Serial Port Name for Unix
 	struct XDIGI * XDIGIS;		// Cross port digi setup

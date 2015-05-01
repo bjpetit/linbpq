@@ -155,7 +155,7 @@ VOID QueueRaw(int Port, PMESSAGEX AXMSG, int Len)
 
 	memcpy(AXCopy, AXMSG, Len + 10);
 
-	GetSemaphore(&DGSemaphore);
+	GetSemaphore(&DGSemaphore, 0);
 
 	if (DG_Q == 0)						// Empty
 	{
@@ -334,7 +334,7 @@ VOID UnQueueRaw(UINT Param)
 
 	while (TRUE)
 	{
-		GetSemaphore(&DGSemaphore);
+		GetSemaphore(&DGSemaphore, 0);
 
 		if (DG_Q)
 		{

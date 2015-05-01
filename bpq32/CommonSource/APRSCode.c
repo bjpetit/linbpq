@@ -2554,8 +2554,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 
 	strcpy(ISCopy, APRSMsg);
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 12;
+	GetSemaphore(&Semaphore, 12);
 
 #ifdef WIN32
 
@@ -2654,8 +2653,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		{
 			sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
 
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 12;
+			GetSemaphore(&Semaphore, 12);
 			SendAPRSMessage(Message, STN->Port);	
 			FreeSemaphore(&Semaphore);
 
@@ -2672,8 +2670,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 	{
 		sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
 	
-		GetSemaphore(&Semaphore);
-		SemHeldByAPI = 12;
+		GetSemaphore(&Semaphore, 12);
 		SendAPRSMessage(Message, -1);		// Send to all APRS Ports
 		FreeSemaphore(&Semaphore);
 
@@ -2690,8 +2687,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		if (Station->Lat != 0.0 && Station->Lon != 0.0 && Distance(Station->Lat, Station->Lon) < GateLocalDistance)
 		{
 			sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
-			GetSemaphore(&Semaphore);
-			SemHeldByAPI = 12;
+			GetSemaphore(&Semaphore, 12);
 			SendAPRSMessage(Message, -1);		// Send to all APRS Ports
 			FreeSemaphore(&Semaphore);
 
@@ -3266,9 +3262,7 @@ Dll BOOL APIENTRY GetAPRSFrame(char * Frame, char * Call)
 	struct _EXCEPTION_POINTERS exinfo;
 #endif
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 10;
-
+	GetSemaphore(&Semaphore, 10);
 	{
 		if (APPL_Q)
 		{
@@ -3295,8 +3289,7 @@ Dll BOOL APIENTRY PutAPRSFrame(char * Frame, int Len, int Port)
 
 	UINT * buffptr;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 11;
+	GetSemaphore(&Semaphore, 11);
 
 	buffptr = GetBuff();
 
@@ -3321,8 +3314,7 @@ Dll BOOL APIENTRY PutAPRSMessage(char * Frame, int Len)
 
 	UINT * buffptr;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 11;
+	GetSemaphore(&Semaphore, 11);
 
 	buffptr = GetBuff();
 
@@ -3709,8 +3701,7 @@ Dll struct STATIONRECORD *  APIENTRY APPLFindStation(char * Call, BOOL AddIfNotF
 
 	struct STATIONRECORD * Stn;
 
-	GetSemaphore(&Semaphore);
-	SemHeldByAPI = 12;
+	GetSemaphore(&Semaphore, 12);
 	Stn = FindStation(Call, AddIfNotFount)	;		
 	FreeSemaphore(&Semaphore);
 

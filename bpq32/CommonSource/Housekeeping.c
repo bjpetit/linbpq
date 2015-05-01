@@ -253,14 +253,14 @@ VOID DoHouseKeeping(BOOL Manual)
 	RemoveKilledMessages();
 	ExpireMessages();
 	
-	GetSemaphore(&AllocSemaphore);
+	GetSemaphore(&AllocSemaphore, 0);
 	ExpireBIDs();
 	FreeSemaphore(&AllocSemaphore);
 
 	if (LatestMsg > MaxMsgno)
 	{
-		GetSemaphore(&MsgNoSemaphore);
-		GetSemaphore(&AllocSemaphore);
+		GetSemaphore(&MsgNoSemaphore, 0);
+		GetSemaphore(&AllocSemaphore, 0);
 
 		Renumber_Messages();
 	
@@ -526,8 +526,8 @@ BOOL RemoveKilledMessages()
 
 	Removed = 0;
 
-	GetSemaphore(&MsgNoSemaphore);
-	GetSemaphore(&AllocSemaphore);
+	GetSemaphore(&MsgNoSemaphore, 0);
+	GetSemaphore(&AllocSemaphore, 0);
 
 	FirstMessageIndextoForward = 0;
 
@@ -902,7 +902,7 @@ VOID SendNonDeliveryMessage(struct MsgInfo * OldMsg, BOOL Unread, int Age)
 			sprintf(From, "%s@%s", OldMsg->from, WP->first_homebbs);
 	}
 
-	GetSemaphore(&MsgNoSemaphore);
+	GetSemaphore(&MsgNoSemaphore, 0);
 	Msg->number = ++LatestMsg;
 	MsgnotoMsg[Msg->number] = Msg;
 

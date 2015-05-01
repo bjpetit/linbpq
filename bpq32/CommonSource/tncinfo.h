@@ -170,6 +170,7 @@ struct STREAMINFO
 	int	FramesQueued;			// Frames Queued - used for flow control
 	BOOL InternalCmd;			// Last Command was generated internally
 	int	IntCmdDelay;			// To limit internal commands
+	BOOL CheckingCall;			// Set on PTC if waiting for I response after a Connect RXed
 
 	BOOL Attached;				// Set what attached to a BPQ32 stream
 	BOOL Connected;				// When set, all data is passed as data instead of commands
@@ -517,6 +518,9 @@ typedef struct TNCINFO
 	int Mode;						// Mode Flag
 
 	BOOL Dragon;					// Set if P4Dragon
+	BOOL DragonSingle;				// Set if P4Dragon using Pactor and Packet on same port
+	BOOL EnterExit;					// Switching to Term mode to change bandwidth
+	int PktStream;					// Stream in use for Packet when in single port mode
 	BOOL MaxLevel;					// Pactor Level to set for Wide Mode (3 or 4)
 	int MinLevel;					// Mimimum accepted Pactor Level
 	int MinLevelTimer;				// Time left to achieve Min Level
@@ -525,6 +529,7 @@ typedef struct TNCINFO
 	int SwitchToPactor;				// Countdown to switch
 
 	BOOL OldMode;					// Use PACTOR instead of TOR (for old software)
+	BOOL VeryOldMode;				// Use MYCALL  instead of MYPTCALL (for old software)
 
 	int Mem1;						// Free Bytes (VHF /HF)
 	int Mem2;

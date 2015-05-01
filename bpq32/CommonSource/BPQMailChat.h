@@ -259,6 +259,8 @@ typedef struct ConnectionInfo_S
 
 	int SIDResponseTimer;				// Used to detect incomplete handshake
 
+	char SecureMsg[20];					// CMS Secure Signon Response
+
 } ConnectionInfo, CIRCUIT;
 
 // Flags Equates
@@ -1116,7 +1118,7 @@ int RemoveLF(char * Message, int len);
 // Utilities
 
 BOOL isdigits(char * string);
-void GetSemaphore(struct SEM * Semaphore);
+void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 
 VOID __cdecl Debugprintf(const char * format, ...);

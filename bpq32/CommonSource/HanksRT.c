@@ -263,7 +263,7 @@ int ChatQueueMsg(ChatCIRCUIT * conn, char * msg, int len)
 
 	// Create or extend buffer
 
-	GetSemaphore(&OutputSEM);
+	GetSemaphore(&OutputSEM, 0);
 
 	if (conn->OutputQueueLength + len > 9999)
 	{
@@ -2878,7 +2878,7 @@ VOID ChatTimer()
 	time_t NOW = time(NULL);
 	char Msg[256];
 #endif
-	GetSemaphore(&ChatSemaphore);
+	GetSemaphore(&ChatSemaphore, 0);
 
 	if (NeedStatus)
 	{
@@ -3539,13 +3539,13 @@ int ChatPollStreams()
 		{
 			if (state == 1) // Connected	
 			{
-				GetSemaphore(&ConSemaphore);
+				GetSemaphore(&ConSemaphore, 0);
 				ChatConnected(conn->BPQStream);
 				FreeSemaphore(&ConSemaphore);
 			}
 			else
 			{
-				GetSemaphore(&ConSemaphore);
+				GetSemaphore(&ConSemaphore, 0);
 				ChatDisconnected(conn);
 				FreeSemaphore(&ConSemaphore);
 			}
@@ -3736,7 +3736,7 @@ void ChatFlush(ChatCIRCUIT * conn)
 		else
 			len=conn->paclen;
 
-		GetSemaphore(&OutputSEM);
+		GetSemaphore(&OutputSEM, 0);
 
 
 		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
@@ -3762,7 +3762,7 @@ VOID ChatClearQueue(ChatCIRCUIT * conn)
 	if (conn->OutputQueue == NULL)
 		return;
 
-	GetSemaphore(&OutputSEM);
+	GetSemaphore(&OutputSEM, 0);
 	
 	conn->OutputGetPointer=0;
 	conn->OutputQueueLength=0;

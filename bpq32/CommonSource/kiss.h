@@ -11,6 +11,7 @@ typedef struct tagASYINFO
 	SOCKET	sock;			// for KISS over UDP/TCP
 	BOOL	Connecting;		// Kiss over TCP
 	BOOL	Connected;		// Kiss over TCP
+	BOOL	Listening;		// Kiss over TCP
 	BOOL	Alerted;		// Connect Fail Reported
 
 	struct sockaddr_in destaddr;

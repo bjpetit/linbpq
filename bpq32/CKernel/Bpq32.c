@@ -698,6 +698,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Separate Portmapper from IPGateway
 //	Add PING Command
 //	Add ARDOP Driver
+//	Add basic APPLCALL support for PTC-PRO/Dragon 7800 Packet (using MYALIAS)
+//	Add "VeryOldMode" for KAM Version 5.02
+//	Add KISS over TCP Slave Mode.
 
 #define CKernel
 
@@ -784,6 +787,7 @@ UINT FLDigiExtInit(EXTPORTDATA * PortEntry);
 UINT UIARQExtInit(EXTPORTDATA * PortEntry);
 UINT BaycomExtInit(EXTPORTDATA * PortEntry);
 UINT ARDOPExtInit(EXTPORTDATA * PortEntry);
+UINT DragonExtInit(EXTPORTDATA * PortEntry);
 
 extern char * ConfigBuffer;	// Config Area
 VOID REMOVENODE(dest_list * DEST);
@@ -940,7 +944,7 @@ UINT Sem_edx = 0;
 UINT Sem_esi = 0;
 UINT Sem_edi = 0;
 
-void GetSemaphore(struct SEM * Semaphore);
+void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 
 DllExport long  BPQHOSTAPIPTR = (long)&BPQHOSTAPI;
@@ -1424,9 +1428,7 @@ VOID CALLBACK TimerProc
 	//	Get semaphore before proceeeding
 	//
 
-	GetSemaphore(&Semaphore);
-
-	SemHeldByAPI = 2;
+	GetSemaphore(&Semaphore, 2);
 
 	strcpy(EXCEPTMSG, "Timer ReconfigProcessing");
 	
@@ -1559,12 +1561,12 @@ VOID CALLBACK TimerProc
 			{
 				FreeSemaphore(&Semaphore);
 				InitializeTNCEmulator();
-				GetSemaphore(&Semaphore);
+				GetSemaphore(&Semaphore, 0);
 			}
 
 			FreeSemaphore(&Semaphore);
 			AGWActive = AGWAPIInit();
-			GetSemaphore(&Semaphore);
+			GetSemaphore(&Semaphore, 0);
 		
 			OutputDebugString("BPQ32 Reconfiguration Complete\n");	
 		}
@@ -1753,7 +1755,7 @@ Check_Timer()
 	if (Closing)
 		return 0;
 
-	GetSemaphore(&Semaphore);
+	GetSemaphore(&Semaphore, 3);
 
 	if (InitDone == -1)
 	{
@@ -1761,8 +1763,6 @@ Check_Timer()
 		FreeSemaphore(&Semaphore);
 		exit (0);
 	}
-
-	SemHeldByAPI = 3;
 
 	if (FirstInitDone == 0)
 	{
@@ -1989,8 +1989,7 @@ BOOL APIENTRY DllMain(HANDLE hInst, DWORD ul_reason_being_called, LPVOID lpReser
 			return 0;
 		}
 	
-		GetSemaphore(&Semaphore);
-		SemHeldByAPI = 4;
+		GetSemaphore(&Semaphore, 4);
 
 		BPQHOSTVECPTR = &BPQHOSTVECTOR[0];
 		
@@ -2974,9 +2973,7 @@ BOOL UpdateNodesForApp(int Appl)
 		if (APPLCALLTABLE[App].APPLCALL[0] < 41) return FALSE;
 
 
-		GetSemaphore(&Semaphore);
-
-		SemHeldByAPI = 5;
+		GetSemaphore(&Semaphore, 5);
 	
 		DEST = DESTS;
 	
@@ -3013,9 +3010,8 @@ BOOL UpdateNodesForApp(int Appl)
 
 	if (APPLCALLTABLE[App].APPLQUAL == 0)
 	{
-		GetSemaphore(&Semaphore);
+		GetSemaphore(&Semaphore, 6);
 
-		SemHeldByAPI = 6;
 		REMOVENODE(DEST);			// Clear buffers, Remove from Sorted Nodes chain, and zap entry
 		
 		APPL->NODEPOINTER=NULL;
@@ -3027,9 +3023,7 @@ BOOL UpdateNodesForApp(int Appl)
 
 	if (APPLCALLTABLE[App].APPLCALL[0] < 41)	return FALSE;
 
-	GetSemaphore(&Semaphore);
-
-	SemHeldByAPI = 7;
+	GetSemaphore(&Semaphore, 7);
 
 	memmove (DEST->DEST_CALL,APPL->APPLCALL,13);
 
@@ -3192,6 +3186,9 @@ UINT InitializeExtDriver(PEXTPORTDATA PORTVEC)
 
 	if (strstr(Value, "ARDOP"))
 		return (UINT) ARDOPExtInit;
+
+	if (strstr(Value, "DRAGON"))
+		return (UINT) DragonExtInit;
 
 	ExtDriver=LoadLibrary(Value);
 

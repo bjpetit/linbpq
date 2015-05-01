@@ -1316,7 +1316,7 @@ BOOL InitializeTNCEmulator()
 			if (TNC->HOSTSTREAMS == 0)
 				TNC->HOSTSTREAMS = 1;		// Default
 
-			for (i = 1; i <= TNC->HOSTSTREAMS; i++)
+			for (i = 0; i <= TNC->HOSTSTREAMS; i++)
 			{
 				struct StreamInfo * Channel;
 
@@ -4578,6 +4578,7 @@ VOID ProcessPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 		//	In Terminal Mode - Pass to Term Mode Handler
 		
 		ProcessKPacket(conn, rxbuffer, Len);
+		conn->RXBPtr = 0;
 		return;
 	}
 
@@ -4639,11 +4640,23 @@ VOID ProcessKPacket(struct TNCDATA * conn, UCHAR * rxbuffer, int Len)
 	{
 		// Term thinks it is hosr mode
 
-		// Unless it is FEND FF FEND (exit KISS)
+		// Unless it is FEND FF FEND (exit KISS) or FEND Q FEND (exit host)
 
-		if (Len == 3)
-			return;
+		if (rxbuffer[2] == FEND)
+		{
+			if (rxbuffer[1] == 255 || rxbuffer[1] == 'q')
+			{
+				// If any more , process it.
+				
+				if (Len == 3)
+					return;
 
+				Len -= 3;
+				rxbuffer+= 3;
+				ProcessKPacket(conn, rxbuffer, Len);
+				return;
+			}
+		}
 		conn->MODE = 1;
 		return;
 	}

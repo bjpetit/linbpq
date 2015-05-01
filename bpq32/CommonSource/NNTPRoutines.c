@@ -76,7 +76,7 @@ VOID BuildNNTPList(struct MsgInfo * Msg)
 	{
 		// New Group. Allocate a record, and put at correct place in chain (alpha order)
 
-		GetSemaphore(&AllocSemaphore);
+		GetSemaphore(&AllocSemaphore, 0);
 
 		REC = zalloc(sizeof (struct NNTPRec));
 		OLDREC = FirstNNTPRec;

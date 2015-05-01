@@ -115,12 +115,14 @@ int NumberofRoutes = 0;
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
 ULONG OurIPAddr = 0;
+ULONG EncapAddr = INADDR_NONE;	// Virtual Host for IPIP PCAP Mode.
+UCHAR RouterMac[6] = {0};		// Mac Address of our Internet Gateway.
 
 ULONG OurIPBroadcast = 0;
 ULONG OurNetMask = 0xffffffff;
 
 BOOL WantTAP = FALSE;
-BOOL WantEncap = 0;			// Run RIP44 and Net44 Encap
+BOOL WantEncap = 0;				// Run RIP44 and Net44 Encap
 
 SOCKET EncapSock = 0;
 
@@ -284,8 +286,6 @@ void OpenTAP();
 
 Dll BOOL APIENTRY Init_IP()
 {
-	ARPDATA * ARPptr;
-
 	if (BPQDirectory[0] == 0)
 	{
 		strcpy(ARPFN,"BPQARP.dat");
@@ -381,6 +381,16 @@ Dll BOOL APIENTRY Init_IP()
 		int err, ret;
 		char Msg[80];
 				
+		UCSD44 = inet_addr("44.0.0.1");
+
+		if (EncapAddr != INADDR_NONE)
+		{
+			// Using Virtual Host on PCAP Adapter (Windows)
+
+			WritetoConsoleLocal("Net44 Tunnel opened on PCAP device\n");
+			return TRUE;
+		}
+
 		if (UDPEncap)
 		{
 			// Open UDP Socket
@@ -434,7 +444,6 @@ Dll BOOL APIENTRY Init_IP()
 			}
 			else
 			{
-				UCSD44 = inet_addr("44.0.0.1");
 				WritetoConsoleLocal("Net44 Tunnel opened\n");
 			}
 		}
@@ -1062,6 +1071,17 @@ VOID ProcessEthIPMsg(PETHMSG Buffer)
 			TCP->CHECKSUM = Generate_CHECKSUM(TCP, Len);
 		}
 	}
+
+	if (ipptr->IPDEST.addr == EncapAddr)
+	{
+		if (ipptr->IPPROTOCOL == 4)		// AMPRNET Tunnelled Packet
+		{
+			memcpy(RouterMac, Buffer->SOURCE, 6);
+			ProcessTunnelMsg(ipptr);
+		}
+		return;							// Ignore Others
+	}
+
 	ProcessIPMsg(ipptr, Buffer->SOURCE, 'E', 255);
 }
 
@@ -1079,14 +1099,20 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 	{
 	case 0x0100:
 
-		// We should only accept requests from our subnet - we might have more than one net on iterface
+		//	Is it for our ENCAP (not on our 44 LAN)
 
-		if ((arpptr->SENDIPADDR & OurNetMask) != (OurIPAddr & OurNetMask))
-			return;
+		if (arpptr->TARGETIPADDR != EncapAddr)
+		{
+			// We should only accept requests from our subnet - we might have more than one net on iterface
 
-		if (arpptr->TARGETIPADDR == 0)		// Request for 0.0.0.0
-			return;
+			if ((arpptr->SENDIPADDR & OurNetMask) != (OurIPAddr & OurNetMask))
+				return;
+
+			if (arpptr->TARGETIPADDR == 0)		// Request for 0.0.0.0
+				return;
 	
+		}
+
 		// Add to our table, as we will almost certainly want to send back to it
 		
 		Arp = LookupARP(arpptr->SENDIPADDR, TRUE, &Found);
@@ -1111,7 +1137,7 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 	
 AlreadyThere:
 
-		if (arpptr->TARGETIPADDR == OurIPAddr)
+		if (arpptr->TARGETIPADDR == OurIPAddr || arpptr->TARGETIPADDR == EncapAddr)
 		{
 			ULONG Save = arpptr->TARGETIPADDR;
  
@@ -1128,7 +1154,6 @@ AlreadyThere:
 			Send_ETH(arpptr,42);
 
 			return;
-
 		}
 
 		// If for our Ethernet Subnet, Ignore or we send loads of unnecessary msgs to ax.25
@@ -1226,7 +1251,7 @@ SendBack:
 			while (Arp->ARP_Q)
 			{
 				buffptr = Q_REM(&Arp->ARP_Q);
-				IPptr = &buffptr->L2DATA[30];
+				IPptr = (PIPMSG)&buffptr->L2DATA[30];
 				RouteIPMsg(IPptr);
 				ReleaseBuffer(buffptr);
 			}
@@ -2010,6 +2035,36 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
 	TXaddr.txaddr.sin_family = AF_INET;
 	Origlen = htons(IPptr->IPLENGTH);
 
+	//	If we are using PCAP interface we have to add IPIP and MAC Headers.
+
+	if (EncapAddr != INADDR_NONE)
+	{
+		UCHAR IPCopy[512];				// Need Space to addd headers
+		PETHMSG Ethptr = (PETHMSG)IPCopy;
+		PIPMSG Outer = &IPCopy[14];
+
+		memset(IPCopy, 0, 34);			// Eth + IP Headers
+
+		Outer->VERLEN = 0x45;
+		Outer->IPDEST.addr = Encap;
+		Outer->IPSOURCE.addr = EncapAddr;
+		Outer->IPPROTOCOL = 4;
+		Outer->IPTTL = IPTTL;
+		Outer->IPID = IPptr->IPID;
+		Outer->IPLENGTH = htons(Origlen + 20);
+		memcpy(&Outer->Data, IPptr, Origlen);
+
+		Outer->IPCHECKSUM = 0;
+		Outer->IPCHECKSUM = Generate_CHECKSUM(Outer, 20);
+
+		memcpy(Ethptr->DEST, RouterMac, 6);
+		memcpy(Ethptr->SOURCE, ourMACAddr, 6);
+		Ethptr->ETYPE= 0x0008;
+		Send_ETH(Ethptr, Origlen + 34);
+
+		return;
+
+	}
 	if (UDPEncap)
 	{
 		UCHAR * ptr;
@@ -2587,7 +2642,38 @@ static ProcessLine(char * buf)
 	if (_stricmp(ptr,"44Encap") == 0)			// Enable Net44 IPIP Tunnel
 	{
 		WantEncap = TRUE;
-		if (p_value && _stricmp(p_value, "UDP") == 0)
+
+		if (p_value == NULL)
+			return TRUE;
+
+		EncapAddr = inet_addr(p_value);
+
+		if (EncapAddr != INADDR_NONE)
+		{
+			int a,b,c,d,e,f,num;
+		
+			// See if MAC Specified
+
+			p_value = strtok(NULL, " \t\n\r");
+
+			if (p_value == NULL)
+				return TRUE;
+		
+			num=sscanf(p_value,"%x-%x-%x-%x-%x-%x",&a,&b,&c,&d,&e,&f);
+
+			if (num != 6) return FALSE;
+
+			RouterMac[0]=a;
+			RouterMac[1]=b;
+			RouterMac[2]=c;
+			RouterMac[3]=d;
+			RouterMac[4]=e;
+			RouterMac[5]=f;
+
+			return TRUE;					// Normal IPIP
+		}
+
+		if (_stricmp(p_value, "UDP") == 0)
 		{
 			UDPEncap = TRUE;
 

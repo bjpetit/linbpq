@@ -691,8 +691,7 @@ int AGWDoMonitorData()
 	{
 		MESSAGE * monbuff;
 
-		GetSemaphore(&Semaphore);
-		SemHeldByAPI = 99;
+		GetSemaphore(&Semaphore, 99);
 		
 		monbuff = Q_REM((UINT *)&AGWMONVECPTR->HOSTTRACEQ);
 

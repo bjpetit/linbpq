@@ -77,6 +77,7 @@ GtkWidget *box2;
 GtkWidget *box3;
 GtkWidget *hbox;
 GtkWidget *button;
+GtkWidget *button2;
 GtkWidget *checklabel;
 GtkWidget *check1;
 GtkWidget *check2;
@@ -118,9 +119,10 @@ socklen_t peer_addr_size;
 int maxfd;
 
 VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station);
-void UpdateTXMessageLine(int n, struct APRSMESSAGE * Message);
+void UpdateTXMessageLine(struct APRSMESSAGE * Message);
 VOID SecTimer();
 void plotLine(int x0, int y0, int x1, int y1, COLORREF rgb);
+void SelectTXMsg (GtkTreeView *tree_view, GtkTreePath *path, GtkTreeViewColumn *column, gpointer user_data);
 
 struct SEM
 {
@@ -2260,6 +2262,118 @@ enum
 } ;
 
 
+void CancelMessageSend (GtkWidget *menuitem, struct APRSMESSAGE * userdata)
+{
+    userdata->Retries = 0;
+	userdata->RetryTimer = 0;
+	userdata->Cancelled = TRUE;
+	UpdateTXMessageLine(userdata);
+}
+
+
+void view_popup_menu_onDoNothing (GtkWidget *menuitem, gpointer userdata)
+{
+    GtkTreeView *treeview = GTK_TREE_VIEW(userdata);
+}
+ 
+void view_popup_menu (GtkWidget *treeview, GdkEventButton *event, struct APRSMESSAGE * userdata)
+{
+    GtkWidget *menu, *menuitem1,*menuitem2 ;
+	char Msg[80];
+
+	sprintf(Msg,"Cancel Message Seq %s to %s?", userdata->Seq, userdata->ToCall);
+ 
+    menu = gtk_menu_new();
+ 
+	menuitem1 = gtk_menu_item_new_with_label(Msg);
+    menuitem2 = gtk_menu_item_new_with_label("Return");
+ 
+    g_signal_connect(menuitem1, "activate",
+                     (GCallback) CancelMessageSend, (gpointer)userdata);
+    g_signal_connect(menuitem2, "activate",
+                     (GCallback) view_popup_menu_onDoNothing, treeview);
+ 
+	if (userdata->Retries)		// Not active so cant cancel
+	    gtk_menu_shell_append(GTK_MENU_SHELL(menu), menuitem1);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), menuitem2);
+ 
+    gtk_widget_show_all(menu);
+ 
+    /* Note: event can be NULL here when called from view_onPopupMenu;
+     *  gdk_event_get_time() accepts a NULL argument */
+    gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL,
+                   (event != NULL) ? event->button : 0,
+                   gdk_event_get_time((GdkEvent*)event));
+ }
+ 
+ 
+gboolean view_onButtonPressed (GtkWidget *treeview, GdkEventButton *event, gpointer userdata)
+{
+	//	Right click on TX Message window. If a message is selected,
+	//	Pop up a Cancel Message Window
+	
+	if (event->type == GDK_BUTTON_PRESS  &&  event->button == 3)
+	{
+		GtkTreeSelection *selection;
+		GtkTreeModel     *model;
+		GtkTreeIter       iter;
+		GtkTreePath *path;
+		struct APRSMESSAGE * ptr = OutstandingMsgs;
+
+		if (ptr == 0)
+			return;
+
+		// Make sure the entry that was clicked is selected
+
+        selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+		
+		if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(treeview),
+			(gint) event->x, (gint) event->y, &path, NULL, NULL, NULL))
+		{
+			gtk_tree_selection_unselect_all(selection);
+			gtk_tree_selection_select_path(selection, path);
+			gtk_tree_path_free(path);
+		}
+
+
+		selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
+
+		if (gtk_tree_selection_get_selected(selection, &model, &iter))
+		{
+			gchar *Seq;
+
+			gtk_tree_model_get (model, &iter, 1, &Seq, -1);
+
+			// Find the message
+
+			while (ptr)
+			{
+				if (strcmp(ptr->Seq, Seq) == 0)
+				{
+					view_popup_menu(treeview, event, ptr);		
+					g_free(Seq);
+					return TRUE;				
+				}
+				ptr = ptr->Next;
+			}
+		
+			g_free(Seq);
+			g_print ("Msg not found.\n");
+		}
+		g_print ("no row selected.\n");
+	}
+
+	return FALSE; /* we did not handle this */
+}
+  
+gboolean view_onPopupMenu (GtkWidget *treeview, gpointer userdata)
+{
+	view_popup_menu(treeview, NULL, userdata);
+ 
+    return TRUE; /* we handled this */
+}
+ 
+
 static GtkWidget *create_sent_window( void )
 {
 	GtkCellRenderer *renderer;
@@ -2267,6 +2381,16 @@ static GtkWidget *create_sent_window( void )
 	GtkTreeIter iter;
 
 	view = gtk_tree_view_new();
+	
+    gtk_signal_connect (GTK_OBJECT (view), "row_activated",
+                        GTK_SIGNAL_FUNC (SelectTXMsg), NULL);
+
+
+    g_signal_connect(view, "button-press-event", (GCallback) view_onButtonPressed, NULL);
+    g_signal_connect(view, "popup-menu", (GCallback) view_onPopupMenu, NULL);
+ 
+
+
 
 	renderer = gtk_cell_renderer_text_new();
 	renderer->ypad = 0;
@@ -2422,6 +2546,32 @@ void enter_callback( GtkWidget *widget,
 	}
 }
 
+
+void SelectTXMsg (GtkTreeView *tree_view, GtkTreePath *path, GtkTreeViewColumn *column, gpointer user_data)
+{
+	GtkTreeIter iter;
+    GtkTreeModel *model;
+	struct APRSMESSAGE * ptr = OutstandingMsgs;
+
+	if (ptr == 0)
+		return;
+
+	model = gtk_tree_view_get_model(tree_view);
+ 
+    if (gtk_tree_model_get_iter(model, &iter, path))
+    {
+		gchar *seq;
+ 
+		gtk_tree_model_get(model, &iter, 1, &seq, -1);
+ 
+		g_print ("Double-clicked row contains seq %s\n", seq);
+		g_free(seq);
+	}
+	
+	return;
+}
+ 
+
 VOID GTKThread()
 {
 	gtk_main();
@@ -2547,6 +2697,20 @@ void button_callback(GtkButton *button, gpointer user_data)
 }
 
 
+void button2_callback(GtkButton *button, gpointer user_data)
+{
+	// Clear Sent Messages
+
+	GtkTreeIter iter;
+
+	if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(sentitems), &iter, NULL, 0))
+	{
+		while (gtk_list_store_remove(sentitems, &iter))
+		{}
+	}
+}
+
+
 static gboolean delete_event (GtkWidget *widget, GdkEvent *event, gpointer data)
 {
 	// Don't allow window to be closed
@@ -2665,7 +2829,7 @@ int main(int argc, char *argv[])
 	signal(SIGPIPE, SIG_IGN);
 #endif
 
-	printf("G8BPQ APRS Client for Linux Version 0.0.0.9\n");
+	printf("G8BPQ APRS Client for Linux Version 0.0.1.0\n");
   	printf("Copyright © 2004-2015 John Wiseman G8BPQ\n");
 	printf("APRS is a registered trademark of Bob Bruninga.\n");
 	printf("This software is based in part on the work of the Independent JPEG Group.\n");
@@ -2931,6 +3095,7 @@ int main(int argc, char *argv[])
 	check3 = gtk_check_button_new_with_label ("Show Bulls  ");
 
 	button = gtk_button_new_with_label("Clear RX"); 
+	button2 = gtk_button_new_with_label("Clear TX"); 
 
 	gtk_toggle_button_set_active((GtkToggleButton *)check1, OnlyMine);
 	gtk_toggle_button_set_active((GtkToggleButton *)check2, OnlySeq);
@@ -2940,6 +3105,7 @@ int main(int argc, char *argv[])
 	g_signal_connect(G_OBJECT(check2), "clicked", G_CALLBACK(check_callback), "2");
 	g_signal_connect(G_OBJECT(check3), "clicked", G_CALLBACK(check_callback), "3");
 	g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(button_callback), "1");
+	g_signal_connect(G_OBJECT(button2), "clicked", G_CALLBACK(button2_callback), "1");
 
 	// hBox for Check boxes
 
@@ -2949,6 +3115,7 @@ int main(int argc, char *argv[])
 	gtk_container_add (GTK_CONTAINER (checkhbox), check2);
 	gtk_container_add (GTK_CONTAINER (checkhbox), check3);
 	gtk_container_add (GTK_CONTAINER (checkhbox), button);
+	gtk_container_add (GTK_CONTAINER (checkhbox), button2);
 	checklabel = gtk_label_new(" ");
 	gtk_container_add (GTK_CONTAINER (checkhbox), checklabel);
 
@@ -3371,7 +3538,7 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 				ptr->Retries = 0;
 				ptr->Acked = TRUE;
 //				if (hMsgsOut)
-				UpdateTXMessageLine(n, ptr);
+				UpdateTXMessageLine(ptr);
 
 				return;
 			}
@@ -3414,7 +3581,7 @@ VOID ProcessMessage(char * Payload, struct STATIONRECORD * Station)
 					ptr1->Acked = TRUE;
 					ptr1->Retries = 0;
 //					if (hMsgsOut)
-						UpdateTXMessageLine(nn, ptr1);
+						UpdateTXMessageLine(ptr1);
 					
 					break;
 				}
@@ -3529,32 +3696,51 @@ wantit:
 
 }
 
-void UpdateTXMessageLine(int n, struct APRSMESSAGE * Message)
+void UpdateTXMessageLine(struct APRSMESSAGE * Message)
 {
 	GtkTreeIter iter;
+	int n = 0;
+	gchar *seq;
+	
 	char status[10];
 
 	if (Message->Acked)
 		strcpy(status, "A");
-	else
-	if (Message->Retries == 0)
+	else if (Message->Cancelled)
+		strcpy(status, "C");
+	else if (Message->Retries == 0)
 		strcpy(status, "F");
 	else
 		sprintf(status, "%d", Message->Retries);
 
-    if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(sentitems), &iter, NULL, n))
-    {
-			gtk_list_store_set (sentitems, &iter, 2, status, -1);
-    }
-	else
+	//	look for line with correct sequence
+
+	while (TRUE)
 	{
-		 gtk_list_store_insert_with_values(
-			sentitems, &iter, -1,
-			0, Message->ToCall,
-			1, Message->Seq,
-			2, status,
-			3, Message->Time,
-			4, Message->Text, -1);
+		if (gtk_tree_model_iter_nth_child(GTK_TREE_MODEL(sentitems), &iter, NULL, n++))
+		{
+			gtk_tree_model_get((GtkTreeModel *)sentitems, &iter, 1, &seq, -1);
+
+			if (strcmp(Message->Seq, seq) == 0)
+			{
+				gtk_list_store_set (sentitems, &iter, 2, status, -1);
+				g_free(seq);
+				break;
+			}
+			g_free(seq);
+		}
+		else
+		{
+			gtk_list_store_insert_with_values(
+				sentitems, &iter, -1,
+				0, Message->ToCall,
+				1, Message->Seq,
+				2, status,
+				3, Message->Time,
+				4, Message->Text, -1);
+
+			break;
+		}
 	}
 	gtk_tree_view_scroll_to_cell ((GtkTreeView *)view,
 		gtk_tree_model_get_path (GTK_TREE_MODEL(sentitems), &iter), NULL, FALSE, 0, 0);
@@ -3616,7 +3802,7 @@ VOID SendAPRSMessage(const char * Text, char * ToCall)
 		ptr->Next = Message;
 	}
 
-	UpdateTXMessageLine(n, Message);
+	UpdateTXMessageLine(Message);
 
 	n = sprintf(Msg, ":%-9s:%s{%s", ToCall, Text, Message->Seq);
 	PutAPRSMessage(Msg, n);
@@ -3721,7 +3907,7 @@ VOID SecTimer()
 						ptr->RetryTimer = RetryIntervals[ptr->Retries];
 					}
 
-					UpdateTXMessageLine(n, ptr);
+					UpdateTXMessageLine(ptr);
 				}
 			}
 		}
@@ -4111,3 +4297,4 @@ void plotLineTB(int x0, int y0, int x1, int y1, COLORREF rgb)
 		}
 	}
 }
+

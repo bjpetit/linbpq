@@ -141,7 +141,7 @@ Dll int APIENTRY SaveNodes ();
 
 struct SEM;
 
-void GetSemaphore(struct SEM * Semaphore);
+void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 
 Dll int APIENTRY SessionControl(int stream, int command, int Mask);

@@ -145,7 +145,7 @@ int ASYSEND(struct PORTCONTROL * PortVector, char * buffer, int count)
 #endif
 		return 0;
 	}
-	else if (PortVector->PORTIPADDR.s_addr)		// KISS over UDP/TCP
+	else if (PortVector->PORTIPADDR.s_addr || PortVector->KISSSLAVE)		// KISS over UDP/TCP
 		if (PortVector->KISSTCP)
 			send(Port->sock, buffer, count, 0);
 		else
@@ -277,7 +277,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 #endif
 
 	}
-	else if (PortVector->PORTIPADDR.s_addr)
+	else if (PortVector->PORTIPADDR.s_addr || PortVector->KISSSLAVE)
 	{
 		SOCKET sock;
 		u_long param=1;
@@ -315,7 +315,41 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		npKISSINFO->destaddr.sin_port = htons(PortVector->IOBASE);
 
 		if (PortVector->KISSTCP)
-			ConnecttoUZ7HOTCP(npKISSINFO);
+		{
+			if (PortVector->KISSSLAVE)
+			{
+				// Bind and Listen
+
+				npKISSINFO->sock = sock = socket(AF_INET,SOCK_STREAM,0);
+				ioctl(sock, FIONBIO, &param);
+
+				sinx.sin_family = AF_INET;
+				sinx.sin_addr.s_addr = INADDR_ANY;		
+				sinx.sin_port = htons(PortVector->ListenPort);
+
+				if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
+				{
+					//	Bind Failed
+
+					int err = WSAGetLastError();
+					Consoleprintf("Bind Failed for KISS TCP port %d - error code = %d", PortVector->ListenPort, err);
+					closesocket(sock);
+				}
+				else
+				{
+					if (listen(sock, 1) < 0)
+					{
+						int err = WSAGetLastError();
+						Consoleprintf("Listen Failed for KISS TCP port %d - error code = %d", PortVector->ListenPort, err);
+						closesocket(sock);
+					}
+					else
+						npKISSINFO->Listening = TRUE;	
+				}
+			}
+			else
+				ConnecttoUZ7HOTCP(npKISSINFO);
+		}
 		else
 		{
 			npKISSINFO->sock = sock = socket(AF_INET,SOCK_DGRAM,0);
@@ -484,7 +518,7 @@ static void CheckReceivedData(struct PORTCONTROL * PORT, NPASYINFO npKISSINFO)
 			nLength = 0;
 #endif
 		}
-		else if (PORT->PORTIPADDR.s_addr)		// KISS over UDP
+		else if (PORT->PORTIPADDR.s_addr || PORT->KISSSLAVE)		// KISS over UDP
 		{
 			if (PORT->KISSTCP)
 			{
@@ -1563,6 +1597,33 @@ int KISSGetTCPMessage(NPASYINFO ASY)
 	int index=0;
 	ULONG param = 1;
 
+	if (ASY->Listening)
+	{
+		//	TCP Slave waiting for a connection
+
+		SOCKET sock;
+		int addrlen = sizeof(struct sockaddr_in);
+		struct sockaddr_in sin;  
+
+		sock = accept(ASY->sock, (struct sockaddr *)&sin, &addrlen);
+
+		if (sock == INVALID_SOCKET)
+		{
+			int err = GetLastError();
+
+			if (err == 10035 || err == 11)		// Would Block
+				return 0;
+
+		}
+		
+		//	Have a connection. Close Listening Socket and use new one
+
+		closesocket(ASY->sock);
+		ASY->sock = sock;
+		ASY->Listening = FALSE;
+		ASY->Connected = TRUE;
+	}
+
 	if (ASY->Connected)
 	{
 		int InputLen;
@@ -1594,6 +1655,44 @@ int KISSGetTCPMessage(NPASYINFO ASY)
 
 			ASY->Connected = 0;
 			closesocket(ASY->sock);
+
+			if (ASY->Portvector->KISSSLAVE)
+			{
+				// Reopen Listening Socket
+
+				SOCKET sock;
+				u_long param=1;
+				BOOL bcopt=TRUE;
+				struct sockaddr_in sinx;
+
+				ASY->sock = sock = socket(AF_INET,SOCK_STREAM,0);
+				ioctl(sock, FIONBIO, &param);
+
+				sinx.sin_family = AF_INET;
+				sinx.sin_addr.s_addr = INADDR_ANY;		
+				sinx.sin_port = htons(ASY->Portvector->ListenPort);
+
+				if (bind(sock, (struct sockaddr *) &sinx, sizeof(sinx)) != 0 )
+				{
+					//	Bind Failed
+
+					int err = WSAGetLastError();
+					Consoleprintf("Bind Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+					closesocket(sock);
+				}
+				else
+				{
+					if (listen(sock, 1) < 0)
+					{
+						int err = WSAGetLastError();
+						Consoleprintf("Listen Failed for KISS TCP port %d - error code = %d", ASY->Portvector->ListenPort, err);
+						closesocket(sock);
+					}
+					else
+						ASY->Listening = TRUE;	
+				}
+
+			}
 			return 0;
 		}
 	}

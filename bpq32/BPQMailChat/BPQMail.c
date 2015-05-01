@@ -874,6 +874,9 @@
 //	Fix failure to store some encrypted ISP passwords
 //	Allow EDITUSER to change "RMS Express User" flag
 //	Fix reporting of Config File errors
+//	Fix Finding MPS Messages (First to Farward was being used incorrectly)
+//	Add "Save Attachment" to Web Mgmt Interface
+//	Support Secure Signon on Forwarding sessions to CMS
 
 #include "BPQMailChat.h"
 #define MAIL
@@ -1210,7 +1213,7 @@ VOID CheckProgramErrors()
 	}
 }
 
-void GetSemaphore(struct SEM * Semaphore)
+void GetSemaphore(struct SEM * Semaphore, int ID)
 {
 	//
 	//	Wait for it to be free
@@ -1742,14 +1745,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				{
 					if (state == 1) // Connected	
 					{
-						GetSemaphore(&ConSemaphore);
+						GetSemaphore(&ConSemaphore, 0);
 						__try {Connected(wParam);}
 						My__except_Routine("Connected");
 						FreeSemaphore(&ConSemaphore);
 					}
 					else
 					{
-						GetSemaphore(&ConSemaphore);
+						GetSemaphore(&ConSemaphore, 0);
 						__try{Disconnected(wParam);}
 						My__except_Routine("Disconnected");
 						FreeSemaphore(&ConSemaphore);

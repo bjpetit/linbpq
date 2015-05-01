@@ -669,7 +669,7 @@ int RemoveLF(char * Message, int len);
 struct SEM;
 
 BOOL isdigits(char * string);
-void GetSemaphore(struct SEM * Semaphore);
+void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 
 VOID __cdecl Debugprintf(const char * format, ...);

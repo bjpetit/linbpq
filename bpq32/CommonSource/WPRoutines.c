@@ -36,7 +36,7 @@ WPRec * AllocateWPRecord()
 {
 	WPRec * WP = zalloc(sizeof (WPRec));
 
-	GetSemaphore(&AllocSemaphore);
+	GetSemaphore(&AllocSemaphore, 0);
 
 	WPRecPtr=realloc(WPRecPtr,(++NumberofWPrecs+1)*4);
 	WPRecPtr[NumberofWPrecs]= WP;

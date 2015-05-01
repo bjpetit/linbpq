@@ -1343,8 +1343,7 @@ static VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 				{
 					MsgLen = sprintf(Buffer, "%s\r", AppName);
 	
-					GetSemaphore(&Semaphore);			
-					SemHeldByAPI = 50;
+					GetSemaphore(&Semaphore, 50);			
 
 					buffptr = GetBuff();
 

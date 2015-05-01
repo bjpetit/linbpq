@@ -79,6 +79,7 @@ struct APRSMESSAGE
 	int RetryTimer;
 	int Port;
 	char Time[6];
+	BOOL Cancelled;
 };
 
 struct APRSConnectionInfo			// Used for Web Server for thread-specific stuff
