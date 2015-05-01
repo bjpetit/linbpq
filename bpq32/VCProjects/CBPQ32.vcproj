@@ -245,6 +245,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\ARDOP.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CKernel\asmDOSAPI.asm"
 				>
 			</File>
@@ -330,6 +334,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\Dragon.c"
+				>
+			</File>
+			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\FLDigi.c"
 				>
 			</File>
@@ -379,6 +387,10 @@
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MULTIPSK.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\PortMapper.c"
 				>
 			</File>
 			<File
