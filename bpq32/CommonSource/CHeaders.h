@@ -144,6 +144,8 @@ struct SEM;
 void GetSemaphore(struct SEM * Semaphore, int ID);
 void FreeSemaphore(struct SEM * Semaphore);
 
+void MySetWindowText(HWND hWnd, char * Msg);
+
 Dll int APIENTRY SessionControl(int stream, int command, int Mask);
 
 HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet, int Stopbits);

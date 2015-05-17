@@ -409,7 +409,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 	TNC->RigControlRow = RigControlRow;
 
-	SetWindowText(TNC->xIDC_TNCSTATE, "Free");
+	MySetWindowText(TNC->xIDC_TNCSTATE, "Free");
 
 	return TRUE;
 #endif

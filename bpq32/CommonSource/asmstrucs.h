@@ -962,6 +962,7 @@ struct SEM
 	int	Gets;
 	int Rels;
 	DWORD SemProcessID;
+	DWORD SemThreadID;
 };
 
 

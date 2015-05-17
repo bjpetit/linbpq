@@ -458,7 +458,7 @@ int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength )
 	return ReadCOMBlock(npKISSINFO->idComDev, lpszBlock, nMaxLength);
 }
 
-BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite)
+static BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite)
 {
 	if (npKISSINFO->idComDev == 0)
 		return 0;

@@ -39,7 +39,7 @@ NPASYINFO CreateKISSINFO( int port, int speed );
 
 BOOL DestroyKISSINFO(NPASYINFO npKISSINFO) ;
 int ReadCommBlock(NPASYINFO npKISSINFO, char * lpszBlock, int nMaxLength);
-BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite);
+static BOOL WriteCommBlock(NPASYINFO npKISSINFO, char * lpByte, DWORD dwBytesToWrite);
 HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port);
 BOOL SetupConnection(NPASYINFO npKISSINFO);
 BOOL CloseConnection(NPASYINFO npKISSINFO);

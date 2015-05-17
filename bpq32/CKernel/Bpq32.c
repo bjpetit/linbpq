@@ -701,6 +701,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add basic APPLCALL support for PTC-PRO/Dragon 7800 Packet (using MYALIAS)
 //	Add "VeryOldMode" for KAM Version 5.02
 //	Add KISS over TCP Slave Mode.
+//	Support Pactor and Packet on P4Dragon on one port
+//	Add "Remote Staton Quality" to Web ROUTES display
+//	Add Virtual Host option for IPGateway NET44 Encap
+//	Add NAT for local hosts to IPGateway
 
 #define CKernel
 
@@ -1009,6 +1013,9 @@ BOOL FrameMaximized = FALSE;
 BOOL IGateEnabled = TRUE;
 extern int ISDelayTimer;			// Time before trying to reopen APRS-IS link
 extern int ISPort;
+
+UINT * WINMORTraceQ = NULL;
+UINT * SetWindowTextQ = NULL;
 
 static RECT Rect = {100,100,400,400};	// Console Window Position
 static RECT FRect = {100,100,800,600};	// Frame 
@@ -1415,6 +1422,8 @@ VOID MonitorTimerThread(int x)
 	} while (TRUE);
 }
 
+VOID WritetoTraceSupport(UINT * Buffer);
+
 VOID CALLBACK TimerProc
 (
     HWND  hwnd,	// handle of window for timer messages 
@@ -1429,6 +1438,20 @@ VOID CALLBACK TimerProc
 	//
 
 	GetSemaphore(&Semaphore, 2);
+
+	// Process WINMORTraceQ
+
+	while (WINMORTraceQ)
+	{
+		UINT * Buffer = Q_REM(&WINMORTraceQ);
+		WritetoTraceSupport(Buffer);
+	}
+
+	while (SetWindowTextQ)
+	{
+		UINT * Buffer = Q_REM(&SetWindowTextQ);
+		SetWindowTextSupport(Buffer);
+	}
 
 	strcpy(EXCEPTMSG, "Timer ReconfigProcessing");
 	
@@ -3680,7 +3703,7 @@ LRESULT CALLBACK FrameWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPa
 				}
 
 				wsprintf(Title,"BPQ32 Beacon Configuration");
-				SetWindowText(UIhWnd, Title);
+				MySetWindowText(UIhWnd, Title);
 				ShowWindow(UIhWnd, SW_NORMAL);
 	
 				OnTabbedDialogInit(UIhWnd);			// Set up pages
@@ -4018,7 +4041,7 @@ int SetupConsoleWindow()
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 	
-	SetWindowText(hConsWnd,Title);
+	MySetWindowText(hConsWnd,Title);
 
 	if (Rect.right < 100 || Rect.bottom < 100)
 	{
@@ -4376,7 +4399,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 
 				wsprintf(Title,"BPQ32 Beacon Utility Version");
-				SetWindowText(UIhWnd, Title);
+				MySetWindowText(UIhWnd, Title);
 				return 0;
 			}
 
@@ -5752,7 +5775,3 @@ VOID GetParam(char * input, char * key, char * value)
 		strcpy(value, Param);
 	}
 }
-
-
-
-

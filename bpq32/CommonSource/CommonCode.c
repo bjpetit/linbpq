@@ -529,7 +529,7 @@ VOID CheckForDetach(struct TNCINFO * TNC, int Stream, struct STREAMINFO * STREAM
 			STREAM->DisconnectingTimeout = 300;			// 30 Secs
 
 			if (Stream == 0)
-				SetWindowText(TNC->xIDC_TNCSTATE, "Disconnecting");
+				MySetWindowText(TNC->xIDC_TNCSTATE, "Disconnecting");
 
 			// Create a traffic record
 
@@ -568,7 +568,7 @@ NotConnected:
 		STREAM->Connected = FALSE;
 
 		if (Stream == 0)
-			SetWindowText(TNC->xIDC_TNCSTATE, "Free");
+			MySetWindowText(TNC->xIDC_TNCSTATE, "Free");
 
 		STREAM->FramesQueued = 0;
 		STREAM->FramesOutstanding = 0;
@@ -1901,13 +1901,13 @@ OpenCOMMPort(struct TNCINFO * conn, char * Port, int Speed, BOOL Quiet)
 	if (conn->hDevice == 0)
 	{
 		sprintf(conn->WEB_COMMSSTATE,"%s Open failed - Error %d", Port, GetLastError());
-		SetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
+		MySetWindowText(conn->xIDC_COMMSSTATE, conn->WEB_COMMSSTATE);
 
 		return (FALSE);
 	}
 
 	sprintf(conn->WEB_COMMSSTATE,"COM%s Open", Port);
-	SetWindowText(conn->xIDC_COMMSSTATE, buf);
+	MySetWindowText(conn->xIDC_COMMSSTATE, buf);
 
 	return TRUE;
 }
@@ -3007,6 +3007,9 @@ loop1:
 
 	Semaphore->Gets++;
 	Semaphore->SemProcessID = GetCurrentProcessId();
+#ifdef WIN32
+	Semaphore->SemThreadID = GetCurrentThreadId();
+#endif
 	SemHeldByAPI = ID;
 
 	return;
@@ -3018,6 +3021,7 @@ void FreeSemaphore(struct SEM * Semaphore)
 		Debugprintf("Free Semaphore Called when Sem not held");
 
 	Semaphore->Rels++;
+	SemHeldByAPI = 0;
 	Semaphore->Flag = 0;
 
 	return;
@@ -3095,13 +3099,15 @@ VOID ResolveUpdateThread()
 		if (HostEnt1)
 			memcpy(&reportdest.sin_addr.s_addr,HostEnt1->h_addr,4);
 
-		Debugprintf("Resolving %s", "chatmap.g8bpq.net");
-		HostEnt2 = gethostbyname ("chatmap.g8bpq.net");
+//		Debugprintf("Resolving %s", "chatmap.g8bpq.net");
+//		HostEnt2 = gethostbyname ("chatmap.g8bpq.net");
 
-		if (HostEnt2)
-			memcpy(&Chatreportdest.sin_addr.s_addr,HostEnt2->h_addr,4);
+//		if (HostEnt2)
+//			memcpy(&Chatreportdest.sin_addr.s_addr,HostEnt2->h_addr,4);
 
-		if (HostEnt1 && HostEnt2)
+//		if (HostEnt1 && HostEnt2)
+
+		if (HostEnt1)
 		{
 			Sleep(1000 * 60 * 30);
 			continue;

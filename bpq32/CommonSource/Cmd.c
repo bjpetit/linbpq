@@ -39,6 +39,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "CHeaders.h"
 
+#pragma pack()
+
+#include "tncinfo.h"
+#include "telnetserver.h"
+
 //#include "GetVersion.h"
 
 //#define DllImport	__declspec( dllimport )
@@ -4308,9 +4313,6 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 }
 
 #pragma pack()
-
-#include "tncinfo.h"
-#include "telnetserver.h"
 
 struct TNCINFO * TNCInfo[34];	
 

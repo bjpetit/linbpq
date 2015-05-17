@@ -1327,9 +1327,9 @@ int GetTickCount()
 #endif
 
 
-BOOL MySetWindowText(HWND hWnd, char * lpString)
+void SetWindowText(HWND hWnd, char * lpString)
 {
-	return 0;
+	return;
 };
 
 BOOL MySetDlgItemText(HWND hWnd, char * lpString)

@@ -174,18 +174,11 @@ ConfigLine:
 	
 }
 
-static BOOL WriteCommBlock(struct TNCINFO * TNC)
-{
-	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
-
-	TNC->Timeout = 20;				// 2 secs
-	return TRUE;
-}
-
 struct TNCINFO * CreateTTYInfo(int port, int speed);
 BOOL OpenConnection(int);
 BOOL SetupConnection(int);
-BOOL CloseConnection(struct TNCINFO * conn);static BOOL WriteCommBlock(struct TNCINFO * TNC);
+BOOL CloseConnection(struct TNCINFO * conn);
+BOOL WriteCommBlock(struct TNCINFO * TNC);
 BOOL DestroyTTYInfo(int port);
 void SCSCheckRX(struct TNCINFO * TNC);
 VOID SCSPoll(int Port);
@@ -197,7 +190,6 @@ VOID ProcessTermModeResponse(struct TNCINFO * TNC);
 VOID ExitHost(struct TNCINFO * TNC);
 VOID DoTNCReinit(struct TNCINFO * TNC);
 VOID DoTermModeTimeout(struct TNCINFO * TNC);
-static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 int Switchmode(struct TNCINFO * TNC, int Mode);
 VOID SwitchToPacketOnly(struct TNCINFO * TNC);
 
@@ -610,7 +602,7 @@ ok:
 static int WebProc(struct TNCINFO * TNC, char * Buff, BOOL LOCAL)
 {
 	int Len = sprintf(Buff, "<html><meta http-equiv=expires content=0><meta http-equiv=refresh content=15>"
-	"<head><title>SCS Pactor Status</title></head><body><h3>SCS Pactor Status</h3>");
+	"<head><title>Dragon Status</title></head><body><h3>SCS Pactor Status</h3>");
 
 	Len += sprintf(&Buff[Len], "<table style=\"text-align: left; width: 480px; font-family: monospace; align=center \" border=1 cellpadding=2 cellspacing=2>");
 
@@ -1915,133 +1907,6 @@ static MESSAGEY Monframe;		// I frames come in two parts.
 
 MESSAGEY * AdjMsg;				// Adjusted fir digis
 
-
-static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
-{
-	// Convert to ax.25 form and pass to monitor
-
-	UCHAR * ptr, * starptr;
-	char * context;
-
-	if (Msg[0] == 6)		// Second part of I or UI
-	{
-		int len = Msg[1] +1;
-
-		memcpy(AdjMsg->L2DATA, &Msg[2], len);
-		Monframe.LENGTH += len;
-
-		time(&Monframe.Timestamp);
-
-		BPQTRACE((MESSAGE *)&Monframe, TRUE);
-		return;
-	}
-
-	Monframe.LENGTH = 23;				// Control Frame
-	Monframe.PORT = TNC->Port;
-	
-	AdjMsg = &Monframe;					// Adjusted fir digis
-	ptr = strstr(Msg, "fm ");
-
-	ConvToAX25(&ptr[3], Monframe.ORIGIN);
-
-	ptr = strstr(ptr, "to ");
-
-	ConvToAX25(&ptr[3], Monframe.DEST);
-
-	ptr = strstr(ptr, "via ");
-
-	if (ptr)
-	{
-		// We have digis
-
-		char Save[100];
-		char * fiddle;
-
-		memcpy(Save, &ptr[4], 60);
-
-		ptr = strtok_s(Save, " ", &context);
-DigiLoop:
-		fiddle = (char *)AdjMsg;
-		fiddle += 7;
-		AdjMsg = (MESSAGEY *)fiddle;
-
-		Monframe.LENGTH += 7;
-
-		starptr = strchr(ptr, '*');
-		if (starptr)
-			*(starptr) = 0;
-
-		ConvToAX25(ptr, AdjMsg->ORIGIN);
-
-		if (starptr)
-			AdjMsg->ORIGIN[6] |= 0x80;				// Set end of address
-
-		ptr = strtok_s(NULL, " ", &context);
-
-		if (memcmp(ptr, "ctl", 3))
-			goto DigiLoop;
-	}
-
-	AdjMsg->ORIGIN[6] |= 1;				// Set end of address
-
-	ptr = strstr(Msg, "ctl ");
-
-	if (memcmp(&ptr[4], "SABM", 4) == 0)
-		AdjMsg->CTL = 0x2f;
-	else  
-	if (memcmp(&ptr[4], "DISC", 4) == 0)
-		AdjMsg->CTL = 0x43;
-	else 
-	if (memcmp(&ptr[4], "UA", 2) == 0)
-		AdjMsg->CTL = 0x63;
-	else  
-	if (memcmp(&ptr[4], "DM", 2) == 0)
-		AdjMsg->CTL = 0x0f;
-	else 
-	if (memcmp(&ptr[4], "UI", 2) == 0)
-		AdjMsg->CTL = 0x03;
-	else 
-	if (memcmp(&ptr[4], "RR", 2) == 0)
-		AdjMsg->CTL = 0x1 | (ptr[6] << 5);
-	else 
-	if (memcmp(&ptr[4], "RNR", 3) == 0)
-		AdjMsg->CTL = 0x5 | (ptr[7] << 5);
-	else 
-	if (memcmp(&ptr[4], "REJ", 3) == 0)
-		AdjMsg->CTL = 0x9 | (ptr[7] << 5);
-	else 
-	if (memcmp(&ptr[4], "FRMR", 4) == 0)
-		AdjMsg->CTL = 0x87;
-	else  
-	if (ptr[4] == 'I')
-	{
-		AdjMsg->CTL = (ptr[5] << 5) | (ptr[6] & 7) << 1 ;
-	}
-
-	if (strchr(&ptr[4], '+'))
-	{
-		AdjMsg->CTL |= 0x10;
-		Monframe.DEST[6] |= 0x80;				// SET COMMAND
-	}
-
-	if (strchr(&ptr[4], '-'))	
-	{
-		AdjMsg->CTL |= 0x10;
-		Monframe.ORIGIN[6] |= 0x80;				// SET COMMAND
-	}
-
-	if (Msg[0] == 5)							// More to come
-	{
-		ptr = strstr(ptr, "pid ");	
-		sscanf(&ptr[3], "%x", (int *)&AdjMsg->PID);
-		return;	
-	}
-
-	time(&Monframe.Timestamp);
-
-	BPQTRACE((MESSAGE *)&Monframe, TRUE);
-
-}
 //1:fm G8BPQ to KD6PGI-1 ctl I11^ pid F0
 //fm KD6PGI-1 to G8BPQ ctl DISC+
 

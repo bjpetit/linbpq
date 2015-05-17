@@ -546,11 +546,15 @@ VOID GetUserDatabase()
 				memcpy(user->pass, OldRec->pass, 13);
 				memcpy(user->ZIP, OldRec->ZIP, 9);
 
+				//	Read any forwarding info, even if not a BBS.
+				//	This allows a BBS to be temporarily set as a
+				//	normal user without loosing forwarding info
+
+				SetupForwardingStruct(user);
+
 				if (user->flags & F_BBS)
 				{
 					// Defined as BBS - allocate and initialise forwarding structure
-
-					SetupForwardingStruct(user);
 
 					// Add to BBS Chain;
 	
@@ -606,12 +610,14 @@ Next:
 		if (user->lastmsg < 0 || user->lastmsg > LatestMsg)
 			user->lastmsg = LatestMsg;
 
+		//	Read any forwarding info, even if not a BBS.
+		//	This allows a BBS to be temporarily set as a
+		//	normal user without loosing forwarding info
+
+		SetupForwardingStruct(user);
+
 		if (user->flags & F_BBS)
 		{
-			// Defined as BBS - allocate and initialise forwarding structure
-
-			SetupForwardingStruct(user);
-
 			// Add to BBS Chain;
 
 			user->BBSNext = BBSChain;
@@ -5423,6 +5429,7 @@ VOID SendMessageToSYSOP(char * Title, char * MailBuffer, int Length)
 		fclose(hFile);
 	}
 
+	MatchMessagetoBBSList(Msg, NULL);
 	free(MailBuffer);
 }
 
@@ -5535,7 +5542,9 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 
 		group = config_lookup (&cfg, Key);
 
-		if (group)
+		if (group == NULL)			// No info
+			return;
+		else
 		{
 			ForwardingInfo->TOCalls = GetMultiStringValue(group,  "TOCalls");
 			ForwardingInfo->ConnectScript = GetMultiStringValue(group,  "ConnectScript");
@@ -5572,7 +5581,6 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 				ForwardingInfo->BBSHA = _strdup(Temp);
 			else
 				ForwardingInfo->BBSHA = _strdup("");
-
 		}
 	}
 	else
@@ -5581,7 +5589,9 @@ VOID SetupForwardingStruct(struct UserInfo * user)
 		strcat(RegKey, user->Call);
 		retCode = RegOpenKeyEx (REGTREE, RegKey, 0, KEY_QUERY_VALUE, &hKey);
 
-		if (retCode == ERROR_SUCCESS)
+		if (retCode != ERROR_SUCCESS)
+			return;
+		else
 		{
 			ForwardingInfo->ConnectScript = RegGetMultiStringValue(hKey,  "Connect Script");
 			ForwardingInfo->TOCalls = RegGetMultiStringValue(hKey,  "TOCalls");
@@ -7414,9 +7424,7 @@ VOID SaveMultiStringValue(config_setting_t * group, char * name, char ** values)
 	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
 	if (setting)
 		config_setting_set_string(setting, &Multi[1]);
-
 }
-
 
 VOID SaveConfig(char * ConfigName)
 {
@@ -7425,6 +7433,9 @@ VOID SaveConfig(char * ConfigName)
 	config_setting_t *root, *group, *bbs;
 	int i;
 	char Size[80];
+	struct BBSForwardingInfo DummyForwardingInfo;
+	
+	memset(&DummyForwardingInfo, 0, sizeof(struct BBSForwardingInfo));
 
 	//	Get rid of old config before saving
 	
@@ -7551,11 +7562,16 @@ VOID SaveConfig(char * ConfigName)
 
 	bbs = config_setting_add(root, "BBSForwarding", CONFIG_TYPE_GROUP);
 
-	for (user = BBSChain; user; user = user->BBSNext)
+	for (i=1; i <= NumberofUsers; i++)
 	{
-		// See if any messages are queued for this BBS
-
+		user = UserRecPtr[i];
 		ForwardingInfo = user->ForwardingInfo;
+
+		if (ForwardingInfo == NULL)
+			continue;
+
+		if (memcmp(ForwardingInfo, &DummyForwardingInfo, sizeof(struct BBSForwardingInfo)) == 0)
+			continue;		// Ignore empty records;
 
 		if (isdigit(user->Call[0]))
 		{
@@ -8159,17 +8175,6 @@ int Connected(int Stream)
 
 				conn->PageLen = user->PageLen;				// No paging for chat
 				conn->Paging = (user->PageLen > 0);
-
-				// Get rid of any Temp forwatding structure (allocated for WinPack PMS or RMS EX User)
-
-				if ((user->flags & F_BBS) == 0)			// Not a BBS
-				{
-					if (user->ForwardingInfo)			// Got a forwarding structure
-					{
-						free(user->ForwardingInfo);
-						user->ForwardingInfo = NULL;
-					}
-				}
 
 				if ((user->flags & F_Temp_B2_BBS) && (user->ForwardingInfo == NULL))
 				{

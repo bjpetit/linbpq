@@ -2225,7 +2225,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 					if ((_stricmp(Msg->to, sockptr->CallSign) == 0) ||
 						((_stricmp(Msg->to, "SYSOP") == 0) && (user->flags & F_SYSOP) && (Msg->type == 'P')))
 					{
-						if (Msg->status != 'K')
+						if (Msg->status != 'K' && Msg->status != 'H')
 						{
 							sockptr->POP3Msgs = realloc(sockptr->POP3Msgs, (sockptr->POP3MsgCount+1)*4);
 							sockptr->POP3Msgs[sockptr->POP3MsgCount++] = MsgHddrPtr[i];
@@ -2252,10 +2252,15 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-
 	if (memcmp(Buffer, "NOOP",4) == 0)
 	{
 		SendSock(sockptr, "+OK ");
+		return;
+	}
+
+	if (memcmp(Buffer, "LAST",4) == 0)
+	{
+		SendSock(sockptr, "+OK 0");
 		return;
 	}
 
@@ -2326,7 +2331,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "RETR",4) == 0)
+	if (memcmp(Buffer, "RETR", 4) == 0 || memcmp(Buffer, "TOP", 3) == 0)
 	{
 		char * ptr;		
 		char Header[120];
@@ -2337,6 +2342,10 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		char B2From[80];
 		struct UserInfo * FromUser;
 		char TimeString[64];
+		BOOL TOP = FALSE;
+
+		if (memcmp(Buffer, "TOP", 3) == 0)
+			TOP = TRUE;
 
 		ptr=strlop(Buffer, ' ');			// Get Number
 
@@ -2429,7 +2438,7 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		sprintf_s(Header, sizeof(Header), "Subject: %s", Msg->title);
 		SendSock(sockptr, Header);
 
-		if (Msg->B2Flags & Attachments)
+		if ((Msg->B2Flags & Attachments) && TOP == FALSE)
 		{
 			// B2 Message with Attachments. Create a Mime-Encoded Multipart message
 
@@ -2438,6 +2447,31 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		}
 
 		SendSock(sockptr, "");							// Blank line before body
+
+		if (TOP)
+		{
+			char * ptr1, * ptr2;
+
+			ptr = strlop(ptr, ' ');			// Get Number of lines
+			i = atoi(ptr);
+
+			// Get first i lines of message
+
+			ptr1 = msgbytes;
+			ptr2 = --ptr1;					// Point both to char before message
+			
+			while(i--)
+			{
+				ptr2 = strchr(++ptr1, 10);
+
+				if (ptr2 == 0)				// No more lines
+					i = 0;
+
+				ptr1 = ptr2;
+			}
+			if (ptr2)
+				*(ptr2 + 1) = 0;
+		}
 
 		SendSock(sockptr, msgbytes);
 		SendSock(sockptr, "");

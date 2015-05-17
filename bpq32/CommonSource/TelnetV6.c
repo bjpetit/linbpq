@@ -480,7 +480,7 @@ VOID ProcessKPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKHOSTPacket(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
 VOID ProcessKNormCommand(struct TNCINFO * TNC, UCHAR * rxbuffer);
 VOID ProcessHostFrame(struct TNCINFO * TNC, UCHAR * rxbuffer, int Len);
-VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
+//static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len);
 
 
 static VOID WritetoTrace(int Stream, char * Msg, int Len)

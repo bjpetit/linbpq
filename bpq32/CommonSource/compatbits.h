@@ -177,7 +177,7 @@ typedef struct tagRECT
 #ifdef SetWindowText
 #undef SetWindowText
 #endif
-#define SetWindowText  MySetWindowText
+//#define SetWindowText  MySetWindowText
 
 
 #ifdef SetDlgItemText
@@ -188,7 +188,7 @@ typedef struct tagRECT
 
 BOOL MySetDlgItemText();
 
-BOOL MySetWindowText();
+//BOOL MySetWindowText();
 
 #ifdef APIENTRY
 #undef APIENTRY

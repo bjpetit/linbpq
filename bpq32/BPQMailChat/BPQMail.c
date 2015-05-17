@@ -877,7 +877,9 @@
 //	Fix Finding MPS Messages (First to Farward was being used incorrectly)
 //	Add "Save Attachment" to Web Mgmt Interface
 //	Support Secure Signon on Forwarding sessions to CMS
-
+//	Save Forwarding config when BBS flag on user is cleared
+//	Pass internally generated SYSOP messages through routing process
+//	Add POP3 TOP and LAST commands.
 #include "BPQMailChat.h"
 #define MAIL
 #include "Versions.h"

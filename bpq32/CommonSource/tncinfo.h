@@ -436,6 +436,7 @@ typedef struct TNCINFO
 	HWND hMonitor;					// Handle to Monitor control
 //	HMENU hPopMenu;					// Actions Menu Handle
 
+	int MaxConReq;					// For ARDOP
 	int BusyHold;					// Hold Time from SCS reporting channel free till we call 
 	int BusyWait;					// Time to wait for clear channel before connect
 

@@ -65,9 +65,9 @@ TODo	?Multiple Adapters
 
 #include "IPCode.h"
 
-#ifdef WIN32
-#include "pcap.h"
-#endif
+//#ifdef WIN32
+#include <pcap.h>
+//#endif
 
 #ifndef LINBPQ
 #include "kernelresource.h"
@@ -93,6 +93,8 @@ VOID DoRouteTimer();
 PROUTEENTRY FindRoute(ULONG IPADDR);
 VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap);
 USHORT Generate_CHECKSUM(VOID * ptr1, int Len);
+VOID RecalcTCPChecksum(PIPMSG IPptr);
+VOID RecalcUDPChecksum(PIPMSG IPptr);
 
 #define ARPTIMEOUT 3600
 
@@ -146,6 +148,11 @@ int baseline=0;
 
 unsigned char  hostaddr[64];
 
+static int nat_table_len = 0;
+
+static struct nat_table_entry nat_table[MAX_ENTRIES];
+
+
 ULONG UCSD44;		// 44.0.0.1
 
 
@@ -184,12 +191,12 @@ char ARPFN[MAX_PATH];
 
 HANDLE handle;
 
-#ifdef WIN32
+//#ifdef WIN32
 pcap_t *adhandle = 0;
 pcap_t * (FAR * pcap_open_livex)(const char *, int, int, int, char *);
 
 int pcap_reopen_delay;
-#endif
+//#endif
 
 static char Adapter[256];
 
@@ -332,7 +339,7 @@ Dll BOOL APIENTRY Init_IP()
 	ETHARPREQMSG.HWADDRLEN = 6;
 	ETHARPREQMSG.IPADDRLEN = 4;
 
-#ifdef WIN32
+//#ifdef WIN32
 
     //
     // Open PCAP Driver
@@ -355,9 +362,11 @@ Dll BOOL APIENTRY Init_IP()
 		} 
 	}
 
-#else
+//#else
 
 	// Linux - if TAP requested, open it
+
+#ifdef LINBPQ
 #ifndef MACBPQ
 
 	if (WantTAP)
@@ -493,7 +502,7 @@ Dll BOOL APIENTRY Poll_IP()
 
 Pollloop:
 
-#ifdef WIN32
+//#ifdef WIN32
 
 	if (adhandle)
 	{
@@ -502,7 +511,7 @@ Pollloop:
 		if (res > 0)
 		{
 			PETHMSG ethptr = (PETHMSG)&Buffer[EthOffset];
-
+			
 			if (header->len > 1514)
 			{
 //				Debugprintf("Ether Packet Len = %d", header->len);
@@ -556,7 +565,7 @@ Pollloop:
 		}
 	}
 
-#endif
+//#endif
 
 PollTAPloop:
 
@@ -1039,12 +1048,29 @@ static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD 
 VOID ProcessEthIPMsg(PETHMSG Buffer)
 {
 	PIPMSG ipptr = (PIPMSG)&Buffer[1];
+	struct nat_table_entry * NAT = NULL;
+	int index;
 
 	if (memcmp(Buffer, ourMACAddr,6 ) != 0) 
 		return;		// Not for us
 
 	if (memcmp(&Buffer[6], ourMACAddr,6 ) == 0) 
 		return;		// Discard our sends
+
+	// See if from a NAT'ed address
+
+	for (index=0; index < nat_table_len; index++)
+	{
+		NAT = &nat_table[index];
+					
+		if (NAT->mappedipaddr == ipptr->IPSOURCE.addr)
+		{
+			ipptr->IPSOURCE.addr = NAT->origipaddr;
+
+			ipptr->IPCHECKSUM = 0;		// to force cksum recalc below
+			break;
+		}
+	}
 
 	// if Checkum offload is active we get the packet before the NIC sees it (from PCAP)
 
@@ -1106,7 +1132,30 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 			// We should only accept requests from our subnet - we might have more than one net on iterface
 
 			if ((arpptr->SENDIPADDR & OurNetMask) != (OurIPAddr & OurNetMask))
-				return;
+			{
+				// Discard Unless it is from a NAT'ed Host
+				
+				struct nat_table_entry * NAT = NULL;
+				int index;
+
+				for (index=0; index < nat_table_len; index++)
+				{
+					NAT = &nat_table[index];
+					
+					if (NAT->mappedipaddr == arpptr->SENDIPADDR)
+						break;
+				}
+				
+				if (index >= nat_table_len)
+					return;
+
+				// Also check it is for a 44. address or we send all LAN ARPS to 
+				//	RF
+
+				if ((arpptr->TARGETIPADDR & 0xff) != 44)
+					return;
+
+			}
 
 			if (arpptr->TARGETIPADDR == 0)		// Request for 0.0.0.0
 				return;
@@ -1159,8 +1208,26 @@ AlreadyThere:
 		// If for our Ethernet Subnet, Ignore or we send loads of unnecessary msgs to ax.25
 
 		if ((arpptr->TARGETIPADDR & OurNetMask) == (OurIPAddr & OurNetMask))
-			return;
+		{
+			// Unless for a NAT'ed address, in which case we reply with our virtual MAC
 
+			struct nat_table_entry * NAT = NULL;
+			int index;
+
+			for (index=0; index < nat_table_len; index++)
+			{
+				NAT = &nat_table[index];
+					
+				if (NAT->origipaddr == arpptr->TARGETIPADDR)
+					break;
+			}
+				
+			if (index >= nat_table_len)
+				return;
+		
+			goto ProxyARPReply;
+
+		}
 		// Should't we just reply if we know it ?? (Proxy ARP)
 
 		//	Maybe, but that may mean dowstream nodes dont learnit
@@ -1653,8 +1720,6 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 	int Origlen;
 //	int InnerLen;
 
-	//	Make sure it is from UCSD Encap ??How??
-
 	// Check header length - for now drop any message with options
 
 	if (IPptr->VERLEN != 0x45)
@@ -1811,32 +1876,8 @@ VOID ProcessRIP44Message(PIPMSG IPptr)
 
 		// if for our subnet, ignore
 
-		/*
-
-		;
-PUTINLIST:
-
-	PUSH	SI
-;
-;	IF ENTRY IS A SUBNET ROUTE TO OUR SUBNET, IGNORE IT
-;
-	PUSH	SI
-
-	MOV	SI,OFFSET TEMPENTRY
-	MOV     AX,WORD PTR MYIPADDR+2
-	AND	AX,WORD PTR SUBNET+2[SI]
-	CMP     AX,WORD PTR NETWORK+2[SI]
-	JNE	NOTOURNET1
-;
-	MOV     AX,WORD PTR MYIPADDR
-	AND	AX,WORD PTR SUBNET[SI]
-	CMP     AX,WORD PTR NETWORK[SI]
-	JNE	NOTOURNET1
-
-	POP	SI
-	JMP	SKIPADD
-;
-*/
+		//	Actually don't need to, as we won't overwrite the preconfigured
+		//	interface route
 
 		Route = LookupRoute(RIP2->IPAddress, RIP2->Mask, TRUE, &Found);
 
@@ -1860,6 +1901,7 @@ PUTINLIST:
 
 			//	Should we replace an RF route with an ENCAP route??
 			//	For now, no. May make an option later
+			//	Should never replace our interface routes
 
 			if (Route->TYPE == 'T')
 			{
@@ -1930,8 +1972,7 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 		IPptr->IPSOURCE.addr = OurIPAddr;
 		IPptr->IPTTL = IPTTL;
 
-//		IPptr->IPCHECKSUM = 0;
-//		IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);		// RouteIPMsg redoes checksum
+		// RouteIPMsg redoes checksum
 
 		RouteIPMsg(IPptr);			// Send Back
 		return;
@@ -2039,9 +2080,9 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
 
 	if (EncapAddr != INADDR_NONE)
 	{
-		UCHAR IPCopy[512];				// Need Space to addd headers
+		UCHAR IPCopy[2048];				// Need Space to add headers
 		PETHMSG Ethptr = (PETHMSG)IPCopy;
-		PIPMSG Outer = &IPCopy[14];
+		PIPMSG Outer = (PIPMSG)&IPCopy[14];
 
 		memset(IPCopy, 0, 34);			// Eth + IP Headers
 
@@ -2095,6 +2136,8 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 	PARPDATA Arp, ARPptr;
 	PROUTEENTRY Route;
 	BOOL Found;
+	struct nat_table_entry * NAT = NULL;
+	int index;
 
 	//	Decremnent TTL and Recalculate header checksum
 
@@ -2105,6 +2148,28 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 		SendICMPTimeExceeded(IPptr);
 		return FALSE;	
 	}
+
+	// See if for a NATed Address
+				
+	for (index=0; index < nat_table_len; index++)
+	{
+		NAT = &nat_table[index];
+					
+		// for the moment only map all ports
+
+		if (NAT->origipaddr == IPptr->IPDEST.addr)
+		{
+			IPptr->IPDEST.addr = NAT->mappedipaddr;
+
+			if (IPptr->IPPROTOCOL == 6)
+				RecalcTCPChecksum(IPptr);
+			else if (IPptr->IPPROTOCOL == 11)
+				RecalcUDPChecksum(IPptr);
+
+						break;
+					}
+				}
+
 
 	IPptr->IPCHECKSUM = 0;
 	IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
@@ -2140,12 +2205,11 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 			if (Route->GATEWAY == 0)	// Interace Route
 			{	
 				ARPptr = AllocARPEntry();
-
 				if (ARPptr != NULL)
 				{
 					struct DATAMESSAGE * buffptr;
-//					Route->ARP = ARPptr;
-//					ARPptr->ARPROUTE = Route;
+					Route->ARP = ARPptr;
+					ARPptr->ARPROUTE = Route;
 					ARPptr->ARPINTERFACE = 255;
 					ARPptr->ARPTIMER = 5;
 					ARPptr->ARPTYPE = 'E';
@@ -2604,7 +2668,9 @@ static BOOL ReadConfigFile()
 
 static ProcessLine(char * buf)
 {
-	char * ptr, * p_value, * p_port;
+	char * ptr, * p_value, * p_origport, * p_host, * p_port;
+	int port, mappedport, ipad, mappedipad;
+
 	int i;
 
 	ptr = strtok(buf, " \t\n\r");
@@ -2619,10 +2685,10 @@ static ProcessLine(char * buf)
 
 	if(_stricmp(ptr,"ADAPTER") == 0)
 	{
-#ifndef WIN32
-		WritetoConsoleLocal("IPGating to Ethernet is not supported in this build\n");
-		return TRUE;
-#endif
+//#ifndef WIN32
+//		WritetoConsoleLocal("IPGating to Ethernet is not supported in this build\n");
+//		return TRUE;
+//#endif
 		strcpy(Adapter,p_value);
 		return (TRUE);
 	}
@@ -2754,6 +2820,64 @@ static ProcessLine(char * buf)
 		return TRUE;
 	}
 
+	if (_stricmp(ptr,"NAT") == 0)
+	{
+		PROUTEENTRY Route;
+		BOOL Found;
+
+		if (!p_value) return FALSE;
+		ipad = inet_addr(p_value);
+		
+		if (ipad == INADDR_NONE)
+			return FALSE;
+
+		p_host = strtok(NULL, " ,\t\n\r");
+		if (!p_host) return FALSE;
+
+		mappedipad = inet_addr(p_host);
+		if (mappedipad == INADDR_NONE)
+			return FALSE;
+
+		p_origport = strtok(NULL, " ,\t\n\r");
+		
+		//	Default is all ports
+
+		if (p_origport)
+		{
+			p_port = strtok(NULL, " ,\t\n\r");
+			if (!p_port) return FALSE;
+
+			port = atoi(p_origport);
+			mappedport=atoi(p_port);
+		}
+		else
+			port = mappedport = 0;
+	
+		nat_table[nat_table_len].origipaddr = ipad;
+		nat_table[nat_table_len].origport = ntohs(port);
+		nat_table[nat_table_len].mappedipaddr = mappedipad;
+		nat_table[nat_table_len++].mappedport = ntohs(mappedport);
+	
+		//	Add a Host Route
+
+		Route = LookupRoute(mappedipad, 0xffffffff, TRUE, &Found);
+
+		if (!Found)
+		{
+			// Add if possible
+
+			if (Route != NULL)
+			{
+				Route->NETWORK = mappedipad ;
+				Route->SUBNET = 0xffffffff;
+			 	Route->GATEWAY = 0;
+				Route->LOCKED = 1;
+			}
+		}
+		return (TRUE);
+	}
+
+
 	
 	//
 	//	Bad line
@@ -2844,6 +2968,7 @@ FARPROCX GetAddress(char * Proc)
 	return ProcAddr;
 }
 
+#endif
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
@@ -2854,11 +2979,12 @@ int OpenPCAP()
 	int i=0;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	u_int netmask;
-	char packet_filter[60];
+	char packet_filter[64];
 	struct bpf_program fcode;
 	char buf[256];
 	int n;
 
+#ifdef WIN32
 
 	PcapDriver=LoadLibrary(Dllname);
 
@@ -2880,7 +3006,11 @@ int OpenPCAP()
 
 	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
 
+#endif
+#ifndef MACBPQ
+
 	/* Open the adapter */
+
 	adhandle= pcap_open_livex(Adapter,	// name of the device
 							 65536,			// portion of the packet to capture. 
 											// 65536 grants that the whole packet will be captured on all the MACs.
@@ -2898,21 +3028,25 @@ int OpenPCAP()
 		n=sprintf(buf,"\nThis program works only on Ethernet networks.\n");
 		WritetoConsoleLocal(buf);
 		
-		/* Free the device list */
+		adhandle = 0;
 		return FALSE;
 	}
 
 	netmask=0xffffff; 
 
-	sprintf(packet_filter,"ether[12:2]=0x0800 or ether[12:2]=0x0806");
+//	sprintf(packet_filter,"ether[12:2]=0x0800 or ether[12:2]=0x0806");
 
+	n = sprintf(packet_filter,"ether broadcast or ether dst %02x:%02x:%02x:%02x:%02x:%02x",
+		ourMACAddr[0], ourMACAddr[1], ourMACAddr[2],
+		ourMACAddr[3], ourMACAddr[4], ourMACAddr[5]);
+		
 	//compile the filter
 	if (pcap_compilex(adhandle, &fcode, packet_filter, 1, netmask) <0 )
 	{	
 		n=sprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
 		WritetoConsoleLocal(buf);
 
-		/* Free the device list */
+		adhandle = 0;
 		return FALSE;
 	}
 	
@@ -2923,12 +3057,11 @@ int OpenPCAP()
 		n=sprintf(buf,"\nError setting the filter.\n");
 		WritetoConsoleLocal(buf);
 
-		/* Free the device list */
+		adhandle = 0;
 		return FALSE;
 	}
 	
 	return TRUE;
-
 }
 #endif
 
@@ -3084,11 +3217,12 @@ VOID AddToRoutes(PARPDATA Arp, UINT IPAddr, char Type)
 			Route->NETWORK = IPAddr;
 			Route->SUBNET = IPMask;
 			Route->GATEWAY = IPAddr;		// Host Route
-			Route->ARP = Arp;				// Crosslink Arp<>Routee
-			Arp->ARPROUTE = Route;
 			Route->TYPE = Type;
 		}
 	}
+
+	Arp->ARPROUTE = Route;
+	Route->ARP = Arp;				// Crosslink Arp<>Routee
 
 	//	Sort into reverse mask order
 
@@ -3381,6 +3515,39 @@ int CheckSumAndSendUDP(PIPMSG IPptr, PUDPMSG UDPmsg, USHORT Len)
 	RouteIPMsg(IPptr);
 	return 0;
 }
+
+VOID RecalcTCPChecksum(PIPMSG IPptr)
+{
+	PTCPMSG	TCPptr = (PTCPMSG)&IPptr->Data;
+	PHEADER PH = {0};
+	USHORT Len = ntohs(IPptr->IPLENGTH);
+	Len-=20;
+
+	PH.IPPROTOCOL = 6;
+	PH.LENGTH = htons(Len);
+	memcpy(&PH.IPSOURCE, &IPptr->IPSOURCE, 4);
+	memcpy(&PH.IPDEST, &IPptr->IPDEST, 4);
+
+	TCPptr->CHECKSUM = ~Generate_CHECKSUM(&PH, 12);
+	TCPptr->CHECKSUM = Generate_CHECKSUM(TCPptr, Len);
+}
+
+VOID RecalcUDPChecksum(PIPMSG IPptr)
+{
+	PUDPMSG UDPmsg = (PUDPMSG)&IPptr->Data;
+	PHEADER PH = {0};
+	USHORT Len = ntohs(IPptr->IPLENGTH);
+	Len-=20;
+
+	PH.IPPROTOCOL = 6;
+	PH.LENGTH = htons(Len);
+	memcpy(&PH.IPSOURCE, &IPptr->IPSOURCE, 4);
+	memcpy(&PH.IPDEST, &IPptr->IPDEST, 4);
+
+	UDPmsg->CHECKSUM = ~Generate_CHECKSUM(&PH, 12);
+	UDPmsg->CHECKSUM = Generate_CHECKSUM(UDPmsg, Len);
+}
+
 #ifndef WIN32
 #ifndef MACBPQ
 
@@ -3445,7 +3612,7 @@ void OpenTAP()
     return;
   }
 
-  printf("Successfully connected to interface %s\n", if_name);
+  printf("Successfully connected to TAP interface %s\n", if_name);
 
   ioctl(tap_fd, FIONBIO, &optval);
   return;
@@ -4095,7 +4262,4 @@ VOID ProcessSNMPMessage(PIPMSG IPptr)
 
 	// Ingnore others
 }
-
-
-
 

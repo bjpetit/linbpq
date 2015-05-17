@@ -159,12 +159,20 @@ typedef struct _IPSTATS
 struct map_table_entry
 {
 	unsigned int sourceipaddr;
-	unsigned short sourceport;			// bytes to compare (6 or 7)
+	unsigned short sourceport;
 	unsigned int mappedipaddr;
 	unsigned short mappedport;
 	unsigned char hostname[64];
 	unsigned int error;
 	BOOL ResolveFlag;			// True if need to resolve name
+};
+
+struct nat_table_entry
+{
+	unsigned int origipaddr;
+	unsigned short origport;
+	unsigned int mappedipaddr;
+	unsigned short mappedport;
 };
 
 struct ipv6_header

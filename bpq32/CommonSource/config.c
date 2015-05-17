@@ -719,7 +719,7 @@ char rec[];
 
 	if (_memicmp(rec, "PORTMAPPER", 10) == 0)	
 	{
-		// Create Embedded ortmapper Config
+		// Create Embedded portmapper Config
 
 		// Copy all subsequent lines up to **** to a memory buffer
 
@@ -736,7 +736,7 @@ char rec[];
 		{
 			if (_memicmp(rec, "****", 3) == 0)
 			{
-				PortConfig[34] = realloc(PortConfig[34], (strlen(ptr) + 1));
+				PortConfig[35] = realloc(PortConfig[35], (strlen(ptr) + 1));
 				cfg->C_PM = 1;
 				return 0;
 			}

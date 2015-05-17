@@ -139,7 +139,7 @@ char GPSRelay[80] = "";
 BOOL GateLocal = FALSE;
 double GateLocalDistance = 0.0;
 
-MaxDigisforIS = 7;			// Dont send to IS if more digis uued to reach us
+int MaxDigisforIS = 7;			// Dont send to IS if more digis uued to reach us
 
 char WXFileName[MAX_PATH];
 char WXComment[80];

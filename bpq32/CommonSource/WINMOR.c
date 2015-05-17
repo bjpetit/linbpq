@@ -130,6 +130,159 @@ unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int a
 
 // RIGCONTROL COM60 19200 ICOM IC706 5e 4 14.103/U1w 14.112/u1 18.1/U1n 10.12/l1
 
+// There seem to be timing issues when calling SendMessage from multiple threads.
+// Queue and process in main thread
+
+UINT * WINMORTraceQ;
+UINT * SetWindowTextQ;
+
+VOID WritetoTraceSupport(UINT * Buffer)
+{
+	struct TNCINFO * TNC = (struct TNCINFO * )Buffer[1];
+	int Len = Buffer[2];
+	char * Msg = (char *)&Buffer[3];
+
+	int index = 0;
+	UCHAR * ptr1 = Msg, * ptr2;
+	UCHAR Line[1000];
+	int LineLen, i;
+
+#ifndef LINBPQ
+	index=SendMessage(TNC->hMonitor, LB_SETCURSEL, -1, 0);
+#endif
+
+lineloop:
+
+	if (Len > 0)
+	{
+		//	copy text to control a line at a time	
+					
+		ptr2=memchr(ptr1,13,Len);
+
+		if (ptr2)
+		{
+			ptr2++;
+			LineLen = ptr2 - ptr1;
+			Len -= LineLen;
+			memcpy(Line, ptr1, LineLen);
+			memcpy(&Line[LineLen - 1], "<cr>", 4);
+			LineLen += 3;
+
+			if ((*ptr2) == 10)
+			{
+				memcpy(&Line[LineLen], "<lf>", 4);
+				LineLen += 4;
+				ptr2++;
+				Len --;
+			}
+			
+			Line[LineLen] = 0;
+
+			// If line contains any data above 7f, assume binary and dont display
+
+			for (i = 0; i < LineLen; i++)
+			{
+				if (Line[i] > 126 || Line[i] < 32)
+					goto Skip;
+			}
+#ifdef LINBPQ
+#else
+			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Line);
+#endif
+			// Write to Web Buffer
+
+			strcat(TNC->WebBuffer, Line);
+			strcat(TNC->WebBuffer, "\r\n");
+			if (strlen(TNC->WebBuffer) > 4500)
+				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4490);	// Make sure null is moved
+		Skip:
+			ptr1 = ptr2;
+
+			goto lineloop;
+
+		}
+
+		for (i = 0; i < Len; i++)
+		{
+			if (ptr1[i] > 126 || ptr1[i] < 32)
+				break;
+		}
+
+		if (i == Len)
+		{
+#ifdef LINBPQ
+#else
+			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) ptr1 );
+#endif
+			strcat(TNC->WebBuffer, ptr1);
+			strcat(TNC->WebBuffer, "\r\n");
+			if (strlen(TNC->WebBuffer) > 4500)
+				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4490);	// Make sure null is moved
+		}
+	}
+
+#ifdef LINBPQ
+#else
+
+	if (index > 1200)
+						
+	do{
+
+		index=index=SendMessage(TNC->hMonitor, LB_DELETESTRING, 0, 0);
+			
+	} while (index > 1000);
+
+	if (index > -1)
+		index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
+#endif
+
+	ReleaseBuffer(Buffer);
+}
+
+VOID MySetWindowText(HWND hWnd, char * Msg)
+{
+#ifdef WIN32
+	UINT * buffptr = GetBuff();
+
+	if (buffptr == 0) return;			// No buffers, so ignore
+
+	buffptr[1] = (UINT)hWnd;
+	memcpy(&buffptr[2], Msg, strlen(Msg) + 1);
+	
+	C_Q_ADD(&SetWindowTextQ, buffptr);
+#endif
+}
+
+VOID SetWindowTextSupport(UINT * Buffer)
+{
+	HWND hWnd = (HWND)Buffer[1];
+	char * Msg = (char *)&Buffer[2];
+
+	SetWindowText(hWnd, Msg);
+	ReleaseBuffer(Buffer);
+}
+
+
+VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
+{
+	//	It seems writing from multiple threads can cause problems
+	//	Queue and process in main thread
+	
+	UINT * buffptr = GetBuff();
+
+	if (buffptr == 0) return;			// No buffers, so ignore
+
+	if (Len > 340)
+		Len = 340;
+
+	buffptr[1] = (UINT)TNC;
+	buffptr[2] = (UINT)Len;
+	memcpy(&buffptr[3], Msg, Len + 1);	
+	
+	C_Q_ADD(&WINMORTraceQ, buffptr);
+}
+
+
 
 static ProcessLine(char * buf, int Port)
 {
@@ -369,7 +522,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				TNC->Busy--;
 				if (TNC->Busy == 0)
-					SetWindowText(TNC->xIDC_CHANSTATE, "Clear");
+					MySetWindowText(TNC->xIDC_CHANSTATE, "Clear");
 					strcpy(TNC->WEB_CHANSTATE, "Clear");
 			}
 		}
@@ -389,7 +542,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(TNC->Streams[0].RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
 
 				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				free(TNC->ConnectCmd);
 				TNC->BusyDelay = 0;
@@ -415,7 +568,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					free(TNC->ConnectCmd);
 
 					sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				}
 			}
@@ -515,11 +668,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
 						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
-					SetWindowText(TNC->xIDC_RESTARTTIME, Time);
+					MySetWindowText(TNC->xIDC_RESTARTTIME, Time);
 					strcpy(TNC->WEB_RESTARTTIME, Time);
 
 					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-					SetWindowText(TNC->xIDC_RESTARTS, Time);
+					MySetWindowText(TNC->xIDC_RESTARTS, Time);
 					strcpy(TNC->WEB_RESTARTS, Time);
 	
 					KillTNC(TNC);
@@ -552,7 +705,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			SuspendOtherPorts(TNC);
 
 			sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			// Stop Scanning
 
@@ -864,7 +1017,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						// Save Command, and wait up to 10 secs
 						
 						sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
-						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 						TNC->ConnectCmd = _strdup(Connect);
 						TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
@@ -881,7 +1034,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(TNC->Streams[0].RemoteCall, &Connect[8], txlen-10);
 
 				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			}
 			else
 			{
@@ -1626,7 +1779,7 @@ Lost:
 			WritetoConsole(Msg);
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	
 			TNC->CONNECTED = FALSE;
 			TNC->Alerted = FALSE;
@@ -1768,7 +1921,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	if (_memicmp(Buffer, "TARGET", 6) == 0)
 	{
 		Debugprintf(Buffer);
+		GetSemaphore(&Semaphore, 50);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		FreeSemaphore(&Semaphore);
 		memcpy(TNC->TargetCall, &Buffer[7], 10);
 		return;
 	}
@@ -1791,7 +1946,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		struct WL2KInfo * WL2K = TNC->WL2K;
 
 		Debugprintf(Buffer);
+
+		GetSemaphore(&Semaphore, 50);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		FreeSemaphore(&Semaphore);
 
 		STREAM->ConnectTime = time(NULL); 
 		STREAM->BytesRXed = STREAM->BytesTXed = STREAM->PacketsSent = 0;
@@ -1984,7 +2142,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			return;
 		}
 
+		GetSemaphore(&Semaphore, 50);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		FreeSemaphore(&Semaphore);
 
 		// Release Session
 
@@ -2024,7 +2184,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		// Add to MHEARD
 
+		GetSemaphore(&Semaphore, 50);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		FreeSemaphore(&Semaphore);
 		UpdateMH(TNC, &Buffer[8], '!', 0);
 		
 		if (!TNC->FECMode)
@@ -2083,7 +2245,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	//	Debugprintf("WINMOR RX: %s", Buffer);
 
 		strcpy(TNC->WEB_MODE, &Buffer[5]);
-		SetWindowText(TNC->xIDC_MODE, &Buffer[5]);
+		GetSemaphore(&Semaphore, 50);
+		MySetWindowText(TNC->xIDC_MODE, &Buffer[5]);
+		FreeSemaphore(&Semaphore);
 		return;
 	}
 
@@ -2092,7 +2256,9 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
 	{
+		GetSemaphore(&Semaphore, 50);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
+		FreeSemaphore(&Semaphore);
 		return;
 	}
 
@@ -2100,7 +2266,10 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		TNC->WinmorRestartCodecTimer = time(NULL);
 
-		SetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
+		GetSemaphore(&Semaphore, 50);
+		MySetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
+		FreeSemaphore(&Semaphore);
+
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[9]);
 
 		if (_memicmp(&Buffer[9], "CONNECTPENDING", 14) == 0)	// Save Pending state for scan control
@@ -2322,7 +2491,7 @@ loop:
 		// Does this mean closed?
 		
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;
@@ -2594,102 +2763,6 @@ BOOL RestartTNC(struct TNCINFO * TNC)
 	return 0;
 }
 
-VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
-{
-	int index = 0;
-	UCHAR * ptr1 = Msg, * ptr2;
-	UCHAR Line[1000];
-	int LineLen, i;
-
-#ifndef LINBPQ
-	index=SendMessage(TNC->hMonitor, LB_SETCURSEL, -1, 0);
-#endif
-
-lineloop:
-
-	if (Len > 0)
-	{
-		//	copy text to control a line at a time	
-					
-		ptr2=memchr(ptr1,13,Len);
-
-		if (ptr2)
-		{
-			ptr2++;
-			LineLen = ptr2 - ptr1;
-			Len -= LineLen;
-			memcpy(Line, ptr1, LineLen);
-			memcpy(&Line[LineLen - 1], "<cr>", 4);
-			LineLen += 3;
-
-			if ((*ptr2) == 10)
-			{
-				memcpy(&Line[LineLen], "<lf>", 4);
-				LineLen += 4;
-				ptr2++;
-				Len --;
-			}
-			
-			Line[LineLen] = 0;
-
-			// If line contains any data above 7f, assume binary and dont display
-
-			for (i = 0; i < LineLen; i++)
-			{
-				if (Line[i] > 126 || Line[i] < 32)
-					goto Skip;
-			}
-#ifdef LINBPQ
-#else
-			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) Line);
-#endif
-			// Write to Web Buffer
-
-			strcat(TNC->WebBuffer, Line);
-			strcat(TNC->WebBuffer, "\r\n");
-			if (strlen(TNC->WebBuffer) > 4500)
-				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4490);	// Make sure null is moved
-		Skip:
-			ptr1 = ptr2;
-
-			goto lineloop;
-
-		}
-
-		for (i = 0; i < Len; i++)
-		{
-			if (ptr1[i] > 126 || ptr1[i] < 32)
-				break;
-		}
-
-		if (i == Len)
-		{
-#ifdef LINBPQ
-#else
-			index=SendMessage(TNC->hMonitor, LB_ADDSTRING, 0, (LPARAM)(LPCTSTR) ptr1 );
-#endif
-			strcat(TNC->WebBuffer, ptr1);
-			strcat(TNC->WebBuffer, "\r\n");
-			if (strlen(TNC->WebBuffer) > 4500)
-				memmove(TNC->WebBuffer, &TNC->WebBuffer[500], 4490);	// Make sure null is moved
-		}
-	}
-
-#ifdef LINBPQ
-#else
-
-	if (index > 1200)
-						
-	do{
-
-		index=index=SendMessage(TNC->hMonitor, LB_DELETESTRING, 0, 0);
-			
-	} while (index > 1000);
-
-	if (index > -1)
-		index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
-#endif
-}
 VOID TidyClose(struct TNCINFO * TNC, int Stream)
 {
 	// If all acked, send disc

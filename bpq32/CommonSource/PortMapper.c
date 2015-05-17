@@ -1459,7 +1459,7 @@ static int OpenPCAP()
 	int i=0;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	u_int netmask;
-	char packet_filter[60];
+	char packet_filter[64];
 	struct bpf_program fcode;
 	char buf[256];
 	int n;
@@ -1486,7 +1486,8 @@ static int OpenPCAP()
 	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
 
 	/* Open the adapter */
-	adhandle= pcap_open_livex(Adapter,	// name of the device
+
+	adhandle = pcap_open_livex(Adapter,	// name of the device
 							 65536,			// portion of the packet to capture. 
 											// 65536 grants that the whole packet will be captured on all the MACs.
 							 Promiscuous,	// promiscuous mode (nonzero means promiscuous)
@@ -1498,26 +1499,32 @@ static int OpenPCAP()
 		return FALSE;
 	
 	/* Check the link layer. We support only Ethernet for simplicity. */
+	
 	if(pcap_datalinkx(adhandle) != DLT_EN10MB)
 	{
 		n=sprintf(buf,"\nThis program works only on Ethernet networks.\n");
 		WritetoConsoleLocal(buf);
-		
-		/* Free the device list */
+	
+		adhandle = 0;
 		return FALSE;
 	}
 
 	netmask=0xffffff; 
 
-	sprintf(packet_filter,"ether[12:2]=0x0800 or ether[12:2]=0x0806");
+//	sprintf(packet_filter,"ether[12:2]=0x0800 or ether[12:2]=0x0806");
 
+	sprintf(packet_filter,"ether broadcast or ether dst %02x:%02x:%02x:%02x:%02x:%02x",
+		ourMACAddr[0], ourMACAddr[1], ourMACAddr[2],
+		ourMACAddr[3], ourMACAddr[4], ourMACAddr[5]);
+		
 	//compile the filter
+
 	if (pcap_compilex(adhandle, &fcode, packet_filter, 1, netmask) <0 )
 	{	
 		n=sprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
 		WritetoConsoleLocal(buf);
 
-		/* Free the device list */
+		adhandle = 0;
 		return FALSE;
 	}
 	
@@ -1528,12 +1535,11 @@ static int OpenPCAP()
 		n=sprintf(buf,"\nError setting the filter.\n");
 		WritetoConsoleLocal(buf);
 
-		/* Free the device list */
+		adhandle = 0;
 		return FALSE;
 	}
 	
 	return TRUE;
-
 }
 #endif
 
