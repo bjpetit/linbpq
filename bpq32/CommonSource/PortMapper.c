@@ -96,6 +96,8 @@ USHORT Generate_CHECKSUM(VOID * ptr1, int Len);
 static VOID MapRouteIPMsg(PIPMSG IPptr);
 BOOL Check_Checksum(VOID * ptr1, int Len);
 
+static BOOL Send_ETH(VOID * Block, DWORD len);
+
 #define ARPTIMEOUT 3600
 
 

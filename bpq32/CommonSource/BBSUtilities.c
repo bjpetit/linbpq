@@ -3405,7 +3405,8 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 				int BodyLen, NewLen;
 				int i;
 				char *ptr2;		
-				char Msg[512];					int Len;
+				char Msg[512];
+				int Len;
 		
 				ptr = MsgBytes;
 	
@@ -3514,7 +3515,7 @@ void ReadMessage(ConnectionInfo * conn, struct UserInfo * user, int msgno)
 
 		nodeprintf(conn, "\r\r[End of Message #%d from %s]\r", msgno, Msg->from);
 
-		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)) || Msg->type == 'T')
+		if ((_stricmp(Msg->to, user->Call) == 0) || ((conn->sysop) && (_stricmp(Msg->to, "SYSOP") == 0)))
 		{
 			if ((Msg->status != 'K') && (Msg->status != 'H') && (Msg->status != 'F') && (Msg->status != 'D'))
 			{

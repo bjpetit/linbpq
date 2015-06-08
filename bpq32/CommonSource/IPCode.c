@@ -47,10 +47,40 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 TODo	?Multiple Adapters
 */
 
+/*
+	Windows uses PCAP to send to both the local host (the machine running BPQ) and 
+	to other machines on the same LAN. I may be able to add the 44/8 route but
+	dont at the moment.
 
+	On Linux, the local machine doesn't see packets sent via pcap, so it uses a TAP
+	device for the local host, and pcap for other addresses on the LAN. The TAP is 
+	created dynamically - it doesn't have to be predefined. A route to 44/8 via the
+	TAP and an ARP entry for it are also added. The TAP runs unnumbered
+
+	44 addresses can be NAT'ed to the local LAN address, so hosts don't have to have
+	both an ISP and a 44 address. You can run your local LAN as 44, but I would expect
+	most uses to prefer to keep their LAN with its normal (usually 192.168) addresses.
+
+	If the PC address isn't the same as the IPGateway IPAddr a NAT entry is created
+	automaticaly.
+
+
+
+*/
 // ip tuntap add dev bpqtap mode tap
 // ifconfig bpqtap 44.131.4.19 mtu 256 up
 
+/*
+
+ShellExecute( NULL, 
+    "runas",  
+    "c:\\windows\\notepad.exe",  
+    " c:\\temp\\report.txt",     
+    NULL,                        // default dir 
+    SW_SHOWNORMAL  
+); 
+
+*/
 
 
 #pragma data_seg("_BPQDATA")
@@ -95,6 +125,8 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap);
 USHORT Generate_CHECKSUM(VOID * ptr1, int Len);
 VOID RecalcTCPChecksum(PIPMSG IPptr);
 VOID RecalcUDPChecksum(PIPMSG IPptr);
+BOOL Send_ETH(VOID * Block, DWORD len, BOOL SendToTAP);
+
 
 #define ARPTIMEOUT 3600
 
@@ -120,7 +152,12 @@ ULONG OurIPAddr = 0;
 ULONG EncapAddr = INADDR_NONE;	// Virtual Host for IPIP PCAP Mode.
 UCHAR RouterMac[6] = {0};		// Mac Address of our Internet Gateway.
 
-ULONG OurIPBroadcast = 0;
+//ULONG HostIPAddr = INADDR_NONE;	// Makes more sense to use same addr for host
+char IPAddrText[20];			// Text form of Our Address
+
+ULONG HostNATAddr = INADDR_NONE;	// LAN address (not 44 net) of our host
+char HostNATAddrText[20];
+
 ULONG OurNetMask = 0xffffffff;
 
 BOOL WantTAP = FALSE;
@@ -132,6 +169,8 @@ BOOL UDPEncap = FALSE;
 
 BOOL IPv6 = FALSE;
 int UDPPort = 4473;			// RX Port, Send on +1
+
+BOOL BPQSNMP = FALSE;		// If set process SNMP in BPQ, else pass to host
 
 int IPTTL = 128;
 
@@ -210,6 +249,8 @@ typedef int (FAR *FARPROCX)();
 
 int (FAR * pcap_sendpacketx)();
 
+FARPROCX pcap_findalldevsx;
+
 FARPROCX pcap_compilex;
 FARPROCX pcap_setfilterx;
 FARPROCX pcap_datalinkx;
@@ -222,7 +263,7 @@ char Dllname[6]="wpcap";
 FARPROCX GetAddress(char * Proc);
 
 #else
-
+#define pcap_findalldevsx pcap_findalldevs
 #define pcap_compilex pcap_compile
 #define pcap_open_livex pcap_open_live
 #define pcap_setfilterx pcap_setfilter
@@ -291,6 +332,35 @@ int CompareMasks (const VOID * a, const VOID * b)
 
 void OpenTAP();
 
+BOOL GetPCAP()
+{
+#ifdef WIN32
+
+	PcapDriver=LoadLibrary(Dllname);
+
+	if (PcapDriver == NULL) return(FALSE);
+	
+	if ((pcap_findalldevsx=GetAddress("pcap_findalldevs")) == 0 ) return FALSE;
+
+	if ((pcap_sendpacketx=GetAddress("pcap_sendpacket")) == 0 ) return FALSE;
+
+	if ((pcap_datalinkx=GetAddress("pcap_datalink")) == 0 ) return FALSE;
+
+	if ((pcap_compilex=GetAddress("pcap_compile")) == 0 ) return FALSE;
+
+	if ((pcap_setfilterx=GetAddress("pcap_setfilter")) == 0 ) return FALSE;
+	
+	pcap_open_livex = (pcap_t * (__cdecl *)(const char *, int, int, int, char *)) GetProcAddress(PcapDriver,"pcap_open_live");
+
+	if (pcap_open_livex == NULL) return FALSE;
+
+	if ((pcap_geterrx=GetAddress("pcap_geterr")) == 0 ) return FALSE;
+
+	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
+
+#endif
+	return TRUE;
+}
 Dll BOOL APIENTRY Init_IP()
 {
 	if (BPQDirectory[0] == 0)
@@ -341,6 +411,76 @@ Dll BOOL APIENTRY Init_IP()
 
 //#ifdef WIN32
 
+	if (Adapter[0])
+		GetPCAP();
+
+	// on Windows create a NAT entry for IPADDR.
+	// on linux enable the TAP device (on Linux you can't use pcap to talk to 
+	// the local host, whereas on Windows you can.
+
+#ifndef MACBPQ
+	{
+		pcap_if_t * ifs, * saveifs;
+		char Line[80];
+
+		// Find IP Addr of Adapter Interface
+		
+		pcap_findalldevsx(&ifs, "");	
+
+		saveifs = ifs;		// Save for release
+
+		while (ifs)
+		{
+			if (strcmp(ifs->name, Adapter) == 0)
+				break;
+
+			ifs = ifs->next;
+		}
+
+		if (ifs)
+		{
+			struct pcap_addr *address;
+
+			address = ifs->addresses;
+
+			while (address)
+			{
+				if (address->addr->sa_family == 2)
+					break;
+
+				address = address->next;
+
+			}
+
+			if (address)
+			{
+				memcpy(&HostNATAddr, &address->addr->sa_data[2], 4);
+
+				sprintf(HostNATAddrText, "%d.%d.%d.%d", (UCHAR)address->addr->sa_data[2],
+						(UCHAR)address->addr->sa_data[3],
+						(UCHAR)address->addr->sa_data[4],
+						(UCHAR)address->addr->sa_data[5]);			
+			}
+			
+			//	We need to create a NAT entry.
+
+			//  For now do for both Windows and Linux
+
+			sprintf(Line, "NAT %s %s", IPAddrText, HostNATAddrText);
+			Debugprintf("Generated NAT %s\n", Line);
+			ProcessLine(Line);
+#ifdef WIN32
+#else
+			// Linux, need TAP
+
+			WantTAP = TRUE;
+
+#endif
+			}
+		}
+				
+#endif
+
     //
     // Open PCAP Driver
 
@@ -366,7 +506,7 @@ Dll BOOL APIENTRY Init_IP()
 
 	// Linux - if TAP requested, open it
 
-#ifdef LINBPQ
+#ifndef WIN32
 #ifndef MACBPQ
 
 	if (WantTAP)
@@ -813,17 +953,22 @@ fragloop:
 }
 
 
-BOOL Send_ETH(VOID * Block, DWORD len)
+BOOL Send_ETH(VOID * Block, DWORD len, BOOL SendtoTAP)
 {
-	if (WantTAP)
+	// On Windows we don't use TAP so everything goes to pcap
+
+#ifndef WIN32
+	if (SendtoTAP)
 	{
 		if (tap_fd)
 			write(tap_fd, Block, len);
 
 		return TRUE;
 	}
+#endif
 
-#ifdef WIN32
+	// On Windows we don't use TAP so everything goes to pcap
+
 	if (adhandle)
 	{
 //		if (len < 60) len = 60;
@@ -834,7 +979,6 @@ BOOL Send_ETH(VOID * Block, DWORD len)
 			Block,				// buffer with the packet
 			len);				// size
 	}
-#endif			
     return TRUE;
 }
 
@@ -1127,6 +1271,9 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 
 		//	Is it for our ENCAP (not on our 44 LAN)
 
+		printf("ARP Request for %08x Tell %08x\n",
+				arpptr->TARGETIPADDR, arpptr->SENDIPADDR);
+
 		if (arpptr->TARGETIPADDR != EncapAddr)
 		{
 			// We should only accept requests from our subnet - we might have more than one net on iterface
@@ -1200,7 +1347,10 @@ AlreadyThere:
 			memcpy(arpptr->MSGHDDR.DEST, arpptr->MSGHDDR.SOURCE ,6); 
 			memcpy(arpptr->MSGHDDR.SOURCE, ourMACAddr ,6); 
 
-			Send_ETH(arpptr,42);
+			printf("Forus ARP Reply for %08x Targ %08x HNAT %08x\n",
+				arpptr->SENDIPADDR, arpptr->TARGETIPADDR, HostNATAddr);
+
+			Send_ETH(arpptr,42, arpptr->TARGETIPADDR == HostNATAddr); // Encap to PCAP
 
 			return;
 		}
@@ -1255,7 +1405,12 @@ ProxyARPReply:
 					memcpy(ETHARPREQMSG.SENDHWADDR,ourMACAddr, 6);
 					memcpy(ETHARPREQMSG.MSGHDDR.DEST, arpptr->SENDHWADDR, 6);
 
-					Send_ETH(&ETHARPREQMSG, 42);
+					printf("Proxy ARP Reply for %08x Targ %08x HNAT %08x\n",
+						ETHARPREQMSG.SENDIPADDR, ETHARPREQMSG.TARGETIPADDR, HostNATAddr);
+	
+					//	We send to TAP if the TARGETIPADDR is our Addr
+
+					Send_ETH(&ETHARPREQMSG, 42, ETHARPREQMSG.TARGETIPADDR == HostNATAddr);
 					return;
 			}
 		}
@@ -1339,7 +1494,7 @@ SendBack:
 				memcpy(ETHARPREQMSG.SENDHWADDR,ourMACAddr, 6);
 				memcpy(ETHARPREQMSG.MSGHDDR.DEST, Arp->HWADDR, 6);
 
-				Send_ETH(&ETHARPREQMSG, 42);
+				Send_ETH(&ETHARPREQMSG, 42, ETHARPREQMSG.TARGETIPADDR == HostNATAddr);
 				return;
 			}
 			else
@@ -1490,7 +1645,7 @@ AXProxyARPReply:
 		ETHARPREQMSG.SENDIPADDR = arpptr->SENDIPADDR;
 		memcpy(ETHARPREQMSG.SENDHWADDR, ourMACAddr, 6);
 
-		Send_ETH(&ETHARPREQMSG, 42);
+		Send_ETH(&ETHARPREQMSG, 42, FALSE);
 
 		break;
 	}
@@ -1541,7 +1696,7 @@ SendBack:
 				memcpy(ETHARPREQMSG.TARGETHWADDR, Arp->HWADDR, 6);
 				memcpy(ETHARPREQMSG.MSGHDDR.DEST, Arp->HWADDR, 6);
 
-				Send_ETH(&ETHARPREQMSG, 42);
+				Send_ETH(&ETHARPREQMSG, 42, ETHARPREQMSG.TARGETIPADDR == HostNATAddr);
 				return;
 			}
 			else
@@ -1627,7 +1782,9 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 
 	Dest = IPptr->IPDEST.addr;
 
-	if (Dest == OurIPAddr || Dest == 0xffffffff || Dest == OurIPBroadcast)
+	printf("IP Pkt for %08X\n", Dest);
+
+	if (Dest == OurIPAddr)
 		goto ForUs;
 
 	RouteIPMsg(IPptr);
@@ -1635,6 +1792,11 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 	return;
 
 ForUs:
+	
+	//	We now pass stuff addressed to us to the host, unless it is a reponse
+	//	to our ping request
+
+	//	Not sure what to do with snmp (maybe option)
 
 //	if (IPptr->IPPROTOCOL == 4)		// AMPRNET Tunnelled Packet
 //	{
@@ -1642,15 +1804,31 @@ ForUs:
 //		return;
 //	}
 
+	printf("Msg for us\n");
+
 	if (IPptr->IPPROTOCOL == 1)		// ICMP
 	{
-		ProcessICMPMsg(IPptr);
-		return;
+		int Len;
+		PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
+
+		Len = ntohs(IPptr->IPLENGTH);
+		Len-=20;
+
+		printf("ICMP Msg for us\n");
+
+		if (Len == 28 && ICMPptr->ICMPTYPE == 0 && memcmp(ICMPptr->ICMPData, "*BPQ", 4) == 0)
+		{
+			// Probably ours
+			
+			printf("Local ICMP Msg for us\n");
+			ProcessICMPMsg(IPptr);
+			return;
+		}
 	}
 
 	// Support UDP for SNMP
 
-	if (IPptr->IPPROTOCOL == 17)		// UDP
+	if (BPQSNMP && IPptr->IPPROTOCOL == 17)		// UDP
 	{
 		UDPptr = (PUDPMSG)&IPptr->Data;
 
@@ -1660,6 +1838,11 @@ ForUs:
 			return;
 		}
 	}
+
+	// Pass rest to host
+	
+	RouteIPMsg(IPptr);
+	return;
 }
 
 unsigned short cksum(unsigned short *ip, int len)
@@ -2101,7 +2284,7 @@ VOID SendIPtoEncap(PIPMSG IPptr, ULONG Encap)
 		memcpy(Ethptr->DEST, RouterMac, 6);
 		memcpy(Ethptr->SOURCE, ourMACAddr, 6);
 		Ethptr->ETYPE= 0x0008;
-		Send_ETH(Ethptr, Origlen + 34);
+		Send_ETH(Ethptr, Origlen + 34, FALSE);
 
 		return;
 
@@ -2138,6 +2321,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 	BOOL Found;
 	struct nat_table_entry * NAT = NULL;
 	int index;
+	BOOL SendtoTAP = FALSE;		// used on LinBPQ for NAT to This Host
 
 	//	Decremnent TTL and Recalculate header checksum
 
@@ -2150,6 +2334,8 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 	}
 
 	// See if for a NATed Address
+
+	printf("RouteIPFrame IP %x\n", IPptr->IPDEST.addr);
 				
 	for (index=0; index < nat_table_len; index++)
 	{
@@ -2159,17 +2345,20 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 
 		if (NAT->origipaddr == IPptr->IPDEST.addr)
 		{
+			printf("NAT %08X to %08X\n", IPptr->IPDEST, NAT->mappedipaddr);
+
 			IPptr->IPDEST.addr = NAT->mappedipaddr;
 
 			if (IPptr->IPPROTOCOL == 6)
 				RecalcTCPChecksum(IPptr);
 			else if (IPptr->IPPROTOCOL == 11)
 				RecalcUDPChecksum(IPptr);
+			break;
+		}
+	}
 
-						break;
-					}
-				}
-
+	if (IPptr->IPDEST.addr == HostNATAddr)
+		SendtoTAP = TRUE;
 
 	IPptr->IPCHECKSUM = 0;
 	IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
@@ -2240,7 +2429,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 			SendIPtoEncap(IPptr, Route->Encap);
 		else
 			if (Arp->ARPTYPE == 'E')
-				SendIPtoBPQDEV(IPptr, Arp->HWADDR);
+				SendIPtoEther(IPptr, Arp->HWADDR, SendtoTAP);
 			else
 				SendIPtoAX25(IPptr, Arp->HWADDR, Arp->ARPINTERFACE, Arp->ARPTYPE);
 
@@ -2249,7 +2438,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 	return FALSE;	
 }
 
-VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR)
+VOID SendIPtoEther(PIPMSG IPptr, UCHAR * HWADDR, BOOL SendtoTAP)
 {	
 	// AX.25 headers are bigger, so there will always be room in buffer for enet header
 	
@@ -2266,7 +2455,7 @@ VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR)
 	memcpy(Ethptr->SOURCE, ourMACAddr, 6);
 	Ethptr->ETYPE= 0x0008;
 
-	Send_ETH(Ethptr,Len);
+	Send_ETH(Ethptr,Len, SendtoTAP);
 
 	return;
 }
@@ -2421,7 +2610,7 @@ PARPDATA AllocARPEntry()
 		memcpy(ETHARPREQMSG.MSGHDDR.SOURCE, ourMACAddr, 6);
 		memset(ETHARPREQMSG.MSGHDDR.DEST, 255, 6);
 
-		Send_ETH(&ETHARPREQMSG, 42);
+		Send_ETH(&ETHARPREQMSG, 42, FALSE);
 
 		return;
 	}
@@ -2665,7 +2854,6 @@ static BOOL ReadConfigFile()
 	return TRUE;
 }
 
-
 static ProcessLine(char * buf)
 {
 	char * ptr, * p_value, * p_origport, * p_host, * p_port;
@@ -2699,11 +2887,11 @@ static ProcessLine(char * buf)
 		return (TRUE);
 	}
 
-	if(_stricmp(ptr,"USEBPQTAP") == 0)
-	{
-		WantTAP = TRUE;
-		return (TRUE);
-	}
+//	if(_stricmp(ptr,"USEBPQTAP") == 0)
+//	{
+//		WantTAP = TRUE;
+//		return (TRUE);
+//	}
 
 	if (_stricmp(ptr,"44Encap") == 0)			// Enable Net44 IPIP Tunnel
 	{
@@ -2762,22 +2950,26 @@ static ProcessLine(char * buf)
 		return (TRUE);
 	}
 
-	if (_stricmp(ptr,"IPAddr") == 0)
+	if (_stricmp(ptr,"IPAddr") == 0 || _stricmp(ptr,"BPQIPAddr") == 0)
 	{
 		OurIPAddr = inet_addr(p_value);
 
 		if (OurIPAddr == INADDR_NONE) return (FALSE);
 
+		strcpy(IPAddrText, p_value);
 		return (TRUE);
 	}
-	if (_stricmp(ptr,"IPBroadcast") == 0)
-	{
-		OurIPBroadcast = inet_addr(p_value);
 
-		if (OurIPBroadcast == INADDR_NONE) return (FALSE);
+//	if (_stricmp(ptr,"HostIPAddr") == 0)
+//	{
+//		HostIPAddr = inet_addr(p_value);
 
-		return (TRUE);
-	}
+//		if (HostIPAddr == INADDR_NONE) return (FALSE);
+
+//		strcpy(HostIPAddrText, p_value);
+
+//		return (TRUE);
+//	}
 
 	if (_stricmp(ptr,"IPNetMask") == 0)
 	{
@@ -2825,6 +3017,12 @@ static ProcessLine(char * buf)
 		PROUTEENTRY Route;
 		BOOL Found;
 
+		if (OurIPAddr == 0)
+		{
+			WritetoConsoleLocal("NAT lines should follow IPAddr\n");
+			return FALSE;
+		}
+
 		if (!p_value) return FALSE;
 		ipad = inet_addr(p_value);
 		
@@ -2853,6 +3051,14 @@ static ProcessLine(char * buf)
 		else
 			port = mappedport = 0;
 	
+#ifndef WIN32
+		// on Linux, we send stuff for our host to TAP
+		
+		if (ipad == OurIPAddr)
+			nat_table[nat_table_len].ThisHost = TRUE;
+
+		printf("NAT %x %x %d\n", ipad, OurIPAddr, nat_table[nat_table_len].ThisHost);
+#endif
 		nat_table[nat_table_len].origipaddr = ipad;
 		nat_table[nat_table_len].origport = ntohs(port);
 		nat_table[nat_table_len].mappedipaddr = mappedipad;
@@ -2874,15 +3080,18 @@ static ProcessLine(char * buf)
 				Route->LOCKED = 1;
 			}
 		}
-		return (TRUE);
+		return TRUE;
 	}
 
-
-	
+	if (_stricmp(ptr,"ENABLESNMP") == 0)
+	{
+		BPQSNMP = TRUE;
+		return TRUE;
+	}
 	//
 	//	Bad line
 	//
-	return (FALSE);
+	return FALSE;
 	
 }
 
@@ -2984,29 +3193,8 @@ int OpenPCAP()
 	char buf[256];
 	int n;
 
-#ifdef WIN32
 
-	PcapDriver=LoadLibrary(Dllname);
 
-	if (PcapDriver == NULL) return(FALSE);
-	
-	if ((pcap_sendpacketx=GetAddress("pcap_sendpacket")) == 0 ) return FALSE;
-
-	if ((pcap_datalinkx=GetAddress("pcap_datalink")) == 0 ) return FALSE;
-
-	if ((pcap_compilex=GetAddress("pcap_compile")) == 0 ) return FALSE;
-
-	if ((pcap_setfilterx=GetAddress("pcap_setfilter")) == 0 ) return FALSE;
-	
-	pcap_open_livex = (pcap_t * (__cdecl *)(const char *, int, int, int, char *)) GetProcAddress(PcapDriver,"pcap_open_live");
-
-	if (pcap_open_livex == NULL) return FALSE;
-
-	if ((pcap_geterrx=GetAddress("pcap_geterr")) == 0 ) return FALSE;
-
-	if ((pcap_next_exx=GetAddress("pcap_next_ex")) == 0 ) return FALSE;
-
-#endif
 #ifndef MACBPQ
 
 	/* Open the adapter */
@@ -3041,6 +3229,7 @@ int OpenPCAP()
 		ourMACAddr[3], ourMACAddr[4], ourMACAddr[5]);
 		
 	//compile the filter
+
 	if (pcap_compilex(adhandle, &fcode, packet_filter, 1, netmask) <0 )
 	{	
 		n=sprintf(buf,"\nUnable to compile the packet filter. Check the syntax.\n");
@@ -3592,16 +3781,27 @@ int tun_alloc(char *dev, int flags) {
   return fd;
 }
 
+#include <net/if_arp.h>
+#include <net/route.h> 
+ 
 
 void OpenTAP()
 {
-  int flags = IFF_TAP;
-  char if_name[IFNAMSIZ] = "bpqtap";
+	int flags = IFF_TAP;
+	char if_name[IFNAMSIZ] = "bpqtemptap";
+	struct arpreq arpreq;
+	int s;
+	struct ifreq ifr;
+	struct sockaddr_in sin;
+	int sockfd;
+	struct rtentry rm;
+	int err;
+	int n;
 
-  uint nread, nwrite, plength;
-  char buffer[BUFSIZE];
+	uint nread, nwrite, plength;
+	char buffer[BUFSIZE];
 
-  int optval = 1;
+	int optval = 1;
 
   /* initialize tun/tap interface */
 
@@ -3615,9 +3815,127 @@ void OpenTAP()
   printf("Successfully connected to TAP interface %s\n", if_name);
 
   ioctl(tap_fd, FIONBIO, &optval);
-  return;
-}
 
+//	s = socket(AF_INET, SOCK_DGRAM, 0);
+//	ioctl(s, SIOCSARP, (caddr_t)&arpreq);
+//	perror("ARP IOCTL);
+//	ioctl(s, SIOCGARP, (caddr_t)&arpreq);
+//	ioctl(s, SIOCDARP, (caddr_t)&arpreq);
+
+	// Bring it up
+
+	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+	if (sockfd < 0)
+	{
+		perror ("Socket");
+		return;
+	}
+
+	memset(&ifr, 0, sizeof ifr);
+
+	strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
+
+	ifr.ifr_flags |= IFF_UP;
+
+	if ((err = ioctl(sockfd, SIOCSIFFLAGS, &ifr)) < 0)
+	{
+		perror("SIOCSIFFLAGS");
+		printf("SIOCSIFFLAGS failed , ret->%d\n",err);
+		return;
+	}
+
+	printf("TAP brought up\n");
+
+	memset(&sin, 0, sizeof(struct sockaddr_in));
+ 
+	sin.sin_addr.s_addr = OurIPAddr;
+	sin.sin_family = AF_INET;
+
+	memcpy(&ifr.ifr_addr, &sin, sizeof(struct sockaddr));
+
+//	ifr.ifr_flags = 0;
+
+/*	if ((err = ioctl(sockfd, SIOCSIFADDR, &ifr)) < 0)
+	{
+		perror("SIOCSIFADDR");
+		printf("SIOCSIFADDR failed , ret->%d\n",err);
+		return;
+	}
+
+	printf("Address set to %s\n", IPAddrText);
+*/
+	// Add a Route for 44/8 via TAP
+
+	memset(&rm, 0, sizeof(rm));
+
+	(( struct sockaddr_in*)&rm.rt_dst)->sin_family = AF_INET;
+	(( struct sockaddr_in*)&rm.rt_dst)->sin_addr.s_addr = inet_addr("44.0.0.0");
+	(( struct sockaddr_in*)&rm.rt_dst)->sin_port = 0;
+
+	(( struct sockaddr_in*)&rm.rt_genmask)->sin_family = AF_INET;
+	(( struct sockaddr_in*)&rm.rt_genmask)->sin_addr.s_addr = inet_addr("255.0.0.0");
+	(( struct sockaddr_in*)&rm.rt_genmask)->sin_port = 0;
+
+	(( struct sockaddr_in*)&rm.rt_gateway)->sin_family = AF_INET;
+	(( struct sockaddr_in*)&rm.rt_gateway)->sin_addr.s_addr = 0; //inet_addr("192.168.17.1");
+	(( struct sockaddr_in*)&rm.rt_gateway)->sin_port = 0;
+	
+	rm.rt_dev = if_name;
+
+	rm.rt_flags = RTF_UP; // | RTF_GATEWAY;
+	
+	if ((err = ioctl(sockfd, SIOCADDRT, &rm)) < 0)
+	{
+		perror("SIOCADDRT");
+		printf("SIOCADDRT failed , ret->%d\n",err);
+		return;
+	}
+	
+	printf("Route to 44/8 added\n");
+
+   struct ifreq xbuffer;
+
+    memset(&xbuffer, 0x00, sizeof(xbuffer));
+
+    strcpy(xbuffer.ifr_name, "bpqtemptap");
+
+    ioctl(sockfd, SIOCGIFHWADDR, &xbuffer);
+
+    for( n = 0; n < 6; n++ )
+    {
+    	printf("%.2X ", (unsigned char)xbuffer.ifr_hwaddr.sa_data[n]);
+    }
+
+    printf("\n");
+
+	//	Create ARP entry for real IP Address
+
+	PARPDATA Arp;
+	PROUTEENTRY Route;
+	BOOL Found;
+
+	Arp = LookupARP(HostNATAddr, TRUE, &Found);
+
+	if (Arp != NULL)
+	{
+		Arp->IPADDR = HostNATAddr;
+		memcpy(Arp->HWADDR, xbuffer.ifr_hwaddr.sa_data, 6);
+
+		Arp->ARPTYPE = 'E';
+		Arp->ARPINTERFACE = 255;
+		Arp->ARPVALID = TRUE;
+		Arp->ARPTIMER = 0;
+		Arp->LOCKED = TRUE;
+
+		// Also add to Routes
+
+		AddToRoutes(Arp, HostNATAddr, 'E');
+		Arp->ARPROUTE->LOCKED = TRUE;
+	}
+
+	close(sockfd);
+}
 #endif
 #endif
 
@@ -3629,8 +3947,9 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 
 	ULONG PingAddr;
 	UCHAR Msg[120] = "";
-	PIPMSG IPptr = (PIPMSG)&Msg[40];		// Sapce of frmae header (not used)
+	PIPMSG IPptr = (PIPMSG)&Msg[40];		// Space for frame header (not used)
 	PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
+	time_t NOW = time(NULL);
 
 	Bufferptr += sprintf(Bufferptr, "\r");
 
@@ -3650,17 +3969,25 @@ VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD
 		return;
 	}
 
+	// We keep the message pretty short in case running over RF
+	// Send "*BPQPINGID*, then Timestamp (Secs), then padding to 20 bytes
+	// So we can use same address for host we examine ping responses for 
+	// the pattern, and intercept ours
+
 	IPptr->VERLEN = 0x45;
 	IPptr->IPDEST.addr = PingAddr;		
 	IPptr->IPSOURCE.addr = OurIPAddr;
 	IPptr->IPPROTOCOL = ICMP;
 	IPptr->IPTTL = IPTTL;
 	IPptr->FRAGWORD = 0;
-	IPptr->IPLENGTH = htons(60);			// IP Header ICMP Header IP Header 8 Data
+	IPptr->IPLENGTH = htons(48);			// IP Header ICMP Header 20 Data
 
 	ICMPptr->ICMPTYPE = 8;
 	ICMPptr->ICMPID = Session->CIRCUITINDEX;
-	ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, 36);
+	strcpy(ICMPptr->ICMPData, "*BPQPINGID*");	// 12 including null
+	memcpy(&ICMPptr->ICMPData[12], &NOW, 4);
+
+	ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, 28);
 
 	if (RouteIPMsg(IPptr))	
 		Bufferptr += sprintf(Bufferptr, "OK\r");

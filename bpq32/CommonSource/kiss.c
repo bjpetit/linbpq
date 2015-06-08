@@ -1338,7 +1338,7 @@ SeeifMore:
 TXBE:Q:PSK250C6.78.Kiss
 RSIDN:1504,PSK250C6,1504,PSK250C6,ACTIVE
 */
-		Debugprintf(Port->RXMSG);
+//		Debugprintf(Port->RXMSG);
 		return 0;
 	}
 

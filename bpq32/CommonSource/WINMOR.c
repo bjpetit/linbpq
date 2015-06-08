@@ -1142,7 +1142,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
-//			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
 
 			return TRUE;
 		}
@@ -1157,7 +1157,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
-//			send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+			send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
 			return 0;
 		}
 

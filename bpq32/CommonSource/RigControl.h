@@ -29,13 +29,15 @@ struct ScanEntry
 	char * Cmd1;
 	int Cmd1Len;
 	char * Cmd2;
-	int xCmd2Len;
+	int Cmd2Len;
 	char * Cmd3;
 	int Cmd3Len;
 	char * PollCmd;
 	int PollCmdLen;
 	char APPL[13];		// Autoconnect APPL for this Freq
 	char APPLCALL[10];	// Callsign for autoconnect application
+	char MemoryBank;	// For Memory Scanning
+	int MemoryNumber;
 };
 
 struct RIGINFO

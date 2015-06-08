@@ -173,6 +173,7 @@ struct nat_table_entry
 	unsigned short origport;
 	unsigned int mappedipaddr;
 	unsigned short mappedport;
+	BOOL ThisHost;				//	Needed by LinBPQ to direct host mesgs to TAP
 };
 
 struct ipv6_header
@@ -194,7 +195,6 @@ static HANDLE hInstance;
 
 Dll BOOL APIENTRY Init_IP();
 Dll BOOL APIENTRY Poll_IP();  
-BOOL Send_ETH(VOID * Block, DWORD len);
 VOID ProcessEthARPMsg(PETHARP arpptr);
 VOID ProcessEthIPMsg(PETHMSG Buffer);
 VOID ProcessAXARPMsg(PAXARP arpptr);
@@ -220,6 +220,7 @@ int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len);
 int CheckSumAndSendUDP(PIPMSG IPptr, PUDPMSG UDPmsg, USHORT Len);
 VOID SaveARP();
 VOID WriteARPLine(PARPDATA ArpRecord, FILE * file);
+VOID SendIPtoEther(PIPMSG IPptr, UCHAR * HWADDR, BOOL SendtoTAP);
 
 int InitPCAP(void);
 int OpenPCAP(void);

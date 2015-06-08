@@ -1846,7 +1846,8 @@ nosocks:
 				}
 				// Always Disconnect CMS Socket
 
-				DataSocket_Disconnect(TNC, sockptr);	
+				DataSocket_Disconnect(TNC, sockptr);
+				return;
 			}
 
 			if (sockptr->RelayMode)
@@ -3345,7 +3346,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 		if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == 0)
 		{
 			DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
-			return;
+			return 0;
 		}
 
 		send(sock, RelayMsg, strlen(RelayMsg), 0);
@@ -3787,7 +3788,7 @@ MsgLoop:
 			if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == FALSE)
 			{
 				DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
-				return;
+				return 0;
 			}
 		
 			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
@@ -4124,31 +4125,40 @@ BOOL ProcessTelnetCommand(struct ConnectionInfo * sockptr, byte * Msg, int Len)
 	return FALSE;
 }
 
+char LastCMSLog[256];
+char LastTelnetLog[256];
 
 int WriteLog(char * msg)
 {
 	FILE *file;
 	char timebuf[128];
-
+	struct tm * tm;
 	time_t ltime;
 
 	UCHAR Value[100];
 
+	time(&ltime);
+	tm = gmtime(&ltime);
+
 	if (BPQDirectory[0] == 0)
 	{
-		strcpy(Value, "logs/BPQTelnetServer.log");
+		strcpy(Value, "logs/TelnetServer");
 	}
+
 	else
 	{
 		strcpy(Value, BPQDirectory);
 		strcat(Value, "/");
-		strcat(Value, "logs/BPQTelnetServer.log");
+		strcat(Value, "logs/TelnetServer");
 	}
+
+	sprintf(Value, "%s_%04d%02d%02d.log", Value,
+				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+
 		
 	if ((file = fopen(Value, "a")) == NULL)
 		return FALSE;
 
-	time(&ltime);
 
 #ifdef LINBPQ
 	{
@@ -4172,10 +4182,22 @@ int WriteLog(char * msg)
 
 	fclose(file);
 
+#ifndef WIN32
+
+	if (strcmp(Value, LastTelnetLog))
+	{
+		UCHAR SYMLINK[MAX_PATH];
+
+		sprintf(SYMLINK,"%s/TelnetLatest.log", BPQDirectory);
+		unlink(SYMLINK); 
+		strcpy(LastTelnetLog, Value);
+		symlink(Value, SYMLINK);
+	}
+
+#endif
+
 	return 0;
 }
-
-char LastCMSLog[256];
 
 VOID WriteCMSLog(char * msg)
 {

@@ -191,13 +191,13 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 
 	if (PTTState)
 	{
-		SetWindowText(RIG->hPTT, "T");
+		MySetWindowText(RIG->hPTT, "T");
 		RIG->WEB_PTT = 'T';
 		RIG->PTTTimer = PTTLimit;
 	}
 	else
 	{
-		SetWindowText(RIG->hPTT, "");
+		MySetWindowText(RIG->hPTT, "");
 		RIG->WEB_PTT = ' ';
 		RIG->PTTTimer = 0;
 	}
@@ -326,6 +326,8 @@ int Rig_Command(int Session, char * Command)
 	struct ScanEntry * FreqPtr;
 	char * CmdPtr;
 	int Len;
+	char MemoryBank = 0;	// For Memory Scanning
+	int MemoryNumber = 0;
 
 	//	Only Allow RADIO from Secure Applications
 
@@ -454,14 +456,28 @@ portok:
 
 	RIG->Session = Session;		// BPQ Stream
 
-	Freq = atof(FreqString);
-
-	if (Freq < 0.1)
+	if (_memicmp(FreqString, "Chan", 4) == 0)
 	{
-		strcpy(Command, "Sorry - Invalid Frequency\r");
-		return FALSE;
-	}
+		if (strchr(FreqString, '/')	)	// Bank/Chan
+		{
+			MemoryBank = FreqString[4];
+			MemoryNumber = atoi(&FreqString[6]);
+		}
+		else
+			MemoryNumber = atoi(&ptr[4]);	// Just Chan
 
+		Freq = 0.0;
+	}
+	else
+	{
+		Freq = atof(FreqString);
+
+		if (Freq < 0.1)
+		{
+			strcpy(Command, "Sorry - Invalid Frequency\r");
+			return FALSE;
+		}
+	}
 	Freq = Freq * 1000000.0;
 
 	Valchar = _fcvt(Freq, 0, &dec, &sign);
@@ -566,6 +582,60 @@ portok:
 		*(CmdPtr++) = 0xFE;
 		*(CmdPtr++) = RIG->RigAddr;
 		*(CmdPtr++) = 0xE0;
+
+
+		if (MemoryNumber)
+		{
+			// Set Memory Channel instead of Freq, Mode, etc
+
+			char ChanString[5];
+
+			// Send Set Memory, then Channel
+								
+			*(CmdPtr++) = 0x08;
+			*(CmdPtr++) = 0xFD;
+
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = RIG->RigAddr;
+			*(CmdPtr++) = 0xE0;
+
+			sprintf(ChanString, "%04d", MemoryNumber); 
+	
+			*(CmdPtr++) = 0x08;
+			*(CmdPtr++) = (ChanString[1] - 48) | ((ChanString[0] - 48) << 4);
+			*(CmdPtr++) = (ChanString[3] - 48) | ((ChanString[2] - 48) << 4);
+			*(CmdPtr++) = 0xFD;
+				
+			FreqPtr[0].Cmd1Len = 14;
+
+			if (MemoryBank)
+			{						
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = RIG->RigAddr;
+				*(CmdPtr++) = 0xE0;
+				*(CmdPtr++) = 0x08;
+				*(CmdPtr++) = 0xA0;
+				*(CmdPtr++) = MemoryBank - 0x40;
+				*(CmdPtr++) = 0xFD;
+
+				FreqPtr[0].Cmd1Len += 8;
+			}	
+		}
+		else
+		{
+
+			// Send Set VFO in case last chan was memory
+							
+			*(CmdPtr++) = 0x07;
+			*(CmdPtr++) = 0xFD;
+
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = 0xFE;
+			*(CmdPtr++) = RIG->RigAddr;
+			*(CmdPtr++) = 0xE0;
+
 		*(CmdPtr++) = 0x5;		// Set frequency command
 
 		// Need to convert two chars to bcd digit
@@ -620,8 +690,7 @@ portok:
 				*(CmdPtr++) = 0xE0;
 				*(CmdPtr++) = 0x1a;	
 
-				if (strcmp(RIG->RigName, "IC7100") == 0)
-				{
+				if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))				{
 					FreqPtr[0].Cmd3Len = 9;
 					*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
 					*(CmdPtr++) = 0x1;		// Data On
@@ -643,7 +712,7 @@ portok:
 						
 				*(CmdPtr++) = 0xFD;
 			}
-
+		}
 		}
 
 		buffptr[1] = 200;
@@ -1823,9 +1892,9 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 				if (RIG_DEBUG)
 					Debugprintf("BPQ32 Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
-				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, 24);
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 	
-				PORT->TXLen = 11;
+				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
 				RigWriteCommBlock(PORT);
 				PORT->Retries = 2;
 				PORT->AutoPoll = TRUE;
@@ -1997,7 +2066,16 @@ ok:
 			goto SetFinished;
 		}
 
-		if (PORT->TXBuffer[4] == 0x0f || PORT->TXBuffer[4] == 0x01a)	// Set DUP or Set Data
+		if (PORT->TXBuffer[4] == 0x08)
+		{
+			// Memory Chan
+			
+			PORT->TXBuffer[4] = 0;			// So we only do it once
+
+			goto SetFinished;
+		}
+
+		if (PORT->TXBuffer[4] == 0x08 || PORT->TXBuffer[4] == 0x0f || PORT->TXBuffer[4] == 0x01a)	// Set DUP or Set Data
 		{
 
 SetFinished:
@@ -2971,13 +3049,16 @@ VOID SwitchAntenna(struct RIGINFO * RIG, char Antenna)
 BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 				   char * PMinLevel, char * PMaxLevel, char * PacketMode,
 				   char * RPacketMode, char * Split, char * Data, char * WinmorMode,
-				   char * Antenna, BOOL * Supress, char * Filter, char * Appl)
+				   char * Antenna, BOOL * Supress, char * Filter, char * Appl,
+				   char * MemoryBank, int * MemoryNumber)
 {
 	char * Context;
 	char * ptr;
 
-	*Filter = '1';			// Default
+	*Filter = '1';			// Defaults
 	*PMinLevel = 1;
+	*MemoryBank = 0;
+	*MemoryNumber = 0;
 
 	ptr = strtok_s(Param, ",", &Context);
 
@@ -2997,7 +3078,23 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	*Dwell = atof(ptr);
 	
 	ptr = strtok_s(NULL, ",", &Context);
-	*Freq = atof(ptr);
+
+	// May be a frequency or a Memory Bank/Channel 
+
+	if (_memicmp(ptr, "Chan", 4) == 0)
+	{
+		if (strchr(ptr, '/'))		// Bank/Chan
+		{
+			memcpy(MemoryBank, &ptr[4], 1);
+			*MemoryNumber = atoi(&ptr[6]);
+		}
+		else
+			*MemoryNumber = atoi(&ptr[4]);	// Just Chan
+
+		*Freq = 0.0;
+	}
+	else
+		*Freq = atof(ptr);
 
 	ptr = strtok_s(NULL, ",", &Context);
 
@@ -3097,6 +3194,9 @@ struct RIGINFO * RigConfig(struct TNCINFO * TNC, char * buf, int Port)
 	char PTTRigName[] = "PTT";
 	double ScanFreq;
 	double Dwell;
+	char MemoryBank;	// For Memory Scanning
+	int MemoryNumber;
+
 	BOOL PTTControlsInputMUX = FALSE;
 	BOOL DataPTT = FALSE;
 	int DataPTTOffMode = 1;				// ACC
@@ -3624,8 +3724,9 @@ CheckScan:
 			break;
 
 		Filter = PMinLevel = PMaxLevel = PacketMode = RPacketMode = Split =
-			Data = WinmorMode = Antenna = ModeNo = Supress = 0;
-
+			Data = WinmorMode = Antenna = ModeNo = Supress = MemoryNumber = 0;
+	
+		MemoryBank = 0;
 		Appl[0] = 0;
 
 		Dwell = 0.0;
@@ -3655,7 +3756,8 @@ CheckScan:
 		if (strchr(ptr, ','))			// New Format
 		{
 			DecodeModePtr(ptr, &Dwell, &Freq, Mode, &PMinLevel, &PMaxLevel, &PacketMode,
-				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter, &Appl[0]);
+				&RPacketMode, &Split, &Data, &WinmorMode, &Antenna, &Supress, &Filter, &Appl[0],
+				&MemoryBank, &MemoryNumber);
 		}
 		else
 		{
@@ -3936,84 +4038,140 @@ CheckScan:
 			*(CmdPtr++) = 0xFE;
 			*(CmdPtr++) = RIG->RigAddr;
 			*(CmdPtr++) = 0xE0;
-			*(CmdPtr++) = 0x5;		// Set frequency command
 
-			// Need to convert two chars to bcd digit
-	
-			*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
-			*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
-			*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
-			*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
-			*(CmdPtr++) = (FreqString[0] - 48);
+			if (MemoryNumber)
+			{
+				// Set Memory Channel instead of Freq, Mode, etc
 
-			*(CmdPtr++) = 0xFD;
+				char ChanString[5];
 
-			if (Filter)
-			{						
-				CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+				// Send Set Memory, then Channel
+								
+				*(CmdPtr++) = 0x08;
+				*(CmdPtr++) = 0xFD;
+
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = RIG->RigAddr;
 				*(CmdPtr++) = 0xE0;
-				*(CmdPtr++) = 0x6;		// Set Mode
-				*(CmdPtr++) = ModeNo;
-				*(CmdPtr++) = Filter - '0'; //Filter
-				*(CmdPtr++) = 0xFD;
 
-				if (Split)
-				{
-					CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-					FreqPtr[0]->Cmd3Len = 7;
+				sprintf(ChanString, "%04d", MemoryNumber); 
+	
+				*(CmdPtr++) = 0x08;
+				*(CmdPtr++) = (ChanString[1] - 48) | ((ChanString[0] - 48) << 4);
+				*(CmdPtr++) = (ChanString[3] - 48) | ((ChanString[2] - 48) << 4);
+				*(CmdPtr++) = 0xFD;
+				
+				FreqPtr[0]->Cmd1Len = 14;
+
+				if (MemoryBank)
+				{						
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = RIG->RigAddr;
 					*(CmdPtr++) = 0xE0;
-					*(CmdPtr++) = 0xF;		// Set Mode
-					if (Split == 'S')
-						*(CmdPtr++) = 0x10;
-					else
-						if (Split == '+')
-							*(CmdPtr++) = 0x12;
-					else
-						if (Split == '-')
-							*(CmdPtr++) = 0x11;
-			
+					*(CmdPtr++) = 0x08;
+					*(CmdPtr++) = 0xA0;
+					*(CmdPtr++) = MemoryBank - 0x40;
 					*(CmdPtr++) = 0xFD;
+
+					FreqPtr[0]->Cmd1Len += 8;
 				}
-				else
-				{
-					if (Data)
+			}	
+			else
+			{
+
+				// Send Set VFO in case last chan was memory
+							
+				*(CmdPtr++) = 0x07;
+				*(CmdPtr++) = 0xFD;
+
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = 0xFE;
+				*(CmdPtr++) = RIG->RigAddr;
+				*(CmdPtr++) = 0xE0;
+
+				*(CmdPtr++) = 0x5;		// Set frequency command
+
+				// Need to convert two chars to bcd digit
+		
+				*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
+				*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
+				*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
+				*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+				*(CmdPtr++) = (FreqString[0] - 48);
+
+				*(CmdPtr++) = 0xFD;
+
+				FreqPtr[0]->Cmd1Len = 17;
+
+				if (Filter)
+				{						
+					CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = RIG->RigAddr;
+					*(CmdPtr++) = 0xE0;
+					*(CmdPtr++) = 0x6;		// Set Mode
+					*(CmdPtr++) = ModeNo;
+					*(CmdPtr++) = Filter - '0'; //Filter
+					*(CmdPtr++) = 0xFD;
+
+					if (Split)
 					{
 						CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
-
+						FreqPtr[0]->Cmd3Len = 7;
 						*(CmdPtr++) = 0xFE;
 						*(CmdPtr++) = 0xFE;
 						*(CmdPtr++) = RIG->RigAddr;
 						*(CmdPtr++) = 0xE0;
-						*(CmdPtr++) = 0x1a;	
-
-						if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))
-						{
-							FreqPtr[0]->Cmd3Len = 9;
-							*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
-							*(CmdPtr++) = 0x1;		// Data On
-							*(CmdPtr++) = Filter - '0'; //Filter
-						}
-						else if (strcmp(RIG->RigName, "IC7200") == 0)
-						{
-							FreqPtr[0]->Cmd3Len = 9;
-							*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
-							*(CmdPtr++) = 0x1;		// Data On
-							*(CmdPtr++) = Filter - '0'; //Filter
-						}
+						*(CmdPtr++) = 0xF;		// Set Mode
+						if (Split == 'S')
+							*(CmdPtr++) = 0x10;
 						else
-						{
-							FreqPtr[0]->Cmd3Len = 8;
-							*(CmdPtr++) = 0x6;		// Set Data
-							*(CmdPtr++) = 0x1;		//On		
-						}
-						
+							if (Split == '+')
+								*(CmdPtr++) = 0x12;
+						else
+							if (Split == '-')
+								*(CmdPtr++) = 0x11;
+			
 						*(CmdPtr++) = 0xFD;
+					}
+					else
+					{
+						if (Data)
+						{
+							CmdPtr = FreqPtr[0]->Cmd3 = malloc(10);
+
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = 0xFE;
+							*(CmdPtr++) = RIG->RigAddr;
+							*(CmdPtr++) = 0xE0;
+							*(CmdPtr++) = 0x1a;	
+
+							if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))
+							{
+								FreqPtr[0]->Cmd3Len = 9;
+								*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
+								*(CmdPtr++) = 0x1;		// Data On
+								*(CmdPtr++) = Filter - '0'; //Filter
+							}
+							else if (strcmp(RIG->RigName, "IC7200") == 0)
+							{
+								FreqPtr[0]->Cmd3Len = 9;
+								*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
+								*(CmdPtr++) = 0x1;		// Data On
+								*(CmdPtr++) = Filter - '0'; //Filter
+							}
+							else
+							{
+								FreqPtr[0]->Cmd3Len = 8;
+								*(CmdPtr++) = 0x6;		// Set Data
+								*(CmdPtr++) = 0x1;		//On		
+							}
+						
+							*(CmdPtr++) = 0xFD;
+						}
 					}
 				}
 			}
@@ -4160,9 +4318,9 @@ VOID SetupPortRIGPointers()
 			continue;
 
 		if (TNC->RIG == NULL)
-			TNC->RIG = Rig_GETPTTREC(port);
+			TNC->RIG = Rig_GETPTTREC(port);		// Get from Intelock Port
 
-		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4)
+		if (TNC->Hardware == H_WINMOR || TNC->Hardware == H_V4 || TNC->Hardware == H_ARDOP)
 			if (TNC->RIG && TNC->PTTMode)
 				TNC->RIG->PTTMode = TNC->PTTMode;
 	

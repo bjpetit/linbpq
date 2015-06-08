@@ -777,7 +777,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 			// Stop Listening, and set MYCALL to user's call
 
-//			ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
+			ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
 			ARDOPChangeMYC(TNC, TNC->Streams[0].MyCall);
 
 			// Stop other ports in same group
@@ -818,6 +818,18 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		}
 		
 		// See if any frames for this port
+
+		if (TNC->Streams[0].BPQtoPACTOR_Q)		//Used for CTEXT
+		{
+			UINT * buffptr = Q_REM(&TNC->Streams[0].BPQtoPACTOR_Q);
+			txlen=buffptr[1];
+			memcpy(txbuff,buffptr+2,txlen);
+			bytes = ARDOPSendData(TNC, &txbuff[0], txlen);
+			STREAM->BytesTXed += bytes;
+			WritetoTrace(TNC, txbuff, txlen);
+			ReleaseBuffer(buffptr);
+		}
+
 
 		if (TNC->WINMORtoBPQ_Q != 0)
 		{
@@ -1123,7 +1135,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
-//			ARDOPSendCommand(TNC, "LISTEN FALSE");
+			ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
 
 			return TRUE;
 		}
@@ -1138,7 +1150,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
-//			ARDOPSendCommand(TNC, "LISTEN TRUE");
+			ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 			return 0;
 		}
 
@@ -1749,7 +1761,9 @@ BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam)
 			 // Our Process
 
 			sprintf (wtext, "ARDOP Virtual TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
+			GetSemaphore(&Semaphore, 52);
 			MySetWindowText(hwnd, wtext);
+			FreeSemaphore(&Semaphore);
 			return FALSE;
 		}
 	}
@@ -1936,8 +1950,9 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			}
 		}
 
-		MySetWindowText(TNC->xIDC_TRAFFIC, &Buffer[7]);
-		strcpy(TNC->WEB_TRAFFIC, &Buffer[7]);
+		sprintf(TNC->WEB_TRAFFIC, "Sent %d RXed %d Queued %s",
+			STREAM->BytesTXed, STREAM->BytesRXed, &Buffer[7]);
+		MySetWindowText(TNC->xIDC_TRAFFIC, TNC->WEB_TRAFFIC);
 		ARDOPSendCommand(TNC, "RDY", FALSE);
 		return;
 	}
@@ -1982,7 +1997,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 			SuspendOtherPorts(TNC);
 
-			ProcessIncommingConnectEx(TNC, Call, 0, FALSE, TRUE); //TRUE, TRUE);
+			ProcessIncommingConnectEx(TNC, Call, 0, TRUE, TRUE);
 				
 			SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
 			
@@ -2101,13 +2116,15 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	}
 
 
-	if (_memicmp(Buffer, "STATUS END ARQ CALL", 18) == 0
+	if (_memicmp(Buffer, "DISCONNECTED", 12) == 0
+		|| _memicmp(Buffer, "STATUS CONNECT TO", 17) == 0  
 		|| _memicmp(Buffer, "STATUS ARQ TIMEOUT FROM PROTOCOL STATE", 24) == 0)
 	{
 		Debugprintf(Buffer);
 
 		ARDOPSendCommand(TNC, "RDY", FALSE);
-	
+		TNC->ConnectPending = FALSE;			// Cancel Scan Lock
+
 		if (TNC->FECMode)
 			return;
 
@@ -2201,8 +2218,11 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		return;
 	}
 
-	if (_memicmp(Buffer, "PENDING", 6) == 0)
+	if (_memicmp(&Buffer[0], "PENDING", 7) == 0)	// Save Pending state for scan control
+	{
+		TNC->ConnectPending = TRUE;
 		return;
+	}
 
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
 	{
@@ -2232,6 +2252,8 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		if (_memicmp(&Buffer[9], "DISCONNECTED", 12) == 0)
 		{
 			TNC->DiscPending = FALSE;
+			TNC->ConnectPending = FALSE;
+
 			if (TNC->RestartAfterFailure)
 			{
 				if (TNC->HadConnect)
@@ -2496,12 +2518,15 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 		
 	TNC->TimeSinceLast = 0;
 
-	if (Length > 200)
-		Length = 200;
+	while (Data[Length-1] == 0)
+		Length--;
+
+	if (Length > 256)
+		Length = 256;
 
 	if (strcmp(Type, "IDF") == 0)
 	{
-		// Place ID drames ib Monitor Window and MH
+		// Place ID drames in Monitor Window and MH
 
 		char Call[20];
 
@@ -2800,7 +2825,7 @@ VOID TidyClose(struct TNCINFO * TNC, int Stream)
 
 VOID ForcedClose(struct TNCINFO * TNC, int Stream)
 {
-	ARDOPSendCommand(TNC, "DIRTYDISCONNECT", TRUE);
+	ARDOPSendCommand(TNC, "ABORT", TRUE);
 }
 
 VOID CloseComplete(struct TNCINFO * TNC, int Stream)
