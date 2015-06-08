@@ -705,6 +705,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add "Remote Staton Quality" to Web ROUTES display
 //	Add Virtual Host option for IPGateway NET44 Encap
 //	Add NAT for local hosts to IPGateway
+//	Fix setting filter from RADIO command for IC7410
 
 #define CKernel
 
