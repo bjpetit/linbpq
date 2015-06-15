@@ -614,7 +614,7 @@ Next:
 		//	This allows a BBS to be temporarily set as a
 		//	normal user without loosing forwarding info
 
-		SetupForwardingStruct(user);
+			SetupForwardingStruct(user);
 
 		if (user->flags & F_BBS)
 		{
@@ -7425,7 +7425,9 @@ VOID SaveMultiStringValue(config_setting_t * group, char * name, char ** values)
 	setting = config_setting_add(group, name, CONFIG_TYPE_STRING);
 	if (setting)
 		config_setting_set_string(setting, &Multi[1]);
+
 }
+
 
 VOID SaveConfig(char * ConfigName)
 {

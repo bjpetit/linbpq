@@ -95,6 +95,12 @@ ShellExecute( NULL,
 
 #include "IPCode.h"
 
+#ifdef WIN32
+#include <iphlpapi.h>
+// Link with Iphlpapi.lib
+#pragma comment(lib, "IPHLPAPI.lib")
+#endif
+
 //#ifdef WIN32
 #include <pcap.h>
 //#endif
@@ -219,6 +225,8 @@ UCHAR ourMACAddr[6] = {02,'B','P','Q',0,2};
 #else
 UCHAR ourMACAddr[6] = {02,'B','P','Q',0,1};
 #endif
+
+UCHAR RealMacAddress[6];
 
 int IPPortMask = 0;
 
@@ -3188,12 +3196,10 @@ int OpenPCAP()
 	int i=0;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	u_int netmask;
-	char packet_filter[64];
+	char packet_filter[256];
 	struct bpf_program fcode;
 	char buf[256];
 	int n;
-
-
 
 #ifndef MACBPQ
 

@@ -522,7 +522,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				TNC->Busy--;
 				if (TNC->Busy == 0)
-					MySetWindowText(TNC->xIDC_CHANSTATE, "Clear");
+					SetWindowText(TNC->xIDC_CHANSTATE, "Clear");
 					strcpy(TNC->WEB_CHANSTATE, "Clear");
 			}
 		}
@@ -542,7 +542,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(TNC->Streams[0].RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
 
 				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				free(TNC->ConnectCmd);
 				TNC->BusyDelay = 0;
@@ -568,7 +568,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					free(TNC->ConnectCmd);
 
 					sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				}
 			}
@@ -668,11 +668,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					sprintf_s(Time, sizeof(Time),"%04d/%02d/%02d %02d:%02dZ",
 						tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday, tm->tm_hour, tm->tm_min);
 
-					MySetWindowText(TNC->xIDC_RESTARTTIME, Time);
+					SetWindowText(TNC->xIDC_RESTARTTIME, Time);
 					strcpy(TNC->WEB_RESTARTTIME, Time);
 
 					sprintf_s(Time, sizeof(Time),"%d", TNC->Restarts);
-					MySetWindowText(TNC->xIDC_RESTARTS, Time);
+					SetWindowText(TNC->xIDC_RESTARTS, Time);
 					strcpy(TNC->WEB_RESTARTS, Time);
 	
 					KillTNC(TNC);
@@ -705,7 +705,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			SuspendOtherPorts(TNC);
 
 			sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			// Stop Scanning
 
@@ -1017,7 +1017,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 						// Save Command, and wait up to 10 secs
 						
 						sprintf(TNC->WEB_TNCSTATE, "Waiting for clear channel");
-						MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+						SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 						TNC->ConnectCmd = _strdup(Connect);
 						TNC->BusyDelay = TNC->BusyWait * 10;		// BusyWait secs
@@ -1034,7 +1034,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(TNC->Streams[0].RemoteCall, &Connect[8], txlen-10);
 
 				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			}
 			else
 			{
@@ -1779,7 +1779,7 @@ Lost:
 			WritetoConsole(Msg);
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	
 			TNC->CONNECTED = FALSE;
 			TNC->Alerted = FALSE;
@@ -2256,9 +2256,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "FAULT", 5) == 0)
 	{
-		GetSemaphore(&Semaphore, 50);
 		WritetoTrace(TNC, Buffer, MsgLen - 2);
-		FreeSemaphore(&Semaphore);
 		return;
 	}
 
@@ -2266,10 +2264,7 @@ VOID ProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		TNC->WinmorRestartCodecTimer = time(NULL);
 
-		GetSemaphore(&Semaphore, 50);
-		MySetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
-		FreeSemaphore(&Semaphore);
-
+		SetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[9]);
 
 		if (_memicmp(&Buffer[9], "CONNECTPENDING", 14) == 0)	// Save Pending state for scan control
@@ -2491,7 +2486,7 @@ loop:
 		// Does this mean closed?
 		
 		sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 	
 		TNC->CONNECTING = FALSE;
 		TNC->CONNECTED = FALSE;

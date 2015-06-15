@@ -1135,7 +1135,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
-			ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
+//			ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
 
 			return TRUE;
 		}
@@ -1150,7 +1150,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
-			ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+//			ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
 			return 0;
 		}
 
@@ -1619,9 +1619,17 @@ VOID ARDOPThread(port)
 
 	ptr1 = &TNC->InitScript[0];
 
-	// We should wait for first RDY. Cheat be queueing a null command
+	// We should wait for first RDY. Cheat by queueing a null command
 
 	GetSemaphore(&Semaphore, 52);
+
+	while(TNC->BPQtoWINMOR_Q)
+	{
+		buffptr = Q_REM(&TNC->BPQtoWINMOR_Q);
+
+		if (buffptr)
+			ReleaseBuffer(buffptr);
+	}
 
 	buffptr = GetBuff();
 	buffptr[1] = 0;
@@ -1631,9 +1639,13 @@ VOID ARDOPThread(port)
 	{
 		ptr2 = strchr(ptr1, 13);
 		if (ptr2)
-			*(ptr2++) = 0; 
+			*(ptr2) = 0; 
 	
 		ARDOPSendCommand(TNC, ptr1, TRUE);
+
+		if (ptr2)
+			*(ptr2++) = 13;		// Put CR back for next time 
+
 		ptr1 = ptr2;
 	}
 	
@@ -1902,6 +1914,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(Buffer, "TARGET", 6) == 0)
 	{
+		TNC->ConnectPending = TRUE;					// This comes before Pending
 		Debugprintf(Buffer);
 		WritetoTrace(TNC, Buffer, MsgLen - 5);
 		memcpy(TNC->TargetCall, &Buffer[7], 10);
@@ -2220,7 +2233,16 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 	if (_memicmp(&Buffer[0], "PENDING", 7) == 0)	// Save Pending state for scan control
 	{
+		ARDOPSendCommand(TNC, "RDY", FALSE);
 		TNC->ConnectPending = TRUE;
+		return;
+	}
+
+	if (_memicmp(&Buffer[0], "CANCELPENDING", 13) == 0
+		|| _memicmp(&Buffer[0], "REJECTEDB", 9) == 0)  //REJECTEDBUSY or REJECTEDBW
+	{
+		ARDOPSendCommand(TNC, "RDY", FALSE);
+		TNC->ConnectPending = FALSE;
 		return;
 	}
 
@@ -2239,10 +2261,10 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 		MySetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[9]);
 
-		if (_memicmp(&Buffer[9], "CONNECTPENDING", 14) == 0)	// Save Pending state for scan control
-			TNC->ConnectPending = TRUE;
-		else
-			TNC->ConnectPending = FALSE;
+//		if (_memicmp(&Buffer[9], "CONNECTPENDING", 14) == 0)	// Save Pending state for scan control
+//			TNC->ConnectPending = TRUE;
+//		else
+//			TNC->ConnectPending = FALSE;
 	
 		if (_memicmp(&Buffer[9], "DISCONNECTING", 13) == 0)	// So we can timout stuck discpending
 		{
@@ -2526,7 +2548,7 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 
 	if (strcmp(Type, "IDF") == 0)
 	{
-		// Place ID drames in Monitor Window and MH
+		// Place ID frames in Monitor Window and MH
 
 		char Call[20];
 
@@ -2539,6 +2561,7 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 			strlop(Call, ':'); 
 			UpdateMH(TNC, Call, '!', 'O');
 		}
+		return;
 	}
 
 	buffptr = GetBuff();

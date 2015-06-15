@@ -1171,11 +1171,19 @@ VOID SCSPoll(int Port)
 
 			int calllen=0;
 
-			TNC->Streams[Stream].Attached = TRUE;
+			STREAM = &TNC->Streams[Stream];
+			Debugprintf("SCS New Attach Stream %d DEDStream %d", Stream, STREAM->DEDStream);
 
-			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, TNC->Streams[Stream].MyCall);
-			TNC->Streams[Stream].MyCall[calllen] = 0;
+			if (Stream == 0)
+				STREAM->DEDStream = 31;	// Pactor
 
+			STREAM->Attached = TRUE;
+
+			calllen = ConvFromAX25(TNC->PortRecord->ATTACHEDSESSIONS[Stream]->L4USER, STREAM->MyCall);
+
+			STREAM->MyCall[calllen] = 0;
+				
+			STREAM->CmdSet = STREAM->CmdSave = malloc(100);
 
 			if (Stream == 0)
 			{
@@ -1186,14 +1194,14 @@ VOID SCSPoll(int Port)
 					TNC->DontReleasePermission = FALSE;
 					TNC->DontWantToChangeFreq = TRUE;
 				}
-				TNC->Streams[Stream].CmdSet = TNC->Streams[Stream].CmdSave = malloc(100);
-				sprintf(TNC->Streams[Stream].CmdSet, "I%s\r", "SCSPTC");
 
-				Debugprintf("SCS Pactor CMDSet = %s", TNC->Streams[Stream].CmdSet);
+				sprintf(STREAM->CmdSet, "I%s\r", "SCSPTC");
+
+				Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
 
 				SuspendOtherPorts(TNC);			// Prevent connects on other ports in same scan gruop
 
-				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
+				sprintf(TNC->WEB_TNCSTATE, "In Use by %s", STREAM->MyCall);
 				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				// Stop Scanner
@@ -1203,7 +1211,12 @@ VOID SCSPoll(int Port)
 		
 				Rig_Command(-1, Status);
 			}
+			else
+			{
+				sprintf(STREAM->CmdSet, "I%s\r", STREAM->MyCall);
+				Debugprintf("SCS Pactor Attach CMDSet = %s", STREAM->CmdSet);
 		}
+	}
 	}
 
 	if (TNC->Timeout)
@@ -2313,6 +2326,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	UCHAR * ptr;
 	UCHAR Buffer[80];	
 	UINT * buffptr;
+	BOOL PactorCall = FALSE;
 	
 	char * Call = STREAM->RemoteCall;
 
@@ -2425,6 +2439,9 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 	//Connect on HF port. May be Pactor or RP on some models
 	
+	if (STREAM->DEDStream == 31)
+		PactorCall = TRUE;
+
 	if (TNC->RIG && TNC->RIG != &TNC->DummyRig)
 	{
 		sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Inbound Freq %s", STREAM->RemoteCall, TNC->NodeCall, TNC->RIG->Valchar);
@@ -2449,7 +2466,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 	SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
-	if (TNC->MinLevel > 1)
+	if (PactorCall && TNC->MinLevel > 1)
 		TNC->MinLevelTimer = 150;		// Check we have reached right level
 					
 	// If an autoconnect APPL is defined, send it
@@ -2458,8 +2475,11 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	
 	strcpy(DestCall, STREAM->MyCall);
 
-	Debugprintf("Pactor Incoming Call - MYCALL = *%s*", DestCall);					
-					
+	if (PactorCall)
+		Debugprintf("Pactor Incoming Call - MYCALL = *%s*", DestCall);					
+	else					
+		Debugprintf("HF Packet/RP Incoming Call - MYCALL = *%s*", DestCall);					
+
 	if (TNC->UseAPPLCallsforPactor && strcmp(DestCall, TNC->NodeCall) != 0)		// Not Connect to Node Call
 	{		
 		for (App = 0; App < 32; App++)
@@ -2587,7 +2607,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 	UINT * buffptr;
 	UCHAR * Buffer;				// Data portion of frame
 	char Status[80];
-	int Stream = 0, RealStream;
+	unsigned int Stream = 0, RealStream;
 
 	if (TNC->HostMode == 0)
 		return;
@@ -2615,7 +2635,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 	//	Im not convinced this is the bast place to do this, but let's try
 
-	if (TNC->DragonSingle && RealStream < 32 && RealStream != 31 && RealStream)	// Not a Pactor frame
+	if (TNC->DragonSingle && RealStream && RealStream < 31)	// Not a Pactor or control frame
 	{
 		//	must be packet
 
@@ -2753,7 +2773,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			{
 				// We've received a connect and are checking MYCALL
 
-				Debugprintf("SCS Incoming Call I Cmd Response %s", Buffer);
+				Debugprintf("SCS Incoming Call I Cmd Response %s Stream %d DED Stream %d", Buffer, Stream, RealStream);
 
 				strlop(Buffer, 13);
 				strcpy(STREAM->MyCall, Buffer);
@@ -2965,7 +2985,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 					//	Packet Call to MYALIAS
 
 					STREAM->CmdSet = STREAM->CmdSave = malloc(100);
-					sprintf(STREAM->CmdSet, "I\r", STREAM->MyCall);
+					sprintf(STREAM->CmdSet, "I\r");
 
 					STREAM->CheckingCall = TRUE;
 					return;
@@ -3608,13 +3628,13 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 				TNC->Streams[0].DEDStream = 31;		// Pactor Channel
 				Debugprintf("BPQ32 Session Closed - switch to Pactor");
 		}
+		ReleaseOtherPorts(TNC);
 	}
 	else
 		sprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);
 
 	Debugprintf("SCS Pactor CMDSet = %s", STREAM->CmdSet);
 
-	ReleaseOtherPorts(TNC);
 }
 
 VOID PTCSuspendPort(struct TNCINFO * TNC)
@@ -3633,7 +3653,8 @@ VOID PTCReleasePort(struct TNCINFO * TNC)
 
 	STREAM->CmdSet = STREAM->CmdSave = zalloc(100);
 
-	if (TNC->UseAPPLCallsforPactor && TNC->RIG && TNC->RIG != &TNC->DummyRig)
+	if (TNC->UseAPPLCallsforPactor && TNC->RIG && TNC->RIG != &TNC->DummyRig 
+			&& TNC->RIG->FreqPtr[0]->APPLCALL[0])
 		sprintf(STREAM->CmdSet, "I%s\r", TNC->RIG->FreqPtr[0]->APPLCALL);
 	else
 		sprintf(STREAM->CmdSet, "I%s\r", TNC->NodeCall);

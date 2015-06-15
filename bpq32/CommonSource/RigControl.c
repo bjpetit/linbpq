@@ -2031,7 +2031,7 @@ ok:
 
 		// if it was the set freq, send the set mode
 
-		if (PORT->TXBuffer[4] == 5)
+		if (PORT->TXBuffer[4] == 5 || PORT->TXBuffer[4] == 7) // Freq or VFO
 		{
 			if (PORT->FreqPtr->Cmd2)
 			{
@@ -2065,6 +2065,9 @@ ok:
 
 			goto SetFinished;
 		}
+
+		if (PORT->TXBuffer[4] == 0x0f || PORT->TXBuffer[4] == 0x01a)	// Set DUP or Set Data
+			goto SetFinished;
 
 		if (PORT->TXBuffer[4] == 0x08)
 		{

@@ -409,7 +409,7 @@ BOOL CreatePactorWindow(struct TNCINFO * TNC, char * ClassName, char * WindowTit
 
 	TNC->RigControlRow = RigControlRow;
 
-	MySetWindowText(TNC->xIDC_TNCSTATE, "Free");
+	SetWindowText(TNC->xIDC_TNCSTATE, "Free");
 
 	return TRUE;
 #endif
@@ -816,6 +816,14 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 		WL2KReport->mode = 30;
 		WL2KReport->baud = 600;
 	}
+	else if (_stricmp(param, "ARDOP200") == 0)
+		WL2KReport->mode = 40;
+	else if (_stricmp(param, "ARDOP500") == 0)
+		WL2KReport->mode = 41;
+	else if (_stricmp(param, "ARDOP1000") == 0)
+		WL2KReport->mode = 42;
+	else if (_stricmp(param, "ARDOP2000") == 0)
+		WL2KReport->mode = 43;
 	else if (_stricmp(param, "P1") == 0)
 		WL2KReport->mode = 11;
 	else if (_stricmp(param, "P12") == 0)

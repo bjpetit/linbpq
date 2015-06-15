@@ -3832,7 +3832,7 @@ InnerLoop:
 
 VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 {
-	char * ptr1, * ptr2, *ptr3, * crptr, * lfptr;
+	char * ptr1, * ptr2, *ptr3;
 	int len, oldlen, newlen, rest, n;
 	struct DATAMESSAGE * OldBuffer;
 	struct DATAMESSAGE * SaveBuffer;
@@ -3882,22 +3882,8 @@ VOID InnerCommandHandler(TRANSPORTENTRY * Session, struct DATAMESSAGE * Buffer)
 	len = Buffer->LENGTH - 8;
 	ptr1 = &Buffer->L2DATA[0];
 
-
-	//	Allow CR CR/LF or LF, replace LF with CR
-
-	crptr = memchr(ptr1, '\r', len);
-/*	lfptr = memchr(ptr1, '\n', len);
-				
-	if ((lfptr && lfptr < crptr) || crptr == 0)		// LF before CR, or no CR
-		crptr = lfptr;								// Use LF
-
-	if (crptr)				// CR ot LF in buffer
-	{
-		*(crptr) = '\r';	// In case was LF
-	}
-*/
-	ptr2 = crptr;
-
+	ptr2 = memchr(ptr1, 13, len);
+	
 	if (ptr2 == 0)
 	{
 		//	No newline
