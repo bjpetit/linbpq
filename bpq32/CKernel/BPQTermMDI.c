@@ -951,7 +951,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	sprintf(Title,"BPQTerminal Version %s", VersionString);
 
-	MySetWindowText(FrameWnd, Title);
+	SetWindowText(FrameWnd, Title);
 		
 	// Get config from Registry 
 
@@ -1393,7 +1393,7 @@ BOOL InitInstancex(HINSTANCE hInstance, int nCmdShow)
 
 	sprintf(Title,"BPQTerminal Version %s - using stream %d", VersionString, Stream);
 
-	MySetWindowText(hWnd,Title);
+	SetWindowText(hWnd,Title);
 		
 
 //	Sets Application Flags and Mask for stream. (BPQHOST function 1)

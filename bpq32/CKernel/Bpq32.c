@@ -4042,7 +4042,7 @@ int SetupConsoleWindow()
 
 	hFont = CreateFontIndirect(&LFTTYFONT) ;
 	
-	MySetWindowText(hConsWnd,Title);
+	SetWindowText(hConsWnd,Title);
 
 	if (Rect.right < 100 || Rect.bottom < 100)
 	{

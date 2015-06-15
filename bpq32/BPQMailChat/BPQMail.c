@@ -880,6 +880,8 @@
 //	Save Forwarding config when BBS flag on user is cleared
 //	Pass internally generated SYSOP messages through routing process
 //	Add POP3 TOP and LAST commands.
+//	DOn't set 'T' messages to 'Y' when read.
+
 #include "BPQMailChat.h"
 #define MAIL
 #include "Versions.h"
