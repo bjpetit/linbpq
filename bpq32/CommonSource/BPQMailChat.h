@@ -655,7 +655,8 @@ struct BBSForwardingInfo
 	// Holds info for forwarding
 
 	BOOL Enabled;					// Forwarding Enabled
-	char ** ConnectScript;			// 
+	char ** ConnectScript;			// Main Connect Script
+	char ** TempConnectScript;		// Used with FWD command.
 	int ScriptIndex;				// Next line in script
 	BOOL MoreLines;					// Set until script is finsihed
 
@@ -1016,7 +1017,7 @@ void set_fwd_bit(char *mask, int bbsnumber);
 void clear_fwd_bit (char *mask, int bbsnumber);
 VOID SetupForwardingStruct(struct UserInfo * user);
 BOOL Forward_Message(struct UserInfo * user, struct MsgInfo * Msg);
-VOID StartForwarding (int BBSNumber);
+VOID StartForwarding (int BBSNumber, char ** TempScript);
 BOOL Reverse_Forward();
 int ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len);
 BOOL FBBDoForward(CIRCUIT * conn);

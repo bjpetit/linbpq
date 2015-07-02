@@ -2654,7 +2654,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 			sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
 
 			GetSemaphore(&Semaphore, 12);
-			SendAPRSMessage(Message, STN->Port);	
+//			SendAPRSMessage(Message, STN->Port);	
 			FreeSemaphore(&Semaphore);
 
 			MessageCount++;
@@ -2671,7 +2671,7 @@ VOID ProcessAPRSISMsg(char * APRSMsg)
 		sprintf(Message, "}%s>%s,TCPIP,%s*:%s", Source, Dest, APRSCall, Payload);
 	
 		GetSemaphore(&Semaphore, 12);
-		SendAPRSMessage(Message, -1);		// Send to all APRS Ports
+//		SendAPRSMessage(Message, -1);		// Send to all APRS Ports
 		FreeSemaphore(&Semaphore);
 
 		return;

@@ -2742,6 +2742,7 @@ int DataSocket_Read(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCKE
 	int len=0, maxlen, InputLen, MsgLen, i, n,charsAfter;
 	char NLMsg[3]={13,10,0};
 	byte * IACptr;
+	byte * CRPtr;
 	byte * LFPtr;
 	byte * BSptr;
 	byte * MsgPtr;
@@ -2929,33 +2930,35 @@ MsgLoop:
 		return 0;
 	}
 
+
 	// Server Mode
 	
-	LFPtr=memchr(MsgPtr, 13, InputLen);
-		if (LFPtr == 0)
+	CRPtr=memchr(MsgPtr, 13, InputLen);
+
+	if (CRPtr)
 	{
+		// Convert CR Null to CR LF
+
 		LFPtr=memchr(MsgPtr, 0, InputLen);
+
 		if (LFPtr && *(LFPtr - 1) == 13)		// Convert CR NULL to CR LF
 		{
 			*LFPtr = 10;						// Replace NULL with LF
 			send(sockptr->socket, LFPtr, 1, 0);	// And echo it
 		}
 	}
+
+	// could just have LF??
 	
-
-
 	LFPtr=memchr(MsgPtr, 10, InputLen);
+
 	if (LFPtr == 0)
-	{
-		LFPtr=memchr(MsgPtr, 0, InputLen);
-		if (LFPtr && *(LFPtr - 1) == 13)		// Convert CR NULL to CR LF
+		if (CRPtr)
 		{
-			*LFPtr = 10;						// Replace NULL with LF
-			send(sockptr->socket, LFPtr, 1, 0);	// And echo it
+			LFPtr = ++CRPtr;
+			InputLen++;
 		}
-	}
-	
-	if (LFPtr == 0)
+		if (LFPtr == 0)
 	{
 		// Check Paclen
 

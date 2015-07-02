@@ -4613,7 +4613,10 @@ BOOL CreateMonitorWindow(char * MonSize)
 	HWND ChildWnd = 0;
 	struct ConsoleInfo * Cinfo = &MonWindow;
 	RECT Rect = {0,0,0,0};
-	
+	char Size[80];
+	HKEY hKey;
+	int retCode,Type,Vallen;
+
 	memset(Cinfo, 0, sizeof(struct ConsoleInfo));
 
 	Cinfo->WarnLen = Cinfo->WrapLen = Cinfo->maxlinelen = 100; // In case doesn't get set up
@@ -4650,8 +4653,26 @@ BOOL CreateMonitorWindow(char * MonSize)
 		return 0;
 	}
 
+	sprintf(Key, "SOFTWARE\\G8BPQ\\BPQ32\\BPQTermMDI");
+
+	retCode = RegOpenKeyEx (REGTREE, Key, 0, KEY_QUERY_VALUE, &hKey);
+
+	Vallen=80;
+	RegQueryValueEx(hKey, "MonSize", 0 , &Type, &Size[0], &Vallen);
+
+	sscanf(Size,"%d,%d,%d,%d,%d",&Rect.left, &Rect.right, &Rect.top, &Rect.bottom, &Cinfo->Minimized);
+
+	if (Rect.right < 100 || Rect.bottom < 100)
+	{
+		Rect.right = 400;
+		Rect.bottom = 400;
+	}
+
 	ChildWnd =  CreateMDIWindow("MonWnd", "Monitor", 0,
-		  00,00,000,000, ClientWnd, hInstance, 1234);
+		   Rect.left,	Rect.top,
+		   Rect.right - Rect.left,
+		   Rect.bottom - Rect.top,
+		   ClientWnd, hInstance, 1234);
 
 	Cinfo->hConsole = ChildWnd;
 
@@ -4677,17 +4698,9 @@ BOOL CreateMonitorWindow(char * MonSize)
 	SendMessage(Cinfo->hwndOutput, EM_EXLIMITTEXT, 0, MAXLINES * LINELEN);
 
 	Cinfo = &MonWindow;
-
-	sscanf(MonSize,"%d,%d,%d,%d,%d",&Rect.left, &Rect.right, &Rect.top, &Rect.bottom, &Cinfo->Minimized);
-
-	if (Rect.right < 100 || Rect.bottom < 100)
-	{
-		Rect.right = 400;
-		Rect.bottom = 400;
-	}
 	
-	MoveWindow(Cinfo->hConsole, Rect.left - (OffsetW /2), Rect.top - OffsetH,
-		Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
+//	MoveWindow(Cinfo->hConsole, Rect.left - (OffsetW /2), Rect.top - OffsetH,
+//		Rect.right-Rect.left, Rect.bottom-Rect.top, TRUE);
 
  	MoveWindows(Cinfo);
 

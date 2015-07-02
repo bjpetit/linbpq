@@ -372,6 +372,9 @@ typedef struct TNCINFO
 		UCHAR TCPBuffer[1000];		// For converting byte stream to messages
 		UCHAR DEDBuffer[1000];		// For converting byte stream to messages
 	};
+
+	UCHAR * ARDOPBuffer;		// Needs to be pretty big, so Malloc
+
 	int InputLen;				// Data we have alreasdy = Offset of end of an incomplete packet;
 
 	int	MSGCOUNT;				// DED WORKING FIELD
@@ -383,7 +386,7 @@ typedef struct TNCINFO
 
 
 	BOOL StartSent;				// Codec Start send (so will get a disconnect)
-	BOOL ConnectPending;		// Set if Connect Pending Received. If so, mustn't allow freq change.
+	int ConnectPending;			// Set if Connect Pending Received. If so, mustn't allow freq change.
 	BOOL DiscPending;			// Set if Disconnect Pending Received. So we can time out stuck in Disconnecting
 	BOOL HadConnect;				// Flag to say have been in session
 	BOOL FECMode;				// In FEC Mode

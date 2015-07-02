@@ -2081,8 +2081,10 @@ BOOL WriteCOMBlock(HANDLE fd, char * Block, int BytesToWrite)
 	                       &BytesWritten, NULL );
 
 	if ((!fWriteStat) || (BytesToWrite != BytesWritten))
+	{
+		int Err = GetLastError();
 		ClearCommError(fd, &ErrorFlags, &ComStat);
-
+	}
 	return TRUE;
 }
 

@@ -195,7 +195,6 @@ static HANDLE hInstance;
 
 Dll BOOL APIENTRY Init_IP();
 Dll BOOL APIENTRY Poll_IP();  
-VOID ProcessEthARPMsg(PETHARP arpptr);
 VOID ProcessEthIPMsg(PETHMSG Buffer);
 VOID ProcessAXARPMsg(PAXARP arpptr);
 VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port);
@@ -206,7 +205,6 @@ BOOL RouteIPMsg(PIPMSG IPptr);
 VOID SendIPtoBPQDEV(PIPMSG IPptr, UCHAR * HWADDR);
 VOID SendIPtoAX25(PIPMSG IPptr, UCHAR * HWADDR, int Port, char Mode);
 PARPDATA AllocARPEntry();
-VOID SendARPMsg(PARPDATA ARPptr);
 PARPDATA LookupARP(ULONG IPADDR, BOOL Add, BOOL * Found);
 static BOOL ReadConfigFile();
 static int ProcessLine(char * buf);
@@ -219,6 +217,8 @@ void IPResolveNames(void *dummy);
 int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len);
 int CheckSumAndSendUDP(PIPMSG IPptr, PUDPMSG UDPmsg, USHORT Len);
 VOID SaveARP();
+VOID SaveIPRoutes();
+VOID ReadIPRoutes();
 VOID WriteARPLine(PARPDATA ArpRecord, FILE * file);
 VOID SendIPtoEther(PIPMSG IPptr, UCHAR * HWADDR, BOOL SendtoTAP);
 

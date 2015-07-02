@@ -137,6 +137,7 @@ int rtlink (char * Call);
 UCHAR * APIENTRY GetBPQDirectory();
 VOID SaveChatConfig(char * ConfigName);
 BOOL GetChatConfig(char * ConfigName);
+char * GetTemplateFromFile(int Version, char * FN);
 
 static char UNC[] = "";
 static char CHKD[] = "checked=checked ";

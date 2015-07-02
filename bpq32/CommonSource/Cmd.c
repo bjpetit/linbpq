@@ -145,6 +145,7 @@ VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 VOID SHOWTELNET(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWAGW(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD);
@@ -3707,6 +3708,7 @@ CMDX COMMANDS[] =
 	"PING        ",2,PING,0,
 	"AGWSTATUS   ",3,SHOWAGW,0,
 	"ARP         ",3,SHOWARP,0,
+	"NAT         ",3,SHOWNAT,0,
 	"IPROUTE     ",3,SHOWIPROUTE,0,
 	"..FLMSG     ",7,FLMSG,0
 };

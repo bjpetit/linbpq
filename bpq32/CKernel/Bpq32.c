@@ -706,6 +706,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add Virtual Host option for IPGateway NET44 Encap
 //	Add NAT for local hosts to IPGateway
 //	Fix setting filter from RADIO command for IC7410
+//	Add Memory Channel Scanning for ICOM Radios
+//	Try to reopen Rig Control port if it fails (could be unplugged USB)
+//	Fix restoring position of Monitor Window
 
 #define CKernel
 
@@ -4095,6 +4098,8 @@ int SetupConsoleWindow()
 			ShowWindow(FrameWnd, SW_SHOWMINIMIZED);	
 	else
 		ShowWindow(FrameWnd, SW_RESTORE);
+
+	"BPQTermMDI", "MonSize",
 	
 	CreateMonitorWindow(Size);
 

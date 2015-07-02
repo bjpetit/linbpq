@@ -474,6 +474,8 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 		nodeprintf(conn, "FWD BBSCALL +- Flags (Flags are EN(able) RE(verse Poll) SE(Send Immediately)\r");
 		nodeprintf(conn, "FWD BBSCALL NOW - Start a forwarding cycle now\r");
 		nodeprintf(conn, "FWD QUEUE - List BBS's with queued messages\r");
+		nodeprintf(conn, "FWD NOW can specify a Connect Script to use, overriding the configured script.\r");
+		nodeprintf(conn, "Elements are separated by | chars. eg FWD RMS NOW ATT 7|C GM8BPQ-10\r");
 
 		SendPrompt(conn, user);
 		return;
@@ -515,6 +517,8 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 
 	if (_stricmp(Arg1, "NOW") == 0)
 	{
+		char ** Value = NULL;
+
 		if (ForwardingInfo->Forwarding)
 		{
 			BBSputs(conn, "Already Connected\r");
@@ -522,7 +526,44 @@ VOID DoFwdCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Contex
 			return;
 		}
 
-		StartForwarding(FwdBBS->BBSNumber);
+		while (Context[0] == ' ')
+			Context++;
+
+		if (Context)
+			strlop(Context, 13);
+
+		if (Context && Context[0])
+		{
+			// Temp Connect Script to use
+
+			char * ptr1;
+			char * MultiString = NULL;
+			const char * ptr;
+			int Count = 0;
+
+			Value = zalloc(4);				// always NULL entry on end even if no values
+			Value[0] = NULL;
+
+			ptr = Context;
+
+			while (ptr && strlen(ptr))
+			{
+				ptr1 = strchr(ptr, '|');
+			
+				if (ptr1)
+					*(ptr1++) = 0;
+
+				Value = realloc(Value, (Count+2)*4);
+			
+				Value[Count++] = _strdup(ptr);
+			
+				ptr = ptr1;
+			}
+	
+			Value[Count] = NULL;
+		}
+
+		StartForwarding(FwdBBS->BBSNumber, Value);
 		
 		if (ForwardingInfo->Forwarding)
 			nodeprintf(conn, "Forwarding Started\r");

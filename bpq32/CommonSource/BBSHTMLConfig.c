@@ -1679,7 +1679,7 @@ VOID SaveFwdDetails(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	{
 		if (strstr(input, "StartForward"))
 		{
-			StartForwarding(USER->BBSNumber);
+			StartForwarding(USER->BBSNumber, NULL);
 			SendFwdDetails(Session, Reply, RLen, Session->Key);
 			return;
 		}

@@ -824,6 +824,8 @@ struct WL2KInfo * DecodeWL2KReportLine(char *  buf)
 		WL2KReport->mode = 42;
 	else if (_stricmp(param, "ARDOP2000") == 0)
 		WL2KReport->mode = 43;
+	else if (_stricmp(param, "ARDOP2000FM") == 0)
+		WL2KReport->mode = 44;
 	else if (_stricmp(param, "P1") == 0)
 		WL2KReport->mode = 11;
 	else if (_stricmp(param, "P12") == 0)
@@ -900,11 +902,35 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 		_gcvt(Freq, 9, ReportFreq);
 	}
 
-	if (TNC->Hardware != H_WINMOR)			// Only WINMOR has a locator
+	if (TNC->Hardware == H_ARDOP)	
+	{
+		LOC = memchr(Call, '[', 20);
+
+		if (LOC)
+		{
+			LOCEND = memchr(Call, ']', 30);
+			if (LOCEND)
+			{
+				LOC--;
+				*(LOC++) = 0;
+				*(LOCEND) = 0;
+				LOC++;
+				if (strlen(LOC) != 6 && strlen(LOC) != 0)
+				{
+					Debugprintf("Corrupt LOC %s %s", Call, LOC);
+					LOC = NoLOC;
+				}
+				goto NOLOC;
+			}		
+		}
+	}
+
+	else if (TNC->Hardware != H_WINMOR)			// Only WINMOR has a locator
 	{
 		LOC = NoLOC;
 		goto NOLOC;
 	}
+
 
 	LOC = memchr(Call, '(', 20);
 

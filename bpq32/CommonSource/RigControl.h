@@ -29,7 +29,7 @@ struct ScanEntry
 	char * Cmd1;
 	int Cmd1Len;
 	char * Cmd2;
-	int xCmd2Len;
+	int Cmd2Len;
 	char * Cmd3;
 	int Cmd3Len;
 	char * PollCmd;
@@ -158,6 +158,7 @@ struct RIGPORTINFO
 	BOOL PORTOK;				// PORT is reponding
 
 	HANDLE hDevice;					// COM device Handle
+	int ReopenDelay;
 	struct TNCINFO * PTC;			// Set to TNC record address if using an SCS PTC Radio Port
 	HANDLE hPTTDevice;				// May use a different port for PTT
 	UCHAR TXBuffer[500];			// Last message sent - saved for Retry

@@ -464,7 +464,7 @@ portok:
 			MemoryNumber = atoi(&FreqString[6]);
 		}
 		else
-			MemoryNumber = atoi(&ptr[4]);	// Just Chan
+			MemoryNumber = atoi(&FreqString[4]);	// Just Chan
 
 		Freq = 0.0;
 	}
@@ -625,52 +625,57 @@ portok:
 		}
 		else
 		{
+			*(CmdPtr++) = 0x5;		// Set frequency command
+
+			// Need to convert two chars to bcd digit
+	
+			*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
+			*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
+			*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
+			*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
+			*(CmdPtr++) = (FreqString[0] - 48);
+
+			*(CmdPtr++) = 0xFD;
+
+			FreqPtr[0].Cmd1Len = 11;
 
 			// Send Set VFO in case last chan was memory
 							
-			*(CmdPtr++) = 0x07;
-			*(CmdPtr++) = 0xFD;
+	//		*(CmdPtr++) = 0xFE;
+	//		*(CmdPtr++) = 0xFE;
+	//		*(CmdPtr++) = RIG->RigAddr;
+	//		*(CmdPtr++) = 0xE0;
 
-			*(CmdPtr++) = 0xFE;
-			*(CmdPtr++) = 0xFE;
-			*(CmdPtr++) = RIG->RigAddr;
-			*(CmdPtr++) = 0xE0;
+	//		*(CmdPtr++) = 0x07;
+	//		*(CmdPtr++) = 0xFD;
 
-		*(CmdPtr++) = 0x5;		// Set frequency command
+	//		FreqPtr[0].Cmd1Len = 17;
 
-		// Need to convert two chars to bcd digit
-	
-		*(CmdPtr++) = (FreqString[8] - 48) | ((FreqString[7] - 48) << 4);
-		*(CmdPtr++) = (FreqString[6] - 48) | ((FreqString[5] - 48) << 4);
-		*(CmdPtr++) = (FreqString[4] - 48) | ((FreqString[3] - 48) << 4);
-		*(CmdPtr++) = (FreqString[2] - 48) | ((FreqString[1] - 48) << 4);
-		*(CmdPtr++) = (FreqString[0] - 48);
-
-		*(CmdPtr++) = 0xFD;
-
-		if (ModeNo != -1)			// Dont Set
-		{		
-			CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[30];
-			*(CmdPtr++) = 0xFE;
-			*(CmdPtr++) = 0xFE;
-			*(CmdPtr++) = RIG->RigAddr;
-			*(CmdPtr++) = 0xE0;
-			*(CmdPtr++) = 0x6;		// Set Mode
-			*(CmdPtr++) = ModeNo;
-			*(CmdPtr++) = Filter;
-			*(CmdPtr++) = 0xFD;
-
-			if (Split)
-			{
-				CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
-				FreqPtr->Cmd3Len = 7;
+			if (ModeNo != -1)			// Dont Set
+			{		
+				CmdPtr = FreqPtr->Cmd2 = (UCHAR *)&buffptr[30];
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = 0xFE;
 				*(CmdPtr++) = RIG->RigAddr;
 				*(CmdPtr++) = 0xE0;
-				*(CmdPtr++) = 0xF;		// Set Mode
-				if (Split == 'S')
-					*(CmdPtr++) = 0x10;
+				*(CmdPtr++) = 0x6;		// Set Mode
+				*(CmdPtr++) = ModeNo;
+				*(CmdPtr++) = Filter;
+				*(CmdPtr++) = 0xFD;
+
+				FreqPtr->Cmd2Len = 8;
+
+				if (Split)
+				{
+					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
+					FreqPtr->Cmd3Len = 7;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = RIG->RigAddr;
+					*(CmdPtr++) = 0xE0;
+					*(CmdPtr++) = 0xF;		// Set Mode
+					if (Split == 'S')
+						*(CmdPtr++) = 0x10;
 					else
 						if (Split == '+')
 							*(CmdPtr++) = 0x12;
@@ -679,40 +684,40 @@ portok:
 							*(CmdPtr++) = 0x11;
 			
 					*(CmdPtr++) = 0xFD;
-			}
-			else if (DataFlag)
-			{
-				CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
-
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = RIG->RigAddr;
-				*(CmdPtr++) = 0xE0;
-				*(CmdPtr++) = 0x1a;	
-
-				if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))				{
-					FreqPtr[0].Cmd3Len = 9;
-					*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
-					*(CmdPtr++) = 0x1;		// Data On
-					*(CmdPtr++) = Filter;	//Filter
 				}
-				else if (strcmp(RIG->RigName, "IC7200") == 0)
+				else if (DataFlag)
 				{
-					FreqPtr[0].Cmd3Len = 9;
-					*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
-					*(CmdPtr++) = 0x1;		// Data On
-					*(CmdPtr++) = Filter;	// Filter
-				}
-				else
-				{
-					FreqPtr[0].Cmd3Len = 8;
-					*(CmdPtr++) = 0x6;		// Set Data
-					*(CmdPtr++) = 0x1;		//On		
-				}
+					CmdPtr = FreqPtr->Cmd3 = (UCHAR *)&buffptr[40];
+
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = 0xFE;
+					*(CmdPtr++) = RIG->RigAddr;
+					*(CmdPtr++) = 0xE0;
+					*(CmdPtr++) = 0x1a;	
+
+					if ((strcmp(RIG->RigName, "IC7100") == 0) || (strcmp(RIG->RigName, "IC7410") == 0))				{
+						FreqPtr[0].Cmd3Len = 9;
+						*(CmdPtr++) = 0x6;		// Send/read DATA mode with filter set
+						*(CmdPtr++) = 0x1;		// Data On
+						*(CmdPtr++) = Filter;	//Filter
+					}
+					else if (strcmp(RIG->RigName, "IC7200") == 0)
+					{
+						FreqPtr[0].Cmd3Len = 9;
+						*(CmdPtr++) = 0x4;		// Send/read DATA mode with filter set
+						*(CmdPtr++) = 0x1;		// Data On
+						*(CmdPtr++) = Filter;	// Filter
+					}
+					else
+					{
+						FreqPtr[0].Cmd3Len = 8;
+						*(CmdPtr++) = 0x6;		// Set Data
+						*(CmdPtr++) = 0x1;		//On		
+					}
 						
-				*(CmdPtr++) = 0xFD;
+					*(CmdPtr++) = 0xFD;
+				}
 			}
-		}
 		}
 
 		buffptr[1] = 200;
@@ -1250,8 +1255,12 @@ DllExport BOOL APIENTRY Rig_Close()
 
 		CloseCOMPort(PORT->hDevice);
 
+		
 		if (PORT->hPTTDevice != PORT->hDevice)
 			CloseCOMPort(PORT->hPTTDevice);
+
+		PORT->hDevice = 0;
+		PORT->hPTTDevice = 0;
 
 		// Free the RIG and Port Records
 
@@ -1311,6 +1320,18 @@ BOOL Rig_Poll()
 			return TRUE;
 		}
 
+		if (PORT->hDevice == 0)			// Try to reopen
+		{
+			// Try to reopen every 15 secs 
+			
+			PORT->ReopenDelay++;
+
+			if (PORT->ReopenDelay > 150)
+			{
+				PORT->ReopenDelay = 0;
+				OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+			}
+		}
 		if (PORT == NULL || (PORT->hDevice == 0 && PORT->PTC == 0))
 			continue;
 
@@ -1636,7 +1657,33 @@ BOOL RigWriteCommBlock(struct RIGPORTINFO * PORT)
 	if (PORT->PTC)
 		SendPTCRadioCommand(PORT->PTC, PORT->TXBuffer, PORT->TXLen);
 	else
-		WriteCOMBlock(PORT->hDevice, PORT->TXBuffer, PORT->TXLen);
+	{
+		BOOL        fWriteStat;
+		DWORD       BytesWritten;
+		DWORD       ErrorFlags;
+
+#ifdef LINBPQ
+		BytesWritten = write(PORT->hDevice, PORT->TXBuffer, PORT->TXLen);
+#else
+		fWriteStat = WriteFile(PORT->hDevice, PORT->TXBuffer, PORT->TXLen, &BytesWritten, NULL );
+#endif
+		if (PORT->TXLen != BytesWritten)
+		{
+			if (PORT->hDevice)
+				 CloseCOMPort(PORT->hDevice);
+			OpenRigCOMMPort(PORT, PORT->IOBASE, PORT->SPEED);
+			if (PORT->hDevice)
+			{
+				// Try Again
+
+#ifdef LINBPQ
+				BytesWritten = write(PORT->hDevice, PORT->TXBuffer, PORT->TXLen);
+#else
+				fWriteStat = WriteFile(PORT->hDevice, PORT->TXBuffer, PORT->TXLen, &BytesWritten, NULL );
+#endif
+			}
+		}
+	}
 
 	PORT->Timeout = 100;		// 2 secs
 	return TRUE;  
@@ -1923,24 +1970,24 @@ VOID ICOMPoll(struct RIGPORTINFO * PORT)
 			Debugprintf("BPQ32 Manual Change Freq to %9.4f", PORT->FreqPtr->Freq/1000000.0);
 
 
-		memcpy(Poll, &buffptr[20], 12);
+		memcpy(Poll, &buffptr[20], PORT->FreqPtr->Cmd1Len);
 
 		if (PORT->ScanEntry.Cmd2)
 		{
 			PORT->ScanEntry.Cmd2 = (char *)&PORT->Line2;	// Put The Set mode Command into ScanStruct
-			memcpy(PORT->Line2, &buffptr[30], 10);
+			memcpy(PORT->Line2, &buffptr[30], PORT->FreqPtr->Cmd2Len);
 
 			if (PORT->ScanEntry.Cmd3)
 			{
 				PORT->ScanEntry.Cmd3 = (char *)&PORT->Line3;
-				memcpy(PORT->Line3, &buffptr[40], 10);
+				memcpy(PORT->Line3, &buffptr[40], PORT->FreqPtr->Cmd3Len);
 			}
 		}
 
 		DoBandwidthandAntenna(RIG, &PORT->ScanEntry);
 
 		
-		PORT->TXLen = 11;					// First send the set Freq
+		PORT->TXLen = PORT->FreqPtr->Cmd1Len;					// First send the set Freq
 		RigWriteCommBlock(PORT);
 		PORT->Retries = 2;
 
@@ -2035,8 +2082,8 @@ ok:
 		{
 			if (PORT->FreqPtr->Cmd2)
 			{
-				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd2, 8);
-				PORT->TXLen = 8;
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd2, PORT->FreqPtr->Cmd2Len);
+				PORT->TXLen = PORT->FreqPtr->Cmd2Len;
 				RigWriteCommBlock(PORT);
 				PORT->Retries = 2;
 			}
@@ -2056,7 +2103,7 @@ ok:
 		{
 			if (PORT->FreqPtr->Cmd3)
 			{
-				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd3, 10);
+				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd3, PORT->FreqPtr->Cmd3Len);
 				PORT->TXLen = PORT->FreqPtr->Cmd3Len;
 				RigWriteCommBlock(PORT);
 				PORT->Retries = 2;
@@ -2996,13 +3043,13 @@ VOID DummyPoll(struct RIGPORTINFO * PORT)
 
 				memcpy(PORT->TXBuffer, PORT->FreqPtr->Cmd1, PORT->FreqPtr->Cmd1Len);
 				PORT->TXLen = PORT->FreqPtr->Cmd1Len;
-
+/*
 				RigWriteCommBlock(PORT);
 				PORT->CmdSent = 1;
 				PORT->Retries = 0;	
 				PORT->Timeout = 0;
 				PORT->AutoPoll = TRUE;
-
+*/
 				// There isn't a response to a set command, so clear Scan Lock here
 			
 				ReleasePermission(RIG);			// Release Perrmission
@@ -3062,7 +3109,8 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	*PMinLevel = 1;
 	*MemoryBank = 0;
 	*MemoryNumber = 0;
-
+	*Mode = 0;
+	
 	ptr = strtok_s(Param, ",", &Context);
 
 	// "New" format - Dwell, Freq, Params.
@@ -3104,9 +3152,13 @@ BOOL DecodeModePtr(char * Param, double * Dwell, double * Freq, char * Mode,
 	if (strlen(ptr) >  6)
 		return FALSE;
 
-	strcpy(Mode, ptr); 
+	// If channel, dont need mode
 
-	ptr = strtok_s(NULL, ",", &Context);
+	if (*MemoryNumber == 0)
+	{
+		strcpy(Mode, ptr); 
+		ptr = strtok_s(NULL, ",", &Context);
+	}
 
 	while (ptr)
 	{
@@ -4083,17 +4135,6 @@ CheckScan:
 			}	
 			else
 			{
-
-				// Send Set VFO in case last chan was memory
-							
-				*(CmdPtr++) = 0x07;
-				*(CmdPtr++) = 0xFD;
-
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = 0xFE;
-				*(CmdPtr++) = RIG->RigAddr;
-				*(CmdPtr++) = 0xE0;
-
 				*(CmdPtr++) = 0x5;		// Set frequency command
 
 				// Need to convert two chars to bcd digit
@@ -4106,11 +4147,24 @@ CheckScan:
 
 				*(CmdPtr++) = 0xFD;
 
-				FreqPtr[0]->Cmd1Len = 17;
+				FreqPtr[0]->Cmd1Len = 11;
+				
+				// Send Set VFO in case last chan was memory
+							
+//				*(CmdPtr++) = 0xFE;
+//				*(CmdPtr++) = 0xFE;
+//				*(CmdPtr++) = RIG->RigAddr;
+//				*(CmdPtr++) = 0xE0;
+
+//				*(CmdPtr++) = 0x07;
+//				*(CmdPtr++) = 0xFD;
+
+//				FreqPtr[0]->Cmd1Len = 17;
 
 				if (Filter)
 				{						
 					CmdPtr = FreqPtr[0]->Cmd2 = malloc(10);
+					FreqPtr[0]->Cmd2Len = 8;		
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = 0xFE;
 					*(CmdPtr++) = RIG->RigAddr;

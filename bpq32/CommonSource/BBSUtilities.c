@@ -5931,11 +5931,12 @@ VOID SetupFwdTimes(struct BBSForwardingInfo * ForwardingInfo)
 		ForwardingInfo->FWDBands[Count] = NULL;
 	}
 }
-void StartForwarding(int BBSNumber)
+void StartForwarding(int BBSNumber, char ** TempScript)
 {
 	struct UserInfo * user;
 	struct	BBSForwardingInfo * ForwardingInfo ;
 	time_t NOW = time(NULL);
+
 
 	for (user = BBSChain; user; user = user->BBSNext)
 	{
@@ -5950,7 +5951,15 @@ void StartForwarding(int BBSNumber)
 						if (BBSNumber || SeeifMessagestoForward(user->BBSNumber, NULL) ||
 							(ForwardingInfo->ReverseFlag && ((NOW - ForwardingInfo->LastReverseForward) >= ForwardingInfo->RevFwdInterval))) // Menu Command overrides Reverse
 						{
-							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+							user->ForwardingInfo->ScriptIndex = -1;	// Incremented before being used
+						
+							// See if TempScript requested
+							
+							if (user->ForwardingInfo->TempConnectScript)
+								FreeList(user->ForwardingInfo->TempConnectScript);
+
+							user->ForwardingInfo->TempConnectScript = TempScript;
+						
 							if (ConnecttoBBS(user))
 								ForwardingInfo->Forwarding = TRUE;
 						}
@@ -6023,6 +6032,7 @@ BOOL ForwardMessagestoFile(CIRCUIT * conn, char * FN)
 
 		if (Handle == NULL)
 		{
+			int err = GetLastError();
 			Logprintf(LOG_BBS, conn, '!', "Failed to open Export File %s", FN);
 			return FALSE;
 		}
@@ -6428,7 +6438,10 @@ BOOL ProcessBBSConnectScript(CIRCUIT * conn, char * Buffer, int len)
 	Buffer[len]=0;
 	_strupr(Buffer);
 
-	Scripts = ForwardingInfo->ConnectScript;	
+	if (ForwardingInfo->TempConnectScript)
+		Scripts = ForwardingInfo->TempConnectScript;
+	else
+		Scripts = ForwardingInfo->ConnectScript;	
 
 	if (ForwardingInfo->ScriptIndex == -1)
 	{

@@ -64,11 +64,28 @@ TODo	?Multiple Adapters
 	If the PC address isn't the same as the IPGateway IPAddr a NAT entry is created
 	automaticaly.
 
+	As a special case, if you are running jnos (or probably other similar software
+	on the same machine as LinBPQ you will have another pair of addresses on
+	the PC that have to be reached via the TAP. In this case a static ARP for 
+	the jnos address has to be created over the TAP interface, so LinBPQ can ARP 
+	it. This needs the command (where 192.168.x.y is the address of jnos)
 
+	arp -i bpqtemptap -Ds 192.168.x.y bpqtemptap pub
+
+	This will be lost when LinBPQ closes and delete bpqrtemptap, so in this
+	case the tap should be created on boot
+
+	ip tuntap add dev bpqtemptap mode tap
+
+	These lines can be added to rc.local (in the opposite order!)
+
+	In these cases the NAT line for jnos should have TAP appended to tell
+	LinBPQ it is reached over the TAP.
+
+	NAT 44.131.11.x 192.168.x.y TAP
 
 */
-// ip tuntap add dev bpqtap mode tap
-// ifconfig bpqtap 44.131.4.19 mtu 256 up
+
 
 /*
 
@@ -132,7 +149,10 @@ USHORT Generate_CHECKSUM(VOID * ptr1, int Len);
 VOID RecalcTCPChecksum(PIPMSG IPptr);
 VOID RecalcUDPChecksum(PIPMSG IPptr);
 BOOL Send_ETH(VOID * Block, DWORD len, BOOL SendToTAP);
-
+VOID ProcessEthARPMsg(PETHARP arpptr, BOOL FromTAP);
+VOID WriteIPRLine(PROUTEENTRY RouteRecord, FILE * file);
+int CountBits(unsigned long in);
+VOID SendARPMsg(PARPDATA ARPptr, BOOL ToTAP);;
 
 #define ARPTIMEOUT 3600
 
@@ -235,6 +255,7 @@ IPSTATS IPStats = {0};
 UCHAR BPQDirectory[260];
 
 char ARPFN[MAX_PATH];
+char IPRFN[MAX_PATH];
 
 HANDLE handle;
 
@@ -281,6 +302,18 @@ FARPROCX GetAddress(char * Proc);
 #define pcap_sendpacketx pcap_sendpacket
 #endif
 VOID __cdecl Debugprintf(const char * format, ...);
+
+char FormatIPWork[20];
+
+char * FormatIP(ULONG Addr)
+{
+	unsigned char work[4];
+
+	memcpy(work, &Addr, 4);
+	sprintf(FormatIPWork, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+	return FormatIPWork;
+}
 
 int CompareRoutes (const VOID * a, const VOID * b)
 {
@@ -380,6 +413,17 @@ Dll BOOL APIENTRY Init_IP()
 		strcpy(ARPFN,BPQDirectory);
 		strcat(ARPFN,"/");
 		strcat(ARPFN,"BPQARP.dat");
+	}
+	
+	if (BPQDirectory[0] == 0)
+	{
+		strcpy(IPRFN,"BPQIPR.dat");
+	}
+	else
+	{
+		strcpy(IPRFN,BPQDirectory);
+		strcat(IPRFN,"/");
+		strcat(IPRFN,"BPQIPR.dat");
 	}
 	
 	ARPRecords = NULL;				// ARP Table - malloc'ed as needed
@@ -614,6 +658,7 @@ Dll BOOL APIENTRY Init_IP()
 
 VOID IPClose()
 {
+	SaveIPRoutes();
 }
 
 union
@@ -678,7 +723,7 @@ Pollloop:
 
 			if (ethptr->ETYPE == 0x0608)
 			{
-				ProcessEthARPMsg((PETHARP)ethptr);
+				ProcessEthARPMsg((PETHARP)ethptr, FALSE);
 				goto Pollloop;
 			}
 
@@ -735,7 +780,7 @@ PollTAPloop:
 
 			if (ethptr->ETYPE == 0x0608)
 			{
-				ProcessEthARPMsg((PETHARP)ethptr);
+				ProcessEthARPMsg((PETHARP)ethptr, TRUE);
 				goto PollTAPloop;
 			}
 
@@ -1263,7 +1308,7 @@ VOID ProcessEthIPMsg(PETHMSG Buffer)
 	ProcessIPMsg(ipptr, Buffer->SOURCE, 'E', 255);
 }
 
-VOID ProcessEthARPMsg(PETHARP arpptr)
+VOID ProcessEthARPMsg(PETHARP arpptr, BOOL FromTAP)
 {
 	int i=0, Mask=IPPortMask;
 	PARPDATA Arp;
@@ -1279,9 +1324,16 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 
 		//	Is it for our ENCAP (not on our 44 LAN)
 
-		printf("ARP Request for %08x Tell %08x\n",
-				arpptr->TARGETIPADDR, arpptr->SENDIPADDR);
+//		printf("ARP Request for %08x Tell %08x\n",
+//			arpptr->TARGETIPADDR, arpptr->SENDIPADDR);
 
+		//  Process anything for 44 from TAP
+		// (or should the be from either..???)
+
+//		if (FromTAP && (arpptr->TARGETIPADDR & 0xff) == 44)
+		if ((arpptr->TARGETIPADDR & 0xff) == 44)
+			goto ARPOk;
+	
 		if (arpptr->TARGETIPADDR != EncapAddr)
 		{
 			// We should only accept requests from our subnet - we might have more than one net on iterface
@@ -1318,14 +1370,18 @@ VOID ProcessEthARPMsg(PETHARP arpptr)
 		}
 
 		// Add to our table, as we will almost certainly want to send back to it
-		
+ARPOk:
+		Debugprintf("ARP Request for %08x Tell %08x\n",
+			arpptr->TARGETIPADDR, arpptr->SENDIPADDR);
+
+
 		Arp = LookupARP(arpptr->SENDIPADDR, TRUE, &Found);
 
 		if (Found)
 			goto AlreadyThere;				// Already there
 
-		if (Arp == NULL) return;				// No point of table full
-				
+		if (Arp == NULL) return;	// No point if table full
+			
 		Arp->IPADDR = arpptr->SENDIPADDR;
 		Arp->ARPTYPE = 'E';
 		Arp->ARPINTERFACE = 255;
@@ -1355,10 +1411,10 @@ AlreadyThere:
 			memcpy(arpptr->MSGHDDR.DEST, arpptr->MSGHDDR.SOURCE ,6); 
 			memcpy(arpptr->MSGHDDR.SOURCE, ourMACAddr ,6); 
 
-			printf("Forus ARP Reply for %08x Targ %08x HNAT %08x\n",
+			Debugprintf("Forus ARP Reply for %08x Targ %08x HNAT %08x\n",
 				arpptr->SENDIPADDR, arpptr->TARGETIPADDR, HostNATAddr);
 
-			Send_ETH(arpptr,42, arpptr->TARGETIPADDR == HostNATAddr); // Encap to PCAP
+			Send_ETH(arpptr,42, FromTAP);
 
 			return;
 		}
@@ -1413,12 +1469,12 @@ ProxyARPReply:
 					memcpy(ETHARPREQMSG.SENDHWADDR,ourMACAddr, 6);
 					memcpy(ETHARPREQMSG.MSGHDDR.DEST, arpptr->SENDHWADDR, 6);
 
-					printf("Proxy ARP Reply for %08x Targ %08x HNAT %08x\n",
+					Debugprintf("Proxy ARP Reply for %08x Targ %08x HNAT %08x\n",
 						ETHARPREQMSG.SENDIPADDR, ETHARPREQMSG.TARGETIPADDR, HostNATAddr);
 	
-					//	We send to TAP if the TARGETIPADDR is our Addr
-
-					Send_ETH(&ETHARPREQMSG, 42, ETHARPREQMSG.TARGETIPADDR == HostNATAddr);
+					//	We send to TAP if request from TAP
+//					Send_ETH(&ETHARPREQMSG, 42, ETHARPREQMSG.TARGETIPADDR == HostNATAddr);
+					Send_ETH(&ETHARPREQMSG, 42, FromTAP);
 					return;
 			}
 		}
@@ -1473,10 +1529,10 @@ SendBack:
 		
 		//  Send Back to Originator of ARP Request
 
-		if (arpptr->TARGETIPADDR == OurIPAddr)		// Reply to our request?
+		if (Arp && arpptr->TARGETIPADDR == OurIPAddr)		// Reply to our request?
 		{
 			struct DATAMESSAGE * buffptr;
-			PIPMSG IPptr = Q_REM(Arp->ARP_Q);
+			PIPMSG IPptr;
 
 			while (Arp->ARP_Q)
 			{
@@ -1790,7 +1846,7 @@ VOID ProcessIPMsg(PIPMSG IPptr, UCHAR * MACADDR, char Type, UCHAR Port)
 
 	Dest = IPptr->IPDEST.addr;
 
-	printf("IP Pkt for %08X\n", Dest);
+	Debugprintf("IP Pkt for %s\n", FormatIP(Dest));
 
 	if (Dest == OurIPAddr)
 		goto ForUs;
@@ -1812,8 +1868,6 @@ ForUs:
 //		return;
 //	}
 
-	printf("Msg for us\n");
-
 	if (IPptr->IPPROTOCOL == 1)		// ICMP
 	{
 		int Len;
@@ -1822,13 +1876,10 @@ ForUs:
 		Len = ntohs(IPptr->IPLENGTH);
 		Len-=20;
 
-		printf("ICMP Msg for us\n");
-
 		if (Len == 28 && ICMPptr->ICMPTYPE == 0 && memcmp(ICMPptr->ICMPData, "*BPQ", 4) == 0)
 		{
 			// Probably ours
 			
-			printf("Local ICMP Msg for us\n");
 			ProcessICMPMsg(IPptr);
 			return;
 		}
@@ -2132,6 +2183,8 @@ VOID ProcessRIP44Message(PIPMSG IPptr)
 		Len -= 20;
 		RIP2++;
 	}
+
+	SaveIPRoutes();
 	qsort(RouteRecords, NumberofRoutes, 4, CompareMasks);
 }
 
@@ -2173,12 +2226,26 @@ VOID ProcessICMPMsg(PIPMSG IPptr)
 	{
 		//	ICMP_REPLY:
 
+		//	It could be a reply to our request
+		//	or from a our host pc
+
 		UCHAR * BUFFER = GetBuff();
 		UCHAR * ptr1;
 		struct _MESSAGE * Msg;
 		TRANSPORTENTRY * Session = L4TABLE;
 		char IP[20];
 		unsigned char work[4];
+
+		// Internal Pings have Length 28 and Circuit Index as ID
+	
+		if (Len > 28 || ICMPptr->ICMPID >= MAXCIRCUITS)
+		{
+			// For Host
+
+			ReleaseBuffer(BUFFER);
+			RouteIPMsg(IPptr);
+			return;
+		}
 
 		Session += ICMPptr->ICMPID;
 
@@ -2343,7 +2410,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 
 	// See if for a NATed Address
 
-	printf("RouteIPFrame IP %x\n", IPptr->IPDEST.addr);
+	Debugprintf("RouteIPFrame IP %s\n", FormatIP(IPptr->IPDEST.addr));
 				
 	for (index=0; index < nat_table_len; index++)
 	{
@@ -2353,7 +2420,13 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 
 		if (NAT->origipaddr == IPptr->IPDEST.addr)
 		{
-			printf("NAT %08X to %08X\n", IPptr->IPDEST, NAT->mappedipaddr);
+			char Msg[80];
+			int ptr;
+			
+			ptr = sprintf(Msg, "NAT %s to ", FormatIP(IPptr->IPDEST.addr));
+			sprintf(&Msg[ptr], "%s\n", FormatIP(NAT->mappedipaddr));
+
+			Debugprintf("%s", Msg);
 
 			IPptr->IPDEST.addr = NAT->mappedipaddr;
 
@@ -2361,6 +2434,8 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 				RecalcTCPChecksum(IPptr);
 			else if (IPptr->IPPROTOCOL == 11)
 				RecalcUDPChecksum(IPptr);
+
+			SendtoTAP = NAT->ThisHost;
 			break;
 		}
 	}
@@ -2422,7 +2497,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 						C_Q_ADD(&ARPptr->ARP_Q, buffptr);
 					}
 
-					SendARPMsg(ARPptr);
+					SendARPMsg(ARPptr, SendtoTAP);
 
 					return TRUE;
 				}
@@ -2599,7 +2674,7 @@ PARPDATA AllocARPEntry()
 	return ARPptr;
 }
 
- VOID SendARPMsg(PARPDATA Arp)
+ VOID SendARPMsg(PARPDATA Arp, BOOL ToTAP)
  {
 	//	Send ARP. Initially used only to find default gateway
 
@@ -2618,7 +2693,7 @@ PARPDATA AllocARPEntry()
 		memcpy(ETHARPREQMSG.MSGHDDR.SOURCE, ourMACAddr, 6);
 		memset(ETHARPREQMSG.MSGHDDR.DEST, 255, 6);
 
-		Send_ETH(&ETHARPREQMSG, 42, FALSE);
+		Send_ETH(&ETHARPREQMSG, 42, ToTAP);
 
 		return;
 	}
@@ -2842,7 +2917,7 @@ static BOOL ReadConfigFile()
 			}
 		}
 
-		// Add an Inerface Route to our LAN
+		// Add an Interface Route to our LAN
 
 		Route = LookupRoute(OurIPAddr & OurNetMask, OurNetMask, TRUE, &Found);
 
@@ -2856,6 +2931,7 @@ static BOOL ReadConfigFile()
 				Route->SUBNET = OurNetMask;
 			 	Route->GATEWAY = 0;
 				Route->LOCKED = 1;
+				Route->TYPE = 'E';
 			}
 		}
 	}
@@ -2866,7 +2942,7 @@ static ProcessLine(char * buf)
 {
 	char * ptr, * p_value, * p_origport, * p_host, * p_port;
 	int port, mappedport, ipad, mappedipad;
-
+	BOOL NATTAP = FALSE;
 	int i;
 
 	ptr = strtok(buf, " \t\n\r");
@@ -3045,27 +3121,33 @@ static ProcessLine(char * buf)
 			return FALSE;
 
 		p_origport = strtok(NULL, " ,\t\n\r");
-		
-		//	Default is all ports
 
-		if (p_origport)
-		{
-			p_port = strtok(NULL, " ,\t\n\r");
-			if (!p_port) return FALSE;
+		if (p_origport && strcmp(p_origport, "TAP") == 0)
+			NATTAP = TRUE;
 
-			port = atoi(p_origport);
-			mappedport=atoi(p_port);
-		}
-		else
-			port = mappedport = 0;
+		//		
+//		//	Default is all ports
+//
+//		if (p_origport)
+//		{
+//			p_port = strtok(NULL, " ,\t\n\r");
+//			if (!p_port) return FALSE;
+//
+//			port = atoi(p_origport);
+//			mappedport=atoi(p_port);
+//		}
+//		else
+
+		port = mappedport = 0;
 	
 #ifndef WIN32
 		// on Linux, we send stuff for our host to TAP
-		
-		if (ipad == OurIPAddr)
+
+
+		if (ipad == OurIPAddr || NATTAP)
 			nat_table[nat_table_len].ThisHost = TRUE;
 
-		printf("NAT %x %x %d\n", ipad, OurIPAddr, nat_table[nat_table_len].ThisHost);
+		printf("NAT %x %x %d\n", ipad, mappedipad, nat_table[nat_table_len].ThisHost);
 #endif
 		nat_table[nat_table_len].origipaddr = ipad;
 		nat_table[nat_table_len].origport = ntohs(port);
@@ -3086,6 +3168,7 @@ static ProcessLine(char * buf)
 				Route->SUBNET = 0xffffffff;
 			 	Route->GATEWAY = 0;
 				Route->LOCKED = 1;
+				Route->TYPE = 'E';
 			}
 		}
 		return TRUE;
@@ -3321,6 +3404,11 @@ BOOL ProcessARPLine(char * buf, BOOL Locked)
 	if (IPAddr == INADDR_NONE) return FALSE;
 
 	_strupr(p_type);
+
+	// Don't restore Eth addresses from the save file
+
+	if (*p_type == 'E' && Locked == FALSE)
+		return TRUE;
 
 	if (!((*p_type == 'D') || (*p_type == 'E') || (*p_type =='V'))) return FALSE;
 
@@ -3620,48 +3708,65 @@ VOID WriteARPLine(PARPDATA ARPRecord, FILE * file)
 
 
 
-/*
-;	DO PSEUDO HEADER FIRST
-;
-	MOV	DX,600H			; PROTOCOL (REVERSED)
-	MOV	AX,TCPLENGTH		; TCP LENGTH
-	XCHG	AH,AL
-	ADD	DX,AX
-	MOV	AX,WORD PTR LOCALADDR[BX]
-	ADC	DX,AX
-	MOV	AX,WORD PTR LOCALADDR+2[BX]
-	ADC	DX,AX
-	MOV	AX,WORD PTR REMOTEADDR[BX]
-	ADC	DX,AX
-	MOV	AX,WORD PTR REMOTEADDR+2[BX]
-	ADC	DX,AX
-	ADC	DX,0
+VOID SaveIPRoutes ()
+{
+	PROUTEENTRY Route;
+	int i;
+	FILE * file;
 
-	MOV	PHSUM,DX
+	if ((file = fopen(IPRFN, "w")) == NULL)
+		return;
 
-	PUSH	BX
+	for (i=0; i < NumberofRoutes; i++)
+	{
+		Route = RouteRecords[i];
+		if (!Route->LOCKED) 
+			WriteIPRLine(Route, file);
+	}
 
-	MOV	BX,TXBUFFER		; HEADER
+ 	fclose(file);
+	
+	return ;
+}
 
-	MOV	CX,TCPLENGTH		; PUT LENGTH INTO HEADER
-	MOV	BUFFLEN[BX],CX
-;
-	MOV	SI,BUFFPTR[BX]
+VOID WriteIPRLine(PROUTEENTRY RouteRecord, FILE * file)
+{
+	int Len;
+	char Net[20];
+	char Nexthop[20];
+	char Encap[20];
 
-	INC	CX			; ROUND UP
-	SHR	CX,1			; WORD COUNT
+	char Line[100];
+	unsigned char work[4];
 
-	CALL	DO_CHECKSUM
+	memcpy(work, &RouteRecord->NETWORK, 4);
+	sprintf(Net, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-	ADD	DX,PHSUM
-	ADC	DX,0
-	NOT	DX
+	memcpy(work, &RouteRecord->GATEWAY, 4);
+	sprintf(Nexthop, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-	MOV	SI,BUFFPTR[BX]
-	MOV	CHECKSUM[SI],DX
+	memcpy(work, &RouteRecord->Encap, 4);
+	sprintf(Encap, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
+
+	if (RouteRecord->TYPE == 'T')
+		Len = sprintf(Line, "%s/%d %s %c %d %d encap %s\r",
+					Net, CountBits(RouteRecord->SUBNET),
+					Nexthop, RouteRecord->TYPE,
+					RouteRecord->METRIC, RouteRecord->RIPTIMOUT, Encap);
+	else
+		Len = sprintf(Line, "%s/%d %s %c %d %d\r",
+					Net, CountBits(RouteRecord->SUBNET),
+					Nexthop, RouteRecord->TYPE,
+					RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
+
+	fputs(Line, file);
+	
+	return;
+}
 
 
-*/
+
+
 
 int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len)
 {
@@ -4089,6 +4194,44 @@ VOID SHOWARP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
+VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	//	DISPLAY IP Gateway ARP status or Clear
+	
+	struct nat_table_entry * NAT = NULL;
+	int index;
+	char From[20];
+	char To[20];
+				
+	Bufferptr += sprintf(Bufferptr, "\r");
+
+	if (IPRequired == FALSE)
+	{
+		Bufferptr += sprintf(Bufferptr, "IP Gateway is not enabled\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	for (index=0; index < nat_table_len; index++)
+	{
+		NAT = &nat_table[index];
+					
+		strcpy(From, FormatIP(NAT->origipaddr));
+		strcpy(To, FormatIP(NAT->mappedipaddr));
+		
+		Bufferptr = CHECKBUFFER(Session, Bufferptr);	// ENSURE ROOM
+
+#ifdef LINBPQ
+		Bufferptr += sprintf(Bufferptr, "%s to %s %s\r", From, To,
+			NAT->ThisHost?"via TAP":"");
+#else
+		Bufferptr += sprintf(Bufferptr, "%s to %s\r", From, To);
+#endif
+	}
+
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
 int CountBits(unsigned long in)
 {
 	int n = 0;
@@ -4173,10 +4316,11 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 					RouteRecord->FRAMECOUNT, Nexthop, RouteRecord->TYPE,
 					RouteRecord->METRIC, RouteRecord->RIPTIMOUT, Encap);
 			else
-				Bufferptr += sprintf(Bufferptr, "%s/%d %d %s %c %d %d\r",
+				Bufferptr += sprintf(Bufferptr, "%s/%d %d %s %c %d %d %s\r",
 					Net, CountBits(RouteRecord->SUBNET),
 					RouteRecord->FRAMECOUNT, Nexthop, RouteRecord->TYPE,
-					RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
+					RouteRecord->METRIC, RouteRecord->RIPTIMOUT,
+					RouteRecord->LOCKED?"Locked":"");
 		}
 	}
 

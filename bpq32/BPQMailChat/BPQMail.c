@@ -874,13 +874,14 @@
 //	Fix failure to store some encrypted ISP passwords
 //	Allow EDITUSER to change "RMS Express User" flag
 //	Fix reporting of Config File errors
-//	Fix Finding MPS Messages (First to Farward was being used incorrectly)
+//	Fix Finding MPS Messages (First to Forward was being used incorrectly)
 //	Add "Save Attachment" to Web Mgmt Interface
 //	Support Secure Signon on Forwarding sessions to CMS
 //	Save Forwarding config when BBS flag on user is cleared
 //	Pass internally generated SYSOP messages through routing process
-//	Add POP3 TOP and LAST commands.
-//	DOn't set 'T' messages to 'Y' when read.
+//	Add POP3 TOP command.
+//	Don't set 'T' messages to 'Y' when read.
+//	Add optional temporary connect script on "FWD NOW" command
 
 #include "BPQMailChat.h"
 #define MAIL
@@ -1933,7 +1934,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		if (wmId >= IDM_FORWARD_ALL && wmId < IDM_FORWARD_ALL + 100)
 		{
-			StartForwarding(wmId - IDM_FORWARD_ALL);
+			StartForwarding(wmId - IDM_FORWARD_ALL, NULL);
 			return 0;
 		}
 

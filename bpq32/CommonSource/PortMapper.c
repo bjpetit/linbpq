@@ -98,6 +98,9 @@ BOOL Check_Checksum(VOID * ptr1, int Len);
 
 static BOOL Send_ETH(VOID * Block, DWORD len);
 
+VOID ProcessEthARPMsg(PETHARP arpptr);
+static VOID SendARPMsg(PARPDATA Arp);
+
 #define ARPTIMEOUT 3600
 
 

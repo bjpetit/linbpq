@@ -2258,11 +2258,11 @@ VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 
-	if (memcmp(Buffer, "LAST",4) == 0)
-	{
-		SendSock(sockptr, "+OK 0");
-		return;
-	}
+//	if (memcmp(Buffer, "LAST",4) == 0)
+//	{
+//		SendSock(sockptr, "+OK 0");
+//		return;
+//	}
 
 	if (sockptr->State != Authenticated)
 	{

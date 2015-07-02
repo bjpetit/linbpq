@@ -280,6 +280,33 @@ ConfigLine:
 		if (_memicmp(buf, "WL2KREPORT", 10) == 0)
 			TNC->WL2K = DecodeWL2KReportLine(buf);
 		else
+		if (_memicmp(buf, "DATE", 4) == 0)
+		{
+			char Cmd[32];
+			time_t T;
+			struct tm * tm;
+
+			T = time(NULL);
+			tm = gmtime(&T);	
+
+			sprintf(Cmd,"DATE %02d%02d%02d\r",  tm->tm_mday, tm->tm_mon + 1, tm->tm_year - 100);
+
+			strcat (TNC->InitScript, Cmd);
+		}
+		if (_memicmp(buf, "TIME", 4) == 0)
+		{
+			char Cmd[32];
+			time_t T;
+			struct tm * tm;
+
+			T = time(NULL);
+			tm = gmtime(&T);	
+
+			sprintf(Cmd,"TIME %02d%02d%02d\r",  tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+			strcat (TNC->InitScript, Cmd);
+		}
+		else
 			strcat (TNC->InitScript, buf);
 	}
 	
@@ -1370,28 +1397,41 @@ VOID SCSPoll(int Port)
 			}
 			else
 			{
+				end = strchr(start, 13);
+				len = ++end - start -1;	// exclude cr
+				TNC->Streams[Stream].CmdSet = end;
+
 				if (*(start) == 1)
 				{
 					// This is UI data, not a command. Send it to channel 0
 
-					int uilen = strlen(&start[1]);
+					len --;
 
 					Poll[2] = 0;				// UI Channel
 					Poll[3] = 0;				// Data
-					Poll[4] = uilen - 1;
-					memcpy(&Poll[5], &start[1], uilen);
+					Poll[4] = len - 1;
+					memcpy(&Poll[5], &start[1], len);
 		
-					CRCStuffAndSend(TNC, Poll, uilen + 5);
-
-					free(TNC->Streams[Stream].CmdSave);
-					TNC->Streams[Stream].CmdSet = NULL;
+					CRCStuffAndSend(TNC, Poll, len + 5);
 	
 					return;
 				}
 
-				end = strchr(start, 13);
-				len = ++end - start -1;	// exclude cr
-				TNC->Streams[Stream].CmdSet = end;
+				if (*(start) == 2)
+				{
+					// This is a UI command Send it to channel 0
+
+					len--;
+
+					Poll[2] = 0;				// UI Channel
+					Poll[3] = 1;				// Command
+					Poll[4] = len - 1;
+					memcpy(&Poll[5], &start[1], len);
+		
+					CRCStuffAndSend(TNC, Poll, len + 5);
+	
+					return;
+				}
 
 				Poll[2] = TNC->Streams[Stream].DEDStream;		// Channel
 				Poll[3] = 1;			// Command
@@ -1487,6 +1527,7 @@ VOID SCSPoll(int Port)
 	{
 		int datalen;
 		char * Buffer;
+		char ICall[16];
 		char CCMD[80] = "C";
 		char Call[12] = "           ";	
 		struct _MESSAGE * buffptr;
@@ -1501,6 +1542,14 @@ VOID SCSPoll(int Port)
 		// Buffer has an ax.25 header, which we need to pick out and set as channel 0 Connect address
 		// before sending the beacon
 
+		// We also need to set Chan 0 Mycall so digi'ing can work, and put
+		// it back after so incoming calls will work
+
+		// But we cant digipeated bit in call, so if we find one, skip message
+
+		ConvFromAX25(Buffer + 7, ICall);		// Origin
+		strlop(ICall, ' ');
+	
 		ConvFromAX25(Buffer, &Call[1]);			// Dest
 		strlop(&Call[1], ' ');
 		strcat(CCMD, Call);
@@ -1509,6 +1558,12 @@ VOID SCSPoll(int Port)
 
 		while ((Buffer[-1] & 1) == 0)
 		{
+			if (Buffer[6] & 0x80)				// Digied bit set?
+			{
+				ReleaseBuffer((UINT *)buffptr);
+				return;
+			}
+
 			ConvFromAX25(Buffer, &Call[1]);
 			strlop(&Call[1], ' ');
 			strcat(CCMD, Call);
@@ -1528,7 +1583,10 @@ VOID SCSPoll(int Port)
 			CRCStuffAndSend(TNC, Poll, Poll[4] + 6);	// Set Dest and Path
 
 			TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(400);
-			sprintf(TNC->Streams[0].CmdSet, "%c%s", 1, Buffer);		// Flag CmdSet as Data
+			sprintf(TNC->Streams[0].CmdSet, "%cI%s\r%c%s\r%cI%s\r",
+				2, ICall,			// Flag as Chan 0 Command
+				1, Buffer,			// Flag CmdSet as Data
+				2, TNC->NodeCall);	// Flag as Chan 0 Command
 		}
 
 		ReleaseBuffer((UINT *)buffptr);
@@ -3338,8 +3396,7 @@ static MESSAGEY Monframe;		// I frames come in two parts.
 
 #define TIMESTAMP 352
 
-MESSAGEY * AdjMsg;				// Adjusted fir digis
-
+MESSAGEY * AdjMsg = &Monframe;				// Adjusted for digis
 
 static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 {
@@ -3364,14 +3421,17 @@ static VOID DoMonitor(struct TNCINFO * TNC, UCHAR * Msg, int Len)
 	Monframe.LENGTH = 23;				// Control Frame
 	Monframe.PORT = TNC->Port;
 	
-	AdjMsg = &Monframe;					// Adjusted fir digis
+	AdjMsg = &Monframe;					// Adjusted for digis
 	ptr = strstr(Msg, "fm ");
 
 	ConvToAX25(&ptr[3], Monframe.ORIGIN);
 
+	UpdateMH(TNC, &ptr[3], '.', 0);
+
 	ptr = strstr(ptr, "to ");
 
 	ConvToAX25(&ptr[3], Monframe.DEST);
+
 
 	ptr = strstr(ptr, "via ");
 
@@ -3625,8 +3685,12 @@ VOID CloseComplete(struct TNCINFO * TNC, int Stream)
 				TNC->Streams[0].DEDStream = 30;		// Packet Channel
 				Debugprintf("BPQ32 Session Closed - switch to Packet");
 			}
+			else
+			{
+				sprintf(STREAM->CmdSet, "I%s\rPT\r", TNC->NodeCall);
 				TNC->Streams[0].DEDStream = 31;		// Pactor Channel
 				Debugprintf("BPQ32 Session Closed - switch to Pactor");
+			}
 		}
 		ReleaseOtherPorts(TNC);
 	}
