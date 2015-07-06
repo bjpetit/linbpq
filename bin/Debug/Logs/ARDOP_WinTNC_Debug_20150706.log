@@ -1,0 +1,24 @@
+﻿2015/07/06 10:48:45.527 [0.4.1]  
+2015/07/06 10:48:45.543 [0.4.1] [ARDOP_Win TNC.Main.Load] Command line =
+2015/07/06 10:48:47.728 [0.4.1] [Main.StartCodec] Setting SelectedPlaybackDevice = Speakers (Realtek High Definition Audio)
+2015/07/06 10:48:47.772 [0.4.1] [CaptureWaitThread] Startup
+2015/07/06 10:48:47.783 [0.4.1] [Main.StartCodec] Successful start of codec
+2015/07/06 10:48:50.202 [0.4.1] [Main.StopCodec] Stop thrNotify with blnSCCapturing = False
+2015/07/06 10:48:50.270 [0.4.1] [Main.CaptureWaitThread] Exit
+2015/07/06 10:48:50.435 [0.4.1] [Main.StopCodec] = True
+2015/07/06 10:49:09.511 [0.4.1]  
+2015/07/06 10:49:09.529 [0.4.1] [ARDOP_Win TNC.Main.Load] Command line =
+2015/07/06 10:49:11.687 [0.4.1] [Main.StartCodec] Setting SelectedPlaybackDevice = Speakers (Realtek High Definition Audio)
+2015/07/06 10:49:11.731 [0.4.1] [CaptureWaitThread] Startup
+2015/07/06 10:49:11.742 [0.4.1] [Main.StartCodec] Successful start of codec
+2015/07/06 10:49:19.109 [0.4.1] [Main.StopCodec] Stop thrNotify with blnSCCapturing = False
+2015/07/06 10:49:19.171 [0.4.1] [Main.CaptureWaitThread] Exit
+2015/07/06 10:49:19.336 [0.4.1] [Main.StopCodec] = True
+2015/07/06 10:51:22.333 [0.4.1]  
+2015/07/06 10:51:22.350 [0.4.1] [ARDOP_Win TNC.Main.Load] Command line =
+2015/07/06 10:51:24.512 [0.4.1] [Main.StartCodec] Setting SelectedPlaybackDevice = Speakers (Realtek High Definition Audio)
+2015/07/06 10:51:24.552 [0.4.1] [CaptureWaitThread] Startup
+2015/07/06 10:51:24.564 [0.4.1] [Main.StartCodec] Successful start of codec
+2015/07/06 10:51:26.497 [0.4.1] [Main.StopCodec] Stop thrNotify with blnSCCapturing = False
+2015/07/06 10:51:26.525 [0.4.1] [Main.CaptureWaitThread] Exit
+2015/07/06 10:51:26.719 [0.4.1] [Main.StopCodec] = True

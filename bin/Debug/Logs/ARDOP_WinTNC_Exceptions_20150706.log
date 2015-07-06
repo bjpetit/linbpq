@@ -1,0 +1,9 @@
+﻿2015/07/06 10:48:45 [0.4.1] [HostInterface.EnableHostLink]  TCPIP link startup, Err: nsoftware.IPWorks.IPWorksIpdaemonException: Could not bind server socket: Only one usage of each socket address (protocol/network address/port) is normally permitted
+   at nsoftware.IPWorks.Ipdaemon.set_Listening(Boolean value)
+   at ARDOP_Win1.HostInterface.EnableHostLink() in S:\DEV\Source\ARDOP\BuildProcessTemplates\ARDOP_Win_BPQ\ARDOP_Win\ARDOP_Win\HostInterface.vb:line 100
+2015/07/06 10:49:09 [0.4.1] [HostInterface.EnableHostLink]  TCPIP link startup, Err: nsoftware.IPWorks.IPWorksIpdaemonException: Could not bind server socket: Only one usage of each socket address (protocol/network address/port) is normally permitted
+   at nsoftware.IPWorks.Ipdaemon.set_Listening(Boolean value)
+   at ARDOP_Win1.HostInterface.EnableHostLink() in S:\DEV\Source\ARDOP\BuildProcessTemplates\ARDOP_Win_BPQ\ARDOP_Win\ARDOP_Win\HostInterface.vb:line 100
+2015/07/06 10:51:22 [0.4.1] [HostInterface.EnableHostLink]  TCPIP link startup, Err: nsoftware.IPWorks.IPWorksIpdaemonException: Could not bind server socket: Only one usage of each socket address (protocol/network address/port) is normally permitted
+   at nsoftware.IPWorks.Ipdaemon.set_Listening(Boolean value)
+   at ARDOP_Win1.HostInterface.EnableHostLink() in S:\DEV\Source\ARDOP\BuildProcessTemplates\ARDOP_Win_BPQ\ARDOP_Win\ARDOP_Win\HostInterface.vb:line 100

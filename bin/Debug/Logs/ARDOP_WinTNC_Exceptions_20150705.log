@@ -1,0 +1,24 @@
+﻿2015/07/05 09:03:58 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:03 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:08 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:13 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:19 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:24 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:29 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:34 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:39 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 09:04:45 [0.4.0] [tmrStartCodec_Tick] Failure to start Codec! Fault= Playback Device setup, Device  not found in Windows enumerated Playback Devices
+2015/07/05 11:09:31 [0.4.0] [HostInterface.EnableHostLink]  TCPIP link startup, Err: System.Exception: IP*Works! V9 (nsoftware.IPWorks.Ipdaemon component). Could not find a valid license for using IP*Works! V9 on this system.  To obtain a trial license, please visit www.nsoftware.com or email support@nsoftware.com [code: G nodeid: AZ77WZTW].
+   at ipw90S.p.B(Int32 l, Type B, Int32& s, String& p, Boolean r)
+   at ipw90S.p.s(Int32 l, Type B, Int32& s)
+   at ipw90S.p.B(Int32 l, Type B, Byte[] s)
+   at ipw90S.p.l(Int32 l, Type B, String s)
+   at nsoftware.IPWorks.Ipdaemon.set_Listening(Boolean value)
+   at ARDOP_Win1.HostInterface.EnableHostLink() in S:\DEV\Source\ARDOP\BuildProcessTemplates\ARDOP_Win_BPQ\ARDOP_Win\ARDOP_Win\HostInterface.vb:line 91
+2015/07/05 11:09:40 [0.4.0] [HostInterface.TerminateHostLink]  Err: System.Exception: IP*Works! V9 (nsoftware.IPWorks.Ipdaemon component). Could not find a valid license for using IP*Works! V9 on this system.  To obtain a trial license, please visit www.nsoftware.com or email support@nsoftware.com [code: G nodeid: AZ77WZTW].
+   at ipw90S.p.B(Int32 l, Type B, Int32& s, String& p, Boolean r)
+   at ipw90S.p.s(Int32 l, Type B, Int32& s)
+   at ipw90S.p.B(Int32 l, Type B, Byte[] s)
+   at ipw90S.p.l(Int32 l, Type B, String s)
+   at nsoftware.IPWorks.Ipdaemon.Shutdown()
+   at ARDOP_Win1.HostInterface.TerminateHostLink() in S:\DEV\Source\ARDOP\BuildProcessTemplates\ARDOP_Win_BPQ\ARDOP_Win\ARDOP_Win\HostInterface.vb:line 228
