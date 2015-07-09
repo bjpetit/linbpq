@@ -3027,6 +3027,12 @@ void PollGPSIn()
 
 				portptr->gpsinptr-=len;			// bytes left
 
+				if (portptr->gpsinptr > 0 && *ptr == 0)
+				{
+					*ptr++;
+					portptr->gpsinptr--;
+				}
+
 				if (portptr->gpsinptr > 0)
 				{
 					memmove(portptr->GPSinMsg,ptr, portptr->gpsinptr);

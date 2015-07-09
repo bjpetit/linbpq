@@ -189,7 +189,7 @@ static DWORD IPLen = 0;
 
 
 #ifdef WIN32
-static UCHAR ourMACAddr[6] = {02,'B','P','Q',0,48};
+static UCHAR ourMACAddr[6] = {02,'B','P','Q',3,48};
 #else
 UCHAR ourMACAddr[6] = {02,'B','P','Q',0,1};
 #endif

@@ -30,6 +30,7 @@ struct ConnectionInfo
 	BOOL DoEcho;				// Telnet Echo option accepted
 	BOOL CMSSession;			// Set if connect to CMS
 	BOOL FBBMode;				// Pure TCP for FBB forwarding
+	BOOL NeedLF;				// FBB mode, but with cr > crlf outbound
 	BOOL RelayMode;				// Pure TCP for RMS Relay Emulation forwarding
 	BOOL HTTPMode;				// HTML Terminal Emulator
 	BOOL TriMode;				// Trimode emulation

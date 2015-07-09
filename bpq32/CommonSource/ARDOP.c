@@ -1287,12 +1287,12 @@ VOID ARDOPReleaseTNC(struct TNCINFO * TNC)
 
 VOID ARDOPSuspendPort(struct TNCINFO * TNC)
 {
-	ARDOPSendCommand(TNC, "LISTEN FALSE", TRUE);
+	ARDOPSendCommand(TNC, "CODEC FALSE", TRUE);
 }
 
 VOID ARDOPReleasePort(struct TNCINFO * TNC)
 {
-	ARDOPSendCommand(TNC, "LISTEN TRUE", TRUE);
+	ARDOPSendCommand(TNC, "CODEC TRUE", TRUE);
 }
 
 
@@ -1387,6 +1387,8 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	PortEntry->MAXHOSTMODESESSIONS = 1;	
 	PortEntry->SCANCAPABILITIES = SIMPLE;			// Scan Control - pending connect only
 
+	PortEntry->PORTCONTROL.UICAPABLE = TRUE;
+
 	if (PortEntry->PORTCONTROL.PORTPACLEN == 0)
 		PortEntry->PORTCONTROL.PORTPACLEN = 236;
 
@@ -1451,8 +1453,7 @@ UINT ARDOPExtInit(EXTPORTDATA * PortEntry)
 	if (strlen(Aux) > 8)
 	{
 		strcat(TNC->InitScript, Aux);
-//	strcat(TNC->InitScript,"\r");
-		strcat(TNC->InitScript,"\rMYAUX\r");
+		strcat(TNC->InitScript,"\rMYAUX\r");	// READ BACK
 	}
 
 	strcpy(TNC->CurrentMYC, TNC->NodeCall);
@@ -2680,6 +2681,11 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 
 			}
 		}
+
+		// FEC but not APRS. Discard if connected
+
+		if (TNC->Streams[0].Connected)
+			return;
 	}
 
 	WritetoTrace(TNC, Data, Length);

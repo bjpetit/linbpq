@@ -2056,6 +2056,17 @@ nosocks:
 						STREAM->Connecting = TRUE;
 						STREAM->ConnectionInfo->CMSSession = FALSE;
 						STREAM->ConnectionInfo->RelaySession = FALSE;
+
+						if (_stricmp(P3, "TELNET") == 0)
+						{
+//							// FBB with CRLF
+		
+							STREAM->ConnectionInfo->NeedLF = TRUE;
+						}
+						else
+							STREAM->ConnectionInfo->NeedLF = FALSE;
+
+
 						STREAM->ConnectionInfo->FBBMode = TRUE;
 
 						if (_stricmp(P3, "NEEDLF") == 0)
@@ -2568,7 +2579,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->FBBMode = FALSE;	
 			sockptr->RelayMode = FALSE;
 			sockptr->ClientSession = FALSE;
-
+			sockptr->NeedLF = FALSE;
 
 			if (SocketId == TCP->HTTPsock || SocketId == TCP->HTTPsock6)
 				sockptr->HTTPMode = TRUE;
@@ -4777,6 +4788,7 @@ CMSConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 	sockptr->BPQTermMode = FALSE;
 
 	sockptr->FBBMode = TRUE;		// Raw Data
+	sockptr->NeedLF = FALSE;
 
 	destaddr.sin_family = AF_INET; 
 	destaddr.sin_port = htons(8772);
@@ -5231,7 +5243,7 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 	}
 
 
-	if (sockptr->FBBMode)
+	if (sockptr->FBBMode && sockptr->NeedLF == FALSE)
 	{
 		// if Outward Connect to FBB,  Replace ff with ffff
 

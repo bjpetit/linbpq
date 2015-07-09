@@ -709,6 +709,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add Memory Channel Scanning for ICOM Radios
 //	Try to reopen Rig Control port if it fails (could be unplugged USB)
 //	Fix restoring position of Monitor Window
+//	Stop Codec on Winmor and ARDOP when an interlocked port is attached (instead of listen false)
+//	Support APRS beacons in RP mode on Dragon
+//	Change Virtual MAC address on IPGateway to include last octet of IP Address
+
 
 #define CKernel
 

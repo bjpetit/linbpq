@@ -1287,12 +1287,12 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
 
 VOID WinmorSuspendPort(struct TNCINFO * TNC)
 {
-	send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+	send(TNC->WINMORSock, "CODEC FALSE\r\n", 14, 0);
 }
 
 VOID WinmorReleasePort(struct TNCINFO * TNC)
 {
-	send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+	send(TNC->WINMORSock, "CODEC TRUE\r\n", 13, 0);
 }
 
 

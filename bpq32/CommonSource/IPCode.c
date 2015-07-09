@@ -241,9 +241,9 @@ DWORD IPLen = 0;
 UCHAR QST[7]={'Q'+'Q','S'+'S','T'+'T',0x40,0x40,0x40,0xe0};		//QST IN AX25
 
 #ifdef WIN32
-UCHAR ourMACAddr[6] = {02,'B','P','Q',0,2};
+UCHAR ourMACAddr[6] = {02,'B','P','Q',2,2};
 #else
-UCHAR ourMACAddr[6] = {02,'B','P','Q',0,1};
+UCHAR ourMACAddr[6] = {02,'B','P','Q',1,1};
 #endif
 
 UCHAR RealMacAddress[6];
@@ -430,6 +430,8 @@ Dll BOOL APIENTRY Init_IP()
 	NumberofARPEntries=0;
 
 	ReadConfigFile();
+
+	ourMACAddr[5] = (OurIPAddr >> 24) & 255;
 	
 	// Clear old packets
 
@@ -1878,7 +1880,7 @@ ForUs:
 
 		if (Len == 28 && ICMPptr->ICMPTYPE == 0 && memcmp(ICMPptr->ICMPData, "*BPQ", 4) == 0)
 		{
-			// Probably ours
+			// Probably our response
 			
 			ProcessICMPMsg(IPptr);
 			return;
@@ -2051,12 +2053,36 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 
 	//	See if for us
 
+	//	Handle Pings, our Ping responses and SNMP in BPQ
+	//	pass rest to host
+
 	if (IPptr->IPDEST.addr == OurIPAddr)
 	{
 		if (IPptr->IPPROTOCOL == 1)		// ICMP
 		{
-			ProcessICMPMsg(IPptr);
-			return;
+			int Len;
+			PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
+
+			Len = ntohs(IPptr->IPLENGTH);
+			Len-=20;
+
+			if (Len == 28 && ICMPptr->ICMPTYPE == 0 && memcmp(ICMPptr->ICMPData, "*BPQ", 4) == 0)
+			{
+				// Probably ours
+			
+				ProcessICMPMsg(IPptr);
+				return;
+			}
+		}
+
+		if (IPptr->IPPROTOCOL == 1)		// ICMP
+		{
+			PICMPMSG ICMPptr = (PICMPMSG)&IPptr->Data;
+
+			if (ICMPptr->ICMPTYPE == 8)
+			{	ProcessICMPMsg(IPptr);
+				return;
+			}
 		}
 
 		// Support UDP for SNMP
@@ -2072,7 +2098,10 @@ VOID ProcessTunnelMsg(PIPMSG IPptr)
 			}
 		}
 
-		return;				// Igonre others
+		// Others should be passed to our host
+
+		// I think we can just drop through to RouteIPMsg
+
 	}
 
 	// I think anything else is just passed to the router
@@ -3749,12 +3778,12 @@ VOID WriteIPRLine(PROUTEENTRY RouteRecord, FILE * file)
 	sprintf(Encap, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
 	if (RouteRecord->TYPE == 'T')
-		Len = sprintf(Line, "%s/%d %s %c %d %d encap %s\r",
+		Len = sprintf(Line, "%s/%d %s %c %d %d encap %s\n",
 					Net, CountBits(RouteRecord->SUBNET),
 					Nexthop, RouteRecord->TYPE,
 					RouteRecord->METRIC, RouteRecord->RIPTIMOUT, Encap);
 	else
-		Len = sprintf(Line, "%s/%d %s %c %d %d\r",
+		Len = sprintf(Line, "%s/%d %s %c %d %d\n",
 					Net, CountBits(RouteRecord->SUBNET),
 					Nexthop, RouteRecord->TYPE,
 					RouteRecord->METRIC, RouteRecord->RIPTIMOUT);
