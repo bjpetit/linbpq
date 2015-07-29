@@ -1632,9 +1632,9 @@ VOID PROC_I_FRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 
 		// NOS FRAGMENTED IP
 
-		C_Q_ADD(&LINK->L2FRAG_Q, Msg);
+		C_Q_ADD(&LINK->L2FRAG_Q, Buffer);
 
-		if (Msg->L2DATA[0] == 0)
+		if (Buffer->L2DATA[0] == 0)
 		{
 			//	THERE IS A WHOLE MESSAGE ON FRAG_Q - PASS TO IP
 

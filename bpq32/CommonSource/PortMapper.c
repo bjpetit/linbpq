@@ -270,6 +270,9 @@ Dll BOOL APIENTRY Init_PM()
 	ARPRecords = NULL;				// ARP Table - malloc'ed as needed
 	NumberofARPEntries=0;
 
+	RouteRecords = NULL;
+	NumberofRoutes = 0;
+
 	ReadConfigFile();
 	
 	// Clear old packets

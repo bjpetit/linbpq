@@ -1489,7 +1489,7 @@ extern HWND hWndPopup;
 
 static void ResolveNames(struct AXIPPORTINFO * PORT)
 {
-	PORT->ResolveNamesThreadId = pthread_self();		// Detect if another started
+	PORT->ResolveNamesThreadId = GetCurrentThreadId();		// Detect if another started
 	
 	while(TRUE)
 	{
@@ -1542,9 +1542,9 @@ static void ResolveNames(struct AXIPPORTINFO * PORT)
 		}
 		while(ResolveDelay-- > 0)
 		{
-			if (pthread_equal(PORT->ResolveNamesThreadId, pthread_self()) == FALSE)
+			if (pthread_equal(PORT->ResolveNamesThreadId, GetCurrentThreadId()) == FALSE)
 			{
-				Debugprintf("AXIP Resolve thread %x redundant - closing", pthread_self());
+				Debugprintf("AXIP Resolve thread %x redundant - closing", GetCurrentThreadId());
 				return;
 			}
 			Sleep(1000);
@@ -2360,33 +2360,7 @@ BOOL add_arp_entry(struct AXIPPORTINFO * PORT, UCHAR * call, UCHAR * ip, int len
 		//
 		return (FALSE); 
 
-	arp = &PORT->arp_table[0];			// First
-
-	if (PORT->arp_table_len)
-	{
-		// Aleady some, so add in callsign order
-
-		int n = 0;
-
-		while (n < MAX_ENTRIES)
-		{
-			if (arp->callsign[0] == 0)	// off end of table, so add here
-				break;
-
-			if (memcmp(call, arp->callsign, 7) > 0)	// lower
-			{
-				arp++;
-				n++;
-				continue;
-			}
-
-			// Move follwoing extries down one and add here
-
-			memmove(arp + 1, arp, (PORT->arp_table_len - n) * sizeof(struct arp_table_entry));
-			memset(arp, 0, sizeof(struct arp_table_entry));
-			break;
-		}
-	}
+	arp = &PORT->arp_table[PORT->arp_table_len];
 
 	if (SourcePort)
 		arp->SourcePort = SourcePort;

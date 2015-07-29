@@ -1687,7 +1687,7 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 
 BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 {
-	int i;
+	int i, n;
 
 	struct FBBRestartData * RestartRec;
 
@@ -1712,6 +1712,15 @@ BOOL LookupRestart(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 					FBBHeader->BID);
 				
 				WriteLogLine(conn, '|',Msg, len, LOG_BBS);
+
+				// Remove restrt data
+
+				for (n = i; n < RestartCount; n++)
+				{
+					RestartData[n] = RestartData[n+1];		// move down all following entries
+				}
+				
+				RestartCount--;
 				return FALSE;
 			}
 

@@ -2333,7 +2333,7 @@ BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR * AXCalls)
 
 	memset(AXCalls, 0, 64);
 
-	ptr = strtok_s(Calls, " ", &Context);
+	ptr = strtok_s(Calls, " ,", &Context);
 
 	if (ptr == NULL)
 		return FALSE;
@@ -2345,7 +2345,7 @@ BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR * AXCalls)
 
 	axptr += 7;
 
-	ptr = strtok_s(NULL, " ", &Context);
+	ptr = strtok_s(NULL, " ,", &Context);
 
 	while (ptr && n--)
 	{
@@ -2368,7 +2368,7 @@ BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR * AXCalls)
 			axptr += 7;
 		}
 
-		ptr = strtok_s(NULL, " ", &Context);
+		ptr = strtok_s(NULL, " ,", &Context);
 	}
 
 	return TRUE;

@@ -453,7 +453,15 @@ KC6OAR*>ID:
 
 		case 8:					// Fragmented IP
 
-			Output += sprintf(Output, "<Fragmented IP>");
+			n = ADJBUFFER->L2DATA[0];	// Frag Count
+
+			Output += sprintf(Output, "<Fragmented IP %02x>\r", n);
+
+			if (ADJBUFFER->L2DATA[0] & 0x80)	// First Frag - Display Header
+			{
+				Output = DISPLAYIPDATAGRAM((IPMSG *)&ADJBUFFER->L2DATA[2], Output, MsgLen - 1);
+			}
+
 			break;	
 		}
 	}

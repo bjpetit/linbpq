@@ -46,6 +46,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #ifdef WIN32
 #include <winioctl.h>
 #include "WS2tcpip.h"
+#else
+#define TIOCOUTQ        0x5411
+#define SIOCOUTQ        TIOCOUTQ        /* output queue size (not sent + not acked) */
 #endif
 
 #include "telnetserver.h"
@@ -1925,6 +1928,17 @@ nosocks:
 			UINT * buffptr;
 			UCHAR * MsgPtr;
 
+			// Make sure there is space. Linux TCP buffer is quite small
+			// Windows doesn't support SIOCOUTQ
+
+#ifndef WIN32
+			int value = 0, error;
+
+			error = ioctl(sockptr->socket, SIOCOUTQ, &value);
+
+			if (value > 1500)
+				break;
+#endif
 			buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
 			STREAM->FramesQueued--;
 			datalen=buffptr[1];
@@ -3359,7 +3373,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 		if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == 0)
 		{
 			DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
-			return;
+			return 0;
 		}
 
 		send(sock, RelayMsg, strlen(RelayMsg), 0);
@@ -3801,7 +3815,7 @@ MsgLoop:
 			if (ProcessIncommingConnect(TNC, sockptr->Callsign, sockptr->Number, FALSE) == FALSE)
 			{
 				DataSocket_Disconnect(TNC, sockptr);      //' Tidy up
-				return;
+				return 0;
 			}
 		
 			TNC->PortRecord->ATTACHEDSESSIONS[sockptr->Number]->Secure_Session = sockptr->UserPointer->Secure;
@@ -5056,7 +5070,10 @@ TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREA
 		//	Connected successful
 		//
 
-		ReportError(STREAM, "*** Connected");	
+		ReportError(STREAM, "*** Connected");
+
+		// Get Send Buffer Size
+
 		return TRUE;
 	}
 	else
@@ -5276,7 +5293,10 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 		}
 		else
 		{
-			send(sock, MsgPtr, datalen, 0);
+			int sent;
+			sent = send(sock, MsgPtr, datalen, 0);
+			if (sent != datalen)
+				Debugprintf("TCP Send Failed - Sent %d should be %d", sent, datalen);
 		}
 	}
 	else

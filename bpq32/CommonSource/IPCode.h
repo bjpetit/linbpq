@@ -114,7 +114,7 @@ typedef struct _ARPDATA
 //       KEEP IP ADDR AT FRONT
 
 	ULONG	IPADDR;
-	UCHAR	HWADDR[7];				// ETHERNET/ax.25 ADDR
+	UCHAR	HWADDR[64];				// ETHERNET/ax.25 ADDR, maybe with digis
 	BOOL	ARPVALID;				// NONZERO IF ADDRESS HAS BEEN RESOLVED
 	ULONG	ARPTIMER;
 	UCHAR	ARPINTERFACE;			// Port to use. 0= NETROM, 0xff Ethernet
@@ -122,7 +122,7 @@ typedef struct _ARPDATA
 	BOOL	LOCKED;					// Locked entry from config file
 	struct _MESSAGE * ARP_Q;		// CHAIN OF DATAGRAMS WAITING FOR RESOLUTION
 	struct _ROUTEENTRY * ARPROUTE;	// Route Entry for this ARP entry
-
+ 
 } ARPDATA, *PARPDATA;
 
 typedef struct _ROUTEENTRY
@@ -212,6 +212,7 @@ VOID DoARPTimer();
 UINT SENDNETFRAME;
 static VOID SendNetFrame(UCHAR * ToCall, UCHAR * FromCall, UCHAR * Block, DWORD Len, UCHAR Port);
 VOID ReadARP();
+VOID ReadIPRoutes();
 BOOL ProcessARPLine(char * buf, BOOL Locked);
 void IPResolveNames(void *dummy);
 int CheckSumAndSend(PIPMSG IPptr, PTCPMSG TCPmsg, USHORT Len);

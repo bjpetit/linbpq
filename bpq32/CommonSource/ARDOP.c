@@ -658,7 +658,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			{
 				TNC->Busy--;
 				if (TNC->Busy == 0)
-					MySetWindowText(TNC->xIDC_CHANSTATE, "Clear");
+					SetWindowText(TNC->xIDC_CHANSTATE, "Clear");
 					strcpy(TNC->WEB_CHANSTATE, "Clear");
 			}
 		}
@@ -678,7 +678,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				memcpy(TNC->Streams[0].RemoteCall, &TNC->ConnectCmd[8], strlen(TNC->ConnectCmd)-10);
 
 				sprintf(TNC->WEB_TNCSTATE, "%s Connecting to %s", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
-				MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+				SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				free(TNC->ConnectCmd);
 				TNC->BusyDelay = 0;
@@ -704,7 +704,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					free(TNC->ConnectCmd);
 
 					sprintf(TNC->WEB_TNCSTATE, "In Use by %s", TNC->Streams[0].MyCall);
-					MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+					SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 				}
 			}
@@ -1170,7 +1170,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (TNC->CONNECTED)
 		{
+			GetSemaphore(&Semaphore, 52);
 			ARDOPSendCommand(TNC, "CLOSE", FALSE);
+			FreeSemaphore(&Semaphore);
 			Sleep(100);
 		}
 		shutdown(TNC->WINMORSock, SD_BOTH);
@@ -1756,13 +1758,9 @@ Lost:
 
 				sprintf(Msg, "ARDOP Connection lost for Port %d\r\n", TNC->Port);
 				WritetoConsole(Msg);
-				
-				GetSemaphore(&Semaphore, 52);
 
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
-
-				FreeSemaphore(&Semaphore);
+				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
@@ -1838,9 +1836,7 @@ BOOL CALLBACK EnumARDOPWindowsProc(HWND hwnd, LPARAM  lParam)
 			 // Our Process
 
 			sprintf (wtext, "ARDOP Virtual TNC - BPQ %s", TNC->PortRecord->PORTCONTROL.PORTDESCRIPTION);
-			GetSemaphore(&Semaphore, 52);
-			MySetWindowText(hwnd, wtext);
-			FreeSemaphore(&Semaphore);
+			SetWindowText(hwnd, wtext);
 			return FALSE;
 		}
 	}
@@ -1867,7 +1863,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	
 	Buffer+=2;					// Skip c:
 
-	if (_memicmp(Buffer, "RDY", 3) == 0 || _memicmp(Buffer, "CRCFAULT", 8) == 0)
+	if (_memicmp(Buffer, "RDY", 3) == 0)
 	{
 		//	Command ACK. Remove from bufer and send next if any
 
@@ -1900,6 +1896,21 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	{
 		//	Command NAK. Resend 
 
+		UINT * buffptr;
+		UINT * Q;
+	
+		// Leave on Queue till acked
+
+		// Q may not be word aligned, so copy as bytes (for ARM5)
+
+		Q = (UINT *)&TNC->BPQtoWINMOR_Q;
+
+		buffptr = (UINT *)Q[0];
+
+		if (buffptr)
+			SendToTNC(TNC, (UCHAR *)&buffptr[2], buffptr[1]);
+
+		Debugprintf("ARDP CRCFAULT Received");
 		return;
 	}
 
@@ -2098,7 +2109,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			if (WL2K)
 				strcpy(SESS->RMSCall, WL2K->RMSCall);
 
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 			
 			// See which application the connect is for
 
@@ -2186,7 +2197,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 			else
 				sprintf(TNC->WEB_TNCSTATE, "%s Connected to %s Outbound", TNC->Streams[0].MyCall, TNC->Streams[0].RemoteCall);
 			
-			MySetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
+			SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
 
 			UpdateMH(TNC, Call, '+', 'O');
 			return;
@@ -2292,7 +2303,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 	//	Debugprintf("WINMOR RX: %s", Buffer);
 
 		strcpy(TNC->WEB_MODE, &Buffer[5]);
-		MySetWindowText(TNC->xIDC_MODE, &Buffer[5]);
+		SetWindowText(TNC->xIDC_MODE, &Buffer[5]);
 		return;
 	}
 
@@ -2323,7 +2334,7 @@ VOID ARDOPProcessResponse(struct TNCINFO * TNC, UCHAR * Buffer, int MsgLen)
 
 		TNC->WinmorRestartCodecTimer = time(NULL);
 
-		MySetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
+		SetWindowText(TNC->xIDC_PROTOSTATE, &Buffer[9]);
 		strcpy(TNC->WEB_PROTOSTATE,  &Buffer[9]);
 	
 		if (_memicmp(&Buffer[9], "DISCONNECTING", 13) == 0)	// So we can timout stuck discpending
@@ -2615,7 +2626,7 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 		{
 			memcpy(Call, &Data[3], 20);
 			strlop(Call, ':'); 
-			UpdateMH(TNC, Call, '!', 'O');
+			UpdateMH(TNC, Call, '!', 'I');
 		}
 		return;
 	}
@@ -2697,11 +2708,21 @@ VOID ARDOPProcessDataPacket(struct TNCINFO * TNC, UCHAR * Type, UCHAR * Data, in
 	{
 		if (strcmp(Type, "ARQ") == 0)
 		{
-			// Log to MH
-
 			if (Data[1] == '[')
 			{
-				int i = 1;
+				// Log to MH
+			
+				char Call[20];
+				char * ptr;
+
+				ptr = strchr(Data, ':');
+
+				if (ptr)
+				{
+					memcpy(Call, &ptr[2], 20);
+					strlop(Call, ' '); 
+					UpdateMH(TNC, Call, '!', 'I');
+				}
 			}
 		}
 	}

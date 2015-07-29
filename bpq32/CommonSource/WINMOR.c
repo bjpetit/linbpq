@@ -136,12 +136,8 @@ unsigned long _beginthread( void( *start_address )(), unsigned stack_size, int a
 UINT * WINMORTraceQ;
 UINT * SetWindowTextQ;
 
-VOID WritetoTraceSupport(UINT * Buffer)
+VOID WritetoTraceSupport(struct TNCINFO * TNC, char * Msg, int Len)
 {
-	struct TNCINFO * TNC = (struct TNCINFO * )Buffer[1];
-	int Len = Buffer[2];
-	char * Msg = (char *)&Buffer[3];
-
 	int index = 0;
 	UCHAR * ptr1 = Msg, * ptr2;
 	UCHAR Line[1000];
@@ -235,21 +231,34 @@ lineloop:
 	if (index > -1)
 		index=SendMessage(TNC->hMonitor, LB_SETCARETINDEX,(WPARAM) index, MAKELPARAM(FALSE, 0));
 #endif
-
-	ReleaseBuffer(Buffer);
 }
 
 VOID MySetWindowText(HWND hWnd, char * Msg)
 {
 #ifdef WIN32
-	UINT * buffptr = GetBuff();
 
-	if (buffptr == 0) return;			// No buffers, so ignore
+	UINT * buffptr;
+	BOOL Sem = FALSE;
 
-	buffptr[1] = (UINT)hWnd;
-	memcpy(&buffptr[2], Msg, strlen(Msg) + 1);
+	if (Semaphore.Flag == 0)
+	{
+		GetSemaphore(&Semaphore, 88);
+		Sem = TRUE;
+	}
 	
-	C_Q_ADD(&SetWindowTextQ, buffptr);
+	buffptr = GetBuff();
+
+	if (buffptr)
+	{
+		buffptr[1] = (UINT)hWnd;
+		memcpy(&buffptr[2], Msg, strlen(Msg) + 1);
+	
+		C_Q_ADD(&SetWindowTextQ, buffptr);
+	}
+
+	if (Sem)
+		FreeSemaphore(&Semaphore);
+
 #endif
 }
 
@@ -265,24 +274,43 @@ VOID SetWindowTextSupport(UINT * Buffer)
 
 VOID WritetoTrace(struct TNCINFO * TNC, char * Msg, int Len)
 {
-	//	It seems writing from multiple threads can cause problems
+	//	It seems writing from multiple threads can cause problems in Windows
 	//	Queue and process in main thread
-	
-	UINT * buffptr = GetBuff();
 
-	if (buffptr == 0) return;			// No buffers, so ignore
+#ifndef WIN32
 
-	if (Len > 340)
-		Len = 340;
-
-	buffptr[1] = (UINT)TNC;
-	buffptr[2] = (UINT)Len;
-	memcpy(&buffptr[3], Msg, Len + 1);	
-	
-	C_Q_ADD(&WINMORTraceQ, buffptr);
+	WritetoTraceSupport(TNC, Msg, Len);
 }
 
+#else
 
+	UINT * buffptr;
+	BOOL Sem = FALSE;
+
+	if (Semaphore.Flag == 0)
+	{
+		GetSemaphore(&Semaphore, 88);
+		Sem = TRUE;
+	}
+
+	buffptr = GetBuff();
+
+	if (buffptr)
+	{
+		if (Len > 340)
+			Len = 340;
+
+		buffptr[1] = (UINT)TNC;
+		buffptr[2] = (UINT)Len;
+		memcpy(&buffptr[3], Msg, Len + 1);	
+	
+		C_Q_ADD(&WINMORTraceQ, buffptr);
+	}
+
+	if (Sem)
+		FreeSemaphore(&Semaphore);
+}
+#endif
 
 static ProcessLine(char * buf, int Port)
 {
@@ -1642,8 +1670,9 @@ VOID WINMORThread(port)
    			i=sprintf(Msg, "Connect Failed for WINMOR socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
-
+			GetSemaphore(&Semaphore, 40);
+			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			FreeSemaphore(&Semaphore);
 			TNC->Alerted = TRUE;
 		}
 		
@@ -1704,7 +1733,9 @@ VOID WINMORThread(port)
 		else
 			sprintf(TNC->WEB_COMMSSTATE, "Connected to WINMOR TNC");
 		
-		SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		GetSemaphore(&Semaphore, 40);
+		MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+		FreeSemaphore(&Semaphore);
 
 	}
 	else
@@ -1755,8 +1786,10 @@ Lost:
 				WritetoConsole(Msg);
 				
 				sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-				SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
-
+				GetSemaphore(&Semaphore, 40);
+				MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+				FreeSemaphore(&Semaphore);
+			
 				TNC->CONNECTED = FALSE;
 				TNC->Alerted = FALSE;
 
@@ -1779,7 +1812,9 @@ Lost:
 			WritetoConsole(Msg);
 
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC lost");
-			SetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			GetSemaphore(&Semaphore, 40);
+			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
+			FreeSemaphore(&Semaphore);
 	
 			TNC->CONNECTED = FALSE;
 			TNC->Alerted = FALSE;

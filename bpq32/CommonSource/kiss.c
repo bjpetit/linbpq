@@ -50,8 +50,18 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //#include <netax25/ttyutils.h>
 //#include <netax25/daemon.h>
 
-#ifndef NOI2C
-#include "linux/i2c-dev.h"
+#ifdef NOI2C
+int i2c_smbus_write_byte()
+{
+	return -1;
+}
+
+int i2c_smbus_read_byte()
+{
+	return -1;
+}
+#else
+#include "i2c-dev.h"
 #endif
 
 //#define I2C_TIMEOUT	0x0702	/* set timeout - call with int 		*/
@@ -1506,7 +1516,7 @@ VOID ConnecttoUZ7HOTCPThread(NPASYINFO ASY)
 	u_long param=1;
 	BOOL bcopt=TRUE;
 	SOCKET sock;
-	struct hostent * HostEnt;
+//	struct hostent * HostEnt;
 	SOCKADDR_IN sinx; 
 	int addrlen=sizeof(sinx);
 

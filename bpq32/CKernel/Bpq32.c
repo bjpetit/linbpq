@@ -710,9 +710,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Try to reopen Rig Control port if it fails (could be unplugged USB)
 //	Fix restoring position of Monitor Window
 //	Stop Codec on Winmor and ARDOP when an interlocked port is attached (instead of listen false)
-//	Support APRS beacons in RP mode on Dragon
+//	Support APRS beacons in RP mode on Dragon//
 //	Change Virtual MAC address on IPGateway to include last octet of IP Address
-
+//	Fix "NOS Fragmentation" in IP over ax.25 Virtual Circuit Mode
+//	Fix sending I frames before L2 session is up
+//	Fix Flow control on Telent outbound sessions.
 
 #define CKernel
 
@@ -892,7 +894,7 @@ DllExport int APIENTRY RXCount(int Stream);
 DllExport int APIENTRY TXCount(int Stream);
 DllExport int APIENTRY MONCount(int Stream);
 DllExport int APIENTRY GetCallsign(int stream, char * callsign);
-
+DllExport VOID APIENTRY RelBuff(VOID * Msg);
 
 char EXCEPTMSG[80] = "";
 
@@ -1097,6 +1099,7 @@ HANDLE Mutex;
 
 BOOL PartLine = FALSE;
 int pindex = 0;
+DWORD * WritetoConsoleQ;
 
 VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dwTime);
 
@@ -1416,7 +1419,10 @@ VOID MonitorTimerThread(int x)
 			CheckforLostProcesses();		// Normally only done in timer thread, which is now dead
 
 			// Timer can only run in BPQ32.exe
-			
+
+			TimerInst=0xffffffff;			// So we dont keep doing it
+			TimerHandle = 0;				// So new process attaches
+
 			if (Closing == FALSE && AttachingProcess == FALSE)
 			{
 				OutputDebugString("BPQ32 Reloading BPQ32.exe\n");
@@ -1430,14 +1436,21 @@ VOID MonitorTimerThread(int x)
 	} while (TRUE);
 }
 
-VOID WritetoTraceSupport(UINT * Buffer);
+VOID WritetoTraceSupport(struct TNCINFO * TNC, char * Msg, int Len);
 
-VOID CALLBACK TimerProc
-(
-    HWND  hwnd,	// handle of window for timer messages 
+VOID TimerProcX();
+
+VOID CALLBACK TimerProc(
+	HWND  hwnd,	// handle of window for timer messages 
     UINT  uMsg,	// WM_TIMER message
     UINT  idEvent,	// timer identifier
     DWORD  dwTime)	// current system time	
+{
+ 	KillTimer(NULL,TimerHandle);
+	TimerProcX();
+	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
+}
+VOID TimerProcX()
 {
 	struct _EXCEPTION_POINTERS exinfo;
 
@@ -1452,13 +1465,25 @@ VOID CALLBACK TimerProc
 	while (WINMORTraceQ)
 	{
 		UINT * Buffer = Q_REM(&WINMORTraceQ);
-		WritetoTraceSupport(Buffer);
+		struct TNCINFO * TNC = (struct TNCINFO * )Buffer[1];
+		int Len = Buffer[2];
+		char * Msg = (char *)&Buffer[3];
+
+		WritetoTraceSupport(TNC, Msg, Len);
+		RelBuff(Buffer);
 	}
 
 	while (SetWindowTextQ)
 	{
 		UINT * Buffer = Q_REM(&SetWindowTextQ);
 		SetWindowTextSupport(Buffer);
+	}
+
+	while (WritetoConsoleQ)
+	{
+		UINT * Buffer = Q_REM(&WritetoConsoleQ);
+		WritetoConsoleSupport(&Buffer[2]);
+		RelBuff(Buffer);
 	}
 
 	strcpy(EXCEPTMSG, "Timer ReconfigProcessing");
@@ -1723,9 +1748,6 @@ FirstInit()
 	}
 	INITIALISEPORTS();
 
-	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
-	TimerInst=GetCurrentProcessId();
-
 	OpenReportingSockets();
 
  	WritetoConsole("\n");
@@ -1776,6 +1798,10 @@ FirstInit()
 
 	_beginthread(MonitorThread,0,0);
 	
+	TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
+	TimerInst=GetCurrentProcessId();
+	SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
+
 	OutputDebugString("BPQ32 Port Initialisation Complete\n");
 
 	return 0;
@@ -1786,10 +1812,12 @@ Check_Timer()
 	if (Closing)
 		return 0;
 
-	GetSemaphore(&Semaphore, 3);
+	if (Semaphore.Flag)
+		return 0;
 
 	if (InitDone == -1)
 	{
+		GetSemaphore(&Semaphore, 3);
 		Sleep(15000);
 		FreeSemaphore(&Semaphore);
 		exit (0);
@@ -1797,15 +1825,17 @@ Check_Timer()
 
 	if (FirstInitDone == 0)
 	{
+		GetSemaphore(&Semaphore, 3);
+
 		if (_stricmp(pgm, "bpq32.exe") == 0)
 		{
-			FirstInitDone=1;					// Only init in BPQ32.exe
 			FirstInit();
 			FreeSemaphore(&Semaphore);
 			if (NUMBEROFTNCPORTS)
 				InitializeTNCEmulator();
 
 			AGWActive = AGWAPIInit();
+			FirstInitDone=1;					// Only init in BPQ32.exe
 			return 0;
 		}
 		else
@@ -1815,7 +1845,7 @@ Check_Timer()
 		}
 	}
 
-	if (TimerHandle == 0)
+	if (TimerHandle == 0 && FirstInitDone == 1)
 	{
 	    WSADATA       WsaData;            // receives data from WSAStartup
 		HINSTANCE ExtDriver=0;
@@ -1825,10 +1855,10 @@ Check_Timer()
 
 		if (_stricmp(pgm, "bpq32.exe") != 0)
 		{
-			FreeSemaphore(&Semaphore);
 			return 0;
 		}
 
+		GetSemaphore(&Semaphore, 3);
 		OutputDebugString("BPQ32 Reinitialising External Ports and Attaching Timer\n");
 
 		if (!ProcessConfig())
@@ -1884,9 +1914,6 @@ Check_Timer()
 
 		WritetoConsole("\n\nPort Reinitialisation Complete\n");
 
-		TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
-		TimerInst=GetCurrentProcessId();
-
 		BPQMsg = RegisterWindowMessage(BPQWinMsg);
 
 		CreateMutex(NULL,TRUE,"BPQLOCKMUTEX");
@@ -1931,7 +1958,7 @@ Check_Timer()
 			InitializeTNCEmulator();
 
 		AGWActive = AGWAPIInit();
-	
+
 		if (StartMinimized)
 			if (MinimizetoTray)
 				ShowWindow(FrameWnd, SW_HIDE);
@@ -1940,11 +1967,13 @@ Check_Timer()
 		else
 			ShowWindow(FrameWnd, SW_RESTORE);
 
-		return (1);
+		TimerHandle=SetTimer(NULL,0,100,lpTimerFunc);
+		TimerInst=GetCurrentProcessId();
+		SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
 
+		return (1);
 	}
 
-	FreeSemaphore(&Semaphore);
 	return (0);
 }
 
@@ -2286,6 +2315,8 @@ SkipInit:
 			IncludesChat = FALSE;
 
 		ProcessID=GetCurrentProcessId();
+
+		Debugprintf("BPQ32 Process %d Detaching", ProcessID); 
 		
 		// Release any streams that the app has failed to release
 
@@ -4093,7 +4124,6 @@ int SetupConsoleWindow()
 
 
 	LoadLibrary("riched20.dll");
-	SessHandle = SetTimer(NULL, 0, 5000, lpSetupTermSessions);
 
 	if (StartMinimized)
 		if (MinimizetoTray)
@@ -4606,13 +4636,37 @@ DllExport int APIENTRY WritetoConsole(char * buff)
 	return WritetoConsoleLocal(buff);
 }
 
+DllExport VOID * APIENTRY GetBuff();
+#define C_Q_ADD(s, b) _C_Q_ADD(s, b, __FILE__, __LINE__)
+
 int WritetoConsoleLocal(char * buff)
 {
 	int len=strlen(buff);
+	UINT * buffptr;
+
+	if (Semaphore.Flag == 0)
+		return WritetoConsoleSupport(buff);
+
+	buffptr = GetBuff();
+	if (buffptr == 0)	// No buffers, so send direct
+		return WritetoConsoleSupport(buff);
+
+	if (len > 300)
+		len = 300;
+
+	memcpy(&buffptr[2], buff, len + 1);
+	
+	C_Q_ADD(&WritetoConsoleQ, buffptr);
+
+	return 0;
+}
+
+int WritetoConsoleSupport(char * buff)
+{
+
+	int len=strlen(buff);
 	char Temp[2000]= "";
 	char * ptr;
-
-//	Debugprintf(buff);
 
 	if (PartLine)
 	{
@@ -5484,7 +5538,8 @@ LRESULT CALLBACK StatusWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lP
 	{
 	case WM_TIMER:
 
-		DoStatus();
+		if  (Semaphore.Flag == 0)
+			DoStatus();
 		break;
 
 	case WM_MDIACTIVATE:

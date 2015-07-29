@@ -43,8 +43,6 @@ Stuff to make compiling on WINDOWS and LINUX easier
 
 #define pthread_t DWORD
 
-#define pthread_self GetCurrentThreadId
-
 int pthread_equal(pthread_t T1, pthread_t T2);
 
 #else
@@ -142,6 +140,7 @@ char * strlwr(char* s);
 #define GetLastError() errno 
 #define closesocket close
 #define GetCurrentProcessId getpid
+#define GetCurrentThreadId pthread_self
 
 char * inet_ntoa(struct in_addr in);
 

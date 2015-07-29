@@ -1958,7 +1958,7 @@ HANDLE OpenCOMPort(VOID * pPort, int speed, BOOL SetDTR, BOOL SetRTS, BOOL Quiet
 			else
 				sprintf(buf," %s could not be opened \r\n ", pPort);
 
-			WritetoConsoleLocal(buf);
+	//		WritetoConsoleLocal(buf);
 			OutputDebugString(buf);
 		}
 		return (FALSE);
@@ -3009,6 +3009,7 @@ loop1:
 
 	Semaphore->Gets++;
 	Semaphore->SemProcessID = GetCurrentProcessId();
+	Semaphore->SemThreadID = GetCurrentThreadId();
 	SemHeldByAPI = ID;
 
 	return;
@@ -3079,13 +3080,13 @@ VOID ResolveUpdateThread()
 	struct hostent * HostEnt1;
 	struct hostent * HostEnt2;
 
-	ResolveUpdateThreadId = pthread_self();
+	ResolveUpdateThreadId = GetCurrentThreadId();
 
 	while (TRUE)
 	{
-		if (pthread_equal(ResolveUpdateThreadId, pthread_self()) == FALSE)
+		if (pthread_equal(ResolveUpdateThreadId, GetCurrentThreadId()) == FALSE)
 		{
-			Debugprintf("Resolve Update thread %x redundant - closing", pthread_self());
+			Debugprintf("Resolve Update thread %x redundant - closing", GetCurrentThreadId());
 			return;
 		}
 

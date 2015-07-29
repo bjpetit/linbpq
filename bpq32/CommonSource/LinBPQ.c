@@ -1135,6 +1135,9 @@ int main(int argc, char * argv[])
 	if (AUTOSAVE)
 		SaveNodes();
 
+	if (IPActive)
+		IPClose();
+
 	return 0;
 }
 
