@@ -714,7 +714,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Change Virtual MAC address on IPGateway to include last octet of IP Address
 //	Fix "NOS Fragmentation" in IP over ax.25 Virtual Circuit Mode
 //	Fix sending I frames before L2 session is up
-//	Fix Flow control on Telent outbound sessions.
+//	Fix Flow control on Telnet outbound sessions.
+//	Fix reporting of unterminatred comments in config
 
 #define CKernel
 

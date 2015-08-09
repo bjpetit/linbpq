@@ -4573,9 +4573,9 @@ CheckServers:
 	
 #ifndef LINBPQ
 	if (TCP->CMSOK)
-		SetWindowText(TCP->hCMSWnd, "CMS OK"); 
+		MySetWindowText(TCP->hCMSWnd, "CMS OK"); 
 	else
-		SetWindowText(TCP->hCMSWnd, "NO CMS"); 
+		MySetWindowText(TCP->hCMSWnd, "NO CMS"); 
 #endif
 	return TRUE;
 }

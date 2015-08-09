@@ -594,7 +594,7 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	{
 	case 1:				// poll
 
-		while (TNC->PortRecord->UI_Q)			// Release anything accidentally put on UI_Q
+		while (TNC->PortRecord->UI_Q)
 		{
 			int datalen;
 			char * Buffer;

@@ -270,6 +270,7 @@ BOOL ToLOC(double Lat, double Lon , char * Locator);
 
 int FIRSTAPPL=1;
 BOOL Comment = FALSE;
+int CommentLine = 0;
 
 #define MAXLINE 512
 #define FILEVERSION 22
@@ -625,7 +626,7 @@ BOOL ProcessConfig()
 
 	if (Comment)
 	{
-		Consoleprintf("\nUnterminated Comment (Missing */)");
+		Consoleprintf("Unterminated Comment (Missing */) at line %d", CommentLine);
 		heading = 1;
 	}
 
@@ -782,6 +783,7 @@ char rec[];
 				if (memcmp(rec, "/*", 2) == 0)
 				{
 					Comment = TRUE;
+					CommentLine = LineNo;
 					goto NextAPRS;
 				}
 				else if (memcmp(rec, "*/", 2) == 0)
@@ -1802,7 +1804,10 @@ int GetNextLine(char *rec)
 
 		if (strlen(rec) > 1)
 			if (memcmp(rec, "/*",2) == 0)
+			{
 				Comment = TRUE;
+				CommentLine = LineNo;
+			}
 			else
 				if (memcmp(rec, "*/",2) == 0)
 				{

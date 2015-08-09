@@ -6341,12 +6341,12 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 			
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
 
-#ifdef LINBPQ
+//#ifdef LINBPQ
 			{
 				BPQVECSTRUC * SESS;	
 				SESS = &BPQHOSTVECTOR[conn->BPQStream - 1];
 
-				if (SESS == NULL)
+				if (SESS->HOSTSESSION == NULL)
 				{
 					Logprintf(LOG_BBS, NULL, '|', "No L4 Sessions for connect to BBS %s", user->Call);
 					return FALSE;
@@ -6354,7 +6354,7 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 
 				SESS->HOSTSESSION->Secure_Session = 1;
 			}
-#endif
+//#endif
 
 			strcpy(conn->Callsign, user->Call);
 
@@ -6916,10 +6916,15 @@ CheckForSID:
 		{
 			// Build a ;FW: line with all calls with PollRMS Set
 
+			// According to Lee if you use secure login the first
+			// must be the BBS call
+
 			int i, s;
-			char FWLine[10000] = ";FW:";
+			char FWLine[10000] = ";FW: ";
 			struct UserInfo * user;
 			char RMSCall[20];
+
+			strcat (FWLine, BBSName);
 			
 			for (i = 0; i <= NumberofUsers; i++)
 			{
@@ -6937,11 +6942,12 @@ CheckForSID:
 							if (s)
 							{
 								sprintf(RMSCall, "%s-%d", user->Call, s);
-								strcat(FWLine, RMSCall);
+								if (strcmp(RMSCall, BBSName) != 0)
+									strcat(FWLine, RMSCall);
 							}
 							else
-								strcat(FWLine, user->Call);
-							
+								if (strcmp(user->Call, BBSName) != 0)
+									strcat(FWLine, user->Call);
 						}
 					}
 				}

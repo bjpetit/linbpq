@@ -2134,6 +2134,13 @@ doHeader:
 		ReplyLen += sprintf(&_REPLYBUFFER[ReplyLen], PortStatsHddr, PortNo);
 		
 		Port = (struct _EXTPORTDATA *)GetPortTableEntryFromPortNum(PortNo);
+		
+		if (Port == NULL)
+		{
+			ReplyLen = sprintf(_REPLYBUFFER, "Invalid Port");
+			goto SendResp;
+		}
+		
 		Protocol = Port->PORTCONTROL.PROTOCOL;
 		PortType = Port->PORTCONTROL.PROTOCOL;
 

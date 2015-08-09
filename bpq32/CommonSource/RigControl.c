@@ -191,13 +191,13 @@ VOID Rig_PTT(struct RIGINFO * RIG, BOOL PTTState)
 
 	if (PTTState)
 	{
-		SetWindowText(RIG->hPTT, "T");
+		MySetWindowText(RIG->hPTT, "T");
 		RIG->WEB_PTT = 'T';
 		RIG->PTTTimer = PTTLimit;
 	}
 	else
 	{
-		SetWindowText(RIG->hPTT, "");
+		MySetWindowText(RIG->hPTT, "");
 		RIG->WEB_PTT = ' ';
 		RIG->PTTTimer = 0;
 	}

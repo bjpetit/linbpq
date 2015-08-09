@@ -138,6 +138,7 @@ VOID ProcessEthARPMsg(PETHARP arpptr, BOOL FromTAP);
 VOID WriteIPRLine(PROUTEENTRY RouteRecord, FILE * file);
 int CountBits(unsigned long in);
 VOID SendARPMsg(PARPDATA ARPptr, BOOL ToTAP);;
+BOOL DecodeCallString(char * Calls, BOOL * Stay, BOOL * Spy, UCHAR * AXCalls);
 
 #define ARPTIMEOUT 3600
 
@@ -162,11 +163,14 @@ time_t LastRIP44Msg = 0;
 //HANDLE hBPQNET = INVALID_HANDLE_VALUE;
 
 ULONG OurIPAddr = 0;
+char IPAddrText[20];			// Text form of Our Address
+
 ULONG EncapAddr = INADDR_NONE;	// Virtual Host for IPIP PCAP Mode.
+char EncapAddrText[20];			// Text form of Our Address
+
 UCHAR RouterMac[6] = {0};		// Mac Address of our Internet Gateway.
 
 //ULONG HostIPAddr = INADDR_NONE;	// Makes more sense to use same addr for host
-char IPAddrText[20];			// Text form of Our Address
 
 ULONG HostNATAddr = INADDR_NONE;	// LAN address (not 44 net) of our host
 char HostNATAddrText[20];
@@ -301,9 +305,8 @@ BOOL Check44Route(int Interface)
 {
 	PMIB_IPFORWARDTABLE pIpForwardTable = NULL;
 	PMIB_IPFORWARDROW Row;
-	int ret;
 	int Size = 0;
-	int n;
+	DWORD n;
 
 	//	First call gets the required size
 
@@ -699,7 +702,7 @@ Dll BOOL APIENTRY Init_IP()
 #pragma warning(pop)
 						Setup44Route(Interface, "0.0.0.0");
 					else
-						Setup44Route(Interface, HostNATAddrText);
+						Setup44Route(Interface, EncapAddrText);
 					
 					Sleep(2000);
 					if (Check44Route(Interface))	
@@ -1269,17 +1272,22 @@ VOID Send_AX_Connected(VOID * Block, DWORD Len, UCHAR Port, UCHAR * HWADDR)
 		*p = fragno--;
 	
 		if (first)
-		{
 			*p |= SEG_FIRST;
-			first = 0;
-		}
 
 		txlen = (PACLEN > Len) ? Len : PACLEN;
 
 		Debugprintf("Send IP to VC Fragment, Len = %d", txlen);
 
-		SendNetFrame(HWADDR, MYCALL, p-23, txlen+18, Port); 
+		// Sobsequent fragments only add one byte (the PID is left in place)
 
+		if (first)
+			SendNetFrame(HWADDR, MYCALL, p-23, txlen+18, Port); 
+		else
+		{
+			SendNetFrame(HWADDR, MYCALL, p-23, txlen+17, Port);  // only one frag byte
+			p--;
+		}
+		first = 0;
 		p += (txlen);
 		Len -= txlen;
 	}
@@ -2058,6 +2066,8 @@ ForUs:
 		Len = ntohs(IPptr->IPLENGTH);
 		Len-=20;
 
+		Debugprintf("FORUS ICMP Type %d", ICMPptr->ICMPTYPE);
+
 		if (Len == 28 && ICMPptr->ICMPTYPE == 0 && memcmp(ICMPptr->ICMPData, "*BPQ", 4) == 0)
 		{
 			// Probably our response
@@ -2643,6 +2653,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 		{
 			char Msg[80];
 			int ptr;
+			IPLen =  htons(IPptr->IPLENGTH);
 			
 			ptr = sprintf(Msg, "NAT %s to ", FormatIP(IPptr->IPDEST.addr));
 			sprintf(&Msg[ptr], "%s\n", FormatIP(NAT->mappedipaddr));
@@ -2653,7 +2664,7 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 
 			if (IPptr->IPPROTOCOL == 6)
 				RecalcTCPChecksum(IPptr);
-			else if (IPptr->IPPROTOCOL == 11)
+			else if (IPptr->IPPROTOCOL == 17)
 				RecalcUDPChecksum(IPptr);
 			else if (IPptr->IPPROTOCOL == 1)
 			{
@@ -2665,11 +2676,27 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 				if (ICMPptr->ICMPTYPE == 3 || ICMPptr->ICMPTYPE == 11)
 				{
 					PIPMSG IPptr = (PIPMSG)ICMPptr->ICMPData;
+
+					Debugprintf("NAT ICMP Unreachable or Time Exceeded %d", ICMPptr->ICMPTYPE); 
 					IPptr->IPSOURCE.addr = NAT->mappedipaddr;
+
+					// Dest could also need to be de-natted
+
+					for (index=0; index < nat_table_len; index++)
+					{
+						NAT = &nat_table[index];
+		
+						if (NAT->mappedipaddr == IPptr->IPDEST.addr)
+						{
+							IPptr->IPDEST.addr = NAT->origipaddr;
+							break;
+						}
+					}
+
 					IPptr->IPCHECKSUM = 0;
 					IPptr->IPCHECKSUM = Generate_CHECKSUM(IPptr, 20);
 					ICMPptr->ICMPCHECKSUM = 0;
-					ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, 36);
+					ICMPptr->ICMPCHECKSUM = Generate_CHECKSUM(ICMPptr, IPLen - 20);
 				}
 			}
 
@@ -3239,6 +3266,8 @@ static ProcessLine(char * buf)
 
 		EncapAddr = inet_addr(p_value);
 
+		strcpy(EncapAddrText, p_value);
+
 		if (EncapAddr != INADDR_NONE)
 		{
 			int a,b,c,d,e,f,num;
@@ -3516,7 +3545,7 @@ VOID DoRouteTimer()
 		if (Route->RIPTIMOUT)
 			Route->RIPTIMOUT--;
 
-		if (Route->TYPE == 'T' && Route->RIPTIMOUT == 0)
+		if (Route->TYPE == 'T' && Route->RIPTIMOUT == 0 && Route->LOCKED == FALSE)
 		{
 			// Only remove Encap routes if we are still getting RIP44 messages,
 			// so we can keep going if UCSD stops sending updates, but can time 
@@ -4266,7 +4295,7 @@ VOID RecalcUDPChecksum(PIPMSG IPptr)
 	USHORT Len = ntohs(IPptr->IPLENGTH);
 	Len-=20;
 
-	PH.IPPROTOCOL = 6;
+	PH.IPPROTOCOL = 17;
 	PH.LENGTH = htons(Len);
 	memcpy(&PH.IPSOURCE, &IPptr->IPSOURCE, 4);
 	memcpy(&PH.IPDEST, &IPptr->IPDEST, 4);
@@ -4704,6 +4733,8 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 	char Nexthop[20];
 	char Encap[20];
 	char *Context;
+	char Reply[128];
+	char UCReply[128];
 
 	unsigned char work[4];
 
@@ -4729,13 +4760,6 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 			memcpy(work, &RouteRecord->NETWORK, 4);
 			sprintf(Net, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
-			// Treat any parameter as a "Find Filter"
-
-			CmdTail = strtok_s(CmdTail, " ", &Context);
-
-			if (CmdTail && CmdTail[0] && memcmp(Net, CmdTail, strlen(CmdTail)) != 0)
-				continue;
-
 			memcpy(work, &RouteRecord->GATEWAY, 4);
 			sprintf(Nexthop, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
@@ -4743,17 +4767,28 @@ VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMD
 			sprintf(Encap, "%d.%d.%d.%d", work[0], work[1], work[2], work[3]);
 
 			if (RouteRecord->TYPE == 'T')
-				Bufferptr += sprintf(Bufferptr, "%s/%d %d %s %c %d %d encap %s\r",
+				sprintf(Reply, "%s/%d %d %c %d %d encap %s\r",
 					Net, CountBits(RouteRecord->SUBNET),
-					RouteRecord->FRAMECOUNT, Nexthop, RouteRecord->TYPE,
+					RouteRecord->FRAMECOUNT, RouteRecord->TYPE,
 					RouteRecord->METRIC, RouteRecord->RIPTIMOUT, Encap);
 			else
-				Bufferptr += sprintf(Bufferptr, "%s/%d %d %s %c %d %d %s\r",
+				sprintf(Reply, "%s/%d %d %s %c %d %d %s\r",
 					Net, CountBits(RouteRecord->SUBNET),
 					RouteRecord->FRAMECOUNT, Nexthop, RouteRecord->TYPE,
 					RouteRecord->METRIC, RouteRecord->RIPTIMOUT,
 					RouteRecord->LOCKED?"Locked":"");
 		}
+
+		// Treat any parameter as a "Find Filter"
+
+		CmdTail = strtok_s(CmdTail, " ", &Context);
+		strcpy(UCReply, Reply);
+		_strupr(UCReply);
+
+		if (CmdTail && CmdTail[0] && strstr(UCReply, CmdTail) == 0)
+			continue;
+	
+		Bufferptr += sprintf(Bufferptr, "%s", Reply);
 	}
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);

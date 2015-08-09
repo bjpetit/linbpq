@@ -1624,13 +1624,25 @@ VOID PROC_I_FRAME(struct _LINKTABLE * LINK, struct PORTCONTROL * PORT, MESSAGE *
 	case 0xcd:
 		
 		// IP Message
-	
+
+		if (n < 8)			// If digis, move data back down buffer
+		{
+			memmove(&Buffer->PID, &EOA[2], Length);
+			Buffer->LENGTH -= (&EOA[2] - &Buffer->PID);
+		}
+
 		Q_IP_MSG( Buffer);
 		break;
 
 	case 8:
 
 		// NOS FRAGMENTED IP
+
+		if (n < 8)			// If digis, move data back down buffer
+		{
+			memmove(&Buffer->PID, &EOA[2], Length);
+			Buffer->LENGTH -= (&EOA[2] - &Buffer->PID);
+		}
 
 		C_Q_ADD(&LINK->L2FRAG_Q, Buffer);
 
