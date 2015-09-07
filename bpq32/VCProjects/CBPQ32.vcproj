@@ -452,19 +452,11 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CInclude\Environ.inc"
-				>
-			</File>
-			<File
 				RelativePath="S:\DEV\Source\BPQ32\CKernel\kernelresource.h"
 				>
 			</File>
 			<File
 				RelativePath="S:\DEV\Source\BPQ32\CInclude\Strucs.inc"
-				>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\tncinfo.h"
 				>
 			</File>
 		</Filter>
