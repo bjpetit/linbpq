@@ -125,6 +125,12 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC);
 
 VOID PTCSuspendPort(struct TNCINFO * TNC);
 VOID PTCReleasePort(struct TNCINFO * TNC);
+int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
+
+#define	FEND	0xC0	// KISS CONTROL CODES 
+#define	FESC	0xDB
+#define	TFEND	0xDC
+#define	TFESC	0xDD
 
 #ifdef WRITELOG
 static HANDLE LogHandle[32] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
@@ -266,6 +272,9 @@ ConfigLine:
 			TNC->Dragon = TRUE;
 			if (_memicmp(&buf[7], "SINGLE", 6) == 0)
 				TNC->DragonSingle = TRUE;
+
+			if (_memicmp(&buf[7], "KISS", 4) == 0)
+				TNC->DragonKISS = TRUE;
 		}
 		else
 		if (_memicmp(buf, "DEFAULT ROBUST", 14) == 0)
@@ -1127,10 +1136,10 @@ void SCSCheckRX(struct TNCINFO * TNC)
 
 BOOL WriteCommBlock(struct TNCINFO * TNC)
 {
-	WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
+	BOOL ret = WriteCOMBlock(TNC->hDevice, TNC->TXBuffer, TNC->TXLen);
 
 	TNC->Timeout = 20;				// 2 secs
-	return TRUE;
+	return ret;
 }
 
 VOID SCSPoll(int Port)
@@ -1389,7 +1398,22 @@ VOID SCSPoll(int Port)
 			int len;
 
 			start = TNC->Streams[Stream].CmdSet;
+			
+			if (*(start) == 250)			// 2nd part of long KISS packet
+			{
+				len = start[1];
+				
+				Poll[2] = 250;				// KISS Channel
+				Poll[3] = 0;				// Data
+				Poll[4] = len - 1;
+				memcpy(&Poll[5], &start[2], len);
 		
+				CRCStuffAndSend(TNC, Poll, len + 5);
+
+				free(TNC->Streams[Stream].CmdSave);
+				TNC->Streams[Stream].CmdSet = NULL;
+			}
+
 			if (*(start) == 0)			// End of Script
 			{
 				free(TNC->Streams[Stream].CmdSave);
@@ -1541,6 +1565,50 @@ VOID SCSPoll(int Port)
 							
 		// Buffer has an ax.25 header, which we need to pick out and set as channel 0 Connect address
 		// before sending the beacon
+
+		// If a Dragon with KISS over Hostmade we can just send it
+
+		if (TNC->DragonKISS)
+		{
+			int EncLen;
+
+			Poll[2] = 250;				// KISS Channel
+			Poll[3] = 0;				// CMD
+			Poll[4] = datalen + 2;		// 3 extrac chars, but need Len - 1
+			Poll[5] = 192;				// Fend
+			Poll[6] = 0;
+
+			EncLen = KissEncode(&Poll[5], Buffer, datalen);
+
+			// We can only send 256 bytes in HostMode, so if longer will
+			// have to fragemt
+
+			if (EncLen > 256)
+			{
+				//We have to wait for response before sending rest, so use CmdSet
+
+				// We need to save the extra first, as CRC will overwrite the first two bytes
+
+				UCHAR * ptr = TNC->Streams[0].CmdSet = TNC->Streams[0].CmdSave = zalloc(400);
+		
+				(*ptr++) = 250;			// KISS Channel
+				(*ptr++) = EncLen - 256;
+				memcpy(ptr, &Poll[5 + 256], EncLen - 256);
+
+				// Send first 256
+
+				Poll[4] = 255;			//need Len - 1
+				CRCStuffAndSend(TNC, Poll, 261);	
+			}
+			else
+			{
+				Poll[4] = EncLen - 1;	//need Len - 1
+				CRCStuffAndSend(TNC, Poll, EncLen + 5);	
+			}
+
+			ReleaseBuffer((UINT *)buffptr);
+			return;
+		}
 
 		// We also need to set Chan 0 Mycall so digi'ing can work, and put
 		// it back after so incoming calls will work
@@ -1930,7 +1998,12 @@ VOID DoTNCReinit(struct TNCINFO * TNC)
 		Poll[1] = 0x1B;
 		TNC->TXLen = 2;
 
-		WriteCommBlock(TNC);
+		if (WriteCommBlock(TNC) == FALSE)
+		{
+			CloseCOMPort(TNC->hDevice);
+			OpenCOMMPort(TNC, TNC->PortRecord->PORTCONTROL.SerialPortName, TNC->PortRecord->PORTCONTROL.BAUDRATE, TRUE);
+		}
+
 		TNC->Retries = 1;
 	}
 

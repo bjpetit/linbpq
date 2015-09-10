@@ -431,7 +431,8 @@ struct UserInfo
 	struct MsgStats Total;
 	struct MsgStats	Last;
 	
-	char Filler[64];			// So we can add a few fields wirhout another resize
+	char CMSPass[16];			// For Secure Signon
+	char Filler[48];			// So we can add a few fields wirhout another resize
 };
 
 // flags equates
@@ -1127,7 +1128,7 @@ VOID __cdecl Logprintf(int LogMode, CIRCUIT * conn, int InOut, const char * form
 
 VOID SortBBSChain();
 VOID ExpandAndSendMessage(CIRCUIT * conn, char * Msg, int LOG);
-int ImportMessages(CIRCUIT * conn, char * FN);
+int ImportMessages(CIRCUIT * conn, char * FN, BOOL Nopopup);
 
 // TCP Routines
 

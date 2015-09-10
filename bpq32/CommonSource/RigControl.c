@@ -799,53 +799,58 @@ portok:
 	case FT100:
 	case FT990:
 	case FT1000:
-			
-		if (n < 3)
-		{
-			strcpy(Command, "Sorry - Invalid Format - should be Port Freq Mode\r");
-			return FALSE;
-		}
 
-		if (PORT->PortType == FT100)
-		{
-			for (ModeNo = 0; ModeNo < 8; ModeNo++)	
-			{
-				if (_stricmp(FT100Modes[ModeNo], Mode) == 0)
-					break;
-			}
-
-			if (ModeNo == 8)
-			{
-				sprintf(Command, "Sorry -Invalid Mode\r");
-				return FALSE;
-			}
-		}
-		else if (PORT->PortType == FT990)
-		{
-			for (ModeNo = 0; ModeNo < 12; ModeNo++)	
-			{
-				if (_stricmp(FT990Modes[ModeNo], Mode) == 0)
-					break;
-			}
-
-			if (ModeNo == 12)
-			{
-				sprintf(Command, "Sorry -Invalid Mode\r");
-				return FALSE;
-			}
-		}
+		if (n == 2)			// Set Freq Only
+			ModeNo = -1;
 		else
 		{
-			for (ModeNo = 0; ModeNo < 12; ModeNo++)	
+			if (n < 3)
 			{
-				if (_stricmp(FT1000Modes[ModeNo], Mode) == 0)
-					break;
-			}
-
-			if (ModeNo == 12)
-			{
-				sprintf(Command, "Sorry -Invalid Mode\r");
+				strcpy(Command, "Sorry - Invalid Format - should be Port Freq Mode\r");
 				return FALSE;
+			}
+		
+			if (PORT->PortType == FT100)
+			{
+				for (ModeNo = 0; ModeNo < 8; ModeNo++)	
+				{
+					if (_stricmp(FT100Modes[ModeNo], Mode) == 0)
+						break;
+				}
+
+				if (ModeNo == 8)
+				{
+					sprintf(Command, "Sorry -Invalid Mode\r");
+					return FALSE;
+				}
+			}
+			else if (PORT->PortType == FT990)
+			{
+				for (ModeNo = 0; ModeNo < 12; ModeNo++)	
+				{
+					if (_stricmp(FT990Modes[ModeNo], Mode) == 0)
+						break;
+				}
+
+				if (ModeNo == 12)
+				{
+					sprintf(Command, "Sorry -Invalid Mode\r");
+					return FALSE;
+				}
+			}
+			else
+			{
+				for (ModeNo = 0; ModeNo < 12; ModeNo++)	
+				{
+					if (_stricmp(FT1000Modes[ModeNo], Mode) == 0)
+						break;
+				}
+
+				if (ModeNo == 12)
+				{
+					sprintf(Command, "Sorry -Invalid Mode\r");
+					return FALSE;
+				}
 			}
 		}
 
@@ -869,11 +874,25 @@ portok:
 
 		// Send Mode then Freq - setting Mode seems to change frequency
 
-		*(Poll++) = 0;
-		*(Poll++) = 0;
-		*(Poll++) = 0;
-		*(Poll++) = ModeNo;
-		*(Poll++) = 12;		// Set Mode
+		if (ModeNo == -1)		// Don't set Mode
+		{
+			// Changing the length messes up a lot of code,
+			// so set freq twice instead of omitting entry
+
+			*(Poll++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
+			*(Poll++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
+			*(Poll++) = (FreqString[3] - 48) | ((FreqString[2] - 48) << 4);
+			*(Poll++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
+			*(Poll++) = 10;		// Set Freq
+		}
+		else
+		{
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = 0;
+			*(Poll++) = ModeNo;
+			*(Poll++) = 12;		// Set Mode
+		}
 
 		*(Poll++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
 		*(Poll++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
@@ -4273,14 +4292,30 @@ CheckScan:
 		}
 		else if	(PORT->PortType == FT100 || PORT->PortType == FT990
 			|| PORT->PortType == FT1000)
-		{	
+		{
+			// Allow Mode = "LEAVE" to suppress mode change
+
 			//Send Mode first - changing mode can change freq
 
-			*(CmdPtr++) = 0;
-			*(CmdPtr++) = 0;
-			*(CmdPtr++) = 0;
-			*(CmdPtr++) = ModeNo;
-			*(CmdPtr++) = 12;
+			if (strcmp(Mode, "LEAVE") == 0)
+			{
+				// we can't easily change the string length,
+				// so just set freq twice
+
+				*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
+				*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
+				*(CmdPtr++) = (FreqString[3] - 48) | ((FreqString[2] - 48) << 4);
+				*(CmdPtr++) = (FreqString[1] - 48) | ((FreqString[0] - 48) << 4);
+				*(CmdPtr++) = 10;
+			}
+			else
+			{
+				*(CmdPtr++) = 0;
+				*(CmdPtr++) = 0;
+				*(CmdPtr++) = 0;
+				*(CmdPtr++) = ModeNo;
+				*(CmdPtr++) = 12;
+			}
 
 			*(CmdPtr++) = (FreqString[7] - 48) | ((FreqString[6] - 48) << 4);
 			*(CmdPtr++) = (FreqString[5] - 48) | ((FreqString[4] - 48) << 4);
@@ -4299,7 +4334,7 @@ CheckScan:
 			else
 				*(CmdPtr++) = 2;		// F100 or FT1000MP
 			
-			*(CmdPtr++) = 16;			// Send Get Status, as FT100 doesn't ack commands
+			*(CmdPtr++) = 16;			// Get Status
 		}
 		else if	(PORT->PortType == NMEA)
 		{	

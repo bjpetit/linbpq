@@ -437,7 +437,7 @@ VOID DoImportCmd(CIRCUIT * conn, struct UserInfo * user, char * Arg1, char * Con
 
 	conn->BBSFlags |= BBS;
 
-	count = ImportMessages(conn, Arg1);
+	count = ImportMessages(conn, Arg1, TRUE);
 
 	conn->BBSFlags &= ~BBS;
 	conn->Flags = 0;

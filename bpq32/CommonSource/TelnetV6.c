@@ -68,7 +68,7 @@ static VOID SetupListenSet(struct TNCINFO * TNC);
 int IntDecodeFrame(MESSAGE * msg, char * buffer, int Stamp, UINT Mask, BOOL APRS, BOOL MCTL);
 DllExport int APIENTRY SetTraceOptionsEx(int mask, int mtxparam, int mcomparam, int monUIOnly);
 int WritetoConsoleLocal(char * buff);
-VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr);
+BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr);
 int GetCMSHash(char * Challenge, char * Password);
 int IsUTF8(unsigned char *cpt, int len);
 int Convert437toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
@@ -182,6 +182,32 @@ void BuffertoNode(struct ConnectionInfo * sockptr, char * MsgPtr, int InputLen)
 	return;
 	}
 
+BOOL SendAndCheck(struct ConnectionInfo * sockptr, unsigned char * MsgPtr, int len, int flags)
+{
+	int err;
+	int sent = send(sockptr->socket, MsgPtr, len, flags);
+
+	if (sent == len)
+		return TRUE;			// OK
+
+	err = WSAGetLastError();
+				
+	Debugprintf("TCP Send Failed - Sent %d should be %d err %d - requeue data", sent, len, err);
+
+	if (err == 10035 || err == 115 || err == 36)		//EWOULDBLOCK
+	{
+		// Save unsent data
+
+		if (sent == -1)				// -1 means none sent
+			sent = 0;
+
+		sockptr->ResendBuffer = malloc(len - sent);
+		sockptr->ResendLen = len - sent;
+
+		memmove(sockptr->ResendBuffer, MsgPtr + sent, len - sent);
+	}
+	return FALSE;
+}
 
 ProcessLine(char * buf, int Port)
 {
@@ -1627,6 +1653,8 @@ VOID TelnetPoll(int Port)
 		{
 			sockptr = TNC->Streams[n].ConnectionInfo;
 		
+			//	Should we use write event after a blocked write ????
+
 			if (sockptr->SocketActive)
 			{
 				if (TNC->Streams[n].Connecting)
@@ -1814,7 +1842,22 @@ nosocks:
 			while(TNC->Streams[Stream].BPQtoPACTOR_Q)
 			{
 				buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
-				TelSendPacket(Stream, &TNC->Streams[Stream], buffptr);
+				if (TelSendPacket(Stream, &TNC->Streams[Stream], buffptr) == FALSE)
+				{
+					//	Send failed, and has saved packet
+					//	free saved and discard any more on queue
+
+					free(sockptr->ResendBuffer);
+					sockptr->ResendBuffer = NULL;
+					sockptr->ResendLen = 0;
+
+					while(TNC->Streams[Stream].BPQtoPACTOR_Q)
+					{
+						buffptr=Q_REM(&TNC->Streams[Stream].BPQtoPACTOR_Q);
+						ReleaseBuffer(buffptr);
+					}
+					break;
+				}
 			}
 
 			while(TNC->Streams[Stream].PACTORtoBPQ_Q)
@@ -1921,7 +1964,20 @@ nosocks:
 				BuffertoNode(sockptr, "Keepalive\r", 10);
 			}
 		}
-				
+			
+		if (sockptr->ResendBuffer)
+		{
+			// Data saved after EWOULDBLOCK returned to send
+
+			UCHAR * ptr = sockptr->ResendBuffer;
+			sockptr->ResendBuffer = NULL;
+
+			SendAndCheck(sockptr, ptr, sockptr->ResendLen, 0);
+			free(ptr);
+
+			continue;
+		}
+			
 		while (STREAM->BPQtoPACTOR_Q)
 		{
 			int datalen;
@@ -1954,7 +2010,13 @@ nosocks:
 
 			if (TNC->Streams[Stream].Connected)
 			{
-				TelSendPacket(Stream, STREAM, buffptr);
+				if (TelSendPacket(Stream, STREAM, buffptr) == FALSE)
+				{
+					//	Send failed, and has requeued packet
+					//	Dont send any more
+
+					break;
+				}
 			}
 			else // Not Connected
 			{
@@ -1995,6 +2057,7 @@ nosocks:
 	
 					sockptr->Signon[0] = 0;		// Not outgoing;
 					sockptr->Keepalive = FALSE;	// No Keepalives
+					sockptr->UTF8 = 0;			// Not UTF8
 
 					if (_stricmp(Host, "HOST") == 0)
 					{
@@ -2083,7 +2146,7 @@ nosocks:
 
 						STREAM->ConnectionInfo->FBBMode = TRUE;
 
-						if (_stricmp(P3, "NEEDLF") == 0)
+						if (_stricmp(P3, "NEEDLF") == 0 || STREAM->ConnectionInfo->NeedLF)
 						{
 							// Send LF after each param
 						
@@ -2093,6 +2156,7 @@ nosocks:
 							if (P5[0])
 								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n%s\r\n", P4, P5);
 							else
+							if (P4[0])
 								sprintf(STREAM->ConnectionInfo->Signon, "%s\r\n", P4);
 						}
 						else
@@ -2585,6 +2649,7 @@ int Socket_Accept(struct TNCINFO * TNC, int SocketId)
 			sockptr->BPQTermMode = FALSE;
 			sockptr->ConnectTime = time(NULL);
 			sockptr->Keepalive = FALSE;
+			sockptr->UTF8 = 0;
 
 			TNC->Streams[n].BytesRXed = TNC->Streams[n].BytesTXed = 0;
 			TNC->Streams[n].FramesQueued = 0;
@@ -5215,7 +5280,7 @@ VOID Tel_Format_Addr(struct ConnectionInfo * sockptr, char * dst)
 	*ptr++ = '\0';	
 }
 
-VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
+BOOL TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 {
 	int datalen;
 	UCHAR * MsgPtr;
@@ -5252,19 +5317,18 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 			else
 				u = Convert1252toUTF8(MsgPtr, datalen, UTF);
 			
-			send(sock, UTF, u, 0);
+			SendAndCheck(sockptr, UTF, u, 0);
 			ReleaseBuffer(buffptr);
-
-			return;
+			return TRUE;
 		}
 	}
 
-
 	if (sockptr->FBBMode && sockptr->NeedLF == FALSE)
 	{
+/*
 		// if Outward Connect to FBB,  Replace ff with ffff
 
-		if (0)
+		if (0)		// if we use this need to fix retry
 		{
 			char * ptr2, * ptr = &MsgPtr[0];
 			int i;
@@ -5276,60 +5340,53 @@ VOID TelSendPacket(int Stream, struct STREAMINFO * STREAM, UINT * buffptr)
 				{
 					//	no ff, so just send as is 
 
-					send(sock, ptr, datalen, 0);
+					xxxsend(sock, ptr, datalen, 0);
 					i=0;
 					break;
 				}
 
 				i=ptr2+1-ptr;
 
-				send(sock,ptr,i,0);
-				send(sock,"\xff",1,0);
+				xxsend(sock,ptr,i,0);
+				xxsend(sock,"\xff",1,0);
 
 				datalen-=i;
 				ptr=ptr2+1;
 			}
 			while (datalen>0);
 		}
-		else
-		{
-			int sent;
-			sent = send(sock, MsgPtr, datalen, 0);
-			if (sent != datalen)
-				Debugprintf("TCP Send Failed - Sent %d should be %d", sent, datalen);
-		}
+*/
+		// Normal FBB Mode path
+
+		BOOL ret = SendAndCheck(sockptr, MsgPtr, datalen, 0);
+		ReleaseBuffer(buffptr);
+		return ret;
 	}
-	else
+	
+	// Not FBB mode, or FBB and NEEDLF Replace cr with crlf
+
 	{
-		// Replace cr with crlf
+		unsigned char Out[1024];
+		unsigned char c;
+		unsigned char * ptr2 = Out;
+		unsigned char * ptr = &MsgPtr[0];
 
-		char * ptr2, * ptr = &MsgPtr[0];
-		int i;
-		do 
+		while (datalen--)
 		{
-			ptr2 = memchr(ptr, 13, datalen);
-
-			if (ptr2 == 0)
+			c = (*ptr++);
+			
+			if (c == 13)
 			{
-				//	no cr, so just send as is 
-
-				send(sock, ptr, datalen, 0);
-				i=0;
-				break;
+				*(ptr2++) = 13;
+				*(ptr2++) = 10;
 			}
-
-			i=ptr2+1-ptr;
-
-			send(sock,ptr,i,0);
-			send(sock,"\n",1,0);
-
-			datalen-=i;
-			ptr=ptr2+1;
+			else
+				*(ptr2++) = c;
 		}
-		while (datalen>0);
+
+		ReleaseBuffer(buffptr);
+		return SendAndCheck(sockptr, Out, ptr2 - Out, 0);
 	}
-				
-	ReleaseBuffer(buffptr);
 }
 
 VOID ProcessTrimodeCommand(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, char * MsgPtr)

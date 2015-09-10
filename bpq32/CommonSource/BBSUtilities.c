@@ -1937,7 +1937,7 @@ PrintMessage(HDC hDC, struct MsgInfo * Msg)
 #endif
 
 
-int ImportMessages(CIRCUIT * conn, char * FN)
+int ImportMessages(CIRCUIT * conn, char * FN, BOOL Nopopup)
 {
 	char FileName[MAX_PATH] = "Messages.in";
 	int Files = 0;
@@ -1986,7 +1986,8 @@ int ImportMessages(CIRCUIT * conn, char * FN)
 			nodeprintf(conn, "%s\r", msg);
 #ifdef WIN32
 		else
-			MessageBox(NULL, msg, "BPQMailChat", MB_OK);
+			if (Nopopup == FALSE)
+				MessageBox(NULL, msg, "BPQMailChat", MB_OK);
 #endif
 		return 0;
 	}
@@ -5006,7 +5007,7 @@ VOID CreateMessageFile(ConnectionInfo * conn, struct MsgInfo * Msg)
 	}
 
 	if (AutoImport)
-		ImportMessages(NULL, MsgFile);
+		ImportMessages(NULL, MsgFile, TRUE);
 
 	free(conn->MailBuffer);
 	conn->MailBufferSize=0;
@@ -6341,7 +6342,7 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 			
 			ConnectUsingAppl(conn->BPQStream, BBSApplMask);
 
-//#ifdef LINBPQ
+#ifdef LINBPQ
 			{
 				BPQVECSTRUC * SESS;	
 				SESS = &BPQHOSTVECTOR[conn->BPQStream - 1];
@@ -6354,7 +6355,7 @@ if (_memicmp(ForwardingInfo->ConnectScript[0], "FILE ", 5) == 0)
 
 				SESS->HOSTSESSION->Secure_Session = 1;
 			}
-//#endif
+#endif
 
 			strcpy(conn->Callsign, user->Call);
 
@@ -6512,7 +6513,8 @@ InBand:
 		(strstr(Buffer, "DOWNLINK") && strstr(Buffer, "ATTEMPTING") == 0) ||
 		strstr(Buffer, "SORRY") || strstr(Buffer, "INVALID") || strstr(Buffer, "RETRIED") ||
 		strstr(Buffer, "NO CONNECTION TO") || strstr(Buffer, "ERROR - ") ||
-		strstr(Buffer, "UNABLE TO CONNECT") ||  strstr(Buffer, "DISCONNECTED"))
+		strstr(Buffer, "UNABLE TO CONNECT") ||  strstr(Buffer, "DISCONNECTED") ||
+		strstr(Buffer, "FAILED TO CONNECT"))
 	{
 		// Connect Failed
 
@@ -6736,16 +6738,26 @@ InBand:
 			if (_memicmp(Cmd, "FILE", 4) == 0)
 			{
 				ForwardMessagestoFile(conn, &Cmd[5]);
+				Disconnect(conn->BPQStream);
+				return FALSE;
+			}
 
-//				Cmd = Scripts[++ForwardingInfo->ScriptIndex];
-//				Delay = 1000;
-	
-//		// Look for an alternative connect block (Starting with ELSE)
+			if (_memicmp(Cmd, "IMPORT", 6) == 0)
+			{
+				char * File, * Context;
+				int Num;
 
-//	ElseLoop:
+				File = strtok_s(&Cmd[6], " ", &Context);
 
-//		if (Cmd == 0 || memcmp(Cmd, "TIMES", 5) == 0)			// Only Check until script is finished
-//		{
+				if (File && File[0]) 
+				{
+					Num = ImportMessages(NULL, File, TRUE);
+
+					Logprintf(LOG_BBS, NULL, '|', "Imported %d Message(s)", Num);
+
+					if (Context && _stricmp(Context, "delete") == 0)
+						DeleteFile(File);
+				}
 				Disconnect(conn->BPQStream);
 				return FALSE;
 			}

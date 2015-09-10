@@ -1396,9 +1396,11 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 					if (user == 0)
 						continue;
-					if ((user->flags & F_POLLRMS) == 0)
-						continue;
 
+					if (strcmp(Call, BBSName) != 0)	// always accept to bbs call
+						if ((user->flags & F_POLLRMS) == 0)
+							continue;
+					
 					conn->TempMsg = Msg = malloc(sizeof(struct MsgInfo));
 					memcpy(Msg, SaveMsg, sizeof(struct MsgInfo));
 	

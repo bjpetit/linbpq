@@ -1170,7 +1170,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (!TNC->ConnectPending)
 				return 0;	// OK to Change
 
-			send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+			if (TNC->CONNECTED)
+				send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
 
 			return TRUE;
 		}
@@ -1185,7 +1186,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 		if (Param == 3)		// Release  Permission
 		{
-			send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+			if (TNC->CONNECTED)
+				send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
 			return 0;
 		}
 
@@ -1198,9 +1200,11 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->WinmorCurrentMode != 1600)
 			{
 				if (TNC->WinmorCurrentMode == 0)
-					send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+					if (TNC->CONNECTED)
+						send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
 
-				send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
+				if (TNC->CONNECTED)
+					send(TNC->WINMORSock, "BW 1600\r\n", 9, 0);
 				TNC->WinmorCurrentMode = 1600;
 			}
 			TNC->WL2KMode = 22;
@@ -1213,10 +1217,12 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			if (TNC->WinmorCurrentMode != 500)
 			{
 				if (TNC->WinmorCurrentMode == 0)
-					send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
+					if (TNC->CONNECTED)
+						send(TNC->WINMORSock, "LISTEN TRUE\r\n", 13, 0);
 
 				TNC->WinmorCurrentMode = 500;
-				send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
+				if (TNC->CONNECTED)
+					send(TNC->WINMORSock, "BW 500\r\n", 8, 0);
 			}
 			TNC->WL2KMode = 21;
 			return 0;
@@ -1226,7 +1232,8 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 		{
 			if (TNC->WinmorCurrentMode != 0)
 			{
-				send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
+				if (TNC->CONNECTED)
+					send(TNC->WINMORSock, "LISTEN FALSE\r\n", 14, 0);
 				TNC->WinmorCurrentMode = 0;
 			}
 
@@ -1247,7 +1254,8 @@ VOID ReleaseTNC(struct TNCINFO * TNC)
 
 	ChangeMYC(TNC, TNC->NodeCall);
 
-	send(TNC->WINMORSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
+	if (TNC->CONNECTED)
+		send(TNC->WINMORSock, "LISTEN TRUE\r\nMAXCONREQ 4\r\n", 26, 0);
 
 	strcpy(TNC->WEB_TNCSTATE, "Free");
 	SetWindowText(TNC->xIDC_TNCSTATE, TNC->WEB_TNCSTATE);
@@ -1309,18 +1317,19 @@ VOID ReleaseOtherPorts(struct TNCINFO * ThisTNC)
 		if (Interlock == TNC->Interlock)	// Same Group	
 			if (TNC->ReleasePortProc)
 				TNC->ReleasePortProc(TNC);
-
 	}
 }
 
 VOID WinmorSuspendPort(struct TNCINFO * TNC)
 {
-	send(TNC->WINMORSock, "CODEC FALSE\r\n", 14, 0);
+	if (TNC->CONNECTED)
+		send(TNC->WINMORSock, "CODEC FALSE\r\n", 14, 0);
 }
 
 VOID WinmorReleasePort(struct TNCINFO * TNC)
 {
-	send(TNC->WINMORSock, "CODEC TRUE\r\n", 13, 0);
+	if (TNC->CONNECTED)
+		send(TNC->WINMORSock, "CODEC TRUE\r\n", 13, 0);
 }
 
 
@@ -1670,14 +1679,14 @@ VOID WINMORThread(port)
    			i=sprintf(Msg, "Connect Failed for WINMOR socket - error code = %d\r\n", err);
 			WritetoConsole(Msg);
 			sprintf(TNC->WEB_COMMSSTATE, "Connection to TNC failed");
-			GetSemaphore(&Semaphore, 40);
 			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
-			FreeSemaphore(&Semaphore);
 			TNC->Alerted = TRUE;
 		}
 		
 		closesocket(TNC->WINMORSock);
 	 	TNC->CONNECTING = FALSE;
+		TNC->WINMORSock = 0;
+
 		return;
 	}
 
@@ -1801,6 +1810,10 @@ Lost:
 
 				closesocket(TNC->WINMORSock);
 				closesocket(TNC->WINMORDataSock);
+
+				TNC->WINMORSock = 0;
+				TNC->WINMORDataSock = 0;
+
 				return;
 			}
 		}
@@ -1834,6 +1847,7 @@ Lost:
 
 			closesocket(TNC->WINMORDataSock);
 			closesocket(TNC->WINMORSock);
+			TNC->WINMORSock= 0;
 
 			if (TNC->WIMMORPID && TNC->WeStartedTNC)
 			{

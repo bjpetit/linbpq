@@ -2413,7 +2413,7 @@ VOID APRSISThread(BOOL Report)
 		//
 
 #ifndef LINBPQ
-		SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Connect Failed");
+		MySetWindowText(GetDlgItem(hConsWnd, IGATESTATE), "IGate State: Connect Failed");
 #else
 		printf("APRS Igate connect failed\n");
 #endif
@@ -2426,8 +2426,14 @@ VOID APRSISThread(BOOL Report)
 	}
 
 	freeaddrinfo(saveres);
-	
-	InputLen=recv(sock, Buffer, 5500, 0);
+
+	APRSISOpen = TRUE;
+
+#ifndef LINBPQ
+	MySetWindowText(GetDlgItem(hConsWnd, IGATESTATE), "IGate State: Connected");
+#endif
+
+	InputLen=recv(sock, Buffer, 500, 0);
 
 	if (InputLen > 0)
 	{
@@ -2437,7 +2443,7 @@ VOID APRSISThread(BOOL Report)
 	}
 
 	ISSend(sock, Signon, strlen(Signon), 0);
-
+/*
 	InputLen=recv(sock, Buffer, 500, 0);
 
 	if (InputLen > 0)
@@ -2455,13 +2461,7 @@ VOID APRSISThread(BOOL Report)
 		Debugprintf(Buffer);
 		MonitorAPRSIS(Buffer, InputLen, FALSE);
 	}
-
-	APRSISOpen = TRUE;
-
-#ifndef LINBPQ
-	SetDlgItemText(hConsWnd, IGATESTATE, "IGate State: Connected");
-#endif
-
+*/
 	while (InputLen > 0 && IGateEnabled)
 	{
 		InputLen = recv(sock, &APRSinMsg[inptr], 500 - inptr, 0);

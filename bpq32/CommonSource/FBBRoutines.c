@@ -1083,6 +1083,9 @@ loop:
 
 		//	Don't allow restart, as saved data is probably duff
 
+		//	Actually all but the last block is probably OK, but maybe
+		//  not worth the risk of restarting
+
 		conn->DontSaveRestartData = TRUE;
 		return;
 	}
@@ -1637,11 +1640,6 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 	if (conn->TempMsg->length < 256)
 		return;							// Not worth it.
 
-	// Need to save Header in conn->TempMsg and data in conn->MailBuffer
-
-//	if (conn->InputLen < 2)
-//		return;							//  All formats need at least two bytes
-
 	// If we already have a restart record, reuse it
 
 	for (i = 1; i <= RestartCount; i++)
@@ -1651,7 +1649,7 @@ VOID SaveFBBBinary(CIRCUIT * conn)
 		if ((RestartRec->UserPointer == conn->UserPointer)
 			&& (strcmp(RestartRec->TempMsg->bid, conn->TempMsg->bid) == 0))
 		{
-			// Fund it, so seuse
+			// Fund it, so reuse
 
 			//	If we have more data, reset retry count
 

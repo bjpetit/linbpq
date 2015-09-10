@@ -355,6 +355,9 @@ VOID MonitorAPRSIS(char * Msg, int MsgLen, BOOL TX)
 	if (MonWindow.hConsole == NULL || MonitorAPRS == 0)
 		return;
 
+	if (MsgLen > 250)
+		return;
+
 	NOW = _time32(NULL);
 	TM = gmtime(&NOW);
 

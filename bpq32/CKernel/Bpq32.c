@@ -716,6 +716,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix sending I frames before L2 session is up
 //	Fix Flow control on Telnet outbound sessions.
 //	Fix reporting of unterminatred comments in config
+//	Add option for RigControl to not change mode on FT100/FT990/FT1000
+//	Add "Attach and Connect" for Telnet ports
 
 #define CKernel
 

@@ -882,6 +882,8 @@
 //	Add POP3 TOP command.
 //	Don't set 'T' messages to 'Y' when read.
 //	Add optional temporary connect script on "FWD NOW" command
+//	Add automatic import facility
+//	Accept RMS mail to BBS Call even if "Poll RMS" not set.
 
 #include "BPQMailChat.h"
 #define MAIL
@@ -1983,7 +1985,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		case IDM_IMPORT:
 
-			ImportMessages(NULL, "");
+			ImportMessages(NULL, "", FALSE);
 			break;
 
 		case IDM_ABOUT:

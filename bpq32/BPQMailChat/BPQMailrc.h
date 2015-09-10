@@ -1,5 +1,5 @@
 //{{NO_DEPENDENCIES}}
-// Microsoft Developer Studio generated include file.
+// Microsoft Visual C++ generated include file.
 // Used by BPQMail.rc
 //
 #define IDC_MYICON                      2
@@ -212,6 +212,8 @@
 #define IDC_SYSOP_IN_LM                 5013
 #define IDC_UZIP                        5014
 #define IDC_SYSOP_IN_LMx                5015
+#define IDC_UZIP2                       5015
+#define IDC_CMSPASS                     5015
 #define IDD_USERADDED_BOX               5051
 #define IDD_UserEditInfo                5051
 #define IDC_NTSMPS                      5060
@@ -289,7 +291,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        30009
+#define _APS_NEXT_RESOURCE_VALUE        30010
 #define _APS_NEXT_COMMAND_VALUE         40024
 #define _APS_NEXT_CONTROL_VALUE         1089
 #define _APS_NEXT_SYMED_VALUE           101

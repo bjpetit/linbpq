@@ -523,6 +523,7 @@ typedef struct TNCINFO
 
 	BOOL Dragon;					// Set if P4Dragon
 	BOOL DragonSingle;				// Set if P4Dragon using Pactor and Packet on same port
+	BOOL DragonKISS;				// Set if P4Dragon supports sending KISS frames in Hostmode
 	BOOL EnterExit;					// Switching to Term mode to change bandwidth
 	int PktStream;					// Stream in use for Packet when in single port mode
 	BOOL MaxLevel;					// Pactor Level to set for Wide Mode (3 or 4)

@@ -1578,6 +1578,8 @@ VOID ARDOPThread(port)
 	if (TNC->WINMORHostName == NULL)
 		return;
 
+	TNC->BusyFlags = 0;
+
 	TNC->CONNECTING = TRUE;
 
 	Sleep(5000);		// Allow init to complete 
@@ -1755,7 +1757,6 @@ VOID ARDOPThread(port)
 			if (FD_ISSET(TNC->WINMORSock, &errorfs))
 			{
 Lost:	
-
 				sprintf(Msg, "ARDOP Connection lost for Port %d\r\n", TNC->Port);
 				WritetoConsole(Msg);
 
@@ -1772,6 +1773,7 @@ Lost:
 					TNC->Streams[0].ReportDISC = TRUE;
 
 				closesocket(TNC->WINMORSock);
+				TNC->WINMORSock = 0;
 				return;
 			}
 	

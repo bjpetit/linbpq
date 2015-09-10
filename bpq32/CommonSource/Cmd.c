@@ -3409,6 +3409,11 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 				NewSess->L4CIRCUITTYPE = DOWNLINK + PACTOR;
 				NewSess->L4TARGET.PORT = PORT;
 
+				ptr = strtok_s(NULL, " ", &Context);
+				sess = count;
+				goto checkattachandcall;
+
+
 				memcpy(Bufferptr, OKMSG, 3);
 				Bufferptr += 3;
 				SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
@@ -3544,6 +3549,8 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	NewSess->L4STATE = 5;
 	NewSess->L4CIRCUITTYPE = DOWNLINK + PACTOR;
 	NewSess->L4TARGET.PORT = PORT;
+
+checkattachandcall:
 
 	if (ptr)
 	{
