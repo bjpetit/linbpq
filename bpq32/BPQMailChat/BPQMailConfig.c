@@ -483,6 +483,9 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_NNTPPort, NNTPInPort, FALSE);
 		SetDlgItemInt(pHdr->hwndDisplay, IDC_SMTPPort, SMTPInPort, FALSE);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_REMOTEEMAIL, RemoteEmail);
+		SetDlgItemText(pHdr->hwndDisplay, IDC_AMPR, AMPRDomain);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_FORWARDAMPR, SendAMPRDirect);
+
 
 		break;
 
@@ -1494,6 +1497,8 @@ VOID SaveBBSConfig()
 	SMTPInPort = GetDlgItemInt(hwndDisplay, IDC_SMTPPort, &OK4, FALSE);
 	NNTPInPort = GetDlgItemInt(hwndDisplay, IDC_NNTPPort, &OK3, FALSE);
 
+	GetDlgItemText(hwndDisplay, IDC_AMPR, AMPRDomain, 50);
+	SendAMPRDirect= IsDlgButtonChecked(hwndDisplay, IDC_FORWARDAMPR);
 	RemoteEmail = IsDlgButtonChecked(hwndDisplay, IDC_REMOTEEMAIL);
 
 	strlop(BBSName, '-');

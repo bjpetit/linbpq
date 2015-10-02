@@ -692,7 +692,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Improved reporting of configuration file format errors
 //	Experimental driver to support ARQ sessions using UI frames
 
-//  Version 6.0.11.1
+//  Version 6.0.11.1 September 2015
 
 //	Fixes for IPGateway configuration and Virtual Circuit Mode
 //	Separate Portmapper from IPGateway
@@ -718,6 +718,14 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix reporting of unterminatred comments in config
 //	Add option for RigControl to not change mode on FT100/FT990/FT1000
 //	Add "Attach and Connect" for Telnet ports
+
+//  Version 6.0.12.1
+
+//	Fix logging of IP addresses for connects to FBBPORT
+//	Allow lower case user and passwords in Telnet "Attach and Connect"
+//	Fix possible hang in KISS over TCP Slave mode
+//	Fix duplicating LinBPQ process if running ARDOP fails
+//	Allow lower case command aliase and increase alias length to 48
 
 #define CKernel
 

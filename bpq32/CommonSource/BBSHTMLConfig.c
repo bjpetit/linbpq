@@ -648,7 +648,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (ConfigTemplate)
 			free(ConfigTemplate);
 
-		ConfigTemplate = GetTemplateFromFile(2, "MainConfig.txt");
+		ConfigTemplate = GetTemplateFromFile(3, "MainConfig.txt");
 
 		SendConfigPage(Reply, RLen, Key);
 		return;
@@ -1504,6 +1504,9 @@ VOID ProcessConfUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		GetCheckBox(input, "EnRemote=", &RemoteEmail);
 
 		GetCheckBox(input, "EnISP=", &ISP_Gateway_Enabled);
+		GetCheckBox(input, "SendAMPR=", &SendAMPRDirect);
+
+		GetParam(input, "AMPRDomain=", AMPRDomain);
 
 		GetParam(input, "Domain=", MyDomain);
 		GetParam(input, "SMTPServer=", ISPSMTPName);
@@ -2236,6 +2239,8 @@ VOID SendConfigPage(char * Reply, int * ReplyLen, char * Key)
 		(ForwardToMe) ? CHKD  : UNC,
 		POP3InPort, SMTPInPort, NNTPInPort,
 		(RemoteEmail) ? CHKD  : UNC,
+		AMPRDomain,
+		(SendAMPRDirect) ? CHKD  : UNC,
 		(ISP_Gateway_Enabled) ? CHKD  : UNC,
 		MyDomain, ISPSMTPName, ISPSMTPPort, ISPPOP3Name, ISPPOP3Port,
 		ISPAccountName, ISPAccountPass, ISPPOP3Interval,

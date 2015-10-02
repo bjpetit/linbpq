@@ -866,7 +866,7 @@
 //	Remove trailing spaces from BID when Creating Message from Clipboard.
 //	Improved handling of FBB B1/B2 Restarts.
 
-//64
+//64 September 2015
 
 //	Fix Message Type in msgs from RMS Express to Internet
 //	Reopen Monitor window if open when program list closed
@@ -884,6 +884,11 @@
 //	Add optional temporary connect script on "FWD NOW" command
 //	Add automatic import facility
 //	Accept RMS mail to BBS Call even if "Poll RMS" not set.
+
+// 65
+
+//	Fix loading Housekeeping value for forwarded bulls.
+//	Fix re-using Fwd script override in timer driven forwarding.
 
 #include "BPQMailChat.h"
 #define MAIL
@@ -1014,8 +1019,6 @@ extern BOOL DontNeedHomeBBS;
 
 char BBSName[100];
 char MailForText[100];
-
-char HRoute[100];
 
 char SignoffMsg[100];
 
@@ -2823,6 +2826,34 @@ BOOL Initialise()
 
 		if (SetupNewBBS(user))
 			user->flags |= F_BBS;
+	}
+
+	// if forwarding AMPR mail make sure User/BBS AMPR exists
+
+	if (SendAMPRDirect)
+	{
+		BOOL NeedSave = FALSE;
+		
+		user = LookupCall("AMPR");
+		
+		if (user == NULL)
+		{
+			user = AllocateUserRecord("AMPR");
+			user->Temp = zalloc(sizeof (struct TempUserInfo));
+			NeedSave = TRUE;
+		}
+
+		if ((user->flags & F_BBS) == 0)
+		{
+			// Not Defined as a BBS
+
+			if (SetupNewBBS(user))
+				user->flags |= F_BBS;
+			NeedSave = TRUE;
+		}
+
+		if (NeedSave)
+			SaveUserDatabase();
 	}
 
 	// Allocate Streams

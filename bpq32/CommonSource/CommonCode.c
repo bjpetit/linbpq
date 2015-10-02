@@ -614,7 +614,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl)
 				if (_memicmp(APPL->APPLCMD, "RELAY ", 6) == 0)
 					return APPL->APPLCALL_TEXT;			// Assume people using RELAY know what they are doing
 
-				if (APPL->APPLPORT)
+				if (APPL->APPLPORT && (_memicmp(APPL->APPLCMD, "RMS ", 4) == 0))
 				{
 					APPLTNC = TNCInfo[APPL->APPLPORT];
 					{

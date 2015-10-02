@@ -2968,6 +2968,8 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 		char * arg_list[] = {NULL, NULL};
 		pid_t child_pid;	
 
+		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
+
 		//	Fork and Exec ARDOP
 
 		printf("Trying to start %s\n", TNC->ProgramPath);
@@ -2991,7 +2993,7 @@ BOOL ARDOPRestartTNC(struct TNCINFO * TNC)
 			/* The execvp  function returns only if an error occurs.  */ 
 
 			printf ("Failed to run ARDOP\n"); 
-			return 0 ;
+			exit(0);			// Kill the new process
 		}
 		printf("Started ARDOP TNC\n");
 		return TRUE;

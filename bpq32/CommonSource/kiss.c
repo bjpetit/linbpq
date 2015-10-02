@@ -1629,6 +1629,8 @@ int KISSGetTCPMessage(NPASYINFO ASY)
 		//	Have a connection. Close Listening Socket and use new one
 
 		closesocket(ASY->sock);
+
+		ioctl(sock, FIONBIO, &param);
 		ASY->sock = sock;
 		ASY->Listening = FALSE;
 		ASY->Connected = TRUE;

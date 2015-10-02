@@ -963,7 +963,7 @@ int SendMessageFile(SOCKET sock, char * FN, BOOL OnlyifExists)
 	if (strlen(FN) > 256)
 	{
 		FN[256] = 0;
-		Debugprintf("HTTP Finle Name too long %s", FN);
+		Debugprintf("HTTP File Name too long %s", FN);
 	}
 
 	if (strcmp(FN, "/") == 0)

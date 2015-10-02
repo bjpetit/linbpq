@@ -235,6 +235,8 @@ typedef struct ConnectionInfo_S
 	BOOL DontSaveRestartData;			// Set if corrupt data received
 	BOOL FBBMsgsSent;					// Messages need to be maked as complete when next command received
 	UCHAR FBBChecksum;					// Header Checksum
+	BOOL OpenBCM;						// OpenBCM mode (escape -xFF chars)
+	BOOL InTelnetExcape;				// Last Char was 0xff
 	BOOL LocalMsg;						// Set if current Send command is for a local user
 	BOOL NewUser;						// Set if first time user has accessed BBS
 	BOOL Paclink;						// Set if receiving messages from Paclink
@@ -827,6 +829,9 @@ typedef struct SocketConnectionInfo
     SOCKET socket;
 	SOCKADDR_IN sin; 
 	int Type;					// SMTP or POP3
+	BOOL AMPR;					// Set if sending to an AMPR.ORG server
+	char FromDomain[50];		// Domain we are sending from
+	struct UserInfo * bbs;		// BBS dor forwarding to AMPR
 	int State;					// Transaction State Machine
     UCHAR CallSign[10];
     UCHAR TCPBuffer[3000];		// For converting byte stream to messages
@@ -1147,7 +1152,7 @@ int TidyString(char * MailFrom);
 VOID ProcessPOP3ServerMessage(SocketConn * sockptr, char * Buffer, int Len);
 char *str_base64_encode(char *str);
 int b64decode(char *str);
-BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody);
+SocketConn * SMTPConnect(char * Host, int Port, BOOL AMPR, struct MsgInfo * Msg, char * MsgBody);
 BOOL POP3Connect(char * Host, int Port);
 VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len);
 VOID ProcessPOP3ClientMessage(SocketConn * sockptr, char * Buffer, int Len);
@@ -1341,6 +1346,8 @@ extern RECT MainRect;
 
 extern char BBSName[];
 extern char HRoute[];
+extern char AMPRDomain[];
+extern BOOL SendAMPRDirect;
 extern int BBSApplNum;
 extern int SMTPInPort;
 extern int POP3InPort;

@@ -161,6 +161,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define WSA_DATA WM_USER + 2
 #define WSA_CONNECT WM_USER + 3
 
+// Cater for only systems without IPV6_V6ONLY
+
+#ifndef IPV6_V6ONLY
+#define IPV6_V6ONLY 0x27
+#endif
+
 #ifndef MAXGETHOSTSTRUCT
 #define MAXGETHOSTSTRUCT        1024
 #endif

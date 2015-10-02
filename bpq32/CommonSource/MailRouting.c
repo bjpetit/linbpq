@@ -914,6 +914,55 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 		return 0;
 	}
 
+	// See if AMPR.ORG Mail
+
+	// If for our domain leave alone
+
+	if (AMPRDomain[0] && SendAMPRDirect && _stricmp(Msg->via, AMPRDomain) != 0)
+	{
+		int toLen = strlen(Msg->via);
+
+		if (_memicmp(&Msg->via[toLen - 8], "ampr.org", 8) == 0)
+		{
+			if (_stricmp(Msg->to, "AMPR") != 0)	// Already set up?
+			{
+		
+				// Put full name in VIA and AMPR in TO
+
+				char Full[80];
+
+				sprintf(Full, "%s@%s", Msg->to, Msg->via);
+
+				if (strlen(Full) > 40)
+					Full[40] = 0;
+
+				strcpy(Msg->via, Full);
+
+				strcpy(Msg->to, "AMPR");
+			}
+		}
+
+	
+		if (_stricmp(Msg->to, "AMPR") == 0)
+		{
+			bbs = FindAMPR();
+
+			if (bbs)
+			{
+				Logprintf(LOG_BBS, conn, '?', "Routing Trace to ampr.org Matches BBS AMPR");
+			
+				set_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+				bbs->ForwardingInfo->MsgCount++;
+				if (bbs->ForwardingInfo->SendNew)
+					bbs->ForwardingInfo->FwdTimer = bbs->ForwardingInfo->FwdInterval;
+
+				return 1;
+			}
+
+			// To AMPR, but don't have a BBS called AMPR - dropthrough in case we are forwarding AMPR to another BBS
+		}
+	}
+
 	// See if a well-known alias
 
 	Alias = FindAlias(RouteElements);
@@ -1472,8 +1521,18 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct BBSForwardingInfo * Forwarding
 
 		while(Calls[0])
 		{
+			BOOL Invert = FALSE;		// !Match
+
 			Call = Calls[0];
+
+			if (Call[0] == '!' || Call[0] == '-')
+			{
+				Call++;
+				Invert = TRUE;
+			}
+
 			ptr = strchr(Call, '*');
+
 			if (ptr)
 			{
 				MatchLen = ptr - Call;
@@ -1481,6 +1540,11 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct BBSForwardingInfo * Forwarding
 				if (memcmp(Msg->to, Call, MatchLen) == 0)
 				{
 					// Match - de we have a better one?
+
+					// if it is a !Match, return without checking any more
+
+					if (Invert)
+						return -1;
 
 					if (MatchLen > bestmatch)
 						bestmatch = MatchLen;
@@ -1492,6 +1556,9 @@ int CheckBBSToForNTS(struct MsgInfo * Msg, struct BBSForwardingInfo * Forwarding
 				
 				if (strcmp(Msg->to, Call) == 0)
 				{
+					if (Invert)
+						return -1;
+
 					MatchLen = strlen(Call);
 					if (MatchLen > bestmatch)
 						bestmatch = MatchLen;

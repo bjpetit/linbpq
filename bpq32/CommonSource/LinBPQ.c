@@ -758,6 +758,35 @@ int main(int argc, char * argv[])
 			user->flags |= F_BBS;
 	}
 
+	// if forwarding AMPR mail make sure User/BBS AMPR exists
+
+	if (SendAMPRDirect)
+	{
+		BOOL NeedSave = FALSE;
+		
+		user = LookupCall("AMPR");
+		
+		if (user == NULL)
+		{
+			user = AllocateUserRecord("AMPR");
+			user->Temp = zalloc(sizeof (struct TempUserInfo));
+			NeedSave = TRUE;
+		}
+
+		if ((user->flags & F_BBS) == 0)
+		{
+			// Not Defined as a BBS
+
+			if (SetupNewBBS(user))
+				user->flags |= F_BBS;
+			NeedSave = TRUE;
+		}
+
+		if (NeedSave)
+			SaveUserDatabase();
+	}
+
+
 	// Make sure SYSOPCALL is set
 
 	if (SYSOPCall[0] == 0)

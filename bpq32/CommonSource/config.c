@@ -2863,8 +2863,6 @@ BOOL ProcessAPPLDef(char * buf)
 	struct APPLCONFIG * App;
 	struct CONFIGTABLE * cfg = (struct CONFIGTABLE * )ConfigBuffer;
 
-	_strupr(buf);
-
 	memset(Param, 0, 2048);
 
 	ptr1 = buf;
@@ -2877,6 +2875,18 @@ BOOL ProcessAPPLDef(char * buf)
 		strcpy(&Param[n++][0], ptr1);
 		ptr1 = ptr2;
 	}
+
+	_strupr(Param[0]);
+	_strupr(Param[1]);
+
+	//	Leave Alias in original case
+
+	_strupr(Param[3]);
+	_strupr(Param[4]);
+	_strupr(Param[5]);
+	_strupr(Param[6]);
+	_strupr(Param[7]);
+
 
 	Appl = atoi(Param[0]);
 

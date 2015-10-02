@@ -1245,7 +1245,25 @@ VOID SendCompressed(CIRCUIT * conn, struct MsgInfo * FwdMsg)
 	conn->FBBChecksum = - conn->FBBChecksum;
 	*Outputptr++ = conn->FBBChecksum;
 
-	QueueMsg(conn, Output, Outputptr - Output);
+	if (conn->OpenBCM)			// Telnet, so escape any 0xFF
+	{
+		unsigned char * ptr1 = Output;
+		unsigned char * ptr2 = Compressed;	// Reuse Compressed buffer
+		int Len = Outputptr - Output;
+		unsigned char c;
+
+		while (Len--)
+		{
+			c = *(ptr1++);
+			*(ptr2++) = c;
+			if (c == 0xff)		// FF becodes FFFF
+				*(ptr2++) = c;
+		}
+
+		QueueMsg(conn, Compressed, ptr2 - Compressed);
+	}
+	else
+		QueueMsg(conn, Output, Outputptr - Output);
 
 	free(Save);
 	free(Compressed);
@@ -1618,7 +1636,25 @@ VOID SendCompressedB2(CIRCUIT * conn, struct FBBHeaderLine * FBBHeader)
 	conn->FBBChecksum = - conn->FBBChecksum;
 	*Outputptr++ = conn->FBBChecksum;
 
-	QueueMsg(conn, Output, Outputptr - Output);
+	if (conn->OpenBCM)			// Telnet, so escape any 0xFF
+	{
+		unsigned char * ptr1 = Output;
+		unsigned char * ptr2 = Compressed;	// Reuse Compressed buffer
+		int Len = Outputptr - Output;
+		unsigned char c;
+
+		while (Len--)
+		{
+			c = *(ptr1++);
+			*(ptr2++) = c;
+			if (c == 0xff)		// FF becodes FFFF
+				*(ptr2++) = c;
+		}
+
+		QueueMsg(conn, Compressed, ptr2 - Compressed);
+	}
+	else
+		QueueMsg(conn, Output, Outputptr - Output);
 
 	free(Compressed);
 	free(Output);		

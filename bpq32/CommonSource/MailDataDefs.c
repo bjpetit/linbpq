@@ -52,7 +52,7 @@ struct UserInfo * BBSChain = NULL;					// Chain of users that are BBSes
 struct MsgInfo ** MsgHddrPtr=NULL;
 int NumberofMessages=0;
 
-int FirstMessageIndextoForward=0;					// Lowest Message wirh a forward bit set - limits search
+int FirstMessageIndextoForward = 0;					// Lowest Message wirh a forward bit set - limits search
 
 BIDRec ** BIDRecPtr=NULL;
 int NumberofBIDs=0;
@@ -129,6 +129,8 @@ char SYSOPCall[50];
 char MailForText[100];
 
 char HRoute[100];
+char AMPRDomain[100];
+BOOL SendAMPRDirect = 0;
 
 char SignoffMsg[100];
 

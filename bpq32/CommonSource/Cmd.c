@@ -606,6 +606,9 @@ VOID APPLCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 		//	COPY ALIAS TO COMMAND BUFFER, THEN REENTER COMMAND HANDLER
 
 		memcpy(COMMANDBUFFER, ALIASPTR, ALIASLEN);
+		_strupr(COMMANDBUFFER);
+		memcpy(OrigCmdBuffer, ALIASPTR, ALIASLEN);	// In case original case version needed
+		
 		ALIASINVOKED = 1;							// To prevent Alias Loops 	
 
 		DoTheCommand(Session);
@@ -3411,6 +3414,11 @@ VOID ATTACHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 
 				ptr = strtok_s(NULL, " ", &Context);
 				sess = count;
+
+				// Replace command tail with original (before conversion to upper case
+
+				Context = Context + (OrigCmdBuffer - COMMANDBUFFER);
+
 				goto checkattachandcall;
 
 

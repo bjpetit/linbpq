@@ -213,8 +213,13 @@ VOID Socket_Connected(SocketConn * sockptr, int error)
 
 	if (error)
 	{
-		printf("Connect Failed\n");
+		Logprintf(LOG_TCP, NULL, '|', "Connect Failed");
+
+		if (sockptr->Type == SMTPClient)
+			SMTPActive = FALSE;
+
 		ReleaseSock(sock);
+
 		return;
 	}
 	
@@ -362,7 +367,7 @@ VOID TCPTimer()
 	{
 		POP3Timer=0;
 
-		if (ISPSMTPPort && ISP_Gateway_Enabled)
+		if ((ISPSMTPPort && ISP_Gateway_Enabled))
 			SendtoISP();
 		
 		if (ISPPOP3Port  && ISP_Gateway_Enabled)
@@ -518,7 +523,6 @@ int Socket_Accept(int SocketId)
 	Sockets = sockptr;
 
 	sock = accept(SocketId, (struct sockaddr *)&sockptr->sin, &addrlen);
-
 
 	if (sock == INVALID_SOCKET)
 	{
@@ -1499,7 +1503,7 @@ VOID ProcessSMTPServerMessage(SocketConn * sockptr, char * Buffer, int Len)
 			for (i=0; i < sockptr->Recipients; i++)
 			{
 				char Addr[256];					// Need copy, as we may change it then decide it isn't for RMS
-				
+
 				strcpy(Addr, sockptr->RecpTo[i]);
 				Debugprintf("To Addr %s", Addr);
 
@@ -1763,8 +1767,17 @@ ZvVx9G1hcg==
 	{
 		if (sockptr->State != Authenticated)
 		{
-			SendSock(sockptr, "530 Authentication required");
-			return;
+			// Accept if from 44/8 and ends in ampr.org
+
+			if (_memicmp(&Buffer[Len - 11], "ampr.org", 8) == 0 &&
+				(sockptr->sin.sin_addr.s_addr & 0xff) == 44)	
+			{
+			}
+			else
+			{
+				SendSock(sockptr, "530 Authentication required");
+				return;
+			}
 		}
 		
 		sockptr->MailFrom = zalloc(Len);
@@ -1779,8 +1792,19 @@ ZvVx9G1hcg==
 	{
 		if (sockptr->State != Authenticated)
 		{
-			SendSock(sockptr, "530 Authentication required");
-			return;
+			// Accept if from 44/8 and ends in ampr.org
+
+
+
+			if (_memicmp(&Buffer[Len - 11], "ampr.org", 8) == 0 &&
+				(sockptr->sin.sin_addr.s_addr & 0xff) == 44)	
+			{
+			}
+			else
+			{
+				SendSock(sockptr, "530 Authentication required");
+				return;
+			}
 		}
 
 		sockptr->RecpTo=realloc(sockptr->RecpTo, (sockptr->Recipients+1)*4);
@@ -1920,17 +1944,53 @@ CreateSMTPMessage(SocketConn * sockptr, int i, char * MsgTitle, time_t Date, cha
 
 	if (via)
 	{
+		int toLen;
+		
 		if (strlen(via) > 40) via[40] = 0;
 
 		strcpy(Msg->via, via);		// Save before messing with it
 
-		strlop(via, '.');			// Get first part of address
+		// if ending in AMPR.ORG send via ISP if we have enabled forwarding AMPR
 
-		if (_stricmp(via, BBSName) == 0)
+		toLen = strlen(via);
+
+		if (_memicmp(&via[toLen - 8], "ampr.org", 8) == 0)
 		{
-			// sent via us - clear the name
+			// if our domain keep here.
+				
+			// if not, and SendAMPRDirect set, set as ISP,
+			// else set as RMS			
+				
+			if (_stricmp(via, AMPRDomain) == 0)
+			{
+				// Our Message- dont forward
+			}
+			else
+			{
+				// AMPR but not us
 
-			Msg->via[0] = 0;
+				if (SendAMPRDirect)
+				{
+//					sprintf(Msg->via,"%s@%s", To, via);
+//					strcpy(To, "AMPR");
+				}
+				else
+				{
+					sprintf(Msg->via,"%s@%s", To, via);
+					strcpy(To, "RMS");
+				}
+			}
+		}
+		else
+		{	
+			strlop(via, '.');			// Get first part of address
+
+			if (_stricmp(via, BBSName) == 0)
+			{
+				// sent via us - clear the name
+
+				Msg->via[0] = 0;
+			}
 		}
 	}
 
@@ -2096,7 +2156,21 @@ TidyString(char * Address)
 			{
 				Address[len] = 0;
 				memmove(Address, &Address[1], len);
+				return 0;
 			}
+			
+			// Thunderbird can put "" round part of address "rms:john.wiseman"@cantab.net
+			
+			ptr2 = strchr(&Address[1], '"');
+
+			if (ptr2)
+			{
+				memmove(Address, &Address[1], ptr2 - &Address[1]);
+				memmove(ptr2 - 1, ptr2 + 1, strlen(ptr2 + 1) + 1);
+
+			}
+
+
 		}
 
 		return 0;
@@ -2617,7 +2691,7 @@ char *str_base64_encode(char *str)
 	return result;
 }
 
-BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
+SocketConn * SMTPConnect(char * Host, int Port, BOOL AMPR, struct MsgInfo * Msg, char * MsgBody)
 {
 	int err;
 	u_long param=1;
@@ -2668,6 +2742,12 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 	}
 
 	sockptr->Type = SMTPClient;
+	sockptr->AMPR = AMPR;
+
+	if (AMPR)
+		strcpy(sockptr->FromDomain, AMPRDomain);
+	else
+		strcpy(sockptr->FromDomain, MyDomain);
 	
 	sockptr->SMTPMsg = Msg;
 	sockptr->MailBuffer = MsgBody;
@@ -2697,7 +2777,7 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 
 		sockptr->State = WaitingForGreeting;
 
-		return TRUE;
+		return sockptr;
 	}
 	else
 	{
@@ -2710,7 +2790,7 @@ BOOL SMTPConnect(char * Host, int Port, struct MsgInfo * Msg, char * MsgBody)
 			//
 
 			sockptr->State = Connecting;
-			return TRUE;
+			return sockptr;
 		}
 		else
 		{
@@ -2744,7 +2824,10 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 	{
 		if (memcmp(Buffer, "220 ",4) == 0)
 		{
-			sockprintf(sockptr, "EHLO %s", BBSName);
+			if (sockptr->AMPR)
+				sockprintf(sockptr, "EHLO %s", AMPRDomain);
+			else
+				sockprintf(sockptr, "EHLO %s", BBSName);
 			sockptr->State = WaitingForHELOResponse;
 		}
 		else
@@ -2763,14 +2846,14 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 		if (memcmp(Buffer, "250 ",4) == 0)
 		{
-			if (SMTPAuthNeeded)
+			if (SMTPAuthNeeded && sockptr->AMPR == FALSE)
 			{
 				sockprintf(sockptr, "AUTH LOGIN");
 				sockptr->State = WaitingForAUTHResponse;
 			}
 			else
 			{
-				sockprintf(sockptr, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
+				sockprintf(sockptr, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, sockptr->FromDomain);
 				sockptr->State = WaitingForFROMResponse;
 			}
 		}
@@ -2803,7 +2886,7 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		}
 		else if (memcmp(Buffer, "235 ", 4) == 0)
 		{
-			sockprintf(sockptr, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, MyDomain);
+			sockprintf(sockptr, "MAIL FROM: <%s@%s>", sockptr->SMTPMsg->from, sockptr->FromDomain);
 //			sockprintf(sockptr, "MAIL FROM: <%s@%s.%s>", sockptr->SMTPMsg->from, BBSName, HRoute);
 			sockptr->State = WaitingForFROMResponse;
 		}
@@ -2861,12 +2944,12 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		if (memcmp(Buffer, "354 ",4) == 0)
 		{
 			sockprintf(sockptr, "To: %s", sockptr->SMTPMsg->via);
-			sockprintf(sockptr, "From: %s <%s@%s>", sockptr->SMTPMsg->from, sockptr->SMTPMsg->from, MyDomain);
-			sockprintf(sockptr, "Sender: %s@%s", sockptr->SMTPMsg->from, MyDomain);
-			if (GMailMode)
-				sockprintf(sockptr, "Reply-To: %s+%s@%s", GMailName, sockptr->SMTPMsg->from, MyDomain);
+			sockprintf(sockptr, "From: %s <%s@%s>", sockptr->SMTPMsg->from, sockptr->SMTPMsg->from, sockptr->FromDomain);
+			sockprintf(sockptr, "Sender: %s@%s", sockptr->SMTPMsg->from, sockptr->FromDomain);
+			if (GMailMode && sockptr->AMPR == FALSE)
+				sockprintf(sockptr, "Reply-To: %s+%s@%s", GMailName, sockptr->SMTPMsg->from, sockptr->FromDomain);
 			else
-				sockprintf(sockptr, "Reply-To: %s@%s", sockptr->SMTPMsg->from, MyDomain);
+				sockprintf(sockptr, "Reply-To: %s@%s", sockptr->SMTPMsg->from, sockptr->FromDomain);
 
 			sockprintf(sockptr, "Subject: %s", sockptr->SMTPMsg->title);
 			
@@ -2897,11 +2980,45 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 
 	if (sockptr->State == WaitingForBodyResponse)
 	{
+		struct MsgInfo * Msg = sockptr->SMTPMsg;
+
 		if (memcmp(Buffer, "250 ",  4) == 0)
 		{
-			sockptr->SMTPMsg->status = 'F';
-		}
+			// if AMPR, clear forwarding bitmap
 
+			if (sockptr->AMPR)
+			{
+				// Mark mail as sent, and look for more
+
+				struct UserInfo * bbs = sockptr->bbs;
+	
+				clear_fwd_bit(Msg->fbbs, bbs->BBSNumber);
+				set_fwd_bit(Msg->forw, bbs->BBSNumber);
+
+				//  Only mark as forwarded if sent to all BBSs that should have it
+			
+				if (memcmp(Msg->fbbs, zeros, NBMASK) == 0)
+				{
+					Msg->status = 'F';			// Mark as forwarded
+					Msg->datechanged=time(NULL);
+				}
+				
+				bbs->ForwardingInfo->MsgCount--;
+				bbs->ForwardingInfo->Forwarding = 0;
+
+				// See if any more
+
+				if (bbs->ForwardingInfo->MsgCount)
+					bbs->ForwardingInfo->FwdTimer = bbs->ForwardingInfo->FwdInterval; // Reschdul send
+			
+			}
+			else
+			{
+				Msg->status = 'F';
+				SMTPActive = FALSE;
+				SMTPMsgCreated=TRUE;					// See if any more
+			}
+		}
 
 		SendSock(sockptr, "QUIT");
 		sockptr->State = 0;
@@ -2913,6 +3030,48 @@ VOID ProcessSMTPClientMessage(SocketConn * sockptr, char * Buffer, int Len)
 		return;
 	}
 }	
+
+BOOL SendtoAMPR(CIRCUIT * conn)
+{
+	struct MsgInfo * Msg = conn->FwdMsg;
+	SocketConn * sockptr;
+
+	char * Body;
+	int toLen;
+	char * tocopy;
+	char * Host;
+	
+	// Make sure message exists
+
+	Body = ReadMessageFile(Msg->number);
+
+	if (Body == NULL)
+	{
+		FlagAsKilled(Msg);
+		return FALSE;
+	}
+		
+	toLen = strlen(Msg->via);
+
+	tocopy = _strdup(Msg->via);
+
+	Host = strlop(tocopy, '@');
+
+	Logprintf(LOG_TCP, NULL, '|', "Connecting to Server %s to send Msg %d", Host, Msg->number);
+
+	sockptr = SMTPConnect(Host, 25, TRUE, Msg, Body);
+	
+	free(tocopy);
+
+	if (sockptr)
+	{
+		sockptr->bbs = conn->UserPointer;
+
+		return TRUE;
+	}
+
+	return FALSE;
+}
 
 BOOL SendtoISP()
 {
@@ -2944,7 +3103,8 @@ BOOL SendtoISP()
 
 			Logprintf(LOG_TCP, NULL, '|', "Connecting to Server %s to send Msg %d", ISPSMTPName, Msg->number);
 
-			SMTPConnect(ISPSMTPName, ISPSMTPPort, Msg, Body);
+			SMTPMsgCreated=FALSE;		// Stop any more attempts
+			SMTPConnect(ISPSMTPName, ISPSMTPPort, FALSE, Msg, Body);
 
 			SMTPActive = TRUE;
 
@@ -2958,6 +3118,7 @@ BOOL SendtoISP()
 	return FALSE;
 
 }
+
 
 BOOL POP3Connect(char * Host, int Port)
 {
@@ -3723,3 +3884,21 @@ VOID SendMultiPartMessage(SocketConn * sockptr, struct MsgInfo * Msg, UCHAR * ms
 
 	return;
 }
+
+BOOL SendAMPRSMTP(CIRCUIT * conn)
+{
+	struct UserInfo * bbs = conn->UserPointer;
+
+	while (FindMessagestoForward(conn))
+	{
+		if (SendtoAMPR(conn))
+		{
+			bbs->ForwardingInfo->Forwarding = TRUE;
+			return TRUE;
+		}
+	}
+
+	bbs->ForwardingInfo->Forwarding = FALSE;
+	return FALSE;
+}
+

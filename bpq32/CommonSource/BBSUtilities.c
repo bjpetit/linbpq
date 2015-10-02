@@ -71,6 +71,7 @@ UCHAR * APIENTRY GetVersionString();
 void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 int GetCMSHash(char * Challenge, char * Password);
+BOOL SendAMPRSMTP(CIRCUIT * conn);
 
 config_t cfg;
 config_setting_t * group;
@@ -1231,6 +1232,19 @@ VOID * _zalloc(int len)
 	return ptr;
 }
 
+
+struct UserInfo * FindAMPR()
+{
+	struct UserInfo * bbs;
+	
+	for (bbs = BBSChain; bbs; bbs = bbs->BBSNext)
+	{		
+		if (strcmp(bbs->Call, "AMPR") == 0)
+			return bbs;
+	}
+	
+	return NULL;
+}
 
 struct UserInfo * FindRMS()
 {
@@ -4876,8 +4890,9 @@ nextline:
 		{
 			if (Msg->via[0])
 			{	
-				if (_stricmp(Msg->via, BBSName))		// Not for our BBS and no forwardimg
-					SendWarningToSYSOP(Msg);
+				if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
+					if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
+						SendWarningToSYSOP(Msg);
 			}
 			else
 			{
@@ -4893,7 +4908,10 @@ nextline:
 			nodeprintf(conn, "Message: %d Bid:  %s Size: %d\r", Msg->number, Msg->bid, Msg->length);
 
 			if (Msg->via[0])
-			{	
+			{
+				if (_stricmp(Msg->via, BBSName))		// Not for our BBS a
+					if (_stricmp(Msg->via, AMPRDomain))	// Not for our AMPR Address
+
 				if (FWDCount ==  0 &&  Msg->to[0] != 0)		// unless smtp msg
 					nodeprintf(conn, "@BBS specified, but no forwarding info is available - msg may not be delivered\r");
 			}
@@ -6742,6 +6760,17 @@ InBand:
 				return FALSE;
 			}
 
+			if (_memicmp(Cmd, "SMTP", 4) == 0)
+			{
+				conn->NextMessagetoForward = FirstMessageIndextoForward;
+				conn->UserPointer->Total.ConnectsOut++;
+
+				SendAMPRSMTP(conn);
+				Disconnect(conn->BPQStream);
+				return FALSE;
+			}
+
+
 			if (_memicmp(Cmd, "IMPORT", 6) == 0)
 			{
 				char * File, * Context;
@@ -7042,6 +7071,11 @@ VOID Parse_SID(CIRCUIT * conn, char * SID, int len)
 		conn->Paclink = TRUE;
 	}
 
+	if (_memicmp(SID, "OpenBCM", 7) == 0)
+	{
+		conn->OpenBCM = TRUE;
+	}
+
 
 	// See if BPQ for selective forwarding 
 
@@ -7188,7 +7222,7 @@ VOID FWDTimerProc()
 				if (Localtime)
 					now -= (time_t)_MYTIMEZONE; 
 
-				now %= 86400;		// Secs in to day
+				now %= 86400;		// Secs in day
 
 				while(Bands[Count])
 				{
@@ -7208,6 +7242,15 @@ VOID FWDTimerProc()
 
 						{
 							user->ForwardingInfo->ScriptIndex = -1;			 // Incremented before being used
+
+
+							// remove any old TempScript
+
+							if (user->ForwardingInfo->TempConnectScript)
+							{
+								FreeList(user->ForwardingInfo->TempConnectScript);
+								user->ForwardingInfo->TempConnectScript = NULL;
+							}
 
 							if (ConnecttoBBS(user))
 								ForwardingInfo->Forwarding = TRUE;					
@@ -7486,6 +7529,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveStringValue(group, "BBSName", BBSName);
 	SaveStringValue(group, "SYSOPCall", SYSOPCall);
 	SaveStringValue(group, "H-Route", HRoute);
+	SaveStringValue(group, "AMPRDomain", AMPRDomain);
 	SaveIntValue(group, "EnableUI", EnableUI);
 	SaveIntValue(group, "RefuseBulls", RefuseBulls);
 	SaveIntValue(group, "SendSYStoSYSOPCall", SendSYStoSYSOPCall);
@@ -7499,6 +7543,8 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "POP3Port", POP3InPort);
 	SaveIntValue(group, "NNTPPort", NNTPInPort);
 	SaveIntValue(group, "RemoteEmail", RemoteEmail);
+	SaveIntValue(group, "SendAMPRDirect", SendAMPRDirect);
+
 	SaveIntValue(group, "MailForInterval", MailForInterval);
 	SaveStringValue(group, "MailForText", MailForText);
 
@@ -7822,6 +7868,8 @@ BOOL GetConfig(char * ConfigName)
 	GetStringValue(group, "MailForText", MailForText);
 	GetStringValue(group, "SYSOPCall", SYSOPCall);
 	GetStringValue(group, "H-Route", HRoute);
+	GetStringValue(group, "AMPRDomain", AMPRDomain);
+	SendAMPRDirect = GetIntValue(group, "SendAMPRDirect");
 	ISP_Gateway_Enabled =  GetIntValue(group, "SMTPGatewayEnabled");
 	ISPPOP3Interval =  GetIntValue(group, "POP3PollingInterval");
 	GetStringValue(group, "MyDomain", MyDomain);
@@ -8005,6 +8053,7 @@ BOOL GetConfig(char * ConfigName)
 		 PUR = GetIntValue(group, "PUR");
 		 PF = GetIntValue(group, "PF");
 		 PNF = GetIntValue(group, "PNF");
+		 BF = GetIntValue(group, "BF");
 		 BNF = GetIntValue(group, "BNF");
 		 NTSD = GetIntValue(group, "NTSD");
 		 NTSU = GetIntValue(group, "NTSU");
@@ -8402,6 +8451,42 @@ int DoReceivedData(int Stream)
 
 				if (conn->InputMode == 'B')
 				{
+					// if in OpenBCM mode, remove FF transparency
+
+					if (conn->OpenBCM)			// Telnet, so escape any 0xFF
+					{
+						unsigned char * ptr1 = conn->InputBuffer;
+						unsigned char * ptr2;
+						int Len;
+						unsigned char c;
+
+						// We can come through here again for the
+						// same data as we wait for a full packet
+						// So only check last InputLen bytes
+
+						ptr1 += (conn->InputLen - InputLen);
+						ptr2 = ptr1;
+						Len = InputLen;
+
+						while (Len--)
+						{
+							c = *(ptr1++);
+
+							if (conn->InTelnetExcape)	// Last char was ff
+							{
+								conn->InTelnetExcape = FALSE;
+								continue;
+							}
+
+							*(ptr2++) = c;
+
+							if (c == 0xff)		// 
+								conn->InTelnetExcape = TRUE;
+						}
+
+						conn->InputLen = ptr2 - conn->InputBuffer;
+					}
+
 					UnpackFBBBinary(conn);
 					goto OuterLoop;
 				}

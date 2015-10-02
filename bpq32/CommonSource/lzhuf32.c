@@ -1020,6 +1020,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 		else if (_memicmp(ptr1, "To:", 3) == 0 || _memicmp(ptr1, "cc:", 3) == 0)
 		{
+			int toLen;
+			
 			HddrTo=realloc(HddrTo, (Recipients+1)*4);
 			HddrTo[Recipients] = zalloc(100);
 
@@ -1034,6 +1036,48 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			conn->TempMsg->length -= strlen(HddrTo[Recipients]);
 
 			B2To = ptr1 - outfile;
+
+			// if ending in AMPR.ORG send via ISP if we have enabled forwarding AMPR
+
+			toLen = strlen(FullTo);
+
+			if (_memicmp(&FullTo[toLen - 8], "ampr.org", 8) == 0)
+			{
+				// if our domain keep here.
+				
+				// if not, and SendAMPRDirect set, set as ISP,
+				// else set as RMS			
+				
+				memcpy(Msg->via, FullTo, toLen);
+
+				ptr3 = strchr(FullTo, '@');
+
+				if (ptr3)
+				{
+					ptr3++;
+
+					if (_stricmp(ptr3, AMPRDomain) == 0)
+					{
+						// Our Message
+
+						strcpy(Msg->via, ptr3);
+						strlop(FullTo,'@');
+						BBSMsgs ++;
+						goto BBSMsg;
+					}
+				}
+
+				if (SendAMPRDirect)
+				{
+					strcpy(Msg->via, ptr3);
+					strlop(FullTo,'@');
+					BBSMsgs ++;
+					goto BBSMsg;
+				}
+				
+				strcpy(FullTo,"RMS");
+				RMSMsgs ++;
+			}
 
 			if (conn->BPQBBS && !CheckifPacket(FullTo))  // May be an message for RMS being passed to an intermediate BBS
 			{
@@ -1125,9 +1169,9 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 
 				if (Msg->via[0])
 				{
-					// Has an @ - See if Packet or SMTP
+					// Has an @ - See if Packet or SMTP. If to our AMPR address, treat as packet
 					
-					if (CheckifPacket(Msg->via))
+					if (CheckifPacket(Msg->via) || _stricmp(Msg->via, AMPRDomain) == 0)
 					{
 						// Packet Message
 
@@ -1225,10 +1269,10 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 			}
 			else if ((_memicmp(FullTo, "bull/", 5) == 0) || (_memicmp(FullTo, "bull:", 5) == 0))
 			{
-				// remove bull/ and set type 'T'
+				// remove bull/ and set type 'B'
 
 				memmove(FullTo, &FullTo[5], strlen(FullTo) - 4);		
-				Type[Recipients] = 'B';		// NTS
+				Type[Recipients] = 'B';		// Bulletin
 				memmove(HddrTo[Recipients] + 4, HddrTo[Recipients] + 9, 90);
 
 				// Replace Type: Private with Type: Bulletin
@@ -1613,6 +1657,8 @@ File: 5566 NEWBOAT.HOMEPORT.JPG
 		}
 #endif	
 	} // end if B2Msg
+
+	// Look for 
 
 	CreateMessageFromBuffer(conn);
 	SetupNextFBBMessage(conn);

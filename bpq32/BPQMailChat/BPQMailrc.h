@@ -1,5 +1,5 @@
 //{{NO_DEPENDENCIES}}
-// Microsoft Visual C++ generated include file.
+// Microsoft Developer Studio generated include file.
 // Used by BPQMail.rc
 //
 #define IDC_MYICON                      2
@@ -58,6 +58,7 @@
 #define IDC_UIPORTS                     1010
 #define IDC_NNTPPort                    1010
 #define IDC_BIDSLEFT                    1011
+#define IDC_AMPR                        1011
 #define IDC_ENABLEUI                    1012
 #define IDC_USEB2                       1013
 #define IDC_REFUSEBULLS                 1013
@@ -65,6 +66,7 @@
 #define IDC_PERSONALONLY                1014
 #define MAILFOR_MINS                    1014
 #define IDC_SENDNEW                     1015
+#define IDC_FORWARDAMPR                 1015
 #define IDC_UICONFIG                    1016
 #define IDC_USELOCALTIME                1016
 #define IDC_DELETETORECYCLE             1017

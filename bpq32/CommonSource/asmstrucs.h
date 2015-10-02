@@ -17,9 +17,9 @@
 
 #define BUFFLEN	360
 
-#define ApplStringLen 48	// Length of each config entry
+//#define ApplStringLen 48	// Length of each config entry
 #define NumberofAppls 32	// Max APPLICATIONS= values
-#define ALIASLEN 32
+#define ALIASLEN 48
 #define MHENTRIES 30		// Entries in MH List
 
 typedef int (FAR *FARPROCY)();

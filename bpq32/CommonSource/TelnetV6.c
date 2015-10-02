@@ -3388,7 +3388,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
         
         if (LogEnabled)
 		{
-			char work[4];
+			unsigned char work[4];
 			memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
 			sprintf(logmsg,"%d %d.%d.%d.%d User=%s\n",
 					sockptr->Number,
@@ -3423,7 +3423,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
             
         if (LogEnabled)
 		{
-			char work[4];
+			unsigned char work[4];
 			memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
 			sprintf(logmsg,"%d %d.%d.%d.%d Password=%s\n",
 					sockptr->Number,
@@ -3449,7 +3449,7 @@ int DataSocket_ReadRelay(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, 
 
 		if (LogEnabled)
 		{
-			char work[4];
+			unsigned char work[4];
 			memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
 			sprintf(logmsg,"%d %d.%d.%d.%d Call Accepted Callsign =%s\n",
 					sockptr->Number,
@@ -3579,7 +3579,7 @@ MsgLoop:
 			return 0;
 		}
 
-		// Queue to Node. Data may arrive it large quatities, possibly exceeding node buffer capacity
+		// Queue to Node. Data may arrive it large quantities, possibly exceeding node buffer capacity
 
 		STREAM->BytesRXed += InputLen;
 		BuffertoNode(sockptr, MsgPtr, InputLen); 
@@ -3798,13 +3798,9 @@ MsgLoop:
         
         if (LogEnabled)
 		{
-			char work[4];
-			memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
-			sprintf(logmsg,"%d %d.%d.%d.%d User=%s\n",
-					sockptr->Number,
-					work[0], work[1], work[2], work[3],
-					MsgPtr);
-
+			char Addr[100];		
+			Tel_Format_Addr(sockptr, Addr);
+			sprintf(logmsg,"%d %s User=%s\n", sockptr->Number, Addr, MsgPtr);
 			WriteLog (logmsg);
 		}
 		for (i = 0; i < TCP->NumberofUsers; i++)
@@ -3864,13 +3860,9 @@ MsgLoop:
             
         if (LogEnabled)
 		{
-			char work[4];
-			memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
-			sprintf(logmsg,"%d %d.%d.%d.%d Password=%s\n",
-					sockptr->Number,
-					work[0], work[1], work[2], work[3],
-					MsgPtr);
-
+			char Addr[100];
+			Tel_Format_Addr(sockptr, Addr);
+			sprintf(logmsg,"%d %s Password=%s\n", sockptr->Number, Addr, MsgPtr);
 			WriteLog (logmsg);
 		}
 		if (strcmp(MsgPtr, sockptr->UserPointer->Password) == 0)
@@ -3891,12 +3883,10 @@ MsgLoop:
             
             if (LogEnabled)
 			{
-				char work[4];
-				memcpy(work, &sockptr->sin.sin_addr.s_addr, 4);
-				sprintf(logmsg,"%d %d.%d.%d.%d Call Accepted  Callsign =%s\n",
-					sockptr->Number,
-					work[0], work[1], work[2], work[3],
-					sockptr->Callsign);
+				char Addr[100];
+				Tel_Format_Addr(sockptr, Addr);
+				sprintf(logmsg,"%d %s Call Accepted  Callsign =%s\n",
+				sockptr->Number, Addr,sockptr->Callsign);
 
 				WriteLog (logmsg);
 			}
