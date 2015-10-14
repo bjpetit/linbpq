@@ -1483,7 +1483,10 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 			if (Session)
 			{
-				strcpy(Context, "/Mail/Header");
+				if (_stricmp(Context, "/Mail/WebMailEntry") == 0)
+					strcpy(Context, "/Mail/WebMail");
+				else
+					strcpy(Context, "/Mail/Header");
 				goto doHeader;
 			}
 			else
@@ -2086,9 +2089,9 @@ doHeader:
 		free (CfgBytes);
 
 		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
-		send(sock, Header, HeaderLen, 0);
-		send(sock, _REPLYBUFFER, ReplyLen, 0);
-		send(sock, Tail, strlen(Tail), 0);
+		sendandcheck(sock, Header, HeaderLen);
+		sendandcheck(sock, _REPLYBUFFER, ReplyLen);
+		sendandcheck(sock, Tail, strlen(Tail));
 		free (_REPLYBUFFER);
 
 		return 1;

@@ -261,6 +261,7 @@ typedef struct ConnectionInfo_S
 
 	int SIDResponseTimer;				// Used to detect incomplete handshake
 
+	char PQChallenge[20];				// Secure User logon challange
 	char SecureMsg[20];					// CMS Secure Signon Response
 
 } ConnectionInfo, CIRCUIT;

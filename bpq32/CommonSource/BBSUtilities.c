@@ -2806,6 +2806,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 	BOOL SendFullFrom = Cmd[2];
 	int Start = 0;
 	struct  TempUserInfo * Temp = user->Temp;
+	char ListType = 0;
 
 	if (conn->Paging)
 	{
@@ -2827,11 +2828,39 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		
 		user->Temp->LinesSent = 0;
 	}
+
+	// Allow compound selection, eg LTN or LFP
+
+	if (Cmd[1] == 0)
+		Cmd[1] = '*';
+
+	_strupr(Cmd);
+
+	if (strchr(Cmd, 'T'))
+	{
+		ListType = 'T';
+		if (Cmd[1] == 'T')		// We want LNT not LTN
+			memmove(&Cmd[1], &Cmd[2], strlen(&Cmd[1]));  // Need Null
+	}	
+	else
+	if (strchr(Cmd, 'P'))
+	{
+		ListType = 'P';
+		if (Cmd[1] == 'P')		// We want LNT not LTN
+			memmove(&Cmd[1], &Cmd[2], strlen(&Cmd[1]));  // Need Null
+	}	
+	else
+	if (strchr(Cmd, 'B'))
+	{
+		ListType = 'B';
+		if (Cmd[1] =='B')		// We want LNT not LTN
+			memmove(&Cmd[1], &Cmd[2], strlen(&Cmd[1]));  // Need Null
+	}	
 	
-	switch (toupper(Cmd[1]))
+	switch (Cmd[1])
 	{
 
-	case 0:					// Just L
+	case '*':					// Just L
 	case 'R':				// LR = List Reverse
 
 		if (Arg1)
@@ -2862,7 +2891,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 				return;
 			}
 
-			if (Cmd[1])
+			if (Cmd[1] == 'R')
 			{
 				if (Start)
 					To = Start + 1;
@@ -2881,7 +2910,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 			if (LatestMsg == conn->lastmsg)
 				BBSputs(conn, "No New Messages\r");
-			else if (Cmd[1])
+			else if (Cmd[1] == 'R')
 				ListMessagesInRangeForwards(conn, user, user->Call, LatestMsg, conn->lastmsg + 1, SendFullFrom);
 			else
 				ListMessagesInRange(conn, user, user->Call, LatestMsg, conn->lastmsg + 1, SendFullFrom);
@@ -2977,10 +3006,18 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 						continue;
 					}
 			
-					if (MsgHddrPtr[m]->status == toupper(Cmd[1]))
-						if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
-							return;			// Hit page limit
-
+					if (ListType)
+					{
+						if (MsgHddrPtr[m]->status == Cmd[1] && MsgHddrPtr[m]->type == ListType)
+							if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
+								return;			// Hit page limit
+					}
+					else
+					{
+						if (MsgHddrPtr[m]->status == toupper(Cmd[1]))
+							if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
+								return;			// Hit page limit
+					}
 					m--;
 				}
 			}
@@ -3014,34 +3051,7 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 		else
 				BBSputs(conn, "LH or LK can only be used by SYSOP\r");
 
-
-	case 'P':
-	case 'B':
-	case 'T':			// NTS Traffic can be listed by anyone
-		{
-			int m = NumberofMessages;
-							
-			while (m > 0)
-			{
-				m = GetUserMsg(m, user->Call, conn->sysop);
-
-				if (m > 0)
-				{
-					if (Start && MsgHddrPtr[m]->number >= Start)
-					{
-						m--;
-						continue;
-					}
-
-					if (MsgHddrPtr[m]->type == toupper(Cmd[1]))
-						if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
-							return;			// Hit page limit
-					m--;
-				}
-			}
-
-			return;
-		}
+		return;
 
 	case 'C':
 	{
@@ -3089,10 +3099,45 @@ void DoListCommand(ConnectionInfo * conn, struct UserInfo * user, char * Cmd, ch
 
 		return;
 	}
+	}
+	
+	// Could be P B or T if specified without a status
+
+	switch (ListType)
+	{
+	case 'P':
+	case 'B':
+	case 'T':			// NTS Traffic can be listed by anyone
+	{
+			int m = NumberofMessages;
+							
+			while (m > 0)
+			{
+				m = GetUserMsg(m, user->Call, conn->sysop);
+
+				if (m > 0)
+				{
+					if (Start && MsgHddrPtr[m]->number >= Start)
+					{
+						m--;
+						continue;
+					}
+
+					if (MsgHddrPtr[m]->type == ListType)
+						if (ListMessage(MsgHddrPtr[m], conn, SendFullFrom))
+							return;			// Hit page limit
+					m--;
+				}
+			}
+
+			return;
+		}
+	}
+
 	
 	nodeprintf(conn, "*** Error: Invalid List option %c\r", Cmd[1]);
 
-	}
+
 }	
 int ListMessagesTo(ConnectionInfo * conn, struct UserInfo * user, char * Call, BOOL SendFullFrom, int Start)
 {
@@ -6872,12 +6917,20 @@ CheckForSID:
 			// Secure CMS challenge
 
 			int Len;
-			int Response = GetCMSHash(&Buffer[5], conn->UserPointer->pass);
+			int Response = GetCMSHash(&Buffer[5], conn->UserPointer->CMSPass);
 			char RespString[12];
+
+			// Save challengs in case needed for FW lines
+
 
 			sprintf(RespString, "%010d", Response);
 
 			Len = sprintf(conn->SecureMsg, ";PR: %s\r", &RespString[2]);
+
+			// Save challengs in case needed for FW lines
+
+			strcpy(conn->PQChallenge, &Buffer[5]);
+
 			return FALSE;
 		}
 
@@ -6959,6 +7012,11 @@ CheckForSID:
 
 			// According to Lee if you use secure login the first
 			// must be the BBS call
+			//	Actually I don't think we need the first,
+			//	as that is implied
+
+			//	If a secure password is available send the new 
+			//	call|response format.
 
 			int i, s;
 			char FWLine[10000] = ";FW: ";
@@ -6979,16 +7037,37 @@ CheckForSID:
 					{
 						if (user->RMSSSIDBits & (1 << s))
 						{
-							strcat(FWLine, " ");
 							if (s)
 							{
 								sprintf(RMSCall, "%s-%d", user->Call, s);
 								if (strcmp(RMSCall, BBSName) != 0)
+								{
+									strcat(FWLine, " ");
 									strcat(FWLine, RMSCall);
+								}
 							}
 							else
-								if (strcmp(user->Call, BBSName) != 0)
-									strcat(FWLine, user->Call);
+							{
+								if (strcmp(user->Call, BBSName) == 0)
+								{
+									// Dont include BBS call - was put on front
+									goto NoPass;
+								}
+								
+								strcat(FWLine, " ");
+								strcat(FWLine, user->Call);
+							}
+
+							if (user->CMSPass[0])
+							{
+								int Response = GetCMSHash(conn->PQChallenge, user->CMSPass);
+								char RespString[12];
+
+								sprintf(RespString, "%010d", Response);
+								strcat(FWLine, "|");
+								strcat(FWLine, &RespString[2]);
+							}
+NoPass:;
 						}
 					}
 				}
@@ -7831,7 +7910,7 @@ BOOL GetConfig(char * ConfigName)
 #ifdef WIN32
 		MessageBox(NULL, Msg, "BPQMail", MB_ICONSTOP);
 #else
-		printf(Msg);
+		printf("%s", Msg);
 #endif
 		config_destroy(&cfg);
 		return(EXIT_FAILURE);
@@ -9603,6 +9682,29 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 		return;
 	}
+
+	if (_memicmp(Cmd, "CMSPASS", CmdLen) == 0)
+	{
+		if (Arg1 == 0)
+		{
+			nodeprintf(conn,"Must specify a password\r");
+		}
+		else
+		{
+			if (strlen(Arg1) > 15)
+				Arg1[15] = 0;
+
+			strcpy(user->CMSPass, _strupr(Arg1));
+			UpdateWPWithUserInfo(user);
+			nodeprintf(conn,"CMSPassword Set\r");
+			SaveUserDatabase();
+		}
+
+		SendPrompt(conn, user);
+
+		return;
+	}
+
 
 	if (_memicmp(Cmd, "R", 1) == 0)
 	{

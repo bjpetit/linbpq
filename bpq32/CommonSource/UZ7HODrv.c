@@ -76,7 +76,7 @@ struct TNCINFO * GetSessionKey(char * key, struct TNCINFO * TNC);
 static VOID SendData(struct TNCINFO * TNC, char * key, char * Msg, int MsgLen);
 static VOID DoMonitorHddr(struct TNCINFO * TNC, struct AGWHEADER * RXHeader, UCHAR * Msg);
 VOID SendRPBeacon(struct TNCINFO * TNC);
-
+VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer);
 
 extern UCHAR BPQDirectory[];
 
@@ -1763,10 +1763,10 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 
 		strlop(Message, '<');
 
-		if (strchr(Message, '*'))
-			UpdateMH(TNC, RXHeader->callfrom, '*', 0);
-		else
-			UpdateMH(TNC, RXHeader->callfrom, ' ', 0);
+//		if (strchr(Message, '*'))
+//			UpdateMH(TNC, RXHeader->callfrom, '*', 0);
+//		else
+//			UpdateMH(TNC, RXHeader->callfrom, ' ', 0);
 		
 		return;
 
@@ -1807,6 +1807,7 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 		// Pass to Monitor
 
 		time(&Monframe.Timestamp);
+		MHPROC(&TNC->PortRecord->PORTCONTROL, (MESSAGE *)&Monframe);
 		BPQTRACE((MESSAGE *)&Monframe, TRUE);
 
 		return;
@@ -2063,10 +2064,7 @@ DigiLoop:
 	if (memcmp(&ptr[1], "SABM", 4) == 0)
 	{
 		AdjMsg->CTL = 0x2f;
-		if (TNC->Robust)
-			UpdateMH(TNC, MHCall, '.', 0);
-		else
-			UpdateMH(TNC, MHCall, ' ', 0);
+//		UpdateMH(TNC, MHCall, ' ', 0);
 	}
 	else  
 	if (memcmp(&ptr[1], "DISC", 4) == 0)
@@ -2075,10 +2073,7 @@ DigiLoop:
 	if (memcmp(&ptr[1], "UA", 2) == 0)
 	{
 		AdjMsg->CTL = 0x63;
-		if (TNC->Robust)
-			UpdateMH(TNC, MHCall, '.', 0);
-		else
-			UpdateMH(TNC, MHCall, ' ', 0);
+//		UpdateMH(TNC, MHCall, ' ', 0);
 	}
 	else  
 	if (memcmp(&ptr[1], "DM", 2) == 0)
@@ -2087,10 +2082,7 @@ DigiLoop:
 	if (memcmp(&ptr[1], "UI", 2) == 0)
 	{
 		AdjMsg->CTL = 0x03;
-		if (TNC->Robust)
-			UpdateMH(TNC, MHCall, '.', 0);
-		else
-			UpdateMH(TNC, MHCall, ' ', 0);
+//		UpdateMH(TNC, MHCall, ' ', 0);
 	}
 	else 
 	if (memcmp(&ptr[1], "RR", 2) == 0)

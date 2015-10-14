@@ -138,6 +138,7 @@ int CMDXLEN	= sizeof (CMDX);
 VOID SENDNODESMSG();
 VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
+VOID FINDBUFFS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 
 VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
@@ -1871,6 +1872,7 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	TRANSPORTENTRY * NewSess;
 
 	int CONNECTPORT, Port;
+	BOOL CallEvenIfInNodes = FALSE;
 	char * ptr, *Context;
 	UCHAR axcalls[64];
 	UCHAR ourcall[7];					// Call we are using (may have SSID bits inverted
@@ -1975,6 +1977,11 @@ NoPort:
 
 	ptr[strlen(ptr)] = ' ';				// Put param back together
 
+	if (ptr[0] == '!')
+	{
+		CallEvenIfInNodes = TRUE;
+		ptr++;
+	}
 
 	if (DecodeCallString(ptr, &Stay, &Spy, &axcalls[0]) == 0)
 	{
@@ -1986,6 +1993,9 @@ NoPort:
 	Session->STAYFLAG = Stay;
 
 	TextCallLen = ConvFromAX25(axcalls, TextCall);
+
+	if (CallEvenIfInNodes)
+		goto Downlink;
 
 	//	SEE IF CALL TO ANY OF OUR HOST SESSIONS - UNLESS DIGIS SPECIFIED
 
@@ -2069,6 +2079,8 @@ NoPort:
 	}
 
 	// Must be Downlink Connect
+
+Downlink:
 
 	if (CONNECTPORT == 0 && NUMBEROFPORTS > 1)
 	{
@@ -3084,11 +3096,13 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 	struct PORTCONTROL * PORT = NULL;
 	MHSTRUC * MH;
 	int n = MHENTRIES;
-	char Normcall[11];
+	char Normcall[20];
 	char From[10];
 	char DigiList[100];
 	char * Output;
 	int len;
+	char Digi = 0;
+
 
 	// Note that the MHDIGIS field may contain rubbish. You have to check End of Address bit to find
 	// how many digis there are
@@ -3132,6 +3146,8 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 		Bufferptr = CHECKBUFFER(Session, Bufferptr);
 		
+		Digi = 0;
+		
 		len = ConvFromAX25(MH->MHCALL, Normcall);
 
 		Normcall[len++] = MH->MHDIGI;
@@ -3168,17 +3184,36 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 				if (*ptr & 0x80)
 				{
 					if (*ptr & 1)						// if last address, must need *
+					{
 						*(Output++) = '*';
+						Digi = '*';
+					}
+
 					else
 						if ((ptr[7] & 0x80) == 0)		// Repeased by next?
+						{
 							*(Output++) = '*';			// No, so need *
-				}
+							Digi = '*';
+						}
+					
+}
 				*(Output++) = ',';
 			}		
 			*(--Output) = 0;							// remove last comma
 		}
 		else 
 			*(Output) = 0;
+
+		// if we used a digi set * on call and display via string
+
+
+		if (Digi)
+			Normcall[len++] = Digi;
+		else
+			DigiList[0] = 0;	// Dont show list if not used
+
+		Normcall[len++] = 0;
+
 
 		ptr = FormatMH(MH);
 		
@@ -3194,11 +3229,55 @@ VOID APRSMHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 {
 	//	DISPLAY APRES HEARD LIST
 
+	// APRS [Port] [Pattern] 
+
 	APRSSTATIONRECORD * MH = MHDATA;
 	int n = MAXHEARDENTRIES;
 	int len;
 	char * ptr;
-	
+	char * Pattern, * context;
+	int Port = -1;
+	char dummypattern[] ="";
+
+	Pattern = strtok_s(CmdTail, " \r", &context);
+
+	if (Pattern && strlen(Pattern) < 3)
+	{
+		// could be port number
+
+		if (isdigit(Pattern[0]) && (Pattern[1] == 0 || isdigit(Pattern[1])))
+		{
+			Port = atoi(Pattern);
+			Pattern = strtok_s(NULL, " \r", &context);
+		}
+	}
+
+	// Param is a pattern to match
+
+	if (Pattern == NULL)
+		Pattern = dummypattern;
+
+	if (Pattern[0] == ' ')
+	{
+		// Prepare Pattern
+
+		char * ptr1 = Pattern + 1;
+		char * ptr2 = Pattern;
+		char c;
+		
+		do
+		{
+			c = *ptr1++;
+			*(ptr2++) = c;
+		}
+		while (c != ' ');
+
+		*(--ptr2) = 0;
+	}
+
+	strlop(Pattern, ' ');
+	_strupr(Pattern);
+
 	*(Bufferptr++) = 13;
 
 	while (n--)
@@ -3206,17 +3285,27 @@ VOID APRSMHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 		if (MH->MHCALL[0] == 0)
 			break;
 
+		if ((Port > -1) && Port != MH->Port)
+		{
+			MH++;
+			continue;
+		}
+
 		Bufferptr = CHECKBUFFER(Session, Bufferptr);
 	
-		ptr = FormatAPRSMH(MH, CmdTail);
+		ptr = FormatAPRSMH(MH);
 
+		MH++;
+		
 		if (ptr)
 		{
+			if (Pattern[0] && strstr(ptr, Pattern) == 0)
+				continue;
+
 			len = strlen(ptr);
 			memcpy(Bufferptr, ptr, len);
 			Bufferptr += len;
 		}
-		MH++;
 	}
 
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
@@ -3633,6 +3722,7 @@ CMDX COMMANDS[] =
 	"WL2KSYSOP   ",5,WL2KSYSOP,0,
 	"STOPPORT    ",4,STOPPORT,0,
 	"STARTPORT   ",5,STARTPORT,0,
+	"FINDBUFFS   ",5,FINDBUFFS,0,
 
 #ifdef BLACKBITS
 
@@ -3713,7 +3803,7 @@ CMDX COMMANDS[] =
 	"?           ",1,CMDQUERY,0,
 //	"DUMP        ",4,DUMPCMD,0,
 	"MHEARD      ",1,MHCMD,0,
-	"APRSMH      ",4,APRSMHCMD,0,
+	"APRSMH      ",2,APRSMHCMD,0,
 	"ATTACH      ",1,ATTACHCMD,0,
 	"RADIO       ",3,RADIOCMD,0,
 	"AXRESOLVER  ",3,AXRESOLVER,0,
@@ -4642,10 +4732,6 @@ VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX *
 	Bufferptr += strlen(BADPORT);
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 	return;
-
-	
-	Bufferptr += sprintf(Bufferptr, "Winlink reporting is not configured\r");
-	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 
 VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
@@ -4708,9 +4794,18 @@ VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX 
 	Bufferptr += strlen(BADPORT);
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 	return;
+}
 
-	
-	Bufferptr += sprintf(Bufferptr, "Winlink reporting is not configured\r");
+
+VOID FINDBUFFS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	FindLostBuffers();
+
+#ifdef WIN32
+	Bufferptr += sprintf(Bufferptr, "Lost buffer info dumped to Debugview\r");
+#else
+	Bufferptr += sprintf(Bufferptr, "Lost buffer info dumped to syslog\r");
+#endif
 	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
 }
 

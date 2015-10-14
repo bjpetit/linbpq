@@ -2675,6 +2675,13 @@ int do_kiss (char * value,char * rec)
 		kissflags=kissflags | 64;
 	}
 
+	if (_stricmp(value,"TRACKER") == 0)
+	{
+		err=0;
+		kissflags |= 512;
+	}
+
+
 	if (_stricmp(value,"NOPARAMS") == 0)
 	{
 		err=0;

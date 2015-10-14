@@ -74,8 +74,13 @@
 //	Version 2.2.3.1	Dec 2014
 //		Remove "Enable Chat" option
 
+//	Version 2.2.4.1	Dec 2015
+//		Add Port Names to Monitor Config Menu
 
 #define _CRT_SECURE_NO_DEPRECATE
+
+#define pthread_t DWORD
+#include "asmstrucs.h"
 
 #include <windows.h>
 
@@ -554,13 +559,14 @@ VOID SetupRTFHddr()
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	int i, n, tempmask=0xffff;
-	char msg[20];
+	char msg[50];
 	int retCode,Type,Vallen;
 	HKEY hKey=0;
 	char Size[80];
 	TEXTMETRIC tm; 
 	HDC dc;
 	struct RTFTerm * OPData;
+	struct PORTCONTROL * PORT;
 
 	hInst = hInstance; // Store instance handle in our global variable
 
@@ -793,9 +799,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	for (n=1;n <= GetNumberofPorts();n++)
 	{
-		i = GetPortNumber(n);
+		PORT = GetPortTableEntryFromSlot(n);
+		
+		i = PORT->PORTNUMBER;
 
-		wsprintf(msg,"Port %d",i);
+		sprintf(msg,"Port %d %s ",i, PORT->PORTDESCRIPTION);
 
 		if (tempmask & (1<<(i-1)))
 		{

@@ -1722,7 +1722,7 @@ SendBack:
 				buffptr = Q_REM(&Arp->ARP_Q);
 				IPptr = (PIPMSG)&buffptr->L2DATA[30];
 				RouteIPMsg(IPptr);
-				ReleaseBuffer(buffptr);
+				free(buffptr);
 			}
 
 			break;
@@ -2339,7 +2339,7 @@ VOID ProcessRIP44Message(PIPMSG IPptr)
 		RIP2++;
 	}
 
-	while (Len > 20)		// Entry LengtH
+	while (Len >= 20)		// Entry LengtH
 	{
 		// See if already in table
 
@@ -2755,10 +2755,15 @@ BOOL RouteIPMsg(PIPMSG IPptr)
 
 					// Save a copy to send on if ARP reply received
 					
-					buffptr = GetBuff();
+					buffptr = malloc(2048);
 					
 					if (buffptr)
 					{
+						if (ntohs(IPptr->IPLENGTH) > 1600)
+						{
+							Debugprintf("Overlength IP Packet %d" , ntohs(IPptr->IPLENGTH));
+							return TRUE;
+						}
 						memcpy(&buffptr->L2DATA[30], IPptr, ntohs(IPptr->IPLENGTH));
 						C_Q_ADD(&ARPptr->ARP_Q, buffptr);
 					}
@@ -3102,7 +3107,7 @@ VOID RemoveARP(PARPDATA Arp)
 	int i;
 
 	while (Arp->ARP_Q)
-		ReleaseBuffer(Q_REM(&Arp->ARP_Q));
+		free(Q_REM(&Arp->ARP_Q));
 
 	for (i=0; i < NumberofARPEntries; i++)
 	{

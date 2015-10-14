@@ -889,6 +889,10 @@
 
 //	Fix loading Housekeeping value for forwarded bulls.
 //	Fix re-using Fwd script override in timer driven forwarding.
+//	Add ampr.org handling
+//	Add "Dont forward" match on TO address for NTS
+//	Allow listing a combinatiom of state and type, such as LNT or LPF
+//	Fix handling ISP messages from gmail without a '+'
 
 #include "BPQMailChat.h"
 #define MAIL

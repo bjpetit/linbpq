@@ -101,7 +101,7 @@ int cCOUNT_AT_L2(struct _LINKTABLE * LINK);
 void * zalloc(int len);
 BOOL FindDestination(UCHAR * Call, struct DEST_LIST ** REQDEST);
 
-char * FormatAPRSMH(APRSSTATIONRECORD * MH, char * Pattern);
+char * FormatAPRSMH(APRSSTATIONRECORD * MH);
 BOOL ProcessConfig();
 
 VOID PUT_ON_PORT_Q(struct PORTCONTROL * PORT, MESSAGE * Buffer);

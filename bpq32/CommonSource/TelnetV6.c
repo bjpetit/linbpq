@@ -76,6 +76,8 @@ int Convert1251toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
 int Convert1252toUTF8(unsigned char * MsgPtr, int len, unsigned char * UTF);
 VOID initUTF8();
 int TrytoGuessCode(unsigned char * Char, int Len);
+DllExport struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
+
 
 extern BPQVECSTRUC * TELNETMONVECPTR;
 
@@ -148,7 +150,7 @@ int WriteLog(char * msg);
 VOID WriteCMSLog(char * msg);
 byte * EncodeCall(byte * Call);
 VOID SendtoNode(struct TNCINFO * TNC, int Stream, char * Msg, int MsgLen);
-
+DllExport int APIENTRY GetNumberofPorts();
 
 BOOL CheckCMS(struct TNCINFO * TNC);
 int TCPConnect(struct TNCINFO * TNC, struct TCPINFO * TCP, struct STREAMINFO * STREAM, char * Host, int Port, BOOL FBB);
@@ -207,6 +209,39 @@ BOOL SendAndCheck(struct ConnectionInfo * sockptr, unsigned char * MsgPtr, int l
 		memmove(sockptr->ResendBuffer, MsgPtr + sent, len - sent);
 	}
 	return FALSE;
+}
+
+VOID SendPortsForMonitor(SOCKET sock)
+{
+	UCHAR PortInfo[1500] = {0xff, 0xff};
+	UCHAR * ptr = &PortInfo[2];
+	char ID[31] = "";
+	struct PORTCONTROL * PORT;
+	int i, n, p;
+
+	// Sends the ID of each Port to TermTCP
+
+	p = GetNumberofPorts();
+
+	ptr += sprintf(ptr, "%d|", p);
+
+	for (n=1; n <= p; n++)
+	{
+		PORT = GetPortTableEntryFromSlot(n);
+		
+		memcpy(ID, PORT->PORTDESCRIPTION, 30);
+
+		for (i = 29; i; i--)
+		{
+			if (ID[i] != ' ')
+				break;
+
+			ID[i] = 0;
+		}
+
+		ptr += sprintf(ptr,"%d %s|", PORT->PORTNUMBER, ID);
+	}
+	send(sock, PortInfo, ptr - PortInfo, 0);
 }
 
 ProcessLine(char * buf, int Port)
@@ -3553,15 +3588,20 @@ MsgLoop:
 			{
 				// Monitor Control
 
-				int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x",
+				int P8 = 0;
+				
+				int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x %x",
 					&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES,
-					&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8);
+					&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8, &P8);
 
 				if (n == 5)
 					sockptr->MUIOnly = sockptr->UTF8 = 0;
 
 				if (n == 6)
 					sockptr->UTF8 = 0;
+
+				if (P8 == 1)
+					SendPortsForMonitor(sock);
 
 				sockptr->InputLen = 0;
 				return 0;
@@ -3918,20 +3958,26 @@ MsgLoop:
 					{
 						// Monitor control info may arrive in same packet
 
+						int P8 = 0;
+						
 						memmove(MsgPtr, &MsgPtr[11], InputLen);
 						if (memcmp(MsgPtr, "\\\\\\\\", 4) == 0)
 						{
 							// Monitor Control
 
-							int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x",
+							int n = sscanf(&MsgPtr[4], "%x %x %x %x %x %x %x %x",
 								&sockptr->MMASK, &sockptr->MTX, &sockptr->MCOM, &sockptr->MonitorNODES,
-								&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8);
+								&sockptr->MonitorColour, &sockptr->MUIOnly, &sockptr->UTF8, &P8);
 
 							if (n == 5)
 								sockptr->MUIOnly = sockptr->UTF8 = 0;
 
 							if (n == 6)
 								sockptr->UTF8 = 0;
+
+							if (P8 == 1)
+								SendPortsForMonitor(sock);
+
 
 							sockptr->InputLen = 0;
 							return 0;
@@ -3955,6 +4001,7 @@ MsgLoop:
 
 			return 0;
 	
+
 		}
 		// Bad Password
         
@@ -4531,9 +4578,12 @@ rootok:
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_DGRAM;
-	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
-		 
-	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
+//	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
+
+	n = getaddrinfo("brentwood.winlink.org", NULL, &hints, &res);
+	 
+//	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
+	if (!res)	// Resolve Failed
 	{
 		// Switch to Cached Servers
 		

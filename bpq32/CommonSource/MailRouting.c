@@ -45,6 +45,7 @@ BOOL WarnNoRoute = TRUE;
 BOOL Localtime = FALSE;		// Use Local Time for Timebands and forward connect scripts
 
 struct ALIAS * CheckForNTSAlias(struct MsgInfo * Msg, char * FirstDestElement);
+struct UserInfo * FindAMPR();
 
 struct Continent
 {

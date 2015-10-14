@@ -418,8 +418,8 @@ VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 
 	char DIGI = '*';
 	
-	if (Buffer->ORIGIN[6] & 1)
-		DIGI = 0;
+//	if (Buffer->ORIGIN[6] & 1)
+		DIGI = 0;					// DOn't think we wnat to do this
 	
 	// See if in list
 

@@ -3620,6 +3620,13 @@ CreatePOP3Message(char * From, char * To, char * MsgTitle, time_t Date, char * M
 			if (GmailVia)
 				strcpy(Msg->via, GmailVia);
 		}
+		else
+		{
+			// Someone has sent to the GMAIL account without a +. 
+			// This should go to the BBS Call
+
+			strcpy(To, BBSName);
+		}
 	}
 
 	if ((_memicmp(To, "bull/", 5) == 0) || (_memicmp(To, "bull.", 5) == 0)

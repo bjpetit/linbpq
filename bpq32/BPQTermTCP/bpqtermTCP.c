@@ -79,6 +79,10 @@
 //	Add "Alert after interval" feature
 //	Fix "Copy to Clipboard"
 
+//	Version 1.0.12.1 Feb 2015
+//	Add Port Names to Monitor Config and fix saving monitor option s by host
+
+
 #define _USE_32BIT_TIME_T
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -715,7 +719,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		GetStringValue(MON[n], MonParams[n], 80);
 	}
 
-	swscanf(MonParams[CurrentHost], L"%x %x %x %x %x %x",
+	n = swscanf(MonParams[CurrentHost], L"%x %x %x %x %x %x",
 			&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
 
 
@@ -1296,7 +1300,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			CurrentHost = wmId - BPQCONNECT1;
 
-			swscanf(MonParams[CurrentHost], L"%x %x %x %x %x %x",
+			i = swscanf(MonParams[CurrentHost], L"%x %x %x %x %x %x",
 					&portmask, &mtxparam, &mcomparam, &MonitorNODES, &MonitorColour, &monUI);
 
 			for (i = 1; i <= MonPorts; i++)
@@ -1307,6 +1311,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					CheckMenuItem(hMenu, BPQBASE + i, MF_UNCHECKED);
 
 			}
+
+			CheckMenuItem(hMenu, BPQMCOM, (mcomparam) ? MF_CHECKED : MF_UNCHECKED);
+			CheckMenuItem(hMenu, MUIONLY, (monUI) ? MF_CHECKED : MF_UNCHECKED);
+			CheckMenuItem(hMenu, BPQMTX, (mtxparam) ? MF_CHECKED : MF_UNCHECKED);
+			CheckMenuItem(hMenu, BPQMNODES, (MonitorNODES) ? MF_CHECKED : MF_UNCHECKED);
+
 
 			TCPConnect(Host[CurrentHost], Port[CurrentHost]);
 			break;
@@ -2277,15 +2287,7 @@ int TogglePort(HWND hWnd, int Item, int mask)
 int ToggleMTX(HWND hWnd)
 {
 	mtxparam = mtxparam ^ 1;
-	
-	if (mtxparam & 1)
-
-		CheckMenuItem(hMenu,BPQMTX,MF_CHECKED);
-	
-	else
-
-		CheckMenuItem(hMenu,BPQMTX,MF_UNCHECKED);
-
+	CheckMenuItem(hMenu, BPQMTX, (mtxparam) ? MF_CHECKED : MF_UNCHECKED);
 	SendTraceOptions();
 
     return (0);
@@ -2599,6 +2601,8 @@ int Telnet_Connected(SOCKET sock, int Error)
 {
 	TCHAR Msg[80];
 	int Len;
+	int i = 1;
+
 
 	// Connect Complete
 				
@@ -2625,6 +2629,29 @@ int Telnet_Connected(SOCKET sock, int Error)
 	SocketActive = TRUE;
 	Connecting = FALSE;
 	Connected = TRUE;
+
+	// Reset Monitor Menu
+
+	// Remove old menu
+
+	while (i)
+	{
+		i = RemoveMenu(hPopMenu1, 6, MF_BYPOSITION);
+	}
+
+	for (i = 1; i <= MonPorts; i++)
+	{
+		wsprintf(Msg,L"Port %d",i);
+
+		if (portmask & (1<<(i-1)))
+		{
+			AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i, &Msg[0]);
+			portmask |= (1<<(i-1));
+		}
+		else
+			AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i, &Msg[0]); 
+	}
+
 
 	Len = wsprintf(Msg, L"%s\r%s\rBPQTermTCP\r", UserName[CurrentHost], Password[CurrentHost]);
 	
@@ -2722,15 +2749,15 @@ int TrytoGuessCode(unsigned char * Char, int Len)
 VOID DataSocket_Read(SOCKET sock)
 {
 	int len = 0, MonLen, wlen, err = 0, newlen;
-	unsigned char Buffer[1000];
+	unsigned char Buffer[2000];
 	UCHAR * ptr;
 	UCHAR * Buffptr;
 	UCHAR * FEptr = 0;
-	TCHAR BufferW[1000];
+	TCHAR BufferW[2000];
 
 	ioctlsocket(sock, FIONREAD, &len);
 
-	if (len > 1000) len = 1000;
+	if (len > 2000) len = 2000;
 
 	len = recv(sock, Buffer, len, 0);
 
@@ -2833,6 +2860,44 @@ MonLoop:
 			goto MonLoop;
 		}
 
+		if (ptr[1] == 0xff)
+		{
+			// Port Definition String
+
+			int NumberofPorts = atoi(&ptr[2]);
+			char *p, *Context;
+			int i = 1;
+			TCHAR msg[80];
+			TCHAR ID[80];
+
+			// Remove old menu
+
+			while (i)
+			{
+				i = RemoveMenu(hPopMenu1, 6, MF_BYPOSITION);
+			}
+
+			p = strtok_s(&ptr[2], "|", &Context);
+
+			while(NumberofPorts--)
+			{
+				p = strtok_s(NULL, "|", &Context);
+				mbstowcs(ID, p, strlen(p) +1);
+				
+				wsprintf(msg, L"Port %s", ID);
+
+				if (portmask & (1<<(i)))
+					AppendMenu(hPopMenu1,MF_STRING | MF_CHECKED,BPQBASE + i + 1, &msg[0]);
+				else
+					AppendMenu(hPopMenu1,MF_STRING | MF_UNCHECKED,BPQBASE + i + 1, &msg[0]); 
+			
+				i++;
+			}
+
+			return;
+		}
+
+
 		MonData = TRUE;
 
 		FEptr = memchr(Buffptr, 0xfe, len);
@@ -2920,9 +2985,9 @@ VOID SendTraceOptions()
 {
 	char Buffer[80];
 
- 	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI, 1);
-	memcpy(&MonParams[CurrentHost], &Buffer[4], Len - 4);
-	
+ 	int Len = sprintf(Buffer, "\\\\\\\\%x %x %x %x %x %x %x %x\r", portmask, mtxparam, mcomparam, MonitorNODES, MonitorColour, monUI, 1, 1);
+	mbstowcs(&MonParams[CurrentHost][0], &Buffer[4], Len - 4);
+	SaveStringValue(MON[CurrentHost], MonParams[CurrentHost]);
 	send(sock, Buffer, Len, 0);
 
 }

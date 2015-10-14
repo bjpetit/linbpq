@@ -590,6 +590,20 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 	if (TNC == NULL)
 		return 0;							// Port not defined
 
+	if (TNC->CONNECTED == 0)
+	{
+		// clear Q if not connected
+
+		while(TNC->BPQtoWINMOR_Q)
+		{
+			buffptr = Q_REM(&TNC->BPQtoWINMOR_Q);
+
+			if (buffptr)
+				ReleaseBuffer(buffptr);
+		}
+	}
+
+
 	switch (fn)
 	{
 	case 1:				// poll
@@ -603,7 +617,15 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 			struct _MESSAGE * buffptr;
 			
 			buffptr = Q_REM(&TNC->PortRecord->UI_Q);
-		
+
+			if (TNC->CONNECTED == 0)
+			{
+				// discard if not connected
+
+				ReleaseBuffer(buffptr);
+				continue;
+			}
+	
 			datalen = buffptr->LENGTH - 7;
 			Buffer = &buffptr->DEST[0];		// Raw Frame
 			Buffer[datalen] = 0;
@@ -1667,6 +1689,7 @@ VOID ARDOPThread(port)
 		}
 		
 		closesocket(TNC->WINMORSock);
+		TNC->WINMORSock = 0;
 	 	TNC->CONNECTING = FALSE;
 		return;
 	}

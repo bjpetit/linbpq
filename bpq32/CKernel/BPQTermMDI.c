@@ -66,12 +66,8 @@
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
-#include <windows.h>
-#include <time.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <malloc.h>	
-#include <memory.h>
+#include "compatbits.h"
+#include "AsmStrucs.h"
 #include <htmlhelp.h>
 #include <Richedit.h> 
 #include <commctrl.h>
@@ -92,6 +88,7 @@
 HBRUSH bgBrush;
 
 #include "BpqTermMDI.h"
+
 
 extern BOOL FrameMaximized;
 
@@ -214,13 +211,6 @@ COLORREF Colours[256] = {0,
 LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 
-typedef struct _CMDX
-{
-	char String[12];			// COMMAND STRING
-	UCHAR CMDLEN;				// SIGNIFICANT LENGTH
-	VOID (* CMDPROC)();			// COMMAND PROCESSOR
-	VOID * CMDFLAG;				// FLAG/VALUE ADDRESS
-} CMDX;
 
 extern CMDX COMMANDS[];
 extern int APPL1;
@@ -451,11 +441,12 @@ extern int SessHandle;
 VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dwTime)
 {
 	int i, n, tempmask=0xffff;
-	char msg[20];
+	char msg[50];
 	int retCode,Type,Vallen;
 	HKEY hKey=0;
 	char Size[80];
 	int Sessions = 0;
+	struct PORTCONTROL * PORT;
 
 	KillTimer(NULL,SessHandle);
 
@@ -594,9 +585,11 @@ VOID CALLBACK SetupTermSessions(HWND hwnd, UINT  uMsg, UINT  idEvent,  DWORD  dw
 
 	for (n=1; n <= GetNumberofPorts(); n++)
 	{
-		i = GetPortNumber(n);
+		PORT = GetPortTableEntryFromSlot(n);
+		
+		i = PORT->PORTNUMBER;
 
-		sprintf(msg,"Port %d",i);
+		sprintf(msg,"Port %d %s ",i, PORT->PORTDESCRIPTION);
 
 		if (tempmask & (1<<(i-1)))
 			AppendMenu(hMonCfgMenu,MF_STRING | MF_CHECKED,BPQBASE + i,msg);

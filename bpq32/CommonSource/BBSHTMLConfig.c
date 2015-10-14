@@ -121,6 +121,7 @@ char **	SeparateMultiString(char * MultiString, BOOL NoToUpper);
 VOID TidyPrompts();
 char * GetTemplateFromFile(int Version, char * FN);
 VOID FormatTime(char * Time, time_t cTime);
+struct MsgInfo * GetMsgFromNumber(int msgno);
 
 char UNC[] = "";
 char CHKD[] = "checked=checked ";
@@ -362,6 +363,7 @@ static char LostSession[] = "<html><body>"
 "Sorry, Session had been lost<br><br>&nbsp;&nbsp;&nbsp;&nbsp;"
 "<input name=Submit value=Restart type=submit> <input type=submit value=Exit name=Cancel><br></form>";
 
+
 char * MsgEditTemplate = NULL;
 char * HousekeepingTemplate = NULL;
 char * ConfigTemplate = NULL;
@@ -370,6 +372,9 @@ char * UserListTemplate = NULL;
 char * UserDetailTemplate = NULL;
 char * FwdTemplate = NULL;
 char * FwdDetailTemplate = NULL;
+char * WebMailTemplate = NULL;
+
+
 
 #ifdef LINBPQ
 UCHAR * GetBPQDirectory();
@@ -386,6 +391,237 @@ static int compare(const void *arg1, const void *arg2)
 int SendHeader(char * Reply, char * Key)
 {
 	return sprintf(Reply, MailPage, BBSName, BBSName, Key, Key, Key, Key, Key, Key, Key, Key);
+}
+
+int SendWebMailHeader(char * Reply, char * Key, struct UserInfo * User)
+{
+	char Messages[8192];
+	int m;
+	struct MsgInfo * Msg;
+	char * ptr = Messages;
+	int Start = LatestMsg;
+	int End = 1;
+	int n = 40;
+
+	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len From   @       To     Subject\r\n\r\n");
+
+	for (m = Start; m >= End; m--)
+	{
+		Msg = GetMsgFromNumber(m);
+		
+		if (Msg && CheckUserMsg(Msg, User->Call, User->flags & F_SYSOP))
+		{
+			// List it
+
+			//  1962 02-Oct PY   151 G8BPQ  @NOTBBS GM8BPQ //WL2K Test
+
+			ptr += sprintf(ptr, "<a href=""/Mail/WM/%d?%s"">%6d</a> %s %c%c %5d %-8s%-8s%-8s%s\r\n",
+				Msg->number, Key, Msg->number, "02-Oct", Msg->type,
+				Msg->status, Msg->length, Msg->to, Msg->via,
+				Msg->from, Msg->title);
+
+			n--;
+
+			if (n == 0)
+				break;
+		}
+	}
+	
+	return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Messages);
+}
+
+int SendWebMailMessage(char * Reply, char * Key, struct UserInfo * User, int Number)
+{
+	char Message[100000] = "";
+	int m;
+	struct MsgInfo * Msg;
+	char * ptr = Message;
+	int Start = LatestMsg;
+	int End = 1;
+	int n = 40;
+
+	char * MsgBytes, * Save;
+	char FullTo[100];
+	int Index;
+
+	Msg = GetMsgFromNumber(Number);
+
+	if (Msg == NULL)
+	{
+		ptr += sprintf(ptr, "Message %d not found\r\n", Number);
+		return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Message);
+	}
+
+	if (!CheckUserMsg(Msg, User->Call, User->flags & F_SYSOP))
+	{
+		ptr += sprintf(ptr, "Message %d not for you\r", Number);
+		return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Message);
+	}
+
+	if (_stricmp(Msg->to, "RMS") == 0)
+		 sprintf(FullTo, "RMS:%s", Msg->via);
+	else
+	if (Msg->to[0] == 0)
+		sprintf(FullTo, "smtp:%s", Msg->via);
+	else
+		strcpy(FullTo, Msg->to);
+
+
+	ptr += sprintf(ptr, "From: %s%s\r\nTo: %s\r\nType/Status: %c%c\r\nDate/Time: %s\r\nBid: %s\r\nTitle: %s\r\n\r\n",
+		Msg->from, Msg->emailfrom, FullTo, Msg->type, Msg->status, FormatDateAndTime(Msg->datecreated, FALSE), Msg->bid, Msg->title);
+
+	MsgBytes = Save = ReadMessageFile(Number);
+
+	if (Msg->type == 'P')
+		Index = PMSG;
+	else if (Msg->type == 'B')
+		Index = BMSG;
+	else if (Msg->type == 'T')
+		Index = TMSG;
+
+	if (MsgBytes)
+	{
+		int Length;
+
+		if (Msg->B2Flags)
+		{
+			char * ptr1;
+	
+			// if message has attachments, display them if plain text
+
+			if (Msg->B2Flags & Attachments)
+			{
+				char * FileName[100];
+				int FileLen[100];
+				int Files = 0;
+				int BodyLen, NewLen;
+				int i;
+				char *ptr2;		
+				char Msg[512];
+				int Len;
+		
+				ptr1 = MsgBytes;
+	
+				ptr += sprintf(ptr, "Message has Attachments\r\n\r\n");
+
+
+				while(*ptr1 != 13)
+				{
+					ptr2 = strchr(ptr1, 10);	// Find CR
+
+					if (memcmp(ptr1, "Body: ", 6) == 0)
+					{
+						BodyLen = atoi(&ptr1[6]);
+					}
+
+					if (memcmp(ptr1, "File: ", 6) == 0)
+					{
+						char * ptr3 = strchr(&ptr1[6], ' ');	// Find Space
+
+						FileLen[Files] = atoi(&ptr1[6]);
+
+						FileName[Files++] = &ptr3[1];
+						*(ptr2 - 1) = 0;
+					}
+				
+					ptr1 = ptr2;
+					ptr1++;
+				}
+
+				ptr1 += 2;			// Over Blank Line and Separator 
+
+				ptr += sprintf(ptr, "%s", ptr1);
+
+				ptr1 += BodyLen + 2;		// to first file
+
+				for (i = 0; i < Files; i++)
+				{
+					char Msg[512];
+					int Len, n;
+					char * p = ptr1;
+					char c;
+
+					// Check if message is probably binary
+
+					int BinCount = 0;
+
+					NewLen = RemoveLF(ptr1, FileLen[i]);		// Removes LF agter CR but not on its own
+
+					for (n = 0; n < NewLen; n++)
+					{
+						c = *p;
+						
+						if (c == 10)
+							*p = 13;
+
+						if (c==0 || (c & 128))
+							BinCount++;
+
+						p++;
+
+					}
+
+					if (BinCount > NewLen/10)
+					{
+						// File is probably Binary
+
+						ptr += sprintf(ptr, "\rAttachment %s is a binary file\r", FileName[i]);
+					}
+					else
+					{
+						ptr += sprintf(ptr, "\rAttachment %s\r\r", FileName[i]);
+
+						User->Total.MsgsSent[Index] ++;
+						User->Total.BytesForwardedOut[Index] += NewLen;
+					}
+				
+					ptr1 += FileLen[i];
+					ptr1 +=2;				// Over separator
+				}
+				return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Message);
+			}
+			
+			// Remove B2 Headers (up to the File: Line)
+			
+			ptr1 = strstr(MsgBytes, "Body:");
+
+			if (ptr1)
+				MsgBytes = ptr1;
+		}
+
+		// Remove lf chars
+
+//		Length = RemoveLF(MsgBytes, strlen(MsgBytes));
+
+		User->Total.MsgsSent[Index] ++;
+//		User->Total.BytesForwardedOut[Index] += Length;
+
+		ptr += sprintf(ptr, "%s", MsgBytes);
+		free(Save);
+
+		ptr += sprintf(ptr, "\r\r[End of Message #%d from %s]\r", Number, Msg->from);
+
+		if ((_stricmp(Msg->to, User->Call) == 0) || ((User->flags & F_SYSOP) && (_stricmp(Msg->to, "SYSOP") == 0)))
+		{
+			if ((Msg->status != 'K') && (Msg->status != 'H') && (Msg->status != 'F') && (Msg->status != 'D'))
+			{
+				if (Msg->status != 'Y')
+				{
+					Msg->status = 'Y';
+					Msg->datechanged=time(NULL);
+				}
+			}
+		}
+	}
+	else
+	{
+		ptr += sprintf(ptr, "File for Message %d not found\r", Number);
+	}
+
+
+
+
+	return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Message);
 }
 
 
@@ -411,6 +647,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 			*RLen = SendHeader(Reply, Session->Key);
  			return;
 		}
+
 
 		if (_stricmp(NodeURL, "/Mail/Config") == 0)
 		{
@@ -631,6 +868,55 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
  		return;
 	}
 
+	if (_stricmp(NodeURL, "/Mail/WebMailEntry") == 0)
+	{
+		// if signed in, continue. If not and Localhost 
+		// signin as sysop.
+
+		if (Session->User)
+		{
+			strcpy(NodeURL, "/Mail/WebMail");
+		}
+		else
+		{
+			if (LOCAL)
+			{
+				Session->User = LookupCall(BBSName);
+				strcpy(NodeURL, "/Mail/WebMail");
+			}
+		}
+	}
+		
+
+	if (_stricmp(NodeURL, "/Mail/WebMail") == 0)
+	{
+		if (WebMailTemplate)
+			free(WebMailTemplate);
+
+		WebMailTemplate = GetTemplateFromFile(1, "WebMailPage.txt");
+
+		*RLen = SendWebMailHeader(Reply, Session->Key, Session->User);
+ 		return;
+	}
+
+	if (memcmp(NodeURL, "/Mail/WM/", 9 ) == 0)
+	{
+		// Read Message
+
+		int n = atoi(&NodeURL[9]);
+
+		if (WebMailTemplate)
+			free(WebMailTemplate);
+
+		WebMailTemplate = GetTemplateFromFile(1, "WebMailPage.txt");
+
+		*RLen = SendWebMailMessage(Reply, Session->Key, Session->User, n);
+
+ 		return;
+	}
+
+
+
 	if (_stricmp(NodeURL, "/Mail/all.html") == 0)
 	{
 		*RLen = SendHeader(Reply, Session->Key);
@@ -680,12 +966,12 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (UserListTemplate)
 			free(UserListTemplate);
 
-		UserListTemplate = GetTemplateFromFile(3, "UserPage.txt");
+		UserListTemplate = GetTemplateFromFile(4, "UserPage.txt");
 
 		if (UserDetailTemplate)
 			free(UserDetailTemplate);
 
-		UserDetailTemplate = GetTemplateFromFile(3, "UserDetail.txt");
+		UserDetailTemplate = GetTemplateFromFile(4, "UserDetail.txt");
 
 		*RLen = sprintf(Reply, UserListTemplate, Key, Key, BBSName,
 			Key, Key, Key, Key, Key, Key, Key, Key);
@@ -1920,10 +2206,13 @@ VOID ProcessUserUpdate(struct HTTPConnectionInfo * Session, char * MsgPtr, char 
 		strcpy(USER->Name, ptr1);
 		ptr1 = GetNextParam(&ptr2);		// Pass
 		strcpy(USER->pass, ptr1);		
-		ptr1 = GetNextParam(&ptr2);		// ZIP
-		strcpy(USER->ZIP, ptr1);
+		ptr1 = GetNextParam(&ptr2);		// CMS Pass
+		strcpy(USER->CMSPass, ptr1);
+		_strupr(USER->CMSPass);
 		ptr1 = GetNextParam(&ptr2);		// QTH
 		strcpy(USER->Address, ptr1);
+		ptr1 = GetNextParam(&ptr2);		// ZIP
+		strcpy(USER->ZIP, ptr1);
 		ptr1 = GetNextParam(&ptr2);		// HomeBBS
 		strcpy(USER->HomeBBS, ptr1);
 		_strupr(USER->HomeBBS);
@@ -2500,6 +2789,7 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 	struct UserInfo * User = Session->User;
 	int flags = User->flags;
 	int RMSSSIDBits = Session->User->RMSSSIDBits;
+	char HiddenPass[20] = "";
 
 	int	ConnectsIn;
 	int ConnectsOut;
@@ -2544,6 +2834,8 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 				SSID[i++][0] = 0;
 		}
 	}
+
+	memset(HiddenPass, '*', strlen(User->CMSPass));
 	
 	Len = sprintf(Reply, UserDetailTemplate, Key, User->Call,
 		(flags & F_BBS)?CHKD:UNC,
@@ -2567,8 +2859,9 @@ int SendUserDetails(struct HTTPConnectionInfo * Session, char * Reply, char * Ke
 		BytesForwardedOut, User->lastmsg,
 		User->Name,
 		User->pass,
-		User->ZIP,
+		HiddenPass,
 		User->Address,
+		User->ZIP,
 		User->HomeBBS);
 
 	return Len;

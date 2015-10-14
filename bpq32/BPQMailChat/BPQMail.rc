@@ -210,7 +210,7 @@ BEGIN
     CONTROL         "Don't Request Name",IDC_NONAME,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,259,208,79,12
     EDITTEXT        IDC_AMPR,72,255,119,13
-    LTEXT           "ampr.org Address",IDC_STATIC,6,257,60,12
+    LTEXT           "AMPR Address",IDC_STATIC,6,257,60,12
     CONTROL         "Send ampr.org mail to AMPR host",IDC_FORWARDAMPR,"Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP,201,255,124,14
 END
@@ -305,7 +305,7 @@ BEGIN
     CONTROL         "Include SYSOP msgs in LM",IDC_SYSOP_IN_LM,"Button",
                     BS_AUTOCHECKBOX | BS_LEFT | WS_DISABLED | WS_TABSTOP,153,
                     74,100,10
-    EDITTEXT        IDC_CMSPASS,187,177,88,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_CMSPASS,187,177,88,14,ES_PASSWORD
     CONTROL         "CMS Pass",IDC_STATIC,"Static",SS_LEFTNOWORDWRAP | 
                     WS_GROUP,149,179,34,14
 END

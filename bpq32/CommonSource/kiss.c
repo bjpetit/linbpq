@@ -96,7 +96,7 @@ int i2c_smbus_read_byte()
 #define PITNC 64				// PITNC Mode - can reset TNC with FEND 15 2
 #define NOPARAMS 128			// Don't send SETPARAMS frame
 #define FLDIGI 256				// Support FLDIGI COmmand Frames
-
+#define TRACKER 512				// SCS Tracker. Need to set KISS Mode 
 
 int WritetoConsoleLocal(char * buff);
 VOID INITCOMMON(struct KISSINFO * PORT);
@@ -401,19 +401,7 @@ int	ASYINIT(int comport, int speed, struct PORTCONTROL * PortVector, char Channe
 		npKISSINFO->RXMPTR=&npKISSINFO->RXMSG[0];
 
 		OpenConnection(PortVector, comport);
-	
-		if (PortVector->KISSFLAGS & PITNC)
-		{
-			// RFM22/23 module - send a reset
 
-			struct KISSINFO * KISS = (struct KISSINFO *) PortVector;
-
-			ENCBUFF[0] = FEND;
-			ENCBUFF[1] = KISS->OURCTRL | 15;	// Action command
-			ENCBUFF[2] = 2;						// Reset command
-
-			ASYSEND(PortVector, ENCBUFF, 3);
-		}
 	}
 
 	npKISSINFO->Portvector = PortVector; 
@@ -457,6 +445,30 @@ HANDLE OpenConnection(struct PORTCONTROL * PortVector, int port)
 	
 	if (ComDev)
 		npKISSINFO->idComDev = ComDev;
+
+	if (PortVector->KISSFLAGS & PITNC)
+	{
+		// RFM22/23 module  or TNC-PI- send a reset
+
+		struct KISSINFO * KISS = (struct KISSINFO *) PortVector;
+
+		ENCBUFF[0] = FEND;
+		ENCBUFF[1] = KISS->OURCTRL | 15;	// Action command
+		ENCBUFF[2] = 2;						// Reset command
+
+		ASYSEND(PortVector, ENCBUFF, 3);
+	}
+
+	if (PortVector->KISSFLAGS & TRACKER)
+	{
+		// SCS Tracker - Send Enter KISS (CAN)(ESC)@K(CR)
+
+		struct KISSINFO * KISS = (struct KISSINFO *) PortVector;
+
+		memcpy(ENCBUFF, "\x18\x1b@K\r", 5);	// Enter KISS
+
+		ASYSEND(PortVector, ENCBUFF, 5);
+	}
 
 	return ComDev;
 }

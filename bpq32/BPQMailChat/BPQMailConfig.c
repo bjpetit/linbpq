@@ -927,7 +927,8 @@ int Do_User_Sel_Changed(HWND hDlg)
 			SetDlgItemText(hDlg, IDC_QTH, user->Address);
 			SetDlgItemText(hDlg, IDC_UZIP, user->ZIP);
 			SetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS);
-
+			SetDlgItemText(hDlg, IDC_CMSPASS, user->CMSPass);
+			
 			SetDlgItemInt(hDlg, IDC_LASTLISTED, user->lastmsg, TRUE);
 
 			CheckDlgButton(hDlg, IDC_SYSOP, (user->flags & F_SYSOP));
@@ -1014,6 +1015,8 @@ int Do_User_Sel_Changed(HWND hDlg)
 
 	SetDlgItemText(hDlg, IDC_NAME, "");
 	SetDlgItemText(hDlg, IDC_PASSWORD, "");
+	SetDlgItemText(hDlg, IDC_CMSPASS, "");
+	
 	SetDlgItemText(hDlg, IDC_QTH, "");
 	SetDlgItemText(hDlg, IDC_UZIP, "");
 	SetDlgItemText(hDlg, IDC_HOMEBBS, "");
@@ -1142,7 +1145,11 @@ VOID Do_Save_User(HWND hDlg, BOOL ShowBox)
 	GetDlgItemText(hDlg, IDC_QTH, user->Address, 60);
 	GetDlgItemText(hDlg, IDC_UZIP, user->ZIP, 8);
 	GetDlgItemText(hDlg, IDC_HOMEBBS, user->HomeBBS, 40);
-	user->lastmsg = GetDlgItemInt(hDlg, IDC_LASTLISTED, &OK, FALSE);
+	GetDlgItemText(hDlg, IDC_CMSPASS, user->CMSPass, 15);
+	_strupr(user->CMSPass);
+
+
+user->lastmsg = GetDlgItemInt(hDlg, IDC_LASTLISTED, &OK, FALSE);
 
 	if (IsDlgButtonChecked(hDlg, IDC_BBSFLAG))
 	{

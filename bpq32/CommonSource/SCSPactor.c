@@ -1394,7 +1394,7 @@ VOID SCSPoll(int Port)
 	{
 		if (TNC->Streams[Stream].CmdSet)
 		{
-			char * start, * end;
+			unsigned char * start, * end;
 			int len;
 
 			start = TNC->Streams[Stream].CmdSet;
@@ -1412,6 +1412,7 @@ VOID SCSPoll(int Port)
 
 				free(TNC->Streams[Stream].CmdSave);
 				TNC->Streams[Stream].CmdSet = NULL;
+				return;
 			}
 
 			if (*(start) == 0)			// End of Script
@@ -1575,10 +1576,10 @@ VOID SCSPoll(int Port)
 			Poll[2] = 250;				// KISS Channel
 			Poll[3] = 0;				// CMD
 			Poll[4] = datalen + 2;		// 3 extrac chars, but need Len - 1
-			Poll[5] = 192;				// Fend
-			Poll[6] = 0;
 
-			EncLen = KissEncode(&Poll[5], Buffer, datalen);
+			Buffer--;
+			*(Buffer) = 0;			// KISS Control on front
+			EncLen = KissEncode(Buffer, &Poll[5], datalen + 1);
 
 			// We can only send 256 bytes in HostMode, so if longer will
 			// have to fragemt
@@ -2580,7 +2581,7 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 
 		// If Scan Entry has a Appl, save it
 
-		if (TNC->RIG->FreqPtr[0]->APPL[0])
+		if (PactorCall && TNC->RIG->FreqPtr && TNC->RIG->FreqPtr[0]->APPL[0])
 			strcpy(FreqAppl, &TNC->RIG->FreqPtr[0]->APPL[0]);
 	}
 	else
@@ -2611,7 +2612,8 @@ VOID ProcessIncomingCall(struct TNCINFO * TNC, struct STREAMINFO * STREAM, int S
 	else					
 		Debugprintf("HF Packet/RP Incoming Call - MYCALL = *%s*", DestCall);					
 
-	if (TNC->UseAPPLCallsforPactor && strcmp(DestCall, TNC->NodeCall) != 0)		// Not Connect to Node Call
+	if ( ((PactorCall && TNC->UseAPPLCallsforPactor) || (PactorCall == 0 && TNC->UseAPPLCalls))
+		&& strcmp(DestCall, TNC->NodeCall) != 0)		// Not Connect to Node Call
 	{		
 		for (App = 0; App < 32; App++)
 		{
@@ -3165,7 +3167,7 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 
 			// Monitor
 
-			if (TNC->HFPacket && TNC->UseAPPLCalls && strstr(&Msg[4], "SABM") && STREAM->Connected == FALSE)
+			if ((TNC->HFPacket || TNC->DragonSingle) && TNC->UseAPPLCalls && strstr(&Msg[4], "SABM") && STREAM->Connected == FALSE)
 			{
 				// See if a call to Nodecall or one of our APPLCALLS - if so, stop scan and switch MYCALL
 

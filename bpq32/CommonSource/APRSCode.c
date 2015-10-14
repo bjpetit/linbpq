@@ -2862,7 +2862,7 @@ BOOL CheckforDups(char * Call, char * Msg, int Len)
 	return FALSE;
 }
 
-char * FormatAPRSMH(APRSSTATIONRECORD * MH, char * Pattern)
+char * FormatAPRSMH(APRSSTATIONRECORD * MH)
  {
 	 // Called from CMD.ASM
 
@@ -2870,40 +2870,13 @@ char * FormatAPRSMH(APRSSTATIONRECORD * MH, char * Pattern)
 	static char MHLine[50];
 	time_t szClock = MH->MHTIME;
 
-	if (Pattern[0] == ' ')
-	{
-		// Prepare Pattern
-
-		char * ptr1 = Pattern + 1;
-		char * ptr2 = Pattern;
-		char c;
-		
-		do
-		{
-			c = *ptr1++;
-			*(ptr2++) = c;
-		}
-		while (c != ' ');
-
-		*(--ptr2) = 0;
-	}
-
-
-
 	szClock = (time(NULL) - szClock);
 	TM = gmtime(&szClock);
 
 	sprintf(MHLine, "%-10s %d %.2d:%.2d:%.2d:%.2d %s\r",
 		MH->MHCALL, MH->Port, TM->tm_yday, TM->tm_hour, TM->tm_min, TM->tm_sec, (MH->IGate) ? "IGATE" : "");
 
-	if (Pattern[0] == 0)
-		return MHLine;
-
-	if (strstr(MHLine, Pattern))
-		return MHLine;
-	else
-		return NULL;
-
+	return MHLine;
  }
 
 // GPS Handling Code

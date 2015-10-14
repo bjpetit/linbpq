@@ -340,6 +340,8 @@ VOID * _GetBuff(char * File, int Line)
 	UINT * Temp = Q_REM(&FREE_Q);
 	MESSAGE * Msg;
 
+//	FindLostBuffers();
+
 	if (Semaphore.Flag == 0)
 		Debugprintf("GetBuff called without semaphore from %s Line %d", File, Line);
 

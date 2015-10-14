@@ -725,7 +725,15 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Allow lower case user and passwords in Telnet "Attach and Connect"
 //	Fix possible hang in KISS over TCP Slave mode
 //	Fix duplicating LinBPQ process if running ARDOP fails
-//	Allow lower case command aliase and increase alias length to 48
+//	Allow lower case command aliases and increase alias length to 48
+//	Fix saving long IP frames pending ARP resolution
+//	Fix dropping last entry from a RIP44 message.
+//	Fix displaying Digis in MH list
+//	Add port name to Monitor config screen port list
+//	Fix APRS display filter and add port filter
+//	Support port names in BPQTermTCP Monitor config
+//	Add FINDBUFFS command to dump lost buffers to Debugview/Syslog
+//	Buffer Web Mgmt Edit Config output
 
 #define CKernel
 
