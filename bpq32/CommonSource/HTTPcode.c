@@ -58,10 +58,8 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	VOID * Msg;					// Selected Message
 	VOID * WP;					// Selected WP record
 	struct UserRec * USER;		// Telnet Server USER record
+	int WebMailLastListed;
 };
-
-
-
 
 
 extern int MAXBUFFS, QCOUNT, MINBUFFCOUNT, NOBUFFCOUNT, BUFFERWAITS, L3FRAMES;
@@ -120,7 +118,7 @@ void ProcessChatHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 struct PORTCONTROL * APIENTRY GetPortTableEntryFromSlot(int portslot);
 int SetupNodeMenu(char * Buff);
 int StatusProc(char * Buff);
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail);
 int ProcessChatSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session);
 VOID APRSProcessHTTPMessage(SOCKET sock, char * MsgPtr);
 
@@ -1440,7 +1438,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 	if (_stricmp(NodeURL, "/Mail/Signon") == 0)
 	{
-		ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session);
+		ReplyLen = ProcessMailSignon(TCP, MsgPtr, Key, Reply, &Session, FALSE);
 		
 		if (ReplyLen)
 		{
@@ -1483,10 +1481,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 
 			if (Session)
 			{
-				if (_stricmp(Context, "/Mail/WebMailEntry") == 0)
-					strcpy(Context, "/Mail/WebMail");
-				else
-					strcpy(Context, "/Mail/Header");
+				strcpy(Context, "/Mail/Header");
 				goto doHeader;
 			}
 			else
@@ -1499,7 +1494,7 @@ int InnerProcessHTTPMessage(struct ConnectionInfo * conn)
 			goto Returnit;
 
 		}
-		
+
 		ReplyLen = sprintf(Reply, MailSignon, Mycall, Mycall);
 
 		RLen = ReplyLen;
@@ -1623,11 +1618,15 @@ doHeader:
 
 #ifdef LINBPQ
 
-	if (_memicmp(Context, "/MAIL/", 6) == 0)
+	if ((_memicmp(Context, "/MAIL/", 6) == 0) || (_memicmp(Context, "/WebMail", 8) == 0))
 	{
 		char _REPLYBUFFER[100000];
+		struct HTTPConnectionInfo Dummy = {0};
 
 		ReplyLen = 0;
+
+		if (Session == 0)
+			Session = &Dummy;
 
 		ProcessMailHTTPMessage(Session, Method, Context, MsgPtr, _REPLYBUFFER, &ReplyLen);
 
@@ -1691,7 +1690,7 @@ doHeader:
 
 	// Pass to MailChat if active
 
-	if (_memicmp(Context, "/MAIL/", 6) == 0)
+	if ((_memicmp(Context, "/MAIL/", 6) == 0) || (_memicmp(Context, "/WebMail", 8) == 0))
 	{
 		// If for Mail, Pass to Mail Server via Named Pipe
 
@@ -1711,6 +1710,10 @@ doHeader:
 		{
 //			int Sent;
 			int Loops = 0;
+			struct HTTPConnectionInfo Dummy = {0};
+
+			if (Session == 0)
+				Session = &Dummy;
 
 			WriteFile(hPipe, Session, sizeof (struct HTTPConnectionInfo), &InputLen, NULL);
 			WriteFile(hPipe, MsgPtr, MsgLen, &InputLen, NULL);
@@ -3002,11 +3005,12 @@ int ProcessNodeSignon(SOCKET sock, struct TCPINFO * TCP, char * MsgPtr, char * A
 
 
 
-int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session)
+int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * Reply, struct HTTPConnectionInfo ** Session, BOOL WebMail)
 {
 	int ReplyLen = 0;
 	char * input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 	char * user, * password, * Key;
+	struct HTTPConnectionInfo * NewSession;
 
 	if (input)
 	{
@@ -3028,15 +3032,19 @@ int ProcessMailSignon(struct TCPINFO * TCP, char * MsgPtr, char * Appl, char * R
 
 			if (user && _stricmp(user, USER->UserName) == 0)
 			{
- 				if (strcmp(password, USER->Password) == 0 && USER->Secure)
+ 				if (strcmp(password, USER->Password) == 0 && (USER->Secure || WebMail))
 				{
 					// ok
 
-					*Session = AllocateSession(Appl[0], 'M');
-
-					if (Session)
+					NewSession = AllocateSession(Appl[0], 'M');
+				
+					*Session = NewSession;
+				
+					if (NewSession)
 					{
+						
 						ReplyLen = 0;
+						strcpy(NewSession->Callsign, USER->Callsign);
 					}
 					else
 					{

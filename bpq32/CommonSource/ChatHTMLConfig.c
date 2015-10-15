@@ -90,6 +90,7 @@ struct HTTPConnectionInfo		// Used for Web Server for thread-specific stuff
 	VOID * Msg;					// Selected Message
 	VOID * WP;					// Selected WP record
 	struct UserRec * USER;		// Telnet Server USER record
+	int WebMailLastListed;
 };
 
 

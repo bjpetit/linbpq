@@ -6917,11 +6917,25 @@ CheckForSID:
 			// Secure CMS challenge
 
 			int Len;
-			int Response = GetCMSHash(&Buffer[5], conn->UserPointer->CMSPass);
+			struct UserInfo * User = conn->UserPointer;
+			char * Pass = User->CMSPass;
+			int Response ;
 			char RespString[12];
 
-			// Save challengs in case needed for FW lines
+			if (Pass[0] == 0)
+			{
+				Pass = User->pass;		// Old Way
+				if (Pass[0] == 0)
+				{
+					User = LookupCall(BBSName);
+					if (User)
+					Pass = User->CMSPass;
+				}
+			}
 
+			// 
+
+			Response = GetCMSHash(&Buffer[5], Pass);
 
 			sprintf(RespString, "%010d", Response);
 
@@ -9696,7 +9710,29 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 
 			strcpy(user->CMSPass, _strupr(Arg1));
 			UpdateWPWithUserInfo(user);
-			nodeprintf(conn,"CMSPassword Set\r");
+			nodeprintf(conn,"CMS Password Set\r");
+			SaveUserDatabase();
+		}
+
+		SendPrompt(conn, user);
+
+		return;
+	}
+
+	if (_memicmp(Cmd, "PASS", CmdLen) == 0)
+	{
+		if (Arg1 == 0)
+		{
+			nodeprintf(conn,"Must specify a password\r");
+		}
+		else
+		{
+			if (strlen(Arg1) > 12)
+				Arg1[12] = 0;
+
+			strcpy(user->pass, Arg1);
+			UpdateWPWithUserInfo(user);
+			nodeprintf(conn,"BBS Password Set\r");
 			SaveUserDatabase();
 		}
 
@@ -9740,6 +9776,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		{
 			BBSputs(conn, "A - Abort Output\r");
 			BBSputs(conn, "B - Logoff\r");
+			BBSputs(conn, "CMSPASS Password - Set CMS Password\r");
 			BBSputs(conn, "D - Flag NTS Message(s) as Delivered - D num\r");
 			BBSputs(conn, "HOMEBBS - Display or get HomeBBS\r");
 			BBSputs(conn, "INFO - Display information about this BBS\r");
@@ -9760,6 +9797,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 			BBSputs(conn, "N Name - Set Name\r");
 			BBSputs(conn, "NODE - Return to Node\r");
 			BBSputs(conn, "OP n - Set Page Length (Output will pause every n lines)\r");
+			BBSputs(conn, "PASS Password - Set BBS Password\r");
 			BBSputs(conn, "POLLRMS - Manage Polling for messages from RMS \r");
 			BBSputs(conn, "Q QTH - Set QTH\r");
 			BBSputs(conn, "R - Read Message(s) - R num, RM (Read new messages to me)\r");

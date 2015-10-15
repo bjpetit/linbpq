@@ -4578,12 +4578,9 @@ rootok:
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
 	hints.ai_socktype = SOCK_DGRAM;
-//	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
-
-	n = getaddrinfo("brentwood.winlink.org", NULL, &hints, &res);
+	n = getaddrinfo("server.winlink.org", NULL, &hints, &res);
 	 
-//	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
-	if (!res)	// Resolve Failed
+	if (n || !res || res->ai_next == 0)	// Resolve Failed, or Returned only one Host
 	{
 		// Switch to Cached Servers
 		
