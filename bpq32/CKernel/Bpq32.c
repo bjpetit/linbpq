@@ -734,6 +734,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Support port names in BPQTermTCP Monitor config
 //	Add FINDBUFFS command to dump lost buffers to Debugview/Syslog
 //	Buffer Web Mgmt Edit Config output
+//	Add WebMail Support
+//	Fix not closing APRS Send WX file.
 
 #define CKernel
 

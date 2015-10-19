@@ -55,6 +55,7 @@ struct STATIONRECORD
 	char LastRXSeq[6];				// Seq from last received message (used for Reply-Ack system)
 	BOOL SimpleNumericSeq;			// Station treats seq as a number, not a text field
 	struct STATIONRECORD * Object;	// Set if last record from station was an object
+    time_t TimeLastTracked;			// Time of last trackpoint
 
 } StationRecord;
 

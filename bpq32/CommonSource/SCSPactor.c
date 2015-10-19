@@ -65,9 +65,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 // Changes for P4Dragon
 
-//#ifdef WIN32
-//#define WRITELOG
-//#endif
+#ifdef WIN32
+#define WRITELOG
+#endif
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
@@ -302,7 +302,7 @@ ConfigLine:
 
 			strcat (TNC->InitScript, Cmd);
 		}
-		if (_memicmp(buf, "TIME", 4) == 0)
+		else if (_memicmp(buf, "TIME", 4) == 0)
 		{
 			char Cmd[32];
 			time_t T;
@@ -2811,7 +2811,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				TNC->Timeout = 1;			// 
 				return;
 			}
-		}	
+		}
+		
+		if (TNC->Streams[Stream].Connected)
+			return;
 
 		buffptr = GetBuff();
 
@@ -2895,8 +2898,6 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			struct STREAMINFO * STREAM = &TNC->Streams[Stream];
 			
 			// See if a response to internal command
-
-			// *** TEST **** display response to I cmd
 
 			if (RIG_DEBUG)
 				if (LastCmd == 'I')
@@ -3214,10 +3215,12 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 								sprintf(Status, "%d SCANSTART 30", TNC->Port);
 								Rig_Command(-1, Status);
 								TNC->SwitchToPactor = 0;		// Stay in RP
-
+				
 								strcpy(STREAM->MyCall, DestCall);
 								STREAM->CmdSet = STREAM->CmdSave = malloc(100);
 								sprintf(STREAM->CmdSet, "I%s\r", DestCall);
+								TNC->InternalCmd = TRUE;
+								
 								break;
 							}
 						}
@@ -3237,6 +3240,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		if (buffptr == NULL) return;			// No buffers, so ignore
 
 		buffptr[1] = sprintf((UCHAR *)&buffptr[2],"Pactor} %s", &Msg[4]);
+
+		OpenLogFile(TNC->Port);
+		WriteLogLine(TNC->Port, &Msg[4], strlen(&Msg[4]));
+		CloseLogFile(TNC->Port);
 
 		C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
 

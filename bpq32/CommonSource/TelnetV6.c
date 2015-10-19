@@ -1751,10 +1751,6 @@ VOID TelnetPoll(int Port)
 									ProcessTriModeDataMessage(TNC, sockptr, sockptr->TriModeDataSock, &TNC->Streams[n]);
 								}
 							}
-							if (FD_ISSET(sock, &exceptfd))
-							{
-								DataSocket_Disconnect(TNC, sockptr);
-							}
 
 							if (FD_ISSET(sock, &readfd))
 							{
@@ -1769,7 +1765,10 @@ VOID TelnetPoll(int Port)
 							}
 
 							if (FD_ISSET(sock, &exceptfd))
+							{
+								Debugprintf("exceptfd set");
 								Telnet_Connected(TNC, sockptr, sock, 1);
+							}
 
 							if (FD_ISSET(sock, &writefd))
 								Telnet_Connected(TNC, sockptr, sock, 0);
@@ -4094,6 +4093,8 @@ int DataSocket_Disconnect(struct TNCINFO * TNC,  struct ConnectionInfo * sockptr
 {
 	int n;
 
+	Debugprintf("Disconnect Reported");
+
 	if (sockptr->SocketActive)
 	{
 		closesocket(sockptr->socket);
@@ -4379,11 +4380,22 @@ int Telnet_Connected(struct TNCINFO * TNC, struct ConnectionInfo * sockptr, SOCK
 	buffptr = GetBuff();
 	if (buffptr == 0) return 0;			// No buffers, so ignore
 				
+	Debugprintf("Except Event Error = %d", Error);
 #ifndef WIN32
+
+//	SO_ERROR codes
+
+#define	ETIMEDOUT		110	/* Connection timed out */
+#define	ECONNREFUSED	111	/* Connection refused */
+#define	EHOSTDOWN		112	/* Host is down */
+#define	EHOSTUNREACH	113	/* No route to host */
+#define	EALREADY		114	/* Operation already in progress */
+#define	EINPROGRESS		115	/* Operation now in progress */
 
 	if (Error == 0)
 		getsockopt(sock, SOL_SOCKET, SO_ERROR, (char *)&Error, &errlen);
 
+	Debugprintf("Except Event Error after opts = %d", Error);
 #endif
 
 	if (Error)

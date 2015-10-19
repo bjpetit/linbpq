@@ -4000,11 +4000,13 @@ BOOL DecodeLocationString(UCHAR * Payload, struct STATIONRECORD * Station)
 	if (Station->Lat != NewLat || Station->Lon != NewLon)
 	{
 		time_t NOW = time(NULL);
-		time_t Age = NOW - Station->TimeLastUpdated;
+		time_t Age = NOW - Station->TimeLastTracked;
 
 		if (Age > 15)				// Don't update too often
 		{
 			// Add to track
+
+			Station->TimeLastTracked = NOW;
 
 //			if (memcmp(Station->Callsign, "ISS ", 4) == 0)
 //				Debugprintf("%s %s %s ",Station->Callsign, Station->Path, Station->LastPacket);
@@ -5182,7 +5184,7 @@ VOID SendWeatherBeacon()
 		Len = fread(WXMessage, 1, 1024, hFile); 
 	else
 	{
-		Debugprintf("APRS WX File %s fread() falied %d", WXFileName, GetLastError());
+		Debugprintf("APRS WX File %s open() failed %d", WXFileName, GetLastError());
 		return;
 	}
 
@@ -5190,6 +5192,7 @@ VOID SendWeatherBeacon()
 	if (Len < 30)
 	{
 		Debugprintf("BPQAPRS - WX file %s is too short - %d Chars", WXFileName, Len);
+		fclose(hFile);
 		return;
 	}
 
@@ -5291,6 +5294,7 @@ VOID SendWeatherBeacon()
 		if (WXPort[index])
 			SendAPRSMessage(Msg, index);
 
+	fclose(hFile);
 }
 
 
