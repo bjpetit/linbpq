@@ -736,6 +736,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Buffer Web Mgmt Edit Config output
 //	Add WebMail Support
 //	Fix not closing APRS Send WX file.
+//	Add RUN option to APRS Config to start APRS Client
+//	LinBPQ run FindLostBuffers and exit if QCOUNT < 5
 
 #define CKernel
 

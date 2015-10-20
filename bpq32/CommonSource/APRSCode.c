@@ -222,6 +222,8 @@ int BeaconCounter = 0;
 int IStatusCounter = 0;					// Used to send ?ISTATUS? Responses
 int StatusCounter = 0;					// Used to send Status Messages
 
+char RunProgram[128] = "";				// Program to start
+
 BOOL APRSISOpen = FALSE;
 int ISDelayTimer = 0;					// Time before trying to reopen APRS-IS link
 
@@ -699,6 +701,69 @@ Dll BOOL APIENTRY Init_APRS()
 	WritetoConsole("APRS Digi/Gateway Enabled\n");
 
 	APRSWeb = TRUE;
+
+	// If a Run parameter was supplied, run the program
+
+	if (RunProgram[0] == 0)
+		return TRUE;
+
+	#ifndef WIN32
+	{
+		char * arg_list[] = {NULL, NULL};
+		pid_t child_pid;	
+
+		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
+
+		//	Fork and Exec ARDOP
+
+		printf("Trying to start %s\n", RunProgram);
+
+		arg_list[0] = RunProgram;
+	 
+    	/* Duplicate this process. */ 
+
+		child_pid = fork (); 
+
+		if (child_pid == -1) 
+ 		{    				
+			printf ("APRS fork() Failed\n"); 
+			return 0;
+		}
+
+		if (child_pid == 0) 
+ 		{    				
+			execvp (arg_list[0], arg_list); 
+        
+			/* The execvp  function returns only if an error occurs.  */ 
+
+			printf ("Failed to run %s\n", RunProgram); 
+			exit(0);			// Kill the new process
+		}
+	}								 
+#else
+	{
+		int n = 0;
+		
+		STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
+	    PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
+
+		SInfo.cb=sizeof(SInfo);
+		SInfo.lpReserved=NULL; 
+		SInfo.lpDesktop=NULL; 
+		SInfo.lpTitle=NULL; 
+		SInfo.dwFlags=0; 
+		SInfo.cbReserved2=0; 
+	  	SInfo.lpReserved2=NULL; 
+
+		while (KillOldTNC(RunProgram) && n++ < 100)
+		{
+			Sleep(100);
+		}
+
+		if (!CreateProcess(RunProgram, NULL, NULL, NULL, FALSE,0 ,NULL ,NULL, &SInfo, &PInfo))
+			Debugprintf("Failed to Start %s Error %d ", RunProgram, GetLastError());
+	}
+#endif
 
 	return TRUE;
 }
@@ -1857,8 +1922,15 @@ static APRSProcessLine(char * buf)
 			
 			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
 		}
+		return TRUE;
 	}
-	return TRUE;
+
+	if (_stricmp(ptr, "Run") == 0)
+	{
+		strcpy(RunProgram, p_value);
+		return TRUE;
+	}
+
 
 	//
 	//	Bad line

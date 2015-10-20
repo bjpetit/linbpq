@@ -143,7 +143,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories="s:\dev\source\bpq32\cinclude"
+				AdditionalIncludeDirectories="..\cinclude"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -214,11 +214,11 @@
 			Filter="cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
 			>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\WinmorControl.c"
+				RelativePath="..\CKernel\WinmorControl.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\WinmorControl.rc"
+				RelativePath="..\CKernel\WinmorControl.rc"
 				>
 			</File>
 		</Filter>

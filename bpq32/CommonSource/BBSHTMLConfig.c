@@ -330,8 +330,8 @@ static char MsgEditPage[] = "<html><head><meta content=\"text/html; charset=ISO-
 static char MsgInputPage[] = "<html><head><meta content=\"text/html; charset=ISO-8859-1\" http-equiv=\"content-type\">"
 "<title></title></head><body>"
 "<form style=\"font-family: monospace; \"method=post action=EMSave?%s>"
-"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 name=To><br>"
-"Subject <input size=60 name=Subj><br>"
+"To &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input size=60 value=\"%s\" name=To><br>"
+"Subject <input size=60 name=Subj value=\"%s\"><br>"
 "Type &nbsp;&nbsp;&nbsp;<select tabindex=1 size=1 name=Type>"
 "<option value=P>P</option><option value=B>B</option><option value=T>T</option>"
 "</select> BID <input name=BID><br>"
@@ -468,7 +468,7 @@ int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Sess
 	char Via[64];
 	int Count = 0;
 
-	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len From   @       To     Subject\r\n\r\n");
+	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len To     @       From   Subject\r\n\r\n");
 
 	for (m = LatestMsg; m >= 1; m--)
 	{
@@ -769,6 +769,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	char * Title;
 	char * Vptr;
 	char * Context;
+	char Prompt[256] = "Message Saved";
 
 	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 
@@ -876,12 +877,46 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 		strcpy(Msg->to, _strupr(HDest));
 	}
 
+	if (SendBBStoSYSOPCall)
+		if (_stricmp(HDest, BBSName) == 0)
+			strcpy(Msg->to, SYSOPCall);
+
+
 	if (Vptr)
 	{
 		if (strlen(Vptr) > 40)
 			Vptr[40] = 0;
 
 		strcpy(Msg->via, _strupr(Vptr));
+	}
+	else
+	{
+		// No via. If not local user try to add BBS 
+	
+		struct UserInfo * ToUser = LookupCall(Msg->to);
+
+		if (ToUser)
+		{
+			// Local User. If Home BBS is specified, use it
+
+			if (ToUser->HomeBBS[0])
+			{
+				strcpy(Msg->via, ToUser->HomeBBS);
+				sprintf(Prompt, "%s added from HomeBBS", Msg->via);
+			}
+		}
+		else
+		{
+			// Not local user - Check WP
+			
+			WPRecP WP = LookupWP(Msg->to);
+
+			if (WP)
+			{
+				strcpy(Msg->via, WP->first_homebbs);
+				sprintf(Prompt, "%s added from WP", Msg->via);
+			}
+		}
 	}
 
 	if (strlen(Title) > 60)
@@ -926,7 +961,7 @@ VOID SaveNewMessage(struct HTTPConnectionInfo * Session, char * MsgPtr, char * R
 	SaveMessageDatabase();
 	SaveBIDDatabase();
 
-	*RLen = sprintf(Reply, "%s", "<html><script>alert(\"Message Saved\");window.close();</script></html>");
+	*RLen = sprintf(Reply, "<html><script>alert(\"%s\");window.close();</script></html>", Prompt);
 
 	return;
 }
@@ -991,7 +1026,6 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 //					ReplyLen = SetupNodeMenu(Reply);
 //					return ReplyLen;
 				}
-
 				// Webmail Gets Here with a dummy Session
 
 				Session = AllocateWebMailSession();
@@ -1040,8 +1074,15 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 			SaveNewMessage(Session, input, Reply, RLen, Key);
 			return;
-	}
+		}
 
+		if (_stricmp(NodeURL, "/WebMail/WM/Reply/EMSave") == 0)
+		{
+			//	Save Reply
+
+			SaveNewMessage(Session, input, Reply, RLen, Key);
+			return;
+		}
 
 		if (_stricmp(NodeURL, "/Mail/Header") == 0)
 		{
@@ -1391,6 +1432,32 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
  		return;
 	}
 
+	if (memcmp(NodeURL, "/WebMail/WM/Reply/", 18) == 0)
+	{
+		// Reply to Message
+
+		int n = atoi(&NodeURL[18]);
+		struct MsgInfo * Msg;
+		char Message[100] = "";
+		char Title[100];
+
+		Msg = GetMsgFromNumber(n);
+
+		if (Msg == NULL)
+		{
+			sprintf(Message, "Message %d not found", n);
+			*RLen = sprintf(Reply, "%s", Message);
+			return;
+		}
+
+		sprintf(Title, "Re:%s", Msg->title);
+
+		*RLen = sprintf(Reply, MsgInputPage, Key, Msg->from, Title);
+		return;
+	}
+
+
+
 	if (memcmp(NodeURL, "/WebMail/WM/", 12 ) == 0)
 	{
 		// Read Message
@@ -1409,7 +1476,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 	if (memcmp(NodeURL, "/WebMail/WMDel/", 15) == 0)
 	{
-		// Read Message
+		// Kill  Message
 
 		int n = atoi(&NodeURL[15]);
 
@@ -1425,7 +1492,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 	if (_stricmp(NodeURL, "/WebMail/NewMsg") == 0)
 	{
-		*RLen = sprintf(Reply, MsgInputPage, Key);
+		*RLen = sprintf(Reply, MsgInputPage, Key, "", "");
 		return;
 	}
 

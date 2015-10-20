@@ -922,6 +922,13 @@ int main(int argc, char * argv[])
 		Sleep(100);
 		GetSemaphore(&Semaphore, 2);
 
+		if (QCOUNT < 10)
+		{
+			if (CLOSING == FALSE)
+				FindLostBuffers();
+			CLOSING = TRUE;
+		}
+
 		if (CLOSING)
 		{
 			if (RunChat)

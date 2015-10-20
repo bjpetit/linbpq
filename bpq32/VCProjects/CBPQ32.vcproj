@@ -34,7 +34,7 @@
 			<Tool
 				Name="MASM"
 				PreserveIdentifierCase="3"
-				IncludePaths="S:\DEV\Source\BPQ32\CInclude"
+				IncludePaths="..\CInclude"
 				EnableMASM51Compatibility="true"
 			/>
 			<Tool
@@ -49,7 +49,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\CKernel"
+				AdditionalIncludeDirectories="..\CInclude;..\CommonSource;..\CKernel"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -77,7 +77,7 @@
 				AdditionalDependencies="WS2_32.Lib  winmm.lib DbgHelp.lib comctl32.lib"
 				OutputFile="c:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="2"
-				ModuleDefinitionFile="S:\Dev\Source\bpq32\CKernel\bpq32.def"
+				ModuleDefinitionFile="..\CKernel\bpq32.def"
 				GenerateDebugInformation="true"
 				GenerateMapFile="true"
 				MapFileName="c:\DevProgs\BPQ32\bpqdev.map"
@@ -86,7 +86,7 @@
 				EnableCOMDATFolding="1"
 				EntryPointSymbol=""
 				BaseAddress="0x42000000"
-				ImportLibrary="S:\DEV\Source\BPQ32\lib\bpq32.lib"
+				ImportLibrary="..\lib\bpq32.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -134,7 +134,7 @@
 				Name="MASM"
 				PreserveIdentifierCase="3"
 				AssembledCodeListingFile="$(IntDir)\$(InputName)"
-				IncludePaths="S:\DEV\Source\BPQ32\CInclude"
+				IncludePaths="..\CInclude"
 				ListAllAvailableInformation="true"
 				EnableAssemblyGeneratedCodeListing="true"
 				EnableFalseConditionalsInListing="true"
@@ -154,7 +154,7 @@
 				AdditionalOptions="/D &quot;MDIKERNEL&quot;"
 				Optimization="0"
 				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\CKernel"
+				AdditionalIncludeDirectories="..\CInclude;..\CommonSource;..\CKernel"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;_USRDLL;BPQ32_EXPORTS;MDIKERNEL"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -179,7 +179,7 @@
 				AdditionalDependencies="WS2_32.Lib  winmm.lib DbgHelp.lib comctl32.lib"
 				OutputFile="C:\DevProgs\BPQ32\bpq32.dll"
 				LinkIncremental="1"
-				ModuleDefinitionFile="S:\Dev\Source\bpq32\CKernel\bpq32.def"
+				ModuleDefinitionFile="..\CKernel\bpq32.def"
 				GenerateDebugInformation="false"
 				GenerateMapFile="true"
 				MapFileName="c:\DevProgs\BPQ32\bpqpdn.map"
@@ -229,19 +229,19 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\AEAPactor.c"
+				RelativePath="..\CommonSource\AEAPactor.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\AGWAPI.c"
+				RelativePath="..\CommonSource\AGWAPI.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\AGWMoncode.c"
+				RelativePath="..\CommonSource\AGWMoncode.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\APRSCode.c"
+				RelativePath="..\CommonSource\APRSCode.c"
 				>
 			</File>
 			<File
@@ -253,11 +253,11 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\Baycom.c"
+				RelativePath="..\CKernel\Baycom.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\Bpq32.c"
+				RelativePath="..\CKernel\Bpq32.c"
 				>
 				<FileConfiguration
 					Name="Release|Win32"
@@ -270,63 +270,63 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\bpqaxip.c"
+				RelativePath="..\CommonSource\bpqaxip.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\bpqether.c"
+				RelativePath="..\CKernel\bpqether.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\bpqhdlc.c"
+				RelativePath="..\CommonSource\bpqhdlc.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BPQINP3.c"
+				RelativePath="..\CommonSource\BPQINP3.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BPQNRR.c"
+				RelativePath="..\CommonSource\BPQNRR.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\BPQTermMDI.c"
+				RelativePath="..\CKernel\BPQTermMDI.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BPQtoAGW.c"
+				RelativePath="..\CommonSource\BPQtoAGW.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\bpqvkiss.c"
+				RelativePath="..\CKernel\bpqvkiss.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\cMain.c"
+				RelativePath="..\CommonSource\cMain.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\Cmd.c"
+				RelativePath="..\CommonSource\Cmd.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\CMSAuth.c"
+				RelativePath="..\CommonSource\CMSAuth.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\CommonCode.c"
+				RelativePath="..\CommonSource\CommonCode.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\compatbits.c"
+				RelativePath="..\CommonSource\compatbits.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\config.c"
+				RelativePath="..\CommonSource\config.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\datadefs.c"
+				RelativePath="..\CommonSource\datadefs.c"
 				>
 			</File>
 			<File
@@ -338,55 +338,55 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\FLDigi.c"
+				RelativePath="..\CommonSource\FLDigi.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\HALDriver.c"
+				RelativePath="..\CommonSource\HALDriver.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\HFCommon.c"
+				RelativePath="..\CommonSource\HFCommon.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\HTTPcode.c"
+				RelativePath="..\CommonSource\HTTPcode.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\IPCode.c"
+				RelativePath="..\CommonSource\IPCode.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\KAMPactor.c"
+				RelativePath="..\CommonSource\KAMPactor.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\kiss.c"
+				RelativePath="..\CommonSource\kiss.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\L2Code.c"
+				RelativePath="..\CommonSource\L2Code.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\L3Code.c"
+				RelativePath="..\CommonSource\L3Code.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\L4Code.c"
+				RelativePath="..\CommonSource\L4Code.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\md5.c"
+				RelativePath="..\CommonSource\md5.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\Moncode.c"
+				RelativePath="..\CommonSource\Moncode.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MULTIPSK.c"
+				RelativePath="..\CommonSource\MULTIPSK.c"
 				>
 			</File>
 			<File
@@ -394,35 +394,35 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\RigControl.c"
+				RelativePath="..\CommonSource\RigControl.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\SCSPactor.c"
+				RelativePath="..\CommonSource\SCSPactor.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\SCSTrackeMulti.c"
+				RelativePath="..\CommonSource\SCSTrackeMulti.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\SCSTracker.c"
+				RelativePath="..\CommonSource\SCSTracker.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\SoundModem.c"
+				RelativePath="..\CKernel\SoundModem.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\TelnetV6.c"
+				RelativePath="..\CommonSource\TelnetV6.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\TNCCode.c"
+				RelativePath="..\CommonSource\TNCCode.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\TNCEmulators.c"
+				RelativePath="..\CommonSource\TNCEmulators.c"
 				>
 			</File>
 			<File
@@ -430,15 +430,15 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\UZ7HODrv.c"
+				RelativePath="..\CommonSource\UZ7HODrv.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\V4.c"
+				RelativePath="..\CommonSource\V4.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\WINMOR.c"
+				RelativePath="..\CommonSource\WINMOR.c"
 				>
 			</File>
 		</Filter>
@@ -448,15 +448,15 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\bpq32.def"
+				RelativePath="..\CKernel\bpq32.def"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CKernel\kernelresource.h"
+				RelativePath="..\CKernel\kernelresource.h"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CInclude\Strucs.inc"
+				RelativePath="..\CInclude\Strucs.inc"
 				>
 			</File>
 		</Filter>
@@ -466,7 +466,7 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\CKernel\KernelScript1.rc"
+				RelativePath="..\CKernel\KernelScript1.rc"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -474,7 +474,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions="CKernel"
-						AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource"
+						AdditionalIncludeDirectories="..\CInclude;..\CommonSource"
 					/>
 				</FileConfiguration>
 				<FileConfiguration
@@ -483,7 +483,7 @@
 					<Tool
 						Name="VCResourceCompilerTool"
 						PreprocessorDefinitions="CKernel"
-						AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource"
+						AdditionalIncludeDirectories="..\CInclude;..\CommonSource"
 					/>
 				</FileConfiguration>
 			</File>

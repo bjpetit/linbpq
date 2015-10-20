@@ -42,7 +42,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CKernel;S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\BPQMailChat"
+				AdditionalIncludeDirectories="..\CKernel;..\CInclude;..\CommonSource;..\BPQMailChat"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -59,14 +59,14 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
+				AdditionalIncludeDirectories="..\Include"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="S:\DEV\Source\BPQ32\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib S:\DEV\Source\BPQ32\lib\libconfigd.lib"
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfigd.lib"
 				OutputFile="c:\DevProgs\bpq32\BPQMail.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -131,7 +131,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\CKernel;S:\DEV\Source\BPQ32\CInclude;S:\DEV\Source\BPQ32\CommonSource;S:\DEV\Source\BPQ32\BPQMailChat"
+				AdditionalIncludeDirectories="..\CKernel;..\CInclude;..\CommonSource;..\BPQMailChat"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -145,14 +145,14 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
+				AdditionalIncludeDirectories="..\Include"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib C:\Dev\MSDev2005\Projects\BPQ32\lib\libconfig.lib"
+				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfig.lib"
 				OutputFile="c:\DevProgs\bpq32\BPQMail.exe"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"
@@ -200,29 +200,11 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BBSHTMLConfig.c"
+				RelativePath="..\CommonSource\BBSHTMLConfig.c"
 				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\BBSUtilities.c"
+				RelativePath="..\CommonSource\BBSUtilities.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -250,7 +232,7 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\bpq32\BPQMailChat\BPQMailConfig.c"
+				RelativePath="..\BPQMailChat\BPQMailConfig.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -275,7 +257,7 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\FBBRoutines.c"
+				RelativePath="..\CommonSource\FBBRoutines.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -297,15 +279,15 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\Housekeeping.c"
+				RelativePath="..\CommonSource\Housekeeping.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\HTMLCommonCode.c"
+				RelativePath="..\CommonSource\HTMLCommonCode.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\lzhuf32.c"
+				RelativePath="..\CommonSource\lzhuf32.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -329,7 +311,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailCommands.c"
+				RelativePath="..\CommonSource\MailCommands.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -351,33 +333,11 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailDataDefs.c"
+				RelativePath="..\CommonSource\MailDataDefs.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailRouting.c"
-				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						ObjectFile="$(IntDir)\$(InputName)1.obj"
-						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
-					/>
-				</FileConfiguration>
-			</File>
-			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MailTCP.c"
+				RelativePath="..\CommonSource\MailRouting.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -399,11 +359,33 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\MBLRoutines.c"
+				RelativePath="..\CommonSource\MailTCP.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						ObjectFile="$(IntDir)\$(InputName)1.obj"
+						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\CommonSource\MBLRoutines.c"
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\BPQMailChat\Monitor.c"
+				RelativePath="..\BPQMailChat\Monitor.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -424,7 +406,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\BPQMailChat\MultiConsole.c"
+				RelativePath="..\BPQMailChat\MultiConsole.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -445,7 +427,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\NNTPRoutines.c"
+				RelativePath="..\CommonSource\NNTPRoutines.c"
 				>
 			</File>
 			<File
@@ -453,7 +435,7 @@
 				>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\UIRoutines.c"
+				RelativePath="..\CommonSource\UIRoutines.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -475,7 +457,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\CommonSource\WPRoutines.c"
+				RelativePath="..\CommonSource\WPRoutines.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -503,15 +485,15 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="S:\Dev\Source\BPQ32\BPQMailChat\BPQMailChat.h"
+				RelativePath="..\BPQMailChat\BPQMailChat.h"
 				>
 			</File>
 			<File
-				RelativePath="S:\Dev\Source\BPQ32\BPQMailChat\Resource.h"
+				RelativePath="..\BPQMailChat\Resource.h"
 				>
 			</File>
 			<File
-				RelativePath="S:\Dev\Source\BPQ32\BPQMailChat\stdafx.h"
+				RelativePath="..\BPQMailChat\stdafx.h"
 				>
 			</File>
 		</Filter>
@@ -521,7 +503,7 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 			<File
-				RelativePath="S:\DEV\Source\BPQ32\BPQMailChat\BPQMail.rc"
+				RelativePath="..\BPQMailChat\BPQMail.rc"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
