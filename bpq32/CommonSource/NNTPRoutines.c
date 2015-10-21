@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 // White Pages Database Support Routines
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 VOID __cdecl Debugprintf(const char * format, ...);
 VOID ReleaseSock(SOCKET sock);

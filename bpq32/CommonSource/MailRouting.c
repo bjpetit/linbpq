@@ -29,7 +29,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 // Bulls should not be distributed outside their designated area.
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 char WW[] = "WW";
 

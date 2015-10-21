@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 //	Housekeeping Module
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 int LogAge = 7;
 

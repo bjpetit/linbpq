@@ -42,7 +42,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\CKernel;..\CInclude;..\CommonSource;..\BPQMailChat"
+				AdditionalIncludeDirectories="..\CKernel;..\CInclude;..\CommonSource;..\BPQMail"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -72,7 +72,7 @@
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(IntDir)$(TargetName).pdb"
 				GenerateMapFile="true"
-				MapFileName="$(IntDir)\BBSListings\bpqmailchat.map"
+				MapFileName="$(IntDir)\BBSListings\bpqmail.map"
 				MapExports="true"
 				SubSystem="2"
 				TargetMachine="1"
@@ -131,7 +131,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				WholeProgramOptimization="false"
-				AdditionalIncludeDirectories="..\CKernel;..\CInclude;..\CommonSource;..\BPQMailChat"
+				AdditionalIncludeDirectories="..\CKernel;..\CInclude;..\CommonSource;..\BPQMail"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
 				RuntimeLibrary="0"
 				UsePrecompiledHeader="0"
@@ -158,7 +158,7 @@
 				GenerateDebugInformation="false"
 				ProgramDatabaseFile="$(IntDir)$(TargetName).pdb"
 				GenerateMapFile="true"
-				MapFileName="$(IntDir)\BBSListings\bpqmailchat.map"
+				MapFileName="$(IntDir)\BBSListings\bpqmail.map"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -228,11 +228,11 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\BPQMailChat\BPQMail.c"
+				RelativePath="..\BPQMail\BPQMail.c"
 				>
 			</File>
 			<File
-				RelativePath="..\BPQMailChat\BPQMailConfig.c"
+				RelativePath="..\BPQMail\BPQMailConfig.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -385,7 +385,7 @@
 				>
 			</File>
 			<File
-				RelativePath="..\BPQMailChat\Monitor.c"
+				RelativePath="..\BPQMail\Monitor.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -406,7 +406,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath="..\BPQMailChat\MultiConsole.c"
+				RelativePath="..\BPQMail\MultiConsole.c"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -485,15 +485,15 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath="..\BPQMailChat\BPQMailChat.h"
+				RelativePath="..\BPQMail\BPQMail.h"
 				>
 			</File>
 			<File
-				RelativePath="..\BPQMailChat\Resource.h"
+				RelativePath="..\BPQMail\Resource.h"
 				>
 			</File>
 			<File
-				RelativePath="..\BPQMailChat\stdafx.h"
+				RelativePath="..\BPQMail\stdafx.h"
 				>
 			</File>
 		</Filter>
@@ -503,7 +503,7 @@
 			UniqueIdentifier="{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}"
 			>
 			<File
-				RelativePath="..\BPQMailChat\BPQMail.rc"
+				RelativePath="..\BPQMail\BPQMail.rc"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"

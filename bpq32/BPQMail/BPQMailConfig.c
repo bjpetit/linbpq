@@ -3,7 +3,7 @@
 //
 //	Configuration Module
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 
 #define C_PAGES 7

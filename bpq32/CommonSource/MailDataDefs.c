@@ -18,7 +18,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 */	
 
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 int LastVer[4] = {0, 0, 0, 0};					// In case we need to do somthing the first time a version is run
 

@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 //	Utility Routines
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 #ifdef WIN32
 #include "Winspool.h"
 #endif

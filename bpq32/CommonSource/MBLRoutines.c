@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 // MBL-Style Forwarding Routines
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 VOID ProcessMBLLine(CIRCUIT * conn, struct UserInfo * user, UCHAR* Buffer, int len)
 {

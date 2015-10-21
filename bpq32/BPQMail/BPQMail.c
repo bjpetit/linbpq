@@ -895,7 +895,7 @@
 //	Fix handling ISP messages from gmail without a '+'
 //	Add basic WebMail support
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 #define MAIL
 #include "Versions.h"
 

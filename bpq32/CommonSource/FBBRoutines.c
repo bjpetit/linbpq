@@ -21,7 +21,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //
 // FBB Forwarding Routines
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 int MaxRXSize = 99999;
 int MaxTXSize = 99999;

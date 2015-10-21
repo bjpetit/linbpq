@@ -65,7 +65,7 @@
 
 #include "asmstrucs.h"
 
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 
 #include "resrc1.h"
 //#include "resource.h"
