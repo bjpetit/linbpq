@@ -23,7 +23,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _USE_32BIT_TIME_T
 
 #include "CHeaders.h"
-#include "BPQMailChat.h"
+#include "BPQMail.h"
 #ifdef WIN32
 #include "C:\Program Files (x86)\GnuWin32\include\iconv.h"
 #else

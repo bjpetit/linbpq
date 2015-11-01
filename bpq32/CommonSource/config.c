@@ -440,6 +440,8 @@ int heading = 0;
 
 struct CONFIGTABLE * xxcfg;
 
+UCHAR CfgBridgeMap[33][33];
+
 BOOL ProcessConfig()
 {
 	int i;
@@ -503,6 +505,8 @@ BOOL ProcessConfig()
 
 	App = (struct APPLCONFIG *)&ConfigBuffer[ApplOffset];
 
+	memset(CfgBridgeMap, 0, sizeof(CfgBridgeMap));
+	
 	for (i=0; i < NumberofAppls; i++)
 	{
 		memset(App->Command, ' ', 12);
@@ -642,6 +646,7 @@ BOOL ProcessConfig()
 //		_beginthread(WarnThread, 0, 0);
 	}
 
+	memcpy(&ConfigBuffer[BridgeMapOffset], CfgBridgeMap, sizeof(CfgBridgeMap));
 
 	if (heading == 0)
 	{
@@ -674,8 +679,7 @@ BOOL ProcessConfig()
 /*	Decode PARAM=							*/
 /************************************************************************/
 
-int decode_rec(rec)
-char rec[];
+int decode_rec(char * rec)
 {
 	int i;
 	int cn = 1;			/* RETURN CODE FROM ROUTINES */
@@ -919,6 +923,45 @@ NextAPRS:
 
 		return 0;
 	}
+
+	//	Process BRIDGE statement
+
+	if (_memicmp(rec, "BRIDGE", 6) == 0)
+	{
+		int DigiTo;
+		int Port;
+		char * Context;
+		char * p_value;
+		char * ptr;
+
+		p_value = strtok_s(&rec[7], ",=\t\n\r", &Context);
+
+		Port = atoi(p_value);
+
+		if (Port > 32)
+			return FALSE;
+
+		if (Context == NULL)
+			return FALSE;
+	
+		ptr = strtok_s(NULL, ",\t\n\r", &Context);
+
+		while (ptr)
+		{
+			DigiTo = atoi(ptr);
+	
+			if (DigiTo > 32)
+				return 0;
+
+			if (Port != DigiTo)				// Not to our port!
+				CfgBridgeMap[Port][DigiTo] = TRUE;	
+
+			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
+		}
+
+		return 0;
+	}
+
 
 	// AGW Emulator Params
 

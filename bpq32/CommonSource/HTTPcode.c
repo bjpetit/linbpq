@@ -1136,12 +1136,13 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
 	int ReplyLen = 0;
 	char * ptr, * ptr1, * ptr2, *input;
 	char c;
-	int MsgLen, WriteLen;
+	int MsgLen, WriteLen = 0;
 	char inputname[250]="bpqcfg.txt";
 	FILE *fp1;
 	char Header[256];
 	int HeaderLen;
 	char Reply[4096];
+	char Mess[80] = "Configuration Saved";
 
 	input = strstr(MsgPtr, "\r\n\r\n");	// End of headers
 
@@ -1218,14 +1219,10 @@ VOID SaveConfigFile(SOCKET sock , char * MsgPtr, char * Rest)
 			}
 
 			if (WriteLen != MsgLen)
-			{
-				char Mess[80];
-				sprintf_s(Mess, sizeof(Mess), "Failed to create Config File\r");
-				return;
-			}
+				sprintf_s(Mess, sizeof(Mess), "Failed to write Config File");
 		}
 	
-		ReplyLen = sprintf(Reply, "%s", "<html><script>alert(\"Configuration Saved\");window.close();</script></html>");
+		ReplyLen = sprintf(Reply, "<html><script>alert(\"%s\");window.close();</script></html>", Mess);
 		HeaderLen = sprintf(Header, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: text/html\r\n\r\n", ReplyLen + strlen(Tail));
 		send(sock, Header, HeaderLen, 0);
 		send(sock, Reply, ReplyLen, 0);

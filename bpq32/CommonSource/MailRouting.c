@@ -790,7 +790,7 @@ int MatchMessagetoBBSList(struct MsgInfo * Msg, CIRCUIT * conn)
 	struct UserInfo * RMS;
 
 	if (Msg->status == 'K')
-		return 1;				// No point,  but don'r want no route warning
+		return 1;				// No point,  but don't want no route warning
 
 	strcpy(RouteElements, Msg->via);
 

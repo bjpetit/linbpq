@@ -389,7 +389,7 @@ VOID ProcessLine(ChatCIRCUIT * conn, struct UserInfo * user, char* Buffer, int l
 	struct _EXCEPTION_POINTERS exinfo;
 
 	{
-		GetSemaphore(&ChatSemaphore);
+		GetSemaphore(&ChatSemaphore, 0);
 
 		__try 
 		{
@@ -496,7 +496,7 @@ void ChatFlush(ChatCIRCUIT * conn)
 		else
 			len=conn->paclen;
 
-		GetSemaphore(&OutputSEM);
+		GetSemaphore(&OutputSEM, 0);
 
 		SendUnbuffered(conn->BPQStream, &conn->OutputQueue[conn->OutputGetPointer], len);
 
@@ -518,7 +518,7 @@ void ChatFlush(ChatCIRCUIT * conn)
 
 VOID ChatClearQueue(ChatCIRCUIT * conn)
 {
-	GetSemaphore(&OutputSEM);
+	GetSemaphore(&OutputSEM, 0);
 
 	conn->OutputGetPointer=0;
 	conn->OutputQueueLength=0;
@@ -566,7 +566,7 @@ VOID FreeList(char ** Hddr)
 }
 
 #define LIBCONFIG_STATIC
-#include "..\BPQMailChat\libconfig.h"
+#include "..\BPQMail\libconfig.h"
 
 
 config_t cfg;

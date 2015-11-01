@@ -219,8 +219,9 @@ int BTLENGTH = 9; //	DW	9		; LENGTH
 //			DB	0F0H		; PID
 char BTEXTFLD[256] ="\r";
 
-// Keep at end
+char BridgeMap[33][33] = {0};
 
+// Keep Buffers at end
 	
 #define DATABYTES 400000		// WAS 320000
 
@@ -1192,7 +1193,6 @@ BOOL Start()
 
 	IDHDDR.LENGTH = ptr3 - (unsigned char *)&IDHDDR;
 
-
 	{
 		UINT X = (UINT)NEXTFREEDATA;
 		X = (X + 3)& 0x0FFFFFFFC;	// MASK TO DWORD
@@ -1221,13 +1221,15 @@ BOOL Start()
 		MAXBUFFS++;
 	}
 
+	//	Copy Bridge Map
+
+	memcpy(BridgeMap, &ConfigBuffer[BridgeMapOffset], sizeof(BridgeMap));
 
 //	MOV	EAX,_NEXTFREEDATA
 //	CALL	HEXOUT
 
 	//	SET UP OUR CALLIGN(S)
 
-	
 	ConvToAX25(MYNETROMCALL, NETROMCALL);
 
 	ConvToAX25(MYNODECALL, MYCALL);
@@ -1633,7 +1635,7 @@ VOID TIMERINTERRUPT()
 	UINT * Buffer;
 	struct _LINKTABLE * LINK;
 	struct _MESSAGE * Message;
-
+	int toPort;
 
 //	RAN1++;
 	BGTIMER++;
@@ -1803,6 +1805,28 @@ VOID TIMERINTERRUPT()
 			time(&Message->Timestamp);
 
 			Message->PORT = CURRENTPORT;
+			
+			// Bridge if requested
+
+			for (toPort = 1; toPort <= NUMBEROFPORTS; toPort++)
+			{
+				if (BridgeMap[CURRENTPORT][toPort])
+				{
+					MESSAGE * BBuffer = GetBuff();
+					struct PORTCONTROL * BPORT;
+
+					if (BBuffer)
+					{
+						memcpy(BBuffer, Message, Message->LENGTH);
+						BBuffer->PORT = toPort;
+						BPORT = GetPortTableEntryFromPortNum(toPort);
+						if (BPORT)
+							PUT_ON_PORT_Q(BPORT, BBuffer);
+						else
+							ReleaseBuffer(BBuffer);
+					}	
+				}
+			}
 
 			L2Routine(PORT, Buffer);
 

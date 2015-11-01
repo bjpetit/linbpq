@@ -377,6 +377,10 @@ char * FwdTemplate = NULL;
 char * FwdDetailTemplate = NULL;
 char * WebMailTemplate = NULL;
 char * WebMailMsgTemplate = NULL;
+char * jsTemplate = NULL;
+
+
+
 static struct HTTPConnectionInfo * WebSessionList;	// active WebMail sessions
 
 
@@ -468,7 +472,7 @@ int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Sess
 	char Via[64];
 	int Count = 0;
 
-	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len To     @       From   Subject\r\n\r\n");
+	ptr += sprintf(ptr, "%s", "     #  Date  XX   Len To      @       From    Subject\r\n\r\n");
 
 	for (m = LatestMsg; m >= 1; m--)
 	{
@@ -501,7 +505,7 @@ int SendWebMailHeader(char * Reply, char * Key, struct HTTPConnectionInfo * Sess
 	}
 
 	if (WebMailTemplate == NULL)
-		WebMailTemplate = GetTemplateFromFile(3, "WebMailPage.txt");
+		WebMailTemplate = GetTemplateFromFile(4, "WebMailPage.txt");
 
 	return sprintf(Reply, WebMailTemplate, BBSName, User->Call, Key, Key, Key, Key, Key, Key, Key, Key, Key, Messages);
 }
@@ -1298,11 +1302,22 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 			return ;
 		}
 
-
-
-
 		// End of POST section
 	}
+
+	if (strstr(NodeURL, "webscript.js"))
+	{
+		if (jsTemplate)
+			free(jsTemplate);
+		
+		jsTemplate = GetTemplateFromFile(1, "webscript.js");
+
+		ReplyLen = sprintf(Reply, "HTTP/1.1 200 OK\r\nContent-Length: %d\r\n"
+			"Cache-Control: max-age=900\r\nContent-Type: text/javascript\r\n\r\n%s", strlen(jsTemplate), jsTemplate);
+		*RLen = ReplyLen;
+		return;
+	}
+
 
 	if (_stricmp(NodeURL, "/Mail/Header") == 0)
 	{
@@ -1458,7 +1473,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 
 
 
-	if (memcmp(NodeURL, "/WebMail/WM/", 12 ) == 0)
+	if (memcmp(NodeURL, "/WebMail/WM/", 12) == 0)
 	{
 		// Read Message
 
@@ -1467,7 +1482,7 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		if (WebMailMsgTemplate)
 			free(WebMailMsgTemplate);
 
-		WebMailMsgTemplate = GetTemplateFromFile(1, "WebMailMsg.txt");
+		WebMailMsgTemplate = GetTemplateFromFile(2, "WebMailMsg.txt");
 
 		*RLen = SendWebMailMessage(Reply, Session->Key, Session->User, n);
 
@@ -1479,11 +1494,6 @@ void ProcessMailHTTPMessage(struct HTTPConnectionInfo * Session, char * Method, 
 		// Kill  Message
 
 		int n = atoi(&NodeURL[15]);
-
-		if (WebMailMsgTemplate)
-			free(WebMailMsgTemplate);
-
-		WebMailMsgTemplate = GetTemplateFromFile(1, "WebMailMsg.txt");
 
 		*RLen = KillWebMailMessage(Reply, Session->Key, Session->User, n);
 
@@ -3471,13 +3481,13 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
    DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0; 
    BOOL fSuccess = FALSE;
    HANDLE hPipe  = NULL;
-   char Buffer[4096];
+   char Buffer[100001];
    char OutBuffer[100000];
    char * MsgPtr;
    int InputLen = 0;
    int OutputLen = 0;
 	struct HTTPConnectionInfo Session;
-	char URL[4096];
+	char URL[100001];
 	char * Context, * Method;
 	int n;
 
@@ -3493,7 +3503,7 @@ static DWORD WINAPI InstanceThread(LPVOID lpvParam)
    // up to BUFSIZE characters in length.
  
    n = ReadFile(hPipe, &Session, sizeof (struct HTTPConnectionInfo), &n, NULL);
-   fSuccess = ReadFile(hPipe, Buffer, 4096, &InputLen, NULL);
+   fSuccess = ReadFile(hPipe, Buffer, 100000, &InputLen, NULL);
 
 	if (!fSuccess || InputLen == 0)
 	{   

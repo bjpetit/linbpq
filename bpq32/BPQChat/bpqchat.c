@@ -26,6 +26,9 @@
 //	Oct 2014 1.0.5.1
 //	Fix occasional crash in terminal part line processing
 
+// October 2015 1.0.6.1
+//	Recompiled for compatibility with WebMail
+
 
 #include "BPQChat.h"
 
@@ -695,14 +698,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				{
 					if (state == 1) // Connected	
 					{
-						GetSemaphore(&ConSemaphore);
+						GetSemaphore(&ConSemaphore, 0);
 						__try {Connected(wParam);}
 						My__except_Routine("Connected");
 						FreeSemaphore(&ConSemaphore);
 					}
 					else
 					{
-						GetSemaphore(&ConSemaphore);
+						GetSemaphore(&ConSemaphore, 0);
 						__try{Disconnected(wParam);}
 						My__except_Routine("Disconnected");
 						FreeSemaphore(&ConSemaphore);

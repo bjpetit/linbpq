@@ -738,6 +738,9 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix not closing APRS Send WX file.
 //	Add RUN option to APRS Config to start APRS Client
 //	LinBPQ run FindLostBuffers and exit if QCOUNT < 5
+//	Close and reopen ARDOP connection if nothing received for 90 secs
+//	Add facility to bridge traffic between ports (similar to APRS Bridge but for all frame types)
+
 
 #define CKernel
 

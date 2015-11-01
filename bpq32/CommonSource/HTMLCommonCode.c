@@ -74,7 +74,7 @@ char * GetTemplateFromFile(int Version, char * FN)
 		{
 			free(MsgBytes);
 			MsgBytes = malloc(256);
-			sprintf(MsgBytes, "Wrong Version of HTML Pages - is %d should be %d. Please update", PageVersion, Version);
+			sprintf(MsgBytes, "Wrong Version of HTML Page %s - is %d should be %d. Please update", FN, PageVersion, Version);
 		}
 	}
 	

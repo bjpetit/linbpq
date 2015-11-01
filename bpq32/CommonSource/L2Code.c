@@ -144,6 +144,7 @@ VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 	int n;
 	UCHAR CTL;
 	UINT Work;
+	UCHAR c;
 
 	//	Check for invalid length (< 22 7Header + 7Addr + 7Addr + CTL
 
@@ -169,13 +170,51 @@ VOID L2Routine(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 
 	while(n--)
 	{
-		if (*(ptr++) < 0x40)
+		// Try a bit harder to detect corruption
+
+		c = *(ptr++);
+
+		if (c & 1)
+		{
+			ReleaseBuffer(Buffer);
+			return;
+		}
+
+		c = c >> 1;
+		
+		if (!isalnum(c) && !(c == '#') && !(c == ' '))
 		{
 			ReleaseBuffer(Buffer);
 			return;
 		}
 	}
 
+	//	Check Digis if present
+
+	if ((Buffer->ORIGIN[6] & 1) == 0)	// Digis
+	{
+		ptr = &Buffer->CTL;
+		n = 6;
+
+		while(n--)
+		{
+			c = *(ptr++);
+
+			if (c & 1)
+			{
+				ReleaseBuffer(Buffer);
+				return;
+			}
+
+			c = c >> 1;
+		
+			if (!isalnum(c) && !(c == '#') && !(c == ' '))
+			{
+				ReleaseBuffer(Buffer);
+				return;
+			}
+		}
+	}
 
 	BPQTRACE(Buffer, TRUE);				// TRACE - RX frames to APRS
 
@@ -415,6 +454,7 @@ VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 	PMHSTRUC MH = PORT->PORTMHEARD;
 	PMHSTRUC MHBASE = MH;
 	int i;
+	int OldCount = 0;
 
 	char DIGI = '*';
 	
@@ -426,7 +466,10 @@ VOID MHPROC(struct PORTCONTROL * PORT, MESSAGE * Buffer)
 	for (i = 0; i < MHENTRIES; i++)
 	{
 		if ((MH->MHCALL[0] == 0) || (CompareCalls(Buffer->ORIGIN, MH->MHCALL) && MH->MHDIGI == DIGI)) // Spare or our entry
+		{
+			OldCount = MH->MHCOUNT;
 			goto DoMove;
+		}
 		MH++;
 	}
 
@@ -442,6 +485,7 @@ DoMove:
 	memcpy (MHBASE->MHCALL, Buffer->ORIGIN, 7 * 9);		// Save Digis
 	MHBASE->MHDIGI = DIGI;
 	MHBASE->MHTIME = time(NULL);
+	MHBASE->MHCOUNT = ++OldCount;
 
 	return;
 }

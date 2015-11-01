@@ -795,7 +795,7 @@ Next:
 
 		if (FileRecsize == sizeof(struct MsgInfo))
 		{
-			if (MsgRec.type == 0)
+			if (MsgRec.type == 0 || MsgRec.number == 0)
 				goto Next;
 
 			MsgBytes = ReadMessageFileEx(&MsgRec);
@@ -9697,7 +9697,7 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		return;
 	}
 
-	if (_memicmp(Cmd, "CMSPASS", CmdLen) == 0)
+	if (_memicmp(Cmd, "CMSPASS", 7) == 0)
 	{
 		if (Arg1 == 0)
 		{

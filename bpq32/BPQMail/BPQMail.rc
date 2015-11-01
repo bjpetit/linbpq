@@ -151,7 +151,7 @@ FONT 8, "System"
 BEGIN
 END
 
-BBS_CONFIG DIALOG DISCARDABLE  0, 0, 368, 306
+BBS_CONFIG DIALOG DISCARDABLE  0, 0, 368, 290
 STYLE WS_CHILD
 FONT 8, "System"
 BEGIN
@@ -169,50 +169,48 @@ BEGIN
     EDITTEXT        IDC_SYSOPCALL,184,103,42,14,ES_UPPERCASE
     CONTROL         "Send SYSTEM Msgs to SYSOP call",IDC_SYSTOSYSOPCALL,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
-                    191,137,12
+                    173,137,12
     LTEXT           "H Route",IDC_STATIC,7,122,37,12
     EDITTEXT        IDC_HRoute,83,120,119,13,ES_UPPERCASE
-    LTEXT           "Base Directory",IDC_STATIC,7,137,66,12
-    EDITTEXT        IDC_BaseDir,83,137,212,14,ES_AUTOHSCROLL | ES_READONLY
-    LTEXT           "BBS Appl Number",IDC_STATIC,7,156,61,10
-    EDITTEXT        IDC_BBSAppl,83,154,29,12
-    LTEXT           "Streams",IDC_STATIC,171,156,32,10
-    EDITTEXT        IDC_BBSStreams,205,154,29,12
+    LTEXT           "BBS Appl Number",IDC_STATIC,7,138,61,10
+    EDITTEXT        IDC_BBSAppl,83,136,29,12
+    LTEXT           "Streams",IDC_STATIC,171,138,32,10
+    EDITTEXT        IDC_BBSStreams,205,136,29,12
     CONTROL         "Refuse Bulls",IDC_REFUSEBULLS,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,264,156,53,10
+                    BS_LEFTTEXT | WS_TABSTOP,264,138,53,10
     CONTROL         "Enable FBB UI System",IDC_ENABLEUI,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,175,87,10
-    LTEXT           "Send Mail For Beacons Every",IDC_STATIC,102,175,100,12
-    EDITTEXT        MAILFOR_MINS,205,174,22,12,ES_UPPERCASE
-    LTEXT           "Minutes",IDC_STATIC,232,175,30,12
-    PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,267,173,91,13
-    LTEXT           "eMail Server Params:",IDC_STATIC,7,224,135,10
-    LTEXT           "NNTP Port",IDC_STATIC,7,240,39,12
-    EDITTEXT        IDC_NNTPPort,47,238,29,14
-    LTEXT           "POP3 Port",IDC_STATIC,90,240,37,12
-    EDITTEXT        IDC_POP3Port,130,238,29,14
-    LTEXT           "SMTP Port",IDC_STATIC,170,240,37,12
-    EDITTEXT        IDC_SMTPPort,210,238,29,14
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,6,157,87,10
+    LTEXT           "Send Mail For Beacons Every",IDC_STATIC,102,157,100,12
+    EDITTEXT        MAILFOR_MINS,205,156,22,12,ES_UPPERCASE
+    LTEXT           "Minutes",IDC_STATIC,232,157,30,12
+    PUSHBUTTON      "Config UI Ports and Digis",IDC_UICONFIG,267,155,91,13
+    LTEXT           "eMail Server Params:",IDC_STATIC,7,206,135,10
+    LTEXT           "NNTP Port",IDC_STATIC,7,222,39,12
+    EDITTEXT        IDC_NNTPPort,47,220,29,14
+    LTEXT           "POP3 Port",IDC_STATIC,90,222,37,12
+    EDITTEXT        IDC_POP3Port,130,220,29,14
+    LTEXT           "SMTP Port",IDC_STATIC,170,222,37,12
+    EDITTEXT        IDC_SMTPPort,210,220,29,14
     CONTROL         "Enable Remote Access",1009,"Button",BS_AUTOCHECKBOX | 
-                    WS_TABSTOP,249,237,91,14
-    DEFPUSHBUTTON   "Save",1100,159,275,50,14,BS_CENTER | BS_VCENTER
+                    WS_TABSTOP,249,219,91,14
+    DEFPUSHBUTTON   "Save",1100,159,257,50,14,BS_CENTER | BS_VCENTER
     CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
-                    208,136,12
+                    190,136,12
     CONTROL         "Forward Messages to BBS Call",IDC_FORWARDTOBBS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,153,192,114,
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,153,174,114,
                     12
     CONTROL         "Redirect msgs to BBS Call to SYSOP Call",
                     IDC_BBSTOSYSOPCALL,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,218,120,146,12
     CONTROL         "Don't Request Home BBS",IDC_NOHOMEBBS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,154,208,93,12
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,154,190,93,12
     CONTROL         "Don't Request Name",IDC_NONAME,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,259,208,79,12
-    EDITTEXT        IDC_AMPR,72,255,119,13
-    LTEXT           "AMPR Address",IDC_STATIC,6,257,60,12
+                    BS_LEFTTEXT | WS_TABSTOP,259,190,79,12
+    EDITTEXT        IDC_AMPR,72,237,119,13
+    LTEXT           "AMPR Address",IDC_STATIC,6,239,60,12
     CONTROL         "Send ampr.org mail to AMPR host",IDC_FORWARDAMPR,"Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP,201,255,124,14
+                    BS_AUTOCHECKBOX | WS_TABSTOP,201,237,124,14
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266
@@ -1095,7 +1093,7 @@ GUIDELINES DESIGNINFO MOVEABLE PURE
 BEGIN
     "BBS_CONFIG", DIALOG
     BEGIN
-        BOTTOMMARGIN, 292
+        BOTTOMMARGIN, 276
         HORZGUIDE, 87
     END
 

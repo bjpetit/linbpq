@@ -139,7 +139,6 @@ VOID SENDNODESMSG();
 VOID STOPPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID STARTPORT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID FINDBUFFS(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
-
 VOID WL2KSYSOP(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID AXRESOLVER(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID AXMHEARD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
@@ -3217,7 +3216,10 @@ VOID MHCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CM
 
 		ptr = FormatMH(MH);
 		
-		Bufferptr += sprintf(Bufferptr, "%-10s %s %s\r", Normcall, ptr, DigiList);
+		if (CMD->String[2] == 'V')		// MHV
+			Bufferptr += sprintf(Bufferptr, "%-10s %d %s %s\r", Normcall, MH->MHCOUNT, ptr, DigiList);
+		else
+			Bufferptr += sprintf(Bufferptr, "%-10s %s %s\r", Normcall, ptr, DigiList);
 
 		MH++;
 	}
@@ -3722,7 +3724,7 @@ CMDX COMMANDS[] =
 	"WL2KSYSOP   ",5,WL2KSYSOP,0,
 	"STOPPORT    ",4,STOPPORT,0,
 	"STARTPORT   ",5,STARTPORT,0,
-	"FINDBUFFS   ",5,FINDBUFFS,0,
+	"FINDBUFFS   ",4,FINDBUFFS,0,
 
 #ifdef BLACKBITS
 
@@ -3802,6 +3804,7 @@ CMDX COMMANDS[] =
 	"UNPROTO     ",2,UNPROTOCMD,0,
 	"?           ",1,CMDQUERY,0,
 //	"DUMP        ",4,DUMPCMD,0,
+	"MHV         ",3,MHCMD,0,
 	"MHEARD      ",1,MHCMD,0,
 	"APRSMH      ",2,APRSMHCMD,0,
 	"ATTACH      ",1,ATTACHCMD,0,

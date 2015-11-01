@@ -1814,7 +1814,7 @@ Lost:
 //			MySetWindowText(TNC->xIDC_COMMSSTATE, TNC->WEB_COMMSSTATE);
 //			FreeSemaphore(&Semaphore);
 	
-/*
+
 			TNC->CONNECTED = FALSE;
 			TNC->Alerted = FALSE;
 
@@ -1824,7 +1824,7 @@ Lost:
 			if (TNC->Streams[0].Attached)
 				TNC->Streams[0].ReportDISC = TRUE;
 
-			ARDOPSendCommand(TNC, "CODEC FALSE");
+			ARDOPSendCommand(TNC, "CODEC FALSE", FALSE);
 	
 			Sleep(100);
 			shutdown(TNC->WINMORSock, SD_BOTH);
@@ -1837,7 +1837,6 @@ Lost:
 				ARDOPKillTNC(TNC);
 			}
 			return;
-*/
 		}
 	}
 }

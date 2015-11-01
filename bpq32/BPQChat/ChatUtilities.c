@@ -39,7 +39,7 @@ VOID __cdecl Logprintf(int LogMode, ChatCIRCUIT * conn, int InOut, const char * 
 	return;
 }
 
-void GetSemaphore(struct SEM * Semaphore)
+void GetSemaphore(struct SEM * Semaphore, int ID)
 {
 	//
 	//	Wait for it to be free

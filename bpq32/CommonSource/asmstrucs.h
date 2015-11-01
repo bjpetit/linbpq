@@ -60,8 +60,9 @@ extern int NUMBEROFNODES;
 
 // Length of config Buffer = 100000
 
+#define BridgeMapOffset 70000
 #define ApplOffset 80000			// Applications offset in config buffer
-#define InfoOffset 85000			// Infomsg offset in config buffer
+#define InfoOffset 85000			// Infomsg offset in  buffer
 #define InfoMax	2000				// Max Info
 #define HFCTextOffset 88000;		// HF modes CTEXT
 
@@ -95,6 +96,7 @@ typedef struct _MHSTRUC
 	UCHAR MHCALL[7];
 	UCHAR MHDIGIS[7][8];
 	time_t MHTIME;
+	int MHCOUNT;
 	BYTE MHDIGI;
 	char MHFreq[12];
 	char MHLocator[6];

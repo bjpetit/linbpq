@@ -199,7 +199,7 @@ int StatusMsgLen = 0;
 char * BeaconPath[33] = {0};
 
 char CrossPortMap[33][33] = {0};
-char BridgeMap[33][33] = {0};
+char APRSBridgeMap[33][33] = {0};
 
 UCHAR BeaconHeader[33][10][7] = {""};	//	Dest, Source and up to 8 digis 
 int BeaconHddrLen[33] = {0};			// Actual Length used
@@ -451,7 +451,7 @@ Dll BOOL APIENTRY Init_APRS()
 	memset(BeaconPath, sizeof(BeaconPath), 0);
 
 	memset(&CrossPortMap[0][0], 0, sizeof(CrossPortMap));
-	memset(&BridgeMap[0][0], 0, sizeof(BridgeMap));
+	memset(&APRSBridgeMap[0][0], 0, sizeof(APRSBridgeMap));
 
 	for (i = 1; i <= NUMBEROFPORTS; i++)
 	{
@@ -980,7 +980,7 @@ Dll VOID APIENTRY Poll_APRS()
 
 		for (toPort = 1; toPort <= NUMBEROFPORTS; toPort++)
 		{
-			if (BridgeMap[Port][toPort])
+			if (APRSBridgeMap[Port][toPort])
 			{
 				MESSAGE * Buffer = GetBuff();
 				struct PORTCONTROL * PORT;
@@ -1708,7 +1708,7 @@ static APRSProcessLine(char * buf)
 			if (DigiTo > NUMBEROFPORTS)
 				return FALSE;
 
-			BridgeMap[Port][DigiTo] = TRUE;	
+			APRSBridgeMap[Port][DigiTo] = TRUE;	
 			ptr = strtok_s(NULL, " ,\t\n\r", &Context);
 		}
 
@@ -3248,15 +3248,12 @@ void DecodeRMC(char * msg, int len)
 	strcpy(LON, NewLon);
 }
 
-VOID SendFilterCommand()
+VOID SendFilterCommand(char * Filter)
 {
 	char Msg[2000];
 	int n;
 
-	n = sprintf(Msg, ":%-9s:filter %s{1", "SERVER", "m/0");
-
-	if (ISFilter[0])
-		n = sprintf(Msg, ":%-9s:filter %s{1", "SERVER", ISFilter);
+	n = sprintf(Msg, ":%-9s:filter %s{1", "SERVER", Filter);
 
 	PutAPRSMessage(Msg, n);
 
@@ -3277,7 +3274,7 @@ Dll VOID APIENTRY APRSConnect(char * Call, char * Filter)
 	if (APPLFilter[0])
 	{
 		strcpy(ISFilter, APPLFilter);
-		SendFilterCommand();
+		SendFilterCommand(ISFilter);
 	}
 	strcpy(Call, CallPadded);
 }
@@ -3294,7 +3291,7 @@ Dll VOID APIENTRY APRSDisconnect()
 
 	strcpy(ISFilter, NodeFilter);
 
-	SendFilterCommand();
+	SendFilterCommand(ISFilter);
 
 	while (APPL_Q)
 	{
