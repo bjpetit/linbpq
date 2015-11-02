@@ -17,7 +17,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="Debug"
-			IntermediateDirectory="Debug"
+			IntermediateDirectory="$(ConfigurationName)"
 			ConfigurationType="1"
 			>
 			<Tool
@@ -38,7 +38,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
+				AdditionalIncludeDirectories="..\Commonsource"
 				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -55,7 +55,7 @@
 			/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\Include"
+				AdditionalIncludeDirectories="S:\DEV\Source\BPQ32\cInclude"
 			/>
 			<Tool
 				Name="VCPreLinkEventTool"
@@ -266,11 +266,11 @@
 	</References>
 	<Files>
 		<File
-			RelativePath="S:\DEV\Source\BPQ32\BPQTerminal\BPQTerminal.c"
+			RelativePath="..\BPQTerminal\BPQTerminal.c"
 			>
 		</File>
 		<File
-			RelativePath="S:\DEV\Source\BPQ32\BPQTerminal\BPQTerminal.rc"
+			RelativePath="..\BPQTerminal\BPQTerminal.rc"
 			>
 			<FileConfiguration
 				Name="Debug|Win32"
@@ -278,14 +278,7 @@
 				<Tool
 					Name="VCResourceCompilerTool"
 					PreprocessorDefinitions="BPQTerm"
-				/>
-			</FileConfiguration>
-			<FileConfiguration
-				Name="Release|Win32"
-				>
-				<Tool
-					Name="VCResourceCompilerTool"
-					PreprocessorDefinitions="BPQTerm"
+					AdditionalIncludeDirectories="..\Include"
 				/>
 			</FileConfiguration>
 			<FileConfiguration
@@ -294,6 +287,7 @@
 				<Tool
 					Name="VCResourceCompilerTool"
 					PreprocessorDefinitions="BPQTerm"
+					AdditionalIncludeDirectories="..\Include"
 				/>
 			</FileConfiguration>
 		</File>

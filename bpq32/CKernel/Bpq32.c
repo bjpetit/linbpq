@@ -740,7 +740,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	LinBPQ run FindLostBuffers and exit if QCOUNT < 5
 //	Close and reopen ARDOP connection if nothing received for 90 secs
 //	Add facility to bridge traffic between ports (similar to APRS Bridge but for all frame types)
-
+//	Add KISSOPTION TRACKER to set SCS Tracker into KISS Mode
 
 #define CKernel
 
