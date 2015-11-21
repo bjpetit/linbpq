@@ -182,7 +182,19 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ardopSampleArrays.c"
+				>
+			</File>
+			<File
+				RelativePath=".\CalcTemplates.c"
+				>
+			</File>
+			<File
 				RelativePath=".\FEC.c"
+				>
+			</File>
+			<File
+				RelativePath=".\Modulate.c"
 				>
 			</File>
 			<File

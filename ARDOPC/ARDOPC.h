@@ -11,7 +11,8 @@
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
-#include <windows.h>
+
+
 #include <time.h>
 
 #include <stdio.h>
@@ -22,6 +23,8 @@
 
 typedef int BOOL;
 typedef unsigned char UCHAR;
+
+#define VOID void
 
 #define FALSE 0
 #define TRUE 1
@@ -35,17 +38,24 @@ int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn)
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
 void FSXmtFilter200_1500Hz(short * intNewSamples, int Length);
 void FSXmtFilter500_1500Hz(short * intNewSamples, int Length);
-SampleSink(UCHAR * Samples, int Count);
-SoundFlush();
+void SampleSink(UCHAR * Samples, int Count);
+void SoundFlush();
 int AddTrailer(short * intSamples, int Length);
 void CWID(char * strID, short * intSamples, BOOL blnPlay);
 void sendCWID(char * Call, BOOL Play);
 UCHAR ComputeTypeParity(UCHAR bytFrameType);
 void GenCRC16FrameType(char * Data, int intStartIndex, int intStopIndex, UCHAR bytFrameType);
+char * strlop(char * buf, char delim);
+BOOL DemodDecode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare);
+void DeCompressCallsign(char * bytCallsign, char * returned);
+void DeCompressGridSquare(char * bytGS, char * returned);
+
+int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len);
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
 void FreeSemaphore();
+char * Name(UCHAR bytID);
 
 
 
@@ -53,7 +63,7 @@ VOID __cdecl Debugprintf(const char * format, ...);
 
 
 
-enum ReceiveState		// used for initial receive testing...later put in correct protocol states
+enum _ReceiveState		// used for initial receive testing...later put in correct protocol states
 {
 	SearchingForLeader,
 	AcquireSymbolSync,
@@ -63,7 +73,7 @@ enum ReceiveState		// used for initial receive testing...later put in correct pr
 	AcquireFrame
 };
 
-enum ReceiveState State;
+extern enum _ReceiveState State;
 
 enum _ARDOPState
 {
@@ -76,13 +86,36 @@ enum _ARDOPState
 	FECRcv,
 };
 
-enum _ARDOPState ProtocolState;
-enum _ARDOPState ARDOPState;
+extern enum _ARDOPState ProtocolState;
+extern enum _ARDOPState ARDOPState;
 
-char GridSquare[7];
-char Callsign[10];
-BOOL wantCWID;
-int LeaderLength;
-int TrailerLength;
+extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (10 ms) of the leader
 
-time_t Now;
+extern short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
+    //   (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the table size from 7680 to 3840 integers
+extern short intPSK200bdCarTemplate[9][4][72];		// Templates for 200 bd with cyclic prefix
+extern short intFSK25bdCarTemplate[16][480];		// Template for 16FSK carriers spaced at 25 Hz, 25 baud
+extern short intFSK50bdCarTemplate[4][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
+extern short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carriers spaced at 100 Hz, 100 baud
+extern short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
+
+
+extern char GridSquare[7];
+extern char Callsign[10];
+extern BOOL wantCWID;
+extern int LeaderLength;
+extern int TrailerLength;
+
+extern char ProtocolMode[4];
+
+extern time_t Now;
+extern UCHAR bytValidFrameTypes[256];
+
+extern int bytValidFrameTypesLength;
+
+extern BOOL blnTimeoutTriggered;
+
+
+// RS Variables
+
+extern int MaxCorrections;

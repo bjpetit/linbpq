@@ -1,3 +1,8 @@
+#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
+#define _CRT_SECURE_NO_DEPRECATE
+#define _USE_32BIT_TIME_T
+
+
 #include <windows.h>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
@@ -37,8 +42,10 @@ SampleSink(UCHAR * Samples, int Count)
 }
 
 
-SoundFlush()
+void SoundFlush()
 {
+	// loop back to decoder for testing
+
 	header.dwBufferLength = Number * 2;
 
 	waveOutPrepareHeader(hWaveOut, &header, sizeof(WAVEHDR));
@@ -46,9 +53,11 @@ SoundFlush()
 
 	while (!(header.dwFlags & WHDR_DONE));
 	waveOutUnprepareHeader(hWaveOut, &header, sizeof(WAVEHDR));
+
+	ProcessNewSamples(buffer, Number + 1200);
 	Number = 0;
 
-	return 0;
+	return;
 }
 
 
@@ -73,3 +82,20 @@ CloseSound()
 { 
 	waveOutClose(hWaveOut);
 }
+
+
+VOID __cdecl Debugprintf(const char * format, ...)
+{
+	char Mess[10000];
+	va_list(arglist);
+
+	va_start(arglist, format);
+	vsprintf(Mess, format, arglist);
+	strcat(Mess, "\r\n");
+	OutputDebugString(Mess);
+
+	return;
+}
+
+
+

@@ -36,7 +36,6 @@ int intNumCar = 0, intBaud, intDataLen = 0, intRSLen; // Do these need to be sta
 BOOL GetNextFECFrame()
 {
 	UCHAR bytData[512];
-	int intNumCar, intBaud, intDataLen, intRSLen;
 	BOOL blnOdd;
 	char strMod[16];
 	char bytQualThresh;

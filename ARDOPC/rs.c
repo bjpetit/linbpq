@@ -2,7 +2,7 @@
 /* This program is an encoder/decoder for Reed-Solomon codes. Encoding is in
    systematic form, decoding via the Berlekamp iterative algorithm.
    In the present form , the constants mm, nn, tt, and kk=nn-2tt must be
-   specified  (the double letters are used simply to avoid clashes with
+   specified  (the float letters are used simply to avoid clashes with
    other n,k,t used in other programs into which this was incorporated!)
    Also, the irreducible polynomial used to generate GF(2**mm) must also be
    entered -- these can be found in Lin and Costello, and also Clark and Cain.
@@ -47,6 +47,8 @@
 */
 
 #include "ARDOPC.h"
+
+extern BOOL blnErrorsCorrected;
 
 #define mm  8           /* RS code over GF(2**4) - change to suit */
 #define nn  255          /* nn=2**mm -1   length of codeword */
@@ -172,7 +174,8 @@ void decode_rs()
         if (recd[j]!=-1)
           s[i] ^= alpha_to[(recd[j]+i*j)%nn] ;      /* recd[j] in index form */
 /* convert syndrome from polynomial form to index form  */
-      if (s[i]!=0)  syn_error=1 ;        /* set flag if non-zero syndrome => error */
+      if (s[i]!=0)
+		  syn_error=1 ;        /* set flag if non-zero syndrome => error */
       s[i] = index_of[s[i]] ;
     } ;
 
@@ -333,10 +336,14 @@ void decode_rs()
           else  recd[i] = 0 ;     /* just output received codeword as is */
     }
    else       /* no non-zero syndromes => no errors: output received codeword */
-    for (i=0; i<nn; i++)
-       if (recd[i]!=-1)        /* convert recd[] to polynomial form */
-         recd[i] = alpha_to[recd[i]] ;
-       else  recd[i] = 0 ;
+   {
+	   blnErrorsCorrected = TRUE;
+	   for (i=0; i<nn; i++)
+		   if (recd[i]!=-1)        /* convert recd[] to polynomial form */
+			   recd[i] = alpha_to[recd[i]] ;
+		   else
+			   recd[i] = 0 ;
+	   }
  }
 
 
@@ -347,15 +354,20 @@ main()
 	char buffer[24000];
 	int t;
 
-	GenerateTwoToneLeaderTemplate();
-	GenerateFSKTemplates();
+	blnTimeoutTriggered = FALSE;
 
+
+//	GenerateTwoToneLeaderTemplate();
+	GenerateFSKTemplates();
+	InitValidFrameTypes();
 	InitSound();
 
-	ProtocolState = FECSend;
-	GetNextFECFrame();
+	 SendID(0);
+	 
+	 ProtocolState = FECSend;
+//	GetNextFECFrame();
 
-//  SendID(0);
+// 
 //  SendID(0);
 //  ModTwoToneTest();
 

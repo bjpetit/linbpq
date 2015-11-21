@@ -9,27 +9,31 @@ BOOL wantCWID = FALSE;
 int LeaderLength = 500;
 int TrailerLength = 0;
 
+enum _ReceiveState State;
+enum _ARDOPState ProtocolState;
+enum _ARDOPState ARDOPState;
+
 BOOL SoundIsPlaying = FALSE;
 
+char ProtocolMode[4]= "";
+
+time_t Now = 0;
+UCHAR bytValidFrameTypes[256]= {0};
+
+int bytValidFrameTypesLength = 0;
+
+BOOL blnTimeoutTriggered= FALSE;
+
+int MaxCorrections;
 
 char TXQueue[4096] = "Hello";					// May malloc this, or change to cyclic buffer
 int TXQueueLen = 5;
 
-int MaxCorrections;
-
 UCHAR bytSessionID;
 
+int intLastRcvdFrameQuality;
+
 int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
-
-short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (10 ms) of the leader
-
-short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
-    //   (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the table size from 7680 to 3840 integers
-short intPSK200bdCarTemplate[9][4][72];		// Templates for 200 bd with cyclic prefix
-short intFSK25bdCarTemplate[16][480];		// Template for 16FSK carriers spaced at 25 Hz, 25 baud
-short intFSK50bdCarTemplate[4][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
-short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carriers spaced at 100 Hz, 100 baud
-short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
 
 
 const char strFrameType[256][16] = {
@@ -155,6 +159,19 @@ const char strFrameType[256][16] = {
 	"DataACK"		// Range &HE0 to &HFF includes 5 bits for quality 
 };
 
+char * strlop(char * buf, char delim)
+{
+	// Terminate buf at delim, and return rest of string
+
+	char * ptr = strchr(buf, delim);
+
+	if (ptr == NULL) return NULL;
+
+	*(ptr)++=0;
+
+	return ptr;
+}
+
 void GetSemaphore()
 {
 }
@@ -162,21 +179,6 @@ void GetSemaphore()
 void FreeSemaphore()
 {
 }
-
-VOID __cdecl Debugprintf(const char * format, ...)
-{
-	char Mess[10000];
-	va_list(arglist);
-
-	va_start(arglist, format);
-	vsprintf(Mess, format, arglist);
-	strcat(Mess, "\r\n");
-	OutputDebugString(Mess);
-
-	return;
-}
-
-
 
 void CompressCallsign(char * Callsign, UCHAR * Compressed);
 void CompressGridSquare(char * Square, UCHAR * Compressed);
@@ -193,125 +195,17 @@ void SendCWID(char * Callsign, BOOL x)
 
 // Subroutine to generate 1 symbol of leader
 
-void GenerateTwoToneLeaderTemplate()
+//	 Returns pointer to Frame Type Name
+
+char * Name(UCHAR bytID)
 {
-	// to create leader alternate these template samples reversing sign on each adjacent symbol
-    
-	int i;
-	double x, y, z;
-	
-	for (i = 0; i < 120; i++)
-	{
-		y = (sin(((1500.0 - 50) / 1500) * (i / 8.0 * 2 * M_PI)));
-		z = (sin(((1500.0 + 50) / 1500) * (i / 8.0 * 2 * M_PI)));
-
-		x = intAmp * 0.6 * (y - z);
-		intTwoToneLeaderTemplate[i] = (short)x + 0.5;;
-	}
+	if (bytID < 0x20)
+		return strFrameType[0];
+	else if (bytID >= 0xE0)
+		return strFrameType[0xE0];
+	else
+		return strFrameType[bytID];
 }
-
-// Subroutine to create the FSK symbol templates
-
-void GenerateFSKTemplates()
-{
-	// Generate templates of 240 samples (each symbol template = 20 ms) for each of the 4 possible carriers used in 200 Hz BW FSK modulation.
-	// Generate templates of 120 samples (each symbol template = 10 ms) for each of the 20 possible carriers used in 500, 1000 and 2000 Hz BW 4FSK modulation.
-	//Used to speed up computation of FSK frames and reduce use of Sin functions.
-	//50 baud Tone values 
-
-	// the possible carrier frequencies in Hz ' note gaps for groups of 4 at 900, 1400, and 1900 Hz improved isolation between simultaneous carriers
-
-	double dblCarFreq[] = {1425, 1475, 1525, 1575, 600, 700, 800, 900, 1100, 1200, 1300, 1400, 1600, 1700, 1800, 1900, 2100, 2200, 2300, 2400};
-
-	double dblAngle;		// Angle in radians
-	double dblCarPhaseInc[20]; 
-	int i, k;
-
-	// Compute the phase inc per sample
-
-    for (i = 0; i < 4; i++) 
-	{
-		dblCarPhaseInc[i] = 2 * M_PI * dblCarFreq[i] / 12000;
-	}
-	
-	// Now compute the templates: (960 32 bit values total)   
-	
-	for (i = 0; i < 4; i++)			// across the 4 tones for 50 baud frequencies
-	{
-		dblAngle = 0;
-		// 50 baud template
-
-		for (k = 0; k < 240; k++)	// for 240 samples (one 50 baud symbol)
-		{
-			intFSK50bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle);  // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
-			dblAngle += dblCarPhaseInc[i];
-
-			if (dblAngle >= 2 * M_PI)
-				dblAngle -= 2 * M_PI;
-		}
-	}
-
-	// 16 FSK templates (500 Hz BW, 25 baud)
-
-	for (i = 0; i < 16; i++)	 // across the 16 tones for 25 baud frequencies
-	{
-		dblAngle = 0;
-		//25 baud template
-		for (k = 0; k < 480; k++)			 // for 480 samples (one 25 baud symbol)
-		{
-			intFSK25bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
-			dblAngle += (2 * M_PI / 12000) * (1312.5 + i * 25);
-			if (dblAngle >= 2 * M_PI)
-				dblAngle -= 2 * M_PI;
-		}
-	}
-
-	// 4FSK templates for 600 baud (2 Khz bandwidth) 
-	for (i = 0; i < 4; i++)		 // across the 4 tones for 600 baud frequencies
-	{
-		dblAngle = 0;
-		//600 baud template
-		for (k = 0; k < 20; k++)	 // for 20 samples (one 600 baud symbol)
-		{
-			intFSK600bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
-			dblAngle += (2 * M_PI / 12000) * (600 + i * 600);
-			if (dblAngle >= 2 * M_PI)
-				dblAngle -= 2 * M_PI;
-		}
-	}
-
-	//  100 baud Tone values for a single carrier case 
-	// the 100 baud carrier frequencies in Hz
-
-	dblCarFreq[0] = 1350;
-	dblCarFreq[1] = 1450;
-	dblCarFreq[2] = 1550;
-	dblCarFreq[3] = 1650;
-
-	//Values of dblCarFreq for index 4-19 as in Dim above
-	// Compute the phase inc per sample
-   
-	for (i = 0; i < 20; i++)
-	{
-		dblCarPhaseInc[i] = 2 * M_PI * dblCarFreq[i] / 12000;
-	}
-
-	// Now compute the templates: (2400 32 bit values total)  
-
-	for (i = 0; i < 20; i++)	 // across 20 tones
-	{
-		dblAngle = 0;
-		//'100 baud template
-		for (k = 0; k < 120; k++)		// for 120 samples (one 100 baud symbol)
-		{
-			intFSK100bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
-			dblAngle += dblCarPhaseInc[i];
-			if (dblAngle >= 2 * M_PI)
-				dblAngle -= 2 * M_PI;
-		}
-	}
-}
-
 
 // Function to look up frame info from bytFrameType
 
@@ -319,7 +213,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 			   int * intBaud, int * intDataLen, int * intRSLen, UCHAR * bytQualThres, char * strType)
 {
 	//Used to "lookup" all parameters by frame Type. 
-	// Returns True if all fields updated otherwise false (improper bytFrameType)
+	// Returns True if all fields updated otherwise FALSE (improper bytFrameType)
 
 	// 1 Carrier 4FSK control frames 
    
@@ -745,224 +639,14 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 	return TRUE;
 }
 
-void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
-{
-	// Function to Modulate data encoded for 4FSK and create the integer array of 32 bit samples suitable for playing 
-	// Function works for 1, 2 or 4 simultaneous carriers 
-
-	int intNumCar, intBaud, intDataLen, intRSLen, intSampleLen, intSamplePtr, intDataPtr, intSampPerSym, intDataBytesPerCar;
-	BOOL blnOdd;
-	short intLeader[100000];
-	short intSamples[100000];
-
-    char strType[16] = "";
-    char strMod[16] = "";
-
-	UCHAR bytSymToSend, bytMask, bytMinQualThresh;
-	UCHAR bytLastSym[8];	// Holds the last symbol sent (per carrier). bytLastSym(4) is 1500 Hz carrier (only used on 1 carrier modes) 
-
-	double dblCarScalingFactor;
-	int intMask = 0;
-	int intLeaderLenMS;
-	int j, k, m, n;
-
-	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
-		return;
-
-	if (strcmp(strMod, "4FSK") != 0)
-		return;
-	
-//	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
- //               strLastWavStream = strType
-  //          End If
-
-
-	if (intLeaderLen == 0)
-		intLeaderLenMS = LeaderLength;
-	else
-		intLeaderLenMS = intLeaderLen;
-
-
- //           Dim intLeader(-1) As Int32
-    switch(intBaud)
-	{		
-	case 50:
-		
-		intSampPerSym = 240;
-        // For FEC transmission the computed leader length = MCB.Leader length    
-		intSampleLen = intLeaderLenMS * 12 + 240 * 10 + intSampPerSym * (4 * (Len - 2) / intNumCar);
-
-		GetTwoToneLeaderWithSync(intLeaderLenMS / 10, &intLeader[0]);
-		SampleSink(intLeader, intLeaderLenMS * 12);	// (500 ms 2400
-
-		 break;
-                
-	case 100:
-		
-		intSampPerSym = 120;
-		intSampleLen = intLeaderLenMS * 12 + 240 * 10 + intSampPerSym * (4 * (Len - 2) / intNumCar);
-		GetTwoToneLeaderWithSync(intLeaderLenMS / 10, &intLeader[0]);
-		SampleSink(intLeader, intLeaderLenMS * 12);	// (500 ms 2400
-	}
-	
-	// Create the leader
-	
-	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
-    
-	//Array.Copy(intLeader, 0, intSamples, 0, intLeader.Length) 'copy the leader + sync
-     
-	intSamplePtr = 0;
-
-	//Create the 8 symbols (16 bit) 50 baud 4FSK frame type with Implied SessionID
-	// No reference needed for 4FSK
-
-	// note revised To accomodate 1 parity symbol per byte (10 symbols total)
-
-	for(j = 0; j < 2; j++)		 // for the 2 bytes of the frame type
-	{              
-		bytMask = 0xc0;
-		
-		for(k = 0; k < 5; k++)		 // for 5 symbols per byte (4 data + 1 parity)
-		{
-			if (k < 4)
-				bytSymToSend = (bytMask & bytEncodedData[j]) >> (2 * (3 - k));
-			else
-				bytSymToSend = ComputeTypeParity(bytEncodedData[0]);
-
-			for(n = 0; n < 240; n++)
-			{
-				if (((5 * j + k) & 1 ) == 0)
-					intSamples[intSamplePtr + n] = intFSK50bdCarTemplate[bytSymToSend][n];
-				else
-					intSamples[intSamplePtr + n] = -intFSK50bdCarTemplate[bytSymToSend][n]; // -sign insures no phase discontinuity at symbol boundaries
-			}
-			intSamplePtr += 240;
-			bytMask = bytMask >> 2;
-		}
-	}
-
-	//' No reference needed for 4FSK
-
-	intDataPtr = 2;
-
-	switch(intNumCar)
-	{
-	case 1:			 // use carriers 0-4
-		
-		dblCarScalingFactor = 1.0; //  (scaling factors determined emperically to minimize crest factor) 
-
-		for (m = 0; m < intDataBytesPerCar; m++)  // For each byte of input data
-		{
-			bytMask = 0xC0;		 // Initialize mask each new data byte
-			
-			for (k = 0; k < 4; k++)		// for 4 symbol values per byte of data
-			{
-				bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
-
-				for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
-				{
-					if((k & 1) == 0)
-					{
-						if(intBaud == 50)
-							intSamples[intSamplePtr + n] = intFSK50bdCarTemplate[bytSymToSend][n];
-						else
-							intSamples[intSamplePtr + n] = intFSK100bdCarTemplate[bytSymToSend][n];
-					}
-					else
- 					{
-						if(intBaud == 50)
-							intSamples[intSamplePtr + n] = -intFSK50bdCarTemplate[bytSymToSend][n];
-						else
-							intSamples[intSamplePtr + n] = -intFSK100bdCarTemplate[bytSymToSend][n];
-					}
-				}
-
-				bytMask = bytMask >> 2;
-				intSamplePtr += intSampPerSym;
-			}
-			intDataPtr += 1;
-		}
-
-		if (intBaud == 50)
-			FSXmtFilter200_1500Hz(intSamples, intSamplePtr);
-		else if (intBaud == 100)
-			FSXmtFilter500_1500Hz(intSamples, intSamplePtr);
-
-		SampleSink(intSamples, intSamplePtr);	// 2400
-		SoundFlush();
-
-		break;
-
-	case 2:			// use carriers 8-15 (100 baud only)
-
-		dblCarScalingFactor = 0.51; //  (scaling factors determined emperically to minimize crest factor)
-
-		for (m = 0; m < intDataBytesPerCar; m++)	  // For each byte of input data 
-		{
-			bytMask = 0xC0;	// Initialize mask each new data byte
-                        			
-			for (k = 0; k < 4; k++)		// for 4 symbol values per byte of data
-			{
-				for (n = 0; n < intSampPerSym; n++)	 // for all the samples of a symbol for 2 carriers
-				{
-					//' First carrier
-                      
-					bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
-					intSamples[intSamplePtr + n] = intFSK100bdCarTemplate[8 + bytSymToSend][n];
-					// Second carrier
-                    
-					bytSymToSend = (bytMask & bytEncodedData[intDataPtr + intDataBytesPerCar]) >> (2 * (3 - k));	// Values 0-3
-					intSamples[intSamplePtr + n] = dblCarScalingFactor * (intSamples[intSamplePtr + n] + intFSK100bdCarTemplate[12 + bytSymToSend][n]);
-				}
-
-				bytMask = bytMask >> 2;
-				intSamplePtr += intSampPerSym;
-			}
-			intDataPtr += 1;
-		}
-             
-//			intSamples = FSXmtFilter1000_1500Hz(intSamples)
-		SampleSink(intSamples, intSamplePtr);	// 2400
-		SoundFlush();
-
-		break;
-
-				/*
-		Case 4 ' use carriers 4-19 (100 baud only)
-                    dblCarScalingFactor = 0.27 '  (scaling factors determined emperically to minimize crest factor)
-                    For m As Integer = 0 To intDataBytesPerCar - 1  ' For each byte of input data 
-                        bytMask = &HC0 ' Initialize mask each new data byte
-                        For k As Integer = 0 To 3 ' for 4 symbol values per byte of data
-                            For n As Integer = 0 To intSampPerSym - 1 ' for all the samples of a symbol for 4 carriers 
-                                ' First carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr)) >> (2 * (3 - k)) ' Values 0-3
-                                intSamples(intSamplePtr + n) = intFSK100bdCarTemplate(4 + bytSymToSend, n)
-                                ' Second carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr + intDataBytesPerCar)) >> (2 * (3 - k)) ' Values 0-3
-                                intSamples(intSamplePtr + n) = intSamples(intSamplePtr + n) + intFSK100bdCarTemplate(8 + bytSymToSend, n)
-                                ' Third carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr + (2 * intDataBytesPerCar))) >> (2 * (3 - k)) ' Values 0-3
-                                intSamples(intSamplePtr + n) = intSamples(intSamplePtr + n) + intFSK100bdCarTemplate(12 + bytSymToSend, n)
-                                ' Fourth carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr + (3 * intDataBytesPerCar))) >> (2 * (3 - k)) ' Values 0-3
-                                intSamples(intSamplePtr + n) = dblCarScalingFactor * (intSamples(intSamplePtr + n) + intFSK100bdCarTemplate(16 + bytSymToSend, n))
-                            Next n
-                            bytMask = bytMask >> 2
-                            intSamplePtr += intSampPerSym
-                        Next k
-                        intDataPtr += 1
-                    Next m
-                    intSamples = FSXmtFilter2000_1500Hz(intSamples)
-  */
-	}
-}
-
 #define mm  8           /* RS code over GF(2**4) - change to suit */
 #define nn  255          /* nn=2**mm -1   length of codeword */
 
+// defined in RS module
+
 extern int tt, kk;
-extern int data[];
-extern int bb[];
+extern int recd[nn], data[nn], bb[nn];
+extern int index_of [nn+1];
 
 int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len)
 {
@@ -1007,6 +691,82 @@ int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len)
 	return Len + RSLen;
 }
 
+//	Main RS decode function
+
+BOOL blnErrorsCorrected = FALSE;
+
+void RSDecode(UCHAR * bytRcv, int Length, UCHAR * Corrected, BOOL * blnRSOK)
+{
+	// bytRcv is the received array of symbols (up to 8 bits/symbol) including systematic data + 2 * tt parity symbols
+	// length of bytRcv may be shorter than full length (nn) but must be agreed upon a priori by both encoder and decoder (Shortened code)
+	// Shortening simply appends leading 0's (before encoding and before decoding) and then 
+	// discarding the same 0's at the end.
+	// This verified with several thousand automated random test cases for both 239,255 and 223, 255 RS codes
+	// approximate encode + decode time (with max num of errors) is on the order of 1 ms (Pentium 1700 MHz) 
+	// Note on some intensive test done July 5, 2009 by RM (> 20 Million RS Corrections) there are rare (but possible) conditions
+	// where RSDecode reports blnCorrected = true but there are still bytes with errors. The exact 
+	// mechanism for this is unknown so this now requires a Sum Check confirmation even if the blnCorrected
+	// is reported True. In over 20 Million test cases there was no condition that blnCorrected was reported
+	// true, there was an error, and the 16 bit Sum check did not detect the error.
+	
+	int intIndexSave;
+	int intIsave;
+	UCHAR intTemp[256];			// can this be UCHAR?
+	int intStartIndex, i, j;
+	
+	BOOL blnDecodeFailed = FALSE;
+
+	if (Length > nn || Length < (1 + 2 * tt))
+	{
+		*blnRSOK = FALSE;
+
+		//'ReDim Preserve bytRcv(bytRcv.Length - 2 * tt - 1)
+		//'  RSDecode = bytRcv 'insufficient length
+        //        Logs.Exception("[ReedSoloman8.RSDecode8] Length Error Rcv:" & bytRcv.Length.ToString & " nn:" & nn.ToString & " tt:" & tt.ToString & "  Return empty array.")
+        
+		return;
+	}
+
+	intStartIndex = nn - Length;	 // set the start point for shortened RS codes
+
+	// horrible!!
+
+	for (j = 0; j < nn; j++)
+	{
+		if (j < intStartIndex)
+			intTemp[j] = 0;
+		else
+			intTemp[j] = bytRcv[j - intStartIndex];
+	}
+
+	// convert to indexed form
+
+	for(i = 0; i < 256; i++)
+	{
+		intIsave = i;
+		intIndexSave = index_of[intTemp[i]];
+		recd[i] = index_of[intTemp[i]];
+	}
+
+	decode_rs();
+
+	*blnRSOK = blnErrorsCorrected;
+
+	if(blnErrorsCorrected)
+	{
+		for (i = 0; i < Length - (2 * tt); i++)
+		{
+			Corrected[i] = recd[i + intStartIndex];
+		}
+	}
+	else
+	{
+		// Just return input minus RS (can't we just use input??
+
+		memcpy(Corrected, bytRcv, Length - 2 * tt);
+		*blnRSOK = TRUE;
+	}
+}
 
 // Function to encode data for all FSK frame types
   
@@ -1221,6 +981,73 @@ void Send5SecTwoTone()
 	}
 }
 
+
+
+void  ASCIIto6Bit(char * Padded, UCHAR * Compressed)
+{
+	// Input must be 8 bytes which will convert to 6 bytes of packed 6 bit characters and
+	// inputs must be the ASCII character set values from 32 to 95....
+    
+	unsigned long long intSum = 0;
+
+	int i;
+
+	for (i=0; i<4; i++)
+	{
+		intSum = (64 * intSum) + Padded[i] - 32;
+	}
+
+	Compressed[0] = (UCHAR)(intSum >> 16) & 255;
+	Compressed[1] = (UCHAR)(intSum >> 8) &  255;
+	Compressed[2] = (UCHAR)intSum & 255;
+
+	intSum = 0;
+
+	for (i=4; i<8; i++)
+	{
+		intSum = (64 * intSum) + Padded[i] - 32;
+	}
+
+	Compressed[3] = (UCHAR)(intSum >> 16) & 255;
+	Compressed[4] = (UCHAR)(intSum >> 8) &  255;
+	Compressed[5] = (UCHAR)intSum & 255;
+}
+
+void Bit6ToASCII(UCHAR * Padded, UCHAR * UnCompressed)
+{
+	// uncompress 6 to 8
+
+	// Input must be 6 bytes which represent packed 6 bit characters that well 
+	// result will be 8 ASCII character set values from 32 to 95...
+
+	unsigned long long intSum = 0;
+
+	int i;
+
+	for (i=0; i<3; i++)
+	{
+		intSum = (intSum << 8) + Padded[i];
+	}
+
+	UnCompressed[0] = (UCHAR)((intSum >> 18) & 63) + 32;
+	UnCompressed[1] = (UCHAR)((intSum >> 12) & 63) + 32;
+	UnCompressed[2] = (UCHAR)((intSum >> 6) & 63) + 32;
+	UnCompressed[3] = (UCHAR)(intSum & 63) + 32;
+
+	intSum = 0;
+
+	for (i=3; i<6; i++)
+	{
+		intSum = (intSum << 8) + Padded[i] ;
+	}
+
+	UnCompressed[4] = (UCHAR)((intSum >> 18) & 63) + 32;
+	UnCompressed[5] = (UCHAR)((intSum >> 12) & 63) + 32;
+	UnCompressed[6] = (UCHAR)((intSum >> 6) & 63) + 32;
+	UnCompressed[7] = (UCHAR)(intSum & 63) + 32;
+}
+
+
 // Function to compress callsign (up to 7 characters + optional "-"SSID   (-0 to -15 or -A to -Z) 
     
 void CompressCallsign(char * Callsign, UCHAR * Compressed)
@@ -1267,518 +1094,40 @@ void CompressGridSquare(char * Square, UCHAR * Compressed)
 	ASCIIto6Bit(Padded, Compressed); //compress to 8 6 bit characters   6 bytes total
 }
 
-/*
- > 8 Then Return Nothing
-        Dim bytReturn() As Byte = ASCIIto6Bit(GetBytes(strGS.PadRight(8))) ' compress to 6 bit ascii (upper case)
-        Return bytReturn ' 6 bytes total
-    End Function  ' CompressGridSquare
-
-    ' Function to decompress 6 byte call sign to 7 characters plus optional -SSID of -0 to -15 or -A to -Z
-    Public Function DeCompressCallsign(bytCallsign() As Byte) As String
-        If IsNothing(bytCallsign) Then Return ""
-        If bytCallsign.Length <> 6 Then Return ""
-        Dim bytTest() As Byte = Bit6ToASCII(bytCallsign)
-        Dim strWithSSID As String
-        If bytTest(7) = 48 Then ' Value of "0" so No SSID
-            ReDim Preserve bytTest(6)
-            Return GetString(bytTest).Trim
-        ElseIf (bytTest(7) >= 58 And bytTest(7) <= 63) Then ' handles special case for -10 to -15
-            DeCompressCallsign = GetString(bytTest).Substring(0, 7).Trim & "-"
-            DeCompressCallsign &= (bytTest(7) - 48).ToString
-        Else
-            strWithSSID = GetString(bytTest)
-            Return strWithSSID.Substring(0, 7).Trim & "-" & strWithSSID.Substring(strWithSSID.Length - 1)
-        End If
-    End Function ' DeCompressCallsign
-
-    ' Function to decompress 6 byte Grid square to 4, 6 or 8 characters
-    Public Function DeCompressGridSquare(bytGS() As Byte) As String
-        If IsNothing(bytGS) Then Return ""
-        If bytGS.Length <> 6 Then Return ""
-        Dim bytTest() As Byte = Bit6ToASCII(bytGS)
-        Return GetString(bytTest).Trim
-    End Function ' DeCompressGridSquare
-
-*/
-
-void  ASCIIto6Bit(char * Padded, UCHAR * Compressed)
+// Function to decompress 6 byte call sign to 7 characters plus optional -SSID of -0 to -15 or -A to -Z
+  
+void DeCompressCallsign(char * bytCallsign, char * returned)
 {
-	// Input must be 8 bytes which will convert to 6 bytes of packed 6 bit characters and
-	// inputs must be the ASCII character set values from 32 to 95....
+	char bytTest[10];
+	char SSID[8] = "";
     
-	unsigned long long intSum = 0;
+	Bit6ToASCII(bytCallsign, bytTest);
 
-	int i;
+	memcpy(returned, bytTest, 6);
+	returned[6] = 0;
+	strlop(returned, ' ');		// remove trailing space
 
-	for (i=0; i<4; i++)
-	{
-		intSum = (64 * intSum) + Padded[i] - 32;
-	}
-
-	Compressed[0] = (UCHAR)(intSum >> 16) & 255;
-	Compressed[1] = (UCHAR)(intSum >> 8) &  255;
-	Compressed[2] = (UCHAR)intSum & 255;
-
-	intSum = 0;
-
-	for (i=4; i<8; i++)
-	{
-		intSum = (64 * intSum) + Padded[i] - 32;
-	}
-
-	Compressed[3] = (UCHAR)(intSum >> 16) & 255;
-	Compressed[4] = (UCHAR)(intSum >> 8) &  255;
-	Compressed[5] = (UCHAR)intSum & 255;
-}
-
-/*
-
-
-void Bit6ToASCII(char * Padded, UCHAR * Compressed)
-{
-; //compress to 8 6 bit characters   6 bytes total
-
-        ' Input must be 6 bytes which represent packed 6 bit characters that well 
-        ' result will be 8 ASCII character set values from 32 to 95...
-
-        Dim intSum As Int64
-        Dim intMask As Int64
-        Dim bytReturn(7) As Byte
-
-        For i As Integer = 0 To 2
-            intSum = 256 * intSum + byt6Bit(i)
-        Next i
-        For j As Integer = 0 To 3
-            intMask = CInt(63 * (64 ^ (3 - j)))
-            bytReturn(j) = CByte(32 + (intSum And intMask) \ CInt((64 ^ (3 - j))))
-        Next
-        For i As Integer = 0 To 2
-            intSum = 256 * intSum + byt6Bit(i + 3)
-        Next i
-        For j As Integer = 0 To 3
-            intMask = CInt(63 * (64 ^ (3 - j)))
-            bytReturn(j + 4) = CByte(32 + (intSum And intMask) \ CInt((64 ^ (3 - j))))
-        Next
-        Return bytReturn
-    End Function
-*/
-
-// Function to generate the Two-tone leader and Frame Sync (used in all frame types) 
-
-void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader)
-{
-	// Generate a 100 baud (10 ms symbol time) 2 tone leader 
-	// leader tones used are 1450 and 1550 Hz.  
-  
-	int intPtr = 0;
-	int intSign = 1;
-	int i, j;
-
-    if ((intSymLen & 1) == 1) 
-		intSign = -1;
-
-	for (i = 0; i < intSymLen; i++)   //for the number of symbols needed (two symbols less than total leader length) 
-	{
-		for (j = 0; j < 120; j++)	// for 120 samples per symbol (100 baud) 
-		{
-           if (i != (intSymLen - 1)) 
-			   intLeader[intPtr] = intSign * intTwoToneLeaderTemplate[j];
-		   else
-			   intLeader[intPtr] = -intSign * intTwoToneLeaderTemplate[j];
-   
-		   intPtr += 1;
-		}
-		intSign = -intSign;
-	}
-
-}
-
-// Function to apply 200 Hz filter for transmit  
-
-void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
-{
-	// Used for PSK 200 Hz modulation XMIT filter  
-	// assumes sample rate of 12000
-	// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
-	// FSF (Frequency Selective Filter) variables
-
-	static double dblR = 0.9995;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-	static int intN = 120;				//Length of filter 12000/100
-	static double dblRn;
-
-	static double dblR2;
-	static double dblCoef[19] = {0.0};			// the coefficients
-	double dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
-	// The resonators 
-      
-	double dblZout_0[19] = {0.0};	// resonator outputs
-	double dblZout_1[19] = {0.0};	// resonator outputs delayed one sample
-	double dblZout_2[19] = {0.0};	// resonator outputs delayed two samples
-
-	int intFilLen = intN / 2;
-	int i, j;
-
-	double intFilteredSample = 0;			//  Filtered sample
-	double largest = 0;
-
-	dblRn = pow(dblR, intN);
-
-	dblR2 = pow(dblR, 2);
-
-
-	Length = AddTrailer(intNewSamples, Length);  // add the trailer before filtering
-
-	// Initialize the coefficients
-
-	if (dblCoef[15] == 0.0)
-	{
-		for (i = 14; i <= 16; i++)
-		{
-			dblCoef[i] = 2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
-		}
-	}
-
-	for (i = 0; i < Length + intFilLen - 1; i++)
-	{
-		intFilteredSample = 0;
-		if (i < intN)
-			dblZin = intNewSamples[i];
-		else if (i < Length)
-			dblZin = intNewSamples[i] - dblRn * intNewSamples[i - intN];
-		else
-			dblZin = -dblRn * intNewSamples[i - intN];
- 
-		//Compute the Comb
-
-		dblZComb = dblZin - dblZin_2 * dblR2;
-		dblZin_2 = dblZin_1;
-		dblZin_1 = dblZin;
-
-		// Now the resonators
-		
-		for (j = 14; j <= 16; j++)	   // calculate output for 3 resonators 
-		{
-			dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
-			dblZout_2[j] = dblZout_1[j];
-			dblZout_1[j] = dblZout_0[j];
-
-			// scale each by transition coeff and + (Even) or - (Odd) 
-
-			if (i >= intFilLen)
-			{
-              if (j == 14 || j == 16)
-				  intFilteredSample += 0.7389 * dblZout_0[j];
-			  else
-				  intFilteredSample -= dblZout_0[j];
-			}
-		}
-
-		if (i >= intFilLen)
-		{
-			intFilteredSample = intFilteredSample * 0.00833333333; //  rescales for gain of filter
-			if (intFilteredSample > 32700)  // Hard clip above 32700
-				intFilteredSample = 32700;
-			else if (intFilteredSample < -32700)
-				intFilteredSample = -32700;
-
-			intNewSamples[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
-			largest = max(largest, intFilteredSample);
-		}
-	}
-}
+	if (bytTest[7] == '0') // Value of "0" so No SSID
+		returned[6] = 0;
+	else if (bytTest[7] >= 58 && bytTest[7] <= 63) //' handles special case for -10 to -15
+		sprintf(SSID, "-%d", bytTest[7] - 48);
+	else
+		sprintf(SSID, "-%c", bytTest[7]);
 	
-// Function to apply 500 Hz filter for transmit 
-void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
-{
-	// Used for FSK modulation XMIT filter  
-	// assumes sample rate of 12000
-	// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
-	// FSF (Frequency Selective Filter) variables
- 
-	static double dblR = 0.9995;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-	static int intN = 120;				//Length of filter 12000/100
-	static double dblRn;
-
-	static double dblR2;
-	static double dblCoef[19] = {0.0};			// the coefficients
-	double dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
-	// The resonators 
-      
-	double dblZout_0[19] = {0.0};	// resonator outputs
-	double dblZout_1[19] = {0.0};	// resonator outputs delayed one sample
-	double dblZout_2[19] = {0.0};	// resonator outputs delayed two samples
-
-	int intFilLen = intN / 2;
-	int i, j;
-
-	double intFilteredSample = 0;			//  Filtered sample
-
-	dblRn = pow(dblR, intN);
-
-	dblR2 = pow(dblR, 2);
-
-	Length = AddTrailer(intNewSamples, Length);  // add the trailer before filtering
-
-	// Initialize the coefficients
-
-	if (dblCoef[18] == 0.0)
-	{
-		for (i = 12; i <= 18; i++)
-		{
-			dblCoef[i] = 2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
-		}
-	}
-
-  
-	for (i = 0; i < Length + intFilLen - 1; i++)
-	{
-		intFilteredSample = 0;
-
-		if (i < intN)
-			dblZin = intNewSamples[i];
-		else if (i < Length)
-			dblZin = intNewSamples[i] - dblRn * intNewSamples[i - intN];
-		else
-			dblZin = -dblRn * intNewSamples[i - intN];
- 
-		//Compute the Comb
-
-		dblZComb = dblZin - dblZin_2 * dblR2;
-		dblZin_2 = dblZin_1;
-		dblZin_1 = dblZin;	
-				 
-		// Now the resonators
-		
-		for (j = 12; j <= 18; j++)	   // calculate output for 3 resonators 
-		{
-			dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
-			dblZout_2[j] = dblZout_1[j];
-			dblZout_1[j] = dblZout_0[j];
-
-							
-			// scale each by transition coeff and + (Even) or - (Odd) 
-			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-			// practical range of scaling .05 to .25
-			// Scaling also accomodates for the filter "gain" of approx 60. 
-
-			if (i >= intFilLen)
-			{
-				if (j == 12 || j == 18)
-					intFilteredSample += 0.10601 * dblZout_0[j];
-                        else if (j == 13 || j == 17)
-							intFilteredSample -= 0.59383 * dblZout_0[j];
-                        else if ((j & 1) == 0) 
-                            intFilteredSample += dblZout_0[j];
-                        else
-                            intFilteredSample -= dblZout_0[j];
-			}
-		}     
-         
-		if (i >= intFilLen)
-		{
-			intFilteredSample = intFilteredSample * 0.00833333333; //  rescales for gain of filter
-			if (intFilteredSample > 32700)  // Hard clip above 32700
-				intFilteredSample = 32700;
-			else if (intFilteredSample < -32700)
-				intFilteredSample = -32700;
-
-			intNewSamples[i - intFilLen] = (short)intFilteredSample;
-		}
-	}
+	strcat(returned, SSID);
 }
 
-/*
-    ' Function to apply 1000 Hz filter for transmit 
-    Public Function FSXmtFilter1000_1500Hz(ByRef intNewSamples() As Int32) As Int32()
 
-        ' Used for FSK modulation XMIT filter  
-        ' assumes sample rate of 12000
-        ' implements 11 100 Hz wide sections centered on 1500 Hz  (~1000 Hz wide @ - 30dB centered on 1500 Hz)
-        ' FSF (Frequency Selective Filter) variables
-        AddTrailer(intNewSamples) ' add the trailer before filtering
+// Function to decompress 6 byte Grid square to 4, 6 or 8 characters
 
-        Static dblR As Double = 0.9995  ' insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-        Static intN As Integer = 120  ' Length of filter 12000/100
-        Static dblRn As Double = dblR ^ intN
-        Static dblR2 As Double = dblR ^ 2
-        Static dblCoef(20) As Double 'the coefficients
-        Dim dblZin, dblZin_1, dblZin_2, dblZComb As Double  ' Used in the comb generator
-        ' The resonators 
-        Dim dblZout_0(20) As Double ' resonator outputs
-        Dim dblZout_1(20) As Double ' resonator outputs delayed one sample
-        Dim dblZout_2(20) As Double  ' resonator outputs delayed two samples
-        Static intFilLen As Integer = intN \ 2
-        Dim intFilteredSamples(intNewSamples.Length - 1) As Int32 '  Filtered samples
-        'Dim dblUnfilteredSamples(intNewSamples.Length - 1) As Double 'for debug wave plotting
-        'Dim dblFilteredSamples(intNewSamples.Length - 1) As Double ' for debug wave plotting
-        Dim intPeakSample As Int32 = 0
-        ' Initialize the coefficients
-        If dblCoef(20) = 0 Then
-            For i As Integer = 10 To 20
-                dblCoef(i) = 2 * dblR * Cos(2 * PI * i / intN) ' For Frequency = bin i
-            Next i
-        End If
-        Try
-            For i As Integer = 0 To intNewSamples.Length + intFilLen - 1
+void DeCompressGridSquare(char * bytGS, char * returned)
+{
+	char bytTest[10];
+	Bit6ToASCII(bytGS, bytTest);
 
-                If i < intN Then
-                    ' dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i)
-                ElseIf i < intNewSamples.Length Then
-                    'dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i) - dblRn * intNewSamples(i - intN)
-                Else
-                    dblZin = -dblRn * intNewSamples(i - intN)
-                End If
-                ' Compute the Comb
-                dblZComb = dblZin - dblZin_2 * dblR2
-                dblZin_2 = dblZin_1
-                dblZin_1 = dblZin
-
-                ' Now the resonators
-
-                For j As Integer = 10 To 20   ' calculate output for 11 resonators 
-                    dblZout_0(j) = dblZComb + dblCoef(j) * dblZout_1(j) - dblR2 * dblZout_2(j)
-                    dblZout_2(j) = dblZout_1(j)
-                    dblZout_1(j) = dblZout_0(j)
-                    ' scale each by transition coeff and + (Even) or - (Odd) 
-                    ' Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-                    ' practical range of scaling .05 to .25
-                    ' Scaling also accomodates for the filter "gain" of approx 60. 
-                    If i >= intFilLen Then
-                        If j = 10 Or j = 20 Then
-                            intFilteredSamples(i - intFilLen) += 0.389 * dblZout_0(j)
-                        ElseIf j Mod 2 = 0 Then
-                            intFilteredSamples(i - intFilLen) += dblZout_0(j)
-                        Else
-                            intFilteredSamples(i - intFilLen) -= dblZout_0(j)
-                        End If
-                    End If
-                Next j
-                If i >= intFilLen Then
-                    intFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) * 0.00833333333 '  rescales for gain of filter
-                    If intFilteredSamples(i - intFilLen) > 32700 Then ' Hard clip above 32700
-                        intFilteredSamples(i - intFilLen) = 32700
-                    ElseIf intFilteredSamples(i - intFilLen) < -32700 Then
-                        intFilteredSamples(i - intFilLen) = -32700
-                    End If
-                    'dblFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) ' debug code
-                    If Abs(intFilteredSamples(i - intFilLen)) > Abs(intPeakSample) Then intPeakSample = intFilteredSamples(i - intFilLen)
-                End If
-            Next i
-            ' *********************************
-            ' Debug code to look at filter output
-            'Dim objWT As New WaveTools
-            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = False Then
-            '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
-            'End If
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\UnFiltered" & strFilename, 12000, 16, dblUnfilteredSamples)
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\Filtered" & strFilename, 12000, 16, dblFilteredSamples)
-            ' End of debug code
-            '************************************
-        Catch ex As Exception
-            Logs.Exception("[Filters.FSXmtFilterFSK500_1500Hz] Exception: " & ex.ToString)
-            Return Nothing
-        End Try
-        Return intFilteredSamples
-    End Function ' FSXmtFilter1000_1500Hz
-
-    ' Function to apply 2000 Hz filter for transmit 
-    Public Function FSXmtFilter2000_1500Hz(ByRef intNewSamples() As Int32) As Int32()
-
-        ' Used for FSK modulation XMIT filter  
-        ' assumes sample rate of 12000
-        ' implements 21 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
-        ' FSF (Frequency Selective Filter) variables
-
-        AddTrailer(intNewSamples) ' add the trailer before filtering
-
-        Static dblR As Double = 0.9995  ' insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-        Static intN As Integer = 120  ' Length of filter 12000/100
-        Static dblRn As Double = dblR ^ intN
-        Static dblR2 As Double = dblR ^ 2
-        Static dblCoef(25) As Double 'the coefficients
-        Dim dblZin, dblZin_1, dblZin_2, dblZComb As Double  ' Used in the comb generator
-        ' The resonators 
-        Dim dblZout_0(25) As Double ' resonator outputs
-        Dim dblZout_1(25) As Double ' resonator outputs delayed one sample
-        Dim dblZout_2(25) As Double  ' resonator outputs delayed two samples
-        Static intFilLen As Integer = intN \ 2
-        Dim intFilteredSamples(intNewSamples.Length - 1) As Int32 '  Filtered samples
-        'Dim dblUnfilteredSamples(intNewSamples.Length - 1) As Double 'for debug wave plotting
-        ' Dim dblFilteredSamples(intNewSamples.Length - 1) As Double ' for debug wave plotting
-        Dim intPeakSample As Int32 = 0
-        ' Initialize the coefficients
-        If dblCoef(25) = 0 Then
-            For i As Integer = 5 To 25
-                dblCoef(i) = 2 * dblR * Cos(2 * PI * i / intN) ' For Frequency = bin i
-            Next i
-        End If
-        Try
-            For i As Integer = 0 To intNewSamples.Length + intFilLen - 1
-
-                If i < intN Then
-                    'dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i)
-                ElseIf i < intNewSamples.Length Then
-                    'dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i) - dblRn * intNewSamples(i - intN)
-                Else
-                    dblZin = -dblRn * intNewSamples(i - intN)
-                End If
-                ' Compute the Comb
-                dblZComb = dblZin - dblZin_2 * dblR2
-                dblZin_2 = dblZin_1
-                dblZin_1 = dblZin
-
-                ' Now the resonators
-
-                For j As Integer = 5 To 25  ' calculate output for 21 resonators 
-                    dblZout_0(j) = dblZComb + dblCoef(j) * dblZout_1(j) - dblR2 * dblZout_2(j)
-                    dblZout_2(j) = dblZout_1(j)
-                    dblZout_1(j) = dblZout_0(j)
-                    ' scale each by transition coeff and + (Even) or - (Odd) 
-                    ' Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-                    ' practical range of scaling .05 to .25
-                    ' Scaling also accomodates for the filter "gain" of approx 60. 
-                    If i >= intFilLen Then
-                        If j = 5 Or j = 25 Then
-                            intFilteredSamples(i - intFilLen) -= 0.389 * dblZout_0(j)
-                        ElseIf j Mod 2 = 0 Then
-                            intFilteredSamples(i - intFilLen) += dblZout_0(j)
-                        Else
-                            intFilteredSamples(i - intFilLen) -= dblZout_0(j)
-                        End If
-                    End If
-                Next j
-                If i >= intFilLen Then
-                    intFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) * 0.00833333333 '  rescales for gain of filter
-                    If intFilteredSamples(i - intFilLen) > 32700 Then ' Hard clip above 32700
-                        intFilteredSamples(i - intFilLen) = 32700
-                    ElseIf intFilteredSamples(i - intFilLen) < -32700 Then
-                        intFilteredSamples(i - intFilLen) = -32700
-                    End If
-                    'dblFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) ' debug code
-                    If Abs(intFilteredSamples(i - intFilLen)) > Abs(intPeakSample) Then intPeakSample = intFilteredSamples(i - intFilLen)
-                End If
-            Next i
-            ' *********************************
-            ' Debug code to look at filter output
-            'Dim objWT As New WaveTools
-            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = False Then
-            '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
-            'End If
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\UnFiltered2000Hz.wav", 12000, 16, dblUnfilteredSamples)
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\Filtered2000Hz.wav", 12000, 16, dblFilteredSamples)
-            ' End of debug code
-            '************************************
-        Catch ex As Exception
-            Logs.Exception("[EncodeModulate.FSXmitFilterFSK2000_1500Hz] Exception: " & ex.ToString)
-            Return Nothing
-        End Try
-        Return intFilteredSamples
-    End Function  'FSXmtFilter2000_1500Hz
-*/
+	strlop(bytTest, ' ');
+	strcpy(returned, bytTest);
+}
 
 // A function to compute the parity symbol used in the frame type encoding
 
@@ -1797,25 +1146,6 @@ UCHAR ComputeTypeParity(UCHAR bytFrameType)
 	}
     
 	return bytParitySum & 0x3;
-}
-
-// Subroutine to add trailer before filtering
-
-int AddTrailer(short * intSamples, int Length)
-{
-	int intPtr = Length;
-	int intAddedSymbols = 1 + TrailerLength / 10; // add 1 symbol + 1 per each 10 ms of MCB.Trailer
-	int i, k;
-
-	for (i = 1; i <= intAddedSymbols; i++)
-	{
-		for (k = 0; k < 120; k++)
-		{
-			intSamples[intPtr] = intPSK100bdCarTemplate[4][0][k];
-			intPtr += 1;
-		}
-	}
-	return intPtr;
 }
 
 // Subroutine to make a CW ID Wave File
@@ -1847,10 +1177,10 @@ void CWID(char * strID, short * intSamples, BOOL blnPlay)
             strID = strID.Substring(0, strID.IndexOf("-"))
         End If
 
-        Dim dblHiPhaseInc As Double = 2 * PI * 1609.375 / 12000 ' 1609.375 Hz High tone
-        Dim dblLoPhaseInc As Double = 2 * PI * 1390.625 / 12000 ' 1390.625  low tone
-        Dim dblHiPhase As Double
-        Dim dblLoPhase As Double
+        Dim dblHiPhaseInc As float = 2 * PI * 1609.375 / 12000 ' 1609.375 Hz High tone
+        Dim dblLoPhaseInc As float = 2 * PI * 1390.625 / 12000 ' 1390.625  low tone
+        Dim dblHiPhase As float
+        Dim dblLoPhase As float
         Dim intDotSampCnt As Integer = 768 ' about 12 WPM or so (should be a multiple of 256
         Dim intDot(intDotSampCnt - 1) As Int16
         Dim intSpace(intDotSampCnt - 1) As Int16
@@ -1921,7 +1251,7 @@ void CWID(char * strID, short * intSamples, BOOL blnPlay)
         Next j
         ' *********************************
         ' Debug code to look at wave file 
-        'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = False Then
+        'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = FALSE Then
         '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
         'End If
         'objWave.WriteRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\CWID.wav", 12000, 16, aryWave)
@@ -2061,7 +1391,7 @@ void GenCRC16FrameType(char * Data, int intStartIndex, int intStopIndex, UCHAR b
 /*
     ' Function to compute a 16 bit CRC value and check it against the last 2 bytes of Data (the CRC) XORing LS byte with bytFrameType..
     Public Function CheckCRC16FrameType(ByRef Data() As Byte, Optional bytFrameType As Byte = 0) As Boolean
-        ' Returns True if CRC matches, else False
+        ' Returns True if CRC matches, else FALSE
         ' For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
         ' intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
 
@@ -2099,7 +1429,7 @@ void GenCRC16FrameType(char * Data, int intStartIndex, int intStopIndex, UCHAR b
                 Return True
             End If
         End If
-        Return False
+        Return FALSE
     End Function 'CheckCRC16FrameType
 */
 
