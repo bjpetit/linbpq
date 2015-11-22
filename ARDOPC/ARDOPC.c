@@ -16,6 +16,7 @@ enum _ARDOPState ARDOPState;
 BOOL SoundIsPlaying = FALSE;
 
 char ProtocolMode[4]= "";
+int intSamplesToCompleteFrame;
 
 time_t Now = 0;
 UCHAR bytValidFrameTypes[256]= {0};

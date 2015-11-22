@@ -18,27 +18,21 @@ WAVEHDR header = {(char *)buffer, sizeof(buffer), 0, 0, 0, 0, 0, 0 };
 
 int Number = 0;				// Number waiting to be sent
 
-SampleSink(UCHAR * Samples, int Count)
+void main()
 {
-	if (Number + Count > 120000)			// Will overflow
-	{
-		memcpy(&buffer[Number], Samples, (120000 - Number) * 2);
-		waveOutPrepareHeader(hWaveOut, &header, sizeof(WAVEHDR));
-		waveOutWrite(hWaveOut, &header, sizeof(WAVEHDR));
+	ardopmain();
+}
 
-		while (!(header.dwFlags & WHDR_DONE));
-		waveOutUnprepareHeader(hWaveOut, &header, sizeof(WAVEHDR));
+void SampleSink(short Sample, void * Filter())
+{
+	// We probably need to filter samples. 
+	// Filters run 120 samples behind, so we need to 
+	// save state. Don't want to call too often cos of
+	// the overhead of saving and restoring context, but
+	// also don't want to use too much RAM
 
-		Count -= (12000 - Number);
-		Samples = &Samples[12000 - Number];
-		Number = 0;
-	}
 
-	memcpy(&buffer[Number], Samples, Count * 2);
-
-	Number += Count;
-
-	return 0;
+	buffer[Number++]= Sample;
 }
 
 

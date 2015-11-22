@@ -2,18 +2,18 @@
 
 #include "ARDOPC.h"
 
-
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 // Function to generate the Two-tone leader and Frame Sync (used in all frame types) 
 
-void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader)
+void GetTwoToneLeaderWithSync(int intSymLen)
 {
 	// Generate a 100 baud (10 ms symbol time) 2 tone leader 
 	// leader tones used are 1450 and 1550 Hz.  
   
-	int intPtr = 0;
 	int intSign = 1;
 	int i, j;
+	short intSample;
 
     if ((intSymLen & 1) == 1) 
 		intSign = -1;
@@ -23,11 +23,11 @@ void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader)
 		for (j = 0; j < 120; j++)	// for 120 samples per symbol (100 baud) 
 		{
            if (i != (intSymLen - 1)) 
-			   intLeader[intPtr] = intSign * intTwoToneLeaderTemplate[j];
+			   intSample = intSign * intTwoToneLeaderTemplate[j];
 		   else
-			   intLeader[intPtr] = -intSign * intTwoToneLeaderTemplate[j];
+			   intSample = -intSign * intTwoToneLeaderTemplate[j];
    
-		   intPtr += 1;
+		   SampleSink(intSample, NULL);
 		}
 		intSign = -intSign;
 	}
@@ -38,10 +38,10 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	// Function to Modulate data encoded for 4FSK and create the integer array of 32 bit samples suitable for playing 
 	// Function works for 1, 2 or 4 simultaneous carriers 
 
-	int intNumCar, intBaud, intDataLen, intRSLen, intSampleLen, intSamplePtr, intDataPtr, intSampPerSym, intDataBytesPerCar;
+	int intNumCar, intBaud, intDataLen, intRSLen, intSampleLen, intDataPtr, intSampPerSym, intDataBytesPerCar;
 	BOOL blnOdd;
-	short intLeader[100000];
-	short intSamples[100000];
+
+	short intSample;
 
     char strType[16] = "";
     char strMod[16] = "";
@@ -80,8 +80,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
         // For FEC transmission the computed leader length = MCB.Leader length    
 		intSampleLen = intLeaderLenMS * 12 + 240 * 10 + intSampPerSym * (4 * (Len - 2) / intNumCar);
 
-		GetTwoToneLeaderWithSync(intLeaderLenMS / 10, &intLeader[0]);
-		SampleSink(intLeader, intLeaderLenMS * 12);	// (500 ms 2400
+		GetTwoToneLeaderWithSync(intLeaderLenMS / 10);
 
 		 break;
                 
@@ -89,8 +88,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 		
 		intSampPerSym = 120;
 		intSampleLen = intLeaderLenMS * 12 + 240 * 10 + intSampPerSym * (4 * (Len - 2) / intNumCar);
-		GetTwoToneLeaderWithSync(intLeaderLenMS / 10, &intLeader[0]);
-		SampleSink(intLeader, intLeaderLenMS * 12);	// (500 ms 2400
+		GetTwoToneLeaderWithSync(intLeaderLenMS / 10);
 	}
 	
 	// Create the leader
@@ -99,7 +97,6 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
     
 	//Array.Copy(intLeader, 0, intSamples, 0, intLeader.Length) 'copy the leader + sync
      
-	intSamplePtr = 0;
 
 	//Create the 8 symbols (16 bit) 50 baud 4FSK frame type with Implied SessionID
 	// No reference needed for 4FSK
@@ -120,11 +117,17 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 			for(n = 0; n < 240; n++)
 			{
 				if (((5 * j + k) & 1 ) == 0)
-					intSamples[intSamplePtr + n] = intFSK50bdCarTemplate[bytSymToSend][n];
+					intSample = intFSK50bdCarTemplate[bytSymToSend][n];
 				else
-					intSamples[intSamplePtr + n] = -intFSK50bdCarTemplate[bytSymToSend][n]; // -sign insures no phase discontinuity at symbol boundaries
+					intSample = -intFSK50bdCarTemplate[bytSymToSend][n]; // -sign insures no phase discontinuity at symbol boundaries
+
+				// Not sure if we should always use 200 hz here
+
+				if(intBaud == 50)
+					SampleSink(intSample, FSXmtFilter200_1500Hz);
+				else
+					SampleSink(intSample, FSXmtFilter500_1500Hz);	
 			}
-			intSamplePtr += 240;
 			bytMask = bytMask >> 2;
 		}
 	}
@@ -152,31 +155,41 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 					if((k & 1) == 0)
 					{
 						if(intBaud == 50)
-							intSamples[intSamplePtr + n] = intFSK50bdCarTemplate[bytSymToSend][n];
+						{
+							intSample = intFSK50bdCarTemplate[bytSymToSend][n];
+							SampleSink(intSample, FSXmtFilter200_1500Hz);
+						}
 						else
-							intSamples[intSamplePtr + n] = intFSK100bdCarTemplate[bytSymToSend][n];
+						{
+							intSample = intFSK100bdCarTemplate[bytSymToSend][n];
+							SampleSink(intSample, FSXmtFilter500_1500Hz);	
+						}
 					}
 					else
  					{
 						if(intBaud == 50)
-							intSamples[intSamplePtr + n] = -intFSK50bdCarTemplate[bytSymToSend][n];
+						{
+							intSample = -intFSK50bdCarTemplate[bytSymToSend][n];
+							SampleSink(intSample, FSXmtFilter200_1500Hz);
+						}
 						else
-							intSamples[intSamplePtr + n] = -intFSK100bdCarTemplate[bytSymToSend][n];
+						{
+							intSample = -intFSK100bdCarTemplate[bytSymToSend][n];
+							SampleSink(intSample, FSXmtFilter500_1500Hz);	
+						}
 					}
 				}
 
 				bytMask = bytMask >> 2;
-				intSamplePtr += intSampPerSym;
 			}
 			intDataPtr += 1;
 		}
 
-		if (intBaud == 50)
-			FSXmtFilter200_1500Hz(intSamples, intSamplePtr);
-		else if (intBaud == 100)
-			FSXmtFilter500_1500Hz(intSamples, intSamplePtr);
+//		if (intBaud == 50)
+//			FSXmtFilter200_1500Hz(intSamples, intSamplePtr);
+//		else if (intBaud == 100)
+//			FSXmtFilter500_1500Hz(intSamples, intSamplePtr);
 
-		SampleSink(intSamples, intSamplePtr);	// 2400
 		SoundFlush();
 
 		break;
@@ -196,21 +209,19 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 					//' First carrier
                       
 					bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
-					intSamples[intSamplePtr + n] = intFSK100bdCarTemplate[8 + bytSymToSend][n];
+					intSample = intFSK100bdCarTemplate[8 + bytSymToSend][n];
 					// Second carrier
                     
 					bytSymToSend = (bytMask & bytEncodedData[intDataPtr + intDataBytesPerCar]) >> (2 * (3 - k));	// Values 0-3
-					intSamples[intSamplePtr + n] = dblCarScalingFactor * (intSamples[intSamplePtr + n] + intFSK100bdCarTemplate[12 + bytSymToSend][n]);
+					intSample = dblCarScalingFactor * (intSample + intFSK100bdCarTemplate[12 + bytSymToSend][n]);
 				}
 
 				bytMask = bytMask >> 2;
-				intSamplePtr += intSampPerSym;
+//				SampleSink(intSample, FSXmtFilter1000_1500Hz);
 			}
 			intDataPtr += 1;
 		}
              
-//			intSamples = FSXmtFilter1000_1500Hz(intSamples)
-		SampleSink(intSamples, intSamplePtr);	// 2400
 		SoundFlush();
 
 		break;
@@ -356,7 +367,7 @@ void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
 				intFilteredSample = -32700;
 
 			intNewSamples[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
-			largest = max(largest, intFilteredSample);
+			largest = MAX(largest, intFilteredSample);
 		}
 	}
 }

@@ -2,16 +2,6 @@
 
 static int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
-short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (10 ms) of the leader
-
-short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
-    //   (only positive Phase values are in the table, sign reversal is used to get the negative phase values) This reduces the table size from 7680 to 3840 integers
-short intPSK200bdCarTemplate[9][4][72];		// Templates for 200 bd with cyclic prefix
-short intFSK25bdCarTemplate[16][480];		// Template for 16FSK carriers spaced at 25 Hz, 25 baud
-short intFSK50bdCarTemplate[4][240];		// Template for 4FSK carriers spaced at 50 Hz, 50 baud
-short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carriers spaced at 100 Hz, 100 baud
-short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
-
 
 void GenerateTwoToneLeaderTemplate()
 {
@@ -82,7 +72,7 @@ void GenerateFSKTemplates()
 	int line = 0;
 	FILE * fp1;
 
-	fp1 = fopen("s:\\fskcoeffs.txt", "wb");
+//	fp1 = fopen("s:\\fskcoeffs.txt", "wb");
 
 
 	// Compute the phase inc per sample
@@ -95,7 +85,7 @@ void GenerateFSKTemplates()
 	// Now compute the templates: (960 32 bit values total) 
 
 	len = sprintf(msg, "%s\n", "// FSK 50");
-	fwrite(msg, 1, len, fp1);
+//	fwrite(msg, 1, len, fp1);
 	
 	for (i = 0; i < 4; i++)			// across the 4 tones for 50 baud frequencies
 	{
@@ -130,7 +120,7 @@ void GenerateFSKTemplates()
 
 				line = k + 1;
 
-				fwrite(msg, 1, len, fp1);
+//				fwrite(msg, 1, len, fp1);
 			}
 		}
 	}
@@ -195,12 +185,213 @@ void GenerateFSKTemplates()
 				dblAngle -= 2 * M_PI;
 		}
 	}
-	fclose(fp1);
+//	fclose(fp1);
 }
 
 //	 Subroutine to initialize valid frame types 
 
-const int SamplesToComplete[256];
+
+//	Subroutine to create the PSK symbol templates for 8 tones and 8 phases at 200 baud
+
+ float round(float x) {return floor(x + 0.5);}
+
+VOID GeneratePSKTemplates()
+{
+	// Generate templates of 120 samples (each template = 10 ms) for each of the 9 possible carriers used in PSK modulation. 
+	// Used to speed up computation of PSK frames and reduce use of Sin functions.
+	// Amplitude values will have to be scaled based on the number of Active Carriers (1, 2, 4 or 8) initial values should be OK for 1 carrier
+	// Tone values 
+	// the carrier frequencies in Hz
+
+	int i, j ,k;
+	float dblCarFreq[]  = {800, 1000, 1200, 1400, 1500, 1600, 1800, 2000, 2200};
+	FILE * fp1;
+	char msg[256];
+	int len;
+	int line = 0;
+
+	//  for 1 carrier modes use index 4 (1500)
+	//  for 2 carrier modes use indexes 3, 5 (1400 and 1600 Hz)
+	//  for 4 carrier modes use indexes 2, 3, 5, 6 (1200, 1400, 1600, 1800Hz) 
+	//  for 8 carrier modes use indexes 0,1,2,3,5,6,7,8 (800, 1000, 1200, 1400, 1600, 1800, 2000, 2200 Hz) 
+
+	float dblCarPhaseInc[9] ;	// the phase inc per sample
+
+	float dblAngle;			 // Angle in radians
+
+        //Dim dblPeakAmp As Double = intAmp * 0.5 ' may need to adjust 
+	
+	fp1 = fopen("s:\\PSKcoeffs.txt", "wb");
+
+		// Compute the phase inc per sample
+
+	for (i = 0; i <= 8; i++)
+	{
+		dblCarPhaseInc[i] = 2 * M_PI * dblCarFreq[i] / 12000;
+	}
+
+	// Now compute the templates: (4320 32 bit values total) 
+
+	for (i = 0; i <= 8; i++)		// across 9 tones
+	{
+		for (j = 0; j <= 3; j++)	// ( using only half the values and sign compliment for the opposit phases) 
+		{
+			dblAngle = 2 * M_PI * j / 8;
+
+			// 100 baud template
+
+			for (k = 0; k <= 119; k++) // for 120 samples (one 100 baud symbol, 200 baud modes will just use half of the data)
+			{
+				float xx = intAmp * sin(M_PI * k / 119) * sin(dblAngle);
+				int xxi= (int)round(xx);
+				
+				if (intPSK100bdCarTemplate[i][j][k] != xxi)
+				{
+					k++;
+					k--;
+				}
+		
+				intPSK100bdCarTemplate[i][j][k] = (short)round(intAmp * sin(M_PI * k / 119) * sin(dblAngle));  // with envelope control using Sin
+				dblAngle += dblCarPhaseInc[i];
+				
+				if (dblAngle >= 2 * M_PI)
+					dblAngle -= 2 * M_PI;
+			}
+			
+			// 167 baud template
+
+			dblAngle = 2 * M_PI * j / 8;
+
+			for (k = 0 ; k <= 71; k++)
+			{
+				float xx = intAmp * sin(dblAngle);
+				int xxi= (int)round(xx);
+				
+				if (intPSK200bdCarTemplate[i][j][k] != xxi)
+				{
+					k++;
+					k--;
+				}
+
+				intPSK200bdCarTemplate[i][j][k] = (short)round(intAmp * sin(dblAngle)); // with no envelope control
+				dblAngle += dblCarPhaseInc[i];
+				if (dblAngle >= 2 * M_PI)
+					dblAngle -= 2 * M_PI;
+			}
+		}
+	}
+
+// Now print them
+
+	len = sprintf(msg, "\tshort intPSK100bdCarTemplate[9][4][120] = \r\n");
+	fwrite(msg, 1, len, fp1);
+
+	len = sprintf(msg, "\t{{{\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	for (i = 0; i <= 8; i++)		// across 9 tones
+	{
+		for (j = 0; j <= 3; j++)	// ( using only half the values and sign compliment for the opposit phases) 
+		{
+			line = 0;
+
+			for (k = 0; k <= 119; k++) // for 120 samples (one 100 baud symbol, 200 baud modes will just use half of the data)
+			{
+				if ((k - line) == 9)
+				{
+					// print 10 to line
+
+					len = sprintf(msg, "\t%d, %d, %d, %d, %d, %d, %d, %d, %d, %d,\n",
+					intPSK100bdCarTemplate[i][j][line],
+					intPSK100bdCarTemplate[i][j][line + 1],
+					intPSK100bdCarTemplate[i][j][line + 2],
+					intPSK100bdCarTemplate[i][j][line + 3],
+					intPSK100bdCarTemplate[i][j][line + 4],
+					intPSK100bdCarTemplate[i][j][line + 5],
+					intPSK100bdCarTemplate[i][j][line + 6],
+					intPSK100bdCarTemplate[i][j][line + 7],
+					intPSK100bdCarTemplate[i][j][line + 8],
+					intPSK100bdCarTemplate[i][j][line + 9]);
+
+					line = k + 1;
+
+					if (k == 119)
+					{
+						len += sprintf(&msg[len-2], "},\r\n\t{", msg);
+						len -=2;
+					}
+					fwrite(msg, 1, len, fp1);
+				}
+			}
+//			len = sprintf(msg, "\t}{\r\n");
+//			fwrite(msg, 1, len, fp1);
+		}
+		len = sprintf(msg, "\t}}{{\r\n");
+		fwrite(msg, 1, len, fp1);
+	}
+
+	len = sprintf(msg, "\t}}};\r\n");
+	fwrite(msg, 1, len, fp1);
+
+
+	len = sprintf(msg, "\tshort intPSK200bdCarTemplate[9][4][120] = \r\n");
+	fwrite(msg, 1, len, fp1);
+
+	len = sprintf(msg, "\t{{{\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	for (i = 0; i <= 8; i++)		// across 9 tones
+	{
+		for (j = 0; j <= 3; j++)	// ( using only half the values and sign compliment for the opposit phases) 
+		{
+			line = 0;
+
+			for (k = 0; k <= 71; k++) // for 120 samples (one 100 baud symbol, 200 baud modes will just use half of the data)
+			{
+				if ((k - line) == 8)
+				{
+					// ony 72, so print 9 to line
+
+					len = sprintf(msg, "\t%d, %d, %d, %d, %d, %d, %d, %d, %d,\n",
+					intPSK200bdCarTemplate[i][j][line],
+					intPSK200bdCarTemplate[i][j][line + 1],
+					intPSK200bdCarTemplate[i][j][line + 2],
+					intPSK200bdCarTemplate[i][j][line + 3],
+					intPSK200bdCarTemplate[i][j][line + 4],
+					intPSK200bdCarTemplate[i][j][line + 5],
+					intPSK200bdCarTemplate[i][j][line + 6],
+					intPSK200bdCarTemplate[i][j][line + 7],
+					intPSK200bdCarTemplate[i][j][line + 8]);
+
+					line = k + 1;
+
+					if (k == 71)
+					{
+						len += sprintf(&msg[len-2], "},\r\n\t{", msg);
+						len -=2;
+					}
+					fwrite(msg, 1, len, fp1);
+				}
+			}
+//			len = sprintf(msg, "\t}{\r\n");
+//			fwrite(msg, 1, len, fp1);
+		}
+		len = sprintf(msg, "\t}}{{\r\n");
+		fwrite(msg, 1, len, fp1);
+	}
+
+	len = sprintf(msg, "\t}}};\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	fclose(fp1);
+	
+}
+
+
+
+
+
+extern const int SamplesToComplete[256];
 
 void InitValidFrameTypes()
 {

@@ -17,7 +17,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <tchar.h>
+
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -38,8 +38,8 @@ int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn)
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
 void FSXmtFilter200_1500Hz(short * intNewSamples, int Length);
 void FSXmtFilter500_1500Hz(short * intNewSamples, int Length);
-void SampleSink(UCHAR * Samples, int Count);
-void SoundFlush();
+//extern "C" void SampleSink(UCHAR * Samples, int Count);
+//extern "C" void SoundFlush();
 int AddTrailer(short * intSamples, int Length);
 void CWID(char * strID, short * intSamples, BOOL blnPlay);
 void sendCWID(char * Call, BOOL Play);
@@ -56,11 +56,12 @@ int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
 void FreeSemaphore();
 char * Name(UCHAR bytID);
+void SampleSink(short Sample, void * Filter());
+void SampleFlush();
 
 
 
-VOID __cdecl Debugprintf(const char * format, ...);
-
+VOID Debugprintf(const char * format, ...);
 
 
 enum _ReceiveState		// used for initial receive testing...later put in correct protocol states

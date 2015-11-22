@@ -348,7 +348,7 @@ void decode_rs()
 
 
 
-main()
+void ardopmain()
 {
 	register int i;
 	char buffer[24000];
@@ -359,6 +359,7 @@ main()
 
 //	GenerateTwoToneLeaderTemplate();
 	GenerateFSKTemplates();
+//	GeneratePSKTemplates();
 	InitValidFrameTypes();
 	InitSound();
 

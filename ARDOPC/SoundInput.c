@@ -2,6 +2,9 @@
 
 #include "ARDOPC.h"
 
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
+
 BOOL Capturing = TRUE;
 
 char strCurrentFrame[16];
@@ -14,15 +17,15 @@ int intRcvdSamplesRPtr = 0;
 int intLeaderRcvdMs = 1000;		// Leader length??
 short intPSKRefPhase;			// PSK Reference symbol in milliradians) (+/- 3142)
 
-int intLastRcvdFrameQuality;
+extern int intLastRcvdFrameQuality;
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
 
-short intFilteredMixedSamples[1000000];
+short intFilteredMixedSamples[60000];
 int intFilteredMixedSamplesLength = 0;
 
-short intMixedSamples[100000];		// may need to be int
+short intMixedSamples[60000];		// may need to be int
 int	intMixedSamplesLength = 0;	//size of intMixedSamples
 
 BOOL blnSymbolSyncFound, blnFrameSyncFound;
@@ -31,7 +34,7 @@ int intFrameType;
 
 UCHAR bytLastARQSessionID;
 
-int intSamplesToCompleteFrame;
+extern int intSamplesToCompleteFrame;
 
 // dont think I need it short intRcvdSamples[12000];		// 1 second. May need to optimise
 
@@ -46,7 +49,7 @@ time_t intRmtLeaderMeasure = 0;
 BOOL Connected = FALSE;
 BOOL Pending = FALSE;
 UCHAR PendingSessionID;
-UCHAR bytSessionID;
+extern UCHAR bytSessionID;
 
 time_t dttLastGoodFrameTypeDecod;
 time_t dttStartRmtLeaderMeasure;
