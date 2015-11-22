@@ -27,7 +27,7 @@ void GetTwoToneLeaderWithSync(int intSymLen)
 		   else
 			   intSample = -intSign * intTwoToneLeaderTemplate[j];
    
-		   SampleSink(intSample, NULL);
+		   SampleSink(intSample);
 		}
 		intSign = -intSign;
 	}
@@ -59,6 +59,8 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
+
+
 	
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
@@ -123,10 +125,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
 				// Not sure if we should always use 200 hz here
 
-				if(intBaud == 50)
-					SampleSink(intSample, FSXmtFilter200_1500Hz);
-				else
-					SampleSink(intSample, FSXmtFilter500_1500Hz);	
+				SampleSink(intSample);	
 			}
 			bytMask = bytMask >> 2;
 		}
@@ -155,28 +154,21 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 					if((k & 1) == 0)
 					{
 						if(intBaud == 50)
-						{
 							intSample = intFSK50bdCarTemplate[bytSymToSend][n];
-							SampleSink(intSample, FSXmtFilter200_1500Hz);
-						}
 						else
-						{
 							intSample = intFSK100bdCarTemplate[bytSymToSend][n];
-							SampleSink(intSample, FSXmtFilter500_1500Hz);	
-						}
+							
+						SampleSink(intSample);
 					}
 					else
  					{
 						if(intBaud == 50)
-						{
 							intSample = -intFSK50bdCarTemplate[bytSymToSend][n];
-							SampleSink(intSample, FSXmtFilter200_1500Hz);
-						}
 						else
-						{
 							intSample = -intFSK100bdCarTemplate[bytSymToSend][n];
-							SampleSink(intSample, FSXmtFilter500_1500Hz);	
-						}
+							
+						SampleSink(intSample);	
+
 					}
 				}
 
@@ -184,11 +176,6 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 			}
 			intDataPtr += 1;
 		}
-
-//		if (intBaud == 50)
-//			FSXmtFilter200_1500Hz(intSamples, intSamplePtr);
-//		else if (intBaud == 100)
-//			FSXmtFilter500_1500Hz(intSamples, intSamplePtr);
 
 		SoundFlush();
 
@@ -217,7 +204,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 				}
 
 				bytMask = bytMask >> 2;
-//				SampleSink(intSample, FSXmtFilter1000_1500Hz);
+				SampleSink(intSample);
 			}
 			intDataPtr += 1;
 		}
@@ -304,14 +291,10 @@ void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
 	int i, j;
 
 	float intFilteredSample = 0;			//  Filtered sample
-	float largest = 0;
 
 	dblRn = pow(dblR, intN);
 
 	dblR2 = pow(dblR, 2);
-
-
-	Length = AddTrailer(intNewSamples, Length);  // add the trailer before filtering
 
 	// Initialize the coefficients
 
@@ -367,7 +350,6 @@ void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
 				intFilteredSample = -32700;
 
 			intNewSamples[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
-			largest = MAX(largest, intFilteredSample);
 		}
 	}
 }

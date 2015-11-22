@@ -38,8 +38,14 @@ int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn)
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
 void FSXmtFilter200_1500Hz(short * intNewSamples, int Length);
 void FSXmtFilter500_1500Hz(short * intNewSamples, int Length);
-//extern "C" void SampleSink(UCHAR * Samples, int Count);
+//extern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
+//extern "C" void SetFilter(void * Filter());
+
+void SampleSink(short Sample);
+void SoundFlush();
+void SetFilter(void * Filter());
+
 int AddTrailer(short * intSamples, int Length);
 void CWID(char * strID, short * intSamples, BOOL blnPlay);
 void sendCWID(char * Call, BOOL Play);
@@ -56,9 +62,6 @@ int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
 void FreeSemaphore();
 char * Name(UCHAR bytID);
-void SampleSink(short Sample, void * Filter());
-void SampleFlush();
-
 
 
 VOID Debugprintf(const char * format, ...);
