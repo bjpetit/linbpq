@@ -1,21 +1,44 @@
+//
+//	Passes audio samples to the sound interface
+
+//	Windows uses WaveOut
+
+//	Nucleo uses DMA
+
+//	Linux will probably use ALSA
+
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
-
+#ifdef WIN32
 #include <windows.h>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
+#endif
+
+#define _USE_MATH_DEFINES
+#include <math.h>
+
+#include "ARDOPC.h"
+
+// Windows works with signed samples +- 32767
+// STM32 DAC uses unsigned 0 - 4095
+
+#ifdef WIN32
+short buffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
+#else
+unsigned short buffer[2][1200];	// Two Transfer/DMA buffers of 0.1 Sec
+unsigned short work;
+#endif
+
+
+#ifdef WIN32
 
 HWAVEOUT hWaveOut = 0;
 HWAVEIN hWaveIn = 0;
 
 WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 12000, 12000, 2, 16, 0 };
-
-short buffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
-
-short SavedFiltered[120];		// Samples we have partly filtered
-short toFilter[1200];			// Samples waiting to be filtered
 
 WAVEHDR header[2] =
 {
@@ -23,111 +46,286 @@ WAVEHDR header[2] =
 	{(char *)buffer[1], 0, 0, 0, 0, 0, 0, 0}
 };
 
-int Number = 0;				// Number waiting to be sent
+WAVEOUTCAPS pwoc;
+WAVEINCAPS pwic;
 
-int Index = 0;
+void InitSound();
 
-void FSXmtFilter200_1500Hz(short * intNewSamples, int Length);
 
 void main()
 {
+//	xxmain();
 	ardopmain();
 }
+#else
+#include <stm32f4xx_dma.h>
+#endif
 
-typedef void (*PROCX)();
+int PriorSize = 0;
 
-int (* Filter)() = FSXmtFilter200_1500Hz;
-
-//PROCX Filter = NULL;
-
-short Dummy[1200];
+int Number = 0;				// Number waiting to be sent
+int Index = 0;				// DMA Buffer being used 0 or 1
 
 int SendSize = 1200;		// 100 mS for now
 
-void SetFilter(void * NewFilter)
+// Filter State Vaiables
+
+static float dblR = 0.9995;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
+static int intN = 120;				//Length of filter 12000/100
+static float dblRn;
+
+static float dblR2;
+static float dblCoef[19] = {0.0};			// the coefficients
+float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
+
+// The resonators 
+      
+float dblZout_0[19] = {0.0};	// resonator outputs
+float dblZout_1[19] = {0.0};	// resonator outputs delayed one sample
+float dblZout_2[19] = {0.0};	// resonator outputs delayed two samples
+
+int PacketLen;
+int SampleNo;
+int outCount = 0;
+
+float largest = 0;
+
+short Last120[128];
+
+int Last120Get = 0;
+int Last120Put = 120;
+
+// initFilter is called to set up each packet. It will select filter width
+//	 when I get that far
+
+void initFilter(int Length)
 {
-	Filter = NewFilter;
+	int i, j;
+	PacketLen = Length;
+	largest = 0;
+	SampleNo = 0;
+	Number = 0;
+	outCount = 0;
+	memset(Last120, 0, 256);
+	Index = 0;
+
+	Last120Get = 0;
+	Last120Put = 120;
+
+	dblRn = pow(dblR, intN);
+	dblR2 = pow(dblR, 2);
+
+	dblZin_2 = dblZin_1 = 0;
+
+	for (j = 14; j <= 16; j++)	   // calculate output for 3 resonators 
+	{
+		dblZout_0[j] = 0;
+		dblZout_2[j] = 0;
+		dblZout_1[j] = 0;
+	}
+
+	// Initialise the coefficients
+
+	if (dblCoef[15] == 0.0)
+	{
+		for (i = 14; i <= 16; i++)
+		{
+			dblCoef[i] = 2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
+		}
+	}
 }
 
-void FilterandSend()
+BOOL DMARunning = FALSE;		// Used to start DMS on first write
+
+void SendtoCard(int n)
 {
-	//	Filter Samples, then send to sound interface
-
-	Filter(Dummy, Number);
-
-	//	Save partly filtered samples (Last 120 samples)
-
-	// Wait till current buffer is available
-
-
-	memcpy(&buffer[Index][0], toFilter, Number * 2);
-	header[Index].dwBufferLength = Number * 2;
+#ifdef WIN32
+	header[Index].dwBufferLength = n * 2;
 
 	waveOutPrepareHeader(hWaveOut, &header[Index], sizeof(WAVEHDR));
 	waveOutWrite(hWaveOut, &header[Index], sizeof(WAVEHDR));
 
+	// wait till previous buffer is complete
+
 	while (!(header[!Index].dwFlags & WHDR_DONE));
 	waveOutUnprepareHeader(hWaveOut, &header[!Index], sizeof(WAVEHDR));
+	Index = !Index;
 
-	Index = !Index;		// Switch buffers
+#else
 
-	Number = 0;
+	// Embedded
+
+	// Start DMA if first call
+
+	if (DMARunning == FALSE)
+	{
+		StartDAC();
+		DMARunning = TRUE;
+	}
+
+	// wait for other DMA buffer to finish
+
+	printtick("Start Wait");		// FOr timing tests
+
+	while (1)
+	{
+		int chan = DMA_GetCurrentMemoryTarget(DMA1_Stream5);
+
+		if (chan == Index) 	// we've started sending current buffer
+		{
+			Index = !Index;
+			printtick("Stop Wait");
+			return;
+		}
+	}
+#endif
 }
-
-
+short loopbuff[1200];		// Temp for testing - loop sent samples to decoder
 
 void SampleSink(short Sample)
 {
-	// We need to filter samples. 
-	// Filters run 120 samples behind, so we need to 
-	// save state. Don't want to call too often cos of
-	// the overhead of saving and restoring context, but
-	// also don't want to use too much RAM
+	//	Filter and send to sound interface
 
-	// We also buffer up samples before sending to the sound interface,
-	// which could be a proper sound card, or an ADC
+	// This version is passed samples one at a time, as we don't have
+	//	enough RAM in embedded systems to hold a full audio frame
 
-	// Buffer to max size 
+	
+	// Used for PSK 200 Hz modulation XMIT filter  
+	// assumes sample rate of 12000
+	// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
 
-	toFilter[Number++] = Sample;
+	// FSF (Frequency Selective Filter) variables
 
-	if (Number == SendSize)
+
+	int intFilLen = intN / 2;
+	int j;
+	float intFilteredSample = 0;			//  Filtered sample
+
+	// We save the previous intN samples
+	//	The samples are held in a cyclic buffer
+
+	if (SampleNo < intN)
+		dblZin = Sample;
+	else 
+		dblZin = Sample - dblRn * Last120[Last120Get];
+
+	if (++Last120Get == 121)
+		Last120Get = 0;
+
+	//Compute the Comb
+
+	dblZComb = dblZin - dblZin_2 * dblR2;
+	dblZin_2 = dblZin_1;
+	dblZin_1 = dblZin;
+
+	// Now the resonators
+		
+	for (j = 14; j <= 16; j++)	   // calculate output for 3 resonators 
 	{
-		FilterandSend();
+		dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
+		dblZout_2[j] = dblZout_1[j];
+		dblZout_1[j] = dblZout_0[j];
+
+		// scale each by transition coeff and + (Even) or - (Odd) 
+
+		if (SampleNo >= intFilLen)
+		{
+			if (j == 14 || j == 16)
+				intFilteredSample += 0.7389 * dblZout_0[j];
+			else
+				intFilteredSample -= dblZout_0[j];
+		}
 	}
-	return;
+
+	if (SampleNo >= intFilLen)
+	{
+		intFilteredSample = intFilteredSample * 0.00833333333; //  rescales for gain of filter
+		largest = max(largest, intFilteredSample);	
+		
+		if (intFilteredSample > 32700)  // Hard clip above 32700
+			intFilteredSample = 32700;
+		else if (intFilteredSample < -32700)
+			intFilteredSample = -32700;
+
+#ifdef WIN32
+		buffer[Index][Number++] = (short)intFilteredSample;
+#else
+		work = (short)(intFilteredSample);
+		loopbuff[Number] = work;
+		buffer[Index][Number++] = (work + 32768) >> 4; // 12 bit left justify
+#endif
+		if (Number == SendSize)
+		{
+			// send this buffer to sound interface
+			// Loop back   to decode for testing
+
+#ifdef WIN32
+			ProcessNewSamples(buffer[Index], 1200);		// signed
+#else
+			ProcessNewSamples(loopbuff, 1200);
+#endif
+			SendtoCard(SendSize);
+			Number = 0;
+		}
+	}
+		
+	Last120[Last120Put++] = Sample;
+
+	if (Last120Put == 121)
+		Last120Put = 0;
+
+	SampleNo++;
 }
-
-
-
-
+	
+//	Called at end of transmission
 
 void SoundFlush()
 {
-	//Append Trailer then send remainig samples
+	int chan;
 
-	
-//	Length = AddTrailer(intNewSamples, Length);  // add the trailer before filtering
+	// Append Trailer then send remaining samples
 
+	AddTrailer();			// add the trailer.
 
+#ifdef WIN32
+	ProcessNewSamples(buffer[Index], Number);
+#else
+	ProcessNewSamples(loopbuff, Number);
+#endif
 
-	FilterandSend();
+	SendtoCard(Number * 2);
 
-	// loop back to decoder for testing
+#ifndef WIN32
+
+	// Wait for other DMS buffer to empty beofre shutting down DAC
+
+	while (1)
+	{
+		chan = DMA_GetCurrentMemoryTarget(DMA1_Stream5);
+
+		if (chan == Index) 	// we've started sending current buffer
+		{
+			break;
+		}
+	}
+
+	stopDAC();
+	DMARunning = FALSE;
+
+#endif
 
 	return;
 }
 
-
+//		// This generates a nice musical pattern for sound interface testing
 //    for (t = 0; t < sizeof(buffer); ++t)
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
-WAVEOUTCAPS pwoc;
-WAVEINCAPS pwic;
 
-
-InitSound()
+void InitSound()
 {
+#ifdef WIN32
+
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
 
@@ -136,15 +334,20 @@ InitSound()
 
     waveInOpen(&hWaveIn, 0, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 	waveInGetDevCaps(hWaveIn, &pwic, sizeof(WAVEINCAPS));
-}
 
-CloseSound()
+#endif
+}
+void CloseSound()
 { 
+#ifdef WIN32
 	waveOutClose(hWaveOut);
+#endif
 }
 
+#ifdef WIN32
+#include <stdarg.h>
 
-VOID __cdecl Debugprintf(const char * format, ...)
+VOID Debugprintf(const char * format, ...)
 {
 	char Mess[10000];
 	va_list(arglist);
@@ -152,10 +355,12 @@ VOID __cdecl Debugprintf(const char * format, ...)
 	va_start(arglist, format);
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
+
 	OutputDebugString(Mess);
 
 	return;
 }
+#endif
 
 
 

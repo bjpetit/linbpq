@@ -193,7 +193,6 @@ void GenerateFSKTemplates()
 
 //	Subroutine to create the PSK symbol templates for 8 tones and 8 phases at 200 baud
 
- float round(float x) {return floor(x + 0.5);}
 
 VOID GeneratePSKTemplates()
 {

@@ -29,7 +29,7 @@ void WriteDebug(char * msg)
 }
 
 
-int intNumCar = 0, intBaud, intDataLen = 0, intRSLen; // Do these need to be static??
+//int intNumCar = 0, intBaud, intDataLen = 0, intRSLen; // Do these need to be static??
 
 // Function to get the next FEC data frame 
 
@@ -41,6 +41,8 @@ BOOL GetNextFECFrame()
 	char bytQualThresh;
 	char strType[16];
 	int Len;
+	int intNumCar = 0, intBaud, intDataLen = 0, intRSLen; // Do these need to be static??
+
 	int intCurrentFrameSamples;
 	UCHAR bytEncodedData[600];		// ??? May not need that much
 

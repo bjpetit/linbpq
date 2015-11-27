@@ -2,10 +2,13 @@
 
 #include "ARDOPC.h"
 
+FILE * fp1;
+
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 // Function to generate the Two-tone leader and Frame Sync (used in all frame types) 
 
+extern short Dummy;
 void GetTwoToneLeaderWithSync(int intSymLen)
 {
 	// Generate a 100 baud (10 ms symbol time) 2 tone leader 
@@ -60,8 +63,9 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
+	initFilter(30000);
 
-	
+
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
   //          End If
@@ -72,8 +76,6 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	else
 		intLeaderLenMS = intLeaderLen;
 
-
- //           Dim intLeader(-1) As Int32
     switch(intBaud)
 	{		
 	case 50:
@@ -84,7 +86,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
 		GetTwoToneLeaderWithSync(intLeaderLenMS / 10);
 
-		 break;
+		break;
                 
 	case 100:
 		
@@ -122,8 +124,6 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 					intSample = intFSK50bdCarTemplate[bytSymToSend][n];
 				else
 					intSample = -intFSK50bdCarTemplate[bytSymToSend][n]; // -sign insures no phase discontinuity at symbol boundaries
-
-				// Not sure if we should always use 200 hz here
 
 				SampleSink(intSample);	
 			}
@@ -246,9 +246,8 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
 // Subroutine to add trailer before filtering
 
-int AddTrailer(short * intSamples, int Length)
+void AddTrailer()
 {
-	int intPtr = Length;
 	int intAddedSymbols = 1 + TrailerLength / 10; // add 1 symbol + 1 per each 10 ms of MCB.Trailer
 	int i, k;
 
@@ -256,14 +255,11 @@ int AddTrailer(short * intSamples, int Length)
 	{
 		for (k = 0; k < 120; k++)
 		{
-			intSamples[intPtr] = intPSK100bdCarTemplate[4][0][k];
-			intPtr += 1;
+			SampleSink(intPSK100bdCarTemplate[4][0][k]);
 		}
 	}
-	return intPtr;
 }
-
-
+/*
 // Function to apply 200 Hz filter for transmit  
 
 void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
@@ -288,9 +284,10 @@ void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
 	float dblZout_2[19] = {0.0};	// resonator outputs delayed two samples
 
 	int intFilLen = intN / 2;
-	int i, j;
+	int i, j, x, xold;
 
 	float intFilteredSample = 0;			//  Filtered sample
+	float largest = 0;
 
 	dblRn = pow(dblR, intN);
 
@@ -315,7 +312,21 @@ void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
 			dblZin = intNewSamples[i] - dblRn * intNewSamples[i - intN];
 		else
 			dblZin = -dblRn * intNewSamples[i - intN];
- 
+
+		x = xold = 0;
+		
+		if (i < intN)
+			x  = intNewSamples[i];
+		else if (i < Length)
+		{
+			x = intNewSamples[i];
+			xold = intNewSamples[i - intN];
+		}
+		else
+			xold = intNewSamples[i - intN];
+
+		dblZin = x  -dblRn * xold;
+	
 		//Compute the Comb
 
 		dblZComb = dblZin - dblZin_2 * dblR2;
@@ -349,11 +360,16 @@ void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
 			else if (intFilteredSample < -32700)
 				intFilteredSample = -32700;
 
-			intNewSamples[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
+//			intNewSamples[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
+			xDummy[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
+			largest = MAX(largest, intFilteredSample);
 		}
+		fprintf(fp1, "i %d s %d s_old %d dblZin %f out %f\r\n",
+			i, x, xold, dblZin, intFilteredSample);
+
 	}
 }
-	
+*/	
 // Function to apply 500 Hz filter for transmit 
 void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
 {
@@ -384,7 +400,7 @@ void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
 
 	dblR2 = pow(dblR, 2);
 
-	Length = AddTrailer(intNewSamples, Length);  // add the trailer before filtering
+	AddTrailer();  // add the trailer before filtering
 
 	// Initialize the coefficients
 
@@ -450,6 +466,7 @@ void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
 				intFilteredSample = -32700;
 
 			intNewSamples[i - intFilLen] = (short)intFilteredSample;
+			
 		}
 	}
 }

@@ -11,15 +11,21 @@
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
-
+#ifndef WIN32
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
+#endif
 
 #include <time.h>
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define _USE_MATH_DEFINES
 #include <math.h>
+
+#include "ecc.h"				// RS Constants
 
 typedef int BOOL;
 typedef unsigned char UCHAR;
@@ -29,6 +35,7 @@ typedef unsigned char UCHAR;
 #define FALSE 0
 #define TRUE 1
 
+
 UCHAR FrameCode(char * strFrameName);
 BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
    int * intBaud, int * intDataLen, int * intRSLen, UCHAR * bytQualThres, char * strType);
@@ -36,7 +43,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData);
 int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn);
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
-void FSXmtFilter200_1500Hz(short * intNewSamples, int Length);
+void FSXmtFilter200_1500Hz(short * intNewSamples, int Length, short * PriorSamples, short * Filtered);
 void FSXmtFilter500_1500Hz(short * intNewSamples, int Length);
 //extern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
@@ -46,7 +53,7 @@ void SampleSink(short Sample);
 void SoundFlush();
 void SetFilter(void * Filter());
 
-int AddTrailer(short * intSamples, int Length);
+void AddTrailer();
 void CWID(char * strID, short * intSamples, BOOL blnPlay);
 void sendCWID(char * Call, BOOL Play);
 UCHAR ComputeTypeParity(UCHAR bytFrameType);
@@ -57,15 +64,12 @@ void DeCompressCallsign(char * bytCallsign, char * returned);
 void DeCompressGridSquare(char * bytGS, char * returned);
 
 int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len);
+BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, UCHAR * Corrected, BOOL * blnRSOK);
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
 void FreeSemaphore();
 char * Name(UCHAR bytID);
-
-
-VOID Debugprintf(const char * format, ...);
-
 
 enum _ReceiveState		// used for initial receive testing...later put in correct protocol states
 {

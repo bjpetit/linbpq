@@ -173,6 +173,13 @@ char * strlop(char * buf, char delim)
 	return ptr;
 }
 
+#ifdef WIN32
+float round(float x)
+{
+	return floor(x + 0.5);
+}
+#endif
+
 void GetSemaphore()
 {
 }
@@ -185,6 +192,37 @@ void CompressCallsign(char * Callsign, UCHAR * Compressed);
 void CompressGridSquare(char * Square, UCHAR * Compressed);
 void  ASCIIto6Bit(char * Padded, UCHAR * Compressed);
 void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader);
+
+void SendID(BOOL blnEnableCWID);
+
+void ardopmain()
+{
+	register int i;
+	int t;
+
+	blnTimeoutTriggered = FALSE;
+
+
+//	GenerateTwoToneLeaderTemplate();
+	GenerateFSKTemplates();
+//	GeneratePSKTemplates();
+	InitValidFrameTypes();
+	InitSound();
+
+	 SendID(0);
+	 
+	 ProtocolState = FECSend;
+//	GetNextFECFrame();
+
+// 
+//  SendID(0);
+//  ModTwoToneTest();
+
+  return 0;
+}
+
+
+
 
 void AddTagToDataAndSendToHost(char * Msg, char * Type)
 {
@@ -640,105 +678,136 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 	return TRUE;
 }
 
-#define mm  8           /* RS code over GF(2**4) - change to suit */
-#define nn  255          /* nn=2**mm -1   length of codeword */
+int NPAR = -1;	// Number of Parity Bytes - used in RS Code
 
-// defined in RS module
-
-extern int tt, kk;
-extern int recd[nn], data[nn], bb[nn];
-extern int index_of [nn+1];
-
-int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len)
+int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 {
-	int Start, i;
-	int RSLen;
+	// This just returns the Parity Bytes. I don't see the point
+	// in copying the message about
+
+	int i;
+
+	unsigned char Padded[256];		// The padded Data
+
+	int Length = DataLen + RSLen;	// Final Length of packet
+	int PadLength = 253 - DataLen;	// Padding bytes needed for shortened RS codes
 
 	//	subroutine to do the RS encode. For full length and shortend RS codes up to 8 bit symbols (mm = 8)
 
-	tt = MaxErr;		// number of errors that can be corrected 
-    kk = nn - 2 * tt;	// the number of information characters  kk = nn-2*tt
-
-	RSLen = 2 * tt;
-
-	generate_gf();
-
-	/* compute the generator polynomial for this RS code */
-	
-	gen_poly();
-
-	// Copy the suplied data to end of data array. Len of array is kk
-
-	Start = kk - Len;
-
-	if (Len > kk)
-		return 0;
-
-	for(i = 0; i < Len; i++)
+	if (NPAR != RSLen)		// Changed RS Len, so recalc constants;
 	{
-		data[i + Start] = bytToRS[i];
+		NPAR = RSLen;
+		initialize_ecc();
 	}
- 
-	encode_rs();
 
-	// Return original + RS Code
-	
-	memcpy(bytRSEncoded, bytToRS, Len);
+	// Copy the supplied data to end of data array.
 
-	for (i = 0; i < RSLen; i++)
-	{
-		bytRSEncoded[Len++] = bb[i];
-	}
-	return Len + RSLen;
+	memset(Padded, 0, PadLength);
+	memcpy(&Padded[PadLength], bytToRS, DataLen); 
+
+	encode_data(Padded, 253, RSBytes);
+
+	return RSLen;
 }
 
 //	Main RS decode function
 
-BOOL blnErrorsCorrected = FALSE;
 
-void RSDecode(UCHAR * bytRcv, int Length, UCHAR * Corrected, BOOL * blnRSOK)
-{
-	// bytRcv is the received array of symbols (up to 8 bits/symbol) including systematic data + 2 * tt parity symbols
-	// length of bytRcv may be shorter than full length (nn) but must be agreed upon a priori by both encoder and decoder (Shortened code)
-	// Shortening simply appends leading 0's (before encoding and before decoding) and then 
-	// discarding the same 0's at the end.
-	// This verified with several thousand automated random test cases for both 239,255 and 223, 255 RS codes
-	// approximate encode + decode time (with max num of errors) is on the order of 1 ms (Pentium 1700 MHz) 
-	// Note on some intensive test done July 5, 2009 by RM (> 20 Million RS Corrections) there are rare (but possible) conditions
-	// where RSDecode reports blnCorrected = true but there are still bytes with errors. The exact 
-	// mechanism for this is unknown so this now requires a Sum Check confirmation even if the blnCorrected
-	// is reported True. In over 20 Million test cases there was no condition that blnCorrected was reported
-	// true, there was an error, and the 16 bit Sum check did not detect the error.
+BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, UCHAR * Corrected, BOOL * blnRSOK)
+{	
+	// Using a modified version of Henry Minsky's code
 	
-	int intIndexSave;
-	int intIsave;
-	UCHAR intTemp[256];			// can this be UCHAR?
-	int intStartIndex, i, j;
-	
-	BOOL blnDecodeFailed = FALSE;
+	//Copyright Henry Minsky (hqm@alum.mit.edu) 1991-2009
 
-	if (Length > nn || Length < (1 + 2 * tt))
+	// Rick's Implementation processes the byte array in reverse. and also 
+	//	has the check bytes in the opposite order. I've modified the encoder
+	//	to allow for this, but so far haven't found a way to mske the decoder
+	//	work, so I have to reverse the data and checksum to decode G8BPQ Nov 2015
+
+	//	Returns TRUE if was ok or correction succeeded, FALSE if correction impossible
+
+	UCHAR intTemp[256];				// WOrk Area to pass to Decoder		
+	int i;
+	UCHAR * ptr2 = intTemp;
+	UCHAR * ptr1 = &bytRcv[Length - CheckLen -1]; // Last Byte of Data
+
+	int DataLen = Length - CheckLen;
+	int PadLength = 255 - Length;		// Padding bytes needed for shortened RS codes
+
+	*blnRSOK = FALSE;
+
+	if (Length > 255 || Length < (1 + CheckLen))		//Too long or too short 
+		return FALSE;
+
+	if (NPAR != CheckLen)		// Changed RS Len, so recalc constants;
 	{
-		*blnRSOK = FALSE;
-
-		//'ReDim Preserve bytRcv(bytRcv.Length - 2 * tt - 1)
-		//'  RSDecode = bytRcv 'insufficient length
-        //        Logs.Exception("[ReedSoloman8.RSDecode8] Length Error Rcv:" & bytRcv.Length.ToString & " nn:" & nn.ToString & " tt:" & tt.ToString & "  Return empty array.")
-        
-		return;
+		NPAR = CheckLen;
+		initialize_ecc();
 	}
 
-	intStartIndex = nn - Length;	 // set the start point for shortened RS codes
 
-	// horrible!!
+	//	We reverse the data while zero padding it to speed things up
 
-	for (j = 0; j < nn; j++)
+	//	We Need (Data Reversed) (Zero Padding) (Checkbytes Reversed)
+
+	// Reverse Data
+
+	for (i = 0; i < DataLen; i++)
 	{
-		if (j < intStartIndex)
-			intTemp[j] = 0;
-		else
-			intTemp[j] = bytRcv[j - intStartIndex];
+	  *(ptr2++) = *(ptr1--);
 	}
+
+	//	Clear padding
+
+	memset(ptr2, 0, PadLength);	
+
+	ptr2+= PadLength;
+	
+	// Error Bits
+
+	ptr1 = &bytRcv[Length - 1];			// End of check bytes
+
+	for (i = 0; i < CheckLen; i++)
+	{
+	  *(ptr2++) = *(ptr1--);
+	}
+	
+	decode_data(intTemp, 255);
+
+	// check if syndrome is all zeros 
+
+	if (check_syndrome() == 0)
+	{
+		// RS ok, so no need to correct
+
+		*blnRSOK = TRUE;
+		return TRUE;		// No Need to Correct
+	}
+
+    if (correct_errors_erasures (intTemp, 255, 0, 0) == 0) // Dont support erasures at the momnet
+
+		// Uncorrectable
+
+		return FALSE;
+
+	// Data has been corrected, so need to reverse again
+
+	ptr1 = &intTemp[DataLen - 1];
+	ptr2 = bytRcv; // Last Byte of Data
+
+	for (i = 0; i < Length; i++)
+	{
+	  *(ptr2++) = *(ptr1--);
+	}
+
+	// ?? Do we need to return the check bytes ??
+ 
+	return TRUE;
+}
+
+/*
+
+Old code
 
 	// convert to indexed form
 
@@ -749,7 +818,11 @@ void RSDecode(UCHAR * bytRcv, int Length, UCHAR * Corrected, BOOL * blnRSOK)
 		recd[i] = index_of[intTemp[i]];
 	}
 
+	printtick("entering decode_rs");
+
 	decode_rs();
+
+	printtick("decode_rs Done");
 
 	*blnRSOK = blnErrorsCorrected;
 
@@ -768,6 +841,7 @@ void RSDecode(UCHAR * bytRcv, int Length, UCHAR * Corrected, BOOL * blnRSOK)
 		*blnRSOK = TRUE;
 	}
 }
+*/
 
 // Function to encode data for all FSK frame types
   
@@ -796,7 +870,7 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	int EncLen;				// Length of encoded data
 	int i;
 	UCHAR bytToRS[256];
-	UCHAR bytRSEncoded[256];
+	UCHAR RSBytes[MAXNPAR];
 
 
 	blnFrameTypeOK = FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
@@ -854,9 +928,9 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 		
 			GenCRC16FrameType(bytToRS, 0, intDataLen, bytFrameType); // calculate the CRC on the byte count  data bytes
 
-			EncLen = RSEncode(bytToRS, bytRSEncoded, MaxCorrections, intDataLen + 3);  // Generate the RS encoding ...now 14 bytes total
+			EncLen = RSEncode(bytToRS, RSBytes, intDataLen, intRSLen);  // Generate the RS encoding ...now 14 bytes total
         
-			memcpy(&bytEncodedData[intEncodedDataPtr], bytRSEncoded, EncLen);
+			memcpy(&bytEncodedData[intEncodedDataPtr], bytToRS, intDataLen);
  
 			intEncodedDataPtr += EncLen;
 		}
@@ -896,20 +970,15 @@ int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn)
 	// Function to encodes ID frame 
 	// Returns length of encoded message 
 
-	UCHAR bytToRS[16];
-	UCHAR bytRSEncoded[16];
+	UCHAR * bytToRS= &bytReturn[2];
 
 	 // If (Not CheckValidCallsignSyntax(strMyCallsign)) Then
      //       Logs.Exception("[EncodeModulate.EncodeIDFrame] Illegal Callsign syntax or Gridsquare length. MyCallsign = " & strMyCallsign & ", Gridsquare = " & strGridSquare)
       //      Return Nothing
 
-//	Dim bytReturn(2 + 6 + 6 + 2 - 1) As Byte ' 4 Frame type bytes + 6 Call sign (compressed)  + 8 Grid square bytes ( compressed)  +  2 bytes CRC 
 
 	bytReturn[0] = 0x30;
-
-	//	strFilename = objFrameInfo.Name(bytReturn(0)) & "_" & strMyCallsign.Trim.ToUpper & " [" & strGridSquare.Trim & "]"
-
-	bytReturn[1] = bytReturn[0] ^ 0xFF;
+	bytReturn[1] = 0x30 ^ 0xFF;
 
 	// Modified May 9, 2015 to use RS instead of 2 byte CRC.
        
@@ -918,11 +987,7 @@ int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn)
     if (Square[0])
 		CompressGridSquare(Square, &bytToRS[6]);  //this uses compression to accept 4, 6, or 8 character Grid squares.
 
-	MaxCorrections = 1;	 // with two Parity bytes can correct 1 error. 
-
-	RSEncode(bytToRS, bytRSEncoded, MaxCorrections, 12);  // Generate the RS encoding ...now 14 bytes total
-        
-	memcpy(&bytReturn[2], bytRSEncoded, 14);
+	RSEncode(bytToRS, &bytReturn[14], 12, 2);  // Generate the RS encoding ...now 14 bytes total
 
 	return 16;
 }
@@ -967,7 +1032,7 @@ void ModTwoToneTest()
 {
 	short intLeader[100000];
 	GetTwoToneLeaderWithSync(500, &intLeader[0]);
-	SampleSink(intLeader, 60000);	// 5 secs
+	SampleSink(0);	// 5 secs
 	SoundFlush();
 }
 

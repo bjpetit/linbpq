@@ -186,11 +186,31 @@
 				>
 			</File>
 			<File
+				RelativePath=".\berlekamp.c"
+				>
+			</File>
+			<File
 				RelativePath=".\CalcTemplates.c"
 				>
 			</File>
 			<File
+				RelativePath=".\crcgen.c"
+				>
+			</File>
+			<File
+				RelativePath=".\ecc.h"
+				>
+			</File>
+			<File
 				RelativePath=".\FEC.c"
+				>
+			</File>
+			<File
+				RelativePath=".\galois.c"
+				>
+			</File>
+			<File
+				RelativePath=".\Main.c"
 				>
 			</File>
 			<File
