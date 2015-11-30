@@ -67,13 +67,10 @@ void GenerateFSKTemplates()
 	float dblCarPhaseInc[20]; 
 	int i, k;
 
-	char msg[80];
+	char msg[256];
 	int len;
 	int line = 0;
 	FILE * fp1;
-
-//	fp1 = fopen("s:\\fskcoeffs.txt", "wb");
-
 
 	// Compute the phase inc per sample
 
@@ -83,9 +80,6 @@ void GenerateFSKTemplates()
 	}
 	
 	// Now compute the templates: (960 32 bit values total) 
-
-	len = sprintf(msg, "%s\n", "// FSK 50");
-//	fwrite(msg, 1, len, fp1);
 	
 	for (i = 0; i < 4; i++)			// across the 4 tones for 50 baud frequencies
 	{
@@ -134,7 +128,7 @@ void GenerateFSKTemplates()
 		//25 baud template
 		for (k = 0; k < 480; k++)			 // for 480 samples (one 25 baud symbol)
 		{
-			intFSK25bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+	//		intFSK25bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
 			dblAngle += (2 * M_PI / 12000) * (1312.5 + i * 25);
 			if (dblAngle >= 2 * M_PI)
 				dblAngle -= 2 * M_PI;
@@ -148,7 +142,7 @@ void GenerateFSKTemplates()
 		//600 baud template
 		for (k = 0; k < 20; k++)	 // for 20 samples (one 600 baud symbol)
 		{
-			intFSK600bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+	//		intFSK600bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
 			dblAngle += (2 * M_PI / 12000) * (600 + i * 600);
 			if (dblAngle >= 2 * M_PI)
 				dblAngle -= 2 * M_PI;
@@ -172,20 +166,73 @@ void GenerateFSKTemplates()
 	}
 
 	// Now compute the templates: (2400 32 bit values total)  
-
+/*
 	for (i = 0; i < 20; i++)	 // across 20 tones
 	{
 		dblAngle = 0;
 		//'100 baud template
 		for (k = 0; k < 120; k++)		// for 120 samples (one 100 baud symbol)
 		{
-			intFSK100bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+			short work = intAmp * 1.1 * sin(dblAngle);
+			intFSK100bdCarTemplate[i][k] = work); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+				
 			dblAngle += dblCarPhaseInc[i];
 			if (dblAngle >= 2 * M_PI)
 				dblAngle -= 2 * M_PI;
 		}
 	}
-//	fclose(fp1);
+*/
+/*
+	// Now print them
+
+	fp1 = fopen("s:\\fskcoeffs100.txt", "wb");
+
+	len = sprintf(msg, "short intFSK100bdCarTemplate[20][120] = \r\n");
+	fwrite(msg, 1, len, fp1);
+
+	len = sprintf(msg, "\t{{\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	for (i = 0; i < 20; i++)		// across 9 tones
+	{
+			line = 0;
+
+			for (k = 0; k <= 119; k++) // for 120 samples (one 100 baud symbol, 200 baud modes will just use half of the data)
+			{
+				if ((k - line) == 9)
+				{
+					// print 10 to line
+
+					len = sprintf(msg, "\t%d, %d, %d, %d, %d, %d, %d, %d, %d, %d,\n",
+					intFSK100bdCarTemplate[i][line],
+					intFSK100bdCarTemplate[i][line + 1],
+					intFSK100bdCarTemplate[i][line + 2],
+					intFSK100bdCarTemplate[i][line + 3],
+					intFSK100bdCarTemplate[i][line + 4],
+					intFSK100bdCarTemplate[i][line + 5],
+					intFSK100bdCarTemplate[i][line + 6],
+					intFSK100bdCarTemplate[i][line + 7],
+					intFSK100bdCarTemplate[i][line + 8],
+					intFSK100bdCarTemplate[i][line + 9]);
+
+					line = k + 1;
+
+					if (k == 119)
+					{
+						len += sprintf(&msg[len-2], "},\r\n\r\n\t{");
+						len -=2;
+					}
+					fwrite(msg, 1, len, fp1);
+				}
+	
+		}
+	}
+
+	len = sprintf(msg, "\t}};\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	fclose(fp1);
+*/
 }
 
 //	 Subroutine to initialize valid frame types 
@@ -244,13 +291,13 @@ VOID GeneratePSKTemplates()
 				float xx = intAmp * sin(M_PI * k / 119) * sin(dblAngle);
 				int xxi= (int)round(xx);
 				
-				if (intPSK100bdCarTemplate[i][j][k] != xxi)
+	//			if (intPSK100bdCarTemplate[i][j][k] != xxi)
 				{
 					k++;
 					k--;
 				}
 		
-				intPSK100bdCarTemplate[i][j][k] = (short)round(intAmp * sin(M_PI * k / 119) * sin(dblAngle));  // with envelope control using Sin
+	//			intPSK100bdCarTemplate[i][j][k] = (short)round(intAmp * sin(M_PI * k / 119) * sin(dblAngle));  // with envelope control using Sin
 				dblAngle += dblCarPhaseInc[i];
 				
 				if (dblAngle >= 2 * M_PI)
@@ -316,7 +363,7 @@ VOID GeneratePSKTemplates()
 
 					if (k == 119)
 					{
-						len += sprintf(&msg[len-2], "},\r\n\t{", msg);
+						len += sprintf(&msg[len-2], "},\r\n\t{");
 						len -=2;
 					}
 					fwrite(msg, 1, len, fp1);
@@ -366,7 +413,7 @@ VOID GeneratePSKTemplates()
 
 					if (k == 71)
 					{
-						len += sprintf(&msg[len-2], "},\r\n\t{", msg);
+						len += sprintf(&msg[len-2], "},\r\n\t{");
 						len -=2;
 					}
 					fwrite(msg, 1, len, fp1);

@@ -7,7 +7,7 @@ char GridSquare[7] = "IO68VL";
 char Callsign[10] = "G8BPQ-2";
 BOOL wantCWID = FALSE;
 int LeaderLength = 500;
-int TrailerLength = 0;
+int TrailerLength = 200;
 
 enum _ReceiveState State;
 enum _ARDOPState ProtocolState;
@@ -27,8 +27,8 @@ BOOL blnTimeoutTriggered= FALSE;
 
 int MaxCorrections;
 
-char TXQueue[4096] = "Hello";					// May malloc this, or change to cyclic buffer
-int TXQueueLen = 5;
+char TXQueue[100] = "HelloHelloAAAABBBBCCCCBBBBCCCCDDDD\rHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r";					// May malloc this, or change to cyclic buffer
+int TXQueueLen = 96;
 
 UCHAR bytSessionID;
 
@@ -209,24 +209,29 @@ void ardopmain()
 	InitValidFrameTypes();
 	InitSound();
 
-	 SendID(0);
-	 
-	 ProtocolState = FECSend;
-//	GetNextFECFrame();
+//	 SendID(0);
 
+#ifdef WIN32
+	 
+	ProtocolState = FECSend;
+	GetNextFECFrame();
+
+
+
+	ProtocolState = FECSend;
+	GetNextFECFrame();
+
+	ProtocolState = FECSend;
+	GetNextFECFrame();
+
+#endif
 // 
 //  SendID(0);
 //  ModTwoToneTest();
 
-  return 0;
+  return ;
 }
 
-
-
-
-void AddTagToDataAndSendToHost(char * Msg, char * Type)
-{
-}
 
 void SendCWID(char * Callsign, BOOL x)
 {
@@ -236,7 +241,7 @@ void SendCWID(char * Callsign, BOOL x)
 
 //	 Returns pointer to Frame Type Name
 
-char * Name(UCHAR bytID)
+const char * Name(UCHAR bytID)
 {
 	if (bytID < 0x20)
 		return strFrameType[0];
@@ -300,8 +305,8 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 
 		*blnOdd = (1 & bytFrameType) != 0;
 		*intNumCar = 1;
-		*intDataLen = 14;
-		*intRSLen = 0;
+		*intDataLen = 12;
+		*intRSLen = 2;
 		strcpy(strMod, "4FSK");
 		*intBaud = 50;
 		*bytQualThres = 50;
@@ -690,7 +695,7 @@ int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 	unsigned char Padded[256];		// The padded Data
 
 	int Length = DataLen + RSLen;	// Final Length of packet
-	int PadLength = 253 - DataLen;	// Padding bytes needed for shortened RS codes
+	int PadLength = 255 - Length;	// Padding bytes needed for shortened RS codes
 
 	//	subroutine to do the RS encode. For full length and shortend RS codes up to 8 bit symbols (mm = 8)
 
@@ -705,7 +710,7 @@ int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 	memset(Padded, 0, PadLength);
 	memcpy(&Padded[PadLength], bytToRS, DataLen); 
 
-	encode_data(Padded, 253, RSBytes);
+	encode_data(Padded, 255-RSLen, RSBytes);
 
 	return RSLen;
 }
@@ -713,7 +718,7 @@ int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 //	Main RS decode function
 
 
-BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, UCHAR * Corrected, BOOL * blnRSOK)
+BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)
 {	
 	// Using a modified version of Henry Minsky's code
 	
@@ -867,11 +872,9 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	char strMod[16];
 	BOOL blnFrameTypeOK;
 	UCHAR bytQualThresh;
-	int EncLen;				// Length of encoded data
 	int i;
-	UCHAR bytToRS[256];
+	UCHAR * bytToRS = &bytEncodedData[2]; 
 	UCHAR RSBytes[MAXNPAR];
-
 
 	blnFrameTypeOK = FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
 
@@ -883,9 +886,6 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	
 	//strFrameName = strType;
 
-	//  Need: (2 bytes for Frame Type) +( Data + RS + 1 byte byteCount + 2 Byte CRC per carrier)
- 
-	EncLen = (2 + intNumCar * (intDataLen + intRSLen + 1 + 2));
 	
 	//	Generate the 2 bytes for the frame type data:
 	
@@ -906,9 +906,9 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 		{
 			intCarDataCnt = Length - intDataToSendPtr;
 			
-			if (intCarDataCnt >= intDataLen)
+			if (intCarDataCnt >= intDataLen) // why not > ??
 			{
-				// Will all fit ???
+				// Won't all fit 
 
 				bytToRS[0] = intDataLen;
 				intStartIndex = intEncodedDataPtr;
@@ -917,6 +917,8 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 			}
 			else
 			{
+				// Last bit
+
 				bytToRS[0] = intCarDataCnt;  // Could be 0 if insuffient data for # of carriers 
 
 				if (intCarDataCnt > 0)
@@ -926,13 +928,18 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 				}	
 			}
 		
-			GenCRC16FrameType(bytToRS, 0, intDataLen, bytFrameType); // calculate the CRC on the byte count  data bytes
+			GenCRC16FrameType(bytToRS, intDataLen + 1, bytFrameType); // calculate the CRC on the byte count + data bytes
 
-			EncLen = RSEncode(bytToRS, RSBytes, intDataLen, intRSLen);  // Generate the RS encoding ...now 14 bytes total
+//			EncLen = RSEncode(bytToRS, RSBytes, intDataLen, intRSLen);  // Generate the RS encoding ...now 14 bytes total
+ 			RSEncode(bytToRS, bytToRS+intDataLen+3, intDataLen + 3, intRSLen);  // Generate the RS encoding ...now 14 bytes total
         
-			memcpy(&bytEncodedData[intEncodedDataPtr], bytToRS, intDataLen);
+       
+	//		memcpy(&bytEncodedData[intEncodedDataPtr], bytToRS, intDataLen);
  
-			intEncodedDataPtr += EncLen;
+
+ 			//  Need: (2 bytes for Frame Type) +( Data + RS + 1 byte byteCount + 2 Byte CRC per carrier)
+
+ 			intEncodedDataPtr += intDataLen + 3 + intRSLen;
 		}
 	}
 /*
@@ -1354,7 +1361,7 @@ int GenCRC16(unsigned char * Data, unsigned short length)
 	int Bit;
 	int intPoly = 0x8810;	//  This implements the CRC polynomial  x^16 + x^12 +x^5 + 1
 
-	for (j = 0; j <  (length); j++)	
+	for (j = 0; j < length; j++)	
 	{
 		int Mask = 0x80;			// Top bit first
 
@@ -1444,60 +1451,34 @@ BOOL checkcrc16(unsigned char * Data, unsigned short length)
 
 //	Subroutine to compute a 16 bit CRC value and append it to the Data... With LS byte XORed by bytFrameType
     
-void GenCRC16FrameType(char * Data, int intStartIndex, int intStopIndex, UCHAR bytFrameType)
+void GenCRC16FrameType(char * Data, int Length, UCHAR bytFrameType)
 {
-	int CRC = GenCRC16(&Data[intStartIndex], intStopIndex - intStartIndex + 1);
+	unsigned int CRC = GenCRC16(Data, Length);
 
 	// Put the two CRC bytes after the stop index
 
-	Data[intStopIndex + 1] = (CRC >> 8);		 // MS 8 bits of Register
-	Data[intStopIndex + 2] = (CRC & 0xFF) ^ bytFrameType;  // LS 8 bits of Register
+	Data[Length++] = (CRC >> 8);		 // MS 8 bits of Register
+	Data[Length] = (CRC & 0xFF) ^ bytFrameType;  // LS 8 bits of Register
 }
 
-/*
-    ' Function to compute a 16 bit CRC value and check it against the last 2 bytes of Data (the CRC) XORing LS byte with bytFrameType..
-    Public Function CheckCRC16FrameType(ByRef Data() As Byte, Optional bytFrameType As Byte = 0) As Boolean
-        ' Returns True if CRC matches, else FALSE
-        ' For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
-        ' intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
+// Function to compute a 16 bit CRC value and check it against the last 2 bytes of Data (the CRC) XORing LS byte with bytFrameType..
+ 
+BOOL  CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType)
+{
+	// Returns True if CRC matches, else FALSE
+    // For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
+    // intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
 
-        Dim intPoly As Integer = &H8810 ' This implements the CRC polynomial  x^16 + x^12 +x^5 + 1
-        Dim intRegister As Int32 = &HFFFF ' initialize the register to all 1's
+	unsigned int CRC = GenCRC16(Data, Length);
+  
+	// Compare the register with the last two bytes of Data (the CRC) 
+    
+	if ((CRC >> 8) == Data[Length])
+		if (((CRC & 0xFF) ^ bytFrameType) == Data[Length + 1])
+			return TRUE;
 
-        For j As Integer = 0 To Data.Length - 3 ' 2 bytes short of data length
-            For i As Integer = 7 To 0 Step -1 ' for each bit processing MS bit first
-                Dim blnBit As Boolean = (Data(j) And CByte(2 ^ i)) <> 0
-                If (intRegister And &H8000) = &H8000 Then ' the MSB of the register is set
-                    ' Shift left, place data bit as LSB, then divide
-                    ' Register := shiftRegister left shift 1
-                    ' Register := shiftRegister xor polynomial
-                    If blnBit Then
-                        intRegister = &HFFFF And (1 + 2 * intRegister)
-                    Else
-                        intRegister = &HFFFF And (2 * intRegister)
-                    End If
-                    intRegister = intRegister Xor intPoly
-                Else ' the MSB is not set
-                    ' Register is not divisible by polynomial yet.
-                    ' Just shift left and bring current data bit onto LSB of shiftRegister
-                    If blnBit Then
-                        intRegister = &HFFFF And (1 + 2 * intRegister)
-                    Else
-                        intRegister = &HFFFF And (2 * intRegister)
-                    End If
-                End If
-            Next i
-        Next j
-
-        ' Compare the register with the last two bytes of Data (the CRC) 
-        If Data(Data.Length - 2) = CByte((intRegister And &HFF00) \ 256) Then
-            If Data(Data.Length - 1) = (CByte(intRegister And &HFF) Xor bytFrameType) Then
-                Return True
-            End If
-        End If
-        Return FALSE
-    End Function 'CheckCRC16FrameType
-*/
+	return FALSE;
+}
 
 // Subroutine to get intDataLen bytes from outbound queue (bytDataToSend)
 
@@ -1523,7 +1504,7 @@ int GetDataFromQueue(UCHAR * Data, int MaxLen)
 	TXQueueLen -= Returned;
 
 	if (TXQueueLen)
-		memmove(Data, &Data[Returned], TXQueueLen);
+		memmove(TXQueue, &TXQueue[Returned], TXQueueLen);
 
 	FreeSemaphore();
 

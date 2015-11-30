@@ -22,8 +22,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define _USE_MATH_DEFINES
 #include <math.h>
+
+#define M_PI       3.141592f
 
 #include "ecc.h"				// RS Constants
 
@@ -35,11 +36,14 @@ typedef unsigned char UCHAR;
 #define FALSE 0
 #define TRUE 1
 
+void KeyPTT(BOOL State);
+
 
 UCHAR FrameCode(char * strFrameName);
 BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
    int * intBaud, int * intDataLen, int * intRSLen, UCHAR * bytQualThres, char * strType);
 
+void ClearDataToSend();
 int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData);
 int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn);
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
@@ -57,19 +61,29 @@ void AddTrailer();
 void CWID(char * strID, short * intSamples, BOOL blnPlay);
 void sendCWID(char * Call, BOOL Play);
 UCHAR ComputeTypeParity(UCHAR bytFrameType);
-void GenCRC16FrameType(char * Data, int intStartIndex, int intStopIndex, UCHAR bytFrameType);
+void GenCRC16FrameType(char * Data, int Length, UCHAR bytFrameType);
+BOOL CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType);
 char * strlop(char * buf, char delim);
+
+#ifdef WIN32
+void ProcessNewSamples(short * Samples, int nSamples);
+VOID Debugprintf(const char * format, ...);
+void ardopmain();
+#endif
+
 BOOL DemodDecode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare);
 void DeCompressCallsign(char * bytCallsign, char * returned);
 void DeCompressGridSquare(char * bytGS, char * returned);
 
 int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len);
-BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, UCHAR * Corrected, BOOL * blnRSOK);
+BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK);
+
+void AddTagToDataAndSendToHost(char * Msg, char * Type);
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
 void FreeSemaphore();
-char * Name(UCHAR bytID);
+const char * Name(UCHAR bytID);
 
 enum _ReceiveState		// used for initial receive testing...later put in correct protocol states
 {

@@ -11,9 +11,25 @@ int DataToSend = 1;
 
 UCHAR bytFrameType;
 
+extern int intNumCar;
+extern int intBaud;
+extern int intDataLen;
+extern int intRSLen;
+extern int intSampleLen;
+extern int intDataPtr;
+extern int intSampPerSym;
+extern int intDataBytesPerCar;
+extern BOOL blnOdd;
+extern char strType[16];
+extern char strMod[16];
+extern UCHAR bytMinQualThresh;
+
 UCHAR bytLastFECDataFrameSent;
 
-char strFECMode[16] = "4FSK.1000.100"; // "4FSK.500.100"; //"4FSK.200.50";
+//char strFECMode[16] = "4FSK.200.50";
+char strFECMode[16] = "4FSK.500.100"; //"4FSK.200.50"; //"4FSK.1000.100"; // ; //;
+//char strFECMode[16] = "4FSK.500.100"; //"4FSK.200.50"; //"4FSK.1000.100"; // ; //;
+//char strFECMode[16] = "4FSK.500.100"; //"4FSK.200.50"; //"4FSK.1000.100"; // ; //;
 
 char strCurrentFrameFilename[16];
 
@@ -36,14 +52,8 @@ void WriteDebug(char * msg)
 BOOL GetNextFECFrame()
 {
 	UCHAR bytData[512];
-	BOOL blnOdd;
-	char strMod[16];
-	char bytQualThresh;
-	char strType[16];
 	int Len;
-	int intNumCar = 0, intBaud, intDataLen = 0, intRSLen; // Do these need to be static??
 
-	int intCurrentFrameSamples;
 	UCHAR bytEncodedData[600];		// ??? May not need that much
 
 	if (blnAbort)
@@ -94,48 +104,48 @@ BOOL GetNextFECFrame()
  //           End If
 
  
-			FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
+		FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType);
 
-			Len = GetDataFromQueue(bytData, intDataLen * intNumCar);
+		Len = GetDataFromQueue(bytData, intDataLen * intNumCar);
 
-			//'If bytData.Length < (intDataLen * intNumCar) Then ReDim Preserve bytData((intDataLen * intNumCar) - 1)
+		//'If bytData.Length < (intDataLen * intNumCar) Then ReDim Preserve bytData((intDataLen * intNumCar) - 1)
 sendit:
-			if (strcmp(strMod, "4FSK") == 0)
-			{
-				int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
+		if (strcmp(strMod, "4FSK") == 0)
+		{
+			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
 
 	//			if (bytFrameType >= 0x7A && bytFrameType <= 0x7D)
 	//				intCurrentFrameSamples = Mod4FSK600BdData(bytData[0], bytData, intCalcLeader);  // Modulate Data frame 
 	//			else
-                    Mod4FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
-			}
-			else if (strcmp(strMod, "16FSK") == 0)
-			{
-				int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);				
+			Mod4FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
+		}
+		else if (strcmp(strMod, "16FSK") == 0)
+		{
+			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);				
 				
-				//		intCurrentFrameSamples = Mod16FSKData(bytFrameType, bytData);
-			}
-			else if (strcmp(strMod, "8FSK") == 0)
-			{
-				int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
-			}
-			else
-			{
+			//		intCurrentFrameSamples = Mod16FSKData(bytFrameType, bytData);
+		}
+		else if (strcmp(strMod, "8FSK") == 0)
+		{
+			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+		}
+		else
+		{
 	//			int PSKLen = EncodePSK(bytFrameType, bytData, strCurrentFrameFilename);
 	//			intCurrentFrameSamples = ModPSK(bytFrameType, bytData);
-			}
+		}
 			
 			//CreateWaveStream(intCurrentFrameSamples);
-			intFECFramesSent += 1;
-			bytLastFECDataFrameSent = bytFrameType;
-            return TRUE;
+		intFECFramesSent += 1;
+		bytLastFECDataFrameSent = bytFrameType;
+		return TRUE;
 	}
 	
 	// Not First
 
 	if ((intFECFramesSent % (FECRepeats + 1)) == 0)
 	{
-		GetDataFromQueue(bytData, intDataLen * intNumCar);
+		Len = GetDataFromQueue(bytData, intDataLen * intNumCar);
 		//'If bytData.Length < (intDataLen * intNumCar) Then ReDim Preserve bytData((intDataLen * intNumCar) - 1)
 		//' toggle the frame type Even/Odd
 		
@@ -165,3 +175,9 @@ sendit:
 
 	return TRUE;
 }
+
+void ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK)
+{
+}
+		
+

@@ -17,7 +17,6 @@
 #pragma comment(lib, "winmm.lib")
 #endif
 
-#define _USE_MATH_DEFINES
 #include <math.h>
 
 #include "ARDOPC.h"
@@ -68,41 +67,44 @@ int Index = 0;				// DMA Buffer being used 0 or 1
 
 int SendSize = 1200;		// 100 mS for now
 
-// Filter State Vaiables
+// Filter State Variables
 
-static float dblR = 0.9995;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
+static float dblR = (float)0.9995f;	// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
 static int intN = 120;				//Length of filter 12000/100
 static float dblRn;
 
 static float dblR2;
-static float dblCoef[19] = {0.0};			// the coefficients
+static float dblCoef[19] = {0.0f};			// the coefficients
 float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
 
 // The resonators 
       
-float dblZout_0[19] = {0.0};	// resonator outputs
-float dblZout_1[19] = {0.0};	// resonator outputs delayed one sample
-float dblZout_2[19] = {0.0};	// resonator outputs delayed two samples
+float dblZout_0[19] = {0.0f};	// resonator outputs
+float dblZout_1[19] = {0.0f};	// resonator outputs delayed one sample
+float dblZout_2[19] = {0.0f};	// resonator outputs delayed two samples
 
-int PacketLen;
+int Baud;
 int SampleNo;
 int outCount = 0;
+int first, last;		// Filter slots
 
 float largest = 0;
+float smallest = 0;
 
 short Last120[128];
 
 int Last120Get = 0;
 int Last120Put = 120;
 
-// initFilter is called to set up each packet. It will select filter width
-//	 when I get that far
+// initFilter is called to set up each packet. It selects filter width
 
-void initFilter(int Length)
+FILE * wavfp1;
+
+void initFilter(int fBaud)
 {
 	int i, j;
-	PacketLen = Length;
-	largest = 0;
+	Baud = fBaud;
+	largest = smallest = 0;
 	SampleNo = 0;
 	Number = 0;
 	outCount = 0;
@@ -112,28 +114,47 @@ void initFilter(int Length)
 	Last120Get = 0;
 	Last120Put = 120;
 
-	dblRn = pow(dblR, intN);
-	dblR2 = pow(dblR, 2);
+	dblRn = (float)pow(dblR, intN);
+	dblR2 = (float)pow(dblR, 2);
 
 	dblZin_2 = dblZin_1 = 0;
 
-	for (j = 14; j <= 16; j++)	   // calculate output for 3 resonators 
+	switch (Baud)
+	{
+	case 50:
+
+		// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 14;
+		last = 16;		// 3 filter sections
+		break;
+
+	case 100:
+
+		// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 12;
+		last = 18;		// 7 filter sections
+		break;
+	}
+
+	for (j = first; j <= last; j++)	   // calculate output for 3 resonators 
 	{
 		dblZout_0[j] = 0;
-		dblZout_2[j] = 0;
 		dblZout_1[j] = 0;
+		dblZout_2[j] = 0;
 	}
 
 	// Initialise the coefficients
 
-	if (dblCoef[15] == 0.0)
+	if (dblCoef[last] == 0.0)
 	{
-		for (i = 14; i <= 16; i++)
+		for (i = first; i <= last; i++)
 		{
-			dblCoef[i] = 2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
+			dblCoef[i] = (float)2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
 		}
 	}
-}
+ }
 
 BOOL DMARunning = FALSE;		// Used to start DMS on first write
 
@@ -165,7 +186,7 @@ void SendtoCard(int n)
 
 	// wait for other DMA buffer to finish
 
-	printtick("Start Wait");		// FOr timing tests
+//	printtick("Start Wait");		// FOr timing tests
 
 	while (1)
 	{
@@ -174,7 +195,7 @@ void SendtoCard(int n)
 		if (chan == Index) 	// we've started sending current buffer
 		{
 			Index = !Index;
-			printtick("Stop Wait");
+//			printtick("Stop Wait");
 			return;
 		}
 	}
@@ -189,19 +210,11 @@ void SampleSink(short Sample)
 	// This version is passed samples one at a time, as we don't have
 	//	enough RAM in embedded systems to hold a full audio frame
 
-	
-	// Used for PSK 200 Hz modulation XMIT filter  
-	// assumes sample rate of 12000
-	// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
-
-	// FSF (Frequency Selective Filter) variables
-
-
 	int intFilLen = intN / 2;
 	int j;
 	float intFilteredSample = 0;			//  Filtered sample
 
-	// We save the previous intN samples
+	//	We save the previous intN samples
 	//	The samples are held in a cyclic buffer
 
 	if (SampleNo < intN)
@@ -220,27 +233,55 @@ void SampleSink(short Sample)
 
 	// Now the resonators
 		
-	for (j = 14; j <= 16; j++)	   // calculate output for 3 resonators 
+	for (j = first; j <= last; j++)	   // calculate output for 3 or 7 resonators 
 	{
 		dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
 		dblZout_2[j] = dblZout_1[j];
 		dblZout_1[j] = dblZout_0[j];
 
-		// scale each by transition coeff and + (Even) or - (Odd) 
-
-		if (SampleNo >= intFilLen)
+		switch (Baud)
 		{
-			if (j == 14 || j == 16)
-				intFilteredSample += 0.7389 * dblZout_0[j];
-			else
-				intFilteredSample -= dblZout_0[j];
+		case 50:
+
+			// scale each by transition coeff and + (Even) or - (Odd) 
+
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 14 || j == 16)
+					intFilteredSample += (float)0.7389f * dblZout_0[j];
+				else
+					intFilteredSample -= (float)dblZout_0[j];
+			}
+			break;
+
+		case 100:
+
+			// scale each by transition coeff and + (Even) or - (Odd) 
+			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// practical range of scaling .05 to .25
+			// Scaling also accomodates for the filter "gain" of approx 60. 
+
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 12 || j == 18)
+					intFilteredSample += 0.10601f * dblZout_0[j];
+				else if (j == 13 || j == 17)
+					intFilteredSample -= 0.59383f * dblZout_0[j];
+				else if ((j & 1) == 0)	// 14 15 16
+					intFilteredSample += (int)dblZout_0[j];
+				else
+					intFilteredSample -= (int)dblZout_0[j];
+			}
+        
+			break;
 		}
 	}
 
 	if (SampleNo >= intFilLen)
 	{
-		intFilteredSample = intFilteredSample * 0.00833333333; //  rescales for gain of filter
+		intFilteredSample = intFilteredSample * 0.00833333333f; //  rescales for gain of filter
 		largest = max(largest, intFilteredSample);	
+		smallest = min(smallest, intFilteredSample);
 		
 		if (intFilteredSample > 32700)  // Hard clip above 32700
 			intFilteredSample = 32700;
@@ -276,13 +317,12 @@ void SampleSink(short Sample)
 
 	SampleNo++;
 }
+
 	
 //	Called at end of transmission
 
 void SoundFlush()
 {
-	int chan;
-
 	// Append Trailer then send remaining samples
 
 	AddTrailer();			// add the trailer.
@@ -301,7 +341,7 @@ void SoundFlush()
 
 	while (1)
 	{
-		chan = DMA_GetCurrentMemoryTarget(DMA1_Stream5);
+		int chan = DMA_GetCurrentMemoryTarget(DMA1_Stream5);
 
 		if (chan == Index) 	// we've started sending current buffer
 		{
@@ -330,10 +370,12 @@ void InitSound()
 	header[1].dwFlags = WHDR_DONE;
 
     waveOutOpen(&hWaveOut, 0, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
-	waveOutGetDevCaps(hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
+	waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
 
     waveInOpen(&hWaveIn, 0, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
-	waveInGetDevCaps(hWaveIn, &pwic, sizeof(WAVEINCAPS));
+	waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
+
+	wavfp1 = fopen("s:\\textxxx.wav", "wb");
 
 #endif
 }
@@ -341,6 +383,7 @@ void CloseSound()
 { 
 #ifdef WIN32
 	waveOutClose(hWaveOut);
+	fclose(wavfp1);
 #endif
 }
 
@@ -356,11 +399,21 @@ VOID Debugprintf(const char * format, ...)
 	vsprintf(Mess, format, arglist);
 	strcat(Mess, "\r\n");
 
-	OutputDebugString(Mess);
+	printf(Mess);
 
 	return;
 }
 #endif
 
+
+
+
+VOID WriteSamples(short * buffer, int len)
+{
+
+#ifdef WIN32
+	fwrite(buffer, 1, len * 2, wavfp1);
+#endif
+}
 
 

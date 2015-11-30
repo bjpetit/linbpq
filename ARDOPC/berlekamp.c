@@ -282,7 +282,10 @@ correct_errors_erasures (unsigned char codeword[],
 
   Modified_Berlekamp_Massey();
   Find_Roots();
-  
+
+
+  if (DEBUG) fprintf(stderr, "RS found %d errors\n", NErrors);
+
 
   if ((NErrors <= NPAR) && NErrors > 0) { 
 

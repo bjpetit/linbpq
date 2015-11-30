@@ -186,6 +186,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ARQ.c"
+				>
+			</File>
+			<File
 				RelativePath=".\berlekamp.c"
 				>
 			</File>
@@ -207,6 +211,10 @@
 			</File>
 			<File
 				RelativePath=".\galois.c"
+				>
+			</File>
+			<File
+				RelativePath=".\HostInterface.c"
 				>
 			</File>
 			<File

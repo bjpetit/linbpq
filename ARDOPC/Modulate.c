@@ -63,7 +63,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	initFilter(30000);
+	initFilter(intBaud);
 
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
