@@ -194,10 +194,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\CalcTemplates.c"
-				>
-			</File>
-			<File
 				RelativePath=".\crcgen.c"
 				>
 			</File>
@@ -215,10 +211,6 @@
 			</File>
 			<File
 				RelativePath=".\HostInterface.c"
-				>
-			</File>
-			<File
-				RelativePath=".\Main.c"
 				>
 			</File>
 			<File

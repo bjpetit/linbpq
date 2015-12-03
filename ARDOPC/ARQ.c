@@ -7,12 +7,12 @@ void InitializeConnection()
 {
 }
 
-void ProcessUnconnectedConReqFrame(intFrameType, bytData)
+void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData)
 {
 }
 
 // Process connected ARQ frames here 
 
-void ProcessRcvdARQFrame(intFrameType, bytData, blnFrameDecodedOK)
+void ProcessRcvdARQFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK)
 {
 }

@@ -2,14 +2,6 @@
 #include "ARDOPC.h"
 
 
-int Ticks;
-
-
-void printtick(char * msg)
-{
-	printf("%s %i\r\n", msg, Ticks);
-}
-
 #include "ecc.h"
 
 unsigned char msg[] = "Nervously I loaded the twin ducks aboard the revolving pl\

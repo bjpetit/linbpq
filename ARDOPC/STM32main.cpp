@@ -76,6 +76,7 @@ void InitSound()
 
 int lastchan = 0;
 
+extern int TXQueueLen;
 
 int main()
 {
@@ -86,18 +87,12 @@ int main()
 
 	jnw = jnw * 4.0;
 
-
 	serial.baud(115200);
 	serial.printf("Clock Freq %d\r\n", SystemCoreClock);
 
 	mybutton.fall(&pressed);
 
 	blnTimeoutTriggered = FALSE;
-
-//	GenerateTwoToneLeaderTemplate();
-//	GenerateFSKTemplates();
-//	InitValidFrameTypes();
-//	InitSound();
 
 	ti.attach(tick, .001);
 
@@ -106,18 +101,9 @@ int main()
 	Config_ADC_DMA();
 	Start_ADC_DMA();
 
-//	SendID(0);
-
-//	 ProtocolState = FECSend;
-//	GetNextFECFrame();
-
-//
-//  SendID(0);
-//  ModTwoToneTest();
-
     while (1)
     {
-    	// Proces sany received samples
+    	// Process any received samples
 
 		// *************************
 		// convert the saved ADC 12-bit unsigned samples into 16-bit signed samples
@@ -164,13 +150,13 @@ int main()
 
    			bTick = false;
     	}
+
     	if (bClick)
     	{
    			serial.printf("button click %i\r\n", iClick);
    			bClick = false;
 
-   			ProtocolState = FECSend;
-   			GetNextFECFrame();
+   			int TXQueueLen = 96;
 
    			ProtocolState = FECSend;
    			GetNextFECFrame();
@@ -178,11 +164,11 @@ int main()
    			ProtocolState = FECSend;
    			GetNextFECFrame();
 
+   			ProtocolState = FECSend;
+   			GetNextFECFrame();
 
    			SendID(0);
     	}
-
-	//	serial.printf("Delay Expires\r\n");
 
  //       myled = !myled;
        wait(delay);

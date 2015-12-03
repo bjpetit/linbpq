@@ -15,6 +15,7 @@
 #include <windows.h>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
+void printtick(char * msg);
 #endif
 
 #include <math.h>
@@ -51,11 +52,34 @@ WAVEINCAPS pwic;
 void InitSound();
 
 
+int Ticks;
+
+LARGE_INTEGER Frequency;
+LARGE_INTEGER StartTicks;
+LARGE_INTEGER NewTicks;
+
 void main()
 {
+	QueryPerformanceFrequency(&Frequency);
+	Frequency.QuadPart /= 10000;			// Microsecs
+	QueryPerformanceCounter(&StartTicks);
+
+	printtick("Test Start");
+	Sleep(1000);
+	printtick("Test End");
+
 //	xxmain();
 	ardopmain();
 }
+void printtick(char * msg)
+{
+	QueryPerformanceCounter(&NewTicks);
+	Ticks = (NewTicks.QuadPart - StartTicks.QuadPart) /Frequency.QuadPart;
+	printf("%s %i\r\n", msg, Ticks);
+	StartTicks = NewTicks;
+}
+
+
 #else
 #include <stm32f4xx_dma.h>
 #endif
@@ -74,16 +98,16 @@ static int intN = 120;				//Length of filter 12000/100
 static float dblRn;
 
 static float dblR2;
-static float dblCoef[19] = {0.0f};			// the coefficients
+static float dblCoef[21] = {0.0f};			// the coefficients
 float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
 
 // The resonators 
       
-float dblZout_0[19] = {0.0f};	// resonator outputs
-float dblZout_1[19] = {0.0f};	// resonator outputs delayed one sample
-float dblZout_2[19] = {0.0f};	// resonator outputs delayed two samples
+float dblZout_0[21] = {0.0f};	// resonator outputs
+float dblZout_1[21] = {0.0f};	// resonator outputs delayed one sample
+float dblZout_2[21] = {0.0f};	// resonator outputs delayed two samples
 
-int Baud;
+int fWidth;				// Filter BandWidth
 int SampleNo;
 int outCount = 0;
 int first, last;		// Filter slots
@@ -100,10 +124,10 @@ int Last120Put = 120;
 
 FILE * wavfp1;
 
-void initFilter(int fBaud)
+void initFilter(int Width)
 {
 	int i, j;
-	Baud = fBaud;
+	fWidth = Width;
 	largest = smallest = 0;
 	SampleNo = 0;
 	Number = 0;
@@ -119,9 +143,9 @@ void initFilter(int fBaud)
 
 	dblZin_2 = dblZin_1 = 0;
 
-	switch (Baud)
+	switch (fWidth)
 	{
-	case 50:
+	case 200:
 
 		// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
 
@@ -129,12 +153,20 @@ void initFilter(int fBaud)
 		last = 16;		// 3 filter sections
 		break;
 
-	case 100:
+	case 500:
 
 		// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
 
 		first = 12;
 		last = 18;		// 7 filter sections
+		break;
+
+	case 1000:
+		
+		// implements 11 100 Hz wide sections centered on 1500 Hz  (~1000 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 10;
+		last = 20;		// 7 filter sections
 		break;
 	}
 
@@ -151,7 +183,7 @@ void initFilter(int fBaud)
 	{
 		for (i = first; i <= last; i++)
 		{
-			dblCoef[i] = (float)2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
+			dblCoef[i] = 2 * dblR * cosf(2 * M_PI * i / intN); // For Frequency = bin i
 		}
 	}
  }
@@ -239,9 +271,9 @@ void SampleSink(short Sample)
 		dblZout_2[j] = dblZout_1[j];
 		dblZout_1[j] = dblZout_0[j];
 
-		switch (Baud)
+		switch (fWidth)
 		{
-		case 50:
+		case 200:
 
 			// scale each by transition coeff and + (Even) or - (Odd) 
 
@@ -254,7 +286,7 @@ void SampleSink(short Sample)
 			}
 			break;
 
-		case 100:
+		case 500:
 
 			// scale each by transition coeff and + (Even) or - (Odd) 
 			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
@@ -274,6 +306,30 @@ void SampleSink(short Sample)
 			}
         
 			break;
+		
+		case 1000:
+
+			// scale each by transition coeff and + (Even) or - (Odd) 
+			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// practical range of scaling .05 to .25
+			// Scaling also accomodates for the filter "gain" of approx 60. 
+         
+
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 10 || j == 20)
+					intFilteredSample +=  0.389f * dblZout_0[j];
+				else if ((j & 1) == 0)	// Even
+					intFilteredSample += (int)dblZout_0[j];
+				else
+					intFilteredSample -= (int)dblZout_0[j];
+			}
+        
+			break;
+
+
+
+
 		}
 	}
 

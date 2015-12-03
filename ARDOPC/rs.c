@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include "ecc.h"
 
 /* Encoder parity bytes */

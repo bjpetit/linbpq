@@ -27,9 +27,11 @@ extern UCHAR bytMinQualThresh;
 UCHAR bytLastFECDataFrameSent;
 
 //char strFECMode[16] = "4FSK.200.50";
-char strFECMode[16] = "4FSK.500.100"; //"4FSK.200.50"; //"4FSK.1000.100"; // ; //;
-//char strFECMode[16] = "4FSK.500.100"; //"4FSK.200.50"; //"4FSK.1000.100"; // ; //;
-//char strFECMode[16] = "4FSK.500.100"; //"4FSK.200.50"; //"4FSK.1000.100"; // ; //;
+//char strFECMode[16] = "4FSK.500.100";
+//char strFECMode[16] = "4FSK.1000.100";
+//char strFECMode[16] = "4PSK.200.100";
+char strFECMode[16] = "8PSK.200.100";
+
 
 char strCurrentFrameFilename[16];
 
@@ -121,17 +123,21 @@ sendit:
 		}
 		else if (strcmp(strMod, "16FSK") == 0)
 		{
-			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);				
+			EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
 				
 			//		intCurrentFrameSamples = Mod16FSKData(bytFrameType, bytData);
 		}
 		else if (strcmp(strMod, "8FSK") == 0)
 		{
-			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+			EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
 		}
 		else
 		{
-	//			int PSKLen = EncodePSK(bytFrameType, bytData, strCurrentFrameFilename);
+			int PSKLen = EncodePSKData(bytFrameType, bytData, Len, bytEncodedData);
+
+			ModPSKDataAndPlay(bytEncodedData[0], bytEncodedData, PSKLen, intCalcLeader);  // Modulate Data frame 
+
+	//			EncodePSK(bytFrameType, bytData, strCurrentFrameFilename);
 	//			intCurrentFrameSamples = ModPSK(bytFrameType, bytData);
 		}
 			
@@ -176,7 +182,7 @@ sendit:
 	return TRUE;
 }
 
-void ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK)
+void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK)
 {
 }
 		

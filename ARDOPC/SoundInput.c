@@ -31,8 +31,8 @@ int intFrameType;				// Type we are decoding
 
 #define MAX_DATA_LENGTH	8 * 159 // I think! 8PSK.2000.167
 
-int intCenterFreq = 1500;		// Probably always fixed
-
+int intCenterFreq = 1500;
+int intCarFreq;				// Are these the same ??
 int intNumCar;
 int intBaud;
 int intDataLen;
@@ -45,12 +45,22 @@ BOOL blnOdd;
 char strType[16] = "";
 char strMod[16] = "";
 UCHAR bytMinQualThresh;
+int intPSKMode;
 
 #define MAX_RAW_LENGTH	256     // I think! Max length of an RS block
 #define MAX_DATA_LENGTH	8 * 159 // I think! 8PSK.2000.167
 
 int intToneMags[16 * MAX_RAW_LENGTH] = {0};	// Do we need one per carrier
 int intToneMagsLength;
+
+short intPhases[8];			// We will decode as soon as we have 4 or 8 depending on mode
+							//	(but may need one set per carrier)
+
+short intMags[8];
+
+//	If we so Mem ARQ we will need a fair amount of RAM
+
+int intPhasesLen;
 
 UCHAR bytData[MAX_DATA_LENGTH];
 int frameLen;
@@ -75,9 +85,8 @@ int charIndex = 0;				// Index into received chars
 
 int SymbolsLeft;				// number still to decode
 
+BOOL PSKInitDone = FALSE;
 
-short intMixedSamples[1200];	// All we need at once ( I hope!)		// may need to be int
-int	intMixedSamplesLength = 0;	//size of intMixedSamples
 
 BOOL blnSymbolSyncFound, blnFrameSyncFound;
 
@@ -119,11 +128,22 @@ int	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the f
 
 int RcvdSamplesLen = 0;				// Samples in RX buffer
 
+BOOL Acquire2ToneLeaderSymbolFraming();
 BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz);
+BOOL AcquireFrameSyncRSB();
+int Acquire4FSKFrameType();
 
 void DemodulateFrame(int intFrameType);
 void Demod1Car4FSKChar(int Start, char * Decoded);
 VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float intSearchFreq, int intBaud, UCHAR * bytSymHistory);
+
+int EnvelopeCorrelator();
+BOOL DecodeFrame(int intFrameType, char * bytData);
+
+int Update4FSKConstellation(int * intToneMags, int * intQuality);
+BOOL DemodPSK();
+
+/*
 
 const int SamplesToComplete[256] = {
 //  lookup the number of samples (@12 KHz) needed to complete the frame after the Frame ID is detected 
@@ -228,14 +248,17 @@ const int SamplesToComplete[256] = {
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// e0 - eF    ACK and NAK
 	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};	// f0 - ff
 
+	*/
+
 // Function to determine if a valide frame type
 
+extern UCHAR isValidFrame[256];
 
 BOOL IsValidFrameType(UCHAR bytType)
 {
 	//  used in the minimum distance decoder (update if frames added or removed)
 
-	return (SamplesToComplete[bytType] != -1);
+	return (isValidFrame[bytType]);
 /*
 	if (bytType >= 0 && bytType <= 0x1F)  return TRUE;
     if (bytType == 0x23 || bytType == 0x26 || bytType == 0x29 || bytType == 0x2C || bytType == 0x2D || bytType == 0x2E) return TRUE;
@@ -267,7 +290,7 @@ BOOL IsShortControlFrame(UCHAR bytType)
 
 BOOL IsDataFrame(UCHAR intFrameType)
 {
-	char * String = Name(intFrameType);
+	const char * String = Name(intFrameType);
 
 	if (String == NULL || String[0] == 0)
 		return FALSE;
@@ -290,8 +313,6 @@ void ResetSNPwrs()
 void ClearAllMixedSamples()
 {
 	intFilteredMixedSamplesLength = 0;
-	intMixedSamplesLength = 0;
-	// not sure as this is fixed len intPriorMixedSamplesLength = 120;
 	intMFSReadPtr = 0;
 }
 
@@ -302,8 +323,6 @@ void InitializeMixedSamples()
 	// Measure the time from release of PTT to leader detection of reply.
 
 	intARQRTmeasuredMs = min(10000, Ticks - dttStartRTMeasure); //?????? needs work
-
-	intMixedSamplesLength = 0;	// ' Zero the intMixedSamples array
 	intPriorMixedSamplesLength = 120;  // zero out prior samples in Prior sample buffer
 	intFilteredMixedSamplesLength = 0;	// zero out the FilteredMixedSamples array
 	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
@@ -339,8 +358,12 @@ static float dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb gener
 static float dblZout_0[27] = {0.0f};	// resonator outputs
 static float dblZout_1[27] = {0.0f};	// resonator outputs delayed one sample
 static float dblZout_2[27] = {0.0f};	// resonator outputs delayed two samples
+static float dblCoef[27] = {0.0};		// the coefficients
+static float dblR = 0.9995f;			// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
+static int intN = 120;				//Length of filter 12000/100
 
-void FSMixFilter2000Hz()
+
+void FSMixFilter2000Hz(short * intMixedSamples, int intMixedSamplesLength)
 {
 	// assumes sample rate of 12000
 	// implements  23 100 Hz wide sections   (~2000 Hz wide @ - 30dB centered on 1500 Hz)
@@ -351,23 +374,14 @@ void FSMixFilter2000Hz()
 
 	// Filtered data is appended to intFilteredMixedSamples
 
-	static float dblR = 0.9995f;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-	static int intN = 120;				//Length of filter 12000/100
 	static float dblRn;
 	static float dblR2;
-	static float dblCoef[27] = {0.0};			// the coefficients
+
 	static float dblZin = 0;
-
-	// The resonators 
       
-	static float dblZout_0[27] = {0.0f};	// resonator outputs
-	static float dblZout_1[27] = {0.0f};	// resonator outputs delayed one sample
-	static float dblZout_2[27] = {0.0f};	// resonator outputs delayed two samples
-
 	int i, j;
 
 	float intFilteredSample = 0;			//  Filtered sample
-	float largest = 0;
 
 	dblRn = powf(dblR, intN);
 
@@ -379,7 +393,7 @@ void FSMixFilter2000Hz()
 	{
 		for (i = 4; i <= 26; i++)
 		{
-			dblCoef[i] = 2 * dblR * cos(2 * M_PI * i / intN);  // For Frequency = bin i
+			dblCoef[i] = 2 * dblR * cosf(2 * M_PI * i / intN);  // For Frequency = bin i
 		}
 	}
 
@@ -445,7 +459,6 @@ void Filter150Hz(short * intFilterOut)
 	float dblZout_1[17] = {0.0};	// resonator outputs delayed one sample
 	float dblZout_2[17] = {0.0};	// resonator outputs delayed two samples
 
-	int intFilLen = intN / 2;
 	int i, j;
 
 	float FilterOut = 0;			//  Filtered sample
@@ -507,8 +520,8 @@ void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
 	// Correct the dimension of intPriorMixedSamples if needed (should only happen after a bandwidth setting change). 
 
 	int i;
-	int oldlen = intFilteredMixedSamplesLength;
-
+	short intMixedSamples[1200];	// All we need at once ( I hope!)		// may need to be int
+	int	intMixedSamplesLength ;		//size of intMixedSamples
 
 	if (Length == 0)
 		return;
@@ -522,7 +535,7 @@ void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
 
 	for (i = 0; i < Length; i++)
 	{
-		intMixedSamples[i] = (int)ceil(intNewSamples[i] * cos(dblNCOPhase));  // later may want a lower "cost" implementation of "Cos"
+		intMixedSamples[i] = (int)ceilf(intNewSamples[i] * cosf(dblNCOPhase));  // later may want a lower "cost" implementation of "Cos"
 		dblNCOPhase += dblNCOPhaseInc;
 		if (dblNCOPhase > dbl2Pi)
 			dblNCOPhase -= dbl2Pi;
@@ -531,8 +544,9 @@ void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
 	
 	
 	// showed no significant difference if the 2000 Hz filer used for all bandwidths.
-	
-	FSMixFilter2000Hz();   // filter through the FS filter (required to reject image from Local oscillator)
+	printtick("Start Filter");
+	FSMixFilter2000Hz(intMixedSamples, intMixedSamplesLength);   // filter through the FS filter (required to reject image from Local oscillator)
+	printtick("Done Filter");
 
 	// save for analysys
 
@@ -556,7 +570,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		// return the actual data
 		
 		memcpy(bytCorrectedData, &bytRawData[1], bytRawData[0]);    
-		Debugprintf("[DemodDecode4FSKData] OK without RS");
+		printf("[DemodDecode4FSKData] OK without RS\n");
 		return bytRawData[0];
 	}
 	
@@ -566,16 +580,16 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 	FrameOK = RSDecode(bytRawData, intDataLen + 3 + intRSLen, intRSLen, &blnRSOK);
 
 	if (blnRSOK)
-		printtick("RS Says blnRSOK");
+		printf("RS Says blnRSOK");
 
 	if (FrameOK)
-		printf("RS Says FrameOK");
+		printf("RS Says FrameOK\n");
 	else
-		printf("RS Says Can't Correct");
+		printf("RS Says Can't Correct\n");
 
     if (FrameOK &&  CheckCRC16FrameType(bytRawData, intDataLen + 1, bytFrameType)) // RS correction successful 
 	{
-		int intFailedByteCnt = 0, j;
+		int intFailedByteCnt = 0;
 		
 		// need to fix this if we want to use it
 		//  test code just to determine how many corrections were applied  ...later remove
@@ -679,12 +693,12 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	// I'm going to filter all samples into intFilteredMixedSamples.
 	//I'll need to limit the size of this soon
 
-	printtick("Start Filter");
+	printtick("Start Mix");
 
 	MixNCOFilter(Samples, nSamples, dblOffsetHz); // Mix and filter new samples (Mixing consumes all intRcvdSamples)
 	nSamples = 0;	//	all used
 
-	printtick("Done Filter Samples");
+	printtick("Done Mix Samples");
 
 	// Acquire Symbol Sync 
 
@@ -801,6 +815,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			intToneMagsLength = (4 * intDataLen);
 
 			charIndex = 0;	
+			PSKInitDone = 0;
 			
 			if (!IsShortControlFrame(intFrameType))
 			{
@@ -942,7 +957,7 @@ void ProcessCapturedData(short * Samples, int nSamples)
 
 // Subroutine to compute Goertzel algorithm and return Real and Imag components for a single frequency bin
 
-GoertzelRealImag(short intRealIn[], int intPtr, int N, float m, float * dblReal, float * dblImag)
+void GoertzelRealImag(short intRealIn[], int intPtr, int N, float m, float * dblReal, float * dblImag)
 {
 	// intRealIn is a buffer at least intPtr + N in length
 	// N need not be a power of 2
@@ -1372,7 +1387,7 @@ BOOL AcquireFrameSyncRSB()
 		else if (dblPhaseDiff23 < -M_PI)
 			dblPhaseDiff23 += dbl2Pi;
 
-		if (abs(dblPhaseDiff12) > 0.6667 * M_PI && abs(dblPhaseDiff23) < 0.3333 * M_PI)  // Tighten the margin to 60 degrees
+		if (fabsf(dblPhaseDiff12) > 0.6667f * M_PI && fabsf(dblPhaseDiff23) < 0.3333f * M_PI)  // Tighten the margin to 60 degrees
 		{
 			intPSKRefPhase = (short)dblPhaseSym3 * 1000;
 
@@ -1810,9 +1825,6 @@ BOOL Demod1Car4FSK()
 		// If this is a multicarrier mode, we must call the
 		// decode char routing for each carrier
 	
-		intCenterFreq = 1500;
-		Demod1Car4FSKChar(Start, bytFrameData1);
-
 		switch (intNumCar)
 		{
 		case 1:
@@ -2054,15 +2066,21 @@ void DemodulateFrame(int intFrameType)
                 stcStatus.Text = objFrameInfo.Name(intFrameType) & " " & strCallerCallsign & ">" & strTargetCallsign
                 If blnDecodeOK Then bytData = GetBytes(strCallerCallsign & " " & strTargetCallsign)
 
-                ' 1 Carrier Data frames
-                '  PSK Data
-            Case &H40, &H41, &H42, &H43, &H44, &H45 ' OK
-                blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
-                If blnDecodeOK Then
-                    blnDecodeOK = DecodePSKData(intFrameType, intPhase, intMag, bytData)
-                End If
-*/
+				*/
+
+			// 1 Carrier Data frames
+			// PSK Data
+
+					
+		case 0x40:
+		case 0x41:
+		case 0x42:
+		case 0x43:
+		case 0x44:
+		case 0x45:
+
+			DemodPSK();
+			break;
 
 		//4FSK Data
 
@@ -2074,6 +2092,9 @@ void DemodulateFrame(int intFrameType)
 		case 0x4b:
 		case 0x4c:
 		case 0x4d:
+
+		case 0x68:		// 2 Carrier FSK
+		case 0x69:		// 2 Carrier FSK
 
 			Demod1Car4FSK();
 			break;
@@ -2134,6 +2155,8 @@ void DemodulateFrame(int intFrameType)
                 DemodSounder(intMFSReadPtr, intFilteredMixedSamples)
                 blnDecodeOK = True
   */
+		default:
+			intFilteredMixedSamplesLength = 0;	// Testing
 	}
 	
 //	if (blnDecodeOK)
@@ -2177,6 +2200,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 	char strTargetCallsign[10] = "";
 	char strIDCallSign[10] = "";
 	char strGridSQ[10] = "";
+	int CarrierLen;
 
 
  //       ReDim bytData(-1)
@@ -2227,17 +2251,17 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
                 blnDecodeOK = DemodDecode4FSKConReq(intFrameType, intBW, strCallerCallsign, strTargetCallsign)
                 stcStatus.Text = objFrameInfo.Name(intFrameType) & " " & strCallerCallsign & ">" & strTargetCallsign
                 If blnDecodeOK Then bytData = GetBytes(strCallerCallsign & " " & strTargetCallsign)
-
-                ' 1 Carrier Data frames
-                '  PSK Data
-            Case &H40, &H41, &H42, &H43, &H44, &H45 ' OK
-                blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
-                If blnDecodeOK Then
-                    blnDecodeOK = DecodePSKData(intFrameType, intPhase, intMag, bytData)
-                End If
-				*/
-
+*/
+		
+			
+		//   PSK 1 Carrier Data
+	
+		case 0x40:
+		case 0x41:
+		case 0x42:
+		case 0x43:
+		case 0x44:
+		case 0x45:
 
 		// FSK 1 Carrier Modes
 
@@ -2293,8 +2317,30 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
                 If blnDecodeOK Then
                     blnDecodeOK = DecodePSKData(intFrameType, intPhase, intMag, bytData)
                 End If
+*/
 
-            Case &H68, &H69
+		case 0x68:
+		case 0x69:
+
+			// 2 Carrier Modes
+
+			CarrierLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType);
+	
+			CarrierOk[0] = (CarrierLen > 0);
+			frameLen += CarrierLen;
+
+			CarrierLen = CorrectRawDataWithRS(bytFrameData2, &bytData[frameLen], intDataLen, intRSLen, intFrameType);
+	
+			CarrierOk[1] = (CarrierLen > 0);
+			frameLen += CarrierLen;
+
+			if (CarrierOk[0] && CarrierOk[1])
+				blnDecodeOK = TRUE;
+
+			break;
+
+
+/*
                 blnDecodeOK = DemodDecode4FSKData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If MCB.DebugLog Then Logs.WriteDebug("[DecodeFrame] Frame: " & objFrameInfo.Name(intFrameType) & " Decode " & blnDecodeOK.ToString & "  Quality= " & intLastRcvdFrameQuality.ToString)
@@ -2336,7 +2382,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 
 // Subroutine to update the 4FSK Constellation
 
-Update4FSKConstellation(int * intToneMags, int * intQuality)
+int Update4FSKConstellation(int * intToneMags, int * intQuality)
 {
 	// Subroutine to update bmpConstellation plot for 4FSK modes...
         
@@ -2395,6 +2441,97 @@ Update4FSKConstellation(int * intToneMags, int * intQuality)
 	return *intQuality;
 }
 
+//	Subroutine to Update the PhaseConstellation
+
+int intMagLength;
+int intPhasesLength;
+
+int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM)
+{
+	// Subroutine to update bmpConstellation plot for PSK modes...
+	// Skip plotting and calculations of intPSKPhase(0) as this is a reference phase (9/30/2014)
+
+	int intPSKPhase = strMod[0] - '0';
+	float dblPhaseError; 
+	float dblPhaseErrorSum = 0;
+	int intPSKIndex;
+	int intX, intY, intP = 0;
+	float dblRad = 0;
+	float dblAvgRad = 0;
+	float intMagMax = 0;
+	float dblPi4 = 0.25 * M_PI;
+	float dbPhaseStep  = 2 * M_PI / intPSKPhase;
+	float dblRadError = 0;
+	float  dblPlotRotation = 0;
+	// stcStatus As Status
+	int yCenter = 0, xCenter = 0;
+	int i,j;
+
+	if (intPSKPhase == 4)
+		intPSKIndex = 0;
+	else
+		intPSKIndex = 1;
+ 
+           // bmpConstellation = New Bitmap(89, 89)
+           // ' Draw the axis and paint the black background area
+            //yCenter = (bmpConstellation.Height - 1) \ 2
+           // xCenter = (bmpConstellation.Width - 1) \ 2
+            //For x As Integer = 0 To bmpConstellation.Width - 1
+             //   For y As Integer = 0 To bmpConstellation.Height - 1
+             //       If y = yCenter Or x = xCenter Then
+             //           bmpConstellation.SetPixel(x, y, Color.Tomato)
+             //       End If
+             //   Next y
+            //Next x
+
+	for (j = 1; j < intMagLength; j++)   // skip the magnitude of the reference in calculation
+	{
+		intMagMax = max(intMagMax, intMags[j]); // find the max magnitude to auto scale
+		dblAvgRad += intMags[j];
+	}
+	dblAvgRad = dblAvgRad / (intMagLength);  // the average radius
+  
+	for (i = 1; i <  intPhasesLength; i++)  // Don't plot the first phase (reference)
+	{
+		dblRad = 40 * intMags[i] / intMagMax; // scale the radius dblRad based on intMagMax
+        //        intX = CInt(xCenter + dblRad * Math.Cos(dblPlotRotation + intPhases(i) / 1000))
+		intY = (yCenter + dblRad * sinf(dblPlotRotation + intPhases[i] / 1000));
+         //       intP = CInt(Math.Round(0.001 * intPhases(i) / dbPhaseStep))
+		//' compute the Phase and Raduius errors
+
+		dblRadError += powf(dblAvgRad - intMags[i], 2); 
+		dblPhaseError = fabsf(((0.001 * intPhases[i]) - intP * dbPhaseStep)); // always positive and < .5 *  dblPhaseStep
+		dblPhaseErrorSum += dblPhaseError;
+
+        // If intX <> xCenter And intY <> yCenter Then bmpConstellation.SetPixel(intX, intY, Color.Yellow) ' don't plot on top of axis
+	}
+
+	dblRadError = sqrtf(dblRadError / (intPhasesLength)) / dblAvgRad;
+    
+	if (blnQAM) 
+	{
+		//include Radius error for QAM ...Lifted from WINMOR....may need work
+        //        return = CInt(Math.Max(0, (1 - dblRadError) * (100 - 200 * (dblPhaseErrorSum / (intPhases.Length - 1)) / dbPhaseStep)))
+	}
+	//       ' This gives good quality with probable seccessful decoding threshold around quality value of 60 to 70
+
+	return  max(0, ((100 - 200 * (dblPhaseErrorSum / (intPhasesLength)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
+	//        'Debug.WriteLine("  Avg Radius Error: " & Format(dblRadError, "0.0"))
+
+
+            //If MCB.AccumulateStats Then
+             //   stcQualityStats.intPSKQualityCnts(intPSKIndex) += 1
+             //   stcQualityStats.intPSKQuality(intPSKIndex) += intQuality
+             //   stcQualityStats.intPSKSymbolsDecoded += intPhases.Length
+            //End If
+           // stcStatus.ControlName = "lblQuality"
+           // stcStatus.Text = strMod & " Quality: " & intQuality.ToString
+           // queTNCStatus.Enqueue(stcStatus)
+           // stcStatus.ControlName = "ConstellationPlot"
+           // queTNCStatus.Enqueue(stcStatus)
+}
+
+
 // Subroutine to track 1 carrier 4FSK. Used for both single and multiple simultaneous carrier 4FSK modes.
 
 
@@ -2428,5 +2565,813 @@ VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float
 	}
 }
 
+//	Function to Decode one Carrier of PSK modulation 
+
+//	Ideally want to be able to call on for each symbol, as I don't have the
+//	RAM to build whole frame
+
+//	Call for each set of 4 or 8 Phase Values
+
+VOID Decode1CarPSKChar(UCHAR * Decoded)
+{
+	unsigned int int24Bits;
+	UCHAR bytRawData;
+	int k;
+	int Start = 0;
+
+	// Phase Samples are in intPhases
+
+	switch (intPSKMode)
+	{
+	case 4:		// process 4 sequential phases per byte (2 bits per phase)
+
+		for (k = 0; k < 4; k++)
+		{
+			if (k == 0)
+				bytRawData = 0;
+			else
+				bytRawData <<= 2;
+			
+			if (intPhases[Start] < 786 && intPhases[Start] > -786)
+			{
+			}		// Zero so no need to do anything
+			else if (intPhases[Start] >= 786 && intPhases[Start] < 2356)
+				bytRawData += 1;
+			else if (intPhases[Start] >= 2356 || intPhases[Start] <= -2356)
+				bytRawData += 2;
+			else
+				bytRawData += 3;
+
+			Start++;
+		}
+
+		Decoded[charIndex++] = bytRawData;
+
+		break;
+
+	case 8: // Process 8 sequential phases (3 bits per phase)  for 24 bits or 3 bytes  
+
+		//	Status verified on 1 Carrier 8PSK with no RS needed for High S/N
+
+		//	Assume we check for 8 available phase samples before being called
+
+		int24Bits = 0;
+
+		for (k = 0; k < 8; k++)
+		{
+			int24Bits <<= 3;
+
+			if (intPhases[Start] < 393 && intPhases[Start] > -393)
+			{
+			}		// Zero so no need to do anything
+			else if (intPhases[Start] >= 393 && intPhases[Start] < 1179)
+				int24Bits += 1;
+			else if (intPhases[Start] >= 1179 && intPhases[Start] < 1965)
+				int24Bits += 2;
+			else if (intPhases[Start] >= 1965 && intPhases[Start] < 2751)
+				int24Bits += 3;
+			else if (intPhases[Start] >= 2751 || intPhases[Start] < -2751)
+				int24Bits += 4;
+			else if (intPhases[Start] >= -2751 && intPhases[Start] < -1965)
+				int24Bits += 5;
+			else if (intPhases[Start] >= -1965 && intPhases[Start] <= -1179)
+				int24Bits += 6;
+			else 
+				int24Bits += 7;
+
+			Start ++;
+	
+		}
+		Decoded[charIndex++] = int24Bits >> 16;
+		Decoded[charIndex++] = int24Bits >> 8;
+		Decoded[charIndex++] = int24Bits ;
+
+		break;
+	}
 
 
+	return;
+}
+
+// This goes later
+ /*
+        Array.Copy(bytRawData, 0, bytNoRS, 0, bytNoRS.Length)
+        ' Check to see if correct without RS parity
+        If CheckCRC16FrameType(bytNoRS, bytFrameType) Then ' No RS correction needed
+            ReDim bytCorrectCarData(bytNoRS(0) - 1)
+            Array.Copy(bytNoRS, 1, bytCorrectCarData, 0, bytNoRS(0))
+            Return True
+        Else
+            ' Try correction with RS Parity
+            Dim bytFailedNoRS(bytNoRS.Length - 1) As Byte
+            Array.Copy(bytNoRS, bytFailedNoRS, bytNoRS.Length)
+            objRS8.MaxCorrections = intRSLen \ 2
+            bytNoRS = objRS8.RSDecode(bytRawData)
+            If CheckCRC16FrameType(bytNoRS, bytFrameType) Then ' No RS correction needed
+                ReDim bytCorrectCarData(bytNoRS(0) - 1)
+                Array.Copy(bytNoRS, 1, bytCorrectCarData, 0, bytNoRS(0))
+                Return True
+            Else
+                Return False
+            End If
+        End If
+    End Function  ' Decode1CarPSK
+*/
+
+//	A function to decode all PSK data frames, all number of carriers, all PSK modes
+/*
+BOOL DecodePSKData(int bytFrameType, short * intPhases, short * intMags, UCHAR * bytData)
+{
+	// phases have all been rotation corrected. 
+	// This version creates and average intPhases on failed decodes and uses the average to try and recover (analog phase average of millirads)  
+	// Need to evaluate effectiveness of this vs complexity...it should however all still fit within this routine.
+	// Test 3/24 does avaraging is effective at low S/N with and without multipath
+	// Modified 6/30/2015 to use magnitude weighted averaging in the averaging of repeated frames.  A measureable improvement over simple 
+	//  averaging of before.
+
+	int i;
+	/*
+        Dim intCarPhases(0) As Int16, intCarMags(0) As Int16
+        Dim bytCarMask As Byte = &H80
+        Dim bytQualThresh As Byte = 100
+        Dim bytNoRS(-1) As Byte
+        Dim bytCorrectedCarData(-1) As Byte
+
+  
+        Static bytPass As Byte = 0
+        Static intCarPhaseAvg(7, 0) As Int16 ' array to accumulate phases for averaging (Memory ARQ)
+        Static intCarMagAvg(7, 0) As Int16 ' array to accumulate mags for averaging (Memory ARQ) 
+        Static intSumCounts(7) As Int32
+        DecodePSKData = False ' Preset for failure 
+ 
+
+	intNumSymbolsPerCar = intPhasesLength / intNumCar;
+        objRS8.MaxCorrections = intRSLen \ 2
+        Dim bytRawData((intPhases.Length \ 4) \ intNumCar - 1) As Byte ' for 4PSK modes
+        If intPSKMode = 8 Then
+            ReDim bytRawData((intPhases.Length * 3 \ 8) \ intNumCar - 1) ' Redim for 3 bits per phase value for 8PSK modes
+        End If
+        ReDim intCarPhases((intPhases.Length \ intNumCar) - 1)
+        ReDim intCarMags((intMags.Length \ intNumCar) - 1)
+        ReDim bytNoRS(1 + intDataLen + 2 - 1) ' 1 byte byte Count, Data, 2 byte CRC 
+        ' initialise the static data if Accumulating Stats or on a change in frame type (e.g. even to odd, different # car, etc)
+        If bytLastDataFrameType <> bytFrameType Then
+            bytPass = 0 ' clear the passing flags (prior successful decodes of bytFrameType)
+            bytLastDataFrameType = bytFrameType
+            ReDim bytCorrectedData0(-1) ' Re initialize the bytCorrectedData array for carrier 0
+            ReDim bytCorrectedData1(-1) ' Re initialize the bytCorrectedData array for carrier 1
+            ReDim bytCorrectedData2(-1) ' Re initialize the bytCorrectedData array for carrier 2
+            ReDim bytCorrectedData3(-1) ' Re initialize the bytCorrectedData array for carrier 3
+            ReDim bytCorrectedData4(-1) ' Re initialize the bytCorrectedData array for carrier 4
+            ReDim bytCorrectedData5(-1) ' Re initialize the bytCorrectedData array for carrier 5
+            ReDim bytCorrectedData6(-1) ' Re initialize the bytCorrectedData array for carrier 6
+            ReDim bytCorrectedData7(-1) ' Re initialize the bytCorrectedData array for carrier 7
+            ReDim intCarPhaseAvg(7, intCarPhases.Length - 1) ' clear avg phase of multiple frames used for analog Mem ARQ
+            ReDim intCarMagAvg(7, intCarPhases.Length - 1) ' clear avg Mags of mulitple frames used for Analog Mem ARQ (Added Rev 0.3.5.1)
+            ReDim intSumCounts(7) ' zero out the counts in the averages
+        End If
+
+	// Across all carriers
+
+	for (i = 0; i < intNumCar; i++)
+	{
+		if ((bytCarMask & bytPass) == 0) // decode only those carriers not yet correctly decoded.   
+		{
+			Array.Copy(intPhases, i * intCarPhases.Length, intCarPhases, 0, intCarPhases.Length)
+                Array.Copy(intMags, i * intCarMags.Length, intCarMags, 0, intCarMags.Length)
+                If Decode1CarPSK(intCarPhases, intPSKMode, bytRawData, bytCorrectedCarData, intRSLen, bytFrameType) Then
+                    Select Case i
+                        Case 0 : ReDim bytCorrectedData0(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData0, bytCorrectedCarData.Length)
+                        Case 1 : ReDim bytCorrectedData1(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData1, bytCorrectedCarData.Length)
+                        Case 2 : ReDim bytCorrectedData2(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData2, bytCorrectedCarData.Length)
+                        Case 3 : ReDim bytCorrectedData3(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData3, bytCorrectedCarData.Length)
+                        Case 4 : ReDim bytCorrectedData4(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData4, bytCorrectedCarData.Length)
+                        Case 5 : ReDim bytCorrectedData5(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData5, bytCorrectedCarData.Length)
+                        Case 6 : ReDim bytCorrectedData6(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData6, bytCorrectedCarData.Length)
+                        Case 7 : ReDim bytCorrectedData7(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData7, bytCorrectedCarData.Length)
+                    End Select
+                    If MCB.DebugLog Then Logs.WriteDebug("[DecodePSKData] carrier " & i.ToString & " pass on initial decode") ' Added 0.3.5.1
+                    bytPass = bytCarMask Or bytPass
+                    intSumCounts(i) = 0
+                Else
+                    ' failure in correction so just add to average and try to decode
+                    If intSumCounts(i) = 0 Then ' initialize Sum counts Phase average and Mag Average 
+                        For m As Integer = 0 To intCarPhases.Length - 1
+                            intCarPhaseAvg(i, m) = intCarPhases(m)
+                            intCarMagAvg(i, m) = intCarMags(m)
+                        Next
+                        intSumCounts(i) = 1
+                        ' Debug.WriteLine("[DecodePSKData2] Reset sum for carrier " & i.ToString & " sum count = " & intSumCounts(i).ToString)
+                    Else
+                        For k As Integer = 0 To intCarPhases.Length - 1
+                            intCarPhaseAvg(i, k) = WeightedAngleAvg(intCarPhaseAvg(i, k), intCarPhases(k), intCarMagAvg(i, k), intCarMags(k)) ' Modified 0.3.5.1
+                            intCarPhases(k) = intCarPhaseAvg(i, k)
+                            intCarMagAvg(i, k) = CShort((intCarMagAvg(i, k) ^ 2 + intCarMags(k) ^ 2) / (intCarMagAvg(i, k) + intCarMags(k))) ' Added 0.3.5.1
+                        Next k
+                        intSumCounts(i) += 1
+                        ' now try to decode based on the WeightedAveragePhases
+                        If Decode1CarPSK(intCarPhases, intPSKMode, bytRawData, bytCorrectedCarData, intRSLen, bytFrameType) Then
+                            Select Case i
+                                Case 0 : ReDim bytCorrectedData0(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData0, bytCorrectedCarData.Length)
+                                Case 1 : ReDim bytCorrectedData1(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData1, bytCorrectedCarData.Length)
+                                Case 2 : ReDim bytCorrectedData2(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData2, bytCorrectedCarData.Length)
+                                Case 3 : ReDim bytCorrectedData3(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData3, bytCorrectedCarData.Length)
+                                Case 4 : ReDim bytCorrectedData4(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData4, bytCorrectedCarData.Length)
+                                Case 5 : ReDim bytCorrectedData5(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData5, bytCorrectedCarData.Length)
+                                Case 6 : ReDim bytCorrectedData6(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData6, bytCorrectedCarData.Length)
+                                Case 7 : ReDim bytCorrectedData7(bytCorrectedCarData.Length - 1) : Array.Copy(bytCorrectedCarData, bytCorrectedData7, bytCorrectedCarData.Length)
+                            End Select
+                            bytPass = bytCarMask Or bytPass
+                            If MCB.AccumulateStats Then stcTuningStats.intGoodPSKSummationDecodes += 1
+                            If MCB.DebugLog Then Logs.WriteDebug("[DecodePSKData] carrier " & i.ToString & " pass after " & intSumCounts(i).ToString & " sums")
+                        End If
+                    End If
+                End If
+            End If
+            bytCarMask = bytCarMask >> 1 ' Shift the mask
+        Next i '
+        Select Case intNumCar
+            Case 1
+                DecodePSKData = (bytPass = &H80)
+            Case 2
+                DecodePSKData = (bytPass = &HC0)
+            Case 4
+                DecodePSKData = (bytPass = &HF0)
+            Case 8
+                DecodePSKData = (bytPass = &HFF)
+        End Select
+        If DecodePSKData Then
+            Dim intPtr As Integer = 0
+            ReDim bytData(-1)
+            For i As Integer = 0 To intNumCar - 1
+                Select Case i
+                    Case 0 : ReDim Preserve bytData(intPtr + bytCorrectedData0.Length - 1) : Array.Copy(bytCorrectedData0, 0, bytData, intPtr, bytCorrectedData0.Length) : intPtr += bytCorrectedData0.Length
+                    Case 1 : ReDim Preserve bytData(intPtr + bytCorrectedData1.Length - 1) : Array.Copy(bytCorrectedData1, 0, bytData, intPtr, bytCorrectedData1.Length) : intPtr += bytCorrectedData1.Length
+                    Case 2 : ReDim Preserve bytData(intPtr + bytCorrectedData2.Length - 1) : Array.Copy(bytCorrectedData2, 0, bytData, intPtr, bytCorrectedData2.Length) : intPtr += bytCorrectedData2.Length '<<Corrected 0.3.2.3
+                    Case 3 : ReDim Preserve bytData(intPtr + bytCorrectedData3.Length - 1) : Array.Copy(bytCorrectedData3, 0, bytData, intPtr, bytCorrectedData3.Length) : intPtr += bytCorrectedData3.Length '<<Corrected 0.3.2.3
+                    Case 4 : ReDim Preserve bytData(intPtr + bytCorrectedData4.Length - 1) : Array.Copy(bytCorrectedData4, 0, bytData, intPtr, bytCorrectedData4.Length) : intPtr += bytCorrectedData4.Length '<<Corrected 0.3.2.3
+                    Case 5 : ReDim Preserve bytData(intPtr + bytCorrectedData5.Length - 1) : Array.Copy(bytCorrectedData5, 0, bytData, intPtr, bytCorrectedData5.Length) : intPtr += bytCorrectedData5.Length '<<Corrected 0.3.2.3
+                    Case 6 : ReDim Preserve bytData(intPtr + bytCorrectedData6.Length - 1) : Array.Copy(bytCorrectedData6, 0, bytData, intPtr, bytCorrectedData6.Length) : intPtr += bytCorrectedData6.Length '<<Corrected 0.3.2.3
+                    Case 7 : ReDim Preserve bytData(intPtr + bytCorrectedData7.Length - 1) : Array.Copy(bytCorrectedData7, 0, bytData, intPtr, bytCorrectedData7.Length)
+                End Select
+            Next i
+
+            If MCB.AccumulateStats Then stcTuningStats.intGoodPSKFrameDataDecodes += 1
+            ' Debug.WriteLine("[DecodePSKData2] bytPass = " & Format(bytPass, "X"))
+        Else
+            If MCB.AccumulateStats Then stcTuningStats.intFailedPSKFrameDataDecodes += 1
+            ' Debug.WriteLine("[DecodePSKData2] bytPass = " & Format(bytPass, "X"))
+        End If
+    End Function  ' DecodePSKData
+   ' Function to demod all PSKData frames single or multiple carriers 
+    Private Function DemodPSK(bytFrameType As Byte, ByRef intPhases() As Int16, ByRef intMags() As Int16, ByRef intQuality As Int32) As Boolean
+        'Concept:
+        '   Look up the frame data for bytFrameType
+        '   For each carrier demodulate the frame yielding intPhases() and intMags() for that carrier, appending each to intPhases() and intMags() in carrier order
+        '   Update the quality display for the entire frame
+        '   The results (intPhases() and intMags() by ref) will be processed by DecodePSK
+        Dim blnOdd As Boolean
+        Dim intNumCar, intBaud, intDataLen, intRSLen, intCarFreq, intNumSymbolsPerCar, intPSKMode As Integer
+        Dim strType As String = ""
+        Dim strMod As String = ""
+        Dim intCarPhases(0) As Int16, intCarMags(0) As Int16
+        Dim bytQualThresh As Byte
+        'Look up the details by Frame type
+        objFrameInfo.FrameInfo(bytFrameType, blnOdd, intNumCar, strMod, intBaud, intDataLen, intRSLen, bytQualThresh, strType)
+        intPSKMode = CInt(strMod.Substring(0, 1))
+        ' Assign the starting carrier
+        If intNumCar = 1 Then
+            intCarFreq = 1500
+        Else
+            intCarFreq = 1400 + (intNumCar \ 2) * 200 ' start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
+        End If
+        Select Case strMod
+            Case "4PSK" : intNumSymbolsPerCar = (1 + intDataLen + 2 + intRSLen) * 4     ' bytCount, data, CRC, RS not counting reference symbol 
+            Case "8PSK" : intNumSymbolsPerCar = (1 + intDataLen + 2 + intRSLen) * 8 \ 3
+        End Select
+
+        ReDim intPhases(intNumSymbolsPerCar * intNumCar - 1)
+        ReDim intMags(intNumSymbolsPerCar * intNumCar - 1)
+
+        ' Repeatedly call Demod1CarPSK once for each carrier building the phases and mags. 
+        For i As Integer = 0 To intNumCar - 1
+            Demod1CarPSK(intMFSReadPtr, intFilteredMixedSamples, intBaud, intCarFreq, intNumSymbolsPerCar, intCarPhases, intCarMags, strMod, True)
+            Array.Copy(intCarPhases, 0, intPhases, i * intCarPhases.Length, intCarPhases.Length)
+            Array.Copy(intCarMags, 0, intMags, i * intCarMags.Length, intCarMags.Length)
+            intCarFreq -= 200  ' Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+        Next
+        objMain.UpdatePhaseConstellation(intPhases, intMags, strMod, intQuality)
+        Return True
+    End Function ' DemodPSK
+*/
+
+//	Function to compute PSK symbol tracking (all PSK modes, used for single or multiple carrier modes) 
+
+int Track1CarPSK(int intCarFreq, char * strPSKMod, float dblUnfilteredPhase, BOOL blnInit)
+{
+	// This routine initializes and tracks the phase offset per symbol and adjust intPtr +/-1 when the offset creeps to a threshold value.
+	// adjusts (by Ref) intPtr 0, -1 or +1 based on a filtering of phase offset. 
+	// this seems to work fine on test Mar 21, 2015. May need optimization after testing with higher sample rate errors. This should handle sample rate offsets (sender to receiver) up to about 2000 ppm
+
+	float dblAlpha = 0.3f; // low pass filter constant  may want to optimize value after testing with large sample rate error. 
+		// (Affects how much averaging is done) lower values of dblAlpha will minimize adjustments but track more slugishly.
+
+	float dblPhaseOffset;
+
+	static float dblTrackingPhase = 0;
+	static float dblModFactor;
+	static float dblRadiansPerSample;  // range is .4188 @ car freq = 800 to 1.1195 @ car freq 2200
+	static float dblPhaseAtLastTrack;
+	static int intCountAtLastTrack;
+	static float dblFilteredPhaseOffset;
+
+	if (blnInit)
+	{
+		// dblFilterredPhase = dblUnfilteredPhase;
+		dblTrackingPhase = dblUnfilteredPhase;
+		
+		if (strPSKMod[0] == '8')
+			dblModFactor = M_PI / 4;
+		else if (strPSKMod[0] == '4')
+			dblModFactor = M_PI / 2;
+
+		dblRadiansPerSample = intCarFreq * dbl2Pi / 12000;
+		dblPhaseOffset = dblUnfilteredPhase - dblModFactor * round(dblUnfilteredPhase / dblModFactor);
+		dblPhaseAtLastTrack = dblPhaseOffset;
+		dblFilteredPhaseOffset = dblPhaseOffset;
+		intCountAtLastTrack = 0;
+		return 0;
+	}
+
+	intCountAtLastTrack += 1;
+	dblPhaseOffset = dblUnfilteredPhase - dblModFactor * round(dblUnfilteredPhase / dblModFactor);
+	dblFilteredPhaseOffset = (1 - dblAlpha) * dblFilteredPhaseOffset + dblAlpha * dblPhaseOffset;
+
+	if ((dblFilteredPhaseOffset - dblPhaseAtLastTrack) > dblRadiansPerSample)
+	{
+		//Debug.WriteLine("Filtered>LastTrack: Cnt=" & intCountAtLastTrack.ToString & "  Filtered = " & Format(dblFilteredPhaseOffset, "00.000") & "  Offset = " & Format(dblPhaseOffset, "00.000") & "  Unfiltered = " & Format(dblUnfilteredPhase, "00.000"))
+		dblFilteredPhaseOffset = dblPhaseOffset - dblRadiansPerSample;
+		dblPhaseAtLastTrack = dblFilteredPhaseOffset;
+	
+		//if MCB.AccumulateStats Then
+        //       stcTuningStats.intPSKTrackAttempts += 1
+        //        stcTuningStats.intAccumPSKTracking -= 1
+        // 
+
+		return -1;
+	}
+
+	if ((dblPhaseAtLastTrack - dblFilteredPhaseOffset) > dblRadiansPerSample)
+	{
+		//'Debug.WriteLine("Filtered<LastTrack: Cnt=" & intCountAtLastTrack.ToString & "  Filtered = " & Format(dblFilteredPhaseOffset, "00.000") & "  Offset = " & Format(dblPhaseOffset, "00.000") & "  Unfiltered = " & Format(dblUnfilteredPhase, "00.000"))
+		dblFilteredPhaseOffset = dblPhaseOffset + dblRadiansPerSample;
+		dblPhaseAtLastTrack = dblFilteredPhaseOffset;
+        //If MCB.AccumulateStats Then
+        //    stcTuningStats.intPSKTrackAttempts += 1
+        //  stcTuningStats.intAccumPSKTracking += 1
+	
+		return 1;
+	}
+	// 'Debug.WriteLine("Filtered Phase = " & Format(dblFilteredPhaseOffset, "00.000") & "  Offset = " & Format(dblPhaseOffset, "00.000") & "  Unfiltered = " & Format(dblUnfilteredPhase, "00.000"))
+
+	return 0;
+}
+ 
+// Function to compute the differenc of two angles 
+
+int ComputeAng1_Ang2(int intAng1, int intAng2)
+{
+	// do an angle subtraction intAng1 minus intAng2 (in milliradians) 
+	// Results always between -3142 and 3142 (+/- Pi)
+
+	int intDiff;
+
+	intDiff = intAng1 - intAng2;
+
+	if (intDiff < -3142)
+		intDiff += 6284;
+	else if (intDiff > 3142 )
+		intDiff -= 6284;
+
+	return intDiff;
+}
+
+// Subroutine to "rotate" the phases to try and set the average offset to 0. 
+
+void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * strMod)
+{
+	// A tunning error of -1 Hz will rotate the phase calculation Clockwise ~ 64 milliradians (~4 degrees)
+	//   This corrects for:
+	// 1) Small tuning errors which result in a phase bias (rotation) of then entire constellation
+	// 2) Small Transmitter/receiver drift during the frame by averaging and adjusting to constellation to the average. 
+	//   It only processes phase values close to the nominal to avoid generating too large of a correction from outliers: +/- 30 deg for 4PSK, +/- 15 deg for 8PSK
+	//  Is very affective in handling initial tuning error.  
+
+	short intPhaseMargin  = 2095 / intPSKMode; // Compute the acceptable phase correction range (+/-30 degrees for 4 PSK)
+	short intPhaseInc = 6284 / intPSKMode;
+	int intTest;
+	int i;
+	int intOffset, intAvgOffset, intAvgOffsetBeginning, intAvgOffsetEnd;
+	int intAccOffsetCnt = 0, intAccOffsetCntBeginning = 0, intAccOffsetCntEnd = 0;
+
+	// Compute the average offset (rotation) for all symbols within +/- intPhaseMargin of nominal
+            
+	int intAccOffset = 0, intAccOffsetBeginning = 0, intAccOffsetEnd = 0;
+
+	for (i = 0; i <  intPhaseLength; i++)
+	{
+		intTest = (intPhase[i] + intPhaseInc/2) / intPhaseInc;
+		intOffset = intPhase[i] - intTest * intPhaseInc;
+
+		if ((intOffset >= 0 && intOffset <= intPhaseMargin) || (intOffset < 0 && intOffset >= -intPhaseMargin))
+		{
+			intAccOffsetCnt += 1;
+			intAccOffset += intOffset;
+			
+			if (i <= intPhaseLength / 4)
+			{
+				intAccOffsetCntBeginning += 1;
+				intAccOffsetBeginning += intOffset;
+			}
+			else if (i >= (3 * intPhaseLength) / 4)
+			{
+				intAccOffsetCntEnd += 1;
+				intAccOffsetEnd += intOffset;
+			}
+		}
+	}
+	
+	if (intAccOffsetCnt > 0)
+		intAvgOffset = (intAccOffset / intAccOffsetCnt);
+	if (intAccOffsetCntBeginning > 0)
+		intAvgOffsetBeginning = (intAccOffsetBeginning / intAccOffsetCntBeginning);
+	if (intAccOffsetCntEnd > 0)
+		intAvgOffsetEnd = (intAccOffsetEnd / intAccOffsetCntEnd);
+     
+	//Debug.WriteLine("[CorrectPhaseForOffset] Beginning: " & intAvgOffsetBeginning.ToString & "   End: " & intAvgOffsetEnd.ToString & "    Total: " & intAvgOffset.ToString)
+
+	if ((intAccOffsetBeginning > intPhaseLength / 8) && (intAccOffsetCntEnd > intPhaseLength / 8))
+	{
+		for (i = 0; i < intPhaseLength; i++)
+		{
+			intPhase[i] = intPhase[i] - ((intAvgOffsetBeginning * (intPhaseLength - i) / intPhaseLength) + (intAvgOffsetEnd * i / intPhaseLength));
+			if (intPhase[i] > 3142)
+				intPhase[i] -= 6284;
+			else if (intPhase[i] < -3142)
+				intPhase[i] += 6284;
+		}
+	}
+		
+	//MCB.DebugLog Then Logs.WriteDebug("[CorrectPhaseForTuningOffset] AvgOffsetBeginning=" & intAvgOffsetBeginning.ToString & "  AvgOffsetEnd=" & intAvgOffsetEnd.ToString & " AccOffsetCnt=" & intAccOffsetCnt.ToString & "/" & intPhase.Length.ToString)
+       
+	else if (intAccOffsetCnt > intPhaseLength / 2)
+	{
+		for (i = 0; i < intPhaseLength; i++)
+		{
+			intPhase[i] -= intAvgOffset;
+			if (intPhase[i] > 3142)
+				intPhase[i] -= 6284;
+			else if (intPhase[i] < -3142)
+				intPhase[i] += 6284;
+		}
+		//   If MCB.DebugLog Then Logs.WriteDebug("[CorrectPhaseForTuningOffset] AvgOffset=" & intAvgOffset.ToString & " AccOffsetCnt=" & intAccOffsetCnt.ToString & "/" & intPhase.Length.ToString)
+	}
+}
+
+
+//	Functions to demod all PSKData frames single or multiple carriers 
+
+double dblPhaseInc;  // in milliradians
+short intNforGoertzel[8];
+short intPSKPhase_1[8], intPSKPhase_0[8];
+int intPCThresh = 194;  // (about 22 degrees... should work for 4PSK or 8PSK)
+short intCP[8];	  // Cyclic prefix offset 
+float dblFreqBin[8];
+
+
+VOID InitDemodPSK()
+{
+	// Called at start of frame
+
+	int i;
+	float dblPhase, dblReal, dblImag;
+
+	intPSKMode = strMod[0] - '0';
+	PSKInitDone = TRUE;
+
+	if (intPSKMode == 8)
+		dblPhaseInc = 2 * M_PI * 1000 / 8;
+	else
+		dblPhaseInc = 2 * M_PI * 1000 / 4;
+
+	if (intBaud == 167)
+		intSampPerSym = 72;
+	else
+		intSampPerSym = 120;
+
+	if (intNumCar == 1)
+		intCarFreq = 1500;
+	else
+		intCarFreq = 1400 + (intNumCar / 2) * 200; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
+  
+	for (i= 0; i < intNumCar; i++)
+	{
+		if (intBaud == 100 && intCarFreq == 1500) 
+		{
+		intCP[i] = 20;  //  These values selected for best decode percentage (92%) and best average 4PSK Quality (82) on MPP0dB channel
+		dblFreqBin[i] = intCarFreq / 150;
+		intNforGoertzel[i] = 80;
+		}
+		else if (intBaud == 100)
+		{
+			intCP[i] = 28; // This value selected for best decoding percentage (56%) and best Averag 4PSK Quality (77) on mpg +5 dB
+			intNforGoertzel[i] = 60;
+			dblFreqBin[i] = intCarFreq / 200;
+		}
+		else if (intBaud == 167)
+		{
+			intCP[i] = 6;  // Need to optimize (little difference between 6 and 12 @ wgn5, 2 Car 500 Hz)
+			intNforGoertzel[i] = 60;
+			dblFreqBin[i] = intCarFreq / 200;
+		}
+	
+		// Get initial Reference Phase
+		
+		GoertzelRealImag(intFilteredMixedSamples, intCP[i], intNforGoertzel[i], dblFreqBin[i], &dblReal, &dblImag);
+		dblPhase = atan2f(dblImag, dblReal);
+		Track1CarPSK(intCarFreq, strMod, dblPhase, TRUE);
+		intPSKPhase_1[i] = 1000 * dblPhase;
+		intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+	}
+}
+
+int Demod1CarPSKChar(int Start, int Carrier);
+
+BOOL DemodPSK()
+{
+	int Used;
+	int Start = 0;
+
+	// We can't wait for the full frame as we don't have enough RAM, so
+	// we do one DMA Buffer at a time, until we run out or end of frame
+
+	// Only continue if we have enough samples
+
+	
+	while (State == AcquireFrame)
+	{
+		if (intFilteredMixedSamplesLength < 4 * intSampPerSym + 10) // allow for a few phase corrections
+		{
+			// Move any unprocessessed data down buffer
+
+			//	(while checking process - will use cyclic buffer eventually
+
+			if (intFilteredMixedSamplesLength > 0)
+				memmove(intFilteredMixedSamples,
+					&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
+
+			return FALSE;
+		}
+		
+
+		if (PSKInitDone == 0)		// First time through
+		{	
+			if (intFilteredMixedSamplesLength < 8 * intSampPerSym + 10) 
+				return FALSE;				// Wait for at least 2 chars worth
+
+			InitDemodPSK();
+			intFilteredMixedSamplesLength -= intSampPerSym;
+			Start += intSampPerSym;	
+		}
+
+		// If this is a multicarrier mode, we must call the
+		// decode char routing for each carrier
+
+		if (intNumCar == 1)
+			intCarFreq = 1500;
+		else
+			intCarFreq = 1400 + (intNumCar / 2) * 200; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
+
+	
+		switch (intNumCar)
+		{
+		case 1:
+
+			Used = Demod1CarPSKChar(Start, 0);
+			break;
+
+		case 2:
+
+			Demod1CarPSKChar(Start, 0);
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+			Used = Demod1CarPSKChar(Start, 1);
+	
+		}
+
+		//	if we have 4 or 8 Phase samples, decode them 
+		
+		// (or each carrier)
+
+		if (intPhasesLen >= intPSKMode)
+		{
+//			CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
+
+			Decode1CarPSKChar(bytFrameData1);
+			intPhasesLen -= intPSKMode;
+
+			if (intPSKMode == 4)
+				SymbolsLeft--;		// number still to decode
+			else
+				SymbolsLeft -=3;
+		
+		}
+		Start += Used; //intSampPerSym * 4;	
+		intFilteredMixedSamplesLength -= Used; //intSampPerSym * 4;
+
+		if (SymbolsLeft <= 0)	
+		{	
+			//- prepare for next
+
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
+		}
+	}
+	return TRUE;
+}
+
+// Function to demodulate one carrier for all PSK frame types
+int Demod1CarPSKChar(int Start, int Carrier)
+{
+	// Converts intSample to an array of differential phase and magnitude values for the Specific Carrier Freq
+	// intPtr should be pointing to the approximate start of the first reference/training symbol (1 of 3) 
+	// intPhase() is an array of phase values (in milliradians range of 0 to 6283) for each symbol 
+	// intMag() is an array of Magnitude values (not used in PSK decoding but for constellation plotting or QAM decoding)
+	// Objective is to use Minimum Phase Error Tracking to maintain optimum pointer position
+
+	//	This is called for one DMA buffer of samples (normally 1200)
+
+	float dblReal, dblImag;
+	int intMiliRadPerSample = intCarFreq * M_PI / 6;
+	int i;
+	int intNumOfSymbols = 4;
+	int origStart = Start;;
+
+	for (i = 0; i <  intNumOfSymbols; i++)
+	{
+		GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+		intMags[intPhasesLen] = sqrtf(powf(dblReal, 2) + powf(dblImag, 2));
+		intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+		intPhases[intPhasesLen] = -(ComputeAng1_Ang2(intPSKPhase_0[Carrier], intPSKPhase_1[Carrier]));
+
+		Corrections = Track1CarPSK(intCarFreq, strMod, atan2f(dblImag, dblReal), FALSE);
+
+		if (Corrections != 0)
+		{
+			Start += Corrections;
+
+			printf("Phase adjust %d\n", Corrections);
+			GoertzelRealImag(intFilteredMixedSamples, Start + intCP[Carrier], intNforGoertzel[Carrier], dblFreqBin[Carrier], &dblReal, &dblImag);
+			intPSKPhase_0[Carrier] = 1000 * atan2f(dblImag, dblReal);
+		}
+		intPSKPhase_1[Carrier] = intPSKPhase_0[Carrier];
+		intPhasesLen++;
+		Start += intSampPerSym;
+	}
+       // If AccumulateStats Then intPSKSymbolCnt += intPhase.Length
+
+	return (Start - origStart);	// Symbols we've consumed
+}
+
+/*
+
+void xDemodPSK(UCHAR bytFrameType, short * intPhases, short * intMags, int * intQuality)
+{
+	// Concept:
+	//	Look up the frame data for bytFrameType
+	//	For each carrier demodulate the frame yielding intPhases() and intMags() for that carrier, appending each to intPhases() and intMags() in carrier order
+	//	Update the quality display for the entire frame
+	//	The results (intPhases() and intMags() by ref) will be processed by DecodePSK
+
+
+	short intCarPhases[1024] = {0};
+	short intCarMags[1024] = {0};
+	int i, intCarFreq, intNumSymbolsPerCar;
+//	int intPSKMode = strmod[0] - '0'; //!!!??
+
+	// Assign the starting carrier
+
+	if (intNumCar == 1)
+		intCarFreq = 1500;
+	else
+		intCarFreq = 1400 + (intNumCar / 2) * 200 ; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
+
+   if (strMod[0] == '4')
+	   intNumSymbolsPerCar = (1 + intDataLen + 2 + intRSLen) * 4;    // bytCount, data, CRC, RS not counting reference symbol 
+   else
+	   intNumSymbolsPerCar = (1 + intDataLen + 2 + intRSLen) * 8 / 3;
+
+   //     ReDim intPhases(intNumSymbolsPerCar * intNumCar - 1)
+   //     ReDim intMags(intNumSymbolsPerCar * intNumCar - 1)
+
+   //	Repeatedly call Demod1CarPSK once for each carrier building the phases and mags. 
+  
+   for (i = 0; i < intNumCar; i++)
+   {
+	   Demod1CarPSK(intMFSReadPtr, intFilteredMixedSamples, intBaud, intCarFreq, intNumSymbolsPerCar, *intCarPhases, *intCarMags, strMod, TRUE);
+
+		//   Array.Copy(intCarPhases, 0, intPhases, i * intCarPhases.Length, intCarPhases.Length)
+        //    Array.Copy(intCarMags, 0, intMags, i * intCarMags.Length, intCarMags.Length)
+	   
+	   intCarFreq -= 200 ;	 // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+   }
+
+   UpdatePhaseConstellation(intPhases, intMags, strMod, intQuality, FALSE);
+}
+*/
+
+// Function to demodulate one carrier for all low baud rate 4FSK frame types
+ 
+void xDemod1Car4FSKChar(int Start, char * Decoded)
+{
+	// Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
+	// intPtr should be pointing to the approximate start of the first data symbol  
+	// Updates bytData() with demodulated bytes
+	// Updates bytMinSymQuality with the minimum (range is 25 to 100) symbol making up each byte.
+
+	float dblReal, dblImag;
+	float dblSearchFreq;
+	float dblMagSum = 0;
+	float  dblMag[4];	// The magnitude for each of the 4FSK frequency bins
+	UCHAR bytSym;
+	static UCHAR bytSymHistory[3];
+	int j;
+	UCHAR bytData = 0;
+	
+	// If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
+    
+	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
+    //    ReDim bytData(intNumOfSymbols \ 4 - 1)
+
+	dblSearchFreq = intCenterFreq + (1.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
+
+	// Do one symbol
+
+	for (j = 0; j < 4; j++)		// for each 4FSK symbol (2 bits) in a byte
+	{
+		dblMagSum = 0;
+		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, dblSearchFreq / intBaud, &dblReal, &dblImag);
+		dblMag[0] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[0];
+
+        GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - intBaud) / intBaud, &dblReal, &dblImag);
+		dblMag[1] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[1];
+
+		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 2 * intBaud) / intBaud, &dblReal, &dblImag);
+		dblMag[2] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[2];
+			
+		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 3 * intBaud) / intBaud, &dblReal,& dblImag);
+		dblMag[3] = powf(dblReal,2) + powf(dblImag, 2);
+		dblMagSum += dblMag[3];
+
+		if (dblMag[0] > dblMag[1] && dblMag[0] > dblMag[2] && dblMag[0] > dblMag[3])
+			bytSym = 0;
+		else if (dblMag[1] > dblMag[0] && dblMag[1] > dblMag[2] && dblMag[1] > dblMag[3])
+			bytSym = 1;
+		else if (dblMag[2] > dblMag[0] && dblMag[2] > dblMag[1] && dblMag[2] > dblMag[3])
+			bytSym = 2;
+		else
+			bytSym = 3;
+
+		bytData = (bytData << 2) + bytSym;
+
+		// !!!!!!! this needs attention !!!!!!!!
+
+		intToneMags[16 * charIndex + 4 * j] = dblMag[0];
+		intToneMags[16 * charIndex + 4 * j + 1] = dblMag[1];
+		intToneMags[16 * charIndex + 4 * j + 2] = dblMag[2];
+		intToneMags[16 * charIndex + 4 * j + 3] = dblMag[3];
+		bytSymHistory[0] = bytSymHistory[1];
+		bytSymHistory[1] = bytSymHistory[2];
+		bytSymHistory[2] = bytSym;
+
+//		if ((bytSymHistory[0] != bytSymHistory[1]) && (bytSymHistory[1] != bytSymHistory[2]))
+		{
+			// only track when adjacent symbols are different (statistically about 56% of the time) 
+			// this should allow tracking over 2000 ppm sampling rate error	
+//			if (Start > intSampPerSym + 2)
+//				Track1Car4FSK(intFilteredMixedSamples, &Start, intSampPerSym, dblSearchFreq, intBaud, bytSymHistory);
+		}
+		Start += intSampPerSym; // advance the pointer one symbol
+	}
+
+	Decoded[charIndex] = bytData;	
+
+	return;
+}
+
+
+
+ 

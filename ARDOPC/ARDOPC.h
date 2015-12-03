@@ -47,8 +47,6 @@ void ClearDataToSend();
 int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData);
 int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn);
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
-void FSXmtFilter200_1500Hz(short * intNewSamples, int Length, short * PriorSamples, short * Filtered);
-void FSXmtFilter500_1500Hz(short * intNewSamples, int Length);
 //extern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
 //extern "C" void SetFilter(void * Filter());
@@ -69,6 +67,10 @@ char * strlop(char * buf, char delim);
 void ProcessNewSamples(short * Samples, int nSamples);
 VOID Debugprintf(const char * format, ...);
 void ardopmain();
+BOOL GetNextFECFrame();
+void GenerateFSKTemplates();
+void printtick(char * msg);
+void InitValidFrameTypes();
 #endif
 
 BOOL DemodDecode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare);
@@ -78,12 +80,19 @@ void DeCompressGridSquare(char * bytGS, char * returned);
 int RSEncode(UCHAR * bytToRS, UCHAR * bytRSEncoded, int MaxErr, int Len);
 BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK);
 
+void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK);
+void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData);
+void ProcessRcvdARQFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK);
+void InitializeConnection();
+
 void AddTagToDataAndSendToHost(char * Msg, char * Type);
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
 void FreeSemaphore();
 const char * Name(UCHAR bytID);
+void InitSound();
+void initFilter(int Width);
 
 enum _ReceiveState		// used for initial receive testing...later put in correct protocol states
 {
@@ -131,11 +140,12 @@ extern int TrailerLength;
 extern char ProtocolMode[4];
 
 extern time_t Now;
-extern UCHAR bytValidFrameTypes[256];
 
 extern int bytValidFrameTypesLength;
 
 extern BOOL blnTimeoutTriggered;
+
+extern const UCHAR bytValidFrameTypes[];
 
 
 // RS Variables

@@ -2,7 +2,7 @@
 
 static int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
-
+/*
 void GenerateTwoToneLeaderTemplate()
 {
 	// to create leader alternate these template samples reversing sign on each adjacent symbol
@@ -16,7 +16,7 @@ void GenerateTwoToneLeaderTemplate()
 	char msg[80];
 	int len;
 
-	fp1 = fopen("s:\leadercoeffs.txt", "wb");
+	fp1 = fopen("s:\\leadercoeffs.txt", "wb");
 
 	for (i = 0; i < 120; i++)
 	{
@@ -49,7 +49,7 @@ void GenerateTwoToneLeaderTemplate()
 	}		
 	fclose(fp1);
 }
-
+*/
 // Subroutine to create the FSK symbol templates
 
 void GenerateFSKTemplates()
@@ -128,7 +128,10 @@ void GenerateFSKTemplates()
 		//25 baud template
 		for (k = 0; k < 480; k++)			 // for 480 samples (one 25 baud symbol)
 		{
-	//		intFSK25bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+			int xx = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+			if (intFSK25bdCarTemplate[i][k] != xx)
+				printf("Duff\n");
+				
 			dblAngle += (2 * M_PI / 12000) * (1312.5 + i * 25);
 			if (dblAngle >= 2 * M_PI)
 				dblAngle -= 2 * M_PI;
@@ -142,7 +145,10 @@ void GenerateFSKTemplates()
 		//600 baud template
 		for (k = 0; k < 20; k++)	 // for 20 samples (one 600 baud symbol)
 		{
-	//		intFSK600bdCarTemplate[i][k] = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+			int xx = intAmp * 1.1 * sin(dblAngle); // with no envelope control (factor 1.1 chosen emperically to keep FSK peak amplitude slightly below 2 tone peak)
+			if (intFSK600bdCarTemplate[i][k] != xx)
+				printf("Duff\n");
+
 			dblAngle += (2 * M_PI / 12000) * (600 + i * 600);
 			if (dblAngle >= 2 * M_PI)
 				dblAngle -= 2 * M_PI;
@@ -182,9 +188,10 @@ void GenerateFSKTemplates()
 		}
 	}
 */
-/*
+
 	// Now print them
 
+/*
 	fp1 = fopen("s:\\fskcoeffs100.txt", "wb");
 
 	len = sprintf(msg, "short intFSK100bdCarTemplate[20][120] = \r\n");
@@ -233,6 +240,105 @@ void GenerateFSKTemplates()
 
 	fclose(fp1);
 */
+
+	fp1 = fopen("s:\\fskcoeffs25.txt", "wb");
+
+	len = sprintf(msg, "short intFSK25bdCarTemplate[16][480] = {\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	len = sprintf(msg, "\t{\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	for (i = 0; i < 16; i++)		// across 16 tones
+	{
+			line = 0;
+
+			for (k = 0; k <= 479; k++) // for 480 samples (one 25 baud symbol)
+			{
+				if ((k - line) == 9)
+				{
+					// print 10 to line
+
+					len = sprintf(msg, "\t%d, %d, %d, %d, %d, %d, %d, %d, %d, %d,\n",
+					intFSK25bdCarTemplate[i][line],
+					intFSK25bdCarTemplate[i][line + 1],
+					intFSK25bdCarTemplate[i][line + 2],
+					intFSK25bdCarTemplate[i][line + 3],
+					intFSK25bdCarTemplate[i][line + 4],
+					intFSK25bdCarTemplate[i][line + 5],
+					intFSK25bdCarTemplate[i][line + 6],
+					intFSK25bdCarTemplate[i][line + 7],
+					intFSK25bdCarTemplate[i][line + 8],
+					intFSK25bdCarTemplate[i][line + 9]);
+
+					line = k + 1;
+
+					if (k == 479)
+					{
+						len += sprintf(&msg[len-2], "},\r\n\r\n\t{");
+						len -=2;
+					}
+					fwrite(msg, 1, len, fp1);
+				}
+	
+		}
+	}
+
+	len = sprintf(msg, "\t}};\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	fclose(fp1);
+
+	fp1 = fopen("s:\\fskcoeffs600.txt", "wb");
+
+	len = sprintf(msg, "short intFSK600bdCarTemplate[4][20] = {\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	len = sprintf(msg, "\t{\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	for (i = 0; i < 4; i++)		// across 4 tones
+	{
+			line = 0;
+
+			for (k = 0; k < 20; k++) // for 20 samples (one 600 baud symbol)
+			{
+				if ((k - line) == 9)
+				{
+					// print 10 to line
+
+					len = sprintf(msg, "\t%d, %d, %d, %d, %d, %d, %d, %d, %d, %d,\n",
+					intFSK600bdCarTemplate[i][line],
+					intFSK600bdCarTemplate[i][line + 1],
+					intFSK600bdCarTemplate[i][line + 2],
+					intFSK600bdCarTemplate[i][line + 3],
+					intFSK600bdCarTemplate[i][line + 4],
+					intFSK600bdCarTemplate[i][line + 5],
+					intFSK600bdCarTemplate[i][line + 6],
+					intFSK600bdCarTemplate[i][line + 7],
+					intFSK600bdCarTemplate[i][line + 8],
+					intFSK600bdCarTemplate[i][line + 9]);
+
+					line = k + 1;
+
+					if (k == 19)
+					{
+						len += sprintf(&msg[len-2], "},\r\n\r\n\t{");
+						len -=2;
+					}
+					fwrite(msg, 1, len, fp1);
+				}
+	
+		}
+	}
+
+	len = sprintf(msg, "\t}};\r\n");
+	fwrite(msg, 1, len, fp1);
+
+	fclose(fp1);
+
+
+
 }
 
 //	 Subroutine to initialize valid frame types 
@@ -437,21 +543,3 @@ VOID GeneratePSKTemplates()
 
 
 
-extern const int SamplesToComplete[256];
-
-void InitValidFrameTypes()
-{
-	int i;
-	
-	bytValidFrameTypesLength = 0;
-	
-	for (i = 0; i < 256; i++)
-	{
-		if (IsValidFrameType(i))
-			bytValidFrameTypes[bytValidFrameTypesLength++] = i;
-
-		if (IsValidFrameType(i) && (SamplesToComplete[i] == -1))
-			break;
-
-	}
-}

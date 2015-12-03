@@ -6,8 +6,8 @@
 char GridSquare[7] = "IO68VL";
 char Callsign[10] = "G8BPQ-2";
 BOOL wantCWID = FALSE;
-int LeaderLength = 500;
-int TrailerLength = 200;
+int LeaderLength = 200;
+int TrailerLength = 100;
 
 enum _ReceiveState State;
 enum _ARDOPState ProtocolState;
@@ -16,18 +16,56 @@ enum _ARDOPState ARDOPState;
 BOOL SoundIsPlaying = FALSE;
 
 char ProtocolMode[4]= "";
-int intSamplesToCompleteFrame;
+
 
 time_t Now = 0;
-UCHAR bytValidFrameTypes[256]= {0};
 
-int bytValidFrameTypesLength = 0;
+const UCHAR bytValidFrameTypes[]=
+{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+ 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 35, 38, 41, 44, 45,
+ 46, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 64, 65, 66,
+ 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83,
+ 84, 85, 86, 87, 88, 89, 90, 91, 96, 97, 98, 99, 100, 101, 102, 103,
+ 104, 105, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123,
+ 124, 125, 208, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234,
+ 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248,
+ 249, 250, 251, 252, 253, 254, 255};
+
+int bytValidFrameTypesLength = sizeof(bytValidFrameTypes);
+
+UCHAR isValidFrame[256]= 
+{
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 00 - 0F    ACK and NAK
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 10 - 1F
+	0,0,0,1,0,0,1,0,0,1,0,0,1,1,1,0,	// BREAK=23, IDLE=26, DISC=29, END=2C, ConRejBusy=2D, ConRejBW=2E
+
+	1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,	// 30 - 3F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// 40 - 4F
+	1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,	// 50 - 5F
+	1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,	// 60 - 6F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,	// 70 - 7F
+			
+
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// 80 - 8F
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// 90 - 9F
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// A0 - AF
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// B0 - BF
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// C0 - CF
+
+	// experimental SOUNDINGs D0
+
+	1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,	// D0 - DF
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,	// e0 - eF    ACK and NAK
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1		// f0 - ff
+};
+
 
 BOOL blnTimeoutTriggered= FALSE;
 
 int MaxCorrections;
 
-char TXQueue[100] = "HelloHelloAAAABBBBCCCCBBBBCCCCDDDD\rHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r";					// May malloc this, or change to cyclic buffer
+char TXQueue[100] = "HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";					// May malloc this, or change to cyclic buffer
+//char TXQueue[100] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUHelloHelloHelloHelloHello\r\n";					// May malloc this, or change to cyclic buffer
 int TXQueueLen = 96;
 
 UCHAR bytSessionID;
@@ -176,7 +214,7 @@ char * strlop(char * buf, char delim)
 #ifdef WIN32
 float round(float x)
 {
-	return floor(x + 0.5);
+	return floorf(x + 0.5f);
 }
 #endif
 
@@ -188,6 +226,9 @@ void FreeSemaphore()
 {
 }
 
+
+
+
 void CompressCallsign(char * Callsign, UCHAR * Compressed);
 void CompressGridSquare(char * Square, UCHAR * Compressed);
 void  ASCIIto6Bit(char * Padded, UCHAR * Compressed);
@@ -197,16 +238,13 @@ void SendID(BOOL blnEnableCWID);
 
 void ardopmain()
 {
-	register int i;
-	int t;
 
 	blnTimeoutTriggered = FALSE;
 
-
 //	GenerateTwoToneLeaderTemplate();
-	GenerateFSKTemplates();
+//	GenerateFSKTemplates();
 //	GeneratePSKTemplates();
-	InitValidFrameTypes();
+
 	InitSound();
 
 //	 SendID(0);
@@ -690,8 +728,6 @@ int RSEncode(UCHAR * bytToRS, UCHAR * RSBytes, int DataLen, int RSLen)
 	// This just returns the Parity Bytes. I don't see the point
 	// in copying the message about
 
-	int i;
-
 	unsigned char Padded[256];		// The padded Data
 
 	int Length = DataLen + RSLen;	// Final Length of packet
@@ -848,6 +884,94 @@ Old code
 }
 */
 
+// Function to encode data for all PSK frame types
+
+int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData)
+{
+	// Objective is to use this to use this to send all PSK data frames 
+	// 'Output is a byte array which includes:
+	//  1) A 2 byte Header which include the Frame ID.  This will be sent using 4FSK at 50 baud. It will include the Frame ID and ID Xored by the Session bytID.
+	//  2) n sections one for each carrier that will inlcude all data (with FEC appended) for the entire frame. Each block will be identical in length.
+	//  Ininitial implementation:
+	//    intNum Car may be 1, 2, 4 or 8
+	//    intBaud may be 100, 167
+	//    intPSKMode may be 4 (4PSK) or 8 (8PSK) 
+	//    bytDataToSend must be equal to or less than max data supported by the frame or a exception will be logged and an empty array returned
+
+	//  First determine if bytDataToSend is compatible with the requested modulation mode.
+
+	int intNumCar, intBaud, intDataLen, intRSLen, intDataToSendPtr, intEncodedDataPtr;
+
+	int intCarDataCnt, intStartIndex;
+	BOOL blnOdd;
+	char strType[16];
+	char strMod[16];
+	BOOL blnFrameTypeOK;
+	UCHAR bytQualThresh;
+	int i;
+	UCHAR * bytToRS = &bytEncodedData[2]; 
+
+	blnFrameTypeOK = FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
+
+	if (intDataLen == 0 || Length == 0 || !blnFrameTypeOK)
+	{
+		//Logs.Exception("[EncodeFSKFrameType] Failure to update parameters for frame type H" & Format(bytFrameType, "X") & "  DataToSend Len=" & bytDataToSend.Length.ToString)
+		return 0;
+	}
+		
+	//	Generate the 2 bytes for the frame type data:
+	
+	bytEncodedData[0] = bytFrameType;
+	bytEncodedData[1] = bytFrameType ^ bytSessionID;
+
+
+	intDataToSendPtr = 0;
+	intEncodedDataPtr = 2;
+
+	// Now compute the RS frame for each carrier in sequence and move it to bytEncodedData 
+		
+	for (i = 0; i < intNumCar; i++)		//  across all carriers
+	{
+			intCarDataCnt = Length - intDataToSendPtr;
+			
+			if (intCarDataCnt >= intDataLen) // why not > ??
+			{
+				// Won't all fit 
+
+				bytToRS[0] = intDataLen;
+				intStartIndex = intEncodedDataPtr;
+				memcpy(&bytToRS[1], &bytDataToSend[intDataToSendPtr], intDataLen);
+				intDataToSendPtr += intDataLen;
+			}
+			else
+			{
+				// Last bit
+
+				bytToRS[0] = intCarDataCnt;  // Could be 0 if insuffient data for # of carriers 
+
+				if (intCarDataCnt > 0)
+				{
+					memcpy(&bytToRS[1], &bytDataToSend[intDataToSendPtr], intCarDataCnt);
+                    intDataToSendPtr += intCarDataCnt;
+				}	
+			}
+		
+			GenCRC16FrameType(bytToRS, intDataLen + 1, bytFrameType); // calculate the CRC on the byte count + data bytes
+
+ 			RSEncode(bytToRS, bytToRS+intDataLen+3, intDataLen + 3, intRSLen);  // Generate the RS encoding ...now 14 bytes total
+     
+ 			//  Need: (2 bytes for Frame Type) +( Data + RS + 1 byte byteCount + 2 Byte CRC per carrier)
+
+ 			intEncodedDataPtr += intDataLen + 3 + intRSLen;
+
+			bytToRS += intDataLen + 3 + intRSLen;
+		
+	}
+	return intEncodedDataPtr;
+}
+
+ 
+
 // Function to encode data for all FSK frame types
   
 int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData)
@@ -874,7 +998,7 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	UCHAR bytQualThresh;
 	int i;
 	UCHAR * bytToRS = &bytEncodedData[2]; 
-	UCHAR RSBytes[MAXNPAR];
+
 
 	blnFrameTypeOK = FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
 
@@ -940,6 +1064,8 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
  			//  Need: (2 bytes for Frame Type) +( Data + RS + 1 byte byteCount + 2 Byte CRC per carrier)
 
  			intEncodedDataPtr += intDataLen + 3 + intRSLen;
+
+			bytToRS += intDataLen + 3 + intRSLen;
 		}
 	}
 /*
@@ -1351,7 +1477,7 @@ UCHAR FrameCode(char * strFrameName)
 	return 0;
 }
 
-int GenCRC16(unsigned char * Data, unsigned short length)
+unsigned int GenCRC16(unsigned char * Data, unsigned short length)
 {
 	// For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
     // intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
