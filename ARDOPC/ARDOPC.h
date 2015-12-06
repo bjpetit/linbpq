@@ -45,7 +45,8 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 
 void ClearDataToSend();
 int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData);
-int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn);
+int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn);
+int EncodeDATAACK(int intQuality, UCHAR bytSessionID, UCHAR * bytreturn);
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
 //extern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
@@ -53,6 +54,9 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
 void SampleSink(short Sample);
 void SoundFlush();
+void StopCapture();
+void StartCapture();
+
 void SetFilter(void * Filter());
 
 void AddTrailer();
@@ -62,6 +66,7 @@ UCHAR ComputeTypeParity(UCHAR bytFrameType);
 void GenCRC16FrameType(char * Data, int Length, UCHAR bytFrameType);
 BOOL CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType);
 char * strlop(char * buf, char delim);
+void QueueCommandToHost(char * Cmd);
 
 #ifdef WIN32
 void ProcessNewSamples(short * Samples, int nSamples);
@@ -82,10 +87,10 @@ BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK);
 
 void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK);
 void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData);
-void ProcessRcvdARQFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK);
+void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL blnFrameDecodedOK);
 void InitializeConnection();
 
-void AddTagToDataAndSendToHost(char * Msg, char * Type);
+void AddTagToDataAndSendToHost(char * Msg, char * Type, int Len);
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
@@ -106,6 +111,22 @@ enum _ReceiveState		// used for initial receive testing...later put in correct p
 
 extern enum _ReceiveState State;
 
+enum _ARQBandwidth
+{
+	B200FORCED,
+	B500FORCED,
+	B1000FORCED,
+	B2000FORCED,
+	B200MAX,
+	B500MAX,
+	B1000MAX,
+	B2000MAX
+};
+
+extern enum _ARQBandwidth ARQBandwidth;
+	
+
+
 enum _ARDOPState
 {
 	OFFLINE,
@@ -118,7 +139,37 @@ enum _ARDOPState
 };
 
 extern enum _ARDOPState ProtocolState;
-extern enum _ARDOPState ARDOPState;
+//extern enum _ARDOPState ARDOPState;
+
+
+// Enum of ARQ Substates
+
+enum _ARQSubStates
+{
+	ISSConReq,
+	ISSConAck,
+	ISSData,
+	ISSId,
+	IRSConAck,
+	IRSData,
+	IRSBreak,
+	IRSfromISS,
+	DISCArqEnd,
+	None
+};
+
+extern enum _ARQSubStates ARQState;
+
+enum _ProtocolMode
+{
+	Undef,
+	FEC,
+	ARQ
+};
+
+extern enum _ProtocolMode ProtocolMode;
+
+extern enum _ARQSubStates ARQState;
 
 extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (10 ms) of the leader
 
@@ -136,10 +187,12 @@ extern char Callsign[10];
 extern BOOL wantCWID;
 extern int LeaderLength;
 extern int TrailerLength;
+extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
-extern char ProtocolMode[4];
+extern BOOL Capturing;
+extern BOOL SoundIsPlaying;
 
-extern time_t Now;
+extern int Now;
 
 extern int bytValidFrameTypesLength;
 

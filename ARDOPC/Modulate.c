@@ -36,6 +36,54 @@ void GetTwoToneLeaderWithSync(int intSymLen)
 	}
 }
 
+void SendLeaderAndSYNC(UCHAR * bytEncodedData, int intLeaderLen)
+{
+	int intMask = 0;
+	int intLeaderLenMS;
+	int j, k, m, n;
+	UCHAR bytMask;
+	UCHAR bytSymToSend;
+	short intSample;
+	if (intLeaderLen == 0)
+		intLeaderLenMS = LeaderLength;
+	else
+		intLeaderLenMS = intLeaderLen;
+
+ 	// Create the leader
+
+	GetTwoToneLeaderWithSync(intLeaderLenMS / 10);
+		       
+	//Create the 8 symbols (16 bit) 50 baud 4FSK frame type with Implied SessionID
+	// No reference needed for 4FSK
+
+	// note revised To accomodate 1 parity symbol per byte (10 symbols total)
+
+	for(j = 0; j < 2; j++)		 // for the 2 bytes of the frame type
+	{              
+		bytMask = 0xc0;
+		
+		for(k = 0; k < 5; k++)	 // for 5 symbols per byte (4 data + 1 parity)
+		{
+			if (k < 4)
+				bytSymToSend = (bytMask & bytEncodedData[j]) >> (2 * (3 - k));
+			else
+				bytSymToSend = ComputeTypeParity(bytEncodedData[0]);
+
+			for(n = 0; n < 240; n++)
+			{
+				if (((5 * j + k) & 1 ) == 0)
+					intSample = intFSK50bdCarTemplate[bytSymToSend][n];
+				else
+					intSample = -intFSK50bdCarTemplate[bytSymToSend][n]; // -sign insures no phase discontinuity at symbol boundaries
+
+				SampleSink(intSample);	
+			}
+			bytMask = bytMask >> 2;
+		}
+	}
+}
+
+
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
 {
 	// Function to Modulate data encoded for 4FSK, create
@@ -64,6 +112,8 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
+	StopCapture();
+
 	if (intBaud == 50)
 		initFilter(200);
 	else if (intNumCar == 1)
@@ -88,57 +138,16 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	case 50:
 		
 		intSampPerSym = 240;
-        // For FEC transmission the computed leader length = MCB.Leader length    
-		intSampleLen = intLeaderLenMS * 12 + 240 * 10 + intSampPerSym * (4 * (Len - 2) / intNumCar);
-
-		GetTwoToneLeaderWithSync(intLeaderLenMS / 10);
-
 		break;
                 
 	case 100:
 		
 		intSampPerSym = 120;
-		intSampleLen = intLeaderLenMS * 12 + 240 * 10 + intSampPerSym * (4 * (Len - 2) / intNumCar);
-		GetTwoToneLeaderWithSync(intLeaderLenMS / 10);
 	}
-	
-	// Create the leader
-	
+		
 	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
     
-	//Array.Copy(intLeader, 0, intSamples, 0, intLeader.Length) 'copy the leader + sync
-     
-
-	//Create the 8 symbols (16 bit) 50 baud 4FSK frame type with Implied SessionID
-	// No reference needed for 4FSK
-
-	// note revised To accomodate 1 parity symbol per byte (10 symbols total)
-
-	for(j = 0; j < 2; j++)		 // for the 2 bytes of the frame type
-	{              
-		bytMask = 0xc0;
-		
-		for(k = 0; k < 5; k++)		 // for 5 symbols per byte (4 data + 1 parity)
-		{
-			if (k < 4)
-				bytSymToSend = (bytMask & bytEncodedData[j]) >> (2 * (3 - k));
-			else
-				bytSymToSend = ComputeTypeParity(bytEncodedData[0]);
-
-			for(n = 0; n < 240; n++)
-			{
-				if (((5 * j + k) & 1 ) == 0)
-					intSample = intFSK50bdCarTemplate[bytSymToSend][n];
-				else
-					intSample = -intFSK50bdCarTemplate[bytSymToSend][n]; // -sign insures no phase discontinuity at symbol boundaries
-
-				SampleSink(intSample);	
-			}
-			bytMask = bytMask >> 2;
-		}
-	}
-
-	//' No reference needed for 4FSK
+	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
 
 	intDataPtr = 2;
 
@@ -249,7 +258,217 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	}
 }
 
+// Function to Modulate encoded data to 8FSK and send to sound interface
+
+void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+{
+	// Function to Modulate data encoded for 8FSK, create
+	// the 16 bit samples and send to sound interface
+
+	int intBaud, intDataLen, intRSLen, intSampleLen, intDataPtr, intSampPerSym, intDataBytesPerCar;
+	BOOL blnOdd;
+	int intNumCar;
+
+	short intSample;
+	unsigned int intThreeBytes = 0;
+
+    char strType[16] = "";
+    char strMod[16] = "";
+
+	UCHAR bytSymToSend, bytMask, bytMinQualThresh;
+	int intMask = 0;
+	int intLeaderLenMS;
+	int j, k, m, n;
+
+	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
+		return;
+
+	if (strcmp(strMod, "8FSK") != 0)
+		return;
+
+	StopCapture();
+
+	initFilter(200);
+
+//	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
+ //               strLastWavStream = strType
+  //          End If
+
+
+	intSampPerSym = 240;
+	
+	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
+    
+	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
+
+	intSampPerSym = 480;			// 25 Baud
+
+	intDataPtr = 2;
+
+ 	for (m = 0; m < intDataBytesPerCar; m += 3)  // For each byte of input data
+	{
+		intThreeBytes = bytEncodedData[intDataPtr++];
+		intThreeBytes = (intThreeBytes << 8) + bytEncodedData[intDataPtr++];
+		intThreeBytes = (intThreeBytes << 8) + bytEncodedData[intDataPtr++];
+		intMask = 0xE00000;
+                 
+		for (k = 0; k < 8; k++)
+		{
+			bytSymToSend = (intMask & intThreeBytes) >> (3 * (7 - k));
+
+			// note value of "+ 4" below allows using 16FSK template for 8FSK using only the "inner" 8 tones around 1500
+
+			for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
+			{
+				if((k & 1) == 0)
+					intSample = intFSK25bdCarTemplate[bytSymToSend + 4][n]; // Symbol vlaues 4- 11 (surrounding 1500 Hz)  
+				else
+					intSample = -intFSK25bdCarTemplate[bytSymToSend + 4][n]; // Symbol vlaues 4- 11 (surrounding 1500 Hz)  
+
+				SampleSink(intSample);
+			}
+			intMask = intMask >> 3;
+		}
+	}
+	SoundFlush();
+}
+
+// Function to Modulate encoded data to 16FSK and send to sound interface
+
+void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+{
+	// Function to Modulate data encoded for 16FSK, create
+	// the 16 bit samples and send to sound interface
+
+	int intBaud, intDataLen, intRSLen, intSampleLen, intDataPtr, intSampPerSym, intDataBytesPerCar;
+	BOOL blnOdd;
+	int intNumCar;
+
+	short intSample;
+	unsigned int intThreeBytes = 0;
+
+    char strType[16] = "";
+    char strMod[16] = "";
+
+	UCHAR bytSymToSend, bytMask, bytMinQualThresh;
+
+	int intMask = 0;
+	int intLeaderLenMS;
+	int j, k, m, n;
+
+	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
+		return;
+
+	if (strcmp(strMod, "16FSK") != 0)
+		return;
+
+	StopCapture();
+
+	initFilter(500);
+
+//	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
+ //               strLastWavStream = strType
+  //          End If
+
+	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below    
+	intSampPerSym = 480;			// 25 Baud
+
+	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
+
+	intDataPtr = 2;
+
+	for (m = 0; m < intDataBytesPerCar; m++)  // For each byte of input data 
+	{
+		bytMask = 0xF0;	 // Initialize mask each new data byte
+		for (k = 0; k < 2; k++)	// for 2 symbol values per byte of data
+		{
+			bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (4 * (1 - k)); // Values 0 - 15
+
+			for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
+			{
+				if((k & 1) == 0)
+					intSample = intFSK25bdCarTemplate[bytSymToSend][n];
+				else
+					intSample = -intFSK25bdCarTemplate[bytSymToSend][n];
+
+				SampleSink(intSample);
+			}
+			bytMask = bytMask >> 4;
+		}
+		intDataPtr++;
+	}
+	SoundFlush();
+}
+
+//	Function to Modulate data encoded for 4FSK High baud rate and create the integer array of 32 bit samples suitable for playing 
+
+
+
+void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+{
+	// Function to Modulate data encoded for 4FSK, create
+	// the 16 bit samples and send to sound interface
+
+	// Function works for 1, 2 or 4 simultaneous carriers 
+
+	int intNumCar, intBaud, intDataLen, intRSLen, intSampleLen, intDataPtr, intSampPerSym, intDataBytesPerCar;
+	BOOL blnOdd;
+
+	short intSample;
+
+    char strType[16] = "";
+    char strMod[16] = "";
+
+	UCHAR bytSymToSend, bytMask, bytMinQualThresh;
+
+	float dblCarScalingFactor;
+	int intMask = 0;
+	int intLeaderLenMS;
+	int j, k, m, n;
+
+	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
+		return;
+
+	if (strcmp(strMod, "4FSK") != 0)
+		return;
+
+	StopCapture();
+
+	initFilter(2000);
+
+//	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
+ //               strLastWavStream = strType
+  //          End If
+
+	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
+
+	intSampPerSym = 12000 / intBaud;
+    
+	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
+
+	intDataPtr = 2;
+
+	for (m = 0; m < intDataBytesPerCar; m++)  // For each byte of input data
+	{
+		bytMask = 0xC0;		 // Initialize mask each new data byte			
+		for (k = 0; k < 4; k++)		// for 4 symbol values per byte of data
+		{
+			bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
+			for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
+			{
+    			intSample = intFSK600bdCarTemplate[bytSymToSend][n];
+				SampleSink(intSample);
+			}
+			bytMask = bytMask >> 2;
+		}
+		intDataPtr += 1;
+	}
+	SoundFlush();
+}
+
+
 // Function to extract an 8PSK symbol from an encoded data array
+
 
 UCHAR GetSym8PSK(int intDataPtr, int k, int intCar, UCHAR * bytEncodedData, int intDataBytesPerCar)
 {
@@ -296,6 +515,8 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int in
 
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
+
+	StopCapture();
 
 	if (intNumCar == 1)
 		initFilter(200);
@@ -879,7 +1100,7 @@ void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
             ' *********************************
             ' Debug code to look at filter output
             'Dim objWT As New WaveTools
-            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = False Then
+            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = FALSE Then
             '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
             'End If
             'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\UnFiltered" & strFilename, 12000, 16, dblUnfilteredSamples)
@@ -888,9 +1109,9 @@ void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
             '************************************
         Catch ex As Exception
             Logs.Exception("[Filters.FSXmtFilterFSK500_1500Hz] Exception: " & ex.ToString)
-            Return Nothing
+            return Nothing
         End Try
-        Return intFilteredSamples
+        return intFilteredSamples
     End Function ' FSXmtFilter1000_1500Hz
 
     ' Function to apply 2000 Hz filter for transmit 
@@ -975,7 +1196,7 @@ void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
             ' *********************************
             ' Debug code to look at filter output
             'Dim objWT As New WaveTools
-            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = False Then
+            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = FALSE Then
             '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
             'End If
             'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\UnFiltered2000Hz.wav", 12000, 16, dblUnfilteredSamples)
@@ -984,9 +1205,9 @@ void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
             '************************************
         Catch ex As Exception
             Logs.Exception("[EncodeModulate.FSXmitFilterFSK2000_1500Hz] Exception: " & ex.ToString)
-            Return Nothing
+            return Nothing
         End Try
-        Return intFilteredSamples
+        return intFilteredSamples
     End Function  'FSXmtFilter2000_1500Hz
 */
 

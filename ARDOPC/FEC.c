@@ -30,16 +30,19 @@ UCHAR bytLastFECDataFrameSent;
 //char strFECMode[16] = "4FSK.500.100";
 //char strFECMode[16] = "4FSK.1000.100";
 //char strFECMode[16] = "4PSK.200.100";
-char strFECMode[16] = "8PSK.200.100";
+//char strFECMode[16] = "8PSK.200.100";
+//char strFECMode[16] = "8FSK.200.25";
+//char strFECMode[16] = "16FSK.500.25";
+char strFECMode[16] = "4FSK.2000.600";
 
 
 char strCurrentFrameFilename[16];
 
-time_t dttLastFECIDSent;
+int dttLastFECIDSent;
 
 extern int TXQueueLen;
 
-int intCalcLeader;        // the computed leader to use based on the reported Leader Length
+extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
 void WriteDebug(char * msg)
 {
@@ -56,7 +59,7 @@ BOOL GetNextFECFrame()
 	UCHAR bytData[512];
 	int Len;
 
-	UCHAR bytEncodedData[600];		// ??? May not need that much
+	UCHAR bytEncodedData[800];		// 
 
 	if (blnAbort)
 	{
@@ -116,20 +119,20 @@ sendit:
 		{
 			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
 
-	//			if (bytFrameType >= 0x7A && bytFrameType <= 0x7D)
-	//				intCurrentFrameSamples = Mod4FSK600BdData(bytData[0], bytData, intCalcLeader);  // Modulate Data frame 
-	//			else
-			Mod4FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
+			if (bytFrameType >= 0x7A && bytFrameType <= 0x7D)
+				Mod4FSK600BdDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
+			else
+				Mod4FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else if (strcmp(strMod, "16FSK") == 0)
 		{
-			EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
-				
-			//		intCurrentFrameSamples = Mod16FSKData(bytFrameType, bytData);
+			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
+			Mod16FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else if (strcmp(strMod, "8FSK") == 0)
 		{
-			EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+			Mod8FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else
 		{
@@ -182,8 +185,15 @@ sendit:
 	return TRUE;
 }
 
+extern int frameLen;
+
 void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK)
 {
+	bytData[frameLen] = 0;
+	if (blnFrameDecodedOK)
+		printf("Good FEC %s\n", bytData);
+	else
+		printf("Bad FEC %s\n", bytData);
 }
 		
 

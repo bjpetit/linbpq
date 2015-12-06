@@ -1,24 +1,69 @@
 // ARDOPC.cpp : Defines the entry point for the console application.
 //
 
+
+#ifdef WIN32
+#define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
+#define _CRT_SECURE_NO_DEPRECATE
+#define _USE_32BIT_TIME_T
+
+#include <windows.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+#endif
+
 #include "ARDOPC.h"
+
+
+void CompressCallsign(char * Callsign, UCHAR * Compressed);
+void CompressGridSquare(char * Square, UCHAR * Compressed);
+void  ASCIIto6Bit(char * Padded, UCHAR * Compressed);
+void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader);
+void SendID(BOOL blnEnableCWID);
+void PollReceivedSamples();
+void CheckTimers();
+
+
+// Config parameters
 
 char GridSquare[7] = "IO68VL";
 char Callsign[10] = "G8BPQ-2";
 BOOL wantCWID = FALSE;
 int LeaderLength = 200;
-int TrailerLength = 100;
+int TrailerLength = 0;
+int ARQTimeout = 120;
+
+//
+
+int tmrSendTimeout;
+
+int intCalcLeader;        // the computed leader to use based on the reported Leader Length
+int intRmtLeaderMeasure = 0;
 
 enum _ReceiveState State;
 enum _ARDOPState ProtocolState;
-enum _ARDOPState ARDOPState;
+//enum _ARDOPState ARDOPState;
 
 BOOL SoundIsPlaying = FALSE;
+BOOL Capturing = TRUE;
 
-char ProtocolMode[4]= "";
+BOOL blnAbort = FALSE;
+int intRepeatCount;
+BOOL blnARQDisconnect = FALSE;
+
+enum _ProtocolMode ProtocolMode = FEC;
+
+extern BOOL blnEnbARQRpt;
+extern BOOL blnDISCRepeating;
+extern char strRemoteCallsign[10];
+extern char strLocalCallsign[10];
+extern char strFinalIDCallsign[10];
+extern int dttTimeoutTrip;
+extern int dttLastFECIDSent;
+extern int intFrameRepeatInterval;
 
 
-time_t Now = 0;
+int Now = 0;
 
 const UCHAR bytValidFrameTypes[]=
 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
@@ -68,7 +113,7 @@ char TXQueue[100] = "HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHe
 //char TXQueue[100] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUHelloHelloHelloHelloHello\r\n";					// May malloc this, or change to cyclic buffer
 int TXQueueLen = 96;
 
-UCHAR bytSessionID;
+extern UCHAR bytSessionID;
 
 int intLastRcvdFrameQuality;
 
@@ -226,20 +271,143 @@ void FreeSemaphore()
 {
 }
 
+BOOL CheckValidCallsignSyntax(char * strTargetCallsign)
+{
+	return TRUE;
+}
 
 
+// Function polled by Main polling loop to see if time to play next wave stream
 
-void CompressCallsign(char * Callsign, UCHAR * Compressed);
-void CompressGridSquare(char * Square, UCHAR * Compressed);
-void  ASCIIto6Bit(char * Padded, UCHAR * Compressed);
-void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader);
+BOOL GetNextFrame()
+{
+	// returning TRUE sets frame pending in Main
 
-void SendID(BOOL blnEnableCWID);
+	if (ProtocolMode == FEC || ProtocolState == FECSend)
+	{
+		if (ProtocolState == FECSend || ProtocolState == FECRcv || ProtocolState == DISC)
+			return GetNextFECFrame();
+		else
+			return FALSE;
+	}
+	if (ProtocolMode == ARQ)
+		if (ARQState == None)
+			return FALSE;
+		else
+            return GetNextARQFrame();
 
+	return FALSE;
+}
+     
+//  Function to Get the next ARQ frame returns TRUE if frame repeating is enable 
+
+BOOL GetNextARQFrame()
+{
+	//Dim bytToMod(-1) As Byte
+
+	char HostCmd[80];
+
+	if (blnAbort)  // handles ABORT (aka Dirty Disconnect)
+	{
+		//If MCB.DebugLog Then Logs.WriteDebug("[ARDOPprotocol.GetNextARQFrame] ABORT...going to ProtocolState DISC, return FALSE")
+
+		ClearDataToSend();
+		
+		ProtocolState = DISC;
+		InitializeConnection();
+		blnAbort = FALSE;
+		blnEnbARQRpt = FALSE;
+		blnDISCRepeating = FALSE;
+		return FALSE;
+	}
+
+	if (blnDISCRepeating)	// handle the repeating DISC reply 
+	{
+		intRepeatCount += 1;
+		blnEnbARQRpt = FALSE;
+
+		if (intRepeatCount > 5)  // do 5 tries then force disconnect 
+		{
+			sprintf(HostCmd, "STATUS END NOT RECEIVED CLOSING ARQ SESSION WITH %s", strRemoteCallsign);
+			QueueCommandToHost(HostCmd);
+			blnDISCRepeating = FALSE;
+			blnEnbARQRpt = FALSE;
+			ClearDataToSend();
+			ProtocolState = DISC;
+			InitializeConnection();
+			return FALSE;			 //indicates end repeat
+		}
+		return TRUE;			// continue with DISC repeats
+	}
+/*        If GetARDOPProtocolState = ProtocolState.ISS And ARQState = ARQSubStates.ISSConReq Then ' Handles Repeating ConReq frames 
+            intRepeatCount += 1
+            If intRepeatCount > MCB.ARQConReqRepeats Then
+                ClearDataToSend()
+                SetARDOPProtocolState(ProtocolState.DISC)
+                If stcConnection.strRemoteCallsign.Trim <> "" Then
+                    objMain.objHI.QueueCommandToHost("STATUS CONNECT TO " & stcConnection.strRemoteCallsign & " FAILED!")
+                    InitializeConnection() : return FALSE 'indicates end repeat
+                Else
+                    objMain.objHI.QueueCommandToHost("STATUS END ARQ CALL")
+                    InitializeConnection() : return FALSE 'indicates end repeat
+                End If
+                ' Clear the mnuBusy status on the main form
+                Dim stcStatus As Status = Nothing
+                stcStatus.ControlName = "mnuBusy"
+                queTNCStatus.Enqueue(stcStatus)
+            Else
+                return TRUE ' continue with repeats
+            End If
+
+        ElseIf GetARDOPProtocolState = ProtocolState.ISS And ARQState = ARQSubStates.IRSConAck Then ' Handles ISS repeat of ConAck
+            intRepeatCount += 1
+            If intRepeatCount <= MCB.ARQConReqRepeats Then
+                return TRUE
+            Else
+                SetARDOPProtocolState(ProtocolState.DISC) : ARQState = ARQSubStates.DISCArqEnd
+                objMain.objHI.QueueCommandToHost("STATUS CONNECT TO " & stcConnection.strRemoteCallsign & " FAILED!") : InitializeConnection() : return FALSE
+            End If
+			*/
+
+	// Handles a timeout from an ARQ conneceted State
+
+	if (ProtocolState == ISS || ProtocolState == IDLE || ProtocolState == IRS)
+	{
+		if ((Now - dttTimeoutTrip) / 1000 > ARQTimeout) // (Handles protocol rule 1.7)
+		{
+            if (!blnTimeoutTriggered)
+			{
+				//If MCB.DebugLog Then Logs.WriteDebug("[ARDOPprotocol.GetNexARQFrame] Timeout setting SendTimeout timer to start.")
+
+				blnEnbARQRpt = FALSE;
+				blnTimeoutTriggered = TRUE; // prevents a retrigger
+                tmrSendTimeout = 100;
+				return FALSE;
+			}
+		}
+	}
+
+	// Handles the DISC state (no repeats)
+ 
+	if (ProtocolState == DISC) // never repeat in DISC state
+	{
+		blnARQDisconnect = FALSE;
+		return FALSE;
+	}
+
+	// ' Handles all other possibly repeated Frames
+
+	return blnEnbARQRpt;  // not all frame types repeat...blnEnbARQRpt is set/cleared in ProcessRcvdARQFrame
+}
+
+extern LARGE_INTEGER Frequency;
+extern LARGE_INTEGER StartTicks;
+extern LARGE_INTEGER NewTicks;
+	
 void ardopmain()
 {
-
 	blnTimeoutTriggered = FALSE;
+	ProtocolState = DISC;
 
 //	GenerateTwoToneLeaderTemplate();
 //	GenerateFSKTemplates();
@@ -247,20 +415,52 @@ void ardopmain()
 
 	InitSound();
 
-//	 SendID(0);
+	ProtocolMode = ARQ;
+	SendARQConnectRequest("GM8BPQ", "GM8BPQ-2");
+
+//	ProtocolState = FECSend;
+//	GetNextFECFrame();
+//	ProtocolState = FECSend;
+//	GetNextFECFrame();
+//	ProtocolState = FECSend;
+//	GetNextFECFrame();
+
+//	ProtocolState = DISC;
+
+	ProtocolMode = ARQ;
+
+	while(1)
+	{
+		// Get Time Now is millisecs since program start
+
+#ifdef WIN32
+		QueryPerformanceCounter(&NewTicks);
+		Now = (NewTicks.QuadPart - StartTicks.QuadPart) / Frequency.QuadPart;
+#endif
+	//	if (Capturing)
+			PollReceivedSamples();
+
+		CheckTimers();	
+
+		if (!SoundIsPlaying)
+			GetNextARQFrame();
+	
+
+		Sleep(10);
+	}
+
+	SendID(0);
 
 #ifdef WIN32
 	 
 	ProtocolState = FECSend;
-	GetNextFECFrame();
-
-
+//	GetNextFECFrame();
 
 	ProtocolState = FECSend;
-	GetNextFECFrame();
+//	GetNextFECFrame();
 
 	ProtocolState = FECSend;
-	GetNextFECFrame();
+//	GetNextFECFrame();
 
 #endif
 // 
@@ -277,7 +477,7 @@ void SendCWID(char * Callsign, BOOL x)
 
 // Subroutine to generate 1 symbol of leader
 
-//	 Returns pointer to Frame Type Name
+//	 returns pointer to Frame Type Name
 
 const char * Name(UCHAR bytID)
 {
@@ -295,11 +495,11 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 			   int * intBaud, int * intDataLen, int * intRSLen, UCHAR * bytQualThres, char * strType)
 {
 	//Used to "lookup" all parameters by frame Type. 
-	// Returns True if all fields updated otherwise FALSE (improper bytFrameType)
+	// returns TRUE if all fields updated otherwise FALSE (improper bytFrameType)
 
 	// 1 Carrier 4FSK control frames 
    
-	if (bytFrameType >= 0 &&  bytFrameType <= 0x1F)
+	if ((bytFrameType >= 0 &&  bytFrameType <= 0x1F) || bytFrameType >= 0xE0)
 	{
 		*blnOdd = (1 & bytFrameType) != 0;
 		*intNumCar = 1;
@@ -309,6 +509,8 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*intBaud = 50;
 		*bytQualThres = 40;
 	}
+	else
+	{
 
 	switch(bytFrameType)
 	{
@@ -339,6 +541,13 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		break;
 
 	case 0x30:
+	case 0x31:
+	case 0x32:
+	case 0x33:
+	case 0x34:
+	case 0x35:
+	case 0x36:
+	case 0x37:
 	case 0x38:
 
 		*blnOdd = (1 & bytFrameType) != 0;
@@ -351,6 +560,8 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		break;
 
 	case 0x39:
+	case 0x3A:
+	case 0x3B:
 	case 0x3C:
 
 		*blnOdd = (1 & bytFrameType) != 0;
@@ -709,6 +920,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		//'Logs.Exception("[PSKDataInfo] No data for frame type= H" & Format(bytFrameType, "x"))
         return FALSE;
 	}
+	}
 	
 	if (bytFrameType >= 0 && bytFrameType <= 0x1F)
 		strcpy(strType,strFrameType[0]);
@@ -765,7 +977,7 @@ BOOL RSDecode(UCHAR * bytRcv, int Length, int CheckLen, BOOL * blnRSOK)
 	//	to allow for this, but so far haven't found a way to mske the decoder
 	//	work, so I have to reverse the data and checksum to decode G8BPQ Nov 2015
 
-	//	Returns TRUE if was ok or correction succeeded, FALSE if correction impossible
+	//	returns TRUE if was ok or correction succeeded, FALSE if correction impossible
 
 	UCHAR intTemp[256];				// WOrk Area to pass to Decoder		
 	int i;
@@ -999,7 +1211,6 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	int i;
 	UCHAR * bytToRS = &bytEncodedData[2]; 
 
-
 	blnFrameTypeOK = FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
 
 	if (intDataLen == 0 || Length == 0 || !blnFrameTypeOK)
@@ -1007,9 +1218,6 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 		//Logs.Exception("[EncodeFSKFrameType] Failure to update parameters for frame type H" & Format(bytFrameType, "X") & "  DataToSend Len=" & bytDataToSend.Length.ToString)
 		return 0;
 	}
-	
-	//strFrameName = strType;
-
 	
 	//	Generate the 2 bytes for the frame type data:
 	
@@ -1020,7 +1228,6 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 
 	intDataToSendPtr = 0;
 	intEncodedDataPtr = 2;
-	MaxCorrections = intRSLen / 2;  // RS length must be even
 
 	if (intBaud < 600 || intDataLen < 600)
 	{
@@ -1054,12 +1261,7 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 		
 			GenCRC16FrameType(bytToRS, intDataLen + 1, bytFrameType); // calculate the CRC on the byte count + data bytes
 
-//			EncLen = RSEncode(bytToRS, RSBytes, intDataLen, intRSLen);  // Generate the RS encoding ...now 14 bytes total
- 			RSEncode(bytToRS, bytToRS+intDataLen+3, intDataLen + 3, intRSLen);  // Generate the RS encoding ...now 14 bytes total
-        
-       
-	//		memcpy(&bytEncodedData[intEncodedDataPtr], bytToRS, intDataLen);
- 
+			RSEncode(bytToRS, bytToRS+intDataLen+3, intDataLen + 3, intRSLen);  // Generate the RS encoding ...now 14 bytes total
 
  			//  Need: (2 bytes for Frame Type) +( Data + RS + 1 byte byteCount + 2 Byte CRC per carrier)
 
@@ -1068,50 +1270,119 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 			bytToRS += intDataLen + 3 + intRSLen;
 		}
 	}
-/*
+
 	// special case for 600 baud 4FSK which has 600 byte data field sent as three sequencial (200 byte + 50 byte RS) groups
 
-	ReDim bytEncodedData((2 + intDataLen + intRSLen + 9) - 1) ' handles 3 groups of data with independed count and CRC
-            bytEncodedData(0) = bytFrameType
-            bytEncodedData(1) = bytFrameType Xor stcConnection.bytSessionID
-            objRS8.MaxCorrections = intRSLen \ 6
-            For i As Integer = 0 To 2 ' for three blocks of RS data
-                ReDim bytToRS(intDataLen \ 3 + 3 - 1)
-                intCarDataCnt = bytDataToSend.Length - intDataToSendPtr
-                If intCarDataCnt >= intDataLen \ 3 Then
-                    bytToRS(0) = intDataLen \ 3
-                    Array.Copy(bytDataToSend, intDataToSendPtr, bytToRS, 1, intDataLen \ 3)
-                    intDataToSendPtr += intDataLen \ 3
-                Else
-                    bytToRS(0) = bytDataToSend.Length - intDataToSendPtr
-                    Array.Copy(bytDataToSend, intDataToSendPtr, bytToRS, 1, bytDataToSend.Length - intDataToSendPtr)
-                    intDataToSendPtr = intDataLen
-                End If
-                GenCRC16FrameType(bytToRS, 0, intDataLen \ 3, CByte(bytFrameType)) 'calculate the CRC on the byte count  data bytes
-                bytToRS = objRS8.RSEncode(bytToRS)
-                Array.Copy(bytToRS, 0, bytEncodedData, intEncodedDataPtr, bytToRS.Length)
-                intEncodedDataPtr += bytToRS.Length
-            Next i
-            Return bytEncodedData
-  */
+	for (i = 0; i < 3; i++)		 // for three blocks of RS data
+	{
+		intCarDataCnt = Length - intDataToSendPtr;
+			
+		if (intCarDataCnt >= intDataLen /3 ) // why not > ??
+		{
+			// Won't all fit 
+
+			bytToRS[0] = intDataLen / 3;
+			intStartIndex = intEncodedDataPtr;
+			memcpy(&bytToRS[1], &bytDataToSend[intDataToSendPtr], intDataLen / 3);
+			intDataToSendPtr += intDataLen /3;
+		}
+		else
+		{
+			// Last bit
+
+			bytToRS[0] = intCarDataCnt;  // Could be 0 if insuffient data for # of carriers 
+
+			if (intCarDataCnt > 0)
+			{
+				memcpy(&bytToRS[1], &bytDataToSend[intDataToSendPtr], intCarDataCnt);
+                intDataToSendPtr += intCarDataCnt;
+			}	
+		}
+		GenCRC16FrameType(bytToRS, intDataLen / 3 + 1, bytFrameType); // calculate the CRC on the byte count + data bytes
+
+ 		RSEncode(bytToRS, bytToRS + intDataLen / 3 + 3, intDataLen / 3 + 3, intRSLen / 3);  // Generate the RS encoding ...now 14 bytes total
+		intEncodedDataPtr += intDataLen / 3  + 3 + intRSLen / 3;
+		bytToRS += intDataLen / 3  + 3 + intRSLen / 3;
+	}		
 	return intEncodedDataPtr;
 }
 	
+//  Function to encode ConnectRequest frame 
 
-int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn)
+BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _ARQBandwidth ARQBandwidth, UCHAR * bytReturn)
 {
-	// Function to encodes ID frame 
-	// Returns length of encoded message 
+	//  Encodes a 4FSK 200 Hz BW Connect Request frame ( ~ 1950 ms with default leader/trailer)
 
 	UCHAR * bytToRS= &bytReturn[2];
 
-	 // If (Not CheckValidCallsignSyntax(strMyCallsign)) Then
-     //       Logs.Exception("[EncodeModulate.EncodeIDFrame] Illegal Callsign syntax or Gridsquare length. MyCallsign = " & strMyCallsign & ", Gridsquare = " & strGridSquare)
-      //      Return Nothing
+	if (strcmp(strTargetCallsign, "CQ") != 0)  // skip syntax checking for psuedo call "CQ"
+	{
+		if (!CheckValidCallsignSyntax(strMyCallsign))
+		{
+			//Logs.Exception("[EncodeModulate.EncodeARQConnectRequest] Illegal Call sign syntax. MyCallsign = " & strMyCallsign & ", TargetCallsign = " & strTargetCallsign)
+
+			return 0;
+		}
+		if (!CheckValidCallsignSyntax(strTargetCallsign) || !CheckValidCallsignSyntax(strMyCallsign))
+		{            
+			//Logs.Exception("[EncodeModulate.EncodeARQConnectRequest] Illegal Call sign syntax. MyCallsign = " & strMyCallsign & ", TargetCallsign = " & strTargetCallsign)
+			
+			return 0;
+		}
+	}		
+	if (ARQBandwidth == B200MAX)
+		bytReturn[0] = 0x31;
+	else if (ARQBandwidth == B500MAX)
+		bytReturn[0] = 0x32;
+	else if (ARQBandwidth == B1000MAX)
+		bytReturn[0] = 0x33;
+	else if (ARQBandwidth == B2000MAX)
+		bytReturn[0] = 0x34;
+
+	else if (ARQBandwidth == B200FORCED)
+		bytReturn[0] = 0x35;
+	else if (ARQBandwidth == B500FORCED)
+		bytReturn[0] = 0x36;
+	else if (ARQBandwidth == B1000FORCED)
+		bytReturn[0] = 0x37;
+	else if (ARQBandwidth == B2000FORCED)
+		bytReturn[0] = 0x38;
+	else
+	{
+		//Logs.Exception("[EncodeModulate.EncodeFSK500_1S] Bandwidth error.  Bandwidth = " & strBandwidth)
+		return 0;
+	}
+
+	bytReturn[1] = bytReturn[0] ^ 0xFF;  // Connect Request always uses session ID of &HFF
+
+	// Modified May 24, 2015 to use RS instead of 2 byte CRC. (same as ID frame)
+
+	CompressCallsign(strMyCallsign, &bytToRS[0]);
+	CompressCallsign(strTargetCallsign, &bytToRS[6]);  //this uses compression to accept 4, 6, or 8 character Grid squares.
+
+	RSEncode(bytToRS, &bytReturn[14], 12, 2);  // Generate the RS encoding ...now 14 bytes total
+ 
+	return 16;
+}
 
 
-	bytReturn[0] = 0x30;
-	bytReturn[1] = 0x30 ^ 0xFF;
+ 
+int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn)
+{
+	// Function to encodes ID frame 
+	// returns length of encoded message 
+
+	UCHAR * bytToRS= &bytreturn[2];
+
+	 if (!CheckValidCallsignSyntax(Callsign))
+	 {
+		//       Logs.Exception("[EncodeModulate.EncodeIDFrame] Illegal Callsign syntax or Gridsquare length. MyCallsign = " & strMyCallsign & ", Gridsquare = " & strGridSquare)
+		
+		 return 0;
+	 }
+
+	bytreturn[0] = 0x30;
+	bytreturn[1] = 0x30 ^ 0xFF;
 
 	// Modified May 9, 2015 to use RS instead of 2 byte CRC.
        
@@ -1120,10 +1391,89 @@ int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytReturn)
     if (Square[0])
 		CompressGridSquare(Square, &bytToRS[6]);  //this uses compression to accept 4, 6, or 8 character Grid squares.
 
-	RSEncode(bytToRS, &bytReturn[14], 12, 2);  // Generate the RS encoding ...now 14 bytes total
+	RSEncode(bytToRS, &bytreturn[14], 12, 2);  // Generate the RS encoding ...now 14 bytes total
 
 	return 16;
 }
+
+//  Funtion to encodes a short 4FSK 50 baud Control frame  (2 bytes total) BREAK, END, DISC, IDLE, ConRejBusy, ConRegBW  
+
+int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn)
+{
+	// Encodes a short control frame (normal length ~320 ms with default 160 ms leader+trailer) 
+    
+	//If IsShortControlFrame(intFrameCode) Then
+    //        Logs.Exception("[EncodeModulate.EncodeFSKControl] Illegal control frame code: H" & Format(intFrameCode, "X"))
+    //        return Nothing
+    //    End If
+
+	bytreturn[0] = bytFrameType;
+	bytreturn[1] = bytFrameType ^ bytSessionID;
+
+	return 2;		// Length
+}
+
+//  Function to encode a CONACK frame with Timing data  (6 bytes total)  
+
+int EncodeConACKwTiming(UCHAR bytFrameType, int intRcvdLeaderLenMs, UCHAR bytSessionID, UCHAR * bytreturn)
+{
+	// Encodes a Connect ACK with one byte Timing info. (Timing info repeated 2 times for redundancy) 
+
+	//If intFrameCode < &H39 Or intFrameCode > &H3C Then
+    //        Logs.Exception("[EncodeConACKwTiming] Illegal Frame code: " & Format(intFrameCode, "X"))
+    //        return Nothing
+    //    End If
+
+	UCHAR bytTiming = min(255, intRcvdLeaderLenMs / 10);  // convert to 10s of ms.
+
+	if (intRcvdLeaderLenMs > 2550 || intRcvdLeaderLenMs < 0)
+	{
+		// Logs.Exception("[EncodeConACKwTiming] Timing value out of range: " & intRcvdLeaderLenMs.ToString & " continue with forced value = 0")
+        bytTiming = 0;
+	}
+
+	bytreturn[0] = bytFrameType;
+	bytreturn[1] = bytFrameType ^ bytSessionID;
+
+	bytreturn[2] = bytTiming;
+	bytreturn[3] = bytTiming;
+
+	return 4;
+}
+
+//	' Function to encode an ACK control frame  (2 bytes total) ...with 5 bit Quality code 
+
+int EncodeDATAACK(int intQuality, UCHAR bytSessionID, UCHAR * bytreturn)
+{
+	// Encodes intQuality and DataACK frame (normal length ~320 ms with default leader/trailer)
+
+	int intScaledQuality;
+
+	intScaledQuality = max(0, (intQuality / 2) - 19); // scale quality value to fit 5 bit field of 0 represents Q <= of 38 (pretty poor)
+	
+	bytreturn[0] = 0xE0 + intScaledQuality;		//ACKs 0xE0 - 0xFF
+	bytreturn[1] = bytreturn[0] ^ bytSessionID;
+
+	return 2;
+}
+
+//  Function to encode a NAK frame  (2 bytes total) ...with 5 bit Quality code 
+
+int EncodeDATANAK(int intQuality , UCHAR bytSessionID, UCHAR * bytreturn)
+{
+	// Encodes intQuality and DataACK frame (normal length ~320 ms with default leader/trailer)
+
+	int intScaledQuality;
+
+	intScaledQuality = max(0, (intQuality / 2) - 19); // scale quality value to fit 5 bit field of 0 represents Q <= of 38 (pretty poor)
+	
+	bytreturn[0] = intScaledQuality;		// NAKS 00 - 0x1F
+	bytreturn[1] = bytreturn[0] ^ bytSessionID;
+
+	return 2;
+}
+
+
 
 void SendID(BOOL blnEnableCWID)
 {
@@ -1136,6 +1486,8 @@ void SendID(BOOL blnEnableCWID)
 	if (SoundIsPlaying)
 		return;
 
+	return;
+
     if (GridSquare[0] == 0)
 	{
 		Len = Encode4FSKIDFrame(Callsign, "No GS", bytEncodedBytes);
@@ -1144,10 +1496,10 @@ void SendID(BOOL blnEnableCWID)
 	else
 	{
 		Len = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
-		sprintf(bytIDSent," %s:[%s] ", Callsign, GridSquare);
+		Len = sprintf(bytIDSent," %s:[%s] ", Callsign, GridSquare);
 	}
 
-	AddTagToDataAndSendToHost(bytIDSent, "IDF");
+	AddTagToDataAndSendToHost(bytIDSent, "IDF", Len);
 
 	// On embedded platforms we don't have the memory to create full sound stream before playiong,
 	// so this is structured differently from Rick's code
@@ -1249,12 +1601,16 @@ void Bit6ToASCII(UCHAR * Padded, UCHAR * UnCompressed)
 
 // Function to compress callsign (up to 7 characters + optional "-"SSID   (-0 to -15 or -A to -Z) 
     
-void CompressCallsign(char * Callsign, UCHAR * Compressed)
+void CompressCallsign(char * inCallsign, UCHAR * Compressed)
 {
-	char * Dash = strchr(Callsign, '-');
+	char Callsign[10];
 	char Padded[16];
 	int SSID;
+	char * Dash;
 
+	memcpy(Callsign, inCallsign, 10);
+	Dash = strchr(Callsign, '-');
+	
 	if (Dash == 0)		// if No SSID
 	{
 		strcpy(Padded, Callsign);
@@ -1297,7 +1653,7 @@ void CompressGridSquare(char * Square, UCHAR * Compressed)
   
 void DeCompressCallsign(char * bytCallsign, char * returned)
 {
-	char bytTest[10];
+	char bytTest[10] = "";
 	char SSID[8] = "";
     
 	Bit6ToASCII(bytCallsign, bytTest);
@@ -1321,7 +1677,7 @@ void DeCompressCallsign(char * bytCallsign, char * returned)
 
 void DeCompressGridSquare(char * bytGS, char * returned)
 {
-	char bytTest[10];
+	char bytTest[10] = "";
 	Bit6ToASCII(bytGS, bytTest);
 
 	strlop(bytTest, ' ');
@@ -1591,7 +1947,7 @@ void GenCRC16FrameType(char * Data, int Length, UCHAR bytFrameType)
  
 BOOL  CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType)
 {
-	// Returns True if CRC matches, else FALSE
+	// returns TRUE if CRC matches, else FALSE
     // For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
     // intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
 
@@ -1615,7 +1971,7 @@ void ClearDataToSend()
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen)
 {
-	int Returned = MaxLen;
+	int returned = MaxLen;
 
 	if (MaxLen == 0)
 		return 0;
@@ -1623,20 +1979,147 @@ int GetDataFromQueue(UCHAR * Data, int MaxLen)
 	GetSemaphore();
 
 	if (MaxLen > TXQueueLen)
-		Returned = TXQueueLen;
+		returned = TXQueueLen;
 
-	memcpy(Data, TXQueue, Returned);
+	memcpy(Data, TXQueue, returned);
 
-	TXQueueLen -= Returned;
+	TXQueueLen -= returned;
 
 	if (TXQueueLen)
-		memmove(TXQueue, &TXQueue[Returned], TXQueueLen);
+		memmove(TXQueue, &TXQueue[returned], TXQueueLen);
 
 	FreeSemaphore();
 
-	return Returned;
+	return returned;
 }
 
 void KeyPTT(BOOL State)
 {
+}
+
+// Timer Rotines
+
+void CheckTimers()
+{
+	//  Event triggered by tmrSendTimeout elapse. Ends an ARQ session and sends a DISC frame 
+    
+	if (tmrSendTimeout)
+	{
+		tmrSendTimeout--;
+
+		if (tmrSendTimeout == 0)
+		{
+			unsigned char bytEncodedBytes[16];
+			int Len;
+			char HostCmd[80];
+
+			// (Handles protocol rule 1.7)
+       
+			//Dim dttStartWait As Date = Now
+			//While objMain.blnLastPTT And Now.Subtract(dttStartWait).TotalSeconds < 10
+			// Thread.Sleep(50)
+			// End While
+
+			//if (DebugLog) Then Logs.WriteDebug("ARDOPprotocol.tmrSendTimeout]  ARQ Timeout from ProtocolState: " & GetARDOPProtocolState.ToString & "  Going to DISC state")
+        
+			// Confirmed proper operation of this timeout and rule 4.0 May 18, 2015
+			// Send an ID frame (Handles protocol rule 4.0)
+
+            Len = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
+			Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+			dttLastFECIDSent = Now;
+			
+			// If MCB.AccumulateStats Then LogStats()
+
+			QueueCommandToHost("DISCONNECTED");
+			
+			sprintf(HostCmd, "STATUS ARQ Timeout from Protocol State:  %d", ProtocolState);
+			QueueCommandToHost(HostCmd);
+			blnEnbARQRpt = FALSE;
+			//Thread.Sleep(2000)
+			ClearDataToSend();
+
+			Len = Encode4FSKControl(0x29, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(0x29, &bytEncodedBytes[0], Len, LeaderLength);		// only returns when all sent
+
+			intFrameRepeatInterval = 2000;
+			ProtocolState = DISC;
+			
+			InitializeConnection(); // reset all Connection data
+				
+			// Clear the mnuBusy status on the main form
+			//Dim stcStatus As Status = Nothing
+		    //stcStatus.ControlName = "mnuBusy"
+			//stcStatus.Text = "FALSE"
+		    //queTNCStatus.Enqueue(stcStatus)
+        
+			blnTimeoutTriggered = FALSE ;// prevents a retrigger
+		}
+	}
+
+    // Elapsed Subroutine for Pending timeout
+
+	/*
+    Private Sub tmrIRSPendingTimeout_Elapsed(sender As Object, e As System.Timers.ElapsedEventArgs) Handles tmrIRSPendingTimeout.Elapsed
+        tmrIRSPendingTimeout.Stop()
+       
+        If MCB.DebugLog Then Logs.WriteDebug("ARDOPprotocol.tmrIRSPendingTimeout]  ARQ Timeout from ProtocolState: " & GetARDOPProtocolState.ToString & "  Going to DISC state")
+        objMain.objHI.QueueCommandToHost("DISCONNECTED")
+        objMain.objHI.QueueCommandToHost("STATUS ARQ CONNECT REQUEST TIMEOUT FROM PROTOCOL STATE: " & GetARDOPProtocolState.ToString & " @ " & TimestampEx())
+        blnEnbARQRpt = False
+        Thread.Sleep(2000)
+        SetARDOPProtocolState(ProtocolState.DISC)
+        InitializeConnection() ' reset all Connection data
+        ' Clear the mnuBusy status on the main form
+        Dim stcStatus As Status = Nothing
+        stcStatus.ControlName = "mnuBusy"
+        stcStatus.Text = "FALSE"
+        queTNCStatus.Enqueue(stcStatus)
+    End Sub  'tmrIRSPendingTimeout_Elapsed
+
+    ' Subroutine for tmrFinalIDElapsed
+    Private Sub tmrFinalID_Elapsed(sender As Object, e As System.Timers.ElapsedEventArgs) Handles tmrFinalID.Elapsed
+        Dim bytDataToMod() As Byte
+
+        tmrFinalID.Stop()
+        If MCB.DebugLog Then Logs.WriteDebug("[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (" & strFinalIDCallsign & ", [" & MCB.GridSquare & "])")
+        If CheckValidCallsignSyntax(strFinalIDCallsign) Then
+            bytDataToMod = objMain.objMod.Encode4FSKIDFrame(strFinalIDCallsign, MCB.GridSquare, strCurrentFrameFilename)
+            intCurrentFrameSamples = objMain.objMod.Mod4FSKData(&H30, bytDataToMod)
+            dttLastFECIDSent = Now
+            objMain.SendFrame(intCurrentFrameSamples, strCurrentFrameFilename, 1000)
+        End If
+    End Sub  ' tmrFinalIDElapsed
+
+    ' Function to send 10 minute ID
+    Private Function Send10MinID() As Boolean
+        Dim dttSafetyBailout As Date = Now
+        If Now.Subtract(dttLastFECIDSent).TotalMinutes > 10 And Not blnDISCRepeating Then
+            If MCB.DebugLog Then Logs.WriteDebug("[ARDOPptocol.Send10MinID] Send ID Frame")
+            ' Send an ID frame (Handles protocol rule 4.0)
+            blnEnbARQRpt = False
+            Dim bytEncodedBytes() As Byte = objMain.objMod.Encode4FSKIDFrame(stcConnection.strLocalCallsign, MCB.GridSquare, strCurrentFrameFilename)
+            intCurrentFrameSamples = objMain.objMod.Mod4FSKData(&H30, bytEncodedBytes)
+            objMain.SendFrame(intCurrentFrameSamples, strCurrentFrameFilename, intARQDefaultDlyMs)
+            dttLastFECIDSent = Now
+            ' Hold until PTT goes true
+            While objMain.blnLastPTT = False And Now.Subtract(dttSafetyBailout).TotalMilliseconds < 4000
+                Thread.Sleep(100)
+            End While
+            ' Now hold until PTT goes false
+            While objMain.blnLastPTT = True And Now.Subtract(dttSafetyBailout).TotalMilliseconds < 4000
+                Thread.Sleep(100)
+            End While
+            If Now.Subtract(dttSafetyBailout).TotalMilliseconds > 4000 Then
+                Logs.Exception("[ARDOPprotocol.Send10MinID] Safety bailout!")
+                Return True
+            Else
+                Thread.Sleep(200)
+                Return True
+            End If
+        Else
+            Return False
+        End If
+    End Function  'Send10MinID()
+*/
 }

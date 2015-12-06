@@ -262,7 +262,7 @@ Find_Roots (void)
  * Evaluate Omega(actually Psi)/Lambda' at the roots
  * alpha^(-i) for error locs i. 
  *
- * Returns 1 if everything ok, or 0 if an out-of-bounds error is found
+ * returns 1 if everything ok, or 0 if an out-of-bounds error is found
  *
  */
 

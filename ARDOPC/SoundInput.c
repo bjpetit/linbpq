@@ -2,12 +2,9 @@
 
 #include "ARDOPC.h"
 
-extern int Ticks;
 
 //#define max(x, y) ((x) > (y) ? (x) : (y))
 //#define min(x, y) ((x) < (y) ? (x) : (y))
-
-BOOL Capturing = TRUE;
 
 char strRcvFrameTag[16];
 
@@ -18,11 +15,13 @@ int intLeaderRcvdMs = 1000;		// Leader length??
 short intPSKRefPhase;			// PSK Reference symbol in milliradians) (+/- 3142)
 
 extern int intLastRcvdFrameQuality;
+extern int intReceivedLeaderLen;
+extern UCHAR bytLastDataFrameType;
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
 
-short intFilteredMixedSamples[3600];	// Should be plenty
+short intFilteredMixedSamples[6000];	// Should be plenty
 int intFilteredMixedSamplesLength = 0;
 
 int intFrameType;				// Type we are decoding
@@ -70,7 +69,7 @@ int frameLen;
 
 // This can be optimized quite a bit to save space
 
-UCHAR bytFrameData1[MAX_RAW_LENGTH];		// Received chars
+UCHAR bytFrameData1[760];					// Received chars
 UCHAR bytFrameData2[MAX_RAW_LENGTH];		// Received chars
 //UCHAR bytFrameData3[MAX_RAW_LENGTH];		// Received chars
 //UCHAR bytFrameData4[MAX_RAW_LENGTH];		// Received chars
@@ -101,11 +100,13 @@ int dttLastGoodFrameTypeDecode = 0;
 float dblOffsetHz = 0;;
 int dttLastLeaderDetect;
 
-int intRmtLeaderMeasure = 0;
+extern int intRmtLeaderMeasure;
 
-BOOL Connected = FALSE;
-BOOL Pending = FALSE;
-UCHAR PendingSessionID;
+BOOL blnARQConnected;
+
+
+extern BOOL blnPending;
+extern UCHAR bytPendingSessionID;
 extern UCHAR bytSessionID;
 
 int dttLastGoodFrameTypeDecod;
@@ -322,7 +323,7 @@ void InitializeMixedSamples()
 {
 	// Measure the time from release of PTT to leader detection of reply.
 
-	intARQRTmeasuredMs = min(10000, Ticks - dttStartRTMeasure); //?????? needs work
+	intARQRTmeasuredMs = min(10000, Now - dttStartRTMeasure); //?????? needs work
 	intPriorMixedSamplesLength = 120;  // zero out prior samples in Prior sample buffer
 	intFilteredMixedSamplesLength = 0;	// zero out the FilteredMixedSamples array
 	intMFSReadPtr = 30;				// reset the MFSReadPtr offset 30 to accomodate the filter delay
@@ -544,9 +545,9 @@ void MixNCOFilter(short * intNewSamples, int Length, float dblOffsetHz)
 	
 	
 	// showed no significant difference if the 2000 Hz filer used for all bandwidths.
-	printtick("Start Filter");
+//	printtick("Start Filter");
 	FSMixFilter2000Hz(intMixedSamples, intMixedSamplesLength);   // filter through the FS filter (required to reject image from Local oscillator)
-	printtick("Done Filter");
+//	printtick("Done Filter");
 
 	// save for analysys
 
@@ -667,7 +668,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			{
 				printtick("Got Leader");
 
-				dttLastLeaderDetect = Ticks;
+				dttLastLeaderDetect = Now;
                 //        stcStatus.ControlName = "lblOffset"
                 //        stcStatus.Text = "Offset: " & (Format(dblOffsetHz, "#0.0").PadLeft(6)) & " Hz"
                  //       queTNCStatus.Enqueue(stcStatus)
@@ -693,12 +694,12 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	// I'm going to filter all samples into intFilteredMixedSamples.
 	//I'll need to limit the size of this soon
 
-	printtick("Start Mix");
+//	printtick("Start Mix");
 
 	MixNCOFilter(Samples, nSamples, dblOffsetHz); // Mix and filter new samples (Mixing consumes all intRcvdSamples)
 	nSamples = 0;	//	all used
 
-	printtick("Done Mix Samples");
+//	printtick("Done Mix Samples");
 
 	// Acquire Symbol Sync 
 
@@ -759,13 +760,13 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 	if (State == AcquireFrameType)
 	{
-		printtick("getting frame type");
+//		printtick("getting frame type");
 
 		intFrameType = Acquire4FSKFrameType();
 		if (intFrameType == -2)
 		{
-			sprintf(Msg, "not enough %d %d", intFilteredMixedSamplesLength, intMFSReadPtr);
-			printtick(Msg);
+//			sprintf(Msg, "not enough %d %d", intFilteredMixedSamplesLength, intMFSReadPtr);
+//			printtick(Msg);
 			return;		//  insufficient samples
 		}
 
@@ -828,7 +829,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	
 			State = AcquireFrame;
 			
-			if (strcmp(ProtocolMode, "FEC") == 0 && IsDataFrame(intFrameType) && ProtocolState != FECSend)
+			if (ProtocolMode == FEC && IsDataFrame(intFrameType) && ProtocolState != FECSend)
 				ProtocolState = FECRcv;
 		}
 	}
@@ -858,31 +859,34 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		
 		if (blnFrameDecodedOK)
 		{
-			if (strcmp(ProtocolMode, "FEC") == 0)
+			if (ProtocolMode == FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame
 					ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);
 				else if (intFrameType == 0x30)
-					AddTagToDataAndSendToHost(bytData, "IDF");
+					AddTagToDataAndSendToHost(bytData, "IDF", frameLen);
 				else if (intFrameType >= 0x31 && intFrameType <= 0x38)
 					ProcessUnconnectedConReqFrame(intFrameType, bytData);
 			}				
-			else if (strcmp(ProtocolMode, "ARQ") == 0)
+			else if (ProtocolMode == ARQ)
 			{
 				if (!blnTimeoutTriggered)
-					ProcessRcvdARQFrame(intFrameType, bytData, blnFrameDecodedOK);  // Process connected ARQ frames here 
+					ProcessRcvdARQFrame(intFrameType, bytData, frameLen, blnFrameDecodedOK);  // Process connected ARQ frames here 
 
 				if (ProtocolState == DISC)		  // allows ARQ mode to operate like FEC when not connected
 					if (intFrameType == 0x30)				
-						AddTagToDataAndSendToHost(bytData, "IDF");			
+						AddTagToDataAndSendToHost(bytData, "IDF", frameLen);			
 					else if (intFrameType >= 0x31 && intFrameType <= 0x38)
 						ProcessUnconnectedConReqFrame(intFrameType, bytData);			
 					else if (IsDataFrame(intFrameType)) // check to see if a data frame
 						ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);			
 			}
-			// Unknown Mode
-			bytData[frameLen] = 0;
-			Debugprintf("Received Data, No State %s", bytData);
+			else
+			{
+				// Unknown Mode
+				bytData[frameLen] = 0;
+				Debugprintf("Received Data, No State %s", bytData);
+			}
 		}
 		else
 		{
@@ -892,27 +896,27 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			Debugprintf("Bad Received Data, %s", bytData);
 
 
-			if (strcmp(ProtocolMode, "FEC") == 0)
+			if (ProtocolMode ==FEC)
 			{
 				if (IsDataFrame(intFrameType))	// ' check to see if a data frame
 					ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);
 				else if (intFrameType == 0x30)
-					AddTagToDataAndSendToHost(bytData, "ERR");
+					AddTagToDataAndSendToHost(bytData, "ERR", frameLen);
 			}				
-			else if (strcmp(ProtocolMode, "ARQ") == 0)
+			else if (ProtocolMode == ARQ)
 			{
 				if (ProtocolState == DISC)		  // allows ARQ mode to operate like FEC when not connected
 					if (intFrameType == 0x30)				
-						AddTagToDataAndSendToHost(bytData, "ERR");			
+						AddTagToDataAndSendToHost(bytData, "ERR", frameLen);			
 
 					else if (IsDataFrame(intFrameType))		// check to see if a data frame
 						ProcessRcvdFECDataFrame(intFrameType, bytData, blnFrameDecodedOK);
 
 				if (!blnTimeoutTriggered)
-					ProcessRcvdARQFrame(intFrameType, bytData, blnFrameDecodedOK);  // Process connected ARQ frames here 
+					ProcessRcvdARQFrame(intFrameType, bytData, frameLen, blnFrameDecodedOK);  // Process connected ARQ frames here 
  
 			}
-  			if (strcmp(ProtocolMode, "FEC") == 0 && ProtocolState != FECSend)
+  			if (ProtocolMode == FEC && ProtocolState != FECSend)
 			{
 				ProtocolState = DISC;
 				InitializeConnection();
@@ -1047,8 +1051,7 @@ BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz
 	float dblFilteredMaxPeak = 0;
 	int intStartBin, intStopBin;
 	float dblLeftCar, dblRightCar, dblBinInterpLeft, dblBinInterpRight, dblCtrR, dblCtrI, dblCtrP, dblLeftP, dblRightP;
-	float dblLeftR[2], dblLeftI[2], dblRightR[2], dblRightI[2];
-	int Now = Ticks;
+	float dblLeftR[3], dblLeftI[3], dblRightR[3], dblRightI[3];
 	int i;
 	int Ptr = 0;
 
@@ -1056,8 +1059,8 @@ BOOL SearchFor2ToneLeader(short * intNewSamples, int Length, float * dblOffsetHz
 		return FALSE;		// insure there are at least 960 samples (8 symbols of 120 samples)
 
 	// Compute the start and stop bins based on the tuning range Each bin is 12000/960 or 12.5 Hz/bin
- 
-	if (Connected && (Now - dttLastGoodFrameTypeDecod < 1500) || TuningRange == 0)
+
+	if (blnARQConnected && (Now - dttLastGoodFrameTypeDecod < 1500) || TuningRange == 0)
 	{
 		// Limited range tuning
 
@@ -1439,80 +1442,8 @@ BOOL DemodFrameType4FSK(int intPtr, short * intSamples, int * intToneMags)
 	
 	return TRUE;
 }
-/*
-    ' Function to demodulate one carrier for all low baud rate 4FSK frame types
-    Private Function Demod1Car4FSK(intPtr As Int32, ByRef intSamples() As Int32, intBaud As Int32, intCenterFreq As Int32, intNumOfSymbols As Int32, ByRef bytData() As Byte, ByRef intToneMags() As Int32) As Boolean
-        ' Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
-        ' intPtr should be pointing to the approximate start of the first data symbol  
-        ' Updates bytData() with demodulated bytes
-        ' Updates bytMinSymQuality with the minimum (range is 25 to 100) symbol making up each byte.
 
-        Dim intSampPerSymbol As Int32 = CInt(12000 / intBaud)
-        Dim dblReal, dblImag As float
-        Dim intSearchFreq As Integer
-        Dim dblMagSum As float = 0
-        Dim dblMag(3) As float ' The magnitude for each of the 4FSK frequency bins
-        Dim bytSym As Byte
-        Static bytSymHistory(2) As Byte
-
-        If (intSamples.Length - intPtr) < (intSampPerSymbol * intNumOfSymbols) Then
-            Logs.Exception("[DemodulateDecode.Demod1Car4FSK] Insufficient Samples for requested " & intNumOfSymbols.ToString & " symbols.")
-            Return False
-        End If
-        If (intNumOfSymbols Mod 4) <> 0 Then
-            Logs.Exception("[DemodulateDecode.Demod1Car4FSK] Number of Symbols not a multiple of 4: " & intNumOfSymbols.ToString & " symbols.")
-            Return False
-        End If
-        If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
-        ReDim intToneMags(4 * intNumOfSymbols - 1)
-        ReDim bytData(intNumOfSymbols \ 4 - 1)
-
-        For i As Integer = 0 To bytData.Length - 1 ' For each data byte
-            intSearchFreq = CInt(intCenterFreq + 1.5 * intBaud) ' the highest freq (equiv to lowest sent freq because of sideband reversal)
-            For j As Integer = 0 To 3 ' for each 4FSK symbol (2 bits) in a byte
-                dblMagSum = 0
-                GoertzelRealImag(intSamples, intPtr, intSampPerSymbol, intSearchFreq / intBaud, dblReal, dblImag)
-                dblMag(0) = (dblReal ^ 2) + (dblImag ^ 2)
-                dblMagSum += dblMag(0)
-                GoertzelRealImag(intSamples, intPtr, intSampPerSymbol, (intSearchFreq - intBaud) / intBaud, dblReal, dblImag)
-                dblMag(1) = (dblReal ^ 2) + (dblImag ^ 2)
-                dblMagSum += dblMag(1)
-                GoertzelRealImag(intSamples, intPtr, intSampPerSymbol, (intSearchFreq - 2 * intBaud) / intBaud, dblReal, dblImag)
-                dblMag(2) = (dblReal ^ 2) + (dblImag ^ 2)
-                dblMagSum += dblMag(2)
-                GoertzelRealImag(intSamples, intPtr, intSampPerSymbol, (intSearchFreq - 3 * intBaud) / intBaud, dblReal, dblImag)
-                dblMag(3) = (dblReal ^ 2) + (dblImag ^ 2)
-                dblMagSum += dblMag(3)
-                If dblMag(0) > dblMag(1) And dblMag(0) > dblMag(2) And dblMag(0) > dblMag(3) Then
-                    bytSym = 0
-                ElseIf dblMag(1) > dblMag(0) And dblMag(1) > dblMag(2) And dblMag(1) > dblMag(3) Then
-                    bytSym = 1
-                ElseIf dblMag(2) > dblMag(0) And dblMag(2) > dblMag(1) And dblMag(2) > dblMag(3) Then
-                    bytSym = 2
-                Else
-                    bytSym = 3
-                End If
-                bytData(i) = (bytData(i) << 2) + bytSym
-                intToneMags(16 * i + 4 * j) = dblMag(0)
-                intToneMags(16 * i + 4 * j + 1) = dblMag(1)
-                intToneMags(16 * i + 4 * j + 2) = dblMag(2)
-                intToneMags(16 * i + 4 * j + 3) = dblMag(3)
-                bytSymHistory(0) = bytSymHistory(1)
-                bytSymHistory(1) = bytSymHistory(2)
-                bytSymHistory(2) = bytSym
-                If (bytSymHistory(0) <> bytSymHistory(1)) And (bytSymHistory(1) <> bytSymHistory(2)) Then ' only track when adjacent symbols are different (statistically about 56% of the time)
-                    ' this should allow tracking over 2000 ppm sampling rate error
-                    Track1Car4FSK(intSamples, intPtr, intSampPerSymbol, intSearchFreq, intBaud, bytSymHistory)
-                End If
-                intPtr += intSampPerSymbol ' advance the pointer one symbol
-            Next j
-        Next i
-        Return True
-    End Function  '  Demod1Car4FSK
-
-*/ 
-
-// Function to compute the "distance" from a speicific bytFrame Xored by bytID using 1 symbol parity 
+// Function to compute the "distance" from a specific bytFrame Xored by bytID using 1 symbol parity 
 
 float ComputeDecodeDistance(int intTonePtr, int * intToneMags, UCHAR bytFrameType, UCHAR bytID)
 {
@@ -1564,7 +1495,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		dblDistance1 = ComputeDecodeDistance(0, intToneMags, bytValidFrameTypes[i], 0);
 		dblDistance2 = ComputeDecodeDistance(20, intToneMags, bytValidFrameTypes[i], bytSessionID);
 
-		if (Pending)
+		if (blnPending)
 		    dblDistance3 = ComputeDecodeDistance(20, intToneMags, bytValidFrameTypes[i], 0xFF);
 		else
 			dblDistance3 = ComputeDecodeDistance(20, intToneMags, bytValidFrameTypes[i], bytLastARQSessionID);
@@ -1585,6 +1516,8 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			intIatMinDistance3 = bytValidFrameTypes[i];
 		}
 	}
+
+	printf("%x %x %x Sess %x\n", intIatMinDistance1, intIatMinDistance2, intIatMinDistance3, bytSessionID); 
 	
 	if (bytSessionID == 0xFF)		// ' we are in a FEC QSO, monitoring an ARQ session or have not yet reached the ARQ Pending or Connected status 
 	{
@@ -1629,7 +1562,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		//	strDecodeCapture &= "MD Decode;5 Type1=H" & Format(intIatMinDistance1, "X") & ", Type2=H" & Format(intIatMinDistance2, "X") & ", D1=" & Format(dblMinDistance1, "#.00") & ", D2=" & Format(dblMinDistance2, "#.00")
 		//  If MCB.DebugLog Then Logs.WriteDebug("[Frame Type Decode Fail] " & strDecodeCapture)
 	}
-	else if (Pending)			 // We have a Pending ARQ connection 
+	else if (blnPending)		 // We have a Pending ARQ connection 
 	{
 		// this should be a Con Ack from the ISS if we are Pending
 
@@ -1669,7 +1602,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			return -1;	 // indicates poor quality decode so  don't use
 		}
 	}
-	else if (Connected)		// ' we have an ARQ connected session.
+	else if (blnARQConnected)		// ' we have an ARQ connected session.
 	{
 			//if AccumulateStats Then
               //      With stcTuningStats
@@ -1734,8 +1667,8 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 int Acquire4FSKFrameType()
 {
 	// intMFSReadPtr is pointing to start of first symbol of Frame Type (total of 10 4FSK symbols in frame type (2 bytes) + 1 parity symbol per byte 
-	// Returns -1 if minimal distance decoding is below threshold (low likelyhood of being correct)
-	// Returns -2 if insufficient samples 
+	// returns -1 if minimal distance decoding is below threshold (low likelyhood of being correct)
+	// returns -2 if insufficient samples 
 	// Else returns frame type 0-255
 
 	int NewType = 0;
@@ -1756,15 +1689,15 @@ int Acquire4FSKFrameType()
 	
 	// don't like this, as it is mixing modem functions with proto states
 
-	if (Pending)			// If we have a pending connection (btween the IRS first decode of ConReq until it receives a ConAck from the iSS)  
-		NewType = MinimalDistanceFrameType(intToneMags, PendingSessionID);		 // The pending session ID will become the session ID once connected) 
-	else if (Connected)		// If we are connected then just use the stcConnection.bytSessionID
+	if (blnPending)			// If we have a pending connection (btween the IRS first decode of ConReq until it receives a ConAck from the iSS)  
+		NewType = MinimalDistanceFrameType(intToneMags, bytPendingSessionID);		 // The pending session ID will become the session ID once connected) 
+	else if (blnARQConnected)		// If we are connected then just use the stcConnection.bytSessionID
 		NewType = MinimalDistanceFrameType(intToneMags, bytSessionID);
 	else					// not connected and not pending so use &FF (FEC or ARQ unconnected session ID
 		NewType = MinimalDistanceFrameType(intToneMags, 0xFF);
   
-//	if (NewType > 0x30 && NewType < 0x39)
-//		QueueCommandToHost("PENDING");			 // early pending notice to stop scanners
+	if (NewType > 0x30 && NewType < 0x39)
+		QueueCommandToHost("PENDING");			 // early pending notice to stop scanners
 
 	if (NewType >= 0 &&  IsShortControlFrame(NewType))		// update the constellation if a short frame (no data to follow)
 		Update4FSKConstellation(intToneMags, &intLastRcvdFrameQuality);
@@ -1859,7 +1792,6 @@ BOOL Demod1Car4FSK()
 	return TRUE;
 }
 
-
 // Function to demodulate one carrier for all low baud rate 4FSK frame types
  
 void Demod1Car4FSKChar(int Start, char * Decoded)
@@ -1938,13 +1870,398 @@ void Demod1Car4FSKChar(int Start, char * Decoded)
 	}
 
 	Decoded[charIndex] = bytData;	
+	return;
+}
+
+void Demod1Car8FSKChar(int Start, char * Decoded);
+
+BOOL Demod1Car8FSK()
+{
+	int Start = 0;
+	
+	// We can't wait for the full frame as we don't have enough data, so
+	// we do one character at a time, until we run out or end of frame
+
+	// Only continue if we have more than intSampPerSym * 8 chars
+
+	while (State == AcquireFrame)
+	{
+		if (intFilteredMixedSamplesLength < ((intSampPerSym * 8) + 20)) // allow for correcrions
+		{
+			// Move any unprocessessed data down buffer
+
+			//	(while checking process - will use cyclic buffer eventually
+
+//			Debugprintf("Corrections %d", Corrections);
+
+			// If corrections is non-zero, we have to adjust
+			//	number left
+
+			intFilteredMixedSamplesLength -= Corrections;
+
+			Corrections = 0;
+
+			if (intFilteredMixedSamplesLength > 0)
+				memmove(intFilteredMixedSamples,
+					&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
+
+			return FALSE;
+		}
+
+		// If this is a multicarrier mode, we must call the
+		// decode char routing for each carrier
+	
+		switch (intNumCar)
+		{
+		case 1:
+
+			intCenterFreq = 1500;
+			Demod1Car8FSKChar(Start, bytFrameData1);
+			break;
+
+		case 2:
+
+			intCenterFreq = 1750;
+			Demod1Car8FSKChar(Start, bytFrameData1);
+			intCenterFreq = 1250;
+			Demod1Car8FSKChar(Start, bytFrameData2);
+			break;
+		}
+
+		SymbolsLeft -=3;			// number still to decode
+		Start += intSampPerSym * 8;	// 8 FSK bit triplea 
+		intFilteredMixedSamplesLength -= intSampPerSym * 8;
+
+		if (SymbolsLeft <= 0)	
+		{	
+			//- prepare for next
+
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
+		}
+	}
+	return TRUE;
+}
+
+// Function to demodulate one carrier for all 8FSK frame types
+ 
+void Demod1Car8FSKChar(int Start, char * Decoded)
+{
+	// Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
+	// intPtr should be pointing to the approximate start of the first data symbol  
+	// Updates bytData() with demodulated bytes
+	// Updates bytMinSymQuality with the minimum (range is 25 to 100) symbol making up each byte.
+
+	float dblReal, dblImag;
+	float dblSearchFreq;
+	float dblMagSum = 0;
+	float  dblMag[4];	// The magnitude for each of the 4FSK frequency bins
+	UCHAR bytSym;
+	static UCHAR bytSymHistory[3];
+	int j, k;
+	unsigned int intThreeBytes = 0;
+	int intMaxMag;
+	
+	// If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
+    
+	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
+    //    ReDim bytData(intNumOfSymbols \ 4 - 1)
+
+	dblSearchFreq = intCenterFreq + (1.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
+
+	// Do one symbol
+
+	for (j = 0; j < 8; j++)		// for each group of 8 symbols (24 bits) 
+	{
+		dblMagSum = 0;
+		intMaxMag = 0;
+
+		dblSearchFreq = intCenterFreq + 3.5f * intBaud; //' the highest freq (equiv to lowest sent freq because of sideband reversal)
+			
+		for (k = 0; k < 8; k++)  // for each of 8 possible tones per symbol
+		{
+			GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - k * intBaud) / intBaud, &dblReal, &dblImag);
+ 
+			intToneMags[8 * j + k] = pow(dblReal, 2) + pow(dblImag, 2);
+			dblMagSum += intToneMags[8 * j + k];
+
+			if (intToneMags[8 * j + k] > intMaxMag)
+			{
+				intMaxMag = intToneMags[8 * j + k];
+				bytSym = k;
+			}
+		}
+
+		intThreeBytes = (intThreeBytes << 3) + bytSym;
+
+		// !!!!!!! this needs attention !!!!!!!!
+
+/*		intToneMags[16 * charIndex + 4 * j] = dblMag[0];
+		intToneMags[16 * charIndex + 4 * j + 1] = dblMag[1];
+		intToneMags[16 * charIndex + 4 * j + 2] = dblMag[2];
+		intToneMags[16 * charIndex + 4 * j + 3] = dblMag[3];
+*/
+		bytSymHistory[0] = bytSymHistory[1];
+		bytSymHistory[1] = bytSymHistory[2];
+		bytSymHistory[2] = bytSym;
+
+//		if ((bytSymHistory[0] != bytSymHistory[1]) && (bytSymHistory[1] != bytSymHistory[2]))
+		{
+			// only track when adjacent symbols are different (statistically about 56% of the time) 
+			// this should allow tracking over 2000 ppm sampling rate error	
+//			if (Start > intSampPerSym + 2)
+//				Track1Car4FSK(intFilteredMixedSamples, &Start, intSampPerSym, dblSearchFreq, intBaud, bytSymHistory);
+		}
+		Start += intSampPerSym; // advance the pointer one symbol
+	}
+
+	Decoded[charIndex++] = intThreeBytes >> 16;	
+	Decoded[charIndex++] = intThreeBytes >> 8;	
+	Decoded[charIndex++] = intThreeBytes;	
 
 	return;
 }
 
+//	Function to Decode 1 carrier 4FSK 50 baud Connect Request 
 
 
+
+void Demod1Car16FSKChar(int Start, char * Decoded);
+
+BOOL Demod1Car16FSK()
+{
+	int Start = 0;
+	
+	// We can't wait for the full frame as we don't have enough data, so
+	// we do one character at a time, until we run out or end of frame
+
+	// Only continue if we have more than intSampPerSym * 2 chars
+
+	while (State == AcquireFrame)
+	{
+		if (intFilteredMixedSamplesLength < ((intSampPerSym * 2) + 20)) // allow for correcrions
+		{
+			// Move any unprocessessed data down buffer
+
+			//	(while checking process - will use cyclic buffer eventually
+
+//			Debugprintf("Corrections %d", Corrections);
+
+			// If corrections is non-zero, we have to adjust
+			//	number left
+
+			intFilteredMixedSamplesLength -= Corrections;
+
+			Corrections = 0;
+
+			if (intFilteredMixedSamplesLength > 0)
+				memmove(intFilteredMixedSamples,
+					&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
+
+			return FALSE;
+		}
+
+		// If this is a multicarrier mode, we must call the
+		// decode char routing for each carrier
+	
+		switch (intNumCar)
+		{
+		case 1:
+
+			intCenterFreq = 1500;
+			Demod1Car16FSKChar(Start, bytFrameData1);
+			break;
+
+		case 2:
+
+			intCenterFreq = 1750;
+			Demod1Car16FSKChar(Start, bytFrameData1);
+			intCenterFreq = 1250;
+			Demod1Car16FSKChar(Start, bytFrameData2);
+			break;
+		}
+
+		SymbolsLeft--;			// number still to decode
+		Start += intSampPerSym * 2;	// 2 FSK nibbles 
+		intFilteredMixedSamplesLength -= intSampPerSym * 2;
+
+		if (SymbolsLeft <= 0)	
+		{	
+			//- prepare for next
+
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
+		}
+	}
+	return TRUE;
+}
+
+// Function to demodulate one carrier for all 8FSK frame types
  
+void Demod1Car16FSKChar(int Start, char * Decoded)
+{
+	// Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
+	// intPtr should be pointing to the approximate start of the first data symbol  
+	// Updates bytData() with demodulated bytes
+	// Updates bytMinSymQuality with the minimum (range is 25 to 100) symbol making up each byte.
+
+	float dblReal, dblImag;
+	float dblSearchFreq;
+	float dblMagSum = 0;
+	float  dblMag[4];	// The magnitude for each of the 4FSK frequency bins
+	UCHAR bytSym;
+	static UCHAR bytSymHistory[3];
+	int j, k;
+	UCHAR bytData = 0;
+	int intMaxMag;
+	
+	// If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
+    
+	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
+    //    ReDim bytData(intNumOfSymbols \ 4 - 1)
+
+	dblSearchFreq = intCenterFreq + (7.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
+
+	// Do one symbol
+ 
+	for (j = 0; j < 2; j++)  // for each 16FSK symbol (4 bits) in a byte
+	{
+		dblMagSum = 0;
+		intMaxMag = 0;
+
+		dblSearchFreq = intCenterFreq + 7.5f * intBaud; //' the highest freq (equiv to lowest sent freq because of sideband reversal)
+			
+		for (k = 0; k < 16; k++)  // for each of 8 possible tones per symbol
+		{
+			GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - k * intBaud) / intBaud, &dblReal, &dblImag);
+ 
+			intToneMags[16 * j + k] = pow(dblReal, 2) + pow(dblImag, 2);
+			dblMagSum += intToneMags[16 * j + k];
+
+			if (intToneMags[16 * j + k] > intMaxMag)
+			{
+				intMaxMag = intToneMags[16 * j + k];
+				bytSym = k;
+			}
+		}
+
+		bytData = (bytData << 4) + bytSym;
+
+		// !!!!!!! this needs attention !!!!!!!!
+
+/*		intToneMags[16 * charIndex + 4 * j] = dblMag[0];
+		intToneMags[16 * charIndex + 4 * j + 1] = dblMag[1];
+		intToneMags[16 * charIndex + 4 * j + 2] = dblMag[2];
+		intToneMags[16 * charIndex + 4 * j + 3] = dblMag[3];
+*/
+		bytSymHistory[0] = bytSymHistory[1];
+		bytSymHistory[1] = bytSymHistory[2];
+		bytSymHistory[2] = bytSym;
+
+//		if ((bytSymHistory[0] != bytSymHistory[1]) && (bytSymHistory[1] != bytSymHistory[2]))
+		{
+			// only track when adjacent symbols are different (statistically about 56% of the time) 
+			// this should allow tracking over 2000 ppm sampling rate error	
+//			if (Start > intSampPerSym + 2)
+//				Track1Car4FSK(intFilteredMixedSamples, &Start, intSampPerSym, dblSearchFreq, intBaud, bytSymHistory);
+		}
+		Start += intSampPerSym; // advance the pointer one symbol
+	}
+
+	Decoded[charIndex++] = bytData;;	
+	return;
+}
+
+//	Function to Decode 1 carrier 4FSK 50 baud Connect Request 
+
+
+
+extern int intBW;
+
+BOOL Decode4FSKConReq()
+{
+	UCHAR strCaller[10];
+	UCHAR strTarget [10];
+	UCHAR bytCall[6];
+	BOOL blnRSOK;
+	BOOL FrameOK;
+
+	// Modified May 24, 2015 to use RS encoding vs CRC (similar to ID Frame)
+ 
+	FrameOK = RSDecode(bytFrameData1, 14, 2, &blnRSOK);
+
+	memcpy(bytCall, bytFrameData1, 6);
+	DeCompressCallsign(bytCall, strCaller);
+	memcpy(bytCall, &bytFrameData1[6], 6);
+	DeCompressCallsign(bytCall, strTarget);
+
+	printtick(strCaller);
+	printtick(strTarget);
+	
+	sprintf(strRcvFrameTag, "_%s > %s", strCaller, strTarget);
+	sprintf(bytData, "%s %s", strCaller, strTarget);
+
+	// Recheck the returned data by reencoding
+	
+//	if (((bytCheck[12] == bytRawData[12]) || (bytCheck[13] == bytRawData[13])) && blnRSOK)
+	{
+		if (intFrameType == 0x31)
+			intBW = 200;
+		else if (intFrameType == 0x32)
+			intBW = 500;
+		else if (intFrameType == 0x33)
+			intBW = 1000;
+		else if (intFrameType == 0x34)
+			intBW = 2000;
+	
+        //    If MCB.AccumulateStats Then stcTuningStats.intGoodFSKFrameDataDecodes += 1
+        //    intTestFrameCorrectCnt += 1
+
+		return TRUE;
+	}
+
+	//If MCB.AccumulateStats Then stcTuningStats.intFailedFSKFrameDataDecodes += 1
+
+	return FALSE;
+}
+
+// Function to Decode 1 carrier 4FSK 50 baud Connect Ack with timing 
+
+BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
+{
+	int Timing = 0;
+
+ //Dim bytCall(5) As Byte
+
+
+	if (bytFrameData1[0] == bytFrameData1[1]) 
+		Timing = 10 * bytFrameData1[0];
+	else if (bytFrameData1[0] == bytFrameData1[2])
+		Timing = 10 * bytFrameData1[0];
+	else if (bytFrameData1[1] == bytFrameData1[2])
+		Timing = 10 * bytFrameData1[1];
+
+	if (Timing >= 0)
+	{
+		*intTiming = intTiming;
+
+		// strRcvFrameTag = "_" & intTiming.ToString & " ms"
+        //    If MCB.DebugLog Then Logs.WriteDebug("[DemodDecode4FSKConACK]  Remote leader timing reported: " & intTiming.ToString & " ms")
+         //   If MCB.AccumulateStats Then stcTuningStats.intGoodFSKFrameDataDecodes += 1
+         
+		//intTestFrameCorrectCnt++;
+		intReceivedLeaderLen = intLeaderRcvdMs;
+		bytLastDataFrameType = 0;  // initialize the LastFrameType to an illegal Data frame
+        return TRUE;
+	}
+	
+	//If MCB.AccumulateStats Then stcTuningStats.intFailedFSKFrameDataDecodes += 1
+
+	return FALSE;
+}
+
 BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 {
 	UCHAR bytCall[6];
@@ -2016,9 +2333,7 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 
  
 //  Function to Demodulate Frame based on frame type
-
 //	Will be called repeatedly as new samples arrive
-
 
 void DemodulateFrame(int intFrameType)
 {
@@ -2029,17 +2344,39 @@ void DemodulateFrame(int intFrameType)
  //       ReDim bytData(-1)
 
 	strRcvFrameTag[0] = 0;
+
 	//stcStatus.ControlName = "lblRcvFrame"
 
+	//	DataACK/NAK and short control frames
+
+	if ((intFrameType >= 0 && intFrameType <= 0x1f) ||  intFrameType == 0xe0)	 // DataACK/NAK
+	{
+		//blnDecodeOK = DecodeACKNAK(intFrameType, intRcvdQuality)
+        //    stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
+        //ElseIf (objFrameInfo.IsShortControlFrame(intFrameType)) Then ' Short Control Frames
+        //    blnDecodeOK = TRUE
+        //    stcStatus.Text = objFrameInfo.Name(intFrameType)
+        //End If
+		return;
+	}
+
+	if (intFrameType >= 0x30 && intFrameType <= 0x38)
+	{
+		// ID and CON Req
+
+		Demod1Car4FSK();
+		return;
+	}
+
+
 /*
-	'DataACK/NAK and short control frames 
-        If intFrameType >= 0 And intFrameType <= &H1F Or intFrameType >= &HE0 Then ' DataACK/NAK
-            blnDecodeOK = DecodeACKNAK(intFrameType, intRcvdQuality)
-            stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
-        ElseIf (objFrameInfo.IsShortControlFrame(intFrameType)) Then ' Short Control Frames
-            blnDecodeOK = True
-            stcStatus.Text = objFrameInfo.Name(intFrameType)
-        End If
+            Case &H31, &H32, &H33, &H34, &H35, &H36, &H37, &H38    ' Connect Request
+                blnDecodeOK = DemodDecode4FSKConReq(intFrameType, intBW, strCallerCallsign, strTargetCallsign)
+                stcStatus.Text = objFrameInfo.Name(intFrameType) & " " & strCallerCallsign & ">" & strTargetCallsign
+                If blnDecodeOK Then bytData = GetBytes(strCallerCallsign & " " & strTargetCallsign)
+
+				
+
 
         ' Special Frames
  */
@@ -2050,24 +2387,12 @@ void DemodulateFrame(int intFrameType)
 		case 0x3B:
 		case 0x3C:		 // Connect ACKs with Timing
  
-//			blnDecodeOK = DemodDecode4FSKConACK(intFrameType, intTiming)
-// /               If blnDecodeOK Then ReDim bytData(0) : bytData(0) = CByte(intTiming / 10)
-//                stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
+		Demod1Car4FSK();
+		return;
 
 		break;
 		
-		case 0x30:		 // ID Frame
-						
-			Demod1Car4FSK();
-			break;
-/*
-            Case &H31, &H32, &H33, &H34, &H35, &H36, &H37, &H38    ' Connect Request
-                blnDecodeOK = DemodDecode4FSKConReq(intFrameType, intBW, strCallerCallsign, strTargetCallsign)
-                stcStatus.Text = objFrameInfo.Name(intFrameType) & " " & strCallerCallsign & ">" & strTargetCallsign
-                If blnDecodeOK Then bytData = GetBytes(strCallerCallsign & " " & strTargetCallsign)
-
-				*/
-
+	
 			// 1 Carrier Data frames
 			// PSK Data
 
@@ -2098,23 +2423,35 @@ void DemodulateFrame(int intFrameType)
 
 			Demod1Car4FSK();
 			break;
+
+		// 8FSK Data
+
+		case 0x4E:
+		case 0x4F:
+
+			Demod1Car8FSK();
+			break;
+
+        // 4FSK Data (600 bd)
+
+		case 0x7A:
+		case 0x7B:
+		case 0x7C:
+		case 0x7D:
+
+//			Demod1Car4FSK600();
+			break;
+  
+		// 16FSK Data
+
+		case 0x58:
+		case 0x59:
+		case 0x5A:
+		case 0x5B:
+			
+			Demod1Car16FSK();
+			break;
 /*
-
-                blnDecodeOK = DemodDecode4FSKData(intFrameType, bytData, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
-                ' 8FSK Data
-            Case &H4E, &H4F
-                blnDecodeOK = Decode8FSKData(intFrameType, bytData, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
-                ' 4FSK Data (600 bd)
-            Case &H7A, &H7B, &H7C, &H7D
-                blnDecodeOK = Decode4FSK600bdData(intFrameType, bytData, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
-                ' 16FSK Data
-            Case &H58, &H59, &H5A, &H5B
-                blnDecodeOK = Decode16FSKData(intFrameType, bytData, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
-
                 ' 2 Carrier Data frames
             Case &H50, &H51, &H52, &H53, &H54, &H55, &H56, &H57
                 blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
@@ -2146,16 +2483,22 @@ void DemodulateFrame(int intFrameType)
             Case &H78, &H79
                 blnDecodeOK = DemodDecode4FSKData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
-            Case &H7A, &H7B, &H7C, &H7D
-                blnDecodeOK = Decode4FSK600bdData(intFrameType, bytData, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
+  
+  */
 
-                ' Experimental Sounding frame
+  /*              ' Experimental Sounding frame
             Case &HD0
                 DemodSounder(intMFSReadPtr, intFilteredMixedSamples)
-                blnDecodeOK = True
+                blnDecodeOK = TRUE
   */
 		default:
+
+			printf("Unsupported frame type %x\n", intFrameType);
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
+
+
 			intFilteredMixedSamplesLength = 0;	// Testing
 	}
 	
@@ -2201,7 +2544,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 	char strIDCallSign[10] = "";
 	char strGridSQ[10] = "";
 	int CarrierLen;
-
+	int intTiming;
 
  //       ReDim bytData(-1)
 
@@ -2214,7 +2557,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
             blnDecodeOK = DecodeACKNAK(intFrameType, intRcvdQuality)
             stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
         ElseIf (objFrameInfo.IsShortControlFrame(intFrameType)) Then ' Short Control Frames
-            blnDecodeOK = True
+            blnDecodeOK = TRUE
             stcStatus.Text = objFrameInfo.Name(intFrameType)
         End If
 
@@ -2227,8 +2570,10 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 		case 0x3B:
 		case 0x3C:		 // Connect ACKs with Timing
  
-//			blnDecodeOK = DemodDecode4FSKConACK(intFrameType, intTiming)
-// /               If blnDecodeOK Then ReDim bytData(0) : bytData(0) = CByte(intTiming / 10)
+			blnDecodeOK = Decode4FSKConACK(intFrameType, &intTiming);
+
+			if (blnDecodeOK)
+				bytData[0] = intTiming / 10;
 //                stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
 
 		break;
@@ -2246,13 +2591,19 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 			//stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
 
 			break;
-/*
-            Case &H31, &H32, &H33, &H34, &H35, &H36, &H37, &H38    ' Connect Request
-                blnDecodeOK = DemodDecode4FSKConReq(intFrameType, intBW, strCallerCallsign, strTargetCallsign)
-                stcStatus.Text = objFrameInfo.Name(intFrameType) & " " & strCallerCallsign & ">" & strTargetCallsign
-                If blnDecodeOK Then bytData = GetBytes(strCallerCallsign & " " & strTargetCallsign)
-*/
-		
+
+		case 0x31:
+		case 0x32:
+		case 0x33:
+		case 0x34:
+		case 0x35:
+		case 0x36:
+		case 0x37:
+		case 0x38:
+
+			blnDecodeOK = Decode4FSKConReq();
+			break;
+
 			
 		//   PSK 1 Carrier Data
 	
@@ -2273,6 +2624,12 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 		case 0x4b:
 		case 0x4c:
 		case 0x4d:
+		case 0x4e:
+		case 0x4f:
+		case 0x58:
+		case 0x59:
+		case 0x5A:
+		case 0x5B:
 
 			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType);
 	
@@ -2362,7 +2719,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
                 ' Experimental Sounding frame
             Case &HD0
                 DemodSounder(intMFSReadPtr, intFilteredMixedSamples)
-                blnDecodeOK = True
+                blnDecodeOK = TRUE
   */
 	}
 	
@@ -2660,7 +3017,7 @@ VOID Decode1CarPSKChar(UCHAR * Decoded)
         If CheckCRC16FrameType(bytNoRS, bytFrameType) Then ' No RS correction needed
             ReDim bytCorrectCarData(bytNoRS(0) - 1)
             Array.Copy(bytNoRS, 1, bytCorrectCarData, 0, bytNoRS(0))
-            Return True
+            return TRUE
         Else
             ' Try correction with RS Parity
             Dim bytFailedNoRS(bytNoRS.Length - 1) As Byte
@@ -2670,9 +3027,9 @@ VOID Decode1CarPSKChar(UCHAR * Decoded)
             If CheckCRC16FrameType(bytNoRS, bytFrameType) Then ' No RS correction needed
                 ReDim bytCorrectCarData(bytNoRS(0) - 1)
                 Array.Copy(bytNoRS, 1, bytCorrectCarData, 0, bytNoRS(0))
-                Return True
+                return TRUE
             Else
-                Return False
+                return FALSE
             End If
         End If
     End Function  ' Decode1CarPSK
@@ -2702,7 +3059,7 @@ BOOL DecodePSKData(int bytFrameType, short * intPhases, short * intMags, UCHAR *
         Static intCarPhaseAvg(7, 0) As Int16 ' array to accumulate phases for averaging (Memory ARQ)
         Static intCarMagAvg(7, 0) As Int16 ' array to accumulate mags for averaging (Memory ARQ) 
         Static intSumCounts(7) As Int32
-        DecodePSKData = False ' Preset for failure 
+        DecodePSKData = FALSE ' Preset for failure 
  
 
 	intNumSymbolsPerCar = intPhasesLength / intNumCar;
@@ -2855,13 +3212,13 @@ BOOL DecodePSKData(int bytFrameType, short * intPhases, short * intMags, UCHAR *
 
         ' Repeatedly call Demod1CarPSK once for each carrier building the phases and mags. 
         For i As Integer = 0 To intNumCar - 1
-            Demod1CarPSK(intMFSReadPtr, intFilteredMixedSamples, intBaud, intCarFreq, intNumSymbolsPerCar, intCarPhases, intCarMags, strMod, True)
+            Demod1CarPSK(intMFSReadPtr, intFilteredMixedSamples, intBaud, intCarFreq, intNumSymbolsPerCar, intCarPhases, intCarMags, strMod, TRUE)
             Array.Copy(intCarPhases, 0, intPhases, i * intCarPhases.Length, intCarPhases.Length)
             Array.Copy(intCarMags, 0, intMags, i * intCarMags.Length, intCarMags.Length)
             intCarFreq -= 200  ' Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
         Next
         objMain.UpdatePhaseConstellation(intPhases, intMags, strMod, intQuality)
-        Return True
+        return TRUE
     End Function ' DemodPSK
 */
 
@@ -3289,89 +3646,4 @@ void xDemodPSK(UCHAR bytFrameType, short * intPhases, short * intMags, int * int
    UpdatePhaseConstellation(intPhases, intMags, strMod, intQuality, FALSE);
 }
 */
-
-// Function to demodulate one carrier for all low baud rate 4FSK frame types
- 
-void xDemod1Car4FSKChar(int Start, char * Decoded)
-{
-	// Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
-	// intPtr should be pointing to the approximate start of the first data symbol  
-	// Updates bytData() with demodulated bytes
-	// Updates bytMinSymQuality with the minimum (range is 25 to 100) symbol making up each byte.
-
-	float dblReal, dblImag;
-	float dblSearchFreq;
-	float dblMagSum = 0;
-	float  dblMag[4];	// The magnitude for each of the 4FSK frequency bins
-	UCHAR bytSym;
-	static UCHAR bytSymHistory[3];
-	int j;
-	UCHAR bytData = 0;
-	
-	// If MCB.AccumulateStats Then stcTuningStats.intFSKSymbolCnt += intNumOfSymbols
-    
-	//	ReDim intToneMags(4 * intNumOfSymbols - 1)
-    //    ReDim bytData(intNumOfSymbols \ 4 - 1)
-
-	dblSearchFreq = intCenterFreq + (1.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
-
-	// Do one symbol
-
-	for (j = 0; j < 4; j++)		// for each 4FSK symbol (2 bits) in a byte
-	{
-		dblMagSum = 0;
-		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, dblSearchFreq / intBaud, &dblReal, &dblImag);
-		dblMag[0] = powf(dblReal,2) + powf(dblImag, 2);
-		dblMagSum += dblMag[0];
-
-        GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - intBaud) / intBaud, &dblReal, &dblImag);
-		dblMag[1] = powf(dblReal,2) + powf(dblImag, 2);
-		dblMagSum += dblMag[1];
-
-		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 2 * intBaud) / intBaud, &dblReal, &dblImag);
-		dblMag[2] = powf(dblReal,2) + powf(dblImag, 2);
-		dblMagSum += dblMag[2];
-			
-		GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSym, (dblSearchFreq - 3 * intBaud) / intBaud, &dblReal,& dblImag);
-		dblMag[3] = powf(dblReal,2) + powf(dblImag, 2);
-		dblMagSum += dblMag[3];
-
-		if (dblMag[0] > dblMag[1] && dblMag[0] > dblMag[2] && dblMag[0] > dblMag[3])
-			bytSym = 0;
-		else if (dblMag[1] > dblMag[0] && dblMag[1] > dblMag[2] && dblMag[1] > dblMag[3])
-			bytSym = 1;
-		else if (dblMag[2] > dblMag[0] && dblMag[2] > dblMag[1] && dblMag[2] > dblMag[3])
-			bytSym = 2;
-		else
-			bytSym = 3;
-
-		bytData = (bytData << 2) + bytSym;
-
-		// !!!!!!! this needs attention !!!!!!!!
-
-		intToneMags[16 * charIndex + 4 * j] = dblMag[0];
-		intToneMags[16 * charIndex + 4 * j + 1] = dblMag[1];
-		intToneMags[16 * charIndex + 4 * j + 2] = dblMag[2];
-		intToneMags[16 * charIndex + 4 * j + 3] = dblMag[3];
-		bytSymHistory[0] = bytSymHistory[1];
-		bytSymHistory[1] = bytSymHistory[2];
-		bytSymHistory[2] = bytSym;
-
-//		if ((bytSymHistory[0] != bytSymHistory[1]) && (bytSymHistory[1] != bytSymHistory[2]))
-		{
-			// only track when adjacent symbols are different (statistically about 56% of the time) 
-			// this should allow tracking over 2000 ppm sampling rate error	
-//			if (Start > intSampPerSym + 2)
-//				Track1Car4FSK(intFilteredMixedSamples, &Start, intSampPerSym, dblSearchFreq, intBaud, bytSymHistory);
-		}
-		Start += intSampPerSym; // advance the pointer one symbol
-	}
-
-	Decoded[charIndex] = bytData;	
-
-	return;
-}
-
-
-
  

@@ -27,11 +27,13 @@ void printtick(char * msg);
 
 #ifdef WIN32
 short buffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
+short inbuffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
 #else
 unsigned short buffer[2][1200];	// Two Transfer/DMA buffers of 0.1 Sec
 unsigned short work;
 #endif
-
+BOOL Loopback = FALSE;
+//BOOL Loopback = TRUE;
 
 #ifdef WIN32
 
@@ -46,6 +48,12 @@ WAVEHDR header[2] =
 	{(char *)buffer[1], 0, 0, 0, 0, 0, 0, 0}
 };
 
+WAVEHDR inheader[2] =
+{
+	{(char *)inbuffer[0], 0, 0, 0, 0, 0, 0, 0},
+	{(char *)inbuffer[1], 0, 0, 0, 0, 0, 0, 0}
+};
+
 WAVEOUTCAPS pwoc;
 WAVEINCAPS pwic;
 
@@ -58,10 +66,12 @@ LARGE_INTEGER Frequency;
 LARGE_INTEGER StartTicks;
 LARGE_INTEGER NewTicks;
 
+int LastNow;
+
 void main()
 {
 	QueryPerformanceFrequency(&Frequency);
-	Frequency.QuadPart /= 10000;			// Microsecs
+	Frequency.QuadPart /= 1000;			// Microsecs
 	QueryPerformanceCounter(&StartTicks);
 
 	printtick("Test Start");
@@ -74,9 +84,9 @@ void main()
 void printtick(char * msg)
 {
 	QueryPerformanceCounter(&NewTicks);
-	Ticks = (NewTicks.QuadPart - StartTicks.QuadPart) /Frequency.QuadPart;
-	printf("%s %i\r\n", msg, Ticks);
-	StartTicks = NewTicks;
+	Now = (NewTicks.QuadPart - StartTicks.QuadPart) /Frequency.QuadPart;
+	printf("%s %i\r\n", msg, Now - LastNow);
+	LastNow = Now;
 }
 
 
@@ -88,6 +98,7 @@ int PriorSize = 0;
 
 int Number = 0;				// Number waiting to be sent
 int Index = 0;				// DMA Buffer being used 0 or 1
+int inIndex = 0;			// DMA Buffer being used 0 or 1
 
 int SendSize = 1200;		// 100 mS for now
 
@@ -98,14 +109,14 @@ static int intN = 120;				//Length of filter 12000/100
 static float dblRn;
 
 static float dblR2;
-static float dblCoef[21] = {0.0f};			// the coefficients
+static float dblCoef[26] = {0.0f};			// the coefficients
 float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
 
 // The resonators 
       
-float dblZout_0[21] = {0.0f};	// resonator outputs
-float dblZout_1[21] = {0.0f};	// resonator outputs delayed one sample
-float dblZout_2[21] = {0.0f};	// resonator outputs delayed two samples
+float dblZout_0[26] = {0.0f};	// resonator outputs
+float dblZout_1[26] = {0.0f};	// resonator outputs delayed one sample
+float dblZout_2[26] = {0.0f};	// resonator outputs delayed two samples
 
 int fWidth;				// Filter BandWidth
 int SampleNo;
@@ -168,6 +179,15 @@ void initFilter(int Width)
 		first = 10;
 		last = 20;		// 7 filter sections
 		break;
+
+	case 2000:
+		
+		// implements 21 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 5;
+		last = 25;		// 7 filter sections
+
+
 	}
 
 	for (j = first; j <= last; j++)	   // calculate output for 3 resonators 
@@ -188,7 +208,7 @@ void initFilter(int Width)
 	}
  }
 
-BOOL DMARunning = FALSE;		// Used to start DMS on first write
+BOOL DMARunning = FALSE;		// Used to start DMA on first write
 
 void SendtoCard(int n)
 {
@@ -327,9 +347,22 @@ void SampleSink(short Sample)
         
 			break;
 
+		case 2000:
 
-
-
+			// scale each by transition coeff and + (Even) or - (Odd) 
+			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// practical range of scaling .05 to .25
+			// Scaling also accomodates for the filter "gain" of approx 60. 
+          
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 5 || j == 25)
+					intFilteredSample +=  0.389f * dblZout_0[j];
+				else if ((j & 1) == 0)	// Even
+					intFilteredSample += (int)dblZout_0[j];
+				else
+					intFilteredSample -= (int)dblZout_0[j];
+			}
 		}
 	}
 
@@ -356,11 +389,14 @@ void SampleSink(short Sample)
 			// send this buffer to sound interface
 			// Loop back   to decode for testing
 
+			if (Loopback)
+			{
 #ifdef WIN32
-			ProcessNewSamples(buffer[Index], 1200);		// signed
+				ProcessNewSamples(buffer[Index], 1200);		// signed
 #else
-			ProcessNewSamples(loopbuff, 1200);
+				ProcessNewSamples(loopbuff, 1200);
 #endif
+			}
 			SendtoCard(SendSize);
 			Number = 0;
 		}
@@ -393,7 +429,7 @@ void SoundFlush()
 
 #ifndef WIN32
 
-	// Wait for other DMS buffer to empty beofre shutting down DAC
+	// Wait for other DMA buffer to empty beofre shutting down DAC
 
 	while (1)
 	{
@@ -410,6 +446,8 @@ void SoundFlush()
 
 #endif
 
+	StartCapture();
+
 	return;
 }
 
@@ -418,9 +456,12 @@ void SoundFlush()
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
 
+
 void InitSound()
 {
 #ifdef WIN32
+
+	int ret;
 
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
@@ -431,14 +472,79 @@ void InitSound()
     waveInOpen(&hWaveIn, 0, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 	waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
 
-	wavfp1 = fopen("s:\\textxxx.wav", "wb");
+//	wavfp1 = fopen("s:\\textxxx.wav", "wb");
+
+	inheader[0].dwBufferLength = 2400;
+	inheader[1].dwBufferLength = 2400;
+
+	ret = waveInPrepareHeader(hWaveIn, &inheader[0], sizeof(WAVEHDR));
+	ret = waveInAddBuffer(hWaveIn, &inheader[0], sizeof(WAVEHDR));
+
+	ret = waveInPrepareHeader(hWaveIn, &inheader[1], sizeof(WAVEHDR));
+	ret = waveInAddBuffer(hWaveIn, &inheader[1], sizeof(WAVEHDR));
+
+	ret = waveInStart(hWaveIn);
 
 #endif
+}
+
+PollReceivedSamples()
+{
+	// Process any captured samples
+	// Ideally call at least every 100 mS, more than 200 will loose data
+
+#ifdef WIN32
+
+	if (inheader[0].dwFlags & WHDR_DONE)
+	{
+		waveInUnprepareHeader(hWaveIn, &inheader[0], sizeof(WAVEHDR));
+//		printf("Process 1 %d\n", inheader[0].dwBytesRecorded/2);
+		if (Capturing && Loopback == FALSE)
+			ProcessNewSamples(&inbuffer[0][0], inheader[0].dwBytesRecorded/2);
+		inheader[0].dwFlags = 0;
+		waveInPrepareHeader(hWaveIn, &inheader[0], sizeof(WAVEHDR));
+		waveInAddBuffer(hWaveIn, &inheader[0], sizeof(WAVEHDR));
+	}
+
+	if (inheader[1].dwFlags & WHDR_DONE)
+	{
+		waveInUnprepareHeader(hWaveIn, &inheader[1], sizeof(WAVEHDR));
+//		printf("Process 2 %d\n", inheader[1].dwBytesRecorded/2);
+		if (Capturing && Loopback == FALSE)
+			ProcessNewSamples(&inbuffer[1][0], inheader[1].dwBytesRecorded/2);
+		inheader[1].dwFlags = 0;
+
+		waveInPrepareHeader(hWaveIn, &inheader[1], sizeof(WAVEHDR));
+		waveInAddBuffer(hWaveIn, &inheader[1], sizeof(WAVEHDR));
+	}
+#endif
+}
+
+
+void StopCapture()
+{
+	Capturing = FALSE;
+#ifdef WIND32
+	waveInStop(hWaveIn);
+#endif
+//	printf("Stop Capture\n");
+}
+void StartCapture()
+{
+	Capturing = TRUE;
+	DiscardOldSamples();
+	ClearAllMixedSamples();
+	State = SearchingForLeader;
+
+#ifdef WIN32
+//	waveInStart(hWaveIn);
+#endif
+//	printf("Start Capture\n");
 }
 void CloseSound()
 { 
 #ifdef WIN32
-	waveOutClose(hWaveOut);
+//	waveOutClose(hWaveOut);
 	fclose(wavfp1);
 #endif
 }

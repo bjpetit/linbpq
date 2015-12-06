@@ -193,7 +193,7 @@ encode_data (unsigned char msg[], int nbytes, unsigned char dst[])
 		LFSR[0] = gmult(genPoly[0], dbyte);
 	}
 
-	// Return the parity bytes
+	// return the parity bytes
   
 	memcpy(dst, LFSR, NPAR);
 }
