@@ -36,7 +36,7 @@ void GetTwoToneLeaderWithSync(int intSymLen)
 	}
 }
 
-void SendLeaderAndSYNC(UCHAR * bytEncodedData, int intLeaderLen)
+void SendLeaderAndSYNC(UCHAR * bytEncodedBytes, int intLeaderLen)
 {
 	int intMask = 0;
 	int intLeaderLenMS;
@@ -65,9 +65,9 @@ void SendLeaderAndSYNC(UCHAR * bytEncodedData, int intLeaderLen)
 		for(k = 0; k < 5; k++)	 // for 5 symbols per byte (4 data + 1 parity)
 		{
 			if (k < 4)
-				bytSymToSend = (bytMask & bytEncodedData[j]) >> (2 * (3 - k));
+				bytSymToSend = (bytMask & bytEncodedBytes[j]) >> (2 * (3 - k));
 			else
-				bytSymToSend = ComputeTypeParity(bytEncodedData[0]);
+				bytSymToSend = ComputeTypeParity(bytEncodedBytes[0]);
 
 			for(n = 0; n < 240; n++)
 			{
@@ -84,7 +84,7 @@ void SendLeaderAndSYNC(UCHAR * bytEncodedData, int intLeaderLen)
 }
 
 
-void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen)
 {
 	// Function to Modulate data encoded for 4FSK, create
 	// the 16 bit samples and send to sound interface
@@ -147,7 +147,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 		
 	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
     
-	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
+	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
 
 	intDataPtr = 2;
 
@@ -163,7 +163,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 			
 			for (k = 0; k < 4; k++)		// for 4 symbol values per byte of data
 			{
-				bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
+				bytSymToSend = (bytMask & bytEncodedBytes[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
 
 				for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
 				{
@@ -210,11 +210,11 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 				{
 					//' First carrier
                       
-					bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
+					bytSymToSend = (bytMask & bytEncodedBytes[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
 					intSample = intFSK100bdCarTemplate[8 + bytSymToSend][n];
 					// Second carrier
                     
-					bytSymToSend = (bytMask & bytEncodedData[intDataPtr + intDataBytesPerCar]) >> (2 * (3 - k));	// Values 0-3
+					bytSymToSend = (bytMask & bytEncodedBytes[intDataPtr + intDataBytesPerCar]) >> (2 * (3 - k));	// Values 0-3
 					intSample = dblCarScalingFactor * (intSample + intFSK100bdCarTemplate[12 + bytSymToSend][n]);
 			
 					SampleSink(intSample);
@@ -232,20 +232,20 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 		Case 4 ' use carriers 4-19 (100 baud only)
                     dblCarScalingFactor = 0.27 '  (scaling factors determined emperically to minimize crest factor)
                     For m As Integer = 0 To intDataBytesPerCar - 1  ' For each byte of input data 
-                        bytMask = &HC0 ' Initialize mask each new data byte
+                        bytMask = 0xC0 ' Initialize mask each new data byte
                         For k As Integer = 0 To 3 ' for 4 symbol values per byte of data
                             For n As Integer = 0 To intSampPerSym - 1 ' for all the samples of a symbol for 4 carriers 
                                 ' First carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr)) >> (2 * (3 - k)) ' Values 0-3
+                                bytSymToSend = (bytMask And bytEncodedBytes(intDataPtr)) >> (2 * (3 - k)) ' Values 0-3
                                 intSamples(intSamplePtr + n) = intFSK100bdCarTemplate(4 + bytSymToSend, n)
                                 ' Second carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr + intDataBytesPerCar)) >> (2 * (3 - k)) ' Values 0-3
+                                bytSymToSend = (bytMask And bytEncodedBytes(intDataPtr + intDataBytesPerCar)) >> (2 * (3 - k)) ' Values 0-3
                                 intSamples(intSamplePtr + n) = intSamples(intSamplePtr + n) + intFSK100bdCarTemplate(8 + bytSymToSend, n)
                                 ' Third carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr + (2 * intDataBytesPerCar))) >> (2 * (3 - k)) ' Values 0-3
+                                bytSymToSend = (bytMask And bytEncodedBytes(intDataPtr + (2 * intDataBytesPerCar))) >> (2 * (3 - k)) ' Values 0-3
                                 intSamples(intSamplePtr + n) = intSamples(intSamplePtr + n) + intFSK100bdCarTemplate(12 + bytSymToSend, n)
                                 ' Fourth carrier
-                                bytSymToSend = (bytMask And bytEncodedData(intDataPtr + (3 * intDataBytesPerCar))) >> (2 * (3 - k)) ' Values 0-3
+                                bytSymToSend = (bytMask And bytEncodedBytes(intDataPtr + (3 * intDataBytesPerCar))) >> (2 * (3 - k)) ' Values 0-3
                                 intSamples(intSamplePtr + n) = dblCarScalingFactor * (intSamples(intSamplePtr + n) + intFSK100bdCarTemplate(16 + bytSymToSend, n))
                             Next n
                             bytMask = bytMask >> 2
@@ -260,7 +260,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
 // Function to Modulate encoded data to 8FSK and send to sound interface
 
-void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen)
 {
 	// Function to Modulate data encoded for 8FSK, create
 	// the 16 bit samples and send to sound interface
@@ -286,8 +286,6 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	if (strcmp(strMod, "8FSK") != 0)
 		return;
 
-	StopCapture();
-
 	initFilter(200);
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
@@ -299,7 +297,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 	
 	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below
     
-	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
+	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
 
 	intSampPerSym = 480;			// 25 Baud
 
@@ -307,9 +305,9 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
  	for (m = 0; m < intDataBytesPerCar; m += 3)  // For each byte of input data
 	{
-		intThreeBytes = bytEncodedData[intDataPtr++];
-		intThreeBytes = (intThreeBytes << 8) + bytEncodedData[intDataPtr++];
-		intThreeBytes = (intThreeBytes << 8) + bytEncodedData[intDataPtr++];
+		intThreeBytes = bytEncodedBytes[intDataPtr++];
+		intThreeBytes = (intThreeBytes << 8) + bytEncodedBytes[intDataPtr++];
+		intThreeBytes = (intThreeBytes << 8) + bytEncodedBytes[intDataPtr++];
 		intMask = 0xE00000;
                  
 		for (k = 0; k < 8; k++)
@@ -335,7 +333,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int i
 
 // Function to Modulate encoded data to 16FSK and send to sound interface
 
-void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen)
 {
 	// Function to Modulate data encoded for 16FSK, create
 	// the 16 bit samples and send to sound interface
@@ -373,7 +371,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int 
 	intDataBytesPerCar = (Len - 2) / intNumCar;		// We queue the samples here, so dont copy below    
 	intSampPerSym = 480;			// 25 Baud
 
-	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
+	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
 
 	intDataPtr = 2;
 
@@ -382,7 +380,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int 
 		bytMask = 0xF0;	 // Initialize mask each new data byte
 		for (k = 0; k < 2; k++)	// for 2 symbol values per byte of data
 		{
-			bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (4 * (1 - k)); // Values 0 - 15
+			bytSymToSend = (bytMask & bytEncodedBytes[intDataPtr]) >> (4 * (1 - k)); // Values 0 - 15
 
 			for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
 			{
@@ -404,7 +402,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int 
 
 
 
-void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen)
 {
 	// Function to Modulate data encoded for 4FSK, create
 	// the 16 bit samples and send to sound interface
@@ -434,8 +432,6 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, 
 
 	StopCapture();
 
-	initFilter(2000);
-
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
   //          End If
@@ -444,7 +440,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, 
 
 	intSampPerSym = 12000 / intBaud;
     
-	SendLeaderAndSYNC(bytEncodedData, intLeaderLen);
+	SendLeaderAndSYNC(bytEncodedBytes, intLeaderLen);
 
 	intDataPtr = 2;
 
@@ -453,7 +449,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, 
 		bytMask = 0xC0;		 // Initialize mask each new data byte			
 		for (k = 0; k < 4; k++)		// for 4 symbol values per byte of data
 		{
-			bytSymToSend = (bytMask & bytEncodedData[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
+			bytSymToSend = (bytMask & bytEncodedBytes[intDataPtr]) >> (2 * (3 - k)); // Values 0-3
 			for (n = 0; n < intSampPerSym; n++)	 // Sum for all the samples of a symbols 
 			{
     			intSample = intFSK600bdCarTemplate[bytSymToSend][n];
@@ -470,17 +466,17 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, 
 // Function to extract an 8PSK symbol from an encoded data array
 
 
-UCHAR GetSym8PSK(int intDataPtr, int k, int intCar, UCHAR * bytEncodedData, int intDataBytesPerCar)
+UCHAR GetSym8PSK(int intDataPtr, int k, int intCar, UCHAR * bytEncodedBytes, int intDataBytesPerCar)
 {
-	int int3Bytes = bytEncodedData[intDataPtr + intCar * intDataBytesPerCar];
+	int int3Bytes = bytEncodedBytes[intDataPtr + intCar * intDataBytesPerCar];
 //	int intMask  = 7;
 	int intSym;
 	UCHAR bytSym;
 
 	int3Bytes = int3Bytes << 8;
-	int3Bytes += bytEncodedData[intDataPtr + intCar * intDataBytesPerCar + 1];
+	int3Bytes += bytEncodedBytes[intDataPtr + intCar * intDataBytesPerCar + 1];
 	int3Bytes = int3Bytes << 8;
-	int3Bytes += bytEncodedData[intDataPtr + intCar * intDataBytesPerCar + 2];  // now have 3 bytes, 24 bits or 8 8PSK symbols 
+	int3Bytes += bytEncodedBytes[intDataPtr + intCar * intDataBytesPerCar + 2];  // now have 3 bytes, 24 bits or 8 8PSK symbols 
 //	intMask = intMask << (3 * (7 - k));
 	intSym = int3Bytes >> (3 * (7 - k));
 	bytSym = intSym & 7;	//(intMask && int3Bytes) >> (3 * (7 - k));
@@ -494,7 +490,7 @@ UCHAR GetSym8PSK(int intDataPtr, int k, int intCar, UCHAR * bytEncodedData, int 
 // the 16 bit samples and send to sound interface
    
  
-void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen)
+void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen)
 {
 	int intNumCar, intBaud, intDataLen, intRSLen, intSampleLen, intDataPtr, intSampPerSym, intDataBytesPerCar;
 	BOOL blnOdd;
@@ -515,8 +511,6 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int in
 
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
-
-	StopCapture();
 
 	if (intNumCar == 1)
 		initFilter(200);
@@ -600,9 +594,9 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int in
 		for(k = 0; k < 5; k++)		 // for 5 symbols per byte (4 data + 1 parity)
 		{
 			if (k < 4)
-				bytSymToSend = (bytMask & bytEncodedData[j]) >> (2 * (3 - k));
+				bytSymToSend = (bytMask & bytEncodedBytes[j]) >> (2 * (3 - k));
 			else
-				bytSymToSend = ComputeTypeParity(bytEncodedData[0]);
+				bytSymToSend = ComputeTypeParity(bytEncodedBytes[0]);
 
 			for(n = 0; n < 240; n++)
 			{
@@ -683,7 +677,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int in
                  
 				for (i = 0; i < intNumCar ; i++) // across all carriers
 				{
-					bytSym = (bytMask & bytEncodedData[intDataPtr + i * intDataBytesPerCar]) >> (2 * (3 - k));
+					bytSym = (bytMask & bytEncodedBytes[intDataPtr + i * intDataBytesPerCar]) >> (2 * (3 - k));
 					bytSymToSend = ((bytLastSym[intCarIndex] + bytSym) & 3);  // Values 0-3
 
 					for (n = 0; n < intSampPerSym; n++)  // Sum for all the samples of a symbols 
@@ -733,7 +727,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int in
 
 				for (i = 0; i < intNumCar; i++)
 				{
-					bytSym = GetSym8PSK(intDataPtr, k, i, bytEncodedData, intDataBytesPerCar);
+					bytSym = GetSym8PSK(intDataPtr, k, i, bytEncodedBytes, intDataBytesPerCar);
 					bytSymToSend = ((bytLastSym[intCarIndex] + bytSym) & 7);	// mod 8
 					for (n = 0; n < intSampPerSym; n++)	//  Sum for all the samples of a symbols 
 					{
@@ -806,408 +800,40 @@ void AddTrailer()
 		}
 	}
 }
-/*
-// Function to apply 200 Hz filter for transmit  
 
-void FSXmtFilter200_1500Hz(short * intNewSamples, int Length)
-{
-	// Used for PSK 200 Hz modulation XMIT filter  
-	// assumes sample rate of 12000
-	// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
+//	Resends the last frame
 
-	// FSF (Frequency Selective Filter) variables
+void RemodulateLastFrame()
+{	
+	int intNumCar, intBaud, intDataLen, intRSLen, intSampleLen, intDataPtr, intSampPerSym, intDataBytesPerCar;
+	int bytMinQualThresh;
+	BOOL blnOdd;
 
-	static float dblR = 0.9995;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-	static int intN = 120;				//Length of filter 12000/100
-	static float dblRn;
+	char strType[16] = "";
+    char strMod[16] = "";
 
-	static float dblR2;
-	static float dblCoef[19] = {0.0};			// the coefficients
-	float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
-	// The resonators 
-      
-	float dblZout_0[19] = {0.0};	// resonator outputs
-	float dblZout_1[19] = {0.0};	// resonator outputs delayed one sample
-	float dblZout_2[19] = {0.0};	// resonator outputs delayed two samples
+	if (!FrameInfo(bytEncodedBytes[0], &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
+		return;
 
-	int intFilLen = intN / 2;
-	int i, j, x, xold;
-
-	float intFilteredSample = 0;			//  Filtered sample
-	float largest = 0;
-
-	dblRn = pow(dblR, intN);
-
-	dblR2 = pow(dblR, 2);
-
-	// Initialize the coefficients
-
-	if (dblCoef[15] == 0.0)
+	if (strcmp(strMod, "4FSK") == 0)
 	{
-		for (i = 14; i <= 16; i++)
-		{
-			dblCoef[i] = 2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
-		}
+		if (bytEncodedBytes[0] >= 0x7A && bytEncodedBytes[0] <= 0x7D)
+			Mod4FSK600BdDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
+		else
+			Mod4FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
+
+		return;
 	}
-
-	for (i = 0; i < Length + intFilLen - 1; i++)
+	if (strcmp(strMod, "16FSK") == 0)
 	{
-		intFilteredSample = 0;
-		if (i < intN)
-			dblZin = intNewSamples[i];
-		else if (i < Length)
-			dblZin = intNewSamples[i] - dblRn * intNewSamples[i - intN];
-		else
-			dblZin = -dblRn * intNewSamples[i - intN];
-
-		x = xold = 0;
-		
-		if (i < intN)
-			x  = intNewSamples[i];
-		else if (i < Length)
-		{
-			x = intNewSamples[i];
-			xold = intNewSamples[i - intN];
-		}
-		else
-			xold = intNewSamples[i - intN];
-
-		dblZin = x  -dblRn * xold;
+		Mod16FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
+		return;
+	}
+	if (strcmp(strMod, "8FSK") == 0)
+	{
+		Mod8FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
+		return;
+	}
+	ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
+}
 	
-		//Compute the Comb
-
-		dblZComb = dblZin - dblZin_2 * dblR2;
-		dblZin_2 = dblZin_1;
-		dblZin_1 = dblZin;
-
-		// Now the resonators
-		
-		for (j = 14; j <= 16; j++)	   // calculate output for 3 resonators 
-		{
-			dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
-			dblZout_2[j] = dblZout_1[j];
-			dblZout_1[j] = dblZout_0[j];
-
-			// scale each by transition coeff and + (Even) or - (Odd) 
-
-			if (i >= intFilLen)
-			{
-              if (j == 14 || j == 16)
-				  intFilteredSample += 0.7389 * dblZout_0[j];
-			  else
-				  intFilteredSample -= dblZout_0[j];
-			}
-		}
-
-		if (i >= intFilLen)
-		{
-			intFilteredSample = intFilteredSample * 0.00833333333; //  rescales for gain of filter
-			if (intFilteredSample > 32700)  // Hard clip above 32700
-				intFilteredSample = 32700;
-			else if (intFilteredSample < -32700)
-				intFilteredSample = -32700;
-
-//			intNewSamples[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
-			xDummy[i - intFilLen] = (short)intFilteredSample; // & 0xfff0;
-			largest = MAX(largest, intFilteredSample);
-		}
-		fprintf(fp1, "i %d s %d s_old %d dblZin %f out %f\r\n",
-			i, x, xold, dblZin, intFilteredSample);
-
-	}
-}
-
-// Function to apply 500 Hz filter for transmit 
-void FSXmtFilter500_1500Hz(short * intNewSamples, int Length)
-{
-	// Used for FSK modulation XMIT filter  
-	// assumes sample rate of 12000
-	// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
-	// FSF (Frequency Selective Filter) variables
- 
-	static float dblR = 0.9995f;		// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-	static int intN = 120;				//Length of filter 12000/100
-	static float dblRn;
-
-	static float dblR2;
-	static float dblCoef[19] = {0.0};			// the coefficients
-	float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
-	// The resonators 
-      
-	float dblZout_0[19] = {0.0};	// resonator outputs
-	float dblZout_1[19] = {0.0};	// resonator outputs delayed one sample
-	float dblZout_2[19] = {0.0};	// resonator outputs delayed two samples
-
-	int intFilLen = intN / 2;
-	int i, j;
-
-	float intFilteredSample = 0;			//  Filtered sample
-
-	dblRn = pow(dblR, intN);
-
-	dblR2 = pow(dblR, 2);
-
-	AddTrailer();  // add the trailer before filtering
-
-	// Initialize the coefficients
-
-	if (dblCoef[18] == 0.0)
-	{
-		for (i = 12; i <= 18; i++)
-		{
-			dblCoef[i] = 2 * dblR * cos(2 * M_PI * i / intN); // For Frequency = bin i
-		}
-	}
-
-  
-	for (i = 0; i < Length + intFilLen - 1; i++)
-	{
-		intFilteredSample = 0;
-
-		if (i < intN)
-			dblZin = intNewSamples[i];
-		else if (i < Length)
-			dblZin = intNewSamples[i] - dblRn * intNewSamples[i - intN];
-		else
-			dblZin = -dblRn * intNewSamples[i - intN];
- 
-		//Compute the Comb
-
-		dblZComb = dblZin - dblZin_2 * dblR2;
-		dblZin_2 = dblZin_1;
-		dblZin_1 = dblZin;	
-				 
-		// Now the resonators
-		
-		for (j = 12; j <= 18; j++)	   // calculate output for 3 resonators 
-		{
-			dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
-			dblZout_2[j] = dblZout_1[j];
-			dblZout_1[j] = dblZout_0[j];
-
-							
-			// scale each by transition coeff and + (Even) or - (Odd) 
-			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-			// practical range of scaling .05 to .25
-			// Scaling also accomodates for the filter "gain" of approx 60. 
-
-			if (i >= intFilLen)
-			{
-				if (j == 12 || j == 18)
-					intFilteredSample += 0.10601 * dblZout_0[j];
-                        else if (j == 13 || j == 17)
-							intFilteredSample -= 0.59383 * dblZout_0[j];
-                        else if ((j & 1) == 0) 
-                            intFilteredSample += dblZout_0[j];
-                        else
-                            intFilteredSample -= dblZout_0[j];
-			}
-		}     
-         
-		if (i >= intFilLen)
-		{
-			intFilteredSample = intFilteredSample * 0.00833333333; //  rescales for gain of filter
-			if (intFilteredSample > 32700)  // Hard clip above 32700
-				intFilteredSample = 32700;
-			else if (intFilteredSample < -32700)
-				intFilteredSample = -32700;
-
-			intNewSamples[i - intFilLen] = (short)intFilteredSample;
-			
-		}
-	}
-}
-
-/*
-    ' Function to apply 1000 Hz filter for transmit 
-    Public Function FSXmtFilter1000_1500Hz(ByRef intNewSamples() As Int32) As Int32()
-
-        ' Used for FSK modulation XMIT filter  
-        ' assumes sample rate of 12000
-        ' implements 11 100 Hz wide sections centered on 1500 Hz  (~1000 Hz wide @ - 30dB centered on 1500 Hz)
-        ' FSF (Frequency Selective Filter) variables
-        AddTrailer(intNewSamples) ' add the trailer before filtering
-
-        Static dblR As float = 0.9995  ' insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-        Static intN As Integer = 120  ' Length of filter 12000/100
-        Static dblRn As float = dblR ^ intN
-        Static dblR2 As float = dblR ^ 2
-        Static dblCoef(20) As float 'the coefficients
-        Dim dblZin, dblZin_1, dblZin_2, dblZComb As float  ' Used in the comb generator
-        ' The resonators 
-        Dim dblZout_0(20) As float ' resonator outputs
-        Dim dblZout_1(20) As float ' resonator outputs delayed one sample
-        Dim dblZout_2(20) As float  ' resonator outputs delayed two samples
-        Static intFilLen As Integer = intN \ 2
-        Dim intFilteredSamples(intNewSamples.Length - 1) As Int32 '  Filtered samples
-        'Dim dblUnfilteredSamples(intNewSamples.Length - 1) As float 'for debug wave plotting
-        'Dim dblFilteredSamples(intNewSamples.Length - 1) As float ' for debug wave plotting
-        Dim intPeakSample As Int32 = 0
-        ' Initialize the coefficients
-        If dblCoef(20) = 0 Then
-            For i As Integer = 10 To 20
-                dblCoef(i) = 2 * dblR * Cos(2 * PI * i / intN) ' For Frequency = bin i
-            Next i
-        End If
-        Try
-            For i As Integer = 0 To intNewSamples.Length + intFilLen - 1
-
-                If i < intN Then
-                    ' dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i)
-                ElseIf i < intNewSamples.Length Then
-                    'dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i) - dblRn * intNewSamples(i - intN)
-                Else
-                    dblZin = -dblRn * intNewSamples(i - intN)
-                End If
-                ' Compute the Comb
-                dblZComb = dblZin - dblZin_2 * dblR2
-                dblZin_2 = dblZin_1
-                dblZin_1 = dblZin
-
-                ' Now the resonators
-
-                For j As Integer = 10 To 20   ' calculate output for 11 resonators 
-                    dblZout_0(j) = dblZComb + dblCoef(j) * dblZout_1(j) - dblR2 * dblZout_2(j)
-                    dblZout_2(j) = dblZout_1(j)
-                    dblZout_1(j) = dblZout_0(j)
-                    ' scale each by transition coeff and + (Even) or - (Odd) 
-                    ' Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-                    ' practical range of scaling .05 to .25
-                    ' Scaling also accomodates for the filter "gain" of approx 60. 
-                    If i >= intFilLen Then
-                        If j = 10 Or j = 20 Then
-                            intFilteredSamples(i - intFilLen) += 0.389 * dblZout_0(j)
-                        ElseIf j Mod 2 = 0 Then
-                            intFilteredSamples(i - intFilLen) += dblZout_0(j)
-                        Else
-                            intFilteredSamples(i - intFilLen) -= dblZout_0(j)
-                        End If
-                    End If
-                Next j
-                If i >= intFilLen Then
-                    intFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) * 0.00833333333 '  rescales for gain of filter
-                    If intFilteredSamples(i - intFilLen) > 32700 Then ' Hard clip above 32700
-                        intFilteredSamples(i - intFilLen) = 32700
-                    ElseIf intFilteredSamples(i - intFilLen) < -32700 Then
-                        intFilteredSamples(i - intFilLen) = -32700
-                    End If
-                    'dblFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) ' debug code
-                    If Abs(intFilteredSamples(i - intFilLen)) > Abs(intPeakSample) Then intPeakSample = intFilteredSamples(i - intFilLen)
-                End If
-            Next i
-            ' *********************************
-            ' Debug code to look at filter output
-            'Dim objWT As New WaveTools
-            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = FALSE Then
-            '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
-            'End If
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\UnFiltered" & strFilename, 12000, 16, dblUnfilteredSamples)
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\Filtered" & strFilename, 12000, 16, dblFilteredSamples)
-            ' End of debug code
-            '************************************
-        Catch ex As Exception
-            Logs.Exception("[Filters.FSXmtFilterFSK500_1500Hz] Exception: " & ex.ToString)
-            return Nothing
-        End Try
-        return intFilteredSamples
-    End Function ' FSXmtFilter1000_1500Hz
-
-    ' Function to apply 2000 Hz filter for transmit 
-    Public Function FSXmtFilter2000_1500Hz(ByRef intNewSamples() As Int32) As Int32()
-
-        ' Used for FSK modulation XMIT filter  
-        ' assumes sample rate of 12000
-        ' implements 21 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
-        ' FSF (Frequency Selective Filter) variables
-
-        AddTrailer(intNewSamples) ' add the trailer before filtering
-
-        Static dblR As float = 0.9995  ' insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-        Static intN As Integer = 120  ' Length of filter 12000/100
-        Static dblRn As float = dblR ^ intN
-        Static dblR2 As float = dblR ^ 2
-        Static dblCoef(25) As float 'the coefficients
-        Dim dblZin, dblZin_1, dblZin_2, dblZComb As float  ' Used in the comb generator
-        ' The resonators 
-        Dim dblZout_0(25) As float ' resonator outputs
-        Dim dblZout_1(25) As float ' resonator outputs delayed one sample
-        Dim dblZout_2(25) As float  ' resonator outputs delayed two samples
-        Static intFilLen As Integer = intN \ 2
-        Dim intFilteredSamples(intNewSamples.Length - 1) As Int32 '  Filtered samples
-        'Dim dblUnfilteredSamples(intNewSamples.Length - 1) As float 'for debug wave plotting
-        ' Dim dblFilteredSamples(intNewSamples.Length - 1) As float ' for debug wave plotting
-        Dim intPeakSample As Int32 = 0
-        ' Initialize the coefficients
-        If dblCoef(25) = 0 Then
-            For i As Integer = 5 To 25
-                dblCoef(i) = 2 * dblR * Cos(2 * PI * i / intN) ' For Frequency = bin i
-            Next i
-        End If
-        Try
-            For i As Integer = 0 To intNewSamples.Length + intFilLen - 1
-
-                If i < intN Then
-                    'dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i)
-                ElseIf i < intNewSamples.Length Then
-                    'dblUnfilteredSamples(i) = intNewSamples(i) ' debug code for waveform plotting.
-                    dblZin = intNewSamples(i) - dblRn * intNewSamples(i - intN)
-                Else
-                    dblZin = -dblRn * intNewSamples(i - intN)
-                End If
-                ' Compute the Comb
-                dblZComb = dblZin - dblZin_2 * dblR2
-                dblZin_2 = dblZin_1
-                dblZin_1 = dblZin
-
-                ' Now the resonators
-
-                For j As Integer = 5 To 25  ' calculate output for 21 resonators 
-                    dblZout_0(j) = dblZComb + dblCoef(j) * dblZout_1(j) - dblR2 * dblZout_2(j)
-                    dblZout_2(j) = dblZout_1(j)
-                    dblZout_1(j) = dblZout_0(j)
-                    ' scale each by transition coeff and + (Even) or - (Odd) 
-                    ' Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-                    ' practical range of scaling .05 to .25
-                    ' Scaling also accomodates for the filter "gain" of approx 60. 
-                    If i >= intFilLen Then
-                        If j = 5 Or j = 25 Then
-                            intFilteredSamples(i - intFilLen) -= 0.389 * dblZout_0(j)
-                        ElseIf j Mod 2 = 0 Then
-                            intFilteredSamples(i - intFilLen) += dblZout_0(j)
-                        Else
-                            intFilteredSamples(i - intFilLen) -= dblZout_0(j)
-                        End If
-                    End If
-                Next j
-                If i >= intFilLen Then
-                    intFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) * 0.00833333333 '  rescales for gain of filter
-                    If intFilteredSamples(i - intFilLen) > 32700 Then ' Hard clip above 32700
-                        intFilteredSamples(i - intFilLen) = 32700
-                    ElseIf intFilteredSamples(i - intFilLen) < -32700 Then
-                        intFilteredSamples(i - intFilLen) = -32700
-                    End If
-                    'dblFilteredSamples(i - intFilLen) = intFilteredSamples(i - intFilLen) ' debug code
-                    If Abs(intFilteredSamples(i - intFilLen)) > Abs(intPeakSample) Then intPeakSample = intFilteredSamples(i - intFilLen)
-                End If
-            Next i
-            ' *********************************
-            ' Debug code to look at filter output
-            'Dim objWT As New WaveTools
-            'If IO.Directory.Exists(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav") = FALSE Then
-            '    IO.Directory.CreateDirectory(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav")
-            'End If
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\UnFiltered2000Hz.wav", 12000, 16, dblUnfilteredSamples)
-            'objWT.WriteFloatingRIFF(Application.ExecutablePath.Substring(0, Application.ExecutablePath.LastIndexOf("\")) & "\Wav\Filtered2000Hz.wav", 12000, 16, dblFilteredSamples)
-            ' End of debug code
-            '************************************
-        Catch ex As Exception
-            Logs.Exception("[EncodeModulate.FSXmitFilterFSK2000_1500Hz] Exception: " & ex.ToString)
-            return Nothing
-        End Try
-        return intFilteredSamples
-    End Function  'FSXmtFilter2000_1500Hz
-*/
-

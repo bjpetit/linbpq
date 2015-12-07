@@ -44,10 +44,20 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
    int * intBaud, int * intDataLen, int * intRSLen, UCHAR * bytQualThres, char * strType);
 
 void ClearDataToSend();
-int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData);
+int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes);
+int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes);
 int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn);
 int EncodeDATAACK(int intQuality, UCHAR bytSessionID, UCHAR * bytreturn);
-void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedData, int Len, int intLeaderLen);
+void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
+BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _ARQBandwidth ARQBandwidth, UCHAR * bytReturn);
+BOOL IsDataFrame(UCHAR intFrameType);
+BOOL CheckValidCallsignSyntax(char * strTargetCallsign);
+
+
 //extern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
 //extern "C" void SetFilter(void * Filter());
@@ -181,22 +191,38 @@ extern short intFSK50bdCarTemplate[4][240];		// Template for 4FSK carriers space
 extern short intFSK100bdCarTemplate[20][120];		// Template for 4FSK carriers spaced at 100 Hz, 100 baud
 extern short intFSK600bdCarTemplate[4][20];		// Template for 4FSK carriers spaced at 600 Hz, 600 baud  (used for FM only)
 
-
+// Config Params
 extern char GridSquare[7];
 extern char Callsign[10];
 extern BOOL wantCWID;
 extern int LeaderLength;
 extern int TrailerLength;
+extern int TuningRange;
+
+
+
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
+extern const char strFrameType[256][16];
 extern BOOL Capturing;
 extern BOOL SoundIsPlaying;
+extern blnLastPTT;
+
+extern UCHAR bytDataToSend[4000];
+extern int bytDataToSendLength;
+
+extern unsigned char bytEncodedBytes[780];
+extern int EncLen;
+
 
 extern int Now;
 
 extern int bytValidFrameTypesLength;
 
 extern BOOL blnTimeoutTriggered;
+
+extern BOOL PlayComplete;
+
 
 extern const UCHAR bytValidFrameTypes[];
 

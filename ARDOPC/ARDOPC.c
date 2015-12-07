@@ -32,8 +32,15 @@ BOOL wantCWID = FALSE;
 int LeaderLength = 200;
 int TrailerLength = 0;
 int ARQTimeout = 120;
+int TuningRange = 100;
+int ARQConReqRepeats = 5;
 
-//
+
+// 
+
+BOOL blnLastPTT = FALSE;
+
+BOOL PlayComplete = FALSE;
 
 int tmrSendTimeout;
 
@@ -61,6 +68,13 @@ extern char strFinalIDCallsign[10];
 extern int dttTimeoutTrip;
 extern int dttLastFECIDSent;
 extern int intFrameRepeatInterval;
+
+int intRepeatCnt;
+
+BOOL blnFramePending = FALSE;
+BOOL blnClosing = FALSE;
+
+int dttNextPlay = 0;
 
 
 int Now = 0;
@@ -105,13 +119,21 @@ UCHAR isValidFrame[256]=
 };
 
 
-BOOL blnTimeoutTriggered= FALSE;
+BOOL blnTimeoutTriggered = FALSE;
 
-int MaxCorrections;
+//	Main TX Buffer
 
-char TXQueue[100] = "HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";					// May malloc this, or change to cyclic buffer
+UCHAR bytDataToSend[4000] = "HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";					// May malloc this, or change to cyclic buffer
 //char TXQueue[100] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUHelloHelloHelloHelloHello\r\n";					// May malloc this, or change to cyclic buffer
-int TXQueueLen = 96;
+int bytDataToSendLength = 96;
+
+//	We can't keep the audio samples for retry, but we can keep the
+//	encoded data
+
+unsigned char bytEncodedBytes[780];		// I think the biggest is 600 bd 768 + overhead
+int EncLen;
+
+
 
 extern UCHAR bytSessionID;
 
@@ -121,7 +143,7 @@ int intAmp = 26000;	   // Selected to have some margin in calculations with 16 b
 
 
 const char strFrameType[256][16] = {
-	"DataNAK", //  Range &H00 to &H1F includes 5 bits for quality 1 Car, 200Hz,4FSK
+	"DataNAK", //  Range 0x00 to 0x1F includes 5 bits for quality 1 Car, 200Hz,4FSK
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","",
 	"","",
@@ -151,7 +173,7 @@ const char strFrameType[256][16] = {
 	"ConAck500",
 	"ConAck1000",
 	"ConAck2000",
-	// Types &H3D to &H3F reserved
+	// Types 0x3D to 0x3F reserved
 	"","","",
 	// 200 Hz Bandwidth Data 
 	// 1 Car PSK Data Modes 200 HzBW  100 baud 
@@ -236,11 +258,11 @@ const char strFrameType[256][16] = {
 	"","","","","","","","","","","","","","","","",
 	"","","","","","","","","","","","","","","","", //C0
 
-	//Frame Types &HA0 to &HDF reserved for experimentation 
+	//Frame Types 0xA0 to 0xDF reserved for experimentation 
 	"SOUND2K" //D0
 	"","","","","","","","","","","","","","","","",
     //Data ACK  1 Car, 200Hz,4FSK
-	"DataACK"		// Range &HE0 to &HFF includes 5 bits for quality 
+	"DataACK"		// Range 0xE0 to 0xFF includes 5 bits for quality 
 };
 
 char * strlop(char * buf, char delim)
@@ -339,26 +361,39 @@ BOOL GetNextARQFrame()
 		}
 		return TRUE;			// continue with DISC repeats
 	}
-/*        If GetARDOPProtocolState = ProtocolState.ISS And ARQState = ARQSubStates.ISSConReq Then ' Handles Repeating ConReq frames 
-            intRepeatCount += 1
-            If intRepeatCount > MCB.ARQConReqRepeats Then
-                ClearDataToSend()
-                SetARDOPProtocolState(ProtocolState.DISC)
-                If stcConnection.strRemoteCallsign.Trim <> "" Then
-                    objMain.objHI.QueueCommandToHost("STATUS CONNECT TO " & stcConnection.strRemoteCallsign & " FAILED!")
-                    InitializeConnection() : return FALSE 'indicates end repeat
-                Else
-                    objMain.objHI.QueueCommandToHost("STATUS END ARQ CALL")
-                    InitializeConnection() : return FALSE 'indicates end repeat
-                End If
-                ' Clear the mnuBusy status on the main form
-                Dim stcStatus As Status = Nothing
-                stcStatus.ControlName = "mnuBusy"
-                queTNCStatus.Enqueue(stcStatus)
-            Else
-                return TRUE ' continue with repeats
-            End If
+	
+	if (ProtocolState == ISS && ARQState == ISSConReq) // Handles Repeating ConReq frames 
+	{
+		intRepeatCount++;
+		if (intRepeatCount > ARQConReqRepeats)
+		{
+		    ClearDataToSend();
+			ProtocolState = DISC;
 
+			if (strRemoteCallsign[0])
+			{
+				sprintf(HostCmd, "STATUS CONNECT TO %s FAILED!", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				InitializeConnection();
+				return FALSE;		// 'indicates end repeat
+			}
+			else
+			{
+				QueueCommandToHost("STATUS END ARQ CALL");
+				InitializeConnection();
+				return FALSE;		  //indicates end repeat
+			}
+
+			
+			//Clear the mnuBusy status on the main form
+            ///    Dim stcStatus As Status = Nothing
+            //    stcStatus.ControlName = "mnuBusy"
+            //    queTNCStatus.Enqueue(stcStatus)
+		}
+
+		return TRUE;		// ' continue with repeats
+	}
+/*
         ElseIf GetARDOPProtocolState = ProtocolState.ISS And ARQState = ARQSubStates.IRSConAck Then ' Handles ISS repeat of ConAck
             intRepeatCount += 1
             If intRepeatCount <= MCB.ARQConReqRepeats Then
@@ -417,8 +452,8 @@ void ardopmain()
 
 	ProtocolMode = ARQ;
 	SendARQConnectRequest("GM8BPQ", "GM8BPQ-2");
-
-//	ProtocolState = FECSend;
+	
+	//	ProtocolState = FECSend;
 //	GetNextFECFrame();
 //	ProtocolState = FECSend;
 //	GetNextFECFrame();
@@ -442,9 +477,7 @@ void ardopmain()
 
 		CheckTimers();	
 
-		if (!SoundIsPlaying)
-			GetNextARQFrame();
-	
+		MainPoll();
 
 		Sleep(10);
 	}
@@ -1098,7 +1131,7 @@ Old code
 
 // Function to encode data for all PSK frame types
 
-int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData)
+int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes)
 {
 	// Objective is to use this to use this to send all PSK data frames 
 	// 'Output is a byte array which includes:
@@ -1121,7 +1154,7 @@ int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	BOOL blnFrameTypeOK;
 	UCHAR bytQualThresh;
 	int i;
-	UCHAR * bytToRS = &bytEncodedData[2]; 
+	UCHAR * bytToRS = &bytEncodedBytes[2]; 
 
 	blnFrameTypeOK = FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
 
@@ -1133,14 +1166,14 @@ int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 		
 	//	Generate the 2 bytes for the frame type data:
 	
-	bytEncodedData[0] = bytFrameType;
-	bytEncodedData[1] = bytFrameType ^ bytSessionID;
+	bytEncodedBytes[0] = bytFrameType;
+	bytEncodedBytes[1] = bytFrameType ^ bytSessionID;
 
 
 	intDataToSendPtr = 0;
 	intEncodedDataPtr = 2;
 
-	// Now compute the RS frame for each carrier in sequence and move it to bytEncodedData 
+	// Now compute the RS frame for each carrier in sequence and move it to bytEncodedBytes 
 		
 	for (i = 0; i < intNumCar; i++)		//  across all carriers
 	{
@@ -1186,7 +1219,7 @@ int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 
 // Function to encode data for all FSK frame types
   
-int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedData)
+int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes)
 {
 	// Objective is to use this to use this to send all 4FSK data frames 
 	// 'Output is a byte array which includes:
@@ -1209,7 +1242,7 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	BOOL blnFrameTypeOK;
 	UCHAR bytQualThresh;
 	int i;
-	UCHAR * bytToRS = &bytEncodedData[2]; 
+	UCHAR * bytToRS = &bytEncodedBytes[2]; 
 
 	blnFrameTypeOK = FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytQualThresh, strType);
 
@@ -1221,8 +1254,8 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 	
 	//	Generate the 2 bytes for the frame type data:
 	
-	bytEncodedData[0] = bytFrameType;
-	bytEncodedData[1] = bytFrameType ^ bytSessionID;
+	bytEncodedBytes[0] = bytFrameType;
+	bytEncodedBytes[1] = bytFrameType ^ bytSessionID;
 
      //   Dim bytToRS(intDataLen + 3 - 1) As Byte ' Data + Count + 2 byte CRC
 
@@ -1231,7 +1264,7 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 
 	if (intBaud < 600 || intDataLen < 600)
 	{
-		// Now compute the RS frame for each carrier in sequence and move it to bytEncodedData 
+		// Now compute the RS frame for each carrier in sequence and move it to bytEncodedBytes 
 		
 		for (i = 0; i < intNumCar; i++)		//  across all carriers
 		{
@@ -1353,7 +1386,7 @@ BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _A
 		return 0;
 	}
 
-	bytReturn[1] = bytReturn[0] ^ 0xFF;  // Connect Request always uses session ID of &HFF
+	bytReturn[1] = bytReturn[0] ^ 0xFF;  // Connect Request always uses session ID of 0xFF
 
 	// Modified May 24, 2015 to use RS instead of 2 byte CRC. (same as ID frame)
 
@@ -1419,7 +1452,7 @@ int EncodeConACKwTiming(UCHAR bytFrameType, int intRcvdLeaderLenMs, UCHAR bytSes
 {
 	// Encodes a Connect ACK with one byte Timing info. (Timing info repeated 2 times for redundancy) 
 
-	//If intFrameCode < &H39 Or intFrameCode > &H3C Then
+	//If intFrameCode < 0x39 Or intFrameCode > 0x3C Then
     //        Logs.Exception("[EncodeConACKwTiming] Illegal Frame code: " & Format(intFrameCode, "X"))
     //        return Nothing
     //    End If
@@ -1477,7 +1510,6 @@ int EncodeDATANAK(int intQuality , UCHAR bytSessionID, UCHAR * bytreturn)
 
 void SendID(BOOL blnEnableCWID)
 {
-	unsigned char bytEncodedBytes[16];
 	unsigned char bytIDSent[80];
 	int Len;
 
@@ -1490,12 +1522,12 @@ void SendID(BOOL blnEnableCWID)
 
     if (GridSquare[0] == 0)
 	{
-		Len = Encode4FSKIDFrame(Callsign, "No GS", bytEncodedBytes);
+		EncLen = Encode4FSKIDFrame(Callsign, "No GS", bytEncodedBytes);
 		sprintf(bytIDSent," %s:[No GS] ", Callsign);
 	}
 	else
 	{
-		Len = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
+		EncLen = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
 		Len = sprintf(bytIDSent," %s:[%s] ", Callsign, GridSquare);
 	}
 
@@ -1720,12 +1752,12 @@ void CWID(char * strID, short * intSamples, BOOL blnPlay)
 	// Look up table for strAlphabet...each bit represents one dot time, 3 adjacent dots = 1 dash
 	// one dot spacing between dots or dashes
 /*
-        Dim intCW() As Integer = {&H17, &H1D5, &H75D, &H75, &H1, &H15D, _
-           &H1DD, &H55, &H5, &H1777, &H1D7, &H175, _
-           &H77, &H1D, &H777, &H5DD, &H1DD7, &H5D, _
-           &H15, &H7, &H57, &H157, &H177, &H757, _
-           &H1D77, &H775, &H77777, &H17777, &H5777, &H1577, _
-           &H557, &H155, &H755, &H1DD5, &H7775, &H1DDDD, &H1D57, &H1D57}
+        Dim intCW() As Integer = {0x17, 0x1D5, 0x75D, 0x75, 0x1, 0x15D, _
+           0x1DD, 0x55, 0x5, 0x1777, 0x1D7, 0x175, _
+           0x77, 0x1D, 0x777, 0x5DD, 0x1DD7, 0x5D, _
+           0x15, 0x7, 0x57, 0x157, 0x177, 0x757, _
+           0x1D77, 0x775, 0x77777, 0x17777, 0x5777, 0x1577, _
+           0x557, 0x155, 0x755, 0x1DD5, 0x7775, 0x1DDDD, 0x1D57, 0x1D57}
 
         If strID.IndexOf("-") <> -1 Then
             ' strip off the -ssid for CWID
@@ -1757,7 +1789,7 @@ void CWID(char * strID, short * intSamples, BOOL blnPlay)
         Next k
 
         For j As Integer = 0 To strID.Length - 1 ' for each character in the string
-            intMask = &H40000000
+            intMask = 0x40000000
             Dim intIdx As Integer = strAlphabet.IndexOf(strID.ToUpper.Substring(j, 1))
             If intIdx = -1 Then
                 ' process this as a space adding 6 dots worth of space to the wave file
@@ -1801,8 +1833,8 @@ void CWID(char * strID, short * intSamples, BOOL blnPlay)
         ' Convert the integer array to bytes
         Dim aryWave(2 * intWav.Length - 1) As Byte
         For j As Integer = 0 To intWav.Length - 1
-            aryWave(2 * j) = CByte(intWav(j) And &HFF) ' LSByte
-            aryWave(1 + 2 * j) = CByte((intWav(j) And &HFF00) \ 256) ' MSbyte
+            aryWave(2 * j) = CByte(intWav(j) And 0xFF) ' LSByte
+            aryWave(1 + 2 * j) = CByte((intWav(j) And 0xFF00) \ 256) ' MSbyte
         Next j
         ' *********************************
         ' Debug code to look at wave file 
@@ -1836,7 +1868,7 @@ UCHAR FrameCode(char * strFrameName)
 unsigned int GenCRC16(unsigned char * Data, unsigned short length)
 {
 	// For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
-    // intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
+    // intSeed is the seed value for the shift register and must be in the range 0-0xFFFF
 
 	int intRegister = 0xffff; //intSeed
 	int i,j;
@@ -1949,7 +1981,7 @@ BOOL  CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType)
 {
 	// returns TRUE if CRC matches, else FALSE
     // For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
-    // intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
+    // intSeed is the seed value for the shift register and must be in the range 0-0xFFFF
 
 	unsigned int CRC = GenCRC16(Data, Length);
   
@@ -1966,7 +1998,7 @@ BOOL  CheckCRC16FrameType(unsigned char * Data, int Length, UCHAR bytFrameType)
 
 void ClearDataToSend()
 {
-	TXQueueLen = 0;
+	bytDataToSendLength = 0;
 }
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen)
@@ -1978,15 +2010,15 @@ int GetDataFromQueue(UCHAR * Data, int MaxLen)
 
 	GetSemaphore();
 
-	if (MaxLen > TXQueueLen)
-		returned = TXQueueLen;
+	if (MaxLen > bytDataToSendLength)
+		returned = bytDataToSendLength;
 
-	memcpy(Data, TXQueue, returned);
+	memcpy(Data, bytDataToSend, returned);
 
-	TXQueueLen -= returned;
+	bytDataToSendLength -= returned;
 
-	if (TXQueueLen)
-		memmove(TXQueue, &TXQueue[returned], TXQueueLen);
+	if (bytDataToSendLength)
+		memmove(bytDataToSend, &bytDataToSend[returned], bytDataToSendLength);
 
 	FreeSemaphore();
 
@@ -1995,6 +2027,12 @@ int GetDataFromQueue(UCHAR * Data, int MaxLen)
 
 void KeyPTT(BOOL State)
 {
+	blnLastPTT = State;
+
+	if (State)
+		printf("PTT ON\n");
+	else
+		printf("PTT OFF\n");
 }
 
 // Timer Rotines
@@ -2009,8 +2047,6 @@ void CheckTimers()
 
 		if (tmrSendTimeout == 0)
 		{
-			unsigned char bytEncodedBytes[16];
-			int Len;
 			char HostCmd[80];
 
 			// (Handles protocol rule 1.7)
@@ -2025,7 +2061,7 @@ void CheckTimers()
 			// Confirmed proper operation of this timeout and rule 4.0 May 18, 2015
 			// Send an ID frame (Handles protocol rule 4.0)
 
-            Len = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
+            EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
 			Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
 			dttLastFECIDSent = Now;
 			
@@ -2039,8 +2075,8 @@ void CheckTimers()
 			//Thread.Sleep(2000)
 			ClearDataToSend();
 
-			Len = Encode4FSKControl(0x29, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(0x29, &bytEncodedBytes[0], Len, LeaderLength);		// only returns when all sent
+			EncLen = Encode4FSKControl(0x29, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(0x29, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
 			intFrameRepeatInterval = 2000;
 			ProtocolState = DISC;
@@ -2085,7 +2121,7 @@ void CheckTimers()
         If MCB.DebugLog Then Logs.WriteDebug("[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (" & strFinalIDCallsign & ", [" & MCB.GridSquare & "])")
         If CheckValidCallsignSyntax(strFinalIDCallsign) Then
             bytDataToMod = objMain.objMod.Encode4FSKIDFrame(strFinalIDCallsign, MCB.GridSquare, strCurrentFrameFilename)
-            intCurrentFrameSamples = objMain.objMod.Mod4FSKData(&H30, bytDataToMod)
+            intCurrentFrameSamples = objMain.objMod.Mod4FSKData(0x30, bytDataToMod)
             dttLastFECIDSent = Now
             objMain.SendFrame(intCurrentFrameSamples, strCurrentFrameFilename, 1000)
         End If
@@ -2099,7 +2135,7 @@ void CheckTimers()
             ' Send an ID frame (Handles protocol rule 4.0)
             blnEnbARQRpt = False
             Dim bytEncodedBytes() As Byte = objMain.objMod.Encode4FSKIDFrame(stcConnection.strLocalCallsign, MCB.GridSquare, strCurrentFrameFilename)
-            intCurrentFrameSamples = objMain.objMod.Mod4FSKData(&H30, bytEncodedBytes)
+            intCurrentFrameSamples = objMain.objMod.Mod4FSKData(0x30, bytEncodedBytes)
             objMain.SendFrame(intCurrentFrameSamples, strCurrentFrameFilename, intARQDefaultDlyMs)
             dttLastFECIDSent = Now
             ' Hold until PTT goes true
@@ -2122,4 +2158,135 @@ void CheckTimers()
         End If
     End Function  'Send10MinID()
 */
+}
+
+// Main polling Function returns True or False if closing 
+
+BOOL MainPoll()
+{
+	//   Dim stcStatus As Status = Nothing
+
+   //     ' Check the sound card to insure still sampling
+     //   If (Now.Subtract(dttLastSoundCardSample).TotalSeconds > 10) And objProtocol.GetARDOPProtocolState() <> ProtocolState.OFFLINE Then
+       //     tmrStartCODEC.Interval = 1000
+         //   dttLastSoundCardSample = Now
+        //    Logs.Exception("[tmrPoll_Tick] > 10 seconds with no sound card samples...Restarting Codec")
+          //  tmrStartCODEC.Start() ' Start the timer to retry starting sound card
+       // End If
+
+	// This handles the normal condition of going from Sending (Playback) to Receiving (Recording)
+ 
+	if (PlayComplete)
+	{
+		PlayComplete = FALSE;
+		//'Debug.WriteLine("[tmrPoll.Tick] Play stop. Length = " & Format(Now.Subtract(dttTestStart).TotalMilliseconds, "#") & " ms")
+          
+		if (intRepeatCnt > 0)
+		{
+			dttNextPlay = Now + 2000;	// 2 secs
+		}
+         //           ElseIf MCB.AccumulateStats Then
+           //             tmrLogStats.Start()
+
+		KeyPTT(FALSE);		 // Unkey the Transmitter
+		//' clear the transmit label 
+        //        stcStatus.BackColor = SystemColors.Control
+        //        stcStatus.ControlName = "lblXmtFrame" ' clear the transmit label
+        //        queTNCStatus.Enqueue(stcStatus)
+        //        stcStatus.ControlName = "lblRcvFrame" ' clear the Receive label
+        //        queTNCStatus.Enqueue(stcStatus)
+          
+		// Check if the protocol has a frame to send
+
+		if (GetNextFrame())
+		{
+			dttNextPlay = Now + intFrameRepeatInterval;
+
+			//Debug.WriteLine("[Main.tmrPoll] Frame Pending")
+            
+			blnFramePending = TRUE;
+		}
+		else
+		{
+			//'Debug.WriteLine("[Main.tmrPoll] No Frame Pending")
+              
+			blnFramePending = FALSE;
+		}
+	}
+	
+	//Repeat mechanism for normal repeated FEC or ARQ frames
+      
+	if (!SoundIsPlaying && blnFramePending && Now > dttNextPlay)
+	{
+		//	We cant just repeat the stream as we dont keep it
+		
+		RemodulateLastFrame();
+		blnFramePending = FALSE;
+	}
+  
+//            If Not SoundIsPlaying Then
+ //               SendIDToolStripMenuItem.Enabled = objProtocol.GetARDOPProtocolState = ProtocolState.DISC
+   //         Else
+     //           SendIDToolStripMenuItem.Enabled = False
+       //     End If
+    
+		/*
+		' Update any form Main display items from the TNCStatus queue
+            While queTNCStatus.Count > 0
+                Try
+                    stcStatus = CType(queTNCStatus.Dequeue, Status)
+                    Select Case stcStatus.ControlName
+                        ' Receive controls:
+                        Case "lblQuality"
+                            lblQuality.Text = stcStatus.Text
+                        Case "ConstellationPlot"
+                            DisplayPlot()
+                            intRepeatCnt += 0
+                        Case "lblXmtFrame"
+                            lblXmtFrame.Text = stcStatus.Text
+                            lblXmtFrame.BackColor = stcStatus.BackColor
+                        Case "lblRcvFrame"
+                            lblRcvFrame.Text = stcStatus.Text
+                            lblRcvFrame.BackColor = stcStatus.BackColor
+                        Case "prgReceiveLevel"
+                            prgReceiveLevel.Value = stcStatus.Value
+                            If stcStatus.Value < 64 Then ' < 12% of Full scale (16 bit A/D)
+                                prgReceiveLevel.ForeColor = Color.SkyBlue
+                            ElseIf stcStatus.Value > 170 Then ' > 88% of full scale (16 bit A/D)
+                                prgReceiveLevel.ForeColor = Color.LightSalmon
+                            Else
+                                prgReceiveLevel.ForeColor = Color.LightGreen
+                            End If
+                        Case "lblOffset"
+                            lblOffset.Text = stcStatus.Text
+                        Case "lblHost"
+                            If stcStatus.Text <> "" Then lblHost.Text = stcStatus.Text
+                            lblHost.BackColor = stcStatus.BackColor
+                        Case "lblState"
+                            lblState.Text = stcStatus.Text
+                            lblState.BackColor = stcStatus.BackColor
+                        Case "lblCF"
+                            lblCF.Text = stcStatus.Text
+                        Case "mnuBusy"
+                            If stcStatus.Text.ToUpper = "TRUE" Or stcStatus.Text.ToUpper = "FALSE" Then
+                                ChannelBusyToolStripMenuItem.Text = "Channel Busy"
+                                ChannelBusyToolStripMenuItem.Visible = CBool(stcStatus.Text)
+                            Else
+                                ChannelBusyToolStripMenuItem.Text = stcStatus.Text
+                                ChannelBusyToolStripMenuItem.Visible = True
+                            End If
+                    End Select
+                Catch
+                    Logs.Exception("[Main.tmrPoll.Tick] queTNCStatus Err: " & Err.Description)
+                    Exit While
+                End Try
+            End While
+        */
+
+
+	
+	if	(blnClosing)	// Check for closing
+		return FALSE;
+
+	return TRUE;
 }

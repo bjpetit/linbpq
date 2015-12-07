@@ -40,8 +40,6 @@ char strCurrentFrameFilename[16];
 
 int dttLastFECIDSent;
 
-extern int TXQueueLen;
-
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
 void WriteDebug(char * msg)
@@ -58,8 +56,6 @@ BOOL GetNextFECFrame()
 {
 	UCHAR bytData[512];
 	int Len;
-
-	UCHAR bytEncodedData[800];		// 
 
 	if (blnAbort)
 	{
@@ -81,7 +77,7 @@ BOOL GetNextFECFrame()
 		return FALSE;
 	}
 	
-	if (TXQueueLen == 0 && (intFECFramesSent % (FECRepeats + 1)) == 0 && ProtocolState == FECSend)
+	if (bytDataToSendLength == 0 && (intFECFramesSent % (FECRepeats + 1)) == 0 && ProtocolState == FECSend)
 	{
 		if (DebugLog) WriteDebug("[GetNextFECFrame] All data and repeats sent.  Going to DISC state");
             
@@ -105,7 +101,7 @@ BOOL GetNextFECFrame()
 		bytFrameType = FrameCode(FullType);
 
  //           If bytFrameType = bytLastFECDataFrameSent Then ' Added 0.3.4.1 
- //               bytFrameType = bytFrameType Xor &H1 ' insures a new start is on a different frame type. 
+ //               bytFrameType = bytFrameType Xor 0x1 ' insures a new start is on a different frame type. 
  //           End If
 
  
@@ -117,31 +113,28 @@ BOOL GetNextFECFrame()
 sendit:
 		if (strcmp(strMod, "4FSK") == 0)
 		{
-			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
+			EncLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedBytes);
 
 			if (bytFrameType >= 0x7A && bytFrameType <= 0x7D)
-				Mod4FSK600BdDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
+				Mod4FSK600BdDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 			else
-				Mod4FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
+				Mod4FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else if (strcmp(strMod, "16FSK") == 0)
 		{
-			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);
-			Mod16FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
+			int EncLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedBytes);
+			Mod16FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else if (strcmp(strMod, "8FSK") == 0)
 		{
-			int FSKLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedData);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
-			Mod8FSKDataAndPlay(bytEncodedData[0], bytEncodedData, FSKLen, intCalcLeader);  // Modulate Data frame 
+			int EncLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedBytes);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+			Mod8FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else
 		{
-			int PSKLen = EncodePSKData(bytFrameType, bytData, Len, bytEncodedData);
+			int EncLen = EncodePSKData(bytFrameType, bytData, Len, bytEncodedBytes);
 
-			ModPSKDataAndPlay(bytEncodedData[0], bytEncodedData, PSKLen, intCalcLeader);  // Modulate Data frame 
-
-	//			EncodePSK(bytFrameType, bytData, strCurrentFrameFilename);
-	//			intCurrentFrameSamples = ModPSK(bytFrameType, bytData);
+			ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 			
 			//CreateWaveStream(intCurrentFrameSamples);
@@ -169,7 +162,7 @@ sendit:
 
 		unsigned char bytEncodedBytes[16];
 
-		Len = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
+		EncLen = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
 		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
 
 		dttLastFECIDSent = Now;

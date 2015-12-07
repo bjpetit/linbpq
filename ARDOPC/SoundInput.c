@@ -116,7 +116,6 @@ int dttStartRTMeasure;
 int GotBitSyncTicks;
 
 int intARQRTmeasuredMs;
-int TuningRange = 100;
 
 float dbl2Pi = 2 * M_PI; 
 
@@ -1543,7 +1542,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			dttLastGoodFrameTypeDecode = Now;
 			return intIatMinDistance1;
 		}
-		if ((dblMinDistance1 < 0.3) && (dblMinDistance1 < dblMinDistance2) && IsDataFrame(intIatMinDistance1) )	//  this would handle the case of monitoring an ARQ connection where the SessionID is not &HFF
+		if ((dblMinDistance1 < 0.3) && (dblMinDistance1 < dblMinDistance2) && IsDataFrame(intIatMinDistance1) )	//  this would handle the case of monitoring an ARQ connection where the SessionID is not 0xFF
 		{
 			//strDecodeCapture &= "MD Decode;3 ID=H" & Format(bytSessionID, "X") & ", Type=H" & Format(intIatMinDistance1, "X") & ":" & objFrameInfo.Name(intIatMinDistance1) & ", D1=" & Format(dblMinDistance1, "#.00") & ", D2=" & Format(dblMinDistance2, "#.00")
             //   If MCB.DebugLog Then Logs.WriteDebug("[Frame Type Decode OK  ] " & strDecodeCapture)
@@ -1551,7 +1550,7 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			return intIatMinDistance1;
 		}
 
-		if ((dblMinDistance2 < 0.3) && (dblMinDistance2 < dblMinDistance1) && IsDataFrame(intIatMinDistance2))  // this would handle the case of monitoring an FEC transmission that failed above when the session ID is = &HFF
+		if ((dblMinDistance2 < 0.3) && (dblMinDistance2 < dblMinDistance1) && IsDataFrame(intIatMinDistance2))  // this would handle the case of monitoring an FEC transmission that failed above when the session ID is = 0xFF
 		{
 			//strDecodeCapture &= "MD Decode;4 ID=H" & Format(bytSessionID, "X") & ", Type=H" & Format(intIatMinDistance1, "X") & ":" & objFrameInfo.Name(intIatMinDistance1) & ", D1=" & Format(dblMinDistance1, "#.00") & ", D2=" & Format(dblMinDistance2, "#.00")      
 			//If MCB.DebugLog Then Logs.WriteDebug("[Frame Type Decode OK  ] " & strDecodeCapture)
@@ -1583,11 +1582,11 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 			}
 		}
 	}
-	//	handles the case of a received ConReq frame based on an ID of &HFF (ISS must have missed ConAck reply from IRS so repeated ConReq)
+	//	handles the case of a received ConReq frame based on an ID of 0xFF (ISS must have missed ConAck reply from IRS so repeated ConReq)
 
 	else if (intIatMinDistance1 == intIatMinDistance3)	 //matching indexes at minimal distances so high probablity of correct decode.
 	{
-		//strDecodeCapture &= "MD Decode;7 ID=H" & Format(&HFF, "X") & ", type=H" & Format(intIatMinDistance1, "X") & ":" & objFrameInfo.Name(intIatMinDistance1) & ", D1=" & Format(dblMinDistance1, "#.00") & ", D3=" & Format(dblMinDistance3, "#.00")
+		//strDecodeCapture &= "MD Decode;7 ID=H" & Format(0xFF, "X") & ", type=H" & Format(intIatMinDistance1, "X") & ":" & objFrameInfo.Name(intIatMinDistance1) & ", D1=" & Format(dblMinDistance1, "#.00") & ", D3=" & Format(dblMinDistance3, "#.00")
 		if (intIatMinDistance1 >= 0x31 && intIatMinDistance1 <= 0x38 && ((dblMinDistance1 < 0.4) || (dblMinDistance3 < 0.4)))  // Check for ConReq (ISS must have missed previous ConAck  
 		{
 			dblOffsetLastGoodDecode = dblOffsetHz;
@@ -2370,7 +2369,7 @@ void DemodulateFrame(int intFrameType)
 
 
 /*
-            Case &H31, &H32, &H33, &H34, &H35, &H36, &H37, &H38    ' Connect Request
+            Case 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38    ' Connect Request
                 blnDecodeOK = DemodDecode4FSKConReq(intFrameType, intBW, strCallerCallsign, strTargetCallsign)
                 stcStatus.Text = objFrameInfo.Name(intFrameType) & " " & strCallerCallsign & ">" & strTargetCallsign
                 If blnDecodeOK Then bytData = GetBytes(strCallerCallsign & " " & strTargetCallsign)
@@ -2453,7 +2452,7 @@ void DemodulateFrame(int intFrameType)
 			break;
 /*
                 ' 2 Carrier Data frames
-            Case &H50, &H51, &H52, &H53, &H54, &H55, &H56, &H57
+            Case 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57
                 blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If blnDecodeOK Then
@@ -2461,33 +2460,33 @@ void DemodulateFrame(int intFrameType)
                 End If
 
                 ' 1000 Hz  Data frames
-            Case &H60, &H61, &H62, &H63, &H64, &H65, &H66, &H67
+            Case 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67
                 blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If blnDecodeOK Then
                     blnDecodeOK = DecodePSKData(intFrameType, intPhase, intMag, bytData)
                 End If
 
-            Case &H68, &H69
+            Case 0x68, 0x69
                 blnDecodeOK = DemodDecode4FSKData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If MCB.DebugLog Then Logs.WriteDebug("[DecodeFrame] Frame: " & objFrameInfo.Name(intFrameType) & " Decode " & blnDecodeOK.ToString & "  Quality= " & intLastRcvdFrameQuality.ToString)
 
                 ' 2000 Hz Data frames
-            Case &H70, &H71, &H72, &H73, &H74, &H75, &H76, &H77
+            Case 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77
                 blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If blnDecodeOK Then
                     blnDecodeOK = DecodePSKData(intFrameType, intPhase, intMag, bytData)
                 End If
-            Case &H78, &H79
+            Case 0x78, 0x79
                 blnDecodeOK = DemodDecode4FSKData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
   
   */
 
   /*              ' Experimental Sounding frame
-            Case &HD0
+            Case 0xD0
                 DemodSounder(intMFSReadPtr, intFilteredMixedSamples)
                 blnDecodeOK = TRUE
   */
@@ -2553,7 +2552,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 
 /*
 	'DataACK/NAK and short control frames 
-        If intFrameType >= 0 And intFrameType <= &H1F Or intFrameType >= &HE0 Then ' DataACK/NAK
+        If intFrameType >= 0 And intFrameType <= 0x1F Or intFrameType >= 0xE0 Then ' DataACK/NAK
             blnDecodeOK = DecodeACKNAK(intFrameType, intRcvdQuality)
             stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
         ElseIf (objFrameInfo.IsShortControlFrame(intFrameType)) Then ' Short Control Frames
@@ -2647,20 +2646,20 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
  ' 8FSK Data
 
 
-            Case &H4E, &H4F
+            Case 0x4E, 0x4F
                 blnDecodeOK = Decode8FSKData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 ' 4FSK Data (600 bd)
-            Case &H7A, &H7B, &H7C, &H7D
+            Case 0x7A, 0x7B, 0x7C, 0x7D
                 blnDecodeOK = Decode4FSK600bdData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 ' 16FSK Data
-            Case &H58, &H59, &H5A, &H5B
+            Case 0x58, 0x59, 0x5A, 0x5B
                 blnDecodeOK = Decode16FSKData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
 
                 ' 2 Carrier Data frames
-            Case &H50, &H51, &H52, &H53, &H54, &H55, &H56, &H57
+            Case 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57
                 blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If blnDecodeOK Then
@@ -2668,7 +2667,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
                 End If
 
                 ' 1000 Hz  Data frames
-            Case &H60, &H61, &H62, &H63, &H64, &H65, &H66, &H67
+            Case 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67
                 blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If blnDecodeOK Then
@@ -2703,21 +2702,21 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
                 If MCB.DebugLog Then Logs.WriteDebug("[DecodeFrame] Frame: " & objFrameInfo.Name(intFrameType) & " Decode " & blnDecodeOK.ToString & "  Quality= " & intLastRcvdFrameQuality.ToString)
 
                 ' 2000 Hz Data frames
-            Case &H70, &H71, &H72, &H73, &H74, &H75, &H76, &H77
+            Case 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77
                 blnDecodeOK = DemodPSK(intFrameType, intPhase, intMag, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
                 If blnDecodeOK Then
                     blnDecodeOK = DecodePSKData(intFrameType, intPhase, intMag, bytData)
                 End If
-            Case &H78, &H79
+            Case 0x78, 0x79
                 blnDecodeOK = DemodDecode4FSKData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
-            Case &H7A, &H7B, &H7C, &H7D
+            Case 0x7A, 0x7B, 0x7C, 0x7D
                 blnDecodeOK = Decode4FSK600bdData(intFrameType, bytData, intConstellationQuality)
                 stcStatus.Text = objFrameInfo.Name(intFrameType)
 
                 ' Experimental Sounding frame
-            Case &HD0
+            Case 0xD0
                 DemodSounder(intMFSReadPtr, intFilteredMixedSamples)
                 blnDecodeOK = TRUE
   */
@@ -3049,7 +3048,7 @@ BOOL DecodePSKData(int bytFrameType, short * intPhases, short * intMags, UCHAR *
 	int i;
 	/*
         Dim intCarPhases(0) As Int16, intCarMags(0) As Int16
-        Dim bytCarMask As Byte = &H80
+        Dim bytCarMask As Byte = 0x80
         Dim bytQualThresh As Byte = 100
         Dim bytNoRS(-1) As Byte
         Dim bytCorrectedCarData(-1) As Byte
@@ -3149,13 +3148,13 @@ BOOL DecodePSKData(int bytFrameType, short * intPhases, short * intMags, UCHAR *
         Next i '
         Select Case intNumCar
             Case 1
-                DecodePSKData = (bytPass = &H80)
+                DecodePSKData = (bytPass = 0x80)
             Case 2
-                DecodePSKData = (bytPass = &HC0)
+                DecodePSKData = (bytPass = 0xC0)
             Case 4
-                DecodePSKData = (bytPass = &HF0)
+                DecodePSKData = (bytPass = 0xF0)
             Case 8
-                DecodePSKData = (bytPass = &HFF)
+                DecodePSKData = (bytPass = 0xFF)
         End Select
         If DecodePSKData Then
             Dim intPtr As Integer = 0

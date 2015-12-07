@@ -146,6 +146,10 @@ void initFilter(int Width)
 	memset(Last120, 0, 256);
 	Index = 0;
 
+	KeyPTT(TRUE);
+	SoundIsPlaying = TRUE;
+	StopCapture();
+
 	Last120Get = 0;
 	Last120Put = 120;
 
@@ -447,7 +451,8 @@ void SoundFlush()
 #endif
 
 	StartCapture();
-
+	SoundIsPlaying = FALSE;
+	PlayComplete = TRUE;
 	return;
 }
 
