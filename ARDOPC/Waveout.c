@@ -37,10 +37,11 @@ BOOL Loopback = FALSE;
 
 #ifdef WIN32
 
+char xxx[5000] = "";
+WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 12000, 12000, 2, 16, 0 };
+
 HWAVEOUT hWaveOut = 0;
 HWAVEIN hWaveIn = 0;
-
-WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 12000, 12000, 2, 16, 0 };
 
 WAVEHDR header[2] =
 {
@@ -53,6 +54,7 @@ WAVEHDR inheader[2] =
 	{(char *)inbuffer[0], 0, 0, 0, 0, 0, 0, 0},
 	{(char *)inbuffer[1], 0, 0, 0, 0, 0, 0, 0}
 };
+char xxxx[5000] = "";
 
 WAVEOUTCAPS pwoc;
 WAVEINCAPS pwic;
@@ -242,7 +244,7 @@ void SendtoCard(int n)
 
 	// wait for other DMA buffer to finish
 
-//	printtick("Start Wait");		// FOr timing tests
+	printtick("Start Wait");		// FOr timing tests
 
 	while (1)
 	{
@@ -251,7 +253,7 @@ void SendtoCard(int n)
 		if (chan == Index) 	// we've started sending current buffer
 		{
 			Index = !Index;
-//			printtick("Stop Wait");
+			printtick("Stop Wait");
 			return;
 		}
 	}
@@ -423,10 +425,11 @@ void SoundFlush()
 
 	AddTrailer();			// add the trailer.
 
+	if (Loopback)
 #ifdef WIN32
-	ProcessNewSamples(buffer[Index], Number);
+		ProcessNewSamples(buffer[Index], Number);
 #else
-	ProcessNewSamples(loopbuff, Number);
+		ProcessNewSamples(loopbuff, Number);
 #endif
 
 	SendtoCard(Number * 2);
@@ -448,9 +451,12 @@ void SoundFlush()
 	stopDAC();
 	DMARunning = FALSE;
 
+#else
+		while (!(header[0].dwFlags & WHDR_DONE));
+		while (!(header[1].dwFlags & WHDR_DONE));
+
 #endif
 
-	StartCapture();
 	SoundIsPlaying = FALSE;
 	PlayComplete = TRUE;
 	return;
@@ -500,28 +506,21 @@ PollReceivedSamples()
 
 #ifdef WIN32
 
-	if (inheader[0].dwFlags & WHDR_DONE)
+	if (inheader[inIndex].dwFlags & WHDR_DONE)
 	{
-		waveInUnprepareHeader(hWaveIn, &inheader[0], sizeof(WAVEHDR));
-//		printf("Process 1 %d\n", inheader[0].dwBytesRecorded/2);
+//		printf("Process %d %d\n", Index, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
-			ProcessNewSamples(&inbuffer[0][0], inheader[0].dwBytesRecorded/2);
-		inheader[0].dwFlags = 0;
-		waveInPrepareHeader(hWaveIn, &inheader[0], sizeof(WAVEHDR));
-		waveInAddBuffer(hWaveIn, &inheader[0], sizeof(WAVEHDR));
-	}
+			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
 
-	if (inheader[1].dwFlags & WHDR_DONE)
-	{
-		waveInUnprepareHeader(hWaveIn, &inheader[1], sizeof(WAVEHDR));
-//		printf("Process 2 %d\n", inheader[1].dwBytesRecorded/2);
-		if (Capturing && Loopback == FALSE)
-			ProcessNewSamples(&inbuffer[1][0], inheader[1].dwBytesRecorded/2);
-		inheader[1].dwFlags = 0;
+		waveInUnprepareHeader(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
+		inheader[inIndex].dwFlags = 0;
+		waveInPrepareHeader(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
+		waveInAddBuffer(hWaveIn, &inheader[inIndex], sizeof(WAVEHDR));
 
-		waveInPrepareHeader(hWaveIn, &inheader[1], sizeof(WAVEHDR));
-		waveInAddBuffer(hWaveIn, &inheader[1], sizeof(WAVEHDR));
+		inIndex = !inIndex;
 	}
+		
+
 #endif
 }
 
@@ -534,6 +533,17 @@ void StopCapture()
 #endif
 //	printf("Stop Capture\n");
 }
+
+void StartCodec(char * strFault)
+{
+	strFault[0] = 0;
+}
+
+void StopCodec(char * strFault)
+{
+	strFault[0] = 0;
+}
+
 void StartCapture()
 {
 	Capturing = TRUE;

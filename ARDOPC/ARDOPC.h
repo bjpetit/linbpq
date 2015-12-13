@@ -3,6 +3,9 @@
 // are changed infrequently
 //
 
+#define ProductName "ARDOP TNC"
+#define ProductVersion "0.4.0-BPQ"
+
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 #endif						
@@ -38,7 +41,6 @@ typedef unsigned char UCHAR;
 
 void KeyPTT(BOOL State);
 
-
 UCHAR FrameCode(char * strFrameName);
 BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
    int * intBaud, int * intDataLen, int * intRSLen, UCHAR * bytQualThres, char * strType);
@@ -48,15 +50,18 @@ int EncodeFSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigne
 int EncodePSKData(UCHAR bytFrameType, UCHAR * bytDataToSend, int Length, unsigned char * bytEncodedBytes);
 int Encode4FSKIDFrame(char * Callsign, char * Square, unsigned char * bytreturn);
 int EncodeDATAACK(int intQuality, UCHAR bytSessionID, UCHAR * bytreturn);
+int EncodeDATANAK(int intQuality , UCHAR bytSessionID, UCHAR * bytreturn);
 void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
 void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
 void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
 void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
 void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int intLeaderLen);
-BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _ARQBandwidth ARQBandwidth, UCHAR * bytReturn);
 BOOL IsDataFrame(UCHAR intFrameType);
 BOOL CheckValidCallsignSyntax(char * strTargetCallsign);
-
+void StartCodec(char * strFault);
+void StopCodec(char * strFault);
+void SetARDOPProtocolState(int value);
+BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall);
 
 //extern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
@@ -100,7 +105,7 @@ void ProcessUnconnectedConReqFrame(int intFrameType, UCHAR * bytData);
 void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL blnFrameDecodedOK);
 void InitializeConnection();
 
-void AddTagToDataAndSendToHost(char * Msg, char * Type, int Len);
+void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len);
 
 int GetDataFromQueue(UCHAR * Data, int MaxLen);
 void GetSemaphore();
@@ -134,7 +139,8 @@ enum _ARQBandwidth
 };
 
 extern enum _ARQBandwidth ARQBandwidth;
-	
+
+extern const char ARQBandwidths[8][12];
 
 
 enum _ARDOPState
@@ -149,7 +155,8 @@ enum _ARDOPState
 };
 
 extern enum _ARDOPState ProtocolState;
-//extern enum _ARDOPState ARDOPState;
+
+extern const char ARDOPStates[7][8];
 
 
 // Enum of ARQ Substates
@@ -181,6 +188,16 @@ extern enum _ProtocolMode ProtocolMode;
 
 extern enum _ARQSubStates ARQState;
 
+struct SEM
+{
+	unsigned int Flag;
+	int Clashes;
+	int	Gets;
+	int Rels;
+};
+
+extern struct SEM Semaphore;
+
 extern short intTwoToneLeaderTemplate[120];  // holds just 1 symbol (10 ms) of the leader
 
 extern short intPSK100bdCarTemplate[9][4][120];	// The actual templates over 9 carriers for 4 phase values and 120 samples
@@ -197,25 +214,35 @@ extern char Callsign[10];
 extern BOOL wantCWID;
 extern int LeaderLength;
 extern int TrailerLength;
+extern int ARQTimeout;
 extern int TuningRange;
-
-
+extern BOOL DebugLog;
+extern int ARQConReqRepeats;
+extern BOOL CommandTrace;
 
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
 extern const char strFrameType[256][16];
 extern BOOL Capturing;
 extern BOOL SoundIsPlaying;
-extern blnLastPTT;
+extern int blnLastPTT;
+extern BOOL blnAbort;
+extern BOOL blnClosing;
+extern BOOL blnCodecStarted;
+extern BOOL blnInitializing;
 
 extern UCHAR bytDataToSend[4000];
 extern int bytDataToSendLength;
 
-extern unsigned char bytEncodedBytes[780];
+extern BOOL blnListen;
+
+extern unsigned char bytEncodedBytes[1800];
 extern int EncLen;
 
+extern char AuxCalls[10][10];
+extern int AuxCallsLength;
 
-extern int Now;
+extern volatile int Now;
 
 extern int bytValidFrameTypesLength;
 
@@ -230,3 +257,8 @@ extern const UCHAR bytValidFrameTypes[];
 // RS Variables
 
 extern int MaxCorrections;
+
+// Has to follow enum defs
+
+BOOL EncodeARQConRequest(char * strMyCallsign, char * strTargetCallsign, enum _ARQBandwidth ARQBandwidth, UCHAR * bytReturn);
+

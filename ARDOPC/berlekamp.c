@@ -52,7 +52,7 @@ static void mul_z_poly (int src[]);
 
 /* error locations found using Chien's search*/
 static int ErrorLocs[256];
-static int NErrors;
+int NErrors;
 
 /* erasure flags */
 static int ErasureLocs[256];

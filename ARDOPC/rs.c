@@ -39,7 +39,7 @@ int synBytes[MAXDEG];
 /* generator polynomial */
 int genPoly[MAXDEG*2];
 
-int DEBUG = TRUE;
+int DEBUG = FALSE; //RUE;
 
 static void
 compute_genpoly (int nbytes, int genpoly[]);

@@ -21,6 +21,7 @@ extern "C" void SendID(BOOL blnEnableCWID);
 extern "C" void GetNextFECFrame();
 
 extern "C" void ardopmain();
+extern "C" void Sleep();
 extern "C" void printtick(char * msg);
 extern "C" VOID Debugprintf(const char * format, ...);
 extern "C" void Config_ADC_DMA(void);
@@ -39,7 +40,7 @@ volatile int iTick = 0;
 volatile bool bTick = 0;
 volatile int iClick = 0;
 volatile bool bClick = 0;
-volatile int Ticks = 0;
+extern volatile int Now;
 volatile int ADCInterrupts = 0;
 extern volatile int adc_buffer_mem;
 
@@ -55,8 +56,7 @@ int i = 0;
 void tick()
 {
 	bTick = true;
-	Ticks++;
-	iTick++;
+	Now++;
 }
 
 void pressed()
@@ -179,8 +179,8 @@ int Lasttick = 0;
 
 void printtick(char * msg)
 {
-	serial.printf("%s %i\r\n", msg, iTick - Lasttick);
-	Lasttick = iTick;
+	serial.printf("%s %i\r\n", msg, Now - Lasttick);
+	Lasttick = Now;
 }
 
 VOID Debugprintf(const char * format, ...)
@@ -196,6 +196,7 @@ VOID Debugprintf(const char * format, ...)
 
 	return;
 }
+
 
 
 

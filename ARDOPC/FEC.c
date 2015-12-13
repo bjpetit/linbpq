@@ -2,12 +2,10 @@
 
 #include "ARDOPC.h"
 
-BOOL blnAbort;
-BOOL DebugLog;
+extern BOOL blnAbort;
 
 int intFECFramesSent;
 int FECRepeats;
-int DataToSend = 1;
 
 UCHAR bytFrameType;
 
@@ -31,10 +29,18 @@ UCHAR bytLastFECDataFrameSent;
 //char strFECMode[16] = "4FSK.1000.100";
 //char strFECMode[16] = "4PSK.200.100";
 //char strFECMode[16] = "8PSK.200.100";
+
+char strFECMode[16] = "8PSK.500.100";
+
+//char strFECMode[16] = "4PSK.500.100";	// 2 carrier
+//char strFECMode[16] = "4PSK.1000.100";	// 4 carrier
+//char strFECMode[16] = "4PSK.2000.100";	// 8 carrier
+
+
 //char strFECMode[16] = "8FSK.200.25";
 //char strFECMode[16] = "16FSK.500.25";
-char strFECMode[16] = "4FSK.2000.600";
-
+//char strFECMode[16] = "4FSK.2000.600";
+//char strFECMode[16] = "4FSK.2000.100";
 
 char strCurrentFrameFilename[16];
 
@@ -64,7 +70,7 @@ BOOL GetNextFECFrame()
 		if (DebugLog)
 			WriteDebug("[GetNextFECFrame] FECAbort. Going to DISC state");
 		KeyPTT(FALSE);  // insurance for PTT off
-		ProtocolState = DISC;
+		SetARDOPProtocolState(DISC);
 		return FALSE;
 	}
 	
@@ -72,7 +78,7 @@ BOOL GetNextFECFrame()
 	{
 		if (DebugLog) WriteDebug("[GetNextFECFrame] intFECFramesSent = -1.  Going to DISC state");
 		
-		ProtocolState = DISC;
+		SetARDOPProtocolState(DISC);
 		KeyPTT(FALSE); // insurance for PTT off
 		return FALSE;
 	}
@@ -81,7 +87,7 @@ BOOL GetNextFECFrame()
 	{
 		if (DebugLog) WriteDebug("[GetNextFECFrame] All data and repeats sent.  Going to DISC state");
             
-		ProtocolState = DISC;
+		SetARDOPProtocolState(DISC);
 		KeyPTT(FALSE); // insurance for PTT of
 		return FALSE;
 	}

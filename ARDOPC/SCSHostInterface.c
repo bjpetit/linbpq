@@ -3,8 +3,22 @@
 
 #include "ARDOPC.h"
 
-BOOL blnProcessingCmdData = FALSE; // Processing a Command or Data frame
-BOOL blnHostRDY = FALSE;
+void QueueCommandToHost(char * Cmd)
+{
+	printf("Command to Host %s\n", Cmd);
+}
+
+void SendCommandToHost(char * Cmd)
+{
+	printf("Command to Host %s\n", Cmd);
+}
+
+
+void AddTagToDataAndSendToHost(char * Msg, char * Type, int Len)
+{
+	Msg[Len] = 0;
+	printf("RX Data %s %s\n", Type, Msg);
+}
 
 
 // Subroutine for processing a command from Host
@@ -13,16 +27,18 @@ void ProcessCommandFromHost(char * strCMD)
 {
 	char * ptrParams;
 	char cmdCopy[80] = "";
-	char strFault[100] = "";
+	char strFault[100];
 	char cmdReply[120];
 
 	memcpy(cmdCopy, strCMD, 79);	// save before we split it up
 
 	_strupr(strCMD);
 
-	if (CommandTrace) Debugprintf("[obCommand Trace FROM host: C:%s", strCMD);
-
 	ptrParams = strlop(strCMD, ' ');
+
+
+  //      Dim strParameters As String = ""
+ //       Dim strFault As String = ""
 
 	if (strcmp(strCMD, "ABORT") == 0)
 	{
@@ -37,7 +53,7 @@ void ProcessCommandFromHost(char * strCMD)
 		if (ptrParams == 0)
 		{
 			sprintf(cmdReply, "ARQBW %S", ARQBandwidths[ARQBandwidth]);
-			goto cmddone;
+			SendCommandToHost(cmdReply);
 		}
 		else
 		{
@@ -83,43 +99,21 @@ void ProcessCommandFromHost(char * strCMD)
 		sprintf(strFault, "Syntax Err: %s", cmdCopy);
 		goto cmddone;
 	}
-
-	if (strcmp(strCMD, "ARQTIMEOUT") == 0)
-	{
-		int i;
-
-		if (ptrParams == 0)
-		{
-			sprintf(cmdReply, "%s %d", strCMD, ARQTimeout);
-			goto cmddone;
-		}
-		else
-		{
-			i = atoi(ptrParams);
-
-			if (i > 29 && i < 241)	
-				ARQTimeout = i;
-			else
-				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
-		}
-		goto cmddone;
-	}
-
-	if (strcmp(strCMD, "BUFFER") == 0)
-	{
-		if (ptrParams == 0)
-		{
-			sprintf(cmdReply, "%s %d", strCMD, bytDataToSendLength);
-			SendCommandToHost(cmdReply);
-		}
-		else
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-
-		goto cmddone;
-	}
-
-
-/*
+	/*
+            Case "ARQTIMEOUT"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & MCB.ARQTimeout.ToString)
+                ElseIf IsNumeric(strParameters) AndAlso (CInt(strParameters) > 29 And CInt(strParameters) < 241) Then
+                    MCB.ARQTimeout = CInt(strParameters)
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
+            Case "BUFFER"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & objMain.objProtocol.DataToSend.ToString)
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
             Case "CAPTURE"
                 If strParameters <> "" Then
                     MCB.CaptureDevice = strParameters.Trim
@@ -128,91 +122,37 @@ void ProcessCommandFromHost(char * strCMD)
                 End If
             Case "CAPTUREDEVICES"
                 SendCommandToHost(strCommand & " " & objMain.CaptureDevices)
-*/
-	if (strcmp(strCMD, "CLOSE") == 0)
-	{
-		blnClosing = TRUE;
-		goto cmddone;
-	}
-
-	if (strcmp(strCMD, "CMDTRACE") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			if (CommandTrace)
-				sprintf(cmdReply, "CMDTRACE TRUE");
-			else
-				sprintf(cmdReply, "CMDTRACE FALSE");
-
-			SendCommandToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			CommandTrace = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			CommandTrace = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		goto cmddone;
-	}
-
-	if (strcmp(strCMD, "CODEC") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			if (blnCodecStarted)
-				sprintf(cmdReply, "CODEC TRUE");
-			else
-				sprintf(cmdReply, "CODEC FALSE");
-
-			SendCommandToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			StartCodec(strFault);
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			StopCodec(strFault);
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		goto cmddone;
-	}
-
-	if (strcmp(strCMD, "CWID") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			if (wantCWID)
-				sprintf(cmdReply, "CWID TRUE");
-			else
-				sprintf(cmdReply, "CWID FALSE");
-
-			SendCommandToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			wantCWID = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			wantCWID = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		goto cmddone;
-	}
-	/*
+            Case "CLOSE"
+                objMain.blnClosing = True
+            Case "CMDTRACE"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & MCB.CommandTrace.ToString)
+                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
+                    MCB.CommandTrace = CBool(strParameters)
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
+            Case "CODEC"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & objMain.blnCodecStarted.ToString.ToUpper)
+                ElseIf strParameters = "TRUE" Then
+                    objMain.StopCodec(strFault)
+                    If strFault = "" Then
+                        objMain.StartCodec(strFault)
+                    End If
+                ElseIf strParameters = "FALSE" Then
+                    objMain.StopCodec(strFault)
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
+            Case "CWID"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & MCB.CWID.ToString)
+                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
+                    MCB.CWID = CBool(strParameters)
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
             Case "DATATOSEND"
                 If ptrSpace = -1 Then
                     SendCommandToHost(strCommand & " " & bytDataToSend.Length.ToString)
@@ -221,36 +161,15 @@ void ProcessCommandFromHost(char * strCMD)
                 Else
                     strFault = "Syntax Err:" & strCMD
                 End If
-      */
-  
-	if (strcmp(strCMD, "DEBUGLOG") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			if (DebugLog)
-				sprintf(cmdReply, "DEBUGLOG TRUE");
-			else
-				sprintf(cmdReply, "DEBUGLOG FALSE");
-
-			SendCommandToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			DebugLog = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			DebugLog = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		goto cmddone;
-	}
-
- /*
-	Case "DISCONNECT"
+            Case "DEBUGLOG"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & MCB.DebugLog.ToString)
+                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
+                    MCB.DebugLog = CBool(strParameters)
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
+            Case "DISCONNECT"
                 With objMain.objProtocol ' Ignore if not ARQ connected states
                     If .GetARDOPProtocolState = ProtocolState.IDLE Or .GetARDOPProtocolState = ProtocolState.IRS Or .GetARDOPProtocolState = ProtocolState.ISS Then
                         .blnARQDisconnect = True
@@ -341,121 +260,68 @@ void ProcessCommandFromHost(char * strCMD)
                         strFault = "Syntax Err:" & strCMD
                     End If
                 End If
-				*/
-	if (strcmp(strCMD, "INITIALIZE") == 0)
-	{
-		blnInitializing = TRUE;
-
-//		tmrPollQueue = 0;
-
-         //       queDataForHost.Clear()
-
-		blnProcessingCmdData = FALSE; // Processing a Command or Data frame
-		blnHostRDY = TRUE;
-		blnInitializing = FALSE;
-
-//		tmrPollQueue = 10;
-
-		goto cmddone;
-	}
-
-	if (strcmp(strCMD, "LEADER") == 0)
-	{
-		int i;
-
-		if (ptrParams == 0)
-		{
-			sprintf(cmdReply, "%s %d", strCMD, LeaderLength);
-			SendCommandToHost(cmdReply);
-		}
-		else
-		{
-			i = atoi(ptrParams);
-
-			if (i >= 100  && i <= 1200)
-			{
-				LeaderLength = (i + 9) /10;
-				LeaderLength *= 10;				// round to 10 mS
-			}
-			else
-				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
-		}
-		goto cmddone;
-	}
-
-	if (strcmp(strCMD, "LISTEN") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			if (blnListen)
-				sprintf(cmdReply, "LISTEN TRUE");
-			else
-				sprintf(cmdReply, "LISTEN FALSE");
-
-			SendCommandToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "TRUE") == 0)
-			blnListen = TRUE;
-		else 
-		if (strcmp(ptrParams, "FALSE") == 0)
-			blnListen = FALSE;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		goto cmddone;
-	}
-	if (strcmp(strCMD, "MYAUX") == 0)
-	{
-		int i, len;
-		char * ptr, * context;
-
-		if (ptrParams == 0)
-		{
-			len = sprintf(cmdReply, "%s", "MYAUX ");
-
-			for (i = 0; i < AuxCallsLength; i++)
-			{
-				len += sprintf(&cmdReply[len], "%s,", AuxCalls[i]);
-			}
-			cmdReply[len - 1] = 0;	// remove trailing space or ,
-			SendCommandToHost(cmdReply);	
-			goto cmddone;
-		}
-
-		ptr = strtok_s(ptrParams, ", ", &context);
-
-		AuxCallsLength = 0;
-
-		while (ptr && AuxCallsLength < 10)
-		{
-			if (CheckValidCallsignSyntax(ptr))
-				strcpy(AuxCalls[AuxCallsLength++], ptr);
-
-			ptr = strtok_s(NULL, ", ", &context);
-		}
-		goto cmddone;
-	}
-
-	if (strcmp(strCMD, "MYCALL") == 0)
-	{
-		if (ptrParams == 0)
-		{
-			sprintf(cmdReply, "%s %s", strCMD, Callsign);
-			SendCommandToHost(cmdReply);
-		}
-		else
-			if (CheckValidCallsignSyntax(ptrParams))
-				strcpy(Callsign, ptrParams);
-			else
-				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-
-		goto cmddone;
-	}
-/*
+            Case "INITIALIZE"
+                blnInitializing = True
+                Thread.Sleep(200)
+                tmrPollQueue.Stop()
+                queDataForHost.Clear()
+                blnProcessingCmdData = False ' Processing a Command or Data frame
+                blnHostRDY = True
+                blnInitializing = False
+                tmrPollQueue.Start()
+            Case "LEADER"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & MCB.LeaderLength.ToString)
+                Else
+                    If IsNumeric(strParameters) Then
+                        If CInt(strParameters) >= 100 And CInt(strParameters) <= 1200 Then
+                            MCB.LeaderLength = 10 * Math.Round(CInt(strParameters) / 10) ' Round to nearest 10 ms
+                        Else
+                            strFault = "Syntax Err:" & strCMD
+                        End If
+                    Else
+                        strFault = "Syntax Err:" & strCMD
+                    End If
+                End If
+            Case "LISTEN"
+                If ptrSpace = -1 Then
+                    strFault = "Syntax Err:" & strCMD
+                Else
+                    If strParameters = "TRUE" Then
+                        objMain.objProtocol.Listen = True
+                    ElseIf strParameters = "FALSE" Then
+                        objMain.objProtocol.Listen = False
+                    Else
+                        strFault = "Syntax Err:" & strCMD
+                    End If
+                End If
+            Case "MYAUX"
+                If strParameters <> "" Then
+                    Dim strAux() As String = strParameters.Split(","c)
+                    ReDim MCB.AuxCalls(9)
+                    For i As Integer = 0 To Math.Min(9, strAux.Length - 1)
+                        If CheckValidCallsignSyntax(strAux(i).Trim.ToUpper) Then
+                            MCB.AuxCalls(i) = strAux(i).Trim.ToUpper
+                        End If
+                    Next
+                Else
+                    Dim strReply As String = ""
+                    For i As Integer = 0 To 9
+                        If MCB.AuxCalls IsNot Nothing AndAlso MCB.AuxCalls(i) <> "" Then
+                            strReply &= MCB.AuxCalls(i) & ","
+                        End If
+                    Next
+                    If strReply.EndsWith(",") Then strReply = strReply.Substring(0, strReply.Length - 1) ' Trim the trailing ","
+                    SendCommandToHost(strCommand & " " & strReply)
+                End If
+            Case "MYCALL"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & MCB.Callsign)
+                ElseIf CheckValidCallsignSyntax(strParameters) Then
+                    MCB.Callsign = strParameters
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
             Case "PLAYBACK"
                 If strParameters <> "" Then
                     MCB.PlaybackDevice = strParameters.ToUpper.Trim
@@ -467,35 +333,17 @@ void ProcessCommandFromHost(char * strCMD)
 
                 ' The following Radio commands are optional to allow the TNC to control the radio
                 '  (All radio commands begin with "RADIO"
-				*/
-	if (strcmp(strCMD, "PROTOCOLMODE") == 0)
-	{
-		if (ptrParams == NULL)
-		{
-			if (ProtocolMode == ARQ)
-				sprintf(cmdReply, "PROTOCOLMODE ARQ");
-			else
-				sprintf(cmdReply, "PROTOCOLMODE FEC");
-
-			SendCommandToHost(cmdReply);
-			goto cmddone;
-		}
-		
-		if (strcmp(ptrParams, "ARQ") == 0)
-			ProtocolMode = ARQ;
-		else 
-		if (strcmp(ptrParams, "FEC") == 0)
-			ProtocolMode = FEC;
-		else
-		{
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			goto cmddone;
-		}
-		SetARDOPProtocolState(DISC);	// ' set state to DISC on any Protocol mode change. 
-		goto cmddone;
-	}
-
-/*
+            Case "PROTOCOLMODE"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & MCB.ProtocolMode)
+                Else
+                    If strParameters.Trim = "ARQ" Or strParameters.Trim = "FEC" Then
+                        MCB.ProtocolMode = strParameters.Trim
+                        objMain.objProtocol.SetARDOPProtocolState(ProtocolState.DISC) ' set state to DISC on any Protocol mode change. 
+                    Else
+                        strFault = "Syntax Err:" & strCMD
+                    End If
+                End If
             Case "RADIOANT"
                 If ptrSpace = -1 Then
                     SendCommandToHost(strCommand & " " & RCB.Ant.ToString)
@@ -693,21 +541,12 @@ void ProcessCommandFromHost(char * strCMD)
                 Else
                     SendCommandToHost(strCommand & " " & MCB.Squelch.ToString)
                 End If
-*/
-	if (strcmp(strCMD, "STATE") == 0)
-	{
-		if (ptrParams == 0)
-		{
-			sprintf(cmdReply, "%s %s", strCMD, ARDOPStates[ProtocolState]);
-			SendCommandToHost(cmdReply);
-		}
-		else
-			sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-
-		goto cmddone;
-	}
-
-				/*
+            Case "STATE"
+                If ptrSpace = -1 Then
+                    SendCommandToHost(strCommand & " " & ARDOPState.ToString)
+                Else
+                    strFault = "Syntax Err:" & strCMD
+                End If
             Case "TRAILER"
                 If ptrSpace = -1 Then
                     SendCommandToHost(strCommand & " " & MCB.TrailerLength.ToString)
@@ -733,17 +572,13 @@ void ProcessCommandFromHost(char * strCMD)
                 Else
                     strFault = "Not from state " & objMain.objProtocol.GetARDOPProtocolState.ToString
                 End If
+            Case "VERSION"
+                SendCommandToHost("VERSION " & Application.ProductName & "_" & Application.ProductVersion)
+            Case "RDY" ' no response required for RDY
 */
-	if (strcmp(strCMD, "VERSION") == 0)
-	{
-		sprintf(cmdReply, "VERSION %s_%s", ProductName, ProductVersion);
-		SendCommandToHost(cmdReply);
-		goto cmddone;
-	} 
-	// RDY processed earlier Case "RDY" ' no response required for RDY
 
-	sprintf(strFault, "CMD not recoginized");
-
+	else
+		sprintf(strFault, "CMD not recoginized");
 cmddone:
 
 	if (strFault[0])
