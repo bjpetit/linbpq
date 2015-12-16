@@ -5,9 +5,9 @@
 extern BOOL blnAbort;
 
 int intFECFramesSent;
-int FECRepeats;
 
 UCHAR bytFrameType;
+BOOL blnSendIDFrame;
 
 extern int intNumCar;
 extern int intBaud;
@@ -53,14 +53,132 @@ void WriteDebug(char * msg)
 	Debugprintf(msg);
 }
 
+// Function to start sending FEC data 
 
-//int intNumCar = 0, intBaud, intDataLen = 0, intRSLen; // Do these need to be static??
+BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL blnSendID)
+{
+	// Return True if OK false if problem
 
+	BOOL blnModeOK = FALSE;
+	int i;
+
+	FECRepeats = intRepeats;
+
+	if (ProtocolState == FECSend)	// If already sending FEC data simply add to the OB queue
+	{
+		AddDataToDataToSend(bytData, Len);	// add new data to queue
+
+		if (DebugLog) Debugprintf("[ARDOPprotocol.StartFEC] %d bytes received while in FECSend state...append to data to send.", Len);
+		return TRUE;
+	}
+	
+	//	Check to see that there is data in the buffer.
+
+	if (Len == 0 && bytDataToSendLength == 0)
+	{
+		if (DebugLog) Debugprintf("[ARDOPprotocol.StartFEC] No data to send!");
+		return FALSE;
+	}
+
+	// Check intRepeates
+	
+	if (intRepeats < 0 || intRepeats > 5)
+	{
+        //    Logs.Exception("[ARDOPprotocol.StartFEC] Repeats out of range: " & intRepeats.ToString)
+		return FALSE;
+	}
+	
+	//	check call sign
+	
+	if (!CheckValidCallsignSyntax(Callsign))
+	{
+     //       Logs.Exception("[ARDOPprotocol.StartFEC] Invalid call sign: " & MCB.Callsign)
+		return FALSE;
+	}
+	
+	//	Check to see that strDataMode is correct
+    
+	for (i = 0;  i < strAllDataModesLen; i++)
+	{
+		if (strcmp(strDataMode, strAllDataModes[i]) == 0)
+		{
+			strcpy(strFECMode, strDataMode);
+			blnModeOK = TRUE;
+			break;
+		}
+	}
+
+	if (blnModeOK == FALSE)
+	{
+		//Logs.Exception("[ARDOPprotocol.StartFEC] Illegal FEC mode: " & strDataMode)
+		return FALSE;
+	}
+        
+	//While objMain.SoundIsPlaying
+       //    Thread.Sleep(100)
+        //End While
+
+	blnAbort = FALSE;
+
+	intFrameRepeatInterval = 400;	// should be a safe number for FEC...perhaps could be shortened down to 200 -300 ms
+ 
+	AddDataToDataToSend(bytData, Len);	// add new data to queue
+
+	SetARDOPProtocolState(FECSend);		// set to FECSend state
+
+	blnSendIDFrame = blnSendID;
+
+	if (blnSendID)
+	{
+		unsigned char bytEncodedBytes[16];
+
+		EncLen = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
+		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+
+		dttLastFECIDSent = Now;
+		intFECFramesSent = 0;
+	}
+	else
+	{
+		// Cant we just call GetNextFECFrame??
+
+		GetNextFECFrame();
+/*
+			Dim bytFrameData(-1) As Byte
+            strFrameComponents = strFECMode.Split(".")
+            bytFrameType = objFrameInfo.FrameCode(strFECMode & ".E")
+            If bytFrameType = bytLastFECDataFrameSent Then ' Added 0.3.4.1 
+                bytFrameType = bytFrameType Xor &H1 ' insures a new start is on a different frame type. 
+            End If
+            objFrameInfo.FrameInfo(bytFrameType, blnOdd, intNumCar, strMod, intBaud, intDataLen, intRSLen, bytQualThres, strType)
+            GetDataFromQueue(bytFrameData, intDataLen * intNumCar)
+            ' If bytFrameData.Length < (intDataLen * intNumCar) Then ReDim Preserve bytFrameData((intDataLen * intNumCar) - 1)
+            'Logs.WriteDebug("[ARDOPprotocol.StartFEC]  Frame Data (string) = " & GetString(bytFrameData))
+            If strMod = "4FSK" Then
+                bytFrameData = objMain.objMod.EncodeFSKData(bytFrameType, bytFrameData, strCurrentFrameFilename)
+                intCurrentFrameSamples = objMain.objMod.Mod4FSKData(bytFrameType, bytFrameData)
+            ElseIf strMod = "16FSK" Then
+                bytFrameData = objMain.objMod.EncodeFSKData(bytFrameType, bytFrameData, strCurrentFrameFilename)
+                intCurrentFrameSamples = objMain.objMod.Mod16FSKData(bytFrameType, bytFrameData)
+            ElseIf strMod = "8FSK" Then
+                bytFrameData = objMain.objMod.EncodeFSKData(bytFrameType, bytFrameData, strCurrentFrameFilename)
+                intCurrentFrameSamples = objMain.objMod.Mod8FSKData(bytFrameType, bytFrameData)
+            Else
+                bytFrameData = objMain.objMod.EncodePSK(bytFrameType, bytFrameData, strCurrentFrameFilename)
+                intCurrentFrameSamples = objMain.objMod.ModPSK(bytFrameType, bytFrameData)
+            End If
+            bytLastFECDataFrameSent = bytFrameType
+            objMain.SendFrame(intCurrentFrameSamples, strCurrentFrameFilename)
+            intFECFramesSent = 1
+*/
+	}
+	return TRUE;
+}
+     
 // Function to get the next FEC data frame 
 
 BOOL GetNextFECFrame()
 {
-	UCHAR bytData[512];
 	int Len;
 
 	if (blnAbort)
@@ -113,13 +231,15 @@ BOOL GetNextFECFrame()
  
 		FrameInfo(bytFrameType, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType);
 
-		Len = GetDataFromQueue(bytData, intDataLen * intNumCar);
+		Len = intDataLen * intNumCar;
 
-		//'If bytData.Length < (intDataLen * intNumCar) Then ReDim Preserve bytData((intDataLen * intNumCar) - 1)
+		if (Len > bytDataToSendLength)
+			Len = bytDataToSendLength;
+
 sendit:
 		if (strcmp(strMod, "4FSK") == 0)
 		{
-			EncLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedBytes);
+			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
 
 			if (bytFrameType >= 0x7A && bytFrameType <= 0x7D)
 				Mod4FSK600BdDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
@@ -128,22 +248,22 @@ sendit:
 		}
 		else if (strcmp(strMod, "16FSK") == 0)
 		{
-			int EncLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedBytes);
+			int EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
 			Mod16FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else if (strcmp(strMod, "8FSK") == 0)
 		{
-			int EncLen = EncodeFSKData(bytFrameType, bytData, Len, bytEncodedBytes);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+			int EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
 			Mod8FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else
 		{
-			int EncLen = EncodePSKData(bytFrameType, bytData, Len, bytEncodedBytes);
+			int EncLen = EncodePSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
 
 			ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
-			
-			//CreateWaveStream(intCurrentFrameSamples);
+
+		RemoveDataFromQueue(Len);		// No ACKS in FEC
 		intFECFramesSent += 1;
 		bytLastFECDataFrameSent = bytFrameType;
 		return TRUE;
@@ -153,11 +273,11 @@ sendit:
 
 	if ((intFECFramesSent % (FECRepeats + 1)) == 0)
 	{
-		Len = GetDataFromQueue(bytData, intDataLen * intNumCar);
-		//'If bytData.Length < (intDataLen * intNumCar) Then ReDim Preserve bytData((intDataLen * intNumCar) - 1)
-		//' toggle the frame type Even/Odd
-		
-		bytFrameType = bytFrameType ^ 1;
+
+		Len = intDataLen * intNumCar;
+
+		if (Len > bytDataToSendLength)
+			Len = bytDataToSendLength;
 
 		goto sendit;
 	}

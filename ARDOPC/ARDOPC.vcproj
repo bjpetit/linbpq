@@ -18,7 +18,7 @@
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
+			IntermediateDirectory="$(SolutionDir)$(ConfigurationName)"
 			ConfigurationType="1"
 			CharacterSet="0"
 			>
@@ -204,6 +204,10 @@
 			</File>
 			<File
 				RelativePath=".\FEC.c"
+				>
+			</File>
+			<File
+				RelativePath=".\FFT.c"
 				>
 			</File>
 			<File

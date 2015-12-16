@@ -7,16 +7,16 @@
 
 //	Linux will probably use ALSA
 
+//	This is the Windows Version
+
 #define WIN32_LEAN_AND_MEAN		// Exclude rarely-used stuff from Windows headers
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
 
-#ifdef WIN32
 #include <windows.h>
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
 void printtick(char * msg);
-#endif
 
 #include <math.h>
 
@@ -25,19 +25,18 @@ void printtick(char * msg);
 // Windows works with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
 
-#ifdef WIN32
 short buffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
 short inbuffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
-#else
-unsigned short buffer[2][1200];	// Two Transfer/DMA buffers of 0.1 Sec
-unsigned short work;
-#endif
+
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
 
-#ifdef WIN32
+char CaptureDevice[80] = "2";
+char PlaybackDevice[80] = "1";
 
-char xxx[5000] = "";
+char * CaptureDevices = NULL;
+char * PlaybackDevices = NULL;
+
 WAVEFORMATEX wfx = { WAVE_FORMAT_PCM, 1, 12000, 12000, 2, 16, 0 };
 
 HWAVEOUT hWaveOut = 0;
@@ -54,13 +53,11 @@ WAVEHDR inheader[2] =
 	{(char *)inbuffer[0], 0, 0, 0, 0, 0, 0, 0},
 	{(char *)inbuffer[1], 0, 0, 0, 0, 0, 0, 0}
 };
-char xxxx[5000] = "";
 
 WAVEOUTCAPS pwoc;
 WAVEINCAPS pwic;
 
 void InitSound();
-
 
 int Ticks;
 
@@ -70,155 +67,52 @@ LARGE_INTEGER NewTicks;
 
 int LastNow;
 
-void main()
+void main(int argc, char * argv[])
 {
+	if (argc > 1)
+		port = atoi(argv[1]);
+
+	printf("ARDOPC listening on port %d\n", port);
+
 	QueryPerformanceFrequency(&Frequency);
 	Frequency.QuadPart /= 1000;			// Microsecs
 	QueryPerformanceCounter(&StartTicks);
 
-	printtick("Test Start");
-	Sleep(1000);
-	printtick("Test End");
-
 //	xxmain();
 	ardopmain();
 }
+
+int getTicks()
+{
+		QueryPerformanceCounter(&NewTicks);
+		return (int)(NewTicks.QuadPart - StartTicks.QuadPart) / Frequency.QuadPart;
+}
+
 void printtick(char * msg)
 {
 	QueryPerformanceCounter(&NewTicks);
-	Now = (NewTicks.QuadPart - StartTicks.QuadPart) /Frequency.QuadPart;
 	printf("%s %i\r\n", msg, Now - LastNow);
 	LastNow = Now;
 }
 
-
-#else
-#include <stm32f4xx_dma.h>
-#endif
-
 int PriorSize = 0;
 
-int Number = 0;				// Number waiting to be sent
 int Index = 0;				// DMA Buffer being used 0 or 1
-int inIndex = 0;			// DMA Buffer being used 0 or 1
-
-int SendSize = 1200;		// 100 mS for now
-
-// Filter State Variables
-
-static float dblR = (float)0.9995f;	// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
-static int intN = 120;				//Length of filter 12000/100
-static float dblRn;
-
-static float dblR2;
-static float dblCoef[26] = {0.0f};			// the coefficients
-float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
-
-// The resonators 
-      
-float dblZout_0[26] = {0.0f};	// resonator outputs
-float dblZout_1[26] = {0.0f};	// resonator outputs delayed one sample
-float dblZout_2[26] = {0.0f};	// resonator outputs delayed two samples
-
-int fWidth;				// Filter BandWidth
-int SampleNo;
-int outCount = 0;
-int first, last;		// Filter slots
-
-float largest = 0;
-float smallest = 0;
-
-short Last120[128];
-
-int Last120Get = 0;
-int Last120Put = 120;
-
-// initFilter is called to set up each packet. It selects filter width
+int inIndex = 0;				// DMA Buffer being used 0 or 1
 
 FILE * wavfp1;
 
-void initFilter(int Width)
-{
-	int i, j;
-	fWidth = Width;
-	largest = smallest = 0;
-	SampleNo = 0;
-	Number = 0;
-	outCount = 0;
-	memset(Last120, 0, 256);
-	Index = 0;
-
-	KeyPTT(TRUE);
-	SoundIsPlaying = TRUE;
-	StopCapture();
-
-	Last120Get = 0;
-	Last120Put = 120;
-
-	dblRn = (float)pow(dblR, intN);
-	dblR2 = (float)pow(dblR, 2);
-
-	dblZin_2 = dblZin_1 = 0;
-
-	switch (fWidth)
-	{
-	case 200:
-
-		// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
-
-		first = 14;
-		last = 16;		// 3 filter sections
-		break;
-
-	case 500:
-
-		// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
-
-		first = 12;
-		last = 18;		// 7 filter sections
-		break;
-
-	case 1000:
-		
-		// implements 11 100 Hz wide sections centered on 1500 Hz  (~1000 Hz wide @ - 30dB centered on 1500 Hz)
-
-		first = 10;
-		last = 20;		// 7 filter sections
-		break;
-
-	case 2000:
-		
-		// implements 21 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
-
-		first = 5;
-		last = 25;		// 7 filter sections
-
-
-	}
-
-	for (j = first; j <= last; j++)	   // calculate output for 3 resonators 
-	{
-		dblZout_0[j] = 0;
-		dblZout_1[j] = 0;
-		dblZout_2[j] = 0;
-	}
-
-	// Initialise the coefficients
-
-	if (dblCoef[last] == 0.0)
-	{
-		for (i = first; i <= last; i++)
-		{
-			dblCoef[i] = 2 * dblR * cosf(2 * M_PI * i / intN); // For Frequency = bin i
-		}
-	}
- }
-
 BOOL DMARunning = FALSE;		// Used to start DMA on first write
 
-void SendtoCard(int n)
+short * SendtoCard(unsigned short * buf, int n)
 {
-#ifdef WIN32
+	if (Loopback)
+	{
+		// Loop back   to decode for testing
+
+		ProcessNewSamples(buf, 1200);		// signed
+	}
+
 	header[Index].dwBufferLength = n * 2;
 
 	waveOutPrepareHeader(hWaveOut, &header[Index], sizeof(WAVEHDR));
@@ -226,241 +120,17 @@ void SendtoCard(int n)
 
 	// wait till previous buffer is complete
 
-	while (!(header[!Index].dwFlags & WHDR_DONE));
+	while (!(header[!Index].dwFlags & WHDR_DONE))
+	{
+		txSleep(10);				// Run buckground while waiting 
+	}
+
 	waveOutUnprepareHeader(hWaveOut, &header[!Index], sizeof(WAVEHDR));
 	Index = !Index;
 
-#else
-
-	// Embedded
-
-	// Start DMA if first call
-
-	if (DMARunning == FALSE)
-	{
-		StartDAC();
-		DMARunning = TRUE;
-	}
-
-	// wait for other DMA buffer to finish
-
-	printtick("Start Wait");		// FOr timing tests
-
-	while (1)
-	{
-		int chan = DMA_GetCurrentMemoryTarget(DMA1_Stream5);
-
-		if (chan == Index) 	// we've started sending current buffer
-		{
-			Index = !Index;
-			printtick("Stop Wait");
-			return;
-		}
-	}
-#endif
-}
-short loopbuff[1200];		// Temp for testing - loop sent samples to decoder
-
-void SampleSink(short Sample)
-{
-	//	Filter and send to sound interface
-
-	// This version is passed samples one at a time, as we don't have
-	//	enough RAM in embedded systems to hold a full audio frame
-
-	int intFilLen = intN / 2;
-	int j;
-	float intFilteredSample = 0;			//  Filtered sample
-
-	//	We save the previous intN samples
-	//	The samples are held in a cyclic buffer
-
-	if (SampleNo < intN)
-		dblZin = Sample;
-	else 
-		dblZin = Sample - dblRn * Last120[Last120Get];
-
-	if (++Last120Get == 121)
-		Last120Get = 0;
-
-	//Compute the Comb
-
-	dblZComb = dblZin - dblZin_2 * dblR2;
-	dblZin_2 = dblZin_1;
-	dblZin_1 = dblZin;
-
-	// Now the resonators
-		
-	for (j = first; j <= last; j++)	   // calculate output for 3 or 7 resonators 
-	{
-		dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
-		dblZout_2[j] = dblZout_1[j];
-		dblZout_1[j] = dblZout_0[j];
-
-		switch (fWidth)
-		{
-		case 200:
-
-			// scale each by transition coeff and + (Even) or - (Odd) 
-
-			if (SampleNo >= intFilLen)
-			{
-				if (j == 14 || j == 16)
-					intFilteredSample += (float)0.7389f * dblZout_0[j];
-				else
-					intFilteredSample -= (float)dblZout_0[j];
-			}
-			break;
-
-		case 500:
-
-			// scale each by transition coeff and + (Even) or - (Odd) 
-			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-			// practical range of scaling .05 to .25
-			// Scaling also accomodates for the filter "gain" of approx 60. 
-
-			if (SampleNo >= intFilLen)
-			{
-				if (j == 12 || j == 18)
-					intFilteredSample += 0.10601f * dblZout_0[j];
-				else if (j == 13 || j == 17)
-					intFilteredSample -= 0.59383f * dblZout_0[j];
-				else if ((j & 1) == 0)	// 14 15 16
-					intFilteredSample += (int)dblZout_0[j];
-				else
-					intFilteredSample -= (int)dblZout_0[j];
-			}
-        
-			break;
-		
-		case 1000:
-
-			// scale each by transition coeff and + (Even) or - (Odd) 
-			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-			// practical range of scaling .05 to .25
-			// Scaling also accomodates for the filter "gain" of approx 60. 
-         
-
-			if (SampleNo >= intFilLen)
-			{
-				if (j == 10 || j == 20)
-					intFilteredSample +=  0.389f * dblZout_0[j];
-				else if ((j & 1) == 0)	// Even
-					intFilteredSample += (int)dblZout_0[j];
-				else
-					intFilteredSample -= (int)dblZout_0[j];
-			}
-        
-			break;
-
-		case 2000:
-
-			// scale each by transition coeff and + (Even) or - (Odd) 
-			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
-			// practical range of scaling .05 to .25
-			// Scaling also accomodates for the filter "gain" of approx 60. 
-          
-			if (SampleNo >= intFilLen)
-			{
-				if (j == 5 || j == 25)
-					intFilteredSample +=  0.389f * dblZout_0[j];
-				else if ((j & 1) == 0)	// Even
-					intFilteredSample += (int)dblZout_0[j];
-				else
-					intFilteredSample -= (int)dblZout_0[j];
-			}
-		}
-	}
-
-	if (SampleNo >= intFilLen)
-	{
-		intFilteredSample = intFilteredSample * 0.00833333333f; //  rescales for gain of filter
-		largest = max(largest, intFilteredSample);	
-		smallest = min(smallest, intFilteredSample);
-		
-		if (intFilteredSample > 32700)  // Hard clip above 32700
-			intFilteredSample = 32700;
-		else if (intFilteredSample < -32700)
-			intFilteredSample = -32700;
-
-#ifdef WIN32
-		buffer[Index][Number++] = (short)intFilteredSample;
-#else
-		work = (short)(intFilteredSample);
-		loopbuff[Number] = work;
-		buffer[Index][Number++] = (work + 32768) >> 4; // 12 bit left justify
-#endif
-		if (Number == SendSize)
-		{
-			// send this buffer to sound interface
-			// Loop back   to decode for testing
-
-			if (Loopback)
-			{
-#ifdef WIN32
-				ProcessNewSamples(buffer[Index], 1200);		// signed
-#else
-				ProcessNewSamples(loopbuff, 1200);
-#endif
-			}
-			SendtoCard(SendSize);
-			Number = 0;
-		}
-	}
-		
-	Last120[Last120Put++] = Sample;
-
-	if (Last120Put == 121)
-		Last120Put = 0;
-
-	SampleNo++;
+	return &buffer[Index][0];
 }
 
-	
-//	Called at end of transmission
-
-void SoundFlush()
-{
-	// Append Trailer then send remaining samples
-
-	AddTrailer();			// add the trailer.
-
-	if (Loopback)
-#ifdef WIN32
-		ProcessNewSamples(buffer[Index], Number);
-#else
-		ProcessNewSamples(loopbuff, Number);
-#endif
-
-	SendtoCard(Number * 2);
-
-#ifndef WIN32
-
-	// Wait for other DMA buffer to empty beofre shutting down DAC
-
-	while (1)
-	{
-		int chan = DMA_GetCurrentMemoryTarget(DMA1_Stream5);
-
-		if (chan == Index) 	// we've started sending current buffer
-		{
-			break;
-		}
-	}
-
-	stopDAC();
-	DMARunning = FALSE;
-
-#else
-		while (!(header[0].dwFlags & WHDR_DONE));
-		while (!(header[1].dwFlags & WHDR_DONE));
-
-#endif
-
-	SoundIsPlaying = FALSE;
-	PlayComplete = TRUE;
-	return;
-}
 
 //		// This generates a nice musical pattern for sound interface testing
 //    for (t = 0; t < sizeof(buffer); ++t)
@@ -470,18 +140,51 @@ void SoundFlush()
 
 void InitSound()
 {
-#ifdef WIN32
-
 	int ret;
+	int count, i;
+
+	count = waveInGetNumDevs();
+
+	PlaybackDevices = malloc((MAXPNAMELEN + 2) * count);
+	PlaybackDevices[0] = 0;
+	
+	for (i = 0; i < count; i++)
+	{
+		waveOutOpen(&hWaveOut, i, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+		waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
+
+		if (PlaybackDevices[0])
+			strcat(PlaybackDevices, ",");
+		strcat(PlaybackDevices, pwoc.szPname);
+		waveOutClose(hWaveOut);
+	}
+
+	count = waveOutGetNumDevs();
+
+	CaptureDevices = malloc((MAXPNAMELEN + 2) * count);
+	CaptureDevices[0] = 0;
+	
+	for (i = 0; i < count; i++)
+	{
+		waveInOpen(&hWaveIn, i, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+		waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
+
+		if (CaptureDevices)
+			strcat(CaptureDevices, ",");
+		strcat(CaptureDevices, pwic.szPname);
+		waveInClose(hWaveIn);
+	}
 
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
 
-    waveOutOpen(&hWaveOut, 0, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+    waveOutOpen(&hWaveOut, atoi(PlaybackDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 	waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
+	Debugprintf("Opened WaveOut Device %s", pwoc.szPname);
 
-    waveInOpen(&hWaveIn, 0, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+    waveInOpen(&hWaveIn, atoi(CaptureDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
 	waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
+	Debugprintf("Opened WaveIn Device %s", pwic.szPname);
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
 
@@ -495,8 +198,6 @@ void InitSound()
 	ret = waveInAddBuffer(hWaveIn, &inheader[1], sizeof(WAVEHDR));
 
 	ret = waveInStart(hWaveIn);
-
-#endif
 }
 
 PollReceivedSamples()
@@ -504,11 +205,9 @@ PollReceivedSamples()
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
 
-#ifdef WIN32
-
 	if (inheader[inIndex].dwFlags & WHDR_DONE)
 	{
-//		printf("Process %d %d\n", Index, inheader[inIndex].dwBytesRecorded/2);
+//		printf("Process %d %d\n", inIndex, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
 			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
 
@@ -519,30 +218,19 @@ PollReceivedSamples()
 
 		inIndex = !inIndex;
 	}
-		
-
-#endif
 }
 
 
 void StopCapture()
 {
 	Capturing = FALSE;
-#ifdef WIND32
-	waveInStop(hWaveIn);
-#endif
+
+//	waveInStop(hWaveIn);
 //	printf("Stop Capture\n");
 }
 
-void StartCodec(char * strFault)
-{
-	strFault[0] = 0;
-}
-
-void StopCodec(char * strFault)
-{
-	strFault[0] = 0;
-}
+void DiscardOldSamples();
+void ClearAllMixedSamples();
 
 void StartCapture()
 {
@@ -551,20 +239,14 @@ void StartCapture()
 	ClearAllMixedSamples();
 	State = SearchingForLeader;
 
-#ifdef WIN32
-//	waveInStart(hWaveIn);
-#endif
 //	printf("Start Capture\n");
 }
 void CloseSound()
 { 
-#ifdef WIN32
-//	waveOutClose(hWaveOut);
-	fclose(wavfp1);
-#endif
+	waveInClose(hWaveIn);
+	waveOutClose(hWaveOut);
 }
 
-#ifdef WIN32
 #include <stdarg.h>
 
 VOID Debugprintf(const char * format, ...)
@@ -580,17 +262,82 @@ VOID Debugprintf(const char * format, ...)
 
 	return;
 }
-#endif
-
-
-
 
 VOID WriteSamples(short * buffer, int len)
 {
-
-#ifdef WIN32
 	fwrite(buffer, 1, len * 2, wavfp1);
-#endif
 }
 
+unsigned short * SoundInit()
+{
+	Index = 0;
+	return &buffer[0][0];
+}
+	
+//	Called at end of transmission
+
+void SoundFlush(Number)
+{
+	// Append Trailer then send remaining samples
+
+	AddTrailer();			// add the trailer.
+
+	if (Loopback)
+		ProcessNewSamples(buffer[Index], Number);
+
+	SendtoCard(buffer[Index], Number * 2);
+
+	//	Wait for all sound output to complete
+	
+	while (!(header[0].dwFlags & WHDR_DONE));
+	while (!(header[1].dwFlags & WHDR_DONE));
+
+	SoundIsPlaying = FALSE;
+	PlayComplete = TRUE;
+	return;
+}
+
+
+void StartCodec(char * strFault)
+{
+	strFault[0] = 0;
+	InitSound();
+
+}
+
+void StopCodec(char * strFault)
+{
+	CloseSound();
+	strFault[0] = 0;
+}
+
+VOID RadioPTT()			// No Radio Control in Windows Version (but may add later)
+{
+}
+
+//  Function to send PTT TRUE or PTT FALSE comannad to Host or if local Radio control Keys radio PTT 
+
+const char BoolString[2][6] = {"FALSE", "TRUE"};
+
+BOOL KeyPTT(BOOL blnPTT)
+{
+	// Returns TRUE if successful False otherwise
+
+	if (blnLastPTT &&  !blnPTT)
+		dttStartRTMeasure = Now;	 // start a measurement on release of PTT.
+
+	if (!RadioControl)
+		if (blnPTT)
+			QueueCommandToHost("PTT TRUE");
+		else
+			QueueCommandToHost("PTT FALSE");
+
+	else
+		RadioPTT(blnPTT);
+
+	if (DebugLog) Debugprintf("[Main.KeyPTT]  PTT-%s", BoolString[blnPTT]);
+
+	blnLastPTT = blnPTT;
+	return TRUE;
+}
 

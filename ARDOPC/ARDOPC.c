@@ -14,7 +14,6 @@
 
 #include "ARDOPC.h"
 
-
 void CompressCallsign(char * Callsign, UCHAR * Compressed);
 void CompressGridSquare(char * Square, UCHAR * Compressed);
 void  ASCIIto6Bit(char * Padded, UCHAR * Compressed);
@@ -22,7 +21,10 @@ void GetTwoToneLeaderWithSync(int intSymLen, short * intLeader);
 void SendID(BOOL blnEnableCWID);
 void PollReceivedSamples();
 void CheckTimers();
-
+BOOL GetNextARQFrame();
+BOOL TCPInit();
+void TCPPoll();
+BOOL MainPoll();
 
 // Config parameters
 
@@ -36,8 +38,13 @@ int TuningRange = 100;
 int ARQConReqRepeats = 5;
 BOOL DebugLog = TRUE;
 BOOL CommandTrace = TRUE;
-
-int port = 8517;
+int DriveLevel = 100;
+int FECRepeats = 0;
+BOOL FECId = FALSE;
+int Squelch = 5;
+enum _ARQBandwidth ARQBandwidth = B2000MAX;
+int port = 8515;
+BOOL RadioControl = FALSE;
 
 // 
 
@@ -51,6 +58,8 @@ int tmrSendTimeout;
 
 int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 int intRmtLeaderMeasure = 0;
+
+int dttCodecStarted;
 
 enum _ReceiveState State;
 enum _ARDOPState ProtocolState;
@@ -89,8 +98,6 @@ BOOL blnCodecStarted = FALSE;
 
 int dttNextPlay = 0;
 
-
-volatile int Now = 0;
 
 const UCHAR bytValidFrameTypes[]=
 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
@@ -134,19 +141,6 @@ UCHAR isValidFrame[256]=
 
 BOOL blnTimeoutTriggered = FALSE;
 
-//	Main TX Buffer
-
-UCHAR bytDataToSend[4000] = 
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
-		"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";
-
-;					// May malloc this, or change to cyclic buffer
-
-int bytDataToSendLength = 512;
-
 //	We can't keep the audio samples for retry, but we can keep the
 //	encoded data
 
@@ -160,7 +154,16 @@ int intLastRcvdFrameQuality;
 
 int intAmp = 26000;	   // Selected to have some margin in calculations with 16 bit values (< 32767) this must apply to all filters as well. 
 
+const char strAllDataModes[26][14] = {"8FSK.200.25", "4FSK.200.50S", "4FSK.200.50", "4PSK.200.100S",
+		"4PSK.200.100", "8PSK.200.100", "16FSK.500.25S", "16FSK.500.25", "4FSK.500.100S",
+		"4FSK.500.100", "4PSK.500.100", "8PSK.500.100", "4PSK.500.167", "8PSK.500.167",
+		"4FSK.1000.100", "4PSK.1000.100", "8PSK.1000.100", "4PSK.1000.167", "8PSK.1000.167", 
+		"4FSK.2000.600S", "4FSK.2000.600", "4FSK.2000.100", "4PSK.2000.100", "8PSK.2000.100",
+		"4PSK.2000.167", "8PSK.2000.167"};
 
+int strAllDataModesLen = 26;
+
+ 
 const char strFrameType[256][16] = {
 	"DataNAK", //  Range 0x00 to 0x1F includes 5 bits for quality 1 Car, 200Hz,4FSK
 	"","","","","","","","","","","","","","","","",
@@ -347,6 +350,35 @@ BOOL CheckValidCallsignSyntax(char * strCallsign)
 	return TRUE;
 }
 
+//	 Function to check for proper syntax of a 4, 6 or 8 character GS
+
+BOOL CheckGSSyntax(char * GS)
+{
+	int Len = strlen(GS);
+
+	if (!(Len == 4 || Len == 6 || Len == 8))
+		return FALSE;
+
+	if (!isalpha(GS[0]) || !isalpha(GS[1]))
+		return FALSE;
+	
+	if (!isdigit(GS[2]) || !isdigit(GS[3]))
+		return FALSE;
+
+	if (Len == 4)
+		return TRUE;
+
+	if (!isalpha(GS[4]) || !isalpha(GS[5]))
+		return FALSE;
+
+	if (Len == 6)
+		return TRUE;
+
+	if (!isdigit(GS[6]) || !isdigit(GS[7]))
+		return FALSE;
+
+	return TRUE;
+}
 
 // Function polled by Main polling loop to see if time to play next wave stream
 
@@ -380,7 +412,7 @@ BOOL GetNextARQFrame()
 
 	if (blnAbort)  // handles ABORT (aka Dirty Disconnect)
 	{
-		//If MCB.DebugLog Then Logs.WriteDebug("[ARDOPprotocol.GetNextARQFrame] ABORT...going to ProtocolState DISC, return FALSE")
+		//if (DebugLog) Debugprintf(("[ARDOPprotocol.GetNextARQFrame] ABORT...going to ProtocolState DISC, return FALSE")
 
 		ClearDataToSend();
 		
@@ -454,7 +486,7 @@ BOOL GetNextARQFrame()
             End If
 			*/
 
-	// Handles a timeout from an ARQ conneceted State
+	// Handles a timeout from an ARQ connected State
 
 	if (ProtocolState == ISS || ProtocolState == IDLE || ProtocolState == IRS)
 	{
@@ -462,7 +494,7 @@ BOOL GetNextARQFrame()
 		{
             if (!blnTimeoutTriggered)
 			{
-				//If MCB.DebugLog Then Logs.WriteDebug("[ARDOPprotocol.GetNexARQFrame] Timeout setting SendTimeout timer to start.")
+				if (DebugLog) Debugprintf("[ARDOPprotocol.GetNexARQFrame] Timeout setting SendTimeout timer to start.");
 
 				blnEnbARQRpt = FALSE;
 				blnTimeoutTriggered = TRUE; // prevents a retrigger
@@ -525,48 +557,34 @@ void ardopmain()
 
 //	ProtocolMode = ARQ;
 
-	while(1)
+	while(!blnClosing)
 	{
 		// Get Time Now is millisecs since program start
 
-#ifdef WIN32
-		QueryPerformanceCounter(&NewTicks);
-		Now = (NewTicks.QuadPart - StartTicks.QuadPart) / Frequency.QuadPart;
-#endif
-	//	if (Capturing)
+		//	if (Capturing)
 			PollReceivedSamples();
 
 		CheckTimers();	
 
 #ifndef TARGET_STM32F4
 		TCPPoll();
-
 #endif
-
 		MainPoll();
-
 		Sleep(10);
 	}
 
-	SendID(0);
+	return;
+}
 
-#ifdef WIN32
-	 
-	SetARDOPProtocolState(FECSend);
-//	GetNextFECFrame();
+void txSleep(int mS)
+{
+	// called while waiting for next TX buffer. Run background processes
 
-	SetARDOPProtocolState(FECSend);
-//	GetNextFECFrame();
-
-	SetARDOPProtocolState(FECSend);
-//	GetNextFECFrame();
-
+#ifndef TARGET_STM32F4
+		TCPPoll();
 #endif
-// 
-//  SendID(0);
-//  ModTwoToneTest();
 
-  return ;
+	Sleep(mS);
 }
 
 
@@ -982,7 +1000,7 @@ BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
 		*intNumCar = 8;
 		*intDataLen = 108;
 		*intRSLen = 36;
-		strcpy(strMod, "4PSK");
+		strcpy(strMod, "8PSK");
 		*intBaud = 100;
 		*bytQualThres = 50;
 		break;
@@ -1734,7 +1752,7 @@ void CompressCallsign(char * inCallsign, UCHAR * Compressed)
 		strcat(Padded, "    ");
 
 		if (SSID >= 10)		// ' handles special case of -10 to -15 : ; < = > ? '
-			Padded[7] = ':' + *(Dash) - 10;
+			Padded[7] = ':' + SSID - 10;
 		else
 			Padded[7] = *(Dash);
 	}
@@ -2077,38 +2095,30 @@ void ClearDataToSend()
 	bytDataToSendLength = 0;
 }
 
-int GetDataFromQueue(UCHAR * Data, int MaxLen)
-{
-	int returned = MaxLen;
 
-	if (MaxLen == 0)
-		return 0;
+void RemoveDataFromQueue(int Len)
+{
+	char HostCmd[32];
+
+	if (Len == 0)
+		return;
+
+	// Called when ACK received, or on FEC send
 
 	GetSemaphore();
 
-	if (MaxLen > bytDataToSendLength)
-		returned = bytDataToSendLength;
+	if (Len > bytDataToSendLength)
+		Len = bytDataToSendLength;			// Shouldn't happen, unless the Q is cleared
 
-	memcpy(Data, bytDataToSend, returned);
+	bytDataToSendLength -= Len;
 
-	bytDataToSendLength -= returned;
-
-	if (bytDataToSendLength)
-		memmove(bytDataToSend, &bytDataToSend[returned], bytDataToSendLength);
+	if (bytDataToSendLength > 0)
+		memmove(bytDataToSend, &bytDataToSend[Len], bytDataToSendLength);
 
 	FreeSemaphore();
 
-	return returned;
-}
-
-void KeyPTT(BOOL State)
-{
-	blnLastPTT = State;
-
-	if (State)
-		printf("PTT ON\n");
-	else
-		printf("PTT OFF\n");
+	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
+	QueueCommandToHost(HostCmd);
 }
 
 // Timer Rotines
@@ -2173,7 +2183,7 @@ void CheckTimers()
    
 	if (tmrIRSPendingTimeout)
 	{
-		char HostCmd[32];
+		char HostCmd[80];
 		
 		tmrIRSPendingTimeout--;
 
@@ -2207,7 +2217,7 @@ void CheckTimers()
 		tmrFinalID--;
 		if (tmrFinalID == 0)
 		{
-			//If MCB.DebugLog Then Logs.WriteDebug("[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (" & strFinalIDCallsign & ", [" & MCB.GridSquare & "])")
+			//if (DebugLog) Debugprintf(("[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (" & strFinalIDCallsign & ", [" & MCB.GridSquare & "])")
    
 			if (CheckValidCallsignSyntax(strFinalIDCallsign))
 			{
@@ -2236,11 +2246,6 @@ void CheckTimers()
 
 BOOL MainPoll()
 {
-	#ifdef WIN32
-		QueryPerformanceCounter(&NewTicks);
-		Now = (NewTicks.QuadPart - StartTicks.QuadPart) / Frequency.QuadPart;
-#endif
-
 	//   Dim stcStatus As Status = Nothing
 
    //     ' Check the sound card to insure still sampling
@@ -2307,14 +2312,25 @@ BOOL MainPoll()
 //		printf("Now %d Now - dttNextPlay 3  = %d\n", Now, Now - dttNextPlay);
 
 		if (Now > dttNextPlay)
-	{
-		//	We cant just repeat the stream as we dont keep it
+		{
+			//	We cant just repeat the stream as we dont keep it
 		
-		RemodulateLastFrame();
-		blnFramePending = FALSE;
+			Debugprintf("Repeating Last Frame\n");
+			RemodulateLastFrame();
+			blnFramePending = FALSE;
+		}
 	}
+	
+	//Checks to see if frame ready for playing
+
+	else if (!SoundIsPlaying && !blnFramePending)
+	{
+		if (GetNextFrame())
+		{
+			blnFramePending = TRUE;
+			dttNextPlay = Now + intFrameRepeatInterval;
+		}
 	}
-  
 //            If Not SoundIsPlaying Then
  //               SendIDToolStripMenuItem.Enabled = objProtocol.GetARDOPSetARDOPProtocolState(ProtocolState.DISC
    //         Else
@@ -2382,11 +2398,238 @@ BOOL MainPoll()
 	return TRUE;
 }
 
-#ifndef WIN32
+int dttLastBusy;
+int dttLastClear;
+int dttStartRTMeasure;
+int intLastStart;
+int intLastStop;
+float dblAvgBaselineSlow;
+float dblAvgBaselineFast;
+float dblAvgPk2BaselineRatio;
 
-void Sleep(int ticks)
+//  Functino to extract bandwidth from ARQBandwidth
+
+int ExtractARQBandwidth()
 {
+	return atoi(ARQBandwidths[ARQBandwidth]);
 }
 
-#endif
+//	 Function to implement a busy detector based on 1024 point FFT
+ 
+BOOL BusyDetect(float * dblMag, int intStart, int intStop)
+{
+	// this only called while searching for leader ...once leader detected, no longer called.
+	// First look at simple peak over the frequency band of  interest.
+	// Status:  May 28, 2014.  Some initial encouraging results. But more work needed.
+	//       1) Use of Start and Stop ranges good and appear to work well ...may need some tweaking +/_ a few bins.
+	//       2) Using a Fast attack and slow decay for the dblAvgPk2BaselineRation number e.g.
+	//       dblAvgPk2BaselineRatio = Max(dblPeakPwrAtFreq / dblAvgBaselineX, 0.9 * dblAvgPk2BaselineRatio)
+	// Seems to work well for the narrow detector. Tested on real CW, PSK, RTTY. 
+	// Still needs work on the wide band detector. (P3, P4 etc)  May be issues with AGC speed. (my initial on-air tests using AGC Fast).
+	// Ideally can find a set of parameters that won't require user "tweaking"  (Busy Squelch) but that is an alternative if needed. 
+	// use of technique of re initializing some parameters on a change in detection bandwidth looks good and appears to work well with 
+	// scanning.  Could be expanded with properties to "read back" these parameters so they could be saved and re initialize upon each new frequency. 
 
+	static int intBusyCountPkToBaseline = 0;
+	static int intBusyCountFastToSlow = 0;
+	static int intBusyCountSlowToFast = 0;
+	static BOOL blnLastBusy = FALSE;
+
+	float dblAvgBaseline = 0;
+	float dblPwrAtPeakFreq = 0;
+	float dblAvgBaselineX;
+	float dblAlphaBaselineSlow = 0.1f; // This factor affects the filtering of baseline slow. smaller = slower filtering
+	float dblAlphaBaselineFast = 0.5f; // This factor affects the filtering of baseline fast. smaller = slower filtering
+	int intPkIndx = 0;
+	float dblFSRatioNum, dblSFRatioNum;
+	BOOL  blnFS, blnSF, blnPkBaseline;
+	int i;
+
+	// This holds off any processing of data until 100 ms after PTT release to allow receiver recovery.
+      
+	if (Now - dttStartRTMeasure < 100)
+		return blnLastBusy;
+
+	for (i = intStart; i <= intStop; i++)	 // cover a range that matches the bandwidth expanded (+/-) by the tuning range
+	{
+		if (dblMag[i] > dblPwrAtPeakFreq)
+		{
+			dblPwrAtPeakFreq = dblMag[i];
+			intPkIndx = i;
+		}
+		dblAvgBaseline += dblMag[i];
+	}
+     
+	if (intPkIndx == 0)
+		return 0;
+	
+	// add in the 2 bins above and below the peak (about 59 Hz total bandwidth)
+	// This needs refinement for FSK mods like RTTY which have near equal peaks making the Peak and baseline on strong signals near equal
+	// Computer the power within a 59 Hz spectrum around the peak
+
+	dblPwrAtPeakFreq += (dblMag[intPkIndx - 2] + dblMag[intPkIndx - 1]) + (dblMag[intPkIndx + 2] + dblMag[intPkIndx + 1]);
+	dblAvgBaselineX = (dblAvgBaseline - dblPwrAtPeakFreq) / (intStop - intStart - 5);  // the avg Pwr per bin ignoring the 59 Hz area centered on the peak
+	dblPwrAtPeakFreq = dblPwrAtPeakFreq / 5;  //the the average Power (per bin) in the region of the peak (peak +/- 2bins...about 59 Hz)
+
+	if (intStart == intLastStart && intStop == intLastStop)
+	{
+		dblAvgPk2BaselineRatio = dblPwrAtPeakFreq / dblAvgBaselineX;
+		dblAvgBaselineSlow = (1 - dblAlphaBaselineSlow) * dblAvgBaselineSlow + dblAlphaBaselineSlow * dblAvgBaseline;
+		dblAvgBaselineFast = (1 - dblAlphaBaselineFast) * dblAvgBaselineFast + dblAlphaBaselineFast * dblAvgBaseline;
+	}
+	else
+	{
+		// This initializes the values after a bandwidth change
+
+		dblAvgPk2BaselineRatio = dblPwrAtPeakFreq / dblAvgBaselineX;
+		dblAvgBaselineSlow = dblAvgBaseline;
+		dblAvgBaselineFast = dblAvgBaseline;
+		intLastStart = intStart;
+		intLastStop = intStop;
+	}
+	
+	if (Now - dttLastBusy < 1000 ||  ProtocolState != DISC)	// Why??
+		return blnLastBusy;
+	
+	if (dblAvgPk2BaselineRatio > 1.118f * powf(Squelch, 1.5f))   // These values appear to work OK but may need optimization April 21, 2015
+	{
+		blnPkBaseline = TRUE;
+		dblAvgBaselineSlow = dblAvgBaseline;
+		dblAvgBaselineFast = dblAvgBaseline;
+	}
+	else
+	{
+       // 'If intBusyCountPkToBaseline > 0 Then
+
+		blnPkBaseline = FALSE;
+	}
+	
+	// This detects wide band "pulsy" modes like Pactor 3, MFSK etc
+
+	switch(Squelch)		 // this provides a modest adjustment to the ratio limit based on practical squelch values
+	{
+		//These values yield less sensiivity for F:S which minimizes trigger by static crashes but my need further optimization May 2, 2015
+
+	case 0:
+	case 1:
+	case 2:
+		dblFSRatioNum = 1.9f;
+		dblSFRatioNum = 1.2f;
+		break;
+		
+	case 3:
+		dblFSRatioNum = 2.1f;
+		dblSFRatioNum = 1.4f;
+		break;
+	case 4:
+		dblFSRatioNum = 2.3f;
+		dblSFRatioNum = 1.6f;
+		break;
+	case 5:
+		dblFSRatioNum = 2.5f;
+		dblSFRatioNum = 1.8f;
+		break;
+	case 6:
+		dblFSRatioNum = 2.7f;
+		dblSFRatioNum = 2.0f;
+	case 7:
+		dblFSRatioNum = 2.9f;
+		dblSFRatioNum = 2.2f;
+	case 8:
+	case 9:
+	case 10:
+        dblFSRatioNum = 3.1f;
+		dblSFRatioNum = 2.4f;
+	}
+	
+	// This covers going from Modulation to no modulation e.g. End of Pactor frame
+
+	if ((dblAvgBaselineSlow / dblAvgBaselineFast) > dblSFRatioNum)
+	
+		//Debug.WriteLine("     Slow to Fast")
+		blnSF = TRUE;
+	else
+		blnSF = FALSE;
+	
+	//  This covers going from no modulation to Modulation e.g. Start of Pactor Frame or Static crash
+	
+	if ((dblAvgBaselineFast / dblAvgBaselineSlow) > dblFSRatioNum)
+         //Debug.WriteLine("     Fast to Slow")
+		blnFS = TRUE;
+	else
+		blnFS = FALSE;
+
+	if (blnFS || blnSF || blnPkBaseline)
+	{
+		//'If blnFS Then Debug.WriteLine("Busy: Fast to Slow")
+		//'If blnSF Then Debug.WriteLine("Busy: Slow to Fast")
+		//'If blnPkBaseline Then Debug.WriteLine("Busy: Pk to Baseline")
+		blnLastBusy = TRUE;
+		dttLastBusy = Now;
+		return TRUE;
+	}
+	else
+	{
+		blnLastBusy = FALSE;
+		dttLastClear = Now;
+        return FALSE;
+	}
+	return blnLastBusy;
+}
+
+//	Subroutine to update the Busy detector when not displaying Spectrum or Waterfall (graphics disabled)
+ 		
+void UpdateBusyDetector(short * bytNewSamples)
+{
+	float dblReF[1024];
+	float dblImF[1024];
+	int aryLastY[256];
+
+	float dblMag[206];
+	
+	static BOOL blnLastBusyStatus;
+	
+	float dblMagAvg = 0;
+	int intTuneLineLow, intTuneLineHi, intDelta;
+	BOOL blnBusyStatus;
+	int i;
+
+//        Dim stcStatus As Status = Nothing
+//        stcStatus.ControlName = "mnuBusy"
+
+	if (Now - dttCodecStarted < 2)
+		return;
+	
+	FourierTransform(1024, bytNewSamples, &dblReF, &dblImF, FALSE);
+
+	for (i = 0; i <  206; i++)
+	{
+		//	starting at ~300 Hz to ~2700 Hz Which puts the center of the signal in the center of the window (~1500Hz)
+            
+		dblMag[i] = powf(dblReF[i + 25], 2) + powf(dblImF[i + 25], 2);	 // first pass 
+		dblMagAvg += dblMag[i];
+	}
+	intDelta = (ExtractARQBandwidth() / 2 + TuningRange) / 11.719f;
+
+	intTuneLineLow = max((103 - intDelta), 3);
+	intTuneLineHi = min((103 + intDelta), 203);
+    
+	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
+	{
+		blnBusyStatus = BusyDetect(dblMag, intTuneLineLow, intTuneLineHi);
+		
+		if (blnBusyStatus && !blnLastBusyStatus)
+			QueueCommandToHost("BUSY TRUE");
+            //    stcStatus.Text = "True"
+            //    queTNCStatus.Enqueue(stcStatus)
+            //    'Debug.WriteLine("BUSY TRUE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
+			
+		else if (blnLastBusyStatus && !blnBusyStatus)
+			QueueCommandToHost("BUSY FALSE");
+            //    stcStatus.Text = "False"
+            //    queTNCStatus.Enqueue(stcStatus)
+            //    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
+
+		blnLastBusyStatus = blnBusyStatus;
+	}
+}

@@ -9,6 +9,9 @@ FILE * fp1;
 // Function to generate the Two-tone leader and Frame Sync (used in all frame types) 
 
 extern short Dummy;
+
+void Flush();
+
 void GetTwoToneLeaderWithSync(int intSymLen)
 {
 	// Generate a 100 baud (10 ms symbol time) 2 tone leader 
@@ -104,7 +107,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	float dblCarScalingFactor;
 	int intMask = 0;
 	int intLeaderLenMS;
-	int j, k, m, n;
+	int k, m, n;
 
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
@@ -112,7 +115,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	StopCapture();
+	printf("Sending Frame Type %s\n", strType);
 
 	if (intBaud == 50)
 		initFilter(200);
@@ -192,7 +195,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 			intDataPtr += 1;
 		}
 
-		SoundFlush();
+		Flush();
 
 		break;
 
@@ -224,7 +227,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 			intDataPtr += 1;
 		}
              
-		SoundFlush();
+		Flush();
 
 		break;
 
@@ -265,7 +268,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 			}
 			intDataPtr += 1;
 		}       
-		SoundFlush();
+		Flush();
 		break;
 	}
 }
@@ -296,6 +299,8 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 
 	if (strcmp(strMod, "8FSK") != 0)
 		return;
+
+	printf("Sending Frame Type %s\n", strType);
 
 	initFilter(200);
 
@@ -339,7 +344,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 			intMask = intMask >> 3;
 		}
 	}
-	SoundFlush();
+	Flush();
 }
 
 // Function to Modulate encoded data to 16FSK and send to sound interface
@@ -370,7 +375,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 	if (strcmp(strMod, "16FSK") != 0)
 		return;
 
-	StopCapture();
+	printf("Sending Frame Type %s\n", strType);
 
 	initFilter(500);
 
@@ -405,7 +410,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 		}
 		intDataPtr++;
 	}
-	SoundFlush();
+	Flush();
 }
 
 //	Function to Modulate data encoded for 4FSK High baud rate and create the integer array of 32 bit samples suitable for playing 
@@ -438,7 +443,9 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	StopCapture();
+	printf("Sending Frame Type %s\n", strType);
+
+	initFilter(2000);
 
 //	If Not (strType = "DataACK" Or strType = "DataNAK" Or strType = "IDFrame" Or strType.StartsWith("ConReq") Or strType.StartsWith("ConAck")) Then
  //               strLastWavStream = strType
@@ -467,7 +474,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 		}
 		intDataPtr += 1;
 	}
-	SoundFlush();
+	Flush();
 }
 
 
@@ -508,7 +515,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	float dblCarScalingFactor;
 	int intMask = 0;
 	int intLeaderLenMS;
-	int i, j, k, m, n;
+	int i, k, m, n;
 	int intCarStartIndex;
 	int intPeakAmp;
 	int intCarIndex;
@@ -517,6 +524,8 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
  
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
+
+	printf("Sending Frame Type %s\n", strType);
 
 	if (intNumCar == 1)
 		initFilter(200);
@@ -598,7 +607,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 			if (intBaud == 100)
 				intSample += intPSK100bdCarTemplate[intCarIndex][0][n];  // double the symbol value during template lookup for 4PSK. (skips over odd PSK 8 symbols)
 			else
-				intSample -= intPSK200bdCarTemplate[intCarIndex][0][n]; // subtract 2 from the symbol value before doubling and subtract value of table 
+				intSample += intPSK200bdCarTemplate[intCarIndex][0][n]; // subtract 2 from the symbol value before doubling and subtract value of table 
 
 			intCarIndex += 1;
 			if (intCarIndex == 4)
@@ -652,9 +661,13 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 							intCarIndex += 1;	// skip over 1500 Hz for multi carrier modes (multi carrier modes all use even hundred Hz tones)
 					}
 					intSample = intSample * dblCarScalingFactor; // on the last carrier rescale value based on # of carriers to bound output
-					if (intSample > 32767 || intSample < -32767)
-						printf("too big");
-					
+
+					if (intSample > 32700)
+						intSample = 32700;
+				
+					if (intSample < -32700)
+					  	intSample = -32700;
+	
 					SampleSink(intSample);		
 				}       
 				bytMask = bytMask >> 2;
@@ -693,9 +706,9 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 						else
 						{
 							if (bytSymToSend < 4) // This uses the symmetry of the symbols to reduce the table size by a factor of 2
-								intSample += intPSK100bdCarTemplate[intCarIndex][bytSymToSend][n]; // positive phase values template lookup for 8PSK.
+								intSample += intPSK200bdCarTemplate[intCarIndex][bytSymToSend][n]; // positive phase values template lookup for 8PSK.
 							else
-								intSample -= intPSK100bdCarTemplate[intCarIndex][bytSymToSend - 4][n]; // negative phase values,  subtract value of table 
+								intSample -= intPSK200bdCarTemplate[intCarIndex][bytSymToSend - 4][n]; // negative phase values,  subtract value of table 
 						}
 
 						if (n == intSampPerSym - 1)		// Last sample?
@@ -715,7 +728,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 			intDataPtr += 3;
 		}
 	}
-	SoundFlush();
+	Flush();
 }
 
 
@@ -740,7 +753,7 @@ void AddTrailer()
 void RemodulateLastFrame()
 {	
 	int intNumCar, intBaud, intDataLen, intRSLen;
-	int bytMinQualThresh;
+	UCHAR bytMinQualThresh;
 	BOOL blnOdd;
 
 	char strType[16] = "";
@@ -770,4 +783,272 @@ void RemodulateLastFrame()
 	}
 	ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 }
-	
+
+// Filter State Variables
+
+static float dblR = (float)0.9995f;	// insures stability (must be < 1.0) (Value .9995 7/8/2013 gives good results)
+static int intN = 120;				//Length of filter 12000/100
+static float dblRn;
+
+static float dblR2;
+static float dblCoef[26] = {0.0f};			// the coefficients
+float dblZin = 0, dblZin_1 = 0, dblZin_2 = 0, dblZComb= 0;  // Used in the comb generator
+
+// The resonators 
+      
+float dblZout_0[26] = {0.0f};	// resonator outputs
+float dblZout_1[26] = {0.0f};	// resonator outputs delayed one sample
+float dblZout_2[26] = {0.0f};	// resonator outputs delayed two samples
+
+int fWidth;				// Filter BandWidth
+int SampleNo;
+int outCount = 0;
+int first, last;		// Filter slots
+
+float largest = 0;
+float smallest = 0;
+
+short Last120[128];
+
+int Last120Get = 0;
+int Last120Put = 120;
+
+int Number = 0;				// Number waiting to be sent
+
+extern unsigned short buffer[2][1200];
+
+unsigned short * DMABuffer;
+
+unsigned short * SendtoCard(unsigned short * buf, int n);
+unsigned short * SoundInit();
+
+// initFilter is called to set up each packet. It selects filter width
+
+void initFilter(int Width)
+{
+	int i, j;
+	fWidth = Width;
+	largest = smallest = 0;
+	SampleNo = 0;
+	Number = 0;
+	outCount = 0;
+	memset(Last120, 0, 256);
+
+	DMABuffer = SoundInit();
+
+	KeyPTT(TRUE);
+	SoundIsPlaying = TRUE;
+	StopCapture();
+
+	Last120Get = 0;
+	Last120Put = 120;
+
+	dblRn = (float)pow(dblR, intN);
+	dblR2 = (float)pow(dblR, 2);
+
+	dblZin_2 = dblZin_1 = 0;
+
+	switch (fWidth)
+	{
+	case 200:
+
+		// implements 3 100 Hz wide sections centered on 1500 Hz  (~200 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 14;
+		last = 16;		// 3 filter sections
+		break;
+
+	case 500:
+
+		// implements 7 100 Hz wide sections centered on 1500 Hz  (~500 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 12;
+		last = 18;		// 7 filter sections
+		break;
+
+	case 1000:
+		
+		// implements 11 100 Hz wide sections centered on 1500 Hz  (~1000 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 10;
+		last = 20;		// 7 filter sections
+		break;
+
+	case 2000:
+		
+		// implements 21 100 Hz wide sections centered on 1500 Hz  (~2000 Hz wide @ - 30dB centered on 1500 Hz)
+
+		first = 5;
+		last = 25;		// 7 filter sections
+	}
+
+	for (j = first; j <= last; j++)	   // calculate output for 3 resonators 
+	{
+		dblZout_0[j] = 0;
+		dblZout_1[j] = 0;
+		dblZout_2[j] = 0;
+	}
+
+	// Initialise the coefficients
+
+	if (dblCoef[last] == 0.0)
+	{
+		for (i = first; i <= last; i++)
+		{
+			dblCoef[i] = 2 * dblR * cosf(2 * M_PI * i / intN); // For Frequency = bin i
+		}
+	}
+ }
+
+
+void SampleSink(short Sample)
+{
+	//	Filter and send to sound interface
+
+	// This version is passed samples one at a time, as we don't have
+	//	enough RAM in embedded systems to hold a full audio frame
+
+	int intFilLen = intN / 2;
+	int j;
+	float intFilteredSample = 0;			//  Filtered sample
+
+	//	We save the previous intN samples
+	//	The samples are held in a cyclic buffer
+
+	if (SampleNo < intN)
+		dblZin = Sample;
+	else 
+		dblZin = Sample - dblRn * Last120[Last120Get];
+
+	if (++Last120Get == 121)
+		Last120Get = 0;
+
+	//Compute the Comb
+
+	dblZComb = dblZin - dblZin_2 * dblR2;
+	dblZin_2 = dblZin_1;
+	dblZin_1 = dblZin;
+
+	// Now the resonators
+		
+	for (j = first; j <= last; j++)	   // calculate output for 3 or 7 resonators 
+	{
+		dblZout_0[j] = dblZComb + dblCoef[j] * dblZout_1[j] - dblR2 * dblZout_2[j];
+		dblZout_2[j] = dblZout_1[j];
+		dblZout_1[j] = dblZout_0[j];
+
+		switch (fWidth)
+		{
+		case 200:
+
+			// scale each by transition coeff and + (Even) or - (Odd) 
+
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 14 || j == 16)
+					intFilteredSample += (float)0.7389f * dblZout_0[j];
+				else
+					intFilteredSample -= (float)dblZout_0[j];
+			}
+			break;
+
+		case 500:
+
+			// scale each by transition coeff and + (Even) or - (Odd) 
+			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// practical range of scaling .05 to .25
+			// Scaling also accomodates for the filter "gain" of approx 60. 
+
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 12 || j == 18)
+					intFilteredSample += 0.10601f * dblZout_0[j];
+				else if (j == 13 || j == 17)
+					intFilteredSample -= 0.59383f * dblZout_0[j];
+				else if ((j & 1) == 0)	// 14 15 16
+					intFilteredSample += (int)dblZout_0[j];
+				else
+					intFilteredSample -= (int)dblZout_0[j];
+			}
+        
+			break;
+		
+		case 1000:
+
+			// scale each by transition coeff and + (Even) or - (Odd) 
+			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// practical range of scaling .05 to .25
+			// Scaling also accomodates for the filter "gain" of approx 60. 
+         
+
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 10 || j == 20)
+					intFilteredSample +=  0.389f * dblZout_0[j];
+				else if ((j & 1) == 0)	// Even
+					intFilteredSample += (int)dblZout_0[j];
+				else
+					intFilteredSample -= (int)dblZout_0[j];
+			}
+        
+			break;
+
+		case 2000:
+
+			// scale each by transition coeff and + (Even) or - (Odd) 
+			// Resonators 6 and 9 scaled by .15 to get best shape and side lobe supression to - 45 dB while keeping BW at 500 Hz @ -26 dB
+			// practical range of scaling .05 to .25
+			// Scaling also accomodates for the filter "gain" of approx 60. 
+          
+			if (SampleNo >= intFilLen)
+			{
+				if (j == 5 || j == 25)
+					intFilteredSample +=  0.389f * dblZout_0[j];
+				else if ((j & 1) == 0)	// Even
+					intFilteredSample += (int)dblZout_0[j];
+				else
+					intFilteredSample -= (int)dblZout_0[j];
+			}
+		}
+	}
+
+	if (SampleNo >= intFilLen)
+	{
+		intFilteredSample = intFilteredSample * 0.00833333333f; //  rescales for gain of filter
+		largest = max(largest, intFilteredSample);	
+		smallest = min(smallest, intFilteredSample);
+		
+		if (intFilteredSample > 32700)  // Hard clip above 32700
+			intFilteredSample = 32700;
+		else if (intFilteredSample < -32700)
+			intFilteredSample = -32700;
+
+#ifdef TARGET_STM32F4	
+		work = (short)(intFilteredSample);
+		DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
+#else
+		DMABuffer[Number++] = (short)intFilteredSample;
+#endif
+		if (Number == SendSize)
+		{
+			// send this buffer to sound interface
+
+			DMABuffer = SendtoCard(DMABuffer, SendSize);
+			Number = 0;
+		}
+	}
+		
+	Last120[Last120Put++] = Sample;
+
+	if (Last120Put == 121)
+		Last120Put = 0;
+
+	SampleNo++;
+}
+
+void Flush()
+{
+	SoundFlush(Number);
+}
+
+

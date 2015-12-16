@@ -6,6 +6,10 @@
 #define ProductName "ARDOP TNC"
 #define ProductVersion "0.4.0-BPQ"
 
+//	Sound interface buffer size
+
+#define SendSize 1200		// 100 mS for now
+
 #ifndef _WIN32_WINNT		// Allow use of features specific to Windows XP or later.                   
 #define _WIN32_WINNT 0x0501	// Change this to the appropriate value to target other versions of Windows.
 #endif						
@@ -27,8 +31,17 @@
 
 #include <math.h>
 
+#ifdef M_PI
+#undef M_PI
+#endif
+
 #define M_PI       3.141592f
 
+#ifdef TARGET_STM32F4
+#define Now ticks				
+#else
+#define Now getTicks()
+#endif
 #include "ecc.h"				// RS Constants
 
 typedef int BOOL;
@@ -39,7 +52,7 @@ typedef unsigned char UCHAR;
 #define FALSE 0
 #define TRUE 1
 
-void KeyPTT(BOOL State);
+BOOL KeyPTT(BOOL State);
 
 UCHAR FrameCode(char * strFrameName);
 BOOL FrameInfo(UCHAR bytFrameType, int * blnOdd, int * intNumCar, char * strMod,
@@ -62,8 +75,16 @@ void StartCodec(char * strFault);
 void StopCodec(char * strFault);
 void SetARDOPProtocolState(int value);
 BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall);
+void AddDataToDataToSend(UCHAR * bytNewData, int Len);
+BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL blnSendID);
+void SendID(BOOL blnEnableCWID);
+BOOL CheckGSSyntax(char * GS);
 
-//extern "C" void SampleSink(short Sample);
+int getTicks();
+void txSleep(int mS);
+void rxSleep(int mS);
+
+//exern "C" void SampleSink(short Sample);
 //extern "C" void SoundFlush();
 //extern "C" void SetFilter(void * Filter());
 
@@ -107,7 +128,9 @@ void InitializeConnection();
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len);
 
-int GetDataFromQueue(UCHAR * Data, int MaxLen);
+void RemoveDataFromQueue(int Len);
+void RemodulateLastFrame();
+
 void GetSemaphore();
 void FreeSemaphore();
 const char * Name(UCHAR bytID);
@@ -219,6 +242,19 @@ extern int TuningRange;
 extern BOOL DebugLog;
 extern int ARQConReqRepeats;
 extern BOOL CommandTrace;
+extern char strFECMode[];
+extern char CaptureDevice[];
+extern char PlaybackDevice[];
+extern int port;
+extern BOOL RadioControl;
+
+
+
+extern char * CaptureDevices;
+extern char * PlaybackDevices;
+
+extern int dttCodecStarted;
+extern int dttStartRTMeasure;
 
 extern int intCalcLeader;        // the computed leader to use based on the reported Leader Length
 
@@ -230,8 +266,13 @@ extern BOOL blnAbort;
 extern BOOL blnClosing;
 extern BOOL blnCodecStarted;
 extern BOOL blnInitializing;
+extern BOOL blnARQDisconnect;
+extern int DriveLevel;
+extern int FECRepeats;
+extern BOOL FECId;
+extern int Squelch;
 
-extern UCHAR bytDataToSend[4000];
+extern UCHAR bytDataToSend[];
 extern int bytDataToSendLength;
 
 extern BOOL blnListen;
@@ -242,17 +283,16 @@ extern int EncLen;
 extern char AuxCalls[10][10];
 extern int AuxCallsLength;
 
-extern volatile int Now;
-
 extern int bytValidFrameTypesLength;
 
 extern BOOL blnTimeoutTriggered;
-
+extern int intFrameRepeatInterval;
 extern BOOL PlayComplete;
-
 
 extern const UCHAR bytValidFrameTypes[];
 
+extern const char strAllDataModes[][14];
+extern int strAllDataModesLen;
 
 // RS Variables
 
