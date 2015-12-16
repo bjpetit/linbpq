@@ -79,8 +79,12 @@
 //	Add "Alert after interval" feature
 //	Fix "Copy to Clipboard"
 
-//	Version 1.0.12.1 Feb 2015
+//	Version 1.0.12.1 Nov 2015
 //	Add Port Names to Monitor Config and fix saving monitor option s by host
+
+
+//	Version 1.0.12.2 Dec 2015
+//	Fix buffer overrun introduced in 1.0.12.1 
 
 
 #define _USE_32BIT_TIME_T
@@ -508,10 +512,10 @@ BOOL CheckKeyWord(char * Word, char * Msg)
 
 BOOL CheckKeyWords(char * Msg, int len)
 {
-	char dupMsg[1024];
+	char dupMsg[2048];
 	int i;
 
-	if (UseKeywords == 0)
+	if (UseKeywords == 0 || NumberofKeyWords == 0)
 		return FALSE;
 
 	memcpy(dupMsg, Msg, len);
@@ -2164,7 +2168,7 @@ lineloop:
 
 
 
-TCHAR MonSave[1000];
+TCHAR MonSave[2000];
 int MonSaveLen;
 
 VOID WritetoMonWindow(TCHAR * Msg, int len)
@@ -2784,7 +2788,7 @@ VOID DataSocket_Read(SOCKET sock)
 		{
 			// no FE - so send all to monitor
 			
-			len = MultiByteToWideChar(CP_UTF8, 0, Buffptr, len, BufferW, 1000); 
+			len = MultiByteToWideChar(CP_UTF8, 0, Buffptr, len, BufferW, 2000); 
 
 			if (len == 0)
 				return;
@@ -2797,7 +2801,7 @@ VOID DataSocket_Read(SOCKET sock)
 
 		MonLen = FEptr - Buffptr;		// Mon Data, Excluding the FE
 
-		wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr, MonLen, BufferW, 1000); 
+		wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr, MonLen, BufferW, 2000); 
 
 		if (wlen == 0)
 			return;
@@ -2832,7 +2836,7 @@ MonLoop:
 
 			CheckKeyWords(Buffptr, NormLen);
 	
-			wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, NormLen, BufferW, 1000); 
+			wlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, NormLen, BufferW, 2000); 
 
 			err =  GetLastError();
 			
@@ -2844,11 +2848,11 @@ MonLoop:
 				{
 					int Table = TrytoGuessCode(Buffptr, NormLen);
 					
-					wlen = MultiByteToWideChar(Table, 0, Buffptr, NormLen, BufferW, 1000); 
+					wlen = MultiByteToWideChar(Table, 0, Buffptr, NormLen, BufferW, 2000); 
 				}
 				else 
 				{
-					wlen = MultiByteToWideChar(RXMode, 0, Buffptr, NormLen, BufferW, 1000); 
+					wlen = MultiByteToWideChar(RXMode, 0, Buffptr, NormLen, BufferW, 2000); 
 				}
 			}
 
@@ -2908,7 +2912,7 @@ MonLoop:
 
 			MonLen = FEptr + 1 - Buffptr;				// MonLen includes FF and FE
 
-			wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr + 1, MonLen - 2, BufferW, 1000); 
+			wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr + 1, MonLen - 2, BufferW, 2000); 
 
 			if (wlen)
 				WritetoMonWindow(BufferW, wlen);
@@ -2928,7 +2932,7 @@ MonLoop:
 		{
 			// No FE, so rest of buffer is MON Data
 
-			wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr + 1, MonLen - 1, BufferW, 1000); 		// Exclude FF
+			wlen = MultiByteToWideChar(CP_UTF8, 0, Buffptr + 1, MonLen - 1, BufferW, 2000); 		// Exclude FF
 
 			if (wlen == 0)
 				return;
@@ -2943,7 +2947,7 @@ MonLoop:
 
 	CheckKeyWords(Buffptr, len);
 
-	newlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, len, BufferW, 1000); 
+	newlen = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, Buffptr, len, BufferW, 2000); 
 
 	err =  GetLastError();
 			
@@ -2955,11 +2959,11 @@ MonLoop:
 		{
 			int Table = TrytoGuessCode(Buffptr, len);
 
-			newlen = MultiByteToWideChar(Table, 0, Buffptr, len, BufferW, 1000); 
+			newlen = MultiByteToWideChar(Table, 0, Buffptr, len, BufferW, 2000); 
 		}
 		else 
 		{
-			newlen = MultiByteToWideChar(RXMode, 0, Buffptr, len, BufferW, 1000); 
+			newlen = MultiByteToWideChar(RXMode, 0, Buffptr, len, BufferW, 2000); 
 		}
 	}
 

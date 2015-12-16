@@ -1958,6 +1958,7 @@ int ImportMessages(CIRCUIT * conn, char * FN, BOOL Nopopup)
 	int WriteLen=0;
 	FILE *in;
 	CIRCUIT dummyconn;
+	struct UserInfo User;	
 	int Index = 0;
 			
 	char Buffer[100000];
@@ -2007,12 +2008,14 @@ int ImportMessages(CIRCUIT * conn, char * FN, BOOL Nopopup)
 	}
 
 	memset(&dummyconn, 0, sizeof(CIRCUIT));
+	memset(&User, 0, sizeof(struct UserInfo));
 
 	if (conn == 0)
-	{
+	{	
 		conn = &dummyconn;
 
-		dummyconn.UserPointer = LookupCall(SYSOPCall);
+		dummyconn.UserPointer = &User;	// Was SYSOPCall, but I think that is wrong.
+		strcpy(User.Call, "IMPORT");
 		dummyconn.sysop = TRUE;
 		dummyconn.BBSFlags = BBS;
 		strcpy(dummyconn.Callsign, "IMPORT");
@@ -8334,7 +8337,7 @@ int Connected(int Stream)
 			if (user->flags & F_Excluded)
 			{
 				n=sprintf_s(Msg, sizeof(Msg), "Incoming Connect from %s Rejected by Exclude Flag", user->Call);
-				WriteLogLine(conn, '|',Msg, n, LOG_CHAT);
+				WriteLogLine(conn, '|',Msg, n, LOG_BBS);
 				Disconnect(Stream);
 				return 0;
 			}

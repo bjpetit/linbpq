@@ -719,7 +719,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add option for RigControl to not change mode on FT100/FT990/FT1000
 //	Add "Attach and Connect" for Telnet ports
 
-//  Version 6.0.12.1
+//  Version 6.0.12.1	November 2015
 
 //	Fix logging of IP addresses for connects to FBBPORT
 //	Allow lower case user and passwords in Telnet "Attach and Connect"
@@ -730,7 +730,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix dropping last entry from a RIP44 message.
 //	Fix displaying Digis in MH list
 //	Add port name to Monitor config screen port list
-//	Fix APRS display filter and add port filter
+//	Fix APRS command display filter and add port filter
 //	Support port names in BPQTermTCP Monitor config
 //	Add FINDBUFFS command to dump lost buffers to Debugview/Syslog
 //	Buffer Web Mgmt Edit Config output
@@ -741,6 +741,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Close and reopen ARDOP connection if nothing received for 90 secs
 //	Add facility to bridge traffic between ports (similar to APRS Bridge but for all frame types)
 //	Add KISSOPTION TRACKER to set SCS Tracker into KISS Mode
+
+// 6.0.13.1
+
+//	Allow /ex to exit UNPROTO mode
+//	Support ARQBW commands.
 
 #define CKernel
 

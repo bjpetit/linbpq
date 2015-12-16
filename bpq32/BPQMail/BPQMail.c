@@ -885,7 +885,7 @@
 //	Add automatic import facility
 //	Accept RMS mail to BBS Call even if "Poll RMS" not set.
 
-// 65
+// 65 November 2015
 
 //	Fix loading Housekeeping value for forwarded bulls.
 //	Fix re-using Fwd script override in timer driven forwarding.
@@ -894,6 +894,11 @@
 //	Allow listing a combinatiom of state and type, such as LNT or LPF
 //	Fix handling ISP messages from gmail without a '+'
 //	Add basic WebMail support
+
+// 66
+
+//	Autoimport messages as Dummy Call, not SYSOP Call
+//	Add "My Messages" display option to WebMail
 
 #include "BPQMail.h"
 #define MAIL
