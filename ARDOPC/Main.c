@@ -19,7 +19,7 @@ unsigned char xxcodeword[256];
 void
 byte_err (int err, int loc, unsigned char *dst)
 {
-	printf("Adding Error at loc %d, data %#x\n", loc, dst[loc-1]);
+	Debugprintf("Adding Error at loc %d, data %#x\n", loc, dst[loc-1]);
   dst[loc-1] ^= err;
 }
 
@@ -29,7 +29,7 @@ byte_err (int err, int loc, unsigned char *dst)
 void
 byte_erasure (int loc, unsigned char dst[], int cwsize, int erasures[])
 {
-	printf("Erasure at loc %d, data %#x\n", loc, dst[loc-1]);
+	Debugprintf("Erasure at loc %d, data %#x\n", loc, dst[loc-1]);
   dst[loc-1] = 0;
 }
 
@@ -54,7 +54,7 @@ void xxmain ()
 
   encode_data(msg, sizeof(msg), codeword);
 
-  printf("Encoded data is: \"%s\" Len %d\n", codeword, sizeof (msg));
+  Debugprintf("Encoded data is: \"%s\" Len %d\n", codeword, sizeof (msg));
 
 #define ML (sizeof (msg) + NPAR)
 
@@ -68,7 +68,7 @@ void xxmain ()
   byte_err(0x34, 19, codeword);
 
 
-  printf("with some errors: \"%s\"\n", codeword);
+  Debugprintf("with some errors: \"%s\"\n", codeword);
 
   /* We need to indicate the position of the erasures.  Eraseure
      positions are indexed (1 based) from the end of the message... */
@@ -107,7 +107,7 @@ i=0;
   {
 	  xxcodeword[i++] = revcodeword[j];
 	}
-    printf("Corrected codeword: \"%s\"\n", xxcodeword);
+    Debugprintf("Corrected codeword: \"%s\"\n", xxcodeword);
   }
 
 }

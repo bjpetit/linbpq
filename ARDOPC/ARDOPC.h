@@ -37,8 +37,16 @@
 
 #define M_PI       3.141592f
 
+#ifndef TARGET_STM32F4
+#ifndef WIN32
+#define LINUX
+#endif
+#endif
+
+
 #ifdef TARGET_STM32F4
-#define Now ticks				
+#define Now ticks
+extern volatile int ticks;
 #else
 #define Now getTicks()
 #endif
@@ -73,14 +81,14 @@ BOOL IsDataFrame(UCHAR intFrameType);
 BOOL CheckValidCallsignSyntax(char * strTargetCallsign);
 void StartCodec(char * strFault);
 void StopCodec(char * strFault);
-void SetARDOPProtocolState(int value);
+//void SetARDOPProtocolState(int value);
 BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall);
 void AddDataToDataToSend(UCHAR * bytNewData, int Len);
 BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL blnSendID);
 void SendID(BOOL blnEnableCWID);
 BOOL CheckGSSyntax(char * GS);
 
-int getTicks();
+unsigned int getTicks();
 void txSleep(int mS);
 void rxSleep(int mS);
 
@@ -136,6 +144,7 @@ void FreeSemaphore();
 const char * Name(UCHAR bytID);
 void InitSound();
 void initFilter(int Width);
+void FourierTransform(int NumSamples, short * RealIn, float * RealOut, float * ImagOut, int InverseTransform);
 
 enum _ReceiveState		// used for initial receive testing...later put in correct protocol states
 {
@@ -186,6 +195,7 @@ extern const char ARDOPStates[7][8];
 
 enum _ARQSubStates
 {
+	None,
 	ISSConReq,
 	ISSConAck,
 	ISSData,
@@ -194,8 +204,7 @@ enum _ARQSubStates
 	IRSData,
 	IRSBreak,
 	IRSfromISS,
-	DISCArqEnd,
-	None
+	DISCArqEnd
 };
 
 extern enum _ARQSubStates ARQState;
@@ -271,6 +280,8 @@ extern int DriveLevel;
 extern int FECRepeats;
 extern BOOL FECId;
 extern int Squelch;
+extern BOOL blnEnbARQRpt;
+extern int dttNextPlay;
 
 extern UCHAR bytDataToSend[];
 extern int bytDataToSendLength;

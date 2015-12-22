@@ -22,7 +22,7 @@ extern int NErrors;
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
 int	intPriorMixedSamplesLength = 120;  // size of Prior sample buffer
 
-short intFilteredMixedSamples[6000];	// Should be plenty
+short intFilteredMixedSamples[3600];	// Get Frame Type need 2400 and we may add 1200
 int intFilteredMixedSamplesLength = 0;
 
 int intFrameType;				// Type we are decoding
@@ -146,7 +146,7 @@ int Acquire4FSKFrameType();
 void DemodulateFrame(int intFrameType);
 void Demod1Car4FSKChar(int Start, char * Decoded);
 VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float intSearchFreq, int intBaud, UCHAR * bytSymHistory);
-
+VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier);
 int EnvelopeCorrelator();
 BOOL DecodeFrame(int intFrameType, char * bytData);
 
@@ -583,7 +583,7 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 		// return the actual data
 		
 		memcpy(bytCorrectedData, &bytRawData[1], bytRawData[0]);    
-		printf("[DemodDecode4FSKData] OK without RS\n");
+		Debugprintf("[DemodDecode4FSKData] OK without RS");
 		*OK = TRUE;
 		return bytRawData[0];
 	}
@@ -594,13 +594,13 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 	FrameOK = RSDecode(bytRawData, intDataLen + 3 + intRSLen, intRSLen, &blnRSOK);
 
 	if (blnRSOK)
-		printf("RS Says blnRSOK");
+		Debugprintf("RS Says blnRSOK");
 
 	if (FrameOK)
-		printf("RS Says FrameOK\n");
+		Debugprintf("RS Says FrameOK");
 	else
 	{
-		printf("RS Says Can't Correct\n");
+		Debugprintf("RS Says Can't Correct");
 		goto returnBad;
 	}
 
@@ -648,6 +648,14 @@ returnBad:
 // Subroutine to process new samples as received from the sound card via Main.ProcessCapturedData
 // Only called when not transmitting
 
+double dblPhaseInc;  // in milliradians
+short intNforGoertzel[8];
+short intPSKPhase_1[8], intPSKPhase_0[8];
+int intPCThresh = 194;  // (about 22 degrees... should work for 4PSK or 8PSK)
+short intCP[8];	  // Cyclic prefix offset 
+float dblFreqBin[8];
+
+
 void ProcessNewSamples(short * Samples, int nSamples)
 {
 	int intRcvdSamplesWPtr = 0;
@@ -657,14 +665,76 @@ void ProcessNewSamples(short * Samples, int nSamples)
  //       Dim stcStatus As Status = Nothing
 	BOOL blnFrameDecodedOK = FALSE;
 
+	if (0)		// Experimental UZ7HO FSK Detect
+	{
+		int Used;
+		int Start = 0, i;
+
+		dblPhaseInc = 2 * M_PI * 1000 / 4;
+		intSampPerSym = 120;
+		intCarFreq = 1800; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
+		intPhasesLen = 0;
+
+		for (i= 0; i < 4; i++)
+		{
+			intCP[i] = 28; // This value selected for best decoding percentage (56%) and best Averag 4PSK Quality (77) on mpg +5 dB
+			intNforGoertzel[i] = 60;
+			dblFreqBin[i] = intCarFreq / 200;
+			intCarFreq -= 200;
+		}
+	
+
+
+		MixNCOFilter(Samples, nSamples, dblOffsetHz); // Mix and filter new samples (Mixing consumes all intRcvdSamples)
+		Start = 0;
+
+		// If this is a multicarrier mode, we must call the
+		// decode char routing for each carrier
+
+		while (1)
+		{
+			intCarFreq = 1800;
+		
+			Demod1CarPSKChar(Start, 0);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+	
+			Demod1CarPSKChar(Start, 1);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Demod1CarPSKChar(Start, 2);
+			intPhasesLen -= 4; //intPSKMode;
+			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
+
+			Used = Demod1CarPSKChar(Start, 3);
+
+
+		if (intPhasesLen ==	8)
+		{
+	//		CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
+
+			return ;
+			Decode1CarPSKChar(bytFrameData1, 0);
+			Decode1CarPSKChar(bytFrameData2, 1);
+			Decode1CarPSKChar(bytFrameData3, 2);
+			Decode1CarPSKChar(bytFrameData4, 3);
+	
+		}
+		
+		Start += Used; //intSampPerSym * 4;	
+		intFilteredMixedSamplesLength -= Used; //intSampPerSym * 4;
+		}
+		return;
+	}	// en d of UZ7HO
+	
 	if (State == SearchingForLeader)
 		UpdateBusyDetector(Samples);
 
-	//	if (ProtocolState == FECSend)
-//		return;
+	if (ProtocolState == FECSend)
+		return;
 
-	// it seems (maybe!) that searchforleader runs on unmixed and
-	//	unfilered samples
+	// it seems that searchforleader runs on unmixed and unfilered samples
 
 	// Searching for leader
 
@@ -672,7 +742,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	{
 		// Search for leader as long as 960 samples (8  symbols) available
 
-//		printf("Looking for Leader\n");
+//		Debugprintf("Looking for Leader");
 
 		while (State == SearchingForLeader && nSamples > 960)
 		{
@@ -680,7 +750,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		
 			if (blnLeaderFound)
 			{
-				printf("Got Leader\n");
+//				Debugprintf("Got Leader");
 
 				dttLastLeaderDetect = Now;
                 //        stcStatus.ControlName = "lblOffset"
@@ -707,7 +777,6 @@ void ProcessNewSamples(short * Samples, int nSamples)
 	//	At this point samples haven't been processed, and are in Samples, len nSamples
 
 	// I'm going to filter all samples into intFilteredMixedSamples.
-	//I'll need to limit the size of this soon
 
 //	printtick("Start Mix");
 
@@ -720,7 +789,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
     if (State == AcquireSymbolSync)
 	{
-		if ((intFilteredMixedSamplesLength - intMFSReadPtr) > 3600) // want whole header for timoing 500)
+		if ((intFilteredMixedSamplesLength - intMFSReadPtr) > 500)
 		{
 			blnSymbolSyncFound = Acquire2ToneLeaderSymbolFraming();  // adjust the pointer to the nominal symbol start based on phase
 			if (blnSymbolSyncFound)
@@ -748,7 +817,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 				
 			//	Have frame Sync. Remove used samples from buffer
 
-			printtick("Got Frame Sync");
+	//		printtick("Got Frame Sync");
 
 		}
 
@@ -789,7 +858,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			State = SearchingForLeader;
 			ClearAllMixedSamples();
 			DiscardOldSamples();
-			printtick("poor frame type decode");
+//			printtick("poor frame type decode");
 
 			// stcStatus.BackColor = SystemColors.Control
 			// stcStatus.Text = ""
@@ -802,8 +871,8 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 			// We've used intMFSReadPtr samples, so remove from Buffer
 
-			sprintf(Msg, "Got Frame Type %x", intFrameType);
-			printtick(Msg);
+//			sprintf(Msg, "Got Frame Type %x", intFrameType);
+//			printtick(Msg);
 
 			intFilteredMixedSamplesLength -= intMFSReadPtr;
 	
@@ -878,7 +947,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		//	We have the whole frame, so process it
 
 
-		printtick("got whole frame");
+//		printtick("got whole frame");
 
 		frameLen = 0;
 
@@ -1527,8 +1596,8 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		}
 	}
 
-	printf("%x %x %x Sess %x pend %d conn %d\n", intIatMinDistance1, intIatMinDistance2,
-		intIatMinDistance3, bytSessionID, blnPending, blnARQConnected); 
+//	Debugprintf("%x %x %x Sess %x pend %d conn %d", intIatMinDistance1, intIatMinDistance2,
+//		intIatMinDistance3, bytSessionID, blnPending, blnARQConnected); 
 	
 	if (bytSessionID == 0xFF)		// ' we are in a FEC QSO, monitoring an ARQ session or have not yet reached the ARQ Pending or Connected status 
 	{
@@ -1678,13 +1747,13 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		else		//non matching indexes
 		{
 			sprintf(strDecodeCapture, "%s MD Decode;10  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
-				 strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2);
+				 strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, dblMinDistance1, dblMinDistance2);
 			if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
 			return -1; // indicates poor quality decode so  don't use
 		}
 	}
 	sprintf(strDecodeCapture, "%s MD Decode;11  Type1=H%X: Type2=H%X: , D1= %.2f, D2= %.2f",
-		strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, Name(intIatMinDistance1), dblMinDistance1, dblMinDistance2);
+		strDecodeCapture, intIatMinDistance1 , intIatMinDistance2, dblMinDistance1, dblMinDistance2);
 	if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
 	return -1; // indicates poor quality decode so  don't use
 }
@@ -1714,8 +1783,6 @@ int Acquire4FSKFrameType()
 	intRmtLeaderMeasure = (Now - dttStartRmtLeaderMeasure);
 
 	// Now do check received  Tone array for testing minimum distance decoder
-	
-	// don't like this, as it is mixing modem functions with proto states
 
 	if (blnPending)			// If we have a pending connection (btween the IRS first decode of ConReq until it receives a ConAck from the iSS)  
 		NewType = MinimalDistanceFrameType(intToneMags, bytPendingSessionID);		 // The pending session ID will become the session ID once connected) 
@@ -2202,7 +2269,7 @@ void Demod1Car16FSKChar(int Start, char * Decoded)
 		Start += intSampPerSym; // advance the pointer one symbol
 	}
 
-//	printf("Tone Mags Index %d\n", charIndex * 32 + 16 * j + k);
+//	Debugprintf("Tone Mags Index %d", charIndex * 32 + 16 * j + k);
 
 	Decoded[charIndex++] = bytData;;	
 	return;
@@ -2544,7 +2611,7 @@ void DemodulateFrame(int intFrameType)
   */
 		default:
 
-			printf("Unsupported frame type %x\n", intFrameType);
+			Debugprintf("Unsupported frame type %x", intFrameType);
 			DiscardOldSamples();
 			ClearAllMixedSamples();
 			State = SearchingForLeader;
@@ -2800,7 +2867,7 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 
 	if (blnDecodeOK && (totalRSErrors / intNumCar) < (intRSLen / 4) && intLastRcvdFrameQuality < 80)
 	{
-		printf("RS Errors %d Carriers %d RLen %d Qual %d - adjusting Qual\n",
+		Debugprintf("RS Errors %d Carriers %d RLen %d Qual %d - adjusting Qual",
 			totalRSErrors, intNumCar, intRSLen, intLastRcvdFrameQuality);
 		
 		intLastRcvdFrameQuality = 80;
@@ -3400,7 +3467,7 @@ void CorrectPhaseForTuningOffset(short * intPhase, int intPhaseLength, char * st
 double dblPhaseInc;  // in milliradians
 short intNforGoertzel[8];
 short intPSKPhase_1[8], intPSKPhase_0[8];
-int intPCThresh = 194;  // (about 22 degrees... should work for 4PSK or 8PSK)
+//int intPCThresh = 194;  // (about 22 degrees... should work for 4PSK or 8PSK)
 short intCP[8];	  // Cyclic prefix offset 
 float dblFreqBin[8];
 

@@ -22,14 +22,14 @@ void SendID(BOOL blnEnableCWID);
 void PollReceivedSamples();
 void CheckTimers();
 BOOL GetNextARQFrame();
-BOOL TCPInit();
-void TCPPoll();
+BOOL HostInit();
+void HostPoll();
 BOOL MainPoll();
 
 // Config parameters
 
-char GridSquare[7] = "IO68VL";
-char Callsign[10] = "G8BPQ-2";
+char GridSquare[7] = "";
+char Callsign[10] = "";
 BOOL wantCWID = FALSE;
 int LeaderLength = 200;
 int TrailerLength = 0;
@@ -39,6 +39,7 @@ int ARQConReqRepeats = 5;
 BOOL DebugLog = TRUE;
 BOOL CommandTrace = TRUE;
 int DriveLevel = 100;
+char strFECMode[16] = "4FSK.200.50";
 int FECRepeats = 0;
 BOOL FECId = FALSE;
 int Squelch = 5;
@@ -498,7 +499,7 @@ BOOL GetNextARQFrame()
 
 				blnEnbARQRpt = FALSE;
 				blnTimeoutTriggered = TRUE; // prevents a retrigger
-                tmrSendTimeout = 100;
+                tmrSendTimeout = Now + 1000;
 				return FALSE;
 			}
 		}
@@ -530,61 +531,23 @@ void ardopmain()
 	blnTimeoutTriggered = FALSE;
 	SetARDOPProtocolState(DISC);
 
-//	GenerateTwoToneLeaderTemplate();
-//	GenerateFSKTemplates();
-//	GeneratePSKTemplates();
-
 	InitSound();
 
-#ifndef TARGET_STM32F4
+	HostInit();
 
-	TCPInit();
-
-#endif
+	tmrPollOBQueue = Now + 10000;
 
 	ProtocolMode = ARQ;
-//	SendARQConnectRequest("GM8BPQ", "G8BPQ-9");
-	
-//	ProtocolMode = FEC;
-//	SetARDOPProtocolState(FECSend);
-//	GetNextFECFrame();
-//	SetARDOPProtocolState(FECSend);
-//	GetNextFECFrame();
-//	SetARDOPProtocolState(FECSend);
-//	GetNextFECFrame();
-
-//	SetARDOPProtocolState(DISC;
-
-//	ProtocolMode = ARQ;
 
 	while(!blnClosing)
 	{
-		// Get Time Now is millisecs since program start
-
-		//	if (Capturing)
-			PollReceivedSamples();
-
+		PollReceivedSamples();
 		CheckTimers();	
-
-#ifndef TARGET_STM32F4
-		TCPPoll();
-#endif
+		HostPoll();
 		MainPoll();
-		Sleep(10);
+		PlatformSleep();
 	}
-
 	return;
-}
-
-void txSleep(int mS)
-{
-	// called while waiting for next TX buffer. Run background processes
-
-#ifndef TARGET_STM32F4
-		TCPPoll();
-#endif
-
-	Sleep(mS);
 }
 
 
@@ -2095,6 +2058,16 @@ void ClearDataToSend()
 	bytDataToSendLength = 0;
 }
 
+#ifdef PTC
+
+extern UCHAR bytEchoData[2048];		// has to be at least max packet size (?1280)
+
+extern int bytesEchoed;
+
+extern UCHAR DelayedEcho;
+
+#endif
+
 
 void RemoveDataFromQueue(int Len)
 {
@@ -2104,6 +2077,18 @@ void RemoveDataFromQueue(int Len)
 		return;
 
 	// Called when ACK received, or on FEC send
+
+	//	If using PTC Serial Interface and delayed echo requested, send it
+
+#ifdef PTC
+
+	if (DelayedEcho == '1')
+	{
+		memcpy(bytEchoData, bytDataToSend, Len);
+		bytesEchoed = Len;
+	}
+
+#endif
 
 	GetSemaphore();
 
@@ -2125,49 +2110,69 @@ void RemoveDataFromQueue(int Len)
 
 void CheckTimers()
 {
+	//	Check for Timeout after a send that needs to be repeated
+
+	if (blnEnbARQRpt && Now > dttNextPlay)
+	{
+		// No response Timeout
+
+		if (GetNextFrame())
+		{
+			// I think this only returns TRUE if we have to repeat the last 
+
+			//	Repeat mechanism for normal repeated FEC or ARQ frames
+      
+			Debugprintf("Repeating Last Frame");
+			RemodulateLastFrame();
+		}
+		else
+			// I think this means we have exceeded retries or had an abort
+
+			blnEnbARQRpt = FALSE;
+	}
+
+
 	//  Event triggered by tmrSendTimeout elapse. Ends an ARQ session and sends a DISC frame 
     
-	if (tmrSendTimeout)
+	if (tmrSendTimeout && Now > tmrSendTimeout)
 	{
-		tmrSendTimeout--;
+		char HostCmd[80];
 
-		if (tmrSendTimeout == 0)
-		{
-			char HostCmd[80];
-
-			// (Handles protocol rule 1.7)
+		// (Handles protocol rule 1.7)
        
+		tmrSendTimeout = 0;
+
 			//Dim dttStartWait As Date = Now
 			//While objMain.blnLastPTT And Now.Subtract(dttStartWait).TotalSeconds < 10
 			// Thread.Sleep(50)
 			// End While
 
-			//if (DebugLog) Then Logs.WriteDebug("ARDOPprotocol.tmrSendTimeout]  ARQ Timeout from ProtocolState: " & GetARDOPProtocolState.ToString & "  Going to DISC state")
+		if (DebugLog) Debugprintf("ARDOPprotocol.tmrSendTimeout]  ARQ Timeout from ProtocolState: %s Going to DISC state", ARDOPStates[ProtocolState]);
         
 			// Confirmed proper operation of this timeout and rule 4.0 May 18, 2015
 			// Send an ID frame (Handles protocol rule 4.0)
-
-            EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
-			Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
-			dttLastFECIDSent = Now;
+		
+		EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
+		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+		dttLastFECIDSent = Now;
 			
-			// If MCB.AccumulateStats Then LogStats()
+		// If MCB.AccumulateStats Then LogStats()
 
-			QueueCommandToHost("DISCONNECTED");
+		QueueCommandToHost("DISCONNECTED");
 			
-			sprintf(HostCmd, "STATUS ARQ Timeout from Protocol State:  %d", ProtocolState);
-			QueueCommandToHost(HostCmd);
-			blnEnbARQRpt = FALSE;
-			//Thread.Sleep(2000)
-			ClearDataToSend();
+		sprintf(HostCmd, "STATUS ARQ Timeout from Protocol State:  %d", ProtocolState);
+		QueueCommandToHost(HostCmd);
+		blnEnbARQRpt = FALSE;
+		//Thread.Sleep(2000)
+		ClearDataToSend();
 
-			EncLen = Encode4FSKControl(0x29, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(0x29, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+		EncLen = Encode4FSKControl(0x29, bytSessionID, bytEncodedBytes);
+		Mod4FSKDataAndPlay(0x29, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
-			intFrameRepeatInterval = 2000;
-			SetARDOPProtocolState(DISC);
+		intFrameRepeatInterval = 2000;
+		SetARDOPProtocolState(DISC);
 			
-			InitializeConnection(); // reset all Connection data
+		InitializeConnection(); // reset all Connection data
 				
 			// Clear the mnuBusy status on the main form
 			//Dim stcStatus As Status = Nothing
@@ -2175,70 +2180,59 @@ void CheckTimers()
 			//stcStatus.Text = "FALSE"
 		    //queTNCStatus.Enqueue(stcStatus)
         
-			blnTimeoutTriggered = FALSE ;// prevents a retrigger
-		}
+		blnTimeoutTriggered = FALSE ;// prevents a retrigger
 	}
 
 	// Elapsed Subroutine for Pending timeout
    
-	if (tmrIRSPendingTimeout)
+	if (tmrIRSPendingTimeout && Now > tmrIRSPendingTimeout)
 	{
 		char HostCmd[80];
 		
-		tmrIRSPendingTimeout--;
+		tmrIRSPendingTimeout = 0;
 
-		if (tmrIRSPendingTimeout == 0)
-		{
-			if (DebugLog) Debugprintf("ARDOPprotocol.tmrIRSPendingTimeout]  ARQ Timeout from ProtocolState: %s Going to DISC state",  ARDOPStates[ProtocolState]);
+		if (DebugLog) Debugprintf("ARDOPprotocol.tmrIRSPendingTimeout]  ARQ Timeout from ProtocolState: %s Going to DISC state",  ARDOPStates[ProtocolState]);
 
-			QueueCommandToHost("DISCONNECTED");
-			sprintf(HostCmd, "STATUS ARQ CONNECT REQUEST TIMEOUT FROM PROTOCOL STATE: %s",ARDOPStates[ProtocolState]);
+		QueueCommandToHost("DISCONNECTED");
+		sprintf(HostCmd, "STATUS ARQ CONNECT REQUEST TIMEOUT FROM PROTOCOL STATE: %s",ARDOPStates[ProtocolState]);
 
-			QueueCommandToHost(HostCmd);
+		QueueCommandToHost(HostCmd);
 
-			blnEnbARQRpt = FALSE;
-			Sleep(2000);		// why???
-			ProtocolState = DISC;
-			blnPending = FALSE;
-			InitializeConnection();	 // reset all Connection data
+		blnEnbARQRpt = FALSE;
+		ProtocolState = DISC;
+		blnPending = FALSE;
+		InitializeConnection();	 // reset all Connection data
 
 			//' Clear the mnuBusy status on the main form
 		     //Dim stcStatus As Status = Nothing
 			//stcStatus.ControlName = "mnuBusy"
 			//stcStatus.Text = "FALSE"
 			//	queTNCStatus.Enqueue(stcStatus)
-		}
 	}
 
 	// Subroutine for tmrFinalIDElapsed
 
-	if (tmrFinalID)
+	if (tmrFinalID && Now > tmrFinalID)
 	{
-		tmrFinalID--;
-		if (tmrFinalID == 0)
-		{
-			//if (DebugLog) Debugprintf(("[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (" & strFinalIDCallsign & ", [" & MCB.GridSquare & "])")
+		tmrFinalID = 0;
+		
+		if (DebugLog) Debugprintf("[ARDOPprotocol.tmrFinalID_Elapsed]  Send Final ID (%s, [%s])", strFinalIDCallsign, GridSquare);
    
-			if (CheckValidCallsignSyntax(strFinalIDCallsign))
-			{
-				EncLen = Encode4FSKIDFrame(strFinalIDCallsign, GridSquare, bytEncodedBytes);
-				Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
-				dttLastFECIDSent = Now;
-			}
+		if (CheckValidCallsignSyntax(strFinalIDCallsign))
+		{
+			EncLen = Encode4FSKIDFrame(strFinalIDCallsign, GridSquare, bytEncodedBytes);
+			Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+			dttLastFECIDSent = Now;
 		}
 	}
 
-	if (tmrPollOBQueue)
+	if (Now > tmrPollOBQueue)
 	{
-		tmrPollOBQueue--;
-		if (tmrPollOBQueue == 0)
-		{
-			char HostCmd[32];
-			sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
-			QueueCommandToHost(HostCmd);
+		char HostCmd[32];
+		sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
+		QueueCommandToHost(HostCmd);
 	
-			tmrPollOBQueue = 1000;		// 10 Secs
-		}
+		tmrPollOBQueue = Now + 10000;		// 10 Secs
 	}
 }
 
@@ -2246,6 +2240,7 @@ void CheckTimers()
 
 BOOL MainPoll()
 {
+
 	//   Dim stcStatus As Status = Nothing
 
    //     ' Check the sound card to insure still sampling
@@ -2255,85 +2250,20 @@ BOOL MainPoll()
         //    Logs.Exception("[tmrPoll_Tick] > 10 seconds with no sound card samples...Restarting Codec")
           //  tmrStartCODEC.Start() ' Start the timer to retry starting sound card
        // End If
-
-	// This handles the normal condition of going from Sending (Playback) to Receiving (Recording)
- 
-	if (PlayComplete)
-	{
-		PlayComplete = FALSE;
-		//'Debug.WriteLine("[tmrPoll.Tick] Play stop. Length = " & Format(Now.Subtract(dttTestStart).TotalMilliseconds, "#") & " ms")
-          
-//		printf("Play complete blnEnbARQRpt = %d\n", blnEnbARQRpt);
-
-		if (blnEnbARQRpt > 0)			// reset timout to start after tx
-			dttNextPlay = Now + 2000;	// 2 secs
-
-//		printf("Now %d Now - dttNextPlay 1  = %d\n", Now, Now - dttNextPlay);
-
 	
-         //           ElseIf MCB.AccumulateStats Then
-           //             tmrLogStats.Start()
+	// Checks to see if frame ready for playing
 
-		KeyPTT(FALSE);		 // Unkey the Transmitter
-
-		StartCapture();
-
-		//' clear the transmit label 
-        //        stcStatus.BackColor = SystemColors.Control
-        //        stcStatus.ControlName = "lblXmtFrame" ' clear the transmit label
-        //        queTNCStatus.Enqueue(stcStatus)
-        //        stcStatus.ControlName = "lblRcvFrame" ' clear the Receive label
-        //        queTNCStatus.Enqueue(stcStatus)
-          
-		// Check if the protocol has a frame to send
-
-		if (GetNextFrame())
-		{
-			dttNextPlay = Now + intFrameRepeatInterval;
-
-//			printf("Now %d Now - dttNextPlay 2  = %d\n", Now, Now - dttNextPlay);
-
-			//Debug.WriteLine("[Main.tmrPoll] Frame Pending")
-            
-			blnFramePending = TRUE;
-		}
-		else
-		{
-			//'Debug.WriteLine("[Main.tmrPoll] No Frame Pending")
-              
-			blnFramePending = FALSE;
-		}
-	}
-	
-	//Repeat mechanism for normal repeated FEC or ARQ frames
-      
-	if (!SoundIsPlaying && blnFramePending)
-	{
-//		printf("Now %d Now - dttNextPlay 3  = %d\n", Now, Now - dttNextPlay);
-
-		if (Now > dttNextPlay)
-		{
-			//	We cant just repeat the stream as we dont keep it
-		
-			Debugprintf("Repeating Last Frame\n");
-			RemodulateLastFrame();
-			blnFramePending = FALSE;
-		}
-	}
-	
-	//Checks to see if frame ready for playing
-
-	else if (!SoundIsPlaying && !blnFramePending)
+	if (!SoundIsPlaying && !blnEnbARQRpt)		// Idle (check playing in case we call from txSleep())
 	{
 		if (GetNextFrame())
 		{
-			blnFramePending = TRUE;
-			dttNextPlay = Now + intFrameRepeatInterval;
+			// As we will send the frame if one is available, and won't return
+			// till it is all sent, I don't think I have to do anything here
 		}
 	}
 //            If Not SoundIsPlaying Then
- //               SendIDToolStripMenuItem.Enabled = objProtocol.GetARDOPSetARDOPProtocolState(ProtocolState.DISC
-   //         Else
+//               SendIDToolStripMenuItem.Enabled = objProtocol.GetARDOPSetARDOPProtocolState(ProtocolState.DISC
+//         Else
      //           SendIDToolStripMenuItem.Enabled = FALSE
        //     End If
     
@@ -2583,7 +2513,6 @@ void UpdateBusyDetector(short * bytNewSamples)
 {
 	float dblReF[1024];
 	float dblImF[1024];
-	int aryLastY[256];
 
 	float dblMag[206];
 	
@@ -2600,7 +2529,7 @@ void UpdateBusyDetector(short * bytNewSamples)
 	if (Now - dttCodecStarted < 2)
 		return;
 	
-	FourierTransform(1024, bytNewSamples, &dblReF, &dblImF, FALSE);
+	FourierTransform(1024, bytNewSamples, &dblReF[0], &dblImF[0], FALSE);
 
 	for (i = 0; i <  206; i++)
 	{

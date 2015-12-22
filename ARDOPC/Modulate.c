@@ -115,7 +115,7 @@ void Mod4FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	printf("Sending Frame Type %s\n", strType);
+	Debugprintf("Sending Frame Type %s", strType);
 
 	if (intBaud == 50)
 		initFilter(200);
@@ -300,7 +300,7 @@ void Mod8FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int 
 	if (strcmp(strMod, "8FSK") != 0)
 		return;
 
-	printf("Sending Frame Type %s\n", strType);
+	Debugprintf("Sending Frame Type %s", strType);
 
 	initFilter(200);
 
@@ -375,7 +375,7 @@ void Mod16FSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int
 	if (strcmp(strMod, "16FSK") != 0)
 		return;
 
-	printf("Sending Frame Type %s\n", strType);
+	Debugprintf("Sending Frame Type %s", strType);
 
 	initFilter(500);
 
@@ -443,7 +443,7 @@ void Mod4FSK600BdDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len,
 	if (strcmp(strMod, "4FSK") != 0)
 		return;
 
-	printf("Sending Frame Type %s\n", strType);
+	Debugprintf("Sending Frame Type %s", strType);
 
 	initFilter(2000);
 
@@ -525,7 +525,7 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 	if (!FrameInfo(Type, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType))
 		return;
 
-	printf("Sending Frame Type %s\n", strType);
+	Debugprintf("Sending Frame Type %s", strType);
 
 	if (intNumCar == 1)
 		initFilter(200);
@@ -719,8 +719,12 @@ void ModPSKDataAndPlay(int Type, unsigned char * bytEncodedBytes, int Len, int i
 							intCarIndex += 1;  // skip over 1500 Hz for multi carrier modes (multi carrier modes all use even hundred Hz tones)
 					}
 					intSample = intSample * dblCarScalingFactor; // on the last carrier rescale value based on # of carriers to bound output
-					if (intSample > 32767 || intSample < -32767)
-						printf("too big");
+
+					if (intSample > 32700)
+						intSample = 32700;
+				
+					if (intSample < -32700)
+					  	intSample = -32700;
 					
 					SampleSink(intSample);		
 				}
@@ -843,8 +847,8 @@ void initFilter(int Width)
 	Last120Get = 0;
 	Last120Put = 120;
 
-	dblRn = (float)pow(dblR, intN);
-	dblR2 = (float)pow(dblR, 2);
+	dblRn = powf(dblR, intN);
+	dblR2 = powf(dblR, 2);
 
 	dblZin_2 = dblZin_1 = 0;
 
@@ -1024,7 +1028,7 @@ void SampleSink(short Sample)
 			intFilteredSample = -32700;
 
 #ifdef TARGET_STM32F4	
-		work = (short)(intFilteredSample);
+		int work = (short)(intFilteredSample);
 		DMABuffer[Number++] = (work + 32768) >> 4; // 12 bit left justify
 #else
 		DMABuffer[Number++] = (short)intFilteredSample;

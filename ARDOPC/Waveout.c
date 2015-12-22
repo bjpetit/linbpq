@@ -22,17 +22,20 @@ void printtick(char * msg);
 
 #include "ARDOPC.h"
 
+void GetSoundDevices();
+
+
 // Windows works with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
 
 short buffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
-short inbuffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
+short inbuffer[2][1200];		// Two Transfer/DMA buffers of 0.1 Sec
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
 
-char CaptureDevice[80] = "2";
-char PlaybackDevice[80] = "1";
+char CaptureDevice[80] = "0"; //"2";
+char PlaybackDevice[80] = "0"; //"1";
 
 char * CaptureDevices = NULL;
 char * PlaybackDevices = NULL;
@@ -58,6 +61,7 @@ WAVEOUTCAPS pwoc;
 WAVEINCAPS pwic;
 
 void InitSound();
+void HostPoll();
 
 int Ticks;
 
@@ -71,18 +75,26 @@ void main(int argc, char * argv[])
 {
 	if (argc > 1)
 		port = atoi(argv[1]);
-
-	printf("ARDOPC listening on port %d\n", port);
+	
+	if (argc == 4)
+	{
+		strcpy(CaptureDevice, argv[2]);
+		strcpy(PlaybackDevice, argv[3]);
+	}
 
 	QueryPerformanceFrequency(&Frequency);
 	Frequency.QuadPart /= 1000;			// Microsecs
 	QueryPerformanceCounter(&StartTicks);
 
+	GetSoundDevices();
+
+	Debugprintf("ARDOPC listening on port %d", port);
+
 //	xxmain();
 	ardopmain();
 }
 
-int getTicks()
+unsigned int getTicks()
 {
 		QueryPerformanceCounter(&NewTicks);
 		return (int)(NewTicks.QuadPart - StartTicks.QuadPart) / Frequency.QuadPart;
@@ -91,8 +103,16 @@ int getTicks()
 void printtick(char * msg)
 {
 	QueryPerformanceCounter(&NewTicks);
-	printf("%s %i\r\n", msg, Now - LastNow);
+	Debugprintf("%s %i\r", msg, Now - LastNow);
 	LastNow = Now;
+}
+
+void txSleep(int mS)
+{
+	// called while waiting for next TX buffer. Run background processes
+
+	HostPoll();
+	Sleep(mS);
 }
 
 int PriorSize = 0;
@@ -136,30 +156,13 @@ short * SendtoCard(unsigned short * buf, int n)
 //    for (t = 0; t < sizeof(buffer); ++t)
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
-
-
-void InitSound()
+void GetSoundDevices()
 {
-	int ret;
 	int count, i;
 
+	Debugprintf("Capture Devices");
+
 	count = waveInGetNumDevs();
-
-	PlaybackDevices = malloc((MAXPNAMELEN + 2) * count);
-	PlaybackDevices[0] = 0;
-	
-	for (i = 0; i < count; i++)
-	{
-		waveOutOpen(&hWaveOut, i, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
-		waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
-
-		if (PlaybackDevices[0])
-			strcat(PlaybackDevices, ",");
-		strcat(PlaybackDevices, pwoc.szPname);
-		waveOutClose(hWaveOut);
-	}
-
-	count = waveOutGetNumDevs();
 
 	CaptureDevices = malloc((MAXPNAMELEN + 2) * count);
 	CaptureDevices[0] = 0;
@@ -172,8 +175,33 @@ void InitSound()
 		if (CaptureDevices)
 			strcat(CaptureDevices, ",");
 		strcat(CaptureDevices, pwic.szPname);
+		Debugprintf("%d %s", i, pwic.szPname);
 		waveInClose(hWaveIn);
 	}
+
+	Debugprintf("Playback Devices");
+
+	count = waveOutGetNumDevs();
+
+	PlaybackDevices = malloc((MAXPNAMELEN + 2) * count);
+	PlaybackDevices[0] = 0;
+
+	for (i = 0; i < count; i++)
+	{
+		waveOutOpen(&hWaveOut, i, &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+		waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
+
+		if (PlaybackDevices[0])
+			strcat(PlaybackDevices, ",");
+		strcat(PlaybackDevices, pwoc.szPname);
+		Debugprintf("%i %s", i, pwoc.szPname);
+		waveOutClose(hWaveOut);
+	}
+}
+
+void InitSound()
+{
+	int ret;
 
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
@@ -207,7 +235,7 @@ PollReceivedSamples()
 
 	if (inheader[inIndex].dwFlags & WHDR_DONE)
 	{
-//		printf("Process %d %d\n", inIndex, inheader[inIndex].dwBytesRecorded/2);
+//		Debugprintf("Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
 			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
 
@@ -226,7 +254,7 @@ void StopCapture()
 	Capturing = FALSE;
 
 //	waveInStop(hWaveIn);
-//	printf("Stop Capture\n");
+//	Debugprintf("Stop Capture");
 }
 
 void DiscardOldSamples();
@@ -239,7 +267,7 @@ void StartCapture()
 	ClearAllMixedSamples();
 	State = SearchingForLeader;
 
-//	printf("Start Capture\n");
+//	Debugprintf("Start Capture");
 }
 void CloseSound()
 { 
@@ -276,9 +304,11 @@ unsigned short * SoundInit()
 	
 //	Called at end of transmission
 
-void SoundFlush(Number)
+extern int Number;				// Number of samples waiting to be sent
+
+void SoundFlush()
 {
-	// Append Trailer then send remaining samples
+	// Append Trailer then wait for TX to complete
 
 	AddTrailer();			// add the trailer.
 
@@ -292,8 +322,38 @@ void SoundFlush(Number)
 	while (!(header[0].dwFlags & WHDR_DONE));
 	while (!(header[1].dwFlags & WHDR_DONE));
 
+	// I think we should turn round the link here. I dont see the point in
+	// waiting for MainPoll
+
 	SoundIsPlaying = FALSE;
-	PlayComplete = TRUE;
+
+	//'Debug.WriteLine("[tmrPoll.Tick] Play stop. Length = " & Format(Now.Subtract(dttTestStart).TotalMilliseconds, "#") & " ms")
+          
+//		Debugprintf("Play complete blnEnbARQRpt = %d", blnEnbARQRpt);
+
+	if (blnEnbARQRpt > 0)	// Start Repeat Timer if frame should be repeated
+		dttNextPlay = Now + intFrameRepeatInterval;
+
+//	Debugprintf("Now %d Now - dttNextPlay 1  = %d", Now, Now - dttNextPlay);
+
+	KeyPTT(FALSE);		 // Unkey the Transmitter
+
+	// Clear the capture buffers. I think this is only  needed when testing
+	// with audio loopback.
+
+	memset(&buffer[0], 0, 2400);
+	memset(&buffer[1], 0, 2400);
+
+	StartCapture();
+
+		//' clear the transmit label 
+        //        stcStatus.BackColor = SystemColors.Control
+        //        stcStatus.ControlName = "lblXmtFrame" ' clear the transmit label
+        //        queTNCStatus.Enqueue(stcStatus)
+        //        stcStatus.ControlName = "lblRcvFrame" ' clear the Receive label
+        //        queTNCStatus.Enqueue(stcStatus)
+          
+
 	return;
 }
 
@@ -339,5 +399,12 @@ BOOL KeyPTT(BOOL blnPTT)
 
 	blnLastPTT = blnPTT;
 	return TRUE;
+}
+
+void PlatformSleep()
+{
+	//	Sleep to avoid using all cpu
+
+	Sleep(10);
 }
 

@@ -3,20 +3,35 @@
 
 //	Windows uses WaveOut
 
-//	Nucleo uses DMA
+//	Nucleo uses DMA to the internal ADC and DAC
 
 //	Linux will probably use ALSA
 
 //	This is the Nucleo Version
 
+//	Also has some platform specific routines
+
 #include <math.h>
 #include "ARDOPC.h"
 
-// Windows works with signed samples +- 32767
+void SetLED(int blnPTT);
+void stopDAC();
+
+// Windows and Linux work with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
 
 unsigned short buffer[2][1200];	// Two Transfer/DMA buffers of 0.1 Sec
 unsigned short work;
+
+extern volatile int adc_buffer_mem;
+
+#define SAMPLES_PER_BLOCK 1200
+
+extern uint16_t ADC_Buffer[2][SAMPLES_PER_BLOCK];     // stereo capture buffers
+
+//short audioInputBuffer[SAMPLES_PER_BLOCK]; Reuse DMA buffer
+
+int max, min, tot;
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -27,21 +42,24 @@ char PlaybackDevice[] = "DMA";
 char * CaptureDevices = CaptureDevice;
 char * PlaybackDevices = PlaybackDevice;
 
-void InitSound();
-
-int Ticks;
 int LastNow;
 
-void main()
-{
-	ardopmain();
-}
 
 void printtick(char * msg)
 {
-	printf("%s %i\r\n", msg, Now - LastNow);
+	Debugprintf("%s %i", msg, Now - LastNow);
 	LastNow = Now;
 }
+
+
+void txSleep(int mS)
+{
+	// called while waiting for next TX buffer. Run background processes
+
+	HostPoll();
+	Sleep(mS);
+}
+
 
 #include <stm32f4xx_dma.h>
 
@@ -51,6 +69,12 @@ int Index = 0;				// DMA Buffer being used 0 or 1
 int inIndex = 0;				// DMA Buffer being used 0 or 1
 
 BOOL DMARunning = FALSE;		// Used to start DMA on first write
+
+void InitSound()
+{
+	Config_ADC_DMA();
+	Start_ADC_DMA();
+}
 
 unsigned short * SendtoCard(unsigned short buf, int n)
 {
@@ -71,7 +95,7 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 
 	// wait for other DMA buffer to finish
 
-	printtick("Start Wait");		// FOr timing tests
+//	printtick("Start Wait");		// FOr timing tests
 
 	while (1)
 	{
@@ -80,9 +104,10 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 		if (chan == Index) 	// we've started sending current buffer
 		{
 			Index = !Index;
-			printtick("Stop Wait");
+//			printtick("Stop Wait");
+			break;
 		}
-		txSleep(10);				// Run buckground while waiting 
+		txSleep(10);				// Run background while waiting
 	}
 	return &buffer[Index][0];
 }
@@ -92,14 +117,49 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
 
-void InitSound()
-{
-}
-
-PollReceivedSamples()
+void PollReceivedSamples()
 {
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
+
+ 	// Process any received samples
+
+	// convert the saved ADC 12-bit unsigned samples into 16-bit signed samples
+
+    if (adc_buffer_mem >= 0 && adc_buffer_mem <= 1)
+    {
+    	uint16_t *src = (uint16_t *)&ADC_Buffer[adc_buffer_mem];	// point to the DMA buffer where the ADC samples were saved
+//    	int16_t *dst = (int16_t *)&audioInputBuffer;				// point to our own buffer where we are going to copy them too
+      	int16_t *dst = (int16_t *)src;				// reuse input buffer
+
+    	// 12-bit unsigned to 16-bit signed
+
+    	int i;
+
+   		tot = 0;
+   		max = 0;
+    	min = 0;
+
+   		for (i = 0; i < SAMPLES_PER_BLOCK; i++)
+   		{
+    		register int32_t s1 = ((int16_t)(*src++) - 2048) << 4;  // unsigned 12-bit to 16-bit signed .. ADC channel 1
+     		*dst++ = (int16_t)s1;
+     		tot += s1;
+     		if (s1 > max)
+     			max = s1;
+     		if (s1 < min)
+     			min = s1;
+    	}
+
+//	serial.printf("Max %d min %d av %d\n", max, min, tot/1200);
+
+//   	 printtick("Process Sample Start");
+//   	 ProcessNewSamples(audioInputBuffer, SAMPLES_PER_BLOCK);
+    	 ProcessNewSamples(&ADC_Buffer[adc_buffer_mem], SAMPLES_PER_BLOCK);
+//   	 printtick("Process Sample End");
+
+    	 adc_buffer_mem = -1;    // finished with the ADC buffer that the DMA filled
+    }
 }
 
 
@@ -169,9 +229,46 @@ void SoundFlush(Number)
 	stopDAC();
 	DMARunning = FALSE;
 
+
+	// I think we should turn round the link here. I dont see the point in
+	// waiting for MainPoll
+
 	SoundIsPlaying = FALSE;
-	PlayComplete = TRUE;
+
+	if (blnEnbARQRpt > 0)	// Start Repeat Timer if frame should be repeated
+		dttNextPlay = Now + intFrameRepeatInterval;
+
+	KeyPTT(FALSE);		 // Unkey the Transmitter
+
+	StartCapture();
+
 	return;
 }
+
+//  Function to Key radio PTT 
+
+const char BoolString[2][6] = {"FALSE", "TRUE"};
+
+BOOL KeyPTT(BOOL blnPTT)
+{
+	// Returns TRUE if successful False otherwise
+
+	if (blnLastPTT &&  !blnPTT)
+		dttStartRTMeasure = Now;	 // start a measurement on release of PTT.
+
+	if (DebugLog) Debugprintf("[Main.KeyPTT]  PTT-%s", BoolString[blnPTT]);
+
+	SetLED(blnPTT);
+
+	blnLastPTT = blnPTT;
+	return TRUE;
+}
+
+
+
+
+
+
+
 
 	

@@ -57,7 +57,7 @@ int intSessionBW;	// Negotiated speed
 const char ARQBandwidths[8][12] = {"200FORCED", "500FORCED", "1000FORCED", "2000FORCED", "200MAX", "500MAX", "1000MAX", "2000MAX"};
 enum _ARQSubStates ARQState;
 
-const char ARQSubStates[10][11] = {"ISSConReq", "ISSConAck", "ISSData", "ISSId", "IRSConAck", "IRSData", "IRSBreak", "IRSfromISS", "DISCArqEnd", "None"};
+const char ARQSubStates[10][11] = {"None", "ISSConReq", "ISSConAck", "ISSData", "ISSId", "IRSConAck", "IRSData", "IRSBreak", "IRSfromISS", "DISCArqEnd"};
 
 char strRemoteCallsign[10];
 char strLocalCallsign[10];
@@ -81,7 +81,7 @@ int intAvgQuality;
 int intReceivedLeaderLen;
 int tmrFinalID = 0;
 int tmrIRSPendingTimeout = 0;
-int tmrPollOBQueue = 1000;
+int tmrPollOBQueue;
 UCHAR bytLastDataFrameType;
 BOOL blnDISCRepeating;
 int intRmtLeaderMeas;
@@ -109,10 +109,8 @@ int Encode4FSKControl(UCHAR bytFrameType, UCHAR bytSessionID, UCHAR * bytreturn)
 int EncodeConACKwTiming(UCHAR bytFrameType, int intRcvdLeaderLenMs, UCHAR bytSessionID, UCHAR * bytreturn);
 int IRSNegotiateBW(int intConReqFrameType);
 int GetNextFrameData(int * intUpDn, UCHAR * bytFrameTypeToSend, UCHAR * strMod, BOOL blnInitialize);
-void RestoreDataToQueue(UCHAR * bytData,  int Len);
 BOOL CheckForDisconnect();
 BOOL Send10MinID();
-
 
 // Subroutine to compute a 8 bit CRC value and append it to the Data...
 
@@ -527,10 +525,8 @@ void SendDataOrIDLE()
 		if (bytDataToSendLength == 0 && !blnEnbARQRpt)
 		{
 			Send10MinID();	 // Send ID if 10 minutes since last
-			// Send First IDLE and setup repeat
 
-			EncLen = Encode4FSKControl(IDLEFRAME, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(IDLEFRAME, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+			// Send First IDLE and setup repeat
 
 			blnLastFrameSentData = FALSE;
 			
@@ -539,9 +535,14 @@ void SendDataOrIDLE()
 				if (DebugLog) Debugprintf("[ARDOPprotocol.SendDataOrIDLE] DataToSend = 0, Go to ProtocolState IDLE");
 				SetARDOPProtocolState(IDLE);
 			}
+
 			intFrameRepeatInterval = 2000; // Keep IDLE/BREAK repeats fairly long 
 			blnEnbARQRpt = TRUE;
 			dttTimeoutTrip = Now;
+
+			EncLen = Encode4FSKControl(IDLEFRAME, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(IDLEFRAME, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+
 			return;
 		}
 		if (bytDataToSendLength > 0)
@@ -554,7 +555,13 @@ void SendDataOrIDLE()
 
 			Len = GetNextFrameData(&intShiftUpDn, &bytCurrentFrameType, strMod, FALSE);
 
-			printf("Sending Type %x Len %d\n", bytCurrentFrameType, Len);
+			Debugprintf("Sending Type %x Len %d", bytCurrentFrameType, Len);
+
+			blnLastFrameSentData = TRUE;
+			intFrameRepeatInterval = 2000;  // set up 2000 ms repeat interval for Data may be able to shorten
+			//'intFrameRepeatInterval = ComputeInterFrameInterval(1300) 'Fairly conservative...evaluate (based on measured leader from remote.
+			dttTimeoutTrip = Now;
+			blnEnbARQRpt = TRUE;
 
 			if (strcmp(strMod, "4FSK") == 0)
 			{
@@ -580,14 +587,9 @@ void SendDataOrIDLE()
 				ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 			}
 
-			blnLastFrameSentData = TRUE;
-			intFrameRepeatInterval = 2000;  // set up 2000 ms repeat interval for Data may be able to shorten
-			//'intFrameRepeatInterval = ComputeInterFrameInterval(1300) 'Fairly conservative...evaluate (based on measured leader from remote.
-			dttTimeoutTrip = Now;
-			blnEnbARQRpt = TRUE;
 			return;
 		}
-		break;		// Shouldnt ger here
+		break;		// Shouldnt get here
 	
 	case ISS:
 			
@@ -598,11 +600,19 @@ void SendDataOrIDLE()
 
 		if (bytDataToSendLength > 0)
 		{
-			//if (DebugLog) Debugprintf(("[ARDOPprotocol.SendDataOrIDLE] DataToSend = " & bytDataToSendLength.ToString & " bytes, In ProtocolState ISS")
+			if (DebugLog) Debugprintf("[ARDOPprotocol.SendDataOrIDLE] DataToSend = %d bytes, In ProtocolState ISS", bytDataToSendLength);
+
 			//' Get the data from the buffer here based on current data frame type
 			//' (Handles protocol Rule 2.1)
 
 			Len = bytQDataInProcessLen = GetNextFrameData(&intShiftUpDn, &bytCurrentFrameType, strMod, FALSE);
+
+			blnLastFrameSentData = TRUE;
+			intFrameRepeatInterval = 2000;  // set up 2000 ms repeat interval for Data may be able to shorten
+			//'intFrameRepeatInterval = ComputeInterFrameInterval(1300) 'Fairly conservative...evaluate (based on measured leader from remote.
+			dttTimeoutTrip = Now;
+			blnEnbARQRpt = TRUE;
+			ARQState = ISSData;		 // Should not be necessary
 
 			if (strcmp(strMod, "4FSK") == 0)
 			{
@@ -628,29 +638,23 @@ void SendDataOrIDLE()
 				ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 			}
 
-			blnLastFrameSentData = TRUE;
-			intFrameRepeatInterval = 2000;  // set up 2000 ms repeat interval for Data may be able to shorten
-			//'intFrameRepeatInterval = ComputeInterFrameInterval(1300) 'Fairly conservative...evaluate (based on measured leader from remote.
-			dttTimeoutTrip = Now;
-			blnEnbARQRpt = TRUE;
-			ARQState = ISSData;		 // Should not be necessary
 			return;
 		}
 		else
 		{
 			// Send IDLE
 
-			EncLen = Encode4FSKControl(IDLEFRAME, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(IDLEFRAME, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-
-			blnLastFrameSentData = FALSE;
-			
-			if (DebugLog) Debugprintf("[ARDOPprotocol.SendDataOrIDLE] DataToSend = 0, ProtocolState ISS > IDLE");
- 	
 			SetARDOPProtocolState(IDLE);
 			intFrameRepeatInterval = 2000; // Keep IDLE/BREAK repeats fairly long 
 			blnEnbARQRpt = TRUE;
 			dttTimeoutTrip = Now;
+
+			blnLastFrameSentData = FALSE;
+			
+			if (DebugLog) Debugprintf("[ARDOPprotocol.SendDataOrIDLE] DataToSend = 0, ProtocolState ISS > IDLE");
+			EncLen = Encode4FSKControl(IDLEFRAME, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(IDLEFRAME, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+ 	
 			return;
 		}
 	}
@@ -796,7 +800,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 	// Allow for link turnround before responding
 
-	Sleep(500);		// May need to turn
+	txSleep(300);		// May need to tune, or may be better to wait in each send path
+
+	// Note this is called as part of the RX sample poll routine
 	
 	switch (ProtocolState)
 	{
@@ -811,11 +817,11 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			if (DebugLog) Debugprintf("[ARDOPprotocol.ProcessRcvdARQFrame]  DISC frame received in ProtocolState DISC, Send END with SessionID= %XX Stay in DISC state", bytLastARQSessionID);
 
 			EncLen = Encode4FSKControl(0x2C, bytLastARQSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(0x2C, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
-			tmrFinalID = 500;
-			
+			tmrFinalID = 500;			
 			blnEnbARQRpt = FALSE;
+
+			Mod4FSKDataAndPlay(0x2C, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 			return;
 		}
 		if (!blnListen)
@@ -841,9 +847,10 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				sprintf(HostCmd, "TARGET %s", strCallsign);
 				QueueCommandToHost(HostCmd);
                        
-				blnPending = TRUE;
-				
-				tmrIRSPendingTimeout = 1000;  // Triggers a 10 second timeout before auto abort from pending
+				blnPending = TRUE;				
+				blnEnbARQRpt = FALSE;
+
+				tmrIRSPendingTimeout = Now + 10000;  // Triggers a 10 second timeout before auto abort from pending
 
 				// (Handles protocol rule 1.2)
                             
@@ -870,13 +877,13 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				// ' (Handles protocol rule 1.3)
              
-				EncLen = Encode4FSKControl(intReply, bytPendingSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(intReply, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-
 				sprintf(HostCmd, "REJECTEDBW %s", strRemoteCallsign);
 				QueueCommandToHost(HostCmd);
 				sprintf(HostCmd, "STATUS ARQ CONNECTION REJECTED BY %s", strRemoteCallsign);
 				QueueCommandToHost(HostCmd);
+			
+				EncLen = Encode4FSKControl(intReply, bytPendingSessionID, bytEncodedBytes);
+				Mod4FSKDataAndPlay(intReply, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 			}
 		}
 		else
@@ -932,7 +939,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 						dttTimeoutTrip = Now;
 
 						//Stop and restart the Pending timer upon each ConReq received to ME
- 						tmrIRSPendingTimeout= 1000;  // Triggers a 10 second timeout before auto abort from pending
+ 						tmrIRSPendingTimeout= Now + 10000;  // Triggers a 10 second timeout before auto abort from pending
 
 						strcpy(strRemoteCallsign, bytData);
 						strcpy(strLocalCallsign, strCallsign);
@@ -949,14 +956,14 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					// ' (Handles protocol rule 1.3)
              
 					//	if (DebugLog) Debugprintf(("[ProcessRcvdARQFrame] Incompatible bandwidth connect request. Frame type: " & objFrameInfo.Name(intFrameType) & "   MCB.ARQBandwidth:  " & MCB.ARQBandwidth)
-  				
-					EncLen = Encode4FSKControl(intReply, bytPendingSessionID, bytEncodedBytes);
-					Mod4FSKDataAndPlay(intReply, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-	
+  					
 					sprintf(HostCmd, "REJECTEDBW %s", strRemoteCallsign);
 					QueueCommandToHost(HostCmd);
 					sprintf(HostCmd, "STATUS ARQ CONNECTION FROM %s REJECTED, INCOMPATIBLE BANDWIDTHS.", strRemoteCallsign);
 					QueueCommandToHost(HostCmd);
+
+					EncLen = Encode4FSKControl(intReply, bytPendingSessionID, bytEncodedBytes);
+					Mod4FSKDataAndPlay(intReply, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
 					return;
 				}
@@ -994,17 +1001,26 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				bytSessionID = bytPendingSessionID; // This sets the session ID now 
                
-				EncLen = EncodeDATAACK(intLastRcvdFrameQuality, bytSessionID, bytEncodedBytes); // Send ACK
-				Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 				blnARQConnected = TRUE;
 				blnPending = FALSE;
 				tmrIRSPendingTimeout = 0;
 
+				dttTimeoutTrip = Now;
+				ARQState = IRSData;
+				intLastARQDataFrameToHost = -1;
+				intTrackingQuality = -1;
+				intNAKctr = 0;
+				dttLastFECIDSent = Now;
+
+				blnEnbARQRpt = FALSE;
 				sprintf(HostCmd, "CONNECTED %s %d", strRemoteCallsign, intSessionBW);
 				QueueCommandToHost(HostCmd);
  
 				sprintf(HostCmd, "STATUS ARQ CONNECTION FROM %s: SESSION BW = %d HZ", strRemoteCallsign, intSessionBW);
 				QueueCommandToHost(HostCmd);
+
+				EncLen = EncodeDATAACK(intLastRcvdFrameQuality, bytSessionID, bytEncodedBytes); // Send ACK
+				Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
 				// Initialize the frame type and pointer based on bandwidth (added 0.3.1.3)
 				
@@ -1016,13 +1032,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
                 //       stcStatus.Text = "Connected " & .strRemoteCallsign
                  //       queTNCStatus.Enqueue(stcStatus)
 
-				dttTimeoutTrip = Now;
-				ARQState = IRSData;
-				intLastARQDataFrameToHost = -1;
-				intTrackingQuality = -1;
-				intNAKctr = 0;
-				
-				blnEnbARQRpt = FALSE;
 				return;
 			}
 		}
@@ -1053,9 +1062,10 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					break;
 				}
 
+				dttTimeoutTrip = Now;
+
 				EncLen = EncodeDATAACK(intLastRcvdFrameQuality, bytSessionID, bytEncodedBytes); // Send ACK
 				Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-				dttTimeoutTrip = Now;
 				return;
 			}
 
@@ -1070,9 +1080,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s", strRemoteCallsign);
 				QueueCommandToHost(HostCmd);
 				
-				EncLen = Encode4FSKControl(0x2C, bytSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(0x2C, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-
 				bytLastARQSessionID = bytSessionID;  // capture this session ID to allow answering DISC from DISC state if ISS missed Sent END
                        
 				ClearDataToSend();
@@ -1082,6 +1089,11 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				SetARDOPProtocolState(DISC);
                 InitializeConnection();
 				blnEnbARQRpt = FALSE;
+
+				bytLastARQSessionID = bytSessionID;  // capture this session ID to allow answering DISC from DISC state if ISS missed Sent END
+
+				EncLen = Encode4FSKControl(0x2C, bytSessionID, bytEncodedBytes);
+				Mod4FSKDataAndPlay(0x2C, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 				return;
 			}
 			
@@ -1097,16 +1109,19 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				QueueCommandToHost(HostCmd);
 				blnDISCRepeating = FALSE;
 				ClearDataToSend();
-				if (CheckValidCallsignSyntax(strLocalCallsign))
-				{
-					EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
-					Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
-					dttLastFECIDSent = Now;
-				}
-				
+
 				SetARDOPProtocolState(DISC);
 				InitializeConnection();
 				blnEnbARQRpt = FALSE;
+
+				if (CheckValidCallsignSyntax(strLocalCallsign))
+				{
+					dttLastFECIDSent = Now;
+					EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
+					Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+				}
+				
+
 				return;
 			}
 
@@ -1133,9 +1148,10 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 					
 				// Always ACK if it is a data frame ...ISS may have missed last ACK
 
+				blnEnbARQRpt = FALSE;
 				EncLen = EncodeDATAACK(intLastRcvdFrameQuality, bytSessionID, bytEncodedBytes); // Send ACK
 				Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-				blnEnbARQRpt = FALSE;					return;
+				return;
 			}
 
 			// handles IDLE from ISS
@@ -1145,15 +1161,15 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				if (intRmtLeaderMeas == 0)
 				{
 					intRmtLeaderMeas = intRmtLeaderMeasure; // capture the leader timing of the first ACK from IRS, use this value to help compute repeat interval. 
-;
+
 					if (DebugLog) Debugprintf("[ARDOPprotocol.ProcessRcvdARQFrame] IRS (receiving IDLE) RmtLeaderMeas=%d ms", intRmtLeaderMeas);
 				}
 				
 				if (bytDataToSendLength == 0)  // no data pending at IRS so send ACK
 				{
+					blnEnbARQRpt = FALSE;
 					EncLen = EncodeDATAACK(intLastRcvdFrameQuality, bytSessionID, bytEncodedBytes); // Send ACK
 					Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-					blnEnbARQRpt = FALSE;
                     //blnIRSBreakSent = FALSE
 					return;
 				}
@@ -1162,12 +1178,13 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
                 //  This implements the tricky and important IRS>ISS changeover...may have to adjust parameters here for reliability 
                 
 				dttTimeoutTrip = Now;
-				EncLen = Encode4FSKControl(0x23, bytSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(0x23, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-
-				intFrameRepeatInterval = 2000; //'keep IDLE/BREAK Repeats fairly long
+				intFrameRepeatInterval = 2500; // !! Not ure why, but often ISS doesn't get the BREAK'keep IDLE/BREAK Repeats fairly long
 				ARQState = IRSBreak;   //(ONLY IRS State where repeats are used)
 				blnEnbARQRpt = TRUE;// setup for repeats until changeover 
+
+				EncLen = Encode4FSKControl(BREAK, bytSessionID, bytEncodedBytes);
+				Mod4FSKDataAndPlay(BREAK, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
+
                 return;
 			}
 			
@@ -1177,10 +1194,11 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			{
 				if (DebugLog) Debugprintf("[ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd in IRS ARQState IRSData... indicates remote side has transitioned to IRS");
            
+	   			blnEnbARQRpt = FALSE;
+
 				EncLen = EncodeDATAACK(100, bytSessionID, bytEncodedBytes); // Send ACK
 				Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
-	   			blnEnbARQRpt = FALSE;
 				return;
 			}
 			
@@ -1188,10 +1206,10 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			
 			if (!blnFrameDecodedOK && IsDataFrame(intFrameType))	// 'Incorrectly decoded frame. Send NAK with Quality
 			{
+				blnEnbARQRpt = FALSE;
+
 				EncLen = EncodeDATANAK(intLastRcvdFrameQuality, bytSessionID, bytEncodedBytes); // Send NAK
 				Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);
-			
-				blnEnbARQRpt = FALSE;
 				return;
 			}
 			return;   // can we get here ??
@@ -1249,21 +1267,22 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			SendDataOrIDLE();
 			return;
 		}
-		if (intFrameType ==  BREAK)
+		if (intFrameType == BREAK)
 		{
 			// Initiate the transisiton to IRS
 
 			dttTimeoutTrip = Now;
 			blnEnbARQRpt = FALSE;
 				              
-			EncLen = EncodeDATAACK(100, bytSessionID, bytEncodedBytes); // Send ACK
-			Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);
-
 			if(DebugLog) Debugprintf("[ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from IDLE, Go to IRS, Substate IRSData");
 				
 			SetARDOPProtocolState(IRS);
 			ARQState = IRSData;
 			intLastARQDataFrameToHost = -1;	 // precondition to an illegal frame type (insures the new IRS does not reject a frame)
+
+			EncLen = EncodeDATAACK(100, bytSessionID, bytEncodedBytes); // Send ACK
+			Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);
+
 			return;
 		}
 		if (intFrameType == DISCFRAME)  //  IF DISC received from IRS Handles protocol rule 1.5
@@ -1275,9 +1294,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s", strRemoteCallsign);
 			QueueCommandToHost(HostCmd);
 
-			EncLen = Encode4FSKControl(END, bytSessionID, bytEncodedBytes);
-			Mod4FSKDataAndPlay(END, &bytEncodedBytes[0], EncLen, LeaderLength);	
-
 			bytLastARQSessionID = bytSessionID;	// ' capture this session ID to allow answering DISC from DISC state
 			tmrFinalID = 500;
 			blnDISCRepeating = FALSE;
@@ -1285,6 +1301,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			SetARDOPProtocolState(DISC);
 			InitializeConnection();
 			blnEnbARQRpt = FALSE;
+
+			EncLen = Encode4FSKControl(END, bytSessionID, bytEncodedBytes);
+			Mod4FSKDataAndPlay(END, &bytEncodedBytes[0], EncLen, LeaderLength);	
 			return;
 		}
 		if (intFrameType == END)
@@ -1298,21 +1317,22 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 			ClearDataToSend();
    		
-			if (CheckValidCallsignSyntax(strLocalCallsign))
-			{
-				EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
-				Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
-				dttLastFECIDSent = Now;
-			}
-				
 			SetARDOPProtocolState(DISC);
 			InitializeConnection();
 			blnEnbARQRpt = FALSE;
 			blnDISCRepeating = FALSE;
+
+			if (CheckValidCallsignSyntax(strLocalCallsign))
+			{
+				dttLastFECIDSent = Now;
+				EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
+				Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+			}
+				
 			return;
 		}
 
-		printf("Shouldn't get here");
+		Debugprintf("Shouldn't get here");
 
 	// ISS state **************************************************************************************
 
@@ -1356,14 +1376,14 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				intReceivedLeaderLen = intLeaderRcvdMs;
 				
-				EncLen = EncodeConACKwTiming(intFrameType, intReceivedLeaderLen, bytSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(intFrameType, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-
 				intFrameRepeatInterval = 2000;
 				blnEnbARQRpt = TRUE;	// Setup for repeats of the ConACK if no answer from IRS
 				if (DebugLog) Debugprintf("[ARDOPprotocol.ProcessRcvdARQFrame] Compatible bandwidth received from IRS ConAck: %d Hz", intSessionBW);
 				ARQState = ISSConAck;
 				dttLastFECIDSent = Now;
+
+				EncLen = EncodeConACKwTiming(intFrameType, intReceivedLeaderLen, bytSessionID, bytEncodedBytes);
+				Mod4FSKDataAndPlay(intFrameType, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
 				return;
 			}
@@ -1382,7 +1402,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 					//        if (DebugLog) Debugprintf(("[ARDOPprotocol.ProcessRcvdARQFrame] ACK received in ARQState " & ARQState.ToString)
 	
-	 			SendDataOrIDLE();	// this should start a repeat of either IDLE (if no data to send) or Data (if outbound queue not empty) 
 				blnARQConnected = TRUE;
 				blnPending = FALSE;
 
@@ -1400,6 +1419,8 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				intTrackingQuality = -1;	 //initialize tracking quality to illegal value
 				intNAKctr = 0;
+
+	 			SendDataOrIDLE();	// this should start a repeat of either IDLE (if no data to send) or Data (if outbound queue not empty) 
 			}
 			else if (blnFrameDecodedOK && intFrameType == 0x2D)  // ConRejBusy
 			{
@@ -1486,9 +1507,6 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				QueueCommandToHost("DISCONNECTED");
 				sprintf(HostCmd, "STATUS ARQ CONNECTION ENDED WITH %s", strRemoteCallsign);
 				QueueCommandToHost(HostCmd);
-
-				EncLen = Encode4FSKControl(END, bytSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(END, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
       
 				bytLastARQSessionID = bytSessionID; // capture this session ID to allow answering DISC from DISC state
 				blnDISCRepeating = FALSE;
@@ -1497,6 +1515,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 				SetARDOPProtocolState(DISC);
 				InitializeConnection();
 				blnEnbARQRpt = FALSE;
+
+				EncLen = Encode4FSKControl(END, bytSessionID, bytEncodedBytes);
+				Mod4FSKDataAndPlay(END, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 			}
 				
 			else if (intFrameType == END)	// ' if END
@@ -1512,9 +1533,9 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 				if (CheckValidCallsignSyntax(strLocalCallsign))
 				{
+					dttLastFECIDSent = Now;
 					EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
 					Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
-					dttLastFECIDSent = Now;
 				}
 					
 				SetARDOPProtocolState(DISC);
@@ -1523,22 +1544,23 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 			else if (intFrameType == BREAK)  // if BREAK
 			{
 				//' Initiate the transisiton to IRS
-				//if (DebugLog) Debugprintf(("[ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from ARQState ISSData, Go to ProtocolState IDLE, send IDLE")
-                      
-				EncLen = Encode4FSKControl(IDLEFRAME, bytSessionID, bytEncodedBytes);
-				Mod4FSKDataAndPlay(IDLEFRAME, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-					
+				
+				if (DebugLog) Debugprintf("[ARDOPprotocol.ProcessRcvdARQFrame] BREAK Rcvd from ARQState ISSData, Go to ProtocolState IDLE, send IDLE");
+                      					
 				dttTimeoutTrip = Now;                      
 				SetARDOPProtocolState(IDLE);		//': ARQState = ARQSubStates.ISSIdle
 				intRepeatCount = 0;
 				intFrameRepeatInterval = 2000;
 				blnEnbARQRpt = TRUE;	//  setup for repeats if no IRS answer
+
+				EncLen = Encode4FSKControl(IDLEFRAME, bytSessionID, bytEncodedBytes);
+				Mod4FSKDataAndPlay(IDLEFRAME, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 			}
 			return;
 		}
 
 	default:
-		printf("Shouldnt get Here\n" );           
+		Debugprintf("Shouldnt get Here" );           
 		//Logs.Exception("[ARDOPprotocol.ProcessRcvdARQFrame] 
 	}
 		// Unhandled Protocol state=" & GetARDOPProtocolState.ToString & "  ARQState=" & ARQState.ToString)
@@ -1665,8 +1687,7 @@ BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall)
 	// generate the modulation with 2 x the default FEC leader length...Should insure reception at the target
 	// Note this is sent with session ID 0xFF
 
-	Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
-
+	//	Set all flags before playing, as the End TX is called before we return here
 	blnAbort = FALSE;
 	dttTimeoutTrip = Now;
 	SetARDOPProtocolState(ISS);
@@ -1675,13 +1696,16 @@ BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall)
 	
 	bytSessionID = GenerateSessionID(strMycall, strTargetCall);  // Now set bytSessionID to receive ConAck (note the calling staton is the first entry in GenerateSessionID) 
 	bytPendingSessionID = bytSessionID;
-	
+
 	//Logs.WriteDebug("[SendARQConnectRequest] strMycall=" & strMycall & "  strTargetCall=" & strTargetCall & "  bytPendnigSessionID=" & Format(bytPendingSessionID, "X"))
 	
 	blnPending = TRUE;
 	blnARQConnected = FALSE;
 	
 	intFrameRepeatInterval = 2000;  // ms ' Finn reported 7/4/2015 that 1600 was too short ...need further evaluation but temporarily moved to 2000 ms
+	blnEnbARQRpt = TRUE;
+
+	Mod4FSKDataAndPlay(bytEncodedBytes[0], &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 
 	//' Update the main form menu status lable 
     //        Dim stcStatus As Status = Nothing
@@ -1707,28 +1731,10 @@ BOOL Send10MinID()
 
 		blnEnbARQRpt = FALSE;
 
-		EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
-		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
 		dttLastFECIDSent = Now;
-		
-		// Hold until PTT goes true
-
-		while (blnLastPTT == FALSE && dttSafetyBailout)		{
-		{
-			Sleep(100);
-			dttSafetyBailout--;
-		}
-		//  Now hold until PTT goes FALSE
-
-		if (dttSafetyBailout <= 0)
-		{
-			//Logs.Exception("[ARDOPprotocol.Send10MinID] Safety bailout!")
- 
-			return TRUE;
-		}
-		Sleep(200);
+		EncLen = Encode4FSKIDFrame(strLocalCallsign, GridSquare, bytEncodedBytes);
+		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent		
 		return TRUE;
-		}
 	}
 	return FALSE;
 }
@@ -1743,49 +1749,16 @@ BOOL CheckForDisconnect()
 		
 		QueueCommandToHost("STATUS INITIATING ARQ DISCONNECT");
 
-		EncLen = Encode4FSKControl(0x29, bytSessionID, bytEncodedBytes);
-		Mod4FSKDataAndPlay(0x29, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 		intFrameRepeatInterval = 2000;
 		intRepeatCount = 1;
 		blnARQDisconnect = FALSE;
 		blnDISCRepeating = TRUE;
 		blnEnbARQRpt = FALSE;
+
+		EncLen = Encode4FSKControl(0x29, bytSessionID, bytEncodedBytes);
+		Mod4FSKDataAndPlay(0x29, &bytEncodedBytes[0], EncLen, LeaderLength);		// only returns when all sent
 		return TRUE;
 	}
 	return FALSE;
 }
-
-//	Subroutine to safely restore data to queue to be used after a failed attempt to send data and a change of mode requiring a different data size
-
-void RestoreDataToQueue(UCHAR * bytData,  int Len)
-{
-	char HostCmd[32];
-
-	if (Len == 0)
-		return;
-	
-	GetSemaphore();
-
-	if (bytDataToSendLength == 0)
-	{
-		memcpy(bytDataToSend, bytData, Len);
-		bytDataToSendLength = Len;
-	}
-	else
-	{
-		// Move data down buffer and prepend requeued
-
-		memmove(&bytDataToSend[Len], bytDataToSend, bytDataToSendLength);	
-		memcpy(bytDataToSend, bytData, Len);
-		bytDataToSendLength += Len;
-	}
-	
-	FreeSemaphore();
-
-	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
-	QueueCommandToHost(HostCmd);
-	
-	tmrPollOBQueue = 1000;		// 10 Secs
-}
- 
 

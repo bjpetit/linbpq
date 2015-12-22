@@ -3,593 +3,861 @@
 
 #include "ARDOPC.h"
 
+VOID ProcessSCSPacket(UCHAR * rxbuffer, int Length);
+VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
+
+UCHAR bytDataToSend[4096];// =
+	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
+	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
+	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
+	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n"
+	//	"HelloHelloAAAABBBBCCCCDDDD\r\nHelloHelloHelloHelloHello\rHelloHelloHelloHelloHelloHelloHello\r\n";
+
+
+// May malloc this, or change to cyclic buffer
+
+int bytDataToSendLength = 0;
+
+char ReportCall[10];
+
+UCHAR bytDataforHost[2048];		// has to be at least max packet size (?1280)
+
+int bytesforHost = 0;
+
+UCHAR bytEchoData[2048];		// has to be at least max packet size (?1280)
+
+int bytesEchoed = 0;
+
+UCHAR DelayedEcho = 0;
+
+UCHAR SCSReply[256 + 5];	// could be smaller??
+
+int Toggle;
+
+extern char Callsign[10];
+
+BOOL Term4Mode;
+BOOL PACMode;
+
+BOOL MODE;		// Host or Term
+
+int Mode;
+
+volatile int RXBPtr;
+
+int change = 0;			// Flag for connect/disconnect reports
+int state = 0;
+
+int DataChannel = 31;
+int ReplyLen;
+
+extern float dblOffsetHz;
+extern int intSessionBW;
+
 void QueueCommandToHost(char * Cmd)
 {
-	printf("Command to Host %s\n", Cmd);
+	if (memcmp(Cmd, "STATUS ", 7) == 0)
+	{
+		if (memcmp(&Cmd[7], "CONNECT TO", 10) == 0)
+		{
+			memcpy(ReportCall, &Cmd[18], 10);
+			strlop(ReportCall, ' ');
+			change = 1;
+			state = 0;
+		}
+	}
+	if (memcmp(Cmd, "CONNECTED ", 10) == 0)
+	{
+		memcpy(ReportCall, &Cmd[10], 10);
+		strlop(ReportCall, ' ');
+		change = 1;
+		state = 1;
+	}
+
+	if (memcmp(Cmd, "DISCON", 6) == 0)
+	{
+		change = 1;
+		state = 0;
+	}
+
+	Debugprintf("Command to Host %s", Cmd);
 }
 
 void SendCommandToHost(char * Cmd)
 {
-	printf("Command to Host %s\n", Cmd);
-}
+	// if possible convert to equivalent PTC message
 
-
-void AddTagToDataAndSendToHost(char * Msg, char * Type, int Len)
-{
-	Msg[Len] = 0;
-	printf("RX Data %s %s\n", Type, Msg);
-}
-
-
-// Subroutine for processing a command from Host
-
-void ProcessCommandFromHost(char * strCMD)
-{
-	char * ptrParams;
-	char cmdCopy[80] = "";
-	char strFault[100];
-	char cmdReply[120];
-
-	memcpy(cmdCopy, strCMD, 79);	// save before we split it up
-
-	_strupr(strCMD);
-
-	ptrParams = strlop(strCMD, ' ');
-
-
-  //      Dim strParameters As String = ""
- //       Dim strFault As String = ""
-
-	if (strcmp(strCMD, "ABORT") == 0)
+	if (memcmp(Cmd, "STATUS CONNECT TO", 20) == 0)
 	{
-		blnAbort = TRUE;
-		goto cmddone;
+		change = 1;
+		state = 0;
 	}
 
-	if (strcmp(strCMD, "ARQBW") == 0)
-	{
-		int i;
+	Debugprintf("Command to Host %s", Cmd);
+}
 
-		if (ptrParams == 0)
+void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
+{
+	if (strcmp(Type, "ARQ") == 0)
+	{
+		memcpy(&bytDataforHost[bytesforHost], Msg, Len);
+		bytesforHost += Len;
+	}
+	else
+	{
+		Msg[Len] = 0;
+		Debugprintf("RX Data %s %s", Type, Msg);
+	}
+}
+
+BOOL CheckStatusChange()
+{
+	if (change == 1)
+	{
+		change = 0;
+
+		if (state == 1)
 		{
-			sprintf(cmdReply, "ARQBW %S", ARQBandwidths[ARQBandwidth]);
-			SendCommandToHost(cmdReply);
+			// Connected
+
+			SCSReply[2] = DataChannel;
+			SCSReply[3] = 3;
+			ReplyLen  = sprintf(&SCSReply[4], "(%d) CONNECTED to %s", DataChannel, ReportCall);
+			ReplyLen += 5;
+			EmCRCStuffAndSend(SCSReply, ReplyLen);
+
+			return TRUE;
+		}
+		// Disconnected
+		
+		SCSReply[2] = DataChannel;
+		SCSReply[3] = 3;
+		ReplyLen  = sprintf(&SCSReply[4], "(%d) DISCONNECTED fm %s", DataChannel, ReportCall);
+		ReplyLen += 5;		// Include Null
+		EmCRCStuffAndSend(SCSReply, ReplyLen);
+
+		return TRUE;
+
+	}
+
+	return FALSE;
+
+}
+
+BOOL CheckForData()
+{
+	int Length;
+
+	if (bytesEchoed)
+	{
+		// Echo back acked data
+
+		if (bytesEchoed > 256)
+			Length = 256;
+		else
+			Length = bytesEchoed;
+
+		memcpy(&SCSReply[5], bytEchoData, Length);
+
+		bytesEchoed -= Length;
+
+		if (bytesEchoed)
+			memmove(bytEchoData, &bytEchoData[Length], bytesEchoed);
+
+		SCSReply[2] = DataChannel;
+		SCSReply[3] = 8;		// PTC Special - delayed echoed data
+		SCSReply[4] = Length - 1;
+
+		ReplyLen = Length + 5;
+		EmCRCStuffAndSend(SCSReply, ReplyLen);
+
+		return TRUE;
+	}
+
+	if (bytesforHost == 0)
+		return FALSE;
+
+	if (bytesforHost > 256)
+		Length = 256;
+	else
+		Length = bytesforHost;
+
+	memcpy(&SCSReply[5], bytDataforHost, Length);
+
+	bytesforHost -= Length;
+
+	if (bytesforHost)
+		memmove(bytDataforHost, &bytDataforHost[Length], bytesforHost);
+
+	SCSReply[2] = DataChannel;
+	SCSReply[3] = 7;
+	SCSReply[4] = Length - 1;
+
+	ReplyLen = Length + 5;
+	EmCRCStuffAndSend(SCSReply, ReplyLen);
+
+	return TRUE;
+}
+
+
+// SCS Emulator
+
+const unsigned short CRCTAB[256];
+
+unsigned short int compute_crc(unsigned char *buf,int len)
+{
+	unsigned short fcs = 0xffff; 
+	int i;
+
+	for(i = 0; i < len; i++) 
+		fcs = (fcs >>8 ) ^ CRCTAB[(fcs ^ buf[i]) & 0xff]; 
+
+	return fcs;
+}
+
+// SCS Mode Stuff
+
+unsigned short int compute_crc(unsigned char *buf,int len);
+VOID EmCRCStuffAndSend(UCHAR * Msg, int Len);
+
+int EmUnstuff(UCHAR * MsgIn, UCHAR * MsgOut, int len)
+{
+	int i, j=0;
+
+	for (i=0; i<len; i++, j++)
+	{
+		MsgOut[j] = MsgIn[i];
+		if (MsgIn[i] == 170)			// Remove next byte
+		{
+			i++;
+			if (MsgIn[i] != 0)
+				if (i != len) return -1;
+		}
+	}
+
+	return j;
+}
+
+
+VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
+{
+	int Channel = Buffer[0];
+	int Command = Buffer[1] & 0x3f;
+	int Len = Buffer[2];
+	char * MYCall;
+	int len;
+
+	if (Toggle == (Buffer[1] & 0x80) && (Buffer[1] & 0x40) == 0)
+	{
+		// Repeat Condition
+
+		//EmCRCStuffAndSend( SCSReply, ReplyLen);
+		//return;
+	}
+
+	Toggle = (Buffer[1] & 0x80);
+	Toggle ^= 0x80;
+
+//	if (Channel == 255 &&  Len == 0)
+	if (Channel == 255)
+	{
+		UCHAR * NextChan = &SCSReply[4];
+		
+		// General Poll
+
+		// See if any channels have anything available
+		
+		if (bytesforHost || bytesEchoed || change)
+			*(NextChan++) = DataChannel;			// Something for this channel
+
+		*(NextChan++) = 0;
+
+		SCSReply[2] = 255;
+		SCSReply[3] = 1;
+
+		ReplyLen = NextChan - &SCSReply[0];
+
+		EmCRCStuffAndSend(SCSReply, ReplyLen);
+		return;
+	}
+
+	if (Channel == 254)			// Status
+	{
+		// Extended Status Poll
+
+		SCSReply[2] = 254;
+		SCSReply[3] = 7;		// Status
+		SCSReply[4] = 3;		// Len -1
+
+		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS)
+		{
+			// connected states
+
+			SCSReply[5] = 0xa2;		// ARQ, Traffic
+
+			if (ProtocolState != IRS)
+				SCSReply[5] |= 0x8;	// Send Bit
+
+			SCSReply[6] = 3;		// Pactor 3
+
+			if (intSessionBW == 200)
+				SCSReply[7] = 1;		// P1
+			else if (intSessionBW == 500)
+				SCSReply[7] = 2;		// P2
+			else
+				SCSReply[7] = 3;		// P3
+
+			SCSReply[7] = 3;			// SpeedLevel		
+			
+			SCSReply[8] = dblOffsetHz;	// Freq Error
 		}
 		else
 		{
-			for (i = 0; i < 8; i++)
-			{
-				if (strcmp(ptrParams, ARQBandwidths[i]) == 0)
-					break;
-			}
-
-			if (i == 8)
-				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);
-			else
-				ARQBandwidth = i;
+			SCSReply[5] = 0;
+			SCSReply[6] = 0;
+			SCSReply[7] = 0;
+			SCSReply[8] = 0;
 		}
-		goto cmddone;
+
+		ReplyLen = 9;
+		EmCRCStuffAndSend(SCSReply, 9);
+		return;
 	}
 
-	if (strcmp(strCMD, "ARQCALL") == 0)
-	{
-		char * strCallParam = NULL;
-		if (ptrParams)
-			strCallParam = strlop(ptrParams, ' ');
 
-		if (strCallParam)
+	if (Command == 0)
+	{
+		// Data Frame
+
+		if (Channel == 31)
+			AddDataToDataToSend(&Buffer[3], Buffer[2]+ 1);
+		goto AckIt;
+	}
+
+//	Debugprintf("%c", Buffer[3]);
+
+	switch (Buffer[3])
+	{
+	case 'J':				// JHOST
+
+		MODE = FALSE;
+
+		return;
+
+	case 'L':
+/*
+                            ' Status responses from the 'L' command will have 6 fields separated by spaces.
+                            ' The field definitions are as follows:
+                            ' Field 1: Number of link status messages not yet displayed
+                            ' Field 2: NUmber of receive frames not yet displayed
+                            ' Field 3: NUmber of send frames not yet delivered
+                            ' Field 4: NUmber of transmitted frames not yet acknowledged
+                            ' Field 5: NUmber of tries on the current operation
+                            ' Field 6: Link state:
+                            '   0 = Disconnected
+                            '   1 = Link Setop
+                            '   2 = Frame Reject
+                            '   3 = Disconnect Request
+                            '   4 = Information transfer
+                            '   5 = Reject Frame Sent
+                            '   6 = Waiting Acknowledgement
+                            '   7 = Device Busy
+                            '   8 = Remote Device Busy
+                            '   9 = Both Devices Busy
+                            '   10 = Waiting Acknowledgement and Device Busy
+                            '   11 = Waiting Acknowledgement and Remote Busy
+                            '   12 = Waiting Acknowledgement and Both Device Busy
+                            '   13 = Reject Frame Sent and Device Busy
+                            '   14 = Reject Frame Sent and Remote Busy
+                            '   15 = Reject Frame Sent and Both Device Busy
+                            '
+							*/
+
+			// I think only 3 is important as it is used for flow control
+			// RMS Express stops at 20
+
+		SCSReply[2] = Channel;
+		SCSReply[3] = 1;
+		len = sprintf(&SCSReply[4], "%d %d %d %d %d %d", 0, 0, (bytDataToSendLength > 3000)?51:0, 0, 0, 4);
+		ReplyLen = len + 5;
+		EmCRCStuffAndSend(SCSReply, len + 5);
+		return;
+
+
+		return;
+
+	case 'G':				// Specific Poll
+	
+		if (CheckStatusChange())
+			return;						// It has sent reply
+
+		if (CheckForData())
+			return;						// It has sent reply
+
+		SCSReply[2] = Channel;
+		SCSReply[3] = 0;
+		ReplyLen = 4;
+		EmCRCStuffAndSend(SCSReply, 4);
+		return;
+
+	case 'C':				// Connect
+
+		// Could be real, or just C to request status
+
+		if (Channel == 0)
+			goto AckIt;
+
+		if (Length == 0)
 		{
-			if ((strcmp(ptrParams, "CQ") == 0) || CheckValidCallsignSyntax(ptrParams))
-			{
-				int param = atoi(strCallParam);
+			// STATUS REQUEST - IF CONNECTED, GET CALL
 
-				if (param > 1 && param < 16)
-				{
-					if (ProtocolMode == ARQ)
-					{
-						ARQConReqRepeats = param;
-						SendARQConnectRequest(Callsign, ptrParams);
-						goto cmddone;
-					}
-					sprintf(strFault, "Not from mode FEC");
-					goto cmddone;
-				}
-			}
+			return;
 		}
-		sprintf(strFault, "Syntax Err: %s", cmdCopy);
-		goto cmddone;
+		Buffer[Length - 2] = 0;
+
+		SendARQConnectRequest(Callsign, &Buffer[6]);
+
+	AckIt:
+
+		SCSReply[2] = Channel;
+		SCSReply[3] = 0;
+		ReplyLen = 4;
+		EmCRCStuffAndSend(SCSReply, 4);
+		return;
+
+	case 'D':
+
+		// Disconnect
+
+		if (ProtocolState == IDLE || ProtocolState == IRS || ProtocolState == ISS)
+			blnARQDisconnect = TRUE;
+
+		goto AckIt;
+		
+	case '%':
+
+		// %X commands
+
+		switch (Buffer[4])
+		{
+		case 'V':					// Version
+
+			SCSReply[2] = Channel;
+			SCSReply[3] = 1;
+			strcpy(&SCSReply[4], "4.8 1.32");
+			ReplyLen = 13;
+			EmCRCStuffAndSend(SCSReply, 13);
+
+			return;
+
+
+		case 'M':
+
+			DelayedEcho = Buffer[5];
+			
+			SCSReply[2] = Channel;
+			SCSReply[3] = 1;
+			SCSReply[4] = 0;
+
+			ReplyLen = 5;
+			EmCRCStuffAndSend(SCSReply, 5);
+
+			return;
+
+		default:
+						
+			SCSReply[2] = Channel;
+			SCSReply[3] = 1;
+			SCSReply[4] = 0;
+
+			ReplyLen = 5;
+			EmCRCStuffAndSend(SCSReply, 5);
+
+			return;
+		}
+	case '@':
+
+		// Pobably just @B
+
+			SCSReply[2] = Channel;
+			SCSReply[3] = 1;
+			len = sprintf(&SCSReply[4], "%d ", 4096 - bytDataToSendLength);
+			ReplyLen = len + 5;
+			EmCRCStuffAndSend(SCSReply, len + 5);
+			return;
+
+	default:
+						
+		SCSReply[2] = Channel;
+		SCSReply[3] = 1;
+		SCSReply[4] = 0;
+
+		ReplyLen = 5;
+		EmCRCStuffAndSend(SCSReply, 5);
 	}
-	/*
-            Case "ARQTIMEOUT"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.ARQTimeout.ToString)
-                ElseIf IsNumeric(strParameters) AndAlso (CInt(strParameters) > 29 And CInt(strParameters) < 241) Then
-                    MCB.ARQTimeout = CInt(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "BUFFER"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & objMain.objProtocol.DataToSend.ToString)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "CAPTURE"
-                If strParameters <> "" Then
-                    MCB.CaptureDevice = strParameters.Trim
-                Else
-                    SendCommandToHost(strCommand & " " & MCB.CaptureDevice)
-                End If
-            Case "CAPTUREDEVICES"
-                SendCommandToHost(strCommand & " " & objMain.CaptureDevices)
-            Case "CLOSE"
-                objMain.blnClosing = True
-            Case "CMDTRACE"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.CommandTrace.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    MCB.CommandTrace = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "CODEC"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & objMain.blnCodecStarted.ToString.ToUpper)
-                ElseIf strParameters = "TRUE" Then
-                    objMain.StopCodec(strFault)
-                    If strFault = "" Then
-                        objMain.StartCodec(strFault)
-                    End If
-                ElseIf strParameters = "FALSE" Then
-                    objMain.StopCodec(strFault)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "CWID"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.CWID.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    MCB.CWID = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "DATATOSEND"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & bytDataToSend.Length.ToString)
-                ElseIf strParameters = 0 Then
-                    objMain.objProtocol.ClearDataToSend()
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "DEBUGLOG"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.DebugLog.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    MCB.DebugLog = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "DISCONNECT"
-                With objMain.objProtocol ' Ignore if not ARQ connected states
-                    If .GetARDOPProtocolState = ProtocolState.IDLE Or .GetARDOPProtocolState = ProtocolState.IRS Or .GetARDOPProtocolState = ProtocolState.ISS Then
-                        .blnARQDisconnect = True
-                    End If
-                End With
-            Case "DISPLAY"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & Format(MCB.DisplayFreq, "#.000"))
-                ElseIf IsNumeric(strParameters) Then
-                    MCB.DisplayFreq = Val(strParameters)
-                    Dim stcStatus As Status = Nothing
-                    If Val(strParameters) > 100000 Then
-                        stcStatus.Text = "Dial: " & Format(Val(strParameters) / 1000, "##0.000") & "MHz"
-                    Else
-                        stcStatus.Text = "Dial: " & strParameters & "KHz"
-                    End If
-                    stcStatus.ControlName = "lblCF"
-                    queTNCStatus.Enqueue(stcStatus)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "DRIVELEVEL"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.DriveLevel.ToString)
-                Else
-                    If IsNumeric(strParameters) Then
-                        If CInt(strParameters) >= 0 And CInt(strParameters) <= 100 Then
-                            MCB.DriveLevel = CInt(strParameters)
-                        Else
-                            strFault = "Syntax Err:" & strCMD
-                        End If
-                    End If
-                End If
-            Case "FECID"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.FECId.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    MCB.FECId = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "FECMODE"
-                Dim blnModeOK As Boolean = False
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.FECMode)
-                Else
-                    For i As Integer = 0 To strAllDataModes.Length - 1
-                        If strParameters = strAllDataModes(i) Then
-                            MCB.FECMode = strParameters
-                            blnModeOK = True
-                            Exit For
-                        End If
-                    Next i
-                    If blnModeOK = False Then strFault = "Syntax Err:" & strCMD
-                End If
-            Case "FECREPEATS"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.FECRepeats.ToString)
-                Else
-                    If IsNumeric(strParameters) Then
-                        If CInt(strParameters) >= 0 And CInt(strParameters) <= 5 Then
-                            MCB.FECRepeats = CInt(strParameters)
-                        Else
-                            strFault = "Syntax Err:" & strCMD
-                        End If
-                    End If
-                End If
-            Case "FECSEND"
-                If ptrSpace = -1 Then
-                    strFault = "Syntax Err:" & strCMD
-                Else
-                    If strParameters = "TRUE" Then
-                        Dim bytData(-1) As Byte ' this will force using the data in the current inbound buffer
-                        objMain.objProtocol.StartFEC(bytData, MCB.FECMode, MCB.FECRepeats, MCB.FECId)
-                    ElseIf strParameters = "FALSE" Then
-                        objMain.objProtocol.Abort()
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                End If
-            Case "GRIDSQUARE"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.GridSquare)
-                Else
-                    If CheckGSSyntax(strParameters.Trim) Then
-                        MCB.GridSquare = strParameters.Trim
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                End If
-            Case "INITIALIZE"
-                blnInitializing = True
-                Thread.Sleep(200)
-                tmrPollQueue.Stop()
-                queDataForHost.Clear()
-                blnProcessingCmdData = False ' Processing a Command or Data frame
-                blnHostRDY = True
-                blnInitializing = False
-                tmrPollQueue.Start()
-            Case "LEADER"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.LeaderLength.ToString)
-                Else
-                    If IsNumeric(strParameters) Then
-                        If CInt(strParameters) >= 100 And CInt(strParameters) <= 1200 Then
-                            MCB.LeaderLength = 10 * Math.Round(CInt(strParameters) / 10) ' Round to nearest 10 ms
-                        Else
-                            strFault = "Syntax Err:" & strCMD
-                        End If
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                End If
-            Case "LISTEN"
-                If ptrSpace = -1 Then
-                    strFault = "Syntax Err:" & strCMD
-                Else
-                    If strParameters = "TRUE" Then
-                        objMain.objProtocol.Listen = True
-                    ElseIf strParameters = "FALSE" Then
-                        objMain.objProtocol.Listen = False
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                End If
-            Case "MYAUX"
-                If strParameters <> "" Then
-                    Dim strAux() As String = strParameters.Split(","c)
-                    ReDim MCB.AuxCalls(9)
-                    For i As Integer = 0 To Math.Min(9, strAux.Length - 1)
-                        If CheckValidCallsignSyntax(strAux(i).Trim.ToUpper) Then
-                            MCB.AuxCalls(i) = strAux(i).Trim.ToUpper
-                        End If
-                    Next
-                Else
-                    Dim strReply As String = ""
-                    For i As Integer = 0 To 9
-                        If MCB.AuxCalls IsNot Nothing AndAlso MCB.AuxCalls(i) <> "" Then
-                            strReply &= MCB.AuxCalls(i) & ","
-                        End If
-                    Next
-                    If strReply.EndsWith(",") Then strReply = strReply.Substring(0, strReply.Length - 1) ' Trim the trailing ","
-                    SendCommandToHost(strCommand & " " & strReply)
-                End If
-            Case "MYCALL"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.Callsign)
-                ElseIf CheckValidCallsignSyntax(strParameters) Then
-                    MCB.Callsign = strParameters
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "PLAYBACK"
-                If strParameters <> "" Then
-                    MCB.PlaybackDevice = strParameters.ToUpper.Trim
-                Else
-                    SendCommandToHost(strCommand & " " & MCB.PlaybackDevice)
-                End If
-            Case "PLAYBACKDEVICES"
-                SendCommandToHost(strCommand & " " & objMain.PlaybackDevices)
-
-                ' The following Radio commands are optional to allow the TNC to control the radio
-                '  (All radio commands begin with "RADIO"
-            Case "PROTOCOLMODE"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.ProtocolMode)
-                Else
-                    If strParameters.Trim = "ARQ" Or strParameters.Trim = "FEC" Then
-                        MCB.ProtocolMode = strParameters.Trim
-                        objMain.objProtocol.SetARDOPProtocolState(ProtocolState.DISC) ' set state to DISC on any Protocol mode change. 
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                End If
-            Case "RADIOANT"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Ant.ToString)
-                ElseIf strParameters = "0" Or strParameters = "1" Or strParameters = "2" Then
-                    RCB.Ant = CInt(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOCTRL"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.RadioControl.ToString)
-                ElseIf strParameters = "TRUE" Then
-                    If IsNothing(objMain.objRadio) Then
-                        objMain.SetNewRadio()
-                        objMain.objRadio.InitRadioPorts()
-                    End If
-                    RCB.RadioControl = CBool(strParameters)
-                ElseIf strParameters = "FALSE" Then
-                    If Not IsNothing(objMain.objRadio) Then
-                        objMain.objRadio = Nothing
-                    End If
-                    RCB.RadioControl = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOCTRLBAUD"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPortBaud.ToString)
-                ElseIf IsNumeric(strParameters) Then  ' Later expand to tighter syntax checking
-                    RCB.CtrlPortBaud = CInt(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOCTRLDTR"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPortDTR.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    RCB.CtrlPortDTR = CBool(strParameters)
-                    objMain.objRadio.InitRadioPorts()
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOCTRLPORT"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPort)
-                Else ' Later expand to tighter syntax checking
-                    RCB.CtrlPort = strParameters
-                    objMain.objRadio.InitRadioPorts()
-                End If
-            Case "RADIOCTRLRTS"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.CtrlPortRTS.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    RCB.CtrlPortRTS = CBool(strParameters)
-                    objMain.objRadio.InitRadioPorts()
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOFILTER"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Filter.ToString)
-                ElseIf IsNumeric(strParameters) AndAlso (CInt(strParameters) >= 0 And CInt(strParameters <= 3)) Then
-                    RCB.Filter = CInt(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOFREQ"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Frequency.ToString)
-                ElseIf IsNumeric(strParameters) Then ' Later expand to tighter syntax checking
-                    RCB.Frequency = CInt(strParameters)
-                    If Not IsNothing(objMain.objRadio) Then
-                        objMain.objRadio.SetDialFrequency(RCB.Frequency)
-                    End If
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOICOMADD"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.IcomAdd)
-                ElseIf strParameters.Length = 2 AndAlso ("0123456789ABCDEF".IndexOf(strParameters(0)) <> -1) AndAlso _
-                        ("0123456789ABCDEF".IndexOf(strParameters(1)) <> -1) Then
-                    RCB.IcomAdd = strParameters
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOISC"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.InternalSoundCard)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    RCB.InternalSoundCard = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOMENU"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & objMain.RadioMenu.Enabled.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    objMain.RadioMenu.Enabled = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOMODE"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Mode)
-                ElseIf strParameters = "USB" Or strParameters = "USBD" Or strParameters = "FM" Then
-                    RCB.Mode = strParameters
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOMODEL"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.Model)
-                Else
-                    Dim strRadios() As String = objMain.objRadio.strSupportedRadios.Split(",")
-                    Dim strRadioModel As String = ""
-                    For Each strModel As String In strRadios
-                        If strModel.ToUpper = strParameters.ToUpper Then
-                            strRadioModel = strParameters
-                            Exit For
-                        End If
-                    Next
-                    If strRadioModel.Length > 0 Then
-                        RCB.Model = strParameters
-                    Else
-                        strFault = "Model not supported :" & strCMD
-                    End If
-                End If
-
-            Case "RADIOMODELS"
-                If ptrSpace = -1 And Not IsNothing(objMain.objRadio) Then
-                    ' Send a comma delimited list of models?
-                    SendCommandToHost(strCommand & " " & objMain.objRadio.strSupportedRadios) ' Need to insure this isn't too long for Interfaces:
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOPTT"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.PTTPort)
-                Else ' need syntax check
-                    If strParameters.ToUpper = "CATPTT" Then
-                        RCB.PTTPort = "CAT PTT"
-                        objMain.objRadio.InitRadioPorts()
-                    ElseIf strParameters.ToUpper = "VOX/SIGNALINK" Then
-                        RCB.PTTPort = "VOX/Signalink"
-                        objMain.objRadio.InitRadioPorts()
-                    ElseIf strParameters.ToUpper.StartsWith("COM") Then
-                        RCB.PTTPort = strParameters.ToUpper
-                        objMain.objRadio.InitRadioPorts()
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                End If
-            Case "RADIOPTTDTR"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.PTTDTR.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    RCB.PTTDTR = CBool(strParameters)
-                    objMain.objRadio.InitRadioPorts()
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "RADIOPTTRTS"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & RCB.PTTRTS.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    RCB.PTTRTS = CBool(strParameters)
-                    objMain.objRadio.InitRadioPorts()
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-                ' End of optional Radio Commands
-
-            Case "SENDID"
-                If Main.objProtocol.GetARDOPProtocolState = ProtocolState.DISC Then
-                    objMain.SendID(MCB.CWID)
-                Else
-                    strFault = "Not From State " & Main.objProtocol.GetARDOPProtocolState.ToString
-                End If
-            Case "SETUPMENU"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & objMain.SetupMenu.Enabled.ToString)
-                ElseIf strParameters = "TRUE" Or strParameters = "FALSE" Then
-                    objMain.SetupMenu.Enabled = CBool(strParameters)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "SQUELCH"
-                If strParameters <> "" Then
-                    If IsNumeric(strParameters) AndAlso (CInt(strParameters) >= 1 And CInt(strParameters) <= 10) Then
-                        MCB.Squelch = CInt(strParameters)
-                    Else
-                        strFault = "Syntax Err:" & strCMD
-                    End If
-                Else
-                    SendCommandToHost(strCommand & " " & MCB.Squelch.ToString)
-                End If
-            Case "STATE"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & ARDOPState.ToString)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "TRAILER"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.TrailerLength.ToString)
-                ElseIf IsNumeric(strParameters) AndAlso (CInt(strParameters) >= 0 And CInt(strParameters) <= 200) Then
-                    MCB.TrailerLength = 10 * Math.Round(CInt(strParameters) / 10)
-                Else
-                    strFault = "Syntax Err:" & strCMD
-                End If
-            Case "TUNERANGE"
-                If ptrSpace = -1 Then
-                    SendCommandToHost(strCommand & " " & MCB.TuningRange.ToString)
-                Else
-                    Select Case strParameters.Trim
-                        Case "0", "50", "100", "150", "200"
-                            MCB.TuningRange = CInt(strParameters)
-                        Case Else
-                            strFault = "Syntax Err:" & strCMD
-                    End Select
-                End If
-            Case "TWOTONETEST"
-                If objMain.objProtocol.GetARDOPProtocolState = ProtocolState.DISC Then
-                    objMain.Send5SecTwoTone()
-                Else
-                    strFault = "Not from state " & objMain.objProtocol.GetARDOPProtocolState.ToString
-                End If
-            Case "VERSION"
-                SendCommandToHost("VERSION " & Application.ProductName & "_" & Application.ProductVersion)
-            Case "RDY" ' no response required for RDY
-*/
-
-	else
-		sprintf(strFault, "CMD not recoginized");
-cmddone:
-
-	if (strFault[0])
-	{
-		//Logs.Exception("[ProcessCommandFromHost] Cmd Rcvd=" & strCommand & "   Fault=" & strFault)
-		sprintf(cmdReply, "FAULT %s", strFault);
-		SendCommandToHost(cmdReply);
-	}
-	SendCommandToHost("RDY");		// signals host a new command may be sent
 }
 
- 
 
+VOID ProcessSCSTextCommand(char * Command, int Len)
+{
+	// Command to SCS in non-Host mode.
+
+	// We can probably just dump anything but JHOST 4 and Callsign
+
+	if (Len == 1)
+		goto SendPrompt;		// Just a CR
+
+	if (_memicmp(Command, "CB ", 3) == 0)
+	{
+		char SerialNo[] = "\r\nPRMS Express sends next without waiting";
+	//	PutString(SerialNo);
+		return;
+	}
+
+	Debugprintf("SCS Command %s", Command);
+
+	if (_memicmp(Command, "JHOST4", 6) == 0)
+	{
+		MODE = TRUE;
+		Toggle = 0;
+
+		return;
+	}
+
+	if (_memicmp(Command, "TERM 4", 6) == 0)
+		Term4Mode = TRUE;
+
+	else if (_memicmp(Command, "T 0", 3) == 0)
+		Term4Mode = FALSE;
+
+	else if (_memicmp(Command, "PAC 4", 5) == 0)
+		PACMode = TRUE;
+
+	if (_memicmp(Command, "MYC", 3) == 0)
+	{
+		char * ptr = strchr(Command, ' ');
+		char MYResp[80];
+
+		Command[Len-1] = 0;		// Remove CR
+		
+		if (ptr && (strlen(ptr) > 2))
+		{
+			strcpy(Callsign, ++ptr); 
+		}
+
+		sprintf(MYResp, "\rMycall: >%s<", Callsign);
+		PutString(MYResp);
+	}
+
+	else if (_memicmp(Command, "SYS SERN", 8) == 0)
+	{
+		char SerialNo[] = "\r\nSerial number: 0100000000000000";
+		PutString(SerialNo);
+	}
+
+	else if (_memicmp(Command, "PTCC", 4) == 0)
+	{
+		char SerialNo[] = "\r\nPTC-II COMPATIBILITY MODE: 0";
+		PutString(SerialNo);
+	}
+
+	else if (_memicmp(Command, "MYL ", 4) == 0)
+	{
+		char Resp[] = "\rXXXX";
+		int level = atoi(&Command[4]);
+		
+		if (level == 1)
+			ARQBandwidth = B200MAX;
+		else if (level == 2)
+			ARQBandwidth = B500MAX;
+		else if (level == 3)
+			ARQBandwidth = B1000MAX;
+		else if (level == 4)
+			ARQBandwidth = B2000MAX;
+
+		PutString(Resp);
+	}
+	else 
+	{
+		char SerialNo[] = "\rXXXX";
+		PutString(SerialNo);
+	}
+
+SendPrompt:	
+	
+	if (PACMode)
+	{
+		PutChar( 13);
+		PutChar( 'p');
+		PutChar( 'a');
+		PutChar( 'c');
+		PutChar( ':');
+		PutChar( ' ');
+
+		return;
+	}
+
+	if (Term4Mode)
+	{
+		PutChar( 13);
+		PutChar( 4);
+		PutChar( 13);
+		PutChar( 'c');
+		PutChar( 'm');
+		PutChar( 'd');
+		PutChar( ':');
+		PutChar( ' ');
+		PutChar( 1);
+	}
+	else
+	{
+		PutChar( 13);
+		PutChar( 'c');
+		PutChar( 'm');
+		PutChar( 'd');
+		PutChar( ':');
+		PutChar( ' ');
+	}
+
+
+
+	if (Term4Mode)
+		PutChar( 4);
+
+	PutChar( 13);
+	PutChar( 'c');
+	PutChar( 'm');
+	PutChar( 'd');
+	PutChar( ':');
+	PutChar( ' ');
+	
+	return;
+}
+
+
+
+VOID ProcessSCSPacket(UCHAR * rxbuffer, int Length)
+{
+	unsigned short crc;
+	char UnstuffBuffer[500] = "";
+
+	// DED mode doesn't have an end of frame delimiter. We need to know if we have a full frame
+
+	// Fortunately this is a polled protocol, so we only get one frame at a time
+
+	// If first char != 170, then probably a Terminal Mode Frame. Wait for CR on end
+
+	// If first char is 170, we could check rhe length field, but that could be corrupt, as
+	// we haen't checked CRC. All I can think of is to check the CRC and if it is ok, assume frame is
+	// complete. If CRC is duff, we will eventually time out and get a retry. The retry code
+	// can clear the RC buffer
+			
+Loop:
+
+	if (rxbuffer[0] != 170)
+	{
+		UCHAR *ptr;
+		int cmdlen;
+		
+		// Char Mode Frame I think we need to see CR on end (and we could have more than one in buffer
+
+		// If we think we are in host mode, then to could be noise - just discard.
+
+		if (MODE)
+		{
+			RXBPtr = 0;
+			return;
+		}
+
+		rxbuffer[Length] = 0;
+
+		if (rxbuffer[0] == 0x1b)
+		{
+			// Just ignore (I think!)
+
+			RXBPtr--;
+			if (RXBPtr)
+			{
+				memmove(rxbuffer, rxbuffer+1, RXBPtr + 1);
+				Length--;
+				goto Loop;
+			}
+			return;
+		}
+
+		if (rxbuffer[0] == 0x1e)
+		{
+			// Status POLL
+
+			RXBPtr--;
+			if (RXBPtr)
+			{
+				memmove(rxbuffer, rxbuffer+1, RXBPtr + 1);
+				Length--;
+				goto Loop;
+			}
+			PutChar(30);
+			PutChar(0x87);
+	if (Term4Mode)
+	{
+		PutChar(13);
+		PutChar(4);
+		PutChar(13);
+		PutChar('c');
+		PutChar('m');
+		PutChar('d');
+		PutChar(':');
+		PutChar(' ');
+		PutChar(1);
+	}
+	else
+	{
+		PutChar(13);
+		PutChar('c');
+		PutChar('m');
+		PutChar('d');
+		PutChar(':');
+		PutChar(' ');
+	}
+
+
+			return;
+		}
+		ptr = strchr(rxbuffer, 13);
+
+		if (ptr == 0)
+			return;		// Wait for rest of frame
+
+		ptr++;
+
+		cmdlen = ptr - rxbuffer;
+
+		// Complete Char Mode Frame
+
+		RXBPtr -= cmdlen;		// Ready for next frame
+					
+		ProcessSCSTextCommand(rxbuffer, cmdlen);
+
+		if (RXBPtr)
+		{
+			memmove(rxbuffer, ptr, RXBPtr + 1);
+			if (Mode)
+			{
+				// now in host mode, so pass rest up a level
+				
+				ProcessSCSPacket(rxbuffer, RXBPtr);
+				return;
+			}
+			goto Loop;
+		}
+		return;
+	}
+
+	// Receiving a Host Mode frame
+
+	if (Length < 6)				// Minimum Frame Sise
+		return;
+
+	if (rxbuffer[2] == 170)
+	{
+		// Retransmit Request
+	
+		RXBPtr = 0;
+		return;				// Ignore for now
+	}
+
+	// Can't unstuff into same buffer - fails if partial msg received, and we unstuff twice
+
+
+	Length = EmUnstuff(&rxbuffer[2], &UnstuffBuffer[2], Length - 2);
+
+	if (Length == -1)
+	{
+		// Unstuff returned an errors (170 not followed by 0)
+
+		RXBPtr = 0;
+		return;				// Ignore for now
+	}
+	crc = compute_crc(&UnstuffBuffer[2], Length);
+
+	if (crc == 0xf0b8)		// Good CRC
+	{
+		RXBPtr = 0;		// Ready for next frame
+		ProcessSCSHostFrame(&UnstuffBuffer[2], Length);
+		return;
+	}
+
+	// Bad CRC - assume incomplete frame, and wait for rest. If it was a full bad frame, timeout and retry will recover link.
+
+	return;
+}
+
+
+VOID EmCRCStuffAndSend(UCHAR * Msg, int Len)
+{
+	unsigned short int crc;
+	UCHAR StuffedMsg[500];
+	int i, j;
+
+	crc = compute_crc(&Msg[2], Len-2);
+	crc ^= 0xffff;
+
+	Msg[Len++] = (crc&0xff);
+	Msg[Len++] = (crc>>8);
+
+	for (i = j = 2; i < Len; i++)
+	{
+		StuffedMsg[j++] = Msg[i];
+		if (Msg[i] == 170)
+		{
+			StuffedMsg[j++] = 0;
+		}
+	}
+
+	if (j != i)
+	{
+		Len = j;
+		memcpy(Msg, StuffedMsg, j);
+	}
+
+	Msg[0] = 170;
+	Msg[1] = 170;
+
+	SerialSendData(Msg, Len);
+}
+
+const unsigned short CRCTAB[256] = {
+	0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 
+	0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 
+	0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e, 
+	0x9cc9, 0x8d40, 0xbfdb, 0xae52, 0xdaed, 0xcb64, 0xf9ff, 0xe876, 
+	0x2102, 0x308b, 0x0210, 0x1399, 0x6726, 0x76af, 0x4434, 0x55bd, 
+	0xad4a, 0xbcc3, 0x8e58, 0x9fd1, 0xeb6e, 0xfae7, 0xc87c, 0xd9f5, 
+0x3183, 0x200a, 0x1291, 0x0318, 0x77a7, 0x662e, 0x54b5, 0x453c, 
+0xbdcb, 0xac42, 0x9ed9, 0x8f50, 0xfbef, 0xea66, 0xd8fd, 0xc974, 
+0x4204, 0x538d, 0x6116, 0x709f, 0x0420, 0x15a9, 0x2732, 0x36bb, 
+0xce4c, 0xdfc5, 0xed5e, 0xfcd7, 0x8868, 0x99e1, 0xab7a, 0xbaf3, 
+0x5285, 0x430c, 0x7197, 0x601e, 0x14a1, 0x0528, 0x37b3, 0x263a, 
+0xdecd, 0xcf44, 0xfddf, 0xec56, 0x98e9, 0x8960, 0xbbfb, 0xaa72, 
+0x6306, 0x728f, 0x4014, 0x519d, 0x2522, 0x34ab, 0x0630, 0x17b9, 
+0xef4e, 0xfec7, 0xcc5c, 0xddd5, 0xa96a, 0xb8e3, 0x8a78, 0x9bf1, 
+0x7387, 0x620e, 0x5095, 0x411c, 0x35a3, 0x242a, 0x16b1, 0x0738, 
+0xffcf, 0xee46, 0xdcdd, 0xcd54, 0xb9eb, 0xa862, 0x9af9, 0x8b70, 
+0x8408, 0x9581, 0xa71a, 0xb693, 0xc22c, 0xd3a5, 0xe13e, 0xf0b7, 
+0x0840, 0x19c9, 0x2b52, 0x3adb, 0x4e64, 0x5fed, 0x6d76, 0x7cff, 
+0x9489, 0x8500, 0xb79b, 0xa612, 0xd2ad, 0xc324, 0xf1bf, 0xe036, 
+0x18c1, 0x0948, 0x3bd3, 0x2a5a, 0x5ee5, 0x4f6c, 0x7df7, 0x6c7e, 
+0xa50a, 0xb483, 0x8618, 0x9791, 0xe32e, 0xf2a7, 0xc03c, 0xd1b5, 
+0x2942, 0x38cb, 0x0a50, 0x1bd9, 0x6f66, 0x7eef, 0x4c74, 0x5dfd, 
+0xb58b, 0xa402, 0x9699, 0x8710, 0xf3af, 0xe226, 0xd0bd, 0xc134, 
+0x39c3, 0x284a, 0x1ad1, 0x0b58, 0x7fe7, 0x6e6e, 0x5cf5, 0x4d7c, 
+0xc60c, 0xd785, 0xe51e, 0xf497, 0x8028, 0x91a1, 0xa33a, 0xb2b3, 
+0x4a44, 0x5bcd, 0x6956, 0x78df, 0x0c60, 0x1de9, 0x2f72, 0x3efb, 
+0xd68d, 0xc704, 0xf59f, 0xe416, 0x90a9, 0x8120, 0xb3bb, 0xa232, 
+0x5ac5, 0x4b4c, 0x79d7, 0x685e, 0x1ce1, 0x0d68, 0x3ff3, 0x2e7a, 
+0xe70e, 0xf687, 0xc41c, 0xd595, 0xa12a, 0xb0a3, 0x8238, 0x93b1, 
+0x6b46, 0x7acf, 0x4854, 0x59dd, 0x2d62, 0x3ceb, 0x0e70, 0x1ff9, 
+0xf78f, 0xe606, 0xd49d, 0xc514, 0xb1ab, 0xa022, 0x92b9, 0x8330, 
+0x7bc7, 0x6a4e, 0x58d5, 0x495c, 0x3de3, 0x2c6a, 0x1ef1, 0x0f78 
+}; 
 

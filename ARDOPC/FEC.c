@@ -5,9 +5,17 @@
 extern BOOL blnAbort;
 
 int intFECFramesSent;
+int FECRepeatsSent;
 
 UCHAR bytFrameType;
 BOOL blnSendIDFrame;
+
+extern int intLastFrameIDToHost;
+int bytFailedDataLength; 
+extern int intLastFailedFrameID;
+int crcLastFECDataPassedToHost;
+
+UCHAR bytFailedData[1600];		// do we rally need that much ????
 
 extern int intNumCar;
 extern int intBaud;
@@ -23,24 +31,6 @@ extern char strMod[16];
 extern UCHAR bytMinQualThresh;
 
 UCHAR bytLastFECDataFrameSent;
-
-//char strFECMode[16] = "4FSK.200.50";
-//char strFECMode[16] = "4FSK.500.100";
-//char strFECMode[16] = "4FSK.1000.100";
-//char strFECMode[16] = "4PSK.200.100";
-//char strFECMode[16] = "8PSK.200.100";
-
-char strFECMode[16] = "8PSK.500.100";
-
-//char strFECMode[16] = "4PSK.500.100";	// 2 carrier
-//char strFECMode[16] = "4PSK.1000.100";	// 4 carrier
-//char strFECMode[16] = "4PSK.2000.100";	// 8 carrier
-
-
-//char strFECMode[16] = "8FSK.200.25";
-//char strFECMode[16] = "16FSK.500.25";
-//char strFECMode[16] = "4FSK.2000.600";
-//char strFECMode[16] = "4FSK.2000.100";
 
 char strCurrentFrameFilename[16];
 
@@ -71,6 +61,8 @@ BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL
 		if (DebugLog) Debugprintf("[ARDOPprotocol.StartFEC] %d bytes received while in FECSend state...append to data to send.", Len);
 		return TRUE;
 	}
+	else
+		dttLastFECIDSent = Now;
 	
 	//	Check to see that there is data in the buffer.
 
@@ -201,12 +193,14 @@ BOOL GetNextFECFrame()
 		return FALSE;
 	}
 	
-	if (bytDataToSendLength == 0 && (intFECFramesSent % (FECRepeats + 1)) == 0 && ProtocolState == FECSend)
+	if (bytDataToSendLength == 0 && FECRepeatsSent >= FECRepeats && ProtocolState == FECSend)
 	{
 		if (DebugLog) WriteDebug("[GetNextFECFrame] All data and repeats sent.  Going to DISC state");
             
 		SetARDOPProtocolState(DISC);
+		blnEnbARQRpt = FALSE;
 		KeyPTT(FALSE); // insurance for PTT of
+
 		return FALSE;
 	}
 	
@@ -236,7 +230,22 @@ BOOL GetNextFECFrame()
 		if (Len > bytDataToSendLength)
 			Len = bytDataToSendLength;
 
+		bytLastFECDataFrameSent = bytFrameType;
+
 sendit:
+		if (FECRepeats)
+			blnEnbARQRpt = TRUE;
+		else
+			blnEnbARQRpt = FALSE;
+
+		intFrameRepeatInterval = 400;	// should be a safe number for FEC...perhaps could be shortened down to 200 -300 ms
+
+		FECRepeatsSent = 0;
+
+		intFECFramesSent += 1;
+
+		bytFrameType = bytLastFECDataFrameSent;
+
 		if (strcmp(strMod, "4FSK") == 0)
 		{
 			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
@@ -248,71 +257,119 @@ sendit:
 		}
 		else if (strcmp(strMod, "16FSK") == 0)
 		{
-			int EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
+			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
 			Mod16FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else if (strcmp(strMod, "8FSK") == 0)
 		{
-			int EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
+			EncLen = EncodeFSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);          //      intCurrentFrameSamples = Mod8FSKData(bytFrameType, bytData);
 			Mod8FSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 		else
 		{
-			int EncLen = EncodePSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
-
+			EncLen = EncodePSKData(bytFrameType, bytDataToSend, Len, bytEncodedBytes);
 			ModPSKDataAndPlay(bytEncodedBytes[0], bytEncodedBytes, EncLen, intCalcLeader);  // Modulate Data frame 
 		}
 
 		RemoveDataFromQueue(Len);		// No ACKS in FEC
-		intFECFramesSent += 1;
-		bytLastFECDataFrameSent = bytFrameType;
 		return TRUE;
 	}
 	
 	// Not First
 
-	if ((intFECFramesSent % (FECRepeats + 1)) == 0)
+	if (FECRepeatsSent >= FECRepeats)
 	{
+		// Send New Data
 
+		//	Need to add pause  
+
+		txSleep(400);
+
+		if ((Now - dttLastFECIDSent) > 600000)		// 10 Mins
+		{
+			// Send ID every 10 Mins
+
+			unsigned char bytEncodedBytes[16];
+
+			EncLen = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
+			Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
+
+			dttLastFECIDSent = Now;
+			return TRUE;
+		}
+		
 		Len = intDataLen * intNumCar;
 
 		if (Len > bytDataToSendLength)
 			Len = bytDataToSendLength;
 
+		bytLastFECDataFrameSent = bytLastFECDataFrameSent ^ 1;
 		goto sendit;
 	}
-	
-	if ((Now - dttLastFECIDSent) > 600)		// 10 Mins
-	{
-		// Send ID every 10 Mins
-
-		unsigned char bytEncodedBytes[16];
-
-		EncLen = Encode4FSKIDFrame(Callsign, GridSquare, bytEncodedBytes);
-		Mod4FSKDataAndPlay(0x30, &bytEncodedBytes[0], 16, 0);		// only returns when all sent
-
-		dttLastFECIDSent = Now;
-		return TRUE;
-	}
-	
+		
 	// just a repeat of the last frame so no changes to samples...just inc frames Sent
 
-	// This doesn't work as we dont save samples
-	
-	intFECFramesSent += 1;
+	FECRepeatsSent++;
+	intFECFramesSent++;
 
 	return TRUE;
 }
 
 extern int frameLen;
 
+ //	Subroutine to process Received FEC data 
+
 void ProcessRcvdFECDataFrame(int intFrameType, UCHAR * bytData, BOOL blnFrameDecodedOK)
 {
-	bytData[frameLen] = 0;
+	// Determine if this frame should be passed to Host.
+
 	if (blnFrameDecodedOK)
-		printf("Good FEC %s\n", bytData);
+	{
+		int CRC = GenCRC16(bytData, frameLen);
+		
+		if (intFrameType == intLastFrameIDToHost && CRC == crcLastFECDataPassedToHost)
+		{
+			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Same Frame ID: %s and matching data, not passed to Host", Name(intFrameType));
+			return;
+		}
+		
+		if (bytFailedDataLength > 0 && intLastFailedFrameID != intFrameType)
+		{
+			AddTagToDataAndSendToHost(bytFailedData, "ERR", bytFailedDataLength);
+			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
+			bytFailedDataLength = 0;
+			intLastFailedFrameID = -1;
+		}
+
+
+		AddTagToDataAndSendToHost(bytData, "FEC", frameLen);
+
+		crcLastFECDataPassedToHost = GenCRC16(bytData, frameLen);
+		intLastFrameIDToHost = intFrameType;
+		if (intLastFailedFrameID == intFrameType)
+		{
+			bytFailedDataLength = 0;
+			intLastFailedFrameID = -1;
+		}
+
+		if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass good data frame  ID %s to Host (%d bytes)", Name(intFrameType), frameLen);
+	}
 	else
-		printf("Bad FEC %s\n", bytData);
+	{
+		// Bad Decode
+		
+		if (bytFailedDataLength > 0 && intLastFailedFrameID != intFrameType)
+		{
+			AddTagToDataAndSendToHost(bytFailedData, "ERR", bytFailedDataLength);
+			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
+			bytFailedDataLength = 0;
+			intLastFrameIDToHost = intLastFailedFrameID;
+			if (CommandTrace) Debugprintf("[ARDOPprotocol.ProcessRcvdFECDataFrame] Pass failed frame ID %s to Host (%d bytes)", Name(intFrameType), bytFailedDataLength);
+		}
+		memcpy(bytFailedData, bytData, frameLen);	// ' capture the current data and frame type 
+		bytFailedDataLength = frameLen;
+		intLastFailedFrameID = intFrameType;
+	}
 }
 		
 

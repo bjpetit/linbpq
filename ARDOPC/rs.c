@@ -67,10 +67,10 @@ void
 print_parity (void)
 { 
   int i;
-  printf("Parity Bytes: ");
+  Debugprintf("Parity Bytes: ");
   for (i = 0; i < NPAR; i++) 
-    printf("[%d]:%x, ",i,pBytes[i]);
-  printf("\n");
+    Debugprintf("[%d]:%x, ",i,pBytes[i]);
+  Debugprintf("\n");
 }
 
 
@@ -78,10 +78,10 @@ void
 print_syndrome (void)
 { 
   int i;
-  printf("Syndrome Bytes: ");
+  Debugprintf("Syndrome Bytes: ");
   for (i = 0; i < NPAR; i++) 
-    printf("[%d]:%x, ",i,synBytes[i]);
-  printf("\n");
+    Debugprintf("[%d]:%x, ",i,synBytes[i]);
+  Debugprintf("\n");
 }
 
 
@@ -106,7 +106,7 @@ decode_data(unsigned char data[], int nbytes)
 		
 		synBytes[j]  = sum;
 
-//	printf("%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
+//	Debugprintf("%d %d %d\r\n", i, synBytes[i], index_of[s[i]]);
 
 	}
 }
@@ -133,7 +133,7 @@ debug_check_syndrome (void)
   int i;
 	
   for (i = 0; i < 3; i++) {
-    printf(" inv log S[%d]/S[%d] = %d\n", i, i+1, 
+    Debugprintf(" inv log S[%d]/S[%d] = %d\n", i, i+1, 
 	   glog[gmult(synBytes[i], ginv(synBytes[i+1]))]);
   }
 }

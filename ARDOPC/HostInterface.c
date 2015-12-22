@@ -35,8 +35,28 @@ int _memicmp(unsigned char *a, unsigned char *b, int n)
    return 0;
 }
 
-
 #endif
+
+//	Subroutine to add data to outbound queue (bytDataToSend)
+
+void AddDataToDataToSend(UCHAR * bytNewData, int Len)
+{
+	char HostCmd[32];
+
+	if (Len == 0)
+		return;
+
+	GetSemaphore();
+
+	memcpy(&bytDataToSend[bytDataToSendLength], bytNewData, Len);
+	bytDataToSendLength += Len;
+
+	FreeSemaphore();
+
+	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
+	QueueCommandToHost(HostCmd);
+}
+
 
 
 
@@ -403,7 +423,10 @@ void ProcessCommandFromHost(char * strCMD)
 		int i;
 
 		if (ptrParams == 0)
+		{
 			sprintf(cmdReply, "%s %d", strCMD, FECRepeats);
+			SendCommandToHost(cmdReply);
+		}
 		else
 		{
 			i = atoi(ptrParams);

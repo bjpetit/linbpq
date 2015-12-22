@@ -16,9 +16,9 @@
 
 #include "ARDOPC.h"
 
-void Sleep(int ticks)
+void Sleep(int mS)
 {
-	usleep(ticks * 1000);
+	usleep(mS * 1000);
 	return;
 }
 
@@ -46,7 +46,7 @@ int LastNow;
 
 void printtick(char * msg)
 {
-	printf("%s %i\r\n", msg, Now - LastNow);
+	Debugprintf("%s %i", msg, Now - LastNow);
 	LastNow = Now;
 }
 
@@ -67,18 +67,29 @@ void main(int argc, char * argv[])
 	if (argc > 1)
 		port = atoi(argv[1]);
 
-	printf("ARDOPC listening on port %d\n", port);
+	if (argc == 4)
+	{
+		strcpy(CaptureDevice, argv[2]);
+		strcpy(PlaybackDevice, argv[3]);
+	}
+
+	Debugprintf("ARDOPC listening on port %d", port);
 
 	// Get Time Reference
 		
 	clock_gettime(CLOCK_MONOTONIC, &time_start);
 	LastNow = getTicks();
 
-	printtick("First tick");
-	printtick("Test Start");
-	Sleep(1000);
-	printtick("Test End");
 	ardopmain();
+}
+
+void txSleep(int mS)
+{
+	// called while waiting for next TX buffer or to delay response.
+	// Run background processes
+
+	HostPoll();
+	Sleep(mS);
 }
 
 // ALSA Code 
@@ -132,7 +143,7 @@ int GetOutputDeviceCollection()
 	snd_pcm_format_mask_t *fmask;
 	char NameString[256];
 
-	printf("getWriteDevices\n");
+	Debugprintf("getWriteDevices");
 
 	CloseSoundCard();
 
@@ -171,7 +182,7 @@ int GetOutputDeviceCollection()
 
 	if (snd_card_next(&card) < 0)
 	{
-		printf("No Devices\n");
+		Debugprintf("No Devices");
 		return 0;
 	}
 
@@ -186,7 +197,7 @@ int GetOutputDeviceCollection()
 		err = snd_ctl_open(&handle, hwdev, 0);
 		err = snd_ctl_card_info(handle, info);
     
-		printf("Card %d, ID `%s', name `%s'\n", card, snd_ctl_card_info_get_id(info),
+		Debugprintf("Card %d, ID `%s', name `%s'", card, snd_ctl_card_info_get_id(info),
                 snd_ctl_card_info_get_name(info));
 
 
@@ -214,7 +225,7 @@ int GetOutputDeviceCollection()
 
 			nsubd = snd_pcm_info_get_subdevices_count(pcminfo);
 		
-			printf("  Device %d, ID `%s', name `%s', %d subdevices (%d available)\n",
+			Debugprintf("  Device %d, ID `%s', name `%s', %d subdevices (%d available)",
 				dev, snd_pcm_info_get_id(pcminfo), snd_pcm_info_get_name(pcminfo),
 				nsubd, snd_pcm_info_get_subdevices_avail(pcminfo));
 
@@ -224,7 +235,7 @@ int GetOutputDeviceCollection()
 
 			if (err)
 			{
-				printf("Error %d opening output device\n", err);
+				Debugprintf("Error %d opening output device", err);
 				goto nextdevice;
 			}
 
@@ -237,22 +248,22 @@ int GetOutputDeviceCollection()
 			
 			if( min == max )
 				if(min == 1)
-					printf("    1 channel, ");
+					Debugprintf("    1 channel, ");
 				else
-					printf("    %d channels, ", min);
+					Debugprintf("    %d channels, ", min);
 			else
-				printf("    %u..%u channels, ", min, max);
+				Debugprintf("    %u..%u channels, ", min, max);
 			
 			snd_pcm_hw_params_get_rate_min(pars, &min, NULL);
 			snd_pcm_hw_params_get_rate_max(pars, &max, NULL);
-			printf("sampling rate %u..%u Hz\n", min, max);
+			Debugprintf("sampling rate %u..%u Hz", min, max);
 
 			// Add device to list
 
 			sprintf(NameString, "hw:%d,%d %s(%s)", card, dev,
 				snd_pcm_info_get_name(pcminfo), snd_ctl_card_info_get_name(info));
 
-			printf("%s\n", NameString);
+			Debugprintf("%s", NameString);
 
 			WriteDevices = realloc(WriteDevices,(WriteDeviceCount + 1) * 4);
 			WriteDevices[WriteDeviceCount++] = strdup(NameString);
@@ -299,7 +310,7 @@ int GetInputDeviceCollection()
 	snd_pcm_format_mask_t *fmask;
 	char NameString[256];
 
-	printf("getReadDevices\n");
+	Debugprintf("getReadDevices");
 
 	// free old struct if called again
 
@@ -336,7 +347,7 @@ int GetInputDeviceCollection()
 
 	if(snd_card_next(&card) < 0)
 	{
-		printf("No Devices\n");
+		Debugprintf("No Devices");
 		return 0;
 	}
 
@@ -351,7 +362,7 @@ int GetInputDeviceCollection()
 		err = snd_ctl_open(&handle, hwdev, 0);
 		err = snd_ctl_card_info(handle, info);
     
-		printf("Card %d, ID `%s', name `%s'\n", card, snd_ctl_card_info_get_id(info),
+		Debugprintf("Card %d, ID `%s', name `%s'", card, snd_ctl_card_info_get_id(info),
                 snd_ctl_card_info_get_name(info));
 
 		dev = -1;
@@ -373,7 +384,7 @@ int GetInputDeviceCollection()
 				goto nextdevice;
 	
 			nsubd= snd_pcm_info_get_subdevices_count(pcminfo);
-			printf("  Device %d, ID `%s', name `%s', %d subdevices (%d available)\n",
+			Debugprintf("  Device %d, ID `%s', name `%s', %d subdevices (%d available)",
 				dev, snd_pcm_info_get_id(pcminfo), snd_pcm_info_get_name(pcminfo),
 				nsubd, snd_pcm_info_get_subdevices_avail(pcminfo));
 
@@ -383,7 +394,7 @@ int GetInputDeviceCollection()
 	
 			if (err)
 			{	
-				printf("Error %d opening input device\n", err);
+				Debugprintf("Error %d opening input device", err);
 				goto nextdevice;
 			}
 
@@ -394,20 +405,20 @@ int GetInputDeviceCollection()
 	
 			if( min == max )
 				if( min == 1 )
-					printf("    1 channel, ");
+					Debugprintf("    1 channel, ");
 				else
-					printf("    %d channels, ", min);
+					Debugprintf("    %d channels, ", min);
 			else
-				printf("    %u..%u channels, ", min, max);
+				Debugprintf("    %u..%u channels, ", min, max);
 			
 			snd_pcm_hw_params_get_rate_min(pars, &min, NULL);
 			snd_pcm_hw_params_get_rate_max(pars, &max, NULL);
-			printf("sampling rate %u..%u Hz\n", min, max);
+			Debugprintf("sampling rate %u..%u Hz", min, max);
 
 			sprintf(NameString, "hw:%d,%d %s(%s)", card, dev,
 				snd_pcm_info_get_name(pcminfo), snd_ctl_card_info_get_name(info));
 
-			printf("%s\n", NameString);
+			Debugprintf("%s", NameString);
 
 			ReadDevices = realloc(ReadDevices,(ReadDeviceCount + 1) * 4);
 			ReadDevices[ReadDeviceCount++] = strdup(NameString);
@@ -442,11 +453,11 @@ int GetNextInputDevice(char * dest, int max, int n)
 }
 int OpenSoundCard(char * CaptureDevice, char * PlaybackDevice, int c_sampleRate, int p_sampleRate, char * ErrorMsg)
 {
-	printf("Opening Playback Device %s Rate %d\n", PlaybackDevice, p_sampleRate);
+	Debugprintf("Opening Playback Device %s Rate %d", PlaybackDevice, p_sampleRate);
 
 	if (OpenSoundPlayback(PlaybackDevice, p_sampleRate, ErrorMsg))
 	{
-		printf("Opening Capture Device %s Rate %d\n", CaptureDevice, c_sampleRate, ErrorMsg);
+		Debugprintf("Opening Capture Device %s Rate %d", CaptureDevice, c_sampleRate);
 		return OpenSoundCapture(CaptureDevice, c_sampleRate, ErrorMsg);
 	}
 	else
@@ -480,34 +491,34 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, char * ErrorMsg)
 		if (ErrorMsg)
 			sprintf (ErrorMsg, "cannot open playback audio device %s (%s)",  buf1, snd_strerror(err));
 		else
-			fprintf (stderr, "cannot open playback audio device %s (%s)\n",  buf1, snd_strerror(err));
+			fprintf (stderr, "cannot open playback audio device %s (%s)",  buf1, snd_strerror(err));
 		return false;
 	}
 		   
 	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-		fprintf (stderr, "cannot allocate hardware parameter structure (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot allocate hardware parameter structure (%s)", snd_strerror(err));
 		return false;
 	}
 				 
 	if ((err = snd_pcm_hw_params_any (playhandle, hw_params)) < 0) {
-		fprintf (stderr, "cannot initialize hardware parameter structure (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot initialize hardware parameter structure (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	if ((err = snd_pcm_hw_params_set_access (playhandle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-			fprintf (stderr, "cannot set playback access type (%s)\n", snd_strerror (err));
+			fprintf (stderr, "cannot set playback access type (%s)", snd_strerror (err));
 		return false;
 	}
 	if ((err = snd_pcm_hw_params_set_format (playhandle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
-		fprintf (stderr, "cannot setplayback  sample format (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot setplayback  sample format (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	if ((err = snd_pcm_hw_params_set_rate (playhandle, hw_params, m_sampleRate, 0)) < 0) {
 		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot set playback sample rate (%s)\n", snd_strerror(err));
+			sprintf (ErrorMsg, "cannot set playback sample rate (%s)", snd_strerror(err));
 		else
-			fprintf (stderr, "cannot set playback sample rate (%s)\n", snd_strerror(err));
+			fprintf (stderr, "cannot set playback sample rate (%s)", snd_strerror(err));
 		return false;
 	}
 
@@ -515,26 +526,26 @@ int OpenSoundPlayback(char * PlaybackDevice, int m_sampleRate, char * ErrorMsg)
 	
 	if ((err = snd_pcm_hw_params_set_channels (playhandle, hw_params, 1)) < 0)
 	{
-		fprintf (stderr, "cannot set play channel count to 1 (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot set play channel count to 1 (%s)", snd_strerror(err));
 		m_playchannels = 2;
 
 		if ((err = snd_pcm_hw_params_set_channels (playhandle, hw_params, 2)) < 0)
 		{
-			fprintf (stderr, "cannot play set channel count to 2 (%s)\n", snd_strerror(err));
+			fprintf (stderr, "cannot play set channel count to 2 (%s)", snd_strerror(err));
 				return false;
 		}
-		fprintf (stderr, "Play channel count set to 2 (%s)\n", snd_strerror(err));
+		fprintf (stderr, "Play channel count set to 2 (%s)", snd_strerror(err));
 	}
 	
 	if ((err = snd_pcm_hw_params (playhandle, hw_params)) < 0) {
-		fprintf (stderr, "cannot set parameters (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot set parameters (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	snd_pcm_hw_params_free(hw_params);
 	
 	if ((err = snd_pcm_prepare (playhandle)) < 0) {
-		fprintf (stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot prepare audio interface for use (%s)", snd_strerror(err));
 		return false;
 	}
 
@@ -565,36 +576,36 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	
 	if ((err = snd_pcm_open (&rechandle, buf1, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
 		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot open capture audio device %s (%s)\n",  buf1, snd_strerror(err));
+			sprintf (ErrorMsg, "cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
 		else
-			fprintf (stderr, "cannot open capture audio device %s (%s)\n",  buf1, snd_strerror(err));
+			fprintf (stderr, "cannot open capture audio device %s (%s)",  buf1, snd_strerror(err));
 		return false;
 	}
 	   
 	if ((err = snd_pcm_hw_params_malloc (&hw_params)) < 0) {
-		fprintf (stderr, "cannot allocate capture hardware parameter structure (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot allocate capture hardware parameter structure (%s)", snd_strerror(err));
 		return false;
 	}
 				 
 	if ((err = snd_pcm_hw_params_any (rechandle, hw_params)) < 0) {
-		fprintf (stderr, "cannot initialize capture hardware parameter structure (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot initialize capture hardware parameter structure (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	if ((err = snd_pcm_hw_params_set_access (rechandle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)) < 0) {
-			fprintf (stderr, "cannot set capture access type (%s)\n", snd_strerror (err));
+			fprintf (stderr, "cannot set capture access type (%s)", snd_strerror (err));
 		return false;
 	}
 	if ((err = snd_pcm_hw_params_set_format (rechandle, hw_params, SND_PCM_FORMAT_S16_LE)) < 0) {
-		fprintf (stderr, "cannot set capture sample format (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot set capture sample format (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	if ((err = snd_pcm_hw_params_set_rate (rechandle, hw_params, m_sampleRate, 0)) < 0) {
 		if (ErrorMsg)
-			sprintf (ErrorMsg, "cannot set capture sample rate (%s)\n", snd_strerror(err));
+			sprintf (ErrorMsg, "cannot set capture sample rate (%s)", snd_strerror(err));
 		else
-			fprintf (stderr, "cannot set capture sample rate (%s)\n", snd_strerror(err));
+			fprintf (stderr, "cannot set capture sample rate (%s)", snd_strerror(err));
 		return false;
 	}
 	
@@ -602,26 +613,26 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	
 	if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, 1)) < 0)
 	{
-		fprintf (stderr, "cannot set rec channel count to 1 (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot set rec channel count to 1 (%s)", snd_strerror(err));
 		m_recchannels = 2;
 
 		if ((err = snd_pcm_hw_params_set_channels (rechandle, hw_params, 2)) < 0)
 		{
-			fprintf (stderr, "cannot rec set channel count to 2 (%s)\n", snd_strerror(err));
+			fprintf (stderr, "cannot rec set channel count to 2 (%s)", snd_strerror(err));
 			return false;
 		}
-		fprintf (stderr, "Record channel count set to 2 (%s)\n", snd_strerror(err));
+		fprintf (stderr, "Record channel count set to 2 (%s)", snd_strerror(err));
 	}
 	
 	if ((err = snd_pcm_hw_params (rechandle, hw_params)) < 0) {
-		fprintf (stderr, "cannot set parameters (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot set parameters (%s)", snd_strerror(err));
 		return false;
 	}
 	
 	snd_pcm_hw_params_free(hw_params);
 	
 	if ((err = snd_pcm_prepare (rechandle)) < 0) {
-		fprintf (stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+		fprintf (stderr, "cannot prepare audio interface for use (%s)", snd_strerror(err));
 		return FALSE;
 	}
 
@@ -632,12 +643,12 @@ int OpenSoundCapture(char * CaptureDevice, int m_sampleRate, char * ErrorMsg)
 	{
 		if ((err = snd_pcm_readi (rechandle, buf, 128)) != 128)
 		{
-			fprintf (stderr, "read from audio interface failed (%s)\n",
+			fprintf (stderr, "read from audio interface failed (%s)",
 				 snd_strerror (err));
 		}
 	}
 
-//	printf("Read got %d\n", err);
+//	Debugprintf("Read got %d", err);
 
  	return TRUE;
 }
@@ -678,27 +689,26 @@ int SoundCardWrite(short * input, unsigned int nSamples)
 	}
 
 	avail = snd_pcm_avail_update(playhandle);
-//	printf("avail before play returned %d\n", (int)avail);
+//	Debugprintf("avail before play returned %d", (int)avail);
 
 	if (avail < 0)
 	{
 		if (avail != -32)
-			printf("Playback Avail Recovering from %d ..\n", (int)avail);
+			Debugprintf("Playback Avail Recovering from %d ..", (int)avail);
 		snd_pcm_recover(playhandle, avail, 1);
 
 		avail = snd_pcm_avail_update(playhandle);
 
 		if (avail < 0)
-			printf("avail play after recovery returned %d\n", (int)avail);
+			Debugprintf("avail play after recovery returned %d", (int)avail);
 	}
 	
 	maxavail = avail;
 
-//	printf("Tosend %d Avail %d\n", nSamples, (int)avail);
+//	Debugprintf("Tosend %d Avail %d", nSamples, (int)avail);
 
 	while (avail < nSamples)
 	{
-		printf("Waiting for space - %d avail \n", (int)avail);
 		txSleep(100);
 		avail = snd_pcm_avail_update(playhandle);
 	}
@@ -742,10 +752,10 @@ int PackSamplesAndSend(short * input, int nSamples)
 
 	if (ret < 0)
 	{
-//		printf("Write Recovering from %d ..\n", ret);
+//		Debugprintf("Write Recovering from %d ..", ret);
 		snd_pcm_recover(playhandle, ret, 1);
 		ret = snd_pcm_writei(playhandle, samples, nSamples);
-//		printf("Write after recovery returned %d\n", ret);
+//		Debugprintf("Write after recovery returned %d", ret);
 	}
 
 	avail = snd_pcm_avail_update(playhandle);
@@ -769,7 +779,7 @@ int SoundCardClearInput()
 
 	if (avail < 0)
 	{
-		printf("Discard Recovering from %d ..\n", avail);
+		Debugprintf("Discard Recovering from %d ..", avail);
 		if (rechandle)
 		{
 			snd_pcm_close(rechandle);
@@ -785,10 +795,10 @@ int SoundCardClearInput()
 			avail = 65536;
 
 			ret = snd_pcm_readi(rechandle, samples, avail);
-//			printf("Discarded %d samples from card\n", ret);
+//			Debugprintf("Discarded %d samples from card", ret);
 			avail = snd_pcm_avail_update(rechandle);
 
-//			printf("Discarding %d samples from card\n", avail);
+//			Debugprintf("Discarding %d samples from card", avail);
 	}
 	return 0;
 }
@@ -808,7 +818,7 @@ int SoundCardRead(short * input, unsigned int nSamples)
 
 	if (avail < 0)
 	{
-		printf("Read Recovering from %d ..\n", avail);
+		Debugprintf("Read Recovering from %d ..", avail);
 		if (rechandle)
 		{
 			snd_pcm_close(rechandle);
@@ -818,25 +828,19 @@ int SoundCardRead(short * input, unsigned int nSamples)
 		OpenSoundCapture(SavedCaptureDevice, SavedCaptureRate, NULL);
 //		snd_pcm_recover(rechandle, avail, 0);
 		avail = snd_pcm_avail_update(rechandle);
-		printf("Read After recovery %d ..\n", avail);
+		Debugprintf("Read After recovery %d ..", avail);
 	}
 
-	if (avail < 1200)
+	if (avail < nSamples)
 		return 0;
 
-	if (avail > nSamples)
-	{
-//		printf("ALSARead available %d\n", avail);
-		avail = nSamples;
-	}
+//	Debugprintf("ALSARead available %d", avail);
 
-//	printf("ALSARead available %d\n", avail);
-
-	ret = snd_pcm_readi(rechandle, samples, avail);
+	ret = snd_pcm_readi(rechandle, samples, nSamples);
 
 	if (ret < 0)
 	{
-		printf("RX Error %d\n", ret);
+		Debugprintf("RX Error %d", ret);
 		snd_pcm_recover(rechandle, avail, 0);
 		return 0;
 	}
@@ -922,7 +926,7 @@ PollReceivedSamples()
 void StopCapture()
 {
 	Capturing = FALSE;
-//	printf("Stop Capture\n");
+//	Debugprintf("Stop Capture");
 }
 
 void StartCodec(char * strFault)
@@ -944,7 +948,7 @@ void StartCapture()
 	ClearAllMixedSamples();
 	State = SearchingForLeader;
 
-//	printf("Start Capture\n");
+//	Debugprintf("Start Capture");
 }
 void CloseSound()
 { 
@@ -963,7 +967,6 @@ VOID Debugprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf("%s", Mess);
-
 	return;
 }
 
@@ -1004,13 +1007,11 @@ void SoundFlush(Number)
 
 	while (1)
 	{
-	//	printf("Waiting... \n");
-		
 		snd_pcm_status_alloca(&status);					// alloca allocates once per function, does not need a free
 
 		if ((err=snd_pcm_status(playhandle, status))!=0)
 		{
-    		printf("snd_pcm_status() failed: %s",snd_strerror(err));
+    		Debugprintf("snd_pcm_status() failed: %s",snd_strerror(err));
 			break;
 		}
 	 
@@ -1025,9 +1026,17 @@ void SoundFlush(Number)
 		}
 		usleep(50000);
 	}
+	// I think we should turn round the link here. I dont see the point in
+	// waiting for MainPoll
 
 	SoundIsPlaying = FALSE;
-	PlayComplete = TRUE;
+
+	if (blnEnbARQRpt > 0)	// Start Repeat Timer if frame should be repeated
+		dttNextPlay = Now + intFrameRepeatInterval;
+
+	KeyPTT(FALSE);		 // Unkey the Transmitter
+
+	StartCapture();
 	return;
 }
 

@@ -191,28 +191,6 @@ static BOOL checkcrc16(unsigned char * Data, unsigned short length)
 	return FALSE;
 }
 
-
-
-//	Subroutine to add data to outbound queue (bytDataToSend)
-
-void AddDataToDataToSend(UCHAR * bytNewData, int Len)
-{
-	char HostCmd[32];
-
-	if (Len == 0)
-		return;
-
-	GetSemaphore();
-
-	memcpy(&bytDataToSend[bytDataToSendLength], bytNewData, Len);
-	bytDataToSendLength += Len;
-
-	FreeSemaphore();
-
-	sprintf(HostCmd, "BUFFER %d", bytDataToSendLength);
-	QueueCommandToHost(HostCmd);
-}
-
 UCHAR bytLastCMD_DataSent[256];
 
 //	Function to send a text command to the Host
@@ -588,7 +566,7 @@ loop:
 
 	// Getting bad data ?? Should we just reset ??
 	
-	Debugprintf("ADDOP BadHost Message ?? %s", ARDOPBuffer);
+	Debugprintf("ARDOP BadHost Message ?? %s", ARDOPBuffer);
 	return;
 }
 
@@ -638,7 +616,7 @@ SOCKET OpenSocket4()
 
 VOID InitQueue();
 
-BOOL TCPInit()
+BOOL HostInit()
 {
 #ifdef WIN32
 	WSADATA WsaData;			 // receives data from WSAStartup
@@ -652,7 +630,7 @@ BOOL TCPInit()
 	return ListenSock;
 }
 
-void TCPPoll()
+void HostPoll()
 {
 	// Check for incoming connect or data
 
@@ -677,7 +655,7 @@ void TCPPoll()
 	if (ret == -1)
 	{
 		ret = WSAGetLastError();
-		printf("%d ", ret);
+		Debugprintf("%d ", ret);
 		perror("listen select");
 	}
 	else
