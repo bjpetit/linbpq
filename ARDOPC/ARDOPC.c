@@ -31,7 +31,7 @@ BOOL MainPoll();
 char GridSquare[7] = "";
 char Callsign[10] = "";
 BOOL wantCWID = FALSE;
-int LeaderLength = 200;
+int LeaderLength = 160;
 int TrailerLength = 0;
 int ARQTimeout = 120;
 int TuningRange = 100;
@@ -54,6 +54,9 @@ BOOL blnInitializing = FALSE;
 BOOL blnLastPTT = FALSE;
 
 BOOL PlayComplete = FALSE;
+
+BOOL blnBusyStatus;
+BOOL newStatus;
 
 int tmrSendTimeout;
 
@@ -403,121 +406,6 @@ BOOL GetNextFrame()
 	return FALSE;
 }
      
-//  Function to Get the next ARQ frame returns TRUE if frame repeating is enable 
-
-BOOL GetNextARQFrame()
-{
-	//Dim bytToMod(-1) As Byte
-
-	char HostCmd[80];
-
-	if (blnAbort)  // handles ABORT (aka Dirty Disconnect)
-	{
-		//if (DebugLog) Debugprintf(("[ARDOPprotocol.GetNextARQFrame] ABORT...going to ProtocolState DISC, return FALSE")
-
-		ClearDataToSend();
-		
-		SetARDOPProtocolState(DISC);
-		InitializeConnection();
-		blnAbort = FALSE;
-		blnEnbARQRpt = FALSE;
-		blnDISCRepeating = FALSE;
-		return FALSE;
-	}
-
-	if (blnDISCRepeating)	// handle the repeating DISC reply 
-	{
-		intRepeatCount += 1;
-		blnEnbARQRpt = FALSE;
-
-		if (intRepeatCount > 5)  // do 5 tries then force disconnect 
-		{
-			sprintf(HostCmd, "STATUS END NOT RECEIVED CLOSING ARQ SESSION WITH %s", strRemoteCallsign);
-			QueueCommandToHost(HostCmd);
-			blnDISCRepeating = FALSE;
-			blnEnbARQRpt = FALSE;
-			ClearDataToSend();
-			SetARDOPProtocolState(DISC);
-			InitializeConnection();
-			return FALSE;			 //indicates end repeat
-		}
-		return TRUE;			// continue with DISC repeats
-	}
-	
-	if (ProtocolState == ISS && ARQState == ISSConReq) // Handles Repeating ConReq frames 
-	{
-		intRepeatCount++;
-		if (intRepeatCount > ARQConReqRepeats)
-		{
-		    ClearDataToSend();
-			SetARDOPProtocolState(DISC);
-			blnPending = FALSE;
-
-			if (strRemoteCallsign[0])
-			{
-				sprintf(HostCmd, "STATUS CONNECT TO %s FAILED!", strRemoteCallsign);
-				QueueCommandToHost(HostCmd);
-				InitializeConnection();
-				return FALSE;		// 'indicates end repeat
-			}
-			else
-			{
-				QueueCommandToHost("STATUS END ARQ CALL");
-				InitializeConnection();
-				return FALSE;		  //indicates end repeat
-			}
-
-			
-			//Clear the mnuBusy status on the main form
-            ///    Dim stcStatus As Status = Nothing
-            //    stcStatus.ControlName = "mnuBusy"
-            //    queTNCStatus.Enqueue(stcStatus)
-		}
-
-		return TRUE;		// ' continue with repeats
-	}
-/*
-        ElseIf GetARDOPSetARDOPProtocolState(ProtocolState.ISS And ARQState = ARQSubStates.IRSConAck Then ' Handles ISS repeat of ConAck
-            intRepeatCount += 1
-            If intRepeatCount <= MCB.ARQConReqRepeats Then
-                return TRUE
-            Else
-                SetARDOPProtocolState(ProtocolState.DISC) : ARQState = ARQSubStates.DISCArqEnd
-                objMain.objHI.QueueCommandToHost("STATUS CONNECT TO " & stcConnection.strRemoteCallsign & " FAILED!") : InitializeConnection() : return FALSE
-            End If
-			*/
-
-	// Handles a timeout from an ARQ connected State
-
-	if (ProtocolState == ISS || ProtocolState == IDLE || ProtocolState == IRS)
-	{
-		if ((Now - dttTimeoutTrip) / 1000 > ARQTimeout) // (Handles protocol rule 1.7)
-		{
-            if (!blnTimeoutTriggered)
-			{
-				if (DebugLog) Debugprintf("[ARDOPprotocol.GetNexARQFrame] Timeout setting SendTimeout timer to start.");
-
-				blnEnbARQRpt = FALSE;
-				blnTimeoutTriggered = TRUE; // prevents a retrigger
-                tmrSendTimeout = Now + 1000;
-				return FALSE;
-			}
-		}
-	}
-
-	// Handles the DISC state (no repeats)
- 
-	if (ProtocolState == DISC) // never repeat in DISC state
-	{
-		blnARQDisconnect = FALSE;
-		return FALSE;
-	}
-
-	// ' Handles all other possibly repeated Frames
-
-	return blnEnbARQRpt;  // not all frame types repeat...blnEnbARQRpt is set/cleared in ProcessRcvdARQFrame
-}
-
 #ifdef WIN32
 
 extern LARGE_INTEGER Frequency;
@@ -2320,7 +2208,6 @@ BOOL MainPoll()
             End While
         */
 
-
 	
 	if	(blnClosing)	// Check for closing
 		return FALSE;
@@ -2520,7 +2407,6 @@ void UpdateBusyDetector(short * bytNewSamples)
 	
 	float dblMagAvg = 0;
 	int intTuneLineLow, intTuneLineHi, intDelta;
-	BOOL blnBusyStatus;
 	int i;
 
 //        Dim stcStatus As Status = Nothing
@@ -2548,16 +2434,22 @@ void UpdateBusyDetector(short * bytNewSamples)
 		blnBusyStatus = BusyDetect(dblMag, intTuneLineLow, intTuneLineHi);
 		
 		if (blnBusyStatus && !blnLastBusyStatus)
+		{
 			QueueCommandToHost("BUSY TRUE");
-            //    stcStatus.Text = "True"
+         	newStatus = TRUE;				// report to PTC
+		}
+		//    stcStatus.Text = "True"
             //    queTNCStatus.Enqueue(stcStatus)
             //    'Debug.WriteLine("BUSY TRUE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
 			
 		else if (blnLastBusyStatus && !blnBusyStatus)
+		{
 			QueueCommandToHost("BUSY FALSE");
-            //    stcStatus.Text = "False"
-            //    queTNCStatus.Enqueue(stcStatus)
-            //    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
+			newStatus = TRUE;				// report to PTC
+		} 
+		//    stcStatus.Text = "False"
+        //    queTNCStatus.Enqueue(stcStatus)
+        //    'Debug.WriteLine("BUSY FALSE @ " & Format(DateTime.UtcNow, "HH:mm:ss"))
 
 		blnLastBusyStatus = blnBusyStatus;
 	}

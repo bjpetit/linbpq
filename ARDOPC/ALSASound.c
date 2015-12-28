@@ -52,7 +52,7 @@ void printtick(char * msg)
 
 struct timespec time_start;
 
-int getTicks()
+unsigned int getTicks()
 {	
 	struct timespec tp;
 	
@@ -60,9 +60,16 @@ int getTicks()
 	return (tp.tv_sec - time_start.tv_sec) * 1000 + (tp.tv_nsec - time_start.tv_nsec) / 1000000;
 }
 
+void PlatformSleep()
+{
+	Sleep(10);
+}
+
 void main(int argc, char * argv[])
 {
 	struct timespec tp;
+
+	Debugprintf("ARDOPC Version %s", ProductVersion);
 
 	if (argc > 1)
 		port = atoi(argv[1]);
@@ -907,18 +914,40 @@ void InitSound()
 	OpenSoundCard(CaptureDevice, PlaybackDevice, 12000, 12000, NULL);
 }
 
+int min = 0, max = 0, leveltimer = 0;
+
 PollReceivedSamples()
 {
 	// Process any captured samples
 	// Ideally call at least every 100 mS, more than 200 will loose data
 
-	if (SoundCardRead(&inbuffer[0][0], 1200))
+	if (SoundCardRead(&inbuffer[0], 1200))
 	{
 		// returns 1200 or none
 
+		short * ptr = inbuffer;
+		int i;
+
+		for (i = 0; i < 1200; i++)
+		{
+			if (*(ptr) < min)
+				min = *ptr;
+			else if (*(ptr) > max)
+				max = *ptr;
+			ptr++;
+		}
+		leveltimer++;
+
+		if (leveltimer > 100)
+		{
+			leveltimer = 0;
+			Debugprintf("Input peaks = %d, %d", min, max);
+			min = max = 0;
+		}
+
 
 		if (Capturing && Loopback == FALSE)
-			ProcessNewSamples(&inbuffer[0][0], 1200);
+			ProcessNewSamples(&inbuffer[0], 1200);
 	}
 }
 
@@ -955,6 +984,37 @@ void CloseSound()
 	CloseSoundCard();
 }
 
+int WriteLog(char * msg)
+{
+	FILE *file;
+	char timebuf[128];
+	time_t T;
+	struct tm * tm;
+	UCHAR Value[100];
+
+	T = time(NULL);
+	tm = gmtime(&T);
+
+	sprintf(Value, "ARDOPDebug_%04d%02d%02d.log",
+				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+	
+	if ((file = fopen(Value, "a")) == NULL)
+		return FALSE;
+
+	strftime(timebuf, 128,
+		"%H:%M:%S ", tm);
+
+	fputs(timebuf, file);
+
+	fputs(msg, file);
+
+	fclose(file);
+
+	return 0;
+}
+
+
+
 #include <stdarg.h>
 
 VOID Debugprintf(const char * format, ...)
@@ -967,6 +1027,7 @@ VOID Debugprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf("%s", Mess);
+	WriteLog(Mess);
 	return;
 }
 

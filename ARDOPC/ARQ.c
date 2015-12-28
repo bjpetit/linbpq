@@ -27,6 +27,7 @@ extern int intRmtLeaderMeasure;
 extern BOOL blnAbort;
 extern int intRepeatCount;
 extern int dttLastFECIDSent;
+extern int tmrSendTimeout;
 
 int intLastFrameIDToHost = 0;
 int	intLastFailedFrameID = 0;
@@ -82,7 +83,7 @@ int intReceivedLeaderLen;
 int tmrFinalID = 0;
 int tmrIRSPendingTimeout = 0;
 int tmrPollOBQueue;
-UCHAR bytLastDataFrameType;
+UCHAR bytLastReceivedDataFrameType;
 BOOL blnDISCRepeating;
 int intRmtLeaderMeas;
 
@@ -175,6 +176,8 @@ void SetARDOPProtocolState(int value)
 
 	ProtocolState = value;
 
+	newStatus = TRUE;				// report to PTC
+
         //Dim stcStatus As Status
         //stcStatus.ControlName = "lblState"
         //stcStatus.Text = ARDOPState.ToString
@@ -218,7 +221,122 @@ void SetARDOPProtocolState(int value)
 	QueueCommandToHost(HostCmd);
 }
 
-  
+ 
+
+//  Function to Get the next ARQ frame returns TRUE if frame repeating is enable 
+
+BOOL GetNextARQFrame()
+{
+	//Dim bytToMod(-1) As Byte
+
+	char HostCmd[80];
+
+	if (blnAbort)  // handles ABORT (aka Dirty Disconnect)
+	{
+		//if (DebugLog) Debugprintf(("[ARDOPprotocol.GetNextARQFrame] ABORT...going to ProtocolState DISC, return FALSE")
+
+		ClearDataToSend();
+		
+		SetARDOPProtocolState(DISC);
+		InitializeConnection();
+		blnAbort = FALSE;
+		blnEnbARQRpt = FALSE;
+		blnDISCRepeating = FALSE;
+		return FALSE;
+	}
+
+	if (blnDISCRepeating)	// handle the repeating DISC reply 
+	{
+		intRepeatCount += 1;
+		blnEnbARQRpt = FALSE;
+
+		if (intRepeatCount > 5)  // do 5 tries then force disconnect 
+		{
+			sprintf(HostCmd, "STATUS END NOT RECEIVED CLOSING ARQ SESSION WITH %s", strRemoteCallsign);
+			QueueCommandToHost(HostCmd);
+			blnDISCRepeating = FALSE;
+			blnEnbARQRpt = FALSE;
+			ClearDataToSend();
+			SetARDOPProtocolState(DISC);
+			InitializeConnection();
+			return FALSE;			 //indicates end repeat
+		}
+		return TRUE;			// continue with DISC repeats
+	}
+	
+	if (ProtocolState == ISS && ARQState == ISSConReq) // Handles Repeating ConReq frames 
+	{
+		intRepeatCount++;
+		if (intRepeatCount > ARQConReqRepeats)
+		{
+		    ClearDataToSend();
+			SetARDOPProtocolState(DISC);
+			blnPending = FALSE;
+
+			if (strRemoteCallsign[0])
+			{
+				sprintf(HostCmd, "STATUS CONNECT TO %s FAILED!", strRemoteCallsign);
+				QueueCommandToHost(HostCmd);
+				InitializeConnection();
+				return FALSE;		// 'indicates end repeat
+			}
+			else
+			{
+				QueueCommandToHost("STATUS END ARQ CALL");
+				InitializeConnection();
+				return FALSE;		  //indicates end repeat
+			}
+
+			
+			//Clear the mnuBusy status on the main form
+            ///    Dim stcStatus As Status = Nothing
+            //    stcStatus.ControlName = "mnuBusy"
+            //    queTNCStatus.Enqueue(stcStatus)
+		}
+
+		return TRUE;		// ' continue with repeats
+	}
+/*
+        ElseIf GetARDOPSetARDOPProtocolState(ProtocolState.ISS And ARQState = ARQSubStates.IRSConAck Then ' Handles ISS repeat of ConAck
+            intRepeatCount += 1
+            If intRepeatCount <= MCB.ARQConReqRepeats Then
+                return TRUE
+            Else
+                SetARDOPProtocolState(ProtocolState.DISC) : ARQState = ARQSubStates.DISCArqEnd
+                objMain.objHI.QueueCommandToHost("STATUS CONNECT TO " & stcConnection.strRemoteCallsign & " FAILED!") : InitializeConnection() : return FALSE
+            End If
+			*/
+
+	// Handles a timeout from an ARQ connected State
+
+	if (ProtocolState == ISS || ProtocolState == IDLE || ProtocolState == IRS)
+	{
+		if ((Now - dttTimeoutTrip) / 1000 > ARQTimeout) // (Handles protocol rule 1.7)
+		{
+            if (!blnTimeoutTriggered)
+			{
+				if (DebugLog) Debugprintf("[ARDOPprotocol.GetNexARQFrame] Timeout setting SendTimeout timer to start.");
+
+				blnEnbARQRpt = FALSE;
+				blnTimeoutTriggered = TRUE; // prevents a retrigger
+                tmrSendTimeout = Now + 1000;
+				return FALSE;
+			}
+		}
+	}
+
+	// Handles the DISC state (no repeats)
+ 
+	if (ProtocolState == DISC) // never repeat in DISC state
+	{
+		blnARQDisconnect = FALSE;
+		return FALSE;
+	}
+
+	// ' Handles all other possibly repeated Frames
+
+	return blnEnbARQRpt;  // not all frame types repeat...blnEnbARQRpt is set/cleared in ProcessRcvdARQFrame
+}
 
  
 // function to generate 8 bit session ID
@@ -276,7 +394,46 @@ BOOL IsCallToMe(char * strCallsign, UCHAR * bytReplySessionID)
 
 	return FALSE;
 }
+/*
+ModeToSpeed() = {
 
+	40 768
+	42 
+	44 1296
+	46 429
+	48
+	4A 881
+	4C
+	4E 288
+
+	50 1536
+	52 2592
+	54 
+	56 4305
+	58 429
+	5A 329
+	5C
+	5E 
+
+	60 3072
+	62 5184
+	64 
+	66 8610
+	68 1762
+	6A
+	6C
+	6E 
+
+	70 6144 
+	72 10286
+	74 
+	76 17228
+	78 3624
+	7A 5863
+	7C 4338
+	7E 
+
+	*/
 // Function to get base (even) data modes by bandwidth for ARQ sessions
 
 // Streamlined 0.3.1.6
@@ -800,7 +957,7 @@ void ProcessRcvdARQFrame(UCHAR intFrameType, UCHAR * bytData, int DataLen, BOOL 
 
 	// Allow for link turnround before responding
 
-	txSleep(300);		// May need to tune, or may be better to wait in each send path
+	txSleep(250);		// May need to tune, or may be better to wait in each send path
 
 	// Note this is called as part of the RX sample poll routine
 	
@@ -1745,7 +1902,7 @@ BOOL CheckForDisconnect()
 {
 	if (blnARQDisconnect)
 	{
-		//    if (DebugLog) Debugprintf(("[ARDOPprotocol.CheckForDisconnect]  ARQ Disconnect ...Sending DISC (repeat)")
+		if (DebugLog) Debugprintf("[ARDOPprotocol.CheckForDisconnect]  ARQ Disconnect ...Sending DISC (repeat)");
 		
 		QueueCommandToHost("STATUS INITIATING ARQ DISCONNECT");
 

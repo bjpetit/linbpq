@@ -19,7 +19,6 @@ int ReadCOMBlock(HANDLE fd, char * Block, int MaxLength);
 
 
 extern int port;
-int ComPort = 36;
 int Speed;
 int PollDelay;
 
@@ -30,7 +29,7 @@ HANDLE hDevice;
 
 BOOL VCOM;
 
-char PORTNAME[80] = "com35";
+char PORTNAME[80];
 
 int Mode;
 int CTS, DTR, RTS;
@@ -136,7 +135,6 @@ HANDLE BPQOpenSerialPort(DWORD * lasterror)
 {
 	// Open a Virtual COM Port
 
-	int port = ComPort;
 	char szPort[80];
 	HANDLE hDevice;
 	int Err;
@@ -144,6 +142,8 @@ HANDLE BPQOpenSerialPort(DWORD * lasterror)
 	*lasterror=0;
 
 	// Only support New Style VCOM 
+
+	Debugprintf("ARDOPC opening port com%d", port);
 
 	sprintf( szPort, "\\\\.\\pipe\\BPQCOM%d", port ) ;
 
@@ -290,11 +290,10 @@ BOOL HostInit()
 	hDevice = BPQOpenSerialPort(&Errorval);
 
 	if (hDevice != (HANDLE) -1)
-	{ 
-	}
+		Debugprintf("ARDOPC opened port com%d", port);
 	else
 	{
-		Debugprintf("TNC - Open Failed for Port %s", PORTNAME);
+		Debugprintf("ARDOPC Open Failed for Port com%d", port);
 		hDevice = 0;
 	}
 	return TRUE;

@@ -54,8 +54,6 @@ VOID * _GetBuff(char * File, int Line);
 int C_Q_COUNT(VOID *Q);
 
 void ProcessCommandFromHost(char * strCMD);
-BOOL SendCommandToHost(char * strText);
-BOOL SendCommandToHost(char * strText);
 
 extern int port;
 
@@ -92,110 +90,11 @@ int NUMBEROFBUFFERS = 0;
 
 unsigned int Host_Q;			// Frames for Host
 
-
-
-static int GenCRC16(unsigned char * Data, unsigned short length)
-{
-	// For  CRC-16-CCITT =    x^16 + x^12 +x^5 + 1  intPoly = 1021 Init FFFF
-    // intSeed is the seed value for the shift register and must be in the range 0-&HFFFF
-
-	int intRegister = 0xffff; //intSeed
-	int i,j;
-	int Bit;
-	int intPoly = 0x8810;	//  This implements the CRC polynomial  x^16 + x^12 +x^5 + 1
-
-	for (j = 0; j <  (length); j++)	
-	{
-		int Mask = 0x80;			// Top bit first
-
-		for (i = 0; i < 8; i++)	// for each bit processing MS bit first
-		{
-			Bit = Data[j] & Mask;
-			Mask >>= 1;
-
-            if (intRegister & 0x8000)		//  Then ' the MSB of the register is set
-			{
-                // Shift left, place data bit as LSB, then divide
-                // Register := shiftRegister left shift 1
-                // Register := shiftRegister xor polynomial
-                 
-              if (Bit)
-                 intRegister = 0xFFFF & (1 + (intRegister << 1));
-			  else
-                  intRegister = 0xFFFF & (intRegister << 1);
-	
-				intRegister = intRegister ^ intPoly;
-			}
-			else  
-			{
-				// the MSB is not set
-                // Register is not divisible by polynomial yet.
-                // Just shift left and bring current data bit onto LSB of shiftRegister
-              if (Bit)
-                 intRegister = 0xFFFF & (1 + (intRegister << 1));
-			  else
-                  intRegister = 0xFFFF & (intRegister << 1);
-			}
-		}
-	}
- 
-	return intRegister;
-}
-
-static BOOL checkcrc16(unsigned char * Data, unsigned short length)
-{
-	int intRegister = 0xffff; //intSeed
-	int i,j;
-	int Bit;
-	int intPoly = 0x8810;	//  This implements the CRC polynomial  x^16 + x^12 +x^5 + 1
-
-	for (j = 0; j <  (length - 2); j++)		// ' 2 bytes short of data length
-	{
-		int Mask = 0x80;			// Top bit first
-
-		for (i = 0; i < 8; i++)	// for each bit processing MS bit first
-		{
-			Bit = Data[j] & Mask;
-			Mask >>= 1;
-
-            if (intRegister & 0x8000)		//  Then ' the MSB of the register is set
-			{
-                // Shift left, place data bit as LSB, then divide
-                // Register := shiftRegister left shift 1
-                // Register := shiftRegister xor polynomial
-                 
-              if (Bit)
-                 intRegister = 0xFFFF & (1 + (intRegister << 1));
-			  else
-                  intRegister = 0xFFFF & (intRegister << 1);
-	
-				intRegister = intRegister ^ intPoly;
-			}
-			else  
-			{
-				// the MSB is not set
-                // Register is not divisible by polynomial yet.
-                // Just shift left and bring current data bit onto LSB of shiftRegister
-              if (Bit)
-                 intRegister = 0xFFFF & (1 + (intRegister << 1));
-			  else
-                  intRegister = 0xFFFF & (intRegister << 1);
-			}
-		}
-	}
-
-    if (Data[length - 2] == intRegister >> 8)
-		if (Data[length - 1] == (intRegister & 0xFF))
-			return TRUE;
-   
-	return FALSE;
-}
-
 UCHAR bytLastCMD_DataSent[256];
 
 //	Function to send a text command to the Host
 
-BOOL SendCommandToHost(char * strText)
+void SendCommandToHost(char * strText)
 {
 	// This is from TNC side as identified by the leading "c:"   (Host side sends "C:")
 	// Subroutine to send a line of text (terminated with <Cr>) on the command port... All commands beging with "c:" and end with <Cr>
@@ -224,9 +123,9 @@ BOOL SendCommandToHost(char * strText)
 		ret = WSAGetLastError();
 
 		if (CommandTrace) Debugprintf(" Command Trace TO Host  c:%s", strText);
-		return TRUE;
+		return;
 	}
-	return FALSE;
+	return;
 }
 
 //	Function to queue a text command to the Host used for all asynchronous Commmands (e.g. BUSY etc)
@@ -624,6 +523,7 @@ BOOL HostInit()
 	WSAStartup(MAKEWORD(2, 0), &WsaData);
 #endif
 
+	Debugprintf("ARDOPC listening on port %d", port);
 	InitQueue();
 
 	ListenSock = OpenSocket4();

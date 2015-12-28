@@ -4,7 +4,7 @@
 //
 
 #define ProductName "ARDOP TNC"
-#define ProductVersion "0.4.0-BPQ"
+#define ProductVersion "0.4.3.0-BPQ"
 
 //	Sound interface buffer size
 
@@ -87,6 +87,11 @@ void AddDataToDataToSend(UCHAR * bytNewData, int Len);
 BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL blnSendID);
 void SendID(BOOL blnEnableCWID);
 BOOL CheckGSSyntax(char * GS);
+void SetARDOPProtocolState(int value);
+unsigned int GenCRC16(unsigned char * Data, unsigned short length);
+void SendCommandToHost(char * Cmd);
+void UpdateBusyDetector(short * bytNewSamples);
+int UpdatePhaseConstellation(short * intPhases, short * intMags, char * strMod, BOOL blnQAM);
 
 unsigned int getTicks();
 void txSleep(int mS);
@@ -304,6 +309,8 @@ extern const UCHAR bytValidFrameTypes[];
 
 extern const char strAllDataModes[][14];
 extern int strAllDataModesLen;
+
+extern BOOL newStatus;
 
 // RS Variables
 

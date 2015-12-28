@@ -16,7 +16,7 @@ short intPSKRefPhase;			// PSK Reference symbol in milliradians) (+/- 3142)
 
 extern int intLastRcvdFrameQuality;
 extern int intReceivedLeaderLen;
-extern UCHAR bytLastDataFrameType;
+extern UCHAR bytLastReceivedDataFrameType;
 extern int NErrors;
 
 short intPriorMixedSamples[120];  // a buffer of 120 samples to hold the prior samples used in the filter
@@ -590,14 +590,13 @@ int CorrectRawDataWithRS(UCHAR * bytRawData, UCHAR * bytCorrectedData, int intDa
 	
 	// Try correcting with RS Parity
 
-	
 	FrameOK = RSDecode(bytRawData, intDataLen + 3 + intRSLen, intRSLen, &blnRSOK);
 
 	if (blnRSOK)
-		Debugprintf("RS Says blnRSOK");
-
+		Debugprintf("RS Says OK without correction");
+	else
 	if (FrameOK)
-		Debugprintf("RS Says FrameOK");
+		Debugprintf("RS Says OK after correction");
 	else
 	{
 		Debugprintf("RS Says Can't Correct");
@@ -835,7 +834,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 			DiscardOldSamples();
 			ClearAllMixedSamples();
 			State = SearchingForLeader;
-			printtick("frame sync timeout");
+//			printtick("frame sync timeout");
 		}
 	}
 	
@@ -1646,6 +1645,8 @@ int MinimalDistanceFrameType(int * intToneMags, UCHAR bytSessionID)
 		sprintf(strDecodeCapture, "%s MD Decode;5 Type1=H%X, Type2=H%X, D1= %.2f, D2= %.2f",
 			 strDecodeCapture, intIatMinDistance1, intIatMinDistance2, dblMinDistance1, dblMinDistance2);
 		if (DebugLog) Debugprintf("[Frame Type Decode Fail] %s", strDecodeCapture);
+		
+		return -1;		// indicates poor quality decode so  don't use
 
 	}
 
@@ -1981,6 +1982,113 @@ void Demod1Car4FSKChar(int Start, char * Decoded)
 	return;
 }
 
+
+void Demod1Car4FSK600Char(int Start, char * Decoded);
+
+
+BOOL Demod1Car4FSK600()
+{
+	int Start = 0;
+	
+	// We can't wait for the full frame as we don't have enough data, so
+	// we do one character at a time, until we run out or end of frame
+
+	// Only continue if we have more than intSampPerSym * 4 chars
+
+	while (State == AcquireFrame)
+	{
+		if (intFilteredMixedSamplesLength < ((intSampPerSym * 4) + 20)) // allow for correcrions
+		{
+			// Move any unprocessessed data down buffer
+
+			//	(while checking process - will use cyclic buffer eventually
+
+//			Debugprintf("Corrections %d", Corrections);
+
+			// If corrections is non-zero, we have to adjust
+			//	number left
+
+			intFilteredMixedSamplesLength -= Corrections;
+
+			Corrections = 0;
+
+			if (intFilteredMixedSamplesLength > 0)
+				memmove(intFilteredMixedSamples,
+					&intFilteredMixedSamples[Start], intFilteredMixedSamplesLength * 2); 
+
+			return FALSE;
+		}
+	
+		intCenterFreq = 1500;
+		Demod1Car4FSK600Char(Start, bytFrameData1);
+
+		charIndex++;			// Index into received chars
+		SymbolsLeft--;			// number still to decode
+		Start += intSampPerSym * 4;	// 4 FSK bit pairs per byte
+		intFilteredMixedSamplesLength -= intSampPerSym * 4;
+
+		if (SymbolsLeft == 0)	
+		{	
+			//- prepare for next
+
+			DiscardOldSamples();
+			ClearAllMixedSamples();
+			State = SearchingForLeader;
+		}
+	}
+	return TRUE;
+}
+
+void Demod1Car4FSK600Char(int Start, char * Decoded)
+{
+  	float dblReal, dblImag;
+	float dblSearchFreq;
+	float dblMagSum = 0;
+	float  dblMag[4];	// The magnitude for each of the 4FSK frequency bins
+	UCHAR bytSym;
+	static UCHAR bytSymHistory[3];
+	int j, k;
+	UCHAR bytData = 0;
+	int intSampPerSymbol = 12000 / intBaud;
+	int intMaxMag;
+
+	dblSearchFreq = intCenterFreq + (1.5f * intBaud);	// the highest freq (equiv to lowest sent freq because of sideband reversal)
+
+	// Do one symbol
+
+	for (j = 0; j < 4; j++)		// for each 4FSK symbol (2 bits) in a byte
+	{
+		dblMagSum = 0;	
+		intMaxMag = 0;
+
+		for (k = 0; k < 4; k++)
+		{
+			GoertzelRealImag(intFilteredMixedSamples, Start, intSampPerSymbol, (dblSearchFreq - k * intBaud) / intBaud, &dblReal, &dblImag);
+			intToneMags[4 * j + k] = powf(dblReal,2) + powf(dblImag, 2);
+			dblMagSum += intToneMags[4 * j + k];
+			if (intToneMags[4 * j + k] > intMaxMag)
+			{
+				intMaxMag = intToneMags[4 * j + k];
+				bytSym = k;
+			}
+		}
+		bytData = (bytData<< 2) + bytSym;
+		bytSymHistory[0] = bytSymHistory[1];
+		bytSymHistory[1] = bytSymHistory[2];
+		bytSymHistory[2] = bytSym;
+
+        //If (bytSymHistory(0) <> bytSymHistory(1)) And (bytSymHistory(1) <> bytSymHistory(2)) Then ' only track when adjacent symbols are different (statistically about 56% of the time)
+        //            ' this should allow tracking over 2000 ppm sampling rate error
+        //            Track1Car4FSK600bd(intSamples, intPtr, intSampPerSymbol, intSearchFreq, intBaud, bytSymHistory)
+        //        End If
+
+		Start += intSampPerSym; // advance the pointer one symbol
+	}
+
+	Decoded[charIndex] = bytData;	
+	return;
+}
+
 void Demod1Car8FSKChar(int Start, char * Decoded);
 
 BOOL Demod1Car8FSK()
@@ -2298,8 +2406,8 @@ BOOL Decode4FSKConReq()
 	memcpy(bytCall, &bytFrameData1[6], 6);
 	DeCompressCallsign(bytCall, strTarget);
 
-	printtick(strCaller);
-	printtick(strTarget);
+//	printtick(strCaller);
+//	printtick(strTarget);
 	
 	sprintf(strRcvFrameTag, "_%s > %s", strCaller, strTarget);
 	sprintf(bytData, "%s %s", strCaller, strTarget);
@@ -2354,7 +2462,7 @@ BOOL Decode4FSKConACK(UCHAR bytFrameType, int * intTiming)
          
 		//intTestFrameCorrectCnt++;
 		intReceivedLeaderLen = intLeaderRcvdMs;
-		bytLastDataFrameType = 0;  // initialize the LastFrameType to an illegal Data frame
+		bytLastReceivedDataFrameType = 0;  // initialize the LastFrameType to an illegal Data frame
         return TRUE;
 	}
 	
@@ -2376,8 +2484,8 @@ BOOL Decode4FSKID(UCHAR bytFrameType, char * strCallID, char * strGridSquare)
 	memcpy(bytCall, &bytFrameData1[6], 6);
 	DeCompressGridSquare(bytCall, strGridSquare);
 
-	printtick(strCallID);
-	printtick(strGridSquare);
+//	printtick(strCallID);
+//	printtick(strGridSquare);
 
 
 	/*
@@ -2470,19 +2578,9 @@ void DemodulateFrame(int intFrameType)
 		Demod1Car4FSK();
 		return;
 	}
-
-
-/*
-            Case 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38    ' Connect Request
-                blnDecodeOK = DemodDecode4FSKConReq(intFrameType, intBW, strCallerCallsign, strTargetCallsign)
-                stcStatus.Text = objFrameInfo.Name(intFrameType) & " " & strCallerCallsign & ">" & strTargetCallsign
-                If blnDecodeOK Then bytData = GetBytes(strCallerCallsign & " " & strTargetCallsign)
-
-				
-
-
-        ' Special Frames
- */
+		
+	// Special Frames
+ 
 	switch (intFrameType)
 	{
 		case 0x39:
@@ -2542,7 +2640,7 @@ void DemodulateFrame(int intFrameType)
 		case 0x7C:
 		case 0x7D:
 
-//			Demod1Car4FSK600();
+			Demod1Car4FSK600();
 			break;
   
 		// 16FSK Data
@@ -2627,26 +2725,7 @@ void DemodulateFrame(int intFrameType)
    
 //	queTNCStatus.Enqueue(stcStatus);
 
-	if (intConstellationQuality > 0)
-	{
-		intLastRcvdFrameQuality = intConstellationQuality;
-
-        //    If MCB.DebugLog And Not blnDecodeOK Then Logs.WriteDebug("[DecodeFrame] Frame: " & objFrameInfo.Name(intFrameType) & " Decode FAIL,   Constellation Quality= " & intLastRcvdFrameQuality.ToString)
-        //    If MCB.DebugLog And blnDecodeOK Then Logs.WriteDebug("[DecodeFrame] Frame: " & objFrameInfo.Name(intFrameType) & " Decode PASS,   Constellation Quality= " & intLastRcvdFrameQuality.ToString)
-	}
-	else
-	{
-        //    If MCB.DebugLog And Not blnDecodeOK Then Logs.WriteDebug("[DecodeFrame] Frame: " & objFrameInfo.Name(intFrameType) & " Decode FAIL")
-        //    If MCB.DebugLog And blnDecodeOK Then Logs.WriteDebug("[DecodeFrame] Frame: " & objFrameInfo.Name(intFrameType) & " Decode PASS")
-	}
 }
-
-
-
-
-
- 
-
 
 
 // Function to Strip quality from ACK/NAK frame types
@@ -2714,14 +2793,10 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 		break;
 		
 		case 0x30:		 // ID Frame
-
-			printtick("Decoding IDFrame");
 						
 			blnDecodeOK = Decode4FSKID(0x30, strIDCallSign, strGridSQ);
 			
 			frameLen = sprintf(bytData, "ID:%s %s : " , strIDCallSign, strGridSQ);
-			
-			printtick(bytData);
 
 			//stcStatus.Text = objFrameInfo.Name(intFrameType) & strRcvFrameTag
 
@@ -2851,17 +2926,41 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 				blnDecodeOK = TRUE;
 
 			break;
-/*
-            Case 0x7A, 0x7B, 0x7C, 0x7D
-                blnDecodeOK = Decode4FSK600bdData(intFrameType, bytData, intConstellationQuality)
-                stcStatus.Text = objFrameInfo.Name(intFrameType)
+		
+		case 0x7A:
+		case 0x7B:
+		case 0x7C:
+		case 0x7D:
 
-                ' Experimental Sounding frame
-            Case 0xD0
-                DemodSounder(intMFSReadPtr, intFilteredMixedSamples)
-                blnDecodeOK = TRUE
-  */
+			// 600 Baud Data. Frame has 3 * 200 RS Blocks
+
+			intDataLen = 200;
+			intRSLen = 50;
+
+			frameLen = CorrectRawDataWithRS(bytFrameData1, bytData, intDataLen, intRSLen, intFrameType, &CarrierOk[0]);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData1 + 253, &bytData[frameLen], intDataLen, intRSLen, intFrameType, &CarrierOk[1]);
+			frameLen +=  CorrectRawDataWithRS(bytFrameData1 + 506, &bytData[frameLen], intDataLen, intRSLen, intFrameType, &CarrierOk[2]);
+
+			intDataLen = 600;
+			intRSLen = 150;
+
+			if (CarrierOk[0] && CarrierOk[1] && CarrierOk[2]) 
+				blnDecodeOK = TRUE;
+
+			break;
+
+//                ' Experimental Sounding frame
+//            Case 0xD0
+//                DemodSounder(intMFSReadPtr, intFilteredMixedSamples)
+//                blnDecodeOK = TRUE
+
 	}
+
+	if (DebugLog)
+		if (blnDecodeOK)
+			Debugprintf("[DecodeFrame] Frame: %s Decode PASS,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
+		else
+			Debugprintf("[DecodeFrame] Frame: %s Decode FAIL,   Constellation Quality= %d", Name(intFrameType),  intLastRcvdFrameQuality);
 
 	//	if a data frame with few error and quality very low, adjust
 
@@ -2875,6 +2974,9 @@ BOOL DecodeFrame(int intFrameType, char * bytData)
 
 
 returnframe:
+
+	if (blnDecodeOK && intFrameType >= 0x40 && intFrameType <= 0x7F)
+		bytLastReceivedDataFrameType = intFrameType;
 	
 //	if (blnDecodeOK)
 //		stcStatus.BackColor = Color.LightGreen;
@@ -2883,11 +2985,11 @@ returnframe:
    
 //	queTNCStatus.Enqueue(stcStatus);
 
-	if (DebugLog)
-		if (blnDecodeOK)
-			Debugprintf("[DecodeFrame] Frame: %s Decode PASS, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
-		else
-			Debugprintf("[DecodeFrame] Frame: %s Decode FAIL, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
+//	if (DebugLog)
+//		if (blnDecodeOK)
+//			Debugprintf("[DecodeFrame] Frame: %s Decode PASS, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
+//		else
+//			Debugprintf("[DecodeFrame] Frame: %s Decode FAIL, Constellation Quality= %d", Name(intFrameType), intLastRcvdFrameQuality);
 
 	return blnDecodeOK;
 }

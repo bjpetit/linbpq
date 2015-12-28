@@ -28,8 +28,8 @@ void GetSoundDevices();
 // Windows works with signed samples +- 32767
 // STM32 DAC uses unsigned 0 - 4095
 
-short buffer[2][1200];			// Two Transfer/DMA buffers of 0.1 Sec
-short inbuffer[2][1200];		// Two Transfer/DMA buffers of 0.1 Sec
+short buffer[2][1200];		// Two Transfer/DMA buffers of 0.1 Sec
+short inbuffer[2][1200];	// Input Transfer/ buffers of 0.1 Sec
 
 BOOL Loopback = FALSE;
 //BOOL Loopback = TRUE;
@@ -73,6 +73,8 @@ int LastNow;
 
 void main(int argc, char * argv[])
 {
+	Debugprintf("ARDOPC Version %s", ProductVersion);
+
 	if (argc > 1)
 		port = atoi(argv[1]);
 	
@@ -87,8 +89,6 @@ void main(int argc, char * argv[])
 	QueryPerformanceCounter(&StartTicks);
 
 	GetSoundDevices();
-
-	Debugprintf("ARDOPC listening on port %d", port);
 
 //	xxmain();
 	ardopmain();
@@ -206,13 +206,23 @@ void InitSound()
 	header[0].dwFlags = WHDR_DONE;
 	header[1].dwFlags = WHDR_DONE;
 
-    waveOutOpen(&hWaveOut, atoi(PlaybackDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
-	waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
-	Debugprintf("Opened WaveOut Device %s", pwoc.szPname);
+    ret = waveOutOpen(&hWaveOut, atoi(PlaybackDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+	if (ret)
+		Debugprintf("Failed to open WaveOut Device %s Error %d", PlaybackDevice, ret);
+	else
+	{
+		ret = waveOutGetDevCaps((UINT_PTR)hWaveOut, &pwoc, sizeof(WAVEOUTCAPS));
+		Debugprintf("Opened WaveOut Device %s", pwoc.szPname);
+	}
 
-    waveInOpen(&hWaveIn, atoi(CaptureDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
-	waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
-	Debugprintf("Opened WaveIn Device %s", pwic.szPname);
+    ret = waveInOpen(&hWaveIn, atoi(CaptureDevice), &wfx, 0, 0, CALLBACK_NULL); //WAVE_MAPPER
+	if (ret)
+		Debugprintf("Failed to open WaveIn Device %s Error %d", CaptureDevice, ret);
+	else
+	{
+		ret = waveInGetDevCaps((UINT_PTR)hWaveIn, &pwic, sizeof(WAVEINCAPS));
+		Debugprintf("Opened WaveIn Device %s", pwic.szPname);
+	}
 
 //	wavfp1 = fopen("s:\\textxxx.wav", "wb");
 
@@ -228,6 +238,8 @@ void InitSound()
 	ret = waveInStart(hWaveIn);
 }
 
+int min = 0, max = 0, leveltimer = 0;
+
 PollReceivedSamples()
 {
 	// Process any captured samples
@@ -235,6 +247,26 @@ PollReceivedSamples()
 
 	if (inheader[inIndex].dwFlags & WHDR_DONE)
 	{
+		short * ptr = &inbuffer[inIndex][0];
+		int i;
+
+		for (i = 0; i < 1200; i++)
+		{
+			if (*(ptr) < min)
+				min = *ptr;
+			else if (*(ptr) > max)
+				max = *ptr;
+			ptr++;
+		}
+		leveltimer++;
+
+		if (leveltimer > 100)
+		{
+			leveltimer = 0;
+			Debugprintf("Input peaks = %d, %d", min, max);
+			min = max = 0;
+		}
+
 //		Debugprintf("Process %d %d", inIndex, inheader[inIndex].dwBytesRecorded/2);
 		if (Capturing && Loopback == FALSE)
 			ProcessNewSamples(&inbuffer[inIndex][0], inheader[inIndex].dwBytesRecorded/2);
@@ -275,6 +307,36 @@ void CloseSound()
 	waveOutClose(hWaveOut);
 }
 
+int WriteLog(char * msg)
+{
+	FILE *file;
+	char timebuf[128];
+	time_t T;
+	struct tm * tm;
+	UCHAR Value[100];
+
+	T = time(NULL);
+	tm = gmtime(&T);
+
+	sprintf(Value, "ARDOPDebug_%04d%02d%02d.log",
+				tm->tm_year +1900, tm->tm_mon+1, tm->tm_mday);
+	
+	if ((file = fopen(Value, "ab")) == NULL)
+		return FALSE;
+
+	strftime(timebuf, 128,
+		"%H:%M:%S ", tm);
+
+	fputs(timebuf, file);
+
+	fputs(msg, file);
+
+	fclose(file);
+
+	return 0;
+}
+
+
 #include <stdarg.h>
 
 VOID Debugprintf(const char * format, ...)
@@ -287,6 +349,7 @@ VOID Debugprintf(const char * format, ...)
 	strcat(Mess, "\r\n");
 
 	printf(Mess);
+	WriteLog(Mess);
 
 	return;
 }
@@ -319,8 +382,10 @@ void SoundFlush()
 
 	//	Wait for all sound output to complete
 	
-	while (!(header[0].dwFlags & WHDR_DONE));
-	while (!(header[1].dwFlags & WHDR_DONE));
+	while (!(header[0].dwFlags & WHDR_DONE))
+		txSleep(10);
+	while (!(header[1].dwFlags & WHDR_DONE))
+		txSleep(10);
 
 	// I think we should turn round the link here. I dont see the point in
 	// waiting for MainPoll

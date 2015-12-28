@@ -20,11 +20,11 @@ int bytDataToSendLength = 0;
 
 char ReportCall[10];
 
-UCHAR bytDataforHost[2048];		// has to be at least max packet size (?1280)
+UCHAR bytDataforHost[2048];		// has to be at least max packet size (8 * 159)
 
 int bytesforHost = 0;
 
-UCHAR bytEchoData[2048];		// has to be at least max packet size (?1280)
+UCHAR bytEchoData[1272];		// has to be at least max packet size (?1272)
 
 int bytesEchoed = 0;
 
@@ -35,6 +35,7 @@ UCHAR SCSReply[256 + 5];	// could be smaller??
 int Toggle;
 
 extern char Callsign[10];
+extern BOOL blnBusyStatus;
 
 BOOL Term4Mode;
 BOOL PACMode;
@@ -53,6 +54,7 @@ int ReplyLen;
 
 extern float dblOffsetHz;
 extern int intSessionBW;
+
 
 void QueueCommandToHost(char * Cmd)
 {
@@ -266,7 +268,13 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		// General Poll
 
 		// See if any channels have anything available
-		
+
+		if (newStatus)
+		{
+			newStatus = FALSE;
+			*(NextChan++) = 254;
+		}
+
 		if (bytesforHost || bytesEchoed || change)
 			*(NextChan++) = DataChannel;			// Something for this channel
 
@@ -298,22 +306,34 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 			if (ProtocolState != IRS)
 				SCSReply[5] |= 0x8;	// Send Bit
 
-			SCSReply[6] = 3;		// Pactor 3
-
 			if (intSessionBW == 200)
-				SCSReply[7] = 1;		// P1
+				SCSReply[6] = 1;		// P1
 			else if (intSessionBW == 500)
-				SCSReply[7] = 2;		// P2
+				SCSReply[6] = 2;		// P2
+			else if (intSessionBW == 1000)
+				SCSReply[6] = 3;		// P2
 			else
-				SCSReply[7] = 3;		// P3
+				SCSReply[6] = 4;		// P4
 
-			SCSReply[7] = 3;			// SpeedLevel		
+			// Speedlevel Mapping from RMS Express
+
+			// P1 {100, 200}, _
+            // P2 {200, 400, 600, 800}, _
+            // P3 {200, 600, 1400, 2800, 3200, 3600}, _
+            // P4 {47, 85, 150, 300, 450, 1100, 2200, 3300, 4400, 5500}}
+ 
+
+			SCSReply[7] = 3;			// SpeedLevel ?? Base on mode ??	
 			
 			SCSReply[8] = dblOffsetHz;	// Freq Error
 		}
 		else
 		{
-			SCSReply[5] = 0;
+			if (blnBusyStatus)
+				SCSReply[5] = 0xf0;
+			else
+				SCSReply[5] = 0;
+
 			SCSReply[6] = 0;
 			SCSReply[7] = 0;
 			SCSReply[8] = 0;
