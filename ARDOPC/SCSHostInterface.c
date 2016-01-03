@@ -100,6 +100,9 @@ void SendCommandToHost(char * Cmd)
 
 void AddTagToDataAndSendToHost(UCHAR * Msg, char * Type, int Len)
 {
+	if (Mode == 0)
+		return;
+
 	if (strcmp(Type, "ARQ") == 0)
 	{
 		memcpy(&bytDataforHost[bytesforHost], Msg, Len);
@@ -354,13 +357,14 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		goto AckIt;
 	}
 
-//	Debugprintf("%c", Buffer[3]);
+	Debugprintf("%c", Buffer[3]);
 
 	switch (Buffer[3])
 	{
 	case 'J':				// JHOST
 
 		MODE = FALSE;
+		Debugprintf("Exit Host Mode");
 
 		return;
 
@@ -524,6 +528,8 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 
 	// We can probably just dump anything but JHOST 4 and Callsign
 
+	Debugprintf("SCS Command %s", Command);
+
 	if (Len == 1)
 		goto SendPrompt;		// Just a CR
 
@@ -534,11 +540,10 @@ VOID ProcessSCSTextCommand(char * Command, int Len)
 		return;
 	}
 
-	Debugprintf("SCS Command %s", Command);
-
 	if (_memicmp(Command, "JHOST4", 6) == 0)
 	{
 		MODE = TRUE;
+		Debugprintf("Entering Host Mode");
 		Toggle = 0;
 
 		return;
@@ -742,6 +747,14 @@ Loop:
 
 
 			return;
+		}
+
+		// We are in text mode, if buffer contains nulls clear it
+
+		if (strlen(rxbuffer) < Length)
+		{
+			RXBPtr = 0;
+			Debugprintf("cancelling input %d %d", strlen(rxbuffer), Length);
 		}
 		ptr = strchr(rxbuffer, 13);
 

@@ -176,6 +176,8 @@ void SetARDOPProtocolState(int value)
 
 	ProtocolState = value;
 
+	displayState();
+
 	newStatus = TRUE;				// report to PTC
 
         //Dim stcStatus As Status
@@ -272,6 +274,7 @@ BOOL GetNextARQFrame()
 		    ClearDataToSend();
 			SetARDOPProtocolState(DISC);
 			blnPending = FALSE;
+			displayCall(0x20, "");
 
 			if (strRemoteCallsign[0])
 			{
@@ -1850,6 +1853,8 @@ BOOL SendARQConnectRequest(char * strMycall, char * strTargetCall)
 	SetARDOPProtocolState(ISS);
 	ARQState = ISSConReq;    
 	intRepeatCount = 1;
+
+	displayCall(0x7E, strTargetCall);
 	
 	bytSessionID = GenerateSessionID(strMycall, strTargetCall);  // Now set bytSessionID to receive ConAck (note the calling staton is the first entry in GenerateSessionID) 
 	bytPendingSessionID = bytSessionID;

@@ -5,6 +5,8 @@
 #include <stdarg.h>
 
 #include "stm32f4xx.h"
+#include "stm32f4xx_rcc.h"
+#include "stm32f4xx_iwdg.h""
 
 //AnalogOut my_output(PA_4);
 
@@ -30,6 +32,9 @@ extern "C" {
 	void Sleep(int delay);
 	void SerialSink(UCHAR c);
 	void SerialSendData(unsigned char * Msg, int Len);
+
+	void init_I2C1(void);
+	void initdisplay();
 }
 
 InterruptIn mybutton(USER_BUTTON);
@@ -241,7 +246,36 @@ int main()
 //	serial3.attach(&rxc3allback);
 	serial3.attach(&tx3callback, Serial::TxIrq);
 
+	 /* Check if the system has resumed from WWDG reset */
+
+	if (RCC_GetFlagStatus(RCC_FLAG_IWDGRST) != RESET)
+	{
+		Debugprintf("Reset by watchdog");
+		RCC_ClearFlag();
+	}
+
+    /* Enable write access to IWDG_PR and IWDG_RLR registers */
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+
+    /* IWDG counter clock: LSI/256, ~6.4ms */
+    IWDG_SetPrescaler(IWDG_Prescaler_256);
+
+    IWDG_SetReload(2000);	// ~12 secs
+
+    /* Reload IWDG counter */
+    IWDG_ReloadCounter();
+
+    /* Enable IWDG (the LSI oscillator will be enabled by hardware) */
+    IWDG_Enable();
+
+
 	Debugprintf("Clock Freq %d", SystemCoreClock);
+
+	init_I2C1();
+
+	Debugprintf("i2c init returned");
+
+	initdisplay();
 
 	mybutton.fall(&pressed);
 
@@ -253,6 +287,8 @@ int main()
 extern "C" void PlatformSleep()
 {
 	// Called at end of main loop
+
+	IWDG_ReloadCounter();
 
     if (bTick)
     {
@@ -275,7 +311,6 @@ extern "C" void PlatformSleep()
 void Sleep(int delay)
 {
 	wait(delay/1000);
-
 	return;
 }
 

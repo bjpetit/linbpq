@@ -473,3 +473,12 @@ void PlatformSleep()
 	Sleep(10);
 }
 
+void displayState()
+{
+	// Dummy for i2c display
+}
+
+void displayCall(int dirn, char * call)
+{
+	// Dummy for i2c display
+}

@@ -45,6 +45,8 @@
 				BasicRuntimeChecks="3"
 				RuntimeLibrary="1"
 				UsePrecompiledHeader="0"
+				ExpandAttributedSource="false"
+				AssemblerOutput="2"
 				WarningLevel="3"
 				Detect64BitPortabilityProblems="false"
 				DebugInformationFormat="4"
@@ -139,6 +141,7 @@
 				AdditionalDependencies="kernel32.lib $(NoInherit)"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
+				GenerateMapFile="true"
 				SubSystem="1"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -228,6 +231,10 @@
 			</File>
 			<File
 				RelativePath=".\TCPHostInterface.c"
+				>
+			</File>
+			<File
+				RelativePath=".\UZ7HOFEC.c"
 				>
 			</File>
 			<File

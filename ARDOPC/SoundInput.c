@@ -34,7 +34,7 @@ char strDecodeCapture[256];
 #define MAX_DATA_LENGTH	8 * 159 // I think! 8PSK.2000.167
 
 int intCenterFreq = 1500;
-int intCarFreq;				// Are these the same ??
+float intCarFreq;			//(was int)	// Are these the same ??
 int intNumCar;
 int intBaud;
 int intDataLen;
@@ -144,11 +144,11 @@ BOOL AcquireFrameSyncRSB();
 int Acquire4FSKFrameType();
 
 void DemodulateFrame(int intFrameType);
-void Demod1Car4FSKChar(int Start, char * Decoded);
+void Demod1Car4FSKChar(int Start, UCHAR * Decoded);
 VOID Track1Car4FSK(short * intSamples, int * intPtr, int intSampPerSymbol, float intSearchFreq, int intBaud, UCHAR * bytSymHistory);
 VOID Decode1CarPSKChar(UCHAR * Decoded, int Carrier);
 int EnvelopeCorrelator();
-BOOL DecodeFrame(int intFrameType, char * bytData);
+BOOL DecodeFrame(int intFrameType, UCHAR * bytData);
 
 int Update4FSKConstellation(int * intToneMags, int * intQuality);
 void Update16FSKConstellation(int * intToneMags, int * intQuality);
@@ -664,72 +664,14 @@ void ProcessNewSamples(short * Samples, int nSamples)
  //       Dim stcStatus As Status = Nothing
 	BOOL blnFrameDecodedOK = FALSE;
 
-	if (0)		// Experimental UZ7HO FSK Detect
-	{
-		int Used;
-		int Start = 0, i;
+//	LookforUZ7HOLeader(Samples, nSamples);
 
-		dblPhaseInc = 2 * M_PI * 1000 / 4;
-		intSampPerSym = 120;
-		intCarFreq = 1800; // start at the highest carrier freq which is actually the lowest transmitted carrier due to Reverse sideband mixing
-		intPhasesLen = 0;
+//	return;
 
-		for (i= 0; i < 4; i++)
-		{
-			intCP[i] = 28; // This value selected for best decoding percentage (56%) and best Averag 4PSK Quality (77) on mpg +5 dB
-			intNforGoertzel[i] = 60;
-			dblFreqBin[i] = intCarFreq / 200;
-			intCarFreq -= 200;
-		}
-	
-
-
-		MixNCOFilter(Samples, nSamples, dblOffsetHz); // Mix and filter new samples (Mixing consumes all intRcvdSamples)
-		Start = 0;
-
-		// If this is a multicarrier mode, we must call the
-		// decode char routing for each carrier
-
-		while (1)
-		{
-			intCarFreq = 1800;
-		
-			Demod1CarPSKChar(Start, 0);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-	
-			Demod1CarPSKChar(Start, 1);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Demod1CarPSKChar(Start, 2);
-			intPhasesLen -= 4; //intPSKMode;
-			intCarFreq -= 200;  // Step through each carrier Highest to lowest which is equivalent to lowest to highest before RSB mixing. 
-
-			Used = Demod1CarPSKChar(Start, 3);
-
-
-		if (intPhasesLen ==	8)
-		{
-	//		CorrectPhaseForTuningOffset(intPhases, intPhasesLen, strMod);
-
-			return ;
-			Decode1CarPSKChar(bytFrameData1, 0);
-			Decode1CarPSKChar(bytFrameData2, 1);
-			Decode1CarPSKChar(bytFrameData3, 2);
-			Decode1CarPSKChar(bytFrameData4, 3);
-	
-		}
-		
-		Start += Used; //intSampPerSym * 4;	
-		intFilteredMixedSamplesLength -= Used; //intSampPerSym * 4;
-		}
-		return;
-	}	// en d of UZ7HO
-	
+//	printtick("Stary Busy");
 	if (State == SearchingForLeader)
 		UpdateBusyDetector(Samples);
-
+//	printtick("Done Busy");
 	if (ProtocolState == FECSend)
 		return;
 
@@ -777,12 +719,12 @@ void ProcessNewSamples(short * Samples, int nSamples)
 
 	// I'm going to filter all samples into intFilteredMixedSamples.
 
-//	printtick("Start Mix");
+	printtick("Start Mix");
 
 	MixNCOFilter(Samples, nSamples, dblOffsetHz); // Mix and filter new samples (Mixing consumes all intRcvdSamples)
 	nSamples = 0;	//	all used
 
-//	printtick("Done Mix Samples");
+	printtick("Done Mix Samples");
 
 	// Acquire Symbol Sync 
 
@@ -957,7 +899,7 @@ void ProcessNewSamples(short * Samples, int nSamples)
 		else if (strcmp (strMod, "8FSK") == 0)
 			Update8FSKConstellation(intToneMags, &intLastRcvdFrameQuality);
 		else
-			intLastRcvdFrameQuality = UpdatePhaseConstellation(intPhases, intMags, strMod, FALSE);
+			intLastRcvdFrameQuality = UpdatePhaseConstellation(&intPhases[0][0], &intMags[0][0], strMod, FALSE);
 
 
 		Debugprintf("Qual = %d", intLastRcvdFrameQuality);
@@ -1903,7 +1845,7 @@ BOOL Demod1Car4FSK()
 
 // Function to demodulate one carrier for all low baud rate 4FSK frame types
  
-void Demod1Car4FSKChar(int Start, char * Decoded)
+void Demod1Car4FSKChar(int Start, UCHAR * Decoded)
 {
 	// Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
 	// intPtr should be pointing to the approximate start of the first data symbol  
@@ -1983,7 +1925,7 @@ void Demod1Car4FSKChar(int Start, char * Decoded)
 }
 
 
-void Demod1Car4FSK600Char(int Start, char * Decoded);
+void Demod1Car4FSK600Char(int Start, UCHAR * Decoded);
 
 
 BOOL Demod1Car4FSK600()
@@ -2039,7 +1981,7 @@ BOOL Demod1Car4FSK600()
 	return TRUE;
 }
 
-void Demod1Car4FSK600Char(int Start, char * Decoded)
+void Demod1Car4FSK600Char(int Start, UCHAR * Decoded)
 {
   	float dblReal, dblImag;
 	float dblSearchFreq;
@@ -2089,7 +2031,7 @@ void Demod1Car4FSK600Char(int Start, char * Decoded)
 	return;
 }
 
-void Demod1Car8FSKChar(int Start, char * Decoded);
+void Demod1Car8FSKChar(int Start, UCHAR * Decoded);
 
 BOOL Demod1Car8FSK()
 {
@@ -2162,7 +2104,7 @@ BOOL Demod1Car8FSK()
 
 // Function to demodulate one carrier for all 8FSK frame types
  
-void Demod1Car8FSKChar(int Start, char * Decoded)
+void Demod1Car8FSKChar(int Start, UCHAR * Decoded)
 {
 	// Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
 	// intPtr should be pointing to the approximate start of the first data symbol  
@@ -2242,7 +2184,7 @@ void Demod1Car8FSKChar(int Start, char * Decoded)
 
 
 
-void Demod1Car16FSKChar(int Start, char * Decoded);
+void Demod1Car16FSKChar(int Start, UCHAR * Decoded);
 
 BOOL Demod1Car16FSK()
 {
@@ -2315,7 +2257,7 @@ BOOL Demod1Car16FSK()
 
 // Function to demodulate one carrier for all 8FSK frame types
  
-void Demod1Car16FSKChar(int Start, char * Decoded)
+void Demod1Car16FSKChar(int Start, UCHAR * Decoded)
 {
 	// Converts intSamples to an array of bytes demodulating the 4FSK symbols with center freq intCenterFreq
 	// intPtr should be pointing to the approximate start of the first data symbol  
@@ -2741,7 +2683,7 @@ BOOL DecodeACKNAK(int intFrameType, int *  intQuality)
 
 
 
-BOOL DecodeFrame(int intFrameType, char * bytData)
+BOOL DecodeFrame(int intFrameType, UCHAR * bytData)
 {
 	BOOL blnDecodeOK = FALSE;
  //       Dim stcStatus As Status = Nothing

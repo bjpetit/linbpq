@@ -80,6 +80,8 @@ void main(int argc, char * argv[])
 		strcpy(PlaybackDevice, argv[3]);
 	}
 
+	initdisplay();
+
 	Debugprintf("ARDOPC listening on port %d", port);
 
 	// Get Time Reference
@@ -937,6 +939,8 @@ PollReceivedSamples()
 			ptr++;
 		}
 		leveltimer++;
+
+		displayLevel(max);
 
 		if (leveltimer > 100)
 		{

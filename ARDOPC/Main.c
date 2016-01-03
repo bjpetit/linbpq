@@ -1,114 +1,50 @@
+#include <stdio.h>
 
-#include "ARDOPC.h"
+#include "LCM1602-IIC.h"
 
-
-#include "ecc.h"
-
-unsigned char msg[] = "Nervously I loaded the twin ducks aboard the revolving pl\
-atform.";
-unsigned char codeword[256];
-
-unsigned char revcodeword[256];
-unsigned char xxcodeword[256];
-
-/* Some debugging routines to introduce errors or erasures
-   into a codeword.
-   */
-
-/* Introduce a byte error at LOC */
-void
-byte_err (int err, int loc, unsigned char *dst)
+char level[10][5] = {
+        {1,32,32,32,32},
+        {255,32,32,32,32},
+        {255,1,32,32,32},
+        {255,255,32,32,32},
+        {255,255,1,32,32},
+        {255,255,255,32,32},
+        {255,255,255,1,32},
+        {255,255,255,255,32},
+        {255,255,255,255,1},
+        {255,255,255,255,255}};
+        
+int main(int argc, const char *argv[])
 {
-	Debugprintf("Adding Error at loc %d, data %#x\n", loc, dst[loc-1]);
-  dst[loc-1] ^= err;
-}
-
-/* Pass in location of error (first byte position is
-   labeled starting at 1, not 0), and the codeword.
-*/
-void
-byte_erasure (int loc, unsigned char dst[], int cwsize, int erasures[])
-{
-	Debugprintf("Erasure at loc %d, data %#x\n", loc, dst[loc-1]);
-  dst[loc-1] = 0;
-}
-
-int NPAR;
-
-void xxmain ()
-{
-
-  int erasures[16];
-  int nerasures = 0;
-  int i, j;
-
-  /* Initialization the ECC library */
-
-	NPAR = 8;
-
-  initialize_ecc ();
-
-  /* ************** */
-
-  /* Encode data into codeword, adding NPAR parity bytes */
-
-  encode_data(msg, sizeof(msg), codeword);
-
-  Debugprintf("Encoded data is: \"%s\" Len %d\n", codeword, sizeof (msg));
-
-#define ML (sizeof (msg) + NPAR)
-
-
-  /* Add one error and two erasures */
-  
- 
-  byte_err(0x35, 3, codeword);
-
-  byte_err(0x23, 17, codeword);
-  byte_err(0x34, 19, codeword);
-
-
-  Debugprintf("with some errors: \"%s\"\n", codeword);
-
-  /* We need to indicate the position of the erasures.  Eraseure
-     positions are indexed (1 based) from the end of the message... */
-
- // erasures[nerasures++] = ML-17;
-//  erasures[nerasures++] = ML-19;
-
-
-  /* Now decode -- encoded codeword size must be passed */
-
-  // Reverse Data and Error Bits
-
-  i = 0;
-
-  for (j = strlen(msg); j >=0; j--)
-  {
-	  revcodeword[i++] = codeword[j];
-  }
-
-  for (j = strlen(msg) + NPAR; j >= strlen(msg); j--)
-  {
-	  revcodeword[i++] = codeword[j];
-  }
-
-  decode_data(revcodeword, ML);
-
-  /* check if syndrome is all zeros */
-  if (check_syndrome () != 0) {
-    correct_errors_erasures (revcodeword,
-			     ML,
-			     nerasures,
-			     erasures);
-
-i=0;
-	for (j = strlen(msg); j >=0; j--)
-  {
-	  xxcodeword[i++] = revcodeword[j];
+        int i, j;	
+	if (argc != 3) {
+		printf("Ejemplo: LCD /dev/i2c-0 32\r\n");
+		return -1;
 	}
-    Debugprintf("Corrected codeword: \"%s\"\n", xxcodeword);
-  }
+	printf("Using device %s 0x%x\r\n", argv[1], atoi(argv[2]));
 
+	int file = initialize(argv[1], atoi(argv[2]));
+
+	locateCG(file, 0);
+        print(file, "\x7\x7\x7\x7\x7\x7\x7\x7");
+        print(file, "\x1c\x1c\x1c\x1c\x1c\x1c\x1c\x1c");
+                                               
+	locate(file, 0, 0);
+	print(file, "\x7fGM8BPQ-10 ");
+	locate(file, 1, 0);
+	print(file, "ISS");
+	
+	while (1)
+	{
+ 	for (i = 0; i < 10; i++)
+	{
+	        locate(file, 1, 11);
+       	        for (j= 0; j < 5; j++)
+	        {
+	                 send(file, level[i][j], LCD_RS);
+                }
+                usleep(600000);
+        }
+        }
+	finalize(file);
 }
-

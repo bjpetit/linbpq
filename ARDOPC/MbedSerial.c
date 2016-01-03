@@ -19,8 +19,11 @@ int HostInit()
 void HostPoll()
 {
 	if (RXBPtr)
-	{		
+	{
+		RXBUFFER[RXBPtr] = 0;
+		Debugprintf("Host RX %d %s", RXBPtr, RXBUFFER);
 		ProcessSCSPacket(RXBUFFER, RXBPtr);
+		Sleep(100);
 	}
 }
 

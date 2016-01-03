@@ -116,6 +116,7 @@ unsigned short * SendtoCard(unsigned short buf, int n)
 //    for (t = 0; t < sizeof(buffer); ++t)
 //        buffer[t] =((((t * (t >> 8 | t >> 9) & 46 & t >> 8)) ^ (t & t >> 13 | t >> 6)) & 0xFF);
 
+int min = 0, max = 0, leveltimer = 0;
 
 void PollReceivedSamples()
 {
@@ -136,10 +137,6 @@ void PollReceivedSamples()
 
     	int i;
 
-   		tot = 0;
-   		max = 0;
-    	min = 0;
-
    		for (i = 0; i < SAMPLES_PER_BLOCK; i++)
    		{
     		register int32_t s1 = ((int16_t)(*src++) - 2048) << 4;  // unsigned 12-bit to 16-bit signed .. ADC channel 1
@@ -156,9 +153,18 @@ void PollReceivedSamples()
 //   	 printtick("Process Sample Start");
 //   	 ProcessNewSamples(audioInputBuffer, SAMPLES_PER_BLOCK);
     	 ProcessNewSamples(&ADC_Buffer[adc_buffer_mem], SAMPLES_PER_BLOCK);
-//   	 printtick("Process Sample End");
+ //  	 printtick("Process Sample End");
 
     	 adc_buffer_mem = -1;    // finished with the ADC buffer that the DMA filled
+
+    	 displayLevel(max);
+
+     	if (leveltimer++ > 100)
+     	{
+     		leveltimer = 0;
+     		Debugprintf("Input peaks = %d, %d", min, max);
+     	}
+ 		min = max = 0;
     }
 }
 
