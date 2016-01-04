@@ -746,6 +746,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 //	Allow /ex to exit UNPROTO mode
 //	Support ARQBW commands.
+//	Support IC735
+//	Fix sending ARDOP beacons after a busy holdoff
 
 #define CKernel
 
@@ -755,7 +757,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 #define _USE_32BIT_TIME_T
 
 #pragma data_seg("_BPQDATA")
-
 
 #include "time.h"
 #include "stdio.h"

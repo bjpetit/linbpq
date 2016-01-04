@@ -899,6 +899,8 @@
 
 //	Autoimport messages as Dummy Call, not SYSOP Call
 //	Add "My Messages" display option to WebMail
+//	Create .csv extract of User List during hourekeeping.
+//	Fix processing of NTS Alising of @ Addresses
 
 #include "BPQMail.h"
 #define MAIL

@@ -10392,3 +10392,45 @@ CreateMessageWithAttachments()
 }
 
 */
+VOID CreateUserReport()
+{
+	struct UserInfo * User;
+	int i;
+	char Line[200];
+	int len;
+	char File[MAX_PATH];
+	FILE * hFile;
+
+	sprintf(File, "%s/UserList.csv", BaseDir);
+	
+	hFile = fopen(File, "wb");
+
+	if (hFile == NULL)
+	{
+		Debugprintf("Failed to create UserList.csv");
+		return;
+	}
+	
+	for (i=1; i <= NumberofUsers; i++)
+	{
+		User = UserRecPtr[i];
+
+		len = sprintf(Line, "%s,%d,%s,%x,%s,\"%s\",%x,%s,%s,%s\r\n",
+			User->Call,
+			User->lastmsg,
+			FormatDateAndTime(User->TimeLastConnected, FALSE),
+			User->flags,
+			User->Name,
+			User->Address,
+			User->RMSSSIDBits,
+			User->HomeBBS,
+			User->QRA,
+			User->ZIP
+//	struct MsgStats Total;
+//	struct MsgStats	Last;
+			);
+			fwrite(Line, 1, len, hFile);
+	}
+
+	fclose(hFile);
+}

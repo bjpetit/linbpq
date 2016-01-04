@@ -77,6 +77,10 @@
 //	Version 2.2.4.1	Dec 2015
 //		Add Port Names to Monitor Config Menu
 
+
+//	Add Chat Terminal Mode
+
+
 #define _CRT_SECURE_NO_DEPRECATE
 
 #define pthread_t DWORD

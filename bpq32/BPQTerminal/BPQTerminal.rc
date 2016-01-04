@@ -124,6 +124,7 @@ BEGIN
         MENUITEM "Strip Linefeeds",             BPQStripLF
         MENUITEM "Log Monitor",                 BPQLogMonitor
         MENUITEM "Log Output",                  BPQLogOutput
+        MENUITEM "Chat Terminal Mode",          CHATTERM
         MENUITEM "Send Disconnected",           BPQSendDisconnected
     END
     POPUP "Edit"

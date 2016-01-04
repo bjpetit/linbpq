@@ -246,6 +246,8 @@ VOID DoHouseKeeping(BOOL Manual)
 {
 	time_t NOW;
 
+	CreateUserReport();
+
 	UpdateWP();
 
 	DeleteLogFiles();
