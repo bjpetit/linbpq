@@ -357,7 +357,7 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 		goto AckIt;
 	}
 
-	Debugprintf("%c", Buffer[3]);
+//	Debugprintf("%c", Buffer[3]);
 
 	switch (Buffer[3])
 	{
@@ -365,7 +365,6 @@ VOID ProcessSCSHostFrame(UCHAR *  Buffer, int Length)
 
 		MODE = FALSE;
 		Debugprintf("Exit Host Mode");
-
 		return;
 
 	case 'L':
@@ -755,6 +754,7 @@ Loop:
 		{
 			RXBPtr = 0;
 			Debugprintf("cancelling input %d %d", strlen(rxbuffer), Length);
+			return;
 		}
 		ptr = strchr(rxbuffer, 13);
 
@@ -768,7 +768,8 @@ Loop:
 		// Complete Char Mode Frame
 
 		RXBPtr -= cmdlen;		// Ready for next frame
-					
+		Length -= cmdlen;
+
 		ProcessSCSTextCommand(rxbuffer, cmdlen);
 
 		if (RXBPtr)

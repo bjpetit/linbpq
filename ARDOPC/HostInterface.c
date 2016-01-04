@@ -291,7 +291,7 @@ void ProcessCommandFromHost(char * strCMD)
 			i = atoi(ptrParams);
 
 			if (i == 0)	
-				bytDataToSendLength = i;
+				bytDataToSendLength = 0;
 			else
 				sprintf(strFault, "Syntax Err: %s %s", strCMD, ptrParams);	
 		}

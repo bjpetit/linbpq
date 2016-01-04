@@ -172,6 +172,10 @@ BOOL StartFEC(UCHAR * bytData, int Len, char * strDataMode, int intRepeats, BOOL
 BOOL GetNextFECFrame()
 {
 	int Len;
+	int intNumCar, intBaud, intDataLen, intRSLen;
+	BOOL blnOdd;
+    char strType[16] = "";
+    char strMod[16] = "";
 
 	if (blnAbort)
 	{
@@ -297,7 +301,9 @@ sendit:
 			dttLastFECIDSent = Now;
 			return TRUE;
 		}
-		
+
+		FrameInfo(bytLastFECDataFrameSent, &blnOdd, &intNumCar, strMod, &intBaud, &intDataLen, &intRSLen, &bytMinQualThresh, strType);
+
 		Len = intDataLen * intNumCar;
 
 		if (Len > bytDataToSendLength)

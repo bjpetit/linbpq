@@ -60,29 +60,34 @@ void finalize(int i2cfile);
 
 //#include <sys/ioctl.h>
 
-int i2cfile;
+int i2cfile = 0;
 
-
-void expanderWrite(int i2cfile, char value)
+void expanderWrite(char value)
 {
 	char buffer = value | LCD_BACKLIGHT;
-	//printf("EW = %x\r\n", buffer);
-	if (write(i2cfile, &buffer, 1) != 1) 
-		printf("Error escribiendo en el dispositivo.\r\n");
+
+	if (i2cfile)
+	{
+		if (write(i2cfile, &buffer, 1) != 1) 
+		{
+			printf("i2c write failed - disabling i2c display\r\n");
+			i2cfile = 0;
+		}
+	}
 }
 
 void pulseEnable(int i2cfile, char value)
 {
-	expanderWrite(i2cfile, value | LCD_EN);
+	expanderWrite(value | LCD_EN);
 	usleep(1);
 
-	expanderWrite(i2cfile, value & ~LCD_EN);
+	expanderWrite(value & ~LCD_EN);
 	usleep(50);
 }
 
 void write4bits(int i2cfile, char value)
 {
-	expanderWrite(i2cfile, value);
+	expanderWrite(value);
 	pulseEnable(i2cfile, value);
 }
 
@@ -113,7 +118,7 @@ int initialize(const char *i2c_device, int addr)
 	}
 
 	usleep(50000);
-	expanderWrite(i2cfile, LCD_BACKLIGHT);
+	expanderWrite(LCD_BACKLIGHT);
 	usleep(100000);
 
 	// Se comienza en modo 4 bit, intentamos poner en modo 4 bit
@@ -198,44 +203,62 @@ const char level[10][5] = {
 
 void displayState()
 {
-	locate(i2cfile, 1, 0);
-	print(i2cfile, "        ");
-	locate(i2cfile, 1, 0);
-	print(i2cfile, ARDOPStates[ProtocolState]);
+	if (i2cfile)
+	{
+		locate(i2cfile, 1, 0);
+		print(i2cfile, "        ");
+		locate(i2cfile, 1, 0);
+		print(i2cfile, ARDOPStates[ProtocolState]);
+	}
 }
 
 
 void displayLevel(int max)
 {
-	int i, j;
-
-	i = max/3276;
-
-	if (i > 9)
-		i = 9;
-
-	
-	locate(i2cfile, 1, 11);
-    
-	for (j= 0; j < 5; j++)
+	if (i2cfile)
 	{
-		i2csend(i2cfile, level[i][j], LCD_RS);
+		int i, j;
+
+		i = max/3276;
+
+		if (i > 9)
+			i = 9;
+
+		locate(i2cfile, 1, 11);
+    
+		for (j= 0; j < 5; j++)
+		{
+			i2csend(i2cfile, level[i][j], LCD_RS);
+		}
+	}
+}
+
+void displayCall(int dirn, char * Call)
+{
+	if (i2cfile)
+	{
+		char paddedcall[12] = "           ";
+
+		paddedcall[0] = dirn;
+		memcpy(paddedcall+1, Call, strlen(Call));
+
+		locate(i2cfile, 0, 0);
+		print(i2cfile, paddedcall);
 	}
 }
 
 int initdisplay()
 {
+#ifdef I2CDISPLAY
+
   	i2cfile = initialize("/dev/i2c-1", 0X27);
 
-	//		Set font for half display
+	//	Set font for half block for sig level display
 
 	locateCG(i2cfile, 0);
 	print(i2cfile, "\x7\x7\x7\x7\x7\x7\x7\x7");
 	print(i2cfile, "\x1c\x1c\x1c\x1c\x1c\x1c\x1c\x1c");
-                                               
-	locate(i2cfile, 0, 0);
-//	print(i2cfile, "\x7fGM8BPQ-10 ");
 
-
+#endif                                     
 }
 

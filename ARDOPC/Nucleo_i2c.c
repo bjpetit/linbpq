@@ -232,31 +232,22 @@ void command(int i2cfile, char value)
 int initialize(const char *i2c_device, int addr)
 {
     expanderWrite(i2cfile, LCD_BACKLIGHT);
- //   usleep(100000);
-
-    // Se comienza en modo 4 bit, intentamos poner en modo 4 bit
 
     write4bits(i2cfile, 0x03 << 4);
-//    usleep(4500);
+
     write4bits(i2cfile, 0x30);
 //    usleep(4500);
     write4bits(i2cfile, 0x30);
  //   usleep(150);
 
-    // Finalmente se pone el interface en 4 bit
-
     write4bits(i2cfile, 0x20);
 
-    // Sert 2 Lines
+    // Set 2 Lines
 
     command(i2cfile, LCD_FUNCTIONSET | LCD_2LINE);
     command(i2cfile, LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF);
     clear(i2cfile);
-
-    // Se inicializa la dirección del texto por defecto
     command(i2cfile, LCD_ENTRYMODESET | LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT);
-
-    // Cursor al inicio
     home(i2cfile);
 
     return i2cfile;
@@ -269,13 +260,11 @@ void finalize(int i2cfile)
 void clear(int i2cfile)
 {
     command(i2cfile, LCD_CLEARDISPLAY);
-//    usleep(2000);
 }
 
 void home(int i2cfile)
 {
     command(i2cfile, LCD_RETURNHOME);
- //   usleep(2000);
 }
 
 void locate(int i2cfile, int row, int col)
@@ -283,6 +272,8 @@ void locate(int i2cfile, int row, int col)
     static int row_offsets[] = { 0x00, 0x40, 0x14, 0x54 };
     command(i2cfile, LCD_SETDDRAMADDR | ((col % 16) + row_offsets[row % 2]));
 }
+
+//	Point to Character Generator RAM
 
 void locateCG(int i2cfile, int n)
 {
@@ -299,6 +290,7 @@ void print(int i2cfile, const char *text)
 }
 
 //  Signal Level uses a Half block defined as char 1
+//	Use 5 chars to show 10 levels
 
 const char level[10][5] = {
         {1,32,32,32,32},
@@ -315,12 +307,12 @@ const char level[10][5] = {
 
 void displayState()
 {
-	printtick("enter displaystate");
+//	printtick("enter displaystate");
     locate(i2cfile, 1, 0);
     print(i2cfile, "        ");
     locate(i2cfile, 1, 0);
     print(i2cfile, ARDOPStates[ProtocolState]);
-	printtick("exit displaystate");
+//	printtick("exit displaystate");
 }
 
 
@@ -358,12 +350,12 @@ void initdisplay()
     i2cfile = initialize("/dev/i2c-1", 0X27);
 
     Debugprintf("Returned from Init");
-    //      Set font for half display
+
+    //      Set font for half bar display for sig level
 
     locateCG(i2cfile, 0);
     print(i2cfile, "\x7\x7\x7\x7\x7\x7\x7\x7");
     print(i2cfile, "\x1c\x1c\x1c\x1c\x1c\x1c\x1c\x1c");
-
 }
 
 

@@ -2412,6 +2412,12 @@ void UpdateBusyDetector(short * bytNewSamples)
 //        Dim stcStatus As Status = Nothing
 //        stcStatus.ControlName = "mnuBusy"
 
+	if (ProtocolState != DISC)		// ' Only process busy when in DISC state
+		return;
+
+	if (State != SearchingForLeader)
+		return;						// only when looking for leader
+
 	if (Now - dttCodecStarted < 2)
 		return;
 	
@@ -2429,7 +2435,7 @@ void UpdateBusyDetector(short * bytNewSamples)
 	intTuneLineLow = max((103 - intDelta), 3);
 	intTuneLineHi = min((103 + intDelta), 203);
     
-	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
+//	if (ProtocolState == DISC)		// ' Only process busy when in DISC state
 	{
 		blnBusyStatus = BusyDetect(dblMag, intTuneLineLow, intTuneLineHi);
 		
