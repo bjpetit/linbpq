@@ -1724,7 +1724,9 @@ VOID ARDOPThread(port)
 	}
 
 #ifndef LINBPQ
+//	FreeSemaphore(&Semaphore);
 	EnumWindows(EnumARDOPWindowsProc, (LPARAM)TNC);
+//	GetSemaphore(&Semaphore, 52);
 #endif
 	Sleep(1000);
 

@@ -470,6 +470,7 @@ VOID WINAPI OnSelChanged(HWND hwndDlg)
 		CheckDlgButton(pHdr->hwndDisplay, IDC_DONTHOLDNEW, DontHoldNewUsers);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_FORWARDTOBBS, ForwardToMe);
 		CheckDlgButton(pHdr->hwndDisplay, IDC_NONAME, AllowAnon);
+		CheckDlgButton(pHdr->hwndDisplay, IDC_USERRKILLT, !UserCantKillT);		// Note negative logic
 		CheckDlgButton(pHdr->hwndDisplay, IDC_NOHOMEBBS, DontNeedHomeBBS);
 
 		SetDlgItemText(pHdr->hwndDisplay, IDC_HRoute, HRoute);
@@ -1497,6 +1498,7 @@ VOID SaveBBSConfig()
 	ForwardToMe = IsDlgButtonChecked(hwndDisplay, IDC_FORWARDTOBBS);
 	DontNeedHomeBBS = IsDlgButtonChecked(hwndDisplay, IDC_NOHOMEBBS);
 	AllowAnon = IsDlgButtonChecked(hwndDisplay, IDC_NONAME);
+	UserCantKillT = !IsDlgButtonChecked(hwndDisplay, IDC_USERRKILLT);	// Reverse logic
 
 	BBSApplNum = GetDlgItemInt(hwndDisplay, IDC_BBSAppl, &OK1, FALSE);
 	MaxStreams = GetDlgItemInt(hwndDisplay, IDC_BBSStreams, &OK2, FALSE);

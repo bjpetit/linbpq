@@ -23,6 +23,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 #include "BPQMail.h"
 
+UCHAR * APIENTRY GetBPQDirectory();
+
 int LogAge = 7;
 
 BOOL DeletetoRecycleBin = FALSE;

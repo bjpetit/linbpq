@@ -748,6 +748,10 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Support ARQBW commands.
 //	Support IC735
 //	Fix sending ARDOP beacons after a busy holdoff
+//	Enable BPQDED driver to beacon via non-ax.25 ports.
+//	Fix channel number in UZ7HO monitoring
+//	Add SATGate mode to APRSIS Code.
+//	Fix crash caused by overlong user name in telnet logon
 
 #define CKernel
 

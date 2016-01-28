@@ -901,6 +901,9 @@
 //	Add "My Messages" display option to WebMail
 //	Create .csv extract of User List during hourekeeping.
 //	Fix processing of NTS Alising of @ Addresses
+//	Don't reroute Delivered NTS Messages
+//	Add option to stop users killing T messages
+
 
 #include "BPQMail.h"
 #define MAIL

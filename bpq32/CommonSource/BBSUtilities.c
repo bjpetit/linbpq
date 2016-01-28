@@ -155,6 +155,7 @@ extern BOOL MonTCP;
 
 BOOL SendNewUserMessage = TRUE;
 BOOL AllowAnon = FALSE;
+BOOL UserCantKillT = FALSE;
 
 #define BPQHOSTSTREAMS	64
 
@@ -2710,7 +2711,8 @@ int KillMessagesFrom(ConnectionInfo * conn, struct UserInfo * user, char * Call)
 
 BOOL OkToKillMessage(BOOL SYSOP, char * Call, struct MsgInfo * Msg)
 {	
-	if (SYSOP || Msg->type == 'T') return TRUE;
+	if (SYSOP || (Msg->type == 'T' && UserCantKillT == FALSE))
+		return TRUE;
 	
 	if (Msg->type == 'P')
 		if ((_stricmp(Msg->to, Call) == 0) || (_stricmp(Msg->from, Call) == 0))
@@ -7633,6 +7635,7 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "DontHoldNewUsers", DontHoldNewUsers);
 	SaveIntValue(group, "AllowAnon", AllowAnon);
 	SaveIntValue(group, "DontNeedHomeBBS", DontNeedHomeBBS);
+	SaveIntValue(group, "UserCantKillT", UserCantKillT);
 
 	SaveIntValue(group, "ForwardToMe", ForwardToMe);
 	SaveIntValue(group, "SMTPPort", SMTPInPort);
@@ -7952,6 +7955,8 @@ BOOL GetConfig(char * ConfigName)
 	DontHoldNewUsers =  GetIntValue(group, "DontHoldNewUsers");
 	ForwardToMe =  GetIntValue(group, "ForwardToMe");
 	AllowAnon =  GetIntValue(group, "AllowAnon");
+	UserCantKillT = GetIntValue(group, "UserCantKillT");
+
 	DontNeedHomeBBS =  GetIntValue(group, "DontNeedHomeBBS");
 	MaxTXSize =  GetIntValue(group, "MaxTXSize");
 	MaxRXSize =  GetIntValue(group, "MaxRXSize");

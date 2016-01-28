@@ -169,7 +169,7 @@ BEGIN
     EDITTEXT        IDC_SYSOPCALL,184,103,42,14,ES_UPPERCASE
     CONTROL         "Send SYSTEM Msgs to SYSOP call",IDC_SYSTOSYSOPCALL,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
-                    173,137,12
+                    173,135,12
     LTEXT           "H Route",IDC_STATIC,7,122,37,12
     EDITTEXT        IDC_HRoute,83,120,119,13,ES_UPPERCASE
     LTEXT           "BBS Appl Number",IDC_STATIC,7,138,61,10
@@ -196,21 +196,23 @@ BEGIN
     DEFPUSHBUTTON   "Save",1100,159,257,50,14,BS_CENTER | BS_VCENTER
     CONTROL         "Don't hold messages from new users",IDC_DONTHOLDNEW,
                     "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,5,
-                    190,136,12
+                    190,134,12
     CONTROL         "Forward Messages to BBS Call",IDC_FORWARDTOBBS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,153,174,114,
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,146,174,114,
                     12
     CONTROL         "Redirect msgs to BBS Call to SYSOP Call",
                     IDC_BBSTOSYSOPCALL,"Button",BS_AUTOCHECKBOX | 
                     BS_LEFTTEXT | WS_TABSTOP,218,120,146,12
     CONTROL         "Don't Request Home BBS",IDC_NOHOMEBBS,"Button",
-                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,154,190,93,12
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,147,190,99,12
     CONTROL         "Don't Request Name",IDC_NONAME,"Button",BS_AUTOCHECKBOX | 
-                    BS_LEFTTEXT | WS_TABSTOP,259,190,79,12
+                    BS_LEFTTEXT | WS_TABSTOP,267,190,95,12
     EDITTEXT        IDC_AMPR,72,237,119,13
     LTEXT           "AMPR Address",IDC_STATIC,6,239,60,12
     CONTROL         "Send ampr.org mail to AMPR host",IDC_FORWARDAMPR,"Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP,201,237,124,14
+    CONTROL         "Allow users to kill T msgs",IDC_USERRKILLT,"Button",
+                    BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,267,174,95,12
 END
 
 CHAT_CONFIG DIALOG DISCARDABLE  0, 0, 381, 266

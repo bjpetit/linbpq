@@ -147,6 +147,7 @@
 #define IDC_REJTO                       1078
 #define IDC_NONAME                      1078
 #define IDC_REJAT                       1079
+#define IDC_USERRKILLT                  1079
 #define IDC_FILTERSAVE                  1080
 #define IDC_OVERRIDEUNSENT              1081
 #define IDC_MAILFOR                     1082
