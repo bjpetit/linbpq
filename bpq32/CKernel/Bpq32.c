@@ -752,6 +752,8 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix channel number in UZ7HO monitoring
 //	Add SATGate mode to APRSIS Code.
 //	Fix crash caused by overlong user name in telnet logon
+//	Add option to log L4 connects
+//	Add AUTOADDQuiet mode to AXIP.
 
 #define CKernel
 
