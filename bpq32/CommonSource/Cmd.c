@@ -149,6 +149,7 @@ VOID SHOWNAT(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * 
 VOID PING(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID SHOWIPROUTE(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * UserCMD);
+void ListExcludedCalls(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD);
 
 VOID SENDNODES(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
 {
@@ -1885,23 +1886,15 @@ VOID CMDC00(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * C
 	int TextCallLen;
 	char PortString[10];
 
-#ifdef BLACKBITS
+#ifdef EXCLUDEBITS
 
-	PUSH	ESI
-	LEA	ESI,L4USER[EBX]
-	CALL	CHECKBLACKLIST
-	POP	ESI
+	if (CheckExcludeList(Session->L4USER) == FALSE)
+	{
+		//	CONNECTS FROM THIS STATION ARE NOT ALLOWED
 
-	JNZ SHORT ALLOWED
-;
-;	CONNECTS FROM THIS STATION ARE NOT ALLOWED
-;
-	MOV	EDI,_REPLYBUFFER
-	CALL	RELBUFF
-	RET
-
-	PUBLIC	ALLOWED
-ALLOWED:
+		ReleaseBuffer((UINT *)REPLYBUFFER);
+		return;
+	}
 
 #endif
 
@@ -3726,9 +3719,9 @@ CMDX COMMANDS[] =
 	"STARTPORT   ",5,STARTPORT,0,
 	"FINDBUFFS   ",4,FINDBUFFS,0,
 
-#ifdef BLACKBITS
+#ifdef EXCLUDEBITS
 
-	"EXCLUDE     ",5,DISPBLACKLIST,0,
+	"EXCLUDE     ",4,ListExcludedCalls,0,
 
 #endif
 
@@ -4818,3 +4811,60 @@ VOID FLMSG(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * Us
 	CLOSECURRENTSESSION(Session);		// Kills any crosslink, plus local link
 	ReleaseBuffer((UINT *)REPLYBUFFER);
 }
+
+BOOL CheckExcludeList(UCHAR * Call)
+{
+	UCHAR * ptr1 = ExcludeList;
+
+	while (*ptr1)
+	{
+		if (memcmp(Call, ptr1, 6) == 0)
+			return FALSE;
+
+		ptr1 += 7;
+	}
+
+	return TRUE;
+}
+
+
+void ListExcludedCalls(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+
+	UCHAR * ptr = ExcludeList;
+	char Normcall[10] = "";
+	UCHAR AXCall[8] = "";
+
+	if (*CmdTail == ' ')
+		goto DISPLIST;
+
+	if (*CmdTail == 'Z')
+	{
+		// CLEAR LIST
+
+		memset(ExcludeList, 0, 70);
+		goto DISPLIST;
+	}
+
+	ConvToAX25(CmdTail, AXCall);
+
+	if (strlen(ExcludeList) < 70)
+		strcat(ExcludeList, AXCall);
+	
+DISPLIST:
+
+	while (*ptr)
+	{
+		Normcall[ConvFromAX25(ptr, Normcall)] = 0;
+		Bufferptr += sprintf(Bufferptr, "%s ", Normcall);
+		ptr += 7;
+	}
+
+	*(Bufferptr++) = '\r';
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+}
+
+
+
+
+

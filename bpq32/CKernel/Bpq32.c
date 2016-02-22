@@ -754,6 +754,11 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix crash caused by overlong user name in telnet logon
 //	Add option to log L4 connects
 //	Add AUTOADDQuiet mode to AXIP.
+//	Add EXCLUDE processing
+//	Support WinmorControl in UZ7HO driver
+//	Convert calls in MAP entries to upper case.
+//	Support Linux COM Port names for APRS GPS
+
 
 #define CKernel
 

@@ -839,23 +839,62 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 
 static int KillTNC(struct TNCINFO * TNC)
 {
-#ifndef LINBPQ
-	HANDLE hProc;
-
 	if (TNC->PTTMode)
 		Rig_PTT(TNC->RIG, FALSE);			// Make sure PTT is down
 
-	if (TNC->WIMMORPID == 0) return 0;
-
-	hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
-
-	if (hProc)
+/*
+	if (TNC->ProgramPath && _memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
 	{
-		TerminateProcess(hProc, 0);
-		CloseHandle(hProc);
+		// Try to Kill TNC on a remote host
+
+		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
+		struct sockaddr_in destaddr;
+		char Msg[80];
+		int Len;
+
+		if (sock == INVALID_SOCKET)
+			return 0;
+
+		destaddr.sin_family = AF_INET;
+		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_port = htons(8500);
+
+		if (destaddr.sin_addr.s_addr == INADDR_NONE)
+		{
+			//	Resolve name to address
+
+			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+		 
+			if (!HostEnt)
+				return 0;			// Resolve failed
+
+			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+		}
+		Len = sprintf(Msg, "KILL %d", TNC->WIMMORPID);
+		sendto(sock, Msg, Len, 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+		Sleep(100);
+		closesocket(sock);
+
+		TNC->WIMMORPID = 0;			// So we don't try again
+		return 1;				// Cant tell if it worked, but assume ok
 	}
 
-	TNC->WIMMORPID = 0;			// So we don't try again
+*/
+#ifndef LINBPQ
+	{
+		HANDLE hProc;
+
+
+		hProc =  OpenProcess(PROCESS_TERMINATE | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, TNC->WIMMORPID);
+
+		if (hProc)
+		{
+			TerminateProcess(hProc, 0);
+			CloseHandle(hProc);
+		}
+
+		TNC->WIMMORPID = 0;			// So we don't try again
+	}
 #endif
 	return 0;
 }
@@ -863,7 +902,48 @@ static int KillTNC(struct TNCINFO * TNC)
 
 static int RestartTNC(struct TNCINFO * TNC)
 {
+	if (_memicmp(TNC->ProgramPath, "REMOTE:", 7) == 0)
+	{
+		int n;
+		
+		// Try to start TNC on a remote host
+
+		SOCKET sock = socket(AF_INET,SOCK_DGRAM,0);
+		struct sockaddr_in destaddr;
+
+		Debugprintf("trying to restart UZ7HO TNC %s", TNC->ProgramPath);
+
+		if (sock == INVALID_SOCKET)
+			return 0;
+
+		destaddr.sin_family = AF_INET;
+		destaddr.sin_addr.s_addr = inet_addr(TNC->WINMORHostName);
+		destaddr.sin_port = htons(8500);
+
+		if (destaddr.sin_addr.s_addr == INADDR_NONE)
+		{
+			//	Resolve name to address
+
+			struct hostent * HostEnt = gethostbyname (TNC->WINMORHostName);
+		 
+			if (!HostEnt)
+				return 0;			// Resolve failed
+
+			memcpy(&destaddr.sin_addr.s_addr,HostEnt->h_addr,4);
+		}
+
+		n = sendto(sock, TNC->ProgramPath, strlen(TNC->ProgramPath), 0, (struct sockaddr *)&destaddr, sizeof(destaddr));
+	
+		Debugprintf("Restart UZ7HO TNC - sendto returned %d", n);
+
+		Sleep(100);
+		closesocket(sock);
+
+		return 1;				// Cant tell if it worked, but assume ok
+	}
+
 #ifndef LINBPQ
+	{
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
 	char HomeDir[MAX_PATH];
@@ -896,6 +976,7 @@ static int RestartTNC(struct TNCINFO * TNC)
 			TNC->WIMMORPID = PInfo.dwProcessId;
 
 		return ret;
+	}
 	}
 #endif
 	return 0;

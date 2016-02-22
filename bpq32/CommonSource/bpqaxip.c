@@ -2144,6 +2144,8 @@ static ProcessLine(char * buf, struct AXIPPORTINFO * PORT)
 		
 		if (p_call == NULL) return (FALSE);
 
+		_strupr(p_call);
+
 		if (_stricmp(p_call, "DUMMY") == 0)
 		{
 			Consoleprintf("MAP DUMMY is no longer needed - statement ignored");

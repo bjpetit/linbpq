@@ -66,7 +66,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 // Changes for P4Dragon
 
 #ifdef WIN32
-#define WRITELOG
+//#define WRITELOG
 #endif
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -3059,32 +3059,24 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 				{
 					// Incoming Connect
 
-					// Check for Blacklist
+					// Check for ExcludeList
 
-					// As a test use premittedcalls
-
-					if (TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS)
+					if (ExcludeList[0])
 					{
-						UCHAR * ptr = TNC->PortRecord->PORTCONTROL.PERMITTEDCALLS;
 						UCHAR AXCALL[7];
 						
 						ConvToAX25(MHCall, AXCALL);			//Permitted calls are stored in ax.25 format
 
-						while (*ptr)
+						if (CheckExcludeList(AXCALL) == FALSE)
 						{
-							if (memcmp(AXCALL, ptr, 6) == 0)	// Ignore SSID
-							{
-								TidyClose(TNC, Stream);
-								sprintf(Status, "%d SCANSTART 15", TNC->Port);
-								Rig_Command(-1, Status);
-								Debugprintf("SCS Call from %s rejected", MHCall);
-								return;
-							}
-							ptr += 7;
+							TidyClose(TNC, Stream);
+							sprintf(Status, "%d SCANSTART 15", TNC->Port);
+							Rig_Command(-1, Status);
+							Debugprintf("SCS Call from %s rejected", MHCall);
+							return;
 						}
 					}
-
-		
+			
 					// Check that we think we are in the right mode
 
 					if (Stream == 0 && TNC->Dragon == 0)	// Dragon runs both at the same time

@@ -386,9 +386,9 @@ VOID CHOSTAPI(ULONG * pEAX, ULONG * pEBX, ULONG * pECX, ULONG * pEDX, VOID ** pE
 		EAX = REALTIMETICKS;
 		EBX = 0;
 	
-#ifdef BLACKBITS
+#ifdef EXCLUDEBITS
 	
-		EBX = BLACKLIST
+		EBX = ExcludeList;
 
 #endif
 		break;
