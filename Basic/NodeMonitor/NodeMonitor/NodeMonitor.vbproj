@@ -47,12 +47,21 @@
     <DefineDebug>false</DefineDebug>
     <DefineTrace>true</DefineTrace>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\..\..\..\Program Files\bpq32\Monitor\</OutputPath>
+    <OutputPath>..\..\..\..\..\..\devprogs\bpq32\Monitor\</OutputPath>
     <DocumentationFile>NodeMonitor.xml</DocumentationFile>
     <NoWarn>
     </NoWarn>
     <WarningsAsErrors>
     </WarningsAsErrors>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <OutputPath>..\..\..\..\..\..\devprogs\bpq32\Monitor\</OutputPath>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <OutputPath>bin\x86\Release\</OutputPath>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Accessibility" />

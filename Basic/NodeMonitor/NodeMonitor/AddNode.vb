@@ -145,10 +145,17 @@ Public Class AddNode
             UpIconBox.Text = ChatNodes(i).upIcon
             DownIconBox.Text = ChatNodes(i).downIcon
 
-            LOC.Text = ToLOC(CDbl(ChatNodes(i).Lat), CDbl(ChatNodes(i).Lon))
-            DDMMSS.Text = ToDDMMSS(CDbl(ChatNodes(i).Lat), CDbl(ChatNodes(i).Lon))
+            Try
+               LOC.Text = ToLOC(CDbl(ChatNodes(i).Lat), CDbl(ChatNodes(i).Lon))
+               DDMMSS.Text = ToDDMMSS(CDbl(ChatNodes(i).Lat), CDbl(ChatNodes(i).Lon))
+            Catch ex As Exception
+
+            End Try
 
             Try
+
+               PictureBox1.Image = Nothing
+               PictureBox2.Image = Nothing
 
                PictureBox1.Image = New Bitmap(UpIconBox.Text)
                PictureBox2.Image = New Bitmap(DownIconBox.Text)
@@ -382,8 +389,14 @@ Public Class AddNode
 
       End Try
 
-      image1.Save(Callsign & ".ok.png", System.Drawing.Imaging.ImageFormat.Png)
-      image2.Save(Callsign & ".down.png", System.Drawing.Imaging.ImageFormat.Png)
+      Try
+
+         image1.Save(Callsign & ".ok.png", System.Drawing.Imaging.ImageFormat.Png)
+         image2.Save(Callsign & ".down.png", System.Drawing.Imaging.ImageFormat.Png)
+
+      Catch ex As Exception
+
+      End Try
 
       UpIconBox.Text = Callsign & ".ok.png"
       DownIconBox.Text = Callsign & ".down.png"

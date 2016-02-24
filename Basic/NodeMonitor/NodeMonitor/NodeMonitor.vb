@@ -137,15 +137,17 @@ Module NodeMonitor
       End If
 
       Using sw As StreamWriter = New StreamWriter(My.Settings.FileName)
-         With ChatNodes(i)
-            For i = 0 To ChatNodeIndex - 1
 
+         For i = 0 To ChatNodeIndex - 1
+
+            With ChatNodes(i)
                sw.WriteLine(ChatNodes(i).Callsign & "," & .NAlias & "," & _
                      .Lat & "," & .Lon & "," & .downIcon & "," & _
                      .upIcon & "," & .PopupMode & "," & .Comment)
 
-            Next
-         End With
+            End With
+
+         Next
 
          For i = 0 To CallsignData.Length - 1
 
@@ -156,6 +158,8 @@ Module NodeMonitor
             End With
 
          Next
+
+         Dim Age As TimeSpan
 
          For i = 0 To NodeIndex - 1
 
@@ -176,7 +180,13 @@ Module NodeMonitor
 
                      For j = 0 To .HeardItems.Length - 1
                         With .HeardItems(j)
-                           sw.Write(.Freq & "," & .Time.ToOADate & "," & .Flags & ",")
+                           Age = Now.ToUniversalTime - .Time
+                           If Age.TotalDays < 4 Then
+                              sw.Write(.Freq & "," & .Time.ToOADate & "," & .Flags & ",")
+                           Else
+                              Console.WriteLine(Age.TotalDays.ToString)
+                           End If
+
                         End With
                      Next
 
@@ -186,9 +196,9 @@ Module NodeMonitor
 
                Next
             End With
-         Next
+               Next
 
-         sw.Close()
+               sw.Close()
 
       End Using
 

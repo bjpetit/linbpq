@@ -109,10 +109,11 @@ Public Class Form1
 
    Dim ProgramUpdated As Boolean = False
    Dim DataUpdated As Boolean = False
-
-   Public WithEvents AxBPQCtrl1 As AxBPQCTRLLib.AxBPQCtrl
+   Dim UseNETROMNODES As Boolean = False
 
    Dim Node As New Dictionary(Of String, Integer)
+
+   Private Server As Thread
 
    Public Sub FromLOC(ByVal Locator As String, ByRef Lat As Double, ByRef Lon As Double)
 
@@ -166,28 +167,11 @@ Public Class Form1
 
       If My.Settings.UseNode Then
 
-         Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(Form1))
-
-         If IsNothing(AxBPQCtrl1) Then
-
-            AxBPQCtrl1 = New AxBPQCTRLLib.AxBPQCtrl
-            CType(AxBPQCtrl1, System.ComponentModel.ISupportInitialize).BeginInit()
-
-            AxBPQCtrl1.Enabled = True
-            AxBPQCtrl1.Name = "AxBPQCtrl1"
-            AxBPQCtrl1.OcxState = CType(resources.GetObject("AxBPQCtrl1.OcxState"), System.Windows.Forms.AxHost.State)
-            AxBPQCtrl1.Visible = False
-            Me.Controls.Add(AxBPQCtrl1)
-            CType(AxBPQCtrl1, System.ComponentModel.ISupportInitialize).EndInit()
-
-         End If
-
-         AddHandler AxBPQCtrl1.MonDataAvail, AddressOf BPQ32MonDataAvailable
-
-         BPQStream = AxBPQCtrl1.FindFreeStream
-         AxBPQCtrl1.SetFlags(BPQStream, 0, 128)
-
       End If
+
+      ' Get path to status file (for Icon Create)
+
+      Dim i As Integer = InStr(My.Settings.OutputFileName, ".")
 
       ReadNodesFile()
 
@@ -199,6 +183,13 @@ Public Class Form1
 
       End If
 
+
+      CheckForIllegalCrossThreadCalls = False
+      Server = New Thread(AddressOf Webserver)
+      Server.Name = "Server"
+      Server.Start()
+
+
    End Sub
 
    Private Sub Form1_FormClosing(ByVal sender As Object, _
@@ -207,9 +198,10 @@ Public Class Form1
       Exiting = True
 
       Try
-         AxBPQCtrl1.SetFlags(BPQStream, 0, 128)
+         tcpserver.Stop()
       Catch ex As Exception
       End Try
+
       Try
          s.Close()
          thrServer.Abort()
@@ -219,54 +211,6 @@ Public Class Form1
       SaveNodesFile(True)
 
    End Sub
-
-   Public Sub BPQ32MonDataAvailable(ByVal sender As Object, ByVal e As AxBPQCTRLLib._DBPQCtrlEvents_MonDataAvailEvent)
-
-      Dim intStream As Integer
-      Dim strBPQData As String
-      Dim i As Integer
-      Dim Callsign As String
-      Dim Nalias As String
-
-      intStream = e.stream
-
-      strBPQData = AxBPQCtrl1.GetMonFrame(intStream)
-
-      While strBPQData.Length > 0
-
-         strBPQData = Mid(strBPQData, 8)     ' Remove Header
-
-         Dim Buff() As Byte = GetBytes(strBPQData)
-
-         Dim len As Integer = strBPQData.Length
-
-         If Buff(14) = 3 And Buff(15) = 207 And Buff(16) = 255 Then
-
-            Nalias = GetString(Buff, 17, 22)
-            Callsign = GetCall(Buff, 7)
-            '           SerHandle" NODES from " & Callsign & " " & Nalias & " Len " & len.ToString)
-            UpdateChatNode(Callsign, True)
-            Node(Nalias) = 60
-
-            For i = 23 To len - 20 Step 21
-               Callsign = GetCall(Buff, i)
-               UpdateChatNode(Callsign, True)
-               Nalias = GetString(Buff, i + 7, i + 12)
-               Nalias = RTrim(Nalias)
-               Node(Nalias) = 60
-               '          SerHandleCallsign & " " & Nalias)
-            Next
-
-
-         End If
-
-         strBPQData = AxBPQCtrl1.GetMonFrame(intStream)
-
-      End While
-
-
-   End Sub
-
 
    Sub ReceiveFrom()
 
@@ -293,7 +237,7 @@ Public Class Form1
 
                If Buff(14) = 3 Then  ' UI
 
-                  If Buff(15) = 207 And Buff(16) = 255 Then
+                  If UseNETROMNODES AndAlso Buff(15) = 207 AndAlso Buff(16) = 255 Then
 
                      Nalias = GetString(Buff, 17, 22)
                      Nalias = RTrim(Nalias)
@@ -340,6 +284,36 @@ Public Class Form1
 
                         CallFrom = GetCall(Buff, 7)
 
+                        If Microsoft.VisualBasic.Left(Report, 3) = "UP " Then
+
+                           ' remote Callsign locator update
+
+                           Elements = Split(Mid(Report, 4), ",")
+                           If Elements.Length < 2 Then Continue While
+
+                           Dim CallIndex As Integer = FindCallsign(Elements(0))
+                           Dim Lat As Double, Lon As Double
+
+                           With CallsignData(CallIndex)
+
+                              .Locator = Elements(1)
+
+                              FromLOC(.Locator, Lat, Lon)
+
+                              Lat = Lat + Rnd() / 24
+                              Lon = Lon + Rnd() / 12
+
+                              .Lat = Lat.ToString
+                              .Lon = Lon.ToString
+                              .LocType = 5
+
+                           End With
+
+                           SaveNodesFile(False)
+
+                           Continue While
+
+                        End If
                         If Microsoft.VisualBasic.Left(Report, 3) = "MH " Then
                            Try
                               My.Computer.FileSystem.WriteAllText("MonMHLog.txt", _
@@ -369,27 +343,27 @@ Public Class Form1
 
                         End If
 
-                  ' Node Report
+                        ' Node Report
 
-                  If Report.Length > 2 Then
+                        If Report.Length > 2 Then
 
-                     Elements = Split(Report, " ", 2)
+                           Elements = Split(Report, " ", 2)
 
-                     If Elements.Length = 2 Then
+                           If Elements.Length = 2 Then
 
-                        CallFrom = GetCall(Buff, 7)
+                              CallFrom = GetCall(Buff, 7)
 
-                        Index = FindNodeCall(CallFrom)
+                              Index = FindNodeCall(CallFrom)
 
-                        UpdateNode(Index, Elements(0), Elements(1))
+                              UpdateNode(Index, Elements(0), Elements(1))
 
 
-                     End If
-                  End If
+                           End If
+                        End If
 
                      Catch ex As Exception
 
-            End Try
+                     End Try
 
                      Continue While
 
@@ -403,9 +377,11 @@ Public Class Form1
                      Dim n As Integer, ptr As Integer
                      Dim CallFrom As String
                      Dim NewState As Integer
+                     Dim index As Integer
 
                      CallFrom = GetCall(Buff, 7)
 
+                     FindChatCall(CallFrom, True)           ' So will be created
                      UpdateChatNode(CallFrom, True)
 
                      Report = GetString(Buff, 16, Len - 5)
@@ -423,16 +399,15 @@ Public Class Form1
 
                         If Report.Length > 2 Then
 
-                           Elements = Split(Report, " ")
-
-                           If Elements(0) = "INFO" Then
+                           If Mid(Report, 1, 4) = "INFO" Then
 
                               Try
 
                                  Dim latstring As String
                                  Dim lonstring As String
                                  Dim LatLon() As String
-                                 Dim index As Integer = FindChatCall(CallFrom)
+
+                                 index = FindChatCall(CallFrom, True)
 
                                  Report = Mid(Report, 6)
                                  Elements = Split(Report, "|")
@@ -491,10 +466,50 @@ Public Class Form1
 
                            Else
 
+                              ' Remove consecutive Spaces
+
+                              i = InStr(Report, "  ")
+
+                              While i > 0
+
+                                 Report = Mid(Report, 1, i) & Mid(Report, i + 2)
+                                 i = InStr(Report, "  ")
+
+                              End While
+
+                              Elements = Split(Report, " ")
+
                               For n = 0 To Elements.Length - 1 Step 2
 
                                  If Elements(n).Length > 3 Then
 
+                                    NewState = CInt(Elements(n + 1))
+
+                                    ' Ignore down reports if target doesn't exist
+
+                                    If (NewState <> 2) Then
+
+                                       For index = 0 To ChatNodeIndex - 1
+
+                                          If ChatNodes(index).Callsign = Elements(n) Then
+
+                                             If ChatNodes(index).KillTimer > 22 Then
+                                                GoTo Ignore ' Ignore
+                                             Else
+                                                GoTo Ok   ' Node is OK
+                                             End If
+
+                                          End If
+
+                                       Next
+
+                                       ' Not found
+
+                                       GoTo Ignore
+
+                                    End If
+
+Ok:
                                     UpdateChatNode(Elements(n), False)
 
                                     ptr = FindChatPair(CallFrom, Elements(n))
@@ -514,6 +529,8 @@ Public Class Form1
                                     End If
 
                                  End If
+
+Ignore:
 
                               Next
 
@@ -693,11 +710,11 @@ Public Class Form1
 
             For i = 0 To ChatLinkCount - 1
 
-               j = FindChatCall(ChatLinks(i).Call1)
+               j = FindChatCall(ChatLinks(i).Call1, False)
 
                If j <> -1 Then
 
-                  k = FindChatCall(ChatLinks(i).Call2)
+                  k = FindChatCall(ChatLinks(i).Call2, False)
 
                   If k <> -1 Then
 
@@ -775,16 +792,17 @@ Public Class Form1
 
          If ChatNodes(i).Callsign = Callsign Then
 
-            ChatNodes(i).KillTimer = 0
-
             If UpdateCount Then
 
+               ChatNodes(i).KillTimer = 0
                If ChatNodes(i).Count = 0 Then
                   ChatChanged = True
                End If
                ChatNodes(i).Count = 60
 
             End If
+
+            Exit For
 
          End If
       Next
@@ -875,8 +893,9 @@ Public Class Form1
 
          Dim strLines() As String = returnValue.Split(Chr(10))
          Dim Elements() As String
-         For Each strLine In strLines
+         Dim i As Integer
 
+         For Each strLine In strLines
             If strLine.Length < 10 Then Exit For
             If strLine.Length > 5000 Then
                Continue For
@@ -888,6 +907,20 @@ Public Class Form1
             If Trim(Elements(0)) = "NODE" Then
 
                Dim Callsign As String = Trim(Elements(1))
+
+               If Callsign.Length = 0 Then
+                  Console.WriteLine(Callsign)
+                  Continue For
+               End If
+
+               For i = 0 To Callsign.Length - 1
+                  If Char.IsUpper(Callsign, i) Or Char.IsDigit(Callsign, i) Or Callsign(i) = "-" Then
+                  Else
+                     Console.WriteLine(Callsign)
+                     GoTo Skipit
+                  End If
+               Next
+
                Dim Index As Integer = FindNodeCall(Callsign)
 
                With Nodes(Index)
@@ -919,6 +952,20 @@ Public Class Form1
 
                Dim t As Integer = CallsignData.Length
                Dim Callsign As String = Trim(Elements(1))
+               Dim xx As Integer
+               If Callsign.Length = 0 Then
+                  Console.WriteLine(Callsign)
+                  Continue For
+
+               End If
+
+               For xx = 0 To Callsign.Length - 1
+                  If Char.IsUpper(Callsign, xx) Or Char.IsDigit(Callsign, xx) Or Callsign(xx) = "-" Then
+                  Else
+                     Console.WriteLine(Callsign)
+                     GoTo Skipit
+                  End If
+               Next
 
                Dim Index As Integer = FindCallsign(Elements(1))
 
@@ -952,6 +999,22 @@ Public Class Form1
 
             If Trim(Elements(0)) = "MH" Then
 
+               Dim Callsign As String = Trim(Elements(1))
+               Dim xx As Integer
+               If Callsign.Length = 0 Then
+                  Console.WriteLine(Callsign)
+                  GoTo Skipit
+               End If
+
+               For xx = 0 To Callsign.Length - 1
+                  If Char.IsUpper(Callsign, xx) Or Char.IsDigit(Callsign, xx) Or Callsign(xx) = "-" Then
+                  Else
+                     Console.WriteLine(Callsign)
+                     GoTo Skipit
+                  End If
+               Next
+
+
                Dim Index As Integer = FindNodeCall(Elements(1))
                Dim Time As DateTime
                Dim Flags As String
@@ -964,11 +1027,29 @@ Public Class Form1
 
                   For j = 0 To Count
 
-                     Time = DateTime.FromOADate(CDbl(Elements(5 + (j * 3))))
-                     Flags = Elements(6 + j * 3)
-                     Freq = Elements(4 + j * 3)
-                     UpdateHeardData(Index, Elements(2), Freq, "", Flags, Time, False)
+                     Dim Callsignx As String = Trim(Elements(2))
+                     Dim xxx As Integer
+                     If Callsignx.Length = 0 Then
+                        Console.WriteLine(Callsignx)
+                        Continue For
+                     End If
 
+                     For xxx = 0 To Callsignx.Length - 1
+                        If Char.IsUpper(Callsignx, xxx) Or Char.IsDigit(Callsignx, xxx) Or Callsignx(xxx) = "-" Then
+                        Else
+                           Console.WriteLine(Callsignx)
+                           GoTo skipit2
+                        End If
+                     Next
+
+                     Try
+                        Time = DateTime.FromOADate(CDbl(Elements(5 + (j * 3))))
+                        Flags = Elements(6 + j * 3)
+                        Freq = Elements(4 + j * 3)
+                        UpdateHeardData(Index, Elements(2), Freq, "", Flags, Time, False)
+                     Catch ex As Exception
+                     End Try
+skipit2:
                   Next
 
                End With
@@ -1000,7 +1081,7 @@ Public Class Form1
                ChatNodeIndex = ChatNodeIndex + 1
 
             End If
-
+Skipit:
          Next
 
       Catch ex As Exception
@@ -1111,6 +1192,34 @@ Public Class Form1
 
    End Function
 
+   Function FindBaseCall(ByVal Call1 As String) As Integer
+
+      Dim i As Integer
+      Dim Pos As Integer
+
+      Pos = InStr(Call1, "-")
+      If Pos > 0 Then Call1 = Mid(Call1, 1, Pos - 1)
+
+      Dim Count As Integer = CallsignData.Length
+
+      For i = 0 To Count - 1
+
+         Dim Call2 As String = CallsignData(i).Callsign
+
+         Pos = InStr(Call2, "-")
+         If Pos > 0 Then Call2 = Mid(Call2, 1, Pos - 1)
+
+         If Call2 = Call1 Then
+            Return i
+         End If
+
+
+      Next
+
+      Return -1
+
+   End Function
+
    Function FindNodeCall(ByVal Call1 As String) As Integer
 
       Dim i As Integer
@@ -1147,9 +1256,10 @@ Public Class Form1
 
    End Function
 
-   Function FindChatCall(ByVal Call1 As String) As Integer
+   Function FindChatCall(ByVal Call1 As String, ByVal Create As Boolean) As Integer
 
       Dim i As Integer
+      Dim Node As Integer
 
       For i = 0 To ChatNodeIndex - 1
 
@@ -1157,14 +1267,72 @@ Public Class Form1
 
       Next
 
+      If Create = False Then Return -1
+
+
       ReDim Preserve ChatNodes(ChatNodeIndex + 1)
 
       ChatNodes(ChatNodeIndex).Callsign = Call1
       ChatNodes(ChatNodeIndex).NAlias = ""
-      ChatNodes(ChatNodeIndex).Lat = "0"
-      ChatNodes(ChatNodeIndex).Lon = "0"
-      ChatNodes(ChatNodeIndex).upIcon = "greenmarker.png"
-      ChatNodes(ChatNodeIndex).downIcon = "redmarker.png"
+
+      '  See if we have a node with same base callsign
+
+      Node = FindBaseCall(Call1)
+
+      If Node > -1 Then
+         ChatNodes(ChatNodeIndex).Lat = CallsignData(Node).Lat
+         ChatNodes(ChatNodeIndex).Lon = CallsignData(Node).Lon
+      Else
+         ChatNodes(ChatNodeIndex).Lat = (Rnd() / 24).ToString
+         ChatNodes(ChatNodeIndex).Lon = (Rnd() / 12).ToString
+      End If
+
+      Dim Callsign As String
+      Dim Pos As Integer
+
+      Dim ImageX As Integer
+      Dim ImageY As Integer = 25
+
+      Callsign = Call1
+
+
+      Pos = InStr(Callsign, "-")
+      If Pos > 0 Then Callsign = Mid(Callsign, 1, Pos - 1)
+
+      ImageX = Callsign.Length * 14
+
+      Dim image1 As Bitmap = New Bitmap(ImageX, ImageY)
+      Dim image2 As Bitmap = New Bitmap(ImageX, ImageY)
+
+
+      Dim g1 As Graphics = Graphics.FromImage(image1)
+      Dim g2 As Graphics = Graphics.FromImage(image2)
+
+      Dim f As Font = New Font("system", 14, FontStyle.Regular)
+
+      g1.FillRectangle(Brushes.LightGreen, 0, 0, ImageX, ImageY - 3)
+      g1.FillRectangle(Brushes.Black, CInt(ImageX / 2 - 2), ImageY - 3, 5, 1)
+      g1.FillRectangle(Brushes.Black, CInt(ImageX / 2 - 1), ImageY - 2, 3, 1)
+
+      g1.DrawString(Callsign, f, Brushes.Black, 0, 0)
+
+      g2.FillRectangle(Brushes.Red, 0, 0, ImageX, ImageY - 3)
+      g2.FillRectangle(Brushes.Black, CInt(ImageX / 2 - 2), ImageY - 3, 5, 1)
+      g2.FillRectangle(Brushes.Black, CInt(ImageX / 2 - 1), ImageY - 2, 3, 1)
+
+
+      g2.DrawString(Callsign, f, Brushes.White, 0, 0)
+
+      image1.Save(Callsign & ".ok.png", System.Drawing.Imaging.ImageFormat.Png)
+      image2.Save(Callsign & ".down.png", System.Drawing.Imaging.ImageFormat.Png)
+
+      g1.Dispose()
+      g2.Dispose()
+
+      f.Dispose()
+
+      ChatNodes(ChatNodeIndex).upIcon = Callsign & ".ok.png"
+      ChatNodes(ChatNodeIndex).downIcon = Callsign & ".down.png"
 
       ChatNodes(ChatNodeIndex).Comment = Call1
       ChatNodes(ChatNodeIndex).PopupMode = 0
@@ -1230,7 +1398,7 @@ Public Class Form1
       Catch ex As Exception
 
       End Try
- 
+
       Try
 
          Msg = client.DownloadString("http://www.cantab.net/users/john.wiseman/Icons/FileTimeStamps.txt")
@@ -1435,8 +1603,10 @@ Public Class Form1
                                  HTML = HTML & .Time & " " & .Freq & " " & .Flags & " <br>"
                                  If Mid(.Flags, 1, 1) = "A" Then
                                     Protocol = Protocol Or 1
-                                 ElseIf Mid(.Flags, 1, 1) = "H" Then
+                                 ElseIf Mid(.Flags, 1, 1) = "H" Then    ' V4
                                     Protocol = Protocol Or 4
+                                 ElseIf Mid(.Flags, 1, 1) = "G" Then    ' Tracker/RP
+                                    Protocol = Protocol Or 8
                                  Else
                                     Protocol = Protocol Or 2
                                  End If
@@ -1444,8 +1614,8 @@ Public Class Form1
                            End With
                         Next
 
-                        If Protocol > 4 Then
-                           Protocol = 3         ' V4 plus anything - B
+                        If Protocol > 4 And Protocol <> 8 Then
+                           Protocol = 3         ' V4/RP plus anything - B
                         End If
 
                         ' Add 'who has heard me' to popup
@@ -1846,10 +2016,6 @@ Public Class Form1
 
       ReDim Preserve CallsignData(Count)
 
-      If Count = 1891 Then
-         Debug.Print("xx")
-
-      End If
 
       With CallsignData(Count)
 
@@ -1869,6 +2035,166 @@ Public Class Form1
    Private Sub EditBPQ32NodesListToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles EditBPQ32NodesListToolStripMenuItem.Click
       UpdateNodeDialog.Visible = True
       UpdateNodeDialog.Activate()
+
+   End Sub
+
+   Dim Connections As Integer = 0
+   Dim tcpserver As TcpListener
+
+   Private Sub Webserver()
+
+      ' Cache the main page and icon
+
+      Dim returnValue As String = File.ReadAllText("NodeMap.html")
+      Dim pageLen As Integer = returnValue.Length
+
+      Dim Page As [Byte]() = System.Text.Encoding.ASCII.GetBytes(returnValue)
+
+      Dim Icon As Byte() = File.ReadAllBytes("favicon.ico")
+
+      Try
+
+         Dim port As Int32 = 81
+         Dim localAddr As IPAddress = IPAddress.Parse("0.0.0.0")
+
+         tcpserver = New TcpListener(localAddr, port)
+
+         ' Start listening for client requests.
+         tcpserver.Start()
+
+         ' Buffer for reading data
+
+         Dim bytes(8192) As [Byte]
+         Dim data As [String] = Nothing
+
+         ' Enter the listening loop.
+
+         While True
+
+            Console.Write("Waiting for a connection... ")
+            ServerStatus.Text = "Waiting for a connection"
+
+            ' Perform a blocking call to accept requests.
+            ' You could also user server.AcceptSocket() here.
+
+            Dim client As TcpClient = tcpserver.AcceptTcpClient()
+            Console.WriteLine("Connected!")
+
+            ServerStatus.Text = "Connected"
+
+            Connections = Connections + 1
+            ServerCount.Text = Connections.ToString
+
+            data = Nothing
+
+            ' Get a stream object for reading and writing
+            Dim stream As NetworkStream = client.GetStream()
+
+            Dim i As Int32
+
+            Try
+
+
+               ' Loop to receive all the data sent by the client.
+               i = stream.Read(bytes, 0, bytes.Length)
+               While (i <> 0)
+                  ' Translate data bytes to a ASCII string.
+                  data = System.Text.Encoding.ASCII.GetString(bytes, 0, i)
+
+                  Dim params As String() = Split(data, " ", 4)
+
+                  Console.WriteLine(params(1))
+                  ServerStatus.Text = params(1)
+
+
+                  If params(1) = "/" Then
+
+                     ' Send back main page.
+
+                     Dim Header As String = "HTTP/1.1 200 OK\r\nContent-Length: "
+
+                     Header = Header & pageLen.ToString & vbCrLf & "Content-Type: text/html" & vbCrLf & vbCrLf
+
+                     Dim msg As [Byte]() = System.Text.Encoding.ASCII.GetBytes(Header)
+
+                     stream.Write(msg, 0, msg.Length)
+                     stream.Write(Page, 0, Page.Length)
+                     Exit While
+
+                  End If
+
+                  If params(1) = "/favicon.ico" Then
+
+                     Dim Header As String = "HTTP/1.1 200 OK\r\nContent-Length: "
+                     Header = Header & Icon.Length.ToString & vbCrLf & "Content-Type: text/html" & vbCrLf & vbCrLf
+
+                     Dim msg As [Byte]() = System.Text.Encoding.ASCII.GetBytes(Header)
+
+                     stream.Write(msg, 0, msg.Length)
+                     stream.Write(Icon, 0, Icon.Length)
+                     Exit While
+
+                  Else
+
+                     Dim NodeData As Byte()
+
+                     Dim FN As String = Mid(params(1), 2)
+
+                     If InStr(FN, "/") <> 0 OrElse InStr(FN, "\") <> 0 OrElse InStr(FN, "..") <> 0 Then
+
+                        Dim Errormsg As String = "HTTP/1.1 404 Not Found" & vbCrLf & "Content-Length: 16" & vbCrLf & vbCrLf & "Page not found" & vbCrLf
+
+                        Dim msg1 As [Byte]() = System.Text.Encoding.ASCII.GetBytes(Errormsg)
+                        stream.Write(msg1, 0, msg1.Length)
+
+                     End If
+
+                     Try
+                        NodeData = File.ReadAllBytes(FN)
+
+                     Catch ex As Exception
+
+                        Dim Errormsg As String = "HTTP/1.1 404 Not Found" & vbCrLf & "Content-Length: 16" & vbCrLf & vbCrLf & "Page not found" & vbCrLf
+
+                        Dim msg1 As [Byte]() = System.Text.Encoding.ASCII.GetBytes(Errormsg)
+                        stream.Write(msg1, 0, msg1.Length)
+
+                        Exit While
+
+
+                     End Try
+
+                     Dim Header As String = "HTTP/1.1 200 OK\r\nContent-Length: "
+                     Header = Header & NodeData.Length.ToString & vbCrLf & "Content-Type: text/html" & vbCrLf & vbCrLf
+
+                     Dim msg As [Byte]() = System.Text.Encoding.ASCII.GetBytes(Header)
+
+                     stream.Write(msg, 0, msg.Length)
+                     stream.Write(NodeData, 0, NodeData.Length)
+                     Exit While
+
+                  End If
+
+
+               End While
+
+            Catch ex As Exception
+               Console.WriteLine("SocketException: {0}", ex)
+            End Try
+
+
+            ' Shutdown and end connection
+            client.Close()
+         End While
+      Catch e1 As SocketException
+         Console.WriteLine("SocketException: {0}", e1)
+      End Try
+
+      ServerStatus.Text = "Terminated"
+
+   End Sub
+
+   Private Sub Button1_Click_1(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles Button1.Click
 
    End Sub
 End Class
