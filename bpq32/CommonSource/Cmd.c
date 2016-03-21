@@ -1722,6 +1722,56 @@ VOID UNPROTOCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX
 	return;
 }
 
+VOID CALCMD(TRANSPORTENTRY * Session, char * Bufferptr, char * CmdTail, CMDX * CMD)
+{
+	// PROCESS CAL COMMAND
+
+	int Port = 0, index = 0, Count = 0;
+	char * ptr, *Context;
+	struct PORTCONTROL * PORT = NULL;
+
+	ptr = strtok_s(CmdTail, " ", &Context);
+
+	if (ptr)
+		Port = atoi(ptr);
+
+	if (Port == 0 && NUMBEROFPORTS == 1)
+		Port = 1;
+	else
+		ptr = strtok_s(NULL, " ", &Context);		// Get Unproto String
+
+	if (Port)
+		PORT = GetPortTableEntryFromPortNum(Port);
+
+	if (PORT == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Invalid Port\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	if (PORT->PROTOCOL == 10 && PORT->UICAPABLE == 0)
+	{
+		Bufferptr += sprintf(Bufferptr, "Sorry, port is not an ax.25 port\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	if (ptr == NULL)
+	{
+		Bufferptr += sprintf(Bufferptr, "Count Missing\r");
+		SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+		return;
+	}
+
+	Count = atoi(ptr);
+
+	ptr = strtok_s(NULL, " ", &Context);		// Get Unproto String
+
+	Bufferptr += sprintf(Bufferptr, "Ok\r");
+	SendCommandReply(Session, REPLYBUFFER, Bufferptr - (char *)REPLYBUFFER);
+	return;
+}
 
 
 

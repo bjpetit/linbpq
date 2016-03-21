@@ -29,6 +29,10 @@
 // October 2015 1.0.6.1
 //	Recompiled for compatibility with WebMail
 
+// Feb 2016 1.0.7.1
+//	Send Chat Map INFO on Startup 
+//	Add Welcome Message to Web Config
+
 
 #include "BPQChat.h"
 
@@ -139,6 +143,11 @@ UCHAR * OtherNodes=NULL;
 char OtherNodesList[1000];
 
 char BPQDirectory[260];
+
+extern char Position[81];
+extern char PopupText[260];
+extern int PopupMode;
+
 
 int ProgramErrors = 0;
 
@@ -951,26 +960,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	char Position[81] = "";
-	char PopupText[251] = "";
 	char Msg[500];
 	int len;
-	int Click = 0, Hover = 0;
-	char ClickHover[3] = "";
 
 	switch (message)
 	{
 	case WM_INITDIALOG:
 
-		GetStringValue("MapPosition", Position, 80);
-		GetStringValue("MapPopup", PopupText, 250);
-		Click = GetIntValue("PopupMode", 0);
-
 		SetDlgItemText(hDlg, IDC_MAPPOSITION, Position);
 		SetDlgItemText(hDlg, IDC_POPUPTEXT, PopupText);
 
-		SendDlgItemMessage(hDlg, IDC_CLICK, BM_SETCHECK, Click , Click);
-		SendDlgItemMessage(hDlg, IDC_HOVER, BM_SETCHECK, !Click , !Click);
+		SendDlgItemMessage(hDlg, IDC_CLICK, BM_SETCHECK, PopupMode , PopupMode);
+		SendDlgItemMessage(hDlg, IDC_HOVER, BM_SETCHECK, !PopupMode , !PopupMode);
 
 		return TRUE; 
 
@@ -983,16 +984,11 @@ INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			GetDlgItemText(hDlg, IDC_MAPPOSITION, Position, 80);
 			GetDlgItemText(hDlg, IDC_POPUPTEXT, PopupText, 250);
 		
-			Click = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
-			Hover = SendDlgItemMessage(hDlg, IDC_HOVER, BM_GETCHECK, 0 ,0);
+			PopupMode = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
 		
 //			if (AXIPPort)
 			{
-				if (Click) ClickHover[0] = '1';
-				else 
-					if (Hover) ClickHover[0] = '0';
-
-				len = wsprintf(Msg, "INFO %s|%s|%s|\r", Position, PopupText, ClickHover);
+				len = wsprintf(Msg, "INFO %s|%s|%d|\r", Position, PopupText, PopupMode);
 
 				if (len < 256)
 					Send_MON_Datagram(Msg, len);
@@ -1005,12 +1001,11 @@ INT_PTR CALLBACK ChatMapDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARA
 			GetDlgItemText(hDlg, IDC_MAPPOSITION, Position, 80);
 			GetDlgItemText(hDlg, IDC_POPUPTEXT, PopupText, 250);
 		
-			Click = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
-			Hover = SendDlgItemMessage(hDlg, IDC_HOVER, BM_GETCHECK, 0 ,0);
+			PopupMode = SendDlgItemMessage(hDlg, IDC_CLICK, BM_GETCHECK, 0 ,0);
 
 			SaveStringValue("MapPosition", Position);
 			SaveStringValue("MapPopup", PopupText);
-			SaveIntValue("PopupMode", Click);
+			SaveIntValue("PopupMode", PopupMode);
 		
 		case IDCANCEL:
 
@@ -1140,6 +1135,7 @@ SOCKET sock;
 BOOL Initialise()
 {
 	int i, len;
+
 	ChatCIRCUIT * conn;
 	char * ptr1;
 
@@ -1277,6 +1273,10 @@ Retry:
 	DeleteLogFiles();
 
 	CreateChatPipeThread();
+
+	GetStringValue("MapPosition", Position, 80);
+	GetStringValue("MapPopup", PopupText, 250);
+	PopupMode = GetIntValue("PopupMode", 0);
 
 	return TRUE;
 }

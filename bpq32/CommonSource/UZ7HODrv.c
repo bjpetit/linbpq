@@ -942,7 +942,43 @@ static int RestartTNC(struct TNCINFO * TNC)
 		return 1;				// Cant tell if it worked, but assume ok
 	}
 
-#ifndef LINBPQ
+#ifndef WIN32
+	{
+		char * arg_list[] = {NULL, NULL};
+		pid_t child_pid;	
+
+		signal(SIGCHLD, SIG_IGN); // Silently (and portably) reap children. 
+
+		//	Fork and Exec UZ7HO TNC
+
+		printf("Trying to start %s\n", TNC->ProgramPath);
+
+		arg_list[0] = TNC->ProgramPath;
+	 
+    	/* Duplicate this process. */ 
+
+		child_pid = fork (); 
+
+		if (child_pid == -1) 
+ 		{    				
+			printf ("UZ7HO TNC Start fork() Failed\n"); 
+			return 0;
+		}
+
+		if (child_pid == 0) 
+ 		{    				
+			execvp (arg_list[0], arg_list); 
+        
+			/* The execvp  function returns only if an error occurs.  */ 
+
+			printf ("Failed to run UZ7HO TNC\n"); 
+			exit(0);			// Kill the new process
+		}
+		printf("Started UZ7HO TNC\n");
+		return TRUE;
+	}								 
+#else
+
 	{
 	STARTUPINFO  SInfo;			// pointer to STARTUPINFO 
     PROCESS_INFORMATION PInfo; 	// pointer to PROCESS_INFORMATION 
@@ -1070,6 +1106,9 @@ UINT UZ7HOExtInit(EXTPORTDATA * PortEntry)
 		if (EnumWindows(EnumTNCWindowsProc, (LPARAM)TNC))
 			if (TNC->ProgramPath)
 				TNC->WeStartedTNC = RestartTNC(TNC);
+#else
+		if (TNC->ProgramPath)
+			TNC->WeStartedTNC = RestartTNC(TNC);
 #endif
 		ConnecttoUZ7HO(port);
 	}
@@ -1163,7 +1202,7 @@ static ProcessLine(char * buf, int Port)
 			if (_memicmp(ptr, "PATH", 4) == 0)
 			{
 				p_cmd = strtok(NULL, "\n\r");
-				if (p_cmd) TNC->ProgramPath = _strdup(_strupr(p_cmd));
+				if (p_cmd) TNC->ProgramPath = _strdup(p_cmd);
 			}
 		}
 

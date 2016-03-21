@@ -65,10 +65,6 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 
 // Changes for P4Dragon
 
-#ifdef WIN32
-//#define WRITELOG
-#endif
-
 #define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_DEPRECATE
 #define _USE_32BIT_TIME_T
@@ -132,60 +128,55 @@ int	KissEncode(UCHAR * inbuff, UCHAR * outbuff, int len);
 #define	TFEND	0xDC
 #define	TFESC	0xDD
 
-#ifdef WRITELOG
-static HANDLE LogHandle[32] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
-#endif
+static FILE * LogHandle[32] = {0};
 
 //char * Logs[4] = {"1", "2", "3", "4"};
 
 static char BaseDir[MAX_PATH]="c:\\";
 
+static BOOL WRITELOG = TRUE;
+
 static VOID CloseLogFile(int Flags)
 {
-#ifdef WRITELOG
-	CloseHandle(LogHandle[Flags]);
-	LogHandle[Flags] = INVALID_HANDLE_VALUE;
-#endif
+	if (WRITELOG)
+	{
+		fclose(LogHandle[Flags]);
+		LogHandle[Flags] = INVALID_HANDLE_VALUE;
+	}
 }
 
 static BOOL OpenLogFile(int Flags)
 {
-#ifdef WRITELOG
-	UCHAR FN[MAX_PATH];
+	if (WRITELOG)
+	{
+		UCHAR FN[MAX_PATH];
 
-	time_t T;
-	struct tm * tm;
+		time_t T;
+		struct tm * tm;
 
-	T = time(NULL);
-	tm = gmtime(&T);	
+		T = time(NULL);
+		tm = gmtime(&T);	
 
-	sprintf(FN,"%s\\SCSLog_%02d%02d_%d.txt", BPQDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
+		sprintf(FN,"%s/SCSLog_%02d%02d_%d.txt", BPQDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
 
-	LogHandle[Flags] = CreateFile(FN,
-					GENERIC_WRITE,
-					FILE_SHARE_READ,
-					NULL,
-					OPEN_ALWAYS,
-					FILE_ATTRIBUTE_NORMAL,
-					NULL);
-
-	SetFilePointer(LogHandle[Flags], 0, 0, FILE_END);
-
-	return (LogHandle[Flags] != INVALID_HANDLE_VALUE);
-#endif
+		LogHandle[Flags] = fopen(FN, "wb");
+	
+		return (LogHandle[Flags]);
+	}
 	return 0;
 }
 
 static void WriteLogLine(int Flags, char * Msg, int MsgLen)
 {
-#ifdef WRITELOG
-	int cnt;
-	WriteFile(LogHandle[Flags], Msg , MsgLen, &cnt, NULL);
-	WriteFile(LogHandle[Flags], "\r\n" , 2, &cnt, NULL);
-#endif
+	if (WRITELOG)
+	{
+		if (LogHandle[Flags])
+		{
+			fwrite(Msg, 1, MsgLen, LogHandle[Flags]); 
+			fwrite("\r\n", 1, 2, LogHandle[Flags]); 
+		}
+	}
 }
-
-
 
 
 static ProcessLine(char * buf, int Port)
@@ -230,6 +221,9 @@ ConfigLine:
 			*ptr = 0;
 		}
 		
+		if (_memicmp(buf, "DEBUGLOG", 8) == 0)	// Write Debug Log
+			WRITELOG = atoi(&buf[8]);
+		else
 		if (_memicmp(buf, "APPL", 4) == 0)
 		{
 			p_cmd = strtok(&buf[5], " \t\n\r");
@@ -1812,6 +1806,7 @@ VOID SCSPoll(int Port)
 				if (memcmp(Buffer, "MYLEVEL ", 8) == 0)
 				{
 					Switchmode(TNC, Buffer[8] - '0');
+					TNC->Bandwidth = Buffer[8]; // so scanner knows where we are
 
 					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "Ok\r");		
 					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);

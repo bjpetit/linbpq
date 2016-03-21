@@ -1822,7 +1822,8 @@ static APRSProcessLine(char * buf)
 
 	if (_stricmp(ptr, "GPSPort") == 0)
 	{
-		strcpy(GPSPort, p_value);
+		if (strcmp(p_value, "0") != 0)
+			strcpy(GPSPort, p_value);
 		return TRUE;
 	}
 
@@ -3082,7 +3083,13 @@ BOOL OpenGPSPort()
 
 	// open COMM device
 
-	portptr->hDevice = OpenCOMPort((VOID *)GPSPort, GPSSpeed, TRUE, TRUE, FALSE, 0);
+	if (strlen(GPSPort) < 4)
+	{
+		int port = atoi(GPSPort);
+		portptr->hDevice = OpenCOMPort((VOID *)port, GPSSpeed, TRUE, TRUE, FALSE, 0);
+	}
+	else
+		portptr->hDevice = OpenCOMPort((VOID *)GPSPort, GPSSpeed, TRUE, TRUE, FALSE, 0);
 				  
 	if (portptr->hDevice == 0)
 	{

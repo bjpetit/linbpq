@@ -755,10 +755,12 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Add option to log L4 connects
 //	Add AUTOADDQuiet mode to AXIP.
 //	Add EXCLUDE processing
-//	Support WinmorControl in UZ7HO driver
+//	Support WinmorControl in UZ7HO driver and fix starting TNC on Linux
 //	Convert calls in MAP entries to upper case.
 //	Support Linux COM Port names for APRS GPS
-
+//	Fix using NETROM serial protocol on ASYNC Port
+//	Fix setting MYLEVEL by scanner after manual level change.
+//	Add DEBUGLOG config param to SCS Pactor Driver to log serial port traffic
 
 #define CKernel
 

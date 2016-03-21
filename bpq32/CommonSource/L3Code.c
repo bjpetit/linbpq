@@ -226,7 +226,7 @@ VOID PROCESSNODEMESSAGE(MESSAGE * Msg, struct PORTCONTROL * PORT)
 		return;
 
 	if (CheckExcludeList(Msg->ORIGIN) == 0)
-		return 0;
+		return;
 	
 	for (App = 0; App < NumberofAppls; App++)
 	{
