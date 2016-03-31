@@ -61,7 +61,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\Dev\MSDev2005\Projects\BPQ32\lib\libconfigd.lib DbgHelp.lib shell32.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot;"
+				AdditionalDependencies="kernel32.lib WS2_32.Lib C:\Dev\MSDev2005\Projects\BPQ32\lib\libconfig.lib DbgHelp.lib &quot;C:\Program Files (x86)\GnuWin32\lib\libiconv.lib&quot;"
 				OutputFile="c:\LINBPQ\$(ProjectName).exe"
 				LinkIncremental="2"
 				IgnoreDefaultLibraryNames=""

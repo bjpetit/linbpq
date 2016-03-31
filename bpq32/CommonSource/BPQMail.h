@@ -263,6 +263,7 @@ typedef struct ConnectionInfo_S
 
 	char PQChallenge[20];				// Secure User logon challange
 	char SecureMsg[20];					// CMS Secure Signon Response
+	int MCastListenTime;				// Time to run session for
 
 } ConnectionInfo, CIRCUIT;
 
@@ -293,6 +294,7 @@ typedef struct ConnectionInfo_S
 #define FLARQMAIL 1024					// Sending FLARQ Format Message
 #define ARQMAILACK 2048					// Waiting for all data to be acked
 #define	NEEDLF 4096						// Add LF to forward script commands (fro Telnet
+#define	MCASTRX 8192					// Stream in Multicast RX Mode
 
 struct FBBRestartData
 {
@@ -794,6 +796,25 @@ struct ConsoleInfo
 
 };
 
+
+struct MSESSION
+{
+	struct MSESSION * Next;
+	unsigned int Key;
+	char * FileName;
+	char * OrigTimeStamp;
+	unsigned char * Message;
+	int MessageLen;
+	unsigned char * BlockList;
+	char * ID;
+	int BlockSize;
+	int BlockCount;
+	int BlocksReceived;
+	BOOL Completed;
+	time_t Created;
+	time_t LastUpdated;
+	int Index;				// Line in Display
+};
 
 VOID __cdecl nprintf(CIRCUIT * conn, const char * format, ...);
 char * strlop(char * buf, char delim);
@@ -1443,3 +1464,5 @@ struct ConsoleInfo * ConsHeader[2];
 extern BOOL NeedHomeBBS;
 extern char ConfigName[250];
 extern BOOL UsingingRegConfig;
+
+extern BOOL MulticastRX;

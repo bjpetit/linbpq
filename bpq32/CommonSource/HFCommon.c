@@ -876,7 +876,20 @@ BadLine:
 	return 0;
 }
 
+VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc);
+
+
+VOID UpdateMHEx(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * LOC)
+{
+	UpdateMHSupport(TNC, Call, Mode, Direction, LOC);
+}
+
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
+{
+	UpdateMHSupport(TNC, Call, Mode, Direction, NULL);
+}
+
+VOID UpdateMHSupport(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * Loc)
 {
 	PMHSTRUC MH = TNC->PortRecord->PORTCONTROL.PORTMHEARD;
 	PMHSTRUC MHBASE = MH;
@@ -954,6 +967,9 @@ VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction)
 		LOC = NoLOC;
 
 NOLOC:
+
+	if (Loc)
+		LOC = Loc;		// Supplied Locator overrides
 
 	for (i = 0; i < MHENTRIES; i++)
 	{

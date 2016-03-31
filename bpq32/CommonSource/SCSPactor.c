@@ -141,7 +141,7 @@ static VOID CloseLogFile(int Flags)
 	if (WRITELOG)
 	{
 		fclose(LogHandle[Flags]);
-		LogHandle[Flags] = INVALID_HANDLE_VALUE;
+		LogHandle[Flags] = NULL;
 	}
 }
 
@@ -159,9 +159,9 @@ static BOOL OpenLogFile(int Flags)
 
 		sprintf(FN,"%s/SCSLog_%02d%02d_%d.txt", BPQDirectory, tm->tm_mon + 1, tm->tm_mday, Flags);
 
-		LogHandle[Flags] = fopen(FN, "wb");
+		LogHandle[Flags] = fopen(FN, "ab");
 	
-		return (LogHandle[Flags]);
+		return (LogHandle[Flags] != NULL);
 	}
 	return 0;
 }
@@ -1814,6 +1814,16 @@ VOID SCSPoll(int Port)
 					return;
 				}
 
+				if (memcmp(Buffer, "CHECKLEVEL", 10) == 0)
+				{
+					CheckMode(TNC);
+
+					buffptr[1] = sprintf((UCHAR *)&buffptr[2], "%s\r", &TNC->RXBuffer[2]);		
+					C_Q_ADD(&TNC->Streams[Stream].PACTORtoBPQ_Q, buffptr);
+
+					return;
+				}
+
 				if (_memicmp(Buffer, "OVERRIDEBUSY", 12) == 0)
 				{
 					TNC->OverrideBusy = TRUE;
@@ -2193,12 +2203,10 @@ BOOL CheckRXHost(struct TNCINFO * TNC, char * UnstuffBuffer)
 
 int Sleeptime = 250;
 
-Switchmode(struct TNCINFO * TNC, int Mode)
+int CheckMode(struct TNCINFO * TNC)
 {
 	int n;
 	char UnstuffBuffer[500];	
-
-	// Send Exit/Enter Host Sequence
 
 	UCHAR * Poll = TNC->TXBuffer;
 
@@ -2206,6 +2214,76 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 		return 0;							// Don't try if initialising
 
 	TNC->EnterExit = TRUE;
+
+	Poll[2] = 31;
+	Poll[3] = 0x41;
+	Poll[4] = 0x5;
+	memcpy(&Poll[5], "JHOST0", 6);
+
+	CRCStuffAndSend(TNC, Poll, 11);
+
+	n = 0;
+
+	while (CheckRXHost(TNC, UnstuffBuffer) == FALSE)
+	{
+		Sleep(5);
+		n++;
+
+		if (n > 100) break;
+	}
+
+
+	sprintf(Poll, "MYL\r");
+	
+	OpenLogFile(TNC->Port);
+	WriteLogLine(TNC->Port, Poll, 3);
+	CloseLogFile(TNC->Port);
+
+	TNC->TXLen = 4;
+	WriteCommBlock(TNC);
+
+	n = 0;
+
+	while (CheckRXText(TNC) == FALSE)
+	{
+		Sleep(5);
+		n++;
+		if (n > 100) break;
+	}
+
+	memcpy(Poll, "JHOST4\r", 7);
+
+	TNC->TXLen = 7;
+	WriteCommBlock(TNC);
+
+	// No response expected
+
+	Sleep(10);
+
+	Poll[2] = 255;			// Channel
+	TNC->Toggle = 0;
+	Poll[3] = 0x41;
+	Poll[4] = 0;			// Len-1
+	Poll[5] = 'G';			// Poll
+
+	CRCStuffAndSend(TNC, Poll, 6);
+	TNC->InternalCmd = FALSE;
+	TNC->Timeout = 5;		// 1/2 sec - In case missed
+
+	TNC->EnterExit = FALSE;
+	return 0;
+}
+
+
+int Switchmode(struct TNCINFO * TNC, int Mode)
+{
+	int n;
+	char UnstuffBuffer[500];	
+
+	UCHAR * Poll = TNC->TXBuffer;
+
+	if (TNC->HostMode == 0)
+		return 0;							// Don't try if initialising
 
 	if (TNC->HFPacket)
 	{
@@ -2233,67 +2311,23 @@ Switchmode(struct TNCINFO * TNC, int Mode)
 		Sleep(Sleeptime);
 	}
 
+	// Uses "Hidden" feature where you can send any normal mode command
+	// in host mode by preceeding with a #
+
 	Poll[2] = 31;
-	Poll[3] = 0x41;
-	Poll[4] = 0x5;
-	memcpy(&Poll[5], "JHOST0", 6);
-
+	Poll[3] = 0x1;
+	Poll[4] = 5;
+	sprintf(&Poll[5], "#MYL %d\r", Mode);
 	CRCStuffAndSend(TNC, Poll, 11);
+			
+	// It looks like there isn't a response
 
-	n = 0;
+	TNC->Timeout = 0;	
 
-	while (CheckRXHost(TNC, UnstuffBuffer) == FALSE)
-	{
-		Sleep(5);
-		n++;
-
-		if (n > 100) break;
-	}
-
-//	Debugprintf("JHOST0 ACK received in %d mS", 5 * n);
-
-	sprintf(Poll, "MYL %d\r", Mode);
-
-//	Debugprintf("MYL %d", Mode);
-	
 	OpenLogFile(TNC->Port);
-	WriteLogLine(TNC->Port, Poll, 5);
+	WriteLogLine(TNC->Port, &Poll[5], 6);
 	CloseLogFile(TNC->Port);
 
-	TNC->TXLen = 6;
-	WriteCommBlock(TNC);
-
-	n = 0;
-
-	while (CheckRXText(TNC) == FALSE)
-	{
-		Sleep(5);
-		n++;
-		if (n > 100) break;
-	}
-
-//	Debugprintf("MYL ACK received in %d mS", 5 * n);
-
-	memcpy(Poll, "JHOST4\r", 7);
-
-	TNC->TXLen = 7;
-	WriteCommBlock(TNC);
-
-	// No response expected
-
-	Sleep(10);
-
-	Poll[2] = 255;			// Channel
-	TNC->Toggle = 0;
-	Poll[3] = 0x41;
-	Poll[4] = 0;			// Len-1
-	Poll[5] = 'G';			// Poll
-
-	CRCStuffAndSend(TNC, Poll, 6);
-	TNC->InternalCmd = FALSE;
-	TNC->Timeout = 5;		// 1/2 sec - In case missed
-
-	TNC->EnterExit = FALSE;
 	return 0;
 }
 
@@ -2771,6 +2805,10 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 		Stream = 0;
 	}
 
+	if (TNC->TXBuffer[5] == '#')	// Shouldnt happen!
+		return;
+
+
 	//	See if Poll Reply or Data
 	
 	if (Msg[3] == 0)
@@ -2793,6 +2831,9 @@ VOID ProcessDEDFrame(struct TNCINFO * TNC, UCHAR * Msg, int framelen)
 			return;
 
 		if (TNC->TXBuffer[5] == 'L')	// Shouldnt happen!
+			return;
+
+		if (TNC->TXBuffer[5] == '#')	// Shouldnt happen!
 			return;
 
 		if (TNC->TXBuffer[5] == '%' && TNC->TXBuffer[6] == 'W')	// Scan Control - Response to W1

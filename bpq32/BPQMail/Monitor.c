@@ -40,6 +40,7 @@ BOOL LogBBS = TRUE;
 BOOL LogCHAT = TRUE;
 BOOL LogTCP = TRUE;
 
+
 static int PartLinePtr=0;
 static int PartLineIndex=0;		// Listbox index of (last) incomplete line
 
@@ -49,6 +50,7 @@ static LRESULT APIENTRY InputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lP
 static LRESULT APIENTRY OutputProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 static LRESULT APIENTRY MonProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) ;
 static void MoveWindows();
+static void MoveMCWindows();
 
 #define BGCOLOUR RGB(236,233,216)
 
@@ -123,7 +125,6 @@ BOOL CreateMonitor()
 
 }
 
-
 static void MoveWindows()
 {
 	RECT rcMain, rcClient;
@@ -139,7 +140,6 @@ static void MoveWindows()
 	MoveWindow(hwndOutput,2, 2, ClientWidth-4, ClientHeight-4, TRUE);
 //	MoveWindow(hwndSplit,0, SplitPos, ClientWidth, SplitBarHeight, TRUE);
 }
-
 
 static LRESULT CALLBACK MonWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -422,4 +422,3 @@ static  void CopyToClipboard(HWND hWnd)
 				GlobalFree(hMem);		
 	}
 }
-

@@ -87,7 +87,7 @@ int pthread_equal(pthread_t T1, pthread_t T2);
 #define FALSE 0
 #define FAR
 #define byte UCHAR
-#define Byte UCHAR
+//#define Byte UCHAR
 #define Word WORD
 
 typedef DWORD   COLORREF;

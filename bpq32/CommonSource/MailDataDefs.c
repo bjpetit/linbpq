@@ -159,6 +159,7 @@ char ChatConfigName[250];
 
 BOOL UsingingRegConfig = FALSE;
 
+BOOL MulticastRX = FALSE;
 
 char BaseDir[MAX_PATH];
 char BaseDirRaw[MAX_PATH];			// As set in registry - may contain %NAME%

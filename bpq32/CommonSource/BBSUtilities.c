@@ -72,6 +72,8 @@ void ListFiles(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 void ReadBBSFile(ConnectionInfo * conn, struct UserInfo * user, char * filename);
 int GetCMSHash(char * Challenge, char * Password);
 BOOL SendAMPRSMTP(CIRCUIT * conn);
+VOID ProcessMCASTLine(ConnectionInfo * conn, struct UserInfo * user, char * Buffer, int MsgLen);
+
 
 config_t cfg;
 config_setting_t * group;
@@ -736,7 +738,7 @@ VOID GetMessageDatabase()
 		MsgHddrPtr=malloc(4);
 		MsgHddrPtr[0]= zalloc(sizeof (MsgRec));
 		NumberofMessages = 0;
-		MsgHddrPtr[0]->status = 1;
+		MsgHddrPtr[0]->status = 2;
 
 		return;
 	}
@@ -820,6 +822,9 @@ Next:
 			struct OldMsgInfo * OldMessage = (struct OldMsgInfo *) &MsgRec;
 
 			if (OldMessage->type == 0)
+				goto Next;
+
+			if (OldMessage->number > 99999 || OldMessage->number < 1)
 				goto Next;
 
 			Msg = AllocateMsgRecord();
@@ -919,6 +924,7 @@ VOID SaveMessageDatabase()
 
 	Handle = fopen(MsgDatabasePath, "wb");
 
+	MsgHddrPtr[0]->status = 2;
 	MsgHddrPtr[0]->number = NumberofMessages;
 	MsgHddrPtr[0]->length = LatestMsg;
 
@@ -6777,6 +6783,17 @@ InBand:
 				goto CheckForEnd;
 			}
 
+			if (_memicmp(Cmd, "MCASTRX", 6) == 0)
+			{
+				conn->BBSFlags |= MCASTRX;	
+				conn->MCastListenTime = atoi(&Cmd[7]) * 6; // Time to run session for *6 as value is mins put timer ticks 10 secs
+
+				// send MCAST to Node
+				
+				nodeprintfEx(conn, "MCAST\r");
+				return TRUE;
+			}
+
 			if (_memicmp(Cmd, "FLARQ", 5) == 0)
 			{
 				conn->BBSFlags |= FLARQMAIL;
@@ -6846,6 +6863,14 @@ InBand:
 		}
 
 		// End of script.
+
+		if (conn->BBSFlags & MCASTRX)
+		{
+			// No session with Multicast, so no SID
+
+			conn->BBSFlags &= ~RunningConnectScript;
+			return TRUE;
+		}
 
 		if (conn->BBSFlags & FLARQMAIL)
 		{
@@ -7269,12 +7294,20 @@ VOID BBSSlowTimer()
 	ConnectionInfo * conn;
 	int n;
 
+	// Called every 10 seconds
+
+	MCastTimer();
+
 	for (n = 0; n < NumberofStreams; n++)
 	{
 		conn = &Connections[n];
 		
 		if (conn->Active == TRUE)
 		{
+			if (conn->BBSFlags & MCASTRX)
+				MCastConTimer(conn);
+
+
 			//	Check SIDTImers - used to detect failure to compete SID Handshake
 
 			if (conn->SIDResponseTimer)
@@ -7654,6 +7687,8 @@ VOID SaveConfig(char * ConfigName)
 	SaveIntValue(group, "Log_BBS", LogBBS);
 	SaveIntValue(group, "Log_TCP", LogTCP);
 
+	SaveIntValue(group, "MulticastRX", MulticastRX);
+
 	SaveIntValue(group, "SMTPGatewayEnabled", ISP_Gateway_Enabled);
 	SaveIntValue(group, "ISPSMTPPort", ISPSMTPPort);
 	SaveIntValue(group, "ISPPOP3Port", ISPPOP3Port);
@@ -7990,6 +8025,8 @@ BOOL GetConfig(char * ConfigName)
 	SMTPAuthNeeded = GetIntValue(group, "AuthenticateSMTP");
 	LogBBS = GetIntValue(group, "Log_BBS");
 	LogTCP = GetIntValue(group, "Log_TCP");
+
+	MulticastRX = GetIntValue(group, "MulticastRX");
 
 #ifndef LINBPQ
 
@@ -8602,6 +8639,21 @@ int DoReceivedData(int Stream)
 					return 0;
 				}
 
+				user = conn->UserPointer;
+
+				if (conn->BBSFlags & MCASTRX)
+				{
+					//	MCAST delivers full packets
+
+					if (conn->BBSFlags & RunningConnectScript)
+						ProcessBBSConnectScript(conn, conn->InputBuffer, conn->InputLen);
+					else
+						ProcessLine(conn, user, conn->InputBuffer, conn->InputLen);
+					
+					conn->InputLen=0;
+					continue;
+				}
+
 				ptr = memchr(conn->InputBuffer, '\r', conn->InputLen);
 				ptr2 = memchr(conn->InputBuffer, '\n', conn->InputLen);
 				
@@ -8611,8 +8663,6 @@ int DoReceivedData(int Stream)
 				if (ptr)				// CR ot LF in buffer
 				{
 					*(ptr) = '\r';		// In case was LF
-
-					user = conn->UserPointer;
 				
 					ptr2 = &conn->InputBuffer[conn->InputLen];
 					
@@ -9219,6 +9269,13 @@ VOID ProcessLine(CIRCUIT * conn, struct UserInfo * user, char* Buffer, int len)
 		ProcessFLARQLine(conn, user, Buffer, len);
 		return;
 	}
+
+	if (conn->BBSFlags & MCASTRX)
+	{
+		ProcessMCASTLine(conn, user, Buffer, len);
+		return;
+	}
+
 
 	if (conn->BBSFlags & TEXTFORWARDING)
 	{
@@ -10439,3 +10496,4 @@ VOID CreateUserReport()
 
 	fclose(hFile);
 }
+

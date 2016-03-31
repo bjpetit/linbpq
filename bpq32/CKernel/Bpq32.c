@@ -761,6 +761,7 @@ along with LinBPQ/BPQ32.  If not, see http://www.gnu.org/licenses
 //	Fix using NETROM serial protocol on ASYNC Port
 //	Fix setting MYLEVEL by scanner after manual level change.
 //	Add DEBUGLOG config param to SCS Pactor Driver to log serial port traffic
+//	Uue #myl to set SCS Pactor MYLEVEL, and add checklevel command
 
 #define CKernel
 

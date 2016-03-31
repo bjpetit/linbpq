@@ -540,6 +540,9 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 					TidyClose(TNC, buff[4]);
 
 				STREAM->ReportDISC = TRUE;		// Tell Node
+				
+				TNC->FLInfo->MCASTMODE = FALSE;
+
 				return 0;
 			}
 
@@ -683,6 +686,17 @@ static int ExtProc(int fn, int port,unsigned char * buff)
 				return 1;
 			}
 
+			if (_memicmp(&buff[8], "MCAST", 5) == 0)
+			{
+				UINT * buffptr = GetBuff();
+
+				TNC->FLInfo->MCASTMODE = TRUE;
+
+				buffptr[1] = sprintf((UCHAR *)&buffptr[2], "FLDigi} Ok\r");
+				C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+			
+				return 1;
+			}
 
 			if (_memicmp(&buff[8], "INUSE?", 6) == 0)
 			{
@@ -1958,7 +1972,127 @@ VOID ProcessFLDigiPacket(struct TNCINFO * TNC, char * Message, int Len)
 	char c;
 	struct FLINFO *	FL = TNC->FLInfo;
 
-	// Look for SOH/EOT delimiters. May Have several SOH before EOT
+
+	if (TNC->FLInfo->MCASTMODE)
+	{
+		if (TNC->Streams[0].Attached == 0)
+			return;
+		
+		while(Len)
+		{
+			c = *(MPTR++);
+	
+			if (TNC->InPacket)	
+			{
+				TNC->DataBuffer[TNC->DataLen++] = c;
+
+				// Sanity Check
+
+				if (TNC->DataLen == 6)
+				{
+					char * ptr = &TNC->DataBuffer[1];
+
+					if (memcmp(ptr, "DATA ", 5) == 0 ||
+						memcmp(ptr, "PROG ", 5) == 0 ||
+						memcmp(ptr, "FILE ", 5) == 0 ||
+						memcmp(ptr, "SIZE ", 5) == 0 ||
+						memcmp(ptr, "DESC ", 5) == 0 ||
+						memcmp(ptr, "CNTL ", 5) == 0 ||
+						memcmp(ptr, "ID ", 3) == 0)
+
+					{
+					}
+					else
+					{
+						// False Trigger, try again
+
+						TNC->InPacket = FALSE;
+					}
+
+				}
+				else
+				{
+					if (TNC->InData)
+					{
+						if (--TNC->MCASTLen == 0)
+						{
+							// Got a packet
+
+							UINT * buffptr;
+							int Stream = 0;
+							struct STREAMINFO * STREAM = &TNC->Streams[0];
+		
+							buffptr = GetBuff();
+	
+							if (buffptr)
+							{
+								TNC->DataBuffer[TNC->DataLen++] = 13;  // Keep Tidy
+
+								buffptr[1]  = TNC->DataLen;
+								memcpy(&buffptr[2], &TNC->DataBuffer[0], TNC->DataLen);
+				
+								C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+							}
+						
+							TNC->InPacket = FALSE;
+						}
+					}
+					else
+					{
+						// Looking for >
+
+						if (TNC->DataLen == 16)
+						{
+							// Not found it
+
+							TNC->InPacket = FALSE;
+						}
+						else
+						{
+							if (c == '>')
+							{
+								// Got Header - extract Length
+
+								char * ptr;
+								int len;
+
+								ptr = strchr(TNC->DataBuffer, ' ');
+
+								if (ptr)
+								{
+									len = atoi(ptr);
+
+									if (len)
+									{
+										TNC->InData = TRUE;
+										TNC->MCASTLen = len;
+									}
+								}
+							}
+						}
+					}
+				}
+					
+				if (TNC->DataLen > 520)
+					TNC->DataLen--;			// Protect Buffer
+			}
+			else
+			{
+				// Look for '<'
+			
+				if (c == '<')
+				{
+					TNC->DataBuffer[0] = c;
+					TNC->DataLen = 1;
+					TNC->InPacket = TRUE;
+					TNC->InData = FALSE;
+				}
+			}
+			Len--;
+		}
+		return;
+	}
+	// Look for SOH/EOT delimiters. May Have several SOH before EOTTNC->FL
 
 	while(Len)
 	{
@@ -2982,7 +3116,7 @@ VOID FLReleaseTNC(struct TNCINFO * TNC)
 		else
 		{
 			SendXMLCommand(TNC, "modem.set_by_name", TNC->FLInfo->DefaultMode, 'S');
-			SendXMLCommand(TNC, "modem.set_carrier", TNC->FLInfo->DefaultFreq, 'I');
+			SendXMLCommand(TNC, "modem.set_carrier", (char *)TNC->FLInfo->DefaultFreq, 'I');
 		}
 	}
 	//	Start Scanner
@@ -3036,7 +3170,8 @@ VOID ARQTimer(struct TNCINFO * TNC)
 	// Use new BUSY: poll to detect busy state
 
 	if (FL->TX == FALSE)
-		SendKISSCommand(TNC, "BUSY:");					// Send every poll for now - may need to optimize later
+		if (TNC->FLInfo->KISSMODE)
+			SendKISSCommand(TNC, "BUSY:");					// Send every poll for now - may need to optimize later
 
 
 /*
@@ -3438,7 +3573,17 @@ VOID FLSlowTimer(struct TNCINFO * TNC)
 	struct FLINFO * FL = TNC->FLInfo;
 
 	// Entered every 10 secs
-	
+
+	// if in MCAST mode, clear KILL timer (MCAST RX can run for a long time
+
+	if (TNC->FLInfo->MCASTMODE)
+	{
+		TRANSPORTENTRY * SESS = TNC->PortRecord->ATTACHEDSESSIONS[0];
+
+		if (SESS)
+			SESS->L4KILLTIMER = 0;
+	}
+
 	if (FL->KISSMODE)
 	{
 		if (FL->Responding)
@@ -3654,7 +3799,7 @@ VOID SendXMLCommand(struct TNCINFO * TNC, char * Command, char * Value, char Par
 		if (ParamType == 'S')
 			sprintf(ValueString, "<params><param><value><string>%s</string></value></param></params\r\n>", Value);
 		else
-			sprintf(ValueString, "<params><param><value><i4>%s</i4></value></param></params\r\n>", Value);
+			sprintf(ValueString, "<params><param><value><i4>%d</i4></value></param></params\r\n>", Value);
 
 	strcpy(FL->LastXML, Command);
 	Len = sprintf(ReqBuf, Req, FL->LastXML, ValueString);

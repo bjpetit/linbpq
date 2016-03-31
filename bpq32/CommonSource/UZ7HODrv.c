@@ -1727,8 +1727,6 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 			STREAM->ConnectTime = time(NULL); 
 			STREAM->BytesRXed = STREAM->BytesTXed = 0;
 
-			UpdateMH(TNC, RXHeader->callfrom, '+', 'I');
-
 			ProcessIncommingConnect(TNC, RXHeader->callfrom, Stream, FALSE);
 
 			if (HFCTEXTLEN)
@@ -1842,6 +1840,8 @@ VOID ProcessAGWPacket(struct TNCINFO * TNC, UCHAR * Message)
 					buffptr[1]  = sprintf((UCHAR *)&buffptr[2], "*** Connected to %s\r", RXHeader->callfrom);
 
 					C_Q_ADD(&STREAM->PACTORtoBPQ_Q, buffptr);
+
+					UpdateMH(TNC, RXHeader->callfrom, '+', 'O');
 					return;
 				}
 				Stream++;
@@ -2209,7 +2209,25 @@ DigiLoop:
 	if (memcmp(&ptr[1], "UI", 2) == 0)
 	{
 		AdjMsg->CTL = 0x03;
-//		UpdateMH(TNC, MHCall, ' ', 0);
+
+		if (RXHeader->DataKind != 'T' && strstr(Msg, "To BEACON "))
+		{
+			// Update MH with Received Beacons
+
+			char * ptr1 = strchr(Msg, ']');
+
+			if (ptr1)
+			{
+				ptr1 += 2;						// Skip ] and cr
+				if (memcmp(ptr1, "QRA ", 4) == 0)
+				{
+					char Call[10], Loc[10] = "";
+					sscanf(&ptr1[4], "%s %s", &Call, &Loc);
+
+					UpdateMHEx(TNC, MHCall, ' ', 0, Loc);
+				}
+			}
+		}
 	}
 	else 
 	if (memcmp(&ptr[1], "RR", 2) == 0)

@@ -66,7 +66,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="..\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfigd.lib"
+				AdditionalDependencies="C:\SkyDrive\Dev\Source\bpq32\lib\bpq32.lib wsock32.lib comctl32.lib winmm.lib ..\lib\libconfigd.lib"
 				OutputFile="c:\DevProgs\bpq32\BPQMail.exe"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
@@ -200,6 +200,10 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
+				RelativePath="..\CommonSource\Alloc.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\BBSHTMLConfig.c"
 				>
 			</File>
@@ -287,6 +291,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\CommonSource\LzFind.c"
+				>
+			</File>
+			<File
 				RelativePath="..\CommonSource\lzhuf32.c"
 				>
 				<FileConfiguration
@@ -309,6 +317,18 @@
 						XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\CommonSource\LzmaDec.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\LzmaEnc.c"
+				>
+			</File>
+			<File
+				RelativePath="..\CommonSource\LzmaLib.c"
+				>
 			</File>
 			<File
 				RelativePath="..\CommonSource\MailCommands.c"
@@ -404,6 +424,10 @@
 						AssemblerListingLocation="$(IntDir)\BBSListings\"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath="..\CommonSource\Multicast.c"
+				>
 			</File>
 			<File
 				RelativePath="..\BPQMail\MultiConsole.c"

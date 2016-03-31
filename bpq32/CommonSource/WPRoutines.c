@@ -107,6 +107,15 @@ Next:
 			if (_stricmp(WPRec.callsign, "SMTP") == 0)
 				goto Next;
 
+			if (_stricmp(WPRec.callsign, "AMPR") == 0)
+				goto Next;
+
+			if (_stricmp(WPRec.callsign, "FILE") == 0)
+				goto Next;
+
+			if (_memicmp(WPRec.callsign, "MCAST", 5) == 0)
+				goto Next;
+
 			WP = LookupWP(WPRec.callsign);
 
 			if (WP == NULL)
@@ -488,6 +497,15 @@ VOID GetWPBBSInfo(char * Rline)
 	if (_stricmp(Call, "SMTP") == 0)
 		return;
 
+	if (_stricmp(Call, "AMPR") == 0)
+		return;
+
+	if (_stricmp(Call, "FILE") == 0)
+		return;
+
+	if (_memicmp(Call, "MCAST", 5) == 0)
+		return;
+
 	WP = LookupWP(Call);
 
 	if (!WP)
@@ -740,6 +758,15 @@ it will not be replaced. This flag will be used in case the WP update messages a
 
 					if (_stricmp(Call, "SMTP") == 0)
 						break;
+		
+					if (_stricmp(Call, "AMPR") == 0)
+						break;
+
+					if (_stricmp(Call, "FILE") == 0)
+						break;
+
+					if (_memicmp(Call, "MCAST", 5) == 0)
+						break;
 
 					WP = LookupWP(Call);
 
@@ -889,6 +916,15 @@ VOID UpdateWPWithUserInfo(struct UserInfo * user)
 		return;
 
 	if (_stricmp(user->Call, "SMTP") == 0)
+		return;
+
+	if (_stricmp(user->Call, "AMPR") == 0)
+		return;
+
+	if (_stricmp(user->Call, "FILE") == 0)
+		return;
+
+	if (_memicmp(user->Call, "MCAST", 5) == 0)
 		return;
 
 	if (_stricmp(user->Call, user->Name) == 0)

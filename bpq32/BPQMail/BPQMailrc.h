@@ -281,7 +281,7 @@
 #define IDM_LOGTCP                      40013
 #define IDM_LOGCHAT                     40014
 #define ID_ACTIONS_SENDMSGFROMCLIPBOARD 40015
-#define IDM_CHATCONSOLE                 40016
+#define IDM_MCMONITOR                   40016
 #define ID_ACTIONS_UPDATECHATMAPINFO    40017
 #define IDM_EDITCHATCOLOURS             40018
 #define BPQSAVEREG                      40019
@@ -289,13 +289,14 @@
 #define ID_HELP_ONLINEHELP              40021
 #define ID_ACTIONS_SENDMESSAGE          40022
 #define IDM_IMPORT                      40023
+#define ID_MULTICAST                    40024
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30010
-#define _APS_NEXT_COMMAND_VALUE         40024
+#define _APS_NEXT_COMMAND_VALUE         40025
 #define _APS_NEXT_CONTROL_VALUE         1089
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

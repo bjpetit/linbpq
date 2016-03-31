@@ -301,6 +301,7 @@ typedef struct FLINFO
 	int CenterFreq;
 	char CurrentMode[20];			// Mode to return to after session
 	int	Responding;					// If FLDigi is responding to conmands
+	BOOL MCASTMODE;					// If port is in MCAST RX MOde
 
 } *FLINFO;
 
@@ -590,7 +591,9 @@ typedef struct TNCINFO
 	BOOL CmdEsc;						// Set if last char rxed was 0x80
 	BOOL DataEsc;					// Set if last char rxed was 0x81
 	int PollDelay;					// Don't poll too often;
-	int InPacket;					// FLDigi - SOH received.
+	int InData;						// FLDigi - MCAST <....> received
+	int InPacket;					// FLDigi - SOH or < received.
+	int MCASTLen;					// Data still to get
 
 	int DataMode;					// How to treat data 
 
@@ -665,6 +668,7 @@ char * CheckAppl(struct TNCINFO * TNC, char * Appl);
 BOOL SendReporttoWL2K(struct TNCINFO * TNC);
 struct WL2KInfo * DecodeWL2KReportLine(char *  buf);
 VOID UpdateMH(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction);
+VOID UpdateMHEx(struct TNCINFO * TNC, UCHAR * Call, char Mode, char Direction, char * LOC);
 VOID SaveWindowPos(int port);
 VOID SaveMDIWindowPos(HWND hWnd, char * RegKey, char * Value, BOOL Minimized);
 BOOL ProcessIncommingConnect(struct TNCINFO * TNC, char * Call, int Stream, BOOL SENDCTEXT);

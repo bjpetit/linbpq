@@ -903,7 +903,8 @@
 //	Fix processing of NTS Alising of @ Addresses
 //	Don't reroute Delivered NTS Messages
 //	Add option to stop users killing T messages
-
+//	add nmulticast Receive
+//	Fix initailising new message database format field
 
 #include "BPQMail.h"
 #define MAIL
@@ -1804,7 +1805,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			return 0;
 
 		case VK_F3:
-			CreateConsole(-2);
+			CreateMulticastConsole();
 			return 0;
 
 		case VK_F4:
@@ -1986,9 +1987,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			CreateConsole(-1);
 			break;
 
-		case IDM_CHATCONSOLE:
+		case IDM_MCMONITOR:
 
-			CreateConsole(-2);
+			CreateMulticastConsole();
 			break;
 
 		case IDM_MONITOR:
@@ -2046,9 +2047,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_MSGFROMCLIPBOARD), hWnd, SendMsgDialogProc);
 			break;
 
+		case ID_MULTICAST:
+
+			MulticastRX = !MulticastRX;
+			CheckMenuItem(hActionMenu, ID_MULTICAST, (MulticastRX) ? MF_CHECKED : MF_UNCHECKED);
+			break;
+
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
 			break;
+
 
   
 		default:
